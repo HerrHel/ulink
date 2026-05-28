@@ -230,6 +230,8 @@ img{max-width:100%;display:block}
   font-weight:500;
 }
 
+.settings-wrap{position:relative;flex-shrink:0}
+
 .layout-toggle{
   display:flex;align-items:center;
   gap:2px;
@@ -564,6 +566,24 @@ img{max-width:100%;display:block}
 .card-grid-list .group-card-head{flex:1;margin-bottom:0}
 .card-grid-list .group-body{display:none}
 .card-grid-list .card-foot .card-actions{display:flex;gap:2px}
+
+/* Batch grip (drag handle, list mode only) */
+.batch-grip{
+  display:none;
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;
+  align-items:center;justify-content:center;
+  border-radius:6px;
+  color:var(--text-muted);
+  cursor:grab;
+  z-index:1;
+}
+.batch-grip svg{width:16px;height:16px}
+.batch-grip:active{cursor:grabbing}
+.card-grid-list .batch-grip{display:none}
+@media(max-width:768px){
+  .card-grid-list .batch-grip{display:flex}
+}
 
 /* List expand button */
 .list-expand-btn{
@@ -1314,8 +1334,34 @@ img{max-width:100%;display:block}
 .popover-result .pr-url{font-size:0.7rem;color:var(--text-muted);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;font-family:'JetBrains Mono',monospace}
 .popover-result .pr-added{font-size:0.7rem;color:var(--green);margin-left:auto;flex-shrink:0}
 
+/* Hamburger + overlay */
+.hamburger-btn{
+  display:none;
+  width:36px;height:36px;padding:6px;
+  border:none;background:transparent;
+  color:var(--text);cursor:pointer;
+  border-radius:8px;
+  flex-shrink:0;
+}
+.hamburger-btn svg{width:100%;height:100%}
+.overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.35);
+  z-index:1500;
+}
+
 @media(max-width:768px){
-  .icon-rail{width:160px}
+  .hamburger-btn{display:flex;align-items:center;justify-content:center}
+  .icon-rail{
+    position:fixed;left:0;top:0;height:100vh;width:260px;
+    z-index:2000;
+    transform:translateX(-100%);
+    transition:transform 0.25s ease;
+    border-right:1px solid var(--border);
+    box-shadow:4px 0 20px rgba(0,0,0,0.1);
+  }
+  .icon-rail.open{transform:translateX(0)}
+  .overlay.show{display:block}
   .panel-header{padding:10px 14px;flex-wrap:wrap;gap:8px}
   .search-wrapper{max-width:none;width:calc(100% - 28px)}
   .card-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
@@ -1323,11 +1369,114 @@ img{max-width:100%;display:block}
   .form-row{grid-template-columns:1fr}
   .detail-panel.open{width:var(--detail-width,280px)}
   .detail-inner{min-width:var(--detail-width,280px)}
+
+  /* Mobile detail panel → bottom drawer */
+  .detail-panel{
+    position:fixed;bottom:0;left:0;right:0;top:auto;
+    max-height:60vh;width:100%!important;
+    border-radius:16px 16px 0 0;
+    transform:translateY(100%);
+    transition:transform 0.3s ease;
+    z-index:1800;
+    box-shadow:0 -4px 20px rgba(0,0,0,0.15);
+  }
+  .detail-panel.open{transform:translateY(0)}
+  .detail-handle{
+    display:flex;justify-content:center;padding:10px 0 4px;
+    cursor:ns-resize;
+  }
+  .detail-handle::before{
+    content:'';width:36px;height:4px;
+    border-radius:2px;
+    background:var(--border);
+  }
+  .detail-actions-bar{
+    display:flex;gap:4px;padding:4px 14px 8px;
+    border-bottom:1px solid var(--border-light);
+  }
+  .detail-actions-bar button{
+    flex:1;padding:8px 6px;border-radius:8px;
+    border:1px solid var(--border);background:var(--surface);
+    font-size:0.78rem;color:var(--text);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:4px;
+  }
+  .detail-actions-bar button svg{width:14px;height:14px}
+
+  /* Mobile focus mode */
+  .card-grid-focus{flex-direction:column!important;gap:8px;padding-bottom:60px}
+  .card-grid-focus .group-card-focus{flex:1;min-height:0;padding:14px 16px 60px}
+  .focus-toolbar{
+    position:fixed;bottom:0;left:0;right:0;
+    flex-direction:row!important;justify-content:center;
+    gap:6px;padding:10px 14px;
+    border-radius:16px 16px 0 0;
+    z-index:100;
+    align-self:auto;top:auto;
+    box-shadow:0 -2px 12px rgba(0,0,0,0.1);
+  }
+  .focus-toolbar .ft-divider{width:1px;height:24px;margin:0 2px}
+  .focus-toolbar .ft-btn{width:40px;height:40px}
+
+  /* Mobile search bar */
+  .search-wrapper{max-width:none;width:100%}
+
+  /* Mobile modals → bottom slide */
+  .modal{
+    position:fixed;bottom:0;left:0;right:0;top:auto;
+    max-height:90vh;width:100%!important;
+    border-radius:16px 16px 0 0;
+    margin:0;
+    animation:slideUp 0.25s ease-out;
+    overflow-y:auto;
+  }
+  @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  .modal-header{padding:14px 16px 10px;position:sticky;top:0;background:var(--surface);z-index:1}
+  .modal-body{padding:0 16px 24px}
+  .modal input[type="text"],.modal input[type="url"],.modal input[type="password"],.modal textarea{font-size:16px}
 }
 @media(max-width:480px){
   .card-grid{grid-template-columns:1fr;gap:8px}
   .filter-row{gap:4px}
 }
+
+/* Action Sheet */
+.action-sheet{
+  display:none;position:fixed;bottom:0;left:0;right:0;
+  z-index:3000;padding:8px 12px 20px;
+  background:var(--surface);
+  border-radius:16px 16px 0 0;
+  box-shadow:0 -4px 20px rgba(0,0,0,0.2);
+  animation:slideUp 0.2s ease-out;
+}
+.action-sheet.show{display:block}
+.as-list{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.as-item{
+  padding:14px 16px;text-align:center;
+  border:none;background:transparent;
+  font-size:0.95rem;color:var(--text);
+  border-radius:10px;cursor:pointer;
+  transition:background 0.1s ease;
+}
+.as-item:hover,.as-item:active{background:var(--surface-hover)}
+.as-item.danger{color:var(--rose)}
+.as-cancel{
+  width:100%;padding:14px;text-align:center;
+  border:none;border-radius:10px;
+  background:var(--bg-alt);color:var(--text);
+  font-size:0.95rem;font-weight:600;cursor:pointer;
+}
+
+/* Touch drag clone */
+.touch-drag-clone{
+  position:fixed;z-index:3000;
+  pointer-events:none;
+  opacity:0.85;transform:scale(1.03);
+  box-shadow:0 8px 30px rgba(0,0,0,0.2);
+  background:var(--surface);
+  border-radius:12px;
+  border:2px solid var(--accent);
+}
+.drag-target{outline:2px dashed var(--accent);outline-offset:-2px}
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}

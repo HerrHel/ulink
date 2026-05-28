@@ -21,15 +21,29 @@ const DEFAULTS = {
   ],
   bookmarks: [
     { id: 'b1', title: 'GitHub', url: 'https://github.com', username: '', password: '', notes: '代码托管平台', icon: '', categoryId: 'dev', parentId: null, order: 0, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 86400000 },
-    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '', password: '', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 172800000 },
-    { id: 'b4', title: 'Twitter/X', url: 'https://x.com', username: '', password: '', notes: '社交媒体', icon: '', categoryId: 'uncategorized', parentId: null, order: 2, useCount: 4, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 345600000 }
+    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: 'MTIz', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true, 'china-available': true }, isExpanded: false, createdAt: Date.now() - 172800000 },
+    { id: 'b3', title: 'DeepSeek', url: 'https://www.deepseek.com/', username: '', password: '', notes: 'API key:', icon: '', categoryId: 'tools', parentId: null, order: 2, useCount: 5, attributes: { 'china-available': true, 'ai': true }, isExpanded: false, createdAt: Date.now() - 40000000 },
+    { id: 'sb1', title: '开始对话', url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'tools', parentId: 'b3', order: 0, useCount: 3, attributes: { 'china-available': true, 'ai': true }, isExpanded: false, createdAt: Date.now() - 30000000 },
+    { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'tools', parentId: 'b3', order: 1, useCount: 2, attributes: { 'china-available': true, 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000 },
+    { id: 'b4', title: 'Twitter/X', url: 'https://x.com', username: '', password: '', notes: '社交媒体', icon: '', categoryId: 'uncategorized', parentId: null, order: 3, useCount: 4, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 345600000 }
   ],
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
     { id: 'china-available', name: '国内可用', type: 'boolean' },
+    { id: 'ai', name: 'Ai', type: 'boolean' },
     { id: 'is-group', name: '组', type: 'boolean' }
   ],
-  siblingGroups: []
+  siblingGroups: [
+    {
+      id: 'sg_welcome', name: '欢迎使用', categoryId: 'uncategorized', icon: '', order: 0,
+      attributes: { 'is-group': true },
+      bookmarkIds: ['b1', 'b2', 'b3'],
+      notes: '拖拽书签到此处、或输入 @ 来整理收藏：<br>'
+        + '<span class="group-inline-card" contenteditable="false" data-bm-id="b1" draggable="true"><img src="https://api.xinac.net/icon/?url=github.com" alt="" onerror="this.style.display=\'none\'"><span class="gic-name">GitHub</span><span class="gic-domain">github.com</span><span class="gic-btn">详情</span><span class="gic-remove" title="移除">&times;</span></span> '
+        + '<span class="group-inline-card" contenteditable="false" data-bm-id="b2" draggable="true"><img src="https://api.xinac.net/icon/?url=mail.qq.com" alt="" onerror="this.style.display=\'none\'"><span class="gic-name">QQ邮箱</span><span class="gic-domain">mail.qq.com</span><span class="gic-btn">详情</span><span class="gic-remove" title="移除">&times;</span></span> '
+        + '<span class="group-inline-card" contenteditable="false" data-bm-id="b3" draggable="true"><img src="https://api.xinac.net/icon/?url=www.deepseek.com" alt="" onerror="this.style.display=\'none\'"><span class="gic-name">DeepSeek</span><span class="gic-domain">deepseek.com</span><span class="gic-btn">详情</span><span class="gic-remove" title="移除">&times;</span></span>'
+    }
+  ]
 };
 
 /* ==================== DATA LAYER ==================== */
@@ -242,7 +256,9 @@ var I = {
   redo: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14.2929 13.2929C13.9024 13.6834 13.9024 14.3166 14.2929 14.7071C14.6834 15.0976 15.3166 15.0976 15.7071 14.7071L20.7071 9.70711C21.0976 9.31658 21.0976 8.68342 20.7071 8.29289L15.7071 3.29289C15.3166 2.90237 14.6834 2.90237 14.2929 3.29289C13.9024 3.68342 13.9024 4.31658 14.2929 4.70711L17.5858 8H8C6.67392 8 5.40215 8.52678 4.46447 9.46447C3.52678 10.4021 3 11.6739 3 13V20C3 20.5523 3.44771 21 4 21C4.55229 21 5 20.5523 5 20V13C5 12.2044 5.31607 11.4413 5.87868 10.8787C6.44129 10.3161 7.20435 10 8 10H17.5858L14.2929 13.2929Z" fill="currentColor"/></svg>',
   note: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.6602 10.44L20.6802 14.62C19.8402 18.23 18.1802 19.69 15.0602 19.39C14.5602 19.35 14.0202 19.26 13.4402 19.12L11.7602 18.72C7.59018 17.73 6.30018 15.67 7.28018 11.49L8.26018 7.30001C8.46018 6.45001 8.70018 5.71001 9.00018 5.10001C10.1702 2.68001 12.1602 2.03001 15.5002 2.82001L17.1702 3.21001C21.3602 4.19001 22.6402 6.26001 21.6602 10.44Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path opacity="0.4" d="M15.0603 19.3901C14.4403 19.8101 13.6603 20.1601 12.7103 20.4701L11.1303 20.9901C7.16034 22.2701 5.07034 21.2001 3.78034 17.2301L2.50034 13.2801C1.22034 9.3101 2.28034 7.2101 6.25034 5.9301L7.83034 5.4101C8.24034 5.2801 8.63034 5.1701 9.00034 5.1001C8.70034 5.7101 8.46034 6.4501 8.26034 7.3001L7.28034 11.4901C6.30034 15.6701 7.59034 17.7301 11.7603 18.7201L13.4403 19.1201C14.0203 19.2601 14.5603 19.3501 15.0603 19.3901Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L21 6.00078M8 12L21 12.0008M8 18L21 18.0007M3 6.5H4V5.5H3V6.5ZM3 12.5H4V11.5H3V12.5ZM3 18.5H4V17.5H3V18.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  chevronDown: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  chevronDown: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  listCheck: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.25 6C2.25 5.58579 2.58579 5.25 3 5.25H20C20.4142 5.25 20.75 5.58579 20.75 6C20.75 6.41421 20.4142 6.75 20 6.75H3C2.58579 6.75 2.25 6.41421 2.25 6ZM20.4613 10.4086C20.7879 10.6634 20.8461 11.1347 20.5914 11.4613L16.6914 16.4613C16.5522 16.6397 16.3399 16.7458 16.1136 16.7499C15.8873 16.754 15.6713 16.6557 15.5257 16.4824L13.4257 13.9824C13.1593 13.6652 13.2004 13.1921 13.5176 12.9257C13.8348 12.6593 14.3079 12.7004 14.5743 13.0176L16.0784 14.8082L19.4086 10.5387C19.6634 10.2121 20.1347 10.1539 20.4613 10.4086ZM2.25 11C2.25 10.5858 2.58579 10.25 3 10.25H10C10.4142 10.25 10.75 10.5858 10.75 11C10.75 11.4142 10.4142 11.75 10 11.75H3C2.58579 11.75 2.25 11.4142 2.25 11ZM2.25 16C2.25 15.5858 2.58579 15.25 3 15.25H10C10.4142 15.25 10.75 15.5858 10.75 16C10.75 16.4142 10.4142 16.75 10 16.75H3C2.58579 16.75 2.25 16.4142 2.25 16Z" fill="currentColor"/></svg>',
+  grip: '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="4" width="18" height="3" rx="1.5" fill="currentColor"/><rect x="3" y="10.5" width="18" height="3" rx="1.5" fill="currentColor"/><rect x="3" y="17" width="18" height="3" rx="1.5" fill="currentColor"/></svg>'
 };
 
 /* ==================== STATE ==================== */
@@ -425,6 +441,7 @@ function renderCardHTML(bm) {
   }
   return '<div class="card" draggable="true" data-id="' + bm.id + '"' + (_batchMode ? ' onclick="toggleBatchSelect(\'' + bm.id + '\', event)"' : '') + '>'
     + (_batchMode ? '<input type="checkbox" class="batch-chk" id="batchChk_' + bm.id + '" onclick="toggleBatchSelect(\'' + bm.id + '\', event)">' : '')
+    + (_batchMode ? '<span class="batch-grip">' + I.grip + '</span>' : '')
     + '<div class="card-body">'
     + '<div class="card-toprow">'
     + '<div class="card-logo" data-action="visit" data-id="' + bm.id + '" title="打开链接"><img src="' + icon + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="card-logo-fallback">' + bm.title.charAt(0) + '</span></div>'
@@ -461,6 +478,7 @@ function renderGroupCardHTML(g) {
   var bodyHTML = sanitizeHTML(g.notes || '');
   return '<div class="card group-card' + (isFocused ? ' group-card-focus' : '') + '" data-group-id="' + g.id + '" draggable="true">'
     + '<div class="group-card-accent"></div>'
+    + (_batchMode ? '<span class="batch-grip">' + I.grip + '</span>' : '')
     + '<div class="group-card-head">'
     + (g.icon ? '<img class="group-card-icon" src="' + esc(g.icon) + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'\'" style="border-radius:4px;object-fit:contain">' : '')
     + '<span class="group-card-icon" style="' + (g.icon ? 'display:none' : '') + '">' + I.note + '</span>'
@@ -548,6 +566,9 @@ function setupFocusModeUI(g) {
   if (ltWrap) ltWrap.style.display = 'none';
   var btnAdd = document.getElementById('btnAdd');
   if (btnAdd) btnAdd.style.display = 'none';
+  var hamburger = document.getElementById('hamburgerBtn');
+  if (hamburger) hamburger.style.display = 'none';
+  if (window.innerWidth <= 768) document.getElementById('cardGrid').classList.add('focus-mobile');
 
   var title = document.getElementById('panelTitle');
   title.innerHTML = '<input id="focusGroupTitle" value="' + esc(g.name) + '" placeholder="输入组名…">';
@@ -561,7 +582,9 @@ function setupFocusModeUI(g) {
 function setupGridModeUI() {
   document.getElementById('filterTools').style.display = 'flex';
   document.getElementById('focusBack').style.display = 'none';
-  document.getElementById('cardGrid').classList.remove('card-grid-focus');
+  document.getElementById('cardGrid').classList.remove('card-grid-focus', 'focus-mobile');
+  var hamburger = document.getElementById('hamburgerBtn');
+  if (hamburger) hamburger.style.display = '';
   var ltWrap = document.getElementById('layoutToggleWrap');
   if (ltWrap) ltWrap.style.display = '';
   var btnAdd = document.getElementById('btnAdd');
@@ -600,6 +623,8 @@ function applyLayoutMode() {
   }
   if (ltGrid) ltGrid.classList.toggle('active', _layoutMode === 'grid');
   if (ltList) ltList.classList.toggle('active', _layoutMode === 'list');
+  var grip = document.getElementById('btnGrip');
+  if (grip) grip.style.display = (_batchMode && _layoutMode === 'list' && window.innerWidth <= 768) ? '' : 'none';
 }
 
 function toggleBatchMode() {
@@ -607,9 +632,11 @@ function toggleBatchMode() {
   _batchSelected = [];
   var btn = document.getElementById('btnBatch');
   if (btn) {
-    btn.textContent = _batchMode ? '取消' : '批量管理';
+    btn.title = _batchMode ? '取消' : '批量管理';
     btn.classList.toggle('active', _batchMode);
   }
+  var grip = document.getElementById('btnGrip');
+  if (grip) grip.style.display = (_batchMode && _layoutMode === 'list' && window.innerWidth <= 768) ? '' : 'none';
   if (_focusedGroupId) exitGroupFocus();
   renderContent();
   var bar = document.getElementById('batchBar');
@@ -691,6 +718,132 @@ function toggleGroupFocus(gid) {
 }
 
 function exitGroupFocus() { _focusedGroupId = null; renderContent(); }
+
+function toggleRail() {
+  var rail = document.querySelector('.icon-rail');
+  var overlay = document.getElementById('railOverlay');
+  if (rail) rail.classList.toggle('open');
+  if (overlay) overlay.classList.toggle('show');
+}
+
+function closeRail() {
+  var rail = document.querySelector('.icon-rail');
+  var overlay = document.getElementById('railOverlay');
+  if (rail) rail.classList.remove('open');
+  if (overlay) overlay.classList.remove('show');
+}
+
+/* Action Sheet */
+function showActionSheet(items) {
+  var sheet = document.getElementById('actionSheet');
+  var list = document.getElementById('actionSheetList');
+  list.innerHTML = items.map(function(it) {
+    return '<button class="as-item' + (it.danger ? ' danger' : '') + '" onclick="' + it.action + ';hideActionSheet()">' + esc(it.label) + '</button>';
+  }).join('');
+  sheet.classList.add('show');
+}
+function hideActionSheet() { document.getElementById('actionSheet').classList.remove('show'); }
+
+/* Touch long-press and drag (mobile only) */
+var _touchData = null;
+document.addEventListener('touchstart', function (e) {
+  if (window.innerWidth > 768) return;
+  var grip = e.target.closest('.batch-grip');
+  if (!grip) return;
+  var card = grip.closest('.card, .group-card');
+  if (!card) return;
+  e.preventDefault();
+  _touchData = { card: card, grip: grip, startX: e.touches[0].clientX, startY: e.touches[0].clientY, moved: false, clone: null, targetCard: null };
+}, { passive: false });
+
+document.addEventListener('touchmove', function (e) {
+  if (!_touchData) return;
+  var dx = e.touches[0].clientX - _touchData.startX;
+  var dy = e.touches[0].clientY - _touchData.startY;
+  if (!_touchData.moved && Math.abs(dx) + Math.abs(dy) < 10) return;
+  _touchData.moved = true;
+  if (!_touchData.clone) {
+    _touchData.clone = _touchData.card.cloneNode(true);
+    _touchData.clone.classList.add('touch-drag-clone');
+    _touchData.clone.style.width = _touchData.card.offsetWidth + 'px';
+    document.body.appendChild(_touchData.clone);
+    _touchData.card.style.opacity = '0.4';
+  }
+  _touchData.clone.style.left = (e.touches[0].clientX - _touchData.card.offsetWidth / 2) + 'px';
+  _touchData.clone.style.top = (e.touches[0].clientY - 30) + 'px';
+  _touchData.clone.style.display = '';
+  var el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+  var targetCard = el ? el.closest('.card,.group-card') : null;
+  if (targetCard && targetCard !== _touchData.card && targetCard !== _touchData.targetCard) {
+    if (_touchData.targetCard) _touchData.targetCard.classList.remove('drag-target');
+    _touchData.targetCard = targetCard;
+    _touchData.targetCard.classList.add('drag-target');
+  }
+});
+
+/* Long-press for mobile action sheet */
+var _lpTimer = null, _lpTarget = null;
+document.addEventListener('touchstart', function (e) {
+  if (window.innerWidth > 768) return;
+  if (e.target.closest('.batch-grip, input, button, textarea, [contenteditable="true"]')) return;
+  var card = e.target.closest('.card,.group-card');
+  if (!card || card.classList.contains('group-card-focus')) return;
+  _lpTarget = card;
+  _lpTimer = setTimeout(function () {
+    _lpTimer = null;
+    var bmId = card.dataset.id;
+    var gid = card.dataset.groupId;
+    if (bmId) {
+      showActionSheet([
+        { label: '打开链接', action: 'visit(null,\'' + bmId + '\')' },
+        { label: '编辑', action: 'editBm(\'' + bmId + '\')' },
+        { label: '添加到组', action: 'addToGroup(null,event);' + bmId },
+        { label: '删除', action: 'deleteBookmark(\'' + bmId + '\')', danger: true }
+      ]);
+    } else if (gid) {
+      showActionSheet([
+        { label: '展开组', action: 'toggleGroupFocus(\'' + gid + '\')' },
+        { label: '编辑组', action: 'editGroup(\'' + gid + '\')' },
+        { label: '删除组', action: 'deleteGroup(\'' + gid + '\')', danger: true }
+      ]);
+    }
+  }, 500);
+}, { passive: true });
+document.addEventListener('touchmove', function () { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null; } }, { passive: true });
+document.addEventListener('touchend', function () { if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; _lpTarget = null; } });
+
+document.addEventListener('touchend', function () {
+  if (!_touchData) return;
+  if (_touchData.clone) {
+    _touchData.clone.remove();
+    _touchData.card.style.opacity = '';
+    if (_touchData.targetCard) {
+      _touchData.targetCard.classList.remove('drag-target');
+      var aId = _touchData.card.dataset.id || _touchData.card.dataset.groupId;
+      var bId = _touchData.targetCard.dataset.id || _touchData.targetCard.dataset.groupId;
+      if (aId && bId && aId !== bId) {
+        var a, b;
+        if (_touchData.card.dataset.id) a = A.bookmarks.find(function (x) { return x.id === aId; });
+        else a = A.siblingGroups.find(function (x) { return x.id === aId; });
+        if (_touchData.targetCard.dataset.id) b = A.bookmarks.find(function (x) { return x.id === bId; });
+        else b = A.siblingGroups.find(function (x) { return x.id === bId; });
+        if (a && b) { swapOrder(a, b); debouncedSave(); swapCardsDOM(_touchData.card, _touchData.targetCard); }
+      }
+    }
+  }
+  _touchData = null;
+});
+
+function swapCardsDOM(a, b) {
+  var elA = typeof a === 'string' ? document.querySelector(a) : a;
+  var elB = typeof b === 'string' ? document.querySelector(b) : b;
+  if (!elA || !elB || elA === elB) return;
+  var parent = elA.parentNode;
+  var nextA = elA.nextSibling, nextB = elB.nextSibling;
+  if (nextA === elB) { parent.insertBefore(elB, elA); }
+  else if (nextB === elA) { parent.insertBefore(elA, elB); }
+  else { parent.insertBefore(elA, nextB); parent.insertBefore(elB, nextA); }
+}
 
 function toggleListExpand(btn) {
   var card = btn.closest('.card, .group-card');
@@ -998,7 +1151,7 @@ function togglePwCard(id) {
 function createGroup() {
   A.siblingGroups.forEach(function (g) { g.order++; });
   A.bookmarks.filter(function (b) { return !b.parentId; }).forEach(function (b) { b.order++; });
-  var sg = { id: gid(), name: '新组', bookmarkIds: [], notes: '', categoryId: CAT_UNCATEGORIZED, icon: '', attributes: { [ATTR_IS_GROUP]: true }, order: 0 };
+  var sg = { id: gid(), name: '未命名', bookmarkIds: [], notes: '', categoryId: CAT_UNCATEGORIZED, icon: '', attributes: { [ATTR_IS_GROUP]: true }, order: 0 };
   A.siblingGroups.push(sg);
   debouncedSave(); renderContent();
 }
@@ -1829,17 +1982,6 @@ function handleGridDrop(e, p) {
   }
 }
 
-function swapCardsDOM(selA, selB) {
-  var elA = document.querySelector(selA);
-  var elB = document.querySelector(selB);
-  if (!elA || !elB || elA === elB) return;
-  var parent = elA.parentNode;
-  var nextA = elA.nextSibling, nextB = elB.nextSibling;
-  if (nextA === elB) { parent.insertBefore(elB, elA); }
-  else if (nextB === elA) { parent.insertBefore(elA, elB); }
-  else { parent.insertBefore(elA, nextB); parent.insertBefore(elB, nextA); }
-}
-
 function handleRailDrop(e, item) {
   e.preventDefault();
   item.classList.remove('rail-drag-over');
@@ -1907,7 +2049,7 @@ document.addEventListener('click', function (e) {
   // 0. Batch mode: intercept card clicks
   if (_batchMode) {
     var bmCard = e.target.closest('.card[data-id]');
-    if (bmCard && !e.target.closest('.batch-chk, .btn-xs, .card-tag, .card-acct-toggle, .list-expand-btn')) {
+    if (bmCard && !e.target.closest('.batch-chk, .btn-xs, .card-tag, .card-acct-toggle, .list-expand-btn, .batch-grip')) {
       e.stopPropagation();
       toggleBatchSelect(bmCard.dataset.id, e);
       return;
@@ -2025,6 +2167,7 @@ document.addEventListener('click', function (e) {
   var drop = document.getElementById('attrDropdown');
   if (drop && drop.style.display !== 'none' && !e.target.closest('.attr-filter-wrap')) drop.style.display = 'none';
   if (!e.target.closest('#ctxMenu')) hideCtx();
+  if (!e.target.closest('#settingsMenu') && !e.target.closest('.settings-wrap')) hideSettingsMenu();
   if (!e.target.closest('#mentionDrop') && !e.target.closest('.group-body')) hideMention();
   if (!e.target.closest('.search-wrapper')) hideSearchSuggest();
 });
@@ -2055,6 +2198,19 @@ function showCtx(e, type, id) {
   menu.style.left = Math.min(e.clientX, window.innerWidth - 170) + 'px';
   menu.style.top = Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 10) + 'px';
 }
+
+function toggleSettingsMenu(e) {
+  e.stopPropagation();
+  var menu = document.getElementById('settingsMenu');
+  if (menu.style.display === 'block') { hideSettingsMenu(); return; }
+  var btn = document.getElementById('btnSettings');
+  var rect = btn.getBoundingClientRect();
+  menu.style.display = 'block';
+  menu.style.top = (rect.bottom + 4) + 'px';
+  menu.style.right = (window.innerWidth - rect.right) + 'px';
+}
+
+function hideSettingsMenu() { document.getElementById('settingsMenu').style.display = 'none'; }
 
 function hideCtx() { document.getElementById('ctxMenu').style.display = 'none'; ctxTarget = null; ctxType = ''; _ctxGid = null; _ctxCard = null; }
 
@@ -2325,7 +2481,7 @@ document.addEventListener('keydown', function (e) {
   }
   if (e.key === 'Escape') {
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit();
-    hideCtx(); hideSearchSuggest(); closeAddBmPopover();
+    hideCtx(); hideSettingsMenu(); hideSearchSuggest(); closeAddBmPopover();
   }
 });
 
