@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkVault</title>
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600&f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="lv-panel">
+  <!-- ===== NAV RAIL ===== -->
+  <nav class="icon-rail" aria-label="导航">
+    <div class="rail-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      Link<span>Vault</span>
+    </div>
+    <div class="rail-section-label">分类</div>
+    <div class="rail-nav" id="railNav"></div>
+    <div class="rail-storage" id="railStorage"></div>
+    <div class="rail-bottom">
+      <button class="rail-item" id="btnManageCats">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        管理分类
+      </button>
+      <button class="theme-toggle" id="themeToggle" aria-label="切换深浅色主题">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        切换主题
+      </button>
+      <button class="rail-item" onclick="resetData()" style="color:var(--rose)" title="清除所有数据，恢复默认">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        重置数据
+      </button>
+      <button class="rail-item" onclick="exportData()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        导出数据
+      </button>
+      <button class="rail-item" onclick="triggerImport()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        导入数据
+      </button>
+    </div>
+  </nav>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this.files[0]);this.value=''">
+  <div class="resize-handle" id="resizeLeft"></div>
+
+  <!-- ===== MAIN PANEL ===== -->
+  <div class="panel-main">
+    <div class="panel-main-inner">
+    <!-- Header -->
+    <header class="panel-header">
+      <span class="panel-breadcrumb" id="panelTitle">全部书签</span>
+      <span class="panel-count" id="panelCount"></span>
+      <span style="flex:1"></span>
+      <span class="layout-toggle" id="layoutToggleWrap">
+        <button class="lt-btn active" id="ltGrid" onclick="setLayoutMode('grid')" title="网格视图">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+        <button class="lt-btn" id="ltList" onclick="setLayoutMode('list')" title="列表视图">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L21 6M8 12L21 12M8 18L21 18M3 6.5H4V5.5H3V6.5ZM3 12.5H4V11.5H3V12.5ZM3 18.5H4V17.5H3V18.5Z"/></svg>
+        </button>
+      </span>
+      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" onclick="toggleDetailPanel()" title="右侧辅助栏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
+      </button>
+    </header>
+
+    <!-- Filter row -->
+    <div class="filter-row" id="filterRow">
+      <span id="filterTools" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1">
+        <div class="attr-filter-wrap">
+          <button class="btn btn-ghost btn-sm" id="btnAttrFilter" onclick="toggleAttrDropdown()">属性</button>
+          <div class="attr-dropdown" id="attrDropdown" style="display:none">
+            <div class="attr-drop-search">
+              <input type="text" class="attr-search-input" id="attrSearchInput" placeholder="搜索/创建属性…" oninput="renderAttrDropdown()" onclick="event.stopPropagation()">
+              <button class="attr-search-add" onclick="event.stopPropagation();addAttrQuick()" title="新建属性">+</button>
+            </div>
+            <div class="attr-drop-list" id="attrDropList"></div>
+          </div>
+          <div class="attr-chips" id="attrChips"></div>
+        </div>
+        <span style="flex:1"></span>
+        <div class="sort-group">
+          <div class="sort-dir" id="sortDir" onclick="toggleSortDir()" title="切换升序/降序">
+            <button class="sort-arrow sort-asc active" id="sortAsc">∧</button>
+            <button class="sort-arrow sort-desc" id="sortDesc">∨</button>
+          </div>
+          <select class="filter-sort" id="sortSelect">
+            <option value="order">默认排序</option>
+            <option value="title">名称</option>
+            <option value="date">修改时间</option>
+            <option value="useCount">点击次数</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btnAddGroup">新建组</button>
+        <button class="btn btn-secondary btn-sm" id="btnBatch" onclick="toggleBatchMode()">批量管理</button>
+      </span>
+      <span id="focusBack" style="display:none">
+        <button class="btn-back-focus" onclick="exitGroupFocus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>返回</button>
+      </span>
+      <div class="search-wrapper">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" id="searchInput" placeholder="搜索…" autocomplete="off" onfocus="renderSearchSuggest()" oninput="renderSearchSuggest()">
+        </div>
+        <div class="search-suggest" id="searchSuggest" style="display:none"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btnAdd" title="添加书签" style="margin-left:auto">+</button>
+    </div>
+
+    <!-- Content row -->
+    <div style="display:flex;flex:1;overflow:hidden">
+      <div class="panel-content" id="panelContent">
+        <div class="card-grid" id="cardGrid"></div>
+      </div>
+      <div class="batch-bar" id="batchBar" style="display:none">
+        <span class="batch-count" id="batchCount">已选 0 项</span>
+        <button class="btn btn-secondary btn-sm" onclick="selectAllBatch()">全选</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-danger btn-sm" onclick="batchDelete()">删除所选</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleBatchMode()">取消</button>
+      </div>
+      <div class="resize-handle" id="resizeRight"></div>
+    </div>
+    </div><!-- /panel-main-inner -->
+
+    <!-- Right detail panel -->
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-search" id="detailSearchWrap" style="display:none">
+        <input type="text" class="detail-search-input" id="detailSearch" placeholder="搜索辅助栏…" oninput="filterDetailCards()">
+      </div>
+      <div class="detail-inner" id="detailInner"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== BOOKMARK MODAL ===== -->
+<div class="modal-mask" id="bmModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="bmModalTitle">添加书签</h2>
+      <button class="modal-close" id="bmModalClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="bmId">
+      <div class="form-group">
+        <label class="form-label">网站名称 *</label>
+        <input type="text" class="form-input" id="bmTitle" placeholder="例如：GitHub">
+      </div>
+      <div class="form-group">
+        <label class="form-label">网址 *</label>
+        <input type="text" class="form-input" id="bmUrl" placeholder="例如：github.com" oninput="previewLogo()" autocomplete="off">
+        <div class="logo-preview" id="logoPreview" style="display:none"><img src="" alt="" id="logoPreviewImg"><span id="logoPreviewText"></span></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">账户</label><input type="text" class="form-input" id="bmUser" placeholder="用户名"></div>
+        <div class="form-group"><label class="form-label">密码</label><div class="pw-wrap"><input type="password" class="form-input" id="bmPass" placeholder="密码" style="padding-right:38px"><button class="pw-toggle" id="pwToggle" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      </div>
+      <div class="form-group"><label class="form-label">备注</label><textarea class="form-textarea" id="bmNotes" placeholder="备注…"></textarea></div>
+      <div class="form-group"><label class="form-label">自定义图标</label><input type="url" class="form-input" id="bmIcon" placeholder="https://… 输入图标URL，留空则自动获取" oninput="previewIconUrl()"><button class="btn btn-ghost btn-sm" id="btnClearIcon" style="display:none;margin-top:4px" onclick="clearIcon()">清除图标</button><div class="logo-preview" id="iconPreview" style="display:none"><img src="" alt="" id="iconPreviewImg"><span>图标预览</span></div></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">分类</label><select class="form-select" id="bmCat"></select></div>
+        <div class="form-group"><label class="form-label">父级（子网站）</label><select class="form-select" id="bmParent"><option value="">无</option></select></div>
+      </div>
+
+      <div class="form-group"><label class="form-label">属性标记</label><div class="check-group" id="bmAttrs"></div></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" id="bmModalCancel">取消</button>
+      <button class="btn btn-primary" id="bmModalSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CATEGORY MODAL ===== -->
+<div class="modal-mask" id="catModal">
+  <div class="modal">
+    <div class="modal-head"><h2>管理分类</h2><button class="modal-close" id="catModalClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" class="form-input" id="newCatName" placeholder="新分类名称" style="flex:1"><button class="btn btn-primary btn-sm" id="btnAddCat">添加</button></div>
+      <div id="catManageList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ATTRIBUTE MODAL ===== -->
+<div class="modal-mask" id="attrModal">
+  <div class="modal">
+    <div class="modal-head"><h2>管理属性</h2><button class="modal-close" id="attrModalClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px"><input type="text" class="form-input" id="newAttrName" placeholder="属性名称" style="flex:1"><button class="btn btn-primary btn-sm" id="btnAddAttr">添加</button></div>
+      <div id="attrManageList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- @ Mention Dropdown -->
+<div class="mention-drop" id="mentionDrop" style="display:none"></div>
+
+<!-- Context Menu -->
+<div class="ctx-menu" id="ctxMenu" style="display:none">
+  <button class="ctx-item" data-action="visit">打开网站</button>
+  <button class="ctx-item" data-action="edit">编辑</button>
+  <div class="ctx-divider"></div>
+  <button class="ctx-item ctx-danger" data-action="delete">删除</button>
+  <button class="ctx-item" data-action="addbookmark">添加书签</button>
+  <button class="ctx-item" data-action="addgroup">添加组</button>
+  <button class="ctx-item" data-action="addcat">添加分类</button>
+  <div class="ctx-divider"></div>
+  <button class="ctx-item" data-action="trash">回收站</button>
+  <button class="ctx-item ctx-danger" data-action="emptytrash">清空回收站</button>
+  <button class="ctx-item ctx-danger" data-action="permanentdelete">永久删除</button>
+  <button class="ctx-item" data-action="restore">恢复书签</button>
+</div>
+
+<!-- Group Edit Modal -->
+<div class="modal-mask" id="groupEditModal">
+  <div class="modal">
+    <div class="modal-head"><h2>编辑组</h2><button class="modal-close" id="groupEditClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="geId">
+      <div class="form-group"><label class="form-label">组名称</label><input type="text" class="form-input" id="geName" placeholder="组名称"></div>
+      <div class="form-group"><label class="form-label">分类</label><select class="form-select" id="geCat"></select></div>
+      <div class="form-group"><label class="form-label">自定义图标</label><input type="url" class="form-input" id="geIcon" placeholder="https://… 输入图标URL，留空则使用默认图标" oninput="previewGeIconUrl()"><button class="btn btn-ghost btn-sm" id="btnClearGeIcon" style="display:none;margin-top:4px" onclick="clearGeIcon()">清除图标</button><div class="logo-preview" id="geIconPreview" style="display:none"><img src="" alt="" id="geIconPreviewImg"><span>图标预览</span></div></div>
+      <div class="form-group"><label class="form-label">属性标记</label><div class="check-group" id="geAttrs"></div></div>
+      <div class="form-group"><label class="form-label">内含书签</label><div id="geBookmarks"></div></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-secondary" id="groupEditCancel">取消</button><button class="btn btn-primary" id="groupEditSave">保存</button></div>
+  </div>
+</div>
+
+<!-- Add-to-group search popover -->
+<div class="popover-mask" id="addBmPopover" style="display:none" onclick="closeAddBmPopover()">
+  <div class="popover-card" onclick="event.stopPropagation()">
+    <div class="popover-search-row">
+      <input type="text" class="form-input" id="addBmSearch" placeholder="搜索书签…" oninput="renderAddBmResults()" autocomplete="off">
+      <button class="btn btn-primary btn-sm" onclick="addBmNew()">+ 新建</button>
+    </div>
+    <div class="popover-results" id="addBmResults"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
