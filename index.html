@@ -51,19 +51,24 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
         <div class="settings-menu ctx-menu" id="settingsMenu" style="display:none">
-          <button class="ctx-item" onclick="exportData();hideSettingsMenu()">导出数据</button>
-          <button class="ctx-item" onclick="triggerImport();hideSettingsMenu()">导入数据</button>
+          <div class="settings-label">主题风格</div>
+          <div class="settings-segment" id="themeStyleSegment">
+            <button class="seg-btn active" data-style="premium" onclick="setThemeStyle('premium')">高级</button>
+            <button class="seg-btn" data-style="comfortable" onclick="setThemeStyle('comfortable')">舒适</button>
+          </div>
+          <div class="settings-label">视图模式</div>
+          <div class="settings-segment" id="layoutSegment">
+            <button class="seg-btn active" data-mode="grid" onclick="setLayoutMode('grid')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> 宫格</button>
+            <button class="seg-btn" data-mode="list" onclick="setLayoutMode('list')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg> 列表</button>
+          </div>
+          <div class="ctx-divider"></div>
+          <div class="settings-segment" id="dataSegment">
+            <button class="seg-btn" onclick="exportData();hideSettingsMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出</button>
+            <button class="seg-btn" onclick="triggerImport();hideSettingsMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>导入</button>
+          </div>
           <div class="ctx-divider"></div>
           <button class="ctx-item ctx-danger" onclick="resetData();hideSettingsMenu()">重置数据</button>
         </div>
-      </span>
-      <span class="layout-toggle" id="layoutToggleWrap">
-        <button class="lt-btn active" id="ltGrid" onclick="setLayoutMode('grid')" title="网格视图">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        </button>
-        <button class="lt-btn" id="ltList" onclick="setLayoutMode('list')" title="列表视图">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L21 6M8 12L21 12M8 18L21 18M3 6.5H4V5.5H3V6.5ZM3 12.5H4V11.5H3V12.5ZM3 18.5H4V17.5H3V18.5Z"/></svg>
-        </button>
       </span>
       <button class="btn btn-ghost btn-sm" id="btnToggleDetail" onclick="toggleDetailPanel()" title="右侧辅助栏">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
@@ -87,8 +92,8 @@
         <span style="flex:1"></span>
         <div class="sort-group">
           <div class="sort-dir" id="sortDir" onclick="toggleSortDir()" title="切换升序/降序">
-            <button class="sort-arrow sort-asc active" id="sortAsc">∧</button>
-            <button class="sort-arrow sort-desc" id="sortDesc">∨</button>
+            <button class="sort-arrow sort-asc active" id="sortAsc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+            <button class="sort-arrow sort-desc" id="sortDesc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
           </div>
           <select class="filter-sort" id="sortSelect">
             <option value="order">默认排序</option>
