@@ -351,6 +351,79 @@ var LV = {
   lpFired: false
 };
 
+/* ==================== NAV HISTORY (浏览器返回) ==================== */
+
+function captureNavState() {
+  return {
+    curCat: LV.curCat,
+    focusedGroupId: LV.focusedGroupId,
+    detailPanelOpen: document.getElementById('detailPanel').classList.contains('open'),
+    bmModalOpen: document.getElementById('bmModal').classList.contains('open'),
+    groupEditOpen: document.getElementById('groupEditModal').classList.contains('open'),
+    catModalOpen: document.getElementById('catModal').classList.contains('open'),
+    attrModalOpen: document.getElementById('attrModal').classList.contains('open')
+  };
+}
+
+function pushNavState() {
+  history.pushState(captureNavState(), '');
+}
+
+function restoreNavState(prev) {
+  // 1. 关闭模态框（优先级最高）
+  if (prev.bmModalOpen !== true && document.getElementById('bmModal').classList.contains('open')) {
+    closeBmModal(); return;
+  }
+  if (prev.groupEditOpen !== true && document.getElementById('groupEditModal').classList.contains('open')) {
+    closeGroupEdit(); return;
+  }
+  if (prev.catModalOpen !== true && document.getElementById('catModal').classList.contains('open')) {
+    closeCatModal(); return;
+  }
+  if (prev.attrModalOpen !== true && document.getElementById('attrModal').classList.contains('open')) {
+    closeAttrModal(); return;
+  }
+
+  // 2. 退出组聚焦
+  if (prev.focusedGroupId === null && LV.focusedGroupId !== null) {
+    exitGroupFocus();
+    // 如果同时需要切换分类
+    if (prev.curCat !== LV.curCat) {
+      LV.curCat = prev.curCat;
+      renderContent();
+    }
+    return;
+  }
+
+  // 3. 关闭辅助栏
+  if (!prev.detailPanelOpen && document.getElementById('detailPanel').classList.contains('open')) {
+    document.getElementById('detailPanel').classList.remove('open');
+    document.getElementById('detailPanel').style.width = '';
+    document.getElementById('detailSearchWrap').style.display = 'none';
+    return;
+  }
+  if (prev.detailPanelOpen && !document.getElementById('detailPanel').classList.contains('open')) {
+    document.getElementById('detailPanel').classList.add('open');
+    document.getElementById('detailPanel').style.width = '';
+    renderDetailPanel();
+    return;
+  }
+
+  // 4. 切换分类
+  if (prev.curCat !== LV.curCat) {
+    LV.curCat = prev.curCat;
+    LV.focusedGroupId = null;
+    renderContent();
+    return;
+  }
+}
+
+window.addEventListener('popstate', function (e) {
+  var prev = e.state;
+  if (!prev) return;
+  restoreNavState(prev);
+});
+
 function snapSize(s) {
   return (s.notes ? s.notes.length * 2 : 0) + (s.bookmarkIds ? s.bookmarkIds.length * 20 : 0);
 }
@@ -508,6 +581,7 @@ function getCardCounts() {
 }
 
 function selectCat(id) {
+  if (id !== LV.curCat) pushNavState();
   LV.curCat = id;
   LV.focusedGroupId = null;
   renderContent();
@@ -776,8 +850,6 @@ function setupFocusModeUI(g) {
   // 保存当前列表模式，退出focus时恢复
   LV._prevLayoutMode = LV.layoutMode;
   ViewManager.apply('focus');
-  var ltWrap = document.getElementById('layoutToggleWrap');
-  if (ltWrap) ltWrap.style.display = 'none';
   var btnAdd = document.getElementById('btnAdd');
   if (btnAdd) btnAdd.style.display = 'none';
   var addWrap = document.getElementById('addWrap');
@@ -809,8 +881,6 @@ function setupGridModeUI() {
   document.getElementById('cardGrid').classList.remove('focus-view', 'focus-mobile');
   var hamburger = document.getElementById('hamburgerBtn');
   if (hamburger) hamburger.style.display = '';
-  var ltWrap = document.getElementById('layoutToggleWrap');
-  if (ltWrap) ltWrap.style.display = '';
   var btnAdd = document.getElementById('btnAdd');
   if (btnAdd) btnAdd.style.display = '';
   var addWrap = document.getElementById('addWrap');
@@ -913,10 +983,14 @@ function selectAllBatch() {
 function batchDelete() {
   if (!LV.batchSelected.length) return;
   showConfirm('确认删除所选的 ' + LV.batchSelected.length + ' 项？', function () {
-  var allSnapshots = [];
+  var bookmarkSnaps = [];
+  var groupSnaps = [];
   LV.batchSelected.forEach(function (id) {
     if (id.indexOf('group:') === 0) {
-      _deleteGroupInternal(id.slice(6));
+      var gid = id.slice(6);
+      var sg = A.siblingGroups.find(function (g) { return g.id === gid; });
+      if (sg) groupSnaps.push(JSON.parse(JSON.stringify(sg)));
+      _deleteGroupInternal(gid);
     } else {
       var bm = A.bookmarks.find(function (b) { return b.id === id; });
       if (bm) {
@@ -935,16 +1009,22 @@ function batchDelete() {
           }
         });
         A.bookmarks = A.bookmarks.filter(function (b) { return b.id !== id; });
-        allSnapshots.push(snap);
+        bookmarkSnaps.push(snap);
       }
     }
   });
   LV.batchSelected = [];
+  var totalCount = bookmarkSnaps.length + groupSnaps.length;
   debouncedSave(); renderContent();
-  if (allSnapshots.length) {
-    toast('已删除 ' + allSnapshots.length + ' 项');
-    toastWithUndo('已删除 ' + allSnapshots.length + ' 项', function () {
-      allSnapshots.forEach(function (snap) {
+  if (totalCount) {
+    toast('已删除 ' + totalCount + ' 项');
+    toastWithUndo('已删除 ' + totalCount + ' 项', function () {
+      // 先恢复组，再恢复书签（书签可能属于被删除的组）
+      groupSnaps.forEach(function (sg) {
+        A.siblingGroups.push(sg);
+      });
+      if (groupSnaps.length) A.siblingGroups.sort(function (a, b) { return a.order - b.order; });
+      bookmarkSnaps.forEach(function (snap) {
         snap.bookmarks.forEach(function (b) { A.bookmarks.push(b); });
         Object.keys(snap.groups).forEach(function (bid) {
           snap.groups[bid].forEach(function (gid) { addBmToGroup(bid, gid); });
@@ -1011,8 +1091,10 @@ function searchInFocusedGroup() {
 function toggleGroupFocus(gid) {
   var prev = LV.focusedGroupId;
   if (prev) { saveGroupBody(prev); save(); }
-  LV.focusedGroupId = (LV.focusedGroupId === gid) ? null : gid;
+  var entering = (LV.focusedGroupId !== gid);
+  LV.focusedGroupId = entering ? gid : null;
   if (prev !== LV.focusedGroupId) document.getElementById('searchInput').value = '';
+  if (entering) pushNavState();
   renderContent();
 }
 
@@ -1153,7 +1235,12 @@ function restoreExpandStates() {
 
 function toggleDetailPanel() {
   var panel = document.getElementById('detailPanel');
-  if (!LV.detailCards.length && !panel.classList.contains('open')) { panel.classList.add('open'); renderDetailPanel(); }
+  if (!panel) return;
+  // 清除拖拽遗留的内联 width，避免覆盖 CSS 的 open 类
+  panel.style.width = '';
+  var wasOpen = panel.classList.contains('open');
+  if (!wasOpen) pushNavState();
+  if (!LV.detailCards.length && !wasOpen) { panel.classList.add('open'); renderDetailPanel(); }
   else { panel.classList.toggle('open'); if (!panel.classList.contains('open')) document.getElementById('detailSearchWrap').style.display = 'none'; }
 }
 
@@ -1164,6 +1251,13 @@ function openDetail(bmId) {
 
 function closeDetailCard(bmId) {
   LV.detailCards = LV.detailCards.filter(function (id) { return id !== bmId; });
+  if (!LV.detailCards.length) {
+    var panel = document.getElementById('detailPanel');
+    panel.classList.remove('open');
+    panel.style.width = '';
+    document.getElementById('detailSearchWrap').style.display = 'none';
+    return;
+  }
   renderDetailPanel();
 }
 
@@ -1305,6 +1399,7 @@ function openBmModal(bm) {
     else if (!bm && a.id === 'china-available') checked = 'checked';
     return '<label class="check-chip' + (disabled ? ' locked' : '') + '"><input type="checkbox" data-attr="' + a.id + '" ' + checked + ' ' + disabled + '>' + esc(a.name) + '</label>';
   }).join('');
+  pushNavState();
   document.getElementById('bmModal').classList.add('open');
   setTimeout(function () { document.getElementById('bmTitle').focus(); }, 100);
   previewLogo();
@@ -1816,6 +1911,7 @@ function editGroup(gid) {
   }).join('');
   LV.lastFocusedEl = document.activeElement;
   renderGeBookmarks(gid);
+  pushNavState();
   document.getElementById('groupEditModal').classList.add('open');
 }
 
@@ -1858,7 +1954,7 @@ function saveGroupEdit() {
 
 /* ==================== CATEGORY / ATTRIBUTE MANAGEMENT ==================== */
 
-function openCatModal() { LV.lastFocusedEl = document.activeElement; renderCatList(); document.getElementById('catModal').classList.add('open'); setTimeout(function () { document.getElementById('newCatName').focus(); }, 50); }
+function openCatModal() { LV.lastFocusedEl = document.activeElement; renderCatList(); pushNavState(); document.getElementById('catModal').classList.add('open'); setTimeout(function () { document.getElementById('newCatName').focus(); }, 50); }
 function closeCatModal() { document.getElementById('catModal').classList.remove('open'); if (LV.lastFocusedEl) LV.lastFocusedEl.focus(); LV.lastFocusedEl = null; }
 
 function renderCatList() {
@@ -1888,7 +1984,7 @@ function deleteCategory(id) {
   });
 }
 
-function openAttrModal() { LV.lastFocusedEl = document.activeElement; renderAttrList(); document.getElementById('attrModal').classList.add('open'); setTimeout(function () { document.getElementById('newAttrName').focus(); }, 50); }
+function openAttrModal() { LV.lastFocusedEl = document.activeElement; renderAttrList(); pushNavState(); document.getElementById('attrModal').classList.add('open'); setTimeout(function () { document.getElementById('newAttrName').focus(); }, 50); }
 function closeAttrModal() { document.getElementById('attrModal').classList.remove('open'); if (LV.lastFocusedEl) LV.lastFocusedEl.focus(); LV.lastFocusedEl = null; }
 
 function renderAttrList() {
@@ -2501,9 +2597,9 @@ document.getElementById('cardGrid').addEventListener('dblclick', function (e) {
     toggleGroupFocus(nameEl.dataset.groupName);
     return;
   }
-  var bmName = e.target.closest('.card-name');
-  if (bmName) {
-    var card = bmName.closest('.card[data-id]:not(.group-card)');
+  var bmTarget = e.target.closest('.card-name') || e.target.closest('.card-domain');
+  if (bmTarget) {
+    var card = bmTarget.closest('.card[data-id]:not(.group-card)');
     if (card) {
       e.stopPropagation();
       visit(null, card.dataset.id);
@@ -3222,3 +3318,6 @@ initLayoutMode();
 initChipsScroll();
 updateSettingsMenuActive();
 updateCardTagsOverflow();
+
+// 初始状态：用 replaceState 记录当前状态，不产生新历史条目
+if (history.replaceState) history.replaceState(captureNavState(), '');
