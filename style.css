@@ -774,8 +774,7 @@ img{max-width:100%;display:block}
 /* ---- List: hide expandable content ---- */
 .list-view .card-acct-toggle,
 .list-view .card-acct-body,
-.list-view .sub-sites,
-
+.list-view .sub-sites{display:none}
 
 /* ---- List: card footer hidden by default (shown when expanded) ---- */
 .list-view .card-foot{
@@ -845,7 +844,6 @@ img{max-width:100%;display:block}
   overflow:visible;
   padding:0 96px 0 0;
 }
-.list-view .card-expanded .sub-sites{display:block}
 .list-view .card-expanded .card-tags,
 .list-view .group-expanded .card-tags{
   flex-wrap:wrap;gap:5px;
@@ -862,7 +860,7 @@ img{max-width:100%;display:block}
 }
 .list-view .card-expanded .card-acct-toggle svg{display:none}
 .list-view .card-expanded .card-acct-body{display:block}
-
+.list-view .card-expanded .sub-sites{display:block}
 
 /* Show group body when expanded (inside card-body, replaces preview) */
 .list-view .group-expanded .group-body{

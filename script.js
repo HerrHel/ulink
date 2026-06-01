@@ -1199,6 +1199,19 @@ function renderDetailPanel() {
     var _da = bm.attributes || {};
     var dTags = '';
     A.customAttributes.forEach(function (a) { if (_da[a.id]) dTags += '<span class="card-tag tag-custom" data-action="filterAttr" data-id="' + a.id + '">' + esc(a.name) + '</span>'; });
+    var dSubs = A.bookmarks.filter(function (b) { return b.parentId === bm.id; });
+    var dSubsHTML = '';
+    if (dSubs.length) {
+      dSubsHTML = '<div class="sub-sites">';
+      dSubs.forEach(function (sub) {
+        dSubsHTML += '<span class="group-inline-card" contenteditable="false" data-bm-id="' + sub.id + '" data-action="visit" data-id="' + sub.id + '">'
+          + '<img src="' + esc(sub.icon || favicon(sub.url)) + '" alt="" onerror="this.style.display=\'none\'">'
+          + '<span class="gic-name">' + esc(sub.title) + '</span>'
+          + '<span class="gic-btn" data-action="openDetail" data-id="' + sub.id + '">详情</span>'
+          + '</span>';
+      });
+      dSubsHTML += '</div>';
+    }
     return '<div class="detail-card" draggable="true" data-bm-id="' + bm.id + '" data-didx="' + idx + '">'
       + '<button class="detail-close" data-action="closeDetail" data-id="' + bm.id + '">&times;</button>'
       + '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">'
@@ -1211,6 +1224,7 @@ function renderDetailPanel() {
         + (bm.username ? '<div class="acct-row"><span class="acct-label">账户</span><span class="acct-val">' + esc(bm.username) + '</span><button class="acct-copy-btn" data-action="copyUser" data-id="' + bm.id + '" title="复制账户">' + I.copy + '</button></div>' : '')
         + (bm.password ? '<div class="acct-row"><span class="acct-label">密码</span><span class="acct-val">' + esc(bm.password ? safeAtob(bm.password) : '') + '</span><button class="acct-copy-btn" data-action="copyPw" data-id="' + bm.id + '" title="复制密码">' + I.copy + '</button></div>' : '')
         + '</div>' : '')
+      + dSubsHTML
       + '<div style="display:flex;gap:6px;align-items:center;margin-top:8px">'
       + '<button class="btn btn-primary btn-sm" data-action="visit" data-id="' + bm.id + '">打开网站</button>'
       + '<button class="btn btn-secondary btn-sm" data-action="editBm" data-id="' + bm.id + '">编辑</button>'
@@ -1358,10 +1372,6 @@ function addSub(pid) {
   ['btnClearIcon', 'iconPreview', 'logoPreview'].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
 }
 
-function deleteBookmark(id) {
-  showConfirm('删除此书签及其所有子书签？', function () { _doDeleteBookmark(id); });
-}
-
 /** Collect all sub-bookmark IDs recursively */
 function collectSubIds(id) {
   var ids = [id];
@@ -1369,6 +1379,10 @@ function collectSubIds(id) {
     ids = ids.concat(collectSubIds(c.id));
   });
   return ids;
+}
+
+function deleteBookmark(id) {
+  showConfirm('删除此书签及其所有子书签？', function () { _doDeleteBookmark(id); });
 }
 
 function _doDeleteBookmark(id) {
@@ -2393,7 +2407,7 @@ document.addEventListener('click', function (e) {
   // 0b. List mode: click blank area → toggle expand/collapse (only expand cards with expandable content)
   if (LV.layoutMode === 'list') {
     var listCard = e.target.closest('.list-view .card[data-id], .list-view .group-card[data-group-id]');
-    if (listCard && !e.target.closest('[data-action], button, input, select, textarea, .card-name, .card-domain, .card-tag, .card-stat, .card-acct-toggle, .card-acct-body, .sub-site-item, .batch-chk, .batch-grip, .card-logo, .card-actions, .group-inline-card, .group-body')) {
+    if (listCard && !e.target.closest('[data-action], button, input, select, textarea, .card-name, .card-domain, .card-tag, .card-stat, .card-acct-toggle, .card-acct-body, .batch-chk, .batch-grip, .card-logo, .card-actions, .group-inline-card, .group-body')) {
       var isGrp = listCard.classList.contains('group-card');
       var cls = isGrp ? 'group-expanded' : 'card-expanded';
       e.stopPropagation();
