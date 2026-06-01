@@ -40,13 +40,22 @@
     <div class="panel-main-inner">
     <!-- Header -->
     <header class="panel-header">
-      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleRail()" title="菜单">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-      </button>
-      <span class="panel-breadcrumb" id="panelTitle">全部书签</span>
-      <span class="panel-count" id="panelCount"></span>
-      <span style="flex:1"></span>
-      <span class="settings-wrap">
+      <div class="header-left">
+        <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleRail()" title="菜单">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <span class="panel-breadcrumb" id="panelTitle">全部书签</span>
+        <span class="panel-count" id="panelCount"></span>
+      </div>
+      <div class="search-wrapper header-search">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" class="search-input" id="searchInput" placeholder="搜索…" autocomplete="off" onfocus="renderSearchSuggest()" oninput="renderSearchSuggest()">
+        </div>
+        <div class="search-suggest" id="searchSuggest" style="display:none"></div>
+      </div>
+      <div class="header-right">
+        <span class="settings-wrap">
         <button class="lt-btn" id="btnSettings" onclick="toggleSettingsMenu(event)" title="设置">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
@@ -70,9 +79,10 @@
           <button class="ctx-item ctx-danger" onclick="resetData();hideSettingsMenu()">重置数据</button>
         </div>
       </span>
-      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" onclick="toggleDetailPanel()" title="右侧辅助栏">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
-      </button>
+        <button class="btn btn-ghost btn-sm" id="btnToggleDetail" onclick="toggleDetailPanel()" title="右侧辅助栏">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
+        </button>
+      </div>
     </header>
 
     <!-- Filter row -->
@@ -89,7 +99,6 @@
           </div>
           <div class="attr-chips" id="attrChips"></div>
         </div>
-        <span style="flex:1"></span>
         <div class="sort-group">
           <div class="sort-dir" id="sortDir" onclick="toggleSortDir()" title="切换升序/降序">
             <button class="sort-arrow sort-asc active" id="sortAsc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
@@ -109,17 +118,13 @@
       <span id="focusBack" style="display:none">
         <button class="btn-back-focus" onclick="exitGroupFocus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>返回</button>
       </span>
-      <div class="search-wrapper">
-        <div class="search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" class="search-input" id="searchInput" placeholder="搜索…" autocomplete="off" onfocus="renderSearchSuggest()" oninput="renderSearchSuggest()">
+      <span class="add-wrap" id="addWrap">
+        <button class="btn btn-primary btn-sm" id="btnAdd" title="添加">+</button>
+        <div class="add-dropdown ctx-menu" id="addDropdown" style="display:none">
+          <button class="ctx-item" data-action="addBmDropdown">新建书签</button>
+          <button class="ctx-item" data-action="addGrpDropdown">新建组</button>
         </div>
-        <div class="search-suggest" id="searchSuggest" style="display:none"></div>
-      </div>
-      <button class="btn btn-secondary btn-sm" id="btnAddGroup" title="新建组">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-      </button>
-      <button class="btn btn-primary btn-sm" id="btnAdd" title="添加书签">+</button>
+      </span>
       <button class="btn btn-secondary btn-sm" id="btnBatch" onclick="toggleBatchMode()" title="批量管理" style="margin-left:auto">
         <svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.25 6C2.25 5.58579 2.58579 5.25 3 5.25H20C20.4142 5.25 20.75 5.58579 20.75 6C20.75 6.41421 20.4142 6.75 20 6.75H3C2.58579 6.75 2.25 6.41421 2.25 6ZM20.4613 10.4086C20.7879 10.6634 20.8461 11.1347 20.5914 11.4613L16.6914 16.4613C16.5522 16.6397 16.3399 16.7458 16.1136 16.7499C15.8873 16.754 15.6713 16.6557 15.5257 16.4824L13.4257 13.9824C13.1593 13.6652 13.2004 13.1921 13.5176 12.9257C13.8348 12.6593 14.3079 12.7004 14.5743 13.0176L16.0784 14.8082L19.4086 10.5387C19.6634 10.2121 20.1347 10.1539 20.4613 10.4086ZM2.25 11C2.25 10.5858 2.58579 10.25 3 10.25H10C10.4142 10.25 10.75 10.5858 10.75 11C10.75 11.4142 10.4142 11.75 10 11.75H3C2.58579 11.75 2.25 11.4142 2.25 11ZM2.25 16C2.25 15.5858 2.58579 15.25 3 15.25H10C10.4142 15.25 10.75 15.5858 10.75 16C10.75 16.4142 10.4142 16.75 10 16.75H3C2.58579 16.75 2.25 16.4142 2.25 16Z" fill="currentColor"/></svg>
       </button>
@@ -137,9 +142,9 @@
         <button class="btn btn-danger btn-sm" onclick="batchDelete()">删除所选</button>
         <button class="btn btn-secondary btn-sm" onclick="toggleBatchMode()">取消</button>
       </div>
-      <div class="resize-handle" id="resizeRight"></div>
     </div>
     </div><!-- /panel-main-inner -->
+    <div class="resize-handle" id="resizeRight"></div>
 
     <!-- Right detail panel -->
     <div class="detail-panel" id="detailPanel">
@@ -222,14 +227,12 @@
   <button class="ctx-item" data-action="edit">编辑</button>
   <div class="ctx-divider"></div>
   <button class="ctx-item ctx-danger" data-action="delete">删除</button>
+  <div class="ctx-divider"></div>
   <button class="ctx-item" data-action="addbookmark">添加书签</button>
   <button class="ctx-item" data-action="addgroup">添加组</button>
   <button class="ctx-item" data-action="addcat">添加分类</button>
   <div class="ctx-divider"></div>
-  <button class="ctx-item" data-action="trash">回收站</button>
-  <button class="ctx-item ctx-danger" data-action="emptytrash">清空回收站</button>
-  <button class="ctx-item ctx-danger" data-action="permanentdelete">永久删除</button>
-  <button class="ctx-item" data-action="restore">恢复书签</button>
+  <button class="ctx-item" data-action="multiSelect">多选</button>
 </div>
 
 <!-- Group Edit Modal -->
@@ -256,6 +259,19 @@
       <button class="btn btn-primary btn-sm" onclick="addBmNew()">+ 新建</button>
     </div>
     <div class="popover-results" id="addBmResults"></div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-mask" id="confirmModal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-body" style="padding:24px 24px 16px;text-align:center">
+      <div id="confirmMsg" style="font-size:0.92rem;color:var(--text);line-height:1.6"></div>
+    </div>
+    <div class="modal-foot" style="justify-content:center">
+      <button class="btn btn-secondary" id="confirmCancel">取消</button>
+      <button class="btn btn-danger" id="confirmOk">确认</button>
+    </div>
   </div>
 </div>
 

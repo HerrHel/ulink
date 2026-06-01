@@ -276,7 +276,7 @@ img{max-width:100%;display:block}
 
 /* ==================== PANEL HEADER ==================== */
 .panel-header{
-  display:flex;align-items:center;gap:12px;
+  display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
   padding:14px 20px;
   border-bottom:1px solid var(--border-light);
   background:var(--surface);
@@ -338,6 +338,17 @@ img{max-width:100%;display:block}
   position:absolute;left:50%;transform:translateX(-50%);
   width:100%;max-width:480px;
   z-index:5;
+}
+.header-search{
+  position:relative;left:auto;transform:none;
+  width:100%;max-width:480px;
+  justify-self:center;
+}
+.header-left{
+  display:flex;align-items:center;gap:8px;
+}
+.header-right{
+  display:flex;align-items:center;justify-content:flex-end;gap:8px;
 }
 .search-box{
   position:relative;width:100%;
@@ -481,6 +492,9 @@ img{max-width:100%;display:block}
 }
 .sort-group{
   display:flex;align-items:stretch;gap:0;
+  border-left:1px solid var(--border-light);
+  padding-left:8px;margin-left:4px;
+  flex-shrink:0;
 }
 .sort-group .filter-sort{border-radius:0 8px 8px 0;border-left:none}
 .sort-dir{
@@ -517,8 +531,10 @@ img{max-width:100%;display:block}
 }
 .filter-sort:focus{border-color:var(--accent)}
 
+#filterTools{flex-wrap:nowrap!important;min-width:0!important}
 /* Attribute filter */
-.attr-filter-wrap{display:flex;align-items:center;gap:6px;position:relative}
+.attr-filter-wrap{display:flex;align-items:center;gap:6px;position:relative;flex:1;min-width:0}
+#attrChips{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
 .attr-dropdown{
   position:absolute;top:100%;left:0;z-index:500;
   min-width:200px;max-height:300px;overflow-y:auto;
@@ -579,7 +595,6 @@ img{max-width:100%;display:block}
   position:relative;
   display:inline-flex;align-items:center;gap:6px;
   padding:4px 12px 4px 18px;
-  margin-right:6px;
   clip-path:polygon(10px 0,100% 0,100% 100%,10px 100%,0 50%);
   font-size:0.74rem;font-weight:600;
   background:var(--accent-light);color:var(--accent);
@@ -596,25 +611,17 @@ img{max-width:100%;display:block}
 .attr-chip .attr-chip-x{font-size:0.85rem;line-height:1}
 
 .attr-chip-excluded{
-  background:var(--rose-light);color:var(--rose);
+  background:rgba(234,179,8,0.12);color:#ca8a04;
 }
-.attr-chip-excluded::before{background:var(--rose)}
+.attr-chip-excluded::before{background:#ca8a04}
 .attr-chip-excluded .attr-chip-txt{
   text-decoration:line-through;
   text-decoration-thickness:2px;
-  text-decoration-color:var(--rose);
+  text-decoration-color:#ca8a04;
 }
-.attr-chip-excluded:hover{background:var(--rose);color:#fff}
+.attr-chip-excluded:hover{background:#eab308;color:#fff}
 .attr-chip-excluded:hover .attr-chip-txt{text-decoration-color:#fff}
 .attr-chip-excluded:hover::before{background:#fff}
-[data-theme="dark"] .attr-chip-excluded{
-  background:var(--amber-light);color:var(--amber);
-}
-[data-theme="dark"] .attr-chip-excluded::before{background:var(--amber)}
-[data-theme="dark"] .attr-chip-excluded .attr-chip-txt{text-decoration-color:var(--amber)}
-[data-theme="dark"] .attr-chip-excluded:hover{background:var(--amber);color:#1A1A1D}
-[data-theme="dark"] .attr-chip-excluded:hover .attr-chip-txt{text-decoration-color:#1A1A1D}
-[data-theme="dark"] .attr-chip-excluded:hover::before{background:#1A1A1D}
 
 /* Beautify attr filter button */
 #btnAttrFilter{
@@ -635,7 +642,8 @@ img{max-width:100%;display:block}
 
 /* ==================== CONTENT AREA ==================== */
 .panel-content{
-  flex:1;overflow-y:auto;overflow-x:hidden;
+  flex:1;display:flex;flex-direction:column;
+  overflow-y:auto;overflow-x:hidden;
   padding:16px 20px 60px;
 }
 .card-grid{
@@ -643,237 +651,266 @@ img{max-width:100%;display:block}
   grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
   gap:10px;
 }
-
-/* ==================== LIST LAYOUT ==================== */
-.lv-list{display:flex;flex-direction:column;gap:3px}
-
-/* ---- Collapsed card ---- */
-.lv-list .card{
-  position:relative;
-  height:auto;max-height:96px;min-height:96px;
-  padding:12px 14px;
-  flex-direction:row;align-items:flex-start;
-  flex-wrap:nowrap;overflow:hidden;
+/* ==================== LIST VIEW ==================== */
+.card-grid.list-view{
+  display:flex;flex-direction:column;gap:3px;
+  grid-template-columns:none;
 }
-.lv-list .card:hover{transform:none}
 
-/* ---- card-body: flex row, tags inline with name ---- */
-.lv-list .card-body{
-  flex:1;min-width:0;overflow:hidden;
-  display:flex;flex-wrap:wrap;
-  align-items:center;
-  padding-bottom:18px;padding-right:88px;
-  -webkit-mask-image:none;mask-image:none;
+/* 列表模式下禁用卡片动画延迟 */
+.list-view .card,
+.list-view .group-card{
+  animation-delay:0s!important;
 }
-.lv-list .card-body > .card-acct-toggle{display:none}
-.lv-list .card-body > .card-acct-body{display:none}
-.lv-list .card-body > .sub-sites{display:none}
-.lv-list .card-toprow{margin-bottom:0;gap:10px;flex:1 1 auto;min-width:0}
-.lv-list .card-logo{width:36px;height:36px;border-radius:8px;flex-shrink:0}
-.lv-list .card-logo img{width:28px;height:28px}
-.lv-list .card-titlewrap{
+
+/* ---- List: all cards become horizontal rows ---- */
+.list-view .card,
+.list-view .group-card{
+  height:auto;min-height:56px;
+  padding:10px 14px;
+  flex-direction:row;align-items:stretch;
+  flex-wrap:nowrap;
+  transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.2s var(--ease-out);
+}
+/* Collapsed cards: uniform height to fit all preview content */
+.list-view .card:not(.card-expanded):not(.group-expanded),
+.list-view .group-card:not(.card-expanded):not(.group-expanded){
+  height:76px;min-height:0;
+}
+.list-view .card:hover,
+.list-view .group-card:hover{transform:none}
+
+/* ---- List: body is a vertical column ---- */
+.list-view .card-body{
+  flex:1 1 0;min-width:0;
   display:flex;flex-direction:column;
-  justify-content:center;gap:1px;
-  min-width:0;height:36px;
-}
-.lv-list .card-name{
-  font-size:0.9rem;font-weight:600;
-  white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;line-height:1.35;
-}
-.lv-list .card-domain{
-  font-size:0.75rem;
-  white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;line-height:1.25;margin:0;
-}
-.lv-list .card-body > .card-tags{
-  display:inline-flex;gap:3px;
-  flex-shrink:0;flex-wrap:nowrap;
-  max-width:140px;overflow:hidden;margin:0;
-}
-.lv-list .card-notes{
-  flex-basis:100%;display:block;
-  font-size:0.74rem;color:var(--text-muted);
-  line-height:1.3;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  -webkit-mask-image:linear-gradient(to right,black 65%,transparent 100%);
-  mask-image:linear-gradient(to right,black 65%,transparent 100%);
-  margin:2px 0 0 0;
-}
-
-/* ---- Group card: column layout, body below name ---- */
-.lv-list .group-card{
-  position:relative;
-  max-height:96px;
-  padding:12px 14px;
-  flex-direction:column;align-items:stretch;
-  flex-wrap:nowrap;overflow:hidden;
-}
-.group-domain{display:none}
-.lv-list .group-card .card-body{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:10px;padding-bottom:0}
-.lv-list .group-card-head{margin-bottom:0;flex:0 1 auto;min-width:0}
-.lv-list .group-body{
-  flex:1;min-width:0;min-height:0;
-  display:block;overflow:hidden;
-  margin:0;
-  font-size:0.8rem;line-height:1.5;
-  max-height:32px;
-  -webkit-mask-image:linear-gradient(to bottom,black 60%,transparent 95%);
-  mask-image:linear-gradient(to bottom,black 60%,transparent 95%);
-}
-.lv-list .group-head-actions{display:none}
-
-/* ---- card-foot: grid, buttons top-right ---- */
-.lv-list .card > .card-foot{
-  position:absolute;top:8px;right:10px;
-  display:grid;grid-template-columns:repeat(3,28px);
-  gap:2px;padding:2px;
-  border-top:none;z-index:5;
-  background:var(--surface);border-radius:6px;
-}
-.lv-list .card > .card-foot .card-actions{display:contents}
-.lv-list .card > .card-foot .card-stat{display:none}
-.lv-list .btn-undo-group{display:none;grid-column:2}
-.lv-list .btn-redo-group{display:none;grid-column:3}
-
-/* ---- Expand button: full-width bottom bar ---- */
-.list-expand-btn{
-  display:none;flex-shrink:0;
-  align-items:center;justify-content:center;
-  border:none;background:transparent;
-  color:var(--text-muted);cursor:pointer;
-  transition:all 0.15s ease;
-}
-.list-expand-btn svg{width:14px;height:14px;transition:transform 0.2s ease}
-.list-expand-btn:hover{color:var(--text)}
-.lv-list .list-expand-btn{
-  display:flex;
-  position:absolute;bottom:0;left:3px;right:0;
-  height:18px;
-  align-items:center;justify-content:center;
-  border:none;border-top:1px solid var(--border-light);
-  background:var(--surface);color:var(--text-muted);
-  cursor:pointer;z-index:1;
-  border-radius:0 0 12px 12px;
-}
-.lv-list .list-expand-btn:hover{background:var(--surface-hover)}
-
-/* ---- Expanded: height auto, content-driven ---- */
-/* Note: .card-expanded/.group-expanded only exist in list mode, so .lv-list context is unnecessary */
-.lv-list .card{
-  transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out),max-height 0.35s var(--ease-out),padding 0.25s ease;
-}
-.lv-list .group-card{
-  transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out),max-height 0.35s var(--ease-out),padding 0.25s ease;
-}
-.lv-list .card-expanded{
-  height:auto;min-height:96px;max-height:500px;
-  flex-wrap:wrap;align-items:flex-start;
-  padding:12px 14px 22px;
+  gap:3px;
   overflow:hidden;
 }
-.lv-list .group-expanded{
-  max-height:500px;height:auto;
-  padding:12px 14px 22px;overflow:hidden;
+
+/* ---- List: topline wraps toprow + tags in a row ---- */
+.list-view .card-topline{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+}
+/* Grid view: topline is block (toprow and tags on separate lines) */
+.card-topline{
+  display:contents;
+}
+
+/* ---- List: toprow is horizontal compact, tags flow after name ---- */
+.list-view .card-toprow{
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  margin:0;flex:0 0 auto;min-width:0;
+}
+.list-view .card-logo{
+  width:38px;height:38px;
+}
+.list-view .card-logo img{width:28px;height:28px}
+.list-view .card-titlewrap{
+  display:flex;flex-direction:column;justify-content:center;
+  min-width:0;flex:0 1 auto;height:36px;
+  padding:0;margin:0;
+}
+.list-view .card-name{
+  font-size:0.9rem;line-height:18px;height:18px;
+  max-width:200px;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;flex-shrink:1;
+}
+.list-view .card-domain{
+  font-size:0.68rem;line-height:18px;height:18px;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;flex-shrink:0;margin:0;
+}
+
+/* ---- List: tags inline after name, scrollable with fade ---- */
+.list-view .card-tags{
+  display:flex;flex-wrap:nowrap;gap:4px;margin:0;
+  align-items:center;
+  flex:0 1 30vw;min-width:0;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;-ms-overflow-style:none;
+}
+.list-view .card-tags::-webkit-scrollbar{display:none}
+.list-view .card-tags.tags-overflow{
+  -webkit-mask-image:linear-gradient(to right,black 85%,transparent 100%);
+  mask-image:linear-gradient(to right,black 85%,transparent 100%);
+}
+
+/* ---- List: notes hidden (shown via preview) ---- */
+.list-view .card-notes{display:none}
+
+/* ---- List: preview line (visible, single line ellipsis) ---- */
+.list-view .card-preview{
+  display:block;margin:0;
+  font-size:0.74rem;color:var(--text-muted);line-height:1.3;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.grid-view .card-preview,
+.focus-view .card-preview{display:none}
+
+/* ---- List: hide group head in collapsed state ---- */
+.list-view .group-card-head{
+  display:flex;align-items:center;gap:10px;
+  margin:0;flex:0 0 auto;min-width:0;
+}
+.list-view .group-head-actions{display:none}
+
+/* ---- List: expanded group head stays horizontal ---- */
+.list-view .group-expanded .group-card-head{
+  display:flex;flex-direction:row;align-items:center;gap:10px;
+  flex:0 0 auto;min-width:0;
+}
+.list-view .group-expanded .card-logo{
+  flex-shrink:0;
+}
+.list-view .group-expanded .card-titlewrap{
+  flex:0 1 auto;min-width:0;
+}
+
+/* ---- List: hide group body (contenteditable) until expanded ---- */
+.list-view .group-body{display:none}
+
+/* ---- List: hide expandable content ---- */
+.list-view .card-acct-toggle,
+.list-view .card-acct-body,
+.list-view .sub-sites,
+
+
+/* ---- List: card footer hidden by default (shown when expanded) ---- */
+.list-view .card-foot{
+  position:absolute;top:6px;right:8px;
+  padding:0;border-top:none;
+  background:var(--surface);border-radius:6px;
+  display:none;grid-template-columns:repeat(3,28px);
+  gap:4px;z-index:5;
+  opacity:0;
+  transition:opacity 0.15s ease;
+}
+.list-view .card-foot .card-actions{display:contents}
+.list-view .card-foot .card-stat{display:none}
+.list-view .btn-undo-group{display:none}
+.list-view .btn-redo-group{display:none}
+
+/* 鼠标悬停时显示操作按钮 */
+.list-view .card:hover .card-foot,
+.list-view .group-card:hover .card-foot{
+  display:grid;
+  opacity:1;
+}
+
+/* 鼠标悬停时隐藏展开按钮 */
+.list-view .card:hover .list-expand-btn,
+.list-view .group-card:hover .list-expand-btn{
+  display:none;
+}
+
+/* ---- List: expand button hidden ---- */
+.list-view .list-expand-btn{
+  display:none;
+  position:absolute;top:50%;right:8px;
+  transform:translateY(-50%);
+  width:28px;height:28px;
+  align-items:center;justify-content:center;
+  border-radius:50%;z-index:6;
+  color:var(--text-muted);background:transparent;
+  border:none;cursor:pointer;
+  transition:all 0.15s ease;
+}
+.list-view .list-expand-btn:hover{color:var(--accent);background:var(--accent-light)}
+.list-view .list-expand-btn svg{width:14px;height:14px}
+
+/* When footer is visible (grid/focus), hide expand-btn */
+.grid-view .list-expand-btn,
+.focus-view .list-expand-btn{display:none}
+
+/* ---- List: expanded state (natural height, no max-height hack) ---- */
+.list-view .card-expanded,
+.list-view .group-expanded{
+  height:auto;min-height:56px;overflow:hidden;
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent-glow);
 }
-@keyframes expandBodyIn{
-  from{opacity:0;transform:translateY(-6px)}
-  to{opacity:1;transform:translateY(0)}
+.list-view .card-expanded .group-card-accent,
+.list-view .group-expanded .group-card-accent{opacity:1}
+
+/* Expanded body: allow content to flow naturally */
+.list-view .card-expanded .card-body{
+  flex:1 1 0;
+  overflow:visible;
+  padding:0 96px 0 0;
 }
-.group-expanded .group-card-accent{opacity:1}
-.group-expanded .card-notes{display:none}
-.card-expanded .card-body{
-  flex:1 1 100%;display:block;
-  padding-right:0;
+.list-view .group-expanded .card-body{
+  flex:1 1 0;
+  overflow:visible;
+  padding:0 96px 0 0;
+}
+.list-view .card-expanded .sub-sites{display:block}
+.list-view .card-expanded .card-tags,
+.list-view .group-expanded .card-tags{
+  flex-wrap:wrap;gap:5px;
   overflow:visible;
   -webkit-mask-image:none;mask-image:none;
-  animation:expandBodyIn 0.3s var(--ease-out) backwards;
 }
-.group-card.group-expanded .card-body{
-  flex:0 1 auto;
-  padding-right:0;
-  flex-direction:column;align-items:flex-start;
-  overflow:visible;
-  -webkit-mask-image:none;mask-image:none;
-  animation:expandBodyIn 0.3s var(--ease-out) backwards;
-}
-.group-expanded .card-body > .card-tags{
-  display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 0;
-}
-.group-expanded .group-body{
-  display:block;flex:1 1 100%;
-  min-height:40px;max-height:400px;overflow-y:auto;
-  font-size:0.85rem;line-height:1.7;
-  -webkit-mask-image:none;mask-image:none;
-  color:var(--text);margin:8px 0 0;
-  animation:expandBodyIn 0.3s var(--ease-out) backwards;
-}
-.card-expanded .card-body > .card-acct-toggle{
-  display:block;font-size:0.74rem;font-weight:600;
+
+/* Show expandable content when expanded */
+.list-view .card-expanded .card-acct-toggle{
+  display:inline-flex;font-size:0.74rem;font-weight:600;
   color:var(--text-muted);cursor:default;
   padding:3px 6px;border-radius:5px;margin:4px 0 2px;
   pointer-events:none;
 }
-.card-expanded .card-body > .card-acct-toggle svg{display:none}
-.card-expanded .card-body > .card-acct-body{display:block}
-.card-expanded .card-body > .sub-sites{display:block}
-.card-expanded .card-body > .card-tags{
-  display:flex;flex-wrap:wrap;gap:5px;margin:4px 0 0;
+.list-view .card-expanded .card-acct-toggle svg{display:none}
+.list-view .card-expanded .card-acct-body{display:block}
+
+
+/* Show group body when expanded (inside card-body, replaces preview) */
+.list-view .group-expanded .group-body{
+  display:block;
+  flex:none;
+  min-height:20px;max-height:400px;overflow-y:auto;
+  font-size:0.85rem;line-height:1.7;
+  -webkit-mask-image:none;mask-image:none;
+  color:var(--text);margin:4px 0 0;
+  overflow-wrap:anywhere;
+  word-break:break-word;
 }
-.card-expanded .list-expand-btn,
-.group-expanded .list-expand-btn{
-  position:absolute;bottom:0;left:3px;right:0;
-  height:18px;width:auto;
-  border-radius:0 0 12px 12px;padding:0;margin-top:0;
-  border-top:1px solid var(--border-light);
+/* 展开后内联卡片允许换行 */
+.list-view .group-expanded .group-body .group-inline-card{
+  white-space:normal;
 }
-.card-expanded .list-expand-btn svg,
-.group-expanded .list-expand-btn svg{
-  transform:rotate(180deg);
+/* 展开后隐藏预览内容 */
+.list-view .group-expanded .card-preview{
+  display:none;
 }
-.card-expanded > .card-foot .btn-undo-group,
-.card-expanded > .card-foot .btn-redo-group,
-.group-expanded > .card-foot .btn-undo-group,
-.group-expanded > .card-foot .btn-redo-group{
-  display:inline-flex;
+/* 非聚焦组：隐藏撤销/重做按钮 */
+.list-view .group-expanded .group-head-actions{
+  display:none;
+}
+/* 聚焦组：显示撤销/重做按钮 */
+.list-view .group-expanded.group-card-focus .group-head-actions{
+  display:flex;
+}
+.list-view .group-expanded .btn-undo-group,
+.list-view .group-expanded .btn-redo-group{display:inline-flex}
+
+/* 展开后蓝色竖条样式 */
+.list-view .group-expanded .group-card-accent{
+  opacity:1;
 }
 
-/* ---- Batch grip ---- */
-.batch-grip{
-  display:none;
-  position:absolute;right:8px;top:50%;transform:translateY(-50%);
-  width:28px;height:28px;
-  align-items:center;justify-content:center;
-  border-radius:6px;
-  color:var(--text-muted);
-  cursor:grab;z-index:1;
-}
-.batch-grip svg{width:16px;height:16px}
-.batch-grip:active{cursor:grabbing}
-.lv-list .batch-grip{display:none}
-@media(max-width:768px){
-  .lv-list .batch-grip{display:flex}
+/* Hide expand-btn, show footer when expanded */
+.list-view .card-expanded .list-expand-btn,
+.list-view .group-expanded .list-expand-btn{display:none}
+.list-view .card-expanded .card-foot,
+.list-view .group-expanded .card-foot{
+  display:grid;
+  opacity:1;
+  gap:4px;
 }
 
-/* ---- Batch grip ---- */
-.batch-grip{
-  display:none;
-  position:absolute;right:8px;top:50%;transform:translateY(-50%);
-  width:28px;height:28px;
-  align-items:center;justify-content:center;
-  border-radius:6px;
-  color:var(--text-muted);
-  cursor:grab;
-  z-index:1;
-}
-.batch-grip svg{width:16px;height:16px}
-.batch-grip:active{cursor:grabbing}
-.lv-list .batch-grip{display:none}
-@media(max-width:768px){
-  .lv-list .batch-grip{display:flex}
-}
+/* Hidden domain placeholder (group cards) */
+.group-domain{display:none}
 
 /* ==================== CARD ==================== */
 .card{
@@ -917,6 +954,9 @@ img{max-width:100%;display:block}
 .card-body{
   position:relative;z-index:1;
   flex:1;overflow-y:auto;min-height:0;
+}
+/* Grid view: fade-out mask at bottom of card body */
+.card-grid:not(.list-view) .card-body{
   padding-bottom:8px;
   -webkit-mask-image:linear-gradient(to bottom,black calc(100% - 28px),transparent 100%);
   mask-image:linear-gradient(to bottom,black calc(100% - 28px),transparent 100%);
@@ -1009,7 +1049,16 @@ img{max-width:100%;display:block}
 }
 
 /* Card tags */
-.card-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.card-tags{
+  display:flex;flex-wrap:nowrap;gap:5px;margin-bottom:8px;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;-ms-overflow-style:none;
+}
+.card-tags::-webkit-scrollbar{display:none}
+.card-tags.tags-overflow{
+  -webkit-mask-image:linear-gradient(to right,black 85%,transparent 100%);
+  mask-image:linear-gradient(to right,black 85%,transparent 100%);
+}
 .card-tag{
   display:inline-flex;align-items:center;gap:3px;
   padding:3px 10px;
@@ -1019,6 +1068,7 @@ img{max-width:100%;display:block}
   cursor:pointer;
   transition:all 0.2s ease;
   border:1px solid transparent;
+  white-space:nowrap;flex-shrink:0;
 }
 .card-tag:hover{opacity:0.8;transform:translateY(-1px)}
 .tag-custom{background:var(--card-badge-bg);color:var(--card-badge-text);border-color:var(--border-light)}
@@ -1086,15 +1136,13 @@ img{max-width:100%;display:block}
   display:flex;flex-direction:column;
   overflow:hidden;
 }
-.group-card .card-body{flex:none}
-.group-notes{display:none}
-.lv-list .group-notes{display:block}
+/* card-body: flex:1 fills remaining space in grid view; flex:1 1 0 in list view */
 .group-card-accent{
-  position:absolute;left:0;top:0;bottom:0;
+  position:absolute;left:0;top:6px;bottom:6px;
   width:3px;
   background:var(--accent-grad);
   opacity:0.5;
-  border-radius:0 3px 3px 0;
+  border-radius:0 2px 2px 0;
   transition:opacity 0.2s ease,box-shadow 0.2s ease;
 }
 .group-card:hover .group-card-accent{opacity:0.8;box-shadow:0 0 8px var(--accent-glow)}
@@ -1106,54 +1154,30 @@ img{max-width:100%;display:block}
 }
 .group-card-head.drag-over{background:var(--surface-hover);border-radius:8px}
 
-.lv-focus{
-  display:flex;flex-direction:row;
-  height:100%;gap:12px;
-}
-.lv-focus .group-card-focus{
-  flex:1;min-width:0;min-height:0;height:auto;
-  border-color:var(--accent);
-  box-shadow:0 0 0 2px var(--accent-glow);
-  padding:24px 28px;
-}
-.group-card-focus .group-body{
-  -webkit-mask-image:none;
-  mask-image:none;
-  font-size:0.92rem;line-height:1.85;
+.focus-view{
+  display:flex;flex-direction:column;
+  flex:1;min-height:0;gap:12px;
 }
 .group-card-focus .group-card-accent{opacity:1}
-.group-card-focus .card-body{-webkit-mask-image:none;mask-image:none;padding:0}
-.lv-focus .list-expand-btn{display:none}
+.group-card-focus:hover{transform:none;box-shadow:0 0 0 2px var(--accent-glow);border-color:var(--accent)}
+.group-card-focus:active{transform:none}
+.group-card-focus.dragging{opacity:1;transform:none}
 
-/* Focus floating toolbar */
-.focus-toolbar{
-  flex-shrink:0;
-  display:flex;flex-direction:column;
-  gap:4px;padding:8px;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--radius-lg);
-  box-shadow:var(--shadow-md);
-  align-self:flex-start;
-  position:sticky;top:0;
-  z-index:5;
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
-}
+/* Focus toolbar — content now lives in #focusBack */
 .ft-btn{
-  width:36px;height:36px;
+  width:28px;height:28px;
   display:flex;align-items:center;justify-content:center;
   border-radius:var(--radius-md);color:var(--text-muted);
   background:transparent;border:none;
   cursor:pointer;
   transition:all 0.2s var(--ease-out);
 }
-.ft-btn:hover{color:var(--text);background:var(--surface-hover);transform:scale(1.08)}
+.ft-btn:hover{color:var(--text);background:var(--surface-hover)}
 .ft-btn:active{transform:scale(0.95);transition-duration:0.06s}
-.ft-btn svg{width:18px;height:18px}
+.ft-btn svg{width:15px;height:15px}
 .ft-btn-danger:hover{color:var(--rose);background:var(--rose-light)}
 .ft-btn.disabled{opacity:0.25;pointer-events:none}
-.ft-divider{height:1px;background:var(--border-light);margin:4px 6px}
+#focusBack{display:flex;align-items:center;gap:2px;flex:1}
 
 .btn-back-focus{
   display:inline-flex;align-items:center;gap:6px;
@@ -1286,14 +1310,19 @@ img{max-width:100%;display:block}
 }
 
 .resize-handle{
-  width:5px;flex-shrink:0;
+  width:3px;flex-shrink:0;
   cursor:col-resize;
   background:transparent;
   transition:background 0.2s ease;
   z-index:30;
 }
+#resizeLeft{margin-left:-3px}
+#resizeRight{margin-right:-3px}
 .resize-handle:hover,.resize-handle.active{
   background:var(--accent);
+}
+.panel-main:not(:has(.detail-panel.open)) #resizeRight{
+  display:none;
 }
 .detail-card{
   position:relative;
@@ -1318,12 +1347,12 @@ img{max-width:100%;display:block}
 }
 .detail-close:hover{color:var(--text);background:var(--surface-hover)}
 /* ==================== SUB-SITES ==================== */
-.sub-sites{margin-top:10px;border-top:1px solid var(--border-light);padding-top:8px;max-height:120px;overflow-y:auto}
-.sub-site-item{display:flex;align-items:center;gap:4px 6px;padding:4px 6px;border-radius:6px;cursor:pointer;font-size:0.8rem;transition:background 0.15s;flex-wrap:wrap}
-.sub-site-item:hover{background:var(--surface-hover)}
-.sub-site-item img{width:16px;height:16px;border-radius:3px;flex-shrink:0}
-.sub-site-item .ss-name{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
-.sub-site-item .ss-domain{color:var(--text-muted);font-size:0.68rem;flex:0 0 100%;margin-left:22px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub-sites{
+  margin-top:10px;border-top:1px solid var(--border-light);padding-top:8px;
+  max-height:160px;overflow-y:auto;
+  display:flex;flex-wrap:wrap;gap:4px;
+}
+.sub-sites .group-inline-card{cursor:pointer}
 
 /* ==================== EMPTY STATE ==================== */
 .empty{
@@ -1331,6 +1360,11 @@ img{max-width:100%;display:block}
   display:flex;flex-direction:column;align-items:center;
   padding:80px 20px;text-align:center;
   animation:fadeIn 0.5s var(--ease-out);
+}
+/* 列表模式下空状态样式 */
+.list-view .empty{
+  width:100%;
+  padding:60px 20px;
 }
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .empty-icon{
@@ -1454,6 +1488,37 @@ img{max-width:100%;display:block}
 .toast.err{color:var(--rose);border-color:rgba(190,18,60,0.2)}
 @keyframes toastIn{from{opacity:0;transform:translateX(40px) scale(0.95)}to{opacity:1;transform:translateX(0) scale(1)}}
 
+/* ---- Undo toast (top bar) ---- */
+.undo-toast{
+  position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-100%);
+  z-index:5000;display:flex;align-items:center;gap:14px;
+  padding:14px 22px;margin-top:16px;
+  background:linear-gradient(135deg,rgba(30,40,55,0.95),rgba(20,28,40,0.97));
+  color:#fff;
+  border-radius:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,0.25),0 0 0 1px rgba(255,255,255,0.06) inset;
+  font-size:0.88rem;font-weight:500;letter-spacing:0.01em;
+  opacity:0;transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+  pointer-events:auto;white-space:nowrap;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+.undo-toast-in{opacity:1;transform:translateX(-50%) translateY(0)}
+.undo-toast-out{opacity:0;transform:translateX(-50%) translateY(-100%);transition:all 0.3s ease-in}
+.undo-toast-msg{margin-right:2px}
+.undo-toast-btn{
+  background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.12);
+  color:#fff;cursor:pointer;
+  font-weight:700;font-size:0.82rem;padding:6px 18px;border-radius:8px;
+  white-space:nowrap;transition:all 0.2s ease;
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+}
+.undo-toast-btn:hover{background:rgba(255,255,255,0.25);border-color:rgba(255,255,255,0.2);transform:scale(1.03)}
+.undo-toast-btn:active{transform:scale(0.97);background:rgba(255,255,255,0.3)}
+.undo-toast-countdown{
+  font-size:0.78rem;opacity:0.5;font-variant-numeric:tabular-nums;
+  font-weight:600;min-width:20px;text-align:center;
+}
+
 /* ==================== @ MENTION DROPDOWN ==================== */
 .mention-drop{
   position:fixed;z-index:3001;
@@ -1524,14 +1589,35 @@ img{max-width:100%;display:block}
   white-space:nowrap;
 }
 .ctx-item:hover{color:var(--text);background-color:var(--surface-hover)}
-.ctx-danger{color:var(--accent)}
-.ctx-danger:hover{color:#fff;background-color:var(--accent)}
+.ctx-danger{color:#dc2626}
+.ctx-danger:hover{color:#fff;background-color:#dc2626}
 .ctx-divider{height:1px;background:var(--border-light);margin:4px 8px;transition:background-color 0.3s ease}
 
 /* ==================== DRAG ==================== */
 .card.dragging,.group-inline-card.dragging,.group-ref-card.dragging{opacity:0.45;transform:scale(0.96)}
 .card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+/* 列表模式下拖拽目标更明显 */
+.list-view .card.drag-over,
+.list-view .group-card.drag-over{
+  background:var(--accent-light);
+  border-left:3px solid var(--accent);
+}
 /* ==================== BATCH MODE ==================== */
+.batch-grip{
+  display:none;
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;
+  align-items:center;justify-content:center;
+  border-radius:6px;
+  color:var(--text-muted);
+  cursor:grab;z-index:1;
+}
+.batch-grip svg{width:16px;height:16px}
+.batch-grip:active{cursor:grabbing}
+.list-view .batch-grip{display:none}
+@media(max-width:768px){
+  .list-view .batch-grip{display:flex}
+}
 .batch-chk{
   position:absolute;top:10px;left:10px;
   width:18px;height:18px;
@@ -1559,7 +1645,10 @@ img{max-width:100%;display:block}
   font-weight:500;
 }
 #btnBatch.active{background:var(--accent);color:#fff}
-
+/* Desktop: batch button hidden (use right-click 多选 instead); Mobile: visible */
+@media (min-width:769px) {
+  #btnBatch{display:none !important}
+}
 /* ==================== SETTINGS MENU ==================== */
 .settings-label{
   font-size:0.72rem;font-weight:600;color:var(--text-muted);
@@ -1640,6 +1729,7 @@ img{max-width:100%;display:block}
 
 @media(max-width:768px){
   .hamburger-btn{display:flex;align-items:center;justify-content:center}
+  #resizeLeft{display:none}
   .icon-rail{
     position:fixed;left:0;top:0;height:100vh;width:260px;
     z-index:2000;
@@ -1650,9 +1740,11 @@ img{max-width:100%;display:block}
   }
   .icon-rail.open{transform:translateX(0)}
   .overlay.show{display:block}
-  .panel-header{padding:10px 14px;flex-wrap:wrap;gap:8px}
-  .search-wrapper{max-width:none;width:calc(100% - 28px)}
-  .card-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+  .panel-header{padding:10px 14px;grid-template-columns:1fr auto;grid-template-rows:auto auto;gap:8px}
+  .header-left{grid-row:1;grid-column:1}
+  .header-right{grid-row:1;grid-column:2}
+  .header-search{grid-row:2;grid-column:1/-1;max-width:none;width:100%;justify-self:stretch}
+  .card-grid:not(.list-view){grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
   .panel-content{padding:12px 14px 60px}
   .form-row{grid-template-columns:1fr}
   .detail-panel.open{width:var(--detail-width,280px)}
@@ -1662,13 +1754,8 @@ img{max-width:100%;display:block}
   .filter-row{flex-wrap:wrap}
   .filter-row #filterTools{flex:1 1 100%;order:1}
   .filter-row #focusBack{order:2}
-  .search-wrapper{
-    position:relative;left:auto;transform:none;
-    flex:1 1 100%;order:3;max-width:100%;margin-top:6px;
-  }
-  .filter-row #btnAddGroup{order:4}
-  .filter-row #btnAdd{order:5}
-  .filter-row #btnBatch{order:6}
+  .filter-row #addWrap{order:4}
+  .filter-row #btnBatch{order:5}
 
   /* Mobile detail panel → bottom drawer */
   .detail-panel{
@@ -1703,8 +1790,8 @@ img{max-width:100%;display:block}
   .detail-actions-bar button svg{width:14px;height:14px}
 
   /* Mobile focus mode */
-  .lv-focus{flex-direction:column!important;gap:8px;padding-bottom:60px}
-  .lv-focus .group-card-focus{flex:1;min-height:0;padding:14px 16px 60px}
+  .focus-view{flex-direction:column!important;gap:8px;padding-bottom:60px}
+  .focus-view .group-card-focus{flex:1;min-height:0;padding:14px 16px 60px}
   .focus-toolbar{
     position:fixed;bottom:0;left:0;right:0;
     flex-direction:row!important;justify-content:center;
@@ -1714,11 +1801,9 @@ img{max-width:100%;display:block}
     align-self:auto;top:auto;
     box-shadow:0 -2px 12px rgba(0,0,0,0.1);
   }
-  .focus-toolbar .ft-divider{width:1px;height:24px;margin:0 2px}
-  .focus-toolbar .ft-btn{width:40px;height:40px}
 
   /* Mobile search bar */
-  .search-wrapper{max-width:none;width:100%}
+  .header-search{max-width:none;width:100%;justify-self:stretch}
 
   /* Mobile modals → bottom slide */
   .modal{
@@ -1735,7 +1820,7 @@ img{max-width:100%;display:block}
   .modal input[type="text"],.modal input[type="url"],.modal input[type="password"],.modal textarea{font-size:16px}
 }
 @media(max-width:480px){
-  .card-grid{grid-template-columns:1fr;gap:8px}
+  .card-grid:not(.list-view){grid-template-columns:1fr;gap:8px}
   .filter-row{gap:4px}
 }
 
@@ -1785,4 +1870,27 @@ img{max-width:100%;display:block}
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}
+}
+
+/* ============================================================
+   FOCUS MODE — .focus-view namespace isolates from grid/list
+   ============================================================ */
+.focus-view .group-card-focus{
+  height:auto;max-height:none;
+  flex:1;min-height:0;
+  display:flex;flex-direction:column;
+  padding:24px 28px;overflow:hidden;
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-glow);
+}
+.focus-view .group-card-focus .card-body{
+  display:flex;flex-direction:column;flex:1;min-height:0;
+}
+.focus-view .group-card-focus .group-card-head{display:none}
+.focus-view .group-card-focus .card-tags{display:none}
+.focus-view .group-card-focus .card-preview{display:none}
+.focus-view .group-card-focus .group-body{
+  flex:1;min-height:0;overflow-y:auto;
+  -webkit-mask-image:none;mask-image:none;
+  font-size:0.92rem;line-height:1.85;
 }

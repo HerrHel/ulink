@@ -199,15 +199,16 @@ function importData(file) {
 function triggerImport() { document.getElementById('importFile').click(); }
 
 function resetData() {
-  if (!confirm('确认清除所有数据？这将恢复为默认状态，且不可撤销。')) return;
-  localStorage.removeItem(STORAGE_KEY);
-  A = JSON.parse(JSON.stringify(DEFAULTS));
-  LV.curCat = CAT_ALL; LV.focusedGroupId = null;
-  LV.activeAttrs = []; LV.excludedAttrs = [];
-  LV.detailCards = [];
-  Object.keys(LV.undoStacks).forEach(function (k) { delete LV.undoStacks[k]; });
-  save(); renderAll();
-  toast('数据已重置为默认');
+  showConfirm('确认清除所有数据？这将恢复为默认状态，且不可撤销。', function () {
+    localStorage.removeItem(STORAGE_KEY);
+    A = JSON.parse(JSON.stringify(DEFAULTS));
+    LV.curCat = CAT_ALL; LV.focusedGroupId = null;
+    LV.activeAttrs = []; LV.excludedAttrs = [];
+    LV.detailCards = [];
+    Object.keys(LV.undoStacks).forEach(function (k) { delete LV.undoStacks[k]; });
+    save(); renderAll();
+    toast('数据已重置为默认');
+  });
 }
 
 /* ==================== UTILITY FUNCTIONS ==================== */
@@ -317,7 +318,6 @@ var LV = {
   detailCards: [],
   activeAttrs: [],
   excludedAttrs: [],
-  showTrash: false,
   pwShown: {},
   visitTimer: null,
   lastFocusedEl: null,
@@ -348,9 +348,7 @@ var LV = {
   // Touch / long-press
   lpTimer: null,
   lpTarget: null,
-  lpFired: false,
-  touchData: null,
-  deletedBmGroups: null
+  lpFired: false
 };
 
 function snapSize(s) {
@@ -387,7 +385,7 @@ function cleanStaleUndoStacks() {
   for (var gid in LV.undoStacks) {
     if (!A.siblingGroups.find(function (g) { return g.id === gid; })) {
       delete LV.undoStacks[gid];
-      delete LV.undoTimers[gid];
+      if (LV.undoTimers[gid]) { clearTimeout(LV.undoTimers[gid]); delete LV.undoTimers[gid]; }
     }
   }
 }
@@ -428,6 +426,51 @@ function toast(msg, ok) {
   c.appendChild(d);
   setTimeout(function () { d.style.opacity = '0'; d.style.transform = 'translateX(30px)'; d.style.transition = 'all 0.25s ease-in'; }, TOAST_FADE_MS);
   setTimeout(function () { d.remove(); }, TOAST_REMOVE_MS);
+}
+
+function toastWithUndo(msg, undoFn, duration) {
+  duration = duration || 6000;
+  // Remove any existing undo toast
+  var old = document.querySelector('.undo-toast');
+  if (old) old.remove();
+  var d = document.createElement('div');
+  d.className = 'undo-toast';
+  var sec = Math.ceil(duration / 1000);
+  d.innerHTML = '<span class="undo-toast-msg">' + esc(msg) + '</span>'
+    + '<button class="undo-toast-btn">撤回</button>'
+    + '<span class="undo-toast-countdown">' + sec + 's</span>';
+  d.querySelector('.undo-toast-btn').addEventListener('click', function () {
+    undoFn();
+    clearInterval(cdTimer);
+    clearTimeout(dismissTimer);
+    d.classList.add('undo-toast-out');
+    setTimeout(function () { d.remove(); }, 300);
+  });
+  document.body.appendChild(d);
+  requestAnimationFrame(function () { d.classList.add('undo-toast-in'); });
+  var remaining = duration;
+  var cdEl = d.querySelector('.undo-toast-countdown');
+  var cdTimer = setInterval(function () {
+    remaining -= 1000;
+    if (remaining > 0) cdEl.textContent = Math.ceil(remaining / 1000) + 's';
+  }, 1000);
+  var dismissTimer = setTimeout(function () {
+    clearInterval(cdTimer);
+    d.classList.add('undo-toast-out');
+    setTimeout(function () { d.remove(); }, 300);
+  }, duration);
+}
+
+function showConfirm(msg, onConfirm) {
+  var modal = document.getElementById('confirmModal');
+  document.getElementById('confirmMsg').textContent = msg;
+  modal.classList.add('open');
+  var okBtn = document.getElementById('confirmOk');
+  var cancelBtn = document.getElementById('confirmCancel');
+  function close() { modal.classList.remove('open'); okBtn.onclick = null; cancelBtn.onclick = null; }
+  okBtn.onclick = function () { close(); onConfirm(); };
+  cancelBtn.onclick = close;
+  modal.onclick = function (e) { if (e.target === modal) close(); };
 }
 
 /* ==================== RENDERING ==================== */
@@ -471,15 +514,7 @@ function selectCat(id) {
 }
 
 function getFiltered() {
-  if (LV.showTrash) {
-    var tq = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-    return A.bookmarks.filter(function (b) {
-      if (!b.deletedAt) return false;
-      if (!tq) return true;
-      return (b.title || '').toLowerCase().indexOf(tq) > -1 || (domain(b.url) || '').toLowerCase().indexOf(tq) > -1;
-    });
-  }
-  var bm = A.bookmarks.filter(function (b) { return !b.deletedAt; });
+  var bm = A.bookmarks.slice();
   if (LV.curCat !== CAT_ALL) bm = bm.filter(function (b) { return b.categoryId === LV.curCat; });
   var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
   if (q) bm = bm.filter(function (b) {
@@ -493,14 +528,13 @@ function getFiltered() {
     var d = LV.sortDir === 'asc' ? 1 : -1;
     if (sort === 'useCount') return (a.useCount - b.useCount) * d;
     if (sort === 'title') return a.title.localeCompare(b.title) * d;
-    if (sort === 'date') return (a.createdAt - b.createdAt) * d;
+    if (sort === 'date') return ((a.updatedAt || a.createdAt) - (b.updatedAt || b.createdAt)) * d;
     return (a.order - b.order) * d;
   });
   return bm;
 }
 
 function getFilteredGroups() {
-  if (LV.showTrash) return [];
   var groups = A.siblingGroups.slice().sort(function (a, b) { return a.order - b.order; });
   if (LV.curCat !== CAT_ALL) groups = groups.filter(function (g) { return g.categoryId === LV.curCat; });
   var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
@@ -541,23 +575,24 @@ function renderCardHTML(bm) {
   var notes = bm.notes ? '<div class="card-notes">' + esc(bm.notes) + '</div>' : '';
   var hasAcct = bm.username || bm.password;
   var subs = A.bookmarks.filter(function (b) { return b.parentId === bm.id; });
-  var hasExpand = hasAcct || subs.length > 0 || (bm.notes && bm.notes.length > 60);
   var subsHTML = '';
   if (subs.length) {
     subsHTML = '<div class="sub-sites">';
     subs.forEach(function (sub) {
-      subsHTML += '<div class="sub-site-item" data-action="visit" data-id="' + sub.id + '">'
-        + '<img src="' + (sub.icon || favicon(sub.url)) + '" alt="" onerror="this.style.display=\'none\'">'
-        + '<span class="ss-name">' + esc(sub.title) + '</span>'
-        + '<span class="ss-domain">' + domain(sub.url) + '</span>'
-        + '</div>';
+      subsHTML += '<span class="group-inline-card" contenteditable="false" data-bm-id="' + sub.id + '" data-action="visit" data-id="' + sub.id + '">'
+        + '<img src="' + esc(sub.icon || favicon(sub.url)) + '" alt="" onerror="this.style.display=\'none\'">'
+        + '<span class="gic-name">' + esc(sub.title) + '</span>'
+        + '<span class="gic-btn" data-action="openDetail" data-id="' + sub.id + '">详情</span>'
+        + '</span>';
     });
     subsHTML += '</div>';
   }
-  return '<div class="card" draggable="true" data-id="' + bm.id + '"' + (LV.batchMode ? ' onclick="toggleBatchSelect(\'' + bm.id + '\', event)"' : '') + '>'
-    + (LV.batchMode ? '<input type="checkbox" class="batch-chk" id="batchChk_' + bm.id + '" onclick="toggleBatchSelect(\'' + bm.id + '\', event)">' : '')
+  var previewText = bm.notes ? bm.notes : '';
+  return '<div class="card" draggable="true" data-id="' + bm.id + '">'
+    + (LV.batchMode ? '<input type="checkbox" class="batch-chk" id="batchChk_' + bm.id + '">' : '')
     + (LV.batchMode ? '<span class="batch-grip">' + I.grip + '</span>' : '')
     + '<div class="card-body">'
+    + '<div class="card-topline">'
     + '<div class="card-toprow">'
     + '<div class="card-logo" title="打开链接" data-action="visit" data-id="' + bm.id + '"><img src="' + icon + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="card-logo-fallback">' + bm.title.charAt(0) + '</span></div>'
     + '<div class="card-titlewrap">'
@@ -565,7 +600,9 @@ function renderCardHTML(bm) {
     + '<div class="card-domain">' + esc(dm) + '</div>'
     + '</div></div>'
     + (attrTags ? '<div class="card-tags">' + attrTags + '</div>' : '')
+    + '</div>'
     + notes
+    + (previewText ? '<div class="card-preview">' + esc(previewText) + '</div>' : '')
     + (hasAcct ? '<button class="card-acct-toggle" data-action="toggleAcct" data-id="' + bm.id + '">' + I.chevron + ' 账户信息</button><div class="card-acct-body">'
       + (bm.username ? '<div class="acct-row"><span class="acct-label">账户</span><span class="acct-val">' + esc(bm.username) + '</span><button class="acct-copy-btn" data-action="copyUser" data-id="' + bm.id + '" title="复制账户">' + I.copy + '</button></div>' : '')
       + (bm.password ? '<div class="acct-row"><span class="acct-label">密码</span><span class="acct-val" id="pwdisp_' + bm.id + '">••••••</span><button class="acct-show-pw" data-action="togglePw" data-id="' + bm.id + '" title="显示密码"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="acct-copy-btn" data-action="copyPw" data-id="' + bm.id + '" title="复制密码">' + I.copy + '</button></div>' : '')
@@ -580,8 +617,30 @@ function renderCardHTML(bm) {
     + '<button class="btn-xs btn-danger" data-action="deleteBm" data-id="' + bm.id + '" title="删除">' + I.trash + '</button>'
     + '</span>'
     + '</div>'
-    + (hasExpand ? '<button class="list-expand-btn" data-action="toggleExpand" title="展开">' + I.chevronDown + '</button>' : '')
+    + ((hasAcct || subs.length) ? '<button class="list-expand-btn" data-action="toggleExpand" data-id="' + bm.id + '" title="展开">' + I.chevronDown + '</button>' : '')
     + '</div>';
+}
+
+/** Extract plain-text preview from group notes HTML.
+ *  Inline bookmark cards → 【书签名】, plain text kept as-is. CSS handles truncation. */
+function extractGroupPreview(g) {
+  var tmp = document.createElement('div');
+  tmp.innerHTML = sanitizeHTML(g.notes || '');
+  var text = '';
+  function walk(node) {
+    if (node.nodeType === 3) {
+      text += node.textContent.trim();
+    } else if (node.nodeType === 1) {
+      if (node.classList && node.classList.contains('group-inline-card')) {
+        var nameEl = node.querySelector('.gic-name');
+        if (nameEl) text += '【' + nameEl.textContent.trim() + '】';
+      } else {
+        for (var i = 0; i < node.childNodes.length; i++) walk(node.childNodes[i]);
+      }
+    }
+  }
+  for (var i = 0; i < tmp.childNodes.length; i++) walk(tmp.childNodes[i]);
+  return text || '无附加文案';
 }
 
 function renderGroupCardHTML(g) {
@@ -593,30 +652,33 @@ function renderGroupCardHTML(g) {
   var bodyHTML = sanitizeHTML(g.notes || '');
   var gIcon = g.icon || '';
   var gTags = '';
-  A.customAttributes.forEach(function (a) { if (a.id !== ATTR_IS_GROUP && (g.attributes || {})[a.id]) gTags += '<span class="card-tag tag-custom">' + esc(a.name) + '</span>'; });
+  A.customAttributes.forEach(function (a) { if (a.id !== ATTR_IS_GROUP && (g.attributes || {})[a.id]) gTags += '<span class="card-tag tag-custom" data-action="filterAttr" data-id="' + a.id + '" title="按此属性筛选">' + esc(a.name) + '</span>'; });
   var gItemId = 'group:' + g.id;
-  return '<div class="card group-card' + (isFocused ? ' group-card-focus' : '') + '" data-group-id="' + g.id + '" draggable="true"' + (LV.batchMode ? ' onclick="toggleBatchSelect(\'' + gItemId + '\', event)"' : '') + '>'
+  var gPreview = extractGroupPreview(g);
+  return '<div class="card group-card' + (isFocused ? ' group-card-focus' : '') + '" data-group-id="' + g.id + '" draggable="true">'
     + '<div class="group-card-accent"></div>'
-    + (LV.batchMode ? '<input type="checkbox" class="batch-chk" id="batchChk_' + gItemId + '" onclick="toggleBatchSelect(\'' + gItemId + '\', event)">' : '')
+    + (LV.batchMode ? '<input type="checkbox" class="batch-chk" id="batchChk_' + gItemId + '">' : '')
     + (LV.batchMode ? '<span class="batch-grip">' + I.grip + '</span>' : '')
     + '<div class="card-body">'
-    + (isFocused ? '' : '<div class="group-card-head">'
-      + '<div class="card-logo group-card-icon" title="展开组" data-action="toggleFocus" data-id="' + g.id + '" style="cursor:pointer">'
-      + (gIcon ? '<img src="' + esc(gIcon) + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="card-logo-fallback">' + I.note + '</span>'
-        : I.note)
-      + '</div>'
-      + '<div class="card-titlewrap">'
-      + '<div class="card-name">' + esc(g.name || '未命名组') + '</div>'
-      + '<div class="card-domain group-domain"></div>'
-      + '</div>'
-      + '<div class="group-head-actions">'
-      + '<button class="btn-undo-group' + (hasUndo ? '' : ' disabled') + '" data-action="undoGroup" data-id="' + g.id + '" title="撤销">' + I.undo + '</button>'
-      + '<button class="btn-redo-group' + (hasRedo ? '' : ' disabled') + '" data-action="redoGroup" data-id="' + g.id + '" title="前进">' + I.redo + '</button>'
-      + '</div>'
-      + '</div>')
-    + (gTags ? '<div class="card-tags">' + gTags + '</div>' : '')
+    + '<div class="group-card-head">'
+    + '<div class="card-logo group-card-icon" data-action="toggleFocus" data-id="' + g.id + '" style="cursor:pointer">'
+    + (gIcon ? '<img src="' + esc(gIcon) + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="card-logo-fallback">' + I.note + '</span>'
+      : I.note)
     + '</div>'
+    + '<div class="card-titlewrap">'
+    + '<div class="card-name" data-group-name="' + g.id + '">' + esc(g.name || '未命名组') + '</div>'
+    + '<div class="card-domain group-domain"></div>'
+    + '</div>'
+    + '<div class="group-head-actions">'
+    + '<button class="btn-undo-group' + (hasUndo ? '' : ' disabled') + '" data-action="undoGroup" data-id="' + g.id + '" title="撤销">' + I.undo + '</button>'
+    + '<button class="btn-redo-group' + (hasRedo ? '' : ' disabled') + '" data-action="redoGroup" data-id="' + g.id + '" title="前进">' + I.redo + '</button>'
+    + '</div>'
+    + '</div>'
+    + (gTags ? '<div class="card-tags">' + gTags + '</div>' : '')
     + '<div class="group-body" id="sgBody_' + g.id + '" data-gid="' + g.id + '" contenteditable="true">' + bodyHTML + '</div>'
+    + '<div class="card-preview">' + esc(gPreview || '') + '</div>'
+    + '</div>'
+    + (bodyHTML.trim() ? '<button class="list-expand-btn" data-action="toggleExpand" data-group-id="' + g.id + '" title="展开">' + I.chevronDown + '</button>' : '')
     + (isFocused ? '' : '<div class="card-foot">'
       + '<span class="card-stat">' + bmCount + ' 个书签</span>'
       + '<span class="card-actions">'
@@ -625,17 +687,28 @@ function renderGroupCardHTML(g) {
       + '<button class="btn-xs btn-danger" data-action="deleteGroup" data-id="' + g.id + '" title="删除组">' + I.trash + '</button>'
       + '</span>'
       + '</div>')
-    + (isFocused ? '' : (g.notes ? '<button class="list-expand-btn" data-action="toggleExpand" title="展开">' + I.chevronDown + '</button>' : ''))
     + '</div>';
 }
 
 /* ---- Full render ---- */
 
+/** ViewManager — single source of truth for view class on #cardGrid.
+ *  CSS namespaces: .grid-view / .list-view / .focus-view
+ *  Each namespace has fully independent rules — no specificity conflicts. */
+var ViewManager = {
+  /** Apply the correct view class to #cardGrid. Called by setupFocusModeUI / setupGridModeUI / applyLayoutMode. */
+  apply: function (mode) {
+    var grid = document.getElementById('cardGrid');
+    grid.classList.remove('grid-view', 'list-view', 'focus-view');
+    grid.classList.add(mode + '-view');
+  }
+};
+
 /** Fetch filtered data and resolve focus mode → returns { combined, groups, topLevel } */
 function getRenderData() {
   var filtered = getFiltered();
   var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-  var groups = getFilteredGroups(q);
+  var groups = getFilteredGroups();
   var topLevel = filtered.filter(function (b) { return !b.parentId; });
 
   if (LV.focusedGroupId) {
@@ -661,26 +734,15 @@ function buildGridHTML(combined) {
   combined.forEach(function (item) {
     html += item.type === 'group' ? renderGroupCardHTML(item.data) : renderCardHTML(item.data);
   });
-  if (LV.focusedGroupId) {
-    html += '<div class="focus-toolbar" id="focusToolbar">' + buildFocusToolbarHTML(LV.focusedGroupId) + '</div>';
-  }
   if (!html) {
     html = '<div class="empty"><div class="empty-icon">' + I.bookmark + '</div><h3>暂无书签</h3><p>点击 + 按钮开始收藏</p></div>';
   }
   return html;
 }
 
-/** Update panel header (count, title, trash mode UI) */
+/** Update panel header (count, title) */
 function updatePanelHeader(combined) {
-  if (LV.showTrash) {
-    document.getElementById('panelCount').textContent = combined.length + ' 个';
-    document.getElementById('panelTitle').textContent = '回收站';
-    document.getElementById('filterTools').style.display = 'none';
-    document.getElementById('focusBack').style.display = '';
-    document.getElementById('focusBack').innerHTML = '<button class="btn-xs" onclick="toggleTrash()" style="font-size:0.8rem">← 返回</button>';
-    var btnAdd = document.getElementById('btnAdd');
-    if (btnAdd) btnAdd.style.display = 'none';
-  } else if (!LV.focusedGroupId) {
+  if (!LV.focusedGroupId) {
     document.getElementById('panelCount').textContent = combined.length + ' 个';
     document.getElementById('panelTitle').textContent = (A.categories.find(function (c) { return c.id === LV.curCat; }) || {}).name || '全部书签';
   }
@@ -691,11 +753,16 @@ function renderContent() {
   document.getElementById('cardGrid').innerHTML = buildGridHTML(data.combined);
   updatePanelHeader(data.combined);
   renderRail();
+  requestAnimationFrame(function() {
+    updateCardTagsOverflow();
+    restoreExpandStates();
+  });
 }
 
 function setupFocusModeUI(g) {
   document.getElementById('filterTools').style.display = 'none';
   document.getElementById('focusBack').style.display = '';
+  document.getElementById('focusBack').innerHTML = buildFocusToolbarHTML(g.id);
   document.getElementById('panelCount').textContent = '';
   // 显示组名和图标到面板标题
   var gIcon = g.icon || '';
@@ -706,14 +773,15 @@ function setupFocusModeUI(g) {
   var si = document.getElementById('searchInput');
   si.placeholder = '搜索组内…';
   si.dataset.focus = '1';
-  document.getElementById('cardGrid').classList.remove('card-grid-list');
-  document.getElementById('cardGrid').classList.add('card-grid-focus', 'lv-focus');
+  // 保存当前列表模式，退出focus时恢复
+  LV._prevLayoutMode = LV.layoutMode;
+  ViewManager.apply('focus');
   var ltWrap = document.getElementById('layoutToggleWrap');
   if (ltWrap) ltWrap.style.display = 'none';
   var btnAdd = document.getElementById('btnAdd');
   if (btnAdd) btnAdd.style.display = 'none';
-  var btnAddGroup = document.getElementById('btnAddGroup');
-  if (btnAddGroup) btnAddGroup.style.display = 'none';
+  var addWrap = document.getElementById('addWrap');
+  if (addWrap) addWrap.style.display = 'none';
   var btnBatch = document.getElementById('btnBatch');
   if (btnBatch) btnBatch.style.display = 'none';
   var hamburger = document.getElementById('hamburgerBtn');
@@ -723,7 +791,13 @@ function setupFocusModeUI(g) {
   var title = document.getElementById('panelTitle');
   title.innerHTML = '<span class="panel-title-group-icon">' + iconHTML + '</span><input id="focusGroupTitle" value="' + esc(g.name) + '" placeholder="输入组名…">';
   var input = document.getElementById('focusGroupTitle');
-  input.style.cssText = 'font-family:Clash Display,system-ui,sans-serif;font-size:1.1rem;font-weight:600;background:transparent;border:none;border-bottom:1.5px dashed var(--border);outline:none;color:var(--text);padding:2px 4px;border-radius:0;min-width:80px;width:auto';
+  input.style.cssText = 'font-family:Clash Display,system-ui,sans-serif;font-size:1.1rem;font-weight:600;background:transparent;border:none;border-bottom:1.5px dashed var(--border);outline:none;color:var(--text);padding:2px 4px;border-radius:0;min-width:40px;width:auto';
+  var r = document.createElement('span');
+  r.style.cssText = 'position:absolute;visibility:hidden;font-family:Clash Display,system-ui,sans-serif;font-size:1.1rem;font-weight:600;white-space:nowrap';
+  document.body.appendChild(r);
+  function fitTitle() { r.textContent = input.value || input.placeholder; input.style.width = (r.offsetWidth + 12) + 'px'; }
+  input.oninput = fitTitle;
+  fitTitle();
   input.onchange = function () { renameGroup(LV.focusedGroupId, this.value); };
   input.onblur = function () { this.style.borderBottomColor = 'var(--border)'; this.style.borderBottomStyle = 'dashed'; renameGroup(LV.focusedGroupId, this.value); };
   input.onfocus = function () { this.style.borderBottomColor = 'var(--accent)'; this.style.borderBottomStyle = 'solid'; this.select(); };
@@ -732,17 +806,22 @@ function setupFocusModeUI(g) {
 function setupGridModeUI() {
   document.getElementById('filterTools').style.display = 'flex';
   document.getElementById('focusBack').style.display = 'none';
-  document.getElementById('cardGrid').classList.remove('card-grid-focus', 'lv-focus', 'focus-mobile');
+  document.getElementById('cardGrid').classList.remove('focus-view', 'focus-mobile');
   var hamburger = document.getElementById('hamburgerBtn');
   if (hamburger) hamburger.style.display = '';
   var ltWrap = document.getElementById('layoutToggleWrap');
   if (ltWrap) ltWrap.style.display = '';
   var btnAdd = document.getElementById('btnAdd');
   if (btnAdd) btnAdd.style.display = '';
-  var btnAddGroup = document.getElementById('btnAddGroup');
-  if (btnAddGroup) btnAddGroup.style.display = '';
+  var addWrap = document.getElementById('addWrap');
+  if (addWrap) addWrap.style.display = '';
   var btnBatch = document.getElementById('btnBatch');
   if (btnBatch) btnBatch.style.display = '';
+  // 恢复之前的列表模式（如果从focus模式退出）
+  if (LV._prevLayoutMode) {
+    LV.layoutMode = LV._prevLayoutMode;
+    delete LV._prevLayoutMode;
+  }
   applyLayoutMode();
   var si = document.getElementById('searchInput');
   si.placeholder = '搜索…';
@@ -767,14 +846,7 @@ function setLayoutMode(mode) {
 
 function applyLayoutMode() {
   if (LV.focusedGroupId) return;
-  var grid = document.getElementById('cardGrid');
-  if (LV.layoutMode === 'list') {
-    grid.classList.add('card-grid-list', 'lv-list');
-  } else {
-    grid.classList.remove('card-grid-list', 'lv-list');
-  }
-  var grip = document.getElementById('btnGrip');
-  if (grip) grip.style.display = (LV.batchMode && LV.layoutMode === 'list' && window.innerWidth <= 768) ? '' : 'none';
+  ViewManager.apply(LV.layoutMode === 'list' ? 'list' : 'grid');
 }
 
 function updateSettingsMenuActive() {
@@ -802,8 +874,6 @@ function toggleBatchMode() {
     btn.title = LV.batchMode ? '取消' : '批量管理';
     btn.classList.toggle('active', LV.batchMode);
   }
-  var grip = document.getElementById('btnGrip');
-  if (grip) grip.style.display = (LV.batchMode && LV.layoutMode === 'list' && window.innerWidth <= 768) ? '' : 'none';
   if (LV.focusedGroupId) exitGroupFocus();
   renderContent();
   var bar = document.getElementById('batchBar');
@@ -826,8 +896,7 @@ function toggleBatchSelect(itemId, e) {
 
 function selectAllBatch() {
   var filtered = getFiltered();
-  var q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-  var groups = getFilteredGroups(q);
+  var groups = getFilteredGroups();
   var allIds = filtered.map(function (b) { return b.id; })
     .concat(groups.map(function (g) { return 'group:' + g.id; }));
   var allSelected = allIds.length > 0 && allIds.every(function (id) { return LV.batchSelected.indexOf(id) !== -1; });
@@ -843,28 +912,73 @@ function selectAllBatch() {
 
 function batchDelete() {
   if (!LV.batchSelected.length) return;
-  if (!confirm('确认删除所选的 ' + LV.batchSelected.length + ' 项？')) return;
-  var now = Date.now();
+  showConfirm('确认删除所选的 ' + LV.batchSelected.length + ' 项？', function () {
+  var allSnapshots = [];
   LV.batchSelected.forEach(function (id) {
     if (id.indexOf('group:') === 0) {
       _deleteGroupInternal(id.slice(6));
     } else {
       var bm = A.bookmarks.find(function (b) { return b.id === id; });
-      if (bm && !bm.deletedAt) _deleteBmInternal(id, now);
+      if (bm) {
+        var snap = { bookmarks: [JSON.parse(JSON.stringify(bm))], groups: {} };
+        A.siblingGroups.forEach(function (g) {
+          if (g.bookmarkIds.indexOf(id) > -1) {
+            if (!snap.groups[id]) snap.groups[id] = [];
+            snap.groups[id].push(g.id);
+            pushUndo(g.id);
+          }
+          g.bookmarkIds = g.bookmarkIds.filter(function (bid) { return bid !== id; });
+          var gb = document.getElementById('sgBody_' + g.id);
+          if (gb) {
+            gb.querySelectorAll('.group-inline-card[data-bm-id="' + id + '"]').forEach(function (c) { c.remove(); });
+            saveGroupBody(g.id);
+          }
+        });
+        A.bookmarks = A.bookmarks.filter(function (b) { return b.id !== id; });
+        allSnapshots.push(snap);
+      }
     }
   });
   LV.batchSelected = [];
   debouncedSave(); renderContent();
-  toast('已删除所选');
+  if (allSnapshots.length) {
+    toast('已删除 ' + allSnapshots.length + ' 项');
+    toastWithUndo('已删除 ' + allSnapshots.length + ' 项', function () {
+      allSnapshots.forEach(function (snap) {
+        snap.bookmarks.forEach(function (b) { A.bookmarks.push(b); });
+        Object.keys(snap.groups).forEach(function (bid) {
+          snap.groups[bid].forEach(function (gid) { addBmToGroup(bid, gid); });
+        });
+      });
+      debouncedSave(); renderContent();
+      toast('已恢复');
+    });
+  } else {
+    toast('已删除');
+  }
+  }); // end showConfirm
 }
 
 function batchAddToGroup(gid) {
   var bmIds = LV.batchSelected.filter(function (id) { return id.indexOf('group:') !== 0; });
   if (!bmIds.length) return;
-  var count = bmIds.length;
-  bmIds.forEach(function (bmId) { addBmToGroup(bmId, gid); });
+  var sg = A.siblingGroups.find(function (g) { return g.id === gid; });
+  if (!sg) return;
+  pushUndo(gid);
+  var body = document.getElementById('sgBody_' + gid);
+  var added = 0;
+  bmIds.forEach(function (bmId) {
+    if (sg.bookmarkIds.indexOf(bmId) !== -1) return;
+    sg.bookmarkIds.push(bmId);
+    var b = A.bookmarks.find(function (x) { return x.id === bmId; });
+    if (b && body) body.appendChild(buildInlineCard(b));
+    added++;
+  });
+  if (body) saveGroupBody(gid);
+  save();
   LV.batchSelected = [];
-  toast('已将 ' + count + ' 个书签加入组');
+  updateCardStat(gid);
+  if (added) toast('已将 ' + added + ' 个书签加入组');
   renderContent();
 }
 
@@ -934,54 +1048,12 @@ function showActionSheet(items) {
 }
 function hideActionSheet() { document.getElementById('actionSheet').classList.remove('show'); }
 
-/* Touch long-press and drag (mobile only) */
-document.addEventListener('touchstart', function (e) {
-  if (window.innerWidth > 768) return;
-  var grip = e.target.closest('.batch-grip');
-  if (!grip) return;
-  var card = grip.closest('.card, .group-card');
-  if (!card) return;
-  e.preventDefault();
-  LV.touchData = { card: card, grip: grip, startX: e.touches[0].clientX, startY: e.touches[0].clientY, moved: false, clone: null, targetCard: null };
-}, { passive: false });
-
-document.addEventListener('touchmove', function (e) {
-  if (!LV.touchData) return;
-  var dx = e.touches[0].clientX - LV.touchData.startX;
-  var dy = e.touches[0].clientY - LV.touchData.startY;
-  if (!LV.touchData.moved && Math.abs(dx) + Math.abs(dy) < 10) return;
-  LV.touchData.moved = true;
-  if (!LV.touchData.clone) {
-    LV.touchData.clone = LV.touchData.card.cloneNode(true);
-    LV.touchData.clone.classList.add('touch-drag-clone');
-    // Copy key computed styles so clone looks identical outside parent context
-    var cs = getComputedStyle(LV.touchData.card);
-    LV.touchData.clone.style.width = LV.touchData.card.offsetWidth + 'px';
-    LV.touchData.clone.style.font = cs.font;
-    LV.touchData.clone.style.color = cs.color;
-    LV.touchData.clone.style.background = cs.background;
-    LV.touchData.clone.style.borderRadius = cs.borderRadius;
-    LV.touchData.clone.style.padding = cs.padding;
-    document.body.appendChild(LV.touchData.clone);
-    LV.touchData.card.style.opacity = '0.4';
-  }
-  LV.touchData.clone.style.left = (e.touches[0].clientX - LV.touchData.card.offsetWidth / 2) + 'px';
-  LV.touchData.clone.style.top = (e.touches[0].clientY - 30) + 'px';
-  LV.touchData.clone.style.display = '';
-  var el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
-  var targetCard = el ? el.closest('.card,.group-card') : null;
-  if (targetCard && targetCard !== LV.touchData.card && targetCard !== LV.touchData.targetCard) {
-    if (LV.touchData.targetCard) LV.touchData.targetCard.classList.remove('drag-target');
-    LV.touchData.targetCard = targetCard;
-    LV.touchData.targetCard.classList.add('drag-target');
-  }
-});
-
 /* Long-press for mobile action sheet */
 document.addEventListener('touchstart', function (e) {
   if (window.innerWidth > 768) return;
   LV.lpFired = false;
-  if (e.target.closest('.batch-grip, input, button, textarea, [contenteditable="true"]')) return;
+  if (LV.batchMode) return;
+  if (e.target.closest('input, button, textarea, [contenteditable="true"]')) return;
   var card = e.target.closest('.card,.group-card');
   if (!card || card.classList.contains('group-card-focus')) return;
   LV.lpTarget = card;
@@ -994,7 +1066,7 @@ document.addEventListener('touchstart', function (e) {
       showActionSheet([
         { label: '打开链接', action: 'visit(null,\'' + bmId + '\')' },
         { label: '编辑', action: 'editBm(\'' + bmId + '\')' },
-        { label: '添加到组', action: 'addToGroup(null,event);' + bmId },
+        { label: '添加到组', action: 'addToGroup(null,event)' },
         { label: '删除', action: 'deleteBookmark(\'' + bmId + '\')', danger: true }
       ]);
     } else if (gid) {
@@ -1009,28 +1081,6 @@ document.addEventListener('touchstart', function (e) {
 document.addEventListener('touchmove', function () { if (LV.lpTimer) { clearTimeout(LV.lpTimer); LV.lpTimer = null; LV.lpTarget = null; } }, { passive: true });
 document.addEventListener('touchend', function () { if (LV.lpTimer) { clearTimeout(LV.lpTimer); LV.lpTimer = null; LV.lpTarget = null; } });
 
-document.addEventListener('touchend', function () {
-  if (!LV.touchData) return;
-  if (LV.touchData.clone) {
-    LV.touchData.clone.remove();
-    LV.touchData.card.style.opacity = '';
-    if (LV.touchData.targetCard) {
-      LV.touchData.targetCard.classList.remove('drag-target');
-      var aId = LV.touchData.card.dataset.id || LV.touchData.card.dataset.groupId;
-      var bId = LV.touchData.targetCard.dataset.id || LV.touchData.targetCard.dataset.groupId;
-      if (aId && bId && aId !== bId) {
-        var a, b;
-        if (LV.touchData.card.dataset.id) a = A.bookmarks.find(function (x) { return x.id === aId; });
-        else a = A.siblingGroups.find(function (x) { return x.id === aId; });
-        if (LV.touchData.targetCard.dataset.id) b = A.bookmarks.find(function (x) { return x.id === bId; });
-        else b = A.siblingGroups.find(function (x) { return x.id === bId; });
-        if (a && b) { swapOrder(a, b); debouncedSave(); swapCardsDOM(LV.touchData.card, LV.touchData.targetCard); }
-      }
-    }
-  }
-  LV.touchData = null;
-});
-
 function swapCardsDOM(a, b) {
   var elA = typeof a === 'string' ? document.querySelector(a) : a;
   var elB = typeof b === 'string' ? document.querySelector(b) : b;
@@ -1042,13 +1092,60 @@ function swapCardsDOM(a, b) {
   else { parent.insertBefore(elA, nextB); parent.insertBefore(elB, nextA); }
 }
 
+
 function toggleListExpand(btn) {
   var card = btn.closest('.card, .group-card');
   if (!card) return;
-  if (card.classList.contains('group-card')) {
-    card.classList.toggle('group-expanded');
+  var isGroup = card.classList.contains('group-card');
+  var expandedClass = isGroup ? 'group-expanded' : 'card-expanded';
+  var expanding = !card.classList.contains(expandedClass);
+  card.classList.toggle(expandedClass);
+  // 保存展开状态
+  saveExpandState(card.dataset.id || card.dataset.groupId, expanding);
+  if (expanding) {
+    setTimeout(function () { card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 360);
+  }
+  requestAnimationFrame(updateCardTagsOverflow);
+}
+
+// 展开状态管理
+function getExpandStates() {
+  try {
+    return JSON.parse(localStorage.getItem('lv_expandStates') || '{}');
+  } catch (e) { return {}; }
+}
+
+function saveExpandState(id, expanded) {
+  if (!id) return;
+  var states = getExpandStates();
+  if (expanded) {
+    states[id] = true;
   } else {
-    card.classList.toggle('card-expanded');
+    delete states[id];
+  }
+  try { localStorage.setItem('lv_expandStates', JSON.stringify(states)); } catch (e) {}
+}
+
+function restoreExpandStates() {
+  if (LV.layoutMode !== 'list') return;
+  var states = getExpandStates();
+  var cleaned = false;
+  Object.keys(states).forEach(function (id) {
+    var card = document.querySelector('.card[data-id="' + id + '"]');
+    if (card && card.querySelector('.list-expand-btn')) {
+      card.classList.add('card-expanded');
+    } else {
+      var gCard = document.querySelector('.group-card[data-group-id="' + id + '"]');
+      if (gCard && gCard.querySelector('.list-expand-btn')) {
+        gCard.classList.add('group-expanded');
+      } else {
+        delete states[id];
+        cleaned = true;
+      }
+    }
+  });
+  if (cleaned) {
+    try { localStorage.setItem('lv_expandStates', JSON.stringify(states)); } catch (e) {}
   }
 }
 
@@ -1102,18 +1199,6 @@ function renderDetailPanel() {
     var _da = bm.attributes || {};
     var dTags = '';
     A.customAttributes.forEach(function (a) { if (_da[a.id]) dTags += '<span class="card-tag tag-custom" data-action="filterAttr" data-id="' + a.id + '">' + esc(a.name) + '</span>'; });
-    var dSubs = A.bookmarks.filter(function (b) { return b.parentId === bm.id; });
-    var dSubsHTML = '';
-    if (dSubs.length) {
-      dSubsHTML = '<div class="sub-sites">';
-      dSubs.forEach(function (sub) {
-        dSubsHTML += '<div class="sub-site-item" data-action="visit" data-id="' + sub.id + '">'
-          + '<img src="' + (sub.icon || favicon(sub.url)) + '" alt="" onerror="this.style.display=\'none\'">'
-          + '<span class="ss-name">' + esc(sub.title) + '</span>'
-          + '<span class="ss-domain">' + domain(sub.url) + '</span></div>';
-      });
-      dSubsHTML += '</div>';
-    }
     return '<div class="detail-card" draggable="true" data-bm-id="' + bm.id + '" data-didx="' + idx + '">'
       + '<button class="detail-close" data-action="closeDetail" data-id="' + bm.id + '">&times;</button>'
       + '<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">'
@@ -1126,7 +1211,6 @@ function renderDetailPanel() {
         + (bm.username ? '<div class="acct-row"><span class="acct-label">账户</span><span class="acct-val">' + esc(bm.username) + '</span><button class="acct-copy-btn" data-action="copyUser" data-id="' + bm.id + '" title="复制账户">' + I.copy + '</button></div>' : '')
         + (bm.password ? '<div class="acct-row"><span class="acct-label">密码</span><span class="acct-val">' + esc(bm.password ? safeAtob(bm.password) : '') + '</span><button class="acct-copy-btn" data-action="copyPw" data-id="' + bm.id + '" title="复制密码">' + I.copy + '</button></div>' : '')
         + '</div>' : '')
-      + dSubsHTML
       + '<div style="display:flex;gap:6px;align-items:center;margin-top:8px">'
       + '<button class="btn btn-primary btn-sm" data-action="visit" data-id="' + bm.id + '">打开网站</button>'
       + '<button class="btn btn-secondary btn-sm" data-action="editBm" data-id="' + bm.id + '">编辑</button>'
@@ -1246,7 +1330,8 @@ function saveBm() {
     icon: document.getElementById('bmIcon').value.trim(),
     categoryId: document.getElementById('bmCat').value,
     parentId: parentId,
-    attributes: attrs
+    attributes: attrs,
+    updatedAt: Date.now()
   };
   var savedId;
   if (LV.editingId) {
@@ -1273,70 +1358,61 @@ function addSub(pid) {
   ['btnClearIcon', 'iconPreview', 'logoPreview'].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = 'none'; });
 }
 
-function _deleteBmInternal(id, now) {
-  (function rec(i) {
-    A.bookmarks.filter(function (b) { return b.parentId === i; }).forEach(function (c) { rec(c.id); });
-    var b = A.bookmarks.find(function (x) { return x.id === i; });
-    if (b) { b.deletedAt = now; delete LV.pwShown[i]; }
-  })(id);
-  A.siblingGroups.forEach(function (g) {
-    if (g.bookmarkIds.indexOf(id) > -1) {
-      if (!LV.deletedBmGroups) LV.deletedBmGroups = {};
-      if (!LV.deletedBmGroups[id]) LV.deletedBmGroups[id] = [];
-      if (LV.deletedBmGroups[id].indexOf(g.id) === -1) LV.deletedBmGroups[id].push(g.id);
-      pushUndo(g.id);
-    }
-    g.bookmarkIds = g.bookmarkIds.filter(function (bid) { return bid !== id; });
-    var gb = document.getElementById('sgBody_' + g.id);
-    if (gb) {
-      gb.querySelectorAll('.group-inline-card[data-bm-id="' + id + '"]').forEach(function (c) { c.remove(); });
-      saveGroupBody(g.id);
-    }
-  });
-}
-
 function deleteBookmark(id) {
-  if (!confirm('删除此书签及其所有子书签？')) return;
-  _deleteBmInternal(id, Date.now());
-  debouncedSave(); renderContent(); toast('已移入回收站');
+  showConfirm('删除此书签及其所有子书签？', function () { _doDeleteBookmark(id); });
 }
 
-function restoreBookmark(id) {
-  (function rec(i) {
-    A.bookmarks.filter(function (b) { return b.parentId === i; }).forEach(function (c) { rec(c.id); });
-    var b = A.bookmarks.find(function (x) { return x.id === i; });
-    if (b) b.deletedAt = null;
-  })(id);
-  if (LV.deletedBmGroups && LV.deletedBmGroups[id]) {
-    var gids = LV.deletedBmGroups[id];
-    gids.forEach(function (gid) { addBmToGroup(id, gid); });
-    delete LV.deletedBmGroups[id];
-  }
-  debouncedSave(); renderContent(); toast('已恢复');
-}
-
-function emptyTrash() {
-  if (!confirm('永久清空回收站中的所有书签？此操作不可撤销。')) return;
-  A.bookmarks = A.bookmarks.filter(function (b) { return !b.deletedAt; });
-  debouncedSave(); renderContent(); toast('回收站已清空');
-}
-
-function permanentlyDelete(id) {
-  if (!confirm('永久删除此书签？此操作不可撤销。')) return;
-  A.bookmarks = A.bookmarks.filter(function (b) { return b.id !== id; });
-  A.siblingGroups.forEach(function (g) {
-    g.bookmarkIds = g.bookmarkIds.filter(function (bid) { return bid !== id; });
+/** Collect all sub-bookmark IDs recursively */
+function collectSubIds(id) {
+  var ids = [id];
+  A.bookmarks.filter(function (b) { return b.parentId === id; }).forEach(function (c) {
+    ids = ids.concat(collectSubIds(c.id));
   });
-  save(); renderContent(); toast('已永久删除');
+  return ids;
 }
 
-function toggleTrash() {
-  LV.showTrash = !LV.showTrash;
-  if (LV.showTrash) { LV.curCat = CAT_ALL; LV.focusedGroupId = null; LV.activeAttrs = []; LV.excludedAttrs = []; LV.detailCards = []; }
-  renderContent();
+function _doDeleteBookmark(id) {
+  var ids = collectSubIds(id);
+  // Snapshot for undo: bookmark data + group memberships
+  var snapshot = { bookmarks: [], groups: {} };
+  ids.forEach(function (bid) {
+    var b = A.bookmarks.find(function (x) { return x.id === bid; });
+    if (b) {
+      snapshot.bookmarks.push(JSON.parse(JSON.stringify(b)));
+      delete LV.pwShown[bid];
+    }
+  });
+  // Record group memberships & remove from groups
+  ids.forEach(function (bid) {
+    A.siblingGroups.forEach(function (g) {
+      if (g.bookmarkIds.indexOf(bid) > -1) {
+        if (!snapshot.groups[bid]) snapshot.groups[bid] = [];
+        if (snapshot.groups[bid].indexOf(g.id) === -1) snapshot.groups[bid].indexOf(g.id) < 0 && snapshot.groups[bid].push(g.id);
+        pushUndo(g.id);
+      }
+      g.bookmarkIds = g.bookmarkIds.filter(function (bid2) { return bid2 !== bid; });
+      var gb = document.getElementById('sgBody_' + g.id);
+      if (gb) {
+        gb.querySelectorAll('.group-inline-card[data-bm-id="' + bid + '"]').forEach(function (c) { c.remove(); });
+        saveGroupBody(g.id);
+      }
+    });
+  });
+  // Actually remove bookmarks
+  A.bookmarks = A.bookmarks.filter(function (b) { return ids.indexOf(b.id) === -1; });
+  debouncedSave(); renderContent();
+  toast('书签已删除');
+  toastWithUndo('书签已删除', function () {
+    // Restore bookmarks
+    snapshot.bookmarks.forEach(function (b) { A.bookmarks.push(b); });
+    // Restore group memberships
+    Object.keys(snapshot.groups).forEach(function (bid) {
+      snapshot.groups[bid].forEach(function (gid) { addBmToGroup(bid, gid); });
+    });
+    debouncedSave(); renderContent();
+    toast('已恢复');
+  });
 }
-
-function getTrashCount() { return A.bookmarks.filter(function (b) { return b.deletedAt; }).length; }
 
 function toggleAcct(btn, id) { btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('show'); }
 
@@ -1363,7 +1439,7 @@ function renameGroup(id, name) { var sg = A.siblingGroups.find(function (g) { re
 function _deleteGroupInternal(id) {
   A.siblingGroups = A.siblingGroups.filter(function (g) { return g.id !== id; });
   delete LV.undoStacks[id];
-  delete LV.undoTimers[id];
+  if (LV.undoTimers[id]) { clearTimeout(LV.undoTimers[id]); delete LV.undoTimers[id]; }
   A.siblingGroups.forEach(function (g) {
     var bodyEl = document.getElementById('sgBody_' + g.id);
     if (bodyEl) {
@@ -1374,9 +1450,20 @@ function _deleteGroupInternal(id) {
 }
 
 function deleteGroup(id) {
-  if (!confirm('删除此组？（书签不会被删除）')) return;
-  _deleteGroupInternal(id);
-  debouncedSave(); renderContent(); toast('组已删除');
+  showConfirm('删除此组？（书签不会被删除）', function () {
+    var sg = A.siblingGroups.find(function (g) { return g.id === id; });
+    if (!sg) return;
+    var snapshot = JSON.parse(JSON.stringify(sg));
+    _deleteGroupInternal(id);
+    debouncedSave(); renderContent();
+    toast('组已删除');
+    toastWithUndo('组已删除', function () {
+      A.siblingGroups.push(snapshot);
+      A.siblingGroups.sort(function (a, b) { return a.order - b.order; });
+      debouncedSave(); renderContent();
+      toast('组已恢复');
+    });
+  });
 }
 
 /* ---- Group body management ---- */
@@ -1411,7 +1498,7 @@ function handleGroupPaste(e, gid) {
 
 function ensureTextSibling(el, side) {
   var t = side === 'before' ? el.previousSibling : el.nextSibling;
-  if (!t || t.nodeType !== 3 || t.textContent.indexOf('​') === -1) {
+  if (!t || t.nodeType !== 3 || t.textContent !== '​') {
     var z = document.createTextNode('​');
     if (side === 'before') el.parentNode.insertBefore(z, el);
     else el.parentNode.insertBefore(z, el.nextSibling);
@@ -1475,8 +1562,7 @@ function restoreSnapshot(gid, snap) {
   var sg = A.siblingGroups.find(function (g) { return g.id === gid; });
   if (!sg) return;
   sg.bookmarkIds = snap.bookmarkIds.filter(function (bid) {
-    var bm = A.bookmarks.find(function (b) { return b.id === bid; });
-    return bm && !bm.deletedAt;
+    return A.bookmarks.find(function (b) { return b.id === bid; });
   });
   sg.notes = snap.notes;
   var body = document.getElementById('sgBody_' + gid);
@@ -1485,7 +1571,7 @@ function restoreSnapshot(gid, snap) {
     body.querySelectorAll('.group-inline-card[data-bm-id]').forEach(function (c) {
       var bmid = c.getAttribute('data-bm-id');
       var bm = A.bookmarks.find(function (b) { return b.id === bmid; });
-      if (!bm || bm.deletedAt) c.remove();
+      if (!bm) c.remove();
     });
   }
   updateUndoRedoButtons(gid);
@@ -1497,14 +1583,11 @@ function buildFocusToolbarHTML(gid) {
   var stack = LV.undoStacks[gid];
   var hasUndo = !!(stack && stack.undo && stack.undo.length > 0);
   var hasRedo = !!(stack && stack.redo && stack.redo.length > 0);
-  return '<button class="ft-btn' + (hasUndo ? '' : ' disabled') + '" data-action="undoGroup" data-id="' + gid + '" title="撤销">' + I.undo + '</button>'
-    + '<button class="ft-btn' + (hasRedo ? '' : ' disabled') + '" data-action="redoGroup" data-id="' + gid + '" title="前进">' + I.redo + '</button>'
-    + '<div class="ft-divider"></div>'
-    + '<button class="ft-btn" onclick="addToGroup(\'' + gid + '\', event)" title="添加书签到组">' + I.plus + '</button>'
+  return '<button class="ft-btn" data-action="addToGroup" data-id="' + gid + '" title="添加书签到组">' + I.plus + '</button>'
     + '<button class="ft-btn" data-action="editGroup" data-id="' + gid + '" title="编辑组">' + I.edit + '</button>'
-    + '<button class="ft-btn ft-btn-danger" data-action="deleteGroup" data-id="' + gid + '" title="删除组">' + I.trash + '</button>'
-    + '<div class="ft-divider"></div>'
-    + '<button class="ft-btn" onclick="exitGroupFocus()" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg></button>';
+    + '<button class="ft-btn' + (hasUndo ? '' : ' disabled') + '" style="margin-left:auto" data-action="undoGroup" data-id="' + gid + '" title="撤销">' + I.undo + '</button>'
+    + '<button class="ft-btn' + (hasRedo ? '' : ' disabled') + '" data-action="redoGroup" data-id="' + gid + '" title="前进">' + I.redo + '</button>'
+    + '<button class="ft-btn" data-action="exitFocus" title="关闭"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
 }
 
 function updateUndoRedoButtons(gid) {
@@ -1515,10 +1598,10 @@ function updateUndoRedoButtons(gid) {
   var stack = LV.undoStacks[gid];
   if (undoBtn) undoBtn.classList.toggle('disabled', !(stack && stack.undo && stack.undo.length > 0));
   if (redoBtn) redoBtn.classList.toggle('disabled', !(stack && stack.redo && stack.redo.length > 0));
-  var toolbar = document.getElementById('focusToolbar');
-  if (toolbar) {
-    var ftUndo = toolbar.querySelector('[data-action="undoGroup"]');
-    var ftRedo = toolbar.querySelector('[data-action="redoGroup"]');
+  var focusBack = document.getElementById('focusBack');
+  if (focusBack) {
+    var ftUndo = focusBack.querySelector('[data-action="undoGroup"]');
+    var ftRedo = focusBack.querySelector('[data-action="redoGroup"]');
     if (ftUndo) ftUndo.classList.toggle('disabled', !(stack && stack.undo && stack.undo.length > 0));
     if (ftRedo) ftRedo.classList.toggle('disabled', !(stack && stack.redo && stack.redo.length > 0));
   }
@@ -1783,11 +1866,12 @@ function addCat() {
 }
 
 function deleteCategory(id) {
-  if (!confirm('删除此分类？内容将移至"未分类"。')) return;
-  A.bookmarks.forEach(function (b) { if (b.categoryId === id) b.categoryId = CAT_UNCATEGORIZED; });
-  A.siblingGroups.forEach(function (g) { if (g.categoryId === id) g.categoryId = CAT_UNCATEGORIZED; });
-  A.categories = A.categories.filter(function (c) { return c.id !== id; });
-  save(); renderCatList(); renderContent(); toast('已删除');
+  showConfirm('删除此分类？内容将移至"未分类"。', function () {
+    A.bookmarks.forEach(function (b) { if (b.categoryId === id) b.categoryId = CAT_UNCATEGORIZED; });
+    A.siblingGroups.forEach(function (g) { if (g.categoryId === id) g.categoryId = CAT_UNCATEGORIZED; });
+    A.categories = A.categories.filter(function (c) { return c.id !== id; });
+    save(); renderCatList(); renderContent(); toast('已删除');
+  });
 }
 
 function openAttrModal() { LV.lastFocusedEl = document.activeElement; renderAttrList(); document.getElementById('attrModal').classList.add('open'); setTimeout(function () { document.getElementById('newAttrName').focus(); }, 50); }
@@ -1894,6 +1978,7 @@ function renderAttrChips() {
     var a = A.customAttributes.find(function (x) { return x.id === id; });
     return a ? '<span class="attr-chip attr-chip-excluded" data-action="toggleAttrExclude" data-id="' + id + '"><span class="attr-chip-txt">' + esc(a.name) + '</span><span class="attr-chip-x">&times;</span></span>' : '';
   }).join('');
+  updateChipsFade();
 }
 
 function toggleSortDir() {
@@ -1911,7 +1996,7 @@ function renderSearchSuggest() {
   var drop = document.getElementById('searchSuggest');
   if (!q) { drop.style.display = 'none'; return; }
   var results = A.bookmarks.filter(function (b) {
-    return !b.deletedAt && (b.title.toLowerCase().indexOf(q) !== -1 || b.url.toLowerCase().indexOf(q) !== -1 || b.notes.toLowerCase().indexOf(q) !== -1 || b.username.toLowerCase().indexOf(q) !== -1);
+    return b.title.toLowerCase().indexOf(q) !== -1 || b.url.toLowerCase().indexOf(q) !== -1 || b.notes.toLowerCase().indexOf(q) !== -1 || b.username.toLowerCase().indexOf(q) !== -1;
   }).slice(0, MAX_SUGGESTIONS);
   if (!results.length) { drop.style.display = 'none'; return; }
   drop.innerHTML = results.map(function (b) {
@@ -2286,19 +2371,41 @@ function reorderInlineCard(gid, bmId, clientX, clientY, dropTarget) {
 document.addEventListener('click', function (e) {
   // Suppress click after mobile long-press
   if (LV.lpFired) { LV.lpFired = false; e.preventDefault(); e.stopPropagation(); return; }
-  // 0. Batch mode: intercept card clicks
+  // 0. Batch mode: intercept ALL card clicks for batch selection only
   if (LV.batchMode) {
     var bmCard = e.target.closest('.card[data-id]');
     var gCardBatch = e.target.closest('.group-card[data-group-id]');
-    var skipEl = e.target.closest('.batch-chk, .btn-xs, .card-tag, .card-acct-toggle, .list-expand-btn, .batch-grip');
-    if (bmCard && !skipEl) {
+    if (bmCard) {
       e.stopPropagation();
       toggleBatchSelect(bmCard.dataset.id, e);
       return;
     }
-    if (gCardBatch && !skipEl) {
+    if (gCardBatch) {
       e.stopPropagation();
       toggleBatchSelect('group:' + gCardBatch.dataset.groupId, e);
+      return;
+    }
+    if (e.target.closest('.card, .group-card, .card-foot, .card-actions')) {
+      e.stopPropagation(); return;
+    }
+  }
+
+  // 0b. List mode: click blank area → toggle expand/collapse (only expand cards with expandable content)
+  if (LV.layoutMode === 'list') {
+    var listCard = e.target.closest('.list-view .card[data-id], .list-view .group-card[data-group-id]');
+    if (listCard && !e.target.closest('[data-action], button, input, select, textarea, .card-name, .card-domain, .card-tag, .card-stat, .card-acct-toggle, .card-acct-body, .sub-site-item, .batch-chk, .batch-grip, .card-logo, .card-actions, .group-inline-card, .group-body')) {
+      var isGrp = listCard.classList.contains('group-card');
+      var cls = isGrp ? 'group-expanded' : 'card-expanded';
+      e.stopPropagation();
+      var wasExpanded = listCard.classList.contains(cls);
+      // 已展开的卡片始终可以收起；未展开的卡片需要有展开内容才能展开
+      if (!wasExpanded && !listCard.querySelector('.list-expand-btn')) return;
+      listCard.classList.toggle(cls);
+      // 保存展开状态
+      saveExpandState(listCard.dataset.id || listCard.dataset.groupId, listCard.classList.contains(cls));
+      if (listCard.classList.contains(cls)) {
+        setTimeout(function () { listCard.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 360);
+      }
       return;
     }
   }
@@ -2327,6 +2434,7 @@ document.addEventListener('click', function (e) {
   // 2. Generic data-action dispatch (works everywhere: grid, detail panel, attr chips, popover, modals, etc.)
   var btn = e.target.closest('[data-action]');
   if (btn) {
+    if (LV.batchMode && btn.closest('.card, .group-card')) { e.stopPropagation(); return; }
     e.stopPropagation();
     var action = btn.dataset.action;
     var id = btn.dataset.id;
@@ -2341,6 +2449,7 @@ document.addEventListener('click', function (e) {
       case 'redoGroup': performRedo(id); break;
       case 'addToGroup': addToGroup(id, e); break;
       case 'editGroup': editGroup(id); break;
+      case 'exitFocus': exitGroupFocus(); break;
       case 'deleteGroup': deleteGroup(id); break;
       case 'toggleAcct': toggleAcct(btn, id); break;
       case 'togglePw': togglePwCard(id); break;
@@ -2356,6 +2465,10 @@ document.addEventListener('click', function (e) {
       case 'addBmExisting': addBmExisting(id); break;
       case 'searchSuggest': selectSearchSuggest(id); break;
       case 'toggleExpand': toggleListExpand(btn); break;
+      case 'addBmDropdown': hideAddDropdown(); openBmModal(); break;
+      case 'addGrpDropdown': hideAddDropdown(); createGroup(); break;
+      case 'openDetail': openDetail(id); break;
+      case 'multiSelect': toggleBatchMode(); break;
     }
     return;
   }
@@ -2363,6 +2476,25 @@ document.addEventListener('click', function (e) {
   // 3. Rail nav item click
   var railItem = e.target.closest('.rail-item[data-cat-id]');
   if (railItem) { selectCat(railItem.dataset.catId); }
+});
+
+// Double-click: group name → focus mode; bookmark name → open website
+document.getElementById('cardGrid').addEventListener('dblclick', function (e) {
+  if (LV.batchMode) return;
+  var nameEl = e.target.closest('[data-group-name]');
+  if (nameEl) {
+    e.stopPropagation();
+    toggleGroupFocus(nameEl.dataset.groupName);
+    return;
+  }
+  var bmName = e.target.closest('.card-name');
+  if (bmName) {
+    var card = bmName.closest('.card[data-id]:not(.group-card)');
+    if (card) {
+      e.stopPropagation();
+      visit(null, card.dataset.id);
+    }
+  }
 });
 
 // contenteditable event delegation on card grid
@@ -2405,6 +2537,7 @@ document.getElementById('cardGrid').addEventListener('paste', function (e) {
 
 // Double-click delegation
 document.addEventListener('dblclick', function (e) {
+  if (LV.batchMode) return;
   if (e.target.closest('.btn-undo-group, .btn-redo-group, .ft-btn')) { e.stopPropagation(); return; }
 
   // Inline edit of bookmark notes on double-click
@@ -2449,32 +2582,13 @@ document.addEventListener('dblclick', function (e) {
     }
   }
 
-  // Double-click bookmark card name → open detail
-  var bmCardName = e.target.closest('.card[data-id] .card-name');
-  if (bmCardName) {
-    e.stopPropagation();
-    var bmCard = bmCardName.closest('.card[data-id]');
-    if (bmCard) editBm(bmCard.dataset.id);
-    return;
-  }
-
-  // Double-click group card name → focus group
+  // Double-click group card name → focus group (fallback if #cardGrid handler didn't fire)
   var gCardName = e.target.closest('.group-card .card-name');
   if (gCardName) {
     e.stopPropagation();
     var gc = gCardName.closest('.group-card');
     if (gc) toggleGroupFocus(gc.dataset.groupId);
     return;
-  }
-
-  // Double-click bookmark card (not group, not notes) → visit
-  if (!e.target.closest('.card-notes, .card-acct-toggle, .card-acct-body, button, input, textarea, [data-action], .gic-btn, .gic-remove, .gic-name')) {
-    var bmCard = e.target.closest('.card[data-id]');
-    if (bmCard) {
-      e.stopPropagation();
-      visit(null, bmCard.dataset.id);
-      return;
-    }
   }
 });
 
@@ -2484,6 +2598,7 @@ document.addEventListener('click', function (e) {
   if (drop && drop.style.display !== 'none' && !e.target.closest('.attr-filter-wrap')) drop.style.display = 'none';
   if (!e.target.closest('#ctxMenu')) hideCtx();
   if (!e.target.closest('#settingsMenu') && !e.target.closest('.settings-wrap')) hideSettingsMenu();
+  if (!e.target.closest('#addWrap')) hideAddDropdown();
   if (!e.target.closest('#mentionDrop') && !e.target.closest('.group-body')) hideMention();
   if (!e.target.closest('.search-wrapper')) hideSearchSuggest();
 });
@@ -2495,15 +2610,17 @@ var ctxType = '';
 
 /** Context menu item visibility rules per type */
 var CTX_RULES = {
-  card:         { show: ['visit', 'edit', 'delete'] },
+  card:         { show: ['visit', 'edit', 'delete', 'multiSelect'] },
   sub:          { show: ['visit', 'edit', 'delete'], text: { visit: '查看详情' } },
   cat:          { show: ['delete'] },
   attr:         { show: ['edit', 'delete'] },
   group:        { show: ['edit', 'delete'], text: { edit: '编辑组名', delete: '删除组' } },
   'group-card': { show: ['visit', 'delete'], text: { visit: '查看详情', delete: '从组移除' } },
   'rail-empty': { show: ['addcat'] },
-  'grid-empty': { show: ['addbookmark', 'addgroup'] }
+  'grid-empty': { show: ['addbookmark', 'addgroup', 'multiSelect'] }
 };
+/** Default text for context menu items (restored before each show) */
+var CTX_DEFAULT_TEXT = { visit: '打开网站', edit: '编辑', delete: '删除' };
 
 /** Unified context menu dispatcher */
 function showContextMenu(e, type, id) {
@@ -2514,22 +2631,14 @@ function showContextMenu(e, type, id) {
   var showSet = {};
   rule.show.forEach(function (a) { showSet[a] = true; });
 
+  // Reset all item text to defaults first
+  for (var act in CTX_DEFAULT_TEXT) {
+    var btn = menu.querySelector('[data-action="' + act + '"]');
+    if (btn) btn.textContent = CTX_DEFAULT_TEXT[act];
+  }
+
   menu.querySelectorAll('.ctx-item').forEach(function (el) {
     var act = el.dataset.action;
-    // Conditional items (trash/restore/permanent)
-    if (act === 'trash' && (type === 'rail-empty' || type === 'grid-empty')) {
-      el.style.display = getTrashCount() > 0 ? '' : 'none'; return;
-    }
-    if (act === 'restore' && type === 'card' && LV.showTrash) {
-      el.style.display = ''; return;
-    }
-    if (act === 'permanentdelete' && (type === 'card' || type === 'sub') && LV.showTrash) {
-      el.style.display = ''; return;
-    }
-    if (act === 'emptytrash' && LV.showTrash) {
-      el.style.display = getTrashCount() > 0 ? '' : 'none'; return;
-    }
-    // Default: show/hide based on rule
     el.style.display = showSet[act] ? '' : 'none';
   });
   // Apply text overrides
@@ -2566,11 +2675,11 @@ function positionCtx(e) {
 
 // Global contextmenu handler
 document.addEventListener('contextmenu', function (e) {
-  // Sub-site item
-  var subItem = e.target.closest('.sub-site-item');
+  if (LV.batchMode && e.target.closest('.card, .group-card, .group-body, .sub-sites')) return;
+  // Sub-site item (inline card inside .sub-sites)
+  var subItem = e.target.closest('.sub-sites .group-inline-card');
   if (subItem) {
-    var subId = subItem.dataset.id;
-    if (!subId) { var m = (subItem.getAttribute('onclick') || '').match(/visit\(null,'(.+?)'\)/); if (m) subId = m[1]; }
+    var subId = subItem.dataset.bmId || subItem.dataset.id;
     if (subId) { LV.ctxCard = null; showContextMenu(e, 'sub', subId); return; }
   }
   // Inline card inside group body
@@ -2632,12 +2741,7 @@ document.getElementById('ctxMenu').addEventListener('click', function (e) {
     if (act === 'addgroup') createGroup();
   } else if (ttype === 'rail-empty') {
     if (act === 'addcat') { openCatModal(); setTimeout(function () { document.getElementById('newCatName').focus(); }, 200); }
-    if (act === 'trash') toggleTrash();
   }
-  if (act === 'trash') toggleTrash();
-  if (act === 'emptytrash') emptyTrash();
-  if (act === 'permanentdelete') permanentlyDelete(tid);
-  if (act === 'restore') { restoreBookmark(tid); renderContent(); }
 });
 
 /* ==================== @MENTION ==================== */
@@ -2694,12 +2798,12 @@ function showMentionNear(query) {
     drop.style.display = 'block';
   } else {
     var matches = A.bookmarks.filter(function (b) {
-      return !b.deletedAt && !b.parentId && (b.title.toLowerCase().indexOf(query) !== -1 || b.url.toLowerCase().indexOf(query) !== -1);
+      return !b.parentId && (b.title.toLowerCase().indexOf(query) !== -1 || b.url.toLowerCase().indexOf(query) !== -1);
     }).slice(0, MAX_SUGGESTIONS);
     if (!matches.length) { drop.style.display = 'none'; return; }
     LV.mentionIdx = 0;
     drop.innerHTML = matches.map(function (b, i) {
-      var subs = A.bookmarks.filter(function (s) { return s.parentId === b.id && !s.deletedAt; });
+      var subs = A.bookmarks.filter(function (s) { return s.parentId === b.id; });
       var hasSub = subs.length > 0;
       var subHTML = '';
       if (hasSub) {
@@ -2902,7 +3006,8 @@ document.addEventListener('keydown', function (e) {
   }
   if (e.key === 'Escape') {
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit();
-    hideCtx(); hideSettingsMenu(); hideSearchSuggest(); closeAddBmPopover();
+    hideCtx(); hideSettingsMenu(); hideSearchSuggest(); closeAddBmPopover(); hideAddDropdown();
+    document.getElementById('confirmModal').classList.remove('open');
   }
 });
 
@@ -2920,9 +3025,22 @@ document.getElementById('addBmSearch').addEventListener('keydown', function (e) 
 /* ==================== STATIC EVENT BINDINGS ==================== */
 
 document.getElementById('btnAdd').addEventListener('click', function (e) {
-  if (LV.focusedGroupId) { e.stopPropagation(); addToGroup(LV.focusedGroupId, e); }
-  else openBmModal();
+  e.stopPropagation();
+  if (LV.focusedGroupId) { addToGroup(LV.focusedGroupId, e); return; }
+  toggleAddDropdown();
 });
+
+function toggleAddDropdown() {
+  var drop = document.getElementById('addDropdown');
+  if (drop.style.display === 'block') { hideAddDropdown(); return; }
+  var btn = document.getElementById('btnAdd');
+  var rect = btn.getBoundingClientRect();
+  drop.style.display = 'block';
+  drop.style.top = (rect.bottom + 4) + 'px';
+  drop.style.left = Math.min(rect.left, window.innerWidth - 150) + 'px';
+}
+function hideAddDropdown() { document.getElementById('addDropdown').style.display = 'none'; }
+
 document.getElementById('bmModalClose').addEventListener('click', closeBmModal);
 document.getElementById('bmModalCancel').addEventListener('click', closeBmModal);
 document.getElementById('bmModalSave').addEventListener('click', saveBm);
@@ -2944,7 +3062,6 @@ document.getElementById('attrModal').addEventListener('click', function (e) { if
 document.getElementById('btnAddAttr').addEventListener('click', addAttr);
 document.getElementById('newAttrName').addEventListener('keydown', function (e) { if (e.key === 'Enter') addAttr(); });
 
-document.getElementById('btnAddGroup').addEventListener('click', function () { createGroup(); });
 document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
 document.getElementById('pwToggle').addEventListener('click', function () {
@@ -2980,6 +3097,7 @@ document.getElementById('sortSelect').addEventListener('change', function () { r
   function onDown(e, h, p, d) {
     handle = h; panel = p; dir = d;
     handle.classList.add('active');
+    panel.style.transition = 'none';
     startX = e.clientX;
     startW = panel.getBoundingClientRect().width;
     document.addEventListener('mousemove', onMove);
@@ -3004,6 +3122,7 @@ document.getElementById('sortSelect').addEventListener('change', function () { r
   function onUp() {
     if (!handle) return;
     handle.classList.remove('active');
+    panel.style.transition = '';
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
     document.body.style.cursor = '';
@@ -3019,10 +3138,73 @@ document.getElementById('sortSelect').addEventListener('change', function () { r
 
 /* ==================== INIT ==================== */
 
+function updateChipsFade() {
+  var el = document.getElementById('attrChips');
+  if (!el) return;
+  if (el.scrollWidth > el.clientWidth + 1) {
+    var fade = Math.max(24, Math.round(el.clientWidth * 0.1)) + 'px';
+    el.style.webkitMaskImage = el.style.maskImage = 'linear-gradient(to right,black calc(100% - ' + fade + '),transparent 100%)';
+    el.style.webkitMaskRepeat = el.style.maskRepeat = 'no-repeat';
+  } else {
+    el.style.webkitMaskImage = el.style.maskImage = '';
+    el.style.webkitMaskRepeat = el.style.maskRepeat = '';
+  }
+}
+
+function initChipsScroll() {
+  var el = document.getElementById('attrChips');
+  if (!el) return;
+  /* 滚轮横向滚动 */
+  el.addEventListener('wheel', function (e) {
+    if (el.scrollWidth <= el.clientWidth) return;
+    e.preventDefault();
+    el.scrollLeft += e.deltaY || e.deltaX;
+    updateChipsFade();
+  }, { passive: false });
+  /* 按住拖拽滚动 */
+  document.addEventListener('mousemove', function (e) {
+    if (!el._drag) return;
+    el.scrollLeft = el._drag.s - (e.clientX - el._drag.x);
+    updateChipsFade();
+  });
+  document.addEventListener('mouseup', function () {
+    if (!el._drag) return;
+    el._drag = null; el.style.cursor = '';
+  });
+  el.addEventListener('mousedown', function (e) {
+    if (e.target.closest('.attr-chip')) return;
+    el._drag = { x: e.clientX, s: el.scrollLeft };
+    el.style.cursor = 'grabbing'; e.preventDefault();
+  });
+  window.addEventListener('resize', updateChipsFade);
+}
+
+// Card tags horizontal scroll on wheel
+document.addEventListener('wheel', function (e) {
+  var tags = e.target.closest('.card-tags');
+  if (tags && tags.scrollWidth > tags.clientWidth) {
+    e.preventDefault();
+    tags.scrollLeft += e.deltaY;
+  }
+}, { passive: false });
+
+// Update overflow class on card tags
+function updateCardTagsOverflow() {
+  document.querySelectorAll('.card-tags').forEach(function (el) {
+    if (el.scrollWidth > el.clientWidth) {
+      el.classList.add('tags-overflow');
+    } else {
+      el.classList.remove('tags-overflow');
+    }
+  });
+}
+
 document.querySelector('.panel-header').addEventListener('dblclick', function (e) {
   if (LV.focusedGroupId && !e.target.closest('input, button')) exitGroupFocus();
 });
 
 renderContent();
 initLayoutMode();
+initChipsScroll();
 updateSettingsMenuActive();
+updateCardTagsOverflow();
