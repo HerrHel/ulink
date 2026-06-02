@@ -50,7 +50,7 @@
       <div class="search-wrapper header-search">
         <div class="search-box">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" class="search-input" id="searchInput" placeholder="搜索…" autocomplete="off" onfocus="renderSearchSuggest()" oninput="renderSearchSuggest()">
+          <input type="text" class="search-input" id="searchInput" placeholder="搜索…" autocomplete="off">
         </div>
         <div class="search-suggest" id="searchSuggest" style="display:none"></div>
       </div>
@@ -62,7 +62,7 @@
         <div class="settings-menu ctx-menu" id="settingsMenu" style="display:none">
           <div class="settings-label">主题风格</div>
           <div class="settings-segment" id="themeStyleSegment">
-            <button class="seg-btn active" data-style="premium" onclick="setThemeStyle('premium')">高级</button>
+            <button class="seg-btn active" data-style="premium" onclick="setThemeStyle('premium')">效率</button>
             <button class="seg-btn" data-style="comfortable" onclick="setThemeStyle('comfortable')">舒适</button>
           </div>
           <div class="settings-label">视图模式</div>
@@ -72,8 +72,8 @@
           </div>
           <div class="ctx-divider"></div>
           <div class="settings-segment" id="dataSegment">
-            <button class="seg-btn" onclick="exportData();hideSettingsMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出</button>
-            <button class="seg-btn" onclick="triggerImport();hideSettingsMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>导入</button>
+            <button class="seg-btn" onclick="triggerImport();hideSettingsMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导入</button>
+            <button class="seg-btn" onclick="exportData();hideSettingsMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>导出</button>
           </div>
           <div class="ctx-divider"></div>
           <button class="ctx-item ctx-danger" onclick="resetData();hideSettingsMenu()">重置数据</button>
@@ -282,6 +282,6 @@
   <button class="as-cancel" onclick="hideActionSheet()">取消</button>
 </div>
 
-<script src="script.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

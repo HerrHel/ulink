@@ -244,7 +244,8 @@ img{max-width:100%;display:block}
   height:3px;background:var(--accent);
   border-radius:2px;min-width:0;transition:width 0.3s ease;
 }
-.rail-storage span{flex-shrink:0;white-space:nowrap}
+.rail-storage-text{flex-shrink:0;white-space:nowrap;display:flex;align-items:center;gap:2px}
+.rail-storage-pct{opacity:0.7}
 
 .theme-toggle{
   width:100%;height:36px;
@@ -293,6 +294,12 @@ img{max-width:100%;display:block}
 .panel-title-group-icon{
   display:inline-flex;align-items:center;justify-content:center;
   flex-shrink:0;
+  padding:4px;border-radius:6px;
+  transition:all 0.15s ease;
+}
+.panel-title-group-icon:hover{
+  background:var(--accent-light);
+  opacity:0.8;
 }
 .panel-title-group-icon img{
   width:24px;height:24px;object-fit:contain;
@@ -653,14 +660,14 @@ img{max-width:100%;display:block}
 }
 /* ==================== LIST VIEW ==================== */
 .card-grid.list-view{
-  display:flex;flex-direction:column;gap:3px;
+  display:flex;flex-direction:column;gap:6px;
   grid-template-columns:none;
 }
 
-/* 列表模式下禁用卡片动画延迟 */
-.list-view .card,
-.list-view .group-card{
-  animation-delay:0s!important;
+/* ---- List entrance animation ---- */
+@keyframes listCardIn{
+  from{opacity:0;transform:translateY(8px)}
+  to{opacity:1;transform:translateY(0)}
 }
 
 /* ---- List: all cards become horizontal rows ---- */
@@ -670,27 +677,55 @@ img{max-width:100%;display:block}
   padding:10px 14px;
   flex-direction:row;align-items:stretch;
   flex-wrap:nowrap;
-  transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.2s var(--ease-out);
+  border-radius:var(--radius-lg);
+  animation:listCardIn 0.3s var(--ease-out) backwards;
+  box-shadow:var(--shadow-card);
+  transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,background-color 0.2s ease,transform 0.3s var(--ease-out);
+  border:1px solid var(--border);
 }
-/* Collapsed cards: uniform height to fit all preview content */
+.list-view .card:nth-child(n){animation-delay:0s}
+.list-view .group-card:nth-child(n){animation-delay:0s}
+/* Stagger entrance for first few items */
+.list-view .card:nth-child(1),.list-view .group-card:nth-child(1){animation-delay:0.02s}
+.list-view .card:nth-child(2),.list-view .group-card:nth-child(2){animation-delay:0.04s}
+.list-view .card:nth-child(3),.list-view .group-card:nth-child(3){animation-delay:0.06s}
+.list-view .card:nth-child(4),.list-view .group-card:nth-child(4){animation-delay:0.08s}
+.list-view .card:nth-child(5),.list-view .group-card:nth-child(5){animation-delay:0.1s}
+
+/* Collapsed cards: uniform height */
 .list-view .card:not(.card-expanded):not(.group-expanded),
 .list-view .group-card:not(.card-expanded):not(.group-expanded){
-  height:76px;min-height:0;
+  height:82px;min-height:0;
 }
+
+/* ---- List hover: consistent with grid view ---- */
 .list-view .card:hover,
-.list-view .group-card:hover{transform:none}
+.list-view .group-card:hover{
+  transform:translateY(-1px);
+  border-color:var(--border-hover);
+  box-shadow:var(--shadow-card-hover);
+  background:var(--surface);
+}
+
+/* ---- List active press ---- */
+.list-view .card:active,
+.list-view .group-card:active{
+  transform:translateY(0) scale(0.995);
+  background:var(--surface-active);
+  transition-duration:0.08s;
+}
 
 /* ---- List: body is a vertical column ---- */
 .list-view .card-body{
   flex:1 1 0;min-width:0;
   display:flex;flex-direction:column;
-  gap:3px;
+  gap:4px;
   overflow:hidden;
 }
 
 /* ---- List: topline wraps toprow + tags in a row ---- */
 .list-view .card-topline{
-  display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;
 }
 /* Grid view: topline is block (toprow and tags on separate lines) */
 .card-topline{
@@ -699,11 +734,11 @@ img{max-width:100%;display:block}
 
 /* ---- List: toprow is horizontal compact, tags flow after name ---- */
 .list-view .card-toprow{
-  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
   margin:0;flex:0 0 auto;min-width:0;
 }
 .list-view .card-logo{
-  width:38px;height:38px;
+  width:40px;height:40px;
 }
 .list-view .card-logo img{width:28px;height:28px}
 .list-view .card-titlewrap{
@@ -712,20 +747,21 @@ img{max-width:100%;display:block}
   padding:0;margin:0;
 }
 .list-view .card-name{
-  font-size:0.9rem;line-height:18px;height:18px;
+  font-size:0.88rem;line-height:18px;height:18px;
+  font-weight:600;
   max-width:200px;
   white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;flex-shrink:1;
 }
 .list-view .card-domain{
-  font-size:0.68rem;line-height:18px;height:18px;
+  font-size:0.72rem;line-height:18px;height:18px;
   white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;flex-shrink:0;margin:0;
 }
 
 /* ---- List: tags inline after name, scrollable with fade ---- */
 .list-view .card-tags{
-  display:flex;flex-wrap:nowrap;gap:4px;margin:0;
+  display:flex;flex-wrap:nowrap;gap:5px;margin:0;
   align-items:center;
   flex:0 1 30vw;min-width:0;
   overflow-x:auto;overflow-y:hidden;
@@ -743,7 +779,7 @@ img{max-width:100%;display:block}
 /* ---- List: preview line (visible, single line ellipsis) ---- */
 .list-view .card-preview{
   display:block;margin:0;
-  font-size:0.74rem;color:var(--text-muted);line-height:1.3;
+  font-size:0.76rem;color:var(--text-muted);line-height:1.4;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .grid-view .card-preview,
@@ -776,15 +812,16 @@ img{max-width:100%;display:block}
 .list-view .card-acct-body,
 .list-view .sub-sites{display:none}
 
-/* ---- List: card footer hidden by default (shown when expanded) ---- */
+/* ---- List: card footer hidden by default (shown on hover/expanded) ---- */
 .list-view .card-foot{
-  position:absolute;top:6px;right:8px;
-  padding:0;border-top:none;
-  background:var(--surface);border-radius:6px;
+  position:absolute;top:8px;right:10px;
+  padding:4px;border-top:none;
+  background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-md);
   display:none;grid-template-columns:repeat(3,28px);
   gap:4px;z-index:5;
   opacity:0;
-  transition:opacity 0.15s ease;
+  box-shadow:var(--shadow-sm);
+  transition:opacity 0.2s var(--ease-out);
 }
 .list-view .card-foot .card-actions{display:contents}
 .list-view .card-foot .card-stat{display:none}
@@ -796,6 +833,11 @@ img{max-width:100%;display:block}
 .list-view .group-card:hover .card-foot{
   display:grid;
   opacity:1;
+  animation:fadeIn 0.15s ease;
+}
+@keyframes fadeIn{
+  from{opacity:0;transform:translateY(-4px)}
+  to{opacity:1;transform:translateY(0)}
 }
 
 /* 鼠标悬停时隐藏展开按钮 */
@@ -804,32 +846,49 @@ img{max-width:100%;display:block}
   display:none;
 }
 
-/* ---- List: expand button hidden ---- */
+/* ---- List: expand button (hidden by default, shown for expandable cards) ---- */
 .list-view .list-expand-btn{
   display:none;
-  position:absolute;top:50%;right:8px;
+  position:absolute;top:50%;right:10px;
   transform:translateY(-50%);
   width:28px;height:28px;
   align-items:center;justify-content:center;
-  border-radius:50%;z-index:6;
-  color:var(--text-muted);background:transparent;
-  border:none;cursor:pointer;
-  transition:all 0.15s ease;
+  border-radius:var(--radius-md);z-index:6;
+  color:var(--text-muted);background:var(--bg-alt);
+  border:1px solid var(--border-light);
+  cursor:pointer;
+  transition:all 0.2s var(--ease-out);
 }
-.list-view .list-expand-btn:hover{color:var(--accent);background:var(--accent-light)}
-.list-view .list-expand-btn svg{width:14px;height:14px}
+.list-view .list-expand-btn:hover{
+  color:var(--accent);
+  background:var(--accent-light);
+  border-color:var(--accent);
+  transform:translateY(-50%) scale(1.05);
+}
+.list-view .list-expand-btn:active{transform:translateY(-50%) scale(0.95);transition-duration:0.06s}
+.list-view .list-expand-btn svg{width:14px;height:14px;transition:transform 0.2s ease}
+.list-view .card-expanded .list-expand-btn svg,
+.list-view .group-expanded .list-expand-btn svg{transform:rotate(180deg)}
 
 /* When footer is visible (grid/focus), hide expand-btn */
 .grid-view .list-expand-btn,
 .focus-view .list-expand-btn{display:none}
 
-/* ---- List: expanded state (natural height, no max-height hack) ---- */
+/* ---- List: expanded state ---- */
 .list-view .card-expanded,
 .list-view .group-expanded{
   height:auto;min-height:56px;overflow:hidden;
   border-color:var(--accent);
-  box-shadow:0 0 0 2px var(--accent-glow);
+  box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover);
+  background:var(--surface);
+  animation:listExpandIn 0.3s var(--ease-out);
 }
+@keyframes listExpandIn{
+  from{box-shadow:0 0 0 0px var(--accent-glow),var(--shadow-card)}
+  to{box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover)}
+}
+.list-view .card:hover .group-card-accent,
+.list-view .group-card:hover .group-card-accent{opacity:0.8}
 .list-view .card-expanded .group-card-accent,
 .list-view .group-expanded .group-card-accent{opacity:1}
 
@@ -837,12 +896,12 @@ img{max-width:100%;display:block}
 .list-view .card-expanded .card-body{
   flex:1 1 0;
   overflow:visible;
-  padding:0 96px 0 0;
+  padding:0 80px 0 0;
 }
 .list-view .group-expanded .card-body{
   flex:1 1 0;
   overflow:visible;
-  padding:0 96px 0 0;
+  padding:0 80px 0 0;
 }
 .list-view .card-expanded .card-tags,
 .list-view .group-expanded .card-tags{
@@ -859,8 +918,14 @@ img{max-width:100%;display:block}
   pointer-events:none;
 }
 .list-view .card-expanded .card-acct-toggle svg{display:none}
-.list-view .card-expanded .card-acct-body{display:block}
-.list-view .card-expanded .sub-sites{display:block}
+.list-view .card-expanded .card-acct-body{
+  display:block;
+  animation:listBodyIn 0.25s var(--ease-out);
+}
+.list-view .card-expanded .sub-sites{
+  display:block;
+  animation:listBodyIn 0.25s var(--ease-out);
+}
 
 /* Show group body when expanded (inside card-body, replaces preview) */
 .list-view .group-expanded .group-body{
@@ -872,6 +937,11 @@ img{max-width:100%;display:block}
   color:var(--text);margin:4px 0 0;
   overflow-wrap:anywhere;
   word-break:break-word;
+  animation:listBodyIn 0.25s var(--ease-out);
+}
+@keyframes listBodyIn{
+  from{opacity:0;max-height:0}
+  to{opacity:1;max-height:400px}
 }
 /* 展开后内联卡片允许换行 */
 .list-view .group-expanded .group-body .group-inline-card{
@@ -1238,7 +1308,7 @@ img{max-width:100%;display:block}
   transform:translateY(-1px);
 }
 .group-inline-card img{width:16px;height:16px;border-radius:2px}
-.group-inline-card .gic-name{color:var(--text);cursor:pointer}
+.group-inline-card .gic-name{color:var(--text);cursor:pointer;min-width:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-inline-card .gic-name:hover{color:var(--accent)}
 .group-inline-card .gic-domain{color:var(--text-muted);font-size:0.7rem;font-family:'JetBrains Mono',monospace;cursor:pointer}
 .group-inline-card .gic-domain:hover{color:var(--accent)}
@@ -1512,6 +1582,10 @@ img{max-width:100%;display:block}
 }
 .undo-toast-btn:hover{background:rgba(255,255,255,0.25);border-color:rgba(255,255,255,0.2);transform:scale(1.03)}
 .undo-toast-btn:active{transform:scale(0.97);background:rgba(255,255,255,0.3)}
+.undo-toast-confirm{
+  background:rgba(13,122,111,0.5);border-color:rgba(20,184,166,0.3);
+}
+.undo-toast-confirm:hover{background:rgba(13,122,111,0.7);border-color:rgba(20,184,166,0.5)}
 .undo-toast-countdown{
   font-size:0.78rem;opacity:0.5;font-variant-numeric:tabular-nums;
   font-weight:600;min-width:20px;text-align:center;
@@ -1892,3 +1966,25 @@ img{max-width:100%;display:block}
   -webkit-mask-image:none;mask-image:none;
   font-size:0.92rem;line-height:1.85;
 }
+
+/* ========= XSS Hardening: img error fallback via CSS ========= */
+img.img-error{display:none!important}
+.card-logo img.img-error+.card-logo-fallback,
+.card-icon img.img-error+.icon-fallback,
+.panel-title-group-icon img.img-error+.panel-title-group-icon-fallback{display:flex!important}
+
+/* ========= Virtual Scroll skeleton placeholders ========= */
+.vs-ph{
+  border-radius:12px;
+  background:var(--bg-alt);
+  border:1px solid var(--border-light);
+  padding:16px;
+  animation:vs-pulse 1.5s ease-in-out infinite;
+  contain:layout style;
+}
+.list-view .vs-ph{border-radius:8px;padding:10px 16px}
+.vs-ph-row{display:flex;align-items:center;gap:10px}
+.vs-ph-avatar{width:28px;height:28px;border-radius:6px;background:var(--border);flex-shrink:0}
+.vs-ph-lines{flex:1;display:flex;flex-direction:column;gap:6px}
+.vs-ph-line{height:12px;border-radius:3px;background:var(--border)}
+@keyframes vs-pulse{0%,100%{opacity:.45}50%{opacity:.2}}
