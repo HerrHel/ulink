@@ -39,7 +39,7 @@ const ACTIONS = {
   TOGGLE_SETTINGS_MENU: 'toggleSettingsMenu',
   TOGGLE_DETAIL_PANEL: 'toggleDetailPanel',
   TOGGLE_ATTR_DROPDOWN: 'toggleAttrDropdown',
-  TOGGLE_SORT_DIR: 'toggleSortDir',
+  SET_SORT_MODE: 'setSortMode',
   TOGGLE_BATCH_MODE: 'toggleBatchMode',
   TOGGLE_EXPAND: 'toggleExpand',
   EXIT_GROUP_FOCUS: 'exitGroupFocus',
@@ -253,8 +253,7 @@ function saveUIState() {
       excludedAttrs: LV.excludedAttrs.slice(),
       detailCards: LV.detailCards.slice(),
       searchQuery: (document.getElementById('searchInput').value || ''),
-      sortSelect: (document.getElementById('sortSelect').value || 'order'),
-      sortDir: LV.sortDir,
+      sortMode: LV.sortMode || 'order',
       layoutMode: LV.layoutMode,
       detailOpen: document.getElementById('detailPanel').classList.contains('open'),
       docScrollTop: document.documentElement.scrollTop || 0
@@ -274,8 +273,12 @@ function restoreUIState() {
     if (s.curCat) LV.curCat = s.curCat;
 
     // 恢复排序
-    if (s.sortSelect) document.getElementById('sortSelect').value = s.sortSelect;
-    if (s.sortDir === 'asc' || s.sortDir === 'desc') LV.sortDir = s.sortDir;
+    if (s.sortMode) {
+      LV.sortMode = s.sortMode;
+      document.querySelectorAll('#sortSegment .seg-btn').forEach(function (btn) {
+        btn.classList.toggle('active', btn.dataset.sort === s.sortMode);
+      });
+    }
 
     // 恢复布局模式（覆盖 initLayoutMode 的结果）
     if (s.layoutMode === 'list' || s.layoutMode === 'grid') LV.layoutMode = s.layoutMode;
@@ -307,11 +310,8 @@ function restoreUIState() {
     // 恢复辅助栏打开状态
     if (s.detailOpen && LV.detailCards.length) {
       document.getElementById('detailPanel').classList.add('open');
+      _syncDetailOverlay();
     }
-
-    // 更新排序方向按钮状态
-    document.getElementById('sortAsc').classList.toggle('active', LV.sortDir === 'asc');
-    document.getElementById('sortDesc').classList.toggle('active', LV.sortDir === 'desc');
   } catch (e) { }
 }
 
@@ -526,7 +526,7 @@ const I = {
 // LV.State: 所有UI状态变量
 const LV_State = {
   curCat: CAT_ALL,
-  sortDir: 'asc',
+  sortMode: 'order',
   editingId: null,
   focusedGroupId: null,
   detailCards: [],
@@ -777,12 +777,14 @@ function restoreNavState(prev) {
     document.getElementById('detailPanel').classList.remove('open');
     document.getElementById('detailPanel').style.width = '';
     document.getElementById('detailSearchWrap').style.display = 'none';
+    _syncDetailOverlay();
     return;
   }
   if (prev.detailPanelOpen && !document.getElementById('detailPanel').classList.contains('open')) {
     document.getElementById('detailPanel').classList.add('open');
     document.getElementById('detailPanel').style.width = '';
     renderDetailPanel();
+    _syncDetailOverlay();
     return;
   }
 
@@ -1074,13 +1076,13 @@ function getFiltered() {
   });
   LV.activeAttrs.forEach(function (aid) { bm = bm.filter(function (b) { return (b.attributes || {})[aid]; }); });
   LV.excludedAttrs.forEach(function (aid) { bm = bm.filter(function (b) { return !(b.attributes || {})[aid]; }); });
-  const sort = document.getElementById('sortSelect').value;
+  const sort = LV.sortMode || 'order';
   bm.sort(function (a, b) {
-    const d = LV.sortDir === 'asc' ? 1 : -1;
-    if (sort === 'useCount') return (a.useCount - b.useCount) * d;
-    if (sort === 'title') return a.title.localeCompare(b.title) * d;
-    if (sort === 'date') return ((a.updatedAt || a.createdAt) - (b.updatedAt || b.createdAt)) * d;
-    return (a.order - b.order) * d;
+    if (sort === 'title') return a.title.localeCompare(b.title);
+    if (sort === 'dateDesc') return ((b.updatedAt || b.createdAt) || 0) - ((a.updatedAt || a.createdAt) || 0);
+    if (sort === 'dateAsc') return ((a.updatedAt || a.createdAt) || 0) - ((b.updatedAt || b.createdAt) || 0);
+    if (sort === 'useCount') return (b.useCount || 0) - (a.useCount || 0);
+    return (a.order - b.order);
   });
   return bm;
 }
@@ -1401,6 +1403,7 @@ function setupFocusModeUI(g) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
+  document.getElementById('filterRow').classList.add('focus-active');
   if (window.innerWidth <= 768) document.getElementById('cardGrid').classList.add('focus-mobile');
 
   /* —— 面板标题：图标 + 可编辑组名 —— */
@@ -1493,6 +1496,7 @@ function setupGridModeUI() {
   document.getElementById('filterTools').style.display = 'flex';
   document.getElementById('focusBack').style.display = 'none';
   document.getElementById('cardGrid').classList.remove('focus-view', 'focus-mobile');
+  document.getElementById('filterRow').classList.remove('focus-active');
   const hamburger = document.getElementById('hamburgerBtn');
   if (hamburger) hamburger.style.display = '';
   const btnAdd = document.getElementById('btnAdd');
@@ -1560,11 +1564,21 @@ function updateSettingsMenuActive() {
     const m = btn.getAttribute('data-mode');
     btn.classList.toggle('active', m === LV.layoutMode);
   });
+  // Sort mode
+  const segBtns3 = document.querySelectorAll('#sortSegment .seg-btn');
+  segBtns3.forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.sort === (LV.sortMode || 'order'));
+  });
 }
 
 function toggleBatchMode() {
   LV.batchMode = !LV.batchMode;
   LV.batchSelected = [];
+  if (LV.batchMode) {
+    A.bookmarks.forEach(function (b) { b.isExpanded = false; });
+    A.siblingGroups.forEach(function (g) { g.isExpanded = false; });
+    save();
+  }
   var btnBH = document.getElementById('btnBatchHeader');
   if (btnBH) {
     btnBH.title = LV.batchMode ? '取消' : '批量管理';
@@ -1573,7 +1587,10 @@ function toggleBatchMode() {
   if (LV.focusedGroupId) exitGroupFocus();
   renderContent();
   const bar = document.getElementById('batchBar');
-  if (bar) bar.style.display = LV.batchMode ? 'flex' : 'none';
+  if (bar) bar.classList.toggle('show', LV.batchMode);
+  if (!LV.batchMode) hideBatchMovePopover();
+  const bottom = document.getElementById('batchBottom');
+  if (bottom) bottom.classList.toggle('show', LV.batchMode);
 
   // Push history state for mobile back button
   if (LV.batchMode && window.innerWidth <= 768) {
@@ -1667,6 +1684,67 @@ function batchDelete() {
     toast('已删除');
   }
 }
+
+function showBatchMovePopover() {
+  if (!LV.batchSelected.length) return;
+  const popover = document.getElementById('batchMovePopover');
+  const list = document.getElementById('batchMoveList');
+  const cats = A.categories.filter(function (c) { return c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED; });
+  list.innerHTML = cats.map(function (c) {
+    return '<div class="bmp-item" data-cat-id="' + c.id + '">'
+      + '<span class="bmp-item-icon" style="background:' + (c.color || 'var(--accent)') + '"></span>'
+      + esc(c.name) + '</div>';
+  }).join('') + '<div class="bmp-item" data-cat-id="uncategorized">'
+    + '<span class="bmp-item-icon" style="background:var(--text-muted)"></span>未分类</div>';
+  list.querySelectorAll('.bmp-item').forEach(function (item) {
+    item.addEventListener('click', function () {
+      batchMoveTo(this.dataset.catId);
+      hideBatchMovePopover();
+    });
+  });
+  popover.style.display = 'block';
+  document.getElementById('batchMoveNewInput').value = '';
+  document.getElementById('batchMoveNewInput').focus();
+}
+function hideBatchMovePopover() {
+  document.getElementById('batchMovePopover').style.display = 'none';
+}
+function batchMoveTo(catId) {
+  if (!LV.batchSelected.length) return;
+  var count = LV.batchSelected.length;
+  LV.batchSelected.forEach(function (id) {
+    if (id.indexOf('group:') === 0) {
+      var sg = A.siblingGroups.find(function (g) { return g.id === id.slice(6); });
+      if (sg) sg.categoryId = catId;
+    } else {
+      var bm = A.bookmarks.find(function (b) { return b.id === id; });
+      if (bm) bm.categoryId = catId;
+    }
+  });
+  LV.batchSelected = [];
+  save(); renderContent();
+  toast('已移动 ' + count + ' 项');
+}
+document.getElementById('batchMoveNewBtn').addEventListener('click', function () {
+  var input = document.getElementById('batchMoveNewInput');
+  var name = input.value.trim();
+  if (!name) return;
+  var newCat = { id: gid(), name: name, icon: 'bookmark', color: 'var(--accent)' };
+  A.categories.push(newCat);
+  save();
+  batchMoveTo(newCat.id);
+  hideBatchMovePopover();
+  renderRail();
+});
+document.getElementById('batchMoveNewInput').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('batchMoveNewBtn').click();
+});
+document.addEventListener('click', function (e) {
+  var popover = document.getElementById('batchMovePopover');
+  if (popover.style.display === 'none') return;
+  if (e.target.closest('#batchMovePopover') || e.target.closest('[data-action="batchMove"]')) return;
+  hideBatchMovePopover();
+});
 
 function batchAddToGroup(gid) {
   const bmIds = LV.batchSelected.filter(function (id) { return id.indexOf('group:') !== 0; });
@@ -1763,13 +1841,61 @@ function closeRail() {
 /* Action Sheet */
 function showActionSheet(items) {
   const sheet = document.getElementById('actionSheet');
+  const overlay = document.getElementById('asOverlay');
   const list = document.getElementById('actionSheetList');
   list.innerHTML = items.map(function(it) {
     return '<button class="as-item' + (it.danger ? ' danger' : '') + '" onclick="' + it.action + ';hideActionSheet()">' + esc(it.label) + '</button>';
   }).join('');
+  sheet.style.transform = '';
   sheet.classList.add('show');
+  overlay.style.display = 'block';
 }
-function hideActionSheet() { document.getElementById('actionSheet').classList.remove('show'); }
+function hideActionSheet() {
+  const sheet = document.getElementById('actionSheet');
+  const overlay = document.getElementById('asOverlay');
+  sheet.classList.remove('show');
+  sheet.style.transform = '';
+  overlay.style.display = 'none';
+}
+
+/* Action sheet drag-to-dismiss */
+(function () {
+  let dragStartY = 0, dragging = false;
+  const sheet = document.getElementById('actionSheet');
+  const overlay = document.getElementById('asOverlay');
+
+  sheet.addEventListener('touchstart', function (e) {
+    if (e.target.closest('.as-item, .as-cancel')) return;
+    dragStartY = e.touches[0].clientY;
+    dragging = true;
+    sheet.style.transition = 'none';
+  }, { passive: true });
+
+  sheet.addEventListener('touchmove', function (e) {
+    if (!dragging) return;
+    const dy = e.touches[0].clientY - dragStartY;
+    if (dy > 0) {
+      sheet.style.transform = 'translateY(' + dy + 'px)';
+    }
+  }, { passive: true });
+
+  sheet.addEventListener('touchend', function (e) {
+    if (!dragging) return;
+    dragging = false;
+    sheet.style.transition = '';
+    const dy = e.changedTouches[0].clientY - dragStartY;
+    if (dy > 80) {
+      hideActionSheet();
+    } else {
+      sheet.style.transform = '';
+    }
+  });
+
+  overlay.addEventListener('click', hideActionSheet);
+  overlay.addEventListener('touchend', function (e) {
+    if (e.target === overlay) hideActionSheet();
+  });
+})();
 
 /* Long-press for mobile action sheet */
 function _onTouchStart(e) {
@@ -1821,15 +1947,12 @@ function _onTouchStart(e) {
       showActionSheet([
         { label: '打开链接', action: 'visit(null,\'' + bmId + '\')' },
         { label: '编辑', action: 'editBm(\'' + bmId + '\')' },
-        { label: '添加到组', action: 'addToGroup(null,event)' },
-        { label: '多选', action: 'toggleBatchMode()' },
         { label: '删除', action: 'deleteBookmark(\'' + bmId + '\',true)', danger: true }
       ]);
     } else if (gid) {
       showActionSheet([
         { label: '展开组', action: 'toggleGroupFocus(\'' + gid + '\')' },
         { label: '编辑组', action: 'editGroup(\'' + gid + '\')' },
-        { label: '多选', action: 'toggleBatchMode()' },
         { label: '删除组', action: 'deleteGroup(\'' + gid + '\')', danger: true }
       ]);
     }
@@ -2310,6 +2433,7 @@ function _swipeEnd() {
       // 关闭详情面板
       if (panel) { panel.classList.remove('open'); panel.style.transform = ''; panel.style.width = ''; }
       document.getElementById('detailSearchWrap').style.display = 'none';
+      _syncDetailOverlay();
     } else {
       // 回弹
       if (panel) panel.style.transform = '';
@@ -2440,9 +2564,16 @@ function toggleDetailPanel() {
   if (!wasOpen) pushNavState();
   if (!LV.detailCards.length && !wasOpen) { panel.classList.add('open'); renderDetailPanel(); }
   else { panel.classList.toggle('open'); if (!panel.classList.contains('open')) document.getElementById('detailSearchWrap').style.display = 'none'; }
+  _syncDetailOverlay();
   saveUIState();
 }
 
+function _syncDetailOverlay() {
+  if (window.innerWidth > 768) return;
+  var panel = document.getElementById('detailPanel');
+  var overlay = document.getElementById('dpOverlay');
+  if (panel && overlay) overlay.style.display = panel.classList.contains('open') ? 'block' : 'none';
+}
 function openDetail(bmId) {
   if (LV.detailCards.indexOf(bmId) === -1) LV.detailCards.push(bmId);
   renderDetailPanel();
@@ -2456,6 +2587,7 @@ function closeDetailCard(bmId) {
     panel.classList.remove('open');
     panel.style.width = '';
     document.getElementById('detailSearchWrap').style.display = 'none';
+    _syncDetailOverlay();
     saveUIState();
     return;
   }
@@ -3815,10 +3947,11 @@ function renderAttrChips() {
   updateChipsFade();
 }
 
-function toggleSortDir() {
-  LV.sortDir = LV.sortDir === 'asc' ? 'desc' : 'asc';
-  document.getElementById('sortAsc').classList.toggle('active', LV.sortDir === 'asc');
-  document.getElementById('sortDesc').classList.toggle('active', LV.sortDir === 'desc');
+function setSortMode(mode) {
+  LV.sortMode = mode;
+  document.querySelectorAll('#sortSegment .seg-btn').forEach(function (btn) {
+    btn.classList.toggle('active', btn.dataset.sort === mode);
+  });
   renderContent();
   saveUIState();
 }
@@ -4594,7 +4727,7 @@ function positionCtx(e) {
 
 // Global contextmenu handler
 function _onContextMenu(e) {
-  if (LV.batchMode && e.target.closest('.card, .group-card, .group-body, .sub-sites')) return;
+  if (LV.batchMode && e.target.closest('.card, .group-card, .group-body, .sub-sites')) { e.preventDefault(); return; }
   // Sub-site item (inline card inside .sub-sites)
   const subSitesEl = e.target.closest('.sub-sites');
   if (subSitesEl) {
@@ -4758,8 +4891,9 @@ function _initFilterBindings() {
   const attrSearchAdd = document.querySelector('.attr-search-add');
   if (attrSearchAdd) attrSearchAdd.addEventListener('click', function (e) { e.stopPropagation(); addAttrQuick(); });
 
-  const sortDir = document.getElementById('sortDir');
-  if (sortDir) sortDir.addEventListener('click', toggleSortDir);
+  document.querySelectorAll('#sortSegment .seg-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { setSortMode(this.dataset.sort); });
+  });
 
   const focusBack = document.querySelector('.btn-back-focus');
   if (focusBack) focusBack.addEventListener('click', exitGroupFocus);
@@ -4776,8 +4910,16 @@ function _initBatchBindings() {
       if (!btn) return;
       const action = btn.dataset.action;
       if (action === ACTIONS.SELECT_ALL_BATCH) selectAllBatch();
-      else if (action === ACTIONS.BATCH_DELETE) batchDelete();
       else if (action === ACTIONS.TOGGLE_BATCH_MODE) toggleBatchMode();
+    });
+  }
+  const batchBottom = document.getElementById('batchBottom');
+  if (batchBottom) {
+    batchBottom.addEventListener('click', function (e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      if (btn.dataset.action === ACTIONS.BATCH_DELETE) batchDelete();
+      else if (btn.dataset.action === 'batchMove') showBatchMovePopover();
     });
   }
 }
@@ -4833,6 +4975,8 @@ function _initOverlayBindings() {
   if (actionSheet) actionSheet.addEventListener('click', function (e) { e.stopPropagation(); });
   const asCancel = document.querySelector('.as-cancel');
   if (asCancel) asCancel.addEventListener('click', hideActionSheet);
+  const dpOverlay = document.getElementById('dpOverlay');
+  if (dpOverlay) dpOverlay.addEventListener('click', function () { toggleDetailPanel(); });
 }
 
 //#endregion Event Delegation 事件委托
@@ -5227,7 +5371,7 @@ document.getElementById('searchInput').addEventListener('input', debounce(functi
   _debouncedSaveUI();
 }, 300));
 
-document.getElementById('sortSelect').addEventListener('change', function () { renderContent(); saveUIState(); });
+/* sortSelect removed — sort now uses segment buttons in settings */
 
 /* ==================== RESIZE HANDLES ==================== */
 
@@ -5339,8 +5483,34 @@ function _onCardTagsWheel(e) {
     tags.scrollLeft += e.deltaY;
   }
 }
-LV.UI.initCardTags = function () { document.addEventListener('wheel', _onCardTagsWheel, { passive: false }); };
-LV.UI.destroyCardTags = function () { document.removeEventListener('wheel', _onCardTagsWheel); };
+// Card tags horizontal scroll on touch drag
+let _tagsTouchStartX = 0, _tagsTouchScrollLeft = 0, _tagsTouchEl = null;
+function _onCardTagsTouchStart(e) {
+  const tags = e.target.closest('.card-tags');
+  if (tags && tags.scrollWidth > tags.clientWidth) {
+    _tagsTouchEl = tags;
+    _tagsTouchStartX = e.touches[0].clientX;
+    _tagsTouchScrollLeft = tags.scrollLeft;
+  }
+}
+function _onCardTagsTouchMove(e) {
+  if (!_tagsTouchEl) return;
+  const dx = e.touches[0].clientX - _tagsTouchStartX;
+  _tagsTouchEl.scrollLeft = _tagsTouchScrollLeft - dx;
+}
+function _onCardTagsTouchEnd() { _tagsTouchEl = null; }
+LV.UI.initCardTags = function () {
+  document.addEventListener('wheel', _onCardTagsWheel, { passive: false });
+  document.addEventListener('touchstart', _onCardTagsTouchStart, { passive: true });
+  document.addEventListener('touchmove', _onCardTagsTouchMove, { passive: true });
+  document.addEventListener('touchend', _onCardTagsTouchEnd);
+};
+LV.UI.destroyCardTags = function () {
+  document.removeEventListener('wheel', _onCardTagsWheel);
+  document.removeEventListener('touchstart', _onCardTagsTouchStart);
+  document.removeEventListener('touchmove', _onCardTagsTouchMove);
+  document.removeEventListener('touchend', _onCardTagsTouchEnd);
+};
 
 // Update overflow class on card tags
 function updateCardTagsOverflow() {
@@ -5480,7 +5650,7 @@ LV.UI.toggleAttrDropdown = toggleAttrDropdown;
 LV.UI.addAttrQuick = addAttrQuick;
 LV.UI.toggleAttrFilter = toggleAttrFilter;
 LV.UI.toggleAttrExclude = toggleAttrExclude;
-LV.UI.toggleSortDir = toggleSortDir;
+LV.UI.setSortMode = setSortMode;
 LV.UI.selectSearchSuggest = selectSearchSuggest;
 LV.UI.hideSearchSuggest = hideSearchSuggest;
 LV.UI.setLayoutMode = setLayoutMode;
