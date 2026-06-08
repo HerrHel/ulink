@@ -1,12 +1,17 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>LinkVault</title>
 <link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600&f[]=satoshi@400,500,600,700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script type="module" crossorigin src="/app.js"></script>
+  <link rel="modulepreload" crossorigin href="/rolldown-runtime.js">
+  <link rel="modulepreload" crossorigin href="/data.js">
+  <link rel="modulepreload" crossorigin href="/group.js">
+  <link rel="modulepreload" crossorigin href="/render.js">
   <link rel="stylesheet" crossorigin href="/index.css">
 </head>
 <body>
@@ -66,10 +71,25 @@
             <button class="seg-btn active" data-style="premium" data-action="setThemeStyle">效率</button>
             <button class="seg-btn" data-style="comfortable" data-action="setThemeStyle">舒适</button>
           </div>
-          <div class="settings-label">视图模式</div>
+          <button class="ctx-item auto-theme-btn" id="btnAutoTheme" data-action="toggleAutoTheme">
+            <svg class="auto-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="auto-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <span>跟随系统</span>
+            <span class="auto-theme-toggle"></span>
+          </button>
+          <div class="settings-label settings-label-layout">视图模式</div>
           <div class="settings-segment" id="layoutSegment">
             <button class="seg-btn active" data-mode="grid" data-action="setLayoutMode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> 宫格</button>
             <button class="seg-btn" data-mode="list" data-action="setLayoutMode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg> 列表</button>
+          </div>
+          <div class="ctx-divider"></div>
+          <div class="settings-label settings-label-layout">排序方式</div>
+          <div class="settings-segment" id="sortSegment">
+            <button class="seg-btn active" data-sort="order" data-action="setSortMode">自定义</button>
+            <button class="seg-btn" data-sort="title" data-action="setSortMode">名称</button>
+            <button class="seg-btn" data-sort="dateDesc" data-action="setSortMode">时间↓</button>
+            <button class="seg-btn" data-sort="dateAsc" data-action="setSortMode">时间↑</button>
+            <button class="seg-btn" data-sort="useCount" data-action="setSortMode">点击数</button>
           </div>
           <div class="ctx-divider"></div>
           <div class="settings-segment" id="dataSegment">
@@ -100,22 +120,13 @@
           </div>
           <div class="attr-chips" id="attrChips"></div>
         </div>
-        <div class="sort-group">
-          <div class="sort-dir" id="sortDir" data-action="toggleSortDir" title="切换升序/降序">
-            <button class="sort-arrow sort-asc active" id="sortAsc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
-            <button class="sort-arrow sort-desc" id="sortDesc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-          </div>
-          <select class="filter-sort" id="sortSelect">
-            <option value="order">默认排序</option>
-            <option value="title">名称</option>
-            <option value="date">修改时间</option>
-            <option value="useCount">点击次数</option>
-          </select>
-        </div>
         <button class="btn btn-secondary btn-sm" id="btnGrip" style="display:none" title="按住拖动排序">
           <svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px"><rect x="3" y="4" width="18" height="3" rx="1.5" fill="currentColor"/><rect x="3" y="10.5" width="18" height="3" rx="1.5" fill="currentColor"/><rect x="3" y="17" width="18" height="3" rx="1.5" fill="currentColor"/></svg>
         </button>
       </span>
+      <button class="btn btn-secondary btn-sm" id="btnBatchHeader" data-action="toggleBatchMode" title="批量管理" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M11 6L21 6.00072M11 12L21 12.0007M11 18L21 18.0007M3 11.9444L4.53846 13.5L8 10M3 5.94444L4.53846 7.5L8 4M4.5 18H4.51M5 18C5 18.2761 4.77614 18.5 4.5 18.5C4.22386 18.5 4 18.2761 4 18C4 17.7239 4.22386 17.5 4.5 17.5C4.77614 17.5 5 17.7239 5 18Z"/></svg>
+      </button>
       <span id="focusBack" style="display:none">
         <button class="btn-back-focus" data-action="exitGroupFocus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="19 12 5 12"/><polyline points="12 19 5 12 12 5"/></svg>返回</button>
       </span>
@@ -126,9 +137,12 @@
           <button class="ctx-item" data-action="addGrpDropdown">新建组</button>
         </div>
       </span>
-      <button class="btn btn-secondary btn-sm" id="btnBatch" data-action="toggleBatchMode" title="批量管理" style="margin-left:auto">
-        <svg viewBox="0 0 24 24" fill="none" style="width:14px;height:14px"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.25 6C2.25 5.58579 2.58579 5.25 3 5.25H20C20.4142 5.25 20.75 5.58579 20.75 6C20.75 6.41421 20.4142 6.75 20 6.75H3C2.58579 6.75 2.25 6.41421 2.25 6ZM20.4613 10.4086C20.7879 10.6634 20.8461 11.1347 20.5914 11.4613L16.6914 16.4613C16.5522 16.6397 16.3399 16.7458 16.1136 16.7499C15.8873 16.754 15.6713 16.6557 15.5257 16.4824L13.4257 13.9824C13.1593 13.6652 13.2004 13.1921 13.5176 12.9257C13.8348 12.6593 14.3079 12.7004 14.5743 13.0176L16.0784 14.8082L19.4086 10.5387C19.6634 10.2121 20.1347 10.1539 20.4613 10.4086ZM2.25 11C2.25 10.5858 2.58579 10.25 3 10.25H10C10.4142 10.25 10.75 10.5858 10.75 11C10.75 11.4142 10.4142 11.75 10 11.75H3C2.58579 11.75 2.25 11.4142 2.25 11ZM2.25 16C2.25 15.5858 2.58579 15.25 3 15.25H10C10.4142 15.25 10.75 15.5858 10.75 16C10.75 16.4142 10.4142 16.75 10 16.75H3C2.58579 16.75 2.25 16.4142 2.25 16Z" fill="currentColor"/></svg>
-      </button>
+      <div class="batch-bar" id="batchBar">
+        <span class="batch-count" id="batchCount">已选 0 项</span>
+        <button class="btn btn-secondary btn-sm" data-action="selectAllBatch">全选</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-secondary btn-sm" data-action="toggleBatchMode">取消</button>
+      </div>
     </div>
 
     <!-- Content row -->
@@ -136,19 +150,32 @@
       <div class="panel-content" id="panelContent">
         <div class="card-grid" id="cardGrid"></div>
       </div>
-      <div class="batch-bar" id="batchBar" style="display:none">
-        <span class="batch-count" id="batchCount">已选 0 项</span>
-        <button class="btn btn-secondary btn-sm" data-action="selectAllBatch">全选</button>
-        <span style="flex:1"></span>
-        <button class="btn btn-danger btn-sm" data-action="batchDelete">删除所选</button>
-        <button class="btn btn-secondary btn-sm" data-action="toggleBatchMode">取消</button>
+    </div>
+    <div class="batch-bottom" id="batchBottom">
+      <button class="btn-batch-move" data-action="batchMove" title="移动到">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M15 17H21M21 17L19 19M21 17L19 15M13 3H8.2C7.0799 3 6.51984 3 6.09202 3.21799C5.71569 3.40973 5.40973 3.71569 5.21799 4.09202C5 4.51984 5 5.0799 5 6.2V17.8C5 18.9201 5 19.4802 5.21799 19.908C5.40973 20.2843 5.71569 20.5903 6.09202 20.782C6.51984 21 7.0799 21 8.2 21H15M13 3L19 9M13 3V7.4C13 7.96005 13 8.24008 13.109 8.45399C13.2049 8.64215 13.3578 8.79513 13.546 8.89101C13.7599 9 14.0399 9 14.6 9H19M19 9V11.0228" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>移动到</span>
+      </button>
+      <button class="btn-batch-delete" data-action="batchDelete" title="删除所选">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        <span>删除</span>
+      </button>
+    </div>
+    <div class="batch-move-popover" id="batchMovePopover" style="display:none">
+      <div class="bmp-header">移动到分类</div>
+      <div class="bmp-list" id="batchMoveList"></div>
+      <div class="bmp-new">
+        <input type="text" class="bmp-new-input" id="batchMoveNewInput" placeholder="新建分类名称…">
+        <button class="bmp-new-btn" id="batchMoveNewBtn">+</button>
       </div>
     </div>
       </div>
     <div class="resize-handle" id="resizeRight"></div>
 
     <!-- Right detail panel -->
+    <div class="dp-overlay" id="dpOverlay" style="display:none"></div>
     <div class="detail-panel" id="detailPanel">
+      <div class="detail-drag-handle" id="detailDragHandle"></div>
       <div class="detail-search" id="detailSearchWrap" style="display:none">
         <input type="text" class="detail-search-input" id="detailSearch" placeholder="搜索辅助栏…" data-action="filterDetailCards">
       </div>
@@ -278,6 +305,7 @@
 
 <div class="toasts" id="toasts"></div>
 <div class="overlay" id="railOverlay" data-action="closeRail"></div>
+<div class="as-overlay" id="asOverlay" style="display:none"></div>
 <div class="action-sheet" id="actionSheet" data-stop-propagation>
   <div class="as-list" id="actionSheetList"></div>
   <button class="as-cancel" data-action="hideActionSheet">取消</button>
