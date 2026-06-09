@@ -60,46 +60,71 @@
         <div class="search-suggest" id="searchSuggest" style="display:none"></div>
       </div>
       <div class="header-right">
+        <button class="search-toggle-btn" id="searchToggleBtn" title="搜索">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
         <span class="settings-wrap">
         <button class="lt-btn" id="btnSettings" data-action="toggleSettingsMenu" title="设置">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
-        <div class="settings-menu ctx-menu" id="settingsMenu" style="display:none">
-          <div class="settings-label">主题风格</div>
-          <div class="settings-segment" id="themeStyleSegment">
-            <button class="seg-btn active" data-style="premium" data-action="setThemeStyle">效率</button>
-            <button class="seg-btn" data-style="comfortable" data-action="setThemeStyle">舒适</button>
+        <div class="sp" id="settingsMenu" style="display:none">
+          <!-- Theme -->
+          <div class="sp-section">
+            <div class="sp-row">
+              <span class="sp-row-label">主题</span>
+              <div class="sp-seg" id="themeStyleSegment">
+                <button class="sp-seg-btn active" data-style="premium">效率</button>
+                <button class="sp-seg-btn" data-style="comfortable">舒适</button>
+              </div>
+            </div>
+            <div class="sp-divider"></div>
+            <div class="sp-toggle-row" id="btnAutoTheme" data-action="toggleAutoTheme">
+              <svg class="sp-icon auto-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              <svg class="sp-icon auto-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <span class="sp-toggle-label">跟随系统</span>
+              <span class="sp-switch"></span>
+            </div>
           </div>
-          <button class="ctx-item auto-theme-btn" id="btnAutoTheme" data-action="toggleAutoTheme">
-            <svg class="auto-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            <svg class="auto-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            <span>跟随系统</span>
-            <span class="auto-theme-toggle"></span>
-          </button>
-          <div class="settings-label settings-label-layout">视图模式</div>
-          <div class="settings-segment" id="layoutSegment">
-            <button class="seg-btn active" data-mode="grid" data-action="setLayoutMode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> 宫格</button>
-            <button class="seg-btn" data-mode="list" data-action="setLayoutMode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg> 列表</button>
+          <!-- Layout -->
+          <div class="sp-section sp-section-layout">
+            <div class="sp-row">
+              <span class="sp-row-label">视图</span>
+              <div class="sp-seg" id="layoutSegment">
+                <button class="sp-seg-btn active" data-mode="grid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+                <button class="sp-seg-btn" data-mode="list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg></button>
+              </div>
+            </div>
           </div>
-          <div class="ctx-divider"></div>
-          <div class="settings-label settings-label-layout">排序方式</div>
-          <div class="settings-segment" id="sortSegment">
-            <button class="seg-btn active" data-sort="order" data-action="setSortMode">自定义</button>
-            <button class="seg-btn" data-sort="title" data-action="setSortMode">名称</button>
-            <button class="seg-btn" data-sort="dateDesc" data-action="setSortMode">时间↓</button>
-            <button class="seg-btn" data-sort="dateAsc" data-action="setSortMode">时间↑</button>
-            <button class="seg-btn" data-sort="useCount" data-action="setSortMode">点击数</button>
+          <!-- Sort -->
+          <div class="sp-section">
+            <div class="sp-row">
+              <span class="sp-row-label">排序</span>
+              <div class="sp-seg sp-seg-wrap" id="sortSegment">
+                <button class="sp-seg-btn active" data-sort="order" data-action="setSortMode">自定义</button>
+                <button class="sp-seg-btn" data-sort="title" data-action="setSortMode">名称</button>
+                <button class="sp-seg-btn" data-sort="dateDesc" data-action="setSortMode">新→旧</button>
+                <button class="sp-seg-btn" data-sort="dateAsc" data-action="setSortMode">旧→新</button>
+                <button class="sp-seg-btn" data-sort="useCount" data-action="setSortMode">常用</button>
+              </div>
+            </div>
           </div>
-          <div class="ctx-divider"></div>
-          <div class="settings-segment" id="dataSegment">
-            <button class="seg-btn" data-action="triggerImport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导入</button>
-            <button class="seg-btn" data-action="exportData"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>导出</button>
+          <!-- Data -->
+          <div class="sp-section">
+            <div class="sp-actions" id="dataSegment">
+              <button class="sp-action" data-action="triggerImport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导入数据</button>
+              <button class="sp-action" data-action="exportData"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>导出数据</button>
+            </div>
           </div>
-          <div class="ctx-divider"></div>
-          <button class="ctx-item ctx-danger" data-action="resetData">重置数据</button>
+          <!-- Danger -->
+          <div class="sp-section sp-danger">
+            <button class="sp-danger-btn" data-action="resetData">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              重置所有数据
+            </button>
+          </div>
         </div>
       </span>
-        <button class="btn btn-ghost btn-sm" id="btnToggleDetail" data-action="toggleDetailPanel" title="右侧辅助栏">
+        <button class="btn btn-ghost btn-sm" id="btnToggleDetail" title="右侧辅助栏">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
         </button>
       </div>
@@ -109,7 +134,7 @@
     <div class="filter-row" id="filterRow">
       <span id="filterTools" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1">
         <div class="attr-filter-wrap">
-          <button class="btn btn-ghost btn-sm" id="btnAttrFilter" data-action="toggleAttrDropdown">属性</button>
+          <button class="btn btn-ghost btn-sm" id="btnAttrFilter">属性</button>
           <div class="attr-dropdown" id="attrDropdown" style="display:none">
             <div class="attr-drop-search">
               <input type="text" class="attr-search-input" id="attrSearchInput" placeholder="搜索/创建属性…" data-action="renderAttrDropdown">
@@ -138,7 +163,7 @@
       </span>
       <div class="batch-bar" id="batchBar">
         <span class="batch-count" id="batchCount">已选 0 项</span>
-        <button class="btn btn-secondary btn-sm" data-action="selectAllBatch">全选</button>
+        <button class="btn btn-ghost btn-sm" data-action="selectAllBatch">全选</button>
         <span style="flex:1"></span>
         <button class="btn btn-secondary btn-sm" data-action="toggleBatchMode">取消</button>
       </div>
@@ -160,19 +185,18 @@
         <span>删除</span>
       </button>
     </div>
-    <div class="batch-move-popover" id="batchMovePopover" style="display:none">
+    <div class="batch-move-popover" id="batchMovePopover">
       <div class="bmp-header">移动到分类</div>
       <div class="bmp-list" id="batchMoveList"></div>
       <div class="bmp-new">
         <input type="text" class="bmp-new-input" id="batchMoveNewInput" placeholder="新建分类名称…">
-        <button class="bmp-new-btn" id="batchMoveNewBtn">+</button>
+        <button class="bmp-new-btn" id="batchMoveNewBtn" data-action="batchMoveNewCat">+</button>
       </div>
     </div>
       </div>
     <div class="resize-handle" id="resizeRight"></div>
 
     <!-- Right detail panel -->
-    <div class="dp-overlay" id="dpOverlay" style="display:none"></div>
     <div class="detail-panel" id="detailPanel">
       <div class="detail-drag-handle" id="detailDragHandle"></div>
       <div class="detail-search" id="detailSearchWrap" style="display:none">
@@ -208,7 +232,7 @@
         <div class="form-group"><label class="form-label">密码</label><div class="pw-wrap"><input type="password" class="form-input" id="bmPass" placeholder="密码" style="padding-right:38px"><button class="pw-toggle" id="pwToggle" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       </div>
       <div class="form-group"><label class="form-label">备注</label><textarea class="form-textarea" id="bmNotes" placeholder="备注…"></textarea></div>
-      <div class="form-group"><label class="form-label">自定义图标</label><input type="url" class="form-input" id="bmIcon" placeholder="https://… 输入图标URL，留空则自动获取" data-action="previewIconUrl"><button class="btn btn-ghost btn-sm" id="btnClearIcon" style="display:none;margin-top:4px" data-action="clearIcon">清除图标</button><div class="logo-preview" id="iconPreview" style="display:none"><img src="" alt="" id="iconPreviewImg"><span>图标预览</span></div></div>
+      <div class="form-group"><label class="form-label">自定义图标</label><input type="url" class="form-input" id="bmIcon" placeholder="https://… 输入图标URL，留空则自动获取" data-action="previewIconUrl"><button class="btn btn-ghost btn-sm" id="btnClearIcon" style="display:none;margin-top:4px">清除图标</button><div class="logo-preview" id="iconPreview" style="display:none"><img src="" alt="" id="iconPreviewImg"><span>图标预览</span></div></div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">分类</label><select class="form-select" id="bmCat"></select></div>
         <div class="form-group"><label class="form-label">父级（子网站）</label><select class="form-select" id="bmParent"><option value="">无</option></select></div>
@@ -255,6 +279,8 @@
   <div class="ctx-divider"></div>
   <button class="ctx-item ctx-danger" data-action="delete">删除</button>
   <div class="ctx-divider"></div>
+  <button class="ctx-item" data-action="moveToCat">移动到</button>
+  <div class="ctx-divider"></div>
   <button class="ctx-item" data-action="addbookmark">添加书签</button>
   <button class="ctx-item" data-action="addgroup">添加组</button>
   <button class="ctx-item" data-action="addcat">添加分类</button>
@@ -270,7 +296,7 @@
       <input type="hidden" id="geId">
       <div class="form-group"><label class="form-label">组名称</label><input type="text" class="form-input" id="geName" placeholder="组名称"></div>
       <div class="form-group"><label class="form-label">分类</label><select class="form-select" id="geCat"></select></div>
-      <div class="form-group"><label class="form-label">自定义图标</label><input type="url" class="form-input" id="geIcon" placeholder="https://… 输入图标URL，留空则使用默认图标" data-action="previewGeIconUrl"><button class="btn btn-ghost btn-sm" id="btnClearGeIcon" style="display:none;margin-top:4px" data-action="clearGeIcon">清除图标</button><div class="logo-preview" id="geIconPreview" style="display:none"><img src="" alt="" id="geIconPreviewImg"><span>图标预览</span></div></div>
+      <div class="form-group"><label class="form-label">自定义图标</label><input type="url" class="form-input" id="geIcon" placeholder="https://… 输入图标URL，留空则使用默认图标" data-action="previewGeIconUrl"><button class="btn btn-ghost btn-sm" id="btnClearGeIcon" style="display:none;margin-top:4px">清除图标</button><div class="logo-preview" id="geIconPreview" style="display:none"><img src="" alt="" id="geIconPreviewImg"><span>图标预览</span></div></div>
       <div class="form-group"><label class="form-label">属性标记</label><div class="check-group" id="geAttrs"></div></div>
       <div class="form-group"><label class="form-label">内含书签</label><div id="geBookmarks"></div></div>
     </div>
@@ -283,7 +309,7 @@
   <div class="popover-card" data-stop-propagation>
     <div class="popover-search-row">
       <input type="text" class="form-input" id="addBmSearch" placeholder="搜索书签…" data-action="renderAddBmResults" autocomplete="off">
-      <button class="btn btn-primary btn-sm" data-action="addBmNew">+ 新建</button>
+      <button class="btn btn-primary btn-sm" id="addBmNewBtn">+ 新建</button>
     </div>
     <div class="popover-results" id="addBmResults"></div>
   </div>
@@ -302,10 +328,11 @@
   </div>
 </div>
 
+<div class="dp-overlay" id="dpOverlay"></div>
 <div class="toasts" id="toasts"></div>
-<div class="overlay" id="railOverlay" data-action="closeRail"></div>
-<div class="as-overlay" id="asOverlay" style="display:none"></div>
-<div class="action-sheet" id="actionSheet" data-stop-propagation>
+<div class="overlay" id="railOverlay"></div>
+<div class="as-overlay" id="asOverlay"></div>
+<div class="action-sheet" id="actionSheet">
   <div class="as-list" id="actionSheetList"></div>
   <button class="as-cancel" data-action="hideActionSheet">取消</button>
 </div>
