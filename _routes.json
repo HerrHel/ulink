@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": [
+    "/app.js",
+    "/vue-vendor.js",
+    "/tiptap.js",
+    "/sortable.js",
+    "/dexie.js",
+    "/dompurify.js",
+    "/rolldown-runtime.js",
+    "/workbox-dcde9eb3.js",
+    "/registerSW.js",
+    "/sw.js",
+    "/index.css",
+    "/manifest.webmanifest",
+    "/*.js",
+    "/*.css",
+    "/*.svg",
+    "/*.woff2",
+    "/*.png",
+    "/*.jpg",
+    "/*.ico",
+    "/*.webmanifest"
+  ]
+}
