@@ -12,17 +12,17 @@
       <button class="ft-btn" @click="toggle('ul')" title="无序列表" v-html="icons.ul"></button>
       <button class="ft-btn" @click="toggle('task')" title="待办清单" v-html="icons.taskList"></button>
       <span class="ft-sep"></span>
-      <span class="ft-color-wrap">
-        <button ref="mfbColorBtnRef" class="ft-btn ft-color-btn" :class="{ active: !!state.color }"
-                :style="state.color ? { '--ft-color': state.color } : {}"
-                @click="toggleMfbPalette" title="文字颜色" v-html="icons.textColor"></button>
-      </span>
+      <button ref="mfbColorBtnRef" class="ft-btn ft-color-btn" :class="{ active: !!state.color }"
+              :style="state.color ? { '--ft-color': state.color } : {}"
+              @click="toggleMfbPalette" title="文字颜色" v-html="icons.textColor"></button>
+      <template v-if="paletteOpen">
+        <span class="ft-sep"></span>
+        <button v-for="c in palette" :key="c.hex" class="mfb-color-dot"
+                :class="{ active: c.hex === state.color }"
+                :style="{ background: c.hex }" @click="applyColor(c.hex)"></button>
+        <button class="mfb-color-reset" @click="applyColor(null)">默认</button>
+      </template>
     </div>
-    <Teleport to="body">
-      <Transition name="cpalette">
-        <ColorPalette v-if="paletteOpen" class="cp-fixed" :style="mfbPaletteStyle" :activeColor="state.color" @apply="applyColor" />
-      </Transition>
-    </Teleport>
   </template>
   <div v-else class="format-toolbar" ref="toolbarRef" @mousedown.prevent>
     <button class="ft-btn ft-sb-btn" :class="{ active: state.bold }" title="加粗 Ctrl+B" @click="toggle('bold')">
@@ -56,7 +56,7 @@ import { EditorManager } from '../../lib/editor.js'
 import { I } from '../../config/icons.js'
 import { saveGroupBody } from '../../composables/domain/useGroup.js'
 import { setMfbAPI } from '../../composables/bridge.js'
-import { useEditorFormat } from '../../composables/ui/useEditorFormat.js'
+import { useEditorFormat, PALETTE } from '../../composables/ui/useEditorFormat.js'
 import ColorPalette from './ColorPalette.vue'
 
 const store = useAppStore()
@@ -67,7 +67,6 @@ const gid = computed(() => store.focusedGroupId)
 
 const toolbarRef = ref(null)
 const mfbColorBtnRef = ref(null)
-const mfbPaletteStyle = ref({})
 
 const icons = { bold: I.bold, underline: I.underline, ol: I.ol, ul: I.ul, taskList: I.taskList, textColor: I.textColor }
 
@@ -79,6 +78,8 @@ function getEditor() {
 
 const { fmt: state, colorOpen: paletteOpen, syncFmt: syncState, fmtToggle: _fmtToggle, applyColor: _applyColor } = useEditorFormat(getEditor)
 
+const palette = PALETTE
+
 function toggle(f) {
   _fmtToggle(f)
   const saveGid = store.focusedGroupId || document.activeElement?.closest?.('.group-body')?.dataset?.gid
@@ -88,12 +89,7 @@ function toggle(f) {
 function applyColor(hex) { _applyColor(hex) }
 
 function toggleMfbPalette() {
-  if (paletteOpen.value) { paletteOpen.value = false; return }
-  const btn = mfbColorBtnRef.value
-  if (!btn) return
-  const r = btn.getBoundingClientRect()
-  mfbPaletteStyle.value = { position: 'fixed', bottom: (window.innerHeight - r.top + 6) + 'px', left: Math.max(8, r.left + r.width / 2 - 60) + 'px' }
-  paletteOpen.value = true
+  paletteOpen.value = !paletteOpen.value
 }
 
 function onDocClick(e) {
@@ -103,15 +99,14 @@ function onDocClick(e) {
   }
 }
 function _mfbOnDocTouch(e) {
-  // Mobile: close palette when touching outside the mfb bar and palette
   if (!paletteOpen.value) return
   const mfb = document.querySelector('.mfb')
-  const palette = document.querySelector('.cp-fixed')
-  if ((mfb && !mfb.contains(e.target)) && (palette && !palette.contains(e.target))) paletteOpen.value = false
+  if (mfb && !mfb.contains(e.target)) paletteOpen.value = false
 }
 
 const isVisible = ref(false)
 const kbBottom = ref(0)
+let _showTimer = null
 
 function updateViewport() {
   const vv = window.visualViewport
@@ -122,18 +117,21 @@ function updateViewport() {
 function show() {
   if (!isMobile()) return
   isVisible.value = true
-  updateViewport()
   syncState()
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', updateViewport)
     window.visualViewport.addEventListener('scroll', updateViewport)
   }
+  requestAnimationFrame(() => updateViewport())
+  if (_showTimer) clearTimeout(_showTimer)
+  _showTimer = setTimeout(updateViewport, 300)
 }
 
 function hide() {
   isVisible.value = false
   kbBottom.value = 0
   paletteOpen.value = false
+  if (_showTimer) { clearTimeout(_showTimer); _showTimer = null }
   if (window.visualViewport) {
     window.visualViewport.removeEventListener('resize', updateViewport)
     window.visualViewport.removeEventListener('scroll', updateViewport)

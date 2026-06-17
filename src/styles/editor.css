@@ -133,4 +133,15 @@
 .mfb::-webkit-scrollbar{display:none}
 .mfb.visible{transform:translateY(0);opacity:1}
 .mfb .ft-btn{min-width:30px;height:30px}
-.mfb .ft-color-wrap{position:relative;display:inline-flex}
+.mfb .ft-color-btn{position:relative}
+.mfb-color-dot{
+  width:24px;height:24px;border-radius:50%;border:2px solid transparent;
+  cursor:pointer;flex-shrink:0;transition:border-color .15s ease;
+}
+.mfb-color-dot.active{border-color:var(--text)}
+.mfb-color-reset{
+  flex-shrink:0;padding:0 8px;height:24px;
+  background:transparent;border:1px solid var(--border-light);
+  border-radius:var(--radius-sm);color:var(--text-muted);font-size:.7rem;
+  cursor:pointer;
+}
