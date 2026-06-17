@@ -56,7 +56,8 @@ function purgeCssPlugin() {
                 standard: [
                   'open', 'show', 'active', 'visible', 'dragging',
                   'card-expanded', 'group-expanded', 'card-selected',
-                  'list-item', 'resize-handle',
+                  'list-item', 'resize-handle', 'no-drag', 'confirm-foot',
+                  'cat-sort-list', 'cat-placeholder', 'cat-dragging', 'drag-handle',
                   'resizeLeft', 'resizeRight',
                   /^modal-/, /^sp-/, /^ctx-/, /^as-/, /^mfb-/,
                   /^vs-/, /^bmp-/, /^attr-/, /^batch-/, /^search-/,

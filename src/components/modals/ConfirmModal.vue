@@ -26,8 +26,3 @@ function onCancel() {
   store.confirmModalCallback = null
 }
 </script>
-<style scoped>
-.confirm-foot {
-  justify-content: space-between;
-}
-</style>

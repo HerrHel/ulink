@@ -91,3 +91,19 @@
 }
 .logo-preview img{width:20px;height:20px}
 
+/* ── CategoryModal ── */
+#catModal .modal{overflow:hidden}
+.cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.cat-sort-list::-webkit-scrollbar{width:4px}
+.cat-sort-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.cat-list-item{display:flex;align-items:center;gap:8px;cursor:grab;user-select:none;transition:background-color 0.15s,opacity 0.15s}
+.cat-list-item:active{cursor:grabbing}
+.cat-drag-handle{display:flex;align-items:center;color:var(--text-muted);opacity:0.4;flex-shrink:0;cursor:grab;touch-action:none}
+.cat-drag-handle svg{width:16px;height:16px}
+.cat-no-drag{cursor:default;opacity:0.6}
+.cat-placeholder{background:var(--accent-bg);border:2px dashed var(--accent);border-radius:var(--radius);opacity:0.5}
+.cat-dragging{opacity:0.9;box-shadow:0 4px 16px rgba(0,0,0,0.2);background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);touch-action:none}
+
+/* ── ConfirmModal ── */
+.confirm-foot{justify-content:space-between}
+

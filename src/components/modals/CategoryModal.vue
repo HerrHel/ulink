@@ -8,11 +8,11 @@
           <button class="btn btn-primary btn-sm" @click="onAddCat">添加</button>
         </div>
         <div class="cat-sort-list" ref="catListRef">
-          <div class="list-item no-drag">
+          <div class="cat-list-item cat-no-drag">
             <span class="flex-1">{{ uncategorizedCat.name }}</span>
           </div>
-          <div v-for="cat in sortableList" :key="cat.id" class="list-item" :data-cat-id="cat.id">
-            <span class="drag-handle" v-html="I.grip"></span>
+          <div v-for="cat in sortableList" :key="cat.id" class="cat-list-item" :data-cat-id="cat.id">
+            <span class="cat-drag-handle" v-html="I.grip"></span>
             <template v-if="editingId === cat.id">
               <input class="form-input flex-1" v-model="editingName" aria-label="分类名称" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef" style="height:30px">
               <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名">✓</button>
@@ -61,13 +61,13 @@ let scrollRaf = null
 
 function getSortableItems() {
   if (!catListRef.value) return []
-  return Array.from(catListRef.value.querySelectorAll('.list-item[data-cat-id]'))
+  return Array.from(catListRef.value.querySelectorAll('.cat-list-item[data-cat-id]'))
 }
 
 function onPointerDown(e) {
-  const handle = e.target.closest('.drag-handle')
+  const handle = e.target.closest('.cat-drag-handle')
   if (!handle) return
-  const item = handle.closest('.list-item[data-cat-id]')
+  const item = handle.closest('.cat-list-item[data-cat-id]')
   if (!item || !catListRef.value) return
 
   e.preventDefault()
@@ -78,7 +78,7 @@ function onPointerDown(e) {
   const idx = allItems.indexOf(item)
 
   const ph = document.createElement('div')
-  ph.className = 'list-item cat-placeholder'
+  ph.className = 'cat-list-item cat-placeholder'
   ph.style.height = rect.height + 'px'
   catListRef.value.insertBefore(ph, item)
 
@@ -208,73 +208,4 @@ function onDelete(id) {
 }
 </script>
 
-<style scoped>
-#catModal .modal {
-  overflow: hidden;
-}
 
-.cat-sort-list {
-  max-height: 50vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-}
-
-.cat-sort-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.cat-sort-list::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 2px;
-}
-
-.list-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: grab;
-  user-select: none;
-  transition: background-color 0.15s, opacity 0.15s;
-}
-
-.list-item:active {
-  cursor: grabbing;
-}
-
-.drag-handle {
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-  opacity: 0.4;
-  flex-shrink: 0;
-  cursor: grab;
-  touch-action: none;
-}
-
-.drag-handle :deep(svg) {
-  width: 16px;
-  height: 16px;
-}
-
-.no-drag {
-  cursor: default;
-  opacity: 0.6;
-}
-
-.cat-placeholder {
-  background: var(--accent-bg);
-  border: 2px dashed var(--accent);
-  border-radius: var(--radius);
-  opacity: 0.5;
-}
-
-.cat-dragging {
-  opacity: 0.9;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  background: var(--surface);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  touch-action: none;
-}
-</style>
