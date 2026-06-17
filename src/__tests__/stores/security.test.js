@@ -17,8 +17,8 @@ describe('SecurityStore', () => {
   })
 
   describe('主密码管理', () => {
-    it('setMasterPassword - 应该设置主密码', () => {
-      store.setMasterPassword('test-password')
+    it('setMasterPassword - 应该设置主密码', async () => {
+      await store.setMasterPassword('test-password')
       expect(store.masterPassword).toBe('test-password')
     })
 

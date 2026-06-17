@@ -10,7 +10,7 @@ import { closeBmModal, openBmModal } from '../domain/useBookmark.js'
 import { closeGroupEdit, exitGroupFocus, closeAddBmPopover } from '../domain/useGroup.js'
 import { closeCatModal, closeAttrModal } from '../ui/useUI.js'
 import { toggleBatchMode, selectAllBatch, batchDelete } from '../domain/useBatch.js'
-import { hideSettingsMenu, hideAddDropdown } from '../ui/useSettings.js'
+import { hideSettingsMenu, hideAddDropdown } from '../ui/useUI.js'
 import { ctxMenuAPI } from '../bridge.js'
 
 export function captureNavState() {

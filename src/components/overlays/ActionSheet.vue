@@ -81,16 +81,14 @@ function onAction(item) {
 function onPickCategory(catId) {
   hide()
   if (catTargetType === 'group') {
-    const g = store.siblingGroups.find(x => x.id === catTargetId)
+    const g = store.groupMap[catTargetId]
     if (g) { g.categoryId = catId; g.updatedAt = Date.now(); store.save() }
-    const cat = store.categories.find(c => c.id === catId)
-    toast('已移动到 ' + (cat ? cat.name : ''))
   } else {
-    const b = store.bookmarks.find(x => x.id === catTargetId)
+    const b = store.bookmarkMap[catTargetId]
     if (b) { b.categoryId = catId; store.save() }
-    const cat = store.categories.find(c => c.id === catId)
-    toast('已移动到 ' + (cat ? cat.name : ''))
   }
+  const cat = store.categories.find(c => c.id === catId)
+  toast('已移动到 ' + (cat ? cat.name : ''))
 }
 
 function onAddNewCat() {

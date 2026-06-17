@@ -56,10 +56,10 @@ const categoryOptions = computed(() => store.selectableCategories)
 const geBookmarkList = computed(() => {
   const gId = geForm.id || store.editingGeId
   if (!gId) return []
-  const sg = store.siblingGroups.find(g => g.id === gId)
+  const sg = store.groupMap[gId]
   if (!sg) return []
   return sg.bookmarkIds
-    .map(id => store.bookmarks.find(b => b.id === id))
+    .map(id => store.bookmarkMap[id])
     .filter(Boolean)
 })
 
@@ -69,7 +69,7 @@ function domainName(url) { return domain(url || '') }
 function onRemoveBm(bmId) {
   const gId = geForm.id || store.editingGeId
   if (!gId) return
-  const sg = store.siblingGroups.find(g => g.id === gId)
+  const sg = store.groupMap[gId]
   if (!sg) return
   const idx = sg.bookmarkIds.indexOf(bmId)
   if (idx >= 0) sg.bookmarkIds.splice(idx, 1)

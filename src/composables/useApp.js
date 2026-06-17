@@ -13,7 +13,7 @@ import { ctxMenuAPI, actionSheetAPI, attrDropdownAPI, mentionAPI } from './bridg
 import { toggleGroupFocus, removeBmFromGroup, removeGroupRef, createGroup, deleteGroup, exitGroupFocus, editGroup, searchInFocusedGroup } from './domain/useGroup.js'
 import { visit, openBmModal, deleteBookmarkWithUndo as deleteBookmark } from './domain/useBookmark.js'
 import { openDetail, updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
-import { hideAddDropdown } from './ui/useSettings.js'
+import { hideAddDropdown } from './ui/useUI.js'
 import { showBatchMovePopover, batchDelete } from './domain/useBatch.js'
 import { shareGroup, importData, importFromURL } from './domain/useDataIO.js'
 import { performUndo, performRedo } from './domain/useUndo.js'

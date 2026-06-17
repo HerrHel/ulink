@@ -4,7 +4,7 @@ import { useUIStore } from '../stores/ui.js'
 import { isMobile } from '../utils.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { mentionAPI, attrDropdownAPI } from './bridge.js'
-import { hideSettingsMenu, hideAddDropdown } from './ui/useSettings.js'
+import { hideSettingsMenu, hideAddDropdown } from './ui/useUI.js'
 
 /**
  * Global click/contextmenu event delegation.

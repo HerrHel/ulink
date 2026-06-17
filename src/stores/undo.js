@@ -35,7 +35,7 @@ export const useUndoStore = defineStore('undo', {
 
     cleanStale(appStore) {
       for (const gid in this.stacks) {
-        if (!appStore.siblingGroups.find(g => g.id === gid)) {
+        if (!appStore.groupMap[gid]) {
           this.clearStack(gid)
         }
       }

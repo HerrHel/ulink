@@ -81,7 +81,7 @@ watch(() => store.searchQuery, (val) => {
 })
 
 const focusedGroup = computed(() =>
-  store.focusedGroupId ? store.siblingGroups.find(g => g.id === store.focusedGroupId) : null
+  store.focusedGroupId ? store.groupMap[store.focusedGroupId] : null
 )
 const panelTitle = computed(() =>
   (store.categories.find(c => c.id === store.curCat) || {}).name || '全部书签'
@@ -90,7 +90,7 @@ const panelCountText = computed(() =>
   (store.filteredBookmarks.filter(b => !b.parentId).length + store.filteredGroups.length) + ' 个'
 )
 const focusBookmarkCount = computed(() => {
-  const g = store.siblingGroups.find(x => x.id === store.focusedGroupId)
+  const g = store.groupMap[store.focusedGroupId]
   return g ? (g.bookmarkIds?.length || 0) : 0
 })
 

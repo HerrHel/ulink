@@ -61,7 +61,7 @@ function toggleAutoTheme() {
     else { const t = localStorage.getItem('lv_theme'); if (t) document.documentElement.setAttribute('data-theme', t); }
     const s = localStorage.getItem('lv_themeStyle');
     if (s === 'comfortable') document.documentElement.setAttribute('data-theme-style', 'comfortable');
-  } catch (_) {}
+  } catch (_) { /* localStorage 不可用时静默 */ }
 })();
 
 export { toggleTheme, setThemeStyle, toggleAutoTheme };

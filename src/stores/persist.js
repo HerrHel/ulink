@@ -4,11 +4,14 @@ import { idbGet, idbSet } from './storage.js'
 
 const IDB_KEY = 'linkvault_v2'
 
+let _localSavedAt = 0
+
 export function loadFromLocalStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const d = JSON.parse(raw)
+      _localSavedAt = d._savedAt || 0
       const result = {
         categories: d.categories || DEFAULTS.categories.slice(),
         bookmarks: d.bookmarks || [],
@@ -23,15 +26,11 @@ export function loadFromLocalStorage() {
   return JSON.parse(JSON.stringify(DEFAULTS))
 }
 
-export async function loadFromIDB(currentData) {
+export async function loadFromIDB() {
   try {
     const idbData = await idbGet(IDB_KEY)
     if (idbData && idbData.bookmarks) {
-      // Use bookmark count + group count as a simple "freshness" heuristic.
-      // If IDB has >= the same number of items, consider it at least as fresh.
-      const idbCount = (idbData.bookmarks?.length || 0) + (idbData.siblingGroups?.length || 0)
-      const localCount = (currentData.bookmarks?.length || 0) + (currentData.siblingGroups?.length || 0)
-      if (idbCount >= localCount) return idbData
+      if ((idbData._savedAt || 0) >= _localSavedAt) return idbData
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', e.message) }
   return null
@@ -39,7 +38,8 @@ export async function loadFromIDB(currentData) {
 
 export function saveToLocalStorage(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    const stamped = { ...data, _savedAt: Date.now() }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
   } catch (e) {
     console.warn('[persist] localStorage save failed:', e.message)
     return false
@@ -52,8 +52,8 @@ export function saveToIDB(data) {
   if (_idbTimer) clearTimeout(_idbTimer)
   _idbTimer = setTimeout(() => {
     _idbTimer = null
-    // Deep-clone to strip Pinia Proxy wrappers (IDB cannot structuredClone Proxy objects)
     const plain = JSON.parse(JSON.stringify(data))
+    plain._savedAt = Date.now()
     idbSet(IDB_KEY, plain).catch(e =>
       console.warn('[persist] IDB sync failed:', e.message))
   }, 500)

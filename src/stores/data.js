@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { CAT_ALL } from '../config/constants.js'
 import * as persist from './persist.js'
+import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
@@ -35,8 +36,15 @@ export const useDataStore = defineStore('data', {
     categories: [],
     /** @type {import('../types.d.js').CustomAttribute[]} */
     customAttributes: [],
+    /** 主密码验证金丝雀（加密的已知字符串，用于验证主密码正确性） */
+    _masterCanary: null,
     /** 自定义卡片排序顺序（拖拽排序时设置） */
     _customCardOrder: null,
+    /** 持久化辅助 */
+    _cachedStorageInfo: null,
+    _storageInfoDirty: true,
+    _saveCount: 0,
+    _saveTimer: null,
   }),
 
   getters: {
@@ -67,12 +75,12 @@ export const useDataStore = defineStore('data', {
       if (ui.curCat !== CAT_ALL) groups = groups.filter(g => g.categoryId === ui.curCat)
       const q = ui.searchQuery.toLowerCase()
       if (q) {
-        const bm = state.bookmarks
+        const bmMap = this.bookmarkMap
         groups = groups.filter(g => {
           if (g.name.toLowerCase().includes(q)) return true
           if (state.customAttributes.some(a => a.name.toLowerCase().includes(q) && g.attributes[a.id])) return true
           return g.bookmarkIds.some(bid => {
-            const b = bm.find(x => x.id === bid)
+            const b = bmMap[bid]
             return b && (b.title.toLowerCase().includes(q) || b.url.toLowerCase().includes(q))
           })
         })
@@ -157,25 +165,33 @@ export const useDataStore = defineStore('data', {
       const d = persist.loadFromLocalStorage()
       this.bookmarks = d.bookmarks; this.siblingGroups = d.siblingGroups
       this.categories = d.categories; this.customAttributes = d.customAttributes
+      if (d._masterCanary) this._masterCanary = d._masterCanary
     },
     async tryLoadFromIDB() {
-      const idbData = await persist.loadFromIDB({
-        bookmarks: this.bookmarks, siblingGroups: this.siblingGroups,
-        categories: this.categories, customAttributes: this.customAttributes
-      })
+      const idbData = await persist.loadFromIDB()
       if (idbData) {
         this.bookmarks = idbData.bookmarks; this.siblingGroups = idbData.siblingGroups
         this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
+        if (idbData._masterCanary) this._masterCanary = idbData._masterCanary
         return true
       }
       return false
     },
     importFromData(data) {
-      this.categories = [...data.categories]; this.bookmarks = [...data.bookmarks]
-      this.customAttributes = [...data.customAttributes]; this.siblingGroups = [...data.siblingGroups]
+      const result = {
+        categories: [...data.categories],
+        bookmarks: [...data.bookmarks],
+        customAttributes: [...data.customAttributes],
+        siblingGroups: [...data.siblingGroups],
+      }
+      runMigrations(data, result)
+      this.categories = result.categories
+      this.bookmarks = result.bookmarks
+      this.customAttributes = result.customAttributes
+      this.siblingGroups = result.siblingGroups
     },
     _dataSnapshot() {
-      return { bookmarks: this.bookmarks, siblingGroups: this.siblingGroups, categories: this.categories, customAttributes: this.customAttributes }
+      return { bookmarks: this.bookmarks, siblingGroups: this.siblingGroups, categories: this.categories, customAttributes: this.customAttributes, _masterCanary: this._masterCanary }
     },
   },
 })

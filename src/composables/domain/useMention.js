@@ -64,7 +64,7 @@ export function useMention() {
       const from = ed.view.posAtDOM(range.startContainer, range.startOffset)
       const to = ed.view.posAtDOM(range.endContainer, range.endOffset)
       if (from != null && to != null && from <= to) return { from, to }
-    } catch (_) {}
+    } catch (_) { /* range 无效时返回 null */ }
     return null
   }
 

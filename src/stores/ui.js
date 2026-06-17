@@ -61,12 +61,6 @@ export const useUIStore = defineStore('ui', {
     lpFired: false,
     _prevLayoutMode: null,
     _preferredLayoutMode: null,
-
-    // 持久化辅助
-    _cachedStorageInfo: null,
-    _storageInfoDirty: true,
-    _saveCount: 0,
-    _saveTimer: null,
   }),
 
   actions: {
@@ -127,7 +121,7 @@ export const useUIStore = defineStore('ui', {
         if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = s.excludedAttrs.slice()
         if (s.focusedGroupId) {
           const ds = useDataStore()
-          const fg = ds.siblingGroups.find(g => g.id === s.focusedGroupId)
+          const fg = ds.groupMap[s.focusedGroupId]
           if (fg) this.focusedGroupId = s.focusedGroupId
         }
         if (Array.isArray(s.detailCards)) {

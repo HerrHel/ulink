@@ -38,6 +38,20 @@ export const useAppStore = defineStore('app', () => {
     set: (v) => { ui()[key] = v }
   })
 
+  const _uiKeys = [
+    'curCat', 'sortMode', 'sortDir', 'layoutMode', 'searchQuery',
+    'focusedGroupId', 'batchMode', 'batchSelected', 'activeAttrs', 'excludedAttrs',
+    'detailCards', 'detailOpen', 'editingId', 'themeMode', 'themeStyle',
+    'settingsOpen', 'addDropdownOpen', 'railOpen', 'bmModalOpen', 'addBmPopoverOpen',
+    'catModalOpen', 'attrModalOpen', 'groupEditOpen',
+    'confirmModalOpen', 'confirmModalMessage', 'confirmModalCallback',
+    'mentionGid', 'mentionQuery', 'mentionIdx', 'mentionActive', 'mentionType',
+    'mentionSubMode', 'mentionSubIdx',
+    'addToGid', '_addPopoverTrigger', 'saveToGroup',
+    'ctxGid', 'ctxCard', 'editingGeId', 'lastFocusedEl', 'lpFired',
+    '_prevLayoutMode',
+  ]
+
   return {
     bookmarks, siblingGroups, categories, customAttributes,
     bookmarkMap, groupMap, childrenMap,
@@ -45,53 +59,8 @@ export const useAppStore = defineStore('app', () => {
     selectableCategories: computed(() => ds().selectableCategories),
     masterPassword, masterPasswordOpen,
 
-    // ── UI 状态（可读写，委托 uiStore）──
-    curCat: uiProp('curCat'),
-    sortMode: uiProp('sortMode'),
-    sortDir: uiProp('sortDir'),
-    layoutMode: uiProp('layoutMode'),
-    searchQuery: uiProp('searchQuery'),
-    focusedGroupId: uiProp('focusedGroupId'),
-    batchMode: uiProp('batchMode'),
-    batchSelected: uiProp('batchSelected'),
-    activeAttrs: uiProp('activeAttrs'),
-    excludedAttrs: uiProp('excludedAttrs'),
-    detailCards: uiProp('detailCards'),
-    detailOpen: uiProp('detailOpen'),
-    editingId: uiProp('editingId'),
-    themeMode: uiProp('themeMode'),
-    themeStyle: uiProp('themeStyle'),
-    settingsOpen: uiProp('settingsOpen'),
-    addDropdownOpen: uiProp('addDropdownOpen'),
-    railOpen: uiProp('railOpen'),
-    bmModalOpen: uiProp('bmModalOpen'),
-    addBmPopoverOpen: uiProp('addBmPopoverOpen'),
-    catModalOpen: uiProp('catModalOpen'),
-    attrModalOpen: uiProp('attrModalOpen'),
-    groupEditOpen: uiProp('groupEditOpen'),
-    confirmModalOpen: uiProp('confirmModalOpen'),
-    confirmModalMessage: uiProp('confirmModalMessage'),
-    confirmModalCallback: uiProp('confirmModalCallback'),
-    mentionGid: uiProp('mentionGid'),
-    mentionQuery: uiProp('mentionQuery'),
-    mentionIdx: uiProp('mentionIdx'),
-    mentionActive: uiProp('mentionActive'),
-    mentionType: uiProp('mentionType'),
-    mentionSubMode: uiProp('mentionSubMode'),
-    mentionSubIdx: uiProp('mentionSubIdx'),
-    addToGid: uiProp('addToGid'),
-    _addPopoverTrigger: uiProp('_addPopoverTrigger'),
-    saveToGroup: uiProp('saveToGroup'),
-    ctxGid: uiProp('ctxGid'),
-    ctxCard: uiProp('ctxCard'),
-    editingGeId: uiProp('editingGeId'),
-    lastFocusedEl: uiProp('lastFocusedEl'),
-    lpFired: uiProp('lpFired'),
-    _prevLayoutMode: uiProp('_prevLayoutMode'),
-    _cachedStorageInfo: uiProp('_cachedStorageInfo'),
-    _storageInfoDirty: uiProp('_storageInfoDirty'),
-    _saveCount: uiProp('_saveCount'),
-    _saveTimer: uiProp('_saveTimer'),
+    // ── UI 状态（可读写，批量委托 uiStore）──
+    ...Object.fromEntries(_uiKeys.map(k => [k, uiProp(k)])),
 
     // ── CRUD（委托 dataStore）──
     addBookmark(bm) { ds().addBookmark(bm) },
@@ -120,7 +89,7 @@ export const useAppStore = defineStore('app', () => {
     restoreUIState() { ui().restoreUIState() },
 
     // ── 安全（委托 securityStore）──
-    setMasterPassword(pw) { sec().setMasterPassword(pw) },
+    async setMasterPassword(pw) { await sec().setMasterPassword(pw) },
     encryptFormPassword(plaintext) { return sec().encryptFormPassword(plaintext) },
     decryptStoredPassword(stored) { return sec().decryptStoredPassword(stored) },
     verifyMasterPassword(pw) { return sec().verifyMasterPassword(pw) },
@@ -131,21 +100,21 @@ export const useAppStore = defineStore('app', () => {
     tryLoadFromIDB() { return ds().tryLoadFromIDB() },
 
     save() {
-      const u = ui()
-      u._storageInfoDirty = true
-      u._saveCount++
-      const data = ds()._dataSnapshot()
+      const d = ds()
+      d._storageInfoDirty = true
+      d._saveCount++
+      const data = d._dataSnapshot()
       const ok = persist.saveToLocalStorage(data)
       if (!ok) { console.warn('[store] localStorage save failed') }
       persist.saveToIDB(data)
-      if (u._saveCount % 10 === 0) cleanStaleUndoStacks()
+      if (d._saveCount % 10 === 0) cleanStaleUndoStacks()
     },
 
     debouncedSave() {
-      const u = ui()
-      if (u._saveTimer) clearTimeout(u._saveTimer)
-      u._saveTimer = setTimeout(() => {
-        u._saveTimer = null
+      const d = ds()
+      if (d._saveTimer) clearTimeout(d._saveTimer)
+      d._saveTimer = setTimeout(() => {
+        d._saveTimer = null
         this.save()
       }, 300)
     },
@@ -153,11 +122,11 @@ export const useAppStore = defineStore('app', () => {
     _dataSnapshot() { return ds()._dataSnapshot() },
 
     getStorageInfo() {
-      const u = ui()
-      if (!u._storageInfoDirty && u._cachedStorageInfo) return u._cachedStorageInfo
-      u._cachedStorageInfo = persist.getStorageInfo(this._dataSnapshot())
-      u._storageInfoDirty = false
-      return u._cachedStorageInfo
+      const d = ds()
+      if (!d._storageInfoDirty && d._cachedStorageInfo) return d._cachedStorageInfo
+      d._cachedStorageInfo = persist.getStorageInfo(this._dataSnapshot())
+      d._storageInfoDirty = false
+      return d._cachedStorageInfo
     },
 
     _backupBeforeImport() { persist.saveToLocalStorage(this._dataSnapshot()) },

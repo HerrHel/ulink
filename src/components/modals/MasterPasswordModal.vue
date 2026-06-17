@@ -63,7 +63,7 @@ async function onSubmit() {
   error.value = ''
   const ok = await store.verifyMasterPassword(pw)
   if (ok) {
-    store.setMasterPassword(pw)
+    await store.setMasterPassword(pw)
     store.masterPasswordOpen = false
   } else {
     error.value = '主密码错误，请重试'

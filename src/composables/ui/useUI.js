@@ -64,3 +64,7 @@ export function openAttrModal() { useAppStore().attrModalOpen = true }
 export function closeAttrModal() { useAppStore().attrModalOpen = false }
 
 export function deleteAttribute(id) { const s = useAppStore(); s.deleteAttribute(id); s.save() }
+
+// ── Settings / Add Dropdown ──
+export function hideSettingsMenu() { useAppStore().settingsOpen = false }
+export function hideAddDropdown() { useAppStore().addDropdownOpen = false }

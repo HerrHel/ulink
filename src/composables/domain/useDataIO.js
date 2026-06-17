@@ -28,7 +28,7 @@ export function importData(file) {
       const data = JSON.parse(reader.result)
       const err = validateImportData(data)
       if (err) { toast(err, false); return }
-      try { store._backupBeforeImport() } catch (_) {}
+      try { store._backupBeforeImport() } catch (_) { /* 备份失败不阻塞导入 */ }
       store.importFromData(data)
       toast('数据已导入 (' + store.bookmarks.length + ' 个书签)')
     } catch (e) { toast('导入失败：' + e.message, false) }

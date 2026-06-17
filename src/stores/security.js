@@ -8,6 +8,8 @@ import { encryptPassword, autoMigratePassword } from '../crypto.js'
 import { toast } from '../lib/toast.js'
 import { useDataStore } from './data.js'
 
+const CANARY_PLAINTEXT = 'linkvault_canary_v1'
+
 export const useSecurityStore = defineStore('security', {
   state: () => ({
     masterPassword: '',
@@ -15,7 +17,15 @@ export const useSecurityStore = defineStore('security', {
   }),
 
   actions: {
-    setMasterPassword(pw) { this.masterPassword = pw },
+    async setMasterPassword(pw) {
+      this.masterPassword = pw
+      if (pw) {
+        const ds = useDataStore()
+        if (!ds._masterCanary) {
+          ds._masterCanary = await encryptPassword(CANARY_PLAINTEXT, pw)
+        }
+      }
+    },
 
     async encryptFormPassword(plaintext) {
       if (!this.masterPassword) throw new Error('请先设置主密码')
@@ -26,13 +36,19 @@ export const useSecurityStore = defineStore('security', {
       return await autoMigratePassword(stored, this.masterPassword || '')
     },
 
-    /** 通过尝试解密已有加密书签来验证主密码 */
+    /** 通过解密 canary 验证主密码；回退到加密书签验证 */
     async verifyMasterPassword(pw) {
       const ds = useDataStore()
-      const canary = ds.bookmarks.find(b => b.password && typeof b.password === 'object' && b.password.encrypted)
-      if (canary) {
+      if (ds._masterCanary) {
         try {
-          await autoMigratePassword(canary.password, pw)
+          const plain = await autoMigratePassword(ds._masterCanary, pw)
+          return plain === CANARY_PLAINTEXT
+        } catch (_) { return false }
+      }
+      const fallback = ds.bookmarks.find(b => b.password && typeof b.password === 'object' && b.password.encrypted)
+      if (fallback) {
+        try {
+          await autoMigratePassword(fallback.password, pw)
           return true
         } catch (_) { return false }
       }

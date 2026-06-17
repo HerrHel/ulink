@@ -100,10 +100,10 @@ const entries = computed(() => {
   return (store.detailCards || []).map(rawId => {
     if (typeof rawId === 'string' && rawId.startsWith('group:')) {
       const gid = rawId.slice(6)
-      const sg = store.siblingGroups.find(g => g.id === gid)
+      const sg = store.groupMap[gid]
       return sg ? { rawId, isGroup: true, data: sg, name: sg.name || '', domain: '' } : null
     }
-    const bm = store.bookmarks.find(b => b.id === rawId)
+    const bm = store.bookmarkMap[rawId]
     return bm ? { rawId, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) } : null
   }).filter(Boolean)
 })

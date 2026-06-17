@@ -44,7 +44,7 @@ const InlineCard = Node.create({
   renderHTML: ({ node }) => {
     const id = node.attrs['data-bm-id']
     const store = useAppStore()
-    const bm = store.bookmarks.find(b => b.id === id)
+    const bm = store.bookmarkMap[id]
     if (!bm) return ['span', { class: 'group-inline-card' }, '']
     return ['span', { class: 'group-inline-card', contenteditable: 'false', 'data-bm-id': id, draggable: 'true' },
       ['img', { src: favicon(bm.url, bm.icon), alt: '' }],
@@ -66,7 +66,7 @@ const GroupRefCard = Node.create({
   renderHTML: ({ node }) => {
     const gid = node.attrs['data-ref-gid']
     const store = useAppStore()
-    const g = store.siblingGroups.find(x => x.id === gid)
+    const g = store.groupMap[gid]
 
     const span = document.createElement('span')
     span.className = 'group-inline-card group-ref-card'
@@ -119,7 +119,7 @@ let editor = null
 provide('tiptapEditor', editorInstance)
 
 function syncToStore(ed) {
-  const sg = store.siblingGroups.find(x => x.id === props.groupId)
+  const sg = store.groupMap[props.groupId]
   if (!sg) return
   sg.notes = ed.getHTML()
   const ids = [], seen = {}
@@ -134,7 +134,7 @@ function syncToStore(ed) {
 }
 
 onMounted(() => {
-  const group = store.siblingGroups.find(g => g.id === props.groupId)
+  const group = store.groupMap[props.groupId]
   if (!group || !editorRef.value) return
 
   editor = new Editor({

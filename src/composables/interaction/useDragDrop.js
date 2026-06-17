@@ -75,7 +75,7 @@ function _updateDragCursorForGroupBody(body, clientX, clientY) {
         return
       }
     }
-  } catch (_) {}
+  } catch (_) { /* posAtCoords 失败时清除插入位置 */ }
   _lastInsertPos = null
   _hideDragCursor()
 }

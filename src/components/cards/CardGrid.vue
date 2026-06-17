@@ -52,22 +52,20 @@ const gridClass = computed(() => {
 })
 const combinedList = computed(() => {
   if (store.focusedGroupId) {
-    const group = store.siblingGroups.find(g => g.id === store.focusedGroupId)
+    const group = store.groupMap[store.focusedGroupId]
     return group ? [{ type: 'group', data: group }] : []
   }
   // 有自定义顺序时，按自定义顺序重建（支持跨类型排序）
   const customOrder = dataStore._customCardOrder
   if (customOrder != null && store.sortMode === 'order') {
-    const bmMap = {}
-    store.bookmarks.filter(b => !b.parentId).forEach(b => { bmMap[b.id] = b })
-    const gMap = {}
-    store.siblingGroups.forEach(g => { gMap[g.id] = g })
+    const bmMap = store.bookmarkMap
+    const gMap = store.groupMap
     const usedBms = new Set()
     const usedGs = new Set()
     const combined = []
     customOrder.forEach(entry => {
       if (entry.t === 'g' && gMap[entry.id]) { combined.push({ type: 'group', data: gMap[entry.id] }); usedGs.add(entry.id) }
-      else if (entry.t === 'b' && bmMap[entry.id]) { combined.push({ type: 'bm', data: bmMap[entry.id] }); usedBms.add(entry.id) }
+      else if (entry.t === 'b' && bmMap[entry.id] && !bmMap[entry.id].parentId) { combined.push({ type: 'bm', data: bmMap[entry.id] }); usedBms.add(entry.id) }
     })
     // 追加不在自定义顺序中的新项
     store.siblingGroups.forEach(g => { if (!usedGs.has(g.id)) combined.push({ type: 'group', data: g }) })

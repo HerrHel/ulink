@@ -47,12 +47,14 @@
 </template>
 <script setup>
 import { computed } from 'vue'
+import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
 
+const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 
@@ -75,6 +77,11 @@ function selectCat(id) {
   uiStore.focusedGroupId = null
 }
 
-function toggleTheme() { _toggleTheme() }
+function toggleTheme() {
+  _toggleTheme()
+  if (uiStore.themeMode === 'auto') {
+    uiStore.themeMode = 'manual'
+  }
+}
 function openCatModalNav() { openCatModal() }
 </script>
