@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.claude/
+.mimocode/
+task_plan.md
+*.log
+.DS_Store
