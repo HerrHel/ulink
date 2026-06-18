@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useDataStore } from './data.js'
 
 /**
  * Undo store — manages undo/redo stacks per group.
@@ -33,9 +34,10 @@ export const useUndoStore = defineStore('undo', {
       if (this.timers[gid]) { clearTimeout(this.timers[gid]); delete this.timers[gid] }
     },
 
-    cleanStale(appStore) {
+    cleanStale() {
+      const ds = useDataStore()
       for (const gid in this.stacks) {
-        if (!appStore.groupMap[gid]) {
+        if (!ds.groupMap[gid]) {
           this.clearStack(gid)
         }
       }

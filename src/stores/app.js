@@ -8,8 +8,8 @@ import { defineStore } from 'pinia'
 import { useDataStore } from './data.js'
 import { useUIStore } from './ui.js'
 import { useSecurityStore } from './security.js'
+import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
-import { cleanStaleUndoStacks } from '../composables/domain/useUndo.js'
 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
@@ -107,7 +107,7 @@ export const useAppStore = defineStore('app', () => {
       const ok = persist.saveToLocalStorage(data)
       if (!ok) { console.warn('[store] localStorage save failed') }
       persist.saveToIDB(data)
-      if (d._saveCount % 10 === 0) cleanStaleUndoStacks()
+      if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
     },
 
     debouncedSave() {

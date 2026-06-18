@@ -43,13 +43,6 @@ function evictOldestUndo() {
   }
 }
 
-export function cleanStaleUndoStacks() {
-  const appStore = useAppStore()
-  const undo = useUndoStore()
-  undo.cleanStale(appStore)
-  _undoBytesDirty = true
-}
-
 function pushUndo(gid) {
   if (_restoring) return  // suppress during programmatic restore
   const store = useAppStore()

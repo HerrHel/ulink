@@ -11,7 +11,7 @@
         <BatchBar @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       </div>
       <BatchBottom @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
-      <div style="display:flex;flex:1;overflow:hidden">
+      <div class="flex-1" style="display:flex;overflow:hidden">
         <div class="panel-content" id="panelContent"><CardGrid /></div>
       </div>
       <BatchPopover />
@@ -40,7 +40,7 @@
 </template>
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
-<div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false"></div>
+<div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false; store.detailCards.splice(0)"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.railOpen }" @click="closeRail"></div>
 </template>
 
@@ -50,6 +50,8 @@ import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
 import { useApp } from './composables/useApp.js'
+import { useAppHandlers } from './composables/useAppHandlers.js'
+import { useAppLifecycle } from './composables/useAppLifecycle.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -73,5 +75,7 @@ const AttributeModal = defineAsyncComponent(() => import('./components/modals/At
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
 
 const store = useAppStore()
-const { handlers } = useApp()
+useApp()
+useAppLifecycle()
+const { handlers } = useAppHandlers()
 </script>
