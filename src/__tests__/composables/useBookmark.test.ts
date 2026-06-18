@@ -2,15 +2,15 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { setActivePinia, createPinia } from "pinia"
 
 const mockStore = {
-  bookmarkMap: {},
-  bookmarks: [],
-  siblingGroups: [],
-  groupMap: {},
+  bookmarkMap: {} as any,
+  bookmarks: [] as any[],
+  siblingGroups: [] as any[],
+  groupMap: {} as any,
   masterPassword: "",
   masterPasswordOpen: false,
-  editingId: null,
-  lastFocusedEl: null,
-  saveToGroup: null,
+  editingId: null as string | null,
+  lastFocusedEl: null as HTMLElement | null,
+  saveToGroup: null as string | null,
   bmModalOpen: false,
   addBookmark: vi.fn(),
   save: vi.fn(),
@@ -18,7 +18,7 @@ const mockStore = {
   encryptFormPassword: vi.fn().mockResolvedValue({ encrypted: true, data: [1,2,3], iv: [4,5,6], salt: [7,8,9] }),
   updateBookmark: vi.fn(),
   deleteBookmark: vi.fn(),
-};
+}
 
 vi.mock('../../stores/app.js', () => ({
   useAppStore: vi.fn(() => mockStore),
@@ -26,15 +26,15 @@ vi.mock('../../stores/app.js', () => ({
 
 vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),
-  toastWithUndo: vi.fn((msg, undoFn) => { mockToastWithUndo.undoFn = undoFn }),
+  toastWithUndo: vi.fn((msg: string, undoFn: () => void) => { mockToastWithUndo.undoFn = undoFn }),
 }))
 
-const mockToastWithUndo = { undoFn: null }
+const mockToastWithUndo = { undoFn: null as (() => void) | null }
 
 vi.mock('../../utils.js', () => ({
-  favicon: vi.fn(url => 'https://favicon.example.com/' + url),
-  domain: vi.fn(url => url.replace(/https?:\/\//, '').split('/')[0]),
-  fixUrl: vi.fn(url => url ? (url.startsWith('http') ? url : 'https://' + url) : ''),
+  favicon: vi.fn((url: string) => 'https://favicon.example.com/' + url),
+  domain: vi.fn((url: string) => url.replace(/https?:\/\//, '').split('/')[0]),
+  fixUrl: vi.fn((url: string) => url ? (url.startsWith('http') ? url : 'https://' + url) : ''),
   autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
 }))
 
@@ -141,7 +141,7 @@ describe('useBookmark', () => {
       bmForm.addToGroupMode = true
       mockStore.editingId = 'b1'
       const focusSpy = vi.fn()
-      mockStore.lastFocusedEl = { focus: focusSpy }
+      mockStore.lastFocusedEl = { focus: focusSpy } as any
       closeBmModal()
       expect(bmForm.isOpen).toBe(false)
       expect(bmForm.addToGroupMode).toBe(false)
@@ -281,8 +281,8 @@ describe('useBookmark', () => {
 
   describe('deleteBookmarkWithUndo', () => {
     function populateStore() {
-      mockStore.bookmarks.forEach(b => { mockStore.bookmarkMap[b.id] = b })
-      mockStore.siblingGroups.forEach(g => { mockStore.groupMap[g.id] = g })
+      mockStore.bookmarks.forEach((b: any) => { mockStore.bookmarkMap[b.id] = b })
+      mockStore.siblingGroups.forEach((g: any) => { mockStore.groupMap[g.id] = g })
     }
 
     it('deletes bookmark and all descendants', () => {
@@ -324,7 +324,7 @@ describe('useBookmark', () => {
       deleteBookmarkWithUndo('b1')
       expect(mockStore.bookmarks.length).toBe(0)
       expect(mockToastWithUndo.undoFn).not.toBeNull()
-      mockToastWithUndo.undoFn()
+      mockToastWithUndo.undoFn!()
       expect(mockStore.bookmarks.length).toBe(1)
       expect(mockStore.bookmarks[0].id).toBe('b1')
     })
@@ -335,7 +335,7 @@ describe('useBookmark', () => {
       populateStore()
       deleteBookmarkWithUndo('b1')
       expect(mockStore.siblingGroups[0].bookmarkIds).toEqual([])
-      mockToastWithUndo.undoFn()
+      mockToastWithUndo.undoFn!()
       expect(mockStore.siblingGroups[0].bookmarkIds).toContain('b1')
     })
   })

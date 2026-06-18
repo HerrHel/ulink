@@ -35,8 +35,8 @@ describe('App Store (兼容层)', () => {
       const uiStore = useUIStore()
       const store = useAppStore()
       dataStore.bookmarks = [
-        { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 },
-        { id: '2', title: 'Test2', url: 'https://test2.com', categoryId: 'cat2', notes: '', username: '', attributes: {}, order: 1 }
+        { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 } as any,
+        { id: '2', title: 'Test2', url: 'https://test2.com', categoryId: 'cat2', notes: '', username: '', attributes: {}, order: 1 } as any
       ]
       uiStore.curCat = 'cat1'
       expect(store.filteredBookmarks).toHaveLength(1)
@@ -48,8 +48,8 @@ describe('App Store (兼容层)', () => {
       const uiStore = useUIStore()
       const store = useAppStore()
       dataStore.bookmarks = [
-        { id: '1', title: 'GitHub', url: 'https://github.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 },
-        { id: '2', title: 'Google', url: 'https://google.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 1 }
+        { id: '1', title: 'GitHub', url: 'https://github.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 } as any,
+        { id: '2', title: 'Google', url: 'https://google.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 1 } as any
       ]
       uiStore.searchQuery = 'git'
       const filtered = store.filteredBookmarks
@@ -62,8 +62,8 @@ describe('App Store (兼容层)', () => {
       const uiStore = useUIStore()
       const store = useAppStore()
       dataStore.bookmarks = [
-        { id: '1', title: 'Banana', url: 'https://b.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 },
-        { id: '2', title: 'Apple', url: 'https://a.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 1 }
+        { id: '1', title: 'Banana', url: 'https://b.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 } as any,
+        { id: '2', title: 'Apple', url: 'https://a.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 1 } as any
       ]
       uiStore.sortMode = 'title'
       uiStore.sortDir = 'asc'
@@ -77,7 +77,7 @@ describe('App Store (兼容层)', () => {
     it('should add bookmark', () => {
       const dataStore = useDataStore()
       const store = useAppStore()
-      const bm = { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1' }
+      const bm = { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1' } as any
       store.save = () => {}
       store.addBookmark(bm)
       expect(dataStore.bookmarks).toHaveLength(1)
@@ -88,7 +88,7 @@ describe('App Store (兼容层)', () => {
       const dataStore = useDataStore()
       const store = useAppStore()
       dataStore.bookmarks = [
-        { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1' }
+        { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1' } as any
       ]
       dataStore.siblingGroups = []
       store.save = () => {}
@@ -101,7 +101,7 @@ describe('App Store (兼容层)', () => {
       const uiStore = useUIStore()
       const store = useAppStore()
       dataStore.bookmarks = [
-        { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 }
+        { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1', notes: '', username: '', attributes: {}, order: 0 } as any
       ]
       dataStore.siblingGroups = []
       store.selectAllBatch()

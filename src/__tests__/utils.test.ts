@@ -62,9 +62,9 @@ describe('utils', () => {
 
   describe('cleanZeroWidth', () => {
     it('should remove consecutive zero-width characters', () => {
-      const input = 'hello​​world'
+      const input = 'hello\u200B\u200Bworld'
       const result = cleanZeroWidth(input)
-      expect(result).toBe('hello​world')
+      expect(result).toBe('hello\u200Bworld')
     })
     it('should not modify text without zero-width chars', () => {
       expect(cleanZeroWidth('hello world')).toBe('hello world')

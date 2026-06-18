@@ -6,7 +6,7 @@ describe('Password Encryption (Phase 4)', () => {
 
   describe('detectPasswordFormat', () => {
     it('should detect empty', () => {
-      expect(detectPasswordFormat(null)).toBe('empty')
+      expect(detectPasswordFormat(null as any)).toBe('empty')
       expect(detectPasswordFormat('')).toBe('empty')
     })
 
@@ -52,7 +52,7 @@ describe('Password Encryption (Phase 4)', () => {
 
   describe('autoMigratePassword', () => {
     it('should handle empty password', async () => {
-      expect(await autoMigratePassword(null, masterPwd)).toBe('')
+      expect(await autoMigratePassword(null as any, masterPwd)).toBe('')
       expect(await autoMigratePassword('', masterPwd)).toBe('')
     })
 

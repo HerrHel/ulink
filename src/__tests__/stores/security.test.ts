@@ -9,7 +9,7 @@ vi.mock('../../lib/toast.js', () => ({
 }))
 
 describe('SecurityStore', () => {
-  let store
+  let store: ReturnType<typeof useSecurityStore>
 
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -54,7 +54,7 @@ describe('SecurityStore', () => {
     })
 
     it('decryptStoredPassword - 应该处理空密码', async () => {
-      const result = await store.decryptStoredPassword(null)
+      const result = await store.decryptStoredPassword(null as any)
       expect(result).toBe('')
     })
 
@@ -68,7 +68,7 @@ describe('SecurityStore', () => {
   describe('主密码验证', () => {
     it('verifyMasterPassword - 无加密书签时应该返回 true 如果密码非空', async () => {
       const dataStore = useDataStore()
-      dataStore.bookmarks = [{ id: 'b1', password: 'plain' }]
+      dataStore.bookmarks = [{ id: 'b1', password: 'plain' }] as any
       
       const result = await store.verifyMasterPassword('any-password')
       expect(result).toBe(true)
@@ -76,7 +76,7 @@ describe('SecurityStore', () => {
 
     it('verifyMasterPassword - 无加密书签时应该返回 false 如果密码为空', async () => {
       const dataStore = useDataStore()
-      dataStore.bookmarks = [{ id: 'b1', password: 'plain' }]
+      dataStore.bookmarks = [{ id: 'b1', password: 'plain' }] as any
       
       const result = await store.verifyMasterPassword('')
       expect(result).toBe(false)
@@ -89,7 +89,7 @@ describe('SecurityStore', () => {
       
       dataStore.bookmarks = [
         { id: 'b1', password: encrypted },
-      ]
+      ] as any
       
       const correctResult = await store.verifyMasterPassword('correct-pw')
       expect(correctResult).toBe(true)

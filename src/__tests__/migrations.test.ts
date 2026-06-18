@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { runMigrations } from '../stores/migrations.js'
 
-function makeResult(overrides = {}) {
+function makeResult(overrides: any = {}) {
   return {
     categories: overrides.categories || [{ id: 'all', name: '全部', icon: 'grid', color: '#122E8A' }],
     bookmarks: overrides.bookmarks || [],
@@ -15,7 +15,7 @@ describe('runMigrations', () => {
     const d = {}
     const result = makeResult()
     runMigrations(d, result)
-    const ids = result.categories.map(c => c.id)
+    const ids = result.categories.map((c: any) => c.id)
     expect(ids).toContain('uncategorized')
     expect(ids).toContain('email')
     expect(ids).toContain('tools')
@@ -31,7 +31,7 @@ describe('runMigrations', () => {
       ]
     })
     runMigrations(d, result)
-    const toolsCats = result.categories.filter(c => c.id === 'tools')
+    const toolsCats = result.categories.filter((c: any) => c.id === 'tools')
     expect(toolsCats).toHaveLength(1)
   })
 

@@ -4,7 +4,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 
 describe('UIStore', () => {
-  let store
+  let store: ReturnType<typeof useUIStore>
 
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -37,7 +37,7 @@ describe('UIStore', () => {
       store.saveUIState()
       
       expect(localStorage.setItem).toHaveBeenCalled()
-      const savedData = JSON.parse(localStorage.setItem.mock.calls[0][1])
+      const savedData = JSON.parse((localStorage.setItem as any).mock.calls[0][1])
       expect(savedData.curCat).toBe('cat1')
       expect(savedData.layoutMode).toBe('list')
       expect(savedData.searchQuery).toBe('test')
@@ -52,7 +52,7 @@ describe('UIStore', () => {
         activeAttrs: ['attr1'],
         excludedAttrs: ['attr2'],
       }
-      localStorage.getItem.mockReturnValue(JSON.stringify(stateData))
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify(stateData))
       
       store.restoreUIState()
       
@@ -65,14 +65,14 @@ describe('UIStore', () => {
     })
 
     it('restoreUIState - localStorage 为空时应保持默认值', () => {
-      localStorage.getItem.mockReturnValue(null)
+      ;(localStorage.getItem as any).mockReturnValue(null)
       const originalCat = store.curCat
       store.restoreUIState()
       expect(store.curCat).toBe(originalCat)
     })
 
     it('restoreUIState - 应该处理无效 JSON', () => {
-      localStorage.getItem.mockReturnValue('invalid json')
+      ;(localStorage.getItem as any).mockReturnValue('invalid json')
       expect(() => store.restoreUIState()).not.toThrow()
     })
   })
@@ -81,10 +81,10 @@ describe('UIStore', () => {
     it('应该选择所有过滤后的书签和组', () => {
       const dataStore = useDataStore()
       dataStore.bookmarks = [
-        { id: 'b1', title: 'Test', url: 'https://test.com', categoryId: 'c', notes: '', username: '', attributes: {}, order: 0 },
+        { id: 'b1', title: 'Test', url: 'https://test.com', categoryId: 'c', notes: '', username: '', attributes: {}, order: 0 } as any,
       ]
       dataStore.siblingGroups = [
-        { id: 'g1', name: 'Group', categoryId: 'c', bookmarkIds: [], attributes: {}, order: 0 },
+        { id: 'g1', name: 'Group', categoryId: 'c', bookmarkIds: [], attributes: {}, order: 0 } as any,
       ]
       
       store.selectAllBatch()
@@ -97,8 +97,8 @@ describe('UIStore', () => {
   describe('restoreUIState - 详细场景', () => {
     it('应该恢复 focusedGroupId 如果组存在', () => {
       const dataStore = useDataStore()
-      dataStore.siblingGroups = [{ id: 'g1', name: 'Test' }]
-      localStorage.getItem.mockReturnValue(JSON.stringify({
+      dataStore.siblingGroups = [{ id: 'g1', name: 'Test' }] as any
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
         focusedGroupId: 'g1',
       }))
       
@@ -110,7 +110,7 @@ describe('UIStore', () => {
     it('不应该恢复 focusedGroupId 如果组不存在', () => {
       const dataStore = useDataStore()
       dataStore.siblingGroups = []
-      localStorage.getItem.mockReturnValue(JSON.stringify({
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
         focusedGroupId: 'nonexistent',
       }))
       
@@ -121,9 +121,9 @@ describe('UIStore', () => {
 
     it('应该恢复 detailCards 并过滤无效项', () => {
       const dataStore = useDataStore()
-      dataStore.bookmarks = [{ id: 'b1' }]
-      dataStore.siblingGroups = [{ id: 'g1' }]
-      localStorage.getItem.mockReturnValue(JSON.stringify({
+      dataStore.bookmarks = [{ id: 'b1' }] as any
+      dataStore.siblingGroups = [{ id: 'g1' }] as any
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
         detailCards: ['b1', 'group:g1', 'b2', 'group:g2'],
       }))
       
@@ -134,9 +134,9 @@ describe('UIStore', () => {
 
     it('应该恢复 detailOpen 当有 detailCards 时', () => {
       const dataStore = useDataStore()
-      dataStore.bookmarks = [{ id: 'b1' }]
+      dataStore.bookmarks = [{ id: 'b1' }] as any
       dataStore.siblingGroups = []
-      localStorage.getItem.mockReturnValue(JSON.stringify({
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
         detailOpen: true,
         detailCards: ['b1'],
       }))
@@ -147,7 +147,7 @@ describe('UIStore', () => {
     })
 
     it('应该只恢复 grid/list layoutMode', () => {
-      localStorage.getItem.mockReturnValue(JSON.stringify({
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
         layoutMode: 'invalid',
       }))
       
