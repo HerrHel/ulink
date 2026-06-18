@@ -6,17 +6,6 @@ interface VirtualScrollOptions {
   overscan?: number
 }
 
-interface VirtualItem<T> {
-  _virtualIndex: number
-  _virtualStyle: {
-    position: 'absolute'
-    top: string
-    height: string
-    width: string
-  }
-  [key: string]: any
-}
-
 /**
  * useVirtualScroll — 虚拟滚动 composable
  * 仅在数据量超过阈值时激活，避免大数据量场景下的渲染性能问题

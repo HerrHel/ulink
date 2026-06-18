@@ -1,7 +1,11 @@
+import tsParser from '@typescript-eslint/parser'
+import tsPlugin from '@typescript-eslint/eslint-plugin'
+
 export default [
   {
-    files: ['src/**/*.js'],
+    files: ['src/**/*.{js,ts}'],
     languageOptions: {
+      parser: tsParser,
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
@@ -26,9 +30,13 @@ export default [
         Worker: 'readonly', self: 'readonly', require: 'readonly',
       }
     },
+    plugins: {
+      '@typescript-eslint': tsPlugin
+    },
     rules: {
-      'no-undef': 'error',
-      'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+      'no-undef': 'off', // TypeScript handles this
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
       'no-constant-condition': 'warn',
       'no-debugger': 'warn',
       'no-dupe-keys': 'error',

@@ -9,7 +9,7 @@ import type { Editor } from '@tiptap/core'
 // ---------- Editor Registry ----------
 const _editors: Record<string, Editor> = {}
 
-interface EditorManager {
+interface IEditorManager {
   register(gid: string, editor: Editor): void
   unregister(gid: string): void
   get(gid: string): Editor | null
@@ -22,7 +22,7 @@ interface EditorManager {
   insertText(gid: string, text: string): boolean
 }
 
-const editorManager: EditorManager = {
+const editorManager: IEditorManager = {
   register: function (gid: string, editor: Editor): void { _editors[gid] = editor },
   unregister: function (gid: string): void { delete _editors[gid] },
   get: function (gid: string): Editor | null { return _editors[gid] || null },

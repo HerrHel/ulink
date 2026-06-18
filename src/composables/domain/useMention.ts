@@ -9,7 +9,7 @@ import { MAX_SUGGESTIONS } from '../../config/constants.js'
 import { saveGroupBody } from './useGroup.js'
 import { groupRefCardHTML, inlineCardHTML } from '../useInlineCard.js'
 import { EditorManager } from '../../lib/editor.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
+import type { Bookmark } from '../../types.js'
 
 interface MentionItem {
   type: 'bookmark' | 'group'
