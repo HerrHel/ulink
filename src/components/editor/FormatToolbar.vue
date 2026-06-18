@@ -48,7 +48,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { isMobile } from '../../utils.js'
 import { useAppStore } from '../../stores/app.js'

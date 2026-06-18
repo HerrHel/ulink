@@ -55,7 +55,7 @@
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { I } from '../../config/icons.js'

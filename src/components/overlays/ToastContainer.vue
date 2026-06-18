@@ -14,7 +14,7 @@
     <span class="undo-toast-countdown">{{ undoToast.countdown }}s</span>
   </div>
 </template>
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { setToastAPI } from '../../composables/bridge.js'

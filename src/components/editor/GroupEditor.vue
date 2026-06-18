@@ -3,7 +3,7 @@
        ref="editorRef" />
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, provide, onMounted, onBeforeUnmount, watch } from 'vue'
 import { isMobile, favicon, domain } from '../../utils.js'
 import { I } from '../../config/icons.js'

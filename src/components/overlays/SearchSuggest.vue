@@ -8,7 +8,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { favicon, domain } from '../../utils.js'

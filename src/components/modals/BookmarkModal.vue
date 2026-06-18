@@ -78,7 +78,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon } from '../../composables/domain/useBookmark.js'

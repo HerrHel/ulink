@@ -29,7 +29,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { setMentionAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'

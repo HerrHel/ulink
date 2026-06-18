@@ -60,7 +60,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
 import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim } from '../../utils.js'
 import { I } from '../../config/icons.js'

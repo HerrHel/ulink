@@ -15,7 +15,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useUIStore } from '../../stores/ui.js'
 import { I } from '../../config/icons.js'
 

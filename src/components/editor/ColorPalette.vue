@@ -14,7 +14,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { PALETTE } from '../../composables/ui/useEditorFormat.js'
 
 defineProps({

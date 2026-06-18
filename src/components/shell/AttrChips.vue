@@ -11,7 +11,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { toggleAttrFilter, toggleAttrExclude } from '../../composables/domain/useAttrFilter.js'

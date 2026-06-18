@@ -86,7 +86,7 @@
   </Teleport>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { sanitizeHTML, getTagNames, isMobile, stripEntranceAnim } from '../../utils.js'
 import GroupEditor from '../editor/GroupEditor.vue'

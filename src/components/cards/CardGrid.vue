@@ -31,7 +31,7 @@
     </div>
   </div>
 </template>
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'

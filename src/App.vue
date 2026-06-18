@@ -44,7 +44,7 @@
 <div class="overlay" id="railOverlay" :class="{ show: store.railOpen }" @click="closeRail"></div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
 import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
