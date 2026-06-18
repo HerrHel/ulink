@@ -6,7 +6,7 @@
         <button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button>
       </div>
       <div class="modal-body">
-        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
+        <p class="modal-hint">
           主密码用于加密存储的书签密码（AES-256-GCM）。<br>
           设置后所有书签密码将使用此密码加密保护。
         </p>
@@ -20,8 +20,8 @@
                     v-html="showPw ? I.eyeOff : I.eye"></button>
           </div>
         </div>
-        <div v-if="error" style="color:var(--danger);font-size:0.82rem;margin-top:4px">{{ error }}</div>
-        <div v-if="store.masterPassword && !error" style="color:var(--accent);font-size:0.82rem;margin-top:4px">
+        <div v-if="error" class="form-error">{{ error }}</div>
+        <div v-if="store.masterPassword && !error" class="form-success">
           ✓ 主密码已设置
         </div>
       </div>

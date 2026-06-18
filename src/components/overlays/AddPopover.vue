@@ -18,8 +18,7 @@
       <div class="popover-results">
         <!-- 书签结果 -->
         <template v-if="tab === 'bm'">
-          <div v-if="!bookmarkResults.length" class="popover-result"
-               style="justify-content:center;color:var(--text-muted);cursor:default">
+          <div v-if="!bookmarkResults.length" class="popover-result popover-empty">
             {{ query ? '无匹配' : '输入关键词搜索…' }}
           </div>
           <div v-for="b in bookmarkResults" :key="b.id" class="popover-result"
@@ -31,8 +30,7 @@
         </template>
         <!-- 组结果 -->
         <template v-else>
-          <div v-if="!groupResults.length" class="popover-result"
-               style="justify-content:center;color:var(--text-muted);cursor:default">
+          <div v-if="!groupResults.length" class="popover-result popover-empty">
             {{ query ? '无匹配的组' : '输入关键词搜索…' }}
           </div>
           <div v-for="g in groupResults" :key="g.id" class="popover-result"

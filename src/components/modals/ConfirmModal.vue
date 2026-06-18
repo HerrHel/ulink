@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="Confirm" :class="{ open: store.confirmModalOpen }" @click.self="onCancel">
     <div class="modal modal-sm">
       <div class="modal-body modal-body-center">
-        <div style="font-size:0.92rem;color:var(--text);line-height:1.6">{{ store.confirmModalMessage }}</div>
+        <div class="confirm-msg">{{ store.confirmModalMessage }}</div>
       </div>
       <div class="modal-foot confirm-foot">
         <button class="btn btn-secondary" @click="onCancel">取消</button>

@@ -1,10 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import { PurgeCSS } from 'purgecss';
 
 /* ── 安全 & 缓存 HTTP 响应头 ── */
-const securityHeaders = {
+const securityHeaders: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
   'Content-Security-Policy': "frame-ancestors 'self'",
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -12,7 +12,7 @@ const securityHeaders = {
 };
 
 /** Vite 插件：为 dev / preview 服务器注入安全 & 缓存头 */
-function headersPlugin() {
+function headersPlugin(): Plugin {
   return {
     name: 'custom-headers',
     configureServer(server) {
@@ -24,10 +24,10 @@ function headersPlugin() {
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         Object.entries(securityHeaders).forEach(([k, v]) => res.setHeader(k, v));
-        if (/\.html?$/.test(req.url) || req.url === '/') {
+        if (/\.html?$/.test(req.url!) || req.url === '/') {
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        } else if (/\.(js|css|svg|woff2|png|jpg|ico)$/.test(req.url)) {
+        } else if (/\.(js|css|svg|woff2|png|jpg|ico)$/.test(req.url!)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         }
         next();
@@ -36,7 +36,7 @@ function headersPlugin() {
   };
 }
 
-function purgeCssPlugin() {
+function purgeCssPlugin(): Plugin {
   return {
     name: 'vite-plugin-purgecss',
     async generateBundle(_, bundle) {

@@ -193,14 +193,6 @@
     overflow-y:auto;
   }
   @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  #catModal .modal{
-    position:fixed;bottom:0;left:0;right:0;top:auto;
-    max-height:90vh;width:100%!important;
-    border-radius:var(--radius-xl) var(--radius-xl) 0 0;
-    margin:0;
-    animation:slideUp 0.28s var(--ease-out);
-    overflow-y:auto;
-  }
   .modal-head{padding:14px 16px;position:sticky;top:0;background:var(--surface);z-index:1}
   .modal-body{padding:0 16px 24px}
   .modal-foot{
@@ -209,9 +201,7 @@
     background:var(--surface);
   }
   .modal input[type="text"],.modal input[type="url"],.modal input[type="password"],.modal textarea{font-size:16px} /* prevent iOS zoom */
-}
-/* 移动端禁用卡片内药丸标签的点击，避免误触 */
-@media(max-width:768px){
+  /* 移动端禁用卡片内药丸标签的点击，避免误触 */
   .card .card-tags .card-tag,
   .group-card .card-tags .card-tag{
     pointer-events:none;cursor:default;
@@ -220,6 +210,14 @@
   .card,.group-card,.rail-item,.btn,.sp-seg-btn,.sp-action,.sp-toggle-row{
     -webkit-tap-highlight-color:transparent;
   }
+  .focus-richtext-toolbar{gap:3px}
+  .rt-btn{min-width:26px;height:26px;font-size:0.72rem;padding:3px 4px}
+  .ft-format-group,.ft-format-group+.ft-sep{display:none!important}
+  .ft-section-actions{flex:1 1 0!important;min-width:0!important}
+  .ft-undo-end{flex-shrink:0}
+  /* Batch bottom: tighter padding on mobile */
+  .batch-bottom-inner{padding:10px 14px}
+  .batch-btn{padding:11px 14px;font-size:0.82rem}
 }
 @media(max-width:480px){
   .panel-header{padding:0 10px;height:auto;gap:6px 8px}
@@ -229,16 +227,5 @@
 
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:0.01ms!important;transition-duration:0.01ms!important}
-}
-
-@media(max-width:768px){
-  .focus-richtext-toolbar{gap:3px}
-  .rt-btn{min-width:26px;height:26px;font-size:0.72rem;padding:3px 4px}
-  .ft-format-group,.ft-format-group+.ft-sep{display:none!important}
-  .ft-section-actions{flex:1 1 0!important;min-width:0!important}
-  .ft-undo-end{flex-shrink:0}
-  /* Batch bottom: tighter padding on mobile */
-  .batch-bottom-inner{padding:10px 14px}
-  .batch-btn{padding:11px 14px;font-size:0.82rem}
 }
 

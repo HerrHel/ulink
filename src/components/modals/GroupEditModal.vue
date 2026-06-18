@@ -26,10 +26,10 @@
         <div class="form-group">
           <label class="form-label">内含书签</label>
           <div>
-            <div v-if="!geBookmarkList.length" class="text-muted-sm" style="padding:8px 0">暂无书签</div>
-            <div v-for="bm in geBookmarkList" :key="bm.id" class="list-item" style="padding:6px 10px;margin-bottom:4px;background:var(--bg-alt);border-radius:8px">
+            <div v-if="!geBookmarkList.length" class="text-muted-sm pt-1">暂无书签</div>
+            <div v-for="bm in geBookmarkList" :key="bm.id" class="list-item ge-bm-item">
               <img :src="bm.icon || faviconUrl(bm.url)" class="icon-xs" alt="">
-              <span class="flex-1 text-sm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ bm.title }}</span>
+              <span class="flex-1 text-sm text-ellipsis">{{ bm.title }}</span>
               <span class="text-xs text-muted">{{ domainName(bm.url) }}</span>
               <button class="btn-xs btn-danger icon-xs" @click="onRemoveBm(bm.id)" title="移除" v-html="I.trash"></button>
             </div>

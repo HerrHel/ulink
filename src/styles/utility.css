@@ -4,7 +4,6 @@
 /* --- Icon Sizes --- */
 .icon-xs{width:13px;height:13px;flex-shrink:0}
 .icon-sm{width:15px;height:15px;flex-shrink:0}
-.icon-lg{width:20px;height:20px;flex-shrink:0}
 
 /* --- Flex Helpers --- */
 .flex-1{flex:1;min-width:0}
@@ -41,4 +40,20 @@
 .modal-sm{max-width:360px}
 .modal-md{max-width:400px}
 .modal-body-center{padding:24px 24px 16px;text-align:center}
-.modal-foot-center{justify-content:center}
+
+/* --- Inline style replacements --- */
+.detail-entry-head{margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.detail-entry-img{border-radius:4px;object-fit:contain;width:36px;height:36px}
+.detail-actions{display:flex;gap:6px;align-items:center;margin-top:8px}
+.detail-use-count{margin-left:auto}
+.empty-compact{padding:40px 20px}
+.rail-storage-track{height:4px;background:var(--bg-alt);border-radius:2px;overflow:hidden}
+.ge-bm-item{padding:6px 10px;margin-bottom:4px;background:var(--bg-alt);border-radius:8px}
+.text-ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-hint{font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5}
+.form-error{color:var(--danger);font-size:0.82rem;margin-top:4px}
+.form-success{color:var(--accent);font-size:0.82rem;margin-top:4px}
+.confirm-msg{font-size:0.92rem;color:var(--text);line-height:1.6}
+.drop-empty{padding:12px;text-align:center;color:var(--text-muted);font-size:0.78rem}
+.popover-empty{justify-content:center;color:var(--text-muted);cursor:default}
+.form-input-sm{height:30px}

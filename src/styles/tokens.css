@@ -41,10 +41,15 @@
   --radius-md:10px;
   --radius-lg:14px;
   --radius-xl:18px;
+  --danger:#dc2626;
+  --danger-light:rgba(220,38,38,0.08);
+  --accent-dark:#0e2270;
   --ease-out:cubic-bezier(0.16,1,0.3,1);
   --transition-fast:all 0.15s ease;
   --transition-normal:all 0.2s var(--ease-out);
   --ease-spring:cubic-bezier(0.34,1.56,0.64,1);
+  --mask-fade-right:linear-gradient(to right,black 80%,transparent 100%);
+  --mask-fade-bottom:linear-gradient(to bottom,black calc(100% - 28px),transparent 100%);
 }
 [data-theme="dark"]{
   --bg:#1A1A1D;
@@ -83,8 +88,10 @@
   --overlay:rgba(0,0,0,0.6);
   --card-badge-bg:rgba(255,255,255,0.05);
   --card-badge-text:#A8A39B;
+  --danger:#ef4444;
+  --danger-light:rgba(239,68,68,0.1);
+  --accent-dark:#b82d63;
 }
-
 /* ---- Comfortable theme: light ---- */
 [data-theme-style="comfortable"][data-theme="light"],
 :root[data-theme-style="comfortable"]{

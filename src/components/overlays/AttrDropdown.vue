@@ -6,7 +6,7 @@
       <button class="attr-search-add" @click.stop="onAddAttr" title="新建属性" v-html="I.plus"></button>
     </div>
     <div class="attr-drop-list" id="attrDropList">
-      <div v-if="!filteredAttrs.length" style="padding:12px;text-align:center;color:var(--text-muted);font-size:0.78rem">
+      <div v-if="!filteredAttrs.length" class="drop-empty">
         无匹配属性
       </div>
       <div v-for="a in filteredAttrs" :key="a.id"

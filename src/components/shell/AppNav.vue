@@ -22,8 +22,8 @@
       </button>
     </div>
     <div class="rail-storage" id="railStorage">
-      <div v-if="storageInfo" style="flex:1;min-width:0">
-        <div style="height:4px;background:var(--bg-alt);border-radius:2px;overflow:hidden">
+      <div v-if="storageInfo" class="flex-1">
+        <div class="rail-storage-track">
           <div class="rail-storage-bar" :style="{ width: storageInfo.percent + '%', background: storageBarColor }"></div>
         </div>
       </div>

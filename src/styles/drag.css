@@ -25,7 +25,6 @@
 }
 .cat-grip svg{width:14px;height:14px}
 .cat-grip:active{cursor:grabbing;color:var(--accent)}
-@media(max-width:768px){.cat-grip{display:flex}}
 .cat-drag-ghost{
   opacity:0!important;border:none!important;
   box-shadow:none!important;pointer-events:none;
@@ -86,6 +85,7 @@
 
 /* 仅移动端显示拖拽手柄 */
 @media(max-width:768px){
+  .cat-grip{display:flex}
   .batch-drag-handle{display:flex}
   /* 拖拽手柄显示时隐藏展开按钮 */
   .list-view .card:has(.batch-drag-handle) .list-expand-btn{display:none}
