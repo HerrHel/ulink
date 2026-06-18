@@ -40,7 +40,7 @@
       <button class="ft-sb-btn" :class="{ active: fmt.task }" title="待办清单" @click="fmtToggle('task')" v-html="I.taskList"></button>
     </div>
   </div>
-  <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded }"
+  <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': store.batchMode }"
        role="article" :aria-label="group.name || '未命名组'"
        :data-group-id="group.id" :draggable="true" @click="onCardClick">
     <div class="group-card-accent"></div>
@@ -181,6 +181,7 @@ function filterByTagName(name) {
 }
 function toggleExpand() { props.group.isExpanded = !props.group.isExpanded; store.debouncedSave() }
 function onCardClick(e) {
+  if (store.batchMode) { toggleSelect(); return }
   if (store.layoutMode !== 'list') return
   if (e.target.closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
   toggleExpand()

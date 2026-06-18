@@ -14,9 +14,9 @@
           <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
 
           <template v-if="entry.isGroup">
-            <div style="margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <div class="detail-entry-head">
               <img v-if="entry.data.icon" :src="entry.data.icon" alt=""
-                   style="border-radius:4px;object-fit:contain;width:36px;height:36px">
+                   class="detail-entry-img">
               <div v-else class="card-icon" v-html="noteIcon"></div>
               <div>
                 <div class="card-name">{{ entry.data.name || '未命名组' }}</div>
@@ -27,7 +27,7 @@
           </template>
 
           <template v-else>
-            <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            <div class="detail-entry-head">
               <div class="card-icon">
                 <img :src="getIcon(entry.data)" alt="">
                 <span class="icon-fallback">{{ (entry.data.title || '?').charAt(0) }}</span>
@@ -63,15 +63,15 @@
                 <span class="gic-btn" @click.stop="openDetail(sub.id)">详</span>
               </span>
             </div>
-            <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+            <div class="detail-actions">
               <button class="btn btn-primary btn-sm" @click.stop="visit(entry.data)">打开网站</button>
               <button class="btn btn-secondary btn-sm" @click.stop="editBm(entry.data.id)">编辑</button>
-              <span class="card-stat" style="margin-left:auto">{{ entry.data.useCount || 0 }}次</span>
+              <span class="card-stat detail-use-count">{{ entry.data.useCount || 0 }}次</span>
             </div>
           </template>
         </div>
       </template>
-      <div v-else class="empty" style="padding:40px 20px">
+      <div v-else class="empty empty-compact">
         <div class="empty-icon" v-html="bookmarkIcon"></div>
         <h3>辅助栏</h3>
         <p>拖拽书签到此处查看</p>
@@ -134,6 +134,7 @@ const isSwiping = ref(false)
 let _swipeStartY = 0
 function onSwipeStart(e) {
   if (!isMobile() || !store.detailOpen) return
+  if (!e.target.closest('.detail-drag-handle')) return
   _swipeStartY = e.touches[0].clientY
 }
 function onSwipeMove(e) {
@@ -165,7 +166,7 @@ function sanitizeNotes(notes) { return sanitizeHTML(notes || '') }
 
 function visit(bm) { openBookmark(bm) }
 function editBm(id) { openBmModal(id) }
-function openDetail(id) { if (!store.detailCards.includes(id)) store.detailCards.push(id) }
+function openDetail(id) { if (!store.detailCards.includes(id)) store.detailCards.push(id); store.detailOpen = true }
 function closeDetail(rawId) {
   const idx = store.detailCards.indexOf(rawId)
   if (idx > -1) store.detailCards.splice(idx, 1)

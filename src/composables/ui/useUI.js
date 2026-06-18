@@ -30,6 +30,7 @@ export function openDetail(bmId) {
   if (!bmId) return
   const store = useAppStore()
   if (store.detailCards.indexOf(bmId) === -1) store.detailCards.push(bmId)
+  store.detailOpen = true
 }
 
 // ── Card Tags (scroll + overflow) ──

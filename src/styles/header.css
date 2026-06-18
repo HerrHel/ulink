@@ -43,7 +43,7 @@
 }
 .panel-count{
   font-size:0.78rem;color:var(--text-muted);
-  font-weight:500;
+  font-weight:500;flex-shrink:0;
 }
 /* Focus mode title input (used by AppHeader.vue) */
 .focus-title-input{
@@ -53,12 +53,13 @@
   border:none;border-bottom:1.5px dashed var(--border);
   outline:none;color:var(--text);
   padding:2px 6px;
-  min-width:40px;
-  white-space:nowrap;
+  flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .focus-title-input:focus{
   border-bottom-color:var(--accent);
   border-bottom-style:solid;
+  overflow:visible;text-overflow:unset;
 }
 .focus-title-unnamed{
   color:var(--text-muted);
@@ -100,6 +101,7 @@
 }
 .header-left{
   display:flex;align-items:center;gap:8px;
+  min-width:0;overflow:hidden;
 }
 .header-right{
   display:flex;align-items:center;justify-content:flex-end;gap:8px;
@@ -175,23 +177,17 @@
 .btn svg{width:15px;height:15px}
 .btn-primary{
   background:var(--accent-grad);color:#fff;
-  box-shadow:0 2px 8px rgba(18,46,138,0.2);
+  box-shadow:0 2px 8px var(--accent-glow);
   border:1px solid rgba(255,255,255,0.1);
 }
 .btn-primary:hover{
-  box-shadow:0 4px 16px rgba(18,46,138,0.3);
+  box-shadow:0 4px 16px var(--accent-glow);
   transform:translateY(-1px);
 }
 .btn-primary:active{
   transform:translateY(0);
-  box-shadow:0 1px 4px rgba(18,46,138,0.2);
+  box-shadow:0 1px 4px var(--accent-glow);
   transition-duration:0.06s;
-}
-[data-theme="dark"] .btn-primary{
-  box-shadow:0 2px 8px rgba(230,57,124,0.2);
-}
-[data-theme="dark"] .btn-primary:hover{
-  box-shadow:0 4px 16px rgba(230,57,124,0.3);
 }
 .btn-secondary{
   background:var(--surface);color:var(--text-secondary);

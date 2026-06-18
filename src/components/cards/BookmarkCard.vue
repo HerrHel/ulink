@@ -1,5 +1,5 @@
 <template>
-  <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen }"
+  <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode }"
        role="article" :aria-label="bookmark.title"
        :data-id="bookmark.id" draggable="true" @click="onCardClick">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
@@ -113,6 +113,7 @@ function visitSub(sub) { openBookmark(sub) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
 function toggleExpand() { props.bookmark.isExpanded = !props.bookmark.isExpanded; store.debouncedSave() }
 function onCardClick(e) {
+  if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode !== 'list') return
   if (e.target.closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
   toggleExpand()

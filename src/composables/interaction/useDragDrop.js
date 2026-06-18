@@ -368,6 +368,7 @@ function handleDetailPanelDrop(e, p) {
   const store = useAppStore();
   if (p.type === 'group') {
     if (store.detailCards.indexOf(p.id) === -1) store.detailCards.push(p.id);
+    store.detailOpen = true;
   } else {
     if (p.srcGid) { removeFromSrcGroup(p.srcGid, p.id); store.debouncedSave(); }
     openDetail(p.id);
