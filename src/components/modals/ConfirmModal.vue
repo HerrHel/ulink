@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="Confirm" :class="{ open: store.confirmModalOpen }" @click.self="onCancel">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="确认操作" :class="{ open: store.confirmModalOpen }" @click.self="onCancel">
     <div class="modal modal-sm">
       <div class="modal-body modal-body-center">
         <div class="confirm-msg">{{ store.confirmModalMessage }}</div>

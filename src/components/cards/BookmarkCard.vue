@@ -33,7 +33,7 @@
           </div>
           <div class="acct-row" v-if="bookmark.password">
             <span class="acct-label">密码</span><span class="acct-val">{{ isVisible(bookmark.id) ? decodedPw : '••••••' }}</span>
-            <button class="acct-show-pw" @click.stop="togglePw(bookmark.id)" title="显示" v-html="I.eye"></button>
+            <button class="acct-show-pw" @click.stop="togglePw(bookmark.id)" :title="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" :aria-label="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
             <button class="acct-copy-btn" @click.stop="copyPw" title="复制" v-html="I.copy"></button>
           </div>
         </div>

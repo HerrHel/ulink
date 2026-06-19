@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="Master Password" :class="{ open: store.masterPasswordOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="主密码验证" :class="{ open: store.masterPasswordOpen }" @click.self="onClose">
     <div class="modal modal-md">
       <div class="modal-head">
         <h2>{{ store.masterPassword ? '验证主密码' : '设置主密码' }}</h2>

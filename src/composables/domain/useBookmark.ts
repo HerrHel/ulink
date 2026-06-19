@@ -266,7 +266,7 @@ function collectSubIds(id: string): string[] {
   return ids
 }
 
-export function deleteBookmarkWithUndo(id: string, skipRender?: boolean) {
+export function deleteBookmarkWithUndo(id: string) {
   const store = useAppStore()
   const ids = collectSubIds(id)
   const snapshot: { bookmarks: Bookmark[]; groups: Record<string, string[]> } = { bookmarks: [], groups: {} }

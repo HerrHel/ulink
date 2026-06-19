@@ -55,21 +55,29 @@ export function saveToLocalStorage(data: AppData): boolean {
 }
 
 let _idbTimer: ReturnType<typeof setTimeout> | null = null
+let _pendingIDBData: AppData | null = null
 export function saveToIDB(data: AppData): void {
+  _pendingIDBData = data
   if (_idbTimer) clearTimeout(_idbTimer)
-  _idbTimer = setTimeout(() => {
-    _idbTimer = null
-    const plain = JSON.parse(JSON.stringify(data))
-    plain._savedAt = Date.now()
-    idbSet(IDB_KEY, plain).catch((e: Error) =>
-      console.warn('[persist] IDB sync failed:', e.message))
-  }, 500)
+  _idbTimer = setTimeout(_doSaveIDB, 500)
 }
-
+function _doSaveIDB(): void {
+  _idbTimer = null
+  if (!_pendingIDBData) return
+  const plain = JSON.parse(JSON.stringify(_pendingIDBData))
+  plain._savedAt = Date.now()
+  _pendingIDBData = null
+  idbSet(IDB_KEY, plain).catch((e: Error) =>
+    console.warn('[persist] IDB sync failed:', e.message))
+}
 export function flushIDB(): void {
-  if (_idbTimer) {
-    clearTimeout(_idbTimer)
-    _idbTimer = null
+  if (_idbTimer) { clearTimeout(_idbTimer); _idbTimer = null }
+  if (_pendingIDBData) {
+    const plain = JSON.parse(JSON.stringify(_pendingIDBData))
+    plain._savedAt = Date.now()
+    _pendingIDBData = null
+    idbSet(IDB_KEY, plain).catch((e: Error) =>
+      console.warn('[persist] IDB flush failed:', e.message))
   }
 }
 

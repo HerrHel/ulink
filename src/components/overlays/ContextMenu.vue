@@ -92,12 +92,11 @@ function _dispatchAction(type, action, id) {
   if (type === 'card') {
     if (action === ACTIONS.VISIT) visit(null, id)
     if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id, true)
-    if (action === ACTIONS.MOVE_TO_CAT) actionSheetAPI?.showCategoryPicker(id)
+    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
   } else if (type === 'sub') {
     if (action === ACTIONS.VISIT) openDetail(id)
     if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id, true)
+    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
   } else if (type === 'cat') {
     if (action === ACTIONS.EDIT) openCatModal()
     if (action === ACTIONS.DELETE) deleteCategory(id)

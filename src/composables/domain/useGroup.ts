@@ -138,7 +138,8 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
   saveGroupBody(tGid); store.save();
   toastWithUndo('已从组移除', function () {
     sg.bookmarkIds.splice(idx, 0, bmId);
-    if (ed && bm) ed.chain().insertContent(inlineCardHTML(bm)).run();
+    const currentEd = EditorManager.get(tGid);
+    if (currentEd && bm) currentEd.chain().insertContent(inlineCardHTML(bm)).run();
     saveGroupBody(tGid); store.debouncedSave(); toast('已恢复');
   });
 }

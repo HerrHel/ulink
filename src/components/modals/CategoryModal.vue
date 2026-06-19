@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="Category" id="catModal" :class="{ open: store.catModalOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="分类管理" id="catModal" :class="{ open: store.catModalOpen }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head"><h2>管理分类</h2><button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button></div>
       <div class="modal-body">

@@ -125,7 +125,7 @@ async function decodeAllPasswords() {
   decodedPasswords.value = results
 }
 
-watch(entries, () => nextTick(decodeAllPasswords), { deep: true })
+watch(entries, () => nextTick(decodeAllPasswords))
 watch(() => store.masterPassword, decodeAllPasswords)
 
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */

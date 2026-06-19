@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="Bookmark" :class="{ open: bmForm.isOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="书签编辑" :class="{ open: bmForm.isOpen }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head">
         <h2>{{ bmForm.isEdit ? '编辑书签' : bmForm.addToGroupMode ? '新建书签并添加到组' : bmForm.parentId ? '添加子书签' : '添加书签' }}</h2>
