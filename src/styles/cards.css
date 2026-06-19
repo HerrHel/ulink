@@ -26,7 +26,7 @@
 /* Entrance animation — only on non-expanded cards; removed via JS after first play */
 .list-view .card:not(.card-expanded):not(.group-expanded),
 .list-view .group-card:not(.card-expanded):not(.group-expanded){
-  animation:listCardIn 0.38s var(--ease-out) backwards;
+  animation:listCardIn 0.28s var(--ease-out) backwards;
 }
 
 /* Collapsed cards: uniform height */
@@ -318,27 +318,21 @@
   padding:16px;
   cursor:pointer;
   transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out);
-  animation:cardIn 0.42s var(--ease-out) backwards;
+  animation:cardIn 0.32s var(--ease-out) backwards;
   overflow:hidden;
   height:232px;
   display:flex;
   flex-direction:column;
   box-shadow:var(--shadow-card);
 }
-/* Stagger entrance — smooth grid/list wave */
-.card:nth-child(1),.list-view .card:nth-child(1),.list-view .group-card:nth-child(1){animation-delay:0.04s}
-.card:nth-child(2),.list-view .card:nth-child(2),.list-view .group-card:nth-child(2){animation-delay:0.08s}
-.card:nth-child(3),.list-view .card:nth-child(3),.list-view .group-card:nth-child(3){animation-delay:0.12s}
-.card:nth-child(4),.list-view .card:nth-child(4),.list-view .group-card:nth-child(4){animation-delay:0.16s}
-.card:nth-child(5),.list-view .card:nth-child(5),.list-view .group-card:nth-child(5){animation-delay:0.20s}
-.card:nth-child(6),.list-view .card:nth-child(6),.list-view .group-card:nth-child(6){animation-delay:0.23s}
-.card:nth-child(7),.list-view .card:nth-child(7),.list-view .group-card:nth-child(7){animation-delay:0.26s}
-.card:nth-child(8),.list-view .card:nth-child(8),.list-view .group-card:nth-child(8){animation-delay:0.29s}
-.card:nth-child(9),.list-view .card:nth-child(9),.list-view .group-card:nth-child(9){animation-delay:0.32s}
-.card:nth-child(10),.list-view .card:nth-child(10),.list-view .group-card:nth-child(10){animation-delay:0.35s}
-.card:nth-child(11),.list-view .card:nth-child(11),.list-view .group-card:nth-child(11){animation-delay:0.37s}
-.card:nth-child(12),.list-view .card:nth-child(12),.list-view .group-card:nth-child(12){animation-delay:0.39s}
-.card:nth-child(n+13),.list-view .card:nth-child(n+13),.list-view .group-card:nth-child(n+13){animation-delay:0.41s}
+/* Stagger entrance — smooth grid/list wave (capped at 6 children for performance) */
+.card:nth-child(1),.list-view .card:nth-child(1),.list-view .group-card:nth-child(1){animation-delay:0.03s}
+.card:nth-child(2),.list-view .card:nth-child(2),.list-view .group-card:nth-child(2){animation-delay:0.06s}
+.card:nth-child(3),.list-view .card:nth-child(3),.list-view .group-card:nth-child(3){animation-delay:0.09s}
+.card:nth-child(4),.list-view .card:nth-child(4),.list-view .group-card:nth-child(4){animation-delay:0.12s}
+.card:nth-child(5),.list-view .card:nth-child(5),.list-view .group-card:nth-child(5){animation-delay:0.15s}
+.card:nth-child(6),.list-view .card:nth-child(6),.list-view .group-card:nth-child(6){animation-delay:0.18s}
+.card:nth-child(n+7),.list-view .card:nth-child(n+7),.list-view .group-card:nth-child(n+7){animation-delay:0.18s}
 @keyframes cardIn{
   0%{opacity:0;transform:translateY(14px) scale(0.95);filter:blur(3px)}
   50%{opacity:1;filter:blur(0)}

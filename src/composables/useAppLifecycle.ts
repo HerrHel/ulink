@@ -8,6 +8,7 @@ import { mentionAPI } from './bridge.js'
 import { importFromURL } from './domain/useDataIO.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
 import { captureNavState } from './interaction/useKeyboardOps.js'
+import { flushIDB } from '../stores/persist.js'
 
 export function useAppLifecycle() {
   const store = useAppStore()
@@ -26,16 +27,24 @@ export function useAppLifecycle() {
     importFromURL()
     updateCardTagsOverflow()
 
-    const onSave = () => store.save()
+    const flushAndSave = () => {
+      flushIDB()
+      store.flushDebouncedSave()
+    }
     const onSaveUI = () => store.saveUIState()
     const onClearSel = () => window.getSelection()?.removeAllRanges()
-    window.addEventListener('beforeunload', onSave)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushAndSave()
+    }
+    window.addEventListener('beforeunload', flushAndSave)
     window.addEventListener('beforeunload', onSaveUI)
     window.addEventListener('beforeunload', onClearSel as EventListener)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     cleanups.push(() => {
-      window.removeEventListener('beforeunload', onSave)
+      window.removeEventListener('beforeunload', flushAndSave)
       window.removeEventListener('beforeunload', onSaveUI)
       window.removeEventListener('beforeunload', onClearSel as EventListener)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     })
 
     initCardTags()

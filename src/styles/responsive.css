@@ -200,7 +200,12 @@
     position:sticky;bottom:0;
     background:var(--surface);
   }
-  .modal input[type="text"],.modal input[type="url"],.modal input[type="password"],.modal textarea{font-size:16px} /* prevent iOS zoom */
+  .modal input[type="text"],.modal input[type="url"],.modal input[type="password"],.modal textarea,.modal select{font-size:16px} /* prevent iOS zoom */
+  /* 移动端扩大触摸目标至 44x44px（视觉尺寸不变，通过 padding 扩大点击区域） */
+  .btn-xs{padding:8px;min-width:44px;min-height:44px}
+  .acct-copy-btn{padding:11px;min-width:44px;min-height:44px}
+  .acct-show-pw{padding:8px;min-width:44px;min-height:44px}
+  .sp-switch{min-height:44px;padding:13px 0}
   /* 移动端禁用卡片内药丸标签的点击，避免误触 */
   .card .card-tags .card-tag,
   .group-card .card-tags .card-tag{

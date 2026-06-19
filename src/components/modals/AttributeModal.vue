@@ -4,7 +4,7 @@
       <div class="modal-head"><h2>管理属性</h2><button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
         <div class="flex-center gap-2 mb-3">
-          <input type="text" class="form-input flex-1" v-model="newName" placeholder="属性名称" aria-label="属性名称" @keydown.enter="onAddAttr">
+          <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" placeholder="属性名称" aria-label="属性名称" @keydown.enter="onAddAttr">
           <button class="btn btn-primary btn-sm" @click="onAddAttr">添加</button>
         </div>
         <div>
@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { gid } from '../../utils.js'
 import { toast } from '../../lib/toast.js'
@@ -35,9 +35,14 @@ import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 
 const store = useAppStore()
 const newName = ref('')
+const newNameRef = ref(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameAttribute')
 
 const attributes = computed(() => store.customAttributes)
+
+watch(() => store.attrModalOpen, (open) => {
+  if (open) nextTick(() => newNameRef.value?.focus())
+})
 
 function onClose() { store.attrModalOpen = false }
 

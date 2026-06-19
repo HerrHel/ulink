@@ -1,6 +1,5 @@
 <template>
-  <div class="detail-panel" :class="{ open: isOpen, swiping: isSwiping }" id="detailPanel"
-       @touchstart.passive="onSwipeStart" @touchmove.passive="onSwipeMove" @touchend="onSwipeEnd">
+  <div class="detail-panel" :class="{ open: isOpen, swiping: isSwiping }" id="detailPanel">
     <div class="detail-drag-handle" id="detailDragHandle"></div>
     <div class="detail-search" id="detailSearchWrap" v-show="isOpen && entries.length > 0">
       <input type="text" class="detail-search-input" id="detailSearch"
@@ -81,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { favicon, sanitizeHTML, copyToClipboard, isMobile, domain, getTagNames } from '../../utils.js'
 import { safeDecodePassword } from '../../crypto.js'
@@ -129,7 +128,7 @@ async function decodeAllPasswords() {
 watch(entries, () => nextTick(decodeAllPasswords), { deep: true })
 watch(() => store.masterPassword, decodeAllPasswords)
 
-/* Swipe-to-dismiss (mobile only) */
+/* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
 const isSwiping = ref(false)
 let _swipeStartY = 0
 function onSwipeStart(e) {
@@ -141,6 +140,7 @@ function onSwipeMove(e) {
   if (!_swipeStartY) return
   const dy = e.touches[0].clientY - _swipeStartY
   if (dy > 0) {
+    e.preventDefault()
     isSwiping.value = true
     const panel = document.getElementById('detailPanel')
     if (panel) panel.style.transform = `translateY(${dy}px)`
@@ -149,12 +149,30 @@ function onSwipeMove(e) {
 function onSwipeEnd() {
   if (!isSwiping.value) { _swipeStartY = 0; return }
   const panel = document.getElementById('detailPanel')
+  const panelHeight = panel ? panel.offsetHeight : 300
   const currentY = panel ? parseFloat(panel.style.transform.replace(/[^-\d.]/g, '')) || 0 : 0
-  if (currentY > 100) { store.detailOpen = false; store.detailCards.splice(0) }
+  if (currentY > panelHeight * 0.3) { store.detailOpen = false; store.detailCards.splice(0) }
   if (panel) panel.style.transform = ''
   isSwiping.value = false
   _swipeStartY = 0
 }
+
+onMounted(() => {
+  const el = document.getElementById('detailPanel')
+  if (el) {
+    el.addEventListener('touchstart', onSwipeStart, { passive: true })
+    el.addEventListener('touchmove', onSwipeMove, { passive: false })
+    el.addEventListener('touchend', onSwipeEnd)
+  }
+})
+onUnmounted(() => {
+  const el = document.getElementById('detailPanel')
+  if (el) {
+    el.removeEventListener('touchstart', onSwipeStart)
+    el.removeEventListener('touchmove', onSwipeMove)
+    el.removeEventListener('touchend', onSwipeEnd)
+  }
+})
 
 const noteIcon = I.note
 const bookmarkIcon = I.emptyBookmark

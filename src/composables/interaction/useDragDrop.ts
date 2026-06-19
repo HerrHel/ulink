@@ -469,11 +469,16 @@ function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: 
 }
 
 export function useDragDrop() {
+  const onVisibilityChange = () => { if (document.visibilityState === 'hidden') clearDragState() }
+  const onBlur = () => clearDragState()
+
   onMounted(() => {
     document.addEventListener('dragstart', _onDragStart)
     document.addEventListener('dragend', _onDragEnd)
     document.addEventListener('dragover', _onDragOver)
     document.addEventListener('drop', _onDrop)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('blur', onBlur)
   })
 
   onUnmounted(() => {
@@ -481,5 +486,8 @@ export function useDragDrop() {
     document.removeEventListener('dragend', _onDragEnd)
     document.removeEventListener('dragover', _onDragOver)
     document.removeEventListener('drop', _onDrop)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('blur', onBlur)
+    clearDragState()
   })
 }

@@ -130,10 +130,17 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
   const sg = store.groupMap[tGid];
   if (!sg) return;
   const idx = sg.bookmarkIds.indexOf(bmId);
-  if (idx >= 0) sg.bookmarkIds.splice(idx, 1);
+  if (idx < 0) return;
+  const bm = store.bookmarkMap[bmId];
+  sg.bookmarkIds.splice(idx, 1);
   const ed = EditorManager.get(tGid);
   if (ed) EditorManager.deleteNode(tGid, 'data-bm-id', bmId);
   saveGroupBody(tGid); store.save();
+  toastWithUndo('已从组移除', function () {
+    sg.bookmarkIds.splice(idx, 0, bmId);
+    if (ed && bm) ed.chain().insertContent(inlineCardHTML(bm)).run();
+    saveGroupBody(tGid); store.debouncedSave(); toast('已恢复');
+  });
 }
 
 export function addGroupRefToGroup(refGid: string, targetGid: string, clientX?: number, clientY?: number) {

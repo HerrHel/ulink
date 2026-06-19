@@ -46,7 +46,7 @@ export function useAppHandlers() {
     onAddGroup() { hideAddDropdown(); createGroup() },
     onBatchMove() { showBatchMovePopover() },
     onBatchDelete() { batchDelete() },
-    onImportFile(e: Event) { importData((e.target as HTMLInputElement).files![0]); (e.target as HTMLInputElement).value = '' },
+    onImportFile(e: Event) { const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return; importData(file); (e.target as HTMLInputElement).value = '' },
   }
 
   return { handlers }

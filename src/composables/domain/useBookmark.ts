@@ -84,21 +84,29 @@ export function visit(e: Event | null, id?: string) {
   openBookmark(store.bookmarkMap[bmId])
 }
 
+let _opening = false
+let _pendingUnwatch: (() => void) | null = null
 export async function openBmModal(editId?: string) {
-  const store = useAppStore()
-  const bm = editId ? store.bookmarkMap[editId] : null
+  if (_opening) return
+  _opening = true
+  try {
+    const store = useAppStore()
+    const bm = editId ? store.bookmarkMap[editId] : null
 
   // If bookmark has AES-GCM encrypted password, ensure master password is available
   if (bm?.password && typeof bm.password === 'object' && bm.password.encrypted && !store.masterPassword) {
     // Open master password modal first; after verification, re-open this modal
+    if (_pendingUnwatch) { _pendingUnwatch(); _pendingUnwatch = null }
     const _pendingEditId = editId
     store.masterPasswordOpen = true
     const unwatch = watch(
       () => store.masterPassword,
       (pw) => {
-        if (pw) { unwatch(); openBmModal(_pendingEditId) }
+        if (pw) { _pendingUnwatch = null; unwatch(); openBmModal(_pendingEditId) }
       }
     )
+    _pendingUnwatch = unwatch
+    _opening = false
     return
   }
 
@@ -130,6 +138,7 @@ export async function openBmModal(editId?: string) {
   pushNavState()
   store.bmModalOpen = true
   bmForm.isOpen = true
+  } finally { _opening = false }
 }
 
 export function closeBmModal() {
@@ -236,6 +245,20 @@ export function clearIcon() { clearIconBase(bmForm) }
 /** Collect all sub-bookmark IDs recursively */
 function collectSubIds(id: string): string[] {
   const store = useAppStore()
+  const cm = store.childrenMap
+  if (cm && Object.keys(cm).length > 0) {
+    const ids: string[] = [id]
+    const stack = [id]
+    while (stack.length) {
+      const pid = stack.pop()!
+      const children = cm[pid]
+      if (children) {
+        for (const c of children) { ids.push(c.id); stack.push(c.id) }
+      }
+    }
+    return ids
+  }
+  // Fallback for when childrenMap is not available (e.g. in tests)
   let ids = [id]
   store.bookmarks.filter(b => b.parentId === id).forEach(c => {
     ids = ids.concat(collectSubIds(c.id))

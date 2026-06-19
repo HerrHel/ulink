@@ -95,15 +95,15 @@
 .attr-chip .attr-chip-x{font-size:0.85rem;line-height:1}
 
 .attr-chip-excluded{
-  background:rgba(234,179,8,0.12);color:#ca8a04;
+  background:var(--amber-light);color:var(--amber);
 }
-.attr-chip-excluded::before{background:#ca8a04}
+.attr-chip-excluded::before{background:var(--amber)}
 .attr-chip-excluded .attr-chip-txt{
   text-decoration:line-through;
   text-decoration-thickness:2px;
-  text-decoration-color:#ca8a04;
+  text-decoration-color:var(--amber);
 }
-.attr-chip-excluded:hover{background:#eab308;color:#fff}
+.attr-chip-excluded:hover{background:var(--amber);color:#fff}
 .attr-chip-excluded:hover .attr-chip-txt{text-decoration-color:#fff}
 .attr-chip-excluded:hover::before{background:#fff}
 

@@ -47,7 +47,7 @@ const RULES = {
   cat:          { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
   attr:         { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: {} },
   group:        { show: [ACTIONS.EDIT, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
-  'group-card': { show: [ACTIONS.VISIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.DELETE]: '从组移除' } },
+  'group-card': { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.EDIT]: '编辑书签', [ACTIONS.DELETE]: '从组移除' } },
   'rail-empty': { show: [ACTIONS.ADD_CAT], text: {} },
   'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
 }
@@ -111,6 +111,7 @@ function _dispatchAction(type, action, id) {
     if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
   } else if (type === 'group-card') {
     if (action === ACTIONS.VISIT) openDetail(id)
+    if (action === ACTIONS.EDIT) openBmModal(id)
     if (action === ACTIONS.DELETE) removeBmFromGroup(id, store.ctxGid)
   } else if (type === 'grid-empty') {
     if (action === ACTIONS.ADD_BOOKMARK) openBmModal()

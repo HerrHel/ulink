@@ -76,8 +76,9 @@
 .ft-sb-btn span{display:flex;align-items:center;justify-content:center;width:16px;height:16px}
 .ft-sb-btn svg{width:16px;height:16px}
 .ft-sb-btn:hover:not(.disabled){background:var(--surface-hover)}
+.ft-sb-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .ft-sb-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 6px var(--accent-glow)}
-.ft-sb-btn.active:hover{background:var(--accent-hover)}
+.ft-sb-btn.active:hover{background:var(--accent-dark)}
 .ft-sb-btn.disabled{opacity:0.3;cursor:default;pointer-events:none}
 .ft-sb-sep{
   width:22px;height:1px;flex-shrink:0;

@@ -117,6 +117,7 @@
 .rt-btn:hover{background:var(--surface-hover);border-color:var(--border-hover);color:var(--text)}
 .rt-btn:active{background:var(--surface-active);transform:scale(0.95);transition-duration:0.05s}
 .rt-btn.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
+.rt-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* ==================== MOBILE FLOATING FORMAT BAR ==================== */
 .mfb{
@@ -127,7 +128,7 @@
   overflow-x:auto;scrollbar-width:none;
   transform:translateY(100%);opacity:0;
   transition:transform .2s var(--ease-out),opacity .18s var(--ease-out);
-  box-shadow:0 -2px 12px rgba(0,0,0,.08);
+  box-shadow:var(--shadow-md);
   -webkit-overflow-scrolling:touch;
 }
 .mfb::-webkit-scrollbar{display:none}

@@ -106,30 +106,27 @@
 .batch-btn-move{
   background:var(--surface-hover);
   color:var(--text);
-  box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow:var(--shadow-xs),inset 0 1px 0 var(--surface);
   border:1px solid var(--border-light);
-}
-[data-theme="dark"] .batch-btn-move{
-  box-shadow:var(--shadow-xs),inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .batch-btn-move:hover{
   background:var(--surface-active);
-  box-shadow:var(--shadow-sm),inset 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow:var(--shadow-sm),inset 0 1px 0 var(--surface);
 }
 .batch-btn-delete{
   background:var(--rose);
   color:#fff;
-  box-shadow:0 2px 8px rgba(190,18,60,0.25),inset 0 1px 0 rgba(255,255,255,0.15);
+  box-shadow:0 2px 8px var(--rose-light),inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .batch-btn-delete:hover{
-  box-shadow:0 4px 14px rgba(190,18,60,0.35),inset 0 1px 0 rgba(255,255,255,0.15);
+  box-shadow:0 4px 14px var(--rose-light),inset 0 1px 0 rgba(255,255,255,0.15);
 }
 [data-theme="dark"] .batch-btn-delete{
   background:var(--amber);
-  box-shadow:0 2px 8px rgba(245,158,11,0.25),inset 0 1px 0 rgba(255,255,255,0.12);
+  box-shadow:0 2px 8px var(--amber-light),inset 0 1px 0 rgba(255,255,255,0.12);
 }
 [data-theme="dark"] .batch-btn-delete:hover{
-  box-shadow:0 4px 14px rgba(245,158,11,0.35),inset 0 1px 0 rgba(255,255,255,0.12);
+  box-shadow:0 4px 14px var(--amber-light),inset 0 1px 0 rgba(255,255,255,0.12);
 }
 .batch-move-popover{
   position:fixed;bottom:70px;left:50%;

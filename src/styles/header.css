@@ -158,8 +158,12 @@
   background:var(--surface-hover);color:var(--text);
 }
 .search-suggest-item img{width:18px;height:18px;border-radius:2px;flex-shrink:0}
+.search-suggest-item .ss-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent)}
+.search-suggest-item .ss-icon svg{width:16px;height:16px}
 .search-suggest-item .ss-name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.search-suggest-item .ss-name .ss-hl{background:var(--accent-glow);color:var(--accent);border-radius:2px;padding:0 1px}
 .search-suggest-item .ss-url{font-size:0.7rem;color:var(--text-muted);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;font-family:'JetBrains Mono',monospace}
+.ss-divider{padding:6px 12px 2px;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;border-top:1px solid var(--border-light);margin-top:2px}
 
 .btn{
   display:inline-flex;align-items:center;gap:6px;

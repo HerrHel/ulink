@@ -4,7 +4,7 @@
       <div class="modal-head"><h2>管理分类</h2><button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
         <div class="flex-center gap-2 mb-3">
-          <input type="text" class="form-input flex-1" v-model="newName" placeholder="新分类名称" aria-label="新分类名称" @keydown.enter="onAddCat">
+          <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" placeholder="新分类名称" aria-label="新分类名称" @keydown.enter="onAddCat">
           <button class="btn btn-primary btn-sm" @click="onAddCat">添加</button>
         </div>
         <div class="cat-sort-list" ref="catListRef">
@@ -30,23 +30,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { addNewCategory } from '../../utils.js'
-import { toast } from '../../lib/toast.js'
+import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
 const newName = ref('')
+const newNameRef = ref(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameCategory')
 const catListRef = ref(null)
 
 const uncategorizedCat = computed(() => dataStore.categories.find(c => c.id === 'uncategorized') || { id: 'uncategorized', name: '未分类' })
 
 const sortableList = ref([])
+
+watch(() => store.catModalOpen, (open) => {
+  if (open) nextTick(() => newNameRef.value?.focus())
+})
 
 watch(() => dataStore.selectableCategories, (val) => {
   sortableList.value = val.filter(c => c.id !== 'uncategorized').map(c => ({ ...c }))
@@ -202,9 +207,17 @@ function onAddCat() {
 }
 
 function onDelete(id) {
-  store.deleteCategory(id)
-  store.save()
-  toast('分类已删除')
+  const cat = dataStore.categories.find(c => c.id === id)
+  const catName = cat?.name || '此分类'
+  const bmCount = dataStore.bookmarks.filter(b => b.categoryId === id).length
+  const msg = bmCount > 0
+    ? `删除「${catName}」后，其中 ${bmCount} 个书签将移至"未分类"，确定删除吗？`
+    : `确定删除「${catName}」吗？`
+  showConfirm(msg, () => {
+    store.deleteCategory(id)
+    store.save()
+    toast('分类已删除')
+  })
 }
 </script>
 

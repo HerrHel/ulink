@@ -4,7 +4,7 @@
  */
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
-import { toast, showConfirm } from '../../lib/toast.js'
+import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { copyToClipboard } from '../../utils.js'
 
@@ -58,7 +58,14 @@ function validateImportData(data: any): string | null {
 export function resetToDefaults() {
   const store = useAppStore()
   const ds = useDataStore()
-  showConfirm('确认清除所有数据？这将恢复为默认状态，且不可撤销。', () => {
+  showConfirm('确认清除所有数据？将恢复为默认状态。', () => {
+    const snapshot = {
+      categories: JSON.parse(JSON.stringify(ds.categories)),
+      bookmarks: JSON.parse(JSON.stringify(ds.bookmarks)),
+      customAttributes: JSON.parse(JSON.stringify(ds.customAttributes)),
+      siblingGroups: JSON.parse(JSON.stringify(ds.siblingGroups)),
+      curCat: store.curCat,
+    }
     const d = JSON.parse(JSON.stringify(DEFAULTS))
     ds.categories = d.categories
     ds.bookmarks = d.bookmarks
@@ -70,7 +77,15 @@ export function resetToDefaults() {
     store.excludedAttrs = []
     store.detailCards = []
     store.save()
-    toast('数据已重置为默认')
+    toastWithUndo('数据已重置为默认', () => {
+      ds.categories = snapshot.categories
+      ds.bookmarks = snapshot.bookmarks
+      ds.customAttributes = snapshot.customAttributes
+      ds.siblingGroups = snapshot.siblingGroups
+      store.curCat = snapshot.curCat
+      store.debouncedSave()
+      toast('数据已恢复')
+    })
   })
 }
 

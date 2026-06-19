@@ -3,7 +3,7 @@
     <div class="modal">
       <div class="modal-head"><h2>编辑组</h2><button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
-        <div class="form-group"><label class="form-label" for="geName">组名称</label><input type="text" class="form-input" id="geName" v-model="geForm.name" placeholder="组名称"></div>
+        <div class="form-group"><label class="form-label" for="geName">组名称</label><input type="text" class="form-input" id="geName" ref="geNameRef" v-model="geForm.name" placeholder="组名称"></div>
         <div class="form-group"><label class="form-label" for="geCatId">分类</label><select class="form-select" id="geCatId" v-model="geForm.catId"><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
         <div class="form-group">
           <label class="form-label" for="geIcon">自定义图标</label>
@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { favicon, domain } from '../../utils.js'
 import { I } from '../../config/icons.js'
@@ -50,8 +50,13 @@ import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } 
 import { EditorManager } from '../../lib/editor.js'
 
 const store = useAppStore()
+const geNameRef = ref(null)
 
 const categoryOptions = computed(() => store.selectableCategories)
+
+watch(() => store.groupEditOpen, (open) => {
+  if (open) nextTick(() => geNameRef.value?.focus())
+})
 
 const geBookmarkList = computed(() => {
   const gId = geForm.id || store.editingGeId

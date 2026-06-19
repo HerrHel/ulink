@@ -5,7 +5,7 @@
  */
 import { defineStore } from 'pinia'
 import { encryptPassword, autoMigratePassword } from '../crypto.js'
-import { toast } from '../lib/toast.js'
+import { toast, showConfirm } from '../lib/toast.js'
 import { useDataStore } from './data.js'
 import type { EncryptedPassword } from '../types.js'
 
@@ -62,8 +62,17 @@ export const useSecurityStore = defineStore('security', {
     },
 
     clearMasterPassword() {
-      this.masterPassword = ''
-      toast('主密码已清除')
+      const ds = useDataStore()
+      const encryptedCount = ds.bookmarks.filter(b => b.password && typeof b.password === 'object' && (b.password as EncryptedPassword).encrypted).length
+      const doClear = () => {
+        this.masterPassword = ''
+        toast('主密码已清除')
+      }
+      if (encryptedCount > 0) {
+        showConfirm(`当前有 ${encryptedCount} 个书签使用了 AES 加密密码。清除主密码后这些密码将无法解密，确定要清除吗？`, doClear)
+      } else {
+        doClear()
+      }
     },
   },
 })

@@ -116,6 +116,7 @@ function updateViewport() {
 
 function show() {
   if (!isMobile()) return
+  hide()
   isVisible.value = true
   syncState()
   if (window.visualViewport) {

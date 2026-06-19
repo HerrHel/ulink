@@ -10,7 +10,10 @@ import { useUIStore } from './ui.js'
 import { useSecurityStore } from './security.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
+import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EncryptedPassword } from '../types.js'
+
+let _localStorageWarned = false
 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
@@ -106,7 +109,13 @@ export const useAppStore = defineStore('app', () => {
       d._saveCount++
       const data = d._dataSnapshot()
       const ok = persist.saveToLocalStorage(data)
-      if (!ok) { console.warn('[store] localStorage save failed') }
+      if (!ok) {
+        console.warn('[store] localStorage save failed')
+        if (!_localStorageWarned) {
+          _localStorageWarned = true
+          toast('本地存储已满，数据已备份到 IndexedDB', false)
+        }
+      }
       persist.saveToIDB(data)
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
     },
@@ -118,6 +127,15 @@ export const useAppStore = defineStore('app', () => {
         d._saveTimer = null
         this.save()
       }, 300)
+    },
+
+    flushDebouncedSave() {
+      const d = ds()
+      if (d._saveTimer) {
+        clearTimeout(d._saveTimer)
+        d._saveTimer = null
+        this.save()
+      }
     },
 
     _dataSnapshot() { return ds()._dataSnapshot() },

@@ -186,11 +186,12 @@ export const useDataStore = defineStore('data', {
       return false
     },
     importFromData(data: any) {
+      const { categories = [], bookmarks = [], customAttributes = [], siblingGroups = [] } = data || {}
       const result = {
-        categories: [...data.categories],
-        bookmarks: [...data.bookmarks],
-        customAttributes: [...data.customAttributes],
-        siblingGroups: [...data.siblingGroups],
+        categories: [...categories],
+        bookmarks: [...bookmarks],
+        customAttributes: [...customAttributes],
+        siblingGroups: [...siblingGroups],
       }
       runMigrations(data, result)
       this.categories = result.categories

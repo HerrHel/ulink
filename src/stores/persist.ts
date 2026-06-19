@@ -66,6 +66,13 @@ export function saveToIDB(data: AppData): void {
   }, 500)
 }
 
+export function flushIDB(): void {
+  if (_idbTimer) {
+    clearTimeout(_idbTimer)
+    _idbTimer = null
+  }
+}
+
 export function getStorageInfo(data: AppData): StorageInfo {
   try {
     const bytes = new Blob([JSON.stringify(data)]).size

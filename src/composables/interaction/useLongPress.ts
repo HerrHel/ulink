@@ -32,7 +32,7 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
   function onPtrDown(e: PointerEvent) {
     if (!isMobile()) return
     if (useAppStore().batchMode) return
-    if ((e.target as HTMLElement).closest('input, button, textarea, [contenteditable="true"]')) return
+    if ((e.target as HTMLElement).closest('input, button, textarea, select, [contenteditable="true"]')) return
     const card = (e.target as HTMLElement).closest('.card,.group-card') as HTMLElement
     if (!card || card.classList.contains('group-card-focus')) return
     _target = card
@@ -54,7 +54,7 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
   }
 
   function onPtrUp() {
-    if (_fired) { setTimeout(() => { _fired = false }, 100) }
+    if (_fired) { setTimeout(() => { _fired = false }, 200) }
     cancel()
   }
 
