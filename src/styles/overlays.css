@@ -67,7 +67,7 @@
 
 /* 移动端 —— 从底部弹入的 Sheet */
 .popover-mask-visible{
-  background:rgba(0,0,0,0.4);
+  background:var(--overlay);
 }
 .popover-sheet{
   position:fixed;top:auto;bottom:0;left:0;right:0;
@@ -97,7 +97,7 @@
   transition:background 0.25s ease;
 }
 .as-overlay.show{
-  background:rgba(0,0,0,0.4);
+  background:var(--overlay);
   pointer-events:auto;
 }
 .action-sheet{
