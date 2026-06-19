@@ -122,6 +122,14 @@
   .detail-panel.open{width:var(--detail-width,280px)}
   .detail-inner{min-width:var(--detail-width,280px)}
 
+  /* === Settings panel: full-width dropdown === */
+  .sp{
+    position:fixed;top:auto;right:8px;left:8px;
+    width:auto;max-width:none;
+    max-height:70vh;overflow-y:auto;
+    border-radius:var(--radius-xl);
+  }
+
   /* === Hide layout mode toggle on mobile (locked to list) === */
   .sp-section-layout{display:none!important}
 
@@ -205,7 +213,8 @@
   .btn-xs{padding:8px;min-width:44px;min-height:44px}
   .acct-copy-btn{padding:11px;min-width:44px;min-height:44px}
   .acct-show-pw{padding:8px;min-width:44px;min-height:44px}
-  .sp-switch{min-height:44px;padding:13px 0}
+  .sp-toggle-row{padding:13px 10px}
+  .sp-switch::before{content:'';position:absolute;inset:-13px -6px;z-index:1}
   /* 移动端禁用卡片内药丸标签的点击，避免误触 */
   .card .card-tags .card-tag,
   .group-card .card-tags .card-tag{
