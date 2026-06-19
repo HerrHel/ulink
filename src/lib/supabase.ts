@@ -9,5 +9,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     storage: localStorage,
     storageKey: 'linkvault_auth',
+    detectSessionInUrl: true,
   },
 })

@@ -59,6 +59,11 @@
 .form-textarea{resize:vertical;min-height:60px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-select option{background:var(--surface);color:var(--text)}
+.code-input{
+  font-family:'JetBrains Mono',monospace;
+  font-size:1.4rem;letter-spacing:0.3em;
+  text-align:center;padding:12px;
+}
 .pw-wrap{position:relative}
 .pw-toggle{
   position:absolute;right:6px;top:50%;transform:translateY(-50%);

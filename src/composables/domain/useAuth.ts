@@ -25,11 +25,22 @@ export function useAuth() {
     })
   }
 
-  async function signInWithEmail(email: string) {
+  async function sendOtp(email: string): Promise<boolean> {
     authError.value = null
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithOtp({ email })
+    if (error) {
+      authError.value = error.message
+      return false
+    }
+    return true
+  }
+
+  async function verifyOtp(email: string, token: string): Promise<boolean> {
+    authError.value = null
+    const { error } = await supabase.auth.verifyOtp({
       email,
-      options: { emailRedirectTo: window.location.origin }
+      token,
+      type: 'email',
     })
     if (error) {
       authError.value = error.message
@@ -51,6 +62,6 @@ export function useAuth() {
   return {
     user, session, loading, authError, authModalOpen,
     isLoggedIn, userEmail,
-    init, signInWithEmail, signOut,
+    init, sendOtp, verifyOtp, signOut,
   }
 }
