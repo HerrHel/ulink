@@ -6,6 +6,8 @@ import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../stores/app.js'
 import { mentionAPI } from './bridge.js'
 import { importFromURL } from './domain/useDataIO.js'
+import { useAuth } from './domain/useAuth.js'
+import { useCloudSync } from './domain/useCloudSync.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
 import { captureNavState } from './interaction/useKeyboardOps.js'
 import { flushIDB } from '../stores/persist.js'
@@ -26,6 +28,15 @@ export function useAppLifecycle() {
     store.restoreUIState()
     importFromURL()
     updateCardTagsOverflow()
+
+    // 初始化认证 & 云同步
+    const auth = useAuth()
+    await auth.init()
+    const sync = useCloudSync()
+    sync.initOnlineListener()
+    if (auth.isLoggedIn.value) {
+      sync.initialSync().catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
+    }
 
     const flushAndSave = () => {
       flushIDB()
@@ -57,5 +68,6 @@ export function useAppLifecycle() {
     cleanups.length = 0
     destroyCardTags()
     mentionAPI?.destroy?.()
+    try { useCloudSync().destroyOnlineListener() } catch (_) { /* ignore */ }
   })
 }

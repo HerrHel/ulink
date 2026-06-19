@@ -11,6 +11,7 @@ import { useSecurityStore } from './security.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { toast } from '../lib/toast.js'
+import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EncryptedPassword } from '../types.js'
 
 let _localStorageWarned = false
@@ -118,6 +119,8 @@ export const useAppStore = defineStore('app', () => {
       }
       persist.saveToIDB(data)
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
+      // 云同步（防抖 3 秒）
+      try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
     },
 
     debouncedSave() {

@@ -36,6 +36,10 @@
     <button v-show="!store.focusedGroupId" class="btn btn-secondary btn-sm" id="btnBatchHeader" :class="{ active: store.batchMode }" @click.stop="toggleBatch" title="批量管理">
       <span v-html="I.listCheck" class="icon-sm"></span>
     </button>
+    <button v-show="!store.focusedGroupId" class="btn btn-ghost btn-sm" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :title="dlChecking ? '检测中...' + dlProgress : '检测死链'" :disabled="dlChecking">
+      <span v-html="I.refresh" class="icon-sm"></span>
+      <span v-if="deadCount > 0" class="dead-count">{{ deadCount }}</span>
+    </button>
   </div>
 </template>
 
@@ -43,18 +47,32 @@
 import { computed } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
+import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { I } from '../../config/icons.js'
 import AttrChips from './AttrChips.vue'
 import AttrDropdown from '../overlays/AttrDropdown.vue'
 import { toggleBatchMode } from '../../composables/domain/useBatch.js'
+import { toast } from '../../lib/toast.js'
 
 const store = useAppStore()
 const undo = useUndoStore()
+const dl = useDeadLinkChecker()
 const emit = defineEmits(['exit-focus', 'focus-add-bm', 'focus-edit-group', 'focus-undo', 'focus-redo', 'toggle-attr-filter', 'add-bookmark', 'add-group'])
 
 const focusCanUndo = computed(() => !!undo.canUndo(store.focusedGroupId))
 const focusCanRedo = computed(() => !!undo.canRedo(store.focusedGroupId))
+const dlChecking = computed(() => dl.checking.value)
+const dlProgress = computed(() => dl.checking.value ? `${dl.progress.value.done}/${dl.progress.value.total}` : '')
+const deadCount = computed(() => dl.deadCount())
 
 const toggleBatch = toggleBatchMode
 function onAddClick() { store.addDropdownOpen = !store.addDropdownOpen }
+function onCheckDeadLinks() {
+  if (dl.checking.value) return
+  toast('开始检测死链...')
+  dl.checkAll(5, 500).then(() => {
+    const count = dl.deadCount()
+    toast(count > 0 ? `检测完成，发现 ${count} 个死链` : '检测完成，所有链接正常')
+  })
+}
 </script>

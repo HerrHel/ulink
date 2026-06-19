@@ -38,6 +38,7 @@
 <template v-if="store.masterPasswordOpen">
   <MasterPasswordModal />
 </template>
+<AuthModal />
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false; store.detailCards.splice(0)"></div>
@@ -66,6 +67,7 @@ import BatchPopover from './components/overlays/BatchPopover.vue'
 import FormatToolbar from './components/editor/FormatToolbar.vue'
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
 const MasterPasswordModal = defineAsyncComponent(() => import('./components/modals/MasterPasswordModal.vue'))
+const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
 import DetailPanel from './components/shell/DetailPanel.vue'
 import MentionDropdown from './components/overlays/MentionDropdown.vue'
 

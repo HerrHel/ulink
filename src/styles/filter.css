@@ -148,5 +148,21 @@
 .focus-tools .ft-sb-btn.disabled{opacity:0.3;cursor:default;pointer-events:none}
 .focus-tools .ft-color-wrap{position:relative;display:inline-flex}
 
+/* Dead link checker button */
+.btn.checking svg{
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.dead-count{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:14px;height:14px;padding:0 3px;
+  font-size:0.58rem;font-weight:700;
+  color:#fff;
+  background:var(--rose,#ef4444);
+  border-radius:7px;
+  margin-left:2px;
+  line-height:1;
+}
+
 
 

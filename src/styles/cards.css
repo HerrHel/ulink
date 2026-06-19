@@ -439,6 +439,24 @@
   flex-shrink:1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+/* Dead link badge */
+.dead-link-badge{
+  display:inline-flex;align-items:center;
+  padding:0 5px;height:15px;
+  font-size:0.6rem;font-weight:700;
+  color:var(--rose);
+  background:var(--rose-light);
+  border:1px solid var(--rose);
+  border-radius:4px;
+  vertical-align:middle;
+  margin-left:4px;
+  line-height:1;
+  letter-spacing:0.02em;
+}
+[data-theme="dark"] .dead-link-badge{
+  background:rgba(239,68,68,0.15);
+  border-color:rgba(239,68,68,0.4);
+}
 /* Card domain — shared base for all views */
 .card-domain{
   font-family:'JetBrains Mono',monospace;

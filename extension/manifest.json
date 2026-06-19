@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "LinkVault",
+  "version": "1.0.0",
+  "description": "快速保存书签到 LinkVault，搜索已有书签",
+  "permissions": ["activeTab", "storage", "contextMenus", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "LinkVault"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "save-current-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L",
+        "mac": "Command+Shift+L"
+      },
+      "description": "保存当前页面到 LinkVault"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost:5173/*", "https://*.linkvault.app/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

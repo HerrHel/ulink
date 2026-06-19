@@ -1,5 +1,32 @@
 <template>
   <div class="sp" v-show="store.settingsOpen">
+    <!-- Cloud Sync / Auth -->
+    <div class="sp-section">
+      <div class="sp-row">
+        <span class="sp-row-label"><span v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
+        <span class="sp-sync-status" :class="sync.syncStatus.value">{{ sync.syncLabel.value }}</span>
+      </div>
+      <template v-if="auth.isLoggedIn.value">
+        <div class="sp-row">
+          <span class="sp-user-email">{{ auth.userEmail.value }}</span>
+        </div>
+        <div class="sp-row sp-row-actions">
+          <button class="btn btn-ghost btn-sm" @click.stop="onSyncNow" :disabled="sync.syncStatus.value === 'syncing'">
+            <span v-html="I.refresh" class="sp-icon"></span>立即同步
+          </button>
+          <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
+        </div>
+        <div v-if="sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
+      </template>
+      <template v-else>
+        <div class="sp-row">
+          <span class="sp-hint">登录后数据将自动同步到云端，多设备共享</span>
+        </div>
+        <div class="sp-row">
+          <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">登录 / 注册</button>
+        </div>
+      </template>
+    </div>
     <!-- Theme -->
     <div class="sp-section">
       <div class="sp-row">
@@ -71,12 +98,16 @@ import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
 import { exportData, resetToDefaults } from '../../composables/domain/useDataIO.js'
+import { useAuth } from '../../composables/domain/useAuth.js'
+import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { I } from '../../config/icons.js'
 
 function triggerImport() { const el = document.getElementById('importFile'); if (el) el.click() }
 
 const store = useAppStore()
 const uiStore = useUIStore()
+const auth = useAuth()
+const sync = useCloudSync()
 
 const sortModes = [
   { id: 'order', label: '自定义' },
@@ -114,4 +145,18 @@ function onOpenMasterPassword() { store.masterPasswordOpen = true; store.setting
 function onTriggerImport() { triggerImport(); store.settingsOpen = false }
 function onExportData() { exportData(); store.settingsOpen = false }
 function onResetData() { resetToDefaults(); store.settingsOpen = false }
+
+async function onOpenLogin() {
+  auth.authModalOpen.value = true
+  store.settingsOpen = false
+}
+
+async function onLogout() {
+  const ok = await auth.signOut()
+  if (ok) sync.resetSyncState()
+}
+
+async function onSyncNow() {
+  await sync.fullSync()
+}
 </script>

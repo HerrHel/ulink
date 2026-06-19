@@ -13,7 +13,10 @@
             <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
           </div>
           <div class="card-titlewrap" @dblclick.stop="visit">
-            <div class="card-name">{{ bookmark.title }}</div>
+            <div class="card-name">
+              {{ bookmark.title }}
+              <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
+            </div>
             <div class="card-domain">{{ domainStr }}</div>
           </div>
         </div>
@@ -103,6 +106,7 @@ const hasExpandableContent = computed(() => !!(props.bookmark.username || props.
 const previewText = computed(() => (props.bookmark.notes || '').trim().replace(/\s+/g, ' ').slice(0, 120))
 const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded)
 const isSelected = computed(() => { try { return (uiStore.batchSelected || []).indexOf(props.bookmark.id) !== -1 } catch { return false } })
+const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
 
 function visit() { openBookmark(props.bookmark) }
 function edit() { openBmModal(props.bookmark.id) }

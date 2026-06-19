@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><title>Generate LinkVault Icons</title></head>
+<body style="font-family:system-ui;padding:40px;text-align:center">
+<h2>LinkVault 图标生成器</h2>
+<p>点击下方按钮自动下载 16/48/128px PNG 图标</p>
+<button onclick="generate()" style="padding:12px 24px;font-size:16px;cursor:pointer;background:#3B82F6;color:#fff;border:none;border-radius:8px">生成并下载图标</button>
+<div id="preview" style="margin-top:20px;display:flex;justify-content:center;gap:20px;align-items:end"></div>
+<script>
+const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <rect width="128" height="128" rx="28" fill="#3B82F6"/>
+  <path d="M88 92l-24-16-24 16V40a8 8 0 018-8h32a8 8 0 018 8v52z" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+function generate() {
+  [16,48,128].forEach(size => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, size, size);
+      const a = document.createElement('a');
+      a.download = 'icon' + size + '.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      // preview
+      const d = document.createElement('div');
+      d.innerHTML = '<img src="' + canvas.toDataURL() + '" width="' + size + '"><br>' + size + 'px';
+      document.getElementById('preview').appendChild(d);
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(SVG);
+  });
+}
+</script></body></html>

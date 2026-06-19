@@ -166,4 +166,30 @@
   border-color:var(--amber);
 }
 .sp-danger-btn:active{transform:scale(0.97);transition-duration:0.06s}
+/* Sync status */
+.sp-sync-status{
+  font-size:0.72rem;font-weight:600;
+  color:var(--text-muted);
+  margin-left:auto;
+}
+.sp-sync-status.syncing{color:var(--accent)}
+.sp-sync-status.success{color:var(--emerald,#22c55e)}
+.sp-sync-status.error{color:var(--rose,#ef4444)}
+.sp-user-email{
+  font-size:0.76rem;color:var(--text-secondary);
+  word-break:break-all;
+}
+.sp-hint{
+  font-size:0.72rem;color:var(--text-muted);
+  line-height:1.5;
+}
+.sp-sync-error{
+  font-size:0.72rem;color:var(--rose,#ef4444);
+  padding:4px 10px;
+}
+.sp-row-actions{
+  gap:6px;
+}
+.sp-row-actions .btn{display:inline-flex;align-items:center;gap:4px}
+.sp-row-actions .btn .sp-icon{width:13px;height:13px}
 
