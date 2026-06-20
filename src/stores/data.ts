@@ -21,6 +21,7 @@ interface DataState {
   _storageInfoDirty: boolean
   _saveCount: number
   _saveTimer: ReturnType<typeof setTimeout> | null
+  _dirtyIds: Set<string>
 }
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
@@ -53,6 +54,7 @@ export const useDataStore = defineStore('data', {
     _storageInfoDirty: true,
     _saveCount: 0,
     _saveTimer: null,
+    _dirtyIds: new Set<string>(),
   }),
 
   getters: {
@@ -132,40 +134,62 @@ export const useDataStore = defineStore('data', {
 
   actions: {
     // ── CRUD：仅修改数据，调用方负责 save() ──
-    addBookmark(bm: Bookmark) { this.bookmarks.push(bm) },
-    updateBookmark(id: string, changes: Partial<Bookmark>) { const bm = this.bookmarkMap[id]; if (bm) Object.assign(bm, changes) },
+    _markDirty(...ids: string[]) { for (const id of ids) this._dirtyIds.add(id) },
+    drainDirtyIds(): Set<string> {
+      const ids = new Set(this._dirtyIds)
+      this._dirtyIds.clear()
+      return ids
+    },
+    addBookmark(bm: Bookmark) { this.bookmarks.push(bm); this._markDirty(bm.id) },
+    updateBookmark(id: string, changes: Partial<Bookmark>) {
+      const bm = this.bookmarkMap[id]
+      if (bm) { Object.assign(bm, changes); bm.updatedAt = Date.now(); this._markDirty(id) }
+    },
     deleteBookmark(id: string) {
       const idx = this.bookmarks.findIndex(b => b.id === id)
       if (idx >= 0) this.bookmarks.splice(idx, 1)
       for (const g of this.siblingGroups) {
         const bi = g.bookmarkIds.indexOf(id)
-        if (bi >= 0) g.bookmarkIds.splice(bi, 1)
+        if (bi >= 0) { g.bookmarkIds.splice(bi, 1); this._markDirty(g.id) }
       }
+      this._dirtyIds.delete(id)
     },
-    addGroup(g: SiblingGroup) { this.siblingGroups.push(g) },
-    updateGroup(id: string, changes: Partial<SiblingGroup>) { const g = this.groupMap[id]; if (g) Object.assign(g, changes) },
+    addGroup(g: SiblingGroup) { this.siblingGroups.push(g); this._markDirty(g.id) },
+    updateGroup(id: string, changes: Partial<SiblingGroup>) {
+      const g = this.groupMap[id]
+      if (g) { Object.assign(g, changes); g.updatedAt = Date.now(); this._markDirty(id) }
+    },
     deleteGroup(id: string) {
       const idx = this.siblingGroups.findIndex(g => g.id === id)
       if (idx >= 0) this.siblingGroups.splice(idx, 1)
+      this._dirtyIds.delete(id)
     },
-    addCategory(cat: Category) { this.categories.push(cat) },
-    renameCategory(id: string, name: string) { const c = this.categories.find(c => c.id === id); if (c) c.name = name },
+    addCategory(cat: Category) { this.categories.push(cat); this._markDirty(cat.id) },
+    renameCategory(id: string, name: string) {
+      const c = this.categories.find(c => c.id === id)
+      if (c) { c.name = name; this._markDirty(id) }
+    },
     deleteCategory(id: string) {
-      this.bookmarks.forEach(b => { if (b.categoryId === id) b.categoryId = 'uncategorized' })
-      this.siblingGroups.forEach(g => { if (g.categoryId === id) g.categoryId = 'uncategorized' })
+      this.bookmarks.forEach(b => { if (b.categoryId === id) { b.categoryId = 'uncategorized'; this._markDirty(b.id) } })
+      this.siblingGroups.forEach(g => { if (g.categoryId === id) { g.categoryId = 'uncategorized'; this._markDirty(g.id) } })
       const idx = this.categories.findIndex(c => c.id === id)
       if (idx >= 0) this.categories.splice(idx, 1)
+      this._dirtyIds.delete(id)
     },
-    addAttribute(attr: CustomAttribute) { this.customAttributes.push(attr) },
-    renameAttribute(id: string, name: string) { const attr = this.customAttributes.find(a => a.id === id); if (attr) attr.name = name },
+    addAttribute(attr: CustomAttribute) { this.customAttributes.push(attr); this._markDirty(attr.id) },
+    renameAttribute(id: string, name: string) {
+      const attr = this.customAttributes.find(a => a.id === id)
+      if (attr) { attr.name = name; this._markDirty(id) }
+    },
     deleteAttribute(id: string) {
       const idx = this.customAttributes.findIndex(a => a.id === id)
       if (idx >= 0) this.customAttributes.splice(idx, 1)
-      this.bookmarks.forEach(b => { if (b.attributes) delete b.attributes[id] })
-      this.siblingGroups.forEach(g => { if (g.attributes) delete g.attributes[id] })
+      this.bookmarks.forEach(b => { if (b.attributes) { delete b.attributes[id]; this._markDirty(b.id) } })
+      this.siblingGroups.forEach(g => { if (g.attributes) { delete g.attributes[id]; this._markDirty(g.id) } })
       const ui = useUIStore()
       const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
       const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
+      this._dirtyIds.delete(id)
     },
 
     // ── 数据加载/导入 ──

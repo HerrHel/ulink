@@ -195,6 +195,7 @@ export async function saveBm() {
     newBm.useCount = 0
     newBm.isExpanded = false
     newBm.createdAt = Date.now()
+    newBm.updatedAt = newBm.createdAt
     store.addBookmark(newBm)
     store.save()
     toast('书签已添加')

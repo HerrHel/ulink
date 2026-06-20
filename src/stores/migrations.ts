@@ -72,10 +72,16 @@ export function runMigrations(d: any, result: MigrationResult): boolean {
       const cleaned = cleanZeroWidth(g.notes)
       if (cleaned !== g.notes) { g.notes = cleaned; (g as any)._migrated = true }
     }
-    if (!g.updatedAt) { g.updatedAt = Date.now(); (g as any)._migrated = true }
+    if (!g.updatedAt) { g.updatedAt = g.updatedAt || Date.now(); (g as any)._migrated = true }
     if (g.useCount == null) { g.useCount = 0; (g as any)._migrated = true }
   })
 
+  // 7. 补充 bookmark.updatedAt
+  result.bookmarks.forEach(b => {
+    if (!(b as any).updatedAt) { (b as any).updatedAt = b.createdAt || Date.now(); (b as any)._migrated = true }
+  })
+
+  result.bookmarks.forEach(b => { if ((b as any)._migrated) needsPersist = true })
   result.siblingGroups.forEach(g => { if ((g as any)._migrated) needsPersist = true })
 
   return needsPersist

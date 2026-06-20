@@ -88,7 +88,8 @@
         useCount: 0,
         attributes: {},
         isExpanded: false,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        updatedAt: Date.now()
       }
       data.bookmarks.push(newBm)
       data._savedAt = Date.now()

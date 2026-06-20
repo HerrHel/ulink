@@ -119,7 +119,7 @@ describe('runMigrations', () => {
   it('should return false when no migration needed', () => {
     const d = {}
     const result = makeResult({
-      bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {} }],
+      bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
       siblingGroups: [{
         id: 'g1', categoryId: 'uncategorized', bookmarkIds: [],
         attributes: { 'is-group': true }, updatedAt: Date.now(), useCount: 0

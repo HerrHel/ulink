@@ -252,7 +252,7 @@ describe('DataStore', () => {
         customAttributes: [{ id: 'attr1' }],
       }
       store.importFromData(newData)
-      expect(store.bookmarks).toEqual([{ id: 'new' }])
+      expect(store.bookmarks[0].id).toBe('new')
       expect(store.siblingGroups.some(g => g.id === 'g1')).toBe(true)
       expect(store.categories.some(c => c.id === 'cat1')).toBe(true)
       expect(store.customAttributes).toEqual([{ id: 'attr1' }])

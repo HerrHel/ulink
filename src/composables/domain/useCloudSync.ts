@@ -13,7 +13,6 @@ let _syncTimer: ReturnType<typeof setTimeout> | null = null
 let _initialized = false
 let _syncing = false
 
-// ── 辅助：解析 password 字段（修复 JSONB 双重编码）──
 function _parsePassword(raw: unknown): string | EncryptedPassword {
   if (typeof raw === 'string') {
     if (raw.startsWith('{')) { try { return JSON.parse(raw) as EncryptedPassword } catch { /* ignore */ } }
@@ -21,6 +20,23 @@ function _parsePassword(raw: unknown): string | EncryptedPassword {
   }
   if (raw && typeof raw === 'object') return raw as EncryptedPassword
   return ''
+}
+
+function _parseTimestamp(raw: unknown): number {
+  if (typeof raw === 'number') return raw
+  if (typeof raw === 'string') { const t = Date.parse(raw); return isNaN(t) ? 0 : t }
+  return 0
+}
+
+function _snapshotLocal() {
+  const ds = useDataStore()
+  return {
+    bookmarks: ds.bookmarks.map(b => ({ ...b, attributes: { ...b.attributes } })),
+    siblingGroups: ds.siblingGroups.map(g => ({ ...g, attributes: { ...g.attributes }, bookmarkIds: [...g.bookmarkIds] })),
+    categories: ds.categories.map(c => ({ ...c })),
+    customAttributes: ds.customAttributes.map(a => ({ ...a })),
+    _masterCanary: ds._masterCanary,
+  }
 }
 
 export function useCloudSync() {
@@ -41,47 +57,53 @@ export function useCloudSync() {
     return user.value?.id ?? null
   }
 
-  // ── 推送本地数据到云端 ──
-  async function pushToCloud(): Promise<boolean> {
+  // ── 推送本地数据到云端（增量）──
+  async function pushToCloud(dirtyIds?: Set<string>): Promise<boolean> {
     const userId = _getUserId()
     if (!userId) return false
     if (!navigator.onLine) { syncError.value = '网络离线'; return false }
     syncStatus.value = 'syncing'
     syncError.value = null
 
-    try {
-      const ds = useDataStore()
+    const ds = useDataStore()
+    const passedIn = !!dirtyIds
+    const ids = dirtyIds || ds.drainDirtyIds()
 
-      const catRows = ds.categories.map(c => ({
+    try {
+      const now = Date.now()
+
+      const catRows = ds.categories.filter(c => ids.has(c.id)).map(c => ({
         id: c.id, user_id: userId, name: c.name, icon: c.icon, color: c.color,
       }))
-      const bmRows = ds.bookmarks.map(b => ({
+      const bmRows = ds.bookmarks.filter(b => ids.has(b.id)).map(b => ({
         id: b.id, user_id: userId, title: b.title, url: b.url,
         username: b.username,
         password: typeof b.password === 'object' ? JSON.stringify(b.password) : b.password,
         notes: b.notes, icon: b.icon, category_id: b.categoryId,
         parent_id: b.parentId, "order": b.order, use_count: b.useCount,
         attributes: b.attributes, is_expanded: b.isExpanded,
-        created_at_num: b.createdAt,
+        created_at_num: b.createdAt, updated_at_num: b.updatedAt || now,
       }))
-      const groupRows = ds.siblingGroups.map(g => ({
+      const groupRows = ds.siblingGroups.filter(g => ids.has(g.id)).map(g => ({
         id: g.id, user_id: userId, name: g.name, category_id: g.categoryId,
         icon: g.icon, "order": g.order, is_expanded: g.isExpanded,
         attributes: g.attributes, bookmark_ids: g.bookmarkIds,
-        notes: g.notes, use_count: g.useCount, updated_at_num: g.updatedAt,
+        notes: g.notes, use_count: g.useCount, updated_at_num: g.updatedAt || now,
       }))
-      const attrRows = ds.customAttributes.map(a => ({
+      const attrRows = ds.customAttributes.filter(a => ids.has(a.id)).map(a => ({
         id: a.id, user_id: userId, name: a.name, type: a.type,
       }))
 
-      const results = await Promise.all([
-        supabase.from('categories').upsert(catRows, { onConflict: 'id' }),
-        supabase.from('bookmarks').upsert(bmRows, { onConflict: 'id' }),
-        supabase.from('sibling_groups').upsert(groupRows, { onConflict: 'id' }),
-        supabase.from('custom_attributes').upsert(attrRows, { onConflict: 'id' }),
-      ])
+      const tasks = []
+      if (catRows.length) tasks.push(supabase.from('categories').upsert(catRows, { onConflict: 'id' }))
+      if (bmRows.length) tasks.push(supabase.from('bookmarks').upsert(bmRows, { onConflict: 'id' }))
+      if (groupRows.length) tasks.push(supabase.from('sibling_groups').upsert(groupRows, { onConflict: 'id' }))
+      if (attrRows.length) tasks.push(supabase.from('custom_attributes').upsert(attrRows, { onConflict: 'id' }))
 
-      for (const r of results) { if (r.error) throw r.error }
+      if (tasks.length) {
+        const results = await Promise.all(tasks)
+        for (const r of results) { if (r.error) throw r.error }
+      }
 
       if (ds._masterCanary) {
         await supabase.from('user_security').upsert({
@@ -97,11 +119,15 @@ export function useCloudSync() {
       syncStatus.value = 'error'
       syncError.value = msg
       console.warn('[sync] push failed:', e)
+      if (!passedIn) {
+        const ds = useDataStore()
+        for (const id of ids) ds._dirtyIds.add(id)
+      }
       return false
     }
   }
 
-  // ── 从云端拉取数据 ──
+  // ── 从云端拉取数据（智能合并）──
   async function pullFromCloud(): Promise<boolean> {
     const userId = _getUserId()
     if (!userId) return false
@@ -121,7 +147,10 @@ export function useCloudSync() {
       for (const r of [catsRes, bmsRes, groupsRes, attrsRes]) { if (r.error) throw r.error }
 
       const ds = useDataStore()
+      const dirtyIds = ds._dirtyIds
+      const lastSync = lastSyncAt.value
 
+      // 构建远端 Map
       const remoteCats: Category[] = (catsRes.data || []).map(r => ({
         id: r.id, name: r.name, icon: r.icon, color: r.color,
       }))
@@ -136,6 +165,7 @@ export function useCloudSync() {
         attributes: (r.attributes as Record<string, boolean>) || {},
         isExpanded: r.is_expanded || false,
         createdAt: r.created_at_num || 0,
+        updatedAt: _parseTimestamp(r.updated_at) || r.updated_at_num || r.created_at_num || 0,
       }))
       const remoteGroups: SiblingGroup[] = (groupsRes.data || []).map(r => ({
         id: r.id, name: r.name,
@@ -145,17 +175,63 @@ export function useCloudSync() {
         attributes: (r.attributes as Record<string, boolean>) || {},
         bookmarkIds: (r.bookmark_ids as string[]) || [],
         notes: r.notes || '', useCount: r.use_count || 0,
-        updatedAt: r.updated_at_num || 0,
+        updatedAt: _parseTimestamp(r.updated_at) || r.updated_at_num || 0,
       }))
       const remoteAttrs: CustomAttribute[] = (attrsRes.data || []).map(r => ({
         id: r.id, name: r.name, type: (r.type as 'boolean') || 'boolean',
       }))
 
-      // 云端为权威源，无条件覆盖（删除也能正确传播）
-      ds.categories = remoteCats
-      ds.bookmarks = remoteBms
-      ds.siblingGroups = remoteGroups
-      ds.customAttributes = remoteAttrs
+      const remoteCatIds = new Set(remoteCats.map(c => c.id))
+      const remoteBmIds = new Set(remoteBms.map(b => b.id))
+      const remoteGroupIds = new Set(remoteGroups.map(g => g.id))
+      const remoteAttrIds = new Set(remoteAttrs.map(a => a.id))
+
+      // 智能合并：远端更新的覆盖本地，本地有未推送修改的保留本地
+      function _merge<T extends { id: string }>(
+        local: T[], remote: T[], remoteIds: Set<string>,
+        getRemoteTs?: (item: T) => number, getLocalTs?: (item: T) => number,
+      ): T[] {
+        const localMap = new Map(local.map(i => [i.id, i]))
+        const result: T[] = []
+
+        for (const rItem of remote) {
+          const lItem = localMap.get(rItem.id)
+          if (!lItem) {
+            result.push(rItem)
+          } else if (dirtyIds.has(rItem.id)) {
+            result.push(lItem)
+          } else if (getRemoteTs && getLocalTs && getRemoteTs(rItem) > getLocalTs(lItem)) {
+            result.push(rItem)
+          } else {
+            result.push(lItem)
+          }
+        }
+
+        for (const [id, lItem] of localMap) {
+          if (!remoteIds.has(id)) {
+            if (dirtyIds.has(id)) {
+              result.push(lItem)
+            } else if (lastSync > 0) {
+              // 之前同步过但远端已删除 → 本地也删除
+            } else {
+              result.push(lItem)
+            }
+          }
+        }
+
+        return result
+      }
+
+      ds.categories = _merge(ds.categories, remoteCats, remoteCatIds)
+      ds.bookmarks = _merge(
+        ds.bookmarks, remoteBms, remoteBmIds,
+        (b: Bookmark) => b.updatedAt, (b: Bookmark) => b.updatedAt,
+      )
+      ds.siblingGroups = _merge(
+        ds.siblingGroups, remoteGroups, remoteGroupIds,
+        (g: SiblingGroup) => g.updatedAt, (g: SiblingGroup) => g.updatedAt,
+      )
+      ds.customAttributes = _merge(ds.customAttributes, remoteAttrs, remoteAttrIds)
 
       if (secRes.data?.master_canary) {
         ds._masterCanary = secRes.data.master_canary as EncryptedPassword
@@ -183,27 +259,52 @@ export function useCloudSync() {
     }, 3000)
   }
 
-  // ── 双向同步（手动触发）──
+  // ── 双向同步（手动触发，失败回滚）──
   async function fullSync(): Promise<boolean> {
     if (_syncing) return false
     _syncing = true
+    const backup = _snapshotLocal()
     try {
       await pullFromCloud()
-      await pushToCloud()
+      const ds = useDataStore()
+      const allDirty = ds.drainDirtyIds()
+      if (allDirty.size > 0) {
+        const ok = await pushToCloud(allDirty)
+        if (!ok) {
+          const d = useDataStore()
+          d.bookmarks = backup.bookmarks as Bookmark[]
+          d.siblingGroups = backup.siblingGroups as SiblingGroup[]
+          d.categories = backup.categories as Category[]
+          d.customAttributes = backup.customAttributes as CustomAttribute[]
+          d._masterCanary = backup._masterCanary
+          return false
+        }
+      }
       return true
     } finally {
       _syncing = false
     }
   }
 
-  // ── 首次登录后全量同步（防并发）──
+  // ── 首次登录后全量同步 ──
   async function initialSync(): Promise<void> {
     if (_initialized || _syncing || !isLoggedIn.value) return
     _initialized = true
     _syncing = true
     try {
       await pullFromCloud()
-      await pushToCloud()
+      const ds = useDataStore()
+      const allDirty = ds.drainDirtyIds()
+      if (allDirty.size > 0) {
+        await pushToCloud(allDirty)
+      } else {
+        await pushToCloud(new Set([
+          ...ds.bookmarks.map(b => b.id),
+          ...ds.siblingGroups.map(g => g.id),
+          ...ds.categories.map(c => c.id),
+          ...ds.customAttributes.map(a => a.id),
+        ]))
+      }
     } finally {
       _syncing = false
     }
@@ -216,11 +317,20 @@ export function useCloudSync() {
     }
   }
 
+  // ── 切回标签页时拉取最新 ──
+  function _onVisibilityChange() {
+    if (document.visibilityState === 'visible' && isLoggedIn.value && autoSync.value && !_syncing) {
+      pullFromCloud().catch(() => {})
+    }
+  }
+
   function initOnlineListener() {
     window.addEventListener('online', _onOnline)
+    document.addEventListener('visibilitychange', _onVisibilityChange)
   }
   function destroyOnlineListener() {
     window.removeEventListener('online', _onOnline)
+    document.removeEventListener('visibilitychange', _onVisibilityChange)
   }
 
   function resetSyncState() {

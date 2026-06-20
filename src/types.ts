@@ -25,6 +25,7 @@ export interface Bookmark {
   attributes: Record<string, boolean>
   isExpanded: boolean
   createdAt: number
+  updatedAt: number
 }
 
 export interface SiblingGroup {
