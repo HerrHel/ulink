@@ -9,7 +9,7 @@
         <!-- Step 1: 输入邮箱 -->
         <template v-if="step === 'email'">
           <p class="modal-hint">
-            输入邮箱，我们将发送一个 8 位验证码。<br>
+            输入邮箱，我们将发送一个 6 位验证码。<br>
             无需密码，首次登录即自动注册。
           </p>
           <div class="form-group">
@@ -24,12 +24,12 @@
         <template v-if="step === 'code'">
           <p class="modal-hint">
             验证码已发送到 <strong>{{ email }}</strong><br>
-            <span style="font-size:0.72rem">请查收邮件（含垃圾邮件），输入 8 位验证码</span>
+            <span style="font-size:0.72rem">请查收邮件（含垃圾邮件），输入 6 位验证码</span>
           </p>
           <div class="form-group">
             <label class="form-label" for="authCodeInput">验证码</label>
             <input type="text" class="form-input code-input" id="authCodeInput" v-model="code"
-                   placeholder="00000000" maxlength="8" @keydown.enter="onVerify" ref="codeInputRef"
+                   placeholder="000000" maxlength="6" @keydown.enter="onVerify" ref="codeInputRef"
                    autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]*">
           </div>
         </template>
