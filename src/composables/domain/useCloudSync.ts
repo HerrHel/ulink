@@ -259,28 +259,32 @@ export function useCloudSync() {
     }, 3000)
   }
 
-  // ── 双向同步（手动触发，失败回滚）──
+  // ── 内部：push→pull 顺序执行 ──
+  async function _pushThenPull(): Promise<boolean> {
+    const backup = _snapshotLocal()
+    const ds = useDataStore()
+    const dirty = ds.drainDirtyIds()
+    const pushed = await pushToCloud(dirty.size > 0 ? dirty : undefined)
+    if (!pushed) {
+      const d = useDataStore()
+      d.bookmarks = backup.bookmarks as Bookmark[]
+      d.siblingGroups = backup.siblingGroups as SiblingGroup[]
+      d.categories = backup.categories as Category[]
+      d.customAttributes = backup.customAttributes as CustomAttribute[]
+      d._masterCanary = backup._masterCanary
+      for (const id of dirty) d._dirtyIds.add(id)
+      return false
+    }
+    await pullFromCloud()
+    return true
+  }
+
+  // ── 双向同步（手动触发：push-first，Notion 模式）──
   async function fullSync(): Promise<boolean> {
     if (_syncing) return false
     _syncing = true
-    const backup = _snapshotLocal()
     try {
-      await pullFromCloud()
-      const ds = useDataStore()
-      const allDirty = ds.drainDirtyIds()
-      if (allDirty.size > 0) {
-        const ok = await pushToCloud(allDirty)
-        if (!ok) {
-          const d = useDataStore()
-          d.bookmarks = backup.bookmarks as Bookmark[]
-          d.siblingGroups = backup.siblingGroups as SiblingGroup[]
-          d.categories = backup.categories as Category[]
-          d.customAttributes = backup.customAttributes as CustomAttribute[]
-          d._masterCanary = backup._masterCanary
-          return false
-        }
-      }
-      return true
+      return await _pushThenPull()
     } finally {
       _syncing = false
     }
@@ -295,33 +299,39 @@ export function useCloudSync() {
       await pullFromCloud()
       const ds = useDataStore()
       const allDirty = ds.drainDirtyIds()
-      if (allDirty.size > 0) {
-        await pushToCloud(allDirty)
-      } else {
-        await pushToCloud(new Set([
-          ...ds.bookmarks.map(b => b.id),
-          ...ds.siblingGroups.map(g => g.id),
-          ...ds.categories.map(c => c.id),
-          ...ds.customAttributes.map(a => a.id),
-        ]))
+      const ids = allDirty.size > 0
+        ? allDirty
+        : new Set([
+            ...ds.bookmarks.map(b => b.id),
+            ...ds.siblingGroups.map(g => g.id),
+            ...ds.categories.map(c => c.id),
+            ...ds.customAttributes.map(a => a.id),
+          ])
+      const ok = await pushToCloud(ids)
+      if (!ok && allDirty.size === 0) {
+        for (const id of ids) ds._dirtyIds.add(id)
       }
     } finally {
       _syncing = false
     }
   }
 
-  // ── 离线恢复时自动重试 ──
+  // ── 离线恢复时 push→pull ──
   function _onOnline() {
-    if (isLoggedIn.value && syncStatus.value === 'error') {
-      pushToCloud()
-    }
+    if (!isLoggedIn.value || _syncing) return
+    _syncing = true
+    _pushThenPull().catch(() => {}).finally(() => { _syncing = false })
   }
 
-  // ── 切回标签页时拉取最新 ──
+  // ── 切回标签页时 pull→push（获取其他设备的更新，再推送本地变更）──
   function _onVisibilityChange() {
-    if (document.visibilityState === 'visible' && isLoggedIn.value && autoSync.value && !_syncing) {
-      pullFromCloud().catch(() => {})
-    }
+    if (document.visibilityState !== 'visible' || !isLoggedIn.value || !autoSync.value || _syncing) return
+    _syncing = true
+    pullFromCloud().then(() => {
+      const ds = useDataStore()
+      const dirty = ds.drainDirtyIds()
+      if (dirty.size > 0) return pushToCloud(dirty)
+    }).catch(() => {}).finally(() => { _syncing = false })
   }
 
   function initOnlineListener() {
