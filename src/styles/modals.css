@@ -104,12 +104,6 @@
 .ai-suggest-text{flex:1;color:var(--text-primary)}
 .ai-suggest-bar .btn-xs{padding:3px 10px;font-size:0.72rem}
 
-/* ── MasterPasswordModal ── */
-.mp-hint{font-size:0.82rem;color:var(--text-secondary);margin-bottom:14px;line-height:1.5}
-.mp-error{font-size:0.78rem;color:var(--danger,#ef4444);margin-top:6px}
-.mp-bio-btn{margin-top:12px;width:100%;justify-content:center;gap:8px}
-.mp-bio-btn svg{width:18px;height:18px}
-
 /* ── CategoryModal ── */
 #catModal .modal{overflow:hidden}
 .cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
