@@ -511,3 +511,125 @@ views/ShareView.vue (新增)        BookmarkModal.vue
 ---
 
 *最后更新：2026-06-22*
+
+---
+
+## 十一、实施进度追踪（续）
+
+### Track A — 数据流 + 传播 ✅ 已完成
+
+**新增文件：**
+
+| 文件 | 说明 |
+|------|------|
+| `src/views/ShareView.vue` | 公开分享只读页面，支持 `/share/:id` 路由 |
+| `supabase/migrations/005_track_a_enhancements.sql` | `is_public` 字段 + RLS 公开读取策略 |
+
+**修改文件：**
+
+| 文件 | 改动 |
+|------|------|
+| `src/composables/domain/useCloudSync.ts` | A1: `visibilitychange` / `online` / 首次加载自动触发同步；A2: `_merge` 为 categories/attrs 传入 `updatedAt` 比较器，修复静默覆盖 |
+| `src/composables/domain/useDataIO.ts` | A3: 多格式导入向导（Chrome HTML Netscape 格式 / Raindrop JSON / 通用 CSV）；A5: 公开组一键 fork 复制导入 |
+| `src/types.ts` | A4: `Bookmark` / `SiblingGroup` 新增 `is_public?: boolean` 字段 |
+| `src/stores/data.ts` | `importFromData` 支持多格式解析结果 |
+
+**能力对比：**
+
+| 场景 | 改动前 | 改动后 |
+|------|--------|--------|
+| 导入 Chrome 书签 | ❌ 仅支持自有 JSON | ✅ HTML Netscape 格式解析 |
+| 导入 Raindrop.io | ❌ 不支持 | ✅ JSON collection → category, tag → attribute |
+| 导入 CSV | ❌ 不支持 | ✅ title, url, tags 三列解析 |
+| 分享书签组 | ❌ 无分享功能 | ✅ `is_public` + RLS 匿名读取 + `/share/:id` 路由 |
+| 页面切回前台 | 仅 autoSync 开启时同步 | ✅ 无论 autoSync 状态均自动触发 |
+| 网络恢复在线 | 无响应 | ✅ 自动触发同步 |
+| 同步冲突 | 远端静默覆盖本地 | ✅ 冲突检测 + 用户逐条选择 |
+
+---
+
+### Track B — 体验 + 智能 + 基建 ✅ 已完成
+
+**新增文件：**
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/search.ts` | Fuse.js 模糊搜索引擎 + pinyin-pro 拼音支持（P0 已完成，Track B 复用） |
+| `src/lib/ai-classify.ts` | 基于关键词的本地分类器，覆盖 10 个分类、100+ 域名/关键词映射 |
+| `src/lib/master-password.ts` | PBKDF2 主密码派生/验证 + WebAuthn 注册/认证 API |
+| `src/components/modals/MasterPasswordModal.vue` | 主密码设置/验证 UI，支持生物识别一键解锁 |
+| `src/components/overlays/CommandPalette.vue` | Cmd+K 命令面板，搜索书签+组+操作命令 |
+| `src/composables/domain/useOfflineQueue.ts` | 离线操作队列，在线恢复时自动回放 |
+
+**修改文件：**
+
+| 文件 | 改动 |
+|------|------|
+| `src/stores/data.ts` | B1: `_sortItems` 新增 `'recommend'` 排序模式，`score = useCount × e^(-0.05 × days)`，2 周半衰期 |
+| `src/lib/search.ts` | B2: `searchBookmarkIds` / `searchGroupIds` / `searchWithHighlights` 三函数缓存 Fuse 实例，同一数组引用不重建 |
+| `src/composables/domain/useBookmark.ts` | B3: `saveBm` 仅 URL 必填，标题留空自动从域名生成；B4: `autoFetchFromUrl` 防抖 500ms 后自动填充 title/icon + 触发 AI 分类建议；新增 `applyAiCategory` / `applyAiAttributes` / `dismissAiSuggestions` |
+| `src/components/modals/BookmarkModal.vue` | B3: URL 移至首位（必填），名称变为可选；B4: AI 建议条（✨ 采纳/忽略）+ 属性高亮脉冲动画 |
+| `src/components/shell/SettingsPanel.vue` | B1: 排序选项新增「推荐」按钮 |
+| `src/stores/storage.ts` | B6: Dexie 升级 v2，新增 `pendingOps` 表 + `enqueueOp` / `drainPendingOps` / `removePendingOp` / `clearPendingOps` / `pendingOpsCount` API |
+| `src/stores/app.ts` | B8: 添加 `@deprecated` JSDoc 标注 |
+| `src/config/icons.ts` | 新增 `finger` 生物识别图标 |
+| `src/styles/modals.css` | `.ai-suggest-bar` 样式 + `.ai-highlight` 脉冲动画 + `.mp-*` 主密码样式 |
+| `src/styles/overlays.css` | `.cmd-*` 命令面板完整样式 |
+| `src/App.vue` | 挂载 `<CommandPalette />` + `<MasterPasswordModal />`，页面加载时主密码检查 |
+| `vite.config.ts` | PurgeCSS safelist 新增 `cmd-`、`mp-` 前缀 |
+
+**B1 智能排序算法：**
+
+```
+score = useCount × e^(-0.05 × daysSinceLastUse)
+
+λ = 0.05 → 约 2 周半衰期
+- 高频使用 + 近期访问 → 高分（排前）
+- 高频使用 + 久未访问 → 分数衰减
+- 低频使用 + 近期访问 → 中等
+- 低频使用 + 久未访问 → 低分（排后）
+```
+
+**B2 搜索缓存策略：**
+
+| 缓存层 | 策略 | 失效条件 |
+|--------|------|----------|
+| `searchBookmarkIds` | WeakRef 引用 + Fuse 实例 | bookmarks 数组引用变化 |
+| `searchGroupIds` | WeakRef 引用 + Fuse 实例 | groups 数组引用变化 |
+| `searchWithHighlights` | 书签/组分别缓存 | 任一数组引用变化 |
+| `clearSearchCache()` | 清空全部缓存 | 数据大量变更时手动调用 |
+
+**B4 AI 分类覆盖范围：**
+
+| 分类 | 域名示例 | 标题关键词 |
+|------|----------|-----------|
+| 开发 | github.com, gitlab.com, stackoverflow.com | 代码, 编程, api, react, vue, python |
+| 设计 | figma.com, dribbble.com, behance.net | 设计, design, ui, ux, 图标 |
+| 社交 | twitter.com, reddit.com, discord.com | 微博, 推特, 社交, 社区 |
+| 视频 | youtube.com, bilibili.com, twitch.tv | 视频, video, 电影, 直播 |
+| AI | openai.com, claude.ai, huggingface.co | ai, 人工智能, 大模型, llm |
+| 工具 | notion.so, trello.com, slack.com | 工具, 效率, 笔记, 协作 |
+| 新闻 | medium.com, 36kr.com, sspai.com | 新闻, 资讯, 日报 |
+| 购物 | amazon.com, taobao.com, jd.com | 购物, 商城, 优惠 |
+| 学习 | coursera.org, udemy.com, leetcode.com | 教程, 课程, 学习, 入门 |
+| 游戏 | steam, epic, playstation | 游戏, game, steam |
+
+---
+
+### 全量测试结果
+
+```
+11 test files  → 11 passed
+155 test cases → 155 passed
+Lint           → 0 errors, 0 warnings
+Build          → 553ms, PWA precache 24 entries
+```
+
+---
+
+### 提交记录
+
+| Commit | 说明 | 文件数 |
+|--------|------|--------|
+| `7c5947b` | feat: P1-P3 竞争力提升全量实现（Track A + Track B） | 70 files, +4373/-1461 |
+| `6996b70` | chore: 清理废弃迁移文档和 security store | 3 files, -1067 |
