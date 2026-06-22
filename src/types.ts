@@ -3,19 +3,12 @@
  * 从 config/types.d.js 迁移
  */
 
-export interface EncryptedPassword {
-  iv: number[]
-  data: number[]
-  salt: number[]
-  encrypted: true
-}
-
 export interface Bookmark {
   id: string
   title: string
   url: string
   username: string
-  password: string | EncryptedPassword
+  password: string
   notes: string
   icon: string
   categoryId: string
@@ -26,6 +19,7 @@ export interface Bookmark {
   isExpanded: boolean
   createdAt: number
   updatedAt: number
+  deletedAt?: number
 }
 
 export interface SiblingGroup {
@@ -40,6 +34,8 @@ export interface SiblingGroup {
   notes: string
   updatedAt: number
   useCount: number
+  isPublic?: boolean
+  deletedAt?: number
 }
 
 export interface Category {
@@ -47,12 +43,16 @@ export interface Category {
   name: string
   icon: string
   color: string
+  updatedAt?: number
+  deletedAt?: number
 }
 
 export interface CustomAttribute {
   id: string
   name: string
   type: 'boolean'
+  updatedAt?: number
+  deletedAt?: number
 }
 
 export interface AppData {
@@ -60,6 +60,5 @@ export interface AppData {
   siblingGroups: SiblingGroup[]
   categories: Category[]
   customAttributes: CustomAttribute[]
-  _masterCanary?: EncryptedPassword | null
   _savedAt?: number
 }

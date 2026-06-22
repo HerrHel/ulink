@@ -88,13 +88,27 @@
 .check-chip.locked{opacity:0.6;cursor:not-allowed}
 .check-chip.locked::after{content:'\2193';margin-left:2px;font-size:0.7rem}
 .check-chip input{appearance:none;width:0;height:0;position:absolute}
-
-.logo-preview{
-  display:flex;align-items:center;gap:8px;margin-top:6px;
-  padding:8px 12px;background:var(--bg-alt);border-radius:var(--radius-base);
-  font-size:0.78rem;color:var(--text-muted);
+.check-chip.ai-highlight{
+  border-color:var(--accent);background:var(--accent-light);
+  animation:ai-pulse 1.5s ease-in-out infinite;
 }
-.logo-preview img{width:20px;height:20px}
+@keyframes ai-pulse{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 3px var(--accent-glow)}}
+
+.ai-suggest-bar{
+  display:flex;align-items:center;gap:8px;margin-bottom:14px;
+  padding:8px 14px;border-radius:var(--radius-base);
+  background:linear-gradient(135deg,var(--accent-light),var(--surface-alt));
+  border:1px solid var(--accent-glow);font-size:0.82rem;
+}
+.ai-suggest-icon{font-size:1rem}
+.ai-suggest-text{flex:1;color:var(--text-primary)}
+.ai-suggest-bar .btn-xs{padding:3px 10px;font-size:0.72rem}
+
+/* ── MasterPasswordModal ── */
+.mp-hint{font-size:0.82rem;color:var(--text-secondary);margin-bottom:14px;line-height:1.5}
+.mp-error{font-size:0.78rem;color:var(--danger,#ef4444);margin-top:6px}
+.mp-bio-btn{margin-top:12px;width:100%;justify-content:center;gap:8px}
+.mp-bio-btn svg{width:18px;height:18px}
 
 /* ── CategoryModal ── */
 #catModal .modal{overflow:hidden}
@@ -111,4 +125,33 @@
 
 /* ── ConfirmModal ── */
 .confirm-foot{justify-content:space-between}
+
+/* ── TrashPanel ── */
+.trash-body{max-height:50vh;overflow-y:auto;scrollbar-width:thin}
+.trash-body::-webkit-scrollbar{width:4px}
+.trash-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.trash-empty{text-align:center;color:var(--text-muted);padding:32px 0;font-size:0.85rem}
+.trash-section{margin-bottom:16px}
+.trash-section:last-child{margin-bottom:0}
+.trash-section-title{font-size:0.72rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border-light)}
+.trash-item{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:var(--radius-sm);transition:background 0.15s}
+.trash-item:hover{background:var(--surface-hover)}
+.trash-item-icon{flex-shrink:0;color:var(--text-muted);width:16px;height:16px}
+.trash-item-icon svg{width:16px;height:16px}
+.trash-item-name{flex:1;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trash-item-time{font-size:0.7rem;color:var(--text-muted);flex-shrink:0}
+.modal-title{font-family:'Clash Display',system-ui,sans-serif;font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px}
+.modal-md{max-width:560px}
+.btn-xs{padding:3px 8px;font-size:0.72rem}
+
+/* ── HistoryPanel ── */
+.history-body{max-height:50vh;overflow-y:auto;scrollbar-width:thin}
+.history-body::-webkit-scrollbar{width:4px}
+.history-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.history-loading,.history-empty{text-align:center;color:var(--text-muted);padding:32px 0;font-size:0.85rem}
+.history-list{display:flex;flex-direction:column;gap:4px}
+.history-item{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:var(--radius-sm);transition:background 0.15s}
+.history-item:hover{background:var(--surface-hover)}
+.history-item-time{font-size:0.72rem;color:var(--text-muted);flex-shrink:0;min-width:80px}
+.history-item-preview{flex:1;font-size:0.82rem;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 

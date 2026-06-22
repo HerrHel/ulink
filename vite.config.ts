@@ -64,7 +64,8 @@ function purgeCssPlugin(): Plugin {
                   /^detail-/, /^rail-/, /^card-/, /^group-/,
                   /^ft-/, /^btn-/, /^form-/, /^check-/,
                   /^toast-/, /^confirm-/, /^dp-/, /^overlay/,
-                  /^icon-/, /^flex-/, /^mb-/, /^mt-/, /^pt-/, /^text-/
+                  /^icon-/, /^flex-/, /^mb-/, /^mt-/, /^pt-/, /^text-/,
+                  /^cmd-/, /^mp-/
                 ],
                 deep: [/expanded/, /active/, /open/, /show/, /visible/]
               },

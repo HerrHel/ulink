@@ -10,7 +10,11 @@
         无匹配属性
       </div>
       <div v-for="a in filteredAttrs" :key="a.id"
-           class="attr-drop-item" :class="{ active: isActive(a.id), excluded: isExcluded(a.id) }">
+           class="attr-drop-item" :class="{ active: isActive(a.id), excluded: isExcluded(a.id) }"
+           @contextmenu.prevent="onItemContext(a.id, $event)"
+           @touchstart.passive="onTouchStart(a.id, $event)"
+           @touchend="onTouchEnd"
+           @touchmove.passive="onTouchMove">
         <span class="attr-drop-main" @click="onToggleFilter(a.id)" title="包含此属性">
           <span class="attr-dot"></span>{{ a.name }}
         </span>
@@ -27,9 +31,12 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
+import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
-import { toastAPI, setAttrDropdownAPI } from '../../composables/bridge.js'
+import { toastAPI, setAttrDropdownAPI, actionSheetAPI, ctxMenuAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'
+import { showConfirm } from '../../lib/toast.js'
+import { isMobile } from '../../utils.js'
 
 const store = useAppStore()
 const isOpen = ref(false)
@@ -61,6 +68,71 @@ function onAddAttr() {
   } else {
     toastAPI?.toast('属性已存在', false)
   }
+}
+
+// 长按/右键菜单
+let _longPressTimer = null
+let _longPressFired = false
+let _touchStartId = null
+
+function onItemContext(attrId, e) {
+  e.preventDefault()
+  if (!isMobile()) {
+    ctxMenuAPI?.show(e, 'attr', attrId)
+  } else {
+    showAttrActions(attrId)
+  }
+}
+
+function onTouchStart(attrId, e) {
+  _longPressFired = false
+  _touchStartId = attrId
+  _longPressTimer = setTimeout(() => {
+    _longPressFired = true
+    showAttrActions(attrId)
+  }, 500)
+}
+
+function onTouchEnd(e) {
+  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null }
+  if (_longPressFired) { e.preventDefault(); _longPressFired = false }
+  _touchStartId = null
+}
+
+function onTouchMove() {
+  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null }
+  _touchStartId = null
+}
+
+function showAttrActions(attrId) {
+  const dataStore = useDataStore()
+  const attr = store.customAttributes.find(a => a.id === attrId)
+  if (!attr) return
+  actionSheetAPI?.show([
+    { label: '重命名', action: () => onRenameAttr(attrId) },
+    { label: '删除属性', action: () => onDeleteAttr(attrId), danger: true },
+  ])
+}
+
+function onRenameAttr(attrId) {
+  const attr = store.customAttributes.find(a => a.id === attrId)
+  if (!attr) return
+  const input = window.prompt('重命名属性', attr.name)
+  if (input && input.trim() && input.trim() !== attr.name) {
+    const dataStore = useDataStore()
+    dataStore.renameAttribute(attrId, input.trim())
+    dataStore.save()
+  }
+}
+
+function onDeleteAttr(attrId) {
+  const attr = store.customAttributes.find(a => a.id === attrId)
+  if (!attr) return
+  showConfirm('删除属性「' + attr.name + '」？', () => {
+    const dataStore = useDataStore()
+    dataStore.deleteAttribute(attrId)
+    dataStore.save()
+  })
 }
 
 function toggle() {

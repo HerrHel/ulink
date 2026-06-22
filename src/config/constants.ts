@@ -24,6 +24,8 @@ export const ACTIONS: Record<string, string> = {
   ADD_GROUP: 'addgroup',
   ADD_CAT: 'addcat',
   MULTI_SELECT: 'multiSelect',
+  HISTORY: 'history',
+  RENAME_ATTR: 'renameAttr',
 }
 
 const WELCOME_NOTES = '<h1>欢迎使用 LinkVault</h1>'
@@ -108,9 +110,9 @@ const TIPS_NOTES = '<h1>LinkVault 使用指南</h1>'
   + '<li><strong>批量管理</strong> — 点击顶部「批量管理」进入多选模式，支持<span style="color: #3B82F6">全选 Ctrl+A</span>、批量移动、批量删除</li>'
   + '<li><strong>详情面板</strong> — 点击书签卡片的「详」按钮，在右侧面板<u>集中预览多个书签</u>，支持拖入批量查看</li>'
   + '<li><strong>内联重命名</strong> — 双击书签或组的名称区域可<span style="color: #22C55E">直接修改标题</span></li>'
-  + '<li><strong>属性筛选</strong> — 点击「属性」按钮，勾选标签筛选：<span style="color: #EAB308">需要登录</span>、<span style="color: #22C55E">国内可用</span>、<span style="color: #A855F7">AI</span> 等</li>'
+  + '<li><strong>属性筛选</strong> — 点击「属性」按钮，勾选标签筛选：<span style="color: #EAB308">需要登录</span>、<span style="color: #A855F7">AI</span> 等</li>'
   + '<li><strong>布局切换</strong> — 顶栏切换<span style="color: #3B82F6">网格 / 列表</span>视图；列表视图下点击卡片空白处可展开组</li>'
-  + '<li><strong>数据安全</strong> — 书签可设置<u>加密密码</u>（存储时加密）；支持设置<u>主密码</u>保护所有敏感字段</li>'
+  + '<li><strong>数据安全</strong> — 书签可设置<u>加密密码</u>，敏感字段（密码等）存储时加密保护</li>'
   + '<li><strong>导入导出</strong> — 支持 JSON 格式<u>导出备份</u>和<u>导入恢复</u>，侧边栏底部可查看存储用量</li>'
   + '<li><strong>主题与外观</strong> — 设置面板支持亮色/暗色/自动主题，多种<u>主题配色</u>自由切换</li>'
   + '<li><strong>移动端适配</strong> — 手机端自动切换列表布局，底部弹出式菜单，<span style="color: #EC4899">Touch 拖拽排序</span></li>'
@@ -149,16 +151,15 @@ export const DEFAULTS: AppData = {
   ],
   bookmarks: [
     { id: 'b1', title: 'GitHub', url: 'https://github.com', username: '', password: '', notes: '代码托管平台', icon: '', categoryId: 'tools', parentId: null, order: 0, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },
-    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: 'MTIz', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true, 'china-available': true }, isExpanded: false, createdAt: Date.now() - 172800000, updatedAt: Date.now() - 172800000 },
-    { id: 'b3', title: 'DeepSeek', url: 'https://www.deepseek.com/', username: '', password: '', notes: 'API key:', icon: '', categoryId: 'ai', parentId: null, order: 2, useCount: 5, attributes: { 'china-available': true, 'ai': true }, isExpanded: false, createdAt: Date.now() - 40000000, updatedAt: Date.now() - 40000000 },
-    { id: 'sb1', title: '开始对话', url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 0, useCount: 3, attributes: { 'china-available': true, 'ai': true }, isExpanded: false, createdAt: Date.now() - 30000000, updatedAt: Date.now() - 30000000 },
-    { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'china-available': true, 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000, updatedAt: Date.now() - 20000000 },
-    { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: '短视频平台', icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: { 'china-available': true }, isExpanded: false, createdAt: Date.now() - 345600000, updatedAt: Date.now() - 345600000 },
+    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: 'MTIz', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 172800000, updatedAt: Date.now() - 172800000 },
+    { id: 'b3', title: 'DeepSeek', url: 'https://www.deepseek.com/', username: '', password: '', notes: 'API key:', icon: '', categoryId: 'ai', parentId: null, order: 2, useCount: 5, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 40000000, updatedAt: Date.now() - 40000000 },
+    { id: 'sb1', title: '开始对话', url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 0, useCount: 3, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 30000000, updatedAt: Date.now() - 30000000 },
+    { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000, updatedAt: Date.now() - 20000000 },
+    { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: '短视频平台', icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 345600000, updatedAt: Date.now() - 345600000 },
     { id: 'b5', title: 'Steam', url: 'https://store.steampowered.com', username: '', password: '', notes: '游戏平台', icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 100000, updatedAt: Date.now() - 100000 }
   ],
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
-    { id: 'china-available', name: '国内可用', type: 'boolean' },
     { id: 'ai', name: 'Ai', type: 'boolean' },
     { id: 'is-group', name: '组', type: 'boolean' }
   ],

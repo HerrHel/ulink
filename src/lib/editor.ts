@@ -48,12 +48,7 @@ const editorManager: IEditorManager = {
     try {
       const coords = ed.view.posAtCoords({ left: clientX, top: clientY })
       if (coords) {
-        const $pos = ed.state.doc.resolve(coords.pos)
-        let insertPos = coords.pos
-        if ($pos.depth > 0 && $pos.parentOffset === $pos.parent.content.size) {
-          insertPos = Math.max(insertPos - 1, $pos.before(1))
-        }
-        ed.chain().insertContentAt(insertPos, html).run()
+        ed.chain().insertContentAt(coords.pos, html).run()
         return true
       }
     } catch (e: any) { console.warn('[Editor] insertAtCoords fallback:', e.message) }

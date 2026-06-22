@@ -2,7 +2,6 @@ import { nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { batchMoveAPI } from '../bridge.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
 
 /**
  * useBatch — Batch operations
@@ -31,45 +30,37 @@ export function batchDelete() {
   if (!store.batchSelected.length) return
   const count = store.batchSelected.length
   showConfirm('确认删除选中的 ' + count + ' 项？', () => {
-    const bookmarkSnaps: Array<{ bookmarks: Bookmark[]; groups: Record<string, string[]> }> = []
-    const groupSnaps: SiblingGroup[] = []
+    const removedGroupIds: string[] = []
+    const removedBookmarkIds: string[] = []
+    const removedFromGroups: Record<string, string[]> = {}
     store.batchSelected.forEach(id => {
       if (id.startsWith('group:')) {
         const gid = id.slice(6)
-        const sg = store.groupMap[gid]
-        if (sg) groupSnaps.push(JSON.parse(JSON.stringify(sg)))
-        const idx = store.siblingGroups.findIndex(g => g.id === gid)
-        if (idx >= 0) store.siblingGroups.splice(idx, 1)
+        store.deleteGroup(gid)
+        removedGroupIds.push(gid)
       } else {
-        const bm = store.bookmarkMap[id]
-        if (bm) {
-          const snap = { bookmarks: [JSON.parse(JSON.stringify(bm))], groups: {} as Record<string, string[]> }
-          store.siblingGroups.forEach(g => {
-            if (g.bookmarkIds.indexOf(id) > -1) {
-              if (!snap.groups[id]) snap.groups[id] = []
-              snap.groups[id].push(g.id)
-            }
-            g.bookmarkIds = g.bookmarkIds.filter(bid => bid !== id)
-          })
-          bookmarkSnaps.push(snap)
-        }
-        const idx = store.bookmarks.findIndex(b => b.id === id)
-        if (idx >= 0) store.bookmarks.splice(idx, 1)
+        store.siblingGroups.forEach(g => {
+          const bi = g.bookmarkIds.indexOf(id)
+          if (bi > -1) {
+            if (!removedFromGroups[id]) removedFromGroups[id] = []
+            removedFromGroups[id].push(g.id)
+            g.bookmarkIds.splice(bi, 1)
+          }
+        })
+        store.deleteBookmark(id)
+        removedBookmarkIds.push(id)
       }
     })
     store.save()
     store.batchSelected.splice(0)
     store.batchMode = false
     toastWithUndo('已删除 ' + count + ' 项', function () {
-      groupSnaps.forEach(sg => store.siblingGroups.push(sg))
-      if (groupSnaps.length) store.siblingGroups.sort((a, b) => (a.order || 0) - (b.order || 0))
-      bookmarkSnaps.forEach(snap => {
-        snap.bookmarks.forEach(b => store.bookmarks.push(b))
-        Object.keys(snap.groups).forEach(bid => {
-          snap.groups[bid].forEach(gid => {
-            const sg = store.groupMap[gid]
-            if (sg && sg.bookmarkIds.indexOf(bid) === -1) sg.bookmarkIds.push(bid)
-          })
+      removedGroupIds.forEach(gid => store.restoreGroup(gid))
+      removedBookmarkIds.forEach(bid => store.restoreBookmark(bid))
+      Object.keys(removedFromGroups).forEach(bid => {
+        removedFromGroups[bid].forEach(gid => {
+          const sg = store.groupMap[gid]
+          if (sg && sg.bookmarkIds.indexOf(bid) === -1) sg.bookmarkIds.push(bid)
         })
       })
       store.debouncedSave(); toast('已恢复')

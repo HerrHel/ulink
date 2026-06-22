@@ -6,9 +6,9 @@
            role="option" :aria-selected="idx === activeIdx"
            @click="select(item)" @mouseenter="activeIdx = idx">
         <span v-if="item._isGroup" class="ss-icon" v-html="I.note"></span>
-        <img v-else :src="item.icon || favicon(item.url)" alt="">
-        <span class="ss-name" v-html="highlight(item._displayTitle || item.title || item.name)"></span>
-        <span class="ss-url">{{ item._isGroup ? (item.bookmarkIds?.length || 0) + ' 个书签' : domain(item.url) }}</span>
+        <img v-else :src="favicon(item.url || '')" alt="">
+        <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
+        <span class="ss-url">{{ item._isGroup ? (item.bookmarkIds?.length || 0) + ' 个书签' : domain(item.url || '') }}</span>
       </div>
     </template>
   </div>
@@ -17,35 +17,38 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
+import { useDataStore } from '../../stores/data.js'
 import { favicon, domain } from '../../utils.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
+import { searchWithHighlights } from '../../lib/search.js'
 import { I } from '../../config/icons.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
+import type { SearchResultItem, HighlightSegment } from '../../lib/search.js'
 
 const store = useAppStore()
+const dataStore = useDataStore()
 const visible = ref(false)
 const activeIdx = ref(-1)
 
-const results = computed(() => {
+const results = computed<SearchResultItem[]>(() => {
   if (store.focusedGroupId) return []
-  const q = (store.searchQuery || '').trim().toLowerCase()
+  const q = (store.searchQuery || '').trim()
   if (!q) return []
 
-  const bmResults = store.bookmarks.filter(b =>
-    b.title.toLowerCase().includes(q) ||
-    b.url.toLowerCase().includes(q) ||
-    (b.notes || '').toLowerCase().includes(q) ||
-    (b.username || '').toLowerCase().includes(q)
-  ).slice(0, MAX_SUGGESTIONS)
+  const items = searchWithHighlights(
+    dataStore.bookmarks.filter(b => !b.deletedAt),
+    dataStore.siblingGroups.filter(g => !g.deletedAt),
+    q,
+    dataStore.bookmarkMap,
+    dataStore.customAttributes,
+    MAX_SUGGESTIONS,
+  )
 
-  const groupResults = store.siblingGroups.filter(g =>
-    (g.name || '').toLowerCase().includes(q)
-  ).slice(0, 4).map(g => ({ ...g, _isGroup: true, _displayTitle: g.name || '未命名组' }))
-
-  if (!groupResults.length) return bmResults
-  if (!bmResults.length) return groupResults
-  return [...groupResults, { _divider: '书签' }, ...bmResults].slice(0, MAX_SUGGESTIONS + 1)
+  // 在组和书签之间插入分隔线
+  const firstBmIdx = items.findIndex(i => !i._isGroup)
+  if (firstBmIdx > 0) items.splice(firstBmIdx, 0, { id: '__divider', _divider: '书签', _highlights: {} })
+  return items.slice(0, MAX_SUGGESTIONS + 1)
 })
 
 function updateVisibility() {
@@ -66,16 +69,13 @@ function select(item) {
   }
 }
 
-function highlight(text: string): string {
-  if (!text) return ''
-  const q = (store.searchQuery || '').trim()
-  if (!q) return esc(text)
-  const regex = new RegExp('(' + escRegex(q) + ')', 'gi')
-  return esc(text).replace(regex, '<mark class="ss-hl">$1</mark>')
+function renderHighlight(highlights: Record<string, HighlightSegment[]> | undefined, key: string, fallback: string): string {
+  const segs = highlights?.[key]
+  if (!segs || !segs.length) return esc(fallback)
+  return segs.map(s => s.highlight ? `<mark class="ss-hl">${esc(s.text)}</mark>` : esc(s.text)).join('')
 }
 
 function esc(s: string): string { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
-function escRegex(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
 
 function hide() { visible.value = false }
 

@@ -5,7 +5,11 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../stores/app.js'
 import { mentionAPI } from './bridge.js'
-import { importFromURL } from './domain/useDataIO.js'
+import { importFromURL, detectShareRoute } from './domain/useDataIO.js'
+
+// A4: 分享路由回调，App.vue 注册以接收 share group ID
+let _onShareRoute: ((gid: string) => void) | null = null
+export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
 import { useAuth } from './domain/useAuth.js'
 import { useCloudSync } from './domain/useCloudSync.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
@@ -26,7 +30,13 @@ export function useAppLifecycle() {
     store.loadFromStorage()
     store.tryLoadFromIDB().catch((e: Error) => console.warn('[LinkVault] IDB load failed:', e.message))
     store.restoreUIState()
-    importFromURL()
+    // A4: 检测公开分享路由（#share/<id>），优先于旧版 base64 分享
+    const shareGid = detectShareRoute()
+    if (shareGid) {
+      _onShareRoute?.(shareGid)
+    } else {
+      importFromURL()
+    }
     updateCardTagsOverflow()
 
     // 初始化认证 & 云同步

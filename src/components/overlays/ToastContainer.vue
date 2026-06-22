@@ -47,31 +47,34 @@ function _toastImpl(msg, ok = true) {
 
 let dismissTimer = null
 let countdownTimer = null
+let _undoGeneration = 0
 
 function _toastWithUndoImpl(msg, undoFn, duration = 6000) {
   dismissToast()
-  
+
+  const gen = ++_undoGeneration
   undoToast.value = {
     msg,
     undoFn,
     countdown: Math.ceil(duration / 1000),
     cls: ''
   }
-  
+
   setTimeout(() => {
-    if (undoToast.value) undoToast.value.cls = 'undo-toast-in'
+    if (undoToast.value && gen === _undoGeneration) undoToast.value.cls = 'undo-toast-in'
   }, 10)
-  
+
   let remaining = duration
   countdownTimer = setInterval(() => {
     remaining -= 1000
+    if (gen !== _undoGeneration) { clearInterval(countdownTimer); countdownTimer = null; return }
     if (undoToast.value && remaining > 0) {
       undoToast.value.countdown = Math.ceil(remaining / 1000)
     }
   }, 1000)
-  
+
   dismissTimer = setTimeout(() => {
-    dismissToast()
+    if (gen === _undoGeneration) dismissToast()
   }, duration)
 }
 

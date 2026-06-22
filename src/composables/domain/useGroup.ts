@@ -96,13 +96,11 @@ export function deleteGroup(dGid: string, skipConfirm?: boolean) {
   const sg = store.groupMap[dGid];
   if (!sg) return;
   const doDelete = () => {
-    const snapshot = JSON.parse(JSON.stringify(sg));
     store.deleteGroup(dGid);
     store.save();
     if (store.focusedGroupId === dGid) store.focusedGroupId = null;
     toastWithUndo('已删除组', function () {
-      store.siblingGroups.push(snapshot);
-      store.siblingGroups.sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      store.restoreGroup(dGid);
       store.debouncedSave(); toast('组已恢复');
     });
   };

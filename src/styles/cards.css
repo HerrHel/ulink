@@ -57,7 +57,6 @@
   flex:1 1 0;min-width:0;
   display:flex;flex-direction:column;
   gap:4px;
-  overflow:hidden;
 }
 
 /* ---- List: topline wraps toprow + tags in a row ---- */
@@ -205,7 +204,7 @@
 /* ---- List: expanded state ---- */
 .list-view .card-expanded,
 .list-view .group-expanded{
-  height:auto;min-height:56px;overflow:hidden;
+  height:auto;min-height:56px;
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover);
   background:var(--surface);
@@ -319,7 +318,6 @@
   cursor:pointer;
   transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out);
   animation:cardIn 0.32s var(--ease-out) backwards;
-  overflow:hidden;
   height:232px;
   display:flex;
   flex-direction:column;
@@ -350,11 +348,10 @@
 
 .card-body{
   position:relative;z-index:1;
-  flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
+  flex:1;min-height:0;
 }
-/* Grid view: fade-out mask at bottom of card body */
-.card-grid:not(.list-view) .card-body{
-  padding-bottom:8px;
+/* Grid view: fade-out mask at bottom of card notes */
+.card-grid:not(.list-view) .card-notes{
   -webkit-mask-image:var(--mask-fade-bottom);
   mask-image:var(--mask-fade-bottom);
 }
@@ -377,6 +374,7 @@
   border-color:var(--accent);
   transform:scale(1.1);
   box-shadow:0 2px 8px var(--accent-glow);
+  position:relative;z-index:2;
 }
 .card-logo img{
   width:28px;height:28px;
@@ -438,6 +436,12 @@
   max-width:none;
   flex-shrink:1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* Search highlight in cards */
+.card-hl{
+  background:var(--accent-glow,rgba(59,130,246,.15));
+  color:var(--accent,#3B82F6);
+  border-radius:2px;padding:0 1px;
 }
 /* Dead link badge */
 .dead-link-badge{

@@ -7,6 +7,7 @@ interface CheckResult {
   status: number
   finalUrl: string
   checkedAt: number
+  blocked: boolean
 }
 
 const results = reactive<Record<string, CheckResult>>({})
@@ -19,12 +20,29 @@ const PROXIES = [
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
 ]
 
+const GFW_DOMAINS = [
+  'google.com', 'google.com.hk', 'youtube.com', 'twitter.com', 'x.com',
+  'facebook.com', 'instagram.com', 'wikipedia.org', 'wikimedia.org',
+  'reddit.com', 'telegram.org', 't.me', 'whatsapp.com', 'line.me',
+  'medium.com', 'githubusercontent.com', 'nytimes.com', 'bbc.com',
+  'bbc.co.uk', 'bloomberg.com', 'reuters.com', 'wsj.com',
+  'dropbox.com', 'vimeo.com', 'pinterest.com', 'tumblr.com',
+  'soundcloud.com', 'archive.org', 'signal.org', 'brave.com',
+]
+
+function isGFWBlocked(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase()
+    return GFW_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))
+  } catch { return false }
+}
+
 let _abort: AbortController | null = null
 
 export function useDeadLinkChecker() {
   async function checkUrl(url: string): Promise<CheckResult> {
     if (!url || !url.startsWith('http')) {
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now() }
+      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false }
     }
 
     for (const proxyFn of PROXIES) {
@@ -43,15 +61,16 @@ export function useDeadLinkChecker() {
           const data = await resp.json().catch(() => null)
           const status = data?.status?.http_code || data?.status || resp.status
           const alive = status >= 200 && status < 400
-          return { alive, status, finalUrl: data?.status?.url || url, checkedAt: Date.now() }
+          return { alive, status, finalUrl: data?.status?.url || url, checkedAt: Date.now(), blocked: false }
         }
       } catch {
         continue
       }
     }
 
-    // 所有代理失败
-    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now() }
+    // 所有代理失败 — 检查是否为 GFW 封锁
+    const blocked = isGFWBlocked(url)
+    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked }
   }
 
   async function checkAll(batchSize = 5, intervalMs = 500): Promise<void> {
@@ -104,9 +123,16 @@ export function useDeadLinkChecker() {
 
     const attrs = { ...(bm.attributes || {}) }
     if (!result.alive) {
-      attrs['dead-link'] = true
+      if (result.blocked) {
+        attrs['gfw-blocked'] = true
+        delete attrs['dead-link']
+      } else {
+        attrs['dead-link'] = true
+        delete attrs['gfw-blocked']
+      }
     } else {
       delete attrs['dead-link']
+      delete attrs['gfw-blocked']
     }
     ds.updateBookmark(bookmarkId, { attributes: attrs })
     app.debouncedSave()
@@ -120,18 +146,29 @@ export function useDeadLinkChecker() {
       const r = results[bm.id]
       if (!r) continue
 
-      const isDead = !r.alive
       const attrs = bm.attributes || {}
       const hasDeadAttr = !!attrs['dead-link']
+      const hasGfwAttr = !!attrs['gfw-blocked']
 
-      if (isDead && !hasDeadAttr) {
-        ds.updateBookmark(bm.id, {
-          attributes: { ...attrs, 'dead-link': true }
-        })
-      } else if (!isDead && hasDeadAttr) {
-        const rest = { ...attrs }
-        delete rest['dead-link']
-        ds.updateBookmark(bm.id, { attributes: rest })
+      if (r.alive) {
+        if (hasDeadAttr || hasGfwAttr) {
+          const rest = { ...attrs }
+          delete rest['dead-link']
+          delete rest['gfw-blocked']
+          ds.updateBookmark(bm.id, { attributes: rest })
+        }
+      } else if (r.blocked) {
+        if (!hasGfwAttr || hasDeadAttr) {
+          ds.updateBookmark(bm.id, {
+            attributes: { ...attrs, 'gfw-blocked': true, 'dead-link': undefined }
+          })
+        }
+      } else {
+        if (!hasDeadAttr || hasGfwAttr) {
+          ds.updateBookmark(bm.id, {
+            attributes: { ...attrs, 'dead-link': true, 'gfw-blocked': undefined }
+          })
+        }
       }
     }
   }
@@ -147,10 +184,18 @@ export function useDeadLinkChecker() {
 
   function isDead(bookmarkId: string): boolean {
     const r = results[bookmarkId]
-    if (r) return !r.alive
+    if (r) return !r.alive && !r.blocked
     const ds = useDataStore()
     const bm = ds.bookmarkMap[bookmarkId]
     return !!(bm?.attributes && bm.attributes['dead-link'])
+  }
+
+  function isBlocked(bookmarkId: string): boolean {
+    const r = results[bookmarkId]
+    if (r) return !r.alive && r.blocked
+    const ds = useDataStore()
+    const bm = ds.bookmarkMap[bookmarkId]
+    return !!(bm?.attributes && bm.attributes['gfw-blocked'])
   }
 
   function deadCount(): number {
@@ -158,9 +203,14 @@ export function useDeadLinkChecker() {
     return ds.bookmarks.filter(b => isDead(b.id)).length
   }
 
+  function blockedCount(): number {
+    const ds = useDataStore()
+    return ds.bookmarks.filter(b => isBlocked(b.id)).length
+  }
+
   return {
     results, checking, progress, lastFullCheckAt,
     checkUrl, checkAll, checkOne, abort,
-    getResult, isDead, deadCount,
+    getResult, isDead, isBlocked, deadCount, blockedCount,
   }
 }

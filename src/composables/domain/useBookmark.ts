@@ -1,11 +1,11 @@
-import { reactive, watch } from 'vue'
+import { reactive } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { favicon, domain, fixUrl } from '../../utils.js'
-import { autoMigratePassword } from '../../crypto.js'
 import { toast, toastWithUndo } from '../../lib/toast.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
-import type { Bookmark, EncryptedPassword } from '../../types.js'
+import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
+import type { Bookmark } from '../../types.js'
 
 interface BmFormState {
   id: string
@@ -28,17 +28,15 @@ interface BmFormState {
   iconPreviewVisible: boolean
   iconPreviewUrl: string
   clearIconVisible: boolean
+  aiSuggestCatId: string | null
+  aiSuggestAttrIds: string[]
+  aiApplied: boolean
+  _fetchTimer: ReturnType<typeof setTimeout> | null
 }
 
-/** Async decode — handles AES-GCM encrypted passwords with master password */
-async function _decodePasswordForFormAsync(stored: string | EncryptedPassword | undefined, masterPassword: string): Promise<string> {
+function _decodePw(stored: string): string {
   if (!stored) return ''
-  if (typeof stored === 'object' && stored.encrypted) {
-    if (!masterPassword) return ''
-    try { return await autoMigratePassword(stored, masterPassword) } catch (_) { return '' }
-  }
-  if (typeof stored === 'string') { try { return atob(stored) } catch (_) { return stored } }
-  return ''
+  try { return atob(stored) } catch (_) { return stored }
 }
 
 /**
@@ -66,6 +64,10 @@ export const bmForm = reactive<BmFormState>({
   iconPreviewVisible: false,
   iconPreviewUrl: '',
   clearIconVisible: false,
+  aiSuggestCatId: null,
+  aiSuggestAttrIds: [],
+  aiApplied: false,
+  _fetchTimer: null,
 })
 
 export function openBookmark(bm: Bookmark) {
@@ -85,59 +87,43 @@ export function visit(e: Event | null, id?: string) {
 }
 
 let _opening = false
-let _pendingUnwatch: (() => void) | null = null
-export async function openBmModal(editId?: string) {
+export function openBmModal(editId?: string) {
   if (_opening) return
   _opening = true
   try {
     const store = useAppStore()
     const bm = editId ? store.bookmarkMap[editId] : null
 
-  // If bookmark has AES-GCM encrypted password, ensure master password is available
-  if (bm?.password && typeof bm.password === 'object' && bm.password.encrypted && !store.masterPassword) {
-    // Open master password modal first; after verification, re-open this modal
-    if (_pendingUnwatch) { _pendingUnwatch(); _pendingUnwatch = null }
-    const _pendingEditId = editId
-    store.masterPasswordOpen = true
-    const unwatch = watch(
-      () => store.masterPassword,
-      (pw) => {
-        if (pw) { _pendingUnwatch = null; unwatch(); openBmModal(_pendingEditId) }
-      }
-    )
-    _pendingUnwatch = unwatch
-    _opening = false
-    return
-  }
+    bmForm.id = bm?.id || ''
+    bmForm.title = bm?.title || ''
+    bmForm.url = bm?.url || ''
+    bmForm.username = bm?.username || ''
+    bmForm.notes = bm?.notes || ''
+    bmForm.icon = bm?.icon || ''
+    bmForm.categoryId = bm?.categoryId || ''
+    bmForm.parentId = bm?.parentId || null
+    bmForm.attributes = bm?.attributes ? { ...bm.attributes } : {}
+    bmForm.isEdit = !!editId
+    bmForm.showPassword = false
+    bmForm.logoPreviewVisible = false
+    bmForm.logoPreviewUrl = ''
+    bmForm.logoPreviewText = ''
+    bmForm.iconPreviewVisible = !!bm?.icon
+    bmForm.iconPreviewUrl = bm?.icon || ''
+    bmForm.clearIconVisible = !!bm?.icon
 
-  // Set all synchronous form fields BEFORE await, so that addSub() can
-  // override parentId etc. without being overwritten when this async function resumes.
-  bmForm.id = bm?.id || ''
-  bmForm.title = bm?.title || ''
-  bmForm.url = bm?.url || ''
-  bmForm.username = bm?.username || ''
-  bmForm.notes = bm?.notes || ''
-  bmForm.icon = bm?.icon || ''
-  bmForm.categoryId = bm?.categoryId || ''
-  bmForm.parentId = bm?.parentId || null
-  bmForm.attributes = bm?.attributes ? { ...bm.attributes } : {}
-  bmForm.isEdit = !!editId
-  bmForm.showPassword = false
-  bmForm.logoPreviewVisible = false
-  bmForm.logoPreviewUrl = ''
-  bmForm.logoPreviewText = ''
-  bmForm.iconPreviewVisible = !!bm?.icon
-  bmForm.iconPreviewUrl = bm?.icon || ''
-  bmForm.clearIconVisible = !!bm?.icon
+    bmForm.password = _decodePw(bm?.password || '')
 
-  // Async password decode (AES-GCM with master password, or legacy base64)
-  bmForm.password = await _decodePasswordForFormAsync(bm?.password, store.masterPassword)
+    bmForm.aiSuggestCatId = null
+    bmForm.aiSuggestAttrIds = []
+    bmForm.aiApplied = false
+    bmForm._fetchTimer = null
 
-  store.editingId = editId || null
-  store.lastFocusedEl = document.activeElement as HTMLElement
-  pushNavState()
-  store.bmModalOpen = true
-  bmForm.isOpen = true
+    store.editingId = editId || null
+    store.lastFocusedEl = document.activeElement as HTMLElement
+    pushNavState()
+    store.bmModalOpen = true
+    bmForm.isOpen = true
   } finally { _opening = false }
 }
 
@@ -151,27 +137,14 @@ export function closeBmModal() {
   store.lastFocusedEl = null
 }
 
-export async function saveBm() {
+export function saveBm() {
   const store = useAppStore()
-  const title = bmForm.title.trim()
   const url = fixUrl(bmForm.url)
-  if (!title || !url) { toast('请填写名称和网址', false); return }
+  if (!url) { toast('请填写网址', false); return }
 
-  // Encrypt password with AES-GCM if master password is set, else fall back to base64
-  let storedPassword: string | EncryptedPassword = ''
-  if (bmForm.password) {
-    if (store.masterPassword) {
-      try {
-        storedPassword = await store.encryptFormPassword(bmForm.password)
-      } catch (e) {
-        toast('密码加密失败: ' + (e as Error).message, false)
-        return
-      }
-    } else {
-      // Legacy base64 fallback (auto-migrated to AES-GCM when master password is set later)
-      storedPassword = btoa(bmForm.password)
-    }
-  }
+  const title = bmForm.title.trim() || domain(url)
+
+  const storedPassword = bmForm.password ? btoa(bmForm.password) : ''
 
   const data: Partial<Bookmark> = {
     title, url,
@@ -239,6 +212,76 @@ export function previewLogo() {
   }
 }
 
+/**
+ * 快速收藏：从 URL 自动填充标题、图标、分类建议、属性建议
+ * URL 输入防抖后自动调用
+ */
+export function autoFetchFromUrl() {
+  if (bmForm._fetchTimer) { clearTimeout(bmForm._fetchTimer); bmForm._fetchTimer = null }
+  const raw = bmForm.url.trim()
+  if (!raw || raw.length < 4) return
+
+  bmForm._fetchTimer = setTimeout(() => {
+    const url = fixUrl(raw)
+    const dm = domain(url)
+
+    // 标题：仅在为空时自动填充
+    if (!bmForm.title.trim()) {
+      bmForm.title = dm.replace(/^www\./, '').split('.')[0]
+        .charAt(0).toUpperCase() + dm.replace(/^www\./, '').split('.')[0].slice(1)
+    }
+
+    // 图标：仅在为空时自动填充
+    if (!bmForm.icon) {
+      bmForm.icon = favicon(url)
+      bmForm.iconPreviewVisible = true
+      bmForm.iconPreviewUrl = bmForm.icon
+      bmForm.clearIconVisible = true
+    }
+
+    // Logo 预览
+    previewLogo()
+
+    // AI 分类 + 属性建议（仅新建模式）
+    if (!bmForm.isEdit && !bmForm.aiApplied) {
+      const store = useAppStore()
+      const catId = suggestCategory(url, bmForm.title, store.categories)
+      if (catId && !bmForm.categoryId) {
+        bmForm.aiSuggestCatId = catId
+      }
+      const attrIds = suggestAttributes(url, bmForm.title, store.customAttributes)
+      if (attrIds.length) {
+        bmForm.aiSuggestAttrIds = attrIds.filter(id => !bmForm.attributes[id])
+      }
+    }
+  }, 500)
+}
+
+/** 应用 AI 建议的分类 */
+export function applyAiCategory() {
+  if (bmForm.aiSuggestCatId) {
+    bmForm.categoryId = bmForm.aiSuggestCatId
+    bmForm.aiSuggestCatId = null
+    bmForm.aiApplied = true
+  }
+}
+
+/** 应用 AI 建议的属性 */
+export function applyAiAttributes() {
+  for (const id of bmForm.aiSuggestAttrIds) {
+    bmForm.attributes[id] = true
+  }
+  bmForm.aiSuggestAttrIds = []
+  bmForm.aiApplied = true
+}
+
+/** 忽略所有 AI 建议 */
+export function dismissAiSuggestions() {
+  bmForm.aiSuggestCatId = null
+  bmForm.aiSuggestAttrIds = []
+  bmForm.aiApplied = true
+}
+
 export function previewIconUrl() { previewIconUrlBase(bmForm) }
 
 export function clearIcon() { clearIconBase(bmForm) }
@@ -270,28 +313,23 @@ function collectSubIds(id: string): string[] {
 export function deleteBookmarkWithUndo(id: string) {
   const store = useAppStore()
   const ids = collectSubIds(id)
-  const snapshot: { bookmarks: Bookmark[]; groups: Record<string, string[]> } = { bookmarks: [], groups: {} }
+  const removedFromGroups: Record<string, string[]> = {}
   ids.forEach(bid => {
-    const b = store.bookmarkMap[bid]
-    if (b) { snapshot.bookmarks.push(JSON.parse(JSON.stringify(b))); }
-  })
-  ids.forEach(id => {
     store.siblingGroups.forEach(g => {
-      if (g.bookmarkIds.indexOf(id) > -1) {
-        if (!snapshot.groups[id]) snapshot.groups[id] = []
-        if (snapshot.groups[id].indexOf(g.id) === -1) snapshot.groups[id].push(g.id)
+      const bi = g.bookmarkIds.indexOf(bid)
+      if (bi > -1) {
+        if (!removedFromGroups[bid]) removedFromGroups[bid] = []
+        removedFromGroups[bid].push(g.id)
+        g.bookmarkIds.splice(bi, 1)
       }
-      g.bookmarkIds = g.bookmarkIds.filter(x => x !== id)
     })
   })
-  for (let bi = store.bookmarks.length - 1; bi >= 0; bi--) {
-    if (ids.indexOf(store.bookmarks[bi].id) !== -1) store.bookmarks.splice(bi, 1)
-  }
+  ids.forEach(bid => store.deleteBookmark(bid))
   store.debouncedSave()
   toastWithUndo('书签已删除', () => {
-    snapshot.bookmarks.forEach(b => store.bookmarks.push(b))
-    Object.keys(snapshot.groups).forEach(bid => {
-      snapshot.groups[bid].forEach(gid => {
+    ids.forEach(bid => store.restoreBookmark(bid))
+    Object.keys(removedFromGroups).forEach(bid => {
+      removedFromGroups[bid].forEach(gid => {
         const sg = store.groupMap[gid]
         if (sg && sg.bookmarkIds.indexOf(bid) === -1) sg.bookmarkIds.push(bid)
       })

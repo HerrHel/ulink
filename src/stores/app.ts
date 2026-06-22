@@ -1,25 +1,26 @@
 /**
  * app.ts — 兼容层（组合 Store）
- * 组合 data / ui / security 三个子 Store，保持向后兼容。
- * 新代码建议直接使用 useDataStore / useUIStore / useSecurityStore。
+ * 组合 data / ui 两个子 Store，保持向后兼容。
+ * 新代码建议直接使用 useDataStore / useUIStore。
+ *
+ * @deprecated 新代码请直接导入 useDataStore / useUIStore。
+ * 本 Store 仅作向后兼容用途，将逐步废弃。
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useDataStore } from './data.js'
 import { useUIStore } from './ui.js'
-import { useSecurityStore } from './security.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { toast } from '../lib/toast.js'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute, EncryptedPassword } from '../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../types.js'
 
 let _localStorageWarned = false
 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
   const ui = () => useUIStore()
-  const sec = () => useSecurityStore()
 
   // ── 数据（只读，委托 dataStore）──
   const bookmarks = computed(() => ds().bookmarks)
@@ -32,10 +33,6 @@ export const useAppStore = defineStore('app', () => {
   const filteredBookmarks = computed(() => ds().filteredBookmarks)
   const filteredGroups = computed(() => ds().filteredGroups)
   const cardCounts = computed(() => ds().cardCounts)
-
-  // ── 安全（只读，委托 securityStore）──
-  const masterPassword = computed(() => sec().masterPassword)
-  const masterPasswordOpen = computed(() => sec().masterPasswordOpen)
 
   // Helper: 可读写 computed，委托 uiStore
   const uiProp = (key: string) => computed({
@@ -50,6 +47,7 @@ export const useAppStore = defineStore('app', () => {
     'settingsOpen', 'addDropdownOpen', 'railOpen', 'bmModalOpen', 'addBmPopoverOpen',
     'catModalOpen', 'attrModalOpen', 'groupEditOpen',
     'confirmModalOpen', 'confirmModalMessage', 'confirmModalCallback',
+    'trashPanelOpen', 'historyPanelOpen', 'historyItemId', 'historyItemType',
     'mentionGid', 'mentionQuery', 'mentionIdx', 'mentionActive', 'mentionType',
     'mentionSubMode', 'mentionSubIdx',
     'addToGid', '_addPopoverTrigger', 'saveToGroup',
@@ -62,7 +60,6 @@ export const useAppStore = defineStore('app', () => {
     bookmarkMap, groupMap, childrenMap,
     filteredBookmarks, filteredGroups, cardCounts,
     selectableCategories: computed(() => ds().selectableCategories),
-    masterPassword, masterPasswordOpen,
 
     // ── UI 状态（可读写，批量委托 uiStore）──
     ...Object.fromEntries(_uiKeys.map(k => [k, uiProp(k)])),
@@ -80,6 +77,16 @@ export const useAppStore = defineStore('app', () => {
     addAttribute(attr: CustomAttribute) { ds().addAttribute(attr) },
     renameAttribute(id: string, name: string) { ds().renameAttribute(id, name) },
     deleteAttribute(id: string) { ds().deleteAttribute(id) },
+    restoreBookmark(id: string) { ds().restoreBookmark(id) },
+    restoreGroup(id: string) { ds().restoreGroup(id) },
+    restoreCategory(id: string) { ds().restoreCategory(id) },
+    restoreAttribute(id: string) { ds().restoreAttribute(id) },
+    permanentDeleteBookmark(id: string) { ds().permanentDeleteBookmark(id) },
+    permanentDeleteGroup(id: string) { ds().permanentDeleteGroup(id) },
+    permanentDeleteCategory(id: string) { ds().permanentDeleteCategory(id) },
+    permanentDeleteAttribute(id: string) { ds().permanentDeleteAttribute(id) },
+    emptyTrash() { ds().emptyTrash() },
+    autoCleanupTrash() { ds().autoCleanupTrash() },
     importFromData(data: any) {
       ds().importFromData(data)
       const u = ui()
@@ -92,13 +99,6 @@ export const useAppStore = defineStore('app', () => {
     selectAllBatch() { ui().selectAllBatch() },
     saveUIState() { ui().saveUIState() },
     restoreUIState() { ui().restoreUIState() },
-
-    // ── 安全（委托 securityStore）──
-    async setMasterPassword(pw: string) { await sec().setMasterPassword(pw) },
-    encryptFormPassword(plaintext: string) { return sec().encryptFormPassword(plaintext) },
-    decryptStoredPassword(stored: string | EncryptedPassword) { return sec().decryptStoredPassword(stored) },
-    verifyMasterPassword(pw: string) { return sec().verifyMasterPassword(pw) },
-    clearMasterPassword() { sec().clearMasterPassword() },
 
     // ── 持久化（协调多个 Store）──
     loadFromStorage() { ds().loadFromStorage() },
@@ -119,7 +119,6 @@ export const useAppStore = defineStore('app', () => {
       }
       persist.saveToIDB(data)
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
-      // 云同步（防抖 3 秒）
       try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
     },
 

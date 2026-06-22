@@ -1,7 +1,9 @@
 <template>
+<ShareView v-if="shareGroupId" :group-id="shareGroupId" @close="shareGroupId = null" />
+<template v-else>
 <div class="lv-panel">
   <AppNav />
-  <input type="file" id="importFile" accept=".json" style="display:none" @change="handlers.onImportFile">
+  <input type="file" id="importFile" accept=".json,.html,.htm,.csv" style="display:none" @change="handlers.onImportFile">
   <div class="resize-handle" id="resizeLeft"></div>
   <div class="panel-main">
     <div class="panel-main-inner">
@@ -35,24 +37,26 @@
 <template v-if="store.confirmModalOpen">
   <ConfirmModal />
 </template>
-<template v-if="store.masterPasswordOpen">
-  <MasterPasswordModal />
-</template>
+<TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
+<HistoryPanel :open="store.historyPanelOpen" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.historyPanelOpen = false" />
 <AuthModal />
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
+<SyncConflictBanner />
+<CommandPalette />
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false; store.detailCards.splice(0)"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.railOpen }" @click="closeRail"></div>
 </template>
+</template>
 
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
 import { useApp } from './composables/useApp.js'
 import { useAppHandlers } from './composables/useAppHandlers.js'
-import { useAppLifecycle } from './composables/useAppLifecycle.js'
+import { useAppLifecycle, onShareRoute } from './composables/useAppLifecycle.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -66,15 +70,23 @@ import ActionSheet from './components/overlays/ActionSheet.vue'
 import BatchPopover from './components/overlays/BatchPopover.vue'
 import FormatToolbar from './components/editor/FormatToolbar.vue'
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
-const MasterPasswordModal = defineAsyncComponent(() => import('./components/modals/MasterPasswordModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
 import DetailPanel from './components/shell/DetailPanel.vue'
 import MentionDropdown from './components/overlays/MentionDropdown.vue'
+import SyncConflictBanner from './components/overlays/SyncConflictBanner.vue'
+import CommandPalette from './components/overlays/CommandPalette.vue'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))
 const AttributeModal = defineAsyncComponent(() => import('./components/modals/AttributeModal.vue'))
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
+const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
+const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
+
+// A4: 公开分享页面
+const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))
+const shareGroupId = ref<string | null>(null)
+onShareRoute((gid: string) => { shareGroupId.value = gid })
 
 const store = useAppStore()
 useApp()

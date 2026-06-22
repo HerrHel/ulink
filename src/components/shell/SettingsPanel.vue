@@ -1,32 +1,5 @@
 <template>
   <div class="sp" v-show="store.settingsOpen">
-    <!-- Cloud Sync / Auth -->
-    <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label"><span v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
-        <span class="sp-sync-status" :class="sync.syncStatus.value">{{ sync.syncLabel.value }}</span>
-      </div>
-      <template v-if="auth.isLoggedIn.value">
-        <div class="sp-row">
-          <span class="sp-user-email">{{ auth.userEmail.value }}</span>
-        </div>
-        <div class="sp-row sp-row-actions">
-          <button class="btn btn-ghost btn-sm" @click.stop="onSyncNow" :disabled="sync.syncStatus.value === 'syncing'">
-            <span v-html="I.refresh" class="sp-icon"></span>立即同步
-          </button>
-          <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
-        </div>
-        <div v-if="sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
-      </template>
-      <template v-else>
-        <div class="sp-row">
-          <span class="sp-hint">登录后数据将自动同步到云端，多设备共享</span>
-        </div>
-        <div class="sp-row">
-          <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">登录 / 注册</button>
-        </div>
-      </template>
-    </div>
     <!-- Theme -->
     <div class="sp-section">
       <div class="sp-row">
@@ -64,24 +37,52 @@
         </div>
       </div>
     </div>
-    <!-- Master Password -->
+    <!-- Tools -->
     <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label">密码加密</span>
-        <button class="btn btn-ghost btn-sm" @click.stop="onOpenMasterPassword">
-          {{ store.masterPassword ? '已设置 ✓' : '设置主密码' }}
+      <div class="sp-actions">
+        <button class="sp-action" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
+          <span v-html="I.radar"></span>
+          <span>{{ dlChecking ? '检测中...' : '检测死链' }}</span>
+          <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
+          <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
         </button>
       </div>
-      <div v-if="store.masterPassword" class="sp-row pt-1">
-        <span class="flex-1"></span>
-        <button class="btn btn-ghost btn-sm text-danger" @click.stop="store.clearMasterPassword()">清除</button>
+    </div>
+    <!-- Cloud Sync / Auth -->
+    <div class="sp-section">
+      <div class="sp-row">
+        <span class="sp-row-label"><span v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
+        <span class="sp-sync-status" :class="sync.syncStatus.value">
+          <span class="sp-sync-dot" :class="syncDotClass"></span>{{ sync.syncLabel.value }}
+        </span>
       </div>
+      <template v-if="auth.isLoggedIn.value">
+        <div class="sp-row">
+          <span class="sp-user-email">{{ auth.userEmail.value }}</span>
+        </div>
+        <div class="sp-row sp-row-actions">
+          <button class="btn btn-ghost btn-sm" @click.stop="onSyncNow" :disabled="sync.syncStatus.value === 'syncing'">
+            <span v-html="I.sync" class="sp-icon"></span>立即同步
+          </button>
+          <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
+        </div>
+        <div v-if="sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
+      </template>
+      <template v-else>
+        <div class="sp-row">
+          <span class="sp-hint">登录后数据将自动同步到云端，多设备共享</span>
+        </div>
+        <div class="sp-row">
+          <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">登录 / 注册</button>
+        </div>
+      </template>
     </div>
     <!-- Data -->
     <div class="sp-section">
       <div class="sp-actions">
-        <button class="sp-action" @click.stop="onTriggerImport"><span v-html="I.import"></span>导入数据</button>
-        <button class="sp-action" @click.stop="onExportData"><span v-html="I.export"></span>导出数据</button>
+        <button class="sp-action" @click.stop="onOpenTrash"><span v-html="I.trash"></span>回收站 <span v-if="trashCount" class="sp-badge">{{ trashCount }}</span></button>
+        <button class="sp-action" @click.stop="onTriggerImport"><span v-html="I.import"></span>导入</button>
+        <button class="sp-action" @click.stop="onExportData"><span v-html="I.export"></span>导出</button>
       </div>
     </div>
     <!-- Danger -->
@@ -94,23 +95,41 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
 import { exportData, resetToDefaults } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { I } from '../../config/icons.js'
+import { toast } from '../../lib/toast.js'
 
-function triggerImport() { const el = document.getElementById('importFile'); if (el) el.click() }
+function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
 
 const store = useAppStore()
 const uiStore = useUIStore()
+const dataStore = useDataStore()
 const auth = useAuth()
 const sync = useCloudSync()
+const dl = useDeadLinkChecker()
+
+const trashCount = computed(() => dataStore.trashCount)
+const syncDotClass = computed(() => {
+  if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
+  if (sync.syncStatus.value === 'error') return 'dot-error'
+  if (sync.pendingCount.value > 0) return 'dot-pending'
+  return 'dot-ok'
+})
+const dlChecking = computed(() => dl.checking.value)
+const deadCount = computed(() => dl.deadCount())
+const blockedCount = computed(() => dl.blockedCount())
 
 const sortModes = [
   { id: 'order', label: '自定义' },
+  { id: 'recommend', label: '推荐' },
   { id: 'title', label: '名称' },
   { id: 'dateDesc', label: '新→旧' },
   { id: 'dateAsc', label: '旧→新' },
@@ -120,10 +139,6 @@ const sortModes = [
 function onSetThemeStyle(style) {
   themeSetStyle(style)
   store.themeStyle = style
-  if (store.themeMode === 'auto') {
-    themeToggleAuto()
-    store.themeMode = 'manual'
-  }
 }
 
 function onToggleAutoTheme() {
@@ -141,7 +156,7 @@ function onSetSortMode(mode) {
   store.sortMode = mode
 }
 
-function onOpenMasterPassword() { store.masterPasswordOpen = true; store.settingsOpen = false }
+function onOpenTrash() { store.trashPanelOpen = true; store.settingsOpen = false }
 function onTriggerImport() { triggerImport(); store.settingsOpen = false }
 function onExportData() { exportData(); store.settingsOpen = false }
 function onResetData() { resetToDefaults(); store.settingsOpen = false }
@@ -158,5 +173,23 @@ async function onLogout() {
 
 async function onSyncNow() {
   await sync.fullSync()
+}
+
+function onCheckDeadLinks() {
+  if (dl.checking.value) return
+  toast('开始检测死链...')
+  dl.checkAll(5, 500).then(() => {
+    const dead = dl.deadCount()
+    const blocked = dl.blockedCount()
+    if (dead > 0 && blocked > 0) {
+      toast(`检测完成：${dead} 个失效，${blocked} 个被墙`)
+    } else if (dead > 0) {
+      toast(`检测完成：发现 ${dead} 个死链`)
+    } else if (blocked > 0) {
+      toast(`检测完成：${blocked} 个链接被墙`)
+    } else {
+      toast('检测完成，所有链接正常')
+    }
+  })
 }
 </script>

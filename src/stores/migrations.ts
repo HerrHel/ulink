@@ -8,7 +8,6 @@ import { esc, cleanZeroWidth, favicon } from '../utils.js'
 import type { AppData, Bookmark, SiblingGroup } from '../types.js'
 
 interface MigrationResult extends AppData {
-  _masterCanary?: any
 }
 
 /**

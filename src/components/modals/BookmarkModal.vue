@@ -7,16 +7,22 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label" for="bmTitle">网站名称 *</label>
-          <input type="text" class="form-input" id="bmTitle" v-model="bmForm.title" placeholder="例如：GitHub" ref="titleRef">
-        </div>
-        <div class="form-group">
           <label class="form-label" for="bmUrl">网址 *</label>
-          <input type="text" class="form-input" id="bmUrl" v-model="bmForm.url" placeholder="例如：github.com" @input="onPreviewLogo" autocomplete="off">
+          <input type="text" class="form-input" id="bmUrl" v-model="bmForm.url" placeholder="例如：github.com" @input="onUrlInput" autocomplete="off">
           <div class="logo-preview" v-show="bmForm.logoPreviewVisible">
             <img :src="bmForm.logoPreviewUrl" alt="">
             <span>{{ bmForm.logoPreviewText }}</span>
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bmTitle">网站名称</label>
+          <input type="text" class="form-input" id="bmTitle" v-model="bmForm.title" placeholder="留空将自动识别" ref="titleRef">
+        </div>
+        <div v-if="aiSuggestionText" class="ai-suggest-bar">
+          <span class="ai-suggest-icon">✨</span>
+          <span class="ai-suggest-text">{{ aiSuggestionText }}</span>
+          <button class="btn btn-xs btn-primary" @click="onApplyAi">采纳</button>
+          <button class="btn btn-xs btn-ghost" @click="onDismissAi">忽略</button>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -48,6 +54,7 @@
           <div class="form-group">
             <label class="form-label" for="bmCategoryId">分类</label>
             <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId">
+              <option value="">未分类</option>
               <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </div>
@@ -62,7 +69,7 @@
         <div class="form-group">
           <label class="form-label">属性标记</label>
           <div class="check-group">
-            <label v-for="attr in store.customAttributes" :key="attr.id" class="check-chip">
+            <label v-for="attr in store.customAttributes" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
               <input type="checkbox" :checked="bmForm.attributes[attr.id]"
                      @change="toggleAttr(attr.id, $event)">
               {{ attr.name }}
@@ -72,7 +79,7 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" @click="onClose">取消</button>
-        <button class="btn btn-primary" @click="onSave">保存</button>
+        <button class="btn btn-primary" @click="onSave">{{ bmForm.url.trim() ? '保存' : '保存' }}</button>
       </div>
     </div>
   </div>
@@ -81,7 +88,7 @@
 <script setup lang="ts">
 import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon } from '../../composables/domain/useBookmark.js'
+import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 
 const store = useAppStore()
@@ -91,6 +98,21 @@ const categoryOptions = computed(() => store.selectableCategories)
 const parentOptions = computed(() =>
   store.bookmarks.filter(b => !b.parentId && b.id !== bmForm.id)
 )
+
+const aiSuggestionText = computed(() => {
+  const parts: string[] = []
+  if (bmForm.aiSuggestCatId) {
+    const cat = store.categories.find(c => c.id === bmForm.aiSuggestCatId)
+    if (cat) parts.push(`建议分类「${cat.name}」`)
+  }
+  if (bmForm.aiSuggestAttrIds.length) {
+    const names = bmForm.aiSuggestAttrIds
+      .map(id => store.customAttributes.find(a => a.id === id)?.name)
+      .filter(Boolean)
+    if (names.length) parts.push(`建议标签「${names.join('」「')}」`)
+  }
+  return parts.length ? parts.join('，') : ''
+})
 
 function toggleAttr(attrId, event) {
   if (event.target.checked) bmForm.attributes[attrId] = true
@@ -102,6 +124,12 @@ function onSave() { saveBm() }
 function onPreviewLogo() { previewLogo() }
 function onPreviewIconUrl() { previewIconUrl() }
 function onClearIcon() { clearIcon() }
+function onUrlInput() { autoFetchFromUrl() }
+function onApplyAi() {
+  applyAiCategory()
+  applyAiAttributes()
+}
+function onDismissAi() { dismissAiSuggestions() }
 
 // Auto-focus title input when modal opens
 watch(() => bmForm.isOpen, (open) => {

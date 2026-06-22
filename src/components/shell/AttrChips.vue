@@ -1,10 +1,12 @@
 <template>
   <div class="attr-chips" id="attrChips" ref="chipsRef">
-    <span v-for="chip in activeChips" :key="chip.id" class="attr-chip" @click="onToggleFilter(chip.id)">
+    <span v-for="chip in activeChips" :key="chip.id" class="attr-chip"
+          @click="onToggleFilter(chip.id)">
       <span class="attr-chip-txt">{{ chip.name }}</span>
       <span class="attr-chip-x" v-html="I.close"></span>
     </span>
-    <span v-for="chip in excludedChips" :key="chip.id" class="attr-chip attr-chip-excluded" @click="onToggleExclude(chip.id)">
+    <span v-for="chip in excludedChips" :key="chip.id" class="attr-chip attr-chip-excluded"
+          @click="onToggleExclude(chip.id)">
       <span class="attr-chip-txt">{{ chip.name }}</span>
       <span class="attr-chip-x" v-html="I.close"></span>
     </span>

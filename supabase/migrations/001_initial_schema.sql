@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS bookmarks (
   attributes JSONB DEFAULT '{}',
   is_expanded BOOLEAN DEFAULT FALSE,
   created_at_num BIGINT DEFAULT 0,
+  updated_at_num BIGINT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

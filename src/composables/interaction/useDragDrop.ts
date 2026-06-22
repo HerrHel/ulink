@@ -75,13 +75,8 @@ function _updateDragCursorForGroupBody(body: Element, clientX: number, clientY: 
   try {
     const coords = ed.view.posAtCoords({ left: clientX, top: clientY })
     if (coords) {
-      const $pos = ed.state.doc.resolve(coords.pos)
-      let insertPos = coords.pos
-      if ($pos.depth > 0 && $pos.parentOffset === $pos.parent.content.size) {
-        insertPos = Math.max(insertPos - 1, $pos.before(1))
-      }
-      _lastInsertPos = { gid, pos: insertPos }
-      const cursorCoords = ed.view.coordsAtPos(insertPos)
+      _lastInsertPos = { gid, pos: coords.pos }
+      const cursorCoords = ed.view.coordsAtPos(coords.pos)
       if (cursorCoords) {
         _showDragCursor(cursorCoords.left, (cursorCoords.top + cursorCoords.bottom) / 2 - 10)
         return

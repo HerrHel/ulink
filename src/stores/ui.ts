@@ -36,6 +36,10 @@ interface UIState {
   confirmModalOpen: boolean
   confirmModalMessage: string
   confirmModalCallback: (() => void) | null
+  trashPanelOpen: boolean
+  historyPanelOpen: boolean
+  historyItemId: string
+  historyItemType: 'bookmark' | 'group'
   mentionGid: string | null
   mentionQuery: string
   mentionIdx: number
@@ -84,6 +88,10 @@ export const useUIStore = defineStore('ui', {
     confirmModalOpen: false,
     confirmModalMessage: '',
     confirmModalCallback: null,
+    trashPanelOpen: false,
+    historyPanelOpen: false,
+    historyItemId: '',
+    historyItemType: 'bookmark',
     mentionGid: null,
     mentionQuery: '',
     mentionIdx: 0,

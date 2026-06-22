@@ -93,7 +93,8 @@ describe('App Store (兼容层)', () => {
       dataStore.siblingGroups = []
       store.save = () => {}
       store.deleteBookmark('1')
-      expect(dataStore.bookmarks).toHaveLength(0)
+      expect(dataStore.bookmarks).toHaveLength(1)
+      expect(dataStore.bookmarks[0].deletedAt).toBeDefined()
     })
 
     it('should select all batch', () => {

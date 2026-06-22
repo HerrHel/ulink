@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LinkVault</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f8f9fa;--surface:#fff;--text:#1a1a1a;--text2:#6b7280;--border:#e5e7eb;--accent:#3b82f6;--accent-bg:#eff6ff;--danger:#ef4444;--radius:8px;--radius-sm:6px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
+button{cursor:pointer;font:inherit;border:none;background:none}
+input{font:inherit;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;width:100%;outline:none;font-size:13px}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.header h1{font-size:15px;font-weight:700}
+.header-actions{display:flex;gap:6px}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-ghost{color:var(--text2)}.btn-ghost:hover{background:var(--accent-bg);color:var(--accent)}
+.btn-danger{color:var(--danger)}.btn-danger:hover{background:#fef2f2}
+
+.section{padding:12px 16px;border-bottom:1px solid var(--border)}
+.section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+
+.current-page{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--accent-bg);border-radius:var(--radius);margin-bottom:10px}
+.current-page img{width:20px;height:20px;border-radius:4px;flex-shrink:0}
+.current-page-info{flex:1;min-width:0}
+.current-page-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.current-page-url{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.search-box{position:relative;margin-bottom:10px}
+.search-box input{padding-left:32px}
+.search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text2);width:14px;height:14px;pointer-events:none}
+
+.bookmark-list{max-height:calc(100vh - 340px);overflow-y:auto}
+.bookmark-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:background .1s}
+.bookmark-item:hover{background:var(--accent-bg)}
+.bookmark-item img{width:18px;height:18px;border-radius:3px;flex-shrink:0}
+.bookmark-item-info{flex:1;min-width:0}
+.bookmark-item-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bookmark-item-url{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.import-section{padding:12px 16px}
+.import-btn{width:100%;padding:10px;border:2px dashed var(--border);border-radius:var(--radius);text-align:center;color:var(--text2);font-size:12px;transition:all .15s}
+.import-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.import-result{font-size:12px;color:var(--text2);margin-top:6px;text-align:center}
+
+.auth-section{padding:24px 16px;text-align:center}
+.auth-section p{color:var(--text2);margin-bottom:12px;font-size:12px}
+.auth-section input{margin-bottom:8px;text-align:center}
+
+.status-bar{position:fixed;bottom:0;left:0;right:0;padding:8px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
+.status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:4px}
+.status-dot.ok{background:#22c55e}.status-dot.err{background:#ef4444}.status-dot.sync{background:#f59e0b;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:8px 16px;border-radius:var(--radius);font-size:12px;z-index:100;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+
+.empty{text-align:center;padding:32px 16px;color:var(--text2);font-size:12px}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📚 LinkVault</h1>
+  <div class="header-actions">
+    <button class="btn btn-ghost" id="btnRefresh" title="刷新">↻</button>
+    <button class="btn btn-ghost" id="btnLogout" title="退出登录">退出</button>
+  </div>
+</div>
+
+<!-- 登录区 -->
+<div class="auth-section" id="authSection">
+  <p>登录后即可同步书签</p>
+  <input type="email" id="emailInput" placeholder="输入邮箱地址">
+  <button class="btn btn-primary" id="btnLogin" style="width:100%">发送验证码</button>
+  <div id="otpSection" class="hidden" style="margin-top:10px">
+    <input type="text" id="otpInput" placeholder="输入 6 位验证码" maxlength="6">
+    <button class="btn btn-primary" id="btnVerify" style="width:100%;margin-top:6px">验证</button>
+  </div>
+</div>
+
+<!-- 主界面（登录后显示） -->
+<div id="mainSection" class="hidden">
+  <!-- 当前页快速收藏 -->
+  <div class="section">
+    <div class="section-title">当前页面</div>
+    <div class="current-page" id="currentPage">
+      <img id="pageIcon" src="" alt="">
+      <div class="current-page-info">
+        <div class="current-page-title" id="pageTitle">加载中…</div>
+        <div class="current-page-url" id="pageUrl"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ 保存当前页面</button>
+  </div>
+
+  <!-- 搜索 -->
+  <div class="section">
+    <div class="section-title">搜索书签</div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="搜索书签…">
+    </div>
+    <div class="bookmark-list" id="bookmarkList"></div>
+  </div>
+
+  <!-- Chrome 书签导入 -->
+  <div class="import-section">
+    <div class="section-title">导入</div>
+    <button class="import-btn" id="btnImport">📥 从 Chrome 书签导入</button>
+    <div class="import-result hidden" id="importResult"></div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span><span class="status-dot" id="statusDot"></span><span id="statusText">未连接</span></span>
+  <span id="bookmarkCount"></span>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>

@@ -76,6 +76,7 @@
   flex-shrink:0;
 }
 .lt-btn{
+  position:relative;
   display:inline-flex;align-items:center;justify-content:center;
   padding:4px 8px;
   border-radius:0;border:none;
@@ -88,6 +89,15 @@
 .lt-btn svg{width:15px;height:15px}
 .lt-btn.active{color:var(--accent);background:var(--accent-light)}
 .lt-btn:not(.active):hover{background:var(--surface-hover);color:var(--text)}
+.header-sync-dot{
+  position:absolute;top:4px;right:4px;
+  width:6px;height:6px;border-radius:50%;
+  pointer-events:none;
+}
+.header-sync-dot.dot-ok{background:var(--emerald,#22c55e)}
+.header-sync-dot.dot-pending{background:var(--amber,#f59e0b)}
+.header-sync-dot.dot-syncing{background:var(--accent);animation:dot-pulse 1s ease-in-out infinite}
+.header-sync-dot.dot-error{background:var(--rose,#ef4444)}
 
 .search-wrapper{
   position:absolute;left:50%;transform:translateX(-50%);

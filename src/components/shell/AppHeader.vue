@@ -44,7 +44,8 @@
       </template>
       <span v-show="!store.focusedGroupId" class="settings-wrap" @click.stop>
         <button class="lt-btn" id="btnSettings" @click="toggleSettings" title="设置">
-          <span v-html="I.settings" class="icon-sm"></span>
+            <span v-html="I.settings" class="icon-sm"></span>
+          <span v-if="auth.isLoggedIn.value" class="header-sync-dot" :class="syncDotClass" :title="sync.syncLabel.value"></span>
         </button>
         <SettingsPanel />
       </span>
@@ -59,11 +60,22 @@
 import { computed, ref, watch } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { I } from '../../config/icons.js'
+import { useAuth } from '../../composables/domain/useAuth.js'
+import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import SearchSuggest from '../overlays/SearchSuggest.vue'
 import SettingsPanel from './SettingsPanel.vue'
 
 const store = useAppStore()
 const emit = defineEmits(['toggle-rail', 'exit-focus', 'focus-title-change', 'toggle-detail', 'search', 'focus-edit-group', 'focus-share-group'])
+
+const auth = useAuth()
+const sync = useCloudSync()
+const syncDotClass = computed(() => {
+  if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
+  if (sync.syncStatus.value === 'error') return 'dot-error'
+  if (sync.pendingCount.value > 0) return 'dot-pending'
+  return 'dot-ok'
+})
 
 // 搜索防抖：本地输入值延迟同步到 store
 const localQuery = ref(store.searchQuery)

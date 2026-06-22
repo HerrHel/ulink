@@ -14,17 +14,24 @@
           </div>
           <div class="card-titlewrap" @dblclick.stop="visit">
             <div class="card-name">
-              {{ bookmark.title }}
+              <span v-if="searchQuery" v-html="hlText(bookmark.title, searchQuery)"></span>
+              <template v-else>{{ bookmark.title }}</template>
               <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
             </div>
-            <div class="card-domain">{{ domainStr }}</div>
+            <div class="card-domain">
+              <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
+              <template v-else>{{ domainStr }}</template>
+            </div>
           </div>
         </div>
         <div class="card-tags" v-if="tagNames.length">
           <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
         </div>
       </div>
-      <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="editNotes">{{ bookmark.notes }}</div>
+      <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="editNotes">
+        <span v-if="searchQuery" v-html="hlText(bookmark.notes, searchQuery)"></span>
+        <template v-else>{{ bookmark.notes }}</template>
+      </div>
       <template v-if="bookmark.username || bookmark.password">
           <button class="card-acct-toggle" @click.stop="acctOpen = !acctOpen">
             <span v-html="I.chevronDown"></span> 账户信息
@@ -75,28 +82,44 @@ import { openDetail } from '../../composables/ui/useUI.js'
 import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { useSecurityStore } from '../../stores/security.js'
 import { useAppStore } from '../../stores/app.js'
+
+function _hlEsc(s: string): string { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+function hlText(text: string, query: string): string {
+  if (!text || !query.trim()) return _hlEsc(text)
+  const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(q, 'gi')
+  const parts: string[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(_hlEsc(text.slice(last, m.index)))
+    parts.push('<mark class="card-hl">' + _hlEsc(m[0]) + '</mark>')
+    last = m.index + m[0].length
+    if (m[0].length === 0) { regex.lastIndex++; continue }
+  }
+  if (last < text.length) parts.push(_hlEsc(text.slice(last)))
+  return parts.join('')
+}
 
 const props = defineProps({ bookmark: { type: Object, required: true } })
 const dataStore = useDataStore()
 const uiStore = useUIStore()
-const securityStore = useSecurityStore()
 const store = useAppStore()
 const cardEl = ref(null)
 const acctOpen = ref(false)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
-async function decodePassword() {
-  decodedPw.value = await safeDecodePassword(props.bookmark.password, securityStore.masterPassword)
+function decodePassword() {
+  decodedPw.value = safeDecodePassword(props.bookmark.password)
 }
 
 onMounted(() => {
   decodePassword()
   stripEntranceAnim(cardEl.value)
 })
-watch(() => [props.bookmark.password, securityStore.masterPassword], decodePassword)
+watch(() => props.bookmark.password, decodePassword)
 
 const domainStr = computed(() => domain(props.bookmark.url))
 const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))
@@ -107,6 +130,7 @@ const previewText = computed(() => (props.bookmark.notes || '').trim().replace(/
 const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded)
 const isSelected = computed(() => { try { return (uiStore.batchSelected || []).indexOf(props.bookmark.id) !== -1 } catch { return false } })
 const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
+const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
 function visit() { openBookmark(props.bookmark) }
 function edit() { openBmModal(props.bookmark.id) }

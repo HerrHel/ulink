@@ -32,11 +32,12 @@ describe('DataStore', () => {
       expect(store.bookmarks).toHaveLength(0)
     })
 
-    it('deleteBookmark - 应该删除书签', () => {
+    it('deleteBookmark - 应该软删除书签', () => {
       store.bookmarks = [{ id: 'b1' }, { id: 'b2' }] as any
       store.deleteBookmark('b1')
-      expect(store.bookmarks).toHaveLength(1)
-      expect(store.bookmarks[0].id).toBe('b2')
+      expect(store.bookmarks).toHaveLength(2)
+      expect(store.bookmarks[0].deletedAt).toBeDefined()
+      expect(store.bookmarks[1].deletedAt).toBeUndefined()
     })
 
     it('deleteBookmark - 应该从组中移除书签引用', () => {
@@ -60,10 +61,12 @@ describe('DataStore', () => {
       expect(store.groupMap['g1'].name).toBe('New')
     })
 
-    it('deleteGroup - 应该删除分组', () => {
+    it('deleteGroup - 应该软删除分组', () => {
       store.siblingGroups = [{ id: 'g1' }, { id: 'g2' }] as any
       store.deleteGroup('g1')
-      expect(store.siblingGroups).toHaveLength(1)
+      expect(store.siblingGroups).toHaveLength(2)
+      expect(store.siblingGroups[0].deletedAt).toBeDefined()
+      expect(store.siblingGroups[1].deletedAt).toBeUndefined()
     })
   })
 
@@ -80,7 +83,7 @@ describe('DataStore', () => {
       expect(store.categories[0].name).toBe('New')
     })
 
-    it('deleteCategory - 应该将关联书签移至未分类', () => {
+    it('deleteCategory - 应该将关联书签移至未分类并软删除分类', () => {
       store.bookmarks = [{ id: 'b1', categoryId: 'cat1' }] as any
       store.siblingGroups = [{ id: 'g1', categoryId: 'cat1' }] as any
       store.categories = [{ id: 'cat1', name: 'Test', icon: '', color: '' }]
@@ -89,7 +92,7 @@ describe('DataStore', () => {
       
       expect(store.bookmarks[0].categoryId).toBe('uncategorized')
       expect(store.siblingGroups[0].categoryId).toBe('uncategorized')
-      expect(store.categories).toHaveLength(0)
+      expect(store.categories[0].deletedAt).toBeDefined()
     })
   })
 
@@ -105,7 +108,7 @@ describe('DataStore', () => {
       expect(store.customAttributes[0].name).toBe('New')
     })
 
-    it('deleteAttribute - 应该从所有书签中删除属性', () => {
+    it('deleteAttribute - 应该从所有书签中删除属性并软删除', () => {
       store.customAttributes = [{ id: 'attr1', name: 'Important', type: 'boolean' }]
       store.bookmarks = [
         { id: 'b1', attributes: { attr1: true } },
@@ -118,7 +121,7 @@ describe('DataStore', () => {
       expect(store.bookmarks[0].attributes.attr1).toBeUndefined()
       expect(store.bookmarks[1].attributes.attr1).toBeUndefined()
       expect(store.bookmarks[1].attributes.attr2).toBe(true)
-      expect(store.customAttributes).toHaveLength(0)
+      expect(store.customAttributes[0].deletedAt).toBeDefined()
     })
   })
 

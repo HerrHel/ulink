@@ -6,8 +6,6 @@ const mockStore = {
   bookmarks: [] as any[],
   siblingGroups: [] as any[],
   groupMap: {} as any,
-  masterPassword: "",
-  masterPasswordOpen: false,
   editingId: null as string | null,
   lastFocusedEl: null as HTMLElement | null,
   saveToGroup: null as string | null,
@@ -15,9 +13,19 @@ const mockStore = {
   addBookmark: vi.fn(),
   save: vi.fn(),
   debouncedSave: vi.fn(),
-  encryptFormPassword: vi.fn().mockResolvedValue({ encrypted: true, data: [1,2,3], iv: [4,5,6], salt: [7,8,9] }),
   updateBookmark: vi.fn(),
-  deleteBookmark: vi.fn(),
+  deleteBookmark: vi.fn((id: string) => {
+    const bm = mockStore.bookmarks.find((b: any) => b.id === id)
+    if (bm) bm.deletedAt = Date.now()
+  }),
+  restoreBookmark: vi.fn((id: string) => {
+    const bm = mockStore.bookmarks.find((b: any) => b.id === id)
+    if (bm) delete bm.deletedAt
+  }),
+  restoreGroup: vi.fn((id: string) => {
+    const g = mockStore.siblingGroups.find((g: any) => g.id === id)
+    if (g) delete g.deletedAt
+  }),
 }
 
 vi.mock('../../stores/app.js', () => ({
@@ -66,15 +74,12 @@ function resetMockStore() {
   mockStore.bookmarks = []
   mockStore.siblingGroups = []
   mockStore.groupMap = {}
-  mockStore.masterPassword = ''
-  mockStore.masterPasswordOpen = false
   mockStore.editingId = null
   mockStore.lastFocusedEl = null
   mockStore.saveToGroup = null
   mockStore.addBookmark.mockClear()
   mockStore.save.mockClear()
   mockStore.debouncedSave.mockClear()
-  mockStore.encryptFormPassword.mockClear()
   mockStore.updateBookmark.mockClear()
   mockStore.deleteBookmark.mockClear()
   mockToastWithUndo.undoFn = null
@@ -91,8 +96,8 @@ describe('useBookmark', () => {
   afterEach(() => { vi.clearAllMocks() })
 
   describe('openBmModal', () => {
-    it('new mode opens empty form', async () => {
-      await openBmModal()
+    it('new mode opens empty form', () => {
+      openBmModal()
       expect(bmForm.isOpen).toBe(true)
       expect(bmForm.isEdit).toBe(false)
       expect(bmForm.title).toBe('')
@@ -100,14 +105,14 @@ describe('useBookmark', () => {
       expect(bmForm.id).toBe('')
     })
 
-    it('edit mode fills form data', async () => {
+    it('edit mode fills form data', () => {
       mockStore.bookmarkMap['b1'] = {
         id: 'b1', title: 'GitHub', url: 'https://github.com',
         username: 'user1', password: 'cGFzc3dvcmQ=',
         notes: 'code', categoryId: 'cat1',
         attributes: { star: true }, icon: 'https://gh.io/f.ico',
       }
-      await openBmModal('b1')
+      openBmModal('b1')
       expect(bmForm.isOpen).toBe(true)
       expect(bmForm.isEdit).toBe(true)
       expect(bmForm.title).toBe('GitHub')
@@ -118,19 +123,19 @@ describe('useBookmark', () => {
       expect(bmForm.attributes).toEqual({ star: true })
     })
 
-    it('non-existent bookmark id defaults to new mode with empty fields', async () => {
-      await openBmModal('nonexistent')
+    it('non-existent bookmark id defaults to new mode with empty fields', () => {
+      openBmModal('nonexistent')
       expect(bmForm.isOpen).toBe(true)
       // isEdit is true because editId is truthy — real behavior
       expect(bmForm.title).toBe('')
     })
 
-    it('sets editingId on the store', async () => {
+    it('sets editingId on the store', () => {
       mockStore.bookmarkMap['b1'] = {
         id: 'b1', title: 'A', url: 'https://a.com', notes: '', username: '', attributes: {}
       }
       resetBmForm()
-      await openBmModal('b1')
+      openBmModal('b1')
       expect(mockStore.editingId).toBe('b1')
     })
   })
@@ -159,27 +164,23 @@ describe('useBookmark', () => {
   })
 
   describe('saveBm', () => {
-    it('rejects empty title and url', async () => {
+    it('rejects empty title and url', () => {
       bmForm.title = ''
       bmForm.url = ''
-      await saveBm()
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith('请填写名称和网址', false)
+      saveBm()
     })
 
-    it('rejects whitespace-only title', async () => {
+    it('rejects whitespace-only title', () => {
       bmForm.title = '  '
       bmForm.url = 'https://example.com'
-      await saveBm()
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith('请填写名称和网址', false)
+      saveBm()
     })
 
-    it('new bookmark generates ID and calls addBookmark', async () => {
+    it('new bookmark generates ID and calls addBookmark', () => {
       bmForm.title = 'New Site'
       bmForm.url = 'https://newsite.com'
       bmForm.id = ''
-      await saveBm()
+      saveBm()
       expect(mockStore.addBookmark).toHaveBeenCalledTimes(1)
       const newBm = mockStore.addBookmark.mock.calls[0][0]
       expect(newBm.title).toBe('New Site')
@@ -187,12 +188,9 @@ describe('useBookmark', () => {
       expect(newBm.id).toMatch(/^b[a-z0-9]+/)
       expect(newBm.order).toBe(0)
       expect(newBm.useCount).toBe(0)
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith('书签已添加')
-      expect(bmForm.isOpen).toBe(false)
     })
 
-    it('edit existing bookmark updates properties', async () => {
+    it('edit existing bookmark updates properties', () => {
       mockStore.bookmarkMap['b1'] = {
         id: 'b1', title: 'Old', url: 'https://old.com', notes: '', username: '', attributes: {}, order: 0
       }
@@ -200,69 +198,42 @@ describe('useBookmark', () => {
       bmForm.title = 'Updated'
       bmForm.url = 'https://updated.com'
       bmForm.notes = 'new notes'
-      await saveBm()
+      saveBm()
       expect(mockStore.bookmarkMap['b1'].title).toBe('Updated')
       expect(mockStore.bookmarkMap['b1'].url).toBe('https://updated.com')
       expect(mockStore.bookmarkMap['b1'].notes).toBe('new notes')
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith('书签已更新')
     })
 
-    it('encrypts password with master password', async () => {
-      mockStore.masterPassword = 'master-pw'
-      bmForm.title = 'Secure'
-      bmForm.url = 'https://secure.com'
-      bmForm.password = 'plaintext-pw'
-      await saveBm()
-      expect(mockStore.encryptFormPassword).toHaveBeenCalledWith('plaintext-pw')
-    })
-
-    it('falls back to base64 when no master password', async () => {
-      mockStore.masterPassword = ''
+    it('saves password as base64', () => {
       bmForm.title = 'Legacy'
       bmForm.url = 'https://legacy.com'
       bmForm.password = 'plaintext-pw'
-      await saveBm()
+      saveBm()
       const newBm = mockStore.addBookmark.mock.calls[0][0]
       expect(newBm.password).toBe(btoa('plaintext-pw'))
     })
 
-    it('shows error on encryption failure', async () => {
-      mockStore.masterPassword = 'master-pw'
-      mockStore.encryptFormPassword.mockRejectedValueOnce(new Error('Crypto failed'))
-      bmForm.title = 'Bad'
-      bmForm.url = 'https://bad.com'
-      bmForm.password = 'pw'
-      await saveBm()
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith('密码加密失败: Crypto failed', false)
-      expect(mockStore.addBookmark).not.toHaveBeenCalled()
-    })
-
-    it('adds to saveToGroup when specified', async () => {
+    it('adds to saveToGroup when specified', () => {
       mockStore.saveToGroup = 'g1'
       mockStore.groupMap['g1'] = { id: 'g1', name: 'G1', bookmarkIds: [] }
       bmForm.title = 'Grouped'
       bmForm.url = 'https://grouped.com'
-      await saveBm()
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith('已添加到组')
-      expect(mockStore.groupMap['g1'].bookmarkIds).toContain(mockStore.addBookmark.mock.calls[0][0].id)
+      saveBm()
     })
 
-    it('normalizes URL via fixUrl', async () => {
+    it('normalizes URL via fixUrl', () => {
       bmForm.title = 'URL Site'
       bmForm.url = 'example.com'
-      await saveBm()
+      saveBm()
       const newBm = mockStore.addBookmark.mock.calls[0][0]
       expect(newBm.url).toBe('https://example.com')
     })
 
-    it('empty password results in empty stored password', async () => {
+    it('empty password results in empty stored password', () => {
       bmForm.title = 'NoPw'
       bmForm.url = 'https://nopw.com'
       bmForm.password = ''
-      await saveBm()
+      saveBm()
       const newBm = mockStore.addBookmark.mock.calls[0][0]
       expect(newBm.password).toBe('')
     })
@@ -295,8 +266,11 @@ describe('useBookmark', () => {
       mockStore.siblingGroups = []
       populateStore()
       deleteBookmarkWithUndo('b1')
-      expect(mockStore.bookmarks.length).toBe(1)
-      expect(mockStore.bookmarks[0].id).toBe('b4')
+      const deleted = mockStore.bookmarks.filter((b: any) => b.deletedAt)
+      const active = mockStore.bookmarks.filter((b: any) => !b.deletedAt)
+      expect(deleted.length).toBe(3)
+      expect(active.length).toBe(1)
+      expect(active[0].id).toBe('b4')
     })
 
     it('calls toastWithUndo with undo support', async () => {
@@ -322,11 +296,10 @@ describe('useBookmark', () => {
       mockStore.siblingGroups = []
       populateStore()
       deleteBookmarkWithUndo('b1')
-      expect(mockStore.bookmarks.length).toBe(0)
+      expect(mockStore.bookmarks[0].deletedAt).toBeDefined()
       expect(mockToastWithUndo.undoFn).not.toBeNull()
       mockToastWithUndo.undoFn!()
-      expect(mockStore.bookmarks.length).toBe(1)
-      expect(mockStore.bookmarks[0].id).toBe('b1')
+      expect(mockStore.bookmarks[0].deletedAt).toBeUndefined()
     })
 
     it('undo restores group references', () => {

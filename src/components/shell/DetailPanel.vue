@@ -115,18 +115,17 @@ const filteredEntries = computed(() => {
   )
 })
 
-async function decodeAllPasswords() {
+function decodeAllPasswords() {
   const results = {}
   for (const entry of entries.value) {
     if (!entry.isGroup && entry.data.password) {
-      results[entry.rawId] = await safeDecodePassword(entry.data.password, store.masterPassword)
+      results[entry.rawId] = safeDecodePassword(entry.data.password)
     }
   }
   decodedPasswords.value = results
 }
 
 watch(entries, () => nextTick(decodeAllPasswords))
-watch(() => store.masterPassword, decodeAllPasswords)
 
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
 const isSwiping = ref(false)

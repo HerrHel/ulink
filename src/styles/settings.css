@@ -139,6 +139,21 @@
   background:var(--accent-light);
 }
 .sp-action:active{transform:scale(0.97);transition-duration:0.06s}
+.sp-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-width:18px;height:18px;padding:0 5px;
+  border-radius:9px;
+  background:var(--rose,#ef4444);color:#fff;
+  font-size:0.65rem;font-weight:700;
+  line-height:1;
+}
+.sp-badge-gfw{
+  background:var(--amber,#f59e0b);
+}
+.sp-action.checking svg{
+  animation:sp-spin 1s linear infinite;
+}
+@keyframes sp-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 /* Danger zone */
 .sp-danger{padding:2px 6px 4px}
 .sp-danger-btn{
@@ -175,6 +190,15 @@
 .sp-sync-status.syncing{color:var(--accent)}
 .sp-sync-status.success{color:var(--emerald,#22c55e)}
 .sp-sync-status.error{color:var(--rose,#ef4444)}
+.sp-sync-dot{
+  display:inline-block;width:7px;height:7px;border-radius:50%;
+  margin-right:5px;vertical-align:middle;
+}
+.dot-ok{background:var(--emerald,#22c55e)}
+.dot-pending{background:var(--amber,#f59e0b)}
+.dot-syncing{background:var(--accent);animation:dot-pulse 1s ease-in-out infinite}
+.dot-error{background:var(--rose,#ef4444)}
+@keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 .sp-user-email{
   font-size:0.76rem;color:var(--text-secondary);
   word-break:break-all;
