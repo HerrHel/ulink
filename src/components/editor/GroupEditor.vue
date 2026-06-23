@@ -112,17 +112,17 @@ const GroupRefCard = Node.create({
 
 const props = defineProps({ groupId: { type: String, required: true } })
 const store = useAppStore()
-const editorRef = ref(null)
-const editorInstance = ref(null)
-let editor = null
+const editorRef = ref<HTMLElement | null>(null)
+const editorInstance = ref<Editor | null>(null)
+let editor: Editor | null = null
 
 provide('tiptapEditor', editorInstance)
 
-function syncToStore(ed) {
+function syncToStore(ed: Editor) {
   const sg = store.groupMap[props.groupId]
   if (!sg) return
   sg.notes = ed.getHTML()
-  const ids = [], seen = {}
+  const ids: string[] = [], seen: Record<string, boolean> = {}
   ed.state.doc.descendants(node => {
     if (node.type.name === 'inlineCard') {
       const bmid = node.attrs['data-bm-id']
@@ -167,7 +167,7 @@ onMounted(() => {
     onUpdate: ({ editor: ed }) => { pushUndo(props.groupId); syncToStore(ed) },
   })
 
-  editor._lvGid = props.groupId
+  ;(editor as any)._lvGid = props.groupId
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
 
@@ -186,7 +186,7 @@ onMounted(() => {
   }
 })
 
-let _mfbBlurTimer = null
+let _mfbBlurTimer: ReturnType<typeof setTimeout> | null = null
 
 const undo = useUndoStore()
 

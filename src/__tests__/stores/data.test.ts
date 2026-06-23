@@ -72,7 +72,7 @@ describe('DataStore', () => {
 
   describe('分类操作', () => {
     it('addCategory - 应该添加分类', () => {
-      const cat = { id: 'cat1', name: 'Test', icon: '🔗' }
+      const cat = { id: 'cat1', name: 'Test', icon: '🔗', color: '' }
       store.addCategory(cat)
       expect(store.categories).toHaveLength(1)
     })

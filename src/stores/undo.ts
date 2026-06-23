@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { useDataStore } from './data.js'
 
-interface UndoSnapshot {
+export interface UndoSnapshot {
   notes: string
   bookmarkIds: string[]
 }

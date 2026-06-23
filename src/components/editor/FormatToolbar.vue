@@ -20,7 +20,7 @@
         <button v-for="c in palette" :key="c.hex" class="mfb-color-dot"
                 :class="{ active: c.hex === state.color }"
                 :style="{ background: c.hex }" @click="applyColor(c.hex)"></button>
-        <button class="mfb-color-reset" @click="applyColor(null)">默认</button>
+        <button class="mfb-color-reset" @click="applyColor('')">默认</button>
       </template>
     </div>
   </template>
@@ -65,13 +65,13 @@ const injectedEditor = inject('tiptapEditor', ref(null))
 
 const gid = computed(() => store.focusedGroupId)
 
-const toolbarRef = ref(null)
-const mfbColorBtnRef = ref(null)
+const toolbarRef = ref<HTMLElement | null>(null)
+const mfbColorBtnRef = ref<HTMLElement | null>(null)
 
 const icons = { bold: I.bold, underline: I.underline, ol: I.ol, ul: I.ul, taskList: I.taskList, textColor: I.textColor }
 
 function getEditor() {
-  const focusGid = store.focusedGroupId || document.activeElement?.closest?.('.group-body')?.dataset?.gid
+  const focusGid = store.focusedGroupId || (document.activeElement as HTMLElement)?.closest?.('.group-body')?.getAttribute('data-gid') || undefined
   if (focusGid) return EditorManager.get(focusGid)
   return injectedEditor.value
 }
@@ -80,33 +80,33 @@ const { fmt: state, colorOpen: paletteOpen, syncFmt: syncState, fmtToggle: _fmtT
 
 const palette = PALETTE
 
-function toggle(f) {
-  _fmtToggle(f)
-  const saveGid = store.focusedGroupId || document.activeElement?.closest?.('.group-body')?.dataset?.gid
+function toggle(f: string) {
+  _fmtToggle(f as any)
+  const saveGid = store.focusedGroupId || (document.activeElement as HTMLElement)?.closest?.('.group-body')?.getAttribute('data-gid') || undefined
   if (saveGid) saveGroupBody(saveGid)
 }
 
-function applyColor(hex) { _applyColor(hex) }
+function applyColor(hex: string) { _applyColor(hex) }
 
 function toggleMfbPalette() {
   paletteOpen.value = !paletteOpen.value
 }
 
-function onDocClick(e) {
+function onDocClick(e: MouseEvent) {
   // Desktop: close palette when clicking outside
-  if (paletteOpen.value && toolbarRef.value && !toolbarRef.value.contains(e.target)) {
+  if (paletteOpen.value && toolbarRef.value && !toolbarRef.value.contains(e.target as Node)) {
     paletteOpen.value = false
   }
 }
-function _mfbOnDocTouch(e) {
+function _mfbOnDocTouch(e: TouchEvent) {
   if (!paletteOpen.value) return
   const mfb = document.querySelector('.mfb')
-  if (mfb && !mfb.contains(e.target)) paletteOpen.value = false
+  if (mfb && !mfb.contains(e.target as Node)) paletteOpen.value = false
 }
 
 const isVisible = ref(false)
 const kbBottom = ref(0)
-let _showTimer = null
+let _showTimer: ReturnType<typeof setTimeout> | null = null
 
 function updateViewport() {
   const vv = window.visualViewport
@@ -139,7 +139,7 @@ function hide() {
   }
 }
 
-let _fmtHandler = null
+let _fmtHandler: (() => void) | null = null
 function _attachSync() {
   _detachSync()
   const ed = getEditor()

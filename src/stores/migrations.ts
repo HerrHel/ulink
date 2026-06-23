@@ -71,7 +71,7 @@ export function runMigrations(d: any, result: MigrationResult): boolean {
       const cleaned = cleanZeroWidth(g.notes)
       if (cleaned !== g.notes) { g.notes = cleaned; (g as any)._migrated = true }
     }
-    if (!g.updatedAt) { g.updatedAt = g.updatedAt || Date.now(); (g as any)._migrated = true }
+    if (!g.updatedAt) { g.updatedAt = Date.now(); (g as any)._migrated = true }
     if (g.useCount == null) { g.useCount = 0; (g as any)._migrated = true }
   })
 

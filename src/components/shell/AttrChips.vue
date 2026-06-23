@@ -18,24 +18,25 @@ import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { toggleAttrFilter, toggleAttrExclude } from '../../composables/domain/useAttrFilter.js'
 import { I } from '../../config/icons.js'
+import type { CustomAttribute } from '../../types.js'
 
 const store = useAppStore()
-const chipsRef = ref(null)
+const chipsRef = ref<HTMLElement | null>(null)
 
-const activeChips = computed(() => {
+const activeChips = computed<CustomAttribute[]>(() => {
   return store.activeAttrs
     .map(aid => store.customAttributes.find(x => x.id === aid))
-    .filter(Boolean)
+    .filter((c): c is CustomAttribute => c !== undefined)
 })
 
-const excludedChips = computed(() => {
+const excludedChips = computed<CustomAttribute[]>(() => {
   return store.excludedAttrs
     .map(aid => store.customAttributes.find(x => x.id === aid))
-    .filter(Boolean)
+    .filter((c): c is CustomAttribute => c !== undefined)
 })
 
-function onToggleFilter(id) { toggleAttrFilter(id) }
-function onToggleExclude(id) { toggleAttrExclude(id) }
+function onToggleFilter(id: string) { toggleAttrFilter(id) }
+function onToggleExclude(id: string) { toggleAttrExclude(id) }
 
 // 渐变遮罩
 function updateChipsFade() {
@@ -52,7 +53,7 @@ function updateChipsFade() {
 }
 
 // 滚轮水平滚动
-function onChipsWheel(e) {
+function onChipsWheel(e: WheelEvent) {
   const el = chipsRef.value
   if (!el || el.scrollWidth <= el.clientWidth) return
   e.preventDefault()
@@ -61,16 +62,16 @@ function onChipsWheel(e) {
 }
 
 // 鼠标拖拽滚动
-let _drag = null
-function onChipsMouseDown(e) {
-  if (e.target.closest('.attr-chip')) return
+let _drag: { x: number; s: number } | null = null
+function onChipsMouseDown(e: MouseEvent) {
+  if ((e.target as HTMLElement).closest('.attr-chip')) return
   const el = chipsRef.value
   if (!el) return
   _drag = { x: e.clientX, s: el.scrollLeft }
   el.style.cursor = 'grabbing'
   e.preventDefault()
 }
-function onChipsMouseMove(e) {
+function onChipsMouseMove(e: MouseEvent) {
   if (!_drag) return
   const el = chipsRef.value
   if (!el) return

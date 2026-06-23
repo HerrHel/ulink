@@ -37,17 +37,18 @@ import { addNewCategory } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import type { Category } from '../../types.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
 const newName = ref('')
-const newNameRef = ref(null)
+const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameCategory')
-const catListRef = ref(null)
+const catListRef = ref<HTMLElement | null>(null)
 
 const uncategorizedCat = computed(() => dataStore.categories.find(c => c.id === 'uncategorized') || { id: 'uncategorized', name: '未分类' })
 
-const sortableList = ref([])
+const sortableList = ref<Category[]>([])
 
 watch(() => store.catModalOpen, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())
@@ -61,18 +62,29 @@ watch(() => dataStore.selectableCategories, (val) => {
 const EDGE = 50
 const SPEED = 10
 
-let drag = null
-let scrollRaf = null
+interface DragState {
+  el: HTMLElement
+  placeholder: HTMLElement
+  startY: number
+  initialTop: number
+  lastY: number
+  itemHeight: number
+  currentIndex: number
+  pointerId: number
+}
 
-function getSortableItems() {
+let drag: DragState | null = null
+let scrollRaf: number | null = null
+
+function getSortableItems(): HTMLElement[] {
   if (!catListRef.value) return []
   return Array.from(catListRef.value.querySelectorAll('.cat-list-item[data-cat-id]'))
 }
 
-function onPointerDown(e) {
-  const handle = e.target.closest('.cat-drag-handle')
+function onPointerDown(e: PointerEvent) {
+  const handle = (e.target as HTMLElement).closest('.cat-drag-handle')
   if (!handle) return
-  const item = handle.closest('.cat-list-item[data-cat-id]')
+  const item = handle.closest('.cat-list-item[data-cat-id]') as HTMLElement | null
   if (!item || !catListRef.value) return
 
   e.preventDefault()
@@ -111,7 +123,7 @@ function onPointerDown(e) {
   document.addEventListener('pointermove', onPointerMove, { passive: false })
 }
 
-function onPointerMove(e) {
+function onPointerMove(e: PointerEvent) {
   if (!drag || e.pointerId !== drag.pointerId) return
   e.preventDefault()
   drag.lastY = e.clientY
@@ -119,12 +131,12 @@ function onPointerMove(e) {
   const top = drag.initialTop + (drag.lastY - drag.startY)
   drag.el.style.top = top + 'px'
 
-  const allItems = getSortableItems().filter(c => c !== drag.el)
+  const allItems = getSortableItems().filter(c => c !== drag!.el)
   let newIndex = allItems.length
   for (let i = 0; i < allItems.length; i++) {
-    if (allItems[i] === drag.placeholder) continue
+    if (allItems[i] === drag!.placeholder) continue
     const r = allItems[i].getBoundingClientRect()
-    if (top + drag.itemHeight / 2 < r.top + r.height / 2) {
+    if (top + drag!.itemHeight / 2 < r.top + r.height / 2) {
       newIndex = i
       break
     }
@@ -132,12 +144,12 @@ function onPointerMove(e) {
   if (newIndex !== drag.currentIndex) {
     drag.currentIndex = newIndex
     const refEl = allItems[newIndex]
-    if (refEl) catListRef.value.insertBefore(drag.placeholder, refEl)
-    else catListRef.value.appendChild(drag.placeholder)
+    if (refEl) catListRef.value!.insertBefore(drag.placeholder, refEl)
+    else catListRef.value!.appendChild(drag.placeholder)
   }
 
   // 边缘滚动
-  const scrollEl = catListRef.value
+  const scrollEl = catListRef.value!
   const scrollRect = scrollEl.getBoundingClientRect()
   let delta = 0
   if (drag.lastY - scrollRect.top < EDGE && scrollEl.scrollTop > 0) {
@@ -149,7 +161,7 @@ function onPointerMove(e) {
   if (delta) scrollEl.scrollTop += delta
 }
 
-function onPointerUp(e) {
+function onPointerUp(e: PointerEvent) {
   if (!drag || e.pointerId !== drag.pointerId) return
   document.removeEventListener('pointermove', onPointerMove)
 
@@ -165,12 +177,12 @@ function onPointerUp(e) {
   d.el.style.zIndex = ''
   d.el.style.transition = ''
 
-  d.placeholder.parentNode.insertBefore(d.el, d.placeholder)
+  d.placeholder.parentNode!.insertBefore(d.el, d.placeholder)
   d.placeholder.remove()
 
   // 重建顺序
   const allItems = getSortableItems()
-  const newOrder = []
+  const newOrder: Category[] = []
   allItems.forEach(item => {
     const catId = item.dataset.catId
     if (catId) {
@@ -206,7 +218,7 @@ function onAddCat() {
   if (addNewCategory(newName.value, store)) newName.value = ''
 }
 
-function onDelete(id) {
+function onDelete(id: string) {
   const cat = dataStore.categories.find(c => c.id === id)
   const catName = cat?.name || '此分类'
   const bmCount = dataStore.bookmarks.filter(b => b.categoryId === id).length

@@ -9,7 +9,7 @@
       <div class="card-topline">
         <div class="card-toprow">
           <div class="card-logo" title="打开链接" @click.stop="visit">
-            <img v-if="iconSrc" :src="iconSrc" alt="" @error="$event.target.classList.add('img-error')">
+            <img v-if="iconSrc" :src="iconSrc" alt="" @error="($event.target as HTMLImageElement).classList.add('img-error')">
             <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
           </div>
           <div class="card-titlewrap" @dblclick.stop="visit">
@@ -83,6 +83,7 @@ import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
+import type { Bookmark } from '../../types.js'
 
 function _hlEsc(s: string): string { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 function hlText(text: string, query: string): string {
@@ -102,7 +103,7 @@ function hlText(text: string, query: string): string {
   return parts.join('')
 }
 
-const props = defineProps({ bookmark: { type: Object, required: true } })
+const props = defineProps({ bookmark: { type: Object as () => Bookmark, required: true } })
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const store = useAppStore()
@@ -136,32 +137,32 @@ function visit() { openBookmark(props.bookmark) }
 function edit() { openBmModal(props.bookmark.id) }
 function del() { deleteBookmarkWithUndo(props.bookmark.id) }
 function doAddSub() { addSub(props.bookmark.id) }
-function doOpenDetail(bmId) { openDetail(bmId) }
-function visitSub(sub) { openBookmark(sub) }
+function doOpenDetail(bmId: string) { openDetail(bmId) }
+function visitSub(sub: any) { openBookmark(sub) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
 function toggleExpand() { props.bookmark.isExpanded = !props.bookmark.isExpanded; store.debouncedSave() }
-function onCardClick(e) {
+function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode !== 'list') return
-  if (e.target.closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
   toggleExpand()
 }
-function filterByTagName(name) {
+function filterByTagName(name: string) {
   const attr = dataStore.customAttributes.find(a => a.name === name)
   if (attr) toggleAttrFilter(attr.id)
 }
 function copyUser() { copyToClipboard(props.bookmark.username || '', '账户') }
 function copyPw() { copyToClipboard(decodedPw.value, '密码') }
 
-function editNotes(e) {
-  const notesEl = e.currentTarget
+function editNotes(e: Event) {
+  const notesEl = e.currentTarget as HTMLElement
   if (notesEl.hasAttribute('contenteditable')) return
   notesEl.setAttribute('contenteditable', 'true')
   notesEl.style.cssText = 'outline:1px dashed var(--accent);padding:4px;border-radius:4px;cursor:text;white-space:pre-wrap;-webkit-line-clamp:unset;display:block'
   notesEl.textContent = props.bookmark.notes || ''
   notesEl.focus()
   const sel = window.getSelection()
-  sel.selectAllChildren(notesEl)
+  sel?.selectAllChildren(notesEl)
 
   function saveNotes() {
     notesEl.removeAttribute('contenteditable')
@@ -176,7 +177,7 @@ function editNotes(e) {
     notesEl.removeEventListener('keydown', onKey)
   }
 
-  function onKey(ev) {
+  function onKey(ev: KeyboardEvent) {
     if (ev.key === 'Escape') { ev.preventDefault(); saveNotes() }
     if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); saveNotes() }
   }

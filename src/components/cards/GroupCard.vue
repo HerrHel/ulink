@@ -99,16 +99,17 @@ import { editGroup as _editGroup, toggleGroupFocus, saveGroupBody, deleteGroup a
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
 import { useEditorFormat } from '../../composables/ui/useEditorFormat.js'
+import type { SiblingGroup } from '../../types.js'
 
-const props = defineProps({ group: { type: Object, required: true } })
+const props = defineProps({ group: { type: Object as () => SiblingGroup, required: true } })
 const store = useAppStore()
 
-let _cardEl = null
-let _entranceCleanup = null
-function setCardEl(el) {
+let _cardEl: HTMLElement | null = null
+let _entranceCleanup: (() => void) | null = null
+function setCardEl(el: any) {
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
-  _cardEl = el
-  _entranceCleanup = stripEntranceAnim(el)
+  _cardEl = el as HTMLElement | null
+  if (el) _entranceCleanup = stripEntranceAnim(el)
 }
 
 const isFocused = computed(() => store.focusedGroupId === props.group.id)
@@ -131,8 +132,8 @@ const undoStore = useUndoStore()
 const hasUndo = computed(() => !!undoStore.canUndo(props.group.id))
 const hasRedo = computed(() => !!undoStore.canRedo(props.group.id))
 
-const colorBtnRef = ref(null)
-const paletteStyle = ref({})
+const colorBtnRef = ref<HTMLElement | null>(null)
+const paletteStyle = ref<Record<string, string>>({})
 const { fmt, colorOpen, syncFmt, fmtToggle: _fmtToggle, applyColor: _applyColor } = useEditorFormat(() => EditorManager.get(props.group.id))
 
 function toggleColorPalette() {
@@ -144,10 +145,10 @@ function toggleColorPalette() {
   colorOpen.value = true
 }
 
-function fmtToggle(f) { _fmtToggle(f); saveGroupBody(props.group.id) }
-function applyColor(hex) { _applyColor(hex); saveGroupBody(props.group.id) }
+function fmtToggle(f: string) { _fmtToggle(f as any); saveGroupBody(props.group.id) }
+function applyColor(hex: string) { _applyColor(hex); saveGroupBody(props.group.id) }
 
-let _selHandler = null
+let _selHandler: (() => void) | null = null
 function _attach() {
   _detach()
   const ed = EditorManager.get(props.group.id)
@@ -168,22 +169,22 @@ watch(isFocused, (v) => { v ? _attach() : _detach() }, { immediate: true })
 onBeforeUnmount(() => _detach())
 
 function toggleFocus() { toggleGroupFocus(props.group.id) }
-function onDblClick(e) { if (e.target.closest('button, input, [contenteditable], .gic-btn, .gic-remove')) return; toggleGroupFocus(props.group.id) }
-function addToGrp(e) { store.addToGid = props.group.id; const btn = e.currentTarget; if (btn) { const r = btn.getBoundingClientRect(); store._addPopoverTrigger = { top: r.bottom, left: r.left, width: r.width } } else { store._addPopoverTrigger = null } store.addBmPopoverOpen = true }
+function onDblClick(e: MouseEvent) { if ((e.target as HTMLElement).closest('button, input, [contenteditable], .gic-btn, .gic-remove')) return; toggleGroupFocus(props.group.id) }
+function addToGrp(e: MouseEvent) { store.addToGid = props.group.id; const btn = e.currentTarget as HTMLElement; if (btn) { const r = btn.getBoundingClientRect(); store._addPopoverTrigger = { top: r.bottom, left: r.left, width: r.width } } else { store._addPopoverTrigger = null } store.addBmPopoverOpen = true }
 function editGrp() { _editGroup(props.group.id) }
 function delGrp() { _deleteGroup(props.group.id) }
 function undo() { performUndo(props.group.id) }
 function redo() { performRedo(props.group.id) }
 function toggleSelect() { const id = 'group:' + props.group.id; const sel = store.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
-function filterByTagName(name) {
+function filterByTagName(name: string) {
   const attr = store.customAttributes.find(a => a.name === name)
   if (attr) toggleAttrFilter(attr.id)
 }
 function toggleExpand() { props.group.isExpanded = !props.group.isExpanded; store.debouncedSave() }
-function onCardClick(e) {
+function onCardClick(e: MouseEvent) {
   if (store.batchMode) { toggleSelect(); return }
   if (store.layoutMode !== 'list') return
-  if (e.target.closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
   toggleExpand()
 }
 </script>

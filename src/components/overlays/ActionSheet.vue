@@ -36,29 +36,35 @@ import { I, getCategoryIcon } from '../../config/icons.js'
 import { addNewCategory } from '../../utils.js'
 import { toast } from '../../lib/toast.js'
 
+interface ActionItem {
+  label: string
+  action: string | (() => void)
+  danger?: boolean
+}
+
 const store = useAppStore()
 const visible = ref(false)
-const mode = ref('actions') // 'actions' | 'category'
-const items = ref([])
+const mode = ref<'actions' | 'category'>('actions')
+const items = ref<ActionItem[]>([])
 const newCatName = ref('')
 const isDragging = ref(false)
 const dragY = ref(0)
 let startY = 0
-let catTargetId = null
-let catTargetType = null // 'group' | 'bm'
+let catTargetId: string | null = null
+let catTargetType: 'group' | 'bm' | null = null
 
 const categories = computed(() => store.selectableCategories)
 
-const _actionRegistry = {}
-function registerAction(id, fn) { _actionRegistry[id] = fn }
+const _actionRegistry: Record<string, () => void> = {}
+function registerAction(id: string, fn: () => void) { _actionRegistry[id] = fn }
 
-function showActionSheet(actionItems) {
+function showActionSheet(actionItems: ActionItem[]) {
   mode.value = 'actions'
   items.value = actionItems
   visible.value = true
 }
 
-function showCategoryPicker(targetId, targetType) {
+function showCategoryPicker(targetId: string, targetType: 'group' | 'bm') {
   mode.value = 'category'
   catTargetId = targetId
   catTargetType = targetType
@@ -72,19 +78,19 @@ function hide() {
   dragY.value = 0
 }
 
-function onAction(item) {
+function onAction(item: ActionItem) {
   hide()
   if (typeof item.action === 'function') item.action()
   else if (typeof item.action === 'string' && _actionRegistry[item.action]) _actionRegistry[item.action]()
 }
 
-function onPickCategory(catId) {
+function onPickCategory(catId: string) {
   hide()
   if (catTargetType === 'group') {
-    const g = store.groupMap[catTargetId]
+    const g = store.groupMap[catTargetId!]
     if (g) { g.categoryId = catId; g.updatedAt = Date.now(); store.save() }
   } else {
-    const b = store.bookmarkMap[catTargetId]
+    const b = store.bookmarkMap[catTargetId!]
     if (b) { b.categoryId = catId; store.save() }
   }
   const cat = store.categories.find(c => c.id === catId)
@@ -97,12 +103,12 @@ function onAddNewCat() {
 }
 
 // Touch handlers for swipe-down to dismiss
-function onTouchStart(e) {
+function onTouchStart(e: TouchEvent) {
   if (!visible.value) return
   startY = e.touches[0].clientY
   isDragging.value = false
 }
-function onTouchMove(e) {
+function onTouchMove(e: TouchEvent) {
   if (!startY) return
   const dy = e.touches[0].clientY - startY
   if (dy > 0) { isDragging.value = true; dragY.value = dy }
@@ -120,10 +126,10 @@ onMounted(() => {
     show: showActionSheet,
     hide,
     registerAction,
-    showCategoryPicker: (bmId) => showCategoryPicker(bmId, 'bm'),
-    showGroupCategoryPicker: (gid) => showCategoryPicker(gid, 'group'),
-    moveGroupToCat: (gid, catId) => { catTargetId = gid; catTargetType = 'group'; onPickCategory(catId) },
-    moveBmToCat: (bmId, catId) => { catTargetId = bmId; catTargetType = 'bm'; onPickCategory(catId) },
+    showCategoryPicker: (bmId: string) => showCategoryPicker(bmId, 'bm'),
+    showGroupCategoryPicker: (gid: string) => showCategoryPicker(gid, 'group'),
+    moveGroupToCat: (gid: string, catId: string) => { catTargetId = gid; catTargetType = 'group'; onPickCategory(catId) },
+    moveBmToCat: (bmId: string, catId: string) => { catTargetId = bmId; catTargetType = 'bm'; onPickCategory(catId) },
   }
   setActionSheetAPI(api)
 })

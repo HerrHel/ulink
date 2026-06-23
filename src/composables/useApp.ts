@@ -31,7 +31,7 @@ export function useApp() {
       { label: '打开链接', action: () => visit(null, bmId) },
       { label: '编辑', action: () => openBmModal(bmId) },
       { label: '移动到', action: () => actionSheetAPI?.showCategoryPicker(bmId) },
-      { label: '删除', action: () => deleteBookmark(bmId, true), danger: true }
+      { label: '删除', action: () => deleteBookmark(bmId), danger: true }
     ]
     if (gid) return [
       { label: '展开组', action: () => toggleGroupFocus(gid) },
@@ -46,7 +46,7 @@ export function useApp() {
 
   // ── 3. 全局事件委派 ──
   useGlobalEvents({
-    longPressFired: longPress.fired,
+    longPressFired: { value: longPress.fired },
     onOpenDetail: openDetail,
     onToggleGroupFocus: toggleGroupFocus,
     onRemoveGroupRef: removeGroupRef,

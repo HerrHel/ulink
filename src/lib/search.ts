@@ -6,6 +6,26 @@ import Fuse from 'fuse.js'
 import { pinyin } from 'pinyin-pro'
 import type { Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 
+type FuseOptionKeyObject = { name: string; weight: number }
+type IFuseOptions = {
+  threshold?: number
+  distance?: number
+  includeScore?: boolean
+  minMatchCharLength?: number
+  ignoreLocation?: boolean
+  findAllMatches?: boolean
+}
+type FuseResult = {
+  item: any
+  refIndex: number
+  score?: number
+  matches?: Array<{
+    key?: string
+    value?: string
+    indices: ReadonlyArray<readonly [number, number]>
+  }>
+}
+
 // ── 拼音缓存（避免同一条目重复计算）──
 const _pyCache = new Map<string, string>()
 
@@ -19,7 +39,7 @@ function _toPy(text: string): string {
 }
 
 // ── Fuse.js 配置 ──
-const BOOKMARK_KEYS: Fuse.FuseOptionKeyObject[] = [
+const BOOKMARK_KEYS: FuseOptionKeyObject[] = [
   { name: 'title',    weight: 0.35 },
   { name: 'url',      weight: 0.25 },
   { name: 'notes',    weight: 0.15 },
@@ -29,7 +49,7 @@ const BOOKMARK_KEYS: Fuse.FuseOptionKeyObject[] = [
   { name: 'notesPy',  weight: 0.02 },
 ]
 
-const GROUP_KEYS: Fuse.FuseOptionKeyObject[] = [
+const GROUP_KEYS: FuseOptionKeyObject[] = [
   { name: 'name',       weight: 0.40 },
   { name: 'attrNames',  weight: 0.15 },
   { name: 'childTitle', weight: 0.25 },
@@ -38,7 +58,7 @@ const GROUP_KEYS: Fuse.FuseOptionKeyObject[] = [
   { name: 'childTitlePy', weight: 0.05 },
 ]
 
-const FUSE_OPTIONS: Fuse.IFuseOptions<unknown> = {
+const FUSE_OPTIONS: IFuseOptions = {
   threshold: 0.2,
   distance: 200,
   includeScore: true,
@@ -188,6 +208,7 @@ export interface SearchResultItem {
   _isGroup?: boolean
   _displayTitle?: string
   _highlights: Record<string, HighlightSegment[]>
+  _divider?: string
 }
 
 function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {
@@ -202,7 +223,7 @@ function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [
   return segments.length ? segments : [{ text, highlight: false }]
 }
 
-function _extractHighlights(fuseResult: Fuse.FuseResult<unknown>, keyMap: Record<string, string>): Record<string, HighlightSegment[]> {
+function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, string>): Record<string, HighlightSegment[]> {
   const out: Record<string, HighlightSegment[]> = {}
   for (const match of fuseResult.matches || []) {
     if (!match.key || !match.indices?.length) continue
@@ -247,7 +268,7 @@ export function searchWithHighlights(
     id: r.item.id,
     title: (r.item as BookmarkSearchItem).title,
     url: (r.item as BookmarkSearchItem).url,
-    _highlights: _extractHighlights(r, BM_KEY_MAP),
+    _highlights: _extractHighlights(r as any, BM_KEY_MAP),
   }))
 
   if (groups !== _hlGrpCacheRef) {
@@ -263,7 +284,7 @@ export function searchWithHighlights(
     _isGroup: true,
     _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
     bookmarkIds: groups.find(g => g.id === r.item.id)?.bookmarkIds,
-    _highlights: _extractHighlights(r, GRP_KEY_MAP),
+    _highlights: _extractHighlights(r as any, GRP_KEY_MAP),
   }))
 
   if (!groupResults.length) return bookmarkResults.slice(0, maxResults)

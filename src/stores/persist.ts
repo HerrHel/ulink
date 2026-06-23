@@ -72,13 +72,7 @@ function _doSaveIDB(): void {
 }
 export function flushIDB(): void {
   if (_idbTimer) { clearTimeout(_idbTimer); _idbTimer = null }
-  if (_pendingIDBData) {
-    const plain = JSON.parse(JSON.stringify(_pendingIDBData))
-    plain._savedAt = Date.now()
-    _pendingIDBData = null
-    idbSet(IDB_KEY, plain).catch((e: Error) =>
-      console.warn('[persist] IDB flush failed:', e.message))
-  }
+  _doSaveIDB()
 }
 
 export function getStorageInfo(data: AppData): StorageInfo {

@@ -5,6 +5,7 @@ import { toast, toastWithUndo } from '../../lib/toast.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
+import { safeDecodePassword } from '../../crypto.js'
 import type { Bookmark } from '../../types.js'
 
 interface BmFormState {
@@ -32,11 +33,6 @@ interface BmFormState {
   aiSuggestAttrIds: string[]
   aiApplied: boolean
   _fetchTimer: ReturnType<typeof setTimeout> | null
-}
-
-function _decodePw(stored: string): string {
-  if (!stored) return ''
-  try { return atob(stored) } catch (_) { return stored }
 }
 
 /**
@@ -112,7 +108,7 @@ export function openBmModal(editId?: string) {
     bmForm.iconPreviewUrl = bm?.icon || ''
     bmForm.clearIconVisible = !!bm?.icon
 
-    bmForm.password = _decodePw(bm?.password || '')
+    bmForm.password = safeDecodePassword(bm?.password || '')
 
     bmForm.aiSuggestCatId = null
     bmForm.aiSuggestAttrIds = []

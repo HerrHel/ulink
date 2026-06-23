@@ -15,8 +15,8 @@ export function useInlineRename(store: InlineRenameStore, renameMethod: string) 
   const editingName = ref('')
   let editInputElement: HTMLInputElement | null = null
 
-  function setEditInputRef(el: HTMLInputElement | null) {
-    editInputElement = el
+  function setEditInputRef(el: any) {
+    editInputElement = el as HTMLInputElement | null
   }
 
   function startRename(item: { id: string; name: string }) {

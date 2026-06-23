@@ -4,15 +4,10 @@
  * 使用 useUndoStore 替代 LV.undoStacks / LV.undoTimers
  */
 import { useAppStore } from '../../stores/app.js'
-import { useUndoStore } from '../../stores/undo.js'
+import { useUndoStore, type UndoSnapshot } from '../../stores/undo.js'
 import { MAX_UNDO, UNDO_WINDOW, MAX_UNDO_BYTES } from '../../config/constants.js'
 import { EditorManager } from '../../lib/editor.js'
 import { toastAPI } from '../bridge.js'
-
-interface UndoSnapshot {
-  notes: string
-  bookmarkIds: string[]
-}
 
 let _restoring = false  // true while restoreSnapshot is running; suppress pushUndo
 

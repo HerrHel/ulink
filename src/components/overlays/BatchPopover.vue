@@ -32,7 +32,7 @@ const newCatName = ref('')
 
 const categories = computed(() => store.selectableCategories)
 
-function onMoveToCat(catId) {
+function onMoveToCat(catId: string) {
   batchMoveToCat(catId)
   newCatName.value = ''
   hide()
@@ -60,9 +60,9 @@ function hide() {
   document.removeEventListener('click', _closeOnOutsideClick)
 }
 
-function _closeOnOutsideClick(e) {
+function _closeOnOutsideClick(e: MouseEvent) {
   const pop = document.getElementById('batchMovePopover')
-  if (pop && !pop.contains(e.target) && !e.target.closest('[data-action="batchMove"]')) {
+  if (pop && !pop.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-action="batchMove"]')) {
     hide()
   }
 }

@@ -60,9 +60,9 @@ const uiStore = useUIStore()
 const visible = ref(false)
 const query = ref('')
 const tab = ref('bm')
-const searchInputRef = ref(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const sheetEnter = ref(false)
-let _closeTimer = null
+let _closeTimer: ReturnType<typeof setTimeout> | null = null
 
 const isMobileDevice = computed(() => uiStore.isMobile)
 
@@ -112,7 +112,7 @@ const groupResults = computed(() => {
 watch(() => store.addBmPopoverOpen, (v) => {
   if (v) {
     // 打开 —— 先显示元素，下一帧触发入场动画
-    clearTimeout(_closeTimer)
+    if (_closeTimer) clearTimeout(_closeTimer)
     visible.value = true
     query.value = ''
     tab.value = 'bm'
@@ -120,12 +120,12 @@ watch(() => store.addBmPopoverOpen, (v) => {
       nextTick(() => {
         requestAnimationFrame(() => {
           sheetEnter.value = true
-          if (searchInputRef.value) searchInputRef.value.focus()
+          searchInputRef.value?.focus()
         })
       })
     } else {
       nextTick(() => {
-        if (searchInputRef.value) searchInputRef.value.focus()
+        searchInputRef.value?.focus()
       })
     }
   } else {
@@ -141,15 +141,15 @@ watch(() => store.addBmPopoverOpen, (v) => {
   }
 })
 
-function switchTab(t) {
+function switchTab(t: string) {
   tab.value = t
   query.value = ''
   nextTick(() => {
-    if (searchInputRef.value) searchInputRef.value.focus()
+    searchInputRef.value?.focus()
   })
 }
 
-function show(targetGid) {
+function show(targetGid: string) {
   visible.value = true
   store.addToGid = targetGid
   query.value = ''
@@ -161,14 +161,14 @@ function close() {
   store._addPopoverTrigger = null
 }
 
-function onSelectBm(bmId) {
+function onSelectBm(bmId: string) {
   if (bmId && store.addToGid) {
     addToGroupDirect(bmId, store.addToGid)
     close()
   }
 }
 
-function onSelectGroup(refGid) {
+function onSelectGroup(refGid: string) {
   if (refGid && store.addToGid) {
     addGroupRefToGroup(refGid, store.addToGid)
     close()
@@ -178,7 +178,7 @@ function onSelectGroup(refGid) {
 function onAddNew() {
   if (!store.addToGid) return
   store.saveToGroup = store.addToGid
-  openBmModal(null)
+  openBmModal(undefined)
   bmForm.addToGroupMode = true
   close()
 }

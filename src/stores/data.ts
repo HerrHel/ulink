@@ -246,47 +246,28 @@ export const useDataStore = defineStore('data', {
     },
 
     // ── 回收站：恢复 ──
-    restoreBookmark(id: string) {
-      const bm = this.bookmarkMap[id]
-      if (bm) { delete bm.deletedAt; bm.updatedAt = Date.now(); this._markDirty(id) }
-    },
-    restoreGroup(id: string) {
-      const g = this.groupMap[id]
-      if (g) { delete g.deletedAt; g.updatedAt = Date.now(); this._markDirty(id) }
-    },
-    restoreCategory(id: string) {
-      const c = this.categories.find(c => c.id === id)
-      if (c) { delete c.deletedAt; c.updatedAt = Date.now(); this._markDirty(id) }
-    },
-    restoreAttribute(id: string) {
-      const attr = this.customAttributes.find(a => a.id === id)
-      if (attr) { delete attr.deletedAt; attr.updatedAt = Date.now(); this._markDirty(id) }
+    restoreBookmark(id: string) { this._restoreItem(this.bookmarkMap[id], id) },
+    restoreGroup(id: string) { this._restoreItem(this.groupMap[id], id) },
+    restoreCategory(id: string) { this._restoreItem(this.categories.find(c => c.id === id), id) },
+    restoreAttribute(id: string) { this._restoreItem(this.customAttributes.find(a => a.id === id), id) },
+
+    /** 内部辅助：恢复已软删除项 */
+    _restoreItem(item: { deletedAt?: number; updatedAt?: number } | undefined, id: string) {
+      if (item) { delete item.deletedAt; item.updatedAt = Date.now(); this._markDirty(id) }
     },
 
     // ── 回收站：永久删除 ──
-    permanentDeleteBookmark(id: string) {
-      const idx = this.bookmarks.findIndex(b => b.id === id)
-      if (idx >= 0) this.bookmarks.splice(idx, 1)
+    permanentDeleteBookmark(id: string) { this._permanentDelete(this.bookmarks, id, 'bookmarks') },
+    permanentDeleteGroup(id: string) { this._permanentDelete(this.siblingGroups, id, 'sibling_groups') },
+    permanentDeleteCategory(id: string) { this._permanentDelete(this.categories, id, 'categories') },
+    permanentDeleteAttribute(id: string) { this._permanentDelete(this.customAttributes, id, 'custom_attributes') },
+
+    /** 内部辅助：永久删除项 */
+    _permanentDelete(arr: { id: string }[], id: string, table: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes') {
+      const idx = arr.findIndex(item => item.id === id)
+      if (idx >= 0) arr.splice(idx, 1)
       this._dirtyIds.delete(id)
-      this._deletedIds.set(id, 'bookmarks')
-    },
-    permanentDeleteGroup(id: string) {
-      const idx = this.siblingGroups.findIndex(g => g.id === id)
-      if (idx >= 0) this.siblingGroups.splice(idx, 1)
-      this._dirtyIds.delete(id)
-      this._deletedIds.set(id, 'sibling_groups')
-    },
-    permanentDeleteCategory(id: string) {
-      const idx = this.categories.findIndex(c => c.id === id)
-      if (idx >= 0) this.categories.splice(idx, 1)
-      this._dirtyIds.delete(id)
-      this._deletedIds.set(id, 'categories')
-    },
-    permanentDeleteAttribute(id: string) {
-      const idx = this.customAttributes.findIndex(a => a.id === id)
-      if (idx >= 0) this.customAttributes.splice(idx, 1)
-      this._dirtyIds.delete(id)
-      this._deletedIds.set(id, 'custom_attributes')
+      this._deletedIds.set(id, table)
     },
 
     /** 清空回收站（永久删除所有已软删除项） */

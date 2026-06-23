@@ -59,13 +59,13 @@ function updateVisibility() {
 
 watch(() => store.searchQuery, updateVisibility)
 
-function select(item) {
+function select(item: SearchResultItem) {
   visible.value = false
   store.searchQuery = ''
   if (item._isGroup) {
     toggleGroupFocus(item.id)
   } else {
-    openBookmark(item)
+    openBookmark(item as any)
   }
 }
 
@@ -79,11 +79,11 @@ function esc(s: string): string { const d = document.createElement('div'); d.tex
 
 function hide() { visible.value = false }
 
-function onDocClick(e) { if (!e.target.closest('.search-wrapper')) visible.value = false }
+function onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.search-wrapper')) visible.value = false }
 
-function onFocusIn(e) { if (e.target.matches('.search-input')) updateVisibility() }
+function onFocusIn(e: FocusEvent) { if ((e.target as HTMLElement).matches('.search-input')) updateVisibility() }
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent) {
   if (!visible.value) return
   const len = results.value.filter(r => !r._divider).length
   if (e.key === 'ArrowDown') {

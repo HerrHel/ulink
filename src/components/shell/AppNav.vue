@@ -63,7 +63,7 @@ const curCat = computed(() => uiStore.curCat)
 const cardCounts = computed(() => dataStore.cardCounts)
 
 const storageInfo = computed(() => {
-  try { return dataStore.getStorageInfo() } catch { return null }
+  try { return (dataStore as any).getStorageInfo() } catch { return null }
 })
 
 const storageBarColor = computed(() => {
@@ -72,7 +72,7 @@ const storageBarColor = computed(() => {
   return p > 90 ? 'var(--danger)' : p > 70 ? 'var(--warn)' : 'var(--accent)'
 })
 
-function selectCat(id) {
+function selectCat(id: string) {
   uiStore.curCat = id
   uiStore.focusedGroupId = null
 }

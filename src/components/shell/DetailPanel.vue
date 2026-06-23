@@ -90,12 +90,20 @@ import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.
 
 const store = useAppStore()
 const searchQuery = ref('')
-const decodedPasswords = ref({})
+const decodedPasswords = ref<Record<string, string>>({})
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
 const isOpen = computed(() => store.detailOpen || store.detailCards.length > 0)
 
-const entries = computed(() => {
+interface DetailEntry {
+  rawId: string
+  isGroup: boolean
+  data: any
+  name: string
+  domain: string
+}
+
+const entries = computed<DetailEntry[]>(() => {
   return (store.detailCards || []).map(rawId => {
     if (typeof rawId === 'string' && rawId.startsWith('group:')) {
       const gid = rawId.slice(6)
@@ -104,7 +112,7 @@ const entries = computed(() => {
     }
     const bm = store.bookmarkMap[rawId]
     return bm ? { rawId, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) } : null
-  }).filter(Boolean)
+  }).filter((e): e is DetailEntry => e !== null)
 })
 
 const filteredEntries = computed(() => {
@@ -116,7 +124,7 @@ const filteredEntries = computed(() => {
 })
 
 function decodeAllPasswords() {
-  const results = {}
+  const results: Record<string, string> = {}
   for (const entry of entries.value) {
     if (!entry.isGroup && entry.data.password) {
       results[entry.rawId] = safeDecodePassword(entry.data.password)
@@ -130,12 +138,12 @@ watch(entries, () => nextTick(decodeAllPasswords))
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
 const isSwiping = ref(false)
 let _swipeStartY = 0
-function onSwipeStart(e) {
+function onSwipeStart(e: TouchEvent) {
   if (!isMobile() || !store.detailOpen) return
-  if (!e.target.closest('.detail-drag-handle')) return
+  if (!(e.target as HTMLElement).closest('.detail-drag-handle')) return
   _swipeStartY = e.touches[0].clientY
 }
-function onSwipeMove(e) {
+function onSwipeMove(e: TouchEvent) {
   if (!_swipeStartY) return
   const dy = e.touches[0].clientY - _swipeStartY
   if (dy > 0) {
@@ -176,18 +184,18 @@ onUnmounted(() => {
 const noteIcon = I.note
 const bookmarkIcon = I.emptyBookmark
 
-function getIcon(item) { return favicon(item.url, item.icon) }
-function getTags(bm) { return getTagNames(bm, store.customAttributes) }
-function getChildren(parentId) { return store.childrenMap[parentId] || [] }
-function sanitizeNotes(notes) { return sanitizeHTML(notes || '') }
+function getIcon(item: any) { return favicon(item.url, item.icon) }
+function getTags(bm: any) { return getTagNames(bm, store.customAttributes) }
+function getChildren(parentId: string) { return store.childrenMap[parentId] || [] }
+function sanitizeNotes(notes: string) { return sanitizeHTML(notes || '') }
 
-function visit(bm) { openBookmark(bm) }
-function editBm(id) { openBmModal(id) }
-function openDetail(id) { if (!store.detailCards.includes(id)) store.detailCards.push(id); store.detailOpen = true }
-function closeDetail(rawId) {
+function visit(bm: any) { openBookmark(bm) }
+function editBm(id: string) { openBmModal(id) }
+function openDetail(id: string) { if (!store.detailCards.includes(id)) store.detailCards.push(id); store.detailOpen = true }
+function closeDetail(rawId: string) {
   const idx = store.detailCards.indexOf(rawId)
   if (idx > -1) store.detailCards.splice(idx, 1)
   if (!store.detailCards.length) store.detailOpen = false
 }
-function copyText(text) { copyToClipboard(text || '') }
+function copyText(text: string) { copyToClipboard(text || '') }
 </script>

@@ -92,7 +92,7 @@ import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon, a
 import { I } from '../../config/icons.js'
 
 const store = useAppStore()
-const titleRef = ref(null)
+const titleRef = ref<HTMLInputElement | null>(null)
 
 const categoryOptions = computed(() => store.selectableCategories)
 const parentOptions = computed(() =>
@@ -114,8 +114,9 @@ const aiSuggestionText = computed(() => {
   return parts.length ? parts.join('，') : ''
 })
 
-function toggleAttr(attrId, event) {
-  if (event.target.checked) bmForm.attributes[attrId] = true
+function toggleAttr(attrId: string, event: Event) {
+  const target = event.target as HTMLInputElement
+  if (target.checked) bmForm.attributes[attrId] = true
   else delete bmForm.attributes[attrId]
 }
 

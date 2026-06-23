@@ -41,21 +41,21 @@ import { isMobile } from '../../utils.js'
 const store = useAppStore()
 const isOpen = ref(false)
 const query = ref('')
-const searchInputRef = ref(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 
 const filteredAttrs = computed(() => {
   const q = query.value.toLowerCase()
   return store.customAttributes.filter(a => a.name.toLowerCase().indexOf(q) !== -1)
 })
 
-function isActive(id) { return store.activeAttrs.indexOf(id) !== -1 }
-function isExcluded(id) { return store.excludedAttrs.indexOf(id) !== -1 }
+function isActive(id: string) { return store.activeAttrs.indexOf(id) !== -1 }
+function isExcluded(id: string) { return store.excludedAttrs.indexOf(id) !== -1 }
 
-function onToggleFilter(id) {
+function onToggleFilter(id: string) {
   toggleAttrFilter(id)
 }
 
-function onToggleExclude(id) {
+function onToggleExclude(id: string) {
   toggleAttrExclude(id)
 }
 
@@ -71,11 +71,11 @@ function onAddAttr() {
 }
 
 // 长按/右键菜单
-let _longPressTimer = null
+let _longPressTimer: ReturnType<typeof setTimeout> | null = null
 let _longPressFired = false
-let _touchStartId = null
+let _touchStartId: string | null = null
 
-function onItemContext(attrId, e) {
+function onItemContext(attrId: string, e: MouseEvent) {
   e.preventDefault()
   if (!isMobile()) {
     ctxMenuAPI?.show(e, 'attr', attrId)
@@ -84,7 +84,7 @@ function onItemContext(attrId, e) {
   }
 }
 
-function onTouchStart(attrId, e) {
+function onTouchStart(attrId: string, e: TouchEvent) {
   _longPressFired = false
   _touchStartId = attrId
   _longPressTimer = setTimeout(() => {
@@ -93,7 +93,7 @@ function onTouchStart(attrId, e) {
   }, 500)
 }
 
-function onTouchEnd(e) {
+function onTouchEnd(e: TouchEvent) {
   if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null }
   if (_longPressFired) { e.preventDefault(); _longPressFired = false }
   _touchStartId = null
@@ -104,7 +104,7 @@ function onTouchMove() {
   _touchStartId = null
 }
 
-function showAttrActions(attrId) {
+function showAttrActions(attrId: string) {
   const dataStore = useDataStore()
   const attr = store.customAttributes.find(a => a.id === attrId)
   if (!attr) return
@@ -114,24 +114,24 @@ function showAttrActions(attrId) {
   ])
 }
 
-function onRenameAttr(attrId) {
+function onRenameAttr(attrId: string) {
   const attr = store.customAttributes.find(a => a.id === attrId)
   if (!attr) return
   const input = window.prompt('重命名属性', attr.name)
   if (input && input.trim() && input.trim() !== attr.name) {
     const dataStore = useDataStore()
     dataStore.renameAttribute(attrId, input.trim())
-    dataStore.save()
+    store.save()
   }
 }
 
-function onDeleteAttr(attrId) {
+function onDeleteAttr(attrId: string) {
   const attr = store.customAttributes.find(a => a.id === attrId)
   if (!attr) return
   showConfirm('删除属性「' + attr.name + '」？', () => {
     const dataStore = useDataStore()
     dataStore.deleteAttribute(attrId)
-    dataStore.save()
+    store.save()
   })
 }
 

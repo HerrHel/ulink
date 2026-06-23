@@ -64,8 +64,8 @@ describe('runMigrations', () => {
     expect(result.customAttributes).toHaveLength(1)
     expect(result.customAttributes[0].id).toBe('attr-orig')
     // Bookmark attribute should be migrated to the kept attribute
-    expect(d.bookmarks[0].attributes['attr-orig']).toBe(true)
-    expect(d.bookmarks[0].attributes['attr-dup']).toBeUndefined()
+    expect((d.bookmarks[0].attributes as any)['attr-orig']).toBe(true)
+    expect((d.bookmarks[0].attributes as any)['attr-dup']).toBeUndefined()
     expect(needsPersist).toBe(true)
   })
 

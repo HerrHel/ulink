@@ -91,6 +91,14 @@ function _updateDragCursorForGroupBody(body: Element, clientX: number, clientY: 
 function _findBm(id: string): Bookmark | undefined { return useAppStore().bookmarkMap[id] }
 function _findGroup(id: string): SiblingGroup | undefined { return useAppStore().groupMap[id] }
 
+function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage = true) {
+  _currentDragPayload = payload
+  e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify(payload))
+  e.dataTransfer!.effectAllowed = 'move'
+  if (addDragImage) setDragImage(e)
+  el.classList.add('dragging')
+}
+
 function _onDragStart(e: DragEvent) {
   const store = useAppStore()
   if (store.batchMode) { e.preventDefault(); return; }
@@ -100,11 +108,7 @@ function _onDragStart(e: DragEvent) {
     const id = (bmCard as HTMLElement).dataset.id!;
     const gc = bmCard.closest('.group-card');
     const srcGid = gc ? (gc as HTMLElement).dataset.groupId : null;
-    _currentDragPayload = { type: 'bm', id: id, srcGid: srcGid };
-    e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify(_currentDragPayload));
-    e.dataTransfer!.effectAllowed = 'move';
-    setDragImage(e);
-    bmCard.classList.add('dragging');
+    _initDrag(e, bmCard, { type: 'bm', id, srcGid });
     return;
   }
   const inlineCard = (e.target as HTMLElement).closest('.group-inline-card[data-bm-id]');
@@ -112,11 +116,7 @@ function _onDragStart(e: DragEvent) {
     const id = inlineCard.getAttribute('data-bm-id')!;
     const gc = inlineCard.closest('.group-card');
     const srcGid = gc ? (gc as HTMLElement).dataset.groupId : null;
-    _currentDragPayload = { type: 'bm', id: id, srcGid: srcGid };
-    e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify(_currentDragPayload));
-    e.dataTransfer!.effectAllowed = 'move';
-    setDragImage(e);
-    inlineCard.classList.add('dragging');
+    _initDrag(e, inlineCard, { type: 'bm', id, srcGid });
     return;
   }
   const gCard = (e.target as HTMLElement).closest('.group-card[data-group-id]');
@@ -124,27 +124,19 @@ function _onDragStart(e: DragEvent) {
     const gid = (gCard as HTMLElement).dataset.groupId!;
     const parentGc = gCard.parentElement ? gCard.parentElement.closest('.group-card') : null;
     const srcGid = parentGc ? (parentGc as HTMLElement).dataset.groupId : null;
-    _currentDragPayload = { type: 'group', id: 'group:' + gid, srcGid: srcGid };
-    e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify(_currentDragPayload));
-    e.dataTransfer!.effectAllowed = 'move';
-    setDragImage(e);
-    gCard.classList.add('dragging');
+    _initDrag(e, gCard, { type: 'group', id: 'group:' + gid, srcGid });
     return;
   }
   const dCard = (e.target as HTMLElement).closest('.detail-card[data-didx]');
   if (dCard) {
     _detailDragIdx = parseInt((dCard as HTMLElement).dataset.didx!);
-    e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify({ type: 'detail', id: (dCard as HTMLElement).dataset.bmId, srcGid: DRAG_SRC_DETAIL }));
-    e.dataTransfer!.effectAllowed = 'move';
-    setDragImage(e);
-    dCard.classList.add('dragging');
+    _initDrag(e, dCard, { type: 'detail', id: (dCard as HTMLElement).dataset.bmId!, srcGid: DRAG_SRC_DETAIL });
     return;
   }
   const rItem = (e.target as HTMLElement).closest('.rail-item[draggable="true"]');
   if (rItem) {
     _catDragId = (rItem as HTMLElement).dataset.catId!;
-    e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify({ type: 'cat', id: _catDragId }));
-    e.dataTransfer!.effectAllowed = 'move';
+    _initDrag(e, rItem, { type: 'cat', id: _catDragId }, false);
     return;
   }
 }

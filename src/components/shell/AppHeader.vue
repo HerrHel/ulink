@@ -12,7 +12,7 @@
         </span>
         <span class="focus-title-input" contenteditable="true"
               :class="{ 'focus-title-unnamed': !focusedGroup.name || focusedGroup.name === '未命名' }"
-              @blur="$emit('focus-title-change', $event)" @keydown.enter.prevent="$event.target.blur()"
+              @blur="$emit('focus-title-change', $event)" @keydown.enter.prevent="($event.target as HTMLElement).blur()"
               @focus="onTitleFocus">{{ focusedGroup.name || '未命名' }}</span>
         <span class="panel-count">{{ focusBookmarkCount }} 个书签</span>
       </template>
@@ -73,21 +73,21 @@ const sync = useCloudSync()
 const syncDotClass = computed(() => {
   if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
   if (sync.syncStatus.value === 'error') return 'dot-error'
-  if (sync.pendingCount.value > 0) return 'dot-pending'
+  if ((sync.pendingCount.value as any) > 0) return 'dot-pending'
   return 'dot-ok'
 })
 
 // 搜索防抖：本地输入值延迟同步到 store
 const localQuery = ref(store.searchQuery)
-let _searchTimer = null
+let _searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(localQuery, (val) => {
-  clearTimeout(_searchTimer)
+  if (_searchTimer) clearTimeout(_searchTimer)
   _searchTimer = setTimeout(() => { store.searchQuery = val }, 300)
 })
 // store 被外部清空时（如退出聚焦），取消待执行的防抖并同步本地值
 watch(() => store.searchQuery, (val) => {
   if (val !== localQuery.value) {
-    clearTimeout(_searchTimer)
+    if (_searchTimer) clearTimeout(_searchTimer)
     localQuery.value = val
   }
 })
@@ -102,21 +102,22 @@ const panelCountText = computed(() =>
   (store.filteredBookmarks.filter(b => !b.parentId).length + store.filteredGroups.length) + ' 个'
 )
 const focusBookmarkCount = computed(() => {
-  const g = store.groupMap[store.focusedGroupId]
+  const g = store.focusedGroupId ? store.groupMap[store.focusedGroupId] : null
   return g ? (g.bookmarkIds?.length || 0) : 0
 })
 
 function toggleSettings() { store.settingsOpen = !store.settingsOpen }
-function onTitleFocus(e) {
-  const txt = e.target.textContent.trim()
+function onTitleFocus(e: FocusEvent) {
+  const target = e.target as HTMLElement
+  const txt = target.textContent?.trim() || ''
   if (!txt || txt === '未命名') {
-    e.target.textContent = ''
-    e.target.classList.remove('focus-title-unnamed')
+    target.textContent = ''
+    target.classList.remove('focus-title-unnamed')
   }
 }
 
-function onDblClick(e) {
-  if (store.focusedGroupId && !e.target.closest('input, button')) {
+function onDblClick(e: MouseEvent) {
+  if (store.focusedGroupId && !(e.target as HTMLElement).closest('input, button')) {
     emit('exit-focus')
   }
 }

@@ -44,23 +44,23 @@ const {
 
 const noteIcon = I.note
 
-function onItemMousedown(idx, event) {
+function onItemMousedown(idx: number, event: MouseEvent) {
   const item = candidates.value[idx]
   if (!item) return
-  if (item.subItems?.length && event.target.closest('.mention-sub-menu')) return
+  if (item.subItems?.length && (event.target as HTMLElement).closest('.mention-sub-menu')) return
   item.type === 'group' ? selectGroupRef(item.id) : selectBookmark(item.id)
 }
 
-function onSubItemMousedown(sub, event) {
+function onSubItemMousedown(sub: any, event: MouseEvent) {
   event.preventDefault(); event.stopPropagation()
   selectBookmark(sub.id)
 }
 
-function _onKeydown(e) { onTrigger(e); onKeydown(e) }
+function _onKeydown(e: KeyboardEvent) { onTrigger(e); onKeydown(e) }
 function _onScroll() {
   if (!isVisible.value) return
   const sel = window.getSelection()
-  if (sel.rangeCount) {
+  if (sel && sel.rangeCount) {
     const r = sel.getRangeAt(0).getClientRects()[0]
     if (r) pos.value = { x: Math.min(r.left, window.innerWidth - 310), y: Math.min(r.bottom + 4, window.innerHeight - 220) }
   }

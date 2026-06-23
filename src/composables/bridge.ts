@@ -39,6 +39,7 @@ export interface BatchMoveAPI {
 }
 
 export interface MentionAPI {
+  hide(): void
   init(): void
   destroy(): void
 }
@@ -50,28 +51,28 @@ export interface MfbAPI {
 
 // --- Mention ---
 export let mentionAPI: MentionAPI | null = null
-export function setMentionAPI(api: MentionAPI) { mentionAPI = api }
+export function setMentionAPI(api: MentionAPI | null) { mentionAPI = api }
 
 // --- Toast / Confirm ---
 export let toastAPI: ToastAPI | null = null
-export function setToastAPI(api: ToastAPI) { toastAPI = api }
+export function setToastAPI(api: ToastAPI | null) { toastAPI = api }
 
 // --- Context Menu ---
 export let ctxMenuAPI: ContextMenuAPI | null = null
-export function setCtxMenuAPI(api: ContextMenuAPI) { ctxMenuAPI = api }
+export function setCtxMenuAPI(api: ContextMenuAPI | null) { ctxMenuAPI = api }
 
 // --- Action Sheet ---
 export let actionSheetAPI: ActionSheetAPI | null = null
-export function setActionSheetAPI(api: ActionSheetAPI) { actionSheetAPI = api }
+export function setActionSheetAPI(api: ActionSheetAPI | null) { actionSheetAPI = api }
 
 // --- Attr Dropdown ---
 export let attrDropdownAPI: AttrDropdownAPI | null = null
-export function setAttrDropdownAPI(api: AttrDropdownAPI) { attrDropdownAPI = api }
+export function setAttrDropdownAPI(api: AttrDropdownAPI | null) { attrDropdownAPI = api }
 
 // --- Batch Move Popover ---
 export let batchMoveAPI: BatchMoveAPI | null = null
-export function setBatchMoveAPI(api: BatchMoveAPI) { batchMoveAPI = api }
+export function setBatchMoveAPI(api: BatchMoveAPI | null) { batchMoveAPI = api }
 
 // --- Mobile Format Bar ---
 export let mfbAPI: MfbAPI | null = null
-export function setMfbAPI(api: MfbAPI) { mfbAPI = api }
+export function setMfbAPI(api: MfbAPI | null) { mfbAPI = api }

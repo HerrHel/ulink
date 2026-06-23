@@ -22,15 +22,31 @@ import { I } from '../../config/icons.js'
 import { TOAST_FADE_MS, TOAST_REMOVE_MS } from '../../config/constants.js'
 import { esc } from '../../utils.js'
 
+interface ToastItem {
+  id: number
+  ok: boolean
+  html: string
+  opacity: string
+  transform: string
+  transition: string
+}
+
+interface UndoToast {
+  msg: string
+  undoFn: () => void
+  countdown: number
+  cls: string
+}
+
 const store = useAppStore()
-const toasts = ref([])
-const undoToast = ref(null)
+const toasts = ref<ToastItem[]>([])
+const undoToast = ref<UndoToast | null>(null)
 let toastIdCounter = 0
 
-function _toastImpl(msg, ok = true) {
+function _toastImpl(msg: string, ok = true) {
   const id = ++toastIdCounter
   const html = (ok ? I.external : I.trash) + esc(msg)
-  const toastItem = { id, ok, html, opacity: '1', transform: '', transition: '' }
+  const toastItem: ToastItem = { id, ok, html, opacity: '1', transform: '', transition: '' }
   toasts.value.push(toastItem)
   
   setTimeout(() => {
@@ -45,11 +61,11 @@ function _toastImpl(msg, ok = true) {
   }, TOAST_REMOVE_MS)
 }
 
-let dismissTimer = null
-let countdownTimer = null
+let dismissTimer: ReturnType<typeof setTimeout> | null = null
+let countdownTimer: ReturnType<typeof setInterval> | null = null
 let _undoGeneration = 0
 
-function _toastWithUndoImpl(msg, undoFn, duration = 6000) {
+function _toastWithUndoImpl(msg: string, undoFn: () => void, duration = 6000) {
   dismissToast()
 
   const gen = ++_undoGeneration
@@ -67,7 +83,7 @@ function _toastWithUndoImpl(msg, undoFn, duration = 6000) {
   let remaining = duration
   countdownTimer = setInterval(() => {
     remaining -= 1000
-    if (gen !== _undoGeneration) { clearInterval(countdownTimer); countdownTimer = null; return }
+    if (gen !== _undoGeneration) { clearInterval(countdownTimer!); countdownTimer = null; return }
     if (undoToast.value && remaining > 0) {
       undoToast.value.countdown = Math.ceil(remaining / 1000)
     }
@@ -95,7 +111,7 @@ function dismissToast() {
   }
 }
 
-function _showConfirmImpl(msg, onConfirm) {
+function _showConfirmImpl(msg: string, onConfirm: () => void) {
   store.confirmModalMessage = msg
   store.confirmModalCallback = onConfirm
   store.confirmModalOpen = true

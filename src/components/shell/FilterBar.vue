@@ -52,8 +52,8 @@ const store = useAppStore()
 const undo = useUndoStore()
 const emit = defineEmits(['exit-focus', 'focus-add-bm', 'focus-edit-group', 'focus-undo', 'focus-redo', 'toggle-attr-filter', 'add-bookmark', 'add-group'])
 
-const focusCanUndo = computed(() => !!undo.canUndo(store.focusedGroupId))
-const focusCanRedo = computed(() => !!undo.canRedo(store.focusedGroupId))
+const focusCanUndo = computed(() => !!store.focusedGroupId && !!undo.canUndo(store.focusedGroupId))
+const focusCanRedo = computed(() => !!store.focusedGroupId && !!undo.canRedo(store.focusedGroupId))
 
 const toggleBatch = toggleBatchMode
 function onAddClick() { store.addDropdownOpen = !store.addDropdownOpen }

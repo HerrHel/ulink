@@ -35,7 +35,7 @@ import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 
 const store = useAppStore()
 const newName = ref('')
-const newNameRef = ref(null)
+const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameAttribute')
 
 const attributes = computed(() => store.customAttributes)
@@ -57,7 +57,7 @@ function onAddAttr() {
   toast('属性已添加')
 }
 
-function onDelete(id) {
+function onDelete(id: string) {
   store.deleteAttribute(id)
   store.save()
   toast('属性已删除')

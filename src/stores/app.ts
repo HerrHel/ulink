@@ -10,6 +10,7 @@ import { computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useDataStore } from './data.js'
 import { useUIStore } from './ui.js'
+import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { toast } from '../lib/toast.js'
@@ -35,25 +36,10 @@ export const useAppStore = defineStore('app', () => {
   const cardCounts = computed(() => ds().cardCounts)
 
   // Helper: 可读写 computed，委托 uiStore
-  const uiProp = (key: string) => computed({
-    get: () => (ui() as any)[key],
-    set: (v: any) => { (ui() as any)[key] = v }
+  const uiProp = <K extends keyof UIState>(key: K) => computed({
+    get: () => ui()[key],
+    set: (v: UIState[K]) => { (ui() as any)[key] = v }
   })
-
-  const _uiKeys = [
-    'curCat', 'sortMode', 'sortDir', 'layoutMode', 'searchQuery',
-    'focusedGroupId', 'batchMode', 'batchSelected', 'activeAttrs', 'excludedAttrs',
-    'detailCards', 'detailOpen', 'editingId', 'themeMode', 'themeStyle',
-    'settingsOpen', 'addDropdownOpen', 'railOpen', 'bmModalOpen', 'addBmPopoverOpen',
-    'catModalOpen', 'attrModalOpen', 'groupEditOpen',
-    'confirmModalOpen', 'confirmModalMessage', 'confirmModalCallback',
-    'trashPanelOpen', 'historyPanelOpen', 'historyItemId', 'historyItemType',
-    'mentionGid', 'mentionQuery', 'mentionIdx', 'mentionActive', 'mentionType',
-    'mentionSubMode', 'mentionSubIdx',
-    'addToGid', '_addPopoverTrigger', 'saveToGroup',
-    'ctxGid', 'ctxCard', 'editingGeId', 'lastFocusedEl', 'lpFired',
-    '_prevLayoutMode',
-  ]
 
   return {
     bookmarks, siblingGroups, categories, customAttributes,
@@ -61,8 +47,53 @@ export const useAppStore = defineStore('app', () => {
     filteredBookmarks, filteredGroups, cardCounts,
     selectableCategories: computed(() => ds().selectableCategories),
 
-    // ── UI 状态（可读写，批量委托 uiStore）──
-    ...Object.fromEntries(_uiKeys.map(k => [k, uiProp(k)])),
+    // ── UI 状态（可读写，委托 uiStore）──
+    curCat: uiProp('curCat'),
+    sortMode: uiProp('sortMode'),
+    sortDir: uiProp('sortDir'),
+    layoutMode: uiProp('layoutMode'),
+    searchQuery: uiProp('searchQuery'),
+    focusedGroupId: uiProp('focusedGroupId'),
+    batchMode: uiProp('batchMode'),
+    batchSelected: uiProp('batchSelected'),
+    activeAttrs: uiProp('activeAttrs'),
+    excludedAttrs: uiProp('excludedAttrs'),
+    detailCards: uiProp('detailCards'),
+    detailOpen: uiProp('detailOpen'),
+    editingId: uiProp('editingId'),
+    themeMode: uiProp('themeMode'),
+    themeStyle: uiProp('themeStyle'),
+    settingsOpen: uiProp('settingsOpen'),
+    addDropdownOpen: uiProp('addDropdownOpen'),
+    railOpen: uiProp('railOpen'),
+    bmModalOpen: uiProp('bmModalOpen'),
+    addBmPopoverOpen: uiProp('addBmPopoverOpen'),
+    catModalOpen: uiProp('catModalOpen'),
+    attrModalOpen: uiProp('attrModalOpen'),
+    groupEditOpen: uiProp('groupEditOpen'),
+    confirmModalOpen: uiProp('confirmModalOpen'),
+    confirmModalMessage: uiProp('confirmModalMessage'),
+    confirmModalCallback: uiProp('confirmModalCallback'),
+    trashPanelOpen: uiProp('trashPanelOpen'),
+    historyPanelOpen: uiProp('historyPanelOpen'),
+    historyItemId: uiProp('historyItemId'),
+    historyItemType: uiProp('historyItemType'),
+    mentionGid: uiProp('mentionGid'),
+    mentionQuery: uiProp('mentionQuery'),
+    mentionIdx: uiProp('mentionIdx'),
+    mentionActive: uiProp('mentionActive'),
+    mentionType: uiProp('mentionType'),
+    mentionSubMode: uiProp('mentionSubMode'),
+    mentionSubIdx: uiProp('mentionSubIdx'),
+    addToGid: uiProp('addToGid'),
+    _addPopoverTrigger: uiProp('_addPopoverTrigger'),
+    saveToGroup: uiProp('saveToGroup'),
+    ctxGid: uiProp('ctxGid'),
+    ctxCard: uiProp('ctxCard'),
+    editingGeId: uiProp('editingGeId'),
+    lastFocusedEl: uiProp('lastFocusedEl'),
+    lpFired: uiProp('lpFired'),
+    _prevLayoutMode: uiProp('_prevLayoutMode'),
 
     // ── CRUD（委托 dataStore）──
     addBookmark(bm: Bookmark) { ds().addBookmark(bm) },

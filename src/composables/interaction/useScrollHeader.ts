@@ -9,8 +9,8 @@ import { isMobile } from '../../utils.js'
 export function useScrollHeader() {
   onMounted(() => {
     if (!isMobile()) return
-    const content = document.getElementById('panelContent')
-    const wrapper = document.querySelector('.panel-main-inner')
+    const content = document.getElementById('panelContent') as HTMLElement | null
+    const wrapper = document.querySelector('.panel-main-inner') as HTMLElement | null
     if (!content || !wrapper) return
 
     const THRESHOLD_SEARCH = 60
@@ -22,19 +22,19 @@ export function useScrollHeader() {
       if (ticking) return
       ticking = true
       requestAnimationFrame(() => {
-        const y = content.scrollTop
-        const hasSearch = wrapper.classList.contains('scrolled-search')
-        const hasHeader = wrapper.classList.contains('scrolled-header')
+        const y = content!.scrollTop
+        const hasSearch = wrapper!.classList.contains('scrolled-search')
+        const hasHeader = wrapper!.classList.contains('scrolled-header')
 
         if (y > THRESHOLD_HEADER + (hasHeader ? 0 : HYSTERESIS)) {
-          if (!hasSearch) wrapper.classList.add('scrolled-search')
-          if (!hasHeader) wrapper.classList.add('scrolled-header')
+          if (!hasSearch) wrapper!.classList.add('scrolled-search')
+          if (!hasHeader) wrapper!.classList.add('scrolled-header')
         } else if (y > THRESHOLD_SEARCH + (hasSearch ? 0 : HYSTERESIS)) {
-          if (!hasSearch) wrapper.classList.add('scrolled-search')
-          if (hasHeader) wrapper.classList.remove('scrolled-header')
+          if (!hasSearch) wrapper!.classList.add('scrolled-search')
+          if (hasHeader) wrapper!.classList.remove('scrolled-header')
         } else {
-          if (hasSearch) wrapper.classList.remove('scrolled-search')
-          if (hasHeader) wrapper.classList.remove('scrolled-header')
+          if (hasSearch) wrapper!.classList.remove('scrolled-search')
+          if (hasHeader) wrapper!.classList.remove('scrolled-header')
         }
         ticking = false
       })
@@ -45,8 +45,8 @@ export function useScrollHeader() {
     // 搜索切换按钮：展开搜索并聚焦
     const searchBtn = document.getElementById('searchToggleBtn')
     function onSearchToggle() {
-      wrapper.classList.remove('scrolled-search', 'scrolled-header')
-      content.scrollTop = 0
+      wrapper!.classList.remove('scrolled-search', 'scrolled-header')
+      content!.scrollTop = 0
       setTimeout(() => { document.getElementById('searchInput')?.focus() }, 350)
     }
     if (searchBtn) searchBtn.addEventListener('click', onSearchToggle)

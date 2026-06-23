@@ -318,6 +318,7 @@
   cursor:pointer;
   transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out);
   animation:cardIn 0.32s var(--ease-out) backwards;
+  overflow:clip;
   height:232px;
   display:flex;
   flex-direction:column;
@@ -348,10 +349,10 @@
 
 .card-body{
   position:relative;z-index:1;
-  flex:1;min-height:0;
+  flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
 }
-/* Grid view: fade-out mask at bottom of card notes */
-.card-grid:not(.list-view) .card-notes{
+/* Grid view: fade-out mask at bottom of card body */
+.card-grid:not(.list-view) .card-body{
   -webkit-mask-image:var(--mask-fade-bottom);
   mask-image:var(--mask-fade-bottom);
 }

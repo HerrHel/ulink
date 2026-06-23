@@ -27,7 +27,7 @@ function onCancel() {
   store.confirmModalCallback = null
 }
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent) {
   if (!store.confirmModalOpen) return
   if (e.key === 'Escape') { e.preventDefault(); onCancel() }
   if (e.key === 'Enter') { e.preventDefault(); onOk() }

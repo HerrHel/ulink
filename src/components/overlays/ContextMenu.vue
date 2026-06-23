@@ -44,7 +44,7 @@ const allItems = [
   { action: ACTIONS.RENAME_ATTR, text: '重命名' },
 ]
 
-const RULES = {
+const RULES: Record<string, { show: string[]; text: Record<string, string> }> = {
   card:         { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MULTI_SELECT], text: {} },
   sub:          { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情' } },
   cat:          { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
@@ -55,13 +55,13 @@ const RULES = {
   'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
 }
 
-const DEFAULT_TEXT = { [ACTIONS.VISIT]: '打开网站', [ACTIONS.EDIT]: '编辑', [ACTIONS.DELETE]: '删除' }
+const DEFAULT_TEXT: Record<string, string> = { [ACTIONS.VISIT]: '打开网站', [ACTIONS.EDIT]: '编辑', [ACTIONS.DELETE]: '删除' }
 
 const visibleItems = computed(() => {
   const rule = RULES[ctxType.value] || { show: [], text: {} }
   const showSet = new Set(rule.show)
   const textMap = { ...DEFAULT_TEXT, ...rule.text }
-  const items = []
+  const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
   for (const item of allItems) {
     if (!showSet.has(item.action)) continue
     items.push({ ...item, text: textMap[item.action] || item.text })
@@ -69,7 +69,7 @@ const visibleItems = computed(() => {
   return items
 })
 
-function show(e, type, targetId) {
+function show(e: MouseEvent, type: string, targetId: string) {
   e.preventDefault()
   ctxType.value = type
   ctxTarget.value = targetId
@@ -83,7 +83,7 @@ function hide() {
   visible.value = false
 }
 
-function onItemClick(action) {
+function onItemClick(action: string) {
   const tid = ctxTarget.value
   const ttype = ctxType.value
   hide()
@@ -91,7 +91,7 @@ function onItemClick(action) {
   _dispatchAction(ttype, action, tid)
 }
 
-function _dispatchAction(type, action, id) {
+function _dispatchAction(type: string, action: string, id: string) {
   if (type === 'card') {
     if (action === ACTIONS.VISIT) visit(null, id)
     if (action === ACTIONS.EDIT) openBmModal(id)
@@ -112,7 +112,7 @@ function _dispatchAction(type, action, id) {
         const input = window.prompt('重命名属性', attr.name)
         if (input && input.trim() && input.trim() !== attr.name) {
           dataStore.renameAttribute(id, input.trim())
-          dataStore.save()
+          store.save()
         }
       }
     }
@@ -126,7 +126,7 @@ function _dispatchAction(type, action, id) {
   } else if (type === 'group-card') {
     if (action === ACTIONS.VISIT) openDetail(id)
     if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) removeBmFromGroup(id, store.ctxGid)
+    if (action === ACTIONS.DELETE) removeBmFromGroup(id, store.ctxGid!)
   } else if (type === 'grid-empty') {
     if (action === ACTIONS.ADD_BOOKMARK) openBmModal()
     if (action === ACTIONS.ADD_GROUP) createGroup()
@@ -135,7 +135,7 @@ function _dispatchAction(type, action, id) {
   }
 }
 
-function _onDocClick(e) { if (!e.target.closest('#ctxMenu')) hide() }
+function _onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('#ctxMenu')) hide() }
 
 onMounted(() => {
   setCtxMenuAPI({ show, hide })

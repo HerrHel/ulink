@@ -236,7 +236,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
     if (fromIndex !== toIndex) {
       if (onReorder) {
-        onReorder(null, fromIndex, toIndex)
+        onReorder(null as any, fromIndex, toIndex)
       } else {
         const movedItem = arr[fromIndex]
         if (!movedItem) return
@@ -248,7 +248,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
         // 保存自定义顺序 + 更新 order 值
         allItems.forEach((it, i) => { it.data.order = i })
-        const newOrder = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
+        const newOrder: Array<{ t: 'g' | 'b'; id: string }> = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
 
         dataStore._customCardOrder = newOrder
         const uiStore = useUIStore()

@@ -8,7 +8,7 @@ import { CAT_ALL, UI_STATE_KEY } from '../config/constants.js'
 import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 
-interface UIState {
+export interface UIState {
   curCat: string
   isMobile: boolean
   sortMode: string

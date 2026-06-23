@@ -18,7 +18,7 @@
           <label class="form-label">属性标记</label>
           <div class="check-group">
             <label v-for="a in store.customAttributes" :key="a.id" class="check-chip">
-              <input type="checkbox" :checked="!!geForm.attrs[a.id]" @change="geForm.attrs[a.id] = $event.target.checked">
+              <input type="checkbox" :checked="!!geForm.attrs[a.id]" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
               {{ a.name }}
             </label>
           </div>
@@ -50,7 +50,7 @@ import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } 
 import { EditorManager } from '../../lib/editor.js'
 
 const store = useAppStore()
-const geNameRef = ref(null)
+const geNameRef = ref<HTMLInputElement | null>(null)
 
 const categoryOptions = computed(() => store.selectableCategories)
 
@@ -68,10 +68,10 @@ const geBookmarkList = computed(() => {
     .filter(Boolean)
 })
 
-function faviconUrl(url) { return favicon(url || '') }
-function domainName(url) { return domain(url || '') }
+function faviconUrl(url: string) { return favicon(url || '') }
+function domainName(url: string) { return domain(url || '') }
 
-function onRemoveBm(bmId) {
+function onRemoveBm(bmId: string) {
   const gId = geForm.id || store.editingGeId
   if (!gId) return
   const sg = store.groupMap[gId]

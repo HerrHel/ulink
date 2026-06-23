@@ -120,7 +120,7 @@ const trashCount = computed(() => dataStore.trashCount)
 const syncDotClass = computed(() => {
   if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
   if (sync.syncStatus.value === 'error') return 'dot-error'
-  if (sync.pendingCount.value > 0) return 'dot-pending'
+  if ((sync.pendingCount.value as any) > 0) return 'dot-pending'
   return 'dot-ok'
 })
 const dlChecking = computed(() => dl.checking.value)
@@ -136,7 +136,7 @@ const sortModes = [
   { id: 'useCount', label: '常用' },
 ]
 
-function onSetThemeStyle(style) {
+function onSetThemeStyle(style: string) {
   themeSetStyle(style)
   store.themeStyle = style
 }
@@ -146,13 +146,13 @@ function onToggleAutoTheme() {
   store.themeMode = localStorage.getItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
 }
 
-function onSetLayout(mode) {
+function onSetLayout(mode: 'grid' | 'list') {
   if (store.focusedGroupId) return
   if (uiStore.isMobile) return
   store.layoutMode = mode
 }
 
-function onSetSortMode(mode) {
+function onSetSortMode(mode: string) {
   store.sortMode = mode
 }
 

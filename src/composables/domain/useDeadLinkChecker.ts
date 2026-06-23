@@ -160,13 +160,13 @@ export function useDeadLinkChecker() {
       } else if (r.blocked) {
         if (!hasGfwAttr || hasDeadAttr) {
           ds.updateBookmark(bm.id, {
-            attributes: { ...attrs, 'gfw-blocked': true, 'dead-link': undefined }
+            attributes: { ...attrs, 'gfw-blocked': true, 'dead-link': false }
           })
         }
       } else {
         if (!hasDeadAttr || hasGfwAttr) {
           ds.updateBookmark(bm.id, {
-            attributes: { ...attrs, 'dead-link': true, 'gfw-blocked': undefined }
+            attributes: { ...attrs, 'dead-link': true, 'gfw-blocked': false }
           })
         }
       }
