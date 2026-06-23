@@ -6,6 +6,10 @@
  * - navigator.locks 替代 _syncing 布尔值（避免竞态丢弃）
  * - Supabase Realtime 订阅替代 60s 轮询（秒级同步）
  * - 增量拉取（updated_at_num > lastSyncAt）
+ * P4 改进：
+ * - Realtime 断线自动重连（指数退避）
+ * - 重连后 backfill 补全离线期间数据
+ * - 连接状态可视化
  */
 import { ref, computed } from 'vue'
 import { supabase } from '../../lib/supabase.js'
@@ -23,6 +27,7 @@ const syncStatus = ref<'idle' | 'syncing' | 'success' | 'error'>('idle')
 const lastSyncAt = ref<number>(0)
 const syncError = ref<string | null>(null)
 const autoSync = ref(true)
+const realtimeStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
 
 // ── 冲突检测 ──
 export interface SyncConflict {
@@ -38,6 +43,10 @@ const _remoteSnapshots = new Map<string, unknown>()
 let _channel: ReturnType<typeof supabase.channel> | null = null
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
+let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let _reconnectAttempts = 0
+const MAX_RECONNECT_ATTEMPTS = 10
+const BASE_RECONNECT_DELAY = 1000
 
 // ── 辅助函数 ──
 function _parsePassword(raw: unknown): string {
@@ -554,10 +563,27 @@ export function useCloudSync() {
     }
   }
 
+  function _scheduleReconnect() {
+    if (_reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn('[realtime] max reconnect attempts reached')
+      realtimeStatus.value = 'error'
+      return
+    }
+    const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, _reconnectAttempts), 30000)
+    _reconnectAttempts++
+    console.log(`[realtime] reconnecting in ${delay}ms (attempt ${_reconnectAttempts})`)
+    _reconnectTimer = setTimeout(() => {
+      _reconnectTimer = null
+      unsubscribeRealtime()
+      subscribeRealtime()
+    }, delay)
+  }
+
   function subscribeRealtime() {
     const userId = _getUserId()
     if (!userId || _channel) return
 
+    realtimeStatus.value = 'connecting'
     _channel = supabase.channel('db-changes')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'bookmarks', filter: `user_id=eq.${userId}` },
@@ -572,12 +598,37 @@ export function useCloudSync() {
         { event: '*', schema: 'public', table: 'custom_attributes', filter: `user_id=eq.${userId}` },
         (p) => _handleRealtimeChange(p, 'attribute'))
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') console.log('[realtime] subscribed')
-        if (status === 'CHANNEL_ERROR') console.warn('[realtime] channel error')
+        if (status === 'SUBSCRIBED') {
+          console.log('[realtime] subscribed')
+          realtimeStatus.value = 'connected'
+          _reconnectAttempts = 0
+          // 重连后 backfill 补全离线期间数据
+          if (lastSyncAt.value > 0) {
+            _withLock('linkvault-sync', _pullChanges).catch(() => {})
+          }
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[realtime] channel error')
+          realtimeStatus.value = 'error'
+          _scheduleReconnect()
+        }
+        if (status === 'TIMED_OUT') {
+          console.warn('[realtime] timed out')
+          realtimeStatus.value = 'error'
+          _scheduleReconnect()
+        }
+        if (status === 'CLOSED') {
+          realtimeStatus.value = 'disconnected'
+          // 非主动关闭时自动重连
+          if (isLoggedIn.value) _scheduleReconnect()
+        }
       })
   }
 
   function unsubscribeRealtime() {
+    if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null }
+    _reconnectAttempts = 0
+    realtimeStatus.value = 'disconnected'
     if (_channel) {
       supabase.removeChannel(_channel)
       _channel = null
@@ -780,6 +831,7 @@ export function useCloudSync() {
 
   return {
     syncStatus, lastSyncAt, syncError, autoSync, syncLabel, pendingCount,
+    realtimeStatus,
     conflicts, resolveConflict, resolveAllConflicts,
     pushToCloud: _pushFromQueue, pullFromCloud: _pullChanges, fullSync,
     debouncedSync, initialSync, resetSyncState,
