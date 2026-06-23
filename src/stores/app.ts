@@ -94,6 +94,8 @@ export const useAppStore = defineStore('app', () => {
     lastFocusedEl: uiProp('lastFocusedEl'),
     lpFired: uiProp('lpFired'),
     _prevLayoutMode: uiProp('_prevLayoutMode'),
+    e2eSetupOpen: uiProp('e2eSetupOpen'),
+    e2eUnlockOpen: uiProp('e2eUnlockOpen'),
 
     // ── CRUD（委托 dataStore）──
     addBookmark(bm: Bookmark) { ds().addBookmark(bm) },

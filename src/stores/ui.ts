@@ -40,6 +40,8 @@ export interface UIState {
   historyPanelOpen: boolean
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
+  e2eSetupOpen: boolean
+  e2eUnlockOpen: boolean
   mentionGid: string | null
   mentionQuery: string
   mentionIdx: number
@@ -92,6 +94,8 @@ export const useUIStore = defineStore('ui', {
     historyPanelOpen: false,
     historyItemId: '',
     historyItemType: 'bookmark',
+    e2eSetupOpen: false,
+    e2eUnlockOpen: false,
     mentionGid: null,
     mentionQuery: '',
     mentionIdx: 0,

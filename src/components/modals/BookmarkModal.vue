@@ -27,19 +27,25 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="bmUsername">账户</label>
-            <input type="text" class="form-input" id="bmUsername" v-model="bmForm.username" placeholder="用户名">
+            <E2ELockOverlay :disabled="!e2eEnabled" hint="开启 E2E 后可存储账户">
+              <input type="text" class="form-input" id="bmUsername" v-model="bmForm.username" placeholder="用户名">
+            </E2ELockOverlay>
           </div>
           <div class="form-group">
             <label class="form-label" for="bmPassword">密码</label>
-            <div class="pw-wrap">
-              <input :type="bmForm.showPassword ? 'text' : 'password'" class="form-input pw-input" id="bmPassword" v-model="bmForm.password" placeholder="密码">
-              <button class="pw-toggle" type="button" :title="bmForm.showPassword ? '隐藏密码' : '显示密码'" @click="bmForm.showPassword = !bmForm.showPassword" v-html="bmForm.showPassword ? I.eyeOff : I.eye"></button>
-            </div>
+            <E2ELockOverlay :disabled="!e2eEnabled" hint="开启 E2E 后可存储密码">
+              <div class="pw-wrap">
+                <input :type="bmForm.showPassword ? 'text' : 'password'" class="form-input pw-input" id="bmPassword" v-model="bmForm.password" placeholder="密码">
+                <button class="pw-toggle" type="button" :title="bmForm.showPassword ? '隐藏密码' : '显示密码'" @click="bmForm.showPassword = !bmForm.showPassword" v-html="bmForm.showPassword ? I.eyeOff : I.eye"></button>
+              </div>
+            </E2ELockOverlay>
           </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="bmNotes">备注</label>
-          <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" placeholder="备注…"></textarea>
+          <E2ELockOverlay :disabled="!e2eEnabled" hint="开启 E2E 后可存储备注（含 API Key 等）">
+            <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" placeholder="备注…"></textarea>
+          </E2ELockOverlay>
         </div>
         <div class="form-group">
           <label class="form-label" for="bmIcon">自定义图标</label>
@@ -90,9 +96,13 @@ import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
+import { useE2E } from '../../composables/domain/useE2E.js'
+import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 
 const store = useAppStore()
 const titleRef = ref<HTMLInputElement | null>(null)
+const e2e = useE2E()
+const e2eEnabled = computed(() => e2e.isE2EEnabled.value && e2e.isUnlocked.value)
 
 const categoryOptions = computed(() => store.selectableCategories)
 const parentOptions = computed(() =>

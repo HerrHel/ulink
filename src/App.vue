@@ -40,6 +40,8 @@
 <TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
 <HistoryPanel :open="store.historyPanelOpen" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.historyPanelOpen = false" />
 <AuthModal />
+<E2ESetupModal :open="store.e2eSetupOpen" @close="store.e2eSetupOpen = false" />
+<E2EUnlockModal :open="store.e2eUnlockOpen" @close="store.e2eUnlockOpen = false" @unlocked="onE2EUnlocked" />
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
 <SyncConflictBanner />
@@ -50,13 +52,14 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, ref } from 'vue'
+import { defineAsyncComponent, ref, onMounted } from 'vue'
 import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
 import { useApp } from './composables/useApp.js'
 import { useAppHandlers } from './composables/useAppHandlers.js'
 import { useAppLifecycle, onShareRoute } from './composables/useAppLifecycle.js'
+import { useE2E } from './composables/domain/useE2E.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -82,6 +85,8 @@ const AttributeModal = defineAsyncComponent(() => import('./components/modals/At
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
+const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
+const E2EUnlockModal = defineAsyncComponent(() => import('./components/modals/E2EUnlockModal.vue'))
 
 // A4: 公开分享页面
 const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))
@@ -92,4 +97,18 @@ const store = useAppStore()
 useApp()
 useAppLifecycle()
 const { handlers } = useAppHandlers()
+
+// E2E 加密状态
+const e2e = useE2E()
+
+onMounted(async () => {
+  const hasE2E = await e2e.checkE2EStatus()
+  if (hasE2E) {
+    store.e2eUnlockOpen = true
+  }
+})
+
+function onE2EUnlocked() {
+  store.e2eUnlockOpen = false
+}
 </script>

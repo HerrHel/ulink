@@ -6,6 +6,9 @@
  * - navigator.locks 替代 _syncing 布尔值（避免竞态丢弃）
  * - Supabase Realtime 订阅替代 60s 轮询（秒级同步）
  * - 增量拉取（updated_at_num > lastSyncAt）
+ * P2 改进：
+ * - 推送前加密敏感字段（E2E AES-256-GCM）
+ * - 拉取后解密敏感字段
  * P4 改进：
  * - Realtime 断线自动重连（指数退避）
  * - 重连后 backfill 补全离线期间数据
@@ -16,6 +19,7 @@ import { supabase } from '../../lib/supabase.js'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
+import { useE2E } from './useE2E.js'
 import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount,
   type SyncOp, type OpTable,
@@ -366,11 +370,16 @@ export function useCloudSync() {
           delete data._userId
           delete data._isNew
 
+          // P2: 推送前加密敏感字段
+          const e2e = useE2E()
+          const itemType = op.table === 'bookmarks' ? 'bookmark'
+            : op.table === 'sibling_groups' ? 'group'
+            : op.table === 'categories' ? 'category' : 'attribute'
+          const encryptedData = await e2e.encryptItem(itemType as any, data)
+
           const row = _toRemoteRow(
-            op.table === 'bookmarks' ? 'bookmark'
-              : op.table === 'sibling_groups' ? 'group'
-              : op.table === 'categories' ? 'category' : 'attribute',
-            { ...data, _userId: userId },
+            itemType,
+            { ...encryptedData, _userId: userId },
             isNew,
           )
 
@@ -453,10 +462,20 @@ export function useCloudSync() {
 
       const ds = useDataStore()
 
-      const remoteCats = (catsRes.data || []).map(_fromRemoteCategory)
-      const remoteBms = (bmsRes.data || []).map(_fromRemoteBookmark)
-      const remoteGroups = (groupsRes.data || []).map(_fromRemoteGroup)
-      const remoteAttrs = (attrsRes.data || []).map(_fromRemoteAttribute)
+      // P2: 拉取后解密敏感字段
+      const e2e = useE2E()
+      const remoteCats = (catsRes.data || []).map(r => _fromRemoteCategory(r))
+      const remoteBms = (bmsRes.data || []).map(r => _fromRemoteBookmark(r))
+      const remoteGroups = (groupsRes.data || []).map(r => _fromRemoteGroup(r))
+      const remoteAttrs = (attrsRes.data || []).map(r => _fromRemoteAttribute(r))
+
+      // 异步解密（不阻塞合并）
+      if (e2e.isUnlocked.value) {
+        for (const b of remoteBms) await e2e.decryptItem('bookmark', b as any)
+        for (const g of remoteGroups) await e2e.decryptItem('group', g as any)
+        for (const c of remoteCats) await e2e.decryptItem('category', c as any)
+        for (const a of remoteAttrs) await e2e.decryptItem('attribute', a as any)
+      }
 
       // 智能合并
       _mergeIntoLocal(ds.categories, remoteCats, 'category')
@@ -521,7 +540,7 @@ export function useCloudSync() {
   }
 
   // ── Realtime 订阅 ──
-  function _handleRealtimeChange(payload: any, type: 'bookmark' | 'group' | 'category' | 'attribute') {
+  async function _handleRealtimeChange(payload: any, type: 'bookmark' | 'group' | 'category' | 'attribute') {
     const { eventType, new: newRow, old: oldRow } = payload
     const ds = useDataStore()
 
@@ -540,23 +559,30 @@ export function useCloudSync() {
     const row = newRow
     if (!row || ds._dirtyIds.has(row.id)) return
 
+    // P2: 解密后再合并
+    const e2e = useE2E()
+
     if (type === 'bookmark') {
       const mapped = _fromRemoteBookmark(row)
+      if (e2e.isUnlocked.value) await e2e.decryptItem('bookmark', mapped as any)
       const idx = ds.bookmarks.findIndex(b => b.id === mapped.id)
       if (idx >= 0) Object.assign(ds.bookmarks[idx], mapped)
       else ds.bookmarks.push(mapped)
     } else if (type === 'group') {
       const mapped = _fromRemoteGroup(row)
+      if (e2e.isUnlocked.value) await e2e.decryptItem('group', mapped as any)
       const idx = ds.siblingGroups.findIndex(g => g.id === mapped.id)
       if (idx >= 0) Object.assign(ds.siblingGroups[idx], mapped)
       else ds.siblingGroups.push(mapped)
     } else if (type === 'category') {
       const mapped = _fromRemoteCategory(row)
+      if (e2e.isUnlocked.value) await e2e.decryptItem('category', mapped as any)
       const idx = ds.categories.findIndex(c => c.id === mapped.id)
       if (idx >= 0) Object.assign(ds.categories[idx], mapped)
       else ds.categories.push(mapped)
     } else {
       const mapped = _fromRemoteAttribute(row)
+      if (e2e.isUnlocked.value) await e2e.decryptItem('attribute', mapped as any)
       const idx = ds.customAttributes.findIndex(a => a.id === mapped.id)
       if (idx >= 0) Object.assign(ds.customAttributes[idx], mapped)
       else ds.customAttributes.push(mapped)

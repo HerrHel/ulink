@@ -77,6 +77,29 @@
         </div>
       </template>
     </div>
+    <!-- E2E Encryption -->
+    <div class="sp-section" v-if="auth.isLoggedIn.value">
+      <div class="sp-row">
+        <span class="sp-row-label"><span class="sp-icon">🔐</span>端到端加密</span>
+        <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
+          {{ e2eEnabled ? (e2eUnlocked ? '已解锁' : '已锁定') : '未开启' }}
+        </span>
+      </div>
+      <div class="sp-row">
+        <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储</span>
+      </div>
+      <div class="sp-row sp-row-actions">
+        <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.e2eSetupOpen = true">
+          🔐 开启加密
+        </button>
+        <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.e2eUnlockOpen = true">
+          🔓 解锁
+        </button>
+        <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock">
+          🔒 锁定
+        </button>
+      </div>
+    </div>
     <!-- Data -->
     <div class="sp-section">
       <div class="sp-actions">
@@ -95,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
@@ -104,6 +127,7 @@ import { exportData, resetToDefaults } from '../../composables/domain/useDataIO.
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
+import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 
@@ -115,6 +139,13 @@ const dataStore = useDataStore()
 const auth = useAuth()
 const sync = useCloudSync()
 const dl = useDeadLinkChecker()
+const e2e = useE2E()
+const e2eEnabled = computed(() => e2e.isE2EEnabled.value)
+const e2eUnlocked = computed(() => e2e.isUnlocked.value)
+
+onMounted(() => { e2e.checkE2EStatus() })
+
+function onE2ELock() { e2e.lock(); toast('已锁定') }
 
 const trashCount = computed(() => dataStore.trashCount)
 const syncDotClass = computed(() => {
