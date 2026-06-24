@@ -354,7 +354,7 @@ export function useCloudSync() {
           }
         }
       }
-      _saveHistory(userId, historyItems) // fire-and-forget
+      _saveHistory(userId, historyItems).catch(() => {}) // fire-and-forget
 
       // 构建批量请求
       const tasks: Promise<any>[] = []

@@ -17,6 +17,10 @@ const mockStore = {
     const bm = mockStore.bookmarkMap[id]
     if (bm) Object.assign(bm, changes)
   }),
+  updateGroup: vi.fn((id: string, changes: any) => {
+    const g = mockStore.groupMap[id]
+    if (g) Object.assign(g, changes)
+  }),
   deleteBookmark: vi.fn((id: string) => {
     const bm = mockStore.bookmarks.find((b: any) => b.id === id)
     if (bm) bm.deletedAt = Date.now()

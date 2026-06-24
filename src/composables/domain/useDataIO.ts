@@ -108,7 +108,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   for (const c of categories) {
     if (!c.id || !c.name) continue
     if (ds.categories.some(existing => existing.id === c.id)) continue
-    ds.categories.push({ id: c.id, name: c.name, icon: c.icon || 'star', color: c.color || '', updatedAt: Date.now() })
+    ds.addCategory({ id: c.id, name: c.name, icon: c.icon || 'star', color: c.color || '', updatedAt: Date.now() })
     catImported++
   }
 
@@ -116,7 +116,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   for (const a of customAttributes) {
     if (!a.id || !a.name) continue
     if (ds.customAttributes.some(existing => existing.id === a.id)) continue
-    ds.customAttributes.push({ id: a.id, name: a.name, type: a.type || 'boolean', updatedAt: Date.now() })
+    ds.addAttribute({ id: a.id, name: a.name, type: a.type || 'boolean', updatedAt: Date.now() })
     attrImported++
   }
 
@@ -144,7 +144,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
       createdAt: b.createdAt || now,
       updatedAt: b.updatedAt || now,
     }
-    ds.bookmarks.push(newBm)
+    ds.addBookmark(newBm)
     existingUrls.add(b.url.toLowerCase())
     bmImported++
   }
@@ -153,7 +153,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
-    ds.siblingGroups.push({
+    ds.addGroup({
       id: g.id, name: g.name,
       categoryId: g.categoryId || 'uncategorized',
       icon: g.icon || '', order: g.order || 0,
@@ -463,7 +463,7 @@ export function importFromURL(): boolean {
       if (!b.id || !b.url) continue
       if (store.bookmarkMap[b.id]) continue
       if (b.url && existingUrls.has(b.url.toLowerCase())) continue
-      store.bookmarks.push({
+      store.addBookmark({
         id: b.id,
         title: b.title || '',
         url: b.url,
@@ -479,18 +479,21 @@ export function importFromURL(): boolean {
         isExpanded: false,
         createdAt: b.createdAt || Date.now(),
         updatedAt: b.updatedAt || Date.now(),
-      })
+      } as Bookmark)
       imported++
     }
     const existing = store.groupMap[payload.group.id]
     if (existing) {
+      const newBookmarkIds = [...existing.bookmarkIds]
       for (const bid of payload.group.bookmarkIds) {
-        if (!existing.bookmarkIds.includes(bid)) existing.bookmarkIds.push(bid)
+        if (!newBookmarkIds.includes(bid)) newBookmarkIds.push(bid)
       }
-      if (payload.group.notes && !existing.notes) existing.notes = payload.group.notes
+      const changes: Partial<SiblingGroup> = { bookmarkIds: newBookmarkIds }
+      if (payload.group.notes && !existing.notes) changes.notes = payload.group.notes
+      store.updateGroup(payload.group.id, changes)
       toast('已更新组「' + (existing.name || '未命名') + '」（新增 ' + imported + ' 个书签）')
     } else {
-      store.siblingGroups.push(payload.group)
+      store.addGroup(payload.group)
       toast('已导入组「' + (payload.group.name || '未命名') + '」（' + (payload.bookmarks || []).length + ' 个书签）')
     }
     store.save()
@@ -541,10 +544,10 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   // 写入本地
   for (const b of newBookmarks) {
     if (!ds.bookmarks.some(e => e.url?.toLowerCase() === b.url?.toLowerCase())) {
-      ds.bookmarks.push(b)
+      ds.addBookmark(b)
     }
   }
-  ds.siblingGroups.push(newGroup)
+  ds.addGroup(newGroup)
   store.save()
 
   // 尝试写入远端

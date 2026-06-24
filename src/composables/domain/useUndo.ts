@@ -75,15 +75,15 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
   const store = useAppStore()
   const sg = store.groupMap[gid]
   if (!sg) return
-  sg.bookmarkIds = snap.bookmarkIds.filter(function (bid) {
+  const filteredIds = snap.bookmarkIds.filter(function (bid) {
     return store.bookmarkMap[bid]
   })
-  sg.notes = snap.notes
+  store.updateGroup(gid, { notes: snap.notes, bookmarkIds: filteredIds })
   // Sync TipTap editor if it's mounted (visible group)
   const ed = EditorManager.get(gid)
   if (ed) {
     _restoring = true
-    try { ed.commands.setContent(sg.notes || '') }
+    try { ed.commands.setContent(snap.notes || '') }
     finally { _restoring = false }
   }
   // If no editor (group not visible), Vue reactivity renders sg.notes on next mount

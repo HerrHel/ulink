@@ -121,7 +121,6 @@ provide('tiptapEditor', editorInstance)
 function syncToStore(ed: Editor) {
   const sg = store.groupMap[props.groupId]
   if (!sg) return
-  sg.notes = ed.getHTML()
   const ids: string[] = [], seen: Record<string, boolean> = {}
   ed.state.doc.descendants(node => {
     if (node.type.name === 'inlineCard') {
@@ -129,7 +128,7 @@ function syncToStore(ed: Editor) {
       if (bmid && !seen[bmid]) { seen[bmid] = true; ids.push(bmid) }
     }
   })
-  sg.bookmarkIds = ids
+  store.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
   store.debouncedSave()
 }
 

@@ -26,6 +26,7 @@ interface DataState {
   _deletedIds: Map<string, 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes'>
   _newIds: Set<string>
   _changedFields: Map<string, Set<string>>
+  _deletedGroupMemberships: Map<string, string[]> // bookmarkId → groupIds it belonged to before deletion
 }
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
@@ -73,6 +74,7 @@ export const useDataStore = defineStore('data', {
     _deletedIds: new Map(),
     _newIds: new Set<string>(),
     _changedFields: new Map(),
+    _deletedGroupMemberships: new Map(),
   }),
 
   getters: {
@@ -202,10 +204,17 @@ export const useDataStore = defineStore('data', {
         bm.updatedAt = bm.deletedAt
         this._markDirty(id)
       }
+      // 记录被删除书签原本所属的组，以便恢复时还原
+      const groupIds: string[] = []
       for (const g of this.siblingGroups) {
         const bi = g.bookmarkIds.indexOf(id)
-        if (bi >= 0) { g.bookmarkIds.splice(bi, 1); this._markDirty(g.id) }
+        if (bi >= 0) {
+          groupIds.push(g.id)
+          g.bookmarkIds.splice(bi, 1)
+          this._markDirty(g.id)
+        }
       }
+      if (groupIds.length) this._deletedGroupMemberships.set(id, groupIds)
     },
     addGroup(g: SiblingGroup) { this.siblingGroups.push(g); this._markDirty(g.id); this._newIds.add(g.id) },
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
@@ -229,8 +238,9 @@ export const useDataStore = defineStore('data', {
       if (c) { c.name = name; c.updatedAt = Date.now(); this._trackChange(id, 'name'); this._markDirty(id) }
     },
     deleteCategory(id: string) {
-      this.bookmarks.forEach(b => { if (b.categoryId === id) { b.categoryId = 'uncategorized'; this._trackChange(b.id, 'categoryId'); this._markDirty(b.id) } })
-      this.siblingGroups.forEach(g => { if (g.categoryId === id) { g.categoryId = 'uncategorized'; this._trackChange(g.id, 'categoryId'); this._markDirty(g.id) } })
+      const now = Date.now()
+      this.bookmarks.forEach(b => { if (b.categoryId === id) { b.categoryId = 'uncategorized'; b.updatedAt = now; this._trackChange(b.id, 'categoryId'); this._markDirty(b.id) } })
+      this.siblingGroups.forEach(g => { if (g.categoryId === id) { g.categoryId = 'uncategorized'; g.updatedAt = now; this._trackChange(g.id, 'categoryId'); this._markDirty(g.id) } })
       const c = this.categories.find(c => c.id === id)
       if (c) { c.deletedAt = Date.now(); c.updatedAt = c.deletedAt; this._markDirty(id) }
     },
@@ -242,15 +252,30 @@ export const useDataStore = defineStore('data', {
     deleteAttribute(id: string) {
       const attr = this.customAttributes.find(a => a.id === id)
       if (attr) { attr.deletedAt = Date.now(); attr.updatedAt = attr.deletedAt; this._markDirty(id) }
-      this.bookmarks.forEach(b => { if (b.attributes) { delete b.attributes[id]; this._markDirty(b.id) } })
-      this.siblingGroups.forEach(g => { if (g.attributes) { delete g.attributes[id]; this._markDirty(g.id) } })
+      const now = Date.now()
+      this.bookmarks.forEach(b => { if (b.attributes) { delete b.attributes[id]; b.updatedAt = now; this._trackChange(b.id, 'attributes'); this._markDirty(b.id) } })
+      this.siblingGroups.forEach(g => { if (g.attributes) { delete g.attributes[id]; g.updatedAt = now; this._trackChange(g.id, 'attributes'); this._markDirty(g.id) } })
       const ui = useUIStore()
       const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
       const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
     },
 
     // ── 回收站：恢复 ──
-    restoreBookmark(id: string) { this._restoreItem(this.bookmarkMap[id], id) },
+    restoreBookmark(id: string) {
+      this._restoreItem(this.bookmarkMap[id], id)
+      // 恢复被删除书签原本所属的组关系
+      const groupIds = this._deletedGroupMemberships.get(id)
+      if (groupIds) {
+        for (const gid of groupIds) {
+          const g = this.groupMap[gid]
+          if (g && g.bookmarkIds.indexOf(id) === -1) {
+            g.bookmarkIds.push(id)
+            this._markDirty(g.id)
+          }
+        }
+        this._deletedGroupMemberships.delete(id)
+      }
+    },
     restoreGroup(id: string) { this._restoreItem(this.groupMap[id], id) },
     restoreCategory(id: string) { this._restoreItem(this.categories.find(c => c.id === id), id) },
     restoreAttribute(id: string) { this._restoreItem(this.customAttributes.find(a => a.id === id), id) },
@@ -261,7 +286,7 @@ export const useDataStore = defineStore('data', {
     },
 
     // ── 回收站：永久删除 ──
-    permanentDeleteBookmark(id: string) { this._permanentDelete(this.bookmarks, id, 'bookmarks') },
+    permanentDeleteBookmark(id: string) { this._permanentDelete(this.bookmarks, id, 'bookmarks'); this._deletedGroupMemberships.delete(id) },
     permanentDeleteGroup(id: string) { this._permanentDelete(this.siblingGroups, id, 'sibling_groups') },
     permanentDeleteCategory(id: string) { this._permanentDelete(this.categories, id, 'categories') },
     permanentDeleteAttribute(id: string) { this._permanentDelete(this.customAttributes, id, 'custom_attributes') },

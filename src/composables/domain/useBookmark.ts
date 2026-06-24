@@ -69,7 +69,7 @@ export const bmForm = reactive<BmFormState>({
 export function openBookmark(bm: Bookmark) {
   if (!bm?.url) return
   const store = useAppStore()
-  bm.useCount = (bm.useCount || 0) + 1
+  store.updateBookmark(bm.id, { useCount: (bm.useCount || 0) + 1 })
   store.debouncedSave()
   window.open(fixUrl(bm.url), '_blank')
 }
@@ -166,19 +166,17 @@ export function saveBm() {
     newBm.createdAt = Date.now()
     newBm.updatedAt = newBm.createdAt
     store.addBookmark(newBm)
-    store.save()
-    toast('书签已添加')
+    // 如果有待加入的组，先处理再统一 save
     if (store.saveToGroup) {
       const targetGid = store.saveToGroup
       store.saveToGroup = null
       const sg = store.groupMap[targetGid]
       if (sg && sg.bookmarkIds.indexOf(newBm.id) === -1) {
-        sg.bookmarkIds.push(newBm.id)
-        sg.updatedAt = Date.now()
-        store.save()
-        toast('已添加到组')
+        store.updateGroup(targetGid, { bookmarkIds: [...sg.bookmarkIds, newBm.id] })
       }
     }
+    store.save()
+    toast('书签已添加')
   }
   if (bmForm.id) store.save()
   closeBmModal()

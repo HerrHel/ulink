@@ -87,12 +87,11 @@ function onAction(item: ActionItem) {
 function onPickCategory(catId: string) {
   hide()
   if (catTargetType === 'group') {
-    const g = store.groupMap[catTargetId!]
-    if (g) { g.categoryId = catId; g.updatedAt = Date.now(); store.save() }
+    store.updateGroup(catTargetId!, { categoryId: catId })
   } else {
-    const b = store.bookmarkMap[catTargetId!]
-    if (b) { b.categoryId = catId; store.save() }
+    store.updateBookmark(catTargetId!, { categoryId: catId })
   }
+  store.save()
   const cat = store.categories.find(c => c.id === catId)
   toast('已移动到 ' + (cat ? cat.name : ''))
 }

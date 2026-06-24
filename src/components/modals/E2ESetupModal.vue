@@ -102,7 +102,7 @@ function onNext() {
   error.value = ''
   if (masterPw.value.length < 8) { error.value = '主密码至少 8 位'; return }
   if (masterPw.value !== masterPw2.value) { error.value = '两次密码不一致'; return }
-  recoveryKey.value = e2e.generateRecoveryKey(masterPw.value)
+  recoveryKey.value = e2e.generateRecoveryKey()
   step.value = 2
 }
 

@@ -11,6 +11,7 @@ import { saveGroupBody, syncGroupBookmarks, addToGroupDirect, addGroupRefToGroup
 import { inlineCardHTML, groupRefCardHTML } from '../useInlineCard.js'
 import { openDetail } from '../ui/useUI.js'
 import { useAppStore } from '../../stores/app.js'
+import { useDataStore } from '../../stores/data.js'
 import { EditorManager } from '../../lib/editor.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
@@ -90,6 +91,12 @@ function _updateDragCursorForGroupBody(body: Element, clientX: number, clientY: 
 // Helpers: O(1) lookup via store getter
 function _findBm(id: string): Bookmark | undefined { return useAppStore().bookmarkMap[id] }
 function _findGroup(id: string): SiblingGroup | undefined { return useAppStore().groupMap[id] }
+
+/** swapOrder + 标记 dirty（确保排序变更可同步到云端） */
+function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }) {
+  _swapAndMarkDirty(a, b)
+  useDataStore()._markDirty(a.id, b.id)
+}
 
 function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage = true) {
   _currentDragPayload = payload
@@ -247,7 +254,7 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
       const b = _findBm(p.id)
       if (!sg || !b) return;
       EditorManager.insertAtCoords(gid, inlineCardHTML(b), e.clientX, e.clientY);
-      if (sg.bookmarkIds.indexOf(p.id) === -1) sg.bookmarkIds.push(p.id);
+      if (sg.bookmarkIds.indexOf(p.id) === -1) store.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, p.id] });
       saveGroupBody(gid);
       store.save();
       toast('已加入组');
@@ -266,7 +273,7 @@ function handleGroupHeadDrop(e: DragEvent, head: Element, p: DragPayload) {
     if (srcGid === gid) return;
     const a = _findGroup(srcGid)
     const b = _findGroup(gid)
-    if (a && b) { swapOrder(a, b); store.debouncedSave(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); }
+    if (a && b) { _swapAndMarkDirty(a, b); store.debouncedSave(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); }
   } else if (p.type === 'bm') {
     const bm = _findBm(p.id)
     const sg = _findGroup(gid)
@@ -274,7 +281,7 @@ function handleGroupHeadDrop(e: DragEvent, head: Element, p: DragPayload) {
     let dirty = false;
     if (p.srcGid && p.srcGid !== DRAG_SRC_DETAIL) { removeFromSrcGroup(p.srcGid, p.id); dirty = true; }
     if (p.srcGid === DRAG_SRC_DETAIL) { const di = store.detailCards.indexOf(p.id); if (di >= 0) store.detailCards.splice(di, 1); dirty = true; }
-    swapOrder(bm, sg);
+    _swapAndMarkDirty(bm, sg);
     store.debouncedSave();
     if (!dirty) { swapCardsDOM('.card[data-id="' + bm.id + '"]:not(.group-card)', '.group-card[data-group-id="' + sg.id + '"]'); }
   }
@@ -299,14 +306,14 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   if (p.type === 'group') {
     const sg = _findGroup(p.id.slice(6))
     const bm = _findBm(tid!)
-    if (sg && bm && !bm.parentId) { swapOrder(sg, bm); store.debouncedSave(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); }
+    if (sg && bm && !bm.parentId) { _swapAndMarkDirty(sg, bm); store.debouncedSave(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); }
     return;
   }
 
   const a = _findBm(p.id)
   const b = _findBm(tid!)
   if (a && b) {
-    if (a.parentId === b.parentId) { swapOrder(a, b); store.debouncedSave(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); }
+    if (a.parentId === b.parentId) { _swapAndMarkDirty(a, b); store.debouncedSave(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); }
     else toast('只能在同级书签间拖拽排序', false);
   }
 }
@@ -411,7 +418,7 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (!bm) return;
   const newCatId = targetCatId === CAT_UNCATEGORIZED ? CAT_UNCATEGORIZED : targetCatId;
   if (bm.categoryId === newCatId) return;
-  bm.categoryId = newCatId;
+  store.updateBookmark(bm.id, { categoryId: newCatId });
   store.debouncedSave();
   toast('已移动到分类: ' + (store.categories.find(c => c.id === newCatId)?.name || newCatId));
 }

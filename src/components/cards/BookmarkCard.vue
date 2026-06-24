@@ -141,7 +141,7 @@ function doAddSub() { addSub(props.bookmark.id) }
 function doOpenDetail(bmId: string) { openDetail(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
-function toggleExpand() { props.bookmark.isExpanded = !props.bookmark.isExpanded; store.debouncedSave() }
+function toggleExpand() { store.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); store.debouncedSave() }
 function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode !== 'list') return
@@ -170,7 +170,7 @@ function editNotes(e: Event) {
     notesEl.style.cssText = ''
     const newNotes = notesEl.textContent.trim()
     if (props.bookmark.notes !== newNotes) {
-      props.bookmark.notes = newNotes
+      store.updateBookmark(props.bookmark.id, { notes: newNotes })
       store.debouncedSave()
       toast('备注已更新')
     }

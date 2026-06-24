@@ -109,7 +109,9 @@ export function useMention() {
     if (!sg || !b) { hide(); return }
     const ed = EditorManager.get(store.mentionGid)
     _insertHTML(ed, inlineCardHTML(b))
-    if (sg.bookmarkIds.indexOf(bmId) === -1) sg.bookmarkIds.push(bmId)
+    if (sg.bookmarkIds.indexOf(bmId) === -1) {
+      store.updateGroup(store.mentionGid, { bookmarkIds: [...sg.bookmarkIds, bmId] })
+    }
     saveGroupBody(store.mentionGid); store.save(); hide()
   }
 

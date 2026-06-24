@@ -145,6 +145,7 @@ export const useUIStore = defineStore('ui', {
     // ─── UI 状态持久化 ───
     saveUIState() {
       try {
+        const ds = useDataStore()
         const s = {
           curCat: this.curCat,
           focusedGroupId: this.focusedGroupId || null,
@@ -157,6 +158,7 @@ export const useUIStore = defineStore('ui', {
           detailOpen: this.detailOpen || false,
           docScrollTop: document.documentElement.scrollTop || 0,
           _preferredLayoutMode: this._preferredLayoutMode || null,
+          _customCardOrder: ds._customCardOrder || null,
         }
         localStorage.setItem(UI_STATE_KEY, JSON.stringify(s))
       } catch (e) { console.warn('[LinkVault] Failed to save UI state:', (e as Error).message) }
@@ -187,6 +189,10 @@ export const useUIStore = defineStore('ui', {
         }
         if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list') {
           this._preferredLayoutMode = s._preferredLayoutMode
+        }
+        if (Array.isArray(s._customCardOrder)) {
+          const ds = useDataStore()
+          ds._customCardOrder = s._customCardOrder
         }
         if (s.detailOpen && this.detailCards.length) this.detailOpen = true
         if (s.docScrollTop) document.documentElement.scrollTop = s.docScrollTop

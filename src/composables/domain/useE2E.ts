@@ -62,7 +62,7 @@ export function useE2E() {
   }
 
   /** 生成 Recovery Key（在设置主密码前调用） */
-  function generateRecoveryKey(masterPassword: string): string {
+  function generateRecoveryKey(): string {
     const raw = _generateRandomKey(24)
     return _formatRecoveryKey(raw)
   }

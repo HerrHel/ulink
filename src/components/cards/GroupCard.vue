@@ -180,7 +180,7 @@ function filterByTagName(name: string) {
   const attr = store.customAttributes.find(a => a.name === name)
   if (attr) toggleAttrFilter(attr.id)
 }
-function toggleExpand() { props.group.isExpanded = !props.group.isExpanded; store.debouncedSave() }
+function toggleExpand() { store.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); store.debouncedSave() }
 function onCardClick(e: MouseEvent) {
   if (store.batchMode) { toggleSelect(); return }
   if (store.layoutMode !== 'list') return

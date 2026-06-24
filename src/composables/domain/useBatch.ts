@@ -13,8 +13,8 @@ export function toggleBatchMode() {
   store.batchMode = !store.batchMode
   store.batchSelected.splice(0)
   if (store.batchMode) {
-    store.bookmarks.forEach(b => { if (b.isExpanded) b.isExpanded = false })
-    store.siblingGroups.forEach(g => { if (g.isExpanded) g.isExpanded = false })
+    store.bookmarks.forEach(b => { if (b.isExpanded) store.updateBookmark(b.id, { isExpanded: false }) })
+    store.siblingGroups.forEach(g => { if (g.isExpanded) store.updateGroup(g.id, { isExpanded: false }) })
     store.save()
   }
   if (store.focusedGroupId) nextTick(() => { store.focusedGroupId = null })
@@ -96,11 +96,9 @@ export function batchMoveToCat(catId: string) {
   const count = store.batchSelected.length
   store.batchSelected.forEach(id => {
     if (id.startsWith('group:')) {
-      const g = store.groupMap[id.slice(6)]
-      if (g) { g.categoryId = catId; g.updatedAt = Date.now() }
+      store.updateGroup(id.slice(6), { categoryId: catId })
     } else {
-      const b = store.bookmarkMap[id]
-      if (b) b.categoryId = catId
+      store.updateBookmark(id, { categoryId: catId })
     }
   })
   store.save()

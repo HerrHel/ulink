@@ -39,8 +39,9 @@ export function saveGroupBody(gid: string) {
   const sg = store.groupMap[gid];
   if (!sg) return;
   const editorHTML = EditorManager.getContentHTML(gid);
-  if (editorHTML !== null) sg.notes = editorHTML;
-  sg.updatedAt = Date.now();
+  if (editorHTML !== null) {
+    store.updateGroup(gid, { notes: editorHTML })
+  }
 }
 
 export function syncGroupBookmarks(gid: string) {
@@ -57,7 +58,7 @@ export function syncGroupBookmarks(gid: string) {
         if (bmid && !seen[bmid]) { seen[bmid] = true; ids.push(bmid); }
       }
     });
-    sg.bookmarkIds = ids;
+    store.updateGroup(gid, { bookmarkIds: ids });
   } else {
     const el = document.getElementById('sgBody_' + gid);
     if (!el) return;
@@ -68,16 +69,15 @@ export function syncGroupBookmarks(gid: string) {
       const bmid = c.getAttribute('data-bm-id');
       if (bmid && bmid.indexOf('ref:') !== 0 && !seen2[bmid]) { seen2[bmid] = true; ids2.push(bmid); }
     });
-    sg.bookmarkIds = ids2;
+    store.updateGroup(gid, { bookmarkIds: ids2 });
   }
-  sg.updatedAt = Date.now();
   store.save();
 }
 
 export function createGroup(catId?: string): string {
   const store = useAppStore();
-  store.siblingGroups.forEach(function (g) { g.order = (g.order || 0) + 1; });
-  store.bookmarks.filter(function (b) { return !b.parentId; }).forEach(function (b) { b.order = (b.order || 0) + 1; });
+  store.siblingGroups.forEach(function (g) { store.updateGroup(g.id, { order: (g.order || 0) + 1 }); });
+  store.bookmarks.filter(function (b) { return !b.parentId; }).forEach(function (b) { store.updateBookmark(b.id, { order: (b.order || 0) + 1 }); });
   const g: SiblingGroup = {
     id: 'sg_' + gid(),
     name: '',
@@ -116,7 +116,7 @@ export function addToGroupDirect(bmId: string, tGid: string) {
   if (sg.bookmarkIds.indexOf(bmId) !== -1) { toast('书签已在组内', false); return; }
   const bm = store.bookmarkMap[bmId];
   if (!bm) return;
-  sg.bookmarkIds.push(bmId);
+  store.updateGroup(tGid, { bookmarkIds: [...sg.bookmarkIds, bmId] });
   const ed = EditorManager.get(tGid);
   if (ed) ed.chain().insertContent(inlineCardHTML(bm)).run();
   saveGroupBody(tGid); store.save();
@@ -159,8 +159,7 @@ export function addGroupRefToGroup(refGid: string, targetGid: string, clientX?: 
     const sg = store.groupMap[targetGid];
     if (!sg) return;
     const refHtml = groupRefCardHTML(src);
-    sg.notes = (sg.notes || '') + refHtml;
-    sg.updatedAt = Date.now();
+    store.updateGroup(targetGid, { notes: (sg.notes || '') + refHtml });
   }
   store.save();
 }
@@ -198,7 +197,7 @@ export function toggleGroupFocus(tGid: string) {
   store.focusedGroupId = entering ? tGid : null;
   if (entering) {
     const sg = store.groupMap[tGid];
-    if (sg) { sg.useCount = (sg.useCount || 0) + 1; sg.updatedAt = Date.now(); }
+    if (sg) { store.updateGroup(tGid, { useCount: (sg.useCount || 0) + 1 }); }
     pushNavState();
     // 保存当前布局模式，退出时恢复
     store._prevLayoutMode = store.layoutMode;

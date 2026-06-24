@@ -28,11 +28,14 @@ type FuseResult = {
 
 // ── 拼音缓存（避免同一条目重复计算）──
 const _pyCache = new Map<string, string>()
+const _PY_CACHE_MAX = 10000
 
 function _toPy(text: string): string {
   if (!text) return ''
   let cached = _pyCache.get(text)
   if (cached !== undefined) return cached
+  // 防止缓存无限增长：超限时清空
+  if (_pyCache.size >= _PY_CACHE_MAX) _pyCache.clear()
   cached = pinyin(text, { toneType: 'none', type: 'array' }).join('')
   _pyCache.set(text, cached)
   return cached

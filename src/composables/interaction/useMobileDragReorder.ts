@@ -246,8 +246,8 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
         allItems.splice(fromIndex, 1)
         allItems.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, movedItem)
 
-        // 保存自定义顺序 + 更新 order 值
-        allItems.forEach((it, i) => { it.data.order = i })
+        // 保存自定义顺序 + 更新 order 值 + 标记 dirty
+        allItems.forEach((it, i) => { it.data.order = i; dataStore._markDirty(it.data.id) })
         const newOrder: Array<{ t: 'g' | 'b'; id: string }> = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
 
         dataStore._customCardOrder = newOrder

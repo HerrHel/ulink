@@ -65,12 +65,12 @@ const combinedList = computed<CardItem[]>(() => {
     const usedGs = new Set<string>()
     const combined: CardItem[] = []
     customOrder.forEach(entry => {
-      if (entry.t === 'g' && gMap[entry.id]) { combined.push({ type: 'group', data: gMap[entry.id] }); usedGs.add(entry.id) }
-      else if (entry.t === 'b' && bmMap[entry.id] && !bmMap[entry.id].parentId) { combined.push({ type: 'bm', data: bmMap[entry.id] }); usedBms.add(entry.id) }
+      if (entry.t === 'g' && gMap[entry.id] && !gMap[entry.id].deletedAt) { combined.push({ type: 'group', data: gMap[entry.id] }); usedGs.add(entry.id) }
+      else if (entry.t === 'b' && bmMap[entry.id] && !bmMap[entry.id].parentId && !bmMap[entry.id].deletedAt) { combined.push({ type: 'bm', data: bmMap[entry.id] }); usedBms.add(entry.id) }
     })
     // 追加不在自定义顺序中的新项
-    store.siblingGroups.forEach(g => { if (!usedGs.has(g.id)) combined.push({ type: 'group', data: g }) })
-    store.bookmarks.filter(b => !b.parentId).forEach(b => { if (!usedBms.has(b.id)) combined.push({ type: 'bm', data: b }) })
+    store.siblingGroups.forEach(g => { if (!g.deletedAt && !usedGs.has(g.id)) combined.push({ type: 'group', data: g }) })
+    store.bookmarks.filter(b => !b.parentId && !b.deletedAt).forEach(b => { if (!usedBms.has(b.id)) combined.push({ type: 'bm', data: b }) })
     return combined
   }
   const groups = store.filteredGroups

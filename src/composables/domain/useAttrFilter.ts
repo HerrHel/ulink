@@ -34,7 +34,7 @@ export function addAttrQuick(name: string): boolean {
   const store = useAppStore()
   const id = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
   if (store.customAttributes.find(function (a) { return a.id === id || a.name === name })) return false
-  store.customAttributes.push({ id: id, name: name, type: 'boolean' })
+  store.addAttribute({ id: id, name: name, type: 'boolean' })
   store.save()
   return true
 }

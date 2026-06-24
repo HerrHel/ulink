@@ -51,7 +51,7 @@ function onAddAttr() {
   if (!name) return
   const id = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
   if (store.customAttributes.find(a => a.id === id || a.name === name)) { toast('属性已存在', false); return }
-  store.customAttributes.push({ id, name, type: 'boolean' })
+  store.addAttribute({ id, name, type: 'boolean' })
   store.save()
   newName.value = ''
   toast('属性已添加')
