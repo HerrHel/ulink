@@ -95,12 +95,14 @@ function restore(type: string, id: string) {
 }
 
 function permanent(type: string, id: string) {
-  if (type === 'bookmark') ds.permanentDeleteBookmark(id)
-  else if (type === 'group') ds.permanentDeleteGroup(id)
-  else if (type === 'category') ds.permanentDeleteCategory(id)
-  else if (type === 'attribute') ds.permanentDeleteAttribute(id)
-  appStore.save()
-  toast('已永久删除')
+  showConfirm('确定永久删除？此操作无法恢复。', () => {
+    if (type === 'bookmark') ds.permanentDeleteBookmark(id)
+    else if (type === 'group') ds.permanentDeleteGroup(id)
+    else if (type === 'category') ds.permanentDeleteCategory(id)
+    else if (type === 'attribute') ds.permanentDeleteAttribute(id)
+    appStore.save()
+    toast('已永久删除')
+  })
 }
 
 function onEmptyTrash() {

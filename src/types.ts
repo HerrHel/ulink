@@ -3,12 +3,19 @@
  * 从 config/types.d.js 迁移
  */
 
+export interface EncryptedPassword {
+  encrypted: true
+  data: string
+  iv: string
+  salt: string
+}
+
 export interface Bookmark {
   id: string
   title: string
   url: string
   username: string
-  password: string
+  password: string | EncryptedPassword
   notes: string
   icon: string
   categoryId: string
@@ -55,10 +62,16 @@ export interface CustomAttribute {
   deletedAt?: number
 }
 
+/** 卡片列表项 — 联合类型，用于 CardGrid 等组件 */
+export type CardItem =
+  | { type: 'group'; data: SiblingGroup }
+  | { type: 'bm'; data: Bookmark }
+
 export interface AppData {
   bookmarks: Bookmark[]
   siblingGroups: SiblingGroup[]
   categories: Category[]
   customAttributes: CustomAttribute[]
+  _masterCanary?: string | EncryptedPassword
   _savedAt?: number
 }

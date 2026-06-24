@@ -257,7 +257,7 @@ export function saveGroupEdit() {
     name: geForm.name.trim() || '未命名',
     categoryId: geForm.catId,
     icon: geForm.icon.trim(),
-    attributes: { ...geForm.attrs },
+    attributes: { ...geForm.attrs, 'is-group': true },
     updatedAt: Date.now()
   });
   store.save();

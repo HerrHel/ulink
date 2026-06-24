@@ -167,7 +167,7 @@ onMounted(() => {
     onUpdate: ({ editor: ed }) => { pushUndo(props.groupId); syncToStore(ed) },
   })
 
-  ;(editor as any)._lvGid = props.groupId
+  ;(editor as Record<string, unknown>)._lvGid = props.groupId
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
 

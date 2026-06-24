@@ -13,7 +13,10 @@ const mockStore = {
   addBookmark: vi.fn(),
   save: vi.fn(),
   debouncedSave: vi.fn(),
-  updateBookmark: vi.fn(),
+  updateBookmark: vi.fn((id: string, changes: any) => {
+    const bm = mockStore.bookmarkMap[id]
+    if (bm) Object.assign(bm, changes)
+  }),
   deleteBookmark: vi.fn((id: string) => {
     const bm = mockStore.bookmarks.find((b: any) => b.id === id)
     if (bm) bm.deletedAt = Date.now()

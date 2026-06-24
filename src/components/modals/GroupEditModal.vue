@@ -17,8 +17,8 @@
         <div class="form-group">
           <label class="form-label">属性标记</label>
           <div class="check-group">
-            <label v-for="a in store.customAttributes" :key="a.id" class="check-chip">
-              <input type="checkbox" :checked="!!geForm.attrs[a.id]" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
+            <label v-for="a in store.customAttributes" :key="a.id" class="check-chip" :class="{ 'is-system-attr': a.id === 'is-group' }">
+              <input type="checkbox" :checked="a.id === 'is-group' || !!geForm.attrs[a.id]" :disabled="a.id === 'is-group'" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
               {{ a.name }}
             </label>
           </div>

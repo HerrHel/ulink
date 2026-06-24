@@ -1,7 +1,6 @@
 /**
  * storage.ts — IndexedDB 持久化层（Dexie.js）
  * 作为 localStorage 的增强方案，突破 5MB 限制
- * B6: 新增 pendingOps 表，支持离线操作队列
  * P0: 结构化 ops_queue — queue-based sync
  */
 import Dexie from 'dexie'
@@ -25,17 +24,8 @@ export interface SyncOp {
   retries: number
 }
 
-export interface PendingOp {
-  id?: number
-  type: string
-  payload: any
-  createdAt: number
-  retries: number
-}
-
 class LinkVaultDB extends Dexie {
   data!: Dexie.Table<IDBRow, string>
-  pendingOps!: Dexie.Table<PendingOp, number>
   syncOps!: Dexie.Table<SyncOp, number>
 
   constructor() {
@@ -75,58 +65,7 @@ export async function idbGet(key: string): Promise<any | null> {
   }
 }
 
-// ── 离线操作队列 ──
-
-export async function enqueueOp(type: string, payload: any): Promise<void> {
-  try {
-    await db.pendingOps.add({ type, payload, createdAt: Date.now(), retries: 0 })
-  } catch (e) {
-    console.warn('[IDB] enqueue error:', e)
-  }
-}
-
-export async function drainPendingOps(): Promise<PendingOp[]> {
-  try {
-    return await db.pendingOps.orderBy('id').toArray()
-  } catch (e) {
-    console.warn('[IDB] drain error:', e)
-    return []
-  }
-}
-
-export async function removePendingOp(id: number): Promise<void> {
-  try {
-    await db.pendingOps.delete(id)
-  } catch (e) {
-    console.warn('[IDB] remove op error:', e)
-  }
-}
-
-export async function clearPendingOps(): Promise<void> {
-  try {
-    await db.pendingOps.clear()
-  } catch (e) {
-    console.warn('[IDB] clear ops error:', e)
-  }
-}
-
-export async function pendingOpsCount(): Promise<number> {
-  try {
-    return await db.pendingOps.count()
-  } catch (_) {
-    return 0
-  }
-}
-
 // ── 结构化同步队列（P0）──
-
-export async function enqueueSyncOp(op: Omit<SyncOp, 'id' | 'retries'>): Promise<void> {
-  try {
-    await db.syncOps.add({ ...op, retries: 0 })
-  } catch (e) {
-    console.warn('[IDB] enqueueSyncOp error:', e)
-  }
-}
 
 export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>): Promise<void> {
   if (!ops.length) return
@@ -146,14 +85,6 @@ export async function drainSyncOps(): Promise<SyncOp[]> {
   }
 }
 
-export async function removeSyncOp(id: number): Promise<void> {
-  try {
-    await db.syncOps.delete(id)
-  } catch (e) {
-    console.warn('[IDB] removeSyncOp error:', e)
-  }
-}
-
 export async function removeSyncOps(ids: number[]): Promise<void> {
   if (!ids.length) return
   try {
@@ -163,27 +94,10 @@ export async function removeSyncOps(ids: number[]): Promise<void> {
   }
 }
 
-export async function clearSyncOps(): Promise<void> {
-  try {
-    await db.syncOps.clear()
-  } catch (e) {
-    console.warn('[IDB] clearSyncOps error:', e)
-  }
-}
-
 export async function syncOpsCount(): Promise<number> {
   try {
     return await db.syncOps.count()
   } catch (_) {
     return 0
-  }
-}
-
-export async function getSyncOpsByItem(itemId: string): Promise<SyncOp[]> {
-  try {
-    return await db.syncOps.where('itemId').equals(itemId).toArray()
-  } catch (e) {
-    console.warn('[IDB] getSyncOpsByItem error:', e)
-    return []
   }
 }

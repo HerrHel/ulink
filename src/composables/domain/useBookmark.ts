@@ -126,6 +126,7 @@ export function openBmModal(editId?: string) {
 export function closeBmModal() {
   bmForm.isOpen = false
   bmForm.addToGroupMode = false
+  if (bmForm._fetchTimer) { clearTimeout(bmForm._fetchTimer); bmForm._fetchTimer = null }
   const store = useAppStore()
   store.bmModalOpen = false
   store.editingId = null
@@ -154,8 +155,7 @@ export function saveBm() {
   }
 
   if (bmForm.id) {
-    const bm = store.bookmarkMap[bmForm.id]
-    if (bm) Object.assign(bm, data)
+    store.updateBookmark(bmForm.id, data)
     toast('书签已更新')
   } else {
     const newBm = data as Bookmark

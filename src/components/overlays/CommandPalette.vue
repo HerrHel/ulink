@@ -99,7 +99,7 @@ const filtered = computed<CommandItem[]>(() => {
       id: 'b:' + r.id,
       label: r.title || '',
       icon: I.chevron,
-      hint: r.url ? new URL(r.url.startsWith('http') ? r.url : 'https://' + r.url).hostname.replace(/^www\./, '') : '',
+      hint: r.url ? (() => { try { return new URL(r.url.startsWith('http') ? r.url : 'https://' + r.url).hostname.replace(/^www\./, '') } catch { return '' } })() : '',
       section: 'bookmark' as const,
       action() { close(); openBookmark({ url: r.url } as any) },
     }))

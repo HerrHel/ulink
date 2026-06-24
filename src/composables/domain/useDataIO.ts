@@ -12,7 +12,9 @@ import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { copyToClipboard } from '../../utils.js'
 import { supabase } from '../../lib/supabase.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
+import { runMigrations } from '../../stores/migrations.js'
+import { useCloudSync } from './useCloudSync.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../../types.js'
 
 // ── 导出 ──
 
@@ -84,10 +86,20 @@ function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv
 
 // ── 导入内部逻辑（合并模式，不覆盖已有数据）──
 
-function importFromDataInternal(data: { categories?: any[]; bookmarks?: any[]; customAttributes?: any[]; siblingGroups?: any[] }, source: string) {
+function importFromDataInternal(data: Partial<AppData>, source: string) {
   const store = useAppStore()
   const ds = useDataStore()
-  const { categories = [], bookmarks = [], customAttributes = [], siblingGroups = [] } = data
+  
+  // 执行数据迁移（处理旧版格式）
+  const result = {
+    categories: [...(data.categories || [])],
+    bookmarks: [...(data.bookmarks || [])],
+    customAttributes: [...(data.customAttributes || [])],
+    siblingGroups: [...(data.siblingGroups || [])],
+  }
+  runMigrations(data, result)
+  
+  const { categories, bookmarks, customAttributes, siblingGroups } = result
   let catImported = 0, bmImported = 0, groupImported = 0, attrImported = 0
 
   try { store._backupBeforeImport() } catch (_) { /* 备份失败不阻塞导入 */ }
@@ -171,25 +183,28 @@ function importFromDataInternal(data: { categories?: any[]; bookmarks?: any[]; c
 
 // ── Raindrop.io JSON 解析器 ──
 
-function parseRaindropJSON(data: any): Bookmark[] {
+function parseRaindropJSON(data: unknown): Bookmark[] {
   // Raindrop.io 导出格式：{ items: [{ title, link, tags, excerpt, cover, ... }] }
-  const items = data.items || data
+  const d = data as Record<string, unknown> | unknown[]
+  const items = Array.isArray(d) ? d : (d as Record<string, unknown>)?.items ?? d
   if (!Array.isArray(items)) return []
   const now = Date.now()
-  return items.filter((item: any) => item.link || item.url).map((item: any, i: number) => ({
+  return items.filter((item: unknown) => { const r = item as Record<string, unknown>; return r.link || r.url }).map((item: unknown, i: number) => {
+    const r = item as Record<string, unknown>
+    return {
     id: 'b' + (now + i).toString(36) + Math.random().toString(36).slice(2, 6),
-    title: item.title || item.link || '',
-    url: item.link || item.url || '',
-    notes: item.excerpt || item.note || '',
-    icon: item.cover || '',
-    categoryId: item.collection?.$id ? 'rd_' + item.collection.$id : 'uncategorized',
-    attributes: Array.isArray(item.tags)
-      ? Object.fromEntries(item.tags.map((t: string) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
+    title: (r.title as string) || (r.link as string) || '',
+    url: (r.link as string) || (r.url as string) || '',
+    notes: (r.excerpt as string) || (r.note as string) || '',
+    icon: (r.cover as string) || '',
+    categoryId: (r.collection as Record<string, unknown>)?.$id ? 'rd_' + (r.collection as Record<string, unknown>).$id : 'uncategorized',
+    attributes: Array.isArray(r.tags)
+      ? Object.fromEntries((r.tags as string[]).map((t: string) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
       : {},
-    createdAt: item.created ? new Date(item.created).getTime() : now,
-    updatedAt: item.lastUpdate ? new Date(item.lastUpdate).getTime() : now,
+    createdAt: r.created ? new Date(r.created as string).getTime() : now,
+    updatedAt: r.lastUpdate ? new Date(r.lastUpdate as string).getTime() : now,
     username: '', password: '', parentId: null, order: i, useCount: 0, isExpanded: false,
-  }))
+  }})
 }
 
 // ── 浏览器书签 HTML 解析器（Netscape Bookmark 格式）──
@@ -329,7 +344,7 @@ function parseCSV(text: string): Bookmark[] {
 
 // ── LinkVault 原生 JSON 验证 ──
 
-function validateImportData(data: any): string | null {
+function validateImportData(data: Partial<AppData>): string | null {
   if (!Array.isArray(data.categories) || !Array.isArray(data.bookmarks) ||
       !Array.isArray(data.customAttributes) || !Array.isArray(data.siblingGroups)) return '数据结构错误：缺少必需的数组字段'
   for (let i = 0; i < data.categories.length; i++) {
@@ -391,7 +406,6 @@ export async function shareGroup(gid: string) {
   const sg = store.groupMap[gid]
   if (!sg) { toast('组不存在', false); return }
 
-  const { useCloudSync } = await import('./useCloudSync.js')
   const sync = useCloudSync()
 
   // 尝试设置为公开
@@ -413,7 +427,7 @@ function _shareGroupLegacy(gid: string) {
   const sg = store.groupMap[gid]
   if (!sg) return
   const bms = sg.bookmarkIds.map(bid => store.bookmarkMap[bid]).filter(Boolean).map(b => {
-    const safe = { ...b }; delete (safe as any).password; delete (safe as any).username; return safe
+    const { password: _, username: __, ...safe } = b; return safe
   })
   const payload = { v: 1, group: { ...sg }, bookmarks: bms }
   const json = JSON.stringify(payload)
@@ -443,8 +457,30 @@ export function importFromURL(): boolean {
     const payload = JSON.parse(json)
     if (!payload.group?.id) { toast('分享数据格式错误', false); return true }
     let imported = 0
-    for (const b of payload.bookmarks || []) {
-      if (!store.bookmarkMap[b.id]) { store.bookmarks.push(b); imported++ }
+    const existingUrls = new Set(store.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
+    const bookmarks = Array.isArray(payload.bookmarks) ? payload.bookmarks : []
+    for (const b of bookmarks) {
+      if (!b.id || !b.url) continue
+      if (store.bookmarkMap[b.id]) continue
+      if (b.url && existingUrls.has(b.url.toLowerCase())) continue
+      store.bookmarks.push({
+        id: b.id,
+        title: b.title || '',
+        url: b.url,
+        username: b.username || '',
+        password: b.password || '',
+        notes: b.notes || '',
+        icon: b.icon || '',
+        categoryId: b.categoryId || 'uncategorized',
+        parentId: b.parentId || null,
+        order: b.order || 0,
+        useCount: b.useCount || 0,
+        attributes: b.attributes || {},
+        isExpanded: false,
+        createdAt: b.createdAt || Date.now(),
+        updatedAt: b.updatedAt || Date.now(),
+      })
+      imported++
     }
     const existing = store.groupMap[payload.group.id]
     if (existing) {

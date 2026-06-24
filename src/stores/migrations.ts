@@ -5,7 +5,7 @@
  */
 import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP, DEFAULTS } from '../config/constants.js'
 import { esc, cleanZeroWidth, favicon } from '../utils.js'
-import type { AppData, Bookmark, SiblingGroup } from '../types.js'
+import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 
 interface MigrationResult extends AppData {
 }
@@ -16,7 +16,7 @@ interface MigrationResult extends AppData {
  * @param result - 包含 { categories, bookmarks, customAttributes, siblingGroups }
  * @returns 是否需要持久化
  */
-export function runMigrations(d: any, result: MigrationResult): boolean {
+export function runMigrations(d: Partial<AppData>, result: MigrationResult): boolean {
   let needsPersist = false
 
   // 1. 确保默认分类存在
@@ -26,12 +26,12 @@ export function runMigrations(d: any, result: MigrationResult): boolean {
 
   // 2. 属性去重
   const attrs = d.customAttributes || []
-  const seen: Record<string, any> = {}
-  const deduped: any[] = []
-  attrs.forEach((a: any) => {
+  const seen: Record<string, CustomAttribute> = {}
+  const deduped: CustomAttribute[] = []
+  attrs.forEach((a: CustomAttribute) => {
     if (seen[a.name]) {
       const keep = seen[a.name];
-      (d.bookmarks || []).forEach((b: any) => {
+      (d.bookmarks || []).forEach((b: Bookmark) => {
         if (b.attributes && b.attributes[a.id]) {
           b.attributes[keep.id] = b.attributes[a.id]
           delete b.attributes[a.id]
@@ -53,7 +53,7 @@ export function runMigrations(d: any, result: MigrationResult): boolean {
   result.siblingGroups.forEach(g => {
     if (g.notes && !/<[a-z][\s\S]*>/i.test(g.notes)) {
       g.notes = _migrateTextNotes(g.notes, result.bookmarks, result.siblingGroups, g)
-      ;(g as any)._migrated = true
+      needsPersist = true
     }
   })
 
@@ -69,19 +69,16 @@ export function runMigrations(d: any, result: MigrationResult): boolean {
   result.siblingGroups.forEach(g => {
     if (g.notes) {
       const cleaned = cleanZeroWidth(g.notes)
-      if (cleaned !== g.notes) { g.notes = cleaned; (g as any)._migrated = true }
+      if (cleaned !== g.notes) { g.notes = cleaned; needsPersist = true }
     }
-    if (!g.updatedAt) { g.updatedAt = Date.now(); (g as any)._migrated = true }
-    if (g.useCount == null) { g.useCount = 0; (g as any)._migrated = true }
+    if (!g.updatedAt) { g.updatedAt = Date.now(); needsPersist = true }
+    if (g.useCount == null) { g.useCount = 0; needsPersist = true }
   })
 
   // 7. 补充 bookmark.updatedAt
   result.bookmarks.forEach(b => {
-    if (!(b as any).updatedAt) { (b as any).updatedAt = b.createdAt || Date.now(); (b as any)._migrated = true }
+    if (!b.updatedAt) { b.updatedAt = b.createdAt || Date.now(); needsPersist = true }
   })
-
-  result.bookmarks.forEach(b => { if ((b as any)._migrated) needsPersist = true })
-  result.siblingGroups.forEach(g => { if ((g as any)._migrated) needsPersist = true })
 
   return needsPersist
 }

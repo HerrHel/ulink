@@ -25,6 +25,21 @@ export function selectAllBatch() {
   store.selectAllBatch()
 }
 
+function collectSubIds(id: string): string[] {
+  const store = useAppStore()
+  const cm = store.childrenMap
+  const ids: string[] = [id]
+  const stack = [id]
+  while (stack.length) {
+    const pid = stack.pop()!
+    const children = cm[pid]
+    if (children) {
+      for (const c of children) { ids.push(c.id); stack.push(c.id) }
+    }
+  }
+  return ids
+}
+
 export function batchDelete() {
   const store = useAppStore()
   if (!store.batchSelected.length) return
@@ -39,16 +54,19 @@ export function batchDelete() {
         store.deleteGroup(gid)
         removedGroupIds.push(gid)
       } else {
-        store.siblingGroups.forEach(g => {
-          const bi = g.bookmarkIds.indexOf(id)
-          if (bi > -1) {
-            if (!removedFromGroups[id]) removedFromGroups[id] = []
-            removedFromGroups[id].push(g.id)
-            g.bookmarkIds.splice(bi, 1)
-          }
+        const ids = collectSubIds(id)
+        ids.forEach(bid => {
+          store.siblingGroups.forEach(g => {
+            const bi = g.bookmarkIds.indexOf(bid)
+            if (bi > -1) {
+              if (!removedFromGroups[bid]) removedFromGroups[bid] = []
+              removedFromGroups[bid].push(g.id)
+              g.bookmarkIds.splice(bi, 1)
+            }
+          })
+          store.deleteBookmark(bid)
+          removedBookmarkIds.push(bid)
         })
-        store.deleteBookmark(id)
-        removedBookmarkIds.push(id)
       }
     })
     store.save()

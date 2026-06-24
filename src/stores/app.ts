@@ -15,7 +15,7 @@ import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { toast } from '../lib/toast.js'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
 let _localStorageWarned = false
 
@@ -38,7 +38,7 @@ export const useAppStore = defineStore('app', () => {
   // Helper: 可读写 computed，委托 uiStore
   const uiProp = <K extends keyof UIState>(key: K) => computed({
     get: () => ui()[key],
-    set: (v: UIState[K]) => { (ui() as any)[key] = v }
+    set: (v: UIState[K]) => { ui()[key] = v }
   })
 
   return {
@@ -68,6 +68,7 @@ export const useAppStore = defineStore('app', () => {
     railOpen: uiProp('railOpen'),
     bmModalOpen: uiProp('bmModalOpen'),
     addBmPopoverOpen: uiProp('addBmPopoverOpen'),
+    deadLinksPopoverOpen: uiProp('deadLinksPopoverOpen'),
     catModalOpen: uiProp('catModalOpen'),
     attrModalOpen: uiProp('attrModalOpen'),
     groupEditOpen: uiProp('groupEditOpen'),
@@ -120,7 +121,7 @@ export const useAppStore = defineStore('app', () => {
     permanentDeleteAttribute(id: string) { ds().permanentDeleteAttribute(id) },
     emptyTrash() { ds().emptyTrash() },
     autoCleanupTrash() { ds().autoCleanupTrash() },
-    importFromData(data: any) {
+    importFromData(data: Partial<AppData>) {
       ds().importFromData(data)
       const u = ui()
       u.curCat = 'all'; u.focusedGroupId = null

@@ -152,7 +152,7 @@ function _fromRemoteBookmark(r: any): Bookmark {
     attributes: (r.attributes as Record<string, boolean>) || {},
     isExpanded: r.is_expanded || false,
     createdAt: r.created_at_num || 0,
-    updatedAt: _parseTimestamp(r.updated_at) || r.updated_at_num || r.created_at_num || 0,
+    updatedAt: r.updated_at_num || r.created_at_num || 0,
     deletedAt: r.deleted_at ? _parseTimestamp(r.deleted_at) : undefined,
   }
 }
@@ -166,7 +166,7 @@ function _fromRemoteGroup(r: any): SiblingGroup {
     attributes: (r.attributes as Record<string, boolean>) || {},
     bookmarkIds: (r.bookmark_ids as string[]) || [],
     notes: r.notes || '', useCount: r.use_count || 0,
-    updatedAt: _parseTimestamp(r.updated_at) || r.updated_at_num || 0,
+    updatedAt: r.updated_at_num || 0,
     isPublic: r.is_public || false,
     deletedAt: r.deleted_at ? _parseTimestamp(r.deleted_at) : undefined,
   }
@@ -253,9 +253,10 @@ export function useCloudSync() {
     return '未同步'
   })
 
-  const pendingCount = computed(async () => {
-    return syncOpsCount()
-  })
+  const pendingCount = ref(0)
+  async function refreshPendingCount() {
+    pendingCount.value = await syncOpsCount()
+  }
 
   // ── 把内存 dirtyIds 转为持久化 ops ──
   function _enqueueDirtyAsOps(): void {
@@ -316,7 +317,10 @@ export function useCloudSync() {
       ops.push({ action: 'delete', table, itemId: id, data: null, ts: Date.now() })
     }
 
-    if (ops.length) enqueueSyncOps(ops)
+    if (ops.length) {
+      enqueueSyncOps(ops)
+      refreshPendingCount()
+    }
   }
 
   // ── 从队列批量推送到 Supabase ──
@@ -422,7 +426,10 @@ export function useCloudSync() {
       }
 
       // 删除已成功的 ops
-      if (succeededIds.length) await removeSyncOps(succeededIds)
+      if (succeededIds.length) {
+        await removeSyncOps(succeededIds)
+        refreshPendingCount()
+      }
       // 清理 newIds 标记
       for (const op of ops) ds._newIds.delete(op.itemId)
 
@@ -439,8 +446,8 @@ export function useCloudSync() {
     }
   }
 
-  // ── 增量拉取（backfill）──
-  async function _pullChanges(): Promise<boolean> {
+  // ── 拉取远端变更 ──
+  async function _pullChanges(full = false): Promise<boolean> {
     const userId = _getUserId()
     if (!userId) return false
     if (!navigator.onLine) { syncError.value = '网络离线'; return false }
@@ -449,7 +456,7 @@ export function useCloudSync() {
     syncError.value = null
 
     try {
-      const since = lastSyncAt.value || 0
+      const since = full ? 0 : (lastSyncAt.value || 0)
 
       const [catsRes, bmsRes, groupsRes, attrsRes] = await Promise.all([
         supabase.from('categories').select('*').eq('user_id', userId).gt('updated_at_num', since),
@@ -478,10 +485,10 @@ export function useCloudSync() {
       }
 
       // 智能合并
-      _mergeIntoLocal(ds.categories, remoteCats, 'category')
-      _mergeIntoLocal(ds.bookmarks, remoteBms, 'bookmark')
-      _mergeIntoLocal(ds.siblingGroups, remoteGroups, 'group')
-      _mergeIntoLocal(ds.customAttributes, remoteAttrs, 'attribute')
+      _mergeIntoLocal(ds.categories, remoteCats, 'category', full)
+      _mergeIntoLocal(ds.bookmarks, remoteBms, 'bookmark', full)
+      _mergeIntoLocal(ds.siblingGroups, remoteGroups, 'group', full)
+      _mergeIntoLocal(ds.customAttributes, remoteAttrs, 'attribute', full)
 
       lastSyncAt.value = Date.now()
       syncStatus.value = 'success'
@@ -497,7 +504,7 @@ export function useCloudSync() {
 
   // ── 智能合并：远端 → 本地 ──
   function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
-    local: T[], remote: T[], type: SyncConflict['type'],
+    local: T[], remote: T[], type: SyncConflict['type'], full = false,
   ) {
     const ds = useDataStore()
     const localMap = new Map(local.map(i => [i.id, i]))
@@ -529,12 +536,14 @@ export function useCloudSync() {
       }
     }
 
-    // 远端已删除（本地未 dirty 的项）
-    const remoteIds = new Set(remote.map(r => r.id))
-    for (let i = local.length - 1; i >= 0; i--) {
-      const lItem = local[i]
-      if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && lastSyncAt.value > 0) {
-        local.splice(i, 1)
+    // 仅全量拉取时执行删除逻辑（增量拉取结果不包含未变更项，不能作为删除依据）
+    if (full) {
+      const remoteIds = new Set(remote.map(r => r.id))
+      for (let i = local.length - 1; i >= 0; i--) {
+        const lItem = local[i]
+        if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && lastSyncAt.value > 0) {
+          local.splice(i, 1)
+        }
       }
     }
   }
@@ -597,7 +606,7 @@ export function useCloudSync() {
     }
     const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, _reconnectAttempts), 30000)
     _reconnectAttempts++
-    console.log(`[realtime] reconnecting in ${delay}ms (attempt ${_reconnectAttempts})`)
+    console.warn(`[realtime] reconnecting in ${delay}ms (attempt ${_reconnectAttempts})`)
     _reconnectTimer = setTimeout(() => {
       _reconnectTimer = null
       unsubscribeRealtime()
@@ -625,7 +634,7 @@ export function useCloudSync() {
         (p) => _handleRealtimeChange(p, 'attribute'))
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('[realtime] subscribed')
+          console.warn('[realtime] subscribed')
           realtimeStatus.value = 'connected'
           _reconnectAttempts = 0
           // 重连后 backfill 补全离线期间数据
@@ -690,8 +699,8 @@ export function useCloudSync() {
     _initialized = true
 
     await _withLock('linkvault-sync', async () => {
-      // 先拉取远端数据
-      await _pullChanges()
+      // 首次同步：全量拉取（含删除逻辑）
+      await _pullChanges(true)
       // 把本地所有数据入队推送
       const ds = useDataStore()
       const userId = _getUserId()
@@ -716,6 +725,7 @@ export function useCloudSync() {
     })
 
     subscribeRealtime()
+    refreshPendingCount()
   }
 
   /** 离线恢复 */
@@ -856,7 +866,7 @@ export function useCloudSync() {
   }
 
   return {
-    syncStatus, lastSyncAt, syncError, autoSync, syncLabel, pendingCount,
+    syncStatus, lastSyncAt, syncError, autoSync, syncLabel, pendingCount, refreshPendingCount,
     realtimeStatus,
     conflicts, resolveConflict, resolveAllConflicts,
     pushToCloud: _pushFromQueue, pullFromCloud: _pullChanges, fullSync,

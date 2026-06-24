@@ -43,9 +43,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="bmNotes">备注</label>
-          <E2ELockOverlay :disabled="!e2eEnabled" hint="开启 E2E 后可存储备注（含 API Key 等）">
-            <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" placeholder="备注…"></textarea>
-          </E2ELockOverlay>
+          <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" placeholder="备注…"></textarea>
         </div>
         <div class="form-group">
           <label class="form-label" for="bmIcon">自定义图标</label>
@@ -75,7 +73,7 @@
         <div class="form-group">
           <label class="form-label">属性标记</label>
           <div class="check-group">
-            <label v-for="attr in store.customAttributes" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
+            <label v-for="attr in store.customAttributes.filter(a => a.id !== 'is-group')" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
               <input type="checkbox" :checked="bmForm.attributes[attr.id]"
                      @change="toggleAttr(attr.id, $event)">
               {{ attr.name }}
@@ -85,7 +83,7 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" @click="onClose">取消</button>
-        <button class="btn btn-primary" @click="onSave">{{ bmForm.url.trim() ? '保存' : '保存' }}</button>
+        <button class="btn btn-primary" @click="onSave">{{ bmForm.isEdit ? '更新' : '保存' }}</button>
       </div>
     </div>
   </div>

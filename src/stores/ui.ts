@@ -30,6 +30,7 @@ export interface UIState {
   railOpen: boolean
   bmModalOpen: boolean
   addBmPopoverOpen: boolean
+  deadLinksPopoverOpen: boolean
   catModalOpen: boolean
   attrModalOpen: boolean
   groupEditOpen: boolean
@@ -84,6 +85,7 @@ export const useUIStore = defineStore('ui', {
     railOpen: false,
     bmModalOpen: false,
     addBmPopoverOpen: false,
+    deadLinksPopoverOpen: false,
     catModalOpen: false,
     attrModalOpen: false,
     groupEditOpen: false,

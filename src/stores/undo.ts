@@ -49,6 +49,7 @@ export const useUndoStore = defineStore('undo', {
     clearStack(gid: string) {
       delete this.stacks[gid]
       if (this.timers[gid]) { clearTimeout(this.timers[gid]); delete this.timers[gid] }
+      if (this.saveTimers[gid]) { clearTimeout(this.saveTimers[gid]); delete this.saveTimers[gid] }
     },
 
     cleanStale() {

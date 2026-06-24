@@ -29,8 +29,8 @@ const editorManager: IEditorManager = {
   getContentHTML: function (gid: string): string | null { const ed = _editors[gid]; if (!ed) return null; try { return ed.getHTML() } catch (_) { return null } },
   insertInlineCardHTML: function (gid: string, html: string): boolean { const ed = _editors[gid]; if (!ed) return false; try { ed.chain().insertContent(html).run(); return true } catch (_) { return false } },
 
-  toggleBold: function (gid: string): void { const ed = _editors[gid]; if (ed) (ed.commands as any).toggleBold() },
-  setHeading: function (gid: string, level: number): void { const ed = _editors[gid]; if (ed) (ed.commands as any).toggleHeading({ level }) },
+  toggleBold: function (gid: string): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleBold().run() },
+  setHeading: function (gid: string, level: number): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleHeading({ level }).run() },
 
   deleteNode: function (gid: string, attrName: string, attrValue: string): void {
     const ed = _editors[gid]; if (!ed) return
@@ -39,7 +39,7 @@ const editorManager: IEditorManager = {
       if (node.attrs && node.attrs[attrName] === attrValue) toRemove.push(pos)
     })
     toRemove.reverse().forEach(function (p: number) {
-      try { ed.chain().deleteRange({ from: p, to: p + 1 }).run() } catch (e: any) { console.warn('[Editor] deleteRange error:', e.message) }
+      try { ed.chain().deleteRange({ from: p, to: p + 1 }).run() } catch (e: unknown) { console.warn('[Editor] deleteRange error:', e instanceof Error ? e.message : e) }
     })
   },
 
@@ -51,7 +51,7 @@ const editorManager: IEditorManager = {
         ed.chain().insertContentAt(coords.pos, html).run()
         return true
       }
-    } catch (e: any) { console.warn('[Editor] insertAtCoords fallback:', e.message) }
+    } catch (e: unknown) { console.warn('[Editor] insertAtCoords fallback:', e instanceof Error ? e.message : e) }
     return this.insertInlineCardHTML(gid, html)
   },
   insertText: function (gid: string, text: string): boolean { const ed = _editors[gid]; if (!ed) return false; try { ed.chain().insertContent(text).run(); return true } catch (_) { return false } },

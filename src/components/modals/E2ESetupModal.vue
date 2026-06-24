@@ -67,7 +67,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { generateRecoveryKeyPDF } from '../../lib/recoveryKeyPDF.js'
@@ -84,6 +84,19 @@ const showPw2 = ref(false)
 const error = ref('')
 const recoveryKey = ref('')
 const saved = ref(false)
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen) {
+    step.value = 1
+    masterPw.value = ''
+    masterPw2.value = ''
+    showPw.value = false
+    showPw2.value = false
+    error.value = ''
+    recoveryKey.value = ''
+    saved.value = false
+  }
+})
 
 function onNext() {
   error.value = ''

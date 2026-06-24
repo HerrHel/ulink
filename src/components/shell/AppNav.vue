@@ -63,7 +63,7 @@ const curCat = computed(() => uiStore.curCat)
 const cardCounts = computed(() => dataStore.cardCounts)
 
 const storageInfo = computed(() => {
-  try { return (dataStore as any).getStorageInfo() } catch { return null }
+  try { return store.getStorageInfo() } catch { return null }
 })
 
 const storageBarColor = computed(() => {

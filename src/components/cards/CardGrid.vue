@@ -39,6 +39,7 @@ import { isMobile } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useVirtualScroll } from '../../composables/useVirtualScroll.js'
 import { useMobileDragReorder } from '../../composables/interaction/useMobileDragReorder.js'
+import type { CardItem } from '../../types.js'
 import BookmarkCard from './BookmarkCard.vue'
 import GroupCard from './GroupCard.vue'
 const store = useAppStore()
@@ -50,7 +51,7 @@ const gridClass = computed(() => {
   if (store.focusedGroupId) return 'card-grid focus-view' + (isMobile() ? ' focus-mobile' : '')
   return store.layoutMode === 'list' ? 'card-grid list-view' : 'card-grid grid-view'
 })
-const combinedList = computed<Array<{ type: 'group' | 'bm'; data: any }>>(() => {
+const combinedList = computed<CardItem[]>(() => {
   if (store.focusedGroupId) {
     const group = store.groupMap[store.focusedGroupId]
     return group ? [{ type: 'group', data: group }] : []
@@ -62,7 +63,7 @@ const combinedList = computed<Array<{ type: 'group' | 'bm'; data: any }>>(() => 
     const gMap = store.groupMap
     const usedBms = new Set<string>()
     const usedGs = new Set<string>()
-    const combined: Array<{ type: 'group' | 'bm'; data: any }> = []
+    const combined: CardItem[] = []
     customOrder.forEach(entry => {
       if (entry.t === 'g' && gMap[entry.id]) { combined.push({ type: 'group', data: gMap[entry.id] }); usedGs.add(entry.id) }
       else if (entry.t === 'b' && bmMap[entry.id] && !bmMap[entry.id].parentId) { combined.push({ type: 'bm', data: bmMap[entry.id] }); usedBms.add(entry.id) }
@@ -74,14 +75,14 @@ const combinedList = computed<Array<{ type: 'group' | 'bm'; data: any }>>(() => 
   }
   const groups = store.filteredGroups
   const topLevel = store.filteredBookmarks.filter(b => !b.parentId)
-  const combined: Array<{ type: 'group' | 'bm'; data: any }> = []
+  const combined: CardItem[] = []
   groups.forEach(g => combined.push({ type: 'group', data: g }))
   topLevel.forEach(b => combined.push({ type: 'bm', data: b }))
   return combined
 })
 
 const useVirtual = computed(() => combinedList.value.length > 100)
-const virtualList = computed<Array<{ type: 'group' | 'bm'; data: any }>>(() => useVirtual.value ? combinedList.value : [])
+const virtualList = computed<CardItem[]>(() => useVirtual.value ? combinedList.value : [])
 const { visibleItems, totalHeight } = useVirtualScroll(
   virtualList,
   { itemHeight: isMobile() ? 100 : 140, containerHeight: 800, overscan: 5 }

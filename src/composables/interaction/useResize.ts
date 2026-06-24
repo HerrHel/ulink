@@ -52,9 +52,9 @@ export function useResize() {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       if (panel === leftPanel) {
-        localStorage.setItem('lv_railWidth', parseInt(panel.style.width) as any as string)
+        localStorage.setItem('lv_railWidth', String(parseInt(panel.style.width)))
       } else {
-        localStorage.setItem('lv_detailWidth', parseInt(panel.style.getPropertyValue('--detail-width')) as any as string)
+        localStorage.setItem('lv_detailWidth', String(parseInt(panel.style.getPropertyValue('--detail-width'))))
       }
       handle = panel = null
     }

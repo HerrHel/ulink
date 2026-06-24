@@ -34,16 +34,17 @@
 <template v-if="store.groupEditOpen">
   <GroupEditModal />
 </template>
+<TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
 <template v-if="store.confirmModalOpen">
   <ConfirmModal />
 </template>
-<TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
 <HistoryPanel :open="store.historyPanelOpen" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.historyPanelOpen = false" />
 <AuthModal />
 <E2ESetupModal :open="store.e2eSetupOpen" @close="store.e2eSetupOpen = false" />
 <E2EUnlockModal :open="store.e2eUnlockOpen" @close="store.e2eUnlockOpen = false" @unlocked="onE2EUnlocked" />
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
+<DeadLinksPopover />
 <SyncConflictBanner />
 <CommandPalette />
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false; store.detailCards.splice(0)"></div>
@@ -65,6 +66,7 @@ import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
 import BatchBottom from './components/shell/BatchBottom.vue'
 import AddPopover from './components/overlays/AddPopover.vue'
+import DeadLinksPopover from './components/overlays/DeadLinksPopover.vue'
 import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ToastContainer from './components/overlays/ToastContainer.vue'

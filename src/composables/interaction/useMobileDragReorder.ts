@@ -32,7 +32,7 @@ interface UseMobileDragReorderOptions {
   enabled?: Ref<boolean>
   handleSelector?: string | null
   itemSelector?: string
-  onReorder?: ((list: any[], from: number, to: number) => void) | null
+  onReorder?: ((list: unknown, from: number, to: number) => void) | null
   placeholderClass?: string
   draggingClass?: string
 }
@@ -236,7 +236,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
     if (fromIndex !== toIndex) {
       if (onReorder) {
-        onReorder(null as any, fromIndex, toIndex)
+        onReorder(null, fromIndex, toIndex)
       } else {
         const movedItem = arr[fromIndex]
         if (!movedItem) return

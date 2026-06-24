@@ -11,17 +11,18 @@
   100%{opacity:1;transform:translateY(0) scaleY(1);filter:blur(0)}
 }
 
-/* ---- List: all cards become horizontal rows ---- */
+/* ---- List: all cards become vertical columns ---- */
 .list-view .card,
 .list-view .group-card{
   height:auto;min-height:56px;
   padding:10px 14px;
-  flex-direction:row;align-items:stretch;
+  flex-direction:column;align-items:stretch;
   flex-wrap:nowrap;
   border-radius:var(--radius-lg);
   box-shadow:var(--shadow-card);
   transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,background-color 0.2s ease,transform 0.3s var(--ease-out);
   border:1px solid var(--border);
+  overflow:visible;
 }
 /* Entrance animation — only on non-expanded cards; removed via JS after first play */
 .list-view .card:not(.card-expanded):not(.group-expanded),
@@ -64,9 +65,11 @@
   display:flex;align-items:center;flex-wrap:nowrap;gap:8px;
   padding-right:20px;
 }
-/* Grid view: topline is block (toprow and tags on separate lines) */
+/* Grid view: topline outside scroll area, highest layer */
 .card-topline{
-  display:contents;
+  flex-shrink:0;
+  z-index:2;
+  background:var(--surface);
 }
 
 /* ---- List: toprow is horizontal compact, tags flow after name ---- */
@@ -209,9 +212,11 @@
   box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover);
   background:var(--surface);
 }
-/* Extra specificity to override stagger animation-delay rules */
+/* Extra specificity to override base .card rules */
 .list-view .card.card-expanded,
 .list-view .group-card.group-expanded{
+  height:auto;min-height:56px;
+  overflow:visible;
   animation:listExpandIn 0.3s var(--ease-out);
 }
 @keyframes listExpandIn{
@@ -227,9 +232,9 @@
 /* Expanded body: allow content to flow naturally */
 .list-view .card-expanded .card-body,
 .list-view .group-expanded .card-body{
-  flex:1 1 0;
+  flex:none;
   overflow:visible;
-  padding:0 80px 0 0;
+  padding:0 80px 10px 0;
 }
 .list-view .card-expanded .card-topline{
   flex-wrap:wrap;

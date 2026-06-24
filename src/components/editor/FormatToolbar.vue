@@ -57,6 +57,7 @@ import { I } from '../../config/icons.js'
 import { saveGroupBody } from '../../composables/domain/useGroup.js'
 import { setMfbAPI } from '../../composables/bridge.js'
 import { useEditorFormat, PALETTE } from '../../composables/ui/useEditorFormat.js'
+import type { FormatKey } from '../../composables/ui/useEditorFormat.js'
 import ColorPalette from './ColorPalette.vue'
 
 const store = useAppStore()
@@ -80,8 +81,8 @@ const { fmt: state, colorOpen: paletteOpen, syncFmt: syncState, fmtToggle: _fmtT
 
 const palette = PALETTE
 
-function toggle(f: string) {
-  _fmtToggle(f as any)
+function toggle(f: FormatKey) {
+  _fmtToggle(f)
   const saveGid = store.focusedGroupId || (document.activeElement as HTMLElement)?.closest?.('.group-body')?.getAttribute('data-gid') || undefined
   if (saveGid) saveGroupBody(saveGid)
 }

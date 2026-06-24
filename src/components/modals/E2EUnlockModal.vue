@@ -24,7 +24,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 
@@ -36,6 +36,15 @@ const masterPw = ref('')
 const showPw = ref(false)
 const error = ref('')
 const loading = ref(false)
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen) {
+    masterPw.value = ''
+    showPw.value = false
+    error.value = ''
+    loading.value = false
+  }
+})
 
 async function onUnlock() {
   if (loading.value) return

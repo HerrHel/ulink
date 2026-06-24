@@ -72,19 +72,15 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
 export async function decrypt(ciphertext: string, key: CryptoKey): Promise<string> {
   const parts = ciphertext.split('.')
   if (parts.length !== 3) return ciphertext // 非加密数据，直接返回
-  try {
-    const _salt = new Uint8Array(_base64ToBuf(parts[0])) // 解析但不使用，保留格式兼容
-    const iv = new Uint8Array(_base64ToBuf(parts[1]))
-    const data = _base64ToBuf(parts[2])
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
-      key,
-      data,
-    )
-    return _fromBuffer(decrypted)
-  } catch (_) {
-    return ciphertext // 解密失败，返回原值
-  }
+  const _salt = new Uint8Array(_base64ToBuf(parts[0])) // 解析但不使用，保留格式兼容
+  const iv = new Uint8Array(_base64ToBuf(parts[1]))
+  const data = _base64ToBuf(parts[2])
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    key,
+    data,
+  )
+  return _fromBuffer(decrypted)
 }
 
 /** 生成 canary 明文（用于验证主密码是否正确） */
@@ -94,6 +90,65 @@ export async function generateCanary(key: CryptoKey): Promise<string> {
 
 /** 验证 canary */
 export async function verifyCanary(encrypted: string, key: CryptoKey): Promise<boolean> {
-  const result = await decrypt(encrypted, key)
-  return result === 'linkvault-canary-v1'
+  try {
+    const result = await decrypt(encrypted, key)
+    return result === 'linkvault-canary-v1'
+  } catch (_) {
+    return false
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 密码加密/解密（兼容旧版 base64）
+// ══════════════════════════════════════════════════
+
+import type { EncryptedPassword } from './types.js'
+
+/**
+ * 使用主密码加密明文密码
+ * 返回 EncryptedPassword 对象（AES-256-GCM）
+ */
+export async function encryptPassword(plaintext: string, masterPassword: string): Promise<EncryptedPassword> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
+  const key = await deriveKey(masterPassword, salt)
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    key,
+    _toBuffer(plaintext),
+  )
+  return {
+    encrypted: true,
+    data: _bufToBase64(encrypted),
+    iv: _bufToBase64(iv.buffer),
+    salt: _bufToBase64(salt.buffer),
+  }
+}
+
+/**
+ * 自动迁移/解密存储的密码
+ * 支持三种格式：
+ * 1. EncryptedPassword 对象（AES-256-GCM）→ 解密
+ * 2. 普通 base64 字符串 → 解码（旧版兼容）
+ * 3. 空字符串 → 返回空
+ */
+export async function autoMigratePassword(stored: string | EncryptedPassword | null | undefined, masterPassword: string): Promise<string> {
+  if (!stored) return ''
+  
+  // 新格式：EncryptedPassword 对象
+  if (typeof stored === 'object' && stored.encrypted === true) {
+    if (!masterPassword) throw new Error('需要主密码')
+    // 重组为 encrypt 函数使用的格式: base64(salt).base64(iv).base64(ciphertext)
+    const ciphertext = stored.salt + '.' + stored.iv + '.' + stored.data
+    const salt = new Uint8Array(_base64ToBuf(stored.salt))
+    const key = await deriveKey(masterPassword, salt)
+    return decrypt(ciphertext, key)
+  }
+  
+  // 旧格式：base64 字符串
+  if (typeof stored === 'string') {
+    return safeDecodePassword(stored)
+  }
+  
+  return ''
 }

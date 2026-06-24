@@ -16,7 +16,7 @@ type IFuseOptions = {
   findAllMatches?: boolean
 }
 type FuseResult = {
-  item: any
+  item: BookmarkSearchItem | GroupSearchItem
   refIndex: number
   score?: number
   matches?: Array<{
@@ -268,7 +268,7 @@ export function searchWithHighlights(
     id: r.item.id,
     title: (r.item as BookmarkSearchItem).title,
     url: (r.item as BookmarkSearchItem).url,
-    _highlights: _extractHighlights(r as any, BM_KEY_MAP),
+    _highlights: _extractHighlights(r, BM_KEY_MAP),
   }))
 
   if (groups !== _hlGrpCacheRef) {
@@ -284,7 +284,7 @@ export function searchWithHighlights(
     _isGroup: true,
     _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
     bookmarkIds: groups.find(g => g.id === r.item.id)?.bookmarkIds,
-    _highlights: _extractHighlights(r as any, GRP_KEY_MAP),
+    _highlights: _extractHighlights(r, GRP_KEY_MAP),
   }))
 
   if (!groupResults.length) return bookmarkResults.slice(0, maxResults)

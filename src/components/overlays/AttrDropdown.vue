@@ -45,7 +45,8 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 
 const filteredAttrs = computed(() => {
   const q = query.value.toLowerCase()
-  return store.customAttributes.filter(a => a.name.toLowerCase().indexOf(q) !== -1)
+  const userAttrs = store.customAttributes.filter(a => a.name.toLowerCase().indexOf(q) !== -1)
+  return userAttrs
 })
 
 function isActive(id: string) { return store.activeAttrs.indexOf(id) !== -1 }

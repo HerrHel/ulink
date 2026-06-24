@@ -49,8 +49,8 @@ export function useAppLifecycle() {
     }
 
     const flushAndSave = () => {
-      flushIDB()
       store.flushDebouncedSave()
+      flushIDB()
     }
     const onSaveUI = () => store.saveUIState()
     const onClearSel = () => window.getSelection()?.removeAllRanges()

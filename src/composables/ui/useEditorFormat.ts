@@ -9,7 +9,7 @@ export const PALETTE = [
   { hex: '#6B7280', name: '灰' }
 ]
 
-type FormatKey = 'bold' | 'underline' | 'h1' | 'h2' | 'h3' | 'ol' | 'ul' | 'task'
+export type FormatKey = 'bold' | 'underline' | 'h1' | 'h2' | 'h3' | 'ol' | 'ul' | 'task'
 
 interface EditorFormatState {
   bold: boolean

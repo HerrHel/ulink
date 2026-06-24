@@ -2,17 +2,17 @@
   <div v-if="isFocused" class="focus-card-wrap">
     <div class="card group-card group-card-focus" :data-group-id="group.id">
       <div class="group-card-accent"></div>
-      <div class="card-body">
-        <div class="group-card-head">
-          <div class="card-logo group-card-icon" @click.stop="toggleFocus">
-            <img v-if="group.icon" :src="group.icon" alt="">
-            <span v-else v-html="noteIcon" class="display-contents"></span>
-          </div>
-          <div class="card-titlewrap" @dblclick.stop="onDblClick">
-            <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
-            <div class="card-domain group-domain"></div>
-          </div>
+      <div class="group-card-head">
+        <div class="card-logo group-card-icon" @click.stop="toggleFocus">
+          <img v-if="group.icon" :src="group.icon" alt="">
+          <span v-else v-html="noteIcon" class="display-contents"></span>
         </div>
+        <div class="card-titlewrap" @dblclick.stop="onDblClick">
+          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
+          <div class="card-domain group-domain"></div>
+        </div>
+      </div>
+      <div class="card-body">
         <div class="card-tags" v-if="tagNames.length">
           <span class="card-tag tag-custom" v-for="t in tagNames" :key="t">{{ t }}</span>
         </div>
@@ -47,21 +47,21 @@
     <input v-if="store.batchMode" type="checkbox" class="batch-chk"
            :id="'batchChk_group:' + group.id" :checked="isSelected"
            @change.stop @click.stop="toggleSelect">
-    <div class="card-body">
-      <div class="group-card-head">
-        <div class="card-logo group-card-icon" @click.stop="toggleFocus">
-          <img v-if="group.icon" :src="group.icon" alt="">
-          <span v-else v-html="noteIcon" class="display-contents"></span>
-        </div>
-        <div class="card-titlewrap">
-          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
-          <div class="card-domain group-domain"></div>
-        </div>
-        <div class="group-head-actions" v-if="!store.batchMode">
-          <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" title="撤销" v-html="I.undo"></button>
-          <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" title="重做" v-html="I.redo"></button>
-        </div>
+    <div class="group-card-head">
+      <div class="card-logo group-card-icon" @click.stop="toggleFocus">
+        <img v-if="group.icon" :src="group.icon" alt="">
+        <span v-else v-html="noteIcon" class="display-contents"></span>
       </div>
+      <div class="card-titlewrap">
+        <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
+        <div class="card-domain group-domain"></div>
+      </div>
+      <div class="group-head-actions" v-if="!store.batchMode">
+        <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" title="撤销" v-html="I.undo"></button>
+        <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" title="重做" v-html="I.redo"></button>
+      </div>
+    </div>
+    <div class="card-body">
       <div class="card-tags" v-if="tagNames.length">
         <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
@@ -106,7 +106,7 @@ const store = useAppStore()
 
 let _cardEl: HTMLElement | null = null
 let _entranceCleanup: (() => void) | null = null
-function setCardEl(el: any) {
+function setCardEl(el: HTMLElement | null) {
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
   _cardEl = el as HTMLElement | null
   if (el) _entranceCleanup = stripEntranceAnim(el)

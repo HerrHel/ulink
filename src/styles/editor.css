@@ -70,6 +70,7 @@
 .panel-content:has(.focus-view){padding:16px 0 16px 20px!important}
 .focus-view .group-card-focus .card-body{
   display:flex;flex-direction:column;flex:1;min-height:0;
+  -webkit-mask-image:none;mask-image:none;
 }
 .focus-view .group-card-focus .group-card-head{display:none}
 .focus-view .group-card-focus .card-tags{display:none}

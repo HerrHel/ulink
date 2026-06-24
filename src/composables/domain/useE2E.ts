@@ -77,13 +77,22 @@ export function useE2E() {
     const key = await deriveKey(password, salt)
     const canary = await generateCanary(key)
 
-    // 如果提供了 recoveryKey，存储 salt 用于验证
+    let recoveryCanary: string | null = null
+    let recoverySalt: number[] | null = null
+    if (recoveryKey) {
+      const rkSalt = crypto.getRandomValues(new Uint8Array(32))
+      const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), rkSalt)
+      recoveryCanary = await generateCanary(rkKey)
+      recoverySalt = Array.from(rkSalt)
+    }
+
     const { error } = await supabase.from('user_security').upsert({
       user_id: userId,
       master_canary: {
         canary,
         salt: Array.from(salt),
-        recovery_key_salt: recoveryKey ? Array.from(salt) : null, // 使用同一个 salt 派生
+        recovery_canary: recoveryCanary,
+        recovery_salt: recoverySalt,
       },
     }, { onConflict: 'user_id' })
 
@@ -112,11 +121,16 @@ export function useE2E() {
 
     if (!data?.master_canary) return false
 
-    const canaryData = data.master_canary as { canary: string; salt: number[] }
+    const canaryData = data.master_canary as { canary: string; salt: number[]; recovery_canary?: string; recovery_salt?: number[] }
 
-    // 用 recovery key 尝试验证
-    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.salt))
-    const ok = await verifyCanary(canaryData.canary, rkKey)
+    // 使用 recovery canary 验证（如果有）
+    if (!canaryData.recovery_canary || !canaryData.recovery_salt) {
+      console.warn('[e2e] no recovery canary found')
+      return false
+    }
+
+    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt))
+    const ok = await verifyCanary(canaryData.recovery_canary, rkKey)
     if (!ok) return false
 
     // Recovery key 验证通过，设置新主密码
@@ -124,12 +138,18 @@ export function useE2E() {
     const newKey = await deriveKey(newPassword, newSalt)
     const newCanary = await generateCanary(newKey)
 
+    // 生成新的 recovery canary
+    const newRkSalt = crypto.getRandomValues(new Uint8Array(32))
+    const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt)
+    const newRecoveryCanary = await generateCanary(newRkKey)
+
     const { error } = await supabase.from('user_security').upsert({
       user_id: userId,
       master_canary: {
         canary: newCanary,
         salt: Array.from(newSalt),
-        recovery_key_salt: Array.from(newSalt),
+        recovery_canary: newRecoveryCanary,
+        recovery_salt: Array.from(newRkSalt),
       },
     }, { onConflict: 'user_id' })
 

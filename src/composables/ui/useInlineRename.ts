@@ -6,7 +6,7 @@ import { ref, nextTick } from 'vue'
 import { toast } from '../../lib/toast.js'
 
 interface InlineRenameStore {
-  [key: string]: any
+  [key: string]: ((...args: unknown[]) => void) | unknown
   save: () => void
 }
 
@@ -15,7 +15,7 @@ export function useInlineRename(store: InlineRenameStore, renameMethod: string) 
   const editingName = ref('')
   let editInputElement: HTMLInputElement | null = null
 
-  function setEditInputRef(el: any) {
+  function setEditInputRef(el: HTMLElement | null) {
     editInputElement = el as HTMLInputElement | null
   }
 

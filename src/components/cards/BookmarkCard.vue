@@ -5,29 +5,30 @@
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
             :id="'batchChk_' + bookmark.id" :checked="isSelected"
             @change.stop @click.stop="toggleSelect">
-    <div class="card-body">
-      <div class="card-topline">
-        <div class="card-toprow">
-          <div class="card-logo" title="打开链接" @click.stop="visit">
-            <img v-if="iconSrc" :src="iconSrc" alt="" @error="($event.target as HTMLImageElement).classList.add('img-error')">
-            <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
-          </div>
-          <div class="card-titlewrap" @dblclick.stop="visit">
-            <div class="card-name">
-              <span v-if="searchQuery" v-html="hlText(bookmark.title, searchQuery)"></span>
-              <template v-else>{{ bookmark.title }}</template>
-              <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
-            </div>
-            <div class="card-domain">
-              <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
-              <template v-else>{{ domainStr }}</template>
-            </div>
-          </div>
+    <div class="card-topline">
+      <div class="card-toprow">
+        <div class="card-logo" title="打开链接" @click.stop="visit">
+          <img v-if="iconSrc" :src="iconSrc" alt="" @error="($event.target as HTMLImageElement).classList.add('img-error')">
+          <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
         </div>
-        <div class="card-tags" v-if="tagNames.length">
-          <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <div class="card-titlewrap" @dblclick.stop="visit">
+          <div class="card-name">
+            <span v-if="searchQuery" v-html="hlText(bookmark.title, searchQuery)"></span>
+            <template v-else>{{ bookmark.title }}</template>
+            <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
+            <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
+          </div>
+          <div class="card-domain">
+            <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
+            <template v-else>{{ domainStr }}</template>
+          </div>
         </div>
       </div>
+      <div class="card-tags" v-if="tagNames.length">
+        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+      </div>
+    </div>
+    <div class="card-body">
       <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="editNotes">
         <span v-if="searchQuery" v-html="hlText(bookmark.notes, searchQuery)"></span>
         <template v-else>{{ bookmark.notes }}</template>
@@ -138,7 +139,7 @@ function edit() { openBmModal(props.bookmark.id) }
 function del() { deleteBookmarkWithUndo(props.bookmark.id) }
 function doAddSub() { addSub(props.bookmark.id) }
 function doOpenDetail(bmId: string) { openDetail(bmId) }
-function visitSub(sub: any) { openBookmark(sub) }
+function visitSub(sub: Bookmark) { openBookmark(sub) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
 function toggleExpand() { props.bookmark.isExpanded = !props.bookmark.isExpanded; store.debouncedSave() }
 function onCardClick(e: MouseEvent) {

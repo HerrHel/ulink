@@ -52,6 +52,6 @@ export function useApp() {
     onRemoveGroupRef: removeGroupRef,
     onRemoveBmFromGroup: removeBmFromGroup,
     onVisit: visit,
-    onShowCtxMenu: (...args: any[]) => ctxMenuAPI?.show?.(...args as [MouseEvent, string, string])
+    onShowCtxMenu: (e: MouseEvent, type: string, id: string) => ctxMenuAPI?.show?.(e, type, id)
   })
 }

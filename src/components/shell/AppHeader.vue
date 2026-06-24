@@ -26,7 +26,7 @@
       <div class="search-box">
         <span v-html="I.search"></span>
         <input type="text" class="search-input" aria-label="搜索" id="searchInput" v-model="localQuery"
-               :placeholder="store.focusedGroupId ? '搜索组内…' : '搜索…'" autocomplete="off">
+               placeholder="搜索…" autocomplete="off">
       </div>
       <SearchSuggest />
     </div>
@@ -73,7 +73,7 @@ const sync = useCloudSync()
 const syncDotClass = computed(() => {
   if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
   if (sync.syncStatus.value === 'error') return 'dot-error'
-  if ((sync.pendingCount.value as any) > 0) return 'dot-pending'
+  if (sync.pendingCount.value > 0) return 'dot-pending'
   return 'dot-ok'
 })
 

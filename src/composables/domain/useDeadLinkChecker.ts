@@ -1,6 +1,7 @@
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
+import { supabase } from '../../lib/supabase.js'
 
 interface CheckResult {
   alive: boolean
@@ -8,6 +9,7 @@ interface CheckResult {
   finalUrl: string
   checkedAt: number
   blocked: boolean
+  confidence: number
 }
 
 const results = reactive<Record<string, CheckResult>>({})
@@ -15,65 +17,127 @@ const checking = ref(false)
 const progress = ref({ done: 0, total: 0 })
 const lastFullCheckAt = ref(0)
 
-const PROXIES = [
-  (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-]
-
-const GFW_DOMAINS = [
-  'google.com', 'google.com.hk', 'youtube.com', 'twitter.com', 'x.com',
-  'facebook.com', 'instagram.com', 'wikipedia.org', 'wikimedia.org',
-  'reddit.com', 'telegram.org', 't.me', 'whatsapp.com', 'line.me',
-  'medium.com', 'githubusercontent.com', 'nytimes.com', 'bbc.com',
-  'bbc.co.uk', 'bloomberg.com', 'reuters.com', 'wsj.com',
-  'dropbox.com', 'vimeo.com', 'pinterest.com', 'tumblr.com',
-  'soundcloud.com', 'archive.org', 'signal.org', 'brave.com',
-]
-
-function isGFWBlocked(url: string): boolean {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase()
-    return GFW_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))
-  } catch { return false }
-}
+const CONFIDENCE_THRESHOLD = 0.5
 
 let _abort: AbortController | null = null
 
+function getHostname(url: string): string {
+  try { return new URL(url).hostname.toLowerCase() } catch { return '' }
+}
+
+async function checkDns(hostname: string): Promise<{ ok: boolean; duration: number }> {
+  const start = Date.now()
+  try {
+    const resp = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${hostname}&type=A`,
+      { headers: { 'Accept': 'application/dns-json' } }
+    )
+    const data = await resp.json()
+    return {
+      ok: data.Status === 0 && data.Answer && data.Answer.length > 0,
+      duration: Date.now() - start,
+    }
+  } catch {
+    return { ok: true, duration: Date.now() - start }
+  }
+}
+
+function checkDirect(url: string, timeoutMs = 3000): Promise<{ ok: boolean; duration: number }> {
+  return new Promise(resolve => {
+    const start = Date.now()
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      controller.abort()
+      resolve({ ok: false, duration: Date.now() - start })
+    }, timeoutMs)
+
+    fetch(url, {
+      signal: controller.signal,
+      method: 'HEAD',
+      mode: 'no-cors',
+    }).then(() => {
+      clearTimeout(timeout)
+      resolve({ ok: true, duration: Date.now() - start })
+    }).catch(() => {
+      clearTimeout(timeout)
+      resolve({ ok: false, duration: Date.now() - start })
+    })
+  })
+}
+
+async function measureNetworkBaseline(): Promise<number> {
+  const start = Date.now()
+  try {
+    await fetch('https://www.gstatic.com/generate_204', { method: 'HEAD', mode: 'no-cors' })
+  } catch { /* ignore */ }
+  return Date.now() - start
+}
+
+async function callEdgeFunction(url: string, bookmarkId?: string): Promise<{ status: string; http_status: number }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('check-link', {
+      body: { url, bookmark_id: bookmarkId }
+    })
+    if (error) throw error
+    return data
+  } catch {
+    return { status: 'unknown', http_status: 0 }
+  }
+}
+
 export function useDeadLinkChecker() {
-  async function checkUrl(url: string): Promise<CheckResult> {
+  async function checkUrl(url: string, bookmarkId?: string): Promise<CheckResult> {
     if (!url || !url.startsWith('http')) {
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false }
+      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 1 }
     }
 
-    for (const proxyFn of PROXIES) {
-      try {
-        const proxyUrl = proxyFn(url)
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 10000)
+    const hostname = getHostname(url)
 
-        const resp = await fetch(proxyUrl, {
-          signal: controller.signal,
-          mode: 'cors',
-        })
-        clearTimeout(timeout)
-
-        if (resp.ok) {
-          const data = await resp.json().catch(() => null)
-          const status = data?.status?.http_code || data?.status || resp.status
-          const alive = status >= 200 && status < 400
-          return { alive, status, finalUrl: data?.status?.url || url, checkedAt: Date.now(), blocked: false }
-        }
-      } catch {
-        continue
-      }
+    // 1) DoH DNS检查（同时记录响应时间作为网络基线 fallback）
+    const dns = await checkDns(hostname)
+    if (!dns.ok) {
+      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.99 }
     }
 
-    // 所有代理失败 — 检查是否为 GFW 封锁
-    const blocked = isGFWBlocked(url)
-    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked }
+    // 2) 并行测量网络基线 + 直接访问目标
+    const [gstaticBaseline, direct] = await Promise.all([
+      measureNetworkBaseline(),
+      checkDirect(url, 3000),
+    ])
+
+    // 3) 直接访问成功 → 存活
+    if (direct.ok) {
+      return { alive: true, status: 200, finalUrl: url, checkedAt: Date.now(), blocked: false, confidence: 0.95 }
+    }
+
+    // 4) 确定基线
+    // gstatic <5s 说明网络可达（只是延迟高），用它作为基线
+    // gstatic >5s 说明网络本身不通或被墙，无法可靠判断，直接返回 unknown
+    if (gstaticBaseline > 5000) {
+      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.15 }
+    }
+    const baseline = gstaticBaseline
+
+    // 5) 网络差 → 无法判断，标记为 unknown（不改变书签属性）
+    if (baseline > 2000) {
+      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.15 }
+    }
+
+    // 6) 网络良好但直连失败 → 调用 Edge Function 确认
+    const edgeResult = await callEdgeFunction(url, bookmarkId)
+
+    if (edgeResult.status === 'alive') {
+      return { alive: false, status: edgeResult.http_status, finalUrl: '', checkedAt: Date.now(), blocked: true, confidence: 0.95 }
+    }
+
+    if (edgeResult.status === 'dead') {
+      return { alive: false, status: edgeResult.http_status, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.90 }
+    }
+
+    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.2 }
   }
 
-  async function checkAll(batchSize = 5, intervalMs = 500): Promise<void> {
+  async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
     const app = useAppStore()
@@ -84,12 +148,25 @@ export function useDeadLinkChecker() {
     progress.value = { done: 0, total: bookmarks.length }
     _abort = new AbortController()
 
+    Object.keys(results).forEach(k => delete results[k])
+
+    // 清除所有书签的旧标记（不只是 filtered 的），避免残留计数
+    for (const b of ds.bookmarks) {
+      const attrs = b.attributes || {}
+      if (attrs['dead-link'] || attrs['gfw-blocked']) {
+        const rest = { ...attrs }
+        delete rest['dead-link']
+        delete rest['gfw-blocked']
+        ds.updateBookmark(b.id, { attributes: rest })
+      }
+    }
+
     for (let i = 0; i < bookmarks.length; i += batchSize) {
       if (_abort.signal.aborted) break
 
       const batch = bookmarks.slice(i, i + batchSize)
       const batchResults = await Promise.allSettled(
-        batch.map(b => checkUrl(b.url))
+        batch.map(b => checkUrl(b.url, b.id))
       )
 
       for (let j = 0; j < batch.length; j++) {
@@ -118,8 +195,10 @@ export function useDeadLinkChecker() {
     const bm = ds.bookmarkMap[bookmarkId]
     if (!bm?.url) return null
 
-    const result = await checkUrl(bm.url)
+    const result = await checkUrl(bm.url, bookmarkId)
     results[bookmarkId] = result
+
+    if (result.confidence < CONFIDENCE_THRESHOLD) return result
 
     const attrs = { ...(bm.attributes || {}) }
     if (!result.alive) {
@@ -149,6 +228,17 @@ export function useDeadLinkChecker() {
       const attrs = bm.attributes || {}
       const hasDeadAttr = !!attrs['dead-link']
       const hasGfwAttr = !!attrs['gfw-blocked']
+
+      // 低置信度结果：清除旧标记但不设置新标记
+      if (r.confidence < CONFIDENCE_THRESHOLD) {
+        if (hasDeadAttr || hasGfwAttr) {
+          const rest = { ...attrs }
+          delete rest['dead-link']
+          delete rest['gfw-blocked']
+          ds.updateBookmark(bm.id, { attributes: rest })
+        }
+        continue
+      }
 
       if (r.alive) {
         if (hasDeadAttr || hasGfwAttr) {
@@ -198,19 +288,58 @@ export function useDeadLinkChecker() {
     return !!(bm?.attributes && bm.attributes['gfw-blocked'])
   }
 
-  function deadCount(): number {
+  const deadCount = computed(() => {
     const ds = useDataStore()
-    return ds.bookmarks.filter(b => isDead(b.id)).length
-  }
+    let count = 0
+    for (const b of ds.bookmarks) {
+      if (b.deletedAt) continue
+      const r = results[b.id]
+      if (r) {
+        if (!r.alive && !r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+      } else if (b.attributes?.['dead-link']) {
+        count++
+      }
+    }
+    return count
+  })
 
-  function blockedCount(): number {
+  const blockedCount = computed(() => {
     const ds = useDataStore()
-    return ds.bookmarks.filter(b => isBlocked(b.id)).length
-  }
+    let count = 0
+    for (const b of ds.bookmarks) {
+      if (b.deletedAt) continue
+      const r = results[b.id]
+      if (r) {
+        if (!r.alive && r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+      } else if (b.attributes?.['gfw-blocked']) {
+        count++
+      }
+    }
+    return count
+  })
+
+  const toastDeadCount = computed(() => {
+    let count = 0
+    for (const id in results) {
+      const r = results[id]
+      if (!r.alive && !r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+    }
+    return count
+  })
+
+  const toastBlockedCount = computed(() => {
+    let count = 0
+    for (const id in results) {
+      const r = results[id]
+      if (!r.alive && r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+    }
+    return count
+  })
 
   return {
     results, checking, progress, lastFullCheckAt,
     checkUrl, checkAll, checkOne, abort,
     getResult, isDead, isBlocked, deadCount, blockedCount,
+    toastDeadCount, toastBlockedCount,
   }
 }

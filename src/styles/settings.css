@@ -132,6 +132,7 @@
   transition:var(--transition-normal);
 }
 .sp-action>span{display:contents}
+.sp-action>span.sp-badge{display:inline-flex}
 .sp-action svg{width:14px;height:14px;flex-shrink:0}
 .sp-action:hover{
   border-color:var(--accent);
@@ -139,9 +140,14 @@
   background:var(--accent-light);
 }
 .sp-action:active{transform:scale(0.97);transition-duration:0.06s}
+.sp-action-sm{
+  flex:none;
+  padding:6px 10px;
+  font-size:0.7rem;
+}
 .sp-badge{
   display:inline-flex;align-items:center;justify-content:center;
-  min-width:18px;height:18px;padding:0 5px;
+  min-width:18px;padding:3px 5px;
   border-radius:9px;
   background:var(--rose,#ef4444);color:#fff;
   font-size:0.65rem;font-weight:700;

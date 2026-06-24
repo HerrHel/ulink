@@ -46,6 +46,10 @@
           <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
           <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
         </button>
+        <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
+          <span v-html="I.link"></span>
+          <span>查看</span>
+        </button>
       </div>
     </div>
     <!-- Cloud Sync / Auth -->
@@ -103,7 +107,7 @@
     <!-- Data -->
     <div class="sp-section">
       <div class="sp-actions">
-        <button class="sp-action" @click.stop="onOpenTrash"><span v-html="I.trash"></span>回收站 <span v-if="trashCount" class="sp-badge">{{ trashCount }}</span></button>
+        <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
         <button class="sp-action" @click.stop="onTriggerImport"><span v-html="I.import"></span>导入</button>
         <button class="sp-action" @click.stop="onExportData"><span v-html="I.export"></span>导出</button>
       </div>
@@ -148,15 +152,16 @@ onMounted(() => { e2e.checkE2EStatus() })
 function onE2ELock() { e2e.lock(); toast('已锁定') }
 
 const trashCount = computed(() => dataStore.trashCount)
+const trashIcon = computed(() => trashCount.value > 0 ? I.trashFull : I.trash)
 const syncDotClass = computed(() => {
   if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
   if (sync.syncStatus.value === 'error') return 'dot-error'
-  if ((sync.pendingCount.value as any) > 0) return 'dot-pending'
+  if (sync.pendingCount.value > 0) return 'dot-pending'
   return 'dot-ok'
 })
 const dlChecking = computed(() => dl.checking.value)
-const deadCount = computed(() => dl.deadCount())
-const blockedCount = computed(() => dl.blockedCount())
+const deadCount = computed(() => dl.deadCount.value)
+const blockedCount = computed(() => dl.blockedCount.value)
 
 const sortModes = [
   { id: 'order', label: '自定义' },
@@ -209,9 +214,14 @@ async function onSyncNow() {
 function onCheckDeadLinks() {
   if (dl.checking.value) return
   toast('开始检测死链...')
-  dl.checkAll(5, 500).then(() => {
-    const dead = dl.deadCount()
-    const blocked = dl.blockedCount()
+  dl.checkAll(5, 200).then(() => {
+    const ds = dataStore
+    let dead = 0
+    let blocked = 0
+    for (const b of ds.bookmarks) {
+      if (b.attributes?.['dead-link']) dead++
+      if (b.attributes?.['gfw-blocked']) blocked++
+    }
     if (dead > 0 && blocked > 0) {
       toast(`检测完成：${dead} 个失效，${blocked} 个被墙`)
     } else if (dead > 0) {
@@ -222,5 +232,10 @@ function onCheckDeadLinks() {
       toast('检测完成，所有链接正常')
     }
   })
+}
+
+function onViewDeadLinks() {
+  store.deadLinksPopoverOpen = true
+  uiStore.settingsOpen = false
 }
 </script>

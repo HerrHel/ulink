@@ -9,13 +9,14 @@ import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds } from '../lib/search.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
 interface DataState {
   bookmarks: Bookmark[]
   siblingGroups: SiblingGroup[]
   categories: Category[]
   customAttributes: CustomAttribute[]
+  _masterCanary: string | import('../types.js').EncryptedPassword | null
   _customCardOrder: Array<{ t: 'g' | 'b'; id: string }> | null
   _cachedStorageInfo: { size: number; percent: number; label: string } | null
   _storageInfoDirty: boolean
@@ -42,15 +43,17 @@ function _recommendedScore(item: { useCount: number; updatedAt: number }): numbe
   return (item.useCount || 0) * Math.exp(-_DECAY_LAMBDA * days)
 }
 
-function _sortItems<T>(items: T[], { sortMode, sortDir }: { sortMode: string; sortDir: string }, nameKey: keyof T, dateKey: keyof T): void {
+type SortableItem = { useCount: number; order: number; updatedAt: number }
+
+function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: string; sortDir: string }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
-    if (sortMode === 'recommend') return (_recommendedScore(b as any) - _recommendedScore(a as any))
-    if (sortMode === 'useCount') return ((a as any).useCount - (b as any).useCount) * d
+    if (sortMode === 'recommend') return (_recommendedScore(b) - _recommendedScore(a))
+    if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
     if (sortMode === 'title') return String(a[nameKey]).localeCompare(String(b[nameKey])) * d
     if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0)) * d
     if (sortMode === 'dateAsc') return (((a[dateKey] as number) || 0) - ((b[dateKey] as number) || 0)) * d
-    return ((a as any).order - (b as any).order) * d
+    return (a.order - b.order) * d
   })
 }
 
@@ -60,6 +63,7 @@ export const useDataStore = defineStore('data', {
     siblingGroups: [],
     categories: [],
     customAttributes: [],
+    _masterCanary: null,
     _customCardOrder: null,
     _cachedStorageInfo: null,
     _storageInfoDirty: true,
@@ -301,13 +305,14 @@ export const useDataStore = defineStore('data', {
     async tryLoadFromIDB(): Promise<boolean> {
       const idbData = await persist.loadFromIDB()
       if (idbData) {
+        runMigrations(idbData, idbData)
         this.bookmarks = idbData.bookmarks; this.siblingGroups = idbData.siblingGroups
         this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
         return true
       }
       return false
     },
-    importFromData(data: any) {
+    importFromData(data: Partial<AppData>) {
       const { categories = [], bookmarks = [], customAttributes = [], siblingGroups = [] } = data || {}
       const result = {
         categories: [...categories],

@@ -92,8 +92,14 @@ watch(() => props.open, async (isOpen) => {
     loading.value = true
     selectedIdx.value = -1
     diffMode.value = false
-    versions.value = await sync.fetchHistory(props.itemId)
-    loading.value = false
+    try {
+      versions.value = await sync.fetchHistory(props.itemId)
+    } catch (e) {
+      console.warn('[history] fetch failed:', e)
+      versions.value = []
+    } finally {
+      loading.value = false
+    }
   }
 })
 

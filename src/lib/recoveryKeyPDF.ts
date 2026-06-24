@@ -3,6 +3,7 @@
  * 使用纯 HTML+print 打印为 PDF，无需第三方库
  */
 export function generateRecoveryKeyPDF(recoveryKey: string) {
+  const safeKey = recoveryKey.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -32,7 +33,7 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
 
   <div class="key-box">
     <div class="key-label">Recovery Key</div>
-    <div class="key-value">${recoveryKey}</div>
+    <div class="key-value">${safeKey}</div>
   </div>
 
   <div class="warning">
@@ -80,7 +81,13 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
   if (win) {
     win.onload = () => {
       win.print()
-      URL.revokeObjectURL(url)
+      // 延迟 revoke，确保 print 对话框关闭后再释放 URL
+      win.addEventListener('afterprint', () => URL.revokeObjectURL(url), { once: true })
+      // 兜底：10 分钟后自动释放
+      setTimeout(() => URL.revokeObjectURL(url), 600000)
     }
+  } else {
+    // 弹窗被拦截，立即释放
+    URL.revokeObjectURL(url)
   }
 }

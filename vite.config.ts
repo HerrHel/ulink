@@ -59,6 +59,7 @@ function purgeCssPlugin(): Plugin {
                   'list-item', 'resize-handle', 'no-drag', 'confirm-foot',
                   'cat-sort-list', 'cat-placeholder', 'cat-dragging', 'drag-handle',
                   'resizeLeft', 'resizeRight',
+                  'dead-link-badge', 'gfw-blocked-badge',
                   /^modal-/, /^sp-/, /^ctx-/, /^as-/, /^mfb-/,
                   /^vs-/, /^bmp-/, /^attr-/, /^batch-/, /^search-/,
                   /^detail-/, /^rail-/, /^card-/, /^group-/,
@@ -131,9 +132,9 @@ export default defineConfig({
     rollupOptions: {
       input: 'index.html',
       output: {
-        entryFileNames: 'app.js',
-        chunkFileNames: '[name].js',
-        assetFileNames: '[name][extname]',
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash][extname]',
         manualChunks(id) {
           if (id.includes('node_modules')) {
             // TipTap 核心（必需）

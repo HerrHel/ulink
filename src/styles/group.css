@@ -26,6 +26,12 @@
   margin-bottom:10px;
   cursor:default;
 }
+/* Grid view: header outside scroll area, highest layer */
+.card-grid:not(.list-view) .group-card-head{
+  flex-shrink:0;
+  z-index:2;
+  background:var(--surface);
+}
 .group-card-head.drag-over{background:var(--surface-hover);border-radius:var(--radius-base)}
 
 .focus-view{
