@@ -95,6 +95,9 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
       if (subId) { store.ctxCard = null; onShowCtxMenu(e, 'sub', subId); return }
     }
     const inlineCard = (e.target as HTMLElement).closest('.group-inline-card')
+    // 组编辑区域内（非 inline card）：显示浏览器原生右键菜单
+    const groupBody = (e.target as HTMLElement).closest('.group-body')
+    if (groupBody && !inlineCard) { return }
     if (inlineCard) {
       const gCard = inlineCard.closest('.group-card')
       if (gCard) { store.ctxCard = inlineCard as HTMLElement; store.ctxGid = (gCard as HTMLElement).dataset.groupId!; onShowCtxMenu(e, 'group-card', inlineCard.getAttribute('data-bm-id')!); return }

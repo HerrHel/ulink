@@ -14,7 +14,7 @@ import { copyToClipboard } from '../../utils.js'
 import { supabase } from '../../lib/supabase.js'
 import { runMigrations } from '../../stores/migrations.js'
 import { useCloudSync } from './useCloudSync.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../../types.js'
+import type { Bookmark, SiblingGroup, AppData } from '../../types.js'
 
 // ── 导出 ──
 
