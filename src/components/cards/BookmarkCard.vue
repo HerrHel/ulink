@@ -73,7 +73,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim } from '../../utils.js'
+import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim, esc } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { safeDecodePassword } from '../../crypto.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
@@ -86,21 +86,20 @@ import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import type { Bookmark } from '../../types.js'
 
-function _hlEsc(s: string): string { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 function hlText(text: string, query: string): string {
-  if (!text || !query.trim()) return _hlEsc(text)
+  if (!text || !query.trim()) return esc(text)
   const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const regex = new RegExp(q, 'gi')
   const parts: string[] = []
   let last = 0
   let m: RegExpExecArray | null
   while ((m = regex.exec(text)) !== null) {
-    if (m.index > last) parts.push(_hlEsc(text.slice(last, m.index)))
-    parts.push('<mark class="card-hl">' + _hlEsc(m[0]) + '</mark>')
+    if (m.index > last) parts.push(esc(text.slice(last, m.index)))
+    parts.push('<mark class="card-hl">' + esc(m[0]) + '</mark>')
     last = m.index + m[0].length
     if (m[0].length === 0) { regex.lastIndex++; continue }
   }
-  if (last < text.length) parts.push(_hlEsc(text.slice(last)))
+  if (last < text.length) parts.push(esc(text.slice(last)))
   return parts.join('')
 }
 
@@ -132,6 +131,7 @@ const previewText = computed(() => (props.bookmark.notes || '').trim().replace(/
 const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded)
 const isSelected = computed(() => { try { return (uiStore.batchSelected || []).indexOf(props.bookmark.id) !== -1 } catch { return false } })
 const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
+const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked'])
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
 function visit() { openBookmark(props.bookmark) }

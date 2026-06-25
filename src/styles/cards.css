@@ -468,6 +468,23 @@
   background:rgba(239,68,68,0.15);
   border-color:rgba(239,68,68,0.4);
 }
+.gfw-blocked-badge{
+  display:inline-flex;align-items:center;
+  padding:0 5px;height:15px;
+  font-size:0.6rem;font-weight:700;
+  color:var(--amber);
+  background:var(--amber-light);
+  border:1px solid var(--amber);
+  border-radius:4px;
+  vertical-align:middle;
+  margin-left:4px;
+  line-height:1;
+  letter-spacing:0.02em;
+}
+[data-theme="dark"] .gfw-blocked-badge{
+  background:rgba(245,158,11,0.15);
+  border-color:rgba(245,158,11,0.4);
+}
 /* Card domain — shared base for all views */
 .card-domain{
   font-family:'JetBrains Mono',monospace;
