@@ -314,7 +314,7 @@ export function deleteBookmarkWithUndo(id: string) {
       if (bi > -1) {
         if (!removedFromGroups[bid]) removedFromGroups[bid] = []
         removedFromGroups[bid].push(g.id)
-        g.bookmarkIds.splice(bi, 1)
+        store.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
       }
     })
   })
@@ -325,7 +325,9 @@ export function deleteBookmarkWithUndo(id: string) {
     Object.keys(removedFromGroups).forEach(bid => {
       removedFromGroups[bid].forEach(gid => {
         const sg = store.groupMap[gid]
-        if (sg && sg.bookmarkIds.indexOf(bid) === -1) sg.bookmarkIds.push(bid)
+        if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
+          store.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
+        }
       })
     })
     store.debouncedSave()

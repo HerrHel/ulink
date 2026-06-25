@@ -77,7 +77,10 @@ function onRemoveBm(bmId: string) {
   const sg = store.groupMap[gId]
   if (!sg) return
   const idx = sg.bookmarkIds.indexOf(bmId)
-  if (idx >= 0) sg.bookmarkIds.splice(idx, 1)
+  if (idx >= 0) {
+    const newIds = sg.bookmarkIds.filter((_, i) => i !== idx)
+    store.updateGroup(gId, { bookmarkIds: newIds })
+  }
   EditorManager.deleteNode(gId, 'data-bm-id', bmId)
   store.save()
 }

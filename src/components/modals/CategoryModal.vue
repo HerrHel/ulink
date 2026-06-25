@@ -193,7 +193,13 @@ function onPointerUp(e: PointerEvent) {
   if (newOrder.length === sortableList.value.length) {
     sortableList.value = newOrder
     const special = dataStore.categories.filter(c => c.id === 'all' || c.id === 'uncategorized')
-    dataStore.categories = [...special, ...newOrder]
+    const reordered = [...special, ...newOrder]
+    // 标记所有分类为 dirty（顺序变更）
+    for (const cat of reordered) {
+      dataStore._markDirty(cat.id)
+      dataStore._trackChange(cat.id, 'order')
+    }
+    dataStore.categories = reordered
     store.debouncedSave()
     toast('分类顺序已更新')
   }

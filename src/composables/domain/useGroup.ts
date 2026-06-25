@@ -130,12 +130,15 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
   const idx = sg.bookmarkIds.indexOf(bmId);
   if (idx < 0) return;
   const bm = store.bookmarkMap[bmId];
-  sg.bookmarkIds.splice(idx, 1);
+  const newIds = sg.bookmarkIds.filter((_, i) => i !== idx);
+  store.updateGroup(tGid, { bookmarkIds: newIds });
   const ed = EditorManager.get(tGid);
   if (ed) EditorManager.deleteNode(tGid, 'data-bm-id', bmId);
   saveGroupBody(tGid); store.save();
   toastWithUndo('已从组移除', function () {
-    sg.bookmarkIds.splice(idx, 0, bmId);
+    const restored = [...sg.bookmarkIds];
+    restored.splice(idx, 0, bmId);
+    store.updateGroup(tGid, { bookmarkIds: restored });
     const currentEd = EditorManager.get(tGid);
     if (currentEd && bm) currentEd.chain().insertContent(inlineCardHTML(bm)).run();
     saveGroupBody(tGid); store.debouncedSave(); toast('已恢复');
@@ -284,7 +287,7 @@ export function removeFromSrcGroup(srcGid: string, bmId: string): boolean {
   if (!isRef) {
     const idx = sg.bookmarkIds.indexOf(bmId)
     if (idx < 0) return false
-    sg.bookmarkIds.splice(idx, 1)
+    store.updateGroup(srcGid, { bookmarkIds: sg.bookmarkIds.filter((_, i) => i !== idx) })
   }
   const ed = EditorManager.get(srcGid)
   if (ed) EditorManager.deleteNode(srcGid, isRef ? 'data-ref-gid' : 'data-bm-id', lookupId)

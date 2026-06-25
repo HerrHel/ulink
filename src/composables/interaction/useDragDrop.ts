@@ -94,7 +94,7 @@ function _findGroup(id: string): SiblingGroup | undefined { return useAppStore()
 
 /** swapOrder + 标记 dirty（确保排序变更可同步到云端） */
 function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }) {
-  _swapAndMarkDirty(a, b)
+  swapOrder(a, b)
   useDataStore()._markDirty(a.id, b.id)
 }
 
