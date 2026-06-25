@@ -8,3 +8,7 @@ task_plan.md
 .DS_Store
 .env
 .env.local
+*.png
+*.svg
+*.md
+!CLAUDE.md
