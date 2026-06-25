@@ -164,6 +164,11 @@ export default defineConfig({
               return 'dompurify'
             }
 
+            // Supabase 客户端（独立 chunk，便于缓存）
+            if (id.includes('node_modules/@supabase/')) {
+              return 'supabase'
+            }
+
             // Vue 核心
             if (id.includes('node_modules/vue/') ||
                 id.includes('node_modules/@vue/') ||
@@ -171,7 +176,7 @@ export default defineConfig({
               return 'vue-vendor'
             }
 
-            // 其他第三方库
+            // 其他第三方库（fuse.js, pinyin-pro, nanoid 等）
             return 'vendor'
           }
         }
