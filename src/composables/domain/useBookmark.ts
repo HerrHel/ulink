@@ -1,5 +1,7 @@
 import { reactive } from 'vue'
-import { useAppStore } from '../../stores/app.js'
+import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
+import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { favicon, domain, fixUrl } from '../../utils.js'
 import { toast, toastWithUndo } from '../../lib/toast.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
@@ -68,9 +70,9 @@ export const bmForm = reactive<BmFormState>({
 
 export function openBookmark(bm: Bookmark) {
   if (!bm?.url) return
-  const store = useAppStore()
-  store.updateBookmark(bm.id, { useCount: (bm.useCount || 0) + 1 })
-  store.debouncedSave()
+  const ds = useDataStore()
+  ds.updateBookmark(bm.id, { useCount: (bm.useCount || 0) + 1 })
+  debouncedSaveAppData()
   window.open(fixUrl(bm.url), '_blank')
 }
 
@@ -78,8 +80,8 @@ export function visit(e: Event | null, id?: string) {
   if (e?.target && (e.target as HTMLElement).closest?.('button, input, .btn-xs, .card-actions, .group-body, [contenteditable="true"]')) return
   const bmId = id || (e?.target as HTMLElement)?.closest?.('.card[data-id]')?.getAttribute('data-id')
   if (!bmId) return
-  const store = useAppStore()
-  openBookmark(store.bookmarkMap[bmId])
+  const ds = useDataStore()
+  openBookmark(ds.bookmarkMap[bmId])
 }
 
 let _opening = false
@@ -87,8 +89,9 @@ export function openBmModal(editId?: string) {
   if (_opening) return
   _opening = true
   try {
-    const store = useAppStore()
-    const bm = editId ? store.bookmarkMap[editId] : null
+    const ds = useDataStore()
+    const ui = useUIStore()
+    const bm = editId ? ds.bookmarkMap[editId] : null
 
     bmForm.id = bm?.id || ''
     bmForm.title = bm?.title || ''
@@ -115,10 +118,10 @@ export function openBmModal(editId?: string) {
     bmForm.aiApplied = false
     bmForm._fetchTimer = null
 
-    store.editingId = editId || null
-    store.lastFocusedEl = document.activeElement as HTMLElement
+    ui.editingId = editId || null
+    ui.lastFocusedEl = document.activeElement as HTMLElement
     pushNavState()
-    store.bmModalOpen = true
+    ui.bmModalOpen = true
     bmForm.isOpen = true
   } finally { _opening = false }
 }
@@ -127,15 +130,15 @@ export function closeBmModal() {
   bmForm.isOpen = false
   bmForm.addToGroupMode = false
   if (bmForm._fetchTimer) { clearTimeout(bmForm._fetchTimer); bmForm._fetchTimer = null }
-  const store = useAppStore()
-  store.bmModalOpen = false
-  store.editingId = null
-  if (store.lastFocusedEl) store.lastFocusedEl.focus()
-  store.lastFocusedEl = null
+  const ui = useUIStore()
+  ui.bmModalOpen = false
+  ui.editingId = null
+  if (ui.lastFocusedEl) ui.lastFocusedEl.focus()
+  ui.lastFocusedEl = null
 }
 
 export function saveBm() {
-  const store = useAppStore()
+  const ds = useDataStore()
   const url = fixUrl(bmForm.url)
   if (!url) { toast('请填写网址', false); return }
 
@@ -155,35 +158,35 @@ export function saveBm() {
   }
 
   if (bmForm.id) {
-    store.updateBookmark(bmForm.id, data)
+    ds.updateBookmark(bmForm.id, data)
     toast('书签已更新')
   } else {
     const newBm = data as Bookmark
     newBm.id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-    newBm.order = store.bookmarks.length
+    newBm.order = ds.bookmarks.length
     newBm.useCount = 0
     newBm.isExpanded = false
     newBm.createdAt = Date.now()
     newBm.updatedAt = newBm.createdAt
-    store.addBookmark(newBm)
-    // 如果有待加入的组，先处理再统一 save
-    if (store.saveToGroup) {
-      const targetGid = store.saveToGroup
-      store.saveToGroup = null
-      const sg = store.groupMap[targetGid]
+    ds.addBookmark(newBm)
+    const ui = useUIStore()
+    if (ui.saveToGroup) {
+      const targetGid = ui.saveToGroup
+      ui.saveToGroup = null
+      const sg = ds.groupMap[targetGid]
       if (sg && sg.bookmarkIds.indexOf(newBm.id) === -1) {
-        store.updateGroup(targetGid, { bookmarkIds: [...sg.bookmarkIds, newBm.id] })
+        ds.updateGroup(targetGid, { bookmarkIds: [...sg.bookmarkIds, newBm.id] })
       }
     }
-    store.save()
+    saveAppData()
     toast('书签已添加')
   }
-  if (bmForm.id) store.save()
+  if (bmForm.id) saveAppData()
   closeBmModal()
 }
 
 export function addSub(parentId: string) {
-  useAppStore().saveToGroup = null
+  useUIStore().saveToGroup = null
   openBmModal()
   bmForm.parentId = parentId
   bmForm.categoryId = ''
@@ -238,12 +241,12 @@ export function autoFetchFromUrl() {
 
     // AI 分类 + 属性建议（仅新建模式）
     if (!bmForm.isEdit && !bmForm.aiApplied) {
-      const store = useAppStore()
-      const catId = suggestCategory(url, bmForm.title, store.categories)
+      const ds = useDataStore()
+      const catId = suggestCategory(url, bmForm.title, ds.categories)
       if (catId && !bmForm.categoryId) {
         bmForm.aiSuggestCatId = catId
       }
-      const attrIds = suggestAttributes(url, bmForm.title, store.customAttributes)
+      const attrIds = suggestAttributes(url, bmForm.title, ds.customAttributes)
       if (attrIds.length) {
         bmForm.aiSuggestAttrIds = attrIds.filter(id => !bmForm.attributes[id])
       }
@@ -282,8 +285,8 @@ export function clearIcon() { clearIconBase(bmForm) }
 
 /** Collect all sub-bookmark IDs recursively */
 function collectSubIds(id: string): string[] {
-  const store = useAppStore()
-  const cm = store.childrenMap
+  const ds = useDataStore()
+  const cm = ds.childrenMap
   if (cm && Object.keys(cm).length > 0) {
     const ids: string[] = [id]
     const stack = [id]
@@ -298,39 +301,39 @@ function collectSubIds(id: string): string[] {
   }
   // Fallback for when childrenMap is not available (e.g. in tests)
   let ids = [id]
-  store.bookmarks.filter(b => b.parentId === id).forEach(c => {
+  ds.bookmarks.filter(b => b.parentId === id).forEach(c => {
     ids = ids.concat(collectSubIds(c.id))
   })
   return ids
 }
 
 export function deleteBookmarkWithUndo(id: string) {
-  const store = useAppStore()
+  const ds = useDataStore()
   const ids = collectSubIds(id)
   const removedFromGroups: Record<string, string[]> = {}
   ids.forEach(bid => {
-    store.siblingGroups.forEach(g => {
+    ds.siblingGroups.forEach(g => {
       const bi = g.bookmarkIds.indexOf(bid)
       if (bi > -1) {
         if (!removedFromGroups[bid]) removedFromGroups[bid] = []
         removedFromGroups[bid].push(g.id)
-        store.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
+        ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
       }
     })
   })
-  ids.forEach(bid => store.deleteBookmark(bid))
-  store.debouncedSave()
+  ids.forEach(bid => ds.deleteBookmark(bid))
+  debouncedSaveAppData()
   toastWithUndo('书签已删除', () => {
-    ids.forEach(bid => store.restoreBookmark(bid))
+    ids.forEach(bid => ds.restoreBookmark(bid))
     Object.keys(removedFromGroups).forEach(bid => {
       removedFromGroups[bid].forEach(gid => {
-        const sg = store.groupMap[gid]
+        const sg = ds.groupMap[gid]
         if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
-          store.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
+          ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
         }
       })
     })
-    store.debouncedSave()
+    debouncedSaveAppData()
     toast('已恢复')
   })
 }

@@ -1,5 +1,7 @@
 import { reactive } from 'vue';
-import { useAppStore } from '../../stores/app.js';
+import { useDataStore } from '../../stores/data.js';
+import { useUIStore } from '../../stores/ui.js';
+import { saveAppData, debouncedSaveAppData } from '../../stores/app.js';
 import { gid } from '../../utils.js';
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js';
 import { EditorManager } from '../../lib/editor.js';
@@ -35,18 +37,18 @@ export const geForm = reactive<GeFormState>({
 })
 
 export function saveGroupBody(gid: string) {
-  const store = useAppStore();
-  const sg = store.groupMap[gid];
+  const ds = useDataStore();
+  const sg = ds.groupMap[gid];
   if (!sg) return;
   const editorHTML = EditorManager.getContentHTML(gid);
   if (editorHTML !== null) {
-    store.updateGroup(gid, { notes: editorHTML })
+    ds.updateGroup(gid, { notes: editorHTML })
   }
 }
 
 export function syncGroupBookmarks(gid: string) {
-  const store = useAppStore();
-  const sg = store.groupMap[gid];
+  const ds = useDataStore();
+  const sg = ds.groupMap[gid];
   if (!sg) return;
   const ed = EditorManager.get(gid);
   if (ed) {
@@ -58,7 +60,7 @@ export function syncGroupBookmarks(gid: string) {
         if (bmid && !seen[bmid]) { seen[bmid] = true; ids.push(bmid); }
       }
     });
-    store.updateGroup(gid, { bookmarkIds: ids });
+    ds.updateGroup(gid, { bookmarkIds: ids });
   } else {
     const el = document.getElementById('sgBody_' + gid);
     if (!el) return;
@@ -69,39 +71,41 @@ export function syncGroupBookmarks(gid: string) {
       const bmid = c.getAttribute('data-bm-id');
       if (bmid && bmid.indexOf('ref:') !== 0 && !seen2[bmid]) { seen2[bmid] = true; ids2.push(bmid); }
     });
-    store.updateGroup(gid, { bookmarkIds: ids2 });
+    ds.updateGroup(gid, { bookmarkIds: ids2 });
   }
-  store.save();
+  saveAppData();
 }
 
 export function createGroup(catId?: string): string {
-  const store = useAppStore();
-  store.siblingGroups.forEach(function (g) { store.updateGroup(g.id, { order: (g.order || 0) + 1 }); });
-  store.bookmarks.filter(function (b) { return !b.parentId; }).forEach(function (b) { store.updateBookmark(b.id, { order: (b.order || 0) + 1 }); });
+  const ds = useDataStore();
+  const ui = useUIStore();
+  ds.siblingGroups.forEach(function (g) { ds.updateGroup(g.id, { order: (g.order || 0) + 1 }); });
+  ds.bookmarks.filter(function (b) { return !b.parentId; }).forEach(function (b) { ds.updateBookmark(b.id, { order: (b.order || 0) + 1 }); });
   const g: SiblingGroup = {
     id: 'sg_' + gid(),
     name: '',
-    categoryId: catId || (store.curCat === 'all' ? 'uncategorized' : store.curCat),
+    categoryId: catId || (ui.curCat === 'all' ? 'uncategorized' : ui.curCat),
     icon: '', order: 0, isExpanded: false,
     attributes: { 'is-group': true },
     bookmarkIds: [], notes: '',
     updatedAt: Date.now(), useCount: 0
   };
-  store.addGroup(g); store.save(); toast('组已创建');
+  ds.addGroup(g); saveAppData(); toast('组已创建');
   return g.id;
 }
 
 export function deleteGroup(dGid: string, skipConfirm?: boolean) {
-  const store = useAppStore();
-  const sg = store.groupMap[dGid];
+  const ds = useDataStore();
+  const ui = useUIStore();
+  const sg = ds.groupMap[dGid];
   if (!sg) return;
   const doDelete = () => {
-    store.deleteGroup(dGid);
-    store.save();
-    if (store.focusedGroupId === dGid) store.focusedGroupId = null;
+    ds.deleteGroup(dGid);
+    saveAppData();
+    if (ui.focusedGroupId === dGid) ui.focusedGroupId = null;
     toastWithUndo('已删除组', function () {
-      store.restoreGroup(dGid);
-      store.debouncedSave(); toast('组已恢复');
+      ds.restoreGroup(dGid);
+      debouncedSaveAppData(); toast('组已恢复');
     });
   };
   if (skipConfirm) doDelete();
@@ -110,44 +114,44 @@ export function deleteGroup(dGid: string, skipConfirm?: boolean) {
 
 /** Directly add bookmark to group (for programmatic use, not popover) */
 export function addToGroupDirect(bmId: string, tGid: string) {
-  const store = useAppStore();
-  const sg = store.groupMap[tGid];
+  const ds = useDataStore();
+  const sg = ds.groupMap[tGid];
   if (!sg) return;
   if (sg.bookmarkIds.indexOf(bmId) !== -1) { toast('书签已在组内', false); return; }
-  const bm = store.bookmarkMap[bmId];
+  const bm = ds.bookmarkMap[bmId];
   if (!bm) return;
-  store.updateGroup(tGid, { bookmarkIds: [...sg.bookmarkIds, bmId] });
+  ds.updateGroup(tGid, { bookmarkIds: [...sg.bookmarkIds, bmId] });
   const ed = EditorManager.get(tGid);
   if (ed) ed.chain().insertContent(inlineCardHTML(bm)).run();
-  saveGroupBody(tGid); store.save();
+  saveGroupBody(tGid); saveAppData();
   toast('已添加到组');
 }
 
 export function removeBmFromGroup(bmId: string, tGid: string) {
-  const store = useAppStore();
-  const sg = store.groupMap[tGid];
+  const ds = useDataStore();
+  const sg = ds.groupMap[tGid];
   if (!sg) return;
   const idx = sg.bookmarkIds.indexOf(bmId);
   if (idx < 0) return;
-  const bm = store.bookmarkMap[bmId];
+  const bm = ds.bookmarkMap[bmId];
   const newIds = sg.bookmarkIds.filter((_, i) => i !== idx);
-  store.updateGroup(tGid, { bookmarkIds: newIds });
+  ds.updateGroup(tGid, { bookmarkIds: newIds });
   const ed = EditorManager.get(tGid);
   if (ed) EditorManager.deleteNode(tGid, 'data-bm-id', bmId);
-  saveGroupBody(tGid); store.save();
+  saveGroupBody(tGid); saveAppData();
   toastWithUndo('已从组移除', function () {
     const restored = [...sg.bookmarkIds];
     restored.splice(idx, 0, bmId);
-    store.updateGroup(tGid, { bookmarkIds: restored });
+    ds.updateGroup(tGid, { bookmarkIds: restored });
     const currentEd = EditorManager.get(tGid);
     if (currentEd && bm) currentEd.chain().insertContent(inlineCardHTML(bm)).run();
-    saveGroupBody(tGid); store.debouncedSave(); toast('已恢复');
+    saveGroupBody(tGid); debouncedSaveAppData(); toast('已恢复');
   });
 }
 
 export function addGroupRefToGroup(refGid: string, targetGid: string, clientX?: number, clientY?: number) {
-  const store = useAppStore();
-  const src = store.groupMap[refGid];
+  const ds = useDataStore();
+  const src = ds.groupMap[refGid];
   if (!src) return;
   const ed = EditorManager.get(targetGid);
   if (ed) {
@@ -159,78 +163,77 @@ export function addGroupRefToGroup(refGid: string, targetGid: string, clientX?: 
     }
     saveGroupBody(targetGid);
   } else {
-    const sg = store.groupMap[targetGid];
+    const sg = ds.groupMap[targetGid];
     if (!sg) return;
     const refHtml = groupRefCardHTML(src);
-    store.updateGroup(targetGid, { notes: (sg.notes || '') + refHtml });
+    ds.updateGroup(targetGid, { notes: (sg.notes || '') + refHtml });
   }
-  store.save();
+  saveAppData();
 }
 
 export function removeGroupRef(targetGid: string, refGid: string) {
-  const store = useAppStore();
   const ed = EditorManager.get(targetGid);
   if (ed) EditorManager.deleteNode(targetGid, 'data-ref-gid', refGid);
-  saveGroupBody(targetGid); store.save();
+  saveGroupBody(targetGid); saveAppData();
 }
 
 export function searchInFocusedGroup() {
-  const store = useAppStore();
-  const q = (store.searchQuery || '').trim().toLowerCase();
-  const body = document.getElementById('sgBody_' + store.focusedGroupId);
+  const ds = useDataStore();
+  const ui = useUIStore();
+  const q = (ui.searchQuery || '').trim().toLowerCase();
+  const body = document.getElementById('sgBody_' + ui.focusedGroupId);
   if (!body) return;
   body.querySelectorAll('.group-inline-card').forEach(c => {
     const bmId = c.getAttribute('data-bm-id');
     if (!q) { (c as HTMLElement).style.display = ''; return; }
     if (bmId && bmId.startsWith('ref:')) {
-      const rg = store.groupMap[bmId.slice(4)];
+      const rg = ds.groupMap[bmId.slice(4)];
       (c as HTMLElement).style.display = (rg && (rg.name || '').toLowerCase().indexOf(q) !== -1) ? '' : 'none';
     } else if (bmId) {
-      const bm = store.bookmarkMap[bmId];
+      const bm = ds.bookmarkMap[bmId];
       (c as HTMLElement).style.display = (bm && (bm.title.toLowerCase().indexOf(q) !== -1 || bm.url.toLowerCase().indexOf(q) !== -1)) ? '' : 'none';
     }
   });
 }
 
 export function toggleGroupFocus(tGid: string) {
-  const store = useAppStore();
-  const prev = store.focusedGroupId;
-  if (prev) { saveGroupBody(prev); store.save(); }
-  const entering = (store.focusedGroupId !== tGid);
-  store.focusedGroupId = entering ? tGid : null;
+  const ds = useDataStore();
+  const ui = useUIStore();
+  const prev = ui.focusedGroupId;
+  if (prev) { saveGroupBody(prev); saveAppData(); }
+  const entering = (ui.focusedGroupId !== tGid);
+  ui.focusedGroupId = entering ? tGid : null;
   if (entering) {
-    const sg = store.groupMap[tGid];
-    if (sg) { store.updateGroup(tGid, { useCount: (sg.useCount || 0) + 1 }); }
+    const sg = ds.groupMap[tGid];
+    if (sg) { ds.updateGroup(tGid, { useCount: (sg.useCount || 0) + 1 }); }
     pushNavState();
-    // 保存当前布局模式，退出时恢复
-    store._prevLayoutMode = store.layoutMode;
+    ui._prevLayoutMode = ui.layoutMode;
   } else {
-    // 退出聚焦：恢复之前的布局模式
-    if (store._prevLayoutMode) {
-      store.layoutMode = store._prevLayoutMode;
-      store._prevLayoutMode = null;
+    if (ui._prevLayoutMode) {
+      ui.layoutMode = ui._prevLayoutMode;
+      ui._prevLayoutMode = null;
     }
   }
-  if (prev !== store.focusedGroupId) { store.searchQuery = ''; }
+  if (prev !== ui.focusedGroupId) { ui.searchQuery = ''; }
 }
 
 export function exitGroupFocus() {
-  const store = useAppStore();
-  if (store.focusedGroupId) { saveGroupBody(store.focusedGroupId); store.save(); }
-  store.searchQuery = '';
-  store.focusedGroupId = null;
-  // 恢复之前的布局模式
-  if (store._prevLayoutMode) {
-    store.layoutMode = store._prevLayoutMode;
-    store._prevLayoutMode = null;
+  const ui = useUIStore();
+  if (ui.focusedGroupId) { saveGroupBody(ui.focusedGroupId); saveAppData(); }
+  ui.searchQuery = '';
+  ui.focusedGroupId = null;
+  if (ui._prevLayoutMode) {
+    ui.layoutMode = ui._prevLayoutMode;
+    ui._prevLayoutMode = null;
   }
 }
 
 export function editGroup(eGid: string) {
-  const store = useAppStore();
-  const sg = store.groupMap[eGid];
+  const ds = useDataStore();
+  const ui = useUIStore();
+  const sg = ds.groupMap[eGid];
   if (!sg) return;
-  store.editingGeId = eGid;
+  ui.editingGeId = eGid;
   geForm.id = eGid;
   geForm.name = sg.name || '';
   geForm.catId = sg.categoryId || '';
@@ -240,29 +243,29 @@ export function editGroup(eGid: string) {
   geForm.iconPreviewUrl = sg.icon || '';
   geForm.clearIconVisible = !!sg.icon;
   pushNavState();
-  store.groupEditOpen = true;
+  ui.groupEditOpen = true;
 }
 
 export function closeGroupEdit() {
-  const store = useAppStore();
-  store.groupEditOpen = false;
-  store.editingGeId = null;
+  const ui = useUIStore();
+  ui.groupEditOpen = false;
+  ui.editingGeId = null;
 }
 
 export function saveGroupEdit() {
-  const store = useAppStore();
+  const ds = useDataStore();
   const gId = geForm.id;
   if (!gId) return;
-  const sg = store.groupMap[gId];
+  const sg = ds.groupMap[gId];
   if (!sg) return;
-  store.updateGroup(gId, {
+  ds.updateGroup(gId, {
     name: geForm.name.trim() || '未命名',
     categoryId: geForm.catId,
     icon: geForm.icon.trim(),
     attributes: { ...geForm.attrs, 'is-group': true },
     updatedAt: Date.now()
   });
-  store.save();
+  saveAppData();
   closeGroupEdit(); toast('组已更新');
 }
 
@@ -271,23 +274,22 @@ export function previewGeIconUrl() { previewIconUrl(geForm); }
 export function clearGeIcon() { clearIcon(geForm); }
 
 export function closeAddBmPopover() {
-  const store = useAppStore();
-  store.addBmPopoverOpen = false;
-  store.addToGid = null;
+  const ui = useUIStore();
+  ui.addBmPopoverOpen = false;
+  ui.addToGid = null;
 }
 
 export function removeFromSrcGroup(srcGid: string, bmId: string): boolean {
   if (!srcGid || !bmId) return false
-  const store = useAppStore()
-  const sg = store.groupMap[srcGid]
+  const ds = useDataStore()
+  const sg = ds.groupMap[srcGid]
   if (!sg) return false
   const isRef = bmId.startsWith('ref:')
   const lookupId = isRef ? bmId.slice(4) : bmId
-  // 组引用卡片不在 bookmarkIds 中，只从编辑器内容中移除
   if (!isRef) {
     const idx = sg.bookmarkIds.indexOf(bmId)
     if (idx < 0) return false
-    store.updateGroup(srcGid, { bookmarkIds: sg.bookmarkIds.filter((_, i) => i !== idx) })
+    ds.updateGroup(srcGid, { bookmarkIds: sg.bookmarkIds.filter((_, i) => i !== idx) })
   }
   const ed = EditorManager.get(srcGid)
   if (ed) EditorManager.deleteNode(srcGid, isRef ? 'data-ref-gid' : 'data-bm-id', lookupId)
