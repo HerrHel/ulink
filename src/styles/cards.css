@@ -364,6 +364,9 @@
 .card-body::-webkit-scrollbar-track{background:transparent}
 .card-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
+/* 组卡片 grid 视图：标签+正文统一滚动 */
+.card-body.grp-scroll-body{display:flex;flex-direction:column}
+.card-body.grp-scroll-body .group-body{overflow:visible;flex:1 1 0;min-height:0;mask-image:none;-webkit-mask-image:none}
 
 
 .card-toprow{
