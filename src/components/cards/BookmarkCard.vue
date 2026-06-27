@@ -77,6 +77,7 @@ import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceA
 import { I } from '../../config/icons.js'
 import { safeDecodePassword } from '../../crypto.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
+import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { openBmModal, deleteBookmarkWithUndo, addSub, openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { openDetail } from '../../composables/ui/useUI.js'
@@ -107,6 +108,7 @@ const props = defineProps({ bookmark: { type: Object as () => Bookmark, required
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const cardEl = ref(null)
+const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 const acctOpen = ref(false)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
