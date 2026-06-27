@@ -18,7 +18,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
-import { useAppStore } from '../../stores/app.js'
+import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount,
@@ -682,7 +682,7 @@ export function useCloudSync() {
       else if (conflict.type === 'group') ds.updateGroup(id, remoteData as Partial<SiblingGroup>)
       else if (conflict.type === 'category') { const cat = ds.categories.find(c => c.id === id); if (cat) Object.assign(cat, remoteData) }
       else if (conflict.type === 'attribute') { const attr = ds.customAttributes.find(a => a.id === id); if (attr) Object.assign(attr, remoteData) }
-      useAppStore().save()
+      saveAppData()
     }
     _remoteSnapshots.delete(`${conflict.type}:${id}`)
     conflicts.value.splice(idx, 1)
@@ -733,7 +733,7 @@ export function useCloudSync() {
         notes: histData.notes as string, useCount: histData.useCount as number,
       })
     }
-    useAppStore().save()
+    saveAppData()
     return true
   }
 
@@ -745,7 +745,7 @@ export function useCloudSync() {
     const g = ds.groupMap[gid]
     if (!g) return false
     ds.updateGroup(gid, { isPublic })
-    useAppStore().save()
+    saveAppData()
     const { error } = await supabase.from('sibling_groups')
       .update({ is_public: isPublic }).eq('id', gid).eq('user_id', userId)
     if (error) { console.warn('[share] setGroupPublic failed:', error); return false }
