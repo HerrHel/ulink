@@ -109,7 +109,7 @@
 /* ---- List: preview line (visible, single line ellipsis) ---- */
 .list-view .card-preview{
   display:block;margin:0;max-width:80%;
-  font-size:0.76rem;color:var(--text-muted);line-height:1.4;
+  font-size:0.8rem;color:var(--text-muted);line-height:1.4;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .grid-view .card-preview,
@@ -357,8 +357,8 @@
   position:relative;z-index:1;
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
 }
-/* Grid view: fade-out mask at bottom of card body */
-.card-grid:not(.list-view) .card-body{
+/* Grid view: fade-out mask at bottom of card body — only when content overflows */
+.card-grid:not(.list-view) .card-overflow .card-body{
   -webkit-mask-image:var(--mask-fade-bottom);
   mask-image:var(--mask-fade-bottom);
 }
@@ -488,20 +488,20 @@
 /* Card domain — shared base for all views */
 .card-domain{
   font-family:'JetBrains Mono',monospace;
-  font-size:0.68rem;color:var(--text-muted);
+  font-size:0.72rem;color:var(--text-muted);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   line-height:18px;height:18px;margin:0;
 }
 /* List view: slightly larger font */
 .list-view .card-domain{
-  font-size:0.72rem;
+  font-size:0.75rem;
   flex-shrink:0;
 }
 
 /* Card notes - always visible */
 .card-notes{
-  font-size:0.78rem;color:var(--text-muted);
-  line-height:1.4;margin-bottom:8px;
+  font-size:0.8125rem;color:var(--text-muted);
+  line-height:1.5;margin-bottom:8px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
   overflow:hidden;
 }
@@ -544,10 +544,10 @@
 .card-acct-toggle>span{display:contents}
 .card-acct-toggle svg{width:11px;height:11px;transition:transform 0.2s ease}
 .card-acct-toggle.open svg{transform:rotate(90deg)}
-.card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--card-badge-bg);border-radius:var(--radius-base);font-size:0.76rem}
+.card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--card-badge-bg);border-radius:var(--radius-base);font-size:0.8rem}
 .card-acct-body.show{display:block}
 .acct-row{display:flex;align-items:center;gap:6px;padding:3px 0}
-.acct-row .acct-label{color:var(--text-muted);font-size:0.7rem;width:30px;flex-shrink:0}
+.acct-row .acct-label{color:var(--text-muted);font-size:0.75rem;width:30px;flex-shrink:0}
 .acct-row .acct-val{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .acct-show-pw{
   width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;
@@ -583,7 +583,7 @@
 .card:hover .card-foot{border-color:var(--border-hover)}
 .card-stat{
   display:flex;align-items:center;gap:3px;
-  font-size:0.72rem;color:var(--text-muted);
+  font-size:0.75rem;color:var(--text-muted);
   cursor:default;
 }
 .card-stat svg{width:12px;height:12px}
