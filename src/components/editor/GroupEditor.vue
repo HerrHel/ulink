@@ -26,6 +26,8 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
+import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -43,8 +45,7 @@ const InlineCard = Node.create({
   }}],
   renderHTML: ({ node }) => {
     const id = node.attrs['data-bm-id']
-    const store = useAppStore()
-    const bm = store.bookmarkMap[id]
+    const bm = useDataStore().bookmarkMap[id]
     if (!bm) return ['span', { class: 'group-inline-card' }, '']
     return ['span', { class: 'group-inline-card', contenteditable: 'false', 'data-bm-id': id, draggable: 'true' },
       ['img', { src: favicon(bm.url, bm.icon), alt: '' }],
@@ -65,8 +66,7 @@ const GroupRefCard = Node.create({
   }}],
   renderHTML: ({ node }) => {
     const gid = node.attrs['data-ref-gid']
-    const store = useAppStore()
-    const g = store.groupMap[gid]
+    const g = useDataStore().groupMap[gid]
 
     const span = document.createElement('span')
     span.className = 'group-inline-card group-ref-card'
@@ -111,7 +111,9 @@ const GroupRefCard = Node.create({
 })
 
 const props = defineProps({ groupId: { type: String, required: true } })
-const store = useAppStore()
+const ds = useDataStore()
+const ui = useUIStore()
+const appStore = useAppStore()
 const editorRef = ref<HTMLElement | null>(null)
 const editorInstance = ref<Editor | null>(null)
 let editor: Editor | null = null
@@ -119,7 +121,7 @@ let editor: Editor | null = null
 provide('tiptapEditor', editorInstance)
 
 function syncToStore(ed: Editor) {
-  const sg = store.groupMap[props.groupId]
+  const sg = ds.groupMap[props.groupId]
   if (!sg) return
   const ids: string[] = [], seen: Record<string, boolean> = {}
   ed.state.doc.descendants(node => {
@@ -128,12 +130,12 @@ function syncToStore(ed: Editor) {
       if (bmid && !seen[bmid]) { seen[bmid] = true; ids.push(bmid) }
     }
   })
-  store.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
-  store.debouncedSave()
+  ds.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
+  appStore.debouncedSave()
 }
 
 onMounted(() => {
-  const group = store.groupMap[props.groupId]
+  const group = ds.groupMap[props.groupId]
   if (!group || !editorRef.value) return
 
   editor = new Editor({
@@ -161,7 +163,7 @@ onMounted(() => {
       GroupRefCard,
     ],
     content: group.notes || '',
-    editable: !isMobile() || store.focusedGroupId === props.groupId,
+    editable: !isMobile() || ui.focusedGroupId === props.groupId,
     editorProps: { attributes: { class: 'group-tiptap' } },
     onUpdate: ({ editor: ed }) => { pushUndo(props.groupId); syncToStore(ed) },
   })
@@ -179,7 +181,7 @@ onMounted(() => {
 
   // 移动端：只有聚焦后才可编辑
   if (isMobile()) {
-    watch(() => store.focusedGroupId, (fid) => {
+    watch(() => ui.focusedGroupId, (fid) => {
       editor?.setEditable(fid === props.groupId)
     })
   }
@@ -196,7 +198,7 @@ function _onFocusIn() {
     delete undo.saveTimers[props.groupId]
   }
   // 移动端显示浮动格式栏（由 FormatToolbar.vue 通过 bridge.js 注册）
-  if (isMobile() && store.focusedGroupId) {
+  if (isMobile() && ui.focusedGroupId) {
     mfbAPI?.show?.()
   }
 }

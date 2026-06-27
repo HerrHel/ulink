@@ -16,7 +16,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
-import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { favicon, domain } from '../../utils.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
@@ -26,14 +26,14 @@ import { I } from '../../config/icons.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
 import type { SearchResultItem, HighlightSegment } from '../../lib/search.js'
 
-const store = useAppStore()
+const ui = useUIStore()
 const dataStore = useDataStore()
 const visible = ref(false)
 const activeIdx = ref(-1)
 
 const results = computed<SearchResultItem[]>(() => {
-  if (store.focusedGroupId) return []
-  const q = (store.searchQuery || '').trim()
+  if (ui.focusedGroupId) return []
+  const q = (ui.searchQuery || '').trim()
   if (!q) return []
 
   const items = searchWithHighlights(
@@ -53,15 +53,15 @@ const results = computed<SearchResultItem[]>(() => {
 
 function updateVisibility() {
   const hasResults = results.value.length > 0
-  visible.value = !!store.searchQuery?.trim() && !store.focusedGroupId && hasResults
+  visible.value = !!ui.searchQuery?.trim() && !ui.focusedGroupId && hasResults
   activeIdx.value = -1
 }
 
-watch(() => store.searchQuery, updateVisibility)
+watch(() => ui.searchQuery, updateVisibility)
 
 function select(item: SearchResultItem) {
   visible.value = false
-  store.searchQuery = ''
+  ui.searchQuery = ''
   if (item._isGroup) {
     toggleGroupFocus(item.id)
   } else {

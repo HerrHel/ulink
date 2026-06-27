@@ -81,19 +81,21 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
+import { useDataStore } from '../../stores/data.js'
 import { favicon, sanitizeHTML, copyToClipboard, isMobile, domain, getTagNames } from '../../utils.js'
 import { safeDecodePassword } from '../../crypto.js'
 import { I } from '../../config/icons.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
 import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.js'
 
-const store = useAppStore()
+const ui = useUIStore()
+const ds = useDataStore()
 const searchQuery = ref('')
 const decodedPasswords = ref<Record<string, string>>({})
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
-const isOpen = computed(() => store.detailOpen || store.detailCards.length > 0)
+const isOpen = computed(() => ui.detailOpen || ui.detailCards.length > 0)
 
 interface DetailEntry {
   rawId: string
@@ -104,13 +106,13 @@ interface DetailEntry {
 }
 
 const entries = computed<DetailEntry[]>(() => {
-  return (store.detailCards || []).map(rawId => {
+  return (ui.detailCards || []).map(rawId => {
     if (typeof rawId === 'string' && rawId.startsWith('group:')) {
       const gid = rawId.slice(6)
-      const sg = store.groupMap[gid]
+      const sg = ds.groupMap[gid]
       return sg ? { rawId, isGroup: true, data: sg, name: sg.name || '', domain: '' } : null
     }
-    const bm = store.bookmarkMap[rawId]
+    const bm = ds.bookmarkMap[rawId]
     return bm ? { rawId, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) } : null
   }).filter((e): e is DetailEntry => e !== null)
 })
@@ -139,7 +141,7 @@ watch(entries, () => nextTick(decodeAllPasswords))
 const isSwiping = ref(false)
 let _swipeStartY = 0
 function onSwipeStart(e: TouchEvent) {
-  if (!isMobile() || !store.detailOpen) return
+  if (!isMobile() || !ui.detailOpen) return
   if (!(e.target as HTMLElement).closest('.detail-drag-handle')) return
   _swipeStartY = e.touches[0].clientY
 }
@@ -158,7 +160,7 @@ function onSwipeEnd() {
   const panel = document.getElementById('detailPanel')
   const panelHeight = panel ? panel.offsetHeight : 300
   const currentY = panel ? parseFloat(panel.style.transform.replace(/[^-\d.]/g, '')) || 0 : 0
-  if (currentY > panelHeight * 0.3) { store.detailOpen = false; store.detailCards.splice(0) }
+  if (currentY > panelHeight * 0.3) { ui.detailOpen = false; ui.detailCards.splice(0) }
   if (panel) panel.style.transform = ''
   isSwiping.value = false
   _swipeStartY = 0
@@ -185,17 +187,17 @@ const noteIcon = I.note
 const bookmarkIcon = I.emptyBookmark
 
 function getIcon(item: any) { return favicon(item.url, item.icon) }
-function getTags(bm: any) { return getTagNames(bm, store.customAttributes) }
-function getChildren(parentId: string) { return store.childrenMap[parentId] || [] }
+function getTags(bm: any) { return getTagNames(bm, ds.customAttributes) }
+function getChildren(parentId: string) { return ds.childrenMap[parentId] || [] }
 function sanitizeNotes(notes: string) { return sanitizeHTML(notes || '') }
 
 function visit(bm: any) { openBookmark(bm) }
 function editBm(id: string) { openBmModal(id) }
-function openDetail(id: string) { if (!store.detailCards.includes(id)) store.detailCards.push(id); store.detailOpen = true }
+function openDetail(id: string) { if (!ui.detailCards.includes(id)) ui.detailCards.push(id); ui.detailOpen = true }
 function closeDetail(rawId: string) {
-  const idx = store.detailCards.indexOf(rawId)
-  if (idx > -1) store.detailCards.splice(idx, 1)
-  if (!store.detailCards.length) store.detailOpen = false
+  const idx = ui.detailCards.indexOf(rawId)
+  if (idx > -1) ui.detailCards.splice(idx, 1)
+  if (!ui.detailCards.length) ui.detailOpen = false
 }
 function copyText(text: string) { copyToClipboard(text || '') }
 </script>

@@ -1,16 +1,16 @@
 <template>
-  <div class="sp" v-show="store.settingsOpen">
+  <div class="sp" v-show="uiStore.settingsOpen">
     <!-- Theme -->
     <div class="sp-section">
       <div class="sp-row">
         <span class="sp-row-label">主题</span>
         <div class="sp-seg">
-          <button class="sp-seg-btn" :class="{ active: store.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">效率</button>
-          <button class="sp-seg-btn" :class="{ active: store.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">舒适</button>
+          <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">效率</button>
+          <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">舒适</button>
         </div>
       </div>
       <div class="sp-divider"></div>
-      <div class="sp-toggle-row" :class="{ active: store.themeMode === 'auto' }" @click="onToggleAutoTheme">
+      <div class="sp-toggle-row" :class="{ active: uiStore.themeMode === 'auto' }" @click="onToggleAutoTheme">
         <span v-html="I.sun" class="sp-icon auto-icon-sun"></span>
         <span v-html="I.moon" class="sp-icon auto-icon-moon"></span>
         <span class="sp-toggle-label">跟随系统</span>
@@ -22,8 +22,8 @@
       <div class="sp-row">
         <span class="sp-row-label">视图</span>
         <div class="sp-seg">
-          <button class="sp-seg-btn" :class="{ active: store.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span v-html="I.grid"></span></button>
-          <button class="sp-seg-btn" :class="{ active: store.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span v-html="I.list"></span></button>
+          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span v-html="I.grid"></span></button>
+          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span v-html="I.list"></span></button>
         </div>
       </div>
     </div>
@@ -33,7 +33,7 @@
         <span class="sp-row-label">排序</span>
         <div class="sp-seg sp-seg-wrap">
           <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn"
-                  :class="{ active: store.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ s.label }}</button>
+                  :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ s.label }}</button>
         </div>
       </div>
     </div>
@@ -123,7 +123,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
@@ -137,7 +136,6 @@ import { toast } from '../../lib/toast.js'
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
 
-const store = useAppStore()
 const uiStore = useUIStore()
 const dataStore = useDataStore()
 const auth = useAuth()
@@ -174,32 +172,32 @@ const sortModes = [
 
 function onSetThemeStyle(style: string) {
   themeSetStyle(style)
-  store.themeStyle = style
+  uiStore.themeStyle = style
 }
 
 function onToggleAutoTheme() {
   themeToggleAuto()
-  store.themeMode = localStorage.getItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
+  uiStore.themeMode = localStorage.getItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
 }
 
 function onSetLayout(mode: 'grid' | 'list') {
-  if (store.focusedGroupId) return
+  if (uiStore.focusedGroupId) return
   if (uiStore.isMobile) return
-  store.layoutMode = mode
+  uiStore.layoutMode = mode
 }
 
 function onSetSortMode(mode: string) {
-  store.sortMode = mode
+  uiStore.sortMode = mode
 }
 
-function onOpenTrash() { store.trashPanelOpen = true; store.settingsOpen = false }
-function onTriggerImport() { triggerImport(); store.settingsOpen = false }
-function onExportData() { exportData(); store.settingsOpen = false }
-function onResetData() { resetToDefaults(); store.settingsOpen = false }
+function onOpenTrash() { uiStore.trashPanelOpen = true; uiStore.settingsOpen = false }
+function onTriggerImport() { triggerImport(); uiStore.settingsOpen = false }
+function onExportData() { exportData(); uiStore.settingsOpen = false }
+function onResetData() { resetToDefaults(); uiStore.settingsOpen = false }
 
 async function onOpenLogin() {
   auth.authModalOpen.value = true
-  store.settingsOpen = false
+  uiStore.settingsOpen = false
 }
 
 async function onLogout() {
@@ -235,7 +233,7 @@ function onCheckDeadLinks() {
 }
 
 function onViewDeadLinks() {
-  store.deadLinksPopoverOpen = true
+  uiStore.deadLinksPopoverOpen = true
   uiStore.settingsOpen = false
 }
 </script>

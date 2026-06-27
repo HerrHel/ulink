@@ -33,8 +33,8 @@
 </template>
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
 import { isMobile } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useVirtualScroll } from '../../composables/useVirtualScroll.js'
@@ -42,25 +42,25 @@ import { useMobileDragReorder } from '../../composables/interaction/useMobileDra
 import type { CardItem } from '../../types.js'
 import BookmarkCard from './BookmarkCard.vue'
 import GroupCard from './GroupCard.vue'
-const store = useAppStore()
+const ui = useUIStore()
 const dataStore = useDataStore()
 const bookmarkIcon = I.emptyBookmark
 const gridRef = ref(null)
 const normalGridRef = ref(null)
 const gridClass = computed(() => {
-  if (store.focusedGroupId) return 'card-grid focus-view' + (isMobile() ? ' focus-mobile' : '')
-  return store.layoutMode === 'list' ? 'card-grid list-view' : 'card-grid grid-view'
+  if (ui.focusedGroupId) return 'card-grid focus-view' + (isMobile() ? ' focus-mobile' : '')
+  return ui.layoutMode === 'list' ? 'card-grid list-view' : 'card-grid grid-view'
 })
 const combinedList = computed<CardItem[]>(() => {
-  if (store.focusedGroupId) {
-    const group = store.groupMap[store.focusedGroupId]
+  if (ui.focusedGroupId) {
+    const group = dataStore.groupMap[ui.focusedGroupId]
     return group ? [{ type: 'group', data: group }] : []
   }
   // 有自定义顺序时，按自定义顺序重建（支持跨类型排序）
   const customOrder = dataStore._customCardOrder
-  if (customOrder != null && store.sortMode === 'order') {
-    const bmMap = store.bookmarkMap
-    const gMap = store.groupMap
+  if (customOrder != null && ui.sortMode === 'order') {
+    const bmMap = dataStore.bookmarkMap
+    const gMap = dataStore.groupMap
     const usedBms = new Set<string>()
     const usedGs = new Set<string>()
     const combined: CardItem[] = []
@@ -69,12 +69,12 @@ const combinedList = computed<CardItem[]>(() => {
       else if (entry.t === 'b' && bmMap[entry.id] && !bmMap[entry.id].parentId && !bmMap[entry.id].deletedAt) { combined.push({ type: 'bm', data: bmMap[entry.id] }); usedBms.add(entry.id) }
     })
     // 追加不在自定义顺序中的新项
-    store.siblingGroups.forEach(g => { if (!g.deletedAt && !usedGs.has(g.id)) combined.push({ type: 'group', data: g }) })
-    store.bookmarks.filter(b => !b.parentId && !b.deletedAt).forEach(b => { if (!usedBms.has(b.id)) combined.push({ type: 'bm', data: b }) })
+    dataStore.siblingGroups.forEach(g => { if (!g.deletedAt && !usedGs.has(g.id)) combined.push({ type: 'group', data: g }) })
+    dataStore.bookmarks.filter(b => !b.parentId && !b.deletedAt).forEach(b => { if (!usedBms.has(b.id)) combined.push({ type: 'bm', data: b }) })
     return combined
   }
-  const groups = store.filteredGroups
-  const topLevel = store.filteredBookmarks.filter(b => !b.parentId)
+  const groups = dataStore.filteredGroups
+  const topLevel = dataStore.filteredBookmarks.filter(b => !b.parentId)
   const combined: CardItem[] = []
   groups.forEach(g => combined.push({ type: 'group', data: g }))
   topLevel.forEach(b => combined.push({ type: 'bm', data: b }))
