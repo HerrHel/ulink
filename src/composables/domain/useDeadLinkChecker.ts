@@ -21,48 +21,17 @@ const CONFIDENCE_THRESHOLD = 0.5
 
 let _abort: AbortController | null = null
 
-function getHostname(url: string): string {
-  try { return new URL(url).hostname.toLowerCase() } catch { return '' }
-}
-
-async function checkDns(hostname: string): Promise<{ ok: boolean; duration: number }> {
+async function checkDirect(url: string, timeoutMs = 5000): Promise<{ ok: boolean; duration: number }> {
   const start = Date.now()
   try {
-    const resp = await fetch(
-      `https://cloudflare-dns.com/dns-query?name=${hostname}&type=A`,
-      { headers: { 'Accept': 'application/dns-json' } }
-    )
-    const data = await resp.json()
-    return {
-      ok: data.Status === 0 && data.Answer && data.Answer.length > 0,
-      duration: Date.now() - start,
-    }
-  } catch {
+    await Promise.race([
+      fetch(url, { method: 'GET', mode: 'no-cors' }),
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+    ])
     return { ok: true, duration: Date.now() - start }
+  } catch {
+    return { ok: false, duration: Date.now() - start }
   }
-}
-
-function checkDirect(url: string, timeoutMs = 3000): Promise<{ ok: boolean; duration: number }> {
-  return new Promise(resolve => {
-    const start = Date.now()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => {
-      controller.abort()
-      resolve({ ok: false, duration: Date.now() - start })
-    }, timeoutMs)
-
-    fetch(url, {
-      signal: controller.signal,
-      method: 'HEAD',
-      mode: 'no-cors',
-    }).then(() => {
-      clearTimeout(timeout)
-      resolve({ ok: true, duration: Date.now() - start })
-    }).catch(() => {
-      clearTimeout(timeout)
-      resolve({ ok: false, duration: Date.now() - start })
-    })
-  })
 }
 
 async function measureNetworkBaseline(): Promise<number> {
@@ -91,26 +60,18 @@ export function useDeadLinkChecker() {
       return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 1 }
     }
 
-    const hostname = getHostname(url)
-
-    // 1) DoH DNS检查（同时记录响应时间作为网络基线 fallback）
-    const dns = await checkDns(hostname)
-    if (!dns.ok) {
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.99 }
-    }
-
-    // 2) 并行测量网络基线 + 直接访问目标
+    // 1) 并行测量网络基线 + 直接访问目标
     const [gstaticBaseline, direct] = await Promise.all([
       measureNetworkBaseline(),
       checkDirect(url, 3000),
     ])
 
-    // 3) 直接访问成功 → 存活
+    // 2) 直接访问成功 → 存活
     if (direct.ok) {
       return { alive: true, status: 200, finalUrl: url, checkedAt: Date.now(), blocked: false, confidence: 0.95 }
     }
 
-    // 4) 确定基线
+    // 3) 确定基线
     // gstatic <5s 说明网络可达（只是延迟高），用它作为基线
     // gstatic >5s 说明网络本身不通或被墙，无法可靠判断，直接返回 unknown
     if (gstaticBaseline > 5000) {
@@ -118,12 +79,12 @@ export function useDeadLinkChecker() {
     }
     const baseline = gstaticBaseline
 
-    // 5) 网络差 → 无法判断，标记为 unknown（不改变书签属性）
+    // 4) 网络差 → 无法判断，标记为 unknown（不改变书签属性）
     if (baseline > 2000) {
       return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.15 }
     }
 
-    // 6) 网络良好但直连失败 → 调用 Edge Function 确认
+    // 5) 网络良好但直连失败 → 调用 Edge Function 确认
     const edgeResult = await callEdgeFunction(url, bookmarkId)
 
     if (edgeResult.status === 'alive') {

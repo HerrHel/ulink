@@ -171,6 +171,9 @@ onMounted(() => {
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
 
+  // 光标移到文档末尾，避免初始位置落在标题中导致 H1 按钮误亮
+  editor.commands.setTextSelection(editor.state.doc.content.size)
+
   // Mobile floating format bar: show on focus, hide on blur
   const el = editorRef.value
   if (el) {
