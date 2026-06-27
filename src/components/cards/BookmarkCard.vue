@@ -83,7 +83,7 @@ import { openDetail } from '../../composables/ui/useUI.js'
 import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { useAppStore } from '../../stores/app.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import type { Bookmark } from '../../types.js'
 
 function hlText(text: string, query: string): string {
@@ -106,7 +106,6 @@ function hlText(text: string, query: string): string {
 const props = defineProps({ bookmark: { type: Object as () => Bookmark, required: true } })
 const dataStore = useDataStore()
 const uiStore = useUIStore()
-const store = useAppStore()
 const cardEl = ref(null)
 const acctOpen = ref(false)
 const decodedPw = ref('')
@@ -141,7 +140,7 @@ function doAddSub() { addSub(props.bookmark.id) }
 function doOpenDetail(bmId: string) { openDetail(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
-function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); store.debouncedSave() }
+function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode !== 'list') return
@@ -171,7 +170,7 @@ function editNotes(e: Event) {
     const newNotes = notesEl.textContent.trim()
     if (props.bookmark.notes !== newNotes) {
       dataStore.updateBookmark(props.bookmark.id, { notes: newNotes })
-      store.debouncedSave()
+      debouncedSaveAppData()
       toast('备注已更新')
     }
     notesEl.removeEventListener('blur', saveNotes)

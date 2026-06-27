@@ -93,7 +93,7 @@ import GroupEditor from '../editor/GroupEditor.vue'
 import ColorPalette from '../editor/ColorPalette.vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { useAppStore } from '../../stores/app.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -106,7 +106,6 @@ import type { SiblingGroup } from '../../types.js'
 const props = defineProps({ group: { type: Object as () => SiblingGroup, required: true } })
 const ui = useUIStore()
 const ds = useDataStore()
-const appStore = useAppStore()
 
 let _cardEl: HTMLElement | null = null
 let _entranceCleanup: (() => void) | null = null
@@ -184,7 +183,7 @@ function filterByTagName(name: string) {
   const attr = ds.customAttributes.find(a => a.name === name)
   if (attr) toggleAttrFilter(attr.id)
 }
-function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); appStore.debouncedSave() }
+function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (ui.batchMode) { toggleSelect(); return }
   if (ui.layoutMode !== 'list') return

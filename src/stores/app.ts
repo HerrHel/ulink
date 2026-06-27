@@ -17,8 +17,6 @@ import { toast } from '../lib/toast.js'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
-let _localStorageWarned = false
-
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
   const ui = () => useUIStore()
@@ -187,3 +185,43 @@ export const useAppStore = defineStore('app', () => {
     _backupBeforeImport() { persist.saveToLocalStorage(this._dataSnapshot()) },
   }
 })
+
+// ── 独立保存函数（无需 useAppStore 即可调用）──
+
+let _localStorageWarned = false
+
+export function saveAppData() {
+  const ds = useDataStore()
+  ds._storageInfoDirty = true
+  ds._saveCount++
+  const data = ds._dataSnapshot()
+  const ok = persist.saveToLocalStorage(data)
+  if (!ok) {
+    console.warn('[store] localStorage save failed')
+    if (!_localStorageWarned) {
+      _localStorageWarned = true
+      toast('本地存储已满，数据已备份到 IndexedDB', false)
+    }
+  }
+  persist.saveToIDB(data)
+  if (ds._saveCount % 10 === 0) useUndoStore().cleanStale()
+  try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
+}
+
+export function debouncedSaveAppData() {
+  const ds = useDataStore()
+  if (ds._saveTimer) clearTimeout(ds._saveTimer)
+  ds._saveTimer = setTimeout(() => {
+    ds._saveTimer = null
+    saveAppData()
+  }, 300)
+}
+
+export function flushSaveAppData() {
+  const ds = useDataStore()
+  if (ds._saveTimer) {
+    clearTimeout(ds._saveTimer)
+    ds._saveTimer = null
+    saveAppData()
+  }
+}

@@ -28,7 +28,7 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { useAppStore } from '../../stores/app.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { EditorManager } from '../../lib/editor.js'
 import { mfbAPI } from '../../composables/bridge.js'
@@ -113,7 +113,6 @@ const GroupRefCard = Node.create({
 const props = defineProps({ groupId: { type: String, required: true } })
 const ds = useDataStore()
 const ui = useUIStore()
-const appStore = useAppStore()
 const editorRef = ref<HTMLElement | null>(null)
 const editorInstance = ref<Editor | null>(null)
 let editor: Editor | null = null
@@ -131,7 +130,7 @@ function syncToStore(ed: Editor) {
     }
   })
   ds.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
-  appStore.debouncedSave()
+  debouncedSaveAppData()
 }
 
 onMounted(() => {
