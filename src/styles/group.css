@@ -248,7 +248,6 @@
   font-size:0.85rem;color:var(--text-secondary);
   outline:none;
   line-height:1.7;
-  overscroll-behavior:contain;
 }
 .card-overflow .group-body{
   -webkit-mask-image:var(--mask-fade-bottom);
