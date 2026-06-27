@@ -368,17 +368,19 @@
 .card-body::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
 .card-body:hover::-webkit-scrollbar-thumb{background:var(--border)}
 .card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
-/* group-body 不自建滚动上下文，让 card-body 统一滚动（含标签、预览等全部内容） */
-.card-grid:not(.list-view) .card-body:has(.group-body){display:flex;flex-direction:column;scrollbar-width:thin}
+/* 组卡片：card-body 做 flex 布局 + 统一滚动（含标签+正文+预览） */
+.card-grid:not(.list-view) .card-body:has(.group-body){display:flex;flex-direction:column}
 .card-grid:not(.list-view) .card-body:has(.group-body) .group-body{overflow:visible;flex:1 1 0;min-height:0}
 .card-grid:not(.list-view) .card-overflow .card-body:has(.group-body) .group-body{-webkit-mask-image:none;mask-image:none}
-/* Grid view: 底部渐隐改用 sticky 伪元素覆盖，不影响滚动条 */
-.card-grid:not(.list-view) .card-overflow .card-body{position:relative;mask-image:none;-webkit-mask-image:none}
-.card-grid:not(.list-view) .card-overflow .card-body::after{
-  content:'';position:sticky;bottom:0;display:block;height:28px;
-  margin-top:-28px;flex-shrink:0;
-  background:linear-gradient(to bottom,transparent,var(--surface));
-  pointer-events:none;z-index:1;
+/* Grid view: fade-out mask at bottom of card body — only when content overflows */
+.card-grid:not(.list-view) .card-overflow .card-body{
+  -webkit-mask-image:var(--mask-fade-bottom);
+  mask-image:var(--mask-fade-bottom);
+}
+/* 覆盖式滚动条：不受 mask-image 影响，且不占布局宽度 */
+.card-grid:not(.list-view) .card-body{
+  overflow-y:auto;
+  overflow-y:overlay;
 }
 
 .card-toprow{
