@@ -357,7 +357,6 @@
 .card-body{
   position:relative;z-index:1;
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
-  overscroll-behavior:contain;
   scrollbar-width:thin;scrollbar-color:transparent transparent;
   transition:scrollbar-color 0.12s;
 }
