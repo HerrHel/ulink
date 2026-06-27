@@ -60,7 +60,7 @@
 }
 .focus-toolbar-side::-webkit-scrollbar{display:none}
 .focus-toolbar-side .ft-sb-btn{
-  width:32px;height:32px;
+  width:36px;height:36px;
   margin:1px 0;
 }
 .focus-toolbar-side .ft-sb-sep{
@@ -71,10 +71,10 @@
 .focus-toolbar-side .ft-color-wrap{position:relative;display:inline-flex}
 
 .ft-sb-btn{
-  width:34px;height:34px;
+  width:36px;height:36px;
   display:flex;align-items:center;justify-content:center;
   border-radius:var(--radius-base);
-  font-size:0.75rem;font-weight:600;
+  font-size:0.78rem;font-weight:600;
   color:var(--text-muted);
   transition:background 0.15s,color 0.15s,box-shadow 0.15s;
   flex-shrink:0;
@@ -93,7 +93,7 @@
 
 /* Focus toolbar — content now lives in #focusBack */
 .ft-btn{
-  width:28px;height:28px;
+  width:32px;height:32px;
   display:flex;align-items:center;justify-content:center;
   border-radius:var(--radius-md);color:var(--text-muted);
   background:transparent;border:none;
@@ -170,7 +170,7 @@
   width:100%;padding:6px 0;
   border:1px solid var(--border-light);
   background:transparent;
-  color:var(--text-muted);font-size:.7rem;
+  color:var(--text-muted);font-size:.72rem;
   border-radius:var(--radius-sm);
   cursor:pointer;
   transition:background .15s ease;
@@ -208,7 +208,7 @@
 .ft-btn-back svg{width:15px;height:15px}
 /* Stat pill */
 .ft-stat-pill{
-  font-size:0.72rem;font-weight:600;
+  font-size:0.78rem;font-weight:600;
   color:var(--text-muted);
   background:var(--surface-alt,var(--surface-hover));
   padding:3px 8px;border-radius:10px;
@@ -245,9 +245,10 @@
 .group-body{
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:40px;
   padding:4px 0;
-  font-size:0.875rem;color:var(--text-secondary);
+  font-size:0.85rem;color:var(--text-secondary);
   outline:none;
   line-height:1.7;
+  overscroll-behavior:contain;
 }
 .card-overflow .group-body{
   -webkit-mask-image:var(--mask-fade-bottom);
@@ -264,7 +265,7 @@
   border:1px solid var(--border);
   border-radius:var(--radius-md);
   background:var(--surface);
-  font-size:0.8rem;font-weight:500;
+  font-size:0.85rem;font-weight:500;
   white-space:nowrap;
   vertical-align:middle;
   cursor:default;
@@ -280,13 +281,13 @@
 }
 .group-inline-card img,.group-inline-card svg{width:16px;height:16px;border-radius:2px;display:block;flex-shrink:0}
 .group-inline-card .gic-note-icon{display:inline-flex;align-items:center;color:var(--accent)}
-.group-inline-card .gic-name{color:var(--text);cursor:pointer;min-width:0;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.group-inline-card .gic-name{color:var(--text);cursor:pointer;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-inline-card .gic-name:hover{color:var(--accent)}
-.group-inline-card .gic-domain{color:var(--text-muted);font-size:0.7rem;font-family:'JetBrains Mono',monospace;cursor:pointer}
+.group-inline-card .gic-domain{color:var(--text-muted);font-size:0.72rem;font-family:'JetBrains Mono',monospace;cursor:pointer}
 .group-inline-card .gic-domain:hover{color:var(--accent)}
 .group-inline-card .gic-btn{
-  color:var(--accent);font-size:0.7rem;font-weight:700;
-  cursor:pointer;padding:2px 6px;border-radius:4px;
+  color:var(--accent);font-size:0.72rem;font-weight:700;
+  cursor:pointer;padding:2px 6px;border-radius:var(--radius-sm);
   background:var(--accent-light);
   transition:var(--transition-fast);
 }
@@ -309,7 +310,7 @@
 }
 .group-ref-card:active{cursor:pointer}
 .group-ref-card .gic-count{
-  font-size:0.68rem;color:var(--accent);
+  font-size:0.72rem;color:var(--accent);
   margin-left:auto;
 }
 
@@ -389,14 +390,14 @@
   box-shadow:var(--shadow-xs);
 }
 .detail-card:hover{box-shadow:var(--shadow-sm);border-color:var(--border-hover)}
-.detail-card .card-name{font-size:0.84rem}
-.detail-card .card-domain{font-size:0.66rem}
+.detail-card .card-name{font-size:0.9rem}
+.detail-card .card-domain{font-size:0.72rem}
 .detail-card.dragging{opacity:0.45;transform:scale(0.96)}
 .detail-card.detail-drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
 .detail-group-notes{
   max-height:200px;overflow-y:auto;
   margin-top:8px;
-  font-size:0.82rem;line-height:1.6;color:var(--text-secondary);
+  font-size:0.85rem;line-height:1.6;color:var(--text-secondary);
   word-break:break-word;
 }
 .detail-group-notes::-webkit-scrollbar{width:4px}
@@ -416,6 +417,7 @@
 .sub-sites{
   margin-top:10px;border-top:1px solid var(--border-light);padding-top:8px;
   max-height:160px;overflow-y:auto;
+  overscroll-behavior:contain;
   display:flex;flex-wrap:wrap;gap:4px;
 }
 .sub-sites .group-inline-card{cursor:pointer}

@@ -109,7 +109,7 @@
 /* ---- List: preview line (visible, single line ellipsis) ---- */
 .list-view .card-preview{
   display:block;margin:0;max-width:80%;
-  font-size:0.8rem;color:var(--text-muted);line-height:1.4;
+  font-size:0.85rem;color:var(--text-muted);line-height:1.4;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .grid-view .card-preview,
@@ -148,7 +148,7 @@
   position:absolute;top:8px;right:10px;
   padding:4px;border-top:none;
   background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-md);
-  display:none;grid-template-columns:repeat(3,28px);
+  display:none;grid-template-columns:repeat(3,32px);
   gap:4px;z-index:5;
   opacity:0;
   box-shadow:var(--shadow-sm);
@@ -253,7 +253,7 @@
 
 /* Show expandable content when expanded */
 .list-view .card-expanded .card-acct-toggle{
-  display:inline-flex;font-size:0.74rem;font-weight:600;
+  display:inline-flex;font-size:0.78rem;font-weight:600;
   color:var(--text-muted);cursor:default;
   padding:3px 6px;border-radius:5px;margin:4px 0 2px;
   pointer-events:none;
@@ -357,11 +357,28 @@
 .card-body{
   position:relative;z-index:1;
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:transparent transparent;
+  transition:scrollbar-color 0.3s;
 }
-/* Grid view: fade-out mask at bottom of card body — only when content overflows */
-.card-grid:not(.list-view) .card-overflow .card-body{
-  -webkit-mask-image:var(--mask-fade-bottom);
-  mask-image:var(--mask-fade-bottom);
+.card-body:hover{scrollbar-color:var(--border) transparent}
+/* Webkit scrollbar styling for card body */
+.card-body::-webkit-scrollbar{width:4px}
+.card-body::-webkit-scrollbar-track{background:transparent}
+.card-body::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
+.card-body:hover::-webkit-scrollbar-thumb{background:var(--border)}
+.card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
+/* group-body 不自建滚动上下文，让 card-body 统一滚动（含标签、预览等全部内容） */
+.card-grid:not(.list-view) .card-body:has(.group-body){display:flex;flex-direction:column;scrollbar-width:thin}
+.card-grid:not(.list-view) .card-body:has(.group-body) .group-body{overflow:visible;flex:1 1 0;min-height:0}
+.card-grid:not(.list-view) .card-overflow .card-body:has(.group-body) .group-body{-webkit-mask-image:none;mask-image:none}
+/* Grid view: 底部渐隐改用 sticky 伪元素覆盖，不影响滚动条 */
+.card-grid:not(.list-view) .card-overflow .card-body{position:relative;mask-image:none;-webkit-mask-image:none}
+.card-grid:not(.list-view) .card-overflow .card-body::after{
+  content:'';position:sticky;bottom:0;display:block;height:28px;
+  margin-top:-28px;flex-shrink:0;
+  background:linear-gradient(to bottom,transparent,var(--surface));
+  pointer-events:none;z-index:1;
 }
 
 .card-toprow{
@@ -390,13 +407,15 @@
 }
 .card-logo svg{width:36px;height:36px}
 .card-logo-fallback{
-  display:none;
+  display:flex;
   align-items:center;justify-content:center;
   width:28px;height:28px;
   font-size:0.85rem;font-weight:700;
   color:var(--accent);
   text-transform:uppercase;
 }
+.card-logo:has(img:not(.img-error)) .card-logo-fallback{display:none}
+.card-logo img.img-error{display:none}
 .card-icon{
   flex-shrink:0;
   width:36px;height:36px;
@@ -411,19 +430,21 @@
   object-fit:contain;
 }
 .icon-fallback{
-  display:none;
+  display:flex;
   align-items:center;justify-content:center;
   width:20px;height:20px;
   font-size:0.7rem;font-weight:700;
   color:var(--accent);
   text-transform:uppercase;
 }
+.card-icon:has(img:not(.img-error)) .icon-fallback{display:none}
+.card-icon img.img-error{display:none}
 .card-titlewrap{
   flex:1;min-width:0;height:36px;
   overflow:hidden;cursor:pointer;
   padding:0 4px;margin:0 -4px;
   display:flex;flex-direction:column;justify-content:center;
-  border-radius:4px;
+  border-radius:var(--radius-sm);
   transition:background 0.15s ease;
 }
 .card-titlewrap:hover{
@@ -454,12 +475,12 @@
 /* Dead link badge */
 .dead-link-badge{
   display:inline-flex;align-items:center;
-  padding:0 5px;height:15px;
-  font-size:0.6rem;font-weight:700;
+  padding:0 5px;height:16px;
+  font-size:0.72rem;font-weight:700;
   color:var(--rose);
   background:var(--rose-light);
   border:1px solid var(--rose);
-  border-radius:4px;
+  border-radius:var(--radius-sm);
   vertical-align:middle;
   margin-left:4px;
   line-height:1;
@@ -471,12 +492,12 @@
 }
 .gfw-blocked-badge{
   display:inline-flex;align-items:center;
-  padding:0 5px;height:15px;
-  font-size:0.6rem;font-weight:700;
+  padding:0 5px;height:16px;
+  font-size:0.72rem;font-weight:700;
   color:var(--amber);
   background:var(--amber-light);
   border:1px solid var(--amber);
-  border-radius:4px;
+  border-radius:var(--radius-sm);
   vertical-align:middle;
   margin-left:4px;
   line-height:1;
@@ -501,7 +522,7 @@
 
 /* Card notes - always visible */
 .card-notes{
-  font-size:0.8125rem;color:var(--text-muted);
+  font-size:0.85rem;color:var(--text-muted);
   line-height:1.5;margin-bottom:8px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
   overflow:hidden;
@@ -522,8 +543,8 @@
 .card-tag{
   display:inline-flex;align-items:center;gap:3px;
   padding:3px 10px;
-  font-size:0.66rem;font-weight:600;
-  border-radius:20px;
+  font-size:0.72rem;font-weight:600;
+  border-radius:var(--radius-xl);
   letter-spacing:0.02em;
   cursor:pointer;
   transition:all 0.2s ease;
@@ -536,8 +557,8 @@
 /* Card account toggle */
 .card-acct-toggle{
   display:inline-flex;align-items:center;gap:4px;
-  font-size:0.74rem;font-weight:600;color:var(--text-muted);
-  cursor:pointer;padding:3px 6px;border-radius:5px;
+  font-size:0.78rem;font-weight:600;color:var(--text-muted);
+  cursor:pointer;padding:3px 6px;border-radius:var(--radius-sm);
   transition:var(--transition-fast);
   margin-bottom:4px;
 }
@@ -548,7 +569,7 @@
 .card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--card-badge-bg);border-radius:var(--radius-base);font-size:0.8rem}
 .card-acct-body.show{display:block}
 .acct-row{display:flex;align-items:center;gap:6px;padding:3px 0}
-.acct-row .acct-label{color:var(--text-muted);font-size:0.75rem;width:30px;flex-shrink:0}
+.acct-row .acct-label{color:var(--text-muted);font-size:0.78rem;width:30px;flex-shrink:0}
 .acct-row .acct-val{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 .acct-show-pw{
   width:28px;height:28px;padding:0;display:inline-flex;align-items:center;justify-content:center;
@@ -563,9 +584,9 @@
   max-width:80%;
 }
 .acct-copy-btn{
-  width:22px;height:22px;padding:0;
+  width:28px;height:28px;padding:0;
   display:inline-flex;align-items:center;justify-content:center;
-  border-radius:4px;color:var(--text-muted);flex-shrink:0;
+  border-radius:var(--radius-sm);color:var(--text-muted);flex-shrink:0;
   cursor:pointer;transition:var(--transition-fast);
   border:none;background:transparent;
   margin-left:auto;
@@ -584,7 +605,7 @@
 .card:hover .card-foot{border-color:var(--border-hover)}
 .card-stat{
   display:flex;align-items:center;gap:3px;
-  font-size:0.75rem;color:var(--text-muted);
+  font-size:0.78rem;color:var(--text-muted);
   cursor:default;
 }
 .card-stat svg{width:12px;height:12px}
