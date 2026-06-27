@@ -2,7 +2,9 @@
  * useUI — 合并的 UI 辅助函数
  * 合并自: useActionSheet.js, useRail.js, useDetail.js, useCardExpand.js, useModal.js
  */
-import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
+import { useDataStore } from '../../stores/data.js'
+import { saveAppData } from '../../stores/app.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { actionSheetAPI, type ActionSheetAPI } from '../bridge.js'
 import { toast, showConfirm } from '../../lib/toast.js'
@@ -11,26 +13,26 @@ import { toast, showConfirm } from '../../lib/toast.js'
 export function showActionSheet(items: Parameters<ActionSheetAPI['show']>[0]) { actionSheetAPI?.show(items) }
 
 // ── Rail (Sidebar) ──
-export function toggleRail() { useAppStore().railOpen = !useAppStore().railOpen }
-export function closeRail() { useAppStore().railOpen = false }
+export function toggleRail() { const ui = useUIStore(); ui.railOpen = !ui.railOpen }
+export function closeRail() { useUIStore().railOpen = false }
 
 // ── Detail Panel ──
 export function toggleDetailPanel() {
-  const store = useAppStore()
-  if (!store.detailOpen) pushNavState()
-  if (store.detailOpen || store.detailCards.length > 0) {
-    store.detailOpen = false
-    store.detailCards.splice(0)
+  const ui = useUIStore()
+  if (!ui.detailOpen) pushNavState()
+  if (ui.detailOpen || ui.detailCards.length > 0) {
+    ui.detailOpen = false
+    ui.detailCards.splice(0)
   } else {
-    store.detailOpen = true
+    ui.detailOpen = true
   }
 }
 
 export function openDetail(bmId: string) {
   if (!bmId) return
-  const store = useAppStore()
-  if (store.detailCards.indexOf(bmId) === -1) store.detailCards.push(bmId)
-  store.detailOpen = true
+  const ui = useUIStore()
+  if (ui.detailCards.indexOf(bmId) === -1) ui.detailCards.push(bmId)
+  ui.detailOpen = true
 }
 
 // ── Card Tags (scroll + overflow) ──
@@ -52,20 +54,19 @@ export function updateCardTagsOverflow() {
 }
 
 // ── Modal 开关 ──
-export function openCatModal() { useAppStore().catModalOpen = true }
-export function closeCatModal() { useAppStore().catModalOpen = false }
+export function openCatModal() { useUIStore().catModalOpen = true }
+export function closeCatModal() { useUIStore().catModalOpen = false }
 
 export function deleteCategory(id: string) {
   if (id === 'all' || id === 'uncategorized') { toast('无法删除默认分类', false); return }
-  const store = useAppStore()
-  showConfirm('确认删除此分类？', () => { store.deleteCategory(id); store.save() })
+  showConfirm('确认删除此分类？', () => { useDataStore().deleteCategory(id); saveAppData() })
 }
 
-export function openAttrModal() { useAppStore().attrModalOpen = true }
-export function closeAttrModal() { useAppStore().attrModalOpen = false }
+export function openAttrModal() { useUIStore().attrModalOpen = true }
+export function closeAttrModal() { useUIStore().attrModalOpen = false }
 
-export function deleteAttribute(id: string) { const s = useAppStore(); s.deleteAttribute(id); s.save() }
+export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id); saveAppData() }
 
 // ── Settings / Add Dropdown ──
-export function hideSettingsMenu() { useAppStore().settingsOpen = false }
-export function hideAddDropdown() { useAppStore().addDropdownOpen = false }
+export function hideSettingsMenu() { useUIStore().settingsOpen = false }
+export function hideAddDropdown() { useUIStore().addDropdownOpen = false }

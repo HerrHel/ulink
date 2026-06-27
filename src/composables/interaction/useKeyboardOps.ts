@@ -2,7 +2,7 @@
  * useKeyboardOps — 快捷键与导航恢复实现
  * 从 ui/keyboard-ops.js 迁移。
  */
-import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
 import { saveGroupBody } from '../domain/useGroup.js'
 import { performUndo, performRedo } from '../domain/useUndo.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -24,15 +24,15 @@ interface NavState {
 }
 
 export function captureNavState(): NavState {
-  const store = useAppStore()
+  const ui = useUIStore()
   return {
-    curCat: store.curCat,
-    focusedGroupId: store.focusedGroupId,
-    detailPanelOpen: store.detailOpen || false,
-    bmModalOpen: store.bmModalOpen || false,
-    groupEditOpen: store.groupEditOpen || false,
-    catModalOpen: store.catModalOpen || false,
-    attrModalOpen: store.attrModalOpen || false
+    curCat: ui.curCat,
+    focusedGroupId: ui.focusedGroupId,
+    detailPanelOpen: ui.detailOpen || false,
+    bmModalOpen: ui.bmModalOpen || false,
+    groupEditOpen: ui.groupEditOpen || false,
+    catModalOpen: ui.catModalOpen || false,
+    attrModalOpen: ui.attrModalOpen || false
   }
 }
 
@@ -43,19 +43,19 @@ export function pushNavState() {
 // --- 快捷键实现 ---
 
 export function restoreNavState(prev: NavState) {
-  const store = useAppStore()
-  if (prev.bmModalOpen !== true && store.bmModalOpen) { closeBmModal(); return }
-  if (prev.groupEditOpen !== true && store.groupEditOpen) { closeGroupEdit(); return }
-  if (prev.catModalOpen !== true && store.catModalOpen) { closeCatModal(); return }
-  if (prev.attrModalOpen !== true && store.attrModalOpen) { closeAttrModal(); return }
-  if (prev.focusedGroupId === null && store.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== store.curCat) { store.curCat = prev.curCat } return }
-  if (!prev.detailPanelOpen && store.detailOpen) { store.detailOpen = false; return }
-  if (prev.detailPanelOpen && !store.detailOpen) { store.detailOpen = true; return }
-  if (prev.curCat !== store.curCat) { store.curCat = prev.curCat; store.focusedGroupId = null; return }
+  const ui = useUIStore()
+  if (prev.bmModalOpen !== true && ui.bmModalOpen) { closeBmModal(); return }
+  if (prev.groupEditOpen !== true && ui.groupEditOpen) { closeGroupEdit(); return }
+  if (prev.catModalOpen !== true && ui.catModalOpen) { closeCatModal(); return }
+  if (prev.attrModalOpen !== true && ui.attrModalOpen) { closeAttrModal(); return }
+  if (prev.focusedGroupId === null && ui.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat } return }
+  if (!prev.detailPanelOpen && ui.detailOpen) { ui.detailOpen = false; return }
+  if (prev.detailPanelOpen && !ui.detailOpen) { ui.detailOpen = true; return }
+  if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat; ui.focusedGroupId = null; return }
 }
 
 export function _onGlobalKeydown(e: KeyboardEvent) {
-  const store = useAppStore()
+  const ui = useUIStore()
   const _ae = document.activeElement
   const _gb = _ae && _ae.closest ? _ae.closest('.group-body') : null
   if (_gb && (e.ctrlKey || e.metaKey)) {
@@ -86,20 +86,20 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     let undoGid: string | undefined
     const gb = ae && ae.closest ? ae.closest('.group-body') : null
     if (gb) undoGid = gb.closest('.group-card')?.getAttribute('data-group-id') || undefined
-    if (!undoGid && store.focusedGroupId) undoGid = store.focusedGroupId
+    if (!undoGid && ui.focusedGroupId) undoGid = ui.focusedGroupId
     if (undoGid) {
       const handled = e.key.toLowerCase() === 'z' && !e.shiftKey ? performUndo(undoGid) : performRedo(undoGid)
       if (handled) { e.preventDefault(); return }
     }
   }
   if (e.key === 'Escape') {
-    if (store.batchMode) { toggleBatchMode(); return }
+    if (ui.batchMode) { toggleBatchMode(); return }
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
     ctxMenuAPI?.hide?.(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
-    store.confirmModalOpen = false
+    ui.confirmModalOpen = false
   }
-  if (store.batchMode) {
+  if (ui.batchMode) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAllBatch(); return }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && store.batchSelected.length) { e.preventDefault(); batchDelete(); return }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && ui.batchSelected.length) { e.preventDefault(); batchDelete(); return }
   }
 }

@@ -50,6 +50,7 @@ vi.mock('../../utils.js', () => ({
   favicon: vi.fn((url: string) => 'https://favicon.example.com/' + url),
   domain: vi.fn((url: string) => url.replace(/https?:\/\//, '').split('/')[0]),
   fixUrl: vi.fn((url: string) => url ? (url.startsWith('http') ? url : 'https://' + url) : ''),
+  isMobile: vi.fn(() => false),
   autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
 }))
 

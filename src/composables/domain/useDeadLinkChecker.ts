@@ -1,6 +1,6 @@
 import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
-import { useAppStore } from '../../stores/app.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
 
 interface CheckResult {
@@ -101,7 +101,6 @@ export function useDeadLinkChecker() {
   async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
-    const app = useAppStore()
     const bookmarks = ds.bookmarks.filter(b => b.url && b.url.startsWith('http'))
     if (bookmarks.length === 0) return
 
@@ -147,12 +146,11 @@ export function useDeadLinkChecker() {
     checking.value = false
     lastFullCheckAt.value = Date.now()
     _applyDeadLinkAttributes()
-    app.debouncedSave()
+    debouncedSaveAppData()
   }
 
   async function checkOne(bookmarkId: string): Promise<CheckResult | null> {
     const ds = useDataStore()
-    const app = useAppStore()
     const bm = ds.bookmarkMap[bookmarkId]
     if (!bm?.url) return null
 
@@ -175,7 +173,7 @@ export function useDeadLinkChecker() {
       delete attrs['gfw-blocked']
     }
     ds.updateBookmark(bookmarkId, { attributes: attrs })
-    app.debouncedSave()
+    debouncedSaveAppData()
 
     return result
   }

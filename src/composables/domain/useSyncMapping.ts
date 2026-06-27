@@ -101,7 +101,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
 
 // ── 从远端行映射回本地类型 ──
 
-export function fromRemoteBookmark(r: any): Bookmark {
+export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark {
   return {
     id: r.id, title: r.title, url: r.url,
     username: r.username || '', password: parsePassword(r.password),
@@ -117,7 +117,7 @@ export function fromRemoteBookmark(r: any): Bookmark {
   }
 }
 
-export function fromRemoteGroup(r: any): SiblingGroup {
+export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup {
   return {
     id: r.id, name: r.name,
     categoryId: r.category_id || 'uncategorized',
@@ -132,7 +132,7 @@ export function fromRemoteGroup(r: any): SiblingGroup {
   }
 }
 
-export function fromRemoteCategory(r: any): Category {
+export function fromRemoteCategory(r: RemoteCategoryRow): Category {
   return {
     id: r.id, name: r.name, icon: r.icon, color: r.color,
     updatedAt: r.updated_at_num || 0,
@@ -140,7 +140,7 @@ export function fromRemoteCategory(r: any): Category {
   }
 }
 
-export function fromRemoteAttribute(r: any): CustomAttribute {
+export function fromRemoteAttribute(r: RemoteAttributeRow): CustomAttribute {
   return {
     id: r.id, name: r.name, type: (r.type as 'boolean') || 'boolean',
     updatedAt: r.updated_at_num || 0,

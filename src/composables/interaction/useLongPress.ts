@@ -6,7 +6,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { isMobile } from '../../utils.js'
 import { showActionSheet } from '../ui/useUI.js'
-import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
 
 const LP_DELAY = 500
 const LP_SLOP = 10
@@ -31,7 +31,7 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
 
   function onPtrDown(e: PointerEvent) {
     if (!isMobile()) return
-    if (useAppStore().batchMode) return
+    if (useUIStore().batchMode) return
     if ((e.target as HTMLElement).closest('input, button, textarea, select, [contenteditable="true"]')) return
     const card = (e.target as HTMLElement).closest('.card,.group-card') as HTMLElement
     if (!card || card.classList.contains('group-card-focus')) return
