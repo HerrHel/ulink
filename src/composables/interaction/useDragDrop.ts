@@ -10,8 +10,9 @@ import { toast } from '../../lib/toast.js'
 import { saveGroupBody, syncGroupBookmarks, addToGroupDirect, addGroupRefToGroup, removeFromSrcGroup } from '../domain/useGroup.js'
 import { inlineCardHTML, groupRefCardHTML } from '../useInlineCard.js'
 import { openDetail } from '../ui/useUI.js'
-import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
+import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { EditorManager } from '../../lib/editor.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
@@ -89,8 +90,8 @@ function _updateDragCursorForGroupBody(body: Element, clientX: number, clientY: 
 }
 
 // Helpers: O(1) lookup via store getter
-function _findBm(id: string): Bookmark | undefined { return useAppStore().bookmarkMap[id] }
-function _findGroup(id: string): SiblingGroup | undefined { return useAppStore().groupMap[id] }
+function _findBm(id: string): Bookmark | undefined { return useDataStore().bookmarkMap[id] }
+function _findGroup(id: string): SiblingGroup | undefined { return useDataStore().groupMap[id] }
 
 /** swapOrder + 标记 dirty（确保排序变更可同步到云端） */
 function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }) {
@@ -107,8 +108,8 @@ function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage
 }
 
 function _onDragStart(e: DragEvent) {
-  const store = useAppStore()
-  if (store.batchMode) { e.preventDefault(); return; }
+  const ui = useUIStore()
+  if (ui.batchMode) { e.preventDefault(); return; }
   _currentDragPayload = null;
   const bmCard = (e.target as HTMLElement).closest('.card[data-id]:not(.group-card)');
   if (bmCard) {
@@ -219,7 +220,8 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
   body.classList.remove('drag-over');
   if (!p) return;
   const gid = (body as HTMLElement).dataset.gid!;
-  const store = useAppStore();
+  const ds = useDataStore();
+  const ui = useUIStore();
 
   if (p.type === 'group') {
     const refGid = p.id.slice(6);
@@ -234,8 +236,8 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
     removeFromSrcGroup(p.srcGid, p.id);
   }
   if (p.srcGid === DRAG_SRC_DETAIL) {
-    const idx = store.detailCards.indexOf(p.id);
-    if (idx >= 0) store.detailCards.splice(idx, 1);
+    const idx = ui.detailCards.indexOf(p.id);
+    if (idx >= 0) ui.detailCards.splice(idx, 1);
   }
 
   if (p.srcGid === gid) {
@@ -247,16 +249,16 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
       if (!src) return;
       EditorManager.insertAtCoords(gid, groupRefCardHTML(src), e.clientX, e.clientY);
       saveGroupBody(gid);
-      store.save();
+      saveAppData();
       toast('已移动组引用');
     } else {
       const sg = _findGroup(gid)
       const b = _findBm(p.id)
       if (!sg || !b) return;
       EditorManager.insertAtCoords(gid, inlineCardHTML(b), e.clientX, e.clientY);
-      if (sg.bookmarkIds.indexOf(p.id) === -1) store.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, p.id] });
+      if (sg.bookmarkIds.indexOf(p.id) === -1) ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, p.id] });
       saveGroupBody(gid);
-      store.save();
+      saveAppData();
       toast('已加入组');
     }
   }
@@ -267,22 +269,21 @@ function handleGroupHeadDrop(e: DragEvent, head: Element, p: DragPayload) {
   head.classList.remove('drag-over');
   const gid = (head.closest('.group-card') as HTMLElement)?.dataset.groupId;
   if (!gid) return;
-  const store = useAppStore();
   if (p.type === 'group') {
     const srcGid = p.id.slice(6);
     if (srcGid === gid) return;
     const a = _findGroup(srcGid)
     const b = _findGroup(gid)
-    if (a && b) { _swapAndMarkDirty(a, b); store.debouncedSave(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); }
+    if (a && b) { _swapAndMarkDirty(a, b); debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); }
   } else if (p.type === 'bm') {
     const bm = _findBm(p.id)
     const sg = _findGroup(gid)
     if (!bm || !sg) return;
     let dirty = false;
     if (p.srcGid && p.srcGid !== DRAG_SRC_DETAIL) { removeFromSrcGroup(p.srcGid, p.id); dirty = true; }
-    if (p.srcGid === DRAG_SRC_DETAIL) { const di = store.detailCards.indexOf(p.id); if (di >= 0) store.detailCards.splice(di, 1); dirty = true; }
+    if (p.srcGid === DRAG_SRC_DETAIL) { const di = useUIStore().detailCards.indexOf(p.id); if (di >= 0) useUIStore().detailCards.splice(di, 1); dirty = true; }
     _swapAndMarkDirty(bm, sg);
-    store.debouncedSave();
+    debouncedSaveAppData();
     if (!dirty) { swapCardsDOM('.card[data-id="' + bm.id + '"]:not(.group-card)', '.group-card[data-group-id="' + sg.id + '"]'); }
   }
 }
@@ -292,13 +293,12 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   card.classList.remove('drag-over');
   const tid = (card as HTMLElement).dataset.id;
   if (p.id === tid) return;
-  const store = useAppStore();
 
   if (p.srcGid && p.srcGid !== DRAG_SRC_DETAIL) {
     const onGroup = (e.target as HTMLElement).closest('.group-card');
     if (!onGroup || (onGroup as HTMLElement).dataset.groupId !== p.srcGid) {
       removeFromSrcGroup(p.srcGid, p.id);
-      store.debouncedSave();
+      debouncedSaveAppData();
       toast('已移出组');
     }
   }
@@ -306,14 +306,14 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   if (p.type === 'group') {
     const sg = _findGroup(p.id.slice(6))
     const bm = _findBm(tid!)
-    if (sg && bm && !bm.parentId) { _swapAndMarkDirty(sg, bm); store.debouncedSave(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); }
+    if (sg && bm && !bm.parentId) { _swapAndMarkDirty(sg, bm); debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); }
     return;
   }
 
   const a = _findBm(p.id)
   const b = _findBm(tid!)
   if (a && b) {
-    if (a.parentId === b.parentId) { _swapAndMarkDirty(a, b); store.debouncedSave(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); }
+    if (a.parentId === b.parentId) { _swapAndMarkDirty(a, b); debouncedSaveAppData(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); }
     else toast('只能在同级书签间拖拽排序', false);
   }
 }
@@ -323,7 +323,6 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   card.classList.remove('drag-over');
   const gid = (card as HTMLElement).dataset.groupId;
   if (!gid) return;
-  const store = useAppStore();
 
   if (p.type === 'group') {
     const srcGid = p.id.slice(6);
@@ -337,7 +336,6 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
     if (isRef) {
       const refGid = p.id.slice(4);
       if (refGid !== gid) {
-        // 从源组移除（与书签拖拽行为一致：移动而非复制）
         if (p.srcGid && p.srcGid !== DRAG_SRC_DETAIL) removeFromSrcGroup(p.srcGid, p.id);
         addGroupRefToGroup(refGid, gid, e.clientX, e.clientY);
       }
@@ -348,8 +346,9 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
       removeFromSrcGroup(p.srcGid, p.id);
     }
     if (p.srcGid === DRAG_SRC_DETAIL) {
-      const di = store.detailCards.indexOf(p.id);
-      if (di >= 0) store.detailCards.splice(di, 1);
+      const ui = useUIStore()
+      const di = ui.detailCards.indexOf(p.id);
+      if (di >= 0) ui.detailCards.splice(di, 1);
     }
     addToGroupDirect(p.id, gid);
     return;
@@ -360,23 +359,23 @@ function handleDetailCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   e.preventDefault(); e.stopPropagation();
   card.classList.remove('detail-drag-over');
   if (p.type !== 'detail') return;
-  const store = useAppStore();
+  const ui = useUIStore();
   const toIdx = parseInt((card as HTMLElement).dataset.didx!);
   if (_detailDragIdx == null || _detailDragIdx === toIdx) return;
-  const tmp = store.detailCards[_detailDragIdx];
-  store.detailCards[_detailDragIdx] = store.detailCards[toIdx];
-  store.detailCards[toIdx] = tmp;
+  const tmp = ui.detailCards[_detailDragIdx];
+  ui.detailCards[_detailDragIdx] = ui.detailCards[toIdx];
+  ui.detailCards[toIdx] = tmp;
 }
 
 function handleDetailPanelDrop(e: DragEvent, p: DragPayload) {
   e.preventDefault();
   if (p.srcGid === DRAG_SRC_DETAIL) return;
-  const store = useAppStore();
+  const ui = useUIStore();
   if (p.type === 'group') {
-    if (store.detailCards.indexOf(p.id) === -1) store.detailCards.push(p.id);
-    store.detailOpen = true;
+    if (ui.detailCards.indexOf(p.id) === -1) ui.detailCards.push(p.id);
+    ui.detailOpen = true;
   } else {
-    if (p.srcGid) { removeFromSrcGroup(p.srcGid, p.id); store.debouncedSave(); }
+    if (p.srcGid) { removeFromSrcGroup(p.srcGid, p.id); debouncedSaveAppData(); }
     openDetail(p.id);
   }
 }
@@ -384,12 +383,12 @@ function handleDetailPanelDrop(e: DragEvent, p: DragPayload) {
 function handleGridDrop(e: DragEvent, p: DragPayload) {
   e.preventDefault();
   if (!p || p.type === 'group') return;
-  const store = useAppStore();
+  const ui = useUIStore();
   if (p.srcGid === DRAG_SRC_DETAIL) {
-    const di = store.detailCards.indexOf(p.id);
-    if (di >= 0) store.detailCards.splice(di, 1);
+    const di = ui.detailCards.indexOf(p.id);
+    if (di >= 0) ui.detailCards.splice(di, 1);
   } else if (p.srcGid && removeFromSrcGroup(p.srcGid, p.id)) {
-    store.debouncedSave(); toast('已移出组');
+    debouncedSaveAppData(); toast('已移出组');
   }
 }
 
@@ -397,15 +396,15 @@ function handleRailDrop(e: DragEvent, item: Element) {
   e.preventDefault();
   item.classList.remove('rail-drag-over');
   if (!_catDragId) return;
-  const store = useAppStore();
+  const ds = useDataStore();
   const targetId = (item as HTMLElement).dataset.catId;
   if (!targetId || _catDragId === targetId || targetId === CAT_ALL || targetId === CAT_UNCATEGORIZED) return;
-  const srcIdx = store.categories.findIndex(function (c) { return c.id === _catDragId; });
-  const tgtIdx = store.categories.findIndex(function (c) { return c.id === targetId; });
+  const srcIdx = ds.categories.findIndex(function (c) { return c.id === _catDragId; });
+  const tgtIdx = ds.categories.findIndex(function (c) { return c.id === targetId; });
   if (srcIdx < 0 || tgtIdx < 0) return;
-  const src = store.categories.splice(srcIdx, 1)[0];
-  store.categories.splice(tgtIdx, 0, src);
-  store.debouncedSave();
+  const src = ds.categories.splice(srcIdx, 1)[0];
+  ds.categories.splice(tgtIdx, 0, src);
+  debouncedSaveAppData();
 }
 
 function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
@@ -413,18 +412,17 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   item.classList.remove('rail-drag-over');
   const targetCatId = (item as HTMLElement).dataset.catId;
   if (!targetCatId || targetCatId === CAT_ALL) return;
-  const store = useAppStore();
+  const ds = useDataStore();
   const bm = _findBm(p.id);
   if (!bm) return;
   const newCatId = targetCatId === CAT_UNCATEGORIZED ? CAT_UNCATEGORIZED : targetCatId;
   if (bm.categoryId === newCatId) return;
-  store.updateBookmark(bm.id, { categoryId: newCatId });
-  store.debouncedSave();
-  toast('已移动到分类: ' + (store.categories.find(c => c.id === newCatId)?.name || newCatId));
+  ds.updateBookmark(bm.id, { categoryId: newCatId });
+  debouncedSaveAppData();
+  toast('已移动到分类: ' + (ds.categories.find(c => c.id === newCatId)?.name || newCatId));
 }
 
 function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: number) {
-  const store = useAppStore();
   const ed = EditorManager.get(gid);
   if (!ed) return;
   const isRef = bmId && bmId.startsWith('ref:')
@@ -459,7 +457,7 @@ function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: 
     EditorManager.insertAtCoords(gid, html, clientX, clientY);
   }
   saveGroupBody(gid);
-  store.save();
+  saveAppData();
 }
 
 export function useDragDrop() {
