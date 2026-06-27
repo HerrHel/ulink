@@ -6,16 +6,16 @@
 
 /* ---- List entrance animation ---- */
 @keyframes listCardIn{
-  0%{opacity:0;transform:translateY(10px) scaleY(0.96);filter:blur(2px)}
-  60%{opacity:1;filter:blur(0)}
-  100%{opacity:1;transform:translateY(0) scaleY(1);filter:blur(0)}
+  0%{opacity:0;transform:translateY(8px) scaleY(0.97)}
+  60%{opacity:1}
+  100%{opacity:1;transform:translateY(0) scaleY(1)}
 }
 
 /* ---- List: all cards become vertical columns ---- */
 .list-view .card,
 .list-view .group-card{
   height:auto;min-height:56px;
-  padding:10px 14px;
+  padding:8px 12px;
   flex-direction:column;align-items:stretch;
   flex-wrap:nowrap;
   border-radius:var(--radius-lg);
@@ -98,11 +98,14 @@
 
 /* ---- List: notes hidden (shown via preview) ---- */
 .list-view .card-notes{display:none}
+/* 收起时隐藏账户信息 */
+.list-view .card-acct-toggle,
+.list-view .card-acct-body{display:none}
 
 /* Show full notes when expanded, hide preview */
 .list-view .card-expanded .card-notes{
-  display:-webkit-box;-webkit-line-clamp:unset;-webkit-box-orient:vertical;
-  overflow:visible;white-space:pre-wrap;
+  display:block;overflow:visible;white-space:pre-wrap;
+  margin-bottom:0;line-height:1.4;
 }
 .list-view .card-expanded .card-preview{display:none}
 
@@ -208,7 +211,7 @@
 /* ---- List: expanded state ---- */
 .list-view .card-expanded,
 .list-view .group-expanded{
-  height:auto;min-height:56px;
+  height:auto;min-height:82px;
   overflow:hidden;
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover);
@@ -217,7 +220,7 @@
 /* Extra specificity to override base .card rules */
 .list-view .card.card-expanded,
 .list-view .group-card.group-expanded{
-  height:auto;min-height:56px;
+  height:auto;min-height:82px;
   overflow:hidden;
   animation:listExpandIn 0.3s var(--ease-out);
 }
@@ -236,7 +239,8 @@
 .list-view .group-expanded .card-body{
   flex:none;
   overflow:visible;
-  padding:0 80px 10px 0;
+  padding:0 80px 0 0;
+  gap:5px;
 }
 .list-view .card-expanded .card-topline{
   flex-wrap:wrap;
@@ -255,17 +259,17 @@
 .list-view .card-expanded .card-acct-toggle{
   display:inline-flex;font-size:0.78rem;font-weight:600;
   color:var(--text-muted);cursor:default;
-  padding:3px 6px;border-radius:5px;margin:4px 0 2px;
+  padding:3px 6px;border-radius:5px;margin:0;
   pointer-events:none;
 }
 .list-view .card-expanded .card-acct-toggle svg{display:none}
 .list-view .card-expanded .card-acct-body{
-  display:block;
+  display:block;margin-bottom:0;
   max-width:100%;
   animation:listBodyIn 0.25s var(--ease-out);
 }
 .list-view .card-expanded .sub-sites{
-  display:block;
+  display:block;margin-top:0;
   animation:listBodyIn 0.25s var(--ease-out);
 }
 
@@ -276,7 +280,7 @@
   min-height:20px;max-height:400px;overflow-y:auto;overflow-x:hidden;
   font-size:0.85rem;line-height:1.7;
   -webkit-mask-image:none;mask-image:none;
-  color:var(--text);margin:4px 0 0;
+  color:var(--text);margin:0;
   overflow-wrap:anywhere;
   word-break:break-word;
   animation:listBodyIn 0.25s var(--ease-out);
@@ -340,9 +344,8 @@
 .card:nth-child(6),.list-view .card:nth-child(6),.list-view .group-card:nth-child(6){animation-delay:0.18s}
 .card:nth-child(n+7),.list-view .card:nth-child(n+7),.list-view .group-card:nth-child(n+7){animation-delay:0.18s}
 @keyframes cardIn{
-  0%{opacity:0;transform:translateY(14px) scale(0.95);filter:blur(3px)}
-  50%{opacity:1;filter:blur(0)}
-  100%{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}
+  0%{opacity:0;transform:translateY(12px) scale(0.97)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
 }
 .card:hover{
   border-color:var(--border-hover);
@@ -375,12 +378,11 @@
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap:hover::-webkit-scrollbar-thumb{background:var(--border)}
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
-.card-grid:not(.list-view) .grp-scroll-body .group-body{overflow:visible}
-
+.card-grid:not(.list-view) .grp-scroll-body .group-body{overflow:visible;padding:0}
 
 .card-toprow{
   display:flex;align-items:flex-start;gap:10px;
-  margin-bottom:10px;
+  margin-bottom:5px;
 }
 .card-logo{
   flex-shrink:0;cursor:pointer;
@@ -549,7 +551,7 @@
   white-space:nowrap;flex-shrink:0;
 }
 .card-tag:hover{opacity:0.8;transform:translateY(-1px)}
-.tag-custom{background:var(--card-badge-bg);color:var(--card-badge-text);border-color:var(--border-light)}
+.tag-custom{background:var(--surface-hover);color:var(--card-badge-text);border-color:var(--border-light)}
 
 /* Card account toggle */
 .card-acct-toggle{
@@ -563,7 +565,7 @@
 .card-acct-toggle>span{display:contents}
 .card-acct-toggle svg{width:11px;height:11px;transition:transform 0.2s ease}
 .card-acct-toggle.open svg{transform:rotate(90deg)}
-.card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--card-badge-bg);border-radius:var(--radius-base);font-size:0.8rem}
+.card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--surface-hover);border-radius:var(--radius-base);font-size:0.8rem}
 .card-acct-body.show{display:block}
 .acct-row{display:flex;align-items:center;gap:6px;padding:3px 0}
 .acct-row .acct-label{color:var(--text-muted);font-size:0.78rem;width:30px;flex-shrink:0}
@@ -607,6 +609,29 @@
 }
 .card-stat svg{width:12px;height:12px}
 .card-actions{margin-left:auto;display:flex;gap:2px}
+
+/* Grid & focus view: unified card body spacing — owl replaces scattered margins */
+.grid-view .card-body > * + *,
+.focus-view .card-body > * + * {
+  margin-top: 5px;
+}
+.grid-view .card-body .card-notes,
+.focus-view .card-body .card-notes {
+  margin-bottom: 0;
+}
+.grid-view .card-acct-toggle,
+.focus-view .card-acct-toggle {
+  margin-bottom: 0;
+}
+.grid-view .card-acct-body,
+.focus-view .card-acct-body {
+  margin-bottom: 0;
+}
+/* Group card: unified spacing inside scroll-wrap */
+.grid-view .grp-scroll-body .card-scroll-wrap > * + *,
+.focus-view .grp-scroll-body .card-scroll-wrap > * + * {
+  margin-top: 5px;
+}
 
 /* ==================== VIRTUAL SCROLL SKELETON ==================== */
 .vs-ph{

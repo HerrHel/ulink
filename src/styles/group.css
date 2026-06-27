@@ -23,7 +23,7 @@
 .group-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
 .group-card-head{
   display:flex;align-items:flex-start;gap:10px;
-  margin-bottom:10px;
+  margin-bottom:5px;
   cursor:default;
 }
 /* Grid view: header outside scroll area, highest layer */
