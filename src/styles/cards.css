@@ -22,7 +22,7 @@
   box-shadow:var(--shadow-card);
   transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,background-color 0.2s ease,transform 0.3s var(--ease-out);
   border:1px solid var(--border);
-  overflow:clip;
+  overflow:hidden;
 }
 /* Entrance animation — only on non-expanded cards; removed via JS after first play */
 .list-view .card:not(.card-expanded):not(.group-expanded),
@@ -209,7 +209,7 @@
 .list-view .card-expanded,
 .list-view .group-expanded{
   height:auto;min-height:56px;
-  overflow:clip;
+  overflow:hidden;
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover);
   background:var(--surface);
@@ -218,7 +218,7 @@
 .list-view .card.card-expanded,
 .list-view .group-card.group-expanded{
   height:auto;min-height:56px;
-  overflow:clip;
+  overflow:hidden;
   animation:listExpandIn 0.3s var(--ease-out);
 }
 @keyframes listExpandIn{
@@ -325,7 +325,7 @@
   cursor:pointer;
   transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out);
   animation:cardIn 0.32s var(--ease-out) backwards;
-  overflow:clip;
+  overflow:hidden;
   height:232px;
   display:flex;
   flex-direction:column;
@@ -358,15 +358,19 @@
   position:relative;z-index:1;
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
   overscroll-behavior:contain;
-  scrollbar-width:thin;
+  scrollbar-width:thin;scrollbar-color:transparent transparent;
+  transition:scrollbar-color 0.3s;
 }
+.card-body:hover{scrollbar-color:var(--border) transparent}
+/* Webkit scrollbar styling for card body */
 .card-body::-webkit-scrollbar{width:4px}
 .card-body::-webkit-scrollbar-track{background:transparent}
-.card-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.card-body::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
+.card-body:hover::-webkit-scrollbar-thumb{background:var(--border)}
 .card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
-/* 组卡片 grid 视图：标签+正文统一滚动 */
-.card-body.grp-scroll-body{display:flex;flex-direction:column}
-.card-body.grp-scroll-body .group-body{overflow:visible;flex:1 1 0;min-height:0;mask-image:none;-webkit-mask-image:none}
+/* 组卡片：card-body 做 flex 布局 + 统一滚动（含标签+正文+预览） */
+.card-grid:not(.list-view) .card-body:has(.group-body){display:flex;flex-direction:column}
+.card-grid:not(.list-view) .card-body:has(.group-body) .group-body{overflow:visible;flex:1 1 0;min-height:0}
 
 
 .card-toprow{
