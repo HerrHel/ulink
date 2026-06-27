@@ -245,11 +245,11 @@
 .group-body{
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:40px;
   padding:4px 0;
-  font-size:0.875rem;color:var(--text-secondary);
+  font-size:0.85rem;color:var(--text-secondary);
   outline:none;
   line-height:1.7;
 }
-.card-overflow .group-body{
+.group-body.has-fade{
   -webkit-mask-image:var(--mask-fade-bottom);
   mask-image:var(--mask-fade-bottom);
 }

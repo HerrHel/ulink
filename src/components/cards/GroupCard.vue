@@ -95,7 +95,6 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
-import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
 import { editGroup as _editGroup, toggleGroupFocus, saveGroupBody, deleteGroup as _deleteGroup } from '../../composables/domain/useGroup.js'
@@ -108,14 +107,13 @@ const props = defineProps({ group: { type: Object as () => SiblingGroup, require
 const ui = useUIStore()
 const ds = useDataStore()
 
-const cardEl = ref<HTMLElement | null>(null)
+let _cardEl: HTMLElement | null = null
 let _entranceCleanup: (() => void) | null = null
 function setCardEl(el: HTMLElement | null) {
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
-  cardEl.value = el as HTMLElement | null
+  _cardEl = el as HTMLElement | null
   if (el) _entranceCleanup = stripEntranceAnim(el)
 }
-const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 
 const isFocused = computed(() => ui.focusedGroupId === props.group.id)
 const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded)

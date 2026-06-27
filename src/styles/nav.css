@@ -1,6 +1,6 @@
 /* ==================== ICON RAIL ==================== */
 .icon-rail{
-  width:200px;flex-shrink:0;
+  width:176px;flex-shrink:0;
   display:flex;flex-direction:column;
   background:var(--rail-bg);
   border-right:1px solid var(--rail-border);
