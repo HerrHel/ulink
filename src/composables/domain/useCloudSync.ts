@@ -1,18 +1,12 @@
 /**
  * useCloudSync.ts — Queue-based Cloud Sync with Realtime
  *
- * P0 改进：
- * - 操作队列持久化到 IndexedDB（页面崩溃不丢失）
- * - navigator.locks 替代 _syncing 布尔值（避免竞态丢弃）
- * - Supabase Realtime 订阅替代 60s 轮询（秒级同步）
- * - 增量拉取（updated_at_num > lastSyncAt）
- * P2 改进：
- * - 推送前加密敏感字段（E2E AES-256-GCM）
- * - 拉取后解密敏感字段
- * P4 改进：
- * - Realtime 断线自动重连（指数退避）
- * - 重连后 backfill 补全离线期间数据
- * - 连接状态可视化
+ * 职责：同步编排（队列/推送/拉取/合并），注册 Realtime / 生命周期
+ * 分解模块：
+ * - useSyncMapping.ts  — 数据映射（本地 ⇄ 远端）
+ * - useSyncRealtime.ts  — Realtime 订阅管理
+ * - useSyncConflict.ts  — 冲突检测与解决
+ * - useSyncHistory.ts   — 版本历史
  */
 import { ref, computed } from 'vue'
 import { supabase } from '../../lib/supabase.js'
@@ -22,56 +16,32 @@ import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount,
-  type SyncOp, type OpTable,
+  type SyncOp,
 } from '../../stores/storage.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 import {
   toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute,
 } from './useSyncMapping.js'
+import {
+  conflicts, resolveConflict, resolveAllConflicts,
+} from './useSyncConflict.js'
+import {
+  _saveHistory, fetchHistory, restoreFromHistory, _getUserId,
+} from './useSyncHistory.js'
+import {
+  subscribeRealtime, unsubscribeRealtime, realtimeStatus,
+} from './useSyncRealtime.js'
 
 // ── 状态 ──
 const syncStatus = ref<'idle' | 'syncing' | 'success' | 'error'>('idle')
 const lastSyncAt = ref<number>(0)
 const syncError = ref<string | null>(null)
 const autoSync = ref(true)
-const realtimeStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
 
-// ── 冲突检测 ──
-export interface SyncConflict {
-  id: string
-  type: 'bookmark' | 'group' | 'category' | 'attribute'
-  local: unknown
-  remote: unknown
-}
-const conflicts = ref<SyncConflict[]>([])
-const _remoteSnapshots = new Map<string, unknown>()
-
-// ── Realtime ──
-let _channel: ReturnType<typeof supabase.channel> | null = null
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
-let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
-let _reconnectAttempts = 0
-const MAX_RECONNECT_ATTEMPTS = 10
-const BASE_RECONNECT_DELAY = 1000
 
 // ── 辅助函数 ──
-function _getUserId(): string | null {
-  const { user } = useAuth()
-  return user.value?.id ?? null
-}
-
-function _snapshotLocal() {
-  const ds = useDataStore()
-  return {
-    bookmarks: ds.bookmarks.map(b => ({ ...b, attributes: { ...b.attributes } })),
-    siblingGroups: ds.siblingGroups.map(g => ({ ...g, attributes: { ...g.attributes }, bookmarkIds: [...g.bookmarkIds] })),
-    categories: ds.categories.map(c => ({ ...c })),
-    customAttributes: ds.customAttributes.map(a => ({ ...a })),
-  }
-}
-
-// ── navigator.locks 封装 ──
 async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
   if (typeof navigator !== 'undefined' && navigator.locks) {
     return navigator.locks.request(name, { mode: 'exclusive' }, fn)
@@ -79,16 +49,6 @@ async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
   return fn()
 }
 
-// ── 表名映射 ──
-const _tableMap: Record<string, OpTable> = {
-  bookmark: 'bookmarks',
-  group: 'sibling_groups',
-  category: 'categories',
-  attribute: 'custom_attributes',
-}
-
-// ── navigator.locks 封装 ──
-// ── 合并 ops：同 item 的多次操作合并为最终状态 ──
 function _mergeOps(ops: SyncOp[]): SyncOp[] {
   const byItem = new Map<string, SyncOp[]>()
   for (const op of ops) {
@@ -97,38 +57,53 @@ function _mergeOps(ops: SyncOp[]): SyncOp[] {
     list.push(op)
     byItem.set(key, list)
   }
-
   const merged: SyncOp[] = []
   for (const [, itemOps] of byItem) {
     const last = itemOps[itemOps.length - 1]
     if (last.action === 'delete') {
       merged.push(last)
     } else {
-      // upsert：取最后一次的 data，但保留最早的 ts
       merged.push({ ...last, ts: itemOps[0].ts })
     }
   }
   return merged.sort((a, b) => a.ts - b.ts)
 }
 
-// ── 版本历史：保存旧状态 ──
-async function _saveHistory(userId: string, items: Array<{ id: string; type: string; data: Record<string, any> }>) {
-  if (!items.length) return
-  const rows = items.map(i => ({ user_id: userId, item_id: i.id, item_type: i.type, data: i.data }))
-  try {
-    await supabase.from('data_history').insert(rows)
-    // 清理旧历史：每 item 保留最近 10 条
-    const itemIds = [...new Set(rows.map(r => r.item_id))]
-    for (const itemId of itemIds) {
-      const { data } = await supabase.from('data_history')
-        .select('id').eq('user_id', userId).eq('item_id', itemId)
-        .order('created_at', { ascending: false }).range(10, 1000)
-      if (data && data.length) {
-        await supabase.from('data_history').delete().in('id', data.map(r => r.id))
+// ── 智能合并：远端 → 本地 ──
+function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
+  local: T[], remote: T[], type: 'bookmark' | 'group' | 'category' | 'attribute', full = false,
+) {
+  const ds = useDataStore()
+  const localMap = new Map(local.map(i => [i.id, i]))
+
+  for (const rItem of remote) {
+    const lItem = localMap.get(rItem.id)
+    if (!lItem) {
+      local.push(rItem)
+    } else if (ds._dirtyIds.has(rItem.id)) {
+      const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
+      if (remoteNewer && lastSyncAt.value > 0) {
+        if (!conflicts.some(c => c.id === rItem.id)) {
+          conflicts.value.push({
+            id: rItem.id, type,
+            local: JSON.parse(JSON.stringify(lItem)),
+            remote: JSON.parse(JSON.stringify(rItem)),
+          })
+        }
+      }
+    } else if ((rItem.updatedAt || 0) > (lItem.updatedAt || 0)) {
+      Object.assign(lItem, rItem)
+    }
+  }
+
+  if (full) {
+    const remoteIds = new Set(remote.map(r => r.id))
+    for (let i = local.length - 1; i >= 0; i--) {
+      const lItem = local[i]
+      if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && lastSyncAt.value > 0) {
+        local.splice(i, 1)
       }
     }
-  } catch (e) {
-    console.warn('[sync] history save failed:', e)
   }
 }
 
@@ -171,7 +146,6 @@ export function useCloudSync() {
 
     const ops: Array<Omit<SyncOp, 'id' | 'retries'>> = []
 
-    // 书签
     for (const b of ds.bookmarks) {
       if (dirty.has(b.id)) {
         ops.push({
@@ -181,7 +155,6 @@ export function useCloudSync() {
         })
       }
     }
-    // 组
     for (const g of ds.siblingGroups) {
       if (dirty.has(g.id)) {
         ops.push({
@@ -191,7 +164,6 @@ export function useCloudSync() {
         })
       }
     }
-    // 分类
     for (const c of ds.categories) {
       if (dirty.has(c.id)) {
         ops.push({
@@ -201,7 +173,6 @@ export function useCloudSync() {
         })
       }
     }
-    // 属性
     for (const a of ds.customAttributes) {
       if (dirty.has(a.id)) {
         ops.push({
@@ -212,7 +183,6 @@ export function useCloudSync() {
       }
     }
 
-    // 删除
     for (const [id, table] of deleted) {
       ops.push({ action: 'delete', table, itemId: id, data: null, ts: Date.now() })
     }
@@ -237,7 +207,6 @@ export function useCloudSync() {
     syncError.value = null
 
     try {
-      // 版本历史：对更新项保存旧状态
       const ds = useDataStore()
       const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
       for (const op of ops) {
@@ -254,9 +223,8 @@ export function useCloudSync() {
           }
         }
       }
-      _saveHistory(userId, historyItems).catch(() => {}) // fire-and-forget
+      _saveHistory(userId, historyItems).catch(() => {})
 
-      // 构建批量请求
       const tasks: Promise<any>[] = []
       const succeededIds: number[] = []
 
@@ -274,31 +242,23 @@ export function useCloudSync() {
           delete data._userId
           delete data._isNew
 
-          // P2: 推送前加密敏感字段
           const e2e = useE2E()
           const itemType = op.table === 'bookmarks' ? 'bookmark'
             : op.table === 'sibling_groups' ? 'group'
             : op.table === 'categories' ? 'category' : 'attribute'
           const encryptedData = await e2e.encryptItem(itemType as any, data)
 
-          const row = toRemoteRow(
-            itemType,
-            { ...encryptedData, _userId: userId },
-            isNew,
-          )
+          const row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew)
 
           if (isNew || !changedFields) {
-            // 全量 upsert
             tasks.push(
               Promise.resolve(supabase.from(op.table).upsert(row, { onConflict: 'id' }))
                 .then(r => ({ op, result: r }))
             )
           } else {
-            // 增量 update（仅变更字段）
             const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
             for (const f of changedFields) {
               if (f in row && f !== 'id' && f !== 'user_id') partial[f] = row[f]
-              // camelCase → snake_case 映射
               if (f === 'categoryId') partial.category_id = row.category_id
               else if (f === 'parentId') partial.parent_id = row.parent_id
               else if (f === 'useCount') partial.use_count = row.use_count
@@ -320,17 +280,14 @@ export function useCloudSync() {
       const results = await Promise.all(tasks)
       for (const r of results) {
         if (r.result.error) throw r.result.error
-        // 找到对应的 rawOp id
         const rawMatch = rawOps.find(ro => ro.itemId === r.op.itemId && ro.table === r.op.table)
         if (rawMatch?.id != null) succeededIds.push(rawMatch.id)
       }
 
-      // 删除已成功的 ops
       if (succeededIds.length) {
         await removeSyncOps(succeededIds)
         refreshPendingCount()
       }
-      // 清理 newIds 标记
       for (const op of ops) ds._newIds.delete(op.itemId)
 
       lastSyncAt.value = Date.now()
@@ -341,7 +298,6 @@ export function useCloudSync() {
       syncStatus.value = 'error'
       syncError.value = msg
       console.warn('[sync] push failed:', e)
-      // ops 仍在队列中，下次重试
       return false
     }
   }
@@ -368,15 +324,12 @@ export function useCloudSync() {
       for (const r of [catsRes, bmsRes, groupsRes, attrsRes]) { if (r.error) throw r.error }
 
       const ds = useDataStore()
-
-      // P2: 拉取后解密敏感字段
       const e2e = useE2E()
       const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r))
       const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r))
       const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r))
       const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r))
 
-      // 异步解密（不阻塞合并）
       if (e2e.isUnlocked.value) {
         for (const b of remoteBms) await e2e.decryptItem('bookmark', b as any)
         for (const g of remoteGroups) await e2e.decryptItem('group', g as any)
@@ -384,7 +337,6 @@ export function useCloudSync() {
         for (const a of remoteAttrs) await e2e.decryptItem('attribute', a as any)
       }
 
-      // 智能合并
       _mergeIntoLocal(ds.categories, remoteCats, 'category', full)
       _mergeIntoLocal(ds.bookmarks, remoteBms, 'bookmark', full)
       _mergeIntoLocal(ds.siblingGroups, remoteGroups, 'group', full)
@@ -402,177 +354,8 @@ export function useCloudSync() {
     }
   }
 
-  // ── 智能合并：远端 → 本地 ──
-  function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
-    local: T[], remote: T[], type: SyncConflict['type'], full = false,
-  ) {
-    const ds = useDataStore()
-    const localMap = new Map(local.map(i => [i.id, i]))
-
-    for (const rItem of remote) {
-      const lItem = localMap.get(rItem.id)
-      if (!lItem) {
-        // 远端有、本地无 → 新增
-        local.push(rItem)
-      } else if (ds._dirtyIds.has(rItem.id)) {
-        // 本地有未推送修改
-        const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
-        if (remoteNewer && lastSyncAt.value > 0) {
-          // 双向修改冲突
-          const conflictId = `${type}:${rItem.id}`
-          if (!_remoteSnapshots.has(conflictId)) {
-            _remoteSnapshots.set(conflictId, JSON.parse(JSON.stringify(rItem)))
-            conflicts.value.push({
-              id: rItem.id, type,
-              local: JSON.parse(JSON.stringify(lItem)),
-              remote: JSON.parse(JSON.stringify(rItem)),
-            })
-          }
-        }
-        // 保留本地
-      } else if ((rItem.updatedAt || 0) > (lItem.updatedAt || 0)) {
-        // 远端更新，本地未修改 → 采用远端
-        Object.assign(lItem, rItem)
-      }
-    }
-
-    // 仅全量拉取时执行删除逻辑（增量拉取结果不包含未变更项，不能作为删除依据）
-    if (full) {
-      const remoteIds = new Set(remote.map(r => r.id))
-      for (let i = local.length - 1; i >= 0; i--) {
-        const lItem = local[i]
-        if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && lastSyncAt.value > 0) {
-          local.splice(i, 1)
-        }
-      }
-    }
-  }
-
-  // ── Realtime 订阅 ──
-  async function _handleRealtimeChange(payload: any, type: 'bookmark' | 'group' | 'category' | 'attribute') {
-    const { eventType, new: newRow, old: oldRow } = payload
-    const ds = useDataStore()
-
-    if (eventType === 'DELETE') {
-      const id = oldRow?.id
-      if (!id || ds._dirtyIds.has(id)) return
-      // 从本地移除
-      if (type === 'bookmark') { const idx = ds.bookmarks.findIndex(b => b.id === id); if (idx >= 0) ds.bookmarks.splice(idx, 1) }
-      else if (type === 'group') { const idx = ds.siblingGroups.findIndex(g => g.id === id); if (idx >= 0) ds.siblingGroups.splice(idx, 1) }
-      else if (type === 'category') { const idx = ds.categories.findIndex(c => c.id === id); if (idx >= 0) ds.categories.splice(idx, 1) }
-      else { const idx = ds.customAttributes.findIndex(a => a.id === id); if (idx >= 0) ds.customAttributes.splice(idx, 1) }
-      return
-    }
-
-    // INSERT / UPDATE
-    const row = newRow
-    if (!row || ds._dirtyIds.has(row.id)) return
-
-    // P2: 解密后再合并
-    const e2e = useE2E()
-
-    if (type === 'bookmark') {
-      const mapped = fromRemoteBookmark(row)
-      if (e2e.isUnlocked.value) await e2e.decryptItem('bookmark', mapped as any)
-      const idx = ds.bookmarks.findIndex(b => b.id === mapped.id)
-      if (idx >= 0) Object.assign(ds.bookmarks[idx], mapped)
-      else ds.bookmarks.push(mapped)
-    } else if (type === 'group') {
-      const mapped = fromRemoteGroup(row)
-      if (e2e.isUnlocked.value) await e2e.decryptItem('group', mapped as any)
-      const idx = ds.siblingGroups.findIndex(g => g.id === mapped.id)
-      if (idx >= 0) Object.assign(ds.siblingGroups[idx], mapped)
-      else ds.siblingGroups.push(mapped)
-    } else if (type === 'category') {
-      const mapped = fromRemoteCategory(row)
-      if (e2e.isUnlocked.value) await e2e.decryptItem('category', mapped as any)
-      const idx = ds.categories.findIndex(c => c.id === mapped.id)
-      if (idx >= 0) Object.assign(ds.categories[idx], mapped)
-      else ds.categories.push(mapped)
-    } else {
-      const mapped = fromRemoteAttribute(row)
-      if (e2e.isUnlocked.value) await e2e.decryptItem('attribute', mapped as any)
-      const idx = ds.customAttributes.findIndex(a => a.id === mapped.id)
-      if (idx >= 0) Object.assign(ds.customAttributes[idx], mapped)
-      else ds.customAttributes.push(mapped)
-    }
-  }
-
-  function _scheduleReconnect() {
-    if (_reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      console.warn('[realtime] max reconnect attempts reached')
-      realtimeStatus.value = 'error'
-      return
-    }
-    const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, _reconnectAttempts), 30000)
-    _reconnectAttempts++
-    console.warn(`[realtime] reconnecting in ${delay}ms (attempt ${_reconnectAttempts})`)
-    _reconnectTimer = setTimeout(() => {
-      _reconnectTimer = null
-      unsubscribeRealtime()
-      subscribeRealtime()
-    }, delay)
-  }
-
-  function subscribeRealtime() {
-    const userId = _getUserId()
-    if (!userId || _channel) return
-
-    realtimeStatus.value = 'connecting'
-    _channel = supabase.channel('db-changes')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'bookmarks', filter: `user_id=eq.${userId}` },
-        (p) => _handleRealtimeChange(p, 'bookmark'))
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'sibling_groups', filter: `user_id=eq.${userId}` },
-        (p) => _handleRealtimeChange(p, 'group'))
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${userId}` },
-        (p) => _handleRealtimeChange(p, 'category'))
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'custom_attributes', filter: `user_id=eq.${userId}` },
-        (p) => _handleRealtimeChange(p, 'attribute'))
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.warn('[realtime] subscribed')
-          realtimeStatus.value = 'connected'
-          _reconnectAttempts = 0
-          // 重连后 backfill 补全离线期间数据
-          if (lastSyncAt.value > 0) {
-            _withLock('linkvault-sync', _pullChanges).catch(() => {})
-          }
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('[realtime] channel error')
-          realtimeStatus.value = 'error'
-          _scheduleReconnect()
-        }
-        if (status === 'TIMED_OUT') {
-          console.warn('[realtime] timed out')
-          realtimeStatus.value = 'error'
-          _scheduleReconnect()
-        }
-        if (status === 'CLOSED') {
-          realtimeStatus.value = 'disconnected'
-          // 非主动关闭时自动重连
-          if (isLoggedIn.value) _scheduleReconnect()
-        }
-      })
-  }
-
-  function unsubscribeRealtime() {
-    if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null }
-    _reconnectAttempts = 0
-    realtimeStatus.value = 'disconnected'
-    if (_channel) {
-      supabase.removeChannel(_channel)
-      _channel = null
-    }
-  }
-
   // ── 公共 API ──
 
-  /** 防抖同步：save 时调用，把 dirtyIds → ops_queue → 3s 后 push */
   function debouncedSync() {
     if (!autoSync.value || !isLoggedIn.value) return
     _enqueueDirtyAsOps()
@@ -583,7 +366,6 @@ export function useCloudSync() {
     }, 3000)
   }
 
-  /** 手动全量同步：push → pull */
   async function fullSync(): Promise<boolean> {
     _enqueueDirtyAsOps()
     return _withLock('linkvault-sync', async () => {
@@ -593,15 +375,12 @@ export function useCloudSync() {
     })
   }
 
-  /** 首次登录后初始化同步 */
   async function initialSync(): Promise<void> {
     if (_initialized || !isLoggedIn.value) return
     _initialized = true
 
     await _withLock('linkvault-sync', async () => {
-      // 首次同步：全量拉取（含删除逻辑）
       await _pullChanges(true)
-      // 把本地所有数据入队推送
       const ds = useDataStore()
       const userId = _getUserId()
       if (!userId) return
@@ -624,18 +403,16 @@ export function useCloudSync() {
       await _pushFromQueue()
     })
 
-    subscribeRealtime()
+    subscribeRealtime(_pullChanges)
     refreshPendingCount()
   }
 
-  /** 离线恢复 */
   function _onOnline() {
     if (!isLoggedIn.value) return
     _enqueueDirtyAsOps()
     _withLock('linkvault-sync', _pushFromQueue).then(() => _pullChanges())
   }
 
-  /** 切回标签页 */
   function _onVisibilityChange() {
     if (document.visibilityState !== 'visible' || !isLoggedIn.value) return
     _withLock('linkvault-sync', async () => {
@@ -647,11 +424,10 @@ export function useCloudSync() {
     })
   }
 
-  /** 初始化事件监听 */
   function initOnlineListener() {
     window.addEventListener('online', _onOnline)
     document.addEventListener('visibilitychange', _onVisibilityChange)
-    if (isLoggedIn.value) subscribeRealtime()
+    if (isLoggedIn.value) subscribeRealtime(_pullChanges)
   }
 
   function destroyOnlineListener() {
@@ -666,75 +442,7 @@ export function useCloudSync() {
     syncStatus.value = 'idle'
     syncError.value = null
     conflicts.value = []
-    _remoteSnapshots.clear()
     unsubscribeRealtime()
-  }
-
-  // ── 冲突解决 ──
-  function resolveConflict(id: string, keepLocal: boolean) {
-    const idx = conflicts.value.findIndex(c => c.id === id)
-    if (idx < 0) return
-    const conflict = conflicts.value[idx]
-    if (!keepLocal) {
-      const remoteData = conflict.remote as Record<string, unknown>
-      const ds = useDataStore()
-      if (conflict.type === 'bookmark') ds.updateBookmark(id, remoteData as Partial<Bookmark>)
-      else if (conflict.type === 'group') ds.updateGroup(id, remoteData as Partial<SiblingGroup>)
-      else if (conflict.type === 'category') { const cat = ds.categories.find(c => c.id === id); if (cat) Object.assign(cat, remoteData) }
-      else if (conflict.type === 'attribute') { const attr = ds.customAttributes.find(a => a.id === id); if (attr) Object.assign(attr, remoteData) }
-      saveAppData()
-    }
-    _remoteSnapshots.delete(`${conflict.type}:${id}`)
-    conflicts.value.splice(idx, 1)
-  }
-
-  function resolveAllConflicts(keepLocal: boolean) {
-    for (let i = conflicts.value.length - 1; i >= 0; i--) {
-      resolveConflict(conflicts.value[i].id, keepLocal)
-    }
-  }
-
-  // ── 版本历史 ──
-  async function fetchHistory(itemId: string): Promise<Array<{ id: number; data: unknown; created_at: string }>> {
-    const userId = _getUserId()
-    if (!userId) return []
-    const { data, error } = await supabase.from('data_history')
-      .select('id, data, created_at').eq('user_id', userId).eq('item_id', itemId)
-      .order('created_at', { ascending: false }).limit(10)
-    if (error) { console.warn('[history] fetch failed:', error); return [] }
-    return data || []
-  }
-
-  async function restoreFromHistory(historyId: number, itemId: string, itemType: 'bookmark' | 'group'): Promise<boolean> {
-    const userId = _getUserId()
-    if (!userId) return false
-    const { data, error } = await supabase.from('data_history')
-      .select('data').eq('id', historyId).eq('user_id', userId).single()
-    if (error || !data) { console.warn('[history] fetch version failed:', error); return false }
-    const ds = useDataStore()
-    const histData = data.data as Record<string, unknown>
-    if (itemType === 'bookmark') {
-      ds.updateBookmark(itemId, {
-        title: histData.title as string, url: histData.url as string,
-        username: histData.username as string, password: histData.password as string,
-        notes: histData.notes as string, icon: histData.icon as string,
-        categoryId: histData.categoryId as string, parentId: histData.parentId as string | null,
-        order: histData.order as number, useCount: histData.useCount as number,
-        attributes: histData.attributes as Record<string, boolean>,
-        isExpanded: histData.isExpanded as boolean,
-      })
-    } else {
-      ds.updateGroup(itemId, {
-        name: histData.name as string, categoryId: histData.categoryId as string,
-        icon: histData.icon as string, order: histData.order as number,
-        isExpanded: histData.isExpanded as boolean,
-        attributes: histData.attributes as Record<string, boolean>,
-        bookmarkIds: histData.bookmarkIds as string[],
-        notes: histData.notes as string, useCount: histData.useCount as number,
-      })
-    }
-    saveAppData()
-    return true
   }
 
   // ── 公开分享 ──
@@ -772,8 +480,9 @@ export function useCloudSync() {
     pushToCloud: _pushFromQueue, pullFromCloud: _pullChanges, fullSync,
     debouncedSync, initialSync, resetSyncState,
     initOnlineListener, destroyOnlineListener,
-    subscribeRealtime, unsubscribeRealtime,
-    fetchHistory, restoreFromHistory,
+    subscribeRealtime: () => subscribeRealtime(_pullChanges), unsubscribeRealtime,
+    fetchHistory: (itemId: string) => fetchHistory(itemId),
+    restoreFromHistory: (historyId: number, itemId: string, itemType: 'bookmark' | 'group') => restoreFromHistory(historyId, itemId, itemType),
     setGroupPublic, fetchPublicGroup,
   }
 }
