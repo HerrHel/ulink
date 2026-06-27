@@ -1,5 +1,6 @@
 <template>
-  <div class="detail-panel" :class="{ open: isOpen, swiping: isSwiping }" id="detailPanel">
+  <div ref="detailPanelRef" class="detail-panel" :class="{ open: isOpen, swiping: isSwiping }"
+       :style="translateY ? { transform: `translateY(${translateY}px)` } : undefined" id="detailPanel">
     <div class="detail-drag-handle" id="detailDragHandle"></div>
     <div class="detail-search" id="detailSearchWrap" v-show="isOpen && entries.length > 0">
       <input type="text" class="detail-search-input" id="detailSearch"
@@ -92,6 +93,7 @@ import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.
 const ui = useUIStore()
 const ds = useDataStore()
 const searchQuery = ref('')
+const detailPanelRef = ref<HTMLElement | null>(null)
 const decodedPasswords = ref<Record<string, string>>({})
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
@@ -139,6 +141,7 @@ watch(entries, () => nextTick(decodeAllPasswords))
 
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
 const isSwiping = ref(false)
+const translateY = ref(0)
 let _swipeStartY = 0
 function onSwipeStart(e: TouchEvent) {
   if (!isMobile() || !ui.detailOpen) return
@@ -151,23 +154,21 @@ function onSwipeMove(e: TouchEvent) {
   if (dy > 0) {
     e.preventDefault()
     isSwiping.value = true
-    const panel = document.getElementById('detailPanel')
-    if (panel) panel.style.transform = `translateY(${dy}px)`
+    translateY.value = dy
   }
 }
 function onSwipeEnd() {
   if (!isSwiping.value) { _swipeStartY = 0; return }
-  const panel = document.getElementById('detailPanel')
+  const panel = detailPanelRef.value
   const panelHeight = panel ? panel.offsetHeight : 300
-  const currentY = panel ? parseFloat(panel.style.transform.replace(/[^-\d.]/g, '')) || 0 : 0
-  if (currentY > panelHeight * 0.3) { ui.detailOpen = false; ui.detailCards.splice(0) }
-  if (panel) panel.style.transform = ''
+  if (translateY.value > panelHeight * 0.3) { ui.detailOpen = false; ui.detailCards.splice(0) }
+  translateY.value = 0
   isSwiping.value = false
   _swipeStartY = 0
 }
 
 onMounted(() => {
-  const el = document.getElementById('detailPanel')
+  const el = detailPanelRef.value
   if (el) {
     el.addEventListener('touchstart', onSwipeStart, { passive: true })
     el.addEventListener('touchmove', onSwipeMove, { passive: false })
@@ -175,7 +176,7 @@ onMounted(() => {
   }
 })
 onUnmounted(() => {
-  const el = document.getElementById('detailPanel')
+  const el = detailPanelRef.value
   if (el) {
     el.removeEventListener('touchstart', onSwipeStart)
     el.removeEventListener('touchmove', onSwipeMove)

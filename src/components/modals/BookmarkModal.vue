@@ -3,7 +3,7 @@
     <div class="modal">
       <div class="modal-head">
         <h2>{{ bmForm.isEdit ? '编辑书签' : bmForm.addToGroupMode ? '新建书签并添加到组' : bmForm.parentId ? '添加子书签' : '添加书签' }}</h2>
-        <button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button>
+        <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
       </div>
       <div class="modal-body">
         <div class="form-group">

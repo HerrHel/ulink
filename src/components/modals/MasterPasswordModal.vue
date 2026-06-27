@@ -3,7 +3,7 @@
     <div class="modal modal-md">
       <div class="modal-head">
         <h2>{{ hasMasterPassword ? '验证主密码' : '设置主密码' }}</h2>
-        <button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button>
+        <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
       </div>
       <div class="modal-body">
         <p class="modal-hint">

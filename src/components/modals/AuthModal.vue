@@ -3,7 +3,7 @@
     <div class="modal modal-md">
       <div class="modal-head">
         <h2>{{ step === 'email' ? '登录 / 注册' : '输入验证码' }}</h2>
-        <button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button>
+        <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
       </div>
       <div class="modal-body">
         <!-- Step 1: 输入邮箱 -->

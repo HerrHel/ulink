@@ -1,7 +1,7 @@
 <template>
   <header class="panel-header" @dblclick="onDblClick">
     <div class="header-left">
-      <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" title="菜单">
+      <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" title="菜单" aria-label="菜单">
         <span v-html="I.hamburger"></span>
       </button>
       <!-- Focus mode -->
@@ -31,25 +31,25 @@
       <SearchSuggest />
     </div>
     <div class="header-right">
-      <button class="search-toggle-btn" id="searchToggleBtn" title="搜索">
+      <button class="search-toggle-btn" id="searchToggleBtn" title="搜索" aria-label="搜索">
         <span v-html="I.search"></span>
       </button>
       <template v-if="ui.focusedGroupId">
-        <button class="ft-sb-btn" @click="$emit('focus-edit-group')" title="编辑组">
+        <button class="ft-sb-btn" @click="$emit('focus-edit-group')" title="编辑组" aria-label="编辑组">
           <span v-html="I.edit"></span>
         </button>
-        <button class="ft-sb-btn" @click="$emit('focus-share-group')" title="分享组">
+        <button class="ft-sb-btn" @click="$emit('focus-share-group')" title="分享组" aria-label="分享组">
           <span v-html="I.share"></span>
         </button>
       </template>
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
-        <button class="lt-btn" id="btnSettings" @click="toggleSettings" title="设置">
+        <button class="lt-btn" id="btnSettings" @click="toggleSettings" title="设置" aria-label="设置">
             <span v-html="I.settings" class="icon-sm"></span>
           <span v-if="auth.isLoggedIn.value" class="header-sync-dot" :class="syncDotClass" :title="sync.syncLabel.value"></span>
         </button>
         <SettingsPanel />
       </span>
-      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" title="右侧辅助栏">
+      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" title="右侧辅助栏" aria-label="右侧辅助栏">
         <span v-html="I.panel" class="icon-sm"></span>
       </button>
     </div>

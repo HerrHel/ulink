@@ -1,7 +1,7 @@
 <template>
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="编辑组" :class="{ open: store.groupEditOpen }" @click.self="onMaskClick">
     <div class="modal">
-      <div class="modal-head"><h2>编辑组</h2><button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button></div>
+      <div class="modal-head"><h2>编辑组</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
         <div class="form-group"><label class="form-label" for="geName">组名称</label><input type="text" class="form-input" id="geName" ref="geNameRef" v-model="geForm.name" placeholder="组名称"></div>
         <div class="form-group"><label class="form-label" for="geCatId">分类</label><select class="form-select" id="geCatId" v-model="geForm.catId"><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>

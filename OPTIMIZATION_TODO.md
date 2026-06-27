@@ -1,7 +1,7 @@
 # LinkVault 代码优化待办清单
 
 > 最后更新：2026-06-27
-> 已完成 32 轮优化，累计修复 98 项问题
+> 已完成 33 轮优化，累计修复 101 项问题
 
 ---
 
@@ -46,10 +46,10 @@ const ds = useDataStore()
 
 **原因**：通用字段映射器需访问任意属性，已加 `eslint-disable` 注释。
 
-**可能的改进方案**：
-- 定义 `RemoteBookmarkRow`, `RemoteGroupRow` 等具体接口
-- 使用泛型 + 条件类型根据 `type` 参数推断返回类型
-- 风险：改动涉及同步逻辑，需充分测试
+**改进方案**：
+~~定义 `RemoteBookmarkRow`, `RemoteGroupRow` 等具体接口~~
+~~使用泛型 + 条件类型根据 `type` 参数推断返回类型~~
+- **✅ 已完成**：定义了 `RemoteBookmarkRow`/`RemoteGroupRow`/`RemoteCategoryRow`/`RemoteAttributeRow` 接口，用函数重载替代 `Record<string, any>`，清理了未使用的 `isNew` 参数
 
 ---
 
@@ -86,11 +86,12 @@ const ds = useDataStore()
 
 ## 六、已完成的优化摘要
 
-### 类型安全（4 轮）
+### 类型安全（5 轮）
 - ✅ 消除 25+ 处 `as any` 断言 → 0 处
-- ✅ 消除 22+ 处 `: any` 类型 → 4 处（仅 `_toRemoteRow`）
+- ✅ 消除 22+ 处 `: any` 类型 → 0 处（`_toRemoteRow` 最后 4 处已完成）
 - ✅ 消除 2 处不安全 `as` 类型断言 → 0 处
 - ✅ 添加 E2E canary 数据运行时验证
+- ✅ 定义 `RemoteBookmarkRow`/`RemoteGroupRow`/`RemoteCategoryRow`/`RemoteAttributeRow` 接口，函数重载增强类型安全
 
 ### 代码质量（4 轮）
 - ✅ 合并 4 处重复函数定义 → 0 处
@@ -107,6 +108,14 @@ const ds = useDataStore()
 - ✅ 26/26 个 Vue 组件迁移为直接使用子 Store（最后 9 个全部完成）
 - ✅ 提取 `saveAppData()`, `debouncedSaveAppData()`, `getStorageInfo()` 独立函数
 - ✅ 创建 `useSyncDotClass` 共享 composable
+
+### 可访问性（1 轮）
+- ✅ 所有模态框补充 `role="dialog"` + `aria-modal="true"`
+- ✅ Modal 关闭按钮补充 `aria-label`
+- ✅ AppHeader 图标按钮补充 `aria-label`
+
+### 代码质量（+1 轮）
+- ✅ `DetailPanel.vue` swipe-to-dismiss 从 DOM 操作改为 reactive `translateY` ref
 
 ### 测试
 - ✅ 全量测试 155/155 通过，无回归

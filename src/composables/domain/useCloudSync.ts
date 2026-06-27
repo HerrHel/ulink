@@ -94,50 +94,83 @@ const _tableMap: Record<string, OpTable> = {
   attribute: 'custom_attributes',
 }
 
+// ── 远端行类型定义 ──
+interface RemoteBookmarkRow {
+  id: string; user_id: string; title: string; url: string
+  username: string; password: string; notes: string; icon: string
+  category_id: string; parent_id: string | null
+  order: number; use_count: number; attributes: Record<string, boolean>
+  is_expanded: boolean; created_at_num: number; updated_at_num: number
+  deleted_at: string | null
+}
+interface RemoteGroupRow {
+  id: string; user_id: string; name: string; category_id: string
+  icon: string; order: number; is_expanded: boolean
+  attributes: Record<string, boolean>; bookmark_ids: string[]
+  notes: string; use_count: number; is_public: boolean
+  updated_at_num: number; deleted_at: string | null
+}
+interface RemoteCategoryRow {
+  id: string; user_id: string; name: string; icon: string; color: string
+  updated_at_num: number; deleted_at: string | null
+}
+interface RemoteAttributeRow {
+  id: string; user_id: string; name: string; type: string
+  updated_at_num: number; deleted_at: string | null
+}
+
 // ── 字段名映射（本地 camelCase → 远端 snake_case）──
-function _toRemoteRow(type: string, item: Record<string, any>, isNew: boolean): Record<string, any> {
+function _toRemoteRow(type: 'bookmark', item: Record<string, unknown>, _isNew: boolean): RemoteBookmarkRow
+function _toRemoteRow(type: 'group', item: Record<string, unknown>, _isNew: boolean): RemoteGroupRow
+function _toRemoteRow(type: 'category', item: Record<string, unknown>, _isNew: boolean): RemoteCategoryRow
+function _toRemoteRow(type: 'attribute', item: Record<string, unknown>, _isNew: boolean): RemoteAttributeRow
+function _toRemoteRow(type: string, item: Record<string, unknown>): RemoteRow {
   const now = Date.now()
   if (type === 'bookmark') {
-    const row: Record<string, any> = {
-      id: item.id, user_id: item._userId,
-      title: item.title, url: item.url,
-      username: item.username, password: JSON.stringify(item.password),
-      notes: item.notes, icon: item.icon,
-      category_id: item.categoryId, parent_id: item.parentId,
-      order: item.order, use_count: item.useCount,
-      attributes: item.attributes, is_expanded: item.isExpanded,
-      created_at_num: item.createdAt, updated_at_num: item.updatedAt || now,
-      deleted_at: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
+    const row: RemoteBookmarkRow = {
+      id: item.id as string, user_id: item._userId as string,
+      title: item.title as string, url: item.url as string,
+      username: (item.username as string) || '', password: JSON.stringify(item.password),
+      notes: (item.notes as string) || '', icon: (item.icon as string) || '',
+      category_id: item.categoryId as string, parent_id: (item.parentId as string) || null,
+      order: (item.order as number) || 0, use_count: (item.useCount as number) || 0,
+      attributes: (item.attributes as Record<string, boolean>) || {},
+      is_expanded: !!item.isExpanded,
+      created_at_num: item.createdAt as number,
+      updated_at_num: (item.updatedAt as number) || now,
+      deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
     }
     return row
   }
   if (type === 'group') {
     return {
-      id: item.id, user_id: item._userId,
-      name: item.name, category_id: item.categoryId,
-      icon: item.icon, order: item.order, is_expanded: item.isExpanded,
-      attributes: item.attributes, bookmark_ids: item.bookmarkIds,
-      notes: item.notes, use_count: item.useCount,
-      is_public: item.isPublic || false,
-      updated_at_num: item.updatedAt || now,
-      deleted_at: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
-    }
+      id: item.id as string, user_id: item._userId as string,
+      name: item.name as string, category_id: item.categoryId as string,
+      icon: (item.icon as string) || '', order: (item.order as number) || 0,
+      is_expanded: !!item.isExpanded,
+      attributes: (item.attributes as Record<string, boolean>) || {},
+      bookmark_ids: (item.bookmarkIds as string[]) || [],
+      notes: (item.notes as string) || '', use_count: (item.useCount as number) || 0,
+      is_public: !!(item as { isPublic?: boolean }).isPublic,
+      updated_at_num: (item.updatedAt as number) || now,
+      deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
+    } satisfies RemoteGroupRow
   }
   if (type === 'category') {
     return {
-      id: item.id, user_id: item._userId,
-      name: item.name, icon: item.icon, color: item.color,
-      updated_at_num: item.updatedAt || now,
-      deleted_at: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
-    }
+      id: item.id as string, user_id: item._userId as string,
+      name: item.name as string, icon: (item.icon as string) || '',
+      color: (item.color as string) || '',
+      updated_at_num: (item.updatedAt as number) || now,
+      deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
+    } satisfies RemoteCategoryRow
   }
-  // attribute
   return {
-    id: item.id, user_id: item._userId,
-    name: item.name, type: item.type,
-    updated_at_num: item.updatedAt || now,
-    deleted_at: item.deletedAt ? new Date(item.deletedAt).toISOString() : null,
-  }
+    id: item.id as string, user_id: item._userId as string,
+    name: item.name as string, type: (item.type as string) || 'boolean',
+    updated_at_num: (item.updatedAt as number) || now,
+    deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
+  } satisfies RemoteAttributeRow
 }
 
 // ── 从远端行映射回本地类型 ──

@@ -1,7 +1,7 @@
 <template>
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="属性管理" :class="{ open: store.attrModalOpen }" @click.self="onClose">
     <div class="modal">
-      <div class="modal-head"><h2>管理属性</h2><button class="modal-close" @click="onClose" title="关闭" v-html="I.close"></button></div>
+      <div class="modal-head"><h2>管理属性</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
         <div class="flex-center gap-2 mb-3">
           <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" placeholder="属性名称" aria-label="属性名称" @keydown.enter="onAddAttr">

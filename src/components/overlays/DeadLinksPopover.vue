@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" :class="{ open: visible }" @click.self="close">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="死链检测" :class="{ open: visible }" @click.self="close">
     <div class="modal modal-md" @click.stop>
       <!-- 标签切换 + 操作栏 -->
       <div class="modal-head">
