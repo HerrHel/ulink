@@ -357,10 +357,26 @@
 .card-body{
   position:relative;z-index:1;
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:transparent transparent;
+  transition:scrollbar-color 0.12s;
 }
-/* 组卡片：card-body 做 flex 布局 + 统一滚动（含标签+正文+预览） */
-.card-grid:not(.list-view) .card-body:has(.group-body){display:flex;flex-direction:column}
-.card-grid:not(.list-view) .card-body:has(.group-body) .group-body{overflow:visible;flex:1 1 0;min-height:0}
+.card-body:hover{scrollbar-color:var(--border) transparent}
+.card-body::-webkit-scrollbar{width:4px}
+.card-body::-webkit-scrollbar-track{background:transparent}
+.card-body::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
+.card-body:hover::-webkit-scrollbar-thumb{background:var(--border)}
+.card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
+/* grp-scroll-body: 非列表模式的组卡片统一滚动容器 */
+.card-grid:not(.list-view) .grp-scroll-body{display:flex;flex-direction:column;overflow:hidden}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;scrollbar-width:thin;scrollbar-color:transparent transparent;transition:scrollbar-color 0.12s}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap:hover{scrollbar-color:var(--border) transparent}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar{width:4px}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-track{background:transparent}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap:hover::-webkit-scrollbar-thumb{background:var(--border)}
+.card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
+.card-grid:not(.list-view) .grp-scroll-body .group-body{overflow:visible}
 
 
 .card-toprow{

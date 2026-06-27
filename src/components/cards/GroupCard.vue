@@ -13,11 +13,13 @@
         </div>
       </div>
       <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
-        <div class="card-tags" v-if="tagNames.length">
-          <span class="card-tag tag-custom" v-for="t in tagNames" :key="t">{{ t }}</span>
+        <div class="card-scroll-wrap">
+          <div class="card-tags" v-if="tagNames.length">
+            <span class="card-tag tag-custom" v-for="t in tagNames" :key="t">{{ t }}</span>
+          </div>
+          <GroupEditor :groupId="group.id" />
+          <div class="card-preview" v-if="previewText">{{ previewText }}</div>
         </div>
-        <GroupEditor :groupId="group.id" />
-        <div class="card-preview" v-if="previewText">{{ previewText }}</div>
       </div>
     </div>
     <div class="focus-toolbar-side">
@@ -65,11 +67,13 @@
       </div>
     </div>
     <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
-      <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
-        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+      <div class="card-scroll-wrap">
+        <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
+          <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+        </div>
+        <GroupEditor :groupId="group.id" />
+        <div class="card-preview" v-if="previewText">{{ previewText }}</div>
       </div>
-      <GroupEditor :groupId="group.id" />
-      <div class="card-preview" v-if="previewText">{{ previewText }}</div>
     </div>
     <div class="card-foot">
       <span class="card-stat">{{ group.bookmarkIds?.length || 0 }} 个书签</span>
