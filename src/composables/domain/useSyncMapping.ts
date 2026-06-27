@@ -45,6 +45,7 @@ export type RemoteRow = RemoteBookmarkRow | RemoteGroupRow | RemoteCategoryRow |
 
 // ── 字段名映射（本地 camelCase → 远端 snake_case）──
 
+/* eslint-disable no-redeclare */
 export function toRemoteRow(type: 'bookmark', item: Record<string, unknown>, _isNew: boolean): RemoteBookmarkRow
 export function toRemoteRow(type: 'group', item: Record<string, unknown>, _isNew: boolean): RemoteGroupRow
 export function toRemoteRow(type: 'category', item: Record<string, unknown>, _isNew: boolean): RemoteCategoryRow

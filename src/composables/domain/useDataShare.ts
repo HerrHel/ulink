@@ -4,7 +4,7 @@
  */
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
-import { toast, toastWithUndo } from '../../lib/toast.js'
+import { toast } from '../../lib/toast.js'
 import { copyToClipboard } from '../../utils.js'
 import { supabase } from '../../lib/supabase.js'
 import { useCloudSync } from './useCloudSync.js'

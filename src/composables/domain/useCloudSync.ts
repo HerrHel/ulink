@@ -24,7 +24,7 @@ import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount,
   type SyncOp, type OpTable,
 } from '../../stores/storage.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
+import type { Bookmark, SiblingGroup } from '../../types.js'
 import {
   toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute,
 } from './useSyncMapping.js'
