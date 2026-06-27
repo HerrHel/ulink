@@ -2,8 +2,8 @@
  * useDataShare — 分享组与 Fork
  * 从 useDataIO 拆分，A4: 公开分享链接，A5: Fork 公开组
  */
-import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { copyToClipboard } from '../../utils.js'
 import { supabase } from '../../lib/supabase.js'
@@ -13,8 +13,8 @@ import type { Bookmark, SiblingGroup } from '../../types.js'
 // ── 分享组（A4: 公开分享链接，升级为数据库持久化 + URL 路由）──
 
 export async function shareGroup(gid: string) {
-  const store = useAppStore()
-  const sg = store.groupMap[gid]
+  const ds = useDataStore()
+  const sg = ds.groupMap[gid]
   if (!sg) { toast('组不存在', false); return }
 
   const sync = useCloudSync()
@@ -34,10 +34,10 @@ export async function shareGroup(gid: string) {
 }
 
 function _shareGroupLegacy(gid: string) {
-  const store = useAppStore()
-  const sg = store.groupMap[gid]
+  const ds = useDataStore()
+  const sg = ds.groupMap[gid]
   if (!sg) return
-  const bms = sg.bookmarkIds.map(bid => store.bookmarkMap[bid]).filter(Boolean).map(b => {
+  const bms = sg.bookmarkIds.map(bid => ds.bookmarkMap[bid]).filter(Boolean).map(b => {
     const { password: _, username: __, ...safe } = b; return safe
   })
   const payload = { v: 1, group: { ...sg }, bookmarks: bms }
@@ -60,7 +60,7 @@ export function detectShareRoute(): string | null {
 }
 
 export function importFromURL(): boolean {
-  const store = useAppStore()
+  const ds = useDataStore()
   const hash = location.hash
   if (!hash || !hash.startsWith('#share=')) return false
   try {
@@ -68,13 +68,13 @@ export function importFromURL(): boolean {
     const payload = JSON.parse(json)
     if (!payload.group?.id) { toast('分享数据格式错误', false); return true }
     let imported = 0
-    const existingUrls = new Set(store.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
+    const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
     const bookmarks = Array.isArray(payload.bookmarks) ? payload.bookmarks : []
     for (const b of bookmarks) {
       if (!b.id || !b.url) continue
-      if (store.bookmarkMap[b.id]) continue
+      if (ds.bookmarkMap[b.id]) continue
       if (b.url && existingUrls.has(b.url.toLowerCase())) continue
-      store.addBookmark({
+      ds.addBookmark({
         id: b.id,
         title: b.title || '',
         url: b.url,
@@ -93,7 +93,7 @@ export function importFromURL(): boolean {
       } as Bookmark)
       imported++
     }
-    const existing = store.groupMap[payload.group.id]
+    const existing = ds.groupMap[payload.group.id]
     if (existing) {
       const newBookmarkIds = [...existing.bookmarkIds]
       for (const bid of payload.group.bookmarkIds) {
@@ -101,13 +101,13 @@ export function importFromURL(): boolean {
       }
       const changes: Partial<SiblingGroup> = { bookmarkIds: newBookmarkIds }
       if (payload.group.notes && !existing.notes) changes.notes = payload.group.notes
-      store.updateGroup(payload.group.id, changes)
+      ds.updateGroup(payload.group.id, changes)
       toast('已更新组「' + (existing.name || '未命名') + '」（新增 ' + imported + ' 个书签）')
     } else {
-      store.addGroup(payload.group)
+      ds.addGroup(payload.group)
       toast('已导入组「' + (payload.group.name || '未命名') + '」（' + (payload.bookmarks || []).length + ' 个书签）')
     }
-    store.save()
+    saveAppData()
     history.replaceState(null, '', location.pathname + location.search)
     return true
   } catch (_) { toast('分享链接解析失败', false); return true }
@@ -116,7 +116,6 @@ export function importFromURL(): boolean {
 // ── Fork 公开组到自己库（A5）──
 
 export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]) {
-  const store = useAppStore()
   const ds = useDataStore()
   const now = Date.now()
 
@@ -159,7 +158,7 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     }
   }
   ds.addGroup(newGroup)
-  store.save()
+  saveAppData()
 
   // 尝试写入远端
   try {

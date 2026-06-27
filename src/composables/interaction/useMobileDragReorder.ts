@@ -7,7 +7,6 @@
  * - 边缘持续滚动（列表 + 页面）
  */
 import { onMounted, onUnmounted, type Ref, computed } from 'vue'
-import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { toast } from '../../lib/toast.js'
@@ -38,11 +37,11 @@ interface UseMobileDragReorderOptions {
 }
 
 export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, listRef: Ref<any[]>, options: UseMobileDragReorderOptions = {}) {
-  const store = useAppStore()
+  const uiStore = useUIStore()
   const dataStore = useDataStore()
 
   const {
-    enabled = computed(() => store.batchMode && isMobile()),
+    enabled = computed(() => uiStore.batchMode && isMobile()),
     handleSelector = '.batch-drag-handle',
     itemSelector = '.card, .group-card',
     onReorder = null,

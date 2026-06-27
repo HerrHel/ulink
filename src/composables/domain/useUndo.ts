@@ -3,7 +3,8 @@
  * 从 group.js 迁移：performUndo, performRedo, restoreSnapshot, updateUndoRedoButtons
  * 使用 useUndoStore 替代 LV.undoStacks / LV.undoTimers
  */
-import { useAppStore } from '../../stores/app.js'
+import { useDataStore } from '../../stores/data.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore, type UndoSnapshot } from '../../stores/undo.js'
 import { MAX_UNDO, UNDO_WINDOW, MAX_UNDO_BYTES } from '../../config/constants.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -45,9 +46,9 @@ function evictOldestUndo() {
 
 export function pushUndo(gid: string) {
   if (_restoring) return  // suppress during programmatic restore
-  const store = useAppStore()
+  const ds = useDataStore()
   const undo = useUndoStore()
-  const sg = store.groupMap[gid]
+  const sg = ds.groupMap[gid]
   if (!sg) return
   const stack = undo.ensureStack(gid)
   if (undo.timers[gid]) { clearTimeout(undo.timers[gid]) }
@@ -72,13 +73,13 @@ export function pushUndo(gid: string) {
 }
 
 export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
-  const store = useAppStore()
-  const sg = store.groupMap[gid]
+  const ds = useDataStore()
+  const sg = ds.groupMap[gid]
   if (!sg) return
   const filteredIds = snap.bookmarkIds.filter(function (bid) {
-    return store.bookmarkMap[bid]
+    return ds.bookmarkMap[bid]
   })
-  store.updateGroup(gid, { notes: snap.notes, bookmarkIds: filteredIds })
+  ds.updateGroup(gid, { notes: snap.notes, bookmarkIds: filteredIds })
   // Sync TipTap editor if it's mounted (visible group)
   const ed = EditorManager.get(gid)
   if (ed) {
@@ -90,11 +91,11 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
 }
 
 export function performUndo(gid: string): boolean {
-  const store = useAppStore()
+  const ds = useDataStore()
   const undo = useUndoStore()
   const stack = undo.stacks[gid]
   if (!stack || !stack.undo.length) return false
-  const sg = store.groupMap[gid]
+  const sg = ds.groupMap[gid]
   if (!sg) return false
   // sg.notes is always current — GroupEditor.syncToStore runs on every onUpdate
   // Capture the latest from editor if available (handles edge case of rapid typing)
@@ -110,17 +111,17 @@ export function performUndo(gid: string): boolean {
   const snap = stack.undo.pop()!
   _totalUndoBytes -= snapSize(snap)
   restoreSnapshot(gid, snap)
-  store.debouncedSave()
+  debouncedSaveAppData()
   toastAPI?.toast('已撤销')
   return true
 }
 
 export function performRedo(gid: string): boolean {
-  const store = useAppStore()
+  const ds = useDataStore()
   const undo = useUndoStore()
   const stack = undo.stacks[gid]
   if (!stack || !stack.redo || !stack.redo.length) return false
-  const sg = store.groupMap[gid]
+  const sg = ds.groupMap[gid]
   if (!sg) return false
   const editorHTML = EditorManager.getContentHTML(gid)
   if (editorHTML !== null) sg.notes = editorHTML
@@ -134,7 +135,7 @@ export function performRedo(gid: string): boolean {
   const snap = stack.redo.pop()!
   _totalUndoBytes -= snapSize(snap)
   restoreSnapshot(gid, snap)
-  store.debouncedSave()
+  debouncedSaveAppData()
   toastAPI?.toast('已前进')
   return true
 }

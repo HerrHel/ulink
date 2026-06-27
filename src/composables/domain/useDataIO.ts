@@ -4,19 +4,21 @@
  *
  * A3: 支持多格式导入（LinkVault JSON、Chrome HTML、Raindrop JSON、CSV）
  */
-import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
+import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
-import type { AppData } from '../../types.js'
+import type { AppData, Bookmark } from '../../types.js'
 
 // ── 导出 ──
 
 export function exportData() {
-  const store = useAppStore()
+  const ds = useDataStore()
   try {
-    const blob = new Blob([JSON.stringify(store._dataSnapshot(), null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(ds._dataSnapshot(), null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = 'linkvault-backup-' + new Date().toISOString().slice(0, 10) + '.json'
@@ -82,9 +84,8 @@ function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv
 // ── 导入内部逻辑（合并模式，不覆盖已有数据）──
 
 function importFromDataInternal(data: Partial<AppData>, source: string) {
-  const store = useAppStore()
   const ds = useDataStore()
-  
+
   // 执行数据迁移（处理旧版格式）
   const result = {
     categories: [...(data.categories || [])],
@@ -93,11 +94,11 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
     siblingGroups: [...(data.siblingGroups || [])],
   }
   runMigrations(data, result)
-  
+
   const { categories, bookmarks, customAttributes, siblingGroups } = result
   let catImported = 0, bmImported = 0, groupImported = 0, attrImported = 0
 
-  try { store._backupBeforeImport() } catch (_) { /* 备份失败不阻塞导入 */ }
+  try { persist.saveToLocalStorage(ds._dataSnapshot()) } catch (_) { /* 备份失败不阻塞导入 */ }
 
   // 合并分类（去重：同 ID 跳过）
   for (const c of categories) {
@@ -161,7 +162,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
     groupImported++
   }
 
-  store.save()
+  saveAppData()
 
   const total = catImported + bmImported + groupImported + attrImported
   if (total === 0) {
@@ -361,34 +362,34 @@ function validateImportData(data: Partial<AppData>): string | null {
 // ── 重置数据 ──
 
 export function resetToDefaults() {
-  const store = useAppStore()
   const ds = useDataStore()
+  const ui = useUIStore()
   showConfirm('确认清除所有数据？将恢复为默认状态。', () => {
     const snapshot = {
       categories: JSON.parse(JSON.stringify(ds.categories)),
       bookmarks: JSON.parse(JSON.stringify(ds.bookmarks)),
       customAttributes: JSON.parse(JSON.stringify(ds.customAttributes)),
       siblingGroups: JSON.parse(JSON.stringify(ds.siblingGroups)),
-      curCat: store.curCat,
+      curCat: ui.curCat,
     }
     const d = JSON.parse(JSON.stringify(DEFAULTS))
     ds.categories = d.categories
     ds.bookmarks = d.bookmarks
     ds.customAttributes = d.customAttributes
     ds.siblingGroups = d.siblingGroups
-    store.curCat = 'all'
-    store.focusedGroupId = null
-    store.activeAttrs = []
-    store.excludedAttrs = []
-    store.detailCards = []
-    store.save()
+    ui.curCat = 'all'
+    ui.focusedGroupId = null
+    ui.activeAttrs = []
+    ui.excludedAttrs = []
+    ui.detailCards = []
+    saveAppData()
     toastWithUndo('数据已重置为默认', () => {
       ds.categories = snapshot.categories
       ds.bookmarks = snapshot.bookmarks
       ds.customAttributes = snapshot.customAttributes
       ds.siblingGroups = snapshot.siblingGroups
-      store.curCat = snapshot.curCat
-      store.debouncedSave()
+      ui.curCat = snapshot.curCat
+      debouncedSaveAppData()
       toast('数据已恢复')
     })
   })
