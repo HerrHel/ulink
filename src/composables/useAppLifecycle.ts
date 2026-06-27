@@ -3,7 +3,9 @@
  * 从 useApp.js 拆分，职责单一：数据加载、UI 恢复、beforeunload 持久化。
  */
 import { onMounted, onUnmounted } from 'vue'
-import { useAppStore } from '../stores/app.js'
+import { useDataStore } from '../stores/data.js'
+import { useUIStore } from '../stores/ui.js'
+import { flushSaveAppData } from '../stores/app.js'
 import { mentionAPI } from './bridge.js'
 import { importFromURL, detectShareRoute } from './domain/useDataShare.js'
 
@@ -17,7 +19,8 @@ import { captureNavState } from './interaction/useKeyboardOps.js'
 import { flushIDB } from '../stores/persist.js'
 
 export function useAppLifecycle() {
-  const store = useAppStore()
+  const ds = useDataStore()
+  const ui = useUIStore()
   const cleanups: Array<() => void> = []
 
   onMounted(async () => {
@@ -27,9 +30,9 @@ export function useAppLifecycle() {
 
     if (history.scrollRestoration) history.scrollRestoration = 'manual'
 
-    store.loadFromStorage()
-    store.tryLoadFromIDB().catch((e: Error) => console.warn('[LinkVault] IDB load failed:', e.message))
-    store.restoreUIState()
+    ds.loadFromStorage()
+    ds.tryLoadFromIDB().catch((e: Error) => console.warn('[LinkVault] IDB load failed:', e.message))
+    ui.restoreUIState()
     // A4: 检测公开分享路由（#share/<id>），优先于旧版 base64 分享
     const shareGid = detectShareRoute()
     if (shareGid) {
@@ -49,10 +52,10 @@ export function useAppLifecycle() {
     }
 
     const flushAndSave = () => {
-      store.flushDebouncedSave()
+      flushSaveAppData()
       flushIDB()
     }
-    const onSaveUI = () => store.saveUIState()
+    const onSaveUI = () => ui.saveUIState()
     const onClearSel = () => window.getSelection()?.removeAllRanges()
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') flushAndSave()

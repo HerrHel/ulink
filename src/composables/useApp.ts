@@ -5,7 +5,7 @@
  * 生命周期管理 → useAppLifecycle.js
  */
 import { watch } from 'vue'
-import { useAppStore } from '../stores/app.js'
+import { useUIStore } from '../stores/ui.js'
 import { ctxMenuAPI, actionSheetAPI } from './bridge.js'
 import { toggleGroupFocus, removeBmFromGroup, removeGroupRef, editGroup, deleteGroup } from './domain/useGroup.js'
 import { visit, openBmModal, deleteBookmarkWithUndo as deleteBookmark } from './domain/useBookmark.js'
@@ -19,8 +19,6 @@ import { useDragDrop } from './interaction/useDragDrop.js'
 import { useLongPress } from './interaction/useLongPress.js'
 
 export function useApp() {
-  const store = useAppStore()
-
   // ── 1. 注册全局交互 composables ──
   useScrollHeader(); useResize(); useKeyboard(); useDragDrop()
 
@@ -42,7 +40,7 @@ export function useApp() {
     ]
     return null
   })
-  watch(() => longPress.fired, (v) => { store.lpFired = v })
+  watch(() => longPress.fired, (v) => { useUIStore().lpFired = v })
 
   // ── 3. 全局事件委派 ──
   useGlobalEvents({

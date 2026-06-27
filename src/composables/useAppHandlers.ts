@@ -2,7 +2,9 @@
  * useAppHandlers — App.vue 模板事件处理函数
  * 从 useApp.js 拆分，职责单一：提供模板绑定的事件处理器。
  */
-import { useAppStore } from '../stores/app.js'
+import { useDataStore } from '../stores/data.js'
+import { useUIStore } from '../stores/ui.js'
+import { saveAppData } from '../stores/app.js'
 import { attrDropdownAPI } from './bridge.js'
 import { createGroup, exitGroupFocus, editGroup, searchInFocusedGroup } from './domain/useGroup.js'
 import { openBmModal } from './domain/useBookmark.js'
@@ -13,35 +15,36 @@ import { importData } from './domain/useDataIO.js'
 import { performUndo, performRedo } from './domain/useUndo.js'
 
 export function useAppHandlers() {
-  const store = useAppStore()
+  const ds = useDataStore()
+  const ui = useUIStore()
 
   const handlers = {
     onExitGroupFocus() { exitGroupFocus() },
     onFocusTitleChange(e: Event) {
-      if (!store.focusedGroupId) return
+      if (!ui.focusedGroupId) return
       const target = e.target as HTMLElement
       const raw = (target.textContent || '').trim()
       const name = raw || '未命名'
       target.textContent = name
       target.classList.toggle('focus-title-unnamed', !raw || raw === '未命名')
-      store.updateGroup(store.focusedGroupId, { name }); store.save()
+      ds.updateGroup(ui.focusedGroupId, { name }); saveAppData()
     },
-    onSearch() { if (store.focusedGroupId) searchInFocusedGroup() },
+    onSearch() { if (ui.focusedGroupId) searchInFocusedGroup() },
     onFocusAddBm(e?: Event) {
-      if (!store.focusedGroupId) return
+      if (!ui.focusedGroupId) return
       if (e && e.currentTarget) {
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-        store._addPopoverTrigger = { top: r.bottom, left: r.left, width: r.width }
+        ui._addPopoverTrigger = { top: r.bottom, left: r.left, width: r.width }
       } else {
-        store._addPopoverTrigger = null
+        ui._addPopoverTrigger = null
       }
-      store.addToGid = store.focusedGroupId
-      store.addBmPopoverOpen = true
+      ui.addToGid = ui.focusedGroupId
+      ui.addBmPopoverOpen = true
     },
-    onFocusEditGroup() { if (store.focusedGroupId) editGroup(store.focusedGroupId) },
-    onFocusShareGroup() { if (store.focusedGroupId) shareGroup(store.focusedGroupId) },
-    onFocusUndo() { if (store.focusedGroupId) performUndo(store.focusedGroupId) },
-    onFocusRedo() { if (store.focusedGroupId) performRedo(store.focusedGroupId) },
+    onFocusEditGroup() { if (ui.focusedGroupId) editGroup(ui.focusedGroupId) },
+    onFocusShareGroup() { if (ui.focusedGroupId) shareGroup(ui.focusedGroupId) },
+    onFocusUndo() { if (ui.focusedGroupId) performUndo(ui.focusedGroupId) },
+    onFocusRedo() { if (ui.focusedGroupId) performRedo(ui.focusedGroupId) },
     onToggleAttrFilter() { attrDropdownAPI?.toggle?.() },
     onAddBookmark() { hideAddDropdown(); openBmModal() },
     onAddGroup() { hideAddDropdown(); createGroup() },
