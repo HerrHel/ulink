@@ -56,13 +56,16 @@
         <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
         <div class="card-domain group-domain"></div>
       </div>
+      <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list'">
+        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+      </div>
       <div class="group-head-actions" v-if="!ui.batchMode">
         <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" title="撤销" v-html="I.undo"></button>
         <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" title="重做" v-html="I.redo"></button>
       </div>
     </div>
     <div class="card-body">
-      <div class="card-tags" v-if="tagNames.length">
+      <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
         <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
       <GroupEditor :groupId="group.id" />

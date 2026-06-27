@@ -24,11 +24,14 @@
           </div>
         </div>
       </div>
-      <div class="card-tags" v-if="tagNames.length">
+      <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode === 'list'">
         <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
     </div>
     <div class="card-body">
+      <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode !== 'list'">
+        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+      </div>
       <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="editNotes">
         <span v-if="searchQuery" v-html="hlText(bookmark.notes, searchQuery)"></span>
         <template v-else>{{ bookmark.notes }}</template>
