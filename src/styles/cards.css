@@ -358,7 +358,12 @@
   position:relative;z-index:1;
   flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;
   overscroll-behavior:contain;
+  scrollbar-width:thin;
 }
+.card-body::-webkit-scrollbar{width:4px}
+.card-body::-webkit-scrollbar-track{background:transparent}
+.card-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
 
 
 .card-toprow{
