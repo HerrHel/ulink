@@ -5,7 +5,7 @@
   border:1px solid var(--border);
   background:var(--surface);
   cursor:default;
-  padding:16px;
+  padding:16px 16px 10px;
   height:232px;
   display:flex;flex-direction:column;
   overflow:hidden;
