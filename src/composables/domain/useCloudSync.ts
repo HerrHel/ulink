@@ -25,6 +25,9 @@ import {
   type SyncOp, type OpTable,
 } from '../../stores/storage.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
+import {
+  toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute,
+} from './useSyncMapping.js'
 
 // ── 状态 ──
 const syncStatus = ref<'idle' | 'syncing' | 'success' | 'error'>('idle')
@@ -53,16 +56,6 @@ const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 1000
 
 // ── 辅助函数 ──
-function _parsePassword(raw: unknown): string {
-  return typeof raw === 'string' ? raw : ''
-}
-
-function _parseTimestamp(raw: unknown): number {
-  if (typeof raw === 'number') return raw
-  if (typeof raw === 'string') { const t = Date.parse(raw); return isNaN(t) ? 0 : t }
-  return 0
-}
-
 function _getUserId(): string | null {
   const { user } = useAuth()
   return user.value?.id ?? null
@@ -94,133 +87,7 @@ const _tableMap: Record<string, OpTable> = {
   attribute: 'custom_attributes',
 }
 
-// ── 远端行类型定义 ──
-interface RemoteBookmarkRow {
-  id: string; user_id: string; title: string; url: string
-  username: string; password: string; notes: string; icon: string
-  category_id: string; parent_id: string | null
-  order: number; use_count: number; attributes: Record<string, boolean>
-  is_expanded: boolean; created_at_num: number; updated_at_num: number
-  deleted_at: string | null
-}
-interface RemoteGroupRow {
-  id: string; user_id: string; name: string; category_id: string
-  icon: string; order: number; is_expanded: boolean
-  attributes: Record<string, boolean>; bookmark_ids: string[]
-  notes: string; use_count: number; is_public: boolean
-  updated_at_num: number; deleted_at: string | null
-}
-interface RemoteCategoryRow {
-  id: string; user_id: string; name: string; icon: string; color: string
-  updated_at_num: number; deleted_at: string | null
-}
-interface RemoteAttributeRow {
-  id: string; user_id: string; name: string; type: string
-  updated_at_num: number; deleted_at: string | null
-}
-
-// ── 字段名映射（本地 camelCase → 远端 snake_case）──
-function _toRemoteRow(type: 'bookmark', item: Record<string, unknown>, _isNew: boolean): RemoteBookmarkRow
-function _toRemoteRow(type: 'group', item: Record<string, unknown>, _isNew: boolean): RemoteGroupRow
-function _toRemoteRow(type: 'category', item: Record<string, unknown>, _isNew: boolean): RemoteCategoryRow
-function _toRemoteRow(type: 'attribute', item: Record<string, unknown>, _isNew: boolean): RemoteAttributeRow
-function _toRemoteRow(type: string, item: Record<string, unknown>): RemoteRow {
-  const now = Date.now()
-  if (type === 'bookmark') {
-    const row: RemoteBookmarkRow = {
-      id: item.id as string, user_id: item._userId as string,
-      title: item.title as string, url: item.url as string,
-      username: (item.username as string) || '', password: JSON.stringify(item.password),
-      notes: (item.notes as string) || '', icon: (item.icon as string) || '',
-      category_id: item.categoryId as string, parent_id: (item.parentId as string) || null,
-      order: (item.order as number) || 0, use_count: (item.useCount as number) || 0,
-      attributes: (item.attributes as Record<string, boolean>) || {},
-      is_expanded: !!item.isExpanded,
-      created_at_num: item.createdAt as number,
-      updated_at_num: (item.updatedAt as number) || now,
-      deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-    }
-    return row
-  }
-  if (type === 'group') {
-    return {
-      id: item.id as string, user_id: item._userId as string,
-      name: item.name as string, category_id: item.categoryId as string,
-      icon: (item.icon as string) || '', order: (item.order as number) || 0,
-      is_expanded: !!item.isExpanded,
-      attributes: (item.attributes as Record<string, boolean>) || {},
-      bookmark_ids: (item.bookmarkIds as string[]) || [],
-      notes: (item.notes as string) || '', use_count: (item.useCount as number) || 0,
-      is_public: !!(item as { isPublic?: boolean }).isPublic,
-      updated_at_num: (item.updatedAt as number) || now,
-      deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-    } satisfies RemoteGroupRow
-  }
-  if (type === 'category') {
-    return {
-      id: item.id as string, user_id: item._userId as string,
-      name: item.name as string, icon: (item.icon as string) || '',
-      color: (item.color as string) || '',
-      updated_at_num: (item.updatedAt as number) || now,
-      deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-    } satisfies RemoteCategoryRow
-  }
-  return {
-    id: item.id as string, user_id: item._userId as string,
-    name: item.name as string, type: (item.type as string) || 'boolean',
-    updated_at_num: (item.updatedAt as number) || now,
-    deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-  } satisfies RemoteAttributeRow
-}
-
-// ── 从远端行映射回本地类型 ──
-function _fromRemoteBookmark(r: any): Bookmark {
-  return {
-    id: r.id, title: r.title, url: r.url,
-    username: r.username || '', password: _parsePassword(r.password),
-    notes: r.notes || '', icon: r.icon || '',
-    categoryId: r.category_id || 'uncategorized',
-    parentId: r.parent_id || null,
-    order: r.order || 0, useCount: r.use_count || 0,
-    attributes: (r.attributes as Record<string, boolean>) || {},
-    isExpanded: r.is_expanded || false,
-    createdAt: r.created_at_num || 0,
-    updatedAt: r.updated_at_num || r.created_at_num || 0,
-    deletedAt: r.deleted_at ? _parseTimestamp(r.deleted_at) : undefined,
-  }
-}
-
-function _fromRemoteGroup(r: any): SiblingGroup {
-  return {
-    id: r.id, name: r.name,
-    categoryId: r.category_id || 'uncategorized',
-    icon: r.icon || '', order: r.order || 0,
-    isExpanded: r.is_expanded || false,
-    attributes: (r.attributes as Record<string, boolean>) || {},
-    bookmarkIds: (r.bookmark_ids as string[]) || [],
-    notes: r.notes || '', useCount: r.use_count || 0,
-    updatedAt: r.updated_at_num || 0,
-    isPublic: r.is_public || false,
-    deletedAt: r.deleted_at ? _parseTimestamp(r.deleted_at) : undefined,
-  }
-}
-
-function _fromRemoteCategory(r: any): Category {
-  return {
-    id: r.id, name: r.name, icon: r.icon, color: r.color,
-    updatedAt: r.updated_at_num || 0,
-    deletedAt: r.deleted_at ? _parseTimestamp(r.deleted_at) : undefined,
-  }
-}
-
-function _fromRemoteAttribute(r: any): CustomAttribute {
-  return {
-    id: r.id, name: r.name, type: (r.type as 'boolean') || 'boolean',
-    updatedAt: r.updated_at_num || 0,
-    deletedAt: r.deleted_at ? _parseTimestamp(r.deleted_at) : undefined,
-  }
-}
-
+// ── navigator.locks 封装 ──
 // ── 合并 ops：同 item 的多次操作合并为最终状态 ──
 function _mergeOps(ops: SyncOp[]): SyncOp[] {
   const byItem = new Map<string, SyncOp[]>()
@@ -414,7 +281,7 @@ export function useCloudSync() {
             : op.table === 'categories' ? 'category' : 'attribute'
           const encryptedData = await e2e.encryptItem(itemType as any, data)
 
-          const row = _toRemoteRow(
+          const row = toRemoteRow(
             itemType,
             { ...encryptedData, _userId: userId },
             isNew,
@@ -504,10 +371,10 @@ export function useCloudSync() {
 
       // P2: 拉取后解密敏感字段
       const e2e = useE2E()
-      const remoteCats = (catsRes.data || []).map(r => _fromRemoteCategory(r))
-      const remoteBms = (bmsRes.data || []).map(r => _fromRemoteBookmark(r))
-      const remoteGroups = (groupsRes.data || []).map(r => _fromRemoteGroup(r))
-      const remoteAttrs = (attrsRes.data || []).map(r => _fromRemoteAttribute(r))
+      const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r))
+      const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r))
+      const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r))
+      const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r))
 
       // 异步解密（不阻塞合并）
       if (e2e.isUnlocked.value) {
@@ -605,25 +472,25 @@ export function useCloudSync() {
     const e2e = useE2E()
 
     if (type === 'bookmark') {
-      const mapped = _fromRemoteBookmark(row)
+      const mapped = fromRemoteBookmark(row)
       if (e2e.isUnlocked.value) await e2e.decryptItem('bookmark', mapped as any)
       const idx = ds.bookmarks.findIndex(b => b.id === mapped.id)
       if (idx >= 0) Object.assign(ds.bookmarks[idx], mapped)
       else ds.bookmarks.push(mapped)
     } else if (type === 'group') {
-      const mapped = _fromRemoteGroup(row)
+      const mapped = fromRemoteGroup(row)
       if (e2e.isUnlocked.value) await e2e.decryptItem('group', mapped as any)
       const idx = ds.siblingGroups.findIndex(g => g.id === mapped.id)
       if (idx >= 0) Object.assign(ds.siblingGroups[idx], mapped)
       else ds.siblingGroups.push(mapped)
     } else if (type === 'category') {
-      const mapped = _fromRemoteCategory(row)
+      const mapped = fromRemoteCategory(row)
       if (e2e.isUnlocked.value) await e2e.decryptItem('category', mapped as any)
       const idx = ds.categories.findIndex(c => c.id === mapped.id)
       if (idx >= 0) Object.assign(ds.categories[idx], mapped)
       else ds.categories.push(mapped)
     } else {
-      const mapped = _fromRemoteAttribute(row)
+      const mapped = fromRemoteAttribute(row)
       if (e2e.isUnlocked.value) await e2e.decryptItem('attribute', mapped as any)
       const idx = ds.customAttributes.findIndex(a => a.id === mapped.id)
       if (idx >= 0) Object.assign(ds.customAttributes[idx], mapped)
@@ -889,11 +756,11 @@ export function useCloudSync() {
     const { data: gData, error: gErr } = await supabase.from('sibling_groups')
       .select('*').eq('id', gid).eq('is_public', true).maybeSingle()
     if (gErr || !gData) return null
-    const group = _fromRemoteGroup(gData)
+    const group = fromRemoteGroup(gData)
     let bookmarks: Bookmark[] = []
     if (group.bookmarkIds.length) {
       const { data: bData } = await supabase.from('bookmarks').select('*').in('id', group.bookmarkIds)
-      bookmarks = (bData || []).map(_fromRemoteBookmark)
+      bookmarks = (bData || []).map(fromRemoteBookmark)
     }
     return { group, bookmarks }
   }
