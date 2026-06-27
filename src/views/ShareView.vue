@@ -61,7 +61,7 @@
 import { ref, onMounted } from 'vue'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import { useAuth } from '../composables/domain/useAuth.js'
-import { forkPublicGroup } from '../composables/domain/useDataIO.js'
+import { forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { I } from '../config/icons.js'
 import { fixUrl, domain } from '../utils.js'
 import { getCategoryIcon } from '../config/icons.js'

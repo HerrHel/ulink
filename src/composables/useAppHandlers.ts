@@ -8,7 +8,8 @@ import { createGroup, exitGroupFocus, editGroup, searchInFocusedGroup } from './
 import { openBmModal } from './domain/useBookmark.js'
 import { hideAddDropdown } from './ui/useUI.js'
 import { showBatchMovePopover, batchDelete } from './domain/useBatch.js'
-import { shareGroup, importData } from './domain/useDataIO.js'
+import { shareGroup } from './domain/useDataShare.js'
+import { importData } from './domain/useDataIO.js'
 import { performUndo, performRedo } from './domain/useUndo.js'
 
 export function useAppHandlers() {

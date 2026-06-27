@@ -20,7 +20,7 @@ import { actionSheetAPI, setCtxMenuAPI } from '../../composables/bridge.js'
 import { visit, openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal, openAttrModal } from '../../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup } from '../../composables/domain/useGroup.js'
-import { shareGroup } from '../../composables/domain/useDataIO.js'
+import { shareGroup } from '../../composables/domain/useDataShare.js'
 
 const store = useAppStore()
 const visible = ref(false)

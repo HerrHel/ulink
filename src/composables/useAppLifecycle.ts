@@ -5,7 +5,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../stores/app.js'
 import { mentionAPI } from './bridge.js'
-import { importFromURL, detectShareRoute } from './domain/useDataIO.js'
+import { importFromURL, detectShareRoute } from './domain/useDataShare.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
 let _onShareRoute: ((gid: string) => void) | null = null
