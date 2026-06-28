@@ -1,5 +1,5 @@
 <template>
-  <div class="attr-dropdown" id="attrDropdown" v-show="isOpen" @click.stop>
+  <div class="attr-dropdown" id="attrDropdown" v-show="attrDrp.open" @click.stop>
     <div class="attr-drop-search">
       <input type="text" class="attr-search-input" id="attrSearchInput"
              placeholder="搜索/创建属性…" aria-label="搜索属性" v-model="query" @click.stop ref="searchInputRef">
@@ -33,15 +33,15 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
-import { setAttrDropdownAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
+import { useAttrDropdownStore } from '../../stores/attrDropdown.js'
 import { isMobile } from '../../utils.js'
 
 const store = useAppStore()
-const isOpen = ref(false)
+const attrDrp = useAttrDropdownStore()
 const query = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 
@@ -139,21 +139,19 @@ async function onDeleteAttr(attrId: string) {
 }
 
 function toggle() {
-  if (isOpen.value) {
-    close()
+  if (attrDrp.open) {
+    attrDrp.close()
   } else {
     query.value = ''
-    isOpen.value = true
+    attrDrp.open = true
     nextTick(() => searchInputRef.value?.focus())
   }
 }
 
 function close() {
-  isOpen.value = false
+  attrDrp.open = false
   query.value = ''
 }
 
 // 暴露给其他模块（通过 bridge.js）
-onMounted(() => setAttrDropdownAPI({ toggle, close }))
-onUnmounted(() => setAttrDropdownAPI(null))
 </script>

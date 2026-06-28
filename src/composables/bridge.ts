@@ -2,14 +2,9 @@
  * bridge.ts — 模块级服务注册表
  *
  * 正在逐步移除，替代方案：Pinia Store。
- * 已移除：toastAPI, ctxMenuAPI → useToastStore, useContextMenuStore
- * 待移除：attrDropdownAPI, batchMoveAPI, mfbAPI, mentionAPI
+ * 已移除：toastAPI, ctxMenuAPI, actionSheetAPI, attrDropdownAPI
+ * 待移除：batchMoveAPI, mfbAPI, mentionAPI
  */
-
-export interface AttrDropdownAPI {
-  toggle(): void
-  close(): void
-}
 
 export interface BatchMoveAPI {
   show(): void
@@ -30,10 +25,6 @@ export interface MfbAPI {
 // --- Mention ---
 export let mentionAPI: MentionAPI | null = null
 export function setMentionAPI(api: MentionAPI | null) { mentionAPI = api }
-
-// --- Attr Dropdown ---
-export let attrDropdownAPI: AttrDropdownAPI | null = null
-export function setAttrDropdownAPI(api: AttrDropdownAPI | null) { attrDropdownAPI = api }
 
 // --- Batch Move Popover ---
 export let batchMoveAPI: BatchMoveAPI | null = null

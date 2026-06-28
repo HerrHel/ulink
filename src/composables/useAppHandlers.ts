@@ -5,7 +5,7 @@
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { saveAppData } from '../stores/app.js'
-import { attrDropdownAPI } from './bridge.js'
+import { useAttrDropdownStore } from '../stores/attrDropdown.js'
 import { createGroup, exitGroupFocus, editGroup, searchInFocusedGroup } from './domain/useGroup.js'
 import { openBmModal } from './domain/useBookmark.js'
 import { hideAddDropdown } from './ui/useUI.js'
@@ -45,7 +45,7 @@ export function useAppHandlers() {
     onFocusShareGroup() { if (ui.focusedGroupId) shareGroup(ui.focusedGroupId) },
     onFocusUndo() { if (ui.focusedGroupId) performUndo(ui.focusedGroupId) },
     onFocusRedo() { if (ui.focusedGroupId) performRedo(ui.focusedGroupId) },
-    onToggleAttrFilter() { attrDropdownAPI?.toggle?.() },
+    onToggleAttrFilter() { useAttrDropdownStore().toggle() },
     onAddBookmark() { hideAddDropdown(); openBmModal() },
     onAddGroup() { hideAddDropdown(); createGroup() },
     onBatchMove() { showBatchMovePopover() },
