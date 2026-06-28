@@ -1,21 +1,10 @@
 /**
  * bridge.ts — 模块级服务注册表
  *
- * 为什么用模块级单例而非 provide/inject？
- * ─────────────────────────────────────────
- * 本项目中多个 API 引用来自 composable 模块级代码（非 Vue 组件 setup 上下文），
- * 例如 toast.js、useUndo.js、useKeyboardOps.js 等。provide/inject 仅在组件 setup 中可用，
- * 无法满足这些模块的调用需求。因此模块级单例是当前架构下的正确选择。
- *
- * 注册方（Vue 组件 onMounted）：  ToastContainer、ContextMenu、ActionSheet、...
- * 消费方（composable / 组件）：   toast.js、useUndo.js、App.vue、...
+ * 正在逐步移除，替代方案：Pinia Store。
+ * 已移除：toastAPI → useToastStore
+ * 待移除：ctxMenuAPI, actionSheetAPI, attrDropdownAPI, batchMoveAPI, mfbAPI, mentionAPI
  */
-
-export interface ToastAPI {
-  toast(msg: string, ok?: boolean): void
-  toastWithUndo(msg: string, undoFn: () => void, duration?: number): void
-  showConfirm(msg: string, onConfirm: () => void): void
-}
 
 export interface ContextMenuAPI {
   show(e: MouseEvent, type: string, id: string): void
@@ -52,10 +41,6 @@ export interface MfbAPI {
 // --- Mention ---
 export let mentionAPI: MentionAPI | null = null
 export function setMentionAPI(api: MentionAPI | null) { mentionAPI = api }
-
-// --- Toast / Confirm ---
-export let toastAPI: ToastAPI | null = null
-export function setToastAPI(api: ToastAPI | null) { toastAPI = api }
 
 // --- Context Menu ---
 export let ctxMenuAPI: ContextMenuAPI | null = null

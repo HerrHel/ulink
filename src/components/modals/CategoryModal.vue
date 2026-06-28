@@ -231,7 +231,8 @@ function onDelete(id: string) {
   const msg = bmCount > 0
     ? `删除「${catName}」后，其中 ${bmCount} 个书签将移至"未分类"，确定删除吗？`
     : `确定删除「${catName}」吗？`
-  showConfirm(msg, () => {
+  showConfirm(msg).then(ok => {
+    if (!ok) return
     store.deleteCategory(id)
     store.save()
     toast('分类已删除')

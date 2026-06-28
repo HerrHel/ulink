@@ -1,39 +1,30 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="确认操作" :class="{ open: store.confirmModalOpen }" @click.self="onCancel">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="确认操作" :class="{ open: store.confirmOpen }" @click.self="store.resolveConfirm(false)">
     <div class="modal modal-sm">
       <div class="modal-body modal-body-center">
-        <div class="confirm-msg">{{ store.confirmModalMessage }}</div>
+        <div class="confirm-msg">{{ store.confirmMessage }}</div>
       </div>
       <div class="modal-foot confirm-foot">
-        <button class="btn btn-secondary" @click="onCancel">取消</button>
-        <button class="btn btn-danger" @click="onOk">确认</button>
+        <button class="btn btn-secondary" @click="store.resolveConfirm(false)">取消</button>
+        <button class="btn btn-danger" @click="store.resolveConfirm(true)">确认</button>
       </div>
     </div>
   </div>
 </template>
-<script setup lang="ts">
-import { watch, nextTick, onUnmounted } from 'vue'
-import { useAppStore } from '../../stores/app.js'
-import { getAndClearConfirmCallback } from '../../composables/_confirmState.js'
-const store = useAppStore()
 
-function onOk() {
-  const cb = getAndClearConfirmCallback()
-  store.confirmModalOpen = false
-  if (cb) cb()
-}
-function onCancel() {
-  getAndClearConfirmCallback()
-  store.confirmModalOpen = false
-}
+<script setup lang="ts">
+import { watch, onUnmounted, nextTick } from 'vue'
+import { useToastStore } from '../../stores/toast.js'
+
+const store = useToastStore()
 
 function onKeydown(e: KeyboardEvent) {
-  if (!store.confirmModalOpen) return
-  if (e.key === 'Escape') { e.preventDefault(); onCancel() }
-  if (e.key === 'Enter') { e.preventDefault(); onOk() }
+  if (!store.confirmOpen) return
+  if (e.key === 'Escape') { e.preventDefault(); store.resolveConfirm(false) }
+  if (e.key === 'Enter') { e.preventDefault(); store.resolveConfirm(true) }
 }
 
-watch(() => store.confirmModalOpen, (open) => {
+watch(() => store.confirmOpen, (open) => {
   if (open) {
     document.addEventListener('keydown', onKeydown)
     nextTick(() => {

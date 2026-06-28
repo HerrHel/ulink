@@ -42,52 +42,52 @@ function collectSubIds(id: string): string[] {
   return ids
 }
 
-export function batchDelete() {
+export async function batchDelete() {
   const ui = useUIStore()
   if (!ui.batchSelected.length) return
   const count = ui.batchSelected.length
-  showConfirm('确认删除选中的 ' + count + ' 项？', () => {
-    const ds = useDataStore()
-    const removedGroupIds: string[] = []
-    const removedBookmarkIds: string[] = []
-    const removedFromGroups: Record<string, string[]> = {}
-    ui.batchSelected.forEach(id => {
-      if (id.startsWith('group:')) {
-        const gid = id.slice(6)
-        ds.deleteGroup(gid)
-        removedGroupIds.push(gid)
-      } else {
-        const ids = collectSubIds(id)
-        ids.forEach(bid => {
-          ds.siblingGroups.forEach(g => {
-            const bi = g.bookmarkIds.indexOf(bid)
-            if (bi > -1) {
-              if (!removedFromGroups[bid]) removedFromGroups[bid] = []
-              removedFromGroups[bid].push(g.id)
-              ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
-            }
-          })
-          ds.deleteBookmark(bid)
-          removedBookmarkIds.push(bid)
-        })
-      }
-    })
-    saveAppData()
-    ui.batchSelected.splice(0)
-    ui.batchMode = false
-    toastWithUndo('已删除 ' + count + ' 项', function () {
-      removedGroupIds.forEach(gid => ds.restoreGroup(gid))
-      removedBookmarkIds.forEach(bid => ds.restoreBookmark(bid))
-      Object.keys(removedFromGroups).forEach(bid => {
-        removedFromGroups[bid].forEach(gid => {
-          const sg = ds.groupMap[gid]
-          if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
-            ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
+  const confirmed = await showConfirm('确认删除选中的 ' + count + ' 项？')
+  if (!confirmed) return
+  const ds = useDataStore()
+  const removedGroupIds: string[] = []
+  const removedBookmarkIds: string[] = []
+  const removedFromGroups: Record<string, string[]> = {}
+  ui.batchSelected.forEach(id => {
+    if (id.startsWith('group:')) {
+      const gid = id.slice(6)
+      ds.deleteGroup(gid)
+      removedGroupIds.push(gid)
+    } else {
+      const ids = collectSubIds(id)
+      ids.forEach(bid => {
+        ds.siblingGroups.forEach(g => {
+          const bi = g.bookmarkIds.indexOf(bid)
+          if (bi > -1) {
+            if (!removedFromGroups[bid]) removedFromGroups[bid] = []
+            removedFromGroups[bid].push(g.id)
+            ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
           }
         })
+        ds.deleteBookmark(bid)
+        removedBookmarkIds.push(bid)
       })
-      debouncedSaveAppData(); toast('已恢复')
+    }
+  })
+  saveAppData()
+  ui.batchSelected.splice(0)
+  ui.batchMode = false
+  toastWithUndo('已删除 ' + count + ' 项', function () {
+    removedGroupIds.forEach(gid => ds.restoreGroup(gid))
+    removedBookmarkIds.forEach(bid => ds.restoreBookmark(bid))
+    Object.keys(removedFromGroups).forEach(bid => {
+      removedFromGroups[bid].forEach(gid => {
+        const sg = ds.groupMap[gid]
+        if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
+          ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
+        }
+      })
     })
+    debouncedSaveAppData(); toast('已恢复')
   })
 }
 

@@ -361,11 +361,12 @@ function validateImportData(data: Partial<AppData>): string | null {
 
 // ── 重置数据 ──
 
-export function resetToDefaults() {
+export async function resetToDefaults() {
   const ds = useDataStore()
   const ui = useUIStore()
-  showConfirm('确认清除所有数据？将恢复为默认状态。', () => {
-    const snapshot = {
+  const ok = await showConfirm('确认清除所有数据？将恢复为默认状态。')
+  if (!ok) return
+  const snapshot = {
       categories: JSON.parse(JSON.stringify(ds.categories)),
       bookmarks: JSON.parse(JSON.stringify(ds.bookmarks)),
       customAttributes: JSON.parse(JSON.stringify(ds.customAttributes)),
@@ -392,5 +393,4 @@ export function resetToDefaults() {
       debouncedSaveAppData()
       toast('数据已恢复')
     })
-  })
-}
+  }

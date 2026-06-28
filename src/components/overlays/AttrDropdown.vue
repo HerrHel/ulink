@@ -33,9 +33,9 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
-import { toastAPI, setAttrDropdownAPI, actionSheetAPI, ctxMenuAPI } from '../../composables/bridge.js'
+import { setAttrDropdownAPI, actionSheetAPI, ctxMenuAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'
-import { showConfirm } from '../../lib/toast.js'
+import { toast, showConfirm } from '../../lib/toast.js'
 import { isMobile } from '../../utils.js'
 
 const store = useAppStore()
@@ -65,9 +65,9 @@ function onAddAttr() {
   if (!name) return
   if (addAttrQuick(name)) {
     query.value = ''
-    toastAPI?.toast('属性已添加')
+    toast('属性已添加')
   } else {
-    toastAPI?.toast('属性已存在', false)
+    toast('属性已存在', false)
   }
 }
 
@@ -126,14 +126,14 @@ function onRenameAttr(attrId: string) {
   }
 }
 
-function onDeleteAttr(attrId: string) {
+async function onDeleteAttr(attrId: string) {
   const attr = store.customAttributes.find(a => a.id === attrId)
   if (!attr) return
-  showConfirm('删除属性「' + attr.name + '」？', () => {
-    const dataStore = useDataStore()
-    dataStore.deleteAttribute(attrId)
-    store.save()
-  })
+  const ok = await showConfirm('删除属性「' + attr.name + '」？')
+  if (!ok) return
+  const dataStore = useDataStore()
+  dataStore.deleteAttribute(attrId)
+  store.save()
 }
 
 function toggle() {

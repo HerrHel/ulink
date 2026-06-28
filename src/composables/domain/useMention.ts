@@ -6,7 +6,7 @@ import { ref } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
-import { toastAPI } from '../bridge.js'
+import { toast } from '../../lib/toast.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
 import { saveGroupBody } from './useGroup.js'
 import { groupRefCardHTML, inlineCardHTML } from '../useInlineCard.js'
@@ -125,7 +125,7 @@ export function useMention() {
     const ed = EditorManager.get(ui.mentionGid)
     _insertHTML(ed, groupRefCardHTML(src))
     saveGroupBody(ui.mentionGid); saveAppData(); hide()
-    toastAPI?.toast('已添加组引用')
+    toast('已添加组引用')
   }
 
   // 键盘/输入事件处理

@@ -8,7 +8,7 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore, type UndoSnapshot } from '../../stores/undo.js'
 import { MAX_UNDO, UNDO_WINDOW, MAX_UNDO_BYTES } from '../../config/constants.js'
 import { EditorManager } from '../../lib/editor.js'
-import { toastAPI } from '../bridge.js'
+import { toast } from '../../lib/toast.js'
 
 let _restoring = false  // true while restoreSnapshot is running; suppress pushUndo
 
@@ -112,7 +112,7 @@ export function performUndo(gid: string): boolean {
   _totalUndoBytes -= snapSize(snap)
   restoreSnapshot(gid, snap)
   debouncedSaveAppData()
-  toastAPI?.toast('已撤销')
+  toast('已撤销')
   return true
 }
 
@@ -136,6 +136,6 @@ export function performRedo(gid: string): boolean {
   _totalUndoBytes -= snapSize(snap)
   restoreSnapshot(gid, snap)
   debouncedSaveAppData()
-  toastAPI?.toast('已前进')
+  toast('已前进')
   return true
 }

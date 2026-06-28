@@ -12,6 +12,7 @@ import { closeCatModal, closeAttrModal } from '../ui/useUI.js'
 import { toggleBatchMode, selectAllBatch, batchDelete } from '../domain/useBatch.js'
 import { hideSettingsMenu, hideAddDropdown } from '../ui/useUI.js'
 import { ctxMenuAPI } from '../bridge.js'
+import { useToastStore } from '../../stores/toast.js'
 
 interface NavState {
   curCat: string
@@ -96,7 +97,7 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     if (ui.batchMode) { toggleBatchMode(); return }
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
     ctxMenuAPI?.hide?.(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
-    ui.confirmModalOpen = false
+    useToastStore().resolveConfirm(false)
   }
   if (ui.batchMode) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAllBatch(); return }

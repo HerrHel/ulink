@@ -57,9 +57,10 @@ export function updateCardTagsOverflow() {
 export function openCatModal() { useUIStore().catModalOpen = true }
 export function closeCatModal() { useUIStore().catModalOpen = false }
 
-export function deleteCategory(id: string) {
+export async function deleteCategory(id: string) {
   if (id === 'all' || id === 'uncategorized') { toast('无法删除默认分类', false); return }
-  showConfirm('确认删除此分类？', () => { useDataStore().deleteCategory(id); saveAppData() })
+  const ok = await showConfirm('确认删除此分类？')
+  if (ok) { useDataStore().deleteCategory(id); saveAppData() }
 }
 
 export function openAttrModal() { useUIStore().attrModalOpen = true }

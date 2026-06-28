@@ -94,7 +94,7 @@ export function createGroup(catId?: string): string {
   return g.id;
 }
 
-export function deleteGroup(dGid: string, skipConfirm?: boolean) {
+export async function deleteGroup(dGid: string, skipConfirm?: boolean) {
   const ds = useDataStore();
   const ui = useUIStore();
   const sg = ds.groupMap[dGid];
@@ -109,7 +109,7 @@ export function deleteGroup(dGid: string, skipConfirm?: boolean) {
     });
   };
   if (skipConfirm) doDelete();
-  else showConfirm('确认删除组「' + (sg.name || '未命名') + '」？', doDelete);
+  else if (await showConfirm('确认删除组「' + (sg.name || '未命名') + '」？')) doDelete();
 }
 
 /** Directly add bookmark to group (for programmatic use, not popover) */

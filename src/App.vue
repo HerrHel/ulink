@@ -36,9 +36,7 @@
   <GroupEditModal />
 </template>
 <TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
-<template v-if="store.confirmModalOpen">
-  <ConfirmModal />
-</template>
+<ConfirmModal />
 <HistoryPanel :open="store.historyPanelOpen" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.historyPanelOpen = false" />
 <AuthModal />
 <E2ESetupModal :open="store.e2eSetupOpen" @close="store.e2eSetupOpen = false" />

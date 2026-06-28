@@ -94,23 +94,23 @@ function restore(type: string, id: string) {
   toast('已恢复')
 }
 
-function permanent(type: string, id: string) {
-  showConfirm('确定永久删除？此操作无法恢复。', () => {
-    if (type === 'bookmark') ds.permanentDeleteBookmark(id)
-    else if (type === 'group') ds.permanentDeleteGroup(id)
-    else if (type === 'category') ds.permanentDeleteCategory(id)
-    else if (type === 'attribute') ds.permanentDeleteAttribute(id)
-    appStore.save()
-    toast('已永久删除')
-  })
+async function permanent(type: string, id: string) {
+  const ok = await showConfirm('确定永久删除？此操作无法恢复。')
+  if (!ok) return
+  if (type === 'bookmark') ds.permanentDeleteBookmark(id)
+  else if (type === 'group') ds.permanentDeleteGroup(id)
+  else if (type === 'category') ds.permanentDeleteCategory(id)
+  else if (type === 'attribute') ds.permanentDeleteAttribute(id)
+  appStore.save()
+  toast('已永久删除')
 }
 
-function onEmptyTrash() {
-  showConfirm('确定清空回收站？所有内容将被永久删除，无法恢复。', () => {
-    ds.emptyTrash()
-    appStore.save()
-    toast('回收站已清空')
-    emit('close')
-  })
+async function onEmptyTrash() {
+  const ok = await showConfirm('确定清空回收站？所有内容将被永久删除，无法恢复。')
+  if (!ok) return
+  ds.emptyTrash()
+  appStore.save()
+  toast('回收站已清空')
+  emit('close')
 }
 </script>

@@ -34,8 +34,6 @@ export interface UIState {
   catModalOpen: boolean
   attrModalOpen: boolean
   groupEditOpen: boolean
-  confirmModalOpen: boolean
-  confirmModalMessage: string
   trashPanelOpen: boolean
   historyPanelOpen: boolean
   historyItemId: string
@@ -88,8 +86,6 @@ export const useUIStore = defineStore('ui', {
     catModalOpen: false,
     attrModalOpen: false,
     groupEditOpen: false,
-    confirmModalOpen: false,
-    confirmModalMessage: '',
     trashPanelOpen: false,
     historyPanelOpen: false,
     historyItemId: '',
