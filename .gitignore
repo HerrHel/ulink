@@ -12,3 +12,5 @@ task_plan.md
 *.svg
 *.md
 !CLAUDE.md
+/test-results/
+/playwright-report/
