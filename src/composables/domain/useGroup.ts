@@ -243,12 +243,12 @@ export function editGroup(eGid: string) {
   geForm.iconPreviewUrl = sg.icon || '';
   geForm.clearIconVisible = !!sg.icon;
   pushNavState();
-  ui.groupEditOpen = true;
+  ui.modals.groupEdit = true;
 }
 
 export function closeGroupEdit() {
   const ui = useUIStore();
-  ui.groupEditOpen = false;
+  ui.modals.groupEdit = false;
   ui.editingGeId = null;
 }
 

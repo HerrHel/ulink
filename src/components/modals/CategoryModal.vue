@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="分类管理" id="catModal" :class="{ open: store.catModalOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="分类管理" id="catModal" :class="{ open: store.modals.category }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head"><h2>管理分类</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
@@ -50,7 +50,7 @@ const uncategorizedCat = computed(() => dataStore.categories.find(c => c.id === 
 
 const sortableList = ref<Category[]>([])
 
-watch(() => store.catModalOpen, (open) => {
+watch(() => store.modals.category, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())
 })
 
@@ -218,7 +218,7 @@ onUnmounted(() => {
   document.removeEventListener('pointermove', onPointerMove)
 })
 
-function onClose() { store.catModalOpen = false }
+function onClose() { store.modals.category = false }
 
 function onAddCat() {
   if (addNewCategory(newName.value, store)) newName.value = ''

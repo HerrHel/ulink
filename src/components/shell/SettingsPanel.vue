@@ -93,10 +93,10 @@
         <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储</span>
       </div>
       <div class="sp-row sp-row-actions">
-        <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.e2eSetupOpen = true">
+        <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true">
           🔐 开启加密
         </button>
-        <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.e2eUnlockOpen = true">
+        <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eUnlock = true">
           🔓 解锁
         </button>
         <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock">

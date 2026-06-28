@@ -10,6 +10,16 @@ import { isMobile } from '../utils.js'
 
 // ── 严格字面量类型 ──
 export type ThemeStyle = 'premium' | 'comfortable'
+
+export interface ModalState {
+  bookmark: boolean   // bmModalOpen
+  category: boolean   // catModalOpen
+  attribute: boolean  // attrModalOpen
+  groupEdit: boolean  // groupEditOpen
+  e2eSetup: boolean   // e2eSetupOpen
+  e2eUnlock: boolean  // e2eUnlockOpen
+}
+
 export interface UIState {
   curCat: string
   isMobile: boolean
@@ -30,18 +40,12 @@ export interface UIState {
   settingsOpen: boolean
   addDropdownOpen: boolean
   railOpen: boolean
-  bmModalOpen: boolean
   addBmPopoverOpen: boolean
   deadLinksPopoverOpen: boolean
-  catModalOpen: boolean
-  attrModalOpen: boolean
-  groupEditOpen: boolean
   trashPanelOpen: boolean
   historyPanelOpen: boolean
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
-  e2eSetupOpen: boolean
-  e2eUnlockOpen: boolean
   mentionGid: string | null
   mentionQuery: string
   mentionIdx: number
@@ -59,6 +63,9 @@ export interface UIState {
   lpFired: boolean
   _prevLayoutMode: 'grid' | 'list' | null
   _preferredLayoutMode: 'grid' | 'list' | null
+
+  // 分组模态框状态
+  modals: ModalState
 }
 
 export const useUIStore = defineStore('ui', {
@@ -82,18 +89,20 @@ export const useUIStore = defineStore('ui', {
     settingsOpen: false,
     addDropdownOpen: false,
     railOpen: false,
-    bmModalOpen: false,
     addBmPopoverOpen: false,
     deadLinksPopoverOpen: false,
-    catModalOpen: false,
-    attrModalOpen: false,
-    groupEditOpen: false,
     trashPanelOpen: false,
     historyPanelOpen: false,
     historyItemId: '',
     historyItemType: 'bookmark',
-    e2eSetupOpen: false,
-    e2eUnlockOpen: false,
+    modals: {
+      bookmark: false,
+      category: false,
+      attribute: false,
+      groupEdit: false,
+      e2eSetup: false,
+      e2eUnlock: false,
+    },
     mentionGid: null,
     mentionQuery: '',
     mentionIdx: 0,

@@ -58,7 +58,7 @@ const ui = useUIStore()
 
 const commands: CommandItem[] = [
   { id: 'new-bm', label: '新建书签', icon: I.plus, shortcut: 'Ctrl+N', section: 'command', action() { close(); openBmModal() } },
-  { id: 'new-group', label: '新建组', icon: I.note, section: 'command', action() { close(); ui.groupEditOpen = true } },
+  { id: 'new-group', label: '新建组', icon: I.note, section: 'command', action() { close(); ui.modals.groupEdit = true } },
   { id: 'import', label: '导入数据', icon: I.import, section: 'command', action() { close(); document.getElementById('importFile')?.click() } },
   { id: 'export', label: '导出数据', icon: I.export, section: 'command', action() { close(); ui.settingsOpen = true } },
   { id: 'sync', label: '同步到云端', icon: I.cloud, section: 'command', action() { close(); /* trigger sync */ } },

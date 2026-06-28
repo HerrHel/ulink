@@ -23,24 +23,24 @@
     <DetailPanel />
   </div>
 </div>
-<template v-if="store.bmModalOpen">
+<template v-if="store.modals.bookmark">
   <BookmarkModal />
 </template>
-<template v-if="store.catModalOpen">
+<template v-if="store.modals.category">
   <CategoryModal />
 </template>
-<template v-if="store.attrModalOpen">
+<template v-if="store.modals.attribute">
   <AttributeModal />
 </template>
-<template v-if="store.groupEditOpen">
+<template v-if="store.modals.groupEdit">
   <GroupEditModal />
 </template>
 <TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
 <ConfirmModal />
 <HistoryPanel :open="store.historyPanelOpen" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.historyPanelOpen = false" />
 <AuthModal />
-<E2ESetupModal :open="store.e2eSetupOpen" @close="store.e2eSetupOpen = false" />
-<E2EUnlockModal :open="store.e2eUnlockOpen" @close="store.e2eUnlockOpen = false" @unlocked="onE2EUnlocked" />
+<E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
+<E2EUnlockModal :open="store.modals.e2eUnlock" @close="store.modals.e2eUnlock = false" @unlocked="onE2EUnlocked" />
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
 <DeadLinksPopover />
@@ -107,11 +107,11 @@ const e2e = useE2E()
 onMounted(async () => {
   const hasE2E = await e2e.checkE2EStatus()
   if (hasE2E) {
-    store.e2eUnlockOpen = true
+    store.modals.e2eUnlock = true
   }
 })
 
 function onE2EUnlocked() {
-  store.e2eUnlockOpen = false
+  store.modals.e2eUnlock = false
 }
 </script>

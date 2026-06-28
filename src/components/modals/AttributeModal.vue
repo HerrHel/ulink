@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="属性管理" :class="{ open: store.attrModalOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="属性管理" :class="{ open: store.modals.attribute }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head"><h2>管理属性</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
@@ -40,11 +40,11 @@ const { editingId, editingName, setEditInputRef, startRename, confirmRename, can
 
 const attributes = computed(() => store.customAttributes)
 
-watch(() => store.attrModalOpen, (open) => {
+watch(() => store.modals.attribute, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())
 })
 
-function onClose() { store.attrModalOpen = false }
+function onClose() { store.modals.attribute = false }
 
 function onAddAttr() {
   const name = newName.value.trim()

@@ -121,7 +121,7 @@ export function openBmModal(editId?: string) {
     ui.editingId = editId || null
     ui.lastFocusedEl = document.activeElement as HTMLElement
     pushNavState()
-    ui.bmModalOpen = true
+    ui.modals.bookmark = true
     bmForm.isOpen = true
   } finally { _opening = false }
 }
@@ -131,7 +131,7 @@ export function closeBmModal() {
   bmForm.addToGroupMode = false
   if (bmForm._fetchTimer) { clearTimeout(bmForm._fetchTimer); bmForm._fetchTimer = null }
   const ui = useUIStore()
-  ui.bmModalOpen = false
+  ui.modals.bookmark = false
   ui.editingId = null
   if (ui.lastFocusedEl) ui.lastFocusedEl.focus()
   ui.lastFocusedEl = null

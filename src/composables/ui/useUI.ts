@@ -56,8 +56,8 @@ export function updateCardTagsOverflow() {
 }
 
 // ── Modal 开关 ──
-export function openCatModal() { useUIStore().catModalOpen = true }
-export function closeCatModal() { useUIStore().catModalOpen = false }
+export function openCatModal() { useUIStore().modals.category = true }
+export function closeCatModal() { useUIStore().modals.category = false }
 
 export async function deleteCategory(id: string) {
   if (id === 'all' || id === 'uncategorized') { toast('无法删除默认分类', false); return }
@@ -65,8 +65,8 @@ export async function deleteCategory(id: string) {
   if (ok) { useDataStore().deleteCategory(id); saveAppData() }
 }
 
-export function openAttrModal() { useUIStore().attrModalOpen = true }
-export function closeAttrModal() { useUIStore().attrModalOpen = false }
+export function openAttrModal() { useUIStore().modals.attribute = true }
+export function closeAttrModal() { useUIStore().modals.attribute = false }
 
 export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id); saveAppData() }
 

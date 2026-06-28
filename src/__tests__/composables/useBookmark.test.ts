@@ -36,7 +36,14 @@ const mockUI = {
   editingId: null as string | null,
   lastFocusedEl: null as HTMLElement | null,
   saveToGroup: null as string | null,
-  bmModalOpen: false,
+  modals: {
+    bookmark: false,
+    category: false,
+    attribute: false,
+    groupEdit: false,
+    e2eSetup: false,
+    e2eUnlock: false,
+  },
 }
 
 vi.mock('../../stores/app.js', () => ({
@@ -108,7 +115,7 @@ function resetMockStore() {
   mockUI.editingId = null
   mockUI.lastFocusedEl = null
   mockUI.saveToGroup = null
-  mockUI.bmModalOpen = false
+  mockUI.modals.bookmark = false
   mockToastWithUndo.undoFn = null
 }
 

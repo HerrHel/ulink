@@ -18,10 +18,10 @@ interface NavState {
   curCat: string
   focusedGroupId: string | null
   detailPanelOpen: boolean
-  bmModalOpen: boolean
-  groupEditOpen: boolean
-  catModalOpen: boolean
-  attrModalOpen: boolean
+  bm: boolean
+  groupEdit: boolean
+  cat: boolean
+  attr: boolean
 }
 
 export function captureNavState(): NavState {
@@ -30,10 +30,10 @@ export function captureNavState(): NavState {
     curCat: ui.curCat,
     focusedGroupId: ui.focusedGroupId,
     detailPanelOpen: ui.detailOpen || false,
-    bmModalOpen: ui.bmModalOpen || false,
-    groupEditOpen: ui.groupEditOpen || false,
-    catModalOpen: ui.catModalOpen || false,
-    attrModalOpen: ui.attrModalOpen || false
+    bm: ui.modals.bookmark || false,
+    groupEdit: ui.modals.groupEdit || false,
+    cat: ui.modals.category || false,
+    attr: ui.modals.attribute || false,
   }
 }
 
@@ -45,10 +45,10 @@ export function pushNavState() {
 
 export function restoreNavState(prev: NavState) {
   const ui = useUIStore()
-  if (prev.bmModalOpen !== true && ui.bmModalOpen) { closeBmModal(); return }
-  if (prev.groupEditOpen !== true && ui.groupEditOpen) { closeGroupEdit(); return }
-  if (prev.catModalOpen !== true && ui.catModalOpen) { closeCatModal(); return }
-  if (prev.attrModalOpen !== true && ui.attrModalOpen) { closeAttrModal(); return }
+  if (prev.bm !== true && ui.modals.bookmark) { closeBmModal(); return }
+  if (prev.groupEdit !== true && ui.modals.groupEdit) { closeGroupEdit(); return }
+  if (prev.cat !== true && ui.modals.category) { closeCatModal(); return }
+  if (prev.attr !== true && ui.modals.attribute) { closeAttrModal(); return }
   if (prev.focusedGroupId === null && ui.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat } return }
   if (!prev.detailPanelOpen && ui.detailOpen) { ui.detailOpen = false; return }
   if (prev.detailPanelOpen && !ui.detailOpen) { ui.detailOpen = true; return }

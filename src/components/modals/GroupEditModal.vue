@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="编辑组" :class="{ open: store.groupEditOpen }" @click.self="onMaskClick">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="编辑组" :class="{ open: store.modals.groupEdit }" @click.self="onMaskClick">
     <div class="modal">
       <div class="modal-head"><h2>编辑组</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
       <div class="modal-body">
@@ -54,7 +54,7 @@ const geNameRef = ref<HTMLInputElement | null>(null)
 
 const categoryOptions = computed(() => store.selectableCategories)
 
-watch(() => store.groupEditOpen, (open) => {
+watch(() => store.modals.groupEdit, (open) => {
   if (open) nextTick(() => geNameRef.value?.focus())
 })
 

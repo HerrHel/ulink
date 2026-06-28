@@ -63,12 +63,14 @@ export const useAppStore = defineStore('app', () => {
     settingsOpen: uiProp('settingsOpen'),
     addDropdownOpen: uiProp('addDropdownOpen'),
     railOpen: uiProp('railOpen'),
-    bmModalOpen: uiProp('bmModalOpen'),
     addBmPopoverOpen: uiProp('addBmPopoverOpen'),
     deadLinksPopoverOpen: uiProp('deadLinksPopoverOpen'),
-    catModalOpen: uiProp('catModalOpen'),
-    attrModalOpen: uiProp('attrModalOpen'),
-    groupEditOpen: uiProp('groupEditOpen'),
+
+    // ── 分组模态框（通过对象引用支持个体属性读写）──
+    modals: computed({
+      get: () => ui().modals,
+      set: (v) => { ui().modals = v },
+    }),
     trashPanelOpen: uiProp('trashPanelOpen'),
     historyPanelOpen: uiProp('historyPanelOpen'),
     historyItemId: uiProp('historyItemId'),
@@ -89,8 +91,6 @@ export const useAppStore = defineStore('app', () => {
     lastFocusedEl: uiProp('lastFocusedEl'),
     lpFired: uiProp('lpFired'),
     _prevLayoutMode: uiProp('_prevLayoutMode'),
-    e2eSetupOpen: uiProp('e2eSetupOpen'),
-    e2eUnlockOpen: uiProp('e2eUnlockOpen'),
 
     // ── CRUD（委托 dataStore）──
     addBookmark(bm: Bookmark) { ds().addBookmark(bm) },
