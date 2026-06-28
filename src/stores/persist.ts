@@ -61,25 +61,18 @@ export function saveToLocalStorage(data: AppData): boolean {
   return true
 }
 
-let _idbTimer: ReturnType<typeof setTimeout> | null = null
-let _pendingIDBData: AppData | null = null
-export function saveToIDB(data: AppData): void {
-  _pendingIDBData = data
-  if (_idbTimer) clearTimeout(_idbTimer)
-  _idbTimer = setTimeout(_doSaveIDB, 500)
-}
-function _doSaveIDB(): void {
-  _idbTimer = null
-  if (!_pendingIDBData) return
-  const plain = JSON.parse(JSON.stringify(_pendingIDBData))
+export async function saveToIDB(data: AppData): Promise<void> {
+  const plain = JSON.parse(JSON.stringify(data))
   plain._savedAt = Date.now()
-  _pendingIDBData = null
-  idbSet(IDB_KEY, plain).catch((e: Error) =>
-    console.warn('[persist] IDB sync failed:', e.message))
+  try {
+    await idbSet(IDB_KEY, plain)
+  } catch (e: unknown) {
+    console.warn('[persist] IDB save failed:', e instanceof Error ? e.message : e)
+  }
 }
+
 export function flushIDB(): void {
-  if (_idbTimer) { clearTimeout(_idbTimer); _idbTimer = null }
-  _doSaveIDB()
+  // IDB 保存已是即时的，flush 仅保留为兼容 API
 }
 
 export function getStorageInfo(data: AppData): StorageInfo {
