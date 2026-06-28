@@ -134,6 +134,7 @@ export const useToastStore = defineStore('toast', () => {
   }
 
   function onConfirmOpenChange(open: boolean) {
+    confirmOpen.value = open
     if (!open && _confirmResolve) {
       _confirmResolve(false)
       _confirmResolve = null
