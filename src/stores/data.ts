@@ -189,72 +189,114 @@ export const useDataStore = defineStore('data', {
       if (!fields) { fields = new Set(); this._changedFields.set(id, fields) }
       fields.add(field)
     },
-    addBookmark(bm: Bookmark) { this.bookmarks.push(bm); this._markDirty(bm.id); this._newIds.add(bm.id) },
+    addBookmark(bm: Bookmark) { this.bookmarks = [...this.bookmarks, bm]; this._markDirty(bm.id); this._newIds.add(bm.id) },
     updateBookmark(id: string, changes: Partial<Bookmark>) {
-      const bm = this.bookmarkMap[id]
-      if (bm) {
+      const idx = this.bookmarks.findIndex(b => b.id === id)
+      if (idx >= 0) {
         for (const key of Object.keys(changes)) this._trackChange(id, key)
-        Object.assign(bm, changes); bm.updatedAt = Date.now(); this._markDirty(id)
+        this.bookmarks[idx] = { ...this.bookmarks[idx], ...changes, updatedAt: Date.now() }
+        this._markDirty(id)
       }
     },
     deleteBookmark(id: string) {
-      const bm = this.bookmarkMap[id]
-      if (bm) {
-        bm.deletedAt = Date.now()
-        bm.updatedAt = bm.deletedAt
-        this._markDirty(id)
-      }
+      const idx = this.bookmarks.findIndex(b => b.id === id)
+      if (idx < 0) return
+      const bm = this.bookmarks[idx]
+      this.bookmarks[idx] = { ...bm, deletedAt: Date.now(), updatedAt: Date.now() }
+      this._markDirty(id)
       // 记录被删除书签原本所属的组，以便恢复时还原
       const groupIds: string[] = []
-      for (const g of this.siblingGroups) {
+      for (let gi = 0; gi < this.siblingGroups.length; gi++) {
+        const g = this.siblingGroups[gi]
         const bi = g.bookmarkIds.indexOf(id)
         if (bi >= 0) {
           groupIds.push(g.id)
-          g.bookmarkIds.splice(bi, 1)
+          this.siblingGroups[gi] = { ...g, bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) }
           this._markDirty(g.id)
         }
       }
       if (groupIds.length) this._deletedGroupMemberships.set(id, groupIds)
     },
-    addGroup(g: SiblingGroup) { this.siblingGroups.push(g); this._markDirty(g.id); this._newIds.add(g.id) },
+    addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._markDirty(g.id); this._newIds.add(g.id) },
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
-      const g = this.groupMap[id]
-      if (g) {
+      const idx = this.siblingGroups.findIndex(g => g.id === id)
+      if (idx >= 0) {
         for (const key of Object.keys(changes)) this._trackChange(id, key)
-        Object.assign(g, changes); g.updatedAt = Date.now(); this._markDirty(id)
-      }
-    },
-    deleteGroup(id: string) {
-      const g = this.groupMap[id]
-      if (g) {
-        g.deletedAt = Date.now()
-        g.updatedAt = g.deletedAt
+        this.siblingGroups[idx] = { ...this.siblingGroups[idx], ...changes, updatedAt: Date.now() }
         this._markDirty(id)
       }
     },
-    addCategory(cat: Category) { cat.updatedAt = Date.now(); this.categories.push(cat); this._markDirty(cat.id); this._newIds.add(cat.id) },
+    deleteGroup(id: string) {
+      const idx = this.siblingGroups.findIndex(g => g.id === id)
+      if (idx < 0) return
+      const g = this.siblingGroups[idx]
+      this.siblingGroups[idx] = { ...g, deletedAt: Date.now(), updatedAt: Date.now() }
+      this._markDirty(id)
+    },
+    addCategory(cat: Category) {
+      cat.updatedAt = Date.now()
+      this.categories = [...this.categories, cat]
+      this._markDirty(cat.id); this._newIds.add(cat.id)
+    },
     renameCategory(id: string, name: string) {
-      const c = this.categories.find(c => c.id === id)
-      if (c) { c.name = name; c.updatedAt = Date.now(); this._trackChange(id, 'name'); this._markDirty(id) }
+      const idx = this.categories.findIndex(c => c.id === id)
+      if (idx >= 0) {
+        this._trackChange(id, 'name')
+        this.categories[idx] = { ...this.categories[idx], name, updatedAt: Date.now() }
+        this._markDirty(id)
+      }
     },
     deleteCategory(id: string) {
       const now = Date.now()
-      this.bookmarks.forEach(b => { if (b.categoryId === id) { b.categoryId = 'uncategorized'; b.updatedAt = now; this._trackChange(b.id, 'categoryId'); this._markDirty(b.id) } })
-      this.siblingGroups.forEach(g => { if (g.categoryId === id) { g.categoryId = 'uncategorized'; g.updatedAt = now; this._trackChange(g.id, 'categoryId'); this._markDirty(g.id) } })
-      const c = this.categories.find(c => c.id === id)
-      if (c) { c.deletedAt = Date.now(); c.updatedAt = c.deletedAt; this._markDirty(id) }
+      this.bookmarks = this.bookmarks.map(b =>
+        b.categoryId === id ? { ...b, categoryId: 'uncategorized', updatedAt: now } : b
+      )
+      this.siblingGroups = this.siblingGroups.map(g =>
+        g.categoryId === id ? { ...g, categoryId: 'uncategorized', updatedAt: now } : g
+      )
+      const cIdx = this.categories.findIndex(c => c.id === id)
+      if (cIdx >= 0) {
+        this._trackChange(id, 'deletedAt')
+        this.categories[cIdx] = { ...this.categories[cIdx], deletedAt: Date.now(), updatedAt: Date.now() }
+        this._markDirty(id)
+      }
     },
-    addAttribute(attr: CustomAttribute) { attr.updatedAt = Date.now(); this.customAttributes.push(attr); this._markDirty(attr.id); this._newIds.add(attr.id) },
+    addAttribute(attr: CustomAttribute) {
+      attr.updatedAt = Date.now()
+      this.customAttributes = [...this.customAttributes, attr]
+      this._markDirty(attr.id); this._newIds.add(attr.id)
+    },
     renameAttribute(id: string, name: string) {
-      const attr = this.customAttributes.find(a => a.id === id)
-      if (attr) { attr.name = name; attr.updatedAt = Date.now(); this._trackChange(id, 'name'); this._markDirty(id) }
+      const idx = this.customAttributes.findIndex(a => a.id === id)
+      if (idx >= 0) {
+        this._trackChange(id, 'name')
+        this.customAttributes[idx] = { ...this.customAttributes[idx], name, updatedAt: Date.now() }
+        this._markDirty(id)
+      }
     },
     deleteAttribute(id: string) {
-      const attr = this.customAttributes.find(a => a.id === id)
-      if (attr) { attr.deletedAt = Date.now(); attr.updatedAt = attr.deletedAt; this._markDirty(id) }
+      const aIdx = this.customAttributes.findIndex(a => a.id === id)
+      if (aIdx >= 0) {
+        this.customAttributes[aIdx] = { ...this.customAttributes[aIdx], deletedAt: Date.now(), updatedAt: Date.now() }
+        this._markDirty(id)
+      }
       const now = Date.now()
-      this.bookmarks.forEach(b => { if (b.attributes) { delete b.attributes[id]; b.updatedAt = now; this._trackChange(b.id, 'attributes'); this._markDirty(b.id) } })
-      this.siblingGroups.forEach(g => { if (g.attributes) { delete g.attributes[id]; g.updatedAt = now; this._trackChange(g.id, 'attributes'); this._markDirty(g.id) } })
+      this.bookmarks = this.bookmarks.map(b => {
+        if (b.attributes && id in b.attributes) {
+          const next = { ...b, attributes: { ...b.attributes }, updatedAt: now }
+          delete next.attributes[id]
+          return next
+        }
+        return b
+      })
+      this.siblingGroups = this.siblingGroups.map(g => {
+        if (g.attributes && id in g.attributes) {
+          const next = { ...g, attributes: { ...g.attributes }, updatedAt: now }
+          delete next.attributes[id]
+          return next
+        }
+        return g
+      })
       const ui = useUIStore()
       const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
       const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
@@ -262,39 +304,48 @@ export const useDataStore = defineStore('data', {
 
     // ── 回收站：恢复 ──
     restoreBookmark(id: string) {
-      this._restoreItem(this.bookmarkMap[id], id)
+      this._restoreItem('bookmarks', id)
       // 恢复被删除书签原本所属的组关系
       const groupIds = this._deletedGroupMemberships.get(id)
       if (groupIds) {
         for (const gid of groupIds) {
-          const g = this.groupMap[gid]
-          if (g && g.bookmarkIds.indexOf(id) === -1) {
-            g.bookmarkIds.push(id)
+          const gIdx = this.siblingGroups.findIndex(g => g.id === gid)
+          if (gIdx >= 0 && this.siblingGroups[gIdx].bookmarkIds.indexOf(id) === -1) {
+            const g = this.siblingGroups[gIdx]
+            this.siblingGroups[gIdx] = { ...g, bookmarkIds: [...g.bookmarkIds, id] }
             this._markDirty(g.id)
           }
         }
         this._deletedGroupMemberships.delete(id)
       }
     },
-    restoreGroup(id: string) { this._restoreItem(this.groupMap[id], id) },
-    restoreCategory(id: string) { this._restoreItem(this.categories.find(c => c.id === id), id) },
-    restoreAttribute(id: string) { this._restoreItem(this.customAttributes.find(a => a.id === id), id) },
+    restoreGroup(id: string) { this._restoreItem('sibling_groups', id) },
+    restoreCategory(id: string) { this._restoreItem('categories', id) },
+    restoreAttribute(id: string) { this._restoreItem('custom_attributes', id) },
 
     /** 内部辅助：恢复已软删除项 */
-    _restoreItem(item: { deletedAt?: number; updatedAt?: number } | undefined, id: string) {
-      if (item) { delete item.deletedAt; item.updatedAt = Date.now(); this._markDirty(id) }
+    _restoreItem(table: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes', id: string) {
+      const arr = this[table]
+      const idx = (arr as any[]).findIndex((i: any) => i.id === id)
+      if (idx >= 0) {
+        const item = (arr as any[])[idx]
+        const next = { ...item }
+        delete next.deletedAt
+        next.updatedAt = Date.now()
+        ;(arr as any[])[idx] = next
+        this._markDirty(id)
+      }
     },
 
     // ── 回收站：永久删除 ──
-    permanentDeleteBookmark(id: string) { this._permanentDelete(this.bookmarks, id, 'bookmarks'); this._deletedGroupMemberships.delete(id) },
-    permanentDeleteGroup(id: string) { this._permanentDelete(this.siblingGroups, id, 'sibling_groups') },
-    permanentDeleteCategory(id: string) { this._permanentDelete(this.categories, id, 'categories') },
-    permanentDeleteAttribute(id: string) { this._permanentDelete(this.customAttributes, id, 'custom_attributes') },
+    permanentDeleteBookmark(id: string) { this._permanentDelete('bookmarks', id, 'bookmarks'); this._deletedGroupMemberships.delete(id) },
+    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id, 'sibling_groups') },
+    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id, 'categories') },
+    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id, 'custom_attributes') },
 
     /** 内部辅助：永久删除项 */
-    _permanentDelete(arr: { id: string }[], id: string, table: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes') {
-      const idx = arr.findIndex(item => item.id === id)
-      if (idx >= 0) arr.splice(idx, 1)
+    _permanentDelete(key: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes', id: string, table: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes') {
+      this[key as any] = this[key as any].filter((item: any) => item.id !== id)
       this._dirtyIds.delete(id)
       this._deletedIds.set(id, table)
     },
