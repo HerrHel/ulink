@@ -6,11 +6,13 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
-import { actionSheetAPI, type ActionSheetAPI } from '../bridge.js'
 import { toast, showConfirm } from '../../lib/toast.js'
+import { useActionSheetStore } from '../../stores/actionSheet.js'
 
 // ── Action Sheet ──
-export function showActionSheet(items: Parameters<ActionSheetAPI['show']>[0]) { actionSheetAPI?.show(items) }
+export function showActionSheet(items: { label: string; action: () => void; danger?: boolean }[]) {
+  useActionSheetStore().showActions(items)
+}
 
 // ── Rail (Sidebar) ──
 export function toggleRail() { const ui = useUIStore(); ui.railOpen = !ui.railOpen }

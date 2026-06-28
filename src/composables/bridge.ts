@@ -3,19 +3,8 @@
  *
  * 正在逐步移除，替代方案：Pinia Store。
  * 已移除：toastAPI, ctxMenuAPI → useToastStore, useContextMenuStore
- * 待移除：actionSheetAPI, attrDropdownAPI, batchMoveAPI, mfbAPI, mentionAPI
+ * 待移除：attrDropdownAPI, batchMoveAPI, mfbAPI, mentionAPI
  */
-
-export interface ContextMenuAPI {
-  show(e: MouseEvent, type: string, id: string): void
-  hide(): void
-}
-
-export interface ActionSheetAPI {
-  show(items: Array<{ label: string; action: () => void; danger?: boolean }>): void
-  showCategoryPicker(bmId: string): void
-  showGroupCategoryPicker(gid: string): void
-}
 
 export interface AttrDropdownAPI {
   toggle(): void
@@ -41,10 +30,6 @@ export interface MfbAPI {
 // --- Mention ---
 export let mentionAPI: MentionAPI | null = null
 export function setMentionAPI(api: MentionAPI | null) { mentionAPI = api }
-
-// --- Action Sheet ---
-export let actionSheetAPI: ActionSheetAPI | null = null
-export function setActionSheetAPI(api: ActionSheetAPI | null) { actionSheetAPI = api }
 
 // --- Attr Dropdown ---
 export let attrDropdownAPI: AttrDropdownAPI | null = null

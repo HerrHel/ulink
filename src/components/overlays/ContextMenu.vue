@@ -17,7 +17,7 @@ import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { ACTIONS } from '../../config/constants.js'
-import { actionSheetAPI } from '../../composables/bridge.js'
+import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { visit, openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup } from '../../composables/domain/useGroup.js'
@@ -101,7 +101,7 @@ function _dispatchAction(type: string, action: string, id: string) {
   } else if (type === 'group') {
     if (action === ACTIONS.EDIT) editGroup(id)
     if (action === ACTIONS.DELETE) deleteGroup(id)
-    if (action === ACTIONS.MOVE_TO_CAT) actionSheetAPI?.showGroupCategoryPicker(id)
+    if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
     if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
     if (action === ACTIONS.HISTORY) { store.historyItemId = id; store.historyItemType = 'group'; store.historyPanelOpen = true }
   } else if (type === 'group-card') {

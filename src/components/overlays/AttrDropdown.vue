@@ -33,10 +33,11 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
-import { setAttrDropdownAPI, actionSheetAPI } from '../../composables/bridge.js'
+import { setAttrDropdownAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
+import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { isMobile } from '../../utils.js'
 
 const store = useAppStore()
@@ -110,7 +111,7 @@ function showAttrActions(attrId: string) {
   const dataStore = useDataStore()
   const attr = store.customAttributes.find(a => a.id === attrId)
   if (!attr) return
-  actionSheetAPI?.show([
+  useActionSheetStore().showActions([
     { label: '重命名', action: () => onRenameAttr(attrId) },
     { label: '删除属性', action: () => onDeleteAttr(attrId), danger: true },
   ])
