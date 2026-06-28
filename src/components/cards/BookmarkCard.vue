@@ -88,6 +88,7 @@ import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
+import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
 import type { Bookmark } from '../../types.js'
 
 function hlText(text: string, query: string): string {
@@ -159,35 +160,18 @@ function filterByTagName(name: string) {
 function copyUser() { copyToClipboard(props.bookmark.username || '', '账户') }
 function copyPw() { copyToClipboard(decodedPw.value, '密码') }
 
+const { startEditing } = useInlineEdit()
+
 function editNotes(e: Event) {
-  const notesEl = e.currentTarget as HTMLElement
-  if (notesEl.hasAttribute('contenteditable')) return
-  notesEl.setAttribute('contenteditable', 'true')
-  notesEl.style.cssText = 'outline:1px dashed var(--accent);padding:4px;border-radius:4px;cursor:text;white-space:pre-wrap;-webkit-line-clamp:unset;display:block'
-  notesEl.textContent = props.bookmark.notes || ''
-  notesEl.focus()
-  const sel = window.getSelection()
-  sel?.selectAllChildren(notesEl)
-
-  function saveNotes() {
-    notesEl.removeAttribute('contenteditable')
-    notesEl.style.cssText = ''
-    const newNotes = notesEl.textContent.trim()
-    if (props.bookmark.notes !== newNotes) {
-      dataStore.updateBookmark(props.bookmark.id, { notes: newNotes })
-      debouncedSaveAppData()
-      toast('备注已更新')
-    }
-    notesEl.removeEventListener('blur', saveNotes)
-    notesEl.removeEventListener('keydown', onKey)
-  }
-
-  function onKey(ev: KeyboardEvent) {
-    if (ev.key === 'Escape') { ev.preventDefault(); saveNotes() }
-    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); saveNotes() }
-  }
-
-  notesEl.addEventListener('blur', saveNotes)
-  notesEl.addEventListener('keydown', onKey)
+  startEditing(e.currentTarget as HTMLElement, props.bookmark.notes ?? '', {
+    multiline: true,
+    onSave(newNotes) {
+      if (newNotes !== (props.bookmark.notes ?? '')) {
+        dataStore.updateBookmark(props.bookmark.id, { notes: newNotes })
+        debouncedSaveAppData()
+        toast('备注已更新')
+      }
+    },
+  })
 }
 </script>
