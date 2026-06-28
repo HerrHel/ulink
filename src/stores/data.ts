@@ -17,6 +17,12 @@ interface DataState {
   siblingGroups: SiblingGroup[]
   categories: Category[]
   customAttributes: CustomAttribute[]
+  // 规范化索引：由 CRUD action 增量维护，getter 直接返回
+  _bmMap: Record<string, Bookmark>
+  _grpMap: Record<string, SiblingGroup>
+  _catMap: Record<string, Category>
+  _attrMap: Record<string, CustomAttribute>
+  _childrenIdx: Record<string, string[]> // parentId → child bookmark IDs
   _masterCanary: string | import('../types.js').EncryptedPassword | null
   _customCardOrder: Array<{ t: 'g' | 'b'; id: string }> | null
   _cachedStorageInfo: { size: number; percent: number; label: string } | null
@@ -66,6 +72,11 @@ export const useDataStore = defineStore('data', {
     categories: [],
     customAttributes: [],
     _masterCanary: null,
+    _bmMap: {},
+    _grpMap: {},
+    _catMap: {},
+    _attrMap: {},
+    _childrenIdx: {},
     _customCardOrder: null,
     _cachedStorageInfo: null,
     _storageInfoDirty: true,
@@ -130,23 +141,41 @@ export const useDataStore = defineStore('data', {
       return this.trashedBookmarks.length + this.trashedGroups.length + this.trashedCategories.length + this.trashedAttributes.length
     },
 
-    /** O(1) 书签/组查找 Map（含软删除——被 Pinia computed 缓存） */
+    /** O(1) 书签查找 Map（含软删除——由 _syncMaps 维护，懒回退） */
     bookmarkMap(state): Record<string, Bookmark> {
-      const map: Record<string, Bookmark> = {}; state.bookmarks.forEach(b => { map[b.id] = b }); return map
+      if (Object.keys(state._bmMap).length !== state.bookmarks.length) {
+        const map: Record<string, Bookmark> = {}; state.bookmarks.forEach(b => { map[b.id] = b }); return map
+      }
+      return state._bmMap
     },
     groupMap(state): Record<string, SiblingGroup> {
-      const map: Record<string, SiblingGroup> = {}; state.siblingGroups.forEach(g => { map[g.id] = g }); return map
+      if (Object.keys(state._grpMap).length !== state.siblingGroups.length) {
+        const map: Record<string, SiblingGroup> = {}; state.siblingGroups.forEach(g => { map[g.id] = g }); return map
+      }
+      return state._grpMap
     },
-    /** 预计算父→子书签映射（排除软删除） */
+    /** 预计算父→子书签映射（由 _syncMaps 维护，排除软删除） */
     childrenMap(state): Record<string, Bookmark[]> {
-      const map: Record<string, Bookmark[]> = {}
-      state.bookmarks.forEach(b => {
-        if (b.parentId && !b.deletedAt) {
-          if (!map[b.parentId]) map[b.parentId] = []
-          map[b.parentId].push(b)
-        }
-      })
-      return map
+      // 索引未构建或不同步时回退到手动计算
+      if (Object.keys(state._childrenIdx).length === 0 && state.bookmarks.some(b => b.parentId)) {
+        const map: Record<string, Bookmark[]> = {}
+        state.bookmarks.forEach(b => {
+          if (b.parentId && !b.deletedAt) {
+            if (!map[b.parentId]) map[b.parentId] = []
+            map[b.parentId].push(b)
+          }
+        })
+        return map
+      }
+      // 按需将 ID 数组解析为 Bookmark 对象
+      const bmMap = state._bmMap
+      const result: Record<string, Bookmark[]> = {}
+      for (const pid of Object.keys(state._childrenIdx)) {
+        result[pid] = state._childrenIdx[pid]
+          .map(id => bmMap[id] || state.bookmarks.find(b => b.id === id))
+          .filter(b => b && !b.deletedAt)
+      }
+      return result
     },
     /** 各分类的卡片计数（排除软删除） */
     cardCounts(state): Record<string, number> {
@@ -163,6 +192,34 @@ export const useDataStore = defineStore('data', {
   },
 
   actions: {
+    // ── 索引维护：从数组重建所有索引 ──
+    _syncMaps() {
+      const bmMap: Record<string, Bookmark> = {}
+      for (const b of this.bookmarks) bmMap[b.id] = b
+      this._bmMap = bmMap
+
+      const grpMap: Record<string, SiblingGroup> = {}
+      for (const g of this.siblingGroups) grpMap[g.id] = g
+      this._grpMap = grpMap
+
+      const catMap: Record<string, Category> = {}
+      for (const c of this.categories) catMap[c.id] = c
+      this._catMap = catMap
+
+      const attrMap: Record<string, CustomAttribute> = {}
+      for (const a of this.customAttributes) attrMap[a.id] = a
+      this._attrMap = attrMap
+
+      const childIdx: Record<string, string[]> = {}
+      for (const b of this.bookmarks) {
+        if (b.parentId && !b.deletedAt) {
+          if (!childIdx[b.parentId]) childIdx[b.parentId] = []
+          childIdx[b.parentId].push(b.id)
+        }
+      }
+      this._childrenIdx = childIdx
+    },
+
     // ── CRUD：仅修改数据，调用方负责 save() ──
     _markDirty(...ids: string[]) { for (const id of ids) this._dirtyIds.add(id) },
     drainDirtyIds(): Set<string> {
@@ -190,12 +247,22 @@ export const useDataStore = defineStore('data', {
       if (!fields) { fields = new Set(); this._changedFields.set(id, fields) }
       fields.add(field)
     },
-    addBookmark(bm: Bookmark) { this.bookmarks = [...this.bookmarks, bm]; this._markDirty(bm.id); this._newIds.add(bm.id) },
+    addBookmark(bm: Bookmark) {
+      this.bookmarks = [...this.bookmarks, bm]
+      this._bmMap[bm.id] = bm
+      if (bm.parentId) {
+        const sib = this._childrenIdx[bm.parentId]
+        if (sib) sib.push(bm.id)
+        else this._childrenIdx[bm.parentId] = [bm.id]
+      }
+      this._markDirty(bm.id); this._newIds.add(bm.id)
+    },
     updateBookmark(id: string, changes: Partial<Bookmark>) {
       const idx = this.bookmarks.findIndex(b => b.id === id)
       if (idx >= 0) {
         for (const key of Object.keys(changes)) this._trackChange(id, key)
         this.bookmarks[idx] = { ...this.bookmarks[idx], ...changes, updatedAt: Date.now() }
+        this._bmMap[id] = this.bookmarks[idx]
         this._markDirty(id)
       }
     },
@@ -204,7 +271,16 @@ export const useDataStore = defineStore('data', {
       if (idx < 0) return
       const bm = this.bookmarks[idx]
       this.bookmarks[idx] = { ...bm, deletedAt: Date.now(), updatedAt: Date.now() }
+      this._bmMap[id] = this.bookmarks[idx]
       this._markDirty(id)
+      // 从 childrenIdx 中移除
+      if (bm.parentId) {
+        const sib = this._childrenIdx[bm.parentId]
+        if (sib) {
+          const ci = sib.indexOf(id)
+          if (ci >= 0) sib.splice(ci, 1)
+        }
+      }
       // 记录被删除书签原本所属的组，以便恢复时还原
       const groupIds: string[] = []
       for (let gi = 0; gi < this.siblingGroups.length; gi++) {
@@ -213,17 +289,19 @@ export const useDataStore = defineStore('data', {
         if (bi >= 0) {
           groupIds.push(g.id)
           this.siblingGroups[gi] = { ...g, bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) }
+          this._grpMap[g.id] = this.siblingGroups[gi]
           this._markDirty(g.id)
         }
       }
       if (groupIds.length) this._deletedGroupMemberships.set(id, groupIds)
     },
-    addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._markDirty(g.id); this._newIds.add(g.id) },
+    addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id) },
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
       const idx = this.siblingGroups.findIndex(g => g.id === id)
       if (idx >= 0) {
         for (const key of Object.keys(changes)) this._trackChange(id, key)
         this.siblingGroups[idx] = { ...this.siblingGroups[idx], ...changes, updatedAt: Date.now() }
+        this._grpMap[id] = this.siblingGroups[idx]
         this._markDirty(id)
       }
     },
@@ -232,11 +310,13 @@ export const useDataStore = defineStore('data', {
       if (idx < 0) return
       const g = this.siblingGroups[idx]
       this.siblingGroups[idx] = { ...g, deletedAt: Date.now(), updatedAt: Date.now() }
+      this._grpMap[id] = this.siblingGroups[idx]
       this._markDirty(id)
     },
     addCategory(cat: Category) {
       cat.updatedAt = Date.now()
       this.categories = [...this.categories, cat]
+      this._catMap[cat.id] = cat
       this._markDirty(cat.id); this._newIds.add(cat.id)
     },
     renameCategory(id: string, name: string) {
@@ -244,6 +324,7 @@ export const useDataStore = defineStore('data', {
       if (idx >= 0) {
         this._trackChange(id, 'name')
         this.categories[idx] = { ...this.categories[idx], name, updatedAt: Date.now() }
+        this._catMap[id] = this.categories[idx]
         this._markDirty(id)
       }
     },
@@ -255,16 +336,21 @@ export const useDataStore = defineStore('data', {
       this.siblingGroups = this.siblingGroups.map(g =>
         g.categoryId === id ? { ...g, categoryId: 'uncategorized', updatedAt: now } : g
       )
+      // 同步索引
+      for (const b of this.bookmarks) this._bmMap[b.id] = b
+      for (const g of this.siblingGroups) this._grpMap[g.id] = g
       const cIdx = this.categories.findIndex(c => c.id === id)
       if (cIdx >= 0) {
         this._trackChange(id, 'deletedAt')
         this.categories[cIdx] = { ...this.categories[cIdx], deletedAt: Date.now(), updatedAt: Date.now() }
+        this._catMap[id] = this.categories[cIdx]
         this._markDirty(id)
       }
     },
     addAttribute(attr: CustomAttribute) {
       attr.updatedAt = Date.now()
       this.customAttributes = [...this.customAttributes, attr]
+      this._attrMap[attr.id] = attr
       this._markDirty(attr.id); this._newIds.add(attr.id)
     },
     renameAttribute(id: string, name: string) {
@@ -272,6 +358,7 @@ export const useDataStore = defineStore('data', {
       if (idx >= 0) {
         this._trackChange(id, 'name')
         this.customAttributes[idx] = { ...this.customAttributes[idx], name, updatedAt: Date.now() }
+        this._attrMap[id] = this.customAttributes[idx]
         this._markDirty(id)
       }
     },
@@ -279,6 +366,7 @@ export const useDataStore = defineStore('data', {
       const aIdx = this.customAttributes.findIndex(a => a.id === id)
       if (aIdx >= 0) {
         this.customAttributes[aIdx] = { ...this.customAttributes[aIdx], deletedAt: Date.now(), updatedAt: Date.now() }
+        this._attrMap[id] = this.customAttributes[aIdx]
         this._markDirty(id)
       }
       const now = Date.now()
@@ -286,6 +374,7 @@ export const useDataStore = defineStore('data', {
         if (b.attributes && id in b.attributes) {
           const next = { ...b, attributes: { ...b.attributes }, updatedAt: now }
           delete next.attributes[id]
+          this._bmMap[b.id] = next
           return next
         }
         return b
@@ -294,6 +383,7 @@ export const useDataStore = defineStore('data', {
         if (g.attributes && id in g.attributes) {
           const next = { ...g, attributes: { ...g.attributes }, updatedAt: now }
           delete next.attributes[id]
+          this._grpMap[g.id] = next
           return next
         }
         return g
@@ -314,6 +404,7 @@ export const useDataStore = defineStore('data', {
           if (gIdx >= 0 && this.siblingGroups[gIdx].bookmarkIds.indexOf(id) === -1) {
             const g = this.siblingGroups[gIdx]
             this.siblingGroups[gIdx] = { ...g, bookmarkIds: [...g.bookmarkIds, id] }
+            this._grpMap[gid] = this.siblingGroups[gIdx]
             this._markDirty(g.id)
           }
         }
@@ -334,15 +425,22 @@ export const useDataStore = defineStore('data', {
         delete next.deletedAt
         next.updatedAt = Date.now()
         ;(arr as any[])[idx] = next
+        // 更新索引
+        const mapKey = { bookmarks: '_bmMap', sibling_groups: '_grpMap', categories: '_catMap', custom_attributes: '_attrMap' }[table]!
+        ;(this as any)[mapKey][id] = next
         this._markDirty(id)
       }
     },
 
     // ── 回收站：永久删除 ──
-    permanentDeleteBookmark(id: string) { this._permanentDelete('bookmarks', id); this._deletedGroupMemberships.delete(id) },
-    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id) },
-    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id) },
-    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id) },
+    permanentDeleteBookmark(id: string) {
+      this._permanentDelete('bookmarks', id)
+      delete this._bmMap[id]
+      this._deletedGroupMemberships.delete(id)
+    },
+    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id); delete this._grpMap[id] },
+    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id] },
+    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id); delete this._attrMap[id] },
 
     /** 内部辅助：永久删除项 */
     _permanentDelete(key: TableName, id: string) {
@@ -361,6 +459,7 @@ export const useDataStore = defineStore('data', {
       for (const g of groups) this.permanentDeleteGroup(g.id)
       for (const c of cats) this.permanentDeleteCategory(c.id)
       for (const a of attrs) this.permanentDeleteAttribute(a.id)
+      this._syncMaps()
     },
 
     // ── 数据加载/导入 ──
@@ -368,6 +467,7 @@ export const useDataStore = defineStore('data', {
       const d = persist.loadFromLocalStorage()
       this.bookmarks = d.bookmarks; this.siblingGroups = d.siblingGroups
       this.categories = d.categories; this.customAttributes = d.customAttributes
+      this._syncMaps()
     },
     async tryLoadFromIDB(): Promise<boolean> {
       const idbData = await persist.loadFromIDB()
@@ -375,6 +475,7 @@ export const useDataStore = defineStore('data', {
         runMigrations(idbData, idbData)
         this.bookmarks = idbData.bookmarks; this.siblingGroups = idbData.siblingGroups
         this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
+        this._syncMaps()
         return true
       }
       return false
@@ -392,6 +493,7 @@ export const useDataStore = defineStore('data', {
       this.bookmarks = result.bookmarks
       this.customAttributes = result.customAttributes
       this.siblingGroups = result.siblingGroups
+      this._syncMaps()
     },
     _dataSnapshot() {
       return { bookmarks: this.bookmarks, siblingGroups: this.siblingGroups, categories: this.categories, customAttributes: this.customAttributes }
