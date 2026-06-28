@@ -32,7 +32,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { isMobile } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useUIStore } from '../../stores/ui.js'
