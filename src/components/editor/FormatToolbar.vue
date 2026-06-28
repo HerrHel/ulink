@@ -55,8 +55,8 @@ import { useAppStore } from '../../stores/app.js'
 import { EditorManager } from '../../lib/editor.js'
 import { I } from '../../config/icons.js'
 import { saveGroupBody } from '../../composables/domain/useGroup.js'
-import { setMfbAPI } from '../../composables/bridge.js'
 import { useEditorFormat, PALETTE } from '../../composables/ui/useEditorFormat.js'
+import { useMfbStore } from '../../stores/overlay.js'
 import type { FormatKey } from '../../composables/ui/useEditorFormat.js'
 import ColorPalette from './ColorPalette.vue'
 
@@ -169,7 +169,10 @@ onMounted(() => {
     document.addEventListener('click', onDocClick, true)
   } else {
     document.addEventListener('touchstart', _mfbOnDocTouch, true)
-    setMfbAPI({ show, hide })
+    // 让 mfbStore 的 show/hide 触发实际的副作用操作
+    const mfb = useMfbStore()
+    mfb.show = show
+    mfb.hide = hide
   }
 })
 
@@ -177,7 +180,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick, true)
   document.removeEventListener('touchstart', _mfbOnDocTouch, true)
   _detachSync()
-  if (isMobile()) { hide(); setMfbAPI(null) }
+  if (isMobile()) { hide() }
 })
 
 defineExpose({ show, hide, syncState })

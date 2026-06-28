@@ -2,7 +2,7 @@ import { nextTick } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
-import { batchMoveAPI } from '../bridge.js'
+import { useBatchMoveStore } from '../../stores/overlay.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 
 /**
@@ -91,9 +91,9 @@ export async function batchDelete() {
   })
 }
 
-export function showBatchMovePopover() { batchMoveAPI?.show?.() }
+export function showBatchMovePopover() { useBatchMoveStore().show() }
 
-function hideBatchMovePopover() { batchMoveAPI?.hide?.() }
+function hideBatchMovePopover() { useBatchMoveStore().hide() }
 
 export function batchMoveToCat(catId: string) {
   const ui = useUIStore()

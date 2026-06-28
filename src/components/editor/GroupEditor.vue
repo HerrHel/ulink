@@ -31,7 +31,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { EditorManager } from '../../lib/editor.js'
-import { mfbAPI } from '../../composables/bridge.js'
+import { useMfbStore } from '../../stores/overlay.js'
 import { pushUndo } from '../../composables/domain/useUndo.js'
 
 const InlineCard = Node.create({
@@ -201,7 +201,7 @@ function _onFocusIn() {
   }
   // 移动端显示浮动格式栏（由 FormatToolbar.vue 通过 bridge.js 注册）
   if (isMobile() && ui.focusedGroupId) {
-    mfbAPI?.show?.()
+    useMfbStore().show()
   }
 }
 
@@ -216,7 +216,7 @@ function _onFocusOut() {
   _mfbBlurTimer = setTimeout(() => {
     _mfbBlurTimer = null
     const ae = document.activeElement
-    if (!ae?.closest?.('.group-body')) mfbAPI?.hide()
+    if (!ae?.closest?.('.group-body')) useMfbStore().hide()
   }, 150)
 }
 

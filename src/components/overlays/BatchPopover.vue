@@ -1,5 +1,5 @@
 <template>
-  <div id="batchMovePopover" class="batch-move-popover" :class="{ visible: isVisible }">
+  <div id="batchMovePopover" class="batch-move-popover" :class="{ visible: bmStore.open }">
     <div class="bmp-header">移动到分类</div>
     <div id="batchMoveList" class="bmp-list">
       <button v-for="cat in categories" :key="cat.id" class="bmp-item"
@@ -19,15 +19,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { setBatchMoveAPI } from '../../composables/bridge.js'
+import { useBatchMoveStore } from '../../stores/overlay.js'
 import { getCategoryIcon } from '../../config/icons.js'
 import { addNewCategory } from '../../utils.js'
 import { batchMoveToCat } from '../../composables/domain/useBatch.js'
 
 const store = useAppStore()
-const isVisible = ref(false)
+const bmStore = useBatchMoveStore()
 const newCatName = ref('')
 
 const categories = computed(() => store.selectableCategories)
@@ -35,7 +35,7 @@ const categories = computed(() => store.selectableCategories)
 function onMoveToCat(catId: string) {
   batchMoveToCat(catId)
   newCatName.value = ''
-  hide()
+  bmStore.hide()
 }
 
 function onAddNewCat() {
@@ -43,37 +43,32 @@ function onAddNewCat() {
   if (cat) {
     batchMoveToCat(cat.id)
     newCatName.value = ''
-    hide()
+    bmStore.hide()
   }
 }
 
-function show() {
-  isVisible.value = true
+// 重写 store.show/hide 以附加外部点击监听
+const _origShow = bmStore.show
+const _origHide = bmStore.hide
+bmStore.show = () => {
+  _origShow()
   newCatName.value = ''
-  setTimeout(() => {
-    document.addEventListener('click', _closeOnOutsideClick)
-  }, 0)
+  document.addEventListener('click', _closeOnOutsideClick)
 }
-
-function hide() {
-  isVisible.value = false
+bmStore.hide = () => {
+  _origHide()
   document.removeEventListener('click', _closeOnOutsideClick)
 }
 
 function _closeOnOutsideClick(e: MouseEvent) {
   const pop = document.getElementById('batchMovePopover')
   if (pop && !pop.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-action="batchMove"]')) {
-    hide()
+    bmStore.hide()
   }
 }
 
-onMounted(() => {
-  setBatchMoveAPI({ show, hide })
-})
-
 onUnmounted(() => {
-  hide()
-  setBatchMoveAPI(null)
+  bmStore.hide()
 })
 </script>
 

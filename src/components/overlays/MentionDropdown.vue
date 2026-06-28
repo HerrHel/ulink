@@ -31,7 +31,6 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
-import { setMentionAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'
 import { favicon, domain } from '../../utils.js'
 import { useMention } from '../../composables/domain/useMention.js'
@@ -67,7 +66,6 @@ function _onScroll() {
 }
 
 onMounted(() => {
-  setMentionAPI({ hide, init() {}, destroy() {} })
   document.addEventListener('keydown', _onKeydown)
   document.addEventListener('input', onInput)
   document.getElementById('panelContent')?.addEventListener('scroll', _onScroll)
@@ -76,6 +74,5 @@ onUnmounted(() => {
   document.removeEventListener('keydown', _onKeydown)
   document.removeEventListener('input', onInput)
   document.getElementById('panelContent')?.removeEventListener('scroll', _onScroll)
-  setMentionAPI(null)
 })
 </script>

@@ -6,7 +6,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { flushSaveAppData } from '../stores/app.js'
-import { mentionAPI } from './bridge.js'
+import { useMentionStore } from '../stores/overlay.js'
 import { importFromURL, detectShareRoute } from './domain/useDataShare.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
@@ -79,7 +79,7 @@ export function useAppLifecycle() {
     })
 
     initCardTags()
-    mentionAPI?.init?.()
+    useMentionStore().hide()
     if (history.replaceState) history.replaceState(captureNavState(), '')
   })
 
@@ -87,7 +87,6 @@ export function useAppLifecycle() {
     cleanups.forEach(fn => fn())
     cleanups.length = 0
     destroyCardTags()
-    mentionAPI?.destroy?.()
     try { useCloudSync().destroyOnlineListener() } catch (_) { /* ignore */ }
   })
 }

@@ -2,8 +2,8 @@ import { onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../stores/ui.js'
 import { isMobile } from '../utils.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
-import { mentionAPI } from './bridge.js'
 import { useAttrDropdownStore } from '../stores/attrDropdown.js'
+import { useMentionStore } from '../stores/overlay.js'
 import { hideSettingsMenu, hideAddDropdown } from './ui/useUI.js'
 
 interface GlobalEventsOptions {
@@ -47,7 +47,7 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     if (!(e.target as HTMLElement).closest('.attr-filter-wrap')) useAttrDropdownStore().close()
     if (!(e.target as HTMLElement).closest('.settings-wrap')) hideSettingsMenu()
     if (!(e.target as HTMLElement).closest('.add-wrap')) hideAddDropdown()
-    if (!(e.target as HTMLElement).closest('#mentionDrop') && !(e.target as HTMLElement).closest('.group-body')) mentionAPI?.hide()
+    if (!(e.target as HTMLElement).closest('#mentionDrop') && !(e.target as HTMLElement).closest('.group-body')) useMentionStore().hide()
 
     // Inline card interactions
     const gic = (e.target as HTMLElement).closest('.gic-btn')
