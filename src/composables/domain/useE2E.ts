@@ -7,13 +7,11 @@
  * - 加密密钥派生与管理
  * - 加密/解密字段辅助函数
  */
-import { ref } from 'vue'
-import { supabase } from '../../lib/supabase.js'
 import { useAuth } from './useAuth.js'
+import { useE2EStore } from '../../stores/e2e.js'
+import { supabase } from '../../lib/supabase.js'
 import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt } from '../../crypto.js'
 
-const isE2EEnabled = ref(false)
-const isUnlocked = ref(false)
 let _cryptoKey: CryptoKey | null = null
 let _unlockTimer: ReturnType<typeof setTimeout> | null = null
 const LOCK_TIMEOUT = 30 * 60 * 1000 // 30 分钟自动锁定
@@ -44,6 +42,9 @@ function _parseRecoveryKey(formatted: string): string {
 
 export function useE2E() {
   const { isLoggedIn } = useAuth()
+  const e2eStore = useE2EStore()
+  const isE2EEnabled = e2eStore.isE2EEnabled
+  const isUnlocked = e2eStore.isUnlocked
 
   /** 检查用户是否已设置主密码 */
   async function checkE2EStatus(): Promise<boolean> {
@@ -57,7 +58,7 @@ export function useE2E() {
       .eq('user_id', userId)
       .maybeSingle()
 
-    isE2EEnabled.value = !!(data?.master_canary)
+    e2eStore.setEnabled(!!(data?.master_canary))
     return isE2EEnabled.value
   }
 
