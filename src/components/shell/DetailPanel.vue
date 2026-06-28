@@ -97,7 +97,7 @@ const detailPanelRef = ref<HTMLElement | null>(null)
 const decodedPasswords = ref<Record<string, string>>({})
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
-const isOpen = computed(() => ui.detailOpen || ui.detailCards.length > 0)
+const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
 
 interface DetailEntry {
   rawId: string
@@ -144,7 +144,7 @@ const isSwiping = ref(false)
 const translateY = ref(0)
 let _swipeStartY = 0
 function onSwipeStart(e: TouchEvent) {
-  if (!isMobile() || !ui.detailOpen) return
+  if (!isMobile() || !ui.panels.detail) return
   if (!(e.target as HTMLElement).closest('.detail-drag-handle')) return
   _swipeStartY = e.touches[0].clientY
 }
@@ -161,7 +161,7 @@ function onSwipeEnd() {
   if (!isSwiping.value) { _swipeStartY = 0; return }
   const panel = detailPanelRef.value
   const panelHeight = panel ? panel.offsetHeight : 300
-  if (translateY.value > panelHeight * 0.3) { ui.detailOpen = false; ui.detailCards.splice(0) }
+  if (translateY.value > panelHeight * 0.3) { ui.panels.detail = false; ui.detailCards.splice(0) }
   translateY.value = 0
   isSwiping.value = false
   _swipeStartY = 0
@@ -194,11 +194,11 @@ function sanitizeNotes(notes: string) { return sanitizeHTML(notes || '') }
 
 function visit(bm: any) { openBookmark(bm) }
 function editBm(id: string) { openBmModal(id) }
-function openDetail(id: string) { if (!ui.detailCards.includes(id)) ui.detailCards.push(id); ui.detailOpen = true }
+function openDetail(id: string) { if (!ui.detailCards.includes(id)) ui.detailCards.push(id); ui.panels.detail = true }
 function closeDetail(rawId: string) {
   const idx = ui.detailCards.indexOf(rawId)
   if (idx > -1) ui.detailCards.splice(idx, 1)
-  if (!ui.detailCards.length) ui.detailOpen = false
+  if (!ui.detailCards.length) ui.panels.detail = false
 }
 function copyText(text: string) { copyToClipboard(text || '') }
 </script>

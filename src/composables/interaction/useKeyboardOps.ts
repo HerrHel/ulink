@@ -29,7 +29,7 @@ export function captureNavState(): NavState {
   return {
     curCat: ui.curCat,
     focusedGroupId: ui.focusedGroupId,
-    detailPanelOpen: ui.detailOpen || false,
+    detailPanelOpen: ui.panels.detail || false,
     bm: ui.modals.bookmark || false,
     groupEdit: ui.modals.groupEdit || false,
     cat: ui.modals.category || false,
@@ -50,8 +50,8 @@ export function restoreNavState(prev: NavState) {
   if (prev.cat !== true && ui.modals.category) { closeCatModal(); return }
   if (prev.attr !== true && ui.modals.attribute) { closeAttrModal(); return }
   if (prev.focusedGroupId === null && ui.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat } return }
-  if (!prev.detailPanelOpen && ui.detailOpen) { ui.detailOpen = false; return }
-  if (prev.detailPanelOpen && !ui.detailOpen) { ui.detailOpen = true; return }
+  if (!prev.detailPanelOpen && ui.panels.detail) { ui.panels.detail = false; return }
+  if (prev.detailPanelOpen && !ui.panels.detail) { ui.panels.detail = true; return }
   if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat; ui.focusedGroupId = null; return }
 }
 

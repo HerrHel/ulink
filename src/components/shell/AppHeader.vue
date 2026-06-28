@@ -108,7 +108,7 @@ const focusBookmarkCount = computed(() => {
   return g ? (g.bookmarkIds?.length || 0) : 0
 })
 
-function toggleSettings() { ui.settingsOpen = !ui.settingsOpen }
+function toggleSettings() { ui.panels.settings = !ui.panels.settings }
 function onTitleFocus(e: FocusEvent) {
   const target = e.target as HTMLElement
   const txt = target.textContent?.trim() || ''

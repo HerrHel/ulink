@@ -60,16 +60,18 @@ export const useAppStore = defineStore('app', () => {
     editingId: uiProp('editingId'),
     themeMode: uiProp('themeMode'),
     themeStyle: uiProp('themeStyle'),
-    settingsOpen: uiProp('settingsOpen'),
-    addDropdownOpen: uiProp('addDropdownOpen'),
-    railOpen: uiProp('railOpen'),
     addBmPopoverOpen: uiProp('addBmPopoverOpen'),
     deadLinksPopoverOpen: uiProp('deadLinksPopoverOpen'),
+    addDropdownOpen: uiProp('addDropdownOpen'),
 
-    // ── 分组模态框（通过对象引用支持个体属性读写）──
+    // ── 分组状态（通过对象引用支持个体属性读写）──
     modals: computed({
       get: () => ui().modals,
       set: (v) => { ui().modals = v },
+    }),
+    panels: computed({
+      get: () => ui().panels,
+      set: (v) => { ui().panels = v },
     }),
     trashPanelOpen: uiProp('trashPanelOpen'),
     historyPanelOpen: uiProp('historyPanelOpen'),

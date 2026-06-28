@@ -35,9 +35,9 @@
 <template v-if="store.modals.groupEdit">
   <GroupEditModal />
 </template>
-<TrashPanel :open="store.trashPanelOpen" @close="store.trashPanelOpen = false" />
+<TrashPanel :open="store.panels.trash" @close="store.panels.trash = false" />
 <ConfirmModal />
-<HistoryPanel :open="store.historyPanelOpen" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.historyPanelOpen = false" />
+<HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
 <AuthModal />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" @close="store.modals.e2eUnlock = false" @unlocked="onE2EUnlocked" />
@@ -46,8 +46,8 @@
 <DeadLinksPopover />
 <SyncConflictBanner />
 <CommandPalette />
-<div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false; store.detailCards.splice(0)"></div>
-<div class="overlay" id="railOverlay" :class="{ show: store.railOpen }" @click="closeRail"></div>
+<div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false; store.detailCards.splice(0)"></div>
+<div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>
 </template>
 </template>

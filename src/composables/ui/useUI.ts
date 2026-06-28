@@ -15,18 +15,18 @@ export function showActionSheet(items: { label: string; action: () => void; dang
 }
 
 // ── Rail (Sidebar) ──
-export function toggleRail() { const ui = useUIStore(); ui.railOpen = !ui.railOpen }
+export function toggleRail() { const ui = useUIStore(); ui.panels.rail = !ui.panels.rail }
 export function closeRail() { useUIStore().railOpen = false }
 
 // ── Detail Panel ──
 export function toggleDetailPanel() {
   const ui = useUIStore()
-  if (!ui.detailOpen) pushNavState()
-  if (ui.detailOpen || ui.detailCards.length > 0) {
-    ui.detailOpen = false
+  if (!ui.panels.detail) pushNavState()
+  if (ui.panels.detail || ui.detailCards.length > 0) {
+    ui.panels.detail = false
     ui.detailCards.splice(0)
   } else {
-    ui.detailOpen = true
+    ui.panels.detail = true
   }
 }
 
@@ -34,7 +34,7 @@ export function openDetail(bmId: string) {
   if (!bmId) return
   const ui = useUIStore()
   if (ui.detailCards.indexOf(bmId) === -1) ui.detailCards.push(bmId)
-  ui.detailOpen = true
+  ui.panels.detail = true
 }
 
 // ── Card Tags (scroll + overflow) ──
@@ -71,5 +71,5 @@ export function closeAttrModal() { useUIStore().modals.attribute = false }
 export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id); saveAppData() }
 
 // ── Settings / Add Dropdown ──
-export function hideSettingsMenu() { useUIStore().settingsOpen = false }
+export function hideSettingsMenu() { useUIStore().panels.settings = false }
 export function hideAddDropdown() { useUIStore().addDropdownOpen = false }

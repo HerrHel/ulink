@@ -44,6 +44,13 @@ const mockUI = {
     e2eSetup: false,
     e2eUnlock: false,
   },
+  panels: {
+    settings: false,
+    detail: false,
+    trash: false,
+    history: false,
+    rail: false,
+  },
 }
 
 vi.mock('../../stores/app.js', () => ({

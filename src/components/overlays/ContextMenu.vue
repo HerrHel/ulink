@@ -77,7 +77,7 @@ function _dispatchAction(type: string, action: string, id: string) {
     if (action === ACTIONS.VISIT) visit(null, id)
     if (action === ACTIONS.EDIT) openBmModal(id)
     if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
-    if (action === ACTIONS.HISTORY) { store.historyItemId = id; store.historyItemType = 'bookmark'; store.historyPanelOpen = true }
+    if (action === ACTIONS.HISTORY) { store.historyItemId = id; store.historyItemType = 'bookmark'; store.panels.history = true }
   } else if (type === 'sub') {
     if (action === ACTIONS.VISIT) openDetail(id)
     if (action === ACTIONS.EDIT) openBmModal(id)
@@ -103,7 +103,7 @@ function _dispatchAction(type: string, action: string, id: string) {
     if (action === ACTIONS.DELETE) deleteGroup(id)
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
     if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
-    if (action === ACTIONS.HISTORY) { store.historyItemId = id; store.historyItemType = 'group'; store.historyPanelOpen = true }
+    if (action === ACTIONS.HISTORY) { store.historyItemId = id; store.historyItemType = 'group'; store.panels.history = true }
   } else if (type === 'group-card') {
     if (action === ACTIONS.VISIT) openDetail(id)
     if (action === ACTIONS.EDIT) openBmModal(id)

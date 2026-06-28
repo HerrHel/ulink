@@ -373,7 +373,7 @@ function handleDetailPanelDrop(e: DragEvent, p: DragPayload) {
   const ui = useUIStore();
   if (p.type === 'group') {
     if (ui.detailCards.indexOf(p.id) === -1) ui.detailCards.push(p.id);
-    ui.detailOpen = true;
+    ui.panels.detail = true;
   } else {
     if (p.srcGid) { removeFromSrcGroup(p.srcGid, p.id); debouncedSaveAppData(); }
     openDetail(p.id);

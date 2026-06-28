@@ -23,8 +23,8 @@ describe('UIStore', () => {
       expect(store.activeAttrs).toEqual([])
       expect(store.excludedAttrs).toEqual([])
       expect(store.detailCards).toEqual([])
-      expect(store.detailOpen).toBe(false)
-      expect(store.railOpen).toBe(false)
+      expect(store.panels.detail).toBe(false)
+      expect(store.panels.rail).toBe(false)
     })
   })
 
@@ -132,18 +132,18 @@ describe('UIStore', () => {
       expect(store.detailCards).toEqual(['b1', 'group:g1'])
     })
 
-    it('应该恢复 detailOpen 当有 detailCards 时', () => {
+    it('当有 detailCards 时 detailPanel 应从 detailCards 推导', () => {
       const dataStore = useDataStore()
       dataStore.bookmarks = [{ id: 'b1' }] as any
       dataStore.siblingGroups = []
       ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
-        detailOpen: true,
         detailCards: ['b1'],
       }))
-      
+
       store.restoreUIState()
-      
-      expect(store.detailOpen).toBe(true)
+
+      expect(store.detailCards).toEqual(['b1'])
+      expect(store.panels.detail).toBe(false) // detail 不由 detailOpen 持久化驱动
     })
 
     it('应该只恢复 grid/list layoutMode', () => {

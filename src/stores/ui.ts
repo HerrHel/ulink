@@ -12,12 +12,20 @@ import { isMobile } from '../utils.js'
 export type ThemeStyle = 'premium' | 'comfortable'
 
 export interface ModalState {
-  bookmark: boolean   // bmModalOpen
-  category: boolean   // catModalOpen
-  attribute: boolean  // attrModalOpen
-  groupEdit: boolean  // groupEditOpen
-  e2eSetup: boolean   // e2eSetupOpen
-  e2eUnlock: boolean  // e2eUnlockOpen
+  bookmark: boolean
+  category: boolean
+  attribute: boolean
+  groupEdit: boolean
+  e2eSetup: boolean
+  e2eUnlock: boolean
+}
+
+export interface PanelState {
+  settings: boolean  // settingsOpen
+  detail: boolean    // detailOpen
+  trash: boolean     // trashPanelOpen
+  history: boolean   // historyPanelOpen
+  rail: boolean      // railOpen
 }
 
 export interface UIState {
@@ -37,13 +45,9 @@ export interface UIState {
   editingId: string | null
   themeMode: 'auto' | 'manual'
   themeStyle: ThemeStyle
-  settingsOpen: boolean
-  addDropdownOpen: boolean
-  railOpen: boolean
   addBmPopoverOpen: boolean
   deadLinksPopoverOpen: boolean
-  trashPanelOpen: boolean
-  historyPanelOpen: boolean
+  addDropdownOpen: boolean
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
   mentionGid: string | null
@@ -64,8 +68,9 @@ export interface UIState {
   _prevLayoutMode: 'grid' | 'list' | null
   _preferredLayoutMode: 'grid' | 'list' | null
 
-  // 分组模态框状态
+  // 分组状态
   modals: ModalState
+  panels: PanelState
 }
 
 export const useUIStore = defineStore('ui', {
@@ -82,17 +87,12 @@ export const useUIStore = defineStore('ui', {
     activeAttrs: [],
     excludedAttrs: [],
     detailCards: [],
-    detailOpen: false,
     editingId: null,
     themeMode: 'auto',
     themeStyle: 'premium',
-    settingsOpen: false,
-    addDropdownOpen: false,
-    railOpen: false,
     addBmPopoverOpen: false,
     deadLinksPopoverOpen: false,
-    trashPanelOpen: false,
-    historyPanelOpen: false,
+    addDropdownOpen: false,
     historyItemId: '',
     historyItemType: 'bookmark',
     modals: {
@@ -102,6 +102,13 @@ export const useUIStore = defineStore('ui', {
       groupEdit: false,
       e2eSetup: false,
       e2eUnlock: false,
+    },
+    panels: {
+      settings: false,
+      detail: false,
+      trash: false,
+      history: false,
+      rail: false,
     },
     mentionGid: null,
     mentionQuery: '',
@@ -160,7 +167,6 @@ export const useUIStore = defineStore('ui', {
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
           layoutMode: this.layoutMode,
-          detailOpen: this.detailOpen || false,
           docScrollTop: document.documentElement.scrollTop || 0,
           _preferredLayoutMode: this._preferredLayoutMode || null,
           _customCardOrder: ds._customCardOrder || null,
@@ -199,7 +205,6 @@ export const useUIStore = defineStore('ui', {
           const ds = useDataStore()
           ds._customCardOrder = s._customCardOrder
         }
-        if (s.detailOpen && this.detailCards.length) this.detailOpen = true
         if (s.docScrollTop) document.documentElement.scrollTop = s.docScrollTop
       } catch (e) { console.warn('[LinkVault] Failed to restore UI state:', (e as Error).message) }
     },

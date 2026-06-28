@@ -60,10 +60,10 @@ const commands: CommandItem[] = [
   { id: 'new-bm', label: '新建书签', icon: I.plus, shortcut: 'Ctrl+N', section: 'command', action() { close(); openBmModal() } },
   { id: 'new-group', label: '新建组', icon: I.note, section: 'command', action() { close(); ui.modals.groupEdit = true } },
   { id: 'import', label: '导入数据', icon: I.import, section: 'command', action() { close(); document.getElementById('importFile')?.click() } },
-  { id: 'export', label: '导出数据', icon: I.export, section: 'command', action() { close(); ui.settingsOpen = true } },
+  { id: 'export', label: '导出数据', icon: I.export, section: 'command', action() { close(); ui.panels.settings = true } },
   { id: 'sync', label: '同步到云端', icon: I.cloud, section: 'command', action() { close(); /* trigger sync */ } },
-  { id: 'trash', label: '打开回收站', icon: I.trash, section: 'command', action() { close(); ui.trashPanelOpen = true } },
-  { id: 'settings', label: '打开设置', icon: I.settings, shortcut: ',', section: 'command', action() { close(); ui.settingsOpen = true } },
+  { id: 'trash', label: '打开回收站', icon: I.trash, section: 'command', action() { close(); ui.panels.trash = true } },
+  { id: 'settings', label: '打开设置', icon: I.settings, shortcut: ',', section: 'command', action() { close(); ui.panels.settings = true } },
 ]
 
 const searchResults = computed<SearchResultItem[]>(() => {

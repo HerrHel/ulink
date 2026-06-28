@@ -1,5 +1,5 @@
 <template>
-  <div class="sp" v-show="uiStore.settingsOpen">
+  <div class="sp" v-show="uiStore.panels.settings">
     <!-- Theme -->
     <div class="sp-section">
       <div class="sp-row">
@@ -190,14 +190,14 @@ function onSetSortMode(mode: string) {
   uiStore.sortMode = mode
 }
 
-function onOpenTrash() { uiStore.trashPanelOpen = true; uiStore.settingsOpen = false }
-function onTriggerImport() { triggerImport(); uiStore.settingsOpen = false }
-function onExportData() { exportData(); uiStore.settingsOpen = false }
-function onResetData() { resetToDefaults(); uiStore.settingsOpen = false }
+function onOpenTrash() { uiStore.panels.trash = true; uiStore.panels.settings = false }
+function onTriggerImport() { triggerImport(); uiStore.panels.settings = false }
+function onExportData() { exportData(); uiStore.panels.settings = false }
+function onResetData() { resetToDefaults(); uiStore.panels.settings = false }
 
 async function onOpenLogin() {
   auth.authModalOpen.value = true
-  uiStore.settingsOpen = false
+  uiStore.panels.settings = false
 }
 
 async function onLogout() {
@@ -234,6 +234,6 @@ function onCheckDeadLinks() {
 
 function onViewDeadLinks() {
   uiStore.deadLinksPopoverOpen = true
-  uiStore.settingsOpen = false
+  uiStore.panels.settings = false
 }
 </script>
