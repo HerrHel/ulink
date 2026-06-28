@@ -10,6 +10,7 @@ import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds } from '../lib/search.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
+import type { SortMode, SortDir } from './ui.js'
 
 interface DataState {
   bookmarks: Bookmark[]
@@ -46,7 +47,7 @@ function _recommendedScore(item: { useCount: number; updatedAt: number }): numbe
 
 type SortableItem = { useCount: number; order: number; updatedAt: number }
 
-function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: string; sortDir: string }, nameKey: keyof T, dateKey: keyof T): void {
+function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
     if (sortMode === 'recommend') return (_recommendedScore(b) - _recommendedScore(a))

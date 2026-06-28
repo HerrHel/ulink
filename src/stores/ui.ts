@@ -8,12 +8,17 @@ import { CAT_ALL, UI_STATE_KEY } from '../config/constants.js'
 import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 
+// ── 严格字面量类型 ──
+export type SortMode = 'order' | 'title' | 'useCount' | 'dateAsc' | 'dateDesc' | 'recommend'
+export type SortDir = 'asc' | 'desc'
+export type LayoutMode = 'grid' | 'list'
+
 export interface UIState {
   curCat: string
   isMobile: boolean
-  sortMode: string
-  sortDir: string
-  layoutMode: 'grid' | 'list'
+  sortMode: SortMode
+  sortDir: SortDir
+  layoutMode: LayoutMode
   searchQuery: string
   focusedGroupId: string | null
   batchMode: boolean
