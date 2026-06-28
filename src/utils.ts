@@ -58,7 +58,7 @@ export function copyToClipboard(text: string, label?: string): void {
  * 使用 matchMedia 而非 window.innerWidth，自动跟随系统/浏览器变化，
  * 无需 Vue reactivity 支撑。uiStore.isMobile 保持独立的 resize 驱动更新。
  */
-const _mobileMql = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)') : null
+const _mobileMql = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 768px)') : null
 let _isMobile = _mobileMql?.matches ?? false
 if (_mobileMql) {
   _mobileMql.addEventListener('change', (e: MediaQueryListEvent) => { _isMobile = e.matches })
