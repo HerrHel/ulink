@@ -30,8 +30,15 @@ export function useAppLifecycle() {
 
     if (history.scrollRestoration) history.scrollRestoration = 'manual'
 
+    // 优先从 IDB 加载（权威数据源），localStorage 作为同步回退
+    // loadFromStorage 先提供初始状态，tryLoadFromIDB 异步覆盖
     ds.loadFromStorage()
-    ds.tryLoadFromIDB().catch((e: Error) => console.warn('[LinkVault] IDB load failed:', e.message))
+    ds.tryLoadFromIDB().then((found: boolean) => {
+      if (found) {
+        // IDB 数据已覆盖 localStorage，立即同步到 localStorage 保持一致
+        flushSaveAppData()
+      }
+    }).catch((e: Error) => console.warn('[LinkVault] IDB load failed:', e.message))
     ui.restoreUIState()
     // A4: 检测公开分享路由（#share/<id>），优先于旧版 base64 分享
     const shareGid = detectShareRoute()

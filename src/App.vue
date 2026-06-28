@@ -1,6 +1,7 @@
 <template>
 <ShareView v-if="shareGroupId" :group-id="shareGroupId" @close="shareGroupId = null" />
 <template v-else>
+<ErrorBoundary name="MainLayout">
 <div class="lv-panel">
   <AppNav />
   <input type="file" id="importFile" accept=".json,.html,.htm,.csv" style="display:none" @change="handlers.onImportFile">
@@ -49,6 +50,7 @@
 <CommandPalette />
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.detailOpen && isMobile() }" @click="store.detailOpen = false; store.detailCards.splice(0)"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.railOpen }" @click="closeRail"></div>
+</ErrorBoundary>
 </template>
 </template>
 
@@ -74,6 +76,7 @@ import ContextMenu from './components/overlays/ContextMenu.vue'
 import ActionSheet from './components/overlays/ActionSheet.vue'
 import BatchPopover from './components/overlays/BatchPopover.vue'
 import FormatToolbar from './components/editor/FormatToolbar.vue'
+import ErrorBoundary from './components/ui/ErrorBoundary.vue'
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
 import DetailPanel from './components/shell/DetailPanel.vue'
