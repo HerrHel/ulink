@@ -9,10 +9,7 @@ import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 
 // ── 严格字面量类型 ──
-export type SortMode = 'order' | 'title' | 'useCount' | 'dateAsc' | 'dateDesc' | 'recommend'
-export type SortDir = 'asc' | 'desc'
-export type LayoutMode = 'grid' | 'list'
-
+export type ThemeStyle = 'premium' | 'comfortable'
 export interface UIState {
   curCat: string
   isMobile: boolean
@@ -29,7 +26,7 @@ export interface UIState {
   detailOpen: boolean
   editingId: string | null
   themeMode: 'auto' | 'manual'
-  themeStyle: string
+  themeStyle: ThemeStyle
   settingsOpen: boolean
   addDropdownOpen: boolean
   railOpen: boolean
