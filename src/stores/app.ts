@@ -1,10 +1,7 @@
 /**
- * app.ts — 兼容层（组合 Store）
- * 组合 data / ui 两个子 Store，保持向后兼容。
- * 新代码建议直接使用 useDataStore / useUIStore。
- *
- * @deprecated 新代码请直接导入 useDataStore / useUIStore。
- * 本 Store 仅作向后兼容用途，将逐步废弃。
+ * app.ts — Facade Store
+ * 组合 data / ui 两个子 Store，提供统一接口。
+ * 新代码也可直接使用 useDataStore / useUIStore。
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
@@ -16,6 +13,8 @@ import * as persist from './persist.js'
 import { toast } from '../lib/toast.js'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
+
+let _localStorageWarned = false
 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
@@ -186,41 +185,16 @@ export const useAppStore = defineStore('app', () => {
 })
 
 // ── 独立保存函数（无需 useAppStore 即可调用）──
-
-let _localStorageWarned = false
+// 委托至 appStore action，避免保存逻辑重复
 
 export function saveAppData() {
-  const ds = useDataStore()
-  ds._storageInfoDirty = true
-  ds._saveCount++
-  const data = ds._dataSnapshot()
-  const ok = persist.saveToLocalStorage(data)
-  if (!ok) {
-    console.warn('[store] localStorage save failed')
-    if (!_localStorageWarned) {
-      _localStorageWarned = true
-      toast('本地存储已满，数据已备份到 IndexedDB', false)
-    }
-  }
-  persist.saveToIDB(data)
-  if (ds._saveCount % 10 === 0) useUndoStore().cleanStale()
-  try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
+  useAppStore().save()
 }
 
 export function debouncedSaveAppData() {
-  const ds = useDataStore()
-  if (ds._saveTimer) clearTimeout(ds._saveTimer)
-  ds._saveTimer = setTimeout(() => {
-    ds._saveTimer = null
-    saveAppData()
-  }, 300)
+  useAppStore().debouncedSave()
 }
 
 export function flushSaveAppData() {
-  const ds = useDataStore()
-  if (ds._saveTimer) {
-    clearTimeout(ds._saveTimer)
-    ds._saveTimer = null
-    saveAppData()
-  }
+  useAppStore().flushDebouncedSave()
 }
