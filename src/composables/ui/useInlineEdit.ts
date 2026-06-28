@@ -5,7 +5,6 @@
  * blur 或 Enter 时保存，Escape 取消。
  * 替代 BookmarkCard.vue 中的内联 DOM 操作。
  */
-import { type Ref } from 'vue'
 
 interface InlineEditOptions {
   onSave: (value: string) => void
