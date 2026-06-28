@@ -52,7 +52,19 @@ export function copyToClipboard(text: string, label?: string): void {
   toast((label || '') + ' 已复制')
 }
 
-export function isMobile(): boolean { return window.innerWidth <= 768 }
+/**
+ * isMobile — 基于 matchMedia 的响应式检测
+ *
+ * 使用 matchMedia 而非 window.innerWidth，自动跟随系统/浏览器变化，
+ * 无需 Vue reactivity 支撑。uiStore.isMobile 保持独立的 resize 驱动更新。
+ */
+const _mobileMql = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)') : null
+let _isMobile = _mobileMql?.matches ?? false
+if (_mobileMql) {
+  _mobileMql.addEventListener('change', (e: MediaQueryListEvent) => { _isMobile = e.matches })
+}
+
+export function isMobile(): boolean { return _isMobile }
 
 export function getTagNames(item: Bookmark | SiblingGroup, customAttributes: CustomAttribute[]): string[] {
   if (!item.attributes) return []
