@@ -11,8 +11,8 @@ import { closeGroupEdit, exitGroupFocus, closeAddBmPopover } from '../domain/use
 import { closeCatModal, closeAttrModal } from '../ui/useUI.js'
 import { toggleBatchMode, selectAllBatch, batchDelete } from '../domain/useBatch.js'
 import { hideSettingsMenu, hideAddDropdown } from '../ui/useUI.js'
-import { ctxMenuAPI } from '../bridge.js'
 import { useToastStore } from '../../stores/toast.js'
+import { useContextMenuStore } from '../../stores/contextMenu.js'
 
 interface NavState {
   curCat: string
@@ -96,7 +96,7 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (ui.batchMode) { toggleBatchMode(); return }
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
-    ctxMenuAPI?.hide?.(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
+    useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
     useToastStore().resolveConfirm(false)
   }
   if (ui.batchMode) {

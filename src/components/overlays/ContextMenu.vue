@@ -1,6 +1,6 @@
 <template>
-  <div class="ctx-menu" id="ctxMenu" v-show="visible" role="menu" aria-label="操作菜单"
-       :style="{ left: x + 'px', top: y + 'px' }">
+  <div class="ctx-menu" id="ctxMenu" v-show="store.open" role="menu" aria-label="操作菜单"
+       :style="{ left: store.x + 'px', top: store.y + 'px' }">
     <template v-for="item in visibleItems" :key="item.action">
       <div v-if="item.divider" class="ctx-divider" role="separator"></div>
       <button v-else class="ctx-item" :class="{ 'ctx-danger': item.danger }"
@@ -12,24 +12,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { ACTIONS } from '../../config/constants.js'
-import { actionSheetAPI, setCtxMenuAPI } from '../../composables/bridge.js'
+import { actionSheetAPI } from '../../composables/bridge.js'
 import { visit, openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
-import { openDetail, deleteCategory, deleteAttribute, openCatModal, openAttrModal } from '../../composables/ui/useUI.js'
+import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup } from '../../composables/domain/useGroup.js'
 import { shareGroup } from '../../composables/domain/useDataShare.js'
 
 const store = useAppStore()
-const visible = ref(false)
-const x = ref(0)
-const y = ref(0)
-const ctxType = ref('')
-const ctxTarget = ref('')
+const ctx = useContextMenuStore()
 
-// Context menu items with visibility rules per type
 const allItems = [
   { action: ACTIONS.VISIT, text: '打开网站' },
   { action: ACTIONS.EDIT, text: '编辑' },
@@ -58,7 +54,7 @@ const RULES: Record<string, { show: string[]; text: Record<string, string> }> = 
 const DEFAULT_TEXT: Record<string, string> = { [ACTIONS.VISIT]: '打开网站', [ACTIONS.EDIT]: '编辑', [ACTIONS.DELETE]: '删除' }
 
 const visibleItems = computed(() => {
-  const rule = RULES[ctxType.value] || { show: [], text: {} }
+  const rule = RULES[ctx.type] || { show: [], text: {} }
   const showSet = new Set(rule.show)
   const textMap = { ...DEFAULT_TEXT, ...rule.text }
   const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
@@ -69,25 +65,10 @@ const visibleItems = computed(() => {
   return items
 })
 
-function show(e: MouseEvent, type: string, targetId: string) {
-  e.preventDefault()
-  ctxType.value = type
-  ctxTarget.value = targetId
-  // Position: clamp to viewport
-  x.value = Math.min(e.clientX, window.innerWidth - 170)
-  y.value = Math.min(e.clientY, window.innerHeight - 200)
-  visible.value = true
-}
-
-function hide() {
-  visible.value = false
-}
-
 function onItemClick(action: string) {
-  const tid = ctxTarget.value
-  const ttype = ctxType.value
-  hide()
-  // Dispatch to store/UI actions via dynamic imports
+  const tid = ctx.id
+  const ttype = ctx.type
+  ctx.hide()
   _dispatchAction(ttype, action, tid)
 }
 
@@ -135,17 +116,13 @@ function _dispatchAction(type: string, action: string, id: string) {
   }
 }
 
-function _onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('#ctxMenu')) hide() }
+function _onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('#ctxMenu')) ctx.hide() }
 
 onMounted(() => {
-  setCtxMenuAPI({ show, hide })
   document.addEventListener('click', _onDocClick)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', _onDocClick)
-  setCtxMenuAPI(null)
 })
-
-defineExpose({ show, hide, visible })
 </script>

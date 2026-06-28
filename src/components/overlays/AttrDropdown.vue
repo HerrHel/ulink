@@ -33,9 +33,10 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
-import { setAttrDropdownAPI, actionSheetAPI, ctxMenuAPI } from '../../composables/bridge.js'
+import { setAttrDropdownAPI, actionSheetAPI } from '../../composables/bridge.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
+import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { isMobile } from '../../utils.js'
 
 const store = useAppStore()
@@ -79,7 +80,7 @@ let _touchStartId: string | null = null
 function onItemContext(attrId: string, e: MouseEvent) {
   e.preventDefault()
   if (!isMobile()) {
-    ctxMenuAPI?.show(e, 'attr', attrId)
+    useContextMenuStore().show(e, 'attr', attrId)
   } else {
     showAttrActions(attrId)
   }

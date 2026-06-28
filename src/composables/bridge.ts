@@ -2,8 +2,8 @@
  * bridge.ts — 模块级服务注册表
  *
  * 正在逐步移除，替代方案：Pinia Store。
- * 已移除：toastAPI → useToastStore
- * 待移除：ctxMenuAPI, actionSheetAPI, attrDropdownAPI, batchMoveAPI, mfbAPI, mentionAPI
+ * 已移除：toastAPI, ctxMenuAPI → useToastStore, useContextMenuStore
+ * 待移除：actionSheetAPI, attrDropdownAPI, batchMoveAPI, mfbAPI, mentionAPI
  */
 
 export interface ContextMenuAPI {
@@ -41,10 +41,6 @@ export interface MfbAPI {
 // --- Mention ---
 export let mentionAPI: MentionAPI | null = null
 export function setMentionAPI(api: MentionAPI | null) { mentionAPI = api }
-
-// --- Context Menu ---
-export let ctxMenuAPI: ContextMenuAPI | null = null
-export function setCtxMenuAPI(api: ContextMenuAPI | null) { ctxMenuAPI = api }
 
 // --- Action Sheet ---
 export let actionSheetAPI: ActionSheetAPI | null = null

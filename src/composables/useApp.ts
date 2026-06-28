@@ -6,7 +6,8 @@
  */
 import { watch } from 'vue'
 import { useUIStore } from '../stores/ui.js'
-import { ctxMenuAPI, actionSheetAPI } from './bridge.js'
+import { actionSheetAPI } from './bridge.js'
+import { useContextMenuStore } from '../stores/contextMenu.js'
 import { toggleGroupFocus, removeBmFromGroup, removeGroupRef, editGroup, deleteGroup } from './domain/useGroup.js'
 import { visit, openBmModal, deleteBookmarkWithUndo as deleteBookmark } from './domain/useBookmark.js'
 import { openDetail } from './ui/useUI.js'
@@ -50,6 +51,8 @@ export function useApp() {
     onRemoveGroupRef: removeGroupRef,
     onRemoveBmFromGroup: removeBmFromGroup,
     onVisit: visit,
-    onShowCtxMenu: (e: MouseEvent, type: string, id: string) => ctxMenuAPI?.show?.(e, type, id)
+    onShowCtxMenu: (e: MouseEvent, type: string, id: string) => {
+      useContextMenuStore().show(e, type, id)
+    }
   })
 }
