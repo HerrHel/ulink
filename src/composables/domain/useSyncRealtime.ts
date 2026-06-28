@@ -33,10 +33,14 @@ async function _handleRealtimeChange(payload: any, type: 'bookmark' | 'group' | 
   if (eventType === 'DELETE') {
     const id = oldRow?.id
     if (!id || ds._dirtyIds.has(id)) return
-    if (type === 'bookmark') { const idx = ds.bookmarks.findIndex(b => b.id === id); if (idx >= 0) ds.bookmarks.splice(idx, 1) }
-    else if (type === 'group') { const idx = ds.siblingGroups.findIndex(g => g.id === id); if (idx >= 0) ds.siblingGroups.splice(idx, 1) }
-    else if (type === 'category') { const idx = ds.categories.findIndex(c => c.id === id); if (idx >= 0) ds.categories.splice(idx, 1) }
-    else { const idx = ds.customAttributes.findIndex(a => a.id === id); if (idx >= 0) ds.customAttributes.splice(idx, 1) }
+    // 使用 dataStore 软删除动作（而非直接 splice），确保：
+    // - 数据进入回收站可恢复
+    // - 组引用关系正确清理
+    // 然后清除 dirty 标记，避免下次同步把已删除数据重新 upsert 回 Supabase
+    if (type === 'bookmark') { ds.deleteBookmark(id); ds._dirtyIds.delete(id) }
+    else if (type === 'group') { ds.deleteGroup(id); ds._dirtyIds.delete(id) }
+    else if (type === 'category') { ds.deleteCategory(id); ds._dirtyIds.delete(id) }
+    else if (type === 'attribute') { ds.deleteAttribute(id); ds._dirtyIds.delete(id) }
     return
   }
 

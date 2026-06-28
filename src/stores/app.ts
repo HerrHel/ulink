@@ -72,7 +72,6 @@ export const useAppStore = defineStore('app', () => {
     groupEditOpen: uiProp('groupEditOpen'),
     confirmModalOpen: uiProp('confirmModalOpen'),
     confirmModalMessage: uiProp('confirmModalMessage'),
-    confirmModalCallback: uiProp('confirmModalCallback'),
     trashPanelOpen: uiProp('trashPanelOpen'),
     historyPanelOpen: uiProp('historyPanelOpen'),
     historyItemId: uiProp('historyItemId'),

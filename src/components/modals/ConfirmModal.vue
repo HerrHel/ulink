@@ -14,17 +14,17 @@
 <script setup lang="ts">
 import { watch, nextTick, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
+import { getAndClearConfirmCallback } from '../../composables/_confirmState.js'
 const store = useAppStore()
 
 function onOk() {
-  const cb = store.confirmModalCallback
+  const cb = getAndClearConfirmCallback()
   store.confirmModalOpen = false
-  store.confirmModalCallback = null
   if (cb) cb()
 }
 function onCancel() {
+  getAndClearConfirmCallback()
   store.confirmModalOpen = false
-  store.confirmModalCallback = null
 }
 
 function onKeydown(e: KeyboardEvent) {

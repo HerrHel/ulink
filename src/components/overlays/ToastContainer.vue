@@ -18,6 +18,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { setToastAPI } from '../../composables/bridge.js'
+import { setConfirmCallback } from '../../composables/_confirmState.js'
 import { I } from '../../config/icons.js'
 import { TOAST_FADE_MS, TOAST_REMOVE_MS } from '../../config/constants.js'
 import { esc } from '../../utils.js'
@@ -113,7 +114,7 @@ function dismissToast() {
 
 function _showConfirmImpl(msg: string, onConfirm: () => void) {
   store.confirmModalMessage = msg
-  store.confirmModalCallback = onConfirm
+  setConfirmCallback(onConfirm)
   store.confirmModalOpen = true
 }
 
