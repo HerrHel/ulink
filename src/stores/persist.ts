@@ -1,6 +1,7 @@
 import { STORAGE_KEY, DEFAULTS } from '../config/constants.js'
 import { runMigrations } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
+import { AppDataSchema } from '../schemas.js'
 import type { AppData } from '../types.js'
 
 const IDB_KEY = 'linkvault_v2'
@@ -18,6 +19,12 @@ export function loadFromLocalStorage(): AppData {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const d = JSON.parse(raw)
+      // 运行时验证数据结构完整性，防止损坏数据导致白屏
+      const parsed = AppDataSchema.safeParse(d)
+      if (!parsed.success) {
+        console.warn('[persist] data validation failed, falling back to defaults:', parsed.error.issues)
+        return JSON.parse(JSON.stringify(DEFAULTS))
+      }
       _localSavedAt = d._savedAt || 0
       const result: AppData = {
         categories: d.categories || DEFAULTS.categories.slice(),
