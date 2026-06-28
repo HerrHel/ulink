@@ -9,6 +9,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { AppDataSchema } from '../../schemas.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
 import type { AppData, Bookmark } from '../../types.js'
@@ -340,21 +341,11 @@ function parseCSV(text: string): Bookmark[] {
 
 // ── LinkVault 原生 JSON 验证 ──
 
-function validateImportData(data: Partial<AppData>): string | null {
-  if (!Array.isArray(data.categories) || !Array.isArray(data.bookmarks) ||
-      !Array.isArray(data.customAttributes) || !Array.isArray(data.siblingGroups)) return '数据结构错误：缺少必需的数组字段'
-  for (let i = 0; i < data.categories.length; i++) {
-    const c = data.categories[i]; if (!c.id || !c.name) return '分类 #' + i + ' 缺少 id 或 name'
-  }
-  for (let i = 0; i < data.bookmarks.length; i++) {
-    const b = data.bookmarks[i]; if (!b.id || !b.title || !b.url) return '书签 #' + i + ' 缺少 id、title 或 url'
-  }
-  for (let i = 0; i < data.customAttributes.length; i++) {
-    const a = data.customAttributes[i]; if (!a.id || !a.name) return '属性 #' + i + ' 缺少 id 或 name'
-  }
-  for (let i = 0; i < data.siblingGroups.length; i++) {
-    const g = data.siblingGroups[i]; if (!g.id || !g.name) return '组 #' + i + ' 缺少 id 或 name'
-    if (g.bookmarkIds && !Array.isArray(g.bookmarkIds)) return '组 #' + i + ' 的 bookmarkIds 不是数组'
+function validateImportData(data: unknown): string | null {
+  const result = AppDataSchema.safeParse(data)
+  if (!result.success) {
+    const first = result.error.issues[0]
+    return first ? `数据格式错误 (${first.path.join('.')}: ${first.message})` : '数据格式错误'
   }
   return null
 }

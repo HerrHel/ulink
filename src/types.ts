@@ -1,66 +1,23 @@
 /**
  * LinkVault 类型定义
- * 从 config/types.d.js 迁移
+ * 所有数据模型由 Zod schema 推导，确保运行时校验与编译时类型一致。
  */
+import type { z } from 'zod'
+import {
+  EncryptedPasswordSchema,
+  BookmarkSchema,
+  SiblingGroupSchema,
+  CategorySchema,
+  CustomAttributeSchema,
+  AppDataSchema,
+} from './schemas.js'
 
-export interface EncryptedPassword {
-  encrypted: true
-  data: string
-  iv: string
-  salt: string
-}
-
-export interface Bookmark {
-  id: string
-  title: string
-  url: string
-  username: string
-  password: string | EncryptedPassword
-  notes: string
-  icon: string
-  categoryId: string
-  parentId: string | null
-  order: number
-  useCount: number
-  attributes: Record<string, boolean>
-  isExpanded: boolean
-  createdAt: number
-  updatedAt: number
-  deletedAt?: number
-}
-
-export interface SiblingGroup {
-  id: string
-  name: string
-  categoryId: string
-  icon: string
-  order: number
-  isExpanded: boolean
-  attributes: Record<string, boolean>
-  bookmarkIds: string[]
-  notes: string
-  updatedAt: number
-  useCount: number
-  isPublic?: boolean
-  deletedAt?: number
-}
-
-export interface Category {
-  id: string
-  name: string
-  icon: string
-  color: string
-  updatedAt?: number
-  deletedAt?: number
-}
-
-export interface CustomAttribute {
-  id: string
-  name: string
-  type: 'boolean'
-  updatedAt?: number
-  deletedAt?: number
-}
+export type EncryptedPassword = z.infer<typeof EncryptedPasswordSchema>
+export type Bookmark = z.infer<typeof BookmarkSchema>
+export type SiblingGroup = z.infer<typeof SiblingGroupSchema>
+export type Category = z.infer<typeof CategorySchema>
+export type CustomAttribute = z.infer<typeof CustomAttributeSchema>
+export type AppData = z.infer<typeof AppDataSchema>
 
 /** 卡片列表项 — 联合类型，用于 CardGrid 等组件 */
 export type CardItem =
@@ -72,13 +29,3 @@ export type EntityType = 'bookmark' | 'group' | 'category' | 'attribute'
 
 /** Supabase 表名 */
 export type TableName = 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes'
-
-export interface AppData {
-  bookmarks: Bookmark[]
-  siblingGroups: SiblingGroup[]
-  categories: Category[]
-  customAttributes: CustomAttribute[]
-  _masterCanary?: string | EncryptedPassword
-  _dataVersion?: number
-  _savedAt?: number
-}

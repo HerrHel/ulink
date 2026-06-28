@@ -65,5 +65,6 @@ export const AppDataSchema = z.object({
   categories: z.array(CategorySchema),
   customAttributes: z.array(CustomAttributeSchema),
   _masterCanary: z.union([z.string(), EncryptedPasswordSchema]).optional(),
+  _dataVersion: z.number().optional(),
   _savedAt: z.number().optional(),
 })
