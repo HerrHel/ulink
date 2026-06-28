@@ -114,7 +114,6 @@ export const useAppStore = defineStore('app', () => {
     permanentDeleteCategory(id: string) { ds().permanentDeleteCategory(id) },
     permanentDeleteAttribute(id: string) { ds().permanentDeleteAttribute(id) },
     emptyTrash() { ds().emptyTrash() },
-    autoCleanupTrash() { ds().autoCleanupTrash() },
     importFromData(data: Partial<AppData>) {
       ds().importFromData(data)
       const u = ui()

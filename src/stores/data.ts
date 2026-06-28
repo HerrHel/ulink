@@ -363,16 +363,6 @@ export const useDataStore = defineStore('data', {
       for (const a of attrs) this.permanentDeleteAttribute(a.id)
     },
 
-    /** 自动清理：永久删除超过 30 天的已软删除项 */
-    autoCleanupTrash() {
-      const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-      const old = (v: { deletedAt?: number }) => v.deletedAt && v.deletedAt < cutoff
-      this.bookmarks.filter(old).forEach(b => this.permanentDeleteBookmark(b.id))
-      this.siblingGroups.filter(old).forEach(g => this.permanentDeleteGroup(g.id))
-      this.categories.filter(old).forEach(c => this.permanentDeleteCategory(c.id))
-      this.customAttributes.filter(old).forEach(a => this.permanentDeleteAttribute(a.id))
-    },
-
     // ── 数据加载/导入 ──
     loadFromStorage() {
       const d = persist.loadFromLocalStorage()
