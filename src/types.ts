@@ -67,6 +67,12 @@ export type CardItem =
   | { type: 'group'; data: SiblingGroup }
   | { type: 'bm'; data: Bookmark }
 
+/** 实体类型 — 用于 Realtime/同步/加密等模块 */
+export type EntityType = 'bookmark' | 'group' | 'category' | 'attribute'
+
+/** Supabase 表名 */
+export type TableName = 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes'
+
 export interface AppData {
   bookmarks: Bookmark[]
   siblingGroups: SiblingGroup[]

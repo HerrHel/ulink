@@ -11,6 +11,7 @@ import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { supabase } from '../../lib/supabase.js'
 import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt } from '../../crypto.js'
+import type { EntityType } from '../../types.js'
 
 let _cryptoKey: CryptoKey | null = null
 let _unlockTimer: ReturnType<typeof setTimeout> | null = null
@@ -220,7 +221,7 @@ export function useE2E() {
 
   /** 加密对象的敏感字段 */
   async function encryptItem<T extends Record<string, unknown>>(
-    type: 'bookmark' | 'group' | 'category' | 'attribute',
+    type: EntityType,
     item: T,
   ): Promise<T> {
     if (!_cryptoKey) return item
@@ -237,7 +238,7 @@ export function useE2E() {
 
   /** 解密对象的敏感字段 */
   async function decryptItem<T extends Record<string, unknown>>(
-    type: 'bookmark' | 'group' | 'category' | 'attribute',
+    type: EntityType,
     item: T,
   ): Promise<T> {
     if (!_cryptoKey) return item

@@ -8,6 +8,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
+import type { EntityType } from '../../types.js'
 
 export const realtimeStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
 
@@ -26,7 +27,7 @@ async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
 }
 
 /** 处理 Realtime 变更事件 */
-async function _handleRealtimeChange(payload: any, type: 'bookmark' | 'group' | 'category' | 'attribute') {
+async function _handleRealtimeChange(payload: any, type: EntityType) {
   const { eventType, new: newRow, old: oldRow } = payload
   const ds = useDataStore()
 

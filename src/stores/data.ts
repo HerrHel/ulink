@@ -9,7 +9,7 @@ import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds } from '../lib/search.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
 import type { SortMode, SortDir } from './ui.js'
 
 interface DataState {
@@ -24,7 +24,7 @@ interface DataState {
   _saveCount: number
   _saveTimer: ReturnType<typeof setTimeout> | null
   _dirtyIds: Set<string>
-  _deletedIds: Map<string, 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes'>
+  _deletedIds: Map<string, TableName>
   _newIds: Set<string>
   _changedFields: Map<string, Set<string>>
   _deletedGroupMemberships: Map<string, string[]> // bookmarkId → groupIds it belonged to before deletion
@@ -170,7 +170,7 @@ export const useDataStore = defineStore('data', {
       this._dirtyIds.clear()
       return ids
     },
-    drainDeletedIds(): Map<string, 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes'> {
+    drainDeletedIds(): Map<string, TableName> {
       const ids = new Map(this._deletedIds)
       this._deletedIds.clear()
       return ids
@@ -325,8 +325,8 @@ export const useDataStore = defineStore('data', {
     restoreAttribute(id: string) { this._restoreItem('custom_attributes', id) },
 
     /** 内部辅助：恢复已软删除项 */
-    _restoreItem(table: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes', id: string) {
-      const arr = this[table]
+    _restoreItem(table: TableName, id: string) {
+      const arr = (this as any)[table]
       const idx = (arr as any[]).findIndex((i: any) => i.id === id)
       if (idx >= 0) {
         const item = (arr as any[])[idx]
@@ -339,16 +339,16 @@ export const useDataStore = defineStore('data', {
     },
 
     // ── 回收站：永久删除 ──
-    permanentDeleteBookmark(id: string) { this._permanentDelete('bookmarks', id, 'bookmarks'); this._deletedGroupMemberships.delete(id) },
-    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id, 'sibling_groups') },
-    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id, 'categories') },
-    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id, 'custom_attributes') },
+    permanentDeleteBookmark(id: string) { this._permanentDelete('bookmarks', id); this._deletedGroupMemberships.delete(id) },
+    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id) },
+    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id) },
+    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id) },
 
     /** 内部辅助：永久删除项 */
-    _permanentDelete(key: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes', id: string, table: 'bookmarks' | 'sibling_groups' | 'categories' | 'custom_attributes') {
-      this[key as any] = this[key as any].filter((item: any) => item.id !== id)
+    _permanentDelete(key: TableName, id: string) {
+      this[key] = (this[key] as any[]).filter((item: any) => item.id !== id)
       this._dirtyIds.delete(id)
-      this._deletedIds.set(id, table)
+      this._deletedIds.set(id, key)
     },
 
     /** 清空回收站（永久删除所有已软删除项） */
