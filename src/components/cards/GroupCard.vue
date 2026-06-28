@@ -108,7 +108,7 @@ import { EditorManager } from '../../lib/editor.js'
 import { editGroup as _editGroup, toggleGroupFocus, saveGroupBody, deleteGroup as _deleteGroup } from '../../composables/domain/useGroup.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
-import { useEditorFormat } from '../../composables/ui/useEditorFormat.js'
+import { useEditorFormat, type FormatKey } from '../../composables/ui/useEditorFormat.js'
 import type { SiblingGroup } from '../../types.js'
 
 const props = defineProps({ group: { type: Object as () => SiblingGroup, required: true } })
@@ -157,7 +157,7 @@ function toggleColorPalette() {
   colorOpen.value = true
 }
 
-function fmtToggle(f: string) { _fmtToggle(f as any); saveGroupBody(props.group.id) }
+function fmtToggle(f: FormatKey) { _fmtToggle(f); saveGroupBody(props.group.id) }
 function applyColor(hex: string) { _applyColor(hex); saveGroupBody(props.group.id) }
 
 let _selHandler: (() => void) | null = null
