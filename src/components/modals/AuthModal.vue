@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="登录" :class="{ open: auth.authModalOpen.value }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="登录" :class="{ open: auth.authModalOpen }" @click.self="onClose">
     <div class="modal modal-md">
       <div class="modal-head">
         <h2>{{ step === 'email' ? '登录 / 注册' : '输入验证码' }}</h2>
@@ -34,7 +34,7 @@
           </div>
         </template>
 
-        <div v-if="auth.authError.value" class="form-error">{{ auth.authError.value }}</div>
+        <div v-if="auth.authError" class="form-error">{{ auth.authError }}</div>
         <div v-if="verified" class="form-success">✓ 登录成功</div>
       </div>
       <div class="modal-foot gap-2">
@@ -69,7 +69,7 @@ const verified = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const codeInputRef = ref<HTMLInputElement | null>(null)
 
-watch(() => auth.authModalOpen.value, (open) => {
+watch(() => auth.authModalOpen, (open) => {
   if (open) {
     email.value = ''
     code.value = ''
@@ -77,7 +77,7 @@ watch(() => auth.authModalOpen.value, (open) => {
     sending.value = false
     verifying.value = false
     verified.value = false
-    auth.authError.value = null
+    auth.authError = null
     nextTick(() => inputRef.value?.focus())
   }
 })
@@ -86,7 +86,7 @@ async function onSendCode() {
   const e = email.value.trim()
   if (!e) return
   sending.value = true
-  auth.authError.value = null
+  auth.authError = null
   const ok = await auth.sendOtp(e)
   sending.value = false
   if (ok) {
@@ -99,13 +99,13 @@ async function onVerify() {
   const c = code.value.trim()
   if (c.length < 6) return
   verifying.value = true
-  auth.authError.value = null
+  auth.authError = null
   const ok = await auth.verifyOtp(email.value.trim(), c)
   verifying.value = false
   if (ok) {
     verified.value = true
     setTimeout(() => {
-      auth.authModalOpen.value = false
+      auth.authModalOpen = false
       sync.initialSync()
     }, 800)
   }
@@ -114,11 +114,11 @@ async function onVerify() {
 function onBack() {
   step.value = 'email'
   code.value = ''
-  auth.authError.value = null
+  auth.authError = null
   nextTick(() => inputRef.value?.focus())
 }
 
 function onClose() {
-  auth.authModalOpen.value = false
+  auth.authModalOpen = false
 }
 </script>

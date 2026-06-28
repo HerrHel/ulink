@@ -4,6 +4,7 @@
     <div class="error-boundary-icon">⚠</div>
     <h3>出错了</h3>
     <p>{{ errorMsg }}</p>
+    <pre style="font-size:11px;max-height:200px;overflow:auto;text-align:left">{{ errStack }}</pre>
     <button class="btn btn-secondary" @click="reload">重试</button>
   </div>
 </template>
@@ -15,11 +16,13 @@ defineProps<{ name?: string }>()
 
 const errored = ref(false)
 const errorMsg = ref('')
+const errStack = ref('')
 
 onErrorCaptured((err: Error) => {
   errored.value = true
   errorMsg.value = err.message || '未知错误'
-  console.error(`[ErrorBoundary] ${err.message}`)
+  errStack.value = (err.stack || '').split('\n').slice(0, 6).join('\n')
+  console.error('[ErrorBoundary]', err)
   return false // 阻止继续传播
 })
 
