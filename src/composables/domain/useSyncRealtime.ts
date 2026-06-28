@@ -50,19 +50,16 @@ async function _handleRealtimeChange(payload: any, type: 'bookmark' | 'group' | 
   const e2e = useE2E()
 
   const HANDLERS = {
-    bookmark: { from: fromRemoteBookmark, list: () => ds.bookmarks },
-    group: { from: fromRemoteGroup, list: () => ds.siblingGroups },
-    category: { from: fromRemoteCategory, list: () => ds.categories },
-    attribute: { from: fromRemoteAttribute, list: () => ds.customAttributes },
+    bookmark: { from: fromRemoteBookmark, upsert: (m: any) => { const i = ds.bookmarks.findIndex(b => b.id === m.id); if (i >= 0) ds.bookmarks[i] = { ...ds.bookmarks[i], ...m }; else ds.bookmarks = [...ds.bookmarks, m] } },
+    group: { from: fromRemoteGroup, upsert: (m: any) => { const i = ds.siblingGroups.findIndex(g => g.id === m.id); if (i >= 0) ds.siblingGroups[i] = { ...ds.siblingGroups[i], ...m }; else ds.siblingGroups = [...ds.siblingGroups, m] } },
+    category: { from: fromRemoteCategory, upsert: (m: any) => { const i = ds.categories.findIndex(c => c.id === m.id); if (i >= 0) ds.categories[i] = { ...ds.categories[i], ...m }; else ds.categories = [...ds.categories, m] } },
+    attribute: { from: fromRemoteAttribute, upsert: (m: any) => { const i = ds.customAttributes.findIndex(a => a.id === m.id); if (i >= 0) ds.customAttributes[i] = { ...ds.customAttributes[i], ...m }; else ds.customAttributes = [...ds.customAttributes, m] } },
   } as const
 
   const h = HANDLERS[type]
   const mapped = h.from(row)
   if (e2e.isUnlocked.value) await e2e.decryptItem(type, mapped as any)
-  const list = h.list()
-  const idx = list.findIndex((item: any) => item.id === mapped.id)
-  if (idx >= 0) Object.assign(list[idx], mapped)
-  else list.push(mapped)
+  h.upsert(mapped)
 }
 
 function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
