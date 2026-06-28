@@ -178,5 +178,6 @@ export const DEFAULTS: AppData = {
       notes: TIPS_NOTES,
       updatedAt: 0, useCount: 0,
     }
-  ]
+  ],
+  _dataVersion: 2
 }

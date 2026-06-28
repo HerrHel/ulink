@@ -79,5 +79,6 @@ export interface AppData {
   categories: Category[]
   customAttributes: CustomAttribute[]
   _masterCanary?: string | EncryptedPassword
+  _dataVersion?: number
   _savedAt?: number
 }

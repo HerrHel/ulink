@@ -7,6 +7,9 @@ import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP, DEFAULTS } from '../config/c
 import { esc, cleanZeroWidth, favicon } from '../utils.js'
 import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 
+// 当前数据版本。增量更新此值以触发新迁移。
+const CURRENT_VERSION = 2
+
 interface MigrationResult extends AppData {
 }
 
@@ -17,6 +20,8 @@ interface MigrationResult extends AppData {
  * @returns 是否需要持久化
  */
 export function runMigrations(d: Partial<AppData>, result: MigrationResult): boolean {
+  // 版本 >= CURRENT_VERSION 的数据跳过所有迁移
+  if ((d._dataVersion ?? 0) >= CURRENT_VERSION) return false
   let needsPersist = false
 
   // 1. 确保默认分类存在
@@ -79,6 +84,9 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   result.bookmarks.forEach(b => {
     if (!b.updatedAt) { b.updatedAt = b.createdAt || Date.now(); needsPersist = true }
   })
+
+  // 标记迁移版本
+  if (needsPersist) result._dataVersion = CURRENT_VERSION
 
   return needsPersist
 }
