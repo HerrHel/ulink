@@ -147,14 +147,38 @@ function _buildGroupSearchItems(
   })
 }
 
-// ── Fuse 实例缓存（避免每次 getter 调用都重建索引）──
-let _bmCacheRef: Bookmark[] | null = null
-let _bmCacheFuse: Fuse<BookmarkSearchItem> | null = null
-let _bmCacheItems: BookmarkSearchItem[] = []
+// ── 统一搜索缓存（供 searchBookmarkIds / searchWithHighlights 共享）──
+// _bmBaseRef / _grpBaseRef 跟踪原始数组引用，
+// 所有搜索函数共用同一份转换后的搜索项，避免双倍构建
+let _bmBaseRef: Bookmark[] | null = null
+let _bmBaseItems: BookmarkSearchItem[] = []
+let _bmBaseAttrs: CustomAttribute[] | null = null
+let _bmFuse: Fuse<BookmarkSearchItem> | null = null
 
-let _grpCacheRef: SiblingGroup[] | null = null
-let _grpCacheFuse: Fuse<GroupSearchItem> | null = null
-let _grpCacheItems: GroupSearchItem[] = []
+let _grpBaseRef: SiblingGroup[] | null = null
+let _grpBaseItems: GroupSearchItem[] = []
+let _grpBaseAttrs: CustomAttribute[] | null = null
+let _grpBaseMap: Record<string, Bookmark> | null = null
+let _grpFuse: Fuse<GroupSearchItem> | null = null
+
+function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttribute[]) {
+  if (bookmarks !== _bmBaseRef || customAttributes !== _bmBaseAttrs) {
+    _bmBaseItems = _buildBookmarkSearchItems(bookmarks, customAttributes)
+    _bmFuse = new Fuse(_bmBaseItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
+    _bmBaseRef = bookmarks
+    _bmBaseAttrs = customAttributes
+  }
+}
+
+function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bookmark>, customAttributes: CustomAttribute[]) {
+  if (groups !== _grpBaseRef || bookmarkMap !== _grpBaseMap || customAttributes !== _grpBaseAttrs) {
+    _grpBaseItems = _buildGroupSearchItems(groups, bookmarkMap, customAttributes)
+    _grpFuse = new Fuse(_grpBaseItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
+    _grpBaseRef = groups
+    _grpBaseMap = bookmarkMap
+    _grpBaseAttrs = customAttributes
+  }
+}
 
 // ── 公开 API ──
 
@@ -169,12 +193,8 @@ export function searchBookmarkIds(
   customAttributes: CustomAttribute[],
 ): Set<string> | null {
   if (!query.trim()) return null
-  if (bookmarks !== _bmCacheRef) {
-    _bmCacheItems = _buildBookmarkSearchItems(bookmarks, customAttributes)
-    _bmCacheFuse = new Fuse(_bmCacheItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
-    _bmCacheRef = bookmarks
-  }
-  const results = _bmCacheFuse!.search(query.trim())
+  _ensureBookmarkBase(bookmarks, customAttributes)
+  const results = _bmFuse!.search(query.trim())
   return new Set(results.map(r => r.item.id))
 }
 
@@ -191,12 +211,8 @@ export function searchGroupIds(
   customAttributes: CustomAttribute[],
 ): Set<string> | null {
   if (!query.trim()) return null
-  if (groups !== _grpCacheRef) {
-    _grpCacheItems = _buildGroupSearchItems(groups, bookmarkMap, customAttributes)
-    _grpCacheFuse = new Fuse(_grpCacheItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
-    _grpCacheRef = groups
-  }
-  const results = _grpCacheFuse!.search(query.trim())
+  _ensureGroupBase(groups, bookmarkMap, customAttributes)
+  const results = _grpFuse!.search(query.trim())
   return new Set(results.map(r => r.item.id))
 }
 
@@ -236,18 +252,13 @@ function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, strin
   return out
 }
 
-// ── searchWithHighlights 专用缓存 ──
-let _hlBmCacheRef: Bookmark[] | null = null
-let _hlBmCacheFuse: Fuse<BookmarkSearchItem> | null = null
-let _hlGrpCacheRef: SiblingGroup[] | null = null
-let _hlGrpCacheFuse: Fuse<GroupSearchItem> | null = null
-
+// ── searchWithHighlights 需要的 key 映射 ──
 const BM_KEY_MAP = { title: 'title', url: 'url', notes: 'notes', username: 'username', attrNames: 'attrNames', titlePy: 'title', notesPy: 'notes' }
 const GRP_KEY_MAP = { name: 'name', attrNames: 'attrNames', childTitle: 'childTitle', childUrl: 'childUrl', namePy: 'name', childTitlePy: 'childTitle' }
 
 /**
  * 带高亮信息的混合搜索（书签 + 组），供 SearchSuggest 使用。
- * 内部缓存 Fuse 实例，同一数据引用不重复构建。
+ * 复用统一搜索引擎缓存，避免双倍构建 Fuse 索引。
  */
 export function searchWithHighlights(
   bookmarks: Bookmark[],
@@ -260,12 +271,8 @@ export function searchWithHighlights(
   if (!query.trim()) return []
   const q = query.trim()
 
-  if (bookmarks !== _hlBmCacheRef) {
-    const bmItems = _buildBookmarkSearchItems(bookmarks, customAttributes)
-    _hlBmCacheFuse = new Fuse(bmItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
-    _hlBmCacheRef = bookmarks
-  }
-  const bmResults = _hlBmCacheFuse!.search(q, { limit: maxResults })
+  _ensureBookmarkBase(bookmarks, customAttributes)
+  const bmResults = _bmFuse!.search(q, { limit: maxResults })
 
   const bookmarkResults: SearchResultItem[] = bmResults.map(r => ({
     id: r.item.id,
@@ -274,12 +281,8 @@ export function searchWithHighlights(
     _highlights: _extractHighlights(r, BM_KEY_MAP),
   }))
 
-  if (groups !== _hlGrpCacheRef) {
-    const grpItems = _buildGroupSearchItems(groups, bookmarkMap, customAttributes)
-    _hlGrpCacheFuse = new Fuse(grpItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
-    _hlGrpCacheRef = groups
-  }
-  const grpResults = _hlGrpCacheFuse!.search(q, { limit: 4 })
+  _ensureGroupBase(groups, bookmarkMap, customAttributes)
+  const grpResults = _grpFuse!.search(q, { limit: 4 })
 
   const groupResults: SearchResultItem[] = grpResults.map(r => ({
     id: r.item.id,
@@ -301,8 +304,6 @@ export function searchWithHighlights(
  */
 export function clearSearchCache(): void {
   _pyCache.clear()
-  _bmCacheRef = null; _bmCacheFuse = null; _bmCacheItems = []
-  _grpCacheRef = null; _grpCacheFuse = null; _grpCacheItems = []
-  _hlBmCacheRef = null; _hlBmCacheFuse = null
-  _hlGrpCacheRef = null; _hlGrpCacheFuse = null
+  _bmBaseRef = null; _bmBaseItems = []; _bmBaseAttrs = null; _bmFuse = null
+  _grpBaseRef = null; _grpBaseItems = []; _grpBaseMap = null; _grpBaseAttrs = null; _grpFuse = null
 }
