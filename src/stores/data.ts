@@ -130,7 +130,7 @@ export const useDataStore = defineStore('data', {
       return this.trashedBookmarks.length + this.trashedGroups.length + this.trashedCategories.length + this.trashedAttributes.length
     },
 
-    /** O(1) 书签/组查找 Map（含软删除） */
+    /** O(1) 书签/组查找 Map（含软删除——被 Pinia computed 缓存） */
     bookmarkMap(state): Record<string, Bookmark> {
       const map: Record<string, Bookmark> = {}; state.bookmarks.forEach(b => { map[b.id] = b }); return map
     },
