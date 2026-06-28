@@ -233,7 +233,7 @@ function onCheckDeadLinks() {
 }
 
 function onViewDeadLinks() {
-  uiStore.deadLinksPopoverOpen = true
+  uiStore.overlays.deadLinks = true
   uiStore.panels.settings = false
 }
 </script>

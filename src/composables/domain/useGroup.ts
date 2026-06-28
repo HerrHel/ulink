@@ -275,7 +275,7 @@ export function clearGeIcon() { clearIcon(geForm); }
 
 export function closeAddBmPopover() {
   const ui = useUIStore();
-  ui.addBmPopoverOpen = false;
+  ui.overlays.addPopover = false;
   ui.addToGid = null;
 }
 

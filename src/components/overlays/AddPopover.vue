@@ -108,8 +108,8 @@ const groupResults = computed(() => {
   return results.slice(0, 20)
 })
 
-/** 监听 store.addBmPopoverOpen，驱动弹窗显隐 */
-watch(() => store.addBmPopoverOpen, (v) => {
+/** 监听 store.overlays.addPopover，驱动弹窗显隐 */
+watch(() => store.overlays.addPopover, (v) => {
   if (v) {
     // 打开 —— 先显示元素，下一帧触发入场动画
     if (_closeTimer) clearTimeout(_closeTimer)
@@ -156,7 +156,7 @@ function show(targetGid: string) {
 }
 
 function close() {
-  store.addBmPopoverOpen = false
+  store.overlays.addPopover = false
   store.addToGid = null
   store._addPopoverTrigger = null
 }

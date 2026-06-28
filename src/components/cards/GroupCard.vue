@@ -182,7 +182,7 @@ onBeforeUnmount(() => _detach())
 
 function toggleFocus() { toggleGroupFocus(props.group.id) }
 function onDblClick(e: MouseEvent) { if ((e.target as HTMLElement).closest('button, input, [contenteditable], .gic-btn, .gic-remove')) return; toggleGroupFocus(props.group.id) }
-function addToGrp(e: MouseEvent) { ui.addToGid = props.group.id; const btn = e.currentTarget as HTMLElement; if (btn) { const r = btn.getBoundingClientRect(); ui._addPopoverTrigger = { top: r.bottom, left: r.left, width: r.width } } else { ui._addPopoverTrigger = null } ui.addBmPopoverOpen = true }
+function addToGrp(e: MouseEvent) { ui.addToGid = props.group.id; const btn = e.currentTarget as HTMLElement; if (btn) { const r = btn.getBoundingClientRect(); ui._addPopoverTrigger = { top: r.bottom, left: r.left, width: r.width } } else { ui._addPopoverTrigger = null } ui.overlays.addPopover = true }
 function editGrp() { _editGroup(props.group.id) }
 function delGrp() { _deleteGroup(props.group.id) }
 function undo() { performUndo(props.group.id) }

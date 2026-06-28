@@ -28,7 +28,7 @@
       <button class="btn btn-primary btn-sm" id="btnAdd" @click="onAddClick" title="添加">
         <span v-html="I.plus" class="icon-sm"></span>
       </button>
-      <div class="add-dropdown ctx-menu" v-show="store.addDropdownOpen">
+      <div class="add-dropdown ctx-menu" v-show="store.overlays.addDropdown">
         <button class="ctx-item" @click.stop="$emit('add-bookmark')">新建书签</button>
         <button class="ctx-item" @click.stop="$emit('add-group')">新建组</button>
       </div>
@@ -56,5 +56,5 @@ const focusCanUndo = computed(() => !!store.focusedGroupId && !!undo.canUndo(sto
 const focusCanRedo = computed(() => !!store.focusedGroupId && !!undo.canRedo(store.focusedGroupId))
 
 const toggleBatch = toggleBatchMode
-function onAddClick() { store.addDropdownOpen = !store.addDropdownOpen }
+function onAddClick() { store.overlays.addDropdown = !store.overlays.addDropdown }
 </script>

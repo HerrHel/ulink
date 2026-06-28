@@ -90,7 +90,7 @@ const allSelected = computed(() =>
   currentList.value.length > 0 && currentList.value.every(b => selectedIds.value.has(b.id))
 )
 
-watch(() => store.deadLinksPopoverOpen, (v) => {
+watch(() => store.overlays.deadLinks, (v) => {
   if (v) {
     visible.value = true
     selectMode.value = false
@@ -108,7 +108,7 @@ function switchTab(t: 'dead' | 'blocked') {
 }
 
 function close() {
-  store.deadLinksPopoverOpen = false
+  store.overlays.deadLinks = false
 }
 
 function onSelect(bmId: string) {

@@ -39,7 +39,7 @@ export function useAppHandlers() {
         ui._addPopoverTrigger = null
       }
       ui.addToGid = ui.focusedGroupId
-      ui.addBmPopoverOpen = true
+      ui.overlays.addPopover = true
     },
     onFocusEditGroup() { if (ui.focusedGroupId) editGroup(ui.focusedGroupId) },
     onFocusShareGroup() { if (ui.focusedGroupId) shareGroup(ui.focusedGroupId) },

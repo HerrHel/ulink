@@ -21,11 +21,17 @@ export interface ModalState {
 }
 
 export interface PanelState {
-  settings: boolean  // settingsOpen
-  detail: boolean    // detailOpen
-  trash: boolean     // trashPanelOpen
-  history: boolean   // historyPanelOpen
-  rail: boolean      // railOpen
+  settings: boolean
+  detail: boolean
+  trash: boolean
+  history: boolean
+  rail: boolean
+}
+
+export interface OverlayState {
+  addDropdown: boolean   // addDropdownOpen
+  addPopover: boolean    // addBmPopoverOpen
+  deadLinks: boolean     // deadLinksPopoverOpen
 }
 
 export interface UIState {
@@ -41,14 +47,11 @@ export interface UIState {
   activeAttrs: string[]
   excludedAttrs: string[]
   detailCards: string[]
-  detailOpen: boolean
   editingId: string | null
   themeMode: 'auto' | 'manual'
   themeStyle: ThemeStyle
-  addBmPopoverOpen: boolean
-  deadLinksPopoverOpen: boolean
-  addDropdownOpen: boolean
   historyItemId: string
+  historyItemType: 'bookmark' | 'group'
   historyItemType: 'bookmark' | 'group'
   mentionGid: string | null
   mentionQuery: string
@@ -71,6 +74,7 @@ export interface UIState {
   // 分组状态
   modals: ModalState
   panels: PanelState
+  overlays: OverlayState
 }
 
 export const useUIStore = defineStore('ui', {
@@ -90,9 +94,6 @@ export const useUIStore = defineStore('ui', {
     editingId: null,
     themeMode: 'auto',
     themeStyle: 'premium',
-    addBmPopoverOpen: false,
-    deadLinksPopoverOpen: false,
-    addDropdownOpen: false,
     historyItemId: '',
     historyItemType: 'bookmark',
     modals: {
@@ -109,6 +110,11 @@ export const useUIStore = defineStore('ui', {
       trash: false,
       history: false,
       rail: false,
+    },
+    overlays: {
+      addDropdown: false,
+      addPopover: false,
+      deadLinks: false,
     },
     mentionGid: null,
     mentionQuery: '',

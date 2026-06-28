@@ -72,4 +72,4 @@ export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id)
 
 // ── Settings / Add Dropdown ──
 export function hideSettingsMenu() { useUIStore().panels.settings = false }
-export function hideAddDropdown() { useUIStore().addDropdownOpen = false }
+export function hideAddDropdown() { useUIStore().overlays.addDropdown = false }
