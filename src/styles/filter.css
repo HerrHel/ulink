@@ -43,11 +43,28 @@
 .attr-search-add{
   width:30px;height:30px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  border-radius:var(--radius-base);font-size:1rem;font-weight:700;
+  border-radius:var(--radius-base);
   color:var(--accent);background:var(--accent-light);
-  cursor:pointer;transition:var(--transition-fast);
+  cursor:pointer;position:relative;overflow:hidden;
+  border:1px solid transparent;
+  transition:all 0.2s var(--ease-out);
 }
-.attr-search-add:hover{background:var(--accent);color:#fff}
+.attr-search-add svg{
+  width:16px;height:16px;
+  transition:transform 0.3s var(--ease-out);
+}
+.attr-search-add:hover{
+  background:var(--accent);color:#fff;
+  border-color:var(--accent);
+  box-shadow:0 2px 10px var(--accent-glow);
+  transform:scale(1.08);
+}
+.attr-search-add:hover svg{
+  transform:rotate(90deg);
+}
+.attr-search-add:active{
+  transform:scale(0.93);
+}
 .attr-drop-item{
   padding:8px 10px;font-size:0.8rem;font-weight:500;
   color:var(--text-secondary);border-radius:var(--radius-base);
@@ -71,10 +88,8 @@
   transition:var(--transition-fast);
 }
 .attr-drop-exclude svg{width:14px;height:14px}
-.attr-drop-exclude:hover{color:var(--rose);background:var(--rose-light)}
-.attr-drop-exclude.on{color:var(--rose);background:var(--rose-light)}
-[data-theme="dark"] .attr-drop-exclude:hover{color:var(--amber);background:var(--amber-light)}
-[data-theme="dark"] .attr-drop-exclude.on{color:var(--amber);background:var(--amber-light)}
+.attr-drop-exclude:hover{color:var(--amber);background:var(--amber-light)}
+.attr-drop-exclude.on{color:var(--amber);background:var(--amber-light)}
 .attr-chip{
   position:relative;
   display:inline-flex;align-items:center;gap:6px;

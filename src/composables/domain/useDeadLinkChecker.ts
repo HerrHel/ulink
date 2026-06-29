@@ -21,6 +21,9 @@ const CONFIDENCE_THRESHOLD = 0.5
 
 let _abort: AbortController | null = null
 
+// 网络基线缓存，30s 内复用
+let _baselineCache: { value: number; at: number } | null = null
+
 async function checkDirect(url: string, timeoutMs = 5000): Promise<{ ok: boolean; duration: number }> {
   const start = Date.now()
   try {
@@ -35,11 +38,14 @@ async function checkDirect(url: string, timeoutMs = 5000): Promise<{ ok: boolean
 }
 
 async function measureNetworkBaseline(): Promise<number> {
+  if (_baselineCache && Date.now() - _baselineCache.at < 30000) return _baselineCache.value
   const start = Date.now()
   try {
     await fetch('https://www.gstatic.com/generate_204', { method: 'HEAD', mode: 'no-cors' })
   } catch { /* ignore */ }
-  return Date.now() - start
+  const duration = Date.now() - start
+  _baselineCache = { value: duration, at: Date.now() }
+  return duration
 }
 
 async function callEdgeFunction(url: string, bookmarkId?: string): Promise<{ status: string; http_status: number }> {

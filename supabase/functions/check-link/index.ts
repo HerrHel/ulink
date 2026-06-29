@@ -52,7 +52,7 @@ serve(async (req) => {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000)
 
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         method: 'HEAD',
         signal: controller.signal,
         redirect: 'follow',
@@ -60,6 +60,18 @@ serve(async (req) => {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       })
+
+      // HEAD 被拒时降级为 GET（部分 CDN/服务器不支持 HEAD）
+      if (response.status === 405) {
+        response = await fetch(url, {
+          method: 'GET',
+          signal: controller.signal,
+          redirect: 'follow',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        })
+      }
 
       clearTimeout(timeout)
       http_status = response.status

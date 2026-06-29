@@ -73,6 +73,19 @@ function onAddAttr() {
   }
 }
 
+function onDocumentClick(e: MouseEvent) {
+  const target = e.target as Node
+  const dropdown = document.getElementById('attrDropdown')
+  const toggleBtn = document.getElementById('btnAttrFilter')
+  if (!dropdown || !attrDrp.open) return
+  if (dropdown.contains(target)) return
+  if (toggleBtn?.contains(target)) return
+  attrDrp.close()
+}
+
+onMounted(() => document.addEventListener('click', onDocumentClick, true))
+onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
+
 // 长按/右键菜单
 let _longPressTimer: ReturnType<typeof setTimeout> | null = null
 let _longPressFired = false

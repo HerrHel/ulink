@@ -277,10 +277,11 @@ export function useCloudSync() {
         }
       }
 
+      const rawOpsMap = new Map(rawOps.map(ro => [`${ro.table}:${ro.itemId}`, ro]))
       const results = await Promise.all(tasks)
       for (const r of results) {
         if (r.result.error) throw r.result.error
-        const rawMatch = rawOps.find(ro => ro.itemId === r.op.itemId && ro.table === r.op.table)
+        const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
         if (rawMatch?.id != null) succeededIds.push(rawMatch.id)
       }
 

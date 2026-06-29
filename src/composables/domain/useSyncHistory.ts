@@ -11,21 +11,13 @@ export function _getUserId(): string | null {
   return user.value?.id ?? null
 }
 
-/** 保存旧状态到版本历史 */
+/** 保存旧状态到版本历史（服务端触发器自动清理超过 10 条的旧版本） */
 export async function _saveHistory(userId: string, items: Array<{ id: string; type: string; data: Record<string, any> }>) {
   if (!items.length) return
-  const rows = items.map(i => ({ user_id: userId, item_id: i.id, item_type: i.type, data: i.data }))
   try {
-    await supabase.from('data_history').insert(rows)
-    const itemIds = [...new Set(rows.map(r => r.item_id))]
-    for (const itemId of itemIds) {
-      const { data } = await supabase.from('data_history')
-        .select('id').eq('user_id', userId).eq('item_id', itemId)
-        .order('created_at', { ascending: false }).range(10, 1000)
-      if (data && data.length) {
-        await supabase.from('data_history').delete().in('id', data.map(r => r.id))
-      }
-    }
+    await supabase.from('data_history').insert(
+      items.map(i => ({ user_id: userId, item_id: i.id, item_type: i.type, data: i.data }))
+    )
   } catch (e) {
     console.warn('[sync] history save failed:', e)
   }
