@@ -1,6 +1,6 @@
 <template>
-  <div class="ctx-menu" id="ctxMenu" v-show="store.open" role="menu" aria-label="操作菜单"
-       :style="{ left: store.x + 'px', top: store.y + 'px' }">
+  <div class="ctx-menu" id="ctxMenu" v-show="ctx.open" role="menu" aria-label="操作菜单"
+       :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }">
     <template v-for="item in visibleItems" :key="item.action">
       <div v-if="item.divider" class="ctx-divider" role="separator"></div>
       <button v-else class="ctx-item" :class="{ 'ctx-danger': item.danger }"

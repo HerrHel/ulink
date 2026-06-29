@@ -95,7 +95,8 @@ export function useDeadLinkChecker() {
       return { alive: false, status: edgeResult.http_status, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.90 }
     }
 
-    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.2 }
+    // Edge Function 无法确认，但直连已失败且网络正常 → 仍判定为失效
+    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.7 }
   }
 
   async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {

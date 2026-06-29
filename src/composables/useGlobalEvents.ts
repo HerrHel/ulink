@@ -86,12 +86,18 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     if (ui.batchMode && (e.target as HTMLElement).closest('.card, .group-card, .group-body, .sub-sites')) return
     if (!onShowCtxMenu) return
 
+    // 匹配到自定义菜单项时始终阻止浏览器默认菜单
+    function showCtx(type: string, id: string) {
+      e.preventDefault()
+      onShowCtxMenu(e, type, id)
+    }
+
     const subSitesEl = (e.target as HTMLElement).closest('.sub-sites')
     if (subSitesEl) {
       const subItem = (e.target as HTMLElement).closest('.group-inline-card')
-      if (!subItem) { e.preventDefault(); return }
+      if (!subItem) return  // 无 inline card 时不阻止原生菜单
       const subId = (subItem as HTMLElement).dataset.bmId || (subItem as HTMLElement).dataset.id
-      if (subId) { ui.ctxCard = null; onShowCtxMenu(e, 'sub', subId); return }
+      if (subId) { ui.ctxCard = null; showCtx('sub', subId); return }
     }
     const inlineCard = (e.target as HTMLElement).closest('.group-inline-card')
     // 组编辑区域内（非 inline card）：显示浏览器原生右键菜单
@@ -99,16 +105,16 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     if (groupBody && !inlineCard) { return }
     if (inlineCard) {
       const gCard = inlineCard.closest('.group-card')
-      if (gCard) { ui.ctxCard = inlineCard as HTMLElement; ui.ctxGid = (gCard as HTMLElement).dataset.groupId!; onShowCtxMenu(e, 'group-card', inlineCard.getAttribute('data-bm-id')!); return }
+      if (gCard) { ui.ctxCard = inlineCard as HTMLElement; ui.ctxGid = (gCard as HTMLElement).dataset.groupId!; showCtx('group-card', inlineCard.getAttribute('data-bm-id')!); return }
     }
     const gCard = (e.target as HTMLElement).closest('.group-card')
-    if (gCard) { ui.ctxCard = null; onShowCtxMenu(e, 'group', (gCard as HTMLElement).dataset.groupId!); return }
+    if (gCard) { ui.ctxCard = null; showCtx('group', (gCard as HTMLElement).dataset.groupId!); return }
     const bmCard = (e.target as HTMLElement).closest('.card')
-    if (bmCard) { ui.ctxCard = null; onShowCtxMenu(e, 'card', (bmCard as HTMLElement).dataset.id!); return }
+    if (bmCard) { ui.ctxCard = null; showCtx('card', (bmCard as HTMLElement).dataset.id!); return }
     const railItem = (e.target as HTMLElement).closest('.rail-item')
-    if (railItem) { const catId = (railItem as HTMLElement).dataset.catId; if (catId && catId !== CAT_ALL && catId !== CAT_UNCATEGORIZED) { onShowCtxMenu(e, 'cat', catId); return } }
-    if ((e.target as HTMLElement).closest('.icon-rail') && !(e.target as HTMLElement).closest('.rail-item') && !(e.target as HTMLElement).closest('.rail-logo') && !(e.target as HTMLElement).closest('.rail-bottom')) { onShowCtxMenu(e, 'rail-empty', ''); return }
-    if ((e.target as HTMLElement).closest('#panelContent') && !(e.target as HTMLElement).closest('.card') && !(e.target as HTMLElement).closest('.empty')) { onShowCtxMenu(e, 'grid-empty', ''); return }
+    if (railItem) { const catId = (railItem as HTMLElement).dataset.catId; if (catId && catId !== CAT_ALL && catId !== CAT_UNCATEGORIZED) { showCtx('cat', catId); return } }
+    if ((e.target as HTMLElement).closest('.icon-rail') && !(e.target as HTMLElement).closest('.rail-item') && !(e.target as HTMLElement).closest('.rail-logo') && !(e.target as HTMLElement).closest('.rail-bottom')) { showCtx('rail-empty', ''); return }
+    if ((e.target as HTMLElement).closest('#panelContent') && !(e.target as HTMLElement).closest('.card') && !(e.target as HTMLElement).closest('.empty')) { showCtx('grid-empty', ''); return }
   }
 
   onMounted(() => {
