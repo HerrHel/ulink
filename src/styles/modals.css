@@ -107,7 +107,7 @@
 
 /* ── CategoryModal ── */
 #catModal .modal{overflow:hidden}
-.cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+.cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-gutter:stable}
 .cat-sort-list::-webkit-scrollbar{width:4px}
 .cat-sort-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .cat-list-item{display:flex;align-items:center;gap:8px;cursor:grab;user-select:none;transition:background-color 0.15s,opacity 0.15s}

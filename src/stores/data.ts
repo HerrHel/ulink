@@ -417,7 +417,8 @@ export const useDataStore = defineStore('data', {
 
     /** 内部辅助：恢复已软删除项 */
     _restoreItem(table: TableName, id: string) {
-      const arr = (this as any)[table]
+      const stateKey = table === 'sibling_groups' ? 'siblingGroups' : table === 'custom_attributes' ? 'customAttributes' : table
+      const arr = (this as any)[stateKey]
       const idx = (arr as any[]).findIndex((i: any) => i.id === id)
       if (idx >= 0) {
         const item = (arr as any[])[idx]
@@ -444,7 +445,8 @@ export const useDataStore = defineStore('data', {
 
     /** 内部辅助：永久删除项 */
     _permanentDelete(key: TableName, id: string) {
-      this[key] = (this[key] as any[]).filter((item: any) => item.id !== id)
+      const stateKey = key === 'sibling_groups' ? 'siblingGroups' : key === 'custom_attributes' ? 'customAttributes' : key
+      this[stateKey] = (this[stateKey] as any[]).filter((item: any) => item.id !== id)
       this._dirtyIds.delete(id)
       this._deletedIds.set(id, key)
     },
