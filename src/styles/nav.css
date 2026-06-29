@@ -78,9 +78,14 @@
   padding:6px 12px;
   font-size:0.7rem;color:var(--text-muted);
 }
+.rail-storage-track{
+  flex:1;height:4px;
+  background:var(--border-light);
+  border-radius:3px;overflow:hidden;
+}
 .rail-storage-bar{
-  height:3px;background:var(--accent);
-  border-radius:2px;min-width:0;transition:width 0.3s ease;
+  height:100%;background:var(--accent);
+  border-radius:3px;min-width:0;transition:width 0.3s ease;
 }
 .rail-storage-text{flex-shrink:0;white-space:nowrap;display:flex;align-items:center;gap:2px}
 .rail-storage-pct{opacity:0.7}
