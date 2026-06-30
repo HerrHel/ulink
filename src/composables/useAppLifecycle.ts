@@ -7,11 +7,39 @@ import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { flushSaveAppData } from '../stores/app.js'
 import { useMentionStore } from '../stores/overlay.js'
+import { toast } from '../lib/toast.js'
 import { detectShareRoute } from './domain/useDataShare.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
 let _onShareRoute: ((gid: string) => void) | null = null
 export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
+
+// D2: Web Share Target — 从其它 App 分享 URL 到 LinkVault
+function _handleShareTarget(ds: ReturnType<typeof useDataStore>) {
+  const params = new URLSearchParams(location.search)
+  const sharedUrl = params.get('url') || params.get('text') || ''
+  if (!sharedUrl) return
+  const title = params.get('title') || sharedUrl
+  // 非 http 开头的内容不是链接（可能是纯文本分享）
+  const url = sharedUrl.startsWith('http') ? sharedUrl : ''
+  if (!url) return
+  const now = Date.now()
+  ds.addBookmark({
+    id: 'b' + now.toString(36) + Math.random().toString(36).slice(2, 6),
+    title: title.slice(0, 200),
+    url,
+    username: '', password: '', notes: '', icon: '',
+    categoryId: 'uncategorized', parentId: null,
+    order: ds.bookmarks.length, useCount: 0,
+    attributes: {}, isExpanded: false,
+    createdAt: now, updatedAt: now,
+  })
+  flushSaveAppData()
+  toast('已从分享添加书签')
+  // 清除 URL 参数
+  history.replaceState(null, '', location.pathname + location.search.replace(/[\?&]share(&|$)/, ''))
+}
+
 import { useAuth } from './domain/useAuth.js'
 import { useCloudSync } from './domain/useCloudSync.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
@@ -50,6 +78,9 @@ export function useAppLifecycle() {
       useUIStore().modals.setupGuide = true
     }
     updateCardTagsOverflow()
+
+    // D2: Web Share Target — 从其它 App 分享 URL 到 LinkVault
+    _handleShareTarget(ds)
 
     // 初始化认证 & 云同步
     const auth = useAuth()
