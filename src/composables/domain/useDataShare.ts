@@ -5,6 +5,7 @@
 import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
+import { incrementStat } from '../../lib/stats.js'
 import { copyToClipboard } from '../../utils.js'
 import { supabase } from '../../lib/supabase.js'
 import { useCloudSync } from './useCloudSync.js'
@@ -30,6 +31,7 @@ export async function shareGroup(gid: string) {
 
   const url = location.origin + location.pathname + '#share/' + gid
   copyToClipboard(url, '分享链接')
+  incrementStat('share_group')
 }
 
 // ── 从 URL 导入分享数据（C3: 仅支持 #share/<id> 格式，废弃 base64）──

@@ -3,6 +3,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { favicon, domain, fixUrl } from '../../utils.js'
+import { incrementStat } from '../../lib/stats.js'
 import { toast, toastWithUndo } from '../../lib/toast.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
@@ -159,6 +160,7 @@ export function saveBm() {
 
   if (bmForm.id) {
     ds.updateBookmark(bmForm.id, data)
+    incrementStat('bookmark_edited')
     toast('书签已更新')
   } else {
     const newBm = data as Bookmark
@@ -179,6 +181,7 @@ export function saveBm() {
       }
     }
     saveAppData()
+    incrementStat('bookmark_created')
     toast('书签已添加')
   }
   if (bmForm.id) saveAppData()
@@ -322,6 +325,7 @@ export function deleteBookmarkWithUndo(id: string) {
     })
   })
   ids.forEach(bid => ds.deleteBookmark(bid))
+  incrementStat('bookmark_deleted')
   debouncedSaveAppData()
   toastWithUndo('书签已删除', () => {
     ids.forEach(bid => ds.restoreBookmark(bid))

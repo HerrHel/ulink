@@ -156,6 +156,25 @@
         <span class="sp-range-hint">5–30</span>
       </div>
     </div>
+    <!-- Feedback & Stats -->
+    <div class="sp-section">
+      <button class="sp-action" @click.stop="onFeedback">
+        <span v-html="'💬'"></span>反馈 / 建议
+        <span class="sp-action-kbd">GitHub</span>
+      </button>
+      <div class="sp-row">
+        <span class="sp-row-label">使用统计</span>
+        <span class="sp-sync-status ok" @click.stop="showStats = !showStats" style="cursor:pointer">
+          {{ showStats ? '收起' : '查看' }}
+        </span>
+      </div>
+      <div v-if="showStats" class="sp-stats">
+        <div v-for="(label, key) in statsLabels" :key="key" class="sp-stat-row">
+          <span class="sp-stat-label">{{ label }}</span>
+          <span class="sp-stat-count">{{ statsData[key] || 0 }}</span>
+        </div>
+      </div>
+    </div>
     <!-- Danger -->
     <div class="sp-section sp-danger">
       <button class="sp-danger-btn" @click.stop="onResetData">
@@ -178,6 +197,7 @@ import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
+import { incrementStat, getStats, STAT_LABELS } from '../../lib/stats.js'
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
 
@@ -270,6 +290,7 @@ async function onLogout() {
 
 function onCheckDeadLinks() {
   if (dl.checking.value) return
+  incrementStat('deadlink_check')
   toast('开始检测死链...')
   dl.checkAll(5, 200).then(() => {
     const ds = dataStore
@@ -299,5 +320,15 @@ function onViewDeadLinks() {
 function onToggleAutoDeadCheck() {
   if (dl.autoCheckEnabled.value) dl.stopAutoCheck()
   else dl.startAutoCheck()
+}
+
+// ── D4: 使用统计 + 反馈 ──
+const showStats = ref(false)
+const statsData = computed(() => getStats())
+const statsLabels = STAT_LABELS
+
+function onFeedback() {
+  window.open('https://github.com/h2629/LinkVault/issues', '_blank')
+  uiStore.panels.settings = false
 }
 </script>

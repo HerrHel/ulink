@@ -272,6 +272,12 @@
 }
 .sp-range-hint{font-size:0.66rem;color:var(--text-muted,#999);flex-shrink:0}
 
+/* 使用统计 */
+.sp-stats{display:flex;flex-direction:column;padding:4px 10px;gap:3px}
+.sp-stat-row{display:flex;justify-content:space-between;align-items:center;padding:2px 0}
+.sp-stat-label{font-size:0.72rem;color:var(--text-secondary,#666)}
+.sp-stat-count{font-size:0.7rem;font-weight:600;color:var(--accent);min-width:24px;text-align:right}
+
 /* 设置面板内的快捷键入口按钮 */
 .sp-action-kbd{
   margin-left:auto;

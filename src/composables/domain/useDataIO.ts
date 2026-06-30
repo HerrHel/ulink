@@ -9,6 +9,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { incrementStat } from '../../lib/stats.js'
 import { AppDataSchema } from '../../schemas.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
@@ -48,6 +49,7 @@ export function exportData() {
   try {
     _download('linkvault-backup-' + _dateStamp() + '.json',
       JSON.stringify(ds._dataSnapshot(), null, 2), 'application/json')
+    incrementStat('export_json')
     toast('数据已导出')
   } catch (_) { toast('导出失败', false) }
 }
@@ -87,6 +89,7 @@ export function exportHTML() {
     }
     lines.push('</DL><p>')
     _download('linkvault-bookmarks-' + _dateStamp() + '.html', lines.join('\n'), 'text/html')
+    incrementStat('export_html')
     toast(`已导出 ${live.length} 个书签（HTML）`)
   } catch (_) { toast('导出失败', false) }
 }
@@ -111,6 +114,7 @@ export function exportCSV() {
     }
     _download('linkvault-bookmarks-' + _dateStamp() + '.csv',
       rows.map(r => r.join(',')).join('\n'), 'text/csv')
+    incrementStat('export_csv')
     toast(`已导出 ${live.length} 个书签（CSV）`)
   } catch (_) { toast('导出失败', false) }
 }
@@ -131,6 +135,7 @@ export function exportRaindrop() {
     }))
     _download('linkvault-raindrop-' + _dateStamp() + '.json',
       JSON.stringify({ items }, null, 2), 'application/json')
+    incrementStat('export_raindrop')
     toast(`已导出 ${live.length} 个书签（Raindrop JSON）`)
   } catch (_) { toast('导出失败', false) }
 }
@@ -271,6 +276,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   }
 
   saveAppData()
+  incrementStat('import_data')
 
   const total = catImported + bmImported + groupImported + attrImported
   if (total === 0) {
