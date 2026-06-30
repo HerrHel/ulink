@@ -1,6 +1,5 @@
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
-import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
 

@@ -266,7 +266,7 @@ export const useDataStore = defineStore('data', {
         const arr = raw ? JSON.parse(raw) : []
         arr.unshift({ id: Date.now(), data, created_at: new Date().toISOString() })
         localStorage.setItem(key, JSON.stringify(arr.slice(0, max)))
-      } catch (_) {}
+      } catch (_) { /* fire-and-forget */ }
     },
     updateBookmark(id: string, changes: Partial<Bookmark>) {
       const idx = this.bookmarks.findIndex(b => b.id === id)
