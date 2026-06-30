@@ -41,6 +41,7 @@
 <AuthModal />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" @close="store.modals.e2eUnlock = false" @unlocked="onE2EUnlocked" />
+<SetupGuide />
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
 <DeadLinksPopover />
@@ -92,6 +93,7 @@ const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashP
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
 const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
 const E2EUnlockModal = defineAsyncComponent(() => import('./components/modals/E2EUnlockModal.vue'))
+import SetupGuide from './components/modals/SetupGuide.vue'
 
 // A4: 公开分享页面
 const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))

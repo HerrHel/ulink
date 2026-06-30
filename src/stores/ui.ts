@@ -18,6 +18,7 @@ export interface ModalState {
   groupEdit: boolean
   e2eSetup: boolean
   e2eUnlock: boolean
+  setupGuide: boolean
 }
 
 export interface PanelState {
@@ -105,6 +106,7 @@ export const useUIStore = defineStore('ui', {
       groupEdit: false,
       e2eSetup: false,
       e2eUnlock: false,
+      setupGuide: false,
     },
     panels: {
       settings: false,

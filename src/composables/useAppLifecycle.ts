@@ -44,6 +44,11 @@ export function useAppLifecycle() {
     if (shareGid) {
       _onShareRoute?.(shareGid)
     }
+
+    // D1: 首启分流引导
+    if (!localStorage.getItem('lv_setup_done') && !shareGid) {
+      useUIStore().modals.setupGuide = true
+    }
     updateCardTagsOverflow()
 
     // 初始化认证 & 云同步
