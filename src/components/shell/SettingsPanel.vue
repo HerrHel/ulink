@@ -86,8 +86,8 @@
         </div>
       </template>
     </div>
-    <!-- E2E Encryption -->
-    <div class="sp-section" v-if="auth.isLoggedIn.value">
+    <!-- E2E Encryption（A3：下放给本地用户，不再依赖登录） -->
+    <div class="sp-section">
       <div class="sp-row">
         <span class="sp-row-label"><span class="sp-icon">🔐</span>端到端加密</span>
         <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
@@ -95,7 +95,7 @@
         </span>
       </div>
       <div class="sp-row">
-        <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储</span>
+        <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn.value">（本机存储，登录云端后可跨设备）</span></span>
       </div>
       <div class="sp-row sp-row-actions">
         <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true">
