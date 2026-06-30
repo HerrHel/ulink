@@ -101,3 +101,29 @@ export async function syncOpsCount(): Promise<number> {
     return 0
   }
 }
+
+// ── 本地版本历史（C2：下放给本地用户，存储于 localStorage）──
+
+export interface LocalHistoryVersion {
+  id: number
+  data: Record<string, unknown>
+  created_at: string
+}
+
+const _histKey = (itemId: string) => 'lv_hist:' + itemId
+
+export function fetchLocalHistory(itemId: string): LocalHistoryVersion[] {
+  try {
+    const raw = localStorage.getItem(_histKey(itemId))
+    return raw ? JSON.parse(raw) as LocalHistoryVersion[] : []
+  } catch (_) {
+    return []
+  }
+}
+
+/** 按 historyId 取本地某版本 data，供 restore 回退用。 */
+export function getLocalHistoryVersion(itemId: string, historyId: number): Record<string, unknown> | null {
+  const arr = fetchLocalHistory(itemId)
+  const v = arr.find(x => x.id === historyId)
+  return v?.data ?? null
+}

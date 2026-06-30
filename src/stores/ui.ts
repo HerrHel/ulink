@@ -53,7 +53,7 @@ export interface UIState {
   themeStyle: ThemeStyle
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
-  historyItemType: 'bookmark' | 'group'
+  historyMax: number
   mentionGid: string | null
   mentionQuery: string
   mentionIdx: number
@@ -97,6 +97,7 @@ export const useUIStore = defineStore('ui', {
     themeStyle: 'premium',
     historyItemId: '',
     historyItemType: 'bookmark',
+    historyMax: 10,
     modals: {
       bookmark: false,
       category: false,
@@ -175,6 +176,7 @@ export const useUIStore = defineStore('ui', {
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
           layoutMode: this.layoutMode,
+          historyMax: this.historyMax,
           docScrollTop: document.documentElement.scrollTop || 0,
           _preferredLayoutMode: this._preferredLayoutMode || null,
           _customCardOrder: ds._customCardOrder || null,
@@ -191,6 +193,7 @@ export const useUIStore = defineStore('ui', {
         if (s.curCat) this.curCat = s.curCat
         if (s.sortMode) this.sortMode = s.sortMode
         if (s.layoutMode === 'list' || s.layoutMode === 'grid') this.layoutMode = s.layoutMode
+        if (typeof s.historyMax === 'number') this.historyMax = Math.min(30, Math.max(5, s.historyMax))
         if (s.searchQuery) this.searchQuery = s.searchQuery
         if (Array.isArray(s.activeAttrs)) this.activeAttrs = s.activeAttrs.slice()
         if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = s.excludedAttrs.slice()

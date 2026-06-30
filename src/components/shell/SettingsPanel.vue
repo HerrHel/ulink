@@ -137,6 +137,18 @@
         </div>
       </div>
     </div>
+    <!-- History versions -->
+    <div class="sp-section">
+      <div class="sp-row">
+        <span class="sp-row-label">历史版本保留</span>
+        <span class="sp-range-value">{{ uiStore.historyMax }} 版</span>
+      </div>
+      <div class="sp-row">
+        <input type="range" class="sp-range" min="5" max="30" step="1"
+               v-model.number="uiStore.historyMax" @change="onHistoryMaxChange">
+        <span class="sp-range-hint">5–30</span>
+      </div>
+    </div>
     <!-- Danger -->
     <div class="sp-section sp-danger">
       <button class="sp-danger-btn" @click.stop="onResetData">
@@ -210,6 +222,11 @@ function onSetLayout(mode: 'grid' | 'list') {
 
 function onSetSortMode(mode: string) {
   uiStore.sortMode = mode
+}
+
+function onHistoryMaxChange() {
+  uiStore.historyMax = Math.min(30, Math.max(5, uiStore.historyMax))
+  uiStore.saveUIState()
 }
 
 function onOpenTrash() { uiStore.panels.trash = true; uiStore.panels.settings = false }

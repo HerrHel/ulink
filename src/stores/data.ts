@@ -257,9 +257,21 @@ export const useDataStore = defineStore('data', {
       }
       this._markDirty(bm.id); this._newIds.add(bm.id)
     },
+    /** 保存旧状态到本地历史（C2：覆盖前留底）。fire-and-forget。 */
+    _saveLocalHistory(id: string, data: Record<string, unknown>) {
+      const max = useUIStore().historyMax || 10
+      try {
+        const key = 'lv_hist:' + id
+        const raw = localStorage.getItem(key)
+        const arr = raw ? JSON.parse(raw) : []
+        arr.unshift({ id: Date.now(), data, created_at: new Date().toISOString() })
+        localStorage.setItem(key, JSON.stringify(arr.slice(0, max)))
+      } catch (_) {}
+    },
     updateBookmark(id: string, changes: Partial<Bookmark>) {
       const idx = this.bookmarks.findIndex(b => b.id === id)
       if (idx >= 0) {
+        this._saveLocalHistory(id, { ...this.bookmarks[idx] })
         for (const key of Object.keys(changes)) this._trackChange(id, key)
         this.bookmarks[idx] = { ...this.bookmarks[idx], ...changes, updatedAt: Date.now() }
         this._bmMap[id] = this.bookmarks[idx]
@@ -299,6 +311,7 @@ export const useDataStore = defineStore('data', {
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
       const idx = this.siblingGroups.findIndex(g => g.id === id)
       if (idx >= 0) {
+        this._saveLocalHistory(id, { ...this.siblingGroups[idx] })
         for (const key of Object.keys(changes)) this._trackChange(id, key)
         this.siblingGroups[idx] = { ...this.siblingGroups[idx], ...changes, updatedAt: Date.now() }
         this._grpMap[id] = this.siblingGroups[idx]

@@ -67,6 +67,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { fetchLocalHistory } from '../../stores/storage.js'
+import { useAuth } from '../../composables/domain/useAuth.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 import { diffVersions, type DiffField } from '../../lib/diffVersions.js'
@@ -81,6 +83,7 @@ const props = defineProps<{ open: boolean; itemId: string; itemType: 'bookmark' 
 const emit = defineEmits<{ close: [] }>()
 
 const sync = useCloudSync()
+const auth = useAuth()
 const versions = ref<HistoryVersion[]>([])
 const loading = ref(false)
 const selectedIdx = ref(-1)
@@ -93,7 +96,20 @@ watch(() => props.open, async (isOpen) => {
     selectedIdx.value = -1
     diffMode.value = false
     try {
-      versions.value = await sync.fetchHistory(props.itemId)
+      // 本地历史（同步读取）
+      const local = fetchLocalHistory(props.itemId)
+      // 云端历史（登录用户）
+      let remote: HistoryVersion[] = []
+      if (auth.isLoggedIn.value) {
+        remote = await sync.fetchHistory(props.itemId)
+      }
+      // 合并去重：相同 created_at 保留云端
+      const seen = new Set<string>()
+      const merged: HistoryVersion[] = []
+      for (const v of remote) { seen.add(v.created_at); merged.push(v) }
+      for (const v of local) { if (!seen.has(v.created_at)) merged.push(v) }
+      merged.sort((a, b) => b.created_at.localeCompare(a.created_at))
+      versions.value = merged
     } catch (e) {
       console.warn('[history] fetch failed:', e)
       versions.value = []

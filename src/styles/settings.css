@@ -252,6 +252,26 @@
 .sp-export-name{font-size:0.78rem;color:var(--text,#1a1a1a);font-weight:500}
 .sp-export-hint{font-size:0.66rem;color:var(--text-muted,#999)}
 
+/* 历史版本滑块 */
+.sp-range-value{font-size:0.74rem;font-weight:600;color:var(--accent)}
+.sp-range{
+  flex:1;-webkit-appearance:none;appearance:none;
+  height:4px;border-radius:2px;outline:none;cursor:pointer;
+  background:var(--border,#e5e7eb);
+}
+.sp-range::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--surface,#fff);
+  box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer;
+}
+.sp-range::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;
+  background:var(--accent);border:2px solid var(--surface,#fff);
+  box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer;
+}
+.sp-range-hint{font-size:0.66rem;color:var(--text-muted,#999);flex-shrink:0}
+
 /* 设置面板内的快捷键入口按钮 */
 .sp-action-kbd{
   margin-left:auto;
