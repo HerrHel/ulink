@@ -22,6 +22,9 @@
             <button class="pop-action-btn pop-action-danger" :disabled="!selectedIds.size" @click="deleteSelected" title="删除选中">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
+            <button class="pop-action-btn" :disabled="!selectedIds.size" @click="ignoreSelected" title="标记忽略">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
             <button class="pop-action-btn" @click="exitSelectMode" title="取消">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -64,7 +67,8 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { favicon, domain } from '../../utils.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
-import { showConfirm } from '../../lib/toast.js'
+import { showConfirm, toast } from '../../lib/toast.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 
 const store = useAppStore()
 const uiStore = useUIStore()
@@ -75,11 +79,11 @@ const selectMode = ref(false)
 const selectedIds = ref(new Set<string>())
 
 const deadList = computed(() =>
-  dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['dead-link'])
+  dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['dead-link'] && !b.attributes?.['dead-link-ignored'])
 )
 
 const blockedList = computed(() =>
-  dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['gfw-blocked'])
+  dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['gfw-blocked'] && !b.attributes?.['dead-link-ignored'])
 )
 
 const currentList = computed(() =>
@@ -143,6 +147,23 @@ function toggleSelectAll() {
   } else {
     selectedIds.value = new Set(currentList.value.map(b => b.id))
   }
+}
+
+function ignoreSelected() {
+  const ids = [...selectedIds.value]
+  if (!ids.length) return
+  for (const id of ids) {
+    const bm = dataStore.bookmarkMap[id]
+    if (bm) {
+      dataStore.updateBookmark(id, {
+        attributes: { ...(bm.attributes || {}), 'dead-link-ignored': true }
+      })
+    }
+  }
+  debouncedSaveAppData()
+  toast('已标记忽略 ' + ids.length + ' 个链接')
+  selectedIds.value = new Set()
+  exitSelectMode()
 }
 
 function deleteSelected() {

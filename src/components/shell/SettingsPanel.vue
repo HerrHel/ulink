@@ -59,6 +59,13 @@
           <span>查看</span>
         </button>
       </div>
+      <div class="sp-row">
+        <span class="sp-row-label">定时检测</span>
+        <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
+          <span class="sp-switch"></span>
+          <span class="sp-toggle-label">{{ dlAutoEnabled ? '每周自动检测' : '已关闭' }}</span>
+        </div>
+      </div>
     </div>
     <!-- Cloud Sync / Auth -->
     <div class="sp-section">
@@ -194,6 +201,7 @@ const syncState = useSyncState()
 const dlChecking = computed(() => dl.checking.value)
 const deadCount = computed(() => dl.deadCount.value)
 const blockedCount = computed(() => dl.blockedCount.value)
+const dlAutoEnabled = computed(() => dl.autoCheckEnabled.value)
 
 const sortModes = [
   { id: 'order', label: '自定义' },
@@ -286,5 +294,10 @@ function onCheckDeadLinks() {
 function onViewDeadLinks() {
   uiStore.overlays.deadLinks = true
   uiStore.panels.settings = false
+}
+
+function onToggleAutoDeadCheck() {
+  if (dl.autoCheckEnabled.value) dl.stopAutoCheck()
+  else dl.startAutoCheck()
 }
 </script>

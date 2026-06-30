@@ -1,5 +1,6 @@
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
 
@@ -108,7 +109,7 @@ export function useDeadLinkChecker() {
   async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
-    const bookmarks = ds.bookmarks.filter(b => b.url && b.url.startsWith('http'))
+    const bookmarks = ds.bookmarks.filter(b => b.url && b.url.startsWith('http') && !b.attributes?.['dead-link-ignored'])
     if (bookmarks.length === 0) return
 
     checking.value = true
@@ -302,10 +303,50 @@ export function useDeadLinkChecker() {
     return count
   })
 
+  // ── 定时自动检测（D3）──
+  const AUTO_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000 // 每周
+  const AUTO_CHECK_KEY = 'lv_autoDeadCheck'
+  const AUTO_CHECK_ENABLED_KEY = 'lv_autoDeadCheckEnabled'
+
+  const autoCheckEnabled = ref(!!localStorage.getItem(AUTO_CHECK_ENABLED_KEY))
+  let _autoCheckTimer: ReturnType<typeof setInterval> | null = null
+
+  function _persistAutoCheck(v: boolean) {
+    if (v) localStorage.setItem(AUTO_CHECK_ENABLED_KEY, '1')
+    else localStorage.removeItem(AUTO_CHECK_ENABLED_KEY)
+  }
+
+  function startAutoCheck() {
+    autoCheckEnabled.value = true
+    _persistAutoCheck(true)
+    // 检查是否已到检测时间
+    const last = parseInt(localStorage.getItem(AUTO_CHECK_KEY) || '0', 10)
+    if (Date.now() - last > AUTO_INTERVAL_MS && !checking.value) {
+      checkAll(5, 200)
+    }
+    localStorage.setItem(AUTO_CHECK_KEY, String(Date.now()))
+    // 启动定时循环（每 6 小时检查一次）
+    if (_autoCheckTimer) clearInterval(_autoCheckTimer)
+    _autoCheckTimer = setInterval(() => {
+      const last2 = parseInt(localStorage.getItem(AUTO_CHECK_KEY) || '0', 10)
+      if (Date.now() - last2 > AUTO_INTERVAL_MS && !checking.value) {
+        checkAll(5, 200)
+        localStorage.setItem(AUTO_CHECK_KEY, String(Date.now()))
+      }
+    }, 6 * 60 * 60 * 1000)
+  }
+
+  function stopAutoCheck() {
+    autoCheckEnabled.value = false
+    _persistAutoCheck(false)
+    if (_autoCheckTimer) { clearInterval(_autoCheckTimer); _autoCheckTimer = null }
+  }
+
   return {
     results, checking, progress, lastFullCheckAt,
     checkUrl, checkAll, checkOne, abort,
     getResult, isDead, isBlocked, deadCount, blockedCount,
     toastDeadCount, toastBlockedCount,
+    autoCheckEnabled, startAutoCheck, stopAutoCheck,
   }
 }
