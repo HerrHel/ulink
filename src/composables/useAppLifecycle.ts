@@ -7,7 +7,7 @@ import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { flushSaveAppData } from '../stores/app.js'
 import { useMentionStore } from '../stores/overlay.js'
-import { importFromURL, detectShareRoute } from './domain/useDataShare.js'
+import { detectShareRoute } from './domain/useDataShare.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
 let _onShareRoute: ((gid: string) => void) | null = null
@@ -39,12 +39,10 @@ export function useAppLifecycle() {
       flushSaveAppData()
     }
     ui.restoreUIState()
-    // A4: 检测公开分享路由（#share/<id>），优先于旧版 base64 分享
+    // A4/C3: 检测公开分享路由（#share/<id>）
     const shareGid = detectShareRoute()
     if (shareGid) {
       _onShareRoute?.(shareGid)
-    } else {
-      importFromURL()
     }
     updateCardTagsOverflow()
 

@@ -23,8 +23,7 @@ export async function shareGroup(gid: string) {
   if (!sg.isPublic) {
     const ok = await sync.setGroupPublic(gid, true)
     if (!ok) {
-      // 未登录或失败，降级为旧版 base64 方式
-      _shareGroupLegacy(gid)
+      toast('分享需要登录云同步，请先登录', false)
       return
     }
   }
@@ -33,84 +32,15 @@ export async function shareGroup(gid: string) {
   copyToClipboard(url, '分享链接')
 }
 
-function _shareGroupLegacy(gid: string) {
-  const ds = useDataStore()
-  const sg = ds.groupMap[gid]
-  if (!sg) return
-  const bms = sg.bookmarkIds.map(bid => ds.bookmarkMap[bid]).filter(Boolean).map(b => {
-    const { password: _, username: __, ...safe } = b; return safe
-  })
-  const payload = { v: 1, group: { ...sg }, bookmarks: bms }
-  const json = JSON.stringify(payload)
-  const b64 = btoa(unescape(encodeURIComponent(json)))
-  if (b64.length > 30000) { toast('组内容过大，无法生成分享链接', false); return }
-  const url = location.origin + location.pathname + '#share=' + b64
-  copyToClipboard(url, '分享链接')
-}
-
-// ── 从 URL 导入分享数据（A4: 支持两种格式）──
+// ── 从 URL 导入分享数据（C3: 仅支持 #share/<id> 格式，废弃 base64）──
 
 export function detectShareRoute(): string | null {
   const hash = location.hash
   if (!hash) return null
-  // 新格式：#share/<id>
+  // #share/<id>
   const match = hash.match(/^#share\/([a-zA-Z0-9_-]+)$/)
   if (match) return match[1]
   return null
-}
-
-export function importFromURL(): boolean {
-  const ds = useDataStore()
-  const hash = location.hash
-  if (!hash || !hash.startsWith('#share=')) return false
-  try {
-    const json = decodeURIComponent(escape(atob(hash.slice(7))))
-    const payload = JSON.parse(json)
-    if (!payload.group?.id) { toast('分享数据格式错误', false); return true }
-    let imported = 0
-    const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
-    const bookmarks = Array.isArray(payload.bookmarks) ? payload.bookmarks : []
-    for (const b of bookmarks) {
-      if (!b.id || !b.url) continue
-      if (ds.bookmarkMap[b.id]) continue
-      if (b.url && existingUrls.has(b.url.toLowerCase())) continue
-      ds.addBookmark({
-        id: b.id,
-        title: b.title || '',
-        url: b.url,
-        username: b.username || '',
-        password: b.password || '',
-        notes: b.notes || '',
-        icon: b.icon || '',
-        categoryId: b.categoryId || 'uncategorized',
-        parentId: b.parentId || null,
-        order: b.order || 0,
-        useCount: b.useCount || 0,
-        attributes: b.attributes || {},
-        isExpanded: false,
-        createdAt: b.createdAt || Date.now(),
-        updatedAt: b.updatedAt || Date.now(),
-      } as Bookmark)
-      imported++
-    }
-    const existing = ds.groupMap[payload.group.id]
-    if (existing) {
-      const newBookmarkIds = [...existing.bookmarkIds]
-      for (const bid of payload.group.bookmarkIds) {
-        if (!newBookmarkIds.includes(bid)) newBookmarkIds.push(bid)
-      }
-      const changes: Partial<SiblingGroup> = { bookmarkIds: newBookmarkIds }
-      if (payload.group.notes && !existing.notes) changes.notes = payload.group.notes
-      ds.updateGroup(payload.group.id, changes)
-      toast('已更新组「' + (existing.name || '未命名') + '」（新增 ' + imported + ' 个书签）')
-    } else {
-      ds.addGroup(payload.group)
-      toast('已导入组「' + (payload.group.name || '未命名') + '」（' + (payload.bookmarks || []).length + ' 个书签）')
-    }
-    saveAppData()
-    history.replaceState(null, '', location.pathname + location.search)
-    return true
-  } catch (_) { toast('分享链接解析失败', false); return true }
 }
 
 // ── Fork 公开组到自己库（A5）──
