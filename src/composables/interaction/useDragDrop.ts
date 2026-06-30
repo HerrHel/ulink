@@ -51,6 +51,7 @@ let _currentDragPayload: DragPayload | null = null
 
 // 拖拽插入光标指示器
 let _dragCursor: HTMLDivElement | null = null
+let _dragHint: HTMLDivElement | null = null
 let _lastInsertPos: InsertPos | null = null // { gid, pos } — dragover 时缓存的插入位置
 function _getDragCursor(): HTMLDivElement {
   if (!_dragCursor) {
@@ -69,6 +70,43 @@ function _showDragCursor(x: number, y: number) {
 function _hideDragCursor() {
   if (_dragCursor) { _dragCursor.remove(); _dragCursor = null; }
 }
+// ── 拖拽悬浮提示（B1：显示当前落点语义）──
+function _getDragHintText(target: Element, payload: DragPayload | null): string {
+  if (!payload) return ''
+  if (target.classList.contains('group-body')) {
+    return payload.type === 'group' ? '嵌入为组引用' : '嵌入为内联卡片'
+  }
+  if (target.classList.contains('group-card-head')) {
+    return payload.type === 'group' ? '交换组位置' : '将书签排序到此组'
+  }
+  if (target.classList.contains('detail-card')) return '移到此位置'
+  if (target.closest('#detailPanel')) return '加入详情面板'
+  if (target.closest('#cardGrid')) return '移出组'
+  if (target.classList.contains('rail-item')) return '移动到分类'
+  if (target.classList.contains('group-card')) {
+    if (payload.type === 'bm') return '移动书签到组'
+    if (payload.type === 'group') return '嵌入为组引用'
+    return ''
+  }
+  if (target.classList.contains('card') && !target.classList.contains('group-card')) {
+    return '交换排序'
+  }
+  return ''
+}
+function _showDragHint(text: string, x: number, y: number) {
+  if (!_dragHint) {
+    _dragHint = document.createElement('div')
+    _dragHint.className = 'drag-hint'
+    document.body.appendChild(_dragHint)
+  }
+  _dragHint.textContent = text
+  _dragHint.style.left = (x + 12) + 'px'
+  _dragHint.style.top = (y - 24) + 'px'
+}
+function _hideDragHint() {
+  if (_dragHint) { _dragHint.remove(); _dragHint = null }
+}
+
 function _updateDragCursorForGroupBody(body: Element, clientX: number, clientY: number) {
   const gid = (body as HTMLElement).dataset.gid
   if (!gid) { _hideDragCursor(); _lastInsertPos = null; return }
@@ -151,8 +189,16 @@ function _onDragStart(e: DragEvent) {
 
 function _onDragEnd() { clearDragState(); }
 
+function _updateDragHint(e: DragEvent, target: Element | null) {
+  if (!target || !_currentDragPayload) { _hideDragHint(); return }
+  const text = _getDragHintText(target, _currentDragPayload)
+  if (text) _showDragHint(text, e.clientX, e.clientY)
+  else _hideDragHint()
+}
+
 function _onDragOver(e: DragEvent) {
   const target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card, .rail-item, #detailPanel, #cardGrid');
+  _updateDragHint(e, target)
   if (target && target.classList.contains('group-card') && _currentDragPayload && _currentDragPayload.type === 'bm' && _currentDragPayload.srcGid === (target as HTMLElement).dataset.groupId) {
     e.preventDefault();
     const gBody = target.querySelector('.group-body');
@@ -212,7 +258,7 @@ function clearDragState() {
   document.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
   if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
   _catDragId = null; _detailDragIdx = null; _currentDragPayload = null; _lastInsertPos = null;
-  _hideDragCursor();
+  _hideDragCursor(); _hideDragHint();
 }
 
 function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
