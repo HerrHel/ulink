@@ -246,3 +246,37 @@
 .sp-export-name{font-size:0.78rem;color:var(--text,#1a1a1a);font-weight:500}
 .sp-export-hint{font-size:0.66rem;color:var(--text-muted,#999)}
 
+/* 设置面板内的快捷键入口按钮 */
+.sp-action-kbd{
+  margin-left:auto;
+  font-size:0.62rem;padding:1px 5px;
+  color:var(--text-muted,#999);
+  background:var(--surface-secondary,#f3f4f6);
+  border:1px solid var(--border,#e5e7eb);
+  border-radius:4px;font-family:inherit;
+}
+
+/* 快捷键速查面板 */
+.sh-modal{max-width:420px}
+.sh-body{padding:12px 18px 4px}
+.sh-tip{font-size:0.7rem;color:var(--text-muted,#999);margin:0 0 10px}
+.sh-group + .sh-group{margin-top:14px}
+.sh-group-title{
+  font-size:0.7rem;font-weight:600;color:var(--text-secondary,#666);
+  text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;
+}
+.sh-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 0;
+}
+.sh-label{font-size:0.8rem;color:var(--text,#1a1a1a)}
+.sh-keys{display:flex;gap:3px}
+.sh-keys kbd{
+  font-size:0.68rem;padding:2px 6px;min-width:20px;text-align:center;
+  color:var(--text,#1a1a1a);
+  background:var(--surface-secondary,#f3f4f6);
+  border:1px solid var(--border,#e5e7eb);
+  border-bottom-width:2px;border-radius:4px;
+  font-family:inherit;font-weight:500;
+}
+

@@ -46,6 +46,7 @@
 <DeadLinksPopover />
 <SyncConflictBanner />
 <CommandPalette />
+<ShortcutHelpPanel />
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false; store.detailCards.splice(0)"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>
@@ -81,6 +82,7 @@ import DetailPanel from './components/shell/DetailPanel.vue'
 import MentionDropdown from './components/overlays/MentionDropdown.vue'
 import SyncConflictBanner from './components/overlays/SyncConflictBanner.vue'
 import CommandPalette from './components/overlays/CommandPalette.vue'
+import ShortcutHelpPanel from './components/overlays/ShortcutHelpPanel.vue'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))

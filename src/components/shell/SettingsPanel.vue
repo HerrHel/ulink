@@ -1,5 +1,13 @@
 <template>
   <div class="sp" v-show="uiStore.panels.settings">
+    <!-- Shortcut Help -->
+    <div class="sp-section">
+      <button class="sp-action" @click.stop="onOpenShortcutHelp">
+        <span v-html="shortcutIcon"></span>
+        <span>快捷键速查</span>
+        <kbd class="sp-action-kbd">Ctrl /</kbd>
+      </button>
+    </div>
     <!-- Theme -->
     <div class="sp-section">
       <div class="sp-row">
@@ -155,6 +163,9 @@ import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
+
+const shortcutIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>'
+function onOpenShortcutHelp() { uiStore.panels.shortcutHelp = true; uiStore.panels.settings = false }
 
 const uiStore = useUIStore()
 const dataStore = useDataStore()

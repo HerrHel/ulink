@@ -64,6 +64,7 @@ const commands: CommandItem[] = [
   { id: 'sync', label: '同步到云端', icon: I.cloud, section: 'command', action() { close(); /* trigger sync */ } },
   { id: 'trash', label: '打开回收站', icon: I.trash, section: 'command', action() { close(); ui.panels.trash = true } },
   { id: 'settings', label: '打开设置', icon: I.settings, shortcut: ',', section: 'command', action() { close(); ui.panels.settings = true } },
+  { id: 'shortcuts', label: '快捷键速查', icon: I.search, shortcut: 'Ctrl /', section: 'command', action() { close(); ui.panels.shortcutHelp = true } },
 ]
 
 const searchResults = computed<SearchResultItem[]>(() => {

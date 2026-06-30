@@ -26,6 +26,7 @@ export interface PanelState {
   trash: boolean
   history: boolean
   rail: boolean
+  shortcutHelp: boolean
 }
 
 export interface OverlayState {
@@ -110,6 +111,7 @@ export const useUIStore = defineStore('ui', {
       trash: false,
       history: false,
       rail: false,
+      shortcutHelp: false,
     },
     overlays: {
       addDropdown: false,
