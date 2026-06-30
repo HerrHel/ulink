@@ -45,9 +45,19 @@
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
         <button class="lt-btn" id="btnSettings" @click="toggleSettings" title="设置" aria-label="设置">
             <span v-html="I.settings" class="icon-sm"></span>
-          <span v-if="auth.isLoggedIn.value" class="header-sync-dot" :class="syncDotClass" :title="sync.syncLabel.value"></span>
+        </button>
+        <button
+          v-if="auth.isLoggedIn.value"
+          class="header-sync-btn"
+          :class="syncState.dotClass"
+          @click.stop="toggleSyncPopover"
+          :title="syncState.label"
+          aria-label="同步状态"
+        >
+          <span class="sync-badge" v-if="syncState.showBadge">{{ syncState.count }}</span>
         </button>
         <SettingsPanel />
+        <SyncStatusPopover v-if="auth.isLoggedIn.value" />
       </span>
       <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" title="右侧辅助栏" aria-label="右侧辅助栏">
         <span v-html="I.panel" class="icon-sm"></span>
@@ -60,24 +70,26 @@
 import { computed, ref, watch } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useSyncStatusStore } from '../../stores/overlay.js'
 import { I } from '../../config/icons.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
-import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import SearchSuggest from '../overlays/SearchSuggest.vue'
 import SettingsPanel from './SettingsPanel.vue'
+import SyncStatusPopover from '../overlays/SyncStatusPopover.vue'
 
 const ui = useUIStore()
 const dataStore = useDataStore()
 const emit = defineEmits(['toggle-rail', 'exit-focus', 'focus-title-change', 'toggle-detail', 'search', 'focus-edit-group', 'focus-share-group'])
 
 const auth = useAuth()
-const sync = useCloudSync()
-const syncDotClass = computed(() => {
-  if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
-  if (sync.syncStatus.value === 'error') return 'dot-error'
-  if (sync.pendingCount.value > 0) return 'dot-pending'
-  return 'dot-ok'
-})
+const syncState = useSyncState()
+const syncPopover = useSyncStatusStore()
+
+function toggleSyncPopover() {
+  if (syncPopover.open) syncPopover.hide()
+  else syncPopover.show()
+}
 
 // 搜索防抖：本地输入值延迟同步到 store
 const localQuery = ref(ui.searchQuery)

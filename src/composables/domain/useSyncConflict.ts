@@ -16,6 +16,14 @@ export interface SyncConflict {
 export const conflicts = ref<SyncConflict[]>([])
 export const _remoteSnapshots = new Map<string, unknown>()
 
+/** 横幅是否被用户关闭（模块级，供 popover 重现） */
+export const conflictBannerDismissed = ref(false)
+
+/** 重置 dismissed 以重新展示横幅（popover"查看冲突"调用） */
+export function resetConflictBannerDismissed() {
+  conflictBannerDismissed.value = false
+}
+
 export function resolveConflict(id: string, keepLocal: boolean) {
   const idx = conflicts.value.findIndex(c => c.id === id)
   if (idx < 0) return

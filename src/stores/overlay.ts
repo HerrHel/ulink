@@ -21,3 +21,10 @@ export const useMentionStore = defineStore('mention', () => {
   function hide() { open.value = false }
   return { open, show, hide }
 })
+
+export const useSyncStatusStore = defineStore('syncStatus', () => {
+  const open = ref(false)
+  function show() { open.value = true }
+  function hide() { open.value = false }
+  return { open, show, hide }
+})

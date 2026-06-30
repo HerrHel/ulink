@@ -24,6 +24,7 @@ import {
 } from './useSyncMapping.js'
 import {
   conflicts, resolveConflict, resolveAllConflicts,
+  conflictBannerDismissed, resetConflictBannerDismissed,
 } from './useSyncConflict.js'
 import {
   _saveHistory, fetchHistory, restoreFromHistory, _getUserId,
@@ -89,6 +90,7 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
             local: JSON.parse(JSON.stringify(lItem)),
             remote: JSON.parse(JSON.stringify(rItem)),
           })
+          conflictBannerDismissed.value = false
         }
       }
     } else if ((rItem.updatedAt || 0) > (lItem.updatedAt || 0)) {
@@ -478,6 +480,7 @@ export function useCloudSync() {
     syncStatus, lastSyncAt, syncError, autoSync, syncLabel, pendingCount, refreshPendingCount,
     realtimeStatus,
     conflicts, resolveConflict, resolveAllConflicts,
+    conflictBannerDismissed, resetConflictBannerDismissed,
     pushToCloud: _pushFromQueue, pullFromCloud: _pullChanges, fullSync,
     debouncedSync, initialSync, resetSyncState,
     initOnlineListener, destroyOnlineListener,

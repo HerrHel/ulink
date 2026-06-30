@@ -196,6 +196,10 @@
 .sp-sync-status.syncing{color:var(--accent)}
 .sp-sync-status.success{color:var(--emerald,#22c55e)}
 .sp-sync-status.error{color:var(--rose,#ef4444)}
+.sp-sync-status.pending{color:var(--amber,#f59e0b)}
+.sp-sync-status.conflict{color:var(--rose,#ef4444)}
+.sp-sync-status.offline{color:var(--text-muted,#9ca3af)}
+.sp-sync-status.ok{color:var(--emerald,#22c55e)}
 .sp-sync-dot{
   display:inline-block;width:7px;height:7px;border-radius:50%;
   margin-right:5px;vertical-align:middle;
@@ -204,6 +208,8 @@
 .dot-pending{background:var(--amber,#f59e0b)}
 .dot-syncing{background:var(--accent);animation:dot-pulse 1s ease-in-out infinite}
 .dot-error{background:var(--rose,#ef4444)}
+.dot-conflict{background:var(--rose,#ef4444);animation:dot-pulse 1s ease-in-out infinite}
+.dot-offline{background:var(--text-muted,#9ca3af)}
 @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 .sp-user-email{
   font-size:0.76rem;color:var(--text-secondary);

@@ -64,8 +64,8 @@
     <div class="sp-section">
       <div class="sp-row">
         <span class="sp-row-label"><span v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
-        <span class="sp-sync-status" :class="sync.syncStatus.value">
-          <span class="sp-sync-dot" :class="syncDotClass"></span>{{ sync.syncLabel.value }}
+        <span class="sp-sync-status" :class="syncState.level">
+          <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
         </span>
       </div>
       <template v-if="auth.isLoggedIn.value">
@@ -73,12 +73,9 @@
           <span class="sp-user-email">{{ auth.userEmail.value }}</span>
         </div>
         <div class="sp-row sp-row-actions">
-          <button class="btn btn-ghost btn-sm" @click.stop="onSyncNow" :disabled="sync.syncStatus.value === 'syncing'">
-            <span v-html="I.sync" class="sp-icon"></span>立即同步
-          </button>
           <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
         </div>
-        <div v-if="sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
+        <div v-if="syncState.level === 'error' && sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
       </template>
       <template v-else>
         <div class="sp-row">
@@ -157,6 +154,7 @@ import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } fr
 import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
@@ -180,12 +178,7 @@ function onE2ELock() { e2e.lock(); toast('已锁定') }
 
 const trashCount = computed(() => dataStore.trashCount)
 const trashIcon = computed(() => trashCount.value > 0 ? I.trashFull : I.trash)
-const syncDotClass = computed(() => {
-  if (sync.syncStatus.value === 'syncing') return 'dot-syncing'
-  if (sync.syncStatus.value === 'error') return 'dot-error'
-  if (sync.pendingCount.value > 0) return 'dot-pending'
-  return 'dot-ok'
-})
+const syncState = useSyncState()
 const dlChecking = computed(() => dl.checking.value)
 const deadCount = computed(() => dl.deadCount.value)
 const blockedCount = computed(() => dl.blockedCount.value)
@@ -248,10 +241,6 @@ async function onOpenLogin() {
 async function onLogout() {
   const ok = await auth.signOut()
   if (ok) sync.resetSyncState()
-}
-
-async function onSyncNow() {
-  await sync.fullSync()
 }
 
 function onCheckDeadLinks() {

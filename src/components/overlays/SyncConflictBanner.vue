@@ -1,17 +1,16 @@
 <template>
   <Teleport to="body">
     <Transition name="conflict-slide">
-      <div v-if="sync.conflicts.value.length > 0" class="conflict-banner" role="alert">
+      <div v-if="sync.conflicts.value.length > 0 && !sync.conflictBannerDismissed.value" class="conflict-banner" role="alert">
         <div class="conflict-banner-head">
           <span class="conflict-icon" v-html="I.alert"></span>
           <span class="conflict-title">同步冲突 ({{ sync.conflicts.value.length }})</span>
           <span class="conflict-subtitle">本地和云端同时修改了以下数据</span>
-          <button class="conflict-close" @click="dismissed = true" title="暂时关闭">
+          <button class="conflict-close" @click="sync.conflictBannerDismissed.value = true" title="暂时关闭">
             <span v-html="I.close"></span>
           </button>
         </div>
-        <template v-if="!dismissed">
-          <div class="conflict-list">
+        <div class="conflict-list">
             <div v-for="c in sync.conflicts.value" :key="c.id" class="conflict-item">
               <div class="conflict-item-info">
                 <span class="conflict-type-badge">{{ typeLabel(c.type) }}</span>
@@ -27,26 +26,18 @@
             <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(true)">全部保留本地</button>
             <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(false)">全部用云端</button>
           </div>
-        </template>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
 import { useCloudSync, type SyncConflict } from '../../composables/domain/useCloudSync.js'
 import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
 
 const sync = useCloudSync()
 const ds = useDataStore()
-const dismissed = ref(false)
-
-// 新冲突出现时重置 dismissed
-watch(() => sync.conflicts.value.length, (n, o) => {
-  if (n > o) dismissed.value = false
-})
 
 function typeLabel(type: SyncConflict['type']): string {
   const map: Record<string, string> = { bookmark: '书签', group: '组', category: '分类', attribute: '属性' }
