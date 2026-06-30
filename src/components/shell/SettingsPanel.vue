@@ -109,7 +109,27 @@
       <div class="sp-actions">
         <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
         <button class="sp-action" @click.stop="onTriggerImport"><span v-html="I.import"></span>导入</button>
-        <button class="sp-action" @click.stop="onExportData"><span v-html="I.export"></span>导出</button>
+        <div class="sp-export-wrap" @click.stop>
+          <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span v-html="I.export"></span>导出</button>
+          <div v-if="exportMenuOpen" class="sp-export-menu">
+            <button class="sp-export-item" @click="onExport('json')">
+              <span class="sp-export-name">LinkVault 备份</span>
+              <span class="sp-export-hint">完整含组/分类 · .json</span>
+            </button>
+            <button class="sp-export-item" @click="onExport('html')">
+              <span class="sp-export-name">浏览器书签</span>
+              <span class="sp-export-hint">Chrome/Edge 通用 · .html</span>
+            </button>
+            <button class="sp-export-item" @click="onExport('csv')">
+              <span class="sp-export-name">CSV 表格</span>
+              <span class="sp-export-hint">不含账户密码 · .csv</span>
+            </button>
+            <button class="sp-export-item" @click="onExport('raindrop')">
+              <span class="sp-export-name">Raindrop.io</span>
+              <span class="sp-export-hint">迁入竞品 · .json</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <!-- Danger -->
@@ -122,11 +142,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
-import { exportData, resetToDefaults } from '../../composables/domain/useDataIO.js'
+import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
@@ -144,8 +164,6 @@ const dl = useDeadLinkChecker()
 const e2e = useE2E()
 const e2eEnabled = computed(() => e2e.isE2EEnabled.value)
 const e2eUnlocked = computed(() => e2e.isUnlocked.value)
-
-onMounted(() => { e2e.checkE2EStatus() })
 
 function onE2ELock() { e2e.lock(); toast('已锁定') }
 
@@ -193,6 +211,22 @@ function onSetSortMode(mode: string) {
 function onOpenTrash() { uiStore.panels.trash = true; uiStore.panels.settings = false }
 function onTriggerImport() { triggerImport(); uiStore.panels.settings = false }
 function onExportData() { exportData(); uiStore.panels.settings = false }
+
+const exportMenuOpen = ref(false)
+function onExport(fmt: 'json' | 'html' | 'csv' | 'raindrop') {
+  if (fmt === 'json') exportData()
+  else if (fmt === 'html') exportHTML()
+  else if (fmt === 'csv') exportCSV()
+  else if (fmt === 'raindrop') exportRaindrop()
+  exportMenuOpen.value = false
+  uiStore.panels.settings = false
+}
+function _closeExportMenu(e: MouseEvent) {
+  const t = e.target as HTMLElement
+  if (!t.closest('.sp-export-wrap')) exportMenuOpen.value = false
+}
+onMounted(() => { document.addEventListener('click', _closeExportMenu); e2e.checkE2EStatus() })
+onBeforeUnmount(() => document.removeEventListener('click', _closeExportMenu))
 function onResetData() { resetToDefaults(); uiStore.panels.settings = false }
 
 async function onOpenLogin() {

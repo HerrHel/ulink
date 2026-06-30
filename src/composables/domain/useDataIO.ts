@@ -16,15 +16,122 @@ import type { AppData, Bookmark } from '../../types.js'
 
 // ── 导出 ──
 
+/** 仅导出未软删的活书签，供通用格式（HTML/CSV/Raindrop）使用 */
+function _liveBookmarks(ds: ReturnType<typeof useDataStore>): Bookmark[] {
+  return ds.bookmarks.filter(b => !b.deletedAt && b.url)
+}
+
+/** attributes → 标签名数组（用属性 name，找不到则去掉 tag_ 前缀） */
+function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[] {
+  const tags: string[] = []
+  for (const [id, on] of Object.entries(b.attributes || {})) {
+    if (!on) continue
+    const attr = ds.customAttributes.find(a => a.id === id)
+    tags.push(attr?.name || id.replace(/^tag_/, ''))
+  }
+  return tags
+}
+
+function _download(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click(); URL.revokeObjectURL(a.href)
+}
+
+const _dateStamp = () => new Date().toISOString().slice(0, 10)
+
+/** LinkVault 完整备份（含组/分类/属性/加密元数据），其他设备恢复用 */
 export function exportData() {
   const ds = useDataStore()
   try {
-    const blob = new Blob([JSON.stringify(ds._dataSnapshot(), null, 2)], { type: 'application/json' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'linkvault-backup-' + new Date().toISOString().slice(0, 10) + '.json'
-    a.click(); URL.revokeObjectURL(a.href)
+    _download('linkvault-backup-' + _dateStamp() + '.json',
+      JSON.stringify(ds._dataSnapshot(), null, 2), 'application/json')
     toast('数据已导出')
+  } catch (_) { toast('导出失败', false) }
+}
+
+/** 导出为 Netscape Bookmark HTML，可导入 Chrome/Firefox/Edge。按分类组织目录。 */
+export function exportHTML() {
+  const ds = useDataStore()
+  try {
+    const live = _liveBookmarks(ds)
+    const byCat = new Map<string, Bookmark[]>()
+    for (const b of live) {
+      const cid = b.categoryId || 'uncategorized'
+      if (!byCat.has(cid)) byCat.set(cid, [])
+      byCat.get(cid)!.push(b)
+    }
+    const catName = (cid: string) => ds.categories.find(c => c.id === cid)?.name
+      || (cid === 'uncategorized' ? '未分类' : '其他')
+
+    const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const lines: string[] = [
+      '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
+      '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+      '<TITLE>LinkVault 书签导出</TITLE>',
+      '<H1>LinkVault 书签</H1>',
+      '<DL><p>',
+    ]
+    for (const [cid, bms] of byCat) {
+      lines.push(`    <DT><H3>${esc(catName(cid))}</H3>`)
+      lines.push('    <DL><p>')
+      for (const b of bms) {
+        const tags = _attrsToTags(ds, b).join(',')
+        const add = b.createdAt > 0 ? Math.floor(b.createdAt / 1000) : ''
+        lines.push(`        <DT><A HREF="${esc(b.url)}" ADD_DATE="${add}"${b.icon ? ` ICON="${esc(b.icon)}"` : ''}${tags ? ` TAGS="${esc(tags)}"` : ''}>${esc(b.title || b.url)}</A>`)
+        if (b.notes) lines.push(`        <DD>${esc(b.notes)}`)
+      }
+      lines.push('    </DL><p>')
+    }
+    lines.push('</DL><p>')
+    _download('linkvault-bookmarks-' + _dateStamp() + '.html', lines.join('\n'), 'text/html')
+    toast(`已导出 ${live.length} 个书签（HTML）`)
+  } catch (_) { toast('导出失败', false) }
+}
+
+/** 导出为 CSV（title,url,tags,notes,category），表格工具可读。不含账户密码。 */
+export function exportCSV() {
+  const ds = useDataStore()
+  try {
+    const live = _liveBookmarks(ds)
+    const esc = (s: string) => '"' + (s || '').replace(/"/g, '""') + '"'
+    const rows = [['title', 'url', 'tags', 'notes', 'category', 'icon', 'created_at']]
+    for (const b of live) {
+      rows.push([
+        esc(b.title || b.url),
+        esc(b.url),
+        esc(_attrsToTags(ds, b).join(',')),
+        esc(b.notes || ''),
+        esc(ds.categories.find(c => c.id === b.categoryId)?.name || ''),
+        esc(b.icon || ''),
+        b.createdAt > 0 ? new Date(b.createdAt).toISOString() : '',
+      ])
+    }
+    _download('linkvault-bookmarks-' + _dateStamp() + '.csv',
+      rows.map(r => r.join(',')).join('\n'), 'text/csv')
+    toast(`已导出 ${live.length} 个书签（CSV）`)
+  } catch (_) { toast('导出失败', false) }
+}
+
+/** 导出为 Raindrop.io 兼容 JSON（{ items: [...] }），与导入对称。不含账户密码。 */
+export function exportRaindrop() {
+  const ds = useDataStore()
+  try {
+    const live = _liveBookmarks(ds)
+    const items = live.map(b => ({
+      title: b.title || b.url,
+      link: b.url,
+      excerpt: b.notes || '',
+      cover: b.icon || '',
+      tags: _attrsToTags(ds, b),
+      created: b.createdAt > 0 ? new Date(b.createdAt).toISOString() : undefined,
+      lastUpdate: b.updatedAt > 0 ? new Date(b.updatedAt).toISOString() : undefined,
+    }))
+    _download('linkvault-raindrop-' + _dateStamp() + '.json',
+      JSON.stringify({ items }, null, 2), 'application/json')
+    toast(`已导出 ${live.length} 个书签（Raindrop JSON）`)
   } catch (_) { toast('导出失败', false) }
 }
 
