@@ -41,7 +41,7 @@ const groups: ShortcutGroup[] = [
   {
     title: '全局',
     items: [
-      { desc: '全局搜索书签与组', keys: ['Ctrl', 'K'] },
+      { desc: '命令面板 / 全局搜索书签与组', keys: ['Ctrl', 'K'] },
       { desc: '新建书签', keys: ['Ctrl', 'N'] },
       { desc: '快捷键速查（本面板）', keys: ['Ctrl', '/'] },
       { desc: '关闭弹窗 / 退出聚焦 / 退出批量模式', keys: ['Esc'] },

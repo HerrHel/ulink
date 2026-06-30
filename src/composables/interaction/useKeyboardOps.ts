@@ -69,7 +69,6 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-    if (e.key.toLowerCase() === 'k') { e.preventDefault(); document.querySelector<HTMLInputElement>('.search-input')?.focus() }
     if (e.key.toLowerCase() === 'n') { e.preventDefault(); openBmModal() }
   }
   if (e.key === 'Tab') {
