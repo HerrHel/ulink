@@ -20,7 +20,9 @@
 <link rel="dns-prefetch" href="https://api.xinac.net">
 
 <link href="/fonts/fonts.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Google Fonts（异步加载，消除首屏阻塞） -->
+<link rel="preload" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"></noscript>
 </head>
 <body>
 <div id="app"></div>
