@@ -15,48 +15,48 @@
 
           <template v-if="entry.isGroup">
             <div class="detail-entry-head">
-              <img v-if="grpEntry(entry).icon" :src="grpEntry(entry).icon" alt=""
+              <img v-if="entry.data.icon" :src="entry.data.icon" alt=""
                    class="detail-entry-img">
               <div v-else class="card-icon" v-html="noteIcon"></div>
               <div>
-                <div class="card-name">{{ grpEntry(entry).name || '未命名组' }}</div>
-                <div class="card-domain">{{ (grpEntry(entry).bookmarkIds || []).length }} 个书签</div>
+                <div class="card-name">{{ entry.data.name || '未命名组' }}</div>
+                <div class="card-domain">{{ (entry.data.bookmarkIds || []).length }} 个书签</div>
               </div>
             </div>
-            <div class="detail-group-notes" v-html="sanitizeHTML(grpEntry(entry).notes || '')"></div>
+            <div class="detail-group-notes" v-html="sanitizeNotes(entry.data.notes)"></div>
           </template>
 
           <template v-else>
             <div class="detail-entry-head">
               <div class="card-icon">
-                <img :src="getIcon(bmEntry(entry))" alt="">
-                <span class="icon-fallback">{{ (bmEntry(entry).title || '?').charAt(0) }}</span>
+                <img :src="getIcon(entry.data)" alt="">
+                <span class="icon-fallback">{{ (entry.data.title || '?').charAt(0) }}</span>
               </div>
               <div>
-                <div class="card-name">{{ bmEntry(entry).title }}</div>
-                <div class="card-domain">{{ domain(bmEntry(entry).url) }}</div>
+                <div class="card-name">{{ entry.data.title }}</div>
+                <div class="card-domain">{{ domain(entry.data.url) }}</div>
               </div>
             </div>
-            <div class="card-tags mb-1" v-if="getTags(bmEntry(entry)).length">
-              <span class="card-tag tag-custom" v-for="t in getTags(bmEntry(entry))" :key="t">{{ t }}</span>
+            <div class="card-tags mb-1" v-if="getTags(entry.data).length">
+              <span class="card-tag tag-custom" v-for="t in getTags(entry.data)" :key="t">{{ t }}</span>
             </div>
-            <div class="card-notes mb-1" v-if="bmEntry(entry).notes">{{ bmEntry(entry).notes }}</div>
+            <div class="card-notes mb-1" v-if="entry.data.notes">{{ entry.data.notes }}</div>
             <div class="card-acct-body show mb-2"
-                 v-if="bmEntry(entry).username || bmEntry(entry).password">
-              <div class="acct-row" v-if="bmEntry(entry).username">
+                 v-if="entry.data.username || entry.data.password">
+              <div class="acct-row" v-if="entry.data.username">
                 <span class="acct-label">账户</span>
-                <span class="acct-val">{{ bmEntry(entry).username }}</span>
-                 <button class="acct-copy-btn" @click.stop="copyText(bmEntry(entry).username)" title="复制" v-html="I.copy"></button>
+                <span class="acct-val">{{ entry.data.username }}</span>
+                 <button class="acct-copy-btn" @click.stop="copyText(entry.data.username)" title="复制" v-html="I.copy"></button>
               </div>
-              <div class="acct-row" v-if="bmEntry(entry).password">
+              <div class="acct-row" v-if="entry.data.password">
                 <span class="acct-label">密码</span>
                 <span class="acct-val">{{ isVisible(entry.rawId) ? (decodedPasswords[entry.rawId] || '') : '••••••' }}</span>
                 <button class="acct-show-pw" @click.stop="togglePw(entry.rawId)" title="显示"><span v-if="!isVisible(entry.rawId)" v-html="I.eye"></span><span v-else v-html="I.eyeOff"></span></button>
                 <button class="acct-copy-btn" @click.stop="copyText(decodedPasswords[entry.rawId] || '')" title="复制" v-html="I.copy"></button>
               </div>
             </div>
-            <div class="sub-sites" v-if="getChildren(bmEntry(entry).id).length">
-              <span class="group-inline-card" v-for="sub in getChildren(bmEntry(entry).id)" :key="sub.id"
+            <div class="sub-sites" v-if="getChildren(entry.data.id).length">
+              <span class="group-inline-card" v-for="sub in getChildren(entry.data.id)" :key="sub.id"
                     contenteditable="false" :data-bm-id="sub.id">
                 <img :src="getIcon(sub)" alt="">
                 <span class="gic-name">{{ sub.title }}</span>
@@ -64,9 +64,9 @@
               </span>
             </div>
             <div class="detail-actions">
-              <button class="btn btn-primary btn-sm" @click.stop="visit(bmEntry(entry))">打开网站</button>
-              <button class="btn btn-secondary btn-sm" @click.stop="editBm(bmEntry(entry).id)">编辑</button>
-              <span class="card-stat detail-use-count">{{ bmEntry(entry).useCount || 0 }}次</span>
+              <button class="btn btn-primary btn-sm" @click.stop="visit(entry.data)">打开网站</button>
+              <button class="btn btn-secondary btn-sm" @click.stop="editBm(entry.data.id)">编辑</button>
+              <span class="card-stat detail-use-count">{{ entry.data.useCount || 0 }}次</span>
             </div>
           </template>
         </div>
@@ -89,7 +89,6 @@ import { safeDecodePassword } from '../../crypto.js'
 import { I } from '../../config/icons.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
 import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
@@ -103,15 +102,10 @@ const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
 interface DetailEntry {
   rawId: string
   isGroup: boolean
-  data: Bookmark | SiblingGroup
+  data: any
   name: string
   domain: string
 }
-
-/** Helper: narrow entry.data to Bookmark (for v-else branch) */
-function bmEntry(e: DetailEntry): Bookmark { return e.data as Bookmark }
-/** Helper: narrow entry.data to SiblingGroup (for v-if="isGroup" branch) */
-function grpEntry(e: DetailEntry): SiblingGroup { return e.data as SiblingGroup }
 
 const entries = computed<DetailEntry[]>(() => {
   return (ui.detailCards || []).map(rawId => {
@@ -193,11 +187,12 @@ onUnmounted(() => {
 const noteIcon = I.note
 const bookmarkIcon = I.emptyBookmark
 
-function getIcon(item: Bookmark) { return favicon(item.url, item.icon) }
-function getTags(bm: Bookmark) { return getTagNames(bm, ds.customAttributes) }
+function getIcon(item: any) { return favicon(item.url, item.icon) }
+function getTags(bm: any) { return getTagNames(bm, ds.customAttributes) }
 function getChildren(parentId: string) { return ds.childrenMap[parentId] || [] }
+function sanitizeNotes(notes: string) { return sanitizeHTML(notes || '') }
 
-function visit(bm: Bookmark) { openBookmark(bm) }
+function visit(bm: any) { openBookmark(bm) }
 function editBm(id: string) { openBmModal(id) }
 function openDetail(id: string) { if (!ui.detailCards.includes(id)) ui.detailCards.push(id); ui.panels.detail = true }
 function closeDetail(rawId: string) {
