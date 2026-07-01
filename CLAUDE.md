@@ -51,20 +51,14 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 
 ### Supabase 数据库迁移
 
-SQL 迁移文件在 `supabase/migrations/`（当前 11 个文件）。通过 Management API 自动部署：
+SQL 迁移文件放 `supabase/migrations/`，自动通过 Management API 部署：
 
-```bash
-npm run migrate          # 手动执行未应用的迁移
-npm run build            # prebuild 自动执行迁移
-```
+- `npm run migrate` — 手动执行未应用的迁移
+- `npm run build` — prebuild 自动执行迁移
+- 加新迁移只需在 `supabase/migrations/` 中放 `.sql` 文件
+- `.migration-state.json` 跟踪已应用状态，幂等重跑安全
 
-**加新迁移只需一步**：在 `supabase/migrations/` 放一个 `012_xxx.sql` 文件。
-
-`.migration-state.json` 跟踪已应用状态，已跑过的不会重跑。SQL 文件使用 `IF NOT EXISTS` / `DROP POLICY IF EXISTS` 确保幂等。
-
-**注意**：`.env` 需要 `SUPABASE_ACCESS_TOKEN`（个人 access token，不是 anon key）才能连接 Management API。项目 ref：`yqouglfopbmujkqmjgpu`。
-
-**迁移脚本**：`run-migrations.cjs`（自动发现 + 幂等重跑 + 错误中止）
+迁移脚本：`run-migrations.cjs`。需要 `.env` 中 `SUPABASE_ACCESS_TOKEN`。项目 ref：`yqouglfopbmujkqmjgpu`。
 
 ### 云端同步（Supabase）
 
@@ -72,7 +66,7 @@ npm run build            # prebuild 自动执行迁移
 - **同步**（`composables/domain/useCloudSync.ts`）：push-first 策略，手动触发同步，增量推送到 Supabase
 - **实时同步**（`useSyncRealtime.ts`）：Supabase Realtime 订阅，含指数退避重连（最多 10 次）；冲突检测见 `useSyncConflict.ts`，版本历史见 `useSyncHistory.ts`
 - **Supabase 客户端**（`lib/supabase.ts`）：配置见 `.env`（VITE_SUPABASE_URL、VITE_SUPABASE_ANON_KEY）
-- **数据库 Schema**（`supabase/migrations/`，9 个迁移文件）：RLS 行级安全策略，表结构含 categories、bookmarks、sibling_groups、custom_attributes、user_security、version_history、link_check_history；006 启用 Realtime、008 加同步索引、009 历史自动清理
+- **数据库 Schema**（`supabase/migrations/`，11 个迁移文件）：RLS 行级安全策略，表结构含 categories、bookmarks、sibling_groups、custom_attributes、user_security、version_history、link_check_history、error_logs
 - **Edge Function**（`supabase/functions/check-link/`）：服务端死链检查，被 useDeadLinkChecker 调用
 
 ### Composables 层
@@ -174,35 +168,8 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 
 ## 运维与安全
 
-### CSP 安全策略
-
-CSP 写在两处，修改时需同步：
-- **开发服务器**：`vite.config.ts` 中的 `securityHeaders`
-- **生产环境**：`public/_headers`（GitHub Pages 读取）
-
-当前允许策略见 `public/_headers`。关键限制：script-src `'self'`（PWA SW 注册需要 `'unsafe-inline'`）、connect-src 限定 Supabase REST/WS、font-src 限定 fonts.gstatic.com。
-
-### Edge Function（死链检查）
-
-位置：`supabase/functions/check-link/`
-
-SSRF 防护已实现：私有 IP 黑名单（RFC 1918/loopback/link-local）、端口限制、禁止 URL 认证信息。超时和 CORS 来源由 Supabase secrets 控制：
-- `ALLOWED_ORIGINS` = `https://herrhel.github.io`
-- `CHECK_LINK_TIMEOUT_MS` = `10000`
-
-### 客户端错误追踪
-
-Vue `app.config.errorHandler` 拦截渲染错误，自动上报到 Supabase `error_logs` 表。上报器在 `src/lib/errorReporter.ts`，含 5 秒节流。`error_logs` 表允许匿名 INSERT，但仅认证用户可 SELECT 自己的记录。
-
-### 公开分享
-
-`ShareView.vue` + `fetchPublicGroup()` 依赖 RLS 匿名策略：
-- `sibling_groups`：`is_public = true` 的行允许匿名 SELECT
-- `bookmarks`：被公开组引用的书签允许匿名 SELECT（通过 JSONB 包含运算符关联）
-
-### CI/CD
-
-- **部署**（`.github/workflows/static.yml`）：push 到 main → lint → test → audit → build → deploy to Pages
-- **CI**（`.github/workflows/ci.yml`）：PR 或非 main 分支推送 → lint + test
-- **Dependabot**（`.github/dependabot.yml`）：npm 依赖周检、GitHub Actions 月检
-- **构建前自动迁移**：npm `prebuild` hook 执行 `run-migrations.cjs`
+- **CSP**：`public/_headers`（生产）和 `vite.config.ts`（dev）。script-src 含 `'unsafe-inline'`（PWA 需要），connect-src 限 Supabase
+- **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）
+- **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT 允许）
+- **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
+- **CI/CD**：`.github/workflows/` — 部署（lint+test+audit+build+deploy）、CI（PR 触发 lint+test）、Dependabot 周检
