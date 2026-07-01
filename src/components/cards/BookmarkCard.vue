@@ -8,7 +8,7 @@
     <div class="card-topline">
       <div class="card-toprow">
         <div class="card-logo" title="打开链接" @click.stop="visit">
-          <img v-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
+          <img v-if="iconSrc" :src="iconSrc" alt="" @error="($event.target as HTMLImageElement).classList.add('img-error')">
           <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
         </div>
         <div class="card-titlewrap" @dblclick.stop="visit">
@@ -76,7 +76,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim, hlText } from '../../utils.js'
+import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim, esc } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { safeDecodePassword } from '../../crypto.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
@@ -91,6 +91,23 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
 import type { Bookmark } from '../../types.js'
 
+function hlText(text: string, query: string): string {
+  if (!text || !query.trim()) return esc(text)
+  const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(q, 'gi')
+  const parts: string[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(esc(text.slice(last, m.index)))
+    parts.push('<mark class="card-hl">' + esc(m[0]) + '</mark>')
+    last = m.index + m[0].length
+    if (m[0].length === 0) { regex.lastIndex++; continue }
+  }
+  if (last < text.length) parts.push(esc(text.slice(last)))
+  return parts.join('')
+}
+
 const props = defineProps({ bookmark: { type: Object as () => Bookmark, required: true } })
 const dataStore = useDataStore()
 const uiStore = useUIStore()
@@ -99,10 +116,6 @@ const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 const acctOpen = ref(false)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
-
-function onImgError(e: Event) {
-  (e.target as HTMLImageElement).classList.add('img-error')
-}
 
 function decodePassword() {
   decodedPw.value = safeDecodePassword(props.bookmark.password)

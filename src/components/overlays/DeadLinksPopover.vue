@@ -44,7 +44,7 @@
           <div v-if="selectMode" class="pr-checkbox" :class="{ checked: selectedIds.has(b.id) }">
             <svg v-if="selectedIds.has(b.id)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12l5 5L20 7"/></svg>
           </div>
-          <img :src="favicon(b.url)" alt="" @error="onImgError">
+          <img :src="favicon(b.url)" alt="" @error="($event.target as HTMLImageElement).classList.add('img-error')">
           <div class="pr-info">
             <span class="pr-name">{{ b.title }}</span>
             <span class="pr-url">{{ domain(b.url) }}</span>
@@ -81,10 +81,6 @@ const selectedIds = ref(new Set<string>())
 const deadList = computed(() =>
   dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['dead-link'] && !b.attributes?.['dead-link-ignored'])
 )
-
-function onImgError(e: Event) {
-  (e.target as HTMLImageElement).classList.add('img-error')
-}
 
 const blockedList = computed(() =>
   dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['gfw-blocked'] && !b.attributes?.['dead-link-ignored'])
