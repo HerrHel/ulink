@@ -42,6 +42,39 @@ export function sanitizeHTML(html: string): string {
 
 export function cleanZeroWidth(text: string): string { return text.replace(/\u200B{2,}/g, '\u200B') }
 
+/** \u641C\u7D22\u5173\u952E\u8BCD\u9AD8\u4EAE\uFF1A\u8F6C\u4E49 query \u2192 \u6B63\u5219\u5339\u914D \u2192 <mark class="card-hl"> \u5305\u88F9\uFF0C\u542B LRU \u7F13\u5B58 */
+const _hlCache = new Map<string, string>()
+const _HL_CACHE_MAX = 200
+
+export function hlText(text: string, query: string): string {
+  if (!text || !query.trim()) return esc(text)
+  const key = text + '\0' + query
+  const cached = _hlCache.get(key)
+  if (cached) return cached
+
+  const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(q, 'gi')
+  const parts: string[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(esc(text.slice(last, m.index)))
+    parts.push('<mark class="card-hl">' + esc(m[0]) + '</mark>')
+    last = m.index + m[0].length
+    if (m[0].length === 0) { regex.lastIndex++; continue }
+  }
+  if (last < text.length) parts.push(esc(text.slice(last)))
+  const result = parts.join('')
+
+  // \u6709\u754C LRU \u5F0F\u7F13\u5B58\uFF1A\u8D85\u51FA\u4E0A\u9650\u65F6\u6DD8\u6C70\u6700\u65E9\u6761\u76EE
+  if (_hlCache.size >= _HL_CACHE_MAX) {
+    const firstKey = _hlCache.keys().next().value
+    if (firstKey !== undefined) _hlCache.delete(firstKey)
+  }
+  _hlCache.set(key, result)
+  return result
+}
+
 // ── UI 辅助 ──
 
 export function swapOrder(a: { order: number }, b: { order: number }): void { if (a.order === b.order) b.order++; const t = a.order; a.order = b.order; b.order = t }
