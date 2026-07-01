@@ -64,10 +64,10 @@
   --text-secondary:#A8A39B;
   --text-muted:#78746E;
   --text-inverse:#1A1A1D;
-  --accent:#6B8BFF;
-  --accent-light:rgba(107,139,255,0.12);
-  --accent-glow:rgba(107,139,255,0.2);
-  --accent-grad:linear-gradient(135deg,#6B8BFF 0%,#3355CC 100%);
+  --accent:#E6397C;
+  --accent-light:rgba(230,57,124,0.1);
+  --accent-glow:rgba(230,57,124,0.18);
+  --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);
   --green:#14b8a6;
   --green-light:rgba(20,184,166,0.1);
   --amber:#f59e0b;
@@ -90,7 +90,7 @@
   --card-badge-text:#A8A39B;
   --danger:#ef4444;
   --danger-light:rgba(239,68,68,0.1);
-  --accent-dark:#3355CC;
+  --accent-dark:#b82d63;
 }
 /* ---- Comfortable theme: light ---- */
 [data-theme-style="comfortable"][data-theme="light"],
