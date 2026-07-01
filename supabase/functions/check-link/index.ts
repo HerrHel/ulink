@@ -165,7 +165,7 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         bookmark_id: bookmark_id || '',
-        url,
+        url: parsedUrl.href,
         status,
         http_status,
         response_time: details.response_time,
