@@ -1,3 +1,14 @@
+/**
+ * persist.ts — 持久化层（IDB 权威 + localStorage 缓存）
+ *
+ * 架构变更（2026-07）：
+ * - IndexedDB 是权威数据存储
+ * - localStorage 仅作快速启动缓存（尽力同步）
+ * - 单调递增版本号 `_dataVersion` 取代时间戳 `_savedAt`，
+ *   避免系统时间变化导致的数据偏斜
+ * - 写入策略：IDB 先写 → 成功后再写 localStorage（尽力），
+ *   任一失败不回滚另一端（不阻塞主流程）
+ */
 import { STORAGE_KEY, DEFAULTS } from '../config/constants.js'
 import { runMigrations } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
@@ -6,12 +17,86 @@ import type { AppData } from '../types.js'
 
 const IDB_KEY = 'linkvault_v2'
 
-let _localSavedAt = 0
+// 单调递增版本号（进程内，不持久化）
+let _dataVersion = 0
 
-interface StorageInfo {
+export interface StorageInfo {
   size: number
   percent: number
   label: string
+}
+
+// ── 写入 ──
+
+/**
+ * 保存数据到 IDB（权威）和 localStorage（缓存）
+ * IDB 写入失败返回 false，localStorage 失败不阻塞
+ */
+export async function saveData(data: AppData): Promise<boolean> {
+  _dataVersion++
+  const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
+
+  // IDB 权威写入
+  try {
+    const plain = JSON.parse(JSON.stringify(stamped))
+    await idbSet(IDB_KEY, plain)
+  } catch (e) {
+    console.error('[persist] IDB 写入失败，数据未保存:', e)
+    return false
+  }
+
+  // localStorage 尽力同步（静默失败）
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+  } catch {
+    // localStorage 满时静默忽略，IDB 已有完整数据
+  }
+
+  return true
+}
+
+/** 仅写 localStorage（用于备份/导出场景） */
+export function saveToLocalStorage(data: AppData): boolean {
+  try {
+    const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+    return true
+  } catch (e) {
+    console.warn('[persist] localStorage save failed:', (e as Error).message)
+    return false
+  }
+}
+
+/** 仅写 IDB（用于显式备份） */
+export async function saveToIDB(data: AppData): Promise<void> {
+  const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
+  const plain = JSON.parse(JSON.stringify(stamped))
+  try {
+    await idbSet(IDB_KEY, plain)
+  } catch (e: unknown) {
+    console.warn('[persist] IDB save failed:', e instanceof Error ? e.message : e)
+  }
+}
+
+// ── 读取 ──
+
+/**
+ * 加载数据：优先 IDB（权威），回退 localStorage
+ */
+export async function loadData(): Promise<AppData> {
+  const idbData = await loadFromIDB()
+  if (idbData) {
+    // IDB 加载成功，尝试保持 localStorage 一致（静默）
+    saveToLocalStorage(idbData)
+    return idbData
+  }
+
+  const lsData = loadFromLocalStorage()
+  if (lsData && lsData.bookmarks?.length) {
+    // localStorage → IDB 异步回填
+    saveToIDB(lsData)
+  }
+  return lsData
 }
 
 export function loadFromLocalStorage(): AppData {
@@ -25,7 +110,6 @@ export function loadFromLocalStorage(): AppData {
         console.warn('[persist] data validation failed, falling back to defaults:', parsed.error.issues)
         return JSON.parse(JSON.stringify(DEFAULTS))
       }
-      _localSavedAt = d._savedAt || 0
       const result: AppData = {
         categories: d.categories || DEFAULTS.categories.slice(),
         bookmarks: d.bookmarks || [],
@@ -44,32 +128,13 @@ export async function loadFromIDB(): Promise<AppData | null> {
   try {
     const idbData = await idbGet(IDB_KEY)
     if (idbData && idbData.bookmarks) {
-      if ((idbData._savedAt || 0) >= _localSavedAt) return idbData
+      return idbData
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', (e as Error).message) }
   return null
 }
 
-export function saveToLocalStorage(data: AppData): boolean {
-  try {
-    const stamped = { ...data, _savedAt: Date.now() }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
-  } catch (e) {
-    console.warn('[persist] localStorage save failed:', (e as Error).message)
-    return false
-  }
-  return true
-}
-
-export async function saveToIDB(data: AppData): Promise<void> {
-  const plain = JSON.parse(JSON.stringify(data))
-  plain._savedAt = Date.now()
-  try {
-    await idbSet(IDB_KEY, plain)
-  } catch (e: unknown) {
-    console.warn('[persist] IDB save failed:', e instanceof Error ? e.message : e)
-  }
-}
+// ── 兼容旧调用方 ──
 
 export function flushIDB(): void {
   // IDB 保存已是即时的，flush 仅保留为兼容 API

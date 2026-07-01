@@ -10,11 +10,8 @@ import { useUIStore } from './ui.js'
 import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
-import { toast } from '../lib/toast.js'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
-
-let _localStorageWarned = false
 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
@@ -139,15 +136,8 @@ export const useAppStore = defineStore('app', () => {
       d._storageInfoDirty = true
       d._saveCount++
       const data = d._dataSnapshot()
-      const ok = persist.saveToLocalStorage(data)
-      if (!ok) {
-        console.warn('[store] localStorage save failed')
-        if (!_localStorageWarned) {
-          _localStorageWarned = true
-          toast('本地存储已满，数据已备份到 IndexedDB', false)
-        }
-      }
-      persist.saveToIDB(data)
+      // IDB 权威写入（含 localStorage 尽力缓存）
+      persist.saveData(data)
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
       try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
     },

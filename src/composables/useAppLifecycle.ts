@@ -9,6 +9,7 @@ import { flushSaveAppData } from '../stores/app.js'
 import { useMentionStore } from '../stores/overlay.js'
 import { toast } from '../lib/toast.js'
 import { detectShareRoute } from './domain/useDataShare.js'
+import { loadData } from '../stores/persist.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
 let _onShareRoute: ((gid: string) => void) | null = null
@@ -58,14 +59,13 @@ export function useAppLifecycle() {
 
     if (history.scrollRestoration) history.scrollRestoration = 'manual'
 
-    // IDB 权威数据源，localStorage 回退
-    const idbLoaded = await ds.tryLoadFromIDB()
-    if (!idbLoaded) {
-      ds.loadFromStorage()
-    } else {
-      // IDB 加载成功，同步回写到 localStorage 保持一致
-      flushSaveAppData()
-    }
+    // IDB 权威数据源，localStorage 回退（loadData 内部处理）
+    const loaded = await loadData()
+    ds.categories = loaded.categories
+    ds.bookmarks = loaded.bookmarks
+    ds.customAttributes = loaded.customAttributes
+    ds.siblingGroups = loaded.siblingGroups
+    ds._syncMaps()
     ui.restoreUIState()
     // A4/C3: 检测公开分享路由（#share/<id>）
     const shareGid = detectShareRoute()
