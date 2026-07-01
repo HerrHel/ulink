@@ -452,7 +452,14 @@ export const useDataStore = defineStore('data', {
 
     // ── 回收站：恢复 ──
     restoreBookmark(id: string) {
-      this._restoreItem('bookmarks', id)
+      const idx = this.bookmarks.findIndex(b => b.id === id)
+      if (idx >= 0) {
+        const next = { ...this.bookmarks[idx], updatedAt: Date.now() }
+        delete (next as { deletedAt?: unknown }).deletedAt
+        this.bookmarks[idx] = next as Bookmark
+        this._bmMap[id] = this.bookmarks[idx]
+        this._markDirty(id); this._bumpSearchVersion()
+      }
       // 恢复被删除书签原本所属的组关系
       const groupIds = this._deletedGroupMemberships.get(id)
       if (groupIds) {
@@ -469,24 +476,33 @@ export const useDataStore = defineStore('data', {
         this._persistDeletedGroupMemberships()
       }
     },
-    restoreGroup(id: string) { this._restoreItem('sibling_groups', id) },
-    restoreCategory(id: string) { this._restoreItem('categories', id) },
-    restoreAttribute(id: string) { this._restoreItem('custom_attributes', id) },
-
-    /** 内部辅助：恢复已软删除项 */
-    _restoreItem(table: TableName, id: string) {
-      const stateKey = table === 'sibling_groups' ? 'siblingGroups' : table === 'custom_attributes' ? 'customAttributes' : table
-      const arr = (this as any)[stateKey]
-      const idx = (arr as any[]).findIndex((i: any) => i.id === id)
+    restoreGroup(id: string) {
+      const idx = this.siblingGroups.findIndex(g => g.id === id)
       if (idx >= 0) {
-        const item = (arr as any[])[idx]
-        const next = { ...item }
-        delete next.deletedAt
-        next.updatedAt = Date.now()
-        ;(arr as any[])[idx] = next
-        // 更新索引
-        const mapKey = { bookmarks: '_bmMap', sibling_groups: '_grpMap', categories: '_catMap', custom_attributes: '_attrMap' }[table]!
-        ;(this as any)[mapKey][id] = next
+        const next = { ...this.siblingGroups[idx], updatedAt: Date.now() }
+        delete (next as { deletedAt?: unknown }).deletedAt
+        this.siblingGroups[idx] = next as SiblingGroup
+        this._grpMap[id] = this.siblingGroups[idx]
+        this._markDirty(id); this._bumpSearchVersion()
+      }
+    },
+    restoreCategory(id: string) {
+      const idx = this.categories.findIndex(c => c.id === id)
+      if (idx >= 0) {
+        const next = { ...this.categories[idx], updatedAt: Date.now() }
+        delete (next as { deletedAt?: unknown }).deletedAt
+        this.categories[idx] = next as Category
+        this._catMap[id] = this.categories[idx]
+        this._markDirty(id); this._bumpSearchVersion()
+      }
+    },
+    restoreAttribute(id: string) {
+      const idx = this.customAttributes.findIndex(a => a.id === id)
+      if (idx >= 0) {
+        const next = { ...this.customAttributes[idx], updatedAt: Date.now() }
+        delete (next as { deletedAt?: unknown }).deletedAt
+        this.customAttributes[idx] = next as CustomAttribute
+        this._attrMap[id] = this.customAttributes[idx]
         this._markDirty(id); this._bumpSearchVersion()
       }
     },
@@ -507,22 +523,34 @@ export const useDataStore = defineStore('data', {
         }
         delete this._childrenIdx[id]
       }
-      this._permanentDelete('bookmarks', id)
+      this.bookmarks = this.bookmarks.filter(b => b.id !== id)
       delete this._bmMap[id]
+      this._dirtyIds.delete(id)
+      this._deletedIds.set(id, 'bookmarks')
       this._deletedGroupMemberships.delete(id)
       this._persistDeletedGroupMemberships()
       this._bumpSearchVersion()
     },
-    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id); delete this._grpMap[id]; this._bumpSearchVersion() },
-    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id]; this._bumpSearchVersion() },
-    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id); delete this._attrMap[id]; this._bumpSearchVersion() },
-
-    /** 内部辅助：永久删除项 */
-    _permanentDelete(key: TableName, id: string) {
-      const stateKey = key === 'sibling_groups' ? 'siblingGroups' : key === 'custom_attributes' ? 'customAttributes' : key
-      this[stateKey] = (this[stateKey] as any[]).filter((item: any) => item.id !== id)
+    permanentDeleteGroup(id: string) {
+      this.siblingGroups = this.siblingGroups.filter(g => g.id !== id)
+      delete this._grpMap[id]
       this._dirtyIds.delete(id)
-      this._deletedIds.set(id, key)
+      this._deletedIds.set(id, 'sibling_groups')
+      this._bumpSearchVersion()
+    },
+    permanentDeleteCategory(id: string) {
+      this.categories = this.categories.filter(c => c.id !== id)
+      delete this._catMap[id]
+      this._dirtyIds.delete(id)
+      this._deletedIds.set(id, 'categories')
+      this._bumpSearchVersion()
+    },
+    permanentDeleteAttribute(id: string) {
+      this.customAttributes = this.customAttributes.filter(a => a.id !== id)
+      delete this._attrMap[id]
+      this._dirtyIds.delete(id)
+      this._deletedIds.set(id, 'custom_attributes')
+      this._bumpSearchVersion()
     },
 
     /** 清空回收站（永久删除所有已软删除项） */
