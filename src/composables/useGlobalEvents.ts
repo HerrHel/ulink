@@ -5,6 +5,7 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { useAttrDropdownStore } from '../stores/attrDropdown.js'
 import { useMentionStore } from '../stores/overlay.js'
 import { hideSettingsMenu, hideAddDropdown } from './ui/useUI.js'
+import type { UIState } from '../stores/ui.js'
 
 interface GlobalEventsOptions {
   onOpenDetail?: (id: string) => void
@@ -14,6 +15,113 @@ interface GlobalEventsOptions {
   onVisit?: (e: Event | null, id?: string) => void
   onShowCtxMenu?: (e: MouseEvent, type: string, id: string) => void
   longPressFired?: { value: boolean }
+}
+
+// ── 右键菜单匹配器注册表 ──
+// 每个实体类型独立匹配器，顺序决定优先级（先匹配胜出）
+// 返回 null → 尝试下一个匹配器
+// 返回 _ABSTAIN → 交给浏览器原生菜单
+// 返回 CtxMatch → 显示自定义菜单
+
+const _ABSTAIN = Symbol('lv-ctx-abstain')
+
+interface CtxMatch {
+  type: string
+  id: string
+  setup?: () => void
+}
+
+type CtxResult = CtxMatch | typeof _ABSTAIN | null
+
+interface CtxMatcher {
+  name: string
+  match: (target: HTMLElement) => CtxResult
+}
+
+function createMatchers(ui: UIState): CtxMatcher[] {
+  return [
+    // 1. 子网站 inline card
+    {
+      name: 'sub',
+      match(target) {
+        if (!target.closest('.sub-sites')) return null
+        const card = target.closest('.group-inline-card') as HTMLElement | null
+        if (!card) return _ABSTAIN
+        const id = card.dataset.bmId || card.dataset.id
+        return id ? { type: 'sub', id, setup: () => { ui.ctxCard = null } } : null
+      },
+    },
+    // 2. 组内 inline card
+    {
+      name: 'inline-card',
+      match(target) {
+        const card = target.closest('.group-inline-card') as HTMLElement | null
+        if (!card) return null
+        const gCard = card.closest('.group-card') as HTMLElement | null
+        if (!gCard) return null
+        const bmId = card.getAttribute('data-bm-id')
+        return bmId
+          ? { type: 'group-card', id: bmId, setup: () => { ui.ctxCard = card; ui.ctxGid = gCard.dataset.groupId! } }
+          : null
+      },
+    },
+    // 3. 组编辑区域（非 inline card）：交给浏览器
+    {
+      name: 'group-body',
+      match(target) {
+        return target.closest('.group-body') ? _ABSTAIN : null
+      },
+    },
+    // 4. 组卡片
+    {
+      name: 'group',
+      match(target) {
+        const gCard = target.closest('.group-card') as HTMLElement | null
+        if (!gCard) return null
+        const gid = gCard.dataset.groupId
+        return gid ? { type: 'group', id: gid, setup: () => { ui.ctxCard = null } } : null
+      },
+    },
+    // 5. 书签卡片
+    {
+      name: 'card',
+      match(target) {
+        const bmCard = target.closest('.card') as HTMLElement | null
+        if (!bmCard) return null
+        const id = bmCard.dataset.id
+        return id ? { type: 'card', id, setup: () => { ui.ctxCard = null } } : null
+      },
+    },
+    // 6. 导航栏分类
+    {
+      name: 'category',
+      match(target) {
+        const railItem = target.closest('.rail-item') as HTMLElement | null
+        if (!railItem) return null
+        const catId = railItem.dataset.catId
+        if (!catId || catId === CAT_ALL || catId === CAT_UNCATEGORIZED) return null
+        return { type: 'cat', id: catId }
+      },
+    },
+    // 7. 导航栏空白区域
+    {
+      name: 'rail-empty',
+      match(target) {
+        if (!target.closest('.icon-rail')) return null
+        if (target.closest('.rail-item') || target.closest('.rail-logo') || target.closest('.rail-bottom')) return null
+        return { type: 'rail-empty', id: '' }
+      },
+    },
+    // 8. 主面板空白区域
+    {
+      name: 'grid-empty',
+      match(target) {
+        if (!target.closest('#panelContent')) return null
+        if (target.closest('.card') || target.closest('.empty')) return null
+        return { type: 'grid-empty', id: '' }
+      },
+    },
+  ]
 }
 
 /**
@@ -82,39 +190,23 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
   }
 
   function onContextMenu(e: MouseEvent) {
-    if (isMobile()) { e.preventDefault(); return }
-    if (ui.batchMode && (e.target as HTMLElement).closest('.card, .group-card, .group-body, .sub-sites')) return
     if (!onShowCtxMenu) return
+    if (isMobile()) { e.preventDefault(); return }
+    // 批量模式下不显示自定义菜单
+    if (ui.batchMode && (e.target as HTMLElement).closest('.card, .group-card, .group-body, .sub-sites')) return
 
-    // 匹配到自定义菜单项时始终阻止浏览器默认菜单
-    function showCtx(type: string, id: string) {
-      e.preventDefault()
-      onShowCtxMenu(e, type, id)
+    const target = e.target as HTMLElement
+    const matchers = createMatchers(ui)
+    for (const m of matchers) {
+      const result = m.match(target)
+      if (result === _ABSTAIN) return // 交给浏览器原生菜单
+      if (result !== null) {
+        result.setup?.()
+        e.preventDefault()
+        onShowCtxMenu(e, result.type, result.id)
+        return
+      }
     }
-
-    const subSitesEl = (e.target as HTMLElement).closest('.sub-sites')
-    if (subSitesEl) {
-      const subItem = (e.target as HTMLElement).closest('.group-inline-card')
-      if (!subItem) return  // 无 inline card 时不阻止原生菜单
-      const subId = (subItem as HTMLElement).dataset.bmId || (subItem as HTMLElement).dataset.id
-      if (subId) { ui.ctxCard = null; showCtx('sub', subId); return }
-    }
-    const inlineCard = (e.target as HTMLElement).closest('.group-inline-card')
-    // 组编辑区域内（非 inline card）：显示浏览器原生右键菜单
-    const groupBody = (e.target as HTMLElement).closest('.group-body')
-    if (groupBody && !inlineCard) { return }
-    if (inlineCard) {
-      const gCard = inlineCard.closest('.group-card')
-      if (gCard) { ui.ctxCard = inlineCard as HTMLElement; ui.ctxGid = (gCard as HTMLElement).dataset.groupId!; showCtx('group-card', inlineCard.getAttribute('data-bm-id')!); return }
-    }
-    const gCard = (e.target as HTMLElement).closest('.group-card')
-    if (gCard) { ui.ctxCard = null; showCtx('group', (gCard as HTMLElement).dataset.groupId!); return }
-    const bmCard = (e.target as HTMLElement).closest('.card')
-    if (bmCard) { ui.ctxCard = null; showCtx('card', (bmCard as HTMLElement).dataset.id!); return }
-    const railItem = (e.target as HTMLElement).closest('.rail-item')
-    if (railItem) { const catId = (railItem as HTMLElement).dataset.catId; if (catId && catId !== CAT_ALL && catId !== CAT_UNCATEGORIZED) { showCtx('cat', catId); return } }
-    if ((e.target as HTMLElement).closest('.icon-rail') && !(e.target as HTMLElement).closest('.rail-item') && !(e.target as HTMLElement).closest('.rail-logo') && !(e.target as HTMLElement).closest('.rail-bottom')) { showCtx('rail-empty', ''); return }
-    if ((e.target as HTMLElement).closest('#panelContent') && !(e.target as HTMLElement).closest('.card') && !(e.target as HTMLElement).closest('.empty')) { showCtx('grid-empty', ''); return }
   }
 
   onMounted(() => {
