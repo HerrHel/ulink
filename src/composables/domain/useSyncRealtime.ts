@@ -2,15 +2,13 @@
  * useSyncRealtime — Supabase Realtime 订阅管理
  * 依赖：通过 onPullChanges 回调与主同步模块解耦
  */
-import { ref } from 'vue'
 import { supabase } from '../../lib/supabase.js'
 import { useDataStore } from '../../stores/data.js'
+import { useSyncStore } from '../../stores/sync.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
 import type { EntityType } from '../../types.js'
-
-export const realtimeStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -125,7 +123,7 @@ async function _handleRealtimeChange(payload: any, type: EntityType) {
 function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
   if (_reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     console.warn('[realtime] max reconnect attempts reached')
-    realtimeStatus.value = 'error'
+    useSyncStore().setRealtimeStatus('error')
     return
   }
   const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, _reconnectAttempts), 30000)
@@ -138,10 +136,11 @@ function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
 }
 
 export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
+  const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId || _channel) return
 
-  realtimeStatus.value = 'connecting'
+  syncStore.setRealtimeStatus('connecting')
   _channel = supabase.channel('db-changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'bookmarks', filter: `user_id=eq.${userId}` },
@@ -156,19 +155,20 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
       { event: '*', schema: 'public', table: 'custom_attributes', filter: `user_id=eq.${userId}` },
       (p) => _handleRealtimeChange(p, 'attribute'))
     .subscribe((status) => {
+      const s = useSyncStore()
       if (status === 'SUBSCRIBED') {
-        realtimeStatus.value = 'connected'
+        s.setRealtimeStatus('connected')
         _reconnectAttempts = 0
         if (onPullChanges) {
           _withLock('linkvault-sync', onPullChanges).catch(() => {})
         }
       }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        realtimeStatus.value = 'error'
+        s.setRealtimeStatus('error')
         _scheduleReconnect(onPullChanges)
       }
       if (status === 'CLOSED') {
-        realtimeStatus.value = 'disconnected'
+        s.setRealtimeStatus('disconnected')
         _scheduleReconnect(onPullChanges)
       }
     })
@@ -177,7 +177,7 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
 export function unsubscribeRealtime() {
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null }
   _reconnectAttempts = 0
-  realtimeStatus.value = 'disconnected'
+  useSyncStore().setRealtimeStatus('disconnected')
   if (_channel) {
     supabase.removeChannel(_channel)
     _channel = null

@@ -1,33 +1,21 @@
 /**
  * useSyncConflict — 同步冲突检测与解决
+ *
+ * 响应式状态已迁移至 stores/sync.ts (useSyncStore)。
+ * 此处仅保留冲突解决逻辑函数。
  */
-import { ref } from 'vue'
 import { useDataStore } from '../../stores/data.js'
+import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
-export interface SyncConflict {
-  id: string
-  type: 'bookmark' | 'group' | 'category' | 'attribute'
-  local: unknown
-  remote: unknown
-}
-
-export const conflicts = ref<SyncConflict[]>([])
+/** 远端快照缓存（非响应式，用于去重判断） */
 export const _remoteSnapshots = new Map<string, unknown>()
 
-/** 横幅是否被用户关闭（模块级，供 popover 重现） */
-export const conflictBannerDismissed = ref(false)
-
-/** 重置 dismissed 以重新展示横幅（popover"查看冲突"调用） */
-export function resetConflictBannerDismissed() {
-  conflictBannerDismissed.value = false
-}
-
 export function resolveConflict(id: string, keepLocal: boolean) {
-  const idx = conflicts.value.findIndex(c => c.id === id)
-  if (idx < 0) return
-  const conflict = conflicts.value[idx]
+  const store = useSyncStore()
+  const conflict = store.conflicts.find(c => c.id === id)
+  if (!conflict) return
   if (!keepLocal) {
     const remoteData = conflict.remote as Record<string, unknown>
     const ds = useDataStore()
@@ -38,11 +26,12 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     saveAppData()
   }
   _remoteSnapshots.delete(`${conflict.type}:${id}`)
-  conflicts.value.splice(idx, 1)
+  store.removeConflict(id)
 }
 
 export function resolveAllConflicts(keepLocal: boolean) {
-  for (let i = conflicts.value.length - 1; i >= 0; i--) {
-    resolveConflict(conflicts.value[i].id, keepLocal)
+  const store = useSyncStore()
+  for (const c of store.conflicts.slice()) {
+    resolveConflict(c.id, keepLocal)
   }
 }

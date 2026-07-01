@@ -7,11 +7,14 @@
  * - useSyncRealtime.ts  — Realtime 订阅管理
  * - useSyncConflict.ts  — 冲突检测与解决
  * - useSyncHistory.ts   — 版本历史
+ *
+ * 状态管理：所有响应式状态存放于 stores/sync.ts (useSyncStore)
  */
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
+import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import {
@@ -23,21 +26,14 @@ import {
   toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute,
 } from './useSyncMapping.js'
 import {
-  conflicts, resolveConflict, resolveAllConflicts,
-  conflictBannerDismissed, resetConflictBannerDismissed,
+  resolveConflict, resolveAllConflicts, _remoteSnapshots,
 } from './useSyncConflict.js'
 import {
   _saveHistory, fetchHistory, restoreFromHistory, _getUserId,
 } from './useSyncHistory.js'
 import {
-  subscribeRealtime, unsubscribeRealtime, realtimeStatus,
+  subscribeRealtime, unsubscribeRealtime,
 } from './useSyncRealtime.js'
-
-// ── 状态 ──
-const syncStatus = ref<'idle' | 'syncing' | 'success' | 'error'>('idle')
-const lastSyncAt = ref<number>(0)
-const syncError = ref<string | null>(null)
-const autoSync = ref(true)
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
@@ -75,6 +71,7 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
   local: T[], remote: T[], type: 'bookmark' | 'group' | 'category' | 'attribute', full = false,
 ) {
   const ds = useDataStore()
+  const syncStore = useSyncStore()
   const localMap = new Map(local.map(i => [i.id, i]))
 
   for (const rItem of remote) {
@@ -83,14 +80,14 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
       local.push(rItem)
     } else if (ds._dirtyIds.has(rItem.id)) {
       const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
-      if (remoteNewer && lastSyncAt.value > 0) {
-        if (!conflicts.some(c => c.id === rItem.id)) {
-          conflicts.value.push({
+      if (remoteNewer && syncStore.lastSyncAt > 0) {
+        if (!syncStore.conflicts.some(c => c.id === rItem.id)) {
+          syncStore.addConflict({
             id: rItem.id, type,
             local: JSON.parse(JSON.stringify(lItem)),
             remote: JSON.parse(JSON.stringify(rItem)),
           })
-          conflictBannerDismissed.value = false
+          syncStore.resetConflictBanner()
         }
       }
     } else if ((rItem.updatedAt || 0) > (lItem.updatedAt || 0)) {
@@ -102,7 +99,7 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
     const remoteIds = new Set(remote.map(r => r.id))
     for (let i = local.length - 1; i >= 0; i--) {
       const lItem = local[i]
-      if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && lastSyncAt.value > 0) {
+      if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && syncStore.lastSyncAt > 0) {
         local.splice(i, 1)
       }
     }
@@ -114,15 +111,16 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
 // ══════════════════════════════════════════════════════
 export function useCloudSync() {
   const { isLoggedIn } = useAuth()
+  const syncStore = useSyncStore()
 
   const syncLabel = computed(() => {
-    if (syncStatus.value === 'syncing') return '同步中...'
-    if (syncStatus.value === 'error') return '同步失败'
+    if (syncStore.syncStatus === 'syncing') return '同步中...'
+    if (syncStore.syncStatus === 'error') return '同步失败'
     const ds = useDataStore()
     const pending = ds._dirtyIds.size + ds._deletedIds.size + ds._newIds.size
     if (pending > 0) return `${pending} 项待同步`
-    if (lastSyncAt.value) {
-      const diff = Date.now() - lastSyncAt.value
+    if (syncStore.lastSyncAt) {
+      const diff = Date.now() - syncStore.lastSyncAt
       if (diff < 60000) return '刚刚同步'
       if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前同步`
       return `${Math.floor(diff / 3600000)} 小时前同步`
@@ -130,9 +128,8 @@ export function useCloudSync() {
     return '未同步'
   })
 
-  const pendingCount = ref(0)
   async function refreshPendingCount() {
-    pendingCount.value = await syncOpsCount()
+    syncStore.setPendingCount(await syncOpsCount())
   }
 
   // ── 把内存 dirtyIds 转为持久化 ops ──
@@ -199,14 +196,14 @@ export function useCloudSync() {
   async function _pushFromQueue(): Promise<boolean> {
     const userId = _getUserId()
     if (!userId) return false
-    if (!navigator.onLine) { syncError.value = '网络离线'; return false }
+    if (!navigator.onLine) { syncStore.setSyncError('网络离线'); return false }
 
     const rawOps = await drainSyncOps()
     if (!rawOps.length) return true
 
     const ops = _mergeOps(rawOps)
-    syncStatus.value = 'syncing'
-    syncError.value = null
+    syncStore.setSyncStatus('syncing')
+    syncStore.setSyncError(null)
 
     try {
       const ds = useDataStore()
@@ -293,13 +290,13 @@ export function useCloudSync() {
       }
       for (const op of ops) ds._newIds.delete(op.itemId)
 
-      lastSyncAt.value = Date.now()
-      syncStatus.value = 'success'
+      syncStore.setLastSyncAt(Date.now())
+      syncStore.setSyncStatus('success')
       return true
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '同步失败'
-      syncStatus.value = 'error'
-      syncError.value = msg
+      syncStore.setSyncStatus('error')
+      syncStore.setSyncError(msg)
       console.warn('[sync] push failed:', e)
       return false
     }
@@ -309,13 +306,13 @@ export function useCloudSync() {
   async function _pullChanges(full = false): Promise<boolean> {
     const userId = _getUserId()
     if (!userId) return false
-    if (!navigator.onLine) { syncError.value = '网络离线'; return false }
+    if (!navigator.onLine) { syncStore.setSyncError('网络离线'); return false }
 
-    syncStatus.value = 'syncing'
-    syncError.value = null
+    syncStore.setSyncStatus('syncing')
+    syncStore.setSyncError(null)
 
     try {
-      const since = full ? 0 : (lastSyncAt.value || 0)
+      const since = full ? 0 : (syncStore.lastSyncAt || 0)
 
       const [catsRes, bmsRes, groupsRes, attrsRes] = await Promise.all([
         supabase.from('categories').select('*').eq('user_id', userId).gt('updated_at_num', since),
@@ -345,13 +342,13 @@ export function useCloudSync() {
       _mergeIntoLocal(ds.siblingGroups, remoteGroups, 'group', full)
       _mergeIntoLocal(ds.customAttributes, remoteAttrs, 'attribute', full)
 
-      lastSyncAt.value = Date.now()
-      syncStatus.value = 'success'
+      syncStore.setLastSyncAt(Date.now())
+      syncStore.setSyncStatus('success')
       return true
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '同步失败'
-      syncStatus.value = 'error'
-      syncError.value = msg
+      syncStore.setSyncStatus('error')
+      syncStore.setSyncError(msg)
       console.warn('[sync] pull failed:', e)
       return false
     }
@@ -360,7 +357,7 @@ export function useCloudSync() {
   // ── 公共 API ──
 
   function debouncedSync() {
-    if (!autoSync.value || !isLoggedIn.value) return
+    if (!syncStore.autoSync || !isLoggedIn.value) return
     _enqueueDirtyAsOps()
     if (_syncTimer) clearTimeout(_syncTimer)
     _syncTimer = setTimeout(() => {
@@ -420,7 +417,7 @@ export function useCloudSync() {
     if (document.visibilityState !== 'visible' || !isLoggedIn.value) return
     _withLock('linkvault-sync', async () => {
       await _pullChanges()
-      if (autoSync.value) {
+      if (syncStore.autoSync) {
         _enqueueDirtyAsOps()
         await _pushFromQueue()
       }
@@ -441,10 +438,7 @@ export function useCloudSync() {
 
   function resetSyncState() {
     _initialized = false
-    lastSyncAt.value = 0
-    syncStatus.value = 'idle'
-    syncError.value = null
-    conflicts.value = []
+    syncStore.resetSyncState()
     unsubscribeRealtime()
   }
 
@@ -477,16 +471,29 @@ export function useCloudSync() {
   }
 
   return {
-    syncStatus, lastSyncAt, syncError, autoSync, syncLabel, pendingCount, refreshPendingCount,
-    realtimeStatus,
-    conflicts, resolveConflict, resolveAllConflicts,
-    conflictBannerDismissed, resetConflictBannerDismissed,
+    syncStatus: syncStore.syncStatus,
+    lastSyncAt: syncStore.lastSyncAt,
+    syncError: syncStore.syncError,
+    autoSync: syncStore.autoSync,
+    pendingCount: syncStore.pendingCount,
+    syncLabel,
+
     pushToCloud: _pushFromQueue, pullFromCloud: _pullChanges, fullSync,
     debouncedSync, initialSync, resetSyncState,
     initOnlineListener, destroyOnlineListener,
+    refreshPendingCount,
+
     subscribeRealtime: () => subscribeRealtime(_pullChanges), unsubscribeRealtime,
     fetchHistory: (itemId: string) => fetchHistory(itemId),
     restoreFromHistory: (historyId: number, itemId: string, itemType: 'bookmark' | 'group') => restoreFromHistory(historyId, itemId, itemType),
+
+    // 冲突管理（委托至 store + domain 函数，保持 API 不变）
+    conflicts: syncStore.conflicts,
+    conflictBannerDismissed: syncStore.conflictBannerDismissed,
+    resolveConflict,
+    resolveAllConflicts,
+    resetConflictBannerDismissed: syncStore.resetConflictBanner,
+
     setGroupPublic, fetchPublicGroup,
   }
 }
