@@ -2,6 +2,7 @@
  * useMention — @书签 / #组引用 提及系统
  * 从 MentionDropdown.vue 提取的核心逻辑。
  */
+import { ref } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useMentionStore } from '../../stores/overlay.js'
 import { saveAppData } from '../../stores/app.js'

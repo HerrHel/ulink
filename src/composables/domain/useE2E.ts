@@ -62,15 +62,20 @@ function _getCanaryData(): Promise<Record<string, unknown> | null> {
   const local = _readLocalCanary()
   if (local) return Promise.resolve(local)
   // 本地无 canary，尝试从云端拉取（登录用户多设备场景）
-  const { user } = useAuth()
-  const userId = user.value?.id
-  if (!userId) return Promise.resolve(null)
-  return supabase.from('user_security')
-    .select('master_canary')
-    .eq('user_id', userId)
-    .maybeSingle()
-    .then(res => res.data?.master_canary as Record<string, unknown> ?? null)
-    .catch(() => null)
+  try {
+    const auth = useAuth()
+    if (!auth || !auth.user) return Promise.resolve(null)
+    const userId = auth.user.value?.id
+    if (!userId) return Promise.resolve(null)
+    return supabase.from('user_security')
+      .select('master_canary')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .then(res => res.data?.master_canary as Record<string, unknown> ?? null)
+      .catch(() => null)
+  } catch {
+    return Promise.resolve(null)
+  }
 }
 
 function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> {

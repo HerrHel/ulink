@@ -78,7 +78,8 @@ export const useSyncStore = defineStore('sync', () => {
     pendingCount: readonly(pendingCount),
     realtimeStatus: readonly(realtimeStatus),
     conflicts: readonly(conflicts),
-    conflictBannerDismissed: readonly(conflictBannerDismissed),
+    // conflictBannerDismissed 需要在模板中直接赋值（SyncConflictBanner .value = true），不设 readonly
+    conflictBannerDismissed,
 
     // 可写 actions
     setSyncStatus, setSyncError, setLastSyncAt, setAutoSync,

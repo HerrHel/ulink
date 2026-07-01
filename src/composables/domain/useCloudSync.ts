@@ -10,7 +10,7 @@
  *
  * 状态管理：所有响应式状态存放于 stores/sync.ts (useSyncStore)
  */
-import { computed } from 'vue'
+import { computed, toRef } from 'vue'
 import { supabase } from '../../lib/supabase.js'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
@@ -471,11 +471,12 @@ export function useCloudSync() {
   }
 
   return {
-    syncStatus: syncStore.syncStatus,
-    lastSyncAt: syncStore.lastSyncAt,
-    syncError: syncStore.syncError,
-    autoSync: syncStore.autoSync,
-    pendingCount: syncStore.pendingCount,
+    syncStatus: toRef(syncStore, 'syncStatus'),
+    lastSyncAt: toRef(syncStore, 'lastSyncAt'),
+    syncError: toRef(syncStore, 'syncError'),
+    autoSync: toRef(syncStore, 'autoSync'),
+    pendingCount: toRef(syncStore, 'pendingCount'),
+    realtimeStatus: toRef(syncStore, 'realtimeStatus'),
     syncLabel,
 
     pushToCloud: _pushFromQueue, pullFromCloud: _pullChanges, fullSync,
@@ -487,9 +488,9 @@ export function useCloudSync() {
     fetchHistory: (itemId: string) => fetchHistory(itemId),
     restoreFromHistory: (historyId: number, itemId: string, itemType: 'bookmark' | 'group') => restoreFromHistory(historyId, itemId, itemType),
 
-    // 冲突管理（委托至 store + domain 函数，保持 API 不变）
-    conflicts: syncStore.conflicts,
-    conflictBannerDismissed: syncStore.conflictBannerDismissed,
+    // 冲突管理（toRef 避免 Pinia 自动解包 ref → 保持 .value 访问不变）
+    conflicts: toRef(syncStore, 'conflicts'),
+    conflictBannerDismissed: toRef(syncStore, 'conflictBannerDismissed'),
     resolveConflict,
     resolveAllConflicts,
     resetConflictBannerDismissed: syncStore.resetConflictBanner,
