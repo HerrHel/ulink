@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './styles/main.css'
 import App from './App.vue'
+import { vueErrorHandler, unhandledRejectionHandler } from './lib/errorReporter.js'
 
 const pinia = createPinia()
 const app = createApp(App)
@@ -9,9 +10,7 @@ app.use(pinia)
 
 // Debug: catch rendering errors & prevent total white-screen
 app.config.errorHandler = (err, instance, info) => {
-  console.error('[LinkVault] Vue error:', err)
-  console.error('[LinkVault] Component:', instance?.$options?.name || instance?.$?.type?.name || 'unknown')
-  console.error('[LinkVault] Info:', info)
+  vueErrorHandler(err, instance, info)
   // 尝试渲染到根节点，避免完全白屏
   const root = document.getElementById('app')
   if (root && !root.querySelector('.lv-panel, .error-boundary-fallback')) {
@@ -21,6 +20,11 @@ app.config.errorHandler = (err, instance, info) => {
       <button onclick="location.reload()" style="margin-top:16px;padding:8px 24px">重试</button>
     </div>`
   }
+}
+
+// 全局未捕获 Promise 错误
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', unhandledRejectionHandler)
 }
 
 // Mount Vue app
