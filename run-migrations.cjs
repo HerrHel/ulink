@@ -19,13 +19,17 @@ const STATE_FILE = path.join(__dirname, '.migration-state.json')
 const PROJECT_REF = 'yqouglfopbmujkqmjgpu'
 
 // ── 读取 access token ──
-const envRaw = fs.readFileSync(path.join(__dirname, '.env'), 'utf8')
-const tokenMatch = envRaw.match(/SUPABASE_ACCESS_TOKEN=(.+)/)
-if (!tokenMatch) {
-  console.error('❌ 未找到 SUPABASE_ACCESS_TOKEN，请检查 .env 文件')
-  process.exit(1)
+let SUPABASE_ACCESS_TOKEN = ''
+try {
+  const envRaw = fs.readFileSync(path.join(__dirname, '.env'), 'utf8')
+  const tokenMatch = envRaw.match(/SUPABASE_ACCESS_TOKEN=(.+)/)
+  if (tokenMatch) SUPABASE_ACCESS_TOKEN = tokenMatch[1].trim()
+} catch { /* .env 不存在时跳过（如 CI） */ }
+
+if (!SUPABASE_ACCESS_TOKEN) {
+  console.log('⏭️ SUPABASE_ACCESS_TOKEN 未设置，跳过迁移')
+  process.exit(0)
 }
-const SUPABASE_ACCESS_TOKEN = tokenMatch[1].trim()
 
 // ── 读取已应用状态 ──
 let applied = new Set()
