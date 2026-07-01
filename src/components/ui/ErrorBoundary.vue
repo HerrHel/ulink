@@ -27,8 +27,7 @@ onErrorCaptured((err: Error) => {
 })
 
 function reload() {
-  errored.value = false
-  errorMsg.value = ''
+  location.reload()
 }
 </script>
 

@@ -15,7 +15,11 @@
       </div>
       <BatchBottom @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       <div class="flex-1" style="display:flex;overflow:hidden">
-        <div class="panel-content" id="panelContent"><CardGrid /></div>
+        <div class="panel-content" id="panelContent">
+          <ErrorBoundary name="CardGrid">
+            <CardGrid />
+          </ErrorBoundary>
+        </div>
       </div>
       <BatchPopover />
     </div>
@@ -23,6 +27,8 @@
     <DetailPanel />
   </div>
 </div>
+
+<ErrorBoundary name="Modals">
 <template v-if="store.modals.bookmark">
   <BookmarkModal />
 </template>
@@ -42,12 +48,17 @@
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" @close="store.modals.e2eUnlock = false" @unlocked="onE2EUnlocked" />
 <SetupGuide />
+</ErrorBoundary>
+
+<ErrorBoundary name="Overlays">
 <ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
 <AddPopover />
 <DeadLinksPopover />
 <SyncConflictBanner />
 <CommandPalette />
 <ShortcutHelpPanel />
+</ErrorBoundary>
+
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false; store.detailCards.splice(0)"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>

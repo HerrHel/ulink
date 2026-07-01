@@ -10,6 +10,7 @@ import { useUIStore } from './ui.js'
 import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
+import { AppDataSchema } from '../schemas.js'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
@@ -126,11 +127,17 @@ export const useAppStore = defineStore('app', () => {
 
     save() {
       const d = ds()
+      const data = d._dataSnapshot()
+      // 运行时验证数据完整性，阻止损坏数据写入存储
+      const parsed = AppDataSchema.safeParse(data)
+      if (!parsed.success) {
+        console.error('[store] 数据验证失败，跳过存储:', parsed.error.issues)
+        return
+      }
       d._storageInfoDirty = true
       d._saveCount++
-      const data = d._dataSnapshot()
       // IDB 权威写入（含 localStorage 尽力缓存）
-      persist.saveData(data)
+      persist.saveData(parsed.data)
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
       try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
     },

@@ -497,6 +497,8 @@ export const useDataStore = defineStore('data', {
     },
     importFromData(data: Partial<AppData>) {
       const { categories = [], bookmarks = [], customAttributes = [], siblingGroups = [] } = data || {}
+      // 防御性结构检查：确保输入是包含 id 的对象数组
+      if (!Array.isArray(bookmarks) || !Array.isArray(categories) || !Array.isArray(customAttributes) || !Array.isArray(siblingGroups)) return
       const result = {
         categories: [...categories],
         bookmarks: [...bookmarks],
