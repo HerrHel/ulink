@@ -6,7 +6,17 @@ import { PurgeCSS } from 'purgecss';
 /* ── 安全 & 缓存 HTTP 响应头 ── */
 const securityHeaders: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
-  'Content-Security-Policy': "frame-ancestors 'self'",
+  'Content-Security-Policy': [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https:",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "font-src 'self' https://fonts.gstatic.com",
+    "frame-ancestors 'self'",
+    "form-action 'self'",
+    "base-uri 'self'",
+  ].join('; '),
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
@@ -17,7 +27,22 @@ function headersPlugin(): Plugin {
     name: 'custom-headers',
     configureServer(server) {
       server.middlewares.use((_req, res, next) => {
-        Object.entries(securityHeaders).forEach(([k, v]) => res.setHeader(k, v));
+        // Dev 环境下放宽 script-src 以支持 HMR
+        const devCSP = [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data: https:",
+          "connect-src 'self' ws: wss: https:",
+          "font-src 'self' data:",
+          "frame-ancestors 'self'",
+          "form-action 'self'",
+          "base-uri 'self'",
+        ].join('; ')
+        res.setHeader('Content-Security-Policy', devCSP)
+        Object.entries(securityHeaders).forEach(([k, v]) => {
+          if (k !== 'Content-Security-Policy') res.setHeader(k, v)
+        })
         next();
       });
     },
