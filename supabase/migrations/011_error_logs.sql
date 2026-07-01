@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS error_logs (
 -- 允许匿名 INSERT（捕获登录前后的错误）
 ALTER TABLE error_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can insert error logs" ON error_logs;
+DROP POLICY IF EXISTS "Users can view own error logs" ON error_logs;
+
 CREATE POLICY "Anyone can insert error logs" ON error_logs
   FOR INSERT WITH CHECK (true);
 
@@ -22,8 +25,6 @@ CREATE POLICY "Anyone can insert error logs" ON error_logs
 CREATE POLICY "Users can view own error logs" ON error_logs
   FOR SELECT USING (auth.uid() = user_id);
 
--- 索引：按时间降序查询
+-- 索引：按时间降序查询（IF NOT EXISTS 由 PG 原生支持）
 CREATE INDEX IF NOT EXISTS idx_error_logs_created ON error_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_error_logs_user ON error_logs(user_id);
-
-SELECT pg_notify('pgrst', 'reload schema');
