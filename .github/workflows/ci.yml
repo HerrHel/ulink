@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches-ignore: ["main"]
+  pull_request:
+    branches: ["**"]
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit Tests
+        run: npm run test
+      - name: Dependency Audit
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
