@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useE2EStore } from '../../stores/e2e.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { favicon, domain, fixUrl } from '../../utils.js'
 import { incrementStat } from '../../lib/stats.js'
@@ -8,8 +9,8 @@ import { toast, toastWithUndo } from '../../lib/toast.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
-import { safeDecodePassword } from '../../crypto.js'
-import type { Bookmark } from '../../types.js'
+import { safeDecodePassword, encrypt, decrypt } from '../../crypto.js'
+import type { Bookmark, EncryptedPassword } from '../../types.js'
 
 interface BmFormState {
   id: string
@@ -86,7 +87,7 @@ export function visit(e: Event | null, id?: string) {
 }
 
 let _opening = false
-export function openBmModal(editId?: string) {
+export async function openBmModal(editId?: string) {
   if (_opening) return
   _opening = true
   try {
@@ -112,7 +113,24 @@ export function openBmModal(editId?: string) {
     bmForm.iconPreviewUrl = bm?.icon || ''
     bmForm.clearIconVisible = !!bm?.icon
 
-    bmForm.password = safeDecodePassword(bm?.password || '')
+    // 密码：E2E 加密 → 用缓存密钥解密 / 旧版 base64 → 解码 / 空 → 留空
+    const pw = bm?.password
+    if (pw && typeof pw === 'object' && (pw as EncryptedPassword).encrypted) {
+      const e2eStore = useE2EStore()
+      if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
+        try {
+          const ep = pw as EncryptedPassword
+          const raw = ep.salt + '.' + ep.iv + '.' + ep.data
+          bmForm.password = await decrypt(raw, e2eStore.cryptoKey)
+        } catch {
+          bmForm.password = ''
+        }
+      } else {
+        bmForm.password = ''
+      }
+    } else {
+      bmForm.password = safeDecodePassword(bm?.password as string || '')
+    }
 
     bmForm.aiSuggestCatId = null
     bmForm.aiSuggestAttrIds = []
@@ -138,14 +156,25 @@ export function closeBmModal() {
   ui.lastFocusedEl = null
 }
 
-export function saveBm() {
+export async function saveBm() {
   const ds = useDataStore()
   const url = fixUrl(bmForm.url)
   if (!url) { toast('请填写网址', false); return }
 
   const title = bmForm.title.trim() || domain(url)
 
-  const storedPassword = bmForm.password ? btoa(bmForm.password) : ''
+  // 密码：E2E 解锁时使用 AES-256-GCM 加密，否则 base64 编码（旧版兼容）
+  let storedPassword: string | EncryptedPassword = ''
+  if (bmForm.password) {
+    const e2eStore = useE2EStore()
+    if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
+      const raw = await encrypt(bmForm.password, e2eStore.cryptoKey)
+      const parts = raw.split('.')
+      storedPassword = { encrypted: true, data: parts[2] || '', iv: parts[1] || '', salt: parts[0] || '' }
+    } else {
+      storedPassword = btoa(bmForm.password)
+    }
+  }
 
   const data: Partial<Bookmark> = {
     title, url,
