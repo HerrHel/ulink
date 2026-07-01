@@ -48,7 +48,7 @@
 .detail-use-count{margin-left:auto}
 .empty-compact{padding:40px 20px}
 .rail-storage-track{height:4px;background:var(--bg-alt);border-radius:2px;overflow:hidden}
-.ge-bm-item{padding:6px 10px;margin-bottom:4px;background:var(--bg-alt);border-radius:8px}
+.ge-bm-item{padding:6px 10px;margin-bottom:4px;background:var(--bg-alt);border-radius:var(--radius-base)}
 .text-ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .modal-hint{font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5}
 .form-error{color:var(--danger);font-size:0.82rem;margin-top:4px}
