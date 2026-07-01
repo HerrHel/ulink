@@ -55,13 +55,6 @@ export interface UIState {
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
   historyMax: number
-  mentionGid: string | null
-  mentionQuery: string
-  mentionIdx: number
-  mentionActive: boolean
-  mentionType: 'bm' | 'group'
-  mentionSubMode: boolean
-  mentionSubIdx: number
   addToGid: string | null
   _addPopoverTrigger: { top: number; left: number; width: number } | null
   saveToGroup: string | null
@@ -121,13 +114,6 @@ export const useUIStore = defineStore('ui', {
       addPopover: false,
       deadLinks: false,
     },
-    mentionGid: null,
-    mentionQuery: '',
-    mentionIdx: 0,
-    mentionActive: false,
-    mentionType: 'bm',
-    mentionSubMode: false,
-    mentionSubIdx: 0,
     addToGid: null,
     _addPopoverTrigger: null,
     saveToGroup: null,

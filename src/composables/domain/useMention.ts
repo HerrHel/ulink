@@ -2,9 +2,8 @@
  * useMention — @书签 / #组引用 提及系统
  * 从 MentionDropdown.vue 提取的核心逻辑。
  */
-import { ref } from 'vue'
 import { useDataStore } from '../../stores/data.js'
-import { useUIStore } from '../../stores/ui.js'
+import { useMentionStore } from '../../stores/overlay.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
@@ -21,7 +20,7 @@ interface MentionItem {
 
 export function useMention() {
   const ds = useDataStore()
-  const ui = useUIStore()
+  const mentionStore = useMentionStore()
   const isVisible = ref(false)
   const candidates = ref<MentionItem[]>([])
   const activeIdx = ref(0)
@@ -37,18 +36,13 @@ export function useMention() {
     activeSubIdx.value = 0
     mentionType.value = 'bm'
     _mentionRange = null
-    ui.mentionGid = null
-    ui.mentionQuery = ''
-    ui.mentionActive = false
-    ui.mentionType = 'bm'
-    ui.mentionSubMode = false
-    ui.mentionSubIdx = 0
+    mentionStore.hide()
   }
 
   function showNear(query: string) {
-    const isGroup = ui.mentionType === 'group'
+    const isGroup = mentionStore.type === 'group'
     const matches = isGroup
-      ? ds.siblingGroups.filter(g => g.id !== ui.mentionGid && (g.name || '').toLowerCase().includes(query)).slice(0, MAX_SUGGESTIONS)
+      ? ds.siblingGroups.filter(g => g.id !== mentionStore.gid && (g.name || '').toLowerCase().includes(query)).slice(0, MAX_SUGGESTIONS)
       : ds.bookmarks.filter(b => !b.parentId && (b.title.toLowerCase().includes(query) || b.url.toLowerCase().includes(query))).slice(0, MAX_SUGGESTIONS)
 
     if (!matches.length) { isVisible.value = false; return }
@@ -80,7 +74,7 @@ export function useMention() {
 
   function _insertHTML(ed: any, html: string) {
     if (!ed) return
-    const trigger = ui.mentionType === 'group' ? '#' : '@'
+    const trigger = mentionStore.type === 'group' ? '#' : '@'
     const sel = window.getSelection()
     if (!sel || !sel.rangeCount) return
     const node = sel.focusNode
@@ -106,25 +100,25 @@ export function useMention() {
   }
 
   function selectBookmark(bmId: string) {
-    if (!ui.mentionGid) return
-    const sg = ds.groupMap[ui.mentionGid]
+    if (!mentionStore.gid) return
+    const sg = ds.groupMap[mentionStore.gid]
     const b = ds.bookmarkMap[bmId]
     if (!sg || !b) { hide(); return }
-    const ed = EditorManager.get(ui.mentionGid)
+    const ed = EditorManager.get(mentionStore.gid)
     _insertHTML(ed, inlineCardHTML(b))
     if (sg.bookmarkIds.indexOf(bmId) === -1) {
-      ds.updateGroup(ui.mentionGid, { bookmarkIds: [...sg.bookmarkIds, bmId] })
+      ds.updateGroup(mentionStore.gid, { bookmarkIds: [...sg.bookmarkIds, bmId] })
     }
-    saveGroupBody(ui.mentionGid); saveAppData(); hide()
+    saveGroupBody(mentionStore.gid); saveAppData(); hide()
   }
 
   function selectGroupRef(refGid: string) {
-    if (!ui.mentionGid || refGid === ui.mentionGid) { hide(); return }
+    if (!mentionStore.gid || refGid === mentionStore.gid) { hide(); return }
     const src = ds.groupMap[refGid]
     if (!src) { hide(); return }
-    const ed = EditorManager.get(ui.mentionGid)
+    const ed = EditorManager.get(mentionStore.gid)
     _insertHTML(ed, groupRefCardHTML(src))
-    saveGroupBody(ui.mentionGid); saveAppData(); hide()
+    saveGroupBody(mentionStore.gid); saveAppData(); hide()
     toast('已添加组引用')
   }
 
@@ -133,30 +127,30 @@ export function useMention() {
     if (e.key !== '@' && e.key !== '#') return
     const gb = (e.target as HTMLElement).closest('.group-body')
     if (!gb || !(e.target as HTMLElement).isContentEditable) return
-    ui.mentionGid = gb.closest('.group-card')?.getAttribute('data-group-id') || null
-    ui.mentionQuery = ''
-    ui.mentionActive = true
-    ui.mentionType = e.key === '@' ? 'bm' : 'group'
+    mentionStore.gid = gb.closest('.group-card')?.getAttribute('data-group-id') || null
+    mentionStore.setQuery('')
+    mentionStore.active = true
+    mentionStore.type = e.key === '@' ? 'bm' : 'group'
     _mentionRange = null
   }
 
   function onInput(e: Event) {
-    if (!ui.mentionActive || !ui.mentionGid) return
+    if (!mentionStore.active || !mentionStore.gid) return
     const gb = (e.target as HTMLElement).closest('.group-body')
-    if (!gb || !(e.target as HTMLElement).isContentEditable || (gb.closest('.group-card')?.getAttribute('data-group-id') || null) !== ui.mentionGid) { hide(); return }
+    if (!gb || !(e.target as HTMLElement).isContentEditable || (gb.closest('.group-card')?.getAttribute('data-group-id') || null) !== mentionStore.gid) { hide(); return }
     const sel = window.getSelection()
     if (!sel || !sel.rangeCount) { hide(); return }
     const node = sel.focusNode
     if (!node || node.nodeType !== 3) { hide(); return }
     const text = node.textContent || ''
-    const trigger = ui.mentionType === 'group' ? '#' : '@'
+    const trigger = mentionStore.type === 'group' ? '#' : '@'
     const atIdx = text.lastIndexOf(trigger, sel.focusOffset - 1)
     if (atIdx >= 0 && atIdx < sel.focusOffset) {
-      ui.mentionQuery = text.slice(atIdx + 1, sel.focusOffset).toLowerCase()
+      mentionStore.setQuery(text.slice(atIdx + 1, sel.focusOffset).toLowerCase())
       _mentionRange = document.createRange()
       _mentionRange.setStart(node, atIdx)
       _mentionRange.setEnd(node, sel.focusOffset)
-      showNear(ui.mentionQuery)
+      showNear(mentionStore.query)
     } else { hide() }
   }
 
