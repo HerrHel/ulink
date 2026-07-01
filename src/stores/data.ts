@@ -277,14 +277,15 @@ export const useDataStore = defineStore('data', {
       fields.add(field)
     },
     addBookmark(bm: Bookmark) {
-      this.bookmarks = [...this.bookmarks, bm]
-      this._bmMap[bm.id] = bm
-      if (bm.parentId) {
-        const sib = this._childrenIdx[bm.parentId]
-        if (sib) sib.push(bm.id)
-        else this._childrenIdx[bm.parentId] = [bm.id]
+      const entry = { ...bm }
+      this.bookmarks = [...this.bookmarks, entry]
+      this._bmMap[entry.id] = entry
+      if (entry.parentId) {
+        const sib = this._childrenIdx[entry.parentId]
+        if (sib) sib.push(entry.id)
+        else this._childrenIdx[entry.parentId] = [entry.id]
       }
-      this._markDirty(bm.id); this._newIds.add(bm.id)
+      this._markDirty(entry.id); this._newIds.add(entry.id)
       this._bumpSearchVersion()
     },
     /** 保存旧状态到本地历史（C2：覆盖前留底）。含 500ms 防抖，同一 id 连续变更只保留最后一次快照。 */
