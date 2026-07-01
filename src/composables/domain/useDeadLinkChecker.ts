@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
+import { trackMetric } from '../../lib/stats.js'
 
 interface CheckResult {
   alive: boolean
@@ -18,6 +19,43 @@ const progress = ref({ done: 0, total: 0 })
 const lastFullCheckAt = ref(0)
 
 const CONFIDENCE_THRESHOLD = 0.5
+
+// ── 死链检测历史记录（持久化到 localStorage，便于趋势分析）──
+const HIST_KEY = 'lv_deadLinkHistory'
+const MAX_HIST = 5
+
+function _loadDeadLinkHistory(): Record<string, CheckResult[]> {
+  try {
+    const raw = localStorage.getItem(HIST_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function _saveDeadLinkHistory(hist: Record<string, CheckResult[]>): void {
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)) } catch { /* 存储满时静默忽略 */ }
+}
+
+/** 追加一次检测结果到历史记录（保留最近 MAX_HIST 条，按 checkedAt 降序） */
+function _appendDeadLinkHistory(bmId: string, result: CheckResult): void {
+  const hist = _loadDeadLinkHistory()
+  if (!hist[bmId]) hist[bmId] = []
+  hist[bmId].unshift(result)
+  hist[bmId] = hist[bmId].slice(0, MAX_HIST)
+  _saveDeadLinkHistory(hist)
+}
+
+/** 删除某书签的检测历史（永久删除时调用） */
+function _clearDeadLinkHistory(bmId: string): void {
+  const hist = _loadDeadLinkHistory()
+  delete hist[bmId]
+  _saveDeadLinkHistory(hist)
+}
+
+// 启动时加载历史到 results（便于 isDead/isBlocked computed 使用历史数据）
+const _history = _loadDeadLinkHistory()
+for (const [id, checks] of Object.entries(_history)) {
+  if (checks.length > 0) results[id] = checks[0]  // 取最新一次记录覆盖 results
+}
 
 let _abort: AbortController | null = null
 
@@ -140,6 +178,7 @@ export function useDeadLinkChecker() {
         const result = batchResults[j]
         if (result.status === 'fulfilled') {
           results[batch[j].id] = result.value
+          _appendDeadLinkHistory(batch[j].id, result.value)
         }
       }
 
@@ -154,6 +193,10 @@ export function useDeadLinkChecker() {
     lastFullCheckAt.value = Date.now()
     _applyDeadLinkAttributes()
     debouncedSaveAppData()
+    trackMetric('deadlink_check_batch', {
+      count: bookmarks.length,
+      duration: Date.now() - (progress.value.total > 0 ? lastFullCheckAt.value : Date.now()),
+    })
   }
 
   async function checkOne(bookmarkId: string): Promise<CheckResult | null> {
@@ -163,6 +206,7 @@ export function useDeadLinkChecker() {
 
     const result = await checkUrl(bm.url, bookmarkId)
     results[bookmarkId] = result
+    _appendDeadLinkHistory(bookmarkId, result)
 
     if (result.confidence < CONFIDENCE_THRESHOLD) return result
 

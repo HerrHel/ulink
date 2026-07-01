@@ -3,6 +3,7 @@
  * 从 useCloudSync 提取，纯数据转换函数
  */
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
+import { BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 
 // ── 辅助函数 ──
 
@@ -14,6 +15,28 @@ export function parseTimestamp(raw: unknown): number {
   if (typeof raw === 'number') return raw
   if (typeof raw === 'string') { const t = Date.parse(raw); return isNaN(t) ? 0 : t }
   return 0
+}
+
+/**
+ * 通用 camelCase → snake_case 转换。
+ * 已知特殊映射表覆盖了与 Supabase 列名不一致的字段。
+ */
+const SPECIAL_SNAKE: Record<string, string> = {
+  categoryId: 'category_id',
+  parentId: 'parent_id',
+  useCount: 'use_count',
+  isExpanded: 'is_expanded',
+  bookmarkIds: 'bookmark_ids',
+  createdAt: 'created_at_num',
+  updatedAt: 'updated_at_num',
+  deletedAt: 'deleted_at',
+  isPublic: 'is_public',
+  groupIds: 'group_ids',
+}
+
+export function camelToSnake(key: string): string {
+  if (SPECIAL_SNAKE[key]) return SPECIAL_SNAKE[key]
+  return key.replace(/([A-Z])/g, '_$1').toLowerCase()
 }
 
 // ── 远端行类型定义 ──
@@ -101,8 +124,21 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
 
 // ── 从远端行映射回本地类型 ──
 
-export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark {
-  return {
+/**
+ * Zod 验证辅助：远端映射数据通过 schema 校验后才采用。
+ * 校验失败时跳过该条目（远端坏数据不污染本地），并 console.warn 便于排查。
+ */
+function _validateWith<T>(schema: { safeParse: (data: unknown) => { success: boolean; error?: { issues: unknown[] } } }, item: T, label: string): T | null {
+  const result = schema.safeParse(item)
+  if (!result.success) {
+    console.warn(`[sync] 远端 ${label} 数据校验失败，已跳过:`, result.error.issues)
+    return null
+  }
+  return item
+}
+
+export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {
+  return _validateWith(BookmarkSchema, {
     id: r.id, title: r.title, url: r.url,
     username: r.username || '', password: parsePassword(r.password),
     notes: r.notes || '', icon: r.icon || '',
@@ -114,11 +150,11 @@ export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark {
     createdAt: r.created_at_num || 0,
     updatedAt: r.updated_at_num || r.created_at_num || 0,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
-  }
+  }, '书签')
 }
 
-export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup {
-  return {
+export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
+  return _validateWith(SiblingGroupSchema, {
     id: r.id, name: r.name,
     categoryId: r.category_id || 'uncategorized',
     icon: r.icon || '', order: r.order || 0,
@@ -129,21 +165,21 @@ export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup {
     updatedAt: r.updated_at_num || 0,
     isPublic: r.is_public || false,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
-  }
+  }, '组')
 }
 
-export function fromRemoteCategory(r: RemoteCategoryRow): Category {
-  return {
+export function fromRemoteCategory(r: RemoteCategoryRow): Category | null {
+  return _validateWith(CategorySchema, {
     id: r.id, name: r.name, icon: r.icon, color: r.color,
     updatedAt: r.updated_at_num || 0,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
-  }
+  }, '分类')
 }
 
-export function fromRemoteAttribute(r: RemoteAttributeRow): CustomAttribute {
-  return {
+export function fromRemoteAttribute(r: RemoteAttributeRow): CustomAttribute | null {
+  return _validateWith(CustomAttributeSchema, {
     id: r.id, name: r.name, type: (r.type as 'boolean') || 'boolean',
     updatedAt: r.updated_at_num || 0,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
-  }
+  }, '属性')
 }

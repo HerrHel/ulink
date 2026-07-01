@@ -150,33 +150,39 @@ function _buildGroupSearchItems(
 // ── 统一搜索缓存（供 searchBookmarkIds / searchWithHighlights 共享）──
 // _bmBaseRef / _grpBaseRef 跟踪原始数组引用，
 // 所有搜索函数共用同一份转换后的搜索项，避免双倍构建
+// _bmVersion / _grpVersion 来自 dataStore._searchVersion，
+// 仅在 CRUD 发生时重建 Fuse 索引，UI 筛选切换时不重建。
 let _bmBaseRef: Bookmark[] | null = null
 let _bmBaseItems: BookmarkSearchItem[] = []
 let _bmBaseAttrs: CustomAttribute[] | null = null
 let _bmFuse: Fuse<BookmarkSearchItem> | null = null
+let _bmVersion = -1
 
 let _grpBaseRef: SiblingGroup[] | null = null
 let _grpBaseItems: GroupSearchItem[] = []
 let _grpBaseAttrs: CustomAttribute[] | null = null
 let _grpBaseMap: Record<string, Bookmark> | null = null
 let _grpFuse: Fuse<GroupSearchItem> | null = null
+let _grpVersion = -1
 
-function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttribute[]) {
-  if (bookmarks !== _bmBaseRef || customAttributes !== _bmBaseAttrs) {
+function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttribute[], version = -1) {
+  if (bookmarks !== _bmBaseRef || customAttributes !== _bmBaseAttrs || version !== _bmVersion) {
     _bmBaseItems = _buildBookmarkSearchItems(bookmarks, customAttributes)
     _bmFuse = new Fuse(_bmBaseItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
     _bmBaseRef = bookmarks
     _bmBaseAttrs = customAttributes
+    _bmVersion = version
   }
 }
 
-function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bookmark>, customAttributes: CustomAttribute[]) {
-  if (groups !== _grpBaseRef || bookmarkMap !== _grpBaseMap || customAttributes !== _grpBaseAttrs) {
+function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bookmark>, customAttributes: CustomAttribute[], version = -1) {
+  if (groups !== _grpBaseRef || bookmarkMap !== _grpBaseMap || customAttributes !== _grpBaseAttrs || version !== _grpVersion) {
     _grpBaseItems = _buildGroupSearchItems(groups, bookmarkMap, customAttributes)
     _grpFuse = new Fuse(_grpBaseItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
     _grpBaseRef = groups
     _grpBaseMap = bookmarkMap
     _grpBaseAttrs = customAttributes
+    _grpVersion = version
   }
 }
 
@@ -191,9 +197,10 @@ export function searchBookmarkIds(
   bookmarks: Bookmark[],
   query: string,
   customAttributes: CustomAttribute[],
+  version = -1,
 ): Set<string> | null {
   if (!query.trim()) return null
-  _ensureBookmarkBase(bookmarks, customAttributes)
+  _ensureBookmarkBase(bookmarks, customAttributes, version)
   const results = _bmFuse!.search(query.trim())
   return new Set(results.map(r => r.item.id))
 }
@@ -203,15 +210,17 @@ export function searchBookmarkIds(
  * 同时匹配组名、属性名、组内书签标题/URL。
  * query 为空时返回 null（表示无需过滤）。
  * 内部缓存 Fuse 实例，同一 groups 数组引用不重复构建。
+ * @param version - dataStore._searchVersion，仅 CRUD 时递增，用于判断缓存是否有效
  */
 export function searchGroupIds(
   groups: SiblingGroup[],
   query: string,
   bookmarkMap: Record<string, Bookmark>,
   customAttributes: CustomAttribute[],
+  version = -1,
 ): Set<string> | null {
   if (!query.trim()) return null
-  _ensureGroupBase(groups, bookmarkMap, customAttributes)
+  _ensureGroupBase(groups, bookmarkMap, customAttributes, version)
   const results = _grpFuse!.search(query.trim())
   return new Set(results.map(r => r.item.id))
 }
@@ -267,11 +276,12 @@ export function searchWithHighlights(
   bookmarkMap: Record<string, Bookmark>,
   customAttributes: CustomAttribute[],
   maxResults: number = 8,
+  version = -1,
 ): SearchResultItem[] {
   if (!query.trim()) return []
   const q = query.trim()
 
-  _ensureBookmarkBase(bookmarks, customAttributes)
+  _ensureBookmarkBase(bookmarks, customAttributes, version)
   const bmResults = _bmFuse!.search(q, { limit: maxResults })
 
   const bookmarkResults: SearchResultItem[] = bmResults.map(r => ({
@@ -281,7 +291,7 @@ export function searchWithHighlights(
     _highlights: _extractHighlights(r, BM_KEY_MAP),
   }))
 
-  _ensureGroupBase(groups, bookmarkMap, customAttributes)
+  _ensureGroupBase(groups, bookmarkMap, customAttributes, version)
   const grpResults = _grpFuse!.search(q, { limit: 4 })
 
   const groupResults: SearchResultItem[] = grpResults.map(r => ({

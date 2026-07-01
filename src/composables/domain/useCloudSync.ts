@@ -17,13 +17,14 @@ import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
+import { trackMetric } from '../../lib/stats.js'
 import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount,
   type SyncOp,
 } from '../../stores/storage.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 import {
-  toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute,
+  toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute, camelToSnake,
 } from './useSyncMapping.js'
 import {
   resolveConflict, resolveAllConflicts, _remoteSnapshots,
@@ -100,7 +101,16 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
     for (let i = local.length - 1; i >= 0; i--) {
       const lItem = local[i]
       if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && syncStore.lastSyncAt > 0) {
-        local.splice(i, 1)
+        // 远端已不存在（物理删除），本地软删除以确保数据可恢复
+        switch (type) {
+          case 'bookmark': ds.deleteBookmark(lItem.id); break
+          case 'group': ds.deleteGroup(lItem.id); break
+          case 'category': ds.deleteCategory(lItem.id); break
+          case 'attribute': ds.deleteAttribute(lItem.id); break
+        }
+        // 删除由远端同步触发，清除 dirty 标记避免回推
+        ds._dirtyIds.delete(lItem.id)
+        ds._newIds.delete(lItem.id)
       }
     }
   }
@@ -257,15 +267,7 @@ export function useCloudSync() {
           } else {
             const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
             for (const f of changedFields) {
-              if (f in row && f !== 'id' && f !== 'user_id') partial[f] = row[f]
-              if (f === 'categoryId') partial.category_id = row.category_id
-              else if (f === 'parentId') partial.parent_id = row.parent_id
-              else if (f === 'useCount') partial.use_count = row.use_count
-              else if (f === 'isExpanded') partial.is_expanded = row.is_expanded
-              else if (f === 'bookmarkIds') partial.bookmark_ids = row.bookmark_ids
-              else if (f === 'isPublic') partial.is_public = row.is_public
-              else if (f === 'createdAt') partial.created_at_num = row.created_at_num
-              else if (f === 'deletedAt') partial.deleted_at = row.deleted_at
+              if (f in row && f !== 'id' && f !== 'user_id') partial[camelToSnake(f)] = row[f]
             }
             const { id, ...updateData } = partial
             tasks.push(
@@ -292,11 +294,13 @@ export function useCloudSync() {
 
       syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
+      trackMetric('sync_success', { duration: Date.now() - (rawOps[0]?.ts || Date.now()), count: ops.length })
       return true
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '同步失败'
       syncStore.setSyncStatus('error')
       syncStore.setSyncError(msg)
+      trackMetric('sync_failure', { duration: Date.now() - (rawOps[0]?.ts || Date.now()), success: false })
       console.warn('[sync] push failed:', e)
       return false
     }
@@ -325,10 +329,10 @@ export function useCloudSync() {
 
       const ds = useDataStore()
       const e2e = useE2E()
-      const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r))
-      const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r))
-      const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r))
-      const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r))
+      const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r)).filter(Boolean) as Category[]
+      const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r)).filter(Boolean) as Bookmark[]
+      const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r)).filter(Boolean) as SiblingGroup[]
+      const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r)).filter(Boolean) as CustomAttribute[]
 
       if (e2e.isUnlocked.value) {
         for (const b of remoteBms) await e2e.decryptItem('bookmark', b as any)
@@ -341,6 +345,45 @@ export function useCloudSync() {
       _mergeIntoLocal(ds.bookmarks, remoteBms, 'bookmark', full)
       _mergeIntoLocal(ds.siblingGroups, remoteGroups, 'group', full)
       _mergeIntoLocal(ds.customAttributes, remoteAttrs, 'attribute', full)
+
+      // ── 删除同步：拉取远端已软删除但本地仍活的条目 ──
+      // 当前增量查询已包含 updated_at_num > since 的软删除行（deleted_at 被更新），
+      // 此管道作为防御性补充，捕获未来可能出现的漏删边缘情况。
+      const [delBmsRes, delGroupsRes, delCatsRes, delAttrsRes] = await Promise.all([
+        supabase.from('bookmarks').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
+        supabase.from('sibling_groups').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
+        supabase.from('categories').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
+        supabase.from('custom_attributes').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
+      ])
+
+      for (const r of [delBmsRes, delGroupsRes, delCatsRes, delAttrsRes]) {
+        if (r.error) { console.warn('[sync] deletion sync query failed:', r.error); continue }
+        for (const row of r.data || []) {
+          const id = row.id as string
+          // 仅处理本地仍活着的项（避免重复删除）
+          if (ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt) {
+            ds.deleteBookmark(id)
+            ds._dirtyIds.delete(id)
+            ds._newIds.delete(id)
+          } else if (ds.groupMap[id] && !ds.groupMap[id].deletedAt) {
+            ds.deleteGroup(id)
+            ds._dirtyIds.delete(id)
+            ds._newIds.delete(id)
+          }
+          const cat = ds.categories.find(c => c.id === id)
+          if (cat && !cat.deletedAt) {
+            ds.deleteCategory(id)
+            ds._dirtyIds.delete(id)
+            ds._newIds.delete(id)
+          }
+          const attr = ds.customAttributes.find(a => a.id === id)
+          if (attr && !attr.deletedAt) {
+            ds.deleteAttribute(id)
+            ds._dirtyIds.delete(id)
+            ds._newIds.delete(id)
+          }
+        }
+      }
 
       syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
@@ -462,10 +505,11 @@ export function useCloudSync() {
       .select('*').eq('id', gid).eq('is_public', true).maybeSingle()
     if (gErr || !gData) return null
     const group = fromRemoteGroup(gData)
+    if (!group) return null
     let bookmarks: Bookmark[] = []
     if (group.bookmarkIds.length) {
       const { data: bData } = await supabase.from('bookmarks').select('*').in('id', group.bookmarkIds)
-      bookmarks = (bData || []).map(fromRemoteBookmark)
+      bookmarks = (bData || []).map(fromRemoteBookmark).filter(Boolean) as Bookmark[]
     }
     return { group, bookmarks }
   }

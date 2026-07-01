@@ -116,6 +116,7 @@ async function _handleRealtimeChange(payload: any, type: EntityType) {
 
   const h = HANDLERS[type]
   const mapped = h.from(row)
+  if (!mapped) return  // Zod 校验失败的远端条目跳过
   if (e2e.isUnlocked.value) await e2e.decryptItem(type, mapped as any)
   h.upsert(mapped)
 }

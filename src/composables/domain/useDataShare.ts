@@ -7,7 +7,6 @@ import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { incrementStat } from '../../lib/stats.js'
 import { copyToClipboard } from '../../utils.js'
-import { supabase } from '../../lib/supabase.js'
 import { useCloudSync } from './useCloudSync.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
@@ -83,7 +82,7 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     useCount: 0,
   }
 
-  // 写入本地
+  // 写入本地（addBookmark / addGroup 自动标记 dirty，走标准同步管道）
   for (const b of newBookmarks) {
     if (!ds.bookmarks.some(e => e.url?.toLowerCase() === b.url?.toLowerCase())) {
       ds.addBookmark(b)
@@ -92,30 +91,8 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   ds.addGroup(newGroup)
   saveAppData()
 
-  // 尝试写入远端
-  try {
-    const userId = (await supabase.auth.getSession()).data.session?.user?.id
-    if (userId) {
-      const bRows = newBookmarks.map(b => ({
-        id: b.id, user_id: userId, title: b.title, url: b.url,
-        username: b.username, password: '', notes: b.notes, icon: b.icon,
-        category_id: b.categoryId, parent_id: b.parentId,
-        "order": b.order, use_count: b.useCount,
-        attributes: b.attributes, is_expanded: b.isExpanded,
-        created_at_num: b.createdAt, updated_at_num: b.updatedAt,
-      }))
-      const gRow = {
-        id: newGroup.id, user_id: userId, name: newGroup.name,
-        category_id: newGroup.categoryId, icon: newGroup.icon,
-        "order": newGroup.order, is_expanded: newGroup.isExpanded,
-        attributes: newGroup.attributes, bookmark_ids: newGroup.bookmarkIds,
-        notes: newGroup.notes, use_count: newGroup.useCount,
-        updated_at_num: newGroup.updatedAt, is_public: false,
-      }
-      if (bRows.length) await supabase.from('bookmarks').upsert(bRows, { onConflict: 'id' })
-      await supabase.from('sibling_groups').upsert(gRow, { onConflict: 'id' })
-    }
-  } catch (e) { console.warn('[fork] cloud sync failed:', e) }
+  // 触发云端同步（由标准 push 管道处理加密/队列/冲突检测）
+  try { sync.fullSync().catch(() => {}) } catch { /* 静默 */ }
 
   toast(`已复制「${group.name}」到你的库（${newBookmarks.length} 个书签）`)
 }

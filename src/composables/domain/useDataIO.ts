@@ -9,8 +9,9 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
-import { incrementStat } from '../../lib/stats.js'
-import { AppDataSchema } from '../../schemas.js'
+import { incrementStat, trackMetric } from '../../lib/stats.js'
+import { AppDataSchema, BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
+import { clearSearchCache } from '../../lib/search.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
 import type { AppData, Bookmark } from '../../types.js'
@@ -50,6 +51,7 @@ export function exportData() {
     _download('linkvault-backup-' + _dateStamp() + '.json',
       JSON.stringify(ds._dataSnapshot(), null, 2), 'application/json')
     incrementStat('export_json')
+    trackMetric('export_done', { count: Object.keys(ds._dataSnapshot()).length })
     toast('数据已导出')
   } catch (_) { toast('导出失败', false) }
 }
@@ -213,11 +215,16 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
 
   try { persist.saveToLocalStorage(ds._dataSnapshot()) } catch (_) { /* 备份失败不阻塞导入 */ }
 
+  // ── 逐条 Zod 校验：格式错误的条目跳过，不污染本地数据 ──
+  let skippedBm = 0, skippedCat = 0, skippedAttr = 0, skippedGroup = 0
+
   // 合并分类（去重：同 ID 跳过）
   for (const c of categories) {
     if (!c.id || !c.name) continue
     if (ds.categories.some(existing => existing.id === c.id)) continue
-    ds.addCategory({ id: c.id, name: c.name, icon: c.icon || 'star', color: c.color || '', updatedAt: Date.now() })
+    const parsed = CategorySchema.safeParse({ id: c.id, name: c.name, icon: c.icon || 'star', color: c.color || '', updatedAt: Date.now() })
+    if (!parsed.success) { skippedCat++; continue }
+    ds.addCategory(parsed.data)
     catImported++
   }
 
@@ -225,7 +232,9 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   for (const a of customAttributes) {
     if (!a.id || !a.name) continue
     if (ds.customAttributes.some(existing => existing.id === a.id)) continue
-    ds.addAttribute({ id: a.id, name: a.name, type: a.type || 'boolean', updatedAt: Date.now() })
+    const parsed = CustomAttributeSchema.safeParse({ id: a.id, name: a.name, type: a.type || 'boolean', updatedAt: Date.now() })
+    if (!parsed.success) { skippedAttr++; continue }
+    ds.addAttribute(parsed.data)
     attrImported++
   }
 
@@ -236,7 +245,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
     if (ds.bookmarks.some(existing => existing.id === b.id)) continue
     if (existingUrls.has(b.url.toLowerCase())) continue
     const now = Date.now()
-    const newBm: Bookmark = {
+    const parsed = BookmarkSchema.safeParse({
       id: b.id || 'b' + now.toString(36) + Math.random().toString(36).slice(2, 6),
       title: b.title,
       url: b.url,
@@ -252,8 +261,9 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
       isExpanded: false,
       createdAt: b.createdAt || now,
       updatedAt: b.updatedAt || now,
-    }
-    ds.addBookmark(newBm)
+    })
+    if (!parsed.success) { skippedBm++; continue }
+    ds.addBookmark(parsed.data)
     existingUrls.add(b.url.toLowerCase())
     bmImported++
   }
@@ -262,7 +272,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
-    ds.addGroup({
+    const parsed = SiblingGroupSchema.safeParse({
       id: g.id, name: g.name,
       categoryId: g.categoryId || 'uncategorized',
       icon: g.icon || '', order: g.order || 0,
@@ -272,22 +282,28 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
       notes: g.notes || '', updatedAt: g.updatedAt || Date.now(),
       useCount: g.useCount || 0,
     })
+    if (!parsed.success) { skippedGroup++; continue }
+    ds.addGroup(parsed.data)
     groupImported++
   }
 
   saveAppData()
+  clearSearchCache()
   incrementStat('import_data')
+  trackMetric('import_done', { count: catImported + bmImported + groupImported + attrImported })
 
   const total = catImported + bmImported + groupImported + attrImported
+  const skipped = skippedCat + skippedBm + skippedGroup + skippedAttr
   if (total === 0) {
-    toast(`从 ${source} 导入：所有数据已存在，无新增项`)
+    toast(`从 ${source} 导入：所有数据已存在，无新增项${skipped ? `（${skipped} 条格式错误已跳过）` : ''}`)
   } else {
     const parts: string[] = []
     if (bmImported) parts.push(`${bmImported} 个书签`)
     if (catImported) parts.push(`${catImported} 个分类`)
     if (groupImported) parts.push(`${groupImported} 个组`)
     if (attrImported) parts.push(`${attrImported} 个属性`)
-    toast(`从 ${source} 导入：${parts.join('、')}`)
+    const skippedMsg = skipped ? `（${skipped} 条格式错误已跳过）` : ''
+    toast(`从 ${source} 导入：${parts.join('、')}${skippedMsg}`)
   }
 }
 
