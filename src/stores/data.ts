@@ -474,22 +474,25 @@ export const useDataStore = defineStore('data', {
     restoreCategory(id: string) { this._restoreItem('categories', id) },
     restoreAttribute(id: string) { this._restoreItem('custom_attributes', id) },
 
-    /** 内部辅助：恢复已软删除项 */
+    /** 内部辅助：通用型恢复已软删除项 */
     _restoreItem(table: TableName, id: string) {
-      const stateKey = table === 'sibling_groups' ? 'siblingGroups' : table === 'custom_attributes' ? 'customAttributes' : table
-      const arr = (this as any)[stateKey]
-      const idx = (arr as any[]).findIndex((i: any) => i.id === id)
-      if (idx >= 0) {
-        const item = (arr as any[])[idx]
-        const next = { ...item }
-        delete next.deletedAt
-        next.updatedAt = Date.now()
-        ;(arr as any[])[idx] = next
-        // 更新索引
-        const mapKey = { bookmarks: '_bmMap', sibling_groups: '_grpMap', categories: '_catMap', custom_attributes: '_attrMap' }[table]!
-        ;(this as any)[mapKey][id] = next
-        this._markDirty(id); this._bumpSearchVersion()
+      switch (table) {
+        case 'bookmarks': return this._restoreFrom(this.bookmarks, this._bmMap, id)
+        case 'sibling_groups': return this._restoreFrom(this.siblingGroups, this._grpMap, id)
+        case 'categories': return this._restoreFrom(this.categories, this._catMap, id)
+        case 'custom_attributes': return this._restoreFrom(this.customAttributes, this._attrMap, id)
       }
+    },
+    _restoreFrom<T extends { id: string; deletedAt?: number; updatedAt?: number }>(
+      arr: T[], map: Record<string, T>, id: string
+    ) {
+      const idx = arr.findIndex(i => i.id === id)
+      if (idx < 0) return
+      const next = { ...arr[idx], updatedAt: Date.now() }
+      delete (next as { deletedAt?: unknown }).deletedAt
+      arr[idx] = next
+      map[id] = next
+      this._markDirty(id); this._bumpSearchVersion()
     },
 
     // ── 回收站：永久删除 ──
@@ -520,8 +523,12 @@ export const useDataStore = defineStore('data', {
 
     /** 内部辅助：永久删除项 */
     _permanentDelete(key: TableName, id: string) {
-      const stateKey = key === 'sibling_groups' ? 'siblingGroups' : key === 'custom_attributes' ? 'customAttributes' : key
-      this[stateKey] = (this[stateKey] as any[]).filter((item: any) => item.id !== id)
+      switch (key) {
+        case 'bookmarks': this.bookmarks = this.bookmarks.filter(b => b.id !== id); break
+        case 'sibling_groups': this.siblingGroups = this.siblingGroups.filter(g => g.id !== id); break
+        case 'categories': this.categories = this.categories.filter(c => c.id !== id); break
+        case 'custom_attributes': this.customAttributes = this.customAttributes.filter(a => a.id !== id); break
+      }
       this._dirtyIds.delete(id)
       this._deletedIds.set(id, key)
     },
