@@ -7,7 +7,7 @@
  * 职责：
  * - 主密码设置/验证/缓存
  * - Recovery Key 生成与验证
- * - 加密密钥派生与管理
+ * - 加密密钥派生与管理（密钥缓存移至 e2eStore）
  * - 加密/解密字段辅助函数
  */
 import { useAuth } from './useAuth.js'
@@ -17,9 +17,6 @@ import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt } from '../..
 import type { EntityType } from '../../types.js'
 
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
-let _cryptoKey: CryptoKey | null = null
-let _unlockTimer: ReturnType<typeof setTimeout> | null = null
-const LOCK_TIMEOUT = 30 * 60 * 1000 // 30 分钟自动锁定
 
 // ── 需要加密的字段 ──
 const ENCRYPT_FIELDS = {
@@ -94,6 +91,17 @@ export function useE2E() {
   const isE2EEnabled = e2eStore.isE2EEnabled
   const isUnlocked = e2eStore.isUnlocked
 
+  /** 获取缓存的密钥（仅在 isUnlocked=true 时有效） */
+  function _getKey(): CryptoKey | null {
+    return e2eStore.cryptoKey
+  }
+
+  /** 设置密钥到 Store 并启动定时器 */
+  function _setKey(key: CryptoKey) {
+    e2eStore.setKey(key)
+    e2eStore.resetLockTimer()
+  }
+
   /** 检查用户是否已设置主密码 */
   async function checkE2EStatus(): Promise<boolean> {
     const hasLocal = !!_readLocalCanary()
@@ -130,10 +138,9 @@ export function useE2E() {
     const ok = await _saveCanaryData(canaryData)
     if (!ok) return false
 
-    _cryptoKey = key
-    isE2EEnabled.value = true
-    isUnlocked.value = true
-    _startLockTimer()
+    _setKey(key)
+    e2eStore.setUnlocked(true)
+    e2eStore.initVisibilityLock()
     return true
   }
 
@@ -161,10 +168,9 @@ export function useE2E() {
     })
     if (!ok2) return false
 
-    _cryptoKey = newKey
-    isE2EEnabled.value = true
-    isUnlocked.value = true
-    _startLockTimer()
+    _setKey(newKey)
+    e2eStore.setUnlocked(true)
+    e2eStore.initVisibilityLock()
     return true
   }
 
@@ -178,36 +184,32 @@ export function useE2E() {
     const ok = await verifyCanary(canaryData.canary, key)
     if (!ok) return false
 
-    _cryptoKey = key
-    isUnlocked.value = true
-    _startLockTimer()
+    _setKey(key)
+    e2eStore.setUnlocked(true)
+    e2eStore.initVisibilityLock()
     return true
   }
 
-  /** 锁定（清除内存中的密钥） */
+  /** 锁定（清除内存中的密钥 + 停止所有定时器） */
   function lock() {
-    _cryptoKey = null
-    isUnlocked.value = false
-    if (_unlockTimer) { clearTimeout(_unlockTimer); _unlockTimer = null }
-  }
-
-  function _startLockTimer() {
-    if (_unlockTimer) clearTimeout(_unlockTimer)
-    _unlockTimer = setTimeout(() => { lock() }, LOCK_TIMEOUT)
+    e2eStore.lock()
   }
 
   async function encryptField(value: string): Promise<string> {
-    if (!_cryptoKey || !value) return value
-    return encrypt(value, _cryptoKey)
+    const key = _getKey()
+    if (!key || !value) return value
+    return encrypt(value, key)
   }
 
   async function decryptField(value: string): Promise<string> {
-    if (!_cryptoKey || !value) return value
-    return decrypt(value, _cryptoKey)
+    const key = _getKey()
+    if (!key || !value) return value
+    return decrypt(value, key)
   }
 
   async function encryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
-    if (!_cryptoKey) return item
+    const key = _getKey()
+    if (!key) return item
     const fields = ENCRYPT_FIELDS[type]
     const result = { ...item } as Record<string, unknown>
     for (const f of fields) {
@@ -218,7 +220,8 @@ export function useE2E() {
   }
 
   async function decryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
-    if (!_cryptoKey) return item
+    const key = _getKey()
+    if (!key) return item
     const fields = ENCRYPT_FIELDS[type]
     const result = { ...item } as Record<string, unknown>
     for (const f of fields) {
