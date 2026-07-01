@@ -8,6 +8,7 @@ import { saveAppData } from '../../stores/app.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 // ── Action Sheet ──
 export function showActionSheet(items: { label: string; action: () => void; danger?: boolean }[]) {
@@ -60,7 +61,7 @@ export function openCatModal() { useUIStore().modals.category = true }
 export function closeCatModal() { useUIStore().modals.category = false }
 
 export async function deleteCategory(id: string) {
-  if (id === 'all' || id === 'uncategorized') { toast('无法删除默认分类', false); return }
+  if (id === CAT_ALL || id === CAT_UNCATEGORIZED) { toast('无法删除默认分类', false); return }
   const ok = await showConfirm('确认删除此分类？')
   if (ok) { useDataStore().deleteCategory(id); saveAppData() }
 }

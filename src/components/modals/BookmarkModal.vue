@@ -73,7 +73,7 @@
         <div class="form-group">
           <label class="form-label">属性标记</label>
           <div class="check-group">
-            <label v-for="attr in store.customAttributes.filter(a => a.id !== 'is-group')" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
+            <label v-for="attr in store.customAttributes.filter(a => a.id !== ATTR_IS_GROUP)" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
               <input type="checkbox" :checked="bmForm.attributes[attr.id]"
                      @change="toggleAttr(attr.id, $event)">
               {{ attr.name }}
@@ -94,6 +94,7 @@ import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
+import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 

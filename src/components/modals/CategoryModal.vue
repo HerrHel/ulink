@@ -37,6 +37,7 @@ import { addNewCategory } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Category } from '../../types.js'
 
 const store = useAppStore()
@@ -46,7 +47,7 @@ const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameCategory')
 const catListRef = ref<HTMLElement | null>(null)
 
-const uncategorizedCat = computed(() => dataStore.categories.find(c => c.id === 'uncategorized') || { id: 'uncategorized', name: '未分类' })
+const uncategorizedCat = computed(() => dataStore.categories.find(c => c.id === CAT_UNCATEGORIZED) || { id: CAT_UNCATEGORIZED, name: '未分类' })
 
 const sortableList = ref<Category[]>([])
 
@@ -55,7 +56,7 @@ watch(() => store.modals.category, (open) => {
 })
 
 watch(() => dataStore.selectableCategories, (val) => {
-  sortableList.value = val.filter(c => c.id !== 'uncategorized').map(c => ({ ...c }))
+  sortableList.value = val.filter(c => c.id !== CAT_UNCATEGORIZED).map(c => ({ ...c }))
 }, { immediate: true, deep: true })
 
 // ── 拖拽排序 ──
@@ -192,7 +193,7 @@ function onPointerUp(e: PointerEvent) {
   })
   if (newOrder.length === sortableList.value.length) {
     sortableList.value = newOrder
-    const special = dataStore.categories.filter(c => c.id === 'all' || c.id === 'uncategorized')
+    const special = dataStore.categories.filter(c => c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED)
     const reordered = [...special, ...newOrder]
     // 标记所有分类为 dirty（顺序变更）
     for (const cat of reordered) {

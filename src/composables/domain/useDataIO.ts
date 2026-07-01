@@ -10,6 +10,7 @@ import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { incrementStat, trackMetric } from '../../lib/stats.js'
+import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { AppDataSchema, BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 import { clearSearchCache } from '../../lib/search.js'
 import { DEFAULTS } from '../../config/constants.js'
@@ -63,12 +64,12 @@ export function exportHTML() {
     const live = _liveBookmarks(ds)
     const byCat = new Map<string, Bookmark[]>()
     for (const b of live) {
-      const cid = b.categoryId || 'uncategorized'
+      const cid = b.categoryId || CAT_UNCATEGORIZED
       if (!byCat.has(cid)) byCat.set(cid, [])
       byCat.get(cid)!.push(b)
     }
     const catName = (cid: string) => ds.categories.find(c => c.id === cid)?.name
-      || (cid === 'uncategorized' ? '未分类' : '其他')
+      || (cid === CAT_UNCATEGORIZED ? '未分类' : '其他')
 
     const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const lines: string[] = [
@@ -253,7 +254,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
       password: b.password || '',
       notes: b.notes || '',
       icon: b.icon || '',
-      categoryId: b.categoryId || 'uncategorized',
+      categoryId: b.categoryId || CAT_UNCATEGORIZED,
       parentId: b.parentId || null,
       order: ds.bookmarks.length + bmImported,
       useCount: b.useCount || 0,
@@ -274,7 +275,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
     const parsed = SiblingGroupSchema.safeParse({
       id: g.id, name: g.name,
-      categoryId: g.categoryId || 'uncategorized',
+      categoryId: g.categoryId || CAT_UNCATEGORIZED,
       icon: g.icon || '', order: g.order || 0,
       isExpanded: g.isExpanded || false,
       attributes: g.attributes || {},
@@ -323,7 +324,7 @@ function parseRaindropJSON(data: unknown): Bookmark[] {
     url: (r.link as string) || (r.url as string) || '',
     notes: (r.excerpt as string) || (r.note as string) || '',
     icon: (r.cover as string) || '',
-    categoryId: (r.collection as Record<string, unknown>)?.$id ? 'rd_' + (r.collection as Record<string, unknown>).$id : 'uncategorized',
+    categoryId: (r.collection as Record<string, unknown>)?.$id ? 'rd_' + (r.collection as Record<string, unknown>).$id : CAT_UNCATEGORIZED,
     attributes: Array.isArray(r.tags)
       ? Object.fromEntries((r.tags as string[]).map((t: string) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
       : {},
@@ -370,7 +371,7 @@ function parseBookmarkHTML(html: string): Bookmark[] {
             username: '', password: '',
             notes: currentCategory !== '导入的书签' ? `[${currentCategory}]` : '',
             icon: icon || '',
-            categoryId: 'uncategorized',
+            categoryId: CAT_UNCATEGORIZED,
             parentId: null,
             order: bookmarks.length,
             useCount: 0,
@@ -455,7 +456,7 @@ function parseCSV(text: string): Bookmark[] {
       title, url,
       username: '', password: '',
       notes, icon: '',
-      categoryId: 'uncategorized',
+      categoryId: CAT_UNCATEGORIZED,
       parentId: null,
       order: r - 1,
       useCount: 0,

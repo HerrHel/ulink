@@ -8,6 +8,7 @@ import { EditorManager } from '../../lib/editor.js';
 import { pushNavState } from '../interaction/useKeyboardOps.js';
 import { previewIconUrl, clearIcon } from '../ui/useIconPreview.js';
 import { inlineCardHTML, groupRefCardHTML } from '../useInlineCard.js';
+import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../../config/constants.js';
 import type { SiblingGroup } from '../../types.js';
 
 interface GeFormState {
@@ -84,9 +85,9 @@ export function createGroup(catId?: string): string {
   const g: SiblingGroup = {
     id: 'sg_' + gid(),
     name: '',
-    categoryId: catId || (ui.curCat === 'all' ? 'uncategorized' : ui.curCat),
+    categoryId: catId || (ui.curCat === CAT_ALL ? CAT_UNCATEGORIZED : ui.curCat),
     icon: '', order: 0, isExpanded: false,
-    attributes: { 'is-group': true },
+    attributes: { [ATTR_IS_GROUP]: true },
     bookmarkIds: [], notes: '',
     updatedAt: Date.now(), useCount: 0
   };
@@ -262,7 +263,7 @@ export function saveGroupEdit() {
     name: geForm.name.trim() || '未命名',
     categoryId: geForm.catId,
     icon: geForm.icon.trim(),
-    attributes: { ...geForm.attrs, 'is-group': true },
+    attributes: { ...geForm.attrs, [ATTR_IS_GROUP]: true },
     updatedAt: Date.now()
   });
   saveAppData();

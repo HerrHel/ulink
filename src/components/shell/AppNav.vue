@@ -13,7 +13,7 @@
         class="rail-item"
         :class="{ active: curCat === cat.id }"
         :data-cat-id="cat.id"
-        :draggable="cat.id !== 'all' && cat.id !== 'uncategorized'"
+        :draggable="cat.id !== CAT_ALL && cat.id !== CAT_UNCATEGORIZED"
         @click="selectCat(cat.id)"
       >
         <span v-html="getCategoryIcon(cat.icon)"></span>
@@ -53,6 +53,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()

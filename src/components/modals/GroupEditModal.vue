@@ -17,8 +17,8 @@
         <div class="form-group">
           <label class="form-label">属性标记</label>
           <div class="check-group">
-            <label v-for="a in store.customAttributes" :key="a.id" class="check-chip" :class="{ 'is-system-attr': a.id === 'is-group' }">
-              <input type="checkbox" :checked="a.id === 'is-group' || !!geForm.attrs[a.id]" :disabled="a.id === 'is-group'" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
+            <label v-for="a in store.customAttributes" :key="a.id" class="check-chip" :class="{ 'is-system-attr': a.id === ATTR_IS_GROUP }">
+              <input type="checkbox" :checked="a.id === ATTR_IS_GROUP || !!geForm.attrs[a.id]" :disabled="a.id === ATTR_IS_GROUP" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
               {{ a.name }}
             </label>
           </div>
@@ -46,6 +46,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { favicon, domain } from '../../utils.js'
 import { I } from '../../config/icons.js'
+import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } from '../../composables/domain/useGroup.js'
 import { EditorManager } from '../../lib/editor.js'
 

@@ -7,6 +7,7 @@ import { toast } from './lib/toast.js'
 import DOMPurify from 'dompurify'
 import { nanoid } from 'nanoid'
 import type { Bookmark, SiblingGroup, CustomAttribute, Category } from './types.js'
+import { ATTR_IS_GROUP } from './config/constants.js'
 
 interface AppStore {
   categories: Category[]
@@ -68,7 +69,7 @@ export function isMobile(): boolean { return _isMobile }
 
 export function getTagNames(item: Bookmark | SiblingGroup, customAttributes: CustomAttribute[]): string[] {
   if (!item.attributes) return []
-  return customAttributes.filter(a => a.id !== 'is-group' && item.attributes[a.id]).map(a => a.name)
+  return customAttributes.filter(a => a.id !== ATTR_IS_GROUP && item.attributes[a.id]).map(a => a.name)
 }
 
 // ── 分类 ──

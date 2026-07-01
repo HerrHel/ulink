@@ -4,7 +4,7 @@
  * 从 app.js 拆分而来
  */
 import { defineStore } from 'pinia'
-import { CAT_ALL } from '../config/constants.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
@@ -387,7 +387,7 @@ export const useDataStore = defineStore('data', {
     deleteCategory(id: string) {
       const now = Date.now()
       this.bookmarks = this.bookmarks.map(b =>
-        b.categoryId === id ? { ...b, categoryId: 'uncategorized', updatedAt: now } : b
+        b.categoryId === id ? { ...b, categoryId: CAT_UNCATEGORIZED, updatedAt: now } : b
       )
       this.siblingGroups = this.siblingGroups.map(g =>
         g.categoryId === id ? { ...g, categoryId: 'uncategorized', updatedAt: now } : g

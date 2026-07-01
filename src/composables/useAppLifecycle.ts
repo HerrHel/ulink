@@ -10,6 +10,7 @@ import { useMentionStore } from '../stores/overlay.js'
 import { toast } from '../lib/toast.js'
 import { detectShareRoute } from './domain/useDataShare.js'
 import { loadData } from '../stores/persist.js'
+import { CAT_UNCATEGORIZED } from '../config/constants.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
 let _onShareRoute: ((gid: string) => void) | null = null
@@ -30,7 +31,7 @@ function _handleShareTarget(ds: ReturnType<typeof useDataStore>) {
     title: title.slice(0, 200),
     url,
     username: '', password: '', notes: '', icon: '',
-    categoryId: 'uncategorized', parentId: null,
+    categoryId: CAT_UNCATEGORIZED, parentId: null,
     order: ds.bookmarks.length, useCount: 0,
     attributes: {}, isExpanded: false,
     createdAt: now, updatedAt: now,

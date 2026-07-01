@@ -4,6 +4,7 @@
  */
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 import { BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
+import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 // ── 辅助函数 ──
 
@@ -142,7 +143,7 @@ export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {
     id: r.id, title: r.title, url: r.url,
     username: r.username || '', password: parsePassword(r.password),
     notes: r.notes || '', icon: r.icon || '',
-    categoryId: r.category_id || 'uncategorized',
+    categoryId: r.category_id || CAT_UNCATEGORIZED,
     parentId: r.parent_id || null,
     order: r.order || 0, useCount: r.use_count || 0,
     attributes: (r.attributes as Record<string, boolean>) || {},
@@ -156,7 +157,7 @@ export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {
 export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
   return _validateWith(SiblingGroupSchema, {
     id: r.id, name: r.name,
-    categoryId: r.category_id || 'uncategorized',
+    categoryId: r.category_id || CAT_UNCATEGORIZED,
     icon: r.icon || '', order: r.order || 0,
     isExpanded: r.is_expanded || false,
     attributes: (r.attributes as Record<string, boolean>) || {},
