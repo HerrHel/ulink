@@ -4,23 +4,7 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
-/app.js
-  Cache-Control: public, max-age=31536000, immutable
-/tiptap.js
-  Cache-Control: public, max-age=31536000, immutable
-/sortable.js
-  Cache-Control: public, max-age=31536000, immutable
-/dexie.js
-  Cache-Control: public, max-age=31536000, immutable
-/dompurify.js
-  Cache-Control: public, max-age=31536000, immutable
-/vue-vendor.js
-  Cache-Control: public, max-age=31536000, immutable
-/*.css
-  Cache-Control: public, max-age=31536000, immutable
-/*.svg
-  Cache-Control: public, max-age=31536000, immutable
-/*.woff2
+/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 /index.html
