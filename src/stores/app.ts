@@ -11,7 +11,6 @@ import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { AppDataSchema } from '../schemas.js'
-import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
 export const useAppStore = defineStore('app', () => {
@@ -139,7 +138,6 @@ export const useAppStore = defineStore('app', () => {
       // IDB 权威写入（含 localStorage 尽力缓存）
       persist.saveData(parsed.data)
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
-      try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
     },
 
     debouncedSave() {

@@ -2,7 +2,7 @@
  * useAppLifecycle — 应用生命周期管理
  * 从 useApp.js 拆分，职责单一：数据加载、UI 恢复、beforeunload 持久化。
  */
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { flushSaveAppData } from '../stores/app.js'
@@ -90,6 +90,12 @@ export function useAppLifecycle() {
     if (auth.isLoggedIn.value) {
       sync.initialSync().catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
     }
+
+    // 数据变更后自动触发云同步（从 app.ts save() 解耦过来的横切关注点）
+    const syncWatch = watch(() => ds._saveCount, () => {
+      try { useCloudSync().debouncedSync() } catch (_) { /* 未登录时忽略 */ }
+    })
+    cleanups.push(() => syncWatch())
 
     const flushAndSave = () => {
       flushSaveAppData()
