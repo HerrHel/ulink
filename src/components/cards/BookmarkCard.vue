@@ -8,7 +8,7 @@
     <div class="card-topline">
       <div class="card-toprow">
         <div class="card-logo" title="打开链接" @click.stop="visit">
-          <img v-if="iconSrc" :src="iconSrc" alt="" @error="($event.target as HTMLImageElement).classList.add('img-error')">
+          <img v-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
           <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
         </div>
         <div class="card-titlewrap" @dblclick.stop="visit">
@@ -106,6 +106,10 @@ function hlText(text: string, query: string): string {
   }
   if (last < text.length) parts.push(esc(text.slice(last)))
   return parts.join('')
+}
+
+function onImgError(e: Event) {
+  (e.target as HTMLImageElement).classList.add('img-error')
 }
 
 const props = defineProps({ bookmark: { type: Object as () => Bookmark, required: true } })
