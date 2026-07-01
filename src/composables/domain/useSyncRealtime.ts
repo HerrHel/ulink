@@ -50,12 +50,71 @@ async function _handleRealtimeChange(payload: any, type: EntityType) {
 
   const e2e = useE2E()
 
-  const HANDLERS = {
-    bookmark: { from: fromRemoteBookmark, upsert: (m: any) => { const i = ds.bookmarks.findIndex(b => b.id === m.id); if (i >= 0) ds.bookmarks[i] = { ...ds.bookmarks[i], ...m }; else ds.bookmarks = [...ds.bookmarks, m] } },
-    group: { from: fromRemoteGroup, upsert: (m: any) => { const i = ds.siblingGroups.findIndex(g => g.id === m.id); if (i >= 0) ds.siblingGroups[i] = { ...ds.siblingGroups[i], ...m }; else ds.siblingGroups = [...ds.siblingGroups, m] } },
-    category: { from: fromRemoteCategory, upsert: (m: any) => { const i = ds.categories.findIndex(c => c.id === m.id); if (i >= 0) ds.categories[i] = { ...ds.categories[i], ...m }; else ds.categories = [...ds.categories, m] } },
-    attribute: { from: fromRemoteAttribute, upsert: (m: any) => { const i = ds.customAttributes.findIndex(a => a.id === m.id); if (i >= 0) ds.customAttributes[i] = { ...ds.customAttributes[i], ...m }; else ds.customAttributes = [...ds.customAttributes, m] } },
-  } as const
+  const HANDLERS: Record<EntityType, { from: (row: any) => any; upsert: (m: any) => void }> = {
+    bookmark: {
+      from: fromRemoteBookmark,
+      upsert: (m: any) => {
+        if (ds.bookmarkMap[m.id]) {
+          const oldParentId = ds.bookmarks.find(b => b.id === m.id)?.parentId
+          const remoteUpdatedAt = m.updatedAt
+          ds.updateBookmark(m.id, m)
+          // 恢复远端 updatedAt，避免被 Date.now() 覆盖
+          const idx = ds.bookmarks.findIndex(b => b.id === m.id)
+          if (idx >= 0) ds.bookmarks[idx].updatedAt = remoteUpdatedAt
+          ds._bmMap[m.id] = ds.bookmarks[idx]
+          // parentId 变更时更新 _childrenIdx
+          if (oldParentId !== m.parentId) {
+            if (oldParentId) {
+              const sib = ds._childrenIdx[oldParentId]
+              if (sib) { const ci = sib.indexOf(m.id); if (ci >= 0) sib.splice(ci, 1) }
+            }
+            if (m.parentId) {
+              if (!ds._childrenIdx[m.parentId]) ds._childrenIdx[m.parentId] = []
+              if (ds._childrenIdx[m.parentId].indexOf(m.id) === -1) ds._childrenIdx[m.parentId].push(m.id)
+            }
+          }
+        } else {
+          ds.addBookmark(m)
+        }
+        // Realtime 变更来自远端，不清除会在下次 sync 重新推送回 Supabase
+        ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
+      },
+    },
+    group: {
+      from: fromRemoteGroup,
+      upsert: (m: any) => {
+        if (ds.groupMap[m.id]) {
+          const remoteUpdatedAt = m.updatedAt
+          ds.updateGroup(m.id, m)
+          const idx = ds.siblingGroups.findIndex(g => g.id === m.id)
+          if (idx >= 0) ds.siblingGroups[idx].updatedAt = remoteUpdatedAt
+          ds._grpMap[m.id] = ds.siblingGroups[idx]
+        } else {
+          ds.addGroup(m)
+        }
+        ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
+      },
+    },
+    category: {
+      from: fromRemoteCategory,
+      upsert: (m: any) => {
+        const i = ds.categories.findIndex(c => c.id === m.id)
+        if (i >= 0) ds.categories[i] = { ...ds.categories[i], ...m, updatedAt: m.updatedAt }
+        else ds.categories = [...ds.categories, m]
+        // category/attribute 没有完整 update action，直接重建索引
+        ds._catMap[m.id] = ds.categories.find(c => c.id === m.id)!
+      },
+    },
+    attribute: {
+      from: fromRemoteAttribute,
+      upsert: (m: any) => {
+        const i = ds.customAttributes.findIndex(a => a.id === m.id)
+        if (i >= 0) ds.customAttributes[i] = { ...ds.customAttributes[i], ...m, updatedAt: m.updatedAt }
+        else ds.customAttributes = [...ds.customAttributes, m]
+        ds._attrMap[m.id] = ds.customAttributes.find(a => a.id === m.id)!
+      },
+    },
+  }
 
   const h = HANDLERS[type]
   const mapped = h.from(row)
