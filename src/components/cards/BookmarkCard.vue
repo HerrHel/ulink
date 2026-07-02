@@ -38,7 +38,7 @@
       </div>
       <template v-if="bookmark.username || bookmark.password">
           <button class="card-acct-toggle" @click.stop="acctOpen = !acctOpen">
-            <span v-html="I.chevronDown"></span> 账户信息
+            <span aria-hidden="true" aria-hidden="true" v-html="I.chevronDown"></span> 账户信息
           </button>
         <div class="card-acct-body" :class="{ show: acctOpen || isExpanded }">
           <div class="acct-row" v-if="bookmark.username">
@@ -62,7 +62,7 @@
       <div class="card-preview" v-if="previewText">{{ previewText }}</div>
     </div>
     <div class="card-foot">
-      <span class="card-stat"><span v-html="I.click"></span> {{ bookmark.useCount || 0 }}次</span>
+      <span class="card-stat"><span aria-hidden="true" aria-hidden="true" v-html="I.click"></span> {{ bookmark.useCount || 0 }}次</span>
       <span class="card-actions">
         <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" title="添加子网站" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="edit" title="编辑" v-html="I.edit"></button>

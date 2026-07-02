@@ -6,7 +6,7 @@
         <span class="share-logo-text">LinkVault</span>
       </div>
       <button class="btn btn-ghost btn-sm" @click="backToApp">
-        <span v-html="I.back" class="sp-icon"></span>返回
+        <span aria-hidden="true" aria-hidden="true" v-html="I.back" class="sp-icon"></span>返回
       </button>
     </header>
 
@@ -16,7 +16,7 @@
     </div>
 
     <div v-else-if="error" class="share-error">
-      <span v-html="I.alert" class="share-error-icon"></span>
+      <span aria-hidden="true" aria-hidden="true" v-html="I.alert" class="share-error-icon"></span>
       <p>{{ error }}</p>
       <button class="btn btn-primary btn-sm" @click="backToApp">返回首页</button>
     </div>
@@ -50,7 +50,7 @@
             <span class="share-bm-url">{{ domain(b.url) }}</span>
             <p v-if="b.notes" class="share-bm-notes">{{ b.notes }}</p>
           </div>
-          <span v-html="I.external" class="share-bm-arrow"></span>
+          <span aria-hidden="true" aria-hidden="true" v-html="I.external" class="share-bm-arrow"></span>
         </a>
       </div>
     </template>

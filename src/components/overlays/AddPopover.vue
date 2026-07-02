@@ -36,7 +36,7 @@
           <div v-for="g in groupResults" :key="g.id" class="popover-result"
                @click="onSelectGroup(g.id)">
             <img v-if="g.icon" :src="g.icon" alt="" class="pr-img">
-            <span v-else class="pr-icon-fallback" v-html="I.note"></span>
+            <span v-else class="pr-icon-fallback" aria-hidden="true" v-html="I.note"></span>
             <span class="pr-name">{{ g.name || '未命名组' }}</span>
             <span class="pr-meta">{{ g.bookmarkIds?.length || 0 }} 个书签</span>
           </div>

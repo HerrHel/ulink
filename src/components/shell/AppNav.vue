@@ -34,12 +34,12 @@
     </div>
     <div class="rail-bottom">
       <button class="rail-item" id="btnManageCats" @click="openCatModalNav">
-        <span v-html="I.settings"></span>
+        <span aria-hidden="true" aria-hidden="true" v-html="I.settings"></span>
         管理分类
       </button>
       <button class="theme-toggle" @click="toggleTheme" aria-label="切换深浅色主题">
-        <span class="icon-sun" v-html="I.sun"></span>
-        <span class="icon-moon" v-html="I.moon"></span>
+        <span class="icon-sun" aria-hidden="true" v-html="I.sun"></span>
+        <span class="icon-moon" aria-hidden="true" v-html="I.moon"></span>
         切换主题
       </button>
     </div>

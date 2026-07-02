@@ -2,7 +2,7 @@
   <div class="cmd-mask" :class="{ open: visible }" @click.self="close">
     <div class="cmd-palette">
       <div class="cmd-input-wrap">
-        <span class="cmd-icon" v-html="I.search"></span>
+        <span class="cmd-icon" aria-hidden="true" v-html="I.search"></span>
         <input class="cmd-input" v-model="query" placeholder="搜索书签、组或输入命令…"
                ref="inputRef" @keydown="onKeydown" @input="onInput">
         <kbd class="cmd-kbd">Esc</kbd>

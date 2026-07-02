@@ -19,8 +19,8 @@
       </div>
       <div class="sp-divider"></div>
       <div class="sp-toggle-row" :class="{ active: uiStore.themeMode === 'auto' }" @click="onToggleAutoTheme">
-        <span v-html="I.sun" class="sp-icon auto-icon-sun"></span>
-        <span v-html="I.moon" class="sp-icon auto-icon-moon"></span>
+        <span aria-hidden="true" aria-hidden="true" v-html="I.sun" class="sp-icon auto-icon-sun"></span>
+        <span aria-hidden="true" aria-hidden="true" v-html="I.moon" class="sp-icon auto-icon-moon"></span>
         <span class="sp-toggle-label">跟随系统</span>
         <span class="sp-switch"></span>
       </div>
@@ -30,8 +30,8 @@
       <div class="sp-row">
         <span class="sp-row-label">视图</span>
         <div class="sp-seg">
-          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span v-html="I.grid"></span></button>
-          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span v-html="I.list"></span></button>
+          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span aria-hidden="true" aria-hidden="true" v-html="I.grid"></span></button>
+          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span aria-hidden="true" aria-hidden="true" v-html="I.list"></span></button>
         </div>
       </div>
     </div>
@@ -49,13 +49,13 @@
     <div class="sp-section">
       <div class="sp-actions">
         <button class="sp-action" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
-          <span v-html="I.radar"></span>
+          <span aria-hidden="true" aria-hidden="true" v-html="I.radar"></span>
           <span>{{ dlChecking ? '检测中...' : '检测死链' }}</span>
           <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
           <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
         </button>
         <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
-          <span v-html="I.link"></span>
+          <span aria-hidden="true" aria-hidden="true" v-html="I.link"></span>
           <span>查看</span>
         </button>
       </div>
@@ -120,9 +120,9 @@
     <div class="sp-section">
       <div class="sp-actions">
         <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
-        <button class="sp-action" @click.stop="onTriggerImport"><span v-html="I.import"></span>导入</button>
+        <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" aria-hidden="true" v-html="I.import"></span>导入</button>
         <div class="sp-export-wrap" @click.stop>
-          <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span v-html="I.export"></span>导出</button>
+          <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span aria-hidden="true" aria-hidden="true" v-html="I.export"></span>导出</button>
           <div v-if="exportMenuOpen" class="sp-export-menu">
             <button class="sp-export-item" @click="onExport('json')">
               <span class="sp-export-name">LinkVault 备份</span>
@@ -178,7 +178,7 @@
     <!-- Danger -->
     <div class="sp-section sp-danger">
       <button class="sp-danger-btn" @click.stop="onResetData">
-        <span v-html="I.trash"></span>重置所有数据
+        <span aria-hidden="true" aria-hidden="true" v-html="I.trash"></span>重置所有数据
       </button>
     </div>
   </div>

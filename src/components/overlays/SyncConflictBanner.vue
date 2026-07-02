@@ -3,11 +3,11 @@
     <Transition name="conflict-slide">
       <div v-if="sync.conflicts.value.length > 0 && !sync.conflictBannerDismissed.value" class="conflict-banner" role="alert">
         <div class="conflict-banner-head">
-          <span class="conflict-icon" v-html="I.alert"></span>
+          <span class="conflict-icon" aria-hidden="true" v-html="I.alert"></span>
           <span class="conflict-title">同步冲突 ({{ sync.conflicts.value.length }})</span>
           <span class="conflict-subtitle">本地和云端同时修改了以下数据</span>
           <button class="conflict-close" @click="sync.conflictBannerDismissed.value = true" title="暂时关闭">
-            <span v-html="I.close"></span>
+            <span aria-hidden="true" aria-hidden="true" v-html="I.close"></span>
           </button>
         </div>
         <div class="conflict-list">

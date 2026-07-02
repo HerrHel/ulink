@@ -25,7 +25,7 @@
     <div class="focus-toolbar-side">
       <button class="ft-sb-btn" :class="{ active: fmt.bold }" title="加粗" @click="fmtToggle('bold')"><strong>B</strong></button>
       <button class="ft-sb-btn" :class="{ active: fmt.underline }" title="下划线" @click="fmtToggle('underline')">
-        <span v-html="I.underline"></span>
+        <span aria-hidden="true" aria-hidden="true" v-html="I.underline"></span>
       </button>
       <span class="ft-color-wrap">
         <button ref="colorBtnRef" class="ft-sb-btn ft-color-btn" :class="{ active: !!fmt.color }" :style="fmt.color ? { '--ft-color': fmt.color } : {}" title="文字颜色" @click.stop="toggleColorPalette">

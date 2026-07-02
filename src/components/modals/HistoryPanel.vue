@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="版本历史" :class="{ open }" @click.self="emit('close')">
     <div class="modal modal-md">
       <div class="modal-head">
-        <span class="modal-title"><span v-html="I.history" class="sp-icon"></span>版本历史</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.history" class="sp-icon"></span>版本历史</span>
         <button class="modal-close" @click="emit('close')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body history-body">
@@ -51,7 +51,7 @@
             </div>
             <div class="history-item-actions">
               <button v-if="selectedIdx >= 0 && selectedIdx !== idx" class="btn btn-ghost btn-xs" @click="enterDiffMode(idx)" title="对比差异">
-                <span v-html="I.diff || '⇔'"></span> 对比
+                <span aria-hidden="true" v-html="I.diff || '⇔'"></span> 对比
               </button>
               <button class="btn btn-ghost btn-xs" @click="onRestore(v)">恢复此版本</button>
             </div>

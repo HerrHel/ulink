@@ -12,7 +12,7 @@
             <span class="flex-1">{{ uncategorizedCat.name }}</span>
           </div>
           <div v-for="cat in sortableList" :key="cat.id" class="cat-list-item" :data-cat-id="cat.id">
-            <span class="cat-drag-handle" v-html="I.grip"></span>
+            <span class="cat-drag-handle" aria-hidden="true" v-html="I.grip"></span>
             <template v-if="editingId === cat.id">
               <input class="form-input flex-1 form-input-sm" v-model="editingName" aria-label="分类名称" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
               <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名">✓</button>

@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="回收站" :class="{ open }" @click.self="emit('close')">
     <div class="modal modal-md">
       <div class="modal-head">
-        <span class="modal-title"><span v-html="I.trash" class="sp-icon"></span>回收站</span>
+        <span class="modal-title"><span aria-hidden="true" aria-hidden="true" v-html="I.trash" class="sp-icon"></span>回收站</span>
         <button class="modal-close" @click="emit('close')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body trash-body">
@@ -12,7 +12,7 @@
           <div v-if="ds.trashedBookmarks.length" class="trash-section">
             <div class="trash-section-title">书签 ({{ ds.trashedBookmarks.length }})</div>
             <div v-for="b in ds.trashedBookmarks" :key="b.id" class="trash-item">
-              <span class="trash-item-icon" v-html="I.link"></span>
+              <span class="trash-item-icon" aria-hidden="true" v-html="I.link"></span>
               <span class="trash-item-name">{{ b.title || b.url }}</span>
               <span class="trash-item-time">{{ formatTime(b.deletedAt) }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('bookmark', b.id)">恢复</button>
@@ -23,7 +23,7 @@
           <div v-if="ds.trashedGroups.length" class="trash-section">
             <div class="trash-section-title">组 ({{ ds.trashedGroups.length }})</div>
             <div v-for="g in ds.trashedGroups" :key="g.id" class="trash-item">
-              <span class="trash-item-icon" v-html="I.folder"></span>
+              <span class="trash-item-icon" aria-hidden="true" v-html="I.folder"></span>
               <span class="trash-item-name">{{ g.name || '未命名' }}</span>
               <span class="trash-item-time">{{ formatTime(g.deletedAt) }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('group', g.id)">恢复</button>
@@ -34,7 +34,7 @@
           <div v-if="ds.trashedCategories.length" class="trash-section">
             <div class="trash-section-title">分类 ({{ ds.trashedCategories.length }})</div>
             <div v-for="c in ds.trashedCategories" :key="c.id" class="trash-item">
-              <span class="trash-item-icon" v-html="I.tag"></span>
+              <span class="trash-item-icon" aria-hidden="true" v-html="I.tag"></span>
               <span class="trash-item-name">{{ c.name }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('category', c.id)">恢复</button>
               <button class="btn btn-ghost btn-xs text-danger" @click="permanent('category', c.id)">删除</button>
@@ -44,7 +44,7 @@
           <div v-if="ds.trashedAttributes.length" class="trash-section">
             <div class="trash-section-title">属性 ({{ ds.trashedAttributes.length }})</div>
             <div v-for="a in ds.trashedAttributes" :key="a.id" class="trash-item">
-              <span class="trash-item-icon" v-html="I.tag"></span>
+              <span class="trash-item-icon" aria-hidden="true" v-html="I.tag"></span>
               <span class="trash-item-name">{{ a.name }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('attribute', a.id)">恢复</button>
               <button class="btn btn-ghost btn-xs text-danger" @click="permanent('attribute', a.id)">删除</button>

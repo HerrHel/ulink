@@ -51,7 +51,7 @@
               <div class="acct-row" v-if="entry.data.password">
                 <span class="acct-label">密码</span>
                 <span class="acct-val">{{ isVisible(entry.rawId) ? (decodedPasswords[entry.rawId] || '') : '••••••' }}</span>
-                <button class="acct-show-pw" @click.stop="togglePw(entry.rawId)" title="显示"><span v-if="!isVisible(entry.rawId)" v-html="I.eye"></span><span v-else v-html="I.eyeOff"></span></button>
+                <button class="acct-show-pw" @click.stop="togglePw(entry.rawId)" title="显示"><span v-if="!isVisible(entry.rawId)" aria-hidden="true" v-html="I.eye"></span><span v-else aria-hidden="true" v-html="I.eyeOff"></span></button>
                 <button class="acct-copy-btn" @click.stop="copyText(decodedPasswords[entry.rawId] || '')" title="复制" v-html="I.copy"></button>
               </div>
             </div>

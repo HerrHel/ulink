@@ -5,7 +5,7 @@
       <div class="search-suggest-item" :class="{ active: idx === activeIdx }"
            role="option" :aria-selected="idx === activeIdx"
            @click="select(item)" @mouseenter="activeIdx = idx">
-        <span v-if="item._isGroup" class="ss-icon" v-html="I.note"></span>
+        <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
         <img v-else :src="favicon(item.url || '')" alt="">
         <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
         <span class="ss-url">{{ item._isGroup ? (item.bookmarkIds?.length || 0) + ' 个书签' : domain(item.url || '') }}</span>

@@ -14,14 +14,14 @@
         :class="{ 'ssp-btn-primary': state.level === 'error' || state.level === 'offline' }"
         @click="onRetry"
       >
-        <span v-html="I.refresh"></span>重试同步
+        <span aria-hidden="true" aria-hidden="true" v-html="I.refresh"></span>重试同步
       </button>
       <button
         v-if="state.level === 'conflict'"
         class="btn btn-ghost btn-sm ssp-btn"
         @click="onViewConflicts"
       >
-        <span v-html="I.alert"></span>查看冲突
+        <span aria-hidden="true" aria-hidden="true" v-html="I.alert"></span>查看冲突
       </button>
     </div>
   </div>
