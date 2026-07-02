@@ -43,7 +43,7 @@
     </div>
   </div>
   <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
-       role="article" :aria-label="group.name || '未命名组'"
+       role="listitem" :aria-label="group.name || '未命名组'"
        :data-group-id="group.id" :draggable="true" @click="onCardClick">
     <div class="group-card-accent"></div>
     <input v-if="ui.batchMode" type="checkbox" class="batch-chk"

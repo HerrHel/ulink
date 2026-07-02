@@ -1,6 +1,6 @@
 <template>
   <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode }"
-       role="article" :aria-label="bookmark.title"
+       role="listitem" :aria-label="bookmark.title"
        :data-id="bookmark.id" draggable="true" @click="onCardClick">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
             :id="'batchChk_' + bookmark.id" :checked="isSelected"

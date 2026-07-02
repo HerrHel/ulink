@@ -1,5 +1,5 @@
 <template>
-  <div :class="gridClass" id="cardGrid" ref="gridRef">
+  <div :class="gridClass" id="cardGrid" ref="gridRef" role="list">
     <template v-if="useVirtual">
       <div :style="{ height: totalHeight + 'px', position: 'relative' }">
         <GroupCard
