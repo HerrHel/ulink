@@ -26,9 +26,7 @@
             </div>
           </div>
           <div v-if="error" class="e2e-error">{{ error }}</div>
-          <div style="font-size:11px;color:var(--text-muted);border:1px dashed var(--border);padding:4px;margin-top:8px">
-            debug: pw.len={{ masterPw.length }}, pw2.len={{ masterPw2.length }}, step={{ step }}, disabled={{ masterPw.length < 8 }}
-          </div>
+          <div v-else-if="masterPw.length > 0 && masterPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">还需 {{ 8 - masterPw.length }} 位（至少 8 位）</div>
         </div>
 
         <div v-else-if="step === 2" class="e2e-step">

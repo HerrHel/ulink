@@ -228,6 +228,10 @@
   box-shadow:0 4px 16px var(--accent-glow);
   transform:translateY(-1px);
 }
+.btn-primary:disabled{
+  opacity:0.35;cursor:not-allowed;box-shadow:none;
+  transform:none;
+}
 .btn-primary:active{
   transform:translateY(0);
   box-shadow:0 1px 4px var(--accent-glow);
