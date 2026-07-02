@@ -102,8 +102,12 @@ function onNext() {
   error.value = ''
   if (masterPw.value.length < 8) { error.value = '主密码至少 8 位'; return }
   if (masterPw.value !== masterPw2.value) { error.value = '两次密码不一致'; return }
-  recoveryKey.value = e2e.generateRecoveryKey()
-  step.value = 2
+  try {
+    recoveryKey.value = e2e.generateRecoveryKey()
+    step.value = 2
+  } catch (e) {
+    error.value = '生成 Recovery Key 失败：' + (e instanceof Error ? e.message : String(e))
+  }
 }
 
 async function onComplete() {
