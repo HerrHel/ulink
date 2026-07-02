@@ -82,14 +82,14 @@
             <!-- Cloud Sync / Auth -->
             <div class="sp-section">
               <div class="sp-row">
-                <span class="sp-row-label"><span aria-hidden="true" v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
+                <span class="sp-row-label"><span aria-hidden="true" v-html="auth.isLoggedIn ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
                 <span class="sp-sync-status" :class="syncState.level">
                   <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
                 </span>
               </div>
-              <template v-if="auth.isLoggedIn.value">
+              <template v-if="auth.isLoggedIn">
                 <div class="sp-row">
-                  <span class="sp-user-email">{{ auth.userEmail.value }}</span>
+                  <span class="sp-user-email">{{ auth.userEmail }}</span>
                 </div>
                 <div class="sp-row sp-row-actions">
                   <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
@@ -114,7 +114,7 @@
                 </span>
               </div>
               <div class="sp-row">
-                <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn.value">（本机存储，登录云端后可跨设备）</span></span>
+                <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn">（本机存储，登录云端后可跨设备）</span></span>
               </div>
               <div class="sp-row sp-row-actions">
                 <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启加密</button>
@@ -289,7 +289,7 @@ onBeforeUnmount(() => document.removeEventListener('click', _closeExportMenu))
 function onResetData() { resetToDefaults(); uiStore.panels.settings = false }
 
 async function onOpenLogin() {
-  auth.authModalOpen.value = true
+  auth.authModalOpen = true
   uiStore.panels.settings = false
 }
 

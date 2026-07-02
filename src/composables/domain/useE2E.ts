@@ -10,6 +10,7 @@
  * - 加密密钥派生与管理（密钥缓存移至 e2eStore）
  * - 加密/解密字段辅助函数
  */
+import { computed } from 'vue'
 import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { supabase } from '../../lib/supabase.js'
@@ -65,7 +66,7 @@ function _getCanaryData(): Promise<Record<string, unknown> | null> {
   try {
     const auth = useAuth()
     if (!auth || !auth.user) return Promise.resolve(null)
-    const userId = auth.user.value?.id
+    const userId = auth.user?.id
     if (!userId) return Promise.resolve(null)
     return supabase.from('user_security')
       .select('master_canary')
@@ -83,7 +84,7 @@ function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> 
   _writeLocalCanary(canaryData)
   // 登录用户额外写云端（多设备共享）
   const { user } = useAuth()
-  const userId = user.value?.id
+  const userId = user?.id
   if (!userId) return Promise.resolve(true)
   return supabase.from('user_security').upsert({
     user_id: userId,
@@ -93,8 +94,8 @@ function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> 
 
 export function useE2E() {
   const e2eStore = useE2EStore()
-  const isE2EEnabled = e2eStore.isE2EEnabled
-  const isUnlocked = e2eStore.isUnlocked
+  const isE2EEnabled = computed(() => e2eStore.isE2EEnabled)
+  const isUnlocked = computed(() => e2eStore.isUnlocked)
 
   /** 获取缓存的密钥（仅在 isUnlocked=true 时有效） */
   function _getKey(): CryptoKey | null {
