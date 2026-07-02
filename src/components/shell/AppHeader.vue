@@ -96,7 +96,7 @@ const localQuery = ref(ui.searchQuery)
 let _searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(localQuery, (val) => {
   if (_searchTimer) clearTimeout(_searchTimer)
-  _searchTimer = setTimeout(() => { ui.searchQuery = val }, 300)
+  _searchTimer = setTimeout(() => { ui.searchQuery = val }, 150)
 })
 // store 被外部清空时（如退出聚焦），取消待执行的防抖并同步本地值
 watch(() => ui.searchQuery, (val) => {
