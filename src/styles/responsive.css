@@ -245,6 +245,38 @@
   .filter-row{height:auto;min-height:auto;max-height:none;padding:4px 10px;gap:4px}
 }
 
+/* ── Tablet: 769-900px ── */
+@media(min-width:769px) and (max-width:900px){
+  /* Narrower icon rail (icon strip) */
+  .icon-rail{width:58px;padding:8px 0}
+  .icon-rail .rail-logo span{display:none}
+  .icon-rail .rail-logo{padding:4px 0 0;justify-content:center}
+  .icon-rail .rail-section-label{display:none}
+  .icon-rail .rail-nav .rail-item,
+  .icon-rail .rail-bottom .rail-item,
+  .icon-rail .theme-toggle{
+    font-size:0;height:40px;justify-content:center;padding:0;
+  }
+  .icon-rail .rail-item .rail-count{display:none}
+  .icon-rail .rail-item > span{display:flex}
+  .icon-rail .rail-storage{display:none}
+  .icon-rail .rail-item.active::before{left:auto;right:0;width:3px;height:14px}
+  #resizeLeft{display:none!important}
+  .icon-rail .rail-bottom{border-top:none}
+
+  /* Compact header */
+  .panel-header{padding:0 14px}
+  .panel-content{padding:14px 14px 80px}
+
+  /* Detail panel: keep right sidebar but narrower */
+  .detail-panel.open{width:var(--detail-width,240px)}
+  .detail-inner{min-width:var(--detail-width,240px)}
+
+  /* Card grid: tighter */
+  .card-grid{gap:10px}
+  .card{height:210px;padding:14px 14px 8px}
+}
+
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:0.01ms!important;animation-delay:0s!important;transition-duration:0.01ms!important}
 }
