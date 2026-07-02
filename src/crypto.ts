@@ -47,7 +47,7 @@ export async function deriveKey(masterPassword: string, salt: Uint8Array): Promi
     'raw', _toBuffer(masterPassword), 'PBKDF2', false, ['deriveKey'],
   )
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: salt.buffer as ArrayBuffer, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -60,7 +60,7 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    { name: 'AES-GCM', iv },
     key,
     _toBuffer(plaintext),
   )
@@ -76,7 +76,7 @@ export async function decrypt(ciphertext: string, key: CryptoKey): Promise<strin
   const iv = new Uint8Array(_base64ToBuf(parts[1]))
   const data = _base64ToBuf(parts[2])
   const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    { name: 'AES-GCM', iv },
     key,
     data,
   )
@@ -113,7 +113,7 @@ export async function encryptPassword(plaintext: string, masterPassword: string)
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
   const key = await deriveKey(masterPassword, salt)
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv.buffer as ArrayBuffer },
+    { name: 'AES-GCM', iv },
     key,
     _toBuffer(plaintext),
   )
