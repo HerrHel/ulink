@@ -26,6 +26,9 @@
             </div>
           </div>
           <div v-if="error" class="e2e-error">{{ error }}</div>
+          <div style="font-size:11px;color:var(--text-muted);border:1px dashed var(--border);padding:4px;margin-top:8px">
+            debug: pw.len={{ masterPw.length }}, pw2.len={{ masterPw2.length }}, step={{ step }}, disabled={{ masterPw.length < 8 }}
+          </div>
         </div>
 
         <div v-else-if="step === 2" class="e2e-step">
