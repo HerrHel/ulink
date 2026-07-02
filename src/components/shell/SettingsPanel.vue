@@ -108,7 +108,7 @@
             <!-- E2E Encryption -->
             <div class="sp-section">
               <div class="sp-row">
-                <span class="sp-row-label"><span class="sp-icon">🔐</span>端到端加密</span>
+                <span class="sp-row-label"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span>端到端加密</span>
                 <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
                   {{ e2eEnabled ? (e2eUnlocked ? '已解锁' : '已锁定') : '未开启' }}
                 </span>
@@ -117,9 +117,9 @@
                 <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn.value">（本机存储，登录云端后可跨设备）</span></span>
               </div>
               <div class="sp-row sp-row-actions">
-                <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true">🔐 开启加密</button>
-                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eUnlock = true">🔓 解锁</button>
-                <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock">🔒 锁定</button>
+                <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启加密</button>
+                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eUnlock = true"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 解锁</button>
+                <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 锁定</button>
               </div>
             </div>
             <!-- Data -->

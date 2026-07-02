@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="开启端到端加密" :class="{ open }" @click.self="emit('close')">
     <div class="modal">
       <div class="modal-head">
-        <span class="modal-title">🔐 开启端到端加密</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启端到端加密</span>
         <button class="modal-close" @click="emit('close')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body">

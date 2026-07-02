@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="解锁数据" :class="{ open }" @click.self="onCancel">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title">🔐 解锁数据</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 解锁数据</span>
       </div>
       <div class="modal-body">
         <div class="e2e-info">
