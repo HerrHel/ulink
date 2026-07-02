@@ -19,26 +19,26 @@ const PBKDF2_ITERATIONS = 600000
 const SALT_LENGTH = 32
 const IV_LENGTH = 12
 
-function _toBuffer(str: string): ArrayBuffer {
-  return new TextEncoder().encode(str).buffer
+function _toBuffer(str: string): Uint8Array {
+  return new TextEncoder().encode(str)
 }
 
-function _fromBuffer(buf: ArrayBuffer): string {
+function _fromBuffer(buf): string {
   return new TextDecoder().decode(buf)
 }
 
-function _bufToBase64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf)
+function _bufToBase64(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
   let binary = ''
   for (const b of bytes) binary += String.fromCharCode(b)
   return btoa(binary)
 }
 
-function _base64ToBuf(b64: string): ArrayBuffer {
+function _base64ToBuf(b64: string): Uint8Array {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes.buffer
+  return bytes
 }
 
 /** PBKDF2 从主密码派生 AES-256 密钥 */
@@ -65,7 +65,7 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
     _toBuffer(plaintext),
   )
   // 格式: base64(salt) + "." + base64(iv) + "." + base64(ciphertext)
-  return _bufToBase64(salt.buffer) + '.' + _bufToBase64(iv.buffer) + '.' + _bufToBase64(encrypted)
+  return _bufToBase64(salt) + '.' + _bufToBase64(iv) + '.' + _bufToBase64(encrypted)
 }
 
 /** AES-256-GCM 解密 */
@@ -120,8 +120,8 @@ export async function encryptPassword(plaintext: string, masterPassword: string)
   return {
     encrypted: true,
     data: _bufToBase64(encrypted),
-    iv: _bufToBase64(iv.buffer),
-    salt: _bufToBase64(salt.buffer),
+    iv: _bufToBase64(iv),
+    salt: _bufToBase64(salt),
   }
 }
 
