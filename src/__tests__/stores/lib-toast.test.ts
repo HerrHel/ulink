@@ -10,7 +10,7 @@ describe('lib/toast', () => {
     toast('测试消息')
     const store = useToastStore()
     expect(store.toasts.length).toBe(1)
-    expect(store.toasts[0].html).toContain('测试消息')
+    expect(store.toasts[0].msg).toContain('测试消息')
   })
 
   it('toastWithUndo 委托给 store', () => {

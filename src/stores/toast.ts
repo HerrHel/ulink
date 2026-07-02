@@ -6,14 +6,12 @@
  */
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { I } from '../config/icons.js'
 import { TOAST_FADE_MS, TOAST_REMOVE_MS } from '../config/constants.js'
-import { esc } from '../utils.js'
 
 interface ToastItem {
   id: number
   ok: boolean
-  html: string
+  msg: string
   opacity: string
   transform: string
   transition: string
@@ -42,9 +40,8 @@ export const useToastStore = defineStore('toast', () => {
 
   function show(msg: string, ok = true) {
     const id = ++toastIdCounter
-    const html = (ok ? I.external : I.trash) + esc(msg)
     const item: ToastItem = {
-      id, ok, html,
+      id, ok, msg,
       opacity: '1', transform: '', transition: '',
     }
     toasts.value.push(item)
