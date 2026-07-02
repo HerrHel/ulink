@@ -1,191 +1,197 @@
 <template>
-  <div class="sp" v-show="uiStore.panels.settings">
-    <!-- Shortcut Help -->
-    <div class="sp-section">
-      <button class="sp-action" @click.stop="onOpenShortcutHelp">
-        <span v-html="shortcutIcon"></span>
-        <span>快捷键速查</span>
-        <kbd class="sp-action-kbd">Ctrl /</kbd>
-      </button>
-    </div>
-    <!-- Theme -->
-    <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label">主题</span>
-        <div class="sp-seg">
-          <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">效率</button>
-          <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">舒适</button>
-        </div>
-      </div>
-      <div class="sp-divider"></div>
-      <div class="sp-toggle-row" :class="{ active: uiStore.themeMode === 'auto' }" @click="onToggleAutoTheme">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.sun" class="sp-icon auto-icon-sun"></span>
-        <span aria-hidden="true" aria-hidden="true" v-html="I.moon" class="sp-icon auto-icon-moon"></span>
-        <span class="sp-toggle-label">跟随系统</span>
-        <span class="sp-switch"></span>
-      </div>
-    </div>
-    <!-- Layout -->
-    <div class="sp-section sp-section-layout">
-      <div class="sp-row">
-        <span class="sp-row-label">视图</span>
-        <div class="sp-seg">
-          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span aria-hidden="true" aria-hidden="true" v-html="I.grid"></span></button>
-          <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span aria-hidden="true" aria-hidden="true" v-html="I.list"></span></button>
-        </div>
-      </div>
-    </div>
-    <!-- Sort -->
-    <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label">排序</span>
-        <div class="sp-seg sp-seg-wrap">
-          <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn"
-                  :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ s.label }}</button>
-        </div>
-      </div>
-    </div>
-    <!-- Tools -->
-    <div class="sp-section">
-      <div class="sp-actions">
-        <button class="sp-action" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
-          <span aria-hidden="true" aria-hidden="true" v-html="I.radar"></span>
-          <span>{{ dlChecking ? '检测中...' : '检测死链' }}</span>
-          <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
-          <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
-        </button>
-        <div v-if="dlChecking && dl.progress.total > 0" class="sp-check-progress">
-          <div class="sp-check-progress-bar" :style="{ width: (dl.progress.done / dl.progress.total * 100) + '%' }"></div>
-          <span class="sp-check-progress-text">{{ dl.progress.done }}/{{ dl.progress.total }}</span>
-        </div>
-        <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
-          <span aria-hidden="true" aria-hidden="true" v-html="I.link"></span>
-          <span>查看</span>
-        </button>
-      </div>
-      <div class="sp-row">
-        <span class="sp-row-label">定时检测</span>
-        <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
-          <span class="sp-switch"></span>
-          <span class="sp-toggle-label">{{ dlAutoEnabled ? '每周自动检测' : '已关闭' }}</span>
-        </div>
-      </div>
-    </div>
-    <!-- Cloud Sync / Auth -->
-    <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label"><span v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
-        <span class="sp-sync-status" :class="syncState.level">
-          <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
-        </span>
-      </div>
-      <template v-if="auth.isLoggedIn.value">
-        <div class="sp-row">
-          <span class="sp-user-email">{{ auth.userEmail.value }}</span>
-        </div>
-        <div class="sp-row sp-row-actions">
-          <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
-        </div>
-        <div v-if="syncState.level === 'error' && sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
-      </template>
-      <template v-else>
-        <div class="sp-row">
-          <span class="sp-hint">登录后数据将自动同步到云端，多设备共享</span>
-        </div>
-        <div class="sp-row">
-          <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">登录 / 注册</button>
-        </div>
-      </template>
-    </div>
-    <!-- E2E Encryption（A3：下放给本地用户，不再依赖登录） -->
-    <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label"><span class="sp-icon">🔐</span>端到端加密</span>
-        <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
-          {{ e2eEnabled ? (e2eUnlocked ? '已解锁' : '已锁定') : '未开启' }}
-        </span>
-      </div>
-      <div class="sp-row">
-        <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn.value">（本机存储，登录云端后可跨设备）</span></span>
-      </div>
-      <div class="sp-row sp-row-actions">
-        <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true">
-          🔐 开启加密
-        </button>
-        <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eUnlock = true">
-          🔓 解锁
-        </button>
-        <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock">
-          🔒 锁定
-        </button>
-      </div>
-    </div>
-    <!-- Data -->
-    <div class="sp-section">
-      <div class="sp-actions">
-        <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
-        <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" aria-hidden="true" v-html="I.import"></span>导入</button>
-        <div class="sp-export-wrap" @click.stop>
-          <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span aria-hidden="true" aria-hidden="true" v-html="I.export"></span>导出</button>
-          <div v-if="exportMenuOpen" class="sp-export-menu">
-            <button class="sp-export-item" @click="onExport('json')">
-              <span class="sp-export-name">LinkVault 备份</span>
-              <span class="sp-export-hint">完整含组/分类 · .json</span>
-            </button>
-            <button class="sp-export-item" @click="onExport('html')">
-              <span class="sp-export-name">浏览器书签</span>
-              <span class="sp-export-hint">Chrome/Edge 通用 · .html</span>
-            </button>
-            <button class="sp-export-item" @click="onExport('csv')">
-              <span class="sp-export-name">CSV 表格</span>
-              <span class="sp-export-hint">不含账户密码 · .csv</span>
-            </button>
-            <button class="sp-export-item" @click="onExport('raindrop')">
-              <span class="sp-export-name">Raindrop.io</span>
-              <span class="sp-export-hint">迁入竞品 · .json</span>
-            </button>
+  <Teleport to="body">
+    <Transition name="drawer">
+      <div v-if="uiStore.panels.settings" class="settings-drawer-wrap" @click.self="uiStore.panels.settings = false">
+        <div class="settings-drawer" @click.stop>
+          <div class="settings-drawer-head">
+            <h2 class="settings-drawer-title">设置</h2>
+            <button class="modal-close" @click="uiStore.panels.settings = false" aria-label="关闭设置">&times;</button>
+          </div>
+          <div class="settings-drawer-body">
+            <!-- Shortcut Help -->
+            <div class="sp-section">
+              <button class="sp-action" @click.stop="onOpenShortcutHelp">
+                <span v-html="shortcutIcon"></span>
+                <span>快捷键速查</span>
+                <kbd class="sp-action-kbd">Ctrl /</kbd>
+              </button>
+            </div>
+            <!-- Theme -->
+            <div class="sp-section">
+              <div class="sp-row">
+                <span class="sp-row-label">主题</span>
+                <div class="sp-seg">
+                  <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">效率</button>
+                  <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">舒适</button>
+                </div>
+              </div>
+              <div class="sp-divider"></div>
+              <div class="sp-toggle-row" :class="{ active: uiStore.themeMode === 'auto' }" @click="onToggleAutoTheme">
+                <span aria-hidden="true" v-html="I.sun" class="sp-icon auto-icon-sun"></span>
+                <span aria-hidden="true" v-html="I.moon" class="sp-icon auto-icon-moon"></span>
+                <span class="sp-toggle-label">跟随系统</span>
+                <span class="sp-switch"></span>
+              </div>
+            </div>
+            <!-- Layout -->
+            <div class="sp-section sp-section-layout">
+              <div class="sp-row">
+                <span class="sp-row-label">视图</span>
+                <div class="sp-seg">
+                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span aria-hidden="true" v-html="I.grid"></span></button>
+                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span aria-hidden="true" v-html="I.list"></span></button>
+                </div>
+              </div>
+            </div>
+            <!-- Sort -->
+            <div class="sp-section">
+              <div class="sp-row">
+                <span class="sp-row-label">排序</span>
+                <div class="sp-seg sp-seg-wrap">
+                  <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn"
+                          :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ s.label }}</button>
+                </div>
+              </div>
+            </div>
+            <!-- Dead link checker -->
+            <div class="sp-section">
+              <div class="sp-actions">
+                <button class="sp-action" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
+                  <span aria-hidden="true" v-html="I.radar"></span>
+                  <span>{{ dlChecking ? '检测中...' : '检测死链' }}</span>
+                  <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
+                  <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
+                </button>
+                <div v-if="dlChecking && dl.progress.total > 0" class="sp-check-progress">
+                  <div class="sp-check-progress-bar" :style="{ width: (dl.progress.done / dl.progress.total * 100) + '%' }"></div>
+                  <span class="sp-check-progress-text">{{ dl.progress.done }}/{{ dl.progress.total }}</span>
+                </div>
+                <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
+                  <span aria-hidden="true" v-html="I.link"></span>
+                  <span>查看</span>
+                </button>
+              </div>
+              <div class="sp-row">
+                <span class="sp-row-label">定时检测</span>
+                <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
+                  <span class="sp-switch"></span>
+                  <span class="sp-toggle-label">{{ dlAutoEnabled ? '每周自动检测' : '已关闭' }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- Cloud Sync / Auth -->
+            <div class="sp-section">
+              <div class="sp-row">
+                <span class="sp-row-label"><span aria-hidden="true" v-html="auth.isLoggedIn.value ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
+                <span class="sp-sync-status" :class="syncState.level">
+                  <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
+                </span>
+              </div>
+              <template v-if="auth.isLoggedIn.value">
+                <div class="sp-row">
+                  <span class="sp-user-email">{{ auth.userEmail.value }}</span>
+                </div>
+                <div class="sp-row sp-row-actions">
+                  <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">退出登录</button>
+                </div>
+                <div v-if="syncState.level === 'error' && sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
+              </template>
+              <template v-else>
+                <div class="sp-row">
+                  <span class="sp-hint">登录后数据将自动同步到云端，多设备共享</span>
+                </div>
+                <div class="sp-row">
+                  <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">登录 / 注册</button>
+                </div>
+              </template>
+            </div>
+            <!-- E2E Encryption -->
+            <div class="sp-section">
+              <div class="sp-row">
+                <span class="sp-row-label"><span class="sp-icon">🔐</span>端到端加密</span>
+                <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
+                  {{ e2eEnabled ? (e2eUnlocked ? '已解锁' : '已锁定') : '未开启' }}
+                </span>
+              </div>
+              <div class="sp-row">
+                <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn.value">（本机存储，登录云端后可跨设备）</span></span>
+              </div>
+              <div class="sp-row sp-row-actions">
+                <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eSetup = true">🔐 开启加密</button>
+                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="uiStore.modals.e2eUnlock = true">🔓 解锁</button>
+                <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock">🔒 锁定</button>
+              </div>
+            </div>
+            <!-- Data -->
+            <div class="sp-section">
+              <div class="sp-actions">
+                <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
+                <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" v-html="I.import"></span>导入</button>
+                <div class="sp-export-wrap" @click.stop>
+                  <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span aria-hidden="true" v-html="I.export"></span>导出</button>
+                  <div v-if="exportMenuOpen" class="sp-export-menu">
+                    <button class="sp-export-item" @click="onExport('json')">
+                      <span class="sp-export-name">LinkVault 备份</span>
+                      <span class="sp-export-hint">完整含组/分类 · .json</span>
+                    </button>
+                    <button class="sp-export-item" @click="onExport('html')">
+                      <span class="sp-export-name">浏览器书签</span>
+                      <span class="sp-export-hint">Chrome/Edge 通用 · .html</span>
+                    </button>
+                    <button class="sp-export-item" @click="onExport('csv')">
+                      <span class="sp-export-name">CSV 表格</span>
+                      <span class="sp-export-hint">不含账户密码 · .csv</span>
+                    </button>
+                    <button class="sp-export-item" @click="onExport('raindrop')">
+                      <span class="sp-export-name">Raindrop.io</span>
+                      <span class="sp-export-hint">迁入竞品 · .json</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- History versions -->
+            <div class="sp-section">
+              <div class="sp-row">
+                <span class="sp-row-label">历史版本保留</span>
+                <span class="sp-range-value">{{ uiStore.historyMax }} 版</span>
+              </div>
+              <div class="sp-row">
+                <input type="range" class="sp-range" min="5" max="30" step="1"
+                       v-model.number="uiStore.historyMax" @change="onHistoryMaxChange">
+                <span class="sp-range-hint">5–30</span>
+              </div>
+            </div>
+            <!-- Feedback & Stats -->
+            <div class="sp-section">
+              <button class="sp-action" @click.stop="onFeedback">
+                <span v-html="'💬'"></span>反馈 / 建议
+                <span class="sp-action-kbd">GitHub</span>
+              </button>
+              <div class="sp-row">
+                <span class="sp-row-label">使用统计</span>
+                <span class="sp-sync-status ok" @click.stop="showStats = !showStats" style="cursor:pointer">
+                  {{ showStats ? '收起' : '查看' }}
+                </span>
+              </div>
+              <div v-if="showStats" class="sp-stats">
+                <div v-for="(label, key) in statsLabels" :key="key" class="sp-stat-row">
+                  <span class="sp-stat-label">{{ label }}</span>
+                  <span class="sp-stat-count">{{ statsData[key] || 0 }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- Danger -->
+            <div class="sp-section sp-danger">
+              <button class="sp-danger-btn" @click.stop="onResetData">
+                <span aria-hidden="true" v-html="I.trash"></span>重置所有数据
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <!-- History versions -->
-    <div class="sp-section">
-      <div class="sp-row">
-        <span class="sp-row-label">历史版本保留</span>
-        <span class="sp-range-value">{{ uiStore.historyMax }} 版</span>
-      </div>
-      <div class="sp-row">
-        <input type="range" class="sp-range" min="5" max="30" step="1"
-               v-model.number="uiStore.historyMax" @change="onHistoryMaxChange">
-        <span class="sp-range-hint">5–30</span>
-      </div>
-    </div>
-    <!-- Feedback & Stats -->
-    <div class="sp-section">
-      <button class="sp-action" @click.stop="onFeedback">
-        <span v-html="'💬'"></span>反馈 / 建议
-        <span class="sp-action-kbd">GitHub</span>
-      </button>
-      <div class="sp-row">
-        <span class="sp-row-label">使用统计</span>
-        <span class="sp-sync-status ok" @click.stop="showStats = !showStats" style="cursor:pointer">
-          {{ showStats ? '收起' : '查看' }}
-        </span>
-      </div>
-      <div v-if="showStats" class="sp-stats">
-        <div v-for="(label, key) in statsLabels" :key="key" class="sp-stat-row">
-          <span class="sp-stat-label">{{ label }}</span>
-          <span class="sp-stat-count">{{ statsData[key] || 0 }}</span>
-        </div>
-      </div>
-    </div>
-    <!-- Danger -->
-    <div class="sp-section sp-danger">
-      <button class="sp-danger-btn" @click.stop="onResetData">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.trash"></span>重置所有数据
-      </button>
-    </div>
-  </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

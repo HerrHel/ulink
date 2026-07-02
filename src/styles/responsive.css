@@ -122,12 +122,19 @@
   .detail-panel.open{width:var(--detail-width,280px)}
   .detail-inner{min-width:var(--detail-width,280px)}
 
-  /* === Settings panel: full-width dropdown === */
-  .sp{
-    position:fixed;top:auto;right:8px;left:8px;
-    width:auto;max-width:none;
-    max-height:70vh;overflow-y:auto;
-    border-radius:var(--radius-xl);
+  /* === Settings panel: bottom sheet on mobile === */
+  .settings-drawer{
+    margin-left:0;width:100%;max-width:none;
+    border-left:none;border-radius:var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow:0 -4px 24px rgba(0,0,0,0.15);
+    max-height:85vh;
+  }
+  .settings-drawer-wrap{
+    align-items:flex-end;
+  }
+  .drawer-enter-from .settings-drawer,
+  .drawer-leave-to .settings-drawer{
+    transform:translateY(100%);
   }
 
   /* === Hide layout mode toggle on mobile (locked to list) === */

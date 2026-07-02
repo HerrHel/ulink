@@ -1,20 +1,44 @@
-/* ==================== SETTINGS PANEL ==================== */
-.sp{
-  position:absolute;z-index:3000;
-  top:calc(100% + 4px);right:0;
-  width:280px;
-  background:var(--surface);
-  border:1px solid var(--border);
-  border-radius:var(--radius-xl);
-  box-shadow:var(--shadow-xl);
-  padding:6px;
-  animation:spIn 0.22s var(--ease-out);
-  -webkit-backdrop-filter:blur(20px);
-  backdrop-filter:blur(20px);
-  overflow:hidden;
+/* ==================== SETTINGS DRAWER ==================== */
+.settings-drawer-wrap{
+  position:fixed;inset:0;z-index:5000;
+  display:flex;
+  background:var(--overlay);
+  animation:maskIn 0.2s ease;
 }
-@keyframes spIn{from{opacity:0;transform:scale(0.94) translateY(-8px)}to{opacity:1;transform:scale(1) translateY(0)}}
-/* Sections */
+@keyframes maskIn{from{opacity:0}to{opacity:1}}
+.settings-drawer{
+  margin-left:auto;
+  width:340px;max-width:100vw;
+  background:var(--surface);
+  border-left:1px solid var(--border);
+  box-shadow:-8px 0 32px rgba(0,0,0,0.1);
+  display:flex;flex-direction:column;
+  transform:translateX(0);
+  transition:transform 0.25s var(--ease-out), opacity 0.2s ease;
+}
+.settings-drawer-head{
+  display:flex;align-items:center;gap:8px;
+  padding:14px 16px;
+  border-bottom:1px solid var(--border-light);
+  flex-shrink:0;
+}
+.settings-drawer-title{
+  flex:1;font-size:0.95rem;font-weight:700;color:var(--text);
+}
+.settings-drawer-body{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  padding:6px 8px 24px;
+  overscroll-behavior:contain;
+}
+
+/* Drawer animation */
+.drawer-enter-from .settings-drawer,
+.drawer-leave-to .settings-drawer{
+  transform:translateX(100%);
+  opacity:0;
+}
+.drawer-enter-from{background:transparent}
+.drawer-leave-to{background:transparent}
 .sp-section{
   padding:4px 0;
 }
