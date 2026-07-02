@@ -162,6 +162,13 @@ function onSwipeEnd() {
   const panel = detailPanelRef.value
   const panelHeight = panel ? panel.offsetHeight : 300
   if (translateY.value > panelHeight * 0.3) { ui.panels.detail = false; ui.detailCards.splice(0) }
+  _resetSwipe()
+}
+function onSwipeCancel() {
+  // touchcancel（来电/系统手势中断）时复位，避免残留状态
+  if (isSwiping.value || _swipeStartY) _resetSwipe()
+}
+function _resetSwipe() {
   translateY.value = 0
   isSwiping.value = false
   _swipeStartY = 0
@@ -173,6 +180,7 @@ onMounted(() => {
     el.addEventListener('touchstart', onSwipeStart, { passive: true })
     el.addEventListener('touchmove', onSwipeMove, { passive: false })
     el.addEventListener('touchend', onSwipeEnd)
+    el.addEventListener('touchcancel', onSwipeCancel)
   }
 })
 onUnmounted(() => {
@@ -181,6 +189,7 @@ onUnmounted(() => {
     el.removeEventListener('touchstart', onSwipeStart)
     el.removeEventListener('touchmove', onSwipeMove)
     el.removeEventListener('touchend', onSwipeEnd)
+    el.removeEventListener('touchcancel', onSwipeCancel)
   }
 })
 
