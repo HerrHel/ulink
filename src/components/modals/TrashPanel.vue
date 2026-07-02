@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="回收站" :class="{ open }" @click.self="emit('close')">
     <div class="modal modal-md">
       <div class="modal-head">
-        <span class="modal-title"><span aria-hidden="true" aria-hidden="true" v-html="I.trash" class="sp-icon"></span>回收站</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.trash" class="sp-icon"></span>回收站</span>
         <button class="modal-close" @click="emit('close')" aria-label="关闭">&times;</button>
       </div>
       <div class="modal-body trash-body">

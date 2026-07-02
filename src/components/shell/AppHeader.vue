@@ -2,7 +2,7 @@
   <header class="panel-header" @dblclick="onDblClick">
     <div class="header-left">
       <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" title="菜单" aria-label="菜单">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.hamburger"></span>
+        <span aria-hidden="true" v-html="I.hamburger"></span>
       </button>
       <!-- Focus mode -->
       <template v-if="ui.focusedGroupId && focusedGroup">
@@ -24,7 +24,7 @@
     </div>
     <div v-show="!ui.focusedGroupId" class="search-wrapper header-search">
       <div class="search-box">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.search"></span>
+        <span aria-hidden="true" v-html="I.search"></span>
         <input type="text" class="search-input" aria-label="搜索" id="searchInput" v-model="localQuery"
                placeholder="搜索…" autocomplete="off">
       </div>
@@ -32,19 +32,19 @@
     </div>
     <div class="header-right">
       <button class="search-toggle-btn" id="searchToggleBtn" title="搜索" aria-label="搜索">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.search"></span>
+        <span aria-hidden="true" v-html="I.search"></span>
       </button>
       <template v-if="ui.focusedGroupId">
         <button class="ft-sb-btn" @click="$emit('focus-edit-group')" title="编辑组" aria-label="编辑组">
-          <span aria-hidden="true" aria-hidden="true" v-html="I.edit"></span>
+          <span aria-hidden="true" v-html="I.edit"></span>
         </button>
         <button class="ft-sb-btn" @click="$emit('focus-share-group')" title="分享组" aria-label="分享组">
-          <span aria-hidden="true" aria-hidden="true" v-html="I.share"></span>
+          <span aria-hidden="true" v-html="I.share"></span>
         </button>
       </template>
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
         <button class="lt-btn" id="btnSettings" @click="toggleSettings" title="设置" aria-label="设置">
-            <span aria-hidden="true" aria-hidden="true" v-html="I.settings" class="icon-sm"></span>
+            <span aria-hidden="true" v-html="I.settings" class="icon-sm"></span>
         </button>
         <button
           v-if="auth.isLoggedIn.value"
@@ -60,7 +60,7 @@
         <SyncStatusPopover v-if="auth.isLoggedIn.value" />
       </span>
       <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" title="右侧辅助栏" aria-label="右侧辅助栏">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.panel" class="icon-sm"></span>
+        <span aria-hidden="true" v-html="I.panel" class="icon-sm"></span>
       </button>
     </div>
   </header>

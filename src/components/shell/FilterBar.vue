@@ -3,17 +3,17 @@
     <!-- Focus mode tools -->
     <span v-if="store.focusedGroupId" class="focus-tools">
       <button class="ft-sb-btn" @click="$emit('exit-focus')" title="返回">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.back"></span>
+        <span aria-hidden="true" v-html="I.back"></span>
       </button>
       <span class="focus-tools-spacer"></span>
       <button class="ft-sb-btn" :class="{ disabled: !focusCanUndo }" @mousedown.prevent @click.stop="$emit('focus-undo')" title="撤销">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.undo"></span>
+        <span aria-hidden="true" v-html="I.undo"></span>
       </button>
       <button class="ft-sb-btn" :class="{ disabled: !focusCanRedo }" @mousedown.prevent @click.stop="$emit('focus-redo')" title="重做">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.redo"></span>
+        <span aria-hidden="true" v-html="I.redo"></span>
       </button>
       <button class="ft-sb-btn" @click="$emit('focus-add-bm', $event)" title="添加书签或组">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.plus"></span>
+        <span aria-hidden="true" v-html="I.plus"></span>
       </button>
     </span>
     <!-- Normal tools -->
@@ -26,7 +26,7 @@
     </span>
     <span v-show="!store.focusedGroupId" class="add-wrap" id="addWrap" @click.stop>
       <button class="btn btn-primary btn-sm" id="btnAdd" @click="onAddClick" title="添加">
-        <span aria-hidden="true" aria-hidden="true" v-html="I.plus" class="icon-sm"></span>
+        <span aria-hidden="true" v-html="I.plus" class="icon-sm"></span>
       </button>
       <div class="add-dropdown ctx-menu" v-show="store.overlays.addDropdown">
         <button class="ctx-item" @click.stop="$emit('add-bookmark')">新建书签</button>
@@ -34,7 +34,7 @@
       </div>
     </span>
     <button v-show="!store.focusedGroupId" class="btn btn-secondary btn-sm" id="btnBatchHeader" :class="{ active: store.batchMode }" @click.stop="toggleBatch" title="批量管理">
-      <span aria-hidden="true" aria-hidden="true" v-html="I.listCheck" class="icon-sm"></span>
+      <span aria-hidden="true" v-html="I.listCheck" class="icon-sm"></span>
     </button>
   </div>
 </template>
