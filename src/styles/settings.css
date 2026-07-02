@@ -312,3 +312,23 @@
   font-family:inherit;font-weight:500;
 }
 
+/* ---- 死链检查进度条 ---- */
+.sp-check-progress{
+  position:relative;
+  height:4px;margin:0 10px 6px;
+  background:var(--border-light);
+  border-radius:2px;
+  overflow:hidden;
+}
+.sp-check-progress-bar{
+  position:absolute;left:0;top:0;height:100%;
+  background:var(--accent);
+  border-radius:2px;
+  transition:width 0.3s var(--ease-out);
+}
+.sp-check-progress-text{
+  position:absolute;right:0;top:-14px;
+  font-size:0.65rem;color:var(--text-muted);
+  font-variant-numeric:tabular-nums;
+}
+

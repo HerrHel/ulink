@@ -54,6 +54,10 @@
           <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
           <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
         </button>
+        <div v-if="dlChecking && dl.progress.total > 0" class="sp-check-progress">
+          <div class="sp-check-progress-bar" :style="{ width: (dl.progress.done / dl.progress.total * 100) + '%' }"></div>
+          <span class="sp-check-progress-text">{{ dl.progress.done }}/{{ dl.progress.total }}</span>
+        </div>
         <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
           <span aria-hidden="true" aria-hidden="true" v-html="I.link"></span>
           <span>查看</span>

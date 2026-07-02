@@ -100,7 +100,21 @@
 .header-sync-btn:hover{transform:scale(1.15)}
 .header-sync-btn.dot-ok{background:var(--emerald,#22c55e)}
 .header-sync-btn.dot-pending{background:var(--amber,#f59e0b)}
-.header-sync-btn.dot-syncing{background:var(--accent);animation:dot-pulse 1s ease-in-out infinite}
+.header-sync-btn.dot-syncing{
+  background:var(--accent);
+  animation:dot-pulse 1s ease-in-out infinite;
+  box-shadow:0 0 0 2px var(--accent-glow);
+}
+.header-sync-btn.dot-syncing::after{
+  content:'';position:absolute;
+  inset:-5px;border-radius:50%;
+  border:2px solid transparent;
+  border-top-color:var(--accent);
+  border-right-color:var(--accent);
+  animation:sync-spin .7s linear infinite;
+  pointer-events:none;
+}
+@keyframes sync-spin{to{transform:rotate(360deg)}}
 .header-sync-btn.dot-error{background:var(--rose,#ef4444)}
 .header-sync-btn.dot-conflict{background:var(--rose,#ef4444);animation:dot-pulse 1s ease-in-out infinite}
 .header-sync-btn.dot-offline{background:var(--text-muted,#9ca3af)}
