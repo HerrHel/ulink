@@ -254,7 +254,7 @@ describe('DataStore', () => {
         categories: [{ id: 'cat1' }],
         customAttributes: [{ id: 'attr1' }],
       }
-      store.importFromData(newData)
+      store.importFromData(newData as any)
       expect(store.bookmarks[0].id).toBe('new')
       expect(store.siblingGroups.some(g => g.id === 'g1')).toBe(true)
       expect(store.categories.some(c => c.id === 'cat1')).toBe(true)

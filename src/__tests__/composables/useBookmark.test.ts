@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { setActivePinia, createPinia } from "pinia"
+import { CAT_UNCATEGORIZED } from "../../config/constants.js"
 
 const mockData = {
   bookmarkMap: {} as any,
@@ -33,6 +34,7 @@ const mockData = {
 }
 
 const mockUI = {
+  curCat: 'all' as string,
   editingId: null as string | null,
   lastFocusedEl: null as HTMLElement | null,
   saveToGroup: null as string | null,
@@ -122,6 +124,7 @@ function resetMockStore() {
   mockUI.editingId = null
   mockUI.lastFocusedEl = null
   mockUI.saveToGroup = null
+  mockUI.curCat = 'all'
   mockUI.modals.bookmark = false
   mockToastWithUndo.undoFn = null
 }
@@ -144,6 +147,18 @@ describe('useBookmark', () => {
       expect(bmForm.title).toBe('')
       expect(bmForm.url).toBe('')
       expect(bmForm.id).toBe('')
+    })
+
+    it('new mode in 全部 view defaults categoryId to 未分类', () => {
+      mockUI.curCat = 'all'
+      openBmModal()
+      expect(bmForm.categoryId).toBe(CAT_UNCATEGORIZED)
+    })
+
+    it('new mode in a specific category inherits current curCat', () => {
+      mockUI.curCat = 'cat_work'
+      openBmModal()
+      expect(bmForm.categoryId).toBe('cat_work')
     })
 
     it('edit mode fills form data', () => {

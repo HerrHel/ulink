@@ -89,7 +89,7 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     // 匹配到自定义菜单项时始终阻止浏览器默认菜单
     function showCtx(type: string, id: string) {
       e.preventDefault()
-      onShowCtxMenu(e, type, id)
+      onShowCtxMenu!(e, type, id)
     }
 
     const subSitesEl = (e.target as HTMLElement).closest('.sub-sites')

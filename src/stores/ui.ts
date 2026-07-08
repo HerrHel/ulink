@@ -11,6 +11,15 @@ import { isMobile } from '../utils.js'
 // ── 严格字面量类型 ──
 export type ThemeStyle = 'premium' | 'comfortable'
 
+/** 排序模式（与 SettingsPanel 的 sortModes、_sortItems 一致） */
+export type SortMode = 'order' | 'recommend' | 'title' | 'dateDesc' | 'dateAsc' | 'useCount'
+
+/** 排序方向 */
+export type SortDir = 'asc' | 'desc'
+
+/** 布局模式 */
+export type LayoutMode = 'grid' | 'list'
+
 export interface ModalState {
   bookmark: boolean
   category: boolean

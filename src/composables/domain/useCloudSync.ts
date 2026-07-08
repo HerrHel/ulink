@@ -120,7 +120,11 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
 // 主 composable
 // ══════════════════════════════════════════════════════
 export function useCloudSync() {
-  const { isLoggedIn } = useAuth()
+  // 注意：useAuth() 返回 Pinia setup store 实例，其上 isLoggedIn（computed）会被 Pinia 自动解包为 boolean，
+  // 直接解构 `{ isLoggedIn }` 在 TS 类型层是 boolean、运行时是 ComputedRef —— 二者不一致。
+  // 用 computed 包装成统一的 ComputedRef<boolean>，类型与运行时一致且保持响应式。
+  const _auth = useAuth()
+  const isLoggedIn = computed(() => _auth.isLoggedIn)
   const syncStore = useSyncStore()
 
   const syncLabel = computed(() => {
@@ -261,13 +265,16 @@ export function useCloudSync() {
 
           if (isNew || !changedFields) {
             tasks.push(
-              Promise.resolve(supabase.from(op.table).upsert(row, { onConflict: 'id' }))
+              Promise.resolve(supabase.from(op.table).upsert(row as any, { onConflict: 'id' }))
                 .then(r => ({ op, result: r }))
             )
           } else {
             const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
             for (const f of changedFields) {
-              if (f in row && f !== 'id' && f !== 'user_id') partial[camelToSnake(f)] = row[f]
+              // TODO: f 为 camelCase（changedFields 源），row 为 snake_case 远端行；
+              // `f in row` 几乎永不命中，部分更新分支实际只推 id/user_id/updated_at_num。
+              // 运行逻辑修正需配合真实多字段增量同步的 E2E 验证，留待后续单独 PR。
+              if (f in row && f !== 'id' && f !== 'user_id') partial[camelToSnake(f)] = (row as unknown as Record<string, unknown>)[f]
             }
             const { id, ...updateData } = partial
             tasks.push(

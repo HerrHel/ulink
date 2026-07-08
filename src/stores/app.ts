@@ -32,7 +32,7 @@ export const useAppStore = defineStore('app', () => {
   // Helper: 可读写 computed，委托 uiStore
   const uiProp = <K extends keyof UIState>(key: K) => computed({
     get: () => ui()[key],
-    set: (v: UIState[K]) => { ui()[key] = v }
+    set: (v: UIState[K]) => { (ui() as any)[key] = v }
   })
 
   return {
@@ -53,7 +53,6 @@ export const useAppStore = defineStore('app', () => {
     activeAttrs: uiProp('activeAttrs'),
     excludedAttrs: uiProp('excludedAttrs'),
     detailCards: uiProp('detailCards'),
-    detailOpen: uiProp('detailOpen'),
     editingId: uiProp('editingId'),
     themeMode: uiProp('themeMode'),
     themeStyle: uiProp('themeStyle'),
@@ -71,8 +70,6 @@ export const useAppStore = defineStore('app', () => {
       get: () => ui().overlays,
       set: (v) => { ui().overlays = v },
     }),
-    trashPanelOpen: uiProp('trashPanelOpen'),
-    historyPanelOpen: uiProp('historyPanelOpen'),
     historyItemId: uiProp('historyItemId'),
     historyItemType: uiProp('historyItemType'),
     addToGid: uiProp('addToGid'),

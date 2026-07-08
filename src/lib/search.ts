@@ -19,7 +19,7 @@ type FuseResult = {
   item: BookmarkSearchItem | GroupSearchItem
   refIndex: number
   score?: number
-  matches?: Array<{
+  matches?: ReadonlyArray<{
     key?: string
     value?: string
     indices: ReadonlyArray<readonly [number, number]>
@@ -288,7 +288,7 @@ export function searchWithHighlights(
     id: r.item.id,
     title: (r.item as BookmarkSearchItem).title,
     url: (r.item as BookmarkSearchItem).url,
-    _highlights: _extractHighlights(r, BM_KEY_MAP),
+    _highlights: _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP),
   }))
 
   _ensureGroupBase(groups, bookmarkMap, customAttributes, version)
@@ -300,7 +300,7 @@ export function searchWithHighlights(
     _isGroup: true,
     _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
     bookmarkIds: groups.find(g => g.id === r.item.id)?.bookmarkIds,
-    _highlights: _extractHighlights(r, GRP_KEY_MAP),
+    _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
   }))
 
   if (!groupResults.length) return bookmarkResults.slice(0, maxResults)

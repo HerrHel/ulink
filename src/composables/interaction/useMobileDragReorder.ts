@@ -9,6 +9,7 @@
 import { onMounted, onUnmounted, type Ref, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { isMobile } from '../../utils.js'
 
@@ -253,7 +254,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
         const uiStore = useUIStore()
         if (uiStore.sortMode !== 'order') uiStore.sortMode = 'order'
         uiStore.saveUIState()
-        store.save()
+        saveAppData()
         toast('排序已更新')
       }
     }

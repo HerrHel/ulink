@@ -88,7 +88,7 @@ export function useAppLifecycle() {
     await auth.init()
     const sync = useCloudSync()
     sync.initOnlineListener()
-    if (auth.isLoggedIn.value) {
+    if (auth.isLoggedIn) {
       sync.initialSync().catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
     }
 

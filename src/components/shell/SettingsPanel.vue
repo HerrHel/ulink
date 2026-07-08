@@ -166,7 +166,7 @@
             <div class="sp-section">
               <button class="sp-action" @click.stop="onFeedback">
                 <span v-html="'💬'"></span>反馈 / 建议
-                <span class="sp-action-kbd">GitHub</span>
+                <span class="sp-action-kbd">邮箱</span>
               </button>
               <div class="sp-row">
                 <span class="sp-row-label">使用统计</span>
@@ -187,6 +187,24 @@
                 <span aria-hidden="true" v-html="I.trash"></span>重置所有数据
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 反馈 / 建议 弹窗：邮箱地址 + 打开邮箱客户端 / 复制邮箱 双按钮 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="feedbackOpen" class="modal-mask open" role="dialog" aria-modal="true" aria-label="反馈 / 建议" @click.self="feedbackOpen = false">
+        <div class="modal modal-sm">
+          <div class="modal-body modal-body-center">
+            <div class="confirm-msg">通过邮箱向我们反馈或建议</div>
+            <div class="sp-feedback-email" style="margin-top:12px;font-size:15px;word-break:break-all;">{{ FEEDBACK_EMAIL }}</div>
+          </div>
+          <div class="modal-foot confirm-foot">
+            <button class="btn btn-secondary" @click="copyFeedbackEmail">复制邮箱</button>
+            <button class="btn btn-primary" @click="openFeedbackMail">打开邮箱</button>
           </div>
         </div>
       </div>
@@ -339,8 +357,26 @@ const showStats = ref(false)
 const statsData = computed(() => getStats())
 const statsLabels = STAT_LABELS
 
+const FEEDBACK_EMAIL = '2629490959@qq.com'
+const feedbackOpen = ref(false)
+
 function onFeedback() {
-  window.open('https://github.com/h2629/LinkVault/issues', '_blank')
-  uiStore.panels.settings = false
+  feedbackOpen.value = true
+}
+
+async function copyFeedbackEmail() {
+  try {
+    await navigator.clipboard.writeText(FEEDBACK_EMAIL)
+    toast('邮箱地址已复制', true)
+  } catch {
+    // clipboard API 不可用（旧浏览器/非安全上下文）：提示手动选中复制
+    toast('复制失败，请手动选中邮箱地址复制', false)
+  }
+  feedbackOpen.value = false
+}
+
+function openFeedbackMail() {
+  window.open('mailto:' + FEEDBACK_EMAIL + '?subject=' + encodeURIComponent('LinkVault 反馈 / 建议'), '_blank')
+  feedbackOpen.value = false
 }
 </script>

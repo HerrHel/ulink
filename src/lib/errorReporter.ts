@@ -51,7 +51,7 @@ export function reportError(payload: ErrorPayload): void {
     user_agent: payload.user_agent || (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
   }
 
-  supabase.from('error_logs').insert(row).then(({ error }) => {
+  Promise.resolve(supabase.from('error_logs').insert(row)).then(({ error }) => {
     if (error) console.warn('[errorReporter] insert failed:', error)
   }).catch(() => {
     // 完全静默

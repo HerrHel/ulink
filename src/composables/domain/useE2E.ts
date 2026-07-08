@@ -68,10 +68,10 @@ function _getCanaryData(): Promise<Record<string, unknown> | null> {
     if (!auth || !auth.user) return Promise.resolve(null)
     const userId = auth.user?.id
     if (!userId) return Promise.resolve(null)
-    return supabase.from('user_security')
+    return Promise.resolve(supabase.from('user_security')
       .select('master_canary')
       .eq('user_id', userId)
-      .maybeSingle()
+      .maybeSingle())
       .then(res => res.data?.master_canary as Record<string, unknown> ?? null)
       .catch(() => null)
   } catch {
@@ -83,13 +83,13 @@ function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> 
   // 总是写本地
   _writeLocalCanary(canaryData)
   // 登录用户额外写云端（多设备共享）
-  const { user } = useAuth()
-  const userId = user?.id
+  const auth = useAuth()
+  const userId = auth.user?.id
   if (!userId) return Promise.resolve(true)
-  return supabase.from('user_security').upsert({
+  return Promise.resolve(supabase.from('user_security').upsert({
     user_id: userId,
     master_canary: canaryData,
-  }, { onConflict: 'user_id' }).then(r => !r.error).catch(() => false)
+  }, { onConflict: 'user_id' })).then(r => !r.error).catch(() => false)
 }
 
 export function useE2E() {
@@ -99,7 +99,9 @@ export function useE2E() {
 
   /** 获取缓存的密钥（仅在 isUnlocked=true 时有效） */
   function _getKey(): CryptoKey | null {
-    return e2eStore.cryptoKey
+    // e2e.ts 通过 readonly() 暴露 cryptoKey，TS 上其 usages 为 readonly KeyUsage[]，
+    // 与目标 CryptoKey（可变 KeyUsage[]）类型不兼容；这里只丢弃 readonly 标记，运行时无影响。
+    return e2eStore.cryptoKey as CryptoKey | null
   }
 
   /** 设置密钥到 Store 并启动定时器 */
@@ -144,6 +146,7 @@ export function useE2E() {
     const ok = await _saveCanaryData(canaryData)
     if (!ok) return false
 
+    e2eStore.setEnabled(true)
     _setKey(key)
     e2eStore.setUnlocked(true)
     e2eStore.initVisibilityLock()
@@ -174,6 +177,7 @@ export function useE2E() {
     })
     if (!ok2) return false
 
+    e2eStore.setEnabled(true)
     _setKey(newKey)
     e2eStore.setUnlocked(true)
     e2eStore.initVisibilityLock()

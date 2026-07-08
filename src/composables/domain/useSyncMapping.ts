@@ -2,7 +2,7 @@
  * useSyncMapping — 本地 <-> 远端数据映射
  * 从 useCloudSync 提取，纯数据转换函数
  */
-import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
 import { BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
@@ -74,6 +74,8 @@ export function toRemoteRow(type: 'bookmark', item: Record<string, unknown>, _is
 export function toRemoteRow(type: 'group', item: Record<string, unknown>, _isNew: boolean): RemoteGroupRow
 export function toRemoteRow(type: 'category', item: Record<string, unknown>, _isNew: boolean): RemoteCategoryRow
 export function toRemoteRow(type: 'attribute', item: Record<string, unknown>, _isNew: boolean): RemoteAttributeRow
+/** 联合实体类型：返回 RemoteRow 并集（调用方按需 narrow 或用索引访问） */
+export function toRemoteRow(type: EntityType, item: Record<string, unknown>, _isNew: boolean): RemoteRow
 export function toRemoteRow(type: string, item: Record<string, unknown>): RemoteRow {
   const now = Date.now()
   if (type === 'bookmark') {
@@ -132,7 +134,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
 function _validateWith<T>(schema: { safeParse: (data: unknown) => { success: boolean; error?: { issues: unknown[] } } }, item: T, label: string): T | null {
   const result = schema.safeParse(item)
   if (!result.success) {
-    console.warn(`[sync] 远端 ${label} 数据校验失败，已跳过:`, result.error.issues)
+    console.warn(`[sync] 远端 ${label} 数据校验失败，已跳过:`, result.error?.issues)
     return null
   }
   return item

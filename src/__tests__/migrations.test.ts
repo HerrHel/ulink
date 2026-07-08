@@ -59,8 +59,8 @@ describe('runMigrations', () => {
     const result = makeResult({
       bookmarks: d.bookmarks,
       customAttributes: [...d.customAttributes],
-    })
-    const needsPersist = runMigrations(d, result)
+    } as any)
+    const needsPersist = runMigrations(d as any, result as any)
     expect(result.customAttributes).toHaveLength(1)
     expect(result.customAttributes[0].id).toBe('attr-orig')
     // Bookmark attribute should be migrated to the kept attribute

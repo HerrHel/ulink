@@ -5,6 +5,9 @@
  * 通过 _editors 注册表访问由 GroupEditor.vue 创建的编辑器实例。
  */
 import type { Editor } from '@tiptap/core'
+// ── 副作用 import：触发 TipTap v3 extension 对 ChainedCommands 的类型 augmentation ──
+import '@tiptap/extension-bold'
+import '@tiptap/extension-heading'
 
 // ---------- Editor Registry ----------
 const _editors: Record<string, Editor> = {}
@@ -30,7 +33,7 @@ const editorManager: IEditorManager = {
   insertInlineCardHTML: function (gid: string, html: string): boolean { const ed = _editors[gid]; if (!ed) return false; try { ed.chain().insertContent(html).run(); return true } catch (_) { return false } },
 
   toggleBold: function (gid: string): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleBold().run() },
-  setHeading: function (gid: string, level: number): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleHeading({ level }).run() },
+  setHeading: function (gid: string, level: number): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleHeading({ level: level as any }).run() },
 
   deleteNode: function (gid: string, attrName: string, attrValue: string): void {
     const ed = _editors[gid]; if (!ed) return

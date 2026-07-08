@@ -23,7 +23,19 @@ function _toBuffer(str: string): Uint8Array {
   return new TextEncoder().encode(str)
 }
 
-function _fromBuffer(buf): string {
+/**
+ * 把 Uint8Array 转成 ArrayBuffer-backed 的 BufferSource。
+ * TS 5.7+ 把 TypedArray 泛型化后，`Uint8Array<ArrayBufferLike>` 含
+ * `SharedArrayBuffer`，不满足 Web Crypto 的 `BufferSource<ArrayBuffer>`；
+ * 用 .buffer.slice 复制成纯 ArrayBuffer-backed 视图以满足类型。
+ */
+function _bs(u: Uint8Array): ArrayBuffer {
+  // 本仓库所有 Uint8Array 均由 TextEncoder.encode / new Uint8Array(n) / getRandomValues 产生，
+  // 底层 buffer 实际恒为 ArrayBuffer（非 SharedArrayBuffer），安全断言。
+  return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer
+}
+
+function _fromBuffer(buf: ArrayBuffer | Uint8Array): string {
   return new TextDecoder().decode(buf)
 }
 
@@ -44,10 +56,10 @@ function _base64ToBuf(b64: string): Uint8Array {
 /** PBKDF2 从主密码派生 AES-256 密钥 */
 export async function deriveKey(masterPassword: string, salt: Uint8Array): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', _toBuffer(masterPassword), 'PBKDF2', false, ['deriveKey'],
+    'raw', _bs(_toBuffer(masterPassword)), 'PBKDF2', false, ['deriveKey'],
   )
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: _bs(salt), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -60,9 +72,9 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: _bs(iv) },
     key,
-    _toBuffer(plaintext),
+    _bs(_toBuffer(plaintext)),
   )
   // 格式: base64(salt) + "." + base64(iv) + "." + base64(ciphertext)
   return _bufToBase64(salt) + '.' + _bufToBase64(iv) + '.' + _bufToBase64(encrypted)
@@ -76,9 +88,9 @@ export async function decrypt(ciphertext: string, key: CryptoKey): Promise<strin
   const iv = new Uint8Array(_base64ToBuf(parts[1]))
   const data = _base64ToBuf(parts[2])
   const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: _bs(iv) },
     key,
-    data,
+    _bs(data),
   )
   return _fromBuffer(decrypted)
 }
@@ -113,9 +125,9 @@ export async function encryptPassword(plaintext: string, masterPassword: string)
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
   const key = await deriveKey(masterPassword, salt)
   const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: _bs(iv) },
     key,
-    _toBuffer(plaintext),
+    _bs(_toBuffer(plaintext)),
   )
   return {
     encrypted: true,

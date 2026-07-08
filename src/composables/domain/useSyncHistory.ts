@@ -10,8 +10,8 @@ import { useAuth } from './useAuth.js'
 import { fetchLocalHistory, getLocalHistoryVersion, type LocalHistoryVersion } from '../../stores/storage.js'
 
 export function _getUserId(): string | null {
-  const { user } = useAuth()
-  return user.value?.id ?? null
+  const auth = useAuth()
+  return auth.user?.id ?? null
 }
 
 /** 保存旧状态到云端版本历史（服务端触发器自动清理超过 10 条的旧版本） */

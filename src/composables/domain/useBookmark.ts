@@ -10,6 +10,7 @@ import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { safeDecodePassword, encrypt, decrypt } from '../../crypto.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
 
 interface BmFormState {
@@ -101,7 +102,7 @@ export async function openBmModal(editId?: string) {
     bmForm.username = bm?.username || ''
     bmForm.notes = bm?.notes || ''
     bmForm.icon = bm?.icon || ''
-    bmForm.categoryId = bm?.categoryId || ''
+    bmForm.categoryId = editId ? (bm?.categoryId || '') : (ui.curCat === CAT_ALL ? CAT_UNCATEGORIZED : ui.curCat)
     bmForm.parentId = bm?.parentId || null
     bmForm.attributes = bm?.attributes ? { ...bm.attributes } : {}
     bmForm.isEdit = !!editId
@@ -121,7 +122,7 @@ export async function openBmModal(editId?: string) {
         try {
           const ep = pw as EncryptedPassword
           const raw = ep.salt + '.' + ep.iv + '.' + ep.data
-          bmForm.password = await decrypt(raw, e2eStore.cryptoKey)
+          bmForm.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
         } catch {
           bmForm.password = ''
         }
@@ -168,7 +169,7 @@ export async function saveBm() {
   if (bmForm.password) {
     const e2eStore = useE2EStore()
     if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
-      const raw = await encrypt(bmForm.password, e2eStore.cryptoKey)
+      const raw = await encrypt(bmForm.password, e2eStore.cryptoKey as CryptoKey)
       const parts = raw.split('.')
       storedPassword = { encrypted: true, data: parts[2] || '', iv: parts[1] || '', salt: parts[0] || '' }
     } else {

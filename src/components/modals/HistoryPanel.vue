@@ -13,7 +13,7 @@
         <template v-else-if="diffMode">
           <div class="diff-header">
             <span class="diff-title">版本对比</span>
-            <button class="btn btn-ghost btn-xs" @click="exitDiffMode">返回列表</button>
+            <button class="btn btn-ghost btn-xs has-text" @click="exitDiffMode">返回列表</button>
           </div>
           <div v-if="diffFields.length === 0" class="history-empty">两个版本完全相同</div>
           <div v-else class="diff-list">
@@ -41,7 +41,7 @@
 
         <!-- 列表视图 -->
         <div v-else class="history-list">
-          <div v-for="(v, idx) in versions" :key="v.id" class="history-item">
+          <div v-for="(v, idx) in versions" :key="v.id" class="history-item" :class="{ 'is-selected': selectedIdx === idx }">
             <div class="history-item-check" v-if="versions.length > 1">
               <input type="radio" :name="'hist_' + itemId" :checked="selectedIdx === idx" @change="selectedIdx = idx">
             </div>
@@ -51,9 +51,9 @@
             </div>
             <div class="history-item-actions">
               <button v-if="selectedIdx >= 0 && selectedIdx !== idx" class="btn btn-ghost btn-xs" @click="enterDiffMode(idx)" title="对比差异">
-                <span aria-hidden="true" v-html="I.diff || '⇔'"></span> 对比
+                <span aria-hidden="true" v-html="I.diff || '⇔'"></span>对比
               </button>
-              <button class="btn btn-ghost btn-xs" @click="onRestore(v)">恢复此版本</button>
+              <button class="btn btn-xs" :class="selectedIdx === idx ? 'btn-primary' : 'btn-ghost'" @click="onRestore(v)">{{ selectedIdx === idx ? '恢复此版本' : '恢复' }}</button>
             </div>
           </div>
         </div>

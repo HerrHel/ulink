@@ -6,7 +6,7 @@ import { ref, nextTick } from 'vue'
 import { toast } from '../../lib/toast.js'
 
 interface InlineRenameStore {
-  [key: string]: ((...args: unknown[]) => void) | unknown
+  [key: string]: (...args: any[]) => void
   save: () => void
 }
 

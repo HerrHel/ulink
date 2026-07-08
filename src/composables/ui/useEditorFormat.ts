@@ -1,5 +1,14 @@
 import { reactive, ref } from 'vue'
 import type { Editor } from '@tiptap/core'
+// ── 副作用 import：触发 TipTap v3 extension 对 ChainedCommands 的类型 augmentation ──
+import '@tiptap/extension-bold'
+import '@tiptap/extension-underline'
+import '@tiptap/extension-heading'
+import '@tiptap/extension-bullet-list'
+import '@tiptap/extension-ordered-list'
+import '@tiptap/extension-task-list'
+import '@tiptap/extension-color'
+import '@tiptap/extension-text-style'
 
 export const PALETTE = [
   { hex: '#EF4444', name: '红' }, { hex: '#F97316', name: '橙' },

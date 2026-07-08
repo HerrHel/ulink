@@ -48,6 +48,7 @@ export function detectShareRoute(): string | null {
 
 export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]) {
   const ds = useDataStore()
+  const sync = useCloudSync()
   const now = Date.now()
 
   // 为所有书签和组生成新 ID（复制模式）

@@ -17,7 +17,7 @@ export function showActionSheet(items: { label: string; action: () => void; dang
 
 // ── Rail (Sidebar) ──
 export function toggleRail() { const ui = useUIStore(); ui.panels.rail = !ui.panels.rail }
-export function closeRail() { useUIStore().railOpen = false }
+export function closeRail() { useUIStore().panels.rail = false }
 
 // ── Detail Panel ──
 export function toggleDetailPanel() {
