@@ -28,19 +28,28 @@ export async function shareGroup(gid: string) {
     }
   }
 
-  const url = location.origin + location.pathname + '#share/' + gid
+  // 分享链接升级为 path 风格 /s/<gid> 主入口，并带 hash 兜底 #share/<gid>：
+  // - path 便于未来 SSR(Functions 可拦截)、URL 语义更清晰；
+  // - hash 兜底保证即便直 path 直达 fallback 失败，客户端 detectShareRoute 仍能解析。
+  // pathname.replace 去掉末段（首页空段或文件名），保留部署子路径前缀（如 /linkvault/）。
+  const base = location.pathname.replace(/\/[^/]*$/, '/') || '/'
+  const url = location.origin + base + 's/' + gid + '#share/' + gid
   copyToClipboard(url, '分享链接')
   incrementStat('share_group')
 }
 
-// ── 从 URL 导入分享数据（C3: 仅支持 #share/<id> 格式，废弃 base64）──
+// ── 从 URL 导入分享数据（path 风格 /s/<id> 优先，hash #share/<id> 向后兼容）──
 
 export function detectShareRoute(): string | null {
+  // 1) path 风格：/s/<gid>（路由末段）
+  const m = location.pathname.match(/\/s\/([a-zA-Z0-9_-]+)\/?$/)
+  if (m) return m[1]
+  // 2) hash 兜底：#share/<gid>（向后兼容旧链接 + 新链接里的 hash 兜底段）
   const hash = location.hash
-  if (!hash) return null
-  // #share/<id>
-  const match = hash.match(/^#share\/([a-zA-Z0-9_-]+)$/)
-  if (match) return match[1]
+  if (hash) {
+    const match = hash.match(/^#share\/([a-zA-Z0-9_-]+)$/)
+    if (match) return match[1]
+  }
   return null
 }
 

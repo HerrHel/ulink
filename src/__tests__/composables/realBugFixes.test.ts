@@ -2,7 +2,7 @@
  * 真实 bug 回归测试 — 验证被类型错误掩盖的 6 处运行 bug 已修复。
  * 每个测试聚焦一处修复点的运行时行为，而非类型层。
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 // ── supabase mock（useE2E / useCloudSync / useSyncHistory 依赖）──
@@ -113,5 +113,51 @@ describe('useDataShare.forkPublicGroup', () => {
     // 修复前：ReferenceError 静默吞，fork 后不会触发 fullSync
     expect(__csMocks.fullSyncSpy).toHaveBeenCalled()
     expect(ds.bookmarks.length).toBeGreaterThan(before)
+  })
+})
+
+// ──────────────────────────────────────────────────────────────
+// 6. useDataShare.detectShareRoute — path 风格 /s/<gid> 优先，hash #share/<gid> 兼容
+// ──────────────────────────────────────────────────────────────
+describe('useDataShare.detectShareRoute', () => {
+  const _origLoc = (globalThis as any).location
+  function mockLoc(p: { pathname: string; hash?: string; origin?: string }) {
+    Object.defineProperty(window, 'location', {
+      value: { ...(window as any).location, pathname: p.pathname, hash: p.hash || '', origin: p.origin || 'https://x', search: '' },
+      configurable: true,
+    })
+  }
+  afterEach(() => {
+    if (_origLoc) Object.defineProperty(window, 'location', { value: _origLoc, configurable: true })
+  })
+
+  it('path 风格 /s/<gid> 解析出 gid', async () => {
+    mockLoc({ pathname: '/linkvault/s/abc123_-' })
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('abc123_-')
+  })
+
+  it('path 末尾带斜杠也能解析', async () => {
+    mockLoc({ pathname: '/linkvault/s/xyz/' })
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('xyz')
+  })
+
+  it('hash 兼容旧链接 #share/<gid>', async () => {
+    mockLoc({ pathname: '/linkvault/', hash: '#share/oldGid' })
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('oldGid')
+  })
+
+  it('path 与 hash 同存时 path 优先', async () => {
+    mockLoc({ pathname: '/linkvault/s/p', hash: '#share/q' })
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('p')
+  })
+
+  it('无 path 无 hash 时返回 null', async () => {
+    mockLoc({ pathname: '/linkvault/', hash: '' })
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBeNull()
   })
 })
