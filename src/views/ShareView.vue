@@ -86,7 +86,7 @@ function getIcon(icon: string) { return getCategoryIcon(icon) }
 function backToApp() {
   // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识
   cleanupInjectedHead()
-  setCanonical('https://herrhel.github.io/linkvault/')
+  setCanonical('https://herrhel.github.io/')
   const base = location.pathname.replace(/\/s\/.*$/, '/') || '/'
   history.replaceState(null, '', base + location.search)
   emit('close')
@@ -132,7 +132,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cleanupInjectedHead()
-  setCanonical('https://herrhel.github.io/linkvault/')
+  setCanonical('https://herrhel.github.io/')
 })
 
 /**

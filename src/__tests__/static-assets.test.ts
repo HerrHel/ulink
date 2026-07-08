@@ -12,7 +12,7 @@ describe('robots.txt', () => {
     const txt = fs.readFileSync(path.join(root, 'public', 'robots.txt'), 'utf8')
     expect(txt).toMatch(/User-agent:\s*\*/)
     expect(txt).toMatch(/Allow:\s*\//)
-    expect(txt).toContain('Sitemap: https://herrhel.github.io/linkvault/sitemap.xml')
+    expect(txt).toContain('Sitemap: https://herrhel.github.io/sitemap.xml')
   })
 })
 
@@ -20,7 +20,7 @@ describe('sitemap.xml', () => {
   it('存在且含首页 URL', () => {
     const xml = fs.readFileSync(path.join(root, 'public', 'sitemap.xml'), 'utf8')
     expect(xml).toContain('<urlset')
-    expect(xml).toContain('https://herrhel.github.io/linkvault/')
+    expect(xml).toContain('https://herrhel.github.io/')
   })
 })
 

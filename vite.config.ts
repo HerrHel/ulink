@@ -112,6 +112,38 @@ function purgeCssPlugin(): Plugin {
   };
 }
 
+/**
+ * Vite 插件：build 后把已落盘的 dist/index.html 复制为 dist/404.html，
+ * 作 GitHub Pages SPA fallback。
+ * GitHub Pages 对未知路径命中 404 时返回仓库根 404.html（官方支持），
+ * 使 /s/<gid> 等直达路径能自举 SPA：浏览器加载 404.html → main.ts 挂载 →
+ * useAppLifecycle.onMounted.detectShareRoute() 解析当前 URL → ShareView 渲染。
+ * 注：响应状态码仍为 404（无 SSR 约束下的固有限制），彻底解决需后续 SSR/Functions 轮。
+ */
+function spa404Plugin(): Plugin {
+  return {
+    name: 'gh-pages-spa-404-fallback',
+    apply: 'build',
+    async writeBundle(opts) {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const outDir = typeof opts.dir === 'string' ? opts.dir : path.resolve(process.cwd(), 'dist');
+      const src = path.join(outDir, 'index.html');
+      const dest = path.join(outDir, '404.html');
+      try {
+        const html = await fs.promises.readFile(src, 'utf8');
+        const note = '<!-- GitHub Pages SPA fallback（由 vite spa404Plugin 生成；勿手动编辑）。 -->\n';
+        await fs.promises.writeFile(dest, note + html, 'utf8');
+        // eslint-disable-next-line no-console
+        console.log('[spa404] generated dist/404.html from index.html');
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[spa404] failed to generate 404.html:', (e as Error).message);
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -159,7 +191,8 @@ export default defineConfig({
       }
     }),
     purgeCssPlugin(),
-    headersPlugin()],
+    headersPlugin(),
+    spa404Plugin()],
   root: '.',
   build: {
     outDir: 'dist',
