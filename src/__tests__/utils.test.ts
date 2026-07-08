@@ -5,7 +5,7 @@ import { safeAtob } from '../crypto.js'
 describe('utils', () => {
   describe('esc', () => {
     it('should escape HTML entities', () => {
-      expect(esc('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert("xss")&lt;/script&gt;')
+      expect(esc('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;')
     })
     it('should handle normal text', () => {
       expect(esc('hello world')).toBe('hello world')
@@ -16,8 +16,21 @@ describe('utils', () => {
     it('should escape ampersands', () => {
       expect(esc('a & b')).toBe('a &amp; b')
     })
-    it('should escape quotes', () => {
-      expect(esc('"hello"')).toBe('"hello"')
+    it('should escape double quotes (S1: attribute-context safe)', () => {
+      expect(esc('"hello"')).toBe('&quot;hello&quot;')
+    })
+    it('should escape single quotes (S1: attribute-context safe)', () => {
+      expect(esc("'hello'")).toBe('&#39;hello&#39;')
+    })
+    it('should escape an attribute-injection XSS payload (S1)', () => {
+      // payload 意在闭合 src="..." 后注入 onerror；esc 必须转义 " 使其无法闭合属性
+      const payload = 'x" onerror="alert(1)'
+      const out = esc(payload)
+      expect(out).toBe('x&quot; onerror=&quot;alert(1)')
+      expect(out).not.toContain('"')
+    })
+    it('should escape angle brackets and ampersand together', () => {
+      expect(esc('<a href="x">')).toBe('&lt;a href=&quot;x&quot;&gt;')
     })
   })
 
@@ -48,6 +61,22 @@ describe('utils', () => {
     })
     it('should trim whitespace', () => {
       expect(fixUrl('  example.com  ')).toBe('https://example.com')
+    })
+    // S1：危险 scheme 一律返回空串，杜绝 javascript:alert(1) 等跨用户 XSS
+    it('should reject javascript: scheme (S1)', () => {
+      expect(fixUrl('javascript:alert(1)')).toBe('')
+    })
+    it('should reject data: scheme (S1)', () => {
+      expect(fixUrl('data:text/html,<script>alert(1)</script>')).toBe('')
+    })
+    it('should reject vbscript: scheme (S1)', () => {
+      expect(fixUrl('vbscript:msgbox(1)')).toBe('')
+    })
+    it('should reject mixed-case JAVASCRIPT: scheme (S1)', () => {
+      expect(fixUrl('JaVaScRiPt:alert(1)')).toBe('')
+    })
+    it('should reject scheme with leading whitespace (S1)', () => {
+      expect(fixUrl('  javascript:alert(1)  ')).toBe('')
     })
   })
 

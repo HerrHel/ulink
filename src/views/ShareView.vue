@@ -39,8 +39,14 @@
       </div>
 
       <div class="share-bookmarks">
-        <a v-for="b in bookmarks" :key="b.id" :href="fixUrl(b.url)" target="_blank" rel="noopener"
-           class="share-bookmark-card">
+        <!-- S1：fixUrl 对 javascript:/data: 等危险 scheme 返回空串，此时降级为 '#'
+             并 @click.prevent 阻止跳到页内锚点；b.url 来自跨用户公开数据，不可信。 -->
+        <a v-for="b in bookmarks" :key="b.id"
+           :href="fixUrl(b.url) || '#'"
+           :target="fixUrl(b.url) ? '_blank' : '_self'"
+           :rel="fixUrl(b.url) ? 'noopener' : null"
+           :class="['share-bookmark-card', { 'share-bookmark-card--disabled': !fixUrl(b.url) }]"
+           @click="!fixUrl(b.url) ? $event.preventDefault() : null">
           <div class="share-bm-icon">
             <img v-if="b.icon" :src="b.icon" @error="($event.target as HTMLImageElement).style.display='none'" />
             <span v-else class="share-bm-icon-fallback">{{ (b.title || '?')[0].toUpperCase() }}</span>

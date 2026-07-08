@@ -73,10 +73,16 @@ export const bmForm = reactive<BmFormState>({
 
 export function openBookmark(bm: Bookmark) {
   if (!bm?.url) return
+  // S1：fixUrl 对 javascript:/data: 等危险 scheme 返回空串，此时阻止弹窗导航并提示。
+  const safeUrl = fixUrl(bm.url)
+  if (!safeUrl) {
+    toast('该链接地址不安全，已阻止打开', false)
+    return
+  }
   const ds = useDataStore()
   ds.updateBookmark(bm.id, { useCount: (bm.useCount || 0) + 1 })
   debouncedSaveAppData()
-  window.open(fixUrl(bm.url), '_blank')
+  window.open(safeUrl, '_blank')
 }
 
 export function visit(e: Event | null, id?: string) {

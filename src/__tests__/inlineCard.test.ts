@@ -25,6 +25,29 @@ describe('inlineCardHTML', () => {
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;script&gt;')
   })
+  it('should neutralize event-attribute injection in id/title/icon via esc (S1)', () => {
+    // 攻击者把双引号塞进 id/title/icon，企图闭合属性后注入 onmouseover/onerror/onfocus
+    const bm = {
+      id: 'x" onmouseover="alert(1)',
+      title: 'y" onfocus="alert(2)',
+      url: 'https://test.com',
+      icon: 'z" onerror="alert(3)',
+    } as any
+    const html = inlineCardHTML(bm)
+    // 用真实 DOM 解析断言：转义后的引号无法闭合属性，事件处理器不会成为独立属性
+    const el = document.createElement('div')
+    el.innerHTML = html
+    const card = el.firstElementChild as HTMLElement
+    expect(card).not.toBeNull()
+    // 关键：card 上不应出现任何事件处理器属性
+    expect(card.getAttribute('onmouseover')).toBeNull()
+    expect(card.getAttribute('onerror')).toBeNull()
+    expect(card.getAttribute('onfocus')).toBeNull()
+    // data-bm-id 里 "被反转义为文本，而不是边界
+    expect(card.getAttribute('data-bm-id')).toBe('x" onmouseover="alert(1)')
+    const img = card.querySelector('img') as HTMLImageElement
+    expect(img.getAttribute('onerror')).toBeNull()
+  })
 })
 
 describe('groupRefCardHTML', () => {

@@ -24,11 +24,31 @@ export function favicon(url: string, customIcon?: string): string {
   const dm = domain(url)
   return dm ? 'https://api.xinac.net/icon/?url=' + dm : ''
 }
-export function fixUrl(u: string): string { u = u.trim(); if (!u) return u; if (/^https?:\/\//i.test(u)) return u; return 'https://' + u }
+export function fixUrl(u: string): string {
+  // S1：协议白名单。仅放行 http/https；其余带 scheme（javascript:/data:/vbscript: 等）
+  // 一律视为无效并返回空串，避免拼接 https:// 后又把 javascript: 当相对路径导航。
+  const trimmed = u.trim()
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  // 命中其它可导航 scheme（scheme:... 形态）一律拒绝，杜绝 javascript:alert(1) 等 XSS
+  if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:/i.test(trimmed)) return ''
+  return 'https://' + trimmed
+}
 
 // ── HTML / 文本 ──
 
-export function esc(s: string): string { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
+// S1：esc 同时转义 & < > " '，使其在「属性值（双引号/单引号）」与「文本节点」两种
+// 上下文都安全 —— 调用方会把结果拼进 src="..." / HREF="..." 等属性，仅转义 & < > 不足以
+// 阻断引号闭合后的属性注入（如 bm.url = 'x" onerror=...'）。
+// 显式映射，不依赖 textContent→innerHTML 的引号转义行为（各运行时实现可能不一致）。
+export function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
 
 const _purifyConfig = {
   ADD_TAGS: ['details', 'summary'],
