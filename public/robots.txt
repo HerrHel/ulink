@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# 分享直达路径 /s/<gid> 在 GitHub Pages 上命中 404.html SPA fallback（无 SSR/无 Functions），
+# 状态码仍为 404，不主动 allow 以免鼓励爬虫大量抓取 404；依赖站外自然链接被发现。
+# 如需彻底放开 /s/ 并返回 200，后续需引入 SSR/Functions 轮。
+
+Sitemap: https://herrhel.github.io/sitemap.xml
