@@ -92,6 +92,18 @@ vi.mock('../ui/useIconPreview.js', () => ({
   previewIconUrl: vi.fn(),
   clearIcon: vi.fn(),
 }))
+// S6：可控的 E2E store mock —— saveBm 的密码分支依赖 isE2EEnabled / isUnlocked / cryptoKey
+vi.mock('../../stores/e2e.js', () => ({
+  useE2EStore: vi.fn(() => mockE2E),
+}))
+
+// S6 测试用的 E2E 状态容器；测试内可调整 isE2EEnabled/isUnlocked/cryptoKey 触发不同分支
+const mockE2E = {
+  isE2EEnabled: false,
+  isUnlocked: false,
+  cryptoKey: null as CryptoKey | null,
+}
+
 
 import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo } from '../../composables/domain/useBookmark.js'
 
@@ -127,6 +139,10 @@ function resetMockStore() {
   mockUI.curCat = 'all'
   mockUI.modals.bookmark = false
   mockToastWithUndo.undoFn = null
+  // S6：每个测试重置 E2E 状态到默认（未启用），避免上一个用例污染
+  mockE2E.isE2EEnabled = false
+  mockE2E.isUnlocked = false
+  mockE2E.cryptoKey = null
 }
 
 describe('useBookmark', () => {
@@ -292,6 +308,49 @@ describe('useBookmark', () => {
       saveBm()
       const newBm = mockData.addBookmark.mock.calls[0][0]
       expect(newBm.password).toBe('')
+    })
+    // S6：E2E 已启用但未解锁时，带密码的书签必须被阻止保存，禁止走 btoa(明文) 降级
+    it('S6: blocks saving password when E2E enabled but not unlocked', async () => {
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'Should Not Save'
+      bmForm.url = 'https://e2elocked.com'
+      bmForm.password = 'secret-pw'
+      await vi.waitFor(async () => { await saveBm() })
+      // 不应调用 addBookmark / updateBookmark
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(mockData.updateBookmark).not.toHaveBeenCalled()
+      // 应有错误 toast
+      const { toast } = await import('../../lib/toast.js')
+      expect(toast).toHaveBeenCalledWith(expect.stringContaining('解锁'), false)
+    })
+
+    it('S6: empty password still allowed when E2E enabled but not unlocked', async () => {
+      // E2E 启用但未解锁、且本次未填密码 —— 不应被拦截（无明文需保护）
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'No Password'
+      bmForm.url = 'https://e2enopw.com'
+      bmForm.password = ''
+      await vi.waitFor(async () => { await saveBm() })
+      expect(mockData.addBookmark).toHaveBeenCalledTimes(1)
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      expect(newBm.password).toBe('')
+    })
+
+    it('S6: E2E disabled still falls back to base64 (legacy compatibility)', async () => {
+      // E2E 未启用时，密码仍走旧版 base64 —— 不受 S6 拦截影响
+      mockE2E.isE2EEnabled = false
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'Legacy'
+      bmForm.url = 'https://legacy2.com'
+      bmForm.password = 'plaintext-pw'
+      await vi.waitFor(async () => { await saveBm() })
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      expect(newBm.password).toBe(btoa('plaintext-pw'))
     })
   })
 

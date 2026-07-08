@@ -82,7 +82,14 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
     _bs(_toBuffer(plaintext)),
   )
   // 格式: base64(salt) + "." + base64(iv) + "." + base64(ciphertext)
-  return _bufToBase64(salt) + '.' + _bufToBase64(iv) + '.' + _bufToBase64(encrypted)
+  const out = _bufToBase64(salt) + '.' + _bufToBase64(iv) + '.' + _bufToBase64(encrypted)
+  // S6：防御性校验 —— base64 字母表不含 "."，输出必须恰好 3 段；若不是，说明基础假设被打破，
+  // 立即抛错而非返回可被误解析的密文（saveBm 依赖此契约走 EncryptedPassword 切片）。
+  const parts = out.split('.')
+  if (parts.length !== 3 || parts.some(p => !p)) {
+    throw new Error('加密输出格式异常：期望 salt.iv.data 三段')
+  }
+  return out
 }
 
 /** AES-256-GCM 解密 */

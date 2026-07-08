@@ -106,6 +106,18 @@ describe('E2E Encryption', () => {
       const result = await decrypt('not-encrypted', key)
       expect(result).toBe('not-encrypted')
     })
+
+    it('S6: encrypt output is always salt.iv.data with no empty segments', async () => {
+      // encrypt 契约：saveBm 依赖 split 后严格 3 段且每段非空
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey(MASTER_PW, salt)
+      const out = await encrypt('contract-test-payload', key)
+      const parts = out.split('.')
+      expect(parts).toHaveLength(3)
+      parts.forEach((p) => expect(p.length).toBeGreaterThan(0))
+      // 任一段都不应再含 "." —— 防止 saveBm 切片越界
+      parts.forEach((p) => expect(p).not.toContain('.'))
+    })
   })
 
   describe('generateCanary/verifyCanary', () => {

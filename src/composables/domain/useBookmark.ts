@@ -170,15 +170,33 @@ export async function saveBm() {
 
   const title = bmForm.title.trim() || domain(url)
 
-  // 密码：E2E 解锁时使用 AES-256-GCM 加密，否则 base64 编码（旧版兼容）
+  // 密码处理：
+  // - E2E 已启用且已解锁 → AES-256-GCM 加密
+  // - E2E 已启用但未解锁 且 密码非空 → S6 阻断：禁止走 btoa(明文) 降级，提示先解锁
+  // - E2E 未启用 → base64（旧版兼容，明文非 E2E 场景的预期形态）
   let storedPassword: string | EncryptedPassword = ''
   if (bmForm.password) {
     const e2eStore = useE2EStore()
     if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
-      const raw = await encrypt(bmForm.password, e2eStore.cryptoKey as CryptoKey)
-      const parts = raw.split('.')
-      storedPassword = { encrypted: true, data: parts[2] || '', iv: parts[1] || '', salt: parts[0] || '' }
+      // S6：encrypt 已严格保证输出为 salt.iv.data 三段；这里与之对齐，做契约校验。
+      try {
+        const raw = await encrypt(bmForm.password, e2eStore.cryptoKey as CryptoKey)
+        const parts = raw.split('.')
+        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+          toast('密码加密失败：输出格式异常，已取消保存', false)
+          return
+        }
+        storedPassword = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
+      } catch {
+        toast('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+        return
+      }
+    } else if (e2eStore.isE2EEnabled) {
+      // S6：E2E 启用但未解锁 —— 禁止 btoa 明文降级，守住「已加密」预期
+      toast('请先解锁 E2E 再保存带密码的书签', false)
+      return
     } else {
+      // E2E 未启用：旧版兼容的 base64（非加密场景的预期形态）
       storedPassword = btoa(bmForm.password)
     }
   }
