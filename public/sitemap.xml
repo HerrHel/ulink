@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  无 SSR/无后端，无法枚举所有公开分享组（is_public=true 的 SiblingGroup 存于 Supabase），
+  故仅静态列出确定存在的首页。动态 /s/<gid> 列表需后续 SSR/Functions 轮生成。
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://herrhel.github.io/linkvault/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

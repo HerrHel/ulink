@@ -6,18 +6,43 @@
 <meta name="theme-color" content="#122E8A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<title>LinkVault</title>
+<!-- 若部署路径变更需同步更新 canonical/og:url/sitemap -->
+<title>LinkVault — 个人书签管理器</title>
+<meta name="description" content="LinkVault 是一个支持云同步与端到端加密的个人书签管理器，可公开分享书签组供他人查看与收藏。">
+<link rel="canonical" href="https://herrhel.github.io/linkvault/">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LinkVault">
+<meta property="og:title" content="LinkVault — 个人书签管理器">
+<meta property="og:description" content="支持云同步与端到端加密的个人书签管理器，可公开分享书签组。">
+<meta property="og:url" content="https://herrhel.github.io/linkvault/">
+<meta property="og:locale" content="zh_CN">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="LinkVault — 个人书签管理器">
+<meta name="twitter:description" content="支持云同步与端到端加密的个人书签管理器。">
+<!-- 应用级结构化数据（静态，不随分享页变化；分享页动态注入 ItemList） -->
+<script type="application/ld+json" data-lv-jsonld="app">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "LinkVault",
+  "applicationCategory": "ProductivityApplication",
+  "operatingSystem": "Web",
+  "description": "个人书签管理器，支持云同步与端到端加密、公开分享书签组。",
+  "url": "https://herrhel.github.io/linkvault/",
+  "inLanguage": "zh-CN"
+}
+</script>
 
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>">
 
-<!-- 预连接第三方域名 -->
+<!-- 预连接：仅保留字体源（favicon 域名非首屏关键路径，移除以释放连接槽） -->
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://api.xinac.net" crossorigin>
 
 <!-- DNS 预解析 -->
 <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-<link rel="dns-prefetch" href="https://api.xinac.net">
 
 <link href="/fonts/fonts.css" rel="stylesheet">
 <!-- Google Fonts（异步加载，消除首屏阻塞） -->
