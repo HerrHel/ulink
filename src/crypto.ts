@@ -24,15 +24,20 @@ function _toBuffer(str: string): Uint8Array {
 }
 
 /**
- * 把 Uint8Array 转成 ArrayBuffer-backed 的 BufferSource。
- * TS 5.7+ 把 TypedArray 泛型化后，`Uint8Array<ArrayBufferLike>` 含
- * `SharedArrayBuffer`，不满足 Web Crypto 的 `BufferSource<ArrayBuffer>`；
- * 用 .buffer.slice 复制成纯 ArrayBuffer-backed 视图以满足类型。
+ * 把 Uint8Array 规整为 Web Crypto 可接受的 BufferSource。
+ *
+ * 两路约束冲突的折中：
+ * - 运行时：Node 24 / CI 的 SubtleCrypto 拒绝由 TypedArray 派生的 ArrayBuffer
+ *   （.buffer.slice 出来的 ArrayBuffer-instanceof 检测会失败），但接受
+ *   TypedArray 本身。故运行时必须返回 Uint8Array。
+ * - 类型层：TS 5.7+ 把 TypedArray 泛型化，`Uint8Array<ArrayBufferLike>`
+ *   含 SharedArrayBuffer，不满足 `BufferSource<ArrayBuffer>`，TS 报错。
+ *
+ * 因此运行时 `new Uint8Array(u)` 拷贝一份（底层必为纯 ArrayBuffer），
+ * 类型上断言为 ArrayBuffer 以满足 Web Crypto 的 BufferSource 约束。
  */
 function _bs(u: Uint8Array): ArrayBuffer {
-  // 本仓库所有 Uint8Array 均由 TextEncoder.encode / new Uint8Array(n) / getRandomValues 产生，
-  // 底层 buffer 实际恒为 ArrayBuffer（非 SharedArrayBuffer），安全断言。
-  return u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer
+  return new Uint8Array(u) as unknown as ArrayBuffer
 }
 
 function _fromBuffer(buf: ArrayBuffer | Uint8Array): string {
