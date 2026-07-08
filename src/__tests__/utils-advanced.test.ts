@@ -19,16 +19,58 @@ describe('sanitizeHTML', () => {
     expect(result).not.toContain('<iframe>')
   })
 
-  it('should allow details/summary tags', () => {
-    const result = sanitizeHTML('<details><summary>Click</summary><p>Content</p></details>')
-    expect(result).toContain('<details>')
-    expect(result).toContain('<summary>')
+  it('should remove details/summary tags (S5: 白名单不含 details，杜绝 <details ontoggle>)', () => {
+    const result = sanitizeHTML('<details ontoggle="alert(1)" open><summary>Click</summary><p>Content</p></details>')
+    expect(result).not.toContain('<details')
+    expect(result).not.toContain('<summary')
+    expect(result).not.toContain('ontoggle')
+    // 内层 p 仍保留
+    expect(result).toContain('<p>Content</p>')
   })
 
-  it('should allow contenteditable and draggable attrs', () => {
+  it('should strip contenteditable/draggable attrs (S5: 展示侧无需，且防止语义劫持)', () => {
     const result = sanitizeHTML('<span contenteditable="false" draggable="true">Test</span>')
-    expect(result).toContain('contenteditable')
-    expect(result).toContain('draggable')
+    expect(result).not.toContain('contenteditable')
+    expect(result).not.toContain('draggable')
+    // span 本体与文本保留
+    expect(result).toContain('Test')
+  })
+
+  it('should neutralize javascript: href on <a> (S5)', () => {
+    const result = sanitizeHTML('<a href="javascript:alert(1)">click</a>')
+    expect(result).not.toContain('javascript:')
+    // 经 ALLOWED_URI_REGEXP 过滤后 href 被移除
+    expect(result).not.toContain('href=')
+  })
+
+  it('should force rel="noopener noreferrer nofollow" and target="_blank" on <a> (S5)', () => {
+    const result = sanitizeHTML('<a href="https://example.com">x</a>')
+    expect(result).toContain('rel="noopener noreferrer nofollow"')
+    expect(result).toContain('target="_blank"')
+  })
+
+  it('should strip data: URI in any allowed attribute (S5)', () => {
+    const result = sanitizeHTML('<p><a href="data:text/html,<script>alert(1)</script>">x</a></p>')
+    expect(result).not.toContain('data:')
+    expect(result).not.toContain('<script')
+  })
+
+  it('should remove <img> with event attrs (S5: 白名单不含 img)', () => {
+    const result = sanitizeHTML('<img src="x" onerror="alert(1)">')
+    expect(result).not.toContain('<img')
+    expect(result).not.toContain('onerror')
+  })
+
+  it('should remove nested <style> (S5)', () => {
+    const result = sanitizeHTML('<style>body{background:url(javascript:alert(1))}</style><p>x</p>')
+    expect(result).not.toContain('<style')
+    expect(result).not.toContain('javascript:')
+  })
+
+  it('should keep class attr on span (S5: 内联卡片/高亮依赖)', () => {
+    const result = sanitizeHTML('<span class="card-hl">highlighted</span>')
+    expect(result).toContain('class="card-hl"')
+    expect(result).toContain('highlighted')
   })
 
   it('should remove onerror handler', () => {

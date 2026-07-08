@@ -50,12 +50,28 @@ export function esc(s: string): string {
     .replace(/'/g, "&#39;")
 }
 
+// S5：DOMPurify 改为白名单策略。notes 经 v-html 渲染（DetailPanel/GroupCard），
+// 且 group.notes 来自跨用户公开数据（fetchPublicGroup），必须白名单清洗，杜绝
+// <details ontoggle>、<a href="javascript:">、<img src="data:"> 等事件/协议注入。
 const _purifyConfig = {
-  ADD_TAGS: ['details', 'summary'],
-  ADD_ATTR: ['contenteditable', 'draggable', 'data-bm-id', 'data-gid', 'data-group-id'],
-  FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'base', 'form', 'input', 'textarea', 'select'],
-  FORBID_ATTR: ['onerror', 'onload'],
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote', 'a', 'code', 'pre', 'hr', 'span'],
+  ALLOWED_ATTR: ['class', 'href', 'target', 'rel'],
+  ALLOWED_URI_REGEXP: /^https?:\/\//i,
+  FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select', 'svg', 'math'],
 }
+
+// S5：afterSanitizeAttributes 钩子，对所有 <a> 强制注入安全 rel 与 target，
+// 阻断 javascript:/data: 经 href 注入，并防止 tab-opener 攻击。
+// 幂等注册：先移除再添加，避免 HMR 重复加载导致 hook 叠加。
+DOMPurify.removeAllHooks()
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.nodeName.toLowerCase() === 'a') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer nofollow')
+    // 若 href 被 ALLOWED_URI_REGEXP 过滤为空，移除 href 本身防点击空锚
+    if (!node.getAttribute('href')) node.removeAttribute('href')
+  }
+})
 
 export function sanitizeHTML(html: string): string {
   return DOMPurify.sanitize(html, _purifyConfig)
