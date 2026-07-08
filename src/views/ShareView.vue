@@ -58,10 +58,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import { forkPublicGroup } from '../composables/domain/useDataShare.js'
+import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
 import { I } from '../config/icons.js'
 import { fixUrl, domain } from '../utils.js'
 import { getCategoryIcon } from '../config/icons.js'
@@ -83,7 +84,11 @@ const isLoggedIn = auth.isLoggedIn
 function getIcon(icon: string) { return getCategoryIcon(icon) }
 
 function backToApp() {
-  history.replaceState(null, '', location.pathname + location.search)
+  // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识
+  cleanupInjectedHead()
+  setCanonical('https://herrhel.github.io/linkvault/')
+  const base = location.pathname.replace(/\/s\/.*$/, '/') || '/'
+  history.replaceState(null, '', base + location.search)
   emit('close')
 }
 
@@ -115,12 +120,55 @@ onMounted(async () => {
     }
     group.value = data.group
     bookmarks.value = data.bookmarks
+    // 客户端动态 SEO 注入（无 SSR：仅对 Googlebot 二次 JS 抓取与已加载用户生效；
+    // 社交 OG 预览器不执行 JS，首次预览仍是 index.html 静态默认值 —— 彻底解决需后续 SSR 轮）
+    _applyShareHead(data.group, data.bookmarks)
   } catch (e) {
     error.value = '加载失败：' + (e as Error).message
   } finally {
     loading.value = false
   }
 })
+
+onUnmounted(() => {
+  cleanupInjectedHead()
+  setCanonical('https://herrhel.github.io/linkvault/')
+})
+
+/**
+ * 把公开组数据注入 <head>：title / description / og:* / twitter:* / canonical / ItemList JSON-LD。
+ * 走 src/lib/head.ts 幂等函数，重复渲染不堆叠；子页卸载时 backToApp/onUnmounted 调 cleanup 恢复。
+ */
+function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
+  const base = location.pathname.replace(/\/[^/]*$/, '/') || '/'
+  const shareUrl = location.origin + base + 's/' + g.id + '#share/' + g.id
+  const title = `${g.name || '分享组'} - LinkVault 分享`
+  const notesPlain = g.notes ? g.notes.replace(/<[^>]+>/g, '').trim() : ''
+  const desc = (notesPlain && notesPlain.slice(0, 120)) || `${bms.length} 个链接 · 由 LinkVault 公开分享`
+  setTitle(title)
+  setMetaByAttr('name', 'description', desc)
+  setMetaByAttr('property', 'og:title', title)
+  setMetaByAttr('property', 'og:description', desc)
+  setMetaByAttr('property', 'og:url', shareUrl)
+  setMetaByAttr('property', 'og:type', 'article')
+  setMetaByAttr('name', 'twitter:title', title)
+  setMetaByAttr('name', 'twitter:description', desc)
+  setCanonical(shareUrl)
+  setJsonLd('shareItemList', {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: g.name || '分享组',
+    description: desc,
+    url: shareUrl,
+    numberOfItems: bms.length,
+    itemListElement: bms.map((b, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: b.title,
+      url: fixUrl(b.url),
+    })),
+  })
+}
 </script>
 
 <style scoped>
