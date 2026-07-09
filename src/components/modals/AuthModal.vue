@@ -42,12 +42,12 @@
         <span class="flex-1"></span>
         <button class="btn btn-secondary" @click="onClose">取消</button>
         <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode"
-          :disabled="!email.trim() || sending || sendCooldownRemaining(email.trim()) > 0">
+          :disabled="!email.trim() || sending || auth.sendCooldownRemaining(email.trim()) > 0">
           {{ sending ? '发送中...'
-            : (sendCooldownRemaining(email.trim()) > 0 ? `重新发送 (${sendCooldownRemaining(email.trim())}s)` : '发送验证码') }}
+            : (auth.sendCooldownRemaining(email.trim()) > 0 ? `重新发送 (${auth.sendCooldownRemaining(email.trim())}s)` : '发送验证码') }}
         </button>
         <button v-if="step === 'code'" class="btn btn-primary" @click="onVerify"
-          :disabled="code.length < 6 || verifying || verifyLockRemaining(email.trim()) > 0">
+          :disabled="code.length < 6 || verifying || auth.verifyLockRemaining(email.trim()) > 0">
           {{ verifying ? '验证中...' : '登录' }}
         </button>
       </div>

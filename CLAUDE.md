@@ -58,7 +58,7 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 - **同步**（`composables/domain/useCloudSync.ts`）：push-first 策略，手动触发同步，增量推送到 Supabase
 - **实时同步**（`useSyncRealtime.ts`）：Supabase Realtime 订阅，含指数退避重连（最多 10 次）；冲突检测见 `useSyncConflict.ts`，版本历史见 `useSyncHistory.ts`
 - **Supabase 客户端**（`lib/supabase.ts`）：配置见 `.env`（VITE_SUPABASE_URL、VITE_SUPABASE_ANON_KEY）
-- **数据库 Schema**（`supabase/migrations/`，11 个迁移文件）：RLS 行级安全策略，表结构含 categories、bookmarks、sibling_groups、custom_attributes、user_security、version_history、link_check_history、error_logs
+- **数据库 Schema**（`supabase/migrations/`，16 个迁移文件）：RLS 行级安全策略，表结构含 categories、bookmarks、sibling_groups、custom_attributes、user_security、version_history、link_check_history、error_logs
 - **Edge Function**（`supabase/functions/check-link/`）：服务端死链检查，被 useDeadLinkChecker 调用
 
 ### Composables 层
@@ -75,7 +75,7 @@ composables 按职责分三组：
 
 ### 数据模型
 
-类型定义见 `src/types.ts`：
+类型定义见 `src/types.ts`，Zod 运行时校验见 `src/schemas.ts`（两者需保持同步）：
 - **Bookmark**：id, title, url, icon, username, password（string | EncryptedPassword）, notes, categoryId, parentId（支持子书签嵌套）, order, useCount, attributes, isExpanded, createdAt, updatedAt, deletedAt
 - **SiblingGroup**：id, name, categoryId, icon, order, isExpanded, attributes, bookmarkIds[], notes (HTML), updatedAt, useCount, isPublic
 - **Category**：id, name, icon, color
@@ -100,6 +100,8 @@ composables 按职责分三组：
 - `diffVersions.ts` — 版本差异对比，用于历史版本 diff UI
 - `theme.ts` — 主题切换（亮色/暗色/自动）、theme-style（舒适模式）
 - `toast.ts` — 轻量 toast 工具函数，委托 bridge 上的 ToastAPI
+- `stats.ts` — 本地匿名使用统计（计数器 + 带时间序列的 MetricEvent），仅存 localStorage 不上传
+- `head.ts` — 客户端 `<head>` 动态注入（title/meta/OG/canonical/JSON-LD），幂等、可清理，用于 ShareView 等页面的 SEO 元数据覆盖
 - `recoveryKeyPDF.ts` — 纯 HTML+print 生成 Recovery Key PDF 下载
 
 ### 组件结构
