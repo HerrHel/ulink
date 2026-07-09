@@ -68,21 +68,13 @@ body {
 .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-save svg { width: 15px; height: 15px; }
 
-/* Search */
-.search-section { padding: 6px 14px 8px; }
-.search-wrap {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 10px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); transition: border-color 0.15s;
+/* Recent saves */
+.recent-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.recent-title {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 8px 14px 4px;
 }
-.search-wrap:focus-within { border-color: var(--accent); }
-.search-wrap svg { width: 15px; height: 15px; color: var(--text-muted); flex-shrink: 0; }
-.search-wrap input {
-  flex: 1; border: none; background: transparent; outline: none;
-  font-size: 13px; color: var(--text);
-}
-.search-wrap input::placeholder { color: var(--text-muted); }
 
 /* Results */
 .results {

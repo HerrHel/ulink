@@ -1,148 +1,141 @@
-// popup.js — LinkVault Extension Popup Logic
+// popup.js — LinkVault Extension Popup（快速保存入口）
 
-const searchInput = document.getElementById('searchInput')
-const resultsEl = document.getElementById('results')
-const emptyEl = document.getElementById('empty')
 const statusEl = document.getElementById('status')
 const saveBtn = document.getElementById('saveCurrentPage')
 const openBtn = document.getElementById('openLinkVault')
+const recentList = document.getElementById('recentList')
+const emptyEl = document.getElementById('empty')
 
-let allBookmarks = []
-let debounceTimer = null
+const STORAGE_KEY = 'linkvault_ext_bookmarks'
 
-// ── 初始化 ──
-async function init() {
-  allBookmarks = await loadBookmarks()
-  renderResults(allBookmarks)
-  searchInput.focus()
+// ── chrome.storage.local ──
+async function loadBookmarks() {
+  try { return (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] || [] } catch (e) { console.warn('loadBookmarks failed', e); return [] }
 }
 
-// ── 加载书签 ──
-async function loadBookmarks() {
-  return new Promise(resolve => {
-    chrome.runtime.sendMessage({ type: 'GET_ALL_BOOKMARKS' }, response => {
-      resolve(response?.bookmarks || [])
-    })
+async function saveBookmarksViaBackground(bookmarks) {
+  return new Promise(function (resolve) {
+    chrome.runtime.sendMessage({ type: 'SAVE_BOOKMARKS', payload: bookmarks }, function () { resolve() })
   })
 }
 
-// ── 搜索 ──
-function search(query) {
-  if (!query.trim()) {
-    renderResults(allBookmarks)
-    return
-  }
-  const q = query.toLowerCase()
-  const filtered = allBookmarks.filter(b =>
-    b.title?.toLowerCase().includes(q) ||
-    b.url?.toLowerCase().includes(q)
-  )
-  renderResults(filtered)
+async function migrateFromLocalStorage() {
+  const result = await chrome.storage.local.get(STORAGE_KEY)
+  if (result[STORAGE_KEY] && result[STORAGE_KEY].length) return
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed.length) await chrome.storage.local.set({ [STORAGE_KEY]: parsed })
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  } catch (e) { console.warn('migrateFromLocalStorage failed', e) }
 }
 
-// ── 渲染结果 ──
-function renderResults(bookmarks) {
-  resultsEl.innerHTML = ''
-  if (bookmarks.length === 0) {
+// ── 初始化 ──
+async function init() {
+  await migrateFromLocalStorage()
+  const bookmarks = await loadBookmarks()
+  renderRecent(bookmarks)
+}
+
+function renderRecent(bookmarks) {
+  if (!bookmarks.length) {
     emptyEl.style.display = 'flex'
     return
   }
   emptyEl.style.display = 'none'
-
-  for (const b of bookmarks.slice(0, 30)) {
-    const item = document.createElement('a')
+  recentList.innerHTML = ''
+  for (var i = 0; i < Math.min(bookmarks.length, 5); i++) {
+    var b = bookmarks[i]
+    var item = document.createElement('a')
     item.className = 'result-item'
     item.href = b.url
     item.target = '_blank'
     item.rel = 'noopener'
-
-    const domain = (() => {
-      try { return new URL(b.url).hostname } catch { return '' }
-    })()
-
-    const iconUrl = domain ? `https://api.xinac.net/icon/?url=${encodeURIComponent(domain)}` : ''
-
-    item.innerHTML = `
-      ${iconUrl ? `<img class="result-icon" src="${iconUrl}" alt="" onerror="this.style.display='none'">` : ''}
-      <div class="result-info">
-        <div class="result-title">${escapeHtml(b.title || domain)}</div>
-        <div class="result-url">${escapeHtml(domain)}</div>
-      </div>
-    `
-    resultsEl.appendChild(item)
+    var domain = (function () { try { return new URL(b.url).hostname } catch (e) { return '' } })()
+    var iconUrl = domain ? 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(domain) + '&sz=32' : ''
+    item.innerHTML = ''
+      + (iconUrl ? '<img class="result-icon" src="' + escapeHtml(iconUrl) + '" alt="" onerror="this.style.display=\'none\'">' : '')
+      + '<div class="result-info">'
+      + '<div class="result-title">' + escapeHtml(b.title || domain) + '</div>'
+      + '<div class="result-url">' + escapeHtml(domain) + '</div>'
+      + '</div>'
+    recentList.appendChild(item)
   }
 }
 
 // ── 保存当前页面 ──
-saveBtn.addEventListener('click', async () => {
+saveBtn.addEventListener('click', async function () {
   saveBtn.disabled = true
   saveBtn.textContent = '保存中...'
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    if (!tab?.url) {
-      showStatus('无法获取当前页面 URL', 'error')
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+    var tab = tabs[0]
+    if (!tab || !tab.url) { showStatus('无法获取当前页面 URL', 'error'); return }
+
+    if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')
+        || tab.url.startsWith('file:') || tab.url.startsWith('javascript:') || tab.url.startsWith('data:')
+        || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) {
+      showStatus('浏览器内部页面无法保存', 'error')
       return
     }
 
-    const response = await new Promise(resolve => {
-      chrome.runtime.sendMessage({
-        type: 'SAVE_BOOKMARK',
-        data: { url: tab.url, title: tab.title || tab.url }
-      }, resolve)
-    })
+    const now = Date.now()
+    const bookmark = {
+      id: 'b' + now.toString(36) + Math.random().toString(36).slice(2, 8),
+      title: tab.title || tab.url,
+      url: tab.url,
+      icon: tab.favIconUrl || '',
+      notes: '',
+      use_count: 0,
+    }
 
-    if (response?.success) {
-      showStatus('✓ 已保存到 LinkVault', 'success')
-      allBookmarks = await loadBookmarks()
-      search(searchInput.value)
+    const bookmarks = await loadBookmarks()
+    if (!bookmarks.some(function (b) { return b.url === bookmark.url })) {
+      bookmarks.unshift(bookmark)
+      await saveBookmarksViaBackground(bookmarks)
+      showStatus('✓ 已保存', 'success')
+      renderRecent(bookmarks)
     } else {
-      showStatus('已暂存，打开 LinkVault 时自动同步', 'info')
+      showStatus('已存在', 'info')
     }
   } catch (e) {
     showStatus('保存失败: ' + e.message, 'error')
   } finally {
     saveBtn.disabled = false
-    saveBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      保存当前页面
-    `
+    saveBtn.innerHTML = ''
+      + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+      + ' 保存当前页面'
   }
 })
 
 // ── 打开 LinkVault ──
-openBtn.addEventListener('click', async () => {
-  const response = await new Promise(resolve => {
-    chrome.runtime.sendMessage({ type: 'GET_LINKVAULT_TAB' }, resolve)
-  })
-  if (response?.found && response.tabId) {
-    chrome.tabs.update(response.tabId, { active: true })
+openBtn.addEventListener('click', async function () {
+  const tabs = await chrome.tabs.query({})
+  const existing = tabs.find(function (t) { return t.url && (t.url.includes('herrh.github.io') || t.url.includes('localhost:5173')) })
+  if (existing) {
+    chrome.tabs.update(existing.id, { active: true })
   } else {
-    chrome.tabs.create({ url: 'http://localhost:5173' })
+    chrome.tabs.create({ url: 'https://herrh.github.io' })
   }
   window.close()
 })
 
-// ── 搜索输入 ──
-searchInput.addEventListener('input', () => {
-  clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => search(searchInput.value), 200)
-})
-
 // ── 快捷键 ──
-document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') window.close()
-  if (e.key === 'Enter' && resultsEl.firstChild) {
-    resultsEl.firstChild.click()
+  if (e.key === 'Enter' && recentList.firstChild) {
+    recentList.firstChild.click()
   }
 })
 
-// ── 状态提示 ──
 function showStatus(msg, type) {
   statusEl.textContent = msg
   statusEl.className = 'status ' + type
   statusEl.style.display = 'block'
-  setTimeout(() => { statusEl.style.display = 'none' }, 3000)
+  setTimeout(function () { statusEl.style.display = 'none' }, 3000)
 }
 
 function escapeHtml(str) {

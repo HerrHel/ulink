@@ -6,12 +6,17 @@
   "permissions": [
     "sidePanel",
     "activeTab",
-    "bookmarks",
-    "storage"
+    "tabs",
+    "storage",
+    "contextMenus",
+    "notifications"
   ],
   "host_permissions": [
     "https://*.supabase.co/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://*.supabase.co wss://*.supabase.co"
+  },
   "side_panel": {
     "default_path": "sidepanel.html"
   },
@@ -22,6 +27,18 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "icons": {}
+  "commands": {
+    "save-to-linkvault": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "保存当前页面到 LinkVault"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }
-
