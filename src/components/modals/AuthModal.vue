@@ -41,10 +41,13 @@
         <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">返回</button>
         <span class="flex-1"></span>
         <button class="btn btn-secondary" @click="onClose">取消</button>
-        <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode" :disabled="!email.trim() || sending">
-          {{ sending ? '发送中...' : '发送验证码' }}
+        <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode"
+          :disabled="!email.trim() || sending || sendCooldownRemaining(email.trim()) > 0">
+          {{ sending ? '发送中...'
+            : (sendCooldownRemaining(email.trim()) > 0 ? `重新发送 (${sendCooldownRemaining(email.trim())}s)` : '发送验证码') }}
         </button>
-        <button v-if="step === 'code'" class="btn btn-primary" @click="onVerify" :disabled="code.length < 6 || verifying">
+        <button v-if="step === 'code'" class="btn btn-primary" @click="onVerify"
+          :disabled="code.length < 6 || verifying || verifyLockRemaining(email.trim()) > 0">
           {{ verifying ? '验证中...' : '登录' }}
         </button>
       </div>
@@ -85,6 +88,12 @@ watch(() => auth.authModalOpen, (open) => {
 async function onSendCode() {
   const e = email.value.trim()
   if (!e) return
+  // S12：冷却中由 store 返 false 并写 authError，这里读剩余秒数禁用按钮并提前 return
+  const remain = auth.sendCooldownRemaining(e)
+  if (remain > 0) {
+    auth.authError = `验证码已发送，请 ${remain} 秒后再试`
+    return
+  }
   sending.value = true
   auth.authError = null
   const ok = await auth.sendOtp(e)
@@ -98,6 +107,12 @@ async function onSendCode() {
 async function onVerify() {
   const c = code.value.trim()
   if (c.length < 6) return
+  // S12：锁定中由 store 返 false 并写 authError
+  const lockRemain = auth.verifyLockRemaining(email.value.trim())
+  if (lockRemain > 0) {
+    auth.authError = `验证失败次数过多，请 ${lockRemain} 秒后重试或重新获取验证码`
+    return
+  }
   verifying.value = true
   auth.authError = null
   const ok = await auth.verifyOtp(email.value.trim(), c)
@@ -115,6 +130,8 @@ function onBack() {
   step.value = 'email'
   code.value = ''
   auth.authError = null
+  // S12：返回邮箱步视为重新开始，清掉验证失败计数与锁，给用户重试机会
+  auth.resetVerifyState(email.value.trim())
   nextTick(() => inputRef.value?.focus())
 }
 
