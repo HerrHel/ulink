@@ -86,6 +86,25 @@ describe('E2EStore', () => {
       store.setUnlocked(true)
       expect(store.isUnlocked).toBe(true)// 未被自动锁定
     })
+
+    // S14：锁后 cryptoKey 不可达，解锁流程需重新派生（非恢复缓存）
+    it('S14: lock 后 cryptoKey 为 null 且 isUnlocked=false（真销毁，非视觉锁）', () => {
+      const key1 = {} as CryptoKey
+      store.setKey(key1)
+      store.setUnlocked(true)
+      expect(store.cryptoKey).toEqual(key1)
+
+      store.lock()
+      expect(store.cryptoKey).toBeNull()
+      expect(store.isUnlocked).toBe(false)
+
+      // 模拟"解锁"：设置新 key → 应接受（因旧 key 已被真销毁，
+      // 不存在"恢复缓存"——若 lock 是假的，这里新旧 key 会冲突）
+      const key2 = { type: 'fresh' } as unknown as CryptoKey
+      expect(() => store.setKey(key2)).not.toThrow()
+      store.setUnlocked(true)
+      expect(store.cryptoKey).toEqual(key2)
+    })
   })
 
   describe('resetLockTimer', () => {
