@@ -9,6 +9,9 @@
     "bookmarks",
     "storage"
   ],
+  "host_permissions": [
+    "https://*.supabase.co/*"
+  ],
   "side_panel": {
     "default_path": "sidepanel.html"
   },
@@ -19,13 +22,6 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "idle"
-    }
-  ],
   "icons": {}
 }
 
