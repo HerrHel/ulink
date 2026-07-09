@@ -1,27 +1,12 @@
-// background.js — LinkVault Extension Service Worker（侧边栏 + 右键菜单 + 快捷键）
+// background.js — LinkVault Extension
 
-// ── STORAGE ──
-const STORAGE_KEY = 'linkvault_ext_bookmarks'
+const PWA_URL = 'https://herrh.github.io'
 
-// ── 简单的互斥锁，避免并发写入竞态 ──
-let storageLock = Promise.resolve()
-
-/** 串行化 chrome.storage.local 的 read-modify-write 操作 */
-async function withStorageLock(fn) {
-  let release
-  const prev = storageLock
-  storageLock = new Promise(function (resolve) { release = resolve })
-  await prev // 等待前一个操作完成
-  try {
-    return await fn()
-  } finally {
-    release()
-  }
-}
-
-// ── 安装时设置 ──
+// ── 安装时 ──
 chrome.runtime.onInstalled.addListener(function () {
-  // 清空旧菜单再创建，避免更新后菜单 ID 冲突
+  // 侧边栏：点击图标即打开
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(function () {})
+  // 右键菜单
   chrome.contextMenus.removeAll(function () {
     chrome.contextMenus.create({
       id: 'save-to-linkvault',
@@ -29,92 +14,54 @@ chrome.runtime.onInstalled.addListener(function () {
       contexts: ['page', 'link'],
     })
   })
-
-  // 点击图标打开侧边栏
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(function () {})
 })
 
-// ── 右键菜单点击 ──
+// ── 右键菜单 ──
 chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (info.menuItemId === 'save-to-linkvault') {
-    const url = info.linkUrl || tab.url
-    var title = info.linkUrl ? url : (tab.title || url)
-    // 如果是链接，尝试从 content script 获取链接文字
-    if (info.linkUrl && tab.id) {
-      chrome.tabs.sendMessage(tab.id, { type: 'GET_LINK_TEXT' }, function (response) {
-        if (response && response.text) title = response.text
-        saveBookmark({ url: url, title: title, favIconUrl: tab.favIconUrl })
-      })
-    } else {
-      saveBookmark({ url: url, title: title, favIconUrl: tab.favIconUrl })
-    }
+    openPwaWithUrl(info.linkUrl || tab.url, tab.title)
   }
 })
 
-// ── 全局快捷键 ──
+// ── 快捷键 Ctrl+Shift+S ──
 chrome.commands.onCommand.addListener(function (command) {
   if (command === 'save-to-linkvault') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
-      const tab = tabs[0]
-      if (tab) saveBookmark({ url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl })
+      var tab = tabs[0]
+      if (tab) openPwaWithUrl(tab.url, tab.title)
     })
   }
 })
 
-// ── 保存书签 ──
-async function saveBookmark(_a) {
-  var url = _a.url, title = _a.title, favIconUrl = _a.favIconUrl
+/** 新标签页打开 PWA，附带当前页面 URL */
+function openPwaWithUrl(url, title) {
   if (!url) return
-  // 全面过滤内部页面
   if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')
       || url.startsWith('file:') || url.startsWith('javascript:') || url.startsWith('data:')
       || url.startsWith('blob:') || url.startsWith('view-source:')) return
 
-  const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-  const bookmark = { id: id, title: title || url, url: url, icon: favIconUrl || '', notes: '', use_count: 0 }
+  var params = new URLSearchParams({ ext_save_url: url, ext_save_title: title || url })
+  var targetUrl = PWA_URL + '/?ext_save=1&' + params.toString()
 
-  // 原子化 read-modify-write，避免并发竞态
-  await withStorageLock(async function () {
-    const result = await chrome.storage.local.get(STORAGE_KEY)
-    const existing = result[STORAGE_KEY] || []
-    if (!existing.some(function (b) { return b.url === url })) {
-      existing.unshift(bookmark)
-      await chrome.storage.local.set({ [STORAGE_KEY]: existing })
-    }
-  })
-
-  // 通知所有打开的 Side Panel 刷新；如果 Side Panel 已打开则跳过系统通知
-  chrome.runtime.sendMessage({ type: 'REFRESH_BOOKMARKS' }, function (response) {
-    if (response && response.ok) {
-      // Side Panel 已打开且收到了刷新，无需系统通知
-      return
-    }
-    // Side Panel 未打开，发送系统通知
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'LinkVault',
-      message: '已保存到书签',
-      contextMessage: title || url,
+  chrome.tabs.query({}, function (tabs) {
+    var existing = tabs.find(function (t) {
+      return t.url && (t.url.startsWith(PWA_URL) || t.url.includes('localhost:5173'))
     })
+    if (existing) {
+      chrome.tabs.update(existing.id, { active: true, url: targetUrl })
+    } else {
+      chrome.tabs.create({ url: targetUrl })
+    }
   })
 }
 
-// ── 消息处理 ──
+// ── 消息：Side Panel 获取当前标签页 ──
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'GET_CURRENT_TAB') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
       const tab = tabs[0]
       sendResponse(tab ? { url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl } : null)
     })
-    return true // 异步 response
-  }
-
-  // 集中处理 chrome.storage.local 写入，避免 Side Panel / Popup 并发竞态
-  if (msg.type === 'SAVE_BOOKMARKS') {
-    withStorageLock(async function () {
-      await chrome.storage.local.set({ [STORAGE_KEY]: msg.payload })
-    }).then(function () { sendResponse({ ok: true }) })
     return true
   }
 })
