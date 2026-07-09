@@ -24,10 +24,17 @@ async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
   return fn()
 }
 
-/** 处理 Realtime 变更事件 */
-async function _handleRealtimeChange(payload: any, type: EntityType) {
+/** 处理 Realtime 变更事件。S13：收到事件后再按 user_id 校验（纵深防护——即使
+ *  channel filter 因配置错误/策略变更被绕过，也不处理他人数据）。
+ *  导出含 _ 前缀（约定私有），供单测覆盖 S13 纵深防护逻辑。 */
+export async function _handleRealtimeChange(payload: any, type: EntityType) {
   const { eventType, new: newRow, old: oldRow } = payload
   const ds = useDataStore()
+  const userId = _getUserId()
+  if (!userId) return
+  // 新行与旧行的 user_id 均须匹配当前用户（任一不匹配即跳过）
+  const rowUserId = newRow?.user_id || oldRow?.user_id
+  if (rowUserId && rowUserId !== userId) return
 
   if (eventType === 'DELETE') {
     const id = oldRow?.id

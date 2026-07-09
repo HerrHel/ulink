@@ -161,3 +161,80 @@ describe('useDataShare.detectShareRoute', () => {
     expect(detectShareRoute()).toBeNull()
   })
 })
+
+// ──────────────────────────────────────────────────────────────
+// 7. S13: useSyncRealtime._handleRealtimeChange — user_id  纵深校验
+// ──────────────────────────────────────────────────────────────
+describe('S13 Realtime _handleRealtimeChange user_id guard', () => {
+  it('不匹配 user_id 的 UPDATE 事件被静默跳过，不触发数据变更', async () => {
+    const { useAuthStore } = await import('../../stores/auth.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const { _handleRealtimeChange } = await import('../../composables/domain/useSyncRealtime.js')
+
+    const auth = useAuthStore()
+    ;(auth as any).user = { id: 'user-abc', email: 'a@b.com' }
+
+    const ds = useDataStore()
+    // 确保 bookmarkMap 里有一条，让 handler 有机会 update——但 user_id 不匹配应在最外层被拦
+    const bm = {
+      id: 'b1', title: 'Legit', url: 'https://example.com',
+      username: '', password: '', notes: '', icon: '',
+      categoryId: 'uncategorized', parentId: null,
+      order: 0, useCount: 0, attributes: {}, isExpanded: false,
+      createdAt: 1, updatedAt: 1,
+    }
+    ds.bookmarks.push(bm as any)
+    ds.bookmarkMap['b1'] = bm as any
+
+    const updateSpy = vi.spyOn(ds, 'updateBookmark')
+    const addSpy = vi.spyOn(ds, 'addBookmark')
+
+    // 恶意事件：user_id 不匹配当前登录用户
+    await _handleRealtimeChange(
+      {
+        eventType: 'UPDATE',
+        new: { ...bm, id: 'b1', title: 'HACKED', user_id: 'evil-user' },
+        old: bm,
+      },
+      'bookmark',
+    )
+
+    // 不应执行任何 mutation
+    expect(updateSpy).not.toHaveBeenCalled()
+    expect(addSpy).not.toHaveBeenCalled()
+
+    updateSpy.mockRestore()
+    addSpy.mockRestore()
+  })
+
+  it('不匹配 user_id 的 DELETE 事件被静默跳过', async () => {
+    const { useAuthStore } = await import('../../stores/auth.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const { _handleRealtimeChange } = await import('../../composables/domain/useSyncRealtime.js')
+
+    const auth = useAuthStore()
+    ;(auth as any).user = { id: 'user-abc', email: 'a@b.com' }
+
+    const ds = useDataStore()
+    const bm = {
+      id: 'b9', title: 'D', url: 'https://d.com',
+      username: '', password: '', notes: '', icon: '',
+      categoryId: 'uncategorized', parentId: null,
+      order: 0, useCount: 0, attributes: {}, isExpanded: false,
+      createdAt: 1, updatedAt: 1,
+    }
+    ds.bookmarks.push(bm as any)
+    ds.bookmarkMap['b9'] = bm as any
+
+    const deleteSpy = vi.spyOn(ds, 'deleteBookmark')
+
+    // 恶意 DELETE：oldRow user_id 不匹配
+    await _handleRealtimeChange(
+      { eventType: 'DELETE', new: {}, old: { ...bm, id: 'b9', user_id: 'evil-user' } },
+      'bookmark',
+    )
+
+    expect(deleteSpy).not.toHaveBeenCalled()
+    deleteSpy.mockRestore()
+  })
+})
