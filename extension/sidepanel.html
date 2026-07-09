@@ -61,6 +61,16 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .bookmark-list.loading::after{content:'加载中…';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,249,250,.6);color:var(--text2);font-size:12px;border-radius:var(--radius-sm);z-index:2;backdrop-filter:blur(1px)}
 @media(prefers-color-scheme:dark){.bookmark-list.loading::after{background:rgba(26,27,30,.7)}}
 
+/* ── 已收藏详情面板 ── */
+.bookmark-detail{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
+.bd-badge{display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:8px}
+.bd-label{font-size:11px;font-weight:600;color:var(--text2);margin-top:8px;margin-bottom:2px}
+.bd-text{font-size:12px;line-height:1.6;color:var(--text);word-break:break-word}
+.bd-empty{font-size:12px;color:var(--text2);font-style:italic}
+.bd-meta{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text2)}
+.bd-meta span{display:flex;align-items:center;gap:3px}
+.bd-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+
 /* ── 列表底部分页提示 ── */
 .list-footer{text-align:center;padding:8px 10px 12px;font-size:11px;color:var(--text2)}
 
@@ -124,6 +134,24 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
       </div>
     </div>
     <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ 保存当前页面</button>
+
+    <!-- 已收藏详情面板（匹配时显示） -->
+    <div id="bookmarkDetail" class="bookmark-detail hidden">
+      <div class="bd-badge">✅ 已收藏</div>
+      <div id="bdNotesWrap" class="hidden">
+        <div class="bd-label">📝 备注</div>
+        <div class="bd-text" id="bdNotes"></div>
+      </div>
+      <div class="bd-meta">
+        <span id="bdCreatedAt">📅</span>
+        <span id="bdUseCount">👁️</span>
+      </div>
+      <div class="bd-actions">
+        <button class="btn btn-ghost btn-sm" id="bdEditNotes">📝 编辑备注</button>
+        <button class="btn btn-ghost btn-sm" id="bdCopyUrl">🔗 复制链接</button>
+        <button class="btn btn-danger btn-sm" id="bdDelete">🗑️ 删除</button>
+      </div>
+    </div>
   </div>
 
   <!-- 最近保存 -->

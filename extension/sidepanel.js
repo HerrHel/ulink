@@ -69,6 +69,14 @@
   const btnLogout = $('#btnLogout')
   const btnSave = $('#btnSave')
   const lastSyncEl = $('#lastSync')
+  const bookmarkDetail = $('#bookmarkDetail')
+  const bdNotes = $('#bdNotes')
+  const bdNotesWrap = $('#bdNotesWrap')
+  const bdCreatedAt = $('#bdCreatedAt')
+  const bdUseCount = $('#bdUseCount')
+  const bdEditNotes = $('#bdEditNotes')
+  const bdCopyUrl = $('#bdCopyUrl')
+  const bdDelete = $('#bdDelete')
 
   let currentTab = null
   let allBookmarks = []
@@ -77,6 +85,7 @@
   let lastSyncTime = null
   let undoTimeout = null
   let lastDeleted = null
+  let currentMatchedBookmark = null
 
   // ── Toast（支持可操作的撤销 toast）──
   function toast(msg, dur, action) {
@@ -152,11 +161,12 @@
     allBookmarks = await loadLocal()
     bookmarkCount.textContent = allBookmarks.length + ' 个书签'
     renderBookmarks(allBookmarks)
+    checkCurrentPageMatch(currentTab && currentTab.url)
   }
 
   async function loadFromCloud() {
     setStatus('sync', '加载中…')
-    bookmarkList.classList.add('loading') // 保留旧列表，叠加加载遮罩
+    bookmarkList.classList.add('loading')
     const result = await sb.from('bookmarks')
       .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
       .eq('user_id', userId).is('deleted_at', null)
@@ -169,7 +179,7 @@
     updateSyncTime()
     setStatus('ok', '已连接')
     renderBookmarks(allBookmarks)
-    // 每分钟刷新同步时间显示
+    checkCurrentPageMatch(currentTab && currentTab.url)
     clearInterval(window._syncTimer)
     window._syncTimer = setInterval(updateSyncTime, 30000)
   }
@@ -274,6 +284,122 @@
       pageUrl.textContent = domain(tab.url)
       pageIcon.src = tab.favIconUrl || ''
       pageIcon.onerror = function () { pageIcon.style.display = 'none' }
+      // 检测当前 URL 是否已收藏
+      checkCurrentPageMatch(tab.url)
+    })
+  }
+
+  // ── 检测当前页面是否已收藏 ──
+  function checkCurrentPageMatch(url) {
+    if (!url || !allBookmarks.length) {
+      hideBookmarkDetail()
+      return
+    }
+    // URL 标准化匹配：忽略末尾斜杠、协议差异
+    var normalizedUrl = url.replace(/\/+$/, '').replace(/^http:\/\//, 'https://')
+    var matched = allBookmarks.find(function (b) {
+      var bUrl = (b.url || '').replace(/\/+$/, '').replace(/^http:\/\//, 'https://')
+      return bUrl === normalizedUrl
+    })
+    if (matched) {
+      showBookmarkDetail(matched)
+    } else {
+      hideBookmarkDetail()
+    }
+  }
+
+  // ── 显示已收藏详情 ──
+  function showBookmarkDetail(bm) {
+    currentMatchedBookmark = bm
+    btnSave.classList.add('hidden')
+    bookmarkDetail.classList.remove('hidden')
+
+    // 备注
+    if (bm.notes && bm.notes.trim()) {
+      bdNotesWrap.classList.remove('hidden')
+      bdNotes.textContent = bm.notes
+    } else {
+      bdNotesWrap.classList.add('hidden')
+    }
+
+    // 收藏时间
+    if (bm.created_at_num) {
+      var d = new Date(bm.created_at_num)
+      var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+      bdCreatedAt.textContent = '📅 ' + dateStr
+    } else {
+      bdCreatedAt.textContent = ''
+    }
+
+    // 使用次数
+    bdUseCount.textContent = '👁️ ' + (bm.use_count || 0) + ' 次'
+  }
+
+  // ── 隐藏已收藏详情 ──
+  function hideBookmarkDetail() {
+    currentMatchedBookmark = null
+    bookmarkDetail.classList.add('hidden')
+    btnSave.classList.remove('hidden')
+  }
+
+  // ── 编辑备注 ──
+  bdEditNotes.addEventListener('click', function () {
+    if (!currentMatchedBookmark) return
+    var newNotes = prompt('编辑备注：', currentMatchedBookmark.notes || '')
+    if (newNotes === null) return // 取消
+    // 本地更新
+    currentMatchedBookmark.notes = newNotes
+    // 持久化
+    if (loggedIn && userId) {
+      sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId).then(function (result) {
+        if (result.error) { toast('保存失败: ' + result.error.message); return }
+        toast('备注已更新', 1500)
+        showBookmarkDetail(currentMatchedBookmark)
+      })
+    } else {
+      // 更新本地存储
+      var idx = allBookmarks.findIndex(function (b) { return b.id === currentMatchedBookmark.id })
+      if (idx !== -1) {
+        allBookmarks[idx].notes = newNotes
+        saveLocalViaBackground(allBookmarks)
+        showBookmarkDetail(currentMatchedBookmark)
+        toast('备注已更新', 1500)
+      }
+    }
+  })
+
+  // ── 复制链接 ──
+  bdCopyUrl.addEventListener('click', function () {
+    if (!currentMatchedBookmark || !currentMatchedBookmark.url) return
+    navigator.clipboard.writeText(currentMatchedBookmark.url).then(function () {
+      toast('链接已复制', 1500)
+    }).catch(function () {
+      toast('复制失败', 1500)
+    })
+  })
+
+  // ── 从详情面板删除 ──
+  bdDelete.addEventListener('click', function () {
+    if (!currentMatchedBookmark) return
+    deleteBookmark(currentMatchedBookmark.id, currentMatchedBookmark.title)
+  })
+
+  // ── 监听标签页切换/导航，自动更新匹配 ──
+  if (chrome.tabs && chrome.tabs.onActivated) {
+    chrome.tabs.onActivated.addListener(function () {
+      setTimeout(loadCurrentTab, 300)
+    })
+  }
+  if (chrome.tabs && chrome.tabs.onUpdated) {
+    chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+      if (changeInfo.url || changeInfo.status === 'complete') {
+        // 轮询：只关心当前活动标签页
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+          if (tabs[0] && tabs[0].id === tabId) {
+            setTimeout(loadCurrentTab, 300)
+          }
+        })
+      }
     })
   }
 
@@ -478,11 +604,13 @@
       updateLoginUI()
       await mergeLocalToCloud()
       await loadFromCloud()
+      loadCurrentTab()
     } else {
       userId = null
       loggedIn = false
       updateLoginUI()
       await loadFromLocal()
+      loadCurrentTab()
     }
   })
 
