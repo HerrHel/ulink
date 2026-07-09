@@ -185,3 +185,24 @@ export function validateUrlShape(raw: string): URL {
   if (isPrivateHost(parsed.hostname)) throw new Error('不允许访问内网地址')
   return parsed
 }
+
+/**
+ * S9 CORS fail-closed 判定：origin 是否获准跨域。
+ * 白名单为空 → 一律拒（缺省 fail-closed，不再 fail-open 回退 origin/'*'）。
+ * 命中精确白名单才放行（不做子域通配，防 origin 伪造）。
+ */
+export function isOriginAllowed(origin: string | null, allowed: string[]): boolean {
+  if (!origin || allowed.length === 0) return false
+  return allowed.includes(origin)
+}
+
+/** 构造 CORS 响应头：命中白名单才带 Access-Control-Allow-Origin，否则空对象。
+ *  始终带 Vary: Origin，避免 CDN 缓存跨 origin 串台。 */
+export function buildCorsHeaders(origin: string | null, allowed: string[]): Record<string, string> {
+  const headers: Record<string, string> = { 'Vary': 'Origin' }
+  if (isOriginAllowed(origin, allowed)) {
+    headers['Access-Control-Allow-Origin'] = origin!
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type'
+  }
+  return headers
+}

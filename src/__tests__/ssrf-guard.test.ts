@@ -14,6 +14,8 @@ import {
   isPrivateIPv6,
   validateUrlShape,
   isTargetDnsSafeSyncResults,
+  isOriginAllowed,
+  buildCorsHeaders,
 } from '../../supabase/functions/check-link/ssrf-guard.js'
 
 describe('S7 SSRF guard — IPv4 解析', () => {
@@ -188,5 +190,54 @@ describe('S7 SSRF guard — DNS 重绑定检测', () => {
   it('IPv6 AAAA 命中内网即拒', () => {
     expect(isTargetDnsSafeSyncResults('v6.attacker.com', ['::1'])).toBe(false)
     expect(isTargetDnsSafeSyncResults('v6.attacker.com', ['fc00::1'])).toBe(false)
+  })
+})
+
+describe('S9 CORS fail-closed — isOriginAllowed', () => {
+  it('白名单为空时一律拒（fail-closed，不再回退 origin/*）', () => {
+    expect(isOriginAllowed('https://app.linkvault.com', [])).toBe(false)
+    expect(isOriginAllowed(null, [])).toBe(false)
+    // 关键防回归：原 fail-open 在白名单为空且 origin 非空时会反射 origin
+    expect(isOriginAllowed('https://evil.com', [])).toBe(false)
+  })
+
+  it('origin 为 null/空一律拒', () => {
+    expect(isOriginAllowed(null, ['https://app.linkvault.com'])).toBe(false)
+    expect(isOriginAllowed('', ['https://app.linkvault.com'])).toBe(false)
+  })
+
+  it('origin 精确命中白名单才放行', () => {
+    const allowed = ['https://app.linkvault.com', 'https://linkvault.pages.dev']
+    expect(isOriginAllowed('https://app.linkvault.com', allowed)).toBe(true)
+    expect(isOriginAllowed('https://linkvault.pages.dev', allowed)).toBe(true)
+  })
+
+  it('未命中白名单的 origin 被拒（不做子域通配）', () => {
+    const allowed = ['https://app.linkvault.com']
+    expect(isOriginAllowed('https://evil.com', allowed)).toBe(false)
+    expect(isOriginAllowed('http://app.linkvault.com', allowed)).toBe(false)  // 协议不同
+    expect(isOriginAllowed('https://attacker.app.linkvault.com', allowed)).toBe(false)  // 子域不同
+    expect(isOriginAllowed('https://app.linkvault.com.evil.com', allowed)).toBe(false)  // origin 伪造
+  })
+})
+
+describe('S9 CORS fail-closed — buildCorsHeaders', () => {
+  it('命中白名单带 ACAO + Allow-Headers + Vary', () => {
+    const h = buildCorsHeaders('https://app.linkvault.com', ['https://app.linkvault.com'])
+    expect(h['Access-Control-Allow-Origin']).toBe('https://app.linkvault.com')
+    expect(h['Access-Control-Allow-Headers']).toContain('authorization')
+    expect(h['Vary']).toBe('Origin')
+  })
+
+  it('未命中（或白名单空）不带 ACAO，仅留 Vary（浏览器据此阻断跨域）', () => {
+    const h1 = buildCorsHeaders('https://evil.com', ['https://app.linkvault.com'])
+    expect(h1['Access-Control-Allow-Origin']).toBeUndefined()
+    expect(h1['Vary']).toBe('Origin')
+
+    const h2 = buildCorsHeaders('https://evil.com', [])  // 白名单空：原 fail-open 会放通
+    expect(h2['Access-Control-Allow-Origin']).toBeUndefined()
+
+    const h3 = buildCorsHeaders(null, ['https://app.linkvault.com'])
+    expect(h3['Access-Control-Allow-Origin']).toBeUndefined()
   })
 })

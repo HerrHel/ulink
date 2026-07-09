@@ -8,6 +8,8 @@ import {
   isPrivateHost,
   isTargetDnsSafeSyncResults,
   validateUrlShape,
+  isOriginAllowed,
+  buildCorsHeaders,
 } from './ssrf-guard.ts'
 
 /**
@@ -28,15 +30,15 @@ import {
  *      isPrivateHost 判定；resolveDns 不可用则降级，不阻断核心防护。
  */
 
-/** 允许的来源：优先取环境变量，缺省仅同源（S9 将收紧为缺省拒绝跨域） */
+/**
+ * S9：CORS 缺省 fail-closed 收紧。
+ * 历史 fail-open：ALLOWED_ORIGINS 为空时回退 origin || '*'，任意 Origin 被放通，
+ * 受认证保护的端点可被任意站点跨域调用（配合 S4 令牌泄露链式利用）。
+ * 现策略：缺省拒绝跨域——仅配置白名单且 origin 命中才放通，否则不带
+ * Access-Control-Allow-Origin 头（浏览器据此阻断跨域）。
+ * 判定与头构造逻辑抽到 ssrf-guard.ts（buildCorsHeaders / isOriginAllowed），可单测。
+ */
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean)
-
-const corsHeaders = (origin: string | null) => ({
-  'Access-Control-Allow-Origin': ALLOWED_ORIGINS.length
-    ? (origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0])
-    : (origin || '*'),
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-})
 
 /** 默认超时 ms（可由环境变量覆盖） */
 const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10000', 10)
@@ -112,10 +114,11 @@ async function _fetchWithRedirectGuard(
 
 serve(async (req) => {
   const origin = req.headers.get('Origin')
-  const cors = corsHeaders(origin)
+  const cors = buildCorsHeaders(origin, ALLOWED_ORIGINS)
 
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: cors })
+    // S9：白名单未命中（或未配置）的预检直接拒，浏览器据此不再发实际请求
+    return new Response('ok', { status: isOriginAllowed(origin, ALLOWED_ORIGINS) ? 200 : 403, headers: cors })
   }
 
   try {
