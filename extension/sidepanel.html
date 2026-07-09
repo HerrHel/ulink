@@ -6,20 +6,14 @@
 <title>LinkVault</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-
-/* ── 亮色主题变量（默认）── */
 :root{--bg:#f8f9fa;--surface:#fff;--text:#1a1a1a;--text2:#6b7280;--border:#e5e7eb;--accent:#3b82f6;--accent-bg:#eff6ff;--accent-hover:#2563eb;--danger:#ef4444;--danger-bg:#fef2f2;--radius:8px;--radius-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.08);--kbd-bg:#e5e7eb;--toast-bg:#1a1a1a;--toast-color:#fff}
-
-/* ── 暗色主题变量 ── */
 @media(prefers-color-scheme:dark){
 :root{--bg:#1a1b1e;--surface:#25262b;--text:#e4e4e7;--text2:#a1a1aa;--border:#3f3f46;--accent:#60a5fa;--accent-bg:#1e293b;--accent-hover:#3b82f6;--danger:#f87171;--danger-bg:#3b1f1f;--shadow:0 1px 3px rgba(0,0,0,.3);--kbd-bg:#3f3f46;--toast-bg:#e4e4e7;--toast-color:#1a1a1a}
 }
-
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
 button{cursor:pointer;font:inherit;border:none;background:none}
 input{font:inherit;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;width:100%;outline:none;font-size:13px;background:var(--surface);color:var(--text)}
 input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
-
 .header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
 .header h1{font-size:15px;font-weight:700}
 .header-actions{display:flex;gap:6px;align-items:center}
@@ -29,38 +23,45 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .btn-danger{color:var(--danger)}.btn-danger:hover{background:var(--danger-bg)}
 .btn-sm{padding:4px 8px;font-size:11px}
 .btn-login{color:var(--accent);font-weight:600}.btn-login:hover{background:var(--accent-bg)}
-
 .section{padding:12px 16px;border-bottom:1px solid var(--border)}
 .section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-
 .current-page{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--accent-bg);border-radius:var(--radius);margin-bottom:10px;box-shadow:var(--shadow)}
 .current-page img{width:20px;height:20px;border-radius:4px;flex-shrink:0}
 .current-page-info{flex:1;min-width:0}
 .current-page-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .current-page-url{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
+/* ── 搜索框 ── */
+.search-box{padding:12px 16px 8px}
+.search-wrap{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;transition:border-color .15s}
+.search-wrap:focus-within{border-color:var(--accent)}
+.search-wrap .search-icon{font-size:13px;flex-shrink:0;color:var(--text2);opacity:.6}
+.search-wrap input{flex:1;border:none;background:transparent;outline:none;font-size:13px;color:var(--text);padding:0;min-width:0}
+.search-wrap input::placeholder{color:var(--text2);opacity:.5}
+.search-clear{font-size:14px;flex-shrink:0;color:var(--text2);cursor:pointer;padding:2px 4px;display:none;line-height:1;border-radius:3px}
+.search-clear:hover{background:var(--accent-bg);color:var(--accent)}
+.search-wrap.active .search-clear{display:block}
+/* ── 搜索无结果 ── */
+.search-empty{text-align:center;padding:32px 16px;color:var(--text2);font-size:12px;line-height:1.6}
 /* ── 书签列表（含自定义滚动条）── */
-.bookmark-list{max-height:calc(100vh - 310px);overflow-y:auto;position:relative}
+.bookmark-list{max-height:calc(100vh - 360px);overflow-y:auto;position:relative}
 .bookmark-list::-webkit-scrollbar{width:5px}
 .bookmark-list::-webkit-scrollbar-track{background:transparent}
 .bookmark-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
 .bookmark-list::-webkit-scrollbar-thumb:hover{background:var(--text2)}
-
 .bookmark-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:background .1s}
 .bookmark-item:hover{background:var(--accent-bg)}
 .bookmark-item img{width:18px;height:18px;border-radius:3px;flex-shrink:0}
 .bookmark-item-info{flex:1;min-width:0}
 .bookmark-item-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bookmark-item-url{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bookmark-item mark{background:rgba(59,130,246,.2);color:inherit;border-radius:2px;padding:0 2px}
 .bookmark-item-del{color:var(--text2);font-size:16px;padding:4px;border-radius:4px;flex-shrink:0;opacity:0;transition:opacity .15s}
 .bookmark-item:hover .bookmark-item-del{opacity:1}
 .bookmark-item-del:hover{color:var(--danger);background:var(--danger-bg)}
-
 /* ── 加载遮罩 ── */
 .bookmark-list.loading{position:relative;min-height:60px}
 .bookmark-list.loading::after{content:'加载中…';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,249,250,.6);color:var(--text2);font-size:12px;border-radius:var(--radius-sm);z-index:2;backdrop-filter:blur(1px)}
 @media(prefers-color-scheme:dark){.bookmark-list.loading::after{background:rgba(26,27,30,.7)}}
-
 /* ── 已收藏详情面板 ── */
 .bookmark-detail{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
 .bd-badge{display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:8px}
@@ -70,28 +71,22 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .bd-meta{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text2)}
 .bd-meta span{display:flex;align-items:center;gap:3px}
 .bd-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
-
 /* ── 列表底部分页提示 ── */
 .list-footer{text-align:center;padding:8px 10px 12px;font-size:11px;color:var(--text2)}
-
 .login-banner{background:var(--accent-bg);border-bottom:1px solid var(--border);padding:12px 16px}
 .login-banner p{font-size:12px;color:var(--text2);margin-bottom:8px}
 .login-banner input{margin-bottom:6px}
 .login-banner-actions{display:flex;gap:6px}
-
 .status-bar{padding:8px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
 .status-left{display:flex;align-items:center;gap:6px}
 .status-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
 .status-dot.ok{background:#22c55e}.status-dot.local{background:#f59e0b}.status-dot.err{background:#ef4444}.status-dot.sync{background:#f59e0b;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--toast-bg);color:var(--toast-color);padding:8px 16px;border-radius:var(--radius);font-size:12px;z-index:100;opacity:0;transition:opacity .2s;pointer-events:auto;display:flex;align-items:center;gap:12px;white-space:nowrap}
 .toast.show{opacity:1}
 .toast-action{background:var(--accent);color:#fff;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0}
 .toast-action:hover{background:var(--accent-hover)}
-
 .empty{text-align:center;padding:32px 16px;color:var(--text2);font-size:12px}
-
 .hidden{display:none!important}
 </style>
 </head>
@@ -107,7 +102,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
   </div>
 </div>
 
-<!-- 登录横幅（点击"登录"后展开） -->
+<!-- 登录横幅 -->
 <div class="login-banner hidden" id="loginBanner">
   <p>登录后书签将同步到云端，多设备共享</p>
   <input type="email" id="emailInput" placeholder="输入邮箱地址">
@@ -121,7 +116,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
   </div>
 </div>
 
-<!-- 主界面默认显示 -->
+<!-- 主界面 -->
 <div id="mainSection">
   <!-- 当前页快速收藏 -->
   <div class="section">
@@ -134,8 +129,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
       </div>
     </div>
     <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ 保存当前页面</button>
-
-    <!-- 已收藏详情面板（匹配时显示） -->
+    <!-- 已收藏详情面板 -->
     <div id="bookmarkDetail" class="bookmark-detail hidden">
       <div class="bd-badge">✅ 已收藏</div>
       <div id="bdNotesWrap" class="hidden">
@@ -154,12 +148,20 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
     </div>
   </div>
 
-  <!-- 最近保存 -->
-  <div class="section">
-    <div class="section-title">最近保存</div>
-    <div class="bookmark-list" id="bookmarkList"></div>
+  <!-- 搜索 -->
+  <div class="search-box">
+    <div class="search-wrap" id="searchWrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="搜索书签..." autocomplete="off">
+      <span class="search-clear" id="searchClear">✕</span>
+    </div>
   </div>
 
+  <!-- 最近保存 -->
+  <div class="section" style="border-bottom:none">
+    <div class="section-title" id="recentTitle">最近保存</div>
+    <div class="bookmark-list" id="bookmarkList"></div>
+  </div>
 </div>
 
 <div class="status-bar">

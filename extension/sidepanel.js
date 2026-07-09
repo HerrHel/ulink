@@ -77,6 +77,10 @@
   const bdEditNotes = $('#bdEditNotes')
   const bdCopyUrl = $('#bdCopyUrl')
   const bdDelete = $('#bdDelete')
+  const searchInput = $('#searchInput')
+  const searchWrap = $('#searchWrap')
+  const searchClear = $('#searchClear')
+  const recentTitle = $('#recentTitle')
 
   let currentTab = null
   let allBookmarks = []
@@ -86,6 +90,8 @@
   let undoTimeout = null
   let lastDeleted = null
   let currentMatchedBookmark = null
+  let searchQuery = ''
+  let searchTimer = null
 
   // ── Toast（支持可操作的撤销 toast）──
   function toast(msg, dur, action) {
@@ -160,7 +166,12 @@
   async function loadFromLocal() {
     allBookmarks = await loadLocal()
     bookmarkCount.textContent = allBookmarks.length + ' 个书签'
-    renderBookmarks(allBookmarks)
+    // 数据刷新时保留搜索状态——重新执行搜索
+    if (searchQuery) {
+      doSearch(searchInput.value)
+    } else {
+      renderBookmarks(allBookmarks)
+    }
     checkCurrentPageMatch(currentTab && currentTab.url)
   }
 
@@ -178,7 +189,11 @@
     lastSyncTime = Date.now()
     updateSyncTime()
     setStatus('ok', '已连接')
-    renderBookmarks(allBookmarks)
+    if (searchQuery) {
+      doSearch(searchInput.value)
+    } else {
+      renderBookmarks(allBookmarks)
+    }
     checkCurrentPageMatch(currentTab && currentTab.url)
     clearInterval(window._syncTimer)
     window._syncTimer = setInterval(updateSyncTime, 30000)
@@ -186,43 +201,65 @@
 
   // ── 渲染书签列表 ──
   function renderBookmarks(list) {
-    if (!list.length) {
-      bookmarkList.innerHTML = '<div class="empty">'
-        + '<div style="font-size:24px;margin-bottom:8px">📑</div>'
-        + '<div style="font-weight:600;margin-bottom:4px">暂无书签</div>'
-        + '<div style="font-size:12px;color:var(--text2);line-height:1.6">'
-        + '💡 在当前页面点击「保存当前页」<br>'
-        + '或右键页面选择「保存到 LinkVault」<br>'
-        + '快捷键 <kbd style="background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px">Ctrl+Shift+S</kbd>'
-        + '</div></div>'
+    // 搜索模式下用搜索结果覆盖显示
+    var displayList = list || allBookmarks
+    var isSearching = searchQuery.trim().length > 0
+
+    if (!displayList.length) {
+      if (isSearching) {
+        bookmarkList.innerHTML = '<div class="search-empty">🔍 未找到匹配的书签<br><span style="font-size:11px;opacity:.7">试试其他关键词</span></div>'
+      } else {
+        bookmarkList.innerHTML = '<div class="empty">'
+          + '<div style="font-size:24px;margin-bottom:8px">📑</div>'
+          + '<div style="font-weight:600;margin-bottom:4px">暂无书签</div>'
+          + '<div style="font-size:12px;color:var(--text2);line-height:1.6">'
+          + '💡 在当前页面点击「保存当前页」<br>'
+          + '或右键页面选择「保存到 LinkVault」<br>'
+          + '快捷键 <kbd style="background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px">Ctrl+Shift+S</kbd>'
+          + '</div></div>'
+      }
       return
     }
-    bookmarkList.innerHTML = list.slice(0, 50).map(function (b) {
+
+    // 标记匹配的文字（搜索模式下）
+    var query = isSearching ? searchQuery.toLowerCase() : ''
+    bookmarkList.innerHTML = displayList.slice(0, 50).map(function (b) {
       const host = domain(b.url)
       const icon = b.icon || (host ? 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32' : '')
+      var titleHtml = esc(b.title || host)
+      var urlHtml = esc(host)
+      // 搜索模式下高亮匹配
+      if (isSearching) {
+        titleHtml = highlightMatch(titleHtml, query)
+        urlHtml = highlightMatch(urlHtml, query)
+      }
       return '<div class="bookmark-item" data-id="' + esc(b.id) + '" data-url="' + esc(b.url) + '">'
         + (icon ? '<img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'">' : '')
         + '<div class="bookmark-item-info">'
-        + '<div class="bookmark-item-title">' + esc(b.title) + '</div>'
-        + '<div class="bookmark-item-url">' + esc(host) + '</div>'
+        + '<div class="bookmark-item-title">' + titleHtml + '</div>'
+        + '<div class="bookmark-item-url">' + urlHtml + '</div>'
         + '</div>'
         + '<span class="bookmark-item-del" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '">&times;</span>'
         + '</div>'
     }).join('')
 
-    // 如果书签超过 50 条，显示提示
-    var total = list.length
-    if (total > 50) {
+    // 搜索模式结果计数
+    if (isSearching && displayList.length > 0) {
+      var countFooter = document.createElement('div')
+      countFooter.className = 'list-footer'
+      countFooter.textContent = '找到 ' + displayList.length + ' 条结果'
+      bookmarkList.appendChild(countFooter)
+    } else if (!isSearching && displayList.length > 50) {
+      var total = displayList.length
       var footer = document.createElement('div')
       footer.className = 'list-footer'
       footer.textContent = '仅显示最近 50 条，共 ' + total + ' 条'
       bookmarkList.appendChild(footer)
     }
 
-    // 事件委托：一个监听器处理所有点击
+    // 事件委托
     bookmarkList.addEventListener('click', function (e) {
       var target = e.target
-      // 向上查找实际点击的 bookmark-item
       while (target && target !== bookmarkList) {
         if (target.dataset.action === 'delete') {
           e.stopPropagation()
@@ -237,6 +274,68 @@
       }
     }, { once: false })
   }
+
+  // ── 搜索书签（实时过滤）──
+  function doSearch(query) {
+    searchQuery = (query || '').trim()
+    if (!searchQuery) {
+      searchWrap.classList.remove('active')
+      recentTitle.textContent = '最近保存'
+      renderBookmarks(allBookmarks)
+      bookmarkCount.textContent = allBookmarks.length + ' 个书签'
+      return
+    }
+    searchWrap.classList.add('active')
+    var q = searchQuery.toLowerCase()
+    var filtered = allBookmarks.filter(function (b) {
+      return (b.title && b.title.toLowerCase().indexOf(q) !== -1)
+        || (b.url && b.url.toLowerCase().indexOf(q) !== -1)
+        || (domain(b.url) && domain(b.url).toLowerCase().indexOf(q) !== -1)
+        || (b.notes && b.notes.toLowerCase().indexOf(q) !== -1)
+    })
+    recentTitle.textContent = '搜索结果'
+    bookmarkCount.textContent = '找到 ' + filtered.length + ' 条结果'
+    renderBookmarks(filtered)
+  }
+
+  // ── 高亮匹配文字 ──
+  function highlightMatch(text, query) {
+    if (!query) return text
+    var idx = text.toLowerCase().indexOf(query)
+    if (idx === -1) return text
+    return text.slice(0, idx) + '<mark>' + esc(text.slice(idx, idx + query.length)) + '</mark>' + text.slice(idx + query.length)
+  }
+
+  // ── 搜索输入 ──
+  searchInput.addEventListener('input', function () {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(function () {
+      doSearch(searchInput.value)
+    }, 200)
+  })
+
+  // ── 清除搜索 ──
+  searchClear.addEventListener('click', function () {
+    searchInput.value = ''
+    searchInput.focus()
+    doSearch('')
+  })
+
+  // ── 键盘快捷键 ──
+  document.addEventListener('keydown', function (e) {
+    // Ctrl+F 或 / 聚焦搜索框
+    if ((e.ctrlKey && e.key === 'f') || (!e.ctrlKey && !e.metaKey && e.key === '/' && e.target.tagName !== 'INPUT')) {
+      e.preventDefault()
+      searchInput.focus()
+      searchInput.select()
+    }
+    // Escape 清除搜索
+    if (e.key === 'Escape' && searchQuery) {
+      searchInput.value = ''
+      doSearch('')
+      searchInput.blur()
+    }
+  })
 
   // ── 删除书签（toast + 可撤销）──
   async function deleteBookmark(id, title) {
