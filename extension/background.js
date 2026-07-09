@@ -2,18 +2,18 @@
 
 const PWA_URL = 'https://herrh.github.io'
 
-// ── 安装时 ──
-chrome.runtime.onInstalled.addListener(function () {
-  // 侧边栏：点击图标即打开
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(function () {})
-  // 右键菜单
-  chrome.contextMenus.removeAll(function () {
-    chrome.contextMenus.create({
-      id: 'save-to-linkvault',
-      title: '保存到 LinkVault',
-      contexts: ['page', 'link'],
-    })
+// ── 初始化：创建右键菜单（每次 worker 启动时执行，以防重启后丢失）──
+chrome.contextMenus.removeAll(function () {
+  chrome.contextMenus.create({
+    id: 'save-to-linkvault',
+    title: '保存到 LinkVault',
+    contexts: ['page', 'link'],
   })
+})
+
+// ── 安装/更新时 ──
+chrome.runtime.onInstalled.addListener(function () {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(function () {})
 })
 
 // ── 右键菜单 ──
