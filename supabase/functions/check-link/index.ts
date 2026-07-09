@@ -1,44 +1,170 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-/**
- * SSRF 校验纯逻辑（无 Deno 依赖，可被 vitest 单测）。
- * 同目录相对 import，Edge Function 部署整目录上传即可生效。
- */
-import {
-  isPrivateHost,
-  isTargetDnsSafeSyncResults,
-  validateUrlShape,
-  isOriginAllowed,
-  buildCorsHeaders,
-} from './ssrf-guard.ts'
 
 /**
- * S7：SSRF 防护重构。
+ * 单文件镜像说明（重要）：
+ * 本文件是「部署镜像」——SSRF/CORS 纯逻辑在此内联自包含，便于在 Supabase
+ * Dashboard Edge Function 在线编辑器中单文件粘贴部署（该编辑器对同目录多文件
+ * import 的支持不确定，且本地 CLI 在当前环境安装受限）。
+ * 纯逻辑的唯一真源为同目录 ssrf-guard.ts，经 src/__tests__/ssrf-guard.test.ts
+ * 覆盖 53 个单测。如修改 SSRF/CORS 逻辑，请同时改两处并保持一致——
+ * 单测会守护 ssrf-guard.ts 侧的正确性。
  *
- * 三条历史漏洞：
- *  1) _isPrivateHost 只做字面/点分十进制匹配 → 漏 IPv6 私有段、IPv4-mapped IPv6、
- *     十进制整数 IP（2130706433 ≡ 127.0.0.1）。
- *  2) 仅校验首跳 host → redirect:'follow' 跟随跳转，首跳合法、后续 302 跳到
- *     169.254.169.254（云元数据）/内网即可打穿。
- *  3) DNS 重绑定：合法域名解析落到 127.0.0.1 等内网 IP，字面校验拦不住。
- *
- * 本实现三层防御：
- *  一、validateUrlShape 全量 host 校验——点分十进制 / 十进制整数 / IPv6（含映射）全覆盖。
- *  二、重定向逐跳校验——fetch 每跳对 Location 重新走完整 validateUrl，
- *      命中内网地址或超 5 跳即终止，杜绝「首跳合法后续跳内网」。
- *  三、DNS 增强校验（best-effort）——Deno.resolveDns 解析 A/AAAA，逐条复用
- *      isPrivateHost 判定；resolveDns 不可用则降级，不阻断核心防护。
+ * S7：SSRF 三层防御 + S9：CORS fail-closed + S11：错误信息规范化。
  */
 
-/**
- * S9：CORS 缺省 fail-closed 收紧。
- * 历史 fail-open：ALLOWED_ORIGINS 为空时回退 origin || '*'，任意 Origin 被放通，
- * 受认证保护的端点可被任意站点跨域调用（配合 S4 令牌泄露链式利用）。
- * 现策略：缺省拒绝跨域——仅配置白名单且 origin 命中才放通，否则不带
- * Access-Control-Allow-Origin 头（浏览器据此阻断跨域）。
- * 判定与头构造逻辑抽到 ssrf-guard.ts（buildCorsHeaders / isOriginAllowed），可单测。
- */
+/** 允许的来源：优先取环境变量，缺省仅同源；S9 未配置则 fail-closed 拒绝跨域 */
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean)
+
+// ── 镜像自 ssrf-guard.ts（纯逻辑，请与该文件保持一致）──
+const PRIVATE_LITERAL_HOSTS = new Set([
+  'localhost', '127.0.0.1', '0.0.0.0', '::1',
+  'metadata.google.internal', 'metadata',
+])
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
+const ALLOWED_PORTS = new Set(['', '80', '443'])
+
+function isPrivateIPv4(octets: number[]): boolean {
+  if (octets.length !== 4 || octets.some(o => o < 0 || o > 255)) return false
+  const [a, b] = octets
+  if (a === 127) return true
+  if (a === 10) return true
+  if (a === 172 && b >= 16 && b <= 31) return true
+  if (a === 192 && b === 168) return true
+  if (a === 169 && b === 254) return true
+  if (a === 0) return true
+  if (a === 100 && b >= 64 && b <= 127) return true
+  if (a === 192 && b === 0) return true
+  if (a === 198 && (b === 18 || b === 19)) return true
+  if (a >= 224) return true
+  return false
+}
+
+function isPrivateIPv6(hextets: number[]): boolean {
+  if (hextets.length !== 8) return false
+  const a = hextets[0]
+  if (hextets.slice(0, 7).every(h => h === 0) && hextets[7] === 1) return true
+  if (hextets.every(h => h === 0)) return true
+  if ((a & 0xfe00) === 0xfc00) return true
+  if ((a & 0xffc0) === 0xfe80) return true
+  if (a === 0x2001 && hextets[1] === 0x0db8) return true
+  if (hextets.slice(0, 5).every(h => h === 0) && hextets[5] === 0xffff) {
+    const ipv4 = [(hextets[6] >> 8) & 0xff, hextets[6] & 0xff, (hextets[7] >> 8) & 0xff, hextets[7] & 0xff]
+    return isPrivateIPv4(ipv4)
+  }
+  if (hextets.slice(0, 5).every(h => h === 0) && hextets[5] === 0) {
+    const ipv4 = [(hextets[6] >> 8) & 0xff, hextets[6] & 0xff, (hextets[7] >> 8) & 0xff, hextets[7] & 0xff]
+    return isPrivateIPv4(ipv4)
+  }
+  return false
+}
+
+function parseIPv4Hostname(hostname: string): number[] | null {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname)
+  if (m) {
+    const octets = m.slice(1).map(Number)
+    if (octets.some(o => Number.isNaN(o) || o > 255)) return null
+    return octets
+  }
+  const mm = /^(0x[0-9a-f]+|0[0-7]+|\d+)$/i.exec(hostname)
+  if (mm) {
+    const isHex = /^0x/i.test(hostname)
+    const isOct = /^0[0-7]+$/i.test(hostname)
+    const n = parseInt(hostname, isHex ? 16 : isOct ? 8 : 10)
+    if (Number.isNaN(n) || n < 0 || n > 0xffffffff) return null
+    return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]
+  }
+  return null
+}
+
+function parseIPv6Hostname(hostname: string): number[] | null {
+  let h = hostname.toLowerCase()
+  if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1)
+  if (!h.includes(':')) return null
+  const parts = h.split('::')
+  if (parts.length > 2) return null
+  function expandDotted(segs: string[]): string[] | null {
+    if (segs.length === 0) return segs
+    const last = segs[segs.length - 1]
+    if (last.includes('.')) {
+      const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(last)
+      if (!m) return null
+      const o = m.slice(1).map(Number)
+      if (o.some(n => Number.isNaN(n) || n > 255)) return null
+      return [...segs.slice(0, -1), ((o[0] << 8) | o[1]).toString(16), ((o[2] << 8) | o[3]).toString(16)]
+    }
+    return segs
+  }
+  if (parts.length === 2) {
+    let left = parts[0] ? parts[0].split(':') : []
+    let right = parts[1] ? parts[1].split(':') : []
+    left = expandDotted(left)
+    right = expandDotted(right)
+    if (left === null || right === null) return null
+    const fill = 8 - left.length - right.length
+    if (fill < 1) return null
+    h = [...left, ...Array(fill).fill('0'), ...right].join(':')
+  } else {
+    const segs = expandDotted(parts[0].split(':'))
+    if (segs === null) return null
+    h = segs.join(':')
+  }
+  const segs = h.split(':')
+  if (segs.length !== 8) return null
+  const hextets = segs.map(s => {
+    const v = parseInt(s, 16)
+    return Number.isNaN(v) || v < 0 || v > 0xffff ? null : v
+  })
+  if (hextets.some(x => x === null)) return null
+  return hextets as number[]
+}
+
+function isPrivateHost(hostname: string): boolean {
+  let lower = hostname.toLowerCase()
+  if (lower.startsWith('[') && lower.endsWith(']')) lower = lower.slice(1, -1)
+  if (PRIVATE_LITERAL_HOSTS.has(lower)) return true
+  const ipv4 = parseIPv4Hostname(lower)
+  if (ipv4) return isPrivateIPv4(ipv4)
+  const ipv6 = parseIPv6Hostname(lower)
+  if (ipv6) return isPrivateIPv6(ipv6)
+  return false
+}
+
+function isTargetDnsSafeSyncResults(_hostname: string, records: string[]): boolean {
+  for (const r of records) {
+    if (isPrivateHost(r)) return false
+  }
+  return true
+}
+
+function isOriginAllowed(origin: string | null, allowed: string[]): boolean {
+  if (!origin || allowed.length === 0) return false
+  return allowed.includes(origin)
+}
+
+function buildCorsHeaders(origin: string | null, allowed: string[]): Record<string, string> {
+  const headers: Record<string, string> = { 'Vary': 'Origin' }
+  if (isOriginAllowed(origin, allowed)) {
+    headers['Access-Control-Allow-Origin'] = origin!
+    headers['Access-Control-Allow-Headers'] = 'authorization, x-client-info, apikey, content-type'
+  }
+  return headers
+}
+
+function validateUrlShape(raw: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new Error('URL 必须以 http:// 或 https:// 开头')
+  }
+  if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) throw new Error('URL 必须以 http:// 或 https:// 开头')
+  if (parsed.username || parsed.password) throw new Error('URL 不得包含认证信息')
+  if (!ALLOWED_PORTS.has(parsed.port)) throw new Error('仅允许 80/443 端口')
+  if (isPrivateHost(parsed.hostname)) throw new Error('不允许访问内网地址')
+  return parsed
+}
+// ── 镜像结束 ──
 
 /** 默认超时 ms（可由环境变量覆盖） */
 const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10000', 10)
