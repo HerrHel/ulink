@@ -55,11 +55,12 @@ WHERE p.polname = 'Anyone can view bookmarks in public groups'
 ORDER BY c.relname, p.polname;
 
 -- ────── S8 自检：RLS 启用 + FORCE 状态 ──────
--- relrowsecurity = RLS 已 ENABLE；relrowforcerls = RLS 已 FORCE。
--- S8 生效：全部 8 行的两个布尔列均为 true。
-SELECT c.relname        AS table_name,
-       c.relrowsecurity AS rls_enabled,
-       c.relrowforcerls AS rls_forced
+-- relrowsecurity = RLS 已 ENABLE；relforcerowsecurity = RLS 已 FORCE。
+-- 注：PG 列名在 PG17 实测为 relrowsecurity / relforcerowsecurity（不是
+--      relrowforcerls 或 relforcerls）。S8 生效：全部 8 行的两个布尔列均为 true。
+SELECT c.relname            AS table_name,
+       c.relrowsecurity     AS rls_enabled,
+       c.relforcerowsecurity AS rls_forced
 FROM pg_class c
 WHERE c.relname IN (
   'categories', 'bookmarks', 'sibling_groups', 'custom_attributes',
