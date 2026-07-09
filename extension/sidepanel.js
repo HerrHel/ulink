@@ -117,10 +117,12 @@
 
   async function loadFromCloud() {
     setStatus('sync', '加载中…')
+    bookmarkList.classList.add('loading') // 保留旧列表，叠加加载遮罩
     const result = await sb.from('bookmarks')
       .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
       .eq('user_id', userId).is('deleted_at', null)
       .order('created_at_num', { ascending: false }).limit(500)
+    bookmarkList.classList.remove('loading')
     if (result.error) { setStatus('err', '加载失败: ' + (result.error.message || '未知错误')); return }
     allBookmarks = result.data || []
     bookmarkCount.textContent = allBookmarks.length + ' 个书签'
@@ -153,6 +155,15 @@
         + '<span class="bookmark-item-del" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '">&times;</span>'
         + '</div>'
     }).join('')
+
+    // 如果书签超过 50 条，显示提示
+    var total = list.length
+    if (total > 50) {
+      var footer = document.createElement('div')
+      footer.className = 'list-footer'
+      footer.textContent = '仅显示最近 50 条，共 ' + total + ' 条'
+      bookmarkList.appendChild(footer)
+    }
 
     // 事件委托：一个监听器处理所有点击
     bookmarkList.addEventListener('click', function (e) {
@@ -411,10 +422,12 @@
     }
   })
 
-  // ── 监听外部刷新消息（快捷键保存后）──
-  chrome.runtime.onMessage.addListener(function (msg) {
+  // ── 监听外部刷新消息（快捷键保存后），支持双向确认 ──
+  chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (msg.type === 'REFRESH_BOOKMARKS') {
       loadBookmarks()
+      sendResponse({ ok: true })
+      return true
     }
   })
 

@@ -75,18 +75,20 @@ async function saveBookmark(_a) {
     }
   })
 
-  // 通知所有打开的 Side Panel 刷新
-  chrome.runtime.sendMessage({ type: 'REFRESH_BOOKMARKS' }).catch(function () {
-    // Side Panel 未打开时忽略
-  })
-
-  // 系统通知
-  chrome.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon128.png',
-    title: 'LinkVault',
-    message: '已保存到书签',
-    contextMessage: title || url,
+  // 通知所有打开的 Side Panel 刷新；如果 Side Panel 已打开则跳过系统通知
+  chrome.runtime.sendMessage({ type: 'REFRESH_BOOKMARKS' }, function (response) {
+    if (response && response.ok) {
+      // Side Panel 已打开且收到了刷新，无需系统通知
+      return
+    }
+    // Side Panel 未打开，发送系统通知
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'LinkVault',
+      message: '已保存到书签',
+      contextMessage: title || url,
+    })
   })
 }
 
