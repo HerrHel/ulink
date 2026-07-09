@@ -1,7 +1,34 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+/**
+ * SSRF 校验纯逻辑（无 Deno 依赖，可被 vitest 单测）。
+ * 同目录相对 import，Edge Function 部署整目录上传即可生效。
+ */
+import {
+  isPrivateHost,
+  isTargetDnsSafeSyncResults,
+  validateUrlShape,
+} from './ssrf-guard.ts'
 
-/** 允许的来源：优先取环境变量，缺省仅同源 */
+/**
+ * S7：SSRF 防护重构。
+ *
+ * 三条历史漏洞：
+ *  1) _isPrivateHost 只做字面/点分十进制匹配 → 漏 IPv6 私有段、IPv4-mapped IPv6、
+ *     十进制整数 IP（2130706433 ≡ 127.0.0.1）。
+ *  2) 仅校验首跳 host → redirect:'follow' 跟随跳转，首跳合法、后续 302 跳到
+ *     169.254.169.254（云元数据）/内网即可打穿。
+ *  3) DNS 重绑定：合法域名解析落到 127.0.0.1 等内网 IP，字面校验拦不住。
+ *
+ * 本实现三层防御：
+ *  一、validateUrlShape 全量 host 校验——点分十进制 / 十进制整数 / IPv6（含映射）全覆盖。
+ *  二、重定向逐跳校验——fetch 每跳对 Location 重新走完整 validateUrl，
+ *      命中内网地址或超 5 跳即终止，杜绝「首跳合法后续跳内网」。
+ *  三、DNS 增强校验（best-effort）——Deno.resolveDns 解析 A/AAAA，逐条复用
+ *      isPrivateHost 判定；resolveDns 不可用则降级，不阻断核心防护。
+ */
+
+/** 允许的来源：优先取环境变量，缺省仅同源（S9 将收紧为缺省拒绝跨域） */
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filter(Boolean)
 
 const corsHeaders = (origin: string | null) => ({
@@ -13,47 +40,74 @@ const corsHeaders = (origin: string | null) => ({
 
 /** 默认超时 ms（可由环境变量覆盖） */
 const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10000', 10)
+/** 重定向最大跳数 */
+const MAX_REDIRECTS = 5
 
-/** 私有/保留 IP 前缀（IPv4） */
-function _isPrivateHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase()
-  const privateLiterals = new Set([
-    'localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0',
-    'metadata.google.internal', 'metadata',
-  ])
-  if (privateLiterals.has(lower)) return true
-
-  const ipv4Match = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
-  if (ipv4Match) {
-    const octets = ipv4Match.slice(1).map(Number)
-    if (octets.some(o => Number.isNaN(o) || o > 255)) return true
-    // 127.0.0.0/8   — loopback
-    if (octets[0] === 127) return true
-    // 10.0.0.0/8    — RFC 1918
-    if (octets[0] === 10) return true
-    // 172.16.0.0/12 — RFC 1918
-    if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true
-    // 192.168.0.0/16 — RFC 1918
-    if (octets[0] === 192 && octets[1] === 168) return true
-    // 169.254.0.0/16 — link-local
-    if (octets[0] === 169 && octets[1] === 254) return true
+/** best-effort DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
+ *  IP 字面量或非域名直接返 true（不查 DNS，已被 validateUrlShape 覆盖）。
+ *  resolveDns 不可用或解析失败时返 true（降级，不阻断主路径）。 */
+async function _dnsLookupSafe(hostname: string): Promise<boolean> {
+  if (hostname === 'localhost') return false
+  if (!hostname.includes('.')) return true  // 不是域名
+  try {
+    const records = await Deno.resolveDns(hostname, 'A').catch(() => [] as string[])
+    const records6 = await Deno.resolveDns(hostname, 'AAAA').catch(() => [] as string[])
+    return isTargetDnsSafeSyncResults(hostname, [...records, ...records6])
+  } catch {
+    return true
   }
-  return false
 }
 
-/** 校验并解析目标 URL，抛异常则无效 */
-function _validateUrl(raw: string): URL {
-  if (typeof raw !== 'string' || !raw.startsWith('http://') && !raw.startsWith('https://')) {
-    throw new Error('URL 必须以 http:// 或 https:// 开头')
-  }
-  const parsed = new URL(raw)
-  // 禁止带认证信息（user:password@host）
-  if (parsed.username || parsed.password) throw new Error('URL 不得包含认证信息')
-  // 禁止私有/保留地址
-  if (_isPrivateHost(parsed.hostname)) throw new Error('不允许访问内网地址')
-  // 禁止非标准端口（仅允许 80 / 443）
-  if (parsed.port && !['80', '443', ''].includes(parsed.port)) throw new Error('仅允许 80/443 端口')
+/** 完整 URL 校验：形状 + DNS 重绑定。返回解析后的 URL；违规抛 Error。 */
+async function _validateUrl(raw: string): Promise<URL> {
+  const parsed = validateUrlShape(raw)
+  const dnsSafe = await _dnsLookupSafe(parsed.hostname)
+  if (!dnsSafe) throw new Error('目标 DNS 解析到内网地址')
   return parsed
+}
+
+/** 手动逐跳 fetch：每跳对 Location 重新走完整 _validateUrl，
+ *  命中内网/协议/端口违规或超 MAX_REDIRECTS 即终止。 */
+async function _fetchWithRedirectGuard(
+  url: URL,
+  method: 'HEAD' | 'GET',
+  timeoutMs: number,
+): Promise<Response> {
+  let current = url
+  let currentMethod = method
+  let lastResponse: Response | null = null
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      lastResponse = await fetch(current.href, {
+        method: currentMethod,
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'LinkVault/1.0 CheckLink (+https://github.com/h2629/myWeb)',
+        },
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+
+    if (lastResponse.status >= 300 && lastResponse.status < 400) {
+      const loc = lastResponse.headers.get('Location')
+      if (!loc || hop === MAX_REDIRECTS) return lastResponse
+      const nextUrl = new URL(loc, current.href)
+      let validated: URL
+      try {
+        validated = await _validateUrl(nextUrl.href)
+      } catch {
+        throw new Error('重定向目标不被允许')
+      }
+      if ([301, 302, 303].includes(lastResponse.status)) currentMethod = 'GET'
+      current = validated
+      continue
+    }
+    return lastResponse
+  }
+  return lastResponse!
 }
 
 serve(async (req) => {
@@ -90,10 +144,10 @@ serve(async (req) => {
     const body: { url?: string; bookmark_id?: string } = await req.json()
     const { url, bookmark_id } = body
 
-    // SSRF 防护：严格校验 URL
+    // SSRF 防护：严格校验 URL（含 DNS 重绑定校验）
     let parsedUrl: URL
     try {
-      parsedUrl = _validateUrl(url || '')
+      parsedUrl = await _validateUrl(url || '')
     } catch (e: unknown) {
       return new Response(
         JSON.stringify({ error: (e as Error).message || 'Invalid URL' }),
@@ -107,31 +161,13 @@ serve(async (req) => {
     let details: Record<string, unknown> = {}
 
     try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
-
-      let response = await fetch(parsedUrl.href, {
-        method: 'HEAD',
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: {
-          'User-Agent': 'LinkVault/1.0 CheckLink (+https://github.com/h2629/myWeb)'
-        }
-      })
+      let response = await _fetchWithRedirectGuard(parsedUrl, 'HEAD', DEFAULT_TIMEOUT_MS)
 
       // HEAD 被拒时降级为 GET（部分 CDN/服务器不支持 HEAD）
       if (response.status === 405) {
-        response = await fetch(parsedUrl.href, {
-          method: 'GET',
-          signal: controller.signal,
-          redirect: 'follow',
-          headers: {
-            'User-Agent': 'LinkVault/1.0 CheckLink (+https://github.com/h2629/myWeb)'
-          }
-        })
+        response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
       }
 
-      clearTimeout(timeout)
       http_status = response.status
       const responseTime = Date.now() - startTime
 
@@ -150,13 +186,20 @@ serve(async (req) => {
 
       if (error.name === 'AbortError' || error.message?.includes('abort')) {
         status = 'blocked'
+        details = { response_time: responseTime, error: '请求超时或被中断' }
+      } else if (error.message === '重定向目标不被允许' || error.message?.includes('内网')) {
+        // SSRF 触发：不暴露内部细节，S11 顺手收敛
+        status = 'blocked'
+        return new Response(
+          JSON.stringify({ status, http_status: 0, details: { response_time: responseTime, error: '目标地址被安全策略拒绝' } }),
+          { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
+        )
       } else {
         status = 'dead'
-      }
-
-      details = {
-        response_time: responseTime,
-        error: error.message || 'unknown error'
+        details = {
+          response_time: responseTime,
+          error: '请求失败',  // S11：不回传原始 error.message，避免泄露内部主机/路径
+        }
       }
     }
 
