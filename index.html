@@ -2,6 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<!-- S4 收紧后的 CSP：生产注入为 HTML meta 标签以在 GitHub Pages 上生效
+     （GH Pages 不解析 _headers 文件，vite headersPlugin 仅作用于 dev/preview）。
+     注：frame-ancestors/form-action/base-uri 在 meta CSP 中不支持，仅服务器端头生效。-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self' https://fonts.gstatic.com">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#122E8A">
 <meta name="mobile-web-app-capable" content="yes">
