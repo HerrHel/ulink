@@ -124,6 +124,19 @@ onMounted(async () => {
   if (hasE2E) {
     store.modals.e2eUnlock = true
   }
+
+  // 处理扩展传来的保存请求：?ext_save_url=...&ext_save_title=...
+  const params = new URLSearchParams(window.location.search)
+  const extSaveUrl = params.get('ext_save_url')
+  if (extSaveUrl) {
+    // 等应用初始化完成后再打开弹窗
+    setTimeout(async () => {
+      const { openBmModal, bmForm } = await import('./composables/domain/useBookmark.js')
+      await openBmModal()
+      bmForm.title = params.get('ext_save_title') || extSaveUrl
+      bmForm.url = extSaveUrl
+    }, 600)
+  }
 })
 
 function onE2EUnlocked() {
