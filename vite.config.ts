@@ -6,9 +6,14 @@ import { PurgeCSS } from 'purgecss';
 /* ── 安全 & 缓存 HTTP 响应头 ── */
 const securityHeaders: Record<string, string> = {
   'X-Content-Type-Options': 'nosniff',
+  // S4 短期项：生产 script-src 移除 'unsafe-inline'。
+  // 前提已核实：构建产物内无可执行内联 <script>、无原生内联事件（index.html 的
+  // 字体 preload onload= 与 main.ts 白屏兜底 onclick= 已改造为非内联形式），
+  // PWA SW 注册走外部 /registerSW.js。style-src 仍保留 'unsafe-inline'（Vue 运行
+  // 时注入的组件样式 + TipTap 编辑器内联 style 依赖，移除需更大改造，列入中期）。
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
