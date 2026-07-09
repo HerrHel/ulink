@@ -38,8 +38,16 @@ chrome.runtime.onInstalled.addListener(function () {
 chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (info.menuItemId === 'save-to-linkvault') {
     const url = info.linkUrl || tab.url
-    const title = info.linkUrl ? url : (tab.title || url)
-    saveBookmark({ url: url, title: title, favIconUrl: tab.favIconUrl })
+    var title = info.linkUrl ? url : (tab.title || url)
+    // 如果是链接，尝试从 content script 获取链接文字
+    if (info.linkUrl && tab.id) {
+      chrome.tabs.sendMessage(tab.id, { type: 'GET_LINK_TEXT' }, function (response) {
+        if (response && response.text) title = response.text
+        saveBookmark({ url: url, title: title, favIconUrl: tab.favIconUrl })
+      })
+    } else {
+      saveBookmark({ url: url, title: title, favIconUrl: tab.favIconUrl })
+    }
   }
 })
 

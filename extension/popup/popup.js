@@ -46,7 +46,7 @@ function renderRecent(bookmarks) {
   }
   emptyEl.style.display = 'none'
   recentList.innerHTML = ''
-  for (var i = 0; i < Math.min(bookmarks.length, 5); i++) {
+  for (var i = 0; i < Math.min(bookmarks.length, 3); i++) {
     var b = bookmarks[i]
     var item = document.createElement('a')
     item.className = 'result-item'
@@ -98,8 +98,11 @@ saveBtn.addEventListener('click', async function () {
       await saveBookmarksViaBackground(bookmarks)
       showStatus('✓ 已保存', 'success')
       renderRecent(bookmarks)
+      // 保存后自动关闭弹窗
+      setTimeout(function () { window.close() }, 800)
     } else {
       showStatus('已存在', 'info')
+      setTimeout(function () { window.close() }, 1000)
     }
   } catch (e) {
     showStatus('保存失败: ' + e.message, 'error')

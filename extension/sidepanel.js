@@ -68,16 +68,42 @@
   const btnShowLogin = $('#btnShowLogin')
   const btnLogout = $('#btnLogout')
   const btnSave = $('#btnSave')
+  const lastSyncEl = $('#lastSync')
 
   let currentTab = null
   let allBookmarks = []
   let userId = null
   let loggedIn = false
+  let lastSyncTime = null
+  let undoTimeout = null
+  let lastDeleted = null
 
-  // ── Toast ──
-  function toast(msg, dur) {
+  // ── Toast（支持可操作的撤销 toast）──
+  function toast(msg, dur, action) {
     if (dur === undefined) { dur = 2000 }
-    toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(function () { toastEl.classList.remove('show') }, dur)
+    if (action) {
+      toastEl.innerHTML = msg + '<button class="toast-action" id="toastAction">' + action.label + '</button>'
+    } else {
+      toastEl.textContent = msg
+    }
+    toastEl.classList.add('show')
+    clearTimeout(toastEl._hideTimer)
+    toastEl._hideTimer = setTimeout(function () {
+      toastEl.classList.remove('show')
+      // 撤销超时未点击，永久执行
+      if (action && action.onTimeout) action.onTimeout()
+    }, dur)
+    if (action) {
+      var actionBtn = document.getElementById('toastAction')
+      if (actionBtn) {
+        actionBtn.addEventListener('click', function (e) {
+          e.stopPropagation()
+          clearTimeout(toastEl._hideTimer)
+          toastEl.classList.remove('show')
+          action.onClick()
+        }, { once: true })
+      }
+    }
   }
 
   // ── 状态指示 ──
@@ -92,11 +118,24 @@
       loginBanner.classList.add('hidden')
       setStatus('ok', '已连接')
     } else {
-      headerLoginHint.textContent = '本地模式'
+      headerLoginHint.textContent = '未登录'
       headerLoginHint.style.color = ''
       btnShowLogin.classList.remove('hidden')
       btnLogout.classList.add('hidden')
       setStatus('local', '本地模式')
+    }
+  }
+
+  // 更新同步时间显示
+  function updateSyncTime() {
+    if (lastSyncTime && lastSyncEl) {
+      var ago = Math.round((Date.now() - lastSyncTime) / 1000)
+      var text = ''
+      if (ago < 10) text = '刚刚同步'
+      else if (ago < 60) text = ago + '秒前同步'
+      else if (ago < 3600) text = Math.round(ago / 60) + '分钟前同步'
+      else text = Math.round(ago / 3600) + '小时前同步'
+      lastSyncEl.textContent = text
     }
   }
 
@@ -126,8 +165,13 @@
     if (result.error) { setStatus('err', '加载失败: ' + (result.error.message || '未知错误')); return }
     allBookmarks = result.data || []
     bookmarkCount.textContent = allBookmarks.length + ' 个书签'
+    lastSyncTime = Date.now()
+    updateSyncTime()
     setStatus('ok', '已连接')
     renderBookmarks(allBookmarks)
+    // 每分钟刷新同步时间显示
+    clearInterval(window._syncTimer)
+    window._syncTimer = setInterval(updateSyncTime, 30000)
   }
 
   // ── 渲染书签列表 ──
@@ -184,21 +228,41 @@
     }, { once: false })
   }
 
-  // ── 删除书签（带确认）──
+  // ── 删除书签（toast + 可撤销）──
   async function deleteBookmark(id, title) {
-    // 本地模式：二次确认（不可恢复）
-    if (!loggedIn || !userId) {
-      if (!confirm('确定删除书签「' + (title || '') + '」吗？\n本地模式下此操作无法撤销。')) return
-    }
     if (loggedIn && userId) {
+      // 云端模式：直接软删除，toast 提示
       const result = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
       if (result.error) { toast('删除失败: ' + result.error.message); return }
+      toast('已删除', 2500)
+      loadBookmarks()
     } else {
+      // 本地模式：保留待撤销数据，3 秒后永久删除
+      var item = allBookmarks.find(function (b) { return b.id === id })
+      if (!item) return
+      // 立即从界面移除
       allBookmarks = allBookmarks.filter(function (b) { return b.id !== id })
-      await saveLocalViaBackground(allBookmarks)
+      renderBookmarks(allBookmarks)
+      bookmarkCount.textContent = allBookmarks.length + ' 个书签'
+      // 显示撤销 toast
+      toast('已删除', 3000, {
+        label: '撤销',
+        onClick: function () {
+          // 撤销：恢复数据
+          clearTimeout(undoTimeout)
+          allBookmarks.unshift(item)
+          saveLocalViaBackground(allBookmarks).then(function () {
+            renderBookmarks(allBookmarks)
+            bookmarkCount.textContent = allBookmarks.length + ' 个书签'
+            toast('已恢复', 1500)
+          })
+        },
+        onTimeout: function () {
+          // 超时确认删除
+          saveLocalViaBackground(allBookmarks)
+        }
+      })
     }
-    toast('已删除')
-    loadBookmarks()
   }
 
   // ── 加载当前标签页信息 ──
