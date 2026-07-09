@@ -232,6 +232,14 @@ describe('useBookmark', () => {
       expect(() => closeBmModal()).not.toThrow()
       expect(bmForm.isOpen).toBe(false)
     })
+
+    // S15：关闭弹窗时清除明文密码，缩短解密后明文在内存中的暴露窗口
+    it('S15: clears password on close to reduce in-memory exposure window', () => {
+      bmForm.isOpen = true
+      bmForm.password = 'secret-decrypted-password'
+      closeBmModal()
+      expect(bmForm.password).toBe('')
+    })
   })
 
   describe('saveBm', () => {

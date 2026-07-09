@@ -155,6 +155,8 @@ export async function openBmModal(editId?: string) {
 export function closeBmModal() {
   bmForm.isOpen = false
   bmForm.addToGroupMode = false
+  // S15：关闭弹窗时清除明文密码，缩短解密后明文在内存中的暴露窗口
+  bmForm.password = ''
   if (bmForm._fetchTimer) { clearTimeout(bmForm._fetchTimer); bmForm._fetchTimer = null }
   const ui = useUIStore()
   ui.modals.bookmark = false
