@@ -1,6 +1,6 @@
 // background.js — LinkVault Extension
 
-const PWA_URL = 'https://herrh.github.io'
+const PWA_URL = 'https://herrhel.github.io'
 
 // ── 初始化：创建右键菜单（每次 worker 启动时执行，以防重启后丢失）──
 chrome.contextMenus.removeAll(function () {
