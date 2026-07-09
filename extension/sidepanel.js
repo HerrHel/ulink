@@ -77,6 +77,10 @@
   const bdEditNotes = $('#bdEditNotes')
   const bdCopyUrl = $('#bdCopyUrl')
   const bdDelete = $('#bdDelete')
+  const bdPasswordWrap = $('#bdPasswordWrap')
+  const bdPasswordText = $('#bdPasswordText')
+  const bdPwShow = $('#bdPwShow')
+  const bdPwCopy = $('#bdPwCopy')
   const searchInput = $('#searchInput')
   const searchWrap = $('#searchWrap')
   const searchClear = $('#searchClear')
@@ -92,6 +96,8 @@
   let currentMatchedBookmark = null
   let searchQuery = ''
   let searchTimer = null
+  let sessionMasterPassword = ''
+  let passwordRevealed = false
 
   // ── Toast（支持可操作的撤销 toast）──
   function toast(msg, dur, action) {
@@ -179,7 +185,7 @@
     setStatus('sync', '加载中…')
     bookmarkList.classList.add('loading')
     const result = await sb.from('bookmarks')
-      .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
+      .select('id,title,url,icon,category_id,notes,password,use_count,created_at_num')
       .eq('user_id', userId).is('deleted_at', null)
       .order('created_at_num', { ascending: false }).limit(500)
     bookmarkList.classList.remove('loading')
@@ -412,6 +418,7 @@
     currentMatchedBookmark = bm
     btnSave.classList.add('hidden')
     bookmarkDetail.classList.remove('hidden')
+    passwordRevealed = false
 
     // 备注
     if (bm.notes && bm.notes.trim()) {
@@ -419,6 +426,18 @@
       bdNotes.textContent = bm.notes
     } else {
       bdNotesWrap.classList.add('hidden')
+    }
+
+    // 密码
+    var hasPassword = bm.password && bm.password !== '' && bm.password !== '""' && JSON.stringify(bm.password) !== '""'
+    if (hasPassword) {
+      bdPasswordWrap.classList.remove('hidden')
+      bdPasswordText.textContent = '••••••••'
+      bdPasswordText.className = 'bd-pw-text'
+      bdPwShow.textContent = '显示'
+      bdPwShow.dataset.action = 'show'
+    } else {
+      bdPasswordWrap.classList.add('hidden')
     }
 
     // 收藏时间
@@ -433,6 +452,78 @@
     // 使用次数
     bdUseCount.textContent = '👁️ ' + (bm.use_count || 0) + ' 次'
   }
+
+  // ── 密码：显示/隐藏 ──
+  bdPwShow.addEventListener('click', async function () {
+    if (!currentMatchedBookmark || !currentMatchedBookmark.password) return
+    if (passwordRevealed) {
+      // 隐藏
+      bdPasswordText.textContent = '••••••••'
+      bdPasswordText.className = 'bd-pw-text'
+      bdPwShow.textContent = '显示'
+      bdPwShow.dataset.action = 'show'
+      passwordRevealed = false
+      return
+    }
+    try {
+      var stored = currentMatchedBookmark.password
+      // 尝试解析 JSON（EncryptedPassword 对象存储在 Supabase 中为 JSON 字符串）
+      if (typeof stored === 'string') {
+        try { stored = JSON.parse(stored) } catch (e) { /* 非 JSON，保持原样 */ }
+      }
+      var plaintext = ''
+      // EncryptedPassword 对象需要主密码
+      if (typeof stored === 'object' && stored && stored.encrypted === true) {
+        if (!sessionMasterPassword) {
+          sessionMasterPassword = prompt('输入主密码以解密密码：')
+          if (!sessionMasterPassword) return
+        }
+        if (window.LinkVaultCrypto) {
+          plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, sessionMasterPassword)
+        } else {
+          toast('解密库未加载')
+          return
+        }
+      } else {
+        // 普通 base64 或明文
+        if (window.LinkVaultCrypto) {
+          plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
+        } else {
+          plaintext = typeof stored === 'string' ? stored : ''
+        }
+      }
+      bdPasswordText.textContent = plaintext
+      bdPasswordText.className = 'bd-pw-text revealed'
+      bdPwShow.textContent = '隐藏'
+      bdPwShow.dataset.action = 'hide'
+      passwordRevealed = true
+    } catch (e) {
+      toast('解密失败: ' + e.message)
+      // 主密码错误时清除缓存的密码
+      if (e.message && e.message.indexOf('主密码') !== -1) {
+        sessionMasterPassword = ''
+      }
+    }
+  })
+
+  // ── 密码：复制 ──
+  bdPwCopy.addEventListener('click', async function () {
+    if (!currentMatchedBookmark || !currentMatchedBookmark.password) return
+    // 如果还没显示，先解密
+    if (!passwordRevealed) {
+      bdPwShow.click()
+      // 等一帧让 UI 更新
+      await new Promise(function (r) { setTimeout(r, 100) })
+      if (!passwordRevealed) return // 用户取消或解密失败
+    }
+    var text = bdPasswordText.textContent
+    if (text === '••••••••') return
+    navigator.clipboard.writeText(text).then(function () {
+      toast('密码已复制', 1500)
+    }).catch(function () {
+      toast('复制失败', 1500)
+    })
+  })
 
   // ── 隐藏已收藏详情 ──
   function hideBookmarkDetail() {

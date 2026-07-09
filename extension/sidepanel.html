@@ -71,6 +71,12 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .bd-meta{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text2)}
 .bd-meta span{display:flex;align-items:center;gap:3px}
 .bd-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+/* ── 密码显示 ── */
+.bd-password{display:flex;align-items:center;gap:6px;font-size:13px;font-family:monospace;margin-top:2px}
+.bd-pw-text{flex:1;min-width:0;color:var(--text);letter-spacing:1px;user-select:all}
+.bd-pw-text.revealed{letter-spacing:0;font-family:inherit;font-size:12px;color:var(--text)}
+.bd-pw-btn{font-size:11px;padding:2px 8px;border-radius:4px;color:var(--accent);font-weight:600;cursor:pointer;flex-shrink:0;border:1px solid var(--border);background:var(--surface)}
+.bd-pw-btn:hover{background:var(--accent-bg);border-color:var(--accent)}
 /* ── 列表底部分页提示 ── */
 .list-footer{text-align:center;padding:8px 10px 12px;font-size:11px;color:var(--text2)}
 .login-banner{background:var(--accent-bg);border-bottom:1px solid var(--border);padding:12px 16px}
@@ -140,6 +146,14 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
         <span id="bdCreatedAt">📅</span>
         <span id="bdUseCount">👁️</span>
       </div>
+      <div id="bdPasswordWrap" class="hidden" style="margin-top:6px">
+        <div class="bd-label">🔑 密码</div>
+        <div class="bd-password">
+          <span class="bd-pw-text" id="bdPasswordText">••••••••</span>
+          <button class="bd-pw-btn" id="bdPwShow">显示</button>
+          <button class="bd-pw-btn" id="bdPwCopy">复制</button>
+        </div>
+      </div>
       <div class="bd-actions">
         <button class="btn btn-ghost btn-sm" id="bdEditNotes">📝 编辑备注</button>
         <button class="btn btn-ghost btn-sm" id="bdCopyUrl">🔗 复制链接</button>
@@ -176,6 +190,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 <div class="toast" id="toast"></div>
 
 <script src="lib/supabase.js"></script>
+<script src="crypto.js"></script>
 <script src="sidepanel.js"></script>
 </body>
 </html>
