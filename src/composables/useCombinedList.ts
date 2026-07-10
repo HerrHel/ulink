@@ -7,7 +7,7 @@
 import { computed, type ComputedRef } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
-import type { CardItem, Bookmark } from '../types.js'
+import type { CardItem, Bookmark, SiblingGroup } from '../types.js'
 
 export type CombinedMode = 'focus' | 'custom' | 'normal'
 
@@ -65,15 +65,16 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
           const d = ui.sortDir === 'asc' ? 1 : -1
           const sm = ui.sortMode
           combined.sort((a, b) => {
-            const da = a.data, db = b.data
+            const da = a.data as SiblingGroup | Bookmark
+            const db = b.data as SiblingGroup | Bookmark
             if (sm === 'useCount') return ((da.useCount || 0) - (db.useCount || 0)) * d
             if (sm === 'title') {
-              const na = a.type === 'group' ? (da.name || '') : (da.title || '')
-              const nb = b.type === 'group' ? (db.name || '') : (db.title || '')
+              const na = 'name' in da ? (da.name || '') : ('title' in da ? (da.title || '') : '')
+              const nb = 'name' in db ? (db.name || '') : ('title' in db ? (db.title || '') : '')
               return na.localeCompare(nb) * d
             }
-            if (sm === 'dateDesc') return ((db.createdAt || 0) - (da.createdAt || 0)) * d
-            if (sm === 'dateAsc') return ((da.createdAt || 0) - (db.createdAt || 0)) * d
+            if (sm === 'dateDesc') return ((db.updatedAt || 0) - (da.updatedAt || 0)) * d
+            if (sm === 'dateAsc') return ((da.updatedAt || 0) - (db.updatedAt || 0)) * d
             return ((da.order || 0) - (db.order || 0)) * d
           })
         }

@@ -100,10 +100,16 @@ const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
 const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
 
-interface DetailEntry {
+type DetailEntry = {
   rawId: string
-  isGroup: boolean
-  data: Bookmark | SiblingGroup
+  isGroup: true
+  data: SiblingGroup
+  name: string
+  domain: string
+} | {
+  rawId: string
+  isGroup: false
+  data: Bookmark
   name: string
   domain: string
 }
@@ -132,7 +138,7 @@ function decodeAllPasswords() {
   const results: Record<string, string> = {}
   for (const entry of entries.value) {
     if (!entry.isGroup && entry.data.password) {
-      results[entry.rawId] = safeDecodePassword(entry.data.password)
+      results[entry.rawId] = typeof entry.data.password === 'string' ? safeDecodePassword(entry.data.password) : ''
     }
   }
   decodedPasswords.value = results
