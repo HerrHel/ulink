@@ -117,10 +117,10 @@ const ds = useDataStore()
 
 const cardEl = ref<HTMLElement | null>(null)
 let _entranceCleanup: (() => void) | null = null
-function setCardEl(el: HTMLElement | null) {
+function setCardEl(el: any) {
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
   cardEl.value = el as HTMLElement | null
-  if (el) _entranceCleanup = stripEntranceAnim(el)
+  if (el) _entranceCleanup = stripEntranceAnim(el as HTMLElement)
 }
 const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 

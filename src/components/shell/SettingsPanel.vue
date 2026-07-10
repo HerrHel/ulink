@@ -62,9 +62,9 @@
                   <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
                   <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
                 </button>
-                <div v-if="dlChecking && dl.progress.total > 0" class="sp-check-progress">
-                  <div class="sp-check-progress-bar" :style="{ width: (dl.progress.done / dl.progress.total * 100) + '%' }"></div>
-                  <span class="sp-check-progress-text">{{ dl.progress.done }}/{{ dl.progress.total }}</span>
+                <div v-if="dlChecking && dlProgress.total > 0" class="sp-check-progress">
+                  <div class="sp-check-progress-bar" :style="{ width: (dlProgress.done / dlProgress.total * 100) + '%' }"></div>
+                  <span class="sp-check-progress-text">{{ dlProgress.done }}/{{ dlProgress.total }}</span>
                 </div>
                 <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
                   <span aria-hidden="true" v-html="I.link"></span>
@@ -214,7 +214,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
-import { useUIStore } from '../../stores/ui.js'
+import { useUIStore, type ThemeStyle, type SortMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
 import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults } from '../../composables/domain/useDataIO.js'
@@ -249,11 +249,12 @@ const trashCount = computed(() => dataStore.trashCount)
 const trashIcon = computed(() => trashCount.value > 0 ? I.trashFull : I.trash)
 const syncState = useSyncState()
 const dlChecking = computed(() => dl.checking.value)
+const dlProgress = computed(() => dl.progress.value)
 const deadCount = computed(() => dl.deadCount.value)
 const blockedCount = computed(() => dl.blockedCount.value)
 const dlAutoEnabled = computed(() => dl.autoCheckEnabled.value)
 
-const sortModes = [
+const sortModes: { id: SortMode; label: string }[] = [
   { id: 'order', label: '自定义' },
   { id: 'recommend', label: '推荐' },
   { id: 'title', label: '名称' },
@@ -262,7 +263,7 @@ const sortModes = [
   { id: 'useCount', label: '常用' },
 ]
 
-function onSetThemeStyle(style: string) {
+function onSetThemeStyle(style: ThemeStyle) {
   themeSetStyle(style)
   uiStore.themeStyle = style
 }
@@ -278,7 +279,7 @@ function onSetLayout(mode: 'grid' | 'list') {
   uiStore.layoutMode = mode
 }
 
-function onSetSortMode(mode: string) {
+function onSetSortMode(mode: SortMode) {
   uiStore.sortMode = mode
 }
 

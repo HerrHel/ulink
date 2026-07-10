@@ -47,7 +47,7 @@
             <span aria-hidden="true" v-html="I.settings" class="icon-sm"></span>
         </button>
         <button
-          v-if="auth.isLoggedIn.value"
+          v-if="auth.isLoggedIn"
           class="header-sync-btn"
           :class="syncState.dotClass"
           @click.stop="toggleSyncPopover"
@@ -57,7 +57,7 @@
           <span class="sync-badge" v-if="syncState.showBadge">{{ syncState.count }}</span>
         </button>
         <SettingsPanel />
-        <SyncStatusPopover v-if="auth.isLoggedIn.value" />
+        <SyncStatusPopover v-if="auth.isLoggedIn" />
       </span>
       <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" title="右侧辅助栏" aria-label="右侧辅助栏">
         <span aria-hidden="true" v-html="I.panel" class="icon-sm"></span>

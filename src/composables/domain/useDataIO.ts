@@ -54,7 +54,7 @@ export function exportData() {
     incrementStat('export_json')
     trackMetric('export_done', { count: Object.keys(ds._dataSnapshot()).length })
     toast('数据已导出')
-  } catch (_) { toast('导出失败', false) }
+  } catch (e) { console.warn('[export] JSON export failed:', e); toast('导出失败', false) }
 }
 
 /** 导出为 Netscape Bookmark HTML，可导入 Chrome/Firefox/Edge。按分类组织目录。 */
@@ -94,7 +94,7 @@ export function exportHTML() {
     _download('linkvault-bookmarks-' + _dateStamp() + '.html', lines.join('\n'), 'text/html')
     incrementStat('export_html')
     toast(`已导出 ${live.length} 个书签（HTML）`)
-  } catch (_) { toast('导出失败', false) }
+  } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
 
 /** 导出为 CSV（title,url,tags,notes,category），表格工具可读。不含账户密码。 */
@@ -119,7 +119,7 @@ export function exportCSV() {
       rows.map(r => r.join(',')).join('\n'), 'text/csv')
     incrementStat('export_csv')
     toast(`已导出 ${live.length} 个书签（CSV）`)
-  } catch (_) { toast('导出失败', false) }
+  } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
 
 /** 导出为 Raindrop.io 兼容 JSON（{ items: [...] }），与导入对称。不含账户密码。 */
@@ -140,7 +140,7 @@ export function exportRaindrop() {
       JSON.stringify({ items }, null, 2), 'application/json')
     incrementStat('export_raindrop')
     toast(`已导出 ${live.length} 个书签（Raindrop JSON）`)
-  } catch (_) { toast('导出失败', false) }
+  } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
 
 // ── 多格式导入入口（A3）──
@@ -214,7 +214,7 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   const { categories, bookmarks, customAttributes, siblingGroups } = result
   let catImported = 0, bmImported = 0, groupImported = 0, attrImported = 0
 
-  try { persist.saveToLocalStorage(ds._dataSnapshot()) } catch (_) { /* 备份失败不阻塞导入 */ }
+  try { persist.saveToLocalStorage(ds._dataSnapshot()) } catch (e) { console.warn('[import] backup before import failed:', e) }
 
   // ── 逐条 Zod 校验：格式错误的条目跳过，不污染本地数据 ──
   let skippedBm = 0, skippedCat = 0, skippedAttr = 0, skippedGroup = 0

@@ -27,7 +27,7 @@
     border-right:1px solid var(--border);
     box-shadow:4px 0 24px rgba(0,0,0,0.12);
   }
-  .icon-rail.swiping{transition:none!important}
+  .icon-rail.swiping{transition:none}
   .icon-rail.open{transform:translateX(0)}
   .overlay.show{display:block;animation:fadeIn .2s ease}
 
@@ -115,9 +115,9 @@
 
   /* === Content area === */
   .panel-content{padding:10px 12px 80px}
-  #btnToggleDetail{display:none!important}
-  #btnBatchHeader{display:inline-flex!important}
-  .filter-row.focus-active #btnBatchHeader{display:none!important}
+  #btnToggleDetail{display:none}
+  #btnBatchHeader{display:inline-flex}
+  .filter-row.focus-active #btnBatchHeader{display:none}
   .form-row{grid-template-columns:1fr}
   .detail-panel.open{width:var(--detail-width,280px)}
   .detail-inner{min-width:var(--detail-width,280px)}
@@ -138,7 +138,7 @@
   }
 
   /* === Hide layout mode toggle on mobile (locked to list) === */
-  .sp-section-layout{display:none!important}
+  .sp-section-layout{display:none}
 
   /* === Filter row: compact single row === */
   .filter-row{
@@ -157,7 +157,7 @@
   /* Mobile detail panel → bottom drawer */
   .detail-panel{
     position:fixed;bottom:0;left:0;right:0;top:auto;
-    max-height:65vh;width:100%!important;
+    max-height:65vh;width:100%;
     border-radius:var(--radius-xl) var(--radius-xl) 0 0;
     transform:translateY(100%);
     transition:transform 0.3s var(--ease-out);
@@ -166,7 +166,7 @@
   }
   /* dp-overlay mobile styles moved to group.css with proper .show specificity */
   .detail-panel.open{transform:translateY(0)}
-  .detail-panel.swiping{transition:none!important}
+  .detail-panel.swiping{transition:none}
   .detail-drag-handle{
     display:flex;justify-content:center;
     padding:12px 0 8px;cursor:ns-resize;
@@ -182,10 +182,10 @@
     width:48px;background:var(--accent);
   }
   /* === Focus mode === */
-  .focus-view{flex-direction:column!important;gap:0;padding-bottom:0}
-  .panel-content:has(.focus-view){padding:10px 12px!important;overflow:hidden}
+  .focus-view{flex-direction:column;gap:0;padding-bottom:0}
+  .panel-content:has(.focus-view){padding:10px 12px;overflow:hidden}
   .focus-view .group-card-focus{flex:1;min-height:0;padding:12px 14px 60px}
-  .focus-toolbar-side{display:none!important}
+  .focus-toolbar-side{display:none}
   #focusBack{
     overflow-x:auto;overflow-y:hidden;
     -webkit-overflow-scrolling:touch;
@@ -201,7 +201,7 @@
   /* === Modals → bottom sheet === */
   .modal{
     position:fixed;bottom:0;left:0;right:0;top:auto;
-    max-height:90vh;width:100%!important;
+    max-height:90vh;width:100%;
     border-radius:var(--radius-xl) var(--radius-xl) 0 0;
     margin:0;
     animation:slideUp 0.28s var(--ease-out);
@@ -232,8 +232,8 @@
   }
   .focus-richtext-toolbar{gap:3px}
   .rt-btn{min-width:26px;height:26px;font-size:0.72rem;padding:3px 4px}
-  .ft-format-group,.ft-format-group+.ft-sep{display:none!important}
-  .ft-section-actions{flex:1 1 0!important;min-width:0!important}
+  .ft-format-group,.ft-format-group+.ft-sep{display:none}
+  .ft-section-actions{flex:1 1 0;min-width:0}
   .ft-undo-end{flex-shrink:0}
   /* Batch bottom: tighter padding on mobile */
   .batch-bottom-inner{padding:10px 14px}
@@ -261,7 +261,7 @@
   .icon-rail .rail-item > span{display:flex}
   .icon-rail .rail-storage{display:none}
   .icon-rail .rail-item.active::before{left:auto;right:0;width:3px;height:14px}
-  #resizeLeft{display:none!important}
+  #resizeLeft{display:none}
   .icon-rail .rail-bottom{border-top:none}
 
   /* Compact header */

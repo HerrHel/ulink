@@ -9,7 +9,7 @@
         <p class="sh-tip">Mac 用户将 Ctrl 替换为 ⌘ Cmd</p>
         <div v-for="g in groups" :key="g.title" class="sh-group">
           <div class="sh-group-title">{{ g.title }}</div>
-          <div v-for="item in g.items" :key="item.keys" class="sh-row">
+          <div v-for="item in g.items" :key="item.desc" class="sh-row">
             <span class="sh-label">{{ item.desc }}</span>
             <span class="sh-keys">
               <kbd v-for="(k, i) in item.keys" :key="i">{{ k }}</kbd>

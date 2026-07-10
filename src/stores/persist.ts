@@ -151,5 +151,5 @@ export function getStorageInfo(data: AppData): StorageInfo {
         ? sizeKB.toFixed(1) + ' KB'
         : (sizeKB / 1024).toFixed(1) + ' MB'
     }
-  } catch (_) { return { size: 0, percent: 0, label: '0 KB' } }
+  } catch (e) { console.warn('[persist] storage info error:', e); return { size: 0, percent: 0, label: '0 KB' } }
 }

@@ -100,7 +100,7 @@ watch(() => props.open, async (isOpen) => {
       const local = fetchLocalHistory(props.itemId)
       // 云端历史（登录用户）
       let remote: HistoryVersion[] = []
-      if (auth.isLoggedIn.value) {
+      if (auth.isLoggedIn) {
         remote = await sync.fetchHistory(props.itemId)
       }
       // 合并去重：相同 created_at 保留云端

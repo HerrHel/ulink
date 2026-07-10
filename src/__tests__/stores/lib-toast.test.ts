@@ -27,9 +27,6 @@ describe('lib/toast', () => {
   })
 
   it('Pinia 未初始化时静默跳过', () => {
-    // 模拟 Pinia 未初始化场景
-    const origStore = useToastStore
-    const { useToastStore: mockFn }: any = { useToastStore: () => { throw new Error('no pinia') } }
     // 应不抛出
     expect(() => toast('测试')).not.toThrow()
   })

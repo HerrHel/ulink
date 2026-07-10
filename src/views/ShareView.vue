@@ -44,7 +44,7 @@
         <a v-for="b in bookmarks" :key="b.id"
            :href="fixUrl(b.url) || '#'"
            :target="fixUrl(b.url) ? '_blank' : '_self'"
-           :rel="fixUrl(b.url) ? 'noopener' : null"
+           :rel="fixUrl(b.url) ? 'noopener' : undefined"
            :class="['share-bookmark-card', { 'share-bookmark-card--disabled': !fixUrl(b.url) }]"
            @click="!fixUrl(b.url) ? $event.preventDefault() : null">
           <div class="share-bm-icon">
@@ -99,8 +99,8 @@ function backToApp() {
 }
 
 async function onFork() {
-  if (!auth.isLoggedIn.value) {
-    auth.authModalOpen.value = true
+  if (!auth.isLoggedIn) {
+    auth.authModalOpen = true
     toast('请先登录后再复制', false)
     return
   }

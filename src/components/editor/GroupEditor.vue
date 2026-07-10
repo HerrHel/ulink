@@ -167,7 +167,7 @@ onMounted(() => {
     onUpdate: ({ editor: ed }) => { pushUndo(props.groupId); syncToStore(ed) },
   })
 
-  ;(editor as Record<string, unknown>)._lvGid = props.groupId
+  ;(editor as any)._lvGid = props.groupId
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
 
@@ -221,6 +221,13 @@ function _onFocusOut() {
 }
 
 onBeforeUnmount(() => {
+  // Clean up DOM event listeners added in onMounted
+  const el = editorRef.value
+  if (el) {
+    el.removeEventListener('focusin', _onFocusIn)
+    el.removeEventListener('focusout', _onFocusOut)
+  }
+  if (_mfbBlurTimer) clearTimeout(_mfbBlurTimer)
   if (EditorManager.get(props.groupId) === editor) {
     EditorManager.unregister(props.groupId)
   }

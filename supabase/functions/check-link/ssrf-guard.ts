@@ -114,8 +114,8 @@ export function parseIPv6Hostname(hostname: string): number[] | null {
     return segs
   }
   if (parts.length === 2) {
-    let left = parts[0] ? parts[0].split(':') : []
-    let right = parts[1] ? parts[1].split(':') : []
+    let left: string[] | null = parts[0] ? parts[0].split(':') : []
+    let right: string[] | null = parts[1] ? parts[1].split(':') : []
     left = expandLastDottedQuad(left)
     right = expandLastDottedQuad(right)
     if (left === null || right === null) return null

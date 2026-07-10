@@ -122,7 +122,8 @@ const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
 function decodePassword() {
-  decodedPw.value = safeDecodePassword(props.bookmark.password)
+  const rawPw = typeof props.bookmark.password === 'string' ? props.bookmark.password : ''
+  decodedPw.value = safeDecodePassword(rawPw)
 }
 
 onMounted(() => {

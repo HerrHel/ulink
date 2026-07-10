@@ -1,7 +1,7 @@
 /**
- * storage.ts — IndexedDB 持久化层（Dexie.js）
+ * storage.ts �?IndexedDB 持久化层（Dexie.js�?
  * 作为 localStorage 的增强方案，突破 5MB 限制
- * P0: 结构化 ops_queue — queue-based sync
+ * P0: 结构�?ops_queue �?queue-based sync
  */
 import Dexie from 'dexie'
 
@@ -97,9 +97,7 @@ export async function removeSyncOps(ids: number[]): Promise<void> {
 export async function syncOpsCount(): Promise<number> {
   try {
     return await db.syncOps.count()
-  } catch (_) {
-    return 0
-  }
+  } catch (e) { console.warn('[IDB] syncOpsCount error:', e); return 0 }
 }
 
 // ── 本地版本历史（C2：下放给本地用户，存储于 localStorage）──
@@ -116,12 +114,10 @@ export function fetchLocalHistory(itemId: string): LocalHistoryVersion[] {
   try {
     const raw = localStorage.getItem(_histKey(itemId))
     return raw ? JSON.parse(raw) as LocalHistoryVersion[] : []
-  } catch (_) {
-    return []
-  }
+  } catch (e) { console.warn('[IDB] fetchLocalHistory error:', e); return [] }
 }
 
-/** 按 historyId 取本地某版本 data，供 restore 回退用。 */
+/** �?historyId 取本地某版本 data，供 restore 回退用�?*/
 export function getLocalHistoryVersion(itemId: string, historyId: number): Record<string, unknown> | null {
   const arr = fetchLocalHistory(itemId)
   const v = arr.find(x => x.id === historyId)

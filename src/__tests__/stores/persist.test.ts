@@ -1,7 +1,7 @@
 /**
  * stores/persist.test.ts — 持久化层测试
  */
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import * as persist from '../../stores/persist.js'
 import { STORAGE_KEY, DEFAULTS } from '../../config/constants.js'

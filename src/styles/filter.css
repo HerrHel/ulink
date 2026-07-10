@@ -14,7 +14,7 @@
 .add-wrap .add-dropdown{position:absolute;top:calc(100% + 4px);right:0}
 /* Attribute filter */
 .attr-filter-wrap{display:flex;align-items:center;gap:8px;position:relative;flex:1;min-width:0}
-#filterTools{flex-wrap:nowrap!important;min-width:0!important;order:1}
+#filterTools{flex-wrap:nowrap;min-width:0;order:1}
 #addWrap{order:3}
 #btnBatchHeader{order:4;flex-shrink:0}
 /* Attribute filter */

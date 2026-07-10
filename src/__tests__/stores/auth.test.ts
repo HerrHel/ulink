@@ -64,7 +64,7 @@ describe('S12 OTP 限流 — useAuthStore', () => {
     // 立即再发：冷却中
     const ok2 = await auth.sendOtp('a@x.com')
     expect(ok2).toBe(false)
-    expect(auth.authError).toContain('60') || expect(auth.authError).toContain('秒')
+    expect(auth.authError).toMatch(/60|秒/)
     // 只发了一次网络请求（第二次被本地冷却拦截）
     expect((supabase.auth.signInWithOtp as any)).toHaveBeenCalledTimes(1)
 

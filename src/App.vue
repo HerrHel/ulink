@@ -95,6 +95,7 @@ import MentionDropdown from './components/overlays/MentionDropdown.vue'
 import SyncConflictBanner from './components/overlays/SyncConflictBanner.vue'
 import CommandPalette from './components/overlays/CommandPalette.vue'
 import ShortcutHelpPanel from './components/overlays/ShortcutHelpPanel.vue'
+import { openBmModal, bmForm } from './composables/domain/useBookmark.js'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))
@@ -131,7 +132,6 @@ onMounted(async () => {
   if (extSaveUrl) {
     // 等应用初始化完成后再打开弹窗
     setTimeout(async () => {
-      const { openBmModal, bmForm } = await import('./composables/domain/useBookmark.js')
       await openBmModal()
       bmForm.title = params.get('ext_save_title') || extSaveUrl
       bmForm.url = extSaveUrl

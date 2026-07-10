@@ -32,7 +32,8 @@
 </template>
 
 <script setup lang="ts">
-import { useCloudSync, type SyncConflict } from '../../composables/domain/useCloudSync.js'
+import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import type { SyncConflict } from '../../stores/sync.js'
 import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
 
