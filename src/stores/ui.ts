@@ -51,6 +51,7 @@ export interface UIState {
   sortMode: SortMode
   sortDir: SortDir
   layoutMode: LayoutMode
+  groupsOnTop: boolean
   searchQuery: string
   focusedGroupId: string | null
   batchMode: boolean
@@ -87,6 +88,7 @@ export const useUIStore = defineStore('ui', {
     isMobile: isMobile(),
     sortMode: 'order',
     sortDir: 'desc',
+    groupsOnTop: true,
     layoutMode: 'grid',
     searchQuery: '',
     focusedGroupId: null,
@@ -172,6 +174,7 @@ export const useUIStore = defineStore('ui', {
           detailCards: this.detailCards.slice(),
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
+          groupsOnTop: this.groupsOnTop,
           layoutMode: this.layoutMode,
           historyMax: this.historyMax,
           docScrollTop: document.documentElement.scrollTop || 0,
@@ -189,6 +192,7 @@ export const useUIStore = defineStore('ui', {
         const s = JSON.parse(raw)
         if (s.curCat) this.curCat = s.curCat
         if (s.sortMode) this.sortMode = s.sortMode
+        if (typeof s.groupsOnTop === 'boolean') this.groupsOnTop = s.groupsOnTop
         if (s.layoutMode === 'list' || s.layoutMode === 'grid') this.layoutMode = s.layoutMode
         if (typeof s.historyMax === 'number') this.historyMax = Math.min(30, Math.max(5, s.historyMax))
         if (s.searchQuery) this.searchQuery = s.searchQuery

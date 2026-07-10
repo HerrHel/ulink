@@ -45,6 +45,10 @@
                           :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ s.label }}</button>
                 </div>
               </div>
+              <div class="sp-toggle-row" :class="{ active: uiStore.groupsOnTop }" @click="uiStore.groupsOnTop = !uiStore.groupsOnTop">
+                <span class="sp-toggle-label">组置顶</span>
+                <span class="sp-switch"></span>
+              </div>
             </div>
             <!-- 维护 -->
             <div class="sp-section">

@@ -56,8 +56,27 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         const groups = ds.filteredGroups
         const topLevel = ds.filteredBookmarks.filter((b: Bookmark) => !b.parentId)
         const combined: CardItem[] = []
-        for (const g of groups) combined.push({ type: 'group', data: g })
-        for (const b of topLevel) combined.push({ type: 'bm', data: b })
+        if (ui.groupsOnTop) {
+          for (const g of groups) combined.push({ type: 'group', data: g })
+          for (const b of topLevel) combined.push({ type: 'bm', data: b })
+        } else {
+          for (const g of groups) combined.push({ type: 'group', data: g })
+          for (const b of topLevel) combined.push({ type: 'bm', data: b })
+          const d = ui.sortDir === 'asc' ? 1 : -1
+          const sm = ui.sortMode
+          combined.sort((a, b) => {
+            const da = a.data, db = b.data
+            if (sm === 'useCount') return ((da.useCount || 0) - (db.useCount || 0)) * d
+            if (sm === 'title') {
+              const na = a.type === 'group' ? (da.name || '') : (da.title || '')
+              const nb = b.type === 'group' ? (db.name || '') : (db.title || '')
+              return na.localeCompare(nb) * d
+            }
+            if (sm === 'dateDesc') return ((db.createdAt || 0) - (da.createdAt || 0)) * d
+            if (sm === 'dateAsc') return ((da.createdAt || 0) - (db.createdAt || 0)) * d
+            return ((da.order || 0) - (db.order || 0)) * d
+          })
+        }
         return combined
       }
     }
