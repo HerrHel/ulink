@@ -166,5 +166,5 @@ function close() {
   query.value = ''
 }
 
-// 暴露给其他模块（通过 bridge.js）
+// 已通过 useAttrDropdownStore 暴露给其他模块
 </script>

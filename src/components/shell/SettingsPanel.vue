@@ -5,21 +5,14 @@
         <div class="settings-drawer" @click.stop>
           <div class="settings-drawer-head">
             <h2 class="settings-drawer-title">设置</h2>
+            <button class="sp-help-btn" @click.stop="onOpenShortcutHelp" aria-label="快捷键速查" title="快捷键速查">?</button>
             <button class="modal-close" @click="uiStore.panels.settings = false" aria-label="关闭设置">&times;</button>
           </div>
           <div class="settings-drawer-body">
-            <!-- Shortcut Help -->
-            <div class="sp-section">
-              <button class="sp-action" @click.stop="onOpenShortcutHelp">
-                <span v-html="shortcutIcon"></span>
-                <span>快捷键速查</span>
-                <kbd class="sp-action-kbd">Ctrl /</kbd>
-              </button>
-            </div>
             <!-- Theme -->
             <div class="sp-section">
+              <span class="sp-section-title">主题</span>
               <div class="sp-row">
-                <span class="sp-row-label">主题</span>
                 <div class="sp-seg">
                   <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">效率</button>
                   <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">舒适</button>
@@ -35,8 +28,8 @@
             </div>
             <!-- Layout -->
             <div class="sp-section sp-section-layout">
+              <span class="sp-section-title">视图</span>
               <div class="sp-row">
-                <span class="sp-row-label">视图</span>
                 <div class="sp-seg">
                   <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span aria-hidden="true" v-html="I.grid"></span></button>
                   <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span aria-hidden="true" v-html="I.list"></span></button>
@@ -45,16 +38,17 @@
             </div>
             <!-- Sort -->
             <div class="sp-section">
+              <span class="sp-section-title">排序</span>
               <div class="sp-row">
-                <span class="sp-row-label">排序</span>
                 <div class="sp-seg sp-seg-wrap">
                   <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn"
                           :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ s.label }}</button>
                 </div>
               </div>
             </div>
-            <!-- Dead link checker -->
+            <!-- 维护 -->
             <div class="sp-section">
+              <span class="sp-section-title">维护</span>
               <div class="sp-actions">
                 <button class="sp-action" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
                   <span aria-hidden="true" v-html="I.radar"></span>
@@ -79,8 +73,9 @@
                 </div>
               </div>
             </div>
-            <!-- Cloud Sync / Auth -->
+            <!-- 同步与安全 -->
             <div class="sp-section">
+              <span class="sp-section-title">同步与安全</span>
               <div class="sp-row">
                 <span class="sp-row-label"><span aria-hidden="true" v-html="auth.isLoggedIn ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
                 <span class="sp-sync-status" :class="syncState.level">
@@ -104,9 +99,7 @@
                   <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">登录 / 注册</button>
                 </div>
               </template>
-            </div>
-            <!-- E2E Encryption -->
-            <div class="sp-section">
+              <div class="sp-divider"></div>
               <div class="sp-row">
                 <span class="sp-row-label"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span>端到端加密</span>
                 <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
@@ -122,8 +115,9 @@
                 <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 锁定</button>
               </div>
             </div>
-            <!-- Data -->
+            <!-- 数据 -->
             <div class="sp-section">
+              <span class="sp-section-title">数据</span>
               <div class="sp-actions">
                 <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
                 <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" v-html="I.import"></span>导入</button>
@@ -149,9 +143,7 @@
                   </div>
                 </div>
               </div>
-            </div>
-            <!-- History versions -->
-            <div class="sp-section">
+              <div class="sp-divider"></div>
               <div class="sp-row">
                 <span class="sp-row-label">历史版本保留</span>
                 <span class="sp-range-value">{{ uiStore.historyMax }} 版</span>
@@ -162,8 +154,9 @@
                 <span class="sp-range-hint">5–30</span>
               </div>
             </div>
-            <!-- Feedback & Stats -->
+            <!-- 关于 -->
             <div class="sp-section">
+              <span class="sp-section-title">关于</span>
               <button class="sp-action" @click.stop="onFeedback">
                 <span v-html="'💬'"></span>反馈 / 建议
                 <span class="sp-action-kbd">邮箱</span>
@@ -183,6 +176,7 @@
             </div>
             <!-- Danger -->
             <div class="sp-section sp-danger">
+              <span class="sp-section-title">危险操作</span>
               <button class="sp-danger-btn" @click.stop="onResetData">
                 <span aria-hidden="true" v-html="I.trash"></span>重置所有数据
               </button>
@@ -229,7 +223,6 @@ import { incrementStat, getStats, STAT_LABELS } from '../../lib/stats.js'
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
 
-const shortcutIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>'
 function onOpenShortcutHelp() { uiStore.panels.shortcutHelp = true; uiStore.panels.settings = false }
 
 const uiStore = useUIStore()
@@ -256,7 +249,6 @@ const dlAutoEnabled = computed(() => dl.autoCheckEnabled.value)
 
 const sortModes: { id: SortMode; label: string }[] = [
   { id: 'order', label: '自定义' },
-  { id: 'recommend', label: '推荐' },
   { id: 'title', label: '名称' },
   { id: 'dateDesc', label: '新→旧' },
   { id: 'dateAsc', label: '旧→新' },

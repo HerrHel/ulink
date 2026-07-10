@@ -269,12 +269,16 @@ export function useCloudSync() {
                 .then(r => ({ op, result: r }))
             )
           } else {
+            // ⚠️ changedFields 中的 f 是 camelCase（本地字段），row 的键是 snake_case（远端列名）。
+            // 旧代码直接 if (f in row) 几乎永不命中（除单字段如 title/url 恰好同名），
+            // 导致 partial 只含 id/user_id/updated_at_num，退化成无意义的空更新。
             const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
             for (const f of changedFields) {
-              // TODO: f 为 camelCase（changedFields 源），row 为 snake_case 远端行；
-              // `f in row` 几乎永不命中，部分更新分支实际只推 id/user_id/updated_at_num。
-              // 运行逻辑修正需配合真实多字段增量同步的 E2E 验证，留待后续单独 PR。
-              if (f in row && f !== 'id' && f !== 'user_id') partial[camelToSnake(f)] = (row as unknown as Record<string, unknown>)[f]
+              const snakeKey = camelToSnake(f)
+              // id/user_id 已在 partial 基础字段中，跳过
+              if (snakeKey !== 'id' && snakeKey !== 'user_id' && snakeKey in (row as unknown as Record<string, unknown>)) {
+                partial[snakeKey] = (row as unknown as Record<string, unknown>)[snakeKey]
+              }
             }
             const { id, ...updateData } = partial
             tasks.push(

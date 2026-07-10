@@ -51,20 +51,11 @@ function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: 
   return items
 }
 
-const _DECAY_LAMBDA = 0.05
-const _MS_PER_DAY = 86400000
-
-function _recommendedScore(item: { useCount: number; updatedAt: number }): number {
-  const days = (Date.now() - (item.updatedAt || 0)) / _MS_PER_DAY
-  return (item.useCount || 0) * Math.exp(-_DECAY_LAMBDA * days)
-}
-
 type SortableItem = { useCount: number; order: number; updatedAt: number }
 
 function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
-    if (sortMode === 'recommend') return (_recommendedScore(b) - _recommendedScore(a))
     if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
     if (sortMode === 'title') return String(a[nameKey]).localeCompare(String(b[nameKey])) * d
     if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0)) * d

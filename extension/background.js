@@ -9,6 +9,11 @@ chrome.contextMenus.removeAll(function () {
     title: '保存到 LinkVault',
     contexts: ['page', 'link'],
   })
+  chrome.contextMenus.create({
+    id: 'save-selection-to-linkvault',
+    title: '保存选中文本到 LinkVault',
+    contexts: ['selection'],
+  })
 })
 
 // ── 安装/更新时 ──
@@ -20,6 +25,17 @@ chrome.runtime.onInstalled.addListener(function () {
 chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (info.menuItemId === 'save-to-linkvault') {
     openPwaWithUrl(info.linkUrl || tab.url, tab.title)
+  } else if (info.menuItemId === 'save-selection-to-linkvault') {
+    // P2: 选中文本 → 注入脚本获取选中内容 → 传到 PWA 保存
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => window.getSelection()?.toString() || '',
+    }).then(function (results) {
+      const selectedText = (results && results[0] && results[0].result) || ''
+      openPwaWithUrl(info.pageUrl || tab.url, tab.title, selectedText)
+    }).catch(function () {
+      openPwaWithUrl(info.pageUrl || tab.url, tab.title)
+    })
   }
 })
 
@@ -33,14 +49,15 @@ chrome.commands.onCommand.addListener(function (command) {
   }
 })
 
-/** 新标签页打开 PWA，附带当前页面 URL */
-function openPwaWithUrl(url, title) {
+/** 新标签页打开 PWA，附带当前页面 URL 和可选的选中文本 */
+function openPwaWithUrl(url, title, notes) {
   if (!url) return
   if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')
       || url.startsWith('file:') || url.startsWith('javascript:') || url.startsWith('data:')
       || url.startsWith('blob:') || url.startsWith('view-source:')) return
 
   var params = new URLSearchParams({ ext_save_url: url, ext_save_title: title || url })
+  if (notes) params.set('ext_save_notes', notes)
   var targetUrl = PWA_URL + '/?ext_save=1&' + params.toString()
 
   chrome.tabs.query({}, function (tabs) {
@@ -55,7 +72,14 @@ function openPwaWithUrl(url, title) {
   })
 }
 
-// ── 消息：Side Panel 获取当前标签页 ──
+// ── 消息路由：side panel ↔ PWA ──
+//
+// 数据流设计：
+//   side panel 的保存操作 → 本 background → 打开 PWA 标签页（走 PWA 的 sync queue）
+//   side panel 的删除/编辑备注 → 直接写 Supabase（PWA 通过 Realtime 拉取同步）
+//
+// 这样确保主要写操作（保存）走 PWA 的 IndexedDB 队列 + 离线同步机制，
+// 而删除/编辑备注等低频操作容忍短暂滞后。
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'GET_CURRENT_TAB') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
@@ -63,5 +87,16 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       sendResponse(tab ? { url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl } : null)
     })
     return true
+  }
+
+  // ── Side panel 保存 → 转发到 PWA 标签页 ──
+  // side panel 的保存/删除/编辑操作数据流：
+  //   - 保存（主要操作）→ SAVE_TO_VAULT → 打开 PWA 标签页 → 走 sync queue
+  //   - 删除/编辑备注 → 直接写 Supabase（低频操作，PWA 通过 Realtime 同步获取）
+  //   （原因：side panel 保持快速响应，无需等待 PWA 标签页加载）
+  if (msg.type === 'SAVE_TO_VAULT') {
+    openPwaWithUrl(msg.url, msg.title, msg.notes)
+    sendResponse({ ok: true })
+    return false
   }
 })

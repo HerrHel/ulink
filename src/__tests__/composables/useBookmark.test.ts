@@ -102,6 +102,7 @@ const mockE2E = {
   isE2EEnabled: false,
   isUnlocked: false,
   cryptoKey: null as CryptoKey | null,
+  pendingUnlock: null as ((ok: boolean) => void) | null,
 }
 
 
@@ -317,21 +318,23 @@ describe('useBookmark', () => {
       const newBm = mockData.addBookmark.mock.calls[0][0]
       expect(newBm.password).toBe('')
     })
-    // S6：E2E 已启用但未解锁时，带密码的书签必须被阻止保存，禁止走 btoa(明文) 降级
-    it('S6: blocks saving password when E2E enabled but not unlocked', async () => {
+    // P1：E2E 已启用但未解锁时，带密码的书签改为按需解锁而非直接阻断
+    it('P1: prompts unlock when saving password while E2E enabled but locked', async () => {
       mockE2E.isE2EEnabled = true
       mockE2E.isUnlocked = false
       mockE2E.cryptoKey = null
-      bmForm.title = 'Should Not Save'
+      bmForm.title = 'Should Prompt Unlock'
       bmForm.url = 'https://e2elocked.com'
       bmForm.password = 'secret-pw'
-      await vi.waitFor(async () => { await saveBm() })
-      // 不应调用 addBookmark / updateBookmark
+      // 调用 saveBm 后应设置 pendingUnlock（而不是直接 toast 返回）
+      saveBm()
+      // 等待微任务队列处理
+      await new Promise(r => setTimeout(r, 50))
+      // 不应调用 addBookmark / updateBookmark（尚未解锁）
       expect(mockData.addBookmark).not.toHaveBeenCalled()
       expect(mockData.updateBookmark).not.toHaveBeenCalled()
-      // 应有错误 toast
-      const { toast } = await import('../../lib/toast.js')
-      expect(toast).toHaveBeenCalledWith(expect.stringContaining('解锁'), false)
+      // pendingUnlock 应被设置（等待解锁）
+      expect(mockE2E.pendingUnlock).not.toBeNull()
     })
 
     it('S6: empty password still allowed when E2E enabled but not unlocked', async () => {

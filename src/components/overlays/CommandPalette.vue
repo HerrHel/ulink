@@ -107,7 +107,7 @@ const filtered = computed<CommandItem[]>(() => {
       icon: I.chevron,
       hint: r.url ? (() => { try { return new URL(r.url.startsWith('http') ? r.url : 'https://' + r.url).hostname.replace(/^www\./, '') } catch { return '' } })() : '',
       section: 'bookmark' as const,
-      action() { close(); openBookmark({ url: r.url } as any) },
+      action() { const bm = ds.bookmarkMap[r.id]; if (bm) { close(); openBookmark(bm) } },
     }))
   return [...matchedCmds, ...matchedGroups, ...matchedBms]
 })

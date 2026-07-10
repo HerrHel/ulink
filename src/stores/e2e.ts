@@ -12,6 +12,11 @@ import { defineStore } from 'pinia'
 export const useE2EStore = defineStore('e2e', () => {
   const isE2EEnabled = ref(false)
   const isUnlocked = ref(false)
+  /**
+   * 按需解锁：非 null 时表示有操作正在等待解锁完成
+   * resolve(true) → 解锁成功继续；resolve(false) → 用户取消
+   */
+  const pendingUnlock = ref<((ok: boolean) => void) | null>(null)
   /** 缓存的 AES-256-GCM 密钥 — 仅在 isUnlocked=true 时有效 */
   const cryptoKey = ref<CryptoKey | null>(null)
 
@@ -71,7 +76,7 @@ export const useE2EStore = defineStore('e2e', () => {
   }
 
   return {
-    isE2EEnabled, isUnlocked, cryptoKey: readonly(cryptoKey),
+    isE2EEnabled, isUnlocked, cryptoKey: readonly(cryptoKey), pendingUnlock,
     setEnabled, setUnlocked, setKey, resetLockTimer,
     initVisibilityLock, destroyVisibilityLock,
     lock, cleanup,

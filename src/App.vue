@@ -46,7 +46,7 @@
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
 <AuthModal />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
-<E2EUnlockModal :open="store.modals.e2eUnlock" @close="store.modals.e2eUnlock = false" @unlocked="onE2EUnlocked" />
+<E2EUnlockModal :open="store.modals.e2eUnlock" @close="onE2EClose" @unlocked="onE2EUnlocked" />
 <SetupGuide />
 </ErrorBoundary>
 
@@ -66,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, ref, onMounted } from 'vue'
+import { defineAsyncComponent, ref, onMounted, watch } from 'vue'
 import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
@@ -74,6 +74,7 @@ import { useApp } from './composables/useApp.js'
 import { useAppHandlers } from './composables/useAppHandlers.js'
 import { useAppLifecycle, onShareRoute } from './composables/useAppLifecycle.js'
 import { useE2E } from './composables/domain/useE2E.js'
+import { useE2EStore } from './stores/e2e.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -95,7 +96,7 @@ import MentionDropdown from './components/overlays/MentionDropdown.vue'
 import SyncConflictBanner from './components/overlays/SyncConflictBanner.vue'
 import CommandPalette from './components/overlays/CommandPalette.vue'
 import ShortcutHelpPanel from './components/overlays/ShortcutHelpPanel.vue'
-import { openBmModal, bmForm } from './composables/domain/useBookmark.js'
+import { openBmModal, bmForm, saveFromExtension } from './composables/domain/useBookmark.js'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))
@@ -119,27 +120,60 @@ const { handlers } = useAppHandlers()
 
 // E2E 加密状态
 const e2e = useE2E()
+const e2eStore = useE2EStore()
 
 onMounted(async () => {
-  const hasE2E = await e2e.checkE2EStatus()
-  if (hasE2E) {
-    store.modals.e2eUnlock = true
-  }
+  // P1: E2E 改为按需引导 — 不再是「设过主密码就每次启动必解锁」。
+  // 仅在保存敏感字段（密码）或编辑已加密书签时弹解锁提示。
+  await e2e.checkE2EStatus()
 
-  // 处理扩展传来的保存请求：?ext_save_url=...&ext_save_title=...
+  // 处理扩展 / share_target 传来的保存请求
+  //   - 扩展快捷键/右键菜单: ?ext_save=1&ext_save_url=...&ext_save_title=...
+  //   - Web Share Target: ?title=...&text=...&url=...
+  // 静默保存 + toast 撤销（否决纯静默方案，保留可逆性）
   const params = new URLSearchParams(window.location.search)
   const extSaveUrl = params.get('ext_save_url')
-  if (extSaveUrl) {
-    // 等应用初始化完成后再打开弹窗
-    setTimeout(async () => {
-      await openBmModal()
-      bmForm.title = params.get('ext_save_title') || extSaveUrl
-      bmForm.url = extSaveUrl
-    }, 600)
+  const shareUrl = params.get('url')
+  // ext_save 优先，share_target 次之
+  const incomingUrl = extSaveUrl || shareUrl
+  if (incomingUrl) {
+    const incomingTitle = params.get('ext_save_title') || params.get('title') || ''
+    const incomingText = params.get('ext_save_notes') || params.get('text') || ''
+    // 等应用初始化完成后再保存
+    setTimeout(() => {
+      saveFromExtension(incomingUrl, incomingTitle, incomingText)
+      // 清理 URL 参数，避免刷新时重复保存
+      const cleanUrl = window.location.origin + window.location.pathname
+      window.history.replaceState(null, '', cleanUrl)
+    }, 800)
+  }
+})
+
+/**
+ * 按需解锁：当 e2eStore.pendingUnlock 被设置时，弹出解锁弹窗
+ */
+watch(() => e2eStore.pendingUnlock, (resolver) => {
+  if (resolver) {
+    store.modals.e2eUnlock = true
   }
 })
 
 function onE2EUnlocked() {
   store.modals.e2eUnlock = false
+  // 有操作在等待解锁 → resolve(true) 继续
+  if (e2eStore.pendingUnlock) {
+    e2eStore.pendingUnlock(true)
+    e2eStore.pendingUnlock = null
+  }
+}
+
+/** E2E 解锁弹窗关闭/取消 */
+function onE2EClose() {
+  store.modals.e2eUnlock = false
+  // 有操作在等待解锁但用户取消 → resolve(false)
+  if (e2eStore.pendingUnlock) {
+    e2eStore.pendingUnlock(false)
+    e2eStore.pendingUnlock = null
+  }
 }
 </script>

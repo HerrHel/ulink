@@ -12,6 +12,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { isMobile } from '../../utils.js'
+import type { CardItem } from '../../types.js'
 
 const EDGE_ZONE = 60     // 触发滚动的边缘区域 px
 const MAX_SCROLL_SPEED = 12 // 最大滚动速度 px/frame
@@ -37,7 +38,7 @@ interface UseMobileDragReorderOptions {
   draggingClass?: string
 }
 
-export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, listRef: Ref<any[]>, options: UseMobileDragReorderOptions = {}) {
+export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, listRef: Ref<CardItem[]>, options: UseMobileDragReorderOptions = {}) {
   const uiStore = useUIStore()
   const dataStore = useDataStore()
 

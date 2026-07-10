@@ -89,6 +89,7 @@ import { safeDecodePassword } from '../../crypto.js'
 import { I } from '../../config/icons.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
 import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.js'
+import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
@@ -102,7 +103,7 @@ const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
 interface DetailEntry {
   rawId: string
   isGroup: boolean
-  data: any
+  data: Bookmark | SiblingGroup
   name: string
   domain: string
 }
@@ -196,12 +197,12 @@ onUnmounted(() => {
 const noteIcon = I.note
 const bookmarkIcon = I.emptyBookmark
 
-function getIcon(item: any) { return favicon(item.url, item.icon) }
-function getTags(bm: any) { return getTagNames(bm, ds.customAttributes) }
+function getIcon(item: Bookmark) { return favicon(item.url, item.icon) }
+function getTags(bm: Bookmark) { return getTagNames(bm, ds.customAttributes) }
 function getChildren(parentId: string) { return ds.childrenMap[parentId] || [] }
 function sanitizeNotes(notes: string) { return sanitizeHTML(notes || '') }
 
-function visit(bm: any) { openBookmark(bm) }
+function visit(bm: Bookmark) { openBookmark(bm) }
 function editBm(id: string) { openBmModal(id) }
 function openDetail(id: string) { if (!ui.detailCards.includes(id)) ui.detailCards.push(id); ui.panels.detail = true }
 function closeDetail(rawId: string) {

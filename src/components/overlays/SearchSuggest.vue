@@ -65,7 +65,8 @@ function select(item: SearchResultItem) {
   if (item._isGroup) {
     toggleGroupFocus(item.id)
   } else {
-    openBookmark(item as any)
+    const bm = dataStore.bookmarkMap[item.id]
+    if (bm) openBookmark(bm)
   }
 }
 

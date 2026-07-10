@@ -13,6 +13,9 @@ task_plan.md
 *.svg
 *.md
 !CLAUDE.md
+!src/components/share/README.md
+!/extension/lib/README.md
 /test-results/
 /playwright-report/
 supabase/.temp/
+/extension/lib/supabase.js

@@ -7,7 +7,8 @@
     "sidePanel",
     "activeTab",
     "tabs",
-    "contextMenus"
+    "contextMenus",
+    "scripting"
   ],
   "host_permissions": [],
   "side_panel": {

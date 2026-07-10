@@ -133,7 +133,21 @@ export async function openBmModal(editId?: string) {
           bmForm.password = ''
         }
       } else {
-        bmForm.password = ''
+        // P1：按需引导 — 编辑已加密书签时自动弹解锁
+        const unlocked = await new Promise<boolean>(resolve => {
+          e2eStore.pendingUnlock = resolve
+        })
+        if (unlocked && e2eStore.cryptoKey) {
+          try {
+            const ep = pw as EncryptedPassword
+            const raw = ep.salt + '.' + ep.iv + '.' + ep.data
+            bmForm.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
+          } catch {
+            bmForm.password = ''
+          }
+        } else {
+          bmForm.password = ''
+        }
       }
     } else {
       bmForm.password = safeDecodePassword(bm?.password as string || '')
@@ -194,8 +208,16 @@ export async function saveBm() {
         return
       }
     } else if (e2eStore.isE2EEnabled) {
-      // S6：E2E 启用但未解锁 —— 禁止 btoa 明文降级，守住「已加密」预期
-      toast('请先解锁 E2E 再保存带密码的书签', false)
+      // P1：按需解锁 — 不再提示「请先解锁 E2E」，改为自动弹锁 + 等待解锁后继续保存
+      const unlocked = await new Promise<boolean>(resolve => {
+        e2eStore.pendingUnlock = resolve
+      })
+      if (!unlocked) {
+        toast('保存已取消', false)
+        return
+      }
+      // 解锁后重试加密（递归调用自身，解锁后 isUnlocked=true 走上一分支）
+      await saveBm()
       return
     } else {
       // E2E 未启用：旧版兼容的 base64（非加密场景的预期形态）
@@ -396,4 +418,49 @@ export function deleteBookmarkWithUndo(id: string) {
     debouncedSaveAppData()
     toast('已恢复')
   })
+}
+
+/**
+ * 静默保存书签（扩展/分享目标传入），保存后显示带撤销按钮的 toast。
+ * 不打开编辑弹窗，实现一键保存。
+ */
+export function saveFromExtension(url: string, title?: string, notes?: string): boolean {
+  const ds = useDataStore()
+  const safeUrl = fixUrl(url)
+  if (!safeUrl) {
+    toast('无法保存该链接', false)
+    return false
+  }
+
+  const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  const dm = domain(safeUrl)
+  const newBm: Bookmark = {
+    id,
+    title: (title || dm).trim() || dm,
+    url: safeUrl,
+    username: '',
+    password: '',
+    notes: notes || '',
+    icon: `https://www.google.com/s2/favicons?domain=${dm}&sz=32`,
+    categoryId: CAT_UNCATEGORIZED,
+    parentId: null,
+    order: ds.bookmarks.length,
+    useCount: 0,
+    attributes: {},
+    isExpanded: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+
+  ds.addBookmark(newBm)
+  saveAppData()
+  incrementStat('bookmark_created')
+
+  toastWithUndo('✓ 已保存到书签', () => {
+    ds.deleteBookmark(newBm.id)
+    debouncedSaveAppData()
+    toast('已撤销')
+  })
+
+  return true
 }

@@ -416,37 +416,28 @@
   }
 
   // ── 保存按钮 ──
+  // 数据流：side panel → background → 打开 PWA 标签页 → PWA 走 sync queue 保存
+  // 这样确保保存操作经过 PWA 的 IndexedDB 队列 + 离线同步机制，
+  // 与右键菜单 / 快捷键 Ctrl+Shift+S 行为一致。
   function flashSaveButton(success) {
     if (success) { btnSave.innerHTML = '✓ 已保存'; btnSave.style.background = '#22c55e' }
     else { btnSave.innerHTML = '✗ 保存失败'; btnSave.style.background = '#ef4444' }
     setTimeout(function () { btnSave.innerHTML = '⚡ 保存当前页面'; btnSave.style.background = '' }, 2000)
   }
 
-  btnSave.addEventListener('click', async function () {
-    const tab = await new Promise(function (resolve) { chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (t) { resolve(t) }) })
-    if (!tab || !tab.url) { toast('无法获取当前页面，请刷新后重试'); return }
-    if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')
-        || tab.url.startsWith('file:') || tab.url.startsWith('javascript:') || tab.url.startsWith('data:')
-        || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) { return toast('浏览器内部页面无法保存') }
+  btnSave.addEventListener('click', function () {
+    chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
+      if (!tab || !tab.url) { toast('无法获取当前页面，请刷新后重试'); return }
+      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')
+          || tab.url.startsWith('file:') || tab.url.startsWith('javascript:') || tab.url.startsWith('data:')
+          || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) { return toast('浏览器内部页面无法保存') }
 
-    const dupCheck = await sb.from('bookmarks').select('id').eq('user_id', userId).eq('url', tab.url).is('deleted_at', null).maybeSingle()
-    if (!dupCheck.error && dupCheck.data) { toast('已存在，无需重复保存'); flashSaveButton(true); return }
-
-    const id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-    const now = Date.now()
-    setStatus('sync', '保存中…')
-    const result = await sb.from('bookmarks').upsert({
-      id: id, user_id: userId,
-      title: tab.title || tab.url, url: tab.url, icon: tab.favIconUrl || '',
-      category_id: 'uncategorized', notes: '', username: '',
-      password: JSON.stringify(''), parent_id: null, order: 0, use_count: 0,
-      attributes: {}, is_expanded: false,
-      created_at_num: now, updated_at_num: now,
-    }, { onConflict: 'id' })
-    if (result.error) { setStatus('err', '保存失败'); toast(result.error.message); flashSaveButton(false); return }
-    toast('已保存'); flashSaveButton(true)
-    setStatus('ok', '已连接')
-    loadBookmarks()
+      // 委托 background 打开 PWA 保存（走 PWA 的 sync queue）
+      chrome.runtime.sendMessage({ type: 'SAVE_TO_VAULT', url: tab.url, title: tab.title || tab.url })
+      flashSaveButton(true)
+      setStatus('ok', '已连接')
+      toast('已发送到 LinkVault 保存')
+    })
   })
 
   $('#btnRefresh').addEventListener('click', function () { loadBookmarks(); toast('已刷新') })

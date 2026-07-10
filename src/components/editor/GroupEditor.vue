@@ -199,7 +199,7 @@ function _onFocusIn() {
     clearTimeout(undo.saveTimers[props.groupId])
     delete undo.saveTimers[props.groupId]
   }
-  // 移动端显示浮动格式栏（由 FormatToolbar.vue 通过 bridge.js 注册）
+  // 移动端显示浮动格式栏（通过 useMfbStore）
   if (isMobile() && ui.focusedGroupId) {
     useMfbStore().show()
   }

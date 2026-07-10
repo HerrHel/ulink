@@ -12,7 +12,7 @@ import { isMobile } from '../utils.js'
 export type ThemeStyle = 'premium' | 'comfortable'
 
 /** 排序模式（与 SettingsPanel 的 sortModes、_sortItems 一致） */
-export type SortMode = 'order' | 'recommend' | 'title' | 'dateDesc' | 'dateAsc' | 'useCount'
+export type SortMode = 'order' | 'title' | 'dateDesc' | 'dateAsc' | 'useCount'
 
 /** 排序方向 */
 export type SortDir = 'asc' | 'desc'
