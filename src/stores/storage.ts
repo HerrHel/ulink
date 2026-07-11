@@ -94,6 +94,15 @@ export async function removeSyncOps(ids: number[]): Promise<void> {
   }
 }
 
+/** 更新某条 op 的重试计数（失败时累计，用于判定是否达上限移除） */
+export async function updateSyncOpRetry(id: number, retries: number): Promise<void> {
+  try {
+    await db.syncOps.update(id, { retries })
+  } catch (e) {
+    console.warn('[IDB] updateSyncOpRetry error:', e)
+  }
+}
+
 export async function syncOpsCount(): Promise<number> {
   try {
     return await db.syncOps.count()

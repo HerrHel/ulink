@@ -19,7 +19,7 @@ import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { trackMetric } from '../../lib/stats.js'
 import {
-  enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount,
+  enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount, updateSyncOpRetry,
   type SyncOp,
 } from '../../stores/storage.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
@@ -38,6 +38,10 @@ import {
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 单条 sync op 最大推送重试次数：超过即移出队列，避免失败 op 无限堆积
+ *  导致「恢复了又没了」的同步死结（数据本体在 ds.bookmarks，删 op 不丢数据）。 */
+const MAX_PUSH_RETRIES = 3
 
 // ── 辅助函数 ──
 async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
@@ -240,6 +244,11 @@ export function useCloudSync() {
 
       const tasks: Promise<any>[] = []
       const succeededIds: number[] = []
+      // 加密阶段失败（如 E2E encryptItem 抛错、row 构建异常）的 op 单独记录，
+      // 不阻断其它 op 的推送——旧逻辑里任一 op 在循环内 await 抛错会让整个函数进 catch，
+      // 后续 categories/attributes 的 task 根本进不了队列，导致「只推上去一部分」。
+      const encFailedOps: Array<{ table: string; itemId: string; error: string }> = []
+      const e2e = useE2E()
 
       for (const op of ops) {
         if (op.action === 'delete') {
@@ -247,61 +256,123 @@ export function useCloudSync() {
             Promise.resolve(supabase.from(op.table).delete().eq('id', op.itemId).eq('user_id', userId))
               .then(r => ({ op, result: r }))
           )
-        } else if (op.data) {
-          const data = op.data
-          const changedFields = data._changedFields as string[] | null
-          const isNew = data._isNew as boolean || false
-          delete data._changedFields
-          delete data._userId
-          delete data._isNew
+          continue
+        }
+        if (!op.data) continue
 
-          const e2e = useE2E()
-          const itemType = op.table === 'bookmarks' ? 'bookmark'
-            : op.table === 'sibling_groups' ? 'group'
-            : op.table === 'categories' ? 'category' : 'attribute'
+        const data = op.data
+        const changedFields = data._changedFields as string[] | null
+        const isNew = data._isNew as boolean || false
+        delete data._changedFields
+        delete data._userId
+        delete data._isNew
+
+        const itemType = op.table === 'bookmarks' ? 'bookmark'
+          : op.table === 'sibling_groups' ? 'group'
+          : op.table === 'categories' ? 'category' : 'attribute'
+
+        // per-op try：加密 + row 构建。任一环节抛错只跳过本条 op，不拖累整批。
+        let row: Record<string, any>
+        try {
           const encryptedData = await e2e.encryptItem(itemType as any, data)
+          row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew) as unknown as Record<string, any>
+        } catch (err: any) {
+          encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err?.message || String(err)}` })
+          console.warn(`[sync] 加密阶段失败 table=${op.table} id=${op.itemId}`, err)
+          continue
+        }
 
-          const row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew)
-
-          if (isNew || !changedFields) {
-            tasks.push(
-              Promise.resolve(supabase.from(op.table).upsert(row as any, { onConflict: 'id' }))
-                .then(r => ({ op, result: r }))
-            )
-          } else {
-            // ⚠️ changedFields 中的 f 是 camelCase（本地字段），row 的键是 snake_case（远端列名）。
-            // 旧代码直接 if (f in row) 几乎永不命中（除单字段如 title/url 恰好同名），
-            // 导致 partial 只含 id/user_id/updated_at_num，退化成无意义的空更新。
-            const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
-            for (const f of changedFields) {
-              const snakeKey = camelToSnake(f)
-              // id/user_id 已在 partial 基础字段中，跳过
-              if (snakeKey !== 'id' && snakeKey !== 'user_id' && snakeKey in (row as unknown as Record<string, unknown>)) {
-                partial[snakeKey] = (row as unknown as Record<string, unknown>)[snakeKey]
-              }
+        if (isNew || !changedFields) {
+          tasks.push(
+            Promise.resolve(supabase.from(op.table).upsert(row as any, { onConflict: 'id' }))
+              .then(r => ({ op, result: r }))
+              .catch(e => ({ op, result: { data: null, error: e, count: null, status: 0, statusText: String(e?.message || e) } }))
+          )
+        } else {
+          // ⚠️ changedFields 中的 f 是 camelCase（本地字段），row 的键是 snake_case（远端列名）。
+          // 旧代码直接 if (f in row) 几乎永不命中（除单字段如 title/url 恰好同名），
+          // 导致 partial 只含 id/user_id/updated_at_num，退化成无意义的空更新。
+          const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
+          for (const f of changedFields) {
+            const snakeKey = camelToSnake(f)
+            // id/user_id 已在 partial 基础字段中，跳过
+            if (snakeKey !== 'id' && snakeKey !== 'user_id' && snakeKey in row) {
+              partial[snakeKey] = row[snakeKey]
             }
-            const { id, ...updateData } = partial
-            tasks.push(
-              Promise.resolve(supabase.from(op.table).update(updateData).eq('id', id).eq('user_id', userId))
-                .then(r => ({ op, result: r }))
-            )
           }
+          const { id, ...updateData } = partial
+          tasks.push(
+            Promise.resolve(supabase.from(op.table).update(updateData).eq('id', id).eq('user_id', userId))
+              .then(r => ({ op, result: r }))
+              .catch(e => ({ op, result: { data: null, error: e, count: null, status: 0, statusText: String(e?.message || e) } }))
+          )
         }
       }
 
       const rawOpsMap = new Map(rawOps.map(ro => [`${ro.table}:${ro.itemId}`, ro]))
       const results = await Promise.all(tasks)
+      // Promise.all 不会 reject：每个 task 都带 .catch，异常被规整成 { error } 对象。
+
+      // ── per-op 结果收集（替代旧的 Promise.all+throw 一刀切）──
+      // 旧逻辑：任一 op 失败就 throw，整批进 catch，但成功的 categories upsert
+      // 已实际落库，导致「分类推上去了、书签全 0」的假象，且 succeededIds 永不执行、
+      // 所有 op（含成功的）滞留队列无限重试。
+      // 新逻辑：逐条判定，成功的 op 用 removeSyncOps 清除，失败的 op 留队列下次重试，
+      // 并把每条失败的 table/itemId/error 打到 console，让根因可见。
+      const failedOps: Array<{ table: string; itemId: string; error: string; op?: SyncOp }> = [...encFailedOps.map(f => ({ ...f, op: rawOpsMap.get(`${f.table}:${f.itemId}`) }))]
+      const deadIds: number[] = []  // 超过 MAX_RETRIES 的失败 op：删掉避免无限堆积
       for (const r of results) {
-        if (r.result.error) throw r.result.error
+        if (r.result.error) {
+          const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
+          const retries = (rawMatch?.retries || 0) + 1
+          failedOps.push({ table: r.op.table, itemId: r.op.itemId, error: r.result.error.message, op: rawMatch })
+          // 重试上限：超过即从队列删除，防止「恢复了又没了」循环里失败 op 永不消除。
+          // 数据本身存在 ds.bookmarks 里，删 op 不丢数据；下次本地改动会重新 enqueue。
+          if (rawMatch?.id != null) {
+            if (retries >= MAX_PUSH_RETRIES) {
+              deadIds.push(rawMatch.id)
+              console.warn(`[sync] op 达到重试上限(${MAX_PUSH_RETRIES})，移出队列 table=${r.op.table} id=${r.op.itemId}`)
+            } else {
+              await updateSyncOpRetry(rawMatch.id, retries)
+            }
+          }
+          continue
+        }
         const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
         if (rawMatch?.id != null) succeededIds.push(rawMatch.id)
+      }
+      // 加密失败 op 同样走死信：超过重试上限删除
+      for (const f of encFailedOps) {
+        const rawMatch = rawOpsMap.get(`${f.table}:${f.itemId}`)
+        if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) deadIds.push(rawMatch.id)
+        else if (rawMatch?.id != null) {
+          await updateSyncOpRetry(rawMatch.id, (rawMatch.retries || 0) + 1)
+        }
       }
 
       if (succeededIds.length) {
         await removeSyncOps(succeededIds)
         refreshPendingCount()
       }
+      if (deadIds.length) {
+        await removeSyncOps(deadIds)
+        refreshPendingCount()
+      }
       for (const op of ops) ds._newIds.delete(op.itemId)
+
+      if (failedOps.length) {
+        // 仍有失败 op：不设 lastSyncAt（下次仍会重试这些 op，除非已达上限被移除），状态标 error
+        for (const f of failedOps) {
+          console.warn(`[sync] push 失败 table=${f.table} id=${f.itemId} error=${f.error}`)
+        }
+        // dump 第一条失败 op 的完整入队数据，让 Supabase 拒绝的具体字段内容可见
+        const first = failedOps[0]
+        if (first?.op?.data) console.warn(`[sync] 首条失败 op 原始 data:`, JSON.parse(JSON.stringify(first.op.data)))
+        syncStore.setSyncStatus('error')
+        syncStore.setSyncError(`${failedOps.length} 项推送失败：${failedOps[0].error}`)
+        trackMetric('sync_failure', { duration: Date.now() - (rawOps[0]?.ts || Date.now()), success: false, count: failedOps.length })
+        return false
+      }
 
       syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
