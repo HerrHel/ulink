@@ -381,7 +381,7 @@ export const useDataStore = defineStore('data', {
         b.categoryId === id ? { ...b, categoryId: CAT_UNCATEGORIZED, updatedAt: now } : b
       )
       this.siblingGroups = this.siblingGroups.map(g =>
-        g.categoryId === id ? { ...g, categoryId: 'uncategorized', updatedAt: now } : g
+        g.categoryId === id ? { ...g, categoryId: CAT_UNCATEGORIZED, updatedAt: now } : g
       )
       // 同步索引
       for (const b of this.bookmarks) this._bmMap[b.id] = b
