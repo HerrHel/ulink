@@ -20,8 +20,17 @@ import type { EntityType } from '../../types.js'
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 
 // ── 需要加密的字段 ──
+// E2E 启用时由全局 CryptoKey 加密的字段。
+// password 不在此列：它有独立加密路径——useBookmark.saveBm 在 E2E 解锁时
+// 用每条独立 salt 派生 key 生成 EncryptedPassword 对象（见 crypto.encryptPassword），
+// 而非全局 key。若把 password 放进来：
+//   - 对 EncryptedPassword 对象：encryptItem 因 typeof !== 'string' 跳过（碰巧无害）
+//   - 对历史 string 密码：encryptItem 会用全局 key 加密成三段串存云端，回程被
+//     _parseRemotePassword 还原成 EncryptedPassword 对象，但该对象的 data 是用
+//     全局 key 加密的，autoMigratePassword 用「独立 salt + 主密码」解不开 → 二次损坏。
+// 故 password 显式排除，保持它原样在云端传输（已是加密态或旧 base64）。
 const ENCRYPT_FIELDS = {
-  bookmark: ['title', 'url', 'username', 'password', 'notes'] as const,
+  bookmark: ['title', 'url', 'username', 'notes'] as const,
   group: ['name', 'notes'] as const,
   category: ['name'] as const,
   attribute: ['name'] as const,
