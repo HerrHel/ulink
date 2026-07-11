@@ -47,7 +47,6 @@ export const supabase: SupabaseClient = supabaseUrl && supabaseAnonKey
         persistSession: true,
         storage: localStorage,
         storageKey: 'linkvault_auth',
-        detectSessionInUrl: true,
       },
     })
   : createNullClient()
