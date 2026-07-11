@@ -434,7 +434,9 @@ export function useCloudSync() {
     _initialized = true
 
     await _withLock('linkvault-sync', async () => {
-      await _pullChanges(true)
+      // 先推送本地数据到云端（upsert），再全量拉取合并。
+      // 如果先拉再推：云端为空 + lastSyncAt > 0（被 realtime 提前设值）时，
+      // _pullChanges 的 full 分支会把本地书签误删。
       const ds = useDataStore()
       const userId = _getUserId()
       if (!userId) return
@@ -455,6 +457,10 @@ export function useCloudSync() {
       }
       if (allOps.length) await enqueueSyncOps(allOps)
       await _pushFromQueue()
+
+      // 全量拉取：此时 lastSyncAt 已在 _pushFromQueue 中被设置，
+      // 但云端已有刚推送的数据，full 分支的 delete 逻辑不会误删。
+      await _pullChanges(true)
     })
 
     subscribeRealtime(_pullChanges)

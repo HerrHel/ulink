@@ -87,10 +87,13 @@ export function useAppLifecycle() {
     const auth = useAuth()
     await auth.init()
     const sync = useCloudSync()
-    sync.initOnlineListener()
+    // initialSync 必须在 initOnlineListener 之前执行：
+    // initOnlineListener → subscribeRealtime → SUBSCRIBED 回调 → _pullChanges → 设 lastSyncAt，
+    // 若 lastSyncAt 先于 initialSync 的 _pullChanges(true) 被设置，云端为空时 full 分支会把本地书签全删。
     if (auth.isLoggedIn) {
       sync.initialSync().catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
     }
+    sync.initOnlineListener()
 
     // 数据变更后自动触发云同步（从 app.ts save() 解耦过来的横切关注点）
     const syncWatch = watch(() => ds._saveCount, () => {
