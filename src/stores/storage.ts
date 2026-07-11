@@ -70,7 +70,17 @@ export async function idbGet(key: string): Promise<any | null> {
 export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>): Promise<void> {
   if (!ops.length) return
   try {
-    await db.syncOps.bulkAdd(ops.map(op => ({ ...op, retries: 0 })))
+    // op.data 多来自 Pinia reactive 对象经 { ...item } 浅 spread：顶层属性虽被拷出，
+    // 但嵌套的 attributes / bookmarkIds / password 等仍是 reactive Proxy。
+    // IndexedDB 结构化克隆算法拒绝 Proxy，整批 bulkAdd 抛 DataCloneError，
+    // 导致 bookmarks/groups op 根本进不了队列（categories/attributes 字段全为
+    // primitives 浅 spread 后即纯值，故不受影响）。入库前深度脱 reactive。
+    const plain = ops.map(op => ({
+      ...op,
+      data: op.data ? JSON.parse(JSON.stringify(op.data)) : null,
+      retries: 0,
+    }))
+    await db.syncOps.bulkAdd(plain)
   } catch (e) {
     console.warn('[IDB] enqueueSyncOps error:', e)
   }
