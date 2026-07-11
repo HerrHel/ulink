@@ -270,6 +270,22 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
   onUnmounted(() => {
     stopScroll()
+    // 清理拖拽中途被卸载的残留：固定定位的卡片 + 占位符 + pointer capture。
+    // 否则若组件在拖拽中销毁（如切视图/退出批量模式），drag.el 仍 fixed 漂在
+    // viewport 上、drag.placeholder 仍占位，形成幽灵节点直到容器被整体移除。
+    if (drag) {
+      try { drag.el.releasePointerCapture(drag.pointerId) } catch { /* 已释放则忽略 */ }
+      drag.el.classList.remove(draggingClass)
+      drag.el.style.position = ''
+      drag.el.style.left = ''
+      drag.el.style.top = ''
+      drag.el.style.width = ''
+      drag.el.style.margin = ''
+      drag.el.style.zIndex = ''
+      drag.el.style.transition = ''
+      drag.placeholder.remove()
+      drag = null
+    }
     document.removeEventListener('pointerdown', onPointerDown)
     document.removeEventListener('pointermove', onPointerMove)
     document.removeEventListener('pointerup', onPointerUp)
