@@ -458,9 +458,9 @@ export function useCloudSync() {
       if (allOps.length) await enqueueSyncOps(allOps)
       await _pushFromQueue()
 
-      // 全量拉取：此时 lastSyncAt 已在 _pushFromQueue 中被设置，
-      // 但云端已有刚推送的数据，full 分支的 delete 逻辑不会误删。
-      await _pullChanges(true)
+      // 增量拉取（非 full）：推成功后 lastSyncAt 已设，只拉增量；
+      // 推失败则 lastSyncAt 仍为 0，拉全量但不做 full 分支的删除。
+      await _pullChanges(false)
     })
 
     subscribeRealtime(_pullChanges)
