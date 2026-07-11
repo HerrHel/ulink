@@ -228,14 +228,16 @@ export function useCloudSync() {
       const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
       for (const op of ops) {
         if (op.action === 'upsert') {
+          const type = op.table === 'bookmarks' ? 'bookmark'
+            : op.table === 'sibling_groups' ? 'group'
+            : op.table === 'categories' ? 'category' : 'attribute'
+          // data_history.item_type 有 CHECK 约束仅允许 'bookmark'/'group'，
+          // categories/attributes 入历史会撞约束导致整批 POST 400，
+          // 且这两类结构简单无需版本回溯，跳过即可。
+          if (type !== 'bookmark' && type !== 'group') continue
           const existing = op.table === 'bookmarks' ? ds.bookmarks.find(b => b.id === op.itemId)
-            : op.table === 'sibling_groups' ? ds.siblingGroups.find(g => g.id === op.itemId)
-            : op.table === 'categories' ? ds.categories.find(c => c.id === op.itemId)
-            : ds.customAttributes.find(a => a.id === op.itemId)
+            : ds.siblingGroups.find(g => g.id === op.itemId)
           if (existing) {
-            const type = op.table === 'bookmarks' ? 'bookmark'
-              : op.table === 'sibling_groups' ? 'group'
-              : op.table === 'categories' ? 'category' : 'attribute'
             historyItems.push({ id: op.itemId, type, data: { ...existing as any } })
           }
         }
