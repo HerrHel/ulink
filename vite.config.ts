@@ -16,7 +16,7 @@ const securityHeaders: Record<string, string> = {
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    "connect-src 'self' https: wss://*.supabase.co",
     "font-src 'self' https://fonts.gstatic.com",
     "frame-ancestors 'self'",
     "form-action 'self'",
