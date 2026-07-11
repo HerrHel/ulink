@@ -59,10 +59,22 @@
 .form-textarea{resize:vertical;min-height:60px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-select option{background:var(--surface);color:var(--text)}
-.code-input{
-  font-family:'JetBrains Mono',monospace;
-  font-size:1.6rem;letter-spacing:0.4em;
-  text-align:center;padding:12px;
+.code-boxes{
+  position:relative;display:flex;gap:10px;justify-content:center;
+}
+.code-hidden-input{
+  position:absolute;inset:0;opacity:0;font-size:16px;
+}
+.code-box{
+  width:48px;height:56px;display:flex;align-items:center;justify-content:center;
+  font-size:1.5rem;font-family:'JetBrains Mono',monospace;font-weight:600;
+  color:var(--text);background:var(--surface);border:2px solid var(--border);
+  border-radius:var(--radius-md);transition:border-color .15s,box-shadow .15s;
+  user-select:none;
+}
+.code-box--cursor{
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 30%,transparent);
 }
 .pw-wrap{position:relative}
 .pw-toggle{

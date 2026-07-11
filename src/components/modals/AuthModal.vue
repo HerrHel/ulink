@@ -159,37 +159,3 @@ function onClose() {
   auth.authModalOpen = false
 }
 </script>
-<style scoped>
-.code-boxes {
-  position: relative;
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-.code-hidden-input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  font-size: 16px; /* prevent iOS zoom on focus */
-}
-.code-box {
-  width: 48px;
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface);
-  border: 2px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: border-color 0.15s, box-shadow 0.15s;
-  user-select: none;
-}
-.code-box--cursor {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 30%, transparent);
-}
-</style>
