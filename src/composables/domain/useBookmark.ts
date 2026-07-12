@@ -444,7 +444,10 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
     icon: `https://www.google.com/s2/favicons?domain=${dm}&sz=32`,
     categoryId: CAT_UNCATEGORIZED,
     parentId: null,
-    order: ds.bookmarks.length,
+    // order 用「现存最大 order + 1」保证唯一，而非 ds.bookmarks.length。
+    // length 在永久删除（回收站清空，从数组物理移除）后会缩短，新值可能与现存项 order 重复，
+    // 导致"自定义"排序模式下两条同 order 抖动/相对顺序不稳。max+1 只取现存项，永久删后仍唯一。
+    order: ds.bookmarks.reduce((m, b) => b.order > m ? b.order : m, -1) + 1,
     useCount: 0,
     attributes: {},
     isExpanded: false,

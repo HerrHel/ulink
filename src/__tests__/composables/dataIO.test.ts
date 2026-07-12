@@ -17,6 +17,7 @@ vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppDa
 
 import { useDataStore } from '../../stores/data.js'
 import { importFromDataInternal, parseRaindropJSON } from '../../composables/domain/useDataIO.js'
+import { saveFromExtension } from '../../composables/domain/useBookmark.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 describe('importFromDataInternal 组 bookmarkIds 悬空过滤', () => {
@@ -89,5 +90,48 @@ describe('parseRaindropJSON 坏 tags 防御', () => {
     const data = { items: [{ title: 'T', link: 'https://x.example', tags: 'not-an-array' }] }
     expect(() => parseRaindropJSON(data)).not.toThrow()
     expect(parseRaindropJSON(data)[0].attributes).toEqual({})
+  })
+})
+
+describe('saveFromExtension / importFromDataInternal 新建 order 唯一性', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('saveFromExtension 用「现存最大 order+1」,永久删后不与现存项撞 order', () => {
+    const ds = useDataStore()
+    // 模拟「永久删最后一项」后的状态：现存 order=[5,7]，末尾那条 order=9 已被物理移除
+    // 旧实现 order=ds.bookmarks.length=2 → 与现存 order=5 之外可能撞；max+1=8 唯一
+    ds.addBookmark({ id: 'b1', title: 'A', url: 'https://a.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    ds.addBookmark({ id: 'b2', title: 'B', url: 'https://b.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 7, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    saveFromExtension('https://new-save-test.example', '新')
+    const added = ds.bookmarks.find(b => b.url === 'https://new-save-test.example')
+    expect(added).toBeTruthy()
+    expect(added!.order).toBe(8) // max(5,7)+1=8，而非 length=3
+    // 不与任何现存项撞
+    const orders = ds.bookmarks.map(b => b.order)
+    expect(new Set(orders).size).toBe(orders.length)
+  })
+
+  it('importFromDataInternal 用 orderBase=max+1 批量导入间不撞、与现存不撞', () => {
+    const ds = useDataStore()
+    ds.addBookmark({ id: 'exist1', title: '旧', url: 'https://exist1.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    ds.addBookmark({ id: 'exist2', title: '旧2', url: 'https://exist2.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 10, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    importFromDataInternal({
+      categories: [],
+      bookmarks: [
+        { id: 'i1', title: '导入1', url: 'https://imp1.example', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0 } as any,
+        { id: 'i2', title: '导入2', url: 'https://imp2.example', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0 } as any,
+        { id: 'i3', title: '导入3', url: 'https://imp3.example', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0 } as any,
+      ],
+      siblingGroups: [], customAttributes: [],
+    }, 'test')
+    const orders = ds.bookmarks.map(b => b.order)
+    // 全唯一
+    expect(new Set(orders).size).toBe(orders.length)
+    // 导入的三条 order 严格递增且 > 现存最大 10
+    const imp = ds.bookmarks.filter(b => ['i1', 'i2', 'i3'].includes(b.id)).map(b => b.order)
+    expect(imp).toEqual([11, 12, 13])
   })
 })

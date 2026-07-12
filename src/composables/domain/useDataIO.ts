@@ -242,6 +242,8 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
 
   // 合并书签（去重：同 ID 或同 URL 跳过）
   const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
+  // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
+  const orderBase = ds.bookmarks.reduce((m, b) => b.order > m ? b.order : m, -1) + 1
   for (const b of bookmarks) {
     if (!b.title || !b.url) continue
     if (ds.bookmarks.some(existing => existing.id === b.id)) continue
@@ -257,7 +259,7 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
       icon: b.icon || '',
       categoryId: b.categoryId || CAT_UNCATEGORIZED,
       parentId: b.parentId || null,
-      order: ds.bookmarks.length + bmImported,
+      order: orderBase + bmImported,
       useCount: b.useCount || 0,
       attributes: b.attributes || {},
       isExpanded: false,
