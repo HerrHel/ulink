@@ -1,6 +1,6 @@
 <template>
   <div class="ctx-menu" id="ctxMenu" v-show="ctx.open" role="menu" aria-label="操作菜单"
-       :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }">
+       :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
     <template v-for="item in visibleItems" :key="item.action">
       <div v-if="item.divider" class="ctx-divider" role="separator"></div>
       <button v-else class="ctx-item" :class="{ 'ctx-danger': item.danger }"
@@ -12,7 +12,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
@@ -25,6 +25,26 @@ import { shareGroup } from '../../composables/domain/useDataShare.js'
 
 const store = useAppStore()
 const ctx = useContextMenuStore()
+
+// 视口边缘 clamp：contextMenu.show 用 e.clientX/Y 作 left/top，右/下边缘右键时菜单
+// 固定定位会溢出视口（右下 1/3 区域高频）。菜单高度随 type 动态（card=6 项、rail-empty=1 项），
+// 故在 open 切为 true 后 nextTick 读 #ctxMenu 实际 offsetWidth/Height 反算 clamp，比硬编码更准。
+// 对照 AddPopover(useMention 同样 Math.min(innerWidth-innerHeight - 预估)) 做法一致。
+const pos = ref({ x: 0, y: 0 })
+watch(() => ctx.open, async (open) => {
+  if (!open) return
+  // 先按原始 clientX/Y 摆位（菜单可见后才能测尺寸）
+  pos.value = { x: ctx.x, y: ctx.y }
+  await nextTick()
+  const el = document.getElementById('ctxMenu')
+  if (!el) return
+  const w = el.offsetWidth, h = el.offsetHeight
+  const margin = 8
+  pos.value = {
+    x: Math.min(ctx.x, window.innerWidth - w - margin),
+    y: Math.min(ctx.y, window.innerHeight - h - margin),
+  }
+})
 
 const allItems = [
   { action: ACTIONS.VISIT, text: '打开网站' },
