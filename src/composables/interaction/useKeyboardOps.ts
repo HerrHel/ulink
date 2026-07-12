@@ -103,6 +103,11 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     if (ui.batchMode) { toggleBatchMode(); return }
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
     useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
+    // 回收站 / 死链面板：与 settings 一致支持 Esc 关闭（settings 已由 hideSettingsMenu 处理）。
+    // 此前 Esc 仅关 bm/cat/attr/groupEdit 四 modal + ctxMenu/addPopover/dropdown，trash/deadLinks 缺失，
+    // 用户只能点面板右上角关闭按钮，UX 不一致。ShortcutHelpPanel 自带 Esc 监听无需重复。
+    if (ui.panels.trash) ui.panels.trash = false
+    if (ui.overlays.deadLinks) ui.overlays.deadLinks = false
     useToastStore().resolveConfirm(false)
   }
   if (ui.batchMode) {
