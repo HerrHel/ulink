@@ -104,7 +104,12 @@ export function batchMoveToCat(catId: string) {
     if (id.startsWith('group:')) {
       ds.updateGroup(id.slice(6), { categoryId: catId })
     } else {
-      ds.updateBookmark(id, { categoryId: catId })
+      // 递归移动子书签：与 batchDelete 保持一致的父子语义——
+      // 否则父移到新分类、子留在原分类，子书签将无法在原分类顶层显示
+      //（!b.parentId 过滤），又因父不在原分类而无从展开访问，分类归属与
+      // 可见性分裂。collectSubIds 返回 [id, ...所有子孙]，一并改 categoryId。
+      const ids = collectSubIds(id)
+      ids.forEach(bid => ds.updateBookmark(bid, { categoryId: catId }))
     }
   })
   saveAppData()
