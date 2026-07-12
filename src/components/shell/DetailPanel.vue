@@ -85,14 +85,16 @@ import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { favicon, sanitizeHTML, copyToClipboard, isMobile, domain, getTagNames } from '../../utils.js'
-import { safeDecodePassword } from '../../crypto.js'
+import { decryptPasswordWithKey } from '../../crypto.js'
 import { I } from '../../config/icons.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
+import { useE2EStore } from '../../stores/e2e.js'
 import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
+const e2eStore = useE2EStore()
 const searchQuery = ref('')
 const detailPanelRef = ref<HTMLElement | null>(null)
 const decodedPasswords = ref<Record<string, string>>({})
@@ -134,17 +136,25 @@ const filteredEntries = computed(() => {
   )
 })
 
-function decodeAllPasswords() {
+// 密码展示用：string 形态走 safeDecodePassword（同步），EncryptedPassword 对象态
+// （E2E 解锁时 saveBm 存的对象）需用 e2e cryptoKey 异步解密。旧实现仅判 string，
+// 对象态落空串 → 小眼睛点开密码区空白。按形态统一走 decryptPasswordWithKey。
+async function decodeAllPasswords() {
   const results: Record<string, string> = {}
-  for (const entry of entries.value) {
+  await Promise.all(entries.value.map(async (entry) => {
     if (!entry.isGroup && entry.data.password) {
-      results[entry.rawId] = typeof entry.data.password === 'string' ? safeDecodePassword(entry.data.password) : ''
+      results[entry.rawId] = await decryptPasswordWithKey(
+        entry.data.password,
+        e2eStore.cryptoKey as CryptoKey | null,
+      )
     }
-  }
+  }))
   decodedPasswords.value = results
 }
 
 watch(entries, () => nextTick(decodeAllPasswords))
+// E2E 解锁后 key 入内存，重解一遍对象态密码（详见 BookmarkCard decodePassword 注释）。
+watch(() => e2eStore.isUnlocked, decodeAllPasswords)
 
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
 const isSwiping = ref(false)

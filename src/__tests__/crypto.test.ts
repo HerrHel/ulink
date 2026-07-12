@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { safeAtob, safeDecodePassword, encrypt, decrypt, deriveKey, generateCanary, verifyCanary, encryptPassword, autoMigratePassword } from '../crypto.js'
+import { safeAtob, safeDecodePassword, encrypt, decrypt, deriveKey, generateCanary, verifyCanary, encryptPassword, autoMigratePassword, decryptPasswordWithKey } from '../crypto.js'
 
 describe('Password Decoding', () => {
   describe('safeAtob', () => {
@@ -186,6 +186,30 @@ describe('E2E Encryption', () => {
       expect(ep.data).toBeTruthy()
       expect(ep.iv).toBeTruthy()
       expect(ep.salt).toBeTruthy()
+    })
+  })
+
+  describe('decryptPasswordWithKey', () => {
+    it('用加密侧的同一把 cryptoKey 解 EncryptedPassword 对象得回明文', async () => {
+      // 复刻 saveBm 的加密路径：E2E 解锁态下用 e2eStore.cryptoKey（deriveKey 派生的全局 key）加密。
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey(MASTER_PW, salt)
+      const raw = await encrypt('plaintext-pw-456', key)
+      const parts = raw.split('.')
+      const ep = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
+      // 用同一把 key 解密（卡片侧拿到的是 cryptoKey 本身，无主密码）
+      const out = await decryptPasswordWithKey(ep, key)
+      expect(out).toBe('plaintext-pw-456')
+    })
+
+    it('无 cryptoKey 时对象态返回空串而非乱抛（卡片未解锁场景）', async () => {
+      const ep = { encrypted: true, salt: 'a', iv: 'b', data: 'c' }
+      expect(await decryptPasswordWithKey(ep, null)).toBe('')
+    })
+
+    it('string 形态（旧 base64）走 safeDecodePassword', async () => {
+      expect(await decryptPasswordWithKey(btoa('legacy-pw'), null)).toBe('legacy-pw')
+      expect(await decryptPasswordWithKey('', null)).toBe('')
     })
   })
 })

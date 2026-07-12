@@ -78,7 +78,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim, esc } from '../../utils.js'
 import { I } from '../../config/icons.js'
-import { safeDecodePassword } from '../../crypto.js'
+import { decryptPasswordWithKey } from '../../crypto.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { openBmModal, deleteBookmarkWithUndo, addSub, openBookmark } from '../../composables/domain/useBookmark.js'
@@ -87,6 +87,7 @@ import { openDetail } from '../../composables/ui/useUI.js'
 import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useE2EStore } from '../../stores/e2e.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
 import type { Bookmark } from '../../types.js'
@@ -120,10 +121,17 @@ const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 const acctOpen = ref(false)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
+const e2eStore = useE2EStore()
 
-function decodePassword() {
-  const rawPw = typeof props.bookmark.password === 'string' ? props.bookmark.password : ''
-  decodedPw.value = safeDecodePassword(rawPw)
+// 密码展示用：string 形态（E2E 未启 / 旧 base64）走 safeDecodePassword（同步）；
+// EncryptedPassword 对象形态（E2E 解锁时 saveBm 存的对象）需用已就绪的 e2e cryptoKey 解密。
+// 旧实现仅判 typeof === 'string'，对象态直接落空串 → 小眼睛点开后密码区显示空白，
+// 原本 '••••••' 占位也没了，看上去像「点眼睛把点删了」。此处按形态分支解密。
+async function decodePassword() {
+  decodedPw.value = await decryptPasswordWithKey(
+    props.bookmark.password,
+    e2eStore.cryptoKey as CryptoKey | null,
+  )
 }
 
 onMounted(() => {
@@ -131,6 +139,10 @@ onMounted(() => {
   stripEntranceAnim(cardEl.value)
 })
 watch(() => props.bookmark.password, decodePassword)
+// E2E 解锁后会补解密 store 密文条目（decryptStoreItems），但 password 是 EncryptedPassword
+// 对象态不在 ENCRYPT_FIELDS 里、不会被补解密扫到。解锁瞬间 key 入内存，重算一次 decodedPw，
+// 此后点眼睛才能看到对象态密码的明文；未解锁时 cryptoKey 仍空，decodePassword 安全返回 ''。
+watch(() => e2eStore.isUnlocked, decodePassword)
 
 const domainStr = computed(() => domain(props.bookmark.url))
 const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))

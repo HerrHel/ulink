@@ -203,6 +203,32 @@ export async function autoMigratePassword(stored: string | EncryptedPassword | n
   if (typeof stored === 'string') {
     return safeDecodePassword(stored)
   }
-  
+
+  return ''
+}
+
+/**
+ * 用已就绪的 E2E cryptoKey 解密 EncryptedPassword 对象为明文。
+ *
+ * 卡片/详情面板展示密码用：saveBm 在 E2E 解锁时用 e2eStore.cryptoKey（全局 E2E 密钥）
+ * 加密密码 → 存为 EncryptedPassword 对象（见 useBookmark.saveBm）。展示时拿同一把
+ * cryptoKey 解密即可，无需主密码重新派生（与加密侧一致）。
+ *
+ * 与 autoMigratePassword 对象分支的区别：后者用 deriveKey(masterPassword, salt) 重新派生
+ * key——那是为「迁移旧数据」设计的独立路径，本函数面向「运行时已解锁、key 在内存」的展示场景。
+ *
+ * 非 EncryptedPassword 对象（如 string/null）直接返回原值，交由调用方分支处理。
+ */
+export async function decryptPasswordWithKey(
+  stored: string | EncryptedPassword | null | undefined,
+  cryptoKey: CryptoKey | null,
+): Promise<string> {
+  if (!stored) return ''
+  if (typeof stored === 'object' && stored.encrypted === true) {
+    if (!cryptoKey) return ''
+    const ciphertext = stored.salt + '.' + stored.iv + '.' + stored.data
+    return decrypt(ciphertext, cryptoKey)
+  }
+  if (typeof stored === 'string') return safeDecodePassword(stored)
   return ''
 }
