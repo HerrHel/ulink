@@ -65,7 +65,11 @@ export function restoreNavState(prev: NavState) {
   if (prev.attr !== true && ui.modals.attribute) { closeAttrModal(); return }
   if (prev.focusedGroupId === null && ui.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat } return }
   if (!prev.detailPanelOpen && ui.panels.detail) { ui.panels.detail = false; return }
-  if (prev.detailPanelOpen && !ui.panels.detail) { ui.panels.detail = true; return }
+  // 旧实现还有「prev.detailPanelOpen && !ui.panels.detail → 重新打开」反向分支——
+  // popstate 语义统一为「关闭 snapshot 未开而当前已开的层」（其余 modal/panel 都只关不重开），
+  // 唯独 detail 有该反向分支致不一致：场景「detail 开 → 其他操作 pushNavState 快照 detail=true
+  //   → 用户手动关 detail → 后退」会被强制重开 detail，与用户后退意图相悖。删之，与 settings/
+  // trash/shortcutHelp 等一致——prev 开、当前关时保持关（用户已主动关，不强制重开）。
   if (prev.settings !== true && ui.panels.settings) { ui.panels.settings = false; return }
   if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return }
   if (prev.deadLinks !== true && ui.overlays.deadLinks) { ui.overlays.deadLinks = false; return }

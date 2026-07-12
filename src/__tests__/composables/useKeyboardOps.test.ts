@@ -78,4 +78,22 @@ describe('captureNavState / restoreNavState 含 settings/trash/deadLinks/shortcu
     restoreNavState(prev)
     expect(mockUI.panels.trash).toBe(true)
   })
+
+  it('R3-2: prev.detailPanelOpen=open、当前已关时保持关（不强制重开）', () => {
+    // 场景：detail 开 → 其他操作 pushNavState 快照 detail=true → 用户手动关 detail → 后退。
+    // 旧实现 restoreNavState 第 68 行有反向分支「prev 开、当前关 → 重新打开 detail」，
+    // 会被强制重开用户已主动关闭的面板，反直觉。删后保持关，与 settings/trash 等一致。
+    mockUI.panels.detail = false // 当前已关
+    const prev = captureNavState()
+    prev.detailPanelOpen = true // 快照是 detail 开
+    restoreNavState(prev)
+    expect(mockUI.panels.detail).toBe(false)
+  })
+
+  it('prev.detailPanelOpen=false、当前已开 → 关闭 detail（保留正向关闭语义）', () => {
+    mockUI.panels.detail = true
+    const prev = captureNavState(); prev.detailPanelOpen = false
+    restoreNavState(prev)
+    expect(mockUI.panels.detail).toBe(false)
+  })
 })
