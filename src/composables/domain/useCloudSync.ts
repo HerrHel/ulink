@@ -469,6 +469,50 @@ export function useCloudSync() {
         }
       }
 
+      // ── 物理删除对账：远端整行被 .delete() 抹掉后，上面增量查询与软删防御查询都查不到该行
+      // （既不在 updated_at_num>since 的存活行集、也不在 deleted_at IS NOT NULL 的软删集）。
+      // 若对端「先软删 upsert（updated_at_num 落本机 since 之前）→ 再物理删」且本机从未同步过
+      // 该软删态，本机将永远感知不到这次删除——仅漏删尚可接受，但更糟的是 initialSync 先全量
+      // push 本地活副本会 upsert 一条 deleted_at:null 行回去，复活对端已物理删除的事实。
+      // 纯前端修复：lastSyncAt>0（已同步过、非首同步）时，拉远端全量存活 id 集合做差集对账，
+      // 本地有 + 远端无 + 非脏 → 软删本地（不入回收站不可恢复路径而是回收站可见的软删，与
+      // _mergeIntoLocal 的 full 分支语义一致）。首同步 lastSyncAt=0 时跳过，避免误删本地新数据。
+      if (syncStore.lastSyncAt > 0) {
+        const [allBmRes, allGroupRes, allCatRes, allAttrRes] = await Promise.all([
+          supabase.from('bookmarks').select('id').eq('user_id', userId),
+          supabase.from('sibling_groups').select('id').eq('user_id', userId),
+          supabase.from('categories').select('id').eq('user_id', userId),
+          supabase.from('custom_attributes').select('id').eq('user_id', userId),
+        ])
+        const remoteAll = new Set<string>()
+        for (const r of [allBmRes, allGroupRes, allCatRes, allAttrRes]) {
+          if (r.error) { console.warn('[sync] reconcile id query failed:', r.error); continue }
+          for (const row of r.data || []) remoteAll.add((row as { id: string }).id)
+        }
+        const reconcileDelete = (type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) => {
+          if (ds._dirtyIds.has(id)) return  // 正在本地编辑/等推送的条目不删
+          switch (type) {
+            case 'bookmark': ds.deleteBookmark(id); break
+            case 'group': ds.deleteGroup(id); break
+            case 'category': ds.deleteCategory(id); break
+            case 'attribute': ds.deleteAttribute(id); break
+          }
+          ds._dirtyIds.delete(id); ds._newIds.delete(id)
+        }
+        for (const b of ds.bookmarks) {
+          if (!b.deletedAt && !remoteAll.has(b.id)) reconcileDelete('bookmark', b.id)
+        }
+        for (const g of ds.siblingGroups) {
+          if (!g.deletedAt && !remoteAll.has(g.id)) reconcileDelete('group', g.id)
+        }
+        for (const c of ds.categories) {
+          if (!c.deletedAt && !remoteAll.has(c.id)) reconcileDelete('category', c.id)
+        }
+        for (const a of ds.customAttributes) {
+          if (!a.deletedAt && !remoteAll.has(a.id)) reconcileDelete('attribute', a.id)
+        }
+      }
+
       syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
       return true
