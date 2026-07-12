@@ -169,7 +169,11 @@ describe('E2E Encryption', () => {
       const key = await deriveKey(MASTER_PW, salt)
       const canary = await generateCanary(key)
       const parts = canary.split('.')
-      parts[2] = 'X' + parts[2].slice(1) // 篡改 ciphertext
+      // 翻转 ciphertext 段首字符（base64 合法字符间互换，不改变长度/padding），
+      // 既保证 base64 仍可解码（避免不同平台 atob 容错差异导致 flaky），
+      // 又必触发 GCM 认证失败——认证标签覆盖整个密文，改一字节即 reject。
+      const first = parts[2][0]
+      parts[2] = (first === 'A' ? 'B' : 'A') + parts[2].slice(1)
       const ok = await verifyCanary(parts.join('.'), key)
       expect(ok).toBe(false)
     })

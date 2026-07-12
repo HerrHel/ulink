@@ -123,12 +123,31 @@ export async function generateCanary(key: CryptoKey): Promise<string> {
   return encrypt('linkvault-canary-v1', key)
 }
 
-/** 验证 canary */
+/**
+ * 验证 canary：直接做 GCM 解密，靠 AES-GCM 认证标签判定真伪，而非「解出明文是否等于固定串」。
+ *
+ * 旧实现走 decrypt()，但 decrypt() 对 3 段但非法/被篡改的输入做了优雅降级——catch 后
+ * 返回原输入串（见 decrypt 注释，单条坏字段不应污染整次 pull）。canary 验证若复用这条
+ * 吞错路径，判定就退化为「返回串 !== 'linkvault-canary-v1'」即认为假，这本也能拦住篡改，
+ * 但耦合了 decrypt 的降级行为：一旦某平台 SubtleCrypto 对特定篡改的 base64/GCM 走的
+ * 分支不同（如 CI Linux Node 与本地 Windows jsdom 在 atob 容错、buffer 对齐上的差异），
+ * 可能误把篡改辩过。canary 的语义是「密钥是否正确」，该用 GCM 认证本身回答——解密抛错即
+ * 密钥不匹配，绝不依赖返回值串比较。故此处独立走一次 crypto.subtle.decrypt，不吞错。
+ */
 export async function verifyCanary(encrypted: string, key: CryptoKey): Promise<boolean> {
   try {
-    const result = await decrypt(encrypted, key)
-    return result === 'linkvault-canary-v1'
+    const parts = encrypted.split('.')
+    if (parts.length !== 3) return false
+    const iv = new Uint8Array(_base64ToBuf(parts[1]))
+    const data = _base64ToBuf(parts[2])
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: _bs(iv) },
+      key,
+      _bs(data),
+    )
+    return _fromBuffer(decrypted) === 'linkvault-canary-v1'
   } catch (_) {
+    // GCM 认证失败 / base64 非法 / 段数不对 —— 一律视为认证不通过
     return false
   }
 }
