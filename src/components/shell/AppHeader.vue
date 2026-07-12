@@ -70,6 +70,7 @@
 import { computed, ref, watch } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { useSyncStatusStore } from '../../stores/overlay.js'
 import { I } from '../../config/icons.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
@@ -120,7 +121,11 @@ const focusBookmarkCount = computed(() => {
   return g ? (g.bookmarkIds?.length || 0) : 0
 })
 
-function toggleSettings() { ui.panels.settings = !ui.panels.settings }
+function toggleSettings() {
+  // 仅在「即将打开」时 pushNavState 记未开态，后退能关；关闭时后退无意义不再 push。
+  if (!ui.panels.settings) pushNavState()
+  ui.panels.settings = !ui.panels.settings
+}
 function onTitleFocus(e: FocusEvent) {
   const target = e.target as HTMLElement
   const txt = target.textContent?.trim() || ''

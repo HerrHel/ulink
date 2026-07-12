@@ -39,6 +39,7 @@ import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { toast } from '../../lib/toast.js'
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import type { SearchResultItem } from '../../lib/search.js'
 
 interface CommandItem {
@@ -65,11 +66,11 @@ const commands: CommandItem[] = [
   { id: 'new-bm', label: '新建书签', icon: I.plus, shortcut: 'Ctrl+N', section: 'command', action() { close(); openBmModal() } },
   { id: 'new-group', label: '新建组', icon: I.note, section: 'command', action() { close(); ui.modals.groupEdit = true } },
   { id: 'import', label: '导入数据', icon: I.import, section: 'command', action() { close(); document.getElementById('importFile')?.click() } },
-  { id: 'export', label: '导出数据', icon: I.export, section: 'command', action() { close(); ui.panels.settings = true } },
+  { id: 'export', label: '导出数据', icon: I.export, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
   { id: 'sync', label: '同步到云端', icon: I.cloud, section: 'command', async action() { close(); if (!auth.isLoggedIn) { toast('请先登录云同步', false); auth.authModalOpen = true; return } toast('开始同步...'); await sync.fullSync() } },
-  { id: 'trash', label: '打开回收站', icon: I.trash, section: 'command', action() { close(); ui.panels.trash = true } },
-  { id: 'settings', label: '打开设置', icon: I.settings, section: 'command', action() { close(); ui.panels.settings = true } },
-  { id: 'shortcuts', label: '快捷键速查', icon: I.search, shortcut: 'Ctrl /', section: 'command', action() { close(); ui.panels.shortcutHelp = true } },
+  { id: 'trash', label: '打开回收站', icon: I.trash, section: 'command', action() { close(); pushNavState(); ui.panels.trash = true } },
+  { id: 'settings', label: '打开设置', icon: I.settings, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
+  { id: 'shortcuts', label: '快捷键速查', icon: I.search, shortcut: 'Ctrl /', section: 'command', action() { close(); pushNavState(); ui.panels.shortcutHelp = true } },
 ]
 
 const searchResults = computed<SearchResultItem[]>(() => {

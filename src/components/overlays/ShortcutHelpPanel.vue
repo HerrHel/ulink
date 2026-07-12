@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 
 const ui = useUIStore()
 
@@ -73,12 +74,15 @@ const groups: ShortcutGroup[] = [
 function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === '/') {
     e.preventDefault()
+    // 仅在「即将打开」时 pushNavState 记未开态，后退能关；关闭时不再 push。
+    if (!ui.panels.shortcutHelp) pushNavState()
     ui.panels.shortcutHelp = !ui.panels.shortcutHelp
     return
   }
   // ? 在非输入框时调出（Shift+/ 即 ?）
   if (e.key === '?' && !isTyping(e.target)) {
     e.preventDefault()
+    pushNavState()
     ui.panels.shortcutHelp = true
   }
   if (e.key === 'Escape' && ui.panels.shortcutHelp) {

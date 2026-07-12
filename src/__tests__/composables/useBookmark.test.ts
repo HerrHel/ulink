@@ -52,6 +52,12 @@ const mockUI = {
     trash: false,
     history: false,
     rail: false,
+    shortcutHelp: false,
+  },
+  overlays: {
+    addDropdown: false,
+    addPopover: false,
+    deadLinks: false,
   },
 }
 

@@ -221,13 +221,14 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 import { incrementStat, getStats, STAT_LABELS } from '../../lib/stats.js'
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
 
-function onOpenShortcutHelp() { uiStore.panels.shortcutHelp = true; uiStore.panels.settings = false }
+function onOpenShortcutHelp() { pushNavState(); uiStore.panels.shortcutHelp = true; uiStore.panels.settings = false }
 
 const uiStore = useUIStore()
 const dataStore = useDataStore()
@@ -284,7 +285,7 @@ function onHistoryMaxChange() {
   uiStore.saveUIState()
 }
 
-function onOpenTrash() { uiStore.panels.trash = true; uiStore.panels.settings = false }
+function onOpenTrash() { pushNavState(); uiStore.panels.trash = true; uiStore.panels.settings = false }
 function onTriggerImport() { triggerImport(); uiStore.panels.settings = false }
 function onExportData() { exportData(); uiStore.panels.settings = false }
 
@@ -340,6 +341,7 @@ function onCheckDeadLinks() {
 }
 
 function onViewDeadLinks() {
+  pushNavState()
   uiStore.overlays.deadLinks = true
   uiStore.panels.settings = false
 }

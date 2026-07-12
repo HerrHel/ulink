@@ -22,18 +22,30 @@ interface NavState {
   groupEdit: boolean
   cat: boolean
   attr: boolean
+  // 面板类叠加层：与 modal 一样支持「打开前 push、后退关」语义。
+  // 原实现不含这些 → 打开 settings/trash/deadLinks/shortcutHelp 时未 push，
+  // 用户后退无法关面板（只能点关闭按钮/Esc）。
+  settings: boolean
+  trash: boolean
+  deadLinks: boolean
+  shortcutHelp: boolean
 }
 
 export function captureNavState(): NavState {
   const ui = useUIStore()
+  // 可选链防御：测试 mock 可能给 partial 的 panels/overlays，store 迁移期也可能缺字段。
   return {
     curCat: ui.curCat,
     focusedGroupId: ui.focusedGroupId,
-    detailPanelOpen: ui.panels.detail || false,
-    bm: ui.modals.bookmark || false,
-    groupEdit: ui.modals.groupEdit || false,
-    cat: ui.modals.category || false,
-    attr: ui.modals.attribute || false,
+    detailPanelOpen: ui.panels?.detail || false,
+    bm: ui.modals?.bookmark || false,
+    groupEdit: ui.modals?.groupEdit || false,
+    cat: ui.modals?.category || false,
+    attr: ui.modals?.attribute || false,
+    settings: ui.panels?.settings || false,
+    trash: ui.panels?.trash || false,
+    deadLinks: ui.overlays?.deadLinks || false,
+    shortcutHelp: ui.panels?.shortcutHelp || false,
   }
 }
 
@@ -45,6 +57,8 @@ export function pushNavState() {
 
 export function restoreNavState(prev: NavState) {
   const ui = useUIStore()
+  // pushNavState 在「打开前」调用并 snapshot「未开」态，popstate 时比对
+  // 「prev.X=false 且当前已开」→ 关闭。modal 与面板叠加层用同一模式。
   if (prev.bm !== true && ui.modals.bookmark) { closeBmModal(); return }
   if (prev.groupEdit !== true && ui.modals.groupEdit) { closeGroupEdit(); return }
   if (prev.cat !== true && ui.modals.category) { closeCatModal(); return }
@@ -52,6 +66,10 @@ export function restoreNavState(prev: NavState) {
   if (prev.focusedGroupId === null && ui.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat } return }
   if (!prev.detailPanelOpen && ui.panels.detail) { ui.panels.detail = false; return }
   if (prev.detailPanelOpen && !ui.panels.detail) { ui.panels.detail = true; return }
+  if (prev.settings !== true && ui.panels.settings) { ui.panels.settings = false; return }
+  if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return }
+  if (prev.deadLinks !== true && ui.overlays.deadLinks) { ui.overlays.deadLinks = false; return }
+  if (prev.shortcutHelp !== true && ui.panels.shortcutHelp) { ui.panels.shortcutHelp = false; return }
   if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat; ui.focusedGroupId = null; return }
 }
 
