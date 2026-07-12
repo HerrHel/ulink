@@ -14,34 +14,44 @@ let _restoring = false  // true while restoreSnapshot is running; suppress pushU
 
 function snapSize(s: UndoSnapshot): number { return (s.notes ? s.notes.length * 2 : 0) + (s.bookmarkIds ? s.bookmarkIds.length * 20 : 0) }
 
-let _totalUndoBytes = 0
-let _undoBytesDirty = true
-
-function _recalcUndoBytes() {
+/** 实算所有 stack（undo + redo）的总字节。
+ *  旧实现维护模块级 `_totalUndoBytes` 缓存 `+= / -=` 增量记账，存在三类记账 bug：
+ *  ① clearStack 清空被删组的 stack 时不减字节 → 已删组 undo 字节永久泄漏、越用越涨；
+ *  ② `_undoBytesDirty` 在测试间不重置，模块级单例跨 Pinia 实例残留上轮值，新栈空却读到旧字节；
+ *  ③ 增量记账与遍历实算混用致长期失真。
+ *  缓存带来的性能收益不值这三类缺陷（snapshot 总数受 MAX_UNDO×组数 上界，遍历可接受），
+ *  改为每次实算，记账与 stacks 真相永远单一同步。 */
+function totalUndoBytes(): number {
   const undo = useUndoStore()
-  _totalUndoBytes = 0
+  let total = 0
   for (const gid in undo.stacks) {
     const st = undo.stacks[gid]
-    if (st.undo) st.undo.forEach(function (s) { _totalUndoBytes += snapSize(s) })
-    if (st.redo) st.redo.forEach(function (s) { _totalUndoBytes += snapSize(s) })
+    if (st.undo) for (const s of st.undo) total += snapSize(s)
+    if (st.redo) for (const s of st.redo) total += snapSize(s)
   }
-  _undoBytesDirty = false
+  return total
 }
 
-function totalUndoBytes(): number { if (_undoBytesDirty) _recalcUndoBytes(); return _totalUndoBytes }
-
-function evictOldestUndo() {
+function evictOldestUndo(): boolean {
+  // 按「全局最久远的 undo 项」逐条驱逐，而非按 gid 字典序选组——
+  // gid 形如 'g'+ts.toString(36)+random，含随机段，字典序与 push 时间序不等价，
+  // 旧实现 `gid < oldestGid` 会误驱逐时间较新但字典序较小的组，丢失近期编辑的撤销能力。
+  // 各 stack 的 undo[0] 是该组最老项（push 顺序），跨组比其 pushedAt 最小者即全局最老。
   const undo = useUndoStore()
-  let oldestGid: string | null = null
+  let targetGid: string | null = null
+  let oldestAt = Infinity
   for (const gid in undo.stacks) {
     const st = undo.stacks[gid]
-    if (st.undo && st.undo.length) { if (!oldestGid || gid < oldestGid) { oldestGid = gid } }
+    if (st.undo && st.undo.length) {
+      const at = st.undo[0].pushedAt ?? 0
+      if (at < oldestAt) { oldestAt = at; targetGid = gid }
+    }
   }
-  if (oldestGid && undo.stacks[oldestGid].undo.length) {
-    _totalUndoBytes -= snapSize(undo.stacks[oldestGid].undo[0])
-    undo.stacks[oldestGid].undo.shift()
-    if (!undo.stacks[oldestGid].undo.length && !undo.stacks[oldestGid].redo.length) { delete undo.stacks[oldestGid] }
-  }
+  if (!targetGid) return false
+  const st = undo.stacks[targetGid]
+  st.undo.shift()
+  if (!st.undo.length && !st.redo.length) delete undo.stacks[targetGid]
+  return true
 }
 
 export function pushUndo(gid: string) {
@@ -53,19 +63,18 @@ export function pushUndo(gid: string) {
   const stack = undo.ensureStack(gid)
   if (undo.timers[gid]) { clearTimeout(undo.timers[gid]) }
   else {
-    if (stack.redo.length) {
-      stack.redo.forEach(function (s) { _totalUndoBytes -= snapSize(s) })
-    }
     stack.redo = []
     if (stack.undo.length >= MAX_UNDO) {
-      _totalUndoBytes -= snapSize(stack.undo[0])
       stack.undo.shift()
     }
-    const newSnap: UndoSnapshot = { notes: sg.notes, bookmarkIds: sg.bookmarkIds.slice() }
+    const newSnap: UndoSnapshot = { notes: sg.notes, bookmarkIds: sg.bookmarkIds.slice(), pushedAt: Date.now() }
     stack.undo.push(newSnap)
-    _totalUndoBytes += snapSize(newSnap)
-    while (totalUndoBytes() > MAX_UNDO_BYTES && stack.undo.length > 1) {
-      evictOldestUndo()
+    // 字节超限时驱逐「全局最久远」的 undo 项，直到达标或无可驱逐（所有组 undo 已空）。
+    // 旧实现守卫 `stack.undo.length > 1` 用的是当前 push 组的栈深度，但 evict 驱逐的是
+    // 全局最老组——当前组刚首次 push（undo 仅 1 条）时即便全局字节超限也不驱逐，
+    // 超限状态无法靠这条 push 修复；且旧 evict 按字典序选组可能驱逐错组。改纯按字节达标驱动。
+    while (totalUndoBytes() > MAX_UNDO_BYTES) {
+      if (!evictOldestUndo()) break
     }
   }
   undo.timers[gid] = setTimeout(function () { delete undo.timers[gid] }, UNDO_WINDOW)
@@ -102,14 +111,11 @@ export function performUndo(gid: string): boolean {
   const editorHTML = EditorManager.getContentHTML(gid)
   if (editorHTML !== null) sg.notes = editorHTML
   if (stack.redo.length >= MAX_UNDO) {
-    _totalUndoBytes -= snapSize(stack.redo[0])
     stack.redo.shift()
   }
-  const redoSnap: UndoSnapshot = { notes: sg.notes, bookmarkIds: sg.bookmarkIds.slice() }
+  const redoSnap: UndoSnapshot = { notes: sg.notes, bookmarkIds: sg.bookmarkIds.slice(), pushedAt: Date.now() }
   stack.redo.push(redoSnap)
-  _totalUndoBytes += snapSize(redoSnap)
   const snap = stack.undo.pop()!
-  _totalUndoBytes -= snapSize(snap)
   restoreSnapshot(gid, snap)
   debouncedSaveAppData()
   toast('已撤销')
@@ -126,14 +132,11 @@ export function performRedo(gid: string): boolean {
   const editorHTML = EditorManager.getContentHTML(gid)
   if (editorHTML !== null) sg.notes = editorHTML
   if (stack.undo.length >= MAX_UNDO) {
-    _totalUndoBytes -= snapSize(stack.undo[0])
     stack.undo.shift()
   }
-  const undoSnap: UndoSnapshot = { notes: sg.notes, bookmarkIds: sg.bookmarkIds.slice() }
+  const undoSnap: UndoSnapshot = { notes: sg.notes, bookmarkIds: sg.bookmarkIds.slice(), pushedAt: Date.now() }
   stack.undo.push(undoSnap)
-  _totalUndoBytes += snapSize(undoSnap)
   const snap = stack.redo.pop()!
-  _totalUndoBytes -= snapSize(snap)
   restoreSnapshot(gid, snap)
   debouncedSaveAppData()
   toast('已前进')

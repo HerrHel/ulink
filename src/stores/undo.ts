@@ -4,6 +4,9 @@ import { useDataStore } from './data.js'
 export interface UndoSnapshot {
   notes: string
   bookmarkIds: string[]
+  /** 该 snapshot 被 push 进栈的时刻（ms）。仅用于字节超限时按「最久远」驱逐，
+   *  不参与持久化（undo 栈为内存态）。可选以兼容旧手造 snapshot（缺省视为 0=最老）。 */
+  pushedAt?: number
 }
 
 interface UndoStack {
