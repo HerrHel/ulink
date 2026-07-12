@@ -105,7 +105,13 @@ export const useToastStore = defineStore('toast', () => {
     }
     if (undoToast.value) {
       undoToast.value.cls = 'undo-toast-out'
-      setTimeout(() => { undoToast.value = null }, 300)
+      // 动画 300ms 后清除 DOM —— 必须赋给 _dismissTimer 受管，否则下次
+      // showWithUndo → dismissUndo 清不掉此 timer：新 toast 设完后 300ms 旧 timer
+      // fire 把 undoToast.value = null，连新 toast 一并清掉（B-13 根因）。
+      _dismissTimer = setTimeout(() => {
+        _dismissTimer = null
+        undoToast.value = null
+      }, 300)
     }
   }
 

@@ -80,13 +80,20 @@ export function syncGroupBookmarks(gid: string) {
 export function createGroup(catId?: string): string {
   const ds = useDataStore();
   const ui = useUIStore();
-  ds.siblingGroups.forEach(function (g) { ds.updateGroup(g.id, { order: (g.order || 0) + 1 }); });
-  ds.bookmarks.filter(function (b) { return !b.parentId; }).forEach(function (b) { ds.updateBookmark(b.id, { order: (b.order || 0) + 1 }); });
+  // 旧实现为把新组插到「最前」，对所有现存顶层书签 + 组遍历 update*({order: order+1})：
+  //   ① 每个被遍历项的 updatedAt 被刷成 Date.now() —— 按 updatedAt 排序时新建一个组会抹平
+  //      全库的时间次序，用户失去「哪个先建」的辨识；
+  //   ② 每个被遍历项 _markDirty + _trackChange(order) —— 一次新建组触发整库全量同步推送；
+  //   ③ _saveLocalHistory 对每个 id 入队一条历史快照。
+  // 改用「现存最大 order + 1」新组单独占用一个唯一 order 位，仅新增一条 dirty，
+  // 默认 desc 排序下新组 order 最大即排最前——与原「插到最前」行为一致，但零次生副作用。
+  const maxBmOrder = ds.bookmarks.reduce((m, b) => b.parentId ? m : (b.order > m ? b.order : m), -1)
+  const maxGrpOrder = ds.siblingGroups.reduce((m, g) => (g.order > m ? g.order : m), -1)
   const g: SiblingGroup = {
     id: 'sg_' + gid(),
     name: '',
     categoryId: catId || (ui.curCat === CAT_ALL ? CAT_UNCATEGORIZED : ui.curCat),
-    icon: '', order: 0, isExpanded: false,
+    icon: '', order: Math.max(maxBmOrder, maxGrpOrder) + 1, isExpanded: false,
     attributes: { [ATTR_IS_GROUP]: true },
     bookmarkIds: [], notes: '',
     updatedAt: Date.now(), useCount: 0

@@ -243,7 +243,10 @@ export async function saveBm() {
   } else {
     const newBm = data as Bookmark
     newBm.id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-    newBm.order = ds.bookmarks.length
+    // order 用「现存最大 order + 1」而非 ds.bookmarks.length：length 在永久删除（回收站清空、
+    // 数组物理移除）后会缩短，新值可能与现存项 order 重复，自定义排序下两条同 order 抖动。
+    // max+1 只取现存项，永久删后仍唯一。与 saveFromExtension 同策略（见其注释）。
+    newBm.order = ds.bookmarks.reduce((m, b) => b.order > m ? b.order : m, -1) + 1
     newBm.useCount = 0
     newBm.isExpanded = false
     newBm.createdAt = Date.now()

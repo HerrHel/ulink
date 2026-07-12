@@ -123,6 +123,27 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
 // ══════════════════════════════════════════════════════
 // 主 composable
 // ══════════════════════════════════════════════════════
+// ── 回声防护删除 ──
+// 远端 DELETE / 软删合并触发的本机删除会产生衍生的关联行 dirty：
+//  - deleteBookmark 会从所属 groups 剔除并 _markDirty(g.id)
+//  - deleteCategory 会把该分类下所有 bookmark/group 的 categoryId 改 UNCATEGORIZED 并 _markDirty + _trackChange
+//  - deleteAttribute 会遍历所有项删 attributes key 同样 _markDirty + _trackChange
+// 这些衍生 dirty 若不清，下次 debouncedSync 会把波及行回推远端——回声流量 + updated_at_num
+// 污染面。删除前快照 dirty/changed 集合，删除后清掉因衍生新增的项（被删 id 自身也清）。
+function _deleteWithoutEcho(ds: ReturnType<typeof useDataStore>, type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) {
+  const dirtyBefore = new Set(ds._dirtyIds)
+  const changedBefore = new Set(ds._changedFields.keys())
+  switch (type) {
+    case 'bookmark': ds.deleteBookmark(id); break
+    case 'group': ds.deleteGroup(id); break
+    case 'category': ds.deleteCategory(id); break
+    case 'attribute': ds.deleteAttribute(id); break
+  }
+  for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) || did === id) ds._dirtyIds.delete(did)
+  for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || cid === id) ds._changedFields.delete(cid)
+  ds._newIds.delete(id)
+}
+
 export function useCloudSync() {
   // 注意：useAuth() 返回 Pinia setup store 实例，其上 isLoggedIn（computed）会被 Pinia 自动解包为 boolean，
   // 直接解构 `{ isLoggedIn }` 在 TS 类型层是 boolean、运行时是 ComputedRef —— 二者不一致。
@@ -445,27 +466,12 @@ export function useCloudSync() {
         for (const row of r.data || []) {
           const id = row.id as string
           // 仅处理本地仍活着的项（避免重复删除）
-          if (ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt) {
-            ds.deleteBookmark(id)
-            ds._dirtyIds.delete(id)
-            ds._newIds.delete(id)
-          } else if (ds.groupMap[id] && !ds.groupMap[id].deletedAt) {
-            ds.deleteGroup(id)
-            ds._dirtyIds.delete(id)
-            ds._newIds.delete(id)
-          }
+          if (ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt) _deleteWithoutEcho(ds, 'bookmark', id)
+          else if (ds.groupMap[id] && !ds.groupMap[id].deletedAt) _deleteWithoutEcho(ds, 'group', id)
           const cat = ds.categories.find(c => c.id === id)
-          if (cat && !cat.deletedAt) {
-            ds.deleteCategory(id)
-            ds._dirtyIds.delete(id)
-            ds._newIds.delete(id)
-          }
+          if (cat && !cat.deletedAt) _deleteWithoutEcho(ds, 'category', id)
           const attr = ds.customAttributes.find(a => a.id === id)
-          if (attr && !attr.deletedAt) {
-            ds.deleteAttribute(id)
-            ds._dirtyIds.delete(id)
-            ds._newIds.delete(id)
-          }
+          if (attr && !attr.deletedAt) _deleteWithoutEcho(ds, 'attribute', id)
         }
       }
 
@@ -491,13 +497,7 @@ export function useCloudSync() {
         }
         const reconcileDelete = (type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) => {
           if (ds._dirtyIds.has(id)) return  // 正在本地编辑/等推送的条目不删
-          switch (type) {
-            case 'bookmark': ds.deleteBookmark(id); break
-            case 'group': ds.deleteGroup(id); break
-            case 'category': ds.deleteCategory(id); break
-            case 'attribute': ds.deleteAttribute(id); break
-          }
-          ds._dirtyIds.delete(id); ds._newIds.delete(id)
+          _deleteWithoutEcho(ds, type, id)
         }
         for (const b of ds.bookmarks) {
           if (!b.deletedAt && !remoteAll.has(b.id)) reconcileDelete('bookmark', b.id)

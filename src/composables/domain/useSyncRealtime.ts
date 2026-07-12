@@ -49,10 +49,26 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     // - 数据进入回收站可恢复
     // - 组引用关系正确清理
     // 然后清除 dirty 标记，避免下次同步把已删除数据重新 upsert 回 Supabase
-    if (type === 'bookmark') { ds.deleteBookmark(id); ds._dirtyIds.delete(id) }
-    else if (type === 'group') { ds.deleteGroup(id); ds._dirtyIds.delete(id) }
-    else if (type === 'category') { ds.deleteCategory(id); ds._dirtyIds.delete(id) }
-    else if (type === 'attribute') { ds.deleteAttribute(id); ds._dirtyIds.delete(id) }
+    //
+    // 回声防护：deleteBookmark 会把「该 bookmark 所属的 groups」从 bookmarkIds 剔除并
+    // _markDirty(g.id)（波及关联行）。远端 DELETE 引发的本机衍生清理不该被当作本地
+    // 改动回推远端——否则这些 group 会被 partial/full upsert 推回，造成回声流量 +
+    // updated_at_num 污染面（与上方 upsert 分支第 143 行 _changedFields.delete 同理，
+    // 但旧实现漏了删除分支的波及行清理）。删除前快照 dirty 集，删除后清掉新增的波及项。
+    if (type === 'bookmark') {
+      const dirtyBefore = new Set(ds._dirtyIds)
+      const changedBefore = new Set(ds._changedFields.keys())
+      ds.deleteBookmark(id)
+      for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) && did !== id) ds._dirtyIds.delete(did)
+      for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) && cid !== id) ds._changedFields.delete(cid)
+    } else if (type === 'group') {
+      ds.deleteGroup(id)
+    } else if (type === 'category') {
+      ds.deleteCategory(id)
+    } else if (type === 'attribute') {
+      ds.deleteAttribute(id)
+    }
+    ds._dirtyIds.delete(id)
     return
   }
 

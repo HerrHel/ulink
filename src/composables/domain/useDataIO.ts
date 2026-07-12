@@ -290,6 +290,7 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
       bookmarkIds: liveBookmarkIds,
       notes: g.notes || '', updatedAt: g.updatedAt || Date.now(),
       useCount: g.useCount || 0,
+      isPublic: (g as { isPublic?: boolean }).isPublic || false,
     })
     if (!parsed.success) { skippedGroup++; continue }
     ds.addGroup(parsed.data)
@@ -523,6 +524,10 @@ export async function resetToDefaults() {
       ds.customAttributes = snapshot.customAttributes
       ds.siblingGroups = snapshot.siblingGroups
       ui.curCat = snapshot.curCat
+      // 直接替换数组引用后必须重建索引：_bmMap/_grpMap/_catMap/_attrMap/_childrenIdx 仍指向
+      // 重置前的旧数组元素，撤销恢复后全部失同步——后续 bookmarkMap[id]/childrenMap 查找
+      // 会 miss、过滤/排序 getter 走懒回退分支（性能退化）、_syncMaps 才能恢复正常索引。
+      ds._syncMaps()
       debouncedSaveAppData()
       toast('数据已恢复')
     })

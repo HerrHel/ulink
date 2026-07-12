@@ -39,7 +39,13 @@ export async function saveData(data: AppData): Promise<boolean> {
   // IDB 权威写入
   try {
     const plain = JSON.parse(JSON.stringify(stamped))
-    await idbSet(IDB_KEY, plain)
+    const ok = await idbSet(IDB_KEY, plain)
+    // idbSet 现在如实返回 false（见 storage.ts）；旧实现吞错致此处恒为 true，
+    // 使 app.ts 的「存储不可用」toast 永不触发——隐私模式/配额满时数据丢失无提示。
+    if (!ok) {
+      console.error('[persist] IDB 写入失败（idbSet 返回 false），数据未保存')
+      return false
+    }
   } catch (e) {
     console.error('[persist] IDB 写入失败，数据未保存:', e)
     return false

@@ -174,6 +174,7 @@ export const useUIStore = defineStore('ui', {
           detailCards: this.detailCards.slice(),
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
+          sortDir: this.sortDir || 'desc',
           groupsOnTop: this.groupsOnTop,
           layoutMode: this.layoutMode,
           historyMax: this.historyMax,
@@ -192,6 +193,7 @@ export const useUIStore = defineStore('ui', {
         const s = JSON.parse(raw)
         if (s.curCat) this.curCat = s.curCat
         if (s.sortMode) this.sortMode = s.sortMode
+        if (s.sortDir === 'asc' || s.sortDir === 'desc') this.sortDir = s.sortDir
         if (typeof s.groupsOnTop === 'boolean') this.groupsOnTop = s.groupsOnTop
         if (s.layoutMode === 'list' || s.layoutMode === 'grid') this.layoutMode = s.layoutMode
         if (typeof s.historyMax === 'number') this.historyMax = Math.min(30, Math.max(5, s.historyMax))
