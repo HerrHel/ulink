@@ -72,6 +72,19 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
   }
 
   const ds = useDataStore()
+
+  // 已软删的条目不能直接 restore——updateGroup/updateBookmark 只改字段不清 deletedAt，
+  // return true 误报成功但用户看不到恢复结果（组/书签仍在回收站）。
+  // 场景：编辑组 → _saveLocalHistory 防抖 500ms → 用户在 500ms 内删组 → timer fire
+  // 仍写历史 → HistoryPanel 列出已删组的历史 → 点 restore → 误报。
+  if (itemType === 'group') {
+    const g = ds.groupMap[itemId]
+    if (!g || g.deletedAt) return false
+  } else {
+    const b = ds.bookmarkMap[itemId]
+    if (!b || b.deletedAt) return false
+  }
+
   if (itemType === 'bookmark') {
     ds.updateBookmark(itemId, {
       title: histData.title as string, url: histData.url as string,
