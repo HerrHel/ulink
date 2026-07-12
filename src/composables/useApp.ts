@@ -44,8 +44,9 @@ export function useApp() {
   watch(() => longPress.fired, (v) => { useUIStore().lpFired = v })
 
   // ── 3. 全局事件委派 ──
+  // longPress.fired 已通过上面的 watch 同步到 uiStore.lpFired，useGlobalEvents
+  // 直接读 store（不再通过一次性的快照对象传值——快照会失效）。
   useGlobalEvents({
-    longPressFired: { value: longPress.fired },
     onOpenDetail: openDetail,
     onToggleGroupFocus: toggleGroupFocus,
     onRemoveGroupRef: removeGroupRef,

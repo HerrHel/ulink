@@ -13,7 +13,6 @@ interface GlobalEventsOptions {
   onRemoveBmFromGroup?: (bmId: string, gid: string) => void
   onVisit?: (e: Event | null, id?: string) => void
   onShowCtxMenu?: (e: MouseEvent, type: string, id: string) => void
-  longPressFired?: { value: boolean }
 }
 
 /**
@@ -27,7 +26,6 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     onToggleGroupFocus,
     onRemoveGroupRef, onRemoveBmFromGroup,
     onVisit, onShowCtxMenu,
-    longPressFired
   } = options
 
   function onResize() {
@@ -35,9 +33,13 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
   }
 
   function onGlobalClick(e: MouseEvent) {
-    // Suppress click after long-press
-    if (longPressFired?.value) {
-      longPressFired.value = false
+    // Suppress click after long-press：长按抬起后的系统 click 与长按手势同点触发，
+    // 不抑制会误触发卡片内 click 委派（如误展开/误访问）。原实现传一次性快照对象
+    // { value: longPress.fired } 进来——快照创建瞬间取值 false，之后 longPress.fired
+    // 翻 true 也反映不到快照，抑制分支永不生效。改读 store.lpFired（useApp 的 watch
+    // 已把 longPress.fired 同步过去），读完清零，单次抑制语义保持。
+    if (ui.lpFired) {
+      ui.lpFired = false
       e.preventDefault()
       e.stopPropagation()
       return
