@@ -11,11 +11,14 @@ import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { AppDataSchema } from '../schemas.js'
+import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
   const ui = () => useUIStore()
+  // 隐私模式 / IDB 配额满 toast 只弹一次（flag 保证不刷屏）。
+  let _storageFailWarned = false
 
   // ── 数据（只读，委托 dataStore）──
   const bookmarks = computed(() => ds().bookmarks)
@@ -133,7 +136,15 @@ export const useAppStore = defineStore('app', () => {
       d._storageInfoDirty = true
       d._saveCount++
       // IDB 权威写入（含 localStorage 尽力缓存）
-      persist.saveData(parsed.data)
+      // persist.saveData 失败时返回 false（隐私模式/IDB配额满等），fire-and-forget 但 toast 首次警告。
+      // 旧实现不 await 不检查返回值 → 用户存的书签没落库却无任何提示，下次刷新发现丢了误以为 bug。
+      // 只弹一次避免刷屏：debouncedSave 300ms 防抖触发 save 频率不低。
+      persist.saveData(parsed.data).then(ok => {
+        if (!ok && !_storageFailWarned) {
+          _storageFailWarned = true
+          toast('⚠️ 存储不可用（如隐私模式/配额满），刷新后数据可能丢失', false)
+        }
+      })
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
     },
 
