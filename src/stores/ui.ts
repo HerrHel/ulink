@@ -218,6 +218,13 @@ export const useUIStore = defineStore('ui', {
           ds._customCardOrder = s._customCardOrder
         }
         if (s.docScrollTop) document.documentElement.scrollTop = s.docScrollTop
+        // themeStyle 不入 UI state 持久化对象（单一真相源是 theme.ts 的 lv_themeStyle key
+        // —— themeSetStyle 写、theme.ts IIFE 启动读回设 DOM 属性）。但 uiStore.themeStyle 内存态
+        // 刷新后会重置为默认 'premium'，导致重启后 SettingsPanel 的 :class 高亮与实际 DOM 主题
+        // 不一致（实际是 comfortable 却高亮 premium）。此处从 lv_themeStyle 同步回 uiStore.themeStyle，
+        // 与 theme.ts 已设的 DOM 态对齐，单一真相源不污染 saveUIState。
+        const ts = localStorage.getItem('lv_themeStyle')
+        if (ts === 'comfortable' || ts === 'premium') this.themeStyle = ts
       } catch (e) { console.warn('[LinkVault] Failed to restore UI state:', (e as Error).message) }
     },
   },
