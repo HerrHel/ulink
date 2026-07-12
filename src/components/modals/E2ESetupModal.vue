@@ -72,6 +72,7 @@ import { ref, watch } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { generateRecoveryKeyPDF } from '../../lib/recoveryKeyPDF.js'
+import { toast } from '../../lib/toast.js'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -121,7 +122,16 @@ function downloadPDF() {
   generateRecoveryKeyPDF(recoveryKey.value)
 }
 
-function copyKey() {
-  navigator.clipboard.writeText(recoveryKey.value)
+async function copyKey() {
+  // Clipboard API 在非安全上下文（http://局域网 IP）或旧浏览器为 undefined/reject，
+  // 静默吞错会让用户误以为已复制——而 Recovery Key 丢失即 E2E 数据永久不可恢复。
+  // 对照 SettingsPanel.copyFeedbackEmail 的 try/catch+toast 兜底；失败时提示用户
+  // 手动选中上方 recovery-key-box 内的明文 key（recovery-key-box 始终可见，兜底可达）。
+  try {
+    await navigator.clipboard.writeText(recoveryKey.value)
+    toast('Recovery Key 已复制，请妥善保存', true)
+  } catch {
+    toast('复制失败，请手动选中上方 Recovery Key 复制', false)
+  }
 }
 </script>
