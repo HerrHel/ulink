@@ -107,6 +107,31 @@ describe('E2E Encryption', () => {
       expect(result).toBe('not-encrypted')
     })
 
+    it('3 段 . 分隔但非合法密文时优雅降级返回原值，不抛错（避免污染整次 pull）', async () => {
+      // 场景：E2E 关闭时明文 url='a.b.c' 存云端，某次解锁态 pull 调 decrypt。
+      // 旧实现 split('.') 得 3 段 → base64 解 'a' 抛 RangeError → decrypt 抛出 →
+      // _pullChanges try 失败 → 整次 pull 判失败、所有远端变更丢失。修复后 decrypt
+      // 内部 catch 返回原值，单条坏字段不再污染同步。
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey(MASTER_PW, salt)
+      const fake = 'a.b.c'
+      const result = await decrypt(fake, key)
+      expect(result).toBe(fake)
+      // 真密文(正确 key)仍正常解密
+      const realCipher = await encrypt('real-secret', key)
+      expect(await decrypt(realCipher, key)).toBe('real-secret')
+    })
+
+    it('3 段似密文但 wrong key 时优雅降级返回原值（不再抛错）', async () => {
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const keyA = await deriveKey(MASTER_PW, salt)
+      const keyB = await deriveKey('other-password', crypto.getRandomValues(new Uint8Array(32)))
+      const cipherA = await encrypt('secret-A', keyA)
+      // 用 keyB 解 keyA 加密的密文：AES-GCM 认证失败 → 旧实现抛错，新实现返回原密文
+      const result = await decrypt(cipherA, keyB)
+      expect(result).toBe(cipherA)
+    })
+
     it('S6: encrypt output is always salt.iv.data with no empty segments', async () => {
       // encrypt 契约：saveBm 依赖 split 后严格 3 段且每段非空
       const salt = crypto.getRandomValues(new Uint8Array(32))

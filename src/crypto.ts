@@ -96,15 +96,26 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
 export async function decrypt(ciphertext: string, key: CryptoKey): Promise<string> {
   const parts = ciphertext.split('.')
   if (parts.length !== 3) return ciphertext // 非加密数据，直接返回
-  const _salt = new Uint8Array(_base64ToBuf(parts[0])) // 解析但不使用，保留格式兼容
-  const iv = new Uint8Array(_base64ToBuf(parts[1]))
-  const data = _base64ToBuf(parts[2])
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: _bs(iv) },
-    key,
-    _bs(data),
-  )
-  return _fromBuffer(decrypted)
+  // 优雅降级：若 ciphertext 长得像「3 段 . 分隔」但实际不是本系统产出的合法密文
+  //（如 E2E 关闭时以明文存云端的 title＝'a.b.c'，或 base64 段非法、密钥不匹配），
+  // base64 解码或 AES-GCM 认证会抛错。旧实现直接抛出，让单条坏字段污染整次
+  // _pullChanges（其 try 会把整个 pull 判失败，所有远端变更丢失）或 Realtime merge。
+  // 改为 catch 后返回原值——真密文（正确 key）必能解，失败只意味着非密文/解不开，
+  // 返回原值不崩同步，与锁定态「不解密」行为一致，安全性不降（GCM 认证保证不会
+  // 把非密文误解成有意义明文）。
+  try {
+    const _salt = new Uint8Array(_base64ToBuf(parts[0])) // 解析但不使用，保留格式兼容
+    const iv = new Uint8Array(_base64ToBuf(parts[1]))
+    const data = _base64ToBuf(parts[2])
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: _bs(iv) },
+      key,
+      _bs(data),
+    )
+    return _fromBuffer(decrypted)
+  } catch {
+    return ciphertext
+  }
 }
 
 /** 生成 canary 明文（用于验证主密码是否正确） */
