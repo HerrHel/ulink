@@ -69,7 +69,14 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-    if (e.key.toLowerCase() === 'n') { e.preventDefault(); openBmModal() }
+    // Ctrl+N 新建书签——表单输入框/TipTap 编辑器聚焦时不拦截，否则会弹起新建书签弹窗
+    // 打断当前编辑并丢失未保存内容（搜索框/BookmarkModal 表单/组 notes 编辑器均受影响）。
+    // 对照同文件 Ctrl+Z/Y 的守卫（line 84-86），并补 isContentEditable 覆盖 TipTap。
+    if (e.key.toLowerCase() === 'n') {
+      const ae = document.activeElement
+      const inField = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || (ae as HTMLElement).isContentEditable)
+      if (!inField) { e.preventDefault(); openBmModal() }
+    }
   }
   if (e.key === 'Tab') {
     const modal = document.querySelector('.modal-mask.open .modal')
