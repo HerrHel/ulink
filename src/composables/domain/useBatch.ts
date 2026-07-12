@@ -14,12 +14,14 @@ export function toggleBatchMode() {
   const ui = useUIStore()
   ui.batchMode = !ui.batchMode
   ui.batchSelected.splice(0)
-  if (ui.batchMode) {
-    const ds = useDataStore()
-    ds.bookmarks.forEach(b => { if (b.isExpanded) ds.updateBookmark(b.id, { isExpanded: false }) })
-    ds.siblingGroups.forEach(g => { if (g.isExpanded) ds.updateGroup(g.id, { isExpanded: false }) })
-    saveAppData()
-  }
+  // 不再写持久化的 isExpanded=false：
+  //  ① 批量模式下卡片内容 pointer-events:none（见 batch.css .batch-mode），展开按钮点不动、
+  //     账户信息/子站无交互意义，收敛展开态无任何功能依赖——纯属副作用。
+  //  ② 每条 updateBookmark/updateGroup({isExpanded:false}) 会 _markDirty + _trackChange，
+  //     N 张卡片就 N 条同步队列脏 + 刷 N 个 updatedAt（污染「按日期排序」结果）+ 触发全量
+  //     saveAppData 与冗余云推送。退出批量模式也不还原——用户展开状态被持久化抹除，数据丢失。
+  //  批量模式期间的「视觉不展开」改由渲染层 computed `&& !batchMode` 临时压制（见
+  //  BookmarkCard/GroupCard isExpanded），退出后数据态 isExpanded 自然恢复。
   if (ui.focusedGroupId) nextTick(() => { ui.focusedGroupId = null })
 }
 

@@ -73,14 +73,22 @@ export function saveToLocalStorage(data: AppData): boolean {
   }
 }
 
-/** 仅写 IDB（用于显式备份） */
-export async function saveToIDB(data: AppData): Promise<void> {
+/** 仅写 IDB（用于显式备份 / localStorage→IDB 回填）
+ *  返回是否写入成功。备份场景同样不应静默吞掉 IDB 失败（隐私模式/配额满），
+ *  否则用户以为「已备份到本地」实则没落库——与 saveData 对齐如实上报。 */
+export async function saveToIDB(data: AppData): Promise<boolean> {
   const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
   const plain = JSON.parse(JSON.stringify(stamped))
   try {
-    await idbSet(IDB_KEY, plain)
+    const ok = await idbSet(IDB_KEY, plain)
+    if (!ok) {
+      console.warn('[persist] saveToIDB：IDB 写入失败（idbSet 返回 false）')
+      return false
+    }
+    return true
   } catch (e: unknown) {
     console.warn('[persist] IDB save failed:', e instanceof Error ? e.message : e)
+    return false
   }
 }
 
@@ -143,7 +151,15 @@ export async function loadFromIDB(): Promise<AppData | null> {
         console.warn('[persist] IDB validation failed, falling back to localStorage:', parsed.error.issues)
         return null
       }
-      return parsed.data
+      // 与 loadFromLocalStorage 一样跑 runMigrations：IDB 是权威源，但用户从旧版本升级时
+      // 早期数据 _dataVersion 可能缺失/< CURRENT_VERSION，若 IDB 加载分支不迁移，旧格式数据
+      // （文本笔记未转 HTML、categoryId=CAT_ALL、缺 updatedAt 等）会直入 store 且永不被清洗
+      // —— 后续每次 saveData 盖新 _dataVersion 反而把脏数据「冻结」。两条加载路径行为必须一致。
+      // 迁移后需回写，否则下次加载仍走旧分支。
+      const data = parsed.data
+      const needsm = runMigrations(idbData, data)
+      if (needsm) saveToIDB(data)
+      return data
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', (e as Error).message) }
   return null

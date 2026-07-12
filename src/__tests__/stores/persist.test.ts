@@ -8,17 +8,25 @@ import { STORAGE_KEY, DEFAULTS } from '../../config/constants.js'
 import type { AppData } from '../../types.js'
 
 // 隔离 IDB：persist 经 storage.js 的 idbGet/idbSet 读写 IndexedDB，jsdom 无 IDB。
-// mock 出可控的 idbGet 用于「合法/损坏数据」分支验证。
+// mock 出可控的 idbGet/idbSet：
+//  - idbSet 默认返回 true（B-1 修复后是 Promise<boolean>，saveData/saveToIDB 检查返回值）。
+//    旧 mock 返回 undefined 会误触发「IDB 写入失败」分支，破坏 B-1 修复的可测试性。
+//  - idbGet 可控，用于「合法/损坏数据」分支验证。
 vi.mock('../../stores/storage.js', () => ({
   idbGet: vi.fn(async () => null),
-  idbSet: vi.fn(async () => {}),
+  idbSet: vi.fn(async () => true),
 }))
 const _idbGet = vi.mocked(await import('../../stores/storage.js')).idbGet
+const _idbSet = vi.mocked(await import('../../stores/storage.js')).idbSet
 
 describe('persist', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+    // 每个测试重置 idbGet/idbSet 到 mock 工厂默认（null / true），防止上一测试
+    // 临时改的 mockResolvedValueOnce 残留污染下一测试的断言。
+    _idbGet.mockReset(); _idbGet.mockResolvedValue(null)
+    _idbSet.mockReset(); _idbSet.mockResolvedValue(true)
   })
 
   describe('saveToLocalStorage', () => {
@@ -55,6 +63,34 @@ describe('persist', () => {
     })
   })
 
+  describe('saveData (B-1: IDB 写入失败如实上报)', () => {
+    it('IDB 写入成功时返回 true', async () => {
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+      }
+      _idbSet.mockResolvedValue(true)
+      await expect(persist.saveData(data)).resolves.toBe(true)
+    })
+
+    it('idbSet 返回 false（隐私模式/配额满）时 saveData 返回 false，不落库 localStorage 误判成功', async () => {
+      // B-1 根因：旧 idbSet 吞错返回 undefined，saveData 旧实现不检查返回值，
+      // 恒返回 true → app.ts「存储不可用」toast 永不触发，数据丢失无提示。
+      _idbSet.mockResolvedValue(false)
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+      }
+      await expect(persist.saveData(data)).resolves.toBe(false)
+    })
+
+    it('idbSet 抛异常时 saveData 捕获并返回 false', async () => {
+      _idbSet.mockRejectedValue(new Error('IDB unavailable'))
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+      }
+      await expect(persist.saveData(data)).resolves.toBe(false)
+    })
+  })
+
   describe('loadFromLocalStorage', () => {
     it('无数据时返回 DEFAULTS', () => {
       const result = persist.loadFromLocalStorage()
@@ -88,11 +124,19 @@ describe('persist', () => {
   })
 
   describe('saveToIDB / loadFromIDB', () => {
-    it('saveToIDB 不应抛出', async () => {
+    it('saveToIDB 成功返回 true', async () => {
       const data: AppData = {
         bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
       }
-      await expect(persist.saveToIDB(data)).resolves.toBeUndefined()
+      await expect(persist.saveToIDB(data)).resolves.toBe(true)
+    })
+
+    it('saveToIDB 在 idbSet 失败时返回 false（B-1：备份路径也不得静默吞错）', async () => {
+      _idbSet.mockResolvedValue(false)
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+      }
+      await expect(persist.saveToIDB(data)).resolves.toBe(false)
     })
 
     it('loadFromIDB 应在无数据时返回 null', async () => {

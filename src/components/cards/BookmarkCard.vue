@@ -150,7 +150,7 @@ const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttr
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])
 const hasExpandableContent = computed(() => !!(props.bookmark.username || props.bookmark.password || children.value.length))
 const previewText = computed(() => (props.bookmark.notes || '').trim().replace(/\s+/g, ' ').slice(0, 120))
-const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded)
+const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded && !uiStore.batchMode)
 const isSelected = computed(() => (uiStore.batchSelected ?? []).includes(props.bookmark.id))
 const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
 const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked'])

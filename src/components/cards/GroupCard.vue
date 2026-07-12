@@ -125,7 +125,7 @@ function setCardEl(el: any) {
 const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 
 const isFocused = computed(() => ui.focusedGroupId === props.group.id)
-const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded)
+const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
 const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim()))
 const noteIcon = I.note
