@@ -128,7 +128,16 @@ export async function loadFromIDB(): Promise<AppData | null> {
   try {
     const idbData = await idbGet(IDB_KEY)
     if (idbData && idbData.bookmarks) {
-      return idbData
+      // 与 loadFromLocalStorage 对齐加 safeParse：IDB 虽是自写自读的权威源，
+      // 但被外部工具篡改/跨版本结构漂移/写入中断致半条数据时，缺校验会让坏字段直入 store
+      // 引发后续 NPE 或白屏。失败时返回 null 让 loadData 回退到 localStorage（同时回退路径
+      // 还会用 DEFAULTS 兜底），避免静默吞入损坏数据。
+      const parsed = AppDataSchema.safeParse(idbData)
+      if (!parsed.success) {
+        console.warn('[persist] IDB validation failed, falling back to localStorage:', parsed.error.issues)
+        return null
+      }
+      return parsed.data
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', (e as Error).message) }
   return null

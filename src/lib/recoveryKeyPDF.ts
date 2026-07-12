@@ -39,8 +39,8 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
   <div class="warning">
     <h3>⚠️ 重要提醒</h3>
     <ul>
-      <li>此 Recovery Key 是您恢复数据的<strong>唯一方式</strong></li>
-      <li>忘记主密码且丢失此 Key 将导致数据<strong>永久丢失</strong></li>
+      <li>此 Recovery Key 用于在您<strong>忘记主密码时重设主密码</strong>，是重设的<strong>唯一方式</strong></li>
+      <li>忘记主密码且丢失此 Key 将导致无法重设，<strong>新数据也无法再写入加密保护</strong></li>
       <li>请将此文件保存在安全的地方（如密码管理器、加密 U 盘）</li>
       <li>建议打印一份纸质副本存放在保险箱</li>
       <li><strong>不要</strong>将此文件存储在云端网盘或邮件中</li>
@@ -51,11 +51,15 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
     <h2>使用说明</h2>
     <p>
       <strong>忘记主密码时：</strong>在 LinkVault 的 E2E 解锁界面，点击"使用 Recovery Key"，
-      输入此 Recovery Key 即可重新设置主密码并恢复数据访问。
+      输入此 Recovery Key 即可重新设置主密码并继续使用端到端加密。
+    </p>
+    <p style="margin-top:8px;color:#856404">
+      <strong>注意：</strong>重设主密码后会用新主密码派生新密钥。<strong>此前用旧主密码加密、
+      且本地已无明文副本的数据将无法解密</strong>。请尽量在能登录的设备上记牢主密码，仅在确实遗忘时才使用本 Key 重设。
     </p>
     <p style="margin-top:8px">
       <strong>换设备时：</strong>在新设备上安装 LinkVault，登录账户后，输入您的主密码即可解密数据。
-      如果忘记主密码，使用此 Recovery Key 恢复。
+      请务必使用当初加密数据时所用的主密码；若该主密码已遗忘，只能用此 Recovery Key 重设（重设后的限制见上）。
     </p>
   </div>
 

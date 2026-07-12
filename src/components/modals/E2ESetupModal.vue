@@ -32,8 +32,8 @@
         <div v-else-if="step === 2" class="e2e-step">
           <div class="e2e-info e2e-warn">
             <p><strong>⚠️ 重要提醒</strong></p>
-            <p>请立即保存以下 Recovery Key。它是您恢复数据的唯一方式。</p>
-            <p>忘记主密码且丢失 Recovery Key 将导致数据<strong>永久丢失，无法恢复</strong>。</p>
+            <p>请立即保存以下 Recovery Key。它是您在忘记主密码时重设主密码的唯一方式。</p>
+            <p>忘记主密码且丢失此 Key，将无法重设，新数据也无法再写入加密保护。</p>
           </div>
           <div class="recovery-key-box">
             <code class="recovery-key">{{ recoveryKey }}</code>

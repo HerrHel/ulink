@@ -24,6 +24,7 @@
         <template v-else>
           <div class="e2e-info e2e-warn">
             <p>使用 Recovery Key 设置新的主密码。原主密码将被替换。</p>
+            <p style="margin-top:6px">⚠️ 重设后会用新主密码派生新密钥，此前用旧主密码加密且本地无明文副本的数据将无法解密。</p>
           </div>
           <div class="form-group">
             <label class="form-label">Recovery Key</label>

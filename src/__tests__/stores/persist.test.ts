@@ -7,6 +7,14 @@ import * as persist from '../../stores/persist.js'
 import { STORAGE_KEY, DEFAULTS } from '../../config/constants.js'
 import type { AppData } from '../../types.js'
 
+// 隔离 IDB：persist 经 storage.js 的 idbGet/idbSet 读写 IndexedDB，jsdom 无 IDB。
+// mock 出可控的 idbGet 用于「合法/损坏数据」分支验证。
+vi.mock('../../stores/storage.js', () => ({
+  idbGet: vi.fn(async () => null),
+  idbSet: vi.fn(async () => {}),
+}))
+const _idbGet = vi.mocked(await import('../../stores/storage.js')).idbGet
+
 describe('persist', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -88,6 +96,32 @@ describe('persist', () => {
     })
 
     it('loadFromIDB 应在无数据时返回 null', async () => {
+      _idbGet.mockResolvedValue(null)
+      const result = await persist.loadFromIDB()
+      expect(result).toBeNull()
+    })
+
+    it('loadFromIDB 合法数据应经 safeParse 正常返回', async () => {
+      const data: AppData = {
+        bookmarks: [{ id: 'b1', title: '测', url: 'https://t.com', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 100, updatedAt: 100 }],
+        siblingGroups: [], categories: DEFAULTS.categories.map(c => ({ ...c })), customAttributes: [],
+      }
+      _idbGet.mockResolvedValue({ ...data, _dataVersion: 5, _savedAt: 123 })
+      const result = await persist.loadFromIDB()
+      expect(result).not.toBeNull()
+      expect(result!.bookmarks).toHaveLength(1)
+      expect(result!.bookmarks[0].title).toBe('测')
+    })
+
+    it('loadFromIDB 损坏数据（bookmark 缺 url）应被 safeParse 拒，返回 null 走 localStorage 回退', async () => {
+      // bookmark 缺 url → BookmarkSchema 校验失败。修复前直接 return idbData，坏字段入 store 致后续 NPE；
+      // 修复后 safeParse 拒、返回 null，loadData 回退 localStorage（localStorage 自身也 safeParse 兜底 DEFAULTS）。
+      const bad = {
+        bookmarks: [{ id: 'b1', title: '坏' }], // 缺 url/必填字段
+        siblingGroups: [], categories: [], customAttributes: [],
+        _dataVersion: 5,
+      }
+      _idbGet.mockResolvedValue(bad)
       const result = await persist.loadFromIDB()
       expect(result).toBeNull()
     })
