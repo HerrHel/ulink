@@ -80,8 +80,27 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     })
   }
 
-  // 更新组内的 bookmarkIds
-  const newBookmarkIds = group.bookmarkIds.map(bid => idMap.get(bid) || bid)
+  // 实际入库：去重跳过本地已有同 URL 的。记录实际入库的 newId，
+  // 供下方组 bookmarkIds 过滤——否则跳过的 newId 仍留在组里造成悬空引用
+  //（bookmarkMap 查不到 → 组内空卡位），toast 也夸大计数。
+  const addedIds = new Set<string>()
+  const actualAdded = [] as Bookmark[]
+  for (const b of newBookmarks) {
+    if (!ds.bookmarks.some(e => e.url?.toLowerCase() === b.url?.toLowerCase())) {
+      ds.addBookmark(b)
+      addedIds.add(b.id)
+      actualAdded.push(b)
+    }
+  }
+
+  // 组 bookmarkIds 只保留「实际入库」的 newId：
+  // - idMap 未映射（fetchPublicGroup 漏拉 / RLS 软删过滤 / Zod 失败）的 bid → 丢弃
+  // - 被去重跳过的 newId → 丢弃（addedIds 不含）
+  // 旧代码 newBookmarkIds = group.bookmarkIds.map(bid => idMap.get(bid) || bid)
+  // 在两种漏拉场景都把「不存在的 id」塞进组，造成悬空。
+  const newBookmarkIds = group.bookmarkIds
+    .map(bid => idMap.get(bid))
+    .filter((id): id is string => !!id && addedIds.has(id))
 
   const newGroup: SiblingGroup = {
     ...group,
@@ -91,18 +110,13 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     updatedAt: now,
     useCount: 0,
   }
-
-  // 写入本地（addBookmark / addGroup 自动标记 dirty，走标准同步管道）
-  for (const b of newBookmarks) {
-    if (!ds.bookmarks.some(e => e.url?.toLowerCase() === b.url?.toLowerCase())) {
-      ds.addBookmark(b)
-    }
-  }
   ds.addGroup(newGroup)
   saveAppData()
 
   // 触发云端同步（由标准 push 管道处理加密/队列/冲突检测）
   try { sync.fullSync().catch(() => {}) } catch { /* 静默 */ }
 
-  toast(`已复制「${group.name}」到你的库（${newBookmarks.length} 个书签）`)
+  // 报告实际入库条数（而非全部 bookmarks 数），避免跳过去重后仍夸大计数。
+  const count = actualAdded.length
+  toast(`已复制「${group.name}」到你的库（${count} 个书签）`)
 }

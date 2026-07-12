@@ -114,6 +114,40 @@ describe('useDataShare.forkPublicGroup', () => {
     expect(__csMocks.fullSyncSpy).toHaveBeenCalled()
     expect(ds.bookmarks.length).toBeGreaterThan(before)
   })
+
+  it('fork 去重跳过的书签不入组 bookmarkIds，避免悬空引用；fetch 漏拉的 bid 也不进组', async () => {
+    __csMocks.fullSyncSpy.mockClear()
+    const { forkPublicGroup } = await import('../../composables/domain/useDataShare.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+
+    // 本地已有一条同 URL 书签（fork 应去重跳过它）
+    ds.addBookmark({ id: 'localExisting', title: '本地已有', url: 'https://dup.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+
+    // 公开组 bookmarkIds 含三条：B_dup(URL 重复将被跳过)、B_new(正常入库)、
+    // ghostB(fork 拉取时漏拉的虚指 id——模拟 RLS/Zod 过滤后 fetchPublicGroup 没返回它)
+    const group = {
+      id: 'publicG2', name: 'G2', categoryId: 'uncategorized', icon: '', order: 0,
+      isExpanded: false, attributes: {}, bookmarkIds: ['B_dup', 'B_new', 'ghostB'],
+      notes: '', updatedAt: 1, useCount: 0, isPublic: true,
+    } as any
+    // fetch 拿到的书签只有 B_dup 和 B_new（ghostB 没拉到——idMap 无映射）
+    const bookmarks = [
+      { id: 'B_dup', title: '重复', url: 'https://dup.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any,
+      { id: 'B_new', title: '新', url: 'https://fresh.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any,
+    ]
+
+    await forkPublicGroup(group, bookmarks)
+
+    // 新组应只含 B_new 的实际入库 id，不含 B_dup(被去重)与 ghostB(漏拉)的映射
+    const newGroup = ds.siblingGroups.find(g => g.name === 'G2')!
+    expect(newGroup).toBeTruthy()
+    expect(newGroup.bookmarkIds).toHaveLength(1)
+    const newBmId = newGroup.bookmarkIds[0]
+    // 该 id 应确实存在于本地库（不悬空）
+    expect(ds.bookmarkMap[newBmId]).toBeTruthy()
+    expect(ds.bookmarkMap[newBmId].title).toBe('新')
+  })
 })
 
 // ──────────────────────────────────────────────────────────────

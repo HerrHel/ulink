@@ -199,7 +199,8 @@ function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv
 
 // ── 导入内部逻辑（合并模式，不覆盖已有数据）──
 
-function importFromDataInternal(data: Partial<AppData>, source: string) {
+// 导出供单测覆盖组 bookmarkIds 悬空过滤逻辑（仍以 _ 风格名为私有约定）
+export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const ds = useDataStore()
 
   // 执行数据迁移（处理旧版格式）
@@ -273,13 +274,18 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
+    // 组 bookmarkIds 过滤掉未存活的书签：导入源里这些 id 可能指向
+    // 被去重跳过的（同 URL 重复）、Zod 校验失败、缺 title/url 的书签，
+    // 上面循环把它们 continue 掉了根本没入库。原样保留会让组引用悬空 id
+    //（bookmarkMap 查不到 → 组内空卡位，推云后远端组同样悬空）。
+    const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => ds.bookmarkMap[bid])
     const parsed = SiblingGroupSchema.safeParse({
       id: g.id, name: g.name,
       categoryId: g.categoryId || CAT_UNCATEGORIZED,
       icon: g.icon || '', order: g.order || 0,
       isExpanded: g.isExpanded || false,
       attributes: g.attributes || {},
-      bookmarkIds: g.bookmarkIds || [],
+      bookmarkIds: liveBookmarkIds,
       notes: g.notes || '', updatedAt: g.updatedAt || Date.now(),
       useCount: g.useCount || 0,
     })
@@ -310,7 +316,8 @@ function importFromDataInternal(data: Partial<AppData>, source: string) {
 
 // ── Raindrop.io JSON 解析器 ──
 
-function parseRaindropJSON(data: unknown): Bookmark[] {
+// 导出供单测覆盖坏 tags 的防御性解析（仍以 _ 风格名为私有约定）
+export function parseRaindropJSON(data: unknown): Bookmark[] {
   // Raindrop.io 导出格式：{ items: [{ title, link, tags, excerpt, cover, ... }] }
   const d = data as Record<string, unknown> | unknown[]
   const items = Array.isArray(d) ? d : (d as Record<string, unknown>)?.items ?? d
@@ -326,7 +333,10 @@ function parseRaindropJSON(data: unknown): Bookmark[] {
     icon: (r.cover as string) || '',
     categoryId: (r.collection as Record<string, unknown>)?.$id ? 'rd_' + (r.collection as Record<string, unknown>).$id : CAT_UNCATEGORIZED,
     attributes: Array.isArray(r.tags)
-      ? Object.fromEntries((r.tags as string[]).map((t: string) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
+      // 元素可能非 string（Raindrop 偶有 number/对象 tags），.replace 会抛
+      // TypeError 被外层 importData catch 吞掉致整批导入失败、后续合法项全丢。
+      // 先 filter 出 string 元素再 map，单条坏数据不影响其它项。
+      ? Object.fromEntries((r.tags as unknown[]).filter((t): t is string => typeof t === 'string').map((t) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
       : {},
     createdAt: r.created ? new Date(r.created as string).getTime() : now,
     updatedAt: r.lastUpdate ? new Date(r.lastUpdate as string).getTime() : now,
