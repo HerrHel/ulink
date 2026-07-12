@@ -52,7 +52,7 @@
                 <span class="acct-label">密码</span>
                 <span class="acct-val">{{ isVisible(entry.rawId) ? (decodedPasswords[entry.rawId] || '') : '••••••' }}</span>
                 <button class="acct-show-pw" @click.stop="togglePw(entry.rawId)" title="显示"><span v-if="!isVisible(entry.rawId)" aria-hidden="true" v-html="I.eye"></span><span v-else aria-hidden="true" v-html="I.eyeOff"></span></button>
-                <button class="acct-copy-btn" @click.stop="copyText(decodedPasswords[entry.rawId] || '')" title="复制" v-html="I.copy"></button>
+                <button class="acct-copy-btn" @click.stop="copyPw(entry.rawId)" title="复制" v-html="I.copy"></button>
               </div>
             </div>
             <div class="sub-sites" v-if="getChildren(entry.data.id).length">
@@ -90,6 +90,7 @@ import { I } from '../../config/icons.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.js'
+import { toast } from '../../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const ui = useUIStore()
@@ -227,4 +228,11 @@ function closeDetail(rawId: string) {
   if (!ui.detailCards.length) ui.panels.detail = false
 }
 function copyText(text: string) { copyToClipboard(text || '') }
+// 与 BookmarkCard.copyPw 同理：未解锁时 decodedPasswords[id] 为空（对象态解不开），
+// 旧实现照常 copyToClipboard('') 弹「已复制」误导。空就提示无法复制、不写剪贴板。
+function copyPw(rawId: string) {
+  const pw = decodedPasswords.value[rawId] || ''
+  if (!pw) { toast('密码未解锁，无法复制', false); return }
+  copyToClipboard(pw, '密码')
+}
 </script>

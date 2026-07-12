@@ -175,7 +175,13 @@ function filterByTagName(name: string) {
   if (attr) toggleAttrFilter(attr.id)
 }
 function copyUser() { copyToClipboard(props.bookmark.username || '', '账户') }
-function copyPw() { copyToClipboard(decodedPw.value, '密码') }
+// 未解锁时 password 为 EncryptedPassword 对象、decryptPasswordWithKey 解不开返 ''；
+// 旧实现照常 copyToClipboard('') → utils toast「密码 已复制」误导用户以为复制成功，
+// 实则剪贴板是空串。先判 decodedPw 非空再复制，空就提示无法复制、不污染剪贴板。
+function copyPw() {
+  if (!decodedPw.value) { toast('密码未解锁，无法复制', false); return }
+  copyToClipboard(decodedPw.value, '密码')
+}
 
 const { startEditing } = useInlineEdit()
 
