@@ -13,6 +13,7 @@
 import { computed } from 'vue'
 import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
+import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
 import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt } from '../../crypto.js'
 import type { EntityType } from '../../types.js'
@@ -206,6 +207,11 @@ export function useE2E() {
     _setKey(key)
     e2eStore.setUnlocked(true)
     e2eStore.initVisibilityLock()
+    // 补解密：unlock 前若 Realtime 推过远端密文条目（useSyncRealtime 仅在 isUnlocked=true 才解），
+    // 那批条目残留密文态，UI 显示乱码。解锁后 key 就绪，补扫 store 解开密文还原视图。
+    // await 而非 fire-and-forget：unlock 真正完成补解密再返，调用方拿到「已就绪」状态，
+    // 避免 UI 立刻读 store 仍见密文的瞬时窗口。
+    try { await decryptStoreItems() } catch (e) { console.warn('[e2e] decryptStoreItems after unlock failed:', e) }
     return true
   }
 
@@ -250,10 +256,55 @@ export function useE2E() {
     return result as T
   }
 
+  /**
+   * 解锁后补解密：Realtime 在 E2E 未解锁期间推来的远端条目被 storeItem 落盘时
+   * 仅在 isUnlocked=true 才解密（见 useSyncRealtime._handleRealtimeChange），未解锁
+   * 那批条目的 title/url/username/notes 等停留为密文态进 store → 解锁后 UI 显示乱码。
+   * 本函数在 unlock/resetWithRecoveryKey 成功（key 已入内存）后调用，遍历 store 全部条目，
+   * 对 ENCRYPT_FIELDS 字段逐个 decryptField：
+   *   - 真密文（三段 salt.iv.data）→ 解出明文，赋值改 store（reactive 触发 UI 刷新）
+   *   - 非密文/明文 → crypto.decrypt 返回原文（相等），不动
+   *   - 三段但 GCM auth 失败的「伪密文」明文 → decrypt 失败回退原文，不动
+   * 直接改数组元素字段值而非 updateBookmark/updateGroup，避免 _markDirty/_trackChange 引发
+   * 回声推送（密文本就来自远端，补解密是本地视图还原，不该推回远端）。
+   * 有变更时 _bumpSearchVersion 让搜索索引重建（title/name 改了 Fuse 缓存要失效）。
+   */
+  async function decryptStoreItems() {
+    const key = _getKey()
+    if (!key) return
+    const ds = useDataStore()
+    let changed = false
+    const tryField = async (obj: Record<string, unknown>, f: string) => {
+      const v = obj[f]
+      if (typeof v !== 'string' || !v) return
+      // 粗筛：必须是三段（盐.纵深.密文）才可能为密文，避免对普通含点明文（如 url）无谓加解密
+      if (v.split('.').length !== 3) return
+      const decrypted = await decryptField(v)
+      if (decrypted !== v) { obj[f] = decrypted; changed = true }
+    }
+    for (const b of ds.bookmarks) {
+      const o = b as unknown as Record<string, unknown>
+      for (const f of ENCRYPT_FIELDS.bookmark) await tryField(o, f)
+    }
+    for (const g of ds.siblingGroups) {
+      const o = g as unknown as Record<string, unknown>
+      for (const f of ENCRYPT_FIELDS.group) await tryField(o, f)
+    }
+    for (const c of ds.categories) {
+      const o = c as unknown as Record<string, unknown>
+      for (const f of ENCRYPT_FIELDS.category) await tryField(o, f)
+    }
+    for (const a of ds.customAttributes) {
+      const o = a as unknown as Record<string, unknown>
+      for (const f of ENCRYPT_FIELDS.attribute) await tryField(o, f)
+    }
+    if (changed) ds._bumpSearchVersion()
+  }
+
   return {
     isE2EEnabled, isUnlocked,
     checkE2EStatus, generateRecoveryKey,
     setupMasterPassword, resetWithRecoveryKey,
-    unlock, lock, encryptItem, decryptItem,
+    unlock, lock, encryptItem, decryptItem, decryptStoreItems,
   }
 }
