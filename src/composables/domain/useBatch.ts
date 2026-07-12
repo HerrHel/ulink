@@ -51,23 +51,20 @@ export async function batchDelete() {
   const ds = useDataStore()
   const removedGroupIds: string[] = []
   const removedBookmarkIds: string[] = []
-  const removedFromGroups: Record<string, string[]> = {}
   ui.batchSelected.forEach(id => {
     if (id.startsWith('group:')) {
       const gid = id.slice(6)
       ds.deleteGroup(gid)
       removedGroupIds.push(gid)
     } else {
+      // 递归含子书签。删除仅调 deleteBookmark——它会自动从所属组的 bookmarkIds
+      // 中剔除该 bid，并把「原本所属的组」记录到 store._deletedGroupMemberships，
+      // 供回收站 restoreBookmark 恢复组关系。旧代码在此又手动剔组一遍并自维护
+      // removedFromGroups，导致 deleteBookmark 内部 indexOf 找不到（已提前被剔）
+      // → _deletedGroupMemberships 记空 → 用户不撤销而进回收站恢复时组关系丢失。
+      // 统一走 deleteBookmark 的组关系记录，undo 与回收站共用同一恢复路径。
       const ids = collectSubIds(id)
       ids.forEach(bid => {
-        ds.siblingGroups.forEach(g => {
-          const bi = g.bookmarkIds.indexOf(bid)
-          if (bi > -1) {
-            if (!removedFromGroups[bid]) removedFromGroups[bid] = []
-            removedFromGroups[bid].push(g.id)
-            ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
-          }
-        })
         ds.deleteBookmark(bid)
         removedBookmarkIds.push(bid)
       })
@@ -78,15 +75,9 @@ export async function batchDelete() {
   ui.batchMode = false
   toastWithUndo('已删除 ' + count + ' 项', function () {
     removedGroupIds.forEach(gid => ds.restoreGroup(gid))
+    // restoreBookmark 已用 _deleteBookmark 记录的组关系恢复 bookmarkIds，
+    // 不再手动回加 —— 与回收站恢复路径统一。
     removedBookmarkIds.forEach(bid => ds.restoreBookmark(bid))
-    Object.keys(removedFromGroups).forEach(bid => {
-      removedFromGroups[bid].forEach(gid => {
-        const sg = ds.groupMap[gid]
-        if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
-          ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
-        }
-      })
-    })
     debouncedSaveAppData(); toast('已恢复')
   })
 }

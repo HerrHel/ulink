@@ -15,9 +15,11 @@ vi.mock('../../stores/app.js', () => ({
   saveAppData: vi.fn(),
   debouncedSaveAppData: vi.fn(),
 }))
+// 捕获 toastWithUndo 的 undo callback，供 batchDelete 撤销测试同步触发
+let _lastUndoCb: (() => void) | null = null
 vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),
-  toastWithUndo: vi.fn(),
+  toastWithUndo: vi.fn(((_msg: string, cb: () => void) => { _lastUndoCb = cb }) as any),
   showConfirm: vi.fn(() => Promise.resolve(true)),
 }))
 vi.mock('../../stores/overlay.js', () => ({
@@ -26,7 +28,7 @@ vi.mock('../../stores/overlay.js', () => ({
 
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { batchMoveToCat } from '../../composables/domain/useBatch.js'
+import { batchMoveToCat, batchDelete } from '../../composables/domain/useBatch.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 describe('batchMoveToCat 子书签跟随父移动', () => {
@@ -76,5 +78,65 @@ describe('batchMoveToCat 子书签跟随父移动', () => {
     const ui = useUIStore()
     ui.batchSelected = []
     expect(() => batchMoveToCat('catX')).not.toThrow()
+  })
+})
+
+// ──────────────────────────────────────────────────────────────
+// batchDelete 撤销与回收站恢复组关系（双重恢复冲突修复）
+// 旧实现先手动剔组并自维护 removedFromGroups，再 deleteBookmark——后者内部
+// indexOf 找不到（已被提前剔）→ _deletedGroupMemberships 记空 → 不撤销而进
+// 回收站 restoreBookmark 时组关系丢失。修复后统一让 deleteBookmark 记组关系，
+// undo 与回收站共用 restoreBookmark。
+// ──────────────────────────────────────────────────────────────
+describe('batchDelete 组关系恢复', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    _lastUndoCb = null
+  })
+
+  it('删除属组 G 的书签后从回收站 restoreBookmark，应恢复 G.bookmarkIds 含该书签', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'B', title: 'B', url: 'https://b.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ds.addGroup({ id: 'G', name: 'G', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: ['B'], notes: '', useCount: 0, isPublic: false, updatedAt: 0 } as any)
+
+    ui.batchSelected = ['B']
+    ui.batchMode = true
+    await batchDelete()
+
+    // 已软删
+    expect(ds.bookmarkMap['B'].deletedAt).toBeTruthy()
+    // 删除时组已剔除 B
+    expect(ds.groupMap['G'].bookmarkIds).not.toContain('B')
+    // deleteBookmark 应记录组关系到 _deletedGroupMemberships
+    expect(ds._deletedGroupMemberships.get('B')).toEqual(['G'])
+
+    // 模拟用户不从 toast 撤销，而是进回收站恢复
+    ds.restoreBookmark('B')
+
+    // 软删态恢复
+    expect(ds.bookmarkMap['B'].deletedAt).toBeUndefined()
+    // 关键：组关系恢复，B 回到 G.bookmarkIds
+    expect(ds.groupMap['G'].bookmarkIds).toContain('B')
+  })
+
+  it('toast undo 同样应恢复组关系', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'B2', title: 'B2', url: 'https://b2.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ds.addGroup({ id: 'G2', name: 'G2', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: ['B2'], notes: '', useCount: 0, isPublic: false, updatedAt: 0 } as any)
+
+    ui.batchSelected = ['B2']
+    ui.batchMode = true
+    await batchDelete()
+    expect(ds.groupMap['G2'].bookmarkIds).not.toContain('B2')
+
+    // 触发 toast 的 undo
+    expect(_lastUndoCb).not.toBeNull()
+    _lastUndoCb!()
+
+    expect(ds.bookmarkMap['B2'].deletedAt).toBeUndefined()
+    expect(ds.groupMap['G2'].bookmarkIds).toContain('B2')
   })
 })
