@@ -238,3 +238,82 @@ describe('S13 Realtime _handleRealtimeChange user_id guard', () => {
     deleteSpy.mockRestore()
   })
 })
+
+// ──────────────────────────────────────────────────────────────
+// 8. Realtime 回声推送 — _handleRealtimeChange merge 后必须清 _changedFields
+//    否则下次本地真改动时 drainChangedFields 把远端来的字段当本地改动推回远端，
+//    反复 bump updated_at_num 污染冲突判定，多设备下级联回声。
+// ──────────────────────────────────────────────────────────────
+describe('Realtime echo-push: merge 后清理 _changedFields', () => {
+  it('UPDATE bookmark 事件处理后，_changedFields 不应残留远端字段', async () => {
+    const { useAuthStore } = await import('../../stores/auth.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const { _handleRealtimeChange } = await import('../../composables/domain/useSyncRealtime.js')
+
+    const auth = useAuthStore()
+    ;(auth as any).user = { id: 'user-abc', email: 'a@b.com' }
+
+    const ds = useDataStore()
+    const bm = {
+      id: 'b-echo', title: 'Old', url: 'https://x.com',
+      username: '', password: '', notes: '', icon: '',
+      categoryId: 'uncategorized', parentId: null,
+      order: 0, useCount: 0, attributes: {}, isExpanded: false,
+      createdAt: 1, updatedAt: 100,
+    }
+    // 直接塞入，避免走 addBookmark 自动 _markDirty 导致 handler 因 _dirtyIds 提前 return
+    ds.bookmarks.push(bm as any)
+    ds._bmMap['b-echo'] = bm as any
+    ds._dirtyIds.clear()
+
+    // 构造真实 Supabase Realtime 推来的 snake_case 行（fromRemoteBookmark 读 *_num/_id）
+    const remoteRow = {
+      id: 'b-echo', user_id: 'user-abc', title: 'From-Remote', url: 'https://x.com',
+      username: '', password: '', notes: '', icon: '',
+      category_id: 'uncategorized', parent_id: null,
+      order: 0, use_count: 0, attributes: {}, is_expanded: false,
+      created_at_num: 1, updated_at_num: 200, deleted_at: null,
+    }
+    await _handleRealtimeChange({ eventType: 'UPDATE', new: remoteRow, old: {} }, 'bookmark')
+
+    // 核心断言：merge 产生的 _changedFields 必须被清，不残留 remotely-sourced 字段
+    expect(ds._changedFields.has('b-echo')).toBe(false)
+    // 本地值确实更新成了远端数据
+    expect(ds.bookmarkMap['b-echo'].title).toBe('From-Remote')
+    // updatedAt 恢复为远端值而非 Date.now()
+    expect(ds.bookmarkMap['b-echo'].updatedAt).toBe(200)
+    // dirty/new 标记不应残留（避免下次 sync 把远端数据推回）
+    expect(ds._dirtyIds.has('b-echo')).toBe(false)
+    expect(ds._newIds.has('b-echo')).toBe(false)
+  })
+
+  it('UPDATE group 事件处理后，_changedFields 不应残留远端字段', async () => {
+    const { useAuthStore } = await import('../../stores/auth.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const { _handleRealtimeChange } = await import('../../composables/domain/useSyncRealtime.js')
+
+    const auth = useAuthStore()
+    ;(auth as any).user = { id: 'user-abc', email: 'a@b.com' }
+
+    const ds = useDataStore()
+    const g = {
+      id: 'g-echo', name: 'OldG', categoryId: 'uncategorized', icon: '', order: 0,
+      isExpanded: false, attributes: {}, bookmarkIds: [], notes: '', useCount: 0,
+      isPublic: false, updatedAt: 100,
+    }
+    ds.siblingGroups.push(g as any)
+    ds._grpMap['g-echo'] = g as any
+    ds._dirtyIds.clear()
+
+    const remoteRow = {
+      id: 'g-echo', user_id: 'user-abc', name: 'From-Remote-G', category_id: 'uncategorized',
+      icon: '', order: 0, is_expanded: false, attributes: {}, bookmark_ids: [],
+      notes: '', use_count: 0, is_public: false, updated_at_num: 200, deleted_at: null,
+    }
+    await _handleRealtimeChange({ eventType: 'UPDATE', new: remoteRow, old: {} }, 'group')
+
+    expect(ds._changedFields.has('g-echo')).toBe(false)
+    expect(ds.groupMap['g-echo'].name).toBe('From-Remote-G')
+    expect(ds.groupMap['g-echo'].updatedAt).toBe(200)
+  })
+})

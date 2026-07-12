@@ -126,6 +126,15 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   if (!mapped) return  // Zod 校验失败的远端条目跳过
   if (e2e.isUnlocked.value) await e2e.decryptItem(type, mapped as any)
   h.upsert(mapped)
+  // 清除本次 merge 产生的 _changedFields：updateBookmark/updateGroup 内部会
+  // 对传入的所有字段 _trackChange，把这些远端来的字段累积进 _changedFields。
+  // 若不清，下次本地真改动触发 debouncedSync 时，drainChangedFields() 会把
+  // 这些远端字段当本地改动一并 partial update 推回远端——回声推送，
+  // 不仅浪费配额，还会反复 bump updated_at_num 污染基于时间戳的冲突判定，
+  // 多设备订阅时甚至级联回声。走到此处的 id 必不携带本地未推的 changedFields
+  //（上面第 54 行 _dirtyIds.has(row.id) 已挡住本地正在编辑的条目），故直接
+  // 清空该 id 的 _changedFields 安全，不影响真实本地改动。
+  ds._changedFields.delete(mapped.id)
 }
 
 function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
