@@ -207,6 +207,38 @@ describe('E2E Encryption', () => {
       expect(await decryptPasswordWithKey(ep, null)).toBe('')
     })
 
+    it('对象态 + 错误 cryptoKey 时返回空串而非泄漏完整密文（卡顿小眼睛乱码根因）', async () => {
+      // 场景：本机主密码 A 解锁相对全局 key_A；某设备用主密码 B 改了密码并 push，
+      // Realtime 拉到用 key_B 加密的 EncryptedPassword（_parseRemotePassword 还原为对象，
+      // decryptItem 不解 password——不在 ENCRYPT_FIELDS）。BookmarkCard.decodePassword 用
+      // 本机 key_A 去解 → AES-GCM 认证失败。旧实现转走 decrypt() 的优雅降级（catch 返原
+      // ciphertext=salt.iv.data），把整串 base64 密文写进 decodedPw → 模板渲染出长串乱码。
+      // 修复：对象态独立解密、catch 返 ''——解不开即不显示，绝不把密文回吐 UI（与锁定语义一致）。
+      const saltA = crypto.getRandomValues(new Uint8Array(32))
+      const keyA = await deriveKey(MASTER_PW, saltA)
+      const saltB = crypto.getRandomValues(new Uint8Array(32))
+      const keyB = await deriveKey('other-master-password', saltB)
+      // keyB 加密的密码对象，模拟别设备推来的
+      const rawB = await encrypt('pw-from-device-B', keyB)
+      const partsB = rawB.split('.')
+      const epB = { encrypted: true, salt: partsB[0], iv: partsB[1], data: partsB[2] }
+      // 本机 keyA 解 → 失败应返空，绝不是 partsB 拼出的整串密文
+      const out = await decryptPasswordWithKey(epB, keyA)
+      expect(out).toBe('')
+      expect(out).not.toContain(partsB[0])
+      expect(out).not.toContain(partsB[2])
+      // 对照：正确 keyB 仍能解成明文
+      expect(await decryptPasswordWithKey(epB, keyB)).toBe('pw-from-device-B')
+    })
+
+    it('对象态 base64 段非法（非密文/损坏 salt）时返回空串而非原值', async () => {
+      // E2E 关闭时若云端混入损坏对象态（如旧版 JSON.stringify 降级后的残骸），atob 抛错
+      // 不该把 'a.b.c' 当明文塞进 UI。对象态的契约是「要么解出明文要么空」，无中间态。
+      const key = await deriveKey(MASTER_PW, crypto.getRandomValues(new Uint8Array(32)))
+      const broken = { encrypted: true, salt: 'not!base64', iv: 'also-bad', data: 'nope' }
+      expect(await decryptPasswordWithKey(broken, key)).toBe('')
+    })
+
     it('string 形态（旧 base64）走 safeDecodePassword', async () => {
       expect(await decryptPasswordWithKey(btoa('legacy-pw'), null)).toBe('legacy-pw')
       expect(await decryptPasswordWithKey('', null)).toBe('')

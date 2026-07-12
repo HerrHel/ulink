@@ -226,8 +226,35 @@ export async function decryptPasswordWithKey(
   if (!stored) return ''
   if (typeof stored === 'object' && stored.encrypted === true) {
     if (!cryptoKey) return ''
-    const ciphertext = stored.salt + '.' + stored.iv + '.' + stored.data
-    return decrypt(ciphertext, cryptoKey)
+    // 解不开即不显示，绝不把密文回吐 UI。
+    //
+    // 旧实现此处走 decrypt(ciphertext, cryptoKey)：decrypt 对「三段但 GCM 认证失败」
+    // 的输入做了优雅降级——catch 后返回原 ciphertext 串（见 decrypt 注释，单条坏字段
+    // 不该污染整次 pull，那是它服务于 ENCRYPT_FIELDS 通用字段的正确语义）。
+    // 但 password 展示端复用这条降级路径会泄漏密文：本机主密码 A 解锁（key_A），某设备
+    // 用主密码 B 改了密码并 push，Realtime 拉到用 key_B 加密的 EncryptedPassword 对象
+    //（decryptItem 不解 password——它不在 ENCRYPT_FIELDS，见 useE2E 注释），BookmarkCard
+    // 用 key_A 去解 → GCM 认证失败 → decrypt 回退返回完整 ciphertext=b64(salt).b64(iv).b64(data)
+    // → decodedPw 被写成这串长密文 → 模板渲染出「长串无意义字符」（即用户报的小眼睛乱码）。
+    //
+    // password 的展示语义与 ENCRYPT_FIELDS 不同：后者服务于同步（同步管线要容单条坏字段，
+    // 宁可保留原文回写也不让一条拖垮整批）；password 展示只关心「能否正确解出明文」，
+    // 解不出就空——等价于锁定态的『不显示』，安全性不降（GCM 保证非本系统密文不会误解成
+    // 有意义明文，故正确 key 永远能解、错 key 必返空，UI 绝不暴露密文形态）。此处独立走一次
+    // crypto.subtle.decrypt 并 catch 返 ''，不复用 decrypt 的降级。base64 解析亦在 try 内——
+    // 损坏盐/iv 的非法 base64 同样 catch 返空，不抛 InvalidCharacterError 污染展示。
+    try {
+      const iv = new Uint8Array(_base64ToBuf(stored.iv))
+      const data = _base64ToBuf(stored.data)
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: _bs(iv) },
+        cryptoKey,
+        _bs(data),
+      )
+      return _fromBuffer(decrypted)
+    } catch {
+      return ''
+    }
   }
   if (typeof stored === 'string') return safeDecodePassword(stored)
   return ''
