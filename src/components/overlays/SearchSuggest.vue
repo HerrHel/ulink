@@ -37,13 +37,20 @@ const results = computed<SearchResultItem[]>(() => {
   if (!q) return []
 
   const items = searchWithHighlights(
-    dataStore.bookmarks.filter(b => !b.deletedAt),
-    dataStore.siblingGroups.filter(g => !g.deletedAt),
+    dataStore.bookmarks,
+    dataStore.siblingGroups,
     q,
     dataStore.bookmarkMap,
     dataStore.customAttributes,
     MAX_SUGGESTIONS,
-  )
+    // 传 _searchVersion 让 Fuse 基准仅在 CRUD（version bump）时重建；
+    // 旧调用不传 version（默认 -1）→ 每个键击重建 Fuse。基准用全量 bookmarks/siblingGroups
+    //（稳定引用，CRUD 才变），软删/分类过滤推到下方结果层。与 data.ts filteredBookmarks 共享同一份缓存。
+    dataStore._searchVersion,
+  ).filter(r => {
+    if (r._isGroup) return !dataStore.groupMap[r.id]?.deletedAt
+    return !dataStore.bookmarkMap[r.id]?.deletedAt
+  })
 
   // 在组和书签之间插入分隔线
   const firstBmIdx = items.findIndex(i => !i._isGroup)

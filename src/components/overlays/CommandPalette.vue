@@ -77,13 +77,19 @@ const searchResults = computed<SearchResultItem[]>(() => {
   const q = query.value.trim()
   if (!q) return []
   return searchWithHighlights(
-    ds.bookmarks.filter(b => !b.deletedAt),
-    ds.siblingGroups.filter(g => !g.deletedAt),
+    ds.bookmarks,
+    ds.siblingGroups,
     q,
     ds.bookmarkMap,
     ds.customAttributes,
     5,
-  )
+    // 传 _searchVersion 复用 Fuse 基准（旧调用漏传 → 每键击重建）。
+    // 全量基准 + 软删过滤推到结果层，与 data.ts / SearchSuggest 共享缓存。
+    ds._searchVersion,
+  ).filter(r => {
+    if (r._isGroup) return !ds.groupMap[r.id]?.deletedAt
+    return !ds.bookmarkMap[r.id]?.deletedAt
+  })
 })
 
 const filtered = computed<CommandItem[]>(() => {

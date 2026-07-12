@@ -97,7 +97,11 @@ export const useDataStore = defineStore('data', {
       if (ui.curCat !== CAT_ALL) bm = bm.filter(b => b.categoryId === ui.curCat)
       const q = ui.searchQuery
       if (q.trim()) {
-        const matchIds = searchBookmarkIds(bm, q, state.customAttributes, state._searchVersion)
+        // 在全量 bookmarks 上建/复用 Fuse 基准（引用稳定，CRUD 才变，配 version 双保险），
+        // 再用 bm.filter(matchIds) 限定到当前分类——结果与「在 bm 子集上搜」一致，
+        // 但 Fuse 缓存不再因每次 filter 产生的新数组引用而重建。旧实现传 bm（每次新建）
+        // → ref 永远 !== _bmBaseRef → 每个键击重建 Fuse + 与 SearchSuggest 互踩缓存基准。
+        const matchIds = searchBookmarkIds(state.bookmarks, q, state.customAttributes, state._searchVersion)
         if (matchIds) bm = bm.filter(b => matchIds.has(b.id))
       }
       bm = _filterAttrs(bm, ui)
@@ -112,7 +116,9 @@ export const useDataStore = defineStore('data', {
       if (ui.curCat !== CAT_ALL) groups = groups.filter(g => g.categoryId === ui.curCat)
       const q = ui.searchQuery
       if (q.trim()) {
-        const matchIds = searchGroupIds(groups, q, this.bookmarkMap, state.customAttributes, state._searchVersion)
+        // 同 filteredBookmarks：在全量 siblingGroups 上搜复用 Fuse 缓存（见上注释），
+        // 再用 groups.filter 限定当前分类。旧实现传每次新建的 groups 子集 → ref 永变 → 重建。
+        const matchIds = searchGroupIds(state.siblingGroups, q, this.bookmarkMap, state.customAttributes, state._searchVersion)
         if (matchIds) groups = groups.filter(g => matchIds.has(g.id))
       }
       groups = _filterAttrs(groups, ui)
