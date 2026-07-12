@@ -8,6 +8,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { useAuth } from './useAuth.js'
 import { fetchLocalHistory, getLocalHistoryVersion, type LocalHistoryVersion } from '../../stores/storage.js'
+import { EditorManager } from '../../lib/editor.js'
 
 export function _getUserId(): string | null {
   const auth = useAuth()
@@ -82,14 +83,27 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
       isExpanded: histData.isExpanded as boolean,
     })
   } else {
+    // bookmarkIds 过滤掉已删书签——历史快照里的 bookmarkIds 引用了之后被删除的书签 id。
+    // 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位 + 推云后远端也悬空）。
+    // 对齐 useUndo.restoreSnapshot 的过滤策略。
+    const filteredIds = (histData.bookmarkIds as string[] || []).filter(bid => ds.bookmarkMap[bid])
     ds.updateGroup(itemId, {
       name: histData.name as string, categoryId: histData.categoryId as string,
       icon: histData.icon as string, order: histData.order as number,
       isExpanded: histData.isExpanded as boolean,
       attributes: histData.attributes as Record<string, boolean>,
-      bookmarkIds: histData.bookmarkIds as string[],
+      bookmarkIds: filteredIds,
       notes: histData.notes as string, useCount: histData.useCount as number,
     })
+    // 同步 TipTap 编辑器内容（若该组编辑器仍挂载）：
+    // GroupEditor 只在 onMounted 时读一次 group.notes，之后无 watch → setContent 逻辑，
+    // 不显式 setContent 的话编辑器仍显示 restore 前的旧内容，随后用户敲字触发
+    // syncToStore 用「旧内容 + 新字符」覆盖刚 restore 的 notes → restore 被静默抹掉。
+    // 对齐 useUndo.restoreSnapshot 的 EditorManager.setContent 策略。
+    // onUpdate 会触发 pushUndo 推快照（restore 前的状态，用户可 undo 回去）+ syncToStore
+    // 用相同 notes 覆盖（无害），不需要 _restoring 标志。
+    const ed = EditorManager.get(itemId)
+    if (ed) ed.commands.setContent(histData.notes as string || '')
   }
   saveAppData()
   return true
