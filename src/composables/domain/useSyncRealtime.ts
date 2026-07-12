@@ -13,6 +13,12 @@ import type { EntityType } from '../../types.js'
 let _channel: ReturnType<typeof supabase.channel> | null = null
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let _reconnectAttempts = 0
+// 连接代际：每次 subscribeRealtime 自增。旧 channel 异步 removeChannel 期间
+// 仍可能派发状态回调，若不区代，旧 cb 的 CHANNEL_ERROR/CLOSED 会误调度重连，
+// 调 unsubscribeRealtime 时移除的却是当前 _channel（已可能是新代），把刚建的
+// 新 channel 误移除——形成重连风暴 + 多 channel 订阅同表收重复事件。
+// cb 闭包捕获 myGen，与 _gen 不符即视为旧代状态，直接忽略。
+let _gen = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 1000
 
@@ -143,6 +149,9 @@ function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
     useSyncStore().setRealtimeStatus('error')
     return
   }
+  // 防止同一连接连发 CHANNEL_ERROR+CLOSED（或旧代残余状态）时各自 _scheduleReconnect
+  // 覆盖 _reconnectTimer 引用、泄漏前一个 timer（孤儿 fire 导致重复重连/订阅）。
+  if (_reconnectTimer) clearTimeout(_reconnectTimer)
   const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(2, _reconnectAttempts), 30000)
   _reconnectAttempts++
   _reconnectTimer = setTimeout(() => {
@@ -156,6 +165,9 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId || _channel) return
+
+  _gen += 1
+  const myGen = _gen
 
   syncStore.setRealtimeStatus('connecting')
   _channel = supabase.channel('db-changes')
@@ -172,6 +184,10 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
       { event: '*', schema: 'public', table: 'custom_attributes', filter: `user_id=eq.${userId}` },
       (p) => _handleRealtimeChange(p, 'attribute'))
     .subscribe((status) => {
+      // 旧代 channel 的残余状态回调直接忽略——removeChannel 是异步的，旧 channel
+      // 可能在被移除前/中仍派发 CHANNEL_ERROR/CLOSED，若不按代过滤会误调度重连并
+      // 把当前 _channel（新代）误移除，导致重连风暴与多订阅。
+      if (myGen !== _gen) return
       const s = useSyncStore()
       if (status === 'SUBSCRIBED') {
         s.setRealtimeStatus('connected')
