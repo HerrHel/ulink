@@ -39,10 +39,17 @@ export async function fetchHistory(itemId: string): Promise<HistoryVersion[]> {
   const max = ui.historyMax
   const local = fetchLocalHistory(itemId)
 
-  const { data } = await supabase.from('data_history')
-    .select('id, data, created_at').eq('user_id', _getUserId()).eq('item_id', itemId)
-    .order('created_at', { ascending: false }).limit(max)
-  const remote = (data as HistoryVersion[]) || []
+  // HIST-1：未登录时跳过云端查询。旧实现未检查登录状态，_getUserId() 返回 null
+  // 导致 supabase query eq('user_id', null) 查询其他未登录用户的历史记录。
+  // 虽然 RLS 大概率阻止匿名 SELECT，但不应依赖 RLS 作为唯一防线。
+  const userId = _getUserId()
+  let remote: HistoryVersion[] = []
+  if (userId) {
+    const { data } = await supabase.from('data_history')
+      .select('id, data, created_at').eq('user_id', userId).eq('item_id', itemId)
+      .order('created_at', { ascending: false }).limit(max)
+    remote = (data as HistoryVersion[]) || []
+  }
 
   // 合并去重：相同 created_at 保留云端（云端时序权威）
   const seen = new Set<string>()

@@ -259,15 +259,19 @@ export function useDeadLinkChecker() {
         }
       } else if (r.blocked) {
         if (!hasGfwAttr || hasDeadAttr) {
-          ds.updateBookmark(bm.id, {
-            attributes: { ...attrs, 'gfw-blocked': true, 'dead-link': false }
-          })
+          // DLC-2：用 delete 清 key 而非设 false，与 checkOne 行为一致。
+          // 设 false 在布尔判定上等价，但 key 残留在 attributes 对象里越积越多。
+          const rest = { ...attrs }
+          delete rest['dead-link']
+          rest['gfw-blocked'] = true
+          ds.updateBookmark(bm.id, { attributes: rest })
         }
       } else {
         if (!hasDeadAttr || hasGfwAttr) {
-          ds.updateBookmark(bm.id, {
-            attributes: { ...attrs, 'dead-link': true, 'gfw-blocked': false }
-          })
+          const rest = { ...attrs }
+          delete rest['gfw-blocked']
+          rest['dead-link'] = true
+          ds.updateBookmark(bm.id, { attributes: rest })
         }
       }
     }
@@ -366,8 +370,10 @@ export function useDeadLinkChecker() {
     const last = parseInt(localStorage.getItem(AUTO_CHECK_KEY) || '0', 10)
     if (Date.now() - last > AUTO_INTERVAL_MS && !checking.value) {
       checkAll(5, 200)
+      // DLC-4：只在检测实际运行时更新时间戳。旧实现无条件更新——跳过本次检测时
+      // 仍刷时间戳，导致「启动即检测」意图被破坏（需再等 7 天才触发）。
+      localStorage.setItem(AUTO_CHECK_KEY, String(Date.now()))
     }
-    localStorage.setItem(AUTO_CHECK_KEY, String(Date.now()))
     // 启动定时循环（每 6 小时检查一次）
     if (_autoCheckTimer) clearInterval(_autoCheckTimer)
     _autoCheckTimer = setInterval(() => {

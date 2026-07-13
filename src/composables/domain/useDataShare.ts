@@ -85,11 +85,37 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   //（bookmarkMap 查不到 → 组内空卡位），toast 也夸大计数。
   const addedIds = new Set<string>()
   const actualAdded = [] as Bookmark[]
+  // B-10：建立「旧书签 id → 本地实际 id」映射，用于 fork 后保留父子关系。
+  // 新入库的用新 id；被去重跳过的用本地已有同 URL 书签的 id。
+  // 反向 map（新 id → 旧 id）一次构建，避免每条书签 O(n) 反向查找。
+  const reverseIdMap = new Map<string, string>()
+  for (const [oldId, newId] of idMap) reverseIdMap.set(newId, oldId)
+  const oldToLocal = new Map<string, string>()
   for (const b of newBookmarks) {
+    const oldId = reverseIdMap.get(b.id)
     if (!ds.bookmarks.some(e => e.url?.toLowerCase() === b.url?.toLowerCase())) {
       ds.addBookmark(b)
       addedIds.add(b.id)
       actualAdded.push(b)
+      if (oldId) oldToLocal.set(oldId, b.id)
+    } else {
+      // 被去重跳过：找到本地已有的同 URL 书签，用它的 id 作为映射目标
+      const existing = ds.bookmarks.find(e => e.url?.toLowerCase() === b.url?.toLowerCase())
+      if (oldId && existing) oldToLocal.set(oldId, existing.id)
+    }
+  }
+
+  // B-10 修复：用 oldToLocal 映射 parentId，保留父子关系。
+  // 旧实现不映射 parentId → 子书签 parentId 指向原分享者旧 id（本地不存在）→ 孤儿不可见。
+  for (const b of actualAdded) {
+    if (b.parentId) {
+      const newParentId = oldToLocal.get(b.parentId)
+      if (newParentId && newParentId !== b.id) {
+        ds.updateBookmark(b.id, { parentId: newParentId })
+      } else {
+        // 父书签不在本次 fork 范围内或映射失败 → 变为顶层书签（不悬挂）
+        ds.updateBookmark(b.id, { parentId: null })
+      }
     }
   }
 

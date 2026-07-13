@@ -148,6 +148,61 @@ describe('useDataShare.forkPublicGroup', () => {
     expect(ds.bookmarkMap[newBmId]).toBeTruthy()
     expect(ds.bookmarkMap[newBmId].title).toBe('新')
   })
+
+  it('B-10: fork 保留父子关系（parentId 通过 idMap 映射到新 id）', async () => {
+    __csMocks.fullSyncSpy.mockClear()
+    const { forkPublicGroup } = await import('../../composables/domain/useDataShare.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+
+    // 公开组含父子书签：parent 是顶层，child 的 parentId 指向 parent
+    const group = {
+      id: 'publicG3', name: 'G3', categoryId: 'uncategorized', icon: '', order: 0,
+      isExpanded: false, attributes: {}, bookmarkIds: ['P_parent', 'P_child'],
+      notes: '', updatedAt: 1, useCount: 0, isPublic: true,
+    } as any
+    const bookmarks = [
+      { id: 'P_parent', title: '父', url: 'https://parent.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any,
+      { id: 'P_child', title: '子', url: 'https://child.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: 'P_parent', order: 1, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any,
+    ]
+
+    await forkPublicGroup(group, bookmarks)
+
+    const newParent = ds.bookmarks.find(b => b.title === '父' && b.url === 'https://parent.example')!
+    const newChild = ds.bookmarks.find(b => b.title === '子' && b.url === 'https://child.example')!
+    expect(newParent).toBeTruthy()
+    expect(newChild).toBeTruthy()
+    // 修复前：newChild.parentId 仍为 'P_parent'（原分享者旧 id，本地不存在）→ 孤儿不可见
+    // 修复后：newChild.parentId 映射到 newParent.id → 父子关系保留
+    expect(newChild.parentId).toBe(newParent.id)
+  })
+
+  it('B-10: fork 时父书签被去重跳过，子书签 parentId 映射到本地已有的同 URL 书签', async () => {
+    __csMocks.fullSyncSpy.mockClear()
+    const { forkPublicGroup } = await import('../../composables/domain/useDataShare.js')
+    const { useDataStore } = await import('../../stores/data.js')
+    const ds = useDataStore()
+
+    // 本地已有同 URL 的父书签（fork 时会被去重跳过）
+    ds.addBookmark({ id: 'localParent', title: '本地父', url: 'https://parent-dup.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 10, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+
+    const group = {
+      id: 'publicG4', name: 'G4', categoryId: 'uncategorized', icon: '', order: 0,
+      isExpanded: false, attributes: {}, bookmarkIds: ['P2_parent', 'P2_child'],
+      notes: '', updatedAt: 1, useCount: 0, isPublic: true,
+    } as any
+    const bookmarks = [
+      { id: 'P2_parent', title: '重复父', url: 'https://parent-dup.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any,
+      { id: 'P2_child', title: '新子', url: 'https://new-child.example', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: 'P2_parent', order: 1, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any,
+    ]
+
+    await forkPublicGroup(group, bookmarks)
+
+    const newChild = ds.bookmarks.find(b => b.url === 'https://new-child.example')!
+    expect(newChild).toBeTruthy()
+    // 父书签被去重跳过，子书签 parentId 应映射到本地已有的 'localParent'
+    expect(newChild.parentId).toBe('localParent')
+  })
 })
 
 // ──────────────────────────────────────────────────────────────

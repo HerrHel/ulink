@@ -500,14 +500,22 @@ export const useDataStore = defineStore('data', {
         const ci = this._childrenIdx[bm.parentId].indexOf(id)
         if (ci >= 0) this._childrenIdx[bm.parentId].splice(ci, 1)
       }
-      // 清除被删除书签的所有子书签的 parentId
-      if (this._childrenIdx[id]) {
-        for (const cid of this._childrenIdx[id]) {
-          const cbm = this._bmMap[cid]
-          if (cbm) { cbm.parentId = null; this._markDirty(cid) }
+      // RC-1：遍历所有子孙（非仅直接子项）清除 parentId，避免孤儿不可见。
+      // 旧实现只清一级 children parentId——若存在多层嵌套（虽 UI 层 addSub 仅顶层
+      // 可见、禁 >1 层，但 API 层 addBookmark 可编程挂多层），孙辈 parentId 仍指向
+      // 已删中间层 → filteredBookmarks 的 !parentId 过滤排除 → 孙书签永久不可见。
+      // 用队列 BFS 遍历所有后代。
+      const queue: string[] = this._childrenIdx[id] ? [...this._childrenIdx[id]] : []
+      while (queue.length) {
+        const cid = queue.shift()!
+        const cbm = this._bmMap[cid]
+        if (cbm) { cbm.parentId = null; this._markDirty(cid) }
+        if (this._childrenIdx[cid]) {
+          queue.push(...this._childrenIdx[cid])
+          delete this._childrenIdx[cid]
         }
-        delete this._childrenIdx[id]
       }
+      delete this._childrenIdx[id]
       this._permanentDelete('bookmarks', id)
       delete this._bmMap[id]
       this._deletedGroupMemberships.delete(id)
