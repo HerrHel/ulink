@@ -70,7 +70,7 @@
                 </button>
               </div>
               <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
-                <span class="sp-toggle-label">定时检测</span>
+                <span class="sp-toggle-label">定时检测（每周）</span>
                 <span class="sp-switch"></span>
               </div>
             </div>
