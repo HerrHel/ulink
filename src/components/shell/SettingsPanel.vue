@@ -18,7 +18,6 @@
                   <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">舒适</button>
                 </div>
               </div>
-              <div class="sp-divider"></div>
               <div class="sp-toggle-row" :class="{ active: uiStore.themeMode === 'auto' }" @click="onToggleAutoTheme">
                 <span aria-hidden="true" v-html="I.sun" class="sp-icon auto-icon-sun"></span>
                 <span aria-hidden="true" v-html="I.moon" class="sp-icon auto-icon-moon"></span>
@@ -77,13 +76,13 @@
             <!-- 同步与安全 -->
             <div class="sp-section">
               <span class="sp-section-title">同步与安全</span>
-              <div class="sp-row">
-                <span class="sp-row-label"><span aria-hidden="true" v-html="auth.isLoggedIn ? I.cloud : I.cloudOff" class="sp-icon"></span>云同步</span>
-                <span class="sp-sync-status" :class="syncState.level">
-                  <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
-                </span>
-              </div>
               <template v-if="auth.isLoggedIn">
+                <div class="sp-row">
+                  <span class="sp-row-label"><span aria-hidden="true" v-html="I.cloud" class="sp-icon"></span>云同步</span>
+                  <span class="sp-sync-status" :class="syncState.level">
+                    <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
+                  </span>
+                </div>
                 <div class="sp-row">
                   <span class="sp-user-email">{{ auth.userEmail }}</span>
                 </div>
@@ -158,10 +157,7 @@
             <!-- 关于 -->
             <div class="sp-section">
               <span class="sp-section-title">关于</span>
-              <button class="sp-action" @click.stop="onFeedback">
-                <span v-html="'💬'"></span>反馈 / 建议
-                <span class="sp-action-kbd">邮箱</span>
-              </button>
+              <button class="sp-action" @click.stop="onFeedback">反馈 / 建议</button>
             </div>
             <!-- Danger -->
             <div class="sp-section sp-danger">
@@ -340,7 +336,9 @@ const FEEDBACK_EMAIL = '2629490959@qq.com'
 const feedbackOpen = ref(false)
 
 function onFeedback() {
+  pushNavState()
   feedbackOpen.value = true
+  uiStore.panels.settings = false
 }
 
 async function copyFeedbackEmail() {

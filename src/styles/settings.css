@@ -156,7 +156,7 @@
   padding:4px 8px;
 }
 .sp-action{
-  flex:1;
+  flex:1;min-width:0;
   display:flex;align-items:center;justify-content:center;gap:6px;
   padding:9px 12px;
   border:1px solid var(--border);
@@ -198,6 +198,7 @@
 @keyframes sp-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 /* Danger zone */
 .sp-danger{padding:4px 6px 6px}
+.sp-danger .sp-section-title{color:var(--rose,#ef4444)}
 .sp-danger-btn{
   width:100%;
   display:flex;align-items:center;justify-content:center;gap:6px;
@@ -267,7 +268,7 @@
 .sp-row-actions .btn .sp-icon{width:13px;height:13px}
 
 /* 导出格式下拉菜单 */
-.sp-export-wrap{position:relative;flex:1;display:flex}
+.sp-export-wrap{position:relative;flex:1;min-width:0}
 .sp-export-wrap .sp-action{width:100%}
 .sp-export-menu{
   position:absolute;bottom:calc(100% + 4px);left:0;right:0;
@@ -310,15 +311,6 @@
 .sp-range-hint{font-size:0.66rem;color:var(--text-muted,#999);flex-shrink:0}
 
 
-/* 设置面板内的快捷键入口按钮 */
-.sp-action-kbd{
-  margin-left:auto;
-  font-size:0.62rem;padding:1px 5px;
-  color:var(--text-muted,#999);
-  background:var(--surface-secondary,#f3f4f6);
-  border:1px solid var(--border,#e5e7eb);
-  border-radius:4px;font-family:inherit;
-}
 
 /* 快捷键速查面板 */
 .sh-modal{max-width:420px}
