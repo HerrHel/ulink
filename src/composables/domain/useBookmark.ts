@@ -135,7 +135,7 @@ export async function openBmModal(editId?: string) {
       } else {
         // P1：按需引导 — 编辑已加密书签时自动弹解锁
         const unlocked = await new Promise<boolean>(resolve => {
-          e2eStore.pendingUnlock = resolve
+          e2eStore.pendingUnlock.push(resolve)
         })
         if (unlocked && e2eStore.cryptoKey) {
           try {
@@ -210,7 +210,7 @@ export async function saveBm() {
     } else if (e2eStore.isE2EEnabled) {
       // P1：按需解锁 — 不再提示「请先解锁 E2E」，改为自动弹锁 + 等待解锁后继续保存
       const unlocked = await new Promise<boolean>(resolve => {
-        e2eStore.pendingUnlock = resolve
+        e2eStore.pendingUnlock.push(resolve)
       })
       if (!unlocked) {
         toast('保存已取消', false)

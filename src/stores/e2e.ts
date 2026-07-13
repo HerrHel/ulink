@@ -13,10 +13,12 @@ export const useE2EStore = defineStore('e2e', () => {
   const isE2EEnabled = ref(false)
   const isUnlocked = ref(false)
   /**
-   * 按需解锁：非 null 时表示有操作正在等待解锁完成
-   * resolve(true) → 解锁成功继续；resolve(false) → 用户取消
+   * 按需解锁：非空数组时表示有操作正在等待解锁完成。
+   * B-2 修复：旧实现是单值 ref，第二次 saveBm 撞解锁窗口时覆盖第一次的 resolve，
+   * 导致第一次 Promise 永挂、saveBm 永卡。改为数组，允许多个等待者同时被通知。
+   * 每个 resolve(true) → 解锁成功继续；resolve(false) → 用户取消。
    */
-  const pendingUnlock = ref<((ok: boolean) => void) | null>(null)
+  const pendingUnlock = ref<((ok: boolean) => void)[]>([])
   /** 缓存的 AES-256-GCM 密钥 — 仅在 isUnlocked=true 时有效 */
   const cryptoKey = ref<CryptoKey | null>(null)
 

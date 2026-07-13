@@ -108,7 +108,7 @@ const mockE2E = {
   isE2EEnabled: false,
   isUnlocked: false,
   cryptoKey: null as CryptoKey | null,
-  pendingUnlock: null as ((ok: boolean) => void) | null,
+  pendingUnlock: [] as ((ok: boolean) => void)[],
 }
 
 
@@ -339,8 +339,8 @@ describe('useBookmark', () => {
       // 不应调用 addBookmark / updateBookmark（尚未解锁）
       expect(mockData.addBookmark).not.toHaveBeenCalled()
       expect(mockData.updateBookmark).not.toHaveBeenCalled()
-      // pendingUnlock 应被设置（等待解锁）
-      expect(mockE2E.pendingUnlock).not.toBeNull()
+      // pendingUnlock 应被 push 了 resolve（等待解锁）
+      expect(mockE2E.pendingUnlock.length).toBeGreaterThan(0)
     })
 
     it('S6: empty password still allowed when E2E enabled but not unlocked', async () => {

@@ -150,30 +150,27 @@ onMounted(async () => {
 })
 
 /**
- * 按需解锁：当 e2eStore.pendingUnlock 被设置时，弹出解锁弹窗
+ * 按需解锁：当 e2eStore.pendingUnlock 数组非空时，弹出解锁弹窗。
+ * B-2 修复：改为监听数组长度变化（而非单值），允许多个等待者同时被通知。
  */
-watch(() => e2eStore.pendingUnlock, (resolver) => {
-  if (resolver) {
+watch(() => e2eStore.pendingUnlock.length, (len) => {
+  if (len > 0) {
     store.modals.e2eUnlock = true
   }
 })
 
 function onE2EUnlocked() {
   store.modals.e2eUnlock = false
-  // 有操作在等待解锁 → resolve(true) 继续
-  if (e2eStore.pendingUnlock) {
-    e2eStore.pendingUnlock(true)
-    e2eStore.pendingUnlock = null
-  }
+  // 有操作在等待解锁 → 逐个 resolve(true) 继续
+  const pending = e2eStore.pendingUnlock.splice(0)
+  for (const resolve of pending) resolve(true)
 }
 
 /** E2E 解锁弹窗关闭/取消 */
 function onE2EClose() {
   store.modals.e2eUnlock = false
-  // 有操作在等待解锁但用户取消 → resolve(false)
-  if (e2eStore.pendingUnlock) {
-    e2eStore.pendingUnlock(false)
-    e2eStore.pendingUnlock = null
-  }
+  // 有操作在等待解锁但用户取消 → 逐个 resolve(false)
+  const pending = e2eStore.pendingUnlock.splice(0)
+  for (const resolve of pending) resolve(false)
 }
 </script>

@@ -248,7 +248,26 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
         allItems.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, movedItem)
 
         // 保存自定义顺序 + 更新 order 值 + 标记 dirty
-        allItems.forEach((it, i) => { it.data.order = i; dataStore._markDirty(it.data.id) })
+        // B-6 修复：旧实现 allItems.forEach 重排全员 order(0,1,2,3...)并全员 _markDirty，
+        // 一次拖拽产生 N 条同步脏数据 + 刷 N 个 updatedAt。只更新受影响区间的 order：
+        // 被拖拽项设新 order，中间项 ±1，其余不动。
+        const toIdx = toIndex > fromIndex ? toIndex - 1 : toIndex
+        const movedOrder = allItems[toIdx].data.order
+        if (fromIndex < toIdx) {
+          // 向下拖：[from+1, to] 区间各 -1
+          for (let k = fromIndex + 1; k <= toIdx; k++) {
+            allItems[k].data.order--
+            dataStore._markDirty(allItems[k].data.id)
+          }
+        } else if (fromIndex > toIdx) {
+          // 向上拖：[to, from-1] 区间各 +1
+          for (let k = toIdx; k < fromIndex; k++) {
+            allItems[k].data.order++
+            dataStore._markDirty(allItems[k].data.id)
+          }
+        }
+        movedItem.data.order = movedOrder
+        dataStore._markDirty(movedItem.data.id)
         const newOrder: Array<{ t: 'g' | 'b'; id: string }> = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
 
         dataStore._customCardOrder = newOrder
