@@ -30,13 +30,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { addNewCategory } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import { useMobileDragReorder } from '../../composables/interaction/useMobileDragReorder.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Category } from '../../types.js'
 
@@ -59,143 +60,26 @@ watch(() => dataStore.selectableCategories, (val) => {
   sortableList.value = val.filter(c => c.id !== CAT_UNCATEGORIZED).map(c => ({ ...c }))
 }, { immediate: true, deep: true })
 
-// ── 拖拽排序 ──
-const EDGE = 50
-const SPEED = 10
+// ── 拖拽排序：复用移动端通用实现 ──
+useMobileDragReorder(catListRef, sortableList, {
+  enabled: computed(() => store.modals.category),
+  handleSelector: '.cat-drag-handle',
+  itemSelector: '.cat-list-item[data-cat-id]',
+  placeholderClass: 'cat-list-item cat-placeholder',
+  draggingClass: 'cat-dragging',
+  // modal 带 transform 进出场动画 + overflow:hidden，fixed 被拖元素会被裁切 → 移到 body 跟手
+  portalToBody: true,
+  onReorder: (from, to) => {
+    const moved = sortableList.value[from]
+    if (!moved) return
+    const arr = sortableList.value.slice()
+    arr.splice(from, 1)
+    const toIdx = to > from ? to - 1 : to
+    arr.splice(toIdx, 0, moved)
+    sortableList.value = arr
 
-interface DragState {
-  el: HTMLElement
-  placeholder: HTMLElement
-  startY: number
-  initialTop: number
-  lastY: number
-  itemHeight: number
-  currentIndex: number
-  pointerId: number
-}
-
-let drag: DragState | null = null
-let scrollRaf: number | null = null
-
-function getSortableItems(): HTMLElement[] {
-  if (!catListRef.value) return []
-  return Array.from(catListRef.value.querySelectorAll('.cat-list-item[data-cat-id]'))
-}
-
-function onPointerDown(e: PointerEvent) {
-  const handle = (e.target as HTMLElement).closest('.cat-drag-handle')
-  if (!handle) return
-  const item = handle.closest('.cat-list-item[data-cat-id]') as HTMLElement | null
-  if (!item || !catListRef.value) return
-
-  e.preventDefault()
-  item.setPointerCapture(e.pointerId)
-
-  const rect = item.getBoundingClientRect()
-  const allItems = getSortableItems()
-  const idx = allItems.indexOf(item)
-
-  const ph = document.createElement('div')
-  ph.className = 'cat-list-item cat-placeholder'
-  ph.style.height = rect.height + 'px'
-  catListRef.value.insertBefore(ph, item)
-
-  document.body.appendChild(item)
-  item.classList.add('cat-dragging')
-  item.style.position = 'fixed'
-  item.style.left = rect.left + 'px'
-  item.style.top = rect.top + 'px'
-  item.style.width = rect.width + 'px'
-  item.style.margin = '0'
-  item.style.zIndex = '9999'
-  item.style.transition = 'none'
-
-  drag = {
-    el: item,
-    placeholder: ph,
-    startY: e.clientY,
-    initialTop: rect.top,
-    lastY: e.clientY,
-    itemHeight: rect.height,
-    currentIndex: idx,
-    pointerId: e.pointerId
-  }
-
-  document.addEventListener('pointermove', onPointerMove, { passive: false })
-}
-
-function onPointerMove(e: PointerEvent) {
-  if (!drag || e.pointerId !== drag.pointerId) return
-  e.preventDefault()
-  drag.lastY = e.clientY
-
-  const top = drag.initialTop + (drag.lastY - drag.startY)
-  drag.el.style.top = top + 'px'
-
-  const allItems = getSortableItems().filter(c => c !== drag!.el)
-  let newIndex = allItems.length
-  for (let i = 0; i < allItems.length; i++) {
-    if (allItems[i] === drag!.placeholder) continue
-    const r = allItems[i].getBoundingClientRect()
-    if (top + drag!.itemHeight / 2 < r.top + r.height / 2) {
-      newIndex = i
-      break
-    }
-  }
-  if (newIndex !== drag.currentIndex) {
-    drag.currentIndex = newIndex
-    const refEl = allItems[newIndex]
-    if (refEl) catListRef.value!.insertBefore(drag.placeholder, refEl)
-    else catListRef.value!.appendChild(drag.placeholder)
-  }
-
-  // 边缘滚动
-  const scrollEl = catListRef.value!
-  const scrollRect = scrollEl.getBoundingClientRect()
-  let delta = 0
-  if (drag.lastY - scrollRect.top < EDGE && scrollEl.scrollTop > 0) {
-    delta = -Math.round(SPEED * (1 - Math.max(0, drag.lastY - scrollRect.top) / EDGE))
-  } else if (scrollRect.bottom - drag.lastY < EDGE) {
-    const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight - scrollEl.scrollTop
-    if (maxScroll > 0) delta = Math.min(Math.round(SPEED * (1 - Math.max(0, scrollRect.bottom - drag.lastY) / EDGE)), maxScroll)
-  }
-  if (delta) scrollEl.scrollTop += delta
-}
-
-function onPointerUp(e: PointerEvent) {
-  if (!drag || e.pointerId !== drag.pointerId) return
-  document.removeEventListener('pointermove', onPointerMove)
-
-  const d = drag
-  drag = null
-
-  d.el.classList.remove('cat-dragging')
-  d.el.style.position = ''
-  d.el.style.left = ''
-  d.el.style.top = ''
-  d.el.style.width = ''
-  d.el.style.margin = ''
-  d.el.style.zIndex = ''
-  d.el.style.transition = ''
-
-  d.placeholder.parentNode!.insertBefore(d.el, d.placeholder)
-  d.placeholder.remove()
-
-  // 重建顺序
-  const allItems = getSortableItems()
-  const newOrder: Category[] = []
-  allItems.forEach(item => {
-    const catId = item.dataset.catId
-    if (catId) {
-      const found = sortableList.value.find(c => c.id === catId)
-      if (found) newOrder.push(found)
-    }
-  })
-  if (newOrder.length === sortableList.value.length) {
-    sortableList.value = newOrder
     const special = dataStore.categories.filter(c => c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED)
-    const reordered = [...special, ...newOrder]
-    // 标记所有分类为 dirty（顺序变更）
+    const reordered = [...special, ...arr]
     for (const cat of reordered) {
       dataStore._markDirty(cat.id)
       dataStore._trackChange(cat.id, 'order')
@@ -204,19 +88,6 @@ function onPointerUp(e: PointerEvent) {
     store.debouncedSave()
     toast('分类顺序已更新')
   }
-}
-
-onMounted(() => {
-  document.addEventListener('pointerdown', onPointerDown, { passive: false })
-  document.addEventListener('pointerup', onPointerUp)
-  document.addEventListener('pointercancel', onPointerUp)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('pointerdown', onPointerDown)
-  document.removeEventListener('pointerup', onPointerUp)
-  document.removeEventListener('pointercancel', onPointerUp)
-  document.removeEventListener('pointermove', onPointerMove)
 })
 
 function onClose() { store.modals.category = false }

@@ -12,7 +12,6 @@ import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 import { isMobile } from '../../utils.js'
-import type { CardItem } from '../../types.js'
 
 const EDGE_ZONE = 60     // 触发滚动的边缘区域 px
 const MAX_SCROLL_SPEED = 12 // 最大滚动速度 px/frame
@@ -20,6 +19,8 @@ const MAX_SCROLL_SPEED = 12 // 最大滚动速度 px/frame
 interface DragState {
   el: HTMLElement
   placeholder: HTMLDivElement
+  /** portal 到 body 时记录原父节点，pointerup 时移回占位符位置 */
+  originalParent: HTMLElement | null
   startY: number
   initialTop: number
   lastY: number
@@ -29,16 +30,25 @@ interface DragState {
   pointerId: number
 }
 
+type ReorderFn = (from: number, to: number) => void
+
 interface UseMobileDragReorderOptions {
   enabled?: Ref<boolean>
   handleSelector?: string | null
   itemSelector?: string
-  onReorder?: ((list: unknown, from: number, to: number) => void) | null
+  /** 自定义落位回调。未提供时走默认卡片排序逻辑（CardItem / customCardOrder） */
+  onReorder?: ReorderFn | null
   placeholderClass?: string
   draggingClass?: string
+  /**
+   * 拖拽期间把被拖元素移到 document.body 跟手。用于容器处于 transform / overflow:hidden
+   * 祖先（如带进出场动画的 modal）内的列表：否则 fixed 定位会被 transform 祖先裁切，
+   * 看不到跟手卡片。默认 false（CardGrid 列表无需 portal）。
+   */
+  portalToBody?: boolean
 }
 
-export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, listRef: Ref<CardItem[]>, options: UseMobileDragReorderOptions = {}) {
+export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, listRef: Ref<any[]>, options: UseMobileDragReorderOptions = {}) {
   const uiStore = useUIStore()
   const dataStore = useDataStore()
 
@@ -48,7 +58,8 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     itemSelector = '.card, .group-card',
     onReorder = null,
     placeholderClass = 'card card-drag-placeholder',
-    draggingClass = 'card-is-dragging'
+    draggingClass = 'card-is-dragging',
+    portalToBody = false
   } = options
 
   let drag: DragState | null = null
@@ -158,12 +169,12 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     const allItems = getItems()
     const idx = allItems.indexOf(item)
 
-    // 创建占位符
+    // 创建占位符（插入到被拖项原位置之前，保持其他项索引不变）
     const ph = document.createElement('div')
     ph.className = placeholderClass
     ph.style.height = rect.height + 'px'
     ph.style.margin = getComputedStyle(item).marginBottom
-    item.parentNode!.insertBefore(ph, item)
+    containerRef.value!.insertBefore(ph, item)
 
     // 原元素改为 fixed 定位，保留完整 CSS 上下文
     item.classList.add(draggingClass)
@@ -175,9 +186,15 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     item.style.zIndex = '9999'
     item.style.transition = 'none'
 
+    // 容器若处于 transform / overflow:hidden 祖先下（modal 动画），
+    // fixed 会被该祖先裁切且坐标基准偏移——移到 body 才能正常跟手。
+    const originalParent = portalToBody ? item.parentElement : null
+    if (portalToBody) document.body.appendChild(item)
+
     drag = {
       el: item,
       placeholder: ph,
+      originalParent,
       startY: e.clientY,
       initialTop: rect.top,
       lastY: e.clientY,
@@ -222,6 +239,11 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
     const arr = listRef.value
 
+    // 恢复被拖元素到列表：portal 到 body 的需移回原容器（用占位符定位）
+    if (d.originalParent) {
+      d.originalParent.insertBefore(d.el, d.placeholder)
+    }
+
     // 移除占位符
     d.placeholder.remove()
 
@@ -237,7 +259,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
     if (fromIndex !== toIndex) {
       if (onReorder) {
-        onReorder(null, fromIndex, toIndex)
+        onReorder(fromIndex, toIndex)
       } else {
         const movedItem = arr[fromIndex]
         if (!movedItem) return
@@ -302,6 +324,8 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
       drag.el.style.margin = ''
       drag.el.style.zIndex = ''
       drag.el.style.transition = ''
+      // portal 到 body 的残留元素移回原容器，避免 body 残留游离节点
+      if (drag.originalParent) drag.originalParent.appendChild(drag.el)
       drag.placeholder.remove()
       drag = null
     }
