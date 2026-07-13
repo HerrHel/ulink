@@ -211,3 +211,18 @@
 .pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px}
 .pw-input{padding-right:36px}
 
+/* ── icon input row ── */
+.icon-input-row{display:flex;align-items:center;gap:8px}
+.icon-input-row .form-input{flex:1}
+.icon-thumbs{display:flex;gap:6px;flex-shrink:0}
+.icon-thumb{
+  width:36px;height:36px;object-fit:contain;
+  border-radius:var(--radius-sm);
+  border:2px solid var(--border);
+  background:var(--bg-alt);
+  cursor:pointer;padding:3px;
+  transition:border-color 0.2s,box-shadow 0.2s;
+}
+.icon-thumb:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.icon-thumb.active{border-color:var(--accent);background:var(--accent-light)}
+

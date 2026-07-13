@@ -9,10 +9,6 @@
         <div class="form-group">
           <label class="form-label" for="bmUrl">网址 *</label>
           <input type="text" class="form-input" id="bmUrl" v-model="bmForm.url" placeholder="例如：github.com" @input="onUrlInput" autocomplete="off">
-          <div class="logo-preview" v-show="bmForm.logoPreviewVisible">
-            <img :src="bmForm.logoPreviewUrl" alt="">
-            <span>{{ bmForm.logoPreviewText }}</span>
-          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="bmTitle">网站名称</label>
@@ -47,12 +43,14 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="bmIcon">自定义图标</label>
-          <input type="url" class="form-input" id="bmIcon" v-model="bmForm.icon" placeholder="https://… 输入图标URL" @input="onPreviewIconUrl">
-          <button class="btn btn-ghost btn-sm mt-1" v-show="bmForm.clearIconVisible" @click="onClearIcon">清除图标</button>
-          <div class="logo-preview" v-show="bmForm.iconPreviewVisible">
-            <img :src="bmForm.iconPreviewUrl" alt="">
-            <span>图标预览</span>
+          <div class="icon-input-row">
+            <input type="url" class="form-input" id="bmIcon" v-model="bmForm.icon" placeholder="https://… 输入图标URL" @input="onPreviewIconUrl">
+            <div class="icon-thumbs" v-show="bmForm.logoPreviewVisible || bmForm.iconPreviewVisible">
+              <img v-if="bmForm.logoPreviewVisible" :src="bmForm.logoPreviewUrl" class="icon-thumb" :class="{ active: bmForm.icon === bmForm.logoPreviewUrl }" @click="useFaviconAsIcon" title="点击使用网站图标">
+              <img v-if="bmForm.iconPreviewVisible && bmForm.iconPreviewUrl !== bmForm.logoPreviewUrl" :src="bmForm.iconPreviewUrl" class="icon-thumb active" title="当前自定义图标">
+            </div>
           </div>
+          <button class="btn btn-ghost btn-sm mt-1" v-show="bmForm.clearIconVisible" @click="onClearIcon">清除图标</button>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -92,7 +90,7 @@
 <script setup lang="ts">
 import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { bmForm, closeBmModal, saveBm, previewLogo, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
+import { bmForm, closeBmModal, saveBm, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
@@ -131,10 +129,15 @@ function toggleAttr(attrId: string, event: Event) {
 
 function onClose() { closeBmModal() }
 function onSave() { saveBm() }
-function onPreviewLogo() { previewLogo() }
 function onPreviewIconUrl() { previewIconUrl() }
 function onClearIcon() { clearIcon() }
 function onUrlInput() { autoFetchFromUrl() }
+function useFaviconAsIcon() {
+  bmForm.icon = bmForm.logoPreviewUrl
+  bmForm.iconPreviewVisible = true
+  bmForm.iconPreviewUrl = bmForm.logoPreviewUrl
+  bmForm.clearIconVisible = true
+}
 function onApplyAi() {
   applyAiCategory()
   applyAiAttributes()
