@@ -1,6 +1,6 @@
 /**
- * recoveryKeyPDF.ts — 生成 Recovery Key PDF 下载
- * 使用纯 HTML+print 打印为 PDF，无需第三方库
+ * recoveryKeyPDF.ts — 生成 Recovery Key 文件下载
+ * 使用 <a download> 直接下载 HTML 文件，移动端和桌面端均可用
  */
 export function generateRecoveryKeyPDF(recoveryKey: string) {
   const safeKey = recoveryKey.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -81,17 +81,11 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
 
   const blob = new Blob([html], { type: 'text/html' })
   const url = URL.createObjectURL(blob)
-  const win = window.open(url, '_blank')
-  if (win) {
-    win.onload = () => {
-      win.print()
-      // 延迟 revoke，确保 print 对话框关闭后再释放 URL
-      win.addEventListener('afterprint', () => URL.revokeObjectURL(url), { once: true })
-      // 兜底：10 分钟后自动释放
-      setTimeout(() => URL.revokeObjectURL(url), 600000)
-    }
-  } else {
-    // 弹窗被拦截，立即释放
-    URL.revokeObjectURL(url)
-  }
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `LinkVault-Recovery-Key-${new Date().toISOString().slice(0, 10)}.html`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
 }
