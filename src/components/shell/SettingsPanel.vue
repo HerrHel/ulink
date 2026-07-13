@@ -162,18 +162,6 @@
                 <span v-html="'💬'"></span>反馈 / 建议
                 <span class="sp-action-kbd">邮箱</span>
               </button>
-              <div class="sp-row">
-                <span class="sp-row-label">使用统计</span>
-                <span class="sp-sync-status ok" @click.stop="showStats = !showStats" style="cursor:pointer">
-                  {{ showStats ? '收起' : '查看' }}
-                </span>
-              </div>
-              <div v-if="showStats" class="sp-stats">
-                <div v-for="(label, key) in statsLabels" :key="key" class="sp-stat-row">
-                  <span class="sp-stat-label">{{ label }}</span>
-                  <span class="sp-stat-count">{{ statsData[key] || 0 }}</span>
-                </div>
-              </div>
             </div>
             <!-- Danger -->
             <div class="sp-section sp-danger">
@@ -221,7 +209,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
-import { incrementStat, getStats, STAT_LABELS } from '../../lib/stats.js'
+
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
 
@@ -315,7 +303,6 @@ async function onLogout() {
 
 function onCheckDeadLinks() {
   if (dl.checking.value) return
-  incrementStat('deadlink_check')
   toast('开始检测死链...')
   dl.checkAll(5, 200).then(() => {
     const ds = dataStore
@@ -348,11 +335,7 @@ function onToggleAutoDeadCheck() {
   else dl.startAutoCheck()
 }
 
-// ── D4: 使用统计 + 反馈 ──
-const showStats = ref(false)
-const statsData = computed(() => getStats())
-const statsLabels = STAT_LABELS
-
+// ── 反馈 ──
 const FEEDBACK_EMAIL = '2629490959@qq.com'
 const feedbackOpen = ref(false)
 

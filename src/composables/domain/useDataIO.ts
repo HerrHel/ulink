@@ -9,7 +9,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
-import { incrementStat, trackMetric } from '../../lib/stats.js'
+
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { AppDataSchema, BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 import { clearSearchCache } from '../../lib/search.js'
@@ -51,8 +51,6 @@ export function exportData() {
   try {
     _download('linkvault-backup-' + _dateStamp() + '.json',
       JSON.stringify(ds._dataSnapshot(), null, 2), 'application/json')
-    incrementStat('export_json')
-    trackMetric('export_done', { count: Object.keys(ds._dataSnapshot()).length })
     toast('数据已导出')
   } catch (e) { console.warn('[export] JSON export failed:', e); toast('导出失败', false) }
 }
@@ -92,7 +90,6 @@ export function exportHTML() {
     }
     lines.push('</DL><p>')
     _download('linkvault-bookmarks-' + _dateStamp() + '.html', lines.join('\n'), 'text/html')
-    incrementStat('export_html')
     toast(`已导出 ${live.length} 个书签（HTML）`)
   } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
@@ -117,7 +114,6 @@ export function exportCSV() {
     }
     _download('linkvault-bookmarks-' + _dateStamp() + '.csv',
       rows.map(r => r.join(',')).join('\n'), 'text/csv')
-    incrementStat('export_csv')
     toast(`已导出 ${live.length} 个书签（CSV）`)
   } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
@@ -138,7 +134,6 @@ export function exportRaindrop() {
     }))
     _download('linkvault-raindrop-' + _dateStamp() + '.json',
       JSON.stringify({ items }, null, 2), 'application/json')
-    incrementStat('export_raindrop')
     toast(`已导出 ${live.length} 个书签（Raindrop JSON）`)
   } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
@@ -299,9 +294,6 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
 
   saveAppData()
   clearSearchCache()
-  incrementStat('import_data')
-  trackMetric('import_done', { count: catImported + bmImported + groupImported + attrImported })
-
   const total = catImported + bmImported + groupImported + attrImported
   const skipped = skippedCat + skippedBm + skippedGroup + skippedAttr
   if (total === 0) {

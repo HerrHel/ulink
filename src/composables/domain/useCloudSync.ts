@@ -17,7 +17,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
-import { trackMetric } from '../../lib/stats.js'
+
 import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount, updateSyncOpRetry,
   type SyncOp,
@@ -393,19 +393,16 @@ export function useCloudSync() {
         if (first?.op?.data) console.warn(`[sync] 首条失败 op 原始 data:`, JSON.parse(JSON.stringify(first.op.data)))
         syncStore.setSyncStatus('error')
         syncStore.setSyncError(`${failedOps.length} 项推送失败：${failedOps[0].error}`)
-        trackMetric('sync_failure', { duration: Date.now() - (rawOps[0]?.ts || Date.now()), success: false, count: failedOps.length })
         return false
       }
 
       syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
-      trackMetric('sync_success', { duration: Date.now() - (rawOps[0]?.ts || Date.now()), count: ops.length })
       return true
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '同步失败'
       syncStore.setSyncStatus('error')
       syncStore.setSyncError(msg)
-      trackMetric('sync_failure', { duration: Date.now() - (rawOps[0]?.ts || Date.now()), success: false })
       console.warn('[sync] push failed:', e)
       return false
     }

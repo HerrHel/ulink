@@ -5,7 +5,7 @@
 import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
-import { incrementStat } from '../../lib/stats.js'
+
 import { copyToClipboard } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
@@ -35,7 +35,6 @@ export async function shareGroup(gid: string) {
   const base = location.pathname.replace(/\/[^/]*$/, '/') || '/'
   const url = location.origin + base + 's/' + gid + '#share/' + gid
   copyToClipboard(url, '分享链接')
-  incrementStat('share_group')
 }
 
 // ── 从 URL 导入分享数据（path 风格 /s/<id> 优先，hash #share/<id> 向后兼容）──

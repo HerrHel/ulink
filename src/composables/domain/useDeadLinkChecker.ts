@@ -2,7 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
-import { trackMetric } from '../../lib/stats.js'
+
 
 interface CheckResult {
   alive: boolean
@@ -193,10 +193,6 @@ export function useDeadLinkChecker() {
     lastFullCheckAt.value = Date.now()
     _applyDeadLinkAttributes()
     debouncedSaveAppData()
-    trackMetric('deadlink_check_batch', {
-      count: bookmarks.length,
-      duration: Date.now() - (progress.value.total > 0 ? lastFullCheckAt.value : Date.now()),
-    })
   }
 
   async function checkOne(bookmarkId: string): Promise<CheckResult | null> {

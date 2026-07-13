@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 vi.mock('../../lib/toast.js', () => ({ toast: vi.fn(), toastWithUndo: vi.fn(), showConfirm: vi.fn(() => Promise.resolve(true)) }))
-vi.mock('../../lib/stats.js', () => ({ incrementStat: vi.fn(), trackMetric: vi.fn() }))
+
 vi.mock('../../lib/search.js', () => ({ clearSearchCache: vi.fn() }))
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppData: vi.fn() }))
 
