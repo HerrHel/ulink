@@ -74,6 +74,8 @@ function _hideDragCursor() {
 function _getDragHintText(target: Element, payload: DragPayload | null): string {
   if (!payload) return ''
   if (target.classList.contains('group-body')) {
+    const gid = (target as HTMLElement).dataset.gid
+    if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
     return payload.type === 'group' ? '嵌入为组引用' : '嵌入为内联卡片'
   }
   if (target.classList.contains('group-card-head')) {
@@ -84,6 +86,8 @@ function _getDragHintText(target: Element, payload: DragPayload | null): string 
   if (target.closest('#cardGrid')) return '移出组'
   if (target.classList.contains('rail-item')) return '移动到分类'
   if (target.classList.contains('group-card')) {
+    const gid = (target as HTMLElement).dataset.groupId
+    if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
     if (payload.type === 'bm') return '移动书签到组'
     if (payload.type === 'group') return '嵌入为组引用'
     return ''
@@ -206,6 +210,17 @@ function _onDragOver(e: DragEvent) {
     else _hideDragCursor();
     return;
   }
+  // 禁止拖拽组到自身
+  if (target && _currentDragPayload && _currentDragPayload.type === 'group') {
+    const srcGid = _currentDragPayload.id.slice(6)
+    const tgtGid = target.classList.contains('group-body') ? (target as HTMLElement).dataset.gid
+      : target.classList.contains('group-card') ? (target as HTMLElement).dataset.groupId
+      : null
+    if (tgtGid && srcGid === tgtGid) {
+      _hideDragCursor()
+      return
+    }
+  }
   if (target !== _dragOverEl) {
     if (_dragOverEl) _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over');
     _dragOverEl = target;
@@ -271,6 +286,7 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
 
   if (p.type === 'group') {
     const refGid = p.id.slice(6);
+    if (refGid === gid) return;
     addGroupRefToGroup(refGid, gid, e.clientX, e.clientY);
     return;
   }
