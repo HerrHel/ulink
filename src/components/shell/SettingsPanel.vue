@@ -69,12 +69,9 @@
                   <span>查看</span>
                 </button>
               </div>
-              <div class="sp-row">
-                <span class="sp-row-label">定时检测</span>
-                <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
-                  <span class="sp-switch"></span>
-                  <span class="sp-toggle-label">{{ dlAutoEnabled ? '每周自动检测' : '已关闭' }}</span>
-                </div>
+              <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
+                <span class="sp-toggle-label">定时检测</span>
+                <span class="sp-switch"></span>
               </div>
             </div>
             <!-- 同步与安全 -->
