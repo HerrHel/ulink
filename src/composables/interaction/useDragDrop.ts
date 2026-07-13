@@ -83,7 +83,6 @@ function _getDragHintText(target: Element, payload: DragPayload | null): string 
   }
   if (target.classList.contains('detail-card')) return '移到此位置'
   if (target.closest('#detailPanel')) return '加入详情面板'
-  if (target.closest('#cardGrid')) return '移出组'
   if (target.classList.contains('rail-item')) return '移动到分类'
   if (target.classList.contains('group-card')) {
     const gid = (target as HTMLElement).dataset.groupId
@@ -93,8 +92,10 @@ function _getDragHintText(target: Element, payload: DragPayload | null): string 
     return ''
   }
   if (target.classList.contains('card') && !target.classList.contains('group-card')) {
-    return '交换排序'
+    return payload.srcGid ? '移出组' : '交换排序'
   }
+  // 拖到空白区域：仅当源卡片在组内时提示移出组
+  if (payload.srcGid && target.closest('#cardGrid')) return '移出组'
   return ''
 }
 function _showDragHint(text: string, x: number, y: number) {
