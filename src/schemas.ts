@@ -47,6 +47,7 @@ export const CategorySchema = z.object({
   name: z.string(),
   icon: z.string(),
   color: z.string(),
+  order: z.number().optional(),
   updatedAt: z.number().optional(),
   deletedAt: z.number().optional(),
 })

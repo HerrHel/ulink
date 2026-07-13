@@ -31,13 +31,13 @@ export const ACTIONS: Record<string, string> = {
 
 export const DEFAULTS: AppData = {
   categories: [
-    { id: 'all', name: '全部', icon: 'grid', color: '#122E8A' },
-    { id: 'uncategorized', name: '未分类', icon: 'bookmark', color: '#6E6860' },
-    { id: 'email', name: '邮箱', icon: 'mail', color: '#e11d48' },
-    { id: 'tools', name: '工具', icon: 'tool', color: '#d97706' },
-    { id: 'ai', name: 'AI', icon: 'ai-icon', color: '#8b5cf6' },
-    { id: 'social', name: '社交', icon: 'social-icon', color: '#1d9bf0' },
-    { id: 'game', name: '游戏平台', icon: 'game-icon', color: '#16a34a' }
+    { id: 'all', name: '全部', icon: 'grid', color: '#122E8A', order: 0 },
+    { id: 'uncategorized', name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 },
+    { id: 'email', name: '邮箱', icon: 'mail', color: '#e11d48', order: 2 },
+    { id: 'tools', name: '工具', icon: 'tool', color: '#d97706', order: 3 },
+    { id: 'ai', name: 'AI', icon: 'ai-icon', color: '#8b5cf6', order: 4 },
+    { id: 'social', name: '社交', icon: 'social-icon', color: '#1d9bf0', order: 5 },
+    { id: 'game', name: '游戏平台', icon: 'game-icon', color: '#16a34a', order: 6 }
   ],
   bookmarks: [
     { id: 'b1', title: 'GitHub', url: 'https://github.com', username: '', password: '', notes: '代码托管平台', icon: '', categoryId: 'tools', parentId: null, order: 0, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },

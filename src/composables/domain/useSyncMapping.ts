@@ -131,7 +131,7 @@ export interface RemoteGroupRow {
 }
 export interface RemoteCategoryRow {
   id: string; user_id: string; name: string; icon: string; color: string
-  updated_at_num: number; deleted_at: string | null
+  order: number; updated_at_num: number; deleted_at: string | null
 }
 export interface RemoteAttributeRow {
   id: string; user_id: string; name: string; type: string
@@ -185,6 +185,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       id: item.id as string, user_id: item._userId as string,
       name: item.name as string, icon: (item.icon as string) || '',
       color: (item.color as string) || '',
+      order: (item.order as number) || 0,
       updated_at_num: (item.updatedAt as number) || now,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
     } satisfies RemoteCategoryRow
@@ -246,6 +247,7 @@ export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
 export function fromRemoteCategory(r: RemoteCategoryRow): Category | null {
   return _validateWith(CategorySchema, {
     id: r.id, name: r.name, icon: r.icon, color: r.color,
+    order: r.order ?? 0,
     updatedAt: r.updated_at_num || 0,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
   }, '分类')

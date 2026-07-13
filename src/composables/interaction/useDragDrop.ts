@@ -450,6 +450,9 @@ function handleRailDrop(e: DragEvent, item: Element) {
   if (srcIdx < 0 || tgtIdx < 0) return;
   const src = ds.categories.splice(srcIdx, 1)[0];
   ds.categories.splice(tgtIdx, 0, src);
+  // B-11：拖拽重排序后写 order 字段并 markDirty，使分类顺序跨设备同步。
+  // 旧实现只改本地数组顺序不设 order → saveAppData 持久化但云端无 order 列 → 设备间不一致。
+  ds.categories.forEach((c, i) => { c.order = i; ds._markDirty(c.id) });
   debouncedSaveAppData();
 }
 
