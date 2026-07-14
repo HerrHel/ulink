@@ -62,16 +62,20 @@ let _abort: AbortController | null = null
 // 网络基线缓存，30s 内复用
 let _baselineCache: { value: number; at: number } | null = null
 
-async function checkDirect(url: string, timeoutMs = 5000): Promise<{ ok: boolean; duration: number }> {
+/**
+ * RE-10：no-cors 仅作「网络可达」弱信号，opaque 响应读不到 status，
+ * 404/5xx 也会 ok=true。不得单独据此判存活。
+ */
+async function checkDirect(url: string, timeoutMs = 5000): Promise<{ reachable: boolean; duration: number }> {
   const start = Date.now()
   try {
     await Promise.race([
       fetch(url, { method: 'GET', mode: 'no-cors' }),
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
     ])
-    return { ok: true, duration: Date.now() - start }
+    return { reachable: true, duration: Date.now() - start }
   } catch {
-    return { ok: false, duration: Date.now() - start }
+    return { reachable: false, duration: Date.now() - start }
   }
 }
 
@@ -104,49 +108,85 @@ export function useDeadLinkChecker() {
       return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 1 }
     }
 
-    // 1) 并行测量网络基线 + 直接访问目标
+    // 1) 并行测量网络基线 + no-cors 可达性（弱信号，opaque 读不到 status）
     const [gstaticBaseline, direct] = await Promise.all([
       measureNetworkBaseline(),
       checkDirect(url, 3000),
     ])
 
-    // 2) 直接访问成功 → 存活
-    if (direct.ok) {
-      return { alive: true, status: 200, finalUrl: url, checkedAt: Date.now(), blocked: false, confidence: 0.95 }
-    }
-
-    // 3) 确定基线
-    // gstatic <5s 说明网络可达（只是延迟高），用它作为基线
-    // gstatic >5s 说明网络本身不通或被墙，无法可靠判断，直接返回 unknown
-    if (gstaticBaseline > 5000) {
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.15 }
-    }
-    const baseline = gstaticBaseline
-
-    // 4) 网络差 → 无法判断，标记为 unknown（不改变书签属性）
-    if (baseline > 2000) {
+    // 2) 本机网络不可靠 → unknown
+    if (gstaticBaseline > 5000 || gstaticBaseline > 2000) {
       return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.15 }
     }
 
-    // 5) 网络良好但直连失败 → 调用 Edge Function 确认
+    // 3) RE-10：始终用 Edge 读真实 http_status；no-cors 不可单独判存活
     const edgeResult = await callEdgeFunction(url, bookmarkId)
 
     if (edgeResult.status === 'alive') {
-      return { alive: false, status: edgeResult.http_status, finalUrl: '', checkedAt: Date.now(), blocked: true, confidence: 0.95 }
+      // 服务端可达：直连也可达 → 存活；直连失败 → 对本机被墙
+      if (direct.reachable) {
+        return {
+          alive: true,
+          status: edgeResult.http_status || 200,
+          finalUrl: url,
+          checkedAt: Date.now(),
+          blocked: false,
+          confidence: 0.95,
+        }
+      }
+      return {
+        alive: false,
+        status: edgeResult.http_status,
+        finalUrl: '',
+        checkedAt: Date.now(),
+        blocked: true,
+        confidence: 0.95,
+      }
     }
 
     if (edgeResult.status === 'dead') {
-      return { alive: false, status: edgeResult.http_status, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.90 }
+      return {
+        alive: false,
+        status: edgeResult.http_status,
+        finalUrl: '',
+        checkedAt: Date.now(),
+        blocked: false,
+        confidence: 0.90,
+      }
     }
 
-    // Edge Function 无法确认，但直连已失败且网络正常 → 仍判定为失效
+    if (edgeResult.status === 'blocked') {
+      return {
+        alive: false,
+        status: edgeResult.http_status,
+        finalUrl: '',
+        checkedAt: Date.now(),
+        blocked: true,
+        confidence: 0.90,
+      }
+    }
+
+    // Edge unknown：no-cors 可达仅弱存活（不伪造 status:200）；不可达 → 失效
+    if (direct.reachable) {
+      return {
+        alive: true,
+        status: 0,
+        finalUrl: url,
+        checkedAt: Date.now(),
+        blocked: false,
+        confidence: 0.55,
+      }
+    }
     return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.7 }
   }
 
   async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
-    const bookmarks = ds.bookmarks.filter(b => b.url && b.url.startsWith('http') && !b.attributes?.['dead-link-ignored'])
+    // RE-11：排除软删与 ignored，避免污染回收站项
+    const bookmarks = ds.bookmarks.filter(
+      b => !b.deletedAt && b.url && b.url.startsWith('http') && !b.attributes?.['dead-link-ignored']
+    )
     if (bookmarks.length === 0) return
 
     checking.value = true
@@ -155,16 +195,18 @@ export function useDeadLinkChecker() {
 
     Object.keys(results).forEach(k => delete results[k])
 
-    // 清除所有书签的旧标记（不只是 filtered 的），避免残留计数
-    for (const b of ds.bookmarks) {
+    // 仅清活跃书签的旧死链标记（PERF-4：batchPatch，一次 bump）
+    const clearPatches: Record<string, Record<string, unknown>> = {}
+    for (const b of bookmarks) {
       const attrs = b.attributes || {}
       if (attrs['dead-link'] || attrs['gfw-blocked']) {
         const rest = { ...attrs }
         delete rest['dead-link']
         delete rest['gfw-blocked']
-        ds.updateBookmark(b.id, { attributes: rest })
+        clearPatches[b.id] = rest
       }
     }
+    if (Object.keys(clearPatches).length) ds.batchPatchBookmarkAttributes(clearPatches)
 
     for (let i = 0; i < bookmarks.length; i += batchSize) {
       if (_abort.signal.aborted) break
@@ -227,7 +269,9 @@ export function useDeadLinkChecker() {
 
   function _applyDeadLinkAttributes() {
     const ds = useDataStore()
+    const patches: Record<string, Record<string, unknown>> = {}
     for (const bm of ds.bookmarks) {
+      if (bm.deletedAt) continue
       const r = results[bm.id]
       if (!r) continue
 
@@ -241,7 +285,7 @@ export function useDeadLinkChecker() {
           const rest = { ...attrs }
           delete rest['dead-link']
           delete rest['gfw-blocked']
-          ds.updateBookmark(bm.id, { attributes: rest })
+          patches[bm.id] = rest
         }
         continue
       }
@@ -251,26 +295,25 @@ export function useDeadLinkChecker() {
           const rest = { ...attrs }
           delete rest['dead-link']
           delete rest['gfw-blocked']
-          ds.updateBookmark(bm.id, { attributes: rest })
+          patches[bm.id] = rest
         }
       } else if (r.blocked) {
         if (!hasGfwAttr || hasDeadAttr) {
-          // DLC-2：用 delete 清 key 而非设 false，与 checkOne 行为一致。
-          // 设 false 在布尔判定上等价，但 key 残留在 attributes 对象里越积越多。
           const rest = { ...attrs }
           delete rest['dead-link']
           rest['gfw-blocked'] = true
-          ds.updateBookmark(bm.id, { attributes: rest })
+          patches[bm.id] = rest
         }
       } else {
         if (!hasDeadAttr || hasGfwAttr) {
           const rest = { ...attrs }
           delete rest['gfw-blocked']
           rest['dead-link'] = true
-          ds.updateBookmark(bm.id, { attributes: rest })
+          patches[bm.id] = rest
         }
       }
     }
+    if (Object.keys(patches).length) ds.batchPatchBookmarkAttributes(patches)
   }
 
   function abort() {

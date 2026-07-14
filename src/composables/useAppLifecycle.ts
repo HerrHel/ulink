@@ -45,6 +45,8 @@ export function useAppLifecycle() {
     ds.customAttributes = loaded.customAttributes
     ds.siblingGroups = loaded.siblingGroups
     ds._syncMaps()
+    // 跨会话恢复软删书签的组归属映射，否则回收站 restore 永远丢组关系（DATA-2）
+    ds._restoreDeletedGroupMemberships()
     ui.restoreUIState()
     // A4/C3: 检测公开分享路由（#share/<id>）
     const shareGid = detectShareRoute()

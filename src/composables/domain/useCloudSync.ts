@@ -25,6 +25,7 @@ import {
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 import {
   toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute, camelToSnake,
+  type RemoteBookmarkRow, type RemoteGroupRow,
 } from './useSyncMapping.js'
 import {
   resolveConflict, resolveAllConflicts, _remoteSnapshots,
@@ -72,7 +73,8 @@ function _mergeOps(ops: SyncOp[]): SyncOp[] {
 }
 
 // ── 智能合并：远端 → 本地 ──
-function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
+/** 导出供 QUAL-03 单测锁定软删/复活/冲突/full 对账语义 */
+export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
   local: T[], remote: T[], type: 'bookmark' | 'group' | 'category' | 'attribute', full = false,
 ) {
   const ds = useDataStore()
@@ -82,7 +84,13 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
   for (const rItem of remote) {
     const lItem = localMap.get(rItem.id)
     if (!lItem) {
-      local.push(rItem)
+      // 远端软删且本地无：走删除路径会 no-op；仍 push 进数组供回收站可见
+      if (rItem.deletedAt) {
+        local.push(rItem)
+        // 同步 map 会在 _pullChanges 末尾 _syncMaps
+      } else {
+        local.push(rItem)
+      }
     } else if (ds._dirtyIds.has(rItem.id)) {
       const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
       if (remoteNewer && syncStore.lastSyncAt > 0) {
@@ -96,7 +104,16 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
         }
       }
     } else if ((rItem.updatedAt || 0) > (lItem.updatedAt || 0)) {
-      Object.assign(lItem, rItem)
+      // RE-3：远端软删不能 Object.assign 跳过 delete* 副作用（组引用/索引/DGM）
+      if (rItem.deletedAt && !lItem.deletedAt) {
+        _deleteWithoutEcho(ds, type, rItem.id)
+      } else if (!rItem.deletedAt && lItem.deletedAt) {
+        // 远端复活：清本地 deletedAt 后合并字段
+        Object.assign(lItem, rItem)
+        delete (lItem as { deletedAt?: unknown }).deletedAt
+      } else {
+        Object.assign(lItem, rItem)
+      }
     }
   }
 
@@ -130,7 +147,8 @@ function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?:
 //  - deleteAttribute 会遍历所有项删 attributes key 同样 _markDirty + _trackChange
 // 这些衍生 dirty 若不清，下次 debouncedSync 会把波及行回推远端——回声流量 + updated_at_num
 // 污染面。删除前快照 dirty/changed 集合，删除后清掉因衍生新增的项（被删 id 自身也清）。
-function _deleteWithoutEcho(ds: ReturnType<typeof useDataStore>, type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) {
+/** 导出供 QUAL-03 单测锁定回声防护（删除不回推 dirty） */
+export function _deleteWithoutEcho(ds: ReturnType<typeof useDataStore>, type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) {
   const dirtyBefore = new Set(ds._dirtyIds)
   const changedBefore = new Set(ds._changedFields.keys())
   switch (type) {
@@ -236,6 +254,14 @@ export function useCloudSync() {
     const userId = _getUserId()
     if (!userId) return false
     if (!navigator.onLine) { syncStore.setSyncError('网络离线'); return false }
+
+    // E2E 启用未解锁：禁止 drain/push，避免本地明文覆盖云端密文（RE-2）
+    const e2eGuard = useE2E()
+    if (e2eGuard.isE2EEnabled.value && !e2eGuard.isUnlocked.value) {
+      syncStore.setSyncError('请先解锁 E2E 再同步')
+      syncStore.setSyncStatus('error')
+      return false
+    }
 
     const rawOps = await drainSyncOps()
     if (!rawOps.length) return true
@@ -436,11 +462,20 @@ export function useCloudSync() {
       const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r)).filter(Boolean) as SiblingGroup[]
       const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r)).filter(Boolean) as CustomAttribute[]
 
+      // decryptItem 返回浅拷贝，必须用返回值替换；丢弃会导致密文写回 store（RE-1）
       if (e2e.isUnlocked.value) {
-        for (const b of remoteBms) await e2e.decryptItem('bookmark', b as any)
-        for (const g of remoteGroups) await e2e.decryptItem('group', g as any)
-        for (const c of remoteCats) await e2e.decryptItem('category', c as any)
-        for (const a of remoteAttrs) await e2e.decryptItem('attribute', a as any)
+        for (let i = 0; i < remoteBms.length; i++) {
+          remoteBms[i] = await e2e.decryptItem('bookmark', remoteBms[i] as any) as Bookmark
+        }
+        for (let i = 0; i < remoteGroups.length; i++) {
+          remoteGroups[i] = await e2e.decryptItem('group', remoteGroups[i] as any) as SiblingGroup
+        }
+        for (let i = 0; i < remoteCats.length; i++) {
+          remoteCats[i] = await e2e.decryptItem('category', remoteCats[i] as any) as Category
+        }
+        for (let i = 0; i < remoteAttrs.length; i++) {
+          remoteAttrs[i] = await e2e.decryptItem('attribute', remoteAttrs[i] as any) as CustomAttribute
+        }
       }
 
       _mergeIntoLocal(ds.categories, remoteCats, 'category', full)
@@ -510,6 +545,11 @@ export function useCloudSync() {
         }
       }
 
+      // merge 可能直接 push 新项到数组（绕过 add* 的 map 维护），必须重建索引并落盘，
+      // 否则刷新后读旧 IDB、对端变更丢失（DATA-3）
+      ds._syncMaps()
+      saveAppData()
+
       syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
       return true
@@ -548,32 +588,50 @@ export function useCloudSync() {
     _initialized = true
 
     await _withLock('linkvault-sync', async () => {
-      // 先推送本地数据到云端（upsert），再全量拉取合并。
-      // 如果先拉再推：云端为空 + lastSyncAt > 0（被 realtime 提前设值）时，
-      // _pullChanges 的 full 分支会把本地书签误删。
+      // RE-12：禁止盲全量 upsert 复活对端已软删项。
+      // 1) 先 pull（非 full，lastSyncAt=0 时不会做「远端无则本地软删」对账）吸收远端态含软删。
+      // 2) 再只推：脏/新/本地软删；或远端尚无该 id 的本地存活项（首登空云端仍能全量上云）。
       const ds = useDataStore()
       const userId = _getUserId()
       if (!userId) return
 
+      await _pullChanges(false)
+
+      const remoteIds = new Set<string>()
+      const [bmIds, gIds, cIds, aIds] = await Promise.all([
+        supabase.from('bookmarks').select('id').eq('user_id', userId),
+        supabase.from('sibling_groups').select('id').eq('user_id', userId),
+        supabase.from('categories').select('id').eq('user_id', userId),
+        supabase.from('custom_attributes').select('id').eq('user_id', userId),
+      ])
+      for (const r of [bmIds, gIds, cIds, aIds]) {
+        if (r.error) { console.warn('[sync] initialSync id probe failed:', r.error); continue }
+        for (const row of r.data || []) remoteIds.add((row as { id: string }).id)
+      }
+
       const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
       const now = Date.now()
+      const shouldPush = (id: string, deletedAt?: number) =>
+        ds._dirtyIds.has(id) || ds._newIds.has(id) || deletedAt || !remoteIds.has(id)
+
       for (const b of ds.bookmarks) {
+        if (!shouldPush(b.id, b.deletedAt)) continue
         allOps.push({ action: 'upsert', table: 'bookmarks', itemId: b.id, data: { ...b, _userId: userId }, ts: b.updatedAt || now })
       }
       for (const g of ds.siblingGroups) {
+        if (!shouldPush(g.id, g.deletedAt)) continue
         allOps.push({ action: 'upsert', table: 'sibling_groups', itemId: g.id, data: { ...g, _userId: userId }, ts: g.updatedAt || now })
       }
       for (const c of ds.categories) {
+        if (!shouldPush(c.id, c.deletedAt)) continue
         allOps.push({ action: 'upsert', table: 'categories', itemId: c.id, data: { ...c, _userId: userId }, ts: c.updatedAt || now })
       }
       for (const a of ds.customAttributes) {
+        if (!shouldPush(a.id, a.deletedAt)) continue
         allOps.push({ action: 'upsert', table: 'custom_attributes', itemId: a.id, data: { ...a, _userId: userId }, ts: a.updatedAt || now })
       }
       if (allOps.length) await enqueueSyncOps(allOps)
       await _pushFromQueue()
-
-      // 增量拉取（非 full）：推成功后 lastSyncAt 已设，只拉增量；
-      // 推失败则 lastSyncAt 仍为 0，拉全量但不做 full 分支的删除。
       await _pullChanges(false)
     })
 
@@ -632,16 +690,21 @@ export function useCloudSync() {
   }
 
   async function fetchPublicGroup(gid: string): Promise<{ group: SiblingGroup; bookmarks: Bookmark[] } | null> {
-    const { data: gData, error: gErr } = await supabase.from('sibling_groups')
-      .select('*').eq('id', gid).eq('is_public', true).maybeSingle()
-    if (gErr || !gData) return null
-    const group = fromRemoteGroup(gData)
-    if (!group) return null
-    let bookmarks: Bookmark[] = []
-    if (group.bookmarkIds.length) {
-      const { data: bData } = await supabase.from('bookmarks').select('*').in('id', group.bookmarkIds)
-      bookmarks = (bData || []).map(fromRemoteBookmark).filter(Boolean) as Bookmark[]
+    // SEC-01：经 get_public_group RPC 取数（SECURITY DEFINER，服务端不返回 username/password）。
+    // 018 迁移已删除 bookmarks 匿名 SELECT 策略，直接 from('bookmarks') 对访客会空结果。
+    const { data, error } = await supabase.rpc('get_public_group', { p_gid: gid })
+    if (error || data == null) {
+      if (error) console.warn('[share] get_public_group failed:', error)
+      return null
     }
+    const payload = data as { group?: RemoteGroupRow; bookmarks?: RemoteBookmarkRow[] }
+    if (!payload.group) return null
+    const group = fromRemoteGroup(payload.group)
+    if (!group) return null
+    const bookmarks = (payload.bookmarks || [])
+      .map(fromRemoteBookmark)
+      .filter(Boolean)
+      .map(b => ({ ...b!, username: '', password: '' })) as Bookmark[]
     return { group, bookmarks }
   }
 

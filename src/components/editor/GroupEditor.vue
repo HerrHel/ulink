@@ -28,7 +28,7 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { debouncedSaveAppData } from '../../stores/app.js'
+import { debouncedSaveAppDataNotes } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { EditorManager } from '../../lib/editor.js'
 import { useMfbStore } from '../../stores/overlay.js'
@@ -130,7 +130,7 @@ function syncToStore(ed: Editor) {
     }
   })
   ds.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
-  debouncedSaveAppData()
+  debouncedSaveAppDataNotes(1200)
 }
 
 onMounted(() => {

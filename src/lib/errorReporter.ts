@@ -6,6 +6,10 @@
  * - 节流（同一错误消息 5s 内不再重复上报）
  * - 静默失败（不因上报错误影响主流程）
  * - 自动附加上下文（URL、UA）
+ *
+ * SEC-07 权衡：error_logs 表 RLS 允许匿名 INSERT（WITH CHECK true），客户端 5s 节流
+ * 可被直打 PostgREST 绕过。SELECT 仅本人；字段有长度 CHECK。当前维持客户端上报 +
+ * 库侧 length 限制；若滥用上升再上 Edge 写入 / IP 限流 / 定期 prune。
  */
 import { supabase } from './supabase.js'
 import { useAuthStore } from '../stores/auth.js'

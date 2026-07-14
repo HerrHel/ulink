@@ -394,30 +394,14 @@ export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) 
   const bm = ds.bookmarkMap[id]
   if (!bm) return
   const doDelete = () => {
+    // 仅 deleteBookmark：它会从组 bookmarkIds 剔除并写入 _deletedGroupMemberships。
+    // 旧实现先 updateGroup 剔组再 delete，导致 memberships 记空，回收站恢复丢组关系（RE-5/DATA-1）。
+    // 与 batchDelete 对齐：undo / 回收站统一走 restoreBookmark。
     const ids = collectSubIds(id)
-    const removedFromGroups: Record<string, string[]> = {}
-    ids.forEach(bid => {
-      ds.siblingGroups.forEach(g => {
-        const bi = g.bookmarkIds.indexOf(bid)
-        if (bi > -1) {
-          if (!removedFromGroups[bid]) removedFromGroups[bid] = []
-          removedFromGroups[bid].push(g.id)
-          ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
-        }
-      })
-    })
     ids.forEach(bid => ds.deleteBookmark(bid))
     debouncedSaveAppData()
     toastWithUndo('书签已删除', () => {
       ids.forEach(bid => ds.restoreBookmark(bid))
-      Object.keys(removedFromGroups).forEach(bid => {
-        removedFromGroups[bid].forEach(gid => {
-          const sg = ds.groupMap[gid]
-          if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
-            ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
-          }
-        })
-      })
       debouncedSaveAppData()
       toast('已恢复')
     })

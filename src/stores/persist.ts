@@ -4,26 +4,43 @@
  * 架构变更（2026-07）：
  * - IndexedDB 是权威数据存储
  * - localStorage 仅作快速启动缓存（尽力同步）
- * - 单调递增版本号 `_dataVersion` 取代时间戳 `_savedAt`，
- *   避免系统时间变化导致的数据偏斜
+ * - `_writeSeq`：进程内单调写入序号（可比多端/缓存新旧）
+ * - `_schemaVersion`：仅 migrations 读写的 schema 版本（与 writeSeq 分离，QUAL-01）
  * - 写入策略：IDB 先写 → 成功后再写 localStorage（尽力），
  *   任一失败不回滚另一端（不阻塞主流程）
  */
 import { STORAGE_KEY, DEFAULTS } from '../config/constants.js'
-import { runMigrations } from './migrations.js'
+import { runMigrations, CURRENT_SCHEMA_VERSION } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
 import { AppDataSchema } from '../schemas.js'
 import type { AppData } from '../types.js'
 
 const IDB_KEY = 'linkvault_v2'
 
-// 单调递增版本号（进程内，不持久化）
-let _dataVersion = 0
+// 进程内单调写入序号（不表示 schema 版本）
+let _writeSeq = 0
 
 export interface StorageInfo {
   size: number
   percent: number
   label: string
+}
+
+function _stamp(data: AppData) {
+  _writeSeq++
+  // 保留已有 _schemaVersion；禁止用 writeSeq 覆盖
+  const schema =
+    typeof (data as { _schemaVersion?: number })._schemaVersion === 'number'
+      ? (data as { _schemaVersion?: number })._schemaVersion
+      : CURRENT_SCHEMA_VERSION
+  return {
+    ...data,
+    _writeSeq,
+    _schemaVersion: schema,
+    // 兼容旧读者：_dataVersion 不再作迁移门控，仅镜像 writeSeq
+    _dataVersion: _writeSeq,
+    _savedAt: Date.now(),
+  }
 }
 
 // ── 写入 ──
@@ -33,8 +50,7 @@ export interface StorageInfo {
  * IDB 写入失败返回 false，localStorage 失败不阻塞
  */
 export async function saveData(data: AppData): Promise<boolean> {
-  _dataVersion++
-  const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
+  const stamped = _stamp(data)
 
   // IDB 权威写入
   try {
@@ -64,7 +80,7 @@ export async function saveData(data: AppData): Promise<boolean> {
 /** 仅写 localStorage（用于备份/导出场景） */
 export function saveToLocalStorage(data: AppData): boolean {
   try {
-    const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
+    const stamped = _stamp(data)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
     return true
   } catch (e) {
@@ -77,7 +93,7 @@ export function saveToLocalStorage(data: AppData): boolean {
  *  返回是否写入成功。备份场景同样不应静默吞掉 IDB 失败（隐私模式/配额满），
  *  否则用户以为「已备份到本地」实则没落库——与 saveData 对齐如实上报。 */
 export async function saveToIDB(data: AppData): Promise<boolean> {
-  const stamped = { ...data, _dataVersion, _savedAt: Date.now() }
+  const stamped = _stamp(data)
   const plain = JSON.parse(JSON.stringify(stamped))
   try {
     const ok = await idbSet(IDB_KEY, plain)

@@ -1,7 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, beforeAll } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { preloadSearchLibs } from '../../lib/search.js'
+
+beforeAll(async () => {
+  await preloadSearchLibs()
+})
 
 describe('DataStore', () => {
   let store: ReturnType<typeof useDataStore>
@@ -45,6 +50,25 @@ describe('DataStore', () => {
       store.siblingGroups = [{ id: 'g1', bookmarkIds: ['b1', 'b2'] }] as any
       store.deleteBookmark('b1')
       expect(store.siblingGroups[0].bookmarkIds).toEqual(['b2'])
+    })
+
+    it('batchPatchBookmarkAttributes - 批量写 attributes 并 dirty，末尾一次 bump', () => {
+      store.bookmarks = [
+        { id: 'b1', title: 'A', url: 'https://a.com', attributes: { tag: true } },
+        { id: 'b2', title: 'B', url: 'https://b.com', attributes: {} },
+      ] as any
+      store._syncMaps()
+      const v0 = store._searchVersion
+      store.batchPatchBookmarkAttributes({
+        b1: { tag: true, 'dead-link': true },
+        b2: { 'gfw-blocked': true },
+      })
+      expect(store.bookmarkMap['b1'].attributes['dead-link']).toBe(true)
+      expect(store.bookmarkMap['b1'].attributes['tag']).toBe(true)
+      expect(store.bookmarkMap['b2'].attributes['gfw-blocked']).toBe(true)
+      expect(store._dirtyIds.has('b1')).toBe(true)
+      expect(store._dirtyIds.has('b2')).toBe(true)
+      expect(store._searchVersion).toBe(v0 + 1)
     })
   })
 

@@ -5,6 +5,7 @@
 import { supabase } from '../../lib/supabase.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
@@ -146,8 +147,11 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   const h = HANDLERS[type]
   const mapped = h.from(row)
   if (!mapped) return  // Zod 校验失败的远端条目跳过
-  if (e2e.isUnlocked.value) await e2e.decryptItem(type, mapped as any)
-  h.upsert(mapped)
+  // decryptItem 返回浅拷贝，必须使用返回值，否则 upsert 仍是密文（RE-1）
+  const plain = e2e.isUnlocked.value
+    ? await e2e.decryptItem(type, mapped as any)
+    : mapped
+  h.upsert(plain)
   // 清除本次 merge 产生的 _changedFields：updateBookmark/updateGroup 内部会
   // 对传入的所有字段 _trackChange，把这些远端来的字段累积进 _changedFields。
   // 若不清，下次本地真改动触发 debouncedSync 时，drainChangedFields() 会把
@@ -156,7 +160,9 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   // 多设备订阅时甚至级联回声。走到此处的 id 必不携带本地未推的 changedFields
   //（上面第 54 行 _dirtyIds.has(row.id) 已挡住本地正在编辑的条目），故直接
   // 清空该 id 的 _changedFields 安全，不影响真实本地改动。
-  ds._changedFields.delete(mapped.id)
+  ds._changedFields.delete(plain.id)
+  // Realtime 合并后落盘，避免刷新丢失对端变更（DATA-3）
+  debouncedSaveAppData()
 }
 
 function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {

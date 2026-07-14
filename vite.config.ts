@@ -11,6 +11,14 @@ const securityHeaders: Record<string, string> = {
   // 字体 preload onload= 与 main.ts 白屏兜底 onclick= 已改造为非内联形式），
   // PWA SW 注册走外部 /registerSW.js。style-src 仍保留 'unsafe-inline'（Vue 运行
   // 时注入的组件样式 + TipTap 编辑器内联 style 依赖，移除需更大改造，列入中期）。
+  //
+  // SEC-05 / connect-src 权衡（有意放宽，勿在未改死链策略前收窄）：
+  // - 生产 `connect-src 'self' https: wss://*.supabase.co` 允许任意 https fetch。
+  // - 原因：客户端死链检查 `checkDirect` 用 no-cors 直连用户书签 URL（任意域名），
+  //   以及 favicon/部分外部资源；若改为仅 Edge Function 代检，才可把 connect-src
+  //   收到 self + supabase 主机。当前产品选择：弱外泄纵深换本地可达性探测。
+  // - XSS 主防线是 script-src 'self'（无 unsafe-inline）；connect 宽只在脚本已失陷时
+  //   放大数据外泄面。收紧前先统一死链走 Edge、去掉浏览器直连任意 URL。
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self'",

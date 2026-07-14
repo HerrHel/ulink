@@ -196,14 +196,14 @@ describe('E2E Encryption', () => {
       const key = await deriveKey(MASTER_PW, salt)
       const raw = await encrypt('plaintext-pw-456', key)
       const parts = raw.split('.')
-      const ep = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
+      const ep = { encrypted: true as const, salt: parts[0], iv: parts[1], data: parts[2] }
       // 用同一把 key 解密（卡片侧拿到的是 cryptoKey 本身，无主密码）
       const out = await decryptPasswordWithKey(ep, key)
       expect(out).toBe('plaintext-pw-456')
     })
 
     it('无 cryptoKey 时对象态返回空串而非乱抛（卡片未解锁场景）', async () => {
-      const ep = { encrypted: true, salt: 'a', iv: 'b', data: 'c' }
+      const ep = { encrypted: true as const, salt: 'a', iv: 'b', data: 'c' }
       expect(await decryptPasswordWithKey(ep, null)).toBe('')
     })
 
@@ -221,7 +221,7 @@ describe('E2E Encryption', () => {
       // keyB 加密的密码对象，模拟别设备推来的
       const rawB = await encrypt('pw-from-device-B', keyB)
       const partsB = rawB.split('.')
-      const epB = { encrypted: true, salt: partsB[0], iv: partsB[1], data: partsB[2] }
+      const epB = { encrypted: true as const, salt: partsB[0], iv: partsB[1], data: partsB[2] }
       // 本机 keyA 解 → 失败应返空，绝不是 partsB 拼出的整串密文
       const out = await decryptPasswordWithKey(epB, keyA)
       expect(out).toBe('')
@@ -235,7 +235,7 @@ describe('E2E Encryption', () => {
       // E2E 关闭时若云端混入损坏对象态（如旧版 JSON.stringify 降级后的残骸），atob 抛错
       // 不该把 'a.b.c' 当明文塞进 UI。对象态的契约是「要么解出明文要么空」，无中间态。
       const key = await deriveKey(MASTER_PW, crypto.getRandomValues(new Uint8Array(32)))
-      const broken = { encrypted: true, salt: 'not!base64', iv: 'also-bad', data: 'nope' }
+      const broken = { encrypted: true as const, salt: 'not!base64', iv: 'also-bad', data: 'nope' }
       expect(await decryptPasswordWithKey(broken, key)).toBe('')
     })
 

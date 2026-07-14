@@ -19,13 +19,32 @@ const mockData = {
     const g = mockData.groupMap[id]
     if (g) Object.assign(g, changes)
   }),
+  _deletedGroupMemberships: new Map<string, string[]>(),
   deleteBookmark: vi.fn((id: string) => {
     const bm = mockData.bookmarks.find((b: any) => b.id === id)
     if (bm) bm.deletedAt = Date.now()
+    // 与 data store 对齐：剔组并记 memberships，供 restoreBookmark 恢复组关系
+    const groupIds: string[] = []
+    mockData.siblingGroups.forEach((g: any) => {
+      const bi = g.bookmarkIds.indexOf(id)
+      if (bi >= 0) {
+        groupIds.push(g.id)
+        g.bookmarkIds = g.bookmarkIds.filter((_: string, i: number) => i !== bi)
+      }
+    })
+    if (groupIds.length) mockData._deletedGroupMemberships.set(id, groupIds)
   }),
   restoreBookmark: vi.fn((id: string) => {
     const bm = mockData.bookmarks.find((b: any) => b.id === id)
     if (bm) delete bm.deletedAt
+    const groupIds = mockData._deletedGroupMemberships.get(id)
+    if (groupIds) {
+      for (const gid of groupIds) {
+        const g = mockData.siblingGroups.find((x: any) => x.id === gid)
+        if (g && g.bookmarkIds.indexOf(id) === -1) g.bookmarkIds = [...g.bookmarkIds, id]
+      }
+      mockData._deletedGroupMemberships.delete(id)
+    }
   }),
   restoreGroup: vi.fn((id: string) => {
     const g = mockData.siblingGroups.find((g: any) => g.id === id)
@@ -141,6 +160,8 @@ function resetMockStore() {
   mockData.updateBookmark.mockClear()
   mockData.updateGroup.mockClear()
   mockData.deleteBookmark.mockClear()
+  mockData.restoreBookmark.mockClear()
+  mockData._deletedGroupMemberships = new Map()
   mockUI.editingId = null
   mockUI.lastFocusedEl = null
   mockUI.saveToGroup = null
@@ -441,7 +462,20 @@ describe('useBookmark', () => {
       populateStore()
       await deleteBookmarkWithUndo('b1')
       expect(mockData.siblingGroups[0].bookmarkIds).toEqual([])
+      expect(mockData._deletedGroupMemberships.get('b1')).toEqual(['g1'])
       mockToastWithUndo.undoFn!()
+      expect(mockData.siblingGroups[0].bookmarkIds).toContain('b1')
+    })
+
+    it('trash restore via restoreBookmark recovers group membership without toast undo', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Grouped', parentId: null }]
+      mockData.siblingGroups = [{ id: 'g1', name: 'G1', bookmarkIds: ['b1'] }]
+      populateStore()
+      await deleteBookmarkWithUndo('b1')
+      // 不调用 toast undo，模拟进回收站恢复
+      expect(mockData._deletedGroupMemberships.get('b1')).toEqual(['g1'])
+      mockData.restoreBookmark('b1')
+      expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
       expect(mockData.siblingGroups[0].bookmarkIds).toContain('b1')
     })
   })

@@ -12,7 +12,7 @@ export const BookmarkSchema = z.object({
   title: z.string(),
   url: z.string(),
   username: z.string(),
-  password: z.union([z.string(), EncryptedPasswordSchema]),
+  password: z.union([z.string(), EncryptedPasswordSchema]).catch(''),
   notes: z.string(),
   icon: z.string(),
   categoryId: z.string(),
@@ -65,7 +65,10 @@ export const AppDataSchema = z.object({
   siblingGroups: z.array(SiblingGroupSchema),
   categories: z.array(CategorySchema),
   customAttributes: z.array(CustomAttributeSchema),
-  _masterCanary: z.union([z.string(), EncryptedPasswordSchema]).optional(),
+  _masterCanary: z.union([z.string(), EncryptedPasswordSchema]).catch('').optional(),
+  /** @deprecated 兼容旧盘；迁移门控请用 _schemaVersion，写入序号用 _writeSeq */
   _dataVersion: z.number().optional(),
+  _schemaVersion: z.number().optional(),
+  _writeSeq: z.number().optional(),
   _savedAt: z.number().optional(),
 })

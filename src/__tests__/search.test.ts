@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { searchBookmarkIds, searchGroupIds, searchWithHighlights, clearSearchCache } from '../lib/search.js'
+import { describe, it, expect, beforeEach, beforeAll } from 'vitest'
+import { searchBookmarkIds, searchGroupIds, searchWithHighlights, clearSearchCache, preloadSearchLibs } from '../lib/search.js'
 import type { Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
+
+beforeAll(async () => {
+  await preloadSearchLibs()
+})
 
 const EMPTY_ATTRS: CustomAttribute[] = []
 

@@ -116,8 +116,8 @@ describe('runMigrations', () => {
     expect(result.siblingGroups[0].notes).toBe('<p>Already HTML</p>')
   })
 
-  it('should return false when no migration needed', () => {
-    const d = {}
+  it('schema 已是当前版本时跳过迁移', () => {
+    const d = { _schemaVersion: 2 }
     const result = makeResult({
       bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
       siblingGroups: [{
@@ -125,7 +125,31 @@ describe('runMigrations', () => {
         attributes: { 'is-group': true }, updatedAt: Date.now(), useCount: 0
       }],
     })
-    const needsPersist = runMigrations(d, result)
+    const needsPersist = runMigrations(d as any, result)
     expect(needsPersist).toBe(false)
+  })
+
+  it('旧盘 _dataVersion 被 writeSeq 污染（> CURRENT）时仍跑迁移并落 _schemaVersion', () => {
+    const d = { _dataVersion: 9999 }
+    const result = makeResult({
+      bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
+      siblingGroups: [{
+        id: 'g1', categoryId: 'uncategorized', bookmarkIds: [],
+        attributes: { 'is-group': true }, updatedAt: Date.now(), useCount: 0
+      }],
+    })
+    const needsPersist = runMigrations(d as any, result)
+    expect(needsPersist).toBe(true)
+    expect((result as any)._schemaVersion).toBe(2)
+  })
+
+  it('无版本字段时迁移后写入 _schemaVersion', () => {
+    const d = {}
+    const result = makeResult({
+      bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
+    })
+    const needsPersist = runMigrations(d, result)
+    expect(needsPersist).toBe(true)
+    expect((result as any)._schemaVersion).toBe(2)
   })
 })

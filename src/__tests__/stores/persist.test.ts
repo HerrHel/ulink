@@ -51,6 +51,22 @@ describe('persist', () => {
       expect(raw._savedAt).toBeGreaterThan(0)
     })
 
+    it('QUAL-01：写入带 _writeSeq 与 _schemaVersion，_dataVersion 仅镜像 writeSeq', () => {
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+        _schemaVersion: 2,
+      } as AppData
+      persist.saveToLocalStorage(data)
+      const a = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
+      persist.saveToLocalStorage(data)
+      const b = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
+      expect(a._schemaVersion).toBe(2)
+      expect(b._schemaVersion).toBe(2)
+      expect(typeof a._writeSeq).toBe('number')
+      expect(b._writeSeq).toBeGreaterThan(a._writeSeq)
+      expect(b._dataVersion).toBe(b._writeSeq)
+    })
+
     it('localStorage 满时返回 false', () => {
       const setItem = vi.spyOn(window.localStorage, 'setItem')
       setItem.mockImplementation(() => { throw new Error('QuotaExceededError') })

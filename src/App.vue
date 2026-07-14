@@ -79,23 +79,24 @@ import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
 import BatchBottom from './components/shell/BatchBottom.vue'
-import AddPopover from './components/overlays/AddPopover.vue'
-import DeadLinksPopover from './components/overlays/DeadLinksPopover.vue'
 import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
-import ToastContainer from './components/overlays/ToastContainer.vue'
-import ContextMenu from './components/overlays/ContextMenu.vue'
-import ActionSheet from './components/overlays/ActionSheet.vue'
-import BatchPopover from './components/overlays/BatchPopover.vue'
-import FormatToolbar from './components/editor/FormatToolbar.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
+import DetailPanel from './components/shell/DetailPanel.vue'
+// PERF-5：非首屏 overlay / modal 全部 async，切断启动链
+const AddPopover = defineAsyncComponent(() => import('./components/overlays/AddPopover.vue'))
+const DeadLinksPopover = defineAsyncComponent(() => import('./components/overlays/DeadLinksPopover.vue'))
+const ToastContainer = defineAsyncComponent(() => import('./components/overlays/ToastContainer.vue'))
+const ContextMenu = defineAsyncComponent(() => import('./components/overlays/ContextMenu.vue'))
+const ActionSheet = defineAsyncComponent(() => import('./components/overlays/ActionSheet.vue'))
+const BatchPopover = defineAsyncComponent(() => import('./components/overlays/BatchPopover.vue'))
+const FormatToolbar = defineAsyncComponent(() => import('./components/editor/FormatToolbar.vue'))
+const MentionDropdown = defineAsyncComponent(() => import('./components/overlays/MentionDropdown.vue'))
+const SyncConflictBanner = defineAsyncComponent(() => import('./components/overlays/SyncConflictBanner.vue'))
+const CommandPalette = defineAsyncComponent(() => import('./components/overlays/CommandPalette.vue'))
+const ShortcutHelpPanel = defineAsyncComponent(() => import('./components/overlays/ShortcutHelpPanel.vue'))
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
-import DetailPanel from './components/shell/DetailPanel.vue'
-import MentionDropdown from './components/overlays/MentionDropdown.vue'
-import SyncConflictBanner from './components/overlays/SyncConflictBanner.vue'
-import CommandPalette from './components/overlays/CommandPalette.vue'
-import ShortcutHelpPanel from './components/overlays/ShortcutHelpPanel.vue'
 import { openBmModal, bmForm, saveFromExtension } from './composables/domain/useBookmark.js'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
@@ -106,7 +107,7 @@ const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashP
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
 const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
 const E2EUnlockModal = defineAsyncComponent(() => import('./components/modals/E2EUnlockModal.vue'))
-import SetupGuide from './components/modals/SetupGuide.vue'
+const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
 
 // A4: 公开分享页面
 const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))

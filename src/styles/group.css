@@ -21,6 +21,21 @@
 }
 .group-card:hover .group-card-accent{opacity:0.8;box-shadow:0 0 8px var(--accent-glow)}
 .group-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+/* PERF-1：折叠态笔记预览（sanitizeHTML），不挂 TipTap */
+.group-notes-preview{
+  font-size:13px;line-height:1.5;color:var(--text-secondary);
+  max-height:120px;overflow:hidden;
+  pointer-events:none;
+  word-break:break-word;
+}
+.group-notes-preview .group-inline-card,
+.group-notes-preview .group-ref-card{
+  display:inline-flex;align-items:center;gap:4px;
+  vertical-align:middle;max-width:100%;
+  opacity:0.9;
+}
+.group-notes-preview .gic-btn,
+.group-notes-preview .gic-remove{display:none}
 .group-card-head{
   display:flex;align-items:flex-start;gap:10px;
   margin-bottom:5px;

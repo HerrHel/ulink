@@ -7,10 +7,25 @@ import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP, DEFAULTS } from '../config/c
 import { esc, cleanZeroWidth, favicon } from '../utils.js'
 import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 
-// 当前数据版本。增量更新此值以触发新迁移。
-const CURRENT_VERSION = 2
+// 当前 schema 迁移版本。增量更新此值以触发新迁移。
+// 注意：与 persist 的 _writeSeq（写入序号）无关；勿再用 _dataVersion 混用。
+export const CURRENT_SCHEMA_VERSION = 2
 
 interface MigrationResult extends AppData {
+}
+
+/**
+ * 读取用于迁移门控的 schema 版本。
+ * 兼容旧盘：历史上 saveData 把进程计数写进 _dataVersion，会远大于 CURRENT。
+ * 此时若无 _schemaVersion，则视为「已是当前 schema 语义未知」——仍跑幂等迁移并落 _schemaVersion。
+ */
+function _readSchemaVersion(d: Partial<AppData>): number {
+  const schema = (d as { _schemaVersion?: number })._schemaVersion
+  if (typeof schema === 'number' && Number.isFinite(schema)) return schema
+  // 旧字段：仅当明显是「真实 schema 小整数」时信任；否则当 writeSeq 污染，强制再迁移
+  const legacy = d._dataVersion
+  if (typeof legacy === 'number' && legacy > 0 && legacy <= CURRENT_SCHEMA_VERSION) return legacy
+  return 0
 }
 
 /**
@@ -20,8 +35,15 @@ interface MigrationResult extends AppData {
  * @returns 是否需要持久化
  */
 export function runMigrations(d: Partial<AppData>, result: MigrationResult): boolean {
-  // 版本 >= CURRENT_VERSION 的数据跳过所有迁移
-  if ((d._dataVersion ?? 0) >= CURRENT_VERSION) return false
+  const from = _readSchemaVersion(d)
+  if (from >= CURRENT_SCHEMA_VERSION) {
+    // 确保磁盘带上正确 schema 字段（从旧 _dataVersion 拆分后的一次回写）
+    if ((d as { _schemaVersion?: number })._schemaVersion !== CURRENT_SCHEMA_VERSION) {
+      ;(result as { _schemaVersion?: number })._schemaVersion = CURRENT_SCHEMA_VERSION
+      return true
+    }
+    return false
+  }
   let needsPersist = false
 
   // 1. 确保默认分类存在
@@ -85,8 +107,9 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
     if (!b.updatedAt) { b.updatedAt = b.createdAt || Date.now(); needsPersist = true }
   })
 
-  // 标记迁移版本
-  if (needsPersist) result._dataVersion = CURRENT_VERSION
+  // 始终写入 schema 版本（与 writeSeq 分离）
+  ;(result as { _schemaVersion?: number })._schemaVersion = CURRENT_SCHEMA_VERSION
+  needsPersist = true
 
   return needsPersist
 }

@@ -65,6 +65,11 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
   let drag: DragState | null = null
   let scrollRaf: number | null = null
   let _prevY = 0
+  // PERF-6：缓存卡片 midY / 滚动容器 rect，避免每帧全量 getBoundingClientRect
+  let _cachedMids: { el: Element; mid: number }[] = []
+  let _midsDirty = true
+  let _scrollRect: DOMRect | null = null
+  let _scrollRectAt = 0
 
   function getItems(): Element[] {
     if (!containerRef.value) return []
@@ -83,6 +88,34 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     return null
   }
 
+  function invalidateMids() { _midsDirty = true }
+
+  function ensureMids(allCards: Element[]) {
+    if (!_midsDirty && _cachedMids.length === allCards.length) {
+      // 元素集合变化时仍重建
+      let same = true
+      for (let i = 0; i < allCards.length; i++) {
+        if (_cachedMids[i]?.el !== allCards[i]) { same = false; break }
+      }
+      if (same) return
+    }
+    _cachedMids = allCards.map(el => {
+      const r = el.getBoundingClientRect()
+      return { el, mid: r.top + r.height / 2 }
+    })
+    _midsDirty = false
+  }
+
+  function getScrollRect(scrollEl: HTMLElement): DOMRect {
+    const now = performance.now()
+    // 边缘滚动改 scrollTop 后 top/bottom 不变，可复用；仅周期刷新
+    if (!_scrollRect || now - _scrollRectAt > 100) {
+      _scrollRect = scrollEl.getBoundingClientRect()
+      _scrollRectAt = now
+    }
+    return _scrollRect
+  }
+
   // ── rAF 循环：统一更新卡片位置 + 边缘滚动 ──
   function scrollLoop() {
     if (!drag) { scrollRaf = null; return }
@@ -91,18 +124,16 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     const cardTop = drag.initialTop + (drag.lastY - drag.startY)
     drag.el.style.top = cardTop + 'px'
 
-    // 2. 更新占位符
-    //    向上拖：用卡片顶部与目标 midpoint 比较（顶部先越过）
-    //    向下拖：用卡片底部与目标 midpoint 比较（底部先越过）
+    // 2. 更新占位符（用缓存 midY）
     const draggingDown = drag.lastY > _prevY
     _prevY = drag.lastY
     const leadEdge = draggingDown ? cardTop + drag.itemHeight : cardTop
     const allCards = getItems().filter(c => c !== drag!.el)
+    ensureMids(allCards)
     let newIndex = allCards.length
-    for (let i = 0; i < allCards.length; i++) {
-      if (allCards[i] === drag!.placeholder) continue
-      const rect = allCards[i].getBoundingClientRect()
-      if (leadEdge < rect.top + rect.height / 2) {
+    for (let i = 0; i < _cachedMids.length; i++) {
+      if (_cachedMids[i].el === drag!.placeholder) continue
+      if (leadEdge < _cachedMids[i].mid) {
         newIndex = i
         break
       }
@@ -112,13 +143,15 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
       const refEl = allCards[newIndex]
       if (refEl) containerRef.value!.insertBefore(drag.placeholder, refEl)
       else containerRef.value!.appendChild(drag.placeholder)
+      // 占位符移动后 mid 失效
+      invalidateMids()
     }
 
     // 3. 边缘滚动（只滚列表，不动卡片）
     const scrollEl = getScrollContainer()
     if (scrollEl) {
       const y = drag.lastY
-      const scrollRect = scrollEl.getBoundingClientRect()
+      const scrollRect = getScrollRect(scrollEl)
       let delta = 0
 
       if (y - scrollRect.top < EDGE_ZONE && scrollEl.scrollTop > 0) {
@@ -134,6 +167,8 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
       if (delta) {
         scrollEl.scrollTop += delta
+        // 滚动后卡片 mid 相对视口变化
+        invalidateMids()
       }
     }
 
@@ -203,6 +238,9 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
       currentIndex: idx,
       pointerId: e.pointerId
     }
+    _prevY = e.clientY
+    invalidateMids()
+    _scrollRect = null
     _prevY = e.clientY
   }
 

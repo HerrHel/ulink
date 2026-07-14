@@ -142,17 +142,25 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
   const idx = sg.bookmarkIds.indexOf(bmId);
   if (idx < 0) return;
   const bm = ds.bookmarkMap[bmId];
-  const newIds = sg.bookmarkIds.filter((_, i) => i !== idx);
+  // DATA-9：删除前快照完整 bookmarkIds；updateGroup 不可变替换后闭包 sg 仍是旧引用（仍含 bmId），
+  // undo 再 splice 会双 id。恢复时直接写回快照即可。
+  const idsBefore = sg.bookmarkIds.slice();
+  const newIds = idsBefore.filter((_, i) => i !== idx);
   ds.updateGroup(tGid, { bookmarkIds: newIds });
   const ed = EditorManager.get(tGid);
   if (ed) EditorManager.deleteNode(tGid, 'data-bm-id', bmId);
   saveGroupBody(tGid); saveAppData();
   toastWithUndo('已从组移除', function () {
-    const restored = [...sg.bookmarkIds];
-    restored.splice(idx, 0, bmId);
-    ds.updateGroup(tGid, { bookmarkIds: restored });
+    ds.updateGroup(tGid, { bookmarkIds: idsBefore.slice() });
     const currentEd = EditorManager.get(tGid);
-    if (currentEd && bm) currentEd.chain().insertContent(inlineCardHTML(bm)).run();
+    // 编辑器内若已无该卡片再插入，避免重复 inlineCard
+    if (currentEd && bm) {
+      let hasCard = false
+      currentEd.state.doc.descendants(node => {
+        if (node.type.name === 'inlineCard' && node.attrs['data-bm-id'] === bmId) hasCard = true
+      })
+      if (!hasCard) currentEd.chain().insertContent(inlineCardHTML(bm)).run()
+    }
     saveGroupBody(tGid); debouncedSaveAppData(); toast('已恢复');
   });
 }

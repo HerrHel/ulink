@@ -17,8 +17,8 @@
           <div class="card-tags" v-if="tagNames.length">
             <span class="card-tag tag-custom" v-for="t in tagNames" :key="t">{{ t }}</span>
           </div>
+          <!-- 聚焦态始终挂编辑器 -->
           <GroupEditor :groupId="group.id" />
-          <div class="card-preview" v-if="previewText">{{ previewText }}</div>
         </div>
       </div>
     </div>
@@ -71,8 +71,14 @@
         <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
           <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
         </div>
-        <GroupEditor :groupId="group.id" />
-        <div class="card-preview" v-if="previewText">{{ previewText }}</div>
+        <!-- PERF-1：仅展开时挂 TipTap；折叠用 HTML 预览，避免每组一实例 -->
+        <GroupEditor v-if="isExpanded" :groupId="group.id" />
+        <div
+          v-else-if="notesPreviewHtml"
+          class="group-notes-preview"
+          v-html="notesPreviewHtml"
+        ></div>
+        <div class="card-preview" v-else-if="previewText">{{ previewText }}</div>
       </div>
     </div>
     <div class="card-foot">
@@ -94,9 +100,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { sanitizeHTML, getTagNames, isMobile, stripEntranceAnim } from '../../utils.js'
-import GroupEditor from '../editor/GroupEditor.vue'
+// PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
+const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
 import ColorPalette from '../editor/ColorPalette.vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -131,6 +138,12 @@ const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim())
 const noteIcon = I.note
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
+
+const notesPreviewHtml = computed(() => {
+  const notes = props.group.notes || ''
+  if (!notes.trim()) return ''
+  return sanitizeHTML(notes)
+})
 
 const previewText = computed(() => {
   const notes = props.group.notes || ''

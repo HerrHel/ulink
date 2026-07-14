@@ -69,5 +69,6 @@ export const DEFAULTS: AppData = {
       updatedAt: 0, useCount: 0,
     }
   ],
-  _dataVersion: 2
+  _schemaVersion: 2,
+  _dataVersion: 2, // 兼容旧读者；迁移门控以 _schemaVersion 为准
 }

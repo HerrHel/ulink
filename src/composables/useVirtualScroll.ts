@@ -1,28 +1,43 @@
-import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, type Ref } from 'vue'
 
 interface VirtualScrollOptions {
   itemHeight?: number
+  /** 初始估算高度；实际以 scroll 容器 clientHeight + ResizeObserver 为准 */
   containerHeight?: number
   overscan?: number
+  /** 真实滚动根（CardGrid 外层 #panelContent 才有 overflow-y:auto） */
+  scrollRootSelector?: string
 }
 
 /**
  * useVirtualScroll — 虚拟滚动 composable
- * 仅在数据量超过阈值时激活，避免大数据量场景下的渲染性能问题
+ * 仅在数据量超过阈值时由调用方激活。
+ * PERF-2：默认绑定 #panelContent（真正的 overflow 容器），而非 grid 自身。
  */
 export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptions = {}) {
   const {
     itemHeight = 120,
-    containerHeight = 600,
+    containerHeight: initialHeight = 600,
     overscan = 5,
+    scrollRootSelector = '#panelContent',
   } = options
 
   const scrollTop = ref(0)
+  const measuredHeight = ref(initialHeight)
   const containerRef = ref<HTMLElement | null>(null)
 
-  const visibleCount = Math.ceil(containerHeight / itemHeight) + overscan * 2
-  const startIndex = computed(() => Math.max(0, Math.floor(scrollTop.value / itemHeight) - overscan))
-  const endIndex = computed(() => Math.min(items.value.length, startIndex.value + visibleCount))
+  let scrollEl: HTMLElement | null = null
+  let ro: ResizeObserver | null = null
+
+  const visibleCount = computed(
+    () => Math.ceil(measuredHeight.value / itemHeight) + overscan * 2
+  )
+  const startIndex = computed(() =>
+    Math.max(0, Math.floor(scrollTop.value / itemHeight) - overscan)
+  )
+  const endIndex = computed(() =>
+    Math.min(items.value.length, startIndex.value + visibleCount.value)
+  )
 
   const visibleItems = computed(() =>
     items.value.slice(startIndex.value, endIndex.value).map((item, index) => ({
@@ -33,25 +48,51 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
         top: `${(startIndex.value + index) * itemHeight}px`,
         height: `${itemHeight}px`,
         width: '100%',
+        left: '0',
       },
     }))
   )
 
   const totalHeight = computed(() => items.value.length * itemHeight)
 
-  function onScroll(e: Event) {
-    scrollTop.value = (e.target as HTMLElement).scrollTop
+  function onScroll() {
+    if (scrollEl) scrollTop.value = scrollEl.scrollTop
+  }
+
+  function bindScrollRoot(el: HTMLElement | null) {
+    if (scrollEl) {
+      scrollEl.removeEventListener('scroll', onScroll)
+      ro?.disconnect()
+      ro = null
+    }
+    scrollEl = el
+    if (!scrollEl) return
+    scrollEl.addEventListener('scroll', onScroll, { passive: true })
+    measuredHeight.value = scrollEl.clientHeight || initialHeight
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        if (scrollEl) measuredHeight.value = scrollEl.clientHeight || initialHeight
+      })
+      ro.observe(scrollEl)
+    }
   }
 
   onMounted(() => {
-    if (containerRef.value) {
-      containerRef.value.addEventListener('scroll', onScroll, { passive: true })
-    }
+    const el =
+      (containerRef.value as HTMLElement | null) ||
+      (document.querySelector(scrollRootSelector) as HTMLElement | null)
+    bindScrollRoot(el)
   })
 
   onUnmounted(() => {
-    if (containerRef.value) {
-      containerRef.value.removeEventListener('scroll', onScroll)
+    bindScrollRoot(null)
+  })
+
+  // 列表变短时若 scrollTop 超出总高，钳制以免空白
+  watch(totalHeight, (h) => {
+    if (scrollEl && scrollEl.scrollTop > Math.max(0, h - measuredHeight.value)) {
+      scrollEl.scrollTop = Math.max(0, h - measuredHeight.value)
+      scrollTop.value = scrollEl.scrollTop
     }
   })
 
@@ -61,5 +102,6 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
     totalHeight,
     startIndex,
     endIndex,
+    measuredHeight,
   }
 }

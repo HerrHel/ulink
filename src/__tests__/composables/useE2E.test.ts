@@ -33,6 +33,9 @@ import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
+  _e2eState.isE2EEnabled = false
+  _e2eState.isUnlocked = false
+  _e2eState.cryptoKey = null
 })
 
 describe('useE2E.decryptStoreItems 解锁后补解密', () => {
@@ -90,5 +93,46 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     e2e.lock()
     const ok2 = await e2e.unlock('pw-another-456')
     expect(ok2).toBe(true)
+  })
+})
+
+describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {
+  it('decryptItem 返回新对象且不 mutate 入参；调用方必须用返回值', async () => {
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('contract-pw-1')
+    const enc = await e2e.encryptItem('bookmark', {
+      title: '明文标题', url: 'https://a.example', notes: 'n',
+    } as any)
+    const cipher = { ...enc } as Record<string, unknown>
+    const titleBefore = cipher.title
+    const plain = await e2e.decryptItem('bookmark', cipher as any)
+    // 入参仍是密文
+    expect(cipher.title).toBe(titleBefore)
+    expect(cipher.title).not.toBe('明文标题')
+    // 返回值是明文
+    expect(plain.title).toBe('明文标题')
+    expect(plain.url).toBe('https://a.example')
+    expect(plain).not.toBe(cipher)
+  }, 15000)
+
+  it('E2E 启用未解锁时 encryptItem throw，禁止静默透传明文', async () => {
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('contract-pw-2')
+    e2e.lock()
+    expect(e2e.isE2EEnabled.value).toBe(true)
+    expect(e2e.isUnlocked.value).toBe(false)
+    await expect(
+      e2e.encryptItem('bookmark', { title: 't', url: 'https://x.example' } as any)
+    ).rejects.toThrow(/未解锁/)
+  }, 15000)
+
+  it('E2E 未启用时 encryptItem 无 key 透传原文', async () => {
+    const e2e = useE2E()
+    // 不 setup，isE2EEnabled=false，无 cryptoKey
+    expect(e2e.isE2EEnabled.value).toBe(false)
+    const item = { title: 'plain', url: 'https://p.example' }
+    const out = await e2e.encryptItem('bookmark', item as any)
+    expect(out).toBe(item)
+    expect(out.title).toBe('plain')
   })
 })

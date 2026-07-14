@@ -1,10 +1,16 @@
 /**
  * search.ts — Fuse.js 模糊搜索 + 拼音支持
  * 提供书签和组的统一搜索能力，替换原 data.ts 中的暴力 includes 匹配。
+ *
+ * PERF-5：fuse.js / pinyin-pro 动态 import，不进首包；未就绪时用 includes 降级。
  */
-import Fuse from 'fuse.js'
-import { pinyin } from 'pinyin-pro'
 import type { Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
+
+type FuseInstance<T> = {
+  search: (q: string, opts?: { limit?: number }) => Array<{ item: T; matches?: ReadonlyArray<{ key?: string; value?: string; indices: ReadonlyArray<readonly [number, number]> }> }>
+}
+type FuseCtor = new <T>(list: T[], opts: Record<string, unknown>) => FuseInstance<T>
+type PinyinFn = (text: string, opts: { toneType: string; type: string }) => string[]
 
 type FuseOptionKeyObject = { name: string; weight: number }
 type IFuseOptions = {
@@ -17,7 +23,7 @@ type IFuseOptions = {
 }
 type FuseResult = {
   item: BookmarkSearchItem | GroupSearchItem
-  refIndex: number
+  refIndex?: number
   score?: number
   matches?: ReadonlyArray<{
     key?: string
@@ -25,6 +31,34 @@ type FuseResult = {
     indices: ReadonlyArray<readonly [number, number]>
   }>
 }
+
+// ── 动态加载 fuse / pinyin ──
+let FuseClass: FuseCtor | null = null
+let pinyinFn: PinyinFn | null = null
+let _libsLoading: Promise<void> | null = null
+
+function ensureSearchLibs(): boolean {
+  if (FuseClass && pinyinFn) return true
+  if (!_libsLoading) {
+    _libsLoading = Promise.all([import('fuse.js'), import('pinyin-pro')]).then(([fuseMod, pyMod]) => {
+      FuseClass = fuseMod.default as unknown as FuseCtor
+      pinyinFn = pyMod.pinyin as PinyinFn
+    }).catch(e => {
+      console.warn('[search] fuse/pinyin load failed:', e)
+      _libsLoading = null
+    })
+  }
+  return !!(FuseClass && pinyinFn)
+}
+
+/** 测试/预热：等待 fuse/pinyin 动态 import 完成 */
+export async function preloadSearchLibs(): Promise<void> {
+  ensureSearchLibs()
+  if (_libsLoading) await _libsLoading
+}
+
+// 模块加载即开始拉分包（不阻塞主线程解析）
+ensureSearchLibs()
 
 // ── 拼音缓存（避免同一条目重复计算）──
 const _pyCache = new Map<string, string>()
@@ -34,9 +68,10 @@ function _toPy(text: string): string {
   if (!text) return ''
   let cached = _pyCache.get(text)
   if (cached !== undefined) return cached
+  if (!pinyinFn) { ensureSearchLibs(); return '' }
   // 防止缓存无限增长：超限时清空
   if (_pyCache.size >= _PY_CACHE_MAX) _pyCache.clear()
-  cached = pinyin(text, { toneType: 'none', type: 'array' }).join('')
+  cached = pinyinFn(text, { toneType: 'none', type: 'array' }).join('')
   _pyCache.set(text, cached)
   return cached
 }
@@ -155,35 +190,76 @@ function _buildGroupSearchItems(
 let _bmBaseRef: Bookmark[] | null = null
 let _bmBaseItems: BookmarkSearchItem[] = []
 let _bmBaseAttrs: CustomAttribute[] | null = null
-let _bmFuse: Fuse<BookmarkSearchItem> | null = null
+let _bmFuse: FuseInstance<BookmarkSearchItem> | null = null
 let _bmVersion = -1
 
 let _grpBaseRef: SiblingGroup[] | null = null
 let _grpBaseItems: GroupSearchItem[] = []
 let _grpBaseAttrs: CustomAttribute[] | null = null
 let _grpBaseMap: Record<string, Bookmark> | null = null
-let _grpFuse: Fuse<GroupSearchItem> | null = null
+let _grpFuse: FuseInstance<GroupSearchItem> | null = null
 let _grpVersion = -1
 
 function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttribute[], version = -1) {
+  if (!ensureSearchLibs() || !FuseClass) {
+    _bmFuse = null
+    return false
+  }
   if (bookmarks !== _bmBaseRef || customAttributes !== _bmBaseAttrs || version !== _bmVersion) {
     _bmBaseItems = _buildBookmarkSearchItems(bookmarks, customAttributes)
-    _bmFuse = new Fuse(_bmBaseItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
+    _bmFuse = new FuseClass(_bmBaseItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
     _bmBaseRef = bookmarks
     _bmBaseAttrs = customAttributes
     _bmVersion = version
   }
+  return true
 }
 
 function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bookmark>, customAttributes: CustomAttribute[], version = -1) {
+  if (!ensureSearchLibs() || !FuseClass) {
+    _grpFuse = null
+    return false
+  }
   if (groups !== _grpBaseRef || bookmarkMap !== _grpBaseMap || customAttributes !== _grpBaseAttrs || version !== _grpVersion) {
     _grpBaseItems = _buildGroupSearchItems(groups, bookmarkMap, customAttributes)
-    _grpFuse = new Fuse(_grpBaseItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
+    _grpFuse = new FuseClass(_grpBaseItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
     _grpBaseRef = groups
     _grpBaseMap = bookmarkMap
     _grpBaseAttrs = customAttributes
     _grpVersion = version
   }
+  return true
+}
+
+/** 库未就绪时的 includes 降级（无拼音） */
+function _fallbackBmIds(bookmarks: Bookmark[], query: string): Set<string> {
+  const q = query.trim().toLowerCase()
+  return new Set(
+    bookmarks
+      .filter(b =>
+        (b.title || '').toLowerCase().includes(q) ||
+        (b.url || '').toLowerCase().includes(q) ||
+        (b.notes || '').toLowerCase().includes(q) ||
+        (b.username || '').toLowerCase().includes(q)
+      )
+      .map(b => b.id)
+  )
+}
+
+function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Record<string, Bookmark>): Set<string> {
+  const q = query.trim().toLowerCase()
+  return new Set(
+    groups
+      .filter(g => {
+        if ((g.name || '').toLowerCase().includes(q)) return true
+        for (const bid of g.bookmarkIds || []) {
+          const b = bookmarkMap[bid]
+          if (b && ((b.title || '').toLowerCase().includes(q) || (b.url || '').toLowerCase().includes(q))) return true
+        }
+        return false
+      })
+      .map(g => g.id)
+  )
 }
 
 // ── 公开 API ──
@@ -200,8 +276,10 @@ export function searchBookmarkIds(
   version = -1,
 ): Set<string> | null {
   if (!query.trim()) return null
-  _ensureBookmarkBase(bookmarks, customAttributes, version)
-  const results = _bmFuse!.search(query.trim())
+  if (!_ensureBookmarkBase(bookmarks, customAttributes, version) || !_bmFuse) {
+    return _fallbackBmIds(bookmarks, query)
+  }
+  const results = _bmFuse.search(query.trim())
   return new Set(results.map(r => r.item.id))
 }
 
@@ -220,8 +298,10 @@ export function searchGroupIds(
   version = -1,
 ): Set<string> | null {
   if (!query.trim()) return null
-  _ensureGroupBase(groups, bookmarkMap, customAttributes, version)
-  const results = _grpFuse!.search(query.trim())
+  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version) || !_grpFuse) {
+    return _fallbackGrpIds(groups, query, bookmarkMap)
+  }
+  const results = _grpFuse.search(query.trim())
   return new Set(results.map(r => r.item.id))
 }
 
@@ -281,8 +361,14 @@ export function searchWithHighlights(
   if (!query.trim()) return []
   const q = query.trim()
 
-  _ensureBookmarkBase(bookmarks, customAttributes, version)
-  const bmResults = _bmFuse!.search(q, { limit: maxResults })
+  if (!_ensureBookmarkBase(bookmarks, customAttributes, version) || !_bmFuse) {
+    // 降级：无高亮
+    const ids = _fallbackBmIds(bookmarks, q)
+    return bookmarks.filter(b => ids.has(b.id)).slice(0, maxResults).map(b => ({
+      id: b.id, title: b.title, url: b.url, _highlights: {},
+    }))
+  }
+  const bmResults = _bmFuse.search(q, { limit: maxResults })
 
   const bookmarkResults: SearchResultItem[] = bmResults.map(r => ({
     id: r.item.id,
@@ -291,8 +377,10 @@ export function searchWithHighlights(
     _highlights: _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP),
   }))
 
-  _ensureGroupBase(groups, bookmarkMap, customAttributes, version)
-  const grpResults = _grpFuse!.search(q, { limit: 4 })
+  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version) || !_grpFuse) {
+    return bookmarkResults.slice(0, maxResults)
+  }
+  const grpResults = _grpFuse.search(q, { limit: 4 })
 
   const groupResults: SearchResultItem[] = grpResults.map(r => ({
     id: r.item.id,

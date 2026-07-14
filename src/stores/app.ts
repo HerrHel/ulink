@@ -19,6 +19,18 @@ export const useAppStore = defineStore('app', () => {
   const ui = () => useUIStore()
   // 隐私模式 / IDB 配额满 toast 只弹一次（flag 保证不刷屏）。
   let _storageFailWarned = false
+  // PERF-3：上次成功写入的快照指纹，相同则跳过 Zod/双写
+  let _lastSavedFingerprint = ''
+
+  function _fingerprint(data: AppData): string {
+    // 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍
+    const bms = data.bookmarks || []
+    const grps = data.siblingGroups || []
+    let maxUp = 0
+    for (const b of bms) if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
+    for (const g of grps) if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
+    return `${bms.length}|${grps.length}|${(data.categories || []).length}|${(data.customAttributes || []).length}|${maxUp}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+  }
 
   // ── 数据（只读，委托 dataStore）──
   const bookmarks = computed(() => ds().bookmarks)
@@ -127,6 +139,8 @@ export const useAppStore = defineStore('app', () => {
     save() {
       const d = ds()
       const data = d._dataSnapshot()
+      const fp = _fingerprint(data)
+      if (fp && fp === _lastSavedFingerprint) return
       // 运行时验证数据完整性，阻止损坏数据写入存储
       const parsed = AppDataSchema.safeParse(data)
       if (!parsed.success) {
@@ -140,6 +154,7 @@ export const useAppStore = defineStore('app', () => {
       // 旧实现不 await 不检查返回值 → 用户存的书签没落库却无任何提示，下次刷新发现丢了误以为 bug。
       // 只弹一次避免刷屏：debouncedSave 300ms 防抖触发 save 频率不低。
       persist.saveData(parsed.data).then(ok => {
+        if (ok) _lastSavedFingerprint = fp
         if (!ok && !_storageFailWarned) {
           _storageFailWarned = true
           toast('⚠️ 存储不可用（如隐私模式/配额满），刷新后数据可能丢失', false)
@@ -148,13 +163,13 @@ export const useAppStore = defineStore('app', () => {
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
     },
 
-    debouncedSave() {
+    debouncedSave(delayMs = 300) {
       const d = ds()
       if (d._saveTimer) clearTimeout(d._saveTimer)
       d._saveTimer = setTimeout(() => {
         d._saveTimer = null
         this.save()
-      }, 300)
+      }, delayMs)
     },
 
     flushDebouncedSave() {
@@ -189,6 +204,11 @@ export function saveAppData() {
 
 export function debouncedSaveAppData() {
   useAppStore().debouncedSave()
+}
+
+/** PERF-3：笔记/编辑器路径更长 debounce，与 CRUD 300ms 解耦，降低 TipTap 输入写放大 */
+export function debouncedSaveAppDataNotes(delayMs = 1200) {
+  useAppStore().debouncedSave(delayMs)
 }
 
 export function flushSaveAppData() {

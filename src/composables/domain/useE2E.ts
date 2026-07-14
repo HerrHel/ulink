@@ -234,7 +234,14 @@ export function useE2E() {
 
   async function encryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
     const key = _getKey()
-    if (!key) return item
+    // E2E 启用但未解锁时禁止静默返回明文：否则 push 会把云端密文覆盖成明文。
+    // 未启用 E2E 时无 key 属正常路径，原样透传。
+    if (!key) {
+      if (isE2EEnabled.value) {
+        throw new Error('E2E 已启用但未解锁，无法加密后推送')
+      }
+      return item
+    }
     const fields = ENCRYPT_FIELDS[type]
     const result = { ...item } as Record<string, unknown>
     for (const f of fields) {
@@ -244,6 +251,7 @@ export function useE2E() {
     return result as T
   }
 
+  /** 返回浅拷贝后的解密对象，不 mutate 入参；调用方必须使用返回值。 */
   async function decryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
     const key = _getKey()
     if (!key) return item

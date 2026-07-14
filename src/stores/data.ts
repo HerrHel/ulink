@@ -229,6 +229,32 @@ export const useDataStore = defineStore('data', {
     // ── CRUD：仅修改数据，调用方负责 save() ──
     _markDirty(...ids: string[]) { for (const id of ids) this._dirtyIds.add(id) },
 
+    /**
+     * PERF-4：批量写 bookmark.attributes，合并 dirty，末尾一次 _bumpSearchVersion。
+     * 用于死链全量检查等「多 id 同字段」场景，避免 N 次 updateBookmark 风暴。
+     */
+    batchPatchBookmarkAttributes(patches: Record<string, Record<string, unknown>>) {
+      const ids = Object.keys(patches)
+      if (!ids.length) return
+      let bumped = false
+      for (const id of ids) {
+        const idx = this.bookmarks.findIndex(b => b.id === id)
+        if (idx < 0) continue
+        const prev = this.bookmarks[idx]
+        this._saveLocalHistory(id, { ...prev })
+        this._trackChange(id, 'attributes')
+        this.bookmarks[idx] = {
+          ...prev,
+          attributes: patches[id] as Bookmark['attributes'],
+          updatedAt: Date.now(),
+        }
+        this._bmMap[id] = this.bookmarks[idx]
+        this._markDirty(id)
+        bumped = true
+      }
+      if (bumped) this._bumpSearchVersion()
+    },
+
     /** 持久化 _deletedGroupMemberships 到 localStorage，用于恢复时跨会话保持组关联 */
     _persistDeletedGroupMemberships() {
       try {
@@ -307,9 +333,29 @@ export const useDataStore = defineStore('data', {
     updateBookmark(id: string, changes: Partial<Bookmark>) {
       const idx = this.bookmarks.findIndex(b => b.id === id)
       if (idx >= 0) {
-        this._saveLocalHistory(id, { ...this.bookmarks[idx] })
+        const prev = this.bookmarks[idx]
+        this._saveLocalHistory(id, { ...prev })
         for (const key of Object.keys(changes)) this._trackChange(id, key)
-        this.bookmarks[idx] = { ...this.bookmarks[idx], ...changes, updatedAt: Date.now() }
+        // DATA-4：parentId 变更时维护 _childrenIdx，否则 childrenMap 残留/缺失
+        if ('parentId' in changes && changes.parentId !== prev.parentId) {
+          if (prev.parentId) {
+            const sib = this._childrenIdx[prev.parentId]
+            if (sib) {
+              const ci = sib.indexOf(id)
+              if (ci >= 0) sib.splice(ci, 1)
+            }
+          }
+          const nextParent = changes.parentId
+          if (nextParent) {
+            const sib = this._childrenIdx[nextParent]
+            if (sib) {
+              if (sib.indexOf(id) === -1) sib.push(id)
+            } else {
+              this._childrenIdx[nextParent] = [id]
+            }
+          }
+        }
+        this.bookmarks[idx] = { ...prev, ...changes, updatedAt: Date.now() }
         this._bmMap[id] = this.bookmarks[idx]
         this._markDirty(id), this._bumpSearchVersion()
       }
@@ -383,15 +429,23 @@ export const useDataStore = defineStore('data', {
     },
     deleteCategory(id: string) {
       const now = Date.now()
-      this.bookmarks = this.bookmarks.map(b =>
-        b.categoryId === id ? { ...b, categoryId: CAT_UNCATEGORIZED, updatedAt: now } : b
-      )
-      this.siblingGroups = this.siblingGroups.map(g =>
-        g.categoryId === id ? { ...g, categoryId: CAT_UNCATEGORIZED, updatedAt: now } : g
-      )
-      // 同步索引
-      for (const b of this.bookmarks) this._bmMap[b.id] = b
-      for (const g of this.siblingGroups) this._grpMap[g.id] = g
+      // RE-4：级联改写的 bookmark/group 必须 _markDirty + _trackChange，否则跨设备不同步
+      this.bookmarks = this.bookmarks.map(b => {
+        if (b.categoryId !== id) return b
+        this._trackChange(b.id, 'categoryId')
+        this._markDirty(b.id)
+        const next = { ...b, categoryId: CAT_UNCATEGORIZED, updatedAt: now }
+        this._bmMap[b.id] = next
+        return next
+      })
+      this.siblingGroups = this.siblingGroups.map(g => {
+        if (g.categoryId !== id) return g
+        this._trackChange(g.id, 'categoryId')
+        this._markDirty(g.id)
+        const next = { ...g, categoryId: CAT_UNCATEGORIZED, updatedAt: now }
+        this._grpMap[g.id] = next
+        return next
+      })
       const cIdx = this.categories.findIndex(c => c.id === id)
       if (cIdx >= 0) {
         this._trackChange(id, 'deletedAt')
@@ -424,11 +478,14 @@ export const useDataStore = defineStore('data', {
         this._markDirty(id)
       }
       const now = Date.now()
+      // RE-4：去掉属性 key 的实体必须 dirty，否则云端 attributes 陈旧
       this.bookmarks = this.bookmarks.map(b => {
         if (b.attributes && id in b.attributes) {
           const next = { ...b, attributes: { ...b.attributes }, updatedAt: now }
           delete next.attributes[id]
           this._bmMap[b.id] = next
+          this._trackChange(b.id, 'attributes')
+          this._markDirty(b.id)
           return next
         }
         return b
@@ -438,6 +495,8 @@ export const useDataStore = defineStore('data', {
           const next = { ...g, attributes: { ...g.attributes }, updatedAt: now }
           delete next.attributes[id]
           this._grpMap[g.id] = next
+          this._trackChange(g.id, 'attributes')
+          this._markDirty(g.id)
           return next
         }
         return g
@@ -451,6 +510,23 @@ export const useDataStore = defineStore('data', {
     // ── 回收站：恢复 ──
     restoreBookmark(id: string) {
       this._restoreItem('bookmarks', id)
+      // RE-8：恢复后重建 _childrenIdx，否则父下子书签不可见直至下次 _syncMaps
+      const bm = this._bmMap[id]
+      if (bm?.parentId) {
+        const parent = this._bmMap[bm.parentId]
+        if (parent && !parent.deletedAt) {
+          const sib = this._childrenIdx[bm.parentId]
+          if (sib) {
+            if (sib.indexOf(id) === -1) sib.push(id)
+          } else {
+            this._childrenIdx[bm.parentId] = [id]
+          }
+        } else {
+          // 父已删：降为顶层，避免挂在幽灵父下
+          bm.parentId = null
+          this._trackChange(id, 'parentId')
+        }
+      }
       // 恢复被删除书签原本所属的组关系
       const groupIds = this._deletedGroupMemberships.get(id)
       if (groupIds) {

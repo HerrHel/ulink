@@ -115,19 +115,40 @@ export function camelToSnake(key: string): string {
 // ── 远端行类型定义 ──
 
 export interface RemoteBookmarkRow {
-  id: string; user_id: string; title: string; url: string
-  username: string; password: string; notes: string; icon: string
-  category_id: string; parent_id: string | null
-  order: number; use_count: number; attributes: Record<string, boolean>
-  is_expanded: boolean; created_at_num: number; updated_at_num: number
-  deleted_at: string | null
+  id: string
+  /** 公开分享 select 可不含 user_id / 凭证列 */
+  user_id?: string
+  title: string
+  url: string
+  username?: string
+  password?: string
+  notes?: string
+  icon?: string
+  category_id: string
+  parent_id?: string | null
+  order?: number
+  use_count?: number
+  attributes?: Record<string, boolean>
+  is_expanded?: boolean
+  created_at_num?: number
+  updated_at_num?: number
+  deleted_at?: string | null
 }
 export interface RemoteGroupRow {
-  id: string; user_id: string; name: string; category_id: string
-  icon: string; order: number; is_expanded: boolean
-  attributes: Record<string, boolean>; bookmark_ids: string[]
-  notes: string; use_count: number; is_public: boolean
-  updated_at_num: number; deleted_at: string | null
+  id: string
+  user_id?: string
+  name: string
+  category_id: string
+  icon?: string
+  order?: number
+  is_expanded?: boolean
+  attributes?: Record<string, boolean>
+  bookmark_ids?: string[]
+  notes?: string
+  use_count?: number
+  is_public?: boolean
+  updated_at_num?: number
+  deleted_at?: string | null
 }
 export interface RemoteCategoryRow {
   id: string; user_id: string; name: string; icon: string; color: string

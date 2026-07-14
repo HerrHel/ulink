@@ -349,7 +349,19 @@ serve(async (req) => {
     }
 
     if (bookmark_id) {
-      const attrs: Record<string, unknown> = {}
+      // SEC-04：先读现有 attributes 再 merge 死链标志，禁止整列覆盖抹掉用户自定义属性
+      const { data: existing } = await supabase
+        .from('bookmarks')
+        .select('attributes')
+        .eq('id', bookmark_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      const prev =
+        existing?.attributes && typeof existing.attributes === 'object' && !Array.isArray(existing.attributes)
+          ? (existing.attributes as Record<string, unknown>)
+          : {}
+      const attrs: Record<string, unknown> = { ...prev }
       if (status === 'dead') {
         attrs['dead-link'] = true
         attrs['gfw-blocked'] = false

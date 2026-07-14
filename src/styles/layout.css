@@ -37,3 +37,11 @@
   grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
   gap:12px;
 }
+/* PERF-2：虚拟滚动用 absolute 行堆叠，禁用 multi-col grid */
+.card-grid.virtual-scroll{
+  display:block;
+}
+.card-grid-virtual{
+  position:relative;
+  width:100%;
+}

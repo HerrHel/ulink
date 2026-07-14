@@ -36,7 +36,7 @@ describe('toRemoteRow password 序列化', () => {
     const row = toRemoteRow('bookmark', makeLocalItem(makeEP()), false) as RemoteBookmarkRow
     expect(row.password).toBe('saltAAA.ivBBB.dataCCC')
     // 关键：绝不再是 JSON 文本（这是旧 bug 的损坏形态）
-    expect(row.password.startsWith('{')).toBe(false)
+    expect(row.password!.startsWith('{')).toBe(false)
   })
 
   it('string password → 原样透传', () => {

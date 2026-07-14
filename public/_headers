@@ -1,4 +1,6 @@
 /*
+  # SEC-05: connect-src 含 https: 是有意放宽——客户端死链 checkDirect 需直连任意书签 URL；
+  # 主防线是 script-src 'self'。若改死链仅走 Edge 再收窄 connect-src。
   X-Content-Type-Options: nosniff
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https: wss://*.supabase.co; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'self'; form-action 'self'; base-uri 'self'
   Referrer-Policy: strict-origin-when-cross-origin
