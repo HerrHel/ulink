@@ -178,7 +178,7 @@ function deleteSelected() {
   showConfirm(`确认删除 ${count} 个书签？`).then(ok => {
     if (!ok) return
     for (const id of ids) {
-      deleteBookmarkWithUndo(id)
+      deleteBookmarkWithUndo(id, true)
     }
   })
 }

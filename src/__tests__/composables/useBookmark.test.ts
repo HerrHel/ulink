@@ -78,6 +78,7 @@ vi.mock('../../stores/ui.js', () => ({
 vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),
   toastWithUndo: vi.fn((msg: string, undoFn: () => void) => { mockToastWithUndo.undoFn = undoFn }),
+  showConfirm: vi.fn(() => Promise.resolve(true)),
 }))
 
 const mockToastWithUndo = { undoFn: null as (() => void) | null }
@@ -388,7 +389,7 @@ describe('useBookmark', () => {
       mockData.siblingGroups.forEach((g: any) => { mockData.groupMap[g.id] = g })
     }
 
-    it('deletes bookmark and all descendants', () => {
+    it('deletes bookmark and all descendants', async () => {
       mockData.bookmarks = [
         { id: 'b1', title: 'P', parentId: null },
         { id: 'b2', title: 'C1', parentId: 'b1' },
@@ -397,7 +398,7 @@ describe('useBookmark', () => {
       ]
       mockData.siblingGroups = []
       populateStore()
-      deleteBookmarkWithUndo('b1')
+      await deleteBookmarkWithUndo('b1')
       const deleted = mockData.bookmarks.filter((b: any) => b.deletedAt)
       const active = mockData.bookmarks.filter((b: any) => !b.deletedAt)
       expect(deleted.length).toBe(3)
@@ -410,35 +411,35 @@ describe('useBookmark', () => {
       mockData.siblingGroups = []
       populateStore()
       const { toastWithUndo } = await import('../../lib/toast.js')
-      deleteBookmarkWithUndo('b1')
+      await deleteBookmarkWithUndo('b1')
       expect(toastWithUndo).toHaveBeenCalled()
     })
 
-    it('removes bookmark from sibling groups', () => {
+    it('removes bookmark from sibling groups', async () => {
       mockData.bookmarks = [{ id: 'b1', title: 'InG', parentId: null }]
       mockData.siblingGroups = [{ id: 'g1', name: 'G1', bookmarkIds: ['b1', 'b2'] }]
       populateStore()
-      deleteBookmarkWithUndo('b1')
+      await deleteBookmarkWithUndo('b1')
       expect(mockData.siblingGroups[0].bookmarkIds).toEqual(['b2'])
     })
 
-    it('undo callback restores bookmarks', () => {
+    it('undo callback restores bookmarks', async () => {
       const orig = { id: 'b1', title: 'UndoTest', parentId: null }
       mockData.bookmarks = [{ ...orig }]
       mockData.siblingGroups = []
       populateStore()
-      deleteBookmarkWithUndo('b1')
+      await deleteBookmarkWithUndo('b1')
       expect(mockData.bookmarks[0].deletedAt).toBeDefined()
       expect(mockToastWithUndo.undoFn).not.toBeNull()
       mockToastWithUndo.undoFn!()
       expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
     })
 
-    it('undo restores group references', () => {
+    it('undo restores group references', async () => {
       mockData.bookmarks = [{ id: 'b1', title: 'Grouped', parentId: null }]
       mockData.siblingGroups = [{ id: 'g1', name: 'G1', bookmarkIds: ['b1'] }]
       populateStore()
-      deleteBookmarkWithUndo('b1')
+      await deleteBookmarkWithUndo('b1')
       expect(mockData.siblingGroups[0].bookmarkIds).toEqual([])
       mockToastWithUndo.undoFn!()
       expect(mockData.siblingGroups[0].bookmarkIds).toContain('b1')

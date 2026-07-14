@@ -5,7 +5,7 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { favicon, domain, fixUrl } from '../../utils.js'
 
-import { toast, toastWithUndo } from '../../lib/toast.js'
+import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
@@ -389,35 +389,41 @@ function collectSubIds(id: string): string[] {
   return ids
 }
 
-export function deleteBookmarkWithUndo(id: string) {
+export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) {
   const ds = useDataStore()
-  const ids = collectSubIds(id)
-  const removedFromGroups: Record<string, string[]> = {}
-  ids.forEach(bid => {
-    ds.siblingGroups.forEach(g => {
-      const bi = g.bookmarkIds.indexOf(bid)
-      if (bi > -1) {
-        if (!removedFromGroups[bid]) removedFromGroups[bid] = []
-        removedFromGroups[bid].push(g.id)
-        ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
-      }
-    })
-  })
-  ids.forEach(bid => ds.deleteBookmark(bid))
-  debouncedSaveAppData()
-  toastWithUndo('书签已删除', () => {
-    ids.forEach(bid => ds.restoreBookmark(bid))
-    Object.keys(removedFromGroups).forEach(bid => {
-      removedFromGroups[bid].forEach(gid => {
-        const sg = ds.groupMap[gid]
-        if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
-          ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
+  const bm = ds.bookmarkMap[id]
+  if (!bm) return
+  const doDelete = () => {
+    const ids = collectSubIds(id)
+    const removedFromGroups: Record<string, string[]> = {}
+    ids.forEach(bid => {
+      ds.siblingGroups.forEach(g => {
+        const bi = g.bookmarkIds.indexOf(bid)
+        if (bi > -1) {
+          if (!removedFromGroups[bid]) removedFromGroups[bid] = []
+          removedFromGroups[bid].push(g.id)
+          ds.updateGroup(g.id, { bookmarkIds: g.bookmarkIds.filter((_, i) => i !== bi) })
         }
       })
     })
+    ids.forEach(bid => ds.deleteBookmark(bid))
     debouncedSaveAppData()
-    toast('已恢复')
-  })
+    toastWithUndo('书签已删除', () => {
+      ids.forEach(bid => ds.restoreBookmark(bid))
+      Object.keys(removedFromGroups).forEach(bid => {
+        removedFromGroups[bid].forEach(gid => {
+          const sg = ds.groupMap[gid]
+          if (sg && sg.bookmarkIds.indexOf(bid) === -1) {
+            ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, bid] })
+          }
+        })
+      })
+      debouncedSaveAppData()
+      toast('已恢复')
+    })
+  }
+  if (skipConfirm) doDelete()
+  else if (await showConfirm('确认删除书签「' + (bm.title || '未命名') + '」？')) doDelete()
 }
 
 /**
