@@ -29,7 +29,11 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
   } = options
 
   function onResize() {
-    ui.setMobile(isMobile())
+    // 直接读 matchMedia 而非 isMobile()，避免 resize 与 matchMedia change 事件
+    // 触发顺序不确定时读到过时的 _isMobile 缓存值，导致切回桌面端后 isMobile 仍为 true、
+    // 布局不恢复宫格、设置面板按钮禁用。
+    const mobile = window.matchMedia('(max-width: 768px)').matches
+    ui.setMobile(mobile)
   }
 
   function onGlobalClick(e: MouseEvent) {

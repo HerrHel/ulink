@@ -148,6 +148,7 @@ export const useUIStore = defineStore('ui', {
     },
 
     setMobile(value: boolean) {
+      if (this.isMobile === value) return
       this.isMobile = value
       if (value) {
         if (!this._preferredLayoutMode) {
