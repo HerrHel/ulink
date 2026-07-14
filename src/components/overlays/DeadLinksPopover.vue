@@ -67,8 +67,8 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { favicon, domain } from '../../utils.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
-import { showConfirm, toast } from '../../lib/toast.js'
-import { debouncedSaveAppData } from '../../stores/app.js'
+import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
+import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
 
 const store = useAppStore()
 const uiStore = useUIStore()
@@ -170,6 +170,21 @@ function ignoreSelected() {
   exitSelectMode()
 }
 
+function collectSubIds(id: string): string[] {
+  // 与 useBatch.batchDelete 一致的父子语义：含所有子孙书签一起删
+  const cm = dataStore.childrenMap
+  const ids: string[] = [id]
+  const stack = [id]
+  while (stack.length) {
+    const pid = stack.pop()!
+    const children = cm[pid]
+    if (children) {
+      for (const c of children) { ids.push(c.id); stack.push(c.id) }
+    }
+  }
+  return ids
+}
+
 function deleteSelected() {
   const count = selectedIds.value.size
   if (!count) return
@@ -177,9 +192,23 @@ function deleteSelected() {
   close()
   showConfirm(`确认删除 ${count} 个书签？`).then(ok => {
     if (!ok) return
-    for (const id of ids) {
-      deleteBookmarkWithUndo(id, true)
-    }
+    // 复用底层 store 直删：deleteBookmark 会自动从所属组剔除并把组关系
+    // 记到 _deletedGroupMemberships，undo/回收站恢复时能正确还原组关联。
+    // 不再循环调 deleteBookmarkWithUndo(id, true) —— toastWithUndo 是单例，
+    // 循环里 N 次会互相 dismissUndo 覆盖，最终只剩最后一个可撤销。
+    const allIds: string[] = []
+    ids.forEach(id => {
+      const sub = collectSubIds(id)
+      sub.forEach(bid => { dataStore.deleteBookmark(bid); allIds.push(bid) })
+    })
+    saveAppData()
+    selectedIds.value = new Set()
+    exitSelectMode()
+    toastWithUndo(`已删除 ${count} 个书签`, () => {
+      allIds.forEach(bid => dataStore.restoreBookmark(bid))
+      debouncedSaveAppData()
+      toast('已恢复')
+    })
   })
 }
 </script>
