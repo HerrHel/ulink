@@ -30,15 +30,16 @@ export function useResize() {
       if (!handle || !panel || !dir) return
       cancelAnimationFrame(raf!)
       raf = requestAnimationFrame(() => {
+        if (!handle || !panel || dir == null) return
         const delta = (e.clientX - startX) * dir!
         const min = dir! > 0 ? 120 : 200
         const max = dir! > 0 ? 500 : 600
         const w = Math.max(min, Math.min(startW + delta, max))
         if (panel === leftPanel) {
-          panel!.style.width = w + 'px'
+          panel.style.width = w + 'px'
         } else {
-          panel!.style.setProperty('--detail-width', w + 'px')
-          if (panel!.classList.contains('open')) panel!.style.width = w + 'px'
+          panel.style.setProperty('--detail-width', w + 'px')
+          if (panel.classList.contains('open')) panel.style.width = w + 'px'
         }
       })
     }

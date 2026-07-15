@@ -655,3 +655,81 @@
 .vs-ph-line{height:12px;border-radius:3px;background:var(--border)}
 @keyframes vs-pulse{0%,100%{opacity:.45}50%{opacity:.2}}
 
+/* ==================== MINI GRID VIEW ==================== */
+/* 小宫格：瀑布流（columns），只显标题+四行摘要+底部计数，卡片变矮变窄 */
+.card-grid.mini-grid-view{
+  display:block;
+  column-gap:10px;
+  column-fill:balance;
+  column-width:clamp(140px, 11vw, 200px);
+}
+.mini-grid-view .card,
+.mini-grid-view .group-card{
+  break-inside:avoid;
+  -webkit-column-break-inside:avoid;
+  page-break-inside:avoid;
+  display:block;
+  width:100%;
+  height:auto;
+  margin:0 0 10px;
+  padding:8px 10px;
+  min-height:auto;
+}
+.mini-grid-view .card-topline{padding:0;margin:0}
+/* 小宫格里隐藏：标签、富文本组预览、账户区、子站点、头部操作按钮、缩进交互按钮；
+   只留图标+标题（toprow）、摘要、底部统计 */
+.mini-grid-view .card-tags,
+.mini-grid-view .card-notes,
+.mini-grid-view .group-notes-preview,
+.mini-grid-view .card-acct-toggle,
+.mini-grid-view .card-acct-body,
+.mini-grid-view .sub-sites,
+.mini-grid-view .group-head-actions,
+.mini-grid-view .btn-undo-group,
+.mini-grid-view .btn-redo-group,
+.mini-grid-view .list-expand-btn,
+.mini-grid-view .group-card-accent{display:none !important}
+/* 底部只显示计数，隐藏操作按钮 */
+.mini-grid-view .card-foot{padding:4px 0 0;margin-top:4px;border-top:1px solid var(--border-light)}
+.mini-grid-view .card-actions{display:none}
+.mini-grid-view .card-stat{font-size:11px;opacity:.8}
+/* 摘要：最多四行截断 */
+.mini-grid-view .card-body{display:block;padding:0;margin-top:4px}
+.mini-grid-view .card-preview{
+  display:-webkit-box;
+  -webkit-line-clamp:4;
+  line-clamp:4;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  font-size:12px;
+  line-height:1.45;
+  color:var(--text-muted);
+  margin:0;
+  text-overflow:ellipsis;
+}
+.mini-grid-view .card-name{font-size:13px;font-weight:600}
+.mini-grid-view .card-domain{font-size:10px;opacity:.6}
+.mini-grid-view .card-logo{width:20px;height:20px}
+.mini-grid-view .card-logo img{width:20px;height:20px}
+.mini-grid-view .card-logo svg{width:20px;height:20px}
+.mini-grid-view .card-logo-fallback{width:20px;height:20px;font-size:0.75rem}
+.mini-grid-view .card-toprow{gap:6px;align-items:center;margin-bottom:2px}
+/* titlewrap 与图标等高、无 padding/margin 撑大，确保与图标同行水平对齐 */
+.mini-grid-view .card-titlewrap{height:20px;padding:0;margin:0}
+.mini-grid-view .card-name{height:20px;line-height:20px}
+/* 小宫格隐藏 titlewrap 内的原网址 */
+.mini-grid-view .card-titlewrap .card-domain{display:none}
+/* 第二行小字网址 */
+.mini-domain{
+  font-size:10px;
+  opacity:.6;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  margin-top:2px;
+}
+/* 小宫格缩窄间距 */
+.mini-grid-view .card-scroll-wrap{display:block}
+.mini-grid-view .grp-scroll-body{display:block;overflow:visible}
+.mini-grid-view .grp-scroll-body .card-scroll-wrap{overflow:visible}
+

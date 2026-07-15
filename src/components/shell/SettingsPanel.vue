@@ -30,8 +30,9 @@
               <span class="sp-section-title">视图</span>
               <div class="sp-row">
                 <div class="sp-seg">
-                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" :disabled="uiStore.isMobile" @click="onSetLayout('grid')" title="网格视图"><span aria-hidden="true" v-html="I.grid"></span></button>
-                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" :disabled="uiStore.isMobile" @click="onSetLayout('list')" title="列表视图"><span aria-hidden="true" v-html="I.list"></span></button>
+                  <button v-if="!uiStore.isMobile" class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" title="网格视图"><span aria-hidden="true" v-html="I.grid"></span></button>
+                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" @click="onSetLayout('list')" title="列表视图"><span aria-hidden="true" v-html="I.list"></span></button>
+                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'mini-grid' }" @click="onSetLayout('mini-grid')" title="小宫格视图"><span aria-hidden="true" v-html="I.miniGrid"></span></button>
                 </div>
               </div>
             </div>
@@ -193,7 +194,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
-import { useUIStore, type ThemeStyle, type SortMode } from '../../stores/ui.js'
+import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
 import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults } from '../../composables/domain/useDataIO.js'
@@ -251,10 +252,14 @@ function onToggleAutoTheme() {
   uiStore.themeMode = localStorage.getItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
 }
 
-function onSetLayout(mode: 'grid' | 'list') {
+function onSetLayout(mode: LayoutMode) {
   if (uiStore.focusedGroupId) return
-  if (uiStore.isMobile) return
+  // 移动端不可用 grid：拦截
+  if (uiStore.isMobile && mode === 'grid') return
   uiStore.layoutMode = mode
+  if (uiStore.isMobile && (mode === 'list' || mode === 'mini-grid')) {
+    uiStore._mobileLayoutMode = mode
+  }
 }
 
 function onSetSortMode(mode: SortMode) {

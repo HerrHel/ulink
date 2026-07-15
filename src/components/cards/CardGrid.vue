@@ -66,6 +66,7 @@ const gridClass = computed(() => {
   if (ui.focusedGroupId) return 'card-grid focus-view' + (isMobile() ? ' focus-mobile' : '')
   // 虚拟滚动依赖 absolute 行堆叠，强制 list 语义避免与 multi-col grid 冲突
   if (useVirtual.value) return 'card-grid list-view virtual-scroll'
+  if (ui.layoutMode === 'mini-grid') return 'card-grid mini-grid-view'
   return ui.layoutMode === 'list' ? 'card-grid list-view' : 'card-grid grid-view'
 })
 

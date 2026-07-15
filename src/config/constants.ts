@@ -27,6 +27,7 @@ export const ACTIONS: Record<string, string> = {
   MULTI_SELECT: 'multiSelect',
   HISTORY: 'history',
   RENAME_ATTR: 'renameAttr',
+  DETAIL: 'detail',
 }
 
 export const DEFAULTS: AppData = {

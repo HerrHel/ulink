@@ -17,8 +17,8 @@ export type SortMode = 'order' | 'title' | 'dateDesc' | 'dateAsc' | 'useCount'
 /** 排序方向 */
 export type SortDir = 'asc' | 'desc'
 
-/** 布局模式 */
-export type LayoutMode = 'grid' | 'list'
+/** 布局模式：grid 大宫格 / list 列表 / mini-grid 小宫格 */
+export type LayoutMode = 'grid' | 'list' | 'mini-grid'
 
 export interface ModalState {
   bookmark: boolean
@@ -73,8 +73,10 @@ export interface UIState {
   editingGeId: string | null
   lastFocusedEl: HTMLElement | null
   lpFired: boolean
-  _prevLayoutMode: 'grid' | 'list' | null
-  _preferredLayoutMode: 'grid' | 'list' | null
+  _prevLayoutMode: LayoutMode | null
+  _preferredLayoutMode: LayoutMode | null
+  /** 移动端记住的布局（list/mini-grid），移动端不可用 grid */
+  _mobileLayoutMode: 'list' | 'mini-grid'
 
   // 分组状态
   modals: ModalState
@@ -135,6 +137,7 @@ export const useUIStore = defineStore('ui', {
     lpFired: false,
     _prevLayoutMode: null,
     _preferredLayoutMode: null,
+    _mobileLayoutMode: 'list',
   }),
 
   actions: {
@@ -150,15 +153,25 @@ export const useUIStore = defineStore('ui', {
     setMobile(value: boolean) {
       if (this.isMobile === value) return
       this.isMobile = value
+      // 同步 <html> class，供 CSS 区分真移动端 vs 窄窗口 PC
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('is-mobile', value)
+      }
       if (value) {
-        if (!this._preferredLayoutMode) {
-          this._preferredLayoutMode = this.layoutMode
+        // 进移动端：grid 不可用，统一降级到移动端布局（list/mini-grid）
+        if (!this._preferredLayoutMode) this._preferredLayoutMode = this.layoutMode
+        if (this.layoutMode === 'list' || this.layoutMode === 'mini-grid') {
+          this._mobileLayoutMode = this.layoutMode
         }
-        this.layoutMode = 'list'
+        this.layoutMode = this._mobileLayoutMode
       } else {
+        // 切回 PC：grid 在移动端被降级，此处恢复用户 PC 偏好
         if (this._preferredLayoutMode) {
           this.layoutMode = this._preferredLayoutMode
           this._preferredLayoutMode = null
+        } else if (this.layoutMode === 'mini-grid') {
+          // 兜底：PC 端默认 grid
+          this.layoutMode = 'grid'
         }
       }
     },
@@ -181,6 +194,7 @@ export const useUIStore = defineStore('ui', {
           historyMax: this.historyMax,
           docScrollTop: document.documentElement.scrollTop || 0,
           _preferredLayoutMode: this._preferredLayoutMode || null,
+          _mobileLayoutMode: this._mobileLayoutMode,
           _customCardOrder: ds._customCardOrder || null,
         }
         localStorage.setItem(UI_STATE_KEY, JSON.stringify(s))
@@ -196,7 +210,7 @@ export const useUIStore = defineStore('ui', {
         if (s.sortMode) this.sortMode = s.sortMode
         if (s.sortDir === 'asc' || s.sortDir === 'desc') this.sortDir = s.sortDir
         if (typeof s.groupsOnTop === 'boolean') this.groupsOnTop = s.groupsOnTop
-        if (s.layoutMode === 'list' || s.layoutMode === 'grid') this.layoutMode = s.layoutMode
+        if (s.layoutMode === 'list' || s.layoutMode === 'grid' || s.layoutMode === 'mini-grid') this.layoutMode = s.layoutMode
         if (typeof s.historyMax === 'number') this.historyMax = Math.min(30, Math.max(5, s.historyMax))
         if (s.searchQuery) this.searchQuery = s.searchQuery
         if (Array.isArray(s.activeAttrs)) this.activeAttrs = s.activeAttrs.slice()
@@ -213,9 +227,12 @@ export const useUIStore = defineStore('ui', {
             return ds.bookmarks.some(b => b.id === entry)
           })
         }
-        if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list') {
+        if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list' || s._preferredLayoutMode === 'mini-grid') {
           this._preferredLayoutMode = s._preferredLayoutMode
         }
+        if (s._mobileLayoutMode === 'mini-grid') this._mobileLayoutMode = 'mini-grid'
+        // 移动端不可用 grid：还原若落在 grid 上则降级
+        if (this.isMobile && this.layoutMode === 'grid') this.layoutMode = this._mobileLayoutMode
         if (Array.isArray(s._customCardOrder)) {
           const ds = useDataStore()
           ds._customCardOrder = s._customCardOrder

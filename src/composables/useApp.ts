@@ -20,6 +20,12 @@ import { useDragDrop } from './interaction/useDragDrop.js'
 import { useLongPress } from './interaction/useLongPress.js'
 
 export function useApp() {
+  // ── 0. 初始化 is-mobile class（CSS 据此区分真手机 vs PC 窄窗口） ──
+  const ui = useUIStore()
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.toggle('is-mobile', ui.isMobile)
+  }
+
   // ── 1. 注册全局交互 composables ──
   useScrollHeader(); useResize(); useKeyboard(); useDragDrop()
 
@@ -28,11 +34,13 @@ export function useApp() {
     const bmId = card.dataset.id; const gid = card.dataset.groupId
     if (bmId) return [
       { label: '打开链接', action: () => visit(null, bmId) },
+      { label: '查看详情', action: () => openDetail(bmId) },
       { label: '编辑', action: () => openBmModal(bmId) },
       { label: '移动到', action: () => useActionSheetStore().showBmCategoryPicker(bmId) },
       { label: '删除', action: () => deleteBookmark(bmId), danger: true }
     ]
     if (gid) return [
+      { label: '查看详情', action: () => openDetail('group:' + gid) },
       { label: '展开组', action: () => toggleGroupFocus(gid) },
       { label: '编辑组', action: () => editGroup(gid) },
       { label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) },

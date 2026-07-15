@@ -58,14 +58,15 @@ const allItems = [
   { action: ACTIONS.ADD_CAT, text: '添加分类' },
   { action: ACTIONS.MULTI_SELECT, text: '多选' },
   { action: ACTIONS.RENAME_ATTR, text: '重命名' },
+  { action: ACTIONS.DETAIL, text: '查看详情' },
 ]
 
 const RULES: Record<string, { show: string[]; text: Record<string, string> }> = {
-  card:         { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MULTI_SELECT], text: {} },
+  card:         { show: [ACTIONS.DETAIL, ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MULTI_SELECT], text: {} },
   sub:          { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情' } },
   cat:          { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
   attr:         { show: [ACTIONS.RENAME_ATTR, ACTIONS.DELETE], text: { [ACTIONS.RENAME_ATTR]: '重命名' } },
-  group:        { show: [ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
+  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
   'group-card': { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.EDIT]: '编辑书签', [ACTIONS.DELETE]: '从组移除' } },
   'rail-empty': { show: [ACTIONS.ADD_CAT], text: {} },
   'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
@@ -94,6 +95,7 @@ function onItemClick(action: string) {
 
 function _dispatchAction(type: string, action: string, id: string) {
   if (type === 'card') {
+    if (action === ACTIONS.DETAIL) openDetail(id)
     if (action === ACTIONS.VISIT) visit(null, id)
     if (action === ACTIONS.EDIT) openBmModal(id)
     if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
@@ -119,6 +121,7 @@ function _dispatchAction(type: string, action: string, id: string) {
     }
     if (action === ACTIONS.DELETE) deleteAttribute(id)
   } else if (type === 'group') {
+    if (action === ACTIONS.DETAIL) openDetail('group:' + id)
     if (action === ACTIONS.EDIT) editGroup(id)
     if (action === ACTIONS.DELETE) deleteGroup(id)
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)

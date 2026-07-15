@@ -71,10 +71,10 @@
         <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
           <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
         </div>
-        <!-- PERF-1：仅展开时挂 TipTap；折叠用 HTML 预览，避免每组一实例 -->
+        <!-- PERF-1：仅展开时挂 TipTap；折叠用预览，避免每组一实例 -->
         <GroupEditor v-if="isExpanded" :groupId="group.id" />
         <div
-          v-else-if="notesPreviewHtml"
+          v-else-if="notesPreviewHtml && ui.layoutMode === 'grid'"
           class="group-notes-preview"
           v-html="notesPreviewHtml"
         ></div>
@@ -112,6 +112,7 @@ import { useUndoStore } from '../../stores/undo.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
+import { groupPreview } from '../../lib/preview.js'
 import { editGroup as _editGroup, toggleGroupFocus, saveGroupBody, deleteGroup as _deleteGroup } from '../../composables/domain/useGroup.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
@@ -145,13 +146,7 @@ const notesPreviewHtml = computed(() => {
   return sanitizeHTML(notes)
 })
 
-const previewText = computed(() => {
-  const notes = props.group.notes || ''
-  if (!notes) return ''
-  const tmp = document.createElement('div'); tmp.innerHTML = sanitizeHTML(notes)
-  tmp.querySelectorAll('.gic-btn, .gic-remove, .gic-domain').forEach(el => el.remove())
-  return tmp.textContent?.trim().replace(/\s+/g, ' ').slice(0, 120) || ''
-})
+const previewText = computed(() => groupPreview(props.group))
 
 const undoStore = useUndoStore()
 const hasUndo = computed(() => !!undoStore.canUndo(props.group.id))

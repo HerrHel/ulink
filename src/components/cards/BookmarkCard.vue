@@ -24,6 +24,7 @@
           </div>
         </div>
       </div>
+      <div class="card-domain mini-domain" v-if="uiStore.layoutMode === 'mini-grid'">{{ domainStr }}</div>
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode === 'list'">
         <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
@@ -90,6 +91,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
+import { bookmarkPreview } from '../../lib/preview.js'
 import type { Bookmark } from '../../types.js'
 
 function hlText(text: string, query: string): string {
@@ -149,7 +151,7 @@ const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))
 const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttributes))
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])
 const hasExpandableContent = computed(() => !!(props.bookmark.username || props.bookmark.password || children.value.length))
-const previewText = computed(() => (props.bookmark.notes || '').trim().replace(/\s+/g, ' ').slice(0, 120))
+const previewText = computed(() => bookmarkPreview(props.bookmark))
 const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded && !uiStore.batchMode)
 const isSelected = computed(() => (uiStore.batchSelected ?? []).includes(props.bookmark.id))
 const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
