@@ -81,7 +81,7 @@ function _getDragHintText(target: Element, payload: DragPayload | null): string 
   if (target.classList.contains('group-card-head')) {
     return payload.type === 'group' ? '交换组位置' : '将书签排序到此组'
   }
-  if (target.classList.contains('detail-card')) return '移到此位置'
+  if (target.classList.contains('detail-card-wrap')) return '移到此位置'
   if (target.closest('#detailPanel')) return '加入详情面板'
   if (target.classList.contains('rail-item')) return '移动到分类'
   if (target.classList.contains('group-card')) {
@@ -178,7 +178,7 @@ function _onDragStart(e: DragEvent) {
     _initDrag(e, gCard, { type: 'group', id: 'group:' + gid, srcGid });
     return;
   }
-  const dCard = (e.target as HTMLElement).closest('.detail-card[data-didx]');
+  const dCard = (e.target as HTMLElement).closest('.detail-card-wrap[data-didx]');
   if (dCard) {
     _detailDragIdx = parseInt((dCard as HTMLElement).dataset.didx!);
     _initDrag(e, dCard, { type: 'detail', id: (dCard as HTMLElement).dataset.bmId!, srcGid: DRAG_SRC_DETAIL });
@@ -202,7 +202,7 @@ function _updateDragHint(e: DragEvent, target: Element | null) {
 }
 
 function _onDragOver(e: DragEvent) {
-  const target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card, .rail-item, #detailPanel, #cardGrid');
+  const target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #cardGrid');
   _updateDragHint(e, target)
   if (target && target.classList.contains('group-card') && _currentDragPayload && _currentDragPayload.type === 'bm' && _currentDragPayload.srcGid === (target as HTMLElement).dataset.groupId) {
     e.preventDefault();
@@ -227,7 +227,7 @@ function _onDragOver(e: DragEvent) {
     _dragOverEl = target;
     if (target) {
       e.preventDefault();
-      const cls = target.classList.contains('detail-card') ? 'detail-drag-over' : target.classList.contains('rail-item') ? 'rail-drag-over' : 'drag-over';
+      const cls = target.classList.contains('detail-card-wrap') ? 'detail-drag-over' : target.classList.contains('rail-item') ? 'rail-drag-over' : 'drag-over';
       target.classList.add(cls);
     }
   } else if (target) {
@@ -256,7 +256,7 @@ function _onDrop(e: DragEvent) {
   if (bmCard) { handleBmCardDrop(e, bmCard, p); return; }
   const gCard = (e.target as HTMLElement).closest('.group-card');
   if (gCard) { handleGroupCardDrop(e, gCard, p); return; }
-  const dCard = (e.target as HTMLElement).closest('.detail-card');
+  const dCard = (e.target as HTMLElement).closest('.detail-card-wrap');
   if (dCard) { handleDetailCardDrop(e, dCard, p); return; }
   if ((e.target as HTMLElement).closest('#detailPanel')) { handleDetailPanelDrop(e, p); return; }
   if ((e.target as HTMLElement).closest('#cardGrid')) { handleGridDrop(e, p); return; }

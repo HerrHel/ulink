@@ -177,7 +177,7 @@
   to{opacity:1;transform:translateY(0) scale(1)}
 }
 
-/* ---- List: expand button (always visible for expandable cards) ---- */
+/* ---- List: expand button (桌面端列表保留；移动端由「⋯」详情按钮替代) ---- */
 .list-view .list-expand-btn{
   display:flex;
   position:absolute;top:50%;right:10px;
@@ -200,7 +200,31 @@
   }
   .list-view .list-expand-btn:active{transform:scale(0.95);transition-duration:0.06s}
 }
-.list-view .card:has(.batch-chk) .list-expand-btn{display:none}
+/* 移动端隐藏展开/收起键，改用「⋯」详情按钮 */
+@media(max-width:768px){
+  .list-view .list-expand-btn{display:none}
+}
+/* ── 列表模式「⋯」详情按钮（仅移动端，桌面端用 hover card-foot）── */
+.list-view .card-menu-btn{
+  display:none;
+  position:absolute;top:50%;right:6px;
+  transform:translateY(-50%);
+  width:36px;height:36px;
+  align-items:center;justify-content:center;
+  border-radius:var(--radius-md);z-index:7;
+  color:var(--text-muted);background:none;border:none;
+  cursor:pointer;touch-action:manipulation;
+  transition:background 0.15s ease,color 0.15s ease;
+}
+.list-view .card-menu-btn:active{transform:translateY(-50%) scale(0.92);transition-duration:0.06s}
+/* 辅助栏复用大宫格渲染卡片时，不显示列表专属的「⋯」按钮（避免无尺寸约束的 SVG 撑大） */
+.grid-view .card-menu-btn{display:none}
+.list-view .card-menu-btn svg{width:18px;height:18px}
+@media(max-width:768px){
+  .list-view .card-menu-btn{display:flex}
+}
+.list-view .card:has(.batch-chk) .list-expand-btn,
+.list-view .card:has(.batch-chk) .card-menu-btn{display:none}
 .list-view .list-expand-btn svg{width:14px;height:14px;transition:transform 0.2s ease}
 .list-view .card-expanded .list-expand-btn svg,
 .list-view .group-expanded .list-expand-btn svg{transform:rotate(180deg)}
@@ -585,7 +609,7 @@
 .acct-show-pw:hover,.acct-show-pw:active{color:var(--text);background:var(--surface-hover)}
 .acct-show-pw svg{width:15px;height:15px}
 /* Detail panel: constrain account/password section width */
-.detail-card .card-acct-body{
+.detail-card-wrap .card-acct-body{
   max-width:80%;
 }
 .acct-copy-btn{

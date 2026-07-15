@@ -394,41 +394,32 @@
 .panel-main:not(:has(.detail-panel.open)) #resizeRight{
   display:none;
 }
-.detail-card{
+/* 辅助栏卡片复用大宫格 BookmarkCard/GroupCard，外层 grid-view 单列展示 */
+.detail-grid{
+  display:block;
+  gap:10px;
+}
+.detail-grid .card-list-inner{
+  display:flex;flex-direction:column;gap:10px;
+}
+.detail-card-wrap{
   position:relative;
-  background:var(--surface);
-  border:1px solid var(--border);
   border-radius:var(--radius-lg);
-  padding:14px;
-  margin-bottom:8px;
-  cursor:default;
-  transition:var(--transition-normal);
-  box-shadow:var(--shadow-xs);
 }
-.detail-card:hover{box-shadow:var(--shadow-sm);border-color:var(--border-hover)}
-.detail-card .card-name{font-size:0.9rem}
-.detail-card .card-domain{font-size:0.72rem}
-.detail-card.dragging{opacity:0.45;transform:scale(0.96)}
-.detail-card.detail-drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
-.detail-group-notes{
-  max-height:200px;overflow-y:auto;
-  margin-top:8px;
-  font-size:0.85rem;line-height:1.6;color:var(--text-secondary);
-  word-break:break-word;
-}
-.detail-group-notes::-webkit-scrollbar{width:4px}
-.detail-group-notes::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-
-/* 拖拽条：桌面端隐藏，移动端显示 */
-.detail-drag-handle{display:none}
+.detail-card-wrap.dragging{opacity:0.45;transform:scale(0.96)}
+.detail-card-wrap.detail-drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+/* 关闭按钮悬浮在卡片右上角 */
 .detail-close{
-  position:absolute;top:8px;right:8px;z-index:1;
+  position:absolute;top:6px;right:6px;z-index:20;
   width:26px;height:26px;
   display:flex;align-items:center;justify-content:center;
   border-radius:var(--radius-sm);color:var(--text-muted);
+  background:var(--surface);
   cursor:pointer;transition:var(--transition-fast);
 }
 .detail-close:hover{color:var(--text);background:var(--surface-hover)}
+/* 拖拽条：桌面端隐藏，移动端显示（移动端样式见 responsive.css）*/
+.detail-drag-handle{display:none}
 /* ==================== SUB-SITES ==================== */
 .sub-sites{
   margin-top:10px;border-top:1px solid var(--border-light);padding-top:8px;

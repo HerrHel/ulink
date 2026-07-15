@@ -8,67 +8,16 @@
     </div>
     <div class="detail-inner" id="detailInner">
       <template v-if="entries.length">
-        <div v-for="(entry, idx) in filteredEntries" :key="entry.rawId"
-             class="detail-card" :class="{ 'detail-group-card': entry.isGroup }"
-             draggable="true" :data-bm-id="entry.rawId" :data-didx="idx">
-          <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
-
-          <template v-if="entry.isGroup">
-            <div class="detail-entry-head">
-              <img v-if="entry.data.icon" :src="entry.data.icon" alt=""
-                   class="detail-entry-img">
-              <div v-else class="card-icon" v-html="noteIcon"></div>
-              <div>
-                <div class="card-name">{{ entry.data.name || '未命名组' }}</div>
-                <div class="card-domain">{{ (entry.data.bookmarkIds || []).length }} 个书签</div>
+        <div class="card-grid grid-view detail-grid">
+          <div class="card-list-inner">
+            <template v-for="entry in filteredEntries" :key="entry.rawId">
+              <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="filteredEntries.indexOf(entry)">
+                <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
+                <GroupCard v-if="entry.isGroup" :group="entry.data" />
+                <BookmarkCard v-else :bookmark="entry.data" />
               </div>
-            </div>
-            <div class="detail-group-notes" v-html="sanitizeNotes(entry.data.notes)"></div>
-          </template>
-
-          <template v-else>
-            <div class="detail-entry-head">
-              <div class="card-icon">
-                <img :src="getIcon(entry.data)" alt="">
-                <span class="icon-fallback">{{ (entry.data.title || '?').charAt(0) }}</span>
-              </div>
-              <div>
-                <div class="card-name">{{ entry.data.title }}</div>
-                <div class="card-domain">{{ domain(entry.data.url) }}</div>
-              </div>
-            </div>
-            <div class="card-tags mb-1" v-if="getTags(entry.data).length">
-              <span class="card-tag tag-custom" v-for="t in getTags(entry.data)" :key="t">{{ t }}</span>
-            </div>
-            <div class="card-notes mb-1" v-if="entry.data.notes">{{ entry.data.notes }}</div>
-            <div class="card-acct-body show mb-2"
-                 v-if="entry.data.username || entry.data.password">
-              <div class="acct-row" v-if="entry.data.username">
-                <span class="acct-label">账户</span>
-                <span class="acct-val">{{ entry.data.username }}</span>
-                 <button class="acct-copy-btn" @click.stop="copyText(entry.data.username)" title="复制" v-html="I.copy"></button>
-              </div>
-              <div class="acct-row" v-if="entry.data.password">
-                <span class="acct-label">密码</span>
-                <span class="acct-val">{{ isVisible(entry.rawId) ? (decodedPasswords[entry.rawId] || '') : '••••••' }}</span>
-                <button class="acct-show-pw" @click.stop="togglePw(entry.rawId)" title="显示"><span v-if="!isVisible(entry.rawId)" aria-hidden="true" v-html="I.eye"></span><span v-else aria-hidden="true" v-html="I.eyeOff"></span></button>
-                <button class="acct-copy-btn" @click.stop="copyPw(entry.rawId)" title="复制" v-html="I.copy"></button>
-              </div>
-            </div>
-            <div class="sub-sites" v-if="getChildren(entry.data.id).length">
-              <span class="group-inline-card" v-for="sub in getChildren(entry.data.id)" :key="sub.id"
-                    contenteditable="false" :data-bm-id="sub.id">
-                <img :src="getIcon(sub)" alt="">
-                <span class="gic-name">{{ sub.title }}</span>
-                <span class="gic-btn" @click.stop="openDetail(sub.id)">详</span>
-              </span>
-            </div>
-            <div class="detail-actions">
-              <button class="btn btn-primary btn-sm" @click.stop="visit(entry.data)">打开网站</button>
-              <button class="btn btn-secondary btn-sm" @click.stop="editBm(entry.data.id)">编辑</button>
-              <span class="card-stat detail-use-count">{{ entry.data.useCount || 0 }}次</span>
-            </div>
-          </template>
+            </template>
+          </div>
         </div>
       </template>
       <div v-else class="empty empty-compact">
@@ -84,22 +33,16 @@
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
-import { favicon, sanitizeHTML, copyToClipboard, isMobile, domain, getTagNames } from '../../utils.js'
-import { decryptPasswordWithKey } from '../../crypto.js'
+import { isMobile, domain } from '../../utils.js'
 import { I } from '../../config/icons.js'
-import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
-import { useE2EStore } from '../../stores/e2e.js'
-import { openBmModal, openBookmark } from '../../composables/domain/useBookmark.js'
-import { toast } from '../../lib/toast.js'
+import BookmarkCard from '../cards/BookmarkCard.vue'
+import GroupCard from '../cards/GroupCard.vue'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
-const e2eStore = useE2EStore()
 const searchQuery = ref('')
 const detailPanelRef = ref<HTMLElement | null>(null)
-const decodedPasswords = ref<Record<string, string>>({})
-const { isVisible, toggle: togglePw } = usePasswordVisibility()
 
 const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
 
@@ -136,26 +79,6 @@ const filteredEntries = computed(() => {
     e.name.toLowerCase().includes(q) || e.domain.toLowerCase().includes(q)
   )
 })
-
-// 密码展示用：string 形态走 safeDecodePassword（同步），EncryptedPassword 对象态
-// （E2E 解锁时 saveBm 存的对象）需用 e2e cryptoKey 异步解密。旧实现仅判 string，
-// 对象态落空串 → 小眼睛点开密码区空白。按形态统一走 decryptPasswordWithKey。
-async function decodeAllPasswords() {
-  const results: Record<string, string> = {}
-  await Promise.all(entries.value.map(async (entry) => {
-    if (!entry.isGroup && entry.data.password) {
-      results[entry.rawId] = await decryptPasswordWithKey(
-        entry.data.password,
-        e2eStore.cryptoKey as CryptoKey | null,
-      )
-    }
-  }))
-  decodedPasswords.value = results
-}
-
-watch(entries, () => nextTick(decodeAllPasswords))
-// E2E 解锁后 key 入内存，重解一遍对象态密码（详见 BookmarkCard decodePassword 注释）。
-watch(() => e2eStore.isUnlocked, decodeAllPasswords)
 
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
 const isSwiping = ref(false)
@@ -211,28 +134,11 @@ onUnmounted(() => {
   }
 })
 
-const noteIcon = I.note
 const bookmarkIcon = I.emptyBookmark
 
-function getIcon(item: Bookmark) { return favicon(item.url, item.icon) }
-function getTags(bm: Bookmark) { return getTagNames(bm, ds.customAttributes) }
-function getChildren(parentId: string) { return ds.childrenMap[parentId] || [] }
-function sanitizeNotes(notes: string) { return sanitizeHTML(notes || '') }
-
-function visit(bm: Bookmark) { openBookmark(bm) }
-function editBm(id: string) { openBmModal(id) }
-function openDetail(id: string) { if (!ui.detailCards.includes(id)) ui.detailCards.push(id); ui.panels.detail = true }
 function closeDetail(rawId: string) {
   const idx = ui.detailCards.indexOf(rawId)
   if (idx > -1) ui.detailCards.splice(idx, 1)
   if (!ui.detailCards.length) ui.panels.detail = false
-}
-function copyText(text: string) { copyToClipboard(text || '') }
-// 与 BookmarkCard.copyPw 同理：未解锁时 decodedPasswords[id] 为空（对象态解不开），
-// 旧实现照常 copyToClipboard('') 弹「已复制」误导。空就提示无法复制、不写剪贴板。
-function copyPw(rawId: string) {
-  const pw = decodedPasswords.value[rawId] || ''
-  if (!pw) { toast('密码未解锁，无法复制', false); return }
-  copyToClipboard(pw, '密码')
 }
 </script>

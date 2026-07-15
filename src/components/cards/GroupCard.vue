@@ -85,7 +85,7 @@
         <button class="btn-xs btn-danger" @click.stop="delGrp" title="删除组" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasBody && ui.layoutMode === 'list'" class="list-expand-btn" @click.stop="toggleExpand" title="展开" v-html="I.chevronDown"></button>
+    <button v-if="ui.layoutMode === 'list' && !ui.batchMode" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
     <div v-if="ui.batchMode && isMobile()" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
   <Teleport to="body">
@@ -103,13 +103,13 @@ const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue
 import ColorPalette from '../editor/ColorPalette.vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
 import { groupPreview } from '../../lib/preview.js'
 import { editGroup as _editGroup, toggleGroupFocus, saveGroupBody, deleteGroup as _deleteGroup } from '../../composables/domain/useGroup.js'
+import { openDetail } from '../../composables/ui/useUI.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
 import { useEditorFormat, type FormatKey } from '../../composables/ui/useEditorFormat.js'
@@ -131,7 +131,6 @@ const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
 const isFocused = computed(() => ui.focusedGroupId === props.group.id)
 const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
-const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim()))
 const noteIcon = I.note
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
@@ -190,14 +189,14 @@ function filterByTagName(name: string) {
   const attr = ds.customAttributes.find(a => a.name === name)
   if (attr) toggleAttrFilter(attr.id)
 }
-function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); debouncedSaveAppData() }
+function openMenu() { openDetail('group:' + props.group.id) }
 function onCardClick(e: MouseEvent) {
   if (ui.batchMode) { toggleSelect(); return }
   if (ui.layoutMode === 'mini-grid') { toggleFocus(); return }
   // grid / list：单击标题区聚焦组
   if ((e.target as HTMLElement).closest('.card-titlewrap')) { toggleFocus(); return }
   if (ui.layoutMode !== 'list') return
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
-  toggleExpand()
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .card-menu-btn, .group-body')) return
+  toggleFocus()
 }
 </script>

@@ -70,7 +70,7 @@
         <button class="btn-xs btn-danger" @click.stop="del" title="删除" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list'" class="list-expand-btn" @click.stop="toggleExpand" title="展开" v-html="I.chevronDown"></button>
+    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && isMobile()" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>
@@ -164,16 +164,16 @@ function del() { deleteBookmarkWithUndo(props.bookmark.id) }
 function doAddSub() { addSub(props.bookmark.id) }
 function doOpenDetail(bmId: string) { openDetail(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
+function openMenu() { openDetail(props.bookmark.id) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
-function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode === 'mini-grid') { visit(); return }
   // grid / list：单击标题区直接打开网站
   if ((e.target as HTMLElement).closest('.card-titlewrap')) { visit(); return }
   if (uiStore.layoutMode !== 'list') return
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
-  toggleExpand()
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .card-menu-btn')) return
+  visit()
 }
 function filterByTagName(name: string) {
   const attr = dataStore.customAttributes.find(a => a.name === name)
