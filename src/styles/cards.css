@@ -716,6 +716,10 @@
 /* 底部只显示计数，隐藏操作按钮 */
 .mini-grid-view .card-foot{padding:4px 0 0;margin-top:4px;border-top:1px solid var(--border-light)}
 .mini-grid-view .card-actions{display:none}
+/* 移动端主网格大宫格卡片隐藏底部操作按钮（新增子书签/编辑/删除）——详情走辅助栏与长按菜单 */
+@media(max-width:768px){
+  #cardGrid.grid-view .card-actions{display:none}
+}
 .mini-grid-view .card-stat{font-size:11px;opacity:.8}
 /* 摘要：最多四行截断 */
 .mini-grid-view .card-body{display:block;padding:0;margin-top:4px}

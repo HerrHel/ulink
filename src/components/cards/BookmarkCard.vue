@@ -70,8 +70,9 @@
         <button class="btn-xs btn-danger" @click.stop="del" title="删除" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
-    <div v-if="uiStore.batchMode && isMobile()" class="batch-drag-handle" v-html="I.grip"></div>
+    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" title="展开" v-html="I.chevronDown"></button>
+    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
+    <div v-if="uiStore.batchMode && uiStore.isMobile" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>
 
@@ -166,13 +167,22 @@ function doOpenDetail(bmId: string) { openDetail(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
 function openMenu() { openDetail(props.bookmark.id) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
+function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode === 'mini-grid') { visit(); return }
   // grid / list：单击标题区直接打开网站
   if ((e.target as HTMLElement).closest('.card-titlewrap')) { visit(); return }
   if (uiStore.layoutMode !== 'list') return
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .card-menu-btn')) return
+  if (isMobile()) {
+    // 移动端：列表模式卡片任意位置打开网站（详情由「⋯」按钮触发）
+    if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .card-menu-btn')) return
+    visit()
+    return
+  }
+  // PC 端：旧版列表交互——有可展开内容才可展开，无内容时点击打开网站
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
+  if (hasExpandableContent.value) { toggleExpand(); return }
   visit()
 }
 function filterByTagName(name: string) {

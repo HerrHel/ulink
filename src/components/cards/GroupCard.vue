@@ -85,8 +85,9 @@
         <button class="btn-xs btn-danger" @click.stop="delGrp" title="删除组" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="ui.layoutMode === 'list' && !ui.batchMode" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
-    <div v-if="ui.batchMode && isMobile()" class="batch-drag-handle" v-html="I.grip"></div>
+    <button v-if="hasBody && ui.layoutMode === 'list' && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" title="展开" v-html="I.chevronDown"></button>
+    <button v-if="ui.layoutMode === 'list' && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
+    <div v-if="ui.batchMode && ui.isMobile" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
   <Teleport to="body">
     <Transition name="cpalette">
@@ -104,6 +105,7 @@ import ColorPalette from '../editor/ColorPalette.vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useUndoStore } from '../../stores/undo.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -132,6 +134,7 @@ const isFocused = computed(() => ui.focusedGroupId === props.group.id)
 const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
 const noteIcon = I.note
+const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim()))
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 
@@ -190,13 +193,22 @@ function filterByTagName(name: string) {
   if (attr) toggleAttrFilter(attr.id)
 }
 function openMenu() { openDetail('group:' + props.group.id) }
+function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (ui.batchMode) { toggleSelect(); return }
   if (ui.layoutMode === 'mini-grid') { toggleFocus(); return }
   // grid / list：单击标题区聚焦组
   if ((e.target as HTMLElement).closest('.card-titlewrap')) { toggleFocus(); return }
   if (ui.layoutMode !== 'list') return
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .card-menu-btn, .group-body')) return
+  if (isMobile()) {
+    // 移动端：列表模式卡片任意位置聚焦组（详情由「⋯」按钮触发）
+    if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .card-menu-btn, .group-body')) return
+    toggleFocus()
+    return
+  }
+  // PC 端：旧版列表交互——有可展开内容才可展开，无内容时点击聚焦组
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
+  if (hasBody.value) { toggleExpand(); return }
   toggleFocus()
 }
 </script>
