@@ -74,6 +74,7 @@ import { useApp } from './composables/useApp.js'
 import { useAppHandlers } from './composables/useAppHandlers.js'
 import { useAppLifecycle, onShareRoute } from './composables/useAppLifecycle.js'
 import { useE2E } from './composables/domain/useE2E.js'
+import { useCloudSync } from './composables/domain/useCloudSync.js'
 import { useE2EStore } from './stores/e2e.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
@@ -122,6 +123,7 @@ const { handlers } = useAppHandlers()
 // E2E 加密状态
 const e2e = useE2E()
 const e2eStore = useE2EStore()
+const cloudSync = useCloudSync()
 
 onMounted(async () => {
   // P1: E2E 改为按需引导 — 不再是「设过主密码就每次启动必解锁」。
@@ -165,6 +167,9 @@ function onE2EUnlocked() {
   // 有操作在等待解锁 → 逐个 resolve(true) 继续
   const pending = e2eStore.pendingUnlock.splice(0)
   for (const resolve of pending) resolve(true)
+  // 解锁后 flush：锁定期静默排队等解锁的敏感字段 op（username/notes 等）此时 key 已入内存，
+  // 触发一次推送把它们补上云。debouncedSync 内含 autoSync 检查，关闭自动同步时跳过。
+  cloudSync.debouncedSync()
 }
 
 /** E2E 解锁弹窗关闭/取消 */

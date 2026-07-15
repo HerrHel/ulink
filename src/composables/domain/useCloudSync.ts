@@ -44,6 +44,36 @@ let _syncTimer: ReturnType<typeof setTimeout> | null = null
  *  导致「恢复了又没了」的同步死结（数据本体在 ds.bookmarks，删 op 不丢数据）。 */
 const MAX_PUSH_RETRIES = 3
 
+// 锁定态静默排队判定用的敏感字段集（与 useE2E.ENCRYPT_FIELDS 同步）。
+// 锁定期间：改动触及这些字段之一的 upsert op 留在 IDB 等解锁，不推不报错；
+// 其余改动（title/url/分类名/排序/attributes…）经 encryptItem 透传明文照常推送。
+// category/custom_attributes 无敏感字段，锁定态照常全量同步。
+const SENSITIVE_FIELDS: Record<string, readonly string[]> = {
+  bookmarks: ['username', 'notes'],
+  sibling_groups: ['name', 'notes'],
+  categories: [],
+  custom_attributes: [],
+}
+
+/** 锁定态下该 upsert op 是否需要等解锁才能安全推送。
+ *  changedFields 非空 → 看是否含敏感字段；为空（新建/全量）→ 看本体是否有非空敏感字段。
+ *  导出（含 _ 前缀，约定私有）供单测钉住条目级判定语义。 */
+export function _opNeedsUnlock(op: SyncOp): boolean {
+  if (!op.data) return false
+  const sens = SENSITIVE_FIELDS[op.table]
+  if (!sens || sens.length === 0) return false
+  const data = op.data as Record<string, unknown>
+  const changedFields = data._changedFields as string[] | null
+  if (changedFields && changedFields.length > 0) {
+    return changedFields.some(f => sens.includes(f))
+  }
+  for (const f of sens) {
+    const v = data[f]
+    if (typeof v === 'string' && v.length > 0) return true
+  }
+  return false
+}
+
 // ── 辅助函数 ──
 async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
   if (typeof navigator !== 'undefined' && navigator.locks) {
@@ -255,13 +285,13 @@ export function useCloudSync() {
     if (!userId) return false
     if (!navigator.onLine) { syncStore.setSyncError('网络离线'); return false }
 
-    // E2E 启用未解锁：禁止 drain/push，避免本地明文覆盖云端密文（RE-2）
+    // E2E 启用未解锁：不再整体拦截。改为条目级——只有触及敏感字段（username/notes 等）
+    // 的 upsert op 静默留 IDB 等解锁，其余改动照常明文推送。这契合「自动同步」理念：锁定期
+    // 改个标题/换个分类也能正常上云，不累积、不刺眼报错。整体拦截的旧实现见 RE-2，
+    // 此处降级为仅敏感项排队（明文场景靠 encryptItem 透传 + push 明文覆盖云端，
+    // pull 侧 LEGACY_DECRYPT_FIELDS 还原旧密文，安全等价）。
     const e2eGuard = useE2E()
-    if (e2eGuard.isE2EEnabled.value && !e2eGuard.isUnlocked.value) {
-      syncStore.setSyncError('请先解锁 E2E 再同步')
-      syncStore.setSyncStatus('error')
-      return false
-    }
+    const isLocked = e2eGuard.isE2EEnabled.value && !e2eGuard.isUnlocked.value
 
     const rawOps = await drainSyncOps()
     if (!rawOps.length) return true
@@ -272,6 +302,19 @@ export function useCloudSync() {
 
     try {
       const ds = useDataStore()
+      // 锁定态下需等解锁才推的条目键集合（`${table}:${itemId}`）：
+      // 任一 rawOp 触及敏感字段 → 该 item 整条静默留 IDB 等解锁。按 item 而非按 rawOp
+      // 判定是因为 _mergeOps 会把同 item 多个 op 合并成一个（仅保留 last 的 data/_changedFields），
+      // 若按 rawOp id 跳过，当敏感 op 不是 last 时会被漏判，导致明文跟着非敏感 op 推上云端（RE-2）。
+      // 按 item 判定，只要该 item 有敏感改动就整条锁定——保守且与合并语义一致。
+      const lockedItemKeys = new Set<string>()
+      if (isLocked) {
+        for (const op of rawOps) {
+          if (op.action === 'upsert' && _opNeedsUnlock(op)) {
+            lockedItemKeys.add(`${op.table}:${op.itemId}`)
+          }
+        }
+      }
       const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
       for (const op of ops) {
         if (op.action === 'upsert') {
@@ -308,6 +351,9 @@ export function useCloudSync() {
           continue
         }
         if (!op.data) continue
+        // 锁定态下该 item 含敏感改动 → 整条静默跳过：不进 tasks、不 removeSyncOps，
+        // 留 IDB 等解锁后补推。按 item key 判定以兼容 _mergeOps 的合并语义。
+        if (isLocked && lockedItemKeys.has(`${op.table}:${op.itemId}`)) continue
 
         const data = op.data
         const changedFields = data._changedFields as string[] | null
@@ -422,7 +468,14 @@ export function useCloudSync() {
         return false
       }
 
-      syncStore.setLastSyncAt(Date.now())
+      // 锁定态本轮有敏感条目静默留队：不标 success（以免 UI 显示「刚刚同步」却没推关键项），
+      // 也不标 error（静默理念）。已推送的非敏感 op 已 removeSyncOps，敏感 op 留 IDB 等
+      // unlock 后补推。只在确有 op 被推上云时才推进 lastSyncAt（仅 locked/空队列则保持原值）。
+      if (lockedItemKeys.size > 0 && tasks.length === 0) {
+        syncStore.setSyncStatus('idle')
+        return true
+      }
+      if (tasks.length > 0) syncStore.setLastSyncAt(Date.now())
       syncStore.setSyncStatus('success')
       return true
     } catch (e: unknown) {

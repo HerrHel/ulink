@@ -22,6 +22,9 @@ const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 
 // ── 需要加密的字段 ──
 // E2E 启用时由全局 CryptoKey 加密的字段。
+// 加密范围已收窄：title/url/分类名/属性名 改存云端明文，仅用户名与笔记留密文。
+// 这样锁定态（无 key）也能同步只改了 title/url 的书签——push 走明文覆盖、
+// pull 走 LEGACY_DECRYPT_FIELDS 还原旧密文，几轮同步后云端自然全量明文化。
 // password 不在此列：它有独立加密路径——useBookmark.saveBm 在 E2E 解锁时
 // 用每条独立 salt 派生 key 生成 EncryptedPassword 对象（见 crypto.encryptPassword），
 // 而非全局 key。若把 password 放进来：
@@ -31,8 +34,20 @@ const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 //     全局 key 加密的，autoMigratePassword 用「独立 salt + 主密码」解不开 → 二次损坏。
 // 故 password 显式排除，保持它原样在云端传输（已是加密态或旧 base64）。
 const ENCRYPT_FIELDS = {
-  bookmark: ['title', 'url', 'username', 'notes'] as const,
+  bookmark: ['username', 'notes'] as const,
   group: ['name', 'notes'] as const,
+  category: [] as const,
+  attribute: [] as const,
+}
+
+// ── 旧密文遗留字段（legacy 解密专用，不再加密）──
+// 这些字段云端现已改存明文，但历史数据里仍是 E2E 密文。pull/Realtime 进来时
+// 对它们也跑一次 decryptField：真密文（三段且 key 匹配）解回明文，明文/解不开
+// 的原样返回（见 crypto.decrypt 的优雅降级）。push 侧不再加密它们，几轮同步后
+// 云端密文被明文覆盖，完成单向迁移。含义上与 ENCRYPT_FIELDS 互斥。
+const LEGACY_DECRYPT_FIELDS: Record<EntityType, readonly string[]> = {
+  bookmark: ['title', 'url'] as const,
+  group: [] as const,
   category: ['name'] as const,
   attribute: ['name'] as const,
 }
@@ -234,11 +249,17 @@ export function useE2E() {
 
   async function encryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
     const key = _getKey()
-    // E2E 启用但未解锁时禁止静默返回明文：否则 push 会把云端密文覆盖成明文。
-    // 未启用 E2E 时无 key 属正常路径，原样透传。
+    // E2E 启用但未解锁时禁止静默返回明文：若本次确有非空敏感字段需加密，则 throw，
+    // 由调用方（_pushFromQueue）判定该条目静默排队等解锁。若敏感字段全空（如只改了
+    // title/url 的书签、或无所谓敏感的 category），无需 key 即可明文推送——支持锁定态
+    // 同步普通内容。未启用 E2E 时无 key 属正常路径，原样透传。
     if (!key) {
       if (isE2EEnabled.value) {
-        throw new Error('E2E 已启用但未解锁，无法加密后推送')
+        const needsEnc = ENCRYPT_FIELDS[type].some(f => {
+          const v = (item as Record<string, unknown>)[f]
+          return typeof v === 'string' && v.length > 0
+        })
+        if (needsEnc) throw new Error('E2E 已启用但未解锁，无法加密后推送')
       }
       return item
     }
@@ -255,7 +276,10 @@ export function useE2E() {
   async function decryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
     const key = _getKey()
     if (!key) return item
-    const fields = ENCRYPT_FIELDS[type]
+    // 加密字段 + 旧密文遗留字段并集：前者是当前仍会加密的敏感字段，后者是云端已改明文
+    // 但历史行里可能仍是密文的字段。crypto.decrypt 对非三段/解不开的输入原样返回，
+    // 故明文串安全穿透，只有真旧密文被解开。两组并集去重逐字段 try decrypt。
+    const fields = new Set<string>([...ENCRYPT_FIELDS[type], ...LEGACY_DECRYPT_FIELDS[type]])
     const result = { ...item } as Record<string, unknown>
     for (const f of fields) {
       const val = result[f]
@@ -269,10 +293,11 @@ export function useE2E() {
    * 仅在 isUnlocked=true 才解密（见 useSyncRealtime._handleRealtimeChange），未解锁
    * 那批条目的 title/url/username/notes 等停留为密文态进 store → 解锁后 UI 显示乱码。
    * 本函数在 unlock/resetWithRecoveryKey 成功（key 已入内存）后调用，遍历 store 全部条目，
-   * 对 ENCRYPT_FIELDS 字段逐个 decryptField：
+   * 对 ENCRYPT_FIELDS ∪ LEGACY_DECRYPT_FIELDS 字段逐个 decryptField：
    *   - 真密文（三段 salt.iv.data）→ 解出明文，赋值改 store（reactive 触发 UI 刷新）
    *   - 非密文/明文 → crypto.decrypt 返回原文（相等），不动
    *   - 三段但 GCM auth 失败的「伪密文」明文 → decrypt 失败回退原文，不动
+   * 旧密文遗留字段（title/url/category-name/attr-name）一并补解，使迁移期 UI 不显乱码。
    * 直接改数组元素字段值而非 updateBookmark/updateGroup，避免 _markDirty/_trackChange 引发
    * 回声推送（密文本就来自远端，补解密是本地视图还原，不该推回远端）。
    * 有变更时 _bumpSearchVersion 让搜索索引重建（title/name 改了 Fuse 缓存要失效）。
@@ -290,21 +315,26 @@ export function useE2E() {
       const decrypted = await decryptField(v)
       if (decrypted !== v) { obj[f] = decrypted; changed = true }
     }
+    const fieldsOf = (t: EntityType) => new Set<string>([...ENCRYPT_FIELDS[t], ...LEGACY_DECRYPT_FIELDS[t]])
+    const bmFields = fieldsOf('bookmark')
+    const grpFields = fieldsOf('group')
+    const catFields = fieldsOf('category')
+    const attrFields = fieldsOf('attribute')
     for (const b of ds.bookmarks) {
       const o = b as unknown as Record<string, unknown>
-      for (const f of ENCRYPT_FIELDS.bookmark) await tryField(o, f)
+      for (const f of bmFields) await tryField(o, f)
     }
     for (const g of ds.siblingGroups) {
       const o = g as unknown as Record<string, unknown>
-      for (const f of ENCRYPT_FIELDS.group) await tryField(o, f)
+      for (const f of grpFields) await tryField(o, f)
     }
     for (const c of ds.categories) {
       const o = c as unknown as Record<string, unknown>
-      for (const f of ENCRYPT_FIELDS.category) await tryField(o, f)
+      for (const f of catFields) await tryField(o, f)
     }
     for (const a of ds.customAttributes) {
       const o = a as unknown as Record<string, unknown>
-      for (const f of ENCRYPT_FIELDS.attribute) await tryField(o, f)
+      for (const f of attrFields) await tryField(o, f)
     }
     if (changed) ds._bumpSearchVersion()
   }
@@ -313,6 +343,6 @@ export function useE2E() {
     isE2EEnabled, isUnlocked,
     checkE2EStatus, generateRecoveryKey,
     setupMasterPassword, resetWithRecoveryKey,
-    unlock, lock, encryptItem, decryptItem, decryptStoreItems,
+    unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems,
   }
 }
