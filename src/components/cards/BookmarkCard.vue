@@ -168,8 +168,11 @@ function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batc
 function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
+  if (uiStore.layoutMode === 'mini-grid') { visit(); return }
+  // grid / list：单击标题区直接打开网站
+  if ((e.target as HTMLElement).closest('.card-titlewrap')) { visit(); return }
   if (uiStore.layoutMode !== 'list') return
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
+  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
   toggleExpand()
 }
 function filterByTagName(name: string) {

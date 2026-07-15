@@ -193,6 +193,9 @@ function filterByTagName(name: string) {
 function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); debouncedSaveAppData() }
 function onCardClick(e: MouseEvent) {
   if (ui.batchMode) { toggleSelect(); return }
+  if (ui.layoutMode === 'mini-grid') { toggleFocus(); return }
+  // grid / list：单击标题区聚焦组
+  if ((e.target as HTMLElement).closest('.card-titlewrap')) { toggleFocus(); return }
   if (ui.layoutMode !== 'list') return
   if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
   toggleExpand()
