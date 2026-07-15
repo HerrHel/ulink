@@ -21,13 +21,15 @@
 }
 .group-card:hover .group-card-accent{opacity:0.8;box-shadow:0 0 8px var(--accent-glow)}
 .group-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
-/* PERF-1：折叠态笔记预览（sanitizeHTML），不挂 TipTap */
+/* PERF-1：折叠态笔记预览（sanitizeHTML），不挂 TipTap。
+   不截断 max-height——交给 .card-scroll-wrap 的 overflow-y:auto 滚动翻阅，
+   颜色用 --text 避免"变灰"观感（此前 --text-secondary 偏灰）。 */
 .group-notes-preview{
-  font-size:13px;line-height:1.5;color:var(--text-secondary);
-  max-height:120px;overflow:hidden;
+  font-size:13px;line-height:1.6;color:var(--text);
   pointer-events:none;
   word-break:break-word;
 }
+.group-notes-preview :is(h1,h2,h3){color:var(--text);font-weight:600}
 .group-notes-preview .group-inline-card,
 .group-notes-preview .group-ref-card{
   display:inline-flex;align-items:center;gap:4px;

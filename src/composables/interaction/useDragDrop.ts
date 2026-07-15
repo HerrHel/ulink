@@ -244,6 +244,7 @@ function _onDragOver(e: DragEvent) {
 function _onDrop(e: DragEvent) {
   if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
   _hideDragCursor();
+  _hideDragHint();
   const p = dragPayload(e);
   if (!p) return;
 

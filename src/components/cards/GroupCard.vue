@@ -71,13 +71,9 @@
         <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
           <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
         </div>
-        <!-- PERF-1：仅展开时挂 TipTap；折叠用预览，避免每组一实例 -->
-        <GroupEditor v-if="isExpanded" :groupId="group.id" />
-        <div
-          v-else-if="notesPreviewHtml && ui.layoutMode === 'grid'"
-          class="group-notes-preview"
-          v-html="notesPreviewHtml"
-        ></div>
+        <!-- grid 折叠态直接挂 TipTap（与旧版一致，富文本原色可滚可编辑）；list 展开态同样挂载；
+             mini-grid 用纯文本摘要，避免每组一实例 -->
+        <GroupEditor v-if="isExpanded || ui.layoutMode === 'grid'" :groupId="group.id" />
         <div class="card-preview" v-else-if="previewText">{{ previewText }}</div>
       </div>
     </div>
@@ -101,7 +97,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { sanitizeHTML, getTagNames, isMobile, stripEntranceAnim } from '../../utils.js'
+import { getTagNames, isMobile, stripEntranceAnim } from '../../utils.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
 import ColorPalette from '../editor/ColorPalette.vue'
@@ -139,12 +135,6 @@ const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim())
 const noteIcon = I.note
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
-
-const notesPreviewHtml = computed(() => {
-  const notes = props.group.notes || ''
-  if (!notes.trim()) return ''
-  return sanitizeHTML(notes)
-})
 
 const previewText = computed(() => groupPreview(props.group))
 
