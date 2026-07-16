@@ -14,7 +14,7 @@
               <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="filteredEntries.indexOf(entry)">
                 <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
                 <GroupCard v-if="entry.isGroup" :group="entry.data" />
-                <BookmarkCard v-else :bookmark="entry.data" />
+                <BookmarkCard v-else :bookmark="entry.data" :default-acct-open="true" />
               </div>
             </template>
           </div>

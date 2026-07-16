@@ -38,7 +38,7 @@
         <template v-else>{{ bookmark.notes }}</template>
       </div>
       <template v-if="bookmark.username || bookmark.password">
-          <button class="card-acct-toggle" @click.stop="acctOpen = !acctOpen">
+          <button class="card-acct-toggle" :class="{ open: acctOpen || isExpanded }" @click.stop="acctOpen = !acctOpen">
             <span aria-hidden="true" v-html="I.chevronDown"></span> 账户信息
           </button>
         <div class="card-acct-body" :class="{ show: acctOpen || isExpanded }">
@@ -116,12 +116,16 @@ function onImgError(e: Event) {
   (e.target as HTMLImageElement).classList.add('img-error')
 }
 
-const props = defineProps({ bookmark: { type: Object as () => Bookmark, required: true } })
+const props = defineProps({
+  bookmark: { type: Object as () => Bookmark, required: true },
+  // 辅助栏场景下账户信息默认展开（大宫格/列表仍默认折叠）
+  defaultAcctOpen: { type: Boolean, default: false },
+})
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const cardEl = ref(null)
 const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
-const acctOpen = ref(false)
+const acctOpen = ref(props.defaultAcctOpen)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 const e2eStore = useE2EStore()
