@@ -807,6 +807,12 @@ export function useCloudSync() {
     if (!isLoggedIn.value) return
     _enqueueDirtyAsOps()
     _withLock('linkvault-sync', _pushFromQueue).then(() => _pullChanges())
+    // H2：网络恢复时若 realtime 处于 error/disconnected（如重连达 10 次上限被清后），重建订阅，
+    // 否则用户在不知情下停止接收其它设备变更直到刷新页面。
+    if (syncStore.realtimeStatus !== 'connected') {
+      unsubscribeRealtime()
+      subscribeRealtime(_pullChanges)
+    }
   }
 
   function _onVisibilityChange() {
@@ -818,6 +824,11 @@ export function useCloudSync() {
         await _pushFromQueue()
       }
     })
+    // H2：切回前台时若 realtime 断开（非首次未初始化），重建订阅
+    if (syncStore.realtimeStatus !== 'connected' && syncStore.realtimeStatus !== 'connecting') {
+      unsubscribeRealtime()
+      subscribeRealtime(_pullChanges)
+    }
   }
 
   function initOnlineListener() {

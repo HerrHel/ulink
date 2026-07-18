@@ -9,6 +9,8 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
+import { _deleteWithoutEcho } from './useCloudSync.js'
+import { EditorManager } from '../../lib/editor.js'
 import type { EntityType } from '../../types.js'
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
@@ -49,27 +51,19 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     // 使用 dataStore 软删除动作（而非直接 splice），确保：
     // - 数据进入回收站可恢复
     // - 组引用关系正确清理
-    // 然后清除 dirty 标记，避免下次同步把已删除数据重新 upsert 回 Supabase
+    // 然后清除 dirty 标记，避免下次同步把已删除数据重新 upsert 回 Supabase。
     //
-    // 回声防护：deleteBookmark 会把「该 bookmark 所属的 groups」从 bookmarkIds 剔除并
-    // _markDirty(g.id)（波及关联行）。远端 DELETE 引发的本机衍生清理不该被当作本地
-    // 改动回推远端——否则这些 group 会被 partial/full upsert 推回，造成回声流量 +
-    // updated_at_num 污染面（与上方 upsert 分支第 143 行 _changedFields.delete 同理，
-    // 但旧实现漏了删除分支的波及行清理）。删除前快照 dirty 集，删除后清掉新增的波及项。
-    if (type === 'bookmark') {
-      const dirtyBefore = new Set(ds._dirtyIds)
-      const changedBefore = new Set(ds._changedFields.keys())
-      ds.deleteBookmark(id)
-      for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) && did !== id) ds._dirtyIds.delete(did)
-      for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) && cid !== id) ds._changedFields.delete(cid)
-    } else if (type === 'group') {
-      ds.deleteGroup(id)
-    } else if (type === 'category') {
-      ds.deleteCategory(id)
-    } else if (type === 'attribute') {
-      ds.deleteAttribute(id)
-    }
-    ds._dirtyIds.delete(id)
+    // 回声防护（H19 修复）：deleteBookmark/deleteGroup/deleteCategory/deleteAttribute 会产生
+    // 衍生关联行 dirty（deleteBookmark 把所属 groups 从 bookmarkIds 剔除并 _markDirty(g.id)，
+    // deleteCategory 把该分类下所有 bookmark/group 的 categoryId 改 UNCATEGORIZED 并 _markDirty +
+    // _trackChange，deleteAttribute 遍历所有项删 attributes key 同样 _markDirty + _trackChange）。
+    // 远端 DELETE 引发的本机衍生清理不该被当作本地改动回推远端——否则这些波及行被 partial/full
+    // upsert 推回远端造成回声流量 + updated_at_num 污染面。
+    // 旧实现：bookmark 分支重写了一份 dirtyBefore/changedBefore 快照+反向清理，group/category/
+    // attribute 分支直接调 delete* 未做回声清理，与 bookmark 语义不一致且漏改即级联回声。
+    // 现统一调已 export 的 _deleteWithoutEcho（delete* 前快照 dirty/changed，删后清衍生新增项 +
+    // 被删 id 自身），四种类型回声防护口径一致。
+    _deleteWithoutEcho(ds, type, id)
     return
   }
 
@@ -117,6 +111,21 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
           const idx = ds.siblingGroups.findIndex(g => g.id === m.id)
           if (idx >= 0) ds.siblingGroups[idx].updatedAt = remoteUpdatedAt
           ds._grpMap[m.id] = ds.siblingGroups[idx]
+          // H16 修复：group.notes 远端更新时同步挂载中的 TipTap 编辑器。
+          // GroupEditor 只在 onMounted 时读一次 group.notes，之后无 watch setContent。
+          // 远端 realtime 推来 group UPDATE 改了 store.notes，但挂载编辑器仍显示旧 notes，
+          // 用户随后敲字触发 onUpdate → syncToStore 用 ed.getHTML()（旧内容+新字符）覆盖
+          // 刚拉取的远端 notes → 远端更新被静默抹掉。仅当不一致时 setContent 避免焦点重置；
+          // 此处 upsert 已 _dirtyIds.delete，setContent 触发的 onUpdate 会 syncToStore 用相同
+          // notes 覆盖（无害）并 pushUndo（无害），不会回推云端。
+          if (typeof m.notes === 'string' && m.notes !== '') {
+            const ed = EditorManager.get(m.id)
+            if (ed && typeof (ed as any).getHTML === 'function') {
+              try {
+                if (ed.getHTML() !== m.notes) ed.commands.setContent(m.notes)
+              } catch (e) { console.warn('[realtime] sync editor notes failed:', e) }
+            }
+          }
         } else {
           ds.addGroup(m)
         }
@@ -169,6 +178,13 @@ function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
   if (_reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     console.warn('[realtime] max reconnect attempts reached')
     useSyncStore().setRealtimeStatus('error')
+    // H2 修复：达重连上限后直接 unsubscribeRealtime 清 _channel=null。旧实现仅 setRealtimeStatus('error')
+    // 便 return，_channel 仍保持非 null（不会 removeChannel）。subscribeRealtime 入口 `if (!userId || _channel) return`
+    // 因此后续任何 subscribe 都被短路；_onOnline/_onVisibilityChange 仅 push+pull 不订阅 realtime，
+    // initOnlineListener 仅初始化一次触发——realtime 永久断开不可自恢复，直到重新登录或刷新页面，
+    // 用户不知情下停止接收其它设备变更。清 _channel=null 后，后续 online 事件可重建（见 useCloudSync
+    // _onOnline/_onVisibilityChange 中 realtimeStatus!==connected 的重建分支）。
+    unsubscribeRealtime()
     return
   }
   // 防止同一连接连发 CHANNEL_ERROR+CLOSED（或旧代残余状态）时各自 _scheduleReconnect
