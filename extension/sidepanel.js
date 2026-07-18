@@ -3,9 +3,14 @@
 (function () {
   'use strict'
 
-  // ── Supabase 配置 ──
-  const SUPABASE_URL = 'https://yqouglfopbmujkqmjgpu.supabase.co'
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxb3VnbGZvcGJtdWprcW1qZ3B1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NjI2NjAsImV4cCI6MjA5NTUzODY2MH0.jiS802kT9rZZibDC8N3hB1cyvSxHV5xHs9pNjE7Wmnw'
+  // ── Supabase 配置（L2：来自 config.js，与主项目 .env 对齐）──
+  const _cfg = window.LinkVaultExtConfig || {}
+  const SUPABASE_URL = _cfg.SUPABASE_URL || ''
+  const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY || ''
+  const MASTER_PASSWORD_TTL_MS = _cfg.MASTER_PASSWORD_TTL_MS || 60000
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.error('[sidepanel] LinkVaultExtConfig missing SUPABASE_URL / SUPABASE_ANON_KEY')
+  }
 
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { autoRefreshToken: true, persistSession: true, storage: localStorage, storageKey: 'linkvault_ext_auth' }
@@ -60,6 +65,21 @@
   let searchTimer = null
   let sessionMasterPassword = ''
   let passwordRevealed = false
+  let _mpClearTimer = null
+
+  /** M6：主密码用后定时清空，缩短明文常驻 sidepanel 内存窗口 */
+  function scheduleClearMasterPassword() {
+    if (_mpClearTimer) clearTimeout(_mpClearTimer)
+    _mpClearTimer = setTimeout(function () {
+      sessionMasterPassword = ''
+      _mpClearTimer = null
+    }, MASTER_PASSWORD_TTL_MS)
+  }
+
+  function clearMasterPasswordNow() {
+    if (_mpClearTimer) { clearTimeout(_mpClearTimer); _mpClearTimer = null }
+    sessionMasterPassword = ''
+  }
 
   // ── Toast ──
   function toast(msg, dur, action) {
@@ -345,7 +365,9 @@
     if (!currentMatchedBookmark || !currentMatchedBookmark.password) return
     if (passwordRevealed) {
       bdPasswordText.textContent = '••••••••'; bdPasswordText.className = 'bd-pw-text'
-      bdPwShow.textContent = '显示'; passwordRevealed = false; return
+      bdPwShow.textContent = '显示'; passwordRevealed = false
+      // 隐藏时不强制清主密码（用户可能马上再显示），TTL 定时器负责清
+      return
     }
     try {
       var stored = currentMatchedBookmark.password
@@ -358,6 +380,8 @@
         }
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, sessionMasterPassword)
         else { toast('解密库未加载'); return }
+        // M6：解密成功后启动 TTL，到期清空 sessionMasterPassword
+        scheduleClearMasterPassword()
       } else {
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
         else plaintext = typeof stored === 'string' ? stored : ''
@@ -366,7 +390,7 @@
       bdPwShow.textContent = '隐藏'; passwordRevealed = true
     } catch (e) {
       toast('解密失败: ' + e.message)
-      if (e.message && e.message.indexOf('主密码') !== -1) sessionMasterPassword = ''
+      if (e.message && e.message.indexOf('主密码') !== -1) clearMasterPasswordNow()
     }
   })
 
