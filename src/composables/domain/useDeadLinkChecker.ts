@@ -35,24 +35,36 @@ function _saveDeadLinkHistory(hist: Record<string, CheckResult[]>): void {
   try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)) } catch { /* 存储满时静默忽略 */ }
 }
 
-/** 追加一次检测结果到历史记录（保留最近 MAX_HIST 条，按 checkedAt 降序） */
-function _appendDeadLinkHistory(bmId: string, result: CheckResult): void {
-  const hist = _loadDeadLinkHistory()
+// M16：内存中的历史缓存；全量检查只 mutate 内存，结束时一次 save，避免 O(N²) 全量 stringify
+let _histCache: Record<string, CheckResult[]> | null = null
+
+function _getHistCache(): Record<string, CheckResult[]> {
+  if (!_histCache) _histCache = _loadDeadLinkHistory()
+  return _histCache
+}
+
+/** 追加一次检测结果到内存缓存（不写盘）；调用方在批次结束时 flush */
+function _appendDeadLinkHistory(bmId: string, result: CheckResult, persist = true): void {
+  const hist = _getHistCache()
   if (!hist[bmId]) hist[bmId] = []
   hist[bmId].unshift(result)
   hist[bmId] = hist[bmId].slice(0, MAX_HIST)
-  _saveDeadLinkHistory(hist)
+  if (persist) _saveDeadLinkHistory(hist)
+}
+
+function _flushDeadLinkHistory(): void {
+  if (_histCache) _saveDeadLinkHistory(_histCache)
 }
 
 /** 删除某书签的检测历史（永久删除时调用） */
 function _clearDeadLinkHistory(bmId: string): void {
-  const hist = _loadDeadLinkHistory()
+  const hist = _getHistCache()
   delete hist[bmId]
   _saveDeadLinkHistory(hist)
 }
 
 // 启动时加载历史到 results（便于 isDead/isBlocked computed 使用历史数据）
-const _history = _loadDeadLinkHistory()
+const _history = _getHistCache()
 for (const [id, checks] of Object.entries(_history)) {
   if (checks.length > 0) results[id] = checks[0]  // 取最新一次记录覆盖 results
 }
@@ -208,6 +220,9 @@ export function useDeadLinkChecker() {
     }
     if (Object.keys(clearPatches).length) ds.batchPatchBookmarkAttributes(clearPatches)
 
+    // M16：全量检查期间只写内存 hist，结束 flush 一次
+    _getHistCache()
+
     for (let i = 0; i < bookmarks.length; i += batchSize) {
       if (_abort.signal.aborted) break
 
@@ -220,7 +235,7 @@ export function useDeadLinkChecker() {
         const result = batchResults[j]
         if (result.status === 'fulfilled') {
           results[batch[j].id] = result.value
-          _appendDeadLinkHistory(batch[j].id, result.value)
+          _appendDeadLinkHistory(batch[j].id, result.value, false)
         }
       }
 
@@ -231,6 +246,7 @@ export function useDeadLinkChecker() {
       }
     }
 
+    _flushDeadLinkHistory()
     checking.value = false
     lastFullCheckAt.value = Date.now()
     _applyDeadLinkAttributes()
