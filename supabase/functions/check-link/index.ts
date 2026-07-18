@@ -171,18 +171,23 @@ const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10
 /** 重定向最大跳数 */
 const MAX_REDIRECTS = 5
 
-/** best-effort DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
- *  IP 字面量或非域名直接返 true（不查 DNS，已被 validateUrlShape 覆盖）。
- *  resolveDns 不可用或解析失败时返 true（降级，不阻断主路径）。 */
+/** DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
+ *  H6：解析失败 / resolveDns 不可用时改为拒绝（fail-closed），不再 best-effort 放行。
+ *  避免解析能力受限时跳过私网校验、以及 DNS 重绑定窗口下「校验失败仍 fetch」的放大。
+ *  域名解析到 0 条 A/AAAA 也拒（无公网目标可连）。
+ *  IP 字面量不查 DNS（已由 validateUrlShape 覆盖）。 */
 async function _dnsLookupSafe(hostname: string): Promise<boolean> {
   if (hostname === 'localhost') return false
-  if (!hostname.includes('.')) return true  // 不是域名
+  // 非域名（IP 字面量等）已由 validateUrlShape 校验
+  if (!hostname.includes('.')) return true
   try {
     const records = await Deno.resolveDns(hostname, 'A').catch(() => [] as string[])
     const records6 = await Deno.resolveDns(hostname, 'AAAA').catch(() => [] as string[])
-    return isTargetDnsSafeSyncResults(hostname, [...records, ...records6])
+    const all = [...records, ...records6]
+    if (all.length === 0) return false  // 无解析结果 → 拒
+    return isTargetDnsSafeSyncResults(hostname, all)
   } catch {
-    return true
+    return false  // H6：解析异常 → 拒，不再 fail-open
   }
 }
 

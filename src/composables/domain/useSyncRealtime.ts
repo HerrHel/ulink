@@ -71,6 +71,9 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   if (!row || ds._dirtyIds.has(row.id)) return
 
   const e2e = useE2E()
+  // M2：在 await 前捕获解锁态；await 后若已 lock 则丢弃本次 merge，避免密文态 upsert
+  // （与 useCloudSync M1 pull 循环同构：快照 + 返回后二次校验）
+  const wasUnlocked = e2e.isUnlocked.value
 
   const HANDLERS: Record<EntityType, { from: (row: any) => any; upsert: (m: any) => void }> = {
     bookmark: {
@@ -157,9 +160,13 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   const mapped = h.from(row)
   if (!mapped) return  // Zod 校验失败的远端条目跳过
   // decryptItem 返回浅拷贝，必须使用返回值，否则 upsert 仍是密文（RE-1）
-  const plain = e2e.isUnlocked.value
-    ? await e2e.decryptItem(type, mapped as any)
-    : mapped
+  // M2：入口未解锁则保留密文 mapped（unlock 后 decryptStoreItems 补解）；
+  // 入口已解锁则 await decrypt，若 await 期间 lock 则丢弃不 upsert。
+  let plain = mapped
+  if (wasUnlocked) {
+    plain = await e2e.decryptItem(type, mapped as any)
+    if (!e2e.isUnlocked.value) return
+  }
   h.upsert(plain)
   // 清除本次 merge 产生的 _changedFields：updateBookmark/updateGroup 内部会
   // 对传入的所有字段 _trackChange，把这些远端来的字段累积进 _changedFields。

@@ -21,18 +21,17 @@
   53 个单测守护。`index.ts` 内联了一份等价镜像纯逻辑（同步注释顶说明），改 SSRF 逻辑时
   请同步两处并保持一致。
 
-## H6：DNS TOCTOU 说明（已记录的架构限制）
+## H6：DNS TOCTOU 说明与 fail-closed
 
 `index.ts._validateUrl` 用 `Deno.resolveDns` 查 A/AAAA 校验私网后再把原始 URL 传给 `fetch`。
-`fetch` 内部会再次独立 DNS 解析，两次解析之间存在 TOCTOU 窗口（攻击者可配权威 DNS 在校验
-通过后把记录改为内网 IP）。Edge Function 运行时不支持自定义 fetch resolver，完整消除需
-将出口走受限网关——超出本次审计修复能力范围。当前缓解：
+`fetch` 内部会再次独立 DNS 解析，两次解析之间仍存在 TOCTOU 窗口（攻击者可配权威 DNS 在校验
+通过后把记录改为内网 IP）。Edge Function 运行时不支持自定义 fetch resolver 固定已校验 IP，
+完整消除需出口走受限网关。当前缓解：
 
 - `_fetchWithRedirectGuard` 对每跳重定向 Location 重新走 `_validateUrl`（含 DNS lookup），
-  覆盖「重定向后才指向内网」的 TOCTOU。
-- `_dnsLookupSafe` 在解析能力降级（resolveDns 不可用/抛错）时按 best-effort 放行，是为保
-  DNS 暂时不可用时正常页不被误判 dead；在受控运行时（Supabase Edge）resolveDns 可用，
-  正常解析返回私网记录即拒，私网外泄面已显著收窄。
+  覆盖「重定向后才指向内网」的路径。
+- **H6 修复**：`_dnsLookupSafe` 在 resolveDns 抛错 / 0 条 A+AAAA 时 **fail-closed 拒绝**，
+  不再 best-effort 放行。解析能力降级时宁可误拦死链检测，也不跳过私网校验放大 SSRF 面。
 
 ## 环境变量
 
