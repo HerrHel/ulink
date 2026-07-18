@@ -154,7 +154,14 @@ export const useAppStore = defineStore('app', () => {
       // 旧实现不 await 不检查返回值 → 用户存的书签没落库却无任何提示，下次刷新发现丢了误以为 bug。
       // 只弹一次避免刷屏：debouncedSave 300ms 防抖触发 save 频率不低。
       persist.saveData(parsed.data).then(ok => {
-        if (ok) _lastSavedFingerprint = fp
+        if (ok) {
+          _lastSavedFingerprint = fp
+          // H11 修复：IDB 配额满/隐私模式下 saveData 持续返回 false，但 _storageFailWarned
+          // 一旦置 true 永不重置，后续持续失败静默，用户继续增删书签数据仅存活于内存，
+          // 刷新即全部丢失却再无任何提示。写入恢复成功即清旗标，让"恢复→再失败"能重新提示，
+          // 既保留"单次失败只弹一次避免刷屏"语义，又能在存储恢复后重新具备告警能力。
+          _storageFailWarned = false
+        }
         if (!ok && !_storageFailWarned) {
           _storageFailWarned = true
           toast('⚠️ 存储不可用（如隐私模式/配额满），刷新后数据可能丢失', false)

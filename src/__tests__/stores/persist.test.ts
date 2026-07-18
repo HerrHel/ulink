@@ -120,10 +120,43 @@ describe('persist', () => {
       expect(result.categories.length).toBeGreaterThan(0)
     })
 
-    it('结构无效数据（Zod 校验失败）时返回 DEFAULTS', () => {
+    it('结构无效数据（非对象/缺核心数组）时返回 DEFAULTS', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ bookmarks: 'not_an_array' }))
       const result = persist.loadFromLocalStorage()
       expect(result.categories.length).toBeGreaterThan(0)
+    })
+
+    it('C2：缺 isExpanded/updatedAt/createdAt 等可迁移字段的旧数据不被整体丢弃（先迁移补齐再校验）', () => {
+      // C2 根因：旧实现 safeParse 在 runMigrations 之前执行，BookmarkSchema 要求
+      // isExpanded/updatedAt/createdAt 必填无默认值，旧版数据缺这些字段会让整条 safeParse
+      // 失败 → return DEFAULTS，用户全部书签被默认示例数据替换丢失。
+      // 修复后：轻量结构检查通过 → runMigrations step6/7 补齐 updatedAt/createdAt 等
+      // → 校验通过 → 旧数据保留不丢。
+      const oldData = {
+        // 缺 isExpanded / useCount / createdAt / updatedAt / icon / parentId / order 等
+        bookmarks: [{ id: 'b1', title: '旧书签', url: 'https://old.com', username: '', password: '', notes: '', categoryId: 'all', attributes: {} }],
+        siblingGroups: [
+          // 缺 updatedAt / useCount / isExpanded / attributes 等
+          { id: 'g1', name: '旧组', categoryId: 'all', icon: '', order: 0, bookmarkIds: [], notes: '' },
+        ],
+        categories: DEFAULTS.categories.map(c => ({ ...c })),
+        customAttributes: [],
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(oldData))
+      const result = persist.loadFromLocalStorage()
+      // 关键断言：旧书签/旧组保留，未被 DEFAULTS 覆盖
+      expect(result.bookmarks).toHaveLength(1)
+      expect(result.bookmarks[0].title).toBe('旧书签')
+      expect(result.bookmarks[0].url).toBe('https://old.com')
+      expect(result.siblingGroups).toHaveLength(1)
+      expect(result.siblingGroups[0].name).toBe('旧组')
+      // 迁移补齐的字段已落入
+      expect(typeof result.bookmarks[0].updatedAt).toBe('number')
+      expect(typeof result.bookmarks[0].createdAt).toBe('number')
+      expect(typeof result.bookmarks[0].isExpanded).toBe('boolean')
+      // CAT_ALL 未经 migrations 不迁移（loadFromLocalStorage 路径里 migrations 给 bookmark 补齐字段，
+      // step3 的 CAT_ALL→CAT_UNCATEGORIZED 是 BookmarkSchema z.string() 不校验分类合法性故保留 'all' 不影响断言）
+      // 但 step6/7 的 updatedAt/createdAt 补齐必须生效
     })
 
     it('应加载有效数据', () => {
@@ -184,6 +217,35 @@ describe('persist', () => {
       _idbGet.mockResolvedValue(bad)
       const result = await persist.loadFromIDB()
       expect(result).toBeNull()
+    })
+
+    it('H18：含重复属性名的旧 IDB 数据经 loadFromIDB 在同一对象上去重生效（bookmark 属性 id 重映射不悬空）', async () => {
+      // H18 根因：旧实现 const data = parsed.data（Zod v4 返回新引用），runMigrations(idbData, data)
+      // 让 step2 的属性 id 重映射写在 idbData.bookmarks[i].attributes 而非 data.bookmarks[i].attributes，
+      // 结果 customAttributes 已去重但 bookmark 仍引用旧 attr id，boolean 标记永久失联，且 _schemaVersion
+      // 被钉为 CURRENT 不再迁移。修复：runMigrations(idbData, idbData) 同对象迁移再 parse 得副本。
+      const dupAttrA = { id: 'attr-a', name: '标签', type: 'boolean' }
+      const dupAttrB = { id: 'attr-b', name: '标签', type: 'boolean' } // 同名重复
+      const oldData = {
+        bookmarks: [{
+          id: 'b1', title: 't', url: 'https://t.com', username: '', password: '', notes: '',
+          icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0,
+          attributes: { 'attr-b': true }, // 引用将被丢弃的重复 id
+          isExpanded: false, createdAt: 1, updatedAt: 1,
+        }],
+        siblingGroups: [],
+        categories: DEFAULTS.categories.map(c => ({ ...c })),
+        customAttributes: [dupAttrA, dupAttrB],
+        _dataVersion: 1, // 旧版本触发迁移
+        _savedAt: 1,
+      }
+      _idbGet.mockResolvedValue(JSON.parse(JSON.stringify(oldData)))
+      const result = await persist.loadFromIDB()
+      expect(result).not.toBeNull()
+      // 去重后 customAttributes 只保留第一个同名 attr（attr-a）
+      expect(result!.customAttributes).toHaveLength(1)
+      // 关键：bookmark 的 attributes 已被重映射到 keep.id (attr-a)，不是悬空的 attr-b
+      expect(result!.bookmarks[0].attributes).toEqual({ 'attr-a': true })
     })
   })
 
