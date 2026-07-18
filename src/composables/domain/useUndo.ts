@@ -85,8 +85,11 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
   const ds = useDataStore()
   const sg = ds.groupMap[gid]
   if (!sg) return
+  // H15 配套：软删除书签仍在 bookmarkMap，恢复时也需过滤 deletedAt，
+  // 与 GroupEditor.syncToStore / 历史恢复一致，避免 undo 把悬空 id 写回 bookmarkIds。
   const filteredIds = snap.bookmarkIds.filter(function (bid) {
-    return ds.bookmarkMap[bid]
+    const bm = ds.bookmarkMap[bid]
+    return !!(bm && !bm.deletedAt)
   })
   ds.updateGroup(gid, { notes: snap.notes, bookmarkIds: filteredIds })
   // Sync TipTap editor if it's mounted (visible group)
@@ -97,6 +100,17 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
     finally { _restoring = false }
   }
   // If no editor (group not visible), Vue reactivity renders sg.notes on next mount
+}
+
+/** M7：undo/redo 成功后清掉该组 pushUndo 防抖 timer，
+ *  否则窗口内下一次 pushUndo 走 if 分支只续 timer、不建栈也不清 redo，
+ *  新编辑被静默吞掉且 redo 仍指向旧分叉。 */
+function _clearPushTimer(gid: string) {
+  const undo = useUndoStore()
+  if (undo.timers[gid]) {
+    clearTimeout(undo.timers[gid])
+    delete undo.timers[gid]
+  }
 }
 
 export function performUndo(gid: string): boolean {
@@ -117,6 +131,8 @@ export function performUndo(gid: string): boolean {
   stack.redo.push(redoSnap)
   const snap = stack.undo.pop()!
   restoreSnapshot(gid, snap)
+  // M7：清 timer，下一次 pushUndo 必走 else 真正建栈并清 redo
+  _clearPushTimer(gid)
   debouncedSaveAppData()
   toast('已撤销')
   return true
@@ -138,6 +154,8 @@ export function performRedo(gid: string): boolean {
   stack.undo.push(undoSnap)
   const snap = stack.redo.pop()!
   restoreSnapshot(gid, snap)
+  // M7：同 performUndo，清 timer 使后续编辑真正建撤销点
+  _clearPushTimer(gid)
   debouncedSaveAppData()
   toast('已前进')
   return true

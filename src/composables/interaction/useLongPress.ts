@@ -3,7 +3,7 @@
  * 从 event-delegation.js 提取的 pointer event 长按逻辑。
  * 检测 touch 设备上的长按手势，触发 showActionSheet 回调。
  */
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import { isMobile } from '../../utils.js'
 import { showActionSheet } from '../ui/useUI.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -17,12 +17,15 @@ interface ActionItem {
   danger?: boolean
 }
 
-export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | null) {
+export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | null): { fired: Ref<boolean> } {
   let _target: HTMLElement | null = null
   let _timer: ReturnType<typeof setTimeout> | null = null
-  let _fired = false
+  // H17：旧实现用普通 let + getter，useApp 的 watch(() => longPress.fired) 只在初始化触发一次，
+  // 长按后 _fired=true 永不驱动 lpFired，合成 click 抑制失效。改为 ref 后 watch 能正确响应。
+  const fired = ref(false)
   let _startX = 0
   let _startY = 0
+  let _resetTimer: ReturnType<typeof setTimeout> | null = null
 
   function cancel() {
     if (_timer) { clearTimeout(_timer); _timer = null }
@@ -40,7 +43,7 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
     _startY = e.clientY
     _timer = setTimeout(() => {
       _timer = null
-      _fired = true
+      fired.value = true
       const actions = getActions(card)
       if (actions) {
         showActionSheet(actions)
@@ -54,7 +57,11 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
   }
 
   function onPtrUp() {
-    if (_fired) { setTimeout(() => { _fired = false }, 200) }
+    if (fired.value) {
+      // 抬手后短暂保持 true，吞掉合成 click；200ms 后复位
+      if (_resetTimer) clearTimeout(_resetTimer)
+      _resetTimer = setTimeout(() => { fired.value = false; _resetTimer = null }, 200)
+    }
     cancel()
   }
 
@@ -66,12 +73,13 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
   })
 
   onUnmounted(() => {
+    cancel()
+    if (_resetTimer) { clearTimeout(_resetTimer); _resetTimer = null }
     document.removeEventListener('pointerdown', onPtrDown)
     document.removeEventListener('pointermove', onPtrMove)
     document.removeEventListener('pointerup', onPtrUp)
     document.removeEventListener('pointercancel', cancel)
   })
 
-  // Expose _fired so global click handler can suppress click after long-press
-  return { get fired() { return _fired }, set fired(v) { _fired = v } }
+  return { fired }
 }

@@ -128,4 +128,29 @@ describe('useUndo R2-5 字节驱逐语义', () => {
     pushUndo('g2')
     expect(undo.stacks['g2'].undo.length).toBe(1)
   })
+
+  it('M7: undo 后窗口内再 push 必建栈并清 redo（timer 被清）', async () => {
+    // 旧 bug：pushUndo 设 50ms timer 后 performUndo 不清 timer，
+    // 窗口内再次 push 走 if 分支只续 timer → 不建栈、不清 redo → 新编辑无撤销点。
+    const ds = useDataStore()
+    makeGroup('g1', 'v0')
+    pushUndo('g1') // 建点1，启动 timer
+    await tick()
+    ds.updateGroup('g1', { notes: 'v1' })
+    pushUndo('g1') // 建点2，启动 timer
+    const undo = useUndoStore()
+    expect(undo.stacks['g1'].undo.length).toBe(2)
+    expect(undo.timers['g1']).toBeTruthy()
+
+    // 窗口内 undo（不等 tick）——应清 timer
+    expect(performUndo('g1')).toBe(true)
+    expect(undo.timers['g1']).toBeUndefined()
+    expect(undo.stacks['g1'].redo.length).toBe(1)
+
+    // 立刻再编辑并 push：必走 else 真正建栈 + 清 redo
+    ds.updateGroup('g1', { notes: 'v2-after-undo' })
+    pushUndo('g1')
+    expect(undo.stacks['g1'].undo.length).toBeGreaterThanOrEqual(2)
+    expect(undo.stacks['g1'].redo.length).toBe(0)
+  })
 })
