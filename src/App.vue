@@ -134,6 +134,8 @@ onMounted(async () => {
   //   - 扩展快捷键/右键菜单: ?ext_save=1&ext_save_url=...&ext_save_title=...
   //   - Web Share Target: ?title=...&text=...&url=...
   // 静默保存 + toast 撤销（否决纯静默方案，保留可逆性）
+  // H8：先读参再立刻 replaceState 清 query，避免 800ms 窗口内错误上报泄漏书签内容；
+  // 保存动作仍延后等初始化完成。
   const params = new URLSearchParams(window.location.search)
   const extSaveUrl = params.get('ext_save_url')
   const shareUrl = params.get('url')
@@ -142,12 +144,11 @@ onMounted(async () => {
   if (incomingUrl) {
     const incomingTitle = params.get('ext_save_title') || params.get('title') || ''
     const incomingText = params.get('ext_save_notes') || params.get('text') || ''
+    const cleanUrl = window.location.origin + window.location.pathname
+    window.history.replaceState(null, '', cleanUrl)
     // 等应用初始化完成后再保存
     setTimeout(() => {
       saveFromExtension(incomingUrl, incomingTitle, incomingText)
-      // 清理 URL 参数，避免刷新时重复保存
-      const cleanUrl = window.location.origin + window.location.pathname
-      window.history.replaceState(null, '', cleanUrl)
     }, 800)
   }
 })
