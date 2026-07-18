@@ -65,6 +65,32 @@ describe('searchBookmarkIds', () => {
     const result = searchBookmarkIds(SAMPLE_BOOKMARKS, 'zzzznonexistent', EMPTY_ATTRS)
     expect(result!.size).toBe(0)
   })
+
+  it('M21：中文标题可用拼音全拼/首字母搜到（titlePy 索引）', () => {
+    // search.ts 把 titlePy/notesPy 作为 Fuse 搜索键，拼音匹配是中文搜索核心能力。
+    // 组「开发工具」全拼 kaifa 命中；书签 b1 notes='代码托管' 全拼 daima 命中。
+    const byGroupTitle = searchGroupIds(SAMPLE_GROUPS, 'kaifa', BOOKMARK_MAP, EMPTY_ATTRS)
+    expect(byGroupTitle!.has('g1')).toBe(true)
+    const byNotesPy = searchBookmarkIds(SAMPLE_BOOKMARKS, 'daima', EMPTY_ATTRS)
+    expect(byNotesPy!.has('b1')).toBe(true)
+  })
+
+  it('L6：降级（库未就绪）下 attrNames 匹配照常生效', () => {
+    // L6：fallback includes 应覆盖 attrNames 字段，与正常 Fuse 路径一致。
+    // 正常路径能搜到勾选某属性名的书签，降级路径也应能。
+    const attrs: CustomAttribute[] = [{ id: 'attr-rl', name: '需登录', type: 'boolean' }]
+    const bms: Bookmark[] = [{
+      id: 'bl', title: '普通标题', url: 'https://normal.com', notes: '', username: '', password: '',
+      icon: '', categoryId: 'x', parentId: null, order: 0, useCount: 0, attributes: { 'attr-rl': true },
+      isExpanded: false, createdAt: 0, updatedAt: 0,
+    }]
+    // 搜属性名「登录」应命中 bl（无论 fuse 是否就绪，降级路径也包含 attrNames）
+    const result = searchBookmarkIds(bms, '登录', attrs)
+    expect(result!.has('bl')).toBe(true)
+    // 搜属性名片段也命中
+    const frag = searchBookmarkIds(bms, '需登', attrs)
+    expect(frag!.has('bl')).toBe(true)
+  })
 })
 
 describe('searchGroupIds', () => {
@@ -125,6 +151,22 @@ describe('searchWithHighlights', () => {
   it('returns empty for no match', () => {
     const results = searchWithHighlights(SAMPLE_BOOKMARKS, SAMPLE_GROUPS, 'zzzznonexistent', BOOKMARK_MAP, EMPTY_ATTRS)
     expect(results).toEqual([])
+  })
+
+  it('M8：拼音命中时不输出拼音串作高亮段（避免建议项显示拼音乱码）', () => {
+    // M8 根因：拼音字段映射 titlePy->'title'，query 只命中拼音索引时 match.value 是拼音串
+    // （如 'kaiFaGongJu'），_buildHighlightSegments 用拼音串作 text 生成段，建议项渲染拼音字符
+    // 而非中文原文。修复：拼音 key 命中时跳过段生成，渲染层用 fallback 原文显示。
+    // 用拼音搜中文标题——命中后检查 title 段不含拼音拉丁字母串。
+    const results = searchWithHighlights(SAMPLE_BOOKMARKS, SAMPLE_GROUPS, 'kaifa', BOOKMARK_MAP, EMPTY_ATTRS)
+    // 至少命中「开发工具」组或「代码托管」书签
+    expect(results.length).toBeGreaterThan(0)
+    for (const r of results) {
+      const segs = r._highlights.title || r._highlights.name || []
+      const allText = segs.map(s => s.text).join('')
+      // 不应出现整段拉丁拼音串（aa-zz 大量连续拉丁字符的拼音）
+      expect(/[a-zA-Z]{6,}/.test(allText)).toBe(false)
+    }
   })
 })
 
