@@ -91,7 +91,20 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
     const bm = ds.bookmarkMap[bid]
     return !!(bm && !bm.deletedAt)
   })
-  ds.updateGroup(gid, { notes: snap.notes, bookmarkIds: filteredIds })
+  // L4：不走 updateGroup（会 _saveLocalHistory/_trackChange 把机器恢复态写进版本历史与字段脏追踪）；
+  // 直接写 notes/bookmarkIds + dirty，云同步仍能推送，HistoryPanel 不掺假版本。
+  const idx = ds.siblingGroups.findIndex(g => g.id === gid)
+  if (idx >= 0) {
+    ds.siblingGroups[idx] = {
+      ...ds.siblingGroups[idx],
+      notes: snap.notes,
+      bookmarkIds: filteredIds,
+      updatedAt: Date.now(),
+    }
+    ds._grpMap[gid] = ds.siblingGroups[idx]
+    ds._markDirty(gid)
+    ds._bumpSearchVersion()
+  }
   // Sync TipTap editor if it's mounted (visible group)
   const ed = EditorManager.get(gid)
   if (ed) {

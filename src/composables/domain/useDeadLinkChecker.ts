@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
+import type { Bookmark } from '../../types.js'
 
 
 interface CheckResult {
@@ -210,13 +211,8 @@ export function useDeadLinkChecker() {
     // 仅清活跃书签的旧死链标记（PERF-4：batchPatch，一次 bump）
     const clearPatches: Record<string, Record<string, unknown>> = {}
     for (const b of bookmarks) {
-      const attrs = b.attributes || {}
-      if (attrs['dead-link'] || attrs['gfw-blocked']) {
-        const rest = { ...attrs }
-        delete rest['dead-link']
-        delete rest['gfw-blocked']
-        clearPatches[b.id] = rest
-      }
+      const next = _nextDeadAttrs(b.attributes || {}, 'clear')
+      if (next) clearPatches[b.id] = next
     }
     if (Object.keys(clearPatches).length) ds.batchPatchBookmarkAttributes(clearPatches)
 
@@ -264,21 +260,12 @@ export function useDeadLinkChecker() {
 
     if (result.confidence < CONFIDENCE_THRESHOLD) return result
 
-    const attrs = { ...(bm.attributes || {}) }
-    if (!result.alive) {
-      if (result.blocked) {
-        attrs['gfw-blocked'] = true
-        delete attrs['dead-link']
-      } else {
-        attrs['dead-link'] = true
-        delete attrs['gfw-blocked']
-      }
-    } else {
-      delete attrs['dead-link']
-      delete attrs['gfw-blocked']
+    const mode = result.alive ? 'alive' : (result.blocked ? 'blocked' : 'dead')
+    const next = _nextDeadAttrs(bm.attributes || {}, mode)
+    if (next) {
+      ds.updateBookmark(bookmarkId, { attributes: next as Bookmark['attributes'] })
+      debouncedSaveAppData()
     }
-    ds.updateBookmark(bookmarkId, { attributes: attrs })
-    debouncedSaveAppData()
 
     return result
   }
@@ -292,42 +279,16 @@ export function useDeadLinkChecker() {
       if (!r) continue
 
       const attrs = bm.attributes || {}
-      const hasDeadAttr = !!attrs['dead-link']
-      const hasGfwAttr = !!attrs['gfw-blocked']
-
       // 低置信度结果：清除旧标记但不设置新标记
       if (r.confidence < CONFIDENCE_THRESHOLD) {
-        if (hasDeadAttr || hasGfwAttr) {
-          const rest = { ...attrs }
-          delete rest['dead-link']
-          delete rest['gfw-blocked']
-          patches[bm.id] = rest
-        }
+        const next = _nextDeadAttrs(attrs, 'clear')
+        if (next) patches[bm.id] = next
         continue
       }
 
-      if (r.alive) {
-        if (hasDeadAttr || hasGfwAttr) {
-          const rest = { ...attrs }
-          delete rest['dead-link']
-          delete rest['gfw-blocked']
-          patches[bm.id] = rest
-        }
-      } else if (r.blocked) {
-        if (!hasGfwAttr || hasDeadAttr) {
-          const rest = { ...attrs }
-          delete rest['dead-link']
-          rest['gfw-blocked'] = true
-          patches[bm.id] = rest
-        }
-      } else {
-        if (!hasDeadAttr || hasGfwAttr) {
-          const rest = { ...attrs }
-          delete rest['gfw-blocked']
-          rest['dead-link'] = true
-          patches[bm.id] = rest
-        }
-      }
+      const mode = r.alive ? 'alive' : (r.blocked ? 'blocked' : 'dead')
+      const next = _nextDeadAttrs(attrs, mode)
+      if (next) patches[bm.id] = next
     }
     if (Object.keys(patches).length) ds.batchPatchBookmarkAttributes(patches)
   }
@@ -335,6 +296,35 @@ export function useDeadLinkChecker() {
   function abort() {
     _abort?.abort()
     checking.value = false
+  }
+
+  /** L12：统一构造死链/被墙 attrs，仅在有变化时返回新对象 */
+  function _nextDeadAttrs(
+    attrs: Record<string, unknown>,
+    mode: 'clear' | 'alive' | 'blocked' | 'dead',
+  ): Record<string, unknown> | null {
+    const hasDead = !!attrs['dead-link']
+    const hasGfw = !!attrs['gfw-blocked']
+    if (mode === 'clear' || mode === 'alive') {
+      if (!hasDead && !hasGfw) return null
+      const rest = { ...attrs }
+      delete rest['dead-link']
+      delete rest['gfw-blocked']
+      return rest
+    }
+    if (mode === 'blocked') {
+      if (hasGfw && !hasDead) return null
+      const rest = { ...attrs }
+      delete rest['dead-link']
+      rest['gfw-blocked'] = true
+      return rest
+    }
+    // dead
+    if (hasDead && !hasGfw) return null
+    const rest = { ...attrs }
+    delete rest['gfw-blocked']
+    rest['dead-link'] = true
+    return rest
   }
 
   function getResult(bookmarkId: string): CheckResult | null {

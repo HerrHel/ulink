@@ -10,6 +10,7 @@ const mockData = {
   childrenMap: {} as any,
   categories: [] as any[],
   customAttributes: [] as any[],
+  nextBookmarkOrder: vi.fn(() => mockData.bookmarks.reduce((m: number, b: any) => b.order > m ? b.order : m, -1) + 1),
   addBookmark: vi.fn(),
   updateBookmark: vi.fn((id: string, changes: any) => {
     const bm = mockData.bookmarkMap[id]

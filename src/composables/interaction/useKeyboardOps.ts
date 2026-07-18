@@ -132,6 +132,8 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     // 用户只能点面板右上角关闭按钮，UX 不一致。ShortcutHelpPanel 自带 Esc 监听无需重复。
     if (ui.panels.trash) ui.panels.trash = false
     if (ui.overlays.deadLinks) ui.overlays.deadLinks = false
+    // L7：版本历史面板 Esc 关闭
+    if (ui.panels.history) ui.panels.history = false
     // M13：补齐 Rail / AttrDropdown / MFB / BatchMove
     if (ui.panels.rail) ui.panels.rail = false
     if (useAttrDropdownStore().open) useAttrDropdownStore().close()

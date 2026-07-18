@@ -35,6 +35,8 @@ export const useSyncStore = defineStore('sync', () => {
   function setSyncStatus(v: typeof syncStatus.value) { syncStatus.value = v }
   function setSyncError(v: string | null) { syncError.value = v }
   function setLastSyncAt(v: number) { lastSyncAt.value = v }
+  // L16：setAutoSync/clearConflicts/dismissConflictBanner 供设置页与测试；
+  // autoSync 默认 true，UI 暂无开关时仍保留 API 以便后续 Settings 接线与单测。
   function setAutoSync(v: boolean) { autoSync.value = v }
   function setPendingCount(v: number) { pendingCount.value = v }
   function setRealtimeStatus(v: typeof realtimeStatus.value) { realtimeStatus.value = v }

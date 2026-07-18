@@ -21,8 +21,9 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     const ds = useDataStore()
     if (conflict.type === 'bookmark') ds.updateBookmark(id, remoteData as Partial<Bookmark>)
     else if (conflict.type === 'group') ds.updateGroup(id, remoteData as Partial<SiblingGroup>)
-    else if (conflict.type === 'category') { const cat = ds.categories.find(c => c.id === id); if (cat) Object.assign(cat, remoteData) }
-    else if (conflict.type === 'attribute') { const attr = ds.customAttributes.find(a => a.id === id); if (attr) Object.assign(attr, remoteData) }
+    // M18：走 updateCategory/updateAttribute，保证 dirty + track + map
+    else if (conflict.type === 'category') ds.updateCategory(id, remoteData as Partial<import('../../types.js').Category>)
+    else if (conflict.type === 'attribute') ds.updateAttribute(id, remoteData as Partial<import('../../types.js').CustomAttribute>)
     saveAppData()
   }
   _remoteSnapshots.delete(`${conflict.type}:${id}`)

@@ -15,7 +15,7 @@ import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
-import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt } from '../../crypto.js'
+import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher } from '../../crypto.js'
 import type { EntityType } from '../../types.js'
 
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
@@ -310,8 +310,8 @@ export function useE2E() {
     const tryField = async (obj: Record<string, unknown>, f: string) => {
       const v = obj[f]
       if (typeof v !== 'string' || !v) return
-      // 粗筛：必须是三段（盐.纵深.密文）才可能为密文，避免对普通含点明文（如 url）无谓加解密
-      if (v.split('.').length !== 3) return
+      // L15：粗筛走 isThreePartCipher；L17：实体内字段并行、跨实体并行
+      if (!isThreePartCipher(v)) return
       const decrypted = await decryptField(v)
       if (decrypted !== v) { obj[f] = decrypted; changed = true }
     }
@@ -320,22 +320,24 @@ export function useE2E() {
     const grpFields = fieldsOf('group')
     const catFields = fieldsOf('category')
     const attrFields = fieldsOf('attribute')
-    for (const b of ds.bookmarks) {
-      const o = b as unknown as Record<string, unknown>
-      for (const f of bmFields) await tryField(o, f)
-    }
-    for (const g of ds.siblingGroups) {
-      const o = g as unknown as Record<string, unknown>
-      for (const f of grpFields) await tryField(o, f)
-    }
-    for (const c of ds.categories) {
-      const o = c as unknown as Record<string, unknown>
-      for (const f of catFields) await tryField(o, f)
-    }
-    for (const a of ds.customAttributes) {
-      const o = a as unknown as Record<string, unknown>
-      for (const f of attrFields) await tryField(o, f)
-    }
+    await Promise.all([
+      ...ds.bookmarks.map(b => {
+        const o = b as unknown as Record<string, unknown>
+        return Promise.all([...bmFields].map(f => tryField(o, f)))
+      }),
+      ...ds.siblingGroups.map(g => {
+        const o = g as unknown as Record<string, unknown>
+        return Promise.all([...grpFields].map(f => tryField(o, f)))
+      }),
+      ...ds.categories.map(c => {
+        const o = c as unknown as Record<string, unknown>
+        return Promise.all([...catFields].map(f => tryField(o, f)))
+      }),
+      ...ds.customAttributes.map(a => {
+        const o = a as unknown as Record<string, unknown>
+        return Promise.all([...attrFields].map(f => tryField(o, f)))
+      }),
+    ])
     if (changed) ds._bumpSearchVersion()
   }
 

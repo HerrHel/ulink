@@ -278,42 +278,26 @@ export function useCloudSync() {
 
     const ops: Array<Omit<SyncOp, 'id' | 'retries'>> = []
 
-    for (const b of ds.bookmarks) {
-      if (dirty.has(b.id)) {
+    // L11：四类实体同构 upsert 入队
+    const collectDirty = <T extends { id: string; updatedAt?: number }>(
+      items: T[], table: SyncOp['table'],
+    ) => {
+      for (const item of items) {
+        if (!dirty.has(item.id)) continue
         ops.push({
-          action: 'upsert', table: 'bookmarks', itemId: b.id,
-          data: { ...b, _userId: userId, _isNew: _newIds.has(b.id), _changedFields: changedFields.has(b.id) ? [...changedFields.get(b.id)!] : null },
-          ts: b.updatedAt || Date.now(),
+          action: 'upsert', table, itemId: item.id,
+          data: {
+            ...item, _userId: userId, _isNew: _newIds.has(item.id),
+            _changedFields: changedFields.has(item.id) ? [...changedFields.get(item.id)!] : null,
+          },
+          ts: item.updatedAt || Date.now(),
         })
       }
     }
-    for (const g of ds.siblingGroups) {
-      if (dirty.has(g.id)) {
-        ops.push({
-          action: 'upsert', table: 'sibling_groups', itemId: g.id,
-          data: { ...g, _userId: userId, _isNew: _newIds.has(g.id), _changedFields: changedFields.has(g.id) ? [...changedFields.get(g.id)!] : null },
-          ts: g.updatedAt || Date.now(),
-        })
-      }
-    }
-    for (const c of ds.categories) {
-      if (dirty.has(c.id)) {
-        ops.push({
-          action: 'upsert', table: 'categories', itemId: c.id,
-          data: { ...c, _userId: userId, _isNew: _newIds.has(c.id), _changedFields: changedFields.has(c.id) ? [...changedFields.get(c.id)!] : null },
-          ts: c.updatedAt || Date.now(),
-        })
-      }
-    }
-    for (const a of ds.customAttributes) {
-      if (dirty.has(a.id)) {
-        ops.push({
-          action: 'upsert', table: 'custom_attributes', itemId: a.id,
-          data: { ...a, _userId: userId, _isNew: _newIds.has(a.id), _changedFields: changedFields.has(a.id) ? [...changedFields.get(a.id)!] : null },
-          ts: a.updatedAt || Date.now(),
-        })
-      }
-    }
+    collectDirty(ds.bookmarks, 'bookmarks')
+    collectDirty(ds.siblingGroups, 'sibling_groups')
+    collectDirty(ds.categories, 'categories')
+    collectDirty(ds.customAttributes, 'custom_attributes')
 
     for (const [id, table] of deleted) {
       ops.push({ action: 'delete', table, itemId: id, data: null, ts: Date.now() })
@@ -778,22 +762,23 @@ export function useCloudSync() {
       const shouldPush = (id: string, deletedAt?: number) =>
         ds._dirtyIds.has(id) || ds._newIds.has(id) || deletedAt || !remoteIds.has(id)
 
-      for (const b of ds.bookmarks) {
-        if (!shouldPush(b.id, b.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'bookmarks', itemId: b.id, data: { ...b, _userId: userId }, ts: b.updatedAt || now })
+      // L11：initialSync 与 _enqueueDirtyAsOps 同构入队
+      const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
+        items: T[], table: SyncOp['table'],
+      ) => {
+        for (const item of items) {
+          if (!shouldPush(item.id, item.deletedAt)) continue
+          allOps.push({
+            action: 'upsert', table, itemId: item.id,
+            data: { ...item, _userId: userId },
+            ts: item.updatedAt || now,
+          })
+        }
       }
-      for (const g of ds.siblingGroups) {
-        if (!shouldPush(g.id, g.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'sibling_groups', itemId: g.id, data: { ...g, _userId: userId }, ts: g.updatedAt || now })
-      }
-      for (const c of ds.categories) {
-        if (!shouldPush(c.id, c.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'categories', itemId: c.id, data: { ...c, _userId: userId }, ts: c.updatedAt || now })
-      }
-      for (const a of ds.customAttributes) {
-        if (!shouldPush(a.id, a.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'custom_attributes', itemId: a.id, data: { ...a, _userId: userId }, ts: a.updatedAt || now })
-      }
+      pushIf(ds.bookmarks, 'bookmarks')
+      pushIf(ds.siblingGroups, 'sibling_groups')
+      pushIf(ds.categories, 'categories')
+      pushIf(ds.customAttributes, 'custom_attributes')
       if (allOps.length) await enqueueSyncOps(allOps)
       await _pushFromQueue()
       await _pullChanges(false)

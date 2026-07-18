@@ -4,7 +4,8 @@
  * 在数据加载后执行，确保旧版数据格式兼容。
  */
 import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP, DEFAULTS } from '../config/constants.js'
-import { esc, cleanZeroWidth, favicon } from '../utils.js'
+import { esc, cleanZeroWidth } from '../utils.js'
+import { inlineCardHTML, groupRefCardHTML } from '../composables/useInlineCard.js'
 import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 
 // 当前 schema 迁移版本。增量更新此值以触发新迁移。
@@ -130,11 +131,11 @@ function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGroups: S
     html += esc(text.slice(lastIdx, m2.index))
     if (m2[1] !== undefined) {
       const bm2 = bookmarks.find(x => x.id === m2![2])
-      if (bm2) html += _migInlineCardHTML(bm2)
+      if (bm2) html += inlineCardHTML(bm2)
       else html += esc(m2[0])
     } else if (m2[3] !== undefined) {
       const sg2 = siblingGroups.find(x => x.name === m2![3])
-      if (sg2 && sg2.id !== group.id) html += _migGroupRefCardHTML(sg2)
+      if (sg2 && sg2.id !== group.id) html += groupRefCardHTML(sg2)
       else html += esc(m2[0])
     }
     lastIdx = re2.lastIndex
@@ -145,11 +146,4 @@ function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGroups: S
   return html
 }
 
-function _migInlineCardHTML(bm: Bookmark): string {
-  const dm = (u => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } })(bm.url)
-  return '<span class="group-inline-card" contenteditable="false" data-bm-id="' + bm.id + '" draggable="true"><img src="' + favicon(bm.url, bm.icon) + '" alt=""><span class="gic-name">' + esc(bm.title) + '</span><span class="gic-domain">' + dm + '</span><span class="gic-btn">详</span></span>'
-}
-
-function _migGroupRefCardHTML(g: SiblingGroup): string {
-  return '<span class="group-inline-card group-ref-card" contenteditable="false" data-bm-id="ref:' + g.id + '" draggable="true"><span class="gic-name">' + esc(g.name || '未命名组') + '</span><span class="gic-count">' + g.bookmarkIds.length + '个书签</span><span class="gic-btn">详</span></span>'
-}
+// L13：内联卡 HTML 统一走 useInlineCard（含 esc），删除未转义的 _mig* 副本

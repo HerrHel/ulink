@@ -19,6 +19,13 @@ const PBKDF2_ITERATIONS = 600000
 const SALT_LENGTH = 32
 const IV_LENGTH = 12
 
+/** L15：salt.iv.data 三段密文判定单一出口，避免 useSyncMapping/useE2E/decrypt 口径漂移 */
+export function isThreePartCipher(s: string): boolean {
+  if (typeof s !== 'string' || !s) return false
+  const parts = s.split('.')
+  return parts.length === 3 && !!parts[0] && !!parts[1] && !!parts[2]
+}
+
 function _toBuffer(str: string): Uint8Array {
   return new TextEncoder().encode(str)
 }
@@ -85,8 +92,7 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
   const out = _bufToBase64(salt) + '.' + _bufToBase64(iv) + '.' + _bufToBase64(encrypted)
   // S6：防御性校验 —— base64 字母表不含 "."，输出必须恰好 3 段；若不是，说明基础假设被打破，
   // 立即抛错而非返回可被误解析的密文（saveBm 依赖此契约走 EncryptedPassword 切片）。
-  const parts = out.split('.')
-  if (parts.length !== 3 || parts.some(p => !p)) {
+  if (!isThreePartCipher(out)) {
     throw new Error('加密输出格式异常：期望 salt.iv.data 三段')
   }
   return out
@@ -94,8 +100,8 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
 
 /** AES-256-GCM 解密 */
 export async function decrypt(ciphertext: string, key: CryptoKey): Promise<string> {
+  if (!isThreePartCipher(ciphertext)) return ciphertext // 非加密数据，直接返回
   const parts = ciphertext.split('.')
-  if (parts.length !== 3) return ciphertext // 非加密数据，直接返回
   // 优雅降级：若 ciphertext 长得像「3 段 . 分隔」但实际不是本系统产出的合法密文
   //（如 E2E 关闭时以明文存云端的 title＝'a.b.c'，或 base64 段非法、密钥不匹配），
   // base64 解码或 AES-GCM 认证会抛错。旧实现直接抛出，让单条坏字段污染整次
@@ -136,8 +142,8 @@ export async function generateCanary(key: CryptoKey): Promise<string> {
  */
 export async function verifyCanary(encrypted: string, key: CryptoKey): Promise<boolean> {
   try {
+    if (!isThreePartCipher(encrypted)) return false
     const parts = encrypted.split('.')
-    if (parts.length !== 3) return false
     const iv = new Uint8Array(_base64ToBuf(parts[1]))
     const data = _base64ToBuf(parts[2])
     const decrypted = await crypto.subtle.decrypt(
