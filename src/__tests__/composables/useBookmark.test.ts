@@ -392,6 +392,33 @@ describe('useBookmark', () => {
       const newBm = mockData.addBookmark.mock.calls[0][0]
       expect(newBm.password).toBe(btoa('plaintext-pw'))
     })
+
+    // M20：E2E 解锁态 password 应被 encrypt 成 EncryptedPassword 对象
+    it('M20: E2E unlocked encrypts password into EncryptedPassword object', async () => {
+      const { deriveKey } = await import('../../crypto.js')
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey('m20-test-master', salt)
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = key
+      bmForm.title = 'E2E Encrypted'
+      bmForm.url = 'https://e2e-enc.com'
+      bmForm.password = 'super-secret-pw'
+      await vi.waitFor(async () => { await saveBm() })
+      expect(mockData.addBookmark).toHaveBeenCalledTimes(1)
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      const pw = newBm.password
+      expect(pw).toEqual(expect.objectContaining({
+        encrypted: true,
+        salt: expect.any(String),
+        iv: expect.any(String),
+        data: expect.any(String),
+      }))
+      expect(pw.salt && pw.iv && pw.data).toBeTruthy()
+      // 不是明文、也不是单纯 base64(明文)
+      expect(pw).not.toBe('super-secret-pw')
+      expect(pw).not.toBe(btoa('super-secret-pw'))
+    }, 15000)
   })
 
   describe('addSub', () => {

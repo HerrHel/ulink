@@ -74,17 +74,36 @@ describe('E2EStore', () => {
       expect(store.isUnlocked).toBe(false)
     })
 
-    it('锁定时应清除所有定时器', () => {
+    it('锁定时应清除所有定时器（M22：不再用手动 setUnlocked 伪造恒真）', () => {
+      store.setKey({} as CryptoKey)
+      store.setUnlocked(true)
       store.resetLockTimer()
       store.initVisibilityLock()
       store.lock()
-      // 验证可见性事件不再触发锁定
-      document.dispatchEvent(new Event('visibilitychange'))
-      Object.defineProperty(document, 'visibilityState', { value: 'hidden' })
-      document.dispatchEvent(new Event('visibilitychange'))
-      vi.advanceTimersByTime(120_000)
+      expect(store.isUnlocked).toBe(false)
+      expect(store.cryptoKey).toBeNull()
+
+      // 重新标记已解锁，但不调用 resetLockTimer：idle 定时器已被 lock 清掉
+      store.setKey({} as CryptoKey)
       store.setUnlocked(true)
-      expect(store.isUnlocked).toBe(true)// 未被自动锁定
+      vi.advanceTimersByTime(20 * 60 * 1000) // > 15min LOCK_TIMEOUT
+      expect(store.isUnlocked).toBe(true) // 未被幽灵 idle 定时器锁回
+
+      // visibility 监听仍在：hidden 后 PRE_LOCK_DELAY(60s) 应再次 lock
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'hidden',
+      })
+      document.dispatchEvent(new Event('visibilitychange'))
+      vi.advanceTimersByTime(60_000)
+      expect(store.isUnlocked).toBe(false)
+      expect(store.cryptoKey).toBeNull()
+
+      // 还原 visibilityState，避免污染后续用例
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        get: () => 'visible',
+      })
     })
 
     // S14：锁后 cryptoKey 不可达，解锁流程需重新派生（非恢复缓存）

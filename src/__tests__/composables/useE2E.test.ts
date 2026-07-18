@@ -200,3 +200,78 @@ describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {
     expect(out.username).toBe('u')
   })
 })
+
+// H20：Recovery Key 重置主密码是忘记主密码时的唯一恢复入口
+describe('useE2E.resetWithRecoveryKey', () => {
+  it('错误 recovery key / 无 recovery 配置 → false；正确 key 后旧密码失效、新密码可用', async () => {
+    const e2e = useE2E()
+    const recoveryKey = e2e.generateRecoveryKey()
+    const ok = await e2e.setupMasterPassword('old-master-pw', recoveryKey)
+    expect(ok).toBe(true)
+
+    // 错误 recovery → false；旧密码仍能解锁（重置未成功）
+    // 注：mock e2e store 为 plain 对象，computed(isUnlocked) 不追踪变更，故以 unlock 返回值断言状态
+    e2e.lock()
+    const bad = await e2e.resetWithRecoveryKey('XXXX-YYYY-ZZZZ-AAAA-BBBB-CCCC', 'new-pw')
+    expect(bad).toBe(false)
+    expect(await e2e.unlock('old-master-pw')).toBe(true)
+
+    // 正确 recovery → true，旧密码失效，新密码可用
+    e2e.lock()
+    const resetOk = await e2e.resetWithRecoveryKey(recoveryKey, 'brand-new-master')
+    expect(resetOk).toBe(true)
+    e2e.lock()
+    expect(await e2e.unlock('old-master-pw')).toBe(false)
+    expect(await e2e.unlock('brand-new-master')).toBe(true)
+  }, 30000)
+
+  it('未绑定 recovery_canary 时 resetWithRecoveryKey 返回 false', async () => {
+    const e2e = useE2E()
+    // 不传 recoveryKey：canary 无 recovery 字段
+    await e2e.setupMasterPassword('solo-master')
+    e2e.lock()
+    const rk = e2e.generateRecoveryKey()
+    const ok = await e2e.resetWithRecoveryKey(rk, 'whatever')
+    expect(ok).toBe(false)
+  }, 15000)
+})
+
+// M23：password 不在 ENCRYPT/LEGACY 补解密字段；group.name 在 ENCRYPT 内
+describe('useE2E.decryptStoreItems password 契约 + group name', () => {
+  it('EncryptedPassword 对象态 password 解锁后保持不变；group.name 密文被解开', async () => {
+    const e2e = useE2E()
+    const ds = useDataStore()
+    const masterPw = 'm23-password-contract'
+    await e2e.setupMasterPassword(masterPw)
+
+    const encPass = {
+      encrypted: true as const,
+      salt: 's'.repeat(8),
+      iv: 'i'.repeat(8),
+      data: 'd'.repeat(16),
+    }
+    ds.addBookmark({
+      id: 'bpw', title: '有对象密码', url: 'https://pw.example', username: '',
+      password: encPass as any, notes: '', icon: '', categoryId: CAT_UNCATEGORIZED,
+      parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false,
+      createdAt: 1, updatedAt: 1,
+    } as any)
+
+    // group name 用全局 key 加密模拟「未解锁时 Realtime 落的密文态」
+    const cipherName = await e2e.encryptField('机密组名') as string
+    expect(cipherName).not.toBe('机密组名')
+    ds.addGroup({
+      id: 'genc', name: cipherName, categoryId: CAT_UNCATEGORIZED, icon: '',
+      order: 0, isExpanded: false, attributes: {}, bookmarkIds: [], notes: '',
+      updatedAt: 1, useCount: 0,
+    } as any)
+
+    e2e.lock()
+    expect(await e2e.unlock(masterPw)).toBe(true)
+
+    // password 对象态不应被 tryField 触碰（typeof !== 'string'）
+    expect(ds.bookmarkMap['bpw'].password).toEqual(encPass)
+    // group.name 应被补解密回明文
+    expect(ds.groupMap['genc'].name).toBe('机密组名')
+  }, 20000)
+})

@@ -75,6 +75,31 @@ describe('searchBookmarkIds', () => {
     expect(byNotesPy!.has('b1')).toBe(true)
   })
 
+  it('M21：书签标题拼音全拼命中 + 组 childTitlePy 命中', () => {
+    // 「测试」→ ceshi；组 g2 子书签 Vue.js 用 childTitle 命中已有，这里加中文 title 书签
+    const bms: Bookmark[] = [
+      ...SAMPLE_BOOKMARKS,
+      {
+        id: 'b-ceshi', title: '测试文档', url: 'https://test.example', notes: '', username: '',
+        password: '', icon: '', categoryId: 'dev', parentId: null, order: 9, useCount: 0,
+        attributes: {}, isExpanded: false, createdAt: 0, updatedAt: 0,
+      },
+    ]
+    const groups: SiblingGroup[] = [
+      ...SAMPLE_GROUPS,
+      {
+        id: 'g-cs', name: '普通组', categoryId: 'dev', icon: '', order: 9, isExpanded: false,
+        attributes: {}, bookmarkIds: ['b-ceshi'], notes: '', updatedAt: 0, useCount: 0,
+      },
+    ]
+    const map = Object.fromEntries(bms.map(b => [b.id, b]))
+    const byTitlePy = searchBookmarkIds(bms, 'ceshi', EMPTY_ATTRS)
+    expect(byTitlePy!.has('b-ceshi')).toBe(true)
+    // childTitlePy：子书签「测试文档」的拼音应让组被搜到
+    const byChildPy = searchGroupIds(groups, 'ceshi', map, EMPTY_ATTRS)
+    expect(byChildPy!.has('g-cs')).toBe(true)
+  })
+
   it('L6：降级（库未就绪）下 attrNames 匹配照常生效', () => {
     // L6：fallback includes 应覆盖 attrNames 字段，与正常 Fuse 路径一致。
     // 正常路径能搜到勾选某属性名的书签，降级路径也应能。

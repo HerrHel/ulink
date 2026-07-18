@@ -26,10 +26,24 @@ describe('DataStore', () => {
       expect(store.bookmarks[0]).toStrictEqual(bm)
     })
 
+    // M25：走真实 action 验证 dirty / newIds / searchVersion 副作用
+    it('M25: addBookmark 标记 dirty/new 并 bump searchVersion', () => {
+      const v0 = store._searchVersion
+      store.addBookmark({ id: 'b-m25', title: 'M25', url: 'https://m25.example' } as any)
+      expect(store._dirtyIds.has('b-m25')).toBe(true)
+      expect(store._newIds.has('b-m25')).toBe(true)
+      expect(store._searchVersion).toBe(v0 + 1)
+      expect(store.bookmarkMap['b-m25'].title).toBe('M25')
+    })
+
     it('updateBookmark - 应该更新书签属性', () => {
-      store.bookmarks = [{ id: 'b1', title: 'Old', url: 'https://example.com' }] as any
+      store.addBookmark({ id: 'b1', title: 'Old', url: 'https://example.com' } as any)
+      store.drainDirtyIds() // 清空 add 留下的 dirty，隔离 update 副作用
+      const v0 = store._searchVersion
       store.updateBookmark('b1', { title: 'New' })
       expect(store.bookmarkMap['b1'].title).toBe('New')
+      expect(store._dirtyIds.has('b1')).toBe(true)
+      expect(store._searchVersion).toBe(v0 + 1)
     })
 
     it('updateBookmark - 不存在的 ID 应该静默失败', () => {
@@ -38,26 +52,26 @@ describe('DataStore', () => {
     })
 
     it('deleteBookmark - 应该软删除书签', () => {
-      store.bookmarks = [{ id: 'b1' }, { id: 'b2' }] as any
+      store.addBookmark({ id: 'b1' } as any)
+      store.addBookmark({ id: 'b2' } as any)
       store.deleteBookmark('b1')
       expect(store.bookmarks).toHaveLength(2)
       expect(store.bookmarks[0].deletedAt).toBeDefined()
       expect(store.bookmarks[1].deletedAt).toBeUndefined()
+      expect(store._dirtyIds.has('b1')).toBe(true)
     })
 
     it('deleteBookmark - 应该从组中移除书签引用', () => {
-      store.bookmarks = [{ id: 'b1' }] as any
-      store.siblingGroups = [{ id: 'g1', bookmarkIds: ['b1', 'b2'] }] as any
+      store.addBookmark({ id: 'b1' } as any)
+      store.addGroup({ id: 'g1', name: 'G', bookmarkIds: ['b1', 'b2'] } as any)
       store.deleteBookmark('b1')
       expect(store.siblingGroups[0].bookmarkIds).toEqual(['b2'])
     })
 
     it('batchPatchBookmarkAttributes - 批量写 attributes 并 dirty，末尾一次 bump', () => {
-      store.bookmarks = [
-        { id: 'b1', title: 'A', url: 'https://a.com', attributes: { tag: true } },
-        { id: 'b2', title: 'B', url: 'https://b.com', attributes: {} },
-      ] as any
-      store._syncMaps()
+      store.addBookmark({ id: 'b1', title: 'A', url: 'https://a.com', attributes: { tag: true } } as any)
+      store.addBookmark({ id: 'b2', title: 'B', url: 'https://b.com', attributes: {} } as any)
+      store.drainDirtyIds()
       const v0 = store._searchVersion
       store.batchPatchBookmarkAttributes({
         b1: { tag: true, 'dead-link': true },
@@ -77,16 +91,23 @@ describe('DataStore', () => {
       const group = { id: 'g1', name: 'Test Group', bookmarkIds: [] } as any
       store.addGroup(group)
       expect(store.siblingGroups).toHaveLength(1)
+      expect(store._dirtyIds.has('g1')).toBe(true)
+      expect(store._newIds.has('g1')).toBe(true)
     })
 
     it('updateGroup - 应该更新分组属性', () => {
-      store.siblingGroups = [{ id: 'g1', name: 'Old' }] as any
+      store.addGroup({ id: 'g1', name: 'Old', bookmarkIds: [] } as any)
+      store.drainDirtyIds()
+      const v0 = store._searchVersion
       store.updateGroup('g1', { name: 'New' })
       expect(store.groupMap['g1'].name).toBe('New')
+      expect(store._dirtyIds.has('g1')).toBe(true)
+      expect(store._searchVersion).toBe(v0 + 1)
     })
 
     it('deleteGroup - 应该软删除分组', () => {
-      store.siblingGroups = [{ id: 'g1' }, { id: 'g2' }] as any
+      store.addGroup({ id: 'g1' } as any)
+      store.addGroup({ id: 'g2' } as any)
       store.deleteGroup('g1')
       expect(store.siblingGroups).toHaveLength(2)
       expect(store.siblingGroups[0].deletedAt).toBeDefined()
@@ -102,18 +123,18 @@ describe('DataStore', () => {
     })
 
     it('renameCategory - 应该重命名分类', () => {
-      store.categories = [{ id: 'cat1', name: 'Old', icon: '', color: '' }]
+      store.addCategory({ id: 'cat1', name: 'Old', icon: '', color: '' })
       store.renameCategory('cat1', 'New')
       expect(store.categories[0].name).toBe('New')
     })
 
     it('deleteCategory - 应该将关联书签移至未分类并软删除分类', () => {
-      store.bookmarks = [{ id: 'b1', categoryId: 'cat1' }] as any
-      store.siblingGroups = [{ id: 'g1', categoryId: 'cat1' }] as any
-      store.categories = [{ id: 'cat1', name: 'Test', icon: '', color: '' }]
-      
+      store.addBookmark({ id: 'b1', categoryId: 'cat1' } as any)
+      store.addGroup({ id: 'g1', categoryId: 'cat1', bookmarkIds: [] } as any)
+      store.addCategory({ id: 'cat1', name: 'Test', icon: '', color: '' })
+
       store.deleteCategory('cat1')
-      
+
       expect(store.bookmarks[0].categoryId).toBe('uncategorized')
       expect(store.siblingGroups[0].categoryId).toBe('uncategorized')
       expect(store.categories[0].deletedAt).toBeDefined()
