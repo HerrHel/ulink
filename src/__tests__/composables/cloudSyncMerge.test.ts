@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
-import { _mergeIntoLocal, _deleteWithoutEcho } from '../../composables/domain/useCloudSync.js'
+import { _mergeIntoLocal, _deleteWithoutEcho, __testPendingSync } from '../../composables/domain/useCloudSync.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 function makeBm(partial: Record<string, unknown> = {}) {
@@ -50,6 +50,8 @@ function makeGroup(partial: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  // H3：_pendingSyncIds 是 useCloudSync 模块级可变状态，跨用例会泄漏，每用例前清空
+  __testPendingSync.clear()
 })
 
 describe('_mergeIntoLocal 软删 / 复活 / 冲突', () => {
@@ -109,6 +111,29 @@ describe('_mergeIntoLocal 软删 / 复活 / 冲突', () => {
 
     _mergeIntoLocal(ds.bookmarks, [makeBm({ title: '新', updatedAt: 9000 }) as any], 'bookmark', false)
     expect(ds.bookmarkMap['bm-1']?.title).toBe('新')
+  })
+
+  it('H3：dirty 已 drain 进 in-flight 队列、远端 newer 来时转 conflict 不覆盖本地待推改动', () => {
+    // H3 根因：debouncedSync 用 drainDirtyIds 清空 _dirtyIds 排进 syncOps 队列，op 真正推上云端
+    // 有 3000ms debounce 窗口 + 重试滞留期。此间远端 realtime 推来同 id 的更新，_mergeIntoLocal
+    // 因 _dirtyIds.has(id) 已 false 落到 `else if remoteNewer` 分支直接 Object.assign 覆盖，
+    // 随后延迟 push 用本地旧版本覆盖远端 → 双向丢失无 conflict 记录。
+    // 修复：drain 出的 id 记入 _pendingSyncIds，merge 见到 id 在 pending 且远端 newer 时
+    // 转登记 conflict 不覆盖，保证 op 落库成功前不被远端静默覆盖。
+    const ds = useDataStore()
+    const sync = useSyncStore()
+    sync.setLastSyncAt(Date.now())
+    ds.addBookmark(makeBm({ title: '本地待推', updatedAt: 3000 }) as any)
+    ds._dirtyIds.clear()  // 模拟已 drain
+    __testPendingSync.add('bm-1')  // 模拟已 drain 进 in-flight 待推送
+
+    const remote = [makeBm({ title: '远端改', updatedAt: 9000 }) as any]
+    _mergeIntoLocal(ds.bookmarks, remote, 'bookmark', false)
+
+    // 本地待推改动未被覆盖
+    expect(ds.bookmarkMap['bm-1']?.title).toBe('本地待推')
+    // 已登记冲突供后续解决，而非静默覆盖
+    expect(sync.conflicts.some(c => c.id === 'bm-1' && c.type === 'bookmark')).toBe(true)
   })
 
   it('远端有本地无 → push 进数组（含软删项，供回收站）', () => {
