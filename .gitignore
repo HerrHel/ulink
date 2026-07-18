@@ -15,6 +15,7 @@ task_plan.md
 !CLAUDE.md
 !src/components/share/README.md
 !/extension/lib/README.md
+!/supabase/functions/check-link/README.md
 /test-results/
 /playwright-report/
 supabase/.temp/
