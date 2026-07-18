@@ -76,6 +76,8 @@ const storageBarColor = computed(() => {
 function selectCat(id: string) {
   uiStore.curCat = id
   uiStore.focusedGroupId = null
+  // A4-006：移动端点分类后关 rail，避免遮罩残留
+  if (uiStore.isMobile) uiStore.panels.rail = false
 }
 
 function toggleTheme() {

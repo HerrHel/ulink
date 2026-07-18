@@ -265,7 +265,7 @@ export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
 
 export function fromRemoteCategory(r: RemoteCategoryRow): Category | null {
   return _validateWith(CategorySchema, {
-    id: r.id, name: r.name, icon: r.icon, color: r.color,
+    id: r.id, name: r.name, icon: r.icon || '', color: r.color || '',
     order: r.order ?? 0,
     updatedAt: r.updated_at_num || 0,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,

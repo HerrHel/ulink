@@ -20,6 +20,10 @@ interface GeFormState {
   iconPreviewVisible: boolean
   iconPreviewUrl: string
   clearIconVisible: boolean
+  /** A2-003：内含书签草稿；取消时用 _orig* 回滚 */
+  bookmarkIds: string[]
+  _origBookmarkIds: string[]
+  _origNotes: string
 }
 
 /**
@@ -35,6 +39,9 @@ export const geForm = reactive<GeFormState>({
   iconPreviewVisible: false,
   iconPreviewUrl: '',
   clearIconVisible: false,
+  bookmarkIds: [],
+  _origBookmarkIds: [],
+  _origNotes: '',
 })
 
 export function saveGroupBody(gid: string) {
@@ -58,7 +65,9 @@ export function syncGroupBookmarks(gid: string) {
     ed.state.doc.descendants(function (node) {
       if (node.type.name === 'inlineCard') {
         const bmid = node.attrs['data-bm-id'];
-        if (bmid && !seen[bmid]) { seen[bmid] = true; ids.push(bmid); }
+        // A5-005：与 GroupEditor.syncToStore 一致，过滤软删/不存在的 id
+        const bm = bmid ? ds.bookmarkMap[bmid] : null;
+        if (bm && !bm.deletedAt && !seen[bmid]) { seen[bmid] = true; ids.push(bmid); }
       }
     });
     ds.updateGroup(gid, { bookmarkIds: ids });
@@ -70,7 +79,10 @@ export function syncGroupBookmarks(gid: string) {
     const seen2: Record<string, boolean> = {};
     cards.forEach(function (c) {
       const bmid = c.getAttribute('data-bm-id');
-      if (bmid && bmid.indexOf('ref:') !== 0 && !seen2[bmid]) { seen2[bmid] = true; ids2.push(bmid); }
+      if (bmid && bmid.indexOf('ref:') !== 0 && !seen2[bmid]) {
+        const bm = ds.bookmarkMap[bmid];
+        if (bm && !bm.deletedAt) { seen2[bmid] = true; ids2.push(bmid); }
+      }
     });
     ds.updateGroup(gid, { bookmarkIds: ids2 });
   }
@@ -260,14 +272,47 @@ export function editGroup(eGid: string) {
   geForm.iconPreviewVisible = !!sg.icon;
   geForm.iconPreviewUrl = sg.icon || '';
   geForm.clearIconVisible = !!sg.icon;
+  // A2-003：书签列表进草稿；notes 快照供取消时回滚 deleteNode 副作用
+  geForm.bookmarkIds = [...(sg.bookmarkIds || [])];
+  geForm._origBookmarkIds = [...(sg.bookmarkIds || [])];
+  geForm._origNotes = sg.notes || '';
   pushNavState();
   ui.modals.groupEdit = true;
 }
 
-export function closeGroupEdit() {
+/** 取消组编辑：回滚草稿期对 bookmarkIds / notes 的副作用后关闭 */
+export function closeGroupEdit(opts?: { discard?: boolean }) {
   const ui = useUIStore();
+  const discard = opts?.discard !== false;
+  const gId = geForm.id;
+  if (discard && gId) {
+    const ds = useDataStore();
+    const sg = ds.groupMap[gId];
+    if (sg) {
+      const notesChanged = (sg.notes || '') !== (geForm._origNotes || '');
+      const idsChanged =
+        (sg.bookmarkIds || []).length !== geForm._origBookmarkIds.length ||
+        (sg.bookmarkIds || []).some((id, i) => id !== geForm._origBookmarkIds[i]);
+      // deleteNode 可能已经 via onUpdate 写脏 notes；取消时还原打开快照
+      if (notesChanged || idsChanged) {
+        ds.updateGroup(gId, {
+          bookmarkIds: [...geForm._origBookmarkIds],
+          notes: geForm._origNotes,
+        });
+        EditorManager.silentSetContent(gId, geForm._origNotes);
+        saveAppData();
+      } else if (geForm.bookmarkIds.length !== geForm._origBookmarkIds.length) {
+        // 仅草稿列表变了、store 未写：还原编辑器节点即可
+        EditorManager.silentSetContent(gId, geForm._origNotes);
+      }
+    }
+  }
   ui.modals.groupEdit = false;
   ui.editingGeId = null;
+  geForm.id = '';
+  geForm.bookmarkIds = [];
+  geForm._origBookmarkIds = [];
+  geForm._origNotes = '';
   // L8：Esc 路径也走 closeGroupEdit，在此统一恢复焦点
   if (ui.lastFocusedEl) {
     try { ui.lastFocusedEl.focus() } catch { /* 元素可能已卸载 */ }
@@ -281,15 +326,22 @@ export function saveGroupEdit() {
   if (!gId) return;
   const sg = ds.groupMap[gId];
   if (!sg) return;
+  // 保存前把草稿 bookmarkIds 固化；notes 以编辑器当前 HTML 为准（移除书签已反映在 DOM）
+  const editorHTML = EditorManager.getContentHTML(gId);
   ds.updateGroup(gId, {
     name: geForm.name.trim() || '未命名',
     categoryId: geForm.catId,
     icon: geForm.icon.trim(),
     attributes: { ...geForm.attrs, [ATTR_IS_GROUP]: true },
+    bookmarkIds: [...geForm.bookmarkIds],
+    ...(editorHTML !== null ? { notes: editorHTML } : {}),
     updatedAt: Date.now()
   });
+  // 已保存：关闭时不再 discard 回滚
+  geForm._origBookmarkIds = [...geForm.bookmarkIds];
+  geForm._origNotes = editorHTML !== null ? editorHTML : (sg.notes || '');
   saveAppData();
-  closeGroupEdit(); toast('组已更新');
+  closeGroupEdit({ discard: false }); toast('组已更新');
 }
 
 export function previewGeIconUrl() { previewIconUrl(geForm); }

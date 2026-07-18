@@ -8,7 +8,7 @@
       <div class="bmp-header">移动到分类</div>
       <div class="bmp-list">
         <button v-for="cat in store.categories" :key="cat.id" class="bmp-item" @click="store.onPickCategory(cat.id)">
-          <span class="bmp-item-icon" :style="{ color: cat.color || 'var(--accent)' }">{{ getCategoryIcon(cat.icon) }}</span>
+          <span class="bmp-item-icon" :style="{ color: cat.color || 'var(--accent)' }" v-html="getCategoryIcon(cat.icon)"></span>
           <span>{{ cat.name }}</span>
         </button>
       </div>

@@ -28,10 +28,21 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      # F2-006：部署前类型检查
+      - name: Typecheck
+        run: npm run typecheck
       - name: Unit Tests
         run: npm run test
-      - name: Audit (non-blocking)
-        run: npm audit --audit-level=high || true
+      # F2-001：部署前 audit 必须 blocking
+      - name: Dependency Audit
+        run: npm audit --audit-level=high
+      # C1-002 / F2-002：部署前跑 Playwright（与 PR CI 对齐）
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E Tests
+        run: npm run test:e2e
+        env:
+          CI: true
       - name: Build
         run: npm run build
         env:

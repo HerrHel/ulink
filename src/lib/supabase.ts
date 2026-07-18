@@ -5,19 +5,23 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 function createNullClient(): SupabaseClient {
   const nullError = new Error('Supabase 未配置')
-  const nullResult = { data: null, error: nullError }
+  // D1-002：与官方 SDK 空结果形状对齐，避免 data.session 读 null 崩溃
+  const emptySession = { data: { session: null }, error: nullError }
+  const emptyUser = { data: { user: null }, error: nullError }
+  const emptyAuth = { data: { user: null, session: null }, error: nullError }
+  const nullQueryResult = { data: null, error: nullError, count: null, status: 0, statusText: '' }
 
   /** 创建 thenable 的查询构造器 Proxy，支持无限链式调用后 await */
   function createNullQuery(): any {
     return new Proxy(() => {}, {
       get(_t, prop) {
         if (prop === 'then') {
-          return (resolve: (v: typeof nullResult) => void) => resolve(nullResult)
+          return (resolve: (v: typeof nullQueryResult) => void) => resolve(nullQueryResult)
         }
         return () => createNullQuery()
       },
       apply() {
-        return Promise.resolve(nullResult)
+        return Promise.resolve(nullQueryResult)
       },
     })
   }
@@ -28,14 +32,15 @@ function createNullClient(): SupabaseClient {
       if (prop === 'from' || prop === 'rpc') return () => createNullQuery()
       if (prop === 'auth') {
         return {
-          getUser: () => Promise.resolve(nullResult),
-          signInWithOtp: () => Promise.resolve(nullResult),
-          signOut: () => Promise.resolve(nullResult),
-          getSession: () => Promise.resolve(nullResult),
+          getUser: () => Promise.resolve(emptyUser),
+          getSession: () => Promise.resolve(emptySession),
+          signInWithOtp: () => Promise.resolve(emptyAuth),
+          verifyOtp: () => Promise.resolve(emptyAuth),
+          signOut: () => Promise.resolve(emptyAuth),
           onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
         }
       }
-      return () => Promise.resolve(nullResult)
+      return () => Promise.resolve(nullQueryResult)
     },
   })
 }

@@ -41,6 +41,8 @@ interface DataState {
   _newIds: Set<string>
   _changedFields: Map<string, Set<string>>
   _deletedGroupMemberships: Map<string, string[]> // bookmarkId → groupIds it belonged to before deletion
+  /** A2-002：软删属性时快照「实体 id → 曾有该 attr 键」，restoreAttribute 回写 */
+  _deletedAttrMemberships: Map<string, Array<{ entityId: string; kind: 'bookmark' | 'group' }>>
   _searchVersion: number
 }
 
@@ -58,8 +60,9 @@ function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: {
   items.sort((a, b) => {
     if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
     if (sortMode === 'title') return String(a[nameKey]).localeCompare(String(b[nameKey])) * d
-    if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0)) * d
-    if (sortMode === 'dateAsc') return (((a[dateKey] as number) || 0) - ((b[dateKey] as number) || 0)) * d
+    // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir
+    if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0))
+    if (sortMode === 'dateAsc') return (((a[dateKey] as number) || 0) - ((b[dateKey] as number) || 0))
     return (a.order - b.order) * d
   })
 }
@@ -86,6 +89,7 @@ export const useDataStore = defineStore('data', {
     _newIds: new Set<string>(),
     _changedFields: new Map(),
     _deletedGroupMemberships: new Map(),
+    _deletedAttrMemberships: new Map(),
     _searchVersion: 0,
   }),
 
@@ -194,6 +198,10 @@ export const useDataStore = defineStore('data', {
     /** 可选择的分类列表（排除"全部"和软删除） */
     selectableCategories(state): Category[] {
       return state.categories.filter(c => c.id !== CAT_ALL && !c.deletedAt)
+    },
+    /** A2-007：可勾选/管理的属性（排除软删）；查重同名重建时亦用此列表 */
+    selectableAttributes(state): CustomAttribute[] {
+      return state.customAttributes.filter(a => !a.deletedAt)
     },
   },
 
@@ -505,9 +513,12 @@ export const useDataStore = defineStore('data', {
         this._markDirty(id)
       }
       const now = Date.now()
+      // A2-002：快照曾持有该属性的实体，restoreAttribute 可回写
+      const members: Array<{ entityId: string; kind: 'bookmark' | 'group' }> = []
       // RE-4：去掉属性 key 的实体必须 dirty，否则云端 attributes 陈旧
       this.bookmarks = this.bookmarks.map(b => {
         if (b.attributes && id in b.attributes) {
+          members.push({ entityId: b.id, kind: 'bookmark' })
           const next = { ...b, attributes: { ...b.attributes }, updatedAt: now }
           delete next.attributes[id]
           this._bmMap[b.id] = next
@@ -519,6 +530,7 @@ export const useDataStore = defineStore('data', {
       })
       this.siblingGroups = this.siblingGroups.map(g => {
         if (g.attributes && id in g.attributes) {
+          members.push({ entityId: g.id, kind: 'group' })
           const next = { ...g, attributes: { ...g.attributes }, updatedAt: now }
           delete next.attributes[id]
           this._grpMap[g.id] = next
@@ -528,6 +540,7 @@ export const useDataStore = defineStore('data', {
         }
         return g
       })
+      if (members.length) this._deletedAttrMemberships.set(id, members)
       const ui = useUIStore()
       const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
       const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
@@ -572,7 +585,39 @@ export const useDataStore = defineStore('data', {
     },
     restoreGroup(id: string) { this._restoreItem('sibling_groups', id) },
     restoreCategory(id: string) { this._restoreItem('categories', id) },
-    restoreAttribute(id: string) { this._restoreItem('custom_attributes', id) },
+    restoreAttribute(id: string) {
+      this._restoreItem('custom_attributes', id)
+      // A2-002：回写软删时抹掉的 attributes 键
+      const members = this._deletedAttrMemberships.get(id)
+      if (members?.length) {
+        const now = Date.now()
+        for (const m of members) {
+          if (m.kind === 'bookmark') {
+            const b = this._bmMap[m.entityId]
+            if (b && !b.deletedAt) {
+              const next = { ...b, attributes: { ...b.attributes, [id]: true }, updatedAt: now }
+              const idx = this.bookmarks.findIndex(x => x.id === m.entityId)
+              if (idx >= 0) this.bookmarks[idx] = next
+              this._bmMap[m.entityId] = next
+              this._trackChange(m.entityId, 'attributes')
+              this._markDirty(m.entityId)
+            }
+          } else {
+            const g = this._grpMap[m.entityId]
+            if (g && !g.deletedAt) {
+              const next = { ...g, attributes: { ...g.attributes, [id]: true }, updatedAt: now }
+              const idx = this.siblingGroups.findIndex(x => x.id === m.entityId)
+              if (idx >= 0) this.siblingGroups[idx] = next
+              this._grpMap[m.entityId] = next
+              this._trackChange(m.entityId, 'attributes')
+              this._markDirty(m.entityId)
+            }
+          }
+        }
+        this._deletedAttrMemberships.delete(id)
+        this._bumpSearchVersion()
+      }
+    },
 
     /** 内部辅助：通用型恢复已软删除项 */
     _restoreItem(table: TableName, id: string) {
@@ -627,7 +672,12 @@ export const useDataStore = defineStore('data', {
     },
     permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id); delete this._grpMap[id]; this._bumpSearchVersion() },
     permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id]; this._bumpSearchVersion() },
-    permanentDeleteAttribute(id: string) { this._permanentDelete('custom_attributes', id); delete this._attrMap[id]; this._bumpSearchVersion() },
+    permanentDeleteAttribute(id: string) {
+      this._permanentDelete('custom_attributes', id)
+      delete this._attrMap[id]
+      this._deletedAttrMemberships.delete(id)
+      this._bumpSearchVersion()
+    },
 
     /** 内部辅助：永久删除项 */
     _permanentDelete(key: TableName, id: string) {

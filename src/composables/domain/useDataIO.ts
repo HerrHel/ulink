@@ -490,7 +490,16 @@ function validateImportData(data: unknown): string | null {
 export async function resetToDefaults() {
   const ds = useDataStore()
   const ui = useUIStore()
-  const ok = await showConfirm('确认清除所有数据？将恢复为默认状态。')
+  // A4-002：已登录时文案标明仅清本机，避免用户以为连云端一并清空
+  let loggedIn = false
+  try {
+    const { useAuth } = await import('./useAuth.js')
+    loggedIn = !!useAuth().isLoggedIn
+  } catch { /* ignore */ }
+  const msg = loggedIn
+    ? '确认清除本机所有数据并恢复默认？不会删除云端数据；下次同步时云端内容可能重新合并回本机。'
+    : '确认清除所有数据？将恢复为默认状态。'
+  const ok = await showConfirm(msg)
   if (!ok) return
   const snapshot = {
       categories: JSON.parse(JSON.stringify(ds.categories)),
@@ -504,6 +513,27 @@ export async function resetToDefaults() {
     ds.bookmarks = d.bookmarks
     ds.customAttributes = d.customAttributes
     ds.siblingGroups = d.siblingGroups
+    // A4-001：正向路径必须立即 _syncMaps，否则 map 条数相同时返回陈旧对象
+    ds._syncMaps()
+    // A4-002：清空脏标记 / 新建 / 删除 / 变更字段，避免旧 id 被 enqueue 推云复活
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    ds._changedFields.clear()
+    ds._customCardOrder = null
+    try {
+      const { clearSearchCache } = await import('../../lib/search.js')
+      clearSearchCache()
+    } catch { /* ignore */ }
+    ds._bumpSearchVersion()
+    try {
+      const { clearAllSyncOps } = await import('../../stores/storage.js')
+      await clearAllSyncOps()
+    } catch { /* ignore */ }
+    try {
+      const { __testPendingSync } = await import('./useCloudSync.js')
+      __testPendingSync.clear()
+    } catch { /* ignore */ }
     ui.curCat = 'all'
     ui.focusedGroupId = null
     ui.activeAttrs = []

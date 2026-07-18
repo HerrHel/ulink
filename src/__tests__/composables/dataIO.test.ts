@@ -18,6 +18,7 @@ vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppDa
 import { useDataStore } from '../../stores/data.js'
 import { importFromDataInternal, parseRaindropJSON } from '../../composables/domain/useDataIO.js'
 import { saveFromExtension } from '../../composables/domain/useBookmark.js'
+import { __testMarkDataReady } from '../../lib/dataReady.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 describe('importFromDataInternal 组 bookmarkIds 悬空过滤', () => {
@@ -97,6 +98,7 @@ describe('saveFromExtension / importFromDataInternal 新建 order 唯一性', ()
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    __testMarkDataReady()
   })
 
   it('saveFromExtension 用「现存最大 order+1」,永久删后不与现存项撞 order', () => {

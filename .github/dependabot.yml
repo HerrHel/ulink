@@ -11,9 +11,10 @@ updates:
       prefix: "deps"
     labels:
       - "dependencies"
-    # 安全更新无需手动触发
+    # F2-007：允许传递依赖安全更新，勿仅限 direct
     allow:
       - dependency-type: "direct"
+      - dependency-type: "indirect"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

@@ -20,8 +20,9 @@ const store = useToastStore()
 
 function onKeydown(e: KeyboardEvent) {
   if (!store.confirmOpen) return
-  if (e.key === 'Escape') { e.preventDefault(); store.resolveConfirm(false) }
-  if (e.key === 'Enter') { e.preventDefault(); store.resolveConfirm(true) }
+  // A2-001：stopPropagation 防止全局 Esc 连带关闭底层 Category/Attribute 等模态
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); store.resolveConfirm(false) }
+  if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); store.resolveConfirm(true) }
 }
 
 watch(() => store.confirmOpen, (open) => {

@@ -159,6 +159,9 @@ describe('searchWithHighlights', () => {
     const gh = results.find(r => r.id === 'b1')
     expect(gh).toBeDefined()
     expect(gh!._highlights).toBeDefined()
+    // D1-001：includeMatches 开启后应有正向高亮段
+    const titleSegs = gh!._highlights.title || []
+    expect(titleSegs.some(s => s.highlight)).toBe(true)
   })
 
   it('returns results with highlights for matching groups', () => {
@@ -166,6 +169,10 @@ describe('searchWithHighlights', () => {
     const g = results.find(r => r.id === 'g2')
     expect(g).toBeDefined()
     expect(g!._isGroup).toBe(true)
+    // D1-001：组名高亮段非空
+    const nameSegs = g!._highlights.name || g!._highlights.title || []
+    expect(nameSegs.length).toBeGreaterThan(0)
+    expect(nameSegs.some(s => s.highlight)).toBe(true)
   })
 
   it('respects maxResults param', () => {

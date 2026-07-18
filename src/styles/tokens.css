@@ -10,7 +10,8 @@
   --border-hover:#D5CBBE;
   --text:#2C2824;
   --text-secondary:#5E5852;
-  --text-muted:#726E66;
+  /* B1-002：相对 --bg/#F5EFEA 与 --surface 对比度 ≥4.5 */
+  --text-muted:#6A6660;
   --text-inverse:#FDFBF9;
   --accent:#122E8A;
   --accent-light:rgba(18,46,138,0.07);
@@ -62,9 +63,11 @@
   --border-hover:#3D3D46;
   --text:#EEE9E2;
   --text-secondary:#A8A39B;
-  --text-muted:#8A867F;
+  /* B1-002：暗色 muted 相对 surface/#25252B ≥4.5 */
+  --text-muted:#9B968E;
   --text-inverse:#1A1A1D;
-  --accent:#E6397C;
+  /* B1-002：accent 相对 --bg/#1A1A1D ≥4.5 */
+  --accent:#F04A8A;
   --accent-light:rgba(230,57,124,0.1);
   --accent-glow:rgba(230,57,124,0.18);
   --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);
@@ -128,7 +131,8 @@
   --border-hover:#525B70;
   --text:#E2E7BF;
   --text-secondary:#A8AD8A;
-  --text-muted:#A2A986;
+  /* B1-002：舒适暗色 muted 相对 surface/#363D50 ≥4.5 */
+  --text-muted:#B0B692;
   --text-inverse:#2B313F;
   --accent:#E2E7BF;
   --accent-light:rgba(226,231,191,0.1);

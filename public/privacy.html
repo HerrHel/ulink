@@ -15,64 +15,75 @@ p{margin-bottom:12px;color:#374151}
 ul{margin:8px 0 16px 20px;color:#374151}
 li{margin-bottom:6px}
 strong{color:#1a1a1a}
+code{font-size:0.9em;background:#eef2f7;padding:1px 5px;border-radius:4px}
 a{color:#3b82f6}
 </style>
 </head>
 <body>
 <div class="container">
   <h1>LinkVault 隐私政策</h1>
-  <p class="last-updated">更新日期：2026 年 7 月 9 日</p>
+  <p class="last-updated">更新日期：2026 年 7 月 18 日</p>
 
-  <p>LinkVault 是一款书签管理扩展，提供本地存储与可选的云端同步功能。本隐私政策说明我们如何处理用户数据。</p>
+  <p>LinkVault 是一款<strong>网页 / PWA 书签管理器</strong>，并可选配套浏览器扩展。默认本地优先，云端同步与端到端加密（E2E）均为可选功能。本政策说明我们如何处理用户数据。</p>
 
-  <h2>1. 收集的数据</h2>
-  <p>LinkVault 在本地模式下仅存储用户主动保存的书签信息：</p>
+  <h2>1. 产品形态</h2>
   <ul>
-    <li><strong>网页书签</strong> — 您主动保存的网页 URL、标题、图标链接</li>
-    <li><strong>使用统计</strong> — 本地匿名使用计数（如保存次数、导出次数），仅存于浏览器，不对外发送</li>
+    <li><strong>Web / PWA</strong> — 主应用，可安装到桌面或主屏幕，核心数据在本机浏览器中持久化。</li>
+    <li><strong>浏览器扩展（可选）</strong> — 侧边栏与快捷保存，与主应用共用同一套云端账号（若启用）。</li>
   </ul>
-  <p>当您选择登录云端同步功能时，额外处理：</p>
+
+  <h2>2. 收集的数据</h2>
+  <p>LinkVault 仅处理您主动创建或导入的内容：</p>
+  <ul>
+    <li><strong>书签与分组</strong> — URL、标题、图标、备注、分类、自定义属性、嵌套关系等</li>
+    <li><strong>可选凭证字段</strong> — 用户名、密码（若填写；启用 E2E 后以密文形式存储）</li>
+    <li><strong>本地使用统计</strong> — 匿名计数（如保存/导出次数），仅存于本机，不上传</li>
+  </ul>
+  <p>当您选择登录云端同步时，额外处理：</p>
   <ul>
     <li><strong>邮箱地址</strong> — 用于 Supabase 邮箱验证码（OTP）登录</li>
   </ul>
+  <p>当您开启公开分享时，被标记为公开的分组及其书签可被持有链接的访客只读访问（不含需解锁的加密敏感字段）。</p>
 
-  <h2>2. 数据存储</h2>
+  <h2>3. 数据存储</h2>
   <ul>
-    <li><strong>本地模式（默认）</strong> — 所有书签数据存储在浏览器的 <code>localStorage</code> 中，仅在当前设备可用。清除浏览器数据或卸载扩展将删除这些数据。</li>
-    <li><strong>云端模式（可选）</strong> — 登录后，书签会同步到您自己的 Supabase 数据库。您可以在 Supabase Dashboard 中随时查看或删除自己的数据。</li>
+    <li><strong>本地模式（默认）</strong> — 书签与设置主要保存在浏览器 <code>localStorage</code> 与 <strong>IndexedDB</strong>（Dexie）。清除站点数据、卸载 PWA 或清理浏览器存储会删除本地数据。</li>
+    <li><strong>云端模式（可选）</strong> — 登录后，数据同步到您配置的 Supabase 项目。您可在 Dashboard 中查看或删除自己的数据。</li>
+    <li><strong>端到端加密（可选）</strong> — 启用后，敏感字段（如密码）经主密码派生密钥后以 AES-256-GCM 密文存储；主密码不上传。丢失主密码且无 Recovery Key 时，无法恢复已加密字段明文。</li>
   </ul>
 
-  <h2>3. 数据共享</h2>
-  <p>我们不会将您的数据出售、出租或分享给任何第三方。您的书签数据归属于您自己：</p>
+  <h2>4. 数据共享</h2>
+  <p>我们不会将您的数据出售、出租或用于广告定向。数据归属与流向：</p>
   <ul>
-    <li>本地数据仅存于您的浏览器，不传输到任何服务器</li>
-    <li>云端数据仅存于您关联的 Supabase 项目</li>
-    <li>我们不收集个人信息用于广告或分析</li>
+    <li>本地数据仅存于您的浏览器，默认不传输到服务器</li>
+    <li>云端数据仅存于您关联的 Supabase 项目，受行级安全策略（RLS）约束</li>
+    <li>公开分享仅暴露您主动设为公开的内容</li>
+    <li>错误上报（若配置）可能向 Supabase <code>error_logs</code> 写入匿名技术信息，不包含书签正文</li>
   </ul>
 
-  <h2>4. 数据控制</h2>
+  <h2>5. 数据控制</h2>
   <p>您可以随时：</p>
   <ul>
-    <li>删除扩展来清除所有本地数据</li>
-    <li>通过 Supabase Dashboard 删除云端数据</li>
-    <li>退出登录以停止云端同步，本地数据不受影响</li>
+    <li>在应用内导出/导入数据，或清空本地存储</li>
+    <li>通过 Supabase Dashboard 删除云端账号数据</li>
+    <li>退出登录以停止云端同步（本地数据可保留）</li>
+    <li>关闭公开分享、关闭 E2E 或重置主密码（按应用内流程操作）</li>
   </ul>
 
-  <h2>5. 外部服务</h2>
-  <p>本扩展使用了以下外部服务：</p>
+  <h2>6. 外部服务</h2>
   <ul>
-    <li><strong>Supabase</strong> — 提供认证与数据库服务。数据存储于 Supabase 的云基础设施中，受 Supabase 的安全措施保护。详见 <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Supabase 隐私政策</a>。</li>
-    <li><strong>图标服务</strong> — 非登录状态下使用第三方公共图标 API（xinac.net）获取网站 favicon，仅传递域名，不涉及用户身份。</li>
+    <li><strong>Supabase</strong> — 可选认证、数据库与实时同步。详见 <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Supabase 隐私政策</a>。</li>
+    <li><strong>图标服务</strong> — 可能使用公共 favicon/API 按域名拉取图标，通常仅传递域名，不涉及登录身份。</li>
   </ul>
 
-  <h2>6. 安全性</h2>
-  <p>扩展权限已最小化：仅申请书签管理、侧边栏、标签页读取等必要权限。所有网络通信均通过 HTTPS 加密。云端数据受 Supabase 行级安全策略（RLS）保护。</p>
+  <h2>7. 安全性</h2>
+  <p>Web 应用通过 HTTPS 通信；生产环境配置内容安全策略（CSP）等安全头。可选 E2E 在客户端完成加解密。扩展权限按最小必要申请。云端数据受 Supabase RLS 保护。死链检查等边缘能力对私有地址做 SSRF 防护。</p>
 
-  <h2>7. 政策更新</h2>
-  <p>本隐私政策可能不时更新。重大变更时我们会通过扩展更新日志通知。继续使用即表示您同意更新后的政策。</p>
+  <h2>8. 政策更新</h2>
+  <p>本隐私政策可能不时更新。重大变更时我们会通过发布说明或仓库更新日志通知。继续使用即表示您知悉更新后的政策。</p>
 
-  <h2>8. 联系方式</h2>
-  <p>如有任何疑问，可通过 GitHub Issues 联系我们：<a href="https://github.com/HerrHel/HerrHel.github.io" target="_blank" rel="noopener">github.com/HerrHel/HerrHel.github.io</a>。</p>
+  <h2>9. 联系方式</h2>
+  <p>如有疑问，可通过 GitHub Issues 联系：<a href="https://github.com/HerrHel/HerrHel.github.io" target="_blank" rel="noopener">github.com/HerrHel/HerrHel.github.io</a>。</p>
 </div>
 </body>
 </html>

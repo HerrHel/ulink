@@ -1,4 +1,5 @@
 <template>
+<!-- E2-001：Auth/Toast/Confirm 常驻在 Share 与 MainLayout 共同父级，分享页「登录后复制」可用 -->
 <ShareView v-if="shareGroupId" :group-id="shareGroupId" @close="shareGroupId = null" />
 <template v-else>
 <ErrorBoundary name="MainLayout">
@@ -42,16 +43,14 @@
   <GroupEditModal />
 </template>
 <TrashPanel :open="store.panels.trash" @close="store.panels.trash = false" />
-<ConfirmModal />
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
-<AuthModal />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" @close="onE2EClose" @unlocked="onE2EUnlocked" />
 <SetupGuide />
 </ErrorBoundary>
 
 <ErrorBoundary name="Overlays">
-<ContextMenu /><ActionSheet /><ToastContainer /><FormatToolbar /><MentionDropdown />
+<ContextMenu /><ActionSheet /><FormatToolbar /><MentionDropdown />
 <AddPopover />
 <DeadLinksPopover />
 <SyncConflictBanner />
@@ -63,6 +62,10 @@
 <div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>
 </template>
+<!-- 全局覆盖层：Share 路由与主布局共用 -->
+<ConfirmModal />
+<AuthModal />
+<ToastContainer />
 </template>
 
 <script setup lang="ts">
@@ -72,10 +75,11 @@ import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
 import { useApp } from './composables/useApp.js'
 import { useAppHandlers } from './composables/useAppHandlers.js'
-import { useAppLifecycle, onShareRoute } from './composables/useAppLifecycle.js'
+import { useAppLifecycle, onShareRoute, whenDataReady } from './composables/useAppLifecycle.js'
 import { useE2E } from './composables/domain/useE2E.js'
 import { useCloudSync } from './composables/domain/useCloudSync.js'
 import { useE2EStore } from './stores/e2e.js'
+import { toast } from './lib/toast.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -106,15 +110,6 @@ const AttributeModal = defineAsyncComponent(() => import('./components/modals/At
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
-const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
-const E2EUnlockModal = defineAsyncComponent(() => import('./components/modals/E2EUnlockModal.vue'))
-const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
-
-// A4: 公开分享页面
-const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))
-const shareGroupId = ref<string | null>(null)
-onShareRoute((gid: string) => { shareGroupId.value = gid })
-
 const store = useAppStore()
 useApp()
 useAppLifecycle()
@@ -125,6 +120,47 @@ const e2e = useE2E()
 const e2eStore = useE2EStore()
 const cloudSync = useCloudSync()
 
+/**
+ * 按需解锁：当 e2eStore.pendingUnlock 数组非空时，弹出解锁弹窗。
+ * B-2 修复：改为监听数组长度变化（而非单值），允许多个等待者同时被通知。
+ * E1-004：超时 + 异步 chunk 失败时 drain pending(false)，避免 await 永挂。
+ * 须在 defineAsyncComponent 之前定义 failPendingUnlock，供 onError 闭包引用。
+ */
+const PENDING_UNLOCK_TIMEOUT_MS = 60_000
+let _pendingUnlockTimer: ReturnType<typeof setTimeout> | null = null
+
+function drainPendingUnlock(ok: boolean) {
+  if (_pendingUnlockTimer) {
+    clearTimeout(_pendingUnlockTimer)
+    _pendingUnlockTimer = null
+  }
+  const pending = e2eStore.pendingUnlock.splice(0)
+  for (const resolve of pending) resolve(ok)
+}
+
+function failPendingUnlock(reason: string) {
+  if (!e2eStore.pendingUnlock.length && !store.modals.e2eUnlock) return
+  store.modals.e2eUnlock = false
+  drainPendingUnlock(false)
+  toast(reason, false)
+}
+
+const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
+// E1-004：chunk 加载失败时 drain pendingUnlock，避免 await 永挂
+const E2EUnlockModal = defineAsyncComponent({
+  loader: () => import('./components/modals/E2EUnlockModal.vue'),
+  onError: (_err, _retry, fail) => {
+    fail()
+    failPendingUnlock('解锁组件加载失败，请刷新后重试')
+  },
+})
+const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
+
+// A4: 公开分享页面
+const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))
+const shareGroupId = ref<string | null>(null)
+onShareRoute((gid: string) => { shareGroupId.value = gid })
+
 onMounted(async () => {
   // P1: E2E 改为按需引导 — 不再是「设过主密码就每次启动必解锁」。
   // 仅在保存敏感字段（密码）或编辑已加密书签时弹解锁提示。
@@ -134,8 +170,8 @@ onMounted(async () => {
   //   - 扩展快捷键/右键菜单: ?ext_save=1&ext_save_url=...&ext_save_title=...
   //   - Web Share Target: ?title=...&text=...&url=...
   // 静默保存 + toast 撤销（否决纯静默方案，保留可逆性）
-  // H8：先读参再立刻 replaceState 清 query，避免 800ms 窗口内错误上报泄漏书签内容；
-  // 保存动作仍延后等初始化完成。
+  // H8：先读参再立刻 replaceState 清 query，避免错误上报泄漏书签内容。
+  // E1-001/E1-002：await whenDataReady（loadData+_syncMaps）后再 save，禁止固定 800ms 竞态。
   const params = new URLSearchParams(window.location.search)
   const extSaveUrl = params.get('ext_save_url')
   const shareUrl = params.get('url')
@@ -146,28 +182,29 @@ onMounted(async () => {
     const incomingText = params.get('ext_save_notes') || params.get('text') || ''
     const cleanUrl = window.location.origin + window.location.pathname
     window.history.replaceState(null, '', cleanUrl)
-    // 等应用初始化完成后再保存
-    setTimeout(() => {
+    whenDataReady().then(() => {
       saveFromExtension(incomingUrl, incomingTitle, incomingText)
-    }, 800)
+    })
   }
 })
 
-/**
- * 按需解锁：当 e2eStore.pendingUnlock 数组非空时，弹出解锁弹窗。
- * B-2 修复：改为监听数组长度变化（而非单值），允许多个等待者同时被通知。
- */
 watch(() => e2eStore.pendingUnlock.length, (len) => {
   if (len > 0) {
     store.modals.e2eUnlock = true
+    if (_pendingUnlockTimer) clearTimeout(_pendingUnlockTimer)
+    _pendingUnlockTimer = setTimeout(() => {
+      _pendingUnlockTimer = null
+      failPendingUnlock('解锁超时，请重试')
+    }, PENDING_UNLOCK_TIMEOUT_MS)
+  } else if (_pendingUnlockTimer) {
+    clearTimeout(_pendingUnlockTimer)
+    _pendingUnlockTimer = null
   }
 })
 
 function onE2EUnlocked() {
   store.modals.e2eUnlock = false
-  // 有操作在等待解锁 → 逐个 resolve(true) 继续
-  const pending = e2eStore.pendingUnlock.splice(0)
-  for (const resolve of pending) resolve(true)
+  drainPendingUnlock(true)
   // 解锁后 flush：锁定期静默排队等解锁的敏感字段 op（username/notes 等）此时 key 已入内存，
   // 触发一次推送把它们补上云。debouncedSync 内含 autoSync 检查，关闭自动同步时跳过。
   cloudSync.debouncedSync()
@@ -176,8 +213,6 @@ function onE2EUnlocked() {
 /** E2E 解锁弹窗关闭/取消 */
 function onE2EClose() {
   store.modals.e2eUnlock = false
-  // 有操作在等待解锁但用户取消 → 逐个 resolve(false)
-  const pending = e2eStore.pendingUnlock.splice(0)
-  for (const resolve of pending) resolve(false)
+  drainPendingUnlock(false)
 }
 </script>

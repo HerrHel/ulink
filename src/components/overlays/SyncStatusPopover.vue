@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted } from 'vue'
+import { watch, onUnmounted } from 'vue'
 import { useSyncStatusStore } from '../../stores/overlay.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -58,12 +58,16 @@ function _closeOnOutsideClick(e: MouseEvent) {
   }
 }
 
-const _origShow = store.show
-const _origHide = store.hide
-store.show = () => { _origShow(); document.addEventListener('click', _closeOnOutsideClick) }
-store.hide = () => { _origHide(); document.removeEventListener('click', _closeOnOutsideClick) }
+// A3-006：不覆写 store show/hide；watch open 增删 document 监听，避免重挂叠层
+watch(() => store.open, (open) => {
+  if (open) document.addEventListener('click', _closeOnOutsideClick)
+  else document.removeEventListener('click', _closeOnOutsideClick)
+})
 
-onUnmounted(() => store.hide())
+onUnmounted(() => {
+  document.removeEventListener('click', _closeOnOutsideClick)
+  if (store.open) store.hide()
+})
 </script>
 
 <style>

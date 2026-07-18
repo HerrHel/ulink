@@ -15,6 +15,9 @@ import { useToastStore } from '../../stores/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useAttrDropdownStore } from '../../stores/attrDropdown.js'
 import { useBatchMoveStore, useMfbStore } from '../../stores/overlay.js'
+import { useActionSheetStore } from '../../stores/actionSheet.js'
+import { useAuthStore } from '../../stores/auth.js'
+import { useE2EStore } from '../../stores/e2e.js'
 
 interface NavState {
   curCat: string
@@ -25,12 +28,16 @@ interface NavState {
   cat: boolean
   attr: boolean
   // 面板类叠加层：与 modal 一样支持「打开前 push、后退关」语义。
-  // 原实现不含这些 → 打开 settings/trash/deadLinks/shortcutHelp 时未 push，
+  // 原实现不含这些 → 打开 settings/trash/deadLinks/shortcutHelp/history 时未 push，
   // 用户后退无法关面板（只能点关闭按钮/Esc）。
   settings: boolean
   trash: boolean
   deadLinks: boolean
   shortcutHelp: boolean
+  // E3-001：版本历史与 settings/trash 同语义
+  history: boolean
+  // A4-007：反馈弹窗
+  feedback: boolean
 }
 
 export function captureNavState(): NavState {
@@ -48,6 +55,8 @@ export function captureNavState(): NavState {
     trash: ui.panels?.trash || false,
     deadLinks: ui.overlays?.deadLinks || false,
     shortcutHelp: ui.panels?.shortcutHelp || false,
+    history: ui.panels?.history || false,
+    feedback: ui.overlays?.feedback || false,
   }
 }
 
@@ -76,6 +85,10 @@ export function restoreNavState(prev: NavState) {
   if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return }
   if (prev.deadLinks !== true && ui.overlays.deadLinks) { ui.overlays.deadLinks = false; return }
   if (prev.shortcutHelp !== true && ui.panels.shortcutHelp) { ui.panels.shortcutHelp = false; return }
+  // E3-001：HistoryPanel 后退关闭
+  if (prev.history !== true && ui.panels.history) { ui.panels.history = false; return }
+  // A4-007：反馈弹窗后退关闭
+  if (prev.feedback !== true && ui.overlays.feedback) { ui.overlays.feedback = false; return }
   if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat; ui.focusedGroupId = null; return }
 }
 
@@ -112,8 +125,11 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
   }
   if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
-    const ae = document.activeElement
+    const ae = document.activeElement as HTMLElement | null
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return
+    // E3-005：contentEditable 但不在 .group-body 内（如组名行内编辑）交给浏览器原生撤销；
+    // TipTap 组 notes 在 .group-body 内，继续走 performUndo 自定义栈。
+    if (ae?.isContentEditable && !ae.closest?.('.group-body')) return
     let undoGid: string | undefined
     const gb = ae && ae.closest ? ae.closest('.group-body') : null
     if (gb) undoGid = gb.closest('.group-card')?.getAttribute('data-group-id') || undefined
@@ -124,6 +140,25 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if (e.key === 'Escape') {
+    // A3-004：ActionSheet 优先关
+    const as = useActionSheetStore()
+    if (as.visible) { as.hide(); return }
+    // A2-006：Auth / E2E / SetupGuide
+    const auth = useAuthStore()
+    if (auth.authModalOpen) { auth.authModalOpen = false; return }
+    if (ui.modals.e2eUnlock) {
+      ui.modals.e2eUnlock = false
+      // A2-006：与 App.onE2EClose 一致 drain pending，避免 await 永挂
+      try {
+        const pending = useE2EStore().pendingUnlock.splice(0)
+        for (const resolve of pending) { try { resolve(false) } catch { /* ignore */ } }
+      } catch { /* store 未就绪 */ }
+      return
+    }
+    if (ui.modals.e2eSetup) { ui.modals.e2eSetup = false; return }
+    if (ui.modals.setupGuide) { ui.modals.setupGuide = false; return }
+    // A4-007：反馈弹窗
+    if (ui.overlays.feedback) { ui.overlays.feedback = false; return }
     if (ui.batchMode) { toggleBatchMode(); return }
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
     useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()

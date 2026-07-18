@@ -143,13 +143,14 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
   <!-- 当前页快速收藏 -->
   <div class="section">
     <div class="section-title">当前页面</div>
-    <div class="current-page" id="currentPage">
+    <div class="current-page" id="currentPage" title="点击刷新当前页信息（需用户手势以读取标签 URL）" style="cursor:pointer">
       <img id="pageIcon" src="" alt="">
       <div class="current-page-info">
         <div class="current-page-title" id="pageTitle">加载中…</div>
         <div class="current-page-url" id="pageUrl"></div>
       </div>
     </div>
+    <p id="tabUrlHint" class="hidden" style="font-size:11px;color:var(--text2);margin:0 0 8px;line-height:1.5">无法读取当前标签 URL（扩展无持久 tabs 权限）。请点击上方卡片或「↻」刷新后再保存。</p>
     <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ 保存当前页面</button>
     <!-- 已收藏详情面板 -->
     <div id="bookmarkDetail" class="bookmark-detail hidden">

@@ -8,11 +8,15 @@ import { useUIStore } from '../stores/ui.js'
 import { flushSaveAppData } from '../stores/app.js'
 import { useMentionStore } from '../stores/overlay.js'
 import { detectShareRoute } from './domain/useDataShare.js'
-import { loadData } from '../stores/persist.js'
+import { loadData, saveToLocalStorage as persistSaveToLocalStorage } from '../stores/persist.js'
 
 // A4: 分享路由回调，App.vue 注册以接收 share group ID
 let _onShareRoute: ((gid: string) => void) | null = null
 export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
+
+// E1 门闩实现见 lib/dataReady；此处 re-export 便于 App 与其它入口使用
+export { whenDataReady, isDataHydrated } from '../lib/dataReady.js'
+import { markDataReady } from '../lib/dataReady.js'
 
 // D2: Web Share Target 与扩展保存请求统一由 App.vue:saveFromExtension 处理（带 favicon + 撤销 toast + 统计）。
 // 历史上的 _handleShareTarget 在此处同步 addBookmark，但 App.vue 的 onMounted 又会 800ms 后
@@ -39,14 +43,19 @@ export function useAppLifecycle() {
     if (history.scrollRestoration) history.scrollRestoration = 'manual'
 
     // IDB 权威数据源，localStorage 回退（loadData 内部处理）
-    const loaded = await loadData()
-    ds.categories = loaded.categories
-    ds.bookmarks = loaded.bookmarks
-    ds.customAttributes = loaded.customAttributes
-    ds.siblingGroups = loaded.siblingGroups
-    ds._syncMaps()
-    // 跨会话恢复软删书签的组归属映射，否则回收站 restore 永远丢组关系（DATA-2）
-    ds._restoreDeletedGroupMemberships()
+    try {
+      const loaded = await loadData()
+      ds.categories = loaded.categories
+      ds.bookmarks = loaded.bookmarks
+      ds.customAttributes = loaded.customAttributes
+      ds.siblingGroups = loaded.siblingGroups
+      ds._syncMaps()
+      // 跨会话恢复软删书签的组归属映射，否则回收站 restore 永远丢组关系（DATA-2）
+      ds._restoreDeletedGroupMemberships()
+    } finally {
+      // 无论 load 成败都放行扩展保存门闩，避免永久挂起
+      markDataReady()
+    }
     ui.restoreUIState()
     // A4/C3: 检测公开分享路由（#share/<id>）
     const shareGid = detectShareRoute()
@@ -78,14 +87,29 @@ export function useAppLifecycle() {
     })
     cleanups.push(() => syncWatch())
 
+    // E1-003：beforeunload 同步写 localStorage 兜底；visibility hidden 链式 await flush
     const flushAndSave = () => {
-      flushSaveAppData()
+      // 同步 localStorage 快照（关页时浏览器可完成同步写，难等 IDB）
+      try {
+        const snap = ds._dataSnapshot()
+        persistSaveToLocalStorage(snap)
+      } catch (_) { /* ignore */ }
+      void flushSaveAppData()
       flushIDB()
     }
     const onSaveUI = () => ui.saveUIState()
     const onClearSel = () => window.getSelection()?.removeAllRanges()
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushAndSave()
+      if (document.visibilityState === 'hidden') {
+        // 先同步 LS 兜底，再 await IDB flush（hidden 生命周期内尽量完成）
+        try {
+          const snap = ds._dataSnapshot()
+          persistSaveToLocalStorage(snap)
+        } catch (_) { /* ignore */ }
+        void flushSaveAppData()
+        // A4-005：切后台/杀进程前落盘 UI 偏好
+        ui.saveUIState()
+      }
     }
     window.addEventListener('beforeunload', flushAndSave)
     window.addEventListener('beforeunload', onSaveUI)

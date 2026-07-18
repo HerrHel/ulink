@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="欢迎使用 LinkVault" :class="{ open: ui.modals.setupGuide }" @click.self="close">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="欢迎使用 LinkVault" :class="{ open: ui.modals.setupGuide }" @click.self="finish">
     <div class="modal modal-sm" @click.stop>
       <div class="modal-head">
         <span class="modal-title">👋 欢迎使用 LinkVault</span>

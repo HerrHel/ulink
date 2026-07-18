@@ -12,6 +12,7 @@ import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { safeDecodePassword, encrypt, decrypt } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
+import { isDataHydrated } from '../../lib/dataReady.js'
 
 interface BmFormState {
   id: string
@@ -179,92 +180,105 @@ export function closeBmModal() {
   ui.lastFocusedEl = null
 }
 
+/** A2-004：在途保存锁，防双击产生重复书签 */
+let _bmSaving = false
+export function isBmSaving(): boolean { return _bmSaving }
+
 export async function saveBm() {
-  const ds = useDataStore()
-  const url = fixUrl(bmForm.url)
-  if (!url) { toast('请填写网址', false); return }
+  // A2-004：在途直接 return（解锁递归走同一锁，勿在 await 解锁前 release）
+  if (_bmSaving) return
+  _bmSaving = true
+  try {
+    const ds = useDataStore()
+    const url = fixUrl(bmForm.url)
+    if (!url) { toast('请填写网址', false); return }
 
-  const title = bmForm.title.trim() || domain(url)
+    const title = bmForm.title.trim() || domain(url)
 
-  // 密码处理：
-  // - E2E 已启用且已解锁 → AES-256-GCM 加密
-  // - E2E 已启用但未解锁 且 密码非空 → S6 阻断：禁止走 btoa(明文) 降级，提示先解锁
-  // - E2E 未启用 → base64（旧版兼容，明文非 E2E 场景的预期形态）
-  let storedPassword: string | EncryptedPassword = ''
-  if (bmForm.password) {
-    const e2eStore = useE2EStore()
-    if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
-      // S6：encrypt 已严格保证输出为 salt.iv.data 三段；这里与之对齐，做契约校验。
-      try {
-        const raw = await encrypt(bmForm.password, e2eStore.cryptoKey as CryptoKey)
-        const parts = raw.split('.')
-        if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-          toast('密码加密失败：输出格式异常，已取消保存', false)
+    // 密码处理：
+    // - E2E 已启用且已解锁 → AES-256-GCM 加密
+    // - E2E 已启用但未解锁 且 密码非空 → S6 阻断：禁止走 btoa(明文) 降级，提示先解锁
+    // - E2E 未启用 → base64（旧版兼容，明文非 E2E 场景的预期形态）
+    let storedPassword: string | EncryptedPassword = ''
+    if (bmForm.password) {
+      const e2eStore = useE2EStore()
+      if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
+        // S6：encrypt 已严格保证输出为 salt.iv.data 三段；这里与之对齐，做契约校验。
+        try {
+          const raw = await encrypt(bmForm.password, e2eStore.cryptoKey as CryptoKey)
+          const parts = raw.split('.')
+          if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+            toast('密码加密失败：输出格式异常，已取消保存', false)
+            return
+          }
+          storedPassword = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
+        } catch {
+          toast('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
           return
         }
-        storedPassword = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
-      } catch {
-        toast('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+      } else if (e2eStore.isE2EEnabled) {
+        // P1：按需解锁 — 不再提示「请先解锁 E2E」，改为自动弹锁 + 等待解锁后继续保存
+        // 临时释放锁，否则解锁后递归 saveBm 会直接 return
+        _bmSaving = false
+        const unlocked = await new Promise<boolean>(resolve => {
+          e2eStore.pendingUnlock.push(resolve)
+        })
+        if (!unlocked) {
+          toast('保存已取消', false)
+          return
+        }
+        // 解锁后重试加密（递归调用自身，解锁后 isUnlocked=true 走上一分支）
+        await saveBm()
         return
+      } else {
+        // E2E 未启用：旧版兼容的 base64（非加密场景的预期形态）
+        storedPassword = btoa(bmForm.password)
       }
-    } else if (e2eStore.isE2EEnabled) {
-      // P1：按需解锁 — 不再提示「请先解锁 E2E」，改为自动弹锁 + 等待解锁后继续保存
-      const unlocked = await new Promise<boolean>(resolve => {
-        e2eStore.pendingUnlock.push(resolve)
-      })
-      if (!unlocked) {
-        toast('保存已取消', false)
-        return
-      }
-      // 解锁后重试加密（递归调用自身，解锁后 isUnlocked=true 走上一分支）
-      await saveBm()
-      return
+    }
+
+    const data: Partial<Bookmark> = {
+      title, url,
+      username: bmForm.username.trim(),
+      password: storedPassword,
+      notes: bmForm.notes.trim(),
+      icon: bmForm.icon.trim(),
+      categoryId: bmForm.categoryId,
+      parentId: bmForm.parentId || null,
+      attributes: { ...bmForm.attributes },
+    }
+
+    if (bmForm.id) {
+      ds.updateBookmark(bmForm.id, data)
+      toast('书签已更新')
     } else {
-      // E2E 未启用：旧版兼容的 base64（非加密场景的预期形态）
-      storedPassword = btoa(bmForm.password)
-    }
-  }
-
-  const data: Partial<Bookmark> = {
-    title, url,
-    username: bmForm.username.trim(),
-    password: storedPassword,
-    notes: bmForm.notes.trim(),
-    icon: bmForm.icon.trim(),
-    categoryId: bmForm.categoryId,
-    parentId: bmForm.parentId || null,
-    attributes: { ...bmForm.attributes },
-  }
-
-  if (bmForm.id) {
-    ds.updateBookmark(bmForm.id, data)
-    toast('书签已更新')
-  } else {
-    const newBm = data as Bookmark
-    newBm.id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-    // order 用「现存最大 order + 1」而非 ds.bookmarks.length：length 在永久删除（回收站清空、
-    // 数组物理移除）后会缩短，新值可能与现存项 order 重复，自定义排序下两条同 order 抖动。
-    // max+1 只取现存项，永久删后仍唯一。与 saveFromExtension 同策略（见其注释）。
-    newBm.order = ds.nextBookmarkOrder()
-    newBm.useCount = 0
-    newBm.isExpanded = false
-    newBm.createdAt = Date.now()
-    newBm.updatedAt = newBm.createdAt
-    ds.addBookmark(newBm)
-    const ui = useUIStore()
-    if (ui.saveToGroup) {
-      const targetGid = ui.saveToGroup
-      ui.saveToGroup = null
-      const sg = ds.groupMap[targetGid]
-      if (sg && sg.bookmarkIds.indexOf(newBm.id) === -1) {
-        ds.updateGroup(targetGid, { bookmarkIds: [...sg.bookmarkIds, newBm.id] })
+      const newBm = data as Bookmark
+      newBm.id = 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+      // order 用「现存最大 order + 1」而非 ds.bookmarks.length：length 在永久删除（回收站清空、
+      // 数组物理移除）后会缩短，新值可能与现存项 order 重复，自定义排序下两条同 order 抖动。
+      // max+1 只取现存项，永久删后仍唯一。与 saveFromExtension 同策略（见其注释）。
+      newBm.order = ds.nextBookmarkOrder()
+      newBm.useCount = 0
+      newBm.isExpanded = false
+      newBm.createdAt = Date.now()
+      newBm.updatedAt = newBm.createdAt
+      ds.addBookmark(newBm)
+      const ui = useUIStore()
+      if (ui.saveToGroup) {
+        const targetGid = ui.saveToGroup
+        ui.saveToGroup = null
+        const sg = ds.groupMap[targetGid]
+        if (sg && sg.bookmarkIds.indexOf(newBm.id) === -1) {
+          ds.updateGroup(targetGid, { bookmarkIds: [...sg.bookmarkIds, newBm.id] })
+        }
       }
+      saveAppData()
+      toast('书签已添加')
     }
-    saveAppData()
-    toast('书签已添加')
+    if (bmForm.id) saveAppData()
+    closeBmModal()
+  } finally {
+    _bmSaving = false
   }
-  if (bmForm.id) saveAppData()
-  closeBmModal()
 }
 
 export function addSub(parentId: string) {
@@ -413,8 +427,15 @@ export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) 
 /**
  * 静默保存书签（扩展/分享目标传入），保存后显示带撤销按钮的 toast。
  * 不打开编辑弹窗，实现一键保存。
+ * 调用方须 await whenDataReady() 后再调用（E1-001/E1-002）；未 hydrate 时拒绝写入，
+ * 避免空 store 快照覆盖 IDB 或随后被 load 整表冲掉。
  */
 export function saveFromExtension(url: string, title?: string, notes?: string): boolean {
+  if (!isDataHydrated()) {
+    console.warn('[LinkVault] saveFromExtension 在 dataReady 前被调用，已拒绝')
+    toast('数据尚未就绪，请稍后重试', false)
+    return false
+  }
   const ds = useDataStore()
   const safeUrl = fixUrl(url)
   if (!safeUrl) {

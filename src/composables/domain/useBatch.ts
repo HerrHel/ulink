@@ -14,6 +14,8 @@ export function toggleBatchMode() {
   const ui = useUIStore()
   ui.batchMode = !ui.batchMode
   ui.batchSelected.splice(0)
+  // A4-003：退出批量时一并关 batchMove 浮层，避免取消/Esc 后残留
+  if (!ui.batchMode) useBatchMoveStore().hide()
   // 不再写持久化的 isExpanded=false：
   //  ① 批量模式下卡片内容 pointer-events:none（见 batch.css .batch-mode），展开按钮点不动、
   //     账户信息/子站无交互意义，收敛展开态无任何功能依赖——纯属副作用。

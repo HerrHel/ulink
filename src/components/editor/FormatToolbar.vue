@@ -1,5 +1,6 @@
 <template>
-  <template v-if="isMobile">
+  <!-- A5-001：用响应式 mobile 布尔，禁止 v-if="isMobile" 把函数当真值永久挂桌面栏 -->
+  <template v-if="mobile">
     <div class="mfb" :class="{ visible: isVisible }" :style="{ bottom: kbBottom + 'px' }"
          @mousedown.prevent>
       <button class="ft-btn" @click="toggle('bold')" title="加粗" v-html="icons.bold"></button>
@@ -52,6 +53,7 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { isMobile } from '../../utils.js'
 import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
 import { EditorManager } from '../../lib/editor.js'
 import { I } from '../../config/icons.js'
 import { saveGroupBody } from '../../composables/domain/useGroup.js'
@@ -61,6 +63,9 @@ import type { FormatKey } from '../../composables/ui/useEditorFormat.js'
 import ColorPalette from './ColorPalette.vue'
 
 const store = useAppStore()
+const ui = useUIStore()
+// A5-001：优先 uiStore 响应式布尔
+const mobile = computed(() => ui.isMobile)
 
 const injectedEditor = inject('tiptapEditor', ref(null))
 
@@ -116,10 +121,11 @@ function updateViewport() {
 }
 
 function show() {
-  if (!isMobile()) return
+  if (!mobile.value && !isMobile()) return
   hide()
   isVisible.value = true
-  syncState()
+  // A5-007：移动端同样挂 selectionUpdate，避免格式钮 active 与选区脱节
+  _attachSync()
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', updateViewport)
     window.visualViewport.addEventListener('scroll', updateViewport)
@@ -133,6 +139,7 @@ function hide() {
   isVisible.value = false
   kbBottom.value = 0
   paletteOpen.value = false
+  _detachSync()
   if (_showTimer) { clearTimeout(_showTimer); _showTimer = null }
   if (window.visualViewport) {
     window.visualViewport.removeEventListener('resize', updateViewport)
@@ -157,30 +164,69 @@ function _detachSync() {
   }
 }
 
-watch(gid, (v, old) => {
-  if (isMobile()) return
+// A5-007：桌面跟 gid；移动端由 show/hide 管 _attachSync，gid 变化时若 mfb 已开则重绑
+watch(gid, (v) => {
   paletteOpen.value = false
+  if (mobile.value) {
+    const mfb = useMfbStore()
+    if (mfb.open && v) _attachSync()
+    else if (!v) _detachSync()
+    return
+  }
   if (v) _attachSync()
   else _detachSync()
 }, { immediate: true })
 
-onMounted(() => {
-  if (!isMobile()) {
-    document.addEventListener('click', onDocClick, true)
+function bindDesktop() {
+  document.addEventListener('click', onDocClick, true)
+}
+function unbindDesktop() {
+  document.removeEventListener('click', onDocClick, true)
+}
+// A5-002：不覆盖 mfbStore.show/hide，watch open 驱动本组件可见副作用
+let _mfbWatchStop: (() => void) | null = null
+function bindMobile() {
+  document.addEventListener('touchstart', _mfbOnDocTouch, true)
+  if (_mfbWatchStop) { _mfbWatchStop(); _mfbWatchStop = null }
+  const mfb = useMfbStore()
+  _mfbWatchStop = watch(() => mfb.open, (open) => {
+    if (open) show()
+    else hide()
+  }, { immediate: true })
+}
+function unbindMobile() {
+  document.removeEventListener('touchstart', _mfbOnDocTouch, true)
+  if (_mfbWatchStop) { _mfbWatchStop(); _mfbWatchStop = null }
+  hide()
+}
+
+// A5-001：断点变化时补绑/解绑 mfb 与桌面监听
+watch(mobile, (m, prev) => {
+  if (prev === undefined) return
+  if (m) {
+    unbindDesktop()
+    _detachSync()
+    bindMobile()
   } else {
-    document.addEventListener('touchstart', _mfbOnDocTouch, true)
-    // 让 mfbStore 的 show/hide 触发实际的副作用操作
-    const mfb = useMfbStore()
-    mfb.show = show
-    mfb.hide = hide
+    unbindMobile()
+    bindDesktop()
+    if (gid.value) _attachSync()
+  }
+})
+
+onMounted(() => {
+  if (mobile.value) bindMobile()
+  else {
+    bindDesktop()
+    if (gid.value) _attachSync()
   }
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocClick, true)
-  document.removeEventListener('touchstart', _mfbOnDocTouch, true)
+  unbindDesktop()
+  unbindMobile()
   _detachSync()
-  if (isMobile()) { hide() }
+  hide()
 })
 
 defineExpose({ show, hide, syncState })

@@ -16,8 +16,27 @@ jobs:
       - run: npm ci
       - name: Lint
         run: npm run lint
+      # F2-006：类型检查进入门禁
+      - name: Typecheck
+        run: npm run typecheck
       - name: Unit Tests
         run: npm run test
+      # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错
       - name: Dependency Audit
-        run: npm audit --audit-level=high || true
-        continue-on-error: true
+        run: npm audit --audit-level=high
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # C1-002 / F2-002：Playwright 进入 PR 门禁
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E Tests
+        run: npm run test:e2e
+        env:
+          CI: true

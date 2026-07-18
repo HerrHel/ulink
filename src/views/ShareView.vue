@@ -24,10 +24,13 @@
     <template v-else-if="group">
       <div class="share-group-header">
         <h1 class="share-group-name">
-          <span v-if="group.icon" v-html="getIcon(group.icon)" class="share-group-icon"></span>
+          <!-- D2-006：icon 键 → SVG；http(s) → img；其它不渲染 -->
+          <img v-if="groupIconImg" :src="groupIconImg" class="share-group-icon-img" referrerpolicy="no-referrer" alt="" />
+          <span v-else-if="groupIconSvg" v-html="groupIconSvg" class="share-group-icon"></span>
           {{ group.name }}
         </h1>
-        <p v-if="group.notes" class="share-group-notes">{{ group.notes }}</p>
+        <!-- E2-003：TipTap HTML 经 sanitize 后 v-html，禁止原文插值 / 未清洗 v-html -->
+        <div v-if="groupNotesHtml" class="share-group-notes" v-html="groupNotesHtml"></div>
         <div class="share-group-meta">
           <span class="share-meta-item">{{ bookmarks.length }} 个链接</span>
         </div>
@@ -66,14 +69,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useCloudSync } from '../composables/domain/useCloudSync.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import { forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
+import { fixUrl, domain, favicon, sanitizeHTML, safeIconUrl } from '../utils.js'
 import { I } from '../config/icons.js'
-import { fixUrl, domain, favicon } from '../utils.js'
-import { getCategoryIcon } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
@@ -89,9 +91,29 @@ const forking = ref(false)
 const auth = useAuth()
 const isLoggedIn = auth.isLoggedIn
 
-function getIcon(icon: string) { return getCategoryIcon(icon) }
+/** D2-006：已知图标键 → SVG；http(s) 自定义 → 安全 URL；其它空 */
+const groupIconImg = computed(() => {
+  const icon = group.value?.icon
+  if (!icon) return ''
+  const safe = safeIconUrl(icon)
+  if (safe && /^https?:\/\//i.test(safe)) return safe
+  return ''
+})
+const groupIconSvg = computed(() => {
+  const icon = group.value?.icon
+  if (!icon || groupIconImg.value) return ''
+  // 仅匹配 icons.ts 已知键；未知字符串不渲染（勿把任意串当 SVG 键回落 star）
+  return Object.prototype.hasOwnProperty.call(I, icon) ? I[icon] : ''
+})
 
-/** M5：分享页图标只由 http(s) 书签 URL 派生，忽略所有者自填的任意 icon */
+/** E2-003：分享页 notes 展示用白名单 HTML */
+const groupNotesHtml = computed(() => {
+  const n = group.value?.notes
+  if (!n || !n.trim()) return ''
+  return sanitizeHTML(n)
+})
+
+/** M5：分享页书签图标只由 http(s) 书签 URL 派生 */
 function shareIconSrc(b: Bookmark): string {
   const safe = fixUrl(b.url)
   return safe ? favicon(safe) : ''
@@ -222,7 +244,12 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
   letter-spacing: -0.5px;
 }
 .share-group-icon :deep(svg) { width: 24px; height: 24px; color: var(--accent, #3B82F6); }
+.share-group-icon-img {
+  width: 24px; height: 24px; object-fit: contain; border-radius: 4px; flex-shrink: 0;
+}
 .share-group-notes { color: var(--text-secondary, #666); font-size: 14px; margin: 0 0 12px; line-height: 1.6; }
+.share-group-notes :deep(p) { margin: 0 0 0.5em; }
+.share-group-notes :deep(p:last-child) { margin-bottom: 0; }
 .share-group-meta { display: flex; gap: 16px; margin-bottom: 16px; }
 .share-meta-item { font-size: 13px; color: var(--text-secondary, #888); }
 .share-group-actions { display: flex; gap: 8px; }

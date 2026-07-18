@@ -139,7 +139,22 @@ function _findGroup(id: string): SiblingGroup | undefined { return useDataStore(
 /** swapOrder + 标记 dirty（确保排序变更可同步到云端） */
 function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }) {
   swapOrder(a, b)
-  useDataStore()._markDirty(a.id, b.id)
+  const ds = useDataStore()
+  ds._markDirty(a.id, b.id)
+  // A1-003：已有自定义序时同步交换 _customCardOrder，避免 PC 拖拽 DOM 换位后 Vue 弹回
+  const ui = useUIStore()
+  if (ds._customCardOrder && ui.sortMode === 'order') {
+    const order = ds._customCardOrder.slice()
+    const ia = order.findIndex(e => e.id === a.id)
+    const ib = order.findIndex(e => e.id === b.id)
+    if (ia >= 0 && ib >= 0) {
+      const tmp = order[ia]
+      order[ia] = order[ib]
+      order[ib] = tmp
+      ds._customCardOrder = order
+      ui.saveUIState()
+    }
+  }
 }
 
 function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage = true) {

@@ -17,8 +17,10 @@ import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from 
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
   const ui = () => useUIStore()
-  // 隐私模式 / IDB 配额满 toast 只弹一次（flag 保证不刷屏）。
+  // 隐私模式 / IDB 配额满：首次必 toast；持续失败时每 STORAGE_FAIL_REMIND_MS 再提醒（G1-004）
   let _storageFailWarned = false
+  let _lastStorageFailToastAt = 0
+  const STORAGE_FAIL_REMIND_MS = 5 * 60 * 1000
   // PERF-3：上次成功写入的快照指纹，相同则跳过 Zod/双写
   let _lastSavedFingerprint = ''
 
@@ -55,6 +57,7 @@ export const useAppStore = defineStore('app', () => {
     bookmarkMap, groupMap, childrenMap,
     filteredBookmarks, filteredGroups, cardCounts,
     selectableCategories: computed(() => ds().selectableCategories),
+    selectableAttributes: computed(() => ds().selectableAttributes),
 
     // ── UI 状态（可读写，委托 uiStore）──
     curCat: uiProp('curCat'),
@@ -136,38 +139,41 @@ export const useAppStore = defineStore('app', () => {
     loadFromStorage() { ds().loadFromStorage() },
     tryLoadFromIDB() { return ds().tryLoadFromIDB() },
 
-    save() {
+    save(): Promise<boolean> {
       const d = ds()
       const data = d._dataSnapshot()
       const fp = _fingerprint(data)
-      if (fp && fp === _lastSavedFingerprint) return
+      if (fp && fp === _lastSavedFingerprint) return Promise.resolve(true)
       // 运行时验证数据完整性，阻止损坏数据写入存储
       const parsed = AppDataSchema.safeParse(data)
       if (!parsed.success) {
         console.error('[store] 数据验证失败，跳过存储:', parsed.error.issues)
-        return
+        return Promise.resolve(false)
       }
       d._storageInfoDirty = true
       d._saveCount++
       // IDB 权威写入（含 localStorage 尽力缓存）
-      // persist.saveData 失败时返回 false（隐私模式/IDB配额满等），fire-and-forget 但 toast 首次警告。
-      // 旧实现不 await 不检查返回值 → 用户存的书签没落库却无任何提示，下次刷新发现丢了误以为 bug。
-      // 只弹一次避免刷屏：debouncedSave 300ms 防抖触发 save 频率不低。
-      persist.saveData(parsed.data).then(ok => {
+      // E1-003：返回 Promise 供 flush 可 await；toast 仍链式处理。
+      const p = persist.saveData(parsed.data).then(ok => {
         if (ok) {
           _lastSavedFingerprint = fp
-          // H11 修复：IDB 配额满/隐私模式下 saveData 持续返回 false，但 _storageFailWarned
-          // 一旦置 true 永不重置，后续持续失败静默，用户继续增删书签数据仅存活于内存，
-          // 刷新即全部丢失却再无任何提示。写入恢复成功即清旗标，让"恢复→再失败"能重新提示，
-          // 既保留"单次失败只弹一次避免刷屏"语义，又能在存储恢复后重新具备告警能力。
+          // H11：写入恢复成功即清旗标，让「恢复→再失败」能重新提示
           _storageFailWarned = false
+          _lastStorageFailToastAt = 0
+        } else {
+          // G1-004：持续失败时按间隔重复显著提示，禁止只 toast 一次后静默丢写
+          const now = Date.now()
+          const due = !_storageFailWarned || (now - _lastStorageFailToastAt >= STORAGE_FAIL_REMIND_MS)
+          if (due) {
+            _storageFailWarned = true
+            _lastStorageFailToastAt = now
+            toast('⚠️ 存储不可用（如隐私模式/配额满），刷新后数据可能丢失，请尽快导出备份', false)
+          }
         }
-        if (!ok && !_storageFailWarned) {
-          _storageFailWarned = true
-          toast('⚠️ 存储不可用（如隐私模式/配额满），刷新后数据可能丢失', false)
-        }
+        return ok
       })
       if (d._saveCount % 10 === 0) useUndoStore().cleanStale()
+      return p
     },
 
     debouncedSave(delayMs = 300) {
@@ -179,13 +185,14 @@ export const useAppStore = defineStore('app', () => {
       }, delayMs)
     },
 
-    flushDebouncedSave() {
+    /** E1-003：取消防抖并 await 落盘 */
+    flushDebouncedSave(): Promise<boolean> {
       const d = ds()
       if (d._saveTimer) {
         clearTimeout(d._saveTimer)
         d._saveTimer = null
-        this.save()
       }
+      return this.save()
     },
 
     _dataSnapshot() { return ds()._dataSnapshot() },
@@ -206,7 +213,7 @@ export const useAppStore = defineStore('app', () => {
 // 委托至 appStore action，避免保存逻辑重复
 
 export function saveAppData() {
-  useAppStore().save()
+  return useAppStore().save()
 }
 
 export function debouncedSaveAppData() {
@@ -218,6 +225,7 @@ export function debouncedSaveAppDataNotes(delayMs = 1200) {
   useAppStore().debouncedSave(delayMs)
 }
 
-export function flushSaveAppData() {
-  useAppStore().flushDebouncedSave()
+/** E1-003：可 await 的 flush */
+export function flushSaveAppData(): Promise<boolean> {
+  return useAppStore().flushDebouncedSave()
 }

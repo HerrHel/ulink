@@ -1,6 +1,7 @@
 /* ==================== RESET & BASE ==================== */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;height:100%;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+/* B1-001：默认允许选中文本；拖拽/批量态再禁用（见 drag.css / batch.css） */
+html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;height:100%;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
 body{
   font-family:'Satoshi',system-ui,-apple-system,sans-serif;
   background:var(--bg);
@@ -11,12 +12,19 @@ body{
   height:100%;
   touch-action:manipulation;
 }
-button{font:inherit;cursor:pointer;border:none;background:none;color:inherit;-webkit-user-select:auto;user-select:auto}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit;-webkit-user-select:none;user-select:none}
 input,textarea,select{font:inherit;color:inherit;-webkit-user-select:text;user-select:text}
 a{color:inherit;text-decoration:none}
 ul,ol{list-style:none}
 img{max-width:100%;display:block}
 svg{vertical-align:middle}
+
+/* 可复制/可编辑正文区显式恢复（防御性，覆盖祖先 none） */
+.group-tiptap,.group-body,[contenteditable="true"],
+.card-name,.card-domain,.card-notes,.acct-val,.focus-title-input,
+.confirm-msg,.share-page,.modal-body{
+  -webkit-user-select:text;user-select:text;-webkit-touch-callout:default;
+}
 
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 ::selection{background:var(--accent);color:#fff}

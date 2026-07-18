@@ -262,6 +262,9 @@ export async function decryptPasswordWithKey(
       return ''
     }
   }
+  // A1-004：E2E 已启用且未解锁时，禁止把旧 base64/string 解码进 UI（锁定态应与对象密文一致为空）
+  // 调用方应在 isE2EEnabled && !isUnlocked 时不传 cryptoKey 且期望 ''；此处 string 仅在「无 E2E 或已解锁」语义下由调用方保证。
+  // 为双保险：cryptoKey 显式为 null 且 string 时仍 decode 是旧路径——由 BookmarkCard 在锁定时跳过调用。
   if (typeof stored === 'string') return safeDecodePassword(stored)
   return ''
 }

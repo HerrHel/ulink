@@ -149,7 +149,8 @@
 .trash-item-time{font-size:0.7rem;color:var(--text-muted);flex-shrink:0}
 .modal-title{font-family:'Clash Display',system-ui,sans-serif;font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px;flex:1}
 .modal-md{max-width:560px}
-.btn-xs{padding:3px 8px;font-size:0.72rem}
+/* B2-001：覆盖 header 中正方形 .btn-xs，文本按钮需自适应宽高 */
+.btn-xs{width:auto;height:auto;min-height:26px;padding:3px 8px;font-size:0.72rem}
 
 /* ── HistoryPanel ── */
 .history-body{max-height:50vh;overflow-y:auto;scrollbar-width:thin}

@@ -1,7 +1,8 @@
-import { ref, computed, onMounted, onUnmounted, watch, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, unref, type Ref, type MaybeRef } from 'vue'
 
 interface VirtualScrollOptions {
-  itemHeight?: number
+  /** 固定行高；可传 Ref 以响应布局/断点变化（A1-005） */
+  itemHeight?: MaybeRef<number>
   /** 初始估算高度；实际以 scroll 容器 clientHeight + ResizeObserver 为准 */
   containerHeight?: number
   overscan?: number
@@ -16,11 +17,14 @@ interface VirtualScrollOptions {
  */
 export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptions = {}) {
   const {
-    itemHeight = 120,
+    itemHeight: itemHeightOpt = 120,
     containerHeight: initialHeight = 600,
     overscan = 5,
     scrollRootSelector = '#panelContent',
   } = options
+
+  // A1-005：支持响应式行高，避免 setup 时 isMobile 写死
+  const itemHeight = computed(() => unref(itemHeightOpt))
 
   const scrollTop = ref(0)
   const measuredHeight = ref(initialHeight)
@@ -30,30 +34,31 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   let ro: ResizeObserver | null = null
 
   const visibleCount = computed(
-    () => Math.ceil(measuredHeight.value / itemHeight) + overscan * 2
+    () => Math.ceil(measuredHeight.value / itemHeight.value) + overscan * 2
   )
   const startIndex = computed(() =>
-    Math.max(0, Math.floor(scrollTop.value / itemHeight) - overscan)
+    Math.max(0, Math.floor(scrollTop.value / itemHeight.value) - overscan)
   )
   const endIndex = computed(() =>
     Math.min(items.value.length, startIndex.value + visibleCount.value)
   )
 
-  const visibleItems = computed(() =>
-    items.value.slice(startIndex.value, endIndex.value).map((item, index) => ({
+  const visibleItems = computed(() => {
+    const h = itemHeight.value
+    return items.value.slice(startIndex.value, endIndex.value).map((item, index) => ({
       ...item,
       _virtualIndex: startIndex.value + index,
       _virtualStyle: {
         position: 'absolute' as const,
-        top: `${(startIndex.value + index) * itemHeight}px`,
-        height: `${itemHeight}px`,
+        top: `${(startIndex.value + index) * h}px`,
+        height: `${h}px`,
         width: '100%',
         left: '0',
       },
     }))
-  )
+  })
 
-  const totalHeight = computed(() => items.value.length * itemHeight)
+  const totalHeight = computed(() => items.value.length * itemHeight.value)
 
   function onScroll() {
     if (scrollEl) scrollTop.value = scrollEl.scrollTop

@@ -35,7 +35,7 @@
             </div>
           </div>
           <div class="diff-actions">
-            <button class="btn btn-primary btn-sm" @click="onRestoreDiff">恢复到较早版本</button>
+            <button class="btn btn-primary btn-sm" :disabled="restoring" @click="onRestoreDiff">恢复到较早版本</button>
           </div>
         </template>
 
@@ -53,7 +53,7 @@
               <button v-if="selectedIdx >= 0 && selectedIdx !== idx" class="btn btn-ghost btn-xs" @click="enterDiffMode(idx)" title="对比差异">
                 <span aria-hidden="true" v-html="I.diff || '⇔'"></span>对比
               </button>
-              <button class="btn btn-xs" :class="selectedIdx === idx ? 'btn-primary' : 'btn-ghost'" @click="onRestore(v)">{{ selectedIdx === idx ? '恢复此版本' : '恢复' }}</button>
+              <button class="btn btn-xs" :class="selectedIdx === idx ? 'btn-primary' : 'btn-ghost'" :disabled="restoring" @click="onRestore(v)">{{ selectedIdx === idx ? '恢复此版本' : '恢复' }}</button>
             </div>
           </div>
         </div>
@@ -71,6 +71,7 @@ import { fetchLocalHistory } from '../../stores/storage.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
+import { showConfirm } from '../../lib/toast.js'
 import { diffVersions, type DiffField } from '../../lib/diffVersions.js'
 
 interface HistoryVersion {
@@ -86,6 +87,7 @@ const sync = useCloudSync()
 const auth = useAuth()
 const versions = ref<HistoryVersion[]>([])
 const loading = ref(false)
+const restoring = ref(false)
 const selectedIdx = ref(-1)
 const diffMode = ref(false)
 const diffCompareIdx = ref(-1)
@@ -153,18 +155,35 @@ function exitDiffMode() {
 }
 
 async function onRestore(v: HistoryVersion) {
-  const ok = await sync.restoreFromHistory(v.id, props.itemId, props.itemType)
-  if (ok) { toast('已恢复到历史版本'); emit('close') }
-  else toast('恢复失败')
+  // A2-010：二次确认 + 在途锁，防误触/连点覆盖当前数据
+  if (restoring.value) return
+  const okConfirm = await showConfirm('确认恢复到此历史版本？当前未保存的修改将被覆盖。')
+  if (!okConfirm) return
+  restoring.value = true
+  try {
+    const ok = await sync.restoreFromHistory(v.id, props.itemId, props.itemType)
+    if (ok) { toast('已恢复到历史版本'); emit('close') }
+    else toast('恢复失败', false)
+  } finally {
+    restoring.value = false
+  }
 }
 
 async function onRestoreDiff() {
+  if (restoring.value) return
   const targetIdx = Math.min(selectedIdx.value, diffCompareIdx.value)
   if (targetIdx < 0) return
   const v = versions.value[targetIdx]
   if (!v) return
-  const ok = await sync.restoreFromHistory(v.id, props.itemId, props.itemType)
-  if (ok) { toast('已恢复到较早版本'); emit('close') }
-  else toast('恢复失败')
+  const okConfirm = await showConfirm('确认恢复到较早版本？当前未保存的修改将被覆盖。')
+  if (!okConfirm) return
+  restoring.value = true
+  try {
+    const ok = await sync.restoreFromHistory(v.id, props.itemId, props.itemType)
+    if (ok) { toast('已恢复到较早版本'); emit('close') }
+    else toast('恢复失败', false)
+  } finally {
+    restoring.value = false
+  }
 }
 </script>

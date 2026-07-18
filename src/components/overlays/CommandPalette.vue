@@ -184,6 +184,12 @@ function onGlobalKeydown(e: KeyboardEvent) {
     e.preventDefault()
     if (visible.value) close()
     else open()
+    return
+  }
+  // A3-008：面板打开时 Esc 全局关闭（失焦输入框后仍可关）
+  if (visible.value && e.key === 'Escape') {
+    e.preventDefault()
+    close()
   }
 }
 

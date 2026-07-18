@@ -28,8 +28,11 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         return g ? [{ type: 'group' as const, data: g }] : []
       }
       case 'custom': {
-        const bmMap = ds.bookmarkMap
-        const gMap = ds.groupMap
+        // A1-002：候选集一律 filtered*，避免分类/搜索/属性被自定义顺序旁路
+        const filteredGs = ds.filteredGroups
+        const filteredBms = ds.filteredBookmarks.filter((b: Bookmark) => !b.parentId)
+        const gMap = Object.fromEntries(filteredGs.map(g => [g.id, g]))
+        const bmMap = Object.fromEntries(filteredBms.map(b => [b.id, b]))
         const order = ds._customCardOrder!
         const usedBms = new Set<string>()
         const usedGs = new Set<string>()
@@ -37,18 +40,17 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         for (const entry of order) {
           if (entry.t === 'g') {
             const g = gMap[entry.id]
-            if (g && !g.deletedAt) { combined.push({ type: 'group', data: g }); usedGs.add(entry.id) }
+            if (g) { combined.push({ type: 'group', data: g }); usedGs.add(entry.id) }
           } else {
             const b = bmMap[entry.id]
-            if (b && !b.parentId && !b.deletedAt) { combined.push({ type: 'bm', data: b }); usedBms.add(entry.id) }
+            if (b) { combined.push({ type: 'bm', data: b }); usedBms.add(entry.id) }
           }
         }
-        // 追加不在自定义顺序中的新项
-        for (const g of ds.siblingGroups) {
-          if (!g.deletedAt && !usedGs.has(g.id)) combined.push({ type: 'group', data: g })
+        for (const g of filteredGs) {
+          if (!usedGs.has(g.id)) combined.push({ type: 'group', data: g })
         }
-        for (const b of ds.bookmarks) {
-          if (!b.parentId && !b.deletedAt && !usedBms.has(b.id)) combined.push({ type: 'bm', data: b })
+        for (const b of filteredBms) {
+          if (!usedBms.has(b.id)) combined.push({ type: 'bm', data: b })
         }
         return combined
       }
@@ -73,8 +75,9 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
               const nb = 'name' in db ? (db.name || '') : ('title' in db ? (db.title || '') : '')
               return na.localeCompare(nb) * d
             }
-            if (sm === 'dateDesc') return ((db.updatedAt || 0) - (da.updatedAt || 0)) * d
-            if (sm === 'dateAsc') return ((da.updatedAt || 0) - (db.updatedAt || 0)) * d
+            // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir
+            if (sm === 'dateDesc') return (db.updatedAt || 0) - (da.updatedAt || 0)
+            if (sm === 'dateAsc') return (da.updatedAt || 0) - (db.updatedAt || 0)
             return ((da.order || 0) - (db.order || 0)) * d
           })
         }

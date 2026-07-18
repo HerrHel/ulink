@@ -57,7 +57,12 @@ export function updateCardTagsOverflow() {
 }
 
 // ── Modal 开关 ──
-export function openCatModal() { useUIStore().modals.category = true }
+export function openCatModal() {
+  // A2-011：打开前 push 导航栈，浏览器后退可关
+  const ui = useUIStore()
+  if (!ui.modals.category) pushNavState()
+  ui.modals.category = true
+}
 export function closeCatModal() { useUIStore().modals.category = false }
 
 export async function deleteCategory(id: string) {
@@ -66,7 +71,12 @@ export async function deleteCategory(id: string) {
   if (ok) { useDataStore().deleteCategory(id); saveAppData() }
 }
 
-export function openAttrModal() { useUIStore().modals.attribute = true }
+export function openAttrModal() {
+  // A2-011：打开前 push 导航栈，浏览器后退可关
+  const ui = useUIStore()
+  if (!ui.modals.attribute) pushNavState()
+  ui.modals.attribute = true
+}
 export function closeAttrModal() { useUIStore().modals.attribute = false }
 
 export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id); saveAppData() }

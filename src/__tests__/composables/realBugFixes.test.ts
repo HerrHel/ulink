@@ -21,6 +21,7 @@ vi.mock('../../lib/supabase.js', () => ({
 }))
 
 // ── useCloudSync mock（useDataShare.forkPublicGroup 依赖；顶层 vi.mock 避免提升警告）──
+// G1-001 后 Realtime 入口调用 _isPendingSync / _deleteWithoutEcho，mock 必须导出
 const __csMocks = vi.hoisted(() => ({ fullSyncSpy: vi.fn(() => Promise.resolve(true)) }))
 vi.mock('../../composables/domain/useCloudSync.js', () => ({
   useCloudSync: () => ({
@@ -29,6 +30,17 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
     initOnlineListener: vi.fn(),
     initialSync: vi.fn(() => Promise.resolve()),
   }),
+  _isPendingSync: () => false,
+  _deleteWithoutEcho: (ds: { deleteBookmark?: (id: string) => void; deleteGroup?: (id: string) => void; deleteCategory?: (id: string) => void; deleteAttribute?: (id: string) => void; _dirtyIds: Set<string>; _newIds: Set<string>; _changedFields: Map<string, Set<string>> }, type: string, id: string) => {
+    if (type === 'bookmark') ds.deleteBookmark?.(id)
+    else if (type === 'group') ds.deleteGroup?.(id)
+    else if (type === 'category') ds.deleteCategory?.(id)
+    else if (type === 'attribute') ds.deleteAttribute?.(id)
+    ds._dirtyIds?.delete?.(id)
+    ds._newIds?.delete?.(id)
+    ds._changedFields?.delete?.(id)
+  },
+  __testPendingSync: { add: () => {}, clear: () => {} },
 }))
 
 beforeEach(() => {

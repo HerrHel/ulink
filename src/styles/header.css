@@ -90,12 +90,16 @@
 .lt-btn.active{color:var(--accent);background:var(--accent-light)}
 .lt-btn:not(.active):hover{background:var(--surface-hover);color:var(--text)}
 .header-sync-btn{
+  /* B2-003：视觉 10px 圆点，热区 ≥36×36 便于移动端点中 */
   position:relative;
   width:10px;height:10px;border-radius:50%;
   border:none;background:var(--emerald,#22c55e);
   cursor:pointer;padding:0;margin-left:4px;
   transition:transform .12s;
   display:inline-flex;align-items:center;justify-content:center;
+}
+.header-sync-btn::before{
+  content:'';position:absolute;inset:-13px;border-radius:50%;
 }
 .header-sync-btn:hover{transform:scale(1.15)}
 .header-sync-btn.dot-ok{background:var(--emerald,#22c55e)}

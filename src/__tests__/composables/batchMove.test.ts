@@ -47,7 +47,7 @@ describe('batchMoveToCat 子书签跟随父移动', () => {
     ds.addBookmark({ id: 'C2', title: 'C2', url: 'https://c2.x', categoryId: CAT_UNCATEGORIZED, parentId: 'C1', order: 0, attributes: {} } as any)
 
     // 新建一个目标分类
-    ds.categories = [{ id: 'catB', name: 'B', icon: 'bookmark', color: '' }, ...ds.categories]
+    ds.categories = [{ id: 'catB', name: 'B', icon: 'bookmark', color: '', order: 0 }, ...ds.categories]
     ui.batchSelected = ['P']
     ui.batchMode = true
 

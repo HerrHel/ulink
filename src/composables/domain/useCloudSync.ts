@@ -675,7 +675,8 @@ export function useCloudSync() {
             for (const row of r.data || []) remoteAll.add((row as { id: string }).id)
           }
           const reconcileDelete = (type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) => {
-            if (ds._dirtyIds.has(id)) return  // 正在本地编辑/等推送的条目不删
+            // G1-002：dirty 与 in-flight pending（含新建尚未上云）均跳过，防 pull/visibility 对账软删
+            if (ds._dirtyIds.has(id) || _isPendingSync(id)) return
             _deleteWithoutEcho(ds, type, id)
           }
           for (const b of ds.bookmarks) {

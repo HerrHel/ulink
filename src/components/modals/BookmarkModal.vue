@@ -23,13 +23,13 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="bmUsername">账户</label>
-            <E2ELockOverlay :disabled="!e2eEnabled" hint="开启 E2E 后可存储账户">
+            <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintAccount" @hint-click="onE2EHintClick">
               <input type="text" class="form-input" id="bmUsername" v-model="bmForm.username" placeholder="用户名">
             </E2ELockOverlay>
           </div>
           <div class="form-group">
             <label class="form-label" for="bmPassword">密码</label>
-            <E2ELockOverlay :disabled="!e2eEnabled" hint="开启 E2E 后可存储密码">
+            <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintPassword" @hint-click="onE2EHintClick">
               <div class="pw-wrap">
                 <input :type="bmForm.showPassword ? 'text' : 'password'" class="form-input pw-input" id="bmPassword" v-model="bmForm.password" placeholder="密码">
                 <button class="pw-toggle" type="button" :title="bmForm.showPassword ? '隐藏密码' : '显示密码'" @click="bmForm.showPassword = !bmForm.showPassword" v-html="bmForm.showPassword ? I.eyeOff : I.eye"></button>
@@ -71,7 +71,7 @@
         <div class="form-group">
           <label class="form-label">属性标记</label>
           <div class="check-group">
-            <label v-for="attr in store.customAttributes.filter(a => a.id !== ATTR_IS_GROUP)" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
+            <label v-for="attr in selectableAttrs" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
               <input type="checkbox" :checked="bmForm.attributes[attr.id]"
                      @change="toggleAttr(attr.id, $event)">
               {{ attr.name }}
@@ -81,7 +81,7 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" @click="onClose">取消</button>
-        <button class="btn btn-primary" @click="onSave">{{ bmForm.isEdit ? '更新' : '保存' }}</button>
+        <button class="btn btn-primary" :disabled="saving" @click="onSave">{{ bmForm.isEdit ? '更新' : '保存' }}</button>
       </div>
     </div>
   </div>
@@ -90,7 +90,7 @@
 <script setup lang="ts">
 import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { bmForm, closeBmModal, saveBm, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
+import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
@@ -99,9 +99,34 @@ import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 const store = useAppStore()
 const titleRef = ref<HTMLInputElement | null>(null)
 const e2e = useE2E()
-const e2eEnabled = computed(() => e2e.isE2EEnabled.value && e2e.isUnlocked.value)
+// A6-004：仅「已启用且已解锁」才开放字段；hint 区分 setup / unlock
+const e2eFieldsOpen = computed(() => e2e.isE2EEnabled.value && e2e.isUnlocked.value)
+const e2eHintAccount = computed(() =>
+  e2e.isE2EEnabled.value && !e2e.isUnlocked.value
+    ? '点击解锁后可编辑账户'
+    : '开启 E2E 后可存储账户',
+)
+const e2eHintPassword = computed(() =>
+  e2e.isE2EEnabled.value && !e2e.isUnlocked.value
+    ? '点击解锁后可编辑密码'
+    : '开启 E2E 后可存储密码',
+)
+function onE2EHintClick() {
+  if (e2e.isE2EEnabled.value && !e2e.isUnlocked.value) {
+    store.modals.e2eUnlock = true
+  } else if (!e2e.isE2EEnabled.value) {
+    store.modals.e2eSetup = true
+  }
+}
+// A2-004：按钮禁用；isBmSaving 非响应式，用本地 saving 包一层
+const saving = ref(false)
 
 const categoryOptions = computed(() => store.selectableCategories)
+// A2-007：不展示软删属性
+const selectableAttrs = computed(() =>
+  (store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt))
+    .filter(a => a.id !== ATTR_IS_GROUP)
+)
 const parentOptions = computed(() =>
   store.bookmarks.filter(b => !b.parentId && b.id !== bmForm.id)
 )
@@ -128,7 +153,11 @@ function toggleAttr(attrId: string, event: Event) {
 }
 
 function onClose() { closeBmModal() }
-function onSave() { saveBm() }
+async function onSave() {
+  if (saving.value || isBmSaving()) return
+  saving.value = true
+  try { await saveBm() } finally { saving.value = false }
+}
 function onPreviewIconUrl() { previewIconUrl() }
 function onClearIcon() { clearIcon() }
 function onUrlInput() { autoFetchFromUrl() }

@@ -48,7 +48,7 @@
           </div>
           <div class="acct-row" v-if="bookmark.password">
             <span class="acct-label">密码</span><span class="acct-val">{{ isVisible(bookmark.id) ? decodedPw : '••••••' }}</span>
-            <button class="acct-show-pw" @click.stop="togglePw(bookmark.id)" :title="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" :aria-label="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
+            <button class="acct-show-pw" @click.stop="onTogglePw" :title="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" :aria-label="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
             <button class="acct-copy-btn" @click.stop="copyPw" title="复制" v-html="I.copy"></button>
           </div>
         </div>
@@ -135,6 +135,11 @@ const e2eStore = useE2EStore()
 // 旧实现仅判 typeof === 'string'，对象态直接落空串 → 小眼睛点开后密码区显示空白，
 // 原本 '••••••' 占位也没了，看上去像「点眼睛把点删了」。此处按形态分支解密。
 async function decodePassword() {
+  // A1-004：E2E 锁定时禁止 decode 旧 base64/string 明文路径
+  if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
+    decodedPw.value = ''
+    return
+  }
   decodedPw.value = await decryptPasswordWithKey(
     props.bookmark.password,
     e2eStore.cryptoKey as CryptoKey | null,
@@ -150,6 +155,7 @@ watch(() => props.bookmark.password, decodePassword)
 // 对象态不在 ENCRYPT_FIELDS 里、不会被补解密扫到。解锁瞬间 key 入内存，重算一次 decodedPw，
 // 此后点眼睛才能看到对象态密码的明文；未解锁时 cryptoKey 仍空，decodePassword 安全返回 ''。
 watch(() => e2eStore.isUnlocked, decodePassword)
+watch(() => e2eStore.isE2EEnabled, decodePassword)
 
 const domainStr = computed(() => domain(props.bookmark.url))
 const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))
@@ -198,8 +204,21 @@ function copyUser() { copyToClipboard(props.bookmark.username || '', '账户') }
 // 旧实现照常 copyToClipboard('') → utils toast「密码 已复制」误导用户以为复制成功，
 // 实则剪贴板是空串。先判 decodedPw 非空再复制，空就提示无法复制、不污染剪贴板。
 function copyPw() {
+  // A1-004：锁定态禁止复制
+  if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
+    toast('请先解锁主密码', false)
+    return
+  }
   if (!decodedPw.value) { toast('密码未解锁，无法复制', false); return }
   copyToClipboard(decodedPw.value, '密码')
+}
+
+function onTogglePw() {
+  if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
+    toast('请先解锁主密码', false)
+    return
+  }
+  togglePw(props.bookmark.id)
 }
 
 const { startEditing } = useInlineEdit()

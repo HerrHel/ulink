@@ -5,7 +5,7 @@
  * 幂等：按已有节点复用更新（meta[name=..] / meta[property=..] / link[rel=canonical] /
  *      script[data-lv-jsonld=id]），重复调用不堆叠。
  * 可清理：动态创建的节点统一标记 data-lv-head，cleanupInjectedHead() 精确移除，
- *         不动 index.html 里手写的静态 meta / JSON-LD（它们不带该标记）。
+ *         并对覆盖过的静态 meta / title 写回原值（E2-002）。
  *
  * 局限（无 SSR）：爬虫首次拿到静态 index.html 时仍是默认 meta；此处注入仅对
  * Googlebot 二次 JS 渲染抓取与已加载用户生效。社交 OG 预览器不执行 JS，
@@ -15,9 +15,20 @@
 /** 标记本模块动态注入的节点，cleanupInjectedHead 据此精确清理 */
 const MARK = 'data-lv-head'
 
+/** 站点默认 title（与 index.html 对齐） */
+export const DEFAULT_TITLE = 'LinkVault — 个人书签管理器'
+
+/** 覆盖静态 meta 前缓存的原 content，key = `${attrName}:${attrValue}` */
+const _staticMetaBackup = new Map<string, string>()
+
+/** setTitle 前缓存的原 title，cleanup 时写回 */
+let _titleBackup: string | null = null
+
 /** 设置/更新 <title> */
 export function setTitle(t: string): void {
   if (typeof document === 'undefined') return
+  // E2-002：首次改写前备份，cleanup 可还原
+  if (_titleBackup === null) _titleBackup = document.title
   document.title = t
 }
 
@@ -25,6 +36,7 @@ export function setTitle(t: string): void {
  * 设置/更新单个 <meta>。
  * 按 `meta[attrName="attrValue"]` 选择器复用已有节点、更新 content，保证幂等。
  * 用于既存的静态 meta（index.html 已有 og:title 等）覆盖，也用于新增。
+ * 复用静态节点时备份原 content，cleanup 写回。
  */
 export function setMetaByAttr(attrName: 'name' | 'property', attrValue: string, content: string): void {
   if (typeof document === 'undefined') return
@@ -35,6 +47,12 @@ export function setMetaByAttr(attrName: 'name' | 'property', attrValue: string, 
     el.setAttribute(attrName, attrValue)
     el.setAttribute(MARK, '')
     document.head.appendChild(el)
+  } else if (!el.hasAttribute(MARK)) {
+    // E2-002：覆盖静态节点前备份原 content（幂等多次 set 只备份第一次）
+    const key = `${attrName}:${attrValue}`
+    if (!_staticMetaBackup.has(key)) {
+      _staticMetaBackup.set(key, el.getAttribute('content') || '')
+    }
   }
   el.setAttribute('content', content)
 }
@@ -72,14 +90,32 @@ export function setJsonLd(id: string, data: unknown): void {
 }
 
 /**
- * 清理本模块动态注入的全部节点（meta/og/twitter/canonical 动态节点/JSON-LD）。
- * ShareView 卸载时调用，恢复全站默认 head（index.html 静态 meta）。
- * 注意：canonical 复用的是 index.html 静态节点（不带标记），不会被清理，
- *       ShareView 卸载后应显式调 setCanonical(静态首页 URL) 恢复。
+ * 清理本模块动态注入的全部节点（meta/og/twitter/canonical 动态节点/JSON-LD），
+ * 并还原被覆盖的静态 meta 与 document.title（E2-002）。
+ * ShareView 卸载时调用；canonical 若复用静态节点需调用方 setCanonical 写回首页。
  */
 export function cleanupInjectedHead(): void {
   if (typeof document === 'undefined') return
   document.head.querySelectorAll(`[${MARK}]`).forEach(el => {
     el.parentNode?.removeChild(el)
   })
+  // 还原覆盖过的静态 meta
+  for (const [key, content] of _staticMetaBackup) {
+    const colon = key.indexOf(':')
+    if (colon < 0) continue
+    const attrName = key.slice(0, colon)
+    const attrValue = key.slice(colon + 1)
+    const el = document.head.querySelector<HTMLMetaElement>(`meta[${attrName}="${attrValue}"]`)
+    if (el && !el.hasAttribute(MARK)) {
+      el.setAttribute('content', content)
+    }
+  }
+  _staticMetaBackup.clear()
+  // 还原 title
+  if (_titleBackup !== null) {
+    document.title = _titleBackup
+    _titleBackup = null
+  } else {
+    document.title = DEFAULT_TITLE
+  }
 }

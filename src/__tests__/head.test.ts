@@ -83,4 +83,34 @@ describe('head.ts', () => {
     expect(document.head.querySelector('script[data-lv-jsonld="app"]')).not.toBeNull()
     expect(document.head.querySelectorAll('[data-lv-head]').length).toBe(0)
   })
+
+  // E2-002：覆盖静态 meta + setTitle 后 cleanup 须还原
+  it('cleanup 还原被覆盖的静态 meta 与 title (E2-002)', () => {
+    document.title = 'LinkVault — 个人书签管理器'
+    const staticMeta = document.createElement('meta')
+    staticMeta.setAttribute('name', 'description')
+    staticMeta.setAttribute('content', '静态描述')
+    document.head.appendChild(staticMeta)
+    const og = document.createElement('meta')
+    og.setAttribute('property', 'og:title')
+    og.setAttribute('content', '静态 OG')
+    document.head.appendChild(og)
+
+    setTitle('分享组 - LinkVault 分享')
+    setMetaByAttr('name', 'description', '分享描述')
+    setMetaByAttr('property', 'og:title', '分享 OG')
+    setMetaByAttr('property', 'og:type', 'article') // 新建动态节点
+
+    expect(document.title).toBe('分享组 - LinkVault 分享')
+    expect(staticMeta.getAttribute('content')).toBe('分享描述')
+    expect(og.getAttribute('content')).toBe('分享 OG')
+
+    cleanupInjectedHead()
+
+    expect(document.title).toBe('LinkVault — 个人书签管理器')
+    expect(staticMeta.getAttribute('content')).toBe('静态描述')
+    expect(og.getAttribute('content')).toBe('静态 OG')
+    // 纯动态 meta 应被移除
+    expect(document.head.querySelector('meta[property="og:type"]')).toBeNull()
+  })
 })

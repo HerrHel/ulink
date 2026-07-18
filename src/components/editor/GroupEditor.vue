@@ -30,7 +30,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppDataNotes } from '../../stores/app.js'
 import { useUndoStore } from '../../stores/undo.js'
-import { EditorManager } from '../../lib/editor.js'
+import { EditorManager, isSilentSetContent } from '../../lib/editor.js'
 import { useMfbStore } from '../../stores/overlay.js'
 import { pushUndo } from '../../composables/domain/useUndo.js'
 
@@ -46,9 +46,16 @@ const InlineCard = Node.create({
   renderHTML: ({ node }) => {
     const id = node.attrs['data-bm-id']
     const bm = useDataStore().bookmarkMap[id]
-    // H15：软删除书签仍在 _bmMap（truthy），旧实现仍渲染完整可点卡片；
-    // deletedAt 存在时视为不可用，返回空 span 与不存在一致。
-    if (!bm || bm.deletedAt) return ['span', { class: 'group-inline-card' }, '']
+    // A5-003：软删仍保留 data-bm-id，避免 getHTML() 剥属性后任意击键永久抹掉内联卡片；
+    // UI 用 is-deleted 灰显/不可点，恢复书签后 parseHTML 仍能识别。
+    if (!bm || bm.deletedAt) {
+      return ['span', {
+        class: 'group-inline-card is-deleted',
+        contenteditable: 'false',
+        'data-bm-id': id || '',
+        draggable: 'false',
+      }, bm?.title || '（已删除）']
+    }
     return ['span', { class: 'group-inline-card', contenteditable: 'false', 'data-bm-id': id, draggable: 'true' },
       ['img', { src: favicon(bm.url, bm.icon), alt: '' }],
       ['span', { class: 'gic-name' }, bm.title],
@@ -76,14 +83,19 @@ const GroupRefCard = Node.create({
     span.setAttribute('data-bm-id', 'ref:' + gid)
     span.setAttribute('draggable', 'true')
 
-    if (!g) {
-      span.textContent = ''
+    // A5-004：软删组与不存在一致——占位保留 data-bm-id 以便恢复后可解析
+    if (!g || g.deletedAt) {
+      span.classList.add('is-deleted')
+      span.setAttribute('draggable', 'false')
+      span.textContent = g?.name ? `${g.name}（已删除）` : '（已删除组）'
       return span
     }
 
-    if (g.icon) {
+    // A5-006：icon 经 favicon/safeIconUrl 白名单
+    const safeIcon = g.icon ? favicon('', g.icon) : ''
+    if (safeIcon) {
       const img = document.createElement('img')
-      img.src = g.icon
+      img.src = safeIcon
       img.alt = ''
       span.appendChild(img)
     } else {
@@ -169,7 +181,12 @@ onMounted(() => {
     content: group.notes || '',
     editable: !isMobile() || ui.focusedGroupId === props.groupId,
     editorProps: { attributes: { class: 'group-tiptap' } },
-    onUpdate: ({ editor: ed }) => { pushUndo(props.groupId); syncToStore(ed) },
+    onUpdate: ({ editor: ed }) => {
+      // G1-003：远端 silentSetContent 期间勿 pushUndo/syncToStore（避免 _markDirty 回推）
+      if (isSilentSetContent()) return
+      pushUndo(props.groupId)
+      syncToStore(ed)
+    },
   })
 
   ;(editor as any)._lvGid = props.groupId

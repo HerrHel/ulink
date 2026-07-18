@@ -9,7 +9,7 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
-import { _deleteWithoutEcho } from './useCloudSync.js'
+import { _deleteWithoutEcho, _isPendingSync } from './useCloudSync.js'
 import { EditorManager } from '../../lib/editor.js'
 import type { EntityType } from '../../types.js'
 
@@ -47,7 +47,8 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
 
   if (eventType === 'DELETE') {
     const id = oldRow?.id
-    if (!id || ds._dirtyIds.has(id)) return
+    // G1-001：与 _mergeIntoLocal 对齐——dirty 或 in-flight pending 的本地项不因远端 DELETE 静默抹掉
+    if (!id || ds._dirtyIds.has(id) || _isPendingSync(id)) return
     // 使用 dataStore 软删除动作（而非直接 splice），确保：
     // - 数据进入回收站可恢复
     // - 组引用关系正确清理
@@ -68,7 +69,41 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   }
 
   const row = newRow
-  if (!row || ds._dirtyIds.has(row.id)) return
+  if (!row) return
+  // G1-001：pending 且远端 UPDATE → 登记 conflict，勿走 update* 覆盖本地待推改动
+  if (ds._dirtyIds.has(row.id) || _isPendingSync(row.id)) {
+    if (_isPendingSync(row.id) && !ds._dirtyIds.has(row.id)) {
+      const syncStore = useSyncStore()
+      const localItem =
+        type === 'bookmark' ? ds.bookmarkMap[row.id]
+        : type === 'group' ? ds.groupMap[row.id]
+        : type === 'category' ? ds.categories.find(c => c.id === row.id)
+        : ds.customAttributes.find(a => a.id === row.id)
+      if (localItem && syncStore.lastSyncAt > 0 && !syncStore.conflicts.some(c => c.id === row.id)) {
+        const HANDLERS_FROM: Record<EntityType, (r: any) => any> = {
+          bookmark: fromRemoteBookmark,
+          group: fromRemoteGroup,
+          category: fromRemoteCategory,
+          attribute: fromRemoteAttribute,
+        }
+        const remoteMapped = HANDLERS_FROM[type](row)
+        if (remoteMapped) {
+          const remoteTs = (remoteMapped as { updatedAt?: number }).updatedAt || 0
+          const localTs = (localItem as { updatedAt?: number }).updatedAt || 0
+          if (remoteTs > localTs) {
+            syncStore.addConflict({
+              id: row.id,
+              type,
+              local: JSON.parse(JSON.stringify(localItem)),
+              remote: JSON.parse(JSON.stringify(remoteMapped)),
+            })
+            syncStore.resetConflictBanner()
+          }
+        }
+      }
+    }
+    return
+  }
 
   const e2e = useE2E()
   // M2：在 await 前捕获解锁态；await 后若已 lock 则丢弃本次 merge，避免密文态 upsert
@@ -114,18 +149,18 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
           const idx = ds.siblingGroups.findIndex(g => g.id === m.id)
           if (idx >= 0) ds.siblingGroups[idx].updatedAt = remoteUpdatedAt
           ds._grpMap[m.id] = ds.siblingGroups[idx]
-          // H16 修复：group.notes 远端更新时同步挂载中的 TipTap 编辑器。
-          // GroupEditor 只在 onMounted 时读一次 group.notes，之后无 watch setContent。
-          // 远端 realtime 推来 group UPDATE 改了 store.notes，但挂载编辑器仍显示旧 notes，
-          // 用户随后敲字触发 onUpdate → syncToStore 用 ed.getHTML()（旧内容+新字符）覆盖
-          // 刚拉取的远端 notes → 远端更新被静默抹掉。仅当不一致时 setContent 避免焦点重置；
-          // 此处 upsert 已 _dirtyIds.delete，setContent 触发的 onUpdate 会 syncToStore 用相同
-          // notes 覆盖（无害）并 pushUndo（无害），不会回推云端。
+          // H16 + G1-003：远端 notes 写入编辑器时用 silentSetContent，抑制 onUpdate→
+          // updateGroup→_markDirty，避免 setContent 把刚合并的远端内容重新标脏并回推。
           if (typeof m.notes === 'string' && m.notes !== '') {
             const ed = EditorManager.get(m.id)
             if (ed && typeof (ed as any).getHTML === 'function') {
               try {
-                if (ed.getHTML() !== m.notes) ed.commands.setContent(m.notes)
+                if (ed.getHTML() !== m.notes) {
+                  EditorManager.silentSetContent(m.id, m.notes)
+                  // 双保险：即便 onUpdate 仍触发，清掉本次 dirty/changed
+                  ds._dirtyIds.delete(m.id)
+                  ds._changedFields.delete(m.id)
+                }
               } catch (e) { console.warn('[realtime] sync editor notes failed:', e) }
             }
           }

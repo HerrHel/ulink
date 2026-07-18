@@ -60,7 +60,7 @@
       </div>
       <div class="modal-foot">
         <button v-if="step === 1" class="btn btn-primary" :disabled="masterPw.length < 8" @click="onNext">下一步</button>
-        <button v-if="step === 2" class="btn btn-primary" :disabled="!saved" @click="onComplete">确认开启</button>
+        <button v-if="step === 2" class="btn btn-primary" :disabled="!saved || loading" @click="onComplete">确认开启</button>
         <button v-if="step === 3" class="btn btn-primary" @click="emit('close')">完成</button>
         <button class="btn btn-secondary" @click="emit('close')">取消</button>
       </div>
@@ -86,6 +86,7 @@ const showPw2 = ref(false)
 const error = ref('')
 const recoveryKey = ref('')
 const saved = ref(false)
+const loading = ref(false)
 
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
@@ -97,6 +98,7 @@ watch(() => props.open, (isOpen) => {
     error.value = ''
     recoveryKey.value = ''
     saved.value = false
+    loading.value = false
   }
 })
 
@@ -113,9 +115,17 @@ function onNext() {
 }
 
 async function onComplete() {
-  const ok = await e2e.setupMasterPassword(masterPw.value, recoveryKey.value)
-  if (!ok) { error.value = '设置失败，请重试'; return }
-  step.value = 3
+  // A2-009：防重入，避免连点覆写 canary
+  if (loading.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    const ok = await e2e.setupMasterPassword(masterPw.value, recoveryKey.value)
+    if (!ok) { error.value = '设置失败，请重试'; return }
+    step.value = 3
+  } finally {
+    loading.value = false
+  }
 }
 
 function downloadPDF() {

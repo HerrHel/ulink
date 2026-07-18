@@ -28,6 +28,11 @@
 /* ---- 内联卡片（书签/组引用）---- */
 .group-tiptap .group-inline-card .gic-remove{display:none}
 .group-tiptap .group-inline-card:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-glow),var(--shadow-sm);transform:translateY(-1px)}
+/* A5-003/004：软删占位仍保留 data-bm-id，灰显且不可点 */
+.group-tiptap .group-inline-card.is-deleted,
+.group-body .group-inline-card.is-deleted{
+  opacity:0.55;pointer-events:none;filter:grayscale(0.4);cursor:default
+}
 .group-tiptap .ProseMirror-selectednode{outline:2px solid var(--accent);border-radius:var(--radius-sm)}
 
 /* ---- 任务列表 ---- */
@@ -122,18 +127,21 @@
 
 /* ==================== MOBILE FLOATING FORMAT BAR ==================== */
 .mfb{
-  position:fixed;left:0;right:0;bottom:0;z-index:9999;
+  /* B2-002：z-index 降到 2500，避免盖住 modal/confirm（~3000+） */
+  /* B2-004：隐藏时 pointer-events:none，避免透明底栏拦截点击 */
+  position:fixed;left:0;right:0;bottom:0;z-index:2500;
   display:flex;align-items:center;gap:4px;
   padding:6px 10px env(safe-area-inset-bottom,8px);
   background:var(--surface);border-top:1px solid var(--border);
   overflow-x:auto;scrollbar-width:none;
   transform:translateY(100%);opacity:0;
+  pointer-events:none;
   transition:transform .2s var(--ease-out),opacity .18s var(--ease-out);
   box-shadow:var(--shadow-md);
   -webkit-overflow-scrolling:touch;
 }
 .mfb::-webkit-scrollbar{display:none}
-.mfb.visible{transform:translateY(0);opacity:1}
+.mfb.visible{transform:translateY(0);opacity:1;pointer-events:auto}
 .mfb .ft-btn{min-width:30px;height:30px}
 .mfb .ft-color-btn{position:relative}
 .mfb-color-dot{

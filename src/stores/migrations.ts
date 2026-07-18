@@ -76,6 +76,11 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
     if (g.categoryId === CAT_ALL) g.categoryId = CAT_UNCATEGORIZED
     if (!g.attributes) g.attributes = { [ATTR_IS_GROUP]: true }
   })
+  // D2-003：补齐分类 icon/color，避免旧盘缺字段在 schema 严格期整库回退
+  result.categories.forEach(c => {
+    if (typeof c.icon !== 'string') { (c as { icon: string }).icon = ''; needsPersist = true }
+    if (typeof c.color !== 'string') { (c as { color: string }).color = ''; needsPersist = true }
+  })
 
   // 4. 文本格式笔记 → HTML 内联卡片
   result.siblingGroups.forEach(g => {

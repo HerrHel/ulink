@@ -7,6 +7,25 @@ export const EncryptedPasswordSchema = z.object({
   salt: z.string(),
 })
 
+/** D2-004：数字语义字段——字符串可 coerce，非法再兜 0；动态默认用函数 catch */
+function coerceNum(fallback: number | (() => number) = 0) {
+  const catchDef = typeof fallback === 'function' ? fallback : () => fallback
+  return z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : v),
+    z.number(),
+  ).catch(catchDef)
+}
+
+/** attributes：先 strip 非 boolean 键，整表非法再 {} */
+const attributesSchema = z.preprocess((v) => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {}
+  const out: Record<string, boolean> = {}
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof val === 'boolean') out[k] = val
+  }
+  return out
+}, z.record(z.string(), z.boolean())).catch({})
+
 export const BookmarkSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -17,15 +36,13 @@ export const BookmarkSchema = z.object({
   icon: z.string().catch(''),
   categoryId: z.string().catch('uncategorized'),
   parentId: z.string().nullable().catch(null),
-  // C2：以下为可降级语义字段，旧版数据缺失时降级为合理默认而非让整条
-  // AppDataSchema.safeParse 失败、把用户全部书签被 DEFAULTS 覆盖丢弃。
-  // 身份字段（id/title/url/title）保持严格：缺了仍拒，避免接坏数据。
-  order: z.number().catch(0),
-  useCount: z.number().catch(0),
-  attributes: z.record(z.string(), z.boolean()).catch({}),
+  // C2/D2-004：可降级语义字段；类型可修复时优先 coerce，避免整字段清空。
+  order: coerceNum(0),
+  useCount: coerceNum(0),
+  attributes: attributesSchema,
   isExpanded: z.boolean().catch(false),
-  createdAt: z.number().catch(() => Date.now()),
-  updatedAt: z.number().catch(() => Date.now()),
+  createdAt: coerceNum(() => Date.now()),
+  updatedAt: coerceNum(() => Date.now()),
   deletedAt: z.number().optional(),
 })
 
@@ -34,23 +51,24 @@ export const SiblingGroupSchema = z.object({
   name: z.string(),
   categoryId: z.string().catch('uncategorized'),
   icon: z.string().catch(''),
-  order: z.number().catch(0),
+  order: coerceNum(0),
   isExpanded: z.boolean().catch(false),
-  attributes: z.record(z.string(), z.boolean()).catch({}),
+  attributes: attributesSchema,
   bookmarkIds: z.array(z.string()).catch([]),
   notes: z.string().catch(''),
-  updatedAt: z.number().catch(() => Date.now()),
-  useCount: z.number().catch(0),
+  updatedAt: coerceNum(() => Date.now()),
+  useCount: coerceNum(0),
   isPublic: z.boolean().optional(),
   deletedAt: z.number().optional(),
 })
 
+// D2-003：icon/color 必须 .catch，单条坏分类不能拖垮 AppData → DEFAULTS
 export const CategorySchema = z.object({
   id: z.string(),
   name: z.string(),
-  icon: z.string(),
-  color: z.string(),
-  order: z.number().optional(),
+  icon: z.string().catch(''),
+  color: z.string().catch(''),
+  order: coerceNum(0),
   updatedAt: z.number().optional(),
   deletedAt: z.number().optional(),
 })

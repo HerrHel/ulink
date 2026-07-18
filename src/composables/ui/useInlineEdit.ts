@@ -80,7 +80,14 @@ export function useInlineEdit() {
   }
 
   function _onKey(ev: KeyboardEvent) {
-    if (ev.key === 'Escape') { ev.preventDefault(); _cancel(); _onCancel?.(); return }
+    // E3-003：_cancel → _teardown 会清空 _onCancel，须先缓存再调用
+    if (ev.key === 'Escape') {
+      ev.preventDefault()
+      const cancel = _onCancel
+      _cancel()
+      cancel?.()
+      return
+    }
     if (!_multiline && ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); _save() }
   }
 

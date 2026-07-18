@@ -78,7 +78,7 @@ describe('App Store (兼容层)', () => {
       const dataStore = useDataStore()
       const store = useAppStore()
       const bm = { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1' } as any
-      store.save = () => {}
+      store.save = async () => true
       store.addBookmark(bm)
       expect(dataStore.bookmarks).toHaveLength(1)
       expect(dataStore.bookmarks[0].id).toBe('1')
@@ -91,7 +91,7 @@ describe('App Store (兼容层)', () => {
         { id: '1', title: 'Test', url: 'https://test.com', categoryId: 'cat1' } as any
       ]
       dataStore.siblingGroups = []
-      store.save = () => {}
+      store.save = async () => true
       store.deleteBookmark('1')
       expect(dataStore.bookmarks).toHaveLength(1)
       expect(dataStore.bookmarks[0].deletedAt).toBeDefined()

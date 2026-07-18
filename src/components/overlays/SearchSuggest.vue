@@ -2,9 +2,10 @@
   <div class="search-suggest" v-show="visible && results.length > 0" role="listbox" aria-label="搜索建议">
     <template v-for="(item, idx) in results" :key="item.id">
       <div v-if="item._divider" class="ss-divider">{{ item._divider }}</div>
-      <div class="search-suggest-item" :class="{ active: idx === activeIdx }"
-           role="option" :aria-selected="idx === activeIdx"
-           @click="select(item)" @mouseenter="activeIdx = idx">
+      <!-- A3-002：active 用 selectable 下标，避免分隔线与键盘 activeIdx 错位 -->
+      <div v-else class="search-suggest-item" :class="{ active: selectableIndex(idx) === activeIdx }"
+           role="option" :aria-selected="selectableIndex(idx) === activeIdx"
+           @click="select(item)" @mouseenter="activeIdx = selectableIndex(idx)">
         <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
         <img v-else :src="favicon(item.url || '')" alt="">
         <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
@@ -18,6 +19,8 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
+import { useToastStore } from '../../stores/toast.js'
+import { useAuthStore } from '../../stores/auth.js'
 import { favicon, domain } from '../../utils.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
@@ -28,6 +31,8 @@ import type { SearchResultItem, HighlightSegment } from '../../lib/search.js'
 
 const ui = useUIStore()
 const dataStore = useDataStore()
+const toastStore = useToastStore()
+const authStore = useAuthStore()
 const visible = ref(false)
 const activeIdx = ref(-1)
 
@@ -57,6 +62,17 @@ const results = computed<SearchResultItem[]>(() => {
   if (firstBmIdx > 0) items.splice(firstBmIdx, 0, { id: '__divider', _divider: '书签', _highlights: {} })
   return items.slice(0, MAX_SUGGESTIONS + 1)
 })
+
+// A3-002：可选项与 results 下标解耦
+const selectable = computed(() => results.value.filter(r => !r._divider))
+
+function selectableIndex(resultsIdx: number): number {
+  let n = -1
+  for (let i = 0; i <= resultsIdx && i < results.value.length; i++) {
+    if (!results.value[i]._divider) n++
+  }
+  return n
+}
 
 function updateVisibility() {
   const hasResults = results.value.length > 0
@@ -92,10 +108,17 @@ function onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.se
 function onFocusIn(e: FocusEvent) { if ((e.target as HTMLElement).matches('.search-input')) updateVisibility() }
 
 function onKeydown(e: KeyboardEvent) {
-  // M11：任一模态框打开时不抢 ArrowDown/Enter，避免 BookmarkModal 等输入框被劫持
-  if (ui.modals.bookmark || ui.modals.category || ui.modals.attribute || ui.modals.groupEdit) return
+  // A3-003 / M11：任一 modal / 面板 / 确认框 / Auth / 命令面板打开时不抢键
+  if (
+    ui.modals.bookmark || ui.modals.category || ui.modals.attribute || ui.modals.groupEdit ||
+    ui.modals.e2eSetup || ui.modals.e2eUnlock || ui.modals.setupGuide ||
+    ui.panels.settings || ui.panels.trash || ui.panels.history || ui.panels.shortcutHelp ||
+    ui.overlays.deadLinks || ui.overlays.addPopover ||
+    toastStore.confirmOpen || authStore.authModalOpen ||
+    document.querySelector('.cmd-mask.open')
+  ) return
   if (!visible.value) return
-  const len = results.value.filter(r => !r._divider).length
+  const len = selectable.value.length
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     activeIdx.value = activeIdx.value < len - 1 ? activeIdx.value + 1 : 0
@@ -106,12 +129,10 @@ function onKeydown(e: KeyboardEvent) {
     scrollToActive()
   } else if (e.key === 'Enter' && activeIdx.value >= 0) {
     e.preventDefault()
-    const selectable = results.value.filter(r => !r._divider)
-    if (selectable[activeIdx.value]) select(selectable[activeIdx.value])
-  } else if (e.key === 'Enter' && results.value.length > 0) {
+    if (selectable.value[activeIdx.value]) select(selectable.value[activeIdx.value])
+  } else if (e.key === 'Enter' && selectable.value.length > 0) {
     e.preventDefault()
-    const first = results.value.find(r => !r._divider)
-    if (first) select(first)
+    select(selectable.value[0])
   } else if (e.key === 'Escape') {
     visible.value = false
   }

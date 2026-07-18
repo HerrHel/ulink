@@ -117,13 +117,13 @@ describe('DataStore', () => {
 
   describe('分类操作', () => {
     it('addCategory - 应该添加分类', () => {
-      const cat = { id: 'cat1', name: 'Test', icon: '🔗', color: '' }
+      const cat = { id: 'cat1', name: 'Test', icon: '🔗', color: '', order: 0 }
       store.addCategory(cat)
       expect(store.categories).toHaveLength(1)
     })
 
     it('renameCategory - 应该重命名分类', () => {
-      store.addCategory({ id: 'cat1', name: 'Old', icon: '', color: '' })
+      store.addCategory({ id: 'cat1', name: 'Old', icon: '', color: '', order: 0 })
       store.renameCategory('cat1', 'New')
       expect(store.categories[0].name).toBe('New')
     })
@@ -131,7 +131,7 @@ describe('DataStore', () => {
     it('deleteCategory - 应该将关联书签移至未分类并软删除分类', () => {
       store.addBookmark({ id: 'b1', categoryId: 'cat1' } as any)
       store.addGroup({ id: 'g1', categoryId: 'cat1', bookmarkIds: [] } as any)
-      store.addCategory({ id: 'cat1', name: 'Test', icon: '', color: '' })
+      store.addCategory({ id: 'cat1', name: 'Test', icon: '', color: '', order: 0 })
 
       store.deleteCategory('cat1')
 

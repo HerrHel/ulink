@@ -189,7 +189,7 @@ function deleteSelected() {
   const count = selectedIds.value.size
   if (!count) return
   const ids = [...selectedIds.value]
-  close()
+  // A3-007：确认后再 close；取消时保持面板与多选态
   showConfirm(`确认删除 ${count} 个书签？`).then(ok => {
     if (!ok) return
     // 复用底层 store 直删：deleteBookmark 会自动从所属组剔除并把组关系
@@ -204,6 +204,7 @@ function deleteSelected() {
     saveAppData()
     selectedIds.value = new Set()
     exitSelectMode()
+    close()
     toastWithUndo(`已删除 ${count} 个书签`, () => {
       allIds.forEach(bid => dataStore.restoreBookmark(bid))
       debouncedSaveAppData()

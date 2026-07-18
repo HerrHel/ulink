@@ -17,6 +17,8 @@ type IFuseOptions = {
   threshold?: number
   distance?: number
   includeScore?: boolean
+  // D1-001：Fuse includeMatches 开启后才有 matches 供高亮
+  includeMatches?: boolean
   minMatchCharLength?: number
   ignoreLocation?: boolean
   findAllMatches?: boolean
@@ -107,6 +109,8 @@ const FUSE_OPTIONS: IFuseOptions = {
   threshold: 0.2,
   distance: 200,
   includeScore: true,
+  // D1-001：无 includeMatches 时 Fuse 不返回 matches，搜索建议高亮永久为空
+  includeMatches: true,
   minMatchCharLength: 1,
   ignoreLocation: true,
   findAllMatches: true,

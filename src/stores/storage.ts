@@ -125,6 +125,15 @@ export async function syncOpsCount(): Promise<number> {
   } catch (e) { console.warn('[IDB] syncOpsCount error:', e); return 0 }
 }
 
+/** A4-002：重置本地数据时清空待推送同步队列，避免旧 op 复活云端数据 */
+export async function clearAllSyncOps(): Promise<void> {
+  try {
+    await db.syncOps.clear()
+  } catch (e) {
+    console.warn('[IDB] clearAllSyncOps error:', e)
+  }
+}
+
 // ── 本地版本历史（C2：下放给本地用户，存储于 localStorage）──
 
 export interface LocalHistoryVersion {

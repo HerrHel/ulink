@@ -42,7 +42,8 @@ export const DEFAULTS: AppData = {
   ],
   bookmarks: [
     { id: 'b1', title: 'GitHub', url: 'https://github.com', username: '', password: '', notes: '代码托管平台', icon: '', categoryId: 'tools', parentId: null, order: 0, useCount: 15, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 86400000, updatedAt: Date.now() - 86400000 },
-    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: 'MTIz', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 172800000, updatedAt: Date.now() - 172800000 },
+    // D2-007：示例数据不放任何伪密码（原 base64「123」易被误用/误导）
+    { id: 'b2', title: 'QQ邮箱', url: 'https://mail.qq.com', username: '@qq.com', password: '', notes: '', icon: '', categoryId: 'email', parentId: null, order: 1, useCount: 8, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 172800000, updatedAt: Date.now() - 172800000 },
     { id: 'b3', title: 'DeepSeek', url: 'https://www.deepseek.com/', username: '', password: '', notes: 'API key:', icon: '', categoryId: 'ai', parentId: null, order: 2, useCount: 5, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 40000000, updatedAt: Date.now() - 40000000 },
     { id: 'sb1', title: '开始对话', url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 0, useCount: 3, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 30000000, updatedAt: Date.now() - 30000000 },
     { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000, updatedAt: Date.now() - 20000000 },

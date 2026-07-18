@@ -13,8 +13,8 @@ const mockUI: any = {
   curCat: 'all',
   focusedGroupId: null,
   panels: { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false },
-  overlays: { addDropdown: false, addPopover: false, deadLinks: false },
-  modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false },
+  overlays: { addDropdown: false, addPopover: false, deadLinks: false, feedback: false },
+  modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false },
 }
 vi.mock('../../stores/ui.js', () => ({ useUIStore: () => mockUI }))
 
@@ -28,6 +28,14 @@ vi.mock('../../composables/ui/useUI.js', () => ({ closeCatModal: vi.fn(), closeA
 vi.mock('../../composables/domain/useBatch.js', () => ({ toggleBatchMode: vi.fn(), selectAllBatch: vi.fn(), batchDelete: vi.fn() }))
 vi.mock('../../stores/toast.js', () => ({ useToastStore: () => ({ resolveConfirm: vi.fn() }) }))
 vi.mock('../../stores/contextMenu.js', () => ({ useContextMenuStore: () => ({ hide: vi.fn() }) }))
+vi.mock('../../stores/actionSheet.js', () => ({ useActionSheetStore: () => ({ visible: false, hide: vi.fn() }) }))
+vi.mock('../../stores/auth.js', () => ({ useAuthStore: () => ({ authModalOpen: false }) }))
+vi.mock('../../stores/e2e.js', () => ({ useE2EStore: () => ({ pendingUnlock: [] }) }))
+vi.mock('../../stores/attrDropdown.js', () => ({ useAttrDropdownStore: () => ({ open: false, close: vi.fn() }) }))
+vi.mock('../../stores/overlay.js', () => ({
+  useBatchMoveStore: () => ({ open: false, hide: vi.fn() }),
+  useMfbStore: () => ({ open: false, hide: vi.fn() }),
+}))
 
 import { captureNavState, restoreNavState } from '../../composables/interaction/useKeyboardOps.js'
 
@@ -35,8 +43,8 @@ beforeEach(() => {
   setActivePinia(createPinia())
   // 重置面板全部关闭 + 重建子对象避免跨测试引用同一实例污染
   mockUI.panels = { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false }
-  mockUI.overlays = { addDropdown: false, addPopover: false, deadLinks: false }
-  mockUI.modals = { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false }
+  mockUI.overlays = { addDropdown: false, addPopover: false, deadLinks: false, feedback: false }
+  mockUI.modals = { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false }
   mockUI.curCat = 'all'
   mockUI.focusedGroupId = null
 })
@@ -70,6 +78,30 @@ describe('captureNavState / restoreNavState 含 settings/trash/deadLinks/shortcu
     const prev = captureNavState(); prev.shortcutHelp = false
     restoreNavState(prev)
     expect(mockUI.panels.shortcutHelp).toBe(false)
+  })
+
+  // E3-001 / E3-006：history 纳入 NavState，与 trash 同语义
+  it('关闭 history (E3-001)', () => {
+    mockUI.panels.history = true
+    const prev = captureNavState(); prev.history = false
+    restoreNavState(prev)
+    expect(mockUI.panels.history).toBe(false)
+  })
+
+  // A4-007：反馈弹窗纳入 NavState
+  it('关闭 feedback overlay (A4-007)', () => {
+    mockUI.overlays.feedback = true
+    const prev = captureNavState(); prev.feedback = false
+    restoreNavState(prev)
+    expect(mockUI.overlays.feedback).toBe(false)
+  })
+
+  it('captureNavState 含 history 字段', () => {
+    mockUI.panels.history = true
+    const s = captureNavState()
+    expect(s.history).toBe(true)
+    mockUI.panels.history = false
+    expect(captureNavState().history).toBe(false)
   })
 
   it('prev=open 表示本层即打开态，后退不关（应保持开，留给上层处理）', () => {

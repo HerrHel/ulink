@@ -23,6 +23,28 @@
   const pageUrl = $('#pageUrl')
   const pageIcon = $('#pageIcon')
   const bookmarkList = $('#bookmarkList')
+  // F1-001：click 委托只注册一次，禁止 renderBookmarks 每次重绘叠加监听
+  bookmarkList.addEventListener('click', function (e) {
+    var target = e.target
+    while (target && target !== bookmarkList) {
+      if (target.dataset && target.dataset.action === 'delete') {
+        e.stopPropagation()
+        deleteBookmark(target.dataset.id, target.dataset.title)
+        return
+      }
+      if (target.classList && target.classList.contains('bookmark-item')) {
+        // F1-005：仅允许 http(s)，拒绝 javascript:/data: 等
+        var openUrl = target.dataset.url
+        if (!isSafeHttpUrl(openUrl)) {
+          toast('无法打开：链接协议不安全', 2000)
+          return
+        }
+        chrome.tabs.create({ url: openUrl })
+        return
+      }
+      target = target.parentElement
+    }
+  })
   const statusDot = $('#statusDot')
   const statusText = $('#statusText')
   const bookmarkCount = $('#bookmarkCount')
@@ -68,17 +90,41 @@
   let _mpClearTimer = null
 
   /** M6：主密码用后定时清空，缩短明文常驻 sidepanel 内存窗口 */
+  /** F1-002：主密码 TTL 到期时同步掩码 DOM 明文密码 */
+  function maskRevealedPassword() {
+    passwordRevealed = false
+    if (bdPasswordText) {
+      bdPasswordText.textContent = '••••••••'
+      bdPasswordText.className = 'bd-pw-text'
+    }
+    if (bdPwShow) bdPwShow.textContent = '显示'
+  }
+
   function scheduleClearMasterPassword() {
     if (_mpClearTimer) clearTimeout(_mpClearTimer)
     _mpClearTimer = setTimeout(function () {
       sessionMasterPassword = ''
       _mpClearTimer = null
+      // F1-002：TTL 到同时清 DOM 明文
+      maskRevealedPassword()
     }, MASTER_PASSWORD_TTL_MS)
   }
 
   function clearMasterPasswordNow() {
     if (_mpClearTimer) { clearTimeout(_mpClearTimer); _mpClearTimer = null }
     sessionMasterPassword = ''
+    maskRevealedPassword()
+  }
+
+  /** F1-005：与 background openPwaWithUrl 对齐的 http(s) scheme 白名单 */
+  function isSafeHttpUrl(url) {
+    if (!url || typeof url !== 'string') return false
+    try {
+      var u = new URL(url.trim())
+      return u.protocol === 'http:' || u.protocol === 'https:'
+    } catch (_) {
+      return false
+    }
   }
 
   // ── Toast ──
@@ -226,21 +272,7 @@
       bookmarkList.appendChild(f2)
     }
 
-    bookmarkList.addEventListener('click', function (e) {
-      var target = e.target
-      while (target && target !== bookmarkList) {
-        if (target.dataset.action === 'delete') {
-          e.stopPropagation()
-          deleteBookmark(target.dataset.id, target.dataset.title)
-          return
-        }
-        if (target.classList.contains('bookmark-item')) {
-          chrome.tabs.create({ url: target.dataset.url })
-          return
-        }
-        target = target.parentElement
-      }
-    }, { once: false })
+    // F1-001：click 委托已在模块初始化注册一次，禁止此处每次重绘叠加
   }
 
   // ── 搜索 ──
@@ -298,23 +330,70 @@
   })
 
   // ── 删除（仅云端）──
+  // F1-009：删除前确认，避免列表/详情一键误删
   async function deleteBookmark(id, title) {
+    const label = (title && String(title).trim()) || '该书签'
+    if (!window.confirm('确定删除「' + label + '」？此操作将移入回收站。')) return
     const result = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
     if (result.error) { toast('删除失败: ' + result.error.message); return }
     toast('已删除', 2500)
+    if (currentMatchedBookmark && currentMatchedBookmark.id === id) {
+      currentMatchedBookmark = null
+      hideBookmarkDetail()
+    }
     loadBookmarks()
   }
 
   // ── 当前标签页 ──
+  // F1-007：无 tabs 权限时 onActivated 常拿不到 url；UI 降级提示，需用户手势刷新
+  const tabUrlHint = $('#tabUrlHint')
+  const currentPageEl = $('#currentPage')
+
+  function setTabUrlHint(show) {
+    if (!tabUrlHint) return
+    if (show) tabUrlHint.classList.remove('hidden')
+    else tabUrlHint.classList.add('hidden')
+  }
+
   function loadCurrentTab() {
     chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
-      if (!tab) return
+      if (chrome.runtime.lastError) {
+        currentTab = null
+        pageTitle.textContent = '无法读取当前页'
+        pageUrl.textContent = '点击此处或 ↻ 刷新'
+        setTabUrlHint(true)
+        hideBookmarkDetail()
+        return
+      }
+      if (!tab) {
+        currentTab = null
+        pageTitle.textContent = '无活动标签'
+        pageUrl.textContent = ''
+        setTabUrlHint(true)
+        hideBookmarkDetail()
+        return
+      }
       currentTab = tab
-      pageTitle.textContent = tab.title || '无标题'
-      pageUrl.textContent = domain(tab.url)
-      pageIcon.src = tab.favIconUrl || ''
-      pageIcon.onerror = function () { pageIcon.style.display = 'none' }
-      checkCurrentPageMatch(tab.url)
+      const hasUrl = !!(tab.url && String(tab.url).trim())
+      pageTitle.textContent = tab.title || (hasUrl ? '无标题' : '当前页 URL 不可用')
+      pageUrl.textContent = hasUrl ? domain(tab.url) : '点击此处或 ↻ 刷新后保存'
+      if (tab.favIconUrl) {
+        pageIcon.style.display = ''
+        pageIcon.src = tab.favIconUrl
+        pageIcon.onerror = function () { pageIcon.style.display = 'none' }
+      } else {
+        pageIcon.style.display = 'none'
+      }
+      setTabUrlHint(!hasUrl)
+      if (hasUrl) checkCurrentPageMatch(tab.url)
+      else hideBookmarkDetail()
+    })
+  }
+
+  // 用户手势刷新：点击当前页卡片重新触发 activeTab 读取
+  if (currentPageEl) {
+    currentPageEl.addEventListener('click', function () {
+      loadCurrentTab()
     })
   }
 
@@ -380,23 +459,33 @@
         }
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, sessionMasterPassword)
         else { toast('解密库未加载'); return }
-        // M6：解密成功后启动 TTL，到期清空 sessionMasterPassword
-        scheduleClearMasterPassword()
       } else {
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
         else plaintext = typeof stored === 'string' ? stored : ''
       }
       bdPasswordText.textContent = plaintext; bdPasswordText.className = 'bd-pw-text revealed'
       bdPwShow.textContent = '隐藏'; passwordRevealed = true
+      // F1-002/M6：成功后启动 TTL，到期清主密码并掩码 DOM 明文
+      scheduleClearMasterPassword()
     } catch (e) {
-      toast('解密失败: ' + e.message)
-      if (e.message && e.message.indexOf('主密码') !== -1) clearMasterPasswordNow()
+      toast('解密失败: ' + (e && e.message ? e.message : '未知错误'))
+      // F1-003：任意解密失败一律清主密码，勿依赖中文错误子串
+      clearMasterPasswordNow()
     }
   })
 
   bdPwCopy.addEventListener('click', async function () {
     if (!currentMatchedBookmark || !currentMatchedBookmark.password) return
-    if (!passwordRevealed) { bdPwShow.click(); await new Promise(function (r) { setTimeout(r, 100) }); if (!passwordRevealed) return }
+    // F1-006：等待解密完成（prompt+PBKDF2 可能远超 100ms），轮询 passwordRevealed
+    if (!passwordRevealed) {
+      bdPwShow.click()
+      var waited = 0
+      while (!passwordRevealed && waited < 15000) {
+        await new Promise(function (r) { setTimeout(r, 100) })
+        waited += 100
+      }
+      if (!passwordRevealed) return
+    }
     var text = bdPasswordText.textContent
     if (text === '••••••••') return
     navigator.clipboard.writeText(text).then(function () { toast('密码已复制', 1500) }).catch(function () { toast('复制失败', 1500) })
@@ -456,15 +545,34 @@
           || tab.url.startsWith('file:') || tab.url.startsWith('javascript:') || tab.url.startsWith('data:')
           || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) { return toast('浏览器内部页面无法保存') }
 
-      // 委托 background 打开 PWA 保存（走 PWA 的 sync queue）
-      chrome.runtime.sendMessage({ type: 'SAVE_TO_VAULT', url: tab.url, title: tab.title || tab.url })
-      flashSaveButton(true)
-      setStatus('ok', '已连接')
-      toast('已发送到 LinkVault 保存')
+      // F1-008：等 background 回执再 flash 成功，避免未送达仍显示已保存
+      chrome.runtime.sendMessage(
+        { type: 'SAVE_TO_VAULT', url: tab.url, title: tab.title || tab.url },
+        function (resp) {
+          if (chrome.runtime.lastError) {
+            flashSaveButton(false)
+            toast('保存失败：' + (chrome.runtime.lastError.message || '扩展通信错误'))
+            return
+          }
+          if (resp && resp.ok) {
+            flashSaveButton(true)
+            setStatus('ok', '已连接')
+            toast('已发送到 LinkVault 保存')
+          } else {
+            flashSaveButton(false)
+            toast('保存失败，请重试')
+          }
+        },
+      )
     })
   })
 
-  $('#btnRefresh').addEventListener('click', function () { loadBookmarks(); toast('已刷新') })
+  // F1-007：刷新同时用用户手势重读当前标签 URL
+  $('#btnRefresh').addEventListener('click', function () {
+    loadCurrentTab()
+    loadBookmarks()
+    toast('已刷新')
+  })
 
   // ── 登录 ──
   $('#btnShowLogin').addEventListener('click', function () {
@@ -498,7 +606,16 @@
     loginBanner.classList.add('hidden'); otpSection.classList.add('hidden')
     emailInput.value = ''; otpInput.value = ''
   })
-  $('#btnLogout').addEventListener('click', async function () { await sb.auth.signOut() })
+  // F1-004：退出时清主密码/明文/内存书签，避免跨会话残留
+  $('#btnLogout').addEventListener('click', async function () {
+    clearMasterPasswordNow()
+    passwordRevealed = false
+    allBookmarks = []
+    currentMatchedBookmark = null
+    if (bookmarkList) bookmarkList.innerHTML = ''
+    hideBookmarkDetail()
+    await sb.auth.signOut()
+  })
 
   // ── 登录门上的登录按钮 ──
   $('#btnLoginGate').addEventListener('click', function () {

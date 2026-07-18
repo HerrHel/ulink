@@ -29,7 +29,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { gid } from '../../utils.js'
-import { toast } from '../../lib/toast.js'
+import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 
@@ -38,7 +38,10 @@ const newName = ref('')
 const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameAttribute')
 
-const attributes = computed(() => store.customAttributes)
+// A2-007：管理列表仅展示未软删属性
+const attributes = computed(() =>
+  store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt)
+)
 
 watch(() => store.modals.attribute, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())
@@ -50,14 +53,21 @@ function onAddAttr() {
   const name = newName.value.trim()
   if (!name) return
   const id = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
-  if (store.customAttributes.find(a => a.id === id || a.name === name)) { toast('属性已存在', false); return }
+  // A2-007：查重仅对未软删属性，允许与回收站同名重建
+  const active = store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt)
+  if (active.find(a => a.id === id || a.name === name)) { toast('属性已存在', false); return }
   store.addAttribute({ id, name, type: 'boolean' })
   store.save()
   newName.value = ''
   toast('属性已添加')
 }
 
-function onDelete(id: string) {
+async function onDelete(id: string) {
+  // A2-002：删除前确认；软删定义时会快照实体 attributes，恢复时可回写
+  const attr = store.customAttributes.find(a => a.id === id)
+  const name = attr?.name || id
+  const ok = await showConfirm(`确认删除属性「${name}」？已打标的书签/组将暂时去掉该标记；从回收站恢复属性时可还原关联。`)
+  if (!ok) return
   store.deleteAttribute(id)
   store.save()
   toast('属性已删除')

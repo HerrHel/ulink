@@ -41,3 +41,27 @@ if (typeof window !== 'undefined') {
 
 // Mount Vue app
 app.mount('#app')
+
+// D3-001：PWA autoUpdate 仅 SW skipWaiting 不够——客户端必须 register 并在新 SW 激活后整页刷新，
+// 否则旧标签懒加载异步 chunk 会 404（hash 已变）。
+if (import.meta.env.PROD) {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    registerSW({
+      immediate: true,
+      onNeedRefresh() { /* autoUpdate 会走 onRegisteredSW 路径 */ },
+      onOfflineReady() { /* no-op */ },
+      onRegisteredSW(_swUrl, registration) {
+        // 新 SW 控制页面后强制 reload，保证 index + 异步 chunk 同代
+        registration?.addEventListener('updatefound', () => {
+          const nw = registration.installing
+          if (!nw) return
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'activated' && navigator.serviceWorker.controller) {
+              window.location.reload()
+            }
+          })
+        })
+      },
+    })
+  }).catch(() => { /* virtual:pwa-register 在非 PWA 构建中可能不可用 */ })
+}

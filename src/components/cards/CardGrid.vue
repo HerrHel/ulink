@@ -34,7 +34,6 @@
 </template>
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { isMobile } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useCombinedList } from '../../composables/useCombinedList.js'
@@ -57,10 +56,12 @@ const { combinedList } = useCombinedList()
 // 仅在非批量时启用虚拟滚动。
 const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMode)
 const virtualList = computed<CardItem[]>(() => useVirtual.value ? combinedList.value : [])
+// A1-005：行高跟 isMobile 响应，避免 setup 时 isMobile() 写死；虚拟模式强制 list-view
+const virtualItemHeight = computed(() => (ui.isMobile ? 100 : 140))
 const { visibleItems, totalHeight } = useVirtualScroll(
   virtualList,
   {
-    itemHeight: isMobile() ? 100 : 140,
+    itemHeight: virtualItemHeight,
     containerHeight: 800,
     overscan: 5,
     scrollRootSelector: '#panelContent',

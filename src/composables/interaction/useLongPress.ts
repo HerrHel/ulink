@@ -56,12 +56,20 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
     if (Math.abs(e.clientX - _startX) > LP_SLOP || Math.abs(e.clientY - _startY) > LP_SLOP) cancel()
   }
 
+  /** E3-004：pointerup/pointercancel 共用 fired 复位，避免 cancel 后 fired 长期 true */
+  function scheduleFiredReset() {
+    if (!fired.value) return
+    if (_resetTimer) clearTimeout(_resetTimer)
+    _resetTimer = setTimeout(() => { fired.value = false; _resetTimer = null }, 200)
+  }
+
   function onPtrUp() {
-    if (fired.value) {
-      // 抬手后短暂保持 true，吞掉合成 click；200ms 后复位
-      if (_resetTimer) clearTimeout(_resetTimer)
-      _resetTimer = setTimeout(() => { fired.value = false; _resetTimer = null }, 200)
-    }
+    scheduleFiredReset()
+    cancel()
+  }
+
+  function onPtrCancel() {
+    scheduleFiredReset()
     cancel()
   }
 
@@ -69,7 +77,7 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
     document.addEventListener('pointerdown', onPtrDown, { passive: true })
     document.addEventListener('pointermove', onPtrMove, { passive: true })
     document.addEventListener('pointerup', onPtrUp, { passive: true })
-    document.addEventListener('pointercancel', cancel, { passive: true })
+    document.addEventListener('pointercancel', onPtrCancel, { passive: true })
   })
 
   onUnmounted(() => {
@@ -78,7 +86,7 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
     document.removeEventListener('pointerdown', onPtrDown)
     document.removeEventListener('pointermove', onPtrMove)
     document.removeEventListener('pointerup', onPtrUp)
-    document.removeEventListener('pointercancel', cancel)
+    document.removeEventListener('pointercancel', onPtrCancel)
   })
 
   return { fired }

@@ -1,8 +1,11 @@
 /* ==================== APP LAYOUT ==================== */
 .lv-panel{
   display:flex;
+  /* B1-004：动态视口，回退 100vh */
   height:100vh;
+  height:100dvh;
   max-height:100vh;
+  max-height:100dvh;
   overflow:hidden;
 }
 

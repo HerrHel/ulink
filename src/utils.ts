@@ -19,8 +19,23 @@ interface AppStore {
 
 export function gid(): string { return nanoid(12) }
 export function domain(url: string): string { try { return new URL(url).hostname.replace(/^www\./, '') } catch (_) { return url } }
+/** A5-006：自定义 icon 仅允许 http(s) 或相对路径，拒绝 javascript:/data: 等 */
+export function safeIconUrl(icon?: string | null): string {
+  if (!icon) return ''
+  const t = icon.trim()
+  if (!t) return ''
+  if (/^https?:\/\//i.test(t)) return t
+  // 相对路径：/path、./x、../x，或无 scheme 的文件名/路径（custom.png、icons/a.svg）
+  if (t.startsWith('/') || t.startsWith('./') || t.startsWith('../')) return t
+  // 拒绝一切其它 scheme（javascript: data: vbscript: 等）
+  if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:/i.test(t)) return ''
+  // 无 scheme 的相对资源名
+  return t
+}
+
 export function favicon(url: string, customIcon?: string): string {
-  if (customIcon) return customIcon
+  const safe = safeIconUrl(customIcon)
+  if (safe) return safe
   const dm = domain(url)
   return dm ? 'https://api.xinac.net/icon/?url=' + dm : ''
 }
@@ -83,10 +98,30 @@ export function cleanZeroWidth(text: string): string { return text.replace(/\u20
 
 export function swapOrder(a: { order: number }, b: { order: number }): void { if (a.order === b.order) b.order++; const t = a.order; a.order = b.order; b.order = t }
 
+/** D2-005：仅在真正写入剪贴板成功后 toast「已复制」 */
 export function copyToClipboard(text: string, label?: string): void {
-  if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(function () {}) }
-  else { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta) }
-  toast((label || '') + ' 已复制')
+  const okMsg = (label || '') + ' 已复制'
+  const failMsg = (label || '内容') + ' 复制失败'
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => toast(okMsg),
+      () => toast(failMsg, false),
+    )
+    return
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    toast(ok ? okMsg : failMsg, ok)
+  } catch {
+    toast(failMsg, false)
+  }
 }
 
 /**
@@ -113,7 +148,13 @@ export function getTagNames(item: Bookmark | SiblingGroup, customAttributes: Cus
 const CATEGORY_COLORS = ['#122E8A', '#E63948', '#d97706', '#7c3aed', '#0d9488', '#db2777', '#2563eb', '#059669']
 
 export function createCategory(name: string): Category {
-  return { id: gid(), name, icon: 'star', color: CATEGORY_COLORS[Math.floor(Math.random() * CATEGORY_COLORS.length)] }
+  return {
+    id: gid(),
+    name,
+    icon: 'star',
+    color: CATEGORY_COLORS[Math.floor(Math.random() * CATEGORY_COLORS.length)],
+    order: Date.now(),
+  }
 }
 
 export function addNewCategory(name: string, store: AppStore): Category | null {

@@ -51,7 +51,7 @@ describe('useAttrFilter', () => {
     it('should add new attribute', () => {
       const dataStore = useDataStore()
       const appStore = useAppStore()
-      appStore.save = () => {}
+      appStore.save = async () => true
       const result = addAttrQuick('new-tag')
       expect(result).toBe(true)
       expect(dataStore.customAttributes.some(a => a.id === 'new-tag')).toBe(true)
@@ -64,7 +64,7 @@ describe('useAttrFilter', () => {
     it('should reject duplicate name', () => {
       const dataStore = useDataStore()
       const appStore = useAppStore()
-      appStore.save = () => {}
+      appStore.save = async () => true
       dataStore.customAttributes = [{ id: 'test', name: 'Test', type: 'boolean' }]
       expect(addAttrQuick('Test')).toBe(false)
     })
@@ -72,7 +72,7 @@ describe('useAttrFilter', () => {
     it('should sanitize id from name', () => {
       const dataStore = useDataStore()
       const appStore = useAppStore()
-      appStore.save = () => {}
+      appStore.save = async () => true
       addAttrQuick('My Tag!')
       expect(dataStore.customAttributes.some(a => a.id === 'my-tag')).toBe(true)
     })
