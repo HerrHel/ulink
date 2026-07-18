@@ -191,6 +191,10 @@ describe('S7 SSRF guard — DNS 重绑定检测', () => {
     expect(isTargetDnsSafeSyncResults('v6.attacker.com', ['::1'])).toBe(false)
     expect(isTargetDnsSafeSyncResults('v6.attacker.com', ['fc00::1'])).toBe(false)
   })
+
+  it('H6: 空解析结果 fail-closed 拒', () => {
+    expect(isTargetDnsSafeSyncResults('nxdomain.example', [])).toBe(false)
+  })
 })
 
 describe('S9 CORS fail-closed — isOriginAllowed', () => {

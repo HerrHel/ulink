@@ -48,7 +48,9 @@
            :class="['share-bookmark-card', { 'share-bookmark-card--disabled': !fixUrl(b.url) }]"
            @click="!fixUrl(b.url) ? $event.preventDefault() : null">
           <div class="share-bm-icon">
-            <img v-if="b.icon" :src="b.icon" @error="($event.target as HTMLImageElement).style.display='none'" />
+            <!-- M5：跨用户 b.icon 不可信（追踪像素/任意 URL）；统一由书签 url 派生受控 favicon，并禁 Referer -->
+            <img v-if="shareIconSrc(b)" :src="shareIconSrc(b)" referrerpolicy="no-referrer" loading="lazy"
+                 @error="($event.target as HTMLImageElement).style.display='none'" />
             <span v-else class="share-bm-icon-fallback">{{ (b.title || '?')[0].toUpperCase() }}</span>
           </div>
           <div class="share-bm-info">
@@ -70,7 +72,7 @@ import { useAuth } from '../composables/domain/useAuth.js'
 import { forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
 import { I } from '../config/icons.js'
-import { fixUrl, domain } from '../utils.js'
+import { fixUrl, domain, favicon } from '../utils.js'
 import { getCategoryIcon } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
@@ -88,6 +90,12 @@ const auth = useAuth()
 const isLoggedIn = auth.isLoggedIn
 
 function getIcon(icon: string) { return getCategoryIcon(icon) }
+
+/** M5：分享页图标只由 http(s) 书签 URL 派生，忽略所有者自填的任意 icon */
+function shareIconSrc(b: Bookmark): string {
+  const safe = fixUrl(b.url)
+  return safe ? favicon(safe) : ''
+}
 
 function backToApp() {
   // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识

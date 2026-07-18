@@ -90,17 +90,24 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   const reverseIdMap = new Map<string, string>()
   for (const [oldId, newId] of idMap) reverseIdMap.set(newId, oldId)
   const oldToLocal = new Map<string, string>()
+  // M17：预建 url→bookmark 索引，fork 时 O(1) 查重，避免每条 some+find 双重全表扫
+  const urlToLocal = new Map<string, Bookmark>()
+  for (const e of ds.bookmarks) {
+    const key = e.url?.toLowerCase()
+    if (key && !urlToLocal.has(key)) urlToLocal.set(key, e)
+  }
   for (const b of newBookmarks) {
     const oldId = reverseIdMap.get(b.id)
-    if (!ds.bookmarks.some(e => e.url?.toLowerCase() === b.url?.toLowerCase())) {
+    const urlKey = b.url?.toLowerCase() || ''
+    const existing = urlKey ? urlToLocal.get(urlKey) : undefined
+    if (!existing) {
       ds.addBookmark(b)
       addedIds.add(b.id)
       actualAdded.push(b)
       if (oldId) oldToLocal.set(oldId, b.id)
-    } else {
-      // 被去重跳过：找到本地已有的同 URL 书签，用它的 id 作为映射目标
-      const existing = ds.bookmarks.find(e => e.url?.toLowerCase() === b.url?.toLowerCase())
-      if (oldId && existing) oldToLocal.set(oldId, existing.id)
+      if (urlKey) urlToLocal.set(urlKey, b)
+    } else if (oldId) {
+      oldToLocal.set(oldId, existing.id)
     }
   }
 

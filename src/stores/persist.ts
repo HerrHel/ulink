@@ -52,9 +52,14 @@ function _stamp(data: AppData) {
 export async function saveData(data: AppData): Promise<boolean> {
   const stamped = _stamp(data)
 
+  // L14 修复：旧实现先 JSON.parse(JSON.stringify(stamped)) 给 IDB 再 JSON.stringify(stamped)
+  // 写 localStorage，同一 stamped 对象走两遍 JSON 字符串化，大数据集下是双倍序列化主线程开销。
+  // 复用同一份 raw 字符串：IDB 走 JSON.parse(raw) 得纯对象，localStorage 直接存 raw。
+  const raw = JSON.stringify(stamped)
+
   // IDB 权威写入
   try {
-    const plain = JSON.parse(JSON.stringify(stamped))
+    const plain = JSON.parse(raw)
     const ok = await idbSet(IDB_KEY, plain)
     // idbSet 现在如实返回 false（见 storage.ts）；旧实现吞错致此处恒为 true，
     // 使 app.ts 的「存储不可用」toast 永不触发——隐私模式/配额满时数据丢失无提示。
@@ -67,9 +72,9 @@ export async function saveData(data: AppData): Promise<boolean> {
     return false
   }
 
-  // localStorage 尽力同步（静默失败）
+  // localStorage 尽力同步（静默失败），复用已序列化的 raw 免去第二次 stringify
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+    localStorage.setItem(STORAGE_KEY, raw)
   } catch {
     // localStorage 满时静默忽略，IDB 已有完整数据
   }
@@ -134,10 +139,14 @@ export function loadFromLocalStorage(): AppData {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const d = JSON.parse(raw)
-      // 运行时验证数据结构完整性，防止损坏数据导致白屏
-      const parsed = AppDataSchema.safeParse(d)
-      if (!parsed.success) {
-        console.warn('[persist] data validation failed, falling back to defaults:', parsed.error.issues)
+      // C2 修复：旧版 data 可能缺 isExpanded/updatedAt/createdAt 等 migrations 步骤 6/7
+      // 本应补齐的字段。若在 runMigrations 之前用 AppDataSchema.safeParse 做严格校验，
+      // 这些必填字段缺失会令整条 safeParse 失败，下方回退 DEFAULTS 会把用户全部书签/
+      // 分组替换为默认示例数据丢弃。改为仅做轻量结构性检查（是对象且含核心数组），
+      // 先让 runMigrations 补齐缺失字段，再用 schema 校验；只有结构彻底无法识别时
+      // 才回退 DEFAULTS，避免把"可被迁移修复的旧数据"误判为"损坏数据整体丢弃"。
+      if (!d || typeof d !== 'object' || !Array.isArray(d.bookmarks) || !Array.isArray(d.siblingGroups)) {
+        console.warn('[persist] localStorage data structure invalid, falling back to defaults')
         return JSON.parse(JSON.stringify(DEFAULTS))
       }
       const result: AppData = {
@@ -147,8 +156,14 @@ export function loadFromLocalStorage(): AppData {
         siblingGroups: d.siblingGroups || []
       }
       const needsPersist = runMigrations(d, result)
-      if (needsPersist) saveToLocalStorage(result)
-      return result
+      // 迁移后再用 schema 严格校验：若补齐后仍不符合（schema 演进或真正损坏）才回退 DEFAULTS
+      const parsed = AppDataSchema.safeParse(result)
+      if (!parsed.success) {
+        console.warn('[persist] data validation failed after migration, falling back to defaults:', parsed.error.issues)
+        return JSON.parse(JSON.stringify(DEFAULTS))
+      }
+      if (needsPersist) saveToLocalStorage(parsed.data)
+      return parsed.data
     }
   } catch (e) { console.warn('[persist] localStorage load failed:', (e as Error).message) }
   return JSON.parse(JSON.stringify(DEFAULTS))
@@ -158,24 +173,39 @@ export async function loadFromIDB(): Promise<AppData | null> {
   try {
     const idbData = await idbGet(IDB_KEY)
     if (idbData && idbData.bookmarks) {
-      // 与 loadFromLocalStorage 对齐加 safeParse：IDB 虽是自写自读的权威源，
-      // 但被外部工具篡改/跨版本结构漂移/写入中断致半条数据时，缺校验会让坏字段直入 store
-      // 引发后续 NPE 或白屏。失败时返回 null 让 loadData 回退到 localStorage（同时回退路径
-      // 还会用 DEFAULTS 兜底），避免静默吞入损坏数据。
-      const parsed = AppDataSchema.safeParse(idbData)
-      if (!parsed.success) {
-        console.warn('[persist] IDB validation failed, falling back to localStorage:', parsed.error.issues)
+      // C2（与 loadFromLocalStorage 同因）：IDB 虽是自写自读的权威源，但旧版数据可能缺
+      // migrations 步骤 6/7 本应补齐的 isExpanded/updatedAt/createdAt。若在 runMigrations
+      // 之前用 AppDataSchema.safeParse 做严格校验，必填字段缺失会令整条失败并回退 null，
+      // loadData 进一步回退到 localStorage（同样失败）→ DEFAULTS，用户数据全丢无自愈。
+      // 改为轻量结构性检查，先迁移补齐，再用 schema 校验；结构彻底无法识别才回退。
+      if (typeof idbData !== 'object' || !Array.isArray(idbData.bookmarks) || !Array.isArray(idbData.siblingGroups)) {
+        console.warn('[persist] IDB data structure invalid, falling back to localStorage')
         return null
       }
-      // 与 loadFromLocalStorage 一样跑 runMigrations：IDB 是权威源，但用户从旧版本升级时
+      // 与 loadFromLocalStorage 一样跑 runMigrations：IDB 是权威源，用户从旧版本升级时
       // 早期数据 _dataVersion 可能缺失/< CURRENT_VERSION，若 IDB 加载分支不迁移，旧格式数据
       // （文本笔记未转 HTML、categoryId=CAT_ALL、缺 updatedAt 等）会直入 store 且永不被清洗
       // —— 后续每次 saveData 盖新 _dataVersion 反而把脏数据「冻结」。两条加载路径行为必须一致。
       // 迁移后需回写，否则下次加载仍走旧分支。
-      const data = parsed.data
-      const needsm = runMigrations(idbData, data)
-      if (needsm) saveToIDB(data)
-      return data
+      //
+      // H18 修复：必须在**同一对象**上跑 runMigrations（即 runMigrations(idbData, idbData)）。
+      // Zod v4 的 AppDataSchema.safeParse 对 z.object/z.record/z.array 元素返回**新引用**，
+      // 若用 parsed.data 作为迁移结果目标，migrations step2 的属性 id 重映射
+      // (b.attributes[keep.id] = b.attributes[a.id]; delete b.attributes[a.id])
+      // 写的是 idbData.bookmarks[i].attributes，不会反映到 parsed.data.bookmarks，
+      // 导致 customAttributes 去重生效但 bookmark 仍引用旧 attr id，boolean 标记永久失联；
+      // 且随后 _schemaVersion 被钉为 CURRENT 再不迁移。在原对象上迁移后再 parse 得清洗副本返回。
+      const needsm = runMigrations(idbData, idbData as unknown as AppData)
+      // 迁移后再用 schema 严格校验：补齐后仍不符合才回退 null（让 loadData 走 localStorage 兜底）
+      const parsed = AppDataSchema.safeParse(idbData)
+      if (!parsed.success) {
+        console.warn('[persist] IDB validation failed after migration, falling back to localStorage:', parsed.error.issues)
+        return null
+      }
+      // L3 修复：迁移结果必须 await 落库后再返回，否则隐私模式/IDB 临时不可用时 saveToIDB
+      // 静默失败，本次会话看到内存迁移态但下次刷新仍读旧未迁移态（_schemaVersion 未落库）。
+      if (needsm) await saveToIDB(parsed.data)
+      return parsed.data
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', (e as Error).message) }
   return null

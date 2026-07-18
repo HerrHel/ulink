@@ -61,6 +61,10 @@ export async function preloadSearchLibs(): Promise<void> {
 ensureSearchLibs()
 
 // ── 拼音缓存（避免同一条目重复计算）──
+// L5 修复：旧实现 `_pyCache.size >= _PY_CACHE_MAX` 时执行 `_pyCache.clear()` 全量清空，
+// 大数据集（数千条中文书签 title+notes 各算一次拼音逼近 10000）会反复触发全清，导致拼音
+// 被重复同步计算（pinyin-pro 同步 CPU 密集），CRUD 重建时主线程被同步阻塞。Map 迭代顺序即
+// 插入顺序，改为 LRU 淘汰最旧条目（删第一个 entry）而非全清。
 const _pyCache = new Map<string, string>()
 const _PY_CACHE_MAX = 10000
 
@@ -69,8 +73,11 @@ function _toPy(text: string): string {
   let cached = _pyCache.get(text)
   if (cached !== undefined) return cached
   if (!pinyinFn) { ensureSearchLibs(); return '' }
-  // 防止缓存无限增长：超限时清空
-  if (_pyCache.size >= _PY_CACHE_MAX) _pyCache.clear()
+  // LRU 淘汰：超限时删最早插入的条目（Map 第一个 entry），而非整表清空
+  if (_pyCache.size >= _PY_CACHE_MAX) {
+    const oldest = _pyCache.keys().next().value
+    if (oldest !== undefined) _pyCache.delete(oldest)
+  }
   cached = pinyinFn(text, { toneType: 'none', type: 'array' }).join('')
   _pyCache.set(text, cached)
   return cached
@@ -231,17 +238,31 @@ function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bo
   return true
 }
 
-/** 库未就绪时的 includes 降级（无拼音） */
-function _fallbackBmIds(bookmarks: Bookmark[], query: string): Set<string> {
+/** 库未就绪时的 includes 降级（无拼音）
+ *  L6 修复：旧实现仅匹配 title/url/notes/username 四字段，不含 attrNames（也缺拼音），
+ *  与正常 Fuse 路径的 attrNames(权重 0.10) 范围不一致，降级时按自定义属性名搜不到对应书签。
+ *  追加 attrNames 匹配，保持降级与正常路径覆盖范围一致（拼音是能力缺失，不再补）。 */
+function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: CustomAttribute[] = []): Set<string> {
   const q = query.trim().toLowerCase()
+  const attrNameMap = new Map(customAttributes.map(a => [a.id, a.name]))
   return new Set(
     bookmarks
-      .filter(b =>
-        (b.title || '').toLowerCase().includes(q) ||
-        (b.url || '').toLowerCase().includes(q) ||
-        (b.notes || '').toLowerCase().includes(q) ||
-        (b.username || '').toLowerCase().includes(q)
-      )
+      .filter(b => {
+        if ((b.title || '').toLowerCase().includes(q)) return true
+        if ((b.url || '').toLowerCase().includes(q)) return true
+        if ((b.notes || '').toLowerCase().includes(q)) return true
+        if ((b.username || '').toLowerCase().includes(q)) return true
+        // 属性名匹配：勾选的属性对应名包含 query
+        if (q && b.attributes) {
+          for (const k of Object.keys(b.attributes)) {
+            if (b.attributes[k]) {
+              const name = attrNameMap.get(k) || ''
+              if (name && name.toLowerCase().includes(q)) return true
+            }
+          }
+        }
+        return false
+      })
       .map(b => b.id)
   )
 }
@@ -277,7 +298,7 @@ export function searchBookmarkIds(
 ): Set<string> | null {
   if (!query.trim()) return null
   if (!_ensureBookmarkBase(bookmarks, customAttributes, version) || !_bmFuse) {
-    return _fallbackBmIds(bookmarks, query)
+    return _fallbackBmIds(bookmarks, query, customAttributes)
   }
   const results = _bmFuse.search(query.trim())
   return new Set(results.map(r => r.item.id))
@@ -335,6 +356,12 @@ function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, strin
   const out: Record<string, HighlightSegment[]> = {}
   for (const match of fuseResult.matches || []) {
     if (!match.key || !match.indices?.length) continue
+    // M8 修复：拼音 key（titlePy/notesPy/namePy/childTitlePy）命中时，Fuse 的 match.value 是
+    // 拼音串（如 'kaiFaGongJu'）、indices 指向拼音串的字符位置。若把拼音串作 text 生成高亮段，
+    // SearchSuggest/CommandPalette 的建议项名称位置会渲染出拼音字符而非中文原文（如 'kaiFaGongJu'
+    // 而非'开发工具'）。拼音 key 命中时跳过段生成，仅让该字段其他原文 key 命中（若有）正常高亮，
+    // 渲染层对无原文字段段时用 fallback 原文显示（SearchSuggest 已用 item.title/name 显示主标题）。
+    if (match.key.endsWith('Py')) continue
     const label = keyMap[match.key] || match.key
     out[label] = _buildHighlightSegments(match.value || '', match.indices)
   }
@@ -363,10 +390,24 @@ export function searchWithHighlights(
 
   if (!_ensureBookmarkBase(bookmarks, customAttributes, version) || !_bmFuse) {
     // 降级：无高亮
-    const ids = _fallbackBmIds(bookmarks, q)
-    return bookmarks.filter(b => ids.has(b.id)).slice(0, maxResults).map(b => ({
+    const bmIds = _fallbackBmIds(bookmarks, q, customAttributes)
+    const bookmarkResults: SearchResultItem[] = bookmarks.filter(b => bmIds.has(b.id)).slice(0, maxResults).map(b => ({
       id: b.id, title: b.title, url: b.url, _highlights: {},
     }))
+    // M10 修复：旧实现降级时仅处理书签并 return，从不调用组降级，导致 fuse.js/pinyin-pro
+    // 分包加载失败时搜索建议和命令面板完全无法搜到任何组（与正常路径行为不一致）。
+    // 同条件下 _ensureGroupBase 也会失败，但模块内已有现成的 _fallbackGrpIds（用 includes 搜组）。
+    // 降级时调用 _fallbackGrpIds 构建组结果项与书签降级结果合并返回，保持降级与正常路径一致。
+    const grpIds = _fallbackGrpIds(groups, q, bookmarkMap)
+    const groupResults: SearchResultItem[] = groups.filter(g => grpIds.has(g.id)).slice(0, 4).map(g => ({
+      id: g.id, name: g.name, _isGroup: true,
+      _displayTitle: g.name || '未命名组',
+      bookmarkIds: g.bookmarkIds,
+      _highlights: {},
+    }))
+    if (!groupResults.length) return bookmarkResults.slice(0, maxResults)
+    if (!bookmarkResults.length) return groupResults.slice(0, maxResults)
+    return [...groupResults, ...bookmarkResults].slice(0, maxResults + 4)
   }
   const bmResults = _bmFuse.search(q, { limit: maxResults })
 

@@ -16,6 +16,40 @@ import { isMobile } from '../../utils.js'
 const EDGE_ZONE = 60     // 触发滚动的边缘区域 px
 const MAX_SCROLL_SPEED = 12 // 最大滚动速度 px/frame
 
+/**
+ * H12：区间 order 更新（splice 后的 allItems 上调用）。
+ * fromIndex / toIdx 为 splice 前的 from 与 splice 后的目标索引（toIdx 已是「插入后」位置）。
+ * 下移：[fromIndex, toIdx) 各 order--，moved 取区间末邻项的原 order；
+ * 上移：(toIdx, fromIndex] 各 order++，moved 取区间首邻项的原 order。
+ * 保证移动后区间内 order 唯一且相对序正确（连续或带间隙均可）。
+ */
+export function applyIntervalOrder(
+  allItems: Array<{ data: { id: string; order: number } }>,
+  fromIndex: number,
+  toIdx: number,
+  markDirty: (id: string) => void,
+): void {
+  const movedItem = allItems[toIdx]
+  if (!movedItem || fromIndex === toIdx) return
+  if (fromIndex < toIdx) {
+    const targetOrder = allItems[toIdx - 1].data.order
+    for (let k = fromIndex; k < toIdx; k++) {
+      allItems[k].data.order--
+      markDirty(allItems[k].data.id)
+    }
+    movedItem.data.order = targetOrder
+    markDirty(movedItem.data.id)
+  } else {
+    const targetOrder = allItems[toIdx + 1].data.order
+    for (let k = toIdx + 1; k <= fromIndex; k++) {
+      allItems[k].data.order++
+      markDirty(allItems[k].data.id)
+    }
+    movedItem.data.order = targetOrder
+    markDirty(movedItem.data.id)
+  }
+}
+
 interface DragState {
   el: HTMLElement
   placeholder: HTMLDivElement
@@ -183,10 +217,40 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     if (scrollRaf) { cancelAnimationFrame(scrollRaf); scrollRaf = null }
   }
 
+  /**
+   * H14：统一清理拖拽视觉/状态（恢复 el 样式、移除 placeholder、stopScroll、drag=null）。
+   * 不应用 reorder。供 onUnmounted / lostpointercapture / pointercancel 复用。
+   */
+  function cleanupDragState() {
+    if (!drag) return
+    const d = drag
+    drag = null
+    stopScroll()
+    try { d.el.releasePointerCapture(d.pointerId) } catch { /* 已释放则忽略 */ }
+    d.el.classList.remove(draggingClass)
+    d.el.style.position = ''
+    d.el.style.left = ''
+    d.el.style.top = ''
+    d.el.style.width = ''
+    d.el.style.margin = ''
+    d.el.style.zIndex = ''
+    d.el.style.transition = ''
+    // portal 到 body 的需先移回原容器，避免 body 残留游离节点
+    if (d.originalParent) {
+      // 占位符可能已不在 DOM；有则插到占位符前，无则 append
+      if (d.placeholder.parentNode) d.originalParent.insertBefore(d.el, d.placeholder)
+      else d.originalParent.appendChild(d.el)
+    }
+    d.placeholder.remove()
+    _cachedMids = []
+    _midsDirty = true
+    _scrollRect = null
+  }
+
   // ── 拖拽事件 ──
   function onPointerDown(e: PointerEvent) {
     if (!enabled.value) return
-    
+
     let item: HTMLElement | null = null
     if (handleSelector) {
       const handle = (e.target as HTMLElement).closest(handleSelector)
@@ -241,7 +305,6 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     _prevY = e.clientY
     invalidateMids()
     _scrollRect = null
-    _prevY = e.clientY
   }
 
   function onPointerMove(e: PointerEvent) {
@@ -251,9 +314,14 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     startScroll()
   }
 
+  /**
+   * 正常松手：按最终位置应用 reorder，再清理视觉状态。
+   * 规范保证 pointerup 先于 lostpointercapture，故先消费 drag 再 cleanup 不会丢落点。
+   */
   function onPointerUp(e: PointerEvent) {
     if (!drag || e.pointerId !== drag.pointerId) return
     const d = drag
+    // 先置 null 阻断 rAF / 后续 lostpointercapture 二次处理
     drag = null
     stopScroll()
 
@@ -294,6 +362,9 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     d.el.style.margin = ''
     d.el.style.zIndex = ''
     d.el.style.transition = ''
+    _cachedMids = []
+    _midsDirty = true
+    _scrollRect = null
 
     if (fromIndex !== toIndex) {
       if (onReorder) {
@@ -308,26 +379,10 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
         allItems.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, movedItem)
 
         // 保存自定义顺序 + 更新 order 值 + 标记 dirty
-        // B-6 修复：旧实现 allItems.forEach 重排全员 order(0,1,2,3...)并全员 _markDirty，
-        // 一次拖拽产生 N 条同步脏数据 + 刷 N 个 updatedAt。只更新受影响区间的 order：
-        // 被拖拽项设新 order，中间项 ±1，其余不动。
+        // B-6：只更新受影响区间的 order，不全员重排。
+        // H12：见 applyIntervalOrder（下移取邻项 order、区间循环不误改 moved 自身）
         const toIdx = toIndex > fromIndex ? toIndex - 1 : toIndex
-        const movedOrder = allItems[toIdx].data.order
-        if (fromIndex < toIdx) {
-          // 向下拖：[from+1, to] 区间各 -1
-          for (let k = fromIndex + 1; k <= toIdx; k++) {
-            allItems[k].data.order--
-            dataStore._markDirty(allItems[k].data.id)
-          }
-        } else if (fromIndex > toIdx) {
-          // 向上拖：[to, from-1] 区间各 +1
-          for (let k = toIdx; k < fromIndex; k++) {
-            allItems[k].data.order++
-            dataStore._markDirty(allItems[k].data.id)
-          }
-        }
-        movedItem.data.order = movedOrder
-        dataStore._markDirty(movedItem.data.id)
+        applyIntervalOrder(allItems, fromIndex, toIdx, (id) => dataStore._markDirty(id))
         const newOrder: Array<{ t: 'g' | 'b'; id: string }> = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
 
         dataStore._customCardOrder = newOrder
@@ -340,36 +395,35 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     }
   }
 
+  /**
+   * H14：capture 被系统回收且未走 pointerup 时（切 tab / 系统手势抢占 / 部分 WebView），
+   * 仅会派发 lostpointercapture。若不清理，drag 非 null → scrollLoop 持续 rAF + 边缘滚动泄漏。
+   * 规范：pointerup 先于 lostpointercapture；正常松手时 drag 已被 onPointerUp 置 null，此处 no-op。
+   * pointercancel 语义是中断而非确认落点，同样只清理不应用 reorder。
+   */
+  function onPointerCancelOrLost(e: PointerEvent) {
+    if (!drag || e.pointerId !== drag.pointerId) return
+    cleanupDragState()
+  }
+
   onMounted(() => {
     document.addEventListener('pointerdown', onPointerDown, { passive: false })
     document.addEventListener('pointermove', onPointerMove, { passive: false })
     document.addEventListener('pointerup', onPointerUp)
-    document.addEventListener('pointercancel', onPointerUp)
+    document.addEventListener('pointercancel', onPointerCancelOrLost)
+    // lostpointercapture 冒泡，document 级可捕获任意 el 上 setPointerCapture 后的丢失
+    document.addEventListener('lostpointercapture', onPointerCancelOrLost)
   })
 
   onUnmounted(() => {
-    stopScroll()
-    // 清理拖拽中途被卸载的残留：固定定位的卡片 + 占位符 + pointer capture。
+    // 清理拖拽中途被卸载的残留：固定定位的卡片 + 占位符 + pointer capture + rAF。
     // 否则若组件在拖拽中销毁（如切视图/退出批量模式），drag.el 仍 fixed 漂在
     // viewport 上、drag.placeholder 仍占位，形成幽灵节点直到容器被整体移除。
-    if (drag) {
-      try { drag.el.releasePointerCapture(drag.pointerId) } catch { /* 已释放则忽略 */ }
-      drag.el.classList.remove(draggingClass)
-      drag.el.style.position = ''
-      drag.el.style.left = ''
-      drag.el.style.top = ''
-      drag.el.style.width = ''
-      drag.el.style.margin = ''
-      drag.el.style.zIndex = ''
-      drag.el.style.transition = ''
-      // portal 到 body 的残留元素移回原容器，避免 body 残留游离节点
-      if (drag.originalParent) drag.originalParent.appendChild(drag.el)
-      drag.placeholder.remove()
-      drag = null
-    }
+    cleanupDragState()
     document.removeEventListener('pointerdown', onPointerDown)
     document.removeEventListener('pointermove', onPointerMove)
     document.removeEventListener('pointerup', onPointerUp)
-    document.removeEventListener('pointercancel', onPointerUp)
+    document.removeEventListener('pointercancel', onPointerCancelOrLost)
+    document.removeEventListener('lostpointercapture', onPointerCancelOrLost)
   })
 }

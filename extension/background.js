@@ -1,6 +1,8 @@
 // background.js — LinkVault Extension
 
 const PWA_URL = 'https://herrhel.github.io'
+// H10：仅按 PWA / 本地 dev 域名匹配已开标签，无需 tabs 权限遍历全部标签 URL
+const PWA_TAB_URL_PATTERNS = [PWA_URL + '/*', 'http://localhost:5173/*', 'https://localhost:5173/*']
 
 // ── 初始化：创建右键菜单（每次 worker 启动时执行，以防重启后丢失）──
 chrome.contextMenus.removeAll(function () {
@@ -26,7 +28,6 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
   if (info.menuItemId === 'save-to-linkvault') {
     openPwaWithUrl(info.linkUrl || tab.url, tab.title)
   } else if (info.menuItemId === 'save-selection-to-linkvault') {
-    // P2: 选中文本 → 注入脚本获取选中内容 → 传到 PWA 保存
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => window.getSelection()?.toString() || '',
@@ -40,6 +41,7 @@ chrome.contextMenus.onClicked.addListener(function (info, tab) {
 })
 
 // ── 快捷键 Ctrl+Shift+S ──
+// activeTab 在命令/用户手势触发时瞬态授权当前标签，无需持久 tabs 权限
 chrome.commands.onCommand.addListener(function (command) {
   if (command === 'save-to-linkvault') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
@@ -60,10 +62,9 @@ function openPwaWithUrl(url, title, notes) {
   if (notes) params.set('ext_save_notes', notes)
   var targetUrl = PWA_URL + '/?ext_save=1&' + params.toString()
 
-  chrome.tabs.query({}, function (tabs) {
-    var existing = tabs.find(function (t) {
-      return t.url && (t.url.startsWith(PWA_URL) || t.url.includes('localhost:5173'))
-    })
+  // H10：按 URL pattern 仅匹配 PWA 标签，不读用户其它标签 URL
+  chrome.tabs.query({ url: PWA_TAB_URL_PATTERNS }, function (tabs) {
+    var existing = tabs && tabs[0]
     if (existing) {
       chrome.tabs.update(existing.id, { active: true, url: targetUrl })
     } else {
@@ -73,13 +74,6 @@ function openPwaWithUrl(url, title, notes) {
 }
 
 // ── 消息路由：side panel ↔ PWA ──
-//
-// 数据流设计：
-//   side panel 的保存操作 → 本 background → 打开 PWA 标签页（走 PWA 的 sync queue）
-//   side panel 的删除/编辑备注 → 直接写 Supabase（PWA 通过 Realtime 拉取同步）
-//
-// 这样确保主要写操作（保存）走 PWA 的 IndexedDB 队列 + 离线同步机制，
-// 而删除/编辑备注等低频操作容忍短暂滞后。
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'GET_CURRENT_TAB') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
@@ -89,11 +83,6 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     return true
   }
 
-  // ── Side panel 保存 → 转发到 PWA 标签页 ──
-  // side panel 的保存/删除/编辑操作数据流：
-  //   - 保存（主要操作）→ SAVE_TO_VAULT → 打开 PWA 标签页 → 走 sync queue
-  //   - 删除/编辑备注 → 直接写 Supabase（低频操作，PWA 通过 Realtime 同步获取）
-  //   （原因：side panel 保持快速响应，无需等待 PWA 标签页加载）
   if (msg.type === 'SAVE_TO_VAULT') {
     openPwaWithUrl(msg.url, msg.title, msg.notes)
     sendResponse({ ok: true })

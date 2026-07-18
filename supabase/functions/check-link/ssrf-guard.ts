@@ -158,9 +158,10 @@ export interface DnsResolver {
 }
 
 /** DNS 重绑定校验：解析 hostname 的 A/AAAA，任一记录落入私有段即返 false。
- *  resolver 解析抛错时返回 true（best-effort，不阻断主路径），与 Deno resolveDns
- *  降级行为一致。hostname 为 IP 字面量或非域名时直接 true（不查 DNS）。 */
+ *  H6 配套：调用方在解析失败时应 fail-closed（拒），本函数仅判「给定 records 是否安全」。
+ *  records 为空时返回 false（无公网目标）。hostname 为 IP 字面量时通常不查 DNS。 */
 export function isTargetDnsSafeSyncResults(hostname: string, records: string[]): boolean {
+  if (!records.length) return false
   for (const r of records) {
     if (isPrivateHost(r)) return false
   }

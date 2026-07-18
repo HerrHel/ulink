@@ -229,6 +229,33 @@ export const useDataStore = defineStore('data', {
     // ── CRUD：仅修改数据，调用方负责 save() ──
     _markDirty(...ids: string[]) { for (const id of ids) this._dirtyIds.add(id) },
 
+    /** L10：现存书签最大 order + 1，新建书签统一入口 */
+    nextBookmarkOrder(): number {
+      return this.bookmarks.reduce((m, b) => b.order > m ? b.order : m, -1) + 1
+    },
+
+    /** M18：分类整对象补丁（冲突解决「用远端」），走 dirty/track/map */
+    updateCategory(id: string, changes: Partial<Category>) {
+      const idx = this.categories.findIndex(c => c.id === id)
+      if (idx < 0) return
+      for (const key of Object.keys(changes)) this._trackChange(id, key)
+      this.categories[idx] = { ...this.categories[idx], ...changes, updatedAt: Date.now() }
+      this._catMap[id] = this.categories[idx]
+      this._markDirty(id)
+      this._bumpSearchVersion()
+    },
+
+    /** M18：属性整对象补丁 */
+    updateAttribute(id: string, changes: Partial<CustomAttribute>) {
+      const idx = this.customAttributes.findIndex(a => a.id === id)
+      if (idx < 0) return
+      for (const key of Object.keys(changes)) this._trackChange(id, key)
+      this.customAttributes[idx] = { ...this.customAttributes[idx], ...changes, updatedAt: Date.now() }
+      this._attrMap[id] = this.customAttributes[idx]
+      this._markDirty(id)
+      this._bumpSearchVersion()
+    },
+
     /**
      * PERF-4：批量写 bookmark.attributes，合并 dirty，末尾一次 _bumpSearchVersion。
      * 用于死链全量检查等「多 id 同字段」场景，避免 N 次 updateBookmark 风暴。

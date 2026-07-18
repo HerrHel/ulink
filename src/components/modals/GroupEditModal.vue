@@ -88,9 +88,8 @@ function onRemoveBm(bmId: string) {
 
 function onMaskClick() { onClose() }
 function onClose() {
+  // L8：焦点恢复已并入 closeGroupEdit，避免双重 focus
   closeGroupEdit()
-  if (store.lastFocusedEl) store.lastFocusedEl.focus()
-  store.lastFocusedEl = null
 }
 
 function onPreviewGeIconUrl() { previewGeIconUrl() }

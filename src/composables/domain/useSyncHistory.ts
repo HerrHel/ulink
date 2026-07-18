@@ -7,8 +7,10 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { useAuth } from './useAuth.js'
+import { useE2E } from './useE2E.js'
 import { fetchLocalHistory, getLocalHistoryVersion, type LocalHistoryVersion } from '../../stores/storage.js'
 import { EditorManager } from '../../lib/editor.js'
+import type { EntityType } from '../../types.js'
 
 export function _getUserId(): string | null {
   const auth = useAuth()
@@ -51,6 +53,24 @@ export async function fetchHistory(itemId: string): Promise<HistoryVersion[]> {
     remote = (data as HistoryVersion[]) || []
   }
 
+  // H4：云端 data_history 已对 E2E 启用项的敏感字段加密（见 useCloudSync._pushFromQueue
+  // historyItems 构造处）。HistoryPanel 的 diffVersions 会渲染 data 的 username/notes，
+  // 若不解密历史面板会显示密文乱码、diff 无意义。E2E 启用且解锁时按 itemId 类型揭密
+  // 云端版本 data；本地历史本就明文存，无需解密。失败则保留原密文态（不阻断列出版本）。
+  if (remote.length) {
+    const e2e = useE2E()
+    if (e2e.isE2EEnabled.value && e2e.isUnlocked.value) {
+      const ds = useDataStore()
+      const type: EntityType = ds.groupMap[itemId] ? 'group' : 'bookmark'
+      for (const v of remote) {
+        if (v.data && typeof v.data === 'object') {
+          try { v.data = await e2e.decryptItem(type, v.data as Record<string, unknown>) }
+          catch { /* 保留原密文态 */ }
+        }
+      }
+    }
+  }
+
   // 合并去重：相同 created_at 保留云端（云端时序权威）
   const seen = new Set<string>()
   const merged: HistoryVersion[] = []
@@ -80,6 +100,16 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
 
   const ds = useDataStore()
 
+  // H4：历史快照在 E2E 启用时已对敏感字段加密（见 useCloudSync._pushFromQueue 构造
+  // historyItems 处），restore 读出的 histData.username/notes 等可能是三段密文。直接赋值
+  // 会让 store 写入密文态、UI 显示乱码。E2E 启用且已解锁时先 decryptItem 揭密再赋值；
+  // 未解锁/未启用时 decryptItem 透传原文（明文历史无密文字段），无影响。
+  const e2e = useE2E()
+  const e2eType: EntityType = itemType  // 'bookmark' | 'group' 同 EntityType 子集
+  const plain = (e2e.isE2EEnabled.value && e2e.isUnlocked.value)
+    ? (await e2e.decryptItem(e2eType, histData as Record<string, unknown>).catch(() => histData) as Record<string, unknown>)
+    : histData
+
   // 已软删的条目不能直接 restore——updateGroup/updateBookmark 只改字段不清 deletedAt，
   // return true 误报成功但用户看不到恢复结果（组/书签仍在回收站）。
   // 场景：编辑组 → _saveLocalHistory 防抖 500ms → 用户在 500ms 内删组 → timer fire
@@ -94,26 +124,26 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
 
   if (itemType === 'bookmark') {
     ds.updateBookmark(itemId, {
-      title: histData.title as string, url: histData.url as string,
-      username: histData.username as string, password: histData.password as string,
-      notes: histData.notes as string, icon: histData.icon as string,
-      categoryId: histData.categoryId as string, parentId: histData.parentId as string | null,
-      order: histData.order as number, useCount: histData.useCount as number,
-      attributes: histData.attributes as Record<string, boolean>,
-      isExpanded: histData.isExpanded as boolean,
+      title: plain.title as string, url: plain.url as string,
+      username: plain.username as string, password: plain.password as string,
+      notes: plain.notes as string, icon: plain.icon as string,
+      categoryId: plain.categoryId as string, parentId: plain.parentId as string | null,
+      order: plain.order as number, useCount: plain.useCount as number,
+      attributes: plain.attributes as Record<string, boolean>,
+      isExpanded: plain.isExpanded as boolean,
     })
   } else {
     // bookmarkIds 过滤掉已删书签——历史快照里的 bookmarkIds 引用了之后被删除的书签 id。
     // 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位 + 推云后远端也悬空）。
     // 对齐 useUndo.restoreSnapshot 的过滤策略。
-    const filteredIds = (histData.bookmarkIds as string[] || []).filter(bid => ds.bookmarkMap[bid])
+    const filteredIds = (plain.bookmarkIds as string[] || []).filter(bid => ds.bookmarkMap[bid])
     ds.updateGroup(itemId, {
-      name: histData.name as string, categoryId: histData.categoryId as string,
-      icon: histData.icon as string, order: histData.order as number,
-      isExpanded: histData.isExpanded as boolean,
-      attributes: histData.attributes as Record<string, boolean>,
+      name: plain.name as string, categoryId: plain.categoryId as string,
+      icon: plain.icon as string, order: plain.order as number,
+      isExpanded: plain.isExpanded as boolean,
+      attributes: plain.attributes as Record<string, boolean>,
       bookmarkIds: filteredIds,
-      notes: histData.notes as string, useCount: histData.useCount as number,
+      notes: plain.notes as string, useCount: plain.useCount as number,
     })
     // 同步 TipTap 编辑器内容（若该组编辑器仍挂载）：
     // GroupEditor 只在 onMounted 时读一次 group.notes，之后无 watch → setContent 逻辑，
@@ -123,7 +153,7 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
     // onUpdate 会触发 pushUndo 推快照（restore 前的状态，用户可 undo 回去）+ syncToStore
     // 用相同 notes 覆盖（无害），不需要 _restoring 标志。
     const ed = EditorManager.get(itemId)
-    if (ed) ed.commands.setContent(histData.notes as string || '')
+    if (ed) ed.commands.setContent(plain.notes as string || '')
   }
   saveAppData()
   return true

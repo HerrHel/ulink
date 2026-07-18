@@ -50,7 +50,12 @@ const gridRef = ref(null)
 const normalGridRef = ref(null)
 const { combinedList } = useCombinedList()
 
-const useVirtual = computed(() => combinedList.value.length > 100)
+// H13 修复：虚拟滚动用 absolute 定位 + 仅渲染可见项，useMobileDragReorder 依赖
+// 容器 children 真实 DOM 顺序与 listRef 一一对应，虚拟模式下 getItems 只拿得到
+// 可见片段且索引与 combinedList 错位，reorder 必然错误。批量模式本就需要全量 DOM
+// 才能拖拽排序，故 batchMode 时强制走非虚拟完整列表（normalGridRef 挂载），>100 项
+// 仅在非批量时启用虚拟滚动。
+const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMode)
 const virtualList = computed<CardItem[]>(() => useVirtual.value ? combinedList.value : [])
 const { visibleItems, totalHeight } = useVirtualScroll(
   virtualList,
@@ -71,5 +76,6 @@ const gridClass = computed(() => {
 })
 
 // 移动端批量模式拖拽排序（纯 pointer events）
+// 绑定 normalGridRef：batchMode 时 useVirtual 为 false，该 ref 一定挂载
 useMobileDragReorder(normalGridRef, combinedList)
 </script>

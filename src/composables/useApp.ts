@@ -49,7 +49,8 @@ export function useApp() {
     ]
     return null
   })
-  watch(() => longPress.fired, (v) => { useUIStore().lpFired = v })
+  // H17：fired 现为 Ref，直接 watch 该 ref 即可响应长按触发
+  watch(longPress.fired, (v) => { useUIStore().lpFired = v })
 
   // ── 3. 全局事件委派 ──
   // longPress.fired 已通过上面的 watch 同步到 uiStore.lpFired，useGlobalEvents

@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
 import { getCategoryIcon } from '../../config/icons.js'
@@ -47,19 +47,7 @@ function onAddNewCat() {
   }
 }
 
-// 重写 store.show/hide 以附加外部点击监听
-const _origShow = bmStore.show
-const _origHide = bmStore.hide
-bmStore.show = () => {
-  _origShow()
-  newCatName.value = ''
-  document.addEventListener('click', _closeOnOutsideClick)
-}
-bmStore.hide = () => {
-  _origHide()
-  document.removeEventListener('click', _closeOnOutsideClick)
-}
-
+// M14：不重写 store action；watch open 同步 document 监听，卸载时移除，避免重挂叠层
 function _closeOnOutsideClick(e: MouseEvent) {
   const pop = document.getElementById('batchMovePopover')
   if (pop && !pop.contains(e.target as Node) && !(e.target as HTMLElement).closest('[data-action="batchMove"]')) {
@@ -67,8 +55,18 @@ function _closeOnOutsideClick(e: MouseEvent) {
   }
 }
 
+watch(() => bmStore.open, (open) => {
+  if (open) {
+    newCatName.value = ''
+    document.addEventListener('click', _closeOnOutsideClick)
+  } else {
+    document.removeEventListener('click', _closeOnOutsideClick)
+  }
+})
+
 onUnmounted(() => {
-  bmStore.hide()
+  document.removeEventListener('click', _closeOnOutsideClick)
+  if (bmStore.open) bmStore.hide()
 })
 </script>
 

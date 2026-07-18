@@ -5,6 +5,7 @@
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType, EncryptedPassword } from '../../types.js'
 import { BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { isThreePartCipher } from '../../crypto.js'
 
 // ── 辅助函数 ──
 
@@ -14,13 +15,10 @@ export function parsePassword(raw: unknown): string {
 
 /**
  * 判断字符串是否为合格的 salt.iv.data 三段加密格式（AES-256-GCM）。
- * base64 编码后字母表 [A-Za-z0-9+/=] 不含 "."，故旧版 btoa(pwd) 的 base64 密码
- * 不可能被误判为三段格式；仅纯明文（未编码）含两个 "." 才可能误判，
- * 而本地存储路径不会出现未编码明文，所以这里判定安全。
+ * 统一走 crypto.isThreePartCipher（L15）。
  */
 function _isThreePartCipher(s: string): boolean {
-  const parts = s.split('.')
-  return parts.length === 3 && !!parts[0] && !!parts[1] && !!parts[2]
+  return isThreePartCipher(s)
 }
 
 /**
@@ -275,8 +273,14 @@ export function fromRemoteCategory(r: RemoteCategoryRow): Category | null {
 }
 
 export function fromRemoteAttribute(r: RemoteAttributeRow): CustomAttribute | null {
+  // M15：未知 type 不再整条丢弃——当前产品仅 boolean；非 boolean 强制兜底并 warn，保留 id/name 引用
+  const rawType = r.type
+  let type: 'boolean' = 'boolean'
+  if (rawType && rawType !== 'boolean') {
+    console.warn(`[sync] 属性 ${r.id} type=${JSON.stringify(rawType)} 非 boolean，已按 boolean 兜底导入（schema 演进时请扩展 CustomAttributeSchema）`)
+  }
   return _validateWith(CustomAttributeSchema, {
-    id: r.id, name: r.name, type: (r.type as 'boolean') || 'boolean',
+    id: r.id, name: r.name, type,
     updatedAt: r.updated_at_num || 0,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
   }, '属性')

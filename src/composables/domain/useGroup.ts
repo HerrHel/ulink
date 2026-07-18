@@ -249,6 +249,8 @@ export function editGroup(eGid: string) {
   const ui = useUIStore();
   const sg = ds.groupMap[eGid];
   if (!sg) return;
+  // L8：与 openBmModal 对齐，记录打开前焦点，Esc/关闭可恢复
+  ui.lastFocusedEl = document.activeElement as HTMLElement;
   ui.editingGeId = eGid;
   geForm.id = eGid;
   geForm.name = sg.name || '';
@@ -266,6 +268,11 @@ export function closeGroupEdit() {
   const ui = useUIStore();
   ui.modals.groupEdit = false;
   ui.editingGeId = null;
+  // L8：Esc 路径也走 closeGroupEdit，在此统一恢复焦点
+  if (ui.lastFocusedEl) {
+    try { ui.lastFocusedEl.focus() } catch { /* 元素可能已卸载 */ }
+    ui.lastFocusedEl = null
+  }
 }
 
 export function saveGroupEdit() {

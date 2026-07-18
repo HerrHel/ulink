@@ -19,6 +19,8 @@ const securityHeaders: Record<string, string> = {
   //   收到 self + supabase 主机。当前产品选择：弱外泄纵深换本地可达性探测。
   // - XSS 主防线是 script-src 'self'（无 unsafe-inline）；connect 宽只在脚本已失陷时
   //   放大数据外泄面。收紧前先统一死链走 Edge、去掉浏览器直连任意 URL。
+  // L1：已记录架构取舍，死链改走 Edge 后收窄 connect-src（去掉 https: 通配）。
+  // 勿在未改 checkDirect 前私自收紧，否则死链检测失效。
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self'",

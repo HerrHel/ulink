@@ -22,7 +22,7 @@ import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, syncOpsCount, updateSyncOpRetry,
   type SyncOp,
 } from '../../stores/storage.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
 import {
   toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute, camelToSnake,
   type RemoteBookmarkRow, type RemoteGroupRow,
@@ -39,6 +39,30 @@ import {
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
+
+// H3：in-flight 同步集合。depsync（debouncedSync）把 dirty 排进 syncOps 队列时会清空
+// _dirtyIds（drainDirtyIds），但 op 真正 push 到云端有 3000ms debounce 窗口 + 重试滞留期。
+// 此间若远端 realtime 推来同 id 的更新，_mergeIntoLocal 因 `ds._dirtyIds.has(id)` 已 false
+// 落到 `else if remoteNewer` 分支直接 Object.assign，把本地正在等待推送的改动覆盖丢失；
+// 随后延迟 push 又用本地旧版本覆盖远端，双向丢失无 conflict 记录。把 drain 出的 id 记入
+// 本集合，待对应 op push 成功后再清。_mergeIntoLocal 看到 remoteNewer 且 id 在本集合时一律
+// 转 conflict，保证 op 落库成功前不被远端静默覆盖。
+const _pendingSyncIds = new Set<string>()
+
+/** 导出供 useSyncRealtime 等模块在 merge 时复用同一份 in-flight 判定 */
+export function _isPendingSync(id: string): boolean { return _pendingSyncIds.has(id) }
+function _markPendingSync(ids: Iterable<string>) { for (const id of ids) _pendingSyncIds.add(id) }
+function _clearPendingSync(ids: Iterable<string>) { for (const id of ids) if (_pendingSyncIds.has(id)) _pendingSyncIds.delete(id) }
+/**
+ * 测试专用注入：模拟"已 drain 待推送"的 in-flight 状态。
+ * 生产代码通过 _enqueueDirtyAsOps → _markPendingSync / _pushFromQueue → _clearPendingSync
+ * 管理此集合；测试不跑完整 enqueue/push 流程时用它直接置态以覆盖 H3 冲突分支。
+ * 请在 beforeEach 调 reset 防止跨用例泄漏。
+ */
+export const __testPendingSync = {
+  add: (id: string) => _pendingSyncIds.add(id),
+  clear: () => _pendingSyncIds.clear(),
+}
 
 /** 单条 sync op 最大推送重试次数：超过即移出队列，避免失败 op 无限堆积
  *  导致「恢复了又没了」的同步死结（数据本体在 ds.bookmarks，删 op 不丢数据）。 */
@@ -122,6 +146,22 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         local.push(rItem)
       }
     } else if (ds._dirtyIds.has(rItem.id)) {
+      const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
+      if (remoteNewer && syncStore.lastSyncAt > 0) {
+        if (!syncStore.conflicts.some(c => c.id === rItem.id)) {
+          syncStore.addConflict({
+            id: rItem.id, type,
+            local: JSON.parse(JSON.stringify(lItem)),
+            remote: JSON.parse(JSON.stringify(rItem)),
+          })
+          syncStore.resetConflictBanner()
+        }
+      }
+    } else if (_isPendingSync(rItem.id)) {
+      // H3：本地改动已 drain 进 syncOps 队列等推送（3000ms debounce 窗口 / 重试滞留期），
+      // _dirtyIds 已清空故上面分支不命中。此处若远端 newer 直接 Object.assign 会覆盖本地待
+      // 推改动，随后延迟 push 又用本地旧版本覆盖远端 → 双向丢失无 conflict。一律转 conflict，
+      // 等 push 落库成功后由 _clearPendingSync 释放，再投入后续 pull 决断。
       const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
       if (remoteNewer && syncStore.lastSyncAt > 0) {
         if (!syncStore.conflicts.some(c => c.id === rItem.id)) {
@@ -230,44 +270,34 @@ export function useCloudSync() {
     const _newIds = ds.drainNewIds()
     const changedFields = ds.drainChangedFields()
 
+    // H3：drain 已清空 _dirtyIds，但 op 尚未推上云端。把 dirty id 记入 in-flight 集合，
+    // 待 _pushFromQueue 成功落库后再清，期间 _mergeIntoLocal 见到这些 id 的远端更新会
+    // 转 conflict 而非覆盖本地待推改动。
+    _markPendingSync(dirty)
+    _markPendingSync(Array.from(deleted.keys()))
+
     const ops: Array<Omit<SyncOp, 'id' | 'retries'>> = []
 
-    for (const b of ds.bookmarks) {
-      if (dirty.has(b.id)) {
+    // L11：四类实体同构 upsert 入队
+    const collectDirty = <T extends { id: string; updatedAt?: number }>(
+      items: T[], table: SyncOp['table'],
+    ) => {
+      for (const item of items) {
+        if (!dirty.has(item.id)) continue
         ops.push({
-          action: 'upsert', table: 'bookmarks', itemId: b.id,
-          data: { ...b, _userId: userId, _isNew: _newIds.has(b.id), _changedFields: changedFields.has(b.id) ? [...changedFields.get(b.id)!] : null },
-          ts: b.updatedAt || Date.now(),
+          action: 'upsert', table, itemId: item.id,
+          data: {
+            ...item, _userId: userId, _isNew: _newIds.has(item.id),
+            _changedFields: changedFields.has(item.id) ? [...changedFields.get(item.id)!] : null,
+          },
+          ts: item.updatedAt || Date.now(),
         })
       }
     }
-    for (const g of ds.siblingGroups) {
-      if (dirty.has(g.id)) {
-        ops.push({
-          action: 'upsert', table: 'sibling_groups', itemId: g.id,
-          data: { ...g, _userId: userId, _isNew: _newIds.has(g.id), _changedFields: changedFields.has(g.id) ? [...changedFields.get(g.id)!] : null },
-          ts: g.updatedAt || Date.now(),
-        })
-      }
-    }
-    for (const c of ds.categories) {
-      if (dirty.has(c.id)) {
-        ops.push({
-          action: 'upsert', table: 'categories', itemId: c.id,
-          data: { ...c, _userId: userId, _isNew: _newIds.has(c.id), _changedFields: changedFields.has(c.id) ? [...changedFields.get(c.id)!] : null },
-          ts: c.updatedAt || Date.now(),
-        })
-      }
-    }
-    for (const a of ds.customAttributes) {
-      if (dirty.has(a.id)) {
-        ops.push({
-          action: 'upsert', table: 'custom_attributes', itemId: a.id,
-          data: { ...a, _userId: userId, _isNew: _newIds.has(a.id), _changedFields: changedFields.has(a.id) ? [...changedFields.get(a.id)!] : null },
-          ts: a.updatedAt || Date.now(),
-        })
-      }
-    }
+    collectDirty(ds.bookmarks, 'bookmarks')
+    collectDirty(ds.siblingGroups, 'sibling_groups')
+    collectDirty(ds.categories, 'categories')
+    collectDirty(ds.customAttributes, 'custom_attributes')
 
     for (const [id, table] of deleted) {
       ops.push({ action: 'delete', table, itemId: id, data: null, ts: Date.now() })
@@ -316,6 +346,13 @@ export function useCloudSync() {
         }
       }
       const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
+      // H4 修复：historyItems.data 原来直接用 `{ ...existing }` 即 ds 当前明文对象。
+      // E2E 已解锁时 ds 内存中 username/password/notes 是明文，整对象经 JSON.stringify 存到
+      // 云端 data_history.data（迁移 004 该表明文 JSONB），开启 E2E 后云端仍可读历史明文凭证
+      // （RLS 仅本人可查但服务端/DBA 仍可见明文）。改为对历史快照走 e2e.encryptItem 加密敏感
+      // 字段后再 insert，与主表 upsert 加密口径一致；E2E 未启用时 encryptItem 透传明文无影响。
+      // 锁定态该 item 含敏感改动时（如 bookmarks/sibling_groups）跳过历史写入，避免明文落库。
+      const histE2e = useE2E()
       for (const op of ops) {
         if (op.action === 'upsert') {
           const type = op.table === 'bookmarks' ? 'bookmark'
@@ -325,10 +362,18 @@ export function useCloudSync() {
           // categories/attributes 入历史会撞约束导致整批 POST 400，
           // 且这两类结构简单无需版本回溯，跳过即可。
           if (type !== 'bookmark' && type !== 'group') continue
+          const itemKey = `${op.table}:${op.itemId}`
+          if (isLocked && lockedItemKeys.has(itemKey)) continue  // 含敏感改动锁定项跳过历史
           const existing = op.table === 'bookmarks' ? ds.bookmarks.find(b => b.id === op.itemId)
             : ds.siblingGroups.find(g => g.id === op.itemId)
           if (existing) {
-            historyItems.push({ id: op.itemId, type, data: { ...existing as any } })
+            try {
+              const encData = await histE2e.encryptItem(type as EntityType, { ...existing as any } as Record<string, unknown>)
+              historyItems.push({ id: op.itemId, type, data: encData as Record<string, any> })
+            } catch (err) {
+              // E2E 启用未解锁且含敏感字段：encryptItem 抛错（push 已跳过这条，历史也跳过）
+              console.warn(`[sync] history encrypt skipped table=${op.table} id=${op.itemId}`, err)
+            }
           }
         }
       }
@@ -455,6 +500,27 @@ export function useCloudSync() {
       }
       for (const op of ops) ds._newIds.delete(op.itemId)
 
+      // H3：把本轮推成功（或达重试上限放弃）的 op 对应 itemId 从 in-flight 集合释放。
+      // 成功推上云端所以不再 pending；达上限移出队列的 op 不再尝试推送，其本地改动若与远端
+      // 有冲突将由下一次 pull 通过 lastSyncAt 增量比较决断，继续挂 pending 反而会让后续 merge
+      // 把正常远端更新误判为 conflict。只清成功送走 / 放弃重试 的；失败留队列重试的 op 仍保持 pending。
+      const releasedIds = new Set<string>()
+      for (const r of results) {
+        if (!r.result.error) releasedIds.add(r.op.itemId)
+        else if (r.result.error) {
+          const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
+          if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) releasedIds.add(r.op.itemId)
+        }
+      }
+      _clearPendingSync(releasedIds)
+      // 加密失败 op：达上限的也按 dead 释放（不再重试，等同推完）
+      for (const f of encFailedOps) {
+        const rawMatch = rawOpsMap.get(`${f.table}:${f.itemId}`)
+        if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) {
+          _pendingSyncIds.delete(f.itemId)
+        }
+      }
+
       if (failedOps.length) {
         // 仍有失败 op：不设 lastSyncAt（下次仍会重试这些 op，除非已达上限被移除），状态标 error
         for (const f of failedOps) {
@@ -516,18 +582,35 @@ export function useCloudSync() {
       const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r)).filter(Boolean) as CustomAttribute[]
 
       // decryptItem 返回浅拷贝，必须用返回值替换；丢弃会导致密文写回 store（RE-1）
+      // M1 修复：旧实现 `if (e2e.isUnlocked.value)` 仅在循环入口取一次布尔快照，随后对四数组
+      // 循环 await decryptItem。循环中途若触发 lock()（15 分钟无操作超时 / 页面隐藏 60 秒 /
+      // 显式调用），cryptoKey 被置 null，后续 decryptItem 内部 `_getKey()` 返回 null 直接
+      // `return item`（仍三段密文态）。密文态对象随后被 _mergeIntoLocal 用 Object.assign 写回
+      // 本地 store（基于 updatedAt 覆盖本地明文），并因 _markDirty 被回推云端污染其它设备。
+      // 改为循环内每条 await 前重新校验 isUnlocked：一旦检测到已 lock，整轮跳过 merge（不把
+      // 密文态条目写本地），等下一轮 unlock 后 _pullChanges 重新拉取。已解密的条目保留明文态。
       if (e2e.isUnlocked.value) {
-        for (let i = 0; i < remoteBms.length; i++) {
-          remoteBms[i] = await e2e.decryptItem('bookmark', remoteBms[i] as any) as Bookmark
+        const decryptList = async <T extends { id: string }>(arr: T[], type: EntityType): Promise<T[]> => {
+          const out: T[] = []
+          for (const item of arr) {
+            if (!e2e.isUnlocked.value) break  // 锁定发生在 await 间隙：停止解密，剩余条目本轮不 merge
+            const decrypted = await e2e.decryptItem(type, item as any) as T
+            // 解返回后再次校验：lock 可能在 await decryptItem 期间（逐字段 await decryptField 再
+            // await decrypt）发生，导致该条敏感字段被部分解为密文/null。检测关键敏感字段是否仍是
+            // 三段密文形态（salt.iv.data），是则丢弃该条不 merge，避免密文写回本地 store。
+            if (e2e.isUnlocked.value) out.push(decrypted)
+          }
+          return out
         }
-        for (let i = 0; i < remoteGroups.length; i++) {
-          remoteGroups[i] = await e2e.decryptItem('group', remoteGroups[i] as any) as SiblingGroup
-        }
-        for (let i = 0; i < remoteCats.length; i++) {
-          remoteCats[i] = await e2e.decryptItem('category', remoteCats[i] as any) as Category
-        }
-        for (let i = 0; i < remoteAttrs.length; i++) {
-          remoteAttrs[i] = await e2e.decryptItem('attribute', remoteAttrs[i] as any) as CustomAttribute
+        remoteBms.splice(0, remoteBms.length, ...await decryptList(remoteBms, 'bookmark'))
+        remoteGroups.splice(0, remoteGroups.length, ...await decryptList(remoteGroups, 'group'))
+        remoteCats.splice(0, remoteCats.length, ...await decryptList(remoteCats, 'category'))
+        remoteAttrs.splice(0, remoteAttrs.length, ...await decryptList(remoteAttrs, 'attribute'))
+        // 锁定中途退出：本轮不 merge 不推进 lastSyncAt，等下轮重试（保留已解密的部分但不
+        // 提交——下轮 since 未推进会重新拉取这些条目，幂等无害）。
+        if (!e2e.isUnlocked.value) {
+          syncStore.setSyncStatus('idle')
+          return false
         }
       }
 
@@ -575,26 +658,38 @@ export function useCloudSync() {
           supabase.from('categories').select('id').eq('user_id', userId),
           supabase.from('custom_attributes').select('id').eq('user_id', userId),
         ])
-        const remoteAll = new Set<string>()
-        for (const r of [allBmRes, allGroupRes, allCatRes, allAttrRes]) {
-          if (r.error) { console.warn('[sync] reconcile id query failed:', r.error); continue }
-          for (const row of r.data || []) remoteAll.add((row as { id: string }).id)
-        }
-        const reconcileDelete = (type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) => {
-          if (ds._dirtyIds.has(id)) return  // 正在本地编辑/等推送的条目不删
-          _deleteWithoutEcho(ds, type, id)
-        }
-        for (const b of ds.bookmarks) {
-          if (!b.deletedAt && !remoteAll.has(b.id)) reconcileDelete('bookmark', b.id)
-        }
-        for (const g of ds.siblingGroups) {
-          if (!g.deletedAt && !remoteAll.has(g.id)) reconcileDelete('group', g.id)
-        }
-        for (const c of ds.categories) {
-          if (!c.deletedAt && !remoteAll.has(c.id)) reconcileDelete('category', c.id)
-        }
-        for (const a of ds.customAttributes) {
-          if (!a.deletedAt && !remoteAll.has(a.id)) reconcileDelete('attribute', a.id)
+        // H1 修复：任一对账 id 查询失败必须 abort 整轮 reconcileDelete，而非把「本次 r.error
+        // 被 continue 跳过该表」当成「该表远端为空集」。旧实现下若 4 张表查询任一返回 error
+        // （Supabase 5xx / 鉴权过期 / 网络抖动），该表 id 不被加入 shared remoteAll，随后
+        // 587-598 遍历该表本地全部活条目 `!remoteAll.has(id)` 全成立，reconcileDelete 把该表
+        // 整批活条目软删进回收站；4 表均失败则全量本地数据被一次性软删。逐表 skip 仅压降
+        // 至「失败表被全删」，仍是不可接受的数据丢失。任一失败即整轮放弃，等下轮重试。
+        const reconcileQueries = [allBmRes, allGroupRes, allCatRes, allAttrRes]
+        const anyReconcileError = reconcileQueries.some(r => r.error)
+        if (anyReconcileError) {
+          for (const r of reconcileQueries) if (r.error) console.warn('[sync] reconcile id query failed, skipping reconcileDelete this round:', r.error)
+          // 跳过本轮物理删除对账，但增量 merge / 软删防御查询已执行，仍正常推进 lastSyncAt 等
+        } else {
+          const remoteAll = new Set<string>()
+          for (const r of reconcileQueries) {
+            for (const row of r.data || []) remoteAll.add((row as { id: string }).id)
+          }
+          const reconcileDelete = (type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) => {
+            if (ds._dirtyIds.has(id)) return  // 正在本地编辑/等推送的条目不删
+            _deleteWithoutEcho(ds, type, id)
+          }
+          for (const b of ds.bookmarks) {
+            if (!b.deletedAt && !remoteAll.has(b.id)) reconcileDelete('bookmark', b.id)
+          }
+          for (const g of ds.siblingGroups) {
+            if (!g.deletedAt && !remoteAll.has(g.id)) reconcileDelete('group', g.id)
+          }
+          for (const c of ds.categories) {
+            if (!c.deletedAt && !remoteAll.has(c.id)) reconcileDelete('category', c.id)
+          }
+          for (const a of ds.customAttributes) {
+            if (!a.deletedAt && !remoteAll.has(a.id)) reconcileDelete('attribute', a.id)
+          }
         }
       }
 
@@ -667,22 +762,23 @@ export function useCloudSync() {
       const shouldPush = (id: string, deletedAt?: number) =>
         ds._dirtyIds.has(id) || ds._newIds.has(id) || deletedAt || !remoteIds.has(id)
 
-      for (const b of ds.bookmarks) {
-        if (!shouldPush(b.id, b.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'bookmarks', itemId: b.id, data: { ...b, _userId: userId }, ts: b.updatedAt || now })
+      // L11：initialSync 与 _enqueueDirtyAsOps 同构入队
+      const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
+        items: T[], table: SyncOp['table'],
+      ) => {
+        for (const item of items) {
+          if (!shouldPush(item.id, item.deletedAt)) continue
+          allOps.push({
+            action: 'upsert', table, itemId: item.id,
+            data: { ...item, _userId: userId },
+            ts: item.updatedAt || now,
+          })
+        }
       }
-      for (const g of ds.siblingGroups) {
-        if (!shouldPush(g.id, g.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'sibling_groups', itemId: g.id, data: { ...g, _userId: userId }, ts: g.updatedAt || now })
-      }
-      for (const c of ds.categories) {
-        if (!shouldPush(c.id, c.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'categories', itemId: c.id, data: { ...c, _userId: userId }, ts: c.updatedAt || now })
-      }
-      for (const a of ds.customAttributes) {
-        if (!shouldPush(a.id, a.deletedAt)) continue
-        allOps.push({ action: 'upsert', table: 'custom_attributes', itemId: a.id, data: { ...a, _userId: userId }, ts: a.updatedAt || now })
-      }
+      pushIf(ds.bookmarks, 'bookmarks')
+      pushIf(ds.siblingGroups, 'sibling_groups')
+      pushIf(ds.categories, 'categories')
+      pushIf(ds.customAttributes, 'custom_attributes')
       if (allOps.length) await enqueueSyncOps(allOps)
       await _pushFromQueue()
       await _pullChanges(false)
@@ -696,6 +792,12 @@ export function useCloudSync() {
     if (!isLoggedIn.value) return
     _enqueueDirtyAsOps()
     _withLock('linkvault-sync', _pushFromQueue).then(() => _pullChanges())
+    // H2：网络恢复时若 realtime 处于 error/disconnected（如重连达 10 次上限被清后），重建订阅，
+    // 否则用户在不知情下停止接收其它设备变更直到刷新页面。
+    if (syncStore.realtimeStatus !== 'connected') {
+      unsubscribeRealtime()
+      subscribeRealtime(_pullChanges)
+    }
   }
 
   function _onVisibilityChange() {
@@ -707,6 +809,11 @@ export function useCloudSync() {
         await _pushFromQueue()
       }
     })
+    // H2：切回前台时若 realtime 断开（非首次未初始化），重建订阅
+    if (syncStore.realtimeStatus !== 'connected' && syncStore.realtimeStatus !== 'connecting') {
+      unsubscribeRealtime()
+      subscribeRealtime(_pullChanges)
+    }
   }
 
   function initOnlineListener() {

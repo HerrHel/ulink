@@ -46,7 +46,9 @@ const InlineCard = Node.create({
   renderHTML: ({ node }) => {
     const id = node.attrs['data-bm-id']
     const bm = useDataStore().bookmarkMap[id]
-    if (!bm) return ['span', { class: 'group-inline-card' }, '']
+    // H15：软删除书签仍在 _bmMap（truthy），旧实现仍渲染完整可点卡片；
+    // deletedAt 存在时视为不可用，返回空 span 与不存在一致。
+    if (!bm || bm.deletedAt) return ['span', { class: 'group-inline-card' }, '']
     return ['span', { class: 'group-inline-card', contenteditable: 'false', 'data-bm-id': id, draggable: 'true' },
       ['img', { src: favicon(bm.url, bm.icon), alt: '' }],
       ['span', { class: 'gic-name' }, bm.title],
@@ -126,7 +128,10 @@ function syncToStore(ed: Editor) {
   ed.state.doc.descendants(node => {
     if (node.type.name === 'inlineCard') {
       const bmid = node.attrs['data-bm-id']
-      if (bmid && !seen[bmid]) { seen[bmid] = true; ids.push(bmid) }
+      // H15：不把已软删除/不存在的书签 id 回写到 bookmarkIds，
+      // 否则 grid 删除后编辑器内敲字会把悬空 id 复活到组引用并污染远端。
+      const bm = bmid ? ds.bookmarkMap[bmid] : null
+      if (bm && !bm.deletedAt && !seen[bmid]) { seen[bmid] = true; ids.push(bmid) }
     }
   })
   ds.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
