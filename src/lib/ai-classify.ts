@@ -20,6 +20,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
 }
 
 // ── 标题关键词 → 分类映射 ──
+// M9：短英文词（ai/ui/git/api/code 等）用词边界匹配，避免 email/digital/capital 误命中
 const TITLE_KEYWORDS: Record<string, string[]> = {
   '开发': ['github', 'gitlab', 'stackoverflow', '代码', '编程', '开发', 'api', 'sdk', '文档', 'developer', 'code', 'programming', 'frontend', 'backend', 'react', 'vue', 'angular', 'node', 'python', 'java', 'rust', 'golang', 'typescript', 'javascript', 'css', 'html', 'webpack', 'vite', 'docker', 'kubernetes', 'linux', 'git', 'npm', 'yarn', 'pnpm'],
   '设计': ['设计', 'design', 'figma', 'sketch', 'ui', 'ux', '图标', 'icon', 'illustration', '插画', '配色', '字体', 'font'],
@@ -32,6 +33,15 @@ const TITLE_KEYWORDS: Record<string, string[]> = {
   'AI': ['ai', '人工智能', '机器学习', 'machine learning', '深度学习', 'deep learning', '大模型', 'llm', 'chatgpt', 'gpt', 'transformer', 'diffusion', 'stable diffusion', 'midjourney'],
   '学习': ['教程', 'tutorial', '课程', 'course', '学习', 'learn', '入门', '指南', 'guide', 'book', '书', '电子书'],
   '游戏': ['游戏', 'game', 'steam', 'epic', 'playstation', 'xbox', 'nintendo', 'switch'],
+}
+
+/** 纯 ASCII 短词：按词边界匹配；中文/多词短语仍用 includes */
+function titleHasKeyword(titleLower: string, kw: string): boolean {
+  if (/^[a-z0-9.+#-]{1,12}$/i.test(kw)) {
+    const re = new RegExp(`(?:^|[^a-z0-9])${kw.replace(/[.+#-]/g, '\\$&')}(?=[^a-z0-9]|$)`, 'i')
+    return re.test(titleLower)
+  }
+  return titleLower.includes(kw)
 }
 
 // ── 属性关键词映射 ──
@@ -78,10 +88,10 @@ export function suggestCategory(
     }
   }
 
-  // 标题关键词匹配
+  // 标题关键词匹配（M9：短英文词边界）
   for (const [catName, keywords] of Object.entries(TITLE_KEYWORDS)) {
     for (const kw of keywords) {
-      if (titleLower.includes(kw)) {
+      if (titleHasKeyword(titleLower, kw)) {
         scores.set(catName, (scores.get(catName) || 0) + 1)
       }
     }
@@ -119,7 +129,7 @@ export function suggestAttributes(
     const rules = ATTR_KEYWORDS[attr.name]
     if (!rules) continue
     const domainHit = rules.domains.some(d => urlLower.includes(d))
-    const titleHit = rules.titles.some(t => titleLower.includes(t))
+    const titleHit = rules.titles.some(t => titleHasKeyword(titleLower, t))
     if (domainHit || titleHit) suggested.push(attr.id)
   }
 

@@ -30,7 +30,14 @@ export function useInlineRename(store: Record<string, any>, renameMethod: string
     editingId.value = null
   }
 
-  function cancelRename() { editingId.value = null }
+  function cancelRename(e?: KeyboardEvent) {
+    // M12：阻止 Esc 冒泡到 document 全局处理，避免连带关闭整个模态框
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    editingId.value = null
+  }
 
   return { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename }
 }

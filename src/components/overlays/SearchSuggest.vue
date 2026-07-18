@@ -92,6 +92,8 @@ function onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('.se
 function onFocusIn(e: FocusEvent) { if ((e.target as HTMLElement).matches('.search-input')) updateVisibility() }
 
 function onKeydown(e: KeyboardEvent) {
+  // M11：任一模态框打开时不抢 ArrowDown/Enter，避免 BookmarkModal 等输入框被劫持
+  if (ui.modals.bookmark || ui.modals.category || ui.modals.attribute || ui.modals.groupEdit) return
   if (!visible.value) return
   const len = results.value.filter(r => !r._divider).length
   if (e.key === 'ArrowDown') {
