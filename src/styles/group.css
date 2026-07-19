@@ -412,6 +412,32 @@
   height:auto;
   max-height:min(70vh,560px);
 }
+/* 辅助栏组正文可滚；grid-view 父级会隐藏 preview，内容用只读 HTML 展示 */
+.detail-card-wrap .group-card .card-body{
+  display:flex;
+  flex:1 1 auto;
+  min-height:0;
+  overflow:hidden;
+}
+.detail-card-wrap .group-card .card-scroll-wrap{
+  overflow:auto;
+  max-height:min(50vh,420px);
+  flex:1 1 auto;
+  min-height:0;
+}
+.detail-card-wrap .group-body-readonly{
+  display:block;
+  font-size:0.88rem;
+  line-height:1.55;
+  color:var(--text);
+  word-break:break-word;
+  cursor:default;
+  user-select:text;
+}
+.detail-card-wrap .group-body-readonly:empty::before{
+  content:'（无内容）';
+  color:var(--text-muted);
+}
 /* 辅助栏的组卡片不显示撤销/重做按钮（这些是主网格内的组级操作） */
 .detail-card-wrap .group-head-actions{display:none}
 .detail-card-wrap.dragging{opacity:0.45;transform:scale(0.96)}
@@ -437,16 +463,25 @@
 .sub-sites .group-inline-card{cursor:pointer}
 
 /* ==================== EMPTY STATE ==================== */
-.empty{
-  grid-column:1/-1;
-  display:flex;flex-direction:column;align-items:center;
-  padding:80px 20px;text-align:center;
-  animation:fadeIn 0.5s var(--ease-out);
+/* 列表 / 宫格 / 小宫格：空态时父级统一为 flex，避免
+   grid 的 grid-column、list 的 flex 子项、mini-grid 的 columns
+   把「暂无书签」顶到不同位置 */
+.card-grid:has(> .empty){
+  display:flex !important;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:center;
+  min-height:min(60vh, calc(100vh - 220px));
+  grid-template-columns:none;
+  column-width:auto;
+  column-count:auto;
 }
-/* 列表模式下空状态样式 */
-.list-view .empty{
+.empty{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
   width:100%;
-  padding:60px 20px;
+  margin:0 auto;
+  padding:48px 20px;text-align:center;
+  animation:fadeIn 0.5s var(--ease-out);
 }
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .empty-icon{

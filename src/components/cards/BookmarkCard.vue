@@ -1,27 +1,32 @@
 <template>
   <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode }"
        role="listitem" :aria-label="bookmark.title"
-       :data-id="bookmark.id" draggable="true" @click="onCardClick">
+       :data-id="bookmark.id" draggable="true"
+       :tabindex="listKeyboardNav ? 0 : undefined"
+       @click="onCardClick" @keydown="onCardKeydown">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
             :id="'batchChk_' + bookmark.id" :checked="isSelected"
             @change.stop @click.stop="toggleSelect">
     <div class="card-topline">
       <div class="card-toprow">
-        <div class="card-logo" title="打开链接" @click.stop="visit">
+        <div class="card-logo" title="打开链接" @click.stop="onOpenClick">
           <img v-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
           <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
         </div>
-        <div class="card-titlewrap" @dblclick.stop="visit">
-          <div class="card-name">
-            <span v-if="searchQuery" v-html="hlText(bookmark.title, searchQuery)"></span>
-            <template v-else>{{ bookmark.title }}</template>
-            <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
-            <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
+        <div class="card-titlewrap" title="打开链接" @click.stop="onOpenClick">
+          <div class="card-titlewrap-text">
+            <div class="card-name">
+              <span v-if="searchQuery" v-html="hlText(bookmark.title, searchQuery)"></span>
+              <template v-else>{{ bookmark.title }}</template>
+              <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
+              <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
+            </div>
+            <div class="card-domain">
+              <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
+              <template v-else>{{ domainStr }}</template>
+            </div>
           </div>
-          <div class="card-domain">
-            <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
-            <template v-else>{{ domainStr }}</template>
-          </div>
+          <span class="card-open-hint" aria-hidden="true" v-html="I.external"></span>
         </div>
       </div>
       <div class="card-domain mini-domain" v-if="uiStore.layoutMode === 'mini-grid'">{{ domainStr }}</div>
@@ -70,7 +75,7 @@
         <button class="btn-xs btn-danger" @click.stop="del" title="删除" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" title="展开" v-html="I.chevronDown"></button>
+    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
     <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
@@ -93,6 +98,7 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
 import { bookmarkPreview } from '../../lib/preview.js'
+import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import type { Bookmark } from '../../types.js'
 
 function hlText(text: string, query: string): string {
@@ -171,6 +177,10 @@ const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked']
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
 function visit() { openBookmark(props.bookmark) }
+function onOpenClick() {
+  if (uiStore.batchMode) { toggleSelect(); return }
+  visit()
+}
 function edit() { openBmModal(props.bookmark.id) }
 function del() { deleteBookmarkWithUndo(props.bookmark.id) }
 function doAddSub() { addSub(props.bookmark.id) }
@@ -179,22 +189,36 @@ function visitSub(sub: Bookmark) { openBookmark(sub) }
 function openMenu() { openDetail(props.bookmark.id) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
 function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); debouncedSaveAppData() }
+// 完整分区：PC 列表可键盘聚焦；Enter 打开，Space/→ 展开；空白单击开详情
+const listKeyboardNav = computed(() => uiStore.layoutMode === 'list' && !uiStore.isMobile && !uiStore.batchMode)
+// 列表空白区排除：按钮/标签/标题/logo 等已有独立行为
+const LIST_INTERACTIVE_SEL = 'button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn, .card-menu-btn, .card-tag, .card-acct-toggle, .acct-row'
+
 function onCardClick(e: MouseEvent) {
   if (uiStore.batchMode) { toggleSelect(); return }
   if (uiStore.layoutMode === 'mini-grid') { visit(); return }
-  // grid / list：单击标题区直接打开网站
-  if ((e.target as HTMLElement).closest('.card-titlewrap')) { visit(); return }
   if (uiStore.layoutMode !== 'list') return
+  if ((e.target as HTMLElement).closest(LIST_INTERACTIVE_SEL)) return
   if (isMobile()) {
-    // 移动端：列表模式卡片任意位置打开网站（详情由「⋯」按钮触发）
-    if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .card-menu-btn')) return
+    // 移动端：非交互区单击打开网页（详情由「⋯」触发）
     visit()
     return
   }
-  // PC 端：旧版列表交互——有可展开内容才可展开，无内容时点击打开网站
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn')) return
-  if (hasExpandableContent.value) { toggleExpand(); return }
-  visit()
+  // PC 列表：空白单击打开右侧详情（管理器模式，不跳转）
+  openDetail(props.bookmark.id)
+  // 便于紧接着用键盘继续操作
+  ;(cardEl.value as HTMLElement | null)?.focus({ preventScroll: true })
+}
+
+function onCardKeydown(e: KeyboardEvent) {
+  if (!listKeyboardNav.value) return
+  const action = handleListCardKeydown(e, cardEl.value as HTMLElement | null, {
+    canExpand: hasExpandableContent.value,
+    expanded: isExpanded.value,
+  })
+  if (action.type === 'primary') visit()
+  else if (action.type === 'detail') openDetail(props.bookmark.id)
+  else if (action.type === 'expand' || action.type === 'collapse' || action.type === 'toggleExpand') toggleExpand()
 }
 function filterByTagName(name: string) {
   const attr = dataStore.customAttributes.find(a => a.name === name)

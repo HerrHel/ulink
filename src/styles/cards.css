@@ -83,9 +83,20 @@
 }
 .list-view .card-logo img{width:28px;height:28px}
 .list-view .card-titlewrap{
-  display:flex;flex-direction:column;justify-content:center;
+  display:flex;flex-direction:row;align-items:center;gap:6px;
   min-width:0;flex:0 1 auto;height:38px;
   padding:0;margin:0;overflow:hidden;
+}
+.list-view .card-titlewrap-text{
+  flex:0 1 auto;min-width:0;
+}
+/* PC 列表键盘焦点环：Enter 打开 / 聚焦，Space/→ 展开 */
+.list-view .card:focus{
+  outline:none;
+}
+.list-view .card:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
 }
 
 /* ---- List: tags inline after name, scrollable with fade ---- */
@@ -180,22 +191,22 @@
 /* ---- List: expand button (桌面端列表保留；移动端由「⋯」详情按钮替代) ---- */
 .list-view .list-expand-btn{
   display:flex;
-  position:absolute;top:50%;right:10px;
+  position:absolute;top:50%;right:8px;
   transform:translateY(-50%);
-  width:28px;height:28px;
+  width:36px;height:36px;
   align-items:center;justify-content:center;
   border-radius:var(--radius-md);z-index:6;
   color:var(--text-muted);background:none;
   border:none;
   cursor:pointer;
-  transition:color 0.2s var(--ease-out);
+  transition:color 0.15s var(--ease-out),background 0.15s var(--ease-out);
 }
 .list-view .list-expand-btn:hover{color:var(--accent)}
 .list-view .list-expand-btn:active{transform:translateY(-50%) scale(0.95);transition-duration:0.06s}
 /* 电脑端：展开按钮移到右下角，避免与悬浮操作按钮重叠 */
 @media(min-width:769px){
   .list-view .list-expand-btn{
-    top:auto;bottom:8px;
+    top:auto;bottom:6px;right:8px;
     transform:none;
   }
   .list-view .list-expand-btn:active{transform:scale(0.95);transition-duration:0.06s}
@@ -225,7 +236,7 @@
 }
 .list-view .card:has(.batch-chk) .list-expand-btn,
 .list-view .card:has(.batch-chk) .card-menu-btn{display:none}
-.list-view .list-expand-btn svg{width:14px;height:14px;transition:transform 0.2s ease}
+.list-view .list-expand-btn svg{width:16px;height:16px;transition:transform 0.2s ease}
 .list-view .card-expanded .list-expand-btn svg,
 .list-view .group-expanded .list-expand-btn svg{transform:rotate(180deg)}
 
@@ -467,15 +478,36 @@
   flex:1;min-width:0;height:38px;
   overflow:hidden;cursor:pointer;
   padding:0 4px;margin:0 -4px;
-  display:flex;flex-direction:column;justify-content:center;
+  display:flex;flex-direction:row;align-items:center;gap:6px;
   border-radius:var(--radius-sm);
   transition:background 0.15s ease;
 }
+.card-titlewrap-text{
+  flex:1;min-width:0;height:100%;
+  display:flex;flex-direction:column;justify-content:center;
+  overflow:hidden;
+}
+.card-open-hint{
+  flex-shrink:0;
+  display:none;
+  width:14px;height:14px;
+  color:var(--accent);
+  opacity:0.85;
+}
+.card-open-hint svg{width:14px;height:14px;display:block}
 .card-titlewrap:hover{
   background:var(--accent-light);
 }
 .card-titlewrap:hover .card-name{
   color:var(--accent);
+}
+/* 列表/宫格：悬停标题区显示外链提示，强化「此处打开」 */
+.list-view .card-titlewrap:hover .card-open-hint,
+.grid-view .card-titlewrap:hover .card-open-hint{
+  display:block;
+}
+@media(max-width:768px){
+  .card-open-hint{display:none !important}
 }
 
 /* Card name — shared base for all views */
@@ -744,6 +776,8 @@
 .mini-grid-view .card-toprow{gap:6px;align-items:center;margin-bottom:2px}
 /* titlewrap 与图标等高、无 padding/margin 撑大，确保与图标同行水平对齐 */
 .mini-grid-view .card-titlewrap{height:20px;padding:0;margin:0}
+.mini-grid-view .card-titlewrap-text{height:20px}
+.mini-grid-view .card-open-hint{display:none !important}
 .mini-grid-view .card-name{height:20px;line-height:20px}
 /* 小宫格隐藏 titlewrap 内的原网址 */
 .mini-grid-view .card-titlewrap .card-domain{display:none}

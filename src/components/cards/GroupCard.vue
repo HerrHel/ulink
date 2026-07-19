@@ -8,8 +8,10 @@
           <span v-else v-html="noteIcon" class="display-contents"></span>
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
-          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
-          <div class="card-domain group-domain"></div>
+          <div class="card-titlewrap-text">
+            <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
+            <div class="card-domain group-domain"></div>
+          </div>
         </div>
       </div>
       <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
@@ -44,21 +46,25 @@
   </div>
   <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
        role="listitem" :aria-label="group.name || '未命名组'"
-       :data-group-id="group.id" :draggable="true" @click="onCardClick">
+       :data-group-id="group.id" :draggable="true"
+       :tabindex="listKeyboardNav ? 0 : undefined"
+       @click="onCardClick" @keydown="onCardKeydown">
     <div class="group-card-accent"></div>
     <input v-if="ui.batchMode" type="checkbox" class="batch-chk"
            :id="'batchChk_group:' + group.id" :checked="isSelected"
            @change.stop @click.stop="toggleSelect">
     <div class="group-card-head">
-      <div class="card-logo group-card-icon" @click.stop="toggleFocus">
+      <div class="card-logo group-card-icon" title="聚焦组" @click.stop="onFocusClick">
         <img v-if="group.icon" :src="group.icon" alt="">
         <span v-else v-html="noteIcon" class="display-contents"></span>
       </div>
-      <div class="card-titlewrap">
-        <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
-        <div class="card-domain group-domain"></div>
+      <div class="card-titlewrap" title="聚焦组" @click.stop="onFocusClick">
+        <div class="card-titlewrap-text">
+          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
+          <div class="card-domain group-domain"></div>
+        </div>
       </div>
-      <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list'">
+      <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list' && !detailMode">
         <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
       <div class="group-head-actions" v-if="!ui.batchMode">
@@ -66,14 +72,15 @@
         <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" title="重做" v-html="I.redo"></button>
       </div>
     </div>
-    <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
+    <div class="card-body" :class="{'grp-scroll-body':showFullBody}">
       <div class="card-scroll-wrap">
-        <div class="card-tags" v-if="tagNames.length && ui.layoutMode !== 'list'">
+        <div class="card-tags" v-if="tagNames.length && showFullBody">
           <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
         </div>
-        <!-- grid 折叠态直接挂 TipTap（与旧版一致，富文本原色可滚可编辑）；list 展开态同样挂载；
-             mini-grid 用纯文本摘要，避免每组一实例 -->
-        <GroupEditor v-if="isExpanded || ui.layoutMode === 'grid'" :groupId="group.id" />
+        <!-- 辅助栏：只读 HTML（避免与主网格 GroupEditor 抢同一 groupId 注册表） -->
+        <div v-if="detailMode" class="group-body group-body-readonly" v-html="safeNotesHtml"></div>
+        <!-- grid 折叠态 / list 展开态挂 TipTap；mini-grid 用纯文本摘要 -->
+        <GroupEditor v-else-if="showEditor" :groupId="group.id" />
         <div class="card-preview" v-else-if="previewText">{{ previewText }}</div>
       </div>
     </div>
@@ -85,8 +92,8 @@
         <button class="btn-xs btn-danger" @click.stop="delGrp" title="删除组" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasBody && ui.layoutMode === 'list' && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" title="展开" v-html="I.chevronDown"></button>
-    <button v-if="ui.layoutMode === 'list' && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
+    <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
     <div v-if="ui.batchMode && ui.isMobile" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
   <Teleport to="body">
@@ -98,7 +105,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { getTagNames, isMobile, stripEntranceAnim } from '../../utils.js'
+import { getTagNames, isMobile, stripEntranceAnim, sanitizeHTML } from '../../utils.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
 import ColorPalette from '../editor/ColorPalette.vue'
@@ -115,9 +122,15 @@ import { openDetail } from '../../composables/ui/useUI.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
 import { useEditorFormat, type FormatKey } from '../../composables/ui/useEditorFormat.js'
+import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import type { SiblingGroup } from '../../types.js'
 
-const props = defineProps({ group: { type: Object as () => SiblingGroup, required: true } })
+const props = defineProps({
+  group: { type: Object as () => SiblingGroup, required: true },
+  // 辅助栏内复用：主网格可能是 list，但辅助栏强制 grid-view 样式；
+  // 若不强制挂编辑器，GroupEditor 条件失败 + .grid-view .card-preview{display:none} → 空白
+  detailMode: { type: Boolean, default: false },
+})
 const ui = useUIStore()
 const ds = useDataStore()
 
@@ -131,11 +144,15 @@ function setCardEl(el: any) {
 // useCardOverflow 副作用：给 .card-body 加 .card-overflow 类驱动淡出遮罩，返回值此处不消费
 useCardOverflow(cardEl)
 
-const isFocused = computed(() => ui.focusedGroupId === props.group.id)
+const isFocused = computed(() => !props.detailMode && ui.focusedGroupId === props.group.id)
 const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
 const noteIcon = I.note
 const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim()))
+// 辅助栏用只读 HTML；主网格宫格/列表展开挂 TipTap
+const showEditor = computed(() => !props.detailMode && (isExpanded.value || ui.layoutMode === 'grid'))
+const showFullBody = computed(() => props.detailMode || ui.layoutMode !== 'list')
+const safeNotesHtml = computed(() => sanitizeHTML(props.group.notes || ''))
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 
@@ -195,21 +212,38 @@ function filterByTagName(name: string) {
 }
 function openMenu() { openDetail('group:' + props.group.id) }
 function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); debouncedSaveAppData() }
+function onFocusClick() {
+  if (ui.batchMode) { toggleSelect(); return }
+  toggleFocus()
+}
+// 完整分区：PC 列表可键盘聚焦；Enter 聚焦组，Space/→ 展开；空白单击开详情（辅助栏内关闭）
+const listKeyboardNav = computed(() => !props.detailMode && ui.layoutMode === 'list' && !ui.isMobile && !ui.batchMode)
+const LIST_INTERACTIVE_SEL = 'button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .card-menu-btn, .group-body, .card-tag, .group-head-actions'
+
 function onCardClick(e: MouseEvent) {
+  if (props.detailMode) return
   if (ui.batchMode) { toggleSelect(); return }
   if (ui.layoutMode === 'mini-grid') { toggleFocus(); return }
-  // grid / list：单击标题区聚焦组
-  if ((e.target as HTMLElement).closest('.card-titlewrap')) { toggleFocus(); return }
   if (ui.layoutMode !== 'list') return
+  if ((e.target as HTMLElement).closest(LIST_INTERACTIVE_SEL)) return
   if (isMobile()) {
-    // 移动端：列表模式卡片任意位置聚焦组（详情由「⋯」按钮触发）
-    if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .card-menu-btn, .group-body')) return
+    // 移动端：非交互区单击聚焦（详情由「⋯」触发）
     toggleFocus()
     return
   }
-  // PC 端：旧版列表交互——有可展开内容才可展开，无内容时点击聚焦组
-  if ((e.target as HTMLElement).closest('button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .group-body')) return
-  if (hasBody.value) { toggleExpand(); return }
-  toggleFocus()
+  // PC 列表：空白单击打开右侧详情（管理器模式，不聚焦/不跳转）
+  openDetail('group:' + props.group.id)
+  cardEl.value?.focus({ preventScroll: true })
+}
+
+function onCardKeydown(e: KeyboardEvent) {
+  if (!listKeyboardNav.value) return
+  const action = handleListCardKeydown(e, cardEl.value, {
+    canExpand: hasBody.value,
+    expanded: isExpanded.value,
+  })
+  if (action.type === 'primary') toggleFocus()
+  else if (action.type === 'detail') openDetail('group:' + props.group.id)
+  else if (action.type === 'expand' || action.type === 'collapse' || action.type === 'toggleExpand') toggleExpand()
 }
 </script>

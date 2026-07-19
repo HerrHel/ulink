@@ -69,6 +69,16 @@ const groups: ShortcutGroup[] = [
       { desc: '删除所有选中项', keys: ['Delete'] },
     ],
   },
+  {
+    title: '列表模式（桌面）',
+    items: [
+      { desc: '打开书签 / 聚焦组（标题区或 Enter）', keys: ['Enter'] },
+      { desc: '打开右侧详情（空白单击或 Space）', keys: ['Space'] },
+      { desc: '展开 / 收起', keys: ['→', '←'] },
+      { desc: '上一条 / 下一条', keys: ['↑', '↓'] },
+      { desc: '首条 / 末条', keys: ['Home', 'End'] },
+    ],
+  },
 ]
 
 function onGlobalKeydown(e: KeyboardEvent) {
