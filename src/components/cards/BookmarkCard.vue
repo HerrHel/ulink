@@ -124,7 +124,8 @@ const props = defineProps({
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const cardEl = ref(null)
-const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
+// useCardOverflow 副作用：给 .card-body 加 .card-overflow 类驱动淡出遮罩，返回值此处不消费
+useCardOverflow(cardEl)
 const acctOpen = ref(props.defaultAcctOpen)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()

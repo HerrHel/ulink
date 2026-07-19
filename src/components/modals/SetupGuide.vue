@@ -28,11 +28,8 @@
 
 <script setup lang="ts">
 import { useUIStore } from '../../stores/ui.js'
-import { useDataStore } from '../../stores/data.js'
-import { saveAppData } from '../../stores/app.js'
 
 const ui = useUIStore()
-const ds = useDataStore()
 const SETUP_DONE_KEY = 'lv_setup_done'
 
 function close() { ui.modals.setupGuide = false }

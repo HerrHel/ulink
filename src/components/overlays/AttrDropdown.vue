@@ -29,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
@@ -121,7 +121,6 @@ function onTouchMove() {
 }
 
 function showAttrActions(attrId: string) {
-  const dataStore = useDataStore()
   const attr = store.customAttributes.find(a => a.id === attrId)
   if (!attr) return
   useActionSheetStore().showActions([
@@ -151,20 +150,4 @@ async function onDeleteAttr(attrId: string) {
   store.save()
 }
 
-function toggle() {
-  if (attrDrp.open) {
-    attrDrp.close()
-  } else {
-    query.value = ''
-    attrDrp.open = true
-    nextTick(() => searchInputRef.value?.focus())
-  }
-}
-
-function close() {
-  attrDrp.open = false
-  query.value = ''
-}
-
-// 已通过 useAttrDropdownStore 暴露给其他模块
-</script>
+// 已通过 useAttrDropdownStore 暴露给其他模块</script>

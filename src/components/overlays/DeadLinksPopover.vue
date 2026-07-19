@@ -61,9 +61,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { favicon, domain } from '../../utils.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
@@ -71,7 +70,6 @@ import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
 import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
 
 const store = useAppStore()
-const uiStore = useUIStore()
 const dataStore = useDataStore()
 const visible = ref(false)
 const tab = ref<'dead' | 'blocked'>('dead')

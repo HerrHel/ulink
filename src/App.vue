@@ -102,7 +102,7 @@ const CommandPalette = defineAsyncComponent(() => import('./components/overlays/
 const ShortcutHelpPanel = defineAsyncComponent(() => import('./components/overlays/ShortcutHelpPanel.vue'))
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
-import { openBmModal, bmForm, saveFromExtension } from './composables/domain/useBookmark.js'
+import { saveFromExtension } from './composables/domain/useBookmark.js'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))

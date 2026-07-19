@@ -128,7 +128,8 @@ function setCardEl(el: any) {
   cardEl.value = el as HTMLElement | null
   if (el) _entranceCleanup = stripEntranceAnim(el as HTMLElement)
 }
-const { hasOverflow: cardOverflow } = useCardOverflow(cardEl)
+// useCardOverflow 副作用：给 .card-body 加 .card-overflow 类驱动淡出遮罩，返回值此处不消费
+useCardOverflow(cardEl)
 
 const isFocused = computed(() => ui.focusedGroupId === props.group.id)
 const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded && !ui.batchMode)

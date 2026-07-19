@@ -83,6 +83,9 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         }
         return combined
       }
+      default:
+        // mode 为 CombinedMode 三态穷尽，无遗漏；default 仅为消除 computed 不返回路径的 lint 误报。
+        return []
     }
   })
 

@@ -281,7 +281,6 @@ function onHistoryMaxChange() {
 
 function onOpenTrash() { pushNavState(); uiStore.panels.trash = true; uiStore.panels.settings = false }
 function onTriggerImport() { triggerImport(); uiStore.panels.settings = false }
-function onExportData() { exportData(); uiStore.panels.settings = false }
 
 const exportMenuOpen = ref(false)
 function onExport(fmt: 'json' | 'html' | 'csv' | 'raindrop') {

@@ -66,7 +66,7 @@ import { useAppStore } from '../../stores/app.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 
-const props = defineProps<{ open: boolean }>()
+defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const ds = useDataStore()

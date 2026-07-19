@@ -37,7 +37,7 @@ import { useMention } from '../../composables/domain/useMention.js'
 
 const {
   isVisible, candidates, activeIdx, activeSubIdx, mentionType, pos,
-  hide, selectBookmark, selectGroupRef,
+  selectBookmark, selectGroupRef,
   onTrigger, onInput, onKeydown
 } = useMention()
 
