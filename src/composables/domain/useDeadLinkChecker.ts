@@ -83,7 +83,7 @@ async function checkDirect(url: string, timeoutMs = 5000): Promise<{ reachable: 
   const start = Date.now()
   try {
     await Promise.race([
-      fetch(url, { method: 'GET', mode: 'no-cors' }),
+      fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' }),
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
     ])
     return { reachable: true, duration: Date.now() - start }
@@ -94,10 +94,23 @@ async function checkDirect(url: string, timeoutMs = 5000): Promise<{ reachable: 
 
 async function measureNetworkBaseline(): Promise<number> {
   if (_baselineCache && Date.now() - _baselineCache.at < 30000) return _baselineCache.value
+  // 国内 gstatic 常被干扰；用多源取最短 RTT 作为「本机是否在线」参考
+  const probes = [
+    'https://www.baidu.com/favicon.ico',
+    'https://www.gstatic.com/generate_204',
+    'https://cloudflare.com/favicon.ico',
+  ]
   const start = Date.now()
   try {
-    await fetch('https://www.gstatic.com/generate_204', { method: 'HEAD', mode: 'no-cors' })
-  } catch { /* ignore */ }
+    await Promise.any(
+      probes.map(u =>
+        Promise.race([
+          fetch(u, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }),
+          new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+        ])
+      )
+    )
+  } catch { /* 全部失败也记录时长 */ }
   const duration = Date.now() - start
   _baselineCache = { value: duration, at: Date.now() }
   return duration
@@ -109,7 +122,11 @@ async function callEdgeFunction(url: string, bookmarkId?: string): Promise<{ sta
       body: { url, bookmark_id: bookmarkId }
     })
     if (error) throw error
-    return data
+    if (!data || typeof data !== 'object') return { status: 'unknown', http_status: 0 }
+    return {
+      status: typeof data.status === 'string' ? data.status : 'unknown',
+      http_status: Number(data.http_status) || 0,
+    }
   } catch {
     return { status: 'unknown', http_status: 0 }
   }
@@ -122,14 +139,38 @@ export function useDeadLinkChecker() {
     }
 
     // 1) 并行测量网络基线 + no-cors 可达性（弱信号，opaque 读不到 status）
-    const [gstaticBaseline, direct] = await Promise.all([
+    const [baselineMs, direct] = await Promise.all([
       measureNetworkBaseline(),
-      checkDirect(url, 3000),
+      checkDirect(url, 4000),
     ])
 
-    // 2) 本机网络不可靠 → unknown
-    if (gstaticBaseline > 5000 || gstaticBaseline > 2000) {
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.15 }
+    // 2) 本机完全离线（多源探针均超时）→ 低置信 unknown，避免批量误标死链
+    // 注意：国内慢网/gstatic 抖动不再整批跳过，始终走 Edge
+    if (baselineMs >= 4000) {
+      // 仍尝试 Edge：Edge 在海外节点，与本机 gfw/dns 无关
+      const edgeOffline = await callEdgeFunction(url, bookmarkId)
+      if (edgeOffline.status === 'alive') {
+        // 本机探针全挂但 Edge 可达 → 更可能被墙或本机离线
+        return {
+          alive: false,
+          status: edgeOffline.http_status,
+          finalUrl: '',
+          checkedAt: Date.now(),
+          blocked: true,
+          confidence: 0.55,
+        }
+      }
+      if (edgeOffline.status === 'dead') {
+        return {
+          alive: false,
+          status: edgeOffline.http_status,
+          finalUrl: '',
+          checkedAt: Date.now(),
+          blocked: false,
+          confidence: 0.75,
+        }
+      }
+      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.2 }
     }
 
     // 3) RE-10：始终用 Edge 读真实 http_status；no-cors 不可单独判存活
@@ -153,18 +194,29 @@ export function useDeadLinkChecker() {
         finalUrl: '',
         checkedAt: Date.now(),
         blocked: true,
-        confidence: 0.95,
+        confidence: 0.9,
       }
     }
 
     if (edgeResult.status === 'dead') {
+      // Edge 判死但本机 no-cors 可达：可能是 HEAD 误报/鉴权页，降为低置信、不写 dead 标
+      if (direct.reachable) {
+        return {
+          alive: true,
+          status: edgeResult.http_status,
+          finalUrl: url,
+          checkedAt: Date.now(),
+          blocked: false,
+          confidence: 0.45, // < 0.5：不落 dead-link 属性
+        }
+      }
       return {
         alive: false,
         status: edgeResult.http_status,
         finalUrl: '',
         checkedAt: Date.now(),
         blocked: false,
-        confidence: 0.90,
+        confidence: 0.9,
       }
     }
 
@@ -175,22 +227,22 @@ export function useDeadLinkChecker() {
         finalUrl: '',
         checkedAt: Date.now(),
         blocked: true,
-        confidence: 0.90,
+        confidence: 0.85,
       }
     }
 
-    // Edge unknown：no-cors 可达仅弱存活（不伪造 status:200）；不可达 → 失效
+    // Edge unknown：no-cors 可达仅弱存活（不伪造 status:200）；不可达 → 低置信失效
     if (direct.reachable) {
       return {
         alive: true,
-        status: 0,
+        status: edgeResult.http_status || 0,
         finalUrl: url,
         checkedAt: Date.now(),
         blocked: false,
         confidence: 0.55,
       }
     }
-    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.7 }
+    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.4 }
   }
 
   async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {

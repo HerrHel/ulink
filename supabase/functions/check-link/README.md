@@ -33,6 +33,21 @@
 - **H6 修复**：`_dnsLookupSafe` 在 resolveDns 抛错 / 0 条 A+AAAA 时 **fail-closed 拒绝**，
   不再 best-effort 放行。解析能力降级时宁可误拦死链检测，也不跳过私网校验放大 SSRF 面。
 
+## 状态分类（误报收敛）
+
+`classifyHttpStatus` 偏「宁可 unknown 也不误杀」：
+
+| 结果 | 条件 |
+|------|------|
+| `alive` | 2xx/3xx；401/403/405/429；部分 5xx（资源仍存在） |
+| `dead` | 404 / 410 |
+| `unknown` | 其余 4xx/5xx；请求超时 |
+| `blocked` | SSRF 策略拒绝（内网/非法重定向） |
+
+HEAD 若返回 400/401/403/404/405/501 会再试 GET（CDN/WAF 对 HEAD 误报常见）。超时不再标 `blocked`。
+
+客户端 `useDeadLinkChecker`：Edge=`dead` 且本机 no-cors 仍可达时不写 `dead-link`（confidence&lt;0.5）；网络基线用百度/gstatic/cloudflare 多源最短 RTT。
+
 ## 环境变量
 
 - `ALLOWED_ORIGINS`：逗号分隔的允许 CORS 来源；未配置则 fail-closed 拒跨域。

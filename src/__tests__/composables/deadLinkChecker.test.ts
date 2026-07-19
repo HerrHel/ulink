@@ -51,7 +51,7 @@ function seedBm(ds: ReturnType<typeof useDataStore>, partial: Record<string, unk
 beforeEach(() => {
   setActivePinia(createPinia())
   invokeMock.mockReset()
-  // 基线：gstatic 快返回；书签 no-cors 默认可达
+  // 基线：探针快返回；书签 no-cors 默认可达
   // Response status 须在 200–599，status:0 会 RangeError 导致 checkDirect 恒 false
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 200 })))
 })
@@ -81,24 +81,38 @@ describe('checkUrl 决策矩阵（RE-10）', () => {
   it('Edge alive + 直连失败 → GFW blocked', async () => {
     invokeMock.mockResolvedValue({ data: { status: 'alive', http_status: 200 }, error: null })
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (String(url).includes('gstatic')) return new Response(null)
+      // 基线探针仍成功，书签直连失败
+      if (/baidu|gstatic|cloudflare/.test(String(url))) return new Response(null, { status: 200 })
       throw new Error('network fail')
     }))
     const { checkUrl } = useDeadLinkChecker()
     const r = await checkUrl('https://blocked.example')
     expect(r.alive).toBe(false)
     expect(r.blocked).toBe(true)
-    expect(r.confidence).toBe(0.95)
+    expect(r.confidence).toBe(0.9)
   })
 
-  it('Edge dead → 死链非 blocked', async () => {
+  it('Edge dead + 直连失败 → 死链非 blocked', async () => {
     invokeMock.mockResolvedValue({ data: { status: 'dead', http_status: 404 }, error: null })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (/baidu|gstatic|cloudflare/.test(String(url))) return new Response(null, { status: 200 })
+      throw new Error('network fail')
+    }))
     const { checkUrl } = useDeadLinkChecker()
     const r = await checkUrl('https://gone.example')
     expect(r.alive).toBe(false)
     expect(r.blocked).toBe(false)
     expect(r.status).toBe(404)
-    expect(r.confidence).toBe(0.90)
+    expect(r.confidence).toBe(0.9)
+  })
+
+  it('Edge dead + 直连可达 → 弱存活不写 dead（confidence < 0.5）', async () => {
+    invokeMock.mockResolvedValue({ data: { status: 'dead', http_status: 404 }, error: null })
+    const { checkUrl } = useDeadLinkChecker()
+    const r = await checkUrl('https://head-false-positive.example')
+    expect(r.alive).toBe(true)
+    expect(r.confidence).toBe(0.45)
+    expect(r.confidence).toBeLessThan(0.5)
   })
 
   it('Edge blocked → blocked', async () => {
@@ -109,12 +123,11 @@ describe('checkUrl 决策矩阵（RE-10）', () => {
     expect(r.blocked).toBe(true)
   })
 
-  it('Edge unknown + no-cors 可达 → 弱存活 status=0 confidence=0.55', async () => {
+  it('Edge unknown + no-cors 可达 → 弱存活 confidence=0.55', async () => {
     invokeMock.mockResolvedValue({ data: { status: 'unknown', http_status: 0 }, error: null })
     const { checkUrl } = useDeadLinkChecker()
     const r = await checkUrl('https://opaque.example')
     expect(r.alive).toBe(true)
-    expect(r.status).toBe(0)
     expect(r.confidence).toBe(0.55)
   })
 })
@@ -131,7 +144,6 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
     await checkAll(10, 0)
 
     expect(progress.value.total).toBe(1)
-    // 仅活跃非 ignored 会调 Edge（每个 bookmark 一次 + 可能无）
     const urls = invokeMock.mock.calls.map((c: unknown[]) => (c[1] as { body?: { url?: string } })?.body?.url)
     expect(urls.every((u: string | undefined) => u === 'https://a.com' || u === undefined || !u)).toBe(true)
     expect(invokeMock.mock.calls.length).toBeGreaterThanOrEqual(1)
@@ -141,6 +153,10 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
     const ds = useDataStore()
     seedBm(ds, { id: 'bm-dead', url: 'https://dead.example' })
     invokeMock.mockResolvedValue({ data: { status: 'dead', http_status: 404 }, error: null })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (/baidu|gstatic|cloudflare/.test(String(url))) return new Response(null, { status: 200 })
+      throw new Error('network fail')
+    }))
 
     const { checkOne, isDead, isBlocked } = useDeadLinkChecker()
     await checkOne('bm-dead')

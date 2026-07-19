@@ -171,6 +171,27 @@ const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10
 /** 重定向最大跳数 */
 const MAX_REDIRECTS = 5
 
+/**
+ * 按 HTTP 状态分类。偏「宁可 unknown 也不误杀」：
+ * - 2xx/3xx、鉴权/禁令/限流/部分 5xx → alive（资源仍存在）
+ * - 404/410 → dead
+ * - 其余 4xx/5xx → unknown（临时或语义不清）
+ */
+function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
+  if (code >= 200 && code < 400) return 'alive'
+  // 站点存在但需登录 / 反爬 / 不支持 HEAD / 限流 / 短暂过载
+  if ([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504].includes(code)) return 'alive'
+  if (code === 404 || code === 410) return 'dead'
+  if (code >= 400) return 'unknown'
+  return 'unknown'
+}
+
+/** HEAD 常被 CDN/WAF 拒或假报；这些状态应再试 GET */
+function shouldRetryAsGet(code: number): boolean {
+  // 404：不少站 HEAD 直接 404、GET 正常；401/403：反爬对 HEAD 更严
+  return [400, 401, 403, 404, 405, 501].includes(code)
+}
+
 /** DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
  *  H6：解析失败 / resolveDns 不可用时改为拒绝（fail-closed），不再 best-effort 放行。
  *  避免解析能力受限时跳过私网校验、以及 DNS 重绑定窗口下「校验失败仍 fetch」的放大。
@@ -199,7 +220,10 @@ async function _validateUrl(raw: string): Promise<URL> {
   return parsed
 }
 
-/** 手动逐跳 fetch：每跳对 Location 重新走完整 _validateUrl，
+const BROWSER_UA =
+  'Mozilla/5.0 (compatible; LinkVaultCheck/1.1; +https://github.com/HerrHel/HerrHel.github.io)'
+
+/** 手动逐跳 fetch：redirect:manual，每跳对 Location 重新走完整 _validateUrl，
  *  命中内网/协议/端口违规或超 MAX_REDIRECTS 即终止。 */
 async function _fetchWithRedirectGuard(
   url: URL,
@@ -215,9 +239,11 @@ async function _fetchWithRedirectGuard(
     try {
       lastResponse = await fetch(current.href, {
         method: currentMethod,
+        redirect: 'manual',
         signal: controller.signal,
         headers: {
-          'User-Agent': 'LinkVault/1.0 CheckLink (+https://github.com/h2629/myWeb)',
+          'User-Agent': BROWSER_UA,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
       })
     } finally {
@@ -234,7 +260,10 @@ async function _fetchWithRedirectGuard(
       } catch {
         throw new Error('重定向目标不被允许')
       }
-      if ([301, 302, 303].includes(lastResponse.status)) currentMethod = 'GET'
+      // 303 必须改 GET；301/302 对 HEAD 多数站点期望 GET
+      if ([301, 302, 303].includes(lastResponse.status) || currentMethod === 'HEAD') {
+        currentMethod = 'GET'
+      }
       current = validated
       continue
     }
@@ -295,31 +324,34 @@ serve(async (req) => {
     let details: Record<string, unknown> = {}
 
     try {
-      let response = await _fetchWithRedirectGuard(parsedUrl, 'HEAD', DEFAULT_TIMEOUT_MS)
-
-      // HEAD 被拒时降级为 GET（部分 CDN/服务器不支持 HEAD）
-      if (response.status === 405) {
+      let response: Response
+      try {
+        response = await _fetchWithRedirectGuard(parsedUrl, 'HEAD', DEFAULT_TIMEOUT_MS)
+        // HEAD 被 CDN/WAF/不支持时降级 GET
+        if (shouldRetryAsGet(response.status)) {
+          response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
+        }
+      } catch (headErr: any) {
+        // HEAD 网络层失败再试 GET（部分站点直接断 HEAD）
+        if (headErr?.name === 'AbortError' || headErr?.message?.includes('abort')) throw headErr
+        if (headErr?.message === '重定向目标不被允许' || headErr?.message?.includes('内网')) throw headErr
         response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
       }
 
       http_status = response.status
       const responseTime = Date.now() - startTime
-
-      if (response.status >= 200 && response.status < 400) {
-        status = 'alive'
-      } else if (response.status >= 400) {
-        status = 'dead'
-      }
+      status = classifyHttpStatus(http_status)
 
       details = {
         response_time: responseTime,
-        final_url: response.url,
+        final_url: response.url || parsedUrl.href,
       }
     } catch (error: any) {
       const responseTime = Date.now() - startTime
 
       if (error.name === 'AbortError' || error.message?.includes('abort')) {
-        status = 'blocked'
+        // 超时多为慢站/瞬时网络，不应标 GFW blocked
+        status = 'unknown'
         details = { response_time: responseTime, error: '请求超时或被中断' }
       } else if (error.message === '重定向目标不被允许' || error.message?.includes('内网')) {
         // SSRF 触发：不暴露内部细节，S11 顺手收敛
@@ -329,6 +361,7 @@ serve(async (req) => {
           { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
       } else {
+        // DNS/连接失败 → 更可能真死；TLS/其他仍用 dead（客户端可结合 no-cors 复核）
         status = 'dead'
         details = {
           response_time: responseTime,
