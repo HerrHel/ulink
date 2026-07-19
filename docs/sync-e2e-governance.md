@@ -263,8 +263,40 @@ Phase2 后 `useCloudSync.ts` 仍 ~914 行 → **已拆**：
 ### Track B
 
 - [x] `e2e/l2-sync-real.spec.ts`：`test.skip(!process.env.LV_E2E_L2)`  
-- 可选 `.github/workflows/e2e-l2.yml` + secrets（未做）  
-- OTP 成本过高 → 降级 **手动 checklist**，不阻塞主线  
+- [x] 真会话路径（会话注入，无 OTP UI）：`e2e/helpers/l2Session.ts`  
+  - 登录态 + sync label 非失败  
+  - 新建书签 → 手动 fullSync 非失败  
+  - **跨 context**：A push → B 冷启动 pull 可见  
+- 可选 `.github/workflows/e2e-l2.yml` + secrets（未做；仍勿默认进 PR CI）  
+- OTP 成本过高 → 自动化用 **导出 session**；完整人工回归见下方 checklist  
+
+#### L2 运行方式
+
+```bash
+# 1. shell 或 .env 提供真 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+# 2. 浏览器已登录一次后，复制 localStorage `linkvault_auth`：
+export LV_E2E_L2=1
+export LV_E2E_L2_SESSION_JSON='{"access_token":"...","refresh_token":"...","user":{"id":"...","email":"..."}}'
+# 或：LV_E2E_L2_ACCESS_TOKEN / REFRESH_TOKEN / USER_ID / EMAIL
+
+# playwright.config 在 LV_E2E_L2=1 时不注入 l1mock URL
+npx playwright test e2e/l2-sync-real.spec.ts
+```
+
+缺会话时：`LV_E2E_L2=1` 下用例 **skip + 原因**（非 silent 假绿）。
+
+#### 手动 checklist（OTP / 跨设备，自动化不覆盖）
+
+- [ ] 真邮箱 OTP 登录成功；设置页显示邮箱  
+- [ ] 登录后 initialSync：本地独有项上云；云端独有项下拉  
+- [ ] 手动「同步到云端」后 label 非「同步失败」  
+- [ ] 设备 A 新建书签 → 同步 → 设备 B 刷新/重开可见（或 L2 跨 context 绿）  
+- [ ] 设备 A 软删 → 同步 → B 进回收站/不可见（与产品语义一致）  
+- [ ] dirty 本地 + 远端更新 → 冲突横幅可「保留本地 / 使用云端」  
+- [ ] E2E 主密码锁定时：敏感字段 op 不误推；解锁后可推（对照 RE-2）  
+- [ ] 断网 → 改书签 → 恢复 online：队列 drain，无永久「同步失败」  
+- [ ] Realtime：B 开着页面时 A 改数据，B 最终一致（允许延迟；flaky 勿强进 CI）  
+- [ ] 登出后本地仍可读；再登录不丢未同步 dirty（或按产品提示处理）  
 
 ---
 
@@ -301,8 +333,9 @@ npm run test:e2e
 npx playwright test e2e/l0-persist.spec.ts
 npx playwright test e2e/l1-sync-mock.spec.ts
 
-# L2 仅显式
+# L2 仅显式（需真 VITE_SUPABASE_* + SESSION_JSON 或 token 字段）
 LV_E2E_L2=1 npx playwright test e2e/l2-sync-real.spec.ts
+# 无会话时 skip；有会话时跑登录态 / fullSync / 跨 context pull
 ```
 
 ---
@@ -346,7 +379,8 @@ LV_E2E_L2=1 npx playwright test e2e/l2-sync-real.spec.ts
 
 ### 后续可选（非主线阻塞）
 
-- 扩展 `e2e/l2-sync-real.spec.ts` 真会话路径（需 `LV_E2E_L2=1` + secrets）  
-- 可选 `e2e-l2.yml` workflow  
-- OTP 手动 checklist  
-- L1 连续 5 次 flaky 抽检记录
+- [x] 扩展 `e2e/l2-sync-real.spec.ts` 真会话路径 + `helpers/l2Session.ts`  
+- [x] OTP/跨设备 **手动 checklist**（§8 Track B）  
+- 可选 `e2e-l2.yml` workflow（secrets 仅 manual dispatch）  
+- L1 连续 5 次 flaky 抽检记录  
+
