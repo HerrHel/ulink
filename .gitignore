@@ -16,6 +16,7 @@ task_plan.md
 !src/components/share/README.md
 !/extension/lib/README.md
 !/supabase/functions/check-link/README.md
+!docs/sync-e2e-governance.md
 /test-results/
 /playwright-report/
 supabase/.temp/
