@@ -102,14 +102,22 @@ async function measureNetworkBaseline(): Promise<number> {
   ]
   const start = Date.now()
   try {
-    await Promise.any(
-      probes.map(u =>
+    // 不用 Promise.any（tsconfig lib 未含 ES2021）；任一探针成功即 resolve
+    await new Promise<void>((resolve, reject) => {
+      let pending = probes.length
+      let settled = false
+      for (const u of probes) {
         Promise.race([
           fetch(u, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }),
-          new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
-        ])
-      )
-    )
+          new Promise<void>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
+        ]).then(() => {
+          if (!settled) { settled = true; resolve() }
+        }).catch(() => {
+          pending -= 1
+          if (pending === 0 && !settled) reject(new Error('all probes failed'))
+        })
+      }
+    })
   } catch { /* 全部失败也记录时长 */ }
   const duration = Date.now() - start
   _baselineCache = { value: duration, at: Date.now() }
