@@ -113,6 +113,15 @@ test.describe('LinkVault 核心功能', () => {
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 
+  // 非法超长 gid 被白名单拒绝 → 不进 ShareView，落主应用
+  test('分享路由非法超长 id 不进入 ShareView', async ({ page }) => {
+    const long = 'a'.repeat(65)
+    await page.goto(`/#share/${long}`)
+    await expect(page.locator('.share-page')).not.toBeVisible({ timeout: 5000 })
+    await expect(page.locator('#cardGrid')).toBeAttached({ timeout: 10000 })
+    await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
+  })
+
   // 登录/OTP 依赖真实 Supabase 测试后端，本地无凭据时 skip
   test.skip('登录 OTP 流（需测试后端）', async () => {
     // 预留：有 VITE_E2E_AUTH_* 时再启用
@@ -122,7 +131,36 @@ test.describe('LinkVault 核心功能', () => {
     // 预留：登录后触发同步并断言 lastSync 文案
   })
 
-  test.skip('E2E 锁定覆盖层（需预置主密码）', async () => {
-    // 预留：localStorage 注入 canary 后断言解锁模态
+  // E2E 已启用 + 锁定：注入 lv_e2e_canary 后设置页应显示「已锁定」状态，
+  // 点「解锁」按钮弹出解锁模态。canary 仅需 JSON 存在即可让 checkE2EStatus → isE2EEnabled；
+  // 不测真实解密路径（那是 useE2E 单测的职责）。
+  test('E2E 锁定覆盖层（localStorage canary 注入）', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('lv_setup_done', '1')
+      // 形状对齐 setupMasterPassword 写入：canary 字符串 + salt number[]
+      localStorage.setItem('lv_e2e_canary', JSON.stringify({
+        canary: 'deadbeef.deadbeef.deadbeef',
+        salt: Array.from({ length: 32 }, (_, i) => i),
+      }))
+    })
+    await page.goto('/')
+    await expect(page.locator('#cardGrid')).toBeAttached({ timeout: 10000 })
+
+    await page.locator('#btnSettings').click()
+    const settingsPanel = page.locator('.settings-drawer, .settings-drawer-wrap').first()
+    await expect(settingsPanel).toBeVisible({ timeout: 5000 })
+
+    // canary 注入生效 → E2E enabled 且未解锁，状态文案为「已锁定」
+    await expect(settingsPanel.locator('.sp-sync-status').filter({ hasText: '已锁定' })).toBeVisible({ timeout: 5000 })
+
+    // 点设置抽屉内 E2E 区的「解锁」按钮（限定 sp-row-actions 避免误命中解锁模态的 disabled 按钮）
+    const unlockBtn = settingsPanel.locator('.sp-row-actions button').filter({ hasText: '解锁' })
+    await expect(unlockBtn).toBeVisible({ timeout: 5000 })
+    await unlockBtn.click()
+
+    // 解锁模态弹出：标题「解锁数据」+ 主密码输入框
+    await expect(page.getByText('解锁数据').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('input[placeholder="主密码"]')).toBeVisible()
+    await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 })

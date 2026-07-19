@@ -79,6 +79,24 @@ describe('batchMoveToCat 子书签跟随父移动', () => {
     ui.batchSelected = []
     expect(() => batchMoveToCat('catX')).not.toThrow()
   })
+
+  it('跨分类移动只改 categoryId，order 字段保持不变', () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'B1', title: 'B1', url: 'https://b1.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 7, attributes: {} } as any)
+    ds.addBookmark({ id: 'B2', title: 'B2', url: 'https://b2.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 3, attributes: {} } as any)
+    ds.categories = [{ id: 'catB', name: 'B', icon: 'bookmark', color: '', order: 0 }, ...ds.categories]
+    ui.batchSelected = ['B1', 'B2']
+    ui.batchMode = true
+
+    batchMoveToCat('catB')
+
+    expect(ds.bookmarkMap['B1'].categoryId).toBe('catB')
+    expect(ds.bookmarkMap['B2'].categoryId).toBe('catB')
+    // 关键：order 不被重置，避免移动后排序位置漂移
+    expect(ds.bookmarkMap['B1'].order).toBe(7)
+    expect(ds.bookmarkMap['B2'].order).toBe(3)
+  })
 })
 
 // ──────────────────────────────────────────────────────────────
@@ -138,5 +156,25 @@ describe('batchDelete 组关系恢复', () => {
 
     expect(ds.bookmarkMap['B2'].deletedAt).toBeUndefined()
     expect(ds.groupMap['G2'].bookmarkIds).toContain('B2')
+  })
+
+  it('deleteGroup + restoreGroup 应还原组及其 bookmarkIds  sibling 关系', () => {
+    const ds = useDataStore()
+    ds.addBookmark({ id: 'B3', title: 'B3', url: 'https://b3.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ds.addBookmark({ id: 'B4', title: 'B4', url: 'https://b4.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 1, attributes: {} } as any)
+    ds.addGroup({
+      id: 'G3', name: 'G3', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0,
+      isExpanded: false, attributes: {}, bookmarkIds: ['B3', 'B4'], notes: '', useCount: 0, isPublic: false, updatedAt: 0,
+    } as any)
+
+    ds.deleteGroup('G3')
+    expect(ds.groupMap['G3'].deletedAt).toBeTruthy()
+    // 软删不抹 bookmarkIds（组成员关系留在组对象上）
+    expect(ds.groupMap['G3'].bookmarkIds).toEqual(['B3', 'B4'])
+
+    ds.restoreGroup('G3')
+    expect(ds.groupMap['G3'].deletedAt).toBeUndefined()
+    // 关键：还原后 sibling 关系（bookmarkIds）完整保留
+    expect(ds.groupMap['G3'].bookmarkIds).toEqual(['B3', 'B4'])
   })
 })

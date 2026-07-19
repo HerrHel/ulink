@@ -6,9 +6,11 @@ import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 
-import { copyToClipboard } from '../../utils.js'
+import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
+
+export { isValidShareGroupId }
 
 // ── 分享组（A4: 公开分享链接，升级为数据库持久化 + URL 路由）──
 
@@ -42,12 +44,12 @@ export async function shareGroup(gid: string) {
 export function detectShareRoute(): string | null {
   // 1) path 风格：/s/<gid>（路由末段）
   const m = location.pathname.match(/\/s\/([a-zA-Z0-9_-]+)\/?$/)
-  if (m) return m[1]
+  if (m) return isValidShareGroupId(m[1]) ? m[1] : null
   // 2) hash 兜底：#share/<gid>（向后兼容旧链接 + 新链接里的 hash 兜底段）
   const hash = location.hash
   if (hash) {
     const match = hash.match(/^#share\/([a-zA-Z0-9_-]+)$/)
-    if (match) return match[1]
+    if (match) return isValidShareGroupId(match[1]) ? match[1] : null
   }
   return null
 }

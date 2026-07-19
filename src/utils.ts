@@ -18,6 +18,13 @@ interface AppStore {
 // ── ID / URL / 域名 ──
 
 export function gid(): string { return nanoid(12) }
+
+// 分享组 id 白名单（默认拒绝）。合法：[A-Za-z0-9_-] 长度 2–64。
+// 覆盖 createGroup('sg_'+nanoid)、fork('g'+ts36+rand)、示例 sg_welcome。
+const SHARE_GID_RE = /^[a-zA-Z0-9_-]{2,64}$/
+export function isValidShareGroupId(gid: string | null | undefined): gid is string {
+  return typeof gid === 'string' && SHARE_GID_RE.test(gid)
+}
 export function domain(url: string): string { try { return new URL(url).hostname.replace(/^www\./, '') } catch (_) { return url } }
 /** A5-006：自定义 icon 仅允许 http(s) 或相对路径，拒绝 javascript:/data: 等 */
 export function safeIconUrl(icon?: string | null): string {

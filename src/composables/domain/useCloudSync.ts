@@ -36,6 +36,7 @@ import {
 import {
   subscribeRealtime, unsubscribeRealtime,
 } from './useSyncRealtime.js'
+import { isValidShareGroupId } from '../../utils.js'
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
@@ -851,6 +852,8 @@ export function useCloudSync() {
   }
 
   async function fetchPublicGroup(gid: string): Promise<{ group: SiblingGroup; bookmarks: Bookmark[] } | null> {
+    // 分享路由二次 gate：detectShareRoute 已白名单，此处再拒非法/超长 id，防直调/漏过入口。
+    if (!isValidShareGroupId(gid)) return null
     // SEC-01：经 get_public_group RPC 取数（SECURITY DEFINER，服务端不返回 username/password）。
     // 018 迁移已删除 bookmarks 匿名 SELECT 策略，直接 from('bookmarks') 对访客会空结果。
     const { data, error } = await supabase.rpc('get_public_group', { p_gid: gid })

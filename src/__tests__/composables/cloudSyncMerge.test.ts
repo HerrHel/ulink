@@ -102,6 +102,8 @@ describe('_mergeIntoLocal 软删 / 复活 / 冲突', () => {
 
     expect(ds.bookmarkMap['bm-1']?.title).toBe('本地改')
     expect(sync.conflicts.some(c => c.id === 'bm-1' && c.type === 'bookmark')).toBe(true)
+    // 冲突登记不得清掉 local dirty，否则 keepLocal 后待推改动丢失
+    expect(ds._dirtyIds.has('bm-1')).toBe(true)
   })
 
   it('本地非脏且远端更新更晚 → Object.assign 覆盖', () => {

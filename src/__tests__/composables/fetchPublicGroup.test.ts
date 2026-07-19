@@ -112,4 +112,12 @@ describe('fetchPublicGroup SEC-01 RPC', () => {
     const { fetchPublicGroup } = useCloudSync()
     expect(await fetchPublicGroup('x')).toBeNull()
   })
+
+  it('非法/超长 gid 在 RPC 前拒绝，不调用 supabase', async () => {
+    const { fetchPublicGroup } = useCloudSync()
+    expect(await fetchPublicGroup('')).toBeNull()
+    expect(await fetchPublicGroup('a')).toBeNull()
+    expect(await fetchPublicGroup('x'.repeat(65))).toBeNull()
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
 })

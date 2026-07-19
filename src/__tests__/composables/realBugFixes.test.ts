@@ -251,15 +251,33 @@ describe('useDataShare.detectShareRoute', () => {
   })
 
   it('path 与 hash 同存时 path 优先', async () => {
-    mockLoc({ pathname: '/linkvault/s/p', hash: '#share/q' })
+    // 白名单最小长度 2，单字符 'p'/'q' 会被拒；用合法短 id
+    mockLoc({ pathname: '/linkvault/s/p1', hash: '#share/q1' })
     const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
-    expect(detectShareRoute()).toBe('p')
+    expect(detectShareRoute()).toBe('p1')
   })
 
   it('无 path 无 hash 时返回 null', async () => {
     mockLoc({ pathname: '/linkvault/', hash: '' })
     const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
     expect(detectShareRoute()).toBeNull()
+  })
+
+  it('超长 gid（>64）默认拒绝', async () => {
+    const long = 'a'.repeat(65)
+    mockLoc({ pathname: `/linkvault/s/${long}` })
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBeNull()
+  })
+
+  it('合法前缀 g/sg_ + 合理长度放行', async () => {
+    mockLoc({ pathname: '/linkvault/s/sg_abcdefghijkl' })
+    const { detectShareRoute, isValidShareGroupId } = await import('../../composables/domain/useDataShare.js')
+    expect(isValidShareGroupId('sg_abcdefghijkl')).toBe(true)
+    expect(isValidShareGroupId('g' + 'x'.repeat(10))).toBe(true)
+    expect(isValidShareGroupId('a')).toBe(false)
+    expect(isValidShareGroupId('')).toBe(false)
+    expect(detectShareRoute()).toBe('sg_abcdefghijkl')
   })
 })
 

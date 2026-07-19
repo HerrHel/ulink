@@ -27,6 +27,7 @@ describe('resolveConflict', () => {
       notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null,
       order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 2,
     } as any)
+    ds._dirtyIds.add('bm-1')
     sync.addConflict({
       id: 'bm-1', type: 'bookmark',
       local: { title: '本地' },
@@ -39,6 +40,8 @@ describe('resolveConflict', () => {
     expect(ds.bookmarkMap['bm-1']?.title).toBe('本地')
     expect(sync.conflicts).toHaveLength(0)
     expect(_remoteSnapshots.has('bookmark:bm-1')).toBe(false)
+    // keepLocal 后 local dirty 仍在，供后续 push 推送本地版本
+    expect(ds._dirtyIds.has('bm-1')).toBe(true)
   })
 
   it('keepLocal=false：用 remote 覆盖本地 bookmark', () => {
