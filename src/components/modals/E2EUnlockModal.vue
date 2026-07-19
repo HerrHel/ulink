@@ -12,7 +12,7 @@
           </div>
           <div class="form-group">
             <div class="pw-input-wrap">
-              <input :type="showPw ? 'text' : 'password'" class="form-input" v-model="masterPw" placeholder="主密码" @keydown.enter="onUnlock" autofocus>
+              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-unlock-password" v-model="masterPw" placeholder="主密码" @keydown.enter="onUnlock" autofocus>
               <button class="pw-toggle" @click="showPw = !showPw" v-html="showPw ? I.eyeOff : I.eye"></button>
             </div>
           </div>
@@ -54,7 +54,7 @@
       </div>
       <div class="modal-foot">
         <template v-if="mode === 'unlock'">
-          <button class="btn btn-primary" :disabled="!masterPw" @click="onUnlock">解锁</button>
+          <button class="btn btn-primary" data-testid="lv-e2e-unlock-submit" :disabled="!masterPw" @click="onUnlock">解锁</button>
           <button class="btn btn-secondary" @click="onCancel">跳过</button>
         </template>
         <template v-else>

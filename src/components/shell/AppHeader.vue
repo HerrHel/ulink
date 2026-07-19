@@ -25,7 +25,7 @@
     <div v-show="!ui.focusedGroupId" class="search-wrapper header-search">
       <div class="search-box">
         <span aria-hidden="true" v-html="I.search"></span>
-        <input type="text" class="search-input" aria-label="搜索" id="searchInput" v-model="localQuery"
+        <input type="text" class="search-input" aria-label="搜索" id="searchInput" data-testid="lv-search-input" v-model="localQuery"
                placeholder="搜索…" autocomplete="off">
       </div>
       <SearchSuggest />
@@ -43,7 +43,7 @@
         </button>
       </template>
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
-        <button class="lt-btn" id="btnSettings" @click="toggleSettings" title="设置" aria-label="设置">
+        <button class="lt-btn" id="btnSettings" data-testid="lv-btn-settings" @click="toggleSettings" title="设置" aria-label="设置">
             <span aria-hidden="true" v-html="I.settings" class="icon-sm"></span>
         </button>
         <button

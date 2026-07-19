@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="drawer">
       <div v-if="uiStore.panels.settings" class="settings-drawer-wrap" @click.self="uiStore.panels.settings = false">
-        <div class="settings-drawer" @click.stop>
+        <div class="settings-drawer" data-testid="lv-settings-drawer" @click.stop>
           <div class="settings-drawer-head">
             <h2 class="settings-drawer-title">设置</h2>
             <button class="sp-help-btn" @click.stop="onOpenShortcutHelp" aria-label="快捷键速查" title="快捷键速查">?</button>
@@ -80,7 +80,7 @@
               <template v-if="auth.isLoggedIn">
                 <div class="sp-row">
                   <span class="sp-row-label"><span aria-hidden="true" v-html="I.cloud" class="sp-icon"></span>云同步</span>
-                  <span class="sp-sync-status" :class="syncState.level">
+                  <span class="sp-sync-status" data-testid="lv-sync-label" :class="syncState.level">
                     <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
                   </span>
                 </div>
@@ -103,7 +103,7 @@
               <div class="sp-divider"></div>
               <div class="sp-row">
                 <span class="sp-row-label"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span>端到端加密</span>
-                <span class="sp-sync-status" :class="e2eEnabled ? 'ok' : 'error'">
+                <span class="sp-sync-status" data-testid="lv-e2e-status" :class="e2eEnabled ? 'ok' : 'error'">
                   {{ e2eEnabled ? (e2eUnlocked ? '已解锁' : '已锁定') : '未开启' }}
                 </span>
               </div>
@@ -111,9 +111,9 @@
                 <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn">（本机存储，登录云端后可跨设备）</span></span>
               </div>
               <div class="sp-row sp-row-actions">
-                <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" @click.stop="onOpenE2ESetup"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启加密</button>
-                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" @click.stop="onOpenE2EUnlock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 解锁</button>
-                <button v-else class="btn btn-ghost btn-sm" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 锁定</button>
+                <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" data-testid="lv-e2e-setup-btn" @click.stop="onOpenE2ESetup"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启加密</button>
+                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" data-testid="lv-e2e-unlock-btn" @click.stop="onOpenE2EUnlock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 解锁</button>
+                <button v-else class="btn btn-ghost btn-sm" data-testid="lv-e2e-lock-btn" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 锁定</button>
               </div>
             </div>
             <!-- 数据 -->

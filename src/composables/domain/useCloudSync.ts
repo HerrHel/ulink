@@ -36,7 +36,10 @@ import {
 import {
   subscribeRealtime, unsubscribeRealtime,
 } from './useSyncRealtime.js'
+import { decideRemoteApply } from './syncMergeCore.js'
 import { isValidShareGroupId } from '../../utils.js'
+
+export { decideRemoteApply } from './syncMergeCore.js'
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
@@ -128,6 +131,7 @@ function _mergeOps(ops: SyncOp[]): SyncOp[] {
 }
 
 // ── 智能合并：远端 → 本地 ──
+// 决策见 syncMergeCore.decideRemoteApply；此处只执行 store 副作用。
 /** 导出供 QUAL-03 单测锁定软删/复活/冲突/full 对账语义 */
 export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
   local: T[], remote: T[], type: 'bookmark' | 'group' | 'category' | 'attribute', full = false,
@@ -137,19 +141,23 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
   const localMap = new Map(local.map(i => [i.id, i]))
 
   for (const rItem of remote) {
-    const lItem = localMap.get(rItem.id)
-    if (!lItem) {
-      // 远端软删且本地无：走删除路径会 no-op；仍 push 进数组供回收站可见
-      if (rItem.deletedAt) {
+    const lItem = localMap.get(rItem.id) ?? null
+    const decision = decideRemoteApply({
+      localItem: lItem,
+      remoteItem: rItem,
+      isDirty: ds._dirtyIds.has(rItem.id),
+      isPending: _isPendingSync(rItem.id),
+      lastSyncAt: syncStore.lastSyncAt,
+      full,
+    })
+
+    switch (decision.action) {
+      case 'insert':
+        // 远端软删且本地无：仍 push 进数组供回收站可见
         local.push(rItem)
-        // 同步 map 会在 _pullChanges 末尾 _syncMaps
-      } else {
-        local.push(rItem)
-      }
-    } else if (ds._dirtyIds.has(rItem.id)) {
-      const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
-      if (remoteNewer && syncStore.lastSyncAt > 0) {
-        if (!syncStore.conflicts.some(c => c.id === rItem.id)) {
+        break
+      case 'conflict':
+        if (lItem && !syncStore.conflicts.some(c => c.id === rItem.id)) {
           syncStore.addConflict({
             id: rItem.id, type,
             local: JSON.parse(JSON.stringify(lItem)),
@@ -157,53 +165,51 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           })
           syncStore.resetConflictBanner()
         }
-      }
-    } else if (_isPendingSync(rItem.id)) {
-      // H3：本地改动已 drain 进 syncOps 队列等推送（3000ms debounce 窗口 / 重试滞留期），
-      // _dirtyIds 已清空故上面分支不命中。此处若远端 newer 直接 Object.assign 会覆盖本地待
-      // 推改动，随后延迟 push 又用本地旧版本覆盖远端 → 双向丢失无 conflict。一律转 conflict，
-      // 等 push 落库成功后由 _clearPendingSync 释放，再投入后续 pull 决断。
-      const remoteNewer = (rItem.updatedAt || 0) > (lItem.updatedAt || 0)
-      if (remoteNewer && syncStore.lastSyncAt > 0) {
-        if (!syncStore.conflicts.some(c => c.id === rItem.id)) {
-          syncStore.addConflict({
-            id: rItem.id, type,
-            local: JSON.parse(JSON.stringify(lItem)),
-            remote: JSON.parse(JSON.stringify(rItem)),
-          })
-          syncStore.resetConflictBanner()
-        }
-      }
-    } else if ((rItem.updatedAt || 0) > (lItem.updatedAt || 0)) {
-      // RE-3：远端软删不能 Object.assign 跳过 delete* 副作用（组引用/索引/DGM）
-      if (rItem.deletedAt && !lItem.deletedAt) {
+        break
+      case 'soft-delete':
+        // RE-3：远端软删不能 Object.assign 跳过 delete* 副作用（组引用/索引/DGM）
         _deleteWithoutEcho(ds, type, rItem.id)
-      } else if (!rItem.deletedAt && lItem.deletedAt) {
-        // 远端复活：清本地 deletedAt 后合并字段
-        Object.assign(lItem, rItem)
-        delete (lItem as { deletedAt?: unknown }).deletedAt
-      } else {
-        Object.assign(lItem, rItem)
-      }
+        break
+      case 'revive-assign':
+        if (lItem) {
+          Object.assign(lItem, rItem)
+          delete (lItem as { deletedAt?: unknown }).deletedAt
+        }
+        break
+      case 'assign':
+        if (lItem) Object.assign(lItem, rItem)
+        break
+      case 'skip':
+      case 'full-absent-delete':
+        break
     }
   }
 
   if (full) {
+    // 仅对「远端集合中不存在」的本地项走 full-absent 决策（含 pending 保护，见矩阵 #11）
     const remoteIds = new Set(remote.map(r => r.id))
     for (let i = local.length - 1; i >= 0; i--) {
       const lItem = local[i]
-      if (!remoteIds.has(lItem.id) && !ds._dirtyIds.has(lItem.id) && syncStore.lastSyncAt > 0) {
-        // 远端已不存在（物理删除），本地软删除以确保数据可恢复
-        switch (type) {
-          case 'bookmark': ds.deleteBookmark(lItem.id); break
-          case 'group': ds.deleteGroup(lItem.id); break
-          case 'category': ds.deleteCategory(lItem.id); break
-          case 'attribute': ds.deleteAttribute(lItem.id); break
-        }
-        // 删除由远端同步触发，清除 dirty 标记避免回推
-        ds._dirtyIds.delete(lItem.id)
-        ds._newIds.delete(lItem.id)
+      if (remoteIds.has(lItem.id)) continue
+      const decision = decideRemoteApply({
+        localItem: lItem,
+        remoteItem: null,
+        isDirty: ds._dirtyIds.has(lItem.id),
+        isPending: _isPendingSync(lItem.id),
+        lastSyncAt: syncStore.lastSyncAt,
+        full: true,
+      })
+      if (decision.action !== 'full-absent-delete') continue
+      // 远端已不存在（物理删除），本地软删除以确保数据可恢复
+      switch (type) {
+        case 'bookmark': ds.deleteBookmark(lItem.id); break
+        case 'group': ds.deleteGroup(lItem.id); break
+        case 'category': ds.deleteCategory(lItem.id); break
+        case 'attribute': ds.deleteAttribute(lItem.id); break
       }
+      // 删除由远端同步触发，清除 dirty 标记避免回推
+      ds._dirtyIds.delete(lItem.id)
+      ds._newIds.delete(lItem.id)
     }
   }
 }

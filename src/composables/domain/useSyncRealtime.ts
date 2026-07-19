@@ -10,6 +10,7 @@ import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
 import { _deleteWithoutEcho, _isPendingSync } from './useCloudSync.js'
+import { decideRemoteApply } from './syncMergeCore.js'
 import { EditorManager } from '../../lib/editor.js'
 import type { EntityType } from '../../types.js'
 
@@ -70,49 +71,66 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
 
   const row = newRow
   if (!row) return
-  // G1-001：pending 且远端 UPDATE → 登记 conflict，勿走 update* 覆盖本地待推改动
-  if (ds._dirtyIds.has(row.id) || _isPendingSync(row.id)) {
-    if (_isPendingSync(row.id) && !ds._dirtyIds.has(row.id)) {
-      const syncStore = useSyncStore()
-      const localItem =
-        type === 'bookmark' ? ds.bookmarkMap[row.id]
-        : type === 'group' ? ds.groupMap[row.id]
-        : type === 'category' ? ds.categories.find(c => c.id === row.id)
-        : ds.customAttributes.find(a => a.id === row.id)
-      if (localItem && syncStore.lastSyncAt > 0 && !syncStore.conflicts.some(c => c.id === row.id)) {
-        const HANDLERS_FROM: Record<EntityType, (r: any) => any> = {
-          bookmark: fromRemoteBookmark,
-          group: fromRemoteGroup,
-          category: fromRemoteCategory,
-          attribute: fromRemoteAttribute,
-        }
-        const remoteMapped = HANDLERS_FROM[type](row)
-        if (remoteMapped) {
-          const remoteTs = (remoteMapped as { updatedAt?: number }).updatedAt || 0
-          const localTs = (localItem as { updatedAt?: number }).updatedAt || 0
-          if (remoteTs > localTs) {
-            syncStore.addConflict({
-              id: row.id,
-              type,
-              local: JSON.parse(JSON.stringify(localItem)),
-              remote: JSON.parse(JSON.stringify(remoteMapped)),
-            })
-            syncStore.resetConflictBanner()
-          }
-        }
-      }
+
+  // 先做 Zod 映射，决策与 upsert 共用同一份 remote 视图
+  const FROM: Record<EntityType, (r: any) => any> = {
+    bookmark: fromRemoteBookmark,
+    group: fromRemoteGroup,
+    category: fromRemoteCategory,
+    attribute: fromRemoteAttribute,
+  }
+  const mapped = FROM[type](row)
+  if (!mapped) return  // Zod 校验失败的远端条目跳过
+
+  const syncStore = useSyncStore()
+  const localItem =
+    type === 'bookmark' ? (ds.bookmarkMap[row.id] ?? null)
+    : type === 'group' ? (ds.groupMap[row.id] ?? null)
+    : type === 'category' ? (ds.categories.find(c => c.id === row.id) ?? null)
+    : (ds.customAttributes.find(a => a.id === row.id) ?? null)
+
+  // 与 _mergeIntoLocal 共用 decision（conflict / soft-delete / pending / dirty）
+  const decision = decideRemoteApply({
+    localItem: localItem as { id: string; updatedAt?: number; deletedAt?: number } | null,
+    remoteItem: {
+      id: mapped.id,
+      updatedAt: (mapped as { updatedAt?: number }).updatedAt,
+      deletedAt: (mapped as { deletedAt?: number }).deletedAt,
+    },
+    isDirty: ds._dirtyIds.has(row.id),
+    isPending: _isPendingSync(row.id),
+    lastSyncAt: syncStore.lastSyncAt,
+  })
+
+  if (decision.action === 'skip') return
+
+  if (decision.action === 'conflict') {
+    if (localItem && !syncStore.conflicts.some(c => c.id === row.id)) {
+      syncStore.addConflict({
+        id: row.id,
+        type,
+        local: JSON.parse(JSON.stringify(localItem)),
+        remote: JSON.parse(JSON.stringify(mapped)),
+      })
+      syncStore.resetConflictBanner()
     }
     return
   }
 
+  if (decision.action === 'soft-delete') {
+    _deleteWithoutEcho(ds, type, row.id)
+    debouncedSaveAppData()
+    return
+  }
+
+  // insert | assign | revive-assign → decrypt 后走 HANDLERS 副作用（含 editor silentSet）
   const e2e = useE2E()
   // M2：在 await 前捕获解锁态；await 后若已 lock 则丢弃本次 merge，避免密文态 upsert
   // （与 useCloudSync M1 pull 循环同构：快照 + 返回后二次校验）
   const wasUnlocked = e2e.isUnlocked.value
 
-  const HANDLERS: Record<EntityType, { from: (row: any) => any; upsert: (m: any) => void }> = {
+  const HANDLERS: Record<EntityType, { upsert: (m: any) => void }> = {
     bookmark: {
-      from: fromRemoteBookmark,
       upsert: (m: any) => {
         if (ds.bookmarkMap[m.id]) {
           const oldParentId = ds.bookmarks.find(b => b.id === m.id)?.parentId
@@ -141,7 +159,6 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
       },
     },
     group: {
-      from: fromRemoteGroup,
       upsert: (m: any) => {
         if (ds.groupMap[m.id]) {
           const remoteUpdatedAt = m.updatedAt
@@ -171,7 +188,6 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
       },
     },
     category: {
-      from: fromRemoteCategory,
       upsert: (m: any) => {
         const i = ds.categories.findIndex(c => c.id === m.id)
         if (i >= 0) ds.categories[i] = { ...ds.categories[i], ...m, updatedAt: m.updatedAt }
@@ -181,7 +197,6 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
       },
     },
     attribute: {
-      from: fromRemoteAttribute,
       upsert: (m: any) => {
         const i = ds.customAttributes.findIndex(a => a.id === m.id)
         if (i >= 0) ds.customAttributes[i] = { ...ds.customAttributes[i], ...m, updatedAt: m.updatedAt }
@@ -192,8 +207,6 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   }
 
   const h = HANDLERS[type]
-  const mapped = h.from(row)
-  if (!mapped) return  // Zod 校验失败的远端条目跳过
   // decryptItem 返回浅拷贝，必须使用返回值，否则 upsert 仍是密文（RE-1）
   // M2：入口未解锁则保留密文 mapped（unlock 后 decryptStoreItems 补解）；
   // 入口已解锁则 await decrypt，若 await 期间 lock 则丢弃不 upsert。
@@ -202,6 +215,10 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     plain = await e2e.decryptItem(type, mapped as any)
     if (!e2e.isUnlocked.value) return
   }
+  // revive-assign：确保不保留本地 deletedAt（HANDLERS 会合并字段，显式清一次）
+  if (decision.action === 'revive-assign' && plain && typeof plain === 'object') {
+    delete (plain as { deletedAt?: unknown }).deletedAt
+  }
   h.upsert(plain)
   // 清除本次 merge 产生的 _changedFields：updateBookmark/updateGroup 内部会
   // 对传入的所有字段 _trackChange，把这些远端来的字段累积进 _changedFields。
@@ -209,8 +226,7 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   // 这些远端字段当本地改动一并 partial update 推回远端——回声推送，
   // 不仅浪费配额，还会反复 bump updated_at_num 污染基于时间戳的冲突判定，
   // 多设备订阅时甚至级联回声。走到此处的 id 必不携带本地未推的 changedFields
-  //（上面第 54 行 _dirtyIds.has(row.id) 已挡住本地正在编辑的条目），故直接
-  // 清空该 id 的 _changedFields 安全，不影响真实本地改动。
+  //（decision 已挡住 dirty/pending），故直接清空该 id 的 _changedFields 安全。
   ds._changedFields.delete(plain.id)
   // Realtime 合并后落盘，避免刷新丢失对端变更（DATA-3）
   debouncedSaveAppData()

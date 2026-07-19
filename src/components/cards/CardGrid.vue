@@ -1,5 +1,5 @@
 <template>
-  <div :class="gridClass" id="cardGrid" ref="gridRef" role="list">
+  <div :class="gridClass" id="cardGrid" data-testid="lv-card-grid" ref="gridRef" role="list">
     <template v-if="useVirtual">
       <!-- 虚拟模式：固定行高 absolute 列表（绑 #panelContent 滚动，见 useVirtualScroll） -->
       <div class="card-grid-virtual" :style="{ height: totalHeight + 'px', position: 'relative' }">

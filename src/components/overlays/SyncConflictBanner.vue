@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <Transition name="conflict-slide">
-      <div v-if="sync.conflicts.value.length > 0 && !sync.conflictBannerDismissed.value" class="conflict-banner" role="alert">
+      <div v-if="sync.conflicts.value.length > 0 && !sync.conflictBannerDismissed.value" class="conflict-banner" data-testid="lv-conflict-banner" role="alert">
         <div class="conflict-banner-head">
           <span class="conflict-icon" aria-hidden="true" v-html="I.alert"></span>
           <span class="conflict-title">同步冲突 ({{ sync.conflicts.value.length }})</span>

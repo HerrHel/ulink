@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="开启端到端加密" :class="{ open }" @click.self="emit('close')">
+  <div class="modal-mask" data-testid="lv-e2e-setup-modal" role="dialog" aria-modal="true" aria-label="开启端到端加密" :class="{ open }" @click.self="emit('close')">
     <div class="modal">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启端到端加密</span>
@@ -14,14 +14,14 @@
           <div class="form-group">
             <label class="form-label">设置主密码</label>
             <div class="pw-input-wrap">
-              <input :type="showPw ? 'text' : 'password'" class="form-input" v-model="masterPw" placeholder="输入主密码（至少 8 位）" @keydown.enter="onNext">
+              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-setup-password" v-model="masterPw" placeholder="输入主密码（至少 8 位）" @keydown.enter="onNext">
               <button class="pw-toggle" @click="showPw = !showPw" v-html="showPw ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div class="form-group">
             <label class="form-label">确认主密码</label>
             <div class="pw-input-wrap">
-              <input :type="showPw2 ? 'text' : 'password'" class="form-input" v-model="masterPw2" placeholder="再次输入主密码" @keydown.enter="onNext">
+              <input :type="showPw2 ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-setup-password2" v-model="masterPw2" placeholder="再次输入主密码" @keydown.enter="onNext">
               <button class="pw-toggle" @click="showPw2 = !showPw2" v-html="showPw2 ? I.eyeOff : I.eye"></button>
             </div>
           </div>
@@ -44,7 +44,7 @@
           </div>
           <div class="form-group" style="margin-top:16px">
             <label class="check-chip">
-              <input type="checkbox" v-model="saved"> 我已保存 Recovery Key
+              <input type="checkbox" data-testid="lv-e2e-setup-saved" v-model="saved"> 我已保存 Recovery Key
             </label>
           </div>
         </div>
@@ -59,9 +59,9 @@
         </div>
       </div>
       <div class="modal-foot">
-        <button v-if="step === 1" class="btn btn-primary" :disabled="masterPw.length < 8" @click="onNext">下一步</button>
-        <button v-if="step === 2" class="btn btn-primary" :disabled="!saved || loading" @click="onComplete">确认开启</button>
-        <button v-if="step === 3" class="btn btn-primary" @click="emit('close')">完成</button>
+        <button v-if="step === 1" class="btn btn-primary" data-testid="lv-e2e-setup-next" :disabled="masterPw.length < 8" @click="onNext">下一步</button>
+        <button v-if="step === 2" class="btn btn-primary" data-testid="lv-e2e-setup-confirm" :disabled="!saved || loading" @click="onComplete">确认开启</button>
+        <button v-if="step === 3" class="btn btn-primary" data-testid="lv-e2e-setup-done" @click="emit('close')">完成</button>
         <button class="btn btn-secondary" @click="emit('close')">取消</button>
       </div>
     </div>

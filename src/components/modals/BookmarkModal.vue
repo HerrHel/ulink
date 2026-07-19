@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="书签编辑" :class="{ open: bmForm.isOpen }" @click.self="onClose">
+  <div class="modal-mask" data-testid="lv-bm-modal" role="dialog" aria-modal="true" aria-label="书签编辑" :class="{ open: bmForm.isOpen }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head">
         <h2>{{ bmForm.isEdit ? '编辑书签' : bmForm.addToGroupMode ? '新建书签并添加到组' : bmForm.parentId ? '添加子书签' : '添加书签' }}</h2>
@@ -8,11 +8,11 @@
       <div class="modal-body">
         <div class="form-group">
           <label class="form-label" for="bmUrl">网址 *</label>
-          <input type="text" class="form-input" id="bmUrl" v-model="bmForm.url" placeholder="例如：github.com" @input="onUrlInput" autocomplete="off">
+          <input type="text" class="form-input" id="bmUrl" data-testid="lv-bm-url" v-model="bmForm.url" placeholder="例如：github.com" @input="onUrlInput" autocomplete="off">
         </div>
         <div class="form-group">
           <label class="form-label" for="bmTitle">网站名称</label>
-          <input type="text" class="form-input" id="bmTitle" v-model="bmForm.title" placeholder="留空将自动识别" ref="titleRef">
+          <input type="text" class="form-input" id="bmTitle" data-testid="lv-bm-title" v-model="bmForm.title" placeholder="留空将自动识别" ref="titleRef">
         </div>
         <div v-if="aiSuggestionText" class="ai-suggest-bar">
           <span class="ai-suggest-icon">✨</span>
@@ -81,7 +81,7 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" @click="onClose">取消</button>
-        <button class="btn btn-primary" :disabled="saving" @click="onSave">{{ bmForm.isEdit ? '更新' : '保存' }}</button>
+        <button class="btn btn-primary" data-testid="lv-bm-save" :disabled="saving" @click="onSave">{{ bmForm.isEdit ? '更新' : '保存' }}</button>
       </div>
     </div>
   </div>
