@@ -139,6 +139,41 @@ describe('DataStore', () => {
       expect(store.siblingGroups[0].categoryId).toBe('uncategorized')
       expect(store.categories[0].deletedAt).toBeDefined()
     })
+
+    it('reorderCategories - 写 order/updatedAt + dirty/track，保留未参与项', () => {
+      store.categories = [
+        { id: 'all', name: '全部', icon: '', color: '', order: 0 },
+        { id: 'a', name: 'A', icon: '', color: '', order: 1, updatedAt: 1 },
+        { id: 'b', name: 'B', icon: '', color: '', order: 2, updatedAt: 1 },
+        { id: 'gone', name: 'Gone', icon: '', color: '', order: 9, deletedAt: 99, updatedAt: 1 },
+      ] as any
+      store._syncMaps()
+
+      store.reorderCategories([
+        store.categories[0],
+        store.categories[2], // b 提前
+        store.categories[1], // a 靠后
+      ])
+
+      expect(store.categories.map(c => c.id)).toEqual(['all', 'b', 'a', 'gone'])
+      expect(store.categories[1].order).toBe(1)
+      expect(store.categories[2].order).toBe(2)
+      expect(store.categories[1].updatedAt).toBeGreaterThan(1)
+      expect(store._dirtyIds.has('b')).toBe(true)
+      expect(store._dirtyIds.has('a')).toBe(true)
+      expect(store._changedFields.get('b')?.has('order')).toBe(true)
+      expect(store.categories.find(c => c.id === 'gone')?.deletedAt).toBe(99)
+    })
+
+    it('selectableCategories - 按 order 升序且排除全部/软删', () => {
+      store.categories = [
+        { id: 'all', name: '全部', icon: '', color: '', order: 0 },
+        { id: 'z', name: 'Z', icon: '', color: '', order: 5 },
+        { id: 'a', name: 'A', icon: '', color: '', order: 2 },
+        { id: 'x', name: 'X', icon: '', color: '', order: 3, deletedAt: 1 },
+      ] as any
+      expect(store.selectableCategories.map(c => c.id)).toEqual(['a', 'z'])
+    })
   })
 
   describe('属性操作', () => {

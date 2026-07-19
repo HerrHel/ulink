@@ -79,12 +79,8 @@ useMobileDragReorder(catListRef, sortableList, {
     sortableList.value = arr
 
     const special = dataStore.categories.filter(c => c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED)
-    const reordered = [...special, ...arr]
-    for (const cat of reordered) {
-      dataStore._markDirty(cat.id)
-      dataStore._trackChange(cat.id, 'order')
-    }
-    dataStore.categories = reordered
+    // B-11：写 order/updatedAt + dirty/track，保证跨设备 pull 能应用顺序
+    dataStore.reorderCategories([...special, ...arr])
     store.debouncedSave()
     toast('分类顺序已更新')
   }

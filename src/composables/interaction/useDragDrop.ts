@@ -478,14 +478,15 @@ function handleRailDrop(e: DragEvent, item: Element) {
   const ds = useDataStore();
   const targetId = (item as HTMLElement).dataset.catId;
   if (!targetId || _catDragId === targetId || targetId === CAT_ALL || targetId === CAT_UNCATEGORIZED) return;
-  const srcIdx = ds.categories.findIndex(function (c) { return c.id === _catDragId; });
-  const tgtIdx = ds.categories.findIndex(function (c) { return c.id === targetId; });
+  const next = ds.categories.slice();
+  const srcIdx = next.findIndex(function (c) { return c.id === _catDragId; });
+  const tgtIdx = next.findIndex(function (c) { return c.id === targetId; });
   if (srcIdx < 0 || tgtIdx < 0) return;
-  const src = ds.categories.splice(srcIdx, 1)[0];
-  ds.categories.splice(tgtIdx, 0, src);
-  // B-11：拖拽重排序后写 order 字段并 markDirty，使分类顺序跨设备同步。
-  // 旧实现只改本地数组顺序不设 order → saveAppData 持久化但云端无 order 列 → 设备间不一致。
-  ds.categories.forEach((c, i) => { c.order = i; ds._markDirty(c.id) });
+  const src = next.splice(srcIdx, 1)[0];
+  next.splice(tgtIdx, 0, src);
+  // B-11：统一走 reorderCategories（写 order + updatedAt + trackChange），否则远端 pull 因
+  // updatedAt 未变而丢弃顺序，或仅脏标记不记 changedFields。
+  ds.reorderCategories(next);
   debouncedSaveAppData();
 }
 

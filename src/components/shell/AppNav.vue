@@ -59,7 +59,10 @@ const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 
-const categories = computed(() => dataStore.categories)
+// B-11：按 order 升序渲染，pull 后字段已更新但数组位置可能仍是本地旧序
+const categories = computed(() =>
+  dataStore.categories.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+)
 const curCat = computed(() => uiStore.curCat)
 const cardCounts = computed(() => dataStore.cardCounts)
 

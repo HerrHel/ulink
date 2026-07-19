@@ -195,9 +195,12 @@ export const useDataStore = defineStore('data', {
       counts[CAT_ALL] = total
       return counts
     },
-    /** 可选择的分类列表（排除"全部"和软删除） */
+    /** 可选择的分类列表（排除"全部"和软删除），按 order 升序（B-11 跨设备顺序） */
     selectableCategories(state): Category[] {
-      return state.categories.filter(c => c.id !== CAT_ALL && !c.deletedAt)
+      return state.categories
+        .filter(c => c.id !== CAT_ALL && !c.deletedAt)
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     },
     /** A2-007：可勾选/管理的属性（排除软删）；查重同名重建时亦用此列表 */
     selectableAttributes(state): CustomAttribute[] {
@@ -451,6 +454,27 @@ export const useDataStore = defineStore('data', {
       this.categories = [...this.categories, cat]
       this._catMap[cat.id] = cat
       this._markDirty(cat.id); this._newIds.add(cat.id)
+      this._bumpSearchVersion()
+    },
+    /**
+     * B-11：按传入数组顺序重写 categories.order + updatedAt，并 track/markDirty。
+     * 侧栏/模态拖拽共用；旧实现只改数组位置不刷 updatedAt → 远端 pull 丢弃顺序。
+     * 未出现在 ordered 中的项（如软删分类）保留在末尾，避免被拖拽路径抹掉。
+     */
+    reorderCategories(ordered: Category[]) {
+      const now = Date.now()
+      const orderedIds = new Set(ordered.map(c => c.id))
+      const rest = this.categories.filter(c => !orderedIds.has(c.id))
+      this.categories = [
+        ...ordered.map((c, i) => {
+          const next = { ...c, order: i, updatedAt: now }
+          this._catMap[c.id] = next
+          this._trackChange(c.id, 'order')
+          this._markDirty(c.id)
+          return next
+        }),
+        ...rest,
+      ]
       this._bumpSearchVersion()
     },
     renameCategory(id: string, name: string) {
