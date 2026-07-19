@@ -8,9 +8,10 @@ import { toast } from '../../lib/toast.js'
 
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
+import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
-export { isValidShareGroupId }
+export { isValidShareGroupId, setGroupPublic, fetchPublicGroup }
 
 // ── 分享组（A4: 公开分享链接，升级为数据库持久化 + URL 路由）──
 
@@ -19,11 +20,9 @@ export async function shareGroup(gid: string) {
   const sg = ds.groupMap[gid]
   if (!sg) { toast('组不存在', false); return }
 
-  const sync = useCloudSync()
-
   // 尝试设置为公开
   if (!sg.isPublic) {
-    const ok = await sync.setGroupPublic(gid, true)
+    const ok = await setGroupPublic(gid, true)
     if (!ok) {
       toast('分享需要登录云同步，请先登录', false)
       return

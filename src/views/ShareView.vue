@@ -70,9 +70,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useCloudSync } from '../composables/domain/useCloudSync.js'
+import { fetchPublicGroup, forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { useAuth } from '../composables/domain/useAuth.js'
-import { forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
 import { fixUrl, domain, favicon, sanitizeHTML, safeIconUrl } from '../utils.js'
 import { I } from '../config/icons.js'
@@ -148,8 +147,7 @@ async function onFork() {
 
 onMounted(async () => {
   try {
-    const sync = useCloudSync()
-    const data = await sync.fetchPublicGroup(props.groupId)
+    const data = await fetchPublicGroup(props.groupId)
     if (!data) {
       error.value = '该分享链接不存在或已取消公开'
       return

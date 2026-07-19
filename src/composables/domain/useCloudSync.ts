@@ -1,27 +1,21 @@
 /**
  * useCloudSync — 同步编排 facade
  *
- * 职责：debounced / full / initial + 生命周期 + 分享 API
+ * 职责：debounced / full / initial + 生命周期
  * 实现拆分：
  * - syncMergeCore / syncLocalMerge — decision + store 副作用
  * - syncPush / syncPull — 队列推送 / 远端拉取
  * - syncRemotePort — IO
+ * - syncShare — 公开分享（re-export 保兼容）
  * - useSyncRealtime / Conflict / History / Mapping
  */
 import { computed, toRef } from 'vue'
-import { supabase } from '../../lib/supabase.js'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
-import { saveAppData } from '../../stores/app.js'
 import {
   enqueueSyncOps, syncOpsCount, type SyncOp,
 } from '../../stores/storage.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
-import {
-  fromRemoteBookmark, fromRemoteGroup,
-  type RemoteBookmarkRow, type RemoteGroupRow,
-} from './useSyncMapping.js'
 import {
   resolveConflict, resolveAllConflicts,
 } from './useSyncConflict.js'
@@ -32,15 +26,16 @@ import {
   subscribeRealtime, unsubscribeRealtime,
 } from './useSyncRealtime.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
-import { isValidShareGroupId } from '../../utils.js'
 import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
+import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 
 export { decideRemoteApply } from './syncMergeCore.js'
 export { setSyncRemotePort, createMemorySyncPort, getSyncRemotePort } from './syncRemotePort.js'
 export { _isPendingSync, __testPendingSync } from './syncPending.js'
 export { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
 export { _opNeedsUnlock } from './syncPush.js'
+export { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
@@ -192,38 +187,6 @@ export function useCloudSync() {
     unsubscribeRealtime()
   }
 
-  async function setGroupPublic(gid: string, isPublic: boolean): Promise<boolean> {
-    const userId = _getUserId()
-    if (!userId) return false
-    const ds = useDataStore()
-    const g = ds.groupMap[gid]
-    if (!g) return false
-    ds.updateGroup(gid, { isPublic })
-    saveAppData()
-    const { error } = await supabase.from('sibling_groups')
-      .update({ is_public: isPublic }).eq('id', gid).eq('user_id', userId)
-    if (error) { console.warn('[share] setGroupPublic failed:', error); return false }
-    return true
-  }
-
-  async function fetchPublicGroup(gid: string): Promise<{ group: SiblingGroup; bookmarks: Bookmark[] } | null> {
-    if (!isValidShareGroupId(gid)) return null
-    const { data, error } = await supabase.rpc('get_public_group', { p_gid: gid })
-    if (error || data == null) {
-      if (error) console.warn('[share] get_public_group failed:', error)
-      return null
-    }
-    const payload = data as { group?: RemoteGroupRow; bookmarks?: RemoteBookmarkRow[] }
-    if (!payload.group) return null
-    const group = fromRemoteGroup(payload.group)
-    if (!group) return null
-    const bookmarks = (payload.bookmarks || [])
-      .map(fromRemoteBookmark)
-      .filter(Boolean)
-      .map(b => ({ ...b!, username: '', password: '' })) as Bookmark[]
-    return { group, bookmarks }
-  }
-
   return {
     syncStatus: toRef(syncStore, 'syncStatus'),
     lastSyncAt: toRef(syncStore, 'lastSyncAt'),
@@ -249,6 +212,7 @@ export function useCloudSync() {
     resolveAllConflicts,
     resetConflictBannerDismissed: syncStore.resetConflictBanner,
 
+    // 分享 API 实现见 syncShare；保留 facade 字段兼容旧调用方
     setGroupPublic, fetchPublicGroup,
   }
 }
