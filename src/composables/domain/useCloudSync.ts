@@ -37,9 +37,11 @@ import {
   subscribeRealtime, unsubscribeRealtime,
 } from './useSyncRealtime.js'
 import { decideRemoteApply } from './syncMergeCore.js'
+import { getSyncRemotePort } from './syncRemotePort.js'
 import { isValidShareGroupId } from '../../utils.js'
 
 export { decideRemoteApply } from './syncMergeCore.js'
+export { setSyncRemotePort, createMemorySyncPort, getSyncRemotePort } from './syncRemotePort.js'
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
@@ -394,11 +396,13 @@ export function useCloudSync() {
       const encFailedOps: Array<{ table: string; itemId: string; error: string }> = []
       const e2e = useE2E()
 
+      const port = getSyncRemotePort()
       for (const op of ops) {
         if (op.action === 'delete') {
           tasks.push(
-            Promise.resolve(supabase.from(op.table).delete().eq('id', op.itemId).eq('user_id', userId))
+            port.delete(op.table, op.itemId, userId)
               .then(r => ({ op, result: r }))
+              .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } }))
           )
           continue
         }
@@ -431,9 +435,9 @@ export function useCloudSync() {
 
         if (isNew || !changedFields) {
           tasks.push(
-            Promise.resolve(supabase.from(op.table).upsert(row as any, { onConflict: 'id' }))
+            port.upsert(op.table, row)
               .then(r => ({ op, result: r }))
-              .catch(e => ({ op, result: { data: null, error: e, count: null, status: 0, statusText: String(e?.message || e) } }))
+              .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } }))
           )
         } else {
           // ⚠️ changedFields 中的 f 是 camelCase（本地字段），row 的键是 snake_case（远端列名）。
@@ -449,9 +453,9 @@ export function useCloudSync() {
           }
           const { id, ...updateData } = partial
           tasks.push(
-            Promise.resolve(supabase.from(op.table).update(updateData).eq('id', id).eq('user_id', userId))
+            port.update(op.table, id, userId, updateData)
               .then(r => ({ op, result: r }))
-              .catch(e => ({ op, result: { data: null, error: e, count: null, status: 0, statusText: String(e?.message || e) } }))
+              .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } }))
           )
         }
       }
@@ -571,22 +575,23 @@ export function useCloudSync() {
 
     try {
       const since = full ? 0 : (syncStore.lastSyncAt || 0)
+      const port = getSyncRemotePort()
 
       const [catsRes, bmsRes, groupsRes, attrsRes] = await Promise.all([
-        supabase.from('categories').select('*').eq('user_id', userId).gt('updated_at_num', since),
-        supabase.from('bookmarks').select('*').eq('user_id', userId).gt('updated_at_num', since),
-        supabase.from('sibling_groups').select('*').eq('user_id', userId).gt('updated_at_num', since),
-        supabase.from('custom_attributes').select('*').eq('user_id', userId).gt('updated_at_num', since),
+        port.selectSince('categories', userId, since),
+        port.selectSince('bookmarks', userId, since),
+        port.selectSince('sibling_groups', userId, since),
+        port.selectSince('custom_attributes', userId, since),
       ])
 
-      for (const r of [catsRes, bmsRes, groupsRes, attrsRes]) { if (r.error) throw r.error }
+      for (const r of [catsRes, bmsRes, groupsRes, attrsRes]) { if (r.error) throw new Error(r.error.message) }
 
       const ds = useDataStore()
       const e2e = useE2E()
-      const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r)).filter(Boolean) as Category[]
-      const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r)).filter(Boolean) as Bookmark[]
-      const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r)).filter(Boolean) as SiblingGroup[]
-      const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r)).filter(Boolean) as CustomAttribute[]
+      const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r as any)).filter(Boolean) as Category[]
+      const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r as any)).filter(Boolean) as Bookmark[]
+      const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r as any)).filter(Boolean) as SiblingGroup[]
+      const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r as any)).filter(Boolean) as CustomAttribute[]
 
       // decryptItem 返回浅拷贝，必须用返回值替换；丢弃会导致密文写回 store（RE-1）
       // M1 修复：旧实现 `if (e2e.isUnlocked.value)` 仅在循环入口取一次布尔快照，随后对四数组
@@ -630,10 +635,10 @@ export function useCloudSync() {
       // 当前增量查询已包含 updated_at_num > since 的软删除行（deleted_at 被更新），
       // 此管道作为防御性补充，捕获未来可能出现的漏删边缘情况。
       const [delBmsRes, delGroupsRes, delCatsRes, delAttrsRes] = await Promise.all([
-        supabase.from('bookmarks').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
-        supabase.from('sibling_groups').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
-        supabase.from('categories').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
-        supabase.from('custom_attributes').select('id, updated_at_num').eq('user_id', userId).not('deleted_at', 'is', null).gt('updated_at_num', since),
+        port.selectSoftDeleted('bookmarks', userId, since),
+        port.selectSoftDeleted('sibling_groups', userId, since),
+        port.selectSoftDeleted('categories', userId, since),
+        port.selectSoftDeleted('custom_attributes', userId, since),
       ])
 
       for (const r of [delBmsRes, delGroupsRes, delCatsRes, delAttrsRes]) {
@@ -660,10 +665,10 @@ export function useCloudSync() {
       // _mergeIntoLocal 的 full 分支语义一致）。首同步 lastSyncAt=0 时跳过，避免误删本地新数据。
       if (syncStore.lastSyncAt > 0) {
         const [allBmRes, allGroupRes, allCatRes, allAttrRes] = await Promise.all([
-          supabase.from('bookmarks').select('id').eq('user_id', userId),
-          supabase.from('sibling_groups').select('id').eq('user_id', userId),
-          supabase.from('categories').select('id').eq('user_id', userId),
-          supabase.from('custom_attributes').select('id').eq('user_id', userId),
+          port.selectAllIds('bookmarks', userId),
+          port.selectAllIds('sibling_groups', userId),
+          port.selectAllIds('categories', userId),
+          port.selectAllIds('custom_attributes', userId),
         ])
         // H1 修复：任一对账 id 查询失败必须 abort 整轮 reconcileDelete，而非把「本次 r.error
         // 被 continue 跳过该表」当成「该表远端为空集」。旧实现下若 4 张表查询任一返回 error
@@ -754,11 +759,12 @@ export function useCloudSync() {
       await _pullChanges(false)
 
       const remoteIds = new Set<string>()
+      const port = getSyncRemotePort()
       const [bmIds, gIds, cIds, aIds] = await Promise.all([
-        supabase.from('bookmarks').select('id').eq('user_id', userId),
-        supabase.from('sibling_groups').select('id').eq('user_id', userId),
-        supabase.from('categories').select('id').eq('user_id', userId),
-        supabase.from('custom_attributes').select('id').eq('user_id', userId),
+        port.selectAllIds('bookmarks', userId),
+        port.selectAllIds('sibling_groups', userId),
+        port.selectAllIds('categories', userId),
+        port.selectAllIds('custom_attributes', userId),
       ])
       for (const r of [bmIds, gIds, cIds, aIds]) {
         if (r.error) { console.warn('[sync] initialSync id probe failed:', r.error); continue }

@@ -3,7 +3,7 @@
     <div class="cmd-palette">
       <div class="cmd-input-wrap">
         <span class="cmd-icon" aria-hidden="true" v-html="I.search"></span>
-        <input class="cmd-input" v-model="query" placeholder="搜索书签、组或输入命令…"
+        <input class="cmd-input" data-testid="lv-cmd-input" v-model="query" placeholder="搜索书签、组或输入命令…"
                ref="inputRef" @keydown="onKeydown" @input="onInput">
         <kbd class="cmd-kbd">Esc</kbd>
       </div>

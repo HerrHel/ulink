@@ -42,6 +42,17 @@ if (typeof window !== 'undefined') {
 // Mount Vue app
 app.mount('#app')
 
+// L1 E2E：仅 DEV 暴露最小测试钩子（冲突 banner UI；生产构建 tree-shake 掉）
+if (import.meta.env.DEV) {
+  void import('./stores/sync.js').then(({ useSyncStore }) => {
+    ;(window as unknown as { __LV_E2E__?: { addConflict: (c: unknown) => void } }).__LV_E2E__ = {
+      addConflict(c) {
+        useSyncStore().addConflict(c as Parameters<ReturnType<typeof useSyncStore>['addConflict']>[0])
+      },
+    }
+  })
+}
+
 // D3-001：PWA autoUpdate 仅 SW skipWaiting 不够——客户端必须 register 并在新 SW 激活后整页刷新，
 // 否则旧标签懒加载异步 chunk 会 404（hash 已变）。
 if (import.meta.env.PROD) {

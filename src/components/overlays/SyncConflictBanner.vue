@@ -17,8 +17,8 @@
                 <span class="conflict-item-name">{{ itemName(c) }}</span>
               </div>
               <div class="conflict-item-actions">
-                <button class="btn btn-ghost btn-xs" @click="sync.resolveConflict(c.id, true)">保留本地</button>
-                <button class="btn btn-ghost btn-xs" @click="sync.resolveConflict(c.id, false)">用云端覆盖</button>
+                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-keep-local" @click="sync.resolveConflict(c.id, true)">保留本地</button>
+                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-use-remote" @click="sync.resolveConflict(c.id, false)">用云端覆盖</button>
               </div>
             </div>
           </div>
