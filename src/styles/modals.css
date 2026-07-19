@@ -16,7 +16,9 @@
   border:1px solid var(--border);
   border-radius:var(--radius-xl);
   box-shadow:var(--shadow-xl);
-  overflow-y:auto;
+  /* 外层裁剪圆角，滚动放到 .modal-body，避免滚动条画出圆角 */
+  overflow:hidden;
+  display:flex;flex-direction:column;
   transform:scale(0.94) translateY(16px);
   transition:transform 0.35s var(--ease-spring),opacity 0.25s ease;
   opacity:0;
@@ -26,7 +28,7 @@
   display:flex;align-items:center;gap:12px;
   padding:16px 20px;
   border-bottom:1px solid var(--border-light);
-  position:sticky;top:0;background:var(--surface);z-index:10;
+  flex-shrink:0;background:var(--surface);z-index:10;
 }
 .modal-head h2{font-family:'Clash Display',system-ui,sans-serif;font-size:1.05rem;font-weight:600;flex:1;letter-spacing:-0.01em}
 .modal-close{
@@ -34,11 +36,15 @@
   border-radius:var(--radius-md);color:var(--text-muted);transition:var(--transition-fast);
 }
 .modal-close:hover{color:var(--text);background:var(--surface-hover)}
-.modal-body{padding:16px 20px}
+.modal-body{
+  padding:16px 20px;
+  flex:1;min-height:0;
+  overflow-y:auto;overflow-x:hidden;
+}
 .modal-foot{
   display:flex;justify-content:flex-end;gap:8px;
   padding:12px 20px;border-top:1px solid var(--border-light);
-  position:sticky;bottom:0;background:var(--surface);
+  flex-shrink:0;background:var(--surface);
 }
 
 .form-group{margin-bottom:14px}
@@ -118,7 +124,6 @@
 .ai-suggest-bar .btn-xs{padding:3px 10px;font-size:0.72rem}
 
 /* ── CategoryModal ── */
-#catModal .modal{overflow:hidden}
 .cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-gutter:stable}
 .cat-sort-list::-webkit-scrollbar{width:4px}
 .cat-sort-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
