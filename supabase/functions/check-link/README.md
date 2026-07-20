@@ -50,26 +50,34 @@ Edge 不再回产品 verdict（dead/blocked），改回 **evidence**，客户端
 | `ssrf_reject` | 原始 URL 或 DNS 解析到内网 | 0 |
 | `redirect_denied` | 重定向目标不被允许 | 0 |
 
-**HTTP 分类还在 Edge 侧**：`classifyHttpStatus(http_status)` 的结果（alive/dead/unknown）**只写入 `link_check_history.status` 作历史归档**，客户端从不消费该列；`status` 列的 DB CHECK 约束保留不动。决策依据是 `fetch_outcome` + `http_status`。
+**history 契约列**：`link_check_history` 只写 `fetch_outcome` + `http_status`（及 url/details 等元数据）。
+`status` 列已在迁移 022 废弃；决策依据始终是 `fetch_outcome` + `http_status`。
 
-**Edge 不再 merge attributes**（原先按自身 status 写 dead-link/gfw-blocked 的逻辑已删）——客户端用 Edge evidence + 本机 no-cors 直连 + 网络基线健康融合出 `LinkVerdict`，独占写入 `dead-link`/`gfw-blocked`。
+**Edge 不再 merge attributes**——客户端用 Edge evidence + 本机 no-cors 直连 + 网络基线健康融合出 `LinkVerdict`，独占写入 `dead-link`/`gfw-blocked`。
 
-## 状态分类（误报收敛）
+## HEAD → GET 降级
 
-`classifyHttpStatus` 偏「宁可 unknown 也不误杀」，**仅用于 history 归档**：
+先 HEAD，若终 hop 仍是 HEAD 且状态属于 CDN/WAF 假报集合（400/401/403/404/405/501），
+则对**已校验的 finalUrl** 单趟 GET，跳过中间 redirect hops（避免双全链）。
+若 redirect 链中已因 301/302/303 升为 GET，不再从原始 URL 重跑。
+HEAD 网络层失败（非超时/SSRF）仍从原始 URL 兜底 GET。
+
+## 状态分类（客户端）
+
+HTTP 分类在**客户端** `useDeadLinkChecker.classifyHttpStatus` 完成，偏「宁可 unknown 也不误杀」：
 
 | 结果 | 条件 |
 |------|------|
 | `alive` | 2xx/3xx；401/403/405/429；部分 5xx（资源仍存在） |
 | `dead` | 404 / 410 |
-| `unknown` | 其余 4xx/5xx；无响应类（fetch_outcome≠ok 时归档用） |
+| `unknown` | 其余 4xx/5xx |
 
-HEAD 若返回 400/401/403/404/405/501 会再试 GET（CDN/WAF 对 HEAD 误报常见）。超时回 `fetch_outcome=timeout`，不再映射到任何 verdict。
+超时回 `fetch_outcome=timeout`，不再映射到任何 verdict。
 
 客户端 `useDeadLinkChecker`：本机网络健康（baseline）+ Edge evidence + no-cors 直连融合出 `LinkVerdict`（alive/dead/gfw/inconclusive）。
 - `gfw` 只在「本机网络不 offline + Edge `ok`+http_status 分类 alive + 本机直连不可达」时产出。
 - 本机 offline 时一切映射 `inconclusive`，绝不落 `gfw-blocked`/`dead-link`（避免离线笔记本/captive portal 误持久化）。
-- Edge `connect_error` + 本机也不可达 → `dead`；Edge `dead`(404/410) 但本机可达 → `inconclusive`(head_mismatch)，不落标。
+- Edge `connect_error` + 本机也不可达 → `dead`；Edge 判 dead(404/410) 但本机可达 → `inconclusive`(head_mismatch)，不落标。
 - `inconclusive` 不落标也不抹旧标，保留上次状态避免抖动。网络基线用百度/gstatic/cloudflare 多源最短 RTT。
 
 ## 环境变量
