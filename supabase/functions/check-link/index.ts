@@ -182,7 +182,6 @@ function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
   // 站点存在但需登录 / 反爬 / 不支持 HEAD / 限流 / 短暂过载
   if ([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504].includes(code)) return 'alive'
   if (code === 404 || code === 410) return 'dead'
-  if (code >= 400) return 'unknown'
   return 'unknown'
 }
 
@@ -190,6 +189,24 @@ function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
 function shouldRetryAsGet(code: number): boolean {
   // 404：不少站 HEAD 直接 404、GET 正常；401/403：反爬对 HEAD 更严
   return [400, 401, 403, 404, 405, 501].includes(code)
+}
+
+function isAbortError(error: unknown): boolean {
+  const e = error as { name?: string; message?: string } | null
+  return e?.name === 'AbortError' || !!e?.message?.includes('abort')
+}
+
+/** SSRF 策略拒绝的两种来源，拆开以分别映射 fetch_outcome：
+ *  - 私网拒绝（原始 URL 或 DNS 解析到内网）→ ssrf_reject
+ *  - 重定向目标不被允许 → redirect_denied
+ *  保持与 ssrf-guard.ts 语义一致。 */
+function isPrivateReject(error: unknown): boolean {
+  const msg = (error as { message?: string } | null)?.message || ''
+  return msg.includes('内网') || msg === '不允许访问内网地址' || msg === '目标 DNS 解析到内网地址'
+}
+
+function isRedirectDenied(error: unknown): boolean {
+  return (error as { message?: string } | null)?.message === '重定向目标不被允许'
 }
 
 /** DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
@@ -202,8 +219,10 @@ async function _dnsLookupSafe(hostname: string): Promise<boolean> {
   // 非域名（IP 字面量等）已由 validateUrlShape 校验
   if (!hostname.includes('.')) return true
   try {
-    const records = await Deno.resolveDns(hostname, 'A').catch(() => [] as string[])
-    const records6 = await Deno.resolveDns(hostname, 'AAAA').catch(() => [] as string[])
+    const [records, records6] = await Promise.all([
+      Deno.resolveDns(hostname, 'A').catch(() => [] as string[]),
+      Deno.resolveDns(hostname, 'AAAA').catch(() => [] as string[]),
+    ])
     const all = [...records, ...records6]
     if (all.length === 0) return false  // 无解析结果 → 拒
     return isTargetDnsSafeSyncResults(hostname, all)
@@ -319,7 +338,9 @@ serve(async (req) => {
     }
 
     const startTime = Date.now()
-    let status = 'unknown'
+    // evidence API：只回 fetch_outcome + http_status，不回产品 verdict（dead/blocked）。
+    // HTTP 分类（classifyHttpStatus）仅供 link_check_history.status 归档，不再驱动属性。
+    let fetch_outcome: 'ok' | 'timeout' | 'connect_error' | 'ssrf_reject' | 'redirect_denied' = 'connect_error'
     let http_status = 0
     let details: Record<string, unknown> = {}
 
@@ -331,38 +352,42 @@ serve(async (req) => {
         if (shouldRetryAsGet(response.status)) {
           response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
         }
-      } catch (headErr: any) {
-        // HEAD 网络层失败再试 GET（部分站点直接断 HEAD）
-        if (headErr?.name === 'AbortError' || headErr?.message?.includes('abort')) throw headErr
-        if (headErr?.message === '重定向目标不被允许' || headErr?.message?.includes('内网')) throw headErr
+      } catch (headErr) {
+        // HEAD 网络层失败再试 GET；超时/SSRF 直接上抛
+        if (isAbortError(headErr) || isPrivateReject(headErr) || isRedirectDenied(headErr)) throw headErr
         response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
       }
 
       http_status = response.status
-      const responseTime = Date.now() - startTime
-      status = classifyHttpStatus(http_status)
-
+      fetch_outcome = 'ok'
       details = {
-        response_time: responseTime,
+        response_time: Date.now() - startTime,
         final_url: response.url || parsedUrl.href,
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const responseTime = Date.now() - startTime
 
-      if (error.name === 'AbortError' || error.message?.includes('abort')) {
-        // 超时多为慢站/瞬时网络，不应标 GFW blocked
-        status = 'unknown'
+      if (isAbortError(error)) {
+        // 超时：不暴露 verdict，仅回 timeout evidence
+        fetch_outcome = 'timeout'
         details = { response_time: responseTime, error: '请求超时或被中断' }
-      } else if (error.message === '重定向目标不被允许' || error.message?.includes('内网')) {
-        // SSRF 触发：不暴露内部细节，S11 顺手收敛
-        status = 'blocked'
+      } else if (isRedirectDenied(error)) {
+        // 重定向目标违规
+        fetch_outcome = 'redirect_denied'
         return new Response(
-          JSON.stringify({ status, http_status: 0, details: { response_time: responseTime, error: '目标地址被安全策略拒绝' } }),
+          JSON.stringify({ fetch_outcome, http_status: 0, details: { response_time: responseTime, error: '目标地址被安全策略拒绝' } }),
+          { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
+        )
+      } else if (isPrivateReject(error)) {
+        // SSRF 私网拒绝
+        fetch_outcome = 'ssrf_reject'
+        return new Response(
+          JSON.stringify({ fetch_outcome, http_status: 0, details: { response_time: responseTime, error: '目标地址被安全策略拒绝' } }),
           { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
         )
       } else {
-        // DNS/连接失败 → 更可能真死；TLS/其他仍用 dead（客户端可结合 no-cors 复核）
-        status = 'dead'
+        // DNS/TLS/连接失败 → connect_error（不再标 dead；客户端结合本机可达信号判定）
+        fetch_outcome = 'connect_error'
         details = {
           response_time: responseTime,
           error: '请求失败',  // S11：不回传原始 error.message，避免泄露内部主机/路径
@@ -370,13 +395,19 @@ serve(async (req) => {
       }
     }
 
+    // link_check_history.status 仅作历史归档（driven by classifyHttpStatus），
+    // 客户端从不消费该列；fetch_outcome 才是客户端决策依据。
+    const archivalStatus =
+      fetch_outcome === 'ok' ? classifyHttpStatus(http_status) : 'unknown'
+
     const { error: insertError } = await supabase
       .from('link_check_history')
       .insert({
         user_id: user.id,
         bookmark_id: bookmark_id || '',
         url: parsedUrl.href,
-        status,
+        status: archivalStatus,
+        fetch_outcome,
         http_status,
         response_time: details.response_time,
         details
@@ -386,40 +417,10 @@ serve(async (req) => {
       console.error('Failed to insert check history:', insertError)
     }
 
-    if (bookmark_id) {
-      // SEC-04：先读现有 attributes 再 merge 死链标志，禁止整列覆盖抹掉用户自定义属性
-      const { data: existing } = await supabase
-        .from('bookmarks')
-        .select('attributes')
-        .eq('id', bookmark_id)
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      const prev =
-        existing?.attributes && typeof existing.attributes === 'object' && !Array.isArray(existing.attributes)
-          ? (existing.attributes as Record<string, unknown>)
-          : {}
-      const attrs: Record<string, unknown> = { ...prev }
-      if (status === 'dead') {
-        attrs['dead-link'] = true
-        attrs['gfw-blocked'] = false
-      } else if (status === 'blocked') {
-        attrs['dead-link'] = false
-        attrs['gfw-blocked'] = true
-      } else {
-        attrs['dead-link'] = false
-        attrs['gfw-blocked'] = false
-      }
-
-      await supabase
-        .from('bookmarks')
-        .update({ attributes: attrs })
-        .eq('id', bookmark_id)
-        .eq('user_id', user.id)
-    }
+    // 客户端独占属性写入：Edge 不再 merge dead-link/gfw-blocked。
 
     return new Response(
-      JSON.stringify({ status, http_status, details }),
+      JSON.stringify({ fetch_outcome, http_status, details }),
       { headers: { ...cors, 'Content-Type': 'application/json' } }
     )
   } catch (error) {

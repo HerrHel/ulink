@@ -10,6 +10,9 @@
           <button v-if="blockedList.length" class="popover-tab" :class="{ active: tab === 'blocked' }" @click="switchTab('blocked')">
             被墙 <span class="tab-count tab-count-gfw">{{ blockedList.length }}</span>
           </button>
+          <button v-if="unconfirmedList.length" class="popover-tab" :class="{ active: tab === 'unconfirmed' }" @click="switchTab('unconfirmed')">
+            未确认 <span class="tab-count">{{ unconfirmedList.length }}</span>
+          </button>
         </div>
         <div class="popover-actions">
           <button v-if="!selectMode" class="pop-action-btn" @click="enterSelectMode" title="多选">
@@ -35,7 +38,7 @@
       <!-- 结果列表 -->
       <div class="modal-body dead-links-body">
         <div v-if="!currentList.length" class="popover-result popover-empty">
-          暂无{{ tab === 'dead' ? '失效' : '被墙' }}链接
+          暂无{{ tab === 'dead' ? '失效' : tab === 'blocked' ? '被墙' : '未确认' }}链接
         </div>
         <div v-for="b in currentList" :key="b.id" class="popover-result"
              :class="{ selected: selectedIds.has(b.id) }"
@@ -50,7 +53,8 @@
             <span class="pr-url">{{ domain(b.url) }}</span>
           </div>
           <span v-if="tab === 'dead'" class="pr-badge dead">失效</span>
-          <span v-else class="pr-badge blocked">被墙</span>
+          <span v-else-if="tab === 'blocked'" class="pr-badge blocked">被墙</span>
+          <span v-else class="pr-badge unconfirmed">未确认</span>
           <button v-if="!selectMode" class="pr-delete" @click.stop="onDelete(b.id)" title="删除">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
@@ -64,6 +68,7 @@
 import { ref, computed, watch } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { favicon, domain } from '../../utils.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
@@ -71,8 +76,9 @@ import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
+const deadLinkChecker = useDeadLinkChecker()
 const visible = ref(false)
-const tab = ref<'dead' | 'blocked'>('dead')
+const tab = ref<'dead' | 'blocked' | 'unconfirmed'>('dead')
 const selectMode = ref(false)
 const selectedIds = ref(new Set<string>())
 
@@ -88,8 +94,21 @@ const blockedList = computed(() =>
   dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['gfw-blocked'] && !b.attributes?.['dead-link-ignored'])
 )
 
+/** 未确认列表：本次检测 inconclusive 的项（in-session，不读 attributes） */
+const unconfirmedList = computed(() => {
+  const r = deadLinkChecker.results
+  const out: { id: string; title: string; url: string }[] = []
+  for (const id in r) {
+    if (r[id].verdict !== 'inconclusive') continue
+    const bm = dataStore.bookmarkMap[id]
+    if (!bm || bm.deletedAt) continue
+    out.push({ id: bm.id, title: bm.title, url: bm.url })
+  }
+  return out
+})
+
 const currentList = computed(() =>
-  tab.value === 'dead' ? deadList.value : blockedList.value
+  tab.value === 'dead' ? deadList.value : tab.value === 'blocked' ? blockedList.value : unconfirmedList.value
 )
 
 const allSelected = computed(() =>
@@ -103,12 +122,13 @@ watch(() => store.overlays.deadLinks, (v) => {
     selectedIds.value = new Set()
     if (deadList.value.length) tab.value = 'dead'
     else if (blockedList.value.length) tab.value = 'blocked'
+    else if (unconfirmedList.value.length) tab.value = 'unconfirmed'
   } else {
     visible.value = false
   }
 })
 
-function switchTab(t: 'dead' | 'blocked') {
+function switchTab(t: 'dead' | 'blocked' | 'unconfirmed') {
   tab.value = t
   selectedIds.value = new Set()
 }
@@ -282,6 +302,12 @@ function deleteSelected() {
   color:var(--amber);
   background:var(--amber-light);
   border:1px solid var(--amber);
+}
+.pr-badge.unconfirmed{
+  color:var(--text-muted);
+  background:var(--bg-alt);
+  border:1px solid var(--border);
+  font-weight:600;
 }
 .pr-checkbox{
   width:18px;height:18px;

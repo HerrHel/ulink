@@ -561,6 +561,23 @@
   background:rgba(245,158,11,0.15);
   border-color:rgba(245,158,11,0.4);
 }
+/* 未确认 badge：本次检测 inconclusive（离线/超时/信号冲突），不落标、不动旧标 */
+.unconfirmed-badge{
+  display:inline-block;
+  padding:1px 5px;
+  font-size:0.72rem;font-weight:600;line-height:1.2;
+  color:var(--text-muted);
+  background:var(--bg-alt);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  vertical-align:middle;
+  margin-left:4px;
+  letter-spacing:0.02em;
+}
+[data-theme="dark"] .unconfirmed-badge{
+  background:rgba(255,255,255,0.05);
+  border-color:rgba(255,255,255,0.12);
+}
 /* Card domain — shared base for all views */
 .card-domain{
   font-family:'JetBrains Mono',monospace;
