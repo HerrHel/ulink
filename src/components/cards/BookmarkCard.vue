@@ -20,6 +20,7 @@
               <template v-else>{{ bookmark.title }}</template>
               <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
               <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
+              <span v-if="isUnconfirmed" class="unconfirmed-badge" title="本次检测未能确认（离线/超时/信号冲突）">未确认</span>
             </div>
             <div class="card-domain">
               <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
@@ -97,6 +98,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
+import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { bookmarkPreview } from '../../lib/preview.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import type { Bookmark } from '../../types.js'
@@ -136,6 +138,7 @@ const acctOpen = ref(props.defaultAcctOpen)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 const e2eStore = useE2EStore()
+const deadLinkChecker = useDeadLinkChecker()
 
 // 密码展示用：string 形态（E2E 未启 / 旧 base64）走 safeDecodePassword（同步）；
 // EncryptedPassword 对象形态（E2E 解锁时 saveBm 存的对象）需用已就绪的 e2e cryptoKey 解密。
@@ -174,6 +177,8 @@ const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmar
 const isSelected = computed(() => (uiStore.batchSelected ?? []).includes(props.bookmark.id))
 const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
 const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked'])
+// 未确认：只有本次检测结果为 inconclusive 时出现，不读 attributes（attributes 不存 inconclusive）
+const isUnconfirmed = computed(() => deadLinkChecker.isUnconfirmed(props.bookmark.id))
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
 function visit() { openBookmark(props.bookmark) }

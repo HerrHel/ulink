@@ -33,20 +33,44 @@
 - **H6 修复**：`_dnsLookupSafe` 在 resolveDns 抛错 / 0 条 A+AAAA 时 **fail-closed 拒绝**，
   不再 best-effort 放行。解析能力降级时宁可误拦死链检测，也不跳过私网校验放大 SSRF 面。
 
+## evidence API（契约）
+
+Edge 不再回产品 verdict（dead/blocked），改回 **evidence**，客户端独占属性写入：
+
+```jsonc
+// 返回体
+{ "fetch_outcome": "ok|timeout|connect_error|ssrf_reject|redirect_denied", "http_status": 200, "details": { "response_time": 123, "final_url": "...", "error": "..." } }
+```
+
+| fetch_outcome | 含义 | http_status |
+|---|---|---|
+| `ok` | 拿到 HTTP 响应（任意状态码，含 5xx） | 有效 |
+| `timeout` | 请求超时 / 中断 | 0 |
+| `connect_error` | DNS/TLS/连接失败（**不再标 dead**） | 0 |
+| `ssrf_reject` | 原始 URL 或 DNS 解析到内网 | 0 |
+| `redirect_denied` | 重定向目标不被允许 | 0 |
+
+**HTTP 分类还在 Edge 侧**：`classifyHttpStatus(http_status)` 的结果（alive/dead/unknown）**只写入 `link_check_history.status` 作历史归档**，客户端从不消费该列；`status` 列的 DB CHECK 约束保留不动。决策依据是 `fetch_outcome` + `http_status`。
+
+**Edge 不再 merge attributes**（原先按自身 status 写 dead-link/gfw-blocked 的逻辑已删）——客户端用 Edge evidence + 本机 no-cors 直连 + 网络基线健康融合出 `LinkVerdict`，独占写入 `dead-link`/`gfw-blocked`。
+
 ## 状态分类（误报收敛）
 
-`classifyHttpStatus` 偏「宁可 unknown 也不误杀」：
+`classifyHttpStatus` 偏「宁可 unknown 也不误杀」，**仅用于 history 归档**：
 
 | 结果 | 条件 |
 |------|------|
 | `alive` | 2xx/3xx；401/403/405/429；部分 5xx（资源仍存在） |
 | `dead` | 404 / 410 |
-| `unknown` | 其余 4xx/5xx；请求超时 |
-| `blocked` | SSRF 策略拒绝（内网/非法重定向） |
+| `unknown` | 其余 4xx/5xx；无响应类（fetch_outcome≠ok 时归档用） |
 
-HEAD 若返回 400/401/403/404/405/501 会再试 GET（CDN/WAF 对 HEAD 误报常见）。超时不再标 `blocked`。
+HEAD 若返回 400/401/403/404/405/501 会再试 GET（CDN/WAF 对 HEAD 误报常见）。超时回 `fetch_outcome=timeout`，不再映射到任何 verdict。
 
-客户端 `useDeadLinkChecker`：Edge=`dead` 且本机 no-cors 仍可达时不写 `dead-link`（confidence&lt;0.5）；网络基线用百度/gstatic/cloudflare 多源最短 RTT。
+客户端 `useDeadLinkChecker`：本机网络健康（baseline）+ Edge evidence + no-cors 直连融合出 `LinkVerdict`（alive/dead/gfw/inconclusive）。
+- `gfw` 只在「本机网络不 offline + Edge `ok`+http_status 分类 alive + 本机直连不可达」时产出。
+- 本机 offline 时一切映射 `inconclusive`，绝不落 `gfw-blocked`/`dead-link`（避免离线笔记本/captive portal 误持久化）。
+- Edge `connect_error` + 本机也不可达 → `dead`；Edge `dead`(404/410) 但本机可达 → `inconclusive`(head_mismatch)，不落标。
+- `inconclusive` 不落标也不抹旧标，保留上次状态避免抖动。网络基线用百度/gstatic/cloudflare 多源最短 RTT。
 
 ## 环境变量
 

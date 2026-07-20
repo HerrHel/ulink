@@ -5,21 +5,43 @@ import { supabase } from '../../lib/supabase.js'
 import type { Bookmark } from '../../types.js'
 
 
+export type LinkVerdict = 'alive' | 'dead' | 'gfw' | 'inconclusive'
+export type DeadLinkReason =
+  | 'head_mismatch'   // Edge 判死但本机 no-cors 仍可达（旧 0.45 双补偿的显式化）
+  | 'offline'         // 本机基线离线，不敢定
+  | 'timeout'         // Edge 超时
+  | 'edge_unknown'    // Edge 回 unknown HTTP
+  | 'connect_err'     // Edge 连接失败
+  | 'ssrf'            // Edge 安全拒绝（ssrf_reject / redirect_denied）
+  | 'no_edge'         // Edge 调用失败，无远端视角
+
 interface CheckResult {
-  alive: boolean
+  alive: boolean          // verdict === 'alive'
   status: number
   finalUrl: string
   checkedAt: number
-  blocked: boolean
-  confidence: number
+  blocked: boolean        // verdict === 'gfw'
+  verdict: LinkVerdict
+  persist: boolean        // 是否落 attributes（alive/dead/gfw 落，inconclusive 不落不抹）
+  reason?: DeadLinkReason
 }
+
+/** HTTP 状态分类，与 Edge 侧 classifyHttpStatus 保持一致（Edge 为 Deno 单文件镜像，
+ *  不便共享 import；ref: README 同样先例）。仅在 fetch_outcome==='ok' 有响应时调用。 */
+function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
+  if (code >= 200 && code < 400) return 'alive'
+  if ([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504].includes(code)) return 'alive'
+  if (code === 404 || code === 410) return 'dead'
+  return 'unknown'
+}
+
+type LocalNetwork = 'online' | 'degraded' | 'offline'
+const LOCAL_ONLINE_MS = 2000
 
 const results = reactive<Record<string, CheckResult>>({})
 const checking = ref(false)
 const progress = ref({ done: 0, total: 0 })
 const lastFullCheckAt = ref(0)
-
-const CONFIDENCE_THRESHOLD = 0.5
 
 // ── 死链检测历史记录（持久化到 localStorage，便于趋势分析）──
 const HIST_KEY = 'lv_deadLinkHistory'
@@ -28,7 +50,18 @@ const MAX_HIST = 5
 function _loadDeadLinkHistory(): Record<string, CheckResult[]> {
   try {
     const raw = localStorage.getItem(HIST_KEY)
-    return raw ? JSON.parse(raw) : {}
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown[]>
+    const out: Record<string, CheckResult[]> = {}
+    // 兼容旧结构：删除含 confidence（无 verdict）的条目；history 只是缓存，丢弃安全
+    for (const [id, checks] of Object.entries(parsed)) {
+      if (!Array.isArray(checks)) continue
+      const migrated = checks.filter((c): c is CheckResult =>
+        !!c && typeof c === 'object' && 'verdict' in (c as Record<string, unknown>)
+      )
+      if (migrated.length) out[id] = migrated
+    }
+    return out
   } catch { return {} }
 }
 
@@ -72,8 +105,71 @@ for (const [id, checks] of Object.entries(_history)) {
 
 let _abort: AbortController | null = null
 
-// 网络基线缓存，30s 内复用
+// 网络基线缓存，30s 内复用；in-flight 合并避免 checkAll 冷启动探针风暴
 let _baselineCache: { value: number; at: number } | null = null
+let _baselineInflight: Promise<number> | null = null
+
+const BASELINE_PROBES = [
+  'https://www.baidu.com/favicon.ico',
+  'https://www.gstatic.com/generate_204',
+  'https://cloudflare.com/favicon.ico',
+] as const
+const BASELINE_TTL_MS = 30000
+const BASELINE_PROBE_TIMEOUT_MS = 4000
+const BASELINE_OFFLINE_MS = 4000
+/** no-cors 限时 fetch；成功 resolve，超时/网络失败 reject */
+function fetchNoCorsWithTimeout(
+  url: string,
+  opts: { method?: 'GET' | 'HEAD'; timeoutMs: number; signal?: AbortSignal } = { timeoutMs: 5000 },
+): Promise<Response> {
+  const { method = 'GET', timeoutMs, signal } = opts
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('aborted'))
+      return
+    }
+    const timer = setTimeout(() => reject(new Error('timeout')), timeoutMs)
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(new Error('aborted'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    fetch(url, { method, mode: 'no-cors', cache: 'no-store', signal })
+      .then((res) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
+        resolve(res)
+      })
+      .catch((err) => {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
+        reject(err)
+      })
+  })
+}
+
+/** 由 verdict 构造 CheckResult：alive/blocked/status/finalUrl 派生自 verdict，
+ *  persist 由 verdict 决定（inconclusive 不落标）。 */
+function makeCheckResult(p: {
+  verdict: LinkVerdict
+  status?: number
+  finalUrl?: string
+  reason?: DeadLinkReason
+}): CheckResult {
+  const alive = p.verdict === 'alive'
+  const blocked = p.verdict === 'gfw'
+  const persist = p.verdict !== 'inconclusive'
+  return {
+    alive,
+    status: p.status ?? 0,
+    finalUrl: p.finalUrl ?? '',
+    checkedAt: Date.now(),
+    blocked,
+    verdict: p.verdict,
+    persist,
+    reason: p.reason,
+  }
+}
 
 /**
  * RE-10：no-cors 仅作「网络可达」弱信号，opaque 响应读不到 status，
@@ -82,175 +178,169 @@ let _baselineCache: { value: number; at: number } | null = null
 async function checkDirect(url: string, timeoutMs = 5000): Promise<{ reachable: boolean; duration: number }> {
   const start = Date.now()
   try {
-    await Promise.race([
-      fetch(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' }),
-      new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
-    ])
+    await fetchNoCorsWithTimeout(url, { method: 'GET', timeoutMs })
     return { reachable: true, duration: Date.now() - start }
   } catch {
     return { reachable: false, duration: Date.now() - start }
   }
 }
 
+/** 返回基线耗时（ms）。全探针失败时返回 BASELINE_OFFLINE_MS（>= offline 阈值，
+ *  使下方 gradeLocalNetwork 判为 offline）。 */
 async function measureNetworkBaseline(): Promise<number> {
-  if (_baselineCache && Date.now() - _baselineCache.at < 30000) return _baselineCache.value
-  // 国内 gstatic 常被干扰；用多源取最短 RTT 作为「本机是否在线」参考
-  const probes = [
-    'https://www.baidu.com/favicon.ico',
-    'https://www.gstatic.com/generate_204',
-    'https://cloudflare.com/favicon.ico',
-  ]
-  const start = Date.now()
+  if (_baselineCache && Date.now() - _baselineCache.at < BASELINE_TTL_MS) return _baselineCache.value
+  if (_baselineInflight) return _baselineInflight
+
+  _baselineInflight = (async () => {
+    const start = Date.now()
+    const ac = new AbortController()
+    try {
+      // 不用 Promise.any（tsconfig lib 未含 ES2021）；任一探针成功即 resolve 并 abort 其余
+      await new Promise<void>((resolve, reject) => {
+        let pending = BASELINE_PROBES.length
+        let settled = false
+        for (const u of BASELINE_PROBES) {
+          fetchNoCorsWithTimeout(u, {
+            method: 'HEAD',
+            timeoutMs: BASELINE_PROBE_TIMEOUT_MS,
+            signal: ac.signal,
+          }).then(() => {
+            if (!settled) {
+              settled = true
+              ac.abort()
+              resolve()
+            }
+          }).catch(() => {
+            pending -= 1
+            if (pending === 0 && !settled) reject(new Error('all probes failed'))
+          })
+        }
+      })
+    } catch {
+      // 全探针失败 → 本机网络离线；返回 >= offline 阈值使 gradeLocalNetwork 判 offline
+      _baselineCache = { value: BASELINE_OFFLINE_MS, at: Date.now() }
+      return BASELINE_OFFLINE_MS
+    }
+    const duration = Date.now() - start
+    _baselineCache = { value: duration, at: Date.now() }
+    return duration
+  })()
+
   try {
-    // 不用 Promise.any（tsconfig lib 未含 ES2021）；任一探针成功即 resolve
-    await new Promise<void>((resolve, reject) => {
-      let pending = probes.length
-      let settled = false
-      for (const u of probes) {
-        Promise.race([
-          fetch(u, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' }),
-          new Promise<void>((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
-        ]).then(() => {
-          if (!settled) { settled = true; resolve() }
-        }).catch(() => {
-          pending -= 1
-          if (pending === 0 && !settled) reject(new Error('all probes failed'))
-        })
-      }
-    })
-  } catch { /* 全部失败也记录时长 */ }
-  const duration = Date.now() - start
-  _baselineCache = { value: duration, at: Date.now() }
-  return duration
+    return await _baselineInflight
+  } finally {
+    _baselineInflight = null
+  }
 }
 
-async function callEdgeFunction(url: string, bookmarkId?: string): Promise<{ status: string; http_status: number }> {
+/** 基线耗时 → 本机网络健康分级。offline 时一切远端结论都不落 dead/gfw。 */
+function gradeLocalNetwork(baselineMs: number): LocalNetwork {
+  if (baselineMs >= BASELINE_OFFLINE_MS) return 'offline'
+  if (baselineMs >= LOCAL_ONLINE_MS) return 'degraded'
+  return 'online'
+}
+
+/** Edge evidence：fetch_outcome 决策依据；http_status 仅在 fetch_outcome==='ok' 有效。 */
+type EdgeEvidence = {
+  fetch_outcome: 'ok' | 'timeout' | 'connect_error' | 'ssrf_reject' | 'redirect_denied' | null
+  http_status: number
+}
+
+async function callEdgeFunction(url: string, bookmarkId?: string): Promise<EdgeEvidence> {
   try {
     const { data, error } = await supabase.functions.invoke('check-link', {
       body: { url, bookmark_id: bookmarkId }
     })
     if (error) throw error
-    if (!data || typeof data !== 'object') return { status: 'unknown', http_status: 0 }
+    if (!data || typeof data !== 'object') return { fetch_outcome: null, http_status: 0 }
+    const fo = data.fetch_outcome
     return {
-      status: typeof data.status === 'string' ? data.status : 'unknown',
+      fetch_outcome:
+        typeof fo === 'string' &&
+        ['ok', 'timeout', 'connect_error', 'ssrf_reject', 'redirect_denied'].includes(fo)
+          ? (fo as EdgeEvidence['fetch_outcome'])
+          : null,
       http_status: Number(data.http_status) || 0,
     }
   } catch {
-    return { status: 'unknown', http_status: 0 }
+    return { fetch_outcome: null, http_status: 0 }
+  }
+}
+
+/**
+ * 单一决策表：融合 Edge evidence + 本机直连 + 本机网络健康 → LinkVerdict。
+ * - HTTP 分类只在 Edge 侧拿到响应（fetch_outcome==='ok'）时发生。
+ * - GFW 只在「本机网络不 offline + Edge 远端 alive + 本机直连不可达」时产出。
+ * - 本机 offline 时一切映射 inconclusive，绝不落 dead/gfw（重构 #4）。
+ * - Edge dead + 本机可达 → inconclusive(head_mismatch)，不再用 0.45 弱存活（重构 #6）。
+ */
+function decide(
+  edge: EdgeEvidence,
+  direct: { reachable: boolean },
+  local: LocalNetwork,
+  url: string,
+): CheckResult {
+  const localHealthy = local !== 'offline'
+
+  // 本机离线：远端结论都不可信，绝不落标
+  if (!localHealthy) {
+    return makeCheckResult({ verdict: 'inconclusive', reason: 'offline' })
+  }
+
+  // Edge 调用失败：无远端视角，仅凭本机直连
+  if (edge.fetch_outcome === null) {
+    return direct.reachable
+      ? makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'no_edge' })
+      : makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' })
+  }
+
+  switch (edge.fetch_outcome) {
+    case 'ok': {
+      const http = classifyHttpStatus(edge.http_status)
+      if (http === 'alive') {
+        return direct.reachable
+          ? makeCheckResult({ verdict: 'alive', status: edge.http_status || 200, finalUrl: url })
+          : makeCheckResult({ verdict: 'gfw', status: edge.http_status })
+      }
+      if (http === 'dead') {
+        return direct.reachable
+          ? makeCheckResult({ verdict: 'inconclusive', status: edge.http_status, reason: 'head_mismatch' })
+          : makeCheckResult({ verdict: 'dead', status: edge.http_status })
+      }
+      // http === 'unknown'
+      return direct.reachable
+        ? makeCheckResult({ verdict: 'alive', status: edge.http_status, finalUrl: url, reason: 'edge_unknown' })
+        : makeCheckResult({ verdict: 'inconclusive', reason: 'edge_unknown' })
+    }
+    case 'connect_error':
+      // Edge 连接失败：本机可达说明 Edge 侧网络受限 → 不定；本机也不可达 → dead
+      return direct.reachable
+        ? makeCheckResult({ verdict: 'inconclusive', reason: 'connect_err' })
+        : makeCheckResult({ verdict: 'dead', reason: 'connect_err' })
+    case 'timeout':
+      return makeCheckResult({ verdict: 'inconclusive', reason: 'timeout' })
+    case 'ssrf_reject':
+    case 'redirect_denied':
+      // Edge 安全拒绝与用户端死/墙无关
+      return makeCheckResult({ verdict: 'inconclusive', reason: 'ssrf' })
   }
 }
 
 export function useDeadLinkChecker() {
   async function checkUrl(url: string, bookmarkId?: string): Promise<CheckResult> {
     if (!url || !url.startsWith('http')) {
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 1 }
+      return makeCheckResult({ verdict: 'dead' })
     }
 
-    // 1) 并行测量网络基线 + no-cors 可达性（弱信号，opaque 读不到 status）
-    const [baselineMs, direct] = await Promise.all([
+    // 基线 / 直连 / Edge 互不依赖，三者并行以降低 wall-clock
+    // 国内慢网/gstatic 抖动不再整批跳过，始终走 Edge
+    const [baselineMs, direct, edgeResult] = await Promise.all([
       measureNetworkBaseline(),
       checkDirect(url, 4000),
+      callEdgeFunction(url, bookmarkId),
     ])
 
-    // 2) 本机完全离线（多源探针均超时）→ 低置信 unknown，避免批量误标死链
-    // 注意：国内慢网/gstatic 抖动不再整批跳过，始终走 Edge
-    if (baselineMs >= 4000) {
-      // 仍尝试 Edge：Edge 在海外节点，与本机 gfw/dns 无关
-      const edgeOffline = await callEdgeFunction(url, bookmarkId)
-      if (edgeOffline.status === 'alive') {
-        // 本机探针全挂但 Edge 可达 → 更可能被墙或本机离线
-        return {
-          alive: false,
-          status: edgeOffline.http_status,
-          finalUrl: '',
-          checkedAt: Date.now(),
-          blocked: true,
-          confidence: 0.55,
-        }
-      }
-      if (edgeOffline.status === 'dead') {
-        return {
-          alive: false,
-          status: edgeOffline.http_status,
-          finalUrl: '',
-          checkedAt: Date.now(),
-          blocked: false,
-          confidence: 0.75,
-        }
-      }
-      return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.2 }
-    }
-
-    // 3) RE-10：始终用 Edge 读真实 http_status；no-cors 不可单独判存活
-    const edgeResult = await callEdgeFunction(url, bookmarkId)
-
-    if (edgeResult.status === 'alive') {
-      // 服务端可达：直连也可达 → 存活；直连失败 → 对本机被墙
-      if (direct.reachable) {
-        return {
-          alive: true,
-          status: edgeResult.http_status || 200,
-          finalUrl: url,
-          checkedAt: Date.now(),
-          blocked: false,
-          confidence: 0.95,
-        }
-      }
-      return {
-        alive: false,
-        status: edgeResult.http_status,
-        finalUrl: '',
-        checkedAt: Date.now(),
-        blocked: true,
-        confidence: 0.9,
-      }
-    }
-
-    if (edgeResult.status === 'dead') {
-      // Edge 判死但本机 no-cors 可达：可能是 HEAD 误报/鉴权页，降为低置信、不写 dead 标
-      if (direct.reachable) {
-        return {
-          alive: true,
-          status: edgeResult.http_status,
-          finalUrl: url,
-          checkedAt: Date.now(),
-          blocked: false,
-          confidence: 0.45, // < 0.5：不落 dead-link 属性
-        }
-      }
-      return {
-        alive: false,
-        status: edgeResult.http_status,
-        finalUrl: '',
-        checkedAt: Date.now(),
-        blocked: false,
-        confidence: 0.9,
-      }
-    }
-
-    if (edgeResult.status === 'blocked') {
-      return {
-        alive: false,
-        status: edgeResult.http_status,
-        finalUrl: '',
-        checkedAt: Date.now(),
-        blocked: true,
-        confidence: 0.85,
-      }
-    }
-
-    // Edge unknown：no-cors 可达仅弱存活（不伪造 status:200）；不可达 → 低置信失效
-    if (direct.reachable) {
-      return {
-        alive: true,
-        status: edgeResult.http_status || 0,
-        finalUrl: url,
-        checkedAt: Date.now(),
-        blocked: false,
-        confidence: 0.55,
-      }
-    }
-    return { alive: false, status: 0, finalUrl: '', checkedAt: Date.now(), blocked: false, confidence: 0.4 }
+    return decide(edgeResult, direct, gradeLocalNetwork(baselineMs), url)
   }
 
   async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {
@@ -268,13 +358,8 @@ export function useDeadLinkChecker() {
 
     Object.keys(results).forEach(k => delete results[k])
 
-    // 仅清活跃书签的旧死链标记（PERF-4：batchPatch，一次 bump）
-    const clearPatches: Record<string, Record<string, unknown>> = {}
-    for (const b of bookmarks) {
-      const next = _nextDeadAttrs(b.attributes || {}, 'clear')
-      if (next) clearPatches[b.id] = next
-    }
-    if (Object.keys(clearPatches).length) ds.batchPatchBookmarkAttributes(clearPatches)
+    // 全量检测不预先清标：inconclusive 维持旧标（避免抖动），由结尾 _applyDeadLinkAttributes
+    //  按 verdict 重落——verdict=alive 清标，dead/gfw 刷新标，inconclusive 不动。
 
     // M16：全量检查期间只写内存 hist，结束 flush 一次
     _getHistCache()
@@ -318,9 +403,10 @@ export function useDeadLinkChecker() {
     results[bookmarkId] = result
     _appendDeadLinkHistory(bookmarkId, result)
 
-    if (result.confidence < CONFIDENCE_THRESHOLD) return result
+    // inconclusive 不落标也不抹标（保留上次状态，避免抖动）
+    if (!result.persist) return result
 
-    const mode = result.alive ? 'alive' : (result.blocked ? 'blocked' : 'dead')
+    const mode = result.verdict === 'alive' ? 'alive' : (result.verdict === 'gfw' ? 'blocked' : 'dead')
     const next = _nextDeadAttrs(bm.attributes || {}, mode)
     if (next) {
       ds.updateBookmark(bookmarkId, { attributes: next as Bookmark['attributes'] })
@@ -339,14 +425,10 @@ export function useDeadLinkChecker() {
       if (!r) continue
 
       const attrs = bm.attributes || {}
-      // 低置信度结果：清除旧标记但不设置新标记
-      if (r.confidence < CONFIDENCE_THRESHOLD) {
-        const next = _nextDeadAttrs(attrs, 'clear')
-        if (next) patches[bm.id] = next
-        continue
-      }
+      // inconclusive：不落标也不抹标，保持上次状态，避免反复检测时标抖动
+      if (!r.persist) continue
 
-      const mode = r.alive ? 'alive' : (r.blocked ? 'blocked' : 'dead')
+      const mode = r.verdict === 'alive' ? 'alive' : (r.verdict === 'gfw' ? 'blocked' : 'dead')
       const next = _nextDeadAttrs(attrs, mode)
       if (next) patches[bm.id] = next
     }
@@ -393,7 +475,7 @@ export function useDeadLinkChecker() {
 
   function isDead(bookmarkId: string): boolean {
     const r = results[bookmarkId]
-    if (r) return !r.alive && !r.blocked
+    if (r) return r.verdict === 'dead'
     const ds = useDataStore()
     const bm = ds.bookmarkMap[bookmarkId]
     return !!(bm?.attributes && bm.attributes['dead-link'])
@@ -401,10 +483,16 @@ export function useDeadLinkChecker() {
 
   function isBlocked(bookmarkId: string): boolean {
     const r = results[bookmarkId]
-    if (r) return !r.alive && r.blocked
+    if (r) return r.verdict === 'gfw'
     const ds = useDataStore()
     const bm = ds.bookmarkMap[bookmarkId]
     return !!(bm?.attributes && bm.attributes['gfw-blocked'])
+  }
+
+  /** 本次检测结果为「未确认」——只有 in-session result 才会出现，不读 attributes。 */
+  function isUnconfirmed(bookmarkId: string): boolean {
+    const r = results[bookmarkId]
+    return !!r && r.verdict === 'inconclusive'
   }
 
   const deadCount = computed(() => {
@@ -414,7 +502,7 @@ export function useDeadLinkChecker() {
       if (b.deletedAt) continue
       const r = results[b.id]
       if (r) {
-        if (!r.alive && !r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+        if (r.verdict === 'dead') count++
       } else if (b.attributes?.['dead-link']) {
         count++
       }
@@ -429,7 +517,7 @@ export function useDeadLinkChecker() {
       if (b.deletedAt) continue
       const r = results[b.id]
       if (r) {
-        if (!r.alive && r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+        if (r.verdict === 'gfw') count++
       } else if (b.attributes?.['gfw-blocked']) {
         count++
       }
@@ -437,11 +525,19 @@ export function useDeadLinkChecker() {
     return count
   })
 
+  // 本轮（in-session）「未确认」计数。不进 toast——避免检测完弹"N 个未确认"噪音
+  const inconclusiveCount = computed(() => {
+    let count = 0
+    for (const id in results) {
+      if (results[id].verdict === 'inconclusive') count++
+    }
+    return count
+  })
+
   const toastDeadCount = computed(() => {
     let count = 0
     for (const id in results) {
-      const r = results[id]
-      if (!r.alive && !r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+      if (results[id].verdict === 'dead') count++
     }
     return count
   })
@@ -449,8 +545,7 @@ export function useDeadLinkChecker() {
   const toastBlockedCount = computed(() => {
     let count = 0
     for (const id in results) {
-      const r = results[id]
-      if (!r.alive && r.blocked && r.confidence >= CONFIDENCE_THRESHOLD) count++
+      if (results[id].verdict === 'gfw') count++
     }
     return count
   })
@@ -496,11 +591,20 @@ export function useDeadLinkChecker() {
     if (_autoCheckTimer) { clearInterval(_autoCheckTimer); _autoCheckTimer = null }
   }
 
+  /** 测试钩子：清空跨用例共享的模块级缓存（baseline 30s 缓存、in-flight、histCache、results） */
+  function _resetDeadLinkCache() {
+    _baselineCache = null
+    _baselineInflight = null
+    _histCache = null
+    Object.keys(results).forEach(k => delete results[k])
+  }
+
   return {
     results, checking, progress, lastFullCheckAt,
     checkUrl, checkAll, checkOne, abort,
-    getResult, isDead, isBlocked, deadCount, blockedCount,
+    getResult, isDead, isBlocked, isUnconfirmed, deadCount, blockedCount, inconclusiveCount,
     toastDeadCount, toastBlockedCount,
     autoCheckEnabled, startAutoCheck, stopAutoCheck,
+    _resetDeadLinkCache,
   }
 }
