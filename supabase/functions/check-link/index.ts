@@ -171,24 +171,18 @@ const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10
 /** 重定向最大跳数 */
 const MAX_REDIRECTS = 5
 
-/**
- * 按 HTTP 状态分类。偏「宁可 unknown 也不误杀」：
- * - 2xx/3xx、鉴权/禁令/限流/部分 5xx → alive（资源仍存在）
- * - 404/410 → dead
- * - 其余 4xx/5xx → unknown（临时或语义不清）
- */
-function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
-  if (code >= 200 && code < 400) return 'alive'
-  // 站点存在但需登录 / 反爬 / 不支持 HEAD / 限流 / 短暂过载
-  if ([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504].includes(code)) return 'alive'
-  if (code === 404 || code === 410) return 'dead'
-  return 'unknown'
-}
-
 /** HEAD 常被 CDN/WAF 拒或假报；这些状态应再试 GET */
 function shouldRetryAsGet(code: number): boolean {
   // 404：不少站 HEAD 直接 404、GET 正常；401/403：反爬对 HEAD 更严
   return [400, 401, 403, 404, 405, 501].includes(code)
+}
+
+/** 手动 redirect 链的结构化结果：finalUrl 为最后一次请求 URL（每跳已 SSRF 校验）；
+ *  methodUsed 为终 hop 实际 method（链中可能已从 HEAD 升 GET）。 */
+type FetchGuardResult = {
+  response: Response
+  finalUrl: URL
+  methodUsed: 'HEAD' | 'GET'
 }
 
 function isAbortError(error: unknown): boolean {
@@ -243,12 +237,13 @@ const BROWSER_UA =
   'Mozilla/5.0 (compatible; LinkVaultCheck/1.1; +https://github.com/HerrHel/HerrHel.github.io)'
 
 /** 手动逐跳 fetch：redirect:manual，每跳对 Location 重新走完整 _validateUrl，
- *  命中内网/协议/端口违规或超 MAX_REDIRECTS 即终止。 */
+ *  命中内网/协议/端口违规或超 MAX_REDIRECTS 即终止。
+ *  返回 finalUrl/methodUsed，供 HEAD 降级 GET 时从已到达终 URL 单趟重试，避免双全链。 */
 async function _fetchWithRedirectGuard(
   url: URL,
   method: 'HEAD' | 'GET',
   timeoutMs: number,
-): Promise<Response> {
+): Promise<FetchGuardResult> {
   let current = url
   let currentMethod = method
   let lastResponse: Response | null = null
@@ -271,7 +266,9 @@ async function _fetchWithRedirectGuard(
 
     if (lastResponse.status >= 300 && lastResponse.status < 400) {
       const loc = lastResponse.headers.get('Location')
-      if (!loc || hop === MAX_REDIRECTS) return lastResponse
+      if (!loc || hop === MAX_REDIRECTS) {
+        return { response: lastResponse, finalUrl: current, methodUsed: currentMethod }
+      }
       const nextUrl = new URL(loc, current.href)
       let validated: URL
       try {
@@ -286,9 +283,9 @@ async function _fetchWithRedirectGuard(
       current = validated
       continue
     }
-    return lastResponse
+    return { response: lastResponse, finalUrl: current, methodUsed: currentMethod }
   }
-  return lastResponse!
+  return { response: lastResponse!, finalUrl: current, methodUsed: currentMethod }
 }
 
 serve(async (req) => {
@@ -338,31 +335,33 @@ serve(async (req) => {
     }
 
     const startTime = Date.now()
-    // evidence API：只回 fetch_outcome + http_status，不回产品 verdict（dead/blocked）。
-    // HTTP 分类（classifyHttpStatus）仅供 link_check_history.status 归档，不再驱动属性。
+    // evidence API：只回 fetch_outcome + http_status，不回产品 verdict。
+    // history 只写 fetch_outcome（契约列）；HTTP 分类与属性写入均在客户端。
     let fetch_outcome: 'ok' | 'timeout' | 'connect_error' | 'ssrf_reject' | 'redirect_denied' = 'connect_error'
     let http_status = 0
     let details: Record<string, unknown> = {}
 
     try {
-      let response: Response
+      let result: FetchGuardResult
       try {
-        response = await _fetchWithRedirectGuard(parsedUrl, 'HEAD', DEFAULT_TIMEOUT_MS)
-        // HEAD 被 CDN/WAF/不支持时降级 GET
-        if (shouldRetryAsGet(response.status)) {
-          response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
+        result = await _fetchWithRedirectGuard(parsedUrl, 'HEAD', DEFAULT_TIMEOUT_MS)
+        // HEAD 终 hop 仍被 CDN/WAF/不支持时，从已校验的 finalUrl 单趟 GET（跳过中间 redirect）。
+        // 若链中已升 GET（methodUsed==='GET'），不再从原 URL 双全链重跑。
+        if (result.methodUsed === 'HEAD' && shouldRetryAsGet(result.response.status)) {
+          result = await _fetchWithRedirectGuard(result.finalUrl, 'GET', DEFAULT_TIMEOUT_MS)
         }
       } catch (headErr) {
-        // HEAD 网络层失败再试 GET；超时/SSRF 直接上抛
+        // HEAD 网络层失败再试 GET（无 finalUrl，从原始 URL）；超时/SSRF 直接上抛
         if (isAbortError(headErr) || isPrivateReject(headErr) || isRedirectDenied(headErr)) throw headErr
-        response = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
+        result = await _fetchWithRedirectGuard(parsedUrl, 'GET', DEFAULT_TIMEOUT_MS)
       }
 
-      http_status = response.status
+      http_status = result.response.status
       fetch_outcome = 'ok'
       details = {
         response_time: Date.now() - startTime,
-        final_url: response.url || parsedUrl.href,
+        // redirect:manual 时 response.url 常不可靠，用结构化 finalUrl
+        final_url: result.finalUrl.href,
       }
     } catch (error: unknown) {
       const responseTime = Date.now() - startTime
@@ -395,18 +394,13 @@ serve(async (req) => {
       }
     }
 
-    // link_check_history.status 仅作历史归档（driven by classifyHttpStatus），
-    // 客户端从不消费该列；fetch_outcome 才是客户端决策依据。
-    const archivalStatus =
-      fetch_outcome === 'ok' ? classifyHttpStatus(http_status) : 'unknown'
-
+    // fetch_outcome 为 history 唯一契约列；客户端独占属性写入。
     const { error: insertError } = await supabase
       .from('link_check_history')
       .insert({
         user_id: user.id,
         bookmark_id: bookmark_id || '',
         url: parsedUrl.href,
-        status: archivalStatus,
         fetch_outcome,
         http_status,
         response_time: details.response_time,
@@ -416,8 +410,6 @@ serve(async (req) => {
     if (insertError) {
       console.error('Failed to insert check history:', insertError)
     }
-
-    // 客户端独占属性写入：Edge 不再 merge dead-link/gfw-blocked。
 
     return new Response(
       JSON.stringify({ fetch_outcome, http_status, details }),
