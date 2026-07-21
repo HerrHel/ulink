@@ -1,9 +1,10 @@
 /**
- * storage.ts �?IndexedDB 持久化层（Dexie.js�?
+ * storage.ts — IndexedDB 持久化层（Dexie.js）
  * 作为 localStorage 的增强方案，突破 5MB 限制
- * P0: 结构�?ops_queue �?queue-based sync
+ * P0: 结构化 ops_queue 实现 queue-based sync
  */
 import Dexie from 'dexie'
+import { cloneDeep } from '../lib/clone.js'
 
 interface IDBRow {
   key: string
@@ -83,7 +84,8 @@ export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>)
     // primitives 浅 spread 后即纯值，故不受影响）。入库前深度脱 reactive。
     const plain = ops.map(op => ({
       ...op,
-      data: op.data ? JSON.parse(JSON.stringify(op.data)) : null,
+      // 深度脱 reactive Proxy，避免 IndexedDB 结构化克隆 DataCloneError
+      data: op.data ? cloneDeep(op.data) : null,
       retries: 0,
     }))
     await db.syncOps.bulkAdd(plain)
