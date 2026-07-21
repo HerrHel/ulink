@@ -29,6 +29,7 @@ import { getSyncRemotePort } from './syncRemotePort.js'
 import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
+import { withLock } from '../../lib/withLock.js'
 
 export { setSyncRemotePort, createMemorySyncPort, getSyncRemotePort } from './syncRemotePort.js'
 export { _isPendingSync, __testPendingSync } from './syncPending.js'
@@ -38,13 +39,6 @@ export { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
-
-async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  if (typeof navigator !== 'undefined' && navigator.locks) {
-    return navigator.locks.request(name, { mode: 'exclusive' }, fn)
-  }
-  return fn()
-}
 
 export function useCloudSync() {
   const _auth = useAuth()
@@ -76,13 +70,13 @@ export function useCloudSync() {
     if (_syncTimer) clearTimeout(_syncTimer)
     _syncTimer = setTimeout(() => {
       _syncTimer = null
-      void _withLock('linkvault-sync', pushFromQueue)
+      void withLock('linkvault-sync', pushFromQueue)
     }, 3000)
   }
 
   async function fullSync(): Promise<boolean> {
     enqueueDirtyAsOps()
-    return _withLock('linkvault-sync', async () => {
+    return withLock('linkvault-sync', async () => {
       const pushed = await pushFromQueue()
       if (pushed) await pullChanges()
       return pushed
@@ -93,7 +87,7 @@ export function useCloudSync() {
     if (_initialized || !isLoggedIn.value) return
     _initialized = true
 
-    await _withLock('linkvault-sync', async () => {
+    await withLock('linkvault-sync', async () => {
       const ds = useDataStore()
       const userId = _getUserId()
       if (!userId) return
@@ -146,7 +140,7 @@ export function useCloudSync() {
   function _onOnline() {
     if (!isLoggedIn.value) return
     enqueueDirtyAsOps()
-    void _withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
+    void withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
     if (syncStore.realtimeStatus !== 'connected') {
       unsubscribeRealtime()
       subscribeRealtime(pullChanges)
@@ -155,7 +149,7 @@ export function useCloudSync() {
 
   function _onVisibilityChange() {
     if (document.visibilityState !== 'visible' || !isLoggedIn.value) return
-    void _withLock('linkvault-sync', async () => {
+    void withLock('linkvault-sync', async () => {
       await pullChanges()
       if (syncStore.autoSync) {
         enqueueDirtyAsOps()

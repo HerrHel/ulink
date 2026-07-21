@@ -14,7 +14,16 @@ import { _isPendingSync } from './syncPending.js'
 import { decideRemoteApply } from './syncMergeCore.js'
 import { EditorManager } from '../../lib/editor.js'
 import { cloneDeep } from '../../lib/clone.js'
+import { withLock } from '../../lib/withLock.js'
 import type { EntityType } from '../../types.js'
+
+/** EntityType → Zod 远端行映射（模块级常量，避免每次 Realtime 事件重建） */
+const FROM_REMOTE: Record<EntityType, (r: any) => any> = {
+  bookmark: fromRemoteBookmark,
+  group: fromRemoteGroup,
+  category: fromRemoteCategory,
+  attribute: fromRemoteAttribute,
+}
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -27,14 +36,6 @@ let _reconnectAttempts = 0
 let _gen = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 1000
-
-/** 带锁执行 */
-async function _withLock<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  if (typeof navigator !== 'undefined' && navigator.locks) {
-    return navigator.locks.request(name, { mode: 'exclusive' }, fn)
-  }
-  return fn()
-}
 
 /** 处理 Realtime 变更事件。S13：收到事件后再按 user_id 校验（纵深防护——即使
  *  channel filter 因配置错误/策略变更被绕过，也不处理他人数据）。
@@ -75,13 +76,7 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   if (!row) return
 
   // 先做 Zod 映射，决策与 upsert 共用同一份 remote 视图
-  const FROM: Record<EntityType, (r: any) => any> = {
-    bookmark: fromRemoteBookmark,
-    group: fromRemoteGroup,
-    category: fromRemoteCategory,
-    attribute: fromRemoteAttribute,
-  }
-  const mapped = FROM[type](row)
+  const mapped = FROM_REMOTE[type](row)
   if (!mapped) return  // Zod 校验失败的远端条目跳过
 
   const syncStore = useSyncStore()
@@ -294,7 +289,7 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
         s.setRealtimeStatus('connected')
         _reconnectAttempts = 0
         if (onPullChanges) {
-          _withLock('linkvault-sync', onPullChanges).catch(() => {})
+          withLock('linkvault-sync', onPullChanges).catch(() => {})
         }
       }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
