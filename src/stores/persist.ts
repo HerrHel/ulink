@@ -13,6 +13,7 @@ import { STORAGE_KEY, DEFAULTS } from '../config/constants.js'
 import { runMigrations, CURRENT_SCHEMA_VERSION } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
 import { AppDataSchema } from '../schemas.js'
+import { cloneDeep } from '../lib/clone.js'
 import type { AppData } from '../types.js'
 
 const IDB_KEY = 'linkvault_v2'
@@ -99,7 +100,7 @@ export function saveToLocalStorage(data: AppData): boolean {
  *  否则用户以为「已备份到本地」实则没落库——与 saveData 对齐如实上报。 */
 export async function saveToIDB(data: AppData): Promise<boolean> {
   const stamped = _stamp(data)
-  const plain = JSON.parse(JSON.stringify(stamped))
+  const plain = cloneDeep(stamped)
   try {
     const ok = await idbSet(IDB_KEY, plain)
     if (!ok) {
@@ -147,7 +148,7 @@ export function loadFromLocalStorage(): AppData {
       // 才回退 DEFAULTS，避免把"可被迁移修复的旧数据"误判为"损坏数据整体丢弃"。
       if (!d || typeof d !== 'object' || !Array.isArray(d.bookmarks) || !Array.isArray(d.siblingGroups)) {
         console.warn('[persist] localStorage data structure invalid, falling back to defaults')
-        return JSON.parse(JSON.stringify(DEFAULTS))
+        return cloneDeep(DEFAULTS)
       }
       const result: AppData = {
         categories: d.categories || DEFAULTS.categories.slice(),
@@ -160,13 +161,13 @@ export function loadFromLocalStorage(): AppData {
       const parsed = AppDataSchema.safeParse(result)
       if (!parsed.success) {
         console.warn('[persist] data validation failed after migration, falling back to defaults:', parsed.error.issues)
-        return JSON.parse(JSON.stringify(DEFAULTS))
+        return cloneDeep(DEFAULTS)
       }
       if (needsPersist) saveToLocalStorage(parsed.data)
       return parsed.data
     }
   } catch (e) { console.warn('[persist] localStorage load failed:', (e as Error).message) }
-  return JSON.parse(JSON.stringify(DEFAULTS))
+  return cloneDeep(DEFAULTS)
 }
 
 export async function loadFromIDB(): Promise<AppData | null> {

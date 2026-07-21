@@ -4,6 +4,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { collectDescendantIds } from '../../lib/collectSubIds.js'
 
 /**
  * useBatch — Batch operations
@@ -32,18 +33,7 @@ export function selectAllBatch() {
 }
 
 function collectSubIds(id: string): string[] {
-  const ds = useDataStore()
-  const cm = ds.childrenMap
-  const ids: string[] = [id]
-  const stack = [id]
-  while (stack.length) {
-    const pid = stack.pop()!
-    const children = cm[pid]
-    if (children) {
-      for (const c of children) { ids.push(c.id); stack.push(c.id) }
-    }
-  }
-  return ids
+  return collectDescendantIds(pid => useDataStore().childrenMap[pid], id)
 }
 
 export async function batchDelete() {

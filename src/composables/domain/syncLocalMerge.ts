@@ -7,6 +7,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { decideRemoteApply } from './syncMergeCore.js'
 import { _isPendingSync } from './syncPending.js'
+import { cloneDeep } from '../../lib/clone.js'
 
 /** 远端 DELETE/软删合并触发的本机删除：清衍生 dirty，避免回声推送 */
 export function _deleteWithoutEcho(
@@ -54,8 +55,8 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         if (lItem && !syncStore.conflicts.some(c => c.id === rItem.id)) {
           syncStore.addConflict({
             id: rItem.id, type,
-            local: JSON.parse(JSON.stringify(lItem)),
-            remote: JSON.parse(JSON.stringify(rItem)),
+            local: cloneDeep(lItem),
+            remote: cloneDeep(rItem),
           })
           syncStore.resetConflictBanner()
         }

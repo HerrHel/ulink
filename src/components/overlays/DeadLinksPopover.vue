@@ -73,6 +73,7 @@ import { favicon, domain } from '../../utils.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
 import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
+import { collectDescendantIds } from '../../lib/collectSubIds.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
@@ -190,17 +191,7 @@ function ignoreSelected() {
 
 function collectSubIds(id: string): string[] {
   // 与 useBatch.batchDelete 一致的父子语义：含所有子孙书签一起删
-  const cm = dataStore.childrenMap
-  const ids: string[] = [id]
-  const stack = [id]
-  while (stack.length) {
-    const pid = stack.pop()!
-    const children = cm[pid]
-    if (children) {
-      for (const c of children) { ids.push(c.id); stack.push(c.id) }
-    }
-  }
-  return ids
+  return collectDescendantIds(pid => dataStore.childrenMap[pid], id)
 }
 
 function deleteSelected() {

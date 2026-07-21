@@ -30,7 +30,6 @@ import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 
-export { decideRemoteApply } from './syncMergeCore.js'
 export { setSyncRemotePort, createMemorySyncPort, getSyncRemotePort } from './syncRemotePort.js'
 export { _isPendingSync, __testPendingSync } from './syncPending.js'
 export { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'

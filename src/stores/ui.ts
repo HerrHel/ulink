@@ -20,7 +20,7 @@ export type SortDir = 'asc' | 'desc'
 /** 布局模式：grid 大宫格 / list 列表 / mini-grid 小宫格 */
 export type LayoutMode = 'grid' | 'list' | 'mini-grid'
 
-export interface ModalState {
+interface ModalState {
   bookmark: boolean
   category: boolean
   attribute: boolean
@@ -30,7 +30,7 @@ export interface ModalState {
   setupGuide: boolean
 }
 
-export interface PanelState {
+interface PanelState {
   settings: boolean
   detail: boolean
   trash: boolean
@@ -39,7 +39,7 @@ export interface PanelState {
   shortcutHelp: boolean
 }
 
-export interface OverlayState {
+interface OverlayState {
   addDropdown: boolean   // addDropdownOpen
   addPopover: boolean    // addBmPopoverOpen
   deadLinks: boolean     // deadLinksPopoverOpen

@@ -33,7 +33,7 @@ const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 //     _parseRemotePassword 还原成 EncryptedPassword 对象，但该对象的 data 是用
 //     全局 key 加密的，autoMigratePassword 用「独立 salt + 主密码」解不开 → 二次损坏。
 // 故 password 显式排除，保持它原样在云端传输（已是加密态或旧 base64）。
-const ENCRYPT_FIELDS = {
+export const ENCRYPT_FIELDS = {
   bookmark: ['username', 'notes'] as const,
   group: ['name', 'notes'] as const,
   category: [] as const,

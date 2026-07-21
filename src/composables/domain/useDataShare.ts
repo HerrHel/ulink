@@ -9,6 +9,7 @@ import { toast } from '../../lib/toast.js'
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
+import { newId as genId } from '../../lib/newId.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
 export { isValidShareGroupId, setGroupPublic, fetchPublicGroup }
@@ -63,12 +64,12 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   // 为所有书签和组生成新 ID（复制模式）
   const idMap = new Map<string, string>()
 
-  const newGroupId = 'g' + now.toString(36) + Math.random().toString(36).slice(2, 6)
+  const newGroupId = genId('g')
   idMap.set(group.id, newGroupId)
 
   const newBookmarks: Bookmark[] = []
   for (const b of bookmarks) {
-    const newId = 'b' + now.toString(36) + Math.random().toString(36).slice(2, 6) + newBookmarks.length
+    const newId = genId('b', newBookmarks.length)
     idMap.set(b.id, newId)
     newBookmarks.push({
       ...b,

@@ -13,6 +13,7 @@ import { _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
 import { decideRemoteApply } from './syncMergeCore.js'
 import { EditorManager } from '../../lib/editor.js'
+import { cloneDeep } from '../../lib/clone.js'
 import type { EntityType } from '../../types.js'
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
@@ -110,8 +111,8 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
       syncStore.addConflict({
         id: row.id,
         type,
-        local: JSON.parse(JSON.stringify(localItem)),
-        remote: JSON.parse(JSON.stringify(mapped)),
+        local: cloneDeep(localItem),
+        remote: cloneDeep(mapped),
       })
       syncStore.resetConflictBanner()
     }
