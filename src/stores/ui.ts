@@ -7,7 +7,7 @@ import { defineStore } from 'pinia'
 import { CAT_ALL, UI_STATE_KEY } from '../config/constants.js'
 import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
-import { safeGetItem, safeSetItem } from '../lib/storageSafe.js'
+import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 
 // ── 严格字面量类型 ──
 export type ThemeStyle = 'premium' | 'comfortable'
@@ -211,9 +211,25 @@ export const useUIStore = defineStore('ui', {
 
     restoreUIState() {
       try {
-        const raw = safeGetItem(UI_STATE_KEY)
-        if (!raw) return
-        const s = JSON.parse(raw)
+        // UI 状态 JSON 字段由下方运行时守卫收窄；与旧 JSON.parse 一致用宽松类型
+        const s = safeJsonParse<{
+          curCat?: string
+          sortMode?: SortMode
+          sortDir?: SortDir
+          groupsOnTop?: boolean
+          layoutMode?: LayoutMode
+          historyMax?: number
+          searchQuery?: string
+          activeAttrs?: string[]
+          excludedAttrs?: string[]
+          focusedGroupId?: string
+          detailCards?: string[]
+          _preferredLayoutMode?: LayoutMode
+          _mobileLayoutMode?: LayoutMode
+          _customCardOrder?: Array<{ t: 'g' | 'b'; id: string }>
+          docScrollTop?: number
+        } | null>(safeGetItem(UI_STATE_KEY), null)
+        if (!s) return
         if (s.curCat) this.curCat = s.curCat
         if (s.sortMode) this.sortMode = s.sortMode
         if (s.sortDir === 'asc' || s.sortDir === 'desc') this.sortDir = s.sortDir

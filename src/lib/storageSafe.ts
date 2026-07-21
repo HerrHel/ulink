@@ -24,3 +24,13 @@ export function safeRemoveItem(key: string): void {
     localStorage.removeItem(key)
   } catch { /* ignore */ }
 }
+
+/** JSON.parse 失败时返回 fallback（含 raw 为 null） */
+export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (raw == null || raw === '') return fallback
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}

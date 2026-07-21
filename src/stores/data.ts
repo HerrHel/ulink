@@ -9,7 +9,7 @@ import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds, clearSearchCache } from '../lib/search.js'
-import { safeGetItem, safeSetItem } from '../lib/storageSafe.js'
+import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
 import type { SortMode, SortDir } from './ui.js'
 
@@ -302,13 +302,8 @@ export const useDataStore = defineStore('data', {
     },
     /** 从 localStorage 恢复 _deletedGroupMemberships */
     _restoreDeletedGroupMemberships() {
-      try {
-        const raw = safeGetItem(DGM_KEY)
-        if (raw) {
-          const obj = JSON.parse(raw) as Record<string, string[]>
-          this._deletedGroupMemberships = new Map(Object.entries(obj))
-        }
-      } catch { /* 数据损坏时静默跳过 */ }
+      const obj = safeJsonParse<Record<string, string[]> | null>(safeGetItem(DGM_KEY), null)
+      if (obj) this._deletedGroupMemberships = new Map(Object.entries(obj))
     },
     _bumpSearchVersion() { this._searchVersion++ },
     drainDirtyIds(): Set<string> {
@@ -358,13 +353,11 @@ export const useDataStore = defineStore('data', {
         _histDebounceData.delete(id)
         if (!latestData) return
         const max = useUIStore().historyMax || 10
-        try {
-          const key = 'lv_hist:' + id
-          const raw = safeGetItem(key)
-          const arr = raw ? JSON.parse(raw) : []
-          arr.unshift({ id: Date.now(), data: latestData, created_at: new Date().toISOString() })
-          safeSetItem(key, JSON.stringify(arr.slice(0, max)))
-        } catch (_) { /* fire-and-forget */ }
+        const key = 'lv_hist:' + id
+        const arr = safeJsonParse<unknown[]>(safeGetItem(key), [])
+        if (!Array.isArray(arr)) return
+        arr.unshift({ id: Date.now(), data: latestData, created_at: new Date().toISOString() })
+        safeSetItem(key, JSON.stringify(arr.slice(0, max)))
       }, _HISTORY_DEBOUNCE_MS))
     },
     updateBookmark(id: string, changes: Partial<Bookmark>) {

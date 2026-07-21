@@ -2,7 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
-import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
+import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import type { Bookmark } from '../../types.js'
 
 
@@ -27,12 +27,16 @@ interface CheckResult {
   reason?: DeadLinkReason
 }
 
+/** 鉴权/限流/网关类状态：偏可活，不当死链 */
+const HTTP_SOFT_ALIVE = new Set([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504])
+const HTTP_DEAD = new Set([404, 410])
+
 /** 客户端内部 HTTP 分类（偏宁可 unknown 也不误杀）。
  *  仅在 fetch_outcome==='ok' 有响应时调用；不写库。 */
 function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
   if (code >= 200 && code < 400) return 'alive'
-  if ([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504].includes(code)) return 'alive'
-  if (code === 404 || code === 410) return 'dead'
+  if (HTTP_SOFT_ALIVE.has(code)) return 'alive'
+  if (HTTP_DEAD.has(code)) return 'dead'
   return 'unknown'
 }
 
@@ -49,21 +53,17 @@ const HIST_KEY = 'lv_deadLinkHistory'
 const MAX_HIST = 5
 
 function _loadDeadLinkHistory(): Record<string, CheckResult[]> {
-  try {
-    const raw = safeGetItem(HIST_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as Record<string, unknown[]>
-    const out: Record<string, CheckResult[]> = {}
-    // 兼容旧结构：删除含 confidence（无 verdict）的条目；history 只是缓存，丢弃安全
-    for (const [id, checks] of Object.entries(parsed)) {
-      if (!Array.isArray(checks)) continue
-      const migrated = checks.filter((c): c is CheckResult =>
-        !!c && typeof c === 'object' && 'verdict' in (c as Record<string, unknown>)
-      )
-      if (migrated.length) out[id] = migrated
-    }
-    return out
-  } catch { return {} }
+  const parsed = safeJsonParse<Record<string, unknown[]>>(safeGetItem(HIST_KEY), {})
+  const out: Record<string, CheckResult[]> = {}
+  // 兼容旧结构：删除含 confidence（无 verdict）的条目；history 只是缓存，丢弃安全
+  for (const [id, checks] of Object.entries(parsed)) {
+    if (!Array.isArray(checks)) continue
+    const migrated = checks.filter((c): c is CheckResult =>
+      !!c && typeof c === 'object' && 'verdict' in (c as Record<string, unknown>)
+    )
+    if (migrated.length) out[id] = migrated
+  }
+  return out
 }
 
 function _saveDeadLinkHistory(hist: Record<string, CheckResult[]>): void {
