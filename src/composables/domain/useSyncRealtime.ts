@@ -130,10 +130,9 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
           const oldParentId = ds.bookmarkMap[m.id]?.parentId
           const remoteUpdatedAt = m.updatedAt
           ds.updateBookmark(m.id, m)
-          // 恢复远端 updatedAt，避免被 Date.now() 覆盖
-          const idx = ds.bookmarks.findIndex(b => b.id === m.id)
-          if (idx >= 0) ds.bookmarks[idx].updatedAt = remoteUpdatedAt
-          ds._bmMap[m.id] = ds.bookmarks[idx]
+          // 恢复远端 updatedAt，避免被 Date.now() 覆盖（updateBookmark 已同步 _bmMap 引用）
+          const bm = ds.bookmarkMap[m.id]
+          if (bm) bm.updatedAt = remoteUpdatedAt
           // parentId 变更时更新 _childrenIdx
           if (oldParentId !== m.parentId) {
             if (oldParentId) {
@@ -157,9 +156,9 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
         if (ds.groupMap[m.id]) {
           const remoteUpdatedAt = m.updatedAt
           ds.updateGroup(m.id, m)
-          const idx = ds.siblingGroups.findIndex(g => g.id === m.id)
-          if (idx >= 0) ds.siblingGroups[idx].updatedAt = remoteUpdatedAt
-          ds._grpMap[m.id] = ds.siblingGroups[idx]
+          // 恢复远端 updatedAt（updateGroup 已同步 _grpMap 引用）
+          const g = ds.groupMap[m.id]
+          if (g) g.updatedAt = remoteUpdatedAt
           // H16 + G1-003：远端 notes 写入编辑器时用 silentSetContent，抑制 onUpdate→
           // updateGroup→_markDirty，避免 setContent 把刚合并的远端内容重新标脏并回推。
           if (typeof m.notes === 'string' && m.notes !== '') {

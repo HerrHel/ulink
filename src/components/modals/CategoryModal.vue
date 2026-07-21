@@ -48,7 +48,7 @@ const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameCategory')
 const catListRef = ref<HTMLElement | null>(null)
 
-const uncategorizedCat = computed(() => dataStore.categories.find(c => c.id === CAT_UNCATEGORIZED) || { id: CAT_UNCATEGORIZED, name: '未分类' })
+const uncategorizedCat = computed(() => dataStore.categoryMap[CAT_UNCATEGORIZED] || { id: CAT_UNCATEGORIZED, name: '未分类' })
 
 const sortableList = ref<Category[]>([])
 
