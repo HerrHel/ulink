@@ -273,3 +273,11 @@ export function fromRemoteAttribute(r: RemoteAttributeRow): CustomAttribute | nu
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
   }, '属性')
 }
+
+/** EntityType → fromRemote* 映射（Realtime / pull 共用） */
+export const FROM_REMOTE: Record<EntityType, (r: any) => any> = {
+  bookmark: fromRemoteBookmark,
+  group: fromRemoteGroup,
+  category: fromRemoteCategory,
+  attribute: fromRemoteAttribute,
+}

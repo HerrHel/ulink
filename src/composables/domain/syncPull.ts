@@ -6,9 +6,7 @@ import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
-import {
-  fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute,
-} from './useSyncMapping.js'
+import { FROM_REMOTE } from './useSyncMapping.js'
 import { _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
@@ -41,10 +39,10 @@ export async function pullChanges(full = false): Promise<boolean> {
 
     const ds = useDataStore()
     const e2e = useE2E()
-    const remoteCats = (catsRes.data || []).map(r => fromRemoteCategory(r as any)).filter(Boolean) as Category[]
-    const remoteBms = (bmsRes.data || []).map(r => fromRemoteBookmark(r as any)).filter(Boolean) as Bookmark[]
-    const remoteGroups = (groupsRes.data || []).map(r => fromRemoteGroup(r as any)).filter(Boolean) as SiblingGroup[]
-    const remoteAttrs = (attrsRes.data || []).map(r => fromRemoteAttribute(r as any)).filter(Boolean) as CustomAttribute[]
+    const remoteCats = (catsRes.data || []).map(r => FROM_REMOTE.category(r as any)).filter(Boolean) as Category[]
+    const remoteBms = (bmsRes.data || []).map(r => FROM_REMOTE.bookmark(r as any)).filter(Boolean) as Bookmark[]
+    const remoteGroups = (groupsRes.data || []).map(r => FROM_REMOTE.group(r as any)).filter(Boolean) as SiblingGroup[]
+    const remoteAttrs = (attrsRes.data || []).map(r => FROM_REMOTE.attribute(r as any)).filter(Boolean) as CustomAttribute[]
 
     if (e2e.isUnlocked.value) {
       const decryptList = async <T extends { id: string }>(arr: T[], type: EntityType): Promise<T[]> => {

@@ -8,7 +8,7 @@ import { useSyncStore } from '../../stores/sync.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
-import { fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute } from './useSyncMapping.js'
+import { FROM_REMOTE } from './useSyncMapping.js'
 import { _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
 import { decideRemoteApply } from './syncMergeCore.js'
@@ -16,14 +16,6 @@ import { EditorManager } from '../../lib/editor.js'
 import { cloneDeep } from '../../lib/clone.js'
 import { withLock } from '../../lib/withLock.js'
 import type { EntityType } from '../../types.js'
-
-/** EntityType → Zod 远端行映射（模块级常量，避免每次 Realtime 事件重建） */
-const FROM_REMOTE: Record<EntityType, (r: any) => any> = {
-  bookmark: fromRemoteBookmark,
-  group: fromRemoteGroup,
-  category: fromRemoteCategory,
-  attribute: fromRemoteAttribute,
-}
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
