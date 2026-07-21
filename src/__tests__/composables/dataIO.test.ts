@@ -16,7 +16,7 @@ vi.mock('../../lib/search.js', () => ({ clearSearchCache: vi.fn() }))
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppData: vi.fn() }))
 
 import { useDataStore } from '../../stores/data.js'
-import { importFromDataInternal, parseRaindropJSON, exportHTML } from '../../composables/domain/useDataIO.js'
+import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns } from '../../composables/domain/useDataIO.js'
 import { saveFromExtension } from '../../composables/domain/useBookmark.js'
 import { __testMarkDataReady } from '../../lib/dataReady.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -143,6 +143,34 @@ describe('parseRaindropJSON 坏 tags 防御', () => {
     const data = { items: [{ title: 'T', link: 'https://x.example', tags: 'not-an-array' }] }
     expect(() => parseRaindropJSON(data)).not.toThrow()
     expect(parseRaindropJSON(data)[0].attributes).toEqual({})
+  })
+})
+
+describe('resolveCsvColumns 表头列定位', () => {
+  it('识别标准列名 title/url/tags/notes', () => {
+    const r = resolveCsvColumns(['title', 'url', 'tags', 'notes'])
+    expect(r).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: 2, notesIdx: 3 })
+  })
+
+  it('识别各类第一个别名', () => {
+    expect(resolveCsvColumns(['name', 'link', 'labels', 'excerpt'])).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: 2, notesIdx: 3 })
+    expect(resolveCsvColumns(['href', 'tag', 'description'])).toEqual({ titleIdx: -1, urlIdx: 0, tagsIdx: 1, notesIdx: 2 })
+  })
+
+  it('缺失的字段下标为 -1', () => {
+    expect(resolveCsvColumns(['url'])).toEqual({ titleIdx: -1, urlIdx: 0, tagsIdx: -1, notesIdx: -1 })
+  })
+
+  it('未识别的列名被忽略，不会污染已定位下标', () => {
+    const r = resolveCsvColumns(['foo', 'title', 'bar', 'url'])
+    expect(r.titleIdx).toBe(1)
+    expect(r.urlIdx).toBe(3)
+    expect(r.tagsIdx).toBe(-1)
+  })
+
+  it('同类别重复列名只记录首次出现的下标', () => {
+    // 第二个 url 别名 href 不覆盖已定位的 url 下标 1
+    expect(resolveCsvColumns(['title', 'url', 'href'])).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: -1, notesIdx: -1 })
   })
 })
 

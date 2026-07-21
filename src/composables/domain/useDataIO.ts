@@ -419,6 +419,35 @@ function parseBookmarkHTML(html: string): Bookmark[] {
 
 // ── CSV 解析器 ──
 
+/**
+ * CSV 表头列定位：alias → kind 表驱动。
+ * 原实现每个字段一次线性 findIndex（4 次扫描 + 重复别名判定），
+ * 改为单次遍历构建 alias→kind map，O(n) 一次定位四类列下标。
+ * 抽成纯函数便于单测。
+ */
+const CSV_COLUMN_ALIASES: Record<string, 'title' | 'url' | 'tags' | 'notes'> = {
+  title: 'title', name: 'title',
+  url: 'url', link: 'url', href: 'url',
+  tags: 'tags', tag: 'tags', labels: 'tags',
+  notes: 'notes', description: 'notes', excerpt: 'notes',
+}
+
+export interface CsvColumns {
+  titleIdx: number
+  urlIdx: number
+  tagsIdx: number
+  notesIdx: number
+}
+
+export function resolveCsvColumns(headers: string[]): CsvColumns {
+  const idx: Record<'title' | 'url' | 'tags' | 'notes', number> = { title: -1, url: -1, tags: -1, notes: -1 }
+  for (let i = 0; i < headers.length; i++) {
+    const kind = CSV_COLUMN_ALIASES[headers[i]]
+    if (kind && idx[kind] < 0) idx[kind] = i
+  }
+  return { titleIdx: idx.title, urlIdx: idx.url, tagsIdx: idx.tags, notesIdx: idx.notes }
+}
+
 function parseCSV(text: string): Bookmark[] {
   const bookmarks: Bookmark[] = []
   const lines: string[][] = []
@@ -452,12 +481,8 @@ function parseCSV(text: string): Bookmark[] {
 
   if (lines.length < 2) return []
 
-  // 解析表头：查找 title/url/link 和 tags 列
-  const headers = lines[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''))
-  const titleIdx = headers.findIndex(h => h === 'title' || h === 'name')
-  const urlIdx = headers.findIndex(h => h === 'url' || h === 'link' || h === 'href')
-  const tagsIdx = headers.findIndex(h => h === 'tags' || h === 'tag' || h === 'labels')
-  const notesIdx = headers.findIndex(h => h === 'notes' || h === 'description' || h === 'excerpt')
+  // 表头解析：alias → kind 表驱动，单次构建 idx，替代原 4 次线性 findIndex
+  const { titleIdx, urlIdx, tagsIdx, notesIdx } = resolveCsvColumns(lines[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, '')))
   if (urlIdx < 0) return []
 
   const now = Date.now()
