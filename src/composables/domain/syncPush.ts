@@ -148,13 +148,11 @@ export async function pushFromQueue(): Promise<boolean> {
     const histE2e = useE2E()
     for (const op of ops) {
       if (op.action === 'upsert') {
-        const type = op.table === 'bookmarks' ? 'bookmark'
-          : op.table === 'sibling_groups' ? 'group'
-          : op.table === 'categories' ? 'category' : 'attribute'
+        const type = tableToEntityType[op.table as TableName]
         if (type !== 'bookmark' && type !== 'group') continue
         const itemKey = `${op.table}:${op.itemId}`
         if (isLocked && lockedItemKeys.has(itemKey)) continue
-        const existing = op.table === 'bookmarks' ? ds.bookmarks.find(b => b.id === op.itemId)
+        const existing = type === 'bookmark' ? ds.bookmarks.find(b => b.id === op.itemId)
           : ds.siblingGroups.find(g => g.id === op.itemId)
         if (existing) {
           try {
@@ -193,13 +191,12 @@ export async function pushFromQueue(): Promise<boolean> {
       delete data._userId
       delete data._isNew
 
-      const itemType = op.table === 'bookmarks' ? 'bookmark'
-        : op.table === 'sibling_groups' ? 'group'
-        : op.table === 'categories' ? 'category' : 'attribute'
+      const itemType = tableToEntityType[op.table as TableName]
+      if (!itemType) continue
 
       let row: Record<string, any>
       try {
-        const encryptedData = await e2e.encryptItem(itemType as any, data)
+        const encryptedData = await e2e.encryptItem(itemType, data)
         row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew) as unknown as Record<string, any>
       } catch (err: any) {
         encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err?.message || String(err)}` })

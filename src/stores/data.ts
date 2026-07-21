@@ -645,12 +645,13 @@ export const useDataStore = defineStore('data', {
 
     /** 内部辅助：通用型恢复已软删除项 */
     _restoreItem(table: TableName, id: string) {
-      switch (table) {
-        case 'bookmarks': return this._restoreFrom(this.bookmarks, this._bmMap, id)
-        case 'sibling_groups': return this._restoreFrom(this.siblingGroups, this._grpMap, id)
-        case 'categories': return this._restoreFrom(this.categories, this._catMap, id)
-        case 'custom_attributes': return this._restoreFrom(this.customAttributes, this._attrMap, id)
+      const handlers: Record<TableName, () => void> = {
+        bookmarks: () => this._restoreFrom(this.bookmarks, this._bmMap, id),
+        sibling_groups: () => this._restoreFrom(this.siblingGroups, this._grpMap, id),
+        categories: () => this._restoreFrom(this.categories, this._catMap, id),
+        custom_attributes: () => this._restoreFrom(this.customAttributes, this._attrMap, id),
       }
+      handlers[table]?.()
     },
     _restoreFrom<T extends { id: string; deletedAt?: number; updatedAt?: number }>(
       arr: T[], map: Record<string, T>, id: string
@@ -705,12 +706,13 @@ export const useDataStore = defineStore('data', {
 
     /** 内部辅助：永久删除项 */
     _permanentDelete(key: TableName, id: string) {
-      switch (key) {
-        case 'bookmarks': this.bookmarks = this.bookmarks.filter(b => b.id !== id); break
-        case 'sibling_groups': this.siblingGroups = this.siblingGroups.filter(g => g.id !== id); break
-        case 'categories': this.categories = this.categories.filter(c => c.id !== id); break
-        case 'custom_attributes': this.customAttributes = this.customAttributes.filter(a => a.id !== id); break
+      const handlers: Record<TableName, () => void> = {
+        bookmarks: () => { this.bookmarks = this.bookmarks.filter(b => b.id !== id) },
+        sibling_groups: () => { this.siblingGroups = this.siblingGroups.filter(g => g.id !== id) },
+        categories: () => { this.categories = this.categories.filter(c => c.id !== id) },
+        custom_attributes: () => { this.customAttributes = this.customAttributes.filter(a => a.id !== id) },
       }
+      handlers[key]?.()
       this._dirtyIds.delete(id)
       this._deletedIds.set(id, key)
     },

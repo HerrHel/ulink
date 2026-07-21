@@ -151,7 +151,7 @@ export function fetchLocalHistory(itemId: string): LocalHistoryVersion[] {
   } catch (e) { console.warn('[IDB] fetchLocalHistory error:', e); return [] }
 }
 
-/** �?historyId 取本地某版本 data，供 restore 回退用�?*/
+/** 按 historyId 取本地某版本 data，供 restore 回退用 */
 export function getLocalHistoryVersion(itemId: string, historyId: number): Record<string, unknown> | null {
   const arr = fetchLocalHistory(itemId)
   const v = arr.find(x => x.id === historyId)

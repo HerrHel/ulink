@@ -57,16 +57,18 @@ export function useEditorFormat(getEditor: () => Editor | null) {
     const ed = getEditor()
     if (!ed) return
     const chain = ed.chain().focus()
-    switch (f) {
-      case 'bold': chain.toggleBold(); break
-      case 'underline': chain.toggleUnderline(); break
-      case 'h1': chain.toggleHeading({ level: 1 }); break
-      case 'h2': chain.toggleHeading({ level: 2 }); break
-      case 'h3': chain.toggleHeading({ level: 3 }); break
-      case 'ol': chain.toggleOrderedList(); break
-      case 'ul': chain.toggleBulletList(); break
-      case 'task': chain.toggleTaskList(); break
+    // 查表代替 switch，新增 FormatKey 时 TS 会要求补全 Record
+    const apply: Record<FormatKey, () => unknown> = {
+      bold: () => chain.toggleBold(),
+      underline: () => chain.toggleUnderline(),
+      h1: () => chain.toggleHeading({ level: 1 }),
+      h2: () => chain.toggleHeading({ level: 2 }),
+      h3: () => chain.toggleHeading({ level: 3 }),
+      ol: () => chain.toggleOrderedList(),
+      ul: () => chain.toggleBulletList(),
+      task: () => chain.toggleTaskList(),
     }
+    apply[f]()
     chain.run()
     syncFmt()
   }

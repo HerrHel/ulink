@@ -138,28 +138,39 @@ interface GroupSearchItem {
   childTitlePy: string
 }
 
+/** 属性 id → 显示名；搜索索引构建与降级路径共用 */
+function _buildAttrNameMap(customAttributes: CustomAttribute[]): Map<string, string> {
+  return new Map(customAttributes.map(a => [a.id, a.name]))
+}
+
+/** 将勾选属性 id 映射为可搜的空格分隔名称串 */
+function _attrsToAttrNames(
+  attributes: Record<string, boolean> | undefined,
+  attrNameMap: Map<string, string>,
+): string {
+  if (!attributes) return ''
+  return Object.keys(attributes)
+    .filter(k => attributes[k])
+    .map(k => attrNameMap.get(k) || '')
+    .filter(Boolean)
+    .join(' ')
+}
+
 function _buildBookmarkSearchItems(
   bookmarks: Bookmark[],
   customAttributes: CustomAttribute[],
 ): BookmarkSearchItem[] {
-  const attrNameMap = new Map(customAttributes.map(a => [a.id, a.name]))
-  return bookmarks.map(b => {
-    const attrNames = Object.keys(b.attributes || {})
-      .filter(k => b.attributes[k])
-      .map(k => attrNameMap.get(k) || '')
-      .filter(Boolean)
-      .join(' ')
-    return {
-      id: b.id,
-      title: b.title || '',
-      url: b.url || '',
-      notes: b.notes || '',
-      username: b.username || '',
-      attrNames,
-      titlePy: _toPy(b.title || ''),
-      notesPy: _toPy(b.notes || ''),
-    }
-  })
+  const attrNameMap = _buildAttrNameMap(customAttributes)
+  return bookmarks.map(b => ({
+    id: b.id,
+    title: b.title || '',
+    url: b.url || '',
+    notes: b.notes || '',
+    username: b.username || '',
+    attrNames: _attrsToAttrNames(b.attributes, attrNameMap),
+    titlePy: _toPy(b.title || ''),
+    notesPy: _toPy(b.notes || ''),
+  }))
 }
 
 function _buildGroupSearchItems(
@@ -167,13 +178,8 @@ function _buildGroupSearchItems(
   bookmarkMap: Record<string, Bookmark>,
   customAttributes: CustomAttribute[],
 ): GroupSearchItem[] {
-  const attrNameMap = new Map(customAttributes.map(a => [a.id, a.name]))
+  const attrNameMap = _buildAttrNameMap(customAttributes)
   return groups.map(g => {
-    const attrNames = Object.keys(g.attributes || {})
-      .filter(k => g.attributes[k])
-      .map(k => attrNameMap.get(k) || '')
-      .filter(Boolean)
-      .join(' ')
     const childTitles: string[] = []
     const childUrls: string[] = []
     for (const bid of g.bookmarkIds || []) {
@@ -184,7 +190,7 @@ function _buildGroupSearchItems(
     return {
       id: g.id,
       name: g.name || '',
-      attrNames,
+      attrNames: _attrsToAttrNames(g.attributes, attrNameMap),
       childTitle: ct,
       childUrl: childUrls.join(' '),
       namePy: _toPy(g.name || ''),
@@ -248,7 +254,7 @@ function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bo
  *  追加 attrNames 匹配，保持降级与正常路径覆盖范围一致（拼音是能力缺失，不再补）。 */
 function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: CustomAttribute[] = []): Set<string> {
   const q = query.trim().toLowerCase()
-  const attrNameMap = new Map(customAttributes.map(a => [a.id, a.name]))
+  const attrNameMap = _buildAttrNameMap(customAttributes)
   return new Set(
     bookmarks
       .filter(b => {
@@ -256,15 +262,8 @@ function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: 
         if ((b.url || '').toLowerCase().includes(q)) return true
         if ((b.notes || '').toLowerCase().includes(q)) return true
         if ((b.username || '').toLowerCase().includes(q)) return true
-        // 属性名匹配：勾选的属性对应名包含 query
-        if (q && b.attributes) {
-          for (const k of Object.keys(b.attributes)) {
-            if (b.attributes[k]) {
-              const name = attrNameMap.get(k) || ''
-              if (name && name.toLowerCase().includes(q)) return true
-            }
-          }
-        }
+        // 属性名匹配：与 Fuse 路径的 attrNames 覆盖范围一致
+        if (q && _attrsToAttrNames(b.attributes, attrNameMap).toLowerCase().includes(q)) return true
         return false
       })
       .map(b => b.id)

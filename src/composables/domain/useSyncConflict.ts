@@ -7,23 +7,29 @@
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
+import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
 
 /** 远端快照缓存（非响应式，用于去重判断） */
 export const _remoteSnapshots = new Map<string, unknown>()
+
+/** 按实体类型把远端字段写回 data store（走 update* 保证 dirty/track/map） */
+function _applyRemoteToLocal(type: EntityType, id: string, remote: Record<string, unknown>) {
+  const ds = useDataStore()
+  const apply: Record<EntityType, () => void> = {
+    bookmark: () => ds.updateBookmark(id, remote as Partial<Bookmark>),
+    group: () => ds.updateGroup(id, remote as Partial<SiblingGroup>),
+    category: () => ds.updateCategory(id, remote as Partial<Category>),
+    attribute: () => ds.updateAttribute(id, remote as Partial<CustomAttribute>),
+  }
+  apply[type]?.()
+}
 
 export function resolveConflict(id: string, keepLocal: boolean) {
   const store = useSyncStore()
   const conflict = store.conflicts.find(c => c.id === id)
   if (!conflict) return
   if (!keepLocal) {
-    const remoteData = conflict.remote as Record<string, unknown>
-    const ds = useDataStore()
-    if (conflict.type === 'bookmark') ds.updateBookmark(id, remoteData as Partial<Bookmark>)
-    else if (conflict.type === 'group') ds.updateGroup(id, remoteData as Partial<SiblingGroup>)
-    // M18：走 updateCategory/updateAttribute，保证 dirty + track + map
-    else if (conflict.type === 'category') ds.updateCategory(id, remoteData as Partial<import('../../types.js').Category>)
-    else if (conflict.type === 'attribute') ds.updateAttribute(id, remoteData as Partial<import('../../types.js').CustomAttribute>)
+    _applyRemoteToLocal(conflict.type, id, conflict.remote as Record<string, unknown>)
     saveAppData()
   }
   _remoteSnapshots.delete(`${conflict.type}:${id}`)
