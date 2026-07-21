@@ -28,7 +28,6 @@ import { useAuth } from './domain/useAuth.js'
 import { useCloudSync } from './domain/useCloudSync.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
 import { captureNavState } from './interaction/useKeyboardOps.js'
-import { flushIDB } from '../stores/persist.js'
 
 export function useAppLifecycle() {
   const ds = useDataStore()
@@ -95,7 +94,6 @@ export function useAppLifecycle() {
         persistSaveToLocalStorage(snap)
       } catch (_) { /* ignore */ }
       void flushSaveAppData()
-      flushIDB()
     }
     const onSaveUI = () => ui.saveUIState()
     const onClearSel = () => window.getSelection()?.removeAllRanges()

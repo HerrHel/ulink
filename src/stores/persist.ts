@@ -212,12 +212,6 @@ export async function loadFromIDB(): Promise<AppData | null> {
   return null
 }
 
-// ── 兼容旧调用方 ──
-
-export function flushIDB(): void {
-  // IDB 保存已是即时的，flush 仅保留为兼容 API
-}
-
 export function getStorageInfo(data: AppData): StorageInfo {
   try {
     const bytes = new Blob([JSON.stringify(data)]).size

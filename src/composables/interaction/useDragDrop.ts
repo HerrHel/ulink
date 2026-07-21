@@ -14,13 +14,11 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { EditorManager } from '../../lib/editor.js'
+import { getDragHintText } from '../../lib/dragHint.js'
+import type { DragHintPayload } from '../../lib/dragHint.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
-interface DragPayload {
-  type: 'bm' | 'group' | 'detail' | 'cat'
-  id: string
-  srcGid?: string | null
-}
+type DragPayload = DragHintPayload
 
 interface InsertPos {
   gid: string
@@ -70,34 +68,7 @@ function _showDragCursor(x: number, y: number) {
 function _hideDragCursor() {
   if (_dragCursor) { _dragCursor.remove(); _dragCursor = null; }
 }
-// ── 拖拽悬浮提示（B1：显示当前落点语义）──
-function _getDragHintText(target: Element, payload: DragPayload | null): string {
-  if (!payload) return ''
-  if (target.classList.contains('group-body')) {
-    const gid = (target as HTMLElement).dataset.gid
-    if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
-    return payload.type === 'group' ? '嵌入为组引用' : '嵌入为内联卡片'
-  }
-  if (target.classList.contains('group-card-head')) {
-    return payload.type === 'group' ? '交换组位置' : '将书签排序到此组'
-  }
-  if (target.classList.contains('detail-card-wrap')) return '移到此位置'
-  if (target.closest('#detailPanel')) return '加入详情面板'
-  if (target.classList.contains('rail-item')) return '移动到分类'
-  if (target.classList.contains('group-card')) {
-    const gid = (target as HTMLElement).dataset.groupId
-    if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
-    if (payload.type === 'bm') return '移动书签到组'
-    if (payload.type === 'group') return '嵌入为组引用'
-    return ''
-  }
-  if (target.classList.contains('card') && !target.classList.contains('group-card')) {
-    return payload.srcGid ? '移出组' : '交换排序'
-  }
-  // 拖到空白区域：仅当源卡片在组内时提示移出组
-  if (payload.srcGid && target.closest('#cardGrid')) return '移出组'
-  return ''
-}
+// ── 拖拽悬浮提示（文案逻辑见 lib/dragHint.ts）──
 function _showDragHint(text: string, x: number, y: number) {
   if (!_dragHint) {
     _dragHint = document.createElement('div')
@@ -211,7 +182,7 @@ function _onDragEnd() { clearDragState(); }
 
 function _updateDragHint(e: DragEvent, target: Element | null) {
   if (!target || !_currentDragPayload) { _hideDragHint(); return }
-  const text = _getDragHintText(target, _currentDragPayload)
+  const text = getDragHintText(target, _currentDragPayload)
   if (text) _showDragHint(text, e.clientX, e.clientY)
   else _hideDragHint()
 }

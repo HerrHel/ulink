@@ -249,12 +249,6 @@ describe('persist', () => {
     })
   })
 
-  describe('flushIDB', () => {
-    it('应不抛出', () => {
-      expect(() => persist.flushIDB()).not.toThrow()
-    })
-  })
-
   describe('getStorageInfo', () => {
     it('应返回存储信息', () => {
       const data: AppData = {
