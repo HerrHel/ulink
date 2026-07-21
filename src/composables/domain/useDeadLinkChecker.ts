@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
+import { safeGetItem, safeSetItem } from '../../lib/storageSafe.js'
 import type { Bookmark } from '../../types.js'
 
 
@@ -49,7 +50,7 @@ const MAX_HIST = 5
 
 function _loadDeadLinkHistory(): Record<string, CheckResult[]> {
   try {
-    const raw = localStorage.getItem(HIST_KEY)
+    const raw = safeGetItem(HIST_KEY)
     if (!raw) return {}
     const parsed = JSON.parse(raw) as Record<string, unknown[]>
     const out: Record<string, CheckResult[]> = {}
@@ -66,7 +67,7 @@ function _loadDeadLinkHistory(): Record<string, CheckResult[]> {
 }
 
 function _saveDeadLinkHistory(hist: Record<string, CheckResult[]>): void {
-  try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)) } catch { /* 存储满时静默忽略 */ }
+  safeSetItem(HIST_KEY, JSON.stringify(hist))
 }
 
 // M16：内存中的历史缓存；全量检查只 mutate 内存，结束时一次 save，避免 O(N²) 全量 stringify

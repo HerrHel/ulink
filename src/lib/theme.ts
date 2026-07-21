@@ -1,14 +1,12 @@
+import { safeSetItem } from './storageSafe.js'
+
 let _autoThemeMedia: MediaQueryList | null = null
 let _autoThemeHandler: ((e: MediaQueryListEvent) => void) | null = null
-
-function _safeSetItem(key: string, value: string): void {
-  try { localStorage.setItem(key, value) } catch (_) { /* private browsing */ }
-}
 
 function applySystemTheme(): void {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
-  _safeSetItem('lv_theme', isDark ? 'dark' : 'light')
+  safeSetItem('lv_theme', isDark ? 'dark' : 'light')
 }
 
 function startAutoTheme(): void {
@@ -17,7 +15,7 @@ function startAutoTheme(): void {
   _autoThemeMedia = window.matchMedia('(prefers-color-scheme: dark)')
   _autoThemeHandler = function (e: MediaQueryListEvent) {
     document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light')
-    _safeSetItem('lv_theme', e.matches ? 'dark' : 'light')
+    safeSetItem('lv_theme', e.matches ? 'dark' : 'light')
   }
   _autoThemeMedia.addEventListener('change', _autoThemeHandler)
 }
@@ -29,28 +27,28 @@ function stopAutoTheme(): void {
 
 function toggleTheme(): void {
   const mode = localStorage.getItem('lv_themeMode') || 'manual'
-  if (mode === 'auto') { stopAutoTheme(); _safeSetItem('lv_themeMode', 'manual') }
+  if (mode === 'auto') { stopAutoTheme(); safeSetItem('lv_themeMode', 'manual') }
   const el = document.documentElement
   const next = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
   el.setAttribute('data-theme', next)
-  _safeSetItem('lv_theme', next)
+  safeSetItem('lv_theme', next)
 }
 
 function setThemeStyle(style: string): void {
   const el = document.documentElement
   if (style === 'comfortable') { el.setAttribute('data-theme-style', 'comfortable') }
   else { el.removeAttribute('data-theme-style') }
-  _safeSetItem('lv_themeStyle', style)
+  safeSetItem('lv_themeStyle', style)
 }
 
 function toggleAutoTheme(): void {
   const mode = localStorage.getItem('lv_themeMode') || 'manual'
   if (mode === 'auto') {
     stopAutoTheme()
-    _safeSetItem('lv_themeMode', 'manual')
+    safeSetItem('lv_themeMode', 'manual')
   } else {
     startAutoTheme()
-    _safeSetItem('lv_themeMode', 'auto')
+    safeSetItem('lv_themeMode', 'auto')
   }
 }
 

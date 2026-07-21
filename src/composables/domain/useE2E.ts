@@ -16,6 +16,7 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
 import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher } from '../../crypto.js'
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
 import type { EntityType } from '../../types.js'
 
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
@@ -55,17 +56,17 @@ const LEGACY_DECRYPT_FIELDS: Record<EntityType, readonly string[]> = {
 // ── 本地 canary 读写 ──
 function _readLocalCanary(): Record<string, unknown> | null {
   try {
-    const raw = localStorage.getItem(LOCAL_CANARY_KEY)
+    const raw = safeGetItem(LOCAL_CANARY_KEY)
     return raw ? JSON.parse(raw) : null
   } catch { return null }
 }
 
 function _writeLocalCanary(canaryData: Record<string, unknown>) {
-  try { localStorage.setItem(LOCAL_CANARY_KEY, JSON.stringify(canaryData)) } catch { /* ignore */ }
+  safeSetItem(LOCAL_CANARY_KEY, JSON.stringify(canaryData))
 }
 
 function _removeLocalCanary() {
-  try { localStorage.removeItem(LOCAL_CANARY_KEY) } catch { /* ignore */ }
+  safeRemoveItem(LOCAL_CANARY_KEY)
 }
 
 // ── Recovery Key 工具 ──
