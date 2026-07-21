@@ -5,12 +5,16 @@ import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
-import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
+import type { EntityType } from '../../types.js'
 import { FROM_REMOTE } from './useSyncMapping.js'
+import { entityTypeToTable } from './syncMappingTables.js'
 import { _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
+
+/** pull/merge 顺序：分类先于书签/组（无硬依赖，保持历史顺序） */
+const SYNC_ENTITY_ORDER: EntityType[] = ['category', 'bookmark', 'group', 'attribute']
 
 /** 拉取远端变更（full=true 时 since=0 且启用 full-absent 对账） */
 export async function pullChanges(full = false): Promise<boolean> {
@@ -26,23 +30,25 @@ export async function pullChanges(full = false): Promise<boolean> {
     const since = full ? 0 : (syncStore.lastSyncAt || 0)
     const port = getSyncRemotePort()
 
-    const [catsRes, bmsRes, groupsRes, attrsRes] = await Promise.all([
-      port.selectSince('categories', userId, since),
-      port.selectSince('bookmarks', userId, since),
-      port.selectSince('sibling_groups', userId, since),
-      port.selectSince('custom_attributes', userId, since),
-    ])
-
-    for (const r of [catsRes, bmsRes, groupsRes, attrsRes]) {
+    const sinceResults = await Promise.all(
+      SYNC_ENTITY_ORDER.map(type => port.selectSince(entityTypeToTable[type], userId, since)),
+    )
+    for (const r of sinceResults) {
       if (r.error) throw new Error(r.error.message)
     }
 
     const ds = useDataStore()
     const e2e = useE2E()
-    const remoteCats = (catsRes.data || []).map(r => FROM_REMOTE.category(r as any)).filter(Boolean) as Category[]
-    const remoteBms = (bmsRes.data || []).map(r => FROM_REMOTE.bookmark(r as any)).filter(Boolean) as Bookmark[]
-    const remoteGroups = (groupsRes.data || []).map(r => FROM_REMOTE.group(r as any)).filter(Boolean) as SiblingGroup[]
-    const remoteAttrs = (attrsRes.data || []).map(r => FROM_REMOTE.attribute(r as any)).filter(Boolean) as CustomAttribute[]
+
+    type RemoteRow = { id: string; updatedAt?: number; deletedAt?: number }
+    const remotes: Record<EntityType, RemoteRow[]> = {
+      category: [], bookmark: [], group: [], attribute: [],
+    }
+    for (let i = 0; i < SYNC_ENTITY_ORDER.length; i++) {
+      const type = SYNC_ENTITY_ORDER[i]
+      const rows = sinceResults[i].data || []
+      remotes[type] = rows.map(r => FROM_REMOTE[type](r as any)).filter(Boolean) as RemoteRow[]
+    }
 
     if (e2e.isUnlocked.value) {
       const decryptList = async <T extends { id: string }>(arr: T[], type: EntityType): Promise<T[]> => {
@@ -54,29 +60,30 @@ export async function pullChanges(full = false): Promise<boolean> {
         }
         return out
       }
-      remoteBms.splice(0, remoteBms.length, ...await decryptList(remoteBms, 'bookmark'))
-      remoteGroups.splice(0, remoteGroups.length, ...await decryptList(remoteGroups, 'group'))
-      remoteCats.splice(0, remoteCats.length, ...await decryptList(remoteCats, 'category'))
-      remoteAttrs.splice(0, remoteAttrs.length, ...await decryptList(remoteAttrs, 'attribute'))
+      for (const type of SYNC_ENTITY_ORDER) {
+        const list = remotes[type]
+        remotes[type] = await decryptList(list, type)
+      }
       if (!e2e.isUnlocked.value) {
         syncStore.setSyncStatus('idle')
         return false
       }
     }
 
-    _mergeIntoLocal(ds.categories, remoteCats, 'category', full)
-    _mergeIntoLocal(ds.bookmarks, remoteBms, 'bookmark', full)
-    _mergeIntoLocal(ds.siblingGroups, remoteGroups, 'group', full)
-    _mergeIntoLocal(ds.customAttributes, remoteAttrs, 'attribute', full)
+    const localByType: Record<EntityType, RemoteRow[]> = {
+      category: ds.categories,
+      bookmark: ds.bookmarks,
+      group: ds.siblingGroups,
+      attribute: ds.customAttributes,
+    }
+    for (const type of SYNC_ENTITY_ORDER) {
+      _mergeIntoLocal(localByType[type], remotes[type], type, full)
+    }
 
-    const [delBmsRes, delGroupsRes, delCatsRes, delAttrsRes] = await Promise.all([
-      port.selectSoftDeleted('bookmarks', userId, since),
-      port.selectSoftDeleted('sibling_groups', userId, since),
-      port.selectSoftDeleted('categories', userId, since),
-      port.selectSoftDeleted('custom_attributes', userId, since),
-    ])
+    const softDelResults = await Promise.all(
+      SYNC_ENTITY_ORDER.map(type => port.selectSoftDeleted(entityTypeToTable[type], userId, since)),
+    )
 
-    // 各表查询结果与 EntityType 成对，避免对每行做四路猜测
     const isLocalAlive: Record<EntityType, (id: string) => boolean> = {
       bookmark: (id) => !!ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt,
       group: (id) => !!ds.groupMap[id] && !ds.groupMap[id].deletedAt,
@@ -89,13 +96,9 @@ export async function pullChanges(full = false): Promise<boolean> {
         return !!attr && !attr.deletedAt
       },
     }
-    const softDelBatches: Array<{ type: EntityType; res: typeof delBmsRes }> = [
-      { type: 'bookmark', res: delBmsRes },
-      { type: 'group', res: delGroupsRes },
-      { type: 'category', res: delCatsRes },
-      { type: 'attribute', res: delAttrsRes },
-    ]
-    for (const { type, res } of softDelBatches) {
+    for (let i = 0; i < SYNC_ENTITY_ORDER.length; i++) {
+      const type = SYNC_ENTITY_ORDER[i]
+      const res = softDelResults[i]
       if (res.error) { console.warn('[sync] deletion sync query failed:', res.error); continue }
       for (const row of res.data || []) {
         const id = (row as { id: string }).id
@@ -104,13 +107,9 @@ export async function pullChanges(full = false): Promise<boolean> {
     }
 
     if (syncStore.lastSyncAt > 0) {
-      const [allBmRes, allGroupRes, allCatRes, allAttrRes] = await Promise.all([
-        port.selectAllIds('bookmarks', userId),
-        port.selectAllIds('sibling_groups', userId),
-        port.selectAllIds('categories', userId),
-        port.selectAllIds('custom_attributes', userId),
-      ])
-      const reconcileQueries = [allBmRes, allGroupRes, allCatRes, allAttrRes]
+      const reconcileQueries = await Promise.all(
+        SYNC_ENTITY_ORDER.map(type => port.selectAllIds(entityTypeToTable[type], userId)),
+      )
       const anyReconcileError = reconcileQueries.some(r => r.error)
       if (anyReconcileError) {
         for (const r of reconcileQueries) {
@@ -125,17 +124,16 @@ export async function pullChanges(full = false): Promise<boolean> {
           if (ds._dirtyIds.has(id) || _isPendingSync(id)) return
           _deleteWithoutEcho(ds, type, id)
         }
-        for (const b of ds.bookmarks) {
-          if (!b.deletedAt && !remoteAll.has(b.id)) reconcileDelete('bookmark', b.id)
-        }
-        for (const g of ds.siblingGroups) {
-          if (!g.deletedAt && !remoteAll.has(g.id)) reconcileDelete('group', g.id)
-        }
-        for (const c of ds.categories) {
-          if (!c.deletedAt && !remoteAll.has(c.id)) reconcileDelete('category', c.id)
-        }
-        for (const a of ds.customAttributes) {
-          if (!a.deletedAt && !remoteAll.has(a.id)) reconcileDelete('attribute', a.id)
+        const localLists: Array<{ type: EntityType; items: Array<{ id: string; deletedAt?: number }> }> = [
+          { type: 'bookmark', items: ds.bookmarks },
+          { type: 'group', items: ds.siblingGroups },
+          { type: 'category', items: ds.categories },
+          { type: 'attribute', items: ds.customAttributes },
+        ]
+        for (const { type, items } of localLists) {
+          for (const item of items) {
+            if (!item.deletedAt && !remoteAll.has(item.id)) reconcileDelete(type, item.id)
+          }
         }
       }
     }
