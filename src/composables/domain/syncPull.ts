@@ -78,16 +78,30 @@ export async function pullChanges(full = false): Promise<boolean> {
       port.selectSoftDeleted('custom_attributes', userId, since),
     ])
 
-    for (const r of [delBmsRes, delGroupsRes, delCatsRes, delAttrsRes]) {
-      if (r.error) { console.warn('[sync] deletion sync query failed:', r.error); continue }
-      for (const row of r.data || []) {
-        const id = row.id as string
-        if (ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt) _deleteWithoutEcho(ds, 'bookmark', id)
-        else if (ds.groupMap[id] && !ds.groupMap[id].deletedAt) _deleteWithoutEcho(ds, 'group', id)
+    // 各表查询结果与 EntityType 成对，避免对每行做四路猜测
+    const isLocalAlive: Record<EntityType, (id: string) => boolean> = {
+      bookmark: (id) => !!ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt,
+      group: (id) => !!ds.groupMap[id] && !ds.groupMap[id].deletedAt,
+      category: (id) => {
         const cat = ds.categories.find(c => c.id === id)
-        if (cat && !cat.deletedAt) _deleteWithoutEcho(ds, 'category', id)
+        return !!cat && !cat.deletedAt
+      },
+      attribute: (id) => {
         const attr = ds.customAttributes.find(a => a.id === id)
-        if (attr && !attr.deletedAt) _deleteWithoutEcho(ds, 'attribute', id)
+        return !!attr && !attr.deletedAt
+      },
+    }
+    const softDelBatches: Array<{ type: EntityType; res: typeof delBmsRes }> = [
+      { type: 'bookmark', res: delBmsRes },
+      { type: 'group', res: delGroupsRes },
+      { type: 'category', res: delCatsRes },
+      { type: 'attribute', res: delAttrsRes },
+    ]
+    for (const { type, res } of softDelBatches) {
+      if (res.error) { console.warn('[sync] deletion sync query failed:', res.error); continue }
+      for (const row of res.data || []) {
+        const id = (row as { id: string }).id
+        if (id && isLocalAlive[type](id)) _deleteWithoutEcho(ds, type, id)
       }
     }
 
@@ -109,7 +123,7 @@ export async function pullChanges(full = false): Promise<boolean> {
         for (const r of reconcileQueries) {
           for (const row of r.data || []) remoteAll.add((row as { id: string }).id)
         }
-        const reconcileDelete = (type: 'bookmark' | 'group' | 'category' | 'attribute', id: string) => {
+        const reconcileDelete = (type: EntityType, id: string) => {
           if (ds._dirtyIds.has(id) || _isPendingSync(id)) return
           _deleteWithoutEcho(ds, type, id)
         }
