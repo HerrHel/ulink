@@ -9,6 +9,7 @@ import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds, clearSearchCache } from '../lib/search.js'
+import { safeGetItem, safeSetItem } from '../lib/storageSafe.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
 import type { SortMode, SortDir } from './ui.js'
 
@@ -295,16 +296,14 @@ export const useDataStore = defineStore('data', {
 
     /** 持久化 _deletedGroupMemberships 到 localStorage，用于恢复时跨会话保持组关联 */
     _persistDeletedGroupMemberships() {
-      try {
-        const obj: Record<string, string[]> = {}
-        for (const [id, groupIds] of this._deletedGroupMemberships) obj[id] = groupIds
-        localStorage.setItem(DGM_KEY, JSON.stringify(obj))
-      } catch { /* 存储满时静默失败 */ }
+      const obj: Record<string, string[]> = {}
+      for (const [id, groupIds] of this._deletedGroupMemberships) obj[id] = groupIds
+      safeSetItem(DGM_KEY, JSON.stringify(obj))
     },
     /** 从 localStorage 恢复 _deletedGroupMemberships */
     _restoreDeletedGroupMemberships() {
       try {
-        const raw = localStorage.getItem(DGM_KEY)
+        const raw = safeGetItem(DGM_KEY)
         if (raw) {
           const obj = JSON.parse(raw) as Record<string, string[]>
           this._deletedGroupMemberships = new Map(Object.entries(obj))
@@ -361,10 +360,10 @@ export const useDataStore = defineStore('data', {
         const max = useUIStore().historyMax || 10
         try {
           const key = 'lv_hist:' + id
-          const raw = localStorage.getItem(key)
+          const raw = safeGetItem(key)
           const arr = raw ? JSON.parse(raw) : []
           arr.unshift({ id: Date.now(), data: latestData, created_at: new Date().toISOString() })
-          localStorage.setItem(key, JSON.stringify(arr.slice(0, max)))
+          safeSetItem(key, JSON.stringify(arr.slice(0, max)))
         } catch (_) { /* fire-and-forget */ }
       }, _HISTORY_DEBOUNCE_MS))
     },

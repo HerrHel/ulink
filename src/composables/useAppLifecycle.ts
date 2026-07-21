@@ -17,6 +17,7 @@ export function onShareRoute(cb: (gid: string) => void) { _onShareRoute = cb }
 // E1 门闩实现见 lib/dataReady；此处 re-export 便于 App 与其它入口使用
 export { whenDataReady, isDataHydrated } from '../lib/dataReady.js'
 import { markDataReady } from '../lib/dataReady.js'
+import { safeGetItem } from '../lib/storageSafe.js'
 
 // D2: Web Share Target 与扩展保存请求统一由 App.vue:saveFromExtension 处理（带 favicon + 撤销 toast + 统计）。
 // 历史上的 _handleShareTarget 在此处同步 addBookmark，但 App.vue 的 onMounted 又会 800ms 后
@@ -63,7 +64,7 @@ export function useAppLifecycle() {
     }
 
     // D1: 首启分流引导
-    if (!localStorage.getItem('lv_setup_done') && !shareGid) {
+    if (!safeGetItem('lv_setup_done') && !shareGid) {
       useUIStore().modals.setupGuide = true
     }
     updateCardTagsOverflow()

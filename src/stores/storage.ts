@@ -5,6 +5,7 @@
  */
 import Dexie from 'dexie'
 import { cloneDeep } from '../lib/clone.js'
+import { safeGetItem } from '../lib/storageSafe.js'
 
 interface IDBRow {
   key: string
@@ -148,7 +149,7 @@ const _histKey = (itemId: string) => 'lv_hist:' + itemId
 
 export function fetchLocalHistory(itemId: string): LocalHistoryVersion[] {
   try {
-    const raw = localStorage.getItem(_histKey(itemId))
+    const raw = safeGetItem(_histKey(itemId))
     return raw ? JSON.parse(raw) as LocalHistoryVersion[] : []
   } catch (e) { console.warn('[IDB] fetchLocalHistory error:', e); return [] }
 }

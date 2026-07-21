@@ -1,4 +1,4 @@
-import { safeSetItem } from './storageSafe.js'
+import { safeGetItem, safeSetItem } from './storageSafe.js'
 
 let _autoThemeMedia: MediaQueryList | null = null
 let _autoThemeHandler: ((e: MediaQueryListEvent) => void) | null = null
@@ -26,7 +26,7 @@ function stopAutoTheme(): void {
 }
 
 function toggleTheme(): void {
-  const mode = localStorage.getItem('lv_themeMode') || 'manual'
+  const mode = safeGetItem('lv_themeMode') || 'manual'
   if (mode === 'auto') { stopAutoTheme(); safeSetItem('lv_themeMode', 'manual') }
   const el = document.documentElement
   const next = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
@@ -42,7 +42,7 @@ function setThemeStyle(style: string): void {
 }
 
 function toggleAutoTheme(): void {
-  const mode = localStorage.getItem('lv_themeMode') || 'manual'
+  const mode = safeGetItem('lv_themeMode') || 'manual'
   if (mode === 'auto') {
     stopAutoTheme()
     safeSetItem('lv_themeMode', 'manual')
@@ -53,13 +53,11 @@ function toggleAutoTheme(): void {
 }
 
 ;(function () {
-  try {
-    const mode = localStorage.getItem('lv_themeMode') || 'manual'
-    if (mode === 'auto') { applySystemTheme(); startAutoTheme() }
-    else { const t = localStorage.getItem('lv_theme'); if (t) document.documentElement.setAttribute('data-theme', t) }
-    const s = localStorage.getItem('lv_themeStyle')
-    if (s === 'comfortable') document.documentElement.setAttribute('data-theme-style', 'comfortable')
-  } catch (_) { /* localStorage 不可用时静默 */ }
+  const mode = safeGetItem('lv_themeMode') || 'manual'
+  if (mode === 'auto') { applySystemTheme(); startAutoTheme() }
+  else { const t = safeGetItem('lv_theme'); if (t) document.documentElement.setAttribute('data-theme', t) }
+  const s = safeGetItem('lv_themeStyle')
+  if (s === 'comfortable') document.documentElement.setAttribute('data-theme-style', 'comfortable')
 })()
 
 export { toggleTheme, setThemeStyle, toggleAutoTheme }

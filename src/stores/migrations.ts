@@ -6,6 +6,7 @@
 import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP, DEFAULTS } from '../config/constants.js'
 import { esc, cleanZeroWidth } from '../utils.js'
 import { inlineCardHTML, groupRefCardHTML } from '../composables/useInlineCard.js'
+import { safeGetItem, safeRemoveItem } from '../lib/storageSafe.js'
 import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 
 // 当前 schema 迁移版本。增量更新此值以触发新迁移。
@@ -92,10 +93,10 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
 
   // 5. 展开状态迁移
   try {
-    const _es = JSON.parse(localStorage.getItem('lv_expandStates') || '{}')
+    const _es = JSON.parse(safeGetItem('lv_expandStates') || '{}')
     result.bookmarks.forEach(b => { if (_es[b.id]) b.isExpanded = true })
     result.siblingGroups.forEach(g => { if (_es[g.id]) g.isExpanded = true })
-    localStorage.removeItem('lv_expandStates')
+    safeRemoveItem('lv_expandStates')
   } catch (e) { console.warn('[Migration] expand state error:', (e as Error).message) }
 
   // 6. 清理零宽字符 + 补充缺失字段

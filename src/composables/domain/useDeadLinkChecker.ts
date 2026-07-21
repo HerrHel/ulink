@@ -2,7 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
-import { safeGetItem, safeSetItem } from '../../lib/storageSafe.js'
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
 import type { Bookmark } from '../../types.js'
 
 
@@ -556,32 +556,32 @@ export function useDeadLinkChecker() {
   const AUTO_CHECK_KEY = 'lv_autoDeadCheck'
   const AUTO_CHECK_ENABLED_KEY = 'lv_autoDeadCheckEnabled'
 
-  const autoCheckEnabled = ref(!!localStorage.getItem(AUTO_CHECK_ENABLED_KEY))
+  const autoCheckEnabled = ref(!!safeGetItem(AUTO_CHECK_ENABLED_KEY))
   let _autoCheckTimer: ReturnType<typeof setInterval> | null = null
 
   function _persistAutoCheck(v: boolean) {
-    if (v) localStorage.setItem(AUTO_CHECK_ENABLED_KEY, '1')
-    else localStorage.removeItem(AUTO_CHECK_ENABLED_KEY)
+    if (v) safeSetItem(AUTO_CHECK_ENABLED_KEY, '1')
+    else safeRemoveItem(AUTO_CHECK_ENABLED_KEY)
   }
 
   function startAutoCheck() {
     autoCheckEnabled.value = true
     _persistAutoCheck(true)
     // 检查是否已到检测时间
-    const last = parseInt(localStorage.getItem(AUTO_CHECK_KEY) || '0', 10)
+    const last = parseInt(safeGetItem(AUTO_CHECK_KEY) || '0', 10)
     if (Date.now() - last > AUTO_INTERVAL_MS && !checking.value) {
       checkAll(5, 200)
       // DLC-4：只在检测实际运行时更新时间戳。旧实现无条件更新——跳过本次检测时
       // 仍刷时间戳，导致「启动即检测」意图被破坏（需再等 7 天才触发）。
-      localStorage.setItem(AUTO_CHECK_KEY, String(Date.now()))
+      safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
     }
     // 启动定时循环（每 6 小时检查一次）
     if (_autoCheckTimer) clearInterval(_autoCheckTimer)
     _autoCheckTimer = setInterval(() => {
-      const last2 = parseInt(localStorage.getItem(AUTO_CHECK_KEY) || '0', 10)
+      const last2 = parseInt(safeGetItem(AUTO_CHECK_KEY) || '0', 10)
       if (Date.now() - last2 > AUTO_INTERVAL_MS && !checking.value) {
         checkAll(5, 200)
-        localStorage.setItem(AUTO_CHECK_KEY, String(Date.now()))
+        safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
       }
     }, 6 * 60 * 60 * 1000)
   }

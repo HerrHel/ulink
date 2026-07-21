@@ -206,6 +206,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
+import { safeGetItem } from '../../lib/storageSafe.js'
 
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
@@ -249,7 +250,7 @@ function onSetThemeStyle(style: ThemeStyle) {
 
 function onToggleAutoTheme() {
   themeToggleAuto()
-  uiStore.themeMode = localStorage.getItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
+  uiStore.themeMode = safeGetItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
 }
 
 function onSetLayout(mode: LayoutMode) {

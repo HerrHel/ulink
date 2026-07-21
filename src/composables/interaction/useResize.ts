@@ -4,6 +4,7 @@
  * 从 app-legacy.js IIFE 提取。
  */
 import { onMounted, onUnmounted } from 'vue'
+import { safeGetItem, safeSetItem } from '../../lib/storageSafe.js'
 
 export function useResize() {
   onMounted(() => {
@@ -14,8 +15,8 @@ export function useResize() {
     if (!leftHandle || !rightHandle || !leftPanel || !rightPanel) return
 
     // 恢复保存的宽度
-    const savedLeft = localStorage.getItem('lv_railWidth')
-    const savedRight = localStorage.getItem('lv_detailWidth')
+    const savedLeft = safeGetItem('lv_railWidth')
+    const savedRight = safeGetItem('lv_detailWidth')
     if (savedLeft) leftPanel.style.width = savedLeft + 'px'
     if (savedRight) rightPanel.style.setProperty('--detail-width', savedRight + 'px')
 
@@ -53,9 +54,9 @@ export function useResize() {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       if (panel === leftPanel) {
-        localStorage.setItem('lv_railWidth', String(parseInt(panel.style.width)))
+        safeSetItem('lv_railWidth', String(parseInt(panel.style.width)))
       } else {
-        localStorage.setItem('lv_detailWidth', String(parseInt(panel.style.getPropertyValue('--detail-width'))))
+        safeSetItem('lv_detailWidth', String(parseInt(panel.style.getPropertyValue('--detail-width'))))
       }
       handle = panel = null
     }

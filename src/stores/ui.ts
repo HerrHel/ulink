@@ -7,6 +7,7 @@ import { defineStore } from 'pinia'
 import { CAT_ALL, UI_STATE_KEY } from '../config/constants.js'
 import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
+import { safeGetItem, safeSetItem } from '../lib/storageSafe.js'
 
 // ── 严格字面量类型 ──
 export type ThemeStyle = 'premium' | 'comfortable'
@@ -202,13 +203,15 @@ export const useUIStore = defineStore('ui', {
           _mobileLayoutMode: this._mobileLayoutMode,
           _customCardOrder: ds._customCardOrder || null,
         }
-        localStorage.setItem(UI_STATE_KEY, JSON.stringify(s))
+        if (!safeSetItem(UI_STATE_KEY, JSON.stringify(s))) {
+          console.warn('[LinkVault] Failed to save UI state: storage full or unavailable')
+        }
       } catch (e) { console.warn('[LinkVault] Failed to save UI state:', (e as Error).message) }
     },
 
     restoreUIState() {
       try {
-        const raw = localStorage.getItem(UI_STATE_KEY)
+        const raw = safeGetItem(UI_STATE_KEY)
         if (!raw) return
         const s = JSON.parse(raw)
         if (s.curCat) this.curCat = s.curCat
@@ -248,10 +251,10 @@ export const useUIStore = defineStore('ui', {
         // 刷新后会重置为默认 'premium'，导致重启后 SettingsPanel 的 :class 高亮与实际 DOM 主题
         // 不一致（实际是 comfortable 却高亮 premium）。此处从 lv_themeStyle 同步回 uiStore.themeStyle，
         // 与 theme.ts 已设的 DOM 态对齐，单一真相源不污染 saveUIState。
-        const ts = localStorage.getItem('lv_themeStyle')
+        const ts = safeGetItem('lv_themeStyle')
         if (ts === 'comfortable' || ts === 'premium') this.themeStyle = ts
         // D1-004：themeMode 同样以 lv_themeMode 为真相源，避免面板默认误显「跟随系统」
-        const tm = localStorage.getItem('lv_themeMode')
+        const tm = safeGetItem('lv_themeMode')
         this.themeMode = tm === 'auto' ? 'auto' : 'manual'
       } catch (e) { console.warn('[LinkVault] Failed to restore UI state:', (e as Error).message) }
     },

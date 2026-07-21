@@ -28,6 +28,7 @@
 
 <script setup lang="ts">
 import { useUIStore } from '../../stores/ui.js'
+import { safeSetItem } from '../../lib/storageSafe.js'
 
 const ui = useUIStore()
 const SETUP_DONE_KEY = 'lv_setup_done'
@@ -35,7 +36,7 @@ const SETUP_DONE_KEY = 'lv_setup_done'
 function close() { ui.modals.setupGuide = false }
 
 function finish() {
-  localStorage.setItem(SETUP_DONE_KEY, '1')
+  safeSetItem(SETUP_DONE_KEY, '1')
   close()
 }
 
