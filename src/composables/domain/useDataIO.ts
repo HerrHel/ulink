@@ -9,6 +9,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { downloadFile, dateStamp } from '../../lib/download.js'
 import { esc as escHtml } from '../../utils.js'
 
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -40,21 +41,11 @@ function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[
   return tags
 }
 
-function _download(filename: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  a.click(); URL.revokeObjectURL(a.href)
-}
-
-const _dateStamp = () => new Date().toISOString().slice(0, 10)
-
 /** LinkVault 完整备份（含组/分类/属性/加密元数据），其他设备恢复用 */
 export function exportData() {
   const ds = useDataStore()
   try {
-    _download('linkvault-backup-' + _dateStamp() + '.json',
+    downloadFile('linkvault-backup-' + dateStamp() + '.json',
       JSON.stringify(ds._dataSnapshot(), null, 2), 'application/json')
     toast('数据已导出')
   } catch (e) { console.warn('[export] JSON export failed:', e); toast('导出失败', false) }
@@ -95,7 +86,7 @@ export function exportHTML() {
       lines.push('    </DL><p>')
     }
     lines.push('</DL><p>')
-    _download('linkvault-bookmarks-' + _dateStamp() + '.html', lines.join('\n'), 'text/html')
+    downloadFile('linkvault-bookmarks-' + dateStamp() + '.html', lines.join('\n'), 'text/html')
     toast(`已导出 ${live.length} 个书签（HTML）`)
   } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
 }
@@ -118,7 +109,7 @@ export function exportCSV() {
         b.createdAt > 0 ? new Date(b.createdAt).toISOString() : '',
       ])
     }
-    _download('linkvault-bookmarks-' + _dateStamp() + '.csv',
+    downloadFile('linkvault-bookmarks-' + dateStamp() + '.csv',
       rows.map(r => r.join(',')).join('\n'), 'text/csv')
     toast(`已导出 ${live.length} 个书签（CSV）`)
   } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
@@ -138,7 +129,7 @@ export function exportRaindrop() {
       created: b.createdAt > 0 ? new Date(b.createdAt).toISOString() : undefined,
       lastUpdate: b.updatedAt > 0 ? new Date(b.updatedAt).toISOString() : undefined,
     }))
-    _download('linkvault-raindrop-' + _dateStamp() + '.json',
+    downloadFile('linkvault-raindrop-' + dateStamp() + '.json',
       JSON.stringify({ items }, null, 2), 'application/json')
     toast(`已导出 ${live.length} 个书签（Raindrop JSON）`)
   } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }

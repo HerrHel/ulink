@@ -3,6 +3,7 @@
  * 使用 <a download> 直接下载 HTML 文件，移动端和桌面端均可用
  */
 import { esc } from '../utils.js'
+import { downloadFile, dateStamp } from './download.js'
 
 export function generateRecoveryKeyPDF(recoveryKey: string) {
   // 与全站 HTML 转义一致（含单引号），避免局部实现漂移
@@ -82,13 +83,5 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
 </body>
 </html>`
 
-  const blob = new Blob([html], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `LinkVault-Recovery-Key-${new Date().toISOString().slice(0, 10)}.html`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  setTimeout(() => URL.revokeObjectURL(url), 60000)
+  downloadFile(`LinkVault-Recovery-Key-${dateStamp()}.html`, html, 'text/html')
 }
