@@ -7,14 +7,11 @@ import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import type { EntityType } from '../../types.js'
 import { FROM_REMOTE } from './useSyncMapping.js'
-import { entityTypeToTable } from './syncMappingTables.js'
+import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
-
-/** pull/merge 顺序：分类先于书签/组（无硬依赖，保持历史顺序） */
-const SYNC_ENTITY_ORDER: EntityType[] = ['category', 'bookmark', 'group', 'attribute']
 
 /** 拉取远端变更（full=true 时 since=0 且启用 full-absent 对账） */
 export async function pullChanges(full = false): Promise<boolean> {
@@ -124,14 +121,14 @@ export async function pullChanges(full = false): Promise<boolean> {
           if (ds._dirtyIds.has(id) || _isPendingSync(id)) return
           _deleteWithoutEcho(ds, type, id)
         }
-        const localLists: Array<{ type: EntityType; items: Array<{ id: string; deletedAt?: number }> }> = [
-          { type: 'bookmark', items: ds.bookmarks },
-          { type: 'group', items: ds.siblingGroups },
-          { type: 'category', items: ds.categories },
-          { type: 'attribute', items: ds.customAttributes },
-        ]
-        for (const { type, items } of localLists) {
-          for (const item of items) {
+        const localByEntity: Record<EntityType, Array<{ id: string; deletedAt?: number }>> = {
+          category: ds.categories,
+          bookmark: ds.bookmarks,
+          group: ds.siblingGroups,
+          attribute: ds.customAttributes,
+        }
+        for (const type of SYNC_ENTITY_ORDER) {
+          for (const item of localByEntity[type]) {
             if (!item.deletedAt && !remoteAll.has(item.id)) reconcileDelete(type, item.id)
           }
         }

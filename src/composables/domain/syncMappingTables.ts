@@ -21,3 +21,9 @@ export const entityTypeToTable: Record<EntityType, TableName> = {
   category: 'categories',
   attribute: 'custom_attributes',
 }
+
+/**
+ * pull/push/reconcile 实体顺序：分类先于书签/组（无硬依赖，保持历史顺序）。
+ * 单一来源，避免 syncPull 与 enqueueDirty 各自硬编码四表漂移。
+ */
+export const SYNC_ENTITY_ORDER: EntityType[] = ['category', 'bookmark', 'group', 'attribute']

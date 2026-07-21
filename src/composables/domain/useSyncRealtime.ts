@@ -9,7 +9,7 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { FROM_REMOTE } from './useSyncMapping.js'
-import { entityTypeToTable } from './syncMappingTables.js'
+import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
 import { decideRemoteApply } from './syncMergeCore.js'
@@ -182,26 +182,30 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     },
     category: {
       upsert: (m: any) => {
-        const i = ds.categories.findIndex(c => c.id === m.id)
-        if (i >= 0) {
-          ds.categories[i] = { ...ds.categories[i], ...m, updatedAt: m.updatedAt }
-          ds._catMap[m.id] = ds.categories[i]
+        if (ds.categoryMap[m.id]) {
+          const remoteUpdatedAt = m.updatedAt
+          ds.updateCategory(m.id, m)
+          // 恢复远端 updatedAt，避免被 Date.now() 覆盖（updateCategory 已同步 _catMap）
+          const cat = ds.categoryMap[m.id]
+          if (cat) cat.updatedAt = remoteUpdatedAt
         } else {
-          ds.categories = [...ds.categories, m]
-          ds._catMap[m.id] = m
+          ds.addCategory(m)
         }
+        ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
       },
     },
     attribute: {
       upsert: (m: any) => {
-        const i = ds.customAttributes.findIndex(a => a.id === m.id)
-        if (i >= 0) {
-          ds.customAttributes[i] = { ...ds.customAttributes[i], ...m, updatedAt: m.updatedAt }
-          ds._attrMap[m.id] = ds.customAttributes[i]
+        if (ds.attributeMap[m.id]) {
+          const remoteUpdatedAt = m.updatedAt
+          ds.updateAttribute(m.id, m)
+          // 恢复远端 updatedAt（updateAttribute 已同步 _attrMap）
+          const attr = ds.attributeMap[m.id]
+          if (attr) attr.updatedAt = remoteUpdatedAt
         } else {
-          ds.customAttributes = [...ds.customAttributes, m]
-          ds._attrMap[m.id] = m
+          ds.addAttribute(m)
         }
+        ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
       },
     },
   }
@@ -266,9 +270,8 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
   const myGen = _gen
 
   syncStore.setRealtimeStatus('connecting')
-  const tables: EntityType[] = ['bookmark', 'group', 'category', 'attribute']
   let ch = supabase.channel('db-changes')
-  for (const type of tables) {
+  for (const type of SYNC_ENTITY_ORDER) {
     ch = ch.on('postgres_changes',
       { event: '*', schema: 'public', table: entityTypeToTable[type], filter: `user_id=eq.${userId}` },
       (p) => _handleRealtimeChange(p, type))

@@ -12,6 +12,7 @@ import {
 } from '../../stores/storage.js'
 import type { EntityType } from '../../types.js'
 import { toRemoteRow, camelToSnake } from './useSyncMapping.js'
+// EntityType used by _opNeedsUnlock callers / ENCRYPT_FIELDS path
 import { _saveHistory, _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { _markPendingSync, _clearPendingSync } from './syncPending.js'
@@ -26,7 +27,7 @@ export const MAX_PUSH_RETRIES = 3
  * (一处新增敏感字段另一处漏加 → 锁定态把仍加密的旧密文/明文敏感内容误推云)。
  */
 import { ENCRYPT_FIELDS } from './useE2E.js'
-import { tableToEntityType, type TableName } from './syncMappingTables.js'
+import { tableToEntityType, entityTypeToTable, SYNC_ENTITY_ORDER, type TableName } from './syncMappingTables.js'
 
 /** 锁定态下该 upsert op 是否需要等解锁才能安全推送 */
 export function _opNeedsUnlock(op: SyncOp): boolean {
@@ -86,10 +87,15 @@ export function enqueueDirtyAsOps(): void {
 
   const ops: Array<Omit<SyncOp, 'id' | 'retries'>> = []
 
-  const collectDirty = <T extends { id: string; updatedAt?: number }>(
-    items: T[], table: SyncOp['table'],
-  ) => {
-    for (const item of items) {
+  const localByType: Record<EntityType, Array<{ id: string; updatedAt?: number }>> = {
+    category: ds.categories,
+    bookmark: ds.bookmarks,
+    group: ds.siblingGroups,
+    attribute: ds.customAttributes,
+  }
+  for (const type of SYNC_ENTITY_ORDER) {
+    const table = entityTypeToTable[type]
+    for (const item of localByType[type]) {
       if (!dirty.has(item.id)) continue
       ops.push({
         action: 'upsert', table, itemId: item.id,
@@ -101,10 +107,6 @@ export function enqueueDirtyAsOps(): void {
       })
     }
   }
-  collectDirty(ds.bookmarks, 'bookmarks')
-  collectDirty(ds.siblingGroups, 'sibling_groups')
-  collectDirty(ds.categories, 'categories')
-  collectDirty(ds.customAttributes, 'custom_attributes')
 
   for (const [id, table] of deleted) {
     ops.push({ action: 'delete', table, itemId: id, data: null, ts: Date.now() })
