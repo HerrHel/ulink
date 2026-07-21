@@ -125,7 +125,7 @@ function _dispatchAction(type: string, action: string, id: string) {
   } else if (type === 'attr') {
     if (action === ACTIONS.RENAME_ATTR) {
       const dataStore = useDataStore()
-      const attr = store.customAttributes.find(a => a.id === id)
+      const attr = store.attributeMap[id]
       if (attr) {
         const input = window.prompt('重命名属性', attr.name)
         if (input && input.trim() && input.trim() !== attr.name) {

@@ -67,7 +67,7 @@ export const useActionSheetStore = defineStore('actionSheet', () => {
       store.updateBookmark(catTargetId.value!, { categoryId: catId })
     }
     store.save()
-    const cat = store.categories.find(c => c.id === catId)
+    const cat = store.categoryMap[catId]
     toast('已移动到 ' + (cat ? cat.name : ''))
   }
 

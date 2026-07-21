@@ -121,7 +121,7 @@ function onTouchMove() {
 }
 
 function showAttrActions(attrId: string) {
-  const attr = store.customAttributes.find(a => a.id === attrId)
+  const attr = store.attributeMap[attrId]
   if (!attr) return
   useActionSheetStore().showActions([
     { label: '重命名', action: () => onRenameAttr(attrId) },
@@ -130,7 +130,7 @@ function showAttrActions(attrId: string) {
 }
 
 function onRenameAttr(attrId: string) {
-  const attr = store.customAttributes.find(a => a.id === attrId)
+  const attr = store.attributeMap[attrId]
   if (!attr) return
   const input = window.prompt('重命名属性', attr.name)
   if (input && input.trim() && input.trim() !== attr.name) {
@@ -141,7 +141,7 @@ function onRenameAttr(attrId: string) {
 }
 
 async function onDeleteAttr(attrId: string) {
-  const attr = store.customAttributes.find(a => a.id === attrId)
+  const attr = store.attributeMap[attrId]
   if (!attr) return
   const ok = await showConfirm('删除属性「' + attr.name + '」？')
   if (!ok) return

@@ -24,14 +24,16 @@ const store = useAppStore()
 const chipsRef = ref<HTMLElement | null>(null)
 
 const activeChips = computed<CustomAttribute[]>(() => {
+  const map = store.attributeMap
   return store.activeAttrs
-    .map(aid => store.customAttributes.find(x => x.id === aid))
+    .map(aid => map[aid])
     .filter((c): c is CustomAttribute => c !== undefined)
 })
 
 const excludedChips = computed<CustomAttribute[]>(() => {
+  const map = store.attributeMap
   return store.excludedAttrs
-    .map(aid => store.customAttributes.find(x => x.id === aid))
+    .map(aid => map[aid])
     .filter((c): c is CustomAttribute => c !== undefined)
 })
 

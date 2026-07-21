@@ -64,7 +64,7 @@ function onAddAttr() {
 
 async function onDelete(id: string) {
   // A2-002：删除前确认；软删定义时会快照实体 attributes，恢复时可回写
-  const attr = store.customAttributes.find(a => a.id === id)
+  const attr = store.attributeMap[id]
   const name = attr?.name || id
   const ok = await showConfirm(`确认删除属性「${name}」？已打标的书签/组将暂时去掉该标记；从回收站恢复属性时可还原关联。`)
   if (!ok) return

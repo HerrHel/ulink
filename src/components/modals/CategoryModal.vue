@@ -93,7 +93,7 @@ function onAddCat() {
 }
 
 function onDelete(id: string) {
-  const cat = dataStore.categories.find(c => c.id === id)
+  const cat = dataStore.categoryMap[id]
   const catName = cat?.name || '此分类'
   const bmCount = dataStore.bookmarks.filter(b => b.categoryId === id).length
   const msg = bmCount > 0

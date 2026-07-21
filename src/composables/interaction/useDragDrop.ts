@@ -473,7 +473,7 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (bm.categoryId === newCatId) return;
   ds.updateBookmark(bm.id, { categoryId: newCatId });
   debouncedSaveAppData();
-  toast('已移动到分类: ' + (ds.categories.find(c => c.id === newCatId)?.name || newCatId));
+  toast('已移动到分类: ' + (ds.categoryMap[newCatId]?.name || newCatId));
 }
 
 function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: number) {

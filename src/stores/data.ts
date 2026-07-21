@@ -165,6 +165,20 @@ export const useDataStore = defineStore('data', {
       }
       return state._grpMap
     },
+    /** O(1) 分类查找（含软删除——由 _syncMaps 维护，懒回退） */
+    categoryMap(state): Record<string, Category> {
+      if (Object.keys(state._catMap).length !== state.categories.length) {
+        const map: Record<string, Category> = {}; state.categories.forEach(c => { map[c.id] = c }); return map
+      }
+      return state._catMap
+    },
+    /** O(1) 属性查找（含软删除——由 _syncMaps 维护，懒回退） */
+    attributeMap(state): Record<string, CustomAttribute> {
+      if (Object.keys(state._attrMap).length !== state.customAttributes.length) {
+        const map: Record<string, CustomAttribute> = {}; state.customAttributes.forEach(a => { map[a.id] = a }); return map
+      }
+      return state._attrMap
+    },
     /** 预计算父→子书签映射（由 _syncMaps 维护，排除软删除） */
     childrenMap(state): Record<string, Bookmark[]> {
       // 索引未构建或不同步时回退到手动计算

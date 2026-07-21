@@ -33,9 +33,10 @@ function _liveBookmarks(ds: ReturnType<typeof useDataStore>): Bookmark[] {
 /** attributes → 标签名数组（用属性 name，找不到则去掉 tag_ 前缀） */
 function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[] {
   const tags: string[] = []
+  const attrMap = ds.attributeMap
   for (const [id, on] of Object.entries(b.attributes || {})) {
     if (!on) continue
-    const attr = ds.customAttributes.find(a => a.id === id)
+    const attr = attrMap[id]
     tags.push(attr?.name || id.replace(/^tag_/, ''))
   }
   return tags
@@ -62,7 +63,8 @@ export function exportHTML() {
       if (!byCat.has(cid)) byCat.set(cid, [])
       byCat.get(cid)!.push(b)
     }
-    const catName = (cid: string) => ds.categories.find(c => c.id === cid)?.name
+    const catMap = ds.categoryMap
+    const catName = (cid: string) => catMap[cid]?.name
       || (cid === CAT_UNCATEGORIZED ? '未分类' : '其他')
 
     // 复用 utils.esc（含 ' 转义），避免局部实现与属性注入防护漂移
@@ -104,7 +106,7 @@ export function exportCSV() {
         esc(b.url),
         esc(_attrsToTags(ds, b).join(',')),
         esc(b.notes || ''),
-        esc(ds.categories.find(c => c.id === b.categoryId)?.name || ''),
+        esc(ds.categoryMap[b.categoryId]?.name || ''),
         esc(b.icon || ''),
         b.createdAt > 0 ? new Date(b.createdAt).toISOString() : '',
       ])

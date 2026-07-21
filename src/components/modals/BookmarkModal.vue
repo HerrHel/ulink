@@ -134,12 +134,12 @@ const parentOptions = computed(() =>
 const aiSuggestionText = computed(() => {
   const parts: string[] = []
   if (bmForm.aiSuggestCatId) {
-    const cat = store.categories.find(c => c.id === bmForm.aiSuggestCatId)
+    const cat = store.categoryMap[bmForm.aiSuggestCatId]
     if (cat) parts.push(`建议分类「${cat.name}」`)
   }
   if (bmForm.aiSuggestAttrIds.length) {
     const names = bmForm.aiSuggestAttrIds
-      .map(id => store.customAttributes.find(a => a.id === id)?.name)
+      .map(id => store.attributeMap[id]?.name)
       .filter(Boolean)
     if (names.length) parts.push(`建议标签「${names.join('」「')}」`)
   }

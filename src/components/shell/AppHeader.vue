@@ -111,7 +111,7 @@ const focusedGroup = computed(() =>
   ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
 )
 const panelTitle = computed(() =>
-  (dataStore.categories.find(c => c.id === ui.curCat) || {}).name || '全部书签'
+  (dataStore.categoryMap[ui.curCat] || {}).name || '全部书签'
 )
 const panelCountText = computed(() =>
   (dataStore.filteredBookmarks.filter(b => !b.parentId).length + dataStore.filteredGroups.length) + ' 个'

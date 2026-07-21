@@ -78,8 +78,8 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   const localLookup: Record<EntityType, () => unknown> = {
     bookmark: () => ds.bookmarkMap[row.id] ?? null,
     group: () => ds.groupMap[row.id] ?? null,
-    category: () => ds._catMap[row.id] ?? null,
-    attribute: () => ds._attrMap[row.id] ?? null,
+    category: () => ds.categoryMap[row.id] ?? null,
+    attribute: () => ds.attributeMap[row.id] ?? null,
   }
   const localItem = localLookup[type]()
 

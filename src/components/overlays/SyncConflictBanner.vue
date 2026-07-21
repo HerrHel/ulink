@@ -56,10 +56,10 @@ function itemName(c: SyncConflict): string {
     return g?.name || (d?.name as string) || c.id
   }
   if (c.type === 'category') {
-    const cat = ds.categories.find(x => x.id === c.id)
+    const cat = ds.categoryMap[c.id]
     return cat?.name || (d?.name as string) || c.id
   }
-  const attr = ds.customAttributes.find(x => x.id === c.id)
+  const attr = ds.attributeMap[c.id]
   return attr?.name || (d?.name as string) || c.id
 }
 </script>

@@ -81,11 +81,11 @@ export async function pullChanges(full = false): Promise<boolean> {
       bookmark: (id) => !!ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt,
       group: (id) => !!ds.groupMap[id] && !ds.groupMap[id].deletedAt,
       category: (id) => {
-        const cat = ds._catMap[id]
+        const cat = ds.categoryMap[id]
         return !!cat && !cat.deletedAt
       },
       attribute: (id) => {
-        const attr = ds._attrMap[id]
+        const attr = ds.attributeMap[id]
         return !!attr && !attr.deletedAt
       },
     }
