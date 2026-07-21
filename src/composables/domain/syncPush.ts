@@ -147,8 +147,8 @@ export async function pushFromQueue(): Promise<boolean> {
     const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
     const histE2e = useE2E()
     const existingByType: Record<'bookmark' | 'group', (id: string) => unknown> = {
-      bookmark: (id) => ds.bookmarks.find(b => b.id === id),
-      group: (id) => ds.siblingGroups.find(g => g.id === id),
+      bookmark: (id) => ds.bookmarkMap[id],
+      group: (id) => ds.groupMap[id],
     }
     for (const op of ops) {
       if (op.action === 'upsert') {

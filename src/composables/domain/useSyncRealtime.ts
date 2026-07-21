@@ -9,6 +9,7 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { FROM_REMOTE } from './useSyncMapping.js'
+import { entityTypeToTable } from './syncMappingTables.js'
 import { _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
 import { decideRemoteApply } from './syncMergeCore.js'
@@ -73,11 +74,12 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
 
   const syncStore = useSyncStore()
   // 查表取本地项，与 EntityType 扩展点对齐（避免四路三元漂移）
+  // cat/attr 用 _catMap/_attrMap O(1)，与 bookmarkMap/groupMap 一致
   const localLookup: Record<EntityType, () => unknown> = {
     bookmark: () => ds.bookmarkMap[row.id] ?? null,
     group: () => ds.groupMap[row.id] ?? null,
-    category: () => ds.categories.find(c => c.id === row.id) ?? null,
-    attribute: () => ds.customAttributes.find(a => a.id === row.id) ?? null,
+    category: () => ds._catMap[row.id] ?? null,
+    attribute: () => ds._attrMap[row.id] ?? null,
   }
   const localItem = localLookup[type]()
 
@@ -125,7 +127,7 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     bookmark: {
       upsert: (m: any) => {
         if (ds.bookmarkMap[m.id]) {
-          const oldParentId = ds.bookmarks.find(b => b.id === m.id)?.parentId
+          const oldParentId = ds.bookmarkMap[m.id]?.parentId
           const remoteUpdatedAt = m.updatedAt
           ds.updateBookmark(m.id, m)
           // 恢复远端 updatedAt，避免被 Date.now() 覆盖
@@ -182,18 +184,25 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     category: {
       upsert: (m: any) => {
         const i = ds.categories.findIndex(c => c.id === m.id)
-        if (i >= 0) ds.categories[i] = { ...ds.categories[i], ...m, updatedAt: m.updatedAt }
-        else ds.categories = [...ds.categories, m]
-        // category/attribute 没有完整 update action，直接重建索引
-        ds._catMap[m.id] = ds.categories.find(c => c.id === m.id)!
+        if (i >= 0) {
+          ds.categories[i] = { ...ds.categories[i], ...m, updatedAt: m.updatedAt }
+          ds._catMap[m.id] = ds.categories[i]
+        } else {
+          ds.categories = [...ds.categories, m]
+          ds._catMap[m.id] = m
+        }
       },
     },
     attribute: {
       upsert: (m: any) => {
         const i = ds.customAttributes.findIndex(a => a.id === m.id)
-        if (i >= 0) ds.customAttributes[i] = { ...ds.customAttributes[i], ...m, updatedAt: m.updatedAt }
-        else ds.customAttributes = [...ds.customAttributes, m]
-        ds._attrMap[m.id] = ds.customAttributes.find(a => a.id === m.id)!
+        if (i >= 0) {
+          ds.customAttributes[i] = { ...ds.customAttributes[i], ...m, updatedAt: m.updatedAt }
+          ds._attrMap[m.id] = ds.customAttributes[i]
+        } else {
+          ds.customAttributes = [...ds.customAttributes, m]
+          ds._attrMap[m.id] = m
+        }
       },
     },
   }
@@ -258,19 +267,14 @@ export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
   const myGen = _gen
 
   syncStore.setRealtimeStatus('connecting')
-  _channel = supabase.channel('db-changes')
-    .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'bookmarks', filter: `user_id=eq.${userId}` },
-      (p) => _handleRealtimeChange(p, 'bookmark'))
-    .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'sibling_groups', filter: `user_id=eq.${userId}` },
-      (p) => _handleRealtimeChange(p, 'group'))
-    .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'categories', filter: `user_id=eq.${userId}` },
-      (p) => _handleRealtimeChange(p, 'category'))
-    .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'custom_attributes', filter: `user_id=eq.${userId}` },
-      (p) => _handleRealtimeChange(p, 'attribute'))
+  const tables: EntityType[] = ['bookmark', 'group', 'category', 'attribute']
+  let ch = supabase.channel('db-changes')
+  for (const type of tables) {
+    ch = ch.on('postgres_changes',
+      { event: '*', schema: 'public', table: entityTypeToTable[type], filter: `user_id=eq.${userId}` },
+      (p) => _handleRealtimeChange(p, type))
+  }
+  _channel = ch
     .subscribe((status) => {
       // 旧代 channel 的残余状态回调直接忽略——removeChannel 是异步的，旧 channel
       // 可能在被移除前/中仍派发 CHANNEL_ERROR/CLOSED，若不按代过滤会误调度重连并
