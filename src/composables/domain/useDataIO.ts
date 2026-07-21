@@ -198,6 +198,102 @@ function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv
 
 // ── 导入内部逻辑（合并模式，不覆盖已有数据）──
 
+type DataStore = ReturnType<typeof useDataStore>
+interface MergeStats { imported: number; skipped: number }
+
+/** 合并分类（去重：同 ID 跳过；Zod 失败计入 skipped） */
+function _mergeCategories(ds: DataStore, categories: AppData['categories']): MergeStats {
+  let imported = 0, skipped = 0
+  for (const c of categories) {
+    if (!c.id || !c.name) continue
+    if (ds.categories.some(existing => existing.id === c.id)) continue
+    const parsed = CategorySchema.safeParse({ id: c.id, name: c.name, icon: c.icon || 'star', color: c.color || '', updatedAt: Date.now() })
+    if (!parsed.success) { skipped++; continue }
+    ds.addCategory(parsed.data)
+    imported++
+  }
+  return { imported, skipped }
+}
+
+/** 合并属性（去重：同 ID 跳过） */
+function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttributes']): MergeStats {
+  let imported = 0, skipped = 0
+  for (const a of customAttributes) {
+    if (!a.id || !a.name) continue
+    if (ds.customAttributes.some(existing => existing.id === a.id)) continue
+    const parsed = CustomAttributeSchema.safeParse({ id: a.id, name: a.name, type: a.type || 'boolean', updatedAt: Date.now() })
+    if (!parsed.success) { skipped++; continue }
+    ds.addAttribute(parsed.data)
+    imported++
+  }
+  return { imported, skipped }
+}
+
+/** 合并书签（去重：同 ID 或同 URL 跳过） */
+function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
+  let imported = 0, skipped = 0
+  const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
+  // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
+  const orderBase = ds.nextBookmarkOrder()
+  for (const b of bookmarks) {
+    if (!b.title || !b.url) continue
+    if (ds.bookmarks.some(existing => existing.id === b.id)) continue
+    if (existingUrls.has(b.url.toLowerCase())) continue
+    const now = Date.now()
+    const parsed = BookmarkSchema.safeParse({
+      id: b.id || newBookmarkId(imported),
+      title: b.title,
+      url: b.url,
+      username: b.username || '',
+      password: b.password || '',
+      notes: b.notes || '',
+      icon: b.icon || '',
+      categoryId: b.categoryId || CAT_UNCATEGORIZED,
+      parentId: b.parentId || null,
+      order: orderBase + imported,
+      useCount: b.useCount || 0,
+      attributes: b.attributes || {},
+      isExpanded: false,
+      createdAt: b.createdAt || now,
+      updatedAt: b.updatedAt || now,
+    })
+    if (!parsed.success) { skipped++; continue }
+    ds.addBookmark(parsed.data)
+    existingUrls.add(b.url.toLowerCase())
+    imported++
+  }
+  return { imported, skipped }
+}
+
+/**
+ * 合并组（去重：同 ID 跳过）。
+ * bookmarkIds 过滤未存活书签：导入源 id 可能指向被去重/Zod 跳过/缺 title·url 的项，
+ * 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位，推云后远端同样悬空）。
+ */
+function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
+  let imported = 0, skipped = 0
+  for (const g of siblingGroups) {
+    if (!g.id || !g.name) continue
+    if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
+    const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => ds.bookmarkMap[bid])
+    const parsed = SiblingGroupSchema.safeParse({
+      id: g.id, name: g.name,
+      categoryId: g.categoryId || CAT_UNCATEGORIZED,
+      icon: g.icon || '', order: g.order || 0,
+      isExpanded: g.isExpanded || false,
+      attributes: g.attributes || {},
+      bookmarkIds: liveBookmarkIds,
+      notes: g.notes || '', updatedAt: g.updatedAt || Date.now(),
+      useCount: g.useCount || 0,
+      isPublic: (g as { isPublic?: boolean }).isPublic || false,
+    })
+    if (!parsed.success) { skipped++; continue }
+    ds.addGroup(parsed.data)
+    imported++
+  }
+  return { imported, skipped }
+}
+
 // 导出供单测覆盖组 bookmarkIds 悬空过滤逻辑（仍以 _ 风格名为私有约定）
 export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const ds = useDataStore()
@@ -212,102 +308,27 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   runMigrations(data, result)
 
   const { categories, bookmarks, customAttributes, siblingGroups } = result
-  let catImported = 0, bmImported = 0, groupImported = 0, attrImported = 0
 
   try { persist.saveToLocalStorage(ds._dataSnapshot()) } catch (e) { console.warn('[import] backup before import failed:', e) }
 
-  // ── 逐条 Zod 校验：格式错误的条目跳过，不污染本地数据 ──
-  let skippedBm = 0, skippedCat = 0, skippedAttr = 0, skippedGroup = 0
-
-  // 合并分类（去重：同 ID 跳过）
-  for (const c of categories) {
-    if (!c.id || !c.name) continue
-    if (ds.categories.some(existing => existing.id === c.id)) continue
-    const parsed = CategorySchema.safeParse({ id: c.id, name: c.name, icon: c.icon || 'star', color: c.color || '', updatedAt: Date.now() })
-    if (!parsed.success) { skippedCat++; continue }
-    ds.addCategory(parsed.data)
-    catImported++
-  }
-
-  // 合并属性（去重：同 ID 跳过）
-  for (const a of customAttributes) {
-    if (!a.id || !a.name) continue
-    if (ds.customAttributes.some(existing => existing.id === a.id)) continue
-    const parsed = CustomAttributeSchema.safeParse({ id: a.id, name: a.name, type: a.type || 'boolean', updatedAt: Date.now() })
-    if (!parsed.success) { skippedAttr++; continue }
-    ds.addAttribute(parsed.data)
-    attrImported++
-  }
-
-  // 合并书签（去重：同 ID 或同 URL 跳过）
-  const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
-  // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
-  const orderBase = ds.nextBookmarkOrder()
-  for (const b of bookmarks) {
-    if (!b.title || !b.url) continue
-    if (ds.bookmarks.some(existing => existing.id === b.id)) continue
-    if (existingUrls.has(b.url.toLowerCase())) continue
-    const now = Date.now()
-    const parsed = BookmarkSchema.safeParse({
-      id: b.id || newBookmarkId(bmImported),
-      title: b.title,
-      url: b.url,
-      username: b.username || '',
-      password: b.password || '',
-      notes: b.notes || '',
-      icon: b.icon || '',
-      categoryId: b.categoryId || CAT_UNCATEGORIZED,
-      parentId: b.parentId || null,
-      order: orderBase + bmImported,
-      useCount: b.useCount || 0,
-      attributes: b.attributes || {},
-      isExpanded: false,
-      createdAt: b.createdAt || now,
-      updatedAt: b.updatedAt || now,
-    })
-    if (!parsed.success) { skippedBm++; continue }
-    ds.addBookmark(parsed.data)
-    existingUrls.add(b.url.toLowerCase())
-    bmImported++
-  }
-
-  // 合并组（去重：同 ID 跳过）
-  for (const g of siblingGroups) {
-    if (!g.id || !g.name) continue
-    if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
-    // 组 bookmarkIds 过滤掉未存活的书签：导入源里这些 id 可能指向
-    // 被去重跳过的（同 URL 重复）、Zod 校验失败、缺 title/url 的书签，
-    // 上面循环把它们 continue 掉了根本没入库。原样保留会让组引用悬空 id
-    //（bookmarkMap 查不到 → 组内空卡位，推云后远端组同样悬空）。
-    const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => ds.bookmarkMap[bid])
-    const parsed = SiblingGroupSchema.safeParse({
-      id: g.id, name: g.name,
-      categoryId: g.categoryId || CAT_UNCATEGORIZED,
-      icon: g.icon || '', order: g.order || 0,
-      isExpanded: g.isExpanded || false,
-      attributes: g.attributes || {},
-      bookmarkIds: liveBookmarkIds,
-      notes: g.notes || '', updatedAt: g.updatedAt || Date.now(),
-      useCount: g.useCount || 0,
-      isPublic: (g as { isPublic?: boolean }).isPublic || false,
-    })
-    if (!parsed.success) { skippedGroup++; continue }
-    ds.addGroup(parsed.data)
-    groupImported++
-  }
+  // 顺序固定：先 cat/attr，再 bm，最后 group（group 依赖 bm 已入库做悬空过滤）
+  const cats = _mergeCategories(ds, categories)
+  const attrs = _mergeAttributes(ds, customAttributes)
+  const bms = _mergeBookmarks(ds, bookmarks)
+  const groups = _mergeGroups(ds, siblingGroups)
 
   saveAppData()
   clearSearchCache()
-  const total = catImported + bmImported + groupImported + attrImported
-  const skipped = skippedCat + skippedBm + skippedGroup + skippedAttr
+  const total = cats.imported + bms.imported + groups.imported + attrs.imported
+  const skipped = cats.skipped + bms.skipped + groups.skipped + attrs.skipped
   if (total === 0) {
     toast(`从 ${source} 导入：所有数据已存在，无新增项${skipped ? `（${skipped} 条格式错误已跳过）` : ''}`)
   } else {
     const parts: string[] = []
-    if (bmImported) parts.push(`${bmImported} 个书签`)
-    if (catImported) parts.push(`${catImported} 个分类`)
-    if (groupImported) parts.push(`${groupImported} 个组`)
-    if (attrImported) parts.push(`${attrImported} 个属性`)
+    if (bms.imported) parts.push(`${bms.imported} 个书签`)
+    if (cats.imported) parts.push(`${cats.imported} 个分类`)
+    if (groups.imported) parts.push(`${groups.imported} 个组`)
+    if (attrs.imported) parts.push(`${attrs.imported} 个属性`)
     const skippedMsg = skipped ? `（${skipped} 条格式错误已跳过）` : ''
     toast(`从 ${source} 导入：${parts.join('、')}${skippedMsg}`)
   }

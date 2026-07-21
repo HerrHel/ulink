@@ -70,26 +70,36 @@ export function restoreNavState(prev: NavState) {
   const ui = useUIStore()
   // pushNavState 在「打开前」调用并 snapshot「未开」态，popstate 时比对
   // 「prev.X=false 且当前已开」→ 关闭。modal 与面板叠加层用同一模式。
-  if (prev.bm !== true && ui.modals.bookmark) { closeBmModal(); return }
-  if (prev.groupEdit !== true && ui.modals.groupEdit) { closeGroupEdit(); return }
-  if (prev.cat !== true && ui.modals.category) { closeCatModal(); return }
-  if (prev.attr !== true && ui.modals.attribute) { closeAttrModal(); return }
-  if (prev.focusedGroupId === null && ui.focusedGroupId !== null) { exitGroupFocus(); if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat } return }
-  if (!prev.detailPanelOpen && ui.panels.detail) { ui.panels.detail = false; return }
-  // 旧实现还有「prev.detailPanelOpen && !ui.panels.detail → 重新打开」反向分支——
-  // popstate 语义统一为「关闭 snapshot 未开而当前已开的层」（其余 modal/panel 都只关不重开），
-  // 唯独 detail 有该反向分支致不一致：场景「detail 开 → 其他操作 pushNavState 快照 detail=true
-  //   → 用户手动关 detail → 后退」会被强制重开 detail，与用户后退意图相悖。删之，与 settings/
-  // trash/shortcutHelp 等一致——prev 开、当前关时保持关（用户已主动关，不强制重开）。
-  if (prev.settings !== true && ui.panels.settings) { ui.panels.settings = false; return }
-  if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return }
-  if (prev.deadLinks !== true && ui.overlays.deadLinks) { ui.overlays.deadLinks = false; return }
-  if (prev.shortcutHelp !== true && ui.panels.shortcutHelp) { ui.panels.shortcutHelp = false; return }
-  // E3-001：HistoryPanel 后退关闭
-  if (prev.history !== true && ui.panels.history) { ui.panels.history = false; return }
-  // A4-007：反馈弹窗后退关闭
-  if (prev.feedback !== true && ui.overlays.feedback) { ui.overlays.feedback = false; return }
-  if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat; ui.focusedGroupId = null; return }
+  // 顺序即优先级：先关 modal，再 focus/detail，再 panel/overlay，最后 curCat。
+  const closers: Array<() => boolean> = [
+    () => { if (prev.bm !== true && ui.modals.bookmark) { closeBmModal(); return true } return false },
+    () => { if (prev.groupEdit !== true && ui.modals.groupEdit) { closeGroupEdit(); return true } return false },
+    () => { if (prev.cat !== true && ui.modals.category) { closeCatModal(); return true } return false },
+    () => { if (prev.attr !== true && ui.modals.attribute) { closeAttrModal(); return true } return false },
+    () => {
+      if (prev.focusedGroupId === null && ui.focusedGroupId !== null) {
+        exitGroupFocus()
+        if (prev.curCat !== ui.curCat) ui.curCat = prev.curCat
+        return true
+      }
+      return false
+    },
+    () => { if (!prev.detailPanelOpen && ui.panels.detail) { ui.panels.detail = false; return true } return false },
+    // 旧实现曾有「prev.detail 开且当前关 → 重开」反向分支，与其他层只关不重开不一致，已删。
+    () => { if (prev.settings !== true && ui.panels.settings) { ui.panels.settings = false; return true } return false },
+    () => { if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return true } return false },
+    () => { if (prev.deadLinks !== true && ui.overlays.deadLinks) { ui.overlays.deadLinks = false; return true } return false },
+    () => { if (prev.shortcutHelp !== true && ui.panels.shortcutHelp) { ui.panels.shortcutHelp = false; return true } return false },
+    () => { if (prev.history !== true && ui.panels.history) { ui.panels.history = false; return true } return false },
+    () => { if (prev.feedback !== true && ui.overlays.feedback) { ui.overlays.feedback = false; return true } return false },
+    () => {
+      if (prev.curCat !== ui.curCat) { ui.curCat = prev.curCat; ui.focusedGroupId = null; return true }
+      return false
+    },
+  ]
+  for (const close of closers) {
+    if (close()) return
+  }
 }
 
 export function _onGlobalKeydown(e: KeyboardEvent) {
@@ -140,36 +150,44 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if (e.key === 'Escape') {
-    // A3-004：ActionSheet 优先关
-    const as = useActionSheetStore()
-    if (as.visible) { as.hide(); return }
-    // A2-006：Auth / E2E / SetupGuide
-    const auth = useAuthStore()
-    if (auth.authModalOpen) { auth.authModalOpen = false; return }
-    if (ui.modals.e2eUnlock) {
-      ui.modals.e2eUnlock = false
-      // A2-006：与 App.onE2EClose 一致 drain pending，避免 await 永挂
-      try {
-        const pending = useE2EStore().pendingUnlock.splice(0)
-        for (const resolve of pending) { try { resolve(false) } catch { /* ignore */ } }
-      } catch { /* store 未就绪 */ }
-      return
+    // 优先层：命中即 return（独占关闭）。顺序即优先级。
+    const priority: Array<() => boolean> = [
+      () => { // A3-004
+        const as = useActionSheetStore()
+        if (!as.visible) return false
+        as.hide(); return true
+      },
+      () => { // A2-006 Auth
+        const auth = useAuthStore()
+        if (!auth.authModalOpen) return false
+        auth.authModalOpen = false; return true
+      },
+      () => { // A2-006 E2E unlock：与 App.onE2EClose 一致 drain pending
+        if (!ui.modals.e2eUnlock) return false
+        ui.modals.e2eUnlock = false
+        try {
+          const pending = useE2EStore().pendingUnlock.splice(0)
+          for (const resolve of pending) { try { resolve(false) } catch { /* ignore */ } }
+        } catch { /* store 未就绪 */ }
+        return true
+      },
+      () => { if (!ui.modals.e2eSetup) return false; ui.modals.e2eSetup = false; return true },
+      () => { if (!ui.modals.setupGuide) return false; ui.modals.setupGuide = false; return true },
+      () => { // A4-007
+        if (!ui.overlays.feedback) return false
+        ui.overlays.feedback = false; return true
+      },
+      () => { if (!ui.batchMode) return false; toggleBatchMode(); return true },
+    ]
+    for (const tryClose of priority) {
+      if (tryClose()) return
     }
-    if (ui.modals.e2eSetup) { ui.modals.e2eSetup = false; return }
-    if (ui.modals.setupGuide) { ui.modals.setupGuide = false; return }
-    // A4-007：反馈弹窗
-    if (ui.overlays.feedback) { ui.overlays.feedback = false; return }
-    if (ui.batchMode) { toggleBatchMode(); return }
+    // 兜底层：一次 Esc 清扫其余 modal / menu / panel（无 return，全部尝试）
     closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
     useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
-    // 回收站 / 死链面板：与 settings 一致支持 Esc 关闭（settings 已由 hideSettingsMenu 处理）。
-    // 此前 Esc 仅关 bm/cat/attr/groupEdit 四 modal + ctxMenu/addPopover/dropdown，trash/deadLinks 缺失，
-    // 用户只能点面板右上角关闭按钮，UX 不一致。ShortcutHelpPanel 自带 Esc 监听无需重复。
     if (ui.panels.trash) ui.panels.trash = false
     if (ui.overlays.deadLinks) ui.overlays.deadLinks = false
-    // L7：版本历史面板 Esc 关闭
     if (ui.panels.history) ui.panels.history = false
-    // M13：补齐 Rail / AttrDropdown / MFB / BatchMove
     if (ui.panels.rail) ui.panels.rail = false
     if (useAttrDropdownStore().open) useAttrDropdownStore().close()
     if (useBatchMoveStore().open) useBatchMoveStore().hide()
