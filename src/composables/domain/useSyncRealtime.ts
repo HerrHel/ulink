@@ -85,11 +85,14 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   if (!mapped) return  // Zod 校验失败的远端条目跳过
 
   const syncStore = useSyncStore()
-  const localItem =
-    type === 'bookmark' ? (ds.bookmarkMap[row.id] ?? null)
-    : type === 'group' ? (ds.groupMap[row.id] ?? null)
-    : type === 'category' ? (ds.categories.find(c => c.id === row.id) ?? null)
-    : (ds.customAttributes.find(a => a.id === row.id) ?? null)
+  // 查表取本地项，与 EntityType 扩展点对齐（避免四路三元漂移）
+  const localLookup: Record<EntityType, () => unknown> = {
+    bookmark: () => ds.bookmarkMap[row.id] ?? null,
+    group: () => ds.groupMap[row.id] ?? null,
+    category: () => ds.categories.find(c => c.id === row.id) ?? null,
+    attribute: () => ds.customAttributes.find(a => a.id === row.id) ?? null,
+  }
+  const localItem = localLookup[type]()
 
   // 与 _mergeIntoLocal 共用 decision（conflict / soft-delete / pending / dirty）
   const decision = decideRemoteApply({

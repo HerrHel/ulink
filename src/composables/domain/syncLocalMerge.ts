@@ -8,21 +8,31 @@ import { useSyncStore } from '../../stores/sync.js'
 import { decideRemoteApply } from './syncMergeCore.js'
 import { _isPendingSync } from './syncPending.js'
 import { cloneDeep } from '../../lib/clone.js'
+import type { EntityType } from '../../types.js'
+
+type DataStore = ReturnType<typeof useDataStore>
+
+/** EntityType → data store 软删入口（单一查表，避免两处 switch 漂移） */
+const _deleteHandlers: Record<EntityType, (ds: DataStore, id: string) => void> = {
+  bookmark: (ds, id) => ds.deleteBookmark(id),
+  group: (ds, id) => ds.deleteGroup(id),
+  category: (ds, id) => ds.deleteCategory(id),
+  attribute: (ds, id) => ds.deleteAttribute(id),
+}
+
+function _deleteEntity(ds: DataStore, type: EntityType, id: string) {
+  _deleteHandlers[type]?.(ds, id)
+}
 
 /** 远端 DELETE/软删合并触发的本机删除：清衍生 dirty，避免回声推送 */
 export function _deleteWithoutEcho(
-  ds: ReturnType<typeof useDataStore>,
-  type: 'bookmark' | 'group' | 'category' | 'attribute',
+  ds: DataStore,
+  type: EntityType,
   id: string,
 ) {
   const dirtyBefore = new Set(ds._dirtyIds)
   const changedBefore = new Set(ds._changedFields.keys())
-  switch (type) {
-    case 'bookmark': ds.deleteBookmark(id); break
-    case 'group': ds.deleteGroup(id); break
-    case 'category': ds.deleteCategory(id); break
-    case 'attribute': ds.deleteAttribute(id); break
-  }
+  _deleteEntity(ds, type, id)
   for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) || did === id) ds._dirtyIds.delete(did)
   for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || cid === id) ds._changedFields.delete(cid)
   ds._newIds.delete(id)
@@ -30,7 +40,7 @@ export function _deleteWithoutEcho(
 
 /** 智能合并：远端 → 本地（decision → store 副作用） */
 export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
-  local: T[], remote: T[], type: 'bookmark' | 'group' | 'category' | 'attribute', full = false,
+  local: T[], remote: T[], type: EntityType, full = false,
 ) {
   const ds = useDataStore()
   const syncStore = useSyncStore()
@@ -93,12 +103,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         full: true,
       })
       if (decision.action !== 'full-absent-delete') continue
-      switch (type) {
-        case 'bookmark': ds.deleteBookmark(lItem.id); break
-        case 'group': ds.deleteGroup(lItem.id); break
-        case 'category': ds.deleteCategory(lItem.id); break
-        case 'attribute': ds.deleteAttribute(lItem.id); break
-      }
+      _deleteEntity(ds, type, lItem.id)
       ds._dirtyIds.delete(lItem.id)
       ds._newIds.delete(lItem.id)
     }
