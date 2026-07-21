@@ -9,6 +9,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { esc as escHtml } from '../../utils.js'
 
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { AppDataSchema, BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
@@ -73,7 +74,8 @@ export function exportHTML() {
     const catName = (cid: string) => ds.categories.find(c => c.id === cid)?.name
       || (cid === CAT_UNCATEGORIZED ? '未分类' : '其他')
 
-    const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    // 复用 utils.esc（含 ' 转义），避免局部实现与属性注入防护漂移
+    const esc = (s: string) => escHtml(s || '')
     const lines: string[] = [
       '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
       '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',

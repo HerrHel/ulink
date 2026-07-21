@@ -146,14 +146,17 @@ export async function pushFromQueue(): Promise<boolean> {
     }
     const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
     const histE2e = useE2E()
+    const existingByType: Record<'bookmark' | 'group', (id: string) => unknown> = {
+      bookmark: (id) => ds.bookmarks.find(b => b.id === id),
+      group: (id) => ds.siblingGroups.find(g => g.id === id),
+    }
     for (const op of ops) {
       if (op.action === 'upsert') {
         const type = tableToEntityType[op.table as TableName]
         if (type !== 'bookmark' && type !== 'group') continue
         const itemKey = `${op.table}:${op.itemId}`
         if (isLocked && lockedItemKeys.has(itemKey)) continue
-        const existing = type === 'bookmark' ? ds.bookmarks.find(b => b.id === op.itemId)
-          : ds.siblingGroups.find(g => g.id === op.itemId)
+        const existing = existingByType[type](op.itemId)
         if (existing) {
           try {
             const encData = await histE2e.encryptItem(type as EntityType, { ...existing as any } as Record<string, unknown>)

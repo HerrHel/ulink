@@ -16,10 +16,62 @@ vi.mock('../../lib/search.js', () => ({ clearSearchCache: vi.fn() }))
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppData: vi.fn() }))
 
 import { useDataStore } from '../../stores/data.js'
-import { importFromDataInternal, parseRaindropJSON } from '../../composables/domain/useDataIO.js'
+import { importFromDataInternal, parseRaindropJSON, exportHTML } from '../../composables/domain/useDataIO.js'
 import { saveFromExtension } from '../../composables/domain/useBookmark.js'
 import { __testMarkDataReady } from '../../lib/dataReady.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+
+describe('exportHTML 使用 utils.esc（含单引号）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('标题中的单/双引号应被转义，避免 Netscape HTML 属性注入', () => {
+    const ds = useDataStore()
+    ds.addBookmark({
+      id: 'bm-esc',
+      title: `O'Brien "x"`,
+      url: 'https://esc.example/a',
+      username: '',
+      password: '',
+      notes: '',
+      icon: '',
+      categoryId: CAT_UNCATEGORIZED,
+      parentId: null,
+      order: 0,
+      useCount: 0,
+      attributes: {},
+      isExpanded: false,
+      createdAt: 1,
+      updatedAt: 1,
+    } as any)
+
+    const click = vi.fn()
+    let captured: Blob | null = null
+    const createObjectURL = vi.fn((blob: Blob) => {
+      captured = blob
+      return 'blob:mock'
+    })
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+    const origCreate = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = origCreate(tag)
+      if (tag === 'a') (el as HTMLAnchorElement).click = click
+      return el
+    })
+
+    exportHTML()
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(captured).toBeTruthy()
+    return captured!.text().then((html) => {
+      expect(html).toContain('&#39;')
+      expect(html).toContain('&quot;')
+      expect(html).not.toMatch(/>O'Brien "x"</)
+    })
+  })
+})
 
 describe('importFromDataInternal 组 bookmarkIds 悬空过滤', () => {
   beforeEach(() => {
