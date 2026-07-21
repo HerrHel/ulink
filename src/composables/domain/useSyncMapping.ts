@@ -9,18 +9,6 @@ import { isThreePartCipher } from '../../crypto.js'
 
 // ── 辅助函数 ──
 
-export function parsePassword(raw: unknown): string {
-  return typeof raw === 'string' ? raw : ''
-}
-
-/**
- * 判断字符串是否为合格的 salt.iv.data 三段加密格式（AES-256-GCM）。
- * 统一走 crypto.isThreePartCipher（L15）。
- */
-function _isThreePartCipher(s: string): boolean {
-  return isThreePartCipher(s)
-}
-
 /**
  * 把远端 password 字符串还原为本地形态（string | EncryptedPassword 对象）。
  * 按优先级分层识别，最高优先级是「自救历史损坏数据」：
@@ -51,8 +39,8 @@ function _parseRemotePassword(raw: unknown): string | EncryptedPassword {
     } catch { /* 非合法 JSON，落到下方分支 */ }
   }
 
-  // 2. 三段加密串 → 还原为对象
-  if (_isThreePartCipher(s)) {
+  // 2. 三段加密串 → 还原为对象（统一 crypto.isThreePartCipher）
+  if (isThreePartCipher(s)) {
     const [salt, iv, data] = s.split('.')
     return { encrypted: true, salt, iv, data }
   }
@@ -67,7 +55,7 @@ function _parseRemotePassword(raw: unknown): string | EncryptedPassword {
  * - 已是三段串/string → 原样透传
  * - 其它 → ''
  * 删除旧版 JSON.stringify(item.password)——它会把 EncryptedPassword 对象降级为
- * JSON 文本字符串，回程被 parsePassword 当 string 原样存回本地，再被
+ * JSON 文本字符串，回程被当 string 原样存回本地，再被
  * autoMigratePassword 当 base64 解码成乱码，造成密码永久损坏。
  */
 function _serializePassword(p: unknown): string {

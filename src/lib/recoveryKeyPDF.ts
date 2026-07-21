@@ -2,8 +2,11 @@
  * recoveryKeyPDF.ts — 生成 Recovery Key 文件下载
  * 使用 <a download> 直接下载 HTML 文件，移动端和桌面端均可用
  */
+import { esc } from '../utils.js'
+
 export function generateRecoveryKeyPDF(recoveryKey: string) {
-  const safeKey = recoveryKey.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  // 与全站 HTML 转义一致（含单引号），避免局部实现漂移
+  const safeKey = esc(recoveryKey)
   const html = `<!DOCTYPE html>
 <html>
 <head>
