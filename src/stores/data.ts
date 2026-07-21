@@ -56,6 +56,21 @@ function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: 
 
 type SortableItem = { useCount: number; order: number; updatedAt: number }
 
+/**
+ * 经 id→实体 Map 定位数组下标（O(1) 查实体 + indexOf）。
+ * map 与数组偶发不同步时回退 findIndex，保证 CRUD 不丢写。
+ */
+function _indexOfById<T extends { id: string }>(
+  arr: T[], map: Record<string, T>, id: string,
+): number {
+  const item = map[id]
+  if (item) {
+    const idx = arr.indexOf(item)
+    if (idx >= 0) return idx
+  }
+  return arr.findIndex(x => x.id === id)
+}
+
 function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
@@ -179,6 +194,17 @@ export const useDataStore = defineStore('data', {
       }
       return state._attrMap
     },
+    /**
+     * 按显示名查属性（仅未软删）。属性数量通常很小；依赖 customAttributes 缓存。
+     * 用于卡片点 tag、快速新建查重等，避免每次 .find(a => a.name === …)。
+     */
+    attributeByName(state): Record<string, CustomAttribute> {
+      const map: Record<string, CustomAttribute> = {}
+      for (const a of state.customAttributes) {
+        if (!a.deletedAt) map[a.name] = a
+      }
+      return map
+    },
     /** 预计算父→子书签映射（由 _syncMaps 维护，排除软删除） */
     childrenMap(state): Record<string, Bookmark[]> {
       // 索引未构建或不同步时回退到手动计算
@@ -192,13 +218,13 @@ export const useDataStore = defineStore('data', {
         })
         return map
       }
-      // 按需将 ID 数组解析为 Bookmark 对象
+      // 按需将 ID 数组解析为 Bookmark 对象（_bmMap 权威，不再扫 bookmarks.find）
       const bmMap = state._bmMap
       const result: Record<string, Bookmark[]> = {}
       for (const pid of Object.keys(state._childrenIdx)) {
         result[pid] = state._childrenIdx[pid]
-          .map(id => bmMap[id] || state.bookmarks.find(b => b.id === id))
-          .filter(b => b && !b.deletedAt)
+          .map(id => bmMap[id])
+          .filter((b): b is Bookmark => !!b && !b.deletedAt)
       }
       return result
     },
@@ -262,7 +288,7 @@ export const useDataStore = defineStore('data', {
 
     /** M18：分类整对象补丁（冲突解决「用远端」），走 dirty/track/map */
     updateCategory(id: string, changes: Partial<Category>) {
-      const idx = this.categories.findIndex(c => c.id === id)
+      const idx = _indexOfById(this.categories, this._catMap, id)
       if (idx < 0) return
       for (const key of Object.keys(changes)) this._trackChange(id, key)
       this.categories[idx] = { ...this.categories[idx], ...changes, updatedAt: Date.now() }
@@ -273,7 +299,7 @@ export const useDataStore = defineStore('data', {
 
     /** M18：属性整对象补丁 */
     updateAttribute(id: string, changes: Partial<CustomAttribute>) {
-      const idx = this.customAttributes.findIndex(a => a.id === id)
+      const idx = _indexOfById(this.customAttributes, this._attrMap, id)
       if (idx < 0) return
       for (const key of Object.keys(changes)) this._trackChange(id, key)
       this.customAttributes[idx] = { ...this.customAttributes[idx], ...changes, updatedAt: Date.now() }
@@ -291,7 +317,7 @@ export const useDataStore = defineStore('data', {
       if (!ids.length) return
       let bumped = false
       for (const id of ids) {
-        const idx = this.bookmarks.findIndex(b => b.id === id)
+        const idx = _indexOfById(this.bookmarks, this._bmMap, id)
         if (idx < 0) continue
         const prev = this.bookmarks[idx]
         this._saveLocalHistory(id, { ...prev })
@@ -375,7 +401,7 @@ export const useDataStore = defineStore('data', {
       }, _HISTORY_DEBOUNCE_MS))
     },
     updateBookmark(id: string, changes: Partial<Bookmark>) {
-      const idx = this.bookmarks.findIndex(b => b.id === id)
+      const idx = _indexOfById(this.bookmarks, this._bmMap, id)
       if (idx >= 0) {
         const prev = this.bookmarks[idx]
         this._saveLocalHistory(id, { ...prev })
@@ -405,7 +431,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteBookmark(id: string) {
-      const idx = this.bookmarks.findIndex(b => b.id === id)
+      const idx = _indexOfById(this.bookmarks, this._bmMap, id)
       if (idx < 0) return
       const bm = this.bookmarks[idx]
       this.bookmarks[idx] = { ...bm, deletedAt: Date.now(), updatedAt: Date.now() }
@@ -437,7 +463,7 @@ export const useDataStore = defineStore('data', {
     },
     addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id); this._bumpSearchVersion() },
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
-      const idx = this.siblingGroups.findIndex(g => g.id === id)
+      const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
       if (idx >= 0) {
         this._saveLocalHistory(id, { ...this.siblingGroups[idx] })
         for (const key of Object.keys(changes)) this._trackChange(id, key)
@@ -447,7 +473,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteGroup(id: string) {
-      const idx = this.siblingGroups.findIndex(g => g.id === id)
+      const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
       if (idx < 0) return
       const g = this.siblingGroups[idx]
       this.siblingGroups[idx] = { ...g, deletedAt: Date.now(), updatedAt: Date.now() }
@@ -484,7 +510,7 @@ export const useDataStore = defineStore('data', {
       this._bumpSearchVersion()
     },
     renameCategory(id: string, name: string) {
-      const idx = this.categories.findIndex(c => c.id === id)
+      const idx = _indexOfById(this.categories, this._catMap, id)
       if (idx >= 0) {
         this._trackChange(id, 'name')
         this.categories[idx] = { ...this.categories[idx], name, updatedAt: Date.now() }
@@ -511,7 +537,7 @@ export const useDataStore = defineStore('data', {
         this._grpMap[g.id] = next
         return next
       })
-      const cIdx = this.categories.findIndex(c => c.id === id)
+      const cIdx = _indexOfById(this.categories, this._catMap, id)
       if (cIdx >= 0) {
         this._trackChange(id, 'deletedAt')
         this.categories[cIdx] = { ...this.categories[cIdx], deletedAt: Date.now(), updatedAt: Date.now() }
@@ -527,7 +553,7 @@ export const useDataStore = defineStore('data', {
       this._bumpSearchVersion()
     },
     renameAttribute(id: string, name: string) {
-      const idx = this.customAttributes.findIndex(a => a.id === id)
+      const idx = _indexOfById(this.customAttributes, this._attrMap, id)
       if (idx >= 0) {
         this._trackChange(id, 'name')
         this.customAttributes[idx] = { ...this.customAttributes[idx], name, updatedAt: Date.now() }
@@ -536,7 +562,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteAttribute(id: string) {
-      const aIdx = this.customAttributes.findIndex(a => a.id === id)
+      const aIdx = _indexOfById(this.customAttributes, this._attrMap, id)
       if (aIdx >= 0) {
         this.customAttributes[aIdx] = { ...this.customAttributes[aIdx], deletedAt: Date.now(), updatedAt: Date.now() }
         this._attrMap[id] = this.customAttributes[aIdx]
@@ -601,7 +627,7 @@ export const useDataStore = defineStore('data', {
       const groupIds = this._deletedGroupMemberships.get(id)
       if (groupIds) {
         for (const gid of groupIds) {
-          const gIdx = this.siblingGroups.findIndex(g => g.id === gid)
+          const gIdx = _indexOfById(this.siblingGroups, this._grpMap, gid)
           if (gIdx >= 0 && this.siblingGroups[gIdx].bookmarkIds.indexOf(id) === -1) {
             const g = this.siblingGroups[gIdx]
             this.siblingGroups[gIdx] = { ...g, bookmarkIds: [...g.bookmarkIds, id] }
@@ -626,7 +652,7 @@ export const useDataStore = defineStore('data', {
             const b = this._bmMap[m.entityId]
             if (b && !b.deletedAt) {
               const next = { ...b, attributes: { ...b.attributes, [id]: true }, updatedAt: now }
-              const idx = this.bookmarks.findIndex(x => x.id === m.entityId)
+              const idx = _indexOfById(this.bookmarks, this._bmMap, m.entityId)
               if (idx >= 0) this.bookmarks[idx] = next
               this._bmMap[m.entityId] = next
               this._trackChange(m.entityId, 'attributes')
@@ -636,7 +662,7 @@ export const useDataStore = defineStore('data', {
             const g = this._grpMap[m.entityId]
             if (g && !g.deletedAt) {
               const next = { ...g, attributes: { ...g.attributes, [id]: true }, updatedAt: now }
-              const idx = this.siblingGroups.findIndex(x => x.id === m.entityId)
+              const idx = _indexOfById(this.siblingGroups, this._grpMap, m.entityId)
               if (idx >= 0) this.siblingGroups[idx] = next
               this._grpMap[m.entityId] = next
               this._trackChange(m.entityId, 'attributes')
@@ -662,7 +688,7 @@ export const useDataStore = defineStore('data', {
     _restoreFrom<T extends { id: string; deletedAt?: number; updatedAt?: number }>(
       arr: T[], map: Record<string, T>, id: string
     ) {
-      const idx = arr.findIndex(i => i.id === id)
+      const idx = _indexOfById(arr, map, id)
       if (idx < 0) return
       const next = { ...arr[idx], updatedAt: Date.now() }
       delete (next as { deletedAt?: unknown }).deletedAt

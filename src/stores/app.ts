@@ -43,6 +43,7 @@ export const useAppStore = defineStore('app', () => {
   const groupMap = computed(() => ds().groupMap)
   const categoryMap = computed(() => ds().categoryMap)
   const attributeMap = computed(() => ds().attributeMap)
+  const attributeByName = computed(() => ds().attributeByName)
   const childrenMap = computed(() => ds().childrenMap)
   const filteredBookmarks = computed(() => ds().filteredBookmarks)
   const filteredGroups = computed(() => ds().filteredGroups)
@@ -56,7 +57,7 @@ export const useAppStore = defineStore('app', () => {
 
   return {
     bookmarks, siblingGroups, categories, customAttributes,
-    bookmarkMap, groupMap, categoryMap, attributeMap, childrenMap,
+    bookmarkMap, groupMap, categoryMap, attributeMap, attributeByName, childrenMap,
     filteredBookmarks, filteredGroups, cardCounts,
     selectableCategories: computed(() => ds().selectableCategories),
     selectableAttributes: computed(() => ds().selectableAttributes),

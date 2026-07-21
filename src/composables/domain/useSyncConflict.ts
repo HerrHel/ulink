@@ -26,7 +26,7 @@ function _applyRemoteToLocal(type: EntityType, id: string, remote: Record<string
 
 export function resolveConflict(id: string, keepLocal: boolean) {
   const store = useSyncStore()
-  const conflict = store.conflicts.find(c => c.id === id)
+  const conflict = store.getConflict(id)
   if (!conflict) return
   if (!keepLocal) {
     _applyRemoteToLocal(conflict.type, id, conflict.remote as Record<string, unknown>)

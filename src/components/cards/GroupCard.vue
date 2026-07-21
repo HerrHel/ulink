@@ -207,7 +207,7 @@ function undo() { performUndo(props.group.id) }
 function redo() { performRedo(props.group.id) }
 function toggleSelect() { const id = 'group:' + props.group.id; const sel = ui.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
 function filterByTagName(name: string) {
-  const attr = ds.customAttributes.find(a => a.name === name)
+  const attr = ds.attributeByName[name]
   if (attr) toggleAttrFilter(attr.id)
 }
 function openMenu() { openDetail('group:' + props.group.id) }

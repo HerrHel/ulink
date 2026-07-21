@@ -55,8 +55,17 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   function removeConflict(id: string) {
-    const idx = conflicts.value.findIndex(c => c.id === id)
-    if (idx >= 0) conflicts.value.splice(idx, 1)
+    const list = conflicts.value
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        list.splice(i, 1)
+        return
+      }
+    }
+  }
+
+  function getConflict(id: string): SyncConflict | undefined {
+    return conflicts.value.find(c => c.id === id)
   }
 
   function clearConflicts() {
@@ -87,7 +96,7 @@ export const useSyncStore = defineStore('sync', () => {
     setSyncStatus, setSyncError, setLastSyncAt, setAutoSync,
     setPendingCount, setRealtimeStatus,
     resetSyncState,
-    addConflict, removeConflict, clearConflicts,
+    addConflict, removeConflict, getConflict, clearConflicts,
     dismissConflictBanner, resetConflictBanner,
   }
 })

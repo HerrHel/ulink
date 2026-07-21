@@ -84,6 +84,28 @@ describe('DataStore', () => {
       expect(store._dirtyIds.has('b2')).toBe(true)
       expect(store._searchVersion).toBe(v0 + 1)
     })
+
+    it('attributeByName - 仅索引未软删属性，重命名后按新名可查', () => {
+      store.addAttribute({ id: 'a1', name: '标签甲', type: 'boolean' } as any)
+      store.addAttribute({ id: 'a2', name: '标签乙', type: 'boolean' } as any)
+      expect(store.attributeByName['标签甲']?.id).toBe('a1')
+      expect(store.attributeByName['标签乙']?.id).toBe('a2')
+      store.deleteAttribute('a1')
+      expect(store.attributeByName['标签甲']).toBeUndefined()
+      expect(store.attributeMap['a1']?.deletedAt).toBeDefined()
+      store.renameAttribute('a2', '标签丙')
+      expect(store.attributeByName['标签乙']).toBeUndefined()
+      expect(store.attributeByName['标签丙']?.id).toBe('a2')
+    })
+
+    it('updateBookmark 经 map 定位后仍可正确更新', () => {
+      store.addBookmark({ id: 'b-map', title: 'X', url: 'https://x.com' } as any)
+      store.drainDirtyIds()
+      store.updateBookmark('b-map', { title: 'Y' })
+      expect(store.bookmarks[0].title).toBe('Y')
+      expect(store.bookmarkMap['b-map'].title).toBe('Y')
+      expect(store.bookmarks[0]).toBe(store.bookmarkMap['b-map'])
+    })
   })
 
   describe('分组操作', () => {

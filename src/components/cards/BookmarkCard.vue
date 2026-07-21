@@ -226,7 +226,7 @@ function onCardKeydown(e: KeyboardEvent) {
   else if (action.type === 'expand' || action.type === 'collapse' || action.type === 'toggleExpand') toggleExpand()
 }
 function filterByTagName(name: string) {
-  const attr = dataStore.customAttributes.find(a => a.name === name)
+  const attr = dataStore.attributeByName[name]
   if (attr) toggleAttrFilter(attr.id)
 }
 function copyUser() { copyToClipboard(props.bookmark.username || '', '账户') }

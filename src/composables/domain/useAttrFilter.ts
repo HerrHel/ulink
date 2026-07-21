@@ -35,7 +35,7 @@ export function addAttrQuick(name: string): boolean {
   if (!name) return false
   const ds = useDataStore()
   const dsId = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
-  if (ds.attributeMap[dsId] || ds.customAttributes.some(a => a.name === name)) return false
+  if (ds.attributeMap[dsId] || ds.attributeByName[name]) return false
   ds.addAttribute({ id: dsId, name: name, type: 'boolean' })
   saveAppData()
   return true

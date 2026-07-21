@@ -54,8 +54,10 @@ function onAddAttr() {
   if (!name) return
   const id = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
   // A2-007：查重仅对未软删属性，允许与回收站同名重建
-  const active = store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt)
-  if (active.find(a => a.id === id || a.name === name)) { toast('属性已存在', false); return }
+  const byId = store.attributeMap[id]
+  if ((byId && !byId.deletedAt) || store.attributeByName[name]) {
+    toast('属性已存在', false); return
+  }
   store.addAttribute({ id, name, type: 'boolean' })
   store.save()
   newName.value = ''
