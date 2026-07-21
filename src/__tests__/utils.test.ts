@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard } from '../utils.js'
+import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames } from '../utils.js'
 import { safeAtob } from '../crypto.js'
 
 describe('utils', () => {
@@ -143,6 +143,22 @@ describe('utils', () => {
       })
       copyToClipboard('test text', 'Label')
       expect(writeText).toHaveBeenCalledWith('test text')
+    })
+  })
+
+  describe('getTagNames', () => {
+    const attrs = [
+      { id: 't1', name: '标签一', type: 'boolean' as const },
+      { id: 't2', name: '标签二', type: 'boolean' as const },
+      { id: 'is-group', name: '内置组', type: 'boolean' as const },
+      { id: 't3', name: '已软删', type: 'boolean' as const, deletedAt: 1 },
+    ]
+    it('仅收集属性为 true 且非内置组、未软删的名字', () => {
+      const item = { attributes: { t1: true, t2: false, 'is-group': true, t3: true } } as any
+      expect(getTagNames(item, attrs as any)).toEqual(['标签一'])
+    })
+    it('无 attributes 返回空数组', () => {
+      expect(getTagNames({ attributes: null } as any, attrs as any)).toEqual([])
     })
   })
 })

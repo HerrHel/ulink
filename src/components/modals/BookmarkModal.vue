@@ -124,8 +124,7 @@ const saving = ref(false)
 const categoryOptions = computed(() => store.selectableCategories)
 // A2-007：不展示软删属性
 const selectableAttrs = computed(() =>
-  (store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt))
-    .filter(a => a.id !== ATTR_IS_GROUP)
+  store.selectableAttributes.filter(a => a.id !== ATTR_IS_GROUP)
 )
 const parentOptions = computed(() =>
   store.bookmarks.filter(b => !b.parentId && b.id !== bmForm.id)

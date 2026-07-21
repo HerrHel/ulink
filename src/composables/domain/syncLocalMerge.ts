@@ -62,7 +62,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         local.push(rItem)
         break
       case 'conflict':
-        if (lItem && !syncStore.conflicts.some(c => c.id === rItem.id)) {
+        if (lItem && !syncStore.getConflict(rItem.id)) {
           syncStore.addConflict({
             id: rItem.id, type,
             local: cloneDeep(lItem),

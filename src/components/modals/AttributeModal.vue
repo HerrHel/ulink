@@ -39,9 +39,7 @@ const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameAttribute')
 
 // A2-007：管理列表仅展示未软删属性
-const attributes = computed(() =>
-  store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt)
-)
+const attributes = computed(() => store.selectableAttributes)
 
 watch(() => store.modals.attribute, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())

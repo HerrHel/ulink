@@ -99,7 +99,7 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   if (decision.action === 'skip') return
 
   if (decision.action === 'conflict') {
-    if (localItem && !syncStore.conflicts.some(c => c.id === row.id)) {
+    if (localItem && !syncStore.getConflict(row.id)) {
       syncStore.addConflict({
         id: row.id,
         type,

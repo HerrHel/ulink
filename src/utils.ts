@@ -147,7 +147,10 @@ export function isMobile(): boolean { return _isMobile }
 
 export function getTagNames(item: Bookmark | SiblingGroup, customAttributes: CustomAttribute[]): string[] {
   if (!item.attributes) return []
-  return customAttributes.filter(a => a.id !== ATTR_IS_GROUP && item.attributes[a.id]).map(a => a.name)
+  // 排除软删定义 + 内置 is-group，避免回收站属性仍出现在卡片 tag 上
+  return customAttributes
+    .filter(a => !a.deletedAt && a.id !== ATTR_IS_GROUP && item.attributes[a.id])
+    .map(a => a.name)
 }
 
 // ── 分类 ──

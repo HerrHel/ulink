@@ -55,9 +55,7 @@ const geNameRef = ref<HTMLInputElement | null>(null)
 
 const categoryOptions = computed(() => store.selectableCategories)
 // A2-007：不展示软删属性
-const selectableAttrs = computed(() =>
-  store.selectableAttributes || store.customAttributes.filter(a => !a.deletedAt)
-)
+const selectableAttrs = computed(() => store.selectableAttributes)
 
 watch(() => store.modals.groupEdit, (open) => {
   if (open) nextTick(() => geNameRef.value?.focus())
