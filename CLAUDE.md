@@ -13,6 +13,7 @@ npm run dev         # 开发服务器（自动打开浏览器）
 npm run build       # 生产构建到 dist/
 npm run preview     # 预览生产构建
 npm run lint        # ESLint 检查 src/
+npm run typecheck   # TypeScript 类型检查
 npm run test        # 运行所有单元测试（vitest run）
 npm run test:watch  # 监听模式运行单元测试
 npm run test:e2e    # Playwright E2E 测试（e2e/，自动起 dev server）
@@ -39,27 +40,15 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 - **覆盖层 Store**：`toast.ts`（Toast/Confirm/Undo）、`contextMenu.ts`、`actionSheet.ts`、`attrDropdown.ts`、`overlay.ts`（batchMove/mfb/mention 等开关）
 - **`stores/auth.ts`** — Supabase 认证状态（user/session/OTP）
 - **`stores/e2e.ts`** — E2E 加密开关与解锁状态
+- **`stores/sync.ts`** — 云端同步状态（status/lastSyncAt/conflicts/realtime subscription）
 
 **架构迁移注意**：原 `composables/bridge.ts` 是模块级服务定位器（ToastAPI/ContextMenuAPI/ActionSheetAPI 等通过组件 onMounted 注册、composable 消费），现已全部迁移至上述 Pinia Store。bridge.ts 仅保留空壳以防遗漏的 import，**新代码一律用对应的 Pinia Store，不要向 bridge 注册任何 API**。
 
 ### 持久化与数据迁移
 
-- **`stores/persist.ts`**：loadFromLocalStorage → runMigrations → 写回
+- **`stores/persist.ts`**：IDB 权威 + localStorage 缓存，saveData/loadFromStorage/getStorageInfo
 - **`stores/storage.ts`**：Dexie IndexedDB 封装，突破 localStorage 5MB 限制
 - **`stores/migrations.ts`**：旧格式兼容，在加载时自动执行
-
-### Supabase 数据库迁移
-
-迁移文件在 `supabase/migrations/`，通过 Supabase Dashboard → SQL Editor 手动执行。`npm run build` 不涉及数据库操作。
-
-### 云端同步（Supabase）
-
-- **认证**（`composables/domain/useAuth.ts`）：Supabase Auth，email OTP 登录
-- **同步**（`composables/domain/useCloudSync.ts`）：push-first 策略，手动触发同步，增量推送到 Supabase
-- **实时同步**（`useSyncRealtime.ts`）：Supabase Realtime 订阅，含指数退避重连（最多 10 次）；冲突检测见 `useSyncConflict.ts`，版本历史见 `useSyncHistory.ts`
-- **Supabase 客户端**（`lib/supabase.ts`）：配置见 `.env`（VITE_SUPABASE_URL、VITE_SUPABASE_ANON_KEY）
-- **数据库 Schema**（`supabase/migrations/`，16 个迁移文件）：RLS 行级安全策略，表结构含 categories、bookmarks、sibling_groups、custom_attributes、user_security、version_history、link_check_history、error_logs
-- **Edge Function**（`supabase/functions/check-link/`）：服务端死链检查，被 useDeadLinkChecker 调用
 
 ### Composables 层
 
@@ -78,7 +67,7 @@ composables 按职责分三组：
 类型定义见 `src/types.ts`，Zod 运行时校验见 `src/schemas.ts`（两者需保持同步）：
 - **Bookmark**：id, title, url, icon, username, password（string | EncryptedPassword）, notes, categoryId, parentId（支持子书签嵌套）, order, useCount, attributes, isExpanded, createdAt, updatedAt, deletedAt
 - **SiblingGroup**：id, name, categoryId, icon, order, isExpanded, attributes, bookmarkIds[], notes (HTML), updatedAt, useCount, isPublic
-- **Category**：id, name, icon, color
+- **Category**：id, name, icon, color, order
 - **CustomAttribute**：id, name, type: 'boolean'
 - **EncryptedPassword**：{ encrypted: true, data, iv, salt } — AES-256-GCM 加密后的密码对象
 
@@ -98,9 +87,10 @@ composables 按职责分三组：
 - `search.ts` — Fuse.js 模糊搜索 + pinyin-pro 拼音匹配，统一搜索书签和组
 - `ai-classify.ts` — 基于域名关键词的轻量分类器，自动建议书签分类和属性标签
 - `diffVersions.ts` — 版本差异对比，用于历史版本 diff UI
-- `theme.ts` — 主题切换（亮色/暗色/自动）、theme-style（舒适模式）
+- `theme.ts` — 主题切换（亮色/暗色/自动）
 - `toast.ts` — 轻量 toast 工具函数，委托 bridge 上的 ToastAPI
-- `stats.ts` — 本地匿名使用统计（计数器 + 带时间序列的 MetricEvent），仅存 localStorage 不上传
+- `errorReporter.ts` — Vue errorHandler/unhandledrejection → Supabase error_logs 表
+- `stats.ts` — 本地匿名使用统计（localStorage 计数器），仅存不上传
 - `head.ts` — 客户端 `<head>` 动态注入（title/meta/OG/canonical/JSON-LD），幂等、可清理，用于 ShareView 等页面的 SEO 元数据覆盖
 - `recoveryKeyPDF.ts` — 纯 HTML+print 生成 Recovery Key PDF 下载
 
@@ -130,6 +120,7 @@ composables 按职责分三组：
 - **PurgeCSS**：自定义 Vite 插件，safelist 保护动态类名（`/^card-/`, `/^modal-/`, `/^ctx-/` 等前缀）
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
 - **安全头**：自定义 headersPlugin 注入 CSP、X-Content-Type-Options 等
+- **SPA 404 回退**：spa404Plugin 为 GitHub Pages 生成 404.html
 - **部署**：GitHub Actions → GitHub Pages（`.github/workflows/static.yml`）
 
 ### Chrome 扩展
@@ -166,4 +157,4 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT 允许）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
-- **CI/CD**：`.github/workflows/` — 部署（lint+test+audit+build+deploy）、CI（PR 触发 lint+test）、Dependabot 周检
+- **CI/CD**：`.github/workflows/` — 部署（lint+test+build+deploy）、CI（PR 触发 lint+test）、Dependabot 周检

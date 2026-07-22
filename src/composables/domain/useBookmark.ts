@@ -5,7 +5,7 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { favicon, domain, fixUrl } from '../../utils.js'
 
-import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { toast, toastWithUndo, showConfirm, showChoice } from '../../lib/toast.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import { newBookmarkId } from '../../lib/newId.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
@@ -15,6 +15,85 @@ import { safeDecodePassword, encrypt, decrypt } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
 import { isDataHydrated } from '../../lib/dataReady.js'
+
+/**
+ * 检测两个URL是否是后缀变体关系
+ * 例如：
+ * - https://example.com 和 https://example.com/page
+ * - https://example.com/ 和 https://example.com/page
+ * 返回true表示newUrl是existingUrl的后缀变体
+ */
+function isUrlSuffixVariant(existingUrl: string, newUrl: string): boolean {
+  try {
+    const existing = new URL(existingUrl)
+    const newUrlObj = new URL(newUrl)
+
+    // 域名必须相同
+    if (existing.hostname !== newUrlObj.hostname) return false
+
+    // 协议必须相同
+    if (existing.protocol !== newUrlObj.protocol) return false
+
+    // 获取路径（去除开头的斜杠）
+    const existingPath = existing.pathname.replace(/^\//, '')
+    const newPath = newUrlObj.pathname.replace(/^\//, '')
+
+    // 如果existingPath为空或根路径，则newPath是它的后缀
+    if (!existingPath || existingPath === '/') return true
+
+    // newPath必须以existingPath开头（作为前缀）
+    if (newPath.startsWith(existingPath)) {
+      // 确保existingPath后面是斜杠或者是字符串结尾
+      const rest = newPath.slice(existingPath.length)
+      return rest === '' || rest.startsWith('/')
+    }
+
+    return false
+  } catch {
+    // URL解析失败，认为不是后缀变体
+    return false
+  }
+}
+
+/**
+ * 检测是否有完全重复的URL
+ * 返回true表示存在完全重复
+ */
+function isExactDuplicate(existingUrl: string, newUrl: string): boolean {
+  try {
+    const existing = new URL(existingUrl)
+    const newUrlObj = new URL(newUrl)
+
+    // 完整比较：协议、主机名、路径、查询参数、哈希
+    return existing.href === newUrlObj.href
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 查找与指定URL重复或后缀变体的书签
+ * 返回找到的书签和类型（exact: 完全重复, suffix: 后缀变体）
+ */
+function findDuplicateBookmarks(url: string, excludeId?: string): { exact: Bookmark | null; suffix: Bookmark | null } {
+  const ds = useDataStore()
+  const existingBookmarks = ds.bookmarks.filter(b => !b.deletedAt && b.id !== excludeId)
+
+  let exact: Bookmark | null = null
+  let suffix: Bookmark | null = null
+
+  for (const bm of existingBookmarks) {
+    if (isExactDuplicate(bm.url, url)) {
+      exact = bm
+      break
+    }
+    if (isUrlSuffixVariant(bm.url, url) && !suffix) {
+      suffix = bm
+    }
+  }
+
+  return { exact, suffix }
+}
 
 interface BmFormState {
   id: string
@@ -194,6 +273,31 @@ export async function saveBm() {
     const ds = useDataStore()
     const url = fixUrl(bmForm.url)
     if (!url) { toast('请填写网址', false); return }
+
+    // 新建书签时检测重复
+    if (!bmForm.id) {
+      const { exact, suffix } = findDuplicateBookmarks(url)
+
+      // 完全重复：阻止添加
+      if (exact) {
+        toast('该网址已存在书签「' + (exact.title || '未命名') + '」', false)
+        closeBmModal()
+        return
+      }
+
+      // 后缀变体：弹窗让用户选择
+      if (suffix) {
+        const action = await showSuffixVariantDialog(suffix, url)
+        if (action === 'cancel') {
+          closeBmModal()
+          return
+        } else if (action === 'child') {
+          // 成为已有书签的子书签
+          bmForm.parentId = suffix.id
+        }
+        // action === 'sibling' 时保持顶级，继续保存流程
+      }
+    }
 
     const title = bmForm.title.trim() || domain(url)
 
@@ -436,6 +540,13 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
     return false
   }
 
+  // 检测完全重复的URL
+  const { exact } = findDuplicateBookmarks(safeUrl)
+  if (exact) {
+    toast('该网址已存在书签「' + (exact.title || '未命名') + '」', false)
+    return false
+  }
+
   const id = newBookmarkId()
   const dm = domain(safeUrl)
   const newBm: Bookmark = {
@@ -468,4 +579,43 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
   })
 
   return true
+}
+
+/**
+ * 显示后缀变体URL的选择弹窗
+ * 让用户选择：成为已有书签的子书签、作为顶级书签添加、或取消
+ */
+async function showSuffixVariantDialog(existingBookmark: Bookmark, newUrl: string): Promise<'child' | 'sibling' | 'cancel'> {
+  const existingTitle = existingBookmark.title || '未命名'
+  const existingDomain = domain(existingBookmark.url)
+  const newDomain = domain(newUrl)
+
+  // 构建选项
+  const options = [
+    {
+      id: 'child',
+      label: '成为「' + existingTitle + '」的子书签',
+      description: '将新书签作为已有书签的子项保存',
+    },
+    {
+      id: 'sibling',
+      label: '作为独立书签添加',
+      description: '与已有书签平级保存',
+    },
+  ]
+
+  // 构建消息
+  let message = '发现已有书签「' + existingTitle + '」'
+  if (existingDomain === newDomain) {
+    message += '，网址域名相同但路径不同。'
+  } else {
+    message += '，网址相似。'
+  }
+  message += '\n\n如何处理新书签？'
+
+  const result = await showChoice(message, options)
+
+  if (result === 'child') return 'child'
+  if (result === 'sibling') return 'sibling'
+  return 'cancel'
 }

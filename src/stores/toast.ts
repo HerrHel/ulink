@@ -1,5 +1,5 @@
 /**
- * toast.ts — Toast / Confirm / Undo 状态 Store
+ * toast.ts — Toast / Confirm / Undo / Choice 状态 Store
  *
  * 替代 bridge.ts toastAPI 服务定位器模式。
  * 所有 toast 操作通过 Pinia action 调用，消除模块级可变状态。
@@ -24,14 +24,29 @@ interface UndoToast {
   cls: string
 }
 
+interface ChoiceOption {
+  id: string
+  label: string
+  description?: string
+}
+
+interface ChoiceDialog {
+  message: string
+  options: ChoiceOption[]
+  cancelLabel?: string
+}
+
 export const useToastStore = defineStore('toast', () => {
   const toasts = ref<ToastItem[]>([])
   const undoToast = ref<UndoToast | null>(null)
   const confirmOpen = ref(false)
   const confirmMessage = ref('')
+  const choiceOpen = ref(false)
+  const choiceDialog = ref<ChoiceDialog | null>(null)
 
   let toastIdCounter = 0
   let _confirmResolve: ((value: boolean) => void) | null = null
+  let _choiceResolve: ((value: string | null) => void) | null = null
   let _dismissTimer: ReturnType<typeof setTimeout> | null = null
   let _countdownTimer: ReturnType<typeof setInterval> | null = null
   let _undoGeneration = 0
@@ -144,9 +159,39 @@ export const useToastStore = defineStore('toast', () => {
     }
   }
 
+  // ── Choice Dialog ──
+
+  function showChoice(message: string, options: ChoiceOption[], cancelLabel = '取消'): Promise<string | null> {
+    choiceDialog.value = { message, options, cancelLabel }
+    choiceOpen.value = true
+
+    return new Promise((resolve) => {
+      // 若已有挂起的 choice 则先取消
+      if (_choiceResolve) _choiceResolve(null)
+      _choiceResolve = resolve
+    })
+  }
+
+  function resolveChoice(optionId: string | null) {
+    choiceOpen.value = false
+    if (_choiceResolve) {
+      _choiceResolve(optionId)
+      _choiceResolve = null
+    }
+  }
+
+  function onChoiceOpenChange(open: boolean) {
+    choiceOpen.value = open
+    if (!open && _choiceResolve) {
+      _choiceResolve(null)
+      _choiceResolve = null
+    }
+  }
+
   return {
-    toasts, undoToast, confirmOpen, confirmMessage,
+    toasts, undoToast, confirmOpen, confirmMessage, choiceOpen, choiceDialog,
     show, showWithUndo, dismissUndo,
     showConfirm, resolveConfirm, onConfirmOpenChange,
+    showChoice, resolveChoice, onChoiceOpenChange,
   }
 })

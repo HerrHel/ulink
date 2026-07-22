@@ -1,5 +1,5 @@
 /**
- * toast.ts — Toast / Confirm 快捷入口
+ * toast.ts — Toast / Confirm / Choice 快捷入口
  *
  * 简洁的同步函数签名，内部委托至 useToastStore。
  * 调用方无需在 setup 内使用 useToastStore()。
@@ -16,4 +16,8 @@ export function toastWithUndo(msg: string, undoFn: () => void, duration = 6000):
 
 export function showConfirm(msg: string): Promise<boolean> {
   try { return useToastStore().showConfirm(msg) } catch { return Promise.resolve(false) }
+}
+
+export function showChoice(message: string, options: Array<{ id: string; label: string; description?: string }>, cancelLabel = '取消'): Promise<string | null> {
+  try { return useToastStore().showChoice(message, options, cancelLabel) } catch { return Promise.resolve(null) }
 }

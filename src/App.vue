@@ -64,6 +64,7 @@
 </template>
 <!-- 全局覆盖层：Share 路由与主布局共用 -->
 <ConfirmModal />
+<ChoiceModal />
 <AuthModal />
 <ToastContainer />
 </template>
@@ -101,6 +102,7 @@ const SyncConflictBanner = defineAsyncComponent(() => import('./components/overl
 const CommandPalette = defineAsyncComponent(() => import('./components/overlays/CommandPalette.vue'))
 const ShortcutHelpPanel = defineAsyncComponent(() => import('./components/overlays/ShortcutHelpPanel.vue'))
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
+const ChoiceModal = defineAsyncComponent(() => import('./components/modals/ChoiceModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
 import { saveFromExtension } from './composables/domain/useBookmark.js'
 

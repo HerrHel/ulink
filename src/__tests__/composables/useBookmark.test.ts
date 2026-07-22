@@ -99,6 +99,7 @@ vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),
   toastWithUndo: vi.fn((msg: string, undoFn: () => void) => { mockToastWithUndo.undoFn = undoFn }),
   showConfirm: vi.fn(() => Promise.resolve(true)),
+  showChoice: vi.fn(() => Promise.resolve(null)),
 }))
 
 const mockToastWithUndo = { undoFn: null as (() => void) | null }
@@ -533,6 +534,143 @@ describe('useBookmark', () => {
       bmForm.logoPreviewVisible = true
       previewLogo()
       expect(bmForm.logoPreviewVisible).toBe(false)
+    })
+  })
+
+  describe('duplicate detection', () => {
+    it('should prevent adding exact duplicate URL', async () => {
+      // 准备已有书签
+      mockData.bookmarks = [{
+        id: 'existing-bm',
+        title: '已有书签',
+        url: 'https://example.com',
+        deletedAt: undefined,
+      }]
+      mockData.bookmarkMap = { 'existing-bm': mockData.bookmarks[0] }
+
+      // 设置新书签表单
+      bmForm.url = 'https://example.com'
+      bmForm.title = '新书签'
+
+      // 尝试保存
+      await saveBm()
+
+      // 应该显示toast提示并阻止添加
+      const { toast } = await import('../../lib/toast.js')
+      expect(toast).toHaveBeenCalledWith('该网址已存在书签「已有书签」', false)
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+    })
+
+    it('should show choice dialog for suffix variant URL', async () => {
+      // 准备已有书签
+      mockData.bookmarks = [{
+        id: 'existing-bm',
+        title: '已有书签',
+        url: 'https://example.com',
+        deletedAt: undefined,
+      }]
+      mockData.bookmarkMap = { 'existing-bm': mockData.bookmarks[0] }
+
+      // 设置新书签表单
+      bmForm.url = 'https://example.com/page'
+      bmForm.title = '新书签'
+
+      // 模拟用户选择"成为子书签"
+      const { showChoice } = await import('../../lib/toast.js')
+      vi.mocked(showChoice).mockResolvedValueOnce('child')
+
+      // 保存
+      await saveBm()
+
+      // 应该显示选择弹窗
+      expect(showChoice).toHaveBeenCalled()
+
+      // 应该将parentId设置为已有书签的id
+      expect(bmForm.parentId).toBe('existing-bm')
+
+      // 应该添加书签
+      expect(mockData.addBookmark).toHaveBeenCalled()
+    })
+
+    it('should add as sibling when user chooses sibling option', async () => {
+      // 准备已有书签
+      mockData.bookmarks = [{
+        id: 'existing-bm',
+        title: '已有书签',
+        url: 'https://example.com',
+        deletedAt: undefined,
+      }]
+      mockData.bookmarkMap = { 'existing-bm': mockData.bookmarks[0] }
+
+      // 设置新书签表单
+      bmForm.url = 'https://example.com/page'
+      bmForm.title = '新书签'
+
+      // 模拟用户选择"作为独立书签添加"
+      const { showChoice } = await import('../../lib/toast.js')
+      vi.mocked(showChoice).mockResolvedValueOnce('sibling')
+
+      // 保存
+      await saveBm()
+
+      // 应该显示选择弹窗
+      expect(showChoice).toHaveBeenCalled()
+
+      // parentId应该保持为null（顶级书签）
+      expect(bmForm.parentId).toBeNull()
+
+      // 应该添加书签
+      expect(mockData.addBookmark).toHaveBeenCalled()
+    })
+
+    it('should cancel when user chooses cancel option', async () => {
+      // 准备已有书签
+      mockData.bookmarks = [{
+        id: 'existing-bm',
+        title: '已有书签',
+        url: 'https://example.com',
+        deletedAt: undefined,
+      }]
+      mockData.bookmarkMap = { 'existing-bm': mockData.bookmarks[0] }
+
+      // 设置新书签表单
+      bmForm.url = 'https://example.com/page'
+      bmForm.title = '新书签'
+
+      // 模拟用户选择"取消"
+      const { showChoice } = await import('../../lib/toast.js')
+      vi.mocked(showChoice).mockResolvedValueOnce(null)
+
+      // 保存
+      await saveBm()
+
+      // 应该显示选择弹窗
+      expect(showChoice).toHaveBeenCalled()
+
+      // 不应该添加书签
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+    })
+
+    it('should allow editing existing bookmark even with duplicate URL', async () => {
+      // 准备已有书签
+      mockData.bookmarks = [{
+        id: 'existing-bm',
+        title: '已有书签',
+        url: 'https://example.com',
+        deletedAt: undefined,
+      }]
+      mockData.bookmarkMap = { 'existing-bm': mockData.bookmarks[0] }
+
+      // 设置编辑模式
+      bmForm.id = 'existing-bm'
+      bmForm.url = 'https://example.com'
+      bmForm.title = '更新的书签'
+
+      // 保存
+      await saveBm()
+
+      // 编辑模式下不应该检测重复
+      expect(mockData.updateBookmark).toHaveBeenCalled()
     })
   })
 })
