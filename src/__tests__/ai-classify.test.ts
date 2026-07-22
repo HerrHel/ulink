@@ -6,7 +6,7 @@ const CATS: Category[] = [
   { id: 'c-dev', name: '开发', icon: '', color: '', order: 0 },
   { id: 'c-ai', name: 'AI', icon: '', color: '', order: 1 },
   { id: 'c-shop', name: '购物', icon: '', color: '', order: 2 },
-  { id: 'c-social', name: '社交', icon: '', color: '', order: 3 },
+  { id: 'c-social', name: '娱乐', icon: '', color: '', order: 3 },
   { id: 'c-design', name: '设计', icon: '', color: '', order: 4 },
 ]
 

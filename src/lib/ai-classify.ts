@@ -9,7 +9,7 @@ import type { Category } from '../types.js'
 const DOMAIN_KEYWORDS: Record<string, string[]> = {
   '开发': ['github.com', 'gitlab.com', 'bitbucket.org', 'stackoverflow.com', 'dev.to', 'npmjs.com', 'pypi.org', 'crates.io', 'hub.docker.com', 'vercel.com', 'netlify.com', 'heroku.com', 'railway.app', 'digitalocean.com', 'aws.amazon.com', 'cloud.google.com', 'azure.microsoft.com', 'developer.mozilla.org', 'w3schools.com', 'freecodecamp.org', 'codepen.io', 'jsfiddle.net', 'replit.com', 'codesandbox.io'],
   '设计': ['figma.com', 'dribbble.com', 'behance.net', 'canva.com', 'adobe.com', 'sketch.com', 'invisionapp.com', 'zeplin.io', 'coolors.co', 'colorhunt.co'],
-  '社交': ['twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'linkedin.com', 'reddit.com', 'discord.com', 'telegram.org', 'web.telegram.org', 'mastodon.social', 'threads.net', 'xiaohongshu.com', 'weibo.com', 'douban.com', 'zhihu.com'],
+  '娱乐': ['twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'linkedin.com', 'reddit.com', 'discord.com', 'telegram.org', 'web.telegram.org', 'mastodon.social', 'threads.net', 'xiaohongshu.com', 'weibo.com', 'douban.com', 'zhihu.com'],
   '视频': ['youtube.com', 'youtu.be', 'bilibili.com', 'vimeo.com', 'twitch.tv', 'netflix.com', 'disneyplus.com', 'iqiyi.com', 'youku.com'],
   '音乐': ['spotify.com', 'music.apple.com', 'soundcloud.com', 'music.163.com', 'y.qq.com', 'bandcamp.com'],
   '新闻': ['news.ycombinator.com', 'medium.com', 'bbc.com', 'cnn.com', 'reuters.com', 'theverge.com', 'techcrunch.com', 'arstechnica.com', 'wired.com', '36kr.com', 'sspai.com'],
@@ -24,7 +24,7 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
 const TITLE_KEYWORDS: Record<string, string[]> = {
   '开发': ['github', 'gitlab', 'stackoverflow', '代码', '编程', '开发', 'api', 'sdk', '文档', 'developer', 'code', 'programming', 'frontend', 'backend', 'react', 'vue', 'angular', 'node', 'python', 'java', 'rust', 'golang', 'typescript', 'javascript', 'css', 'html', 'webpack', 'vite', 'docker', 'kubernetes', 'linux', 'git', 'npm', 'yarn', 'pnpm'],
   '设计': ['设计', 'design', 'figma', 'sketch', 'ui', 'ux', '图标', 'icon', 'illustration', '插画', '配色', '字体', 'font'],
-  '社交': ['微博', '推特', 'twitter', 'facebook', 'instagram', 'linkedin', 'reddit', '社交', '社区', '论坛', 'forum'],
+  '娱乐': ['微博', '推特', 'twitter', 'facebook', 'instagram', 'linkedin', 'reddit', '社交', '社区', '论坛', 'forum'],
   '视频': ['视频', 'video', 'youtube', 'bilibili', '哔哩哔哩', '电影', 'movie', '剧集', '直播', 'live'],
   '音乐': ['音乐', 'music', '歌单', 'playlist', '播客', 'podcast'],
   '新闻': ['新闻', 'news', '资讯', '头条', '日报', 'daily', '周报', 'weekly'],

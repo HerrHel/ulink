@@ -37,7 +37,7 @@ export const DEFAULTS: AppData = {
     { id: 'email', name: '邮箱', icon: 'mail', color: '#e11d48', order: 2 },
     { id: 'tools', name: '工具', icon: 'tool', color: '#d97706', order: 3 },
     { id: 'ai', name: 'AI', icon: 'ai-icon', color: '#8b5cf6', order: 4 },
-    { id: 'social', name: '社交', icon: 'social-icon', color: '#1d9bf0', order: 5 },
+    { id: 'social', name: '娱乐', icon: 'social-icon', color: '#1d9bf0', order: 5 },
     { id: 'game', name: '游戏平台', icon: 'game-icon', color: '#16a34a', order: 6 }
   ],
   bookmarks: [
