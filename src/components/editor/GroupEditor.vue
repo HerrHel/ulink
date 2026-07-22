@@ -34,17 +34,20 @@ import { EditorManager, isSilentSetContent } from '../../lib/editor.js'
 import { useMfbStore } from '../../stores/overlay.js'
 import { pushUndo } from '../../composables/domain/useUndo.js'
 
+// 内联卡片 DOM 属性名（TipTap 节点 attrs 键 + HTML 属性）
+const BM_ID_ATTR = 'data-bm-id'
+
 const InlineCard = Node.create({
   name: 'inlineCard', group: 'inline', inline: true, atom: true, selectable: true,
-  addAttributes: () => ({ 'data-bm-id': { default: null } }),
-  parseHTML: () => [{ tag: 'span.group-inline-card[data-bm-id]', getAttrs: el => {
-    const id = el.getAttribute('data-bm-id')
+  addAttributes: () => ({ [BM_ID_ATTR]: { default: null } }),
+  parseHTML: () => [{ tag: 'span.group-inline-card[' + BM_ID_ATTR + ']', getAttrs: el => {
+    const id = el.getAttribute(BM_ID_ATTR)
     // 排除组引用卡片（data-bm-id 以 "ref:" 开头），让 GroupRefCard 节点处理
     if (id && id.startsWith('ref:')) return false
-    return id ? { 'data-bm-id': id } : false
+    return id ? { [BM_ID_ATTR]: id } : false
   }}],
   renderHTML: ({ node }) => {
-    const id = node.attrs['data-bm-id']
+    const id = node.attrs[BM_ID_ATTR]
     const bm = useDataStore().bookmarkMap[id]
     // A5-003：软删仍保留 data-bm-id，避免 getHTML() 剥属性后任意击键永久抹掉内联卡片；
     // UI 用 is-deleted 灰显/不可点，恢复书签后 parseHTML 仍能识别。
@@ -52,11 +55,11 @@ const InlineCard = Node.create({
       return ['span', {
         class: 'group-inline-card is-deleted',
         contenteditable: 'false',
-        'data-bm-id': id || '',
+        [BM_ID_ATTR]: id || '',
         draggable: 'false',
       }, bm?.title || '（已删除）']
     }
-    return ['span', { class: 'group-inline-card', contenteditable: 'false', 'data-bm-id': id, draggable: 'true' },
+    return ['span', { class: 'group-inline-card', contenteditable: 'false', [BM_ID_ATTR]: id, draggable: 'true' },
       ['img', { src: favicon(bm.url, bm.icon), alt: '' }],
       ['span', { class: 'gic-name' }, bm.title],
       ['span', { class: 'gic-domain' }, domain(bm.url)],
@@ -68,8 +71,8 @@ const InlineCard = Node.create({
 const GroupRefCard = Node.create({
   name: 'groupRefCard', group: 'inline', inline: true, atom: true, selectable: true,
   addAttributes: () => ({ 'data-ref-gid': { default: null } }),
-  parseHTML: () => [{ tag: 'span.group-ref-card[data-bm-id]', getAttrs: el => {
-    const bid = el.getAttribute('data-bm-id')
+  parseHTML: () => [{ tag: 'span.group-ref-card[' + BM_ID_ATTR + ']', getAttrs: el => {
+    const bid = el.getAttribute(BM_ID_ATTR)
     if (bid && bid.startsWith('ref:')) return { 'data-ref-gid': bid.slice(4) }
     return false
   }}],
@@ -80,7 +83,7 @@ const GroupRefCard = Node.create({
     const span = document.createElement('span')
     span.className = 'group-inline-card group-ref-card'
     span.setAttribute('contenteditable', 'false')
-    span.setAttribute('data-bm-id', 'ref:' + gid)
+    span.setAttribute(BM_ID_ATTR, 'ref:' + gid)
     span.setAttribute('draggable', 'true')
 
     // A5-004：软删组与不存在一致——占位保留 data-bm-id 以便恢复后可解析
@@ -139,7 +142,7 @@ function syncToStore(ed: Editor) {
   const ids: string[] = [], seen: Record<string, boolean> = {}
   ed.state.doc.descendants(node => {
     if (node.type.name === 'inlineCard') {
-      const bmid = node.attrs['data-bm-id']
+      const bmid = node.attrs[BM_ID_ATTR]
       // H15：不把已软删除/不存在的书签 id 回写到 bookmarkIds，
       // 否则 grid 删除后编辑器内敲字会把悬空 id 复活到组引用并污染远端。
       const bm = bmid ? ds.bookmarkMap[bmid] : null

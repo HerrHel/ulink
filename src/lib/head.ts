@@ -16,7 +16,7 @@
 const MARK = 'data-lv-head'
 
 /** 站点默认 title（与 index.html 对齐） */
-export const DEFAULT_TITLE = 'LinkVault — 个人书签管理器'
+const DEFAULT_TITLE = 'LinkVault — 个人书签管理器'
 
 /** 覆盖静态 meta 前缓存的原 content，key = `${attrName}:${attrValue}` */
 const _staticMetaBackup = new Map<string, string>()

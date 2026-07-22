@@ -60,7 +60,7 @@ function _throttleKey(message: string): boolean {
   return false
 }
 
-export interface ErrorPayload {
+interface ErrorPayload {
   message: string
   stack?: string
   component?: string
