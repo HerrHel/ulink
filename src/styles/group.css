@@ -412,6 +412,15 @@
   height:auto;
   max-height:min(70vh,560px);
 }
+/* 辅助栏书签卡片内容可滚 */
+.detail-card-wrap .card .card-body{
+  display:flex;
+  flex-direction:column;
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  max-height:min(50vh,420px);
+}
 /* 辅助栏组正文可滚；grid-view 父级会隐藏 preview，内容用只读 HTML 展示 */
 .detail-card-wrap .group-card .card-body{
   display:flex;
