@@ -371,6 +371,10 @@ function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, strin
   return out
 }
 
+// 组结果预算：混合搜索中组预分组数上限（Fuse limit / slice / 最终拼接上限 maxResults + 该值）。
+// 与书签 maxResults 默认 8 区分；调整组建议条数只改此一处。
+const GROUP_SUGGEST_LIMIT = 4
+
 // ── searchWithHighlights 需要的 key 映射 ──
 const BM_KEY_MAP = { title: 'title', url: 'url', notes: 'notes', username: 'username', attrNames: 'attrNames', titlePy: 'title', notesPy: 'notes' }
 const GRP_KEY_MAP = { name: 'name', attrNames: 'attrNames', childTitle: 'childTitle', childUrl: 'childUrl', namePy: 'name', childTitlePy: 'childTitle' }
@@ -402,7 +406,7 @@ export function searchWithHighlights(
     // 同条件下 _ensureGroupBase 也会失败，但模块内已有现成的 _fallbackGrpIds（用 includes 搜组）。
     // 降级时调用 _fallbackGrpIds 构建组结果项与书签降级结果合并返回，保持降级与正常路径一致。
     const grpIds = _fallbackGrpIds(groups, q, bookmarkMap)
-    const groupResults: SearchResultItem[] = groups.filter(g => grpIds.has(g.id)).slice(0, 4).map(g => ({
+    const groupResults: SearchResultItem[] = groups.filter(g => grpIds.has(g.id)).slice(0, GROUP_SUGGEST_LIMIT).map(g => ({
       id: g.id, name: g.name, _isGroup: true,
       _displayTitle: g.name || '未命名组',
       bookmarkIds: g.bookmarkIds,
@@ -410,7 +414,7 @@ export function searchWithHighlights(
     }))
     if (!groupResults.length) return bookmarkResults.slice(0, maxResults)
     if (!bookmarkResults.length) return groupResults.slice(0, maxResults)
-    return [...groupResults, ...bookmarkResults].slice(0, maxResults + 4)
+    return [...groupResults, ...bookmarkResults].slice(0, maxResults + GROUP_SUGGEST_LIMIT)
   }
   const bmResults = _bmFuse.search(q, { limit: maxResults })
 
@@ -424,7 +428,7 @@ export function searchWithHighlights(
   if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version) || !_grpFuse) {
     return bookmarkResults.slice(0, maxResults)
   }
-  const grpResults = _grpFuse.search(q, { limit: 4 })
+  const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
 
   const groupResults: SearchResultItem[] = grpResults.map(r => ({
     id: r.item.id,
@@ -437,7 +441,7 @@ export function searchWithHighlights(
 
   if (!groupResults.length) return bookmarkResults.slice(0, maxResults)
   if (!bookmarkResults.length) return groupResults.slice(0, maxResults)
-  return [...groupResults, ...bookmarkResults].slice(0, maxResults + 4)
+  return [...groupResults, ...bookmarkResults].slice(0, maxResults + GROUP_SUGGEST_LIMIT)
 }
 
 /**

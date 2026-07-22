@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames } from '../utils.js'
+import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId } from '../utils.js'
 import { safeAtob } from '../crypto.js'
 
 describe('utils', () => {
@@ -111,6 +111,90 @@ describe('utils', () => {
     it('should handle empty URL', () => {
       const result = favicon('')
       expect(result).toBe('')
+    })
+  })
+
+  // A5-006：自定义 icon 白名单——锁住 javascript:/data:/vbscript: 等 XSS scheme 拒绝回归
+  describe('safeIconUrl', () => {
+    it('放行 http(s) 绝对 URL（保留原值）', () => {
+      expect(safeIconUrl('https://example.com/a.png')).toBe('https://example.com/a.png')
+      expect(safeIconUrl('http://example.com/a.png')).toBe('http://example.com/a.png')
+    })
+    it('放行大小写混合的 http(s) scheme', () => {
+      expect(safeIconUrl('HTTPS://example.com/a.png')).toBe('HTTPS://example.com/a.png')
+      expect(safeIconUrl('HtTpS://x.io/i.svg')).toBe('HtTpS://x.io/i.svg')
+    })
+    it('放行相对路径：/path、./x、../x', () => {
+      expect(safeIconUrl('/icons/a.svg')).toBe('/icons/a.svg')
+      expect(safeIconUrl('./custom.png')).toBe('./custom.png')
+      expect(safeIconUrl('../img/x.svg')).toBe('../img/x.svg')
+    })
+    it('放行无 scheme 的相对资源名（custom.png、icons/a.svg）', () => {
+      expect(safeIconUrl('custom.png')).toBe('custom.png')
+      expect(safeIconUrl('icons/a.svg')).toBe('icons/a.svg')
+    })
+    it('拒绝 javascript: scheme（XSS 防御核心）', () => {
+      expect(safeIconUrl('javascript:alert(1)')).toBe('')
+      expect(safeIconUrl('JavaScript:alert(1)')).toBe('')
+      expect(safeIconUrl(' javascript:alert(1)')).toBe('')
+    })
+    it('拒绝 data: / vbscript: scheme', () => {
+      expect(safeIconUrl('data:image/svg+xml,<svg/onload=alert(1)>')).toBe('')
+      expect(safeIconUrl('vbscript:msgbox(1)')).toBe('')
+    })
+    it('拒绝其它带 scheme 的形态（file:、blob: 等）', () => {
+      expect(safeIconUrl('file:///etc/passwd')).toBe('')
+      expect(safeIconUrl('blob:http://x/abc')).toBe('')
+    })
+    it('空 / 纯空白 / null / undefined 返回空串', () => {
+      expect(safeIconUrl('')).toBe('')
+      expect(safeIconUrl('   ')).toBe('')
+      expect(safeIconUrl(null as unknown as undefined)).toBe('')
+      expect(safeIconUrl(undefined)).toBe('')
+    })
+    it('trim 后判定（前后空白不影响 scheme 识别）', () => {
+      expect(safeIconUrl('  /icons/a.svg  ')).toBe('/icons/a.svg')
+      expect(safeIconUrl('  https://example.com/a.png  ')).toBe('https://example.com/a.png')
+      expect(safeIconUrl('  javascript:alert(1)  ')).toBe('')
+    })
+  })
+
+  // 分享组 id 白名单：[A-Za-z0-9_-] 长度 2–64
+  describe('isValidShareGroupId', () => {
+    it('合法：字母数字下划线短横、长度 2–64', () => {
+      expect(isValidShareGroupId('sg_welcome')).toBe(true)
+      expect(isValidShareGroupId('g' + 'x'.repeat(10))).toBe(true)
+      expect(isValidShareGroupId('ab')).toBe(true)
+      expect(isValidShareGroupId('A-B_C.')).toBe(false) // 点非法
+      expect(isValidShareGroupId('_-ok')).toBe(true)
+    })
+    it('长度边界 1 拒绝（最小 2）', () => {
+      expect(isValidShareGroupId('a')).toBe(false)
+    })
+    it('长度边界 64 合法、65 拒绝', () => {
+      const s64 = 'a'.repeat(64)
+      expect(isValidShareGroupId(s64)).toBe(true)
+      expect(isValidShareGroupId(s64 + 'a')).toBe(false)
+    })
+    it('空串拒绝', () => {
+      expect(isValidShareGroupId('')).toBe(false)
+    })
+    it('null / undefined 拒绝（类型守卫）', () => {
+      expect(isValidShareGroupId(null)).toBe(false)
+      expect(isValidShareGroupId(undefined)).toBe(false)
+    })
+    it('非法字符拒绝：空格 / 点 / 斜杠 / 中文', () => {
+      expect(isValidShareGroupId('ab cd')).toBe(false)
+      expect(isValidShareGroupId('ab.cd')).toBe(false)
+      expect(isValidShareGroupId('ab/cd')).toBe(false)
+      expect(isValidShareGroupId('分组abc')).toBe(false)
+    })
+    it('类型守卫收敛为 string（编译期）', () => {
+      const v: string | null = 'sg_ok'
+      if (isValidShareGroupId(v)) {
+        // 此处 v 收敛为 string
+        expect(v.length).toBeLessThanOrEqual(64)
+      }
     })
   })
 
