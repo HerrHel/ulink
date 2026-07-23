@@ -56,7 +56,6 @@
           <div class="form-group">
             <label class="form-label" for="bmCategoryId">分类</label>
             <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId">
-              <option value="">未分类</option>
               <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </div>

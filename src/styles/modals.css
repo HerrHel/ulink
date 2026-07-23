@@ -196,6 +196,7 @@
 .diff-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
 .e2e-lock-overlay{position:relative}
 .e2e-lock-overlay.disabled{pointer-events:none;opacity:0.5}
+.e2e-lock-hint.clickable{pointer-events:auto}
 .e2e-lock-hint{display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--text-muted);padding:6px 8px;background:var(--surface-hover);border-radius:var(--radius-sm);border:1px dashed var(--border)}
 .e2e-lock-icon{font-size:0.9rem}
 .e2e-step{display:flex;flex-direction:column;gap:12px}
