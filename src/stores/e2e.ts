@@ -12,6 +12,8 @@ import { defineStore } from 'pinia'
 export const useE2EStore = defineStore('e2e', () => {
   const isE2EEnabled = ref(false)
   const isUnlocked = ref(false)
+  /** 是否已录入本机指纹凭据（持久态，与解锁态解耦，lock 不清零） */
+  const isBiometricEnrolled = ref(false)
   /**
    * 按需解锁：非空数组时表示有操作正在等待解锁完成。
    * B-2 修复：旧实现是单值 ref，第二次 saveBm 撞解锁窗口时覆盖第一次的 resolve，
@@ -31,6 +33,7 @@ export const useE2EStore = defineStore('e2e', () => {
 
   function setEnabled(v: boolean) { isE2EEnabled.value = v }
   function setUnlocked(v: boolean) { isUnlocked.value = v }
+  function setBiometricEnrolled(v: boolean) { isBiometricEnrolled.value = v }
 
   function setKey(key: CryptoKey | null) { cryptoKey.value = key }
 
@@ -78,8 +81,8 @@ export const useE2EStore = defineStore('e2e', () => {
   }
 
   return {
-    isE2EEnabled, isUnlocked, cryptoKey: readonly(cryptoKey), pendingUnlock,
-    setEnabled, setUnlocked, setKey, resetLockTimer,
+    isE2EEnabled, isUnlocked, isBiometricEnrolled: readonly(isBiometricEnrolled), cryptoKey: readonly(cryptoKey), pendingUnlock,
+    setEnabled, setUnlocked, setBiometricEnrolled, setKey, resetLockTimer,
     initVisibilityLock, destroyVisibilityLock,
     lock, cleanup,
   }

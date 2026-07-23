@@ -17,6 +17,7 @@ import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
 import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
+import { useBiometric } from './useBiometric.js'
 import type { EntityType } from '../../types.js'
 
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
@@ -118,8 +119,10 @@ function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> 
 
 export function useE2E() {
   const e2eStore = useE2EStore()
+  const biometric = useBiometric()
   const isE2EEnabled = computed(() => e2eStore.isE2EEnabled)
   const isUnlocked = computed(() => e2eStore.isUnlocked)
+  const isBiometricEnrolled = computed(() => e2eStore.isBiometricEnrolled)
 
   /** 获取缓存的密钥（仅在 isUnlocked=true 时有效） */
   function _getKey(): CryptoKey | null {
@@ -137,10 +140,10 @@ export function useE2E() {
   /** 检查用户是否已设置主密码 */
   async function checkE2EStatus(): Promise<boolean> {
     const hasLocal = !!_readLocalCanary()
-    if (hasLocal) { e2eStore.setEnabled(true); return true }
-    // 本地无 canary，尝试云端（登录用户）
+    if (hasLocal) { e2eStore.setEnabled(true); e2eStore.setBiometricEnrolled(biometric.isBiometricEnrolled()); return true }
     const data = await _getCanaryData()
     e2eStore.setEnabled(!!data)
+    if (data) e2eStore.setBiometricEnrolled(biometric.isBiometricEnrolled())
     return isE2EEnabled.value
   }
 
@@ -205,6 +208,8 @@ export function useE2E() {
     _setKey(newKey)
     e2eStore.setUnlocked(true)
     e2eStore.initVisibilityLock()
+    await biometric.removeBiometric()
+    e2eStore.setBiometricEnrolled(false)
     return true
   }
 
@@ -340,10 +345,30 @@ export function useE2E() {
     if (changed) ds._bumpSearchVersion()
   }
 
+  // ── 指纹解锁方法（Facade 转发 + Store 同步）──
+  const isBiometricAvailableFn = biometric.isBiometricAvailable
+
+  async function enrollBiometricFn(masterPassword: string): Promise<boolean> {
+    const ok = await biometric.enrollBiometric(masterPassword)
+    if (ok) e2eStore.setBiometricEnrolled(true)
+    return ok
+  }
+
+  const unlockWithBiometricFn = biometric.unlockWithBiometric
+
+  async function removeBiometricFn(): Promise<void> {
+    await biometric.removeBiometric()
+    e2eStore.setBiometricEnrolled(false)
+  }
+
   return {
-    isE2EEnabled, isUnlocked,
+    isE2EEnabled, isUnlocked, isBiometricEnrolled,
     checkE2EStatus, generateRecoveryKey,
     setupMasterPassword, resetWithRecoveryKey,
     unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems,
+    isBiometricAvailable: isBiometricAvailableFn,
+    enrollBiometric: enrollBiometricFn,
+    unlockWithBiometric: unlockWithBiometricFn,
+    removeBiometric: removeBiometricFn,
   }
 }

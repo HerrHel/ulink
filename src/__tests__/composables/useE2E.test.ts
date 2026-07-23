@@ -10,16 +10,18 @@ import { setActivePinia, createPinia } from 'pinia'
 
 // e2e store mock 共享 state（不需 reactive——useE2E 用 getter 实时读，plain 对象即可；
 // getter 闭包对 plain 对象属性实时返回，无 reactive 也能模拟 isUnlocked 等）。
-const _e2eState = vi.hoisted(() => ({ isE2EEnabled: false, isUnlocked: false, cryptoKey: null as CryptoKey | null }))
+const _e2eState = vi.hoisted(() => ({ isE2EEnabled: false, isUnlocked: false, isBiometricEnrolled: false, cryptoKey: null as CryptoKey | null }))
 vi.mock('../../stores/e2e.js', () => ({
   useE2EStore: () => ({
     get isE2EEnabled() { return _e2eState.isE2EEnabled },
     get isUnlocked() { return _e2eState.isUnlocked },
+    get isBiometricEnrolled() { return _e2eState.isBiometricEnrolled },
     get cryptoKey() { return _e2eState.cryptoKey },
     get visibilityLocked() { return false },
     setEnabled: (v: boolean) => { _e2eState.isE2EEnabled = v },
     setKey: (k: CryptoKey) => { _e2eState.cryptoKey = k },
     setUnlocked: (v: boolean) => { _e2eState.isUnlocked = v },
+    setBiometricEnrolled: (v: boolean) => { _e2eState.isBiometricEnrolled = v },
     resetLockTimer: () => {},
     initVisibilityLock: () => {},
     lock: () => { _e2eState.isUnlocked = false; _e2eState.cryptoKey = null },
@@ -35,6 +37,7 @@ beforeEach(() => {
   localStorage.clear()
   _e2eState.isE2EEnabled = false
   _e2eState.isUnlocked = false
+  _e2eState.isBiometricEnrolled = false
   _e2eState.cryptoKey = null
 })
 

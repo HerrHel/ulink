@@ -56,6 +56,15 @@
             <p>您的密码和敏感数据现在已加密存储。</p>
             <p>每次使用需要输入主密码解锁。</p>
           </div>
+          <div v-if="bioAvailable" class="form-group" style="margin-top:16px">
+            <div class="e2e-info" style="font-size:0.85rem">
+              <p>🔐 启用指纹快速解锁，免去每次输入主密码</p>
+            </div>
+            <button class="btn btn-primary" :disabled="bioLoading || bioDone" @click="onEnrollBiometric">
+              {{ bioLoading ? '录入中…' : bioDone ? '✅ 已启用' : '启用指纹解锁' }}
+            </button>
+            <div v-if="bioError" class="e2e-error" style="margin-top:8px">{{ bioError }}</div>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
@@ -87,6 +96,10 @@ const error = ref('')
 const recoveryKey = ref('')
 const saved = ref(false)
 const loading = ref(false)
+const bioAvailable = ref(false)
+const bioLoading = ref(false)
+const bioDone = ref(false)
+const bioError = ref('')
 
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
@@ -99,6 +112,12 @@ watch(() => props.open, (isOpen) => {
     recoveryKey.value = ''
     saved.value = false
     loading.value = false
+    bioAvailable.value = false
+    bioLoading.value = false
+    bioDone.value = false
+    bioError.value = ''
+  } else {
+    bioAvailable.value = e2e.isBiometricAvailable()
   }
 })
 
@@ -133,15 +152,30 @@ function downloadPDF() {
 }
 
 async function copyKey() {
-  // Clipboard API 在非安全上下文（http://局域网 IP）或旧浏览器为 undefined/reject，
-  // 静默吞错会让用户误以为已复制——而 Recovery Key 丢失即 E2E 数据永久不可恢复。
-  // 对照 SettingsPanel.copyFeedbackEmail 的 try/catch+toast 兜底；失败时提示用户
-  // 手动选中上方 recovery-key-box 内的明文 key（recovery-key-box 始终可见，兜底可达）。
   try {
     await navigator.clipboard.writeText(recoveryKey.value)
     toast('Recovery Key 已复制，请妥善保存', true)
   } catch {
     toast('复制失败，请手动选中上方 Recovery Key 复制', false)
+  }
+}
+
+async function onEnrollBiometric() {
+  if (bioLoading.value || bioDone.value) return
+  bioLoading.value = true
+  bioError.value = ''
+  try {
+    const ok = await e2e.enrollBiometric(masterPw.value)
+    if (ok) {
+      bioDone.value = true
+      toast('指纹解锁已启用', true)
+    } else {
+      bioError.value = '录入失败，当前设备不支持或已取消'
+    }
+  } catch (e) {
+    bioError.value = '录入失败：' + (e instanceof Error ? e.message : String(e))
+  } finally {
+    bioLoading.value = false
   }
 }
 </script>

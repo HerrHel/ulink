@@ -10,6 +10,16 @@
           <div class="e2e-info">
             <p>输入主密码以解密您的数据</p>
           </div>
+          <div v-if="e2e.isBiometricEnrolled.value && bioAvailable" class="form-group">
+            <button class="btn btn-primary btn-block" :disabled="bioLoading" @click="onBiometricUnlock">
+              <span aria-hidden="true">🔐</span> {{ bioLoading ? '验证中…' : '指纹解锁' }}
+            </button>
+            <div class="e2e-separator" style="display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--text-muted);font-size:0.8rem">
+              <span style="flex:1;height:1px;background:var(--border)"></span>
+              <span>或</span>
+              <span style="flex:1;height:1px;background:var(--border)"></span>
+            </div>
+          </div>
           <div class="form-group">
             <div class="pw-input-wrap">
               <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-unlock-password" v-model="masterPw" placeholder="主密码" @keydown.enter="onUnlock" autofocus>
@@ -66,7 +76,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 
@@ -84,6 +94,8 @@ const showPw2 = ref(false)
 const showRk = ref(false)
 const error = ref('')
 const loading = ref(false)
+const bioAvailable = ref(false)
+const bioLoading = ref(false)
 
 const canReset = computed(() =>
   recoveryKey.value.trim().length > 0 &&
@@ -103,6 +115,12 @@ watch(() => props.open, (isOpen) => {
     showRk.value = false
     error.value = ''
     loading.value = false
+    bioLoading.value = false
+  } else {
+    bioAvailable.value = e2e.isBiometricAvailable()
+    if (e2e.isBiometricEnrolled.value && bioAvailable.value) {
+      nextTick(() => onBiometricUnlock())
+    }
   }
 })
 
@@ -149,5 +167,25 @@ async function onReset() {
 
 function onCancel() {
   emit('close')
+}
+
+async function onBiometricUnlock() {
+  if (bioLoading.value || loading.value) return
+  bioLoading.value = true
+  error.value = ''
+  const pw = await e2e.unlockWithBiometric()
+  if (!pw) {
+    bioLoading.value = false
+    // 用户取消静默，不设 error；失败带提示
+    return
+  }
+  const ok = await e2e.unlock(pw)
+  bioLoading.value = false
+  if (ok) {
+    emit('unlocked')
+    emit('close')
+  } else {
+    error.value = '指纹解锁失败，请手动输入主密码'
+  }
 }
 </script>
