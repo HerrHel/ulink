@@ -136,11 +136,19 @@ export function copyToClipboard(text: string, label?: string): void {
  *
  * 使用 matchMedia 而非 window.innerWidth，自动跟随系统/浏览器变化，
  * 无需 Vue reactivity 支撑。uiStore.isMobile 保持独立的 resize 驱动更新。
+ * HMR 环境下通过 removeEventListener 避免重复监听器。
  */
 const _mobileMql = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 768px)') : null
 let _isMobile = _mobileMql?.matches ?? false
+
+function _onMediaChange(e: MediaQueryListEvent) { _isMobile = e.matches }
+
 if (_mobileMql) {
-  _mobileMql.addEventListener('change', (e: MediaQueryListEvent) => { _isMobile = e.matches })
+  _mobileMql.addEventListener('change', _onMediaChange)
+  // HMR 兜底：模块被替换时移除旧监听器（import.meta.hot 仅在 Vite dev 存在）
+  if (typeof import.meta !== 'undefined' && import.meta.hot) {
+    import.meta.hot.dispose(() => _mobileMql?.removeEventListener('change', _onMediaChange))
+  }
 }
 
 export function isMobile(): boolean { return _isMobile }
