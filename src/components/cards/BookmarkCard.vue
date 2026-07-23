@@ -211,7 +211,8 @@ function onCardClick(e: MouseEvent) {
     visit()
     return
   }
-  // PC 列表：空白单击打开右侧详情（管理器模式，不跳转）
+  // PC 列表：展开态点空白收起，未展开点空白打开详情
+  if (isExpanded.value) { toggleExpand(); return }
   openDetail(props.bookmark.id)
   // 便于紧接着用键盘继续操作
   ;(cardEl.value as HTMLElement | null)?.focus({ preventScroll: true })
