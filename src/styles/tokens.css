@@ -12,7 +12,6 @@
   --text-secondary:#5E5852;
   /* B1-002：相对 --bg/#F5EFEA 与 --surface 对比度 ≥4.5 */
   --text-muted:#6A6660;
-  --text-inverse:#FDFBF9;
   --accent:#122E8A;
   --accent-light:rgba(18,46,138,0.07);
   --accent-glow:rgba(18,46,138,0.13);
@@ -23,8 +22,6 @@
   --amber-light:rgba(180,83,9,0.08);
   --rose:#be123c;
   --rose-light:rgba(190,18,60,0.08);
-  --sky:#0369a1;
-  --sky-light:rgba(3,105,161,0.08);
   --shadow-xs:0 1px 1px rgba(0,0,0,0.02);
   --shadow-sm:0 1px 3px rgba(0,0,0,0.04),0 1px 2px rgba(0,0,0,0.02);
   --shadow-md:0 4px 14px rgba(0,0,0,0.06),0 2px 4px rgba(0,0,0,0.02);
@@ -36,14 +33,12 @@
   --rail-border:#EBE3D9;
   --overlay:rgba(0,0,0,0.25);
   --card-badge-bg:#EDE5DB;
-  --card-badge-text:#6E6860;
   --radius-sm:6px;
   --radius-base:8px;
   --radius-md:10px;
   --radius-lg:14px;
   --radius-xl:18px;
   --danger:#dc2626;
-  --danger-light:rgba(220,38,38,0.08);
   --accent-dark:#0e2270;
   --ease-out:cubic-bezier(0.16,1,0.3,1);
   --transition-fast:all 0.15s ease;
@@ -65,8 +60,6 @@
   --text-secondary:#A8A39B;
   /* B1-002：暗色 muted 相对 surface/#25252B ≥4.5 */
   --text-muted:#9B968E;
-  --text-inverse:#1A1A1D;
-  /* B1-002：accent 相对 --bg/#1A1A1D ≥4.5 */
   --accent:#F04A8A;
   --accent-light:rgba(230,57,124,0.1);
   --accent-glow:rgba(230,57,124,0.18);
@@ -77,8 +70,6 @@
   --amber-light:rgba(245,158,11,0.1);
   --rose:#f43f5e;
   --rose-light:rgba(244,63,94,0.1);
-  --sky:#38bdf8;
-  --sky-light:rgba(56,189,248,0.1);
   --shadow-xs:0 1px 2px rgba(0,0,0,0.15);
   --shadow-sm:0 1px 3px rgba(0,0,0,0.18),0 1px 2px rgba(0,0,0,0.1);
   --shadow-md:0 4px 14px rgba(0,0,0,0.22),0 2px 4px rgba(0,0,0,0.1);
@@ -90,9 +81,7 @@
   --rail-border:#27272E;
   --overlay:rgba(0,0,0,0.6);
   --card-badge-bg:rgba(255,255,255,0.05);
-  --card-badge-text:#A8A39B;
   --danger:#ef4444;
-  --danger-light:rgba(239,68,68,0.1);
   --accent-dark:#b82d63;
 }
 /* ---- Comfortable theme: light ---- */
@@ -109,7 +98,6 @@
   --text:#262E24;
   --text-secondary:#4A5A46;
   --text-muted:#667362;
-  --text-inverse:#F9FBF6;
   --accent:#2C9678;
   --accent-light:rgba(44,150,120,0.08);
   --accent-glow:rgba(44,150,120,0.18);
@@ -117,7 +105,6 @@
   --rail-bg:#E9EEE2;
   --rail-border:#D4DCC9;
   --card-badge-bg:#E0E8D6;
-  --card-badge-text:#4A5A46;
 }
 /* ---- Comfortable theme: dark ---- */
 [data-theme-style="comfortable"][data-theme="dark"]{
@@ -133,7 +120,6 @@
   --text-secondary:#A8AD8A;
   /* B1-002：舒适暗色 muted 相对 surface/#363D50 ≥4.5 */
   --text-muted:#B0B692;
-  --text-inverse:#2B313F;
   --accent:#E2E7BF;
   --accent-light:rgba(226,231,191,0.1);
   --accent-glow:rgba(226,231,191,0.18);
@@ -141,5 +127,4 @@
   --rail-bg:#252B38;
   --rail-border:#3A4152;
   --card-badge-bg:rgba(226,231,191,0.08);
-  --card-badge-text:#A8AD8A;
 }

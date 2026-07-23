@@ -325,16 +325,18 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     drag = null
     stopScroll()
 
-    // 基于最终位置重新计算目标索引
+    // 基于最终位置重新计算目标索引（使用缓存的 midY 避免重复 getBoundingClientRect）
     const cardTop = d.initialTop + (d.lastY - d.startY)
     const draggingDown = d.lastY > d.startY
     const leadEdge = draggingDown ? cardTop + d.itemHeight : cardTop
     // allCards 排除被拖拽项和占位符
     const allCards = getItems().filter(c => c !== d.el && c !== d.placeholder)
+    // 使用缓存的 midY 而非重新获取 rect
+    ensureMids(allCards)
     let filteredToIdx = allCards.length
-    for (let i = 0; i < allCards.length; i++) {
-      const rect = allCards[i].getBoundingClientRect()
-      if (leadEdge < rect.top + rect.height / 2) { filteredToIdx = i; break }
+    for (let i = 0; i < _cachedMids.length; i++) {
+      if (_cachedMids[i].el === d.placeholder) continue
+      if (leadEdge < _cachedMids[i].mid) { filteredToIdx = i; break }
     }
 
     // 映射：过滤列表索引 → 完整列表索引

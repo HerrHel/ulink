@@ -257,6 +257,16 @@ export default defineConfig({
               return 'supabase'
             }
 
+            // fuse.js 模糊搜索（独立 chunk，按需加载）
+            if (id.includes('node_modules/fuse.js/')) {
+              return 'fuse'
+            }
+
+            // pinyin-pro 拼音匹配（独立 chunk，按需加载）
+            if (id.includes('node_modules/pinyin-pro/')) {
+              return 'pinyin-pro'
+            }
+
             // Vue 核心
             if (id.includes('node_modules/vue/') ||
                 id.includes('node_modules/@vue/') ||
@@ -264,7 +274,7 @@ export default defineConfig({
               return 'vue-vendor'
             }
 
-            // 其他第三方库（fuse.js, pinyin-pro, nanoid 等）
+            // 其他第三方库（nanoid 等）
             return 'vendor'
           }
         }

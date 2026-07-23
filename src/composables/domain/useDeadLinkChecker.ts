@@ -52,6 +52,10 @@ const lastFullCheckAt = ref(0)
 const HIST_KEY = 'lv_deadLinkHistory'
 const MAX_HIST = 5
 
+// 使用 WeakMap 避免内存泄漏，但因为需要持久化，这里用普通对象并限制大小
+let _histCache: Record<string, CheckResult[]> | null = null
+let _histCacheLoaded = false
+
 function _loadDeadLinkHistory(): Record<string, CheckResult[]> {
   const parsed = safeJsonParse<Record<string, unknown[]>>(safeGetItem(HIST_KEY), {})
   const out: Record<string, CheckResult[]> = {}
@@ -71,11 +75,12 @@ function _saveDeadLinkHistory(hist: Record<string, CheckResult[]>): void {
 }
 
 // M16：内存中的历史缓存；全量检查只 mutate 内存，结束时一次 save，避免 O(N²) 全量 stringify
-let _histCache: Record<string, CheckResult[]> | null = null
-
 function _getHistCache(): Record<string, CheckResult[]> {
-  if (!_histCache) _histCache = _loadDeadLinkHistory()
-  return _histCache
+  if (!_histCacheLoaded) {
+    _histCache = _loadDeadLinkHistory()
+    _histCacheLoaded = true
+  }
+  return _histCache!
 }
 
 /** 追加一次检测结果到内存缓存（不写盘）；调用方在批次结束时 flush */
@@ -107,9 +112,6 @@ for (const [id, checks] of Object.entries(_history)) {
 let _abort: AbortController | null = null
 
 // 网络基线缓存，30s 内复用；in-flight 合并避免 checkAll 冷启动探针风暴
-let _baselineCache: { value: number; at: number } | null = null
-let _baselineInflight: Promise<number> | null = null
-
 const BASELINE_PROBES = [
   'https://www.baidu.com/favicon.ico',
   'https://www.gstatic.com/generate_204',
@@ -118,6 +120,13 @@ const BASELINE_PROBES = [
 const BASELINE_TTL_MS = 30000
 const BASELINE_PROBE_TIMEOUT_MS = 4000
 const BASELINE_OFFLINE_MS = 4000
+
+interface BaselineCache {
+  value: number
+  at: number
+}
+let _baselineCache: BaselineCache | null = null
+let _baselineInflight: Promise<number> | null = null
 /** no-cors 限时 fetch；成功 resolve，超时/网络失败 reject */
 function fetchNoCorsWithTimeout(
   url: string,
@@ -652,6 +661,7 @@ export function useDeadLinkChecker() {
     _baselineCache = null
     _baselineInflight = null
     _histCache = null
+    _histCacheLoaded = false
     Object.keys(results).forEach(k => delete results[k])
   }
 

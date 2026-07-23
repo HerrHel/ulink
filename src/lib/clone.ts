@@ -6,7 +6,21 @@
  *
  * 对含 CryptoKey/Date 等非序列化结构的对象请勿用此函数,改用 structuredClone
  * 或手动拷贝。
+ *
+ * 优先使用结构化克隆（structuredClone），回退到 JSON 序列化，
+ * 避免大量同步队列操作时的序列化开销。
+ * 如果 structuredClone 失败（如遇到 reactive proxy），回退到 JSON。
  */
 export function cloneDeep<T>(value: T): T {
+  // structuredClone 在现代浏览器和 Node.js 17+ 中可用
+  // 它比 JSON.parse(JSON.stringify()) 更快且支持更多类型
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value)
+    } catch {
+      // 回退：JSON 序列化（旧版环境兜底，或遇到不可克隆对象如 reactive proxy）
+    }
+  }
+  // 回退：JSON 序列化
   return JSON.parse(JSON.stringify(value))
 }
