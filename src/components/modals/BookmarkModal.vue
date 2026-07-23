@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" data-testid="lv-bm-modal" role="dialog" aria-modal="true" aria-label="书签编辑" :class="{ open: bmForm.isOpen }" @click.self="onClose">
+  <div class="modal-mask" data-testid="lv-bm-modal" role="dialog" aria-modal="true" aria-label="书签编辑" :class="{ open: bmForm.isOpen, 'has-child-modal': childModalOpen }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head">
         <h2>{{ bmForm.isEdit ? '编辑书签' : bmForm.addToGroupMode ? '新建书签并添加到组' : bmForm.parentId ? '添加子书签' : '添加书签' }}</h2>
@@ -84,6 +84,8 @@
             <span v-for="child in childBookmarks" :key="child.id" class="group-inline-card">
               <img v-if="child.icon" :src="child.icon" alt="">
               <span class="gic-name" :title="child.title || child.url">{{ child.title || child.url }}</span>
+              <span class="gic-edit-btn" title="编辑子书签" @click.stop="onEditChild(child.id)" v-html="I.edit"></span>
+              <span class="gic-remove" title="删除子书签" @click.stop="onDeleteChild(child.id)" v-html="I.trash"></span>
             </span>
           </div>
         </div>
@@ -93,17 +95,20 @@
         <button class="btn btn-primary" data-testid="lv-bm-save" :disabled="saving" @click="onSave">{{ bmForm.isEdit ? '更新' : '保存' }}</button>
       </div>
     </div>
+    <!-- 子书签编辑弹窗（在父弹窗右侧并排显示，整体居中） -->
+    <ChildBookmarkEditModal v-if="childModalOpen" :child-id="childModalId" @close="childModalOpen = false" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
+import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
+import ChildBookmarkEditModal from './ChildBookmarkEditModal.vue'
 
 const store = useAppStore()
 const titleRef = ref<HTMLInputElement | null>(null)
@@ -172,6 +177,20 @@ async function onSave() {
   saving.value = true
   try { await saveBm() } finally { saving.value = false }
 }
+
+// ── 子书签编辑/删除 ──
+const childModalOpen = ref(false)
+const childModalId = ref<string>('')
+
+function onEditChild(childId: string) {
+  childModalId.value = childId
+  childModalOpen.value = true
+}
+
+function onDeleteChild(childId: string) {
+  deleteBookmarkWithUndo(childId)
+}
+
 function onPreviewIconUrl() { previewIconUrl() }
 function onClearIcon() { clearIcon() }
 function onUrlInput() { autoFetchFromUrl() }

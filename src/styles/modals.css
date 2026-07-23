@@ -235,12 +235,41 @@
 
 /* ── 子书签列表（复用 .group-inline-card 样式，与编辑组内嵌卡片一致）── */
 .child-bookmarks-list{
-  max-height:200px;overflow-y:auto;overflow-x:hidden;
-  display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:4px;
   padding:4px;
-  scrollbar-width:thin;
+  align-items:start;
 }
-.child-bookmarks-list::-webkit-scrollbar{width:4px}
-.child-bookmarks-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.child-bookmarks-list .group-inline-card{cursor:default}
+.child-bookmarks-list .group-inline-card{cursor:default;display:flex;width:100%}
+/* 子书签卡片的编辑/删除按钮（复用 .gic-remove 样式，编辑按钮另加 gic-edit-btn）*/
+.child-bookmarks-list .gic-edit-btn{
+  margin-left:auto;
+}
+.child-bookmarks-list .gic-edit-btn,
+.child-bookmarks-list .gic-remove{
+  display:inline-flex;align-items:center;justify-content:center;
+  color:var(--text-muted);cursor:pointer;
+  width:18px;height:18px;flex-shrink:0;
+  border-radius:var(--radius-sm);
+  transition:color 0.15s ease,background 0.15s ease;
+}
+.child-bookmarks-list .gic-edit-btn:hover{color:var(--accent);background:var(--accent-light)}
+.child-bookmarks-list .gic-remove:hover{color:var(--danger,#e5484d);background:var(--surface-hover)}
+.child-bookmarks-list .gic-edit-btn svg,
+.child-bookmarks-list .gic-remove svg{width:13px;height:13px}
+
+/* 父弹窗与子弹窗并排：mask 切换为行方向，两个 .modal 水平居中并排 */
+.modal-mask.has-child-modal{
+  flex-direction:row;
+  align-items:center;
+  gap:20px;
+  padding:20px;
+}
+.modal-mask.has-child-modal .modal{max-width:min(480px,calc(50vw - 30px))}
+@media (max-width:820px){
+  /* 窄屏：垂直堆叠，避免溢出 */
+  .modal-mask.has-child-modal{flex-direction:column;gap:12px}
+  .modal-mask.has-child-modal .modal{max-width:500px;max-height:70vh}
+}
 
