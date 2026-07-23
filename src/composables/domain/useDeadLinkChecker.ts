@@ -395,7 +395,7 @@ export function useDeadLinkChecker() {
     const toCheck: typeof bookmarks = []
     const representativeMap = new Map<string, { representative: typeof bookmarks[0]; others: typeof bookmarks[0][] }>()
 
-    for (const [origin, group] of originGroups) {
+    for (const [, group] of originGroups) {
       toCheck.push(group.representative)
       representativeMap.set(group.representative.id, group)
     }

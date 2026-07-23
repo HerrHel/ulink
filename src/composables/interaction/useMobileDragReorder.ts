@@ -343,8 +343,6 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     let toIndex = filteredToIdx
     if (filteredToIdx > fromIndex) toIndex = filteredToIdx + 1
 
-    const arr = listRef.value
-
     // 恢复被拖元素到列表：portal 到 body 的需移回原容器（用占位符定位）
     if (d.originalParent) {
       d.originalParent.insertBefore(d.el, d.placeholder)
