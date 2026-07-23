@@ -77,6 +77,17 @@
             </label>
           </div>
         </div>
+        <!-- 子书签列表（仅编辑模式且有子书签时显示） -->
+        <div v-if="childBookmarks.length > 0" class="form-group">
+          <label class="form-label">子书签 ({{ childBookmarks.length }})</label>
+          <div class="child-bookmarks-list">
+            <div v-for="child in childBookmarks" :key="child.id" class="child-bookmark-item">
+              <img v-if="child.icon" :src="child.icon" class="child-bookmark-icon" alt="">
+              <span v-else class="child-bookmark-icon child-bookmark-icon-placeholder" v-html="I.link"></span>
+              <span class="child-bookmark-title" :title="child.title || child.url">{{ child.title || child.url }}</span>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" @click="onClose">取消</button>
@@ -128,6 +139,12 @@ const selectableAttrs = computed(() =>
 const parentOptions = computed(() =>
   store.bookmarks.filter(b => !b.parentId && b.id !== bmForm.id)
 )
+
+// 当前书签的子书签列表（仅编辑模式显示）
+const childBookmarks = computed(() => {
+  if (!bmForm.isEdit || !bmForm.id) return []
+  return store.bookmarks.filter(b => b.parentId === bmForm.id && !b.deletedAt)
+})
 
 const aiSuggestionText = computed(() => {
   const parts: string[] = []

@@ -233,3 +233,24 @@
 .icon-thumb:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
 .icon-thumb.active{border-color:var(--accent);background:var(--accent-light)}
 
+/* ── 子书签列表 ── */
+.child-bookmarks-list{
+  max-height:200px;overflow-y:auto;overflow-x:hidden;
+  border:1px solid var(--border);border-radius:var(--radius-md);
+  background:var(--bg-alt);scrollbar-width:thin;
+}
+.child-bookmarks-list::-webkit-scrollbar{width:4px}
+.child-bookmarks-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.child-bookmark-item{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;font-size:0.82rem;
+  border-bottom:1px solid var(--border-light);
+  transition:background 0.15s;
+}
+.child-bookmark-item:last-child{border-bottom:none}
+.child-bookmark-item:hover{background:var(--surface-hover)}
+.child-bookmark-icon{width:18px;height:18px;border-radius:4px;flex-shrink:0}
+.child-bookmark-icon-placeholder{color:var(--text-muted);display:flex;align-items:center;justify-content:center}
+.child-bookmark-icon-placeholder svg{width:14px;height:14px}
+.child-bookmark-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary)}
+
