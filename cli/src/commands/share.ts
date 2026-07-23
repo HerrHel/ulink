@@ -24,7 +24,7 @@ export function registerShareCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const { data, error } = await supabase
           .from('sibling_groups')
           .select('*')
@@ -88,7 +88,7 @@ export function registerShareCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         const { data: group, error: fetchError } = await supabase
           .from('sibling_groups')
@@ -137,7 +137,7 @@ export function registerShareCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         const { data: group, error: fetchError } = await supabase
           .from('sibling_groups')

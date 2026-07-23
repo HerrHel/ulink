@@ -14,7 +14,7 @@ export function registerSearchCommand(program: Command): void {
     .option('-f, --format <format>', '输出格式 (table|json)', 'table')
     .action(async (query: string, opts: { limit: string; format: OutputFormat }) => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const limit = parseInt(opts.limit, 10) || 20
         const searchTerm = `%${query}%`
 

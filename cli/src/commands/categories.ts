@@ -24,7 +24,7 @@ export function registerCategoriesCommand(program: Command): void {
     .option('-f, --format <format>', '输出格式 (table|json)', 'table')
     .action(async (opts: { format: OutputFormat }) => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const { data, error } = await supabase
           .from('categories')
           .select('*')
@@ -85,7 +85,7 @@ export function registerCategoriesCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const id = generateId()
 
         const row = {
@@ -151,7 +151,7 @@ export function registerCategoriesCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
         if (opts.name !== undefined) updates.name = opts.name
@@ -189,7 +189,7 @@ export function registerCategoriesCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         if (opts.hard) {
           const { error } = await supabase

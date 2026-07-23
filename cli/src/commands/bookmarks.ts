@@ -30,7 +30,7 @@ export function registerBookmarksCommand(program: Command): void {
     .option('-f, --format <format>', '输出格式 (table|json)', 'table')
     .action(async (opts: { cat?: string; parent?: string; roots?: boolean; sort: SortMode; limit: string; format: OutputFormat }) => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         let query = supabase
           .from('bookmarks')
           .select('*')
@@ -110,7 +110,7 @@ export function registerBookmarksCommand(program: Command): void {
     .option('-f, --format <format>', '输出格式 (table|json)', 'table')
     .action(async (id: string, opts: { format: OutputFormat }) => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const { data, error } = await supabase
           .from('bookmarks')
           .select('*')
@@ -195,7 +195,7 @@ export function registerBookmarksCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const id = generateId()
         const now = Date.now()
 
@@ -295,7 +295,7 @@ export function registerBookmarksCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 构建更新对象
         const updates: Record<string, unknown> = { updated_at_num: Date.now() }
@@ -336,7 +336,7 @@ export function registerBookmarksCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         if (opts.hard) {
           const { error } = await supabase
@@ -381,7 +381,7 @@ export function registerBookmarksCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const { error } = await supabase
           .from('bookmarks')
           .update({ category_id: opts.cat, updated_at_num: Date.now() })

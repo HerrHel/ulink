@@ -31,7 +31,7 @@ export function registerSyncCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 获取各表的记录数和最后更新时间
         const [bookmarks, groups, categories] = await Promise.all([
@@ -108,7 +108,7 @@ export function registerSyncCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在从云端拉取数据...')
 
         const [bookmarksRes, groupsRes, categoriesRes] = await Promise.all([
@@ -183,7 +183,7 @@ export function registerSyncCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在推送到云端...')
 
         const now = Date.now()

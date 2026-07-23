@@ -42,7 +42,7 @@ export function registerBackupCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在创建备份...')
 
         // 获取所有数据（包括软删除的）
@@ -168,7 +168,7 @@ export function registerBackupCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info(`正在从备份恢复: ${filename}`)
 
         // 如果不是合并模式，先清空云端数据

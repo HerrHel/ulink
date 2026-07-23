@@ -25,7 +25,7 @@ export function registerGroupsCommand(program: Command): void {
     .option('-f, --format <format>', '输出格式 (table|json)', 'table')
     .action(async (opts: { cat?: string; format: OutputFormat }) => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         let query = supabase
           .from('sibling_groups')
           .select('*')
@@ -85,7 +85,7 @@ export function registerGroupsCommand(program: Command): void {
     .option('-f, --format <format>', '输出格式 (table|json)', 'table')
     .action(async (id: string, opts: { format: OutputFormat }) => {
       try {
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const { data, error } = await supabase
           .from('sibling_groups')
           .select('*')
@@ -164,7 +164,7 @@ export function registerGroupsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const id = generateId()
         const now = Date.now()
 
@@ -240,7 +240,7 @@ export function registerGroupsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         const updates: Record<string, unknown> = { updated_at_num: Date.now() }
         if (opts.name !== undefined) updates.name = opts.name
@@ -280,7 +280,7 @@ export function registerGroupsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         if (opts.hard) {
           const { error } = await supabase
@@ -324,7 +324,7 @@ export function registerGroupsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 获取当前组
         const { data: group, error: fetchError } = await supabase
@@ -376,7 +376,7 @@ export function registerGroupsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         const { data: group, error: fetchError } = await supabase
           .from('sibling_groups')

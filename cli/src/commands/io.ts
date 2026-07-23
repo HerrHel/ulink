@@ -32,7 +32,7 @@ export function registerImportExportCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在导出数据...')
 
         // 并行获取所有数据
@@ -88,7 +88,7 @@ export function registerImportExportCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在导出书签...')
 
         const { data: bookmarks, error } = await supabase
@@ -170,7 +170,7 @@ export function registerImportExportCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在导入数据...')
 
         // 获取现有数据（用于去重）
@@ -315,7 +315,7 @@ export function registerImportExportCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在导入书签...')
 
         const now = Date.now()

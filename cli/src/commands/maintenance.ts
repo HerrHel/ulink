@@ -27,7 +27,7 @@ export function registerMaintenanceCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在检测链接...')
 
         const { data: bookmarks, error } = await supabase
@@ -126,7 +126,7 @@ export function registerMaintenanceCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在校验数据...')
 
         const issues: Array<{ type: string; id: string; issue: string; fixed: boolean }> = []
@@ -243,7 +243,7 @@ export function registerMaintenanceCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 并行获取统计
         const [
@@ -324,7 +324,7 @@ export function registerMaintenanceCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         format.info('正在计算存储...')
 
         // 获取所有数据

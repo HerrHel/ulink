@@ -28,7 +28,7 @@ export function registerTagsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
         const { data, error } = await supabase
           .from('custom_attributes')
           .select('*')
@@ -91,7 +91,7 @@ export function registerTagsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 检查是否已存在
         const { data: existing } = await supabase
@@ -140,7 +140,7 @@ export function registerTagsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 获取标签名称
         const { data: attr } = await supabase
@@ -197,7 +197,7 @@ export function registerTagsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         // 获取书签当前属性
         const { data: bookmark, error: fetchError } = await supabase
@@ -244,7 +244,7 @@ export function registerTagsCommand(program: Command): void {
           process.exit(1)
         }
 
-        const supabase = getSupabaseClient()
+        const supabase = await getSupabaseClient()
 
         const { data: bookmark, error: fetchError } = await supabase
           .from('bookmarks')
