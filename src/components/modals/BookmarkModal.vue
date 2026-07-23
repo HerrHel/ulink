@@ -81,11 +81,10 @@
         <div v-if="childBookmarks.length > 0" class="form-group">
           <label class="form-label">子书签 ({{ childBookmarks.length }})</label>
           <div class="child-bookmarks-list">
-            <div v-for="child in childBookmarks" :key="child.id" class="child-bookmark-item">
-              <img v-if="child.icon" :src="child.icon" class="child-bookmark-icon" alt="">
-              <span v-else class="child-bookmark-icon child-bookmark-icon-placeholder" v-html="I.link"></span>
-              <span class="child-bookmark-title" :title="child.title || child.url">{{ child.title || child.url }}</span>
-            </div>
+            <span v-for="child in childBookmarks" :key="child.id" class="group-inline-card">
+              <img v-if="child.icon" :src="child.icon" alt="">
+              <span class="gic-name" :title="child.title || child.url">{{ child.title || child.url }}</span>
+            </span>
           </div>
         </div>
       </div>
