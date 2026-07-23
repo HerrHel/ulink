@@ -431,6 +431,38 @@ describe('useBookmark', () => {
       expect(bmForm.username).toBe('')
       expect(bmForm.password).toBe('')
     })
+
+    it('does not trigger duplicate detection when adding sub bookmark to parent with same domain', async () => {
+      // 准备已有父书签
+      mockData.bookmarks = [{
+        id: 'parent-bm',
+        title: '父书签',
+        url: 'https://example.com',
+        deletedAt: undefined,
+        parentId: null,
+      }]
+      mockData.bookmarkMap = { 'parent-bm': mockData.bookmarks[0] }
+
+      // 调用 addSub 设置 parentId
+      addSub('parent-bm')
+      await vi.waitFor(() => bmForm.isOpen === true)
+
+      // 设置子书签表单（同域名不同路径）
+      bmForm.url = 'https://example.com/page'
+      bmForm.title = '子书签'
+
+      // 尝试保存
+      await saveBm()
+
+      // 不应该显示选择弹窗（父书签应被排除在重复检测之外）
+      const { showChoice } = await import('../../lib/toast.js')
+      expect(showChoice).not.toHaveBeenCalled()
+
+      // 应该直接添加书签
+      expect(mockData.addBookmark).toHaveBeenCalled()
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      expect(newBm.parentId).toBe('parent-bm')
+    })
   })
 
   describe('deleteBookmarkWithUndo', () => {

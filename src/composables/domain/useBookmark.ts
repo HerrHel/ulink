@@ -74,10 +74,24 @@ function isExactDuplicate(existingUrl: string, newUrl: string): boolean {
 /**
  * 查找与指定URL重复或后缀变体的书签
  * 返回找到的书签和类型（exact: 完全重复, suffix: 后缀变体）
+ * @param excludeIds 要排除的书签ID列表（编辑模式下排除自身等）
+ * @param excludeParentId 要排除的父书签ID（添加子书签时排除父书签及其祖先）
  */
-function findDuplicateBookmarks(url: string, excludeId?: string): { exact: Bookmark | null; suffix: Bookmark | null } {
+function findDuplicateBookmarks(url: string, excludeIds?: string[], excludeParentId?: string): { exact: Bookmark | null; suffix: Bookmark | null } {
   const ds = useDataStore()
-  const existingBookmarks = ds.bookmarks.filter(b => !b.deletedAt && b.id !== excludeId)
+  const excludeSet = new Set(excludeIds || [])
+
+  // 如果指定了 excludeParentId，收集其祖先链（包括自身）
+  if (excludeParentId) {
+    let pid: string | null = excludeParentId
+    while (pid) {
+      excludeSet.add(pid)
+      const parent: Bookmark | undefined = ds.bookmarkMap[pid]
+      pid = parent?.parentId || null
+    }
+  }
+
+  const existingBookmarks = ds.bookmarks.filter(b => !b.deletedAt && !excludeSet.has(b.id))
 
   let exact: Bookmark | null = null
   let suffix: Bookmark | null = null
@@ -276,7 +290,8 @@ export async function saveBm() {
 
     // 新建书签时检测重复
     if (!bmForm.id) {
-      const { exact, suffix } = findDuplicateBookmarks(url)
+      // 添加子书签时，排除父书签及其祖先（避免父书签被误判为"后缀变体"）
+      const { exact, suffix } = findDuplicateBookmarks(url, undefined, bmForm.parentId || undefined)
 
       // 完全重复：阻止添加
       if (exact) {
