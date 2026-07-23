@@ -100,13 +100,19 @@ function purgeCssPlugin(): Plugin {
                   'cat-sort-list', 'cat-placeholder', 'cat-dragging', 'drag-handle',
                   'resizeLeft', 'resizeRight',
                   'dead-link-badge', 'gfw-blocked-badge',
+                  // TipTap / ProseMirror 运行时注入的 class
+                  'is-editor-empty', 'ProseMirror-selectednode',
                   /^modal-/, /^sp-/, /^ctx-/, /^as-/, /^mfb-/,
                   /^vs-/, /^bmp-/, /^attr-/, /^batch-/, /^search-/,
                   /^detail-/, /^rail-/, /^card-/, /^group-/,
                   /^ft-/, /^btn-/, /^form-/, /^check-/,
                   /^toast-/, /^confirm-/, /^dp-/, /^overlay/,
                   /^icon-/, /^flex-/, /^mb-/, /^mt-/, /^pt-/, /^text-/,
-                  /^cmd-/, /^ssp-/, /^code-/
+                  /^cmd-/, /^ssp-/, /^code-/,
+                  // Vue Transition 动态生成的 class（name="cpalette"/"drawer"）
+                  /^cpalette-/, /^drawer-/,
+                  // HistoryPanel diff-* 动态拼接 class
+                  /^diff-/,
                 ],
                 deep: [/expanded/, /active/, /open/, /show/, /visible/]
               },
