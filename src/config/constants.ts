@@ -28,6 +28,7 @@ export const ACTIONS: Record<string, string> = {
   HISTORY: 'history',
   RENAME_ATTR: 'renameAttr',
   DETAIL: 'detail',
+  PIN: 'pin',
 }
 
 export const DEFAULTS: AppData = {

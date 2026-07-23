@@ -107,8 +107,18 @@ function _updateDragCursorForGroupBody(body: Element, clientX: number, clientY: 
 function _findBm(id: string): Bookmark | undefined { return useDataStore().bookmarkMap[id] }
 function _findGroup(id: string): SiblingGroup | undefined { return useDataStore().groupMap[id] }
 
-/** swapOrder + 标记 dirty（确保排序变更可同步到云端） */
-function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }) {
+/** 检查置顶状态是否一致（都置顶或都不置顶） */
+function _samePinStatus(a: { id: string }, b: { id: string }): boolean {
+  const ds = useDataStore()
+  const aPinned = !!(ds.bookmarkMap[a.id]?.pinnedAt || ds.groupMap[a.id]?.pinnedAt)
+  const bPinned = !!(ds.bookmarkMap[b.id]?.pinnedAt || ds.groupMap[b.id]?.pinnedAt)
+  return aPinned === bPinned
+}
+
+/** swapOrder + 标记 dirty（确保排序变更可同步到云端）。返回 false 表示被置顶检查阻止 */
+function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }): boolean {
+  // 置顶项不能与非置顶项交换位置
+  if (!_samePinStatus(a, b)) return false
   swapOrder(a, b)
   const ds = useDataStore()
   ds._markDirty(a.id, b.id)
@@ -126,6 +136,7 @@ function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; or
       ui.saveUIState()
     }
   }
+  return true
 }
 
 function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage = true) {
@@ -324,7 +335,7 @@ function handleGroupHeadDrop(e: DragEvent, head: Element, p: DragPayload) {
     if (srcGid === gid) return;
     const a = _findGroup(srcGid)
     const b = _findGroup(gid)
-    if (a && b) { _swapAndMarkDirty(a, b); debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); }
+    if (a && b) { if (_swapAndMarkDirty(a, b)) { debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); } }
   } else if (p.type === 'bm') {
     const bm = _findBm(p.id)
     const sg = _findGroup(gid)
@@ -332,9 +343,10 @@ function handleGroupHeadDrop(e: DragEvent, head: Element, p: DragPayload) {
     let dirty = false;
     if (p.srcGid && p.srcGid !== DRAG_SRC_DETAIL) { removeFromSrcGroup(p.srcGid, p.id); dirty = true; }
     if (p.srcGid === DRAG_SRC_DETAIL) { const di = useUIStore().detailCards.indexOf(p.id); if (di >= 0) useUIStore().detailCards.splice(di, 1); dirty = true; }
-    _swapAndMarkDirty(bm, sg);
-    debouncedSaveAppData();
-    if (!dirty) { swapCardsDOM('.card[data-id="' + bm.id + '"]:not(.group-card)', '.group-card[data-group-id="' + sg.id + '"]'); }
+    if (_swapAndMarkDirty(bm, sg)) {
+      debouncedSaveAppData();
+      if (!dirty) { swapCardsDOM('.card[data-id="' + bm.id + '"]:not(.group-card)', '.group-card[data-group-id="' + sg.id + '"]'); }
+    }
   }
 }
 
@@ -356,14 +368,14 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   if (p.type === 'group') {
     const sg = _findGroup(p.id.slice(6))
     const bm = _findBm(tid!)
-    if (sg && bm && !bm.parentId) { _swapAndMarkDirty(sg, bm); debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); }
+    if (sg && bm && !bm.parentId) { if (_swapAndMarkDirty(sg, bm)) { debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); } }
     return;
   }
 
   const a = _findBm(p.id)
   const b = _findBm(tid!)
   if (a && b) {
-    if (a.parentId === b.parentId) { _swapAndMarkDirty(a, b); debouncedSaveAppData(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); }
+    if (a.parentId === b.parentId) { if (_swapAndMarkDirty(a, b)) { debouncedSaveAppData(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); } }
     else toast('只能在同级书签间拖拽排序', false);
   }
 }

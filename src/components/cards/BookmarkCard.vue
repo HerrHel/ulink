@@ -21,6 +21,7 @@
               <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
               <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
               <span v-if="isUnconfirmed" class="unconfirmed-badge" title="本次检测未能确认（离线/超时/信号冲突）">未确认</span>
+              <span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span>
             </div>
             <div class="card-domain">
               <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
@@ -179,6 +180,7 @@ const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
 const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked'])
 // 未确认：只有本次检测结果为 inconclusive 时出现，不读 attributes（attributes 不存 inconclusive）
 const isUnconfirmed = computed(() => deadLinkChecker.isUnconfirmed(props.bookmark.id))
+const isPinned = computed(() => !!props.bookmark.pinnedAt)
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
 function visit() { openBookmark(props.bookmark) }

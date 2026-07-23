@@ -579,6 +579,16 @@
   background:rgba(255,255,255,0.05);
   border-color:rgba(255,255,255,0.12);
 }
+/* 置顶 badge */
+.pinned-badge{
+  display:inline-flex;
+  align-items:center;
+  margin-left:4px;
+  color:var(--accent,#3B82F6);
+}
+.pinned-badge svg{
+  width:14px;height:14px;
+}
 /* Card domain — shared base for all views */
 .card-domain{
   font-family:'JetBrains Mono',monospace;

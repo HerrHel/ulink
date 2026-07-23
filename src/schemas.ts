@@ -44,6 +44,7 @@ export const BookmarkSchema = z.object({
   createdAt: coerceNum(() => Date.now()),
   updatedAt: coerceNum(() => Date.now()),
   deletedAt: z.number().optional(),
+  pinnedAt: z.number().optional(),
 })
 
 export const SiblingGroupSchema = z.object({
@@ -60,6 +61,7 @@ export const SiblingGroupSchema = z.object({
   useCount: coerceNum(0),
   isPublic: z.boolean().optional(),
   deletedAt: z.number().optional(),
+  pinnedAt: z.number().optional(),
 })
 
 // D2-003：icon/color 必须 .catch，单条坏分类不能拖垮 AppData → DEFAULTS

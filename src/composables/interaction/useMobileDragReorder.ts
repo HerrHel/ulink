@@ -367,6 +367,19 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     _scrollRect = null
 
     if (fromIndex !== toIndex) {
+      // 置顶项不能与非置顶项交叉拖拽
+      const arr = listRef.value
+      const movedItem = arr[fromIndex]
+      const targetItem = arr[toIndex > fromIndex ? toIndex - 1 : toIndex]
+      if (movedItem && targetItem) {
+        const movedPinned = !!(movedItem.data?.pinnedAt)
+        const targetPinned = !!(targetItem.data?.pinnedAt)
+        if (movedPinned !== targetPinned) {
+          // 置顶状态不同，取消排序
+          return
+        }
+      }
+
       if (onReorder) {
         onReorder(fromIndex, toIndex)
       } else {

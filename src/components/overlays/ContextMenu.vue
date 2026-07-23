@@ -24,6 +24,7 @@ import { editGroup, deleteGroup, removeBmFromGroup, createGroup } from '../../co
 import { shareGroup } from '../../composables/domain/useDataShare.js'
 import { toggleBatchMode } from '../../composables/domain/useBatch.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 
 const store = useAppStore()
 const ctx = useContextMenuStore()
@@ -52,6 +53,7 @@ const allItems = [
   { action: ACTIONS.VISIT, text: '打开网站' },
   { action: ACTIONS.EDIT, text: '编辑' },
   { action: ACTIONS.HISTORY, text: '版本历史' },
+  { action: ACTIONS.PIN, text: '置顶' },
   { action: ACTIONS.DELETE, text: '删除', danger: true },
   { action: ACTIONS.MOVE_TO_CAT, text: '移动到' },
   { action: ACTIONS.SHARE_GROUP, text: '分享组' },
@@ -64,11 +66,11 @@ const allItems = [
 ]
 
 const RULES: Record<string, { show: string[]; text: Record<string, string> }> = {
-  card:         { show: [ACTIONS.DETAIL, ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MULTI_SELECT], text: {} },
+  card:         { show: [ACTIONS.DETAIL, ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MULTI_SELECT], text: {} },
   sub:          { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情' } },
   cat:          { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
   attr:         { show: [ACTIONS.RENAME_ATTR, ACTIONS.DELETE], text: { [ACTIONS.RENAME_ATTR]: '重命名' } },
-  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
+  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
   'group-card': { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.EDIT]: '编辑书签', [ACTIONS.DELETE]: '从组移除' } },
   'rail-empty': { show: [ACTIONS.ADD_CAT], text: {} },
   'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
@@ -81,9 +83,21 @@ const visibleItems = computed(() => {
   const showSet = new Set(rule.show)
   const textMap = { ...DEFAULT_TEXT, ...rule.text }
   const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
+  const dataStore = useDataStore()
   for (const item of allItems) {
     if (!showSet.has(item.action)) continue
-    items.push({ ...item, text: textMap[item.action] || item.text })
+    const text = textMap[item.action] || item.text
+    // 动态标签：置顶/取消置顶
+    if (item.action === ACTIONS.PIN) {
+      const isPinned = ctx.type === 'card'
+        ? !!dataStore.bookmarkMap[ctx.id]?.pinnedAt
+        : ctx.type === 'group'
+          ? !!dataStore.groupMap[ctx.id]?.pinnedAt
+          : false
+      items.push({ ...item, text: isPinned ? '取消置顶' : '置顶' })
+    } else {
+      items.push({ ...item, text })
+    }
   }
   return items
 })
@@ -96,6 +110,7 @@ function onItemClick(action: string) {
 }
 
 function _dispatchAction(type: string, action: string, id: string) {
+  const dataStore = useDataStore()
   if (type === 'card') {
     if (action === ACTIONS.DETAIL) openDetail(id)
     if (action === ACTIONS.VISIT) visit(null, id)
@@ -108,6 +123,7 @@ function _dispatchAction(type: string, action: string, id: string) {
       store.historyItemType = 'bookmark'
       store.panels.history = true
     }
+    if (action === ACTIONS.PIN) { dataStore.togglePin('bookmark', id); debouncedSaveAppData() }
     // A3-001：补齐移动到 / 多选分发（与 group 路径一致）
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showBmCategoryPicker(id)
     if (action === ACTIONS.MULTI_SELECT) {
@@ -139,6 +155,7 @@ function _dispatchAction(type: string, action: string, id: string) {
     if (action === ACTIONS.DETAIL) openDetail('group:' + id)
     if (action === ACTIONS.EDIT) editGroup(id)
     if (action === ACTIONS.DELETE) deleteGroup(id)
+    if (action === ACTIONS.PIN) { dataStore.togglePin('group', id); debouncedSaveAppData() }
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
     if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
     if (action === ACTIONS.HISTORY) {

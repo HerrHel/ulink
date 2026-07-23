@@ -54,7 +54,7 @@ function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: 
   return items
 }
 
-type SortableItem = { useCount: number; order: number; updatedAt: number }
+type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
 
 /**
  * 经 id→实体 Map 定位数组下标（O(1) 查实体 + indexOf）。
@@ -74,6 +74,10 @@ function _indexOfById<T extends { id: string }>(
 function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
+    // 置顶优先：pinnedAt 存在的项排最前，置顶项之间按当前排序模式排序
+    const aPin = a.pinnedAt ? 1 : 0
+    const bPin = b.pinnedAt ? 1 : 0
+    if (aPin !== bPin) return bPin - aPin
     if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
     if (sortMode === 'title') return String(a[nameKey]).localeCompare(String(b[nameKey])) * d
     // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir
@@ -479,6 +483,31 @@ export const useDataStore = defineStore('data', {
       this.siblingGroups[idx] = { ...g, deletedAt: Date.now(), updatedAt: Date.now() }
       this._grpMap[id] = this.siblingGroups[idx]
       this._markDirty(id)
+      this._bumpSearchVersion()
+    },
+    /** 切换置顶状态：已置顶则取消，未置顶则设为当前时间 */
+    togglePin(entityType: 'bookmark' | 'group', id: string) {
+      if (entityType === 'bookmark') {
+        const idx = _indexOfById(this.bookmarks, this._bmMap, id)
+        if (idx < 0) return
+        const bm = this.bookmarks[idx]
+        const nextPinnedAt = bm.pinnedAt ? undefined : Date.now()
+        this._saveLocalHistory(id, { ...bm })
+        this._trackChange(id, 'pinnedAt')
+        this.bookmarks[idx] = { ...bm, pinnedAt: nextPinnedAt, updatedAt: Date.now() }
+        this._bmMap[id] = this.bookmarks[idx]
+        this._markDirty(id)
+      } else {
+        const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
+        if (idx < 0) return
+        const g = this.siblingGroups[idx]
+        const nextPinnedAt = g.pinnedAt ? undefined : Date.now()
+        this._saveLocalHistory(id, { ...g })
+        this._trackChange(id, 'pinnedAt')
+        this.siblingGroups[idx] = { ...g, pinnedAt: nextPinnedAt, updatedAt: Date.now() }
+        this._grpMap[id] = this.siblingGroups[idx]
+        this._markDirty(id)
+      }
       this._bumpSearchVersion()
     },
     addCategory(cat: Category) {

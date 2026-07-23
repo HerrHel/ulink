@@ -8,6 +8,7 @@ import { watch } from 'vue'
 import { useUIStore } from '../stores/ui.js'
 import { useContextMenuStore } from '../stores/contextMenu.js'
 import { useActionSheetStore } from '../stores/actionSheet.js'
+import { useDataStore } from '../stores/data.js'
 import { toggleGroupFocus, removeBmFromGroup, removeGroupRef, editGroup, deleteGroup } from './domain/useGroup.js'
 import { visit, openBmModal, deleteBookmarkWithUndo as deleteBookmark } from './domain/useBookmark.js'
 import { openDetail } from './ui/useUI.js'
@@ -18,6 +19,7 @@ import { useResize } from './interaction/useResize.js'
 import { useKeyboard } from './interaction/useKeyboard.js'
 import { useDragDrop } from './interaction/useDragDrop.js'
 import { useLongPress } from './interaction/useLongPress.js'
+import { debouncedSaveAppData } from '../stores/app.js'
 
 export function useApp() {
   // ── 0. 初始化 is-mobile class（CSS 据此区分真手机 vs PC 窄窗口） ──
@@ -32,21 +34,30 @@ export function useApp() {
   // ── 2. 长按操作菜单 ──
   const longPress = useLongPress((card) => {
     const bmId = card.dataset.id; const gid = card.dataset.groupId
-    if (bmId) return [
-      { label: '打开链接', action: () => visit(null, bmId) },
-      { label: '查看详情', action: () => openDetail(bmId) },
-      { label: '编辑', action: () => openBmModal(bmId) },
-      { label: '移动到', action: () => useActionSheetStore().showBmCategoryPicker(bmId) },
-      { label: '删除', action: () => deleteBookmark(bmId), danger: true }
-    ]
-    if (gid) return [
-      { label: '查看详情', action: () => openDetail('group:' + gid) },
-      { label: '展开组', action: () => toggleGroupFocus(gid) },
-      { label: '编辑组', action: () => editGroup(gid) },
-      { label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) },
-      { label: '分享组', action: () => shareGroup(gid) },
-      { label: '删除组', action: () => deleteGroup(gid), danger: true }
-    ]
+    const dataStore = useDataStore()
+    if (bmId) {
+      const bm = dataStore.bookmarkMap[bmId]
+      return [
+        { label: bm?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('bookmark', bmId); debouncedSaveAppData() } },
+        { label: '打开链接', action: () => visit(null, bmId) },
+        { label: '查看详情', action: () => openDetail(bmId) },
+        { label: '编辑', action: () => openBmModal(bmId) },
+        { label: '移动到', action: () => useActionSheetStore().showBmCategoryPicker(bmId) },
+        { label: '删除', action: () => deleteBookmark(bmId), danger: true }
+      ]
+    }
+    if (gid) {
+      const g = dataStore.groupMap[gid]
+      return [
+        { label: g?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('group', gid); debouncedSaveAppData() } },
+        { label: '查看详情', action: () => openDetail('group:' + gid) },
+        { label: '展开组', action: () => toggleGroupFocus(gid) },
+        { label: '编辑组', action: () => editGroup(gid) },
+        { label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) },
+        { label: '分享组', action: () => shareGroup(gid) },
+        { label: '删除组', action: () => deleteGroup(gid), danger: true }
+      ]
+    }
     return null
   })
   // H17：fired 现为 Ref，直接 watch 该 ref 即可响应长按触发

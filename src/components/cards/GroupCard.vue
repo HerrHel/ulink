@@ -9,7 +9,7 @@
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
           <div class="card-titlewrap-text">
-            <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
+            <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}<span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span></div>
             <div class="card-domain group-domain"></div>
           </div>
         </div>
@@ -60,7 +60,7 @@
       </div>
       <div class="card-titlewrap" title="聚焦组" @click.stop="onFocusClick">
         <div class="card-titlewrap-text">
-          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}</div>
+          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}<span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span></div>
           <div class="card-domain group-domain"></div>
         </div>
       </div>
@@ -155,6 +155,7 @@ const showFullBody = computed(() => props.detailMode || ui.layoutMode !== 'list'
 const safeNotesHtml = computed(() => sanitizeHTML(props.group.notes || ''))
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
+const isPinned = computed(() => !!props.group.pinnedAt)
 
 const previewText = computed(() => groupPreview(props.group))
 
