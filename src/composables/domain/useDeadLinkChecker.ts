@@ -365,10 +365,49 @@ export function useDeadLinkChecker() {
     // M16：全量检查期间只写内存 hist，结束 flush 一次
     _getHistCache()
 
-    for (let i = 0; i < bookmarks.length; i += batchSize) {
+    // 相同 origin 的 URL 只检测一次：提取代表 URL，结果复制给同组其他书签
+    const originGroups = new Map<string, { representative: typeof bookmarks[0]; others: typeof bookmarks[0][] }>()
+    const ungrouped: typeof bookmarks = []
+
+    for (const bm of bookmarks) {
+      try {
+        const url = new URL(bm.url)
+        const origin = url.origin.toLowerCase()
+        const group = originGroups.get(origin)
+        if (!group) {
+          originGroups.set(origin, { representative: bm, others: [] })
+        } else {
+          // 选最短的 URL 作为代表（通常是根路径，检测更快更可靠）
+          if (bm.url.length < group.representative.url.length) {
+            group.others.push(group.representative)
+            group.representative = bm
+          } else {
+            group.others.push(bm)
+          }
+        }
+      } catch {
+        // URL 解析失败，单独检测
+        ungrouped.push(bm)
+      }
+    }
+
+    // 收集所有需要检测的代表 URL
+    const toCheck: typeof bookmarks = []
+    const representativeMap = new Map<string, { representative: typeof bookmarks[0]; others: typeof bookmarks[0][] }>()
+
+    for (const [origin, group] of originGroups) {
+      toCheck.push(group.representative)
+      representativeMap.set(group.representative.id, group)
+    }
+    toCheck.push(...ungrouped)
+
+    // 进度显示实际书签总数，而非去重后的检测数
+    const totalBookmarks = bookmarks.length
+
+    for (let i = 0; i < toCheck.length; i += batchSize) {
       if (_abort.signal.aborted) break
 
-      const batch = bookmarks.slice(i, i + batchSize)
+      const batch = toCheck.slice(i, i + batchSize)
       const batchResults = await Promise.allSettled(
         batch.map(b => checkUrl(b.url, b.id))
       )
@@ -376,14 +415,30 @@ export function useDeadLinkChecker() {
       for (let j = 0; j < batch.length; j++) {
         const result = batchResults[j]
         if (result.status === 'fulfilled') {
-          results[batch[j].id] = result.value
-          _appendDeadLinkHistory(batch[j].id, result.value, false)
+          const bm = batch[j]
+          results[bm.id] = result.value
+          _appendDeadLinkHistory(bm.id, result.value, false)
+
+          // 将结果复制给同 origin 的其他书签
+          const group = representativeMap.get(bm.id)
+          if (group) {
+            for (const other of group.others) {
+              results[other.id] = result.value
+              _appendDeadLinkHistory(other.id, result.value, false)
+            }
+          }
         }
       }
 
-      progress.value.done = Math.min(i + batchSize, bookmarks.length)
+      // 更新进度：已处理的代表数 + 已复制结果的其他书签数
+      let processedCount = Math.min(i + batchSize, toCheck.length)
+      for (let k = 0; k < Math.min(i + batchSize, toCheck.length); k++) {
+        const group = representativeMap.get(toCheck[k].id)
+        if (group) processedCount += group.others.length
+      }
+      progress.value.done = Math.min(processedCount, totalBookmarks)
 
-      if (i + batchSize < bookmarks.length) {
+      if (i + batchSize < toCheck.length) {
         await new Promise(r => setTimeout(r, intervalMs))
       }
     }

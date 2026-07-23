@@ -112,8 +112,11 @@
               </div>
               <div class="sp-row sp-row-actions">
                 <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" data-testid="lv-e2e-setup-btn" @click.stop="onOpenE2ESetup"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启加密</button>
-                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" data-testid="lv-e2e-unlock-btn" @click.stop="onOpenE2EUnlock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 解锁</button>
-                <button v-else class="btn btn-ghost btn-sm" data-testid="lv-e2e-lock-btn" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 锁定</button>
+                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" data-testid="lv-e2e-unlock-btn" @click.stop="onOpenE2EUnlock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ e2e.isBiometricEnrolled.value ? '指纹解锁' : '解锁' }}</button>
+                <template v-else>
+                  <button class="btn btn-ghost btn-sm" data-testid="lv-e2e-lock-btn" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 锁定</button>
+                  <button v-if="e2e.isBiometricEnrolled.value" class="btn btn-ghost btn-sm" data-testid="lv-e2e-biometric-remove" @click.stop="onRemoveBiometric">移除指纹</button>
+                </template>
               </div>
             </div>
             <!-- 数据 -->
@@ -223,6 +226,7 @@ const e2eEnabled = computed(() => e2e.isE2EEnabled.value)
 const e2eUnlocked = computed(() => e2e.isUnlocked.value)
 
 function onE2ELock() { e2e.lock(); toast('已锁定') }
+function onRemoveBiometric() { e2e.removeBiometric(); toast('已移除指纹解锁') }
 function onOpenE2ESetup() { uiStore.modals.e2eSetup = true; uiStore.panels.settings = false }
 function onOpenE2EUnlock() { uiStore.modals.e2eUnlock = true; uiStore.panels.settings = false }
 
