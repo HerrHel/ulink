@@ -430,12 +430,17 @@ export function searchWithHighlights(
   }
   const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
 
+  // O(1) 查找组 bookmarkIds，避免 map 内 find 导致 O(n²)
+  const groupBmIdsMap = new Map<string, string[] | undefined>(
+    groups.map(g => [g.id, g.bookmarkIds])
+  )
+
   const groupResults: SearchResultItem[] = grpResults.map(r => ({
     id: r.item.id,
     name: (r.item as GroupSearchItem).name,
     _isGroup: true,
     _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
-    bookmarkIds: groups.find(g => g.id === r.item.id)?.bookmarkIds,
+    bookmarkIds: groupBmIdsMap.get(r.item.id),
     _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
   }))
 
