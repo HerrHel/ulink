@@ -36,15 +36,18 @@ export function bookmarkPreview(bm: Bookmark): string {
 /** 组摘要：notes 纯文本 + 组内成员【名字】拼接 */
 export function groupPreview(grp: SiblingGroup): string {
   const ds = useDataStore()
+  // 循环外取一次 map（getter，避免每个 id 触发同步检查的 O(n) 成本）
+  const grpMap = ds.groupMap
+  const bmMap = ds.bookmarkMap
   const parts: string[] = []
   const notesText = htmlToText(grp.notes || '')
   if (notesText) parts.push(notesText)
   const ids = grp.bookmarkIds || []
   if (ids.length) {
     const names = ids.map(id => {
-      const g = ds.groupMap[id]
+      const g = grpMap[id]
       if (g) return `【${g.name || '未命名组'}】`
-      const b = ds.bookmarkMap[id]
+      const b = bmMap[id]
       if (b) return `【${b.title || b.url || ''}】`
       return ''
     }).filter(Boolean)
