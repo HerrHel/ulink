@@ -267,4 +267,22 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
     const { deadCount } = useDeadLinkChecker()
     expect(deadCount.value).toBe(0)
   })
+
+  it('checkAll 多 batch + 同 origin 分组：progress.done 收敛到 total，不漏成员', async () => {
+    const ds = useDataStore()
+    // 3 个不同 origin，其中一个 origin 带 2 个 more others → 代表数 3，总书签 5
+    seedBm(ds, { id: 'rep-a', url: 'https://a.com/1' })
+    seedBm(ds, { id: 'a-other-1', url: 'https://a.com/2' })
+    seedBm(ds, { id: 'a-other-2', url: 'https://a.com/3' })
+    seedBm(ds, { id: 'rep-b', url: 'https://b.com/1' })
+    seedBm(ds, { id: 'rep-c', url: 'https://c.com/1' })
+
+    invokeMock.mockResolvedValue(edge('ok', 200))
+    const { checkAll, progress } = useDeadLinkChecker()
+    // batchSize=1 强制 3 个代表分 3 个 batch，触发累计 others 路径
+    await checkAll(1, 0)
+
+    expect(progress.value.total).toBe(5)
+    expect(progress.value.done).toBe(5)
+  })
 })

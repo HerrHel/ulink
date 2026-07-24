@@ -453,6 +453,11 @@ export function useDeadLinkChecker() {
 
     // 进度显示实际书签总数，而非去重后的检测数
     const totalBookmarks = bookmarks.length
+    // 累加器：缓存到当前批次为止已处理的「代表 + 其同 origin others」数量。
+    // 旧实现每个 batch 完成后都从 0 重新遍历到 i+batchSize 累加 others 长度，O(n²)；
+    // 大数据集（数千条）下成为检测主循环热点。改为仅累加本批新增的 others，O(n)。
+    let cumulativeOthers = 0
+    const processedRepCount = (count: number) => Math.min(count, toCheck.length)
 
     for (let i = 0; i < toCheck.length; i += batchSize) {
       if (_abort.signal.aborted) break
@@ -480,13 +485,13 @@ export function useDeadLinkChecker() {
         }
       }
 
-      // 更新进度：已处理的代表数 + 已复制结果的其他书签数
-      let processedCount = Math.min(i + batchSize, toCheck.length)
-      for (let k = 0; k < Math.min(i + batchSize, toCheck.length); k++) {
+      // 更新进度：已处理代表数 + 这些代表带的所有 others
+      const repCount = processedRepCount(i + batchSize)
+      for (let k = i; k < repCount; k++) {
         const group = representativeMap.get(toCheck[k].id)
-        if (group) processedCount += group.others.length
+        if (group) cumulativeOthers += group.others.length
       }
-      progress.value.done = Math.min(processedCount, totalBookmarks)
+      progress.value.done = Math.min(repCount + cumulativeOthers, totalBookmarks)
 
       if (i + batchSize < toCheck.length) {
         await new Promise(r => setTimeout(r, intervalMs))
