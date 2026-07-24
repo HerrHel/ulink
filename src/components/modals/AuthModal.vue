@@ -51,19 +51,19 @@
       <div class="modal-foot gap-2">
         <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">返回</button>
         <button v-if="step === 'code'" class="btn btn-ghost" @click="onSendCode"
-          :disabled="sending || auth.sendCooldownRemaining(email.trim()) > 0">
+          :disabled="sending || cooldownSec > 0">
           {{ sending ? '发送中...'
-            : (auth.sendCooldownRemaining(email.trim()) > 0 ? `重发 (${auth.sendCooldownRemaining(email.trim())}s)` : '重发验证码') }}
+            : (cooldownSec > 0 ? `重发 (${cooldownSec}s)` : '重发验证码') }}
         </button>
         <span class="flex-1"></span>
         <button class="btn btn-secondary" @click="onClose">取消</button>
         <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode"
-          :disabled="!email.trim() || sending || auth.sendCooldownRemaining(email.trim()) > 0">
+          :disabled="!emailTrim || sending || cooldownSec > 0">
           {{ sending ? '发送中...'
-            : (auth.sendCooldownRemaining(email.trim()) > 0 ? `重新发送 (${auth.sendCooldownRemaining(email.trim())}s)` : '发送验证码') }}
+            : (cooldownSec > 0 ? `重新发送 (${cooldownSec}s)` : '发送验证码') }}
         </button>
         <button v-if="step === 'code'" class="btn btn-primary" @click="onVerify"
-          :disabled="code.length < 6 || verifying || auth.verifyLockRemaining(email.trim()) > 0">
+          :disabled="code.length < 6 || verifying || lockSec > 0">
           {{ verifying ? '验证中...' : '登录' }}
         </button>
       </div>
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { I } from '../../config/icons.js'
@@ -88,6 +88,14 @@ const verified = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const codeInputRef = ref<HTMLInputElement | null>(null)
 
+// PERF：cooldownTick 每秒更新会触发本组件重渲染。旧实现模板里 6+ 处直接调
+// auth.sendCooldownRemaining/verifyLockRemaining(email.trim())，每次渲染重复求值 +
+// 重复 email.trim()。改为 computed 缓存：本次渲染周期内只各求值一次，模板多处引用
+// 读同一缓存值。语义不变（computed 依赖 cooldownTick，每秒仍随 tick 重算一次）。
+const emailTrim = computed(() => email.value.trim())
+const cooldownSec = computed(() => auth.sendCooldownRemaining(emailTrim.value))
+const lockSec = computed(() => auth.verifyLockRemaining(emailTrim.value))
+
 watch(() => auth.authModalOpen, (open) => {
   if (open) {
     email.value = ''
@@ -102,10 +110,10 @@ watch(() => auth.authModalOpen, (open) => {
 })
 
 async function onSendCode() {
-  const e = email.value.trim()
+  const e = emailTrim.value
   if (!e) return
   // S12：冷却中由 store 返 false 并写 authError，这里读剩余秒数禁用按钮并提前 return
-  const remain = auth.sendCooldownRemaining(e)
+  const remain = cooldownSec.value
   if (remain > 0) {
     auth.authError = `验证码已发送，请 ${remain} 秒后再试`
     return
@@ -124,14 +132,14 @@ async function onVerify() {
   const c = code.value.trim()
   if (c.length < 6) return
   // S12：锁定中由 store 返 false 并写 authError
-  const lockRemain = auth.verifyLockRemaining(email.value.trim())
+  const lockRemain = lockSec.value
   if (lockRemain > 0) {
     auth.authError = `验证失败次数过多，请 ${lockRemain} 秒后重试或重新获取验证码`
     return
   }
   verifying.value = true
   auth.authError = null
-  const ok = await auth.verifyOtp(email.value.trim(), c)
+  const ok = await auth.verifyOtp(emailTrim.value, c)
   verifying.value = false
   if (ok) {
     verified.value = true
@@ -147,7 +155,7 @@ function onBack() {
   code.value = ''
   auth.authError = null
   // S12：返回邮箱步视为重新开始，清掉验证失败计数与锁，给用户重试机会
-  auth.resetVerifyState(email.value.trim())
+  auth.resetVerifyState(emailTrim.value)
   nextTick(() => inputRef.value?.focus())
 }
 
