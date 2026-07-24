@@ -16,7 +16,7 @@
         <div class="card-titlewrap" title="打开链接" @click.stop="onOpenClick">
           <div class="card-titlewrap-text">
             <div class="card-name">
-              <span v-if="searchQuery" v-html="hlText(bookmark.title, searchQuery)"></span>
+              <span v-if="searchQuery" v-html="hlTitle"></span>
               <template v-else>{{ bookmark.title }}</template>
               <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
               <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
@@ -24,7 +24,7 @@
               <span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span>
             </div>
             <div class="card-domain">
-              <span v-if="searchQuery" v-html="hlText(domainStr, searchQuery)"></span>
+              <span v-if="searchQuery" v-html="hlDomain"></span>
               <template v-else>{{ domainStr }}</template>
             </div>
           </div>
@@ -41,7 +41,7 @@
         <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
       <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="uiStore.layoutMode !== 'list' && editNotes($event)">
-        <span v-if="searchQuery" v-html="hlText(bookmark.notes, searchQuery)"></span>
+        <span v-if="searchQuery" v-html="hlNotes"></span>
         <template v-else>{{ bookmark.notes }}</template>
       </div>
       <template v-if="bookmark.username || bookmark.password">
@@ -104,23 +104,6 @@ import { bookmarkPreview } from '../../lib/preview.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import type { Bookmark } from '../../types.js'
 
-function hlText(text: string, query: string): string {
-  if (!text || !query.trim()) return esc(text)
-  const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(q, 'gi')
-  const parts: string[] = []
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = regex.exec(text)) !== null) {
-    if (m.index > last) parts.push(esc(text.slice(last, m.index)))
-    parts.push('<mark class="card-hl">' + esc(m[0]) + '</mark>')
-    last = m.index + m[0].length
-    if (m[0].length === 0) { regex.lastIndex++; continue }
-  }
-  if (last < text.length) parts.push(esc(text.slice(last)))
-  return parts.join('')
-}
-
 function onImgError(e: Event) {
   (e.target as HTMLImageElement).classList.add('img-error')
 }
@@ -182,6 +165,37 @@ const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked']
 const isUnconfirmed = computed(() => deadLinkChecker.isUnconfirmed(props.bookmark.id))
 const isPinned = computed(() => !!props.bookmark.pinnedAt)
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
+
+// 搜索高亮：旧实现模板内直接 v-html="hlText(...)" 非缓存，每次重渲染（滚动/批量切换/
+// 账户展开等无关变更）都对 title/domain/notes 各 new RegExp + 正则循环。改用 computed 缓存
+// 三个高亮串；regex 提到 searchQuery 级 computed 共用，避免 N 张卡 ×3 字段重复编译正则。
+const hlRegex = computed<RegExp | null>(() => {
+  const q = searchQuery.value
+  if (!q) return null
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(escaped, 'gi')
+})
+const hlTitle = computed(() => hlRegex.value ? highlight(bookmark.title, hlRegex.value) : '')
+const hlDomain = computed(() => hlRegex.value ? highlight(domainStr.value, hlRegex.value) : '')
+const hlNotes = computed(() => hlRegex.value && bookmark.notes ? highlight(bookmark.notes, hlRegex.value) : '')
+
+/** 按已编译 regex 高亮 text，返回带 <mark> 的 HTML（转义在前） */
+function highlight(text: string, regex: RegExp): string {
+  if (!text) return ''
+  const re = new RegExp(regex.source, regex.flags) // 复制避免 lastIndex 共享污染
+  re.lastIndex = 0
+  const parts: string[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(esc(text.slice(last, m.index)))
+    parts.push('<mark class="card-hl">' + esc(m[0]) + '</mark>')
+    last = m.index + m[0].length
+    if (m[0].length === 0) { re.lastIndex++; continue }
+  }
+  if (last < text.length) parts.push(esc(text.slice(last)))
+  return parts.join('')
+}
 
 function visit() { openBookmark(props.bookmark) }
 function onOpenClick() {
