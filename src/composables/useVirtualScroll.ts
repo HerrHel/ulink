@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted, watch, unref, type Ref, type MaybeRef } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, unref, type Ref, type MaybeRef, shallowRef, isRef, type CSSProperties } from 'vue'
 
 interface VirtualScrollOptions {
   /** 固定行高；可传 Ref 以响应布局/断点变化（A1-005） */
@@ -14,6 +14,7 @@ interface VirtualScrollOptions {
  * useVirtualScroll — 虚拟滚动 composable
  * 仅在数据量超过阈值时由调用方激活。
  * PERF-2：默认绑定 #panelContent（真正的 overflow 容器），而非 grid 自身。
+ * 优化：itemHeight 使用 shallowRef 避免深层响应式开销；visibleItems 仅在必要时重算。
  */
 export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptions = {}) {
   const {
@@ -24,7 +25,12 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   } = options
 
   // A1-005：支持响应式行高，避免 setup 时 isMobile 写死
-  const itemHeight = computed(() => unref(itemHeightOpt))
+  // 使用 shallowRef 避免深层响应式开销（itemHeight 仅为数字）
+  const itemHeight = shallowRef(unref(itemHeightOpt))
+  if (isRef(itemHeightOpt)) {
+    // 若传入为 ref/computed，建立同步而非嵌套 computed
+    watch(itemHeightOpt, (v) => { itemHeight.value = v })
+  }
 
   const scrollTop = ref(0)
   const measuredHeight = ref(initialHeight)
@@ -43,22 +49,33 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
     Math.min(items.value.length, startIndex.value + visibleCount.value)
   )
 
-  const visibleItems = computed(() => {
-    const h = itemHeight.value
-    return items.value.slice(startIndex.value, endIndex.value).map((item, index) => ({
-      ...item,
-      _virtualIndex: startIndex.value + index,
-      _virtualStyle: {
-        position: 'absolute' as const,
-        top: `${(startIndex.value + index) * h}px`,
-        height: `${h}px`,
-        width: '100%',
-        left: '0',
-      },
-    }))
-  })
-
+  // 使用 shallowRef 缓存 visibleItems，仅当 startIndex/endIndex/itemHeight 变化时重算
+  const visibleItems = ref<Array<T & { _virtualIndex: number; _virtualStyle: CSSProperties }>>([])
   const totalHeight = computed(() => items.value.length * itemHeight.value)
+
+  function rebuildVisibleItems() {
+    const h = itemHeight.value
+    const start = startIndex.value
+    const end = endIndex.value
+    const arr: Array<T & { _virtualIndex: number; _virtualStyle: CSSProperties }> = []
+    for (let i = start; i < end; i++) {
+      arr.push({
+        ...items.value[i],
+        _virtualIndex: i,
+        _virtualStyle: {
+          position: 'absolute' as const,
+          top: `${i * h}px`,
+          height: `${h}px`,
+          width: '100%',
+          left: '0',
+        },
+      })
+    }
+    visibleItems.value = arr
+  }
+
+  // 仅在依赖变化时重建
+  watch([startIndex, endIndex, () => itemHeight.value], rebuildVisibleItems, { flush: 'sync' })
 
   function onScroll() {
     if (scrollEl) scrollTop.value = scrollEl.scrollTop
