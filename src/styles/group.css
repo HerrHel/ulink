@@ -181,7 +181,6 @@
   border-color:var(--text);
 }
 .color-swatch .swatch-check{display:none}
-.color-swatch.active .swatch-check{display:none}
 /* Tooltip for color name */
 .color-reset-btn{
   width:100%;padding:6px 0;
