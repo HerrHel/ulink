@@ -11,13 +11,16 @@ import type { Bookmark, SiblingGroup } from '../types.js'
 /** 纯文本摘要字符上限（超出省略号），约四行小宫格所见 */
 const PREVIEW_MAX = 160
 
+/** 复用的临时 DOM 元素，避免 htmlToText 每次创建 div */
+let _htmlToTextEl: HTMLDivElement | null = null
+
 /** 把 HTML 富文本抽成单行纯文本 */
 function htmlToText(html: string): string {
   if (!html) return ''
-  const tmp = document.createElement('div')
-  tmp.innerHTML = sanitizeHTML(html)
-  tmp.querySelectorAll('.gic-btn, .gic-remove, .gic-domain').forEach(el => el.remove())
-  return (tmp.textContent || '').replace(/\s+/g, ' ').trim()
+  if (!_htmlToTextEl) _htmlToTextEl = document.createElement('div')
+  _htmlToTextEl.innerHTML = sanitizeHTML(html)
+  _htmlToTextEl.querySelectorAll('.gic-btn, .gic-remove, .gic-domain').forEach(el => el.remove())
+  return (_htmlToTextEl.textContent || '').replace(/\s+/g, ' ').trim()
 }
 
 function truncate(s: string): string {
