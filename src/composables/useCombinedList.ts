@@ -58,12 +58,9 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         const groups = ds.filteredGroups
         const topLevel = ds.filteredBookmarks.filter((b: Bookmark) => !b.parentId)
         const combined: CardItem[] = []
-        if (ui.groupsOnTop) {
-          for (const g of groups) combined.push({ type: 'group', data: g })
-          for (const b of topLevel) combined.push({ type: 'bm', data: b })
-        } else {
-          for (const g of groups) combined.push({ type: 'group', data: g })
-          for (const b of topLevel) combined.push({ type: 'bm', data: b })
+        for (const g of groups) combined.push({ type: 'group', data: g })
+        for (const b of topLevel) combined.push({ type: 'bm', data: b })
+        if (!ui.groupsOnTop) {
           const d = ui.sortDir === 'asc' ? 1 : -1
           const sm = ui.sortMode
           combined.sort((a, b) => {
