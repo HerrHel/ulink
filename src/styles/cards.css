@@ -539,34 +539,32 @@
   color:var(--accent,#3B82F6);
   border-radius:2px;padding:0 1px;
 }
-/* Dead link badge */
-.dead-link-badge{
+/* Dead link / GFW blocked / 未确认 badge 共享基样式 */
+.dead-link-badge,
+.gfw-blocked-badge,
+.unconfirmed-badge{
   display:inline-block;
   padding:1px 5px;
   font-size:0.72rem;font-weight:700;line-height:1.2;
-  color:var(--rose);
-  background:var(--rose-light);
-  border:1px solid var(--rose);
   border-radius:var(--radius-sm);
   vertical-align:middle;
   margin-left:4px;
   letter-spacing:0.02em;
+}
+/* Dead link badge */
+.dead-link-badge{
+  color:var(--rose);
+  background:var(--rose-light);
+  border:1px solid var(--rose);
 }
 [data-theme="dark"] .dead-link-badge{
   background:rgba(239,68,68,0.15);
   border-color:rgba(239,68,68,0.4);
 }
 .gfw-blocked-badge{
-  display:inline-block;
-  padding:1px 5px;
-  font-size:0.72rem;font-weight:700;line-height:1.2;
   color:var(--amber);
   background:var(--amber-light);
   border:1px solid var(--amber);
-  border-radius:var(--radius-sm);
-  vertical-align:middle;
-  margin-left:4px;
-  letter-spacing:0.02em;
 }
 [data-theme="dark"] .gfw-blocked-badge{
   background:rgba(245,158,11,0.15);
@@ -574,16 +572,10 @@
 }
 /* 未确认 badge：本次检测 inconclusive（离线/超时/信号冲突），不落标、不动旧标 */
 .unconfirmed-badge{
-  display:inline-block;
-  padding:1px 5px;
-  font-size:0.72rem;font-weight:600;line-height:1.2;
+  font-weight:600;
   color:var(--text-muted);
   background:var(--bg-alt);
   border:1px solid var(--border);
-  border-radius:var(--radius-sm);
-  vertical-align:middle;
-  margin-left:4px;
-  letter-spacing:0.02em;
 }
 [data-theme="dark"] .unconfirmed-badge{
   background:rgba(255,255,255,0.05);
