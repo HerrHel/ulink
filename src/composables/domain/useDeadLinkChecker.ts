@@ -27,6 +27,30 @@ interface CheckResult {
   reason?: DeadLinkReason
 }
 
+/** 存储在 localStorage 的基线缓存结构 */
+interface StoredBaseline {
+  value: number
+  at: number
+  ua: string
+}
+
+const BASELINE_STORAGE_KEY = 'lv_deadLinkBaseline'
+
+/** 从 localStorage 加载基线缓存；UA 变更时视为失效 */
+function loadBaselineCache(): BaselineCache | null {
+  try {
+    const raw = safeGetItem(BASELINE_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = safeJsonParse<StoredBaseline | null>(raw, null)
+    if (!parsed) return null
+    // UA 变更视为网络环境变更，缓存失效
+    if (parsed.ua !== navigator.userAgent) return null
+    return { value: parsed.value, at: parsed.at }
+  } catch {
+    return null
+  }
+}
+
 /** 鉴权/限流/网关类状态：偏可活，不当死链 */
 const HTTP_SOFT_ALIVE = new Set([401, 402, 403, 405, 408, 418, 425, 429, 500, 502, 503, 504])
 const HTTP_DEAD = new Set([404, 410])
@@ -111,13 +135,13 @@ for (const [id, checks] of Object.entries(_history)) {
 
 let _abort: AbortController | null = null
 
-// 网络基线缓存，30s 内复用；in-flight 合并避免 checkAll 冷启动探针风暴
+// 网络基线缓存，5分钟内复用（比原来 30s 更长）；in-flight 合并避免 checkAll 冷启动探针风暴
 const BASELINE_PROBES = [
   'https://www.baidu.com/favicon.ico',
   'https://www.gstatic.com/generate_204',
   'https://cloudflare.com/favicon.ico',
 ] as const
-const BASELINE_TTL_MS = 30000
+const BASELINE_TTL_MS = 5 * 60 * 1000 // 5 分钟，减少重复探测
 const BASELINE_PROBE_TIMEOUT_MS = 4000
 const BASELINE_OFFLINE_MS = 4000
 
@@ -127,6 +151,10 @@ interface BaselineCache {
 }
 let _baselineCache: BaselineCache | null = null
 let _baselineInflight: Promise<number> | null = null
+
+// 启动时尝试从 localStorage 恢复基线
+const loadedBaseline = loadBaselineCache()
+if (loadedBaseline) _baselineCache = loadedBaseline
 /** no-cors 限时 fetch；成功 resolve，超时/网络失败 reject */
 function fetchNoCorsWithTimeout(
   url: string,
@@ -229,10 +257,12 @@ async function measureNetworkBaseline(): Promise<number> {
     } catch {
       // 全探针失败 → 本机网络离线；返回 >= offline 阈值使 gradeLocalNetwork 判 offline
       _baselineCache = { value: BASELINE_OFFLINE_MS, at: Date.now() }
+      persistBaselineCache()
       return BASELINE_OFFLINE_MS
     }
     const duration = Date.now() - start
     _baselineCache = { value: duration, at: Date.now() }
+    persistBaselineCache()
     return duration
   })()
 
@@ -241,6 +271,17 @@ async function measureNetworkBaseline(): Promise<number> {
   } finally {
     _baselineInflight = null
   }
+}
+
+/** 将基线缓存持久化到 localStorage，跨页面加载复用 */
+function persistBaselineCache(): void {
+  if (!_baselineCache) return
+  const stored: StoredBaseline = {
+    value: _baselineCache.value,
+    at: _baselineCache.at,
+    ua: navigator.userAgent,
+  }
+  safeSetItem(BASELINE_STORAGE_KEY, JSON.stringify(stored))
 }
 
 /** 基线耗时 → 本机网络健康分级。offline 时一切远端结论都不落 dead/gfw。 */
@@ -663,6 +704,8 @@ export function useDeadLinkChecker() {
     _histCache = null
     _histCacheLoaded = false
     Object.keys(results).forEach(k => delete results[k])
+    // 清除持久化的基线缓存
+    safeRemoveItem(BASELINE_STORAGE_KEY)
   }
 
   return {

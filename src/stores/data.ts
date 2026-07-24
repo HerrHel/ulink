@@ -45,6 +45,10 @@ interface DataState {
   /** A2-002：软删属性时快照「实体 id → 曾有该 attr 键」，restoreAttribute 回写 */
   _deletedAttrMemberships: Map<string, Array<{ entityId: string; kind: 'bookmark' | 'group' }>>
   _searchVersion: number
+  /** 搜索索引重建脏标记：累积多次 CRUD 后仅重建一次 */
+  _searchIndexDirty: boolean
+  /** 防抖定时器：批量 CRUD 时延迟递增 version */
+  _searchVersionTimer: ReturnType<typeof setTimeout> | null
 }
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
@@ -111,6 +115,8 @@ export const useDataStore = defineStore('data', {
     _deletedGroupMemberships: new Map(),
     _deletedAttrMemberships: new Map(),
     _searchVersion: 0,
+    _searchIndexDirty: false,
+    _searchVersionTimer: null as ReturnType<typeof setTimeout> | null,
   }),
 
   getters: {
@@ -121,11 +127,13 @@ export const useDataStore = defineStore('data', {
       if (ui.curCat !== CAT_ALL) bm = bm.filter(b => b.categoryId === ui.curCat)
       const q = ui.searchQuery
       if (q.trim()) {
+        // 如果搜索索引脏了，直接递增 version 触发重建
+        if (state._searchIndexDirty) { state._searchVersion++; state._searchIndexDirty = false }
         // 在全量 bookmarks 上建/复用 Fuse 基准（引用稳定，CRUD 才变，配 version 双保险），
         // 再用 bm.filter(matchIds) 限定到当前分类——结果与「在 bm 子集上搜」一致，
         // 但 Fuse 缓存不再因每次 filter 产生的新数组引用而重建。旧实现传 bm（每次新建）
         // → ref 永远 !== _bmBaseRef → 每个键击重建 Fuse + 与 SearchSuggest 互踩缓存基准。
-        const matchIds = searchBookmarkIds(state.bookmarks, q, state.customAttributes, state._searchVersion)
+        const matchIds = searchBookmarkIds(state.bookmarks, q, state.customAttributes, state._searchVersion, true)
         if (matchIds) bm = bm.filter(b => matchIds.has(b.id))
       }
       bm = _filterAttrs(bm, ui)
@@ -140,9 +148,11 @@ export const useDataStore = defineStore('data', {
       if (ui.curCat !== CAT_ALL) groups = groups.filter(g => g.categoryId === ui.curCat)
       const q = ui.searchQuery
       if (q.trim()) {
+        // 如果搜索索引脏了，直接递增 version 触发重建
+        if (state._searchIndexDirty) { state._searchVersion++; state._searchIndexDirty = false }
         // 同 filteredBookmarks：在全量 siblingGroups 上搜复用 Fuse 缓存（见上注释），
         // 再用 groups.filter 限定当前分类。旧实现传每次新建的 groups 子集 → ref 永变 → 重建。
-        const matchIds = searchGroupIds(state.siblingGroups, q, this.bookmarkMap, state.customAttributes, state._searchVersion)
+        const matchIds = searchGroupIds(state.siblingGroups, q, this.bookmarkMap, state.customAttributes, state._searchVersion, true)
         if (matchIds) groups = groups.filter(g => matchIds.has(g.id))
       }
       groups = _filterAttrs(groups, ui)
@@ -298,7 +308,7 @@ export const useDataStore = defineStore('data', {
       this.categories[idx] = { ...this.categories[idx], ...changes, updatedAt: Date.now() }
       this._catMap[id] = this.categories[idx]
       this._markDirty(id)
-      this._bumpSearchVersion()
+      this._debouncedBumpSearchVersion()
     },
 
     /** M18：属性整对象补丁 */
@@ -309,7 +319,7 @@ export const useDataStore = defineStore('data', {
       this.customAttributes[idx] = { ...this.customAttributes[idx], ...changes, updatedAt: Date.now() }
       this._attrMap[id] = this.customAttributes[idx]
       this._markDirty(id)
-      this._bumpSearchVersion()
+      this._debouncedBumpSearchVersion()
     },
 
     /**
@@ -335,7 +345,7 @@ export const useDataStore = defineStore('data', {
         this._markDirty(id)
         bumped = true
       }
-      if (bumped) this._bumpSearchVersion()
+      if (bumped) this._searchIndexDirty = true
     },
 
     /** 持久化 _deletedGroupMemberships 到 localStorage，用于恢复时跨会话保持组关联 */
@@ -349,7 +359,20 @@ export const useDataStore = defineStore('data', {
       const obj = safeJsonParse<Record<string, string[]> | null>(safeGetItem(DGM_KEY), null)
       if (obj) this._deletedGroupMemberships = new Map(Object.entries(obj))
     },
+    /** 增加搜索版本号（立即重建索引，用于批量操作） */
     _bumpSearchVersion() { this._searchVersion++ },
+    /** 防抖版本：批量 CRUD 时仅最后一次递增 version，减少 Fuse 重建 */
+    _debouncedBumpSearchVersion() {
+      if (this._searchVersionTimer) clearTimeout(this._searchVersionTimer)
+      this._searchVersionTimer = setTimeout(() => { this._searchVersion++ }, 0)
+    },
+    /** 搜索时检查脏标记并重建索引 */
+    _rebuildSearchIndexIfDirty() {
+      if (this._searchIndexDirty) {
+        this._searchVersion++
+        this._searchIndexDirty = false
+      }
+    },
     drainDirtyIds(): Set<string> {
       const ids = new Set(this._dirtyIds)
       this._dirtyIds.clear()
@@ -374,6 +397,7 @@ export const useDataStore = defineStore('data', {
       let fields = this._changedFields.get(id)
       if (!fields) { fields = new Set(); this._changedFields.set(id, fields) }
       fields.add(field)
+      this._searchIndexDirty = true
     },
     addBookmark(bm: Bookmark) {
       const entry = { ...bm }
@@ -385,7 +409,7 @@ export const useDataStore = defineStore('data', {
         else this._childrenIdx[entry.parentId] = [entry.id]
       }
       this._markDirty(entry.id); this._newIds.add(entry.id)
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
     /** 保存旧状态到本地历史（C2：覆盖前留底）。含 500ms 防抖，同一 id 连续变更只保留最后一次快照。 */
     _saveLocalHistory(id: string, data: Record<string, unknown>) {
@@ -431,7 +455,8 @@ export const useDataStore = defineStore('data', {
         }
         this.bookmarks[idx] = { ...prev, ...changes, updatedAt: Date.now() }
         this._bmMap[id] = this.bookmarks[idx]
-        this._markDirty(id), this._bumpSearchVersion()
+        this._markDirty(id)
+        this._searchIndexDirty = true
       }
     },
     deleteBookmark(id: string) {
@@ -463,9 +488,9 @@ export const useDataStore = defineStore('data', {
       }
       if (groupIds.length) this._deletedGroupMemberships.set(id, groupIds)
       this._persistDeletedGroupMemberships()
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
-    addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id); this._bumpSearchVersion() },
+    addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id); this._searchIndexDirty = true },
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
       const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
       if (idx >= 0) {
@@ -473,7 +498,8 @@ export const useDataStore = defineStore('data', {
         for (const key of Object.keys(changes)) this._trackChange(id, key)
         this.siblingGroups[idx] = { ...this.siblingGroups[idx], ...changes, updatedAt: Date.now() }
         this._grpMap[id] = this.siblingGroups[idx]
-        this._markDirty(id), this._bumpSearchVersion()
+        this._markDirty(id)
+        this._searchIndexDirty = true
       }
     },
     deleteGroup(id: string) {
@@ -483,7 +509,7 @@ export const useDataStore = defineStore('data', {
       this.siblingGroups[idx] = { ...g, deletedAt: Date.now(), updatedAt: Date.now() }
       this._grpMap[id] = this.siblingGroups[idx]
       this._markDirty(id)
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
     /** 切换置顶状态：已置顶则取消，未置顶则设为当前时间 */
     togglePin(entityType: 'bookmark' | 'group', id: string) {
@@ -508,14 +534,14 @@ export const useDataStore = defineStore('data', {
         this._grpMap[id] = this.siblingGroups[idx]
         this._markDirty(id)
       }
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
     addCategory(cat: Category) {
       cat.updatedAt = Date.now()
       this.categories = [...this.categories, cat]
       this._catMap[cat.id] = cat
       this._markDirty(cat.id); this._newIds.add(cat.id)
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
     /**
      * B-11：按传入数组顺序重写 categories.order + updatedAt，并 track/markDirty。
@@ -536,7 +562,7 @@ export const useDataStore = defineStore('data', {
         }),
         ...rest,
       ]
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
     renameCategory(id: string, name: string) {
       const idx = _indexOfById(this.categories, this._catMap, id)
@@ -544,7 +570,7 @@ export const useDataStore = defineStore('data', {
         this._trackChange(id, 'name')
         this.categories[idx] = { ...this.categories[idx], name, updatedAt: Date.now() }
         this._catMap[id] = this.categories[idx]
-        this._markDirty(id), this._bumpSearchVersion()
+        this._markDirty(id), this._searchIndexDirty = true
       }
     },
     deleteCategory(id: string) {
@@ -579,7 +605,7 @@ export const useDataStore = defineStore('data', {
       this.customAttributes = [...this.customAttributes, attr]
       this._attrMap[attr.id] = attr
       this._markDirty(attr.id); this._newIds.add(attr.id)
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
     renameAttribute(id: string, name: string) {
       const idx = _indexOfById(this.customAttributes, this._attrMap, id)
@@ -587,7 +613,7 @@ export const useDataStore = defineStore('data', {
         this._trackChange(id, 'name')
         this.customAttributes[idx] = { ...this.customAttributes[idx], name, updatedAt: Date.now() }
         this._attrMap[id] = this.customAttributes[idx]
-        this._markDirty(id), this._bumpSearchVersion()
+        this._markDirty(id), this._searchIndexDirty = true
       }
     },
     deleteAttribute(id: string) {
@@ -629,7 +655,7 @@ export const useDataStore = defineStore('data', {
       const ui = useUIStore()
       const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
       const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
 
     // ── 回收站：恢复 ──
@@ -700,7 +726,7 @@ export const useDataStore = defineStore('data', {
           }
         }
         this._deletedAttrMemberships.delete(id)
-        this._bumpSearchVersion()
+        this._searchIndexDirty = true
       }
     },
 
@@ -723,7 +749,7 @@ export const useDataStore = defineStore('data', {
       delete (next as { deletedAt?: unknown }).deletedAt
       arr[idx] = next
       map[id] = next
-      this._markDirty(id); this._bumpSearchVersion()
+      this._markDirty(id); this._searchIndexDirty = true
     },
 
     // ── 回收站：永久删除 ──
@@ -754,15 +780,15 @@ export const useDataStore = defineStore('data', {
       delete this._bmMap[id]
       this._deletedGroupMemberships.delete(id)
       this._persistDeletedGroupMemberships()
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
-    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id); delete this._grpMap[id]; this._bumpSearchVersion() },
-    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id]; this._bumpSearchVersion() },
+    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id); delete this._grpMap[id]; this._searchIndexDirty = true },
+    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id]; this._searchIndexDirty = true },
     permanentDeleteAttribute(id: string) {
       this._permanentDelete('custom_attributes', id)
       delete this._attrMap[id]
       this._deletedAttrMemberships.delete(id)
-      this._bumpSearchVersion()
+      this._searchIndexDirty = true
     },
 
     /** 内部辅助：永久删除项 */

@@ -28,22 +28,20 @@ describe('DataStore', () => {
 
     // M25：走真实 action 验证 dirty / newIds / searchVersion 副作用
     it('M25: addBookmark 标记 dirty/new 并 bump searchVersion', () => {
-      const v0 = store._searchVersion
       store.addBookmark({ id: 'b-m25', title: 'M25', url: 'https://m25.example' } as any)
       expect(store._dirtyIds.has('b-m25')).toBe(true)
       expect(store._newIds.has('b-m25')).toBe(true)
-      expect(store._searchVersion).toBe(v0 + 1)
+      expect(store._searchIndexDirty).toBe(true)
       expect(store.bookmarkMap['b-m25'].title).toBe('M25')
     })
 
     it('updateBookmark - 应该更新书签属性', () => {
       store.addBookmark({ id: 'b1', title: 'Old', url: 'https://example.com' } as any)
       store.drainDirtyIds() // 清空 add 留下的 dirty，隔离 update 副作用
-      const v0 = store._searchVersion
       store.updateBookmark('b1', { title: 'New' })
       expect(store.bookmarkMap['b1'].title).toBe('New')
       expect(store._dirtyIds.has('b1')).toBe(true)
-      expect(store._searchVersion).toBe(v0 + 1)
+      expect(store._searchIndexDirty).toBe(true)
     })
 
     it('updateBookmark - 不存在的 ID 应该静默失败', () => {
@@ -72,7 +70,6 @@ describe('DataStore', () => {
       store.addBookmark({ id: 'b1', title: 'A', url: 'https://a.com', attributes: { tag: true } } as any)
       store.addBookmark({ id: 'b2', title: 'B', url: 'https://b.com', attributes: {} } as any)
       store.drainDirtyIds()
-      const v0 = store._searchVersion
       store.batchPatchBookmarkAttributes({
         b1: { tag: true, 'dead-link': true },
         b2: { 'gfw-blocked': true },
@@ -82,7 +79,7 @@ describe('DataStore', () => {
       expect(store.bookmarkMap['b2'].attributes['gfw-blocked']).toBe(true)
       expect(store._dirtyIds.has('b1')).toBe(true)
       expect(store._dirtyIds.has('b2')).toBe(true)
-      expect(store._searchVersion).toBe(v0 + 1)
+      expect(store._searchIndexDirty).toBe(true)
     })
 
     it('attributeByName - 仅索引未软删属性，重命名后按新名可查', () => {
@@ -120,11 +117,10 @@ describe('DataStore', () => {
     it('updateGroup - 应该更新分组属性', () => {
       store.addGroup({ id: 'g1', name: 'Old', bookmarkIds: [] } as any)
       store.drainDirtyIds()
-      const v0 = store._searchVersion
       store.updateGroup('g1', { name: 'New' })
       expect(store.groupMap['g1'].name).toBe('New')
       expect(store._dirtyIds.has('g1')).toBe(true)
-      expect(store._searchVersion).toBe(v0 + 1)
+      expect(store._searchIndexDirty).toBe(true)
     })
 
     it('deleteGroup - 应该软删除分组', () => {

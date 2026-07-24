@@ -217,12 +217,13 @@ let _grpBaseMap: Record<string, Bookmark> | null = null
 let _grpFuse: FuseInstance<GroupSearchItem> | null = null
 let _grpVersion = -1
 
-function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttribute[], version = -1) {
+function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttribute[], version = -1, forceRebuild = false) {
   if (!ensureSearchLibs() || !FuseClass) {
     _bmFuse = null
     return false
   }
-  if (bookmarks !== _bmBaseRef || customAttributes !== _bmBaseAttrs || version !== _bmVersion) {
+  // forceRebuild 为 true 时忽略版本检查，直接重建（用于搜索时触发）
+  if (forceRebuild || bookmarks !== _bmBaseRef || customAttributes !== _bmBaseAttrs || version !== _bmVersion) {
     _bmBaseItems = _buildBookmarkSearchItems(bookmarks, customAttributes)
     _bmFuse = new FuseClass(_bmBaseItems, { ...FUSE_OPTIONS, keys: BOOKMARK_KEYS })
     _bmBaseRef = bookmarks
@@ -232,12 +233,12 @@ function _ensureBookmarkBase(bookmarks: Bookmark[], customAttributes: CustomAttr
   return true
 }
 
-function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bookmark>, customAttributes: CustomAttribute[], version = -1) {
+function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bookmark>, customAttributes: CustomAttribute[], version = -1, forceRebuild = false) {
   if (!ensureSearchLibs() || !FuseClass) {
     _grpFuse = null
     return false
   }
-  if (groups !== _grpBaseRef || bookmarkMap !== _grpBaseMap || customAttributes !== _grpBaseAttrs || version !== _grpVersion) {
+  if (forceRebuild || groups !== _grpBaseRef || bookmarkMap !== _grpBaseMap || customAttributes !== _grpBaseAttrs || version !== _grpVersion) {
     _grpBaseItems = _buildGroupSearchItems(groups, bookmarkMap, customAttributes)
     _grpFuse = new FuseClass(_grpBaseItems, { ...FUSE_OPTIONS, keys: GROUP_KEYS })
     _grpBaseRef = groups
@@ -292,15 +293,19 @@ function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Rec
  * 模糊搜索书签，返回匹配的 ID 集合。
  * query 为空时返回 null（表示无需过滤）。
  * 内部缓存 Fuse 实例，同一 bookmarks 数组引用不重复构建。
+ * @param forceRebuild - true 时忽略版本检查强制重建（用于搜索时触发）
  */
 export function searchBookmarkIds(
   bookmarks: Bookmark[],
   query: string,
   customAttributes: CustomAttribute[],
   version = -1,
+  forceRebuild = false,
 ): Set<string> | null {
   if (!query.trim()) return null
-  if (!_ensureBookmarkBase(bookmarks, customAttributes, version) || !_bmFuse) {
+  // 显式 forceRebuild 或版本不匹配时重建
+  const needsRebuild = forceRebuild || (!!_bmFuse && version !== _bmVersion)
+  if (!_ensureBookmarkBase(bookmarks, customAttributes, version, needsRebuild) || !_bmFuse) {
     return _fallbackBmIds(bookmarks, query, customAttributes)
   }
   const results = _bmFuse.search(query.trim())
@@ -313,6 +318,7 @@ export function searchBookmarkIds(
  * query 为空时返回 null（表示无需过滤）。
  * 内部缓存 Fuse 实例，同一 groups 数组引用不重复构建。
  * @param version - dataStore._searchVersion，仅 CRUD 时递增，用于判断缓存是否有效
+ * @param forceRebuild - true 时忽略版本检查强制重建（用于搜索时触发）
  */
 export function searchGroupIds(
   groups: SiblingGroup[],
@@ -320,9 +326,12 @@ export function searchGroupIds(
   bookmarkMap: Record<string, Bookmark>,
   customAttributes: CustomAttribute[],
   version = -1,
+  forceRebuild = false,
 ): Set<string> | null {
   if (!query.trim()) return null
-  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version) || !_grpFuse) {
+  // 显式 forceRebuild 或版本不匹配时重建
+  const needsRebuild = forceRebuild || (!!_grpFuse && version !== _grpVersion)
+  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuild) || !_grpFuse) {
     return _fallbackGrpIds(groups, query, bookmarkMap)
   }
   const results = _grpFuse.search(query.trim())
@@ -395,7 +404,9 @@ export function searchWithHighlights(
   if (!query.trim()) return []
   const q = query.trim()
 
-  if (!_ensureBookmarkBase(bookmarks, customAttributes, version) || !_bmFuse) {
+  // 版本匹配则直接搜索；版本不匹配（CRUD 后）强制重建
+  const needsRebuildBm = !!_bmFuse && version !== _bmVersion
+  if (!_ensureBookmarkBase(bookmarks, customAttributes, version, needsRebuildBm) || !_bmFuse) {
     // 降级：无高亮
     const bmIds = _fallbackBmIds(bookmarks, q, customAttributes)
     const bookmarkResults: SearchResultItem[] = bookmarks.filter(b => bmIds.has(b.id)).slice(0, maxResults).map(b => ({
@@ -425,7 +436,8 @@ export function searchWithHighlights(
     _highlights: _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP),
   }))
 
-  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version) || !_grpFuse) {
+  const needsRebuildGrp = !!_grpFuse && version !== _grpVersion
+  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuildGrp) || !_grpFuse) {
     return bookmarkResults.slice(0, maxResults)
   }
   const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
