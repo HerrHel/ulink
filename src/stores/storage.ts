@@ -145,10 +145,10 @@ export interface LocalHistoryVersion {
   created_at: string
 }
 
-const _histKey = (itemId: string) => 'lv_hist:' + itemId
+export const localHistoryKey = (itemId: string): string => 'lv_hist:' + itemId
 
 export function fetchLocalHistory(itemId: string): LocalHistoryVersion[] {
-  const arr = safeJsonParse<LocalHistoryVersion[] | null>(safeGetItem(_histKey(itemId)), null)
+  const arr = safeJsonParse<LocalHistoryVersion[] | null>(safeGetItem(localHistoryKey(itemId)), null)
   return Array.isArray(arr) ? arr : []
 }
 

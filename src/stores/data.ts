@@ -10,6 +10,7 @@ import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds, clearSearchCache } from '../lib/search.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
+import { localHistoryKey } from './storage.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
 import type { SortMode, SortDir } from './ui.js'
 
@@ -414,7 +415,7 @@ export const useDataStore = defineStore('data', {
         _histDebounceData.delete(id)
         if (!latestData) return
         const max = useUIStore().historyMax || 10
-        const key = 'lv_hist:' + id
+        const key = localHistoryKey(id)
         const arr = safeJsonParse<unknown[]>(safeGetItem(key), [])
         if (!Array.isArray(arr)) return
         arr.unshift({ id: Date.now(), data: latestData, created_at: new Date().toISOString() })
