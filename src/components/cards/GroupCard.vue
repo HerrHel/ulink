@@ -17,7 +17,7 @@
       <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
         <div class="card-scroll-wrap">
           <div class="card-tags" v-if="tagNames.length">
-            <span class="card-tag tag-custom" v-for="t in tagNames" :key="t">{{ t }}</span>
+            <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i">{{ t }}</span>
           </div>
           <!-- 聚焦态始终挂编辑器 -->
           <GroupEditor :groupId="group.id" />
@@ -65,7 +65,7 @@
         </div>
       </div>
       <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list' && !detailMode">
-        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
       <div class="group-head-actions" v-if="!ui.batchMode">
         <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" title="撤销" v-html="I.undo"></button>
@@ -75,7 +75,7 @@
     <div class="card-body" :class="{'grp-scroll-body':showFullBody}">
       <div class="card-scroll-wrap">
         <div class="card-tags" v-if="tagNames.length && showFullBody">
-          <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+          <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
         </div>
         <!-- 辅助栏：只读 HTML（避免与主网格 GroupEditor 抢同一 groupId 注册表） -->
         <div v-if="detailMode" class="group-body group-body-readonly" v-html="safeNotesHtml"></div>

@@ -33,12 +33,12 @@
       </div>
       <div class="card-domain mini-domain" v-if="uiStore.layoutMode === 'mini-grid'">{{ domainStr }}</div>
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode === 'list'">
-        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
     </div>
     <div class="card-body">
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode !== 'list'">
-        <span class="card-tag tag-custom" v-for="t in tagNames" :key="t" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
       </div>
       <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="uiStore.layoutMode !== 'list' && editNotes($event)">
         <span v-if="searchQuery" v-html="hlNotes"></span>
