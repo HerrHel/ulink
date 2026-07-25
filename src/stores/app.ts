@@ -28,10 +28,17 @@ export const useAppStore = defineStore('app', () => {
     // 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍
     const bms = data.bookmarks || []
     const grps = data.siblingGroups || []
+    const cats = data.categories || []
+    const attrs = data.customAttributes || []
     let maxUp = 0
+    // FIX(审计H1): 纯分类/属性改名只改自身 name+updatedAt，长度/order 不变、
+    // 也不顶高 bookmarks/siblingGroups 的 maxUp，故必须把 cats/attrs 的 max updatedAt
+    // 纳入指纹，否则 renameCategory/renameAttribute 命中 fp===_lastSavedFingerprint 早退不落盘。
     for (const b of bms) if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
     for (const g of grps) if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
-    return `${bms.length}|${grps.length}|${(data.categories || []).length}|${(data.customAttributes || []).length}|${maxUp}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+    for (const c of cats) if ((c.updatedAt || 0) > maxUp) maxUp = c.updatedAt || 0
+    for (const a of attrs) if ((a.updatedAt || 0) > maxUp) maxUp = a.updatedAt || 0
+    return `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
   }
 
   // ── 数据（只读，委托 dataStore）──
