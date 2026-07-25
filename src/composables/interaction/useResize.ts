@@ -6,6 +6,18 @@
 import { onMounted, onUnmounted } from 'vue'
 import { safeGetItem, safeSetItem } from '../../lib/storageSafe.js'
 
+/**
+ * 解析面板宽度样式的数值（如 '320px' → 320）。
+ * 空字符串 / 无效值 / NaN 时返回 null —— 调用方据此跳过持久化，
+ * 避免 'NaNpx' 落入 localStorage 致宽度记忆永久损坏
+ * （mousedown 后未移动直接 mouseup 时 style.width 可能为空）。
+ */
+export function parseWidthPx(raw: string | null | undefined): number | null {
+  if (raw == null || raw === '') return null
+  const n = parseInt(raw, 10)
+  return Number.isFinite(n) ? n : null
+}
+
 export function useResize() {
   onMounted(() => {
     const leftHandle = document.getElementById('resizeLeft')
@@ -54,9 +66,11 @@ export function useResize() {
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
       if (panel === leftPanel) {
-        safeSetItem('lv_railWidth', String(parseInt(panel.style.width)))
+        const w = parseWidthPx(panel.style.width)
+        if (w != null) safeSetItem('lv_railWidth', String(w))
       } else {
-        safeSetItem('lv_detailWidth', String(parseInt(panel.style.getPropertyValue('--detail-width'))))
+        const w = parseWidthPx(panel.style.getPropertyValue('--detail-width'))
+        if (w != null) safeSetItem('lv_detailWidth', String(w))
       }
       handle = panel = null
     }
