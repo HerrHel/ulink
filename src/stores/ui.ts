@@ -8,6 +8,7 @@ import { CAT_ALL, UI_STATE_KEY } from '../config/constants.js'
 import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
+import { K_THEME_MODE, K_THEME_STYLE } from '../lib/theme.js'
 
 // ── 严格字面量类型 ──
 export type ThemeStyle = 'premium' | 'comfortable'
@@ -275,10 +276,10 @@ export const useUIStore = defineStore('ui', {
         // 刷新后会重置为默认 'premium'，导致重启后 SettingsPanel 的 :class 高亮与实际 DOM 主题
         // 不一致（实际是 comfortable 却高亮 premium）。此处从 lv_themeStyle 同步回 uiStore.themeStyle，
         // 与 theme.ts 已设的 DOM 态对齐，单一真相源不污染 saveUIState。
-        const ts = safeGetItem('lv_themeStyle')
+        const ts = safeGetItem(K_THEME_STYLE)
         if (ts === 'comfortable' || ts === 'premium') this.themeStyle = ts
         // D1-004：themeMode 同样以 lv_themeMode 为真相源，避免面板默认误显「跟随系统」
-        const tm = safeGetItem('lv_themeMode')
+        const tm = safeGetItem(K_THEME_MODE)
         this.themeMode = tm === 'auto' ? 'auto' : 'manual'
       } catch (e) { console.warn('[LinkVault] Failed to restore UI state:', (e as Error).message) }
     },

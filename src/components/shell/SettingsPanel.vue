@@ -199,7 +199,7 @@
 import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
 import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
-import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle } from '../../lib/theme.js'
+import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle, K_THEME_MODE } from '../../lib/theme.js'
 import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -254,7 +254,7 @@ function onSetThemeStyle(style: ThemeStyle) {
 
 function onToggleAutoTheme() {
   themeToggleAuto()
-  uiStore.themeMode = safeGetItem('lv_themeMode') === 'auto' ? 'auto' : 'manual'
+  uiStore.themeMode = safeGetItem(K_THEME_MODE) === 'auto' ? 'auto' : 'manual'
 }
 
 function onSetLayout(mode: LayoutMode) {

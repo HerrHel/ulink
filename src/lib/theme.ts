@@ -1,8 +1,10 @@
 import { safeGetItem, safeSetItem } from './storageSafe.js'
 
 // 主题常量：存储键 / DOM 属性 / 值。集中收敛避免拼写漂移。
-const K_THEME = 'lv_theme'
-const K_THEME_MODE = 'lv_themeMode'
+// 存储键导出供 ui.ts/SettingsPanel 等跨模块复用，消除裸写字面（单一真相源）。
+export const K_THEME = 'lv_theme'
+export const K_THEME_MODE = 'lv_themeMode'
+export const K_THEME_STYLE = 'lv_themeStyle'
 const A_THEME = 'data-theme'
 const A_THEME_STYLE = 'data-theme-style'
 const V_DARK = 'dark'
@@ -49,7 +51,7 @@ function setThemeStyle(style: string): void {
   const el = document.documentElement
   if (style === V_COMFORTABLE) { el.setAttribute(A_THEME_STYLE, V_COMFORTABLE) }
   else { el.removeAttribute(A_THEME_STYLE) }
-  safeSetItem('lv_themeStyle', style)
+  safeSetItem(K_THEME_STYLE, style)
 }
 
 function toggleAutoTheme(): void {
@@ -67,7 +69,7 @@ function toggleAutoTheme(): void {
   const mode = safeGetItem(K_THEME_MODE) || V_MANUAL
   if (mode === V_AUTO) { applySystemTheme(); startAutoTheme() }
   else { const t = safeGetItem(K_THEME); if (t) document.documentElement.setAttribute(A_THEME, t) }
-  const s = safeGetItem('lv_themeStyle')
+  const s = safeGetItem(K_THEME_STYLE)
   if (s === V_COMFORTABLE) document.documentElement.setAttribute(A_THEME_STYLE, V_COMFORTABLE)
 })()
 
