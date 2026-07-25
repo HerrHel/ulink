@@ -53,22 +53,31 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   const visibleItems = ref<Array<T & { _virtualIndex: number; _virtualStyle: CSSProperties }>>([])
   const totalHeight = computed(() => items.value.length * itemHeight.value)
 
+  // 缓存 style 对象：key = `i:${i}|h:${h}`，避免每次重建创建新对象
+  const _styleCache = new Map<string, CSSProperties>()
+
   function rebuildVisibleItems() {
     const h = itemHeight.value
     const start = startIndex.value
     const end = endIndex.value
     const arr: Array<T & { _virtualIndex: number; _virtualStyle: CSSProperties }> = []
     for (let i = start; i < end; i++) {
-      arr.push({
-        ...items.value[i],
-        _virtualIndex: i,
-        _virtualStyle: {
+      const styleKey = `i:${i}|h:${h}`
+      let style = _styleCache.get(styleKey)
+      if (!style) {
+        style = {
           position: 'absolute' as const,
           top: `${i * h}px`,
           height: `${h}px`,
           width: '100%',
           left: '0',
-        },
+        }
+        _styleCache.set(styleKey, style)
+      }
+      arr.push({
+        ...items.value[i],
+        _virtualIndex: i,
+        _virtualStyle: style,
       })
     }
     visibleItems.value = arr
