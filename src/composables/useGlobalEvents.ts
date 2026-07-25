@@ -53,7 +53,7 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     if (!(e.target as HTMLElement).closest('.attr-filter-wrap')) useAttrDropdownStore().close()
     if (!(e.target as HTMLElement).closest('.settings-wrap')) hideSettingsMenu()
     if (!(e.target as HTMLElement).closest('.add-wrap')) hideAddDropdown()
-    if (!(e.target as HTMLElement).closest('#mentionDrop') && !(e.target as HTMLElement).closest('.group-body')) useMentionStore().hide()
+    if (!(e.target as HTMLElement).closest('#mentionDrop, .group-body')) useMentionStore().hide()
 
     // Inline card interactions
     const gic = (e.target as HTMLElement).closest('.gic-btn')
