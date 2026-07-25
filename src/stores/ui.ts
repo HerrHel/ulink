@@ -246,9 +246,11 @@ export const useUIStore = defineStore('ui', {
         }
         if (Array.isArray(s.detailCards)) {
           const ds = useDataStore()
+          const gMap = ds.groupMap
+          const bMap = ds.bookmarkMap
           this.detailCards = s.detailCards.filter((entry: string) => {
-            if (typeof entry === 'string' && entry.startsWith('group:')) return ds.siblingGroups.some(g => g.id === entry.slice(6))
-            return ds.bookmarks.some(b => b.id === entry)
+            if (typeof entry === 'string' && entry.startsWith('group:')) return !!gMap[entry.slice(6)]
+            return !!bMap[entry]
           })
         }
         if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list' || s._preferredLayoutMode === 'mini-grid') {
