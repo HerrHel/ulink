@@ -300,13 +300,14 @@
 .group-inline-card .gic-name:hover{color:var(--accent)}
 .group-inline-card .gic-domain{color:var(--text-muted);font-size:0.72rem;font-family:'JetBrains Mono',monospace;cursor:pointer}
 .group-inline-card .gic-domain:hover{color:var(--accent)}
-.group-inline-card .gic-btn{
+.group-inline-card .gic-btn,
+.sub-sites .group-inline-card .gic-btn{
   color:var(--accent);font-size:0.72rem;font-weight:700;
   cursor:pointer;padding:2px 6px;border-radius:var(--radius-sm);
   background:var(--accent-light);
-  transition:var(--transition-fast);
 }
-.group-inline-card .gic-btn:hover{background:var(--accent);color:#fff}
+.group-inline-card .gic-btn:hover,
+.sub-sites .group-inline-card .gic-btn:hover{background:var(--accent);color:#fff}
 .group-inline-card .gic-remove{
   color:var(--text-muted);cursor:pointer;
   font-size:0.75rem;padding:0 2px;
@@ -493,12 +494,6 @@
 }
 .sub-sites .group-inline-card .gic-domain,
 .sub-sites .group-inline-card .gic-count{display:none}
-.sub-sites .group-inline-card .gic-btn{
-  color:var(--accent);font-size:0.72rem;font-weight:700;
-  cursor:pointer;padding:2px 6px;border-radius:var(--radius-sm);
-  background:var(--accent-light);flex-shrink:0;
-}
-.sub-sites .group-inline-card .gic-btn:hover{background:var(--accent);color:#fff}
 
 /* ==================== EMPTY STATE ==================== */
 /* 列表 / 宫格 / 小宫格：空态时父级统一为 flex，避免
