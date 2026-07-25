@@ -42,7 +42,7 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 - **`stores/e2e.ts`** — E2E 加密开关与解锁状态
 - **`stores/sync.ts`** — 云端同步状态（status/lastSyncAt/conflicts/realtime subscription）
 
-**架构迁移注意**：原 `composables/bridge.ts` 是模块级服务定位器（ToastAPI/ContextMenuAPI/ActionSheetAPI 等通过组件 onMounted 注册、composable 消费），现已全部迁移至上述 Pinia Store。bridge.ts 仅保留空壳以防遗漏的 import，**新代码一律用对应的 Pinia Store，不要向 bridge 注册任何 API**。
+**架构迁移注意**：原 `composables/bridge.ts` 是模块级服务定位器（ToastAPI/ContextMenuAPI/ActionSheetAPI 等通过组件 onMounted 注册、composable 消费），现已全部迁移至上述 Pinia Store，bridge.ts 文件已彻底删除（commit 34a2fef9 移除服务定位器、055779e0 删空壳）。**新代码一律用对应的 Pinia Store，不要向 bridge 注册任何 API。**
 
 ### 持久化与数据迁移
 
@@ -60,7 +60,7 @@ composables 按职责分三组：
 
 另有模块级文件：`useApp.ts`（初始化协调）、`useAppHandlers.ts`（事件处理）、`useAppLifecycle.ts`（生命周期）、`useGlobalEvents.ts`（全局事件监听）、`useVirtualScroll.ts`（虚拟滚动）、`useInlineCard.ts`（内联卡片 HTML 生成）、`useCombinedList.ts`（从 CardGrid 提取的卡片列表组合逻辑：focus/custom/normal 三种模式）
 
-**bridge.ts** 现为空壳（见上"架构迁移注意"），原服务注册表职责已迁至 Pinia Store。
+**bridge.ts** 已删除（原服务定位器职责全部迁至 Pinia Store，见上"架构迁移注意"）。
 
 ### 数据模型
 
@@ -88,7 +88,7 @@ composables 按职责分三组：
 - `ai-classify.ts` — 基于域名关键词的轻量分类器，自动建议书签分类和属性标签
 - `diffVersions.ts` — 版本差异对比，用于历史版本 diff UI
 - `theme.ts` — 主题切换（亮色/暗色/自动）
-- `toast.ts` — 轻量 toast 工具函数，委托 bridge 上的 ToastAPI
+- `toast.ts` — 轻量 toast 工具函数，委托 useToastStore（调用方无需在 setup 内使用 useToastStore）
 - `errorReporter.ts` — Vue errorHandler/unhandledrejection → Supabase error_logs 表
 - `stats.ts` — 本地匿名使用统计（localStorage 计数器），仅存不上传
 - `head.ts` — 客户端 `<head>` 动态注入（title/meta/OG/canonical/JSON-LD），幂等、可清理，用于 ShareView 等页面的 SEO 元数据覆盖
