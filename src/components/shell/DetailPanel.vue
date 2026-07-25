@@ -70,11 +70,13 @@ const entries = computed<DetailEntry[]>(() => {
     if (typeof rawId === 'string' && rawId.startsWith('group:')) {
       const gid = rawId.slice(6)
       const sg = ds.groupMap[gid]
-      if (sg) out.push({ rawId, realIdx: i, isGroup: true, data: sg, name: sg.name || '', domain: '' })
+      // groupMap 含软删；跳过软删组，否则运行时/刷新后面板仍渲染已删组卡
+      if (sg && !sg.deletedAt) out.push({ rawId, realIdx: i, isGroup: true, data: sg, name: sg.name || '', domain: '' })
       continue
     }
     const bm = ds.bookmarkMap[rawId]
-    if (bm) out.push({ rawId, realIdx: i, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) })
+    // bookmarkMap 含软删；跳过软删书签，否则运行时/刷新后面板仍渲染已删书签卡
+    if (bm && !bm.deletedAt) out.push({ rawId, realIdx: i, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) })
   }
   return out
 })
