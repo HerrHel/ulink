@@ -84,7 +84,7 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   }
 
   // 仅在依赖变化时重建
-  watch([startIndex, endIndex, () => itemHeight.value], rebuildVisibleItems, { flush: 'sync' })
+  watch([startIndex, endIndex, itemHeight], rebuildVisibleItems, { flush: 'sync' })
 
   function onScroll() {
     if (scrollEl) scrollTop.value = scrollEl.scrollTop
