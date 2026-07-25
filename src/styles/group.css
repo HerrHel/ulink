@@ -289,7 +289,8 @@
   transition:var(--transition-normal);
   box-shadow:var(--shadow-xs);
 }
-.group-inline-card:hover{
+.group-inline-card:hover,
+.sub-sites .group-inline-card:hover{
   border-color:var(--accent);
   box-shadow:0 0 0 1px var(--accent-glow),var(--shadow-sm);
   transform:translateY(-1px);
@@ -479,11 +480,6 @@
   background:var(--surface);
   box-shadow:var(--shadow-xs);
   transition:border-color 0.2s,box-shadow 0.2s,transform 0.2s;
-}
-.sub-sites .group-inline-card:hover{
-  border-color:var(--accent);
-  box-shadow:0 0 0 1px var(--accent-glow),var(--shadow-sm);
-  transform:translateY(-1px);
 }
 .sub-sites .group-inline-card img,
 .sub-sites .group-inline-card svg{width:16px;height:16px;border-radius:2px;flex-shrink:0}
