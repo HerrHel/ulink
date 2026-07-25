@@ -245,25 +245,27 @@ function _onDragOver(e: DragEvent) {
 }
 
 function _onDrop(e: DragEvent) {
-  if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
+  // 复用 dragover 期间缓存的目标元素，避免重复 closest() 落点计算（P1）
+  const target = _dragOverEl
+  if (target) { target.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
   _hideDragCursor();
   _hideDragHint();
   const p = dragPayload(e);
   if (!p) return;
 
-  const gBody = (e.target as HTMLElement).closest('.group-body');
+  const gBody = target?.classList.contains('group-body') ? target : target?.closest('.group-body');
   if (gBody) { handleBodyDrop(e, gBody, p); return; }
-  const gHead = (e.target as HTMLElement).closest('.group-card-head');
+  const gHead = target?.classList.contains('group-card-head') ? target : target?.closest('.group-card-head');
   if (gHead) { handleGroupHeadDrop(e, gHead, p); return; }
-  const bmCard = (e.target as HTMLElement).closest('.card:not(.group-card)');
+  const bmCard = target?.classList.contains('card') && !target.classList.contains('group-card') ? target : target?.closest('.card:not(.group-card)');
   if (bmCard) { handleBmCardDrop(e, bmCard, p); return; }
-  const gCard = (e.target as HTMLElement).closest('.group-card');
+  const gCard = target?.classList.contains('group-card') ? target : target?.closest('.group-card');
   if (gCard) { handleGroupCardDrop(e, gCard, p); return; }
-  const dCard = (e.target as HTMLElement).closest('.detail-card-wrap');
+  const dCard = target?.classList.contains('detail-card-wrap') ? target : target?.closest('.detail-card-wrap');
   if (dCard) { handleDetailCardDrop(e, dCard, p); return; }
-  if ((e.target as HTMLElement).closest('#detailPanel')) { handleDetailPanelDrop(e, p); return; }
-  if ((e.target as HTMLElement).closest('#cardGrid')) { handleGridDrop(e, p); return; }
-  const rItem = (e.target as HTMLElement).closest('.rail-item');
+  if (target?.id === 'detailPanel' || target?.closest('#detailPanel')) { handleDetailPanelDrop(e, p); return; }
+  if (target?.id === 'cardGrid' || target?.closest('#cardGrid')) { handleGridDrop(e, p); return; }
+  const rItem = target?.classList.contains('rail-item') ? target : target?.closest('.rail-item');
   if (rItem) {
     if (p.type === 'bm') {
       handleBmToCatDrop(e, rItem, p);
