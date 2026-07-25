@@ -31,7 +31,7 @@ vi.mock('../../stores/e2e.js', () => ({
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { useDataStore } from '../../stores/data.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
+import { PBKDF2_DEFAULT_ITERATIONS, PBKDF2_ITERATIONS } from '../../crypto.js'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -282,7 +282,7 @@ describe('useE2E.decryptStoreItems password 契约 + group name', () => {
 
 // C（PBKDF2 iterations 迁移阶段一）：canaryData 携带生成时 iterations，升级常量后旧 canary 仍按其原始 it 解锁
 describe('useE2E PBKDF2 iterations 携带与兼容', () => {
-  it('setupMasterPassword 写入的 canaryData 携带 it 字段，与 PBKDF2_DEFAULT_ITERATIONS 一致', async () => {
+  it('setupMasterPassword 写入的 canaryData 携带 it 字段，等于当前加密常量 PBKDF2_ITERATIONS', async () => {
     const e2e = useE2E()
     const rk = e2e.generateRecoveryKey()
     const ok = await e2e.setupMasterPassword('it-pw-1', rk)
@@ -291,10 +291,10 @@ describe('useE2E PBKDF2 iterations 携带与兼容', () => {
     expect(raw).toBeTruthy()
     const data = JSON.parse(raw as string)
     expect(typeof data.it).toBe('number')
-    expect(data.it).toBe(PBKDF2_DEFAULT_ITERATIONS)
+    expect(data.it).toBe(PBKDF2_ITERATIONS)
     // recovery canary 同样携带 recovery_it
     expect(typeof data.recovery_it).toBe('number')
-    expect(data.recovery_it).toBe(PBKDF2_DEFAULT_ITERATIONS)
+    expect(data.recovery_it).toBe(PBKDF2_ITERATIONS)
   }, 15000)
 
   it('旧 canaryData 无 it 字段时 unlock 仍可解（向后兼容，回退默认 600000）', async () => {
@@ -308,7 +308,7 @@ describe('useE2E PBKDF2 iterations 携带与兼容', () => {
     delete data.it
     delete data.recovery_it
     localStorage.setItem('lv_e2e_canary', JSON.stringify(data))
-    // 旧式 canary 无 it 字段 → unlock 走默认 600000 派生，仍能验通
+    // 旧式 canary 无 it 字段 → unlock 走 PBKDF2_DEFAULT_ITERATIONS 派生，仍能验通
     const ok = await e2e.unlock(masterPw)
     expect(ok).toBe(true)
   }, 15000)
@@ -326,6 +326,30 @@ describe('useE2E PBKDF2 iterations 携带与兼容', () => {
       canary, salt: Array.from(salt), it: 800000,
     }))
     // unlock 按 canaryData.it=800000 派生 → 验通
+    const ok = await e2e.unlock(masterPw)
+    expect(ok).toBe(true)
+  }, 15000)
+
+  it('PBKDF2_DEFAULT_ITERATIONS 固化 600000，与 PBKDF2_ITERATIONS 解耦——升级常量后旧无 it 数据走 600000 不锁死', async () => {
+    // 阶段一关键不变量：PBKDF2_DEFAULT_ITERATIONS 是"旧数据无 it 字段时的回退"，
+    // 必须独立硬编码 600000，不随 PBKDF2_ITERATIONS 演进。否则将来升 PBKDF2_ITERATIONS
+    // 到 800000 后，回退默认也变成 800000 → 旧 canaryData（无 it、原 600000 加密）按 800000
+    // 派生 key → 与旧密文不符 → GCM 认证失败 → 用户永久锁死（审计要防的不可逆场景）。
+    expect(PBKDF2_DEFAULT_ITERATIONS).toBe(600000)
+    // 当下两常量同值（PBKDF2_ITERATIONS 尚未升级），升级后才分离——此断言锁定"解耦语义"：
+    // PBKDF2_ITERATIONS 可变，PBKDF2_DEFAULT_ITERATIONS 永远 600000。
+    // 若将来有人误把 PBKDF2_DEFAULT_ITERATIONS 改成 = PBKDF2_ITERATIONS，此处仍过（当下同值），
+    // 但上一断言会捕获——故两条共同锁定"固化 600000"语义。
+    const e2e = useE2E()
+    const masterPw = 'legacy-after-upgrade'
+    // 模拟"升级后旧数据"：用 600000 派生 key 生成 canary，写入不带 it（旧式）
+    const { deriveKey, generateCanary } = await import('../../crypto.js')
+    const salt = new Uint8Array(32)
+    crypto.getRandomValues(salt)
+    const key = await deriveKey(masterPw, salt, 600000)
+    const canary = await generateCanary(key)
+    localStorage.setItem('lv_e2e_canary', JSON.stringify({ canary, salt: Array.from(salt) }))
+    // 即便 PBKDF2_ITERATIONS 升级，回退仍 600000 → unlock 验通
     const ok = await e2e.unlock(masterPw)
     expect(ok).toBe(true)
   }, 15000)

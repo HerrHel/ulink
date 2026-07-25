@@ -15,17 +15,26 @@ export function safeDecodePassword(storedPassword: string): string {
 // E2E 加密（P2）
 // ══════════════════════════════════════════════════
 
-const PBKDF2_ITERATIONS = 600000
+/**
+ * 当前新加密所用的 PBKDF2 迭代数。升级时改这（新密文/新 canaryData 会带新值）。
+ * 与 PBKDF2_DEFAULT_ITERATIONS 解耦——后者是旧数据无 it 字段时的回退，固定 600000
+ * 不随本常量演进。二者当下相同（都 600000），将来升 PBKDF2_ITERATIONS 后才分离。
+ */
+export const PBKDF2_ITERATIONS = 600000
 const SALT_LENGTH = 32
 const IV_LENGTH = 12
 
 /**
- * PBKDF2 迭代数的历史默认值——升级常量后，升成前景下新生密文用新值，但**已存的旧密文**
- * 仍需用它生成时的迭代数派生 key 才能解开（升级常量直接换会让旧密文 GCM 认证失败锁死）。
- * 密文/解锁元数据携带各自生成时的 iterations：canaryData 存 it 字段，decrypt 时按其值派生。
- * 此常量即"无 it 元数据时的回退默认"——对当前唯一在用值 600000 兼容，旧数据无 it 字段即按它解。
+ * "无 it 元数据时的回退默认"——**硬编码 600000，不随 PBKDF2_ITERATIONS 演进**。
+ *
+ * 升级 PBKDF2_ITERATIONS（如改 800000）后，新生密文/新 canaryData 携带 it=800000，
+ * 但**已存的旧 canaryData 不带 it 字段**（或带 600000）——这些必须按其生成时的 600000
+ * 派生 key 才能验通。若把它写成 `= PBKDF2_ITERATIONS`，升级常量后回退默认也变 800000，
+ * 旧 canaryData 会按 800000 派生 → 与旧密文 600000 的 key 不符 → GCM 认证失败锁死。
+ * 故此常量与 PBKDF2_ITERATIONS 解耦：它是"历史现网唯一在用值"的固化兼容回退，
+ * 升级 PBKDF2_ITERATIONS 时此常量**保持 600000 不动**。
  */
-export const PBKDF2_DEFAULT_ITERATIONS = PBKDF2_ITERATIONS
+export const PBKDF2_DEFAULT_ITERATIONS = 600000
 
 /** L15：salt.iv.data 三段密文判定单一出口，避免 useSyncMapping/useE2E/decrypt 口径漂移 */
 export function isThreePartCipher(s: string): boolean {

@@ -15,7 +15,7 @@ import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
-import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
+import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher, PBKDF2_ITERATIONS, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { useBiometric } from './useBiometric.js'
 import type { EntityType } from '../../types.js'
@@ -157,7 +157,8 @@ export function useE2E() {
   async function setupMasterPassword(password: string, recoveryKey?: string): Promise<boolean> {
     const salt = crypto.getRandomValues(new Uint8Array(32))
     // PBKDF2 迭代数随 canaryData 持久化——升级常量后旧 canary 仍按其原始 it 派生 key 验证。
-    const it = PBKDF2_DEFAULT_ITERATIONS
+    // 新 setup 用当前加密常量 PBKDF2_ITERATIONS（将来升级后新密文带新值）。
+    const it = PBKDF2_ITERATIONS
     const key = await deriveKey(password, salt, it)
     const canary = await generateCanary(key)
 
@@ -168,7 +169,7 @@ export function useE2E() {
     }
     if (recoveryKey) {
       const rkSalt = crypto.getRandomValues(new Uint8Array(32))
-      const rkIt = PBKDF2_DEFAULT_ITERATIONS
+      const rkIt = PBKDF2_ITERATIONS
       const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), rkSalt, rkIt)
       canaryData.recovery_canary = await generateCanary(rkKey)
       canaryData.recovery_salt = Array.from(rkSalt)
@@ -190,19 +191,21 @@ export function useE2E() {
     const canaryData = await _getCanaryData() as Record<string, unknown> | null
     if (!canaryData?.recovery_canary || !canaryData?.recovery_salt) return false
 
-    // 用 recovery canary 生成时的迭代数派生——旧数据无 recovery_it 字段则回退默认（兼容现网）
+    // 用 recovery canary 生成时的迭代数派生——旧数据无 recovery_it 字段则回退
+    // PBKDF2_DEFAULT_ITERATIONS（固化 600000，不随 PBKDF2_ITERATIONS 演进，兼容现网旧数据）
     const rkIt = typeof canaryData.recovery_it === 'number' ? canaryData.recovery_it : PBKDF2_DEFAULT_ITERATIONS
     const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt as number[]), rkIt)
     const ok = await verifyCanary(canaryData.recovery_canary as string, rkKey)
     if (!ok) return false
 
     const newSalt = crypto.getRandomValues(new Uint8Array(32))
-    const newIt = PBKDF2_DEFAULT_ITERATIONS
+    // reset 后的新密文/新 canary 用当前加密常量
+    const newIt = PBKDF2_ITERATIONS
     const newKey = await deriveKey(newPassword, newSalt, newIt)
     const newCanary = await generateCanary(newKey)
 
     const newRkSalt = crypto.getRandomValues(new Uint8Array(32))
-    const newRkIt = PBKDF2_DEFAULT_ITERATIONS
+    const newRkIt = PBKDF2_ITERATIONS
     const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt, newRkIt)
 
     const ok2 = await _saveCanaryData({
@@ -229,7 +232,8 @@ export function useE2E() {
     const canaryData = await _getCanaryData() as { canary: string; salt: number[]; it?: number } | null
     if (!canaryData) return false
 
-    // 用 canary 生成时的迭代数派生——旧数据无 it 字段则回退默认（兼容现网）
+    // 用 canary 生成时的迭代数派生——旧数据无 it 字段则回退 PBKDF2_DEFAULT_ITERATIONS
+    // （固化 600000，不随 PBKDF2_ITERATIONS 演进，兼容现网旧数据）
     const it = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
     const salt = new Uint8Array(canaryData.salt)
     const key = await deriveKey(password, salt, it)
