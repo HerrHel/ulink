@@ -10,8 +10,8 @@
       <template v-if="entries.length">
         <div class="card-grid grid-view detail-grid">
           <div class="card-list-inner">
-            <template v-for="entry in filteredEntries" :key="entry.rawId">
-              <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="filteredEntries.indexOf(entry)">
+            <template v-for="(entry, idx) in filteredEntries" :key="entry.rawId">
+              <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="idx">
                 <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
                 <GroupCard v-if="entry.isGroup" :group="entry.data" detail-mode />
                 <BookmarkCard v-else :bookmark="entry.data" :default-acct-open="true" />
