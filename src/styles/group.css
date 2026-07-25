@@ -289,12 +289,6 @@
   transition:var(--transition-normal);
   box-shadow:var(--shadow-xs);
 }
-.group-inline-card:hover,
-.sub-sites .group-inline-card:hover{
-  border-color:var(--accent);
-  box-shadow:0 0 0 1px var(--accent-glow),var(--shadow-sm);
-  transform:translateY(-1px);
-}
 .group-inline-card img,.group-inline-card svg{width:16px;height:16px;border-radius:2px;display:block;flex-shrink:0}
 .group-inline-card .gic-note-icon{display:inline-flex;align-items:center;color:var(--accent)}
 .group-inline-card .gic-name{color:var(--text);cursor:pointer;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
