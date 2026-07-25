@@ -40,6 +40,24 @@ describe('suggestCategory', () => {
   it('无任何匹配返回 null', () => {
     expect(suggestCategory('https://unknown.example/zzz', 'zzzz', CATS)).toBeNull()
   })
+
+  it('M9+审计#13：平局时按 categories order 升序选用户排前者，不偏向常量声明序', () => {
+    // title 同时命中「开发」(github, +1) 与「设计」(设计, +1)，两者同分 1。
+    // CATS 中开发 order=0 排在设计 order=4 之前，故选开发；不依赖 DOMAIN/TITLE_KEYWORDS
+    // 常量声明序（开发在两表均先声明，旧实现因 Map 先入序也偶合选开发，此用例以 order 语义固化，
+    // 防 bestName 决胜退化回 score > bestScore 的偶然偏向）。
+    expect(suggestCategory('https://example.com/x', 'github 设计', CATS)).toBe('c-dev')
+  })
+
+  it('审计#13：平局时 order 较小者胜，与 categories 声明顺序无关', () => {
+    // 调换 categories 顺序让设计排在前面但 order 仍 4>0，应仍选 order 小的开发，
+    // 证明决胜按 order 而非 categories 数组下标（数组下标是另一种偶然序）。
+    const reordered = [
+      { id: 'c-design', name: '设计', icon: '', color: '', order: 4 },
+      { id: 'c-dev', name: '开发', icon: '', color: '', order: 0 },
+    ]
+    expect(suggestCategory('https://example.com/x', 'github 设计', reordered)).toBe('c-dev')
+  })
 })
 
 describe('suggestAttributes', () => {

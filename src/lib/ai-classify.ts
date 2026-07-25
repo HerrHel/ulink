@@ -105,16 +105,25 @@ export function suggestCategory(
 
   if (scores.size === 0) return null
 
-  // 找得分最高的分类名
-  let bestName = ''
+  // 找得分最高的分类名。审计 #13：原 `score > bestScore`（严格大于）平局时让 Map
+  // 先入项胜出，偏向 DOMAIN_KEYWORDS/TITLE_KEYWORDS 常量声明序这种偶然顺序，不具确定性。
+  // 改为以 categories（用户排序）为主顺序遍历候选：平局时 order 升序（用户排前者优先，
+  // 贴合用户排序意图）→ name 字典序兜底，完全确定且不偏向常量声明顺序。
+  let bestName: string | null = null
   let bestScore = 0
-  for (const [name, score] of scores) {
-    if (score > bestScore) { bestScore = score; bestName = name }
+  let bestOrder = 0
+  for (const c of categories) {
+    const score = scores.get(c.name)
+    if (score === undefined) continue
+    if (bestName === null || score > bestScore || (score === bestScore && c.order < bestOrder)) {
+      bestScore = score
+      bestName = c.name
+      bestOrder = c.order
+    }
   }
+  if (bestName === null) return null
 
-  // 匹配到已有分类
-  const cat = categories.find(c => c.name === bestName)
-  return cat?.id || null
+  return categories.find(c => c.name === bestName)?.id ?? null
 }
 
 /**
