@@ -147,21 +147,28 @@ function hide() {
   }
 }
 
+// 审计 R3：切组时旧编辑器 selectionUpdate 监听泄漏累积。原 _detachSync 调 getEditor()
+// 即时取值，但 watch gid 触发时 store.focusedGroupId 已是新值，getEditor() 返回新编辑器，
+// 在新编辑器上调 off = no-op，旧编辑器的 _fmtHandler 悬空仍触发 syncState，旧组选区反向
+// 更新当组工具栏态。改：注册处捕获被绑编辑器引用 _fmtBoundEditor，detach 对它 off 并置空，
+// 不依赖 getEditor() 即时取值。
 let _fmtHandler: (() => void) | null = null
+let _fmtBoundEditor: ReturnType<typeof getEditor> = null
 function _attachSync() {
   _detachSync()
   const ed = getEditor()
   if (!ed) return
   _fmtHandler = () => syncState()
+  _fmtBoundEditor = ed
   ed.on('selectionUpdate', _fmtHandler)
   syncState()
 }
 function _detachSync() {
-  if (_fmtHandler) {
-    const ed = getEditor()
-    if (ed) ed.off('selectionUpdate', _fmtHandler)
-    _fmtHandler = null
+  if (_fmtHandler && _fmtBoundEditor) {
+    _fmtBoundEditor.off('selectionUpdate', _fmtHandler)
   }
+  _fmtHandler = null
+  _fmtBoundEditor = null
 }
 
 // A5-007：桌面跟 gid；移动端由 show/hide 管 _attachSync，gid 变化时若 mfb 已开则重绑

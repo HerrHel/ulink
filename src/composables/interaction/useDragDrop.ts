@@ -388,6 +388,15 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
     return;
   }
 
+  // 审计 R2/R7：fd9cd3a3 让详情面板内卡 dragstart 优先产 type:'detail'，让详情面板内重排
+  // 走 handleDetailCardDrop 安区生效。但 drop 端 handleBmCardDrop 此前全未改——type:'detail'
+  // 的详情书签卡拖到主网格普通书签卡时，p.type 非 'group' 跳过上面分支落到下方 bookmark 互换，
+  // _findBm(p.id) 取到真实 bookmarkId 且 parentId 均 null → _swapAndMarkDirty 改 store.bookmark
+  // 全局 order + debouncedSaveAppData 触发云同步，背反 fd9cd3a3 宣称的 drop 端 type:'detail'
+  // 安区。此处与 handleBodyDrop:308 对齐：只接 type:'bm'，type:'detail'（及其它非 bm 类型）
+  // 直接 return 不改全局 order。
+  if (p.type !== 'bm') return;
+
   const a = _findBm(p.id)
   const b = _findBm(tid!)
   if (a && b) {
