@@ -11,8 +11,8 @@
         <template v-for="(section, si) in grouped" :key="si">
           <div class="cmd-section-title" v-if="section.label">{{ section.label }}</div>
           <div v-for="(item, idx) in section.items" :key="item.id"
-               class="cmd-item" :class="{ active: flatIndex(si, idx) === activeIdx }"
-               @click="execute(item)" @mouseenter="activeIdx = flatIndex(si, idx)">
+               class="cmd-item" :class="{ active: offsetAt[si] + idx === activeIdx }"
+               @click="execute(item)" @mouseenter="activeIdx = offsetAt[si] + idx">
             <span class="cmd-item-icon" v-html="item.icon || I.arrow"></span>
             <span class="cmd-item-label">{{ item.label }}</span>
             <span class="cmd-item-hint" v-if="item.hint">{{ item.hint }}</span>
@@ -131,11 +131,11 @@ const grouped = computed(() => {
   return sections
 })
 
-function flatIndex(sectionIdx: number, itemIdx: number): number {
+// 每个 section 的起始扁平偏移；flatIndex(si, idx) = offsetAt[si] + idx，模板 O(1) 替代每行 O(section) 累加
+const offsetAt = computed(() => {
   let count = 0
-  for (let i = 0; i < sectionIdx; i++) count += grouped.value[i].items.length
-  return count + itemIdx
-}
+  return grouped.value.map(s => { const base = count; count += s.items.length; return base })
+})
 
 function totalItems(): number {
   return grouped.value.reduce((sum, s) => sum + s.items.length, 0)
