@@ -3,9 +3,9 @@
     <template v-for="(item, idx) in results" :key="item.id">
       <div v-if="item._divider" class="ss-divider">{{ item._divider }}</div>
       <!-- A3-002：active 用 selectable 下标，避免分隔线与键盘 activeIdx 错位 -->
-      <div v-else class="search-suggest-item" :class="{ active: selectableIndex(idx) === activeIdx }"
-           role="option" :aria-selected="selectableIndex(idx) === activeIdx"
-           @click="select(item)" @mouseenter="activeIdx = selectableIndex(idx)">
+      <div v-else class="search-suggest-item" :class="{ active: selectableIdxAt[idx] === activeIdx }"
+           role="option" :aria-selected="selectableIdxAt[idx] === activeIdx"
+           @click="select(item)" @mouseenter="activeIdx = selectableIdxAt[idx]">
         <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
         <img v-else :src="favicon(item.url || '')" alt="">
         <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
@@ -65,14 +65,11 @@ const results = computed<SearchResultItem[]>(() => {
 
 // A3-002：可选项与 results 下标解耦
 const selectable = computed(() => results.value.filter(r => !r._divider))
-
-function selectableIndex(resultsIdx: number): number {
+// 预计算每个 results 下标对应的 selectable 下标（分隔线处继承前一个），模板 O(1) 查表替代每行 O(idx) 循环
+const selectableIdxAt = computed(() => {
   let n = -1
-  for (let i = 0; i <= resultsIdx && i < results.value.length; i++) {
-    if (!results.value[i]._divider) n++
-  }
-  return n
-}
+  return results.value.map(r => { if (!r._divider) n++; return n })
+})
 
 function updateVisibility() {
   const hasResults = results.value.length > 0
