@@ -104,6 +104,8 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
   let _midsDirty = true
   let _scrollRect: DOMRect | null = null
   let _scrollRectAt = 0
+  // PERF-7：缓存拖拽期间的项目列表，仅在 placeholder 移动/滚动导致 invalidateMids 时重建
+  let _cachedItems: Element[] = []
 
   function getItems(): Element[] {
     if (!containerRef.value) return []
@@ -150,6 +152,14 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     return _scrollRect
   }
 
+  // 缓存的卡片列表（排除被拖拽元素），仅在占位符移动时重建
+
+  function rebuildCachedItems() {
+    if (!containerRef.value || !drag) return
+    _cachedItems = Array.from(containerRef.value.children)
+      .filter(c => (c as HTMLElement).matches?.(itemSelector) && c !== drag!.el)
+  }
+
   // ── rAF 循环：统一更新卡片位置 + 边缘滚动 ──
   function scrollLoop() {
     if (!drag) { scrollRaf = null; return }
@@ -162,9 +172,9 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     const draggingDown = drag.lastY > _prevY
     _prevY = drag.lastY
     const leadEdge = draggingDown ? cardTop + drag.itemHeight : cardTop
-    const allCards = getItems().filter(c => c !== drag!.el)
-    ensureMids(allCards)
-    let newIndex = allCards.length
+    // 使用缓存的 allCards，避免每帧 DOM 查询 + filter
+    ensureMids(_cachedItems)
+    let newIndex = _cachedItems.length
     for (let i = 0; i < _cachedMids.length; i++) {
       if (_cachedMids[i].el === drag!.placeholder) continue
       if (leadEdge < _cachedMids[i].mid) {
@@ -174,10 +184,11 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     }
     if (newIndex !== drag.currentIndex) {
       drag.currentIndex = newIndex
-      const refEl = allCards[newIndex]
+      const refEl = _cachedItems[newIndex]
       if (refEl) containerRef.value!.insertBefore(drag.placeholder, refEl)
       else containerRef.value!.appendChild(drag.placeholder)
-      // 占位符移动后 mid 失效
+      // 占位符移动后：重建缓存列表 + 使 mid 失效
+      rebuildCachedItems()
       invalidateMids()
     }
 
@@ -303,6 +314,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
       pointerId: e.pointerId
     }
     _prevY = e.clientY
+    rebuildCachedItems()
     invalidateMids()
     _scrollRect = null
   }
@@ -329,11 +341,9 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     const cardTop = d.initialTop + (d.lastY - d.startY)
     const draggingDown = d.lastY > d.startY
     const leadEdge = draggingDown ? cardTop + d.itemHeight : cardTop
-    // allCards 排除被拖拽项和占位符
-    const allCards = getItems().filter(c => c !== d.el && c !== d.placeholder)
-    // 使用缓存的 midY 而非重新获取 rect
-    ensureMids(allCards)
-    let filteredToIdx = allCards.length
+    // 使用缓存的 _cachedItems（已排除拖拽元素和占位符），避免 DOM 查询
+    ensureMids(_cachedItems)
+    let filteredToIdx = _cachedItems.length
     for (let i = 0; i < _cachedMids.length; i++) {
       if (_cachedMids[i].el === d.placeholder) continue
       if (leadEdge < _cachedMids[i].mid) { filteredToIdx = i; break }
