@@ -44,22 +44,22 @@
       <div class="share-bookmarks">
         <!-- S1：fixUrl 对 javascript:/data: 等危险 scheme 返回空串，此时降级为 '#'
              并 @click.prevent 阻止跳到页内锚点；b.url 来自跨用户公开数据，不可信。 -->
-        <a v-for="b in bookmarks" :key="b.id"
-           :href="fixUrl(b.url) || '#'"
-           :target="fixUrl(b.url) ? '_blank' : '_self'"
-           :rel="fixUrl(b.url) ? 'noopener' : undefined"
-           :class="['share-bookmark-card', { 'share-bookmark-card--disabled': !fixUrl(b.url) }]"
-           @click="!fixUrl(b.url) ? $event.preventDefault() : null">
+        <a v-for="entry in bookmarkEntries" :key="entry.b.id"
+           :href="entry.safeUrl || '#'"
+           :target="entry.safeUrl ? '_blank' : '_self'"
+           :rel="entry.safeUrl ? 'noopener' : undefined"
+           :class="['share-bookmark-card', { 'share-bookmark-card--disabled': !entry.safeUrl }]"
+           @click="!entry.safeUrl ? $event.preventDefault() : null">
           <div class="share-bm-icon">
             <!-- M5：跨用户 b.icon 不可信（追踪像素/任意 URL）；统一由书签 url 派生受控 favicon，并禁 Referer -->
-            <img v-if="shareIconSrc(b)" :src="shareIconSrc(b)" referrerpolicy="no-referrer" loading="lazy"
+            <img v-if="entry.icon" :src="entry.icon" referrerpolicy="no-referrer" loading="lazy"
                  @error="($event.target as HTMLImageElement).style.display='none'" />
-            <span v-else class="share-bm-icon-fallback">{{ (b.title || '?')[0].toUpperCase() }}</span>
+            <span v-else class="share-bm-icon-fallback">{{ (entry.b.title || '?')[0].toUpperCase() }}</span>
           </div>
           <div class="share-bm-info">
-            <span class="share-bm-title">{{ b.title }}</span>
-            <span class="share-bm-url">{{ domain(b.url) }}</span>
-            <p v-if="b.notes" class="share-bm-notes">{{ b.notes }}</p>
+            <span class="share-bm-title">{{ entry.b.title }}</span>
+            <span class="share-bm-url">{{ entry.urlDomain }}</span>
+            <p v-if="entry.b.notes" class="share-bm-notes">{{ entry.b.notes }}</p>
           </div>
           <span aria-hidden="true" v-html="I.external" class="share-bm-arrow"></span>
         </a>
@@ -112,11 +112,16 @@ const groupNotesHtml = computed(() => {
   return sanitizeHTML(n)
 })
 
-/** M5：分享页书签图标只由 http(s) 书签 URL 派生 */
-function shareIconSrc(b: Bookmark): string {
-  const safe = fixUrl(b.url)
-  return safe ? favicon(safe) : ''
-}
+/**
+ * 分享页书签列表预渲染条目：把 fixUrl/domain/favicon 对每条预计算一次，
+ * 避免模板内（原 5 次 fixUrl + 2 次 favicon/icon + 1 次 domain）重复对同 url 调用。
+ * 函数均为纯函数，预计算与原模板内联调用语义等价。
+ * M5：图标只由 http(s) 书签 URL 派生，跨用户 b.icon 不可信。
+ */
+const bookmarkEntries = computed(() => bookmarks.value.map(b => {
+  const safeUrl = fixUrl(b.url)
+  return { b, safeUrl, urlDomain: domain(b.url), icon: safeUrl ? favicon(safeUrl) : '' }
+}))
 
 function backToApp() {
   // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识
