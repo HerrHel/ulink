@@ -231,22 +231,35 @@ export const useUIStore = defineStore('ui', {
           docScrollTop?: number
         } | null>(safeGetItem(UI_STATE_KEY), null)
         if (!s) return
-        if (s.curCat) this.curCat = s.curCat
+        const ds = useDataStore()
+        // 审计 R37：curCat 不过滤已删除分类 id。若 localStorage 残留指向已删分类的 id（跨会话/同步/
+        // 导入/异常写），filtered* 会返回空列表。用 categoryMap 校验：不存在或已软删则回退 CAT_ALL。
+        if (s.curCat) {
+          if (s.curCat === CAT_ALL || (ds.categoryMap[s.curCat] && !ds.categoryMap[s.curCat].deletedAt)) {
+            this.curCat = s.curCat
+          } else {
+            this.curCat = CAT_ALL
+          }
+        }
         if (s.sortMode) this.sortMode = s.sortMode
         if (s.sortDir === 'asc' || s.sortDir === 'desc') this.sortDir = s.sortDir
         if (typeof s.groupsOnTop === 'boolean') this.groupsOnTop = s.groupsOnTop
         if (s.layoutMode === 'list' || s.layoutMode === 'grid' || s.layoutMode === 'mini-grid') this.layoutMode = s.layoutMode
         if (typeof s.historyMax === 'number') this.historyMax = Math.min(30, Math.max(5, s.historyMax))
         if (s.searchQuery) this.searchQuery = s.searchQuery
-        if (Array.isArray(s.activeAttrs)) this.activeAttrs = s.activeAttrs.slice()
-        if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = s.excludedAttrs.slice()
+        // 审计 R15：activeAttrs/excludedAttrs 不过滤已删除属性 id（与 detailCards 同根因）。
+        // 若 UI_STATE_KEY 残留已删 attr id，_filterAttrs 后列表全空但 AttrChips 不显示 chip。
+        // 按 attributeMap + !deletedAt 过滤后赋值，与 detailCards 模式一致。
+        const attrMap = ds.attributeMap
+        const filterValidAttrs = (ids: string[]) =>
+          ids.filter((id: string) => !!attrMap[id] && !attrMap[id].deletedAt)
+        if (Array.isArray(s.activeAttrs)) this.activeAttrs = filterValidAttrs(s.activeAttrs.slice())
+        if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = filterValidAttrs(s.excludedAttrs.slice())
         if (s.focusedGroupId) {
-          const ds = useDataStore()
           const fg = ds.groupMap[s.focusedGroupId]
           if (fg) this.focusedGroupId = s.focusedGroupId
         }
         if (Array.isArray(s.detailCards)) {
-          const ds = useDataStore()
           const gMap = ds.groupMap
           const bMap = ds.bookmarkMap
           // 过滤已不存在 + 软删项：deleteBookmark 不清理 ui.detailCards，刷新后若不过滤软删
@@ -266,9 +279,16 @@ export const useUIStore = defineStore('ui', {
         if (s._mobileLayoutMode === 'mini-grid') this._mobileLayoutMode = 'mini-grid'
         // 移动端不可用 grid：还原若落在 grid 上则降级
         if (this.isMobile && this.layoutMode === 'grid') this.layoutMode = this._mobileLayoutMode
+        // 审计 R36：_customCardOrder 不过滤已删/不存在卡片 id。useCombinedList 遍历会跳过 stale id
+        // 追加未匹配卡到末尾（渲染不错乱），但 stale 条目永久滞留 order 并随 saveUIState 原样回写
+        // localStorage 跨会话传播。恢复时按 gMap/bmMap + !deletedAt 过滤，保留有效条目相对顺序。
         if (Array.isArray(s._customCardOrder)) {
-          const ds = useDataStore()
-          ds._customCardOrder = s._customCardOrder
+          const gMap = ds.groupMap
+          const bMap = ds.bookmarkMap
+          ds._customCardOrder = s._customCardOrder.filter((entry: { t: 'g' | 'b'; id: string }) => {
+            const target = entry.t === 'g' ? gMap[entry.id] : bMap[entry.id]
+            return !!target && !target.deletedAt
+          })
         }
         if (s.docScrollTop) document.documentElement.scrollTop = s.docScrollTop
         // themeStyle 不入 UI state 持久化对象（单一真相源是 theme.ts 的 lv_themeStyle key

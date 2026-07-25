@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
+import { CAT_ALL } from '../../config/constants.js'
 
 describe('UIStore', () => {
   let store: ReturnType<typeof useUIStore>
@@ -44,6 +45,14 @@ describe('UIStore', () => {
     })
 
     it('restoreUIState - 应该从 localStorage 恢复状态', () => {
+      const dataStore = useDataStore()
+      // restoreUIState 现在对 curCat/activeAttrs/excludedAttrs 做合法性校验
+      // （审计 R37/R15：stale id 回退/过滤），需预建对应 category 与 attribute 方为有效。
+      dataStore.categories = [{ id: 'cat1', name: '分类1', icon: '', color: '', order: 0, updatedAt: 0 } as any]
+      dataStore.customAttributes = [
+        { id: 'attr1', name: '属性1', type: 'boolean', order: 0, updatedAt: 0 } as any,
+        { id: 'attr2', name: '属性2', type: 'boolean', order: 1, updatedAt: 0 } as any,
+      ]
       const stateData = {
         curCat: 'cat1',
         layoutMode: 'list',
@@ -53,15 +62,50 @@ describe('UIStore', () => {
         excludedAttrs: ['attr2'],
       }
       ;(localStorage.getItem as any).mockReturnValue(JSON.stringify(stateData))
-      
+
       store.restoreUIState()
-      
+
       expect(store.curCat).toBe('cat1')
       expect(store.layoutMode).toBe('list')
       expect(store.sortMode).toBe('title')
       expect(store.searchQuery).toBe('test')
       expect(store.activeAttrs).toEqual(['attr1'])
       expect(store.excludedAttrs).toEqual(['attr2'])
+    })
+
+    it('restoreUIState - 审计R37/R15：curCat/activeAttrs/excludedAttrs 的 stale id 回退过滤', () => {
+      const dataStore = useDataStore()
+      // categories/customAttributes 无 staleC / staleA，则 curCat 回退 CAT_ALL、attr 被过滤掉
+      dataStore.categories = [] as any
+      dataStore.customAttributes = [] as any
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
+        curCat: 'staleC',
+        activeAttrs: ['staleA1', 'staleA2'],
+        excludedAttrs: ['staleA3'],
+      }))
+
+      store.restoreUIState()
+
+      expect(store.curCat).toBe(CAT_ALL)
+      expect(store.activeAttrs).toEqual([])
+      expect(store.excludedAttrs).toEqual([])
+    })
+
+    it('restoreUIState - 审计R15：activeAttrs/excludedAttrs 排除已软删属性', () => {
+      const dataStore = useDataStore()
+      dataStore.customAttributes = [
+        { id: 'del', name: '已删', type: 'boolean', order: 0, deletedAt: 123, updatedAt: 0 } as any,
+        { id: 'live', name: '存活', type: 'boolean', order: 1, updatedAt: 0 } as any,
+      ]
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
+        activeAttrs: ['del', 'live'],
+        excludedAttrs: ['del'],
+      }))
+
+      store.restoreUIState()
+
+      expect(store.activeAttrs).toEqual(['live'])
+      expect(store.excludedAttrs).toEqual([])
     })
 
     it('restoreUIState - localStorage 为空时应保持默认值', () => {
