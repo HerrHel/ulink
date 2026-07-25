@@ -25,14 +25,10 @@
   overflow:hidden;
 }
 /* Entrance animation — only on non-expanded cards; removed via JS after first play */
-.list-view .card:not(.card-expanded):not(.group-expanded),
-.list-view .group-card:not(.card-expanded):not(.group-expanded){
-  animation:listCardIn 0.28s var(--ease-out) backwards;
-}
-
 /* Collapsed cards: uniform height */
 .list-view .card:not(.card-expanded):not(.group-expanded),
 .list-view .group-card:not(.card-expanded):not(.group-expanded){
+  animation:listCardIn 0.28s var(--ease-out) backwards;
   height:82px;min-height:0;
 }
 
