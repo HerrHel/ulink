@@ -83,8 +83,10 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
     visibleItems.value = arr
   }
 
-  // 仅在依赖变化时重建
-  watch([startIndex, endIndex, itemHeight], rebuildVisibleItems, { flush: 'sync' })
+  // 仅在依赖变化时重建。
+  // 必须把 items 本身纳入依赖：endIndex 仅依赖 items.value.length，当过滤等长切换导致
+  // items 引用变而长度不变时，endIndex 不变 → 不重建 → 列表显示陈旧（滚一下才自愈）。
+  watch([startIndex, endIndex, itemHeight, items], rebuildVisibleItems, { flush: 'sync' })
 
   function onScroll() {
     if (scrollEl) scrollTop.value = scrollEl.scrollTop
