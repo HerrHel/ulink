@@ -200,7 +200,7 @@
     setStatus('sync', '加载中…')
     bookmarkList.classList.add('loading')
     const result = await sb.from('bookmarks')
-      .select('id,title,url,icon,category_id,notes,password,use_count,created_at_num')
+      .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
       .eq('user_id', userId).is('deleted_at', null)
       .order('created_at_num', { ascending: false }).limit(500)
     bookmarkList.classList.remove('loading')
@@ -409,7 +409,7 @@
   }
 
   // ── 详情面板 ──
-  function showBookmarkDetail(bm) {
+  async function showBookmarkDetail(bm) {
     currentMatchedBookmark = bm
     btnSave.classList.add('hidden')
     bookmarkDetail.classList.remove('hidden')
@@ -418,7 +418,20 @@
     if (bm.notes && bm.notes.trim()) { bdNotesWrap.classList.remove('hidden'); bdNotes.textContent = bm.notes }
     else { bdNotesWrap.classList.add('hidden') }
 
-    var hasPw = bm.password && bm.password !== '' && bm.password !== '""' && JSON.stringify(bm.password) !== '""'
+    // 安全：列表 SELECT 不含 password（避免 N 条密码 base64 常驻 allBookmarks），
+    // 仅在进入单个详情面板时按 id 单查一次 password，挂到当前匹配对象上，供
+    // 显示/复制按钮解密使用（不进全局 allBookmarks）。
+    var hasPw = false
+    if (loggedIn && userId && bm.id) {
+      try {
+        var pwRes = await sb.from('bookmarks').select('password').eq('id', bm.id).eq('user_id', userId).is('deleted_at', null).single()
+        if (!pwRes.error && pwRes.data) {
+          var pw = pwRes.data.password
+          bm.password = pw
+          hasPw = pw && pw !== '' && pw !== '""' && JSON.stringify(pw) !== '""'
+        }
+      } catch (e) { /* 单查失败按无密码处理 */ }
+    }
     if (hasPw) {
       bdPasswordWrap.classList.remove('hidden')
       bdPasswordText.textContent = '••••••••'
