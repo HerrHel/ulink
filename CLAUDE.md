@@ -65,8 +65,8 @@ composables 按职责分三组：
 ### 数据模型
 
 类型定义见 `src/types.ts`，Zod 运行时校验见 `src/schemas.ts`（两者需保持同步）：
-- **Bookmark**：id, title, url, icon, username, password（string | EncryptedPassword）, notes, categoryId, parentId（支持子书签嵌套）, order, useCount, attributes, isExpanded, createdAt, updatedAt, deletedAt
-- **SiblingGroup**：id, name, categoryId, icon, order, isExpanded, attributes, bookmarkIds[], notes (HTML), updatedAt, useCount, isPublic
+- **Bookmark**：id, title, url, icon, username, password（string | EncryptedPassword）, notes, categoryId, parentId（支持子书签嵌套）, order, useCount, attributes, isExpanded, createdAt, updatedAt, deletedAt, pinnedAt（置顶时间戳，可选）
+- **SiblingGroup**：id, name, categoryId, icon, order, isExpanded, attributes, bookmarkIds[], notes (HTML), updatedAt, useCount, isPublic, pinnedAt（置顶时间戳，可选）
 - **Category**：id, name, icon, color, order
 - **CustomAttribute**：id, name, type: 'boolean'
 - **EncryptedPassword**：{ encrypted: true, data, iv, salt } — AES-256-GCM 加密后的密码对象
