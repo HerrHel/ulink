@@ -30,7 +30,7 @@
   border-radius:var(--radius-lg);
   box-shadow:var(--shadow-lg);
   font-size:0.88rem;font-weight:500;letter-spacing:0.01em;
-  opacity:0;transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+  opacity:0;transition:all 0.4s var(--ease-out);
   pointer-events:auto;white-space:nowrap;
   -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
 }
