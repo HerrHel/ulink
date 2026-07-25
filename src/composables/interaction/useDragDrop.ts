@@ -125,14 +125,20 @@ function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; or
   // A1-003：已有自定义序时同步交换 _customCardOrder，避免 PC 拖拽 DOM 换位后 Vue 弹回
   const ui = useUIStore()
   if (ds._customCardOrder && ui.sortMode === 'order') {
-    const order = ds._customCardOrder.slice()
-    const ia = order.findIndex(e => e.id === a.id)
-    const ib = order.findIndex(e => e.id === b.id)
+    const order = ds._customCardOrder
+    // 单次遍历找两个索引，避免双 findIndex O(2n)
+    let ia = -1, ib = -1
+    for (let i = 0; i < order.length; i++) {
+      const e = order[i]
+      if (e.id === a.id) ia = i
+      else if (e.id === b.id) ib = i
+      if (ia >= 0 && ib >= 0) break
+    }
     if (ia >= 0 && ib >= 0) {
       const tmp = order[ia]
       order[ia] = order[ib]
       order[ib] = tmp
-      ds._customCardOrder = order
+      ds._customCardOrder = order // 触发响应式
       ui.saveUIState()
     }
   }
