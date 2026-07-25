@@ -10,8 +10,8 @@
       <template v-if="entries.length">
         <div class="card-grid grid-view detail-grid">
           <div class="card-list-inner">
-            <template v-for="(entry, idx) in filteredEntries" :key="entry.rawId">
-              <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="idx">
+            <template v-for="entry in filteredEntries" :key="entry.rawId">
+              <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="entry.realIdx">
                 <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
                 <GroupCard v-if="entry.isGroup" :group="entry.data" detail-mode />
                 <BookmarkCard v-else :bookmark="entry.data" :default-acct-open="true" />
@@ -48,12 +48,14 @@ const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
 
 type DetailEntry = {
   rawId: string
+  realIdx: number
   isGroup: true
   data: SiblingGroup
   name: string
   domain: string
 } | {
   rawId: string
+  realIdx: number
   isGroup: false
   data: Bookmark
   name: string
@@ -61,15 +63,20 @@ type DetailEntry = {
 }
 
 const entries = computed<DetailEntry[]>(() => {
-  return (ui.detailCards || []).map(rawId => {
+  const cards = ui.detailCards || []
+  const out: DetailEntry[] = []
+  for (let i = 0; i < cards.length; i++) {
+    const rawId = cards[i]
     if (typeof rawId === 'string' && rawId.startsWith('group:')) {
       const gid = rawId.slice(6)
       const sg = ds.groupMap[gid]
-      return sg ? { rawId, isGroup: true, data: sg, name: sg.name || '', domain: '' } : null
+      if (sg) out.push({ rawId, realIdx: i, isGroup: true, data: sg, name: sg.name || '', domain: '' })
+      continue
     }
     const bm = ds.bookmarkMap[rawId]
-    return bm ? { rawId, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) } : null
-  }).filter((e): e is DetailEntry => e !== null)
+    if (bm) out.push({ rawId, realIdx: i, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) })
+  }
+  return out
 })
 
 const filteredEntries = computed(() => {
