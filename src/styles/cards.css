@@ -167,8 +167,8 @@
   transition:opacity 0.2s var(--ease-out);
 }
 .list-view .card-foot .card-actions{display:contents}
-.list-view .card-foot .card-stat{display:none}
-.list-view .btn-undo-group{display:none}
+.list-view .card-foot .card-stat,
+.list-view .btn-undo-group,
 .list-view .btn-redo-group{display:none}
 
 /* 鼠标悬停时显示操作按钮（仅桌面端） */
