@@ -35,10 +35,16 @@ const TITLE_KEYWORDS: Record<string, string[]> = {
   '游戏': ['游戏', 'game', 'steam', 'epic', 'playstation', 'xbox', 'nintendo', 'switch'],
 }
 
-/** 纯 ASCII 短词：按词边界匹配；中文/多词短语仍用 includes */
+/** 纯 ASCII 短词判定 + 词边界正则缓存：关键词是模块级常量，编译结果按 kw 复用免每次 new RegExp */
+const _ASCII_KW = /^[a-z0-9.+#-]{1,12}$/i
+const _kwReCache = new Map<string, RegExp>()
 function titleHasKeyword(titleLower: string, kw: string): boolean {
-  if (/^[a-z0-9.+#-]{1,12}$/i.test(kw)) {
-    const re = new RegExp(`(?:^|[^a-z0-9])${kw.replace(/[.+#-]/g, '\\$&')}(?=[^a-z0-9]|$)`, 'i')
+  if (_ASCII_KW.test(kw)) {
+    let re = _kwReCache.get(kw)
+    if (!re) {
+      re = new RegExp(`(?:^|[^a-z0-9])${kw.replace(/[.+#-]/g, '\\$&')}(?=[^a-z0-9]|$)`, 'i')
+      _kwReCache.set(kw, re)
+    }
     return re.test(titleLower)
   }
   return titleLower.includes(kw)
