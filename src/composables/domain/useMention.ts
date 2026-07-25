@@ -158,9 +158,10 @@ export function useMention() {
   function onKeydown(e: KeyboardEvent) {
     if (!isVisible.value) return
     if (!document.activeElement?.closest?.('.group-body')) { hide(); return }
-    const items = document.querySelectorAll('#mentionDrop > .mention-item')
-    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx.value = (activeIdx.value + 1) % items.length; return }
-    if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx.value = (activeIdx.value - 1 + items.length) % items.length; return }
+    // 顶级候选数 = #mentionDrop > .mention-item 的 DOM 节点数（子菜单 .mention-sub-item 不被 > 直系选择器命中）
+    const len = candidates.value.length
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx.value = (activeIdx.value + 1) % len; return }
+    if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx.value = (activeIdx.value - 1 + len) % len; return }
     if (e.key === 'Escape') { hide(); return }
     if (e.key === 'Enter') {
       e.preventDefault()
