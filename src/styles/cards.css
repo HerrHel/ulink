@@ -110,9 +110,6 @@
 
 /* ---- List: notes hidden (shown via preview) ---- */
 .list-view .card-notes{display:none}
-/* 收起时隐藏账户信息 */
-.list-view .card-acct-toggle,
-.list-view .card-acct-body{display:none}
 
 /* Show full notes when expanded, hide preview */
 .list-view .card-expanded .card-notes{
