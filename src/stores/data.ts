@@ -366,13 +366,6 @@ export const useDataStore = defineStore('data', {
       if (this._searchVersionTimer) clearTimeout(this._searchVersionTimer)
       this._searchVersionTimer = setTimeout(() => { this._searchVersion++ }, 0)
     },
-    /** 搜索时检查脏标记并重建索引 */
-    _rebuildSearchIndexIfDirty() {
-      if (this._searchIndexDirty) {
-        this._searchVersion++
-        this._searchIndexDirty = false
-      }
-    },
     drainDirtyIds(): Set<string> {
       const ids = new Set(this._dirtyIds)
       this._dirtyIds.clear()
