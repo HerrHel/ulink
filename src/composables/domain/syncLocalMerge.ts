@@ -24,18 +24,54 @@ function _deleteEntity(ds: DataStore, type: EntityType, id: string) {
   _deleteHandlers[type]?.(ds, id)
 }
 
+/**
+ * 远端 carry 一个父书签的 DELETE（=远端永久删，软删走 upsert 不发 DELETE）时，本机须把
+ * 其存活后代解孤儿（parentId 置空让其顶层可见），与远端 permanentDeleteBookmark 的 RC-1
+ * 策略一致——远端永久删父会把后代 parentId 置 null 变顶层可见，但**不会**为后代推 DELETE op
+ * （仅推父 DELETE + 后代 parentId=null 的 upsert）。若本机此时未收到后代 upsert（非 full
+ * 同步漏收 / race window），后代 parentId 仍指向已删父 → `filteredBookmarks` 的 `!parentId`
+ * 过滤排除 → 网格静默丢失（仍可被搜索找到，父恢复后重接，故非永久丢失）。
+ * 这里在软删父之前先收集后代（childrenMap 排除软删），软删父后用 updateBookmark 正规解
+ * 孤儿（维护 _childrenIdx + dirty），并通过外层回声清洗让这些更改不回推远端（远端已先行置
+ * null，本机只是补齐漏收 race）。
+ */
+function _collectLiveDescendants(ds: DataStore, rootId: string): string[] {
+  const children = ds.childrenMap[rootId]
+  if (!children?.length) return []
+  const ids: string[] = []
+  const stack = children.map(c => c.id)
+  while (stack.length) {
+    const cid = stack.pop()!
+    ids.push(cid)
+    const grands = ds.childrenMap[cid]
+    if (grands?.length) stack.push(...grands.map(g => g.id))
+  }
+  return ids
+}
+
 /** 远端 DELETE/软删合并触发的本机删除：清衍生 dirty，避免回声推送 */
 export function _deleteWithoutEcho(
   ds: DataStore,
   type: EntityType,
   id: string,
 ) {
+  // bookmark 父被删前先记录存活后代，软删父后将后代解孤儿（与远端 permanentDelete 对齐）
+  const descendantIds = type === 'bookmark' ? _collectLiveDescendants(ds, id) : []
+  const affectedIds = new Set([id, ...descendantIds])
   const dirtyBefore = new Set(ds._dirtyIds)
   const changedBefore = new Set(ds._changedFields.keys())
   _deleteEntity(ds, type, id)
-  for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) || did === id) ds._dirtyIds.delete(did)
-  for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || cid === id) ds._changedFields.delete(cid)
-  ds._newIds.delete(id)
+  // 解孤儿：软删父后存活后代 parentId 置 null 变顶层可见，updateBookmark 维护 _childrenIdx。
+  // 绕过 updateBookmark 会留脏 _childrenIdx（父仍驻留数组或后续恢复时索引错位）。
+  for (const cid of descendantIds) {
+    const cbm = ds._bmMap[cid]
+    if (cbm && !cbm.deletedAt) ds.updateBookmark(cid, { parentId: null })
+  }
+  // 回声清理：删后新增的衍生 dirty（如子项从所属组 bookmarkIds 剔除触发的 group dirty、
+  // 解孤儿 updateBookmark 自身的 dirty）、或属于受影响集自身的项，一律不回推远端。
+  for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) || affectedIds.has(did)) ds._dirtyIds.delete(did)
+  for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || affectedIds.has(cid)) ds._changedFields.delete(cid)
+  for (const did of affectedIds) ds._newIds.delete(did)
 }
 
 /** 智能合并：远端 → 本地（decision → store 副作用） */
@@ -103,9 +139,9 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         full: true,
       })
       if (decision.action !== 'full-absent-delete') continue
-      _deleteEntity(ds, type, lItem.id)
-      ds._dirtyIds.delete(lItem.id)
-      ds._newIds.delete(lItem.id)
+      // 复用 _deleteWithoutEcho：bookmark 父被删时一并解孤儿后代 + 统一回声清理，
+      // 替代旧 _deleteEntity 单删后只能手动清单体 dirty 的口径。
+      _deleteWithoutEcho(ds, type, lItem.id)
     }
   }
 }

@@ -186,4 +186,52 @@ describe('_deleteWithoutEcho', () => {
     expect(ds._dirtyIds.size).toBe(0)
     expect(ds._changedFields.size).toBe(0)
   })
+
+  it('远端 DELETE 父书签时解孤儿存活后代（parentId 置 null 变顶层可见）', () => {
+    const ds = useDataStore()
+    // 父 bm-parent 挂一个子 bm-child，子再挂一个孙 bm-grandchild
+    ds.addBookmark(makeBm({ id: 'bm-parent', parentId: null }) as any)
+    ds.addBookmark(makeBm({ id: 'bm-child', parentId: 'bm-parent' }) as any)
+    ds.addBookmark(makeBm({ id: 'bm-grandchild', parentId: 'bm-child' }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._changedFields.clear()
+
+    _deleteWithoutEcho(ds, 'bookmark', 'bm-parent')
+
+    // 父被软删
+    expect(ds.bookmarkMap['bm-parent']?.deletedAt).toBeTruthy()
+    // 子与孙解孤儿成顶层可见（parentId=null），不被 !parent 过滤隐藏
+    expect(ds.bookmarkMap['bm-child']?.deletedAt).toBeFalsy()
+    expect(ds.bookmarkMap['bm-child']?.parentId).toBeNull()
+    expect(ds.bookmarkMap['bm-grandchild']?.deletedAt).toBeFalsy()
+    expect(ds.bookmarkMap['bm-grandchild']?.parentId).toBeNull()
+    // 顶层过滤下三者中子、孙应可见
+    const visible = ds.bookmarks.filter(b => !b.deletedAt && !b.parentId)
+    expect(visible.map(b => b.id).sort()).toEqual(['bm-child', 'bm-grandchild'].sort())
+    // 回声：解孤儿改动不残留 dirty / changedFields
+    expect(ds._dirtyIds.size).toBe(0)
+    expect(ds._changedFields.size).toBe(0)
+  })
+
+  it('子书签也在某个组时，解孤儿时组关系清理不污染 dirty', () => {
+    const ds = useDataStore()
+    ds.addGroup(makeGroup({ id: 'g-1', bookmarkIds: ['bm-child'] }) as any)
+    // 重新把组关系绑定到已加的子
+    ds.updateGroup('g-1', { bookmarkIds: ['bm-child'] })
+    ds.addBookmark(makeBm({ id: 'bm-parent', parentId: null }) as any)
+    ds.addBookmark(makeBm({ id: 'bm-child', parentId: 'bm-parent' }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._changedFields.clear()
+
+    _deleteWithoutEcho(ds, 'bookmark', 'bm-parent')
+
+    expect(ds.bookmarkMap['bm-parent']?.deletedAt).toBeTruthy()
+    expect(ds.bookmarkMap['bm-child']?.deletedAt).toBeFalsy()
+    expect(ds.bookmarkMap['bm-child']?.parentId).toBeNull()
+    // 回声清理：父被删触发的衍生组 dirty + 解孤儿 dirty 全清
+    expect(ds._dirtyIds.size).toBe(0)
+    expect(ds._changedFields.size).toBe(0)
+  })
 })
