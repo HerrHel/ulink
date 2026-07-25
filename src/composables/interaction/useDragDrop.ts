@@ -157,6 +157,20 @@ function _onDragStart(e: DragEvent) {
   const ui = useUIStore()
   if (ui.batchMode) { e.preventDefault(); return; }
   _currentDragPayload = null;
+  // 详情面板内的卡片杀在所有 .card / .group-card / .group-inline-card 判定之前：
+  // 详情面板卡片被 .detail-card-wrap 包裹，但其内部 BookmarkCard(.card)/GroupCard(.group-card)
+  // 子元素会先命中下方 bm/group 分支产 type:'bm'/type:'group'，绕过 type:'detail' 的安全默认拒，
+  // 导致 (a) 详情内重排走 handleDetailCardDrop（只接 type:'detail'）永不生效、
+  // (b) 拖组卡落另一组走 addGroupRefToGroup 污染目标组 notes（审计 HIGH）、
+  // (c) 拖书签卡落非详情区误改全局 order 并触发云同步（审计 MEDIUM）。
+  // type:'detail' 的卡在 drop 端仅能：面板内重排（handleDetailCardDrop）或拖到面板外摘除（handleGridDrop），
+  // 其余落点由各 handler 的 `!== 'bm'` / `!== 'detail'` 守卫主动拒绝 —— 这正是设计的安区。
+  const dCard = (e.target as HTMLElement).closest('.detail-card-wrap[data-didx]');
+  if (dCard) {
+    _detailDragIdx = parseInt((dCard as HTMLElement).dataset.didx!);
+    _initDrag(e, dCard, { type: 'detail', id: (dCard as HTMLElement).dataset.bmId!, srcGid: DRAG_SRC_DETAIL });
+    return;
+  }
   const bmCard = (e.target as HTMLElement).closest('.card[data-id]:not(.group-card)');
   if (bmCard) {
     const id = (bmCard as HTMLElement).dataset.id!;
@@ -179,12 +193,6 @@ function _onDragStart(e: DragEvent) {
     const parentGc = gCard.parentElement ? gCard.parentElement.closest('.group-card') : null;
     const srcGid = parentGc ? (parentGc as HTMLElement).dataset.groupId : null;
     _initDrag(e, gCard, { type: 'group', id: 'group:' + gid, srcGid });
-    return;
-  }
-  const dCard = (e.target as HTMLElement).closest('.detail-card-wrap[data-didx]');
-  if (dCard) {
-    _detailDragIdx = parseInt((dCard as HTMLElement).dataset.didx!);
-    _initDrag(e, dCard, { type: 'detail', id: (dCard as HTMLElement).dataset.bmId!, srcGid: DRAG_SRC_DETAIL });
     return;
   }
   const rItem = (e.target as HTMLElement).closest('.rail-item[draggable="true"]');
