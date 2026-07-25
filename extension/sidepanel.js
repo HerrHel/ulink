@@ -83,6 +83,7 @@
   let loggedIn = false
   let lastSyncTime = null
   let currentMatchedBookmark = null
+  let currentDetailPassword = null
   let searchQuery = ''
   let searchTimer = null
   let sessionMasterPassword = ''
@@ -419,15 +420,17 @@
     else { bdNotesWrap.classList.add('hidden') }
 
     // 安全：列表 SELECT 不含 password（避免 N 条密码 base64 常驻 allBookmarks），
-    // 仅在进入单个详情面板时按 id 单查一次 password，挂到当前匹配对象上，供
-    // 显示/复制按钮解密使用（不进全局 allBookmarks）。
+    // 仅在进入单个详情面板时按 id 单查一次 password，挂到独立模块变量
+    // currentDetailPassword（**不写回 bm/allBookmarks**——find 返回的是 allBookmarks
+    // 元素引用，直接挂会污染全局数组，违背审计降暴露面意图），供显示/复制按钮解密使用。
+    currentDetailPassword = null
     var hasPw = false
     if (loggedIn && userId && bm.id) {
       try {
         var pwRes = await sb.from('bookmarks').select('password').eq('id', bm.id).eq('user_id', userId).is('deleted_at', null).single()
         if (!pwRes.error && pwRes.data) {
           var pw = pwRes.data.password
-          bm.password = pw
+          currentDetailPassword = pw || null
           hasPw = pw && pw !== '' && pw !== '""' && JSON.stringify(pw) !== '""'
         }
       } catch (e) { /* 单查失败按无密码处理 */ }
@@ -448,13 +451,14 @@
 
   function hideBookmarkDetail() {
     currentMatchedBookmark = null
+    currentDetailPassword = null
     bookmarkDetail.classList.add('hidden')
     btnSave.classList.remove('hidden')
   }
 
   // ── 密码 ──
   bdPwShow.addEventListener('click', async function () {
-    if (!currentMatchedBookmark || !currentMatchedBookmark.password) return
+    if (!currentMatchedBookmark || !currentDetailPassword) return
     if (passwordRevealed) {
       bdPasswordText.textContent = '••••••••'; bdPasswordText.className = 'bd-pw-text'
       bdPwShow.textContent = '显示'; passwordRevealed = false
@@ -462,7 +466,7 @@
       return
     }
     try {
-      var stored = currentMatchedBookmark.password
+      var stored = currentDetailPassword
       if (typeof stored === 'string') { try { stored = JSON.parse(stored) } catch (e) {} }
       var plaintext = ''
       if (typeof stored === 'object' && stored && stored.encrypted === true) {
@@ -488,7 +492,7 @@
   })
 
   bdPwCopy.addEventListener('click', async function () {
-    if (!currentMatchedBookmark || !currentMatchedBookmark.password) return
+    if (!currentMatchedBookmark || !currentDetailPassword) return
     // F1-006：等待解密完成（prompt+PBKDF2 可能远超 100ms），轮询 passwordRevealed
     if (!passwordRevealed) {
       bdPwShow.click()
