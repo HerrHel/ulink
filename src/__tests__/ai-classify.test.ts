@@ -58,6 +58,32 @@ describe('suggestCategory', () => {
     ]
     expect(suggestCategory('https://example.com/x', 'github 设计', reordered)).toBe('c-dev')
   })
+
+  it('审计#13+R33：平局且 order 相等时按 name 字典序兜底，仍不偏向数组下标', () => {
+    // 两分类 score 与 order 都相等（order 都 0）时按 name 字典序选较小者。
+    // 'AI' < '开发'（ASCII 'A'=0x41 < 中文字节），故 'AI' 胜。
+    // 把 '开发' 放在数组前验证不偏向数组下标。
+    const sameOrder = [
+      { id: 'c-dev', name: '开发', icon: '', color: '', order: 0 },
+      { id: 'c-ai', name: 'AI', icon: '', color: '', order: 0 },
+    ]
+    // title 命中 AI（ai → +1）与 开发（github → +1）同分 1，order 同 0 → name 字典序选 'AI'
+    expect(suggestCategory('https://example.com/x', 'github 与 ai 笔记', sameOrder)).toBe('c-ai')
+  })
+
+  it('审计#41：常量分类名与用户分类名大小写不同时仍命中（大小写不敏感）', () => {
+    // DOMAIN_KEYWORDS 常量分类名为 'AI'，用户把分类名写成小写 'ai' 应仍命中（R41 大小写不敏感兜底）。
+    const lowerCats: Category[] = [
+      { id: 'c-dev', name: '开发', icon: '', color: '', order: 0 },
+      { id: 'c-ai-lower', name: 'ai', icon: '', color: '', order: 1 },
+    ]
+    expect(suggestCategory('https://claude.ai/chat', '随便', lowerCats)).toBe('c-ai-lower')
+    // 大写混合也应命中
+    const mixedCats: Category[] = [
+      { id: 'c-ai-mixed', name: 'Ai', icon: '', color: '', order: 1 },
+    ]
+    expect(suggestCategory('https://claude.ai/chat', '随便', mixedCats)).toBe('c-ai-mixed')
+  })
 })
 
 describe('suggestAttributes', () => {

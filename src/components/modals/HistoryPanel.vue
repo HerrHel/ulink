@@ -91,9 +91,15 @@ const restoring = ref(false)
 const selectedIdx = ref(-1)
 const diffMode = ref(false)
 const diffCompareIdx = ref(-1)
+// 审计 R9：watch 无竞态守卫。打开 X 历史→请求 A in-flight→关再立即打开 Y 历史→请求 B；
+// 若 A 先返回 versions 被覆写 X 历史，但 props.itemId 已是 Y → 列表与标题错位，点"恢复"
+// 会针对错误条目。用代际 token 丢弃过期请求结果（fetchHistory 走 supabase client 无原生
+// AbortController，代际丢弃足矣）。
+let _gen = 0
 
 watch(() => props.open, async (isOpen) => {
   if (isOpen && props.itemId) {
+    const gen = ++_gen
     loading.value = true
     selectedIdx.value = -1
     diffMode.value = false
@@ -105,6 +111,8 @@ watch(() => props.open, async (isOpen) => {
       if (auth.isLoggedIn) {
         remote = await sync.fetchHistory(props.itemId)
       }
+      // 丢弃过期请求结果：用户可能已切换到另一条目的历史面板
+      if (gen !== _gen) return
       // 合并去重：相同 created_at 保留云端
       const seen = new Set<string>()
       const merged: HistoryVersion[] = []
@@ -113,10 +121,11 @@ watch(() => props.open, async (isOpen) => {
       merged.sort((a, b) => b.created_at.localeCompare(a.created_at))
       versions.value = merged
     } catch (e) {
+      if (gen !== _gen) return
       console.warn('[history] fetch failed:', e)
       versions.value = []
     } finally {
-      loading.value = false
+      if (gen === _gen) loading.value = false
     }
   }
 })

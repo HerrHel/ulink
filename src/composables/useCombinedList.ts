@@ -66,9 +66,9 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
           combined.sort((a, b) => {
             const da = a.data as SiblingGroup | Bookmark
             const db = b.data as SiblingGroup | Bookmark
-            // 置顶优先
-            const aPin = (da as any).pinnedAt ? 1 : 0
-            const bPin = (db as any).pinnedAt ? 1 : 0
+            // 置顶优先（SiblingGroup/Bookmark 均有 optional pinnedAt，联合类型可达，无需 as any）
+            const aPin = da.pinnedAt ? 1 : 0
+            const bPin = db.pinnedAt ? 1 : 0
             if (aPin !== bPin) return bPin - aPin
             if (sm === 'useCount') return ((da.useCount || 0) - (db.useCount || 0)) * d
             if (sm === 'title') {

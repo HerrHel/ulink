@@ -102,10 +102,16 @@ export function reportError(payload: ErrorPayload): void {
     user_agent: (payload.user_agent || (typeof navigator !== 'undefined' ? navigator.userAgent : '')).slice(0, 1024),
   }
 
-  // H9：insert 包超时，避免慢网挂死
+  // H9：insert 包超时，避免慢网挂死。审计 R28：timeoutP 的 setTimeout 在 insert 早 settle
+  // 时仍挂事件循环 8s，无人 clearTimeout 致每次成功上报泄漏一个 timer 句柄。
+  // 在 insertP settle 后清理 timer，保留超时兜底语义同时消除孤儿 timer。
+  let timer: ReturnType<typeof setTimeout> | undefined
   const insertP = Promise.resolve(supabase.from('error_logs').insert(row))
   const timeoutP = new Promise<{ error: { message: string } }>((resolve) => {
-    setTimeout(() => resolve({ error: { message: 'timeout' } }), INSERT_TIMEOUT_MS)
+    timer = setTimeout(() => resolve({ error: { message: 'timeout' } }), INSERT_TIMEOUT_MS)
+  })
+  insertP.finally(() => {
+    if (timer) clearTimeout(timer)
   })
   Promise.race([insertP, timeoutP]).then((res: any) => {
     if (res?.error && res.error.message !== 'timeout') {

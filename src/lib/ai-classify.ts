@@ -105,17 +105,27 @@ export function suggestCategory(
 
   if (scores.size === 0) return null
 
-  // 找得分最高的分类名。审计 #13：原 `score > bestScore`（严格大于）平局时让 Map
-  // 先入项胜出，偏向 DOMAIN_KEYWORDS/TITLE_KEYWORDS 常量声明序这种偶然顺序，不具确定性。
-  // 改为以 categories（用户排序）为主顺序遍历候选：平局时 order 升序（用户排前者优先，
-  // 贴合用户排序意图）→ name 字典序兜底，完全确定且不偏向常量声明顺序。
+  // 找得分最高的分类名。审计 #41：scores 的 key 是 DOMAIN_KEYWORDS/TITLE_KEYWORDS
+  // 常量分类名（如 'AI'），用户分类名可能与常量大小写不同（如 'ai'）。按 lowercase 做
+  // 大小写不敏感匹配：把 scores（常量驱动）按 lowercase 映射回用户 category，未映射到的忽略。
+  // 审计 #13：原 `score > bestScore`（严格大于）平局时让 Map 先入项胜出，偏向常量声明序
+  // 这种偶然顺序。改为按 categories 顺序遍历候选 + 平局 order 升序 → name 字典序兜底，
+  // 完全确定且不偏向常量声明顺序。
+  const scoresByLower = new Map<string, number>()
+  for (const [constName, s] of scores) scoresByLower.set(constName.toLowerCase(), s)
   let bestName: string | null = null
   let bestScore = 0
   let bestOrder = 0
+  // 以 categories（用户排序）为主顺序遍历，保证平局定序符合用户意图；
+  // scores 可能含 c.name 大小写不匹配的 key，用 lowercase 反查兜底。
   for (const c of categories) {
-    const score = scores.get(c.name)
+    const score = scoresByLower.get(c.name.toLowerCase())
     if (score === undefined) continue
-    if (bestName === null || score > bestScore || (score === bestScore && c.order < bestOrder)) {
+    if (
+      bestName === null ||
+      score > bestScore ||
+      (score === bestScore && (c.order < bestOrder || (c.order === bestOrder && c.name < bestName)))
+    ) {
       bestScore = score
       bestName = c.name
       bestOrder = c.order

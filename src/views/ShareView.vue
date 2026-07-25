@@ -150,9 +150,15 @@ async function onFork() {
   }
 }
 
+// 审计 R10：onMounted async 先 await fetchPublicGroup 再 _applyShareHead 注入 head；
+// 慢网下用户点"返回"卸载 + cleanupInjectedHead，但 in-flight fetch 返回后仍执行 _applyShareHead
+// 污染主应用 <head> 的 SEO 元数据。用闭包 _unmounted 标志：卸载后丢弃过期 fetch 结果。
+let _unmounted = false
+
 onMounted(async () => {
   try {
     const data = await fetchPublicGroup(props.groupId)
+    if (_unmounted) return
     if (!data) {
       error.value = '该分享链接不存在或已取消公开'
       return
@@ -163,13 +169,15 @@ onMounted(async () => {
     // 社交 OG 预览器不执行 JS，首次预览仍是 index.html 静态默认值 —— 彻底解决需后续 SSR 轮）
     _applyShareHead(data.group, data.bookmarks)
   } catch (e) {
+    if (_unmounted) return
     error.value = '加载失败：' + (e as Error).message
   } finally {
-    loading.value = false
+    if (!_unmounted) loading.value = false
   }
 })
 
 onUnmounted(() => {
+  _unmounted = true
   cleanupInjectedHead()
   setCanonical('https://herrhel.github.io/')
 })
