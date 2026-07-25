@@ -19,6 +19,14 @@ const PBKDF2_ITERATIONS = 600000
 const SALT_LENGTH = 32
 const IV_LENGTH = 12
 
+/**
+ * PBKDF2 迭代数的历史默认值——升级常量后，升成前景下新生密文用新值，但**已存的旧密文**
+ * 仍需用它生成时的迭代数派生 key 才能解开（升级常量直接换会让旧密文 GCM 认证失败锁死）。
+ * 密文/解锁元数据携带各自生成时的 iterations：canaryData 存 it 字段，decrypt 时按其值派生。
+ * 此常量即"无 it 元数据时的回退默认"——对当前唯一在用值 600000 兼容，旧数据无 it 字段即按它解。
+ */
+export const PBKDF2_DEFAULT_ITERATIONS = PBKDF2_ITERATIONS
+
 /** L15：salt.iv.data 三段密文判定单一出口，避免 useSyncMapping/useE2E/decrypt 口径漂移 */
 export function isThreePartCipher(s: string): boolean {
   if (typeof s !== 'string' || !s) return false
@@ -65,13 +73,17 @@ function _base64ToBuf(b64: string): Uint8Array {
   return bytes
 }
 
-/** PBKDF2 从主密码派生 AES-256 密钥 */
-export async function deriveKey(masterPassword: string, salt: Uint8Array): Promise<CryptoKey> {
+/**
+ * PBKDF2 从主密码派生 AES-256 密钥
+ * @param iterations 可选迭代数——密文生成时的值（升级常量后旧密文需用其原始值才能解。
+ *   见 PBKDF2_DEFAULT_ITERATIONS 注释）。未传则用当前默认常量，等价于历史行为。
+ */
+export async function deriveKey(masterPassword: string, salt: Uint8Array, iterations: number = PBKDF2_ITERATIONS): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw', _bs(_toBuffer(masterPassword)), 'PBKDF2', false, ['deriveKey'],
   )
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: _bs(salt), iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: _bs(salt), iterations, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -167,11 +179,13 @@ import type { EncryptedPassword } from './types.js'
 /**
  * 使用主密码加密明文密码
  * 返回 EncryptedPassword 对象（AES-256-GCM）
+ * @param iterations 可选迭代数（默认 PBKDF2_ITERATIONS）。无生产加密链路使用本函数
+ *   （saveBm 走 global cryptoKey 的 encrypt 入口）；保留以兼容历史测试与扩展端接口。
  */
-export async function encryptPassword(plaintext: string, masterPassword: string): Promise<EncryptedPassword> {
+export async function encryptPassword(plaintext: string, masterPassword: string, iterations: number = PBKDF2_ITERATIONS): Promise<EncryptedPassword> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
-  const key = await deriveKey(masterPassword, salt)
+  const key = await deriveKey(masterPassword, salt, iterations)
   const encrypted = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv: _bs(iv) },
     key,
@@ -191,20 +205,22 @@ export async function encryptPassword(plaintext: string, masterPassword: string)
  * 1. EncryptedPassword 对象（AES-256-GCM）→ 解密
  * 2. 普通 base64 字符串 → 解码（旧版兼容）
  * 3. 空字符串 → 返回空
+ * @param iterations 可选迭代数（默认 PBKDF2_ITERATIONS）。无生产解密链路使用本函数
+ *   （展示走 decryptPasswordWithKey 用 global cryptoKey）。
  */
-export async function autoMigratePassword(stored: string | EncryptedPassword | null | undefined, masterPassword: string): Promise<string> {
+export async function autoMigratePassword(stored: string | EncryptedPassword | null | undefined, masterPassword: string, iterations: number = PBKDF2_ITERATIONS): Promise<string> {
   if (!stored) return ''
-  
+
   // 新格式：EncryptedPassword 对象
   if (typeof stored === 'object' && stored.encrypted === true) {
     if (!masterPassword) throw new Error('需要主密码')
     // 重组为 encrypt 函数使用的格式: base64(salt).base64(iv).base64(ciphertext)
     const ciphertext = stored.salt + '.' + stored.iv + '.' + stored.data
     const salt = new Uint8Array(_base64ToBuf(stored.salt))
-    const key = await deriveKey(masterPassword, salt)
+    const key = await deriveKey(masterPassword, salt, iterations)
     return decrypt(ciphertext, key)
   }
-  
+
   // 旧格式：base64 字符串
   if (typeof stored === 'string') {
     return safeDecodePassword(stored)

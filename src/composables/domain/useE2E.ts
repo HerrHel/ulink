@@ -15,7 +15,7 @@ import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
-import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher } from '../../crypto.js'
+import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { useBiometric } from './useBiometric.js'
 import type { EntityType } from '../../types.js'
@@ -156,18 +156,23 @@ export function useE2E() {
   /** 设置主密码（首次） */
   async function setupMasterPassword(password: string, recoveryKey?: string): Promise<boolean> {
     const salt = crypto.getRandomValues(new Uint8Array(32))
-    const key = await deriveKey(password, salt)
+    // PBKDF2 迭代数随 canaryData 持久化——升级常量后旧 canary 仍按其原始 it 派生 key 验证。
+    const it = PBKDF2_DEFAULT_ITERATIONS
+    const key = await deriveKey(password, salt, it)
     const canary = await generateCanary(key)
 
     const canaryData: Record<string, unknown> = {
       canary,
       salt: Array.from(salt),
+      it,
     }
     if (recoveryKey) {
       const rkSalt = crypto.getRandomValues(new Uint8Array(32))
-      const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), rkSalt)
+      const rkIt = PBKDF2_DEFAULT_ITERATIONS
+      const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), rkSalt, rkIt)
       canaryData.recovery_canary = await generateCanary(rkKey)
       canaryData.recovery_salt = Array.from(rkSalt)
+      canaryData.recovery_it = rkIt
     }
 
     const ok = await _saveCanaryData(canaryData)
@@ -185,22 +190,28 @@ export function useE2E() {
     const canaryData = await _getCanaryData() as Record<string, unknown> | null
     if (!canaryData?.recovery_canary || !canaryData?.recovery_salt) return false
 
-    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt as number[]))
+    // 用 recovery canary 生成时的迭代数派生——旧数据无 recovery_it 字段则回退默认（兼容现网）
+    const rkIt = typeof canaryData.recovery_it === 'number' ? canaryData.recovery_it : PBKDF2_DEFAULT_ITERATIONS
+    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt as number[]), rkIt)
     const ok = await verifyCanary(canaryData.recovery_canary as string, rkKey)
     if (!ok) return false
 
     const newSalt = crypto.getRandomValues(new Uint8Array(32))
-    const newKey = await deriveKey(newPassword, newSalt)
+    const newIt = PBKDF2_DEFAULT_ITERATIONS
+    const newKey = await deriveKey(newPassword, newSalt, newIt)
     const newCanary = await generateCanary(newKey)
 
     const newRkSalt = crypto.getRandomValues(new Uint8Array(32))
-    const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt)
+    const newRkIt = PBKDF2_DEFAULT_ITERATIONS
+    const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt, newRkIt)
 
     const ok2 = await _saveCanaryData({
       canary: newCanary,
       salt: Array.from(newSalt),
+      it: newIt,
       recovery_canary: await generateCanary(newRkKey),
       recovery_salt: Array.from(newRkSalt),
+      recovery_it: newRkIt,
     })
     if (!ok2) return false
 
@@ -215,11 +226,13 @@ export function useE2E() {
 
   /** 解锁（验证主密码） */
   async function unlock(password: string): Promise<boolean> {
-    const canaryData = await _getCanaryData() as { canary: string; salt: number[] } | null
+    const canaryData = await _getCanaryData() as { canary: string; salt: number[]; it?: number } | null
     if (!canaryData) return false
 
+    // 用 canary 生成时的迭代数派生——旧数据无 it 字段则回退默认（兼容现网）
+    const it = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
     const salt = new Uint8Array(canaryData.salt)
-    const key = await deriveKey(password, salt)
+    const key = await deriveKey(password, salt, it)
     const ok = await verifyCanary(canaryData.canary, key)
     if (!ok) return false
 

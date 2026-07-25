@@ -31,6 +31,7 @@ vi.mock('../../stores/e2e.js', () => ({
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { useDataStore } from '../../stores/data.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -277,4 +278,55 @@ describe('useE2E.decryptStoreItems password 契约 + group name', () => {
     // group.name 应被补解密回明文
     expect(ds.groupMap['genc'].name).toBe('机密组名')
   }, 20000)
+})
+
+// C（PBKDF2 iterations 迁移阶段一）：canaryData 携带生成时 iterations，升级常量后旧 canary 仍按其原始 it 解锁
+describe('useE2E PBKDF2 iterations 携带与兼容', () => {
+  it('setupMasterPassword 写入的 canaryData 携带 it 字段，与 PBKDF2_DEFAULT_ITERATIONS 一致', async () => {
+    const e2e = useE2E()
+    const rk = e2e.generateRecoveryKey()
+    const ok = await e2e.setupMasterPassword('it-pw-1', rk)
+    expect(ok).toBe(true)
+    const raw = localStorage.getItem('lv_e2e_canary')
+    expect(raw).toBeTruthy()
+    const data = JSON.parse(raw as string)
+    expect(typeof data.it).toBe('number')
+    expect(data.it).toBe(PBKDF2_DEFAULT_ITERATIONS)
+    // recovery canary 同样携带 recovery_it
+    expect(typeof data.recovery_it).toBe('number')
+    expect(data.recovery_it).toBe(PBKDF2_DEFAULT_ITERATIONS)
+  }, 15000)
+
+  it('旧 canaryData 无 it 字段时 unlock 仍可解（向后兼容，回退默认 600000）', async () => {
+    const e2e = useE2E()
+    const masterPw = 'legacy-it-pw'
+    // 先正常 setup 生成 canary（带 it），再用当前 key 手算一份"旧式"canary（去掉 it 字段）写回
+    await e2e.setupMasterPassword(masterPw)
+    e2e.lock()
+    const raw = localStorage.getItem('lv_e2e_canary')
+    const data = JSON.parse(raw as string)
+    delete data.it
+    delete data.recovery_it
+    localStorage.setItem('lv_e2e_canary', JSON.stringify(data))
+    // 旧式 canary 无 it 字段 → unlock 走默认 600000 派生，仍能验通
+    const ok = await e2e.unlock(masterPw)
+    expect(ok).toBe(true)
+  }, 15000)
+
+  it('canaryData 携带非默认 it 时 unlock 按该 it 派生，默认 it派的同主密码失败', async () => {
+    const e2e = useE2E()
+    const masterPw = 'custom-it-pw'
+    // 用与默认不同的 it 派生 key + 生成 canary，写入 canaryData 带 it=800000
+    const { deriveKey, generateCanary } = await import('../../crypto.js')
+    const salt = new Uint8Array(32)
+    crypto.getRandomValues(salt)
+    const key = await deriveKey(masterPw, salt, 800000)
+    const canary = await generateCanary(key)
+    localStorage.setItem('lv_e2e_canary', JSON.stringify({
+      canary, salt: Array.from(salt), it: 800000,
+    }))
+    // unlock 按 canaryData.it=800000 派生 → 验通
+    const ok = await e2e.unlock(masterPw)
+    expect(ok).toBe(true)
+  }, 15000)
 })
