@@ -248,9 +248,15 @@ export const useUIStore = defineStore('ui', {
           const ds = useDataStore()
           const gMap = ds.groupMap
           const bMap = ds.bookmarkMap
+          // 过滤已不存在 + 软删项：deleteBookmark 不清理 ui.detailCards，刷新后若不过滤软删
+          // 会渲染已删卡片（bookmarkMap/groupMap 含软删，故需显式判 deletedAt）。
           this.detailCards = s.detailCards.filter((entry: string) => {
-            if (typeof entry === 'string' && entry.startsWith('group:')) return !!gMap[entry.slice(6)]
-            return !!bMap[entry]
+            if (typeof entry === 'string' && entry.startsWith('group:')) {
+              const g = gMap[entry.slice(6)]
+              return !!g && !g.deletedAt
+            }
+            const b = bMap[entry]
+            return !!b && !b.deletedAt
           })
         }
         if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list' || s._preferredLayoutMode === 'mini-grid') {

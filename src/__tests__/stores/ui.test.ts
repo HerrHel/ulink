@@ -126,9 +126,28 @@ describe('UIStore', () => {
       ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
         detailCards: ['b1', 'group:g1', 'b2', 'group:g2'],
       }))
-      
+
       store.restoreUIState()
-      
+
+      expect(store.detailCards).toEqual(['b1', 'group:g1'])
+    })
+
+    it('应该过滤 detailCards 中的软删项（deleteBookmark 不清理 detailCards，刷新后不应渲染已删卡）', () => {
+      const dataStore = useDataStore()
+      dataStore.bookmarks = [
+        { id: 'b1', deletedAt: null } as any,            // 正常
+        { id: 'b2', deletedAt: 1234 } as any,            // 软删
+      ] as any
+      dataStore.siblingGroups = [
+        { id: 'g1', deletedAt: undefined } as any,       // 正常
+        { id: 'g2', deletedAt: 5678 } as any,            // 软删
+      ] as any
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
+        detailCards: ['b1', 'b2', 'group:g1', 'group:g2'],
+      }))
+
+      store.restoreUIState()
+
       expect(store.detailCards).toEqual(['b1', 'group:g1'])
     })
 
