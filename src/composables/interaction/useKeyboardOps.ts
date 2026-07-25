@@ -196,6 +196,13 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
   }
   if (ui.batchMode) {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); selectAllBatch(); return }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && ui.batchSelected.length) { e.preventDefault(); batchDelete(); return }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && ui.batchSelected.length) {
+      // 输入控件聚焦时让浏览器原生删字符，不劫持为批量删除（否则搜索框/内联编辑按 Backspace
+      // 误删选中项并弹确认框打断编辑）。batchDelete 内有 showConfirm 二次确认，故仅体验问题。）
+      const ae = document.activeElement as HTMLElement | null
+      const inField = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT' || ae.isContentEditable)
+      if (inField) return
+      e.preventDefault(); batchDelete(); return
+    }
   }
 }

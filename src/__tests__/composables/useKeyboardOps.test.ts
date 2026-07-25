@@ -25,7 +25,10 @@ vi.mock('../../composables/domain/useUndo.js', () => ({ performUndo: vi.fn(), pe
 vi.mock('../../lib/editor.js', () => ({ EditorManager: { toggleBold: vi.fn(), setHeading: vi.fn(), get: vi.fn() } }))
 vi.mock('../../composables/domain/useBookmark.js', () => ({ closeBmModal: vi.fn(), openBmModal: vi.fn() }))
 vi.mock('../../composables/ui/useUI.js', () => ({ closeCatModal: vi.fn(), closeAttrModal: vi.fn(), hideSettingsMenu: vi.fn(), closeAddBmPopover: vi.fn(), hideAddDropdown: vi.fn() }))
-vi.mock('../../composables/domain/useBatch.js', () => ({ toggleBatchMode: vi.fn(), selectAllBatch: vi.fn(), batchDelete: vi.fn() }))
+
+// batchDelete 被 mock 成 spy，可在批量模式键盘分支测试中断言是否被调用
+const { batchDeleteMock } = vi.hoisted(() => ({ batchDeleteMock: vi.fn() }))
+vi.mock('../../composables/domain/useBatch.js', () => ({ toggleBatchMode: vi.fn(), selectAllBatch: vi.fn(), batchDelete: batchDeleteMock }))
 vi.mock('../../stores/toast.js', () => ({ useToastStore: () => ({ resolveConfirm: vi.fn() }) }))
 vi.mock('../../stores/contextMenu.js', () => ({ useContextMenuStore: () => ({ hide: vi.fn() }) }))
 vi.mock('../../stores/actionSheet.js', () => ({ useActionSheetStore: () => ({ visible: false, hide: vi.fn() }) }))
@@ -37,7 +40,21 @@ vi.mock('../../stores/overlay.js', () => ({
   useMfbStore: () => ({ open: false, hide: vi.fn() }),
 }))
 
-import { captureNavState, restoreNavState } from '../../composables/interaction/useKeyboardOps.js'
+import { captureNavState, restoreNavState, _onGlobalKeydown } from '../../composables/interaction/useKeyboardOps.js'
+
+function makeKey(key: string, opts: Partial<KeyboardEvent> = {}): KeyboardEvent {
+  return {
+    key, code: key, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false,
+    preventDefault: vi.fn(),
+    ...opts,
+  } as unknown as KeyboardEvent
+}
+
+/** 用 getter 覆盖 document.activeElement；restore 删除覆盖让浏览器 jsdom 回落原型默认。 */
+function setActiveElement(el: HTMLElement | null): () => void {
+  Object.defineProperty(document, 'activeElement', { configurable: true, get: () => el })
+  return () => { delete (document as any).activeElement }
+}
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -128,4 +145,43 @@ describe('captureNavState / restoreNavState 含 settings/trash/deadLinks/shortcu
     restoreNavState(prev)
     expect(mockUI.panels.detail).toBe(false)
   })
+})
+
+describe('_onGlobalKeydown 批量模式 Backspace/Delete 输入焦点守卫', () => {
+  beforeEach(() => {
+    mockUI.batchMode = true
+    mockUI.batchSelected = ['b1']
+    batchDeleteMock.mockClear()
+  })
+
+  it('无输入焦点时 Backspace 触发批量删除', () => {
+    const restore = setActiveElement(document.body)
+    const e = makeKey('Backspace')
+    _onGlobalKeydown(e)
+    expect(batchDeleteMock).toHaveBeenCalledTimes(1)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    restore()
+  })
+
+  it('INPUT 聚焦时 Backspace 不劫持（让浏览器原生删字符）', () => {
+    const input = document.createElement('input')
+    const restore = setActiveElement(input)
+    const e = makeKey('Backspace')
+    _onGlobalKeydown(e)
+    expect(batchDeleteMock).not.toHaveBeenCalled()
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+    restore()
+  })
+
+  it('TEXTAREA 聚焦时 Delete 不劫持批量删除', () => {
+    const ta = document.createElement('textarea')
+    const restore = setActiveElement(ta)
+    const e = makeKey('Delete')
+    _onGlobalKeydown(e)
+    expect(batchDeleteMock).not.toHaveBeenCalled()
+    restore()
+  })
+
+  // contentEditable（组名行内编辑/TipTap）走同一 inField 分支守卫，
+  // 但 jsdom 未实现 HTMLElement.isContentEditable，无法在此环境覆盖，留真实浏览器断言。
 })
