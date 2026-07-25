@@ -78,9 +78,12 @@
   animation:none;
   transition:transform 0.3s var(--ease-out);
 }
-.popover-sheet::before{
+.popover-sheet::before,
+.action-sheet::before{
   content:'';display:block;width:36px;height:4px;
   background:var(--border-hover);border-radius:2px;
+}
+.popover-sheet::before{
   margin:8px auto 0;
   flex-shrink:0;
 }
@@ -114,8 +117,6 @@
 }
 .action-sheet.dragging{transition:none!important}
 .action-sheet::before{
-  content:'';display:block;width:36px;height:4px;
-  background:var(--border-hover);border-radius:2px;
   margin:0 auto 6px;
   cursor:grab;
 }
