@@ -308,4 +308,27 @@ describe('syncPushPull via SyncRemotePort', () => {
     const ds = useDataStore()
     expect(ds.bookmarks.some(b => b.id === 'bm-remote-new')).toBe(true)
   })
+
+  it('7 审计 R1：resetSyncState 清空 IDB syncOps 队列与模块级 _pendingSyncIds（防跨账号残留）', async () => {
+    // 模拟 A 登录断网 push 失败后队列残留 + pending 标记未清 ——
+    // onLogout 调 resetSyncState 必须一并清队列与 pending，否则 B 登录 initialSync 会推到 B 云端。
+    const ds = useDataStore()
+    ds.addBookmark(makeBm() as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-residual',
+      data: { ...makeBm(), id: 'bm-residual', _userId: 'user-A', _isNew: true, _changedFields: null },
+      ts: Date.now(),
+    }])
+    __testPendingSync.add('bm-residual')
+    expect(await syncOpsCount()).toBe(1)
+    expect(_isPendingSync('bm-residual')).toBe(true)
+
+    const sync = useCloudSync()
+    await sync.resetSyncState()
+
+    expect(await syncOpsCount()).toBe(0)
+    expect(_isPendingSync('bm-residual')).toBe(false)
+  })
 })

@@ -311,7 +311,7 @@ async function onOpenLogin() {
 
 async function onLogout() {
   const ok = await auth.signOut()
-  if (ok) sync.resetSyncState()
+  if (ok) await sync.resetSyncState()
 }
 
 function onCheckDeadLinks() {

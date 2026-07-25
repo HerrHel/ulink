@@ -19,6 +19,15 @@ export function _clearPendingSync(ids: Iterable<string>): void {
   }
 }
 
+/**
+ * 清空全部 in-flight pending id（登出/切账号时调用）。
+ * 审计 R1：登出不清 _pendingSyncIds 致旧账号残留 pending 标记跨账号串留，与 IDB syncOps
+ * 残留 op 一起在 B 登录 initialSync 时被推到 B 云端。登出需一并清队列与 pending 标记。
+ */
+export function _clearAllPendingSync(): void {
+  _pendingSyncIds.clear()
+}
+
 /** 测试专用：模拟已 drain 待推送；beforeEach 需 clear */
 export const __testPendingSync = {
   add: (id: string) => _pendingSyncIds.add(id),

@@ -14,7 +14,7 @@ import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import {
-  enqueueSyncOps, syncOpsCount, type SyncOp,
+  enqueueSyncOps, syncOpsCount, clearAllSyncOps, type SyncOp,
 } from '../../stores/storage.js'
 import {
   resolveConflict, resolveAllConflicts,
@@ -28,6 +28,7 @@ import {
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
+import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 import { withLock } from '../../lib/withLock.js'
 
@@ -174,10 +175,16 @@ export function useCloudSync() {
     unsubscribeRealtime()
   }
 
-  function resetSyncState() {
+  async function resetSyncState() {
     _initialized = false
     syncStore.resetSyncState()
     unsubscribeRealtime()
+    // 审计 R1：登出不清 IDB syncOps 队列与模块级 _pendingSyncIds 致跨账号残留——A 登录断网
+    // push 失败的 op 留在队列（storage.ts 的 db 是模块级单例跨账号共享），onLogout 调本函数
+    // 不清，B 登录 initialSync→pushFromQueue→drainSyncOps 拉出 A 残留 op（op.data 含旧账号
+    // 书签内容）用 B userId 推到 B 云端 → A 的书签出现在 B 云端。登出/切账号必须清队列与 pending。
+    await clearAllSyncOps()
+    _clearAllPendingSync()
   }
 
   return {
