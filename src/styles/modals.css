@@ -30,7 +30,7 @@
   border-bottom:1px solid var(--border-light);
   flex-shrink:0;background:var(--surface);z-index:10;
 }
-.modal-head h2{font-family:'Clash Display',system-ui,sans-serif;font-size:1.05rem;font-weight:600;flex:1;letter-spacing:-0.01em}
+.modal-head h2{font-family:var(--font-display);font-size:1.05rem;font-weight:600;flex:1;letter-spacing:-0.01em}
 .modal-close{
   width:30px;height:30px;display:flex;align-items:center;justify-content:center;
   border-radius:var(--radius-md);color:var(--text-muted);transition:var(--transition-fast);
@@ -73,7 +73,7 @@
 }
 .code-box{
   width:48px;height:56px;display:flex;align-items:center;justify-content:center;
-  font-size:1.5rem;font-family:'JetBrains Mono',monospace;font-weight:600;
+  font-size:1.5rem;font-family:var(--font-mono);font-weight:600;
   color:var(--text);background:var(--surface);border:2px solid var(--border);
   border-radius:var(--radius-md);transition:border-color .15s,box-shadow .15s;
   user-select:none;
@@ -152,7 +152,7 @@
 .trash-item-icon svg{width:16px;height:16px}
 .trash-item-name{flex:1;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trash-item-time{font-size:0.7rem;color:var(--text-muted);flex-shrink:0}
-.modal-title{font-family:'Clash Display',system-ui,sans-serif;font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px;flex:1}
+.modal-title{font-family:var(--font-display);font-size:1.05rem;font-weight:600;display:flex;align-items:center;gap:8px;flex:1}
 .modal-md{max-width:560px}
 /* B2-001：覆盖 header 中正方形 .btn-xs，文本按钮需自适应宽高 */
 .btn-xs{width:auto;height:auto;min-height:26px;padding:3px 8px;font-size:0.72rem}

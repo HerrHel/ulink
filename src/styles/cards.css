@@ -590,7 +590,7 @@
 }
 /* Card domain — shared base for all views */
 .card-domain{
-  font-family:'JetBrains Mono',monospace;
+  font-family:var(--font-mono);
   font-size:0.72rem;color:var(--text-muted);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   line-height:18px;height:18px;margin:0;

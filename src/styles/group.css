@@ -293,7 +293,7 @@
 .group-inline-card .gic-note-icon{display:inline-flex;align-items:center;color:var(--accent)}
 .group-inline-card .gic-name{color:var(--text);cursor:pointer;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-inline-card .gic-name:hover{color:var(--accent)}
-.group-inline-card .gic-domain{color:var(--text-muted);font-size:0.72rem;font-family:'JetBrains Mono',monospace;cursor:pointer}
+.group-inline-card .gic-domain{color:var(--text-muted);font-size:0.72rem;font-family:var(--font-mono);cursor:pointer}
 .group-inline-card .gic-domain:hover{color:var(--accent)}
 .group-inline-card .gic-btn,
 .sub-sites .group-inline-card .gic-btn{
@@ -511,6 +511,6 @@
   width:56px;height:56px;color:var(--text-muted);margin-bottom:16px;opacity:0.3;
 }
 .empty-icon svg{width:56px;height:56px}
-.empty h3{font-family:'Clash Display',system-ui,sans-serif;font-size:1.1rem;font-weight:600;margin-bottom:6px;color:var(--text-secondary)}
+.empty h3{font-family:var(--font-display);font-size:1.1rem;font-weight:600;margin-bottom:6px;color:var(--text-secondary)}
 .empty p{font-size:0.85rem;color:var(--text-muted);max-width:280px;line-height:1.6}
 

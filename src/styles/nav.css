@@ -12,7 +12,7 @@
 .rail-logo{
   display:flex;align-items:center;gap:8px;
   padding:6px 14px 2px;
-  font-family:'Clash Display',system-ui,sans-serif;
+  font-family:var(--font-display);
   font-size:1rem;font-weight:600;
   letter-spacing:-0.01em;
   flex-shrink:0;

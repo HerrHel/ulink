@@ -61,7 +61,7 @@
 .popover-result .pr-icon-fallback{width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent)}
 .popover-result .pr-icon-fallback svg{width:16px;height:16px}
 .popover-result .pr-name{font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.popover-result .pr-url{font-size:0.7rem;color:var(--text-muted);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;font-family:'JetBrains Mono',monospace}
+.popover-result .pr-url{font-size:0.7rem;color:var(--text-muted);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;font-family:var(--font-mono)}
 .popover-result .pr-meta{font-size:0.7rem;color:var(--text-muted);margin-left:auto;flex-shrink:0}
 .popover-result .pr-added{font-size:0.7rem;color:var(--green);margin-left:auto;flex-shrink:0}
 
