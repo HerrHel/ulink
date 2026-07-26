@@ -22,6 +22,7 @@ export const ACTIONS: Record<string, string> = {
   EDIT: 'edit',
   DELETE: 'delete',
   MOVE_TO_CAT: 'moveToCat',
+  MOVE_TO_SPACE: 'moveToSpace',
   SHARE_GROUP: 'shareGroup',
   ADD_BOOKMARK: 'addbookmark',
   ADD_GROUP: 'addgroup',

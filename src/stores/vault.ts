@@ -1,5 +1,5 @@
 /**
- * vault.ts — 保险柜（私密分类区）独立加密状态 Store
+ * vault.ts — 保险柜（私密空间）独立加密状态 Store
  *
  * 与 e2e.ts 同构但解耦——保险柜有独立主密码、独立派生密钥、独立自动锁定。
  * 即便全局 E2E 被攻破，保险柜仍独立安全。
@@ -7,7 +7,7 @@
  * 职责：
  * - 保险柜是否启用/解锁
  * - 独立 AES-256-GCM 密钥缓存（CryptoKey）
- * - 进区解锁 + 超时锁策略：解锁后 5 分钟无操作或页面后台 60s 自动锁
+ * - 进私密空间解锁 + 超时锁策略：解锁后 5 分钟无操作或页面后台 60s 自动锁
  *   （区别于全局 E2E 的 15 分钟——保险柜是更高密级，超时窗口更短）
  */
 import { ref, readonly } from 'vue'
@@ -61,7 +61,7 @@ export const useVaultStore = defineStore('vault', () => {
     if (_preLockTimer) { clearTimeout(_preLockTimer); _preLockTimer = null }
   }
 
-  /** 锁定：清除密钥 + 停止所有定时器。离开私密分类或超时时调用。 */
+  /** 锁定：清除密钥 + 停止所有定时器。离开私密空间或超时时调用。 */
   function lock() {
     vaultCryptoKey.value = null
     isVaultUnlocked.value = false

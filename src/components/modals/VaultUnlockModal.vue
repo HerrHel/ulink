@@ -1,14 +1,14 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="访问私密分类区" :class="{ open }" @click.self="onCancel">
+  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="进入私密空间" :class="{ open }" @click.self="onCancel">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? '重置保险柜主密码' : '访问私密分类区' }}</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? '重置保险柜主密码' : '进入私密空间' }}</span>
       </div>
       <div class="modal-body">
         <!-- 解锁模式 -->
         <template v-if="mode === 'unlock'">
           <div class="e2e-info">
-            <p>输入保险柜主密码以查看您的私密分类</p>
+            <p>输入保险柜主密码以进入私密空间</p>
           </div>
           <div v-if="vault.isVaultBiometricEnrolled.value && bioAvailable" class="form-group">
             <button class="btn btn-primary btn-block" :disabled="bioLoading" @click="onBiometricUnlock">

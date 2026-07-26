@@ -8,7 +8,7 @@
       <div class="modal-body">
         <div v-if="step === 1" class="e2e-step">
           <div class="e2e-info">
-            <p>保险柜为私密分类提供独立加密保护。设主密码后，私密分类仅在解锁后可见。</p>
+            <p>保险柜为私密空间提供独立加密保护。设主密码后，私密空间仅在解锁后可进入。</p>
             <p>保险柜主密码独立于端到端加密主密码，互不影响。</p>
           </div>
           <div class="form-group">
@@ -33,7 +33,7 @@
           <div class="e2e-info e2e-warn">
             <p><strong>⚠️ 重要提醒</strong></p>
             <p>请立即保存以下 Recovery Key。它是您在忘记保险柜主密码时重设的唯一方式。</p>
-            <p>忘记主密码且丢失此 Key，将无法重设，私密分类内的内容将永久无法访问。</p>
+            <p>忘记主密码且丢失此 Key，将无法重设，私密空间内的内容将永久无法访问。</p>
           </div>
           <div class="recovery-key-box">
             <code class="recovery-key">{{ recoveryKey }}</code>
@@ -53,8 +53,8 @@
           <div class="e2e-success">
             <div class="e2e-success-icon">✅</div>
             <p><strong>保险柜已开启</strong></p>
-            <p>现在您可以在分类设置中勾选「私密分类」。</p>
-            <p>每次访问私密分类需输入保险柜主密码解锁。</p>
+            <p>现在您可以在「管理分类」弹窗点「🔒 私密空间」入口进入。</p>
+            <p>每次进入私密空间需输入保险柜主密码解锁。</p>
           </div>
           <div v-if="bioAvailable" class="form-group" style="margin-top:16px">
             <div class="e2e-info" style="font-size:0.85rem">

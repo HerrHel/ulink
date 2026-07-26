@@ -47,7 +47,7 @@
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" @close="onE2EClose" @unlocked="onE2EUnlocked" />
 <VaultSetupModal :open="store.modals.vaultSetup" @close="store.modals.vaultSetup = false" />
-<VaultUnlockModal :open="store.modals.vaultUnlock" @close="store.modals.vaultUnlock = false" @unlocked="store.modals.vaultUnlock = false" />
+<VaultUnlockModal :open="store.modals.vaultUnlock" @close="onVaultClose" @unlocked="onVaultUnlocked" />
 <SetupGuide />
 </ErrorBoundary>
 
@@ -83,6 +83,9 @@ import { useE2E } from './composables/domain/useE2E.js'
 import { useCloudSync } from './composables/domain/useCloudSync.js'
 import { useVault } from './composables/domain/useVault.js'
 import { useE2EStore } from './stores/e2e.js'
+import { useVaultStore } from './stores/vault.js'
+import { useUIStore } from './stores/ui.js'
+import { useDataStore } from './stores/data.js'
 import { toast } from './lib/toast.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
@@ -126,6 +129,9 @@ const e2eStore = useE2EStore()
 const cloudSync = useCloudSync()
 // 保险柜独立加密状态（私密空间门禁复用，见 useVault）
 const vault = useVault()
+const vaultStore = useVaultStore()
+const uiStore = useUIStore()
+const dataStore = useDataStore()
 
 /**
  * 按需解锁：当 e2eStore.pendingUnlock 数组非空时，弹出解锁弹窗。
@@ -226,4 +232,30 @@ function onE2EClose() {
   store.modals.e2eUnlock = false
   drainPendingUnlock(false)
 }
+
+/**
+ * 保险柜解锁成功：用户正想进私密空间 → 切换数据集到私密空间。
+ * 空间切换取代了上一轮「落 curCat 到私密分类」语义（标志位方案已删）。
+ */
+function onVaultUnlocked() {
+  store.modals.vaultUnlock = false
+  // 仅当当前在主页时切到私密空间（若已解过锁 + 已在私密空间内重复解锁无意义）
+  if (uiStore.curSpace === 'main') {
+    void dataStore.switchSpace('vault')
+  }
+}
+
+/** 保险柜解锁弹窗关闭/取消：关 modal，不切空间 */
+function onVaultClose() {
+  store.modals.vaultUnlock = false
+}
+
+/**
+ * 离开私密空间主动锁保险柜（与 5 分钟超时锁并存）。
+ * 监听 uiStore.curSpace：vault → main 时 lockVault()。手动「返回主页」按钮已主动锁，
+ * 此 watch 作兜底（如路由/外部逻辑切回主页时仍锁）。
+ */
+watch(() => uiStore.curSpace, (next, prev) => {
+  if (prev === 'vault' && next === 'main' && vaultStore.isVaultUnlocked) vault.lockVault()
+})
 </script>

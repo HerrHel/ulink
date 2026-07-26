@@ -1,5 +1,5 @@
 /**
- * useVault.ts — 保险柜（私密分类区）独立加密管理
+ * useVault.ts — 保险柜（私密空间）独立加密管理
  *
  * 与 useE2E 同构但解耦：保险柜有独立主密码 + 独立 canary + 独立派生密钥，
  * 与全局 E2E 完全独立。即便全局 E2E 被攻破，保险柜仍独立安全。
@@ -9,10 +9,11 @@
  * - 保险柜 Recovery Key 生成与验证
  * - 独立加密密钥派生与管理（密钥缓存移至 vaultStore）
  *
- * 本期（C1 方案）：保险柜仅做「私密分类的 UI 隐藏 + 独立解锁门禁」，
- * 不加密书签字段（私密书签的 username/notes 仍走全局 E2E 加密路径）。
- * vaultCryptoKey 仍派生并存内存——它是解锁成功的证明，未来若要加密
- * 私密分类专属字段可直接复用，无需改本 composable 的密钥管理。
+ * 私密空间 = 一套独立本地数据集（linkvault_vault_v1），与主页互不可见。
+ * 本期：保险柜仅做「私密空间的解锁门禁」，不单独加密数据集字段
+ * （私密数据集的 username/notes 等如有敏感字段仍走全局 E2E 加密路径）。
+ * vaultCryptoKey 仍派生并存内存——它是解锁成功的证明，未来若要单独加密
+ * 私密空间字段可直接复用，无需改本 composable 的密钥管理。
  */
 import { computed } from 'vue'
 import { useAuth } from './useAuth.js'
@@ -208,7 +209,7 @@ export function useVault() {
     return true
   }
 
-  /** 锁定保险柜（清除内存中的密钥 + 停止所有定时器）。离开私密分类或超时时调用。 */
+  /** 锁定保险柜（清除内存中的密钥 + 停止所有定时器）。离开私密空间或超时时调用。 */
   function lockVault() {
     vaultStore.lock()
   }

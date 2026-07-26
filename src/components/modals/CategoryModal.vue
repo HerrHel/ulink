@@ -1,7 +1,13 @@
 <template>
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="分类管理" id="catModal" :class="{ open: store.modals.category }" @click.self="onClose">
     <div class="modal">
-      <div class="modal-head"><h2>管理分类</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
+      <div class="modal-head">
+        <h2>{{ isVault ? '管理分类（私密）' : '管理分类' }}</h2>
+        <button v-if="!isVault" class="btn btn-sm btn-primary" data-testid="btnVaultEntry" style="margin-right:auto" @click="onVaultEntry">
+          <span aria-hidden="true">🔒</span> 私密空间
+        </button>
+        <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
+      </div>
       <div class="modal-body">
         <div class="flex-center gap-2 mb-3">
           <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" placeholder="新分类名称" aria-label="新分类名称" @keydown.enter="onAddCat">
@@ -19,6 +25,7 @@
             </template>
             <template v-else>
               <span class="flex-1">{{ cat.name }}</span>
+              <button v-if="!isVault" class="btn-xs icon-xs" @click="onMoveCatToVault(cat)" title="移入私密空间">🔒</button>
               <button class="btn-xs icon-xs" @click="startRename(cat)" title="编辑" v-html="I.edit"></button>
               <button class="btn-xs btn-danger icon-xs" @click="onDelete(cat.id)" title="删除" v-html="I.trash"></button>
             </template>
@@ -33,6 +40,9 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
+import { useVaultStore } from '../../stores/vault.js'
+import { useSpaceMove } from '../../composables/domain/useSpaceMove.js'
 import { addNewCategory } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
@@ -43,10 +53,16 @@ import type { Category } from '../../types.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
+const uiStore = useUIStore()
+const vaultStore = useVaultStore()
+const spaceMove = useSpaceMove()
 const newName = ref('')
 const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameCategory')
 const catListRef = ref<HTMLElement | null>(null)
+
+// 当前是否在私密空间数据集（决定标题与"移入私密"按钮/入口可见性）
+const isVault = computed(() => uiStore.curSpace === 'vault')
 
 const uncategorizedCat = computed(() => dataStore.categoryMap[CAT_UNCATEGORIZED] || { id: CAT_UNCATEGORIZED, name: '未分类' })
 
@@ -87,6 +103,25 @@ useMobileDragReorder(catListRef, sortableList, {
 })
 
 function onClose() { store.modals.category = false }
+
+/** 私密空间入口：未启用保险柜 → 弹设置；已启用未解锁 → 弹解锁（解锁成功后 App.vue 接 switchSpace，进私密后自动关本弹窗） */
+function onVaultEntry() {
+  if (!vaultStore.isVaultEnabled) {
+    uiStore.modals.vaultSetup = true
+    return
+  }
+  // 关分类弹窗避免进私密后还有遮挡；解锁成功后 App.vue 切空间
+  store.modals.category = false
+  uiStore.modals.vaultUnlock = true
+}
+
+/** 整分类移入私密空间：二次确认后调 useSpaceMove（连书签/组一并迁入并从主页删除） */
+function onMoveCatToVault(cat: Category) {
+  showConfirm(`把分类「${cat.name}」及其下书签/组移入私密空间？移入后将从主页删除，仅解锁私密空间后可见。`).then(ok => {
+    if (!ok) return
+    void spaceMove.moveCategoryToVault(cat.id)
+  })
+}
 
 function onAddCat() {
   if (addNewCategory(newName.value, store)) newName.value = ''

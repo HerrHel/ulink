@@ -2,7 +2,7 @@
   <nav class="icon-rail" :class="{ open: uiStore.panels.rail }" aria-label="导航">
     <div class="rail-logo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-      <span class="rail-logo-text">Link<span>Vault</span></span>
+      <span class="rail-logo-text" :data-space="uiStore.curSpace">{{ isVault ? '私密' : 'Link' }}<span v-if="!isVault">Vault</span></span>
     </div>
     <div class="rail-section-label">分类</div>
     <div class="rail-nav" id="railNav">
@@ -33,6 +33,14 @@
       </span>
     </div>
     <div class="rail-bottom">
+      <button v-if="!isVault" class="rail-item" data-testid="btnVaultEntry" @click="onVaultEntry">
+        <span aria-hidden="true">🔒</span>
+        私密空间
+      </button>
+      <button v-else class="rail-item" data-testid="btnBackToMain" @click="onBackToMain">
+        <span aria-hidden="true">←</span>
+        返回主页
+      </button>
       <button class="rail-item" id="btnManageCats" @click="openCatModalNav">
         <span aria-hidden="true" v-html="I.settings"></span>
         管理分类
@@ -50,6 +58,8 @@ import { computed } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useVaultStore } from '../../stores/vault.js'
+import { useVault } from '../../composables/domain/useVault.js'
 import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
@@ -58,6 +68,11 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
+const vaultStore = useVaultStore()
+const vault = useVault()
+
+// 当前是否在私密空间（数据集）；入口/返回按钮与 logo 切换依此
+const isVault = computed(() => uiStore.curSpace === 'vault')
 
 // B-11：按 order 升序渲染，pull 后字段已更新但数组位置可能仍是本地旧序。
 const categories = computed(() =>
@@ -83,6 +98,21 @@ function selectCat(id: string) {
   uiStore.focusedGroupId = null
   // A4-006：移动端点分类后关 rail，避免遮罩残留
   if (uiStore.isMobile) uiStore.panels.rail = false
+}
+
+/** 进入私密空间：未启用保险柜 → 弹设置；已启用未解锁 → 弹解锁（解锁成功后 App.vue onVaultUnlocked 接 switchSpace） */
+function onVaultEntry() {
+  if (!vaultStore.isVaultEnabled) {
+    uiStore.modals.vaultSetup = true
+    return
+  }
+  uiStore.modals.vaultUnlock = true
+}
+
+/** 退出私密空间：锁保险柜并切回主页数据集 */
+async function onBackToMain() {
+  vault.lockVault()
+  await dataStore.switchSpace('main')
 }
 
 function toggleTheme() {

@@ -15,6 +15,8 @@
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
+import { useUIStore } from '../../stores/ui.js'
+import { useSpaceMove } from '../../composables/domain/useSpaceMove.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { ACTIONS } from '../../config/constants.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
@@ -28,6 +30,8 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 
 const store = useAppStore()
 const ctx = useContextMenuStore()
+const uiStore = useUIStore()
+const spaceMove = useSpaceMove()
 
 // 视口边缘 clamp：contextMenu.show 用 e.clientX/Y 作 left/top，右/下边缘右键时菜单
 // 固定定位会溢出视口（右下 1/3 区域高频）。菜单高度随 type 动态（card=6 项、rail-empty=1 项），
@@ -59,6 +63,7 @@ const allItems = [
   { action: ACTIONS.PIN, text: '置顶' },
   { action: ACTIONS.DELETE, text: '删除', danger: true },
   { action: ACTIONS.MOVE_TO_CAT, text: '移动到' },
+  { action: ACTIONS.MOVE_TO_SPACE, text: '移入私密空间', danger: true },
   { action: ACTIONS.SHARE_GROUP, text: '分享组' },
   { action: ACTIONS.ADD_BOOKMARK, text: '添加书签' },
   { action: ACTIONS.ADD_GROUP, text: '添加组' },
@@ -69,11 +74,11 @@ const allItems = [
 ]
 
 const RULES: Record<string, { show: string[]; text: Record<string, string> }> = {
-  card:         { show: [ACTIONS.DETAIL, ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MULTI_SELECT], text: {} },
+  card:         { show: [ACTIONS.DETAIL, ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.MULTI_SELECT], text: {} },
   sub:          { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情' } },
   cat:          { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
   attr:         { show: [ACTIONS.RENAME_ATTR, ACTIONS.DELETE], text: { [ACTIONS.RENAME_ATTR]: '重命名' } },
-  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
+  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
   'group-card': { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.EDIT]: '编辑书签', [ACTIONS.DELETE]: '从组移除' } },
   'rail-empty': { show: [ACTIONS.ADD_CAT], text: {} },
   'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
@@ -84,6 +89,8 @@ const DEFAULT_TEXT: Record<string, string> = { [ACTIONS.VISIT]: '打开网站', 
 const visibleItems = computed(() => {
   const rule = RULES[ctx.type] || { show: [], text: {} }
   const showSet = new Set(rule.show)
+  // 私密空间内不显示「移入私密空间」（已经在私密空间）
+  if (uiStore.curSpace !== 'main') showSet.delete(ACTIONS.MOVE_TO_SPACE)
   const textMap = { ...DEFAULT_TEXT, ...rule.text }
   const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
   const dataStore = useDataStore()
@@ -129,6 +136,7 @@ function _dispatchAction(type: string, action: string, id: string) {
     if (action === ACTIONS.PIN) { dataStore.togglePin('bookmark', id); debouncedSaveAppData() }
     // A3-001：补齐移动到 / 多选分发（与 group 路径一致）
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showBmCategoryPicker(id)
+    if (action === ACTIONS.MOVE_TO_SPACE) void spaceMove.moveBookmarksToVault([id])
     if (action === ACTIONS.MULTI_SELECT) {
       const ui = store // app facade 暴露 batch
       if (!ui.batchMode) toggleBatchMode()
@@ -160,6 +168,7 @@ function _dispatchAction(type: string, action: string, id: string) {
     if (action === ACTIONS.DELETE) deleteGroup(id)
     if (action === ACTIONS.PIN) { dataStore.togglePin('group', id); debouncedSaveAppData() }
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
+    if (action === ACTIONS.MOVE_TO_SPACE) void spaceMove.moveGroupsToVault([id])
     if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
     if (action === ACTIONS.HISTORY) {
       pushNavState()
