@@ -245,7 +245,10 @@ function _onDragOver(e: DragEvent) {
     e.preventDefault();
   }
   const gBody = target && target.classList.contains('group-body') ? target : (target && (target as HTMLElement).closest?.('.group-body'))
-  if (gBody) {
+  // 审计 R24：type:'detail' 卡拖到 .group-body 时画 ProseMirror 插入光标 + 提示"嵌入为内联卡片"，
+  // 但 drop 端 handleBodyDrop:308 `if (p.type !== 'bm') return` 早退不真插入——视觉安区泄漏误导用户。
+  // dragover 期间对 type:'detail' 跳过 group-body 光标绘制（与 drop 端拒绝对齐）。
+  if (gBody && _currentDragPayload?.type === 'bm') {
     _updateDragCursorForGroupBody(gBody, e.clientX, e.clientY)
   } else {
     _hideDragCursor()

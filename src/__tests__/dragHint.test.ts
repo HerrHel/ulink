@@ -12,6 +12,7 @@ const bm: DragHintPayload = { type: 'bm', id: 'b1' }
 const bmInGroup: DragHintPayload = { type: 'bm', id: 'b1', srcGid: 'g1' }
 const group: DragHintPayload = { type: 'group', id: 'group:g1' }
 const groupOther: DragHintPayload = { type: 'group', id: 'group:g2' }
+const detail: DragHintPayload = { type: 'detail', id: 'b1', srcGid: '__DET__' }
 
 describe('getDragHintText', () => {
   it('payload 为空返回空串', () => {
@@ -29,6 +30,25 @@ describe('getDragHintText', () => {
     const head = el('div', 'group-card-head')
     expect(getDragHintText(head, group)).toBe('交换组位置')
     expect(getDragHintText(head, bm)).toBe('将书签排序到此组')
+  })
+
+  it('审计 R24：type:detail 拖到 group-body / group-card-head / group-card 均不提示组操作（drop 端拒绝）', () => {
+    const body = el('div', 'group-body', { 'data-gid': 'g1' })
+    expect(getDragHintText(body, detail)).toBe('')
+    const head = el('div', 'group-card-head')
+    expect(getDragHintText(head, detail)).toBe('')
+    const card = el('div', 'group-card', { 'data-group-id': 'g1' })
+    expect(getDragHintText(card, detail)).toBe('')
+  })
+
+  it('审计 R24：type:detail 拖到 detail-card-wrap / detailPanel 仍提示合法操作（面板内重排/加入面板）', () => {
+    expect(getDragHintText(el('div', 'detail-card-wrap'), detail)).toBe('移到此位置')
+    const panel = el('div', '', { id: 'detailPanel' })
+    const child = el('div')
+    panel.appendChild(child)
+    document.body.appendChild(panel)
+    expect(getDragHintText(child, detail)).toBe('加入详情面板')
+    panel.remove()
   })
 
   it('detail-card-wrap / detailPanel / rail-item', () => {

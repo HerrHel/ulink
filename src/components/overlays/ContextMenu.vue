@@ -34,7 +34,10 @@ const ctx = useContextMenuStore()
 // 故在 open 切为 true 后 nextTick 读 #ctxMenu 实际 offsetWidth/Height 反算 clamp，比硬编码更准。
 // 对照 AddPopover(useMention 同样 Math.min(innerWidth-innerHeight - 预估)) 做法一致。
 const pos = ref({ x: 0, y: 0 })
-watch(() => ctx.open, async (open) => {
+// 审计 R14：原 watch 仅监听 ctx.open，连续右键不同坐标时 ctx.show 每次更新 x/y 但恒置 open=true，
+// open true→true 不触发 → pos 保持第一次坐标，菜单偏位、可能误点错菜单项。改为监听 [open,x,y]：
+// open=false 时 menu 不可见读不到尺寸故仍 return；open=true 且 x/y 变化时同 tick 重算 clamp。
+watch(() => [ctx.open, ctx.x, ctx.y], async ([open]) => {
   if (!open) return
   // 先按原始 clientX/Y 摆位（菜单可见后才能测尺寸）
   pos.value = { x: ctx.x, y: ctx.y }

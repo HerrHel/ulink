@@ -16,6 +16,16 @@ export function getDragHintText(
   payload: DragHintPayload | null,
 ): string {
   if (!payload) return ''
+  // 审计 R24：type:'detail' 的详情卡只能重排（detail-card-wrap）或加入面板（#detailPanel）
+  // 或拖到面板外摘除（cardGrid），不应误提示可嵌入组——drop 端 handleBodyDrop:308 /
+  // handleGroupCardDrop / handleGroupHeadDrop 对 type:'detail' 均拒或 no-op，故 group 相关
+  // 落点对 detail 返回空串，消除视觉安区泄漏（画了插入光标/提示组操作但松手无反应）。
+  if (payload.type === 'detail' &&
+      (target.classList.contains('group-body') ||
+       target.classList.contains('group-card-head') ||
+       target.classList.contains('group-card'))) {
+    return ''
+  }
   if (target.classList.contains('group-body')) {
     const gid = (target as HTMLElement).dataset.gid
     if (payload.type === 'group' && payload.id.slice(6) === gid) return ''

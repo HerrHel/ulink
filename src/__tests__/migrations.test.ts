@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { runMigrations } from '../stores/migrations.js'
+import { runMigrations, CURRENT_SCHEMA_VERSION } from '../stores/migrations.js'
+import { DEFAULTS } from '../config/constants.js'
 
 function makeResult(overrides: any = {}) {
   return {
@@ -151,5 +152,12 @@ describe('runMigrations', () => {
     const needsPersist = runMigrations(d, result)
     expect(needsPersist).toBe(true)
     expect((result as any)._schemaVersion).toBe(2)
+  })
+
+  it('审计 R40：DEFAULTS._schemaVersion 与 CURRENT_SCHEMA_VERSION 不漂移（防新装实例误走迁移分支）', () => {
+    // 两值独立硬编码（constants 不 import migrations 以避循环依赖），某次迁移把 CURRENT 提到 3
+    // 而忘同步 DEFAULTS 时：新装首次 loadData 走 cloneDeep(DEFAULTS) 持久化 schemaVersion=2<3，
+    // 下次加载重跑迁移补字段——虽靠幂等不丢数据但属易错设计。用断言固化两者相等，CI 即报漂移。
+    expect(DEFAULTS._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 })
