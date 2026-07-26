@@ -137,7 +137,9 @@
   function toast(msg, dur, action) {
     if (dur === undefined) { dur = 2000 }
     if (action) {
-      toastEl.innerHTML = msg + '<button class="toast-action" id="toastAction">' + action.label + '</button>'
+      // R45：action 分支使用 innerHTML，msg 与 label 直接拼接——当前无调用（死代码），但若将来
+      // 含远端不可信串（如 error.message）则 XSS。改为先 esc 再拼接。
+      toastEl.innerHTML = esc(msg) + '<button class="toast-action" id="toastAction">' + esc(action.label) + '</button>'
     } else {
       toastEl.textContent = msg
     }
