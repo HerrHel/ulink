@@ -61,7 +61,10 @@ export function _mergeOps(ops: SyncOp[]): SyncOp[] {
     if (last.action === 'delete') {
       merged.push(last)
     } else {
-      merged.push({ ...last, ts: itemOps[0].ts })
+      // R30：保留历史最大 retries，避免新编辑（retries=0）覆盖旧失败 op 的重试计数，
+      // 导致死信阈值被绕过（持续编辑的坏 op 永不进死信，持续重试+错误态长期误导）。
+      const maxRetries = Math.max(...itemOps.map(o => o.retries || 0))
+      merged.push({ ...last, ts: itemOps[0].ts, retries: maxRetries })
     }
   }
   return merged.sort((a, b) => a.ts - b.ts)
