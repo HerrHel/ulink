@@ -29,7 +29,6 @@ import TaskItem from '@tiptap/extension-task-item'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppDataNotes } from '../../stores/app.js'
-import { useUndoStore } from '../../stores/undo.js'
 import { EditorManager, isSilentSetContent } from '../../lib/editor.js'
 import { useMfbStore } from '../../stores/overlay.js'
 import { pushUndo } from '../../composables/domain/useUndo.js'
@@ -216,14 +215,7 @@ onMounted(() => {
 
 let _mfbBlurTimer: ReturnType<typeof setTimeout> | null = null
 
-const undo = useUndoStore()
-
 function _onFocusIn() {
-  // 清除延迟保存定时器
-  if (undo.saveTimers[props.groupId]) {
-    clearTimeout(undo.saveTimers[props.groupId])
-    delete undo.saveTimers[props.groupId]
-  }
   // 移动端显示浮动格式栏（通过 useMfbStore）
   if (isMobile() && ui.focusedGroupId) {
     useMfbStore().show()
@@ -231,11 +223,12 @@ function _onFocusIn() {
 }
 
 function _onFocusOut() {
-  // 延迟保存
-  undo.saveTimers[props.groupId] = setTimeout(() => {
-    // syncToStore already handles saving via TipTap onUpdate
-    delete undo.saveTimers[props.groupId]
-  }, 200)
+  // AUDIT-R35：原此处设 200ms 延迟保存 timer，回调体仅 delete 自身、不落盘
+  // （注释自承「syncToStore each child via TipTap onUpdate 落盘」）。落盘实际由
+  // onUpdate→syncToStore→updateGroup(sync 写 store) + debouncedSaveAppDataNotes(1200) +
+  // beforeunload/visibilitychange→hidden 的 flushSaveAppData 兜底链负责，blur timer 从不参与。
+  // _onFocusIn clearTimeout 它与不 clear 等价（回调空操作）。静态分析穷尽 saveTimers 读写点
+  // （仅本处+undo.clearStack 自管理）确认无保存语义，删死代码；连带移除 undo store saveTimers 字段。
   // 延迟隐藏浮动格式栏
   if (_mfbBlurTimer) clearTimeout(_mfbBlurTimer)
   _mfbBlurTimer = setTimeout(() => {
