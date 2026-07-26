@@ -23,6 +23,11 @@
   const pageUrl = $('#pageUrl')
   const pageIcon = $('#pageIcon')
   const bookmarkList = $('#bookmarkList')
+  // R16：MV3 CSP 拦截内联 onerror 属性，导致无 favicon 书签留碎图标。
+  // 用事件委托 capture 替代内联 onerror，兼容 CSP。
+  bookmarkList.addEventListener('error', function (e) {
+    if (e.target.tagName === 'IMG' && e.target.src) e.target.style.display = 'none'
+  }, true)
   // F1-001：click 委托只注册一次，禁止 renderBookmarks 每次重绘叠加监听
   bookmarkList.addEventListener('click', function (e) {
     var target = e.target
@@ -252,7 +257,7 @@
         urlHtml = highlightMatch(urlHtml, query)
       }
       return '<div class="bookmark-item" data-id="' + esc(b.id) + '" data-url="' + esc(b.url) + '">'
-        + (icon ? '<img src="' + esc(icon) + '" alt="" onerror="this.style.display=\'none\'">' : '')
+        + (icon ? '<img src="' + esc(icon) + '" alt="">' : '')
         + '<div class="bookmark-item-info">'
         + '<div class="bookmark-item-title">' + titleHtml + '</div>'
         + '<div class="bookmark-item-url">' + urlHtml + '</div>'
