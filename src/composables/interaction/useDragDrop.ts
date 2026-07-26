@@ -123,8 +123,11 @@ function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; or
   const ds = useDataStore()
   ds._markDirty(a.id, b.id)
   // A1-003：已有自定义序时同步交换 _customCardOrder，避免 PC 拖拽 DOM 换位后 Vue 弹回
+  // R25：原仅 sortMode==='order' 时同步，非 order 模式拖拽改 order 字段但不同步 _customCardOrder，
+  // 切回 order 模式后 _customCardOrder 仍持有旧顺序，useCombinedList 用旧序渲染致拖拽结果与
+  // 视觉不一致。改为只要 _customCardOrder 存在就同步，无论当前 sortMode。
   const ui = useUIStore()
-  if (ds._customCardOrder && ui.sortMode === 'order') {
+  if (ds._customCardOrder) {
     const order = ds._customCardOrder
     // 单次遍历找两个索引，避免双 findIndex O(2n)
     let ia = -1, ib = -1
