@@ -44,6 +44,19 @@ function makeSendRateLimited() {
     error: { message: 'For security reasons, you can only request once every 60 seconds' },
   })
 }
+function makeSendRateLimitedWithCode() {
+  ;(supabase.auth.signInWithOtp as any).mockResolvedValue({
+    data: {},
+    error: { code: 'over_email_send_rate_limit', message: 'Email rate limit exceeded' },
+  })
+}
+function makeSendInvalidEmail() {
+  // 非限流类 error：邮箱格式错误。旧实现对任何 error 都施 60s 冷却，致一次邮箱输错被卡 60s。
+  ;(supabase.auth.signInWithOtp as any).mockResolvedValue({
+    data: {},
+    error: { message: 'Unable to validate email address: invalid format' },
+  })
+}
 
 describe('S12 OTP 限流 — useAuthStore', () => {
   beforeEach(() => {
@@ -184,5 +197,34 @@ describe('S12 OTP 限流 — useAuthStore', () => {
     expect(auth.sendCooldownRemaining('b@x.com')).toBe(0)
     const ok = await auth.sendOtp('b@x.com')
     expect(ok).toBe(true)
+  })
+
+  it('审计 R31：非限流类 error（邮箱格式错误）不施冷却，可立即重发', async () => {
+    vi.useFakeTimers()
+    const auth = useAuthStore()
+    makeSendInvalidEmail()
+    const ok1 = await auth.sendOtp('bad-email')
+    expect(ok1).toBe(false)
+    expect(auth.authError).toMatch(/validate email|format|invalid/i)
+    // 非限流错误不登记冷却——用户改对邮箱后应能立即重发，不被卡 60s
+    expect(auth.sendCooldownRemaining('bad-email')).toBe(0)
+    // 立即改对邮箱重发：网络应被再次调用
+    makeSendOk()
+    const ok2 = await auth.sendOtp('good@x.com')
+    expect(ok2).toBe(true)
+    expect((supabase.auth.signInWithOtp as any)).toHaveBeenCalledTimes(2)
+  })
+
+  it('审计 R31：限流类 error（带 code）仍施 60s 冷却', async () => {
+    vi.useFakeTimers()
+    const auth = useAuthStore()
+    makeSendRateLimitedWithCode()
+    const ok = await auth.sendOtp('c@x.com')
+    expect(ok).toBe(false)
+    expect(auth.sendCooldownRemaining('c@x.com')).toBeGreaterThan(0)
+    // 冷却中再发被本地拦
+    makeSendOk()
+    const ok2 = await auth.sendOtp('c@x.com')
+    expect(ok2).toBe(false)
   })
 })

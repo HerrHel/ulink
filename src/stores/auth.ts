@@ -47,6 +47,36 @@ function lockDurationFor(locksBefore: number): { lockMs: number; label: string }
 }
 const FAILS_PER_LOCK = 5
 
+/**
+ * 审计 R31：判定 Supabase Auth sendOtp 的 error 是否为「限流类」。
+ *
+ * 旧实现对**任何**平台 error（含网络错误、邮箱格式错误、signup_disabled 等）都施
+ * 60s 发送冷却——用户因一次网络抖动或输错邮箱就被卡 60s 才能重发。
+ *
+ * 仅「限流类」error 才该登记本地冷却（防短时重复触发平台限流）。非限流类 error
+ * 让用户立即重试（修对邮箱、等网络恢复即可），不该施加冷却。
+ *
+ * Supabase gotrue 限流 error：优先看 error.code（新 SDK 带 `over_email_send_rate_limit`「
+ * 等 rate-limit code），兜底看 message 特征短语（旧 SDK 仅 message，如
+ * 'For security reasons, you can only request once every 60 seconds'）。
+ * message 匹配保守——只命中明确的限流措辞，避免误伤普通 error。
+ */
+const RATE_LIMIT_CODES = new Set([
+  'over_email_send_rate_limit',
+  'rate_limit_exceeded',
+  'email_rate_limit_exceeded',
+  'email_not_allowed_rate_limited',
+])
+const RATE_LIMIT_MSG_RE = /(?:rate[ _-]?limit|once every\s+\d+\s+second|too many (?:requests|emails?)|稍候|过频繁|频繁)/i
+
+function _isRateLimitError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false
+  const code = typeof error.code === 'string' ? error.code.toLowerCase() : ''
+  if (code && RATE_LIMIT_CODES.has(code)) return true
+  const msg = typeof error.message === 'string' ? error.message : ''
+  return RATE_LIMIT_MSG_RE.test(msg)
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const session = ref<Session | null>(null)
@@ -132,10 +162,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
     const { error } = await supabase.auth.signInWithOtp({ email })
     if (error) {
-      // 平台限流也按本地冷却对待，避免短时重复触发
-      const rec = _rec(email)
-      rec.sendUntil = Date.now() + SEND_COOLDOWN_MS
-      _ensureTicker()
+      // 审计 R31：仅「限流类」error 登记本地冷却——避免短时重复触发平台限流。
+      // 非限流类（网络错误/邮箱格式错误/signup_disabled 等）不施冷却，让用户立即重试。
+      // 旧实现对任何 error 都设 sendUntil，致一次网络抖动或邮箱输错也卡 60s。
+      if (_isRateLimitError(error)) {
+        const rec = _rec(email)
+        rec.sendUntil = Date.now() + SEND_COOLDOWN_MS
+        _ensureTicker()
+      }
       authError.value = error.message
       return false
     }
