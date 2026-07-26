@@ -59,6 +59,13 @@ function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: 
   return items
 }
 
+// R22：模块级历史防抖 Map，reset/import 时应一并清空，避免旧定时器按旧 id 写快照。
+export function _cancelPendingHist() {
+  for (const t of _histDebounceTimers.values()) clearTimeout(t)
+  _histDebounceTimers.clear()
+  _histDebounceData.clear()
+}
+
 type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
 
 /**
@@ -831,6 +838,8 @@ export const useDataStore = defineStore('data', {
         this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
         this._syncMaps()
         this._restoreDeletedGroupMemberships()
+        // R22：清空本地历史防抖 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
+        _cancelPendingHist()
         clearSearchCache()
         this._searchVersion = 1
         return true
@@ -853,6 +862,8 @@ export const useDataStore = defineStore('data', {
       this.customAttributes = result.customAttributes
       this.siblingGroups = result.siblingGroups
       this._syncMaps()
+      // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
+      _cancelPendingHist()
       clearSearchCache()
       this._searchVersion = 1
     },

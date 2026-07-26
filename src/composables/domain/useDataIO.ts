@@ -4,7 +4,7 @@
  *
  * A3: 支持多格式导入（LinkVault JSON、Chrome HTML、Raindrop JSON、CSV）
  */
-import { useDataStore } from '../../stores/data.js'
+import { useDataStore, _cancelPendingHist } from '../../stores/data.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
@@ -566,6 +566,8 @@ export async function resetToDefaults() {
     ds._deletedIds.clear()
     ds._changedFields.clear()
     ds._customCardOrder = null
+    // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
+    _cancelPendingHist()
     clearSearchCache()
     ds._bumpSearchVersion()
     try { await clearAllSyncOps() } catch { /* ignore */ }
