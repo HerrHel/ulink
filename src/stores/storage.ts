@@ -35,6 +35,10 @@ class LinkVaultDB extends Dexie {
     this.version(1).stores({
       data: 'key',
     })
+    // v2 曾引入 pendingOps 占位表（schema ++id,createdAt），但从未被任何业务代码消费——
+    // enqueue/drain/remove/updateRetry/count/clear 全部走 syncOps（v3 引入）。
+    // v3 仍声明 pendingOps 致其作为僵尸空表留存（AUDIT-R39）。v4 移除其声明：Dexie 声明式
+    // schema 在升级时自动删除未在目标版本声明的表，新增显式 upgrade 双保险清理残留。
     this.version(2).stores({
       data: 'key',
       pendingOps: '++id,createdAt',
@@ -43,6 +47,13 @@ class LinkVaultDB extends Dexie {
       data: 'key',
       pendingOps: '++id,createdAt',
       syncOps: '++id,itemId,table,ts',
+    })
+    this.version(4).stores({
+      data: 'key',
+      syncOps: '++id,itemId,table,ts',
+    }).upgrade(async (tx) => {
+      // pendingOps 是从未存有效 op 的空僵尸表，drop 即可，无数据需迁移。
+      try { await tx.table('pendingOps').clear() } catch { /* 表已不存在则略过 */ }
     })
   }
 }
