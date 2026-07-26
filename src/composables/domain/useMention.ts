@@ -25,6 +25,10 @@ export function useMention() {
   const isVisible = ref(false)
   const candidates = ref<MentionItem[]>([])
   const activeIdx = ref(0)
+  // R27：子菜单（含 subItems 的父候选展开项）的键盘导航设计为鼠标专用——
+  // onKeydown 仅更新 activeIdx（顶级候选），不更新 activeSubIdx（子项高亮恒为 0），
+  // 子菜单只能通过 mousedown 触发 selectBookmark(sub.id)。这是有意设计：子菜单是
+  // 便捷的鼠标展开面板，键盘用户通过 Enter 选父项（整组）即可，无需逐个子项导航。
   const activeSubIdx = ref(0)
   const mentionType = ref<'bm' | 'group'>('bm')
   const pos = ref({ x: 0, y: 0 })
