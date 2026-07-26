@@ -219,6 +219,12 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
     plain = await e2e.decryptItem(type, mapped as any)
     if (!e2e.isUnlocked.value) return
   }
+  // R13：await decrypt 期间可能 yield，与并发本地编辑交错——用户可能在 await 期间编辑该实体，
+  // 导致 ds._dirtyIds 变 true（本地有未推更新）。原 decision 是 entry-time 快照，await 后
+  // 不复查 dirty，直接 upsert 较旧远端值覆盖较新本地值。复查 isDirty/isPending，若脏跳过
+  // （让本地值后续推上去）。最小改动不加锁，仅复查。
+  if (ds._dirtyIds.has(row.id)) return
+  if (_isPendingSync(row.id)) return
   // revive-assign：确保不保留本地 deletedAt（HANDLERS 会合并字段，显式清一次）
   if (decision.action === 'revive-assign' && plain && typeof plain === 'object') {
     delete (plain as { deletedAt?: unknown }).deletedAt
