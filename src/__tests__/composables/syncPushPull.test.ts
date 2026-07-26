@@ -331,4 +331,53 @@ describe('syncPushPull via SyncRemotePort', () => {
     expect(await syncOpsCount()).toBe(0)
     expect(_isPendingSync('bm-residual')).toBe(false)
   })
+
+  it('8 审计 R12：push 部分失败仍 pull，不因单条坏 op 阻断多设备变更拉取', async () => {
+    // 旧实现 fullSync 用 `if (pushed) await pullChanges()`，pushed 单布尔守门：
+    // 任一 op 失败 pushFromQueue 返回 false → 整体跳过 pull → 1 条坏 op 长期阻断 pull
+    // 直到该 op 进死信。修后 pull 独立于 push 成败，坏 op 留队列待重试，仍拉远端变更。
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    // 队列里 2 条 op：bm-ok 推送成功，bm-fail 推送失败
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-ok',
+      data: { ...makeBm({ id: 'bm-ok' }), _userId: 'user-pp', _isNew: true, _changedFields: null },
+      ts: 1000,
+    }, {
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-fail',
+      data: { ...makeBm({ id: 'bm-fail' }), _userId: 'user-pp', _isNew: true, _changedFields: null },
+      ts: 1001,
+    }])
+
+    // 远端 preapare 一条新书签供 pull merge 进本地（验证 pull 真的跑了）
+    const port = createMemorySyncPort({
+      upsertError: (_t, row) => (row.id === 'bm-fail' ? { message: 'partial upsert fail' } : null),
+      sinceRows: {
+        bookmarks: [{
+          id: 'bm-remote-arrived', user_id: 'user-pp',
+          title: '远端到达', url: 'https://remote.example', username: '', password: '',
+          notes: '', icon: '', category_id: CAT_UNCATEGORIZED, parent_id: null,
+          order: 0, use_count: 0, attributes: {}, is_expanded: false,
+          created_at_num: 1000, updated_at_num: 9000, deleted_at: null,
+        }],
+        sibling_groups: [], categories: [], custom_attributes: [],
+      },
+    })
+    setSyncRemotePort(port)
+    useSyncStore().setLastSyncAt(0)
+
+    const sync = useCloudSync()
+    const ok = await sync.fullSync()
+
+    // fullSync 仍返回 false（push 有失败），但 pull 已执行——远端书签被拉进本地
+    expect(ok).toBe(false)
+    expect(ds.bookmarks.some(b => b.id === 'bm-remote-arrived')).toBe(true)
+    // bm-fail 推送失败 → 留队列；bm-ok 推送成功 → 已移除
+    expect(await syncOpsCount()).toBe(1)
+    // push 失败状态被保留（不被 pull 的 success 覆盖），用户感知到有失败
+    expect(useSyncStore().syncStatus).toBe('error')
+    expect(useSyncStore().syncError).toMatch(/partial upsert fail/)
+  })
 })

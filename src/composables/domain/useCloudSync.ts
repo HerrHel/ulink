@@ -79,7 +79,22 @@ export function useCloudSync() {
     enqueueDirtyAsOps()
     return withLock('linkvault-sync', async () => {
       const pushed = await pushFromQueue()
-      if (pushed) await pullChanges()
+      // 审计 R12：pushed 单布尔守门 → 任一 op 失败 pushFromQueue 即返回 false，
+      // 旧实现 `if (pushed) await pullChanges()` 使 1 条坏 op 整体跳过 pull，
+      // 长期阻断多设备变更拉取（坏 op 进死信前 pull 一直不跑）。远端变更拉取应独立于
+      // 推送成败：push 失败的 op 已留队列待重试/死信、syncStore 已记 error 状态，
+      // 但 pullChanges 会先置 syncing 再置 success 覆盖 push 错误——故 pull 后若 push
+      // 确有失败，恢复 error 状态让用户感知，不吞错。
+      if (!pushed) {
+        const pushErr = syncStore.syncError
+        await pullChanges()
+        if (pushErr) {
+          syncStore.setSyncStatus('error')
+          syncStore.setSyncError(pushErr)
+        }
+        return pushed
+      }
+      await pullChanges()
       return pushed
     })
   }
