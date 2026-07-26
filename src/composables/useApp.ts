@@ -13,6 +13,7 @@ import { toggleGroupFocus, removeBmFromGroup, removeGroupRef, editGroup, deleteG
 import { visit, openBmModal, deleteBookmarkWithUndo as deleteBookmark } from './domain/useBookmark.js'
 import { openDetail } from './ui/useUI.js'
 import { shareGroup } from './domain/useDataShare.js'
+import { useSpaceMove } from './domain/useSpaceMove.js'
 import { useGlobalEvents } from './useGlobalEvents.js'
 import { useScrollHeader } from './interaction/useScrollHeader.js'
 import { useResize } from './interaction/useResize.js'
@@ -32,31 +33,36 @@ export function useApp() {
   useScrollHeader(); useResize(); useKeyboard(); useDragDrop()
 
   // ── 2. 长按操作菜单 ──
+  const spaceMove = useSpaceMove()
   const longPress = useLongPress((card) => {
     const bmId = card.dataset.id; const gid = card.dataset.groupId
     const dataStore = useDataStore()
     if (bmId) {
       const bm = dataStore.bookmarkMap[bmId]
-      return [
-        { label: bm?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('bookmark', bmId); debouncedSaveAppData() } },
-        { label: '打开链接', action: () => visit(null, bmId) },
-        { label: '查看详情', action: () => openDetail(bmId) },
-        { label: '编辑', action: () => openBmModal(bmId) },
-        { label: '移动到', action: () => useActionSheetStore().showBmCategoryPicker(bmId) },
-        { label: '删除', action: () => deleteBookmark(bmId), danger: true }
-      ]
+      const isMain = useUIStore().curSpace === 'main'
+      const items: Array<{ label: string; action: () => void; danger?: boolean }> = []
+      items.push({ label: bm?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('bookmark', bmId); debouncedSaveAppData() } })
+      items.push({ label: '打开链接', action: () => visit(null, bmId) })
+      items.push({ label: '查看详情', action: () => openDetail(bmId) })
+      items.push({ label: '编辑', action: () => openBmModal(bmId) })
+      items.push({ label: '移动到', action: () => useActionSheetStore().showBmCategoryPicker(bmId) })
+      if (isMain) items.push({ label: '设为私密', action: () => spaceMove.moveBookmarksToVault([bmId]) })
+      items.push({ label: '删除', action: () => deleteBookmark(bmId), danger: true })
+      return items
     }
     if (gid) {
       const g = dataStore.groupMap[gid]
-      return [
-        { label: g?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('group', gid); debouncedSaveAppData() } },
-        { label: '查看详情', action: () => openDetail('group:' + gid) },
-        { label: '展开组', action: () => toggleGroupFocus(gid) },
-        { label: '编辑组', action: () => editGroup(gid) },
-        { label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) },
-        { label: '分享组', action: () => shareGroup(gid) },
-        { label: '删除组', action: () => deleteGroup(gid), danger: true }
-      ]
+      const isMain = useUIStore().curSpace === 'main'
+      const items: Array<{ label: string; action: () => void; danger?: boolean }> = []
+      items.push({ label: g?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('group', gid); debouncedSaveAppData() } })
+      items.push({ label: '查看详情', action: () => openDetail('group:' + gid) })
+      items.push({ label: '展开组', action: () => toggleGroupFocus(gid) })
+      items.push({ label: '编辑组', action: () => editGroup(gid) })
+      items.push({ label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) })
+      if (isMain) items.push({ label: '设为私密', action: () => spaceMove.moveGroupsToVault([gid]) })
+      items.push({ label: '分享组', action: () => shareGroup(gid) })
+      items.push({ label: '删除组', action: () => deleteGroup(gid), danger: true })
+      return items
     }
     return null
   })

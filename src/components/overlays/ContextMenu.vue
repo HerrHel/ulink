@@ -56,29 +56,29 @@ watch(() => [ctx.open, ctx.x, ctx.y], async ([open]) => {
   }
 })
 
-const allItems = [
-  { action: ACTIONS.VISIT, text: '打开网站' },
-  { action: ACTIONS.EDIT, text: '编辑' },
-  { action: ACTIONS.HISTORY, text: '版本历史' },
-  { action: ACTIONS.PIN, text: '置顶' },
-  { action: ACTIONS.DELETE, text: '删除', danger: true },
-  { action: ACTIONS.MOVE_TO_CAT, text: '移动到' },
-  { action: ACTIONS.MOVE_TO_SPACE, text: '移入私密空间', danger: true },
-  { action: ACTIONS.SHARE_GROUP, text: '分享组' },
-  { action: ACTIONS.ADD_BOOKMARK, text: '添加书签' },
-  { action: ACTIONS.ADD_GROUP, text: '添加组' },
-  { action: ACTIONS.ADD_CAT, text: '添加分类' },
-  { action: ACTIONS.MULTI_SELECT, text: '多选' },
-  { action: ACTIONS.RENAME_ATTR, text: '重命名' },
-  { action: ACTIONS.DETAIL, text: '查看详情' },
-]
+  const allItems = [
+    { action: ACTIONS.VISIT, text: '打开网站' },
+    { action: ACTIONS.EDIT, text: '编辑' },
+    { action: ACTIONS.HISTORY, text: '版本历史' },
+    { action: ACTIONS.PIN, text: '置顶' },
+    { action: ACTIONS.MOVE_TO_CAT, text: '移动到' },
+    { action: ACTIONS.MOVE_TO_SPACE, text: '设为私密' },
+    { action: ACTIONS.SHARE_GROUP, text: '分享组' },
+    { action: ACTIONS.MULTI_SELECT, text: '多选' },
+    { action: ACTIONS.DETAIL, text: '查看详情' },
+    { action: ACTIONS.DELETE, text: '删除', danger: true },
+    { action: ACTIONS.ADD_BOOKMARK, text: '添加书签' },
+    { action: ACTIONS.ADD_GROUP, text: '添加组' },
+    { action: ACTIONS.ADD_CAT, text: '添加分类' },
+    { action: ACTIONS.RENAME_ATTR, text: '重命名' },
+  ]
 
 const RULES: Record<string, { show: string[]; text: Record<string, string> }> = {
-  card:         { show: [ACTIONS.DETAIL, ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.MULTI_SELECT], text: {} },
+  card:         { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.MULTI_SELECT, ACTIONS.DETAIL, ACTIONS.DELETE], text: {} },
   sub:          { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情' } },
-  cat:          { show: [ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
+  cat:          { show: [ACTIONS.EDIT, ACTIONS.MOVE_TO_SPACE, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
   attr:         { show: [ACTIONS.RENAME_ATTR, ACTIONS.DELETE], text: { [ACTIONS.RENAME_ATTR]: '重命名' } },
-  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.DELETE, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.SHARE_GROUP], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
+  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.SHARE_GROUP, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
   'group-card': { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.EDIT]: '编辑书签', [ACTIONS.DELETE]: '从组移除' } },
   'rail-empty': { show: [ACTIONS.ADD_CAT], text: {} },
   'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
@@ -148,6 +148,12 @@ function _dispatchAction(type: string, action: string, id: string) {
     if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
   } else if (type === 'cat') {
     if (action === ACTIONS.EDIT) openCatModal()
+    if (action === ACTIONS.MOVE_TO_SPACE) {
+      const cat = useDataStore().categoryMap[id]
+      if (cat && window.confirm(`确认将分类「${cat.name}」及其全部书签/组移入私密空间?`)) {
+        void spaceMove.moveCategoryToVault(id)
+      }
+    }
     if (action === ACTIONS.DELETE) deleteCategory(id)
   } else if (type === 'attr') {
     if (action === ACTIONS.RENAME_ATTR) {

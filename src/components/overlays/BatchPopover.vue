@@ -15,40 +15,25 @@
              placeholder="新建分类名称…" aria-label="新建分类名称" @keydown.enter="onAddNewCat">
       <button class="bmp-new-btn" @click="onAddNewCat">+</button>
     </div>
-    <button v-if="isMain" class="bmp-item bmp-to-vault" data-testid="btnBatchMoveToVault" @click="onMoveToVault">
-      <span class="bmp-item-icon" aria-hidden="true" v-html="I.lock"></span>
-      <span>移入私密空间</span>
-    </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { useUIStore } from '../../stores/ui.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
-import { I, getCategoryIcon } from '../../config/icons.js'
+import { getCategoryIcon } from '../../config/icons.js'
 import { addNewCategory } from '../../utils.js'
 import { batchMoveToCat } from '../../composables/domain/useBatch.js'
-import { moveBatchSelectedToVault } from '../../composables/domain/useSpaceMove.js'
 
 const store = useAppStore()
-const uiStore = useUIStore()
 const bmStore = useBatchMoveStore()
 const newCatName = ref('')
 
 const categories = computed(() => store.selectableCategories)
-/** 仅主页空间批量可移入私密（私密空间内无意义） */
-const isMain = computed(() => uiStore.curSpace === 'main')
 
 function onMoveToCat(catId: string) {
   batchMoveToCat(catId)
-  newCatName.value = ''
-  bmStore.hide()
-}
-
-async function onMoveToVault() {
-  await moveBatchSelectedToVault([...uiStore.batchSelected])
   newCatName.value = ''
   bmStore.hide()
 }

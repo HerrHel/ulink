@@ -25,7 +25,6 @@
             </template>
             <template v-else>
               <span class="flex-1">{{ cat.name }}</span>
-              <button v-if="!isVault" class="btn-xs icon-xs" @click="onMoveCatToVault(cat)" title="移入私密空间"><span aria-hidden="true" v-html="I.lock"></span></button>
               <button class="btn-xs icon-xs" @click="startRename(cat)" title="编辑" v-html="I.edit"></button>
               <button class="btn-xs btn-danger icon-xs" @click="onDelete(cat.id)" title="删除" v-html="I.trash"></button>
             </template>
@@ -42,7 +41,6 @@ import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useVaultStore } from '../../stores/vault.js'
-import { useSpaceMove } from '../../composables/domain/useSpaceMove.js'
 import { addNewCategory } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
@@ -55,7 +53,6 @@ const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const vaultStore = useVaultStore()
-const spaceMove = useSpaceMove()
 const newName = ref('')
 const newNameRef = ref<HTMLInputElement | null>(null)
 const { editingId, editingName, setEditInputRef, startRename, confirmRename, cancelRename } = useInlineRename(store, 'renameCategory')
@@ -113,14 +110,6 @@ function onVaultEntry() {
   // 关分类弹窗避免进私密后还有遮挡；解锁成功后 App.vue 切空间
   store.modals.category = false
   uiStore.modals.vaultUnlock = true
-}
-
-/** 整分类移入私密空间：二次确认后调 useSpaceMove（连书签/组一并迁入并从主页删除） */
-function onMoveCatToVault(cat: Category) {
-  showConfirm(`把分类「${cat.name}」及其下书签/组移入私密空间？移入后将从主页删除，仅解锁私密空间后可见。`).then(ok => {
-    if (!ok) return
-    void spaceMove.moveCategoryToVault(cat.id)
-  })
 }
 
 function onAddCat() {
