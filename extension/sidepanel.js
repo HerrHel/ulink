@@ -94,6 +94,11 @@
   let sessionMasterPassword = ''
   let passwordRevealed = false
   let _mpClearTimer = null
+  // AUDIT-R19+R44 方向 E：扩展端解 E2E 密码需用主项目 global cryptoKey，其派生参数 canaryData
+  //（含 salt + it）存 Supabase user_security.master_canary。首解时拉一次缓存于内存，
+  // 后续同 sidepanel 生命周期复用，避免每条密码解密都查 DB。随 sidepanel 关闭自然清除，
+  // 不持久化（canaryData 单独不可派生 key——缺主密码仍是死数据，与主项目存云端同敏感度）。
+  let cachedCanaryData = null
 
   /** M6：主密码用后定时清空，缩短明文常驻 sidepanel 内存窗口 */
   /** F1-002：主密码 TTL 到期时同步掩码 DOM 明文密码 */
@@ -120,6 +125,25 @@
     if (_mpClearTimer) { clearTimeout(_mpClearTimer); _mpClearTimer = null }
     sessionMasterPassword = ''
     maskRevealedPassword()
+  }
+
+  /**
+   * AUDIT-R19+R44 方向 E：从 Supabase user_security.master_canary 拉主项目 unlock 写入的 canaryData
+   *（{ salt: number[], it?: number, canary: string }）。RLS 限 owner 读，同账号登录即可。
+   * 拉到后缓存于 cachedCanaryData 供本 session 复用，避免每条密码解密都查 DB。
+   * @returns {Promise<Object|null>} canaryData；失败返 null（调用方据此提示「无法取解锁数据」）
+   */
+  async function ensureCanaryData() {
+    if (cachedCanaryData) return cachedCanaryData
+    try {
+      var res = await sb.from('user_security')
+        .select('master_canary')
+        .eq('user_id', userId)
+        .single()
+      if (res.error || !res.data || !res.data.master_canary) return null
+      cachedCanaryData = res.data.master_canary
+      return cachedCanaryData
+    } catch (e) { return null }
   }
 
   /** F1-005：与 background openPwaWithUrl 对齐的 http(s) scheme 白名单 */
@@ -481,16 +505,40 @@
     }
     try {
       var stored = currentDetailPassword
-      if (typeof stored === 'string') { try { stored = JSON.parse(stored) } catch (e) {} }
+      // 自救旧版损坏形态：若远端原样存的是 JSON 文本（旧 toRemoteRow 用 JSON.stringify 把
+      // EncryptedPassword 对象降级写入的形态），先 parse 还原为对象；失败则按 string 继续
+      // （可能是当前正常的三段串，或旧 base64）。
+      if (typeof stored === 'string' && stored.charAt(0) === '{' && stored.charAt(stored.length - 1) === '}') {
+        try { stored = JSON.parse(stored) } catch (e) {}
+      }
       var plaintext = ''
-      if (typeof stored === 'object' && stored && stored.encrypted === true) {
+      // AUDIT-R19+R44 方向 E：E2E 加密形态（EncryptedPassword 对象或三段串）走 global-key 重建路径，
+      // 从 user_security.master_canary 拉 canaryData 重建主项目同一把 global cryptoKey 解密。
+      // 旧版用 autoDecryptPassword 把 EncryptedPassword.salt 当作派生盐——那是占位盐，
+      // 派生出的 key 与主项目不一致 → GCM 认证失败 → 显示密文长串/失败 toast（pre-existing bug）。
+      var isObjE2E = typeof stored === 'object' && stored && stored.encrypted === true && stored.iv && stored.data
+      var isStrE2E = typeof stored === 'string' && stored.split('.').length === 3 && stored.split('.').every(function (p) { return !!p })
+      if (isObjE2E || isStrE2E) {
+        if (!window.LinkVaultCrypto || !window.LinkVaultCrypto.decryptWithGlobalKey) { toast('解密库未加载'); return }
         if (!sessionMasterPassword) {
           sessionMasterPassword = prompt('输入主密码以解密密码：')
           if (!sessionMasterPassword) return
         }
-        if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, sessionMasterPassword)
-        else { toast('解密库未加载'); return }
+        var canaryData = await ensureCanaryData()
+        if (!canaryData) {
+          toast('无法从云端取解锁数据，请稍后重试')
+          clearMasterPasswordNow()
+          return
+        }
+        plaintext = await window.LinkVaultCrypto.decryptWithGlobalKey(stored, sessionMasterPassword, canaryData)
+        if (!plaintext) {
+          // E2E 形态但解不开：主密码错 / canary 不匹配 / GCM 认证失败 —— 视为失败，清主密码
+          toast('解密失败，请检查主密码')
+          clearMasterPasswordNow()
+          return
+        }
       } else {
+        // 非加密形态：旧 base64 string / 纯文本 → 作 base64 解码（旧路径，不需主密码）
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
         else plaintext = typeof stored === 'string' ? stored : ''
       }
