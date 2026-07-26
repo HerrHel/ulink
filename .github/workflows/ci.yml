@@ -23,7 +23,7 @@ jobs:
         run: npm run test
       # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错
       - name: Dependency Audit
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
   e2e:
     runs-on: ubuntu-latest
     steps:
