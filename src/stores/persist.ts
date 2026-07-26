@@ -123,7 +123,11 @@ export async function loadData(): Promise<AppData> {
   const idbData = await loadFromIDB()
   if (idbData) {
     // IDB 加载成功，尝试保持 localStorage 一致（静默）
-    saveToLocalStorage(idbData)
+    // R23：原 saveToLocalStorage 会 _stamp 递增 _writeSeq 导致每次 load 序号虚高，未来若比对 _writeSeq 会误判。
+    // 直接写入 IDB 原始数据（已含 _writeSeq/_schemaVersion/_dataVersion），不递增计数器。
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(idbData))
+    } catch { /* ignore */ }
     return idbData
   }
 
