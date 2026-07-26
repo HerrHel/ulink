@@ -3,8 +3,8 @@
     <div class="modal">
       <div class="modal-head">
         <h2>{{ isVault ? '管理分类（私密）' : '管理分类' }}</h2>
-        <button v-if="!isVault" class="btn btn-sm btn-primary" data-testid="btnVaultEntry" style="margin-right:auto" @click="onVaultEntry">
-          <span aria-hidden="true">🔒</span> 私密空间
+        <button v-if="!isVault" class="btn btn-sm btn-ghost" data-testid="btnVaultEntry" style="margin-right:auto" @click="onVaultEntry">
+          <span aria-hidden="true" v-html="I.lock"></span> 私密空间
         </button>
         <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
       </div>
@@ -21,11 +21,11 @@
             <span class="cat-drag-handle" aria-hidden="true" v-html="I.grip"></span>
             <template v-if="editingId === cat.id">
               <input class="form-input flex-1 form-input-sm" v-model="editingName" aria-label="分类名称" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
-              <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名">✓</button>
+              <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名" v-html="I.listCheck"></button>
             </template>
             <template v-else>
               <span class="flex-1">{{ cat.name }}</span>
-              <button v-if="!isVault" class="btn-xs icon-xs" @click="onMoveCatToVault(cat)" title="移入私密空间">🔒</button>
+              <button v-if="!isVault" class="btn-xs icon-xs" @click="onMoveCatToVault(cat)" title="移入私密空间"><span aria-hidden="true" v-html="I.lock"></span></button>
               <button class="btn-xs icon-xs" @click="startRename(cat)" title="编辑" v-html="I.edit"></button>
               <button class="btn-xs btn-danger icon-xs" @click="onDelete(cat.id)" title="删除" v-html="I.trash"></button>
             </template>

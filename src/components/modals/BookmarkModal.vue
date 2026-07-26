@@ -15,7 +15,7 @@
           <input type="text" class="form-input" id="bmTitle" data-testid="lv-bm-title" v-model="bmForm.title" placeholder="留空将自动识别" ref="titleRef">
         </div>
         <div v-if="aiSuggestionText" class="ai-suggest-bar">
-          <span class="ai-suggest-icon">✨</span>
+          <span class="ai-suggest-icon"></span>
           <span class="ai-suggest-text">{{ aiSuggestionText }}</span>
           <button class="btn btn-xs btn-primary" @click="onApplyAi">采纳</button>
           <button class="btn btn-xs btn-ghost" @click="onDismissAi">忽略</button>

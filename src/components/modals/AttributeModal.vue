@@ -11,7 +11,7 @@
           <div v-for="attr in attributes" :key="attr.id" class="list-item">
             <template v-if="editingId === attr.id">
               <input class="form-input flex-1 form-input-sm" v-model="editingName" aria-label="属性名称" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
-              <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名">✓</button>
+              <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名" v-html="I.listCheck"></button>
             </template>
             <template v-else>
               <span class="flex-1">{{ attr.name }}</span>

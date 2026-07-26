@@ -41,7 +41,7 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
   </div>
 
   <div class="warning">
-    <h3>⚠️ 重要提醒</h3>
+    <h3>重要提醒</h3>
     <ul>
       <li>此 Recovery Key 用于在您<strong>忘记主密码时重设主密码</strong>，是重设的<strong>唯一方式</strong></li>
       <li>忘记主密码且丢失此 Key 将导致无法重设，<strong>新数据也无法再写入加密保护</strong></li>

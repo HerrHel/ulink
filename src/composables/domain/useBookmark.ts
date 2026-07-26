@@ -587,7 +587,7 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
 
   ds.addBookmark(newBm)
   saveAppData()
-  toastWithUndo('✓ 已保存到书签', () => {
+  toastWithUndo('已保存到书签', () => {
     ds.deleteBookmark(newBm.id)
     debouncedSaveAppData()
     toast('已撤销')

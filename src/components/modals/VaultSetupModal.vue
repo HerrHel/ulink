@@ -31,7 +31,7 @@
 
         <div v-else-if="step === 2" class="e2e-step">
           <div class="e2e-info e2e-warn">
-            <p><strong>⚠️ 重要提醒</strong></p>
+            <p><strong><span class="sp-icon" v-html="I.alert"></span> 重要提醒</strong></p>
             <p>请立即保存以下 Recovery Key。它是您在忘记保险柜主密码时重设的唯一方式。</p>
             <p>忘记主密码且丢失此 Key，将无法重设，私密空间内的内容将永久无法访问。</p>
           </div>
@@ -39,8 +39,8 @@
             <code class="recovery-key">{{ recoveryKey }}</code>
           </div>
           <div class="e2e-actions">
-            <button class="btn btn-primary" @click="downloadPDF">📄 下载 Recovery Key PDF</button>
-            <button class="btn btn-ghost" @click="copyKey">📋 复制</button>
+            <button class="btn btn-primary" @click="downloadPDF"><span class="sp-icon" v-html="I.export"></span> 下载 Recovery Key PDF</button>
+            <button class="btn btn-ghost" @click="copyKey"><span class="sp-icon" v-html="I.copy"></span> 复制</button>
           </div>
           <div class="form-group" style="margin-top:16px">
             <label class="check-chip">
@@ -51,17 +51,17 @@
 
         <div v-else-if="step === 3" class="e2e-step">
           <div class="e2e-success">
-            <div class="e2e-success-icon">✅</div>
+            <div class="e2e-success-icon" v-html="I.listCheck"></div>
             <p><strong>保险柜已开启</strong></p>
-            <p>现在您可以在「管理分类」弹窗点「🔒 私密空间」入口进入。</p>
+            <p>现在您可以在「管理分类」弹窗点「私密空间」入口进入。</p>
             <p>每次进入私密空间需输入保险柜主密码解锁。</p>
           </div>
           <div v-if="bioAvailable" class="form-group" style="margin-top:16px">
             <div class="e2e-info" style="font-size:0.85rem">
-              <p>🔐 启用指纹快速解锁，免去每次输入保险柜主密码</p>
+              <p>启用指纹快速解锁，免去每次输入保险柜主密码</p>
             </div>
             <button class="btn btn-primary" :disabled="bioLoading || bioDone" @click="onEnrollBiometric">
-              {{ bioLoading ? '录入中…' : bioDone ? '✅ 已启用' : '启用指纹解锁' }}
+              {{ bioLoading ? '录入中…' : bioDone ? '已启用' : '启用指纹解锁' }}
             </button>
             <div v-if="bioError" class="e2e-error" style="margin-top:8px">{{ bioError }}</div>
           </div>

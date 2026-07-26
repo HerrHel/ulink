@@ -51,7 +51,7 @@
             </div>
             <div class="history-item-actions">
               <button v-if="selectedIdx >= 0 && selectedIdx !== idx" class="btn btn-ghost btn-xs" @click="enterDiffMode(idx)" title="对比差异">
-                <span aria-hidden="true" v-html="I.diff || '⇔'"></span>对比
+                <span aria-hidden="true" v-html="I.diff"></span>对比
               </button>
               <button class="btn btn-xs" :class="selectedIdx === idx ? 'btn-primary' : 'btn-ghost'" :disabled="restoring" @click="onRestore(v)">{{ selectedIdx === idx ? '恢复此版本' : '恢复' }}</button>
             </div>

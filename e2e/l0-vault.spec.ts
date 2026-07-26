@@ -49,13 +49,15 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   expect(vaultCanary0, '保险柜 canary 初始应为空').toBeNull()
   expect(e2eCanary0, '全局 E2E canary 初始应为空').toBeNull()
 
-  await expect(page.getByTestId('btnVaultEntry')).toBeVisible()
+  await expect(page.locator('#btnManageCats')).toBeVisible()
   const state0 = await getStoreState(page)
   expect(state0?.curSpace).toBe('main')
   expect(state0?.isVaultEnabled).toBe(false)
   expect(state0?.isVaultUnlocked).toBe(false)
 
   // ── Step 2：设置保险柜主密码 ──
+  // btnVaultEntry 已移至管理分类弹窗内，需先打开弹窗
+  await page.locator('#btnManageCats').click()
   await page.getByTestId('btnVaultEntry').click()
   const setupModal = page.getByTestId('lv-vault-setup-modal')
   await expect(setupModal).toBeVisible({ timeout: 5000 })
@@ -88,8 +90,14 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   const state1 = await getStoreState(page)
   expect(state1?.isVaultEnabled).toBe(true)
 
-  // 关闭设置模态
+  // 关闭设置模态 + 分类弹窗(onVaultEntry 在未启用时不关 CategoryModal)
   await page.getByTestId('lv-vault-setup-done').click()
+  await expect(page.getByTestId('lv-vault-setup-modal')).not.toBeVisible({ timeout: 5000 })
+  await page.evaluate(() => {
+    const app = (document.querySelector('#app') as any).__vue_app__
+    const pinia = app.config.globalProperties.$pinia
+    pinia._s.get('ui').modals.category = false
+  })
 
   // setup 完成后 vaultStore 已 isVaultUnlocked=true，需手动锁定以模拟"下次进入"场景
   await page.evaluate(() => {
@@ -99,7 +107,7 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   })
 
   // ── Step 3：解锁失败（错密码）→ 仍锁态 + 错误提示 ──
-  await page.getByTestId('btnVaultEntry').click()
+  await page.locator('#btnManageCats').click(); await page.getByTestId('btnVaultEntry').click()
   const unlockModal = page.getByTestId('lv-vault-unlock-password')
   await expect(unlockModal).toBeVisible({ timeout: 5000 })
 
@@ -118,7 +126,7 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   await expect(page.getByTestId('lv-vault-unlock-password')).not.toBeVisible({ timeout: 3000 })
 
   // ── Step 4：解锁成功 → 切到私密空间 + 数据集为空 ──
-  await page.getByTestId('btnVaultEntry').click()
+  await page.locator('#btnManageCats').click(); await page.getByTestId('btnVaultEntry').click()
   await page.getByTestId('lv-vault-unlock-password').fill(VAULT_PW)
   await page.getByTestId('lv-vault-unlock-submit').click()
 
@@ -135,8 +143,15 @@ test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储
   // ── Step 5：返回主页 → 重锁 + 数据集还原 ──
   await page.getByTestId('btnBackToMain').click()
 
-  // 重锁 + curSpace=main + 入口按钮恢复
-  await expect(page.getByTestId('btnVaultEntry')).toBeVisible({ timeout: 5000 })
+  // 重锁 + curSpace=main + 管理分类按钮恢复
+  await expect(page.locator('#btnManageCats')).toBeVisible({ timeout: 5000 })
+
+  // switchSpace('main') 异步,等 curSpace 回归 main
+  await page.waitForFunction(() => {
+    const app = (document.querySelector('#app') as any)?.__vue_app__
+    const pinia = app?.config?.globalProperties?.$pinia
+    return pinia?._s?.get('ui')?.curSpace === 'main'
+  }, { timeout: 5000 })
 
   const state4 = await getStoreState(page)
   expect(state4?.curSpace).toBe('main')

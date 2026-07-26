@@ -33,12 +33,8 @@
       </span>
     </div>
     <div class="rail-bottom">
-      <button v-if="!isVault" class="rail-item" data-testid="btnVaultEntry" @click="onVaultEntry">
-        <span aria-hidden="true">🔒</span>
-        私密空间
-      </button>
-      <button v-else class="rail-item" data-testid="btnBackToMain" @click="onBackToMain">
-        <span aria-hidden="true">←</span>
+      <button v-if="isVault" class="rail-item" data-testid="btnBackToMain" @click="onBackToMain">
+        <span aria-hidden="true" v-html="I.back"></span>
         返回主页
       </button>
       <button class="rail-item" id="btnManageCats" @click="openCatModalNav">
@@ -58,7 +54,6 @@ import { computed } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { useVaultStore } from '../../stores/vault.js'
 import { useVault } from '../../composables/domain/useVault.js'
 import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
@@ -68,7 +63,6 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
-const vaultStore = useVaultStore()
 const vault = useVault()
 
 // 当前是否在私密空间（数据集）；入口/返回按钮与 logo 切换依此
@@ -100,14 +94,6 @@ function selectCat(id: string) {
   if (uiStore.isMobile) uiStore.panels.rail = false
 }
 
-/** 进入私密空间：未启用保险柜 → 弹设置；已启用未解锁 → 弹解锁（解锁成功后 App.vue onVaultUnlocked 接 switchSpace） */
-function onVaultEntry() {
-  if (!vaultStore.isVaultEnabled) {
-    uiStore.modals.vaultSetup = true
-    return
-  }
-  uiStore.modals.vaultUnlock = true
-}
 
 /** 退出私密空间：锁保险柜并切回主页数据集 */
 async function onBackToMain() {

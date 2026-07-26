@@ -12,7 +12,7 @@
           </div>
           <div v-if="e2e.isBiometricEnrolled.value && bioAvailable" class="form-group">
             <button class="btn btn-primary btn-block" :disabled="bioLoading" @click="onBiometricUnlock">
-              <span aria-hidden="true">🔐</span> {{ bioLoading ? '验证中…' : '指纹解锁' }}
+              <span aria-hidden="true" v-html="I.lock"></span> {{ bioLoading ? '验证中…' : '指纹解锁' }}
             </button>
             <div class="e2e-separator" style="display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--text-muted);font-size:0.8rem">
               <span style="flex:1;height:1px;background:var(--border)"></span>
@@ -34,7 +34,7 @@
         <template v-else>
           <div class="e2e-info e2e-warn">
             <p>使用 Recovery Key 设置新的主密码。原主密码将被替换。</p>
-            <p style="margin-top:6px">⚠️ 重设后会用新主密码派生新密钥，此前用旧主密码加密且本地无明文副本的数据将无法解密。</p>
+            <p style="margin-top:6px">重设后会用新主密码派生新密钥，此前用旧主密码加密且本地无明文副本的数据将无法解密。</p>
           </div>
           <div class="form-group">
             <label class="form-label">Recovery Key</label>

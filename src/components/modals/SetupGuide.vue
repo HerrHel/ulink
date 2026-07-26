@@ -2,18 +2,18 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="欢迎使用 LinkVault" :class="{ open: ui.modals.setupGuide }" @click.self="finish">
     <div class="modal modal-sm" @click.stop>
       <div class="modal-head">
-        <span class="modal-title">👋 欢迎使用 LinkVault</span>
+        <span class="modal-title">欢迎使用 LinkVault</span>
       </div>
       <div class="modal-body setup-body">
         <p class="setup-intro">选择你的起点：</p>
         <div class="setup-cards">
           <button class="setup-card" @click="onFreshStart" autofocus>
-            <span class="setup-card-icon">✨</span>
+            <span class="setup-card-icon"></span>
             <span class="setup-card-title">全新开始</span>
             <span class="setup-card-desc">从一个示例组开始，探索功能后再整理自己的书签</span>
           </button>
           <button class="setup-card" @click="onImport">
-            <span class="setup-card-icon">📥</span>
+            <span class="setup-card-icon"></span>
             <span class="setup-card-title">从其他工具导入</span>
             <span class="setup-card-desc">从浏览器书签、Raindrop 或 CSV 文件导入</span>
           </button>

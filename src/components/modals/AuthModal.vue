@@ -46,7 +46,7 @@
         </template>
 
         <div v-if="auth.authError" class="form-error">{{ auth.authError }}</div>
-        <div v-if="verified" class="form-success">✓ 登录成功</div>
+        <div v-if="verified" class="form-success"><span class="sp-icon" v-html="I.listCheck"></span> 登录成功</div>
       </div>
       <div class="modal-foot gap-2">
         <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">返回</button>

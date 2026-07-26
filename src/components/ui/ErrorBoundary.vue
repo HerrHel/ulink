@@ -8,7 +8,7 @@
     tabindex="-1"
     ref="fallbackRef"
   >
-    <div class="error-boundary-icon">⚠</div>
+    <div class="error-boundary-icon" v-html="I.alert"></div>
     <h3>出错了</h3>
     <p>{{ errorMsg }}</p>
     <!-- A6-002：生产不渲染 stack；仅 dev 或 ?debug=1 可见 -->
@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import { ref, nextTick, onErrorCaptured } from 'vue'
 import { reportError } from '../../lib/errorReporter.js'
-import { useE2EStore } from '../../stores/e2e.js'
+import { I } from '../../config/icons.js'
 
 const props = defineProps<{ name?: string }>()
 
@@ -74,8 +74,12 @@ function reload() {
   color: var(--text-secondary);
 }
 .error-boundary-icon {
-  font-size: 36px;
-  margin-bottom: 12px;
+  width: 36px; height: 36px;
+  margin: 0 auto 12px;
+  color: var(--danger);
+}
+.error-boundary-icon :deep(svg) {
+  width: 100%; height: 100%;
 }
 .error-boundary-fallback h3 {
   margin: 0 0 8px;

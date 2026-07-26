@@ -31,7 +31,7 @@
 
         <div v-else-if="step === 2" class="e2e-step">
           <div class="e2e-info e2e-warn">
-            <p><strong>⚠️ 重要提醒</strong></p>
+            <p><strong><span class="sp-icon" v-html="I.alert"></span> 重要提醒</strong></p>
             <p>请立即保存以下 Recovery Key。它是您在忘记主密码时重设主密码的唯一方式。</p>
             <p>忘记主密码且丢失此 Key，将无法重设，新数据也无法再写入加密保护。</p>
           </div>
@@ -39,8 +39,8 @@
             <code class="recovery-key">{{ recoveryKey }}</code>
           </div>
           <div class="e2e-actions">
-            <button class="btn btn-primary" @click="downloadPDF">📄 下载 Recovery Key PDF</button>
-            <button class="btn btn-ghost" @click="copyKey">📋 复制</button>
+            <button class="btn btn-primary" @click="downloadPDF"><span class="sp-icon" v-html="I.export"></span> 下载 Recovery Key PDF</button>
+            <button class="btn btn-ghost" @click="copyKey"><span class="sp-icon" v-html="I.copy"></span> 复制</button>
           </div>
           <div class="form-group" style="margin-top:16px">
             <label class="check-chip">
@@ -51,17 +51,17 @@
 
         <div v-else-if="step === 3" class="e2e-step">
           <div class="e2e-success">
-            <div class="e2e-success-icon">✅</div>
+            <div class="e2e-success-icon" v-html="I.listCheck"></div>
             <p><strong>端到端加密已开启</strong></p>
             <p>您的密码和敏感数据现在已加密存储。</p>
             <p>每次使用需要输入主密码解锁。</p>
           </div>
           <div v-if="bioAvailable" class="form-group" style="margin-top:16px">
             <div class="e2e-info" style="font-size:0.85rem">
-              <p>🔐 启用指纹快速解锁，免去每次输入主密码</p>
+              <p>启用指纹快速解锁，免去每次输入主密码</p>
             </div>
             <button class="btn btn-primary" :disabled="bioLoading || bioDone" @click="onEnrollBiometric">
-              {{ bioLoading ? '录入中…' : bioDone ? '✅ 已启用' : '启用指纹解锁' }}
+              {{ bioLoading ? '录入中…' : bioDone ? '已启用' : '启用指纹解锁' }}
             </button>
             <div v-if="bioError" class="e2e-error" style="margin-top:8px">{{ bioError }}</div>
           </div>

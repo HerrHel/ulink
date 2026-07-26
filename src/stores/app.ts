@@ -180,7 +180,7 @@ export const useAppStore = defineStore('app', () => {
           if (due) {
             _storageFailWarned = true
             _lastStorageFailToastAt = now
-            toast('⚠️ 存储不可用（如隐私模式/配额满），刷新后数据可能丢失，请尽快导出备份', false)
+            toast('存储不可用（如隐私模式/配额满），刷新后数据可能丢失，请尽快导出备份', false)
           }
         }
         return ok
