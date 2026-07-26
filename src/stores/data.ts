@@ -193,7 +193,7 @@ export const useDataStore = defineStore('data', {
     },
     /** 回收站：已软删除的分类 */
     trashedCategories(state): Category[] {
-      return state.categories.filter(c => c.deletedAt)
+      return state.categories.filter(c => c.deletedAt).sort((a, b) => (b.deletedAt! - a.deletedAt!))
     },
     /** 回收站：已软删除的自定义属性 */
     trashedAttributes(state): CustomAttribute[] {

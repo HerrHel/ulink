@@ -231,10 +231,13 @@
   async function loadFromCloud() {
     setStatus('sync', '加载中…')
     bookmarkList.classList.add('loading')
-    const result = await sb.from('bookmarks')
-      .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
-      .eq('user_id', userId).is('deleted_at', null)
-      .order('created_at_num', { ascending: false }).limit(500)
+    // 并行拉 bookmarks 和 categories（categories 仅取 id 集用于后续可能的全量同步判定）
+    var [result] = await Promise.all([
+      sb.from('bookmarks')
+        .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
+        .eq('user_id', userId).is('deleted_at', null)
+        .order('created_at_num', { ascending: false }).limit(500),
+    ])
     bookmarkList.classList.remove('loading')
     if (result.error) { setStatus('err', '加载失败: ' + (result.error.message || '未知错误')); return }
     allBookmarks = result.data || []

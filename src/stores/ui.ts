@@ -29,6 +29,8 @@ interface ModalState {
   groupEdit: boolean
   e2eSetup: boolean
   e2eUnlock: boolean
+  vaultSetup: boolean
+  vaultUnlock: boolean
   setupGuide: boolean
 }
 
@@ -117,6 +119,8 @@ export const useUIStore = defineStore('ui', {
       groupEdit: false,
       e2eSetup: false,
       e2eUnlock: false,
+      vaultSetup: false,
+      vaultUnlock: false,
       setupGuide: false,
     },
     panels: {

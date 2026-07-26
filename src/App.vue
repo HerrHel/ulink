@@ -46,6 +46,8 @@
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" @close="onE2EClose" @unlocked="onE2EUnlocked" />
+<VaultSetupModal :open="store.modals.vaultSetup" @close="store.modals.vaultSetup = false" />
+<VaultUnlockModal :open="store.modals.vaultUnlock" @close="store.modals.vaultUnlock = false" @unlocked="store.modals.vaultUnlock = false" />
 <SetupGuide />
 </ErrorBoundary>
 
@@ -79,6 +81,7 @@ import { useAppHandlers } from './composables/useAppHandlers.js'
 import { useAppLifecycle, onShareRoute, whenDataReady } from './composables/useAppLifecycle.js'
 import { useE2E } from './composables/domain/useE2E.js'
 import { useCloudSync } from './composables/domain/useCloudSync.js'
+import { useVault } from './composables/domain/useVault.js'
 import { useE2EStore } from './stores/e2e.js'
 import { toast } from './lib/toast.js'
 import AppHeader from './components/shell/AppHeader.vue'
@@ -121,6 +124,8 @@ const { handlers } = useAppHandlers()
 const e2e = useE2E()
 const e2eStore = useE2EStore()
 const cloudSync = useCloudSync()
+// 保险柜独立加密状态（私密空间门禁复用，见 useVault）
+const vault = useVault()
 
 /**
  * 按需解锁：当 e2eStore.pendingUnlock 数组非空时，弹出解锁弹窗。
@@ -156,6 +161,8 @@ const E2EUnlockModal = defineAsyncComponent({
     failPendingUnlock('解锁组件加载失败，请刷新后重试')
   },
 })
+const VaultSetupModal = defineAsyncComponent(() => import('./components/modals/VaultSetupModal.vue'))
+const VaultUnlockModal = defineAsyncComponent(() => import('./components/modals/VaultUnlockModal.vue'))
 const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
 
 // A4: 公开分享页面
@@ -167,6 +174,8 @@ onMounted(async () => {
   // P1: E2E 改为按需引导 — 不再是「设过主密码就每次启动必解锁」。
   // 仅在保存敏感字段（密码）或编辑已加密书签时弹解锁提示。
   await e2e.checkE2EStatus()
+  // 保险柜状态检查（与 E2E 独立）
+  await vault.checkVaultStatus()
 
   // 处理扩展 / share_target 传来的保存请求
   //   - 扩展快捷键/右键菜单: ?ext_save=1&ext_save_url=...&ext_save_title=...
