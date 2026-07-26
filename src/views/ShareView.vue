@@ -73,7 +73,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { fetchPublicGroup, forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
-import { fixUrl, domain, favicon, sanitizeHTML, safeIconUrl } from '../utils.js'
+import { fixUrl, domain, favicon, sanitizeReadonlyHTML, safeIconUrl } from '../utils.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
@@ -109,7 +109,7 @@ const groupIconSvg = computed(() => {
 const groupNotesHtml = computed(() => {
   const n = group.value?.notes
   if (!n || !n.trim()) return ''
-  return sanitizeHTML(n)
+  return sanitizeReadonlyHTML(n)
 })
 
 /**

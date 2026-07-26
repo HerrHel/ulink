@@ -105,7 +105,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { getTagNames, isMobile, stripEntranceAnim, sanitizeHTML } from '../../utils.js'
+import { getTagNames, isMobile, stripEntranceAnim, sanitizeReadonlyHTML } from '../../utils.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
 import ColorPalette from '../editor/ColorPalette.vue'
@@ -152,7 +152,7 @@ const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim())
 // 辅助栏用只读 HTML；主网格宫格/列表展开挂 TipTap
 const showEditor = computed(() => !props.detailMode && (isExpanded.value || ui.layoutMode === 'grid'))
 const showFullBody = computed(() => props.detailMode || ui.layoutMode !== 'list')
-const safeNotesHtml = computed(() => sanitizeHTML(props.group.notes || ''))
+const safeNotesHtml = computed(() => sanitizeReadonlyHTML(props.group.notes || ''))
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 const isPinned = computed(() => !!props.group.pinnedAt)

@@ -82,6 +82,29 @@ const _purifyConfig = {
   FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select', 'svg', 'math'],
 }
 
+// S5-readonly (AUDIT-R34)：只读展示变体白名单，用于 GroupCard 折叠态/详情态只读笔记、
+// ShareView 公开分享视图经 v-html 渲染的 notes。相对编辑态 _purifyConfig 额外放行：
+//   · <img> + src/alt —— inlineCard 的 favicon 当前被整删不显示；img 不在事件/协议白名单，
+//     src 受 ALLOWED_URI_REGEXP 限 https?（data:/javascript:/blob: 全剥），onerror 等事件属性
+//     不入 ALLOWED_ATTR，无脚本注入面。
+//   · 已知 data-* 属性（data-bm-id/data-group-id/data-type/data-checked 等）—— inlineCard 的
+//     data-bm-id（只读点击看详情依赖）、data-group-id（gid 定位）、taskList 的 data-type/data-checked
+//     （清单语义）当前被剥致只读视图 inlineCard 点击失效 + task 语义丢失。data-* 无事件 handler 可挂、
+//     无协议可跳转，唯一利用面是 CSS attribute selector 做信息外泄露（如 [data-bm-id^="x"]{background:
+//     url(...)}），但 style/script 均在 FORBID_TAGS 堵死 CSS 注入面，故 data-* 放行在当前白名单下无可见
+//     注入面。注：DOMPurify 的 ALLOWED_ATTR 对 data- 前缀按整族放行（列任一 data-x 即放行所有 data-*），
+//     此处显式列清单意图是文档化「应保留的 data-* 语义」而非真收窄——真收窄需 afterSanitizeAttributes
+//     hook 删白名单外 data-*，但 inlineCard 语义稳定且 CSS 注入面已堵，过度收窄反成维护负担，故接受整族放行。
+// 不放行：contenteditable/draggable（只读视图不需编辑/拖拽，剥除正合适）、input/label
+// （taskList 勾选态用 CSS 呈现，不引入表单控件加载面）。仍走同一 afterSanitizeAttributes 钩子
+// 强制 <a> 安全 rel/target，最大化复用既有安全屏障。
+const _purifyReadonlyConfig = {
+  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'blockquote', 'a', 'code', 'pre', 'hr', 'span', 'img'],
+  ALLOWED_ATTR: ['class', 'href', 'target', 'rel', 'src', 'alt', 'data-bm-id', 'data-group-id', 'data-type', 'data-checked'],
+  ALLOWED_URI_REGEXP: /^https?:\/\//i,
+  FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form', 'input', 'textarea', 'select', 'svg', 'math'],
+}
+
 // S5：afterSanitizeAttributes 钩子，对所有 <a> 强制注入安全 rel 与 target，
 // 阻断 javascript:/data: 经 href 注入，并防止 tab-opener 攻击。
 // 幂等注册：先移除再添加，避免 HMR 重复加载导致 hook 叠加。
@@ -93,10 +116,19 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     // 若 href 被 ALLOWED_URI_REGEXP 过滤为空，移除 href 本身防点击空锚
     if (!node.getAttribute('href')) node.removeAttribute('href')
   }
+  // S5-readonly：img 强制剥除潜在残留事件属性（ALLOWED_ATTR 已挡，双保险）+ 协议检查后空 src 剥除
+  if (node.nodeName.toLowerCase() === 'img') {
+    if (!node.getAttribute('src')) node.removeAttribute('src')
+  }
 })
 
 export function sanitizeHTML(html: string): string {
   return DOMPurify.sanitize(html, _purifyConfig)
+}
+
+/** AUDIT-R34：只读展示变体，放行 img + 已知 data-* 以保留 inlineCard favicon / 只读点击 / taskList 语义 */
+export function sanitizeReadonlyHTML(html: string): string {
+  return DOMPurify.sanitize(html, _purifyReadonlyConfig)
 }
 
 export function cleanZeroWidth(text: string): string { return text.replace(/\u200B{2,}/g, '\u200B') }
