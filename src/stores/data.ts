@@ -10,11 +10,20 @@ import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds, clearSearchCache } from '../lib/search.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
-import { localHistoryKey } from './storage.js'
+import { localHistoryKey, clearAllSyncOps } from './storage.js'
+import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
-import type { SortMode, SortDir } from './ui.js'
+import type { SortMode, SortDir, Space } from './ui.js'
 
 export const DGM_KEY = 'lv_delGroupMems'
+
+// ── 空间切换：仅当该空间 localStorage 键存在真数据时读取，绝不 fallback DEFAULTS ──
+// （私密空间首进必须是真空库；loadFromLocalStorage 无数据时返回 DEFAULTS 含示例数据）
+function _maybeLoadLocalSpace(space: Space): AppData | null {
+  const lsKey = space === 'vault' ? 'linkvault_vault_v1' : 'linkvault_v2'
+  if (!safeGetItem(lsKey)) return null
+  return persist.loadFromLocalStorage(space)
+}
 
 /** 保存旧状态到本地历史（C2：覆盖前留底）。含 500ms 防抖，同一 id 连续变更只保留最后一次快照。 */
 const _histDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -882,6 +891,51 @@ export const useDataStore = defineStore('data', {
     },
     _dataSnapshot() {
       return { bookmarks: this.bookmarks, siblingGroups: this.siblingGroups, categories: this.categories, customAttributes: this.customAttributes }
+    },
+
+    /**
+     * 切换数据空间（主页 ⇄ 私密空间）。两套数据集物理隔离、互不可见：
+     * - 先把当前四数组落盘到当前空间 key（确保不丢）
+     * - 切 curSpace，清 dirty 三集 + 同步队列 + pending sync 标记
+     *   （私密空间不进云端：清队列防私密窗口产生的 op 切回主页后被误推云）
+     * - 按目标 key 读目标数据集四数组入内存；目标无数据则空库（私密首进为空）。
+     * 因取 uiStore 实例查 curSpace，本 action 必须在 Pinia 已 setActive 后调用。
+     */
+    async switchSpace(space: Space): Promise<void> {
+      const ui = useUIStore()
+      const cur = ui.curSpace
+      if (cur === space) return
+      // 1) 当前空间落盘（防切换中途丢失未提交改动）
+      await persist.saveData(this._dataSnapshot(), cur)
+      // 2) 切空间 + 清 dirty/同步队列（私密 CRUD 不得进云端）
+      ui.curSpace = space
+      this._dirtyIds.clear()
+      this._deletedIds.clear()
+      this._newIds.clear()
+      this._changedFields.clear()
+      try { await clearAllSyncOps() } catch { /* ignore */ }
+      _clearAllPendingSync()
+      // 3) 载入目标数据集四数组：
+      //    - 优先 IDB（权威）
+      //    - 回退 localStorage（仅当该空间 key 存在真数据，绝不 fallback 到 DEFAULTS——
+      //      私密空间首进必须是真空库，不可被示例数据污染）
+      //    - 两者皆无 → 真空四数组（categories=[] 即可，CAT_ALL/CAT_UNCATEGORIZED 由 categoryMap 兜底）
+      let target = await persist.loadFromIDB(space)
+      if (!target) target = _maybeLoadLocalSpace(space)
+      if (!target) target = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
+      // 复用 importFromData 整集替换语义（runMigrations + _syncMaps + 清缓存）
+      this.importFromData(target)
+      // 重置 curCat/focusedGroupId（新空间分类视图从全部分类开始）
+      ui.curCat = 'all'
+      ui.focusedGroupId = null
+    },
+
+    /**
+     * 取指定空间的 IDB 快照（不移入内存），用于移入私密时不打断当前空间视图
+     * 直接读写私密数据集。返回 null 表示该空间暂无落库数据。
+     */
+    async getSpaceSnapshot(space: Space): Promise<AppData | null> {
+      return persist.loadFromIDB(space)
     },
   },
 })

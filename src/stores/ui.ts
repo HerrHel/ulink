@@ -22,6 +22,9 @@ export type SortDir = 'asc' | 'desc'
 /** 布局模式：grid 大宫格 / list 列表 / mini-grid 小宫格 */
 export type LayoutMode = 'grid' | 'list' | 'mini-grid'
 
+/** 数据空间：主页（公共数据集） / vault（私密空间独立数据集）。门禁由 vault 密钥层守。 */
+export type Space = 'main' | 'vault'
+
 interface ModalState {
   bookmark: boolean
   category: boolean
@@ -66,6 +69,8 @@ export interface UIState {
   excludedAttrs: string[]
   detailCards: string[]
   editingId: string | null
+  /** 当前数据空间：main = 主页公共数据集；vault = 私密空间独立数据集 */
+  curSpace: Space
   themeMode: 'auto' | 'manual'
   themeStyle: ThemeStyle
   historyItemId: string
@@ -106,6 +111,7 @@ export const useUIStore = defineStore('ui', {
     excludedAttrs: [],
     detailCards: [],
     editingId: null,
+    curSpace: 'main' as Space,
     // D1-004：默认 manual，与 theme.ts 缺省 lv_themeMode 一致
     themeMode: 'manual',
     themeStyle: 'premium',

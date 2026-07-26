@@ -304,7 +304,7 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
 
   const { categories, bookmarks, customAttributes, siblingGroups } = result
 
-  try { persist.saveToLocalStorage(ds._dataSnapshot()) } catch (e) { console.warn('[import] backup before import failed:', e) }
+  try { persist.saveToLocalStorage(ds._dataSnapshot(), useUIStore().curSpace) } catch (e) { console.warn('[import] backup before import failed:', e) }
 
   // 顺序固定：先 cat/attr，再 bm，最后 group（group 依赖 bm 已入库做悬空过滤）
   const cats = _mergeCategories(ds, categories)

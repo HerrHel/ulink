@@ -21,8 +21,9 @@ export const useAppStore = defineStore('app', () => {
   let _storageFailWarned = false
   let _lastStorageFailToastAt = 0
   const STORAGE_FAIL_REMIND_MS = 5 * 60 * 1000
-  // PERF-3：上次成功写入的快照指纹，相同则跳过 Zod/双写
-  let _lastSavedFingerprint = ''
+  // PERF-3：上次成功写入的快照指纹（per space），相同则跳过 Zod/双写。
+  // 切换数据空间后，按当前空间取该空间的指纹——私密空间与主页指纹独立，避免互相早退跳过落盘。
+  const _lastSavedFp: Record<'main' | 'vault', string> = { main: '', vault: '' }
 
   function _fingerprint(data: AppData): string {
     // 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍
@@ -153,7 +154,8 @@ export const useAppStore = defineStore('app', () => {
       const d = ds()
       const data = d._dataSnapshot()
       const fp = _fingerprint(data)
-      if (fp && fp === _lastSavedFingerprint) return Promise.resolve(true)
+      const space = ui().curSpace
+      if (fp && fp === _lastSavedFp[space]) return Promise.resolve(true)
       // 运行时验证数据完整性，阻止损坏数据写入存储
       const parsed = AppDataSchema.safeParse(data)
       if (!parsed.success) {
@@ -162,11 +164,12 @@ export const useAppStore = defineStore('app', () => {
       }
       d._storageInfoDirty = true
       d._saveCount++
-      // IDB 权威写入（含 localStorage 尽力缓存）
+      // IDB 权威写入（含 localStorage 尽力缓存）；按当前数据空间选存储键——
+      // 主页 linkvault_v2 / 私密空间 linkvault_vault_v1，物理隔离。
       // E1-003：返回 Promise 供 flush 可 await；toast 仍链式处理。
-      const p = persist.saveData(parsed.data).then(ok => {
+      const p = persist.saveData(parsed.data, space).then(ok => {
         if (ok) {
-          _lastSavedFingerprint = fp
+          _lastSavedFp[space] = fp
           // H11：写入恢复成功即清旗标，让「恢复→再失败」能重新提示
           _storageFailWarned = false
           _lastStorageFailToastAt = 0
@@ -215,7 +218,7 @@ export const useAppStore = defineStore('app', () => {
       return d._cachedStorageInfo
     },
 
-    _backupBeforeImport() { persist.saveToLocalStorage(this._dataSnapshot()) },
+    _backupBeforeImport() { persist.saveToLocalStorage(this._dataSnapshot(), ui().curSpace) },
   }
 })
 

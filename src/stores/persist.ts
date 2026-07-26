@@ -9,16 +9,24 @@
  * - 写入策略：IDB 先写 → 成功后再写 localStorage（尽力），
  *   任一失败不回滚另一端（不阻塞主流程）
  */
-import { STORAGE_KEY, DEFAULTS } from '../config/constants.js'
+import { STORAGE_KEY, STORAGE_KEY_VAULT, DEFAULTS } from '../config/constants.js'
 import { runMigrations, CURRENT_SCHEMA_VERSION } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
 import { AppDataSchema } from '../schemas.js'
 import { cloneDeep } from '../lib/clone.js'
 import type { AppData } from '../types.js'
+import type { Space } from './ui.js'
 
-const IDB_KEY = 'linkvault_v2'
+/** 数据空间 → 本地存储键映射。主页与私密空间物理隔离：各自独立 localStorage 与 IDB 键 */
+const _keys = {
+  main: { ls: STORAGE_KEY, idb: 'linkvault_v2' },
+  vault: { ls: STORAGE_KEY_VAULT, idb: 'linkvault_vault_v1' },
+} as const
+function _keyOf(space: Space, kind: 'ls' | 'idb'): string {
+  return _keys[space][kind]
+}
 
-// 进程内单调写入序号（不表示 schema 版本）
+/** 进程内单调写入序号（不表示 schema 版本） */
 let _writeSeq = 0
 
 export interface StorageInfo {
@@ -50,18 +58,20 @@ function _stamp(data: AppData) {
  * 保存数据到 IDB（权威）和 localStorage（缓存）
  * IDB 写入失败返回 false，localStorage 失败不阻塞
  */
-export async function saveData(data: AppData): Promise<boolean> {
+export async function saveData(data: AppData, space: Space = 'main'): Promise<boolean> {
   const stamped = _stamp(data)
 
   // L14 修复：旧实现先 JSON.parse(JSON.stringify(stamped)) 给 IDB 再 JSON.stringify(stamped)
   // 写 localStorage，同一 stamped 对象走两遍 JSON 字符串化，大数据集下是双倍序列化主线程开销。
   // 复用同一份 raw 字符串：IDB 走 JSON.parse(raw) 得纯对象，localStorage 直接存 raw。
   const raw = JSON.stringify(stamped)
+  const idbKey = _keyOf(space, 'idb')
+  const lsKey = _keyOf(space, 'ls')
 
   // IDB 权威写入
   try {
     const plain = JSON.parse(raw)
-    const ok = await idbSet(IDB_KEY, plain)
+    const ok = await idbSet(idbKey, plain)
     // idbSet 现在如实返回 false（见 storage.ts）；旧实现吞错致此处恒为 true，
     // 使 app.ts 的「存储不可用」toast 永不触发——隐私模式/配额满时数据丢失无提示。
     if (!ok) {
@@ -75,7 +85,7 @@ export async function saveData(data: AppData): Promise<boolean> {
 
   // localStorage 尽力同步（静默失败），复用已序列化的 raw 免去第二次 stringify
   try {
-    localStorage.setItem(STORAGE_KEY, raw)
+    localStorage.setItem(lsKey, raw)
   } catch {
     // localStorage 满时静默忽略，IDB 已有完整数据
   }
@@ -84,10 +94,10 @@ export async function saveData(data: AppData): Promise<boolean> {
 }
 
 /** 仅写 localStorage（用于备份/导出场景） */
-export function saveToLocalStorage(data: AppData): boolean {
+export function saveToLocalStorage(data: AppData, space: Space = 'main'): boolean {
   try {
     const stamped = _stamp(data)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stamped))
+    localStorage.setItem(_keyOf(space, 'ls'), JSON.stringify(stamped))
     return true
   } catch (e) {
     console.warn('[persist] localStorage save failed:', (e as Error).message)
@@ -98,11 +108,11 @@ export function saveToLocalStorage(data: AppData): boolean {
 /** 仅写 IDB（用于显式备份 / localStorage→IDB 回填）
  *  返回是否写入成功。备份场景同样不应静默吞掉 IDB 失败（隐私模式/配额满），
  *  否则用户以为「已备份到本地」实则没落库——与 saveData 对齐如实上报。 */
-export async function saveToIDB(data: AppData): Promise<boolean> {
+export async function saveToIDB(data: AppData, space: Space = 'main'): Promise<boolean> {
   const stamped = _stamp(data)
   const plain = cloneDeep(stamped)
   try {
-    const ok = await idbSet(IDB_KEY, plain)
+    const ok = await idbSet(_keyOf(space, 'idb'), plain)
     if (!ok) {
       console.warn('[persist] saveToIDB：IDB 写入失败（idbSet 返回 false）')
       return false
@@ -119,29 +129,30 @@ export async function saveToIDB(data: AppData): Promise<boolean> {
 /**
  * 加载数据：优先 IDB（权威），回退 localStorage
  */
-export async function loadData(): Promise<AppData> {
-  const idbData = await loadFromIDB()
+export async function loadData(space: Space = 'main'): Promise<AppData> {
+  const idbData = await loadFromIDB(space)
   if (idbData) {
     // IDB 加载成功，尝试保持 localStorage 一致（静默）
     // R23：原 saveToLocalStorage 会 _stamp 递增 _writeSeq 导致每次 load 序号虚高，未来若比对 _writeSeq 会误判。
     // 直接写入 IDB 原始数据（已含 _writeSeq/_schemaVersion/_dataVersion），不递增计数器。
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(idbData))
+      localStorage.setItem(_keyOf(space, 'ls'), JSON.stringify(idbData))
     } catch { /* ignore */ }
     return idbData
   }
 
-  const lsData = loadFromLocalStorage()
+  const lsData = loadFromLocalStorage(space)
   if (lsData && lsData.bookmarks?.length) {
     // localStorage → IDB 异步回填
-    saveToIDB(lsData)
+    saveToIDB(lsData, space)
   }
   return lsData
 }
 
-export function loadFromLocalStorage(): AppData {
+export function loadFromLocalStorage(space: Space = 'main'): AppData {
+  const lsKey = _keyOf(space, 'ls')
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(lsKey)
     if (raw) {
       const d = JSON.parse(raw)
       // C2 修复：旧版 data 可能缺 isExpanded/updatedAt/createdAt 等 migrations 步骤 6/7
@@ -167,16 +178,17 @@ export function loadFromLocalStorage(): AppData {
         console.warn('[persist] data validation failed after migration, falling back to defaults:', parsed.error.issues)
         return cloneDeep(DEFAULTS)
       }
-      if (needsPersist) saveToLocalStorage(parsed.data)
+      if (needsPersist) saveToLocalStorage(parsed.data, space)
       return parsed.data
     }
   } catch (e) { console.warn('[persist] localStorage load failed:', (e as Error).message) }
   return cloneDeep(DEFAULTS)
 }
 
-export async function loadFromIDB(): Promise<AppData | null> {
+export async function loadFromIDB(space: Space = 'main'): Promise<AppData | null> {
+  const idbKey = _keyOf(space, 'idb')
   try {
-    const idbData = await idbGet(IDB_KEY)
+    const idbData = await idbGet(idbKey)
     if (idbData && idbData.bookmarks) {
       // C2（与 loadFromLocalStorage 同因）：IDB 虽是自写自读的权威源，但旧版数据可能缺
       // migrations 步骤 6/7 本应补齐的 isExpanded/updatedAt/createdAt。若在 runMigrations
@@ -209,7 +221,7 @@ export async function loadFromIDB(): Promise<AppData | null> {
       }
       // L3 修复：迁移结果必须 await 落库后再返回，否则隐私模式/IDB 临时不可用时 saveToIDB
       // 静默失败，本次会话看到内存迁移态但下次刷新仍读旧未迁移态（_schemaVersion 未落库）。
-      if (needsm) await saveToIDB(parsed.data)
+      if (needsm) await saveToIDB(parsed.data, space)
       return parsed.data
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', (e as Error).message) }

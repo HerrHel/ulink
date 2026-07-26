@@ -2,6 +2,8 @@ import type { AppData } from '../types.js'
 import { WELCOME_NOTES, TIPS_NOTES } from './welcome-data.js'
 
 export const STORAGE_KEY = 'linkvault_v2'
+/** 私密空间独立数据集的本地存储键（localStorage 同名字符串；IDB key 见 persist.ts） */
+export const STORAGE_KEY_VAULT = 'linkvault_vault_v1'
 export const CAT_ALL = 'all'
 export const CAT_UNCATEGORIZED = 'uncategorized'
 export const ATTR_IS_GROUP = 'is-group'
