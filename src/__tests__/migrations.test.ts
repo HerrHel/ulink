@@ -70,6 +70,33 @@ describe('runMigrations', () => {
     expect(needsPersist).toBe(true)
   })
 
+  it('审计 R6：组级同名 attr id 也应重写（旧盘 group 引旧 id，dedup 后不丢失标签）', () => {
+    const d = {
+      bookmarks: [],
+      siblingGroups: [
+        { id: 'g1', categoryId: 'uncategorized', bookmarkIds: [], attributes: { 'attr-dup': true, 'is-group': true } },
+      ],
+      customAttributes: [
+        { id: 'attr-orig', name: 'test-attr', type: 'boolean' },
+        { id: 'attr-dup', name: 'test-attr', type: 'boolean' },
+      ]
+    }
+    const result = makeResult({
+      siblingGroups: d.siblingGroups,
+      customAttributes: [...d.customAttributes],
+    } as any)
+    const needsPersist = runMigrations(d as any, result as any)
+    expect(result.customAttributes).toHaveLength(1)
+    expect(result.customAttributes[0].id).toBe('attr-orig')
+    // 组的 attribute 旧 id 'attr-dup' 应回退到保留项 'attr-orig'，旧 id 失联
+    const g = d.siblingGroups[0]
+    expect((g.attributes as any)['attr-orig']).toBe(true)
+    expect((g.attributes as any)['attr-dup']).toBeUndefined()
+    // 'is-group' 不应被误删（与去重无关）
+    expect((g.attributes as any)['is-group']).toBe(true)
+    expect(needsPersist).toBe(true)
+  })
+
   it('should add missing attributes to groups', () => {
     const d = {}
     const result = makeResult({

@@ -60,10 +60,20 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   attrs.forEach((a: CustomAttribute) => {
     if (seen[a.name]) {
       const keep = seen[a.name];
+      // 审计 R6：步骤2 属性去重只重写 bookmark 的 attributes，group 残留旧 attr id。
+      // dedup 后 customAttributes 删旧 id，组的 g.attributes 旧 id 永久失联
+      // （attributeMap[旧id]=undefined → 组标签消失）。这里对 siblingGroups
+      // 做与 bookmark 完全对称的 attr id 重写。
       (d.bookmarks || []).forEach((b: Bookmark) => {
         if (b.attributes && b.attributes[a.id]) {
           b.attributes[keep.id] = b.attributes[a.id]
           delete b.attributes[a.id]
+        }
+      });
+      (d.siblingGroups || []).forEach((g: SiblingGroup) => {
+        if (g.attributes && g.attributes[a.id]) {
+          g.attributes[keep.id] = g.attributes[a.id]
+          delete g.attributes[a.id]
         }
       })
     } else { seen[a.name] = a; deduped.push(a) }
