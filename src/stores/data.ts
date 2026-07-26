@@ -137,6 +137,18 @@ export const useDataStore = defineStore('data', {
       if (q.trim()) {
         // 如果搜索索引脏了，直接递增 version 触发重建
         if (state._searchIndexDirty) { state._searchVersion++; state._searchIndexDirty = false }
+        // AUDIT-R11 权衡记录：此处 getter 内写 state（state._searchVersion++）是 Vue 反模式（getter 副作用），
+        // 但是「立即性」的刻意设计，非可随意消除。
+        // · CRUD action（addBookmark/updateBookmark/...）末尾仅设 `_searchIndexDirty=true` 不递增 version——
+        //   version 递增唯一时机即此处 getter 求值时。若改为「写 action 末尾 debounced bump(setTimeout 0)」：
+        //   Vue 调度 flush effect（微任务）早于 setTimeout 0（宏任务）触发，getter 首次求值时 version 仍旧 →
+        //   `version === _bmVersion` → needsRebuild=false → 走 Fuse 缓存返回旧结果（搜索框闪旧值一 tick），
+        //   setTimeout 触发后才重建——「首条脏搜索拿到陈旧结果」是真实可见退化。
+        // · 批量导入路径（loadFromStorage/tryLoadFromIDB/importFromData）已直接 `clearSearchCache() + _searchVersion=1`，
+        //   不走本副作用，故「删 getter 副作用优化批量」论证不成立（批量本不经此）。
+        // · 现状 `_searchIndexDirty` 守护确保不无限递归；首次脏搜索立即拿新 version 重建，立即性正确；
+        //   副作用代价（下游 computed 同 tick 多算一次）ms 级无用户感知。
+        // 结论：用可见退化换不可见净化不划算，维持现状。理由入 [[lv-optimization-candidates-board]] R11 段。
         // 在全量 bookmarks 上建/复用 Fuse 基准（引用稳定，CRUD 才变，配 version 双保险），
         // 再用 bm.filter(matchIds) 限定到当前分类——结果与「在 bm 子集上搜」一致，
         // 但 Fuse 缓存不再因每次 filter 产生的新数组引用而重建。旧实现传 bm（每次新建）
@@ -159,6 +171,7 @@ export const useDataStore = defineStore('data', {
       if (q.trim()) {
         // 如果搜索索引脏了，直接递增 version 触发重建
         if (state._searchIndexDirty) { state._searchVersion++; state._searchIndexDirty = false }
+        // AUDIT-R11：同 filteredBookmarks，此处 getter 副作用是「立即性」刻意设计，见上方完整权衡记录。
         // 同 filteredBookmarks：在全量 siblingGroups 上搜复用 Fuse 缓存（见上注释），
         // 再用 groups.filter 限定当前分类。旧实现传每次新建的 groups 子集 → ref 永变 → 重建。
         // 审计 R8：删 forceRebuild=true，仅依赖 version 不匹配触发重建（CRUD 时 _searchIndexDirty=true 递增 version）。
