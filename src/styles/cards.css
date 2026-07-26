@@ -400,22 +400,10 @@
 .card-body:hover::-webkit-scrollbar-thumb{background:var(--border)}
 .card-body::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
 
-/* 书签卡片溢出淡出遮罩（useCardOverflow 触发 .card-overflow 类） */
-.card-overflow .card-notes{
-  -webkit-mask-image:var(--mask-fade-bottom);
-  mask-image:var(--mask-fade-bottom);
-}
-.card-overflow .card-acct-body{
-  -webkit-mask-image:var(--mask-fade-bottom);
-  mask-image:var(--mask-fade-bottom);
-}
-/* 展开（.show）的账户信息区不应用底部渐隐：卡片级 .card-overflow 由 body 整体
-   高度触发（展开账户信息后 body 通常溢出容器），但 acct-body 自身是显式内容区，
-   不该被遮罩，否则出现错误渐隐 */
-.card-acct-body.show{
-  -webkit-mask-image:none;
-  mask-image:none;
-}
+/* 书签卡片的 .card-notes（line-clamp 2 行自带省略号）与 .card-acct-body（用户主动
+   展开）不应用底部渐隐遮罩。卡片级 .card-overflow 由 card-body 整体滚动触发（如
+   展开账户信息使 body 高度超容器），会无差别给这两个元素加 mask-fade-bottom，导致
+   宫格模式展开账户信息后备注/账户区底部错误渐隐。组卡片 .group-body 的渐隐保留。 */
 /* grp-scroll-body: 非列表模式的组卡片统一滚动容器 */
 .card-grid:not(.list-view) .grp-scroll-body{display:flex;flex-direction:column;overflow:hidden}
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap{flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;scrollbar-width:thin;scrollbar-color:transparent transparent;transition:scrollbar-color 0.12s}
