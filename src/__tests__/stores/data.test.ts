@@ -359,4 +359,61 @@ describe('DataStore', () => {
       expect(store.customAttributes).toEqual([{ id: 'attr1' }])
     })
   })
+
+  // 私密空间独立数据集：switchSpace 主页⇄vault 切换
+  describe('switchSpace — 独立数据集切换', () => {
+    it('切到 vault：当前四数组落主页 key、清 dirty/同步队列、载入 vault 空四数组', async () => {
+      // 主页数据
+      store.addCategory({ id: 'catHome', name: '主页分类', icon: '', color: '', order: 1 } as any)
+      store.addBookmark({ id: 'bh1', title: '主页书签', url: 'h', categoryId: 'catHome' } as any)
+      store.addBookmark({ id: 'bh2', title: '脏', url: 'x', categoryId: 'catHome' } as any)
+      expect(store._dirtyIds.size).toBeGreaterThan(0)
+      await store.switchSpace('vault')
+      // 内存已替换为 vault 数据集（基础分类由 runMigrations 注入，无示例书签/组）
+      expect(store.bookmarks).toEqual([])
+      expect(store.siblingGroups).toEqual([])
+      // dirty 三集清空
+      expect(store._dirtyIds.size).toBe(0)
+      expect(store._newIds.size).toBe(0)
+      expect(store._deletedIds.size).toBe(0)
+      // curSpace 已切到 vault
+      expect(uiStore.curSpace).toBe('vault')
+    })
+
+    it('vault 首进空库：载入基础分类（CAT_ALL/UNCATEGORIZED 等）而非 DEFAULTS 示例书签', async () => {
+      // switchSpace 调 _maybeLoadLocalSpace：localStorage 无 vault 键 → null → 空四数组。
+      // importFromData 里 runMigrations 会注入 DEFAULTS 基础分类（all/uncategorized 等）——
+      // 这是正确行为，空私密空间也需要基础分类才能正常渲染。
+      // 但不应有 DEFAULTS 示例书签/组（如 welcome 书签）。
+      await store.switchSpace('vault')
+      // 基础分类存在（all/uncategorized 等），无示例书签/组
+      expect(store.bookmarks).toEqual([])
+      expect(store.siblingGroups).toEqual([])
+      expect(store.customAttributes).toEqual([])
+      // categories 含基础分类（CAT_ALL、CAT_UNCATEGORIZED 等），不为空
+      expect(store.categories.length).toBeGreaterThan(0)
+      expect(store.categories.some(c => c.id === 'all')).toBe(true)
+    })
+
+    it('从 vault 切回 main：落 vault 数据、载入主页数据集还原', async () => {
+      uiStore.curSpace = 'vault'
+      // 先给主页 localStorage 写入真数据（模拟主页历史数据存在）
+      localStorage.setItem('linkvault_v2', JSON.stringify({
+        bookmarks: [{ id: 'bm1', title: '主页书签', url: 'm', username: '', password: '', notes: '', icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
+        siblingGroups: [], categories: [], customAttributes: [],
+      }))
+      await store.switchSpace('main')
+      // 内存换回主页书签
+      expect(store.bookmarks.map(b => b.id)).toContain('bm1')
+      expect(uiStore.curSpace).toBe('main')
+    })
+
+    it('curSpace 已是目标空间时不切（幂等 no-op）', async () => {
+      uiStore.curSpace = 'vault'
+      const before = JSON.stringify(store._dataSnapshot())
+      await store.switchSpace('vault')
+      // 快照不变
+      expect(JSON.stringify(store._dataSnapshot())).toBe(before)
+    })
+  })
 })

@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import * as persist from '../../stores/persist.js'
-import { STORAGE_KEY, DEFAULTS } from '../../config/constants.js'
+import { STORAGE_KEY, STORAGE_KEY_VAULT, DEFAULTS } from '../../config/constants.js'
 import type { AppData } from '../../types.js'
 
 // 隔离 IDB：persist 经 storage.js 的 idbGet/idbSet 读写 IndexedDB，jsdom 无 IDB。
@@ -267,6 +267,69 @@ describe('persist', () => {
       }
       const info = persist.getStorageInfo(data)
       expect(info.size).toBeGreaterThan(0)
+    })
+  })
+
+  describe('私密空间独立数据集 (space=vault)', () => {
+    it('saveToLocalStorage(data,"vault") 写到 STORAGE_KEY_VAULT 而非主页键', () => {
+      const data: AppData = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
+      persist.saveToLocalStorage(data, 'vault')
+      // 主页键应未写入（不被污染）
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+      const vaultRaw = localStorage.getItem(STORAGE_KEY_VAULT)
+      expect(vaultRaw).not.toBeNull()
+      expect(JSON.parse(vaultRaw!).bookmarks).toEqual([])
+    })
+
+    it('主页与私密空间存储键物理隔离：互不读写对方键', () => {
+      const mainData: AppData = {
+        bookmarks: [{ id: 'mb1', title: '主页书签', url: 'm', username: '', password: '', notes: '', icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }] as any,
+        siblingGroups: [], categories: [], customAttributes: [],
+      }
+      const vaultData: AppData = {
+        bookmarks: [{ id: 'vb1', title: '私密书签', url: 'v', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }] as any,
+        siblingGroups: [], categories: [], customAttributes: [],
+      }
+      persist.saveToLocalStorage(mainData, 'main')
+      persist.saveToLocalStorage(vaultData, 'vault')
+      const mainRaw = JSON.parse(localStorage.getItem(STORAGE_KEY)!)
+      const vaultRaw = JSON.parse(localStorage.getItem(STORAGE_KEY_VAULT)!)
+      expect(mainRaw.bookmarks[0].id).toBe('mb1')
+      expect(vaultRaw.bookmarks[0].id).toBe('vb1')
+    })
+
+    it('loadFromIDB("vault") 按 vault key 读取（idbGet 收到 vault key）', async () => {
+      _idbGet.mockImplementation(async (key: string) => {
+        // 仅 vault key 命中，主页 key 返回 null — 证明物理隔离
+        if (key === 'linkvault_vault_v1') return { bookmarks: [{ id: 'v1', title: '私密', url: 'x', username: '', password: '', notes: '', icon: '', categoryId: 'uncategorized', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }], siblingGroups: [], categories: [], customAttributes: [] }
+        return null
+      })
+      const result = await persist.loadFromIDB('vault')
+      expect(result).not.toBeNull()
+      expect(result!.bookmarks[0].id).toBe('v1')
+      // 读主页 key 应回 null
+      const mainResult = await persist.loadFromIDB('main')
+      expect(mainResult).toBeNull()
+    })
+
+    it('saveData(data,"vault") IDB 收到 vault key、localStorage 写到 vault 键', async () => {
+      const seenKeys: string[] = []
+      _idbSet.mockImplementation(async (key: string) => { seenKeys.push(key); return true })
+      const data: AppData = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
+      await persist.saveData(data, 'vault')
+      expect(seenKeys).toContain('linkvault_vault_v1')
+      expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+      expect(localStorage.getItem(STORAGE_KEY_VAULT)).not.toBeNull()
+    })
+
+    it('loadFromLocalStorage("vault") 在 vault 键无数据时不 fallback 主页键、不返回 DEFAULTS 隔离', () => {
+      // 主页键有数据但 vault 键无 — vault 读应走 DEFAULTS（persist 层 baseline），不读主页数据
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        bookmarks: [{ id: 'hijack', title: 'x' }], siblingGroups: [], categories: [], customAttributes: [],
+      }))
+      const r = persist.loadFromLocalStorage('vault')
+      // DEFAULTS 含示例 categories，不会是空；且不含 id=hijack
+      expect(r.bookmarks).not.toContainEqual(expect.objectContaining({ id: 'hijack' }))
     })
   })
 })
