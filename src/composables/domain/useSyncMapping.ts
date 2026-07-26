@@ -118,6 +118,7 @@ export interface RemoteBookmarkRow {
   is_expanded?: boolean
   created_at_num?: number
   updated_at_num?: number
+  pinned_at?: number | null
   deleted_at?: string | null
 }
 export interface RemoteGroupRow {
@@ -134,6 +135,7 @@ export interface RemoteGroupRow {
   use_count?: number
   is_public?: boolean
   updated_at_num?: number
+  pinned_at?: number | null
   deleted_at?: string | null
 }
 export interface RemoteCategoryRow {
@@ -169,6 +171,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       is_expanded: !!item.isExpanded,
       created_at_num: item.createdAt as number,
       updated_at_num: (item.updatedAt as number) || now,
+      pinned_at: (item.pinnedAt as number | undefined) ?? null,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
     }
     return row
@@ -184,6 +187,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       notes: (item.notes as string) || '', use_count: (item.useCount as number) || 0,
       is_public: !!(item as { isPublic?: boolean }).isPublic,
       updated_at_num: (item.updatedAt as number) || now,
+      pinned_at: (item.pinnedAt as number | undefined) ?? null,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
     } satisfies RemoteGroupRow
   }
@@ -232,6 +236,7 @@ export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {
     isExpanded: r.is_expanded || false,
     createdAt: r.created_at_num || 0,
     updatedAt: r.updated_at_num || r.created_at_num || 0,
+    pinnedAt: r.pinned_at ?? undefined,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
   }, '书签')
 }
@@ -247,6 +252,7 @@ export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
     notes: r.notes || '', useCount: r.use_count || 0,
     updatedAt: r.updated_at_num || 0,
     isPublic: r.is_public || false,
+    pinnedAt: r.pinned_at ?? undefined,
     deletedAt: r.deleted_at ? parseTimestamp(r.deleted_at) : undefined,
   }, '组')
 }
