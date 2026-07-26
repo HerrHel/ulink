@@ -917,14 +917,18 @@ export const useDataStore = defineStore('data', {
       _clearAllPendingSync()
       // 3) 载入目标数据集四数组：
       //    - 优先 IDB（权威）
-      //    - 回退 localStorage（仅当该空间 key 存在真数据，绝不 fallback 到 DEFAULTS——
-      //      私密空间首进必须是真空库，不可被示例数据污染）
       //    - 两者皆无 → 真空四数组（categories=[] 即可，CAT_ALL/CAT_UNCATEGORIZED 由 categoryMap 兜底）
       let target = await persist.loadFromIDB(space)
       if (!target) target = _maybeLoadLocalSpace(space)
       if (!target) target = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
       // 复用 importFromData 整集替换语义（runMigrations + _syncMaps + 清缓存）
       this.importFromData(target)
+      // 私密空间首进：runMigrations 会从 DEFAULTS 注入全部示例分类（邮箱/工具/AI等），
+      // 私密空间只需 CAT_ALL + CAT_UNCATEGORIZED 两个基础项，多余分类在此过滤
+      if (space === 'vault') {
+        this.categories = this.categories.filter(c => c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED)
+        this._syncMaps()
+      }
       // 重置 curCat/focusedGroupId（新空间分类视图从全部分类开始）
       ui.curCat = 'all'
       ui.focusedGroupId = null
