@@ -417,7 +417,9 @@
   }
 
   // ── 详情面板 ──
+  var _detailGen = 0 // 审计 R4：异步竞态 generation token
   async function showBookmarkDetail(bm) {
+    var localGen = ++_detailGen
     currentMatchedBookmark = bm
     btnSave.classList.add('hidden')
     bookmarkDetail.classList.remove('hidden')
@@ -435,6 +437,9 @@
     if (loggedIn && userId && bm.id) {
       try {
         var pwRes = await sb.from('bookmarks').select('password').eq('id', bm.id).eq('user_id', userId).is('deleted_at', null).single()
+        // R4：await 期间用户可能导航到另一书签触发新 showBookmarkDetail，generation 增长；
+        // 若 generation 不匹配，当前结果已过期，丢弃不写 DOM。
+        if (localGen !== _detailGen) return
         if (!pwRes.error && pwRes.data) {
           var pw = pwRes.data.password
           currentDetailPassword = pw || null
@@ -442,6 +447,7 @@
         }
       } catch (e) { /* 单查失败按无密码处理 */ }
     }
+    if (localGen !== _detailGen) return
     if (hasPw) {
       bdPasswordWrap.classList.remove('hidden')
       bdPasswordText.textContent = '••••••••'
@@ -457,6 +463,7 @@
   }
 
   function hideBookmarkDetail() {
+    _detailGen++ // R4：任何进行中的 showBookmarkDetail 异步结果应被丢弃
     currentMatchedBookmark = null
     currentDetailPassword = null
     bookmarkDetail.classList.add('hidden')
@@ -500,6 +507,8 @@
 
   bdPwCopy.addEventListener('click', async function () {
     if (!currentMatchedBookmark || !currentDetailPassword) return
+    // R18：轮询期间用户可能导航到另一书签，generation 增长，本轮复制应 abort。
+    var copyGen = _detailGen
     // F1-006：等待解密完成（prompt+PBKDF2 可能远超 100ms），轮询 passwordRevealed
     if (!passwordRevealed) {
       bdPwShow.click()
@@ -507,9 +516,11 @@
       while (!passwordRevealed && waited < 15000) {
         await new Promise(function (r) { setTimeout(r, 100) })
         waited += 100
+        if (copyGen !== _detailGen) return
       }
       if (!passwordRevealed) return
     }
+    if (copyGen !== _detailGen) return
     var text = bdPasswordText.textContent
     if (text === '••••••••') return
     navigator.clipboard.writeText(text).then(function () { toast('密码已复制', 1500) }).catch(function () { toast('复制失败', 1500) })
