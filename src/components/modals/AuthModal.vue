@@ -5,29 +5,35 @@
         <h2>{{ step === 'email' ? '登录 / 注册' : '输入验证码' }}</h2>
         <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body auth-body">
+        <!-- 邮箱图标装饰 -->
+        <div class="auth-icon-wrap">
+          <span class="auth-icon" v-html="I.mail"></span>
+        </div>
+
         <!-- Step 1: 输入邮箱 -->
         <template v-if="step === 'email'">
-          <p class="modal-hint">
-            输入邮箱，我们将发送一个 6 位验证码。<br>
-            无需密码，首次登录即自动注册。
+          <p class="auth-hint">
+            输入邮箱地址，我们将发送一个 6 位验证码
           </p>
+          <p class="auth-hint-sub">无需密码，首次登录即自动注册</p>
           <div class="form-group">
-            <label class="form-label" for="authEmailInput">邮箱地址</label>
-            <input type="email" class="form-input" id="authEmailInput" v-model="email"
-                   placeholder="your@email.com" @keydown.enter="onSendCode" ref="inputRef"
-                   autocomplete="email">
+            <input
+              type="email" class="form-input auth-input" id="authEmailInput"
+              v-model="email" placeholder="your@email.com"
+              @keydown.enter="onSendCode" ref="inputRef" autocomplete="email"
+            />
           </div>
         </template>
 
         <!-- Step 2: 输入验证码 -->
         <template v-if="step === 'code'">
-          <p class="modal-hint">
-            验证码已发送到 <strong>{{ email }}</strong><br>
-            <span style="font-size:0.72rem">请查收邮件（含垃圾邮件），输入 6 位验证码</span>
+          <p class="auth-hint">
+            验证码已发送至
           </p>
+          <p class="auth-email-display">{{ email }}</p>
+          <p class="auth-hint-sub">请查收邮件（含垃圾箱），输入 6 位验证码</p>
           <div class="form-group">
-            <label class="form-label" for="authCodeInput">验证码</label>
             <div class="code-boxes" @click="focusCodeInput">
               <input
                 id="authCodeInput" ref="codeInputRef" v-model="code"
@@ -45,11 +51,11 @@
           </div>
         </template>
 
-        <div v-if="auth.authError" class="form-error">{{ auth.authError }}</div>
-        <div v-if="verified" class="form-success"><span class="sp-icon" v-html="I.listCheck"></span> 登录成功</div>
+        <div v-if="auth.authError" class="auth-error"><span class="auth-error-icon" v-html="I.alert"></span>{{ auth.authError }}</div>
+        <div v-if="verified" class="auth-success"><span class="auth-success-icon" v-html="I.listCheck"></span>登录成功</div>
       </div>
       <div class="modal-foot gap-2">
-        <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">返回</button>
+        <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">返回修改</button>
         <button v-if="step === 'code'" class="btn btn-ghost" @click="onSendCode"
           :disabled="sending || cooldownSec > 0">
           {{ sending ? '发送中...'
@@ -88,10 +94,6 @@ const verified = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const codeInputRef = ref<HTMLInputElement | null>(null)
 
-// PERF：cooldownTick 每秒更新会触发本组件重渲染。旧实现模板里 6+ 处直接调
-// auth.sendCooldownRemaining/verifyLockRemaining(email.trim())，每次渲染重复求值 +
-// 重复 email.trim()。改为 computed 缓存：本次渲染周期内只各求值一次，模板多处引用
-// 读同一缓存值。语义不变（computed 依赖 cooldownTick，每秒仍随 tick 重算一次）。
 const emailTrim = computed(() => email.value.trim())
 const cooldownSec = computed(() => auth.sendCooldownRemaining(emailTrim.value))
 const lockSec = computed(() => auth.verifyLockRemaining(emailTrim.value))
@@ -112,7 +114,6 @@ watch(() => auth.authModalOpen, (open) => {
 async function onSendCode() {
   const e = emailTrim.value
   if (!e) return
-  // S12：冷却中由 store 返 false 并写 authError，这里读剩余秒数禁用按钮并提前 return
   const remain = cooldownSec.value
   if (remain > 0) {
     auth.authError = `验证码已发送，请 ${remain} 秒后再试`
@@ -131,7 +132,6 @@ async function onSendCode() {
 async function onVerify() {
   const c = code.value.trim()
   if (c.length < 6) return
-  // S12：锁定中由 store 返 false 并写 authError
   const lockRemain = lockSec.value
   if (lockRemain > 0) {
     auth.authError = `验证失败次数过多，请 ${lockRemain} 秒后重试或重新获取验证码`
@@ -154,7 +154,6 @@ function onBack() {
   step.value = 'email'
   code.value = ''
   auth.authError = null
-  // S12：返回邮箱步视为重新开始，清掉验证失败计数与锁，给用户重试机会
   auth.resetVerifyState(emailTrim.value)
   nextTick(() => inputRef.value?.focus())
 }
@@ -167,3 +166,51 @@ function onClose() {
   auth.authModalOpen = false
 }
 </script>
+
+<style scoped>
+.auth-body{text-align:center;padding:24px 28px 16px}
+
+/* ── 图标装饰 ── */
+.auth-icon-wrap{margin-bottom:16px}
+.auth-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:48px;height:48px;border-radius:14px;
+  background:var(--accent-light);color:var(--accent);
+}
+.auth-icon svg{width:24px;height:24px}
+
+/* ── 提示文字 ── */
+.auth-hint{
+  font-size:0.88rem;color:var(--text);margin:0 0 4px;
+  line-height:1.5;font-weight:500;
+}
+.auth-hint-sub{
+  font-size:0.76rem;color:var(--text-muted);
+  margin:0 0 16px;line-height:1.5;
+}
+.auth-email-display{
+  font-size:0.92rem;font-weight:600;color:var(--accent);
+  margin:0 0 4px;word-break:break-all;
+}
+
+/* ── 输入框 ── */
+.auth-input{
+  text-align:center;font-size:0.95rem;
+  padding:11px 16px;
+}
+
+/* ── 消息状态 ── */
+.auth-error,.auth-success{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  font-size:0.8rem;margin-top:8px;padding:8px 12px;
+  border-radius:var(--radius-sm);
+}
+.auth-error{
+  color:var(--danger);background:var(--rose-light);
+}
+.auth-error-icon svg{width:14px;height:14px}
+.auth-success{
+  color:var(--green);background:var(--green-light);
+}
+.auth-success-icon svg{width:16px;height:16px}
+</style>
