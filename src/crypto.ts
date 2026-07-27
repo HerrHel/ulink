@@ -145,6 +145,38 @@ export async function decrypt(ciphertext: string, key: CryptoKey): Promise<strin
   }
 }
 
+/**
+ * 展示专用解密：与 decrypt 的唯一差异是「三段但解不开」时返 '' 而非返原 ciphertext。
+ *
+ * decrypt 的「返原值」降级服务于同步管线（单条坏字段别污染整批 pull/Realtime merge），
+ * 不能动。但展示链路（decryptItem / decryptStoreItems → BookmarkCard 渲染 notes/username）
+ * 的需求相反：解不开要返空、绝不把密文长串回吐 UI。改密码/reset 后旧 key 加密的历史
+ * 密文用新 key 解、或异 E2E 状态下密文进 store 后用错 key 解，都会走这条「三段 + GCM
+ * 失败」分支——decrypt 会返回完整 salt.iv.data 串，模板 {{ bookmark.notes }} 直接渲染
+ * 出长串密文乱码。此处独立走一次 crypto.subtle.decrypt 并 catch 返 ''，对齐
+ * decryptPasswordWithKey 对象分支语义（解不开即空，与锁定态一致）。
+ *
+ * 非三段输入（明文 / 旧 base64 / 空）原样返回——展示语境下「非密文」本就该原样显示，
+ * 这与 decrypt 对非密文的处理一致，差异仅在「三段 + 失败」分支。
+ */
+export async function decryptForDisplay(ciphertext: string, key: CryptoKey): Promise<string> {
+  if (!isThreePartCipher(ciphertext)) return ciphertext
+  const parts = ciphertext.split('.')
+  try {
+    const iv = new Uint8Array(_base64ToBuf(parts[1]))
+    const data = _base64ToBuf(parts[2])
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: _bs(iv) },
+      key,
+      _bs(data),
+    )
+    return _fromBuffer(decrypted)
+  } catch {
+    // GCM 认证失败 / base64 非法 / key 不匹配 —— 一律返 ''，绝不回吐密文给 UI。
+    return ''
+  }
+}
+
 /** 生成 canary 明文（用于验证主密码是否正确） */
 export async function generateCanary(key: CryptoKey): Promise<string> {
   return encrypt('linkvault-canary-v1', key)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { safeAtob, safeDecodePassword, encrypt, decrypt, deriveKey, generateCanary, verifyCanary, encryptPassword, autoMigratePassword, decryptPasswordWithKey } from '../crypto.js'
+import { safeAtob, safeDecodePassword, encrypt, decrypt, decryptForDisplay, deriveKey, generateCanary, verifyCanary, encryptPassword, autoMigratePassword, decryptPasswordWithKey } from '../crypto.js'
 
 describe('Password Decoding', () => {
   describe('safeAtob', () => {
@@ -131,6 +131,53 @@ describe('E2E Encryption', () => {
       const result = await decrypt(cipherA, keyB)
       expect(result).toBe(cipherA)
     })
+
+    // ── decryptForDisplay：展示专用解密 ──
+    // 与 decrypt 的唯一差异：「三段但解不开」时返 '' 而非返原 ciphertext。
+    // 用途：decryptField → decryptItem / decryptStoreItems 还原视图给 UI 的展示语境。
+    // 解不开返空而非密文长串，避免 {{ bookmark.notes }} 渲染成乱码。
+    it('decryptForDisplay: 三段密文 + 正确 key 解出明文', async () => {
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey(MASTER_PW, salt)
+      const cipher = await encrypt('display-secret', key)
+      expect(await decryptForDisplay(cipher, key)).toBe('display-secret')
+    })
+
+    it('decryptForDisplay: 三段密文 + 错误 key 时返空串而非泄漏完整密文（notes 乱码根因）', async () => {
+      // 场景：A 设备用 keyA 加密 notes 推云端；改主密码/reset 后新 key 或别设备 keyB。
+      // decryptStoreItems 用本机 key 去 keyA 的密文 → GCM 认证失败。decrypt 会回吐完整
+      // salt.iv.data 串进 store → 模板渲染出长串密文乱码。decryptForDisplay 独立 catch 返 ''。
+      const saltA = crypto.getRandomValues(new Uint8Array(32))
+      const keyA = await deriveKey(MASTER_PW, saltA)
+      const saltB = crypto.getRandomValues(new Uint8Array(32))
+      const keyB = await deriveKey('other-master-password', saltB)
+      const cipherA = await encrypt('notes-from-device-A', keyA)
+      const out = await decryptForDisplay(cipherA, keyB)
+      expect(out).toBe('')
+      const parts = cipherA.split('.')
+      expect(out).not.toContain(parts[0])
+      expect(out).not.toContain(parts[1])
+      expect(out).not.toContain(parts[2])
+      // 对照：正确 keyA 仍能解
+      expect(await decryptForDisplay(cipherA, keyA)).toBe('notes-from-device-A')
+    })
+
+    it('decryptForDisplay: 非三段明文串原样返回（展示语境非密文本就该显示）', async () => {
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey(MASTER_PW, salt)
+      expect(await decryptForDisplay('hello', key)).toBe('hello')
+      expect(await decryptForDisplay('a.b', key)).toBe('a.b')
+      expect(await decryptForDisplay('', key)).toBe('')
+    })
+
+    it('decryptForDisplay: 三段但 base64 段非法时 catch 返空串不抛 InvalidCharacterError', async () => {
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey(MASTER_PW, salt)
+      // 形似三段但段内非合法 base64 —— atob 抛错，须被 catch 吞为 ''
+      const fake = 'a!.b!.c!'
+      await expect(decryptForDisplay(fake, key)).resolves.toBe('')
+    })
+
 
     it('S6: encrypt output is always salt.iv.data with no empty segments', async () => {
       // encrypt 契约：saveBm 依赖 split 后严格 3 段且每段非空

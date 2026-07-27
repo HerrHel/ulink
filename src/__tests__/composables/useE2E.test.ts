@@ -129,6 +129,51 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     const ok2 = await e2e.unlock('pw-another-456')
     expect(ok2).toBe(true)
   })
+
+  it('解不开的密文（错 key / 改主密码后旧密文）经 decryptStoreItems 写空而非保留密文串（防 UI 乱码）', async () => {
+    // 场景：A 设备用主密码 PA 加密 notes 推云端；后改主密码为 PB（reset 生成新 salt/keyB），
+    // 但云端历史 notes 仍是 keyA 密文（reset 未重加密历史）。新设备用 PB unlock → 派生 keyB
+    // → decryptStoreItems 用 keyB 解 keyA 密文 → GCM 认证失败。
+    // 旧 decrypt 路径：返原 ciphertext 串 → tryField `decrypted === v` 不更新 → store 留密文
+    // → 模板 {{ bookmark.notes }} 渲染长串乱码。
+    // 修复（decryptField 走 decryptForDisplay）：解不开返 '' → `'' !== 密文` → 字段写空 → UI 显示空。
+    const e2e = useE2E()
+    const ds = useDataStore()
+
+    // 1) 用 PA setup 加密一条 notes，拿到 keyA 密文
+    await e2e.setupMasterPassword('old-master-PA')
+    expect(e2e.isUnlocked.value).toBe(true)
+    const cipherNotes = await e2e.encryptField('A 设备的私密笔记 keyA 加密') as string
+    expect(cipherNotes.split('.')).toHaveLength(3)
+    expect(cipherNotes).not.toBe('A 设备的私密笔记 keyA 加密')
+
+    // 2) lock，改主密码为 PB（新 salt → 新 keyB；canaryData 被覆盖，模拟 reset）。
+    //    直接再 setup 用新主密码即可让 store 切到 keyB 语境（等价 reset 的换 key 效果，
+    //    但不跑 reset 全链路，聚焦 decryptStoreItems 行为）。
+    e2e.lock()
+    await e2e.setupMasterPassword('new-master-PB')
+    expect(e2e.isUnlocked.value).toBe(true)
+
+    // 3) 把「keyA 加密的密文」塞进 store（模拟云端拉下/残留的历史密文行）
+    ds.addBookmark({
+      id: 'b-stale', title: 'stale-bm', url: 'https://stale.example', username: '',
+      password: '', notes: cipherNotes, icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null,
+      order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1,
+    } as any)
+
+    // 4) lock + 用 PB unlock → 解锁后补解密用 keyB 解 keyA 的 notes 密文
+    e2e.lock()
+    const ok = await e2e.unlock('new-master-PB')
+    expect(ok).toBe(true)
+    expect(e2e.isUnlocked.value).toBe(true)
+
+    // 5) 修复后：notes 应被写为空串（解不开返空），而非保留密文长串
+    const notesAfter = ds.bookmarkMap['b-stale'].notes
+    expect(notesAfter).toBe('')
+    // 双保险：绝不含密文任何段（防回吐）
+    expect(notesAfter).not.toContain(cipherNotes.split('.')[0])
+    expect(notesAfter).not.toContain(cipherNotes.split('.')[2])
+  }, 20000)
 })
 
 describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {

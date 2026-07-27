@@ -15,7 +15,7 @@ import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
-import { deriveKey, generateCanary, verifyCanary, encrypt, decrypt, isThreePartCipher, PBKDF2_ITERATIONS, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
+import { deriveKey, generateCanary, verifyCanary, encrypt, decryptForDisplay, isThreePartCipher, PBKDF2_ITERATIONS, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { useBiometric } from './useBiometric.js'
 import type { EntityType } from '../../types.js'
@@ -277,7 +277,14 @@ export function useE2E() {
   async function decryptField(value: string): Promise<string> {
     const key = _getKey()
     if (!key || !value) return value
-    return decrypt(value, key)
+    // 走展示专用解密：解不开（三段但 GCM 认证失败 / key 不匹配）返 '' 而非返原密文。
+    // decryptField 服务于 decryptItem / decryptStoreItems 还原视图给 UI 的展示语境——
+    // decrypt（同步管线容错版）对"三段+失败"返原 ciphertext，会被模板 {{ bookmark.notes }}
+    // 直接渲染成长串密文乱码（改密码后旧 key 密文用新 key 解、或异 E2E 状态密文进 store
+    // 后用错 key 解时即落入此分支）。改走 decryptForDisplay 后解不开返空，与 password
+    // 路径 decryptPasswordWithKey 语义一致。同步管线本身不调用本函数（先 decryptItem 再
+    // merge，merge 不再解密），故此处改严格不影响同步容错。
+    return decryptForDisplay(value, key)
   }
 
   async function encryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
