@@ -10,6 +10,9 @@ import { _isPendingSync } from './syncPending.js'
 import { cloneDeep } from '../../lib/clone.js'
 import type { EntityType } from '../../types.js'
 
+// UI-only 字段：不参与云端同步（展开/收起、聚焦、编辑态等纯本地状态）
+const NON_SYNC_FIELDS = new Set(['isExpanded'])
+
 type DataStore = ReturnType<typeof useDataStore>
 
 /** EntityType → data store 软删入口（单一查表，避免两处 switch 漂移） */
@@ -112,12 +115,18 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         break
       case 'revive-assign':
         if (lItem) {
-          Object.assign(lItem, rItem)
-          delete (lItem as { deletedAt?: unknown }).deletedAt
+          const l = lItem as Record<string, unknown>
+          const r = rItem as Record<string, unknown>
+          for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
+          delete (l as { deletedAt?: unknown }).deletedAt
         }
         break
       case 'assign':
-        if (lItem) Object.assign(lItem, rItem)
+        if (lItem) {
+          const l = lItem as Record<string, unknown>
+          const r = rItem as Record<string, unknown>
+          for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
+        }
         break
       case 'skip':
       case 'full-absent-delete':

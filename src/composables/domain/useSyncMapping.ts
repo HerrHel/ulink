@@ -168,7 +168,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       category_id: item.categoryId as string, parent_id: (item.parentId as string) || null,
       order: (item.order as number) || 0, use_count: (item.useCount as number) || 0,
       attributes: (item.attributes as Record<string, boolean>) || {},
-      is_expanded: !!item.isExpanded,
+      // is_expanded: !!item.isExpanded,  // UI-only 字段，不参与云端同步
       created_at_num: item.createdAt as number,
       updated_at_num: (item.updatedAt as number) || now,
       pinned_at: (item.pinnedAt as number | undefined) ?? null,
@@ -181,7 +181,7 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       id: item.id as string, user_id: item._userId as string,
       name: item.name as string, category_id: item.categoryId as string,
       icon: (item.icon as string) || '', order: (item.order as number) || 0,
-      is_expanded: !!item.isExpanded,
+      // is_expanded: !!item.isExpanded,  // UI-only 字段，不参与云端同步
       attributes: (item.attributes as Record<string, boolean>) || {},
       bookmark_ids: (item.bookmarkIds as string[]) || [],
       notes: (item.notes as string) || '', use_count: (item.useCount as number) || 0,

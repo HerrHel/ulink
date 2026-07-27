@@ -41,6 +41,12 @@ export function useApp() {
       const bm = dataStore.bookmarkMap[bmId]
       const isMain = useUIStore().curSpace === 'main'
       const items: Array<{ label: string; action: () => void; danger?: boolean }> = []
+      // 列表视图下书签有账户信息或子站时可展开/收起（移动端无独立按钮，放进长按菜单）
+      const canExpand = !!bm && useUIStore().layoutMode === 'list'
+        && !!(bm.username || bm.password || (dataStore.childrenMap[bmId]?.length))
+      if (canExpand) {
+        items.push({ label: bm?.isExpanded ? '收起' : '展开', action: () => { dataStore.updateBookmark(bmId, { isExpanded: !bm?.isExpanded }); debouncedSaveAppData() } })
+      }
       items.push({ label: bm?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('bookmark', bmId); debouncedSaveAppData() } })
       items.push({ label: '打开链接', action: () => visit(null, bmId) })
       items.push({ label: '查看详情', action: () => openDetail(bmId) })
@@ -54,9 +60,14 @@ export function useApp() {
       const g = dataStore.groupMap[gid]
       const isMain = useUIStore().curSpace === 'main'
       const items: Array<{ label: string; action: () => void; danger?: boolean }> = []
+      // 列表视图下组有笔记时可展开/收起（移动端无独立按钮，放进长按菜单）
+      const canExpand = !!g && useUIStore().layoutMode === 'list' && !!(g.notes && g.notes.trim())
+      if (canExpand) {
+        items.push({ label: g?.isExpanded ? '收起' : '展开', action: () => { dataStore.updateGroup(gid, { isExpanded: !g?.isExpanded }); debouncedSaveAppData() } })
+      }
       items.push({ label: g?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('group', gid); debouncedSaveAppData() } })
       items.push({ label: '查看详情', action: () => openDetail('group:' + gid) })
-      items.push({ label: '展开组', action: () => toggleGroupFocus(gid) })
+      items.push({ label: '聚焦编辑', action: () => toggleGroupFocus(gid) })
       items.push({ label: '编辑组', action: () => editGroup(gid) })
       items.push({ label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) })
       if (isMain) items.push({ label: '设为私密', action: () => spaceMove.moveGroupsToVault([gid]) })

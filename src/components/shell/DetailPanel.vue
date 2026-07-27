@@ -2,15 +2,11 @@
   <div ref="detailPanelRef" class="detail-panel" :class="{ open: isOpen, swiping: isSwiping }"
        :style="translateY ? { transform: `translateY(${translateY}px)` } : undefined" id="detailPanel">
     <div class="detail-drag-handle" id="detailDragHandle"></div>
-    <div class="detail-search" id="detailSearchWrap" v-show="isOpen && entries.length > 0">
-      <input type="text" class="detail-search-input" id="detailSearch"
-             placeholder="搜索辅助栏..." aria-label="搜索辅助栏" v-model="searchQuery">
-    </div>
     <div class="detail-inner" id="detailInner">
       <template v-if="entries.length">
         <div class="card-grid grid-view detail-grid">
           <div class="card-list-inner">
-            <template v-for="entry in filteredEntries" :key="entry.rawId">
+            <template v-for="entry in entries" :key="entry.rawId">
               <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="entry.realIdx">
                 <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
                 <GroupCard v-if="entry.isGroup" :group="entry.data" detail-mode />
@@ -41,7 +37,6 @@ import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
-const searchQuery = ref('')
 const detailPanelRef = ref<HTMLElement | null>(null)
 
 const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
@@ -79,14 +74,6 @@ const entries = computed<DetailEntry[]>(() => {
     if (bm && !bm.deletedAt) out.push({ rawId, realIdx: i, isGroup: false, data: bm, name: bm.title || '', domain: domain(bm.url) })
   }
   return out
-})
-
-const filteredEntries = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return entries.value
-  return entries.value.filter(e =>
-    e.name.toLowerCase().includes(q) || e.domain.toLowerCase().includes(q)
-  )
 })
 
 /* Swipe-to-dismiss (mobile only, non-passive to allow preventDefault) */
