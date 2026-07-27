@@ -156,8 +156,11 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
   function rebuildCachedItems() {
     if (!containerRef.value || !drag) return
+    // 排除被拖元素 + 占位符：占位符 className 含 itemSelector 前缀（如 'card card-drag-placeholder'
+    // 匹配 '.card'），若不排除会占据一个索引位，导致 scrollLoop 落点与 onPointerUp 的
+    // filteredToIdx → toIndex 映射整体偏一格（下移落点靠后一格）。
     _cachedItems = Array.from(containerRef.value.children)
-      .filter(c => (c as HTMLElement).matches?.(itemSelector) && c !== drag!.el)
+      .filter(c => (c as HTMLElement).matches?.(itemSelector) && c !== drag!.el && c !== drag!.placeholder)
   }
 
   // ── rAF 循环：统一更新卡片位置 + 边缘滚动 ──
@@ -172,11 +175,10 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     const draggingDown = drag.lastY > _prevY
     _prevY = drag.lastY
     const leadEdge = draggingDown ? cardTop + drag.itemHeight : cardTop
-    // 使用缓存的 allCards，避免每帧 DOM 查询 + filter
+    // 使用缓存的 allCards（已排除拖拽元素与占位符），避免每帧 DOM 查询 + filter
     ensureMids(_cachedItems)
     let newIndex = _cachedItems.length
     for (let i = 0; i < _cachedMids.length; i++) {
-      if (_cachedMids[i].el === drag!.placeholder) continue
       if (leadEdge < _cachedMids[i].mid) {
         newIndex = i
         break
@@ -341,11 +343,10 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     const cardTop = d.initialTop + (d.lastY - d.startY)
     const draggingDown = d.lastY > d.startY
     const leadEdge = draggingDown ? cardTop + d.itemHeight : cardTop
-    // 使用缓存的 _cachedItems（已排除拖拽元素和占位符），避免 DOM 查询
+    // 使用缓存的 _cachedItems（已排除拖拽元素与占位符），避免 DOM 查询
     ensureMids(_cachedItems)
     let filteredToIdx = _cachedItems.length
     for (let i = 0; i < _cachedMids.length; i++) {
-      if (_cachedMids[i].el === d.placeholder) continue
       if (leadEdge < _cachedMids[i].mid) { filteredToIdx = i; break }
     }
 

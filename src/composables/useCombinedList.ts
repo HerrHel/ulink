@@ -52,6 +52,28 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         for (const b of filteredBms) {
           if (!usedBms.has(b.id)) combined.push({ type: 'bm', data: b })
         }
+        // 置顶兜底：_customCardOrder 只反映拖拽序，不含置顶语义。custom 模式绕过了
+        // _sortItems 的 pinned 优先比较，若不在此补 partition，置顶项会被拖拽到中间
+        // 的项压住、不再浮顶。优先级：groupsOnTop（全局）> pinnedAt（单条）> order 相对序。
+        //  - groupsOnTop 开：组整体置最前（即便有置顶书签也不能越过非置顶组），
+        //    组/书签各自内部再按 pinned partition。
+        //  - groupsOnTop 关：组与书签混排，整体按 pinned partition（保持 order 相对序）。
+        if (ui.groupsOnTop) {
+          combined.sort((a, b) => {
+            const aG = a.type === 'group' ? 0 : 1
+            const bG = b.type === 'group' ? 0 : 1
+            if (aG !== bG) return aG - bG
+            const aPin = (a.data as SiblingGroup | Bookmark).pinnedAt ? 1 : 0
+            const bPin = (b.data as SiblingGroup | Bookmark).pinnedAt ? 1 : 0
+            return bPin - aPin
+          })
+        } else {
+          combined.sort((a, b) => {
+            const aPin = (a.data as SiblingGroup | Bookmark).pinnedAt ? 1 : 0
+            const bPin = (b.data as SiblingGroup | Bookmark).pinnedAt ? 1 : 0
+            return bPin - aPin
+          })
+        }
         return combined
       }
       case 'normal': {
