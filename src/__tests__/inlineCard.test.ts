@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { inlineCardHTML, groupRefCardHTML } from '../composables/useInlineCard.js'
 
 describe('inlineCardHTML', () => {
@@ -10,6 +10,7 @@ describe('inlineCardHTML', () => {
     expect(html).toContain('GitHub')
     expect(html).toContain('github.com')
     expect(html).toContain('contenteditable="false"')
+    // jsdom 默认无 matchMedia → isMobile()=false → draggable="true"（桌面端拖拽语义）
     expect(html).toContain('draggable="true"')
   })
 
@@ -70,5 +71,38 @@ describe('groupRefCardHTML', () => {
     const g = { id: 'g1', name: 'Test', icon: '', bookmarkIds: [] } as any
     const html = groupRefCardHTML(g)
     expect(html).toContain('svg')
+  })
+})
+
+// 移动端（matchMedia (max-width:768px) 命中）：inline card 应输出 draggable="false"，
+// 避免 Chrome 移动端长按启动 HTML5 拖拽幽灵、抢占 useLongPress 的 500ms 长按菜单。
+// useInlineCard 的 _draggable 在模块加载时求值一次，须 resetModules + 动态 import 让 stub 生效。
+describe('inlineCard on mobile', () => {
+  beforeEach(() => {
+    vi.stubGlobal('matchMedia', (q: string) => ({
+      matches: q === '(max-width: 768px)',
+      media: q, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    }))
+  })
+  afterEach(() => { vi.unstubAllGlobals(); vi.resetModules() })
+
+  it('inlineCardHTML outputs draggable="false" when mobile', async () => {
+    vi.resetModules()
+    const { inlineCardHTML } = await import('../composables/useInlineCard.js')
+    const bm = { id: 'b1', title: 'GitHub', url: 'https://github.com', icon: '' } as any
+    const html = inlineCardHTML(bm)
+    expect(html).toContain('draggable="false"')
+    expect(html).not.toContain('draggable="true"')
+  })
+
+  it('groupRefCardHTML outputs draggable="false" when mobile', async () => {
+    vi.resetModules()
+    const { groupRefCardHTML } = await import('../composables/useInlineCard.js')
+    const g = { id: 'g1', name: 'AI Tools', icon: '', bookmarkIds: ['b1', 'b2'] } as any
+    const html = groupRefCardHTML(g)
+    expect(html).toContain('draggable="false"')
+    expect(html).not.toContain('draggable="true"')
   })
 })

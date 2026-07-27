@@ -46,7 +46,7 @@
   </div>
   <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
        role="listitem" :aria-label="group.name || '未命名组'"
-       :data-group-id="group.id" :draggable="true"
+       :data-group-id="group.id" :draggable="!ui.isMobile"
        :tabindex="listKeyboardNav ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
     <div class="group-card-accent"></div>

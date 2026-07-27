@@ -1,7 +1,7 @@
 <template>
   <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode }"
        role="listitem" :aria-label="bookmark.title"
-       :data-id="bookmark.id" draggable="true"
+       :data-id="bookmark.id" :draggable="!uiStore.isMobile"
        :tabindex="listKeyboardNav ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
@@ -61,7 +61,7 @@
         </div>
       </template>
       <div class="sub-sites" v-if="children.length">
-        <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" draggable="true" @click.stop="visitSub(sub)">
+        <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" :draggable="!uiStore.isMobile" @click.stop="visitSub(sub)">
           <img :src="favicon(sub.url, sub.icon)" alt="">
           <span class="gic-name">{{ sub.title }}</span>
           <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">详</span>
