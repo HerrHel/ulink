@@ -9,6 +9,13 @@
         </span>
         <span>{{ cat.name }}</span>
       </button>
+      <button v-if="showVaultOption" class="bmp-item bmp-item-vault"
+              @click="onMoveToVault">
+        <span class="bmp-item-icon" style="color: var(--vault-color, #9b59b6)">
+          <span v-html="I.lock"></span>
+        </span>
+        <span>私密空间</span>
+      </button>
     </div>
     <div class="bmp-new">
       <input type="text" class="bmp-new-input" v-model="newCatName"
@@ -21,20 +28,31 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
+import { useVaultStore } from '../../stores/vault.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
-import { getCategoryIcon } from '../../config/icons.js'
+import { I, getCategoryIcon } from '../../config/icons.js'
 import { addNewCategory } from '../../utils.js'
 import { batchMoveToCat } from '../../composables/domain/useBatch.js'
+import { moveBatchSelectedToVault } from '../../composables/domain/useSpaceMove.js'
 
 const store = useAppStore()
+const uiStore = useUIStore()
+const vaultStore = useVaultStore()
 const bmStore = useBatchMoveStore()
 const newCatName = ref('')
 
 const categories = computed(() => store.selectableCategories)
+const showVaultOption = computed(() => vaultStore.isVaultEnabled && uiStore.curSpace === 'main')
 
 function onMoveToCat(catId: string) {
   batchMoveToCat(catId)
   newCatName.value = ''
+  bmStore.hide()
+}
+
+async function onMoveToVault() {
+  await moveBatchSelectedToVault([...uiStore.batchSelected])
   bmStore.hide()
 }
 

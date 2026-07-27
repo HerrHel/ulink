@@ -169,10 +169,11 @@
 }
 .bmp-list{max-height:200px;overflow-y:auto}
 .bmp-item{
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;gap:8px;width:100%;
   padding:10px 14px;cursor:pointer;
   font-size:0.85rem;color:var(--text);
   transition:background 0.1s ease;
+  border:none;background:none;text-align:left;
 }
 .bmp-item:hover{background:var(--surface-hover)}
 .bmp-item-icon{width:18px;height:18px;border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center}

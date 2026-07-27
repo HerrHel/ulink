@@ -148,7 +148,7 @@
 .trash-section-title{font-size:0.72rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border-light)}
 .trash-item{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:var(--radius-sm);transition:background 0.15s}
 .trash-item:hover{background:var(--surface-hover)}
-.trash-item-icon{flex-shrink:0;color:var(--text-muted);width:16px;height:16px}
+.trash-item-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text-muted);width:16px;height:16px}
 .trash-item-icon svg{width:16px;height:16px}
 .trash-item-name{flex:1;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .trash-item-time{font-size:0.7rem;color:var(--text-muted);flex-shrink:0}

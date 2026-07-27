@@ -11,6 +11,13 @@
           <span class="bmp-item-icon" :style="{ color: cat.color || 'var(--accent)' }" v-html="getCategoryIcon(cat.icon)"></span>
           <span>{{ cat.name }}</span>
         </button>
+        <button v-if="showVaultOption" class="bmp-item bmp-item-vault"
+                @click="onMoveToVault">
+          <span class="bmp-item-icon" style="color: var(--vault-color, #9b59b6)">
+            <span v-html="I.lock"></span>
+          </span>
+          <span>私密空间</span>
+        </button>
       </div>
       <div class="bmp-new">
         <input type="text" class="bmp-new-input" v-model="store.newCatName" placeholder="新建分类名称…" aria-label="新建分类名称" @keydown.enter="onAddNewCat">
@@ -29,15 +36,28 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAppStore } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
+import { useVaultStore } from '../../stores/vault.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
 import { addNewCategory } from '../../utils.js'
+import { moveBatchSelectedToVault } from '../../composables/domain/useSpaceMove.js'
 
 const store = useActionSheetStore()
+const uiStore = useUIStore()
+const vaultStore = useVaultStore()
+
+const showVaultOption = computed(() => vaultStore.isVaultEnabled && uiStore.curSpace === 'main')
 
 function onAddNewCat() {
   const cat = addNewCategory(store.newCatName, useAppStore())
   if (cat) store.onPickCategory(cat.id)
+}
+
+async function onMoveToVault() {
+  await moveBatchSelectedToVault([...uiStore.batchSelected])
+  store.hide()
 }
 </script>
