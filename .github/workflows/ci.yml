@@ -13,10 +13,9 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      # tiptap 单包升级后 peer 与 starter-kit 不同小版本（@tiptap/extensions 3.28 vs
-      # extension-placeholder/task-list 3.29），严格 peer 解析下 npm ci 报 ERESOLVE。
-      # 配置层兼容可用 --legacy-peer-deps 通过（build/test 均绿）；统一升级全家桶另开分支。
-      - run: npm ci --legacy-peer-deps
+      # tiptap 全家桶已统一到 3.29.2（见 chore/tiptap-3.29.2），strict peer 解析下
+      # npm ci 无 ERESOLVE，不再需要 --legacy-peer-deps。
+      - run: npm ci
       - name: Lint
         run: npm run lint
       # F2-006：类型检查进入门禁
@@ -35,7 +34,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci --legacy-peer-deps
+      - run: npm ci
       # C1-002 / F2-002：Playwright 进入 PR 门禁
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

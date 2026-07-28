@@ -25,8 +25,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - name: Install dependencies
-        # 见 ci.yml：tiptap 单包升级后 peer 冲突，需 --legacy-peer-deps。
-        run: npm ci --legacy-peer-deps
+        # tiptap 全家桶已统一到 3.29.2，strict peer 解析下 npm ci 无冲突。
+        run: npm ci
       - name: Lint
         run: npm run lint
       # F2-006：部署前类型检查
