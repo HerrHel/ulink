@@ -9,8 +9,8 @@
  * 修复后：push 端把 EncryptedPassword 对象规整成 "salt.iv.data" 三段串；
  * pull 端分层识别（JSON 文本 → 对象 / 三段串 → 对象 / 旧 base64 → string / 空）。
  */
-import { describe, it, expect } from 'vitest'
-import { toRemoteRow, fromRemoteBookmark, fromRemoteGroup, type RemoteBookmarkRow, type RemoteGroupRow } from '../../composables/domain/useSyncMapping.js'
+import { describe, it, expect, vi } from 'vitest'
+import { toRemoteRow, fromRemoteBookmark, fromRemoteGroup, fromRemoteCategory, fromRemoteAttribute, type RemoteBookmarkRow, type RemoteGroupRow, type RemoteCategoryRow, type RemoteAttributeRow } from '../../composables/domain/useSyncMapping.js'
 import type { EncryptedPassword } from '../../types.js'
 
 // 构造一个合法的 EncryptedPassword 对象（字段值无需真的能解密，只测映射形状）
@@ -201,5 +201,169 @@ describe('pinnedAt 跨端映射 (AUDIT-R5)', () => {
     const back = fromRemoteGroup(row)
     expect(back).not.toBeNull()
     expect(back!.pinnedAt).toBe(1800000000000)
+  })
+})
+
+// D1-3：category / attribute 的 toRemoteRow/fromRemote* roundtrip + 兜底护栏。
+// 七轮 sync 序列化护栏都集中在 bookmark/group 的 password/pinned_at，分类与自定义属性
+// 的映射契约（color/order 字段、type 兜底）从未有测试覆盖——它们同样走 FROM_REMOTE 表，
+// pull/realtime 都依赖。补齐为后续 sync 边界优化铺路。
+describe('category 跨端映射 roundtrip (D1-3)', () => {
+  function makeLocalCategory(): Record<string, unknown> {
+    return {
+      id: 'cat-1', _userId: 'u-1',
+      name: '工作', icon: 'briefcase', color: '#3b82f6',
+      order: 2, updatedAt: 3000, deletedAt: undefined,
+    }
+  }
+
+  it('toRemoteRow category: camelCase → snake_case 全字段映射', () => {
+    const row = toRemoteRow('category', makeLocalCategory(), false) as RemoteCategoryRow
+    expect(row.id).toBe('cat-1')
+    expect(row.user_id).toBe('u-1')
+    expect(row.name).toBe('工作')
+    expect(row.icon).toBe('briefcase')
+    expect(row.color).toBe('#3b82f6')
+    expect(row.order).toBe(2)
+    expect(row.updated_at_num).toBe(3000)
+    expect(row.deleted_at).toBeNull()
+  })
+
+  it('toRemoteRow category: 缺省字段兜底（icon/color 空、order 0、updatedAt 现 now）', () => {
+    const item = { id: 'cat-2', _userId: 'u-1', name: '默认', updatedAt: 0 } as Record<string, unknown>
+    const row = toRemoteRow('category', item, false) as RemoteCategoryRow
+    expect(row.icon).toBe('')
+    expect(row.color).toBe('')
+    expect(row.order).toBe(0)
+    // updatedAt 为 0/缺省时回退 Date.now()——锁定「现 now」兜底契约（不写 0 进远端）
+    expect(row.updated_at_num).toBeGreaterThan(0)
+  })
+
+  it('fromRemoteCategory: 远端行还原本地 Category（全字段）', () => {
+    const row: RemoteCategoryRow = {
+      id: 'cat-1', user_id: 'u-1', name: '工作', icon: 'briefcase', color: '#3b82f6',
+      order: 2, updated_at_num: 3000, deleted_at: null,
+    }
+    const c = fromRemoteCategory(row)
+    expect(c).not.toBeNull()
+    expect(c).toMatchObject({ id: 'cat-1', name: '工作', icon: 'briefcase', color: '#3b82f6', order: 2, updatedAt: 3000 })
+    expect(c!.deletedAt).toBeUndefined()
+  })
+
+  it('category roundtrip: push → pull 后分类元信息保留', () => {
+    const item = makeLocalCategory()
+    const row = toRemoteRow('category', item, false) as RemoteCategoryRow
+    const back = fromRemoteCategory(row)
+    expect(back).not.toBeNull()
+    expect(back!.id).toBe('cat-1')
+    expect(back!.name).toBe('工作')
+    expect(back!.icon).toBe('briefcase')
+    expect(back!.color).toBe('#3b82f6')
+    expect(back!.order).toBe(2)
+    expect(back!.updatedAt).toBe(3000)
+  })
+
+  it('category deleted_at roundtrip: 软删时间戳经 ISO 互转仍可还原', () => {
+    const ts = 1700000000000
+    const item = { ...makeLocalCategory(), deletedAt: ts } as Record<string, unknown>
+    const row = toRemoteRow('category', item, false) as RemoteCategoryRow
+    // 远端存 ISO 字符串
+    expect(typeof row.deleted_at).toBe('string')
+    expect(row.deleted_at).not.toBeNull()
+    // 回程 parseTimestamp 还原成 number
+    const back = fromRemoteCategory(row)
+    expect(back).not.toBeNull()
+    expect(back!.deletedAt).toBe(ts)
+  })
+
+  // 真实行为：CategorySchema.id/name 是 z.string()（允许空串），故空 id/name 能过
+  // 校验 → fromRemoteCategory 返回空字段对象而非 null。锁定此当前行为。
+  // 注：空 id/name 对象被接受是否该收紧 schema 拒绝（z.string().min(1)）见
+  //   needs-user-review 清单「sync 坏远端数据污染面」，属 schema 收紧需人工裁。
+  it('fromRemoteCategory: 空 id/name 经 schema 放行返空字段对象（非 null，schema 当前允许空串）', () => {
+    const broken = { id: '', name: '' } as unknown as RemoteCategoryRow
+    const c = fromRemoteCategory(broken)
+    expect(c).not.toBeNull()
+    expect(c?.id).toBe('')
+    expect(c?.name).toBe('')
+  })
+})
+
+describe('attribute 跨端映射 roundtrip (D1-3)', () => {
+  function makeLocalAttribute(): Record<string, unknown> {
+    return {
+      id: 'attr-1', _userId: 'u-1',
+      name: '已读', type: 'boolean',
+      updatedAt: 4000, deletedAt: undefined,
+    }
+  }
+
+  it('toRemoteRow attribute: 字段映射（type 透传 boolean）', () => {
+    const row = toRemoteRow('attribute', makeLocalAttribute(), false) as RemoteAttributeRow
+    expect(row.id).toBe('attr-1')
+    expect(row.user_id).toBe('u-1')
+    expect(row.name).toBe('已读')
+    expect(row.type).toBe('boolean')
+    expect(row.updated_at_num).toBe(4000)
+    expect(row.deleted_at).toBeNull()
+  })
+
+  it('toRemoteRow attribute: type 缺省兜底为 boolean', () => {
+    const item = { id: 'attr-2', _userId: 'u-1', name: '收藏' } as Record<string, unknown>
+    const row = toRemoteRow('attribute', item, false) as RemoteAttributeRow
+    expect(row.type).toBe('boolean')
+  })
+
+  it('fromRemoteAttribute: 远端行还原本地 CustomAttribute', () => {
+    const row: RemoteAttributeRow = {
+      id: 'attr-1', user_id: 'u-1', name: '已读', type: 'boolean',
+      updated_at_num: 4000, deleted_at: null,
+    }
+    const a = fromRemoteAttribute(row)
+    expect(a).not.toBeNull()
+    expect(a).toMatchObject({ id: 'attr-1', name: '已读', type: 'boolean', updatedAt: 4000 })
+    expect(a!.deletedAt).toBeUndefined()
+  })
+
+  it('attribute roundtrip: push → pull 后属性保留', () => {
+    const row = toRemoteRow('attribute', makeLocalAttribute(), false) as RemoteAttributeRow
+    const back = fromRemoteAttribute(row)
+    expect(back).not.toBeNull()
+    expect(back!.id).toBe('attr-1')
+    expect(back!.name).toBe('已读')
+    expect(back!.type).toBe('boolean')
+    expect(back!.updatedAt).toBe(4000)
+  })
+
+  // M15 兜底契约：当前产品仅 boolean，远端若出现非 boolean type（如将来 schema 演进遗留、
+  // 或别端误写）不整条丢弃——强制兜底成 'boolean' 保留 id/name 引用，并 console.warn 提示。
+  // 锁定此行为：它是「新旧端混跑时属性不丢」的安全网，护栏记录防有人误把兜底当 bug 删掉。
+  it('fromRemoteAttribute: 非 boolean type 兜底为 boolean + warn（不丢条目）', () => {
+    const row: RemoteAttributeRow = {
+      id: 'attr-x', user_id: 'u-1', name: '未来类型', type: 'string',
+      updated_at_num: 5000, deleted_at: null,
+    }
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const a = fromRemoteAttribute(row)
+    expect(a).not.toBeNull()
+    // 不丢：id/name 保留
+    expect(a!.id).toBe('attr-x')
+    expect(a!.name).toBe('未来类型')
+    // type 强制兜底成 boolean（schema 当前唯一合法值）
+    expect(a!.type).toBe('boolean')
+    // warn 留迹，提示 type 字面值（schema 演进时据此扩展）
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('attr-x'))
+    spy.mockRestore()
+  })
+
+  // 真实行为：CustomAttributeSchema.id/name 是 z.string()（允许空串），空 id/name
+  // 能过校验 → fromRemoteAttribute 返回空字段对象而非 null。锁定此当前行为。
+  // 注：是否收紧 schema 拒绝空 id/name 见 needs-user-review 清单（同 category）。
+  it('fromRemoteAttribute: 空 id/name 经 schema 放行返空字段对象（非 null）', () => {
+    const broken = { id: '', name: '' } as unknown as RemoteAttributeRow
+    const a = fromRemoteAttribute(broken)
+    expect(a).not.toBeNull()
+    expect(a?.id).toBe('')
+    expect(a?.name).toBe('')
   })
 })
