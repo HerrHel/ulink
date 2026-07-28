@@ -25,7 +25,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - name: Install dependencies
-        run: npm ci
+        # 见 ci.yml：tiptap 单包升级后 peer 冲突，需 --legacy-peer-deps。
+        run: npm ci --legacy-peer-deps
       - name: Lint
         run: npm run lint
       # F2-006：部署前类型检查
