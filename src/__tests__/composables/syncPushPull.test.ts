@@ -415,3 +415,74 @@ describe('syncPushPull via SyncRemotePort', () => {
     expect(useSyncStore().syncError).toMatch(/partial upsert fail/)
   })
 })
+
+describe('syncPull 解锁态竞态（D1-4）', () => {
+  // pullChanges 在 isUnlocked=true 时对远端逐条 decryptItem；其内 async decryptField
+  // 对三段密文字段 await crypto.subtle.decrypt（真异步让出点）。若解密中途被撤销锁（如
+  // 另一路径触发 lock）：decryptList 循环下一条前 `if (!isUnlocked.value) break` 命中，
+  // 随后 `if (!e2e.isUnlocked.value) setSyncStatus('idle'); return false` 中止本轮 merge。
+  // 本用例靠 stub subtle.decrypt 在首条解密结束时撤锁，锁定该竞态边界：
+  // 部分解密不污染本地（merge 未执行）、pull 返回 false、状态置 idle。
+  let _origDecrypt: typeof crypto.subtle.decrypt | null = null
+  let _withdrawCalls = 0
+
+  beforeEach(async () => {
+    _withdrawCalls = 0
+    const e2e = useE2EStore()
+    e2e.setEnabled(true)
+    e2e.setUnlocked(true)
+    // 真实 AES-GCM CryptoKey（jsdom/node 有 webcrypto），让 decryptItem 走 decryptField
+    // 对三段密文字段真 await subtle.decrypt —— 此 await 是模拟竞态的唯一让出点。
+    const key = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt'],
+    )
+    e2e.setKey(key as any)
+    // stub subtle.decrypt：首条解密成功后立即撤锁模拟并发竞态；之后原样返回空解密结果。
+    _origDecrypt = crypto.subtle.decrypt.bind(crypto.subtle)
+    _withdrawCalls = 0
+    crypto.subtle.decrypt = (async (_alg: any, _k: any, _data: any) => {
+      _withdrawCalls++
+      if (_withdrawCalls === 1) e2e.setUnlocked(false) // 首条解密结束即撤锁
+      return new ArrayBuffer(0)
+    }) as any
+  })
+
+  afterEach(() => {
+    if (_origDecrypt) crypto.subtle.decrypt = _origDecrypt
+    _origDecrypt = null
+  })
+
+  it('解锁态中途撤锁 → 中止 pull、远端项不进本地、状态 idle', async () => {
+    // 远端两条 bookmark，username 填三段密文让 decryptItem 走真 await subtle.decrypt
+    // （bookmark 的 ENCRYPT_FIELDS 是 username/notes，三段策略触发 decryptField）
+    const remoteBm = (id: string) => ({
+      id, user_id: 'user-pp', title: '远端书签 ' + id, url: 'https://race.example/' + id,
+      username: 'salt.iv.data', password: '', notes: '', icon: '',
+      category_id: CAT_UNCATEGORIZED, parent_id: null,
+      order: 0, use_count: 0, attributes: {}, is_expanded: false,
+      created_at_num: 1000, updated_at_num: 9000, deleted_at: null,
+    })
+    const port = createMemorySyncPort({
+      sinceRows: {
+        bookmarks: [remoteBm('bm-race-1'), remoteBm('bm-race-2')],
+        sibling_groups: [], categories: [], custom_attributes: [],
+      },
+    })
+    setSyncRemotePort(port)
+    useSyncStore().setLastSyncAt(0)
+
+    const sync = useCloudSync()
+    const ok = await sync.pullFromCloud(false)
+
+    // 撤锁竞态确被触发：至少调到一次 subtle.decrypt（首条解密中）
+    expect(_withdrawCalls).toBeGreaterThanOrEqual(1)
+    // 中止：pull 返回 false
+    expect(ok).toBe(false)
+    // 状态置 idle（非 error、非 success），表明这是主动中止而非崩溃
+    expect(useSyncStore().syncStatus).toBe('idle')
+    // 远端项未 merge 进本地 —— 中断发生在 decrypt 阶段、merge 之前
+    const ds = useDataStore()
+    expect(ds.bookmarkMap['bm-race-1']).toBeUndefined()
+    expect(ds.bookmarkMap['bm-race-2']).toBeUndefined()
+  })
+})
