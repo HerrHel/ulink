@@ -46,7 +46,7 @@
     "@tiptap/extension-underline": "^3.28.0",
     "@tiptap/pm": "^3.28.0",
     "@tiptap/starter-kit": "^3.28.0",
-    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitejs/plugin-vue": "^6.0.8",
     "dexie": "^4.4.3",
     "dompurify": "^3.4.8",
     "fuse.js": "^7.4.2",
