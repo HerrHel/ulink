@@ -477,3 +477,67 @@ describe('useE2E.changeMasterPassword 登录态云端链路（push 失败 / real
     expect(_e2eState.cloudCanaryStale).toBe(false)
   }, 20000)
 })
+
+/**
+ * 修复：unlock 成功后应触发 enqueueDirtyAsOps + pushFromQueue，清空锁定期间积压队列。
+ *
+ * 根因：锁定态下带敏感字段的 upsert op 被 pushFromQueue 静默跳过留 syncOps 队列，
+ * unlock 前 key 不在内存推不上去；原 unlock() 只补解密、不发 push，队列要等下次
+ * autoSync tick / 可见性回前台才被动推（autoSync 关掉的用户压根不会被推），徽章长期
+ * 显「N 项待同步」误导成「同步坏了」。修复：unlock 成功后 fire 一次 push 清队列。
+ */
+describe('useE2E.unlock 解锁后重推积压队列', () => {
+  it('登录态下 unlock 成功后触发 enqueueDirtyAsOps + pushFromQueue（清空锁定积压）', async () => {
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('master-pw-1')
+    setAuthUser() // _getUserId 返非 null，unlock 末尾的发 push 守门通过
+    e2e.lock() // 锁定：key 出内存，模拟锁定期间队列已积压
+    expect(e2e.isUnlocked.value).toBe(false)
+
+    enqueueDirtyAsOps.mockClear()
+    pushFromQueue.mockClear()
+    pushFromQueue.mockResolvedValue(true)
+
+    const ok = await e2e.unlock('master-pw-1')
+    expect(ok).toBe(true)
+
+    // unlock 内 void withLock(push) 是 fire-and-forget，需 flush 让其执行
+    await vi.waitFor(() => expect(pushFromQueue).toHaveBeenCalled())
+    expect(enqueueDirtyAsOps).toHaveBeenCalled()
+    // 时序：enqueue 先于 push（先把内存脏标转成持久 op 再推）
+    const enqCall = enqueueDirtyAsOps.mock.invocationCallOrder[0]
+    const pushCall = pushFromQueue.mock.invocationCallOrder[0]
+    expect(enqCall).toBeLessThan(pushCall)
+  }, 20000)
+
+  it('未登录（_getUserId 返 null）时 unlock 不触发 push（无云端可推，避免无谓调用）', async () => {
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('master-pw-1')
+    // 不 setAuthUser：_getUserId 返 null
+    e2e.lock()
+    enqueueDirtyAsOps.mockClear()
+    pushFromQueue.mockClear()
+
+    const ok = await e2e.unlock('master-pw-1')
+    expect(ok).toBe(true)
+
+    // 解密补全仍 await 完成，但 push 相关不应被调
+    await new Promise(r => setTimeout(r, 50))
+    expect(enqueueDirtyAsOps).not.toHaveBeenCalled()
+    expect(pushFromQueue).not.toHaveBeenCalled()
+  }, 20000)
+
+  it('unlock 主密码错误（verifyCanary 失败）返 false 且不触发 push', async () => {
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('master-pw-1')
+    setAuthUser()
+    e2e.lock()
+    enqueueDirtyAsOps.mockClear()
+    pushFromQueue.mockClear()
+
+    const ok = await e2e.unlock('wrong-password')
+    expect(ok).toBe(false)
+    expect(enqueueDirtyAsOps).not.toHaveBeenCalled()
+    expect(pushFromQueue).not.toHaveBeenCalled()
+  }, 20000)
+})
