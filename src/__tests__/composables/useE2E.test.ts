@@ -174,6 +174,33 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     expect(notesAfter).not.toContain(cipherNotes.split('.')[0])
     expect(notesAfter).not.toContain(cipherNotes.split('.')[2])
   }, 20000)
+
+  it('未解锁时 decryptField：三段密文返空不渲染乱码，明文原样穿透（多设备/锁定态展示兜底）', async () => {
+    // 场景：B 端 E2E 启用但未解锁，云端拉下的密文条目原样进 store（storeItem 锁定态不解密）。
+    // 旧解：decryptField 在 !key 时 `return value` 原样返密文 → 模板 {{ bookmark.notes }}
+    // /{{ bookmark.username }} 渲染长串乱码。修复：!key 时三段密文返 ''、明文原样穿透。
+    // 注意：仅断 decryptField 边界，不跑 decryptStoreItems（解锁后另测覆盖补解密）。
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('locked-pw-0') // 创一把真 key 并生成真密文
+    const cipherNotes = await e2e.encryptField('应被隐藏的机密笔记') as string
+    expect(cipherNotes.split('.')).toHaveLength(3) // 确真三段密文
+    e2e.lock() // → key 出内存，进入未解锁态
+    expect(e2e.isE2EEnabled.value).toBe(true)
+    expect(e2e.isUnlocked.value).toBe(false)
+
+    // 未解锁：三段密文返空（UI 显空不显乱码），非三段明文原样返
+    await expect(e2e.decryptField(cipherNotes)).resolves.toBe('')
+    await expect(e2e.decryptField('普通明文笔记')).resolves.toBe('普通明文笔记')
+    // 形似三段但非密文（如含点的明文）不应被误判为密文：本例 'a.b' 只两段，穿透
+    await expect(e2e.decryptField('a.b')).resolves.toBe('a.b')
+    // 空串原样返
+    await expect(e2e.decryptField('')).resolves.toBe('')
+
+    // 解锁后真密文仍能正确解回——确认兜底未丢数据
+    const ok = await e2e.unlock('locked-pw-0')
+    expect(ok).toBe(true)
+    await expect(e2e.decryptField(cipherNotes)).resolves.toBe('应被隐藏的机密笔记')
+  }, 20000)
 })
 
 describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {

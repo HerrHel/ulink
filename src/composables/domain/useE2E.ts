@@ -286,7 +286,14 @@ export function useE2E() {
 
   async function decryptField(value: string): Promise<string> {
     const key = _getKey()
-    if (!key || !value) return value
+    if (!value) return value
+    if (!key) {
+      // 未解锁兜底：key 不在内存时报不出明文。明文（非三段）原样穿透给 UI 显示；
+      // 三段密文（salt.iv.data）一旦原样进模板 {{ bookmark.notes }}/{{ bookmark.username }}
+      // 会渲染成长串乱码——返空，与"已解锁但用错 key 解不开"语义一致（见下），UI 显空不显乱码。
+      // 解锁后 decryptStoreItems 仍能用真 key 把真密文补解成明文，故不会丢数据。
+      return isThreePartCipher(value) ? '' : value
+    }
     // 走展示专用解密：解不开（三段但 GCM 认证失败 / key 不匹配）返 '' 而非返原密文。
     // decryptField 服务于 decryptItem / decryptStoreItems 还原视图给 UI 的展示语境——
     // decrypt（同步管线容错版）对"三段+失败"返原 ciphertext，会被模板 {{ bookmark.notes }}
