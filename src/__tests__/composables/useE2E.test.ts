@@ -22,6 +22,7 @@ vi.mock('../../stores/e2e.js', () => ({
     setKey: (k: CryptoKey) => { _e2eState.cryptoKey = k },
     setUnlocked: (v: boolean) => { _e2eState.isUnlocked = v },
     setBiometricEnrolled: (v: boolean) => { _e2eState.isBiometricEnrolled = v },
+    setCloudCanaryStale: () => {}, // 4c：stale 标记由 changePw 测试用例覆盖，此处仅占位不炸
     resetLockTimer: () => {},
     initVisibilityLock: () => {},
     lock: () => { _e2eState.isUnlocked = false; _e2eState.cryptoKey = null },

@@ -145,6 +145,8 @@ export function useE2E() {
   const isE2EEnabled = computed(() => e2eStore.isE2EEnabled)
   const isUnlocked = computed(() => e2eStore.isUnlocked)
   const isBiometricEnrolled = computed(() => e2eStore.isBiometricEnrolled)
+  /** canaryData 云端写失败（多设备数据风险）标记，详见 e2eStore.cloudCanaryStale 注释 */
+  const cloudCanaryStale = computed(() => e2eStore.cloudCanaryStale)
 
   /** 获取缓存的密钥（仅在 isUnlocked=true 时有效） */
   function _getKey(): CryptoKey | null {
@@ -204,6 +206,7 @@ export function useE2E() {
     e2eStore.setEnabled(true)
     _setKey(key)
     e2eStore.setUnlocked(true)
+    e2eStore.setCloudCanaryStale(false) // 首次 setup：云端 canary 刚写成功，无 stale
     e2eStore.initVisibilityLock()
     return true
   }
@@ -243,6 +246,7 @@ export function useE2E() {
     e2eStore.setEnabled(true)
     _setKey(newKey)
     e2eStore.setUnlocked(true)
+    e2eStore.setCloudCanaryStale(false) // reset 后云端是新 canary，清旧 stale
     e2eStore.initVisibilityLock()
     await biometric.removeBiometric()
     e2eStore.setBiometricEnrolled(false)
@@ -559,8 +563,14 @@ export function useE2E() {
     }
     const canaryOk = await _saveCanaryData(newCanaryData)
     if (!canaryOk) {
-      // 本地 canary 已写（_saveCanaryData 总先写本地），本机可用；云端写失败 → 其他设备主密码将失效，提示但不回滚数据
-      console.warn('[e2e] canaryData 云端写入失败：本机可用，其他设备主密码需重新设置')
+      // 本地 canary 已写（_saveCanaryData 总先写本地），本机可用；云端写失败 → 置
+      // cloudCanaryStale：其他设备凭旧 canary/旧主密码能验通却解不开本设备 push 的新 key
+      // 密文，业务数据对它们永久不可读。UI 读此标记给强提示，引导在其他设备用 Recovery
+      // Key 走 resetWithRecoveryKey（清空重建空库），把"永久丢失卡死"降级为"需重置"。
+      e2eStore.setCloudCanaryStale(true)
+      console.warn('[e2e] canaryData 云端写入失败：本机可用，其他设备主密码需用 Recovery Key 重置')
+    } else {
+      e2eStore.setCloudCanaryStale(false)
     }
 
     return true
@@ -622,7 +632,7 @@ export function useE2E() {
   }
 
   return {
-    isE2EEnabled, isUnlocked, isBiometricEnrolled,
+    isE2EEnabled, isUnlocked, isBiometricEnrolled, cloudCanaryStale,
     checkE2EStatus, generateRecoveryKey,
     setupMasterPassword, resetWithRecoveryKey, changeMasterPassword,
     unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems,

@@ -118,6 +118,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
+import { showConfirm } from '../../lib/toast.js'
 
 const props = defineProps<{ open: boolean; initialMode?: 'unlock' | 'reset' | 'changePw' }>()
 const emit = defineEmits<{ close: []; unlocked: [] }>()
@@ -227,6 +228,14 @@ async function onChangePw() {
   const ok = await e2e.changeMasterPassword(alreadyUnlocked.value ? '' : oldPw.value, newPw.value)
   loading.value = false
   if (ok) {
+    if (e2e.cloudCanaryStale.value) {
+      // 本机重加密成功，但 canary 云端写失败：其他设备仍持旧 canary/旧主密码，解不开
+      // 本设备 push 的新 key 密文 → 业务数据对它们永久不可读。引导用户在其他设备用
+      // Recovery Key 走「重置主密码」（清空重建空库），把"永久丢失卡死"降级为"需重置"。
+      await showConfirm(
+        '本机主密码已修改，但云端同步失败：其他设备将无法解密已同步的加密内容。\n\n请在其他设备上用恢复密钥（Recovery Key）执行「重置主密码」以清空重建数据，否则那些设备上的加密内容将永久丢失。'
+      )
+    }
     emit('unlocked')
     emit('close')
   } else {

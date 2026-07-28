@@ -24,6 +24,16 @@ export const useE2EStore = defineStore('e2e', () => {
   /** 缓存的 AES-256-GCM 密钥 — 仅在 isUnlocked=true 时有效 */
   const cryptoKey = ref<CryptoKey | null>(null)
 
+  /**
+   * canaryData 云端写失败标记：changeMasterPassword 步骤 9 写 user_security 失败时置 true。
+   * 语义：本地 canary 已成功（先写本地），本机用新主密码正常 unlock 无碍；但云端仍是旧
+   * canary → 其他设备凭旧主密码能验通旧 canary，却用旧 key 解本设备已 push 的新 key 密文，
+   * 全部失败 → 对其他设备业务数据永久不可读。置此标记由 UI 给强提示，引导用户在其他设备
+   * 用 Recovery Key 走 resetWithRecoveryKey（清空重建为空库），把「永久丢失卡死」降级为
+   * 「需在新主密码下重置」。下次 _saveCanaryData 成功时清零。
+   */
+  const cloudCanaryStale = ref(false)
+
   const LOCK_TIMEOUT = 15 * 60 * 1000 // 15 分钟无操作自动锁定
   const PRE_LOCK_DELAY = 60 * 1000 // 页面后台后 60s 锁定
 
@@ -36,6 +46,8 @@ export const useE2EStore = defineStore('e2e', () => {
   function setBiometricEnrolled(v: boolean) { isBiometricEnrolled.value = v }
 
   function setKey(key: CryptoKey | null) { cryptoKey.value = key }
+
+  function setCloudCanaryStale(v: boolean) { cloudCanaryStale.value = v }
 
   /** 启动无操作自动锁定计时器（每次解锁/操作后调用重置） */
   function resetLockTimer() {
@@ -81,8 +93,8 @@ export const useE2EStore = defineStore('e2e', () => {
   }
 
   return {
-    isE2EEnabled, isUnlocked, isBiometricEnrolled: readonly(isBiometricEnrolled), cryptoKey: readonly(cryptoKey), pendingUnlock,
-    setEnabled, setUnlocked, setBiometricEnrolled, setKey, resetLockTimer,
+    isE2EEnabled, isUnlocked, isBiometricEnrolled: readonly(isBiometricEnrolled), cryptoKey: readonly(cryptoKey), cloudCanaryStale: readonly(cloudCanaryStale), pendingUnlock,
+    setEnabled, setUnlocked, setBiometricEnrolled, setKey, setCloudCanaryStale, resetLockTimer,
     initVisibilityLock, destroyVisibilityLock,
     lock, cleanup,
   }
