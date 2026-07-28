@@ -2,7 +2,7 @@
   <div class="modal-mask" role="dialog" aria-modal="true" aria-label="解锁数据" :class="{ open }" @click.self="onCancel">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? '重置主密码' : '解锁数据' }}</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? '重置主密码' : mode === 'changePw' ? '修改主密码' : '解锁数据' }}</span>
       </div>
       <div class="modal-body">
         <!-- 解锁模式 -->
@@ -61,6 +61,41 @@
           <div v-else-if="newPw.length > 0 && newPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">还需 {{ 8 - newPw.length }} 位（至少 8 位）</div>
           <div class="e2e-link" @click="enterUnlock">← 返回解锁</div>
         </template>
+
+        <!-- 修改主密码模式 -->
+        <template v-if="mode === 'changePw'">
+          <div class="e2e-info">
+            <p>修改主密码会用旧密码解密所有数据、用新密码重新加密并同步到云端。</p>
+            <p style="margin-top:6px">若当前已解锁，旧密码无需再输入。</p>
+          </div>
+          <div v-if="alreadyUnlocked" class="e2e-info">
+            <p>当前已解锁，将直接解密并重新加密。</p>
+          </div>
+          <div v-else class="form-group">
+            <label class="form-label">旧主密码</label>
+            <div class="pw-input-wrap">
+              <input :type="showOldPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-old" v-model="oldPw" placeholder="当前主密码" @keydown.enter="onChangePw" autofocus>
+              <button class="pw-toggle" @click="showOldPw = !showOldPw" v-html="showOldPw ? I.eyeOff : I.eye"></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">新主密码</label>
+            <div class="pw-input-wrap">
+              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-new" v-model="newPw" placeholder="输入新主密码（至少 8 位）" @keydown.enter="onChangePw">
+              <button class="pw-toggle" @click="showPw = !showPw" v-html="showPw ? I.eyeOff : I.eye"></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">确认新主密码</label>
+            <div class="pw-input-wrap">
+              <input :type="showPw2 ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-new2" v-model="newPw2" placeholder="再次输入新主密码" @keydown.enter="onChangePw">
+              <button class="pw-toggle" @click="showPw2 = !showPw2" v-html="showPw2 ? I.eyeOff : I.eye"></button>
+            </div>
+          </div>
+          <div v-if="error" class="e2e-error">{{ error }}</div>
+          <div v-else-if="newPw.length > 0 && newPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">还需 {{ 8 - newPw.length }} 位（至少 8 位）</div>
+          <div class="e2e-link" @click="enterUnlock">← 返回解锁</div>
+        </template>
       </div>
       <div class="modal-foot">
         <template v-if="mode === 'unlock'">
@@ -69,6 +104,10 @@
         </template>
         <template v-else>
           <button class="btn btn-primary" :disabled="!canReset || loading" @click="onReset">{{ loading ? '重置中…' : '重置主密码' }}</button>
+          <button class="btn btn-secondary" @click="onCancel">取消</button>
+        </template>
+        <template v-if="mode === 'changePw'">
+          <button class="btn btn-primary" data-testid="lv-e2e-changepw-submit" :disabled="!canChangePw || loading" @click="onChangePw">{{ loading ? '重新加密中…' : '修改主密码' }}</button>
           <button class="btn btn-secondary" @click="onCancel">取消</button>
         </template>
       </div>
@@ -80,22 +119,26 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 
-const props = defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean; initialMode?: 'unlock' | 'reset' | 'changePw' }>()
 const emit = defineEmits<{ close: []; unlocked: [] }>()
 
 const e2e = useE2E()
-const mode = ref<'unlock' | 'reset'>('unlock')
+const mode = ref<'unlock' | 'reset' | 'changePw'>(props.initialMode ?? 'unlock')
 const masterPw = ref('')
 const recoveryKey = ref('')
 const newPw = ref('')
 const newPw2 = ref('')
+const oldPw = ref('')
 const showPw = ref(false)
 const showPw2 = ref(false)
+const showOldPw = ref(false)
 const showRk = ref(false)
 const error = ref('')
 const loading = ref(false)
 const bioAvailable = ref(false)
 const bioLoading = ref(false)
+
+const alreadyUnlocked = computed(() => !!e2e.isUnlocked.value)
 
 const canReset = computed(() =>
   recoveryKey.value.trim().length > 0 &&
@@ -103,22 +146,31 @@ const canReset = computed(() =>
   newPw.value === newPw2.value
 )
 
+const canChangePw = computed(() =>
+  (alreadyUnlocked.value || oldPw.value.length > 0) &&
+  newPw.value.length >= 8 &&
+  newPw.value === newPw2.value
+)
+
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
-    mode.value = 'unlock'
+    mode.value = props.initialMode ?? 'unlock'
     masterPw.value = ''
     recoveryKey.value = ''
     newPw.value = ''
     newPw2.value = ''
+    oldPw.value = ''
     showPw.value = false
     showPw2.value = false
+    showOldPw.value = false
     showRk.value = false
     error.value = ''
     loading.value = false
     bioLoading.value = false
   } else {
+    mode.value = props.initialMode ?? 'unlock'
     bioAvailable.value = e2e.isBiometricAvailable()
-    if (e2e.isBiometricEnrolled.value && bioAvailable.value) {
+    if (e2e.isBiometricEnrolled.value && bioAvailable.value && mode.value === 'unlock') {
       nextTick(() => onBiometricUnlock())
     }
   }
@@ -162,6 +214,23 @@ async function onReset() {
     emit('close')
   } else {
     error.value = 'Recovery Key 错误或重置失败'
+  }
+}
+
+async function onChangePw() {
+  if (loading.value) return
+  error.value = ''
+  if (!alreadyUnlocked.value && oldPw.value.length === 0) { error.value = '请输入旧主密码'; return }
+  if (newPw.value.length < 8) { error.value = '新主密码至少 8 位'; return }
+  if (newPw.value !== newPw2.value) { error.value = '两次新主密码不一致'; return }
+  loading.value = true
+  const ok = await e2e.changeMasterPassword(alreadyUnlocked.value ? '' : oldPw.value, newPw.value)
+  loading.value = false
+  if (ok) {
+    emit('unlocked')
+    emit('close')
+  } else {
+    error.value = '修改失败：旧密码错误或重加密/同步异常，已保持原密码'
   }
 }
 

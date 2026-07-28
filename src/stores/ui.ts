@@ -25,6 +25,9 @@ export type LayoutMode = 'grid' | 'list' | 'mini-grid'
 /** 数据空间：主页（公共数据集） / vault（私密空间独立数据集）。门禁由 vault 密钥层守。 */
 export type Space = 'main' | 'vault'
 
+/** E2EUnlockModal 初始模式透传槽（非 modal flag，仅用于打开时指定初始 mode） */
+export type E2EUnlockInitialMode = 'unlock' | 'reset' | 'changePw'
+
 interface ModalState {
   bookmark: boolean
   category: boolean
@@ -71,6 +74,8 @@ export interface UIState {
   editingId: string | null
   /** 当前数据空间：main = 主页公共数据集；vault = 私密空间独立数据集 */
   curSpace: Space
+  /** E2EUnlockModal 打开时初始模式（'unlock' | 'reset' | 'changePw'），非持久化 */
+  e2eUnlockInitialMode: E2EUnlockInitialMode
   themeMode: 'auto' | 'manual'
   themeStyle: ThemeStyle
   historyItemId: string
@@ -112,6 +117,7 @@ export const useUIStore = defineStore('ui', {
     detailCards: [],
     editingId: null,
     curSpace: 'main' as Space,
+    e2eUnlockInitialMode: 'unlock' as E2EUnlockInitialMode,
     // D1-004：默认 manual，与 theme.ts 缺省 lv_themeMode 一致
     themeMode: 'manual',
     themeStyle: 'premium',

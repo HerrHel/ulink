@@ -15,9 +15,19 @@ import { useAuth } from './useAuth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useDataStore } from '../../stores/data.js'
 import { supabase } from '../../lib/supabase.js'
-import { deriveKey, generateCanary, verifyCanary, encrypt, decryptForDisplay, isThreePartCipher, PBKDF2_ITERATIONS, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
+import { deriveKey, generateCanary, verifyCanary, encrypt, decryptForDisplay, isThreePartCipher, safeDecodePassword, PBKDF2_ITERATIONS, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { useBiometric } from './useBiometric.js'
+import { useSyncStore } from '../../stores/sync.js'
+import { clearAllSyncOps } from '../../stores/storage.js'
+import { _cancelPendingHist } from '../../stores/data.js'
+import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
+import { subscribeRealtime, unsubscribeRealtime } from './useSyncRealtime.js'
+import { pullChanges } from './syncPull.js'
+import { _clearAllPendingSync } from './syncPending.js'
+import { _getUserId } from './useSyncHistory.js'
+import { withLock } from '../../lib/withLock.js'
+import { flushSaveAppData } from '../../stores/app.js'
 import type { EntityType } from '../../types.js'
 
 const LOCAL_CANARY_KEY = 'lv_e2e_canary'
@@ -381,6 +391,213 @@ export function useE2E() {
     if (changed) ds._bumpSearchVersion()
   }
 
+  // ── 修改主密码（数据层重加密迁移）──
+  // 根因：setup/reset 换 key 时生成新 salt+新 key 并直接覆盖 canaryData，但云端历史
+  // 密文（username/notes/name + password 独立路径）仍是旧 key 加密 → 新 key 解不开 →
+  // 数据永久丢失。本函数把「换 key」补成完整链路：旧 key 解全量历史密文 → 新 key 重
+  // 加密 → 内存存明文（password 存 newKey 对象）→ push 走 syncPush 的 encryptItem(newKey)
+  // 加密一次上传（无双重加密）→ 覆盖 canaryData（复用旧 recovery_* 不改 recovery key）。
+  // 失败恢复：逐条幂等可重试——push 失败的 op 留 syncOps 队列下次 online 重试，重试时
+  // 内存是明文+password 对象，encryptItem(newKey) 加密一次，幂等安全，无双重加密。
+  // 不做整批回滚（对齐 syncPush 部分成功语义）；IDB 写失败才回滚 _setKey(oldKey)+store 还原。
+  // 限制：reset（忘旧主密码、只有 recovery key）路径不动——rkKey 只加密 recovery_canary、
+  // 从不加密业务数据，reset 拿不到旧 key，数据救不回是它的本来语义。
+  async function changeMasterPassword(oldPw: string, newPw: string): Promise<boolean> {
+    if (newPw.length < 8) return false
+    const canaryData = await _getCanaryData() as Record<string, unknown> | null
+    if (!canaryData?.canary || !canaryData?.salt) return false
+
+    // ── 步骤 2：派生 oldKey ──
+    // 已 unlock：复用全局 cryptoKey（省旧密码一步），但仍 verifyCanary 校验与当前 canary 一致
+    let oldKey: CryptoKey
+    if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
+      oldKey = e2eStore.cryptoKey as CryptoKey
+      const verified = await verifyCanary(canaryData.canary as string, oldKey)
+      if (!verified) return false
+    } else {
+      if (!oldPw) return false
+      const oldIt = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
+      const oldSalt = new Uint8Array(canaryData.salt as number[])
+      const derived = await deriveKey(oldPw, oldSalt, oldIt)
+      if (!(await verifyCanary(canaryData.canary as string, derived))) return false
+      oldKey = derived
+    }
+
+    // ── 步骤 3：派生 newKey（局部，未设进 cryptoKey）──
+    const newSalt = crypto.getRandomValues(new Uint8Array(32))
+    const newIt = PBKDF2_ITERATIONS
+    const newKey = await deriveKey(newPw, newSalt, newIt)
+
+    // ── 步骤 4：内存浅克隆四数组并重加密到「目标态副本」──
+    // 目标态规则（与现有 push 链路对齐，避免双重加密）：
+    //  - username/notes/name（ENCRYPT_FIELDS）：存「明文」（push 时 syncPush encryptItem(newKey) 加密一次）
+    //  - password：存 newKey 加密的 EncryptedPassword 对象（不在 ENCRYPT_FIELDS，push 不经 encryptItem，
+    //    _serializePassword 仅重组三段串上传，故必须在内存就上锁成对象）
+    //  - category/attribute：ENCRYPT_FIELDS 空，仅 bump updatedAt
+    // 全部 bump updatedAt=now（否则 push 后远端 isRemoteNewer=false → skip → 迁移静默失败）
+    const ds = useDataStore()
+    const now = Date.now()
+    const origSnapshot = {
+      bookmarks: ds.bookmarks.slice(),
+      siblingGroups: ds.siblingGroups.slice(),
+      categories: ds.categories.slice(),
+      customAttributes: ds.customAttributes.slice(),
+    }
+
+    const reencryptFieldToPlain = async (v: string): Promise<string> => {
+      if (typeof v !== 'string' || !v) return v
+      if (!isThreePartCipher(v)) return v // 明文原样
+      const plain = await decryptForDisplay(v, oldKey)
+      return plain === '' ? v : plain // 三段但 oldKey 解不开（脏数据）→ 保留原串
+    }
+
+    const reencryptPassword = async (p: unknown): Promise<unknown> => {
+      if (p == null) return p
+      // EncryptedPassword 对象 → 重组三段串 → oldKey 解 → newKey 加 → 拆回新对象
+      if (typeof p === 'object' && (p as { encrypted?: boolean }).encrypted === true) {
+        const ep = p as { salt?: string; iv?: string; data?: string }
+        if (ep.salt && ep.iv && ep.data) {
+          const cipher = `${ep.salt}.${ep.iv}.${ep.data}`
+          const plain = await decryptForDisplay(cipher, oldKey)
+          if (plain === '') return p // oldKey 也解不开 → 保留原对象
+          const newCipher = await encrypt(plain, newKey)
+          const [salt, iv, data] = newCipher.split('.')
+          return { encrypted: true, salt, iv, data }
+        }
+        return p
+      }
+      if (typeof p === 'string') {
+        if (isThreePartCipher(p)) {
+          const plain = await decryptForDisplay(p, oldKey)
+          if (plain === '') return p
+          const newCipher = await encrypt(plain, newKey)
+          const [salt, iv, data] = newCipher.split('.')
+          return { encrypted: true, salt, iv, data }
+        }
+        // 旧 base64 / 明文 string：safeDecode 不需 key → newKey 上锁成对象
+        const plain = safeDecodePassword(p)
+        if (!plain) return p
+        const newCipher = await encrypt(plain, newKey)
+        const [salt, iv, data] = newCipher.split('.')
+        return { encrypted: true, salt, iv, data }
+      }
+      return p
+    }
+
+    let newBookmarks: Array<Record<string, unknown>>
+    let newGroups: Array<Record<string, unknown>>
+    try {
+      newBookmarks = await Promise.all(ds.bookmarks.map(async b => {
+        const nb: Record<string, unknown> = { ...b }
+        nb.username = await reencryptFieldToPlain(b.username as string)
+        nb.notes = await reencryptFieldToPlain(b.notes as string)
+        if (b.password != null && b.password !== '') nb.password = await reencryptPassword(b.password)
+        nb.updatedAt = now
+        return nb
+      }))
+      newGroups = await Promise.all(ds.siblingGroups.map(async g => {
+        const ng: Record<string, unknown> = { ...g }
+        ng.name = await reencryptFieldToPlain(g.name as string)
+        ng.notes = await reencryptFieldToPlain(g.notes as string)
+        ng.updatedAt = now
+        return ng
+      }))
+    } catch {
+      // 步骤 4 任一字段抛错：store/IDB/canary 全未动，cryptoKey 旧值未变，零损失
+      return false
+    }
+    const newCategories = ds.categories.map(c => ({ ...c, updatedAt: now }))
+    const newAttrs = ds.customAttributes.map(a => ({ ...a, updatedAt: now }))
+
+    // ── 步骤 5：提前切全局 key 为 newKey，为步骤 8 push 时 encryptItem 用 newKey ──
+    // 此处尚未 mutate store，失败回滚只需 _setKey(oldKey)（store 仍是旧态）
+    _setKey(newKey)
+
+    // ── 步骤 6：commit 目标态副本进 store（直接 mutate，绕 CRUD/历史/回声，对齐 decryptStoreItems）──
+    ds.bookmarks = newBookmarks as never
+    ds.siblingGroups = newGroups as never
+    ds.categories = newCategories as never
+    ds.customAttributes = newAttrs as never
+    ds._syncMaps()
+    ds._bumpSearchVersion()
+    _cancelPendingHist()
+
+    // ── 步骤 7：落 IDB（内存是明文+password 对象，与现有架构一致）──
+    // flushSaveAppData 内部 _dataSnapshot + safeParse + saveData
+    const flushed = await flushSaveAppData()
+    if (!flushed) {
+      // IDB 写失败：回滚 _setKey(oldKey) + store 还原原引用 + 重建索引
+      _setKey(oldKey)
+      ds.bookmarks = origSnapshot.bookmarks as never
+      ds.siblingGroups = origSnapshot.siblingGroups as never
+      ds.categories = origSnapshot.categories as never
+      ds.customAttributes = origSnapshot.customAttributes as never
+      ds._syncMaps()
+      return false
+    }
+
+    // ── 步骤 8：push 覆盖云端（整行 upsert，带新 updatedAt 覆盖远端旧密文）──
+    await _reencryptCloudPush()
+
+    // ── 步骤 9：覆盖 canaryData（无条件，即便 push 部分失败也覆盖——否则本机下次 unlock 用旧 canary 失败）──
+    // recovery_* 全部复用旧值（changeMasterPassword 不改 recovery key）
+    const newCanary = await generateCanary(newKey)
+    const newCanaryData: Record<string, unknown> = {
+      canary: newCanary,
+      salt: Array.from(newSalt),
+      it: newIt,
+      recovery_canary: canaryData.recovery_canary,
+      recovery_salt: canaryData.recovery_salt,
+      recovery_it: canaryData.recovery_it,
+    }
+    const canaryOk = await _saveCanaryData(newCanaryData)
+    if (!canaryOk) {
+      // 本地 canary 已写（_saveCanaryData 总先写本地），本机可用；云端写失败 → 其他设备主密码将失效，提示但不回滚数据
+      console.warn('[e2e] canaryData 云端写入失败：本机可用，其他设备主密码需重新设置')
+    }
+
+    return true
+  }
+
+  // 重加密 push：unsubscribeRealtime + 暂停 autoSync + setReencrypting → 清旧队列防
+  // 旧密文 op 复活 → 标全部 dirty+newIds（强制整行 upsert）→ enqueueDirtyAsOps + pushFromQueue
+  async function _reencryptCloudPush(): Promise<boolean> {
+    const syncStore = useSyncStore()
+    const ds = useDataStore()
+    const userId = _getUserId()
+    if (!userId) return true // 未登录：本地已够，无需 push
+
+    const wasAutoSync = syncStore.autoSync
+    syncStore.setAutoSync(false)
+    syncStore.setReencrypting(true)
+    unsubscribeRealtime()
+
+    let result = false
+    try {
+      await clearAllSyncOps()
+      _clearAllPendingSync()
+      // 标全部 id dirty + newIds：强制走整行 upsert（syncPush L215 isNew||!changedFields），
+      // 带 bumped updatedAt 覆盖远端旧密文行。不写 _changedFields → 避开 partial patch
+      for (const b of ds.bookmarks) { ds._markDirty(b.id); ds._newIds.add(b.id) }
+      for (const g of ds.siblingGroups) { ds._markDirty(g.id); ds._newIds.add(g.id) }
+      for (const c of ds.categories) { ds._markDirty(c.id); ds._newIds.add(c.id) }
+      for (const a of ds.customAttributes) { ds._markDirty(a.id); ds._newIds.add(a.id) }
+      enqueueDirtyAsOps()
+      const pushed = await withLock('linkvault-sync', () => pushFromQueue())
+      // pushed=false：失败 op 留 syncOps 队列下次 online 重试（幂等，无双重加密）
+      // canary 在调用方（changeMasterPassword 步骤 9）无条件覆盖，避免本机 unlock 失败
+      result = !!pushed
+    } finally {
+      syncStore.setReencrypting(false)
+      syncStore.setAutoSync(wasAutoSync)
+      // 无条件重生 Realtime 订阅：autoSync 只控制是否自动触发 sync，不决定是否订阅
+      // Realtime。autoSync=false 的用户原本仍有订阅，unsubscribe 仅为防回声，结束必须恢复，
+      // 否则该用户实时推送永久丢失直到 reload。
+      subscribeRealtime(pullChanges)
+    }
+    return result
+  }
+
   // ── 指纹解锁方法（Facade 转发 + Store 同步）──
   const isBiometricAvailableFn = biometric.isBiometricAvailable
 
@@ -400,7 +617,7 @@ export function useE2E() {
   return {
     isE2EEnabled, isUnlocked, isBiometricEnrolled,
     checkE2EStatus, generateRecoveryKey,
-    setupMasterPassword, resetWithRecoveryKey,
+    setupMasterPassword, resetWithRecoveryKey, changeMasterPassword,
     unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems,
     isBiometricAvailable: isBiometricAvailableFn,
     enrollBiometric: enrollBiometricFn,

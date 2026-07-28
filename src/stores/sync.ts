@@ -30,6 +30,11 @@ export const useSyncStore = defineStore('sync', () => {
   const conflicts = ref<SyncConflict[]>([])
   const conflictBannerDismissed = ref(false)
 
+  // ── 重加密进行中标志 ──
+  // changeMasterPassword 全量重加密+push 云端期间置 true，useSyncRealtime 据此
+  // 短路远端变更（本标签页 push 的回声一律 skip，结束后 pullChanges 对账）。
+  const isReencrypting = ref(false)
+
   // ── Actions ──
 
   function setSyncStatus(v: typeof syncStatus.value) { syncStatus.value = v }
@@ -40,6 +45,7 @@ export const useSyncStore = defineStore('sync', () => {
   function setAutoSync(v: boolean) { autoSync.value = v }
   function setPendingCount(v: number) { pendingCount.value = v }
   function setRealtimeStatus(v: typeof realtimeStatus.value) { realtimeStatus.value = v }
+  function setReencrypting(v: boolean) { isReencrypting.value = v }
 
   function resetSyncState() {
     lastSyncAt.value = 0
@@ -91,10 +97,11 @@ export const useSyncStore = defineStore('sync', () => {
     conflicts: readonly(conflicts),
     // conflictBannerDismissed 需要在模板中直接赋值（SyncConflictBanner .value = true），不设 readonly
     conflictBannerDismissed,
+    isReencrypting: readonly(isReencrypting),
 
     // 可写 actions
     setSyncStatus, setSyncError, setLastSyncAt, setAutoSync,
-    setPendingCount, setRealtimeStatus,
+    setPendingCount, setRealtimeStatus, setReencrypting,
     resetSyncState,
     addConflict, removeConflict, getConflict, clearConflicts,
     dismissConflictBanner, resetConflictBanner,

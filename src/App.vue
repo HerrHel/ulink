@@ -45,7 +45,7 @@
 <TrashPanel :open="store.panels.trash" @close="store.panels.trash = false" />
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
-<E2EUnlockModal :open="store.modals.e2eUnlock" @close="onE2EClose" @unlocked="onE2EUnlocked" />
+<E2EUnlockModal :open="store.modals.e2eUnlock" :initial-mode="store.e2eUnlockInitialMode" @close="onE2EClose" @unlocked="onE2EUnlocked" />
 <VaultSetupModal :open="store.modals.vaultSetup" @close="store.modals.vaultSetup = false" />
 <VaultUnlockModal :open="store.modals.vaultUnlock" @close="onVaultClose" @unlocked="onVaultUnlocked" />
 <SetupGuide />
@@ -207,6 +207,7 @@ onMounted(async () => {
 
 watch(() => e2eStore.pendingUnlock.length, (len) => {
   if (len > 0) {
+    store.e2eUnlockInitialMode = 'unlock'
     store.modals.e2eUnlock = true
     if (_pendingUnlockTimer) clearTimeout(_pendingUnlockTimer)
     _pendingUnlockTimer = setTimeout(() => {

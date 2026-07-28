@@ -34,6 +34,10 @@ const BASE_RECONNECT_DELAY = 1000
  *  channel filter 因配置错误/策略变更被绕过，也不处理他人数据）。
  *  导出含 _ 前缀（约定私有），供单测覆盖 S13 纵深防护逻辑。 */
 export async function _handleRealtimeChange(payload: any, type: EntityType) {
+  // 重加密全量迁移期间短路所有远端变更：本标签页自己 push 的新密文会被 Realtime
+  // 当作远端变更收回来，用旧 cryptoKey 解新密文 会解不开→冲突/写空污损正在迁移的内存。
+  // 一律 skip，待 changeMasterPassword 结束后 pullChanges 全量对账拉齐。
+  if (useSyncStore().isReencrypting) return
   const { eventType, new: newRow, old: oldRow } = payload
   const ds = useDataStore()
   const userId = _getUserId()
