@@ -44,6 +44,13 @@ export function useSyncState() {
         ? { level: 'offline', dotClass: 'dot-offline', label: `离线 · ${pending} 项待同步`, count: pending, showBadge: true }
         : { level: 'offline', dotClass: 'dot-offline', label: '离线', count: 0, showBadge: false }
     }
+    // 锁定期积压：E2E 启用但锁定时，敏感字段 op 静默留队列待解锁重推。比泛 pending
+    // 更明确——告诉用户「不是同步坏了，是锁着所以没推」，解锁后自动清空。归因优先于
+    // 纯 pending 计数展示，避免「81 项待同步」无原因、用户无从下手。
+    const locked = sync.pendingLockedCount.value
+    if (locked > 0) {
+      return { level: 'pending', dotClass: 'dot-pending', label: `${locked} 项等待解锁后同步`, count: locked, showBadge: true }
+    }
     if (pending > 0) {
       return { level: 'pending', dotClass: 'dot-pending', label: `${pending} 项待同步`, count: pending, showBadge: true }
     }

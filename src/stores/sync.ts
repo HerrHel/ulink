@@ -23,6 +23,14 @@ export const useSyncStore = defineStore('sync', () => {
   const autoSync = ref(true)
   const pendingCount = ref(0)
 
+  // ── 锁定期积压计数 ──
+  // E2E 启用但锁定时，带敏感字段的 upsert op 需 key 加密才能安全推云，无 key 只能
+  // 静默跳过、等解锁重推。这些 op 留在 syncOps 队列里被 pendingCount 计入，徽章若只显
+  // 「N 项待同步」会让用户误以为同步坏了。本计数单独标记「其中因锁定被跳过、待解锁重推」
+  // 的数量，供 useSyncStatus 展示成「N 项等待解锁后同步」，明确归因。解锁后 pushFromQueue
+  // 重推清空队列，本计数随之归零。
+  const pendingLockedCount = ref(0)
+
   // ── Realtime 连接状态 ──
   const realtimeStatus = ref<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected')
 
@@ -44,6 +52,8 @@ export const useSyncStore = defineStore('sync', () => {
   // autoSync 默认 true，UI 暂无开关时仍保留 API 以便后续 Settings 接线与单测。
   function setAutoSync(v: boolean) { autoSync.value = v }
   function setPendingCount(v: number) { pendingCount.value = v }
+  // 置 0 之外的正值仅由 pushFromQueue 在锁定态跳过 op 时写入（见 syncPush.ts）。
+  function setPendingLockedCount(v: number) { pendingLockedCount.value = v }
   function setRealtimeStatus(v: typeof realtimeStatus.value) { realtimeStatus.value = v }
   function setReencrypting(v: boolean) { isReencrypting.value = v }
 
@@ -53,6 +63,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncError.value = null
     conflicts.value = []
     conflictBannerDismissed.value = false
+    pendingLockedCount.value = 0
   }
 
   // 冲突管理
@@ -93,6 +104,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncError: readonly(syncError),
     autoSync: readonly(autoSync),
     pendingCount: readonly(pendingCount),
+    pendingLockedCount: readonly(pendingLockedCount),
     realtimeStatus: readonly(realtimeStatus),
     conflicts: readonly(conflicts),
     // conflictBannerDismissed 需要在模板中直接赋值（SyncConflictBanner .value = true），不设 readonly
@@ -101,7 +113,7 @@ export const useSyncStore = defineStore('sync', () => {
 
     // 可写 actions
     setSyncStatus, setSyncError, setLastSyncAt, setAutoSync,
-    setPendingCount, setRealtimeStatus, setReencrypting,
+    setPendingCount, setPendingLockedCount, setRealtimeStatus, setReencrypting,
     resetSyncState,
     addConflict, removeConflict, getConflict, clearConflicts,
     dismissConflictBanner, resetConflictBanner,
