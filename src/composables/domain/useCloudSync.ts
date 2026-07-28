@@ -208,6 +208,7 @@ export function useCloudSync() {
     syncError: toRef(syncStore, 'syncError'),
     autoSync: toRef(syncStore, 'autoSync'),
     pendingCount: toRef(syncStore, 'pendingCount'),
+    pendingLockedCount: toRef(syncStore, 'pendingLockedCount'),
     realtimeStatus: toRef(syncStore, 'realtimeStatus'),
     syncLabel,
 

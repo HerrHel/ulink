@@ -238,6 +238,40 @@ describe('syncPushPull via SyncRemotePort', () => {
     expect(port.upserts.length).toBe(0)
     expect(port.updates.length).toBe(0)
     expect(await syncOpsCount()).toBe(1)
+    // 锁定跳过的 op 被显式计入 pendingLockedCount，徽章据此显示「等待解锁后同步」
+    // 而非笼统「N 项待同步」无从归因。
+    expect(useSyncStore().pendingLockedCount).toBe(1)
+  })
+
+  it('4b 解锁态重推：lockedItemKeys 为空 → pendingLockedCount 复位为 0', async () => {
+    // 不管 op 本身加密成败，解锁后 isLocked=false → pushFromQueue 末尾
+    // setPendingLockedCount(lockedItemKeys.size=0) 把 stale 计数清掉。
+    // 这正是用户解锁后徽章从「等待解锁后同步」恢复正常的语义保证。
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const e2e = useE2EStore()
+    const syncStore = useSyncStore()
+    e2e.setEnabled(true)
+    e2e.setUnlocked(true) // 已解锁：isLocked=false，无锁定跳过
+
+    await enqueueSyncOps([{
+      action: 'upsert',
+      table: 'sibling_groups',
+      itemId: 'sg-x',
+      data: {
+        // name/notes 留空 → _opNeedsUnlock 判 false（无敏感字段需加密），
+        // 解锁态下也不经 encryptField，避开 jsdom 无 SubtleCrypto 的干扰，
+        // 专注验证 isLocked=false 时末尾 setPendingLockedCount(0) 复位计数。
+        id: 'sg-x', name: '', notes: '', categoryId: 'cat-1', order: 3,
+        _userId: 'user-pp', _isNew: false, _changedFields: ['order'],
+      },
+      ts: Date.now(),
+    }])
+    syncStore.setPendingLockedCount(5) // 假装 stale
+
+    const sync = useCloudSync()
+    await sync.pushToCloud()
+    expect(syncStore.pendingLockedCount).toBe(0)
   })
 
   it('5 selectAllIds error → reconcile 不软删本地', async () => {

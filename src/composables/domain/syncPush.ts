@@ -307,9 +307,13 @@ export async function pushFromQueue(): Promise<boolean> {
     }
 
     if (lockedItemKeys.size > 0 && tasks.length === 0) {
+      // 全部 op 都因锁定被跳过、留队列待解锁重推。
       syncStore.setSyncStatus('idle')
+      syncStore.setPendingLockedCount(lockedItemKeys.size)
       return true
     }
+    // 部分跳过（isLocked 但有非敏感 op 仍成功推送）：跳过的那批留队列，计数如实反映。
+    syncStore.setPendingLockedCount(lockedItemKeys.size)
     if (tasks.length > 0) syncStore.setLastSyncAt(Date.now())
     syncStore.setSyncStatus('success')
     return true

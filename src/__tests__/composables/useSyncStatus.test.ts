@@ -17,6 +17,7 @@ let _onLine = true
 let _syncStatus = 'idle'
 let _realtimeStatus: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected'
 let _pendingCount = 0
+let _pendingLockedCount = 0
 let _conflicts: unknown[] = []
 let _syncLabel = '已同步'
 
@@ -25,6 +26,7 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
     syncStatus: ref(_syncStatus),
     realtimeStatus: ref(_realtimeStatus),
     pendingCount: ref(_pendingCount),
+    pendingLockedCount: ref(_pendingLockedCount),
     conflicts: ref(_conflicts),
     syncLabel: ref(_syncLabel),
   }),
@@ -47,12 +49,14 @@ function setCtx(opts: {
   syncStatus?: string
   realtime?: 'disconnected' | 'connecting' | 'connected' | 'error'
   pending?: number
+  pendingLocked?: number
   conflicts?: unknown[]
 }) {
   _onLine = opts.onLine ?? true
   _syncStatus = opts.syncStatus ?? 'idle'
   _realtimeStatus = opts.realtime ?? 'connected'
   _pendingCount = opts.pending ?? 0
+  _pendingLockedCount = opts.pendingLocked ?? 0
   _conflicts = opts.conflicts ?? []
   setOnLine(_onLine)
 }
@@ -126,6 +130,23 @@ describe('useSyncState 离线语义', () => {
   it('联网 + pending>0 + realtime 正常 → pending（非 offline）', () => {
     setCtx({ onLine: true, realtime: 'connected', pending: 2 })
     expect(state().level).toBe('pending')
+  })
+
+  it('联网 + pendingLocked>0 → pending，label 明示「等待解锁后同步」', () => {
+    // E2E 锁定期积压：敏感字段 op 静默留队列待解锁重推，徽章应归因为「锁着所以没推」
+    // 而非笼统的「N 项待同步」。Unlock 后 pushFromQueue 重推清空，pendingLocked 归零。
+    setCtx({ onLine: true, realtime: 'connected', pending: 81, pendingLocked: 81 })
+    const s = state()
+    expect(s.level).toBe('pending')
+    expect(s.label).toBe('81 项等待解锁后同步')
+    expect(s.count).toBe(81)
+    expect(s.showBadge).toBe(true)
+  })
+
+  it('pendingLocked 优先级低于离线（断网仍报 offline）', () => {
+    setCtx({ onLine: false, realtime: 'connected', pending: 81, pendingLocked: 81 })
+    // 离线分支在前：断网这件事比「锁着没推」更该先告诉用户
+    expect(state().level).toBe('offline')
   })
 
   it('联网 + syncing → syncing', () => {
