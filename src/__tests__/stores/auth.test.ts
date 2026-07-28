@@ -23,6 +23,7 @@ vi.mock('../../lib/supabase.js', () => {
 })
 
 import { useAuthStore } from '../../stores/auth.js'
+import { lockDurationFor, _isRateLimitError } from '../../stores/auth.js'
 // 触发 mock 模块加载
 import { supabase } from '../../lib/supabase.js'
 
@@ -226,5 +227,118 @@ describe('S12 OTP 限流 — useAuthStore', () => {
     makeSendOk()
     const ok2 = await auth.sendOtp('c@x.com')
     expect(ok2).toBe(false)
+  })
+})
+
+/**
+ * 审计 R31 / S12 限流纯函数护栏。
+ * 锁定阶梯 lockDurationFor 与限流判定 _isRateLimitError 是 sendOtp 验证逻辑核心，
+ * 此前仅经端到端 mock supabase 间接覆盖；这里直锁契约，防止限流语义漂移。
+ */
+describe('auth 限流纯函数护栏 — lockDurationFor / _isRateLimitError', () => {
+  describe('lockDurationFor：锁定阶梯升级', () => {
+    it('首次触发锁（locksBefore=0）→ 30s', () => {
+      const r = lockDurationFor(0)
+      expect(r.lockMs).toBe(30_000)
+      expect(r.label).toBe('30 秒')
+    })
+
+    it('累计 1 次锁（locksBefore=1）→ 升级 5min', () => {
+      const r = lockDurationFor(1)
+      expect(r.lockMs).toBe(300_000)
+      expect(r.label).toBe('5 分钟')
+    })
+
+    it('累计 ≥2 次锁仍为 5min（阶梯封顶，非无限升级）', () => {
+      const r2 = lockDurationFor(2)
+      const r5 = lockDurationFor(5)
+      expect(r2.lockMs).toBe(300_000)
+      expect(r2.label).toBe('5 分钟')
+      expect(r5.lockMs).toBe(300_000)
+      expect(r5.label).toBe('5 分钟')
+    })
+
+    it('边界：负数 locksBefore 视为 0 档（非 ≥1）→ 30s', () => {
+      // rec.locks - 1 理论非负，但护栏锁定负入参仍应走 30s 分支不抛错
+      const r = lockDurationFor(-1)
+      expect(r.lockMs).toBe(30_000)
+    })
+  })
+
+  describe('_isRateLimitError：限流类 error 判定', () => {
+    it('null / undefined → false（不入冷却）', () => {
+      expect(_isRateLimitError(null)).toBe(false)
+      expect(_isRateLimitError(undefined)).toBe(false)
+    })
+
+    it('空对象 / 无 code 无 message → false', () => {
+      expect(_isRateLimitError({})).toBe(false)
+      expect(_isRateLimitError({ code: undefined, message: undefined })).toBe(false)
+    })
+
+    it('code 命中 RATE_LIMIT_CODES（精确）→ true', () => {
+      // 四个限流 code 逐个锁——漂移任一会回归「任何 error 都施冷却」
+      expect(_isRateLimitError({ code: 'over_email_send_rate_limit' })).toBe(true)
+      expect(_isRateLimitError({ code: 'rate_limit_exceeded' })).toBe(true)
+      expect(_isRateLimitError({ code: 'email_rate_limit_exceeded' })).toBe(true)
+      expect(_isRateLimitError({ code: 'email_not_allowed_rate_limited' })).toBe(true)
+    })
+
+    it('code 大小写不敏感（大写仍命中）→ true', () => {
+      // 实测锁定 toLowerCase 行为：上端 error code 未必规范小写
+      expect(_isRateLimitError({ code: 'OVER_EMAIL_SEND_RATE_LIMIT' })).toBe(true)
+      expect(_isRateLimitError({ code: 'Rate_Limit_Exceeded' })).toBe(true)
+    })
+
+    it('非限流 code → false（不误伤普通 error）', () => {
+      // signup_disabled / invalid email / 网络错误等不该施冷却
+      expect(_isRateLimitError({ code: 'signup_disabled' })).toBe(false)
+      expect(_isRateLimitError({ code: 'invalid_credentials' })).toBe(false)
+      expect(_isRateLimitError({ code: 'unknown_code' })).toBe(false)
+    })
+
+    it('message 命中限流措辞（旧 SDK 仅 message）→ true', () => {
+      // gotrue 经典限流文案
+      expect(
+        _isRateLimitError({ message: 'For security reasons, you can only request once every 60 seconds' }),
+      ).toBe(true)
+      expect(_isRateLimitError({ message: 'too many requests' })).toBe(true)
+      expect(_isRateLimitError({ message: 'too many emails' })).toBe(true)
+    })
+
+    it('message 中文限流措辞（稍候/过频繁/频繁）→ true', () => {
+      expect(_isRateLimitError({ message: '请求过于频繁，请稍候再试' })).toBe(true)
+      expect(_isRateLimitError({ message: '操作过频繁' })).toBe(true)
+      expect(_isRateLimitError({ message: '访问频繁，请稍候' })).toBe(true)
+    })
+
+    it('message 含 rate-limit 各分隔变体（空格/下划线/连字符）→ true', () => {
+      expect(_isRateLimitError({ message: 'rate limit reached' })).toBe(true)
+      expect(_isRateLimitError({ message: 'rate_limit reached' })).toBe(true)
+      expect(_isRateLimitError({ message: 'rate-limit reached' })).toBe(true)
+      expect(_isRateLimitError({ message: 'ratelimit reached' })).toBe(true)
+    })
+
+    it('非限流 message → false', () => {
+      // 邮箱格式错误 / signup 禁用 / 网络错误文案不得误判为限流
+      expect(_isRateLimitError({ message: 'Unable to validate email address: invalid format' })).toBe(false)
+      expect(_isRateLimitError({ message: 'Signup disabled' })).toBe(false)
+      expect(_isRateLimitError({ message: 'Network request failed' })).toBe(false)
+      expect(_isRateLimitError({ message: 'Token has expired or is invalid' })).toBe(false)
+    })
+
+    it('code 优先于 message：code 限流命中即使 message 空也 true；code 非限流但 message 限流仍 true', () => {
+      // 双通道或关系——任一命中即施冷却
+      expect(_isRateLimitError({ code: 'over_email_send_rate_limit', message: '' })).toBe(true)
+      expect(_isRateLimitError({ code: 'signup_disabled', message: 'too many requests' })).toBe(true)
+    })
+
+    it('code 为非 string（number/object）→ 不抛错，仅看 message', () => {
+      // error.code 类型不可控时的兜底，护栏锁定非 string code 不参与判定。
+      // 运行时 supabase error.code 可能是非 string 值，用 as any 模拟运行时形态。
+      expect(_isRateLimitError({ code: 123 as any, message: 'rate limit' })).toBe(true)
+      expect(_isRateLimitError({ code: 123 as any, message: 'normal error' })).toBe(false)
+      expect(_isRateLimitError({ code: { x: 1 } as any, message: 'ok' })).toBe(false)
+    })
   })
 })
