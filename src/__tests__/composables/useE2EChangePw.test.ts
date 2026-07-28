@@ -98,7 +98,13 @@ import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { deriveKey, encrypt, decryptForDisplay, isThreePartCipher, verifyCanary } from '../../crypto.js'
 import { flushSaveAppData } from '../../stores/app.js'
 import { subscribeRealtime, unsubscribeRealtime } from '../../composables/domain/useSyncRealtime.js'
+// vi.mock 后 import 的符号，TS 静态类型取自真实模块签名（普通函数），
+// 但运行时是 vi.Mock。cast 成 vi.Mock 让 .mockClear/.mockResolvedValue/.mock 可见，
+// 不改任何测试逻辑。
 import { enqueueDirtyAsOps, pushFromQueue } from '../../composables/domain/syncPush.js'
+
+const enqueueDirtyAsOpsMock = enqueueDirtyAsOps as unknown as ReturnType<typeof vi.fn>
+const pushFromQueueMock = pushFromQueue as unknown as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -494,9 +500,9 @@ describe('useE2E.unlock 解锁后重推积压队列', () => {
     e2e.lock() // 锁定：key 出内存，模拟锁定期间队列已积压
     expect(e2e.isUnlocked.value).toBe(false)
 
-    enqueueDirtyAsOps.mockClear()
-    pushFromQueue.mockClear()
-    pushFromQueue.mockResolvedValue(true)
+    enqueueDirtyAsOpsMock.mockClear()
+    pushFromQueueMock.mockClear()
+    pushFromQueueMock.mockResolvedValue(true)
 
     const ok = await e2e.unlock('master-pw-1')
     expect(ok).toBe(true)
@@ -505,8 +511,8 @@ describe('useE2E.unlock 解锁后重推积压队列', () => {
     await vi.waitFor(() => expect(pushFromQueue).toHaveBeenCalled())
     expect(enqueueDirtyAsOps).toHaveBeenCalled()
     // 时序：enqueue 先于 push（先把内存脏标转成持久 op 再推）
-    const enqCall = enqueueDirtyAsOps.mock.invocationCallOrder[0]
-    const pushCall = pushFromQueue.mock.invocationCallOrder[0]
+    const enqCall = enqueueDirtyAsOpsMock.mock.invocationCallOrder[0]
+    const pushCall = pushFromQueueMock.mock.invocationCallOrder[0]
     expect(enqCall).toBeLessThan(pushCall)
   }, 20000)
 
@@ -515,8 +521,8 @@ describe('useE2E.unlock 解锁后重推积压队列', () => {
     await e2e.setupMasterPassword('master-pw-1')
     // 不 setAuthUser：_getUserId 返 null
     e2e.lock()
-    enqueueDirtyAsOps.mockClear()
-    pushFromQueue.mockClear()
+    enqueueDirtyAsOpsMock.mockClear()
+    pushFromQueueMock.mockClear()
 
     const ok = await e2e.unlock('master-pw-1')
     expect(ok).toBe(true)
@@ -532,8 +538,8 @@ describe('useE2E.unlock 解锁后重推积压队列', () => {
     await e2e.setupMasterPassword('master-pw-1')
     setAuthUser()
     e2e.lock()
-    enqueueDirtyAsOps.mockClear()
-    pushFromQueue.mockClear()
+    enqueueDirtyAsOpsMock.mockClear()
+    pushFromQueueMock.mockClear()
 
     const ok = await e2e.unlock('wrong-password')
     expect(ok).toBe(false)
