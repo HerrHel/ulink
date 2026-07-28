@@ -41,7 +41,7 @@ function _clean<T extends Record<string, unknown>>(item: T): T {
 }
 
 /** 以 id 为键合并：vault 已有同 id 则跳过（不覆盖，避免同 id 误合并） */
-function _mergeById<T extends { id: string }>(existing: T[], incoming: T[]): T[] {
+export function _mergeById<T extends { id: string }>(existing: T[], incoming: T[]): T[] {
   const idSet = new Set(existing.map(x => x.id))
   const out = [...existing]
   for (const it of incoming) {
@@ -53,7 +53,7 @@ function _mergeById<T extends { id: string }>(existing: T[], incoming: T[]): T[]
 }
 
 /** 收集这些书签引用到的 customAttribute id（书签/组的 attributes 键名） */
-function _attrIdsUsed(bms: Bookmark[], groups: SiblingGroup[]): Set<string> {
+export function _attrIdsUsed(bms: Bookmark[], groups: SiblingGroup[]): Set<string> {
   const ids = new Set<string>()
   for (const b of bms) for (const k of Object.keys(b.attributes || {})) ids.add(k)
   for (const g of groups) for (const k of Object.keys(g.attributes || {})) ids.add(k)
