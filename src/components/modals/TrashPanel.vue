@@ -65,6 +65,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
+import { formatTime } from './formatTimeEpoch.js'
 
 defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -73,17 +74,6 @@ const ds = useDataStore()
 const appStore = useAppStore()
 
 const trashCount = computed(() => ds.trashCount)
-
-function formatTime(ts?: number): string {
-  if (!ts) return ''
-  const d = new Date(ts)
-  const now = Date.now()
-  const diff = now - ts
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前'
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-}
 
 function restore(type: string, id: string) {
   if (type === 'bookmark') ds.restoreBookmark(id)
