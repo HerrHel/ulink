@@ -81,7 +81,7 @@ export type SortableItem = { useCount: number; order: number; updatedAt: number;
  * 经 id→实体 Map 定位数组下标（O(1) 查实体 + indexOf）。
  * map 与数组偶发不同步时回退 findIndex，保证 CRUD 不丢写。
  */
-function _indexOfById<T extends { id: string }>(
+export function _indexOfById<T extends { id: string }>(
   arr: T[], map: Record<string, T>, id: string,
 ): number {
   const item = map[id]
