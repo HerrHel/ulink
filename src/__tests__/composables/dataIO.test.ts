@@ -217,3 +217,161 @@ describe('saveFromExtension / importFromDataInternal 新建 order 唯一性', ()
     expect(imp).toEqual([11, 12, 13])
   })
 })
+
+/**
+ * parseRaindropJSON 正路径护栏（D1-21，纯加测试零逻辑改动）。
+ *
+ * 既有「坏 tags 防御」用例仅锁非 string tags 不抛这条边界，正路径分支零直测——
+ * 顶层结构多形态驱入、无 url 项被过滤、title/url/notes 兜底链、collection.$id 拼
+ * categoryId、created/lastUpdate 时间字段映射、tags→attributes 规范化、字段默认等
+ * 均靠实现口头维护。本组直锁全部正路径不变量，任一分支漂移即被抓。
+ */
+describe('parseRaindropJSON 正路径分支护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('顶层为数组时直驱 items（每条直接是书签对象）', () => {
+    const arr = [
+      { title: 'A', link: 'https://a.example', tags: [] },
+      { title: 'B', link: 'https://b.example', tags: [] },
+    ]
+    const result = parseRaindropJSON(arr)
+    expect(result).toHaveLength(2)
+    expect(result[0].url).toBe('https://a.example')
+    expect(result[1].url).toBe('https://b.example')
+  })
+
+  it('顶层为 { items: [...] } 对象形态时取 items 数组', () => {
+    const data = { items: [{ title: 'T', link: 'https://obj.example', tags: [] }] }
+    const result = parseRaindropJSON(data)
+    expect(result).toHaveLength(1)
+    expect(result[0].url).toBe('https://obj.example')
+  })
+
+  it('顶层为非数组且无 items 字段的对象 → bare 对象兜底 ?? d 但 d 非 array → 返空', () => {
+    // 裸单书签对象（无 items 包裹）经 ?? 兜底成 d 自身，非 array → 空
+    expect(parseRaindropJSON({ title: 'x', link: 'https://bare.example' })).toEqual([])
+  })
+
+  it('items 自身非数组（如 items:{}）→ 返空数组', () => {
+    expect(parseRaindropJSON({ items: { not: 'array' } })).toEqual([])
+  })
+
+  it('过滤：无 link 也无 url 的项被跳过，不进结果', () => {
+    const data = {
+      items: [
+        { title: '有 url', link: 'https://keep.example', tags: [] },
+        { title: '无 url 只有 title', tags: [] }, // 缺 link/url → 过滤
+        { title: '有 url', url: 'https://also-keep.example', tags: [] },
+      ],
+    }
+    const result = parseRaindropJSON(data)
+    expect(result).toHaveLength(2)
+    expect(result.map((b) => b.url)).toEqual(['https://keep.example', 'https://also-keep.example'])
+  })
+
+  it('url 取 link 优先：同时有 link 和 url 时用 link', () => {
+    const data = { items: [{ title: 'T', link: 'https://link.example', url: 'https://url.example', tags: [] }] }
+    expect(parseRaindropJSON(data)[0].url).toBe('https://link.example')
+  })
+
+  it('title 兜底链：缺 title 时用 link 占位', () => {
+    const data = { items: [{ link: 'https://notitle.example', tags: [] }] }
+    const r = parseRaindropJSON(data)[0]
+    expect(r.title).toBe('https://notitle.example')
+    expect(r.url).toBe('https://notitle.example')
+  })
+
+  it('notes 取 excerpt||note 双键：excerpt 优先，缺 excerpt 用 note', () => {
+    const data = {
+      items: [
+        { title: 'a', link: 'https://a.example', excerpt: '摘录', note: '备注', tags: [] },
+        { title: 'b', link: 'https://b.example', note: '只有 note', tags: [] },
+      ],
+    }
+    const r = parseRaindropJSON(data)
+    expect(r[0].notes).toBe('摘录')
+    expect(r[1].notes).toBe('只有 note')
+  })
+
+  it('categoryId 由 collection.$id 拼 rd_ 前缀', () => {
+    const data = { items: [{ title: 'T', link: 'https://c.example', collection: { $id: '42' }, tags: [] }] }
+    expect(parseRaindropJSON(data)[0].categoryId).toBe('rd_42')
+  })
+
+  it('无 collection（或 collection 无 $id）时 categoryId 取 CAT_UNCATEGORIZED', () => {
+    const data = { items: [
+      { title: 'T', link: 'https://u.example', tags: [] },
+      { title: 'T2', link: 'https://u2.example', collection: {}, tags: [] },
+    ] }
+    const r = parseRaindropJSON(data)
+    expect(r[0].categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(r[1].categoryId).toBe(CAT_UNCATEGORIZED)
+  })
+
+  it('tags 数组：filter 仅 string 元素 + tag_<空格折叠→_、小写> 建 attributes', () => {
+    const data = {
+      items: [{ title: 'T', link: 'https://t.example', tags: ['Web Dev', 'TOOL', 123, { x: 1 }] }],
+    }
+    const attrs = parseRaindropJSON(data)[0].attributes
+    // 非 string 元素(123/对象)被过滤，仅 'Web Dev'→'tag_web_dev' 与 'TOOL'→'tag_tool'
+    // 注意：parseRaindropJSON 用 `replace(/\s+/g, '_')` 空格→下划线，键是 `tag_web_dev`
+    // 而非 useAttrFilter.addAttrQuick 的横线 `tag_web-dev`——两处口径不同，护栏直锁此差异
+    expect(attrs['tag_web_dev']).toBe(true)
+    expect(attrs['tag_tool']).toBe(true)
+    expect(Object.keys(attrs)).toHaveLength(2)
+    // 确认不是 addAttrQuick 口径的横线键（防未来误以为同口径统一成横线）
+    expect(attrs['tag_web-dev']).toBeUndefined()
+  })
+
+  it('tags 缺失（undefined）时 attributes 为空对象不抛', () => {
+    const data = { items: [{ title: 'T', link: 'https://x.example' }] }
+    expect(parseRaindropJSON(data)[0].attributes).toEqual({})
+  })
+
+  it('created/lastUpdate 字段解析为毫秒时间戳', () => {
+    const data = {
+      items: [{ title: 'T', link: 'https://t.example', created: '2024-01-15T00:00:00Z', lastUpdate: '2024-06-20T12:00:00Z', tags: [] }],
+    }
+    const r = parseRaindropJSON(data)[0]
+    expect(r.createdAt).toBe(new Date('2024-01-15T00:00:00Z').getTime())
+    expect(r.updatedAt).toBe(new Date('2024-06-20T12:00:00Z').getTime())
+  })
+
+  it('created/lastUpdate 缺失时走 Date.now() 兜底（用 fake timers 锁确定性）', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-03-01T08:30:00Z'))
+    const FIXED_NOW = Date.now()
+    try {
+      const data = { items: [{ title: 'T', link: 'https://t.example', tags: [] }] }
+      const r = parseRaindropJSON(data)[0]
+      expect(r.createdAt).toBe(FIXED_NOW)
+      expect(r.updatedAt).toBe(FIXED_NOW)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('字段默认：username/password 空、parentId null、order 按序递增、useCount 0、isExpanded false、icon 取 cover', () => {
+    const data = {
+      items: [
+        { title: 'A', link: 'https://a.example', cover: 'https://cover.example/a.png', tags: [] },
+        { title: 'B', link: 'https://b.example', tags: [] },
+      ],
+    }
+    const r = parseRaindropJSON(data)
+    expect(r[0]).toMatchObject({ username: '', password: '', parentId: null, order: 0, useCount: 0, isExpanded: false, icon: 'https://cover.example/a.png' })
+    expect(r[1]).toMatchObject({ parentId: null, order: 1, useCount: 0, isExpanded: false, icon: '' })
+    // order 按导入序递增（0, 1 而非均 0）
+    expect(r.map((b) => b.order)).toEqual([0, 1])
+  })
+
+  it('空输入（null/undefined/空对象）不抛返空数组', () => {
+    expect(parseRaindropJSON(null)).toEqual([])
+    expect(parseRaindropJSON(undefined)).toEqual([])
+    expect(parseRaindropJSON({})).toEqual([])
+    expect(parseRaindropJSON([])).toEqual([])
+  })
+})
