@@ -131,7 +131,8 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   return needsPersist
 }
 
-function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGroups: SiblingGroup[], group: SiblingGroup): string {
+// 仅 export 供护栏单测直测（D1-13），纯加测试零逻辑改动同 D2-4 同文件口径
+export function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGroups: SiblingGroup[], group: SiblingGroup): string {
   const ids: string[] = []
   const re = /\[([^\]]+)\]\(([a-zA-Z0-9]+)\)/g
   let m: RegExpExecArray | null
