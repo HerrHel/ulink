@@ -28,6 +28,7 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
+import { isTyping } from './isTyping.js'
 
 const ui = useUIStore()
 
@@ -98,13 +99,6 @@ function onGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && ui.panels.shortcutHelp) {
     ui.panels.shortcutHelp = false
   }
-}
-
-function isTyping(t: EventTarget | null): boolean {
-  const el = t as HTMLElement | null
-  if (!el) return false
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
 }
 
 onMounted(() => document.addEventListener('keydown', onGlobalKeydown))
