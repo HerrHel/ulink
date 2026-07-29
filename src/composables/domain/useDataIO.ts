@@ -31,7 +31,7 @@ function _liveBookmarks(ds: ReturnType<typeof useDataStore>): Bookmark[] {
 }
 
 /** attributes → 标签名数组（用属性 name，找不到则去掉 tag_ 前缀） */
-function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[] {
+export function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[] {
   const tags: string[] = []
   const attrMap = ds.attributeMap
   for (const [id, on] of Object.entries(b.attributes || {})) {
