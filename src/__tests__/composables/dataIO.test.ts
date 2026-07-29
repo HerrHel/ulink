@@ -16,7 +16,7 @@ vi.mock('../../lib/search.js', () => ({ clearSearchCache: vi.fn() }))
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppData: vi.fn() }))
 
 import { useDataStore } from '../../stores/data.js'
-import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns, detectFormat } from '../../composables/domain/useDataIO.js'
+import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns, detectFormat, _mergeCategories, _mergeAttributes, _mergeBookmarks, _mergeGroups } from '../../composables/domain/useDataIO.js'
 import { saveFromExtension } from '../../composables/domain/useBookmark.js'
 import { __testMarkDataReady } from '../../lib/dataReady.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -440,5 +440,306 @@ describe('detectFormat 扩展名+内容探测路由护栏', () => {
 
   it('无扩展名且内容空 -> null（无信息可判）', () => {
     expect(detectFormat('README', '')).toBeNull()
+  })
+})
+
+/**
+ * _merge* 合并模式去重核心护栏（D1-23）
+ *
+ * 锁定 useDataIO 四个合并函数「同 id 跳过 / Zod 失败计入 skipped / URL 去重 / order 基线 /
+ * bookmarkIds 悬空过滤 / 缺字段真值守卫跳过不计 skipped」契约。这些函数是合并模式导入
+ * （mergeIntoLocalData）的去重核心，此前仅经 importFromDataInternal 两窄场景间接覆盖
+ * （组 bookmarkIds 悬空过滤 / order 唯一性），分支计数与去重边界零直测。仅补测试零逻辑改动
+ * （已增 export，唯一调用方 importFromDataInternal 内部引用不受影响）。
+ */
+describe('_mergeCategories 合并去重护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('正常分类合并入库，imported 计数正确', () => {
+    const ds = useDataStore()
+    const r = _mergeCategories(ds, [
+      { id: 'c1', name: '工作', icon: 'briefcase', color: '#f00', order: 0 } as any,
+      { id: 'c2', name: '生活', icon: 'home', color: '', order: 1 } as any,
+    ])
+    expect(r).toEqual({ imported: 2, skipped: 0 })
+    expect(ds.categories.length).toBe(2)
+    expect(ds.categories.map((c) => c.id)).toEqual(['c1', 'c2'])
+  })
+
+  it('缺 id 或缺 name 真值守卫 continue 跳过，不计入 skipped 且不入库', () => {
+    const ds = useDataStore()
+    const r = _mergeCategories(ds, [
+      { name: '无id', order: 0 } as any,        // !c.id -> continue
+      { id: 'noName' } as any,                   // !c.name -> continue
+      { id: '', name: '空id', order: 0 } as any, // c.id='' 假值 -> continue
+      { id: 'c1', name: '有值', order: 0 } as any,
+    ])
+    // 四项中仅最后一项入库；前三项走 continue 既不算 imported 也不算 skipped
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.categories.length).toBe(1)
+    expect(ds.categories[0].id).toBe('c1')
+  })
+
+  it('同 ID 跳过去重——已存在分类不重复入库', () => {
+    const ds = useDataStore()
+    ds.addCategory({ id: 'dup', name: '旧同名', icon: 'star', color: '', order: 0, updatedAt: 1 } as any)
+    const r = _mergeCategories(ds, [
+      { id: 'dup', name: '新同名', icon: 'briefcase', color: '#0f0', order: 9 } as any,
+      { id: 'new', name: '新增', icon: 'home', color: '', order: 1 } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    // 旧分类保留（同 id 跳过不覆盖 name/icon/color/order）
+    expect(ds.categories.length).toBe(2)
+    const dup = ds.categories.find((c) => c.id === 'dup')!
+    expect(dup.name).toBe('旧同名')
+    expect(dup.icon).toBe('star')
+    expect(dup.color).toBe('')
+  })
+
+  it('icon/color 缺省兜底——AddCategory 前用 star / 空串填充', () => {
+    const ds = useDataStore()
+    _mergeCategories(ds, [{ id: 'c1', name: '只给名字', order: 0 } as any])
+    const c = ds.categories.find((x) => x.id === 'c1')!
+    expect(c.icon).toBe('star')
+    expect(c.color).toBe('')
+  })
+
+  it('Zod 失败计入 skipped——非 string id 穿过真值守卫但被 CategorySchema z.string() 拒', () => {
+    const ds = useDataStore()
+    const r = _mergeCategories(ds, [{ id: 123, name: '数字id', order: 0 } as any])
+    expect(r).toEqual({ imported: 0, skipped: 1 })
+    expect(ds.categories.length).toBe(0)
+  })
+})
+
+describe('_mergeAttributes 合并去重护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('正常属性合并入库，imported 计数正确', () => {
+    const ds = useDataStore()
+    const r = _mergeAttributes(ds, [
+      { id: 'a1', name: '常用', type: 'boolean' } as any,
+      { id: 'a2', name: '收藏', type: 'boolean' } as any,
+    ])
+    expect(r).toEqual({ imported: 2, skipped: 0 })
+    expect(ds.customAttributes.length).toBe(2)
+    expect(ds.customAttributes.map((a) => a.id)).toEqual(['a1', 'a2'])
+  })
+
+  it('缺 id 或缺 name 真值守卫 continue 跳过，不计 skipped 且不入库', () => {
+    const ds = useDataStore()
+    const r = _mergeAttributes(ds, [
+      { name: '无id' } as any,              // !a.id -> continue
+      { id: 'noName' } as any,              // !a.name -> continue
+      { id: '', name: '空id' } as any,      // a.id='' 假值 -> continue
+      { id: 'a1', name: '有值' } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.customAttributes.length).toBe(1)
+  })
+
+  it('同 ID 跳过去重——已存在属性不重复入库', () => {
+    const ds = useDataStore()
+    ds.addAttribute({ id: 'dup', name: '旧属性', type: 'boolean' } as any)
+    const r = _mergeAttributes(ds, [
+      { id: 'dup', name: '新属性', type: 'boolean' } as any,
+      { id: 'new', name: '新增', type: 'boolean' } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.customAttributes.length).toBe(2)
+    expect(ds.customAttributes.find((a) => a.id === 'dup')!.name).toBe('旧属性')
+  })
+
+  it('type 缺省兜底 boolean——AddAttribute 前用 "boolean" 填充', () => {
+    const ds = useDataStore()
+    _mergeAttributes(ds, [{ id: 'a1', name: '无type' } as any])
+    expect(ds.customAttributes[0].type).toBe('boolean')
+  })
+
+  it('Zod 失败计入 skipped——非 string id 穿过真值守卫但被 CustomAttributeSchema z.string() 拒', () => {
+    const ds = useDataStore()
+    const r = _mergeAttributes(ds, [{ id: 99, name: '数字id' } as any])
+    expect(r).toEqual({ imported: 0, skipped: 1 })
+    expect(ds.customAttributes.length).toBe(0)
+  })
+
+  it('type 非 "boolean" 被 z.literal("boolean") 拒计入 skipped', () => {
+    const ds = useDataStore()
+    // type 是非空字符串 'text' 穿过守卫思路不适用（守卫只查 id/name），但 _mergeAttributes
+    // 用 a.type || 'boolean' 兜底，非 boolean 的 truthy type 不会被兜底覆盖——直接送 Zod
+    // CustomAttributeSchema.type = z.literal('boolean') 会拒 -> skipped++
+    const r = _mergeAttributes(ds, [{ id: 'a1', name: '错的type', type: 'text' } as any])
+    expect(r).toEqual({ imported: 0, skipped: 1 })
+    expect(ds.customAttributes.length).toBe(0)
+  })
+})
+
+describe('_mergeBookmarks 合并去重护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('正常书签合并入库，imported 计数正确，order 基于 nextBookmarkOrder=max+1 递增', () => {
+    const ds = useDataStore()
+    // 本地已有一个 order=5 的书签，order 基线应为 6
+    ds.addBookmark({ id: 'local', title: '本地', url: 'https://local.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    const r = _mergeBookmarks(ds, [
+      { id: 'b1', title: '书签1', url: 'https://b1.example', categoryId: CAT_UNCATEGORIZED } as any,
+      { id: 'b2', title: '书签2', url: 'https://b2.example', categoryId: CAT_UNCATEGORIZED } as any,
+    ])
+    expect(r).toEqual({ imported: 2, skipped: 0 })
+    expect(ds.bookmarks.length).toBe(3)
+    // 新两项 order 应从 6 起（local max=5 + 1），批内递增 orderBase + imported
+    const b1 = ds.bookmarks.find((b) => b.id === 'b1')!
+    const b2 = ds.bookmarks.find((b) => b.id === 'b2')!
+    expect(b1.order).toBe(6)
+    expect(b2.order).toBe(7)
+  })
+
+  it('缺 title 或缺 url 真值守卫 continue 跳过，不计 skipped 且不入库', () => {
+    const ds = useDataStore()
+    const r = _mergeBookmarks(ds, [
+      { id: 'noTitle', url: 'https://a.example' } as any,   // !b.title -> continue
+      { id: 'noUrl', title: '无URL' } as any,               // !b.url -> continue
+      { id: 'good', title: '好', url: 'https://good.example' } as any,
+    ] as any)
+    // 前两项 continue——既不算 imported 也不算 skipped；仅 good 入库
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.bookmarks.length).toBe(1)
+    expect(ds.bookmarks[0].id).toBe('good')
+  })
+
+  it('同 ID 跳过去重——已存在书签不重复入库', () => {
+    const ds = useDataStore()
+    ds.addBookmark({ id: 'dup', title: '旧', url: 'https://dup.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    const r = _mergeBookmarks(ds, [
+      { id: 'dup', title: '新同名', url: 'https://dup.example/other', categoryId: CAT_UNCATEGORIZED } as any,
+      { id: 'new', title: '新', url: 'https://new.example', categoryId: CAT_UNCATEGORIZED } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.bookmarks.length).toBe(2)
+    // 旧 dup 不被覆盖（同 id 先于 URL 去重判定，跳过不覆盖字段）
+    expect(ds.bookmarks.find((b) => b.id === 'dup')!.title).toBe('旧')
+  })
+
+  it('同 URL 跳过去重（大小写不敏感）——与本地现存 URL 重复跳过不入库', () => {
+    const ds = useDataStore()
+    ds.addBookmark({ id: 'local', title: '本地', url: 'https://CASE.example/path', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    const r = _mergeBookmarks(ds, [
+      // URL 大小写不同但 toLowerCase 同 -> 去重跳过
+      { id: 'dupUrl', title: '重复URL', url: 'https://case.example/path', categoryId: CAT_UNCATEGORIZED } as any,
+      { id: 'fresh', title: '不重复', url: 'https://other.example', categoryId: CAT_UNCATEGORIZED } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.bookmarks.find((b) => b.id === 'dupUrl')).toBeUndefined()
+    expect(ds.bookmarks.find((b) => b.id === 'fresh')).toBeTruthy()
+  })
+
+  it('批内 URL 去重——同批两条相同 URL 仅首条入库，次条 URL 进 existingUrls 后被去重', () => {
+    const ds = useDataStore()
+    const r = _mergeBookmarks(ds, [
+      { id: 'b1', title: '首条', url: 'https://same.example', categoryId: CAT_UNCATEGORIZED } as any,
+      { id: 'b2', title: '同URL次条', url: 'https://same.example', categoryId: CAT_UNCATEGORIZED } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.bookmarks.length).toBe(1)
+    expect(ds.bookmarks[0].id).toBe('b1')
+  })
+
+  it('字段缺省兜底——username/password/notes/icon 空、categoryId 走 CAT_UNCATEGORIZED、parentId null', () => {
+    const ds = useDataStore()
+    _mergeBookmarks(ds, [{ id: 'b1', title: '只给title和url', url: 'https://x.example' }] as any)
+    const b = ds.bookmarks[0]
+    expect(b.username).toBe('')
+    expect(b.password).toBe('')
+    expect(b.notes).toBe('')
+    expect(b.icon).toBe('')
+    expect(b.categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(b.parentId).toBeNull()
+    expect(b.useCount).toBe(0)
+    expect(b.isExpanded).toBe(false)
+    expect(b.attributes).toEqual({})
+  })
+})
+
+describe('_mergeGroups 合并去重护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('正常组合并入库，imported 计数正确', () => {
+    const ds = useDataStore()
+    const r = _mergeGroups(ds, [
+      { id: 'g1', name: '组1', categoryId: CAT_UNCATEGORIZED, bookmarkIds: [], icon: '', order: 0, isExpanded: false, attributes: {}, notes: 'n', useCount: 0 } as any,
+      { id: 'g2', name: '组2', categoryId: CAT_UNCATEGORIZED, bookmarkIds: [], icon: '', order: 1, isExpanded: false, attributes: {}, notes: '', useCount: 0 } as any,
+    ])
+    expect(r).toEqual({ imported: 2, skipped: 0 })
+    expect(ds.siblingGroups.length).toBe(2)
+  })
+
+  it('缺 id 或缺 name 真值守卫 continue 跳过，不计 skipped 且不入库', () => {
+    const ds = useDataStore()
+    const r = _mergeGroups(ds, [
+      { name: '无id', bookmarkIds: [] } as any,            // !g.id -> continue
+      { id: 'noName', bookmarkIds: [] } as any,            // !g.name -> continue
+      { id: '', name: '空id', bookmarkIds: [] } as any,    // g.id='' 假值 -> continue
+      { id: 'g1', name: '有值', bookmarkIds: [], categoryId: CAT_UNCATEGORIZED } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.siblingGroups.length).toBe(1)
+  })
+
+  it('同 ID 跳过去重——已存在组不重复入库', () => {
+    const ds = useDataStore()
+    ds.addGroup({ id: 'dup', name: '旧组', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: [], notes: '', updatedAt: 1, useCount: 0, isPublic: false } as any)
+    const r = _mergeGroups(ds, [
+      { id: 'dup', name: '新组', categoryId: CAT_UNCATEGORIZED, bookmarkIds: [] } as any,
+      { id: 'new', name: '新增', categoryId: CAT_UNCATEGORIZED, bookmarkIds: [] } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.siblingGroups.length).toBe(2)
+    expect(ds.siblingGroups.find((g) => g.id === 'dup')!.name).toBe('旧组')
+  })
+
+  it('bookmarkIds 悬空过滤——仅保留本地已存活书签 id，悬空 id 被剔除', () => {
+    const ds = useDataStore()
+    // 仅 goodBm 入库（dup 因同 URL 在更早合并被跳过——此处单独 _mergeGroups 测，先手动放存活项）
+    ds.addBookmark({ id: 'goodBm', title: '存活', url: 'https://good.example', username: '', password: '', notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 } as any)
+    const r = _mergeGroups(ds, [
+      {
+        id: 'g1', name: '测试组', categoryId: CAT_UNCATEGORIZED,
+        bookmarkIds: ['goodBm', 'ghostId1', 'ghostId2'], // goodBm 存活、两 ghost 未存活
+        icon: '', order: 0, isExpanded: false, attributes: {}, notes: '', useCount: 0,
+      } as any,
+    ])
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    const g = ds.groupMap['g1']
+    expect(g.bookmarkIds).toEqual(['goodBm'])
+    // 留存 id 全部可查 bookmarkMap（不悬空）
+    for (const bid of g.bookmarkIds) {
+      expect(ds.bookmarkMap[bid]).toBeTruthy()
+    }
+  })
+
+  it('bookmarkIds 缺省 [] 兜底——无 bookmarkIds 字段不抛错', () => {
+    const ds = useDataStore()
+    const r = _mergeGroups(ds, [{ id: 'g1', name: '无bookmarkIds组', categoryId: CAT_UNCATEGORIZED }] as any)
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.groupMap['g1'].bookmarkIds).toEqual([])
+  })
+
+  it('Zod 失败计入 skipped——非 string id 穿过真值守卫但被 SiblingGroupSchema z.string() 拒', () => {
+    const ds = useDataStore()
+    const r = _mergeGroups(ds, [{ id: 777, name: '数字id', bookmarkIds: [] }] as any)
+    expect(r).toEqual({ imported: 0, skipped: 1 })
+    expect(ds.siblingGroups.length).toBe(0)
   })
 })

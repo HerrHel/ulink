@@ -197,7 +197,7 @@ type DataStore = ReturnType<typeof useDataStore>
 interface MergeStats { imported: number; skipped: number }
 
 /** 合并分类（去重：同 ID 跳过；Zod 失败计入 skipped） */
-function _mergeCategories(ds: DataStore, categories: AppData['categories']): MergeStats {
+export function _mergeCategories(ds: DataStore, categories: AppData['categories']): MergeStats {
   let imported = 0, skipped = 0
   for (const c of categories) {
     if (!c.id || !c.name) continue
@@ -211,7 +211,7 @@ function _mergeCategories(ds: DataStore, categories: AppData['categories']): Mer
 }
 
 /** 合并属性（去重：同 ID 跳过） */
-function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttributes']): MergeStats {
+export function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttributes']): MergeStats {
   let imported = 0, skipped = 0
   for (const a of customAttributes) {
     if (!a.id || !a.name) continue
@@ -225,7 +225,7 @@ function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttrib
 }
 
 /** 合并书签（去重：同 ID 或同 URL 跳过） */
-function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
+export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
   let imported = 0, skipped = 0
   const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
   // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
@@ -265,7 +265,7 @@ function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeS
  * bookmarkIds 过滤未存活书签：导入源 id 可能指向被去重/Zod 跳过/缺 title·url 的项，
  * 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位，推云后远端同样悬空）。
  */
-function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
+export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
   let imported = 0, skipped = 0
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
