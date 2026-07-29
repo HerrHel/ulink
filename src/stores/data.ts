@@ -75,7 +75,7 @@ export function _cancelPendingHist() {
   _histDebounceData.clear()
 }
 
-type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
+export type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
 
 /**
  * 经 id→实体 Map 定位数组下标（O(1) 查实体 + indexOf）。
@@ -92,7 +92,7 @@ function _indexOfById<T extends { id: string }>(
   return arr.findIndex(x => x.id === id)
 }
 
-function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
+export function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
     // 置顶优先：pinnedAt 存在的项排最前，置顶项之间按当前排序模式排序
