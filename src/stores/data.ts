@@ -75,6 +75,32 @@ export function _cancelPendingHist() {
   _histDebounceData.clear()
 }
 
+/**
+ * 测试专用：模拟已 drain 待推送历史防抖；beforeEach 需 clear。
+ * 与 syncPending `__testPendingSync` 同口径——仅暴露填入/窥探/清两 Map 的最小面，
+ * _cancelPendingHist 逻辑一字未动。peekSize 供单测断言 cancel 前后两 Map 清空契约。
+ */
+export const __testHistDebounce = {
+  /** 手动填一个防抖 timer（fake timers 下返回真 timer id）+ 暂存 data，模拟 _saveLocalHistory 已布置防抖后态 */
+  seed(id: string, timer: ReturnType<typeof setTimeout>, data: Record<string, unknown> = {}) {
+    _histDebounceTimers.set(id, timer)
+    _histDebounceData.set(id, data)
+  },
+  /** 窥探两 Map 当前 size，供单测断言 _cancelPendingHist 清空契约 */
+  peekSize() {
+    return { timers: _histDebounceTimers.size, data: _histDebounceData.size }
+  },
+  /** 窥探某 id 的 timer/data 是否仍在（便于断言"清后该 id 消失"） */
+  has(id: string) {
+    return _histDebounceTimers.has(id) || _histDebounceData.has(id)
+  },
+  /** 兜底清两 Map（与 _cancelPendingHist 等价但不调 clearTimeout，给 beforeEach 用） */
+  clear() {
+    _histDebounceTimers.clear()
+    _histDebounceData.clear()
+  },
+}
+
 export type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
 
 /**
