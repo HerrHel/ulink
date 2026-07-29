@@ -179,7 +179,7 @@ export function importData(file: File) {
   reader.readAsText(file)
 }
 
-function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv' | null {
+export function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv' | null {
   const ext = filename.toLowerCase().split('.').pop()
   if (ext === 'json') return 'json'
   if (ext === 'html' || ext === 'htm') return 'html'
