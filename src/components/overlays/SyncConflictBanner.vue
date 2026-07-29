@@ -36,14 +36,10 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import type { SyncConflict } from '../../stores/sync.js'
 import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
+import { typeLabel } from './typeLabel.js'
 
 const sync = useCloudSync()
 const ds = useDataStore()
-
-function typeLabel(type: SyncConflict['type']): string {
-  const map: Record<string, string> = { bookmark: '书签', group: '组', category: '分类', attribute: '属性' }
-  return map[type] || type
-}
 
 function itemName(c: SyncConflict): string {
   const d = c.local as Record<string, unknown>
