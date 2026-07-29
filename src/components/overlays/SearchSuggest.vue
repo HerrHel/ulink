@@ -22,12 +22,13 @@ import { useDataStore } from '../../stores/data.js'
 import { useToastStore } from '../../stores/toast.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { favicon, domain } from '../../utils.js'
+import { renderHighlight } from './searchSuggestRender.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
 import { searchWithHighlights } from '../../lib/search.js'
 import { I } from '../../config/icons.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
-import type { SearchResultItem, HighlightSegment } from '../../lib/search.js'
+import type { SearchResultItem } from '../../lib/search.js'
 
 const ui = useUIStore()
 const dataStore = useDataStore()
@@ -89,14 +90,6 @@ function select(item: SearchResultItem) {
     if (bm) openBookmark(bm)
   }
 }
-
-function renderHighlight(highlights: Record<string, HighlightSegment[]> | undefined, key: string, fallback: string): string {
-  const segs = highlights?.[key]
-  if (!segs || !segs.length) return esc(fallback)
-  return segs.map(s => s.highlight ? `<mark class="ss-hl">${esc(s.text)}</mark>` : esc(s.text)).join('')
-}
-
-function esc(s: string): string { const d = document.createElement('div'); d.textContent = s; return d.innerHTML }
 
 function hide() { visible.value = false }
 
