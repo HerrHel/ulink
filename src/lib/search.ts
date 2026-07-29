@@ -136,6 +136,9 @@ interface GroupSearchItem {
   childUrl: string
   namePy: string
   childTitlePy: string
+  // D2-2：把 bookmarkIds 折进索引项，searchWithHighlights 热路径不再每次 new Map 重建。
+  // 仅供下游携带，不进 Fuse keys，不参与匹配；undefined 透传（见 _buildGroupSearchItems）。
+  bookmarkIds: string[] | undefined
 }
 
 /** 属性 id → 显示名；搜索索引构建与降级路径共用 */
@@ -195,6 +198,8 @@ function _buildGroupSearchItems(
       childUrl: childUrls.join(' '),
       namePy: _toPy(g.name || ''),
       childTitlePy: _toPy(ct),
+      // D2-2：透传原 bookmarkIds（g 无此字段时 undefined），供 searchWithHighlights O(1) 取用。
+      bookmarkIds: g.bookmarkIds,
     }
   })
 }
@@ -442,17 +447,14 @@ export function searchWithHighlights(
   }
   const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
 
-  // O(1) 查找组 bookmarkIds，避免 map 内 find 导致 O(n²)
-  const groupBmIdsMap = new Map<string, string[] | undefined>(
-    groups.map(g => [g.id, g.bookmarkIds])
-  )
-
+  // D2-2：bookmarkIds 已折进 GroupSearchItem（见 _buildGroupSearchItems），热路径不再每键击 new Map。
+  // Fuse 命中的 r.item 即同 version 缓存的组项，O(1) 直接取 bookmarkIds。
   const groupResults: SearchResultItem[] = grpResults.map(r => ({
     id: r.item.id,
     name: (r.item as GroupSearchItem).name,
     _isGroup: true,
     _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
-    bookmarkIds: groupBmIdsMap.get(r.item.id),
+    bookmarkIds: (r.item as GroupSearchItem).bookmarkIds,
     _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
   }))
 
