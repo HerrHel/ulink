@@ -62,7 +62,7 @@ interface DataState {
 }
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
-function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: T[], { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] }): T[] {
+export function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: T[], { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] }): T[] {
   for (const aid of activeAttrs) items = items.filter(i => i.attributes[aid])
   for (const aid of excludedAttrs) items = items.filter(i => !i.attributes[aid])
   return items
