@@ -16,7 +16,7 @@ vi.mock('../../lib/search.js', () => ({ clearSearchCache: vi.fn() }))
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppData: vi.fn() }))
 
 import { useDataStore } from '../../stores/data.js'
-import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns } from '../../composables/domain/useDataIO.js'
+import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns, detectFormat } from '../../composables/domain/useDataIO.js'
 import { saveFromExtension } from '../../composables/domain/useBookmark.js'
 import { __testMarkDataReady } from '../../lib/dataReady.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -373,5 +373,72 @@ describe('parseRaindropJSON 正路径分支护栏', () => {
     expect(parseRaindropJSON(undefined)).toEqual([])
     expect(parseRaindropJSON({})).toEqual([])
     expect(parseRaindropJSON([])).toEqual([])
+  })
+})
+
+/**
+ * detectFormat — 导入路由纯函数护栏
+ *
+ * importData(line 147) 用它按文件名扩展 + 内容头部探测决定走 json/html/csv 分支。
+ * 本护栏锁住：扩展名优先级、大小写不敏感、内容兜底三态、扩展名覆盖内容、
+ * 前导空白容忍、未知格式返 null 等全部分支，为后续若改内容探测正则铺地基。
+ */
+describe('detectFormat 扩展名+内容探测路由护栏', () => {
+  it('扩展名 .json -> json', () => {
+    expect(detectFormat('bookmarks.json', '')).toBe('json')
+  })
+
+  it('扩展名 .html / .htm -> html（两种写法都认）', () => {
+    expect(detectFormat('export.html', '')).toBe('html')
+    expect(detectFormat('export.htm', '')).toBe('html')
+  })
+
+  it('扩展名 .csv -> csv', () => {
+    expect(detectFormat('data.csv', '')).toBe('csv')
+  })
+
+  it('扩展名大小写不敏感（toLowerCase 归一）', () => {
+    expect(detectFormat('BOOKMARKS.JSON', '')).toBe('json')
+    expect(detectFormat('Export.HTML', '')).toBe('html')
+    expect(detectFormat('Data.CSV', '')).toBe('csv')
+  })
+
+  it('扩展名优先于内容探测——已知扩展名时内容不参与判定', () => {
+    // 文件名是 .csv 但内容长得像 html/json，仍按扩展名走 csv（路由"文件名权威"语义）
+    expect(detectFormat('a.csv', '<html>')).toBe('csv')
+    expect(detectFormat('a.json', '<not json>')).toBe('json')
+    expect(detectFormat('a.html', '[1,2,3]')).toBe('html')
+  })
+
+  it('无扩展名 / 不识别扩展名时走内容头部推断——{ 或 [ -> json', () => {
+    expect(detectFormat('no_ext', '{"a":1}')).toBe('json')
+    expect(detectFormat('no_ext', '[1,2,3]')).toBe('json')
+  })
+
+  it('无扩展名时 < 开头 -> html', () => {
+    expect(detectFormat('no_ext', '<!DOCTYPE html>')).toBe('html')
+    expect(detectFormat('no_ext', '<html>')).toBe('html')
+  })
+
+  it('无扩展名且内容不合 json/html -> null', () => {
+    expect(detectFormat('no_ext', 'title,url\na,b')).toBeNull()
+    expect(detectFormat('no_ext', 'plain text')).toBeNull()
+    expect(detectFormat('no_ext', '')).toBeNull()
+  })
+
+  it('内容头部前导空白被 trimStart 容忍后才判型', () => {
+    expect(detectFormat('no_ext', '   \n\t  {"a":1}')).toBe('json')
+    expect(detectFormat('no_ext', '  \n <html>')).toBe('html')
+  })
+
+  it('扩展名取最后一段（点号分隔 split.pop）——文件名含多个点取末段', () => {
+    expect(detectFormat('archive.2024.json', '')).toBe('json')
+    expect(detectFormat('my.bookmarks.csv', '')).toBe('csv')
+    // 末段非已知扩展名（如 .txt）-> 落内容推断
+    expect(detectFormat('notes.txt', '{"a":1}')).toBe('json')
+  })
+
+  it('无扩展名且内容空 -> null（无信息可判）', () => {
+    expect(detectFormat('README', '')).toBeNull()
   })
 })
