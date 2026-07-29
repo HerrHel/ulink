@@ -85,9 +85,10 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim, esc } from '../../utils.js'
+import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { decryptPasswordWithKey } from '../../crypto.js'
+import { highlight } from './highlight.js'
 import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibility.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { openBmModal, deleteBookmarkWithUndo, addSub, openBookmark } from '../../composables/domain/useBookmark.js'
@@ -178,24 +179,6 @@ const hlRegex = computed<RegExp | null>(() => {
 const hlTitle = computed(() => hlRegex.value ? highlight(bookmark.title, hlRegex.value) : '')
 const hlDomain = computed(() => hlRegex.value ? highlight(domainStr.value, hlRegex.value) : '')
 const hlNotes = computed(() => hlRegex.value && bookmark.notes ? highlight(bookmark.notes, hlRegex.value) : '')
-
-/** 按已编译 regex 高亮 text，返回带 <mark> 的 HTML（转义在前） */
-function highlight(text: string, regex: RegExp): string {
-  if (!text) return ''
-  const re = new RegExp(regex.source, regex.flags) // 复制避免 lastIndex 共享污染
-  re.lastIndex = 0
-  const parts: string[] = []
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(esc(text.slice(last, m.index)))
-    parts.push('<mark class="card-hl">' + esc(m[0]) + '</mark>')
-    last = m.index + m[0].length
-    if (m[0].length === 0) { re.lastIndex++; continue }
-  }
-  if (last < text.length) parts.push(esc(text.slice(last)))
-  return parts.join('')
-}
 
 function visit() { openBookmark(props.bookmark) }
 function onOpenClick() {
