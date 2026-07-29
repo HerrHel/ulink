@@ -33,6 +33,32 @@ describe('looksLikeSecret (H9)', () => {
     expect(looksLikeSecret('password=supersecret123')).toBe(true)
   })
 
+  it('detects sk- API keys (≥20 位字母数字)', () => {
+    expect(looksLikeSecret('err Authorization sk-abcdef0123456789ghij')).toBe(true)
+  })
+
+  it('sk- 后不足 20 位字母数字不命中（宽度边界）', () => {
+    expect(looksLikeSecret('sk-abcdef0123456789')).toBe(false)
+  })
+
+  it('detects apikey 赋值（冒号/等号两种分隔）', () => {
+    expect(looksLikeSecret('config apikey: sk_abc123defghijk')).toBe(true)
+    expect(looksLikeSecret('config apikey=sk_abc123defghijk')).toBe(true)
+  })
+
+  it('falsy 短路：空串/0/false/null 入参恒 false 不抛', () => {
+    expect(looksLikeSecret('')).toBe(false)
+    // @ts-expect-error 故意传非 string 验证短路
+    expect(looksLikeSecret(null)).toBe(false)
+    // @ts-expect-error 故意传非 string 验证短路
+    expect(looksLikeSecret(undefined)).toBe(false)
+  })
+
+  it('password/apikey 子串边界：单词含 password 但无赋值不误命中', () => {
+    // password 后仅有空白、无 [:=] 不满足 password\s*[:=] 分支
+    expect(looksLikeSecret('the password field is required')).toBe(false)
+  })
+
   it('allows normal error messages', () => {
     expect(looksLikeSecret('Cannot read properties of undefined')).toBe(false)
     expect(looksLikeSecret('NetworkError when attempting to fetch resource')).toBe(false)
