@@ -521,7 +521,7 @@ export function parseCSV(text: string): Bookmark[] {
 
 // ── LinkVault 原生 JSON 验证 ──
 
-function validateImportData(data: unknown): string | null {
+export function validateImportData(data: unknown): string | null {
   const result = AppDataSchema.safeParse(data)
   if (!result.success) {
     const first = result.error.issues[0]
