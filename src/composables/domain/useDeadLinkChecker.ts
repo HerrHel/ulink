@@ -57,7 +57,7 @@ const HTTP_DEAD = new Set([404, 410])
 
 /** 客户端内部 HTTP 分类（偏宁可 unknown 也不误杀）。
  *  仅在 fetch_outcome==='ok' 有响应时调用；不写库。 */
-function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
+export function classifyHttpStatus(code: number): 'alive' | 'dead' | 'unknown' {
   if (code >= 200 && code < 400) return 'alive'
   if (HTTP_SOFT_ALIVE.has(code)) return 'alive'
   if (HTTP_DEAD.has(code)) return 'dead'
@@ -188,7 +188,7 @@ function fetchNoCorsWithTimeout(
 
 /** 由 verdict 构造 CheckResult：alive/blocked/status/finalUrl 派生自 verdict，
  *  persist 由 verdict 决定（inconclusive 不落标）。 */
-function makeCheckResult(p: {
+export function makeCheckResult(p: {
   verdict: LinkVerdict
   status?: number
   finalUrl?: string
@@ -285,14 +285,14 @@ function persistBaselineCache(): void {
 }
 
 /** 基线耗时 → 本机网络健康分级。offline 时一切远端结论都不落 dead/gfw。 */
-function gradeLocalNetwork(baselineMs: number): LocalNetwork {
+export function gradeLocalNetwork(baselineMs: number): LocalNetwork {
   if (baselineMs >= BASELINE_OFFLINE_MS) return 'offline'
   if (baselineMs >= LOCAL_ONLINE_MS) return 'degraded'
   return 'online'
 }
 
 /** Edge evidence：fetch_outcome 决策依据；http_status 仅在 fetch_outcome==='ok' 有效。 */
-type EdgeEvidence = {
+export type EdgeEvidence = {
   fetch_outcome: 'ok' | 'timeout' | 'connect_error' | 'ssrf_reject' | 'redirect_denied' | null
   http_status: number
 }
@@ -325,7 +325,7 @@ async function callEdgeFunction(url: string, bookmarkId?: string): Promise<EdgeE
  * - 本机 offline 时一切映射 inconclusive，绝不落 dead/gfw（重构 #4）。
  * - Edge dead + 本机可达 → inconclusive(head_mismatch)，不再用 0.45 弱存活（重构 #6）。
  */
-function decide(
+export function decide(
   edge: EdgeEvidence,
   direct: { reachable: boolean },
   local: LocalNetwork,
