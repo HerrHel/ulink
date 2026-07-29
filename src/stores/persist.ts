@@ -35,7 +35,7 @@ export interface StorageInfo {
   label: string
 }
 
-function _stamp(data: AppData) {
+export function _stamp(data: AppData) {
   _writeSeq++
   // 保留已有 _schemaVersion；禁止用 writeSeq 覆盖
   const schema =
