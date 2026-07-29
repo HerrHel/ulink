@@ -448,7 +448,7 @@ export function resolveCsvColumns(headers: string[]): CsvColumns {
   return { titleIdx: idx.title, urlIdx: idx.url, tagsIdx: idx.tags, notesIdx: idx.notes }
 }
 
-function parseCSV(text: string): Bookmark[] {
+export function parseCSV(text: string): Bookmark[] {
   const bookmarks: Bookmark[] = []
   const lines: string[][] = []
   let row: string[] = []
