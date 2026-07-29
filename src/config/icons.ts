@@ -75,6 +75,13 @@ const I: IconMap = {
   diff: '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="9" height="18" rx="1"/><rect x="13" y="3" width="9" height="18" rx="1"/><line x1="11" y1="10" x2="13" y2="10"/><line x1="11" y1="14" x2="13" y2="14"/></svg>',
 }
 
-export function getCategoryIcon(icon: string): string { return I[icon] || I.star }
+export function getCategoryIcon(icon: string): string {
+  // 仅返回 I 自有键的值；原型链键（'__proto__' / 'constructor' / 'toString' 等）
+  // 不能命中——getCategoryIcon 是 ActionSheet/BatchPopover/AppNav 模板 `v-html`
+  // 渲染入口，原型值（Object/Function 字符串化后是 "[object Object]"/"function ...{...}"）
+  // 会被注入 DOM，故非 IconMap 自有键一律兜底到静态 SVG star，闭合 v-html 注入面。
+  const v = I[icon as keyof typeof I]
+  return typeof v === 'string' ? v : I.star
+}
 
 export { I }
