@@ -16,7 +16,7 @@ vi.mock('../../lib/search.js', () => ({ clearSearchCache: vi.fn() }))
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn(), debouncedSaveAppData: vi.fn() }))
 
 import { useDataStore } from '../../stores/data.js'
-import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns, detectFormat, _mergeCategories, _mergeAttributes, _mergeBookmarks, _mergeGroups } from '../../composables/domain/useDataIO.js'
+import { importFromDataInternal, parseRaindropJSON, exportHTML, resolveCsvColumns, detectFormat, _mergeCategories, _mergeAttributes, _mergeBookmarks, _mergeGroups, _attrsToTags } from '../../composables/domain/useDataIO.js'
 import { saveFromExtension } from '../../composables/domain/useBookmark.js'
 import { __testMarkDataReady } from '../../lib/dataReady.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -741,5 +741,92 @@ describe('_mergeGroups 合并去重护栏', () => {
     const r = _mergeGroups(ds, [{ id: 777, name: '数字id', bookmarkIds: [] }] as any)
     expect(r).toEqual({ imported: 0, skipped: 1 })
     expect(ds.siblingGroups.length).toBe(0)
+  })
+})
+
+// ── _attrsToTags 护栏 ──
+// useDataIO.ts:34 导出纯函数：把书签 attributes（attrId→on/off）还原成标签名数组，
+// 供 exportHTML/exportCSV 导出书签时还原 tags 列。是导出链路"属性名正确还原"核心。
+// 仅 export 关键字新增，零逻辑改动。用真实 Pinia store：addAttribute 建真实 attributeMap。
+describe('_attrsToTags attributes→标签名还原', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('attrMap 命中——用属性的 name 作标签名', () => {
+    const ds = useDataStore()
+    ds.addAttribute({ id: 'attr-dev', name: '开发工具', type: 'boolean' } as any)
+    const b = { attributes: { 'attr-dev': true } } as any
+    expect(_attrsToTags(ds, b)).toEqual(['开发工具'])
+  })
+
+  it('attrMap 未命中且 id 带 tag_ 前缀——去掉 tag_ 前缀兜底返回', () => {
+    const ds = useDataStore()
+    // 未注册任何属性，attributeMap 命中不到 id
+    const b = { attributes: { 'tag_my-tag': true } } as any
+    expect(_attrsToTags(ds, b)).toEqual(['my-tag'])
+  })
+
+  it('attrMap 未命中且 id 无 tag_ 前缀——原样返回 id（replace 不匹配即不替换）', () => {
+    const ds = useDataStore()
+    const b = { attributes: { 'custom-id-123': true } } as any
+    expect(_attrsToTags(ds, b)).toEqual(['custom-id-123'])
+  })
+
+  it('falsey 属性值被跳过（!on 守卫）——只有 on=truthy 的属性进标签', () => {
+    const ds = useDataStore()
+    ds.addAttribute({ id: 'attr-on', name: '启用', type: 'boolean' } as any)
+    ds.addAttribute({ id: 'attr-off', name: '禁用', type: 'boolean' } as any)
+    const b = { attributes: { 'attr-on': true, 'attr-off': false } } as any
+    expect(_attrsToTags(ds, b)).toEqual(['启用'])
+  })
+
+  it('attributes 为 undefined——|| {} 兜底不抛 TypeError 返空数组', () => {
+    const ds = useDataStore()
+    expect(_attrsToTags(ds, { attributes: undefined } as any)).toEqual([])
+  })
+
+  it('attributes 为 null——|| {} 兜底不抛 TypeError 返空数组', () => {
+    const ds = useDataStore()
+    expect(_attrsToTags(ds, { attributes: null } as any)).toEqual([])
+  })
+
+  it('attributes 为空对象——返空数组', () => {
+    const ds = useDataStore()
+    expect(_attrsToTags(ds, { attributes: {} } as any)).toEqual([])
+  })
+
+  it('混合命中+未命中+falsey——均按各自分支正确处理互不干扰', () => {
+    const ds = useDataStore()
+    ds.addAttribute({ id: 'attr-named', name: '已命名', type: 'boolean' } as any)
+    const b = {
+      attributes: {
+        'attr-named': true,          // 命中 → '已命名'
+        'tag_orphan': true,          // 未命中去前缀 → 'orphan'
+        'bare-id': true,             // 未命中无前缀 → 'bare-id'
+        'attr-named-dup': false,     // falsey 跳过
+      },
+    } as any
+    expect(_attrsToTags(ds, b)).toEqual(['已命名', 'orphan', 'bare-id'])
+  })
+
+  it('attrMap 命中但 name 为空串(falsy)——走 || 兜底去 tag_ 前缀', () => {
+    // attr?.name 为空串时 || 触发，退回去前缀兜底路径
+    const ds = useDataStore()
+    ds.addAttribute({ id: 'tag_empty', name: '', type: 'boolean' } as any)
+    const b = { attributes: { 'tag_empty': true } } as any
+    expect(_attrsToTags(ds, b)).toEqual(['empty'])
+  })
+
+  it('软删属性仍命中 name——attributeMap getter 不过滤 deletedAt（真实特性锁定）', () => {
+    // attributeMap getter（data.ts:237）直接遍历 customAttributes 不过滤，
+    // 故软删 attr 仍 attributeMap[id] 命中 name 导出。锁定此特性防误判为过滤软删。
+    const ds = useDataStore()
+    ds.addAttribute({ id: 'attr-soft', name: '软删属性', type: 'boolean' } as any)
+    ds.deleteAttribute('attr-soft')
+    expect(ds.customAttributes.find(a => a.id === 'attr-soft')!.deletedAt).toBeTruthy()
+    const b = { attributes: { 'attr-soft': true } } as any
+    expect(_attrsToTags(ds, b)).toEqual(['软删属性'])
   })
 })
