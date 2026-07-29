@@ -360,8 +360,8 @@ export function parseRaindropJSON(data: unknown): Bookmark[] {
 }
 
 // ── 浏览器书签 HTML 解析器（Netscape Bookmark 格式）──
-
-function parseBookmarkHTML(html: string): Bookmark[] {
+// export 供 parseBookmarkHTML.test.ts 行护栏单测（纯加测试零逻辑改动）
+export function parseBookmarkHTML(html: string): Bookmark[] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
   const bookmarks: Bookmark[] = []
