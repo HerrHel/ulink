@@ -357,7 +357,7 @@ export interface SearchResultItem {
   _divider?: string
 }
 
-function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {
+export function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {
   const segments: HighlightSegment[] = []
   let cursor = 0
   for (const [start, end] of indices) {
@@ -369,7 +369,7 @@ function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [
   return segments.length ? segments : [{ text, highlight: false }]
 }
 
-function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, string>): Record<string, HighlightSegment[]> {
+export function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, string>): Record<string, HighlightSegment[]> {
   const out: Record<string, HighlightSegment[]> = {}
   for (const match of fuseResult.matches || []) {
     if (!match.key || !match.indices?.length) continue
