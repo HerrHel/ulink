@@ -244,5 +244,44 @@ describe('utils', () => {
     it('无 attributes 返回空数组', () => {
       expect(getTagNames({ attributes: null } as any, attrs as any)).toEqual([])
     })
+    // 以下护栏拆单分支断言：现有两个 it 把 !deletedAt / id!==ATTR_IS_GROUP / attributes[id] truthy
+    // 三 filter 条件短路复合进单断言且全用 boolean true/false，若误把收取条件改成 ===true
+    // 对现有 toEqual 静默通过，但运行时 attributes 经 sync/import 流入 number/string/对象 truthy
+    // 会被新逻辑误漏且无护栏告警——补测逐分支锁真实隐式 truthy 收取语义。
+    it('ATTR_IS_GROUP 内置组单独排除（不被 truthy 收取分支误代）', () => {
+      const item = { attributes: { 'is-group': true, t1: true } } as any
+      expect(getTagNames(item, attrs as any)).toEqual(['标签一'])
+    })
+    it('软删属性单独排除（不被内置组排除分支误代）', () => {
+      const item = { attributes: { t3: true, t1: true } } as any
+      expect(getTagNames(item, attrs as any)).toEqual(['标签一'])
+    })
+    it('attributes 值隐式 truthy 即收取（非严格 ===true）— number/string/对象均收', () => {
+      const item = {
+        attributes: { t1: 1, t2: 'any-string', 'is-group': 'group-on', t3: true },
+      } as any
+      // t3 软删与 is-group 内置组仍被排除，仅 t1(number 1)/t2(string) truthy 收取
+      expect(getTagNames(item, attrs as any)).toEqual(['标签一', '标签二'])
+    })
+    it('attributes 值 falsy 不收取 — 0/false/空串/null/undefined', () => {
+      const item = {
+        attributes: { t1: 0, t2: false, 'is-group': true, t3: true },
+      } as any
+      // t1(0)/t2(false) falsy 不收；is-group 排除；t3 软删排除 → 空
+      expect(getTagNames(item, attrs as any)).toEqual([])
+    })
+    it('attributes 为空对象返回空数组；customAttributes 为空数组返回空数组', () => {
+      expect(getTagNames({ attributes: {} } as any, attrs as any)).toEqual([])
+      expect(getTagNames({ attributes: { t1: true } } as any, [] as any)).toEqual([])
+    })
+    it('属性缺 name 时 map 返回 undefined（直锁真实行为，防未来误改为跳过缺 name）', () => {
+      const attrsNoName = [
+        { id: 't1', type: 'boolean' as const },
+        { id: 't2', name: '标签二', type: 'boolean' as const },
+      ] as any
+      const item = { attributes: { t1: true, t2: true } } as any
+      // 源码 .map(a => a.name) 不跳过缺 name，t1 无 name→undefined 进数组
+      expect(getTagNames(item, attrsNoName)).toEqual([undefined, '标签二'])
+    })
   })
 })
