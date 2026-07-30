@@ -23,7 +23,7 @@ import { isDataHydrated } from '../../lib/dataReady.js'
  * - https://example.com/ 和 https://example.com/page
  * 返回true表示newUrl是existingUrl的后缀变体
  */
-function isUrlSuffixVariant(existingUrl: string, newUrl: string): boolean {
+export function isUrlSuffixVariant(existingUrl: string, newUrl: string): boolean {
   try {
     const existing = new URL(existingUrl)
     const newUrlObj = new URL(newUrl)
@@ -59,7 +59,7 @@ function isUrlSuffixVariant(existingUrl: string, newUrl: string): boolean {
  * 检测是否有完全重复的URL
  * 返回true表示存在完全重复
  */
-function isExactDuplicate(existingUrl: string, newUrl: string): boolean {
+export function isExactDuplicate(existingUrl: string, newUrl: string): boolean {
   try {
     const existing = new URL(existingUrl)
     const newUrlObj = new URL(newUrl)
