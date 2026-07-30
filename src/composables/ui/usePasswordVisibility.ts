@@ -26,9 +26,24 @@ function _onVisChange() {
 }
 function _onBlur() { _hideAll() }
 
-function _hideAll() {
+export function _hideAll() {
   _visibleIds.value.clear()
   if (_timer) { clearTimeout(_timer); _timer = null }
+}
+
+/// 测试钩子：reset 模块级单例 state（visibleIds Set / auto-hide timer / 监听绑定标志 / autoHideMs 默认值）
+/// 并解绑上轮测试懒绑定的全局监听，供每个用例干净起步。
+/// 同 syncPending `__testPendingSync` / data `__testHistDebounce` 测试注入面口径：
+/// 仅操作单例内存态与全局监听绑定，不触碰生产隐藏逻辑（_hideAll / _onVisChange / _onBlur 一字未动）。
+export function __testReset() {
+  if (_timer) { clearTimeout(_timer); _timer = null }
+  _visibleIds.value.clear()
+  // 解绑上轮测试懒绑定的监听，重置绑定标志（生产单例常驻无解绑，此处仅测试隔离用）
+  document.removeEventListener('visibilitychange', _onVisChange)
+  window.removeEventListener('pagehide', _onVisChange)
+  window.removeEventListener('blur', _onBlur)
+  _listenersBound = false
+  _autoHideMs = 5000
 }
 
 export function usePasswordVisibility(autoHideMs = 5000) {
