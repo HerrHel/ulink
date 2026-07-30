@@ -73,8 +73,9 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { fetchPublicGroup, forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
-import { fixUrl, safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
+import { safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
 import { buildShareEntries } from './buildShareEntries.js'
+import { buildItemListJsonLd } from './buildItemListJsonLd.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
@@ -200,20 +201,7 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
   setMetaByAttr('name', 'twitter:title', title)
   setMetaByAttr('name', 'twitter:description', desc)
   setCanonical(shareUrl)
-  setJsonLd('shareItemList', {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    name: g.name || '分享组',
-    description: desc,
-    url: shareUrl,
-    numberOfItems: bms.length,
-    itemListElement: bms.map((b, i) => ({
-      '@type': 'ListItem',
-      position: i + 1,
-      name: b.title,
-      url: fixUrl(b.url),
-    })),
-  })
+  setJsonLd('shareItemList', buildItemListJsonLd(g, bms, shareUrl))
 }
 </script>
 
