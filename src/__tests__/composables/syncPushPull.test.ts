@@ -414,6 +414,90 @@ describe('syncPushPull via SyncRemotePort', () => {
     expect(useSyncStore().syncStatus).toBe('error')
     expect(useSyncStore().syncError).toMatch(/partial upsert fail/)
   })
+
+  it('9 fullSync pushed=true 正路径：push 全成功→fullSync 返 true + pull 仍执行拉远端 + syncStatus=success 不被 error 污染（D1-37）', async () => {
+    // 锁 fullSync line 104-105 分支：pushFromQueue 返 true（队列无 op 或全成功）时
+    // 走 `await pullChanges()` 正路径、return pushed(=true)，不进 `if (!pushed)` error 恢复分支。
+    // 该分支此前零直测（it8 只测 push 失败的 !pushed 分支），若未来误把 error 恢复逻辑
+    // 提到 if 分支外（无条件设 error），push 全成功也误显失败态——本护栏锁定正路径。
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    // 队列无 op + store 无脏项 → fullSync line86 enqueueDirtyAsOps 入 0 条 →
+    // pushFromQueue drainSyncOps 返空 → line136 `if (!rawOps.length) return true` → pushed=true
+    expect(await syncOpsCount()).toBe(0)
+
+    // 远端预置一条书签供 pull merge 进本地（验证正路径 pull 真执行）
+    const port = createMemorySyncPort({
+      sinceRows: {
+        bookmarks: [{
+          id: 'bm-clean-arrived', user_id: 'user-pp',
+          title: '正路径远端', url: 'https://clean.example', username: '', password: '',
+          notes: '', icon: '', category_id: CAT_UNCATEGORIZED, parent_id: null,
+          order: 0, use_count: 0, attributes: {}, is_expanded: false,
+          created_at_num: 1000, updated_at_num: 9000, deleted_at: null,
+        }],
+        sibling_groups: [], categories: [], custom_attributes: [],
+      },
+    })
+    setSyncRemotePort(port)
+    useSyncStore().setLastSyncAt(0)
+
+    const sync = useCloudSync()
+    const ok = await sync.fullSync()
+
+    // 正路径：fullSync 返 true（push 成功），pull 执行拉进本地
+    expect(ok).toBe(true)
+    expect(ds.bookmarks.some(b => b.id === 'bm-clean-arrived')).toBe(true)
+    // 正路径不设 error：syncStatus=success（pull 成功置位）、syncError=null
+    expect(useSyncStore().syncStatus).toBe('success')
+    expect(useSyncStore().syncError).toBe(null)
+  })
+
+  it('10 fullSync pushErr-falsy 边界：push 因未登录返 false 但 syncError 空→pull 后 `if (pushErr)` falsy 短路不恢复 error，syncStatus 不被强设失败（D1-37）', async () => {
+    // 锁 fullSync line 95-103 `if (!pushed)` 内 `if (pushErr)` 的 falsy 短路分支：
+    // pushFromQueue line129 `if (!userId) return false` 早返不设 syncError，
+    // fullSync 读到 pushErr=null → 不恢复 error 状态。锁定「仅在真有 push 错误信息时
+    // 才向用户报失败」语义——防未来误把 `if (pushErr)` 改成无条件 setSyncStatus('error')，
+    // 让无具体错误信息的 push 失败（如未登录早返）也误显失败态误导用户。该分支此前零直测。
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    // 显式预置 success 态：模拟「之前同步成功」，验证不会被 fullSync 强设 error
+    useSyncStore().setSyncStatus('success')
+    useSyncStore().setSyncError(null)
+    useSyncStore().setLastSyncAt(0)
+
+    // 清掉登录 userId → enqueueDirtyAsOps line80-81 早返不入队 + pushFromQueue line129 早返 false 不设 error
+    const auth = useAuthStore()
+    ;(auth as any).user = null
+    // port 仍预置一条远端（验证 pull 虽同样 userId 空早返不跑——net effect 状态不被污染）
+    const port = createMemorySyncPort({
+      sinceRows: {
+        bookmarks: [{
+          id: 'bm-anon', user_id: 'user-pp', title: '匿名不达', url: 'https://anon.example',
+          username: '', password: '', notes: '', icon: '', category_id: CAT_UNCATEGORIZED,
+          parent_id: null, order: 0, use_count: 0, attributes: {}, is_expanded: false,
+          created_at_num: 1000, updated_at_num: 9000, deleted_at: null,
+        }],
+        sibling_groups: [], categories: [], custom_attributes: [],
+      },
+    })
+    setSyncRemotePort(port)
+
+    const sync = useCloudSync()
+    const ok = await sync.fullSync()
+
+    // push 未登录返 false（pushed=false）→ fullSync 返 false
+    expect(ok).toBe(false)
+    // 关键不变量：未登录 push 早返无错误信息，fullSync 不向用户报失败
+    expect(useSyncStore().syncError).toBe(null)
+    expect(useSyncStore().syncStatus).not.toBe('error')
+    // pull 因同样 userId 空早返不跑 → 远端书签未进本地（佐证整体是干净的早返 no-op）
+    expect(ds.bookmarks.some(b => b.id === 'bm-anon')).toBe(false)
+  })
 })
 
 describe('syncPull 解锁态竞态（D1-4）', () => {
