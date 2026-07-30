@@ -142,12 +142,12 @@ interface GroupSearchItem {
 }
 
 /** 属性 id → 显示名；搜索索引构建与降级路径共用 */
-function _buildAttrNameMap(customAttributes: CustomAttribute[]): Map<string, string> {
+export function _buildAttrNameMap(customAttributes: CustomAttribute[]): Map<string, string> {
   return new Map(customAttributes.map(a => [a.id, a.name]))
 }
 
 /** 将勾选属性 id 映射为可搜的空格分隔名称串 */
-function _attrsToAttrNames(
+export function _attrsToAttrNames(
   attributes: Record<string, boolean> | undefined,
   attrNameMap: Map<string, string>,
 ): string {
@@ -258,7 +258,7 @@ function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bo
  *  L6 修复：旧实现仅匹配 title/url/notes/username 四字段，不含 attrNames（也缺拼音），
  *  与正常 Fuse 路径的 attrNames(权重 0.10) 范围不一致，降级时按自定义属性名搜不到对应书签。
  *  追加 attrNames 匹配，保持降级与正常路径覆盖范围一致（拼音是能力缺失，不再补）。 */
-function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: CustomAttribute[] = []): Set<string> {
+export function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: CustomAttribute[] = []): Set<string> {
   const q = query.trim().toLowerCase()
   const attrNameMap = _buildAttrNameMap(customAttributes)
   return new Set(
@@ -276,7 +276,7 @@ function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: 
   )
 }
 
-function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Record<string, Bookmark>): Set<string> {
+export function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Record<string, Bookmark>): Set<string> {
   const q = query.trim().toLowerCase()
   return new Set(
     groups
