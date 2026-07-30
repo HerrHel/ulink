@@ -40,6 +40,7 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { toast } from '../../lib/toast.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
+import { extractHostname } from './extractHostname.js'
 import type { SearchResultItem } from '../../lib/search.js'
 
 interface CommandItem {
@@ -112,7 +113,7 @@ const filtered = computed<CommandItem[]>(() => {
       id: 'b:' + r.id,
       label: r.title || '',
       icon: I.chevron,
-      hint: r.url ? (() => { try { return new URL(r.url.startsWith('http') ? r.url : 'https://' + r.url).hostname.replace(/^www\./, '') } catch { return '' } })() : '',
+      hint: extractHostname(r.url),
       section: 'bookmark' as const,
       action() { const bm = ds.bookmarkMap[r.id]; if (bm) { close(); openBookmark(bm) } },
     }))
