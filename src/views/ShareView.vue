@@ -76,6 +76,7 @@ import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead }
 import { safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
 import { buildShareEntries } from './buildShareEntries.js'
 import { buildItemListJsonLd } from './buildItemListJsonLd.js'
+import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
@@ -104,7 +105,8 @@ const groupIconSvg = computed(() => {
   const icon = group.value?.icon
   if (!icon || groupIconImg.value) return ''
   // 仅匹配 icons.ts 已知键；未知字符串不渲染（勿把任意串当 SVG 键回落 star）
-  return Object.prototype.hasOwnProperty.call(I, icon) ? I[icon] : ''
+  // 白名单严格判定（hasOwnProperty）抽到 resolveGroupIconSvg 纯函数，见单测护栏
+  return resolveGroupIconSvg(icon, I)
 })
 
 /** E2-003：分享页 notes 展示用白名单 HTML */
