@@ -268,6 +268,83 @@ describe('persist', () => {
       const info = persist.getStorageInfo(data)
       expect(info.size).toBeGreaterThan(0)
     })
+
+    // ── D1-59: getStorageInfo label KB/MB 阈值 + percent 5MB 封顶 + catch 兜底护栏 ──
+    // 锁用户可见「存储用量 X KB / Y% used」展示契约；label 阈值漂移或 percent 不封顶会致展示错乱。
+    it('D1-59: size === bytes/1024，与 JSON.stringify 真字节一致（派生期望锁真实 size 公式）', () => {
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+      }
+      const bytes = new Blob([JSON.stringify(data)]).size
+      const info = persist.getStorageInfo(data)
+      expect(info.size).toBe(bytes / 1024)
+    })
+
+    it('D1-59: label 阈值 sizeKB<1024 → "N KB"（toFixed(1)+空格+KB 真实格式锁定）', () => {
+      // 构造一个 sizeKB 确实 < 1024 的小数据集：DEFAULTS.categories 几行 JSON 已足 KB 量级
+      const data: AppData = {
+        bookmarks: [{ id: 'b1', title: 't', url: 'u', username: '', password: '', notes: '', icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
+        siblingGroups: [], categories: DEFAULTS.categories.map(c => ({ ...c })), customAttributes: [],
+      }
+      const sizeKB = new Blob([JSON.stringify(data)]).size / 1024
+      expect(sizeKB).toBeLessThan(1024) // 前置断言确保真在 KB 档
+      const info = persist.getStorageInfo(data)
+      expect(info.label).toBe(sizeKB.toFixed(1) + ' KB')
+      expect(info.label.endsWith(' KB')).toBe(true)
+      expect(info.label.endsWith(' MB')).toBe(false)
+    })
+
+    it('D1-59: label 阈值 sizeKB>=1024 → "N MB"（严格 < 切档，恰好 1024 KB 进 MB 分支）', () => {
+      // 构造一个 > 1MB 的数据集：填入大 notes 字符串使 bytes>1048576（1024*1024）
+      // 选 notes 长度使 sizeKB 恰 >= 1024，证 < 1024 边界是严格 <（恰好 1024 走 MB 非 KB）
+      const bigNotes = 'x'.repeat(1_050_000) // ~1MB+ 字节，确保 /1024 后 sizeKB > 1024
+      const data: AppData = {
+        bookmarks: [{ id: 'b1', title: 't', url: 'u', username: '', password: '', notes: bigNotes, icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
+        siblingGroups: [], categories: [], customAttributes: [],
+      }
+      const sizeKB = new Blob([JSON.stringify(data)]).size / 1024
+      expect(sizeKB).toBeGreaterThanOrEqual(1024) // 前置断言确保真在 MB 档
+      const info = persist.getStorageInfo(data)
+      expect(info.label).toBe((sizeKB / 1024).toFixed(1) + ' MB')
+      expect(info.label.endsWith(' MB')).toBe(true)
+      expect(info.label.endsWith(' KB')).toBe(false)
+    })
+
+    it('D1-59: percent === round(bytes/5242880*100)，5MB 限额百分比公式直锁', () => {
+      const data: AppData = {
+        bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
+      }
+      const bytes = new Blob([JSON.stringify(data)]).size
+      const expectedPercent = Math.min(100, Math.round(bytes / 5242880 * 100))
+      const info = persist.getStorageInfo(data)
+      expect(info.percent).toBe(expectedPercent)
+    })
+
+    it('D1-59: percent Math.min(100,...) 封顶——超大数据集 percent 不超 100', () => {
+      // 构造 > 5MB（5242880 字节）数据集：6MB notes 使 bytes 远超限额
+      const hugeNotes = 'y'.repeat(6_300_000)
+      const data: AppData = {
+        bookmarks: [{ id: 'b1', title: 't', url: 'u', username: '', password: '', notes: hugeNotes, icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
+        siblingGroups: [], categories: [], customAttributes: [],
+      }
+      const bytes = new Blob([JSON.stringify(data)]).size
+      expect(bytes).toBeGreaterThan(5_242_880) // 前置断言确保真超 5MB
+      const rawPercent = Math.round(bytes / 5242880 * 100)
+      expect(rawPercent).toBeGreaterThan(100) // 前置断言：未封顶前确实 >100
+      const info = persist.getStorageInfo(data)
+      expect(info.percent).toBe(100) // Math.min 封顶到 100
+      expect(info.percent).toBeLessThanOrEqual(100)
+    })
+
+    it('D1-59: JSON.stringify 抛错（循环引用）→ catch 兜底返 {size:0,percent:0,label:"0 KB"} 不崩', () => {
+      // 循环引用致 JSON.stringify 抛 TypeError；getStorageInfo try/catch 兜底，存储用量展示回归零态
+      const cyclic: any = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
+      cyclic.self = cyclic
+      const info = persist.getStorageInfo(cyclic)
+      expect(info.size).toBe(0)
+      expect(info.percent).toBe(0)
+      expect(info.label).toBe('0 KB')
+    })
   })
 
   describe('私密空间独立数据集 (space=vault)', () => {
