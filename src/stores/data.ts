@@ -62,7 +62,7 @@ interface DataState {
 }
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
-function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: T[], { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] }): T[] {
+export function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: T[], { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] }): T[] {
   for (const aid of activeAttrs) items = items.filter(i => i.attributes[aid])
   for (const aid of excludedAttrs) items = items.filter(i => !i.attributes[aid])
   return items
@@ -75,13 +75,39 @@ export function _cancelPendingHist() {
   _histDebounceData.clear()
 }
 
-type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
+/**
+ * 测试专用：模拟已 drain 待推送历史防抖；beforeEach 需 clear。
+ * 与 syncPending `__testPendingSync` 同口径——仅暴露填入/窥探/清两 Map 的最小面，
+ * _cancelPendingHist 逻辑一字未动。peekSize 供单测断言 cancel 前后两 Map 清空契约。
+ */
+export const __testHistDebounce = {
+  /** 手动填一个防抖 timer（fake timers 下返回真 timer id）+ 暂存 data，模拟 _saveLocalHistory 已布置防抖后态 */
+  seed(id: string, timer: ReturnType<typeof setTimeout>, data: Record<string, unknown> = {}) {
+    _histDebounceTimers.set(id, timer)
+    _histDebounceData.set(id, data)
+  },
+  /** 窥探两 Map 当前 size，供单测断言 _cancelPendingHist 清空契约 */
+  peekSize() {
+    return { timers: _histDebounceTimers.size, data: _histDebounceData.size }
+  },
+  /** 窥探某 id 的 timer/data 是否仍在（便于断言"清后该 id 消失"） */
+  has(id: string) {
+    return _histDebounceTimers.has(id) || _histDebounceData.has(id)
+  },
+  /** 兜底清两 Map（与 _cancelPendingHist 等价但不调 clearTimeout，给 beforeEach 用） */
+  clear() {
+    _histDebounceTimers.clear()
+    _histDebounceData.clear()
+  },
+}
+
+export type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
 
 /**
  * 经 id→实体 Map 定位数组下标（O(1) 查实体 + indexOf）。
  * map 与数组偶发不同步时回退 findIndex，保证 CRUD 不丢写。
  */
-function _indexOfById<T extends { id: string }>(
+export function _indexOfById<T extends { id: string }>(
   arr: T[], map: Record<string, T>, id: string,
 ): number {
   const item = map[id]
@@ -92,7 +118,7 @@ function _indexOfById<T extends { id: string }>(
   return arr.findIndex(x => x.id === id)
 }
 
-function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
+export function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
   const d = sortDir === 'asc' ? 1 : -1
   items.sort((a, b) => {
     // 置顶优先：pinnedAt 存在的项排最前，置顶项之间按当前排序模式排序

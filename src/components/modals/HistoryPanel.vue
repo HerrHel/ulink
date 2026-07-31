@@ -73,6 +73,8 @@ import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 import { showConfirm } from '../../lib/toast.js'
 import { diffVersions, type DiffField } from '../../lib/diffVersions.js'
+import { getPreview } from './getPreview.js'
+import { formatTime } from './formatTime.js'
 
 interface HistoryVersion {
   id: number
@@ -129,21 +131,6 @@ watch(() => props.open, async (isOpen) => {
     }
   }
 })
-
-function formatTime(iso: string): string {
-  const d = new Date(iso)
-  const now = Date.now()
-  const diff = now - d.getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前'
-  if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前'
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-}
-
-function getPreview(data: unknown): string {
-  const d = data as Record<string, unknown>
-  return (d.title || d.name || d.url || '').toString().slice(0, 50)
-}
 
 const diffFields = computed<DiffField[]>(() => {
   if (selectedIdx.value < 0 || diffCompareIdx.value < 0) return []

@@ -108,7 +108,7 @@ function _findBm(id: string): Bookmark | undefined { return useDataStore().bookm
 function _findGroup(id: string): SiblingGroup | undefined { return useDataStore().groupMap[id] }
 
 /** 检查置顶状态是否一致（都置顶或都不置顶） */
-function _samePinStatus(a: { id: string }, b: { id: string }): boolean {
+export function _samePinStatus(a: { id: string }, b: { id: string }): boolean {
   const ds = useDataStore()
   const aPinned = !!(ds.bookmarkMap[a.id]?.pinnedAt || ds.groupMap[a.id]?.pinnedAt)
   const bPinned = !!(ds.bookmarkMap[b.id]?.pinnedAt || ds.groupMap[b.id]?.pinnedAt)
@@ -116,7 +116,7 @@ function _samePinStatus(a: { id: string }, b: { id: string }): boolean {
 }
 
 /** swapOrder + 标记 dirty（确保排序变更可同步到云端）。返回 false 表示被置顶检查阻止 */
-function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }): boolean {
+export function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }): boolean {
   // 置顶项不能与非置顶项交换位置
   if (!_samePinStatus(a, b)) return false
   swapOrder(a, b)

@@ -40,7 +40,7 @@ const SEND_COOLDOWN_MS = 60_000
  * 设计前提：单轮连续失败 5 次即锁，锁期内拒绝新请求（穷举者无法在锁内继续推进计数）；
  * 锁到期清掉当前轮计数，但保留累计锁次数以决定下次锁时长。
  */
-function lockDurationFor(locksBefore: number): { lockMs: number; label: string } {
+export function lockDurationFor(locksBefore: number): { lockMs: number; label: string } {
   return locksBefore >= 1
     ? { lockMs: 300_000, label: '5 分钟' }
     : { lockMs: 30_000, label: '30 秒' }
@@ -69,7 +69,7 @@ const RATE_LIMIT_CODES = new Set([
 ])
 const RATE_LIMIT_MSG_RE = /(?:rate[ _-]?limit|once every\s+\d+\s+second|too many (?:requests|emails?)|稍候|过频繁|频繁)/i
 
-function _isRateLimitError(error: { code?: string; message?: string } | null | undefined): boolean {
+export function _isRateLimitError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false
   const code = typeof error.code === 'string' ? error.code.toLowerCase() : ''
   if (code && RATE_LIMIT_CODES.has(code)) return true

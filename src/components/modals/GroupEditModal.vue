@@ -44,9 +44,9 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { favicon, domain } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
+import { faviconUrl, domainName } from './groupEditUrl.js'
 import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } from '../../composables/domain/useGroup.js'
 import { EditorManager } from '../../lib/editor.js'
 
@@ -67,9 +67,6 @@ const geBookmarkList = computed(() => {
     .map(id => store.bookmarkMap[id])
     .filter(Boolean)
 })
-
-function faviconUrl(url: string) { return favicon(url || '') }
-function domainName(url: string) { return domain(url || '') }
 
 function onRemoveBm(bmId: string) {
   const gId = geForm.id || store.editingGeId

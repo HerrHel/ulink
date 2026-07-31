@@ -200,6 +200,86 @@ describe('searchWithHighlights', () => {
       expect(/[a-zA-Z]{6,}/.test(allText)).toBe(false)
     }
   })
+
+  // ── D2-2 护栏：group result 的 bookmarkIds 字段须精确保留原 group.bookmarkIds ──
+  // 优化方向：searchWithHighlights 内 446-448 行每次调用 new Map(groups.map) 重建
+  // groupBmIdsMap 供 O(1) 查 bookmarkIds。优化把它折叠进 Fuse 索引项 GroupSearchItem，
+  // 删掉热路径每键击一次的 Map 重建。此护栏锁定「bookmarkIds 字段精确保留原值」契约
+  // 防优化（把 bookmarkIds 折进 item）后丢字段或引用错位。
+  it('D2-2：组结果项 bookmarkIds 精确保留原 group.bookmarkIds（单/多/有序）', () => {
+    const results = searchWithHighlights(SAMPLE_BOOKMARKS, SAMPLE_GROUPS, '学习', BOOKMARK_MAP, EMPTY_ATTRS)
+    const g2 = results.find(r => r.id === 'g2' && r._isGroup)
+    expect(g2).toBeDefined()
+    // 原 SAMPLE_GROUPS g2.bookmarkIds = ['b2','b3']，须精确数组引用或深等
+    expect(g2!.bookmarkIds).toEqual(['b2', 'b3'])
+    const g1 = results.find(r => r.id === 'g1' && r._isGroup)
+    if (g1) {
+      // g1.bookmarkIds = ['b1']，单元素亦须精确
+      expect(g1!.bookmarkIds).toEqual(['b1'])
+    }
+  })
+
+  it('D2-2：group.bookmarkIds 边界（空数组 / undefined 防御）结果项保留原值', () => {
+    // schema catch 默认把缺 bookmarkIds 的组兜底成 []，但 search.ts 仍对 undefined 做防御
+    // （g.bookmarkIds || []）——护栏两端都锁：空数组→结果项空数组；undefined→结果项 undefined。
+    const groupsWithEmpty: SiblingGroup[] = [
+      // 空数组边界（schema 兜底后的真实形态）
+      { id: 'gE', name: '学习资源空', categoryId: 'edu', icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: [], notes: '', updatedAt: 0, useCount: 0 },
+      ...SAMPLE_GROUPS,
+    ]
+    const resultsE = searchWithHighlights(SAMPLE_BOOKMARKS, groupsWithEmpty, '学习资源空', BOOKMARK_MAP, EMPTY_ATTRS)
+    const gE = resultsE.find(r => r.id === 'gE' && r._isGroup)
+    if (gE) expect(gE!.bookmarkIds).toEqual([])
+    // undefined 防御：绕过 schema 类型，模拟未过校验的裸组（search.ts 的 || [] 与 item 透传都须兼容）
+    const groupsNoIds = [
+      { id: 'gX', name: '学习资源', categoryId: 'edu', icon: '', order: 0, isExpanded: false, attributes: {}, notes: '', updatedAt: 0, useCount: 0 },
+      ...SAMPLE_GROUPS,
+    ] as unknown as SiblingGroup[]
+    const results = searchWithHighlights(SAMPLE_BOOKMARKS, groupsNoIds, '学习', BOOKMARK_MAP, EMPTY_ATTRS)
+    const gX = results.find(r => r.id === 'gX' && r._isGroup)
+    if (gX) {
+      // _buildGroupSearchItems 透传 g.bookmarkIds 即 undefined；结果项须 undefined 而非 null/[]
+      expect(gX!.bookmarkIds).toBeUndefined()
+    }
+    // 同轮已有 bookmarkIds 的组不受影响（防优化漏处理导致全 undefined）
+    const g2 = results.find(r => r.id === 'g2' && r._isGroup)
+    if (g2) expect(g2!.bookmarkIds).toEqual(['b2', 'b3'])
+  })
+
+  // ── D2-2 benchmark 留数：热路径每次键击省去 new Map(groups.map(g => [id, bookmarkIds])) ──
+  // 优化前：每次 searchWithHighlights 调用在 446-448 行 new Map 建全部 groups 的 id→bookmarkIds 映射，
+  //        version 缓存命中（无 CRUD）后每键击仍重建一次，O(groups) 无谓分配 + 数组迭代。
+  // 优化后：bookmarkIds 折进 GroupSearchItem（version 缓存内一次构建，CRUD 才重建），
+  //        热路径直接 r.item.bookmarkIds 取，零额外分配。
+  // 本 benchmark 以 200 组规模 × 1000 次键击刻画版本命中态每次调用耗时，留数到 console 便于
+  // 后续回归对比。注意：微基准 CI 抖动大，不用硬阈值断言（两头过/不过而误导）；改用留数打印 +
+  // 下方"行为不变量"断言（bookmarkIds 精确保留）锁定算法层定性结论——真改善是「version 命中态
+  // 每次键击不再有 new Map(groups) 分配」，由结构层护栏（D2-2 行为测试）保证，非性能数字本身。
+  it('D2-2 benchmark 留数：200 组 × 1000 键击版本命中态每次调用耗时打印（非硬阈值）', () => {
+    const BIG_GROUPS: SiblingGroup[] = Array.from({ length: 200 }, (_, i) => ({
+      id: `gg${i}`, name: `组${i}资源`, categoryId: 'dev', icon: '', order: i,
+      isExpanded: false, attributes: {}, bookmarkIds: [`b${i % 3}`, `b${(i + 1) % 3}`],
+      notes: '', updatedAt: 0, useCount: 0,
+    }))
+    clearSearchCache()
+    // 让 _ensureGroupBase 建一次 version=1 缓存
+    searchWithHighlights(SAMPLE_BOOKMARKS, BIG_GROUPS, '资源', BOOKMARK_MAP, EMPTY_ATTRS, 8, 1)
+    // 版本=1 命中缓存态：连调 1000 次测每次增量构建成本（优化后应为零额外 Map 分配）
+    const N = 1000
+    const t0 = performance.now()
+    for (let i = 0; i < N; i++) {
+      searchWithHighlights(SAMPLE_BOOKMARKS, BIG_GROUPS, '资源', BOOKMARK_MAP, EMPTY_ATTRS, 8, 1)
+    }
+    const perCallUs = ((performance.now() - t0) / N) * 1000
+    console.log(`[D2-2 benchmark] 200 组规模版本命中态每次调用 ≈ ${perCallUs.toFixed(1)}μs (N=${N})`)
+    // 功能性断言：版本命中态下连调结果一致（防缓存被误清）
+    const r1 = searchWithHighlights(SAMPLE_BOOKMARKS, BIG_GROUPS, '资源', BOOKMARK_MAP, EMPTY_ATTRS, 8, 1)
+    expect(r1.length).toBeGreaterThan(0)
+    // 所命中的组结果 bookmarkIds 都应是长度 2 的数组（BIG_GROUPS 构造保证）
+    for (const r of r1) {
+      if (r._isGroup) expect(Array.isArray(r.bookmarkIds)).toBe(true)
+    }
+  })
 })
 
 describe('clearSearchCache', () => {

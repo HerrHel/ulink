@@ -136,15 +136,18 @@ interface GroupSearchItem {
   childUrl: string
   namePy: string
   childTitlePy: string
+  // D2-2：把 bookmarkIds 折进索引项，searchWithHighlights 热路径不再每次 new Map 重建。
+  // 仅供下游携带，不进 Fuse keys，不参与匹配；undefined 透传（见 _buildGroupSearchItems）。
+  bookmarkIds: string[] | undefined
 }
 
 /** 属性 id → 显示名；搜索索引构建与降级路径共用 */
-function _buildAttrNameMap(customAttributes: CustomAttribute[]): Map<string, string> {
+export function _buildAttrNameMap(customAttributes: CustomAttribute[]): Map<string, string> {
   return new Map(customAttributes.map(a => [a.id, a.name]))
 }
 
 /** 将勾选属性 id 映射为可搜的空格分隔名称串 */
-function _attrsToAttrNames(
+export function _attrsToAttrNames(
   attributes: Record<string, boolean> | undefined,
   attrNameMap: Map<string, string>,
 ): string {
@@ -195,6 +198,8 @@ function _buildGroupSearchItems(
       childUrl: childUrls.join(' '),
       namePy: _toPy(g.name || ''),
       childTitlePy: _toPy(ct),
+      // D2-2：透传原 bookmarkIds（g 无此字段时 undefined），供 searchWithHighlights O(1) 取用。
+      bookmarkIds: g.bookmarkIds,
     }
   })
 }
@@ -253,7 +258,7 @@ function _ensureGroupBase(groups: SiblingGroup[], bookmarkMap: Record<string, Bo
  *  L6 修复：旧实现仅匹配 title/url/notes/username 四字段，不含 attrNames（也缺拼音），
  *  与正常 Fuse 路径的 attrNames(权重 0.10) 范围不一致，降级时按自定义属性名搜不到对应书签。
  *  追加 attrNames 匹配，保持降级与正常路径覆盖范围一致（拼音是能力缺失，不再补）。 */
-function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: CustomAttribute[] = []): Set<string> {
+export function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: CustomAttribute[] = []): Set<string> {
   const q = query.trim().toLowerCase()
   const attrNameMap = _buildAttrNameMap(customAttributes)
   return new Set(
@@ -271,7 +276,7 @@ function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttributes: 
   )
 }
 
-function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Record<string, Bookmark>): Set<string> {
+export function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkMap: Record<string, Bookmark>): Set<string> {
   const q = query.trim().toLowerCase()
   return new Set(
     groups
@@ -352,7 +357,7 @@ export interface SearchResultItem {
   _divider?: string
 }
 
-function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {
+export function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {
   const segments: HighlightSegment[] = []
   let cursor = 0
   for (const [start, end] of indices) {
@@ -364,7 +369,7 @@ function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [
   return segments.length ? segments : [{ text, highlight: false }]
 }
 
-function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, string>): Record<string, HighlightSegment[]> {
+export function _extractHighlights(fuseResult: FuseResult, keyMap: Record<string, string>): Record<string, HighlightSegment[]> {
   const out: Record<string, HighlightSegment[]> = {}
   for (const match of fuseResult.matches || []) {
     if (!match.key || !match.indices?.length) continue
@@ -442,17 +447,14 @@ export function searchWithHighlights(
   }
   const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
 
-  // O(1) 查找组 bookmarkIds，避免 map 内 find 导致 O(n²)
-  const groupBmIdsMap = new Map<string, string[] | undefined>(
-    groups.map(g => [g.id, g.bookmarkIds])
-  )
-
+  // D2-2：bookmarkIds 已折进 GroupSearchItem（见 _buildGroupSearchItems），热路径不再每键击 new Map。
+  // Fuse 命中的 r.item 即同 version 缓存的组项，O(1) 直接取 bookmarkIds。
   const groupResults: SearchResultItem[] = grpResults.map(r => ({
     id: r.item.id,
     name: (r.item as GroupSearchItem).name,
     _isGroup: true,
     _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
-    bookmarkIds: groupBmIdsMap.get(r.item.id),
+    bookmarkIds: (r.item as GroupSearchItem).bookmarkIds,
     _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
   }))
 

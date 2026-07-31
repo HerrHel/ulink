@@ -73,7 +73,10 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { fetchPublicGroup, forkPublicGroup } from '../composables/domain/useDataShare.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
-import { fixUrl, domain, favicon, sanitizeReadonlyHTML, safeIconUrl } from '../utils.js'
+import { safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
+import { buildShareEntries } from './buildShareEntries.js'
+import { buildItemListJsonLd } from './buildItemListJsonLd.js'
+import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
@@ -102,7 +105,8 @@ const groupIconSvg = computed(() => {
   const icon = group.value?.icon
   if (!icon || groupIconImg.value) return ''
   // 仅匹配 icons.ts 已知键；未知字符串不渲染（勿把任意串当 SVG 键回落 star）
-  return Object.prototype.hasOwnProperty.call(I, icon) ? I[icon] : ''
+  // 白名单严格判定（hasOwnProperty）抽到 resolveGroupIconSvg 纯函数，见单测护栏
+  return resolveGroupIconSvg(icon, I)
 })
 
 /** E2-003：分享页 notes 展示用白名单 HTML */
@@ -113,15 +117,13 @@ const groupNotesHtml = computed(() => {
 })
 
 /**
- * 分享页书签列表预渲染条目：把 fixUrl/domain/favicon 对每条预计算一次，
- * 避免模板内（原 5 次 fixUrl + 2 次 favicon/icon + 1 次 domain）重复对同 url 调用。
- * 函数均为纯函数，预计算与原模板内联调用语义等价。
- * M5：图标只由 http(s) 书签 URL 派生，跨用户 b.icon 不可信。
+ * 分享页书签列表预渲染条目：预计算核抽至 src/views/buildShareEntries.ts（纯函数，
+ * 可直接单测锁定 fixUrl/domain/favicon 去重前后的等价性与 M5 安全兜底分支）。
+ * 把 fixUrl/domain/favicon 对每条预计算一次，避免模板内（原 5 次 fixUrl + 2 次
+ * favicon/icon + 1 次 domain）重复对同 url 调用。函数均为纯函数，预计算与原模板
+ * 内联调用语义等价。M5：图标只由 http(s) 书签 URL 派生，跨用户 b.icon 不可信。
  */
-const bookmarkEntries = computed(() => bookmarks.value.map(b => {
-  const safeUrl = fixUrl(b.url)
-  return { b, safeUrl, urlDomain: domain(b.url), icon: safeUrl ? favicon(safeUrl) : '' }
-}))
+const bookmarkEntries = computed(() => buildShareEntries(bookmarks.value))
 
 function backToApp() {
   // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识
@@ -201,20 +203,7 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
   setMetaByAttr('name', 'twitter:title', title)
   setMetaByAttr('name', 'twitter:description', desc)
   setCanonical(shareUrl)
-  setJsonLd('shareItemList', {
-    '@context': 'https://schema.org',
-    '@type': 'ItemList',
-    name: g.name || '分享组',
-    description: desc,
-    url: shareUrl,
-    numberOfItems: bms.length,
-    itemListElement: bms.map((b, i) => ({
-      '@type': 'ListItem',
-      position: i + 1,
-      name: b.title,
-      url: fixUrl(b.url),
-    })),
-  })
+  setJsonLd('shareItemList', buildItemListJsonLd(g, bms, shareUrl))
 }
 </script>
 

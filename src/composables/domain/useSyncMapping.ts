@@ -23,7 +23,7 @@ import { isThreePartCipher } from '../../crypto.js'
  * 还原出的对象会经 BookmarkSchema 的 z.union([z.string(), EncryptedPasswordSchema])
  * 校验，坏数据不会污染本地。
  */
-function _parseRemotePassword(raw: unknown): string | EncryptedPassword {
+export function _parseRemotePassword(raw: unknown): string | EncryptedPassword {
   if (!raw) return ''
   if (typeof raw !== 'string') return ''
   const s = raw
@@ -58,7 +58,7 @@ function _parseRemotePassword(raw: unknown): string | EncryptedPassword {
  * JSON 文本字符串，回程被当 string 原样存回本地，再被
  * autoMigratePassword 当 base64 解码成乱码，造成密码永久损坏。
  */
-function _serializePassword(p: unknown): string {
+export function _serializePassword(p: unknown): string {
   if (!p) return ''
   if (typeof p === 'string') return p
   // EncryptedPassword 对象：重组为三段串，与 encrypt() 输出格式一致

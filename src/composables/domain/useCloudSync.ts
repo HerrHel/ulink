@@ -41,6 +41,13 @@ export { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
 
+// 测试钩子：initialSync 的 _initialized 是模块级幂等守卫（首次拉取+回推后置 true，
+// 之后切账号/重登需 resetSyncState 配合重置它）。单测编排需逐用例从干净态起步，
+// 导出此无副作用钩子复位守卫（与 __testPendingSync/setSyncRemotePort 同属测试注入面）。
+export function __resetInitialSync(): void {
+  _initialized = false
+}
+
 export function useCloudSync() {
   const _auth = useAuth()
   const isLoggedIn = computed(() => _auth.isLoggedIn)

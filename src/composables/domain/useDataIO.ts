@@ -31,7 +31,7 @@ function _liveBookmarks(ds: ReturnType<typeof useDataStore>): Bookmark[] {
 }
 
 /** attributes → 标签名数组（用属性 name，找不到则去掉 tag_ 前缀） */
-function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[] {
+export function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): string[] {
   const tags: string[] = []
   const attrMap = ds.attributeMap
   for (const [id, on] of Object.entries(b.attributes || {})) {
@@ -179,7 +179,7 @@ export function importData(file: File) {
   reader.readAsText(file)
 }
 
-function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv' | null {
+export function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv' | null {
   const ext = filename.toLowerCase().split('.').pop()
   if (ext === 'json') return 'json'
   if (ext === 'html' || ext === 'htm') return 'html'
@@ -197,7 +197,7 @@ type DataStore = ReturnType<typeof useDataStore>
 interface MergeStats { imported: number; skipped: number }
 
 /** 合并分类（去重：同 ID 跳过；Zod 失败计入 skipped） */
-function _mergeCategories(ds: DataStore, categories: AppData['categories']): MergeStats {
+export function _mergeCategories(ds: DataStore, categories: AppData['categories']): MergeStats {
   let imported = 0, skipped = 0
   for (const c of categories) {
     if (!c.id || !c.name) continue
@@ -211,7 +211,7 @@ function _mergeCategories(ds: DataStore, categories: AppData['categories']): Mer
 }
 
 /** 合并属性（去重：同 ID 跳过） */
-function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttributes']): MergeStats {
+export function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttributes']): MergeStats {
   let imported = 0, skipped = 0
   for (const a of customAttributes) {
     if (!a.id || !a.name) continue
@@ -225,7 +225,7 @@ function _mergeAttributes(ds: DataStore, customAttributes: AppData['customAttrib
 }
 
 /** 合并书签（去重：同 ID 或同 URL 跳过） */
-function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
+export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
   let imported = 0, skipped = 0
   const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
   // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
@@ -265,7 +265,7 @@ function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeS
  * bookmarkIds 过滤未存活书签：导入源 id 可能指向被去重/Zod 跳过/缺 title·url 的项，
  * 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位，推云后远端同样悬空）。
  */
-function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
+export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroups']): MergeStats {
   let imported = 0, skipped = 0
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
@@ -360,8 +360,8 @@ export function parseRaindropJSON(data: unknown): Bookmark[] {
 }
 
 // ── 浏览器书签 HTML 解析器（Netscape Bookmark 格式）──
-
-function parseBookmarkHTML(html: string): Bookmark[] {
+// export 供 parseBookmarkHTML.test.ts 行护栏单测（纯加测试零逻辑改动）
+export function parseBookmarkHTML(html: string): Bookmark[] {
   const parser = new DOMParser()
   const doc = parser.parseFromString(html, 'text/html')
   const bookmarks: Bookmark[] = []
@@ -448,7 +448,7 @@ export function resolveCsvColumns(headers: string[]): CsvColumns {
   return { titleIdx: idx.title, urlIdx: idx.url, tagsIdx: idx.tags, notesIdx: idx.notes }
 }
 
-function parseCSV(text: string): Bookmark[] {
+export function parseCSV(text: string): Bookmark[] {
   const bookmarks: Bookmark[] = []
   const lines: string[][] = []
   let row: string[] = []
@@ -521,7 +521,7 @@ function parseCSV(text: string): Bookmark[] {
 
 // ── LinkVault 原生 JSON 验证 ──
 
-function validateImportData(data: unknown): string | null {
+export function validateImportData(data: unknown): string | null {
   const result = AppDataSchema.safeParse(data)
   if (!result.success) {
     const first = result.error.issues[0]

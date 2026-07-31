@@ -21,7 +21,8 @@ interface MigrationResult extends AppData {
  * 兼容旧盘：历史上 saveData 把进程计数写进 _dataVersion，会远大于 CURRENT。
  * 此时若无 _schemaVersion，则视为「已是当前 schema 语义未知」——仍跑幂等迁移并落 _schemaVersion。
  */
-function _readSchemaVersion(d: Partial<AppData>): number {
+// 仅 export 供护栏单测直测版本门控四分支（D1-30），纯加测试零逻辑改动同 _migrateTextNotes 口径
+export function _readSchemaVersion(d: Partial<AppData>): number {
   const schema = (d as { _schemaVersion?: number })._schemaVersion
   if (typeof schema === 'number' && Number.isFinite(schema)) return schema
   // 旧字段：仅当明显是「真实 schema 小整数」时信任；否则当 writeSeq 污染，强制再迁移
@@ -131,7 +132,8 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   return needsPersist
 }
 
-function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGroups: SiblingGroup[], group: SiblingGroup): string {
+// 仅 export 供护栏单测直测（D1-13），纯加测试零逻辑改动同 D2-4 同文件口径
+export function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGroups: SiblingGroup[], group: SiblingGroup): string {
   const ids: string[] = []
   const re = /\[([^\]]+)\]\(([a-zA-Z0-9]+)\)/g
   let m: RegExpExecArray | null

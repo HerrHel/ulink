@@ -4,6 +4,8 @@ import {
   handleListCardKeydown,
   listCardsInGrid,
   isNestedInteractiveTarget,
+  focusAdjacentListCard,
+  focusEdgeListCard,
 } from '../../composables/interaction/listCardKeyboard'
 
 function key(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
@@ -112,5 +114,147 @@ describe('handleListCardKeydown 导航', () => {
     const action = handleListCardKeydown(e, a, { canExpand: false, expanded: false })
     expect(action.type).toBe('primary')
     expect(spy).toHaveBeenCalled()
+  })
+})
+
+// D1-27：focusAdjacentListCard / focusEdgeListCard 底层纯函数边界契约护栏。
+// 此前仅经 handleListCardKeydown 间接覆盖（普通位置间移动），边界钳制 / same-pos 短路 /
+// current 不在集 / 空集 / null 入参 这些不变量无直接断言，靠实现口头维护。
+// 复用同文件 grid setup 模式（offsetParent mock + focus/scrollIntoView spy）。
+function makeGridWithCards(n: number): { grid: HTMLElement; cards: HTMLElement[] } {
+  const grid = document.createElement('div')
+  grid.id = 'cardGrid'
+  grid.className = 'card-grid list-view'
+  const cards: HTMLElement[] = []
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('div')
+    el.className = 'card'
+    el.setAttribute('role', 'listitem')
+    el.tabIndex = 0
+    Object.defineProperty(el, 'offsetParent', { get: () => grid, configurable: true })
+    el.focus = vi.fn()
+    el.scrollIntoView = vi.fn()
+    cards.push(el)
+    grid.appendChild(el)
+  }
+  document.body.appendChild(grid)
+  return { grid, cards }
+}
+
+describe('focusAdjacentListCard 相邻移动', () => {
+  let grid: HTMLElement
+  let a: HTMLElement
+  let b: HTMLElement
+  let c: HTMLElement
+
+  beforeEach(() => {
+    ;({ grid, cards: [a, b, c] } = makeGridWithCards(3))
+  })
+
+  afterEach(() => {
+    grid.remove()
+  })
+
+  it('delta=+1 从首张移到下一张并 focus + scrollIntoView，返回 true', () => {
+    expect(focusAdjacentListCard(a, 1)).toBe(true)
+    expect(b.focus).toHaveBeenCalledTimes(1)
+    expect(b.scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(a.focus).not.toHaveBeenCalled()
+  })
+
+  it('delta=-1 从中间移到上一张', () => {
+    expect(focusAdjacentListCard(b, -1)).toBe(true)
+    expect(a.focus).toHaveBeenCalled()
+  })
+
+  it('越界 delta 在末张被钳到末张（next===idx）→ false 不 focus', () => {
+    expect(focusAdjacentListCard(c, 5)).toBe(false)
+    expect(c.focus).not.toHaveBeenCalled()
+  })
+
+  it('越界 delta 在首张被钳到首张（next<0→0===idx）→ false 不 focus', () => {
+    expect(focusAdjacentListCard(a, -5)).toBe(false)
+    expect(a.focus).not.toHaveBeenCalled()
+  })
+
+  it('delta=0 → next===idx → false 不 focus（原地不触发焦点抖动）', () => {
+    expect(focusAdjacentListCard(b, 0)).toBe(false)
+    expect(b.focus).not.toHaveBeenCalled()
+  })
+
+  it('current 在 grid 之外（非卡片集中）→ listCardsInGrid 空集 → false 不 focus', () => {
+    const alien = document.createElement('div')
+    document.body.appendChild(alien) // 不在 #cardGrid 内 → listCardsInGrid 返空
+    expect(focusAdjacentListCard(alien, 1)).toBe(false)
+    alien.remove()
+  })
+
+  it('null current 不抛 → listCardsInGrid(null) 返空集 → false', () => {
+    expect(focusAdjacentListCard(null, 1)).toBe(false)
+    expect(focusAdjacentListCard(null, -1)).toBe(false)
+  })
+
+  it('空卡片集（grid 无 .card）→ false 不 focus', () => {
+    const emptyGrid = document.createElement('div')
+    emptyGrid.id = 'cardGrid'
+    document.body.appendChild(emptyGrid)
+    const lone = document.createElement('div')
+    lone.className = 'card'
+    lone.setAttribute('role', 'listitem')
+    Object.defineProperty(lone, 'offsetParent', { get: () => null, configurable: true })
+    emptyGrid.appendChild(lone) // offsetParent=null 被 listCardsInGrid filter 排除 → 空集
+    expect(focusAdjacentListCard(lone, 1)).toBe(false)
+    emptyGrid.remove()
+  })
+})
+
+describe('focusEdgeListCard 首尾跳转', () => {
+  let grid: HTMLElement
+  let a: HTMLElement
+  let c: HTMLElement
+
+  beforeEach(() => {
+    ;({ grid, cards: [a, , c] } = makeGridWithCards(3))
+  })
+
+  afterEach(() => {
+    grid.remove()
+  })
+
+  it('end 从首张跳到末张 c 并 focus + scrollIntoView，返回 true', () => {
+    expect(focusEdgeListCard(a, 'end')).toBe(true)
+    expect(c.focus).toHaveBeenCalledTimes(1)
+    expect(c.scrollIntoView).toHaveBeenCalledTimes(1)
+  })
+
+  it('start 从末张跳到首张 a', () => {
+    expect(focusEdgeListCard(c, 'start')).toBe(true)
+    expect(a.focus).toHaveBeenCalled()
+  })
+
+  it('current 已在目标 edge（el===current）→ false 不 focus（避免无谓聚焦抖动）', () => {
+    expect(focusEdgeListCard(a, 'start')).toBe(false)
+    expect(a.focus).not.toHaveBeenCalled()
+    expect(focusEdgeListCard(c, 'end')).toBe(false)
+    expect(c.focus).not.toHaveBeenCalled()
+  })
+
+  it('null current → listCardsInGrid(null) 返空集 → false 不抛', () => {
+    expect(focusEdgeListCard(null, 'start')).toBe(false)
+    expect(focusEdgeListCard(null, 'end')).toBe(false)
+  })
+
+  it('空卡片集 → false 不 focus', () => {
+    const emptyGrid = document.createElement('div')
+    emptyGrid.id = 'cardGrid'
+    document.body.appendChild(emptyGrid)
+    const lone = document.createElement('div')
+    lone.className = 'card'
+    lone.setAttribute('role', 'listitem')
+    Object.defineProperty(lone, 'offsetParent', { get: () => null, configurable: true })
+    emptyGrid.appendChild(lone)
+    expect(focusEdgeListCard(lone, 'start')).toBe(false)
+    expect(focusEdgeListCard(lone, 'end')).toBe(false)
+    emptyGrid.remove()
   })
 })
