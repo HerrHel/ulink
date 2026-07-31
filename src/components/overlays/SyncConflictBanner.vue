@@ -37,26 +37,18 @@ import type { SyncConflict } from '../../stores/sync.js'
 import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
 import { typeLabel } from './typeLabel.js'
+import { resolveConflictItemName } from './resolveConflictItemName.js'
 
 const sync = useCloudSync()
 const ds = useDataStore()
 
 function itemName(c: SyncConflict): string {
-  const d = c.local as Record<string, unknown>
-  if (c.type === 'bookmark') {
-    const bm = ds.bookmarkMap[c.id]
-    return bm?.title || (d?.title as string) || c.id
-  }
-  if (c.type === 'group') {
-    const g = ds.groupMap[c.id]
-    return g?.name || (d?.name as string) || c.id
-  }
-  if (c.type === 'category') {
-    const cat = ds.categoryMap[c.id]
-    return cat?.name || (d?.name as string) || c.id
-  }
-  const attr = ds.attributeMap[c.id]
-  return attr?.name || (d?.name as string) || c.id
+  return resolveConflictItemName(c, {
+    bookmarkMap: ds.bookmarkMap,
+    groupMap: ds.groupMap,
+    categoryMap: ds.categoryMap,
+    attributeMap: ds.attributeMap,
+  })
 }
 </script>
 
