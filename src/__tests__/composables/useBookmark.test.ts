@@ -130,9 +130,19 @@ vi.mock('../../lib/ai-classify.js', () => ({
   suggestAttributes: vi.fn(() => mockAi.suggestedAttrIds),
 }))
 
-vi.mock('../interaction/useKeyboardOps.js', () => ({
+vi.mock('../../composables/interaction/useKeyboardOps.js', () => ({
   pushNavState: vi.fn(),
 }))
+// d1-93：原工厂路径 '../interaction/useKeyboardOps.js' 相对测试文件解析到
+// src/__tests__/interaction/——不存在的物理文件，vi.mock 仅桩一个键为该虚拟路径的游离模块，
+// 与 useBookmark.ts:212 真实 import `from '../interaction/useKeyboardOps.js'`（相对被测源
+// 解析到 src/composables/interaction/useKeyboardOps.js）绝对路径不一致 → 桩不匹配 useBookmark
+// 内部 import，pushNavState 在 openBmModal 内走真实 history.pushState，且测试 import 该旧路径
+// 拿到非 spy 真实函数。改为相对测试文件解析到真实物理模块 '../../composables/interaction/...'，
+// 工厂桩键与 useBookmark.ts 真实 import 归一绝对路径一致 → 桩真正生效注入 useBookmark 内部 + 测试
+// import 同路径拿到同一桩 vi.fn()（vi.mocked 追认 spy）。本桩此前从未被任何用例断言故游离未生效污染
+// 既久无人觉察，本轮因 openBmModal pushNavState 护栏需断言首次暴露并修正（纯基建修正不动生产源码）。
+// 既往 138 用例不断 pushNavState 故改工厂路径无回归风险（已 worktree 单跑复核）。
 
 vi.mock('../ui/useIconPreview.js', () => ({
   previewIconUrl: vi.fn(),
@@ -161,6 +171,13 @@ const mockE2E = {
 
 
 import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit, saveFromExtension } from '../../composables/domain/useBookmark.js'
+// d1-93：openBmModal 的 A2-011 opening push 编排需直断 pushNavState 被调。
+// pushNavState 已被上方 vi.mock('../interaction/useKeyboardOps.js') 桩成 vi.fn()，
+// 该工厂路径相对被测源 useBookmark.ts（src/composables/domain/）解析到 src/composables/interaction/，
+// 与 useBookmark.ts:212 `import { pushNavState } from '../interaction/useKeyboardOps.js'` 同源归一，
+// 故这里同样按被测源相对路径 '../interaction/useKeyboardOps.js' import 取桩的 vi.fn() 断言句柄
+// （若用 '../../../composables/interaction/...' 解析到不同物理路径则拿到未桩真实模块报 not-a-spy —— d1-84 教训）。
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 // d1-83：saveFromExtension 的 E1-001 dataHydrated 守卫依赖 lib/dataReady.js 模块级门闩
 // （isDataHydrated 读模块单例 _dataHydrated，默认 false，跨测试不自动重置），
 // 用 __testMarkDataReady/__testResetDataReady 精确控制守卫分支；不 mock dataReady 以测真实门闩语义。
@@ -281,6 +298,76 @@ describe('useBookmark', () => {
       resetBmForm()
       openBmModal('b1')
       expect(mockUI.editingId).toBe('b1')
+    })
+
+    // d1-93：openBmModal 换扫法深挖断言浅——既有 6 用例只断 bmForm.isOpen/isEdit/title/url/id/username/
+    // notes/categoryId/attributes/editingId 共 10 字段，7 项最易被未来重构误改的真实隐特性零护栏：
+    // ① A2-011 opening push 编排 pushNavState 被调（浏览器导航栈 push，让后退可关 modal）
+    // ② ui.modals.bookmark=true 副作用（modal 打开唯一承载，与 bmForm.isOpen 双轨）
+    // ③ 新建态 ui.editingId=null（`editId || null` 守卫防误删 || null 致 undefined 污染 store）
+    // ④ 新建态 bmForm.parentId=null（`bm?.parentId || null` 守卫同源防 undefined）
+    // ⑤ ui.lastFocusedEl 捕获 document.activeElement（关闭后焦点恢复编排唯一承载）
+    // ⑥ 编辑有 icon 态 iconPreviewVisible/iconPreviewUrl/clearIconVisible 三字段初始化
+    //    （决定编辑书签时图标预览区展示什么已有图标 + 清图标按钮可见态）
+    // ⑦ logoPreview 三字段 + showPassword 强制重置（防上轮 saveBm/previewLogo 残值流到新表单）
+    // 全用 string password（base64 解码同步）避开 EncryptedPassword await 解密分支属 outward-facing
+    // 「编辑加密书签自动弹解锁」语义的 needs-user-review 边界外复杂 mock（守则#7 不硬凑）。
+    it('d1-93: calls pushNavState once (A2-011 opening nav-stack push)', async () => {
+      await openBmModal()
+      expect(vi.mocked(pushNavState)).toHaveBeenCalledTimes(1)
+    })
+
+    it('d1-93: sets ui.modals.bookmark=true (modal open core, previously unasserted)', async () => {
+      expect(mockUI.modals.bookmark).toBe(false)
+      await openBmModal()
+      expect(mockUI.modals.bookmark).toBe(true)
+    })
+
+    it('d1-93: new mode sets ui.editingId=null (not undefined)', async () => {
+      expect(mockUI.editingId).toBe(null)
+      await openBmModal()
+      expect(mockUI.editingId).toBe(null)
+    })
+
+    it('d1-93: new mode sets bmForm.parentId=null (not undefined)', async () => {
+      bmForm.parentId = 'should-be-cleared' as unknown as null
+      await openBmModal()
+      expect(bmForm.parentId).toBe(null)
+    })
+
+    it('d1-93: captures ui.lastFocusedEl from document.activeElement', async () => {
+      const el = document.createElement('input')
+      document.body.appendChild(el)
+      el.focus()
+      expect(document.activeElement).toBe(el)
+      expect(mockUI.lastFocusedEl).toBe(null)
+      await openBmModal()
+      expect(mockUI.lastFocusedEl).toBe(el)
+      document.body.removeChild(el)
+    })
+
+    it('d1-93: edit mode with icon initializes icon preview three fields', async () => {
+      const iconUrl = 'https://github.com/favicon.ico'
+      mockData.bookmarkMap['b1'] = {
+        id: 'b1', title: 'A', url: 'https://a.com', notes: '', username: '',
+        password: '', attributes: {}, icon: iconUrl, categoryId: 'cat1',
+      }
+      await openBmModal('b1')
+      expect(bmForm.iconPreviewVisible).toBe(true)
+      expect(bmForm.iconPreviewUrl).toBe(iconUrl)
+      expect(bmForm.clearIconVisible).toBe(true)
+    })
+
+    it('d1-93: new mode forcibly resets logoPreview three fields + showPassword to clear prior form residue', async () => {
+      bmForm.logoPreviewVisible = true
+      bmForm.logoPreviewUrl = 'https://favicon.example.com/old'
+      bmForm.logoPreviewText = 'old.example.com'
+      bmForm.showPassword = true
+      await openBmModal()
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      expect(bmForm.logoPreviewUrl).toBe('')
+      expect(bmForm.logoPreviewText).toBe('')
+      expect(bmForm.showPassword).toBe(false)
     })
   })
 
