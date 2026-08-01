@@ -146,7 +146,8 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark } from '../../composables/domain/useBookmark.js'
+import { debouncedSaveAppData } from '../../stores/app.js'
 import { suggestCategory as mockSuggestCategory, suggestAttributes as mockSuggestAttributes } from '../../lib/ai-classify.js'
 
 function resetBmForm() {
@@ -1100,5 +1101,117 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://example.com')
       expect(bmForm.logoPreviewText).toBe('example.com')
     })
+  })
+})
+
+// D1-79 useBookmark.ts:170 — openBookmark 打开书签弹新窗口编排护栏
+// BookmarkCard.vue visit/visitSub(line 183/192)、CommandPalette.vue(line 118)、SearchSuggest.vue(line 90)
+// 活跃生产消费方，「打开书签弹新窗口」用户可见行为唯一承载。
+// 编排含 S1 安全守卫（fixUrl 对 javascript:/data: 危险 scheme 返空串→早退阻止弹窗并 toast 提示）
+// + !bm?.url 空守卫 + useCount 递增持久化 + window.open。
+describe('openBookmark 打开书签弹新窗口编排', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    resetMockStore()
+    // openBookmark 调 window.open（jsdom 提供），置 spy 便于断言调用并阻真实弹窗
+    vi.spyOn(window, 'open').mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('A：bm=null 空守卫→早退零副作用（不 updateBookmark/不 save/不 open/不 toast）', () => {
+    openBookmark(null as any)
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('B-S1：fixUrl 返空串（javascript:/data: 危险 scheme）→toast 阻止打开且不 updateBookmark/不 open', async () => {
+    const bm: any = { id: 'b1', url: 'javascript:alert(1)', useCount: 3 }
+    // mockData.bookmarkMap 让真实路径可触；fixUrl mock 已默认对非 http 补 https，此处覆写返空触发安全守卫
+    const { fixUrl } = await import('../../utils.js')
+    ;(fixUrl as any).mockReturnValueOnce('')
+
+    openBookmark(bm)
+
+    const { toast } = await import('../../lib/toast.js')
+    expect(toast).toHaveBeenCalledWith('该链接地址不安全，已阻止打开', false)
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('C：正路径合法 https url→updateBookmark(useCount+1)+debouncedSaveAppData+window.open(safeUrl) 各一次', () => {
+    const bm: any = { id: 'b1', url: 'https://github.com/x/y', useCount: 5 }
+    mockData.bookmarkMap['b1'] = bm
+
+    openBookmark(bm)
+
+    expect(mockData.updateBookmark).toHaveBeenCalledTimes(1)
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 6 })
+    expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
+    expect(window.open).toHaveBeenCalledTimes(1)
+    expect(window.open).toHaveBeenCalledWith('https://github.com/x/y', '_blank')
+    // 正路径不弹 toast
+  })
+
+  it('D：useCount 缺省(undefined)→走 `||0` 兜底递增至 1（防 NaN 塌陷）', () => {
+    const bm: any = { id: 'b1', url: 'https://a.com', useCount: undefined }
+    mockData.bookmarkMap['b1'] = bm
+
+    openBookmark(bm)
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+  })
+
+  it('E：useCount=0 走 `||0` 兜底递增至 1（0 falsy 也走兜底而非 0+1=1 巧合同值但语义锁住）', () => {
+    const bm: any = { id: 'b1', url: 'https://a.com', useCount: 0 }
+    mockData.bookmarkMap['b1'] = bm
+
+    openBookmark(bm)
+
+    // 0 是合法值||(0) → 0+1=1；若误改成 `??0`(只不 null/undefined) 则 0 仍 0+1=1 同值，但边界直锁
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+  })
+
+  it('F：协议前缀 url(example.com)经 fixUrl 补 https→window.open 收到补全后的 safeUrl 非原 url', async () => {
+    const bm: any = { id: 'b1', url: 'example.com', useCount: 2 }
+    mockData.bookmarkMap['b1'] = bm
+    // fixUrl mock 默认：非 http 开头 → 补 'https://' → 'https://example.com'
+    openBookmark(bm)
+
+    expect(window.open).toHaveBeenCalledWith('https://example.com', '_blank')
+    // 直锁 open 用的是 fixUrl 后的 safeUrl，「安全过滤后才弹窗」核心契约
+    const { fixUrl } = await import('../../utils.js')
+    expect(fixUrl).toHaveBeenCalledWith('example.com')
+  })
+
+  it('G：危险 scheme 安全守卫早退在 updateBookmark 之前（守卫顺序敏感：useCount 不被递增）', async () => {
+    const bm: any = { id: 'b1', url: 'data:text/html,evil', useCount: 7 }
+    mockData.bookmarkMap['b1'] = bm
+    const { fixUrl } = await import('../../utils.js')
+    ;(fixUrl as any).mockReturnValueOnce('')
+
+    openBookmark(bm)
+
+    // 关键：守卫 return 在 updateBookmark 之前，故危险 scheme 不递增 useCount
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.updateBookmark).not.toHaveBeenCalledWith('b1', expect.anything())
+  })
+
+  it('H：bm.url 空串→!bm?.url 早退（空守卫优先于 fixUrl，不弹 toast 不递增）', async () => {
+    const bm: any = { id: 'b1', url: '', useCount: 2 }
+    // fixUrl('') 返 '' 也会进安全守卫分支；但 bm.url 空时更早在 if(!bm?.url) return 早退
+    // 直锁：空 url 不进 fixUrl 分支（更早 return），故连 toast「不安全」都不弹（守卫顺序）
+    openBookmark(bm)
+
+    const { toast } = await import('../../lib/toast.js')
+    expect(toast).not.toHaveBeenCalled()
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
   })
 })
