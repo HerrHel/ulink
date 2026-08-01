@@ -146,7 +146,7 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit } from '../../composables/domain/useBookmark.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { suggestCategory as mockSuggestCategory, suggestAttributes as mockSuggestAttributes } from '../../lib/ai-classify.js'
 
@@ -1213,5 +1213,131 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
     expect(toast).not.toHaveBeenCalled()
     expect(mockData.updateBookmark).not.toHaveBeenCalled()
     expect(window.open).not.toHaveBeenCalled()
+  })
+})
+
+// D1-81 useBookmark.ts:184 — visit 卡片点击分流到 openBookmark 的编排护栏
+// 活跃生产消费方：BookmarkCard.vue（卡片主体点击 → visit 打开书签）。
+// 「点卡片主体开书签 / 点卡片内编辑按钮·输入·contenteditable 区域不误开」用户可见交互分流唯一承载。
+// 编排含 4 守卫：① 可交互元素短路（e.target.closest 命中 button/input/.btn-xs/.card-actions/.group-body/
+// [contenteditable="true"]→return 不调 openBookmark）② bmId 取值优先级 id||DOM-data-id
+// ③ bmId 无效 return ④ 委托 openBookmark(bookmarkMap[bmId])（缺键→undefined→openBookmark 内 !url 早退兜底）
+describe('visit 卡片点击分流到 openBookmark', () => {
+  // 构造 jsdom 假元素 + 假事件：target.closest 行为可控，命中指定选择器返该元素否则 null。
+  // 多套内容：closest 命中可交互选择器返该元素 / 命中 .card[data-id] 返带 data-id 的卡片元素 / 未命中返 null。
+  function makeFakeEvent(target: { closest: (sel: string) => any } | null): any {
+    return { target }
+  }
+  function makeTargetWithInteractive(selector: string): { closest: (sel: string) => any } {
+    const el = { tagName: 'DIV' } as any
+    return {
+      closest(sel: string) {
+        // 命中传入的可交互选择器串即返该元素（模拟落在 button/input/contenteditable 等内）
+        return sel.includes(selector) ? el : null
+      },
+    } as any
+  }
+  function makeCardTarget(dataId: string | null): { closest: (sel: string) => any } {
+    const cardEl = { getAttribute: () => dataId } as any
+    return {
+      closest(sel: string) {
+        // 仅命中 .card[data-id] 选择器（卡片主体），其它（可交互）一律不命中
+        return sel.includes('.card') && sel.includes('data-id') ? cardEl : null
+      },
+    } as any
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    resetMockStore()
+    vi.spyOn(window, 'open').mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('A：e=null + id 参数正路径→委托 openBookmark（updateBookmark+save+window.open 各一次）', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(null, 'b1')
+
+    expect(mockData.updateBookmark).toHaveBeenCalledTimes(1)
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+    expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
+    expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
+  })
+
+  it('B：DOM 取 data-id 正路径（无 id 参数）→委托 openBookmark 传 bookmarkMap 命中对象', () => {
+    mockData.bookmarkMap['b2'] = { id: 'b2', url: 'https://b.com', useCount: 4 } as any
+    visit(makeFakeEvent(makeCardTarget('b2')), undefined)
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b2', { useCount: 5 })
+    expect(window.open).toHaveBeenCalledWith('https://b.com', '_blank')
+  })
+
+  it('C：e.target 落在 button（可交互元素）→短路不调 openBookmark（零副作用）', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(makeFakeEvent(makeTargetWithInteractive('button')), 'b1')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('D：e.target 落在 [contenteditable="true"]→短路不调 openBookmark', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(makeFakeEvent(makeTargetWithInteractive('contenteditable')), 'b1')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('E：可交互短路命中 .card-actions / .group-body 卡片内编辑/操作区→短路（点操作区不误开书签）', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(makeFakeEvent(makeTargetWithInteractive('card-actions')), 'b1')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('F：bmId 取到但 bookmarkMap 缺键→委托 openBookmark(undefined)→openBookmark 内 !bm?.url 早退兜底零副作用（visit 不崩）', () => {
+    visit(null, 'missing')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('G：无 id 参数 + DOM 无 data-id（e.target.closest 返 null）→bmId 取不到早退零副作用', () => {
+    const noDataIdCard = { getAttribute: () => null } as any
+    const target = {
+      closest(sel: string) {
+        return sel.includes('.card') && sel.includes('data-id') ? noDataIdCard : null
+      },
+    } as any
+    visit(makeFakeEvent(target), undefined)
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('H：id 参数优先于 DOM data-id（id|| 短路逻辑，防误改 DOM 覆盖显式 id）', () => {
+    mockData.bookmarkMap['b2'] = { id: 'b2', url: 'https://b.com', useCount: 1 } as any
+    // e.target.closest('.card[data-id]') 取到 'b1'，但传入 id='b2' 应优先
+    visit(makeFakeEvent(makeCardTarget('b1')), 'b2')
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b2', { useCount: 2 })
+    expect(window.open).toHaveBeenCalledWith('https://b.com', '_blank')
+  })
+
+  it('I：e.target 无 closest 方法（如文本节点经 ?. 链短路）→不抛且走 id 参数路径', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 2 } as any
+    // target 无 closest 属性：?.closest?. 返 undefined（falsy），不进可交互短路，bmId 走 id 参数
+    const targetWithoutClosest = {} as any
+    visit(makeFakeEvent(targetWithoutClosest), 'b1')
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 3 })
+    expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
   })
 })
