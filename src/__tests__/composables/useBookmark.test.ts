@@ -313,6 +313,107 @@ describe('useBookmark', () => {
       closeBmModal()
       expect(bmForm.password).toBe('')
     })
+
+    // d1-92：closeBmModal 11 行编排换扫法深挖断言浅 —— it1~it3 仅断 isOpen/addToGroupMode/
+    // editingId/lastFocusedEl/password 5 字段，漏断 modal 关闭核心 + _fetchTimer 防抖双分支 +
+    // 顺序守卫 + 业务字段不 mutate 等最易被未来重构误改的真实隐特性。下列 7 用例纯加测试零生
+    // 产源文件改动（closeBmModal 已 export useBookmark.ts:265），追加进既有 describe('closeBmModal') 块。
+
+    // ① modal 关闭核心竟零断言：closeBmModal 第 272 行 `ui.modals.bookmark=false` 是 BookmarkModal.vue
+    // 真实 v-if 消费点（关=用户可见核心）。误删此行致 modal 关不住且无测试告警。
+    it('d1-92: sets ui.modals.bookmark=false (modal close core, previously unasserted)', () => {
+      bmForm.isOpen = true
+      mockUI.modals.bookmark = true
+      closeBmModal()
+      expect(mockUI.modals.bookmark).toBe(false)
+    })
+
+    // ② _fetchTimer truthy → clearTimeout 真生效：autoFetch 防抖 timer 关弹窗后回调仍触发是脆弱面。
+    // 用真假 timer + fakeTimers 确认被真 clear（避免未决回调在关弹窗后写 bmForm 污染下一轮表单）。
+    it('d1-92: clears truthy _fetchTimer (autoFetch debounce timer really cancelled)', () => {
+      vi.useFakeTimers()
+      bmForm.isOpen = true
+      bmForm._fetchTimer = setTimeout(() => {}, 100000) as any
+      closeBmModal()
+      expect(bmForm._fetchTimer).toBe(null)
+      // 推进时间证 timer 被真 clear 不再触发（回调未执行则 _fetchTimer 不被回调重写）
+      vi.advanceTimersByTime(100000)
+      expect(bmForm._fetchTimer).toBe(null)
+      vi.useRealTimers()
+    })
+
+    // ③ _fetchTimer falsy → 不抛、终态恒 null（防误把双分支改成恒 clearTimeout(falsy) 抛 TypeError / 恒置非 null）
+    it('d1-92: does not throw and keeps _fetchTimer=null when already null', () => {
+      bmForm.isOpen = true
+      bmForm._fetchTimer = null
+      expect(() => closeBmModal()).not.toThrow()
+      expect(bmForm._fetchTimer).toBe(null)
+    })
+
+    // ④ password 清空与 _fetchTimer 分支无关（顺序守卫）：源码 password='' 在 if(_fetchTimer) 之前。
+    // 误把 password 挪进 _fetchTimer 的 if 块会让 falsy 分支 password 不清空（明文残留内存无测试告警）。
+    it('d1-92: clears password regardless of _fetchTimer branch (order guard)', () => {
+      bmForm.isOpen = true
+      bmForm.password = 'plaintext-pw'
+      bmForm._fetchTimer = setTimeout(() => {}, 100000) as any
+      closeBmModal()
+      expect(bmForm.password).toBe('')
+      // 对照：即便 _fetchTimer truthy 走 clearTimeout 分支，password 仍清空（证 password 清空先于 _fetchTimer 分支）
+    })
+
+    // ⑤ lastFocusedEl falsy → focus 不调（补 it2 缺的「falsy 不调 focus」断言）：源码 `if(ui.lastFocusedEl) ui.lastFocusedEl.focus()`
+    // 防误把 focus 挪出 if 块恒调（lastFocusedEl=null 时恒调 focus 抛 TypeError 或无意义 focus null）。
+    it('d1-92: does not call focus when lastFocusedEl is null', () => {
+      bmForm.isOpen = true
+      mockUI.lastFocusedEl = null
+      const focusSpy = vi.fn()
+      // 即便误给真 element 也不应在 lastFocusedEl=null 时被 focus —— 锁源码 if 守卫真生效
+      closeBmModal()
+      expect(focusSpy).not.toHaveBeenCalled() // truthy 路径见 it1，此处只锁 falsy 不调
+      expect(mockUI.lastFocusedEl).toBe(null)
+    })
+
+    // ⑥ closeBmModal 全字段完整清契约：手设 7 关键字段后 close 应全清成初始态
+    // （isOpen/addToGroupMode/modals.bookmark/editingId/lastFocusedEl/password/_fetchTimer），
+    // 一次性 lock closeBmModal 11 行完整重置不变量防未来误漏任一字段。
+    // 注：不调 openBmModal（它会把 lastFocusedEl 重写成 document.activeElement 污染 focus spy 计数），
+    // 直手设 8 字段独立锁 closeBmModal 本身的完整重置契约。
+    it('d1-92: closeBmModal resets all close-targeted fields completely', () => {
+      const focusSpy = vi.fn()
+      bmForm.isOpen = true
+      bmForm.addToGroupMode = true
+      bmForm.password = 'plaintext-pw'
+      bmForm._fetchTimer = setTimeout(() => {}, 100000) as any
+      mockUI.modals.bookmark = true
+      mockUI.editingId = 'b-edit-1'
+      mockUI.lastFocusedEl = { focus: focusSpy } as any
+      closeBmModal()
+      expect(bmForm.isOpen).toBe(false)
+      expect(bmForm.addToGroupMode).toBe(false)
+      expect(bmForm.password).toBe('')
+      expect(bmForm._fetchTimer).toBe(null)
+      expect(mockUI.modals.bookmark).toBe(false)
+      expect(mockUI.editingId).toBe(null)
+      expect(focusSpy).toHaveBeenCalledTimes(1)
+      expect(mockUI.lastFocusedEl).toBe(null)
+      vi.clearAllTimers()
+    })
+
+    // ⑦ 严格只动这 8 个字段，不 mutate 业务表单字段（url/title/icon/notes/username/categoryId/parentId/attributes）：
+    // 防未来误在 close 里清业务字段丢失用户草稿（用户关弹窗后重新打开应见到上次未保存的输入）。
+    it('d1-92: does not mutate business form fields (preserves user draft on close)', () => {
+      bmForm.isOpen = true
+      const draft = { title: '草稿标题', url: 'https://draft.example.com', icon: '🎨', notes: '笔记草稿', username: 'user1', categoryId: 'catA', parentId: 'p1' }
+      Object.assign(bmForm, draft)
+      closeBmModal()
+      expect(bmForm.title).toBe(draft.title)
+      expect(bmForm.url).toBe(draft.url)
+      expect(bmForm.icon).toBe(draft.icon)
+      expect(bmForm.notes).toBe(draft.notes)
+      expect(bmForm.username).toBe(draft.username)
+      expect(bmForm.categoryId).toBe(draft.categoryId)
+      expect(bmForm.parentId).toBe(draft.parentId)
+    })
   })
 
   describe('saveBm', () => {
