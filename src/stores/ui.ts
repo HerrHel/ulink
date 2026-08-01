@@ -8,6 +8,7 @@ import { CAT_ALL, UI_STATE_KEY } from '../config/constants.js'
 import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
+import { clampHistoryMax } from '../lib/historyMax.js'
 import { K_THEME_MODE, K_THEME_STYLE } from '../lib/theme.js'
 
 // ── 严格字面量类型 ──
@@ -261,7 +262,7 @@ export const useUIStore = defineStore('ui', {
         if (s.sortDir === 'asc' || s.sortDir === 'desc') this.sortDir = s.sortDir
         if (typeof s.groupsOnTop === 'boolean') this.groupsOnTop = s.groupsOnTop
         if (s.layoutMode === 'list' || s.layoutMode === 'grid' || s.layoutMode === 'mini-grid') this.layoutMode = s.layoutMode
-        if (typeof s.historyMax === 'number') this.historyMax = Math.min(30, Math.max(5, s.historyMax))
+        if (typeof s.historyMax === 'number') this.historyMax = clampHistoryMax(s.historyMax)
         if (s.searchQuery) this.searchQuery = s.searchQuery
         // 审计 R15：activeAttrs/excludedAttrs 不过滤已删除属性 id（与 detailCards 同根因）。
         // 若 UI_STATE_KEY 残留已删 attr id，_filterAttrs 后列表全空但 AttrChips 不显示 chip。
