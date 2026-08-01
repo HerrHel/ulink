@@ -132,6 +132,14 @@ vi.mock('../ui/useIconPreview.js', () => ({
   previewIconUrl: vi.fn(),
   clearIcon: vi.fn(),
 }))
+// d1-82：crypto.js 用 importActual 包裹，encrypt 为可被单例覆写一次的 vi.fn（默认调真实 actual.encrypt），
+// 保留 deriveKey/decrypt 真实（M20 用 `await import('../../crypto.js')` 拿真实 deriveKey 派生 key；
+// 引导解锁递归用例给真实 key 让 saveBm 内 encrypt 默认实现真实加密）。S6 格式异常/catch 用例用
+// mockResolvedValueOnce/mockRejectedValueOnce 覆写一次后自动回落默认实现，afterEach clearAllMocks 复位。
+vi.mock('../../crypto.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../crypto.js')>()
+  return { ...actual, encrypt: vi.fn(actual.encrypt) }
+})
 // S6：可控的 E2E store mock —— saveBm 的密码分支依赖 isE2EEnabled / isUnlocked / cryptoKey
 vi.mock('../../stores/e2e.js', () => ({
   useE2EStore: vi.fn(() => mockE2E),
@@ -147,6 +155,10 @@ const mockE2E = {
 
 
 import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit } from '../../composables/domain/useBookmark.js'
+// d1-82：拿 crypto.encrypt 引用，S6 格式异常/catch 用例用 vi.mocked(encrypt) 覆写一次返回值或抛错
+// （vi.mock 工厂虽运行时把 encrypt 替换为 vi.fn，但 TS 静态类型仍是真实签名故需 vi.mocked() 取 mock 类型）
+import { encrypt } from '../../crypto.js'
+const encryptMock = vi.mocked(encrypt)
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { suggestCategory as mockSuggestCategory, suggestAttributes as mockSuggestAttributes } from '../../lib/ai-classify.js'
 
@@ -188,6 +200,9 @@ function resetMockStore() {
   mockE2E.isE2EEnabled = false
   mockE2E.isUnlocked = false
   mockE2E.cryptoKey = null
+  // d1-82：清 P1 引导解锁队列残留（saveBm 内 e2eStore.pendingUnlock.push(resolve) 跨用例累积，
+  // 现有 352 行 P1 用例用 length>0 模糊断言避开污染，本轮精确 toBe(1) 需清空数组实例保引用）
+  mockE2E.pendingUnlock.length = 0
   // d1-78：每个用例重置 ai-classify 注入返回值到「无建议」默认态
   mockAi.suggestedCatId = null
   mockAi.suggestedAttrIds = []
@@ -437,6 +452,126 @@ describe('useBookmark', () => {
       expect(pw).not.toBe('super-secret-pw')
       expect(pw).not.toBe(btoa('super-secret-pw'))
     }, 15000)
+
+    // d1-82: saveBm 密码 E2E 加密编排 + P6 引导解锁递归链 + S6 加密输出格式契约校验多分支护栏
+    // （d1-81 pointer 明确点名：saveBm「有测试但断言浅」换扫法深挖，尤指密码 E2E 加密分支 + pendingUnlock
+    //  引导解锁 await 多分支此前是否充分拆单锁。grep 全测试目录证 S6 格式异常/catch、P1 取消/递归、
+    //  P1 临时释放锁、title 兜底 domain 六条真实护栏分支全零直测，非死号。）
+    it('S6: encrypt 输出非三段格式（缺段数）toast 输出格式异常且不保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = {} as CryptoKey
+      bmForm.title = 'FmtBad'
+      bmForm.url = 'https://fmt-bad.com'
+      bmForm.password = 'pw-fmt'
+      encryptMock.mockResolvedValueOnce('only.two' as any)
+      await saveBm()
+      expect(encryptMock).toHaveBeenCalledTimes(1)
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(mockData.updateBookmark).not.toHaveBeenCalled()
+      expect(toast).toHaveBeenCalledWith('密码加密失败：输出格式异常，已取消保存', false)
+    })
+
+    it('S6: encrypt 输出三段但某段为空 toast 输出格式异常且不保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = {} as CryptoKey
+      bmForm.title = 'FmtEmpty'
+      bmForm.url = 'https://fmt-empty.com'
+      bmForm.password = 'pw-empty'
+      encryptMock.mockResolvedValueOnce('a..c' as any) // 中段空 → parts[1] falsy
+      await saveBm()
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(toast).toHaveBeenCalledWith('密码加密失败：输出格式异常，已取消保存', false)
+    })
+
+    it('S6: encrypt 抛错走 catch toast 密码加密失败重试且不保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = {} as CryptoKey
+      bmForm.title = 'CatchBoom'
+      bmForm.url = 'https://catch-boom.com'
+      bmForm.password = 'pw-catch'
+      encryptMock.mockRejectedValueOnce(new Error('boom'))
+      await saveBm()
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(toast).toHaveBeenCalledWith('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+    })
+
+    it('P1: 引导解锁被取消 toast 保存已取消且不保存不递归', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'UnlockCancel'
+      bmForm.url = 'https://unlock-cancel.com'
+      bmForm.password = 'pw-unlock-cancel'
+      const p = saveBm()
+      await new Promise(r => setTimeout(r, 20))
+      expect(mockE2E.pendingUnlock.length).toBe(1)
+      // 解锁被取消：resolve(false)
+      const resolve = mockE2E.pendingUnlock.pop()!
+      resolve(false)
+      await p
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(mockData.updateBookmark).not.toHaveBeenCalled()
+      expect(encryptMock).not.toHaveBeenCalled() // 未解锁到加密分支即取消
+      expect(toast).toHaveBeenCalledWith('保存已取消', false)
+    })
+
+    it('P1: 引导解锁成功后解锁递归 saveBm 真实加密完成保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      const { deriveKey } = await import('../../crypto.js')
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey('d1-82-recur-master', salt)
+      // 初始：E2E 启用但未解锁
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'RecurEnc'
+      bmForm.url = 'https://recur-enc.com'
+      bmForm.password = 'pw-recur'
+      const p = saveBm()
+      await new Promise(r => setTimeout(r, 20))
+      expect(mockE2E.pendingUnlock.length).toBe(1)
+      // 解锁成功：先注入解锁态（isUnlocked + 真实 key），再 resolve(true) 触发递归走加密分支
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = key
+      const resolve = mockE2E.pendingUnlock.pop()!
+      resolve(true)
+      await vi.waitFor(async () => {
+        await p
+        expect(mockData.addBookmark).toHaveBeenCalledTimes(1)
+      })
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      expect(newBm.password).toEqual(expect.objectContaining({
+        encrypted: true,
+        salt: expect.any(String),
+        iv: expect.any(String),
+        data: expect.any(String),
+      }))
+      // 真实加密后明文不被外泄为 base64
+      const pw = newBm.password as any
+      expect(pw).not.toBe(btoa('pw-recur'))
+      // 弹窗已关闭（保存成功后 closeBmModal）
+      expect(bmForm.isOpen).toBe(false)
+      expect(toast).toHaveBeenCalledWith('书签已添加')
+    }, 15000)
+
+    it('title 空时回退 domain(url) 作为标题', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      bmForm.title = ''
+      bmForm.url = 'https://fallback-domain.com'
+      bmForm.password = ''
+      saveBm()
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      // utils.domain 被 mock 为去协议取 host，块 locked 验回退链（bmForm.title.trim()||domain(url)）
+      expect(newBm.title).toBe('fallback-domain.com')
+      expect(toast).toHaveBeenCalledWith('书签已添加')
+    })
   })
 
   describe('addSub', () => {
