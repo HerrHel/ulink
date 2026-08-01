@@ -59,6 +59,7 @@ import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { storageBarColorFor } from './storageBarColor.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
@@ -82,11 +83,7 @@ const storageInfo = computed(() => {
   try { return store.getStorageInfo() } catch { return null }
 })
 
-const storageBarColor = computed(() => {
-  if (!storageInfo.value) return 'var(--accent)'
-  const p = storageInfo.value.percent
-  return p > 90 ? 'var(--danger)' : p > 70 ? 'var(--warn)' : 'var(--accent)'
-})
+const storageBarColor = computed(() => storageBarColorFor(storageInfo.value?.percent))
 
 function selectCat(id: string) {
   uiStore.curCat = id
