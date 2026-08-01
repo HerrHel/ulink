@@ -625,6 +625,102 @@ describe('useBookmark', () => {
       const newBm = mockData.addBookmark.mock.calls[0][0]
       expect(newBm.parentId).toBe('parent-bm')
     })
+
+    // d1-91：换扫法深挖断言浅护栏——addSub 11 行编排此前 it1 仅断 4 字段，
+    // 7 行真实副作用（saveToGroup carry-over 清除 / openBmModal 调用 / icon 清空 / 两个 previewVisible 视觉态重置）
+    // 零护栏。
+    it('clears ui.saveToGroup carry-over before opening modal（防子书签误继承父的保存到组指示）', async () => {
+      // 故意污染 saveToGroup 残留态（模拟上一轮 saveBm「保存到组」遗留 → addSub 必须先清）
+      mockUI.saveToGroup = 'stale-group-id'
+      expect(mockUI.saveToGroup).toBe('stale-group-id')
+
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+
+      // saveToGroup 必须被 addSub 置 null（siblings 不应继承曾激活的保存到组指示）
+      expect(mockUI.saveToGroup).toBeNull()
+    })
+
+    it('saveToGroup 清除在 openBmModal 之前执行（顺序敏感：先清组指示再开表单）', async () => {
+      // openBmModal 会触发 ui.modals.bookmark=true（modals 开关在 mockUI.modals），
+      // addSub 必须把 saveToGroup=null 放在 openBmModal() 调用之前
+      mockUI.saveToGroup = 'g1'
+      // 调用前 modals.bookmark 应为 false
+      expect(mockUI.modals.bookmark).toBe(false)
+      addSub('p1')
+      // 调用后表单已开（openBmModal 执行了），且 saveToGroup 已清——两者都生效
+      // 证明两行副作用均真正执行（非被某短路跳过）
+      expect(bmForm.isOpen).toBe(true)
+      expect(mockUI.saveToGroup).toBeNull()
+    })
+
+    it('clears icon field 防图标预览区残影（上一轮 openBmModal 设的 icon 被 addSub 清空）', async () => {
+      // 故意污染 bmForm.icon 残值（模拟上一轮表单残留）
+      bmForm.icon = 'https://stale.example/old.ico'
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // icon 必须被清空（防 preview 区域展示上一书签图标残影）
+      expect(bmForm.icon).toBe('')
+    })
+
+    it('重置 clearIconVisible=false（清除图标按钮回到隐藏态）', async () => {
+      // 故意污染为 true（模拟上一轮有图标时按钮可见残留）
+      bmForm.clearIconVisible = true
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // clearIconVisible 必须重置回 false
+      expect(bmForm.clearIconVisible).toBe(false)
+    })
+
+    it('重置 iconPreviewVisible=false（图标预览区回到隐藏态防残影）', async () => {
+      // 故意污染为 true（模拟上一轮图标预览可见残留）
+      bmForm.iconPreviewVisible = true
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // iconPreviewVisible 必须重置回 false
+      expect(bmForm.iconPreviewVisible).toBe(false)
+    })
+
+    it('一次性锁定 7 字段全部重置完整契约（防未来误漏任一字段，标识 addSub 全重置不变量）', async () => {
+      // 全面污染 bmForm 所有 addSub 应重置的字段，模拟上一轮表单残留达最坏情况
+      bmForm.parentId = 'old-parent'
+      bmForm.categoryId = 'old-cat'
+      bmForm.username = 'old-user'
+      bmForm.password = 'old-pass'
+      bmForm.icon = 'old.ico'
+      bmForm.clearIconVisible = true
+      bmForm.iconPreviewVisible = true
+      // saveToGroup 也污染
+      mockUI.saveToGroup = 'old-group'
+
+      addSub('new-parent')
+
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // 一次性契约锁定：parentId 用入参、其余 4 字段恒空、2 视觉态恒 false、saveToGroup 恒 null
+      expect(bmForm.parentId).toBe('new-parent')
+      expect(bmForm.categoryId).toBe('')
+      expect(bmForm.username).toBe('')
+      expect(bmForm.password).toBe('')
+      expect(bmForm.icon).toBe('')
+      expect(bmForm.clearIconVisible).toBe(false)
+      expect(bmForm.iconPreviewVisible).toBe(false)
+      expect(mockUI.saveToGroup).toBeNull()
+    })
+
+    it('空 parentId 入参仍走完整重置路径（undefined 入参不抛，parentId 设 undefined 而非阻断）', async () => {
+      // 验证 addSub 对空入参的容错——不因 parentId 缺省跳过其余重置
+      bmForm.icon = 'stale.ico'
+      bmForm.clearIconVisible = true
+      mockUI.saveToGroup = 'g1'
+      expect(() => addSub('')).not.toThrow()
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // 空串入参：parentId 设为 ''（非阻断），其余重置照常执行
+      expect(bmForm.parentId).toBe('')
+      expect(bmForm.icon).toBe('')
+      expect(bmForm.clearIconVisible).toBe(false)
+      expect(mockUI.saveToGroup).toBeNull()
+      expect(bmForm.isOpen).toBe(true)
+    })
   })
 
   describe('deleteBookmarkWithUndo', () => {
