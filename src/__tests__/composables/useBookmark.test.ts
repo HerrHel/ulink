@@ -695,6 +695,110 @@ describe('useBookmark', () => {
       expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
       expect(mockData.siblingGroups[0].bookmarkIds).toContain('b1')
     })
+
+    // d1-85：换扫法深挖「有测试但断言浅」——deleteBookmarkWithUndo 内 undo 编排 + 恢复组 memberships
+    // 多分支此前零单断言：!bm 守卫早退 / skipConfirm 跳确认 / showConfirm 取消分支 / confirm 文案 title 兜底 /
+    // undo 回调 debouncedSaveAppData 持久化 + toast('已恢复') / undo 恢复级联后代 / 根 id 含在删集
+    it('d1-85: !bm 守卫早退零副作用——id 不在 bookmarkMap 立即 return 不误弹空 toast', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Exists', parentId: null }]
+      populateStore()
+      const { toastWithUndo, showConfirm } = await import('../../lib/toast.js')
+      const { debouncedSaveAppData } = await import('../../stores/app.js')
+      // 传一个不存在的 id
+      await deleteBookmarkWithUndo('nonexistent')
+      // 守卫 return：删集为空，全员零调用
+      expect(mockData.deleteBookmark).not.toHaveBeenCalled()
+      expect(toastWithUndo).not.toHaveBeenCalled()
+      expect(showConfirm).not.toHaveBeenCalled()
+      expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    })
+
+    it('d1-85: skipConfirm=true 跳过确认弹窗直接删除', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Solo', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { toastWithUndo, showConfirm } = await import('../../lib/toast.js')
+      await deleteBookmarkWithUndo('b1', true) // skipConfirm=true
+      // 跳过 showConfirm（不被调）但走 doDelete（删除 + toast）
+      expect(showConfirm).not.toHaveBeenCalled()
+      expect(mockData.deleteBookmark).toHaveBeenCalledWith('b1')
+      expect(toastWithUndo).toHaveBeenCalled()
+    })
+
+    it('d1-85: showConfirm 取消分支——用户点取消则零删除零 toast', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Solo', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { toastWithUndo, showConfirm } = await import('../../lib/toast.js')
+      const { debouncedSaveAppData } = await import('../../stores/app.js')
+      vi.mocked(showConfirm).mockResolvedValueOnce(false) // 用户点取消
+      await deleteBookmarkWithUndo('b1')
+      // 取消则 doDelete 不执行：零删除 / 零持久化 / 零 toast
+      expect(mockData.deleteBookmark).not.toHaveBeenCalled()
+      expect(debouncedSaveAppData).not.toHaveBeenCalled()
+      expect(toastWithUndo).not.toHaveBeenCalled()
+      // 书签仍是 active 态
+      expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
+    })
+
+    it('d1-85: confirm 文案对空 title 回退「未命名」', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: '', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { showConfirm } = await import('../../lib/toast.js')
+      await deleteBookmarkWithUndo('b1')
+      // 入参串应含「未命名」兜底而非空 title
+      expect(showConfirm).toHaveBeenCalledWith('确认删除书签「未命名」？')
+    })
+
+    it('d1-85: undo 回调触发 debouncedSaveAppData 持久化 + toast(已恢复) 提示', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'UndoPersist', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { toast } = await import('../../lib/toast.js')
+      const { debouncedSaveAppData } = await import('../../stores/app.js')
+      await deleteBookmarkWithUndo('b1')
+      // doDelete 内调一次 debouncedSaveAppData
+      const callsAfterDelete = vi.mocked(debouncedSaveAppData).mock.calls.length
+      expect(callsAfterDelete).toBeGreaterThanOrEqual(1)
+      // 触发 undo 回调
+      expect(mockToastWithUndo.undoFn).not.toBeNull()
+      mockToastWithUndo.undoFn!()
+      // undo 回调应再次触发持久化 + toast('已恢复')
+      const callsAfterUndo = vi.mocked(debouncedSaveAppData).mock.calls.length
+      expect(callsAfterUndo).toBe(callsAfterDelete + 1)
+      expect(toast).toHaveBeenCalledWith('已恢复')
+    })
+
+    it('d1-85: undo 回调恢复级联后代——b1+b2+b3 全部 restored', async () => {
+      mockData.bookmarks = [
+        { id: 'b1', title: 'P', parentId: null },
+        { id: 'b2', title: 'C1', parentId: 'b1' },
+        { id: 'b3', title: 'C2', parentId: 'b2' },
+      ]
+      mockData.siblingGroups = []
+      populateStore()
+      await deleteBookmarkWithUndo('b1')
+      // 三个全软删
+      expect(mockData.bookmarks.every((b: any) => b.deletedAt)).toBe(true)
+      expect(mockToastWithUndo.undoFn).not.toBeNull()
+      mockToastWithUndo.undoFn!()
+      // undo 后三个全恢复（不只恢复根，级联后代也恢复）
+      expect(mockData.bookmarks.every((b: any) => b.deletedAt === undefined)).toBe(true)
+      // 且三个都被 restoreBookmark 调过
+      expect(mockData.restoreBookmark).toHaveBeenCalledWith('b1')
+      expect(mockData.restoreBookmark).toHaveBeenCalledWith('b2')
+      expect(mockData.restoreBookmark).toHaveBeenCalledWith('b3')
+    })
+
+    it('d1-85: collectSubIds 含根 id——deleteBookmark 对根也被调', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Solo', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      await deleteBookmarkWithUndo('b1')
+      // 根 id 自身也在删集内（collectSubIds 含自身）
+      expect(mockData.deleteBookmark).toHaveBeenCalledWith('b1')
+    })
   })
 
   describe('previewLogo', () => {
