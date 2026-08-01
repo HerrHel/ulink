@@ -154,7 +154,11 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit, saveFromExtension } from '../../composables/domain/useBookmark.js'
+// d1-83：saveFromExtension 的 E1-001 dataHydrated 守卫依赖 lib/dataReady.js 模块级门闩
+// （isDataHydrated 读模块单例 _dataHydrated，默认 false，跨测试不自动重置），
+// 用 __testMarkDataReady/__testResetDataReady 精确控制守卫分支；不 mock dataReady 以测真实门闩语义。
+import { __testMarkDataReady, __testResetDataReady } from '../../lib/dataReady.js'
 // d1-82：拿 crypto.encrypt 引用，S6 格式异常/catch 用例用 vi.mocked(encrypt) 覆写一次返回值或抛错
 // （vi.mock 工厂虽运行时把 encrypt 替换为 vi.fn，但 TS 静态类型仍是真实签名故需 vi.mocked() 取 mock 类型）
 import { encrypt } from '../../crypto.js'
@@ -1474,5 +1478,143 @@ describe('visit 卡片点击分流到 openBookmark', () => {
 
     expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 3 })
     expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
+  })
+})
+
+// d1-83：saveFromExtension 扩展端「一键静默保存书签」入口编排护栏。
+// useBookmark.ts:545-597 编排链：E1-001 dataHydrated 守卫闭门闩 → S2 fixUrl 危险scheme 拒存
+// → exact 重复去重 → newBookmarkId + order=nextBookmarkOrder 防抖动 → addBookmark + saveAppData
+// → toastWithUndo「已保存到书签」撤销编排（撤销时 deleteBookmark + debouncedSaveAppData + toast「已撤销」）。
+// 既有 coverage：dataIO.test.ts:184 仅 1 用例锁 order 唯一性 happy path，安全面/守卫/去重/撤销编排零护栏。
+// 依赖 lib/dataReady.js 模块级门闩（未 mock，测真实 isDataHydrated 语义）+ lib/newId.js 真实 newBookmarkId。
+// mockToastWithUndo.undoFn 捕获撤销回调（同 d1-80/d1-71 既有范本，toast.js mock 第 100 行）。
+describe('saveFromExtension 扩展端一键静默保存书签编排', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    resetMockStore()
+    // E1-001 门闩每用例复位为 false 基态（模块单例跨用例不自动重置）；用例内按需 mark ready
+    __testResetDataReady()
+  })
+
+  afterEach(() => {
+    // 还原门闩到 false，防跨 describe 污染（saveBm/addSub 等块不依赖门闩，但门闩若被本块某用例
+    // mark 完成 left true，跨 describe 仍持久，故按用例 afterEach 复位为保守基态）
+    __testResetDataReady()
+  })
+
+  it('A：E1-001 未 hydrate 守卫早退——toast「数据尚未就绪」+ return false，不 fixUrl/不 duplicate/不 add/不 save/不 undo', async () => {
+    const { toast } = await import('../../lib/toast.js')
+    const res = saveFromExtension('https://a.example', 'A')
+    expect(res).toBe(false)
+    expect(toast).toHaveBeenCalledWith('数据尚未就绪，请稍后重试', false)
+    // 守卫在 fixUrl 之前：危险 scheme 此时不应触 fixUrl（顺序敏感）
+    expect(mockData.addBookmark).not.toHaveBeenCalled()
+  })
+
+  it('B：S2 fixUrl 危险scheme 拒存（核心安全面）——fixUrl 返空 → toast「无法保存该链接」+ return false，不 duplicate/add/save/undo', async () => {
+    __testMarkDataReady()
+    const { toast } = await import('../../lib/toast.js')
+    const { saveAppData } = await import('../../stores/app.js')
+    // fixUrl mock 默认对 http 前缀透传、空串/无 http 前缀补 https；这里覆写一次返空串模拟
+    // danger scheme（javascript:/data:）经 fixUrl 安全过滤后得空串
+    const { fixUrl } = await import('../../utils.js')
+    vi.mocked(fixUrl).mockReturnValueOnce('')
+    const res = saveFromExtension('javascript:alert(1)', 'B')
+    expect(res).toBe(false)
+    expect(toast).toHaveBeenCalledWith('无法保存该链接', false)
+    expect(mockData.addBookmark).not.toHaveBeenCalled()
+    expect(saveAppData).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(mockToastWithUndo.undoFn).toBeNull()
+  })
+
+  it('C：exact 重复去重——现存同 url 书签 → toast「该网址已存在书签「<title>」」+ return false，不 add/save/undo', async () => {
+    __testMarkDataReady()
+    const { toast } = await import('../../lib/toast.js')
+    mockData.bookmarks.push({ id: 'dup', title: '已存在', url: 'https://dup.example' } as any)
+    const res = saveFromExtension('https://dup.example', 'C')
+    expect(res).toBe(false)
+    // exact.title→「已存在」，message 含书签名
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('已存在'), false)
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('该网址已存在书签'), false)
+    expect(mockData.addBookmark).not.toHaveBeenCalled()
+  })
+
+  it('D：正路径合法 https——return true + addBookmark(url=safeUrl) + saveAppData + toastWithUndo「已保存到书签」+ undo 回调注册', async () => {
+    __testMarkDataReady()
+    const { saveAppData } = await import('../../stores/app.js')
+    const { toastWithUndo } = await import('../../lib/toast.js')
+    const res = saveFromExtension('https://ok.example', '标题D')
+    expect(res).toBe(true)
+    expect(mockData.addBookmark).toHaveBeenCalledTimes(1)
+    const added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.url).toBe('https://ok.example')
+    expect(typeof added.id).toBe('string')
+    expect(added.id).toBeTruthy()
+    expect(saveAppData).toHaveBeenCalledTimes(1)
+    expect(toastWithUndo).toHaveBeenCalledWith('已保存到书签', expect.any(Function))
+    expect(mockToastWithUndo.undoFn).not.toBeNull()
+  })
+
+  it('E：title 兜底链 (title||dm).trim()||dm——空 title 用 domain；纯空白 title trim 后空亦用 domain', () => {
+    __testMarkDataReady()
+    // 空 title（undefined）→ domain 'whitespace.example'
+    saveFromExtension('https://whitespace.example', undefined as any)
+    let added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.title).toBe('whitespace.example')
+    // 纯空白 title 经 trim()→''，|| dm 兜底用 domain 'ws2.example'
+    saveFromExtension('https://ws2.example', '   ')
+    added = mockData.addBookmark.mock.calls[1][0] as any
+    expect(added.title).toBe('ws2.example')
+  })
+
+  it('F：order=nextBookmarkOrder 防抖动——addBookmark 入参 order === mockData.nextBookmarkOrder() 返回值（非 length）', () => {
+    __testMarkDataReady()
+    // nextBookmarkOrder mock 默认 reduce(-1)+1=0（mockData.bookmarks 空时）；注入一个返回值锁契约
+    mockData.nextBookmarkOrder.mockReturnValueOnce(42)
+    saveFromExtension('https://order.example', 'F')
+    const added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.order).toBe(42)
+  })
+
+  it('G：addBookmark 入参字段契约——categoryId=CAT_UNCATEGORIZED / parentId=null / useCount=0 / attributes={}/isExpanded=false / icon 含 favicon domain / notes 透传', () => {
+    __testMarkDataReady()
+    saveFromExtension('https://fields.example', 'G', '备注G')
+    const added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(added.parentId).toBeNull()
+    expect(added.useCount).toBe(0)
+    expect(added.attributes).toEqual({})
+    expect(added.isExpanded).toBe(false)
+    expect(added.notes).toBe('备注G')
+    expect(added.icon).toContain('fields.example')
+    expect(added.icon).toContain('favicon')
+    expect(typeof added.createdAt).toBe('number')
+    expect(added.createdAt).toBe(added.updatedAt)
+  })
+
+  it('H：undo 撤销回调——mockToastWithUndo.undoFn() 触发 deleteBookmark(addedId)+debouncedSaveAppData()+toast「已撤销」', async () => {
+    __testMarkDataReady()
+    const { toast } = await import('../../lib/toast.js')
+    saveFromExtension('https://undo.example', 'H')
+    const addedId = (mockData.addBookmark.mock.calls[0][0] as any).id
+    expect(mockData.deleteBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    // 触发撤销
+    mockToastWithUndo.undoFn!()
+    expect(mockData.deleteBookmark).toHaveBeenCalledTimes(1)
+    expect(mockData.deleteBookmark).toHaveBeenCalledWith(addedId)
+    expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
+    expect(toast).toHaveBeenCalledWith('已撤销')
+  })
+
+  it('I：守卫顺序敏感——未 hydrate 早退在 S2 fixUrl 之前（danger scheme 但未 hydrate 走 E1-001 守卫不触 S2）', async () => {
+    const { toast } = await import('../../lib/toast.js')
+    // 未 mark ready + 危险 scheme：应走 E1-001 守卫 toast「数据尚未就绪」，非 S2 toast「无法保存该链接」
+    const res = saveFromExtension('javascript:alert(1)', 'I')
+    expect(res).toBe(false)
+    expect(toast).toHaveBeenCalledWith('数据尚未就绪，请稍后重试', false)
+    expect(toast).not.toHaveBeenCalledWith('无法保存该链接', false)
   })
 })
