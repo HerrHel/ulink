@@ -112,6 +112,18 @@ vi.mock('../../utils.js', () => ({
   autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
 }))
 
+// d1-78：可控的 ai-classify mock —— autoFetchFromUrl 编排护栏要锁住守卫链/防抖/字段变换
+// 契约，而非 ai-classify 内部关键词命中（后者自有 ai-classify.test.ts）；用可注入返回值容器
+// 供用例切换 suggestCategory/suggestAttributes 的输出
+const mockAi = {
+  suggestedCatId: null as string | null,
+  suggestedAttrIds: [] as string[],
+}
+vi.mock('../../lib/ai-classify.js', () => ({
+  suggestCategory: vi.fn(() => mockAi.suggestedCatId),
+  suggestAttributes: vi.fn(() => mockAi.suggestedAttrIds),
+}))
+
 vi.mock('../interaction/useKeyboardOps.js', () => ({
   pushNavState: vi.fn(),
 }))
@@ -134,7 +146,8 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl } from '../../composables/domain/useBookmark.js'
+import { suggestCategory as mockSuggestCategory, suggestAttributes as mockSuggestAttributes } from '../../lib/ai-classify.js'
 
 function resetBmForm() {
   Object.assign(bmForm, {
@@ -174,6 +187,9 @@ function resetMockStore() {
   mockE2E.isE2EEnabled = false
   mockE2E.isUnlocked = false
   mockE2E.cryptoKey = null
+  // d1-78：每个用例重置 ai-classify 注入返回值到「无建议」默认态
+  mockAi.suggestedCatId = null
+  mockAi.suggestedAttrIds = []
 }
 
 describe('useBookmark', () => {
@@ -918,6 +934,171 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       bmForm.aiApplied = false
       dismissAiSuggestions()
       expect(bmForm.aiApplied).toBe(true)
+    })
+  })
+
+  // d1-78: autoFetchFromUrl 编排护栏 —— 唯一生产消费方 BookmarkModal.vue onUrlInput 触发，
+  // 决定「输入 url 后自动填的 title/icon/AI 建议」用户可见行为。锁守卫链 + 500ms 防抖 +
+  // 字段变换隐特性 + AI 守卫 `!isEdit && !aiApplied` + aiSuggestCatId 仅 !categoryId 时写 +
+  // aiSuggestAttrIds 过滤 !attributes[id]（已采纳不重复建议）。ai-classify 本体已自有
+  // ai-classify.test.ts，本块 mock 其返回值锁编排契约而非耦合关键词命中。
+  describe('autoFetchFromUrl', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('空 url 早退：不布 timer 且 _fetchTimer 仍为 null', () => {
+      bmForm.url = '   '
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).toBeNull()
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+    })
+
+    it('url 长度 <4 早退：不布 timer（trim 后 raw.length 守卫）', () => {
+      bmForm.url = 'abc'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).toBeNull()
+      // 4 字符以下直接 return，不进 setTimeout 编排
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+    })
+
+    it('合法 url 布防抖 timer：500ms 未到不执行编排（title 仍空）', () => {
+      bmForm.url = 'https://github.com'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).not.toBeNull()
+      expect(bmForm.title).toBe('')
+      vi.advanceTimersByTime(499)
+      expect(bmForm.title).toBe('')
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+    })
+
+    it('到 500ms 触发编排：title 空则填充经去 www + 取首段 + 首字母大写变换', () => {
+      bmForm.url = 'www.github.com'
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 真实隐特性直锁：replace(/^www\./) → 'github.com'，split('.')[0] → 'github'，
+      // charAt(0).toUpperCase() → 'G'，slice(1) → 'ithub'，拼 'Github'
+      expect(bmForm.title).toBe('Github')
+    })
+
+    it('到 500ms：title 已存在不被自动覆盖（仅空时填）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.title = 'My Existing Title'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('My Existing Title')
+    })
+
+    it('到 500ms：icon 空时填 favicon(url) 且同步置 iconPreviewVisible/Url/clearIconVisible', () => {
+      bmForm.url = 'https://example.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // favicon mock 返回 'https://favicon.example.com/<url>'
+      expect(bmForm.icon).toBe('https://favicon.example.com/https://example.com')
+      expect(bmForm.iconPreviewVisible).toBe(true)
+      expect(bmForm.iconPreviewUrl).toBe(bmForm.icon)
+      expect(bmForm.clearIconVisible).toBe(true)
+    })
+
+    it('到 500ms：icon 已存在不被覆盖（仅空时填，iconPreviewUrl 不被改）', () => {
+      bmForm.url = 'https://example.com'
+      bmForm.icon = 'existing-icon-url'
+      bmForm.iconPreviewUrl = 'existing-preview'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.icon).toBe('existing-icon-url')
+      expect(bmForm.iconPreviewUrl).toBe('existing-preview')
+    })
+
+    it('AI 守卫：isEdit=true 时 500ms 后不调 suggestCategory/suggestAttributes', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.isEdit = true
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('AI 守卫：aiApplied=true 时 500ms 后不调 suggest（防重复建议）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.aiApplied = true
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('新建未应用：suggestCategory 非空且 categoryId 空时写入 aiSuggestCatId', () => {
+      bmForm.url = 'https://github.com'
+      mockAi.suggestedCatId = 'cat_dev'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 编排顺序真实特性：title 填充分支先于 AI 建议分支执行，故 suggestCategory 入参的 title
+      // 是已填好的 'Github'（github.com → 去首段首字母大写）而非初始空串
+      expect(mockSuggestCategory).toHaveBeenCalledWith('https://github.com', 'Github', mockData.categories)
+      expect(bmForm.aiSuggestCatId).toBe('cat_dev')
+    })
+
+    it('新建未应用 + categoryId 已有：suggestCategory 仍调但不覆盖 categoryId（不写 aiSuggestCatId）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.categoryId = 'existing-cat'
+      mockAi.suggestedCatId = 'cat_dev'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // suggestCategory 照调（编辑模式/已应用才在外层守卫拦截，categoryId 是否已有在内层判定）
+      expect(mockSuggestCategory).toHaveBeenCalled()
+      // 但 categoryId 已有，catId 不写入 aiSuggestCatId
+      expect(bmForm.aiSuggestCatId).toBeNull()
+    })
+
+    it('suggestAttributes 非空：写入 aiSuggestAttrIds 且过滤掉已采纳（!attributes[id]）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.attributes = { 'attr_kept': true }  // 已采纳的不应重复建议
+      mockAi.suggestedAttrIds = ['attr_kept', 'attr_new1', 'attr_new2']
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 编排顺序：title 已先被填成 'Github'，故 suggestAttributes 入参 title='Github'
+      expect(mockSuggestAttributes).toHaveBeenCalledWith('https://github.com', 'Github', mockData.customAttributes)
+      expect(bmForm.aiSuggestAttrIds).toEqual(['attr_new1', 'attr_new2'])
+    })
+
+    it('suggestAttributes 返回空数组：aiSuggestAttrIds 仍被赋空数组（length 守卫不写入）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.aiSuggestAttrIds = ['stale']  // 旧残留应被本轮清掉
+      mockAi.suggestedAttrIds = []
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 源码 `if (attrIds.length)` 守卫：空数组不进赋值分支，故 stale 不被清
+      expect(bmForm.aiSuggestAttrIds).toEqual(['stale'])
+    })
+
+    it('再次输入先 clearTimeout 旧 timer：旧编排不再触发（new url 编排覆盖）', () => {
+      bmForm.url = 'https://first.com'
+      autoFetchFromUrl()
+      const firstTimer = bmForm._fetchTimer
+      expect(firstTimer).not.toBeNull()
+      // 第二次输入不同 url，先清旧 timer
+      bmForm.url = 'https://second.com'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).not.toBe(firstTimer)
+      // 仅推进 500ms：旧 timer 已被清，新 timer 触发，title 反映第二个 url
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Second')
+    })
+
+    it('previewLogo 在编排中被调：设置 logoPreviewVisible/Url/Text（favicon+domain 经 previewLogo）', () => {
+      bmForm.url = 'https://example.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // previewLogo 用 mock favicon/domain 设 logoPreview 字段（domain mock 去协议取 host）
+      expect(bmForm.logoPreviewVisible).toBe(true)
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://example.com')
+      expect(bmForm.logoPreviewText).toBe('example.com')
     })
   })
 })
