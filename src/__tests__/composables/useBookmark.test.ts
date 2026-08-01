@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { setActivePinia, createPinia } from "pinia"
 import { CAT_UNCATEGORIZED } from "../../config/constants.js"
+import { favicon, domain } from "../../utils.js"
+
+// d1-90：favicon/domain 经 vi.mock('../../utils.js') 工厂替换为 vi.fn，
+// 但 TS 静态类型仍为真实签名故需 vi.mocked() 取 mock 类型（同 line 165 encryptMock 口径）。
+const faviconMock = vi.mocked(favicon)
+const domainMock = vi.mocked(domain)
 
 const mockData = {
   bookmarkMap: {} as any,
@@ -826,6 +832,91 @@ describe('useBookmark', () => {
       bmForm.logoPreviewVisible = true
       previewLogo()
       expect(bmForm.logoPreviewVisible).toBe(false)
+    })
+
+    // d1-90：换扫法深挖 previewLogo 断言浅（d1-85 pointer#1 钦点「previewLogo 锁度浅，URL 短串<=3 守卫 + 协议补全 +
+    // logoPreviewVisible/URL 双状态可深挖」）。现有 4 用例只断言 logoPreviewVisible / logoPreviewUrl 两字段，
+    // 第三字段 logoPreviewText=domain(fixed) 全零断言；favicon/domain 入参是补全后 fixed 非原 url 未直锁；
+    // http:// 协议入参不补 https 边界未测；else 分支不清 logoPreviewUrl/logoPreviewText 残值的防御性隐契约未锁。
+    // favicon/domain 已 mock（line 108-109）：favicon(url)=>'https://favicon.example.com/'+url，domain(url)=>去协议取 host。
+
+    it('d1-90: 正路径写入 logoPreviewText——有效 url 时 domain(fixed) 文本进 logoPreviewText 非空', () => {
+      bmForm.url = 'https://git.example.com/user'
+      previewLogo()
+      // 第三字段此前零断言：logoPreviewText 是 icon 预览「展示什么域名文本」承载
+      expect(bmForm.logoPreviewText).toBe('git.example.com')
+      expect(bmForm.logoPreviewVisible).toBe(true)
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://git.example.com/user')
+    })
+
+    it('d1-90: favicon/domain 入参是补全后 fixed 非原 url——无协议 example.com 经补全后传入', () => {
+      bmForm.url = 'example.com'
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // 直锁入参变换契约：fixed='https://example.com' 传入 favicon/domain 而非原 'example.com'
+      expect(faviconMock).toHaveBeenCalledWith('https://example.com')
+      expect(domainMock).toHaveBeenCalledWith('https://example.com')
+      expect(bmForm.logoPreviewText).toBe('example.com') // domain('https://example.com')='example.com'
+    })
+
+    it('d1-90: http:// 协议入参不补 https——startsWith("http") 命中原 url 不补协议', () => {
+      bmForm.url = 'http://httpbin.com/any'
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // http:// 已 startsWith('http') 故 fixed=原 url 不补 https://，与无协议补全分支区别直锁
+      expect(faviconMock).toHaveBeenCalledWith('http://httpbin.com/any')
+      expect(domainMock).toHaveBeenCalledWith('http://httpbin.com/any')
+      expect(bmForm.logoPreviewText).toBe('httpbin.com')
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/http://httpbin.com/any')
+    })
+
+    it('d1-90: else 分支不清 logoPreviewUrl/logoPreviewText 残值——短 url 保留上次残值靠 visible 隐藏', () => {
+      // 先调一次有效 url 灌入 logoPreviewUrl/Text 残值
+      bmForm.url = 'https://persist.example.com'
+      previewLogo()
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://persist.example.com')
+      expect(bmForm.logoPreviewText).toBe('persist.example.com')
+      // 再调短 url（len<=3 走 else）——源码 else 只设 logoPreviewVisible=false
+      bmForm.url = 'ab'
+      previewLogo()
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      // 防御性隐契约直锁：残值保留不清空，靠 visible=false 隐藏（防未来误改 else 加 logoPreviewUrl=''/Text='' 清空破坏设计）
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://persist.example.com')
+      expect(bmForm.logoPreviewText).toBe('persist.example.com')
+    })
+
+    it('d1-90: falsy url 短路走 else——空串经 url && 短路不调 favicon/domain', () => {
+      bmForm.url = ''
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // url && length>3：空串 falsy 短路走 else，favicon/domain 零调用
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      expect(faviconMock).not.toHaveBeenCalled()
+      expect(domainMock).not.toHaveBeenCalled()
+    })
+
+    it('d1-90: length 边界 >3 严格——len==3 走 else、len==4 走真分支', () => {
+      faviconMock.mockClear()
+      // len==3 严格 <（>3 不含 3）走 else
+      bmForm.url = 'abc'
+      previewLogo()
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      expect(faviconMock).not.toHaveBeenCalled()
+      // len==4 走真分支（start 为真字符）
+      faviconMock.mockClear()
+      bmForm.url = 'abcd'
+      previewLogo()
+      expect(bmForm.logoPreviewVisible).toBe(true)
+      expect(faviconMock).toHaveBeenCalledWith('https://abcd')
+    })
+
+    it('d1-90: else 分支不调 favicon/domain——短 url 时两 mock 零调用防误加', () => {
+      bmForm.url = 'ab'
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // else 分支仅设 logoPreviewVisible=false，不应误加 favicon/domain 调用
+      expect(faviconMock).not.toHaveBeenCalled()
+      expect(domainMock).not.toHaveBeenCalled()
     })
   })
 
