@@ -6,6 +6,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { gid } from '../../utils.js'
+import { attrSlug } from './attrSlug.js'
 
 export function toggleAttrFilter(attrId: string) {
   const ui = useUIStore()
@@ -34,7 +35,7 @@ export function toggleAttrExclude(attrId: string) {
 export function addAttrQuick(name: string): boolean {
   if (!name) return false
   const ds = useDataStore()
-  const dsId = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
+  const dsId = attrSlug(name) || gid()
   if (ds.attributeMap[dsId] || ds.attributeByName[name]) return false
   ds.addAttribute({ id: dsId, name: name, type: 'boolean' })
   saveAppData()

@@ -29,6 +29,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { gid } from '../../utils.js'
+import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
@@ -50,7 +51,7 @@ function onClose() { store.modals.attribute = false }
 function onAddAttr() {
   const name = newName.value.trim()
   if (!name) return
-  const id = name.replace(/[\s]+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '') || gid()
+  const id = attrSlug(name) || gid()
   // A2-007：查重仅对未软删属性，允许与回收站同名重建
   const byId = store.attributeMap[id]
   if ((byId && !byId.deletedAt) || store.attributeByName[name]) {
