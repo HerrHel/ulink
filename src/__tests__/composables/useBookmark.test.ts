@@ -134,7 +134,7 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions } from '../../composables/domain/useBookmark.js'
 
 function resetBmForm() {
   Object.assign(bmForm, {
@@ -703,6 +703,221 @@ describe('useBookmark', () => {
 
       // 编辑模式下不应该检测重复
       expect(mockData.updateBookmark).toHaveBeenCalled()
+    })
+  })
+})
+
+// D1-77 useBookmark.ts:475/484/493 — AI 建议采纳/忽略三函数护栏
+// BookmarkModal.vue:204/205/207 用户点击「采纳建议分类 / 采纳建议属性 / 忽略 AI 建议」三按钮唯一承载。
+// 三函数纯函数级：仅读/写模块级 reactive bmForm（aiSuggestCatId/aiSuggestAttrIds/aiApplied/categoryId/attributes），
+// 无 store、无 IO、无 timer、无网络。直接复用既有 bmForm + resetBmForm（useBookmark.test.ts:137/138 处已就位）。
+describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSuggestions）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    resetBmForm()
+  })
+
+  describe('applyAiCategory 应用建议分类', () => {
+    it('正路径：aiSuggestCatId 有值 → categoryId 被建议值覆盖 + 清建议 + 置 aiApplied=true', () => {
+      bmForm.categoryId = 'old-cat'
+      bmForm.aiSuggestCatId = 'new-cat'
+      bmForm.aiApplied = false
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('new-cat')
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('无值守卫：aiSuggestCatId=null → 三赋值全不执行（categoryId 保持原值 + aiApplied 保持 false）', () => {
+      bmForm.categoryId = 'old-cat'
+      bmForm.aiSuggestCatId = null
+      bmForm.aiApplied = false
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('old-cat')
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiApplied).toBe(false)
+    })
+
+    it('空串守卫：aiSuggestCatId=""（falsy）→ 守卫隐式 truthy 判定不执行（非 === null 判定）', () => {
+      bmForm.categoryId = 'keep-cat'
+      bmForm.aiSuggestCatId = ''
+      bmForm.aiApplied = false
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('keep-cat')
+      expect(bmForm.aiSuggestCatId).toBe('')
+      expect(bmForm.aiApplied).toBe(false)
+    })
+
+    it('categoryId 被覆盖语义：原值被建议值整个替换非保留', () => {
+      bmForm.categoryId = 'original'
+      bmForm.aiSuggestCatId = 'suggested'
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('suggested')
+    })
+
+    it('aiApplied 已 true 时再应用仍 true（幂等）', () => {
+      bmForm.aiSuggestCatId = 'cat1'
+      bmForm.aiApplied = true
+
+      applyAiCategory()
+
+      expect(bmForm.aiApplied).toBe(true)
+      expect(bmForm.categoryId).toBe('cat1')
+    })
+
+    it('连续两次应用：第二次 aiSuggestCatId 已清 null → 守卫不执行零副作用', () => {
+      bmForm.aiSuggestCatId = 'first-cat'
+      applyAiCategory()
+      expect(bmForm.categoryId).toBe('first-cat')
+      expect(bmForm.aiApplied).toBe(true)
+
+      // 第二次 aiSuggestCatId 已 null，守卫不动 categoryId
+      bmForm.aiSuggestCatId = null
+      applyAiCategory()
+      expect(bmForm.categoryId).toBe('first-cat')
+      expect(bmForm.aiSuggestCatId).toBeNull()
+    })
+  })
+
+  describe('applyAiAttributes 应用建议属性', () => {
+    it('正路径：aiSuggestAttrIds=[a1,a2] + attributes={} → 两属性置 true + 清建议 + 置 aiApplied', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['a1', 'a2']
+      bmForm.aiApplied = false
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ a1: true, a2: true })
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('既有属性保留：应用新建议不覆盖既有 attribute=true（for 追加非整体替换）', () => {
+      bmForm.attributes = { existing: true }
+      bmForm.aiSuggestAttrIds = ['new1']
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ existing: true, new1: true })
+    })
+
+    it('空建议数组：aiSuggestAttrIds=[] → for 不迭代 + attributes 不变 + 清空仍 []（幂等）', () => {
+      bmForm.attributes = { keep: true }
+      bmForm.aiSuggestAttrIds = []
+      bmForm.aiApplied = false
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ keep: true })
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('重复 id 不报错：[a1,a1] → attributes.a1 末次覆盖仍 true', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['a1', 'a1']
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ a1: true })
+    })
+
+    it('attributes 字段为空对象 {}：for 内 attributes[id]=true 不抛 TypeError', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['x']
+
+      expect(() => applyAiAttributes()).not.toThrow()
+      expect(bmForm.attributes.x).toBe(true)
+    })
+
+    it('aiApplied 已 true 时再应用仍 true（幂等）', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['a']
+      bmForm.aiApplied = true
+
+      applyAiAttributes()
+
+      expect(bmForm.aiApplied).toBe(true)
+    })
+  })
+
+  describe('dismissAiSuggestions 忽略所有 AI 建议', () => {
+    it('正路径：有建议时 dismiss → 清 cat 建议 + 清 attr 建议数组 + 置 aiApplied=true', () => {
+      bmForm.aiSuggestCatId = 'cat1'
+      bmForm.aiSuggestAttrIds = ['a1', 'a2']
+      bmForm.aiApplied = false
+
+      dismissAiSuggestions()
+
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('恒执行无守卫：无建议（cat=null + attrs=[]）时 dismiss 仍执行三赋值（与 applyAiCategory 的 if 守卫不同）', () => {
+      bmForm.aiSuggestCatId = null
+      bmForm.aiSuggestAttrIds = []
+      bmForm.aiApplied = false
+
+      dismissAiSuggestions()
+
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('dismiss 只清建议队列不还原已应用的 categoryId/attributes（防误改撤销已采纳）', () => {
+      // 模拟「先 applyAiCategory 采纳了 cat=suggested 后 dismiss 忽略属性」场景
+      bmForm.categoryId = 'suggested'
+      bmForm.attributes = { adopted: true }
+      bmForm.aiSuggestCatId = 'extra-cat'
+      bmForm.aiSuggestAttrIds = ['extra-attr']
+
+      dismissAiSuggestions()
+
+      // dismiss 清了建议队列，但不应撤销已应用的 categoryId/attributes
+      expect(bmForm.categoryId).toBe('suggested')
+      expect(bmForm.attributes).toEqual({ adopted: true })
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+    })
+
+    it('aiApplied 已 true 时 dismiss 仍 true（幂等）', () => {
+      bmForm.aiApplied = true
+
+      dismissAiSuggestions()
+
+      expect(bmForm.aiApplied).toBe(true)
+    })
+  })
+
+  describe('aiApplied 标志位跨三函数一致（防漏置致重复建议）', () => {
+    it('applyAiCategory 正路径置 aiApplied=true', () => {
+      bmForm.aiApplied = false
+      bmForm.aiSuggestCatId = 'c'
+      applyAiCategory()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('applyAiAttributes 正路径置 aiApplied=true', () => {
+      bmForm.aiApplied = false
+      bmForm.aiSuggestAttrIds = ['a']
+      applyAiAttributes()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('dismissAiSuggestions 恒置 aiApplied=true（即使无建议）', () => {
+      bmForm.aiApplied = false
+      dismissAiSuggestions()
+      expect(bmForm.aiApplied).toBe(true)
     })
   })
 })
