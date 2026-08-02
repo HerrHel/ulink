@@ -195,7 +195,7 @@ export function getTagNames(item: Bookmark | SiblingGroup, customAttributes: Cus
 
 // ── 分类 ──
 
-const CATEGORY_COLORS = ['#122E8A', '#E63948', '#d97706', '#7c3aed', '#0d9488', '#db2777', '#2563eb', '#059669']
+export const CATEGORY_COLORS = ['#122E8A', '#E63948', '#d97706', '#7c3aed', '#0d9488', '#db2777', '#2563eb', '#059669']
 
 export function createCategory(name: string): Category {
   return {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fixUrl, domain, sanitizeHTML, sanitizeReadonlyHTML, createCategory, swapOrder } from '../utils.js'
+import { fixUrl, domain, sanitizeHTML, sanitizeReadonlyHTML, createCategory, swapOrder, CATEGORY_COLORS } from '../utils.js'
 
 describe('sanitizeHTML', () => {
   it('should allow safe HTML tags', () => {
@@ -165,6 +165,31 @@ describe('createCategory', () => {
     const cat1 = createCategory('A')
     const cat2 = createCategory('B')
     expect(cat1.id).not.toBe(cat2.id)
+  })
+
+  // D1-48：order 字段此前零断言——它是分类排序主键，swapOrder (utils.ts:138 的 a.order === b.order)
+  // 与 data.ts _sortItems 依赖稳定 number order；误删 order 字段会让新分类 order=undefined 致
+  // NaN 比较塌陷排序。color 此前仅 toBeDefined 未锁属 CATEGORY_COLORS 集合——防未来误改 color 源
+  // 为非集色值/单色硬编码污染主题色。
+  it('should set order to a positive number (排序主键契约)', () => {
+    const cat = createCategory('排序')
+    expect(cat.order).toBeDefined()
+    expect(typeof cat.order).toBe('number')
+    expect(cat.order).toBeGreaterThan(0)
+  })
+
+  it('should pick color from CATEGORY_COLORS 集合 (主题色防污染)', () => {
+    const cat = createCategory('主题')
+    expect(CATEGORY_COLORS).toContain(cat.color)
+    // 集合内恰好 8 色且 element 自身属于该集合
+    expect(CATEGORY_COLORS.length).toBeGreaterThanOrEqual(8)
+    expect(new Set(CATEGORY_COLORS)).toContain(cat.color)
+  })
+
+  it('should return exactly the Category 字段集 (无多余键契约)', () => {
+    const cat = createCategory('字段集')
+    expect(Object.keys(cat).sort()).toEqual(['color', 'icon', 'id', 'name', 'order'])
+    expect(cat.icon).toBe('star')
   })
 })
 

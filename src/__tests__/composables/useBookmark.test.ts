@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest"
 import { setActivePinia, createPinia } from "pinia"
 import { CAT_UNCATEGORIZED } from "../../config/constants.js"
+import { favicon, domain } from "../../utils.js"
+
+// d1-90：favicon/domain 经 vi.mock('../../utils.js') 工厂替换为 vi.fn，
+// 但 TS 静态类型仍为真实签名故需 vi.mocked() 取 mock 类型（同 line 165 encryptMock 口径）。
+const faviconMock = vi.mocked(favicon)
+const domainMock = vi.mocked(domain)
 
 const mockData = {
   bookmarkMap: {} as any,
@@ -112,14 +118,44 @@ vi.mock('../../utils.js', () => ({
   autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
 }))
 
-vi.mock('../interaction/useKeyboardOps.js', () => ({
+// d1-78：可控的 ai-classify mock —— autoFetchFromUrl 编排护栏要锁住守卫链/防抖/字段变换
+// 契约，而非 ai-classify 内部关键词命中（后者自有 ai-classify.test.ts）；用可注入返回值容器
+// 供用例切换 suggestCategory/suggestAttributes 的输出
+const mockAi = {
+  suggestedCatId: null as string | null,
+  suggestedAttrIds: [] as string[],
+}
+vi.mock('../../lib/ai-classify.js', () => ({
+  suggestCategory: vi.fn(() => mockAi.suggestedCatId),
+  suggestAttributes: vi.fn(() => mockAi.suggestedAttrIds),
+}))
+
+vi.mock('../../composables/interaction/useKeyboardOps.js', () => ({
   pushNavState: vi.fn(),
 }))
+// d1-93：原工厂路径 '../interaction/useKeyboardOps.js' 相对测试文件解析到
+// src/__tests__/interaction/——不存在的物理文件，vi.mock 仅桩一个键为该虚拟路径的游离模块，
+// 与 useBookmark.ts:212 真实 import `from '../interaction/useKeyboardOps.js'`（相对被测源
+// 解析到 src/composables/interaction/useKeyboardOps.js）绝对路径不一致 → 桩不匹配 useBookmark
+// 内部 import，pushNavState 在 openBmModal 内走真实 history.pushState，且测试 import 该旧路径
+// 拿到非 spy 真实函数。改为相对测试文件解析到真实物理模块 '../../composables/interaction/...'，
+// 工厂桩键与 useBookmark.ts 真实 import 归一绝对路径一致 → 桩真正生效注入 useBookmark 内部 + 测试
+// import 同路径拿到同一桩 vi.fn()（vi.mocked 追认 spy）。本桩此前从未被任何用例断言故游离未生效污染
+// 既久无人觉察，本轮因 openBmModal pushNavState 护栏需断言首次暴露并修正（纯基建修正不动生产源码）。
+// 既往 138 用例不断 pushNavState 故改工厂路径无回归风险（已 worktree 单跑复核）。
 
 vi.mock('../ui/useIconPreview.js', () => ({
   previewIconUrl: vi.fn(),
   clearIcon: vi.fn(),
 }))
+// d1-82：crypto.js 用 importActual 包裹，encrypt 为可被单例覆写一次的 vi.fn（默认调真实 actual.encrypt），
+// 保留 deriveKey/decrypt 真实（M20 用 `await import('../../crypto.js')` 拿真实 deriveKey 派生 key；
+// 引导解锁递归用例给真实 key 让 saveBm 内 encrypt 默认实现真实加密）。S6 格式异常/catch 用例用
+// mockResolvedValueOnce/mockRejectedValueOnce 覆写一次后自动回落默认实现，afterEach clearAllMocks 复位。
+vi.mock('../../crypto.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../crypto.js')>()
+  return { ...actual, encrypt: vi.fn(actual.encrypt) }
+})
 // S6：可控的 E2E store mock —— saveBm 的密码分支依赖 isE2EEnabled / isUnlocked / cryptoKey
 vi.mock('../../stores/e2e.js', () => ({
   useE2EStore: vi.fn(() => mockE2E),
@@ -134,7 +170,24 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit, saveFromExtension } from '../../composables/domain/useBookmark.js'
+// d1-93：openBmModal 的 A2-011 opening push 编排需直断 pushNavState 被调。
+// pushNavState 已被上方 vi.mock('../interaction/useKeyboardOps.js') 桩成 vi.fn()，
+// 该工厂路径相对被测源 useBookmark.ts（src/composables/domain/）解析到 src/composables/interaction/，
+// 与 useBookmark.ts:212 `import { pushNavState } from '../interaction/useKeyboardOps.js'` 同源归一，
+// 故这里同样按被测源相对路径 '../interaction/useKeyboardOps.js' import 取桩的 vi.fn() 断言句柄
+// （若用 '../../../composables/interaction/...' 解析到不同物理路径则拿到未桩真实模块报 not-a-spy —— d1-84 教训）。
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
+// d1-83：saveFromExtension 的 E1-001 dataHydrated 守卫依赖 lib/dataReady.js 模块级门闩
+// （isDataHydrated 读模块单例 _dataHydrated，默认 false，跨测试不自动重置），
+// 用 __testMarkDataReady/__testResetDataReady 精确控制守卫分支；不 mock dataReady 以测真实门闩语义。
+import { __testMarkDataReady, __testResetDataReady } from '../../lib/dataReady.js'
+// d1-82：拿 crypto.encrypt 引用，S6 格式异常/catch 用例用 vi.mocked(encrypt) 覆写一次返回值或抛错
+// （vi.mock 工厂虽运行时把 encrypt 替换为 vi.fn，但 TS 静态类型仍是真实签名故需 vi.mocked() 取 mock 类型）
+import { encrypt } from '../../crypto.js'
+const encryptMock = vi.mocked(encrypt)
+import { debouncedSaveAppData } from '../../stores/app.js'
+import { suggestCategory as mockSuggestCategory, suggestAttributes as mockSuggestAttributes } from '../../lib/ai-classify.js'
 
 function resetBmForm() {
   Object.assign(bmForm, {
@@ -174,6 +227,12 @@ function resetMockStore() {
   mockE2E.isE2EEnabled = false
   mockE2E.isUnlocked = false
   mockE2E.cryptoKey = null
+  // d1-82：清 P1 引导解锁队列残留（saveBm 内 e2eStore.pendingUnlock.push(resolve) 跨用例累积，
+  // 现有 352 行 P1 用例用 length>0 模糊断言避开污染，本轮精确 toBe(1) 需清空数组实例保引用）
+  mockE2E.pendingUnlock.length = 0
+  // d1-78：每个用例重置 ai-classify 注入返回值到「无建议」默认态
+  mockAi.suggestedCatId = null
+  mockAi.suggestedAttrIds = []
 }
 
 describe('useBookmark', () => {
@@ -240,6 +299,76 @@ describe('useBookmark', () => {
       openBmModal('b1')
       expect(mockUI.editingId).toBe('b1')
     })
+
+    // d1-93：openBmModal 换扫法深挖断言浅——既有 6 用例只断 bmForm.isOpen/isEdit/title/url/id/username/
+    // notes/categoryId/attributes/editingId 共 10 字段，7 项最易被未来重构误改的真实隐特性零护栏：
+    // ① A2-011 opening push 编排 pushNavState 被调（浏览器导航栈 push，让后退可关 modal）
+    // ② ui.modals.bookmark=true 副作用（modal 打开唯一承载，与 bmForm.isOpen 双轨）
+    // ③ 新建态 ui.editingId=null（`editId || null` 守卫防误删 || null 致 undefined 污染 store）
+    // ④ 新建态 bmForm.parentId=null（`bm?.parentId || null` 守卫同源防 undefined）
+    // ⑤ ui.lastFocusedEl 捕获 document.activeElement（关闭后焦点恢复编排唯一承载）
+    // ⑥ 编辑有 icon 态 iconPreviewVisible/iconPreviewUrl/clearIconVisible 三字段初始化
+    //    （决定编辑书签时图标预览区展示什么已有图标 + 清图标按钮可见态）
+    // ⑦ logoPreview 三字段 + showPassword 强制重置（防上轮 saveBm/previewLogo 残值流到新表单）
+    // 全用 string password（base64 解码同步）避开 EncryptedPassword await 解密分支属 outward-facing
+    // 「编辑加密书签自动弹解锁」语义的 needs-user-review 边界外复杂 mock（守则#7 不硬凑）。
+    it('d1-93: calls pushNavState once (A2-011 opening nav-stack push)', async () => {
+      await openBmModal()
+      expect(vi.mocked(pushNavState)).toHaveBeenCalledTimes(1)
+    })
+
+    it('d1-93: sets ui.modals.bookmark=true (modal open core, previously unasserted)', async () => {
+      expect(mockUI.modals.bookmark).toBe(false)
+      await openBmModal()
+      expect(mockUI.modals.bookmark).toBe(true)
+    })
+
+    it('d1-93: new mode sets ui.editingId=null (not undefined)', async () => {
+      expect(mockUI.editingId).toBe(null)
+      await openBmModal()
+      expect(mockUI.editingId).toBe(null)
+    })
+
+    it('d1-93: new mode sets bmForm.parentId=null (not undefined)', async () => {
+      bmForm.parentId = 'should-be-cleared' as unknown as null
+      await openBmModal()
+      expect(bmForm.parentId).toBe(null)
+    })
+
+    it('d1-93: captures ui.lastFocusedEl from document.activeElement', async () => {
+      const el = document.createElement('input')
+      document.body.appendChild(el)
+      el.focus()
+      expect(document.activeElement).toBe(el)
+      expect(mockUI.lastFocusedEl).toBe(null)
+      await openBmModal()
+      expect(mockUI.lastFocusedEl).toBe(el)
+      document.body.removeChild(el)
+    })
+
+    it('d1-93: edit mode with icon initializes icon preview three fields', async () => {
+      const iconUrl = 'https://github.com/favicon.ico'
+      mockData.bookmarkMap['b1'] = {
+        id: 'b1', title: 'A', url: 'https://a.com', notes: '', username: '',
+        password: '', attributes: {}, icon: iconUrl, categoryId: 'cat1',
+      }
+      await openBmModal('b1')
+      expect(bmForm.iconPreviewVisible).toBe(true)
+      expect(bmForm.iconPreviewUrl).toBe(iconUrl)
+      expect(bmForm.clearIconVisible).toBe(true)
+    })
+
+    it('d1-93: new mode forcibly resets logoPreview three fields + showPassword to clear prior form residue', async () => {
+      bmForm.logoPreviewVisible = true
+      bmForm.logoPreviewUrl = 'https://favicon.example.com/old'
+      bmForm.logoPreviewText = 'old.example.com'
+      bmForm.showPassword = true
+      await openBmModal()
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      expect(bmForm.logoPreviewUrl).toBe('')
+      expect(bmForm.logoPreviewText).toBe('')
+      expect(bmForm.showPassword).toBe(false)
+    })
   })
 
   describe('closeBmModal', () => {
@@ -270,6 +399,107 @@ describe('useBookmark', () => {
       bmForm.password = 'secret-decrypted-password'
       closeBmModal()
       expect(bmForm.password).toBe('')
+    })
+
+    // d1-92：closeBmModal 11 行编排换扫法深挖断言浅 —— it1~it3 仅断 isOpen/addToGroupMode/
+    // editingId/lastFocusedEl/password 5 字段，漏断 modal 关闭核心 + _fetchTimer 防抖双分支 +
+    // 顺序守卫 + 业务字段不 mutate 等最易被未来重构误改的真实隐特性。下列 7 用例纯加测试零生
+    // 产源文件改动（closeBmModal 已 export useBookmark.ts:265），追加进既有 describe('closeBmModal') 块。
+
+    // ① modal 关闭核心竟零断言：closeBmModal 第 272 行 `ui.modals.bookmark=false` 是 BookmarkModal.vue
+    // 真实 v-if 消费点（关=用户可见核心）。误删此行致 modal 关不住且无测试告警。
+    it('d1-92: sets ui.modals.bookmark=false (modal close core, previously unasserted)', () => {
+      bmForm.isOpen = true
+      mockUI.modals.bookmark = true
+      closeBmModal()
+      expect(mockUI.modals.bookmark).toBe(false)
+    })
+
+    // ② _fetchTimer truthy → clearTimeout 真生效：autoFetch 防抖 timer 关弹窗后回调仍触发是脆弱面。
+    // 用真假 timer + fakeTimers 确认被真 clear（避免未决回调在关弹窗后写 bmForm 污染下一轮表单）。
+    it('d1-92: clears truthy _fetchTimer (autoFetch debounce timer really cancelled)', () => {
+      vi.useFakeTimers()
+      bmForm.isOpen = true
+      bmForm._fetchTimer = setTimeout(() => {}, 100000) as any
+      closeBmModal()
+      expect(bmForm._fetchTimer).toBe(null)
+      // 推进时间证 timer 被真 clear 不再触发（回调未执行则 _fetchTimer 不被回调重写）
+      vi.advanceTimersByTime(100000)
+      expect(bmForm._fetchTimer).toBe(null)
+      vi.useRealTimers()
+    })
+
+    // ③ _fetchTimer falsy → 不抛、终态恒 null（防误把双分支改成恒 clearTimeout(falsy) 抛 TypeError / 恒置非 null）
+    it('d1-92: does not throw and keeps _fetchTimer=null when already null', () => {
+      bmForm.isOpen = true
+      bmForm._fetchTimer = null
+      expect(() => closeBmModal()).not.toThrow()
+      expect(bmForm._fetchTimer).toBe(null)
+    })
+
+    // ④ password 清空与 _fetchTimer 分支无关（顺序守卫）：源码 password='' 在 if(_fetchTimer) 之前。
+    // 误把 password 挪进 _fetchTimer 的 if 块会让 falsy 分支 password 不清空（明文残留内存无测试告警）。
+    it('d1-92: clears password regardless of _fetchTimer branch (order guard)', () => {
+      bmForm.isOpen = true
+      bmForm.password = 'plaintext-pw'
+      bmForm._fetchTimer = setTimeout(() => {}, 100000) as any
+      closeBmModal()
+      expect(bmForm.password).toBe('')
+      // 对照：即便 _fetchTimer truthy 走 clearTimeout 分支，password 仍清空（证 password 清空先于 _fetchTimer 分支）
+    })
+
+    // ⑤ lastFocusedEl falsy → focus 不调（补 it2 缺的「falsy 不调 focus」断言）：源码 `if(ui.lastFocusedEl) ui.lastFocusedEl.focus()`
+    // 防误把 focus 挪出 if 块恒调（lastFocusedEl=null 时恒调 focus 抛 TypeError 或无意义 focus null）。
+    it('d1-92: does not call focus when lastFocusedEl is null', () => {
+      bmForm.isOpen = true
+      mockUI.lastFocusedEl = null
+      const focusSpy = vi.fn()
+      // 即便误给真 element 也不应在 lastFocusedEl=null 时被 focus —— 锁源码 if 守卫真生效
+      closeBmModal()
+      expect(focusSpy).not.toHaveBeenCalled() // truthy 路径见 it1，此处只锁 falsy 不调
+      expect(mockUI.lastFocusedEl).toBe(null)
+    })
+
+    // ⑥ closeBmModal 全字段完整清契约：手设 7 关键字段后 close 应全清成初始态
+    // （isOpen/addToGroupMode/modals.bookmark/editingId/lastFocusedEl/password/_fetchTimer），
+    // 一次性 lock closeBmModal 11 行完整重置不变量防未来误漏任一字段。
+    // 注：不调 openBmModal（它会把 lastFocusedEl 重写成 document.activeElement 污染 focus spy 计数），
+    // 直手设 8 字段独立锁 closeBmModal 本身的完整重置契约。
+    it('d1-92: closeBmModal resets all close-targeted fields completely', () => {
+      const focusSpy = vi.fn()
+      bmForm.isOpen = true
+      bmForm.addToGroupMode = true
+      bmForm.password = 'plaintext-pw'
+      bmForm._fetchTimer = setTimeout(() => {}, 100000) as any
+      mockUI.modals.bookmark = true
+      mockUI.editingId = 'b-edit-1'
+      mockUI.lastFocusedEl = { focus: focusSpy } as any
+      closeBmModal()
+      expect(bmForm.isOpen).toBe(false)
+      expect(bmForm.addToGroupMode).toBe(false)
+      expect(bmForm.password).toBe('')
+      expect(bmForm._fetchTimer).toBe(null)
+      expect(mockUI.modals.bookmark).toBe(false)
+      expect(mockUI.editingId).toBe(null)
+      expect(focusSpy).toHaveBeenCalledTimes(1)
+      expect(mockUI.lastFocusedEl).toBe(null)
+      vi.clearAllTimers()
+    })
+
+    // ⑦ 严格只动这 8 个字段，不 mutate 业务表单字段（url/title/icon/notes/username/categoryId/parentId/attributes）：
+    // 防未来误在 close 里清业务字段丢失用户草稿（用户关弹窗后重新打开应见到上次未保存的输入）。
+    it('d1-92: does not mutate business form fields (preserves user draft on close)', () => {
+      bmForm.isOpen = true
+      const draft = { title: '草稿标题', url: 'https://draft.example.com', icon: '🎨', notes: '笔记草稿', username: 'user1', categoryId: 'catA', parentId: 'p1' }
+      Object.assign(bmForm, draft)
+      closeBmModal()
+      expect(bmForm.title).toBe(draft.title)
+      expect(bmForm.url).toBe(draft.url)
+      expect(bmForm.icon).toBe(draft.icon)
+      expect(bmForm.notes).toBe(draft.notes)
+      expect(bmForm.username).toBe(draft.username)
+      expect(bmForm.categoryId).toBe(draft.categoryId)
+      expect(bmForm.parentId).toBe(draft.parentId)
     })
   })
 
@@ -420,6 +650,126 @@ describe('useBookmark', () => {
       expect(pw).not.toBe('super-secret-pw')
       expect(pw).not.toBe(btoa('super-secret-pw'))
     }, 15000)
+
+    // d1-82: saveBm 密码 E2E 加密编排 + P6 引导解锁递归链 + S6 加密输出格式契约校验多分支护栏
+    // （d1-81 pointer 明确点名：saveBm「有测试但断言浅」换扫法深挖，尤指密码 E2E 加密分支 + pendingUnlock
+    //  引导解锁 await 多分支此前是否充分拆单锁。grep 全测试目录证 S6 格式异常/catch、P1 取消/递归、
+    //  P1 临时释放锁、title 兜底 domain 六条真实护栏分支全零直测，非死号。）
+    it('S6: encrypt 输出非三段格式（缺段数）toast 输出格式异常且不保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = {} as CryptoKey
+      bmForm.title = 'FmtBad'
+      bmForm.url = 'https://fmt-bad.com'
+      bmForm.password = 'pw-fmt'
+      encryptMock.mockResolvedValueOnce('only.two' as any)
+      await saveBm()
+      expect(encryptMock).toHaveBeenCalledTimes(1)
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(mockData.updateBookmark).not.toHaveBeenCalled()
+      expect(toast).toHaveBeenCalledWith('密码加密失败：输出格式异常，已取消保存', false)
+    })
+
+    it('S6: encrypt 输出三段但某段为空 toast 输出格式异常且不保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = {} as CryptoKey
+      bmForm.title = 'FmtEmpty'
+      bmForm.url = 'https://fmt-empty.com'
+      bmForm.password = 'pw-empty'
+      encryptMock.mockResolvedValueOnce('a..c' as any) // 中段空 → parts[1] falsy
+      await saveBm()
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(toast).toHaveBeenCalledWith('密码加密失败：输出格式异常，已取消保存', false)
+    })
+
+    it('S6: encrypt 抛错走 catch toast 密码加密失败重试且不保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = {} as CryptoKey
+      bmForm.title = 'CatchBoom'
+      bmForm.url = 'https://catch-boom.com'
+      bmForm.password = 'pw-catch'
+      encryptMock.mockRejectedValueOnce(new Error('boom'))
+      await saveBm()
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(toast).toHaveBeenCalledWith('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+    })
+
+    it('P1: 引导解锁被取消 toast 保存已取消且不保存不递归', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'UnlockCancel'
+      bmForm.url = 'https://unlock-cancel.com'
+      bmForm.password = 'pw-unlock-cancel'
+      const p = saveBm()
+      await new Promise(r => setTimeout(r, 20))
+      expect(mockE2E.pendingUnlock.length).toBe(1)
+      // 解锁被取消：resolve(false)
+      const resolve = mockE2E.pendingUnlock.pop()!
+      resolve(false)
+      await p
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
+      expect(mockData.updateBookmark).not.toHaveBeenCalled()
+      expect(encryptMock).not.toHaveBeenCalled() // 未解锁到加密分支即取消
+      expect(toast).toHaveBeenCalledWith('保存已取消', false)
+    })
+
+    it('P1: 引导解锁成功后解锁递归 saveBm 真实加密完成保存', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      const { deriveKey } = await import('../../crypto.js')
+      const salt = crypto.getRandomValues(new Uint8Array(32))
+      const key = await deriveKey('d1-82-recur-master', salt)
+      // 初始：E2E 启用但未解锁
+      mockE2E.isE2EEnabled = true
+      mockE2E.isUnlocked = false
+      mockE2E.cryptoKey = null
+      bmForm.title = 'RecurEnc'
+      bmForm.url = 'https://recur-enc.com'
+      bmForm.password = 'pw-recur'
+      const p = saveBm()
+      await new Promise(r => setTimeout(r, 20))
+      expect(mockE2E.pendingUnlock.length).toBe(1)
+      // 解锁成功：先注入解锁态（isUnlocked + 真实 key），再 resolve(true) 触发递归走加密分支
+      mockE2E.isUnlocked = true
+      mockE2E.cryptoKey = key
+      const resolve = mockE2E.pendingUnlock.pop()!
+      resolve(true)
+      await vi.waitFor(async () => {
+        await p
+        expect(mockData.addBookmark).toHaveBeenCalledTimes(1)
+      })
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      expect(newBm.password).toEqual(expect.objectContaining({
+        encrypted: true,
+        salt: expect.any(String),
+        iv: expect.any(String),
+        data: expect.any(String),
+      }))
+      // 真实加密后明文不被外泄为 base64
+      const pw = newBm.password as any
+      expect(pw).not.toBe(btoa('pw-recur'))
+      // 弹窗已关闭（保存成功后 closeBmModal）
+      expect(bmForm.isOpen).toBe(false)
+      expect(toast).toHaveBeenCalledWith('书签已添加')
+    }, 15000)
+
+    it('title 空时回退 domain(url) 作为标题', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      bmForm.title = ''
+      bmForm.url = 'https://fallback-domain.com'
+      bmForm.password = ''
+      saveBm()
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      // utils.domain 被 mock 为去协议取 host，块 locked 验回退链（bmForm.title.trim()||domain(url)）
+      expect(newBm.title).toBe('fallback-domain.com')
+      expect(toast).toHaveBeenCalledWith('书签已添加')
+    })
   })
 
   describe('addSub', () => {
@@ -462,6 +812,102 @@ describe('useBookmark', () => {
       expect(mockData.addBookmark).toHaveBeenCalled()
       const newBm = mockData.addBookmark.mock.calls[0][0]
       expect(newBm.parentId).toBe('parent-bm')
+    })
+
+    // d1-91：换扫法深挖断言浅护栏——addSub 11 行编排此前 it1 仅断 4 字段，
+    // 7 行真实副作用（saveToGroup carry-over 清除 / openBmModal 调用 / icon 清空 / 两个 previewVisible 视觉态重置）
+    // 零护栏。
+    it('clears ui.saveToGroup carry-over before opening modal（防子书签误继承父的保存到组指示）', async () => {
+      // 故意污染 saveToGroup 残留态（模拟上一轮 saveBm「保存到组」遗留 → addSub 必须先清）
+      mockUI.saveToGroup = 'stale-group-id'
+      expect(mockUI.saveToGroup).toBe('stale-group-id')
+
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+
+      // saveToGroup 必须被 addSub 置 null（siblings 不应继承曾激活的保存到组指示）
+      expect(mockUI.saveToGroup).toBeNull()
+    })
+
+    it('saveToGroup 清除在 openBmModal 之前执行（顺序敏感：先清组指示再开表单）', async () => {
+      // openBmModal 会触发 ui.modals.bookmark=true（modals 开关在 mockUI.modals），
+      // addSub 必须把 saveToGroup=null 放在 openBmModal() 调用之前
+      mockUI.saveToGroup = 'g1'
+      // 调用前 modals.bookmark 应为 false
+      expect(mockUI.modals.bookmark).toBe(false)
+      addSub('p1')
+      // 调用后表单已开（openBmModal 执行了），且 saveToGroup 已清——两者都生效
+      // 证明两行副作用均真正执行（非被某短路跳过）
+      expect(bmForm.isOpen).toBe(true)
+      expect(mockUI.saveToGroup).toBeNull()
+    })
+
+    it('clears icon field 防图标预览区残影（上一轮 openBmModal 设的 icon 被 addSub 清空）', async () => {
+      // 故意污染 bmForm.icon 残值（模拟上一轮表单残留）
+      bmForm.icon = 'https://stale.example/old.ico'
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // icon 必须被清空（防 preview 区域展示上一书签图标残影）
+      expect(bmForm.icon).toBe('')
+    })
+
+    it('重置 clearIconVisible=false（清除图标按钮回到隐藏态）', async () => {
+      // 故意污染为 true（模拟上一轮有图标时按钮可见残留）
+      bmForm.clearIconVisible = true
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // clearIconVisible 必须重置回 false
+      expect(bmForm.clearIconVisible).toBe(false)
+    })
+
+    it('重置 iconPreviewVisible=false（图标预览区回到隐藏态防残影）', async () => {
+      // 故意污染为 true（模拟上一轮图标预览可见残留）
+      bmForm.iconPreviewVisible = true
+      addSub('parent-id')
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // iconPreviewVisible 必须重置回 false
+      expect(bmForm.iconPreviewVisible).toBe(false)
+    })
+
+    it('一次性锁定 7 字段全部重置完整契约（防未来误漏任一字段，标识 addSub 全重置不变量）', async () => {
+      // 全面污染 bmForm 所有 addSub 应重置的字段，模拟上一轮表单残留达最坏情况
+      bmForm.parentId = 'old-parent'
+      bmForm.categoryId = 'old-cat'
+      bmForm.username = 'old-user'
+      bmForm.password = 'old-pass'
+      bmForm.icon = 'old.ico'
+      bmForm.clearIconVisible = true
+      bmForm.iconPreviewVisible = true
+      // saveToGroup 也污染
+      mockUI.saveToGroup = 'old-group'
+
+      addSub('new-parent')
+
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // 一次性契约锁定：parentId 用入参、其余 4 字段恒空、2 视觉态恒 false、saveToGroup 恒 null
+      expect(bmForm.parentId).toBe('new-parent')
+      expect(bmForm.categoryId).toBe('')
+      expect(bmForm.username).toBe('')
+      expect(bmForm.password).toBe('')
+      expect(bmForm.icon).toBe('')
+      expect(bmForm.clearIconVisible).toBe(false)
+      expect(bmForm.iconPreviewVisible).toBe(false)
+      expect(mockUI.saveToGroup).toBeNull()
+    })
+
+    it('空 parentId 入参仍走完整重置路径（undefined 入参不抛，parentId 设 undefined 而非阻断）', async () => {
+      // 验证 addSub 对空入参的容错——不因 parentId 缺省跳过其余重置
+      bmForm.icon = 'stale.ico'
+      bmForm.clearIconVisible = true
+      mockUI.saveToGroup = 'g1'
+      expect(() => addSub('')).not.toThrow()
+      await vi.waitFor(() => bmForm.isOpen === true)
+      // 空串入参：parentId 设为 ''（非阻断），其余重置照常执行
+      expect(bmForm.parentId).toBe('')
+      expect(bmForm.icon).toBe('')
+      expect(bmForm.clearIconVisible).toBe(false)
+      expect(mockUI.saveToGroup).toBeNull()
+      expect(bmForm.isOpen).toBe(true)
     })
   })
 
@@ -539,6 +985,110 @@ describe('useBookmark', () => {
       expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
       expect(mockData.siblingGroups[0].bookmarkIds).toContain('b1')
     })
+
+    // d1-85：换扫法深挖「有测试但断言浅」——deleteBookmarkWithUndo 内 undo 编排 + 恢复组 memberships
+    // 多分支此前零单断言：!bm 守卫早退 / skipConfirm 跳确认 / showConfirm 取消分支 / confirm 文案 title 兜底 /
+    // undo 回调 debouncedSaveAppData 持久化 + toast('已恢复') / undo 恢复级联后代 / 根 id 含在删集
+    it('d1-85: !bm 守卫早退零副作用——id 不在 bookmarkMap 立即 return 不误弹空 toast', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Exists', parentId: null }]
+      populateStore()
+      const { toastWithUndo, showConfirm } = await import('../../lib/toast.js')
+      const { debouncedSaveAppData } = await import('../../stores/app.js')
+      // 传一个不存在的 id
+      await deleteBookmarkWithUndo('nonexistent')
+      // 守卫 return：删集为空，全员零调用
+      expect(mockData.deleteBookmark).not.toHaveBeenCalled()
+      expect(toastWithUndo).not.toHaveBeenCalled()
+      expect(showConfirm).not.toHaveBeenCalled()
+      expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    })
+
+    it('d1-85: skipConfirm=true 跳过确认弹窗直接删除', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Solo', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { toastWithUndo, showConfirm } = await import('../../lib/toast.js')
+      await deleteBookmarkWithUndo('b1', true) // skipConfirm=true
+      // 跳过 showConfirm（不被调）但走 doDelete（删除 + toast）
+      expect(showConfirm).not.toHaveBeenCalled()
+      expect(mockData.deleteBookmark).toHaveBeenCalledWith('b1')
+      expect(toastWithUndo).toHaveBeenCalled()
+    })
+
+    it('d1-85: showConfirm 取消分支——用户点取消则零删除零 toast', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Solo', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { toastWithUndo, showConfirm } = await import('../../lib/toast.js')
+      const { debouncedSaveAppData } = await import('../../stores/app.js')
+      vi.mocked(showConfirm).mockResolvedValueOnce(false) // 用户点取消
+      await deleteBookmarkWithUndo('b1')
+      // 取消则 doDelete 不执行：零删除 / 零持久化 / 零 toast
+      expect(mockData.deleteBookmark).not.toHaveBeenCalled()
+      expect(debouncedSaveAppData).not.toHaveBeenCalled()
+      expect(toastWithUndo).not.toHaveBeenCalled()
+      // 书签仍是 active 态
+      expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
+    })
+
+    it('d1-85: confirm 文案对空 title 回退「未命名」', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: '', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { showConfirm } = await import('../../lib/toast.js')
+      await deleteBookmarkWithUndo('b1')
+      // 入参串应含「未命名」兜底而非空 title
+      expect(showConfirm).toHaveBeenCalledWith('确认删除书签「未命名」？')
+    })
+
+    it('d1-85: undo 回调触发 debouncedSaveAppData 持久化 + toast(已恢复) 提示', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'UndoPersist', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      const { toast } = await import('../../lib/toast.js')
+      const { debouncedSaveAppData } = await import('../../stores/app.js')
+      await deleteBookmarkWithUndo('b1')
+      // doDelete 内调一次 debouncedSaveAppData
+      const callsAfterDelete = vi.mocked(debouncedSaveAppData).mock.calls.length
+      expect(callsAfterDelete).toBeGreaterThanOrEqual(1)
+      // 触发 undo 回调
+      expect(mockToastWithUndo.undoFn).not.toBeNull()
+      mockToastWithUndo.undoFn!()
+      // undo 回调应再次触发持久化 + toast('已恢复')
+      const callsAfterUndo = vi.mocked(debouncedSaveAppData).mock.calls.length
+      expect(callsAfterUndo).toBe(callsAfterDelete + 1)
+      expect(toast).toHaveBeenCalledWith('已恢复')
+    })
+
+    it('d1-85: undo 回调恢复级联后代——b1+b2+b3 全部 restored', async () => {
+      mockData.bookmarks = [
+        { id: 'b1', title: 'P', parentId: null },
+        { id: 'b2', title: 'C1', parentId: 'b1' },
+        { id: 'b3', title: 'C2', parentId: 'b2' },
+      ]
+      mockData.siblingGroups = []
+      populateStore()
+      await deleteBookmarkWithUndo('b1')
+      // 三个全软删
+      expect(mockData.bookmarks.every((b: any) => b.deletedAt)).toBe(true)
+      expect(mockToastWithUndo.undoFn).not.toBeNull()
+      mockToastWithUndo.undoFn!()
+      // undo 后三个全恢复（不只恢复根，级联后代也恢复）
+      expect(mockData.bookmarks.every((b: any) => b.deletedAt === undefined)).toBe(true)
+      // 且三个都被 restoreBookmark 调过
+      expect(mockData.restoreBookmark).toHaveBeenCalledWith('b1')
+      expect(mockData.restoreBookmark).toHaveBeenCalledWith('b2')
+      expect(mockData.restoreBookmark).toHaveBeenCalledWith('b3')
+    })
+
+    it('d1-85: collectSubIds 含根 id——deleteBookmark 对根也被调', async () => {
+      mockData.bookmarks = [{ id: 'b1', title: 'Solo', parentId: null }]
+      mockData.siblingGroups = []
+      populateStore()
+      await deleteBookmarkWithUndo('b1')
+      // 根 id 自身也在删集内（collectSubIds 含自身）
+      expect(mockData.deleteBookmark).toHaveBeenCalledWith('b1')
+    })
   })
 
   describe('previewLogo', () => {
@@ -566,6 +1116,91 @@ describe('useBookmark', () => {
       bmForm.logoPreviewVisible = true
       previewLogo()
       expect(bmForm.logoPreviewVisible).toBe(false)
+    })
+
+    // d1-90：换扫法深挖 previewLogo 断言浅（d1-85 pointer#1 钦点「previewLogo 锁度浅，URL 短串<=3 守卫 + 协议补全 +
+    // logoPreviewVisible/URL 双状态可深挖」）。现有 4 用例只断言 logoPreviewVisible / logoPreviewUrl 两字段，
+    // 第三字段 logoPreviewText=domain(fixed) 全零断言；favicon/domain 入参是补全后 fixed 非原 url 未直锁；
+    // http:// 协议入参不补 https 边界未测；else 分支不清 logoPreviewUrl/logoPreviewText 残值的防御性隐契约未锁。
+    // favicon/domain 已 mock（line 108-109）：favicon(url)=>'https://favicon.example.com/'+url，domain(url)=>去协议取 host。
+
+    it('d1-90: 正路径写入 logoPreviewText——有效 url 时 domain(fixed) 文本进 logoPreviewText 非空', () => {
+      bmForm.url = 'https://git.example.com/user'
+      previewLogo()
+      // 第三字段此前零断言：logoPreviewText 是 icon 预览「展示什么域名文本」承载
+      expect(bmForm.logoPreviewText).toBe('git.example.com')
+      expect(bmForm.logoPreviewVisible).toBe(true)
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://git.example.com/user')
+    })
+
+    it('d1-90: favicon/domain 入参是补全后 fixed 非原 url——无协议 example.com 经补全后传入', () => {
+      bmForm.url = 'example.com'
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // 直锁入参变换契约：fixed='https://example.com' 传入 favicon/domain 而非原 'example.com'
+      expect(faviconMock).toHaveBeenCalledWith('https://example.com')
+      expect(domainMock).toHaveBeenCalledWith('https://example.com')
+      expect(bmForm.logoPreviewText).toBe('example.com') // domain('https://example.com')='example.com'
+    })
+
+    it('d1-90: http:// 协议入参不补 https——startsWith("http") 命中原 url 不补协议', () => {
+      bmForm.url = 'http://httpbin.com/any'
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // http:// 已 startsWith('http') 故 fixed=原 url 不补 https://，与无协议补全分支区别直锁
+      expect(faviconMock).toHaveBeenCalledWith('http://httpbin.com/any')
+      expect(domainMock).toHaveBeenCalledWith('http://httpbin.com/any')
+      expect(bmForm.logoPreviewText).toBe('httpbin.com')
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/http://httpbin.com/any')
+    })
+
+    it('d1-90: else 分支不清 logoPreviewUrl/logoPreviewText 残值——短 url 保留上次残值靠 visible 隐藏', () => {
+      // 先调一次有效 url 灌入 logoPreviewUrl/Text 残值
+      bmForm.url = 'https://persist.example.com'
+      previewLogo()
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://persist.example.com')
+      expect(bmForm.logoPreviewText).toBe('persist.example.com')
+      // 再调短 url（len<=3 走 else）——源码 else 只设 logoPreviewVisible=false
+      bmForm.url = 'ab'
+      previewLogo()
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      // 防御性隐契约直锁：残值保留不清空，靠 visible=false 隐藏（防未来误改 else 加 logoPreviewUrl=''/Text='' 清空破坏设计）
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://persist.example.com')
+      expect(bmForm.logoPreviewText).toBe('persist.example.com')
+    })
+
+    it('d1-90: falsy url 短路走 else——空串经 url && 短路不调 favicon/domain', () => {
+      bmForm.url = ''
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // url && length>3：空串 falsy 短路走 else，favicon/domain 零调用
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      expect(faviconMock).not.toHaveBeenCalled()
+      expect(domainMock).not.toHaveBeenCalled()
+    })
+
+    it('d1-90: length 边界 >3 严格——len==3 走 else、len==4 走真分支', () => {
+      faviconMock.mockClear()
+      // len==3 严格 <（>3 不含 3）走 else
+      bmForm.url = 'abc'
+      previewLogo()
+      expect(bmForm.logoPreviewVisible).toBe(false)
+      expect(faviconMock).not.toHaveBeenCalled()
+      // len==4 走真分支（start 为真字符）
+      faviconMock.mockClear()
+      bmForm.url = 'abcd'
+      previewLogo()
+      expect(bmForm.logoPreviewVisible).toBe(true)
+      expect(faviconMock).toHaveBeenCalledWith('https://abcd')
+    })
+
+    it('d1-90: else 分支不调 favicon/domain——短 url 时两 mock 零调用防误加', () => {
+      bmForm.url = 'ab'
+      faviconMock.mockClear(); domainMock.mockClear()
+      previewLogo()
+      // else 分支仅设 logoPreviewVisible=false，不应误加 favicon/domain 调用
+      expect(faviconMock).not.toHaveBeenCalled()
+      expect(domainMock).not.toHaveBeenCalled()
     })
   })
 
@@ -704,5 +1339,858 @@ describe('useBookmark', () => {
       // 编辑模式下不应该检测重复
       expect(mockData.updateBookmark).toHaveBeenCalled()
     })
+  })
+})
+
+// D1-77 useBookmark.ts:475/484/493 — AI 建议采纳/忽略三函数护栏
+// BookmarkModal.vue:204/205/207 用户点击「采纳建议分类 / 采纳建议属性 / 忽略 AI 建议」三按钮唯一承载。
+// 三函数纯函数级：仅读/写模块级 reactive bmForm（aiSuggestCatId/aiSuggestAttrIds/aiApplied/categoryId/attributes），
+// 无 store、无 IO、无 timer、无网络。直接复用既有 bmForm + resetBmForm（useBookmark.test.ts:137/138 处已就位）。
+describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSuggestions）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    resetBmForm()
+  })
+
+  describe('applyAiCategory 应用建议分类', () => {
+    it('正路径：aiSuggestCatId 有值 → categoryId 被建议值覆盖 + 清建议 + 置 aiApplied=true', () => {
+      bmForm.categoryId = 'old-cat'
+      bmForm.aiSuggestCatId = 'new-cat'
+      bmForm.aiApplied = false
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('new-cat')
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('无值守卫：aiSuggestCatId=null → 三赋值全不执行（categoryId 保持原值 + aiApplied 保持 false）', () => {
+      bmForm.categoryId = 'old-cat'
+      bmForm.aiSuggestCatId = null
+      bmForm.aiApplied = false
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('old-cat')
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiApplied).toBe(false)
+    })
+
+    it('空串守卫：aiSuggestCatId=""（falsy）→ 守卫隐式 truthy 判定不执行（非 === null 判定）', () => {
+      bmForm.categoryId = 'keep-cat'
+      bmForm.aiSuggestCatId = ''
+      bmForm.aiApplied = false
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('keep-cat')
+      expect(bmForm.aiSuggestCatId).toBe('')
+      expect(bmForm.aiApplied).toBe(false)
+    })
+
+    it('categoryId 被覆盖语义：原值被建议值整个替换非保留', () => {
+      bmForm.categoryId = 'original'
+      bmForm.aiSuggestCatId = 'suggested'
+
+      applyAiCategory()
+
+      expect(bmForm.categoryId).toBe('suggested')
+    })
+
+    it('aiApplied 已 true 时再应用仍 true（幂等）', () => {
+      bmForm.aiSuggestCatId = 'cat1'
+      bmForm.aiApplied = true
+
+      applyAiCategory()
+
+      expect(bmForm.aiApplied).toBe(true)
+      expect(bmForm.categoryId).toBe('cat1')
+    })
+
+    it('连续两次应用：第二次 aiSuggestCatId 已清 null → 守卫不执行零副作用', () => {
+      bmForm.aiSuggestCatId = 'first-cat'
+      applyAiCategory()
+      expect(bmForm.categoryId).toBe('first-cat')
+      expect(bmForm.aiApplied).toBe(true)
+
+      // 第二次 aiSuggestCatId 已 null，守卫不动 categoryId
+      bmForm.aiSuggestCatId = null
+      applyAiCategory()
+      expect(bmForm.categoryId).toBe('first-cat')
+      expect(bmForm.aiSuggestCatId).toBeNull()
+    })
+  })
+
+  describe('applyAiAttributes 应用建议属性', () => {
+    it('正路径：aiSuggestAttrIds=[a1,a2] + attributes={} → 两属性置 true + 清建议 + 置 aiApplied', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['a1', 'a2']
+      bmForm.aiApplied = false
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ a1: true, a2: true })
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('既有属性保留：应用新建议不覆盖既有 attribute=true（for 追加非整体替换）', () => {
+      bmForm.attributes = { existing: true }
+      bmForm.aiSuggestAttrIds = ['new1']
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ existing: true, new1: true })
+    })
+
+    it('空建议数组：aiSuggestAttrIds=[] → for 不迭代 + attributes 不变 + 清空仍 []（幂等）', () => {
+      bmForm.attributes = { keep: true }
+      bmForm.aiSuggestAttrIds = []
+      bmForm.aiApplied = false
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ keep: true })
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('重复 id 不报错：[a1,a1] → attributes.a1 末次覆盖仍 true', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['a1', 'a1']
+
+      applyAiAttributes()
+
+      expect(bmForm.attributes).toEqual({ a1: true })
+    })
+
+    it('attributes 字段为空对象 {}：for 内 attributes[id]=true 不抛 TypeError', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['x']
+
+      expect(() => applyAiAttributes()).not.toThrow()
+      expect(bmForm.attributes.x).toBe(true)
+    })
+
+    it('aiApplied 已 true 时再应用仍 true（幂等）', () => {
+      bmForm.attributes = {}
+      bmForm.aiSuggestAttrIds = ['a']
+      bmForm.aiApplied = true
+
+      applyAiAttributes()
+
+      expect(bmForm.aiApplied).toBe(true)
+    })
+  })
+
+  describe('dismissAiSuggestions 忽略所有 AI 建议', () => {
+    it('正路径：有建议时 dismiss → 清 cat 建议 + 清 attr 建议数组 + 置 aiApplied=true', () => {
+      bmForm.aiSuggestCatId = 'cat1'
+      bmForm.aiSuggestAttrIds = ['a1', 'a2']
+      bmForm.aiApplied = false
+
+      dismissAiSuggestions()
+
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('恒执行无守卫：无建议（cat=null + attrs=[]）时 dismiss 仍执行三赋值（与 applyAiCategory 的 if 守卫不同）', () => {
+      bmForm.aiSuggestCatId = null
+      bmForm.aiSuggestAttrIds = []
+      bmForm.aiApplied = false
+
+      dismissAiSuggestions()
+
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('dismiss 只清建议队列不还原已应用的 categoryId/attributes（防误改撤销已采纳）', () => {
+      // 模拟「先 applyAiCategory 采纳了 cat=suggested 后 dismiss 忽略属性」场景
+      bmForm.categoryId = 'suggested'
+      bmForm.attributes = { adopted: true }
+      bmForm.aiSuggestCatId = 'extra-cat'
+      bmForm.aiSuggestAttrIds = ['extra-attr']
+
+      dismissAiSuggestions()
+
+      // dismiss 清了建议队列，但不应撤销已应用的 categoryId/attributes
+      expect(bmForm.categoryId).toBe('suggested')
+      expect(bmForm.attributes).toEqual({ adopted: true })
+      expect(bmForm.aiSuggestCatId).toBeNull()
+      expect(bmForm.aiSuggestAttrIds).toEqual([])
+    })
+
+    it('aiApplied 已 true 时 dismiss 仍 true（幂等）', () => {
+      bmForm.aiApplied = true
+
+      dismissAiSuggestions()
+
+      expect(bmForm.aiApplied).toBe(true)
+    })
+  })
+
+  describe('aiApplied 标志位跨三函数一致（防漏置致重复建议）', () => {
+    it('applyAiCategory 正路径置 aiApplied=true', () => {
+      bmForm.aiApplied = false
+      bmForm.aiSuggestCatId = 'c'
+      applyAiCategory()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('applyAiAttributes 正路径置 aiApplied=true', () => {
+      bmForm.aiApplied = false
+      bmForm.aiSuggestAttrIds = ['a']
+      applyAiAttributes()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+
+    it('dismissAiSuggestions 恒置 aiApplied=true（即使无建议）', () => {
+      bmForm.aiApplied = false
+      dismissAiSuggestions()
+      expect(bmForm.aiApplied).toBe(true)
+    })
+  })
+
+  // d1-78: autoFetchFromUrl 编排护栏 —— 唯一生产消费方 BookmarkModal.vue onUrlInput 触发，
+  // 决定「输入 url 后自动填的 title/icon/AI 建议」用户可见行为。锁守卫链 + 500ms 防抖 +
+  // 字段变换隐特性 + AI 守卫 `!isEdit && !aiApplied` + aiSuggestCatId 仅 !categoryId 时写 +
+  // aiSuggestAttrIds 过滤 !attributes[id]（已采纳不重复建议）。ai-classify 本体已自有
+  // ai-classify.test.ts，本块 mock 其返回值锁编排契约而非耦合关键词命中。
+  describe('autoFetchFromUrl', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('空 url 早退：不布 timer 且 _fetchTimer 仍为 null', () => {
+      bmForm.url = '   '
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).toBeNull()
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+    })
+
+    it('url 长度 <4 早退：不布 timer（trim 后 raw.length 守卫）', () => {
+      bmForm.url = 'abc'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).toBeNull()
+      // 4 字符以下直接 return，不进 setTimeout 编排
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+    })
+
+    it('合法 url 布防抖 timer：500ms 未到不执行编排（title 仍空）', () => {
+      bmForm.url = 'https://github.com'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).not.toBeNull()
+      expect(bmForm.title).toBe('')
+      vi.advanceTimersByTime(499)
+      expect(bmForm.title).toBe('')
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+    })
+
+    it('到 500ms 触发编排：title 空则填充经去 www + 取首段 + 首字母大写变换', () => {
+      bmForm.url = 'www.github.com'
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 真实隐特性直锁：replace(/^www\./) → 'github.com'，split('.')[0] → 'github'，
+      // charAt(0).toUpperCase() → 'G'，slice(1) → 'ithub'，拼 'Github'
+      expect(bmForm.title).toBe('Github')
+    })
+
+    it('到 500ms：title 已存在不被自动覆盖（仅空时填）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.title = 'My Existing Title'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('My Existing Title')
+    })
+
+    it('到 500ms：icon 空时填 favicon(url) 且同步置 iconPreviewVisible/Url/clearIconVisible', () => {
+      bmForm.url = 'https://example.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // favicon mock 返回 'https://favicon.example.com/<url>'
+      expect(bmForm.icon).toBe('https://favicon.example.com/https://example.com')
+      expect(bmForm.iconPreviewVisible).toBe(true)
+      expect(bmForm.iconPreviewUrl).toBe(bmForm.icon)
+      expect(bmForm.clearIconVisible).toBe(true)
+    })
+
+    it('到 500ms：icon 已存在不被覆盖（仅空时填，iconPreviewUrl 不被改）', () => {
+      bmForm.url = 'https://example.com'
+      bmForm.icon = 'existing-icon-url'
+      bmForm.iconPreviewUrl = 'existing-preview'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.icon).toBe('existing-icon-url')
+      expect(bmForm.iconPreviewUrl).toBe('existing-preview')
+    })
+
+    it('AI 守卫：isEdit=true 时 500ms 后不调 suggestCategory/suggestAttributes', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.isEdit = true
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('AI 守卫：aiApplied=true 时 500ms 后不调 suggest（防重复建议）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.aiApplied = true
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('新建未应用：suggestCategory 非空且 categoryId 空时写入 aiSuggestCatId', () => {
+      bmForm.url = 'https://github.com'
+      mockAi.suggestedCatId = 'cat_dev'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 编排顺序真实特性：title 填充分支先于 AI 建议分支执行，故 suggestCategory 入参的 title
+      // 是已填好的 'Github'（github.com → 去首段首字母大写）而非初始空串
+      expect(mockSuggestCategory).toHaveBeenCalledWith('https://github.com', 'Github', mockData.categories)
+      expect(bmForm.aiSuggestCatId).toBe('cat_dev')
+    })
+
+    it('新建未应用 + categoryId 已有：suggestCategory 仍调但不覆盖 categoryId（不写 aiSuggestCatId）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.categoryId = 'existing-cat'
+      mockAi.suggestedCatId = 'cat_dev'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // suggestCategory 照调（编辑模式/已应用才在外层守卫拦截，categoryId 是否已有在内层判定）
+      expect(mockSuggestCategory).toHaveBeenCalled()
+      // 但 categoryId 已有，catId 不写入 aiSuggestCatId
+      expect(bmForm.aiSuggestCatId).toBeNull()
+    })
+
+    it('suggestAttributes 非空：写入 aiSuggestAttrIds 且过滤掉已采纳（!attributes[id]）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.attributes = { 'attr_kept': true }  // 已采纳的不应重复建议
+      mockAi.suggestedAttrIds = ['attr_kept', 'attr_new1', 'attr_new2']
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 编排顺序：title 已先被填成 'Github'，故 suggestAttributes 入参 title='Github'
+      expect(mockSuggestAttributes).toHaveBeenCalledWith('https://github.com', 'Github', mockData.customAttributes)
+      expect(bmForm.aiSuggestAttrIds).toEqual(['attr_new1', 'attr_new2'])
+    })
+
+    it('suggestAttributes 返回空数组：aiSuggestAttrIds 仍被赋空数组（length 守卫不写入）', () => {
+      bmForm.url = 'https://github.com'
+      bmForm.aiSuggestAttrIds = ['stale']  // 旧残留应被本轮清掉
+      mockAi.suggestedAttrIds = []
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // 源码 `if (attrIds.length)` 守卫：空数组不进赋值分支，故 stale 不被清
+      expect(bmForm.aiSuggestAttrIds).toEqual(['stale'])
+    })
+
+    it('再次输入先 clearTimeout 旧 timer：旧编排不再触发（new url 编排覆盖）', () => {
+      bmForm.url = 'https://first.com'
+      autoFetchFromUrl()
+      const firstTimer = bmForm._fetchTimer
+      expect(firstTimer).not.toBeNull()
+      // 第二次输入不同 url，先清旧 timer
+      bmForm.url = 'https://second.com'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).not.toBe(firstTimer)
+      // 仅推进 500ms：旧 timer 已被清，新 timer 触发，title 反映第二个 url
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Second')
+    })
+
+    it('previewLogo 在编排中被调：设置 logoPreviewVisible/Url/Text（favicon+domain 经 previewLogo）', () => {
+      bmForm.url = 'https://example.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // previewLogo 用 mock favicon/domain 设 logoPreview 字段（domain mock 去协议取 host）
+      expect(bmForm.logoPreviewVisible).toBe(true)
+      expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://example.com')
+      expect(bmForm.logoPreviewText).toBe('example.com')
+    })
+
+    // d1-116: autoFetchFromUrl 编排边界深挖护栏 —— d1-78 锁核心编排链后，7 用例补锁
+    // 「length<4 严格 < 边界 / title trim 检测 / title 变换无 www 与数字首段分支 /
+    //   isEdit 守卫只遮 AI 不遮 title·icon / icon='' 与 undefined 等价走填充分支」6 类
+    // 此前零直测的最易被未来重构误改的真实隐特性。autoFetchFromUrl 已 export useBookmark.ts:433
+    // 无需改源，纯加测试追加入既有 describe 块。
+
+    it('d1-116/1 length 边界严格 <：恰 length==4 即放行（trim 后 raw.length<4 守卫不拦 4 字符）', () => {
+      // 守卫是 `raw.length < 4`：'abc'(3) 早退已测，'abcd'(4) 恰不早退须进 timer 编排
+      // 若误改成 `<=4` 会让 'abcd' 也被早退——边界严格性直锁
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.url = 'abcd'  // 4 字符无点：domain('https://abcd')->'abcd'.replace(/^www\./,'')->'abcd'.split('.')[0]->'abcd'->'Abcd'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).not.toBeNull()
+      vi.advanceTimersByTime(500)
+      // 'abcd' split('.') 取整串首段（无点），首字符大写 → 'Abcd'
+      expect(bmForm.title).toBe('Abcd')
+    })
+
+    it('d1-116/2 title 仅 !bmForm.title.trim() 检测：纯空格 title 应被自动填充（与「非空串不被覆盖」行为不同）', () => {
+      // 源 `if (!bmForm.title.trim())` 是 trim 后空才走填充；'   ' trim()=== '' 视为空
+      // 若误改成 `if (!bmForm.title)` 会让空格串被视为有值不填——trim 检测隐特性直锁
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.title = '   '  // 纯空格
+      bmForm.url = 'www.foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Foo')
+    })
+
+    it('d1-116/3 title 变换无 www 前缀分支：foo.bar.com → Foo（split(\'.\')[0] 不依赖 www 替换）', () => {
+      // 'foo.bar.com' replace(/^www\./,'') 不命中（无 www）→ split('.')[0]='foo' → 'Foo'
+      // 直锁「replace 未命中也照样 split 取首段」隐特性，防误加 www 必须前提守卫
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.url = 'foo.bar.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Foo')
+    })
+
+    it('d1-116/4 title 数字首段不变大写：123abc.com → 123abc（首字符数字 toUpperCase 后不变）', () => {
+      // '123abc.com' → '123abc' → '1'.toUpperCase()='1' + '23abc' = '123abc'
+      // 数字首字符 toUpperCase() 行为不变（'1' !== '1'.toUpperCase() 落空），直锁真实行为
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.url = '123abc.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('123abc')
+    })
+
+    it('d1-116/5 isEdit=true 守卫只遮 AI 不遮 title：编辑已有书签改 URL 且 title 空时 title 仍被自动填充', () => {
+      // 源 AI 守卫 `if (!bmForm.isEdit && !bmForm.aiApplied)` 只遮 AI 分支，
+      // title/icon 填充在 AI 分支外——isEdit=true 时 title 仍按「空时填充」跑
+      // 这是 outward-facing 真实编排差异：编辑已有书签改 URL 时 title(若空) 也会被自动覆盖
+      bmForm.isEdit = true
+      bmForm.title = ''  // 空 → 仍走填充
+      bmForm.url = 'www.foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // title 被填（isEdit 不遮 title 填充）
+      expect(bmForm.title).toBe('Foo')
+      // 但 AI 编排被遮（isEdit=true）
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('d1-116/6 isEdit=true 守卫只遮 AI 不遮 icon：编辑已有书签改 URL 且 icon 空时 icon 仍被自动填充', () => {
+      // 与 d1-116/5 同源 sister：icon 填充在 AI 分支外，isEdit=true 仍照填
+      bmForm.isEdit = true
+      bmForm.icon = ''  // 空 → 仍走填充
+      bmForm.url = 'https://foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // icon 被填（isEdit 不遮 icon 填充）
+      expect(bmForm.icon).toBe('https://favicon.example.com/https://foo.com')
+      expect(bmForm.iconPreviewVisible).toBe(true)
+      expect(bmForm.clearIconVisible).toBe(true)
+      // AI 编排被遮
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('d1-116/7 icon 空串 \'\' 与 undefined 等价走 `!bmForm.icon` 填充分支（新建模式）', () => {
+      // 源 `if (!bmForm.icon)` 是 falsy 检测：'' / undefined / null 同走填充
+      // 若误改成 `=== undefined` 会让 icon='' 不被填，直接锁真实 falsy 检测语义
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.icon = ''  // 显式空串
+      bmForm.url = 'https://foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.icon).toBe('https://favicon.example.com/https://foo.com')
+    })
+  })
+})
+
+// D1-79 useBookmark.ts:170 — openBookmark 打开书签弹新窗口编排护栏
+// BookmarkCard.vue visit/visitSub(line 183/192)、CommandPalette.vue(line 118)、SearchSuggest.vue(line 90)
+// 活跃生产消费方，「打开书签弹新窗口」用户可见行为唯一承载。
+// 编排含 S1 安全守卫（fixUrl 对 javascript:/data: 危险 scheme 返空串→早退阻止弹窗并 toast 提示）
+// + !bm?.url 空守卫 + useCount 递增持久化 + window.open。
+describe('openBookmark 打开书签弹新窗口编排', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    resetMockStore()
+    // openBookmark 调 window.open（jsdom 提供），置 spy 便于断言调用并阻真实弹窗
+    vi.spyOn(window, 'open').mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('A：bm=null 空守卫→早退零副作用（不 updateBookmark/不 save/不 open/不 toast）', () => {
+    openBookmark(null as any)
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('B-S1：fixUrl 返空串（javascript:/data: 危险 scheme）→toast 阻止打开且不 updateBookmark/不 open', async () => {
+    const bm: any = { id: 'b1', url: 'javascript:alert(1)', useCount: 3 }
+    // mockData.bookmarkMap 让真实路径可触；fixUrl mock 已默认对非 http 补 https，此处覆写返空触发安全守卫
+    const { fixUrl } = await import('../../utils.js')
+    ;(fixUrl as any).mockReturnValueOnce('')
+
+    openBookmark(bm)
+
+    const { toast } = await import('../../lib/toast.js')
+    expect(toast).toHaveBeenCalledWith('该链接地址不安全，已阻止打开', false)
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('C：正路径合法 https url→updateBookmark(useCount+1)+debouncedSaveAppData+window.open(safeUrl) 各一次', () => {
+    const bm: any = { id: 'b1', url: 'https://github.com/x/y', useCount: 5 }
+    mockData.bookmarkMap['b1'] = bm
+
+    openBookmark(bm)
+
+    expect(mockData.updateBookmark).toHaveBeenCalledTimes(1)
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 6 })
+    expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
+    expect(window.open).toHaveBeenCalledTimes(1)
+    expect(window.open).toHaveBeenCalledWith('https://github.com/x/y', '_blank')
+    // 正路径不弹 toast
+  })
+
+  it('D：useCount 缺省(undefined)→走 `||0` 兜底递增至 1（防 NaN 塌陷）', () => {
+    const bm: any = { id: 'b1', url: 'https://a.com', useCount: undefined }
+    mockData.bookmarkMap['b1'] = bm
+
+    openBookmark(bm)
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+  })
+
+  it('E：useCount=0 走 `||0` 兜底递增至 1（0 falsy 也走兜底而非 0+1=1 巧合同值但语义锁住）', () => {
+    const bm: any = { id: 'b1', url: 'https://a.com', useCount: 0 }
+    mockData.bookmarkMap['b1'] = bm
+
+    openBookmark(bm)
+
+    // 0 是合法值||(0) → 0+1=1；若误改成 `??0`(只不 null/undefined) 则 0 仍 0+1=1 同值，但边界直锁
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+  })
+
+  it('F：协议前缀 url(example.com)经 fixUrl 补 https→window.open 收到补全后的 safeUrl 非原 url', async () => {
+    const bm: any = { id: 'b1', url: 'example.com', useCount: 2 }
+    mockData.bookmarkMap['b1'] = bm
+    // fixUrl mock 默认：非 http 开头 → 补 'https://' → 'https://example.com'
+    openBookmark(bm)
+
+    expect(window.open).toHaveBeenCalledWith('https://example.com', '_blank')
+    // 直锁 open 用的是 fixUrl 后的 safeUrl，「安全过滤后才弹窗」核心契约
+    const { fixUrl } = await import('../../utils.js')
+    expect(fixUrl).toHaveBeenCalledWith('example.com')
+  })
+
+  it('G：危险 scheme 安全守卫早退在 updateBookmark 之前（守卫顺序敏感：useCount 不被递增）', async () => {
+    const bm: any = { id: 'b1', url: 'data:text/html,evil', useCount: 7 }
+    mockData.bookmarkMap['b1'] = bm
+    const { fixUrl } = await import('../../utils.js')
+    ;(fixUrl as any).mockReturnValueOnce('')
+
+    openBookmark(bm)
+
+    // 关键：守卫 return 在 updateBookmark 之前，故危险 scheme 不递增 useCount
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.updateBookmark).not.toHaveBeenCalledWith('b1', expect.anything())
+  })
+
+  it('H：bm.url 空串→!bm?.url 早退（空守卫优先于 fixUrl，不弹 toast 不递增）', async () => {
+    const bm: any = { id: 'b1', url: '', useCount: 2 }
+    // fixUrl('') 返 '' 也会进安全守卫分支；但 bm.url 空时更早在 if(!bm?.url) return 早退
+    // 直锁：空 url 不进 fixUrl 分支（更早 return），故连 toast「不安全」都不弹（守卫顺序）
+    openBookmark(bm)
+
+    const { toast } = await import('../../lib/toast.js')
+    expect(toast).not.toHaveBeenCalled()
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+})
+
+// D1-81 useBookmark.ts:184 — visit 卡片点击分流到 openBookmark 的编排护栏
+// 活跃生产消费方：BookmarkCard.vue（卡片主体点击 → visit 打开书签）。
+// 「点卡片主体开书签 / 点卡片内编辑按钮·输入·contenteditable 区域不误开」用户可见交互分流唯一承载。
+// 编排含 4 守卫：① 可交互元素短路（e.target.closest 命中 button/input/.btn-xs/.card-actions/.group-body/
+// [contenteditable="true"]→return 不调 openBookmark）② bmId 取值优先级 id||DOM-data-id
+// ③ bmId 无效 return ④ 委托 openBookmark(bookmarkMap[bmId])（缺键→undefined→openBookmark 内 !url 早退兜底）
+describe('visit 卡片点击分流到 openBookmark', () => {
+  // 构造 jsdom 假元素 + 假事件：target.closest 行为可控，命中指定选择器返该元素否则 null。
+  // 多套内容：closest 命中可交互选择器返该元素 / 命中 .card[data-id] 返带 data-id 的卡片元素 / 未命中返 null。
+  function makeFakeEvent(target: { closest: (sel: string) => any } | null): any {
+    return { target }
+  }
+  function makeTargetWithInteractive(selector: string): { closest: (sel: string) => any } {
+    const el = { tagName: 'DIV' } as any
+    return {
+      closest(sel: string) {
+        // 命中传入的可交互选择器串即返该元素（模拟落在 button/input/contenteditable 等内）
+        return sel.includes(selector) ? el : null
+      },
+    } as any
+  }
+  function makeCardTarget(dataId: string | null): { closest: (sel: string) => any } {
+    const cardEl = { getAttribute: () => dataId } as any
+    return {
+      closest(sel: string) {
+        // 仅命中 .card[data-id] 选择器（卡片主体），其它（可交互）一律不命中
+        return sel.includes('.card') && sel.includes('data-id') ? cardEl : null
+      },
+    } as any
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    resetMockStore()
+    vi.spyOn(window, 'open').mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('A：e=null + id 参数正路径→委托 openBookmark（updateBookmark+save+window.open 各一次）', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(null, 'b1')
+
+    expect(mockData.updateBookmark).toHaveBeenCalledTimes(1)
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+    expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
+    expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
+  })
+
+  it('B：DOM 取 data-id 正路径（无 id 参数）→委托 openBookmark 传 bookmarkMap 命中对象', () => {
+    mockData.bookmarkMap['b2'] = { id: 'b2', url: 'https://b.com', useCount: 4 } as any
+    visit(makeFakeEvent(makeCardTarget('b2')), undefined)
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b2', { useCount: 5 })
+    expect(window.open).toHaveBeenCalledWith('https://b.com', '_blank')
+  })
+
+  it('C：e.target 落在 button（可交互元素）→短路不调 openBookmark（零副作用）', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(makeFakeEvent(makeTargetWithInteractive('button')), 'b1')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('D：e.target 落在 [contenteditable="true"]→短路不调 openBookmark', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(makeFakeEvent(makeTargetWithInteractive('contenteditable')), 'b1')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('E：可交互短路命中 .card-actions / .group-body 卡片内编辑/操作区→短路（点操作区不误开书签）', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
+    visit(makeFakeEvent(makeTargetWithInteractive('card-actions')), 'b1')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('F：bmId 取到但 bookmarkMap 缺键→委托 openBookmark(undefined)→openBookmark 内 !bm?.url 早退兜底零副作用（visit 不崩）', () => {
+    visit(null, 'missing')
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('G：无 id 参数 + DOM 无 data-id（e.target.closest 返 null）→bmId 取不到早退零副作用', () => {
+    const noDataIdCard = { getAttribute: () => null } as any
+    const target = {
+      closest(sel: string) {
+        return sel.includes('.card') && sel.includes('data-id') ? noDataIdCard : null
+      },
+    } as any
+    visit(makeFakeEvent(target), undefined)
+
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(window.open).not.toHaveBeenCalled()
+  })
+
+  it('H：id 参数优先于 DOM data-id（id|| 短路逻辑，防误改 DOM 覆盖显式 id）', () => {
+    mockData.bookmarkMap['b2'] = { id: 'b2', url: 'https://b.com', useCount: 1 } as any
+    // e.target.closest('.card[data-id]') 取到 'b1'，但传入 id='b2' 应优先
+    visit(makeFakeEvent(makeCardTarget('b1')), 'b2')
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b2', { useCount: 2 })
+    expect(window.open).toHaveBeenCalledWith('https://b.com', '_blank')
+  })
+
+  it('I：e.target 无 closest 方法（如文本节点经 ?. 链短路）→不抛且走 id 参数路径', () => {
+    mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 2 } as any
+    // target 无 closest 属性：?.closest?. 返 undefined（falsy），不进可交互短路，bmId 走 id 参数
+    const targetWithoutClosest = {} as any
+    visit(makeFakeEvent(targetWithoutClosest), 'b1')
+
+    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 3 })
+    expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
+  })
+})
+
+// d1-83：saveFromExtension 扩展端「一键静默保存书签」入口编排护栏。
+// useBookmark.ts:545-597 编排链：E1-001 dataHydrated 守卫闭门闩 → S2 fixUrl 危险scheme 拒存
+// → exact 重复去重 → newBookmarkId + order=nextBookmarkOrder 防抖动 → addBookmark + saveAppData
+// → toastWithUndo「已保存到书签」撤销编排（撤销时 deleteBookmark + debouncedSaveAppData + toast「已撤销」）。
+// 既有 coverage：dataIO.test.ts:184 仅 1 用例锁 order 唯一性 happy path，安全面/守卫/去重/撤销编排零护栏。
+// 依赖 lib/dataReady.js 模块级门闩（未 mock，测真实 isDataHydrated 语义）+ lib/newId.js 真实 newBookmarkId。
+// mockToastWithUndo.undoFn 捕获撤销回调（同 d1-80/d1-71 既有范本，toast.js mock 第 100 行）。
+describe('saveFromExtension 扩展端一键静默保存书签编排', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    resetMockStore()
+    // E1-001 门闩每用例复位为 false 基态（模块单例跨用例不自动重置）；用例内按需 mark ready
+    __testResetDataReady()
+  })
+
+  afterEach(() => {
+    // 还原门闩到 false，防跨 describe 污染（saveBm/addSub 等块不依赖门闩，但门闩若被本块某用例
+    // mark 完成 left true，跨 describe 仍持久，故按用例 afterEach 复位为保守基态）
+    __testResetDataReady()
+  })
+
+  it('A：E1-001 未 hydrate 守卫早退——toast「数据尚未就绪」+ return false，不 fixUrl/不 duplicate/不 add/不 save/不 undo', async () => {
+    const { toast } = await import('../../lib/toast.js')
+    const res = saveFromExtension('https://a.example', 'A')
+    expect(res).toBe(false)
+    expect(toast).toHaveBeenCalledWith('数据尚未就绪，请稍后重试', false)
+    // 守卫在 fixUrl 之前：危险 scheme 此时不应触 fixUrl（顺序敏感）
+    expect(mockData.addBookmark).not.toHaveBeenCalled()
+  })
+
+  it('B：S2 fixUrl 危险scheme 拒存（核心安全面）——fixUrl 返空 → toast「无法保存该链接」+ return false，不 duplicate/add/save/undo', async () => {
+    __testMarkDataReady()
+    const { toast } = await import('../../lib/toast.js')
+    const { saveAppData } = await import('../../stores/app.js')
+    // fixUrl mock 默认对 http 前缀透传、空串/无 http 前缀补 https；这里覆写一次返空串模拟
+    // danger scheme（javascript:/data:）经 fixUrl 安全过滤后得空串
+    const { fixUrl } = await import('../../utils.js')
+    vi.mocked(fixUrl).mockReturnValueOnce('')
+    const res = saveFromExtension('javascript:alert(1)', 'B')
+    expect(res).toBe(false)
+    expect(toast).toHaveBeenCalledWith('无法保存该链接', false)
+    expect(mockData.addBookmark).not.toHaveBeenCalled()
+    expect(saveAppData).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    expect(mockToastWithUndo.undoFn).toBeNull()
+  })
+
+  it('C：exact 重复去重——现存同 url 书签 → toast「该网址已存在书签「<title>」」+ return false，不 add/save/undo', async () => {
+    __testMarkDataReady()
+    const { toast } = await import('../../lib/toast.js')
+    mockData.bookmarks.push({ id: 'dup', title: '已存在', url: 'https://dup.example' } as any)
+    const res = saveFromExtension('https://dup.example', 'C')
+    expect(res).toBe(false)
+    // exact.title→「已存在」，message 含书签名
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('已存在'), false)
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('该网址已存在书签'), false)
+    expect(mockData.addBookmark).not.toHaveBeenCalled()
+  })
+
+  it('D：正路径合法 https——return true + addBookmark(url=safeUrl) + saveAppData + toastWithUndo「已保存到书签」+ undo 回调注册', async () => {
+    __testMarkDataReady()
+    const { saveAppData } = await import('../../stores/app.js')
+    const { toastWithUndo } = await import('../../lib/toast.js')
+    const res = saveFromExtension('https://ok.example', '标题D')
+    expect(res).toBe(true)
+    expect(mockData.addBookmark).toHaveBeenCalledTimes(1)
+    const added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.url).toBe('https://ok.example')
+    expect(typeof added.id).toBe('string')
+    expect(added.id).toBeTruthy()
+    expect(saveAppData).toHaveBeenCalledTimes(1)
+    expect(toastWithUndo).toHaveBeenCalledWith('已保存到书签', expect.any(Function))
+    expect(mockToastWithUndo.undoFn).not.toBeNull()
+  })
+
+  it('E：title 兜底链 (title||dm).trim()||dm——空 title 用 domain；纯空白 title trim 后空亦用 domain', () => {
+    __testMarkDataReady()
+    // 空 title（undefined）→ domain 'whitespace.example'
+    saveFromExtension('https://whitespace.example', undefined as any)
+    let added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.title).toBe('whitespace.example')
+    // 纯空白 title 经 trim()→''，|| dm 兜底用 domain 'ws2.example'
+    saveFromExtension('https://ws2.example', '   ')
+    added = mockData.addBookmark.mock.calls[1][0] as any
+    expect(added.title).toBe('ws2.example')
+  })
+
+  it('F：order=nextBookmarkOrder 防抖动——addBookmark 入参 order === mockData.nextBookmarkOrder() 返回值（非 length）', () => {
+    __testMarkDataReady()
+    // nextBookmarkOrder mock 默认 reduce(-1)+1=0（mockData.bookmarks 空时）；注入一个返回值锁契约
+    mockData.nextBookmarkOrder.mockReturnValueOnce(42)
+    saveFromExtension('https://order.example', 'F')
+    const added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.order).toBe(42)
+  })
+
+  it('G：addBookmark 入参字段契约——categoryId=CAT_UNCATEGORIZED / parentId=null / useCount=0 / attributes={}/isExpanded=false / icon 含 favicon domain / notes 透传', () => {
+    __testMarkDataReady()
+    saveFromExtension('https://fields.example', 'G', '备注G')
+    const added = mockData.addBookmark.mock.calls[0][0] as any
+    expect(added.categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(added.parentId).toBeNull()
+    expect(added.useCount).toBe(0)
+    expect(added.attributes).toEqual({})
+    expect(added.isExpanded).toBe(false)
+    expect(added.notes).toBe('备注G')
+    expect(added.icon).toContain('fields.example')
+    expect(added.icon).toContain('favicon')
+    expect(typeof added.createdAt).toBe('number')
+    expect(added.createdAt).toBe(added.updatedAt)
+  })
+
+  it('H：undo 撤销回调——mockToastWithUndo.undoFn() 触发 deleteBookmark(addedId)+debouncedSaveAppData()+toast「已撤销」', async () => {
+    __testMarkDataReady()
+    const { toast } = await import('../../lib/toast.js')
+    saveFromExtension('https://undo.example', 'H')
+    const addedId = (mockData.addBookmark.mock.calls[0][0] as any).id
+    expect(mockData.deleteBookmark).not.toHaveBeenCalled()
+    expect(debouncedSaveAppData).not.toHaveBeenCalled()
+    // 触发撤销
+    mockToastWithUndo.undoFn!()
+    expect(mockData.deleteBookmark).toHaveBeenCalledTimes(1)
+    expect(mockData.deleteBookmark).toHaveBeenCalledWith(addedId)
+    expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
+    expect(toast).toHaveBeenCalledWith('已撤销')
+  })
+
+  it('I：守卫顺序敏感——未 hydrate 早退在 S2 fixUrl 之前（danger scheme 但未 hydrate 走 E1-001 守卫不触 S2）', async () => {
+    const { toast } = await import('../../lib/toast.js')
+    // 未 mark ready + 危险 scheme：应走 E1-001 守卫 toast「数据尚未就绪」，非 S2 toast「无法保存该链接」
+    const res = saveFromExtension('javascript:alert(1)', 'I')
+    expect(res).toBe(false)
+    expect(toast).toHaveBeenCalledWith('数据尚未就绪，请稍后重试', false)
+    expect(toast).not.toHaveBeenCalledWith('无法保存该链接', false)
   })
 })

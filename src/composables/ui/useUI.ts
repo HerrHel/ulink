@@ -39,7 +39,7 @@ export function openDetail(bmId: string) {
 }
 
 // ── Card Tags (scroll + overflow) ──
-function _onCardTagsWheel(e: WheelEvent) {
+export function _onCardTagsWheel(e: WheelEvent) {
   const tags = (e.target as HTMLElement).closest('.card-tags')
   if (tags && tags.scrollWidth > tags.clientWidth) {
     e.preventDefault()

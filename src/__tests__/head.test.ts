@@ -113,4 +113,66 @@ describe('head.ts', () => {
     // 纯动态 meta 应被移除
     expect(document.head.querySelector('meta[property="og:type"]')).toBeNull()
   })
+
+  // 连续覆盖仅首次备份守卫（d1-58）：setTitle 的 `if (_titleBackup === null)` 与
+  // setMetaByAttr 的 `if (!_staticMetaBackup.has(key))` 守卫决定连续多次覆盖只记
+  // 首个原值、cleanup 回首启值而非末次覆盖值。line 17/88 只测单次覆盖，
+  // 「连续覆盖仅首次备份」此前零断言靠源码 line 30/52 实现口头维护——
+  // 任一守卫被误删（改为每次覆盖都备份）会让 cleanup 回到末次覆盖值而非首启原值。
+  it('连续 setTitle 仅首次备份，cleanup 回首启原值非末次值 (d1-58)', () => {
+    document.title = '原始标题'
+    setTitle('动态A')
+    setTitle('动态B')
+    expect(document.title).toBe('动态B')
+    cleanupInjectedHead()
+    // 回首启原值 '原始标题'，不是 '动态A'（中间过桥值）也不是 '动态B'（末次覆盖值）
+    expect(document.title).toBe('原始标题')
+  })
+
+  it('连续 setMetaByAttr 覆盖静态 meta 仅首次备份，cleanup 回首启原值 (d1-58)', () => {
+    const staticMeta = document.createElement('meta')
+    staticMeta.setAttribute('name', 'description')
+    staticMeta.setAttribute('content', '原始描述')
+    document.head.appendChild(staticMeta)
+    setMetaByAttr('name', 'description', '动态X')
+    setMetaByAttr('name', 'description', '动态Y')
+    expect(staticMeta.getAttribute('content')).toBe('动态Y')
+    cleanupInjectedHead()
+    // 回首启静态原值 '原始描述'，不是 '动态X'（中间过桥值）也不是 '动态Y'（末次覆盖值）
+    expect(staticMeta.getAttribute('content')).toBe('原始描述')
+  })
+
+  it('setMetaByAttr 复用动态创建的带 MARK meta 不进备份，cleanup 移除而非还原 (d1-58)', () => {
+    setMetaByAttr('property', 'og:title', '动态A') // 新建带 MARK 动态 meta（无静态原值）
+    setMetaByAttr('property', 'og:title', '动态B') // 复用同一动态节点
+    const el = document.head.querySelector<HTMLMetaElement>('meta[property="og:title"]')
+    expect(el?.getAttribute('content')).toBe('动态B')
+    expect(el?.hasAttribute('data-lv-head')).toBe(true)
+    cleanupInjectedHead()
+    // 动态 meta 被移除（has MARK），不存在「还原到不存在」语义
+    expect(document.head.querySelector('meta[property="og:title"]')).toBeNull()
+  })
+
+  it('cleanup 后模块 _titleBackup 复位，连续 cleanup 走 DEFAULT_TITLE 不重复 restore (d1-58)', () => {
+    document.title = '原始标题'
+    setTitle('动态')
+    cleanupInjectedHead()
+    expect(document.title).toBe('原始标题')
+    // 第二次 cleanup:_titleBackup 已被首发 cleanup 置 null → 走 DEFAULT_TITLE 分支（line 119）
+    document.title = '被改'
+    cleanupInjectedHead()
+    expect(document.title).toBe('LinkVault — 个人书签管理器')
+  })
+
+  it('cleanup 后再 setTitle 备份新原值，不沿用旧 _titleBackup (d1-58)', () => {
+    document.title = '第一组原值'
+    setTitle('动态一')
+    cleanupInjectedHead()
+    expect(document.title).toBe('第一组原值')
+    // cleanup 复位 _titleBackup=null 后，新setTitle 备份的是当前 '第一组原值' 而非旧备份
+    document.title = '第二组原值'
+    setTitle('动态二')
+    cleanupInjectedHead()
+    expect(document.title).toBe('第二组原值')
+  })
 })
