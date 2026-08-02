@@ -53,7 +53,7 @@ vi.mock('../../stores/overlay.js', () => ({
   useMfbStore: () => ({ open: false, hide: vi.fn() }),
 }))
 
-import { captureNavState, restoreNavState, _onGlobalKeydown } from '../../composables/interaction/useKeyboardOps.js'
+import { captureNavState, restoreNavState, _onGlobalKeydown, pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 
 function makeKey(key: string, opts: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
@@ -358,5 +358,250 @@ describe('d1-95 restoreNavState closers 顺序短路 + prev!==true 严格判断 
     expect(exitGroupFocusMock).not.toHaveBeenCalled()
     expect(mockUI.curCat).toBe('all')
     expect(mockUI.focusedGroupId).toBe(null)
+  })
+})
+
+// d1-115: A2-011 全周期护栏真增量缺口（d1-95 已锁 captureNavState 14 字段 + restoreNavState
+//        modal/close 顺序短路 + curCat 兜底，本轮补 d1-95 漏掉的真缺口：pushNavState 自身零护栏 +
+//        restoreNavState panel/overlay 7 closer 顺序短路优先级 + prev=open 已开层不关穷举 +
+//        modal 分支 delegate close vs panel 分支直写 store 真实差异）。
+describe('d1-115 pushNavState 委托 history.pushState 入参契约（A2-011 导航栈 push 核心，d1-95 未测）', () => {
+  let pushStateSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    pushStateSpy = vi.spyOn(history, 'pushState')
+  })
+
+  it('调 history.pushState 一次（push 一次栈帧，供浏览器后退关面板）', () => {
+    pushNavState()
+    expect(pushStateSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('入参第一参是 captureNavState 快照（当前态对象，含 curCat/focusedGroupId 真实值）', () => {
+    mockUI.curCat = 'dev'
+    mockUI.focusedGroupId = 'gA'
+    mockUI.panels.settings = true
+    pushNavState()
+    const arg = pushStateSpy.mock.calls[0][0] as Record<string, unknown>
+    // 入参是真 snapshot 对象，关键字段反映 push 当时的 uiStore 态
+    expect(arg).toMatchObject({ curCat: 'dev', focusedGroupId: 'gA', settings: true, detailPanelOpen: false })
+    // 入参含完整 NavState 键集（与 captureNavState 同结构，非 partial）
+    expect(Object.keys(arg).sort()).toEqual(
+      ['attr','bm','cat','curCat','deadLinks','detailPanelOpen','feedback','focusedGroupId','groupEdit','history','settings','shortcutHelp','trash']
+    )
+  })
+
+  it('入参第二参是空串（title 参数恒空，符合 A2-011 仅用 state 不用 title 契约）', () => {
+    pushNavState()
+    expect(pushStateSpy.mock.calls[0][1]).toBe('')
+  })
+
+  it('连续 push 两次入栈两帧：每次调一次 pushState，两次入参是同一时刻不同 snapshot 互不干扰', () => {
+    mockUI.panels.detail = false
+    pushNavState() // push 帧 A：detail 尚未开
+    const argA = pushStateSpy.mock.calls[0][0] as Record<string, unknown>
+    mockUI.panels.detail = true
+    pushNavState() // push 帧 B：detail 已开
+    const argB = pushStateSpy.mock.calls[1][0] as Record<string, unknown>
+    expect(pushStateSpy).toHaveBeenCalledTimes(2)
+    // 两次入参分别反映 push 当时的态（A 时 detail=false / B 时 detail=true），互不引用同一对象
+    expect(argA.detailPanelOpen).toBe(false)
+    expect(argB.detailPanelOpen).toBe(true)
+    expect(argA).not.toBe(argB)
+  })
+
+  it('不改 uiStore 态（纯 push 一个栈帧，不 mutate store 读源——与 restoreNavState 写 store 截然不同）', () => {
+    mockUI.curCat = 'before-push'
+    mockUI.panels.settings = true
+    pushNavState()
+    // pushNavState 全程只 pushState(captureNavState) 不写 store
+    expect(mockUI.curCat).toBe('before-push')
+    expect(mockUI.panels.settings).toBe(true)
+  })
+})
+
+describe('d1-115 restoreNavState panel/overlay 7 closer 顺序短路优先级（d1-95 仅测 modal 四优先级，未测 panel/overlay 层间顺序）', () => {
+  const allFalsePrev = () => ({
+    curCat: 'all', focusedGroupId: null, detailPanelOpen: false, bm: false, groupEdit: false, cat: false, attr: false,
+    settings: false, trash: false, deadLinks: false, shortcutHelp: false, history: false, feedback: false,
+  })
+
+  it('detail closer[5] 短路优先于 settings closer[6]：detail+settings 都开 + prev 都 false → 只关 detail，settings 仍开', () => {
+    mockUI.panels.detail = true
+    mockUI.panels.settings = true
+    restoreNavState(allFalsePrev())
+    // closers[5] detail 命中（!prev.detailPanelOpen && ui.panels.detail）→ ui.panels.detail=false + return true 短路
+    expect(mockUI.panels.detail).toBe(false)
+    // settings closer[6] 因短路不被触 ui.panels.settings 仍 true（panel 分支直接置 false，未触即不变）
+    expect(mockUI.panels.settings).toBe(true)
+  })
+
+  it('settings closer[6] 短路优先于 trash closer[7]：settings+trash 都开 + prev 都 false → 只关 settings', () => {
+    mockUI.panels.settings = true
+    mockUI.panels.trash = true
+    restoreNavState(allFalsePrev())
+    expect(mockUI.panels.settings).toBe(false)
+    expect(mockUI.panels.trash).toBe(true)
+  })
+
+  it('trash closer[7] 短路优先于 deadLinks closer[9]：trash(panel)+deadLinks(overlay) 都开 → 只关 trash', () => {
+    mockUI.panels.trash = true
+    mockUI.overlays.deadLinks = true
+    restoreNavState(allFalsePrev())
+    expect(mockUI.panels.trash).toBe(false)
+    expect(mockUI.overlays.deadLinks).toBe(true)
+  })
+
+  it('deadLinks closer[9] 短路优先于 shortcutHelp closer[10]：deadLinks+shortcutHelp 都开 → 只关 deadLinks', () => {
+    mockUI.overlays.deadLinks = true
+    mockUI.panels.shortcutHelp = true
+    restoreNavState(allFalsePrev())
+    expect(mockUI.overlays.deadLinks).toBe(false)
+    expect(mockUI.panels.shortcutHelp).toBe(true)
+  })
+
+  it('shortcutHelp closer[10] 短路优先于 history closer[11]：shortcutHelp+history 都开 → 只关 shortcutHelp', () => {
+    mockUI.panels.shortcutHelp = true
+    mockUI.panels.history = true
+    restoreNavState(allFalsePrev())
+    expect(mockUI.panels.shortcutHelp).toBe(false)
+    expect(mockUI.panels.history).toBe(true)
+  })
+
+  it('history closer[11] 短路优先于 feedback closer[12]：history+feedback 都开 → 只关 history', () => {
+    mockUI.panels.history = true
+    mockUI.overlays.feedback = true
+    restoreNavState(allFalsePrev())
+    expect(mockUI.panels.history).toBe(false)
+    expect(mockUI.overlays.feedback).toBe(true)
+  })
+
+  it('modal closer 短路优先于所有 panel closer：bm modal + detail panel 都开 + prev 都 false → 关 bm 不关 detail', () => {
+    mockUI.modals.bookmark = true
+    mockUI.panels.detail = true
+    restoreNavState(allFalsePrev())
+    expect(closeBmModalMock).toHaveBeenCalledTimes(1)          // closers[0] bm 命中 delegate
+    expect(mockUI.panels.detail).toBe(true)                   // detail closer[5] 未触仍开
+  })
+})
+
+describe('d1-115 restoreNavState prev=open 已开层不关穷举（d1-95 line 143-148 仅测 trash 1 字段，未穷举 modal/panel/overlay）', () => {
+  // 返回所有字段为 false 的全关快照，再按 key 单挑置 true（模拟某层「push 前 prev 即已开」态）
+  const prevOpenOnly = (key: 'bm' | 'groupEdit' | 'cat' | 'attr' | 'detailPanelOpen' | 'settings' | 'trash' | 'deadLinks' | 'shortcutHelp' | 'history' | 'feedback') => {
+    const base = { curCat: 'all', focusedGroupId: null, detailPanelOpen: false, bm: false, groupEdit: false, cat: false, attr: false, settings: false, trash: false, deadLinks: false, shortcutHelp: false, history: false, feedback: false }
+    base[key] = true
+    return base
+  }
+
+  it('prev.bm=true 当前 bm 已开 → bm 分支 `prev.bm !== true` 守卫短路不关，closeBmModal 不调', () => {
+    mockUI.modals.bookmark = true
+    restoreNavState(prevOpenOnly('bm'))
+    expect(closeBmModalMock).not.toHaveBeenCalled()
+    // modal 分支 delegate（不直改 store），mock 下 modals.bookmark 不变；真实 closeBmModal 才会改——此差异下一 describe 专锁
+  })
+
+  it('prev.groupEdit=true 当前 groupEdit 已开 → groupEdit 分支短路不关，closeGroupEdit 不调', () => {
+    mockUI.modals.groupEdit = true
+    restoreNavState(prevOpenOnly('groupEdit'))
+    expect(closeGroupEditMock).not.toHaveBeenCalled()
+  })
+
+  it('prev.cat=true 当前 cat 已开 → cat 分支短路不关，closeCatModal 不调', () => {
+    mockUI.modals.category = true
+    restoreNavState(prevOpenOnly('cat'))
+    expect(closeCatModalMock).not.toHaveBeenCalled()
+  })
+
+  it('prev.attr=true 当前 attr 已开 → attr 分支短路不关，closeAttrModal 不调', () => {
+    mockUI.modals.attribute = true
+    restoreNavState(prevOpenOnly('attr'))
+    expect(closeAttrModalMock).not.toHaveBeenCalled()
+  })
+
+  it('prev.settings=true 当前 settings 已开 → settings 分支 `!prev.settings` 守卫短路，settings 仍开', () => {
+    mockUI.panels.settings = true
+    restoreNavState(prevOpenOnly('settings'))
+    expect(mockUI.panels.settings).toBe(true)
+  })
+
+  it('prev.trash=true 当前 trash 已开 → trash 分支短路，trash 仍开', () => {
+    mockUI.panels.trash = true
+    restoreNavState(prevOpenOnly('trash'))
+    // 注意：trash 是 panel 分支 [7]，若 trash 是唯一开层且 prev.trash=true，前 7 closer 全不命中，
+    // 到 closers[8-13]：focus/curCat 也不命中（prev 与当前全一致 except trash），全空返不 mutate
+    expect(mockUI.panels.trash).toBe(true)
+  })
+
+  it('prev.detailPanelOpen=true 当前 detail 已开 → detail 分支 `!prev.detailPanelOpen` 守卫短路不关', () => {
+    mockUI.panels.detail = true
+    restoreNavState(prevOpenOnly('detailPanelOpen'))
+    expect(mockUI.panels.detail).toBe(true)
+  })
+
+  it('prev.deadLinks=true 当前 deadLinks 已开 → deadLinks 分支短路不关', () => {
+    mockUI.overlays.deadLinks = true
+    restoreNavState(prevOpenOnly('deadLinks'))
+    expect(mockUI.overlays.deadLinks).toBe(true)
+  })
+
+  it('prev.shortcutHelp=true 当前 shortcutHelp 已开 → shortcutHelp 分支短路不关', () => {
+    mockUI.panels.shortcutHelp = true
+    restoreNavState(prevOpenOnly('shortcutHelp'))
+    expect(mockUI.panels.shortcutHelp).toBe(true)
+  })
+
+  it('prev.history=true 当前 history 已开 → history 分支短路不关', () => {
+    mockUI.panels.history = true
+    restoreNavState(prevOpenOnly('history'))
+    expect(mockUI.panels.history).toBe(true)
+  })
+
+  it('prev.feedback=true 当前 feedback 已开 → feedback 分支短路不关', () => {
+    mockUI.overlays.feedback = true
+    restoreNavState(prevOpenOnly('feedback'))
+    expect(mockUI.overlays.feedback).toBe(true)
+  })
+})
+
+describe('d1-115 restoreNavState modal 分支 delegate close vs panel 分支直写 store 真实差异（d1-95 line 292-294 注释注意到但未锁定）', () => {
+  const allFalsePrev = () => ({
+    curCat: 'all', focusedGroupId: null, detailPanelOpen: false, bm: false, groupEdit: false, cat: false, attr: false,
+    settings: false, trash: false, deadLinks: false, shortcutHelp: false, history: false, feedback: false,
+  })
+
+  it('modal closer 命中：mock 下 close 被调但 modals 字段不被 restoreNavState 直改（delegate 语义，real close 才改 store）', () => {
+    mockUI.modals.bookmark = true
+    restoreNavState(allFalsePrev())
+    // modal 分支走 closeBmModal() delegate，restoreNavState 自身不写 ui.modals.bookmark=false
+    expect(closeBmModalMock).toHaveBeenCalledTimes(1)
+    // mock closeBmModal 是空 fn 不改 store → modals.bookmark 仍 true（真实实现里 closeBmModal 内部才置 false）
+    // —— 直锁真实行为差异：modal 分支只 delegate 不直改 store，与 panel 分支对照
+    expect(mockUI.modals.bookmark).toBe(true)
+  })
+
+  it('panel closer 命中：restoreNavState 直接置 ui.panels.X=false（直写 store，不经 delegate）', () => {
+    mockUI.panels.settings = true
+    restoreNavState(allFalsePrev())
+    // panel closer 走 `ui.panels.settings = false` 直写，store 即时变 false
+    expect(mockUI.panels.settings).toBe(false)
+  })
+
+  it('overlay closer 命中：restoreNavState 直接置 ui.overlays.X=false（直写 store，与 panel 同款不经 delegate）', () => {
+    mockUI.overlays.deadLinks = true
+    restoreNavState(allFalsePrev())
+    expect(mockUI.overlays.deadLinks).toBe(false)
+  })
+
+  it('focus closer 命中：exitGroupFocus delegate（不改 ui.focusedGroupId），但此处若 curCat 不等 restoreNavState 直改 ui.curCat（混合语义）', () => {
+    mockUI.focusedGroupId = 'gM'
+    mockUI.curCat = 'changed'
+    const prev = allFalsePrev() // prev.curCat='all' 与当前 'changed' 不等
+    restoreNavState(prev)
+    expect(exitGroupFocusMock).toHaveBeenCalledTimes(1)       // focus closer delegate exitGroupFocus
+    // 但 focus closer 内 `if (prev.curCat !== ui.curCat) ui.curCat = prev.curCat` 是 restoreNavState 直写 store
+    expect(mockUI.curCat).toBe('all')                          // 直写还原成 prev.curCat
+    // exitGroupFocus 是 mock 空 fn 不清 ui.focusedGroupId（真实实现里才清）
+    expect(mockUI.focusedGroupId).toBe('gM')                   // delegate 不直改 store，与 modal 同款
   })
 })
