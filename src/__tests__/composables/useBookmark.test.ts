@@ -1719,6 +1719,103 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       expect(bmForm.logoPreviewUrl).toBe('https://favicon.example.com/https://example.com')
       expect(bmForm.logoPreviewText).toBe('example.com')
     })
+
+    // d1-116: autoFetchFromUrl 编排边界深挖护栏 —— d1-78 锁核心编排链后，7 用例补锁
+    // 「length<4 严格 < 边界 / title trim 检测 / title 变换无 www 与数字首段分支 /
+    //   isEdit 守卫只遮 AI 不遮 title·icon / icon='' 与 undefined 等价走填充分支」6 类
+    // 此前零直测的最易被未来重构误改的真实隐特性。autoFetchFromUrl 已 export useBookmark.ts:433
+    // 无需改源，纯加测试追加入既有 describe 块。
+
+    it('d1-116/1 length 边界严格 <：恰 length==4 即放行（trim 后 raw.length<4 守卫不拦 4 字符）', () => {
+      // 守卫是 `raw.length < 4`：'abc'(3) 早退已测，'abcd'(4) 恰不早退须进 timer 编排
+      // 若误改成 `<=4` 会让 'abcd' 也被早退——边界严格性直锁
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.url = 'abcd'  // 4 字符无点：domain('https://abcd')->'abcd'.replace(/^www\./,'')->'abcd'.split('.')[0]->'abcd'->'Abcd'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).not.toBeNull()
+      vi.advanceTimersByTime(500)
+      // 'abcd' split('.') 取整串首段（无点），首字符大写 → 'Abcd'
+      expect(bmForm.title).toBe('Abcd')
+    })
+
+    it('d1-116/2 title 仅 !bmForm.title.trim() 检测：纯空格 title 应被自动填充（与「非空串不被覆盖」行为不同）', () => {
+      // 源 `if (!bmForm.title.trim())` 是 trim 后空才走填充；'   ' trim()=== '' 视为空
+      // 若误改成 `if (!bmForm.title)` 会让空格串被视为有值不填——trim 检测隐特性直锁
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.title = '   '  // 纯空格
+      bmForm.url = 'www.foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Foo')
+    })
+
+    it('d1-116/3 title 变换无 www 前缀分支：foo.bar.com → Foo（split(\'.\')[0] 不依赖 www 替换）', () => {
+      // 'foo.bar.com' replace(/^www\./,'') 不命中（无 www）→ split('.')[0]='foo' → 'Foo'
+      // 直锁「replace 未命中也照样 split 取首段」隐特性，防误加 www 必须前提守卫
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.url = 'foo.bar.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Foo')
+    })
+
+    it('d1-116/4 title 数字首段不变大写：123abc.com → 123abc（首字符数字 toUpperCase 后不变）', () => {
+      // '123abc.com' → '123abc' → '1'.toUpperCase()='1' + '23abc' = '123abc'
+      // 数字首字符 toUpperCase() 行为不变（'1' !== '1'.toUpperCase() 落空），直锁真实行为
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.url = '123abc.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('123abc')
+    })
+
+    it('d1-116/5 isEdit=true 守卫只遮 AI 不遮 title：编辑已有书签改 URL 且 title 空时 title 仍被自动填充', () => {
+      // 源 AI 守卫 `if (!bmForm.isEdit && !bmForm.aiApplied)` 只遮 AI 分支，
+      // title/icon 填充在 AI 分支外——isEdit=true 时 title 仍按「空时填充」跑
+      // 这是 outward-facing 真实编排差异：编辑已有书签改 URL 时 title(若空) 也会被自动覆盖
+      bmForm.isEdit = true
+      bmForm.title = ''  // 空 → 仍走填充
+      bmForm.url = 'www.foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // title 被填（isEdit 不遮 title 填充）
+      expect(bmForm.title).toBe('Foo')
+      // 但 AI 编排被遮（isEdit=true）
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('d1-116/6 isEdit=true 守卫只遮 AI 不遮 icon：编辑已有书签改 URL 且 icon 空时 icon 仍被自动填充', () => {
+      // 与 d1-116/5 同源 sister：icon 填充在 AI 分支外，isEdit=true 仍照填
+      bmForm.isEdit = true
+      bmForm.icon = ''  // 空 → 仍走填充
+      bmForm.url = 'https://foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      // icon 被填（isEdit 不遮 icon 填充）
+      expect(bmForm.icon).toBe('https://favicon.example.com/https://foo.com')
+      expect(bmForm.iconPreviewVisible).toBe(true)
+      expect(bmForm.clearIconVisible).toBe(true)
+      // AI 编排被遮
+      expect(mockSuggestCategory).not.toHaveBeenCalled()
+      expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('d1-116/7 icon 空串 \'\' 与 undefined 等价走 `!bmForm.icon` 填充分支（新建模式）', () => {
+      // 源 `if (!bmForm.icon)` 是 falsy 检测：'' / undefined / null 同走填充
+      // 若误改成 `=== undefined` 会让 icon='' 不被填，直接锁真实 falsy 检测语义
+      mockAi.suggestedCatId = null
+      mockAi.suggestedAttrIds = []
+      bmForm.icon = ''  // 显式空串
+      bmForm.url = 'https://foo.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.icon).toBe('https://favicon.example.com/https://foo.com')
+    })
   })
 })
 
