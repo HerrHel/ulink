@@ -78,5 +78,11 @@ const gridClass = computed(() => {
 
 // 移动端批量模式拖拽排序（纯 pointer events）
 // 绑定 normalGridRef：batchMode 时 useVirtual 为 false，该 ref 一定挂载
-useMobileDragReorder(normalGridRef, combinedList)
+// axis：多列网格（mini-grid / grid）需 X/Y 双轴跟手 + 2D 最近邻落点；列表/虚拟 list 仅 Y。
+// 虚拟模式强制 list-view（gridClass 内），故 useVirtual 为真时恒走 'y' 路径，2D 不污染虚拟滚动。
+const mobileDragAxis = computed<'y' | 'xy'>(() => {
+  if (useVirtual.value) return 'y'
+  return ui.layoutMode === 'mini-grid' || ui.layoutMode === 'grid' ? 'xy' : 'y'
+})
+useMobileDragReorder(normalGridRef, combinedList, { axis: mobileDragAxis })
 </script>
