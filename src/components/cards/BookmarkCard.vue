@@ -79,7 +79,7 @@
     </div>
     <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
     <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
-    <div v-if="uiStore.batchMode && uiStore.isMobile" class="batch-drag-handle" v-html="I.grip"></div>
+    <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>
 

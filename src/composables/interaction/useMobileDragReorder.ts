@@ -50,47 +50,15 @@ export function applyIntervalOrder(
   }
 }
 
-/**
- * 2D 模式的落点核心：在「未拖格中心」集合里找离被拖卡片中心最近的格，返回其索引。
- * 纯函数、零 DOM 依赖，便于在 jsdom 之外单测（移动端拖拽无 Playwright，靠纯函数锁行为）。
- *
- * - 用距离平方比较，免 sqrt 且不改变最近邻结果（单调）。
- * - 并列平局稳定取首个（遍历严格小于才更新，故同距保留先遍历者）。
- * - 空数组（无未拖格）返回 -1，调用方据此走 append 末尾逻辑。
- * - 排除被拖自身由调用方在传 centers 时已过滤，本函数不判重。
- */
-export function findNearestCellIndex(
-  centers: ReadonlyArray<{ cx: number; cy: number }>,
-  draggedCenter: { x: number; y: number },
-): number {
-  if (centers.length === 0) return -1
-  let bestIdx = 0
-  let bestDist = Infinity
-  for (let i = 0; i < centers.length; i++) {
-    const dx = centers[i].cx - draggedCenter.x
-    const dy = centers[i].cy - draggedCenter.y
-    const dist = dx * dx + dy * dy
-    if (dist < bestDist) {
-      bestDist = dist
-      bestIdx = i
-    }
-  }
-  return bestIdx
-}
-
 interface DragState {
   el: HTMLElement
   placeholder: HTMLDivElement
   /** portal 到 body 时记录原父节点，pointerup 时移回占位符位置 */
   originalParent: HTMLElement | null
   startY: number
-  startX: number
   initialTop: number
-  initialLeft: number
   lastY: number
-  lastX: number
   itemHeight: number
-  itemWidth: number
   itemIndex: number
   currentIndex: number
   pointerId: number
@@ -106,13 +74,6 @@ interface UseMobileDragReorderOptions {
   onReorder?: ReorderFn | null
   placeholderClass?: string
   draggingClass?: string
-  /**
-   * 拖拽跟手/落点的轴。
-   * - 'y'（默认）：仅 Y 轴跟手、落点按 Y leadEdge×midY 比较。列表模式（单列）用此。
-   * - 'xy'：X/Y 双轴跟手、落点按 2D 最近邻格中心（见 findNearestCellIndex）。网格模式（mini-grid / grid 多列）用此。
-   * 默认 'y' 保证列表与历史调用方零回归；'xy' 仅 CardGrid 在网格布局注入。
-   */
-  axis?: 'y' | 'xy'
   /**
    * 拖拽期间把被拖元素移到 document.body 跟手。用于容器处于 transform / overflow:hidden
    * 祖先（如带进出场动画的 modal）内的列表：否则 fixed 定位会被 transform 祖先裁切，
@@ -133,17 +94,14 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     placeholderClass = 'card card-drag-placeholder',
     draggingClass = 'card-is-dragging',
     portalToBody = false,
-    axis = 'y'
   } = options
+
 
   let drag: DragState | null = null
   let scrollRaf: number | null = null
   let _prevY = 0
   // PERF-6：缓存卡片 midY / 滚动容器 rect，避免每帧全量 getBoundingClientRect
   let _cachedMids: { el: Element; mid: number }[] = []
-  // 2D 模式（axis:'xy'）缓存未拖格几何中心（cx,cy），落点走最近邻（findNearestCellIndex）。
-  // 与 _cachedMids 互不干扰：axis:'y' 只读 _cachedMids，'xy' 只读 _cachedCenters。
-  let _cachedCenters: { el: Element; cx: number; cy: number }[] = []
   let _midsDirty = true
   let _scrollRect: DOMRect | null = null
   let _scrollRectAt = 0
@@ -170,21 +128,6 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
   function invalidateMids() { _midsDirty = true }
 
   function ensureMids(allCards: Element[]) {
-    if (axis === 'xy') {
-      if (!_midsDirty && _cachedCenters.length === allCards.length) {
-        let same = true
-        for (let i = 0; i < allCards.length; i++) {
-          if (_cachedCenters[i]?.el !== allCards[i]) { same = false; break }
-        }
-        if (same) return
-      }
-      _cachedCenters = allCards.map(el => {
-        const r = el.getBoundingClientRect()
-        return { el, cx: r.left + r.width / 2, cy: r.top + r.height / 2 }
-      })
-      _midsDirty = false
-      return
-    }
     if (!_midsDirty && _cachedMids.length === allCards.length) {
       // 元素集合变化时仍重建
       let same = true
@@ -228,39 +171,19 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     // 1. 设置卡片位置（只跟手指，不跟滚动）
     const cardTop = drag.initialTop + (drag.lastY - drag.startY)
     drag.el.style.top = cardTop + 'px'
-    if (axis === 'xy') {
-      const cardLeft = drag.initialLeft + (drag.lastX - drag.startX)
-      drag.el.style.left = cardLeft + 'px'
-    }
 
     // 2. 更新占位符
     // 使用缓存的 allCards（已排除拖拽元素与占位符），避免每帧 DOM 查询 + filter
     ensureMids(_cachedItems)
-    let newIndex: number
-    if (axis === 'xy') {
-      // 网格 2D：被拖卡片中心到各未拖格中心的最近邻格
-      const cardLeft = drag.initialLeft + (drag.lastX - drag.startX)
-      const draggedCenter = {
-        x: cardLeft + drag.itemWidth / 2,
-        y: cardTop + drag.itemHeight / 2,
-      }
-      const idx = findNearestCellIndex(
-        _cachedCenters.map(c => ({ cx: c.cx, cy: c.cy })),
-        draggedCenter,
-      )
-      // findNearestCellIndex 空数组返 -1 → 落末尾
-      newIndex = idx < 0 ? _cachedItems.length : idx
-    } else {
-      // 列表 Y：领边越过 midY 即插入点（原逻辑，逐字不动）
-      const draggingDown = drag.lastY > _prevY
-      _prevY = drag.lastY
-      const leadEdge = draggingDown ? cardTop + drag.itemHeight : cardTop
-      newIndex = _cachedItems.length
-      for (let i = 0; i < _cachedMids.length; i++) {
-        if (leadEdge < _cachedMids[i].mid) {
-          newIndex = i
-          break
-        }
+    // 列表 Y：领边越过 midY 即插入点
+    const draggingDown = drag.lastY > _prevY
+    _prevY = drag.lastY
+    const leadEdge = draggingDown ? cardTop + drag.itemHeight : cardTop
+    let newIndex = _cachedItems.length
+    for (let i = 0; i < _cachedMids.length; i++) {
+      if (leadEdge < _cachedMids[i].mid) {
+        newIndex = i
+        break
       }
     }
     if (newIndex !== drag.currentIndex) {
@@ -335,7 +258,6 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     }
     d.placeholder.remove()
     _cachedMids = []
-    _cachedCenters = []
     _midsDirty = true
     _scrollRect = null
   }
@@ -388,13 +310,9 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
       placeholder: ph,
       originalParent,
       startY: e.clientY,
-      startX: e.clientX,
       initialTop: rect.top,
-      initialLeft: rect.left,
       lastY: e.clientY,
-      lastX: e.clientX,
       itemHeight: rect.height,
-      itemWidth: rect.width,
       itemIndex: idx,
       currentIndex: idx,
       pointerId: e.pointerId
@@ -409,7 +327,6 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     if (!drag || e.pointerId !== drag.pointerId) return
     e.preventDefault()
     drag.lastY = e.clientY
-    if (axis === 'xy') drag.lastX = e.clientX
     startScroll()
   }
 
@@ -427,27 +344,12 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     // 基于最终位置重新计算目标索引
     // 使用缓存的 _cachedItems（已排除拖拽元素与占位符），避免 DOM 查询
     ensureMids(_cachedItems)
-    let filteredToIdx: number
-    if (axis === 'xy') {
-      const cardLeft = d.initialLeft + (d.lastX - d.startX)
-      const cardTop2 = d.initialTop + (d.lastY - d.startY)
-      const draggedCenter = {
-        x: cardLeft + d.itemWidth / 2,
-        y: cardTop2 + d.itemHeight / 2,
-      }
-      const idx = findNearestCellIndex(
-        _cachedCenters.map(c => ({ cx: c.cx, cy: c.cy })),
-        draggedCenter,
-      )
-      filteredToIdx = idx < 0 ? _cachedItems.length : idx
-    } else {
-      const cardTop = d.initialTop + (d.lastY - d.startY)
-      const draggingDown = d.lastY > d.startY
-      const leadEdge = draggingDown ? cardTop + d.itemHeight : cardTop
-      filteredToIdx = _cachedItems.length
-      for (let i = 0; i < _cachedMids.length; i++) {
-        if (leadEdge < _cachedMids[i].mid) { filteredToIdx = i; break }
-      }
+    const cardTop = d.initialTop + (d.lastY - d.startY)
+    const draggingDown = d.lastY > d.startY
+    const leadEdge = draggingDown ? cardTop + d.itemHeight : cardTop
+    let filteredToIdx = _cachedItems.length
+    for (let i = 0; i < _cachedMids.length; i++) {
+      if (leadEdge < _cachedMids[i].mid) { filteredToIdx = i; break }
     }
 
     // 映射：过滤列表索引 → 完整列表索引
@@ -474,7 +376,6 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
     d.el.style.zIndex = ''
     d.el.style.transition = ''
     _cachedMids = []
-    _cachedCenters = []
     _midsDirty = true
     _scrollRect = null
 
