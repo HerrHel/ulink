@@ -159,7 +159,7 @@ export function _attrsToAttrNames(
     .join(' ')
 }
 
-function _buildBookmarkSearchItems(
+export function _buildBookmarkSearchItems(
   bookmarks: Bookmark[],
   customAttributes: CustomAttribute[],
 ): BookmarkSearchItem[] {
