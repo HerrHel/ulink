@@ -14,6 +14,27 @@ import { AppDataSchema } from '../schemas.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
+/**
+ * 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍。
+ * FIX(审计H1): 纯分类/属性改名只改自身 name+updatedAt，长度/order 不变、
+ * 也不顶高 bookmarks/siblingGroups 的 maxUp，故必须把 cats/attrs 的 max updatedAt
+ * 纳入指纹，否则 renameCategory/renameAttribute 命中 fp===_lastSavedFingerprint 早退不落盘。
+ *
+ * 纯函数（仅依赖入参 AppData），抽到模块顶层供护栏单测直测——setup 闭包内调用不变。
+ */
+export function _fingerprint(data: AppData): string {
+  const bms = data.bookmarks || []
+  const grps = data.siblingGroups || []
+  const cats = data.categories || []
+  const attrs = data.customAttributes || []
+  let maxUp = 0
+  for (const b of bms) if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
+  for (const g of grps) if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
+  for (const c of cats) if ((c.updatedAt || 0) > maxUp) maxUp = c.updatedAt || 0
+  for (const a of attrs) if ((a.updatedAt || 0) > maxUp) maxUp = a.updatedAt || 0
+  return `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+}
+
 export const useAppStore = defineStore('app', () => {
   const ds = () => useDataStore()
   const ui = () => useUIStore()
@@ -24,23 +45,6 @@ export const useAppStore = defineStore('app', () => {
   // PERF-3：上次成功写入的快照指纹（per space），相同则跳过 Zod/双写。
   // 切换数据空间后，按当前空间取该空间的指纹——私密空间与主页指纹独立，避免互相早退跳过落盘。
   const _lastSavedFp: Record<'main' | 'vault', string> = { main: '', vault: '' }
-
-  function _fingerprint(data: AppData): string {
-    // 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍
-    const bms = data.bookmarks || []
-    const grps = data.siblingGroups || []
-    const cats = data.categories || []
-    const attrs = data.customAttributes || []
-    let maxUp = 0
-    // FIX(审计H1): 纯分类/属性改名只改自身 name+updatedAt，长度/order 不变、
-    // 也不顶高 bookmarks/siblingGroups 的 maxUp，故必须把 cats/attrs 的 max updatedAt
-    // 纳入指纹，否则 renameCategory/renameAttribute 命中 fp===_lastSavedFingerprint 早退不落盘。
-    for (const b of bms) if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
-    for (const g of grps) if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
-    for (const c of cats) if ((c.updatedAt || 0) > maxUp) maxUp = c.updatedAt || 0
-    for (const a of attrs) if ((a.updatedAt || 0) > maxUp) maxUp = a.updatedAt || 0
-    return `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
-  }
 
   // ── 数据（只读，委托 dataStore）──
   const bookmarks = computed(() => ds().bookmarks)
