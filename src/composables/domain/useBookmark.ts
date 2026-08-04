@@ -77,7 +77,7 @@ export function isExactDuplicate(existingUrl: string, newUrl: string): boolean {
  * @param excludeIds 要排除的书签ID列表（编辑模式下排除自身等）
  * @param excludeParentId 要排除的父书签ID（添加子书签时排除父书签及其祖先）
  */
-function findDuplicateBookmarks(url: string, excludeIds?: string[], excludeParentId?: string): { exact: Bookmark | null; suffix: Bookmark | null } {
+export function findDuplicateBookmarks(url: string, excludeIds?: string[], excludeParentId?: string): { exact: Bookmark | null; suffix: Bookmark | null } {
   const ds = useDataStore()
   const excludeSet = new Set(excludeIds || [])
 
