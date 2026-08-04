@@ -78,11 +78,10 @@ const gridClass = computed(() => {
 
 // 移动端批量模式拖拽排序（纯 pointer events）
 // 绑定 normalGridRef：batchMode 时 useVirtual 为 false，该 ref 一定挂载
-// axis：多列网格（mini-grid / grid）需 X/Y 双轴跟手 + 2D 最近邻落点；列表/虚拟 list 仅 Y。
-// 虚拟模式强制 list-view（gridClass 内），故 useVirtual 为真时恒走 'y' 路径，2D 不污染虚拟滚动。
-const mobileDragAxis = computed<'y' | 'xy'>(() => {
-  if (useVirtual.value) return 'y'
-  return ui.layoutMode === 'mini-grid' || ui.layoutMode === 'grid' ? 'xy' : 'y'
-})
-useMobileDragReorder(normalGridRef, combinedList, { axis: mobileDragAxis })
+// 仅 Y 轴跟手 + leadEdge×midY 落点（列表/小宫格共用同一单列语义）。
+// 历史：曾为大宫格 grid-view 注入 axis:'xy' 走 2D 最近邻落点，但移动端 grid 模式被
+// SettingsPanel 双重拦截（line 33 移动端不显按钮 + line 269 isMobile 时 return）不可达，
+// 且小宫格用 CSS columns 瀑布流（DOM 索引≠视觉位置）2D 落点算法对瀑布流不成立 → 2D 路径
+// 全程死代码，已整体删除回归纯 Y。虚拟模式强制 list-view，纯 Y 不污染虚拟滚动。
+useMobileDragReorder(normalGridRef, combinedList)
 </script>
