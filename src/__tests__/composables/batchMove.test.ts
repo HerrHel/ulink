@@ -22,13 +22,26 @@ vi.mock('../../lib/toast.js', () => ({
   toastWithUndo: vi.fn(((_msg: string, cb: () => void) => { _lastUndoCb = cb }) as any),
   showConfirm: vi.fn(() => Promise.resolve(true)),
 }))
-vi.mock('../../stores/overlay.js', () => ({
-  useBatchMoveStore: () => ({ show: vi.fn(), hide: vi.fn() }),
-}))
+vi.mock('../../stores/overlay.js', () => {
+  // 模块级 spy 容器：支持用例通过 __overrideHide 注入具名 hide spy 以断言收尾关闭浮层副作用。
+  // 默认每次调返一组新 spy（兼容原不关心 hide 的用例），override 后 hide 走注入 spy。
+  const _container = { _hideOverride: null as (() => void) | null }
+  return {
+    useBatchMoveStore: () => ({
+      show: vi.fn(),
+      hide: _container._hideOverride ?? vi.fn(),
+    }),
+    __overrideHide: (spy: () => void) => { _container._hideOverride = spy },
+    __resetHideOverride: () => { _container._hideOverride = null },
+    __container: _container,
+  }
+})
 
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { batchMoveToCat, batchDelete } from '../../composables/domain/useBatch.js'
+import { saveAppData } from '../../stores/app.js'
+import { toastWithUndo, showConfirm } from '../../lib/toast.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 describe('batchMoveToCat 子书签跟随父移动', () => {
@@ -176,5 +189,131 @@ describe('batchDelete 组关系恢复', () => {
     expect(ds.groupMap['G3'].deletedAt).toBeUndefined()
     // 关键：还原后 sibling 关系（bookmarkIds）完整保留
     expect(ds.groupMap['G3'].bookmarkIds).toEqual(['B3', 'B4'])
+  })
+})
+
+// ──────────────────────────────────────────────────────────────
+// chunk #17 r9-batchdelete-guard：batchDelete 编排层子分支护栏
+// 补此前零直接断言的缺口：① batchDelete 的 `group:` 前缀分流分支（deleteGroup +
+// removedGroupIds 记录 + undo restoreGroup）原仅有 line 161 直接 ds.deleteGroup/
+// restoreGroup 手测，未经 batchDelete 的 `group:` 分流路径触发；② 未确认 showConfirm
+// 返 false 早返回（mock 恒返 true，false 半边零测）；③ 空选中早返回（batchMoveToCat
+// 有测、batchDelete 无）；④ batchMoveToCat 收尾 hideBatchMovePopover 副作用（mock
+// useBatchMoveStore 每次返新 spy 故原用例拿不到 hide 断言）。
+// ──────────────────────────────────────────────────────────────
+describe('batchDelete 编排层子分支护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    _lastUndoCb = null
+  })
+
+  it('空选中应直接返回，不调 showConfirm / 不报错', async () => {
+    const ui = useUIStore()
+    ui.batchSelected = []
+    await expect(batchDelete()).resolves.toBeUndefined()
+    // 关键：未确认不应触发——showConfirm 恒返 true 的 mock 下空选中早于 showConfirm 返回
+    expect((showConfirm as any).mock.calls.length).toBe(0)
+  })
+
+  it('showConfirm 返 false（用户取消）应早返回，不软删任何项、不 saveAppData', async () => {
+    ;(showConfirm as any).mockResolvedValueOnce(false)
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'Bx', title: 'Bx', url: 'https://bx.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ui.batchSelected = ['Bx']
+    ui.batchMode = true
+
+    await batchDelete()
+    // 未软删
+    expect(ds.bookmarkMap['Bx'].deletedAt).toBeUndefined()
+    expect(ui.batchSelected).toEqual(['Bx'])  // 未清空选中
+    expect(ui.batchMode).toBe(true)  // 未退出批量
+    expect((saveAppData as any).mock.calls.length).toBe(0)  // 未落盘
+  })
+
+  it('group: 前缀分流应走 deleteGroup 分支（不经 bookmark 递归），undo 经 restoreGroup 还原', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'B1', title: 'B1', url: 'https://b1.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ds.addGroup({ id: 'GG', name: 'GG', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: ['B1'], notes: '', useCount: 0, isPublic: false, updatedAt: 0 } as any)
+
+    ui.batchSelected = ['group:GG']
+    ui.batchMode = true
+    await batchDelete()
+
+    // group 被软删
+    expect(ds.groupMap['GG'].deletedAt).toBeTruthy()
+    // group: 分支不递归改 bookmark——B1 不受影响（非软删、categoryId 不变）
+    expect(ds.bookmarkMap['B1'].deletedAt).toBeUndefined()
+    expect(ds.bookmarkMap['B1'].categoryId).toBe(CAT_UNCATEGORIZED)
+
+    // undo 经 removedGroupIds 走 restoreGroup
+    expect(_lastUndoCb).not.toBeNull()
+    _lastUndoCb!()
+    expect(ds.groupMap['GG'].deletedAt).toBeUndefined()
+  })
+
+  it('group + bookmark 混合选中：两分支各走自身删除路径', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'Bx', title: 'Bx', url: 'https://bx.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ds.addGroup({ id: 'GG2', name: 'GG2', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: [], notes: '', useCount: 0, isPublic: false, updatedAt: 0 } as any)
+
+    ui.batchSelected = ['group:GG2', 'Bx']
+    ui.batchMode = true
+    await batchDelete()
+
+    expect(ds.groupMap['GG2'].deletedAt).toBeTruthy()
+    expect(ds.bookmarkMap['Bx'].deletedAt).toBeTruthy()
+  })
+
+  it('count 标量 = 选中长度（含 group: 前缀项）写入 toast 文案', async () => {
+    const ui = useUIStore()
+    ui.batchSelected = ['group:A', 'B1', 'B2']
+    ui.batchMode = true
+    await batchDelete()
+    // toastWithUndo('已删除 ' + count + ' 项')——count=3（group: 前缀项也算一项）
+    expect((toastWithUndo as any).mock.calls.length).toBe(1)
+    expect((toastWithUndo as any).mock.calls[0][0]).toBe('已删除 3 项')
+  })
+
+  it('batchDelete 成功后应清空选中并退出批量模式', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    ds.addBookmark({ id: 'Bz', title: 'Bz', url: 'https://bz.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ui.batchSelected = ['Bz']
+    ui.batchMode = true
+    await batchDelete()
+    expect(ui.batchSelected).toEqual([])
+    expect(ui.batchMode).toBe(false)
+  })
+})
+
+describe('batchMoveToCat 收尾 hideBatchMovePopover 护栏', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('移动后应 hide batchMove 浮层（hideBatchMovePopover 副作用直锁）', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    const hideSpy = vi.fn()
+    ds.addBookmark({ id: 'Bm', title: 'Bm', url: 'https://bm.x', categoryId: CAT_UNCATEGORIZED, parentId: null, order: 0, attributes: {} } as any)
+    ds.categories = [{ id: 'catT', name: 'T', icon: 'bookmark', color: '', order: 0 }, ...ds.categories]
+
+    // 用能捕获 spy 的 useBatchMoveStore mock 替换原模块 mock
+    const overlayMock = await import('../../stores/overlay.js') as any
+    overlayMock.__overrideHide(hideSpy)
+
+    ui.batchSelected = ['Bm']
+    ui.batchMode = true
+    batchMoveToCat('catT')
+
+    expect(ds.bookmarkMap['Bm'].categoryId).toBe('catT')
+    expect(hideSpy.mock.calls.length).toBe(1)  // 关键：收尾关闭浮层副作用直锁
+    expect(ui.batchMode).toBe(false)
+    expect(ui.batchSelected).toEqual([])
   })
 })
