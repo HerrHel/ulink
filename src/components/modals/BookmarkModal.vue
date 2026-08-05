@@ -109,22 +109,16 @@ import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 import ChildBookmarkEditModal from './ChildBookmarkEditModal.vue'
+import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
 
 const store = useAppStore()
 const titleRef = ref<HTMLInputElement | null>(null)
 const e2e = useE2E()
 // A6-004：仅「已启用且已解锁」才开放字段；hint 区分 setup / unlock
-const e2eFieldsOpen = computed(() => e2e.isE2EEnabled.value && e2e.isUnlocked.value)
-const e2eHintAccount = computed(() =>
-  e2e.isE2EEnabled.value && !e2e.isUnlocked.value
-    ? '点击解锁后可编辑账户'
-    : '开启 E2E 后可存储账户',
-)
-const e2eHintPassword = computed(() =>
-  e2e.isE2EEnabled.value && !e2e.isUnlocked.value
-    ? '点击解锁后可编辑密码'
-    : '开启 E2E 后可存储密码',
-)
+// 三态判定+文案复用 e2eHintText 纯模块（与 ChildBookmarkEditModal 同源单一真相防漂移）
+const e2eFieldsOpen = computed(() => e2eFieldsOpenLogic({ enabled: e2e.isE2EEnabled.value, unlocked: e2e.isUnlocked.value }))
+const e2eHintAccount = computed(() => e2eHintAccountLogic({ enabled: e2e.isE2EEnabled.value, unlocked: e2e.isUnlocked.value }))
+const e2eHintPassword = computed(() => e2eHintPasswordLogic({ enabled: e2e.isE2EEnabled.value, unlocked: e2e.isUnlocked.value }))
 function onE2EHintClick() {
   if (e2e.isE2EEnabled.value && !e2e.isUnlocked.value) {
     store.modals.e2eUnlock = true
