@@ -13,7 +13,7 @@ import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } fr
 export const _remoteSnapshots = new Map<string, unknown>()
 
 /** 按实体类型把远端字段写回 data store（走 update* 保证 dirty/track/map） */
-function _applyRemoteToLocal(type: EntityType, id: string, remote: Record<string, unknown>) {
+export function _applyRemoteToLocal(type: EntityType, id: string, remote: Record<string, unknown>) {
   const ds = useDataStore()
   const apply: Record<EntityType, () => void> = {
     bookmark: () => ds.updateBookmark(id, remote as Partial<Bookmark>),
