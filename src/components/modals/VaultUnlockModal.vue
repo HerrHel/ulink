@@ -79,6 +79,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { I } from '../../config/icons.js'
 import { useVault } from '../../composables/domain/useVault.js'
+import { recoveryKeyEmptyError, newPasswordLengthError, newPasswordMismatchError } from './validatePwResetInput.js'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; unlocked: [] }>()
@@ -152,9 +153,12 @@ async function onUnlock() {
 async function onReset() {
   if (loading.value) return
   error.value = ''
-  if (recoveryKey.value.trim().length === 0) { error.value = '请输入 Recovery Key'; return }
-  if (newPw.value.length < 8) { error.value = '新主密码至少 8 位'; return }
-  if (newPw.value !== newPw2.value) { error.value = '两次新主密码不一致'; return }
+  const rkErr = recoveryKeyEmptyError(recoveryKey.value)
+  if (rkErr) { error.value = rkErr; return }
+  const pwLenErr = newPasswordLengthError(newPw.value)
+  if (pwLenErr) { error.value = pwLenErr; return }
+  const pwMismatchErr = newPasswordMismatchError(newPw.value, newPw2.value)
+  if (pwMismatchErr) { error.value = pwMismatchErr; return }
   loading.value = true
   const ok = await vault.resetVaultWithRecoveryKey(recoveryKey.value.trim(), newPw.value)
   loading.value = false
