@@ -61,6 +61,7 @@ import type { EncryptedPassword } from '../../types.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { toast } from '../../lib/toast.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
+import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
 
 const props = defineProps<{ childId: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -72,17 +73,9 @@ const e2e = useE2E()
 const titleRef = ref<HTMLInputElement | null>(null)
 const saving = ref(false)
 
-const e2eFieldsOpen = computed(() => e2e.isE2EEnabled.value && e2e.isUnlocked.value)
-const e2eHintAccount = computed(() =>
-  e2e.isE2EEnabled.value && !e2e.isUnlocked.value
-    ? '点击解锁后可编辑账户'
-    : '开启 E2E 后可存储账户',
-)
-const e2eHintPassword = computed(() =>
-  e2e.isE2EEnabled.value && !e2e.isUnlocked.value
-    ? '点击解锁后可编辑密码'
-    : '开启 E2E 后可存储密码',
-)
+const e2eFieldsOpen = computed(() => e2eFieldsOpenLogic({ enabled: e2e.isE2EEnabled.value, unlocked: e2e.isUnlocked.value }))
+const e2eHintAccount = computed(() => e2eHintAccountLogic({ enabled: e2e.isE2EEnabled.value, unlocked: e2e.isUnlocked.value }))
+const e2eHintPassword = computed(() => e2eHintPasswordLogic({ enabled: e2e.isE2EEnabled.value, unlocked: e2e.isUnlocked.value }))
 function onE2EHintClick() {
   if (e2e.isE2EEnabled.value && !e2e.isUnlocked.value) {
     ui.modals.e2eUnlock = true

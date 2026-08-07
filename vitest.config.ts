@@ -1,6 +1,11 @@
 import { defineConfig, UserConfig } from 'vitest/config'
+import vue from '@vitejs/plugin-vue'
 
+// 注入 @vitejs/plugin-vue：vitest 默认不继承 vite.config.ts 的 plugins，
+// 缺它则 import *.vue 报 "Failed to parse ... Install @vitejs/plugin-vue"。
+// 仅作用 .vue 文件，对纯 ts/js 测无副作用。
 export default defineConfig({
+  plugins: [vue()],
   test: {
     globals: true,
     environment: 'jsdom',

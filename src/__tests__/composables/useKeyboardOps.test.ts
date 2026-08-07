@@ -25,7 +25,7 @@ const { closeGroupEditMock, exitGroupFocusMock } = vi.hoisted(() => ({
   closeGroupEditMock: vi.fn(),
   exitGroupFocusMock: vi.fn(),
 }))
-vi.mock('../../composables/domain/useGroup.js', () => ({ closeGroupEdit: closeGroupEditMock, exitGroupFocus: exitGroupFocusMock, saveGroupBody: vi.fn() }))
+vi.mock('../../composables/domain/useGroup.js', () => ({ closeGroupEdit: closeGroupEditMock, exitGroupFocus: exitGroupFocusMock, saveGroupBody: vi.fn(), closeAddBmPopover: vi.fn() }))
 vi.mock('../../composables/domain/useUndo.js', () => ({ performUndo: vi.fn(), performRedo: vi.fn() }))
 vi.mock('../../lib/editor.js', () => ({ EditorManager: { toggleBold: vi.fn(), setHeading: vi.fn(), get: vi.fn() } }))
 const { closeBmModalMock, openBmModalMock } = vi.hoisted(() => ({
@@ -42,18 +42,35 @@ vi.mock('../../composables/ui/useUI.js', () => ({ closeCatModal: closeCatModalMo
 // batchDelete 被 mock 成 spy，可在批量模式键盘分支测试中断言是否被调用
 const { batchDeleteMock } = vi.hoisted(() => ({ batchDeleteMock: vi.fn() }))
 vi.mock('../../composables/domain/useBatch.js', () => ({ toggleBatchMode: vi.fn(), selectAllBatch: vi.fn(), batchDelete: batchDeleteMock }))
-vi.mock('../../stores/toast.js', () => ({ useToastStore: () => ({ resolveConfirm: vi.fn() }) }))
-vi.mock('../../stores/contextMenu.js', () => ({ useContextMenuStore: () => ({ hide: vi.fn() }) }))
-vi.mock('../../stores/actionSheet.js', () => ({ useActionSheetStore: () => ({ visible: false, hide: vi.fn() }) }))
-vi.mock('../../stores/auth.js', () => ({ useAuthStore: () => ({ authModalOpen: false }) }))
-vi.mock('../../stores/e2e.js', () => ({ useE2EStore: () => ({ pendingUnlock: [] }) }))
-vi.mock('../../stores/attrDropdown.js', () => ({ useAttrDropdownStore: () => ({ open: false, close: vi.fn() }) }))
-vi.mock('../../stores/overlay.js', () => ({
-  useBatchMoveStore: () => ({ open: false, hide: vi.fn() }),
-  useMfbStore: () => ({ open: false, hide: vi.fn() }),
-}))
+
+// r9 #12 Escape 7 优先级层 + 兜底全家桶需要可写、可断言的 store 单例：
+// vi.mock 工厂若写 `() => ({ visible: false, hide: vi.fn() })`，每次调用useActionSheetStore() 都产新对象，
+// 测试侧设 `as.visible=true` 后函数侧另一调用拿到另一个 visible:false 实例，断言失效。
+// 故仿 mockUI 模式：hoisted 暴露单例对象，useXxxStore 返回它，测试可写状态、可断言 hide/close 调用次数。
+const mockToast = vi.hoisted(() => ({ resolveConfirm: vi.fn() }))
+vi.mock('../../stores/toast.js', () => ({ useToastStore: () => mockToast }))
+const mockCtx = vi.hoisted(() => ({ hide: vi.fn() }))
+vi.mock('../../stores/contextMenu.js', () => ({ useContextMenuStore: () => mockCtx }))
+const mockActionSheet = vi.hoisted(() => ({ visible: false, hide: vi.fn() }))
+vi.mock('../../stores/actionSheet.js', () => ({ useActionSheetStore: () => mockActionSheet }))
+const mockAuth = vi.hoisted(() => ({ authModalOpen: false }))
+vi.mock('../../stores/auth.js', () => ({ useAuthStore: () => mockAuth }))
+const mockE2E = vi.hoisted(() => ({ pendingUnlock: [] as Array<(v: boolean) => void> }))
+vi.mock('../../stores/e2e.js', () => ({ useE2EStore: () => mockE2E }))
+const mockAttrDropdown = vi.hoisted(() => ({ open: false, close: vi.fn(function (this: any) { this.open = false }) }))
+vi.mock('../../stores/attrDropdown.js', () => ({ useAttrDropdownStore: () => mockAttrDropdown }))
+const mockBatchMove = vi.hoisted(() => ({ open: false, hide: vi.fn(function (this: any) { this.open = false }) }))
+const mockMfb = vi.hoisted(() => ({ open: false, hide: vi.fn(function (this: any) { this.open = false }) }))
+vi.mock('../../stores/overlay.js', () => ({ useBatchMoveStore: () => mockBatchMove, useMfbStore: () => mockMfb }))
 
 import { captureNavState, restoreNavState, _onGlobalKeydown, pushNavState } from '../../composables/interaction/useKeyboardOps.js'
+import { EditorManager } from '../../lib/editor.js'
+import { saveGroupBody } from '../../composables/domain/useGroup.js'
+import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
+import { selectAllBatch, toggleBatchMode } from '../../composables/domain/useBatch.js'
+// r9 #12：Escape 优先级层/兜底层断言直接用模块级 hoisted 单例（mockToast/mockCtx/mockActionSheet 等），
+// 不再 import useXxxStore 具名导出，避免 no-unused-vars。单例对象在 vi.mock 工厂内被引用确保同引用。
+
 
 function makeKey(key: string, opts: Partial<KeyboardEvent> = {}): KeyboardEvent {
   return {
@@ -200,9 +217,68 @@ describe('_onGlobalKeydown 批量模式 Backspace/Delete 输入焦点守卫', ()
     expect(batchDeleteMock).not.toHaveBeenCalled()
     restore()
   })
+})
 
-  // contentEditable（组名行内编辑/TipTap）走同一 inField 分支守卫，
-  // 但 jsdom 未实现 HTMLElement.isContentEditable，无法在此环境覆盖，留真实浏览器断言。
+// d1-115 之后：r9 chunk #12 补 `_onGlobalKeydown` 7 个未直测分支护栏。
+// 现有 describe 仅 batch Backspace/Delete/INPUT/TEXTAREA/dev 4 用例测到 batchMode 分支，
+// 其余 7 处独立分支（Ctrl+B/Heading、Ctrl+N inField 守卫、Tab wrap、Ctrl+Z/Y undoGid 解析、
+// Escape 7 优先级层 + 兜底全家桶、batchMode Ctrl+A、Ctrl+N 无焦点开模）全靠实现维护零护栏。
+// 所有 mock 在文件顶部已 hoisted 就位（EditorManager.toggleBold/setHeading、performUndo/performRedo、
+// openBmModalMock/closeBmModalMock、useToastStore.resolveConfirm、useContextMenuStore.hide、
+// useActionSheetStore({visible,hide})、useAuthStore({authModalOpen})、useE2EStore({pendingUnlock})、
+// useAttrDropdownStore({open,close})、useBatchMoveStore/useMfbStore({open,hide})、selectAllBatch）。
+// 每个 describe 自带 beforeEach 把 mockUI.batchMode 显式置 false / batchSelected=[] 防止
+// 前面 batch describe 的 beforeEach 把 batchMode 置 true 后泄漏（全局 beforeEach L72 不重置这俩）。
+describe('r9 #12 _onGlobalKeydown：.group-body Ctrl+B 触发 toggleBold + saveGroupBody', () => {
+  let gb: HTMLElement
+  let restore: () => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    ;(EditorManager.toggleBold as any).mockClear?.()
+    ;(EditorManager.setHeading as any).mockClear?.()
+    gb = document.createElement('div')
+    gb.className = 'group-body'
+    gb.setAttribute('data-gid', 'gid-ctrl-b')
+    document.body.appendChild(gb)
+    restore = setActiveElement(gb)
+  })
+  afterEach(() => { restore(); document.body.removeChild(gb) })
+
+  it('Ctrl+B 在 .group-body[data-gid] 内 → preventDefault + toggleBold(gid) 各一次 + return 不进 N 分支', () => {
+    const e = makeKey('b', { ctrlKey: true, code: 'KeyB' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.toggleBold).toHaveBeenCalledTimes(1)
+    expect((EditorManager.toggleBold as any)).toHaveBeenCalledWith('gid-ctrl-b')
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    // Ctrl+B 已 return，不应顺带触发 Ctrl+N openBmModal（无 shiftKey 时 b !== n 故本就安全，这里锁互斥）
+    expect(openBmModalMock).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+B 无 data-gid → 不触发 toggleBold（守卫要求 _kgid 真值）', () => {
+    gb.removeAttribute('data-gid')
+    const e = makeKey('b', { ctrlKey: true, code: 'KeyB' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.toggleBold).not.toHaveBeenCalled()
+  })
+
+  it('普通元素（非 .group-body）Ctrl+B → 不触发 toggleBold（_gb=null 守卫）', () => {
+    const span = document.createElement('span')
+    document.body.appendChild(span)
+    const r2 = setActiveElement(span)
+    const e = makeKey('b', { ctrlKey: true, code: 'KeyB' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.toggleBold).not.toHaveBeenCalled()
+    r2(); document.body.removeChild(span)
+  })
+
+  it('Shift+Ctrl+B → 不进 b 分支（守卫 !e.shiftKey）', () => {
+    const e = makeKey('b', { ctrlKey: true, shiftKey: true, code: 'KeyB' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.toggleBold).not.toHaveBeenCalled()
+  })
 })
 
 // d1-95: 换扫法深挖断言浅 — captureNavState / restoreNavState 的真实分支此前仅 11 用例单层独立测，
@@ -605,3 +681,542 @@ describe('d1-115 restoreNavState modal 分支 delegate close vs panel 分支直�
     expect(mockUI.focusedGroupId).toBe('gM')                   // delegate 不直改 store，与 modal 同款
   })
 })
+
+// r9 #12 续：Shift+Digit1/2/3 在 .group-body 内触发 setHeading + saveGroupBody
+describe('r9 #12 _onGlobalKeydown：.group-body Shift+Digit1/2/3 触发 setHeading', () => {
+  let gb: HTMLElement
+  let restore: () => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    ;(EditorManager.toggleBold as any).mockClear?.()
+    ;(EditorManager.setHeading as any).mockClear?.()
+    ;(saveGroupBody as any).mockClear?.()
+    gb = document.createElement('div')
+    gb.className = 'group-body'
+    gb.setAttribute('data-gid', 'gid-head')
+    document.body.appendChild(gb)
+    restore = setActiveElement(gb)
+  })
+  afterEach(() => { restore(); document.body.removeChild(gb) })
+
+  it('Shift+Ctrl+Digit1 → setHeading(gid,1) + saveGroupBody(gid) + preventDefault', () => {
+    const e = makeKey('!', { ctrlKey: true, shiftKey: true, code: 'Digit1' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.setHeading).toHaveBeenCalledTimes(1)
+    expect((EditorManager.setHeading as any)).toHaveBeenCalledWith('gid-head', 1)
+    expect((saveGroupBody as any)).toHaveBeenCalledWith('gid-head')
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+  })
+
+  it('Shift+Ctrl+Digit2 → setHeading(gid,2)', () => {
+    const e = makeKey('@', { ctrlKey: true, shiftKey: true, code: 'Digit2' })
+    _onGlobalKeydown(e)
+    expect((EditorManager.setHeading as any)).toHaveBeenCalledWith('gid-head', 2)
+  })
+
+  it('Shift+Ctrl+Digit3 → setHeading(gid,3)', () => {
+    const e = makeKey('#', { ctrlKey: true, shiftKey: true, code: 'Digit3' })
+    _onGlobalKeydown(e)
+    expect((EditorManager.setHeading as any)).toHaveBeenCalledWith('gid-head', 3)
+  })
+
+  it('无 shiftKey 的 Ctrl+Digit1 → 不进 setHeading 分支（守卫要求 e.shiftKey）', () => {
+    const e = makeKey('1', { ctrlKey: true, code: 'Digit1' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.setHeading).not.toHaveBeenCalled()
+  })
+
+  it('Shift+Ctrl+Digit4 → 不进 setHeading 分支（仅匹配 Digit1/2/3）', () => {
+    const e = makeKey('4', { ctrlKey: true, shiftKey: true, code: 'Digit4' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.setHeading).not.toHaveBeenCalled()
+  })
+
+  it('Shift+Alt+Ctrl+Digit1 → 不进 setHeading 分支（守卫要求 !e.altKey）', () => {
+    const e = makeKey('1', { ctrlKey: true, shiftKey: true, altKey: true, code: 'Digit1' })
+    _onGlobalKeydown(e)
+    expect(EditorManager.setHeading).not.toHaveBeenCalled()
+  })
+})
+
+// r9 #12 续：Ctrl+N 输入焦点守卫（jsdom 不可测 isContentEditable，仅覆盖 INPUT/TEXTAREA/SELECT 三路径）
+describe('r9 #12 _onGlobalKeydown：Ctrl+N 输入焦点守卫', () => {
+  let restore: () => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    openBmModalMock.mockClear()
+  })
+  afterEach(() => { restore?.() })
+
+  it('无焦点（body）+ Ctrl+N → preventDefault + openBmModal 触发', () => {
+    restore = setActiveElement(document.body)
+    const e = makeKey('n', { ctrlKey: true, code: 'KeyN' })
+    _onGlobalKeydown(e)
+    expect(openBmModalMock).toHaveBeenCalledTimes(1)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+  })
+
+  it('INPUT 聚焦 + Ctrl+N → 不拦截、openBmModal 不触发（让浏览器原生 input 不被打断）', () => {
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(input) }
+    const r = setActiveElement(input); void r
+    const e = makeKey('n', { ctrlKey: true, code: 'KeyN' })
+    _onGlobalKeydown(e)
+    expect(openBmModalMock).not.toHaveBeenCalled()
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+  })
+
+  it('TEXTAREA 聚焦 + Ctrl+N → 不拦截', () => {
+    const ta = document.createElement('textarea')
+    document.body.appendChild(ta)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(ta) }
+    setActiveElement(ta)
+    const e = makeKey('n', { ctrlKey: true, code: 'KeyN' })
+    _onGlobalKeydown(e)
+    expect(openBmModalMock).not.toHaveBeenCalled()
+  })
+
+  it('SELECT 聚焦 + Ctrl+N → 不拦截', () => {
+    const sel = document.createElement('select')
+    document.body.appendChild(sel)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(sel) }
+    setActiveElement(sel)
+    const e = makeKey('n', { ctrlKey: true, code: 'KeyN' })
+    _onGlobalKeydown(e)
+    expect(openBmModalMock).not.toHaveBeenCalled()
+  })
+
+  it('Shift+Ctrl+N → 不进 N 分支（守卫 !e.shiftKey）', () => {
+    restore = setActiveElement(document.body)
+    const e = makeKey('n', { ctrlKey: true, shiftKey: true, code: 'KeyN' })
+    _onGlobalKeydown(e)
+    expect(openBmModalMock).not.toHaveBeenCalled()
+  })
+
+  // jsdom 未实现 HTMLElement.isContentEditable，contentEditable true 分支无法在此环境覆盖，
+  // 留真实浏览器断言。此 describe 仅锁 INPUT/TEXTAREA/SELECT 三 tagName 路径。
+})
+
+// r9 #12 续：Tab 在打开的 modal 内 shift/无 shift wrap 到 first/last focusable
+describe('r9 #12 _onGlobalKeydown：Tab wrap modal focusable 循环', () => {
+  let mask: HTMLElement
+  let modal: HTMLElement
+  let first: HTMLInputElement
+  let last: HTMLButtonElement
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    // 构造 .modal-mask.open > .modal 含 input + button 两个 focusable
+    mask = document.createElement('div')
+    mask.className = 'modal-mask open'
+    modal = document.createElement('div')
+    modal.className = 'modal'
+    first = document.createElement('input')
+    first.type = 'text'
+    last = document.createElement('button')
+    last.textContent = 'OK'
+    modal.appendChild(first)
+    modal.appendChild(last)
+    mask.appendChild(modal)
+    document.body.appendChild(mask)
+  })
+  afterEach(() => { document.body.removeChild(mask); setActiveElement(document.body)() })
+
+  it('无 shiftKey + activeElement===last → preventDefault + first.focus()', () => {
+    setActiveElement(last)
+    const e = makeKey('Tab', { code: 'Tab' })
+    const focusSpy = vi.spyOn(first, 'focus')
+    _onGlobalKeydown(e)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('shiftKey + activeElement===first → preventDefault + last.focus()', () => {
+    setActiveElement(first)
+    const e = makeKey('Tab', { code: 'Tab', shiftKey: true })
+    const focusSpy = vi.spyOn(last, 'focus')
+    _onGlobalKeydown(e)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+    expect(focusSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('无 shiftKey + activeElement 在中间（非 last）→ 不 preventDefault 不 wrap', () => {
+    setActiveElement(first) // activeElement 是 first 但无 shiftKey，需 `activeElement===last` 才 wrap
+    const e = makeKey('Tab', { code: 'Tab' })
+    const focusSpy = vi.spyOn(last, 'focus')
+    _onGlobalKeydown(e)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+    expect(focusSpy).not.toHaveBeenCalled()
+  })
+
+  it('无 .modal-mask.open → return 不 wrap 不抛', () => {
+    // 去 .open class 实现「无 modal-mask.open」而非 removeChild（afterEach 仍需 mask 在树中以正常清理）
+    mask.classList.remove('open')
+    const e = makeKey('Tab', { code: 'Tab' })
+    expect(() => _onGlobalKeydown(e)).not.toThrow()
+  })
+
+  it('modal 内无 focusable → return 不 wrap 不抛', () => {
+    modal.removeChild(first); modal.removeChild(last)
+    const e = makeKey('Tab', { code: 'Tab' })
+    expect(() => _onGlobalKeydown(e)).not.toThrow()
+  })
+})
+
+// r9 #12 续：Ctrl+Z/Y undoGid 经 .group-body/.group-card data-group-id 或 focusedGroupId 兜底解析
+describe('r9 #12 _onGlobalKeydown：Ctrl+Z/Y undoGid 解析 + INPUT/TEXTAREA/SELECT 守卫', () => {
+  let restore: () => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    ;(performUndo as any).mockClear?.()
+    ;(performRedo as any).mockClear?.()
+  })
+  afterEach(() => { restore?.() })
+
+  it('INPUT 聚焦 + Ctrl+Z → 直接 return，performUndo 不调（让浏览器原生输入撤销）', () => {
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(input) }
+    setActiveElement(input)
+    const e = makeKey('z', { ctrlKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect(performUndo).not.toHaveBeenCalled()
+  })
+
+  it('TEXTAREA 聚焦 + Ctrl+Y → 直接 return，performRedo 不调', () => {
+    const ta = document.createElement('textarea')
+    document.body.appendChild(ta)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(ta) }
+    setActiveElement(ta)
+    const e = makeKey('y', { ctrlKey: true, code: 'KeyY' })
+    _onGlobalKeydown(e)
+    expect(performRedo).not.toHaveBeenCalled()
+  })
+
+  it('.group-body 在 .group-card[data-group-id] 内 + Ctrl+Z → performUndo(gid) + handled=true 时 preventDefault', () => {
+    const card = document.createElement('div')
+    card.className = 'group-card'
+    card.setAttribute('data-group-id', 'gcard-1')
+    const gb = document.createElement('div')
+    gb.className = 'group-body'
+    card.appendChild(gb)
+    document.body.appendChild(card)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(card) }
+    setActiveElement(gb)
+    ;(performUndo as any).mockReturnValueOnce(true) // handled=true
+    const e = makeKey('z', { ctrlKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect(performUndo).toHaveBeenCalledTimes(1)
+    expect((performUndo as any)).toHaveBeenCalledWith('gcard-1')
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+  })
+
+  it('.group-card 内 Ctrl+Y + performRedo 返 true → performRedo(gid) 调一次 + preventDefault', () => {
+    const card = document.createElement('div')
+    card.className = 'group-card'
+    card.setAttribute('data-group-id', 'gcard-2')
+    const gb = document.createElement('div')
+    gb.className = 'group-body'
+    card.appendChild(gb)
+    document.body.appendChild(card)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(card) }
+    setActiveElement(gb)
+    ;(performRedo as any).mockReturnValueOnce(true)
+    const e = makeKey('y', { ctrlKey: true, code: 'KeyY' })
+    _onGlobalKeydown(e)
+    expect((performRedo as any)).toHaveBeenCalledWith('gcard-2')
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+  })
+
+  it('.group-body 无 .group-card 外壳 + ui.focusedGroupId 兜底 + Ctrl+Z + handled=true → performUndo(focusedGroupId)', () => {
+    mockUI.focusedGroupId = 'g-focus'
+    const gb = document.createElement('div')
+    gb.className = 'group-body'
+    document.body.appendChild(gb)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(gb) }
+    setActiveElement(gb)
+    ;(performUndo as any).mockReturnValueOnce(true)
+    const e = makeKey('z', { ctrlKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect((performUndo as any)).toHaveBeenCalledWith('g-focus')
+  })
+
+  it('.group-body 无 .group-card + 无 focusedGroupId + Ctrl+Z → undoGid 缺省 performUndo 不调', () => {
+    mockUI.focusedGroupId = null
+    const gb = document.createElement('div')
+    gb.className = 'group-body'
+    document.body.appendChild(gb)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(gb) }
+    setActiveElement(gb)
+    const e = makeKey('z', { ctrlKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect(performUndo).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Z（非 Z）大写 key 也能命中（e.key.toLowerCase()==="z"）', () => {
+    const card = document.createElement('div')
+    card.className = 'group-card'
+    card.setAttribute('data-group-id', 'gcap')
+    const gb = document.createElement('div')
+    gb.className = 'group-body'
+    card.appendChild(gb)
+    document.body.appendChild(card)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(card) }
+    setActiveElement(gb)
+    ;(performUndo as any).mockReturnValueOnce(true)
+    const e = makeKey('Z', { ctrlKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect(performUndo).toHaveBeenCalledTimes(1)
+  })
+
+  it('非 group-body 非 input + 无 focusedGroupId + Ctrl+Z + performUndo 返 false → 不 preventDefault', () => {
+    // activeElement=body，无 .group-body 在路径上，无 focusedGroupId → undoGid 缺省 → performUndo 不调
+    mockUI.focusedGroupId = null
+    restore = setActiveElement(document.body)
+    ;(performUndo as any).mockReturnValueOnce(false)
+    const e = makeKey('z', { ctrlKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect(performUndo).not.toHaveBeenCalled()
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+  })
+
+  it('Shift+Ctrl+Z 走 performRedo 分支（e.key.toLowerCase()==="z" && e.shiftKey=true → ternary 取 performRedo）', () => {
+    const card = document.createElement('div')
+    card.className = 'group-card'
+    card.setAttribute('data-group-id', 'gredo')
+    const gb = document.createElement('div')
+    gb.className = 'group-body'
+    card.appendChild(gb)
+    document.body.appendChild(card)
+    restore = () => { setActiveElement(document.body)(); document.body.removeChild(card) }
+    setActiveElement(gb)
+    ;(performRedo as any).mockReturnValueOnce(true)
+    const e = makeKey('z', { ctrlKey: true, shiftKey: true, code: 'KeyZ' })
+    _onGlobalKeydown(e)
+    expect((performRedo as any)).toHaveBeenCalledWith('gredo')
+    expect(performUndo).not.toHaveBeenCalled()
+  })
+
+  // jsdom 未实现 isContentEditable，「contentEditable 但不在 .group-body 内」return 分支
+  // 无法在此环境覆盖，留真实浏览器断言。此 describe 锁 INPUT/TEXTAREA/SELECT + .group-body 两条路径。
+})
+
+// r9 #12 续：Escape 7 优先级层（首命中即 return 短路）+ 兜底全家桶（无 return 全调）
+describe('r9 #12 _onGlobalKeydown：Escape 7 优先级层 + 兜底全家桶', () => {
+  let restore: () => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    // 重置所有 store 单例状态 + clear spy
+    mockActionSheet.visible = false; mockActionSheet.hide.mockClear?.()
+    mockAuth.authModalOpen = false
+    mockUI.modals.e2eUnlock = false; mockUI.modals.e2eSetup = false; mockUI.modals.setupGuide = false
+    mockUI.overlays.feedback = false
+    mockE2E.pendingUnlock = []
+    mockAttrDropdown.open = false; mockAttrDropdown.close.mockClear?.()
+    mockBatchMove.open = false; mockBatchMove.hide.mockClear?.()
+    mockMfb.open = false; mockMfb.hide.mockClear?.()
+    mockToast.resolveConfirm.mockClear?.()
+    mockCtx.hide.mockClear?.()
+    closeBmModalMock.mockClear(); closeCatModalMock.mockClear(); closeAttrModalMock.mockClear(); closeGroupEditMock.mockClear()
+    restore = setActiveElement(document.body)
+  })
+  afterEach(() => { restore?.() })
+
+  it('层1 actionSheet.visible=true → hide() 调，下层 store authModalOpen 仍 false 短路未触', () => {
+    mockActionSheet.visible = true
+    mockAuth.authModalOpen = true // 故意置高，验证层1短路让层2 auth 不被关
+    const e = makeKey('Escape')
+    _onGlobalKeydown(e)
+    expect(mockActionSheet.hide).toHaveBeenCalledTimes(1)
+    // 层1命中即 return，auth.authModalOpen 应仍是 true（未被层2关闭）
+    expect(mockAuth.authModalOpen).toBe(true)
+    // 兜底层不应执行（层1 return）
+    expect(closeBmModalMock).not.toHaveBeenCalled()
+    expect(mockToast.resolveConfirm).not.toHaveBeenCalled()
+  })
+
+  it('层2 auth.authModalOpen=true（actionSheet=false）→ 关 auth，层3 e2eUnlock 不触', () => {
+    mockAuth.authModalOpen = true
+    mockUI.modals.e2eUnlock = true
+    const e = makeKey('Escape')
+    _onGlobalKeydown(e)
+    expect(mockAuth.authModalOpen).toBe(false)
+    expect(mockUI.modals.e2eUnlock).toBe(true) // 层2 return，层3 未跑
+  })
+
+  it('层3 e2eUnlock=true → 关 + drain pendingUnlock 全部 resolve(false)', () => {
+    mockUI.modals.e2eUnlock = true
+    const r1 = vi.fn(), r2 = vi.fn()
+    mockE2E.pendingUnlock.push(r1, r2)
+    const e = makeKey('Escape')
+    _onGlobalKeydown(e)
+    expect(mockUI.modals.e2eUnlock).toBe(false)
+    // r1/r2 各被 resolve(false) 一次，pendingUnlock 数组被 splice(0) 清空
+    expect(r1).toHaveBeenCalledWith(false)
+    expect(r2).toHaveBeenCalledWith(false)
+    expect(mockE2E.pendingUnlock.length).toBe(0)
+  })
+
+  it('层3 e2eUnlock + pendingUnlock 内有 resolve 抛错 → catch 兜住，后续 resolve 仍跑', () => {
+    mockUI.modals.e2eUnlock = true
+    const bad = vi.fn(() => { throw new Error('boom') })
+    const good = vi.fn()
+    mockE2E.pendingUnlock.push(bad, good)
+    expect(() => _onGlobalKeydown(makeKey('Escape'))).not.toThrow()
+    expect(bad).toHaveBeenCalledWith(false)
+    expect(good).toHaveBeenCalledWith(false)
+  })
+
+  it('层4 e2eSetup=true → 关', () => {
+    mockUI.modals.e2eSetup = true
+    _onGlobalKeydown(makeKey('Escape'))
+    expect(mockUI.modals.e2eSetup).toBe(false)
+  })
+
+  it('层5 setupGuide=true → 关', () => {
+    mockUI.modals.setupGuide = true
+    _onGlobalKeydown(makeKey('Escape'))
+    expect(mockUI.modals.setupGuide).toBe(false)
+  })
+
+  it('层6 overlays.feedback=true → 关', () => {
+    mockUI.overlays.feedback = true
+    _onGlobalKeydown(makeKey('Escape'))
+    expect(mockUI.overlays.feedback).toBe(false)
+  })
+
+  it('层7 batchMode=true → toggleBatchMode 调', () => {
+    mockUI.batchMode = true
+    _onGlobalKeydown(makeKey('Escape'))
+    expect(toggleBatchMode).toHaveBeenCalledTimes(1)
+  })
+
+  it('全优先层关闭 → 兜底层全家桶：closeBmModal/closeCatModal/closeAttrModal/closeGroupEdit + ctx.hide + 各条件 panel 关', () => {
+    // 兜底条件分支触发：置 trash/deadLinks/history/rail/attrDropdown/batchMove/mfb 都开
+    mockUI.panels.trash = true
+    mockUI.overlays.deadLinks = true
+    mockUI.panels.history = true
+    mockUI.panels.rail = true
+    mockAttrDropdown.open = true
+    mockBatchMove.open = true
+    mockMfb.open = true
+    _onGlobalKeydown(makeKey('Escape'))
+    expect(closeBmModalMock).toHaveBeenCalledTimes(1)
+    expect(closeCatModalMock).toHaveBeenCalledTimes(1)
+    expect(closeAttrModalMock).toHaveBeenCalledTimes(1)
+    expect(closeGroupEditMock).toHaveBeenCalledTimes(1)
+    expect(mockCtx.hide).toHaveBeenCalledTimes(1)
+    expect(mockAttrDropdown.open).toBe(false)
+    expect(mockAttrDropdown.close).toHaveBeenCalledTimes(1)
+    expect(mockBatchMove.open).toBe(false)
+    expect(mockMfb.open).toBe(false)
+    expect(mockUI.panels.trash).toBe(false)
+    expect(mockUI.overlays.deadLinks).toBe(false)
+    expect(mockUI.panels.history).toBe(false)
+    expect(mockUI.panels.rail).toBe(false)
+    expect(mockToast.resolveConfirm).toHaveBeenCalledWith(false)
+  })
+
+  it('兜底层无 return → 即使无任何 modal/panel 开，全家桶仍被无条件调用一次（无短路）', () => {
+    _onGlobalKeydown(makeKey('Escape'))
+    // 无条件组（closeBmModal 等）即使无对应 modal 开也被调
+    expect(closeBmModalMock).toHaveBeenCalledTimes(1)
+    expect(closeCatModalMock).toHaveBeenCalledTimes(1)
+    expect(closeAttrModalMock).toHaveBeenCalledTimes(1)
+    expect(closeGroupEditMock).toHaveBeenCalledTimes(1)
+    expect(mockCtx.hide).toHaveBeenCalledTimes(1)
+    // toast.resolveConfirm 也无条件调
+    expect(mockToast.resolveConfirm).toHaveBeenCalledWith(false)
+    // 条件组只在对应开时才关——此处全 false 故 open 仍 false，hide/close 不调
+    expect(mockAttrDropdown.close).not.toHaveBeenCalled()
+    expect(mockBatchMove.hide).not.toHaveBeenCalled()
+    expect(mockMfb.hide).not.toHaveBeenCalled()
+  })
+
+  it('非 Escape key（如 Enter）→ 不进 Escape 块，全家桶不调', () => {
+    _onGlobalKeydown(makeKey('Enter'))
+    expect(closeBmModalMock).not.toHaveBeenCalled()
+    expect(mockToast.resolveConfirm).not.toHaveBeenCalled()
+  })
+})
+
+// r9 #12 续：batchMode Ctrl+A 全选（源码 L197-198，无 inField 守卫）
+describe('r9 #12 _onGlobalKeydown：batchMode Ctrl+A 全选 + 批量模式开关守卫', () => {
+  let restore: () => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    mockUI.batchMode = false
+    mockUI.batchSelected = []
+    ;(selectAllBatch as any).mockClear?.()
+    ;(toggleBatchMode as any).mockClear?.()
+    restore = setActiveElement(document.body)
+  })
+  afterEach(() => { restore?.() })
+
+  it('batchMode=true + Ctrl+A → selectAllBatch 调 + preventDefault', () => {
+    mockUI.batchMode = true
+    const e = makeKey('a', { ctrlKey: true, code: 'KeyA' })
+    _onGlobalKeydown(e)
+    expect(selectAllBatch).toHaveBeenCalledTimes(1)
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).toHaveBeenCalled()
+  })
+
+  it('batchMode=false + Ctrl+A → 不进 batchMode 块，selectAllBatch 不调（避免劫持非批量页 Ctrl+A）', () => {
+    mockUI.batchMode = false
+    const e = makeKey('a', { ctrlKey: true, code: 'KeyA' })
+    _onGlobalKeydown(e)
+    expect(selectAllBatch).not.toHaveBeenCalled()
+    expect((e.preventDefault as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled()
+  })
+
+  it('batchMode=true + Meta+A（mac cmd）→ 同样触发（ctrl||meta 守卫）', () => {
+    mockUI.batchMode = true
+    const e = makeKey('a', { metaKey: true, code: 'KeyA' })
+    _onGlobalKeydown(e)
+    expect(selectAllBatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('batchMode=true + 小写 key "a" 命中（e.key.toLowerCase()==="a"）', () => {
+    mockUI.batchMode = true
+    const e = makeKey('A', { ctrlKey: true, code: 'KeyA' }) // 大写 A
+    _onGlobalKeydown(e)
+    expect(selectAllBatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('batchMode=true + Shift+Ctrl+A → not toLowerCase a 但 shift 不阻断（源码仅 ctrl||meta 守卫无 shift 拦截）', () => {
+    // 源码 L198: (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a'，无 !shift 守卫
+    mockUI.batchMode = true
+    const e = makeKey('a', { ctrlKey: true, shiftKey: true, code: 'KeyA' })
+    _onGlobalKeydown(e)
+    expect(selectAllBatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('batchMode=true + 非 A 的 Ctrl+x → selectAllBatch 不调', () => {
+    mockUI.batchMode = true
+    const e = makeKey('x', { ctrlKey: true, code: 'KeyX' })
+    _onGlobalKeydown(e)
+    expect(selectAllBatch).not.toHaveBeenCalled()
+  })
+
+  // 注：Delete/Backspace 批量删除分支已有现 useKeyboardOps batch describe 覆盖（inField 守卫 + batchDelete spy），
+  // 本 chunk 不重复，仅补此前 0 直测的 Ctrl+A 全选分支。源码 Ctrl+A 无 inField 守卫是既有设计（批量页无输入控件场景）。
+})
+
+
+
