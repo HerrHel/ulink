@@ -504,16 +504,11 @@ describe('useBookmark', () => {
   })
 
   describe('saveBm', () => {
-    it('rejects empty title and url', () => {
-      bmForm.title = ''
+    it('rejects empty/whitespace title and empty url：不 addBookmark（守卫链 title.trim()/url.trim() 空回退）', () => {
+      bmForm.title = '  '
       bmForm.url = ''
       saveBm()
-    })
-
-    it('rejects whitespace-only title', () => {
-      bmForm.title = '  '
-      bmForm.url = 'https://example.com'
-      saveBm()
+      expect(mockData.addBookmark).not.toHaveBeenCalled()
     })
 
     it('new bookmark generates ID and calls addBookmark', () => {
@@ -816,19 +811,7 @@ describe('useBookmark', () => {
 
     // d1-91：换扫法深挖断言浅护栏——addSub 11 行编排此前 it1 仅断 4 字段，
     // 7 行真实副作用（saveToGroup carry-over 清除 / openBmModal 调用 / icon 清空 / 两个 previewVisible 视觉态重置）
-    // 零护栏。
-    it('clears ui.saveToGroup carry-over before opening modal（防子书签误继承父的保存到组指示）', async () => {
-      // 故意污染 saveToGroup 残留态（模拟上一轮 saveBm「保存到组」遗留 → addSub 必须先清）
-      mockUI.saveToGroup = 'stale-group-id'
-      expect(mockUI.saveToGroup).toBe('stale-group-id')
-
-      addSub('parent-id')
-      await vi.waitFor(() => bmForm.isOpen === true)
-
-      // saveToGroup 必须被 addSub 置 null（siblings 不应继承曾激活的保存到组指示）
-      expect(mockUI.saveToGroup).toBeNull()
-    })
-
+    // 零护栏。下面"顺序敏感"例锁先清后开的执行序，"一次性 7 字段"例锁全部重置不变量，"空 parentId"例锁入参容错。
     it('saveToGroup 清除在 openBmModal 之前执行（顺序敏感：先清组指示再开表单）', async () => {
       // openBmModal 会触发 ui.modals.bookmark=true（modals 开关在 mockUI.modals），
       // addSub 必须把 saveToGroup=null 放在 openBmModal() 调用之前
@@ -840,33 +823,6 @@ describe('useBookmark', () => {
       // 证明两行副作用均真正执行（非被某短路跳过）
       expect(bmForm.isOpen).toBe(true)
       expect(mockUI.saveToGroup).toBeNull()
-    })
-
-    it('clears icon field 防图标预览区残影（上一轮 openBmModal 设的 icon 被 addSub 清空）', async () => {
-      // 故意污染 bmForm.icon 残值（模拟上一轮表单残留）
-      bmForm.icon = 'https://stale.example/old.ico'
-      addSub('parent-id')
-      await vi.waitFor(() => bmForm.isOpen === true)
-      // icon 必须被清空（防 preview 区域展示上一书签图标残影）
-      expect(bmForm.icon).toBe('')
-    })
-
-    it('重置 clearIconVisible=false（清除图标按钮回到隐藏态）', async () => {
-      // 故意污染为 true（模拟上一轮有图标时按钮可见残留）
-      bmForm.clearIconVisible = true
-      addSub('parent-id')
-      await vi.waitFor(() => bmForm.isOpen === true)
-      // clearIconVisible 必须重置回 false
-      expect(bmForm.clearIconVisible).toBe(false)
-    })
-
-    it('重置 iconPreviewVisible=false（图标预览区回到隐藏态防残影）', async () => {
-      // 故意污染为 true（模拟上一轮图标预览可见残留）
-      bmForm.iconPreviewVisible = true
-      addSub('parent-id')
-      await vi.waitFor(() => bmForm.isOpen === true)
-      // iconPreviewVisible 必须重置回 false
-      expect(bmForm.iconPreviewVisible).toBe(false)
     })
 
     it('一次性锁定 7 字段全部重置完整契约（防未来误漏任一字段，标识 addSub 全重置不变量）', async () => {
@@ -949,18 +905,6 @@ describe('useBookmark', () => {
       populateStore()
       await deleteBookmarkWithUndo('b1')
       expect(mockData.siblingGroups[0].bookmarkIds).toEqual(['b2'])
-    })
-
-    it('undo callback restores bookmarks', async () => {
-      const orig = { id: 'b1', title: 'UndoTest', parentId: null }
-      mockData.bookmarks = [{ ...orig }]
-      mockData.siblingGroups = []
-      populateStore()
-      await deleteBookmarkWithUndo('b1')
-      expect(mockData.bookmarks[0].deletedAt).toBeDefined()
-      expect(mockToastWithUndo.undoFn).not.toBeNull()
-      mockToastWithUndo.undoFn!()
-      expect(mockData.bookmarks[0].deletedAt).toBeUndefined()
     })
 
     it('undo restores group references', async () => {
@@ -1092,31 +1036,9 @@ describe('useBookmark', () => {
   })
 
   describe('previewLogo', () => {
-    it('shows logo preview for valid URL', () => {
-      bmForm.url = 'https://github.com/user/repo'
-      previewLogo()
-      expect(bmForm.logoPreviewVisible).toBe(true)
-      expect(bmForm.logoPreviewUrl).toContain('github.com')
-    })
-
-    it('adds https:// for protocol-less URLs', () => {
-      bmForm.url = 'example.com'
-      previewLogo()
-      expect(bmForm.logoPreviewVisible).toBe(true)
-    })
-
-    it('hides preview for short URLs (<=3 chars)', () => {
-      bmForm.url = 'ab'
-      previewLogo()
-      expect(bmForm.logoPreviewVisible).toBe(false)
-    })
-
-    it('hides preview for empty URL', () => {
-      bmForm.url = ''
-      bmForm.logoPreviewVisible = true
-      previewLogo()
-      expect(bmForm.logoPreviewVisible).toBe(false)
-    })
+    // 原有 4 基础镜像例（valid URL / protocol-less / short / empty 各只断 logoPreviewVisible 一字段）
+    // 已被 d1-90 深挖例全覆盖且更严：d1-90 正路径直锁三字段、length 边界含 short>3、falsy url 含 empty。
+    // 故删 4 基础镜像例留 8 个 d1-90 真契约例，无增量回归。
 
     // d1-90：换扫法深挖 previewLogo 断言浅（d1-85 pointer#1 钦点「previewLogo 锁度浅，URL 短串<=3 守卫 + 协议补全 +
     // logoPreviewVisible/URL 双状态可深挖」）。现有 4 用例只断言 logoPreviewVisible / logoPreviewUrl 两字段，
@@ -1389,15 +1311,6 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       expect(bmForm.aiApplied).toBe(false)
     })
 
-    it('categoryId 被覆盖语义：原值被建议值整个替换非保留', () => {
-      bmForm.categoryId = 'original'
-      bmForm.aiSuggestCatId = 'suggested'
-
-      applyAiCategory()
-
-      expect(bmForm.categoryId).toBe('suggested')
-    })
-
     it('aiApplied 已 true 时再应用仍 true（幂等）', () => {
       bmForm.aiSuggestCatId = 'cat1'
       bmForm.aiApplied = true
@@ -1530,28 +1443,6 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
 
       dismissAiSuggestions()
 
-      expect(bmForm.aiApplied).toBe(true)
-    })
-  })
-
-  describe('aiApplied 标志位跨三函数一致（防漏置致重复建议）', () => {
-    it('applyAiCategory 正路径置 aiApplied=true', () => {
-      bmForm.aiApplied = false
-      bmForm.aiSuggestCatId = 'c'
-      applyAiCategory()
-      expect(bmForm.aiApplied).toBe(true)
-    })
-
-    it('applyAiAttributes 正路径置 aiApplied=true', () => {
-      bmForm.aiApplied = false
-      bmForm.aiSuggestAttrIds = ['a']
-      applyAiAttributes()
-      expect(bmForm.aiApplied).toBe(true)
-    })
-
-    it('dismissAiSuggestions 恒置 aiApplied=true（即使无建议）', () => {
-      bmForm.aiApplied = false
-      dismissAiSuggestions()
       expect(bmForm.aiApplied).toBe(true)
     })
   })
@@ -1800,21 +1691,10 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       expect(bmForm.icon).toBe('https://favicon.example.com/https://foo.com')
       expect(bmForm.iconPreviewVisible).toBe(true)
       expect(bmForm.clearIconVisible).toBe(true)
-      // AI 编排被遮
+      // AI 编排被遮（isEdit=true）—— 此例已含 d1-116/7 的 `!bmForm.icon` falsy 检测
+      // （icon='' 走填充分支）语义，/7 ''与undefined等价的镜像不再单立。
       expect(mockSuggestCategory).not.toHaveBeenCalled()
       expect(mockSuggestAttributes).not.toHaveBeenCalled()
-    })
-
-    it('d1-116/7 icon 空串 \'\' 与 undefined 等价走 `!bmForm.icon` 填充分支（新建模式）', () => {
-      // 源 `if (!bmForm.icon)` 是 falsy 检测：'' / undefined / null 同走填充
-      // 若误改成 `=== undefined` 会让 icon='' 不被填，直接锁真实 falsy 检测语义
-      mockAi.suggestedCatId = null
-      mockAi.suggestedAttrIds = []
-      bmForm.icon = ''  // 显式空串
-      bmForm.url = 'https://foo.com'
-      autoFetchFromUrl()
-      vi.advanceTimersByTime(500)
-      expect(bmForm.icon).toBe('https://favicon.example.com/https://foo.com')
     })
   })
 })

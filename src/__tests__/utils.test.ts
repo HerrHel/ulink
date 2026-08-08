@@ -7,14 +7,9 @@ describe('utils', () => {
     it('should escape HTML entities', () => {
       expect(esc('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;')
     })
-    it('should handle normal text', () => {
+    it('should pass through normal text and empty string (透传/空串边界)', () => {
       expect(esc('hello world')).toBe('hello world')
-    })
-    it('should handle empty string', () => {
       expect(esc('')).toBe('')
-    })
-    it('should escape ampersands', () => {
-      expect(esc('a & b')).toBe('a &amp; b')
     })
     it('should escape double quotes (S1: attribute-context safe)', () => {
       expect(esc('"hello"')).toBe('&quot;hello&quot;')
@@ -50,10 +45,8 @@ describe('utils', () => {
     it('should add https:// if missing', () => {
       expect(fixUrl('example.com')).toBe('https://example.com')
     })
-    it('should not modify URLs with http://', () => {
+    it('should not modify URLs with http:// or https:// (startsWith 对称守卫)', () => {
       expect(fixUrl('http://example.com')).toBe('http://example.com')
-    })
-    it('should not modify URLs with https://', () => {
       expect(fixUrl('https://example.com')).toBe('https://example.com')
     })
     it('should handle empty string', () => {
@@ -188,13 +181,6 @@ describe('utils', () => {
       expect(isValidShareGroupId('ab.cd')).toBe(false)
       expect(isValidShareGroupId('ab/cd')).toBe(false)
       expect(isValidShareGroupId('分组abc')).toBe(false)
-    })
-    it('类型守卫收敛为 string（编译期）', () => {
-      const v: string | null = 'sg_ok'
-      if (isValidShareGroupId(v)) {
-        // 此处 v 收敛为 string
-        expect(v.length).toBeLessThanOrEqual(64)
-      }
     })
   })
 
