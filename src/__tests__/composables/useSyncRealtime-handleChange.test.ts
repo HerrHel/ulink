@@ -344,8 +344,8 @@ describe('_handleRealtimeChange — R13 await 后 dirty/pending 复查跳过', (
   })
 })
 
-describe('_handleRealtimeChange — revive-assign 清 deletedAt 契约（bug 痕迹锁定现状）', () => {
-  it('revive-assign：远端复活但 updateBookmark {...prev,...changes} 不透传删除 → 本地仍带软删标记（真 bug 痕迹,锁现状防回归恶化）', async () => {
+describe('_handleRealtimeChange — revive-assign 清 deletedAt 契约（修复后复活生效）', () => {
+  it('★revive-assign：远端复活(edleted_at=null) → 本地 deletedAt 被 changes.deletedAt=undefined 经 spread 覆盖清空 → 复活生效（修复 bug:旧 delete 删 key 致 spread 保留 prev.deletedAt）', async () => {
     await withAuth()
     const { _handleRealtimeChange, ds } = await getDeps()
     seedBookmark(ds, { id: 'r-bm-revive', title: '旧', url: 'https://a.com', deletedAt: 100 })
@@ -358,10 +358,61 @@ describe('_handleRealtimeChange — revive-assign 清 deletedAt 契约（bug 痕
     )
 
     expect(updateSpy).toHaveBeenCalledTimes(1)
-    // 源 L233 delete (plain as any).deletedAt 删 changes 自身 key,但 updateBookmark {...prev,...changes}
-    // merge 后 prev.deletedAt=100 保留——revive-assign 复活后本地仍带软删标记的真 bug 痕迹,
-    // 属 sync 写路径需独立修源分支,此用例锁现状防回归恶化。
-    expect((ds.bookmarkMap['r-bm-revive'] as any).deletedAt).toBe(100)
+    // 修复后:revive-assign 显式把 changes.deletedAt 设 undefined(保 key),
+    // updateBookmark `{...prev, ...changes}` spread 用 undefined 覆盖 prev.deletedAt=100
+    // → 新对象 deletedAt=undefined → 复活生效(UI 软删过滤不再隐藏)。
+    // 旧 bug:源 L233 `delete plain.deletedAt` 删掉 changes 的 deletedAt key,
+    // spread 不动没出现的 key → prev.deletedAt=100 被保留 → 复活失效。
+    expect((ds.bookmarkMap['r-bm-revive'] as any).deletedAt).toBeUndefined()
+  })
+
+  it('★revive-assign group：远端复活组 → 本地 deletedAt 被清空复活（同 bookmark 修复对称）', async () => {
+    await withAuth()
+    const { _handleRealtimeChange, ds } = await getDeps()
+    seedGroup(ds, { id: 'r-grp-revive', name: 'g', deletedAt: 200 })
+    _e2e.isUnlockedRef.value = true
+    const updateSpy = vi.spyOn(ds, 'updateGroup')
+
+    await _handleRealtimeChange(
+      { eventType: 'UPDATE', new: makeRemoteGroupRow({ id: 'r-grp-revive', updated_at_num: 300, deleted_at: null }), old: {} },
+      'group',
+    )
+
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+    expect((ds.groupMap['r-grp-revive'] as any).deletedAt).toBeUndefined()
+  })
+
+  it('revive-assign category：远端复活分类 → 本地 deletedAt 被清空复活（同 bookmark 修复对称）', async () => {
+    await withAuth()
+    const { _handleRealtimeChange, ds } = await getDeps()
+    seedCategory(ds, { id: 'r-cat-revive', name: 'c', deletedAt: 50 })
+    _e2e.isUnlockedRef.value = true
+    const updateSpy = vi.spyOn(ds, 'updateCategory')
+
+    await _handleRealtimeChange(
+      { eventType: 'UPDATE', new: { id: 'r-cat-revive', name: '远端', icon: 'i', color: 'k', order: 0, updated_at_num: 300, deleted_at: null, user_id: 'user-abc' }, old: {} },
+      'category',
+    )
+
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+    expect((ds.categoryMap['r-cat-revive'] as any).deletedAt).toBeUndefined()
+  })
+
+  it('revive-assign 未解锁路径：wasUnlocked=false 仍 plain=mapped 带 deletedAt=undefined → spread 覆盖复活（不依赖 decryptItem）', async () => {
+    await withAuth()
+    const { _handleRealtimeChange, ds } = await getDeps()
+    seedBookmark(ds, { id: 'r-bm-revive-locked', title: '旧', url: 'https://a.com', deletedAt: 100 })
+    _e2e.isUnlockedRef.value = false // 未解锁,plain=mapped 不经 decryptItem
+    const updateSpy = vi.spyOn(ds, 'updateBookmark')
+
+    await _handleRealtimeChange(
+      { eventType: 'UPDATE', new: makeRemoteBookmarkRow({ id: 'r-bm-revive-locked', updated_at_num: 200, deleted_at: null }), old: {} },
+      'bookmark',
+    )
+
+    expect(updateSpy).toHaveBeenCalledTimes(1)
+    expect(_e2e.decryptItemSpy).not.toHaveBeenCalled() // 未解锁不 decrypt
+    expect((ds.bookmarkMap['r-bm-revive-locked'] as any).deletedAt).toBeUndefined()
   })
 })
 
