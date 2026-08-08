@@ -30,8 +30,8 @@
           <div class="e2e-link" @click="enterReset">忘记主密码？使用 Recovery Key 重置</div>
         </template>
 
-        <!-- 重置模式 -->
-        <template v-else>
+        <!-- 重置模式（必须 v-else-if，否则 changePw 模式会误渲染本块） -->
+        <template v-else-if="mode === 'reset'">
           <div class="e2e-info e2e-warn">
             <p>使用 Recovery Key 设置新的主密码。原主密码将被替换。</p>
             <p style="margin-top:6px">重设后会用新主密码派生新密钥，此前用旧主密码加密且本地无明文副本的数据将无法解密。</p>
@@ -102,7 +102,7 @@
           <button class="btn btn-primary" data-testid="lv-e2e-unlock-submit" :disabled="!masterPw" @click="onUnlock">解锁</button>
           <button class="btn btn-secondary" @click="onCancel">跳过</button>
         </template>
-        <template v-else>
+        <template v-else-if="mode === 'reset'">
           <button class="btn btn-primary" :disabled="!canReset || loading" @click="onReset">{{ loading ? '重置中…' : '重置主密码' }}</button>
           <button class="btn btn-secondary" @click="onCancel">取消</button>
         </template>
