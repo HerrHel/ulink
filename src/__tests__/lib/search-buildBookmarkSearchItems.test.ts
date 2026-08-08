@@ -9,9 +9,9 @@
  *
  * 仅给私有 `_buildBookmarkSearchItems` 增 export 供测试 import,函数体逐字未动。
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import type { Bookmark, CustomAttribute } from '../../types.js'
-import { _buildBookmarkSearchItems } from '../../lib/search.js'
+import { _buildBookmarkSearchItems, preloadSearchLibs } from '../../lib/search.js'
 
 function attr(id: string, name: string): CustomAttribute {
   return { id, name, type: 'boolean' as const } as CustomAttribute
@@ -25,6 +25,13 @@ function bm(p: Partial<Pick<Bookmark, 'id' | 'title' | 'url' | 'notes' | 'userna
 }
 
 describe('_buildBookmarkSearchItems 索引构建契约护栏', () => {
+  // _toPy 依赖 pinyin-pro 懒加载（ensureSearchLibs 触发异步 import）；同步调用时 pinyinFn
+  // 可能仍为 null → titlePy 返空串。本地此前靠模块状态泄漏幸过，CI 隔离调度下竞态失败。
+  // beforeAll 预热等待 import resolve，保证依赖拼音的断言（titlePy.length>0）稳定。
+  beforeAll(async () => {
+    await preloadSearchLibs()
+  })
+
   it('一一映射：索引项 id 与 bookmark 一一对应、顺序保留', () => {
     const items = _buildBookmarkSearchItems(
       [bm({ id: 'a', title: 'A', url: 'ua' }), bm({ id: 'b', title: 'B', url: 'ub' })],
