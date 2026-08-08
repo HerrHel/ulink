@@ -11,7 +11,7 @@ import { newBookmarkId } from '../../lib/newId.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
-import { safeDecodePassword, encrypt, decrypt } from '../../crypto.js'
+import { safeDecodePassword, encrypt, decryptPasswordWithKey } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
 import { isDataHydrated } from '../../lib/dataReady.js'
@@ -217,30 +217,23 @@ export async function openBmModal(editId?: string) {
     bmForm.clearIconVisible = !!bm?.icon
 
     // 密码：E2E 加密 → 用缓存密钥解密 / 旧版 base64 → 解码 / 空 → 留空
+    // 展示链路对齐：解密统一走 decryptPasswordWithKey（与 BookmarkCard 卡片路径一致）。
+    // 旧实现此处用 decrypt(raw, cryptoKey)——decrypt 对「三段但 GCM 认证失败」降级返回
+    // 原 ciphertext 串，换设备/改主密码后旧 key 加密的密文用新 key 解会把 salt.iv.data
+    // 长串回吐进编辑框（用户报的「密码乱码」）。decryptPasswordWithKey 解不开返空串，
+    // 与 crypto 的既定展示语义一致，绝不把密文形态泄漏给 UI（其内部已 catch，无需外层 try）。
     const pw = bm?.password
     if (pw && typeof pw === 'object' && (pw as EncryptedPassword).encrypted) {
       const e2eStore = useE2EStore()
       if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
-        try {
-          const ep = pw as EncryptedPassword
-          const raw = ep.salt + '.' + ep.iv + '.' + ep.data
-          bmForm.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
-        } catch {
-          bmForm.password = ''
-        }
+        bmForm.password = await decryptPasswordWithKey(pw, e2eStore.cryptoKey as CryptoKey)
       } else {
         // P1：按需引导 — 编辑已加密书签时自动弹解锁
         const unlocked = await new Promise<boolean>(resolve => {
           e2eStore.pendingUnlock.push(resolve)
         })
         if (unlocked && e2eStore.cryptoKey) {
-          try {
-            const ep = pw as EncryptedPassword
-            const raw = ep.salt + '.' + ep.iv + '.' + ep.data
-            bmForm.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
-          } catch {
-            bmForm.password = ''
-          }
+          bmForm.password = await decryptPasswordWithKey(pw, e2eStore.cryptoKey as CryptoKey)
         } else {
           bmForm.password = ''
         }
