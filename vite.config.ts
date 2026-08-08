@@ -84,6 +84,19 @@ function purgeCssPlugin(): Plugin {
         if (fileName.endsWith('.css')) {
           const chunk = bundle[fileName];
           if (chunk.type === 'asset' && typeof chunk.source === 'string') {
+            const raw = chunk.source as string
+
+            // PurgeCSS 8.x 无法正确解析 Vue scoped CSS 的 [data-v-xxxxx]
+            // 属性选择器——会将 .foo[data-v-abc] 视为整体而找不到类名 .foo，
+            // 导致全部 scoped 样式被误删（issue 复现：AuthModal/SetupGuide 等
+            // 异步组件的 CSS 文件被清空为 0 字节）。
+            // 解法：剥离 data-v-* hash → PurgeCSS → 恢复 hash 到类/ID 选择器。
+            const scopeHashes = new Set<string>()
+            const stripped = raw.replace(/\[data-v-[a-f0-9]+\]/g, (m) => {
+              scopeHashes.add(m)
+              return ''
+            })
+
             const result = await new PurgeCSS().purge({
               content: [
                 './index.html',
@@ -91,7 +104,7 @@ function purgeCssPlugin(): Plugin {
                 './src/**/*.js',
                 './src/**/*.ts'
               ],
-              css: [{ raw: chunk.source }],
+              css: [{ raw: stripped }],
               safelist: {
                 standard: [
                   'open', 'show', 'active', 'visible', 'dragging',
@@ -117,12 +130,21 @@ function purgeCssPlugin(): Plugin {
                 deep: [/expanded/, /active/, /open/, /show/, /visible/]
               },
               variables: true
-            });
+            })
+
             if (result[0] && result[0].css) {
-              const originalSize = chunk.source.length;
-              const newSize = result[0].css.length;
+              let purged = result[0].css
+              // 恢复 data-v-* hash：加回到每个 class / ID 选择器后面
+              for (const hash of scopeHashes) {
+                purged = purged.replace(
+                  /(?<=[}\s,{;]|^)([.#][a-zA-Z_-][\w-]*)/g,
+                  `$1${hash}`
+                )
+              }
+              const originalSize = raw.length
+              const newSize = purged.length
               if (newSize < originalSize) {
-                chunk.source = result[0].css;
+                chunk.source = purged
                 console.log(`[PurgeCSS] ${fileName}: ${(originalSize/1024).toFixed(1)}KB → ${(newSize/1024).toFixed(1)}KB (${Math.round((1 - newSize/originalSize) * 100)}% reduced)`);
               }
             }
