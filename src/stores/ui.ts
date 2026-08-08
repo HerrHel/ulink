@@ -36,6 +36,9 @@ interface ModalState {
   groupEdit: boolean
   e2eSetup: boolean
   e2eUnlock: boolean
+  e2eCanaryConflict: boolean
+  /** e2eCanaryConflict 的形态：true=其他设备改过主密码（跟随迁移向导）；false=多设备各设各的（统一/保留） */
+  e2eCanaryConflictUpgraded: boolean
   vaultSetup: boolean
   vaultUnlock: boolean
   setupGuide: boolean
@@ -132,6 +135,8 @@ export const useUIStore = defineStore('ui', {
       groupEdit: false,
       e2eSetup: false,
       e2eUnlock: false,
+      e2eCanaryConflict: false,
+      e2eCanaryConflictUpgraded: false,
       vaultSetup: false,
       vaultUnlock: false,
       setupGuide: false,

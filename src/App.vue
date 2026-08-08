@@ -46,6 +46,7 @@
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" :initial-mode="store.e2eUnlockInitialMode" @close="onE2EClose" @unlocked="onE2EUnlocked" />
+<E2ECanaryConflictModal :open="store.modals.e2eCanaryConflict" @close="store.modals.e2eCanaryConflict = false" />
 <VaultSetupModal :open="store.modals.vaultSetup" @close="store.modals.vaultSetup = false" />
 <VaultUnlockModal :open="store.modals.vaultUnlock" @close="onVaultClose" @unlocked="onVaultUnlocked" />
 <SetupGuide />
@@ -159,6 +160,7 @@ function failPendingUnlock(reason: string) {
 }
 
 const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
+const E2ECanaryConflictModal = defineAsyncComponent(() => import('./components/modals/E2ECanaryConflictModal.vue'))
 // E1-004：chunk 加载失败时 drain pendingUnlock，避免 await 永挂
 const E2EUnlockModal = defineAsyncComponent({
   loader: () => import('./components/modals/E2EUnlockModal.vue'),

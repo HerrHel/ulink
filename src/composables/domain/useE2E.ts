@@ -139,6 +139,44 @@ function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> 
   }, { onConflict: 'user_id' })).then(r => !r.error).catch(() => false)
 }
 
+// ── 多设备主密码一致性检测（云端 canary 单槽冲突防护） ──
+// 云端 user_security.master_canary 是单行单槽：多设备各设各的主密码时，后写覆盖先写，
+// 且各 key 互解不开对方密文（加密字段跨设备不可读），另一设备一旦本地 canary 丢失即锁死。
+// 登录后检测到不一致时由 UI 引导解决：
+//  - adoptCloudCanary：切到云端 canary 统一主密码（本机旧 key 加密数据不可逆失效，UI 需提示）
+//  - 保留本机：接受加密字段不互通，且禁止在本机改主密码/重置（防覆盖云端 canary 锁死其他设备）
+
+/** 直接读云端 canary（不经本地优先，仅登录用户有值） */
+function _getCloudCanary(): Promise<Record<string, unknown> | null> {
+  try {
+    const auth = useAuth()
+    if (!auth || !auth.user) return Promise.resolve(null)
+    const userId = auth.user?.id
+    if (!userId) return Promise.resolve(null)
+    return Promise.resolve(supabase.from('user_security')
+      .select('master_canary')
+      .eq('user_id', userId)
+      .maybeSingle())
+      .then(res => res.data?.master_canary as Record<string, unknown> ?? null)
+      .catch(() => null)
+  } catch {
+    return Promise.resolve(null)
+  }
+}
+
+/** 两 canary 是否同源：canary 验证串与派生盐一致 → 同一主密码设置 */
+function _sameCanary(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  return a.canary === b.canary && JSON.stringify(a.salt) === JSON.stringify(b.salt)
+}
+
+export interface E2ECanaryMismatch {
+  mismatch: boolean
+  hasLocal: boolean
+  hasCloud: boolean
+  /** 云端 canary 带 prev_*（其他设备主动改过主密码）→ 应走跟随迁移而非多设备冲突 */
+  upgraded: boolean
+}
+
 export function useE2E() {
   const e2eStore = useE2EStore()
   const biometric = useBiometric()
@@ -159,6 +197,50 @@ export function useE2E() {
   function _setKey(key: CryptoKey) {
     e2eStore.setKey(key)
     e2eStore.resetLockTimer()
+  }
+
+  /**
+   * 确保本机主密码设置对云端可见（「一个主密码解锁所有设备」的最后一环）。
+   * 场景：本机设置主密码时未登录（canary 只写本地），之后才登录——登录动作本身不推 canary，
+   * 云端 master_canary 一直是 null，其他设备登录后拉不到 canary，会被引导重新设置主密码 →
+   * 各设各的 key → 加密字段互不可读。本函数在登录后把本地 canary 推上云（云端无 canary 时），
+   * 使其他设备登录后能用同一主密码解锁。云端已有 canary → 不自动覆盖（一致性交给
+   * detectCloudCanaryMismatch 冲突弹窗处理，防止覆盖锁死其他设备）。
+   */
+  async function ensureCloudCanarySynced(): Promise<void> {
+    const local = _readLocalCanary()
+    if (!local) return
+    const cloud = await _getCloudCanary()
+    if (cloud) return
+    const auth = useAuth()
+    if (!auth.user) return
+    await _saveCanaryData(local)
+  }
+
+  /** 登录后检测本机与云端主密码设置是否一致（多设备冲突 / 主密码升级，canary 单槽覆盖风险） */
+  async function detectCloudCanaryMismatch(): Promise<E2ECanaryMismatch> {
+    const local = _readLocalCanary()
+    const cloud = await _getCloudCanary()
+    if (!local || !cloud) return { mismatch: false, hasLocal: !!local, hasCloud: !!cloud, upgraded: false }
+    const mismatch = !_sameCanary(local, cloud)
+    // upgraded：云端带 prev_*（其他设备 changeMasterPassword 过）→ 走「跟随迁移」而非多设备冲突
+    return { mismatch, hasLocal: true, hasCloud: true, upgraded: mismatch && !!cloud.prev_canary }
+  }
+
+  /**
+   * 切到云端 canary（与其他设备统一主密码）：覆盖本地 canary + 复位为锁定态，
+   * 随后由 UI 引导输入其他设备的原主密码解锁（key 由云端 canary 的 salt 派生）。
+   * 代价：本机此前用本机主密码加密的数据（key 已换）将不可逆失效，UI 必须在调用前提示。
+   */
+  async function adoptCloudCanary(): Promise<boolean> {
+    const cloud = await _getCloudCanary()
+    if (!cloud) return false
+    _writeLocalCanary(cloud)
+    e2eStore.setEnabled(true)
+    e2eStore.setUnlocked(false)
+    e2eStore.setKey(null)
+    e2eStore.setCloudCanaryStale(false)
+    return true
   }
 
   /** 检查用户是否已设置主密码 */
@@ -412,6 +494,24 @@ export function useE2E() {
     if (changed) ds._bumpSearchVersion()
   }
 
+  /**
+   * 检测 store 是否存在 E2E 密文数据（EncryptedPassword 对象 / 三段 salt.iv.data 串）。
+   * 换设备防呆：本机无 canary 却已有历史密文时，setupMasterPassword 会生成全新 key，
+   * 旧主密码加密的数据永久解不开（用户报的换设备密码乱码的根因场景）。UI 在 setup 弹窗
+   * 打开时据此给出警告，引导用户走「原主密码解锁」（若已随备份导入 canary）而非静默覆盖。
+   * 只读当前内存数据（curSpace 数据集），不做 IDB/云端查询。
+   */
+  function hasEncryptedData(): boolean {
+    const ds = useDataStore()
+    const isCipher = (v: unknown): boolean => typeof v === 'string' && isThreePartCipher(v)
+    const isPwObj = (v: unknown): boolean =>
+      typeof v === 'object' && v !== null && (v as { encrypted?: boolean }).encrypted === true
+    return ds.bookmarks.some(b => isPwObj(b.password) || isCipher(b.password) || isCipher(b.username) || isCipher(b.notes))
+      || ds.siblingGroups.some(g => isCipher(g.name) || isCipher(g.notes))
+      || ds.categories.some(c => isCipher(c.name))
+      || ds.customAttributes.some(a => isCipher(a.name))
+  }
+
   // ── 修改主密码（数据层重加密迁移）──
   // 根因：setup/reset 换 key 时生成新 salt+新 key 并直接覆盖 canaryData，但云端历史
   // 密文（username/notes/name + password 独立路径）仍是旧 key 加密 → 新 key 解不开 →
@@ -423,7 +523,13 @@ export function useE2E() {
   // 不做整批回滚（对齐 syncPush 部分成功语义）；IDB 写失败才回滚 _setKey(oldKey)+store 还原。
   // 限制：reset（忘旧主密码、只有 recovery key）路径不动——rkKey 只加密 recovery_canary、
   // 从不加密业务数据，reset 拿不到旧 key，数据救不回是它的本来语义。
-  async function changeMasterPassword(oldPw: string, newPw: string): Promise<boolean> {
+  /**
+   * 修改主密码（数据层重加密迁移）。
+   * @param overrideCanary 可选——「跟随迁移」时传入云端新 canary（其他设备改过主密码），
+   *   复用其 salt/it 派生新 key（使本机 key 与其他设备完全一致），canaryData 原样覆盖云端。
+   *   未提供时走常规改密：随机新 salt + 生成新 canary，并记录 prev_*（旧 canary，标记升级）。
+   */
+  async function changeMasterPassword(oldPw: string, newPw: string, overrideCanary?: Record<string, unknown>): Promise<boolean> {
     if (newPw.length < 8) return false
     const canaryData = await _getCanaryData() as Record<string, unknown> | null
     if (!canaryData?.canary || !canaryData?.salt) return false
@@ -445,8 +551,14 @@ export function useE2E() {
     }
 
     // ── 步骤 3：派生 newKey（局部，未设进 cryptoKey）──
-    const newSalt = crypto.getRandomValues(new Uint8Array(32))
-    const newIt = PBKDF2_ITERATIONS
+    // 跟随迁移（overrideCanary）复用云端 canary 的 salt/it → 派生 key 与其他设备完全一致；
+    // 常规改密则随机新 salt。
+    const newSalt = overrideCanary
+      ? new Uint8Array(overrideCanary.salt as number[])
+      : crypto.getRandomValues(new Uint8Array(32))
+    const newIt = overrideCanary
+      ? (typeof overrideCanary.it === 'number' ? overrideCanary.it : PBKDF2_DEFAULT_ITERATIONS)
+      : PBKDF2_ITERATIONS
     const newKey = await deriveKey(newPw, newSalt, newIt)
 
     // ── 步骤 4：内存浅克隆四数组并重加密到「目标态副本」──
@@ -561,15 +673,27 @@ export function useE2E() {
     await _reencryptCloudPush()
 
     // ── 步骤 9：覆盖 canaryData（无条件，即便 push 部分失败也覆盖——否则本机下次 unlock 用旧 canary 失败）──
-    // recovery_* 全部复用旧值（changeMasterPassword 不改 recovery key）
-    const newCanary = await generateCanary(newKey)
-    const newCanaryData: Record<string, unknown> = {
-      canary: newCanary,
-      salt: Array.from(newSalt),
-      it: newIt,
-      recovery_canary: canaryData.recovery_canary,
-      recovery_salt: canaryData.recovery_salt,
-      recovery_it: canaryData.recovery_it,
+    let newCanaryData: Record<string, unknown>
+    if (overrideCanary) {
+      // 跟随迁移：云端 canary 原样覆盖（含 prev_* 等全部字段），保证多设备 canaryData 完全一致
+      //（_sameCanary 按 canary+salt 对比，不一致会被误报为多设备冲突）。
+      newCanaryData = { ...overrideCanary }
+    } else {
+      // recovery_* 全部复用旧值（changeMasterPassword 不改 recovery key）
+      const newCanary = await generateCanary(newKey)
+      newCanaryData = {
+        canary: newCanary,
+        salt: Array.from(newSalt),
+        it: newIt,
+        // prev_* 记录旧 canary：标记「这是主密码升级」供其他设备 detect 出 upgraded 场景
+        //（走跟随迁移而非误判为多设备冲突），并保留旧派生参数供其他设备派生旧 key 解本机数据。
+        prev_canary: canaryData.canary,
+        prev_salt: canaryData.salt,
+        prev_it: canaryData.it,
+        recovery_canary: canaryData.recovery_canary,
+        recovery_salt: canaryData.recovery_salt,
+        recovery_it: canaryData.recovery_it,
+      }
     }
     const canaryOk = await _saveCanaryData(newCanaryData)
     if (!canaryOk) {
@@ -584,6 +708,19 @@ export function useE2E() {
     }
 
     return true
+  }
+
+  /**
+   * 跟随其他设备的主密码修改（多设备「同步修改」）。
+   * 前置：云端 canary 带 prev_*（设备 A 改过主密码）且本机本地 canary 仍是旧值。
+   * 用本机旧主密码 + 本地旧 canary 派生 oldKey 解本机数据；用「云端新 canary 的 salt + 新主密码」
+   * 派生与 A 完全一致的 newKey 重加密，canaryData 原样覆盖云端 → 本机与 A 用同一把 key，互通。
+   * 失败返回 false（如云端无 prev_*、本地 canary 已丢）。
+   */
+  async function followMasterPasswordChange(oldPw: string, newPw: string): Promise<boolean> {
+    const cloud = await _getCloudCanary()
+    if (!cloud?.prev_canary || !cloud?.salt) return false
+    return changeMasterPassword(oldPw, newPw, cloud)
   }
 
   // 重加密 push：unsubscribeRealtime + 暂停 autoSync + setReencrypting → 清旧队列防
@@ -645,7 +782,8 @@ export function useE2E() {
     isE2EEnabled, isUnlocked, isBiometricEnrolled, cloudCanaryStale,
     checkE2EStatus, generateRecoveryKey,
     setupMasterPassword, resetWithRecoveryKey, changeMasterPassword,
-    unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems,
+    unlock, lock, encryptItem, decryptItem, encryptField, decryptField, decryptStoreItems, hasEncryptedData,
+    detectCloudCanaryMismatch, adoptCloudCanary, ensureCloudCanarySynced, followMasterPasswordChange,
     isBiometricAvailable: isBiometricAvailableFn,
     enrollBiometric: enrollBiometricFn,
     unlockWithBiometric: unlockWithBiometricFn,

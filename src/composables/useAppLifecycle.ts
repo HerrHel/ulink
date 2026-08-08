@@ -19,6 +19,27 @@ export { whenDataReady, isDataHydrated } from '../lib/dataReady.js'
 import { markDataReady } from '../lib/dataReady.js'
 import { safeGetItem } from '../lib/storageSafe.js'
 
+// 多设备主密码一致性维护（每会话一次）：登录后先确保本机 canary 上云（打通
+// 「一个主密码解锁所有设备」——本机设置时未登录、之后登录，云端无 canary 则推送），
+// 再对比本机与云端 canary；mismatch 时弹 E2ECanaryConflictModal 引导解决。
+// 见 useE2E.ensureCloudCanarySynced / detectCloudCanaryMismatch / adoptCloudCanary。
+const E2E_CONFLICT_CHECKED_KEY = 'lv_e2e_canary_conflict_checked'
+async function _checkE2ECanaryConflict(): Promise<void> {
+  try {
+    if (sessionStorage.getItem(E2E_CONFLICT_CHECKED_KEY)) return
+    sessionStorage.setItem(E2E_CONFLICT_CHECKED_KEY, '1')
+    const { ensureCloudCanarySynced, detectCloudCanaryMismatch } = useE2E()
+    // 先 ensure（可能上云）再 detect：ensure 后云端有值，detect 才能准确对比
+    await ensureCloudCanarySynced()
+    const r = await detectCloudCanaryMismatch()
+    if (r.mismatch) {
+      // upgraded（其他设备改过主密码）→ 跟随迁移向导；否则 → 多设备冲突（统一/保留）
+      useUIStore().modals.e2eCanaryConflict = true
+      useUIStore().modals.e2eCanaryConflictUpgraded = r.upgraded
+    }
+  } catch { /* 检测失败静默，不打扰启动 */ }
+}
+
 // D2: Web Share Target 与扩展保存请求统一由 App.vue:saveFromExtension 处理（带 favicon + 撤销 toast + 统计）。
 // 历史上的 _handleShareTarget 在此处同步 addBookmark，但 App.vue 的 onMounted 又会 800ms 后
 // 调 saveFromExtension 读同一个 `url` 参数再添加一次——两者职责重叠且 _handleShareTarget 清理的是
@@ -27,6 +48,7 @@ import { safeGetItem } from '../lib/storageSafe.js'
 
 import { useAuth } from './domain/useAuth.js'
 import { useCloudSync } from './domain/useCloudSync.js'
+import { useE2E } from './domain/useE2E.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
 import { captureNavState } from './interaction/useKeyboardOps.js'
 
@@ -73,6 +95,11 @@ export function useAppLifecycle() {
     const auth = useAuth()
     await auth.init()
     const sync = useCloudSync()
+    // 多设备主密码一致性检测：登录且本机已设主密码时，对比云端 canary。
+    // 不一致时弹解决向导（统一主密码 / 保留本机），每会话最多检测一次不打扰。
+    if (auth.isLoggedIn) {
+      void _checkE2ECanaryConflict()
+    }
     // initialSync 必须在 initOnlineListener 之前执行：
     // initOnlineListener → subscribeRealtime → SUBSCRIBED 回调 → _pullChanges → 设 lastSyncAt，
     // 若 lastSyncAt 先于 initialSync 的 _pullChanges(true) 被设置，云端为空时 full 分支会把本地书签全删。

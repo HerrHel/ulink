@@ -11,6 +11,11 @@
             <p>端到端加密确保您的密码和敏感数据在上传到云端前已在本地加密。</p>
             <p>服务器永远无法读取您的加密内容。</p>
           </div>
+          <div v-if="legacyDataDetected" class="e2e-info e2e-warn" style="margin-top:8px">
+            <p><strong><span class="sp-icon" v-html="I.alert"></span> 检测到已有加密数据</strong></p>
+            <p>当前数据中包含由<strong>其他设备的主密码</strong>加密的内容。在此重新设置主密码会生成全新密钥，这些历史数据将<strong>永久无法解密</strong>。</p>
+            <p>如需访问旧数据：请在原设备登录云同步，或导出含加密元数据的备份后在此导入，并改用原主密码「解锁」。</p>
+          </div>
           <div class="form-group">
             <label class="form-label">设置主密码</label>
             <div class="pw-input-wrap">
@@ -77,7 +82,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { generateRecoveryKeyPDF } from '../../lib/recoveryKeyPDF.js'
@@ -88,6 +93,9 @@ const emit = defineEmits<{ close: [] }>()
 
 const e2e = useE2E()
 const step = ref(1)
+// 换设备防呆：本机无 canary 却已有历史密文时，重新设置主密码会生成新 key 解不开旧数据，
+// 弹窗打开即给出警告，引导用户走「原主密码解锁」而非静默覆盖（见 useE2E.hasEncryptedData）。
+const legacyDataDetected = computed(() => e2e.hasEncryptedData())
 const masterPw = ref('')
 const masterPw2 = ref('')
 const showPw = ref(false)

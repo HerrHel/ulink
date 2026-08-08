@@ -18,10 +18,35 @@ import { clearSearchCache } from '../../lib/search.js'
 import { DEFAULTS } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
 import { clearAllSyncOps } from '../../stores/storage.js'
+import { useE2EStore } from '../../stores/e2e.js'
+import { useVaultStore } from '../../stores/vault.js'
+import { safeGetItem, safeSetItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { __testPendingSync } from './syncPending.js'
 import { newBookmarkId } from '../../lib/newId.js'
 import { cloneDeep } from '../../lib/clone.js'
 import type { AppData, Bookmark } from '../../types.js'
+
+// ── E2E/保险柜 canary 元数据附带与恢复（换设备正确姿势） ──
+// canaryData 仅含密钥派生参数（salt/it）与密文验证串（canary/recovery_canary），
+// 不含明文业务数据或主密码——随备份导出是安全的。
+// 不直接 import useE2E/useVault 模块：其依赖链（supabase/sync/useBiometric）较重，
+// 数据导入导出路径不该引入；key 与 useE2E.LOCAL_CANARY_KEY（'lv_e2e_canary'）/
+// useVault.LOCAL_CANARY_KEY（'lv_vault_canary'）保持一致即可。
+const E2E_CANARY_KEY = 'lv_e2e_canary'
+const VAULT_CANARY_KEY = 'lv_vault_canary'
+
+function _readE2ECanary(): Record<string, unknown> | null {
+  return safeJsonParse<Record<string, unknown> | null>(safeGetItem(E2E_CANARY_KEY), null)
+}
+function _writeE2ECanary(data: Record<string, unknown>): boolean {
+  return safeSetItem(E2E_CANARY_KEY, JSON.stringify(data))
+}
+function _readVaultCanary(): Record<string, unknown> | null {
+  return safeJsonParse<Record<string, unknown> | null>(safeGetItem(VAULT_CANARY_KEY), null)
+}
+function _writeVaultCanary(data: Record<string, unknown>): boolean {
+  return safeSetItem(VAULT_CANARY_KEY, JSON.stringify(data))
+}
 
 // ── 导出 ──
 
@@ -46,8 +71,17 @@ export function _attrsToTags(ds: ReturnType<typeof useDataStore>, b: Bookmark): 
 export function exportData() {
   const ds = useDataStore()
   try {
+    const snapshot = ds._dataSnapshot() as Record<string, unknown>
+    // 附带 E2E/保险柜 canary 元数据：本机 canary 存 localStorage、不随数据快照走，
+    // 若导出不带它，新设备导入后会引导"重新设置主密码"生成新 key → 旧主密码加密的
+    // 历史数据永久解不开（换设备数据丢失）。带上后新设备导入能识别加密设置 →
+    // 引导"输入原主密码解锁"，旧数据可正常解密（正确换设备姿势）。
+    const e2eCanary = _readE2ECanary()
+    if (e2eCanary) snapshot.__e2eCanary = e2eCanary
+    const vaultCanary = _readVaultCanary()
+    if (vaultCanary) snapshot.__vaultCanary = vaultCanary
     downloadFile('linkvault-backup-' + dateStamp() + '.json',
-      JSON.stringify(ds._dataSnapshot(), null, 2), 'application/json')
+      JSON.stringify(snapshot, null, 2), 'application/json')
     toast('数据已导出')
   } catch (e) { console.warn('[export] JSON export failed:', e); toast('导出失败', false) }
 }
@@ -305,6 +339,22 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const { categories, bookmarks, customAttributes, siblingGroups } = result
 
   try { persist.saveToLocalStorage(ds._dataSnapshot(), useUIStore().curSpace) } catch (e) { console.warn('[import] backup before import failed:', e) }
+
+  // 恢复 E2E/保险柜 canary（换设备正确姿势）：导出 JSON 附带的加密元数据写回本地，
+  // 使导入后 checkE2EStatus 识别为"已设置主密码"→ 引导输入原主密码解锁，而非重新设置
+  // 生成新 key（新 key 解不开旧主密码加密的历史密文 → 数据永久丢失）。
+  // 仅当本机尚无对应 canary 时恢复，绝不覆盖已有主密码设置（本地优先，覆盖会破坏本机解锁）。
+  // 直接置 store 的 enabled 标记刷新状态：不调 checkE2EStatus——它会经 useBiometric /
+  // 云端查询，数据导入路径不应引入该依赖链；写回本地后 enabled=true 即让解锁引导可用。
+  const importDataAny = data as Partial<AppData> & { __e2eCanary?: Record<string, unknown>; __vaultCanary?: Record<string, unknown> }
+  if (importDataAny.__e2eCanary && !_readE2ECanary()) {
+    _writeE2ECanary(importDataAny.__e2eCanary)
+    useE2EStore().setEnabled(true)
+  }
+  if (importDataAny.__vaultCanary && !_readVaultCanary()) {
+    _writeVaultCanary(importDataAny.__vaultCanary)
+    useVaultStore().setEnabled(true)
+  }
 
   // 顺序固定：先 cat/attr，再 bm，最后 group（group 依赖 bm 已入库做悬空过滤）
   const cats = _mergeCategories(ds, categories)
