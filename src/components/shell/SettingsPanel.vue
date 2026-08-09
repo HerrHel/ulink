@@ -162,6 +162,14 @@
             <!-- 关于 -->
             <div class="sp-section">
               <span class="sp-section-title">关于</span>
+              <div class="sp-row">
+                <span class="sp-row-label">版本</span>
+                <span class="sp-sync-status" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
+              </div>
+              <div class="sp-row">
+                <span class="sp-row-label">构建时间</span>
+                <span class="sp-sync-status" data-testid="lv-build-time">{{ buildTimeText }}</span>
+              </div>
               <button class="sp-action" @click.stop="onFeedback">反馈 / 建议</button>
             </div>
             <!-- Danger -->
@@ -211,6 +219,7 @@ import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 import { safeGetItem } from '../../lib/storageSafe.js'
+import { APP_VERSION, BUILD_TIME } from '../../version.js'
 
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
@@ -239,6 +248,12 @@ function onOpenE2EChangePw() {
 const trashCount = computed(() => dataStore.trashCount)
 const trashIcon = computed(() => trashCount.value > 0 ? I.trashFull : I.trash)
 const syncState = useSyncState()
+// 构建时间本地化显示（__BUILD_TIME__ 为 UTC ISO 串 → 本地时区）；define 未注入时兜底
+const buildTimeText = computed(() => {
+  if (!BUILD_TIME) return ''
+  const d = new Date(BUILD_TIME)
+  return Number.isNaN(d.getTime()) ? BUILD_TIME : d.toLocaleString('zh-CN', { hour12: false })
+})
 const dlChecking = computed(() => dl.checking.value)
 const dlProgress = computed(() => dl.progress.value)
 const deadCount = computed(() => dl.deadCount.value)

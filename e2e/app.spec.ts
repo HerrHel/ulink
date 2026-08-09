@@ -45,6 +45,10 @@ test.describe('LinkVault 核心功能', () => {
     await page.getByTestId('lv-btn-settings').click()
     const settingsPanel = page.getByTestId('lv-settings-drawer')
     await expect(settingsPanel).toBeVisible({ timeout: 5000 })
+    // 版本信息（vite define 构建时注入）：设置面板应显示非空版本号，供测试确认线上为最新构建
+    const versionEl = page.getByTestId('lv-app-version')
+    await expect(versionEl).toBeVisible()
+    await expect(versionEl).not.toHaveText('')
     const listBtn = page.locator('button[title*="列表"], .sp-seg-btn').filter({ hasText: /.*/ }).last()
     await expect(listBtn).toBeVisible()
     await listBtn.click()

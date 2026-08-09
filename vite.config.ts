@@ -2,6 +2,7 @@ import { defineConfig, Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import { PurgeCSS } from 'purgecss';
+import pkg from './package.json';
 
 /* ── 安全 & 缓存 HTTP 响应头 ── */
 const securityHeaders: Record<string, string> = {
@@ -188,6 +189,11 @@ function spa404Plugin(): Plugin {
 }
 
 export default defineConfig({
+  define: {
+    // 构建时注入版本信息：__BUILD_TIME__ 每次部署必变，设置面板显示以确认线上是否为最新构建
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     vue(),
     VitePWA({
