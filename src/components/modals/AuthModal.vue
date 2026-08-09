@@ -81,10 +81,12 @@
 import { ref, watch, nextTick, computed } from 'vue'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 
 const auth = useAuth()
 const sync = useCloudSync()
+const e2e = useE2E()
 const email = ref('')
 const code = ref('')
 const step = ref<'email' | 'code'>('email')
@@ -143,8 +145,13 @@ async function onVerify() {
   verifying.value = false
   if (ok) {
     verified.value = true
-    setTimeout(() => {
+    setTimeout(async () => {
       auth.authModalOpen = false
+      // 登录后刷新 E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
+      // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录后
+      // isE2EEnabled 停留 false → 编辑加密书签解锁成功仍提示设置主密码，且新建密码会
+      // 误走 base64 而非 E2E 加密。
+      await e2e.checkE2EStatus()
       sync.initialSync()
     }, 800)
   }

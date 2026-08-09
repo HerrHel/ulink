@@ -348,6 +348,13 @@ export function useE2E() {
     const ok = await verifyCanary(canaryData.canary, key)
     if (!ok) return false
 
+    // 解锁成功即证明 canary 存在（本地或云端），E2E 必然已启用。
+    // 修复：本地无 canary、仅云端有（换设备/清缓存后登录）时，checkE2EStatus 在未登录
+    // 阶段已把 isE2EEnabled 判为 false，登录动作本身不刷新它。openBmModal 只看 isUnlocked
+    // 会弹解锁，但解锁成功后 enabled 仍 false → BookmarkModal 字段继续锁定并引导「设置主
+    // 密码」，用户明明已解锁却看不到密码字段。此处 unlock 成功即 setEnabled(true) 兜底，
+    // 保证「已解锁 = 已启用」不变量始终成立。
+    e2eStore.setEnabled(true)
     _setKey(key)
     e2eStore.setUnlocked(true)
     e2eStore.initVisibilityLock()
