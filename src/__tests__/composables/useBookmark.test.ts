@@ -116,6 +116,8 @@ vi.mock('../../utils.js', () => ({
   fixUrl: vi.fn((url: string) => url ? (url.startsWith('http') ? url : 'https://' + url) : ''),
   isMobile: vi.fn(() => false),
   autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
+  // 展示兜底：测试数据无密文，identity 语义（null/undefined → ''）
+  displayText: vi.fn((v: string | null | undefined) => v ?? ''),
 }))
 
 // d1-78：可控的 ai-classify mock —— autoFetchFromUrl 编排护栏要锁住守卫链/防抖/字段变换
@@ -537,6 +539,23 @@ describe('useBookmark', () => {
       expect(mockData.bookmarkMap['b1'].title).toBe('Updated')
       expect(mockData.bookmarkMap['b1'].url).toBe('https://updated.com')
       expect(mockData.bookmarkMap['b1'].notes).toBe('new notes')
+    })
+
+    it('E2E 密文保护：原书签含加密字段（未解锁/解不开保留）时禁止保存，避免空表单覆盖密文回写云端', async () => {
+      // 原书签 notes 是三段密文（displayText 过滤为空）；url/title 是明文，能过 url 校验走到密文检测。
+      // 若不加保护：空 notes 会被 updateBookmark 覆盖原密文 → saveAppData/push 回写云端，永久丢失。
+      mockData.bookmarkMap['b1'] = {
+        id: 'b1', title: 'Encrypted', url: 'https://old.com', notes: 'AAAA.bbbb.cccc', username: 'u', attributes: {}, order: 0,
+      }
+      bmForm.id = 'b1'
+      bmForm.title = 'Encrypted'
+      bmForm.url = 'https://old.com'
+      bmForm.notes = '' // 密文被 displayText 过滤成空
+      bmForm.username = ''
+      await saveBm()
+      // 禁止保存：不 update、不落盘，原密文未被覆盖
+      expect(mockData.updateBookmark).not.toHaveBeenCalled()
+      expect(mockData.bookmarkMap['b1'].notes).toBe('AAAA.bbbb.cccc')
     })
 
     it('saves password as base64', () => {

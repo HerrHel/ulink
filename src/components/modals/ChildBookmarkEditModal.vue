@@ -55,8 +55,8 @@ import { useDataStore } from '../../stores/data.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
-import { fixUrl, domain } from '../../utils.js'
-import { safeDecodePassword, encrypt, decrypt } from '../../crypto.js'
+import { fixUrl, domain, displayText } from '../../utils.js'
+import { safeDecodePassword, encrypt, decrypt, isThreePartCipher } from '../../crypto.js'
 import type { EncryptedPassword } from '../../types.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { toast } from '../../lib/toast.js'
@@ -101,10 +101,11 @@ const form = reactive<ChildFormState>({
 async function loadFromStore() {
   const bm = ds.bookmarkMap[props.childId]
   if (!bm) { emit('close'); return }
-  form.url = bm.url || ''
-  form.title = bm.title || ''
-  form.username = bm.username || ''
-  form.notes = bm.notes || ''
+  // E2E 密文（未解锁/解不开）不进表单：displayText 过滤为空，保存时 doSave 的密文检测阻止覆盖
+  form.url = displayText(bm.url)
+  form.title = displayText(bm.title)
+  form.username = displayText(bm.username)
+  form.notes = displayText(bm.notes)
   form.icon = bm.icon || ''
   form.showPassword = false
   // 密码解密（与 saveBm 同流程）
@@ -180,6 +181,14 @@ async function doSave(): Promise<void> {
     } else {
       storedPassword = btoa(form.password)
     }
+  }
+
+  // E2E 密文保护：原书签含加密字段（未解锁/解不开保留的密文）时禁止保存——否则空表单
+  // 会覆盖原密文并经 saveAppData/push 回写云端丢失。须先解锁（decryptStoreItems 解回明文）。
+  const orig = ds.bookmarkMap[props.childId]
+  if (orig && [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
+    toast('该书签含加密字段，请先解锁主密码后再编辑', false)
+    return
   }
 
   ds.updateBookmark(props.childId, {

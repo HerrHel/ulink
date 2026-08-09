@@ -3,7 +3,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
-import { favicon, domain, fixUrl } from '../../utils.js'
+import { favicon, domain, fixUrl, displayText } from '../../utils.js'
 
 import { toast, toastWithUndo, showConfirm, showChoice } from '../../lib/toast.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
@@ -11,7 +11,7 @@ import { newBookmarkId } from '../../lib/newId.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
-import { safeDecodePassword, encrypt, decryptPasswordWithKey } from '../../crypto.js'
+import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
 import { isDataHydrated } from '../../lib/dataReady.js'
@@ -199,10 +199,12 @@ export async function openBmModal(editId?: string) {
     const bm = editId ? ds.bookmarkMap[editId] : null
 
     bmForm.id = bm?.id || ''
-    bmForm.title = bm?.title || ''
-    bmForm.url = bm?.url || ''
-    bmForm.username = bm?.username || ''
-    bmForm.notes = bm?.notes || ''
+    // E2E 密文（未解锁/解不开）不进编辑框：displayText 过滤为空，避免密文长串进表单
+    //（保存时 saveBm 的密文检测会阻止覆盖，见 saveBm 原值密文保护）
+    bmForm.title = displayText(bm?.title)
+    bmForm.url = displayText(bm?.url)
+    bmForm.username = displayText(bm?.username)
+    bmForm.notes = displayText(bm?.notes)
     bmForm.icon = bm?.icon || ''
     bmForm.categoryId = editId ? (bm?.categoryId || '') : (ui.curCat === CAT_ALL ? CAT_UNCATEGORIZED : ui.curCat)
     bmForm.parentId = bm?.parentId || null
@@ -362,6 +364,14 @@ export async function saveBm() {
     }
 
     if (bmForm.id) {
+      // E2E 密文保护：原书签含加密字段（未解锁 / 解不开保留的密文）时禁止保存——否则
+      // 编辑框里 displayText 过滤成的空值会覆盖原密文，并经 saveAppData/push 回写云端
+      // 覆盖明文，造成不可逆丢失。须先解锁（decryptStoreItems 解回明文）再编辑。
+      const orig = ds.bookmarkMap[bmForm.id]
+      if (orig && [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
+        toast('该书签含加密字段，请先解锁主密码后再编辑', false)
+        return
+      }
       ds.updateBookmark(bmForm.id, data)
       toast('书签已更新')
     } else {

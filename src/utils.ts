@@ -8,6 +8,7 @@ import DOMPurify from 'dompurify'
 import { nanoid } from 'nanoid'
 import type { Bookmark, SiblingGroup, CustomAttribute, Category } from './types.js'
 import { ATTR_IS_GROUP } from './config/constants.js'
+import { isThreePartCipher } from './crypto.js'
 
 interface AppStore {
   categories: Category[]
@@ -25,7 +26,17 @@ const SHARE_GID_RE = /^[a-zA-Z0-9_-]{2,64}$/
 export function isValidShareGroupId(gid: string | null | undefined): gid is string {
   return typeof gid === 'string' && SHARE_GID_RE.test(gid)
 }
-export function domain(url: string): string { try { return new URL(url).hostname.replace(/^www\./, '') } catch (_) { return url } }
+export function domain(url: string): string {
+  // 先按合法 URL 解析：https://a.b.c（三段域名）正常返回 hostname，不受下方密文判定影响。
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    // new URL 解析失败（非合法 URL）时：三段密文（未解锁/解不开的 E2E 密文 url）返空兜底，
+    // 统一让所有 domain(url) 调用点（卡片域名/搜索建议/提及/死链/组内联卡）不把密文乱码吐给 UI。
+    // 数据层保留密文（见 useE2E 解密护栏）；其它非法串返原串，保持旧语义。
+    return isThreePartCipher(url) ? '' : url
+  }
+}
 /** A5-006：自定义 icon 仅允许 http(s) 或相对路径，拒绝 javascript:/data: 等 */
 export function safeIconUrl(icon?: string | null): string {
   if (!icon) return ''
@@ -38,6 +49,16 @@ export function safeIconUrl(icon?: string | null): string {
   if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:/i.test(t)) return ''
   // 无 scheme 的相对资源名
   return t
+}
+
+/**
+ * E2E 密文展示兜底：三段 salt.iv.data 密文（未解锁 / 解锁失败保留）显示空串，明文原样。
+ * 与 domain() 的密文检测同源——数据层解密失败保留原文不置空（见 useE2E.decryptItem /
+ * decryptStoreItems），渲染层用本函数兜底不把密文乱码吐给 UI。解锁成功后字段被解密为
+ * 明文，isThreePartCipher=false，自动恢复正常显示。
+ */
+export function displayText(value: string | null | undefined): string {
+  return typeof value === 'string' && isThreePartCipher(value) ? '' : (value ?? '')
 }
 
 export function favicon(url: string, customIcon?: string): string {

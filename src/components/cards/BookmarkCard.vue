@@ -11,13 +11,13 @@
       <div class="card-toprow">
         <div class="card-logo" title="打开链接" @click.stop="onOpenClick">
           <img v-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
-          <span class="card-logo-fallback">{{ bookmark.title?.charAt(0) || '?' }}</span>
+          <span class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
         </div>
         <div class="card-titlewrap" title="打开链接" @click.stop="onOpenClick">
           <div class="card-titlewrap-text">
             <div class="card-name">
               <span v-if="searchQuery" v-html="hlTitle"></span>
-              <template v-else>{{ bookmark.title }}</template>
+              <template v-else>{{ displayText(bookmark.title) }}</template>
               <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
               <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
               <span v-if="isUnconfirmed" class="unconfirmed-badge" title="本次检测未能确认（离线/超时/信号冲突）">未确认</span>
@@ -42,15 +42,15 @@
       </div>
       <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="uiStore.layoutMode !== 'list' && editNotes($event)">
         <span v-if="searchQuery" v-html="hlNotes"></span>
-        <template v-else>{{ bookmark.notes }}</template>
+        <template v-else>{{ displayText(bookmark.notes) }}</template>
       </div>
-      <template v-if="bookmark.username || bookmark.password">
+      <template v-if="displayText(bookmark.username) || bookmark.password">
           <button class="card-acct-toggle" :class="{ open: acctOpen || isExpanded }" @click.stop="acctOpen = !acctOpen">
             <span aria-hidden="true" v-html="I.chevronDown"></span> 账户信息
           </button>
         <div class="card-acct-body" :class="{ show: acctOpen || isExpanded }">
-          <div class="acct-row" v-if="bookmark.username">
-            <span class="acct-label">账户</span><span class="acct-val">{{ bookmark.username }}</span>
+          <div class="acct-row" v-if="displayText(bookmark.username)">
+            <span class="acct-label">账户</span><span class="acct-val">{{ displayText(bookmark.username) }}</span>
             <button class="acct-copy-btn" @click.stop="copyUser" title="复制" v-html="I.copy"></button>
           </div>
           <div class="acct-row" v-if="bookmark.password">
@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, isMobile, copyToClipboard, domain, stripEntranceAnim } from '../../utils.js'
+import { favicon, getTagNames, isMobile, copyToClipboard, domain, displayText, stripEntranceAnim } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { decryptPasswordWithKey } from '../../crypto.js'
 import { highlight } from './highlight.js'
@@ -156,7 +156,7 @@ const domainStr = computed(() => domain(props.bookmark.url))
 const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))
 const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttributes))
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])
-const hasExpandableContent = computed(() => !!(props.bookmark.username || props.bookmark.password || children.value.length))
+const hasExpandableContent = computed(() => !!(displayText(props.bookmark.username) || props.bookmark.password || children.value.length))
 const previewText = computed(() => bookmarkPreview(props.bookmark))
 const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded && !uiStore.batchMode)
 const isSelected = computed(() => (uiStore.batchSelected ?? []).includes(props.bookmark.id))
@@ -176,9 +176,9 @@ const hlRegex = computed<RegExp | null>(() => {
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(escaped, 'gi')
 })
-const hlTitle = computed(() => hlRegex.value ? highlight(props.bookmark.title, hlRegex.value) : '')
+const hlTitle = computed(() => hlRegex.value ? highlight(displayText(props.bookmark.title), hlRegex.value) : '')
 const hlDomain = computed(() => hlRegex.value ? highlight(domainStr.value, hlRegex.value) : '')
-const hlNotes = computed(() => hlRegex.value && props.bookmark.notes ? highlight(props.bookmark.notes, hlRegex.value) : '')
+const hlNotes = computed(() => hlRegex.value && props.bookmark.notes ? highlight(displayText(props.bookmark.notes), hlRegex.value) : '')
 
 function visit() { openBookmark(props.bookmark) }
 function onOpenClick() {
@@ -229,7 +229,12 @@ function filterByTagName(name: string) {
   const attr = dataStore.attributeByName[name]
   if (attr) toggleAttrFilter(attr.id)
 }
-function copyUser() { copyToClipboard(props.bookmark.username || '', '账户') }
+function copyUser() {
+  const v = props.bookmark.username || ''
+  // E2E 密文（未解锁/解不开）复制无意义，提示解锁而非把空/密文写进剪贴板
+  if (v && !displayText(v)) { toast('该字段已加密，请先解锁主密码', false); return }
+  copyToClipboard(v, '账户')
+}
 // 未解锁时 password 为 EncryptedPassword 对象、decryptPasswordWithKey 解不开返 ''；
 // 旧实现照常 copyToClipboard('') → utils toast「密码 已复制」误导用户以为复制成功，
 // 实则剪贴板是空串。先判 decodedPw 非空再复制，空就提示无法复制、不污染剪贴板。
@@ -254,7 +259,10 @@ function onTogglePw() {
 const { startEditing } = useInlineEdit()
 
 function editNotes(e: Event) {
-  startEditing(e.currentTarget as HTMLElement, props.bookmark.notes ?? '', {
+  const v = props.bookmark.notes ?? ''
+  // E2E 密文不进入内联编辑：编辑会拿密文当明文覆盖（saveAppData/push 回写），数据风险
+  if (v && !displayText(v)) { toast('该字段已加密，请先解锁主密码', false); return }
+  startEditing(e.currentTarget as HTMLElement, v, {
     multiline: true,
     onSave(newNotes) {
       if (newNotes !== (props.bookmark.notes ?? '')) {
