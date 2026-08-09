@@ -176,9 +176,9 @@ const hlRegex = computed<RegExp | null>(() => {
   const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(escaped, 'gi')
 })
-const hlTitle = computed(() => hlRegex.value ? highlight(bookmark.title, hlRegex.value) : '')
+const hlTitle = computed(() => hlRegex.value ? highlight(props.bookmark.title, hlRegex.value) : '')
 const hlDomain = computed(() => hlRegex.value ? highlight(domainStr.value, hlRegex.value) : '')
-const hlNotes = computed(() => hlRegex.value && bookmark.notes ? highlight(bookmark.notes, hlRegex.value) : '')
+const hlNotes = computed(() => hlRegex.value && props.bookmark.notes ? highlight(props.bookmark.notes, hlRegex.value) : '')
 
 function visit() { openBookmark(props.bookmark) }
 function onOpenClick() {
