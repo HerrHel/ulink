@@ -131,13 +131,14 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     expect(ok2).toBe(true)
   })
 
-  it('解不开的密文（错 key / 改主密码后旧密文）经 decryptStoreItems 写空而非保留密文串（防 UI 乱码）', async () => {
+  it('解不开的密文（错 key / 改主密码后旧密文）经 decryptStoreItems 保留原文而非写空（防空值回写云端永久丢失）', async () => {
     // 场景：A 设备用主密码 PA 加密 notes 推云端；后改主密码为 PB（reset 生成新 salt/keyB），
     // 但云端历史 notes 仍是 keyA 密文（reset 未重加密历史）。新设备用 PB unlock → 派生 keyB
     // → decryptStoreItems 用 keyB 解 keyA 密文 → GCM 认证失败。
-    // 旧 decrypt 路径：返原 ciphertext 串 → tryField `decrypted === v` 不更新 → store 留密文
-    // → 模板 {{ bookmark.notes }} 渲染长串乱码。
-    // 修复（decryptField 走 decryptForDisplay）：解不开返 '' → `'' !== 密文` → 字段写空 → UI 显示空。
+    // 旧行为：decryptField 走 decryptForDisplay 解不开返 '' → tryField `'' !== 密文` → 字段写空
+    // → UI 显示空（防乱码）。但空值被随后的 saveAppData/push 回写云端覆盖明文 → **永久丢失**
+    //（真实用户事故：登录后一批书签 url 变空白）。修复：解不开时保留原密文，数据在即可换正确
+    // 主密码找回；UI 乱码由渲染层对密文段的展示兜底负责（decryptField 返空语义保持不变）。
     const e2e = useE2E()
     const ds = useDataStore()
 
@@ -168,12 +169,38 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     expect(ok).toBe(true)
     expect(e2e.isUnlocked.value).toBe(true)
 
-    // 5) 修复后：notes 应被写为空串（解不开返空），而非保留密文长串
-    const notesAfter = ds.bookmarkMap['b-stale'].notes
-    expect(notesAfter).toBe('')
-    // 双保险：绝不含密文任何段（防回吐）
-    expect(notesAfter).not.toContain(cipherNotes.split('.')[0])
-    expect(notesAfter).not.toContain(cipherNotes.split('.')[2])
+    // 5) 修复后：notes 保留原密文（解不开不置空），数据仍在
+    expect(ds.bookmarkMap['b-stale'].notes).toBe(cipherNotes)
+  }, 20000)
+
+  it('BUG 复现：用错 key 解锁时，解不开的密文 url 保留原文而非置空（置空会被 push 回写云端永久丢失）', async () => {
+    // 场景：A 设备（旧版 E2E 加密过 title/url）云端存密文 url；B 设备主密码不一致
+    // （canary 单槽被覆盖 / 改主密码未迁移），登录后 unlock 用 keyB 解 keyA 密文失败。
+    // 旧行为：decryptStoreItems 把 url 写空 → UI 显示空白，后续任意保存把空 url 推上云端。
+    const e2e = useE2E()
+    const ds = useDataStore()
+
+    // 1) 设备 A：setup + 加密 url（模拟旧版云端密文行）
+    await e2e.setupMasterPassword('device-A-pw')
+    const cipherUrl = await e2e.encryptField('https://secret-a.example') as string
+    expect(cipherUrl.split('.')).toHaveLength(3)
+    expect(cipherUrl).not.toBe('https://secret-a.example')
+    ds.addBookmark({
+      id: 'b-url', title: '密文标题', url: cipherUrl, username: '', password: '',
+      notes: '', icon: '', categoryId: CAT_UNCATEGORIZED, parentId: null,
+      order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1,
+    } as any)
+
+    // 2) 设备 B：lock + 新主密码 setup（canary 覆盖 → keyB），再 unlock 触发 decryptStoreItems
+    e2e.lock()
+    await e2e.setupMasterPassword('device-B-pw')
+    e2e.lock()
+    const ok = await e2e.unlock('device-B-pw')
+    expect(ok).toBe(true)
+    expect(e2e.isUnlocked.value).toBe(true)
+
+    // 3) 关键断言：url 不被置空。解不开时应保留原密文（数据在，换正确主密码可找回）
+    expect(ds.bookmarkMap['b-url'].url).toBe(cipherUrl)
   }, 20000)
 
   it('未解锁时 decryptField：三段密文返空不渲染乱码，明文原样穿透（多设备/锁定态展示兜底）', async () => {
@@ -243,6 +270,25 @@ describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {
     expect(plainOut.title).toBe('明文标题')
     expect(plainOut.url).toBe('https://plain.example')
   }, 15000)
+
+  it('BUG 复现：decryptItem 用错 key 时，解不开的密文 url 保留原文而非置空（避免 merge assign 用空串覆盖本地 url）', async () => {
+    // 场景：pull / Realtime 在 isUnlocked=true 时对远端行调 decryptItem，用 keyB 解 keyA
+    // 加密的旧密文 url → decryptForDisplay 返 ''。旧行为：result.url 被置空 → 后续 merge
+    // assign 用 '' 覆盖本地 url 并 saveAppData 落盘 → push 把空 url 推上云端，永久丢失。
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('kw-A')
+    const cipherUrl = await e2e.encryptField('https://secret-a.example') as string
+    expect(cipherUrl.split('.')).toHaveLength(3)
+    const remoteRow = { title: 't', url: cipherUrl, username: '', notes: '' }
+
+    // 切到 B 的 key 语境（错 key）
+    e2e.lock()
+    await e2e.setupMasterPassword('kw-B')
+
+    const dec = await e2e.decryptItem('bookmark', remoteRow as any)
+    // 修复后：保留原密文，不置空
+    expect(dec.url).toBe(cipherUrl)
+  }, 20000)
 
   it('E2E 启用未解锁时：含非空敏感字段 throw；敏感字段全空透传（支持锁定态同步普通内容）', async () => {
     const e2e = useE2E()

@@ -443,7 +443,13 @@ export function useE2E() {
     const result = { ...item } as Record<string, unknown>
     for (const f of fields) {
       const val = result[f]
-      if (typeof val === 'string' && val) result[f] = await decryptField(val)
+      if (typeof val === 'string' && val) {
+        const decrypted = await decryptField(val)
+        // 解不开（decryptField 对三段但 GCM 认证失败 / 错 key 返 ''）时保留原密文，绝不置空：
+        // 置空会经 merge assign 用空串覆盖本地 url/notes 并 saveAppData 落盘，push 再把空值
+        // 推回云端覆盖明文，造成不可逆丢失（真实事故：登录后一批书签 url 变空白）。
+        result[f] = decrypted !== '' ? decrypted : val
+      }
     }
     return result as T
   }
@@ -473,7 +479,10 @@ export function useE2E() {
       // L15：粗筛走 isThreePartCipher；L17：实体内字段并行、跨实体并行
       if (!isThreePartCipher(v)) return
       const decrypted = await decryptField(v)
-      if (decrypted !== v) { obj[f] = decrypted; changed = true }
+      // 解不开（decryptField 对三段但 GCM 认证失败 / 错 key 返 ''）时保留原密文，绝不置空：
+      // 置空会让 UI 显示空白，且后续 saveAppData/push 把空值回写云端覆盖明文，永久丢失。
+      // UI 乱码由渲染层兜底；此处以数据安全为优先。
+      if (decrypted !== '' && decrypted !== v) { obj[f] = decrypted; changed = true }
     }
     const fieldsOf = (t: EntityType) => new Set<string>([...ENCRYPT_FIELDS[t], ...LEGACY_DECRYPT_FIELDS[t]])
     const bmFields = fieldsOf('bookmark')
