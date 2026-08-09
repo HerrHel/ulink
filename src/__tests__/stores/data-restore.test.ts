@@ -114,7 +114,7 @@ describe('restore* 软删恢复编排护栏', () => {
       expect(store._deletedAttrMemberships.get('a1')).toBeUndefined()
     })
 
-    it('恢复属性：已软删的实体（deletedAt 非 undefined）不回写（仅存活实体回写）', () => {
+    it('恢复属性：已软删的实体此刻不回写，但 membership 保留待其 restore 回填（r10-attr-restore B1 复现）', () => {
       store.addAttribute({ id: 'a1', name: '标签', type: 'boolean' } as any)
       store.addBookmark({ id: 'bm-alive', title: 'a', url: 'https://a.com', attributes: { a1: true } } as any)
       store.addBookmark({ id: 'bm-dead', title: 'd', url: 'https://d.com', attributes: { a1: true } } as any)
@@ -125,10 +125,84 @@ describe('restore* 软删恢复编排护栏', () => {
 
       store.restoreAttribute('a1')
 
-      // 仅存活 bm-alive 回写（b && !b.deletedAt 守卫）
+      // 仅存活 bm-alive 此刻回写（!b.deletedAt 守卫）
       expect(store.bookmarkMap['bm-alive'].attributes.a1).toBe(true)
-      // bm-dead 已软删，不回写（即使快照里有它）
+      // bm-dead 仍软删，此刻不回写（属性不可见给软删体是正确语义）
       expect(store.bookmarkMap['bm-dead'].attributes.a1).toBeUndefined()
+      // r10-attr-restore B1 真 bug 复现：旧实现末尾无条件清缓存 → bm-dead 的 membership 丢失。
+      // 正确行为：remaining 仍含 bm-dead，缓存保留待其自身 restore 时由 helper 回填
+      const remaining = store._deletedAttrMemberships.get('a1')
+      expect(remaining?.length).toBe(1)
+      expect(remaining?.[0]?.entityId).toBe('bm-dead')
+
+      // 关键：后续恢复 bm-dead 时拿回 [a1]:true（旧 bug 此处永远 undefined）
+      store.restoreBookmark('bm-dead')
+      expect(store.bookmarkMap['bm-dead'].attributes.a1).toBe(true)
+      expect(store._changedFields.get('bm-dead')?.has('attributes')).toBe(true)
+      // bm-dead 被消化后缓存清空
+      expect(store._deletedAttrMemberships.get('a1')).toBeUndefined()
+    })
+
+    it('恢复属性：成员是组时，软删组后续 restoreGroup 回填 attributes（B1 对称面）', () => {
+      store.addAttribute({ id: 'a1', name: '标签', type: 'boolean' } as any)
+      store.addBookmark({ id: 'bm-alive', title: 'a', url: 'https://a.com', attributes: { a1: true } } as any)
+      store.addGroup({ id: 'g-dead', name: 'G', bookmarkIds: [], attributes: { a1: true } } as any)
+      store.deleteGroup('g-dead')
+      store.deleteAttribute('a1')
+      store.drainDirtyIds()
+
+      store.restoreAttribute('a1')
+      // g-dead 仍软删，此刻不回写，缓存保留其 membership
+      expect(store.groupMap['g-dead'].attributes.a1).toBeUndefined()
+      expect(store._deletedAttrMemberships.get('a1')?.some(m => m.entityId === 'g-dead' && m.kind === 'group')).toBe(true)
+
+      store.restoreGroup('g-dead')
+      // 组恢复时通过 helper 拿回 [a1]:true
+      expect(store.groupMap['g-dead'].attributes.a1).toBe(true)
+      expect(store._deletedAttrMemberships.get('a1')).toBeUndefined()
+    })
+
+    it('恢复属性：成员此刻仍软删、属性本体也仍软删时，restoreBookmark 不强行回填（避免给活体打回收站属性键）', () => {
+      store.addAttribute({ id: 'a1', name: '标签', type: 'boolean' } as any)
+      store.addBookmark({ id: 'bm', title: 'a', url: 'https://a.com', attributes: { a1: true } } as any)
+      store.deleteAttribute('a1') // 属性软删前快照 bm；缓存含 bm
+      store.deleteBookmark('bm') // 成员软删
+      store.drainDirtyIds()
+
+      // 属性本体未恢复，先恢复成员：helper 因 _attrMap[a1].deletedAt 跳过回填
+      store.restoreBookmark('bm')
+      expect(store.bookmarkMap['bm'].attributes.a1).toBeUndefined()
+      // membership 仍留缓存待属性恢复
+      expect(store._deletedAttrMemberships.get('a1')?.length).toBe(1)
+
+      // 属性后恢复：此刻成员已活，restoreAttribute 回写它（另一条消化路径）
+      store.restoreAttribute('a1')
+      expect(store.bookmarkMap['bm'].attributes.a1).toBe(true)
+      expect(store._deletedAttrMemberships.get('a1')).toBeUndefined()
+    })
+
+    it('permanentDeleteBookmark 清理 _deletedAttrMemberships 残留 membership（防缓存泄漏）', () => {
+      store.addAttribute({ id: 'a1', name: '标签', type: 'boolean' } as any)
+      store.addBookmark({ id: 'bm', title: 'a', url: 'https://a.com', attributes: { a1: true } } as any)
+      store.addBookmark({ id: 'bm2', title: 'b', url: 'https://b.com', attributes: { a1: true } } as any)
+      store.deleteAttribute('a1') // 快照含 bm + bm2
+      store.drainDirtyIds()
+      expect(store._deletedAttrMemberships.get('a1')?.length).toBe(2)
+
+      store.permanentDeleteBookmark('bm') // bm 永久删，应从 membership 消去
+      const remaining = store._deletedAttrMemberships.get('a1')
+      expect(remaining?.map(m => m.entityId)).toEqual(['bm2'])
+    })
+
+    it('permanentDeleteGroup 清理 _deletedAttrMemberships 残留 membership', () => {
+      store.addAttribute({ id: 'a1', name: '标签', type: 'boolean' } as any)
+      store.addGroup({ id: 'g1', name: 'G', bookmarkIds: [], attributes: { a1: true } } as any)
+      store.addGroup({ id: 'g2', name: 'G2', bookmarkIds: [], attributes: { a1: true } } as any)
+      store.deleteAttribute('a1')
+      store.drainDirtyIds()
+
+      store.permanentDeleteGroup('g1')
+      expect(store._deletedAttrMemberships.get('a1')?.map(m => m.entityId)).toEqual(['g2'])
     })
 
     it('恢复属性：快照为空（无持有方）时不回写不抛，仍清 _deletedAttrMemberships 真链', () => {
