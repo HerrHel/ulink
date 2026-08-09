@@ -125,6 +125,8 @@
               <span class="sp-section-title">数据</span>
               <div class="sp-actions">
                 <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>回收站</button>
+              </div>
+              <div class="sp-actions">
                 <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" v-html="I.import"></span>导入</button>
                 <div class="sp-export-wrap" @click.stop>
                   <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span aria-hidden="true" v-html="I.export"></span>导出</button>
