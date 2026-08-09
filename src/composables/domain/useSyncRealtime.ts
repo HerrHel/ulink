@@ -229,9 +229,16 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   // （让本地值后续推上去）。最小改动不加锁，仅复查。
   if (ds._dirtyIds.has(row.id)) return
   if (_isPendingSync(row.id)) return
-  // revive-assign：确保不保留本地 deletedAt（HANDLERS 会合并字段，显式清一次）
+  // revive-assign：远端复活（远端活 deletedAt=falsy、本地软删 deletedAt=ts）时，
+  // 必须清掉本地 prev.deletedAt 才能让该项重新出现在 UI（软删过滤依赖 deletedAt truthy）。
+  // 但 HANDLERS.upsert 走 updateBookmark/updateGroup/... 的 `{ ...prev, ...changes }` 合并：
+  // 若 changes 不含 deletedAt key（spread 不动没出现的 key），prev.deletedAt 被原样保留 → 复活失效。
+  // 故此处显式把 changes 上的 deletedAt 设为 undefined（保 key 存在），spread 用 undefined 覆盖
+  // prev.deletedAt → 新对象 deletedAt=undefined → 复活生效。与 pull 路径 syncLocalMerge `_mergeIntoLocal`
+  // revive-assign 分支（l.deletedAt = r.deletedAt(undefined) 后 delete 再保险）行为对齐。
+  // 旧实现 `delete plain.deletedAt` 反向：把 key 删掉使 spread 保留 prev.deletedAt，复活失效——真 bug，已修。
   if (decision.action === 'revive-assign' && plain && typeof plain === 'object') {
-    delete (plain as { deletedAt?: unknown }).deletedAt
+    ;(plain as { deletedAt?: unknown }).deletedAt = undefined
   }
   h.upsert(plain)
   // 清除本次 merge 产生的 _changedFields：updateBookmark/updateGroup 内部会
