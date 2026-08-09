@@ -55,7 +55,27 @@ function _throttleKey(message: string): boolean {
   const now = Date.now()
   const last = _throttled.get(message)
   if (last && now - last < THROTTLE_MS) return true
-  if (_throttled.size >= MAX_THROTTLED_KEYS) _throttled.clear()
+  // 表满时回收：先清掉已过期槽位（now - last >= THROTTLE_MS），仍满则仅淘汰最旧一项，
+  // 绝不全表 .clear()——全清会把 5s 窗口内已上报的其他错误记录一起清零，致使紧随其后的
+  // 同 message 重复错误 get 命中 undefined 绕过节流，在最该节流的风暴场景反而失效。
+  // 修审计：实现与文件头注释/test 编排声明的「LRU 100 上限」intent 对齐，附带修过期槽位
+  // 永不主动回收的泄漏（满前 Map 只增不减）。
+  if (_throttled.size >= MAX_THROTTLED_KEYS) {
+    let oldestKey: string | undefined
+    let oldestTs = Infinity
+    for (const [k, ts] of _throttled) {
+      if (now - ts >= THROTTLE_MS) {
+        _throttled.delete(k)
+      } else if (ts < oldestTs) {
+        oldestKey = k
+        oldestTs = ts
+      }
+    }
+    // 清完过期仍超上限（即所有现存条目均在 5s 窗口内），删最旧一项腾槽给当前 message
+    if (_throttled.size >= MAX_THROTTLED_KEYS && oldestKey) {
+      _throttled.delete(oldestKey)
+    }
+  }
   _throttled.set(message, now)
   return false
 }
