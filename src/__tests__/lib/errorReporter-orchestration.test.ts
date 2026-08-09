@@ -153,6 +153,30 @@ describe('reportError 编排护栏', () => {
     expect(_sb.insertSpy).toHaveBeenCalledTimes(2)
   })
 
+  it('MAX 表满不清零整表：中间项重复仍被节流（修复前满即 .clear() 致重复绕过节流）', async () => {
+    // 复现「表满即全清」最坏路径：真实 MAX_THROTTLED_KEYS=100，铺 100 条不同
+    // message 填满表，时间戳严格递增且每条间隔 1ms（均在 5s 窗口内）。
+    for (let i = 0; i < 100; i++) {
+      reportError({ message: `m${i}` })
+      await vi.advanceTimersByTimeAsync(1)
+    }
+    expect(_sb.insertSpy).toHaveBeenCalledTimes(100)
+
+    // 第 101 条不同 message：修复前触发 _throttled.clear() 全清 + 自身 set 放行；
+    // 修复后仅淘汰最旧的 m0、自身 set 放行——两者自身均 insert，都 +1。
+    reportError({ message: 'm100' })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(_sb.insertSpy).toHaveBeenCalledTimes(101)
+
+    // 紧随其后的 m50（中间项，不是被淘汰的最旧 m0）仍在 5s 窗口内：
+    // 修复前——被 m100 触发的 .clear() 清掉，get 命中 undefined → 不节流 → insert（绕过节流）；
+    // 修复后——仅 m0 被淘汰，m50 仍在表且 now - last < THROTTLE_MS → 节流命中 → 不 insert。
+    reportError({ message: 'm50' })
+    await vi.advanceTimersByTimeAsync(0)
+    // 修复后总 insert 仍 101（m50 被节流）；修复前会变 102（m50 绕过节流多 insert 一次）。
+    expect(_sb.insertSpy).toHaveBeenCalledTimes(101)
+  })
+
   it('H9 抑制不计入节流后续放行（含密独立 message 不占节流槽后正常 message 仍上报）', async () => {
     reportError({ message: 'password=wrong1' }) // 被抑制 return
     await vi.advanceTimersByTimeAsync(0)
