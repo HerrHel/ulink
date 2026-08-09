@@ -77,6 +77,7 @@ import { safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
 import { buildShareEntries } from './buildShareEntries.js'
 import { buildItemListJsonLd } from './buildItemListJsonLd.js'
 import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
+import { deriveShareUrl } from './deriveShareUrl.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
@@ -89,6 +90,10 @@ const error = ref('')
 const group = ref<SiblingGroup | null>(null)
 const bookmarks = ref<Bookmark[]>([])
 const forking = ref(false)
+// 组件实例级卸载标志。必须在 setup 内声明（非模块级），否则 defineAsyncComponent +
+// v-if 反复挂/卸会共享同一模块变量：A 卸载置 true 后永不重置，B 重挂时仍是 true 直接
+// 杀死 fetch → 永久"加载中..."。实例级每挂一次新值初 false，卸载只失效本实例。
+const _unmounted = ref(false)
 
 const auth = useAuth()
 const isLoggedIn = auth.isLoggedIn
@@ -152,15 +157,10 @@ async function onFork() {
   }
 }
 
-// 审计 R10：onMounted async 先 await fetchPublicGroup 再 _applyShareHead 注入 head；
-// 慢网下用户点"返回"卸载 + cleanupInjectedHead，但 in-flight fetch 返回后仍执行 _applyShareHead
-// 污染主应用 <head> 的 SEO 元数据。用闭包 _unmounted 标志：卸载后丢弃过期 fetch 结果。
-let _unmounted = false
-
 onMounted(async () => {
   try {
     const data = await fetchPublicGroup(props.groupId)
-    if (_unmounted) return
+    if (_unmounted.value) return
     if (!data) {
       error.value = '该分享链接不存在或已取消公开'
       return
@@ -171,15 +171,15 @@ onMounted(async () => {
     // 社交 OG 预览器不执行 JS，首次预览仍是 index.html 静态默认值 —— 彻底解决需后续 SSR 轮）
     _applyShareHead(data.group, data.bookmarks)
   } catch (e) {
-    if (_unmounted) return
+    if (_unmounted.value) return
     error.value = '加载失败：' + (e as Error).message
   } finally {
-    if (!_unmounted) loading.value = false
+    if (!_unmounted.value) loading.value = false
   }
 })
 
 onUnmounted(() => {
-  _unmounted = true
+  _unmounted.value = true
   cleanupInjectedHead()
   setCanonical('https://herrhel.github.io/')
 })
@@ -189,8 +189,10 @@ onUnmounted(() => {
  * 走 src/lib/head.ts 幂等函数，重复渲染不堆叠；子页卸载时 backToApp/onUnmounted 调 cleanup 恢复。
  */
 function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
-  const base = location.pathname.replace(/\/[^/]*$/, '/') || '/'
-  const shareUrl = location.origin + base + 's/' + g.id + '#share/' + g.id
+  // shareUrl 推导剥部署前缀时必须把 `/s/<gid>` 整段剥掉（旧正则只剥末段残留 `/s/` 再拼
+  // 又一遍 `s/` 产生 `/s/s/<gid>` 双段错误 URL）。该推导剥成纯函数 deriveShareUrl 直测，
+  // 见 src/views/deriveShareUrl.ts 与单测护栏。
+  const shareUrl = deriveShareUrl(location.pathname, location.origin, g.id)
   const title = `${g.name || '分享组'} - LinkVault 分享`
   const notesPlain = g.notes ? g.notes.replace(/<[^>]+>/g, '').trim() : ''
   const desc = (notesPlain && notesPlain.slice(0, 120)) || `${bms.length} 个链接 · 由 LinkVault 公开分享`
