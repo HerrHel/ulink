@@ -744,15 +744,27 @@ export const useDataStore = defineStore('data', {
         this._deletedGroupMemberships.delete(id)
         this._persistDeletedGroupMemberships()
       }
+      // r10-attr-restore B1：回填此书签被删属性时抹掉的 attributes 键
+      this._restoreAttrMemberships(id, 'bookmark')
     },
-    restoreGroup(id: string) { this._restoreItem('sibling_groups', id) },
+    restoreGroup(id: string) {
+      this._restoreItem('sibling_groups', id)
+      // r10-attr-restore B1：回填此组被删属性时抹掉的 attributes 键
+      this._restoreAttrMemberships(id, 'group')
+    },
     restoreCategory(id: string) { this._restoreItem('categories', id) },
     restoreAttribute(id: string) {
       this._restoreItem('custom_attributes', id)
-      // A2-002：回写软删时抹掉的 attributes 键
+      // A2-002：回写软删时抹掉的 attributes 键。
+      // r10-attr-restore 修真 bug：旧实现末尾无条件 _deletedAttrMemberships.delete(id)，
+      // 当某成员此刻仍软删（!b.deletedAt 守卫跳过它）时缓存被清空 → 该成员稍后
+      // restoreBookmark/restoreGroup 永远拿不回 [id]:true（无回填路径，属性归属永久丢失
+      // 且 _trackChange 已写「attributes」会把丢失同步到云端）。改为：只回写存活成员，
+      // 仍软删的成员保留在缓存，等其自身 restore 时由 _restoreAttrMemberships 回填。
       const members = this._deletedAttrMemberships.get(id)
       if (members?.length) {
         const now = Date.now()
+        const remaining: typeof members = []
         for (const m of members) {
           if (m.kind === 'bookmark') {
             const b = this._bmMap[m.entityId]
@@ -763,6 +775,8 @@ export const useDataStore = defineStore('data', {
               this._bmMap[m.entityId] = next
               this._trackChange(m.entityId, 'attributes')
               this._markDirty(m.entityId)
+            } else {
+              remaining.push(m) // 成员仍软删或已永久删前的中间态：留缓存待其 restore 回填
             }
           } else {
             const g = this._grpMap[m.entityId]
@@ -773,11 +787,77 @@ export const useDataStore = defineStore('data', {
               this._grpMap[m.entityId] = next
               this._trackChange(m.entityId, 'attributes')
               this._markDirty(m.entityId)
+            } else {
+              remaining.push(m)
             }
           }
         }
-        this._deletedAttrMemberships.delete(id)
+        if (remaining.length) {
+          this._deletedAttrMemberships.set(id, remaining)
+        } else {
+          this._deletedAttrMemberships.delete(id)
+        }
         this._searchIndexDirty = true
+      }
+    },
+
+    /**
+     * r10-attr-restore：恢复实体（bookmark/group）时回填其曾持有、属性本体已恢复的
+     * attributes 键（从 _deletedAttrMemberships 消化对应 membership）。
+     *
+     * 真修复 B1：旧 restore* 路径只回写存活成员、不清缓存让软删成员的属性归属永久丢失。
+     * 现让成员自身 restore 时扫缓存回填——与 _deletedGroupMemberships 在 restoreBookmark
+     * 回填组关系（733-746）同构。仅当属性本体未软删（已恢复或从未删）才回填，避免给
+     * 实体打上仍在回收站的属性键污染过滤。
+     */
+    _restoreAttrMemberships(entityId: string, kind: 'bookmark' | 'group') {
+      for (const [attrId, members] of this._deletedAttrMemberships) {
+        // 属性本体仍软删：成员此刻不该获得该键（属性不可见），保留 membership 待属性 restore 时回填
+        if (this._attrMap[attrId]?.deletedAt) continue
+        let touched = false
+        let removed = 0
+        for (let i = 0; i < members.length; i++) {
+          const m = members[i]
+          if (m.entityId !== entityId || m.kind !== kind) continue
+          if (kind === 'bookmark') {
+            const b = this._bmMap[entityId]
+            if (!b) { removed++; continue }
+            const next = { ...b, attributes: { ...b.attributes, [attrId]: true }, updatedAt: Date.now() }
+            const idx = _indexOfById(this.bookmarks, this._bmMap, entityId)
+            if (idx >= 0) this.bookmarks[idx] = next
+            this._bmMap[entityId] = next
+          } else {
+            const g = this._grpMap[entityId]
+            if (!g) { removed++; continue }
+            const next = { ...g, attributes: { ...g.attributes, [attrId]: true }, updatedAt: Date.now() }
+            const idx = _indexOfById(this.siblingGroups, this._grpMap, entityId)
+            if (idx >= 0) this.siblingGroups[idx] = next
+            this._grpMap[entityId] = next
+          }
+          this._trackChange(entityId, 'attributes')
+          this._markDirty(entityId)
+          touched = true
+          removed++
+        }
+        if (touched) this._searchIndexDirty = true
+        if (removed > 0) {
+          if (members.length === removed) {
+            this._deletedAttrMemberships.delete(attrId)
+          } else {
+            const surviving = members.filter(m => !(m.entityId === entityId && m.kind === kind))
+            this._deletedAttrMemberships.set(attrId, surviving)
+          }
+        }
+      }
+    },
+
+    /** r10-attr-restore B1：永久删实体时从 _deletedAttrMemberships 消去其残留 membership（防缓存泄漏） */
+    _dropAttrMemberships(entityId: string) {
+      for (const [attrId, members] of this._deletedAttrMemberships) {
+        if (!members.some(m => m.entityId === entityId)) continue
+        const surviving = members.filter(m => m.entityId !== entityId)
+        if (surviving.length === 0) this._deletedAttrMemberships.delete(attrId)
+        else this._deletedAttrMemberships.set(attrId, surviving)
       }
     },
 
@@ -821,6 +901,8 @@ export const useDataStore = defineStore('data', {
         const cid = queue.shift()!
         const cbm = this._bmMap[cid]
         if (cbm) { cbm.parentId = null; this._markDirty(cid) }
+        // r10-attr-restore B1：子孙永久删，清其在 _deletedAttrMemberships 的预订 membership
+        this._dropAttrMemberships(cid)
         if (this._childrenIdx[cid]) {
           queue.push(...this._childrenIdx[cid])
           delete this._childrenIdx[cid]
@@ -831,9 +913,17 @@ export const useDataStore = defineStore('data', {
       delete this._bmMap[id]
       this._deletedGroupMemberships.delete(id)
       this._persistDeletedGroupMemberships()
+      // r10-attr-restore B1：本实体永久删，清其 _deletedAttrMemberships 预订 membership
+      this._dropAttrMemberships(id)
       this._searchIndexDirty = true
     },
-    permanentDeleteGroup(id: string) { this._permanentDelete('sibling_groups', id); delete this._grpMap[id]; this._searchIndexDirty = true },
+    permanentDeleteGroup(id: string) {
+      this._permanentDelete('sibling_groups', id)
+      delete this._grpMap[id]
+      // r10-attr-restore B1：永久删组时清其在 _deletedAttrMemberships 的预订 membership
+      this._dropAttrMemberships(id)
+      this._searchIndexDirty = true
+    },
     permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id]; this._searchIndexDirty = true },
     permanentDeleteAttribute(id: string) {
       this._permanentDelete('custom_attributes', id)
