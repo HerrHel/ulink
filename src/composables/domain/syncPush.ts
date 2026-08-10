@@ -243,10 +243,18 @@ export async function pushFromQueue(): Promise<boolean> {
     ]
     const deadIds: number[] = []
     for (const r of results) {
-      if (r.result.error) {
+      // 无匹配 update 视失败：Supabase update 不命中行时返 { data:null, error:null }，
+      // 仅靠 error 会被误判成功而永久出队，丢本地变更。port 层透传 count：0=无匹配行。
+      const noMatch = r.result.count === 0
+      if (r.result.error || noMatch) {
         const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
         const retries = (rawMatch?.retries || 0) + 1
-        failedOps.push({ table: r.op.table, itemId: r.op.itemId, error: r.result.error.message, op: rawMatch })
+        failedOps.push({
+          table: r.op.table,
+          itemId: r.op.itemId,
+          error: noMatch ? 'update 未匹配远端行（行已删/不存在/RLS 拒绝）' : r.result.error!.message,
+          op: rawMatch,
+        })
         if (rawMatch?.id != null) {
           if (retries >= MAX_PUSH_RETRIES) {
             deadIds.push(rawMatch.id)
@@ -280,7 +288,8 @@ export async function pushFromQueue(): Promise<boolean> {
 
     const releasedIds = new Set<string>()
     for (const r of results) {
-      if (!r.result.error) releasedIds.add(r.op.itemId)
+      const noMatch = r.result.count === 0
+      if (!r.result.error && !noMatch) releasedIds.add(r.op.itemId)
       else {
         const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
         if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) releasedIds.add(r.op.itemId)
