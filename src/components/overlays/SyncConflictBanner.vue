@@ -55,7 +55,7 @@ function itemName(c: SyncConflict): string {
 <style scoped>
 .conflict-banner {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-  z-index: 5000; width: min(460px, calc(100vw - 32px));
+  z-index: 7200; width: min(460px, calc(100vw - 32px)); /* 2026-08-10：抬到模态框(6000)之上，与 undo-toast 同层 */
   background: var(--surface, #fff); border: 1px solid var(--border, #e5e7eb);
   border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,.15);
   overflow: hidden; font-size: 13px;

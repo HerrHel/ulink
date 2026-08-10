@@ -1,6 +1,10 @@
 /* ==================== TOAST ==================== */
 .toasts{
-  position:fixed;bottom:20px;right:20px;z-index:4000;
+  /* 2026-08-10：z-index 4000 → 7000——模态框（BookmarkModal 编辑弹窗等）z-index 6000，
+     旧值低于模态框，编辑弹窗内触发的 toast（如「该书签含加密字段，请先解锁主密码后再编辑」）
+     被弹窗挡住看不见。7000 高于全部常规 UI（modal 6000 / settings 5000 / overlays 3001），
+     仍低于拖拽临时层（drag.css 10000+），不影响拖拽排序体验。 */
+  position:fixed;bottom:20px;right:20px;z-index:7000;
   display:flex;flex-direction:column-reverse;gap:6px;
 }
 .toast{
@@ -22,7 +26,8 @@
 /* ---- Undo toast (top bar) ---- */
 .undo-toast{
   position:fixed;top:0;left:50%;transform:translateX(-50%) translateY(-100%);
-  z-index:5000;display:flex;align-items:center;gap:14px;
+  /* 2026-08-10：5000 → 7200，同步抬到模态框（6000）之上，且高于右下角 .toasts（7000）保持相对层级 */
+  z-index:7200;display:flex;align-items:center;gap:14px;
   padding:14px 22px;margin-top:16px;
   background:var(--surface);
   color:var(--text);
