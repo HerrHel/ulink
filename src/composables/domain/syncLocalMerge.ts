@@ -5,6 +5,7 @@
  */
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { decideRemoteApply } from './syncMergeCore.js'
 import { _isPendingSync } from './syncPending.js'
 import { cloneDeep } from '../../lib/clone.js'
@@ -139,6 +140,9 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
     for (let i = local.length - 1; i >= 0; i--) {
       const lItem = local[i]
       if (remoteIds.has(lItem.id)) continue
+      // 虚拟分类（全部/未分类）是本地常量，云端 categories 表可能从未有过它们的
+      // 记录（未重排过分类的用户从不推送）——全量对账不得把它们当「远端已删」软删。
+      if (type === 'category' && (lItem.id === CAT_ALL || lItem.id === CAT_UNCATEGORIZED)) continue
       const decision = decideRemoteApply({
         localItem: lItem,
         remoteItem: null,

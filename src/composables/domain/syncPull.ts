@@ -6,6 +6,7 @@ import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import type { EntityType } from '../../types.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { FROM_REMOTE } from './useSyncMapping.js'
 import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _getUserId } from './useSyncHistory.js'
@@ -129,12 +130,20 @@ export async function pullChanges(full = false): Promise<boolean> {
         }
         for (const type of SYNC_ENTITY_ORDER) {
           for (const item of localByEntity[type]) {
-            if (!item.deletedAt && !remoteAll.has(item.id)) reconcileDelete(type, item.id)
+            if (item.deletedAt || remoteAll.has(item.id)) continue
+            // 虚拟分类（全部/未分类）是本地常量：未重排过分类的用户云端 categories
+            // 表从未有它们的记录，对账不得当「远端已删」软删，否则侧栏两项消失。
+            if (type === 'category' && (item.id === CAT_ALL || item.id === CAT_UNCATEGORIZED)) continue
+            reconcileDelete(type, item.id)
           }
         }
       }
     }
 
+    // B-12+：pull 的 assign/insert 会把云端 order 就地覆盖进本地（含虚拟分类），
+    // 云端存量可能是 B-12 修复前的毫秒戳（超界）——立即归一化为序号并 markDirty
+    // 回推，避免乱序持续到下次 reload；AppNav 另有渲染层置顶兜底。
+    ds._normalizeCategoryOrders()
     ds._syncMaps()
     saveAppData()
 

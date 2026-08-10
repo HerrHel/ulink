@@ -70,12 +70,18 @@ const vault = useVault()
 const isVault = computed(() => uiStore.curSpace === 'vault')
 
 // B-11：按 order 升序渲染，pull 后字段已更新但数组位置可能仍是本地旧序。
-const categories = computed(() =>
-  dataStore.categories
-    .filter(c => !c.deletedAt)
+// 置顶护栏：全部/未分类是虚拟分类，恒排最前，不参与 order 排序——云端存量
+// order 可能是 B-12 修复前的毫秒戳（超界），pull assign 直接覆盖本地 0/1 会让
+// 这两项穿插进真实分类之间；渲染层置顶后 order 数据异常不再影响显示顺序。
+const categories = computed(() => {
+  const all = dataStore.categories
+  const virtual = all.filter(c => !c.deletedAt && (c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED))
+  const rest = all
+    .filter(c => !c.deletedAt && c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED)
     .slice()
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  return [...virtual, ...rest]
+})
 const curCat = computed(() => uiStore.curCat)
 const cardCounts = computed(() => dataStore.cardCounts)
 
