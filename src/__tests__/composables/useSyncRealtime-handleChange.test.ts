@@ -538,3 +538,46 @@ describe('_handleRealtimeChange — HANDLERS 四 type upsert + bookmark parentId
     expect(_app.debouncedSaveAppDataSpy).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('A5: _handleRealtimeChange 经 withLock 与 pullChanges 串行化', () => {
+  it('★navigator.locks 存在时以 exclusive 模式请求 linkvault-sync 锁，事件经锁正常 upsert', async () => {
+    await withAuth()
+    const lockReq: Array<{ name: string; mode: string }> = []
+    const origLocks = (navigator as any).locks
+    ;(navigator as any).locks = {
+      request: vi.fn(async (name: string, opts: { mode: string }, fn: () => Promise<unknown>) => {
+        lockReq.push({ name, mode: opts.mode })
+        return fn()
+      }),
+    }
+    try {
+      const { _handleRealtimeChange, ds } = await getDeps()
+      _e2e.isUnlockedRef.value = true
+      const addSpy = vi.spyOn(ds, 'addBookmark')
+
+      await _handleRealtimeChange({ eventType: 'UPDATE', new: makeRemoteBookmarkRow({ id: 'a5-bm-1', title: 'A5 锁测试' }), old: {} }, 'bookmark')
+
+      expect(lockReq).toEqual([{ name: 'linkvault-sync', mode: 'exclusive' }])
+      expect(addSpy).toHaveBeenCalledTimes(1)
+      expect(ds.bookmarks.some(b => b.id === 'a5-bm-1')).toBe(true)
+    } finally {
+      ;(navigator as any).locks = origLocks
+    }
+  })
+
+  it('navigator.locks 不可用（jsdom/旧浏览器）fallback 直跑：withLock 直接执行 fn，事件仍正常 upsert', async () => {
+    await withAuth()
+    const origLocks = (navigator as any).locks
+    ;(navigator as any).locks = undefined
+    try {
+      const { _handleRealtimeChange, ds } = await getDeps()
+      _e2e.isUnlockedRef.value = true
+
+      await _handleRealtimeChange({ eventType: 'UPDATE', new: makeRemoteBookmarkRow({ id: 'a5-bm-2', title: 'A5 fallback' }), old: {} }, 'bookmark')
+
+      expect(ds.bookmarks.some(b => b.id === 'a5-bm-2')).toBe(true)
+    } finally {
+      ;(navigator as any).locks = origLocks
+    }
+  })
+})

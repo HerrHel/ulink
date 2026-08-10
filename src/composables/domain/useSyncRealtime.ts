@@ -33,7 +33,7 @@ const BASE_RECONNECT_DELAY = 1000
 /** 处理 Realtime 变更事件。S13：收到事件后再按 user_id 校验（纵深防护——即使
  *  channel filter 因配置错误/策略变更被绕过，也不处理他人数据）。
  *  导出含 _ 前缀（约定私有），供单测覆盖 S13 纵深防护逻辑。 */
-export async function _handleRealtimeChange(payload: any, type: EntityType) {
+async function _handleRealtimeChangeInner(payload: any, type: EntityType) {
   // 重加密全量迁移期间短路所有远端变更：本标签页自己 push 的新密文会被 Realtime
   // 当作远端变更收回来，用旧 cryptoKey 解新密文 会解不开→冲突/写空污损正在迁移的内存。
   // 一律 skip，待 changeMasterPassword 结束后 pullChanges 全量对账拉齐。
@@ -254,6 +254,18 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   ds._changedFields.delete(plain.id)
   // Realtime 合并后落盘，避免刷新丢失对端变更（DATA-3）
   debouncedSaveAppData()
+}
+
+/**
+ * A5（2026-08-10 人工裁定修复）：Realtime 事件处理与 pullChanges 共享 'linkvault-sync'
+ * 互斥锁串行化——pull 在锁内全量 merge 写本地，若不持锁并发写入，pull 的旧快照可能
+ * 覆盖 realtime 已应用的新变更（短暂回退）。navigator.locks exclusive 排队语义无死锁
+ * （inner 内不再请求同名锁；subscribeRealtime 中 pullChanges 是唯一其他持锁方）。
+ * jsdom 无 Web Locks API 时 withLock fallback 直跑，行为与现状一致（测试环境锁不生效）。
+ * 导出含 _ 前缀（约定私有），供单测覆盖。
+ */
+export async function _handleRealtimeChange(payload: any, type: EntityType) {
+  return withLock('linkvault-sync', () => _handleRealtimeChangeInner(payload, type))
 }
 
 function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
