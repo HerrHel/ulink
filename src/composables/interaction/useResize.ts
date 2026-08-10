@@ -38,27 +38,48 @@ export function useResize() {
     let dir: number | null = null
     let startX = 0
     let startW = 0
+    // 最后一次 mousemove 的 clientX，供 onUp 同步 flush 用：onUp 在 mouseup 事件阶段
+    // 同步执行，早于最后一次 mousemove 排入的 rAF 回调（rAF 在下一帧渲染前才跑），
+    // 若不 flush 直接读 panel.style.width 持久化，最后一次 delta 会丢失，存进
+    // localStorage 的是比松手位置略小的宽度。
+    let lastClientX = 0
+
+    // 把拖拽 delta 同步应用到面板样式。提取出 rAF 回调与 onUp flush 共用，
+    // 保证两条路径写 width 的逻辑完全一致。
+    function applyDelta() {
+      if (!panel || dir == null) return
+      const delta = (lastClientX - startX) * dir
+      const min = dir > 0 ? 120 : 200
+      const max = dir > 0 ? 500 : 600
+      const w = Math.max(min, Math.min(startW + delta, max))
+      if (panel === leftPanel) {
+        panel.style.width = w + 'px'
+      } else {
+        panel.style.setProperty('--detail-width', w + 'px')
+        if (panel.classList.contains('open')) panel.style.width = w + 'px'
+      }
+    }
 
     function onMove(e: MouseEvent) {
       if (!handle || !panel || !dir) return
+      lastClientX = e.clientX
       cancelAnimationFrame(raf!)
       raf = requestAnimationFrame(() => {
         if (!handle || !panel || dir == null) return
-        const delta = (e.clientX - startX) * dir!
-        const min = dir! > 0 ? 120 : 200
-        const max = dir! > 0 ? 500 : 600
-        const w = Math.max(min, Math.min(startW + delta, max))
-        if (panel === leftPanel) {
-          panel.style.width = w + 'px'
-        } else {
-          panel.style.setProperty('--detail-width', w + 'px')
-          if (panel.classList.contains('open')) panel.style.width = w + 'px'
-        }
+        applyDelta()
       })
     }
 
     function onUp() {
       if (!handle || !panel) return
+      // flush 最后一次 pending rAF：mouseup 早于最后一次 mousemove 排入的 rAF 回调，
+      // 不 cancel 同步 applyDelta 一次会让持久化读到旧 width（最后一次 delta 丢失）。
+      // cancel 后 applyDelta 用 lastClientX 同步把最终宽度写进 style，再读持久化。
+      if (raf != null) {
+        cancelAnimationFrame(raf)
+        raf = null
+        applyDelta()
+      }
       handle.classList.remove('active')
       panel.style.transition = ''
       document.removeEventListener('mousemove', onMove)
