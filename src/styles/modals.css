@@ -219,7 +219,15 @@
 .e2e-link{font-size:0.78rem;color:var(--accent,var(--primary,#3b82f6));cursor:pointer;text-align:center;padding:2px 0;margin-top:4px}
 .e2e-link:hover{text-decoration:underline}
 .e2e-success{text-align:center;padding:24px 0}
-.e2e-success-icon{font-size:2rem;margin-bottom:8px}
+/* SVG 无显式 width/height 时按替换元素默认渲染（约 300px 宽），必须显式定尺寸 */
+.e2e-success-icon{
+  width:72px;height:72px;margin:0 auto 12px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--green-light);color:var(--green);
+  border-radius:50%;animation:e2e-pop .4s cubic-bezier(.34,1.56,.64,1)
+}
+.e2e-success-icon svg{width:38px;height:38px}
+@keyframes e2e-pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
 .recovery-key-box{background:var(--surface);border:2px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center;margin:12px 0}
 .recovery-key{font-family:'Courier New',monospace;font-size:1.1rem;letter-spacing:2px;word-break:break-all;user-select:all}
 .e2e-actions{display:flex;gap:8px;justify-content:center}
