@@ -66,6 +66,17 @@ import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLo
 const props = defineProps<{ childId: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
+// 代际 token：防 childId 切换竞态致跨书签明文密码视觉泄漏。
+// loadFromStore 内 await pendingUnlock 等用户解锁（秒级手动窗口）期间，用户可能在
+// BookmarkModal 主窗口点另一子书签的 edit（onEditChild 改 childModalId 时 v-if 已真不
+// re-mount，只触发 watch childId 跑新 loadFromStore）。旧 await 在 App.vue:151 全 resolve
+// 队列解锁后仍按旧 bm = A 解密写入 form.password——此时 form 已属 childId B，A 的明文密码
+// 显示在 B 的密码框（视觉泄漏，同 chunk3 bdPwShow 模式）；若进而保存则 B.password 被 A 加密覆盖
+// （数据损坏）。代际 token 对齐 HistoryPanel _gen / bdPwShow _detailGen 模式：每次新
+// loadFromStore 自增 gen 使旧 await 的写入短路。e2e.ts:19-22 B-2 注释证明多 await 可同挂
+// pendingUnlock，此处缺失 guard 是可证明的不一致。
+let _loadGen = 0
+
 const ds = useDataStore()
 const e2eStore = useE2EStore()
 const ui = useUIStore()
@@ -99,6 +110,10 @@ const form = reactive<ChildFormState>({
 
 // 打开时从 store 加载子书签（含 E2E 解密）
 async function loadFromStore() {
+  // 取代际 token：本次调用闭包锁定 localGen，await 后写入 form 前若 _loadGen 已前进（被
+  // 切 childId 触发的新 loadFromStore 或解锁 flush 超前）则短路 return，避免把旧 childId
+  // 的明文密码写入已属于新 childId 的表单。
+  const localGen = ++_loadGen
   const bm = ds.bookmarkMap[props.childId]
   if (!bm) { emit('close'); return }
   // E2E 密文（未解锁/解不开）不进表单：displayText 过滤为空，保存时 doSave 的密文检测阻止覆盖
@@ -116,18 +131,22 @@ async function loadFromStore() {
         const ep = pw as EncryptedPassword
         const raw = ep.salt + '.' + ep.iv + '.' + ep.data
         form.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
-      } catch { form.password = '' }
+        if (localGen !== _loadGen) return // await 后 gen 失效则不写错表单
+      } catch { if (localGen !== _loadGen) return; form.password = '' }
     } else if (e2eStore.isE2EEnabled) {
       // 按需解锁
       const unlocked = await new Promise<boolean>(resolve => {
         e2eStore.pendingUnlock.push(resolve)
       })
+      // 解锁秒级手动窗口期间 user 可能已切 childId 触发新 loadFromStore → _loadGen 前进 → 短路
+      if (localGen !== _loadGen) return
       if (unlocked && e2eStore.cryptoKey) {
         try {
           const ep = pw as EncryptedPassword
           const raw = ep.salt + '.' + ep.iv + '.' + ep.data
           form.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
-        } catch { form.password = '' }
+          if (localGen !== _loadGen) return // 二次 await 后再判一次 gen
+        } catch { if (localGen !== _loadGen) return; form.password = '' }
       } else { form.password = '' }
     } else { form.password = '' }
   } else {
