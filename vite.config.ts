@@ -213,6 +213,9 @@ export default defineConfig({
         share_target: {
           action: '/',
           method: 'GET',
+          // GET 方法唯一合法的 enctype；显式声明可消除 Chromium 的
+          // "Enctype should be set to..." manifest 警告
+          enctype: 'application/x-www-form-urlencoded',
           params: {
             title: 'title',
             text: 'text',
