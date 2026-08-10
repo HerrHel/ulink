@@ -164,12 +164,24 @@ describe('d1-106 addNewCategory — 新增分类 store mutation 前哨编排护�
     expect(CATEGORY_COLORS).toContain(result!.color)
   })
 
-  it('返 Category.order 是 number（Date.now() 排序主键，防误删致 NaN 比较塌陷排序）', () => {
+  it('返 Category.order 是序号语义（非软删分类计数）——B-12 曾用 Date.now() 毫秒戳溢出远端 INTEGER order 列', () => {
     const store = makeMockStore()
     const result = addNewCategory('排序类', asAppStore(store))
     expect(result).not.toBeNull()
-    expect(typeof result!.order).toBe('number')
-    expect(Number.isFinite(result!.order)).toBe(true)
+    expect(result!.order).toBe(0) // 空库第一个分类 order=0
+    // 必须小到能进远端 categories.order INTEGER 列（< 2147483647），防回归成毫秒时间戳
+    expect(result!.order).toBeLessThan(2147483647)
+  })
+
+  it('B-12 预置非软删分类后新分类 order=非软删计数（软删不计入）', () => {
+    const store = makeMockStore([
+      { id: 'c0', name: 'a', icon: '', color: '', order: 0 },
+      { id: 'c1', name: 'b', icon: '', color: '', order: 1, deletedAt: 100 }, // 软删不计
+      { id: 'c2', name: 'c', icon: '', color: '', order: 2 },
+    ])
+    const result = addNewCategory('新类', asAppStore(store))
+    expect(result).not.toBeNull()
+    expect(result!.order).toBe(2) // 非软删 2 个（c0, c2）
   })
 
   it('传入 store.addCategory 收到的就是返回的同一个 Category 对象', () => {
