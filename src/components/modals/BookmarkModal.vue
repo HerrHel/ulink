@@ -110,6 +110,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 import ChildBookmarkEditModal from './ChildBookmarkEditModal.vue'
 import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
+import { selectableParents, selectableChildren } from './bookmarkFormFilters.js'
 
 const store = useAppStore()
 const titleRef = ref<HTMLInputElement | null>(null)
@@ -134,14 +135,12 @@ const categoryOptions = computed(() => store.selectableCategories)
 const selectableAttrs = computed(() =>
   store.selectableAttributes.filter(a => a.id !== ATTR_IS_GROUP)
 )
-const parentOptions = computed(() =>
-  store.bookmarks.filter(b => !b.parentId && b.id !== bmForm.id)
-)
+const parentOptions = computed(() => selectableParents(store.bookmarks, bmForm.id))
 
 // 当前书签的子书签列表（仅编辑模式显示）
 const childBookmarks = computed(() => {
   if (!bmForm.isEdit || !bmForm.id) return []
-  return store.bookmarks.filter(b => b.parentId === bmForm.id && !b.deletedAt)
+  return selectableChildren(store.bookmarks, bmForm.id)
 })
 
 const aiSuggestionText = computed(() => {
