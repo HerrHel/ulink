@@ -78,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onBeforeUnmount } from 'vue'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
@@ -95,6 +95,10 @@ const verifying = ref(false)
 const verified = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const codeInputRef = ref<HTMLInputElement | null>(null)
+// onVerify 成功后延迟关闭弹窗的 timer。需在弹窗提前关闭（手动 X / 遮罩 / 取消 / Esc）
+// 时清掉，否则 800ms 到点回调仍会跑 checkE2EStatus + initialSync —— 用户已明确取消登录流程
+// 后系统不应再自作主张触发全量云端同步。
+const syncTimer = ref<number | null>(null)
 
 const emailTrim = computed(() => email.value.trim())
 const cooldownSec = computed(() => auth.sendCooldownRemaining(emailTrim.value))
@@ -110,6 +114,11 @@ watch(() => auth.authModalOpen, (open) => {
     verified.value = false
     auth.authError = null
     nextTick(() => inputRef.value?.focus())
+  } else if (syncTimer.value !== null) {
+    // 弹窗关闭（含手动 X / 遮罩 / 取消 / Esc 任一路径，均会置 authModalOpen=false）时
+    // 取消 pending 的成功回调 timer，防 800ms 后仍触发 checkE2EStatus + initialSync。
+    clearTimeout(syncTimer.value)
+    syncTimer.value = null
   }
 })
 
@@ -145,7 +154,11 @@ async function onVerify() {
   verifying.value = false
   if (ok) {
     verified.value = true
-    setTimeout(async () => {
+    // 防御：若上次成功回调 timer 仍在 pending（用户在 800ms 内重复点登录）先清掉，
+    // 否则旧 id 被新 setTimeout 覆盖后无法 clearTimeout，旧回调仍会跑一次。
+    if (syncTimer.value !== null) clearTimeout(syncTimer.value)
+    syncTimer.value = window.setTimeout(async () => {
+      syncTimer.value = null
       auth.authModalOpen = false
       // 登录后刷新 E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
       // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录后
@@ -172,6 +185,15 @@ function focusCodeInput() {
 function onClose() {
   auth.authModalOpen = false
 }
+
+// 兜底：组件真卸载（如 SPA 路由切走 AuthModal 父组件）时清 timer，
+// 防 timer 回调访问已卸载组件作用域内的 store 引用。
+onBeforeUnmount(() => {
+  if (syncTimer.value !== null) {
+    clearTimeout(syncTimer.value)
+    syncTimer.value = null
+  }
+})
 </script>
 
 <style scoped>
