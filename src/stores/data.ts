@@ -964,14 +964,18 @@ export const useDataStore = defineStore('data', {
      * 历史 bug——createCategory 曾用 Date.now() 当 order（毫秒戳 13 位超出远端
      * categories.order INTEGER 上限 2147483647，同步必溢出失败）。加载时把超界
      * order 重写为当前数组序号的序号，仅当存在超界值才触发（幂等），正常数据零改动。
+     * 重写时同步刷 updatedAt：否则跨设备 pull 时远端（旧 updatedAt 但超界 order）
+     * 会被判定 remoteNewer 覆盖回来，归一化白做（pull assign 不走本方法）。
      */
     _normalizeCategoryOrders() {
       const MAX_INT = 2147483647
+      const now = Date.now()
       let idx = 0
       for (const c of this.categories) {
         if (c.deletedAt) continue
         if ((c.order ?? 0) > MAX_INT) {
           c.order = idx
+          c.updatedAt = now
           this._markDirty(c.id)
         }
         idx++

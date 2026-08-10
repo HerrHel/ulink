@@ -81,7 +81,7 @@ import {
 import {
   useCloudSync, __testPendingSync, setSyncRemotePort, createMemorySyncPort, _isPendingSync,
 } from '../../composables/domain/useCloudSync.js'
-import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 function makeBm(partial: Record<string, unknown> = {}) {
   return {
@@ -534,6 +534,87 @@ describe('syncPushPull via SyncRemotePort', () => {
     expect(useSyncStore().syncStatus).not.toBe('error')
     // pull 因同样 userId 空早返不跑 → 远端书签未进本地（佐证整体是干净的早返 no-op）
     expect(ds.bookmarks.some(b => b.id === 'bm-anon')).toBe(false)
+  })
+
+  it('11 虚拟分类 order 被云端毫秒戳 assign 覆盖后 pull 立即归一化回序号（首登乱序复现）', async () => {
+    // 复现用户症状：B-12 修复前的存量云端数据里 all/uncategorized 的 order 是毫秒戳
+    // （超界），首登 pull 时本地 DEFAULTS 注入的分类 updatedAt=undefined →
+    // isRemoteNewer 恒真 → assign 把毫秒戳 order 就地覆盖本地 0/1 → 侧栏排序乱。
+    // pull 末尾 _normalizeCategoryOrders 必须把它立即打回数组序号，且 markDirty 回推。
+    const ds = useDataStore()
+    ds.categories = [
+      { id: CAT_ALL, name: '全部', icon: '', color: '', order: 0, updatedAt: 100 },
+      { id: CAT_UNCATEGORIZED, name: '未分类', icon: '', color: '', order: 1, updatedAt: 100 },
+      { id: 'c-real', name: '真实分类', icon: '', color: '', order: 2, updatedAt: 100 },
+    ] as any
+
+    const port = createMemorySyncPort({
+      sinceRows: {
+        bookmarks: [], sibling_groups: [], custom_attributes: [],
+        // 云端存量：虚拟分类 order 是 B-12 前的毫秒戳（13 位超界），updatedAt 更新
+        categories: [
+          { id: CAT_ALL, user_id: 'user-pp', name: '全部', icon: 'grid', color: '', order: 1786356540753, updated_at_num: 9000, deleted_at: null },
+          { id: CAT_UNCATEGORIZED, user_id: 'user-pp', name: '未分类', icon: 'bookmark', color: '', order: 1786356540754, updated_at_num: 9001, deleted_at: null },
+          { id: 'c-real', user_id: 'user-pp', name: '真实分类', icon: '', color: '', order: 1786356540755, updated_at_num: 9002, deleted_at: null },
+        ],
+      },
+      allIds: {
+        bookmarks: [], sibling_groups: [], custom_attributes: [],
+        categories: [{ id: CAT_ALL }, { id: CAT_UNCATEGORIZED }, { id: 'c-real' }],
+      },
+    })
+    setSyncRemotePort(port)
+    useSyncStore().setLastSyncAt(0)
+
+    const sync = useCloudSync()
+    const ok = await sync.pullFromCloud(false)
+    expect(ok).toBe(true)
+
+    // assign 后本地 order 一度是毫秒戳 → pull 归一化必须打回数组序号（虚拟分类恒 0/1）
+    expect(ds.categories.find(c => c.id === CAT_ALL)!.order).toBe(0)
+    expect(ds.categories.find(c => c.id === CAT_UNCATEGORIZED)!.order).toBe(1)
+    expect(ds.categories.find(c => c.id === 'c-real')!.order).toBe(2)
+    // 归一化重写的项 markDirty → 后续 push 把序号回推云端，闭环
+    expect(ds._dirtyIds.has(CAT_ALL)).toBe(true)
+    expect(ds._dirtyIds.has(CAT_UNCATEGORIZED)).toBe(true)
+    expect(ds._dirtyIds.has('c-real')).toBe(true)
+  })
+
+  it('12 全量对账不软删虚拟分类：云端 categories 无 all/uncategorized 记录时本地保留（首登后消失复现）', async () => {
+    // 未重排过分类的用户云端从未推送过虚拟分类 → 对账 selectAllIds 云端无它们 →
+    // 旧实现 reconcileDelete 把本地 all/uncategorized 软删，侧栏两项消失。
+    const ds = useDataStore()
+    ds.categories = [
+      { id: CAT_ALL, name: '全部', icon: '', color: '', order: 0, updatedAt: 100 },
+      { id: CAT_UNCATEGORIZED, name: '未分类', icon: '', color: '', order: 1, updatedAt: 100 },
+      { id: 'c-keep', name: '云端有', icon: '', color: '', order: 2, updatedAt: 100 },
+      { id: 'c-gone', name: '云端无', icon: '', color: '', order: 3, updatedAt: 100 },
+    ] as any
+
+    const port = createMemorySyncPort({
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      // 云端只有真实分类 c-keep（c-gone 应被对账软删；虚拟分类必须豁免）
+      allIds: {
+        bookmarks: [], sibling_groups: [], custom_attributes: [],
+        categories: [{ id: 'c-keep' }],
+      },
+    })
+    setSyncRemotePort(port)
+    useSyncStore().setLastSyncAt(5000) // lastSyncAt>0 才启用 reconcile 对账
+
+    const sync = useCloudSync()
+    const ok = await sync.pullFromCloud(false)
+    expect(ok).toBe(true)
+
+    const cat = (id: string) => ds.categories.find(c => c.id === id)
+    // 虚拟分类保留且存活
+    expect(cat(CAT_ALL)?.deletedAt).toBeFalsy()
+    expect(cat(CAT_UNCATEGORIZED)?.deletedAt).toBeFalsy()
+    expect(cat(CAT_ALL)).toBeTruthy()
+    expect(cat(CAT_UNCATEGORIZED)).toBeTruthy()
+    // 真实分类按原语义对账软删（证明豁免只针对虚拟分类）
+    expect(cat('c-gone')?.deletedAt).toBeTruthy()
+    expect(cat('c-keep')?.deletedAt).toBeFalsy()
   })
 })
 

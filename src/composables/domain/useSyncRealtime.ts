@@ -196,6 +196,9 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
           ds.addCategory(m)
         }
         ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
+        // B-12+：Realtime upsert 同样可能带入云端毫秒戳 order（B-12 修复前存量），
+        // 立即归一化为序号；超界项会被 markDirty 回推正确值（与 pull 路径一致）。
+        ds._normalizeCategoryOrders()
       },
     },
     attribute: {
