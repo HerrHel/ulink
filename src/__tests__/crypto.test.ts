@@ -198,8 +198,8 @@ describe('E2E Encryption', () => {
     it('decryptForDisplay: 三段但 base64 段非法时 catch 返空串不抛 InvalidCharacterError', async () => {
       const salt = crypto.getRandomValues(new Uint8Array(32))
       const key = await deriveKey(MASTER_PW, salt)
-      // 形似三段但段内非合法 base64 —— atob 抛错，须被 catch 吞为 ''
-      const fake = 'a!.b!.c!'
+      // 合法 base64 字形 + 真段长（44/16/24）但内容非本 key 可解的密文 —— GCM 认证失败，须被 catch 吞为 ''
+      const fake = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24)
       await expect(decryptForDisplay(fake, key)).resolves.toBe('')
     })
 

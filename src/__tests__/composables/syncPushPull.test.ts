@@ -578,7 +578,7 @@ describe('syncPull 解锁态竞态（D1-4）', () => {
     // （bookmark 的 ENCRYPT_FIELDS 是 username/notes，三段策略触发 decryptField）
     const remoteBm = (id: string) => ({
       id, user_id: 'user-pp', title: '远端书签 ' + id, url: 'https://race.example/' + id,
-      username: 'salt.iv.data', password: '', notes: '', icon: '',
+      username: 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24), password: '', notes: '', icon: '',
       category_id: CAT_UNCATEGORIZED, parent_id: null,
       order: 0, use_count: 0, attributes: {}, is_expanded: false,
       created_at_num: 1000, updated_at_num: 9000, deleted_at: null,

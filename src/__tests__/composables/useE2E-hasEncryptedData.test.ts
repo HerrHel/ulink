@@ -11,6 +11,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
+// 真密文段长（salt 32B→44、iv 12B→16、data≥17B→≥24 的合法 base64）——isThreePartCipher 已按段长收紧，
+// 短三段（abc.def.ghi 等）不再被判为密文
+const CIPHER = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24)
+
 // e2e store mock（useE2E 构造需 useE2EStore，hasEncryptedData 本体不读它，占位不炸即可）
 const _e2eState = vi.hoisted(() => ({ isE2EEnabled: false, isUnlocked: false, isBiometricEnrolled: false, cryptoKey: null as CryptoKey | null }))
 vi.mock('../../stores/e2e.js', () => ({
@@ -78,31 +82,31 @@ describe('useE2E.hasEncryptedData — 换设备防呆检测', () => {
   })
 
   it('三段 salt.iv.data 串 password → true', () => {
-    useDataStore().addBookmark(makeBookmark('b1', { password: 'abc.def.ghi' }) as any)
+    useDataStore().addBookmark(makeBookmark('b1', { password: CIPHER }) as any)
     expect(useE2E().hasEncryptedData()).toBe(true)
   })
 
   it('username 三段密文 → true', () => {
-    useDataStore().addBookmark(makeBookmark('b1', { username: 'u.v.w' }) as any)
+    useDataStore().addBookmark(makeBookmark('b1', { username: CIPHER }) as any)
     expect(useE2E().hasEncryptedData()).toBe(true)
   })
 
   it('notes 三段密文 → true', () => {
-    useDataStore().addBookmark(makeBookmark('b1', { notes: 'n.o.p' }) as any)
+    useDataStore().addBookmark(makeBookmark('b1', { notes: CIPHER }) as any)
     expect(useE2E().hasEncryptedData()).toBe(true)
   })
 
   it('group.name 三段密文 → true', () => {
     const ds = useDataStore()
     ds.addBookmark(makeBookmark('b1') as any)
-    ds.addGroup({ id: 'g1', name: 'a.b.c', categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: [], notes: '', updatedAt: 1, useCount: 0 } as any)
+    ds.addGroup({ id: 'g1', name: CIPHER, categoryId: CAT_UNCATEGORIZED, icon: '', order: 0, isExpanded: false, attributes: {}, bookmarkIds: [], notes: '', updatedAt: 1, useCount: 0 } as any)
     expect(useE2E().hasEncryptedData()).toBe(true)
   })
 
   it('category.name 三段密文 → true', () => {
     const ds = useDataStore()
     ds.addBookmark(makeBookmark('b1') as any)
-    ds.addCategory({ id: 'c1', name: 'x.y.z', icon: 'star', color: '', order: 0 } as any)
+    ds.addCategory({ id: 'c1', name: CIPHER, icon: 'star', color: '', order: 0 } as any)
     expect(useE2E().hasEncryptedData()).toBe(true)
   })
 

@@ -12,40 +12,71 @@
  * ②空串 '' false
  * ③parts.length===3 严格三段（二/四段 false）
  * ④每段 !!非空（空段 false——'a..b' 中段空不算）
- * ⑤三段全非空 true（典型 salt.iv.data）
+ * ⑤三段全非空 + 密文形态 true（salt 32B→44 字符、iv 12B→16 字符、data≥17B→≥24 字符
+ *   的合法 base64 三段——见 2026-08-10 收紧：旧判定只查「三段点分隔」，把无 scheme 三段
+ *   域名（www.example.com）等普通三段文本误判为密文 → domain()/displayText() 显空白、
+ *   saveBm 密文保护误拦编辑（真实事故：另一设备同步后卡片网址空白但点击可打开、
+ *   复制提示「含加密字段请先解锁」，且与解锁状态无关）
  * ⑥含多个 '.' 仍按三段判定需 split 后严格 length===3（'a.b.c.d' 四段 false）
  * ⑦单段无点 false
  *
- * 任一回归：误把非密文（如含点号的自然文本 'v1.2.3' 或邮箱 'a@b.c'）当密文处理 → E2E 扫描误把
- * 明文字段当密文做加密/解密尝试致乱码或信息丢失；漏判真密文（如误改 length 容忍 2/4）让同步
- * 序列化路径走错分支明文泄漏密文。c8/d1-47 同款「有测试但断言浅」维度缺口。
+ * 任一回归：误把非密文（如含点号的自然文本 'v1.2.3'、三段域名 'www.example.com'）当密文处理
+ * → 渲染层显空白/编辑被拦/同步序列化误走密文分支；漏判真密文（如误改 length 容忍 2/4）让同步
+ * 序列化路径走错分支明文泄漏密文。
  *
- * 口径同 d1-42/d1-117：纯加测试零源文件改动——纯布尔函数已 export，无需改 crypto.ts。
  * 纯函数无 webcrypto/deps 依赖，不 mock 任何模块，直接 import 直测。
  */
 import { describe, it, expect } from 'vitest'
 import { isThreePartCipher } from '../crypto.js'
 
+// 真密文形态：salt 32B→44 字符、iv 12B→16 字符、data≥17B→≥24 字符的合法 base64（btoa 输出恒 4 的倍数）
+const REAL_SALT = 'A'.repeat(44)
+const REAL_IV = 'B'.repeat(16)
+const REAL_DATA = 'C'.repeat(24)
+
 describe('isThreePartCipher — 纯布尔判定护栏', () => {
-  describe('正路径（三段全非空 → true）', () => {
-    it('典型 salt.iv.data 三段非空 → true', () => {
-      expect(isThreePartCipher('salt123.iv456.data789')).toBe(true)
+  describe('正路径（真密文三段形态 → true）', () => {
+    it('44/16/24 字符合法 base64 三段 → true（本系统 encrypt 输出形态）', () => {
+      expect(isThreePartCipher(`${REAL_SALT}.${REAL_IV}.${REAL_DATA}`)).toBe(true)
     })
 
     it('真实 base64 风格三段 → true', () => {
-      expect(isThreePartCipher('AAAAaa==.BBBBbb==.CCCCcc==')).toBe(true)
+      // 44/16/24 的 base64 字形，且 data 带 1-2 个 = padding
+      const b64 = (n: number) => btoa('x'.repeat(Math.floor(n * 3 / 4)))
+      expect(isThreePartCipher(`${b64(44)}.${b64(16)}.${b64(24)}`)).toBe(true)
     })
 
-    it('含特殊字符的各段非空 → true', () => {
-      expect(isThreePartCipher('a-b_c.a+b c.1!2@3#')).toBe(true)
+    it('data 段 ≥24 字符（更长密文）→ true', () => {
+      expect(isThreePartCipher(`${REAL_SALT}.${REAL_IV}.${'D'.repeat(44)}`)).toBe(true)
+    })
+  })
+
+  describe('★误判防护（三段点分隔但非密文 → false）——2026-08-10 收紧', () => {
+    it('无 scheme 三段域名 www.example.com → false（真实事故根因）', () => {
+      // 'www.example.com'.split('.') = ['www','example','com'] 长度 3/7/3 非 4 倍数 → false
+      expect(isThreePartCipher('www.example.com')).toBe(false)
     })
 
-    it('最短三段（单字符每段）→ true', () => {
-      expect(isThreePartCipher('a.b.c')).toBe(true)
+    it('无 scheme 短三段域名 a.b.c → false', () => {
+      expect(isThreePartCipher('a.b.c')).toBe(false)
     })
 
-    it('数字各段 → true', () => {
-      expect(isThreePartCipher('123.456.789')).toBe(true)
+    it('语义版本号 v1.2.3 → false（非密文，URL/标题常见形态）', () => {
+      expect(isThreePartCipher('v1.2.3')).toBe(false)
+    })
+
+    it('纯数字三段 123.456.789 → false', () => {
+      expect(isThreePartCipher('123.456.789')).toBe(false)
+    })
+
+    it('三段长度达标但含非法 base64 字符 → false', () => {
+      // 44/16/24 字符但段内含 - _ 空格 ! 等非 base64 字符
+      expect(isThreePartCipher(`${'a-'.repeat(22)}.${'b c'.padEnd(16, 'b')}.${'!'.repeat(24)}`)).toBe(false)
+    })
+
+    it('salt/iv 长度与固定格式不符 → false', () => {
+      expect(isThreePartCipher('salt123.iv456.data789')).toBe(false)
+      expect(isThreePartCipher('AAAAaa==.BBBBbb==.CCCCcc==')).toBe(false)
     })
   })
 
@@ -117,13 +148,6 @@ describe('isThreePartCipher — 纯布尔判定护栏', () => {
   })
 
   describe('自然文本误判防护（不把含点的明文当密文）', () => {
-    it('语义版本号 v1.2.3 → false（防误把版本号当密文）', () => {
-      // 'v1.2.3'.split('.') = ['v1','2','3'] length 3 且各段非空 → 但语义是版本号非密文
-      // 注意：isThreePartCipher 仅判格式三段非空，不判语义——v1.2.3 格式上 IS 三段 → true
-      // 这是真实行为护栏：明确「格式判定非语义判定」契约（防误以为会拒版本号）
-      expect(isThreePartCipher('v1.2.3')).toBe(true)
-    })
-
     it('★纯明文 hello（无点）→ false', () => {
       expect(isThreePartCipher('hello')).toBe(false)
     })
@@ -142,7 +166,7 @@ describe('isThreePartCipher — 纯布尔判定护栏', () => {
       expect(isThreePartCipher('https://a.com')).toBe(false)
     })
 
-    it('email a@b.c → true（格式三段非空，但非密文）—— 真实行为护栏：格式判定非语义', () => {
+    it('email a@b.c → false（两段）', () => {
       // 'a@b.c'.split('.') = ['a@b', 'c'] length 2 → false
       expect(isThreePartCipher('a@b.c')).toBe(false)
     })
@@ -159,7 +183,7 @@ describe('isThreePartCipher — 纯布尔判定护栏', () => {
 
   describe('幂等性', () => {
     it('同入参多次调用结果一致', () => {
-      const s = 'salt.iv.data'
+      const s = `${REAL_SALT}.${REAL_IV}.${REAL_DATA}`
       const a = isThreePartCipher(s)
       const b = isThreePartCipher(s)
       const c = isThreePartCipher(s)

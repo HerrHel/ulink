@@ -36,11 +36,28 @@ const IV_LENGTH = 12
  */
 export const PBKDF2_DEFAULT_ITERATIONS = 600000
 
-/** L15：salt.iv.data 三段密文判定单一出口，避免 useSyncMapping/useE2E/decrypt 口径漂移 */
+/** 真密文段长：salt 32B→44 字符、iv 12B→16 字符、data≥17B→≥24 字符（btoa 输出恒 4 的倍数） */
+const B64_SEGMENT_RE = /^[A-Za-z0-9+/]+={0,2}$/
+
+/**
+ * L15：salt.iv.data 三段密文判定单一出口，避免 useSyncMapping/useE2E/decrypt 口径漂移
+ *
+ * 2026-08-10 收紧：旧判定只查「三段点分隔全非空」，把无 scheme 三段域名（www.example.com）、
+ * 版本号（v1.2.3）、纯数字（123.456.789）等普通三段文本误判为密文 → domain()/displayText()
+ * 显空白、saveBm 密文保护误拦编辑（真实事故：另一设备同步后卡片网址空白但点击可打开，
+ * 提示「含加密字段请先解锁」且与解锁状态无关）。本系统真密文（encrypt/encryptPassword/canary）
+ * 恒为 base64(salt 32B→44 字符).base64(iv 12B→16 字符).base64(data≥17B→≥24 字符) 三段，
+ * SALT_LENGTH/IV_LENGTH 自引入未变（见 crypto.ts 历史），故按段长 + base64 字形收紧判定：
+ * 真密文全通过，普通三段文本（段长非 4 倍数/含非 base64 字符）全排除，零误伤。
+ */
 export function isThreePartCipher(s: string): boolean {
   if (typeof s !== 'string' || !s) return false
   const parts = s.split('.')
-  return parts.length === 3 && !!parts[0] && !!parts[1] && !!parts[2]
+  if (parts.length !== 3) return false
+  const [salt, iv, data] = parts
+  if (!salt || !iv || !data) return false
+  if (salt.length !== 44 || iv.length !== 16 || data.length < 24) return false
+  return B64_SEGMENT_RE.test(salt) && B64_SEGMENT_RE.test(iv) && B64_SEGMENT_RE.test(data)
 }
 
 function _toBuffer(str: string): Uint8Array {

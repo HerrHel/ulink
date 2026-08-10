@@ -20,7 +20,9 @@ import type { EncryptedPassword } from '../../types.js'
 
 // 三段加密串固定样本（与 crypto.ts encrypt() 输出格式 "salt.iv.data" 一致）。
 // SALT/IV/DATA 必须精确等于 THREE_PART 按 "." 拆分的真实三段（护栏抓出首轮手写常量字符数错位笔误）,故由 split() 派生保证字节精确。
-const THREE_PART = 'AAAABBBBCCCCDDDDEEEEFFFF.FFFFEEEECCCCBBBBAAAA.999988887777666655554444'
+// 2026-08-10：样本改为真密文段长（salt 32B→44、iv 12B→16、data≥17B→≥24 的合法 base64）——
+// isThreePartCipher 已按段长收紧，旧样本（24/20/24）不再被识别为密文。
+const THREE_PART = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
 const [SALT, IV, DATA] = THREE_PART.split('.')
 const THREE_PART_OBJ: EncryptedPassword = { encrypted: true, salt: SALT, iv: IV, data: DATA }
 

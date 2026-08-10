@@ -42,11 +42,12 @@ describe('utils', () => {
     it('E2E 密文（三段 salt.iv.data）返空而非原串乱码', () => {
       // 未解锁/解不开的密文 url 会残留 store（数据层不置空），domain() 必须兜底为空，
       // 否则 new URL 解析失败返原串 → 卡片域名/搜索建议/提及等显示密文乱码
-      expect(domain('AAAA.bbbb.cccc')).toBe('')
+      // 真密文段长（salt 32B→44、iv 12B→16、data≥17B→≥24 的合法 base64）
+      expect(domain('A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24))).toBe('')
       // 合法 URL（含三段域名 https://a.b.c）先走 try 正常解析，不受密文判定影响
       expect(domain('https://a.b.c')).toBe('a.b.c')
-      // 裸三段域名无 scheme：new URL 失败，三段形态被判密文返空（密文兜底优先于失真原串）
-      expect(domain('a.b.c')).toBe('')
+      // 裸三段域名无 scheme：非密文（段长不符）→ new URL 失败返原串，不再被误判为密文返空
+      expect(domain('www.example.com')).toBe('www.example.com')
       // 非三段非法串：返原串，保持旧语义
       expect(domain('not-a-url')).toBe('not-a-url')
     })
@@ -54,8 +55,7 @@ describe('utils', () => {
 
   describe('displayText（E2E 密文展示兜底）', () => {
     it('三段密文返空串（未解锁/解不开不吐乱码给 UI）', () => {
-      expect(displayText('AAAA.bbbb.cccc')).toBe('')
-      expect(displayText('salt.iv.data')).toBe('')
+      expect(displayText('A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24))).toBe('')
     })
     it('明文原样穿透', () => {
       expect(displayText('https://example.com')).toBe('https://example.com')

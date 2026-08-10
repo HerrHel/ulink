@@ -180,12 +180,12 @@ describe('extension/crypto.js — decryptWithGlobalKey 纯分支护栏（方向 
 
   it('三段串形态 + 主密码但无 canaryData 抛错（验三段串拆对象后仍走 line 137 守卫，链路完整）', async () => {
     await expect(
-      getApi().decryptWithGlobalKey('a.b.c', MASTER, null),
+      getApi().decryptWithGlobalKey('A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24), MASTER, null),
     ).rejects.toThrow('缺少解锁数据')
   })
 
   it('三段串形态 + 主密码 + canary 但无主密码抛错（拆对象后 line 136 守卫生效）', async () => {
-    await expect(getApi().decryptWithGlobalKey('a.b.c', '', CANARY)).rejects.toThrow(
+    await expect(getApi().decryptWithGlobalKey('A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24), '', CANARY)).rejects.toThrow(
       '需要主密码才能解密',
     )
   })

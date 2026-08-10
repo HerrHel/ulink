@@ -117,10 +117,19 @@
    * @param {Object} canaryData - 主项目 _saveCanaryData 存的结构 { salt: number[], it?: number, canary: string }
    * @returns {Promise<string>} 明文；非加密形态返 ''；解不开返 ''（不回吐密文，对齐主项目 decryptPasswordWithKey 语义）
    */
+  // 2026-08-10：与主项目 crypto.isThreePartCipher 同步收紧——真密文三段必为合法 base64
+  //（salt 32B→44 字符、iv 12B→16 字符、data≥17B→≥24 字符，btoa 输出恒 4 的倍数）。
+  // 旧判定只查「三段点分隔」，无 scheme 三段域名（www.example.com）等普通三段文本会被误判为
+  // 密文（主项目真实事故：卡片网址空白、编辑被「含加密字段请先解锁」误拦）。
   function _isThreePartCipher(s) {
     if (typeof s !== 'string' || !s) return false
     var parts = s.split('.')
-    return parts.length === 3 && !!parts[0] && !!parts[1] && !!parts[2]
+    if (parts.length !== 3) return false
+    var salt = parts[0], iv = parts[1], data = parts[2]
+    if (!salt || !iv || !data) return false
+    if (salt.length !== 44 || iv.length !== 16 || data.length < 24) return false
+    var b64 = /^[A-Za-z0-9+/]+={0,2}$/
+    return b64.test(salt) && b64.test(iv) && b64.test(data)
   }
 
   async function decryptWithGlobalKey(stored, masterPassword, canaryData) {

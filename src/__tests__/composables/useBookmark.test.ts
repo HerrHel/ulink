@@ -545,7 +545,7 @@ describe('useBookmark', () => {
       // 原书签 notes 是三段密文（displayText 过滤为空）；url/title 是明文，能过 url 校验走到密文检测。
       // 若不加保护：空 notes 会被 updateBookmark 覆盖原密文 → saveAppData/push 回写云端，永久丢失。
       mockData.bookmarkMap['b1'] = {
-        id: 'b1', title: 'Encrypted', url: 'https://old.com', notes: 'AAAA.bbbb.cccc', username: 'u', attributes: {}, order: 0,
+        id: 'b1', title: 'Encrypted', url: 'https://old.com', notes: 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24), username: 'u', attributes: {}, order: 0,
       }
       bmForm.id = 'b1'
       bmForm.title = 'Encrypted'
@@ -555,7 +555,7 @@ describe('useBookmark', () => {
       await saveBm()
       // 禁止保存：不 update、不落盘，原密文未被覆盖
       expect(mockData.updateBookmark).not.toHaveBeenCalled()
-      expect(mockData.bookmarkMap['b1'].notes).toBe('AAAA.bbbb.cccc')
+      expect(mockData.bookmarkMap['b1'].notes).toBe('A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24))
     })
 
     it('saves password as base64', () => {

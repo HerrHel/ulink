@@ -15,7 +15,8 @@ import type { EncryptedPassword } from '../../types.js'
 
 // 构造一个合法的 EncryptedPassword 对象（字段值无需真的能解密，只测映射形状）
 function makeEP(): EncryptedPassword {
-  return { encrypted: true, salt: 'saltAAA', iv: 'ivBBB', data: 'dataCCC' }
+  // 真密文段长（salt 32B→44、iv 12B→16、data≥17B→≥24 的合法 base64）——isThreePartCipher 已按段长收紧
+  return { encrypted: true, salt: 'A'.repeat(44), iv: 'B'.repeat(16), data: 'C'.repeat(24) }
 }
 
 // 构造一个最小可用 bookmark 行（本地形态）
@@ -34,7 +35,8 @@ function makeLocalItem(password: unknown): Record<string, unknown> {
 describe('toRemoteRow password 序列化', () => {
   it('EncryptedPassword 对象 → salt.iv.data 三段串（非 JSON 文本）', () => {
     const row = toRemoteRow('bookmark', makeLocalItem(makeEP()), false) as RemoteBookmarkRow
-    expect(row.password).toBe('saltAAA.ivBBB.dataCCC')
+    const ep = makeEP()
+    expect(row.password).toBe(`${ep.salt}.${ep.iv}.${ep.data}`)
     // 关键：绝不再是 JSON 文本（这是旧 bug 的损坏形态）
     expect(row.password!.startsWith('{')).toBe(false)
   })
@@ -75,9 +77,10 @@ describe('fromRemoteBookmark password 反序列化', () => {
   }
 
   it('三段串 → 还原成 EncryptedPassword 对象（与本地保存路径一致）', () => {
-    const bm = fromRemoteBookmark(rowWith('saltAAA.ivBBB.dataCCC'))
+    const ep = makeEP()
+    const bm = fromRemoteBookmark(rowWith(`${ep.salt}.${ep.iv}.${ep.data}`))
     expect(bm).not.toBeNull()
-    expect(bm!.password).toEqual(makeEP())
+    expect(bm!.password).toEqual(ep)
   })
 
   it('历史损坏数据：JSON 文本 {"encrypted":true,...} → 还原成对象（自救）', () => {
