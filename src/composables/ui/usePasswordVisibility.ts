@@ -5,13 +5,25 @@
  * 审计 R29：原每个 BookmarkCard 调用该函数都会注册独立的 document/window 监听（3N 个全局监听）。
  * 改为模块级单例：首次调用时懒绑定全局监听，共享 visibleIds Set 与 auto-hide timer，
  * CardGrid 普通模式 >100 卡、过滤/虚拟滚动片段进出高频增删监听的抖动消除。
+ *
+ * E2E 锁定对称守门（R29 同向补全）：pagehide/blur 是「被动失焦」都触 _hideAll，
+ * E2E lock 是更强的「主动要求所有明文从 DOM 消失」信号却无守门——
+ * 旧实现 lock 后 isVisible(id) 不清（auto-hide 5s timer 未到），BookmarkCard 模板走
+ * `isVisible(id) ? decodedPw : '••••••'`，decodedPw 被 watch(isUnlocked) 清成 ''，
+ * 结果锁定后密码区显示空字符串而非占位 `••••••`（视觉错误呈现）；更糟若 <5s 内连续
+ * 解锁，decodedPw 重算回明文 + isVisible 仍 true → 明文自动显形（无需再点眼）。
+ * 修复：单例首绑时挂 E2E isUnlocked watch，false 时 _hideAll 清可见态——
+ * 锁定即密码区回落占位、re-unlock 必再点眼才显形。绑在单例层防 R29 N 监听复活。
  */
-import { ref } from 'vue'
+import { ref, effectScope, watch, type EffectScope } from 'vue'
+import { useE2EStore } from '../../stores/e2e.js'
 
 const _visibleIds = ref(new Set<string>())
 let _timer: ReturnType<typeof setTimeout> | null = null
 let _listenersBound = false
 let _autoHideMs = 5000
+// E2E isUnlocked watch 的 scope 句柄——首绑时挂，stop 时停。模块级单例常驻。
+let _e2eScope: EffectScope | null = null
 
 function _bindListeners() {
   if (_listenersBound) return
@@ -19,6 +31,14 @@ function _bindListeners() {
   document.addEventListener('visibilitychange', _onVisChange)
   window.addEventListener('pagehide', _onVisChange)
   window.addEventListener('blur', _onBlur)
+  // E2E lock 守门：isUnlocked→false 时清明文可见态（与 pagehide/blur 同向对称）
+  // 用 effectScope 包裹抑制模块顶层 watch 的「no active render effect」警告
+  if (_e2eScope) _e2eScope.stop()
+  _e2eScope = effectScope(true)
+  _e2eScope.run(() => {
+    const e2eStore = useE2EStore()
+    watch(() => e2eStore.isUnlocked, (v) => { if (!v) _hideAll() })
+  })
 }
 
 function _onVisChange() {
@@ -44,6 +64,8 @@ export function __testReset() {
   window.removeEventListener('blur', _onBlur)
   _listenersBound = false
   _autoHideMs = 5000
+  // 停 E2E isUnlocked watch scope，供下轮用例首绑时挂新 scope 拿新 Pinia 的 store
+  if (_e2eScope) { _e2eScope.stop(); _e2eScope = null }
 }
 
 export function usePasswordVisibility(autoHideMs = 5000) {
