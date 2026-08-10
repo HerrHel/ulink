@@ -1,4 +1,5 @@
 import { ref, computed, onMounted, onUnmounted, watch, unref, type Ref, type MaybeRef, shallowRef, isRef, type CSSProperties } from 'vue'
+import { createBoundedCache } from '../lib/boundedCache.js'
 
 interface VirtualScrollOptions {
   /** 固定行高；可传 Ref 以响应布局/断点变化（A1-005） */
@@ -38,6 +39,10 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
 
   let scrollEl: HTMLElement | null = null
   let ro: ResizeObserver | null = null
+  // onScroll rAF 合并：scroll 高频事件（fling 每帧多次）合并为每帧最多 1 次更新，
+  // 避免每 scroll 事件都同步触发 watch(flush:'sync') 重建 visibleItems（spread+push+
+  // 重写数组+grid 重渲染），在 1000+ 卡分类滚动时掉帧。rAF 在 scroll El 失联或卸载时取消。
+  let scrollRafId = 0
 
   const visibleCount = computed(
     () => Math.ceil(measuredHeight.value / itemHeight.value) + overscan * 2
@@ -53,8 +58,12 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   const visibleItems = ref<Array<T & { _virtualIndex: number; _virtualStyle: CSSProperties }>>([])
   const totalHeight = computed(() => items.value.length * itemHeight.value)
 
-  // 缓存 style 对象：key = `i:${i}|h:${h}`，避免每次重建创建新对象
-  const _styleCache = new Map<string, CSSProperties>()
+  // 缓存 style 对象：key = `i:${i}|h:${h}`，避免每次重建创建新对象。
+  // 必须加上界：原裸 Map 只写不逐出，长会话滚动到大分类时随每触达 index 线性单调
+  // 增长（PC↔移动端 itemHeight 切换则新建整族键旧族永不释放）—— 真内存泄漏。
+  // CACHE_MAX=200 覆盖滚动窗口外 overscan 余量仍有充足复用，LRU 淘汰最旧封死无界增长。
+  const CACHE_MAX = 200
+  const _styleCache = createBoundedCache<string, CSSProperties>(CACHE_MAX)
 
   function rebuildVisibleItems() {
     const h = itemHeight.value
@@ -89,7 +98,12 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   watch([startIndex, endIndex, itemHeight, items], rebuildVisibleItems, { flush: 'sync' })
 
   function onScroll() {
-    if (scrollEl) scrollTop.value = scrollEl.scrollTop
+    // 已有 rAF 在途 → 本帧已 sched 合并，跳过新调度；下一个 rAF 会读最新 scrollTop
+    if (scrollRafId || !scrollEl) return
+    scrollRafId = requestAnimationFrame(() => {
+      scrollRafId = 0
+      if (scrollEl) scrollTop.value = scrollEl.scrollTop
+    })
   }
 
   function bindScrollRoot(el: HTMLElement | null) {
@@ -97,6 +111,12 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
       scrollEl.removeEventListener('scroll', onScroll)
       ro?.disconnect()
       ro = null
+    }
+    // 取消在途 rAF：unbind/卸载后 scrollEl 置空，rAF 回调内 `if (scrollEl)` 虽已兜底，
+    // 但留着悬挂 rafId 会让 onScroll 误判「已在途」而吞掉清空后的合理重调度（生命周期尾收口）。
+    if (scrollRafId) {
+      cancelAnimationFrame(scrollRafId)
+      scrollRafId = 0
     }
     scrollEl = el
     if (!scrollEl) return
