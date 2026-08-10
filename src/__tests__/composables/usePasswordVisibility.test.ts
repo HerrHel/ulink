@@ -15,11 +15,13 @@
  * 生产隐藏逻辑一字未动。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { nextTick } from 'vue'
 import {
   usePasswordVisibility,
   _hideAll,
   __testReset,
 } from '../../composables/ui/usePasswordVisibility.js'
+import { useE2EStore } from '../../stores/e2e.js'
 
 beforeEach(() => {
   __testReset()
@@ -226,3 +228,47 @@ describe('R29 监听懒绑单例 — 防重复监听', () => {
     expect(b.isVisible('bm1')).toBe(true)
   })
 })
+
+describe('E2E 锁定对称守门 — isUnlocked→false 清可见态（R29 同向补全）', () => {
+  it('E2E lock 时 _hideAll 清可见态（与 pagehide/blur 同向对称，防锁定后密码区露空）', async () => {
+    const e2eStore = useE2EStore()
+    e2eStore.setEnabled(true)
+    e2eStore.setUnlocked(true)
+    const { toggle, isVisible } = usePasswordVisibility(999999) // 长 autoHide 防 5s timer 自清干扰
+    toggle('bm1')
+    expect(isVisible('bm1')).toBe(true)
+    // 用户主动 lock（或 15min 超时 lock）：isUnlocked true→false
+    e2eStore.lock()
+    await nextTick() // watch flush:'pre' microtask
+    expect(isVisible('bm1')).toBe(false) // 守门后清明文可见态，密码区回落占位
+  })
+
+  it('E2E 锁定后 re-unlock 不自动显形（visibleIds 已清，需用户再点眼）', async () => {
+    const e2eStore = useE2EStore()
+    e2eStore.setEnabled(true)
+    e2eStore.setUnlocked(true)
+    const { toggle, isVisible } = usePasswordVisibility(999999)
+    toggle('bm1')
+    expect(isVisible('bm1')).toBe(true)
+    e2eStore.lock() // lock 清可见态
+    await nextTick()
+    expect(isVisible('bm1')).toBe(false)
+    e2eStore.setUnlocked(true) // <5s 内连续 re-unlock 边界
+    await nextTick()
+    expect(isVisible('bm1')).toBe(false) // lock 已清态，re-unlock 不自动显形
+  })
+
+  it('E2E unlock（false→true）不触发 _hideAll（解锁不误清明文，仅 lock 方清）', async () => {
+    const e2eStore = useE2EStore()
+    e2eStore.setEnabled(true)
+    e2eStore.setUnlocked(true) // 初始已解锁，先挂 watch 首绑
+    const { toggle, isVisible } = usePasswordVisibility(999999)
+    toggle('bm1')
+    expect(isVisible('bm1')).toBe(true)
+    // 假设另一段流程触发 isUnlocked 在 true 上抖动（true→true 无变化，watch 不触发）
+    e2eStore.setUnlocked(true)
+    await nextTick()
+    expect(isVisible('bm1')).toBe(true) // 仍可见，unlock 路径不误清
+  })
+})
+
