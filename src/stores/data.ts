@@ -959,11 +959,30 @@ export const useDataStore = defineStore('data', {
     },
 
     // ── 数据加载/导入 ──
+    /**
+     * B-12：归一化分类 order（序号语义）。
+     * 历史 bug——createCategory 曾用 Date.now() 当 order（毫秒戳 13 位超出远端
+     * categories.order INTEGER 上限 2147483647，同步必溢出失败）。加载时把超界
+     * order 重写为当前数组序号的序号，仅当存在超界值才触发（幂等），正常数据零改动。
+     */
+    _normalizeCategoryOrders() {
+      const MAX_INT = 2147483647
+      let idx = 0
+      for (const c of this.categories) {
+        if (c.deletedAt) continue
+        if ((c.order ?? 0) > MAX_INT) {
+          c.order = idx
+          this._markDirty(c.id)
+        }
+        idx++
+      }
+    },
     loadFromStorage() {
       const d = persist.loadFromLocalStorage()
       this.bookmarks = d.bookmarks; this.siblingGroups = d.siblingGroups
       this.categories = d.categories; this.customAttributes = d.customAttributes
       this._syncMaps()
+      this._normalizeCategoryOrders()
       this._restoreDeletedGroupMemberships()
       clearSearchCache()
       this._searchVersion = 1
@@ -975,6 +994,7 @@ export const useDataStore = defineStore('data', {
         this.bookmarks = idbData.bookmarks; this.siblingGroups = idbData.siblingGroups
         this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
         this._syncMaps()
+        this._normalizeCategoryOrders()
         this._restoreDeletedGroupMemberships()
         // R22：清空本地历史防抖 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
         _cancelPendingHist()
@@ -1000,6 +1020,7 @@ export const useDataStore = defineStore('data', {
       this.customAttributes = result.customAttributes
       this.siblingGroups = result.siblingGroups
       this._syncMaps()
+      this._normalizeCategoryOrders()
       // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
       _cancelPendingHist()
       clearSearchCache()

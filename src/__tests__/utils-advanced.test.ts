@@ -136,11 +136,15 @@ describe('createCategory', () => {
   // 与 data.ts _sortItems 依赖稳定 number order；误删 order 字段会让新分类 order=undefined 致
   // NaN 比较塌陷排序。color 此前仅 toBeDefined 未锁属 CATEGORY_COLORS 集合——防未来误改 color 源
   // 为非集色值/单色硬编码污染主题色。
-  it('should set order to a positive number (排序主键契约)', () => {
+  // B-12：契约从「正数时间戳」改为「非负序号」——历史 bug createCategory 曾用 Date.now() 当 order
+  // （毫秒戳 13 位 > 远端 categories.order INTEGER 上限 2147483647，同步必溢出失败）。序号可为 0
+  // （第一个分类），且必须 < 2147483647 防回归成毫秒时间戳。
+  it('should set order to a non-negative number (序号契约，防毫秒戳溢出远端 INTEGER order 列)', () => {
     const cat = createCategory('排序')
     expect(cat.order).toBeDefined()
     expect(typeof cat.order).toBe('number')
-    expect(cat.order).toBeGreaterThan(0)
+    expect(cat.order).toBeGreaterThanOrEqual(0)
+    expect(cat.order).toBeLessThan(2147483647)
   })
 
   it('should pick color from CATEGORY_COLORS 集合 (主题色防污染)', () => {

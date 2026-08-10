@@ -416,4 +416,55 @@ describe('DataStore', () => {
       expect(JSON.stringify(store._dataSnapshot())).toBe(before)
     })
   })
+
+  describe('B-12 分类 order 归一化（防毫秒戳溢出远端 INTEGER order 列）', () => {
+    it('超界 order 重写为序号并 markDirty，正常项不动', () => {
+      store.categories = [
+        { id: 'c0', name: 'a', icon: '', color: '', order: 0 },
+        { id: 'c1', name: 'b', icon: '', color: '', order: 1786356540753, updatedAt: 100 },
+        { id: 'c2', name: 'c', icon: '', color: '', order: 2 },
+      ] as any
+      store._normalizeCategoryOrders()
+      expect(store.categories[1].order).toBe(1)
+      expect(store.categories[0].order).toBe(0)
+      expect(store.categories[2].order).toBe(2)
+      expect(store._dirtyIds.has('c1')).toBe(true)
+      expect(store._dirtyIds.has('c0')).toBe(false)
+      expect(store._dirtyIds.has('c2')).toBe(false)
+    })
+
+    it('无超界零改动（幂等）', () => {
+      store.categories = [
+        { id: 'c0', name: 'a', icon: '', color: '', order: 0 },
+        { id: 'c1', name: 'b', icon: '', color: '', order: 1 },
+      ] as any
+      store._normalizeCategoryOrders()
+      expect(store.categories[0].order).toBe(0)
+      expect(store.categories[1].order).toBe(1)
+      expect(store._dirtyIds.size).toBe(0)
+    })
+
+    it('软删分类跳过不重写、不计序', () => {
+      store.categories = [
+        { id: 'c0', name: 'a', icon: '', color: '', order: 1786356540753, deletedAt: 500 },
+        { id: 'c1', name: 'b', icon: '', color: '', order: 1 },
+      ] as any
+      store._normalizeCategoryOrders()
+      expect(store.categories[0].order).toBe(1786356540753) // 软删不碰
+      expect(store.categories[1].order).toBe(1)
+      expect(store._dirtyIds.size).toBe(0)
+    })
+
+    it('超界项重写后的序号与其后正常项递增不冲突', () => {
+      store.categories = [
+        { id: 'c0', name: 'a', icon: '', color: '', order: 5 },
+        { id: 'c1', name: 'b', icon: '', color: '', order: 1786356540753 },
+        { id: 'c2', name: 'c', icon: '', color: '', order: 9 },
+      ] as any
+      store._normalizeCategoryOrders()
+      expect(store.categories[1].order).toBe(1)
+      expect(store.categories[0].order).toBe(5) // 正常项保持
+      expect(store.categories[2].order).toBe(9)
+    })
+  })
 })

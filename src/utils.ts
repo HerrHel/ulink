@@ -224,7 +224,10 @@ export function createCategory(name: string): Category {
     name,
     icon: 'star',
     color: CATEGORY_COLORS[Math.floor(Math.random() * CATEGORY_COLORS.length)],
-    order: Date.now(),
+    // B-12：order 是序号语义（升序排序），由 addNewCategory 按当前分类数赋值。
+    // 历史 bug：这里曾用 Date.now() 当 order——毫秒戳 13 位超出远端 categories.order
+    // INTEGER 上限(2147483647)，同步必报 "value out of range for type integer"。
+    order: 0,
   }
 }
 
@@ -233,6 +236,8 @@ export function addNewCategory(name: string, store: AppStore): Category | null {
   if (!trimmed) { toast('请输入分类名称', false); return null }
   if (store.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) { toast('分类名称已存在', false); return null }
   const cat = createCategory(trimmed)
+  // B-12：序号语义——新分类排最后（非软删分类计数），勿用毫秒时间戳（溢出远端 INTEGER order 列）
+  cat.order = store.categories.filter(c => !c.deletedAt).length
   store.addCategory(cat)
   store.save()
   toast('分类已添加')
