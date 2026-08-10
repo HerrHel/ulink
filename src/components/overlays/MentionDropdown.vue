@@ -65,14 +65,21 @@ function _onScroll() {
   }
 }
 
+// 缓存挂载时拿到的滚动容器引用——卸载时若 #panelContent 已被重建（聚焦态分支切换、
+// 容器 key 变化），getElementById 会查到新元素或 null，挂载时绑在旧元素上的监听无人移除，
+// scroll 回调泄漏到死元素上继续触发读 window.getSelection()。一致引用保证解绑命中同一节点。
+let _scrollEl: HTMLElement | null = null
+
 onMounted(() => {
   document.addEventListener('keydown', _onKeydown)
   document.addEventListener('input', onInput)
-  document.getElementById('panelContent')?.addEventListener('scroll', _onScroll)
+  _scrollEl = document.getElementById('panelContent')
+  _scrollEl?.addEventListener('scroll', _onScroll)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', _onKeydown)
   document.removeEventListener('input', onInput)
-  document.getElementById('panelContent')?.removeEventListener('scroll', _onScroll)
+  _scrollEl?.removeEventListener('scroll', _onScroll)
+  _scrollEl = null
 })
 </script>
