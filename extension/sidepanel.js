@@ -500,6 +500,14 @@
   // ── 密码 ──
   bdPwShow.addEventListener('click', async function () {
     if (!currentMatchedBookmark || !currentDetailPassword) return
+    // R11-补：解密 handler 同款 generation guard。bdPwShow 旧实现遗漏 _detailGen 检查——
+    // await ensureCanaryData() / decryptWithGlobalKey() / autoDecryptPassword() 期间用户若切到
+    // 另一已收藏 URL 标签，onActivated→loadCurrentTab→checkCurrentPageMatch→showBookmarkDetail(B)
+    // 会 ++_detailGen 并把详情面板重置到书签 B（B 的密码单查带 guard 见 line 469/477）；
+    // 旧 await 返回后仍执行 line 548 把**书签 A 的明文密码**写入 B 的面板并 passwordRevealed=true，
+    // 造成跨书签明文密码视觉泄漏。与同模块 bdPwCopy（line 562/570/574）+ showBookmarkDetail
+    //（line 469/477）的 guard 对称补齐：handler 开头记本代次，每个 await 后 + 写 DOM 前检查代次不一致即 return。
+    var localGen = _detailGen
     if (passwordRevealed) {
       bdPasswordText.textContent = '••••••••'; bdPasswordText.className = 'bd-pw-text'
       bdPwShow.textContent = '显示'; passwordRevealed = false
@@ -528,12 +536,16 @@
           if (!sessionMasterPassword) return
         }
         var canaryData = await ensureCanaryData()
+        // R11-补：await 后代次可能已变（用户切标签触发新 showBookmarkDetail），丢弃本结果。
+        if (localGen !== _detailGen) return
         if (!canaryData) {
           toast('无法从云端取解锁数据，请稍后重试')
           clearMasterPasswordNow()
           return
         }
         plaintext = await window.LinkVaultCrypto.decryptWithGlobalKey(stored, sessionMasterPassword, canaryData)
+        // R11-补：PBKDF2+GCM 解密秒级，await 期间用户极可能已切到另一书签。代次不一致丢弃，勿把 A 明文写入 B 面板。
+        if (localGen !== _detailGen) return
         if (!plaintext) {
           // E2E 形态但解不开：主密码错 / canary 不匹配 / GCM 认证失败 —— 视为失败，清主密码
           toast('解密失败，请检查主密码')
@@ -544,7 +556,11 @@
         // 非加密形态：旧 base64 string / 纯文本 → 作 base64 解码（旧路径，不需主密码）
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
         else plaintext = typeof stored === 'string' ? stored : ''
+        // R11-补：autoDecryptPassword 亦 async（base64 解码虽快但 await 让出执行权，切标签竞态同款）。
+        if (localGen !== _detailGen) return
       }
+      // R11-补：写 DOM 前最后一道 guard，确保护本 handler 始终是当前详情面板的 owner，杜绝泄漏。
+      if (localGen !== _detailGen) return
       bdPasswordText.textContent = plaintext; bdPasswordText.className = 'bd-pw-text revealed'
       bdPwShow.textContent = '隐藏'; passwordRevealed = true
       // F1-002/M6：成功后启动 TTL，到期清主密码并掩码 DOM 明文
