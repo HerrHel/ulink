@@ -15,6 +15,10 @@ export type SyncPortError = { message: string; code?: string } | null
 export type SyncPortResult<T = unknown> = {
   data: T | null
   error: SyncPortError
+  /** 受影响行数（仅 update 携带）：Supabase update 不带 count 时为 null，
+   *  带 {count:'exact'} 时为实际命中行数；0 = 无匹配行（远端该 id 不存在/已删/RLS 拒绝）。
+   *  syncPush 据此区分「成功更新 N 行」与「无匹配 update 静默成功」，后者会丢本地变更。 */
+  count?: number | null
 }
 
 export interface SyncRemotePort {
@@ -46,8 +50,19 @@ export function createSupabaseSyncPort(): SyncRemotePort {
       return { data: r.data, error: r.error ? { message: r.error.message, code: r.error.code } : null }
     },
     async update(table, id, userId, patch) {
-      const r = await supabase.from(table).update(patch as any).eq('id', id).eq('user_id', userId)
-      return { data: r.data, error: r.error ? { message: r.error.message, code: r.error.code } : null }
+      // 带 count:'exact' 区分无匹配更新（count=0）与成功更新（count>=1）。
+      // Supabase update 不命中时返 { data: null, error: null }，与成功同形——
+      // 仅靠 error 无法识别静默失败，必须靠 count 透传，否则 syncPush 会误判成功永久出队丢本地变更。
+      const r = await supabase
+        .from(table)
+        .update(patch as any, { count: 'exact' })
+        .eq('id', id)
+        .eq('user_id', userId)
+      return {
+        data: r.data,
+        error: r.error ? { message: r.error.message, code: r.error.code } : null,
+        count: r.count,
+      }
     },
     async delete(table, id, userId) {
       const r = await supabase.from(table).delete().eq('id', id).eq('user_id', userId)
@@ -100,6 +115,8 @@ export function createMemorySyncPort(opts?: {
   upsertError?: (table: SyncTable, row: Record<string, unknown>) => SyncPortError
   updateError?: () => SyncPortError
   deleteError?: () => SyncPortError
+  /** update 受影响行数：默认 1（命中）；传 0 模拟「无匹配 update」（远端行已删/不存在/RLS 拒绝） */
+  updateCount?: () => number | null
   sinceRows?: Partial<Record<SyncTable, unknown[]>>
   softDeleted?: Partial<Record<SyncTable, Array<{ id: string; updated_at_num?: number }>>>
   allIds?: Partial<Record<SyncTable, Array<{ id: string }>>>
@@ -126,7 +143,9 @@ export function createMemorySyncPort(opts?: {
     async update(table, id, _userId, patch) {
       const err = opts?.updateError?.() ?? null
       if (!err) updates.push({ table, id, patch })
-      return { data: null, error: err }
+      // 默认 count=1（命中）；测试可注入 updateCount()=0 模拟无匹配 update
+      const count = opts?.updateCount ? opts.updateCount() : 1
+      return { data: null, error: err, count }
     },
     async delete(table, id) {
       const err = opts?.deleteError?.() ?? null

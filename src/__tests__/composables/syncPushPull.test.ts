@@ -212,6 +212,43 @@ describe('syncPushPull via SyncRemotePort', () => {
     expect(_isPendingSync('bm-dead')).toBe(false)
   })
 
+  it('3.5 无匹配 update 不判成功：op 留队、retries 自增、状态 error（防丢本地变更）', async () => {
+    // 真实 Supabase update().eq('id',..).eq('user_id',..) 不命中行时返 { data:null, error:null }，
+    // 与成功更新同形。port 层透传 count:0 区分；syncPush 必须把它当失败走重试链路，
+    // 而非误判成功 removeSyncOps 永久出队——后者会让本地变更永久丢失（远端从未写入）。
+    const port = createMemorySyncPort({
+      updateCount: () => 0, // 模拟无匹配 update
+    })
+    setSyncRemotePort(port)
+
+    await enqueueSyncOps([{
+      action: 'upsert',
+      table: 'bookmarks',
+      itemId: 'bm-noMatch',
+      data: {
+        ...makeBm({ id: 'bm-noMatch' }),
+        _userId: 'user-pp',
+        _isNew: false,
+        _changedFields: ['title'],
+      },
+      ts: Date.now(),
+    }])
+
+    const sync = useCloudSync()
+    const ok = await sync.pushToCloud()
+    // 失败：pushToCloud 返 false，op 未出队（仍在队列待重试）
+    expect(ok).toBe(false)
+    expect(await syncOpsCount()).toBe(1)
+    const ops = await drainSyncOps()
+    expect(ops[0].retries).toBe(1)
+    // port 确实调过 update（说明走到了 update 分支而非误判跳过）
+    expect(port.updates.length).toBe(1)
+    expect(port.updates[0].id).toBe('bm-noMatch')
+    // 状态标 error（非 success），给用户可见反馈
+    expect(useSyncStore().syncStatus).toBe('error')
+    expect(useSyncStore().syncError).toMatch(/未匹配远端/)
+  })
+
   it('4 锁定 + 敏感字段：不 upsert，op 留队', async () => {
     const port = createMemorySyncPort()
     setSyncRemotePort(port)
