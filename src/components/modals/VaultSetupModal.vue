@@ -87,6 +87,8 @@ const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
 const vault = useVault()
+// 代际 token（对齐 VaultUnlockModal._pwGen）：onComplete 跨取消 await 窗口短路旧 await 的 step=3
+let _setupGen = 0
 const step = ref(1)
 const masterPw = ref('')
 const masterPw2 = ref('')
@@ -116,6 +118,7 @@ watch(() => props.open, (isOpen) => {
     bioLoading.value = false
     bioDone.value = false
     bioError.value = ''
+    _setupGen++  // 关闭时推进，让在途 onComplete 的 localGen 失效短路 step=3
   } else {
     bioAvailable.value = vault.isBiometricAvailable()
   }
@@ -135,14 +138,19 @@ function onNext() {
 
 async function onComplete() {
   if (loading.value) return
+  const localGen = ++_setupGen
   loading.value = true
   error.value = ''
   try {
     const ok = await vault.setupVaultPassword(masterPw.value, recoveryKey.value)
+    // 层一守门：await 窗口用户点遮罩取消（watch 负向分支已推进 _setupGen）→ 短路不 push step=3。
+    // 注意：此守门只消除「modal 已关后 step=3 假成功页」可见后果，vault 写路径副作用
+    //（setEnabled/_setKey 等 await resolve 后同步执行）组件层管不到——层二 cancel token 留人工跟进。
+    if (localGen !== _setupGen) return
     if (!ok) { error.value = '设置失败，请重试'; return }
     step.value = 3
   } finally {
-    loading.value = false
+    if (localGen === _setupGen) loading.value = false
   }
 }
 
