@@ -599,11 +599,12 @@
     if (!currentMatchedBookmark) return
     var newNotes = prompt('编辑备注：', currentMatchedBookmark.notes || '')
     if (newNotes === null) return
-    currentMatchedBookmark.notes = newNotes
+    // B1：乐观写移到 update 成功之后——失败时不写本地引用，避免污染 allBookmarks
     sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId).then(function (r) {
-      if (r.error) { toast('保存失败: ' + r.error.message); return }
-      toast('备注已更新', 1500)
-      showBookmarkDetail(currentMatchedBookmark)
+      var outcome = window.LinkVaultNotesUpdate.notesUpdateOutcome(newNotes, r)
+      if (outcome.writeLocal) currentMatchedBookmark.notes = newNotes
+      toast(outcome.toast, outcome.refresh ? 1500 : undefined)
+      if (outcome.refresh) showBookmarkDetail(currentMatchedBookmark)
     })
   })
 
