@@ -176,7 +176,9 @@ export async function pushFromQueue(): Promise<boolean> {
 
     const tasks: Promise<any>[] = []
     const succeededIds: number[] = []
-    const encFailedOps: Array<{ table: string; itemId: string; error: string }> = []
+    // encFailedOps 保留对应 merged op 引用：retry 决策需用 merged.retries（即 _mergeOps 算的
+    // maxRetries），而非末条 raw.retries（与 _mergeOps 不对称会致死信计数漂移，见 cleanup 段）。
+    const encFailedOps: Array<{ table: string; itemId: string; error: string; op: SyncOp }> = []
     const e2e = useE2E()
     const port = getSyncRemotePort()
 
@@ -207,7 +209,7 @@ export async function pushFromQueue(): Promise<boolean> {
         const encryptedData = await e2e.encryptItem(itemType, data)
         row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew) as unknown as Record<string, any>
       } catch (err: any) {
-        encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err?.message || String(err)}` })
+        encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err?.message || String(err)}`, op })
         console.warn(`[sync] 加密阶段失败 table=${op.table} id=${op.itemId}`, err)
         continue
       }
@@ -235,46 +237,62 @@ export async function pushFromQueue(): Promise<boolean> {
       }
     }
 
-    const rawOpsMap = new Map(rawOps.map(ro => [`${ro.table}:${ro.itemId}`, ro]))
+    // 同 table:itemId 的全部 raw op（多值）——merge 把多条 raw 合并为 1 条 merged op
+    // （_mergeOps: data=last, retries=max），cleanup 必须把同 key 的全部 raw 一并处理：
+    // 成功则同 key 全部 raw 出队（否则其余成 orphan 留队无限重推 + badge 永驻「N 项待同步」），
+    // 失败则同 key 全部 raw 同步 retry+1（用 merged.retries=max 而非末条 raw.retries，
+    // 与 _mergeOps 死信判定对称，否则持续编辑的坏 op 多绕几轮才进死信）。
+    const rawsByKey = new Map<string, SyncOp[]>()
+    for (const ro of rawOps) {
+      const k = `${ro.table}:${ro.itemId}`
+      const arr = rawsByKey.get(k) || []
+      arr.push(ro)
+      rawsByKey.set(k, arr)
+    }
+    const rawsOf = (table: string, itemId: string) => rawsByKey.get(`${table}:${itemId}`) ?? []
     const results = await Promise.all(tasks)
 
     const failedOps: Array<{ table: string; itemId: string; error: string; op?: SyncOp }> = [
-      ...encFailedOps.map(f => ({ ...f, op: rawOpsMap.get(`${f.table}:${f.itemId}`) })),
+      ...encFailedOps.map(f => ({ ...f })),
     ]
     const deadIds: number[] = []
+    // 收集 retry+1 后的 raw id 写回队列（非死信路径）
+    const retryUpdateOps: Array<{ id: number; retries: number }> = []
     for (const r of results) {
       // 无匹配 update 视失败：Supabase update 不命中行时返 { data:null, error:null }，
       // 仅靠 error 会被误判成功而永久出队，丢本地变更。port 层透传 count：0=无匹配行。
       const noMatch = r.result.count === 0
       if (r.result.error || noMatch) {
-        const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
-        const retries = (rawMatch?.retries || 0) + 1
+        // r.op 是 _mergeOps 产出的 merged op（含 retries=max），用它做死信判定与下轮 retry 计数
+        const nextRetry = (r.op.retries || 0) + 1
+        const keyRaws = rawsOf(r.op.table, r.op.itemId)
         failedOps.push({
           table: r.op.table,
           itemId: r.op.itemId,
           error: noMatch ? 'update 未匹配远端行（行已删/不存在/RLS 拒绝）' : r.result.error!.message,
-          op: rawMatch,
+          op: r.op,
         })
-        if (rawMatch?.id != null) {
-          if (retries >= MAX_PUSH_RETRIES) {
-            deadIds.push(rawMatch.id)
-            console.warn(`[sync] op 达到重试上限(${MAX_PUSH_RETRIES})，移出队列 table=${r.op.table} id=${r.op.itemId}`)
-          } else {
-            await updateSyncOpRetry(rawMatch.id, retries)
-          }
+        if (nextRetry >= MAX_PUSH_RETRIES) {
+          console.warn(`[sync] op 达到重试上限(${MAX_PUSH_RETRIES})，移出队列 table=${r.op.table} id=${r.op.itemId}`)
+          for (const rw of keyRaws) if (rw.id != null) deadIds.push(rw.id)
+        } else {
+          for (const rw of keyRaws) if (rw.id != null) retryUpdateOps.push({ id: rw.id, retries: nextRetry })
         }
         continue
       }
-      const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
-      if (rawMatch?.id != null) succeededIds.push(rawMatch.id)
+      const keyRaws = rawsOf(r.op.table, r.op.itemId)
+      for (const rw of keyRaws) if (rw.id != null) succeededIds.push(rw.id)
     }
     for (const f of encFailedOps) {
-      const rawMatch = rawOpsMap.get(`${f.table}:${f.itemId}`)
-      if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) deadIds.push(rawMatch.id)
-      else if (rawMatch?.id != null) {
-        await updateSyncOpRetry(rawMatch.id, (rawMatch.retries || 0) + 1)
+      const nextRetry = (f.op.retries || 0) + 1
+      const keyRaws = rawsOf(f.table, f.itemId)
+      if (nextRetry >= MAX_PUSH_RETRIES) {
+        for (const rw of keyRaws) if (rw.id != null) deadIds.push(rw.id)
+      } else {
+        for (const rw of keyRaws) if (rw.id != null) retryUpdateOps.push({ id: rw.id, retries: nextRetry })
       }
     }
+    for (const { id, retries } of retryUpdateOps) await updateSyncOpRetry(id, retries)
 
     if (succeededIds.length) {
       await removeSyncOps(succeededIds)
@@ -291,14 +309,14 @@ export async function pushFromQueue(): Promise<boolean> {
       const noMatch = r.result.count === 0
       if (!r.result.error && !noMatch) releasedIds.add(r.op.itemId)
       else {
-        const rawMatch = rawOpsMap.get(`${r.op.table}:${r.op.itemId}`)
-        if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) releasedIds.add(r.op.itemId)
+        const nextRetry = (r.op.retries || 0) + 1
+        if (nextRetry >= MAX_PUSH_RETRIES) releasedIds.add(r.op.itemId)
       }
     }
     _clearPendingSync(releasedIds)
     for (const f of encFailedOps) {
-      const rawMatch = rawOpsMap.get(`${f.table}:${f.itemId}`)
-      if (rawMatch?.id != null && (rawMatch.retries || 0) + 1 >= MAX_PUSH_RETRIES) {
+      const nextRetry = (f.op.retries || 0) + 1
+      if (nextRetry >= MAX_PUSH_RETRIES) {
         releasedIds.add(f.itemId)
         _clearPendingSync([f.itemId])
       }

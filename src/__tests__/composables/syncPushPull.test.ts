@@ -618,6 +618,177 @@ describe('syncPushPull via SyncRemotePort', () => {
   })
 })
 
+describe('syncPush 同 key 多 raw op 清理（F1 orphan + F2 maxRetries 不对称）', () => {
+  // 复现 Explore 扫出的两条同根源真 bug——cleanup 用单值 rawOpsMap（`new Map(后写覆盖)`）
+  // 只取末条 raw 进行 success/retry 处理：
+  // F1（orphan 留队）：同 key 的多条 raw 经 _mergeOps 合并为 1 条 merged 推送成功后，
+  //   `succeededIds.push(rawMatch.id)` 只删末条 raw，其余成 orphan 留 IDB 队列 →
+  //   下次任意 sync drain 又拉回 orphan 重推（Supabase upsert 幂等不报错但浪费 RPC/带宽/
+  //   updated_at_num bump）+ badge syncLabel 永驻「N 项待同步」永远清不掉。
+  // F2（maxRetries 不对称）：_mergeOps 死信判定用 maxRetries（max），cleanup retry+1 写回
+  //   用末条 raw.retries。若同 key 有 op5(retries=2)+op6(retries=0)，merge 用 2 判「未达 MAX(3)」，
+  //   cleanup 写 op6 retries=0+1=1（不是 2），下轮 drain max(2,1)=2 又未达 → 多绕几轮才进死信。
+  // 修复：cleanup 用 rawsByKey（多值 Map）同 key 全部 raw 一起处理 + 用 merged.retries (=max)
+  //   做死信判定，与 _mergeOps 对称。
+
+  it('F1：同 key 2 条 raw op push 成功后全部出队，无 orphan 留队（旧实现只剩末条 → 队列剩 1）', async () => {
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    ds.addBookmark(makeBm() as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    // 同 key（bookmarks:bm-dup）入 2 条 raw op：模拟 3s debounce 窗口内两次编辑同书签
+    // （drainDirtyIds 每轮清空后用户又编辑重新 dirty 入队 → 同 key 多条 raw 入队）。
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-dup',
+      data: { ...makeBm({ id: 'bm-dup', title: '第一版' }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+      ts: 1000,
+    }])
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-dup',
+      data: { ...makeBm({ id: 'bm-dup', title: '第二版' }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+      ts: 1001,
+    }])
+
+    const sync = useCloudSync()
+    const ok = await sync.pushToCloud()
+    expect(ok).toBe(true)
+
+    // _mergeOps 把同 key 2 条合并为 1 条 merged → port 只收到 1 次 update
+    // （_isNew:false+_changedFields:['title'] 走 partial update 分支非全行 upsert）。
+    // 同 key 多条 raw 应被 removeSyncOps 一次性清出 IDB 队列。
+    expect(port.updates.length).toBe(1)
+    // 关键断言：全部 raw 出队，队列清零。旧实现 cleanup 只删末条 raw → 队列剩 1 条 orphan。
+    expect(await syncOpsCount()).toBe(0)
+    const remaining = await drainSyncOps()
+    expect(remaining.length).toBe(0)
+  })
+
+  it('F1 链式：3 条同 key raw push 成功后全部出队', async () => {
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-tri' }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    for (let i = 0; i < 3; i++) {
+      await enqueueSyncOps([{
+        action: 'upsert', table: 'bookmarks', itemId: 'bm-tri',
+        data: { ...makeBm({ id: 'bm-tri', title: `v${i}` }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+        ts: 2000 + i,
+      }])
+    }
+    expect(await syncOpsCount()).toBe(3)
+
+    const sync = useCloudSync()
+    const ok = await sync.pushToCloud()
+    expect(ok).toBe(true)
+    // 合并成 1 条 → 1 次 update（partial）；3 条 raw 全部出队
+    expect(port.updates.length).toBe(1)
+    expect(await syncOpsCount()).toBe(0)
+  })
+
+  it('F1 累积：用户连编辑产生新 op + 旧 orphan 还在队时，本轮 push 不再留下新 orphan', async () => {
+    // 模拟场景：上轮 push 后理论上应清空同 key 全部 raw，但旧实留下 orphan。
+    // 修复后即便队里已有遗留 orphan（手动注入一条），新一轮同 key push 成功后
+    // cleanup 也把新入的所有 raw 都出队（这条断言锁定不再生成新 orphan 的属性）。
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-accum' }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-accum',
+      data: { ...makeBm({ id: 'bm-accum', title: 'v1' }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+      ts: 3000,
+    }])
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-accum',
+      data: { ...makeBm({ id: 'bm-accum', title: 'v2' }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+      ts: 3001,
+    }])
+
+    const sync = useCloudSync()
+    const ok = await sync.pushToCloud()
+    expect(ok).toBe(true)
+    // 2 条同 key raw 全部出队
+    expect(await syncOpsCount()).toBe(0)
+  })
+
+  it('F2：同 key op5(retries=2)+op6(retries=0) push 失败 → 用 max=2 走死信一次到位（maxRetries+1=3）', async () => {
+    // 旧实现 cleanup 用末条 raw.retries=0 → nextRetry=1（没死信），下轮又 max(2,1)=2 未达 MAX，
+    // 需多绕几轮才进死信。修复用 merged.retries(=max=2) → nextRetry=3 直接达 MAX 进死信。
+    const port = createMemorySyncPort({
+      updateError: () => ({ message: 'always fail' }),
+    })
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-asym' }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    // 入两条同 key raw（潮：同 key 多 raw 与 retry 同时影响死信判定）
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-asym',
+      data: { ...makeBm({ id: 'bm-asym' }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+      ts: 4000,
+    }])
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-asym',
+      data: { ...makeBm({ id: 'bm-asym' }), _userId: 'user-pp', _isNew: false, _changedFields: ['title'] },
+      ts: 4001,
+    }])
+    // 手工把首条 raw.retries 写到 2（模拟历史失败过的 op），末条保持 0
+    const ops = await drainSyncOps()
+    expect(ops.length).toBe(2)
+    const firstRaw = ops[0]!, secondRaw = ops[1]!
+    expect(firstRaw.id).toBeDefined()
+    expect(secondRaw.id).toBeDefined()
+    await updateSyncOpRetry(firstRaw.id!, 2)
+    __testPendingSync.add('bm-asym')
+
+    const sync = useCloudSync()
+    await sync.pushToCloud()
+
+    // 修复后：merged.reties=max(2,0)=2，nextRetry=3≥MAX_PUSH_RETRIES(3) → 死信 →
+    // 同 key 两条 raw 全部 removeSyncOps（出队）+ clearPendingSync('bm-asym')。
+    expect(await syncOpsCount()).toBe(0)
+    expect(_isPendingSync('bm-asym')).toBe(false)
+  })
+
+  it('cleanup 用 merged.retries 而非末条 raw.retries：单条 raw（retries=2）失败应一次进死信', async () => {
+    // 退化护栏：单条 raw 场景，merged 就是该 raw 本身，merged.retries=raw.retries=2，
+    // nextRetry=3 正好达 MAX → 死信。这锁定「同 key 单 raw 时不退化」（修复不能让单 raw
+    // 死信判定也漂移）。对照 syncPushPull.test.ts 的 it3 死信测，这里构造同形 +retries=2。
+    const port = createMemorySyncPort({
+      upsertError: () => ({ message: 'always fail' }),
+    })
+    setSyncRemotePort(port)
+
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-single',
+      data: { ...makeBm({ id: 'bm-single' }), _userId: 'user-pp', _isNew: true, _changedFields: null },
+      ts: Date.now(),
+    }])
+    const ops = await drainSyncOps()
+    const id = ops[0]?.id
+    expect(id).toBeDefined()
+    await updateSyncOpRetry(id!, 2)
+    __testPendingSync.add('bm-single')
+
+    const sync = useCloudSync()
+    await sync.pushToCloud()
+
+    expect(await syncOpsCount()).toBe(0)
+    expect(_isPendingSync('bm-single')).toBe(false)
+  })
+})
+
 describe('syncPull 解锁态竞态（D1-4）', () => {
   // pullChanges 在 isUnlocked=true 时对远端逐条 decryptItem；其内 async decryptField
   // 对三段密文字段 await crypto.subtle.decrypt（真异步让出点）。若解密中途被撤销锁（如
