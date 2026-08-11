@@ -5,6 +5,7 @@ import { Command } from 'commander'
 import { getSupabaseClient } from '../lib/supabase.js'
 import { getCurrentUser } from '../lib/auth.js'
 import * as format from '../lib/format.js'
+import { computeGroupOrphanFix } from '../lib/groupOrphanFix.js'
 import type { Bookmark, SiblingGroup, OutputFormat } from '../types.js'
 
 export function registerMaintenanceCommand(program: Command): void {
@@ -178,24 +179,30 @@ export function registerMaintenanceCommand(program: Command): void {
         // 检查组的书签引用
         for (const group of groups) {
           if (group.bookmark_ids && Array.isArray(group.bookmark_ids)) {
+            // 先为每个孤儿 push 一条 issue 记录，记录其在 issues 中的下标供修复后标 fixed
+            const orphanIssueIdxs: number[] = []
             for (const bmId of group.bookmark_ids) {
               if (!bookmarkIds.has(bmId)) {
+                orphanIssueIdxs.push(issues.length)
                 issues.push({
                   type: '组',
                   id: group.id,
                   issue: `引用的书签 ${bmId} 不存在`,
                   fixed: false,
                 })
+              }
+            }
 
-                if (opts.fix) {
-                  const newIds = group.bookmark_ids.filter((id: string) => id !== bmId)
-                  await supabase
-                    .from('sibling_groups')
-                    .update({ bookmark_ids: newIds })
-                    .eq('id', group.id)
-                    .eq('user_id', user.id)
-                  issues[issues.length - 1].fixed = true
-                }
+            // BG-11 修复：一次性剔除全部孤儿而非逐个 update（避免多孤儿互相覆盖）
+            if (opts.fix && orphanIssueIdxs.length > 0) {
+              const { cleanedIds } = computeGroupOrphanFix(group.bookmark_ids, bookmarkIds)
+              await supabase
+                .from('sibling_groups')
+                .update({ bookmark_ids: cleanedIds })
+                .eq('id', group.id)
+                .eq('user_id', user.id)
+              for (const idx of orphanIssueIdxs) {
+                issues[idx].fixed = true
               }
             }
           }
