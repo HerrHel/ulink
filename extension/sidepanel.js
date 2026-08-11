@@ -352,7 +352,8 @@
   })
 
   document.addEventListener('keydown', function (e) {
-    if ((e.ctrlKey && e.key === 'f') || (!e.ctrlKey && !e.metaKey && e.key === '/' && e.target.tagName !== 'INPUT')) {
+    // B3：Ctrl+F / 快捷键劫持判定抽到 keypress.js（INPUT 内不劫，含 Ctrl+F 分支补 tagName 限制）
+    if (window.LinkVaultKeyHijack && window.LinkVaultKeyHijack.shouldHijackSearchKey(e)) {
       e.preventDefault()
       searchInput.focus()
       searchInput.select()
