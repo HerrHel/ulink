@@ -172,6 +172,30 @@ export function isTargetDnsSafeSyncResults(hostname: string, records: string[]):
 export const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 export const ALLOWED_PORTS = new Set(['', '80', '443'])
 
+/** SSRF 策略拒绝的错误类别：带 code 的分类比中文消息子串匹配稳健。
+ *  index.ts 为单文件部署镜像，同步内联本类（见 index.ts 顶部镜像说明）。 */
+export type SsrfRejectCode = 'private_host' | 'private_dns' | 'redirect_denied'
+
+export class SsrfRejectError extends Error {
+  readonly code: SsrfRejectCode
+  constructor(code: SsrfRejectCode, message: string) {
+    super(message)
+    this.name = 'SsrfRejectError'
+    this.code = code
+  }
+}
+
+/** 私网拒绝：原始 URL 字面命中（private_host）或 DNS 解析到内网（private_dns）。 */
+export function isPrivateReject(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  return code === 'private_host' || code === 'private_dns'
+}
+
+/** 重定向目标不被允许。 */
+export function isRedirectDenied(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === 'redirect_denied'
+}
+
 /** 校验 URL 字符串（不含 DNS 校验）。返回解析后的 URL；违规抛 Error。 */
 export function validateUrlShape(raw: string): URL {
   let parsed: URL
@@ -183,7 +207,7 @@ export function validateUrlShape(raw: string): URL {
   if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) throw new Error('URL 必须以 http:// 或 https:// 开头')
   if (parsed.username || parsed.password) throw new Error('URL 不得包含认证信息')
   if (!ALLOWED_PORTS.has(parsed.port)) throw new Error('仅允许 80/443 端口')
-  if (isPrivateHost(parsed.hostname)) throw new Error('不允许访问内网地址')
+  if (isPrivateHost(parsed.hostname)) throw new SsrfRejectError('private_host', '不允许访问内网地址')
   return parsed
 }
 

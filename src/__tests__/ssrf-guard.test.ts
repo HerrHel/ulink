@@ -16,6 +16,9 @@ import {
   isTargetDnsSafeSyncResults,
   isOriginAllowed,
   buildCorsHeaders,
+  SsrfRejectError,
+  isPrivateReject,
+  isRedirectDenied,
 } from '../../supabase/functions/check-link/ssrf-guard.js'
 
 describe('S7 SSRF guard — IPv4 解析', () => {
@@ -243,5 +246,48 @@ describe('S9 CORS fail-closed — buildCorsHeaders', () => {
 
     const h3 = buildCorsHeaders(null, ['https://app.linkvault.com'])
     expect(h3['Access-Control-Allow-Origin']).toBeUndefined()
+  })
+})
+
+describe('S7 SSRF guard — SsrfRejectError 分类（B4 错误分类机制）', () => {
+  it('SsrfRejectError 带 code 字段', () => {
+    const e = new SsrfRejectError('private_host', '不允许访问内网地址')
+    expect(e.code).toBe('private_host')
+    expect(e.name).toBe('SsrfRejectError')
+    expect(e instanceof Error).toBe(true)
+  })
+
+  it('validateUrlShape 对私网抛 SsrfRejectError(code=private_host)', () => {
+    const cases = ['http://192.168.1.1/', 'http://localhost/', 'http://[::1]/', 'http://2130706433/']
+    for (const u of cases) {
+      let thrown: unknown = null
+      try {
+        validateUrlShape(u)
+      } catch (e) {
+        thrown = e
+      }
+      expect(thrown, `应抛错: ${u}`).not.toBeNull()
+      expect(isPrivateReject(thrown)).toBe(true)
+      expect((thrown as { code?: string })?.code).toBe('private_host')
+    }
+  })
+
+  it('isPrivateReject 按 code 分类，不受消息措辞影响', () => {
+    expect(isPrivateReject(new SsrfRejectError('private_host', '任意消息'))).toBe(true)
+    expect(isPrivateReject(new SsrfRejectError('private_dns', '任意消息'))).toBe(true)
+    expect(isPrivateReject(new SsrfRejectError('redirect_denied', '任意消息'))).toBe(false)
+  })
+
+  it('isRedirectDenied 按 code 分类', () => {
+    expect(isRedirectDenied(new SsrfRejectError('redirect_denied', '任意消息'))).toBe(true)
+    expect(isRedirectDenied(new SsrfRejectError('private_host', '任意消息'))).toBe(false)
+    expect(isRedirectDenied(new SsrfRejectError('private_dns', '任意消息'))).toBe(false)
+  })
+
+  it('普通 Error（无 code 字段）两分类均 false（防退化）', () => {
+    expect(isPrivateReject(new Error('不允许访问内网地址'))).toBe(false)
+    expect(isRedirectDenied(new Error('重定向目标不被允许'))).toBe(false)
+    expect(isPrivateReject(null)).toBe(false)
+    expect(isRedirectDenied(undefined)).toBe(false)
   })
 })

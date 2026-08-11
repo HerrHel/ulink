@@ -161,8 +161,32 @@ function validateUrlShape(raw: string): URL {
   if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) throw new Error('URL 必须以 http:// 或 https:// 开头')
   if (parsed.username || parsed.password) throw new Error('URL 不得包含认证信息')
   if (!ALLOWED_PORTS.has(parsed.port)) throw new Error('仅允许 80/443 端口')
-  if (isPrivateHost(parsed.hostname)) throw new Error('不允许访问内网地址')
+  if (isPrivateHost(parsed.hostname)) throw new SsrfRejectError('private_host', '不允许访问内网地址')
   return parsed
+}
+
+type SsrfRejectCode = 'private_host' | 'private_dns' | 'redirect_denied'
+
+class SsrfRejectError extends Error {
+  readonly code: SsrfRejectCode
+  constructor(code: SsrfRejectCode, message: string) {
+    super(message)
+    this.name = 'SsrfRejectError'
+    this.code = code
+  }
+}
+
+/** SSRF 策略拒绝的两种来源，拆开以分别映射 fetch_outcome：
+ *  - 私网拒绝（原始 URL 或 DNS 解析到内网）→ ssrf_reject
+ *  - 重定向目标不被允许 → redirect_denied
+ *  基于 SsrfRejectError.code 分类，不依赖中文消息字面量。 */
+function isPrivateReject(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  return code === 'private_host' || code === 'private_dns'
+}
+
+function isRedirectDenied(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === 'redirect_denied'
 }
 // ── 镜像结束 ──
 
@@ -188,19 +212,6 @@ type FetchGuardResult = {
 function isAbortError(error: unknown): boolean {
   const e = error as { name?: string; message?: string } | null
   return e?.name === 'AbortError' || !!e?.message?.includes('abort')
-}
-
-/** SSRF 策略拒绝的两种来源，拆开以分别映射 fetch_outcome：
- *  - 私网拒绝（原始 URL 或 DNS 解析到内网）→ ssrf_reject
- *  - 重定向目标不被允许 → redirect_denied
- *  保持与 ssrf-guard.ts 语义一致。 */
-function isPrivateReject(error: unknown): boolean {
-  const msg = (error as { message?: string } | null)?.message || ''
-  return msg.includes('内网') || msg === '不允许访问内网地址' || msg === '目标 DNS 解析到内网地址'
-}
-
-function isRedirectDenied(error: unknown): boolean {
-  return (error as { message?: string } | null)?.message === '重定向目标不被允许'
 }
 
 /** DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
@@ -229,7 +240,7 @@ async function _dnsLookupSafe(hostname: string): Promise<boolean> {
 async function _validateUrl(raw: string): Promise<URL> {
   const parsed = validateUrlShape(raw)
   const dnsSafe = await _dnsLookupSafe(parsed.hostname)
-  if (!dnsSafe) throw new Error('目标 DNS 解析到内网地址')
+  if (!dnsSafe) throw new SsrfRejectError('private_dns', '目标 DNS 解析到内网地址')
   return parsed
 }
 
@@ -274,7 +285,7 @@ async function _fetchWithRedirectGuard(
       try {
         validated = await _validateUrl(nextUrl.href)
       } catch {
-        throw new Error('重定向目标不被允许')
+        throw new SsrfRejectError('redirect_denied', '重定向目标不被允许')
       }
       // 303 必须改 GET；301/302 对 HEAD 多数站点期望 GET
       if ([301, 302, 303].includes(lastResponse.status) || currentMethod === 'HEAD') {
