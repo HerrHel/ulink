@@ -8,6 +8,7 @@ import * as os from 'os'
 import { getSupabaseClient } from '../lib/supabase.js'
 import { getCurrentUser } from '../lib/auth.js'
 import * as format from '../lib/format.js'
+import { parseBackup } from '../lib/backupParse.js'
 import type { OutputFormat } from '../types.js'
 
 const BACKUP_DIR = path.join(os.homedir(), '.linkvault', 'backups')
@@ -110,16 +111,42 @@ export function registerBackupCommand(program: Command): void {
         const backups = files.map((filename) => {
           const filepath = path.join(BACKUP_DIR, filename)
           const stats = fs.statSync(filepath)
-          const content = JSON.parse(fs.readFileSync(filepath, 'utf-8'))
+          const content = fs.readFileSync(filepath, 'utf-8')
+          const parse = parseBackup(content)
 
+          // 两分支共用统一结构：corrupt 标记 + bookmarks/groups 用 string 显示
+          // （正常行 `${count}`、损坏行「-」），便于 TS 推断一致给 format.output 消费。
+          if (!parse.ok) {
+            // BG-9 修复：损坏文件不再让整个 list 全断退出——降级显示，
+            // filename + size 仍可见、createdAt 用文件 birthtime fallback、
+            // bookmarks/groups 显示「-」与解析错误提示，其余好备份照常列出。
+            return {
+              filename,
+              size: `${(stats.size / 1024).toFixed(1)} KB`,
+              createdAt: stats.birthtime.toLocaleString('zh-CN'),
+              bookmarks: '-',
+              groups: '-',
+              corrupt: true,
+              error: parse.error,
+            }
+          }
+
+          const data = parse.data
           return {
             filename,
             size: `${(stats.size / 1024).toFixed(1)} KB`,
-            createdAt: content.createdAt || stats.birthtime.toLocaleString('zh-CN'),
-            bookmarks: content.bookmarks?.length || 0,
-            groups: content.siblingGroups?.length || 0,
+            createdAt: data.createdAt || stats.birthtime.toLocaleString('zh-CN'),
+            bookmarks: String(data.bookmarks?.length || 0),
+            groups: String(data.siblingGroups?.length || 0),
+            corrupt: false,
+            error: '',
           }
         })
+
+        const corruptCount = backups.filter((b) => b.corrupt).length
+        if (corruptCount > 0) {
+          format.warn(`${corruptCount} 个备份文件已损坏（见下方「-」标记行）`)
+        }
 
         format.output(
           backups,
@@ -161,7 +188,17 @@ export function registerBackupCommand(program: Command): void {
         }
 
         const content = fs.readFileSync(filepath, 'utf-8')
-        const data = JSON.parse(content)
+        const parse = parseBackup(content)
+
+        // BG-9 修复：损坏文件标具体解析失败原因而非抛泛化 JSON.parse stack，
+        // 避免一个明确不可读的备份文件给出含糊的「恢复失败: Unexpected token」。
+        if (!parse.ok) {
+          format.error(`备份文件已损坏无法读取: ${parse.error}`)
+          process.exit(1)
+          return
+        }
+
+        const data = parse.data
 
         if (!data.bookmarks && !data.siblingGroups && !data.categories) {
           format.error('无效的备份文件格式')
