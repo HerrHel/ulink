@@ -131,6 +131,10 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
       order: plain.order as number, useCount: plain.useCount as number,
       attributes: plain.attributes as Record<string, boolean>,
       isExpanded: plain.isExpanded as boolean,
+      // pinnedAt 复原：语义 A「恢复历史版本整套回滚含置顶态」。'pinnedAt' in plain 判老快照
+      // schema 兼容（togglePin 加之前的历史快照无 pinnedAt 字段 → 不传 key，spread 保留 prev.pinnedAt
+      // 不误取消置顶；含 pinnedAt 的快照恢复其值并进 _trackChange → 云同步 partial 推 pinned_at 列）。
+      ...('pinnedAt' in plain ? { pinnedAt: plain.pinnedAt as number | undefined } : {}),
     })
   } else {
     // bookmarkIds 过滤掉已删书签——历史快照里的 bookmarkIds 引用了之后被删除的书签 id。
@@ -144,6 +148,8 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
       attributes: plain.attributes as Record<string, boolean>,
       bookmarkIds: filteredIds,
       notes: plain.notes as string, useCount: plain.useCount as number,
+      // pinnedAt 复原（同 bookmark 分支语义 A + 老快照兼容）
+      ...('pinnedAt' in plain ? { pinnedAt: plain.pinnedAt as number | undefined } : {}),
     })
     // 同步 TipTap 编辑器内容（若该组编辑器仍挂载）：
     // GroupEditor 只在 onMounted 时读一次 group.notes，之后无 watch → setContent 逻辑，
