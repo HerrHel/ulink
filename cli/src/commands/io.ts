@@ -7,6 +7,7 @@ import * as path from 'path'
 import { getSupabaseClient } from '../lib/supabase.js'
 import { getCurrentUser } from '../lib/auth.js'
 import * as format from '../lib/format.js'
+import { parseCsv } from '../lib/csvParse.js'
 import type { Bookmark, SiblingGroup, Category } from '../types.js'
 
 function generateId(): string {
@@ -308,9 +309,11 @@ export function registerImportExportCommand(program: Command): void {
         }
 
         const content = fs.readFileSync(filePath, 'utf-8')
-        const lines = content.split('\n').filter((line) => line.trim())
+        // BG-8 修复：原 content.split('\n').filter(...) 切断跨行引号字段致 CLI 自导出 CSV 自导入坏数据，
+        // 改用状态机 parseCsv 维护跨行引号状态（与 lib/csvParse.ts 一致）。
+        const rows = parseCsv(content)
 
-        if (lines.length < 2) {
+        if (rows.length < 2) {
           format.error('CSV 文件为空或缺少数据行')
           process.exit(1)
         }
@@ -323,8 +326,8 @@ export function registerImportExportCommand(program: Command): void {
         let errors = 0
 
         // 跳过表头
-        for (let i = 1; i < lines.length; i++) {
-          const fields = parseCsvLine(lines[i])
+        for (let i = 1; i < rows.length; i++) {
+          const fields = rows[i]
           if (fields.length < 3) {
             errors++
             continue
@@ -378,40 +381,4 @@ function escapeCsv(field: string): string {
     return `"${field.replace(/"/g, '""')}"`
   }
   return field
-}
-
-/** 解析 CSV 行 */
-function parseCsvLine(line: string): string[] {
-  const fields: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else {
-        current += char
-      }
-    } else {
-      if (char === '"') {
-        inQuotes = true
-      } else if (char === ',') {
-        fields.push(current.trim())
-        current = ''
-      } else {
-        current += char
-      }
-    }
-  }
-
-  fields.push(current.trim())
-  return fields
 }
