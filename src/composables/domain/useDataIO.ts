@@ -305,9 +305,13 @@ export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroup
     if (!g.id || !g.name) continue
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
     const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => ds.bookmarkMap[bid])
+    // categoryId 兜底：源 categoryId 为空 或 指向不存在分类（导出者填错/源数据被半删/
+    // 同名分类被合并跳过未建 id）时，安全兜底到 CAT_UNCATEGORIZED，避免组挂悬空分类 id
+    // 致分类筛选下组卡消失、侧栏分类引用悬空。仅当本地 categoryMap 真有该 id 才用之。
+    const catId = g.categoryId && ds.categoryMap[g.categoryId] ? g.categoryId : CAT_UNCATEGORIZED
     const parsed = SiblingGroupSchema.safeParse({
       id: g.id, name: g.name,
-      categoryId: g.categoryId || CAT_UNCATEGORIZED,
+      categoryId: catId,
       icon: g.icon || '', order: g.order || 0,
       isExpanded: g.isExpanded || false,
       attributes: g.attributes || {},

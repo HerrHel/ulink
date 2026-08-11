@@ -742,6 +742,42 @@ describe('_mergeGroups 合并去重护栏', () => {
     expect(r).toEqual({ imported: 0, skipped: 1 })
     expect(ds.siblingGroups.length).toBe(0)
   })
+
+  it('categoryId 指向不存在分类时兜底到 CAT_UNCATEGORIZED——避免组挂悬空分类 id 致分类筛选下消失', () => {
+    // 真 bug 复现：源 backup 的组 categoryId='cat_ghost'，但本地（及同源 categories 列表）
+    // 均无该分类（导出者填错/源被半删/同名分类合并未建 id）。旧 `g.categoryId || CAT_UNCATEGORIZED`
+    // 仅兜底假值，非空但悬空的 'cat_ghost' 直接采用 → 组挂悬空分类 id。
+    const ds = useDataStore()
+    const r = _mergeGroups(ds, [
+      { id: 'g1', name: '悬空分类组', categoryId: 'cat_ghost', bookmarkIds: [], icon: '', order: 0, isExpanded: false, attributes: {}, notes: '', useCount: 0 } as any,
+    ] as any)
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    const g = ds.groupMap['g1']
+    // 兜底到 CAT_UNCATEGORIZED 而非悬空的 'cat_ghost'
+    expect(g.categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(g.categoryId).not.toBe('cat_ghost')
+  })
+
+  it('categoryId 指向已存在分类时正常采用（不误兜底）', () => {
+    const ds = useDataStore()
+    ds.addCategory({ id: 'realCat', name: '真分类', icon: 'star', color: '', order: 0, updatedAt: 1 } as any)
+    const r = _mergeGroups(ds, [
+      { id: 'g1', name: '挂真分类组', categoryId: 'realCat', bookmarkIds: [], icon: '', order: 0, isExpanded: false, attributes: {}, notes: '', useCount: 0 } as any,
+    ] as any)
+    expect(r).toEqual({ imported: 1, skipped: 0 })
+    expect(ds.groupMap['g1'].categoryId).toBe('realCat')
+  })
+
+  it('空/缺省 categoryId 兜底到 CAT_UNCATEGORIZED（保留旧行为）', () => {
+    const ds = useDataStore()
+    const r = _mergeGroups(ds, [
+      { id: 'g1', name: '空cat组', categoryId: '', bookmarkIds: [] } as any,
+      { id: 'g2', name: '缺cat组', bookmarkIds: [] } as any,
+    ] as any)
+    expect(r).toEqual({ imported: 2, skipped: 0 })
+    expect(ds.groupMap['g1'].categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(ds.groupMap['g2'].categoryId).toBe(CAT_UNCATEGORIZED)
+  })
 })
 
 // ── _attrsToTags 护栏 ──
