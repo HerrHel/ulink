@@ -71,8 +71,26 @@ vi.mock('../../lib/supabase.js', () => {
 
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn() }))
 
-const _edState = vi.hoisted(() => ({ editor: null as { commands: { setContent: ReturnType<typeof vi.fn> } } | null }))
-vi.mock('../../lib/editor.js', () => ({ EditorManager: { get: () => _edState.editor } }))
+// ── EditorManager mock：适配 restoreFromHistory 改用 silentSetContent（G1-003 守门同口径）。
+//    旧版只 mock get；修复后行 156 调 silentSetContent，mock 缺即 throw —— 故补 silent 语义
+//    忠实复刻 editor.ts:75-88（递增 _silentDepth 包 setContent + depth--）与 isSilentSetContent。
+const _edState = vi.hoisted(() => ({
+  editor: null as { commands: { setContent(html: string): void } } | null,
+}))
+let _silentDepth = 0
+vi.mock('../../lib/editor.js', () => ({
+  EditorManager: {
+    get: () => _edState.editor,
+    silentSetContent: (gid: string, html: string): boolean => {
+      const ed = _edState.editor
+      if (!ed) return false
+      _silentDepth++
+      try { ed.commands.setContent(html) } finally { _silentDepth-- }
+      return true
+    },
+    isSilentSetContent: (): boolean => _silentDepth > 0,
+  },
+}))
 
 import { fetchHistory, restoreFromHistory } from '../../composables/domain/useSyncHistory.js'
 import { useDataStore } from '../../stores/data.js'
@@ -107,6 +125,7 @@ beforeEach(() => {
   _supabaseStub.listRes = null
   _supabaseStub.singleRes = null
   _edState.editor = null
+  _silentDepth = 0
   localStorage.clear()
 })
 
