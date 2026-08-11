@@ -134,13 +134,13 @@ export function useVaultBiometric() {
     const aesKey = await _deriveAesFromPrf(prfResult.results.first)
     const encrypted = await encrypt(masterPassword, aesKey)
 
-    safeSetItem(BIO_KEY, JSON.stringify({
+    // 契约消费：safeSetItem 返 boolean（配额满/隐私模式禁写→catch 返 false），
+    // 丢弃则谎报 true 致调用方误标 biometricEnrolled 但 BIO_KEY 未写盘→下次解锁被锁外
+    return safeSetItem(BIO_KEY, JSON.stringify({
       credentialId,
       prfSalt: _bufToBase64(prfSalt),
       encrypted,
     } satisfies BiometricData))
-
-    return true
   }
 
   /** 弹指纹解锁，返回保险柜主密码或 null */

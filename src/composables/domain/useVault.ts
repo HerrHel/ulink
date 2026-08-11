@@ -31,8 +31,9 @@ function _readLocalCanary(): Record<string, unknown> | null {
   return obj && typeof obj === 'object' ? obj : null
 }
 
-function _writeLocalCanary(canaryData: Record<string, unknown>) {
-  safeSetItem(LOCAL_CANARY_KEY, JSON.stringify(canaryData))
+function _writeLocalCanary(canaryData: Record<string, unknown>): boolean {
+  // 契约消费：透传 safeSetItem 结果（配额满/禁写→false），供 _saveCanaryData 判定
+  return safeSetItem(LOCAL_CANARY_KEY, JSON.stringify(canaryData))
 }
 
 function _removeLocalCanary() {
