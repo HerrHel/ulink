@@ -149,6 +149,17 @@ const bioLoading = ref(false)
 // 每次 onBiometricUnlock 自增 gen 使旧 await 的 emit 短路；watch 负向分支推进 gen 让关闭时在途链失效。
 let _bioGen = 0
 
+// onUnlock/onReset/onChangePw 密码路径跨 await 解锁窗口的 orphan 竞态守门：与 onBiometricUnlock
+// 同根漏守（bug1 commit 803f16be 只修指纹路径，密码路径未触及）。onReset 经 resetWithRecoveryKey
+// 含 3×PBKDF2 + 重写 canary +（登录用户）Supabase upsert 网络往返；onChangePw 经 changeMasterPassword
+// 含 3×PBKDF2 + 重加密本机所有数据 + push 新 key 密文到云——弱网数秒 awaiting 窗口。此期间用户可点
+// 遮罩 onCancel emit('close') 使 store.modals.e2eUnlock=false。watch 负向分支 reset loading.value=false
+// 恰好绕过 onUnlock/onReset/onChangePw 顶部 `if (loading.value) return` 守门——await 完成后 if (ok) 的
+// emit('unlocked') 仍触发 → App.vue onE2EUnlocked 跑 drainPendingUnlock(true)+debouncedSync，取消语义
+// 被吞（key 进内存 + 敏感字段推云）。代际 token 对齐 _bioGen 模式：每次密码路径自增 gen 使旧 await 的
+// emit 短路；watch 负向分支推进 gen 让关闭时在途链失效。
+let _pwGen = 0
+
 const alreadyUnlocked = computed(() => !!e2e.isUnlocked.value)
 
 const canReset = computed(() =>
@@ -180,6 +191,8 @@ watch(() => props.open, (isOpen) => {
     bioLoading.value = false
     // 关闭时推进代际 token，短路在途 onBiometricUnlock 的 emit（取消语义生效）
     _bioGen++
+    // 同步推进密码路径代际 token，短路在途 onUnlock/onReset/onChangePw 的 emit
+    _pwGen++
   } else {
     mode.value = props.initialMode ?? 'unlock'
     bioAvailable.value = e2e.isBiometricAvailable()
@@ -201,9 +214,13 @@ function enterUnlock() {
 
 async function onUnlock() {
   if (loading.value) return
+  // 代际 token 防跨取消 await 窗口 orphan emit：watch 负向分支会推进 _pwGen 让旧 await 短路
+  const localGen = ++_pwGen
   loading.value = true
   error.value = ''
   const ok = await e2e.unlock(masterPw.value)
+  // await 期间用户可能已点遮罩取消（watch 负向分支已推进 _pwGen）
+  if (localGen !== _pwGen) { loading.value = false; return }
   loading.value = false
   if (ok) {
     emit('unlocked')
@@ -222,8 +239,12 @@ async function onReset() {
   if (pwLenErr) { error.value = pwLenErr; return }
   const pwMismatchErr = newPasswordMismatchError(newPw.value, newPw2.value)
   if (pwMismatchErr) { error.value = pwMismatchErr; return }
+  // 代际 token 防跨取消 await 窗口 orphan emit（重置路径含云端 upsert，弱网数秒 awaiting 窗口）
+  const localGen = ++_pwGen
   loading.value = true
   const ok = await e2e.resetWithRecoveryKey(recoveryKey.value.trim(), newPw.value)
+  // await 期间用户可能已点遮罩取消（watch 负向分支已推进 _pwGen）
+  if (localGen !== _pwGen) { loading.value = false; return }
   loading.value = false
   if (ok) {
     emit('unlocked')
@@ -244,8 +265,12 @@ async function onChangePw() {
   if (pwLenErr) { error.value = pwLenErr; return }
   const pwMismatchErr = newPasswordMismatchError(newPw.value, newPw2.value)
   if (pwMismatchErr) { error.value = pwMismatchErr; return }
+  // 代际 token 防跨取消 await 窗口 orphan emit（changeMasterPassword 重加密本机全部数据 + 推新 key 密文到云，弱网数秒 awaiting 窗口）
+  const localGen = ++_pwGen
   loading.value = true
   const ok = await e2e.changeMasterPassword(alreadyUnlocked.value ? '' : oldPw.value, newPw.value)
+  // await 期间用户可能已点遮罩取消（watch 负向分支已推进 _pwGen）——不短路会继续 await showConfirm + emit('unlocked')
+  if (localGen !== _pwGen) { loading.value = false; return }
   loading.value = false
   if (ok) {
     if (e2e.cloudCanaryStale.value) {
