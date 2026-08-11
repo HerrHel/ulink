@@ -4,7 +4,7 @@
  * 锁定 useDataIO.ts:364 的 parseBookmarkHTML 全部分支行为契约：
  * - 基础解析：DL/DT/<a> 提取书签、id 形态、categoryId/parentId/order 默认
  * - XSS 过滤：javascript:/data: href 丢弃、合法 http(s) 保留
- * - add_date→createdAt 三分支：>1e9 原样秒级、>0 当秒级乘 1000、空/0/缺省→now 兜底
+ * - add_date→createdAt 三分支：>=1e12 毫秒原样、>0 秒×1000 归毫秒、0/缺省→now 兜底
  * - 嵌套结构：DL>DT>H3 建分类上下文 + 与子 <a> 同级、H3→notes 注入 [分类名] 标记
  * - 顶层 H3（直接出现于 body，DL 外）建分类
  * - title 兜底：空 title 用 href 占位、icon 透传
@@ -52,8 +52,8 @@ describe('parseBookmarkHTML（Netscape 书签解析护栏）', () => {
       expect(b.password).toBe('')
       // 顶层无 H3 分类 → notes 不注入分类标记（保持空）
       expect(b.notes).toBe('')
-      // ADD_DATE=1700000000 > 1e9 → createdAt 取原样秒级值
-      expect(b.createdAt).toBe(1_700_000_000)
+      // ADD_DATE=1700000000 是 Chrome Netscape 秒（< 1e12）→ × 1000 归毫秒（修 1e9 阈值歧义 bug）
+      expect(b.createdAt).toBe(1_700_000_000 * 1000)
       // updatedAt 始终 = now
       expect(b.updatedAt).toBe(FIXED_NOW)
     })
@@ -120,13 +120,31 @@ describe('parseBookmarkHTML（Netscape 书签解析护栏）', () => {
   })
 
   describe('add_date → createdAt 三分支 epoch 归一', () => {
-    it('ADD_DATE > 1e9：直接当秒级时间戳原样采用（浏览器历史大值）', () => {
+    it('ADD_DATE < 1e12（Chrome/Firefox 10 位 Unix 秒）：× 1000 归毫秒，不当毫秒原样存', () => {
+      // 修复「>1e9 原样用」阈值歧义 bug：1700000123 是 2023-11 秒值，
+      // 旧实现当毫秒存 → 显示 1970-01-20；现按秒 × 1000 = 1700000123000（2023-11 毫秒）。
       const html = `<DT><A HREF="https://x.example/" ADD_DATE="1700000123">大值秒</A>`
       const out = parseBookmarkHTML(html)
-      expect(out[0].createdAt).toBe(1_700_000_123)
+      expect(out[0].createdAt).toBe(1_700_000_123_000)
+      // 显式锁定错误呈现：createdAt 对应 2023-11 而非 1970-01
+      expect(new Date(out[0].createdAt).getUTCFullYear()).toBe(2023)
     })
 
-    it('ADD_DATE > 0 但 < 1e9：当秒级乘 1000 转毫秒', () => {
+    it('Chrome 早期秒值（2010-2020）同样 × 1000，不被当毫秒存为 1970', () => {
+      // 1280000000 = 2010-07 秒；旧实现 >1e9 原样用 → 1970-01-15。
+      const html = `<DT><A HREF="https://x.example/" ADD_DATE="1280000000">2010秒</A>`
+      const out = parseBookmarkHTML(html)
+      expect(out[0].createdAt).toBe(1_280_000_000_000)
+      expect(new Date(out[0].createdAt).getUTCFullYear()).toBe(2010)
+    })
+
+    it('ADD_DATE >= 1e12（13 位毫秒，JS Date.now() 量级）：原样采用', () => {
+      const html = `<DT><A HREF="https://x.example/" ADD_DATE="1700000123456">毫秒值</A>`
+      const out = parseBookmarkHTML(html)
+      expect(out[0].createdAt).toBe(1_700_000_123_456)
+    })
+
+    it('ADD_DATE > 0 但 < 1e9（旧小值秒/边界）：当秒级乘 1000 转毫秒', () => {
       // 100000000 = 1e8 < 1e9，按秒×1000
       const html = `<DT><A HREF="https://x.example/" ADD_DATE="100000000">小值秒</A>`
       const out = parseBookmarkHTML(html)
@@ -145,7 +163,7 @@ describe('parseBookmarkHTML（Netscape 书签解析护栏）', () => {
     })
 
     it('ADD_DATE=0 走 now 兜底而非「>0 乘 1000」假 0 分支（边界锁定）', () => {
-      // 0 既不 > 1e9 也不 > 0，直接落 now 兜底；防误判 0 走 0*1000=0
+      // 0 既不 >= 1e12 也不 > 0，直接落 now 兜底；防误判 0 走 0*1000=0
       const html = `<DT><A HREF="https://zero.example/" ADD_DATE="0">zero</A>`
       const out = parseBookmarkHTML(html)
       expect(out[0].createdAt).toBe(FIXED_NOW)

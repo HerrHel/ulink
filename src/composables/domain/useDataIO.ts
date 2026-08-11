@@ -452,7 +452,12 @@ export function parseBookmarkHTML(html: string): Bookmark[] {
             useCount: 0,
             attributes: {},
             isExpanded: false,
-            createdAt: addDate > 1000000000 ? addDate : addDate > 0 ? addDate * 1000 : now,
+            // Netscape ADD_DATE 规范是 Unix 秒；个别导出器可能写毫秒。
+            // 阈值歧义修正：>= 1e12（13 位，JS Date.now() 量级）算毫秒原样采用；
+            // < 1e12 一律按秒 × 1000 归一到毫秒（应用内部 createdAt 是毫秒语义，见导出侧 /1000）。
+            // 旧实现 > 1e9 原样用，会把 Chrome 10 位秒（如 1630000000=2021-08 秒）当毫秒存 →
+            // 时间显示回到 1970，且与导出侧 Math.floor(createdAt/1000) round-trip 失效。
+            createdAt: addDate >= 1e12 ? addDate : addDate > 0 ? addDate * 1000 : now,
             updatedAt: now,
           })
         }
