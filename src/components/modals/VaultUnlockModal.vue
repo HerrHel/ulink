@@ -98,6 +98,16 @@ const loading = ref(false)
 const bioAvailable = ref(false)
 const bioLoading = ref(false)
 
+// onBiometricUnlock 跨 await 解锁窗口的 orphan 竞态守门：弹窗已录入指纹且可用时
+// watch(props.open) 正向分支 nextTick 起指纹链，await navigator.credentials.get 是平台
+// 模态秒级阻塞窗口——此期间用户可点遮罩 onCancel emit('close') 使 store.modals.vaultUnlock=false。
+// 本组件裸挂无外层 v-if（与 BookmarkModal/CategoryModal 不同），关闭后实例常驻、负向分支仅重置
+// ref 不短路在途异步。指纹后续 resolve → unlockVault → emit('unlocked') 仍触发 → App.vue
+// onVaultUnlocked 跑 switchSpace('vault') 把用户强行切进私密空间，取消语义被吞。
+// 代际 token 对齐 ChildBookmarkEditModal._loadGen / HistoryPanel._gen / bdPwShow._detailGen：
+// 每次 onBiometricUnlock 自增 gen 使旧 await 的 emit 短路；watch 负向分支推进 gen 让关闭时在途链失效。
+let _bioGen = 0
+
 const canReset = computed(() =>
   recoveryKey.value.trim().length > 0 &&
   newPw.value.length >= 8 &&
@@ -117,6 +127,8 @@ watch(() => props.open, (isOpen) => {
     error.value = ''
     loading.value = false
     bioLoading.value = false
+    // 关闭时推进代际 token，短路在途 onBiometricUnlock 的 emit（取消语义生效）
+    _bioGen++
   } else {
     bioAvailable.value = vault.isBiometricAvailable()
     // 已录入指纹且可用时自动弹指纹
@@ -176,14 +188,20 @@ function onCancel() {
 
 async function onBiometricUnlock() {
   if (bioLoading.value || loading.value) return
+  const localGen = ++_bioGen
   bioLoading.value = true
   error.value = ''
   const pw = await vault.unlockWithBiometric()
+  // await 指纹平台模态秒级窗口期间用户可能已点遮罩取消（watch 负向分支已推进 _bioGen）
+  if (localGen !== _bioGen) { bioLoading.value = false; return }
   if (!pw) {
     bioLoading.value = false
+    // 用户取消静默，不设 error；失败带提示
     return
   }
   const ok = await vault.unlockVault(pw)
+  // 二次 await 后再判一次 gen：unlockVault 期间用户也可能取消
+  if (localGen !== _bioGen) { bioLoading.value = false; return }
   bioLoading.value = false
   if (ok) {
     emit('unlocked')
