@@ -100,7 +100,11 @@ export async function pullChanges(full = false): Promise<boolean> {
       if (res.error) { console.warn('[sync] deletion sync query failed:', res.error); continue }
       for (const row of res.data || []) {
         const id = (row as { id: string }).id
-        if (id && isLocalAlive[type](id)) _deleteWithoutEcho(ds, type, id)
+        // 与 reconcileDelete(122)/merge(115)/Realtime(52) 一致守门：本地 dirty/pending
+        // 的 in-flight 编辑项不被远端软删批次静默覆盖（其 upsert 推上去会 revive）
+        if (id && isLocalAlive[type](id) && !ds._dirtyIds.has(id) && !_isPendingSync(id)) {
+          _deleteWithoutEcho(ds, type, id)
+        }
       }
     }
 

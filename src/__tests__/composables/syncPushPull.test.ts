@@ -688,3 +688,43 @@ describe('syncPull 解锁态竞态（D1-4）', () => {
     expect(ds.bookmarkMap['bm-race-2']).toBeUndefined()
   })
 })
+
+describe('syncPull — 远端软删批次 dirty/pending guard', () => {
+  it('本地 dirty 项不被远端软删批次静默删除（in-flight 编辑不被抹掉）', async () => {
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-dirty' }) as any)
+    ds._dirtyIds.add('bm-dirty')
+    const port = createMemorySyncPort({
+      softDeleted: { bookmarks: [{ id: 'bm-dirty', updated_at_num: 9999 }] },
+    })
+    setSyncRemotePort(port)
+    const ok = await useCloudSync().pullFromCloud(false)
+    expect(ok).toBe(true)
+    expect(ds.bookmarkMap['bm-dirty'].deletedAt).toBeUndefined()
+    expect(ds._dirtyIds.has('bm-dirty')).toBe(true)
+  })
+
+  it('本地 pending 项不被远端软删批次静默删除', async () => {
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-pending' }) as any)
+    __testPendingSync.add('bm-pending')
+    const port = createMemorySyncPort({
+      softDeleted: { bookmarks: [{ id: 'bm-pending', updated_at_num: 9999 }] },
+    })
+    setSyncRemotePort(port)
+    await useCloudSync().pullFromCloud(false)
+    expect(ds.bookmarkMap['bm-pending'].deletedAt).toBeUndefined()
+  })
+
+  it('非 dirty/pending 的活跃项被远端软删批次正常软删（guard 不误伤）', async () => {
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-clean' }) as any)
+    ds._dirtyIds.clear()
+    const port = createMemorySyncPort({
+      softDeleted: { bookmarks: [{ id: 'bm-clean', updated_at_num: 9999 }] },
+    })
+    setSyncRemotePort(port)
+    await useCloudSync().pullFromCloud(false)
+    expect(ds.bookmarkMap['bm-clean'].deletedAt).toBeDefined()
+  })
+})
