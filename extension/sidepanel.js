@@ -743,14 +743,16 @@
   }
 
   // ── Auth 状态变化 ──
-  // A3（2026-08-10 裁定修复）：Supabase v2 onAuthStateChange 注册即发 INITIAL_SESSION 事件
-  //（带当前会话快照），与下方 checkAuth() 的 getSession() 重复触发 loadFromCloud——
+  // A3（2026-08-10 裁定修复 + 本轮纯函数化锁契约）：Supabase v2 onAuthStateChange 注册即发
+  // INITIAL_SESSION 事件（带当前会话快照），与 checkAuth() 的 getSession() 重复触发 loadFromCloud——
   // 每次打开面板多一次网络查询 + 双渲染。INITIAL_SESSION 快照由 checkAuth() 独占加载，
   // 此处跳过；后续真实事件（SIGNED_IN/TOKEN_REFRESH/SIGNED_OUT）仍正常拉数据。
+  // 决策抽到 auth-flow.js 纯函数（vitest 锁契约），listener 据 action 执行副作用。
   sb.auth.onAuthStateChange(async function (event, session) {
-    if (event === 'INITIAL_SESSION') return
-    if (session && session.user) {
-      userId = session.user.id; loggedIn = true
+    var decision = window.LinkVaultAuthFlow.handleAuthStateChange(event, session)
+    if (decision.action === 'skip') return
+    if (decision.action === 'authed') {
+      userId = decision.user.id; loggedIn = true
       updateLoginUI()
       await loadFromCloud()
       loadCurrentTab()
