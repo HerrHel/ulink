@@ -109,14 +109,13 @@ export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
       ds._bumpSearchVersion()
     }
   }
-  // Sync TipTap editor if it's mounted (visible group)
-  const ed = EditorManager.get(gid)
-  if (ed) {
-    _restoring = true
-    try { ed.commands.setContent(snap.notes || '') }
-    finally { _restoring = false }
-  }
-  // If no editor (group not visible), Vue reactivity renders sg.notes on next mount
+  // Sync TipTap editor if it's mounted (visible group).
+  // G1-003：用 silentSetContent 抑制 onUpdate→syncToStore→updateGroup 副作用链。
+  // plain setContent 默认 emitUpdate=true 会触发 onUpdate——_restoring 只挡 pushUndo 不挡
+  // syncToStore，于是机器恢复态经 updateGroup 的 _saveLocalHistory/_trackChange 写进版本历史
+  // 与字段脏追踪，绕过上方 L4 注释的设计意图。与 useSyncRealtime 远端 notes 写回同口径。
+  // If no editor (group not visible), silentSetContent 返回 false，Vue 响应式下次 mount 渲染 sg.notes。
+  EditorManager.silentSetContent(gid, snap.notes || '')
 }
 
 /** M7：undo/redo 成功后清掉该组 pushUndo 防抖 timer，
