@@ -149,11 +149,14 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
     // GroupEditor 只在 onMounted 时读一次 group.notes，之后无 watch → setContent 逻辑，
     // 不显式 setContent 的话编辑器仍显示 restore 前的旧内容，随后用户敲字触发
     // syncToStore 用「旧内容 + 新字符」覆盖刚 restore 的 notes → restore 被静默抹掉。
-    // 对齐 useUndo.restoreSnapshot 的 EditorManager.setContent 策略。
-    // onUpdate 会触发 pushUndo 推快照（restore 前的状态，用户可 undo 回去）+ syncToStore
-    // 用相同 notes 覆盖（无害），不需要 _restoring 标志。
-    const ed = EditorManager.get(itemId)
-    if (ed) ed.commands.setContent(plain.notes as string || '')
+    // G1-003：与 useUndo.restoreSnapshot / useSyncRealtime 远端写回同口径走 silentSetContent。
+    // 否则 plain setContent 触发 onUpdate → syncToStore → ds.updateGroup 二次调用，
+    // 复用第 1 次 updateGroup 调度的 _saveLocalHistory 防抖 timer，但 _histDebounceData[id]
+    // 被第 2 次调用（state 已是 restore 后版本）无条件覆盖 → timer fire 落盘的「变更前快照」
+    // 实为 restore 后版本（= 当前值）→ HistoryPanel 多一条指向当前版本的伪记录，pre-restore
+    // 版本被覆盖丢失 → 用户失去回退到恢复前状态的能力。silent 短路 onUpdate 不触发 syncToStore，
+    // _saveLocalHistory 只被第 1 次调用一次（记 pre-restore 即真正有意义的变更前快照）。
+    EditorManager.silentSetContent(itemId, plain.notes as string || '')
   }
   saveAppData()
   return true
