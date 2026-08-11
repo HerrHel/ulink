@@ -31,9 +31,10 @@ vi.mock('../../stores/app.js', () => ({
   debouncedSaveAppData: vi.fn(),
   saveAppData: vi.fn(),
 }))
-// EditorManager 不挂载可见编辑器 → get 返回 null 走 updateGroup 路径
+// EditorManager 不挂载可见编辑器 → get 返回 null 走 updateGroup 路径（restoreSnapshot
+// 经 silentSetContent 在 ed=null 时返回 false、editor 跳过 → 与旧行为等价，仅走静默路径）。
 vi.mock('../../lib/editor.js', () => ({
-  EditorManager: { get: () => null, getContentHTML: () => null },
+  EditorManager: { get: () => null, getContentHTML: () => null, silentSetContent: () => false },
 }))
 
 import { pushUndo, performUndo, performRedo } from '../../composables/domain/useUndo.js'
