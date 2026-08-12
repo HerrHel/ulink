@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { safeAtob, safeDecodePassword, encrypt, decrypt, decryptForDisplay, deriveKey, generateCanary, verifyCanary, encryptPassword, autoMigratePassword, decryptPasswordWithKey } from '../crypto.js'
+import { safeAtob, safeDecodePassword, encrypt, decrypt, decryptForDisplay, deriveKey, generateCanary, verifyCanary, decryptPasswordWithKey } from '../crypto.js'
 
 describe('Password Decoding', () => {
   describe('safeAtob', () => {
@@ -32,51 +32,6 @@ describe('Password Decoding', () => {
     it('should decode MTIz to 123', () => {
       expect(safeDecodePassword('MTIz')).toBe('123')
     })
-  })
-})
-
-describe('Password Migration', () => {
-  it('should return empty for null/undefined', async () => {
-    expect(await autoMigratePassword(null, '')).toBe('')
-    expect(await autoMigratePassword(undefined, '')).toBe('')
-  })
-
-  it('should decode base64 string (legacy format)', async () => {
-    expect(await autoMigratePassword(btoa('legacy-pw'), '')).toBe('legacy-pw')
-  })
-
-  it('should return empty for empty string', async () => {
-    expect(await autoMigratePassword('', '')).toBe('')
-  })
-
-  it('should throw if EncryptedPassword but no masterPassword', async () => {
-    const ep = { encrypted: true as const, data: 'x', iv: 'y', salt: 'z' }
-    await expect(autoMigratePassword(ep, '')).rejects.toThrow('需要主密码')
-  })
-
-  // 正路径：EncryptedPassword 对象 → autoMigratePassword 对象分支 → 明文。
-  // 注：autoMigratePassword 生产零调用（useE2E 走 reencryptPassword 自实现等价逻辑），
-  // 但 useSyncMapping 注释将其对象分支作为「生产路径类型判定的语义锚点」——补测锁定契约。
-  it('解 EncryptedPassword 对象得回明文（与 encryptPassword 对称的 roundtrip 正路径）', async () => {
-    const pw = 'roundtrip-secret-pw'
-    const ep = await encryptPassword(pw, 'master-pw-obj')
-    expect(ep.encrypted).toBe(true)
-    // autoMigratePassword 用 stored.salt 重组三段串 + deriveKey(master, salt) 解
-    const out = await autoMigratePassword(ep, 'master-pw-obj')
-    expect(out).toBe(pw)
-  })
-
-  // 真实行为：autoMigratePassword 对象分支用错误主密码解 EncryptedPassword 时
-  // **不抛错、不返回空**，而是 resolve 出 GCM 认证失败后的乱码/半解值串。
-  // 锁定此行为：它在 crypto 核是一条「错 key 不报错而吐密文状串」的泄漏面
-  // （同 [[lv-e2e-display-cipher-leak]] 关注的展示层密文泄漏同源），护栏应记录
-  // 真实行为以防有人误以为此处有错误处理而依赖它。
-  it('对象分支用错误主密码解 EncryptedPassword 不抛错（吐乱码串，非空非原文）', async () => {
-    const ep = await encryptPassword('right-pw', 'correct-master')
-    const out = await autoMigratePassword(ep, 'wrong-master')
-    expect(typeof out).toBe('string')
-    expect(out).not.toBe('right-pw')
-    expect(out.length).toBeGreaterThan(0)
   })
 })
 
@@ -248,34 +203,6 @@ describe('E2E Encryption', () => {
       parts[2] = (first === 'A' ? 'B' : 'A') + parts[2].slice(1)
       const ok = await verifyCanary(parts.join('.'), key)
       expect(ok).toBe(false)
-    })
-  })
-
-  describe('encryptPassword', () => {
-    it('should produce EncryptedPassword object', async () => {
-      const ep = await encryptPassword('my-plaintext-password', MASTER_PW)
-      expect(ep.encrypted).toBe(true)
-      expect(ep.data).toBeTruthy()
-      expect(ep.iv).toBeTruthy()
-      expect(ep.salt).toBeTruthy()
-    })
-
-    // 对称 roundtrip：encryptPassword -> autoMigratePassword 对象分支得回原文。
-    // 锁定"加密侧 deriveKey(master,salt) + GCM" 与"解密侧 stored.salt 重组三段串 + 同一 deriveKey" 的对称契约。
-    it('encryptPassword 加密后用 autoMigratePassword 解得回原文（对称 roundtrip）', async () => {
-      const pw = 'symmetric-roundtrip-pw-xyz'
-      const ep = await encryptPassword(pw, MASTER_PW)
-      const out = await autoMigratePassword(ep, MASTER_PW)
-      expect(out).toBe(pw)
-    })
-
-    // 多样明文 + 两次加密密文不同（iv/salt 随机）但都解得回原文，锁对称性稳健。
-    it('不同明文经 encryptPassword->autoMigratePassword 均得回原文（含中文/空格/长串）', async () => {
-      const samples = ['简体中文密码 p@ss w0rd!', '', 'a'.repeat(200), ' linea\nbreak\ttab ']
-      for (const s of samples) {
-        const ep = await encryptPassword(s, MASTER_PW)
-        expect(await autoMigratePassword(ep, MASTER_PW)).toBe(s)
-      }
     })
   })
 

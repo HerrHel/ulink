@@ -235,59 +235,6 @@ export async function verifyCanary(encrypted: string, key: CryptoKey): Promise<b
 import type { EncryptedPassword } from './types.js'
 
 /**
- * 使用主密码加密明文密码
- * 返回 EncryptedPassword 对象（AES-256-GCM）
- * @param iterations 可选迭代数（默认 PBKDF2_ITERATIONS）。无生产加密链路使用本函数
- *   （saveBm 走 global cryptoKey 的 encrypt 入口）；保留以兼容历史测试与扩展端接口。
- */
-export async function encryptPassword(plaintext: string, masterPassword: string, iterations: number = PBKDF2_ITERATIONS): Promise<EncryptedPassword> {
-  const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH))
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH))
-  const key = await deriveKey(masterPassword, salt, iterations)
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: _bs(iv) },
-    key,
-    _bs(_toBuffer(plaintext)),
-  )
-  return {
-    encrypted: true,
-    data: _bufToBase64(encrypted),
-    iv: _bufToBase64(iv),
-    salt: _bufToBase64(salt),
-  }
-}
-
-/**
- * 自动迁移/解密存储的密码
- * 支持三种格式：
- * 1. EncryptedPassword 对象（AES-256-GCM）→ 解密
- * 2. 普通 base64 字符串 → 解码（旧版兼容）
- * 3. 空字符串 → 返回空
- * @param iterations 可选迭代数（默认 PBKDF2_ITERATIONS）。无生产解密链路使用本函数
- *   （展示走 decryptPasswordWithKey 用 global cryptoKey）。
- */
-export async function autoMigratePassword(stored: string | EncryptedPassword | null | undefined, masterPassword: string, iterations: number = PBKDF2_ITERATIONS): Promise<string> {
-  if (!stored) return ''
-
-  // 新格式：EncryptedPassword 对象
-  if (typeof stored === 'object' && stored.encrypted === true) {
-    if (!masterPassword) throw new Error('需要主密码')
-    // 重组为 encrypt 函数使用的格式: base64(salt).base64(iv).base64(ciphertext)
-    const ciphertext = stored.salt + '.' + stored.iv + '.' + stored.data
-    const salt = new Uint8Array(_base64ToBuf(stored.salt))
-    const key = await deriveKey(masterPassword, salt, iterations)
-    return decrypt(ciphertext, key)
-  }
-
-  // 旧格式：base64 字符串
-  if (typeof stored === 'string') {
-    return safeDecodePassword(stored)
-  }
-
-  return ''
-}
-
-/**
  * 用已就绪的 E2E cryptoKey 解密 EncryptedPassword 对象为明文。
  *
  * 卡片/详情面板展示密码用：saveBm 在 E2E 解锁时用 e2eStore.cryptoKey（全局 E2E 密钥）

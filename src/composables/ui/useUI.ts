@@ -71,12 +71,6 @@ export async function deleteCategory(id: string) {
   if (ok) { useDataStore().deleteCategory(id); saveAppData() }
 }
 
-export function openAttrModal() {
-  // A2-011：打开前 push 导航栈，浏览器后退可关
-  const ui = useUIStore()
-  if (!ui.modals.attribute) pushNavState()
-  ui.modals.attribute = true
-}
 export function closeAttrModal() { useUIStore().modals.attribute = false }
 
 export function deleteAttribute(id: string) { useDataStore().deleteAttribute(id); saveAppData() }
