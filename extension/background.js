@@ -51,25 +51,26 @@ chrome.commands.onCommand.addListener(function (command) {
   }
 })
 
-/** 新标签页打开 PWA，附带当前页面 URL 和可选的选中文本 */
+/** 新标签页打开 PWA，附带当前页面 URL 和可选的选中文本。B2：返 Promise，调用方 await 后据实响应。 */
 function openPwaWithUrl(url, title, notes) {
-  if (!url) return
-  if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')
-      || url.startsWith('file:') || url.startsWith('javascript:') || url.startsWith('data:')
-      || url.startsWith('blob:') || url.startsWith('view-source:')) return
+  return new Promise(function (resolve) {
+    // 决策抽到 pwa-open.js 纯函数（vitest 锁契约）
+    var decision = window.LinkVaultPwaOpen
+      ? window.LinkVaultPwaOpen.decideOpenPwa(url, title, notes, PWA_URL)
+      : { shouldOpen: !!url, reason: null, targetUrl: url ? PWA_URL + '/?ext_save=1&' + new URLSearchParams({ ext_save_url: url, ext_save_title: title || url }).toString() : null }
+    if (!decision.shouldOpen) { resolve({ ok: false, reason: decision.reason }); return }
 
-  var params = new URLSearchParams({ ext_save_url: url, ext_save_title: title || url })
-  if (notes) params.set('ext_save_notes', notes)
-  var targetUrl = PWA_URL + '/?ext_save=1&' + params.toString()
-
-  // H10：按 URL pattern 仅匹配 PWA 标签，不读用户其它标签 URL
-  chrome.tabs.query({ url: PWA_TAB_URL_PATTERNS }, function (tabs) {
-    var existing = tabs && tabs[0]
-    if (existing) {
-      chrome.tabs.update(existing.id, { active: true, url: targetUrl })
-    } else {
-      chrome.tabs.create({ url: targetUrl })
-    }
+    // H10：按 URL pattern 仅匹配 PWA 标签，不读用户其它标签 URL
+    chrome.tabs.query({ url: PWA_TAB_URL_PATTERNS }, function (tabs) {
+      if (chrome.runtime.lastError) { resolve({ ok: false, reason: chrome.runtime.lastError.message }); return }
+      var existing = tabs && tabs[0]
+      if (existing) {
+        chrome.tabs.update(existing.id, { active: true, url: decision.targetUrl })
+      } else {
+        chrome.tabs.create({ url: decision.targetUrl })
+      }
+      resolve({ ok: true })
+    })
   })
 }
 
@@ -84,8 +85,9 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
 
   if (msg.type === 'SAVE_TO_VAULT') {
-    openPwaWithUrl(msg.url, msg.title, msg.notes)
-    sendResponse({ ok: true })
-    return false
+    openPwaWithUrl(msg.url, msg.title, msg.notes).then(function (r) {
+      sendResponse(r)
+    })
+    return true
   }
 })
