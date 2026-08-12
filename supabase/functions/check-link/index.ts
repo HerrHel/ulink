@@ -218,11 +218,12 @@ function isAbortError(error: unknown): boolean {
  *  H6：解析失败 / resolveDns 不可用时改为拒绝（fail-closed），不再 best-effort 放行。
  *  避免解析能力受限时跳过私网校验、以及 DNS 重绑定窗口下「校验失败仍 fetch」的放大。
  *  域名解析到 0 条 A/AAAA 也拒（无公网目标可连）。
- *  IP 字面量不查 DNS（已由 validateUrlShape 覆盖）。 */
+ *  IP 字面量不查 DNS（已由 validateUrlShape 覆盖）。
+ *  E3：无点单标签 hostname（如 gateway/vault）不再提前放行——若运行时 DNS 搜索域能解析
+ *  单标签到内网 IP 则 fetch 可达内网 HTTP = 条件性 SSRF。所有非 IP 字面量 hostname 一律
+ *  走完整 A/AAAA 私网校验，fail-closed（解析失败/0 记录/命中私网均拒）。 */
 async function _dnsLookupSafe(hostname: string): Promise<boolean> {
   if (hostname === 'localhost') return false
-  // 非域名（IP 字面量等）已由 validateUrlShape 校验
-  if (!hostname.includes('.')) return true
   try {
     const [records, records6] = await Promise.all([
       Deno.resolveDns(hostname, 'A').catch(() => [] as string[]),
@@ -359,7 +360,15 @@ serve(async (req) => {
         // HEAD 终 hop 仍被 CDN/WAF/不支持时，从已校验的 finalUrl 单趟 GET（跳过中间 redirect）。
         // 若链中已升 GET（methodUsed==='GET'），不再从原 URL 双全链重跑。
         if (result.methodUsed === 'HEAD' && shouldRetryAsGet(result.response.status)) {
-          result = await _fetchWithRedirectGuard(result.finalUrl, 'GET', DEFAULT_TIMEOUT_MS)
+          try {
+            result = await _fetchWithRedirectGuard(result.finalUrl, 'GET', DEFAULT_TIMEOUT_MS)
+          } catch (getError) {
+            // E1：GET 兜底失败（超时/连接失败）不丢 HEAD 已拿到的 evidence——HEAD 已成功获取
+            // 状态码（400/401/403/404/405/501）是有效 evidence，客户端 classifyHttpStatus 可判
+            // alive/dead/unknown。仅安全拒绝（SSRF/redirect，理论上 finalUrl 已校验极少出现）
+            // 上抛交外层安全分支处理；其余静默回退 HEAD result。
+            if (isPrivateReject(getError) || isRedirectDenied(getError)) throw getError
+          }
         }
       } catch (headErr) {
         // HEAD 网络层失败再试 GET（无 finalUrl，从原始 URL）；超时/SSRF 直接上抛
@@ -382,19 +391,14 @@ serve(async (req) => {
         fetch_outcome = 'timeout'
         details = { response_time: responseTime, error: '请求超时或被中断' }
       } else if (isRedirectDenied(error)) {
-        // 重定向目标违规
+        // 重定向目标违规 → redirect_denied。E2：不再提前 return，统一落 line 408 history insert
+        //（安全拒绝事件也归档，与 migration 021 CHECK 允许的 5 个 fetch_outcome 值契约一致）。
         fetch_outcome = 'redirect_denied'
-        return new Response(
-          JSON.stringify({ fetch_outcome, http_status: 0, details: { response_time: responseTime, error: '目标地址被安全策略拒绝' } }),
-          { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
-        )
+        details = { response_time: responseTime, error: '目标地址被安全策略拒绝' }
       } else if (isPrivateReject(error)) {
-        // SSRF 私网拒绝
+        // SSRF 私网拒绝 → ssrf_reject。E2：同上去提前 return，安全拒绝事件落 history。
         fetch_outcome = 'ssrf_reject'
-        return new Response(
-          JSON.stringify({ fetch_outcome, http_status: 0, details: { response_time: responseTime, error: '目标地址被安全策略拒绝' } }),
-          { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } }
-        )
+        details = { response_time: responseTime, error: '目标地址被安全策略拒绝' }
       } else {
         // DNS/TLS/连接失败 → connect_error（不再标 dead；客户端结合本机可达信号判定）
         fetch_outcome = 'connect_error'
@@ -422,9 +426,12 @@ serve(async (req) => {
       console.error('Failed to insert check history:', insertError)
     }
 
+    // E2：安全拒绝（ssrf_reject/redirect_denied）保持 400 返回体（客户端 callEdgeFunction
+    // 解析不变），其余 200；两安全分支现已落 history（不再提前 return）。
+    const isSecurityReject = fetch_outcome === 'ssrf_reject' || fetch_outcome === 'redirect_denied'
     return new Response(
       JSON.stringify({ fetch_outcome, http_status, details }),
-      { headers: { ...cors, 'Content-Type': 'application/json' } }
+      { status: isSecurityReject ? 400 : 200, headers: { ...cors, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
     console.error('[check-link] internal error:', error)
