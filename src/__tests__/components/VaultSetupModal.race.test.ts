@@ -33,6 +33,7 @@ vi.mock('../../composables/domain/useVault.js', () => ({
     isBiometricAvailable: isBiometricAvailableMock,
     isVaultBiometricEnrolled: () => ({ value: false }),
     enrollBiometric: vi.fn(),
+    cancelSetup: vi.fn(),
   }),
 }))
 

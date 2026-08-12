@@ -23,6 +23,7 @@ vi.mock('../../composables/domain/useE2E.js', () => ({
     isBiometricAvailable: isBiometricAvailableMock,
     hasEncryptedData: () => ({ value: false }),
     enrollBiometric: vi.fn(),
+    cancelSetup: vi.fn(),
   }),
 }))
 

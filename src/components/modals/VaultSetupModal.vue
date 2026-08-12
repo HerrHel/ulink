@@ -118,7 +118,8 @@ watch(() => props.open, (isOpen) => {
     bioLoading.value = false
     bioDone.value = false
     bioError.value = ''
-    _setupGen++  // 关闭时推进，让在途 onComplete 的 localGen 失效短路 step=3
+    _setupGen++  // 层一：关闭时推进，让在途 onComplete 的 localGen 失效短路 step=3
+    vault.cancelSetup()  // 层二：推进 useVault 的 _setupGen，短路 setupVaultPassword 写路径副作用
   } else {
     bioAvailable.value = vault.isBiometricAvailable()
   }
@@ -143,10 +144,10 @@ async function onComplete() {
   error.value = ''
   try {
     const ok = await vault.setupVaultPassword(masterPw.value, recoveryKey.value)
-    // 层一守门：await 窗口用户点遮罩取消（watch 负向分支已推进 _setupGen）→ 短路不 push step=3。
-    // 注意：此守门只消除「modal 已关后 step=3 假成功页」可见后果，vault 写路径副作用
-    //（setEnabled/_setKey 等 await resolve 后同步执行）组件层管不到——层二 cancel token 留人工跟进。
+    // 层一守门：await 窗口用户点遮罩取消（watch 负向分支已推进 _setupGen）→ 短路不 push step=3
     if (localGen !== _setupGen) return
+    // 层二：setupVaultPassword 返回 'cancelled'（取消时写路径内 _saveCanaryData 后也被终止）
+    if (ok === 'cancelled') return
     if (!ok) { error.value = '设置失败，请重试'; return }
     step.value = 3
   } finally {
@@ -177,7 +178,7 @@ async function onEnrollBiometric() {
       bioDone.value = true
       toast('指纹解锁已启用', true)
     } else {
-      bioError.value = '录入失败，当前设备不支持或已取消'
+      bioError.value = '录入失败，当前设备不支持、存储空间不足或已取消'
     }
   } catch (e) {
     bioError.value = '录入失败：' + (e instanceof Error ? e.message : String(e))

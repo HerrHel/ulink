@@ -25,6 +25,10 @@ import { useVaultBiometric } from './useVaultBiometric.js'
 
 const LOCAL_CANARY_KEY = 'lv_vault_canary'
 
+// 层二 cancel token：组件层在 watch 负向分支调 vault.cancelSetup() 推进 _setupGen，
+// setupVaultPassword/resetVaultWithRecoveryKey 在每个 await 后判 gen 一致跳过副作用。
+let _setupGen = 0
+
 // ── 本地 canary 读写（键独立于 lv_e2e_canary） ──
 function _readLocalCanary(): Record<string, unknown> | null {
   const obj = safeJsonParse<Record<string, unknown> | null>(safeGetItem(LOCAL_CANARY_KEY), null)
@@ -125,11 +129,14 @@ export function useVault() {
   }
 
   /** 设置保险柜主密码（首次） */
-  async function setupVaultPassword(password: string, recoveryKey?: string): Promise<boolean> {
+  async function setupVaultPassword(password: string, recoveryKey?: string): Promise<boolean | 'cancelled'> {
+    const gen = _setupGen
     const salt = crypto.getRandomValues(new Uint8Array(32))
     const it = PBKDF2_ITERATIONS
     const key = await deriveKey(password, salt, it)
+    if (gen !== _setupGen) return 'cancelled'
     const canary = await generateCanary(key)
+    if (gen !== _setupGen) return 'cancelled'
 
     const canaryData: Record<string, unknown> = {
       canary,
@@ -140,12 +147,19 @@ export function useVault() {
       const rkSalt = crypto.getRandomValues(new Uint8Array(32))
       const rkIt = PBKDF2_ITERATIONS
       const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), rkSalt, rkIt)
+      if (gen !== _setupGen) return 'cancelled'
       canaryData.recovery_canary = await generateCanary(rkKey)
+      if (gen !== _setupGen) return 'cancelled'
       canaryData.recovery_salt = Array.from(rkSalt)
       canaryData.recovery_it = rkIt
     }
 
     const ok = await _saveCanaryData(canaryData)
+    if (gen !== _setupGen) {
+      // 取消时已写入的本地 canary 回滚（远端 upsert 不可逆，靠下次 setup 覆盖）
+      _removeLocalCanary()
+      return 'cancelled'
+    }
     if (!ok) return false
 
     vaultStore.setEnabled(true)
@@ -156,23 +170,29 @@ export function useVault() {
   }
 
   /** 使用 Recovery Key 重置保险柜主密码 */
-  async function resetVaultWithRecoveryKey(recoveryKey: string, newPassword: string): Promise<boolean> {
+  async function resetVaultWithRecoveryKey(recoveryKey: string, newPassword: string): Promise<boolean | 'cancelled'> {
+    const gen = _setupGen
     const canaryData = await _getCanaryData() as Record<string, unknown> | null
     if (!canaryData?.recovery_canary || !canaryData?.recovery_salt) return false
+    if (gen !== _setupGen) return 'cancelled'
 
     const rkIt = typeof canaryData.recovery_it === 'number' ? canaryData.recovery_it : PBKDF2_DEFAULT_ITERATIONS
     const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt as number[]), rkIt)
     const ok = await verifyCanary(canaryData.recovery_canary as string, rkKey)
     if (!ok) return false
+    if (gen !== _setupGen) return 'cancelled'
 
     const newSalt = crypto.getRandomValues(new Uint8Array(32))
     const newIt = PBKDF2_ITERATIONS
     const newKey = await deriveKey(newPassword, newSalt, newIt)
+    if (gen !== _setupGen) return 'cancelled'
     const newCanary = await generateCanary(newKey)
+    if (gen !== _setupGen) return 'cancelled'
 
     const newRkSalt = crypto.getRandomValues(new Uint8Array(32))
     const newRkIt = PBKDF2_ITERATIONS
     const newRkKey = await deriveKey(_parseRecoveryKey(recoveryKey), newRkSalt, newRkIt)
+    if (gen !== _setupGen) return 'cancelled'
 
     const ok2 = await _saveCanaryData({
       canary: newCanary,
@@ -182,6 +202,10 @@ export function useVault() {
       recovery_salt: Array.from(newRkSalt),
       recovery_it: newRkIt,
     })
+    if (gen !== _setupGen) {
+      _removeLocalCanary()
+      return 'cancelled'
+    }
     if (!ok2) return false
 
     vaultStore.setEnabled(true)
@@ -240,5 +264,7 @@ export function useVault() {
     enrollBiometric: enrollBiometricFn,
     unlockWithBiometric: unlockWithBiometricFn,
     removeBiometric: removeBiometricFn,
+    // 层二 cancel token：组件层在 watch 负向分支调此函数推进 _setupGen，short circuit
+    cancelSetup: () => { _setupGen++ },
   }
 }

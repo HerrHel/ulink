@@ -185,6 +185,10 @@ export function useE2E() {
   const isBiometricEnrolled = computed(() => e2eStore.isBiometricEnrolled)
   /** canaryData 云端写失败（多设备数据风险）标记，详见 e2eStore.cloudCanaryStale 注释 */
   const cloudCanaryStale = computed(() => e2eStore.cloudCanaryStale)
+  // 层二 cancel token：组件层在 watch 负向分支调 cancelSetup() 推进 _setupGen，
+  // setupMasterPassword 在每个 await 后判 gen 一致跳过副作用
+  let _setupGen = 0
+  const cancelSetup = () => { _setupGen++ }
 
   /** 获取缓存的密钥（仅在 isUnlocked=true 时有效） */
   function _getKey(): CryptoKey | null {
@@ -260,13 +264,16 @@ export function useE2E() {
   }
 
   /** 设置主密码（首次） */
-  async function setupMasterPassword(password: string, recoveryKey?: string): Promise<boolean> {
+  async function setupMasterPassword(password: string, recoveryKey?: string): Promise<boolean | 'cancelled'> {
+    const gen = _setupGen
     const salt = crypto.getRandomValues(new Uint8Array(32))
     // PBKDF2 迭代数随 canaryData 持久化——升级常量后旧 canary 仍按其原始 it 派生 key 验证。
     // 新 setup 用当前加密常量 PBKDF2_ITERATIONS（将来升级后新密文带新值）。
     const it = PBKDF2_ITERATIONS
     const key = await deriveKey(password, salt, it)
+    if (gen !== _setupGen) return 'cancelled'
     const canary = await generateCanary(key)
+    if (gen !== _setupGen) return 'cancelled'
 
     const canaryData: Record<string, unknown> = {
       canary,
@@ -277,18 +284,24 @@ export function useE2E() {
       const rkSalt = crypto.getRandomValues(new Uint8Array(32))
       const rkIt = PBKDF2_ITERATIONS
       const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), rkSalt, rkIt)
+      if (gen !== _setupGen) return 'cancelled'
       canaryData.recovery_canary = await generateCanary(rkKey)
+      if (gen !== _setupGen) return 'cancelled'
       canaryData.recovery_salt = Array.from(rkSalt)
       canaryData.recovery_it = rkIt
     }
 
     const ok = await _saveCanaryData(canaryData)
+    if (gen !== _setupGen) {
+      _removeLocalCanary()
+      return 'cancelled'
+    }
     if (!ok) return false
 
     e2eStore.setEnabled(true)
     _setKey(key)
     e2eStore.setUnlocked(true)
-    e2eStore.setCloudCanaryStale(false) // 首次 setup：云端 canary 刚写成功，无 stale
+    e2eStore.setCloudCanaryStale(false)
     e2eStore.initVisibilityLock()
     return true
   }
@@ -804,5 +817,7 @@ export function useE2E() {
     enrollBiometric: enrollBiometricFn,
     unlockWithBiometric: unlockWithBiometricFn,
     removeBiometric: removeBiometricFn,
+    // 层二 cancel token：组件层在 watch 负向分支调此函数短路 setupMasterPassword 副作用
+    cancelSetup,
   }
 }
