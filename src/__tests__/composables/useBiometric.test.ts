@@ -4,27 +4,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useBiometric } from '../../composables/domain/useBiometric.js'
-
-// 确定性 mock storageSafe：safeSetItem 默认真写 localStorage 并返 true（不影响「成功写入」测），
-// 配额满测试用 safeSetItemMock.mockImplementation(() => false) 模拟写盘失败。
-// 用 vi.hoisted + vi.mock（模块加载时绑定，useBiometric 解构的是 mock 引用）而非运行时 spyOn
-// （解构 import 是值拷贝，运行时替换模块导出不生效）。
-const safeSetItemMock = vi.hoisted(() =>
-  vi.fn((key: string, value: string) => {
-    try { window.localStorage.setItem(key, value) } catch { /* ignore */ }
-    return true
-  }),
-)
-
-vi.mock('../../lib/storageSafe.js', () => ({
-  safeGetItem: (k: string) => { try { return window.localStorage.getItem(k) } catch { return null } },
-  safeSetItem: safeSetItemMock,
-  safeRemoveItem: (k: string) => { try { window.localStorage.removeItem(k) } catch { /* ignore */ } },
-  safeJsonParse: (raw: string | null | undefined, fallback: unknown) => {
-    if (raw == null || raw === '') return fallback
-    try { return JSON.parse(raw) } catch { return fallback }
-  },
-}))
+import { localStorageMock } from '../setup.js'
 
 let bio: ReturnType<typeof useBiometric>
 
@@ -55,23 +35,31 @@ describe('useBiometric.enrollBiometric 契约消费（配额满不谎报成功�
 
   it('localStorage 配额满时 enrollBiometric 返 false（不谎报 true 致被锁外）', async () => {
     ;(window as any).PublicKeyCredential = class {}
-    const createSpy = mockCreateOk()
-    // 配额满：safeSetItem 写盘失败返 false（模拟配额满/隐私模式禁写），enrollBiometric 应透传
-    safeSetItemMock.mockImplementation(() => false)
+    const createSpy = vi.spyOn(navigator.credentials, 'create').mockResolvedValueOnce({
+      rawId: crypto.getRandomValues(new Uint8Array(32)),
+      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: new Uint8Array(32).buffer } } }),
+    } as any)
+    // 配额满：localStorageMock.setItem 抛 QuotaExceededError → safeSetItem catch 返 false
+    localStorageMock.setItem.mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError')
+    })
     try {
       const ok = await bio.enrollBiometric('pw')
       expect(ok).toBe(false)
       // BIO_KEY 未写盘 → 未被误标已录入
       expect(bio.isBiometricEnrolled()).toBe(false)
     } finally {
-      safeSetItemMock.mockRestore()
+      localStorageMock.setItem.mockRestore()
       createSpy.mockRestore()
     }
   })
 
   it('localStorage 正常时 enrollBiometric 返 true（BIO_KEY 已写盘）', async () => {
     ;(window as any).PublicKeyCredential = class {}
-    const createSpy = mockCreateOk()
+    const createSpy = vi.spyOn(navigator.credentials, 'create').mockResolvedValueOnce({
+      rawId: crypto.getRandomValues(new Uint8Array(32)),
+      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: new Uint8Array(32).buffer } } }),
+    } as any)
     try {
       const ok = await bio.enrollBiometric('pw')
       expect(ok).toBe(true)
