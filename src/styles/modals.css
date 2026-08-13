@@ -83,6 +83,11 @@
   box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 30%,transparent);
 }
 .pw-wrap{position:relative}
+/* 隐藏 Edge/Chromium 密码框原生 reveal 小眼睛（与 .pw-toggle 自绘小眼睛叠加会出现两个眼睛）。
+   原 Vault/E2E 系列弹窗用 .pw-input-wrap 已隐藏， BookmarkModal/ChildBookmarkEditModal 用 .pw-wrap 漏盖 */
+.pw-wrap input::-ms-reveal,
+.pw-wrap input::-ms-clear{display:none}
+.pw-wrap input::-webkit-credentials-auto-fill-button{display:none}
 .pw-toggle{
   position:absolute;right:6px;top:50%;transform:translateY(-50%);
   width:30px;height:30px;display:flex;align-items:center;justify-content:center;
