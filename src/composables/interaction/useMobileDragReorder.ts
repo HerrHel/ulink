@@ -409,6 +409,15 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
         // H12：见 applyIntervalOrder（下移取邻项 order、区间循环不误改 moved 自身）
         const toIdx = toIndex > fromIndex ? toIndex - 1 : toIndex
         applyIntervalOrder(allItems, fromIndex, toIdx, (id) => dataStore._markDirty(id))
+        // PERF-3 修复：applyIntervalOrder 只改 order 不改 updatedAt，saveAppData 的
+        // _fingerprint 判重会早退不落 IDB（刷新后 _customCardOrder 从 localStorage 恢复，
+        // 但 order 字段还原）。同步更新区间内各项的 updatedAt 确保落盘。
+        const now = Date.now()
+        const start = Math.min(fromIndex, toIdx)
+        const end = Math.max(fromIndex, toIdx)
+        for (let k = start; k <= end; k++) {
+          allItems[k].data.updatedAt = now
+        }
         const newOrder: Array<{ t: 'g' | 'b'; id: string }> = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
 
         dataStore._customCardOrder = newOrder

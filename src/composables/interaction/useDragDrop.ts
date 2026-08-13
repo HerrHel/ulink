@@ -116,10 +116,16 @@ export function _samePinStatus(a: { id: string }, b: { id: string }): boolean {
 }
 
 /** swapOrder + 标记 dirty（确保排序变更可同步到云端）。返回 false 表示被置顶检查阻止 */
-export function _swapAndMarkDirty(a: { id: string; order: number }, b: { id: string; order: number }): boolean {
+export function _swapAndMarkDirty(a: { id: string; order: number; updatedAt?: number }, b: { id: string; order: number; updatedAt?: number }): boolean {
   // 置顶项不能与非置顶项交换位置
   if (!_samePinStatus(a, b)) return false
   swapOrder(a, b)
+  // PERF-3 修复：swap 只改 order 不改 updatedAt 会让 _fingerprint 的 maxUp 不变，
+  // app.save() 命中 fp===_lastSavedFp 早退不落盘，刷新后 order 还原。同步 LWW 亦依赖
+  // updatedAt 递增才让远端采纳新顺序。故交换后同步刷新两 id 的 updatedAt 为当前时刻。
+  const now = Date.now()
+  a.updatedAt = now
+  b.updatedAt = now
   const ds = useDataStore()
   ds._markDirty(a.id, b.id)
   // A1-003：已有自定义序时同步交换 _customCardOrder，避免 PC 拖拽 DOM 换位后 Vue 弹回
