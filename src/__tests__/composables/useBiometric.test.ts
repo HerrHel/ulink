@@ -24,15 +24,6 @@ beforeEach(() => {
 
 // 新 describe 置于文件顶部（先于其他测试执行），避免前序测试泄漏影响配额满路径的确定性
 describe('useBiometric.enrollBiometric 契约消费（配额满不谎报成功）', () => {
-  // jsdom localhost 可通过 isBiometricAvailable 门禁；mock credentials.create 返带 PRF 的 credential
-  function mockCreateOk() {
-    const cred = {
-      rawId: crypto.getRandomValues(new Uint8Array(32)),
-      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: new Uint8Array(32).buffer } } }),
-    }
-    return vi.spyOn(navigator.credentials, 'create').mockResolvedValueOnce(cred as any)
-  }
-
   it('localStorage 配额满时 enrollBiometric 返 false（不谎报 true 致被锁外）', async () => {
     ;(window as any).PublicKeyCredential = class {}
     const createSpy = vi.spyOn(navigator.credentials, 'create').mockResolvedValueOnce({
