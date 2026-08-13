@@ -8,6 +8,13 @@ import { localStorageMock } from '../setup.js'
 
 let bio: ReturnType<typeof useBiometric>
 
+// 生成真实 PRF 输出（32 字节 HMAC-SHA256 签名），确保返回标准 ArrayBuffer 在 CI Node 20 的
+// importKey('raw', ...) 合法消费（Node 20 对 getRandomValues().buffer 的 view 类型更严格）。
+async function makePrfOutput(): Promise<ArrayBuffer> {
+  const key = await crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, true, ['sign'])
+  return crypto.subtle.sign('HMAC', key, new Uint8Array(32))
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
@@ -26,18 +33,17 @@ beforeEach(() => {
 describe('useBiometric.enrollBiometric 契约消费（配额满不谎报成功）', () => {
   it('localStorage 配额满时 enrollBiometric 返 false（不谎报 true 致被锁外）', async () => {
     ;(window as any).PublicKeyCredential = class {}
+    const prfOut = await makePrfOutput()
     const createSpy = vi.spyOn(navigator.credentials, 'create').mockResolvedValueOnce({
       rawId: crypto.getRandomValues(new Uint8Array(32)),
-      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: new Uint8Array(32).buffer } } }),
+      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: prfOut } } }),
     } as any)
-    // 配额满：localStorageMock.setItem 抛 QuotaExceededError → safeSetItem catch 返 false
     localStorageMock.setItem.mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError')
     })
     try {
       const ok = await bio.enrollBiometric('pw')
       expect(ok).toBe(false)
-      // BIO_KEY 未写盘 → 未被误标已录入
       expect(bio.isBiometricEnrolled()).toBe(false)
     } finally {
       localStorageMock.setItem.mockRestore()
@@ -47,9 +53,10 @@ describe('useBiometric.enrollBiometric 契约消费（配额满不谎报成功�
 
   it('localStorage 正常时 enrollBiometric 返 true（BIO_KEY 已写盘）', async () => {
     ;(window as any).PublicKeyCredential = class {}
+    const prfOut = await makePrfOutput()
     const createSpy = vi.spyOn(navigator.credentials, 'create').mockResolvedValueOnce({
       rawId: crypto.getRandomValues(new Uint8Array(32)),
-      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: new Uint8Array(32).buffer } } }),
+      getClientExtensionResults: () => ({ prf: { enabled: true, results: { first: prfOut } } }),
     } as any)
     try {
       const ok = await bio.enrollBiometric('pw')
@@ -143,7 +150,7 @@ describe('useBiometric.enrollBiometric → unlockWithBiometric 闭环', () => {
   it('enrollBiometric 成功写入 localStorage', async () => {
     if (!bio.isBiometricAvailable()) return
 
-    const prfOut = crypto.getRandomValues(new Uint8Array(32)).buffer
+    const prfOut = await makePrfOutput()
     const credId = crypto.getRandomValues(new Uint8Array(32))
     ;(navigator as any).credentials = {
       create: vi.fn().mockResolvedValueOnce({
