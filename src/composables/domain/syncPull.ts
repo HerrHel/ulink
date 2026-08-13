@@ -74,8 +74,12 @@ export async function pullChanges(full = false): Promise<boolean> {
       group: ds.siblingGroups,
       attribute: ds.customAttributes,
     }
+    // 跟踪本次 pull 是否实际产生本地变更（insert/assign/revive/soft-delete/reconcileDelete）。
+    // 末尾据此决定是否 saveAppData：空 pull（远端无新变更、本地无对账删除）跳过 IDB 写入，
+    // 避免每次 realtime/visible 触发的增量 pull 都无效落盘。lastSyncAt/syncStatus 不受邀约。
+    let localChanged = false
     for (const type of SYNC_ENTITY_ORDER) {
-      _mergeIntoLocal(localByType[type], remotes[type], type, full)
+      _mergeIntoLocal(localByType[type], remotes[type], type, full, () => { localChanged = true })
     }
 
     const softDelResults = await Promise.all(
@@ -104,11 +108,19 @@ export async function pullChanges(full = false): Promise<boolean> {
         // 的 in-flight 编辑项不被远端软删批次静默覆盖（其 upsert 推上去会 revive）
         if (id && isLocalAlive[type](id) && !ds._dirtyIds.has(id) && !_isPendingSync(id)) {
           _deleteWithoutEcho(ds, type, id)
+          localChanged = true
         }
       }
     }
 
-    if (syncStore.lastSyncAt > 0) {
+    // 全量 ID 对账（远端物理删除兜底）仅 full=true 时跑：本系统删除走软删
+    //（deleted_at 列，上一段 selectSoftDeleted 已覆盖），远端物理删除是正常流程
+    // 不该发生的边缘情形。旧实现每次常规 pull（lastSyncAt>0）都发 4 张表全量
+    // selectAllIds，对长期使用、只增不减的账号 payload 维持高位，常规增量 pull
+    // 本只需 selectSince + selectSoftDeleted（均为 since 增量）。降频到 fullSync：
+    // 物理删除兜底延迟到下次 fullSync（vis 后即触发一次），实时性可接受，常规 pull
+    // 流量显著降低。常规增量 pull 走软删 + 增量两查询已足够。
+    if (full) {
       const reconcileQueries = await Promise.all(
         SYNC_ENTITY_ORDER.map(type => port.selectAllIds(entityTypeToTable[type], userId)),
       )
@@ -125,6 +137,7 @@ export async function pullChanges(full = false): Promise<boolean> {
         const reconcileDelete = (type: EntityType, id: string) => {
           if (ds._dirtyIds.has(id) || _isPendingSync(id)) return
           _deleteWithoutEcho(ds, type, id)
+          localChanged = true
         }
         const localByEntity: Record<EntityType, Array<{ id: string; deletedAt?: number }>> = {
           category: ds.categories,
@@ -149,7 +162,10 @@ export async function pullChanges(full = false): Promise<boolean> {
     // 回推，避免乱序持续到下次 reload；AppNav 另有渲染层置顶兜底。
     ds._normalizeCategoryOrders()
     ds._syncMaps()
-    saveAppData()
+    // 仅本次 pull 实际改写本地时落盘：空 pull（远端无新变更、无对账删除）跳过 IDB 写，
+    // 避免 realtime/visible 高频触发的增量 pull 每次都无效落盘。lastSyncAt 仍推进，
+    // 标记本次对账点；本地数据未变则无需持久化。
+    if (localChanged) saveAppData()
 
     syncStore.setLastSyncAt(Date.now())
     syncStore.setSyncStatus('success')

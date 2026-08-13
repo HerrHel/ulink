@@ -78,9 +78,12 @@ export function _deleteWithoutEcho(
   for (const did of affectedIds) ds._newIds.delete(did)
 }
 
-/** 智能合并：远端 → 本地（decision → store 副作用） */
+/** 智能合并：远端 → 本地（decision → store 副作用）
+ *  onWrite：可选回调，每当本次 merge 实际向本地写入/插入/删除/复活一项时调用，
+ *  供调用方（syncPull）据此跳过空 pull 的 saveAppData 落盘。不调用 = 本次无本地变更。
+ */
 export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
-  local: T[], remote: T[], type: EntityType, full = false,
+  local: T[], remote: T[], type: EntityType, full = false, onWrite?: () => void,
 ) {
   const ds = useDataStore()
   const syncStore = useSyncStore()
@@ -100,6 +103,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
     switch (decision.action) {
       case 'insert':
         local.push(rItem)
+        onWrite?.()
         break
       case 'conflict':
         if (lItem && !syncStore.getConflict(rItem.id)) {
@@ -113,6 +117,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         break
       case 'soft-delete':
         _deleteWithoutEcho(ds, type, rItem.id)
+        onWrite?.()
         break
       case 'revive-assign':
         if (lItem) {
@@ -120,6 +125,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           const r = rItem as Record<string, unknown>
           for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
           delete (l as { deletedAt?: unknown }).deletedAt
+          onWrite?.()
         }
         break
       case 'assign':
@@ -127,6 +133,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           const l = lItem as Record<string, unknown>
           const r = rItem as Record<string, unknown>
           for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
+          onWrite?.()
         }
         break
       case 'skip':
@@ -155,6 +162,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
       // 复用 _deleteWithoutEcho：bookmark 父被删时一并解孤儿后代 + 统一回声清理，
       // 替代旧 _deleteEntity 单删后只能手动清单体 dirty 的口径。
       _deleteWithoutEcho(ds, type, lItem.id)
+      onWrite?.()
     }
   }
 }

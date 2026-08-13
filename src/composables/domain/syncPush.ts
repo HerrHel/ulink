@@ -16,7 +16,6 @@ import { toRemoteRow, camelToSnake } from './useSyncMapping.js'
 import { _saveHistory, _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { _markPendingSync, _clearPendingSync } from './syncPending.js'
-import { cloneDeep } from '../../lib/clone.js'
 
 /** 单条 sync op 最大推送重试次数 */
 export const MAX_PUSH_RETRIES = 3
@@ -47,6 +46,22 @@ export function _opNeedsUnlock(op: SyncOp): boolean {
   return false
 }
 
+/** 脱敏 op.data 用于日志输出：复用 ENCRYPT_FIELDS 单一来源确定每类型敏感字段，
+ *  值替换为 '[redacted]'，避免 push 失败 warn 把 password/username/notes 等明文
+ *  打到控制台（本地调试无碍，但 devtools 共享/错误上报场景是隐私面）。 */
+export function _redactOpData(op: SyncOp): Record<string, unknown> | null {
+  if (!op.data) return null
+  const type = tableToEntityType[op.table as TableName]
+  const sens: readonly string[] | undefined = type ? ENCRYPT_FIELDS[type] : undefined
+  const copy = { ...(op.data as Record<string, unknown>) }
+  if (sens && sens.length > 0) {
+    for (const f of sens) {
+      if (f in copy && copy[f] != null && copy[f] !== '') copy[f] = '[redacted]'
+    }
+  }
+  return copy
+}
+
 export function _mergeOps(ops: SyncOp[]): SyncOp[] {
   const byItem = new Map<string, SyncOp[]>()
   for (const op of ops) {
@@ -63,7 +78,10 @@ export function _mergeOps(ops: SyncOp[]): SyncOp[] {
     } else {
       // R30：保留历史最大 retries，避免新编辑（retries=0）覆盖旧失败 op 的重试计数，
       // 导致死信阈值被绕过（持续编辑的坏 op 永不进死信，持续重试+错误态长期误导）。
-      const maxRetries = Math.max(...itemOps.map(o => o.retries || 0))
+      // 用 for 循环而非 Math.max(...spread)：同 table:itemId 在极端长跑/自动测试场景
+      // 可能堆积超长 raw ops 数组，spread 到 apply 会爆调用栈（V8 ~6.5万~12.5万参数门槛）。
+      let maxRetries = 0
+      for (const o of itemOps) { const r = o.retries || 0; if (r > maxRetries) maxRetries = r }
       merged.push({ ...last, ts: itemOps[0].ts, retries: maxRetries })
     }
   }
@@ -327,7 +345,7 @@ export async function pushFromQueue(): Promise<boolean> {
         console.warn(`[sync] push 失败 table=${f.table} id=${f.itemId} error=${f.error}`)
       }
       const first = failedOps[0]
-      if (first?.op?.data) console.warn(`[sync] 首条失败 op 原始 data:`, cloneDeep(first.op.data))
+      if (first?.op?.data) console.warn(`[sync] 首条失败 op 原始 data:`, _redactOpData(first.op))
       syncStore.setSyncStatus('error')
       syncStore.setSyncError(`${failedOps.length} 项推送失败：${failedOps[0].error}`)
       return false

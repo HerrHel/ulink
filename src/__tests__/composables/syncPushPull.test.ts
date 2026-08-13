@@ -583,6 +583,9 @@ describe('syncPushPull via SyncRemotePort', () => {
   it('12 全量对账不软删虚拟分类：云端 categories 无 all/uncategorized 记录时本地保留（首登后消失复现）', async () => {
     // 未重排过分类的用户云端从未推送过虚拟分类 → 对账 selectAllIds 云端无它们 →
     // 旧实现 reconcileDelete 把本地 all/uncategorized 软删，侧栏两项消失。
+    // 注：全量 ID 对账（selectAllIds × 4）已在 pull 降频——仅 full=true 跑（常规增量
+    // pull 走 selectSince + selectSoftDeleted 足够，物理删除兜底延迟到 fullSync）。
+    // 故本用例改调 pullFromCloud(true) 验证 full 对账仍正确豁免虚拟分类、软删 c-gone。
     const ds = useDataStore()
     ds.categories = [
       { id: CAT_ALL, name: '全部', icon: '', color: '', order: 0, updatedAt: 100 },
@@ -592,18 +595,27 @@ describe('syncPushPull via SyncRemotePort', () => {
     ] as any
 
     const port = createMemorySyncPort({
-      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
-      // 云端只有真实分类 c-keep（c-gone 应被对账软删；虚拟分类必须豁免）
+      // full pull since=0 应拉回远端全部存活行；c-keep 存活须在 sinceRows 出现
+      // 才不被 _mergeIntoLocal 的 full-absent-delete 对账误删（真实 since=0 必拉回它）。
+      // c-gone 远端确无它（both sinceRows 与 allIds 都不含）→ 两条对账路径都判 absent → 软删。
+      sinceRows: {
+        bookmarks: [], sibling_groups: [], custom_attributes: [],
+        categories: [{
+          id: 'c-keep', user_id: 'u1', name: '云端有', icon: '', color: '',
+          order: 2, updated_at_num: 100, deleted_at: null,
+        }],
+      },
+      // allIds 仅供 selectAllIds reconcile 兜底（c-keep 在远端，c-gone 不在）
       allIds: {
         bookmarks: [], sibling_groups: [], custom_attributes: [],
         categories: [{ id: 'c-keep' }],
       },
     })
     setSyncRemotePort(port)
-    useSyncStore().setLastSyncAt(5000) // lastSyncAt>0 才启用 reconcile 对账
+    useSyncStore().setLastSyncAt(5000) // lastSyncAt>0 满足 full-absent-delete 前提
 
     const sync = useCloudSync()
-    const ok = await sync.pullFromCloud(false)
+    const ok = await sync.pullFromCloud(true) // full pull 触发全量 ID 对账
     expect(ok).toBe(true)
 
     const cat = (id: string) => ds.categories.find(c => c.id === id)
