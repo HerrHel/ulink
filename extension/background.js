@@ -1,5 +1,7 @@
 // background.js — LinkVault Extension
 
+import { decideOpenPwa } from './pwa-open.js'
+
 const PWA_URL = 'https://herrhel.github.io'
 // H10：仅按 PWA / 本地 dev 域名匹配已开标签，无需 tabs 权限遍历全部标签 URL
 const PWA_TAB_URL_PATTERNS = [PWA_URL + '/*', 'http://localhost:5173/*', 'https://localhost:5173/*']
@@ -54,10 +56,9 @@ chrome.commands.onCommand.addListener(function (command) {
 /** 新标签页打开 PWA，附带当前页面 URL 和可选的选中文本。B2：返 Promise，调用方 await 后据实响应。 */
 function openPwaWithUrl(url, title, notes) {
   return new Promise(function (resolve) {
-    // 决策抽到 pwa-open.js 纯函数（vitest 锁契约）
-    var decision = window.LinkVaultPwaOpen
-      ? window.LinkVaultPwaOpen.decideOpenPwa(url, title, notes, PWA_URL)
-      : { shouldOpen: !!url, reason: null, targetUrl: url ? PWA_URL + '/?ext_save=1&' + new URLSearchParams({ ext_save_url: url, ext_save_title: title || url }).toString() : null }
+    // decideOpenPwa 经 ES module import 引入（manifest 已声明 type: module，SW 无 window 故走
+    // import 不依赖 window 挂载）。协议拦截+URL 构造在 pwa-open.js 纯函数内，vitest 锁全分支。
+    var decision = decideOpenPwa(url, title, notes, PWA_URL)
     if (!decision.shouldOpen) { resolve({ ok: false, reason: decision.reason }); return }
 
     // H10：按 URL pattern 仅匹配 PWA 标签，不读用户其它标签 URL
