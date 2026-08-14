@@ -279,7 +279,9 @@ describe('searchWithHighlights', () => {
     for (const r of r1) {
       if (r._isGroup) expect(Array.isArray(r.bookmarkIds)).toBe(true)
     }
-  })
+  // 留数 benchmark 一次跑 1000 迭代 + coverage 插桩更慢，默认 5s 超时会误伤（314 例实测），
+  // 显式给长超时：它非硬阈值、只留数打印，真实耗时数秒级，60s 足够又不掩盖真卡死。
+  }, 60000)
 })
 
 describe('clearSearchCache', () => {
