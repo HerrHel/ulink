@@ -12,6 +12,11 @@ const K_THEME = 'lv_theme'
 const K_THEME_MODE = 'lv_themeMode'
 const K_THEME_STYLE = 'lv_themeStyle'
 
+/** 读 meta[name=theme-color] 当前 content（theme.ts applyThemeColor 动态维护） */
+function themeColorMetaContent(): string | null {
+  return document.head.querySelector('meta[name="theme-color"]')?.getAttribute('content') ?? null
+}
+
 /**
  * matchMedia stub 工厂：返回可控 matches 的 MediaQueryList。
  * theme.ts startAutoTheme 调 matchMedia 两次（applySystemTheme 一次 + 注册 change 监听一次），
@@ -49,6 +54,8 @@ describe('theme.ts 三件套护栏', () => {
   beforeEach(() => {
     document.documentElement.removeAttribute(A_THEME)
     document.documentElement.removeAttribute(A_THEME_STYLE)
+    document.documentElement.style.colorScheme = ''
+    document.head.querySelector('meta[name="theme-color"]')?.remove()
     localStorageMock.clear()
     vi.clearAllMocks()
     // 全局 stub 一个 matchMedia(matches=false)；个别用例需 matches=true 或自行重新 stub
@@ -58,6 +65,8 @@ describe('theme.ts 三件套护栏', () => {
   afterEach(() => {
     document.documentElement.removeAttribute(A_THEME)
     document.documentElement.removeAttribute(A_THEME_STYLE)
+    document.documentElement.style.colorScheme = ''
+    document.head.querySelector('meta[name="theme-color"]')?.remove()
     vi.unstubAllGlobals()
     vi.resetModules()
   })
@@ -71,6 +80,45 @@ describe('theme.ts 三件套护栏', () => {
     toggleTheme()
     expect(document.documentElement.getAttribute(A_THEME)).toBe('light')
     expect(localStorageMock.getItem(K_THEME)).toBe('light')
+  })
+
+  it('B1-003 翻 light 时 style.colorScheme 同步 light（系统深色下浏览器不自动暗化浅色主题）', async () => {
+    localStorageMock.setItem(K_THEME_MODE, 'manual')
+    document.documentElement.setAttribute(A_THEME, 'dark')
+    const { toggleTheme } = await importTheme()
+    toggleTheme()
+    expect(document.documentElement.style.colorScheme).toBe('light')
+    expect(document.documentElement.getAttribute(A_THEME)).toBe('light')
+  })
+
+  it('B1-003 翻 dark 时 style.colorScheme 同步 dark', async () => {
+    localStorageMock.setItem(K_THEME_MODE, 'manual')
+    document.documentElement.setAttribute(A_THEME, 'light')
+    const { toggleTheme } = await importTheme()
+    toggleTheme()
+    expect(document.documentElement.style.colorScheme).toBe('dark')
+    expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
+  })
+
+  it('meta theme-color 随主题更新：浅色 #122E8A / 深色 #F04A8A（缺 meta 时自动补建）', async () => {
+    localStorageMock.setItem(K_THEME_MODE, 'manual')
+    document.documentElement.setAttribute(A_THEME, 'dark')
+    expect(themeColorMetaContent()).toBeNull() // jsdom 空文档，meta 尚不存在
+    const { toggleTheme } = await importTheme()
+    toggleTheme() // dark → light
+    expect(themeColorMetaContent()).toBe('#122E8A')
+    toggleTheme() // light → dark
+    expect(themeColorMetaContent()).toBe('#F04A8A')
+  })
+
+  it('auto 跟随系统切深色时 meta theme-color 同步为深色 accent', async () => {
+    const ctx = stubMatchMedia(false)
+    const { toggleAutoTheme } = await importTheme()
+    toggleAutoTheme() // manual→auto，applySystemTheme(matches=false) → light
+    expect(themeColorMetaContent()).toBe('#122E8A')
+    ctx.emitChange(true) // 系统切 dark
+    expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
+    expect(themeColorMetaContent()).toBe('#F04A8A')
   })
 
   it('manual light → 翻 dark：当前 dark 否则翻 dark（light/null 都翻 dark）', async () => {
@@ -192,6 +240,7 @@ describe('theme.ts 三件套护栏', () => {
     expect(document.documentElement.getAttribute(A_THEME)).toBe('light')
     ctx.emitChange(true) // 系统切 dark
     expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
+    expect(document.documentElement.style.colorScheme).toBe('dark') // B1-003 color-scheme 跟随
     expect(localStorageMock.getItem(K_THEME)).toBe('dark')
   })
 

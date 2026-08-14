@@ -1,5 +1,8 @@
 /* ==================== DESIGN TOKENS ==================== */
 :root,[data-theme="light"]{
+  /* B1-003：声明 color-scheme 告知浏览器页面是有意浅色。否则移动端系统深色时
+     浏览器自动暗化（Chrome Android/Firefox Android）会把浅色主题整页反色（白→黑、浅蓝→深蓝）。 */
+  color-scheme:light;
   --bg:#F5EFEA;
   --bg-alt:#EDE4DA;
   --surface:#FDFBF9;
@@ -60,6 +63,8 @@
   --ft-color:var(--accent);
 }
 [data-theme="dark"]{
+  /* B1-003：与浅色块对应，原生控件/滚动条随暗色主题渲染 */
+  color-scheme:dark;
   --bg:#1A1A1D;
   --bg-alt:#202025;
   --surface:#25252B;

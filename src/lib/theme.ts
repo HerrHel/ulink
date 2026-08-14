@@ -16,9 +16,37 @@ const V_COMFORTABLE = 'comfortable'
 let _autoThemeMedia: MediaQueryList | null = null
 let _autoThemeHandler: ((e: MediaQueryListEvent) => void) | null = null
 
+// theme-color meta（移动端浏览器 UI 栏/状态栏）按主题映射，与 tokens.css 各主题 --accent 对齐
+const META_THEME_COLOR = 'theme-color'
+const THEME_COLOR: Record<string, string> = { light: '#122E8A', dark: '#F04A8A' }
+
+/** 更新 <meta name="theme-color">：已有节点复用，缺则补建（幂等） */
+function applyThemeColor(theme: string): void {
+  const color = THEME_COLOR[theme]
+  if (!color) return
+  let el = document.head.querySelector<HTMLMetaElement>(`meta[name="${META_THEME_COLOR}"]`)
+  if (!el) {
+    el = document.createElement('meta')
+    el.setAttribute('name', META_THEME_COLOR)
+    document.head.appendChild(el)
+  }
+  el.setAttribute('content', color)
+}
+
+/**
+ * 主题写入口（data-theme 唯一写入点）：属性 + style.colorScheme 同步。
+ * color-scheme 同步防移动端系统深色时浏览器自动暗化把浅色主题反色
+ * （B1-003，tokens.css 各主题块亦有同值声明兜底首屏）。
+ */
+function applyTheme(theme: string): void {
+  document.documentElement.setAttribute(A_THEME, theme)
+  document.documentElement.style.colorScheme = theme
+  applyThemeColor(theme)
+}
+
 function applySystemTheme(): void {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  document.documentElement.setAttribute(A_THEME, isDark ? V_DARK : V_LIGHT)
+  applyTheme(isDark ? V_DARK : V_LIGHT)
   safeSetItem(K_THEME, isDark ? V_DARK : V_LIGHT)
 }
 
@@ -27,7 +55,7 @@ function startAutoTheme(): void {
   applySystemTheme()
   _autoThemeMedia = window.matchMedia('(prefers-color-scheme: dark)')
   _autoThemeHandler = function (e: MediaQueryListEvent) {
-    document.documentElement.setAttribute(A_THEME, e.matches ? V_DARK : V_LIGHT)
+    applyTheme(e.matches ? V_DARK : V_LIGHT)
     safeSetItem(K_THEME, e.matches ? V_DARK : V_LIGHT)
   }
   _autoThemeMedia.addEventListener('change', _autoThemeHandler)
@@ -43,7 +71,7 @@ function toggleTheme(): void {
   if (mode === V_AUTO) { stopAutoTheme(); safeSetItem(K_THEME_MODE, V_MANUAL) }
   const el = document.documentElement
   const next = el.getAttribute(A_THEME) === V_DARK ? V_LIGHT : V_DARK
-  el.setAttribute(A_THEME, next)
+  applyTheme(next)
   safeSetItem(K_THEME, next)
 }
 
@@ -68,7 +96,7 @@ function toggleAutoTheme(): void {
 ;(function () {
   const mode = safeGetItem(K_THEME_MODE) || V_MANUAL
   if (mode === V_AUTO) { applySystemTheme(); startAutoTheme() }
-  else { const t = safeGetItem(K_THEME); if (t) document.documentElement.setAttribute(A_THEME, t) }
+  else { const t = safeGetItem(K_THEME); if (t) applyTheme(t) }
   const s = safeGetItem(K_THEME_STYLE)
   if (s === V_COMFORTABLE) document.documentElement.setAttribute(A_THEME_STYLE, V_COMFORTABLE)
 })()
