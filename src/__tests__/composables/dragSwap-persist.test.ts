@@ -27,17 +27,21 @@ describe('PC 拖拽排序后落盘', () => {
     const ds = useDataStore()
     const app = useAppStore()
     const now = Date.now()
-    // 造 3 条书签，updatedAt 相同（初始 maxUp 明确可控）
+    // 造 3 条书签；updatedAt 刻意取 now-1000（比当前早 1 秒），确保 swap 内 Date.now()
+    // 必然严格大于初始 maxUp——避免同一毫秒内连跑两次 Date.now() 同戳 flaky 致契约断言偶发假 fail。
+    // 此偏移不削弱护栏：若 swap 回归不更新 updatedAt，upAfterA 仍 = now-1000 = upBeforeA，
+    // toBeGreaterThan 仍正确 fail 抓 bug。
+    const past = now - 1000
     ds.bookmarks = [
       { id: 'bm1', title: 'A', url: '', username: '', password: '', notes: '', icon: '',
         categoryId: 'all', parentId: null, order: 1, useCount: 0, attributes: {},
-        isExpanded: false, createdAt: now, updatedAt: now },
+        isExpanded: false, createdAt: now, updatedAt: past },
       { id: 'bm2', title: 'B', url: '', username: '', password: '', notes: '', icon: '',
         categoryId: 'all', parentId: null, order: 2, useCount: 0, attributes: {},
-        isExpanded: false, createdAt: now, updatedAt: now },
+        isExpanded: false, createdAt: now, updatedAt: past },
       { id: 'bm3', title: 'C', url: '', username: '', password: '', notes: '', icon: '',
         categoryId: 'all', parentId: null, order: 3, useCount: 0, attributes: {},
-        isExpanded: false, createdAt: now, updatedAt: now },
+        isExpanded: false, createdAt: now, updatedAt: past },
     ]
     ds._syncMaps()
 
@@ -78,13 +82,15 @@ describe('PC 拖拽排序后落盘', () => {
     const ds = useDataStore()
     const app = useAppStore()
     const now = Date.now()
+    // 同上测：updatedAt 取 now-1000 避免同毫秒 Date.now() 同戳 flaky（详见上方注释）。
+    const past = now - 1000
     ds.bookmarks = [
       { id: 'bm1', title: 'A', url: '', username: '', password: '', notes: '', icon: '',
         categoryId: 'all', parentId: null, order: 1, useCount: 0, attributes: {},
-        isExpanded: false, createdAt: now, updatedAt: now },
+        isExpanded: false, createdAt: now, updatedAt: past },
       { id: 'bm2', title: 'B', url: '', username: '', password: '', notes: '', icon: '',
         categoryId: 'all', parentId: null, order: 2, useCount: 0, attributes: {},
-        isExpanded: false, createdAt: now, updatedAt: now },
+        isExpanded: false, createdAt: now, updatedAt: past },
     ]
     ds._syncMaps()
     ds._customCardOrder = [{ t: 'b', id: 'bm1' }, { t: 'b', id: 'bm2' }]
