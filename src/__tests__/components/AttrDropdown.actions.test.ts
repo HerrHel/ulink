@@ -175,4 +175,18 @@ describe('AttrDropdown 用户可见路径护栏', () => {
     expect(ds.attributeMap['a1'].deletedAt).toBeTruthy()
     w.unmount()
   })
+
+  it('软删属性（回收站内）不再出现在属性列表中', async () => {
+    const ds = useDataStore()
+    seedAttr(ds, 'a1', '前端')
+    seedAttr(ds, 'a2', '后端')
+    // deleteAttribute 仅软删（进回收站），列表应立刻隐藏，而非等回收站清除才消失
+    ds.deleteAttribute('a1')
+    const { w } = await mountOpen()
+    const items = w.element.querySelectorAll('.attr-drop-item')
+    expect(items.length).toBe(1)
+    expect(items[0].textContent).toContain('后端')
+    expect(items[0].textContent).not.toContain('前端')
+    w.unmount()
+  })
 })

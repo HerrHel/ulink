@@ -47,7 +47,8 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 
 const filteredAttrs = computed(() => {
   const q = query.value.toLowerCase()
-  const userAttrs = store.customAttributes.filter(a => a.name.toLowerCase().indexOf(q) !== -1)
+  // A2-001：只用未软删属性——软删（进回收站）的属性应立即从列表消失，而非等回收站清除
+  const userAttrs = store.selectableAttributes.filter(a => a.name.toLowerCase().indexOf(q) !== -1)
   return userAttrs
 })
 
