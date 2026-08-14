@@ -10,9 +10,11 @@ task_plan.md
 .env
 .env.local
 *.png
+!extension/icons/icon*.png
 *.svg
 *.md
 !CLAUDE.md
+!AGENTS.md
 !src/components/share/README.md
 !/extension/lib/README.md
 !/supabase/functions/check-link/README.md
