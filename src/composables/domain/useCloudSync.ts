@@ -94,14 +94,19 @@ export function useCloudSync() {
       // 确有失败，恢复 error 状态让用户感知，不吞错。
       if (!pushed) {
         const pushErr = syncStore.syncError
-        await pullChanges()
+        // full=true：手动全量同步才跑全量 ID 对账（selectAllIds × 4 + full-absent-delete +
+        // reconcileDelete），兜底远端物理删除。freq 降频（81e926a3）把对账入口整个改成
+        // `if(full)`，但生产无任何调用方传 true——不在此补上，对账就是不可达死代码。
+        // 安全：_mergeIntoLocal 的 full-absent-delete 与 reconcileDelete 都各自要求
+        // lastSyncAt>0 + 非 dirty + 非 pending，fresh(未首登)状态不会误删本地。
+        await pullChanges(true)
         if (pushErr) {
           syncStore.setSyncStatus('error')
           syncStore.setSyncError(pushErr)
         }
         return pushed
       }
-      await pullChanges()
+      await pullChanges(true)
       return pushed
     })
   }

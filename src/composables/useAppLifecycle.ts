@@ -102,7 +102,9 @@ export function useAppLifecycle() {
     }
     // initialSync 必须在 initOnlineListener 之前执行：
     // initOnlineListener → subscribeRealtime → SUBSCRIBED 回调 → _pullChanges → 设 lastSyncAt，
-    // 若 lastSyncAt 先于 initialSync 的 _pullChanges(true) 被设置，云端为空时 full 分支会把本地书签全删。
+    // 若 lastSyncAt 先于 initialSync 的 pullChanges(false) 被设置，full-absent-delete 本可
+    // 把本地书签全删（幸而 initialSync 走增量 false，不跑 full 对账，无此风险）。
+    // 注：initialSync 的 initial pull 是增量(false)；全量 ID 对账只在手动 fullSync 跑。
     if (auth.isLoggedIn) {
       sync.initialSync().catch((e: Error) => console.warn('[LinkVault] Cloud sync failed:', e.message))
     }

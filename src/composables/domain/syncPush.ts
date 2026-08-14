@@ -48,11 +48,22 @@ export function _opNeedsUnlock(op: SyncOp): boolean {
 
 /** 脱敏 op.data 用于日志输出：复用 ENCRYPT_FIELDS 单一来源确定每类型敏感字段，
  *  值替换为 '[redacted]'，避免 push 失败 warn 把 password/username/notes 等明文
- *  打到控制台（本地调试无碍，但 devtools 共享/错误上报场景是隐私面）。 */
+ *  打到控制台（本地调试无碍，但 devtools 共享/错误上报场景是隐私面）。
+ *
+ *  注意：脱敏集合 ≠ 加密集合。ENCRYPT_FIELDS 刻意把 password 排除（它走
+ *  EncryptedPassword 独立链路），但**日志脱敏**必须也盖住 password——E2E 关闭时
+ *  op.data.password 就是纯明文字符串，是本系统最敏感的单字段，绝不能漏进 warn。
+ *  所以运行时在 ENCRYPT_FIELDS 基础上再补 password（仅日志面，不触碰加密语义）。
+ *  不能模块顶层就把两表拼好：useE2E↔syncPush 循环依赖，顶层求值时 useE2E 的
+ *  ENCRYPT_FIELDS 可能尚未初始化（undefined），必须推迟到函数调用时才读。 */
+const REDACT_EXTRA_FIELDS: Partial<Record<EntityType, readonly string[]>> = {
+  bookmark: ['password'] as const,
+}
+
 export function _redactOpData(op: SyncOp): Record<string, unknown> | null {
   if (!op.data) return null
   const type = tableToEntityType[op.table as TableName]
-  const sens: readonly string[] | undefined = type ? ENCRYPT_FIELDS[type] : undefined
+  const sens: readonly string[] | undefined = type ? [...ENCRYPT_FIELDS[type], ...(REDACT_EXTRA_FIELDS[type] || [])] : undefined
   const copy = { ...(op.data as Record<string, unknown>) }
   if (sens && sens.length > 0) {
     for (const f of sens) {

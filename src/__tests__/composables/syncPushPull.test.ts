@@ -82,6 +82,7 @@ import {
   useCloudSync, __testPendingSync, setSyncRemotePort, createMemorySyncPort, _isPendingSync,
 } from '../../composables/domain/useCloudSync.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { _redactOpData } from '../../composables/domain/syncPush.js'
 
 function makeBm(partial: Record<string, unknown> = {}) {
   return {
@@ -909,5 +910,90 @@ describe('syncPull — 远端软删批次 dirty/pending guard', () => {
     setSyncRemotePort(port)
     await useCloudSync().pullFromCloud(false)
     expect(ds.bookmarkMap['bm-clean'].deletedAt).toBeDefined()
+  })
+})
+
+describe('sync 逆回归（81e926a3 降频把对账入口关死 + redact 漏 password）', () => {
+  // 背景：81e926a3 perf(sync) 把全量 ID 对账（selectAllIds + reconcileDelete +
+  // full-absent-delete）从「每次 lastSyncAt>0 常规 pull 都跑」改成仅 full=true 跑，
+  // 但对账入口从此变成不可达死代码——生产无任何调用方传 pullChanges(true)：
+  //   useCloudSync.fullSync 调 pullChanges() 无参(false)、initialSync/_onOnline/
+  //   _onVisibilityChange/subscribeRealtime 全部 false。于是远端物理删除本机残留行
+  //   永远对不掉（常规增量 selectSince/selectSoftDeleted 都拉不到被整行删掉的 id）。
+  // 修复：fullSync 补传 full=true，让「手动全量同步」真正跑对账（回归 entry 点在
+  //  SyncStatusPopover/CommandPalette 调用的 fullSync，非测试直调 pullFromCloud(true)）。
+
+  it('fullSync 走 full=true：本地残留书签因远端 selectAllIds 无它而被 reconcile 软删', async () => {
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    // 已同步账号（lastSyncAt>0）：本地有一条远端已被物理删除的残留书签 bm-ghost
+    ds.addBookmark(makeBm({ id: 'bm-ghost', title: '幽灵残留' }) as any)
+    useSyncStore().setLastSyncAt(9000)
+
+    // 远端任何查询都没有 bm-ghost：sinceRows 无（增量拉不回）、allIds 无（对账判它远端已删）
+    const port = createMemorySyncPort({
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      softDeleted: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+    })
+    setSyncRemotePort(port)
+
+    const ok = await useCloudSync().fullSync()
+    expect(ok).toBe(true)
+    // 回归断言：fullSync 若仍按旧 bug 调 pullChanges(false)，reconcile 死代码不跑，
+    // bm-ghost 不会软删（增量增量查不到它）→ 本断言失败。修复后 full=true 对账软删它。
+    expect(ds.bookmarkMap['bm-ghost'].deletedAt).toBeDefined()
+  })
+
+  it('fullSync 用 full=true 但不误删仍在重试(pending)的本地项', async () => {
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    ds.addBookmark(makeBm({ id: 'bm-editing', title: '编辑中' }) as any)
+    useSyncStore().setLastSyncAt(9000)
+    ds._dirtyIds.add('bm-editing')
+
+    // 让 bm-editing 的 upsert push 失败——fullSync 前置推失败 → 它留在队列并标记 pending
+    //（_markPendingSync），full 对账（selectAllIds 无它）也不能把它当「远端已删」软删，
+    // 必须由 syncMergeCore full-absent-delete 守卫（!isDirty && !isPending && lastSyncAt>0）拦下，
+    // 否则待重试的本地项被灭，排队 upsert 永远 revive 不回来。
+    const port = createMemorySyncPort({
+      upsertError: (_t, row) => (row.id === 'bm-editing' ? { message: 'simulated network fail' } : null),
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      softDeleted: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+    })
+    setSyncRemotePort(port)
+
+    await useCloudSync().fullSync()
+    // full-absent-delete 守卫：pending 项不被全量灭（其待重试 upsert 会 revive 回来）
+    expect(ds.bookmarkMap['bm-editing'].deletedAt).toBeUndefined()
+    // 且确实还被标记 pending（守卫判断依据成立，非误删后侥幸）
+    expect(_isPendingSync('bm-editing')).toBe(true)
+  })
+
+  // 背景：81e926a3 ④ _redactOpData 复用 ENCRYPT_FIELDS 单一来源做日志脱敏，但 ENCRYPT_FIELDS
+  // 刻意排除 password（它走 EncryptedPassword 独立链路）。E2E 关闭时 op.data.password 是纯明文
+  // 字符串，push 失败 warn（syncPush:348 console.warn('首条失败 op 原始 data')）会把明文密码打到
+  // 控制台，与 commit 声称「避免 password 明文落控制台」直接矛盾。修复：日志脱敏独立于加密，
+  // 在 ENCRYPT_FIELDS 基础上补 password。
+  it('_redactOpData 对 bookmark 明文 password 也脱敏（不只是 username/notes）', () => {
+    const redacted = _redactOpData({
+      id: 1, action: 'upsert', table: 'bookmarks', itemId: 'bm-1', ts: 1, retries: 0,
+      data: {
+        id: 'bm-1', title: 't', url: 'https://x.example',
+        username: 'alice', password: 'super-secret-plaintext', notes: 'note',
+      },
+    })
+    expect(redacted).not.toBeNull()
+    expect((redacted as Record<string, unknown>)['password']).toBe('[redacted]')
+    expect((redacted as Record<string, unknown>)['username']).toBe('[redacted]')
+    expect((redacted as Record<string, unknown>)['notes']).toBe('[redacted]')
+    // 非敏感字段保留原值（排障仍可定位）→ 脱敏不整条丢
+    expect((redacted as Record<string, unknown>)['title']).toBe('t')
+    expect((redacted as Record<string, unknown>)['url']).toBe('https://x.example')
   })
 })
