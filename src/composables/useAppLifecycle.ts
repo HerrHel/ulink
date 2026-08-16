@@ -94,6 +94,18 @@ export function useAppLifecycle() {
     // 初始化认证 & 云同步
     const auth = useAuth()
     await auth.init()
+    // 登录后重新检查 E2E 状态：App.vue onMounted 的 checkE2EStatus 执行时尚未登录，
+    // 读不到云端 user_security → isE2EEnabled 为 false。登录后有了 auth.user，
+    // 重新检查才能从云端拉取 canary 并正确设置 isE2EEnabled = true（常见于移动端、
+    // 换设备等本地无 canary 但云端已设置主密码的场景）。
+    if (auth.isLoggedIn) {
+      try {
+        const e2e = useE2E()
+        if (!e2e.isE2EEnabled.value) {
+          await e2e.checkE2EStatus()
+        }
+      } catch { /* 不阻塞初始化 */ }
+    }
     const sync = useCloudSync()
     // 多设备主密码一致性检测：登录且本机已设主密码时，对比云端 canary。
     // 不一致时弹解决向导（统一主密码 / 保留本机），每会话最多检测一次不打扰。
