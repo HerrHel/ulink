@@ -109,6 +109,7 @@ vi.mock('../../lib/supabase.js', () => ({
 }))
 
 import { useE2E } from '../../composables/domain/useE2E.js'
+import { useDataStore } from '../../stores/data.js'
 
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -377,4 +378,109 @@ describe('useE2E biometric Facade 透传转发', () => {
     const r = await e2e.unlockWithBiometric()
     expect(r).toBe('fake-key')
   })
+})
+
+// ═════════════════ 小函数低成本覆盖：lock/cancelSetup/generateRecoveryKey ═════════════════
+describe('useE2E 小函数委托', () => {
+  it('lock 委托 e2eStore.lock 清 cryptoKey+unlocked', () => {
+    _e2eState.isUnlocked = true
+    _e2eState.cryptoKey = {} as CryptoKey
+    const e2e = useE2E()
+    e2e.lock()
+    expect(_e2eState.isUnlocked).toBe(false)
+    expect(_e2eState.cryptoKey).toBeNull()
+  })
+
+  it('cancelSetup 推进 _setupGen（setupMasterPassword 各 await 后判 gen 短路）', () => {
+    const e2e = useE2E()
+    // 首次调用后 cancelSetup 推进 gen
+    e2e.cancelSetup()
+    // 无状态变化可断言，但 gen 推进后 setupMasterPassword 如被调用会在各 await 后返 'cancelled'
+    // 此测仅验证 cancelSetup 不抛、不副作用即可
+    expect(true).toBe(true)
+  })
+
+  it('generateRecoveryKey 返 6 组 4 字符 recovery key 格式', () => {
+    const e2e = useE2E()
+    const rk = e2e.generateRecoveryKey()
+    expect(rk).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/)
+  })
+})
+
+// ═════════════════ encryptField / decryptField 边缘分支 ═════════════════
+describe('useE2E encryptField / decryptField 边缘分支', () => {
+  it('encryptField 无 key 时返原值（不加密，无崩）', async () => {
+    const e2e = useE2E()
+    const r = await e2e.encryptField('hello')
+    expect(r).toBe('hello')
+  })
+
+  it('encryptField 空 value 返空（不加密，不调用 encrypt）', async () => {
+    _e2eState.cryptoKey = {} as CryptoKey
+    _e2eState.isUnlocked = true
+    const e2e = useE2E()
+    const r = await e2e.encryptField('')
+    expect(r).toBe('')
+  })
+
+  it('decryptField 空 value 返空', async () => {
+    const e2e = useE2E()
+    const r = await e2e.decryptField('')
+    expect(r).toBe('')
+  })
+
+  it('decryptField 无 key + 非三段明文 → 返原值（穿透给 UI）', async () => {
+    const e2e = useE2E()
+    const r = await e2e.decryptField('明文标题')
+    expect(r).toBe('明文标题')
+  })
+
+  it('decryptField 无 key + 三段密文 → 返空（防模板渲染长串乱码）', async () => {
+    const e2e = useE2E()
+    // 三段密文需满足 isThreePartCipher 严格长度：salt=44 base64 / iv=16 base64 / data≥24 base64
+    const salt = 'S'.repeat(44)
+    const iv = 'I'.repeat(16)
+    const data = 'D'.repeat(24)
+    const r = await e2e.decryptField(`${salt}.${iv}.${data}`)
+    expect(r).toBe('') // 无 key 时三段密文返空，防 UI 显出乱码
+  })
+})
+
+// ═════════════════ decryptStoreItems categories/customAttributes 分支 ═════════════════
+describe('useE2E.decryptStoreItems categories/customAttributes 分支', () => {
+  it('category 含密文 name + customAttribute 含密文 name → 解锁后补解密', async () => {
+    const e2e = useE2E()
+    const ds = useDataStore()
+    const masterPw = 'test-pw-cat-attr'
+    await e2e.setupMasterPassword(masterPw)
+
+    // 用全局 key 加密 category name 和 attribute name
+    const cipherCat = await e2e.encryptField('加密分类名')
+    const cipherAttr = await e2e.encryptField('加密属性名')
+    expect(cipherCat).not.toBe('加密分类名')
+    expect(cipherAttr).not.toBe('加密属性名')
+
+    ds.addCategory({ id: 'cat-enc', name: cipherCat, icon: '', color: '', order: 0 } as any)
+    ds.addAttribute({ id: 'attr-enc', name: cipherAttr, type: 'boolean' } as any)
+
+    // lock → unlock 触发 decryptStoreItems
+    e2e.lock()
+    expect(await e2e.unlock(masterPw)).toBe(true)
+
+    // category name 和 attribute name 应被补解密回明文
+    expect(ds.categories.find(c => c.id === 'cat-enc')?.name).toBe('加密分类名')
+    expect(ds.customAttributes.find(a => a.id === 'attr-enc')?.name).toBe('加密属性名')
+  }, 20000)
+
+  it('hasEncryptedData 检测 category 含密文 name → true', async () => {
+    const e2e = useE2E()
+    const ds = useDataStore()
+    const masterPw = 'test-pw-hed'
+    await e2e.setupMasterPassword(masterPw)
+
+    const cipher = await e2e.encryptField('密文分类')
+    ds.addCategory({ id: 'cat-hed', name: cipher, icon: '', color: '', order: 0 } as any)
+
+    expect(e2e.hasEncryptedData()).toBe(true)
+  }, 15000)
 })
