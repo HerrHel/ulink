@@ -16,3 +16,8 @@ declare module 'virtual:pwa-register' {
   }
   export function registerSW(options?: RegisterSWOptions): (reloadPage?: boolean) => Promise<void>
 }
+
+interface ImportMetaEnv {
+  /** PWA SW 更新轮询间隔（毫秒），默认 30 分钟 */
+  readonly VITE_SW_UPDATE_INTERVAL?: string
+}

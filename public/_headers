@@ -12,3 +12,9 @@
 /index.html
   Cache-Control: no-cache
   Content-Type: text/html; charset=utf-8
+
+# PWA Service Worker——必须 no-cache，否则浏览器缓存住旧 SW 永不更新
+/sw.js
+  Cache-Control: no-cache
+/registerSW.js
+  Cache-Control: no-cache

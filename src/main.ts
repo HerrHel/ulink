@@ -59,20 +59,24 @@ if (import.meta.env.PROD) {
   import('virtual:pwa-register').then(({ registerSW }) => {
     registerSW({
       immediate: true,
-      onNeedRefresh() { /* autoUpdate 会走 onRegisteredSW 路径 */ },
+      onNeedRefresh() { /* autoUpdate 自动处理 skipWaiting */ },
       onOfflineReady() { /* no-op */ },
       onRegisteredSW(_swUrl, registration) {
-        // 新 SW 控制页面后强制 reload，保证 index + 异步 chunk 同代
-        registration?.addEventListener('updatefound', () => {
-          const nw = registration.installing
-          if (!nw) return
-          nw.addEventListener('statechange', () => {
-            if (nw.state === 'activated' && navigator.serviceWorker.controller) {
-              window.location.reload()
-            }
-          })
-        })
+        if (!registration) return
+
+        // 定期轮询检查新版本——浏览器默认最长 24h 才检查一次 SW 更新，
+        // 这里改为 30 分钟主动调 update() 触发更新检测。
+        const POLL_MS = Number(import.meta.env.VITE_SW_UPDATE_INTERVAL) || 30 * 60 * 1000
+        setInterval(() => { registration.update() }, POLL_MS)
       },
+    })
+
+    // 新 SW 激活接管后强制整页刷新，确保所有 chunk 同代（hash 一致）
+    let refreshing = false
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return
+      refreshing = true
+      window.location.reload()
     })
   }).catch(() => { /* virtual:pwa-register 在非 PWA 构建中可能不可用 */ })
 }
