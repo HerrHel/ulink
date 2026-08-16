@@ -168,15 +168,31 @@ export function useCloudSync() {
   function _onOnline() {
     if (!isLoggedIn.value) return
     enqueueDirtyAsOps()
-    void withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
     if (syncStore.realtimeStatus !== 'connected') {
+      // 断线重连：subscribeRealtime 不传回调，避免 SUBSCRIBED 再触发一次 pullChanges。
+      // 显式 pullChanges 已做全面拉取，重连后靠 Realtime 增量事件即可。
       unsubscribeRealtime()
-      subscribeRealtime(pullChanges)
+      subscribeRealtime()
+      void withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
+      return
     }
+    void withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
   }
 
   function _onVisibilityChange() {
     if (document.visibilityState !== 'visible' || !isLoggedIn.value) return
+    if (syncStore.realtimeStatus !== 'connected' && syncStore.realtimeStatus !== 'connecting') {
+      unsubscribeRealtime()
+      subscribeRealtime()
+      void withLock('linkvault-sync', async () => {
+        await pullChanges()
+        if (syncStore.autoSync) {
+          enqueueDirtyAsOps()
+          await pushFromQueue()
+        }
+      })
+      return
+    }
     void withLock('linkvault-sync', async () => {
       await pullChanges()
       if (syncStore.autoSync) {
@@ -184,10 +200,6 @@ export function useCloudSync() {
         await pushFromQueue()
       }
     })
-    if (syncStore.realtimeStatus !== 'connected' && syncStore.realtimeStatus !== 'connecting') {
-      unsubscribeRealtime()
-      subscribeRealtime(pullChanges)
-    }
   }
 
   function initOnlineListener() {

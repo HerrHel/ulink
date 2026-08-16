@@ -268,7 +268,7 @@ export async function _handleRealtimeChange(payload: any, type: EntityType) {
   return withLock('linkvault-sync', () => _handleRealtimeChangeInner(payload, type))
 }
 
-function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
+function _scheduleReconnect(onPullChanges?: () => Promise<boolean>) {
   if (_reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     console.warn('[realtime] max reconnect attempts reached')
     useSyncStore().setRealtimeStatus('error')
@@ -293,7 +293,7 @@ function _scheduleReconnect(onPullChanges: () => Promise<boolean>) {
   }, delay)
 }
 
-export function subscribeRealtime(onPullChanges: () => Promise<boolean>) {
+export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId || _channel) return
