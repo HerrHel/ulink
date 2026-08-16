@@ -57,7 +57,8 @@ export function _opNeedsUnlock(op: SyncOp): boolean {
  *  不能模块顶层就把两表拼好：useE2E↔syncPush 循环依赖，顶层求值时 useE2E 的
  *  ENCRYPT_FIELDS 可能尚未初始化（undefined），必须推迟到函数调用时才读。 */
 const REDACT_EXTRA_FIELDS: Partial<Record<EntityType, readonly string[]>> = {
-  bookmark: ['password'] as const,
+  bookmark: ['password', 'notes'] as const,
+  group: ['notes'] as const,
 }
 
 export function _redactOpData(op: SyncOp): Record<string, unknown> | null {

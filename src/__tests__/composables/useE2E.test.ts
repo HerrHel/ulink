@@ -55,15 +55,18 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     expect(e2e.isUnlocked.value).toBe(true) // setup 后自动解锁
 
     // 2) 用真加密生成一条密文 username 的 bookmark，塞 store 模拟「未解锁时 Realtime 落的密文态」。
-    //    现行加密范围已收窄到 username/notes，title/url 不再被 encryptItem 加密。
+    //    现行加密范围已收窄到仅 username，title/url/notes 不再被 encryptItem 加密。
     const enc = await e2e.encryptItem('bookmark', {
       title: '普通标题', url: 'https://cipher.example', username: '机密用户名', notes: '私密笔记',
     } as any)
     const cipherUsername = enc.username as string
-    const cipherNotes = enc.notes as string
     expect(cipherUsername).not.toBe('机密用户名') // 确真加密了（三段 salt.iv.data）
-    expect(cipherNotes).not.toBe('私密笔记')
     expect(enc.title).toBe('普通标题') // title 现已明文存云端，不被加密
+    expect(enc.notes).toBe('私密笔记') // notes 已移入 LEGACY，push 不再加密 → 明文穿透
+
+    // 手动用 encryptField 把 notes 加密，模拟「旧版本加密的 notes 密文」（历史数据迁移期残留）
+    const cipherNotes = await e2e.encryptField('私密笔记') as string
+    expect(cipherNotes).not.toBe('私密笔记')
 
     ds.addBookmark({
       id: 'b1', title: '普通标题', url: 'https://cipher.example', username: cipherUsername, password: '',
@@ -303,10 +306,9 @@ describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {
     await expect(
       e2e.encryptItem('bookmark', { title: 't', url: 'https://x.example', username: 'secret', notes: '' } as any)
     ).rejects.toThrow(/未解锁/)
-    // 含非空 notes → 同样 throw
-    await expect(
-      e2e.encryptItem('bookmark', { title: 't', url: 'https://x.example', username: '', notes: '私密' } as any)
-    ).rejects.toThrow(/未解锁/)
+    // notes 已移入 LEGACY 不触发 needsEnc：即使非空也透传不 throw（锁定态可明文推送正文）
+    const notesOnly = await e2e.encryptItem('bookmark', { title: 't', url: 'https://x.example', username: '', notes: 'plain-notes' } as any)
+    expect(notesOnly.notes).toBe('plain-notes')
     // category 无敏感字段 → 锁定态也透传
     const cat = await e2e.encryptItem('category', { name: '工作' } as any)
     expect(cat.name).toBe('工作')
@@ -359,8 +361,8 @@ describe('useE2E.resetWithRecoveryKey', () => {
   }, 15000)
 })
 
-// M23：password 不在 ENCRYPT/LEGACY 补解密字段；group.name 在 ENCRYPT 内
-describe('useE2E.decryptStoreItems password 契约 + group name', () => {
+// M23：password 不在 ENCRYPT/LEGACY 补解密字段；group.name 在 LEGACY 内（经并集照常被解密）
+describe('useE2E.decryptStoreItems password 契约 + group name legacy', () => {
   it('EncryptedPassword 对象态 password 解锁后保持不变；group.name 密文被解开', async () => {
     const e2e = useE2E()
     const ds = useDataStore()

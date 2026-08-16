@@ -34,9 +34,10 @@ const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 
 // ── 需要加密的字段 ──
 // E2E 启用时由全局 CryptoKey 加密的字段。
-// 加密范围已收窄：title/url/分类名/属性名 改存云端明文，仅用户名与笔记留密文。
-// 这样锁定态（无 key）也能同步只改了 title/url 的书签——push 走明文覆盖、
-// pull 走 LEGACY_DECRYPT_FIELDS 还原旧密文，几轮同步后云端自然全量明文化。
+// 加密范围已收窄：title/url/notes/分组名/分类名/属性名 改存云端明文，
+// 仅 username（真凭证字段）留密文。这样锁定态（无 key）也能同步只改了
+// title/url/notes 的书签——push 走明文覆盖、pull 走 LEGACY_DECRYPT_FIELDS
+// 还原旧密文，几轮同步后云端自然全量明文化。
 // password 不在此列：它有独立加密路径——useBookmark.saveBm 在 E2E 解锁时用
 // e2eStore.cryptoKey（unlock 一次性派生的 global cryptoKey）调 crypto.encrypt 输出
 // salt.iv.data 三段串，再拆回 EncryptedPassword 对象存本地。其中 salt 是 encrypt 内部
@@ -58,8 +59,8 @@ const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 // 重建同一把 global cryptoKey，经 decryptWithGlobalKey 复用 decryptPasswordWithKey 语义
 // 解 EncryptedPassword 对象/三段串，与主项目展示链路一致。主项目本文件零代码改。
 export const ENCRYPT_FIELDS = {
-  bookmark: ['username', 'notes'] as const,
-  group: ['name', 'notes'] as const,
+  bookmark: ['username'] as const,
+  group: [] as const,
   category: [] as const,
   attribute: [] as const,
 }
@@ -69,9 +70,9 @@ export const ENCRYPT_FIELDS = {
 // 对它们也跑一次 decryptField：真密文（三段且 key 匹配）解回明文，明文/解不开
 // 的原样返回（见 crypto.decrypt 的优雅降级）。push 侧不再加密它们，几轮同步后
 // 云端密文被明文覆盖，完成单向迁移。含义上与 ENCRYPT_FIELDS 互斥。
-const LEGACY_DECRYPT_FIELDS: Record<EntityType, readonly string[]> = {
-  bookmark: ['title', 'url'] as const,
-  group: [] as const,
+export const LEGACY_DECRYPT_FIELDS: Record<EntityType, readonly string[]> = {
+  bookmark: ['title', 'url', 'notes'] as const,
+  group: ['name', 'notes'] as const,
   category: ['name'] as const,
   attribute: ['name'] as const,
 }
@@ -592,7 +593,8 @@ export function useE2E() {
 
     // ── 步骤 4：内存浅克隆四数组并重加密到「目标态副本」──
     // 目标态规则（与现有 push 链路对齐，避免双重加密）：
-    //  - username/notes/name（ENCRYPT_FIELDS）：存「明文」（push 时 syncPush encryptItem(newKey) 加密一次）
+    //  - username/name/notes（ENCRYPT_FIELDS ∪ LEGACY_DECRYPT_FIELDS）：存「明文」（push 时
+    //    syncPush encryptItem(newKey) 只加密 username；name/notes 走 legacy 明文迁移）
     //  - password：存 newKey 加密的 EncryptedPassword 对象（不在 ENCRYPT_FIELDS，push 不经 encryptItem，
     //    _serializePassword 仅重组三段串上传，故必须在内存就上锁成对象）
     //  - category/attribute：ENCRYPT_FIELDS 空，仅 bump updatedAt

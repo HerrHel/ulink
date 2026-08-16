@@ -25,10 +25,10 @@ describe('_opNeedsUnlock 锁定态排队判定', () => {
     }))).toBe(true)
   })
 
-  it('bookmark changedFields 含 notes → true', () => {
+  it('bookmark changedFields 含 notes（已移入 LEGACY）→ false，不再排队', () => {
     expect(_opNeedsUnlock(mk('bookmarks', {
       _changedFields: ['notes'], notes: '私密',
-    }))).toBe(true)
+    }))).toBe(false)
   })
 
   it('bookmark 新建（changedFields 为空）且有非空 username → true', () => {
@@ -43,15 +43,15 @@ describe('_opNeedsUnlock 锁定态排队判定', () => {
     }))).toBe(false)
   })
 
-  it('group changedFields 含 name → true', () => {
+  it('group changedFields 含 name（已移入 LEGACY）→ false', () => {
     expect(_opNeedsUnlock(mk('sibling_groups', {
       _changedFields: ['name'], name: '改名',
-    }))).toBe(true)
+    }))).toBe(false)
   })
 
-  it('group 只改 notes 之外的字段（如 bookmark_ids）→ false', () => {
+  it('group 字段全非空（name/notes 已移入 LEGACY 不再触发锁定）→ false', () => {
     expect(_opNeedsUnlock(mk('sibling_groups', {
-      _changedFields: ['bookmarkIds'], name: '', notes: '',
+      _changedFields: ['bookmarkIds'], name: '组名', notes: '备注',
     }))).toBe(false)
   })
 

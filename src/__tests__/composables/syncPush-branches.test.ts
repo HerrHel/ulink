@@ -195,20 +195,20 @@ describe('_opNeedsUnlock — 锁定态判定所用的敏感字段表', () => {
     })).toBe(false)
   })
 
-  it('group 表敏感字段命中 notes 非空 → true', () => {
+  it('group 表敏感字段已移入 LEGACY：notes 非空不再触发 unlock', () => {
     expect(_opNeedsUnlock({
       id: 1, action: 'upsert', table: 'sibling_groups', itemId: 'g1',
       data: { name: '', notes: 'secret-notes', _changedFields: null }, ts: 1, retries: 0,
-    })).toBe(true)
+    })).toBe(false)
   })
 
-  it('group 表敏感字段 name 非空但 changedFields 指向 notes → true（name 被忽略走 changedFields）', () => {
-    // changedFields 非空只看 changedFields.some(sens.includes(f))，name 虽非空但不在 changedFields
-    // → 若 changedFields 不含 name/notes 则 false；此处 changedFields 含 notes → true
+  it('group 表敏感字段已移入 LEGACY：name/notes 在 changedFields 也不再触发 unlock', () => {
+    // group ENCRYPT_FIELDS 已清空，name/notes 移入 LEGACY_DECRYPT_FIELDS。_opNeedsUnlock 仅查 ENCRYPT_FIELDS，
+    // 故 changedFields 含 notes 也不再触发锁定。
     expect(_opNeedsUnlock({
       id: 1, action: 'upsert', table: 'sibling_groups', itemId: 'g1',
       data: { name: 'grp', notes: '', _changedFields: ['notes'] }, ts: 1, retries: 0,
-    })).toBe(true)
+    })).toBe(false)
   })
 })
 
@@ -311,13 +311,13 @@ describe('_redactOpData — 日志脱敏边界', () => {
     expect(r!.title).toBe('keep')
   })
 
-  it('group 表 name/notes 非空 → 脱敏（无 password 额外项）', () => {
+  it('group 表 name 明文保留、notes 经 REDACT_EXTRA 脱敏（name 移入 LEGACY 不再默认脱敏）', () => {
     const r = _redactOpData({
       id: 1, action: 'upsert', table: 'sibling_groups', itemId: 'x', ts: 1, retries: 0,
       data: { name: 'grp', notes: 'secret-notes', password: 'should-keep' },
     })
-    expect(r!.name).toBe('[redacted]')
-    expect(r!.notes).toBe('[redacted]')
+    expect(r!.name).toBe('grp') // name 移入 LEGACY，不再默认脱敏（排障仍需定位组名）
+    expect(r!.notes).toBe('[redacted]') // notes 经 REDACT_EXTRA_FIELDS 补脱敏
     expect(r!.password).toBe('should-keep') // group 不在 REDACT_EXTRA_FIELDS，password 原样保留
   })
 })
@@ -429,7 +429,7 @@ describe('pushFromQueue 离线守门', () => {
 
 describe('pushFromQueue 加密失败一条龙（E2E 锁定 + changedFields 绕 lockedItemKeys）', () => {
   // 锁：E2E 启用锁定态下，changedFields 指向非敏感字段（如 title）让 _opNeedsUnlock 返 false
-  // 绕过 lockedItemKeys 早退，但 data 含非空敏感字段（notes）触发 encryptItem needsEnc throw
+  // 绕过 lockedItemKeys 早退，但 data 含非空真凭证字段（username）触发 encryptItem needsEnc throw
   // 「E2E 已启用但未解锁无法加密」。该 op 走 encFailedOps → retry+1 链路（非误判成功出队），
   // 失败 warn 经 _redactOpData 脱敏（password 明文不打控制台）。锁住「加密失败不丢本地变更 +
   // 失败经重试链路不死信过早/过晚 + 敏感字段不落 warn 明文」三重契约。
@@ -444,16 +444,16 @@ describe('pushFromQueue 加密失败一条龙（E2E 锁定 + changedFields 绕 l
     const port = createMemorySyncPort()
     setSyncRemotePort(port)
     const ds = useDataStore()
-    ds.addBookmark(makeBm({ id: 'bm-enc', notes: '敏感备注' }) as any) // existing 命中走 history encrypt
+    ds.addBookmark(makeBm({ id: 'bm-enc', username: 'secret-user', notes: '注释' }) as any) // existing 命中走 history encrypt
     ds._dirtyIds.clear()
     ds._newIds.clear()
 
     // changedFields=['title'] 非敏感 → _opNeedsUnlock=false → 不进 lockedItemKeys；
-    // notes 非空 → encryptItem needsEnc=true → 锁定态 !key → throw → encFailedOps。
+    // username 非空 → encryptItem needsEnc=true → 锁定态 !key → throw → encFailedOps。
     await enqueueSyncOps([{
       action: 'upsert', table: 'bookmarks', itemId: 'bm-enc',
       data: {
-        ...makeBm({ id: 'bm-enc', notes: '敏感备注', password: '明文密码-plain' }),
+        ...makeBm({ id: 'bm-enc', username: 'secret-user', notes: '注释', password: '明文密码-plain' }),
         _userId: 'user-sp', _isNew: false, _changedFields: ['title'],
       },
       ts: 1,
@@ -480,14 +480,14 @@ describe('pushFromQueue 加密失败一条龙（E2E 锁定 + changedFields 绕 l
     const port = createMemorySyncPort()
     setSyncRemotePort(port)
     const ds = useDataStore()
-    ds.addBookmark(makeBm({ id: 'bm-enc2', notes: '敏感备注' }) as any)
+    ds.addBookmark(makeBm({ id: 'bm-enc2', username: 'secret-user2', notes: '备注' }) as any)
     ds._dirtyIds.clear()
     ds._newIds.clear()
 
     await enqueueSyncOps([{
       action: 'upsert', table: 'bookmarks', itemId: 'bm-enc2',
       data: {
-        ...makeBm({ id: 'bm-enc2', notes: '敏感备注' }),
+        ...makeBm({ id: 'bm-enc2', username: 'secret-user2', notes: '备注' }),
         _userId: 'user-sp', _isNew: false, _changedFields: ['title'],
       },
       ts: 1,
@@ -861,7 +861,7 @@ describe('pushFromQueue history encrypt 块（bookmark/group 的历史快照）'
     expect(port.updates.length).toBe(1)
   })
 
-  it('解锁态 existing bookmark（notes 非空）→ history encrypt 成功入 historyItems（line 196-197）', async () => {
+  it('解锁态 existing bookmark（username 非空）→ history encrypt 成功入 historyItems（line 196-197）', async () => {
     const e2e = useE2EStore()
     e2e.setEnabled(true)
     e2e.setUnlocked(true)
@@ -871,8 +871,8 @@ describe('pushFromQueue history encrypt 块（bookmark/group 的历史快照）'
     const port = createMemorySyncPort()
     setSyncRemotePort(port)
     const ds = useDataStore()
-    // 已存在书签（notes 含敏感内容，命中 ENCRYPT_FIELDS.bookmark）
-    ds.addBookmark(makeBm({ id: 'bm-hist', notes: '历史快照原文' }) as any)
+    // 已存在书签（username 命中 ENCRYPT_FIELDS.bookmark 真凭证字段）
+    ds.addBookmark(makeBm({ id: 'bm-hist', username: 'secret-user', notes: '备注' }) as any)
     ds._dirtyIds.clear()
     ds._newIds.clear()
 
@@ -881,7 +881,7 @@ describe('pushFromQueue history encrypt 块（bookmark/group 的历史快照）'
     // 成功 + 197 push historyItems。主推送 line 238 encryptItem（真 key）成功 → port.update 成功。
     await enqueueSyncOps([{
       action: 'upsert', table: 'bookmarks', itemId: 'bm-hist',
-      data: { ...makeBm({ id: 'bm-hist', notes: '历史快照原文' }), _userId: 'user-sp', _isNew: false, _changedFields: ['title'] },
+      data: { ...makeBm({ id: 'bm-hist', username: 'secret-user', notes: '备注' }), _userId: 'user-sp', _isNew: false, _changedFields: ['title'] },
       ts: 1,
     }])
 
@@ -913,13 +913,13 @@ describe('pushFromQueue history encrypt 块（bookmark/group 的历史快照）'
     const port = createMemorySyncPort()
     setSyncRemotePort(port)
     const ds = useDataStore()
-    ds.addBookmark(makeBm({ id: 'bm-hist-fail', notes: '会触发 hist encrypt 抛错' }) as any)
+    ds.addBookmark(makeBm({ id: 'bm-hist-fail', username: 'secret-user', notes: '会触发历史加密' }) as any)
     ds._dirtyIds.clear()
     ds._newIds.clear()
 
     await enqueueSyncOps([{
       action: 'upsert', table: 'bookmarks', itemId: 'bm-hist-fail',
-      data: { ...makeBm({ id: 'bm-hist-fail', notes: '会触发 hist encrypt 抛错' }), _userId: 'user-sp', _isNew: false, _changedFields: ['title'] },
+      data: { ...makeBm({ id: 'bm-hist-fail', username: 'secret-user', notes: '会触发历史加密' }), _userId: 'user-sp', _isNew: false, _changedFields: ['title'] },
       ts: 1,
     }])
 

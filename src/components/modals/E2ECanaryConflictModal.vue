@@ -44,7 +44,7 @@
         <template v-else>
           <div class="e2e-info e2e-warn">
             <p><strong>该账号已在其他设备设置主密码，与本机主密码不同。</strong></p>
-            <p>两端用不同密钥加密，云端同步的加密内容（用户名、备注、密码）在对方设备上都无法读取；且任一端在登录状态下修改主密码，会覆盖云端主密码，另一端设备一旦本地记录丢失即永久锁定。</p>
+            <p>两端用不同密钥加密，云端同步的加密内容（用户名、密码）在对方设备上都无法读取；且任一端在登录状态下修改主密码，会覆盖云端主密码，另一端设备一旦本地记录丢失即永久锁定。</p>
           </div>
 
           <div class="e2e-info" style="margin-top:12px">
@@ -56,7 +56,7 @@
 
           <div class="e2e-info" style="margin-top:12px">
             <p><strong>解决办法 ② 保留本机主密码</strong></p>
-            <p>本机继续用当前主密码。加密字段（用户名、备注等）不再与云端互通，仅普通字段正常同步。</p>
+            <p>本机继续用当前主密码。加密字段（用户名等）不再与云端互通，仅普通字段正常同步。</p>
             <p style="color:var(--danger);font-size:0.8rem;margin-bottom:8px">请勿在本机「修改主密码」或「重置」，否则会覆盖云端主密码，导致其他设备无法解锁。</p>
             <button class="btn btn-secondary" data-testid="lv-e2e-conflict-keep" @click="close">保留本机主密码</button>
           </div>

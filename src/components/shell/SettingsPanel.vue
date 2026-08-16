@@ -108,7 +108,7 @@
                 </span>
               </div>
               <div class="sp-row">
-                <span class="sp-hint">开启后密码、账户、备注等敏感数据将加密存储<span v-if="!auth.isLoggedIn">（本机存储，登录云端后可跨设备）</span></span>
+                <span class="sp-hint">开启后密码、账户等敏感数据将加密存储<span v-if="!auth.isLoggedIn">（本机存储，登录云端后可跨设备）</span></span>
               </div>
               <div class="sp-row sp-row-actions">
                 <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" data-testid="lv-e2e-setup-btn" @click.stop="onOpenE2ESetup"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> 开启加密</button>

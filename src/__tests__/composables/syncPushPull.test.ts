@@ -297,7 +297,7 @@ describe('syncPushPull via SyncRemotePort', () => {
       table: 'sibling_groups',
       itemId: 'sg-x',
       data: {
-        // name/notes 留空 → _opNeedsUnlock 判 false（无敏感字段需加密），
+        // 组 ENCRYPT_FIELDS 已清空（name/notes 移入 LEGACY），_opNeedsUnlock 判 false，
         // 解锁态下也不经 encryptField，避开 jsdom 无 SubtleCrypto 的干扰，
         // 专注验证 isLocked=false 时末尾 setPendingLockedCount(0) 复位计数。
         id: 'sg-x', name: '', notes: '', categoryId: 'cat-1', order: 3,
@@ -840,7 +840,7 @@ describe('syncPull 解锁态竞态（D1-4）', () => {
 
   it('解锁态中途撤锁 → 中止 pull、远端项不进本地、状态 idle', async () => {
     // 远端两条 bookmark，username 填三段密文让 decryptItem 走真 await subtle.decrypt
-    // （bookmark 的 ENCRYPT_FIELDS 是 username/notes，三段策略触发 decryptField）
+    // （bookmark 的 ENCRYPT_FIELDS 收窄后仅 username，三段策略触发 decryptField）
     const remoteBm = (id: string) => ({
       id, user_id: 'user-pp', title: '远端书签 ' + id, url: 'https://race.example/' + id,
       username: 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24), password: '', notes: '', icon: '',
@@ -980,7 +980,7 @@ describe('sync 逆回归（81e926a3 降频把对账入口关死 + redact 漏 pas
   // 字符串，push 失败 warn（syncPush:348 console.warn('首条失败 op 原始 data')）会把明文密码打到
   // 控制台，与 commit 声称「避免 password 明文落控制台」直接矛盾。修复：日志脱敏独立于加密，
   // 在 ENCRYPT_FIELDS 基础上补 password。
-  it('_redactOpData 对 bookmark 明文 password 也脱敏（不只是 username/notes）', () => {
+  it('_redactOpData 对 bookmark 明文 password 也脱敏（not 在 ENCRYPT_FIELDS，经 REDACT_EXTRA 补；notes 移入 legacy 后仍脱敏）', () => {
     const redacted = _redactOpData({
       id: 1, action: 'upsert', table: 'bookmarks', itemId: 'bm-1', ts: 1, retries: 0,
       data: {
