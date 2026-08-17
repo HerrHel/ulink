@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 LinkVault — 单页书签管理器（PWA）。Vue 3 + Pinia + TipTap 编辑器，Vite + TypeScript，localStorage + IndexedDB（Dexie）持久化，可选 Supabase 云端同步。UI 与注释用中文。
 
 > 本文档为精简版，完整架构与模块清单见根目录 `AGENTS.md`（两者需同步维护）。
@@ -10,7 +12,7 @@ LinkVault — 单页书签管理器（PWA）。Vue 3 + Pinia + TipTap 编辑器�
 npm run dev          # 开发服务器（自动打开浏览器）
 npm run build        # 生产构建到 dist/
 npm run preview      # 预览生产构建
-npm run lint         # ESLint 检查 src/
+npm run lint         # ESLint 检查 src/（--max-warnings 0，warn 也阻断）
 npm run typecheck    # TypeScript 类型检查
 npm run test         # 单元测试（vitest run）；test:watch 监听、coverage 覆盖率
 npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
@@ -24,8 +26,8 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 - UI 文本、代码注释一律用中文
 - 新组件放 `src/components/` 对应子目录；测试放 `src/__tests__/`（子目录 `composables/`、`stores/`）
 - 单测：vitest + jsdom + @vue/test-utils，setup 为 `src/__tests__/setup.ts`（mock localStorage，每测试自动建新 Pinia 实例）
-- E2E：Playwright 仅 chromium，baseURL `localhost:5173`，CI 下重试 2 次
-- ESLint（`eslint.config.js`，Flat Config v10，作用 `src/**/*.{js,ts}`，no-undef 由 TS 接管故关闭）：
+- E2E：Playwright 仅 chromium，baseURL `localhost:5173`，CI 下重试 2 次；默认 L1 注入 mock Supabase URL（e2e/helpers/supabaseMock page.route 拦截），`LV_E2E_L2=1` 切 L2 真后端
+- ESLint（`eslint.config.js`，Flat Config，v10）：ts/js 基础规则作用 `src/**/*.{js,ts}`（no-undef 由 TS 接管故关闭），`.vue` 由 vue flat/recommended 管理，高价值规则（require-v-for-key / no-mutating-props 等）钉 error：
   - error：no-eval / no-implied-eval / no-caller / no-redeclare / no-dupe-keys / no-duplicate-case
   - warn：no-unused-vars（`_` 前缀豁免，args 忽略）/ no-constant-condition / no-debugger / no-empty / no-unreachable / eqeqeq（smart）
 
@@ -72,7 +74,8 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 ### 构建 / 扩展 / 样式
 
 - 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头 + spa404Plugin；部署 GitHub Actions → Pages
-- `extension/` — Manifest V3 扩展，Ctrl+Shift+L 保存当前页
+- `cli/` — 独立命令行工具子项目（commander + Supabase，独立 tsconfig/node_modules，不参与主项目构建与测试）
+- `extension/` — Manifest V3 扩展，Ctrl+Shift+S 保存当前页（manifest `save-to-linkvault` 命令）
 - `src/styles/` — tokens/reset/layout/cards/group/editor/modals/overlays/header/nav/filter/batch/drag/settings/toast/responsive/utility.css，由 main.css 统一导入
 
 ### 移动端拖拽（`useMobileDragReorder.ts`）
@@ -81,8 +84,8 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 ## 安全与运维
 
-- CSP：script-src 含 `'unsafe-inline'`（PWA 必需），connect-src 限 Supabase；生产在 `public/_headers`
+- CSP：生产 script-src `'self'`（无 unsafe-inline），connect-src 有意放宽 `'self' https: wss://*.supabase.co`（死链 checkDirect 直连任意 URL 所需，**勿私自收紧**，见 vite.config.ts SEC-05 注释）；仅 dev 放宽 script-src 支持 HMR；生产在 `public/_headers`
 - Edge Function（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 secrets 控制
 - 错误追踪：errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT）
 - 公开分享：RLS 允许匿名 SELECT `is_public = true` 的组及其书签
-- CI/CD：`.github/workflows/` — 部署（lint+test+build+deploy）、PR CI（lint+test）、Dependabot 周检
+- CI/CD：`.github/workflows/` — static.yml 部署到 Pages、ci.yml PR 门禁（lint+typecheck+test+e2e+audit 高危阻断）、Dependabot 周检

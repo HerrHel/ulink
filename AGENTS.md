@@ -120,12 +120,16 @@ composables 按职责分三组：
 ### 构建配置
 
 - **路径别名**：`@/*` → `src/*`（tsconfig.json + jsconfig.json）
-- **手动分包**：tiptap-core、tiptap-extensions、prosemirror、dexie、dompurify、supabase、vue-vendor、vendor（vite.config.ts）
+- **手动分包**：tiptap-core、tiptap-extensions、prosemirror、dexie、dompurify、supabase、fuse、pinyin-pro、vue-vendor、vendor（vite.config.ts）
 - **PurgeCSS**：自定义 Vite 插件，safelist 保护动态类名（`/^card-/`, `/^modal-/`, `/^ctx-/` 等前缀）
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
 - **安全头**：自定义 headersPlugin 注入 CSP、X-Content-Type-Options 等
 - **SPA 404 回退**：spa404Plugin 为 GitHub Pages 生成 404.html
 - **部署**：GitHub Actions → GitHub Pages（`.github/workflows/static.yml`）
+
+### CLI
+
+`cli/` 目录是 LinkVault 命令行工具（独立子项目：commander + @supabase/supabase-js + conf，独立 tsconfig/node_modules，不参与主项目构建与测试；vitest.config 已排除 `cli/node_modules/`）。
 
 ### Chrome 扩展
 
@@ -157,7 +161,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 
 ## 运维与安全
 
-- **CSP**：`public/_headers`（生产）和 `vite.config.ts`（dev）。script-src 含 `'unsafe-inline'`（PWA 需要），connect-src 限 Supabase
+- **CSP**：`public/_headers`（生产）和 `vite.config.ts`（dev）。生产 script-src `'self'`（无 unsafe-inline），connect-src 有意放宽 `'self' https: wss://*.supabase.co`（死链 checkDirect 直连任意 URL 所需，勿私自收紧，见 vite.config.ts SEC-05 注释）；仅 dev 放宽 script-src 支持 HMR
 - **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT 允许）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
