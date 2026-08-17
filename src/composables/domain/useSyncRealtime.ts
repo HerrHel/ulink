@@ -8,7 +8,7 @@ import { useSyncStore } from '../../stores/sync.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
-import { FROM_REMOTE } from './useSyncMapping.js'
+import { FROM_REMOTE, type RemoteRow, type AnyRemoteRow } from './useSyncMapping.js'
 import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
@@ -30,10 +30,17 @@ let _gen = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 1000
 
+/** Realtime 变更事件的 payload 形状（仅取处理函数真正读取的字段）。new/old 为远端行。 */
+type RealtimeRowPayload = {
+  eventType: string
+  new?: RemoteRow
+  old?: RemoteRow
+}
+
 /** 处理 Realtime 变更事件。S13：收到事件后再按 user_id 校验（纵深防护——即使
  *  channel filter 因配置错误/策略变更被绕过，也不处理他人数据）。
  *  导出含 _ 前缀（约定私有），供单测覆盖 S13 纵深防护逻辑。 */
-async function _handleRealtimeChangeInner(payload: any, type: EntityType) {
+async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: EntityType) {
   // 重加密全量迁移期间短路所有远端变更：本标签页自己 push 的新密文会被 Realtime
   // 当作远端变更收回来，用旧 cryptoKey 解新密文 会解不开→冲突/写空污损正在迁移的内存。
   // 一律 skip，待 changeMasterPassword 结束后 pullChanges 全量对账拉齐。
@@ -73,7 +80,7 @@ async function _handleRealtimeChangeInner(payload: any, type: EntityType) {
   if (!row) return
 
   // 先做 Zod 映射，决策与 upsert 共用同一份 remote 视图
-  const mapped = FROM_REMOTE[type](row)
+  const mapped = FROM_REMOTE[type](row as AnyRemoteRow)
   if (!mapped) return  // Zod 校验失败的远端条目跳过
 
   const syncStore = useSyncStore()
@@ -167,7 +174,7 @@ async function _handleRealtimeChangeInner(payload: any, type: EntityType) {
           // updateGroup→_markDirty，避免 setContent 把刚合并的远端内容重新标脏并回推。
           if (typeof m.notes === 'string' && m.notes !== '') {
             const ed = EditorManager.get(m.id)
-            if (ed && typeof (ed as any).getHTML === 'function') {
+            if (ed && typeof ed.getHTML === 'function') {
               try {
                 if (ed.getHTML() !== m.notes) {
                   EditorManager.silentSetContent(m.id, m.notes)
@@ -264,8 +271,8 @@ async function _handleRealtimeChangeInner(payload: any, type: EntityType) {
  * jsdom 无 Web Locks API 时 withLock fallback 直跑，行为与现状一致（测试环境锁不生效）。
  * 导出含 _ 前缀（约定私有），供单测覆盖。
  */
-export async function _handleRealtimeChange(payload: any, type: EntityType) {
-  return withLock('linkvault-sync', () => _handleRealtimeChangeInner(payload, type))
+export async function _handleRealtimeChange(payload: unknown, type: EntityType) {
+  return withLock('linkvault-sync', () => _handleRealtimeChangeInner(payload as RealtimeRowPayload, type))
 }
 
 function _scheduleReconnect(onPullChanges?: () => Promise<boolean>) {

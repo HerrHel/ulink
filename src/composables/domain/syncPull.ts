@@ -7,7 +7,7 @@ import { saveAppData } from '../../stores/app.js'
 import { useE2E } from './useE2E.js'
 import type { EntityType } from '../../types.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { FROM_REMOTE } from './useSyncMapping.js'
+import { FROM_REMOTE, type AnyRemoteRow } from './useSyncMapping.js'
 import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
@@ -44,8 +44,8 @@ export async function pullChanges(full = false): Promise<boolean> {
     }
     for (let i = 0; i < SYNC_ENTITY_ORDER.length; i++) {
       const type = SYNC_ENTITY_ORDER[i]
-      const rows = sinceResults[i].data || []
-      remotes[type] = rows.map(r => FROM_REMOTE[type](r as any)).filter(Boolean) as RemoteRow[]
+      const rows = (sinceResults[i].data ?? []) as RemoteRow[]
+      remotes[type] = rows.map(r => FROM_REMOTE[type](r as AnyRemoteRow)).filter(Boolean) as RemoteRow[]
     }
 
     if (e2e.isUnlocked.value) {
@@ -103,7 +103,7 @@ export async function pullChanges(full = false): Promise<boolean> {
       const res = softDelResults[i]
       if (res.error) { console.warn('[sync] deletion sync query failed:', res.error); continue }
       for (const row of res.data || []) {
-        const id = (row as { id: string }).id
+        const id = row.id
         // 与 reconcileDelete(122)/merge(115)/Realtime(52) 一致守门：本地 dirty/pending
         // 的 in-flight 编辑项不被远端软删批次静默覆盖（其 upsert 推上去会 revive）
         if (id && isLocalAlive[type](id) && !ds._dirtyIds.has(id) && !_isPendingSync(id)) {

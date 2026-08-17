@@ -148,6 +148,14 @@ export interface RemoteAttributeRow {
 }
 export type RemoteRow = RemoteBookmarkRow | RemoteGroupRow | RemoteCategoryRow | RemoteAttributeRow
 
+/**
+ * FROM_REMOTE[type] 是「逐类型函数」的联合类型，调用时参数被 TS 推导为各参数类型的
+ * **交集**（RemoteBookmarkRow & RemoteGroupRow & …），而非并集。故动态 key 调用
+ * `FROM_REMOTE[type](row)` 时，row 需断言为该交集类型。运行时 row 即真实远端行，断言仅类型层，
+ * 行为不变；这比 `as any` 精确（保留了远端行字段约束），用于 pull / realtime 的远端行映射调用点。
+ */
+export type AnyRemoteRow = RemoteBookmarkRow & RemoteGroupRow & RemoteCategoryRow & RemoteAttributeRow
+
 // ── 字段名映射（本地 camelCase → 远端 snake_case）──
 
 // 单一泛型签名：按 type 字面量精确推导返回类型，既消除 no-redeclare 重复声明，

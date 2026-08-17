@@ -17,6 +17,10 @@ export const MAX_UNDO = 20
 export const UNDO_WINDOW = 500
 export const MAX_UNDO_BYTES = 512 * 1024
 
+// ── 网络请求超时（毫秒）──
+/** 公开分享组 RPC 拉取超时。后端挂起时避免一直转圈（TECH_DEBT D2）。 */
+export const SHARE_RPC_TIMEOUT_MS = 15000
+
 // ── 外部服务 URL 常量已迁至 src/config/urls.ts ──
 // 刻意独立成无依赖模块，避免 constants.ts（DEFAULTS 引用 welcome-data 的 WELCOME_NOTES）
 // 与 welcome-data.ts（引入 favicon 基址）形成循环依赖，导致 DEFAULTS 初始化取到 undefined。

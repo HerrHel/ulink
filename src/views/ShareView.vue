@@ -18,7 +18,10 @@
     <div v-else-if="error" class="share-error">
       <span aria-hidden="true" v-html="I.alert" class="share-error-icon"></span>
       <p>{{ error }}</p>
-      <button class="btn btn-primary btn-sm" @click="backToApp">返回首页</button>
+      <div class="share-error-actions">
+        <button class="btn btn-primary btn-sm" @click="onRetry">重试</button>
+        <button class="btn btn-ghost btn-sm" @click="backToApp">返回首页</button>
+      </div>
     </div>
 
     <template v-else-if="group">
@@ -158,7 +161,9 @@ async function onFork() {
   }
 }
 
-onMounted(async () => {
+async function loadGroup() {
+  loading.value = true
+  error.value = ''
   try {
     const data = await fetchPublicGroup(props.groupId)
     if (_unmounted.value) return
@@ -177,7 +182,13 @@ onMounted(async () => {
   } finally {
     if (!_unmounted.value) loading.value = false
   }
-})
+}
+
+onMounted(loadGroup)
+
+function onRetry() {
+  loadGroup()
+}
 
 onUnmounted(() => {
   _unmounted.value = true
@@ -239,6 +250,7 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
 @keyframes spin { to { transform: rotate(360deg); } }
 .share-error-icon { color: var(--danger, #EF4444); }
 .share-error-icon :deep(svg) { width: 32px; height: 32px; }
+.share-error-actions { display: flex; gap: 8px; }
 
 .share-group-header { padding: 32px 0 24px; }
 .share-group-name {

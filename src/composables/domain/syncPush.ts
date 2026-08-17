@@ -14,7 +14,7 @@ import type { EntityType } from '../../types.js'
 import { toRemoteRow, camelToSnake } from './useSyncMapping.js'
 // EntityType used by _opNeedsUnlock callers / ENCRYPT_FIELDS path
 import { _saveHistory, _getUserId } from './useSyncHistory.js'
-import { getSyncRemotePort } from './syncRemotePort.js'
+import { getSyncRemotePort, type SyncPortResult } from './syncRemotePort.js'
 import { _markPendingSync, _clearPendingSync } from './syncPending.js'
 
 /** 单条 sync op 最大推送重试次数 */
@@ -179,7 +179,7 @@ export async function pushFromQueue(): Promise<boolean> {
         }
       }
     }
-    const historyItems: Array<{ id: string; type: string; data: Record<string, any> }> = []
+    const historyItems: Array<{ id: string; type: string; data: Record<string, unknown> }> = []
     const histE2e = useE2E()
     const existingByType: Record<'bookmark' | 'group', (id: string) => unknown> = {
       bookmark: (id) => ds.bookmarkMap[id],
@@ -194,8 +194,8 @@ export async function pushFromQueue(): Promise<boolean> {
         const existing = existingByType[type](op.itemId)
         if (existing) {
           try {
-            const encData = await histE2e.encryptItem(type as EntityType, { ...existing as any } as Record<string, unknown>)
-            historyItems.push({ id: op.itemId, type, data: encData as Record<string, any> })
+            const encData = await histE2e.encryptItem(type as EntityType, { ...(existing as Record<string, unknown>) })
+            historyItems.push({ id: op.itemId, type, data: encData })
           } catch (err) {
             console.warn(`[sync] history encrypt skipped table=${op.table} id=${op.itemId}`, err)
           }
@@ -204,7 +204,7 @@ export async function pushFromQueue(): Promise<boolean> {
     }
     _saveHistory(userId, historyItems).catch(() => {})
 
-    const tasks: Promise<any>[] = []
+    const tasks: Promise<{ op: SyncOp; result: SyncPortResult }>[] = []
     const succeededIds: number[] = []
     // encFailedOps 保留对应 merged op 引用：retry 决策需用 merged.retries（即 _mergeOps 算的
     // maxRetries），而非末条 raw.retries（与 _mergeOps 不对称会致死信计数漂移，见 cleanup 段）。
@@ -234,12 +234,12 @@ export async function pushFromQueue(): Promise<boolean> {
       const itemType = tableToEntityType[op.table as TableName]
       if (!itemType) continue
 
-      let row: Record<string, any>
+      let row: Record<string, unknown>
       try {
         const encryptedData = await e2e.encryptItem(itemType, data)
-        row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew) as unknown as Record<string, any>
-      } catch (err: any) {
-        encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err?.message || String(err)}`, op })
+        row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew) as unknown as Record<string, unknown>
+      } catch (err) {
+        encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err instanceof Error ? err.message : String(err)}`, op })
         console.warn(`[sync] 加密阶段失败 table=${op.table} id=${op.itemId}`, err)
         continue
       }
@@ -251,7 +251,7 @@ export async function pushFromQueue(): Promise<boolean> {
             .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })),
         )
       } else {
-        const partial: Record<string, any> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
+        const partial: Record<string, unknown> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
         for (const f of changedFields) {
           const snakeKey = camelToSnake(f)
           if (snakeKey !== 'id' && snakeKey !== 'user_id' && snakeKey in row) {
@@ -260,7 +260,7 @@ export async function pushFromQueue(): Promise<boolean> {
         }
         const { id, ...updateData } = partial
         tasks.push(
-          port.update(op.table, id, userId, updateData)
+          port.update(op.table, id as string, userId, updateData)
             .then(r => ({ op, result: r }))
             .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })),
         )
