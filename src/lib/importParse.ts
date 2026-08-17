@@ -1,0 +1,227 @@
+/**
+ * importParse.ts — 导入格式解析纯函数（从 composables/domain/useDataIO.ts 抽取）
+ *
+ * detectFormat / resolveCsvColumns / parseCSV / parseRaindropJSON / parseBookmarkHTML /
+ * validateImportData 全部为无副作用纯函数（仅依赖浏览器 DOMParser 与 newBookmarkId），
+ * 抽离后便于单测直测与 useDataIO.ts 瘦身（TECH_DEBT A 类：格式解析 vs 持久化写入分离）。
+ */
+import { CAT_UNCATEGORIZED } from '../config/constants.js'
+import { newBookmarkId } from './newId.js'
+import { AppDataSchema } from '../schemas.js'
+import type { Bookmark } from '../types.js'
+
+export interface CsvColumns {
+  titleIdx: number
+  urlIdx: number
+  tagsIdx: number
+  notesIdx: number
+}
+
+/**
+ * CSV 表头列定位：alias → kind 表驱动。
+ * 原实现每个字段一次线性 findIndex（4 次扫描 + 重复别名判定），
+ * 改为单次遍历构建 alias→kind map，O(n) 一次定位四类列下标。
+ * 抽成纯函数便于单测。
+ */
+const CSV_COLUMN_ALIASES: Record<string, 'title' | 'url' | 'tags' | 'notes'> = {
+  title: 'title', name: 'title',
+  url: 'url', link: 'url', href: 'url',
+  tags: 'tags', tag: 'tags', labels: 'tags',
+  notes: 'notes', description: 'notes', excerpt: 'notes',
+}
+
+export function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv' | null {
+  const ext = filename.toLowerCase().split('.').pop()
+  if (ext === 'json') return 'json'
+  if (ext === 'html' || ext === 'htm') return 'html'
+  if (ext === 'csv') return 'csv'
+  // 按内容推断
+  const trimmed = content.trimStart()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) return 'json'
+  if (trimmed.startsWith('<')) return 'html'
+  return null
+}
+
+export function resolveCsvColumns(headers: string[]): CsvColumns {
+  const idx: Record<'title' | 'url' | 'tags' | 'notes', number> = { title: -1, url: -1, tags: -1, notes: -1 }
+  for (let i = 0; i < headers.length; i++) {
+    const kind = CSV_COLUMN_ALIASES[headers[i]]
+    if (kind && idx[kind] < 0) idx[kind] = i
+  }
+  return { titleIdx: idx.title, urlIdx: idx.url, tagsIdx: idx.tags, notesIdx: idx.notes }
+}
+
+export function parseCSV(text: string): Bookmark[] {
+  const bookmarks: Bookmark[] = []
+  const lines: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+
+  while (i < text.length) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < text.length && text[i + 1] === '"') { field += '"'; i += 2; continue }
+        inQuotes = false; i++; continue
+      }
+      field += ch; i++
+    } else {
+      if (ch === '"') { inQuotes = true; i++; continue }
+      if (ch === ',') { row.push(field.trim()); field = ''; i++; continue }
+      if (ch === '\r' || ch === '\n') {
+        row.push(field.trim()); field = ''
+        if (row.some(f => f.length > 0)) lines.push(row)
+        row = []
+        if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++
+        i++; continue
+      }
+      field += ch; i++
+    }
+  }
+  if (field || row.length) { row.push(field.trim()); if (row.some(f => f.length > 0)) lines.push(row) }
+
+  if (lines.length < 2) return []
+
+  // 表头解析：alias → kind 表驱动，单次构建 idx，替代原 4 次线性 findIndex
+  const { titleIdx, urlIdx, tagsIdx, notesIdx } = resolveCsvColumns(lines[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, '')))
+  if (urlIdx < 0) return []
+
+  const now = Date.now()
+  for (let r = 1; r < lines.length; r++) {
+    const cols = lines[r]
+    const url = (cols[urlIdx] || '').trim()
+    if (!url || !url.includes('.')) continue
+    const title = titleIdx >= 0 ? (cols[titleIdx] || '').trim() : url
+    if (!title) continue
+    const tags = tagsIdx >= 0 ? (cols[tagsIdx] || '').trim() : ''
+    const notes = notesIdx >= 0 ? (cols[notesIdx] || '').trim() : ''
+    const attributes: Record<string, boolean> = {}
+    if (tags) {
+      for (const t of tags.split(/[;|,]/)) {
+        const tag = t.trim()
+        if (tag) attributes['tag_' + tag.replace(/\s+/g, '_').toLowerCase()] = true
+      }
+    }
+    bookmarks.push({
+      id: newBookmarkId(r),
+      title, url,
+      username: '', password: '',
+      notes, icon: '',
+      categoryId: CAT_UNCATEGORIZED,
+      parentId: null,
+      order: r - 1,
+      useCount: 0,
+      attributes,
+      isExpanded: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+  return bookmarks
+}
+
+// ── Raindrop.io JSON 解析器 ──
+
+// 导出供单测覆盖坏 tags 的防御性解析（仍以 _ 风格名为私有约定）
+export function parseRaindropJSON(data: unknown): Bookmark[] {
+  // Raindrop.io 导出格式：{ items: [{ title, link, tags, excerpt, cover, ... }] }
+  const d = data as Record<string, unknown> | unknown[]
+  const items = Array.isArray(d) ? d : (d as Record<string, unknown>)?.items ?? d
+  if (!Array.isArray(items)) return []
+  const now = Date.now()
+  return items.filter((item: unknown) => { const r = item as Record<string, unknown>; return r.link || r.url }).map((item: unknown, i: number) => {
+    const r = item as Record<string, unknown>
+    return {
+    id: newBookmarkId(i),
+    title: (r.title as string) || (r.link as string) || '',
+    url: (r.link as string) || (r.url as string) || '',
+    notes: (r.excerpt as string) || (r.note as string) || '',
+    icon: (r.cover as string) || '',
+    categoryId: (r.collection as Record<string, unknown>)?.$id ? 'rd_' + (r.collection as Record<string, unknown>).$id : CAT_UNCATEGORIZED,
+    attributes: Array.isArray(r.tags)
+      // 元素可能非 string（Raindrop 偶有 number/对象 tags），.replace 会抛
+      // TypeError 被外层 importData catch 吞掉致整批导入失败、后续合法项全丢。
+      // 先 filter 出 string 元素再 map，单条坏数据不影响其它项。
+      ? Object.fromEntries((r.tags as unknown[]).filter((t): t is string => typeof t === 'string').map((t) => ['tag_' + t.replace(/\s+/g, '_').toLowerCase(), true]))
+      : {},
+    createdAt: r.created ? new Date(r.created as string).getTime() : now,
+    updatedAt: r.lastUpdate ? new Date(r.lastUpdate as string).getTime() : now,
+    username: '', password: '', parentId: null, order: i, useCount: 0, isExpanded: false,
+  }})
+}
+
+// ── 浏览器书签 HTML 解析器（Netscape Bookmark 格式）──
+// export 供 parseBookmarkHTML.test.ts 行护栏单测（纯加测试零逻辑改动）
+export function parseBookmarkHTML(html: string): Bookmark[] {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  const bookmarks: Bookmark[] = []
+  let currentCategory = '导入的书签'
+  const now = Date.now()
+
+  function walk(nodes: NodeList) {
+    for (const node of Array.from(nodes)) {
+      if (!(node instanceof HTMLElement)) continue
+      const tag = node.tagName.toUpperCase()
+
+      if (tag === 'DL') {
+        walk(node.childNodes)
+      } else if (tag === 'DT') {
+        const h3 = node.querySelector('h3')
+        const a = node.querySelector(':scope > a')
+
+        if (h3) {
+          const parentCat = currentCategory
+          currentCategory = (h3.textContent || '').trim() || '未命名'
+          walk(node.childNodes)
+          currentCategory = parentCat
+        } else if (a) {
+          const href = a.getAttribute('href')
+          if (!href || href.startsWith('javascript:') || href.startsWith('data:')) continue
+          const title = (a.textContent || '').trim() || href
+          const addDate = parseInt(a.getAttribute('add_date') || '0', 10) || 0
+          const icon = a.getAttribute('icon') || ''
+          bookmarks.push({
+            id: newBookmarkId(bookmarks.length),
+            title, url: href,
+            username: '', password: '',
+            notes: currentCategory !== '导入的书签' ? `[${currentCategory}]` : '',
+            icon: icon || '',
+            categoryId: CAT_UNCATEGORIZED,
+            parentId: null,
+            order: bookmarks.length,
+            useCount: 0,
+            attributes: {},
+            isExpanded: false,
+            // Netscape ADD_DATE 规范是 Unix 秒；个别导出器可能写毫秒。
+            // 阈值歧义修正：>= 1e12（13 位，JS Date.now() 量级）算毫秒原样采用；
+            // < 1e12 一律按秒 × 1000 归一到毫秒（应用内部 createdAt 是毫秒语义，见导出侧 /1000）。
+            // 旧实现 > 1e9 原样用，会把 Chrome 10 位秒（如 1630000000=2021-08 秒）当毫秒存 →
+            // 时间显示回到 1970，且与导出侧 Math.floor(createdAt/1000) round-trip 失效。
+            createdAt: addDate >= 1e12 ? addDate : addDate > 0 ? addDate * 1000 : now,
+            updatedAt: now,
+          })
+        }
+      } else if (tag === 'H3') {
+        // 顶级 H3 直接出现在 DL 外
+        currentCategory = (node.textContent || '').trim() || '未命名'
+      }
+    }
+  }
+
+  walk(doc.body.childNodes)
+  return bookmarks
+}
+
+// ── LinkVault 原生 JSON 验证 ──
+
+export function validateImportData(data: unknown): string | null {
+  const result = AppDataSchema.safeParse(data)
+  if (!result.success) {
+    const first = result.error.issues[0]
+    return first ? `数据格式错误 (${first.path.join('.')}: ${first.message})` : '数据格式错误'
+  }
+  return null
+}
