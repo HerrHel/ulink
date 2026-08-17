@@ -104,7 +104,7 @@ composables 按职责分三组：
 - `components/modals/` — BookmarkModal、CategoryModal、AttributeModal、GroupEditModal、ConfirmModal、AuthModal、HistoryPanel（版本历史 diff）、TrashPanel（回收站）、E2ESetupModal、E2EUnlockModal；辅助纯函数模块：bookmarkFormFilters.ts、formatTimeEpoch.ts、groupEditUrl.ts、trashOps.ts
 - `components/overlays/` — ContextMenu、ActionSheet、BatchPopover、SearchSuggest、ToastContainer、MentionDropdown、AddPopover、AttrDropdown、CommandPalette、DeadLinksPopover、SyncConflictBanner
 - `components/shell/` — AppHeader、AppNav、FilterBar、BatchBar、BatchBottom、DetailPanel、SettingsPanel、AttrChips
-- `components/share/` — （分享相关组件，目前为占位，仅保留 README）
+- 分享功能（原 `components/share/` 空占位目录已移除）：公开分享与 Fork 的实现位于 `views/ShareView.vue`（分享页 UI）+ `composables/domain/useDataShare.ts`（分享/Fork 逻辑）+ `composables/domain/syncShare.ts`（云端公开读写）；后端公开读见 supabase migrations 005/010/012/013/014/015/018 与 `get_public_group` RPC
 - `components/ui/` — E2ELockOverlay（主密码锁定覆盖层）、ErrorBoundary
 
 ### src/config/
