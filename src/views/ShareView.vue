@@ -80,6 +80,7 @@ import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
 import { deriveShareUrl } from './deriveShareUrl.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
+import { APP_CANONICAL_BASE } from '../config/urls.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
 const props = defineProps<{ groupId: string }>()
@@ -133,7 +134,7 @@ const bookmarkEntries = computed(() => buildShareEntries(bookmarks.value))
 function backToApp() {
   // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识
   cleanupInjectedHead()
-  setCanonical('https://herrhel.github.io/')
+  setCanonical(APP_CANONICAL_BASE)
   const base = location.pathname.replace(/\/s\/.*$/, '/') || '/'
   history.replaceState(null, '', base + location.search)
   emit('close')
@@ -181,7 +182,7 @@ onMounted(async () => {
 onUnmounted(() => {
   _unmounted.value = true
   cleanupInjectedHead()
-  setCanonical('https://herrhel.github.io/')
+  setCanonical(APP_CANONICAL_BASE)
 })
 
 /**

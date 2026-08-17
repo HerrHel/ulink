@@ -271,7 +271,9 @@ describe('searchWithHighlights', () => {
       searchWithHighlights(SAMPLE_BOOKMARKS, BIG_GROUPS, '资源', BOOKMARK_MAP, EMPTY_ATTRS, 8, 1)
     }
     const perCallUs = ((performance.now() - t0) / N) * 1000
-    console.log(`[D2-2 benchmark] 200 组规模版本命中态每次调用 ≈ ${perCallUs.toFixed(1)}μs (N=${N})`)
+    if (process.env.BENCH) {
+      console.log(`[D2-2 benchmark] 200 组规模版本命中态每次调用 ≈ ${perCallUs.toFixed(1)}μs (N=${N})`)
+    }
     // 功能性断言：版本命中态下连调结果一致（防缓存被误清）
     const r1 = searchWithHighlights(SAMPLE_BOOKMARKS, BIG_GROUPS, '资源', BOOKMARK_MAP, EMPTY_ATTRS, 8, 1)
     expect(r1.length).toBeGreaterThan(0)

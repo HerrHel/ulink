@@ -7,7 +7,7 @@
            role="option" :aria-selected="selectableIdxAt[idx] === activeIdx"
            @click="select(item)" @mouseenter="activeIdx = selectableIdxAt[idx]">
         <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
-        <img v-else :src="favicon(item.url || '')" alt="">
+        <img v-else :src="favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url || '')">
         <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
         <span class="ss-url">{{ item._isGroup ? (item.bookmarkIds?.length || 0) + ' 个书签' : domain(item.url || '') }}</span>
       </div>
@@ -21,7 +21,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useToastStore } from '../../stores/toast.js'
 import { useAuthStore } from '../../stores/auth.js'
-import { favicon, domain } from '../../utils.js'
+import { favicon, domain, faviconInitials } from '../../utils.js'
 import { renderHighlight } from './searchSuggestRender.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
@@ -143,6 +143,15 @@ onUnmounted(() => {
   document.removeEventListener('focusin', onFocusIn)
   document.removeEventListener('keydown', onKeydown)
 })
+
+// favicon 加载失败时降级为首字母占位，避免破图
+function onFaviconError(e: Event, name?: string) {
+  const img = e.target as HTMLImageElement
+  if (!img.dataset.fallback) {
+    img.dataset.fallback = '1'
+    img.src = faviconInitials(name)
+  }
+}
 
 defineExpose({ hide, visible })
 </script>

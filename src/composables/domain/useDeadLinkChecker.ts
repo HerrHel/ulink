@@ -3,6 +3,7 @@ import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
+import { NETWORK_PROBE_URLS } from '../../config/urls.js'
 import type { Bookmark } from '../../types.js'
 
 
@@ -136,11 +137,7 @@ for (const [id, checks] of Object.entries(_history)) {
 let _abort: AbortController | null = null
 
 // 网络基线缓存，5分钟内复用（比原来 30s 更长）；in-flight 合并避免 checkAll 冷启动探针风暴
-const BASELINE_PROBES = [
-  'https://www.baidu.com/favicon.ico',
-  'https://www.gstatic.com/generate_204',
-  'https://cloudflare.com/favicon.ico',
-] as const
+const BASELINE_PROBES = NETWORK_PROBE_URLS
 const BASELINE_TTL_MS = 5 * 60 * 1000 // 5 分钟，减少重复探测
 const BASELINE_PROBE_TIMEOUT_MS = 4000
 const BASELINE_OFFLINE_MS = 4000

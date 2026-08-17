@@ -191,7 +191,7 @@ onMounted(() => {
     },
   })
 
-  ;(editor as any)._lvGid = props.groupId
+  ;(editor as unknown as { _lvGid?: string })._lvGid = props.groupId
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
 

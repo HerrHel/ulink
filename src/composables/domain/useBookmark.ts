@@ -574,7 +574,7 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
     username: '',
     password: '',
     notes: notes || '',
-    icon: `https://www.google.com/s2/favicons?domain=${dm}&sz=32`,
+    icon: favicon(safeUrl),
     categoryId: CAT_UNCATEGORIZED,
     parentId: null,
     // order 用「现存最大 order + 1」保证唯一，而非 ds.bookmarks.length。

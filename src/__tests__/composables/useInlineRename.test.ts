@@ -23,7 +23,7 @@ vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),
 }))
 
-import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import { useInlineRename, type RenameTarget } from '../../composables/ui/useInlineRename.js'
 import { toast as toastImpl } from '../../lib/toast.js'
 
 const toastMock = vi.mocked(toastImpl)
@@ -39,7 +39,7 @@ function makeFakeInput(): { el: HTMLInputElement; focus: ReturnType<typeof vi.fn
 function makeFakeStore(
   over: { renameMethodReturn?: unknown; saveReturn?: unknown } = {},
 ): {
-  store: Record<string, any>
+  store: RenameTarget
   renameCategory: ReturnType<typeof vi.fn>
   renameAttribute: ReturnType<typeof vi.fn>
   save: ReturnType<typeof vi.fn>

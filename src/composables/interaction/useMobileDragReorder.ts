@@ -82,7 +82,11 @@ interface UseMobileDragReorderOptions {
   portalToBody?: boolean
 }
 
-export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, listRef: Ref<any[]>, options: UseMobileDragReorderOptions = {}) {
+export function useMobileDragReorder<T>(
+  containerRef: Ref<HTMLElement | null>,
+  listRef: Ref<T[]>,
+  options: UseMobileDragReorderOptions = {},
+) {
   const uiStore = useUIStore()
   const dataStore = useDataStore()
 
@@ -381,7 +385,7 @@ export function useMobileDragReorder(containerRef: Ref<HTMLElement | null>, list
 
     if (fromIndex !== toIndex) {
       // 置顶项不能与非置顶项交叉拖拽
-      const arr = listRef.value
+      const arr = listRef.value as unknown as Array<{ type?: string; data: { id: string; order: number; updatedAt?: number; pinnedAt?: number | null } }>
       const movedItem = arr[fromIndex]
       const targetItem = arr[toIndex > fromIndex ? toIndex - 1 : toIndex]
       if (movedItem && targetItem) {

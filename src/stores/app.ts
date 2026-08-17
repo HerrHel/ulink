@@ -64,7 +64,7 @@ export const useAppStore = defineStore('app', () => {
   // Helper: 可读写 computed，委托 uiStore
   const uiProp = <K extends keyof UIState>(key: K) => computed({
     get: () => ui()[key],
-    set: (v: UIState[K]) => { (ui() as any)[key] = v }
+    set: (v: UIState[K]) => { (ui() as UIState)[key] = v }
   })
 
   return {

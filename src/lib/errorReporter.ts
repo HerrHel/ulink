@@ -133,7 +133,7 @@ export function reportError(payload: ErrorPayload): void {
   insertP.finally(() => {
     if (timer) clearTimeout(timer)
   })
-  Promise.race([insertP, timeoutP]).then((res: any) => {
+  Promise.race([insertP, timeoutP]).then((res: { error?: { message?: string } | null }) => {
     if (res?.error && res.error.message !== 'timeout') {
       console.warn('[errorReporter] insert failed:', res.error)
     }
@@ -148,14 +148,15 @@ export function reportError(payload: ErrorPayload): void {
  */
 export function vueErrorHandler(
   err: unknown,
-  instance: any,
+  instance: unknown,
   info: string,
 ): void {
   const message = err instanceof Error ? err.message : String(err)
   const stack = err instanceof Error ? err.stack : undefined
-  const componentName = instance?.$options?.name
-    || instance?.$?.type?.name
-    || instance?.$options?._componentTag
+  const inst = instance as { $options?: { name?: string; _componentTag?: string }; $?: { type?: { name?: string } } } | null | undefined
+  const componentName = inst?.$options?.name
+    || inst?.$?.type?.name
+    || inst?.$options?._componentTag
     || 'unknown'
 
   reportError({

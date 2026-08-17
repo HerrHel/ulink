@@ -8,6 +8,7 @@ import DOMPurify from 'dompurify'
 import { nanoid } from 'nanoid'
 import type { Bookmark, SiblingGroup, CustomAttribute, Category } from './types.js'
 import { ATTR_IS_GROUP } from './config/constants.js'
+import { FAVICON_PROVIDER_URL } from './config/urls.js'
 import { isThreePartCipher } from './crypto.js'
 
 interface AppStore {
@@ -65,7 +66,18 @@ export function favicon(url: string, customIcon?: string): string {
   const safe = safeIconUrl(customIcon)
   if (safe) return safe
   const dm = domain(url)
-  return dm ? 'https://api.xinac.net/icon/?url=' + dm : ''
+  return dm ? FAVICON_PROVIDER_URL + dm : ''
+}
+
+/**
+ * 首字母占位图标（本地降级）。当远程 favicon 加载失败或为空时使用，避免破图、
+ * 避免强依赖第三方（隐私）、零网络请求。返回内联 SVG data URI。
+ * @param name 取首字符（通常传书签标题 / 域名首字母）
+ */
+export function faviconInitials(name: string | null | undefined): string {
+  const ch = ((name || '').toString().trim().charAt(0) || '?').toUpperCase()
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#6e7681"/><text x="16" y="16" dy=".35em" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16" fill="#ffffff">${ch}</text></svg>`
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
 }
 export function fixUrl(u: string): string {
   // S1：协议白名单。仅放行 http/https；其余带 scheme（javascript:/data:/vbscript: 等）

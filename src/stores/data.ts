@@ -13,7 +13,7 @@ import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { localHistoryKey, clearAllSyncOps } from './storage.js'
 import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
-import type { SortMode, SortDir, Space } from './ui.js'
+import type { Space } from './ui.js'
 
 export const DGM_KEY = 'lv_delGroupMems'
 
@@ -62,11 +62,11 @@ interface DataState {
 }
 
 // ── 内部辅助：getter 公共 filter+sort 逻辑 ──
-export function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: T[], { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] }): T[] {
-  for (const aid of activeAttrs) items = items.filter(i => i.attributes[aid])
-  for (const aid of excludedAttrs) items = items.filter(i => !i.attributes[aid])
-  return items
-}
+// 纯函数（_filterAttrs / _indexOfById / _sortItems / SortableItem）已抽到 src/lib/dataQuery.ts，
+// 此处导入供本 store 内部 getter 使用，并转发导出保持既有导入路径（调用方仍从 data.js 取）与单测不变。
+import { _filterAttrs, _indexOfById, _sortItems } from '../lib/dataQuery.js'
+export { _filterAttrs, _indexOfById, _sortItems }
+export type { SortableItem } from '../lib/dataQuery.js'
 
 // R22：模块级历史防抖 Map，reset/import 时应一并清空，避免旧定时器按旧 id 写快照。
 export function _cancelPendingHist() {
@@ -99,39 +99,6 @@ export const __testHistDebounce = {
     _histDebounceTimers.clear()
     _histDebounceData.clear()
   },
-}
-
-export type SortableItem = { useCount: number; order: number; updatedAt: number; pinnedAt?: number }
-
-/**
- * 经 id→实体 Map 定位数组下标（O(1) 查实体 + indexOf）。
- * map 与数组偶发不同步时回退 findIndex，保证 CRUD 不丢写。
- */
-export function _indexOfById<T extends { id: string }>(
-  arr: T[], map: Record<string, T>, id: string,
-): number {
-  const item = map[id]
-  if (item) {
-    const idx = arr.indexOf(item)
-    if (idx >= 0) return idx
-  }
-  return arr.findIndex(x => x.id === id)
-}
-
-export function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortDir }: { sortMode: SortMode; sortDir: SortDir }, nameKey: keyof T, dateKey: keyof T): void {
-  const d = sortDir === 'asc' ? 1 : -1
-  items.sort((a, b) => {
-    // 置顶优先：pinnedAt 存在的项排最前，置顶项之间按当前排序模式排序
-    const aPin = a.pinnedAt ? 1 : 0
-    const bPin = b.pinnedAt ? 1 : 0
-    if (aPin !== bPin) return bPin - aPin
-    if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
-    if (sortMode === 'title') return String(a[nameKey]).localeCompare(String(b[nameKey])) * d
-    // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir
-    if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0))
-    if (sortMode === 'dateAsc') return (((a[dateKey] as number) || 0) - ((b[dateKey] as number) || 0))
-    return (a.order - b.order) * d
-  })
 }
 
 export const useDataStore = defineStore('data', {

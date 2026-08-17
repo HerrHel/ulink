@@ -41,7 +41,7 @@ const editorManager: IEditorManager = {
   insertInlineCardHTML: function (gid: string, html: string): boolean { const ed = _editors[gid]; if (!ed) return false; try { ed.chain().insertContent(html).run(); return true } catch (_) { return false } },
 
   toggleBold: function (gid: string): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleBold().run() },
-  setHeading: function (gid: string, level: number): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleHeading({ level: level as any }).run() },
+  setHeading: function (gid: string, level: number): void { const ed = _editors[gid]; if (ed) ed.chain().focus().toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 }).run() },
 
   deleteNode: function (gid: string, attrName: string, attrValue: string): void {
     const ed = _editors[gid]; if (!ed) return

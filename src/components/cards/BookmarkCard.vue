@@ -62,7 +62,7 @@
       </template>
       <div class="sub-sites" v-if="children.length">
         <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" :draggable="!uiStore.isMobile" @click.stop="visitSub(sub)">
-          <img :src="favicon(sub.url, sub.icon)" alt="">
+          <img :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
           <span class="gic-name">{{ sub.title }}</span>
           <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">详</span>
         </span>
@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, isMobile, copyToClipboard, domain, displayText, stripEntranceAnim } from '../../utils.js'
+import { favicon, getTagNames, isMobile, copyToClipboard, domain, displayText, stripEntranceAnim, faviconInitials } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { decryptPasswordWithKey } from '../../crypto.js'
 import { highlight } from './highlight.js'
@@ -107,6 +107,15 @@ import type { Bookmark } from '../../types.js'
 
 function onImgError(e: Event) {
   (e.target as HTMLImageElement).classList.add('img-error')
+}
+
+// 子书签图标加载失败时降级为首字母占位，避免破图
+function onSubImgError(e: Event, name?: string) {
+  const img = e.target as HTMLImageElement
+  if (!img.dataset.fallback) {
+    img.dataset.fallback = '1'
+    img.src = faviconInitials(name)
+  }
 }
 
 const props = defineProps({

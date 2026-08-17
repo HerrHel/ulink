@@ -23,7 +23,7 @@
           </div>
           <div v-for="b in bookmarkResults" :key="b.id" class="popover-result"
                @click="onSelectBm(b.id)">
-            <img :src="b.icon || favicon(b.url)" alt="">
+            <img :src="b.icon || favicon(b.url)" alt="" @error="onFaviconError($event, b.title || b.url)">
             <span class="pr-name">{{ b.title }}</span>
             <span class="pr-url">{{ domain(b.url) }}</span>
           </div>
@@ -50,7 +50,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
-import { favicon, domain } from '../../utils.js'
+import { favicon, domain, faviconInitials } from '../../utils.js'
 import { addToGroupDirect, addGroupRefToGroup } from '../../composables/domain/useGroup.js'
 import { openBmModal, bmForm } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
@@ -63,6 +63,15 @@ const tab = ref('bm')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const sheetEnter = ref(false)
 let _closeTimer: ReturnType<typeof setTimeout> | null = null
+
+// favicon 加载失败时降级为首字母占位，避免破图
+function onFaviconError(e: Event, name?: string) {
+  const img = e.target as HTMLImageElement
+  if (!img.dataset.fallback) {
+    img.dataset.fallback = '1'
+    img.src = faviconInitials(name)
+  }
+}
 
 const isMobileDevice = computed(() => uiStore.isMobile)
 

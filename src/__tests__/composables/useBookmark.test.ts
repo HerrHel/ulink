@@ -2064,7 +2064,7 @@ describe('saveFromExtension 扩展端一键静默保存书签编排', () => {
     expect(added.isExpanded).toBe(false)
     expect(added.notes).toBe('备注G')
     expect(added.icon).toContain('fields.example')
-    expect(added.icon).toContain('favicon')
+    expect(added.icon).toContain('favicon.example.com')
     expect(typeof added.createdAt).toBe('number')
     expect(added.createdAt).toBe(added.updatedAt)
   })

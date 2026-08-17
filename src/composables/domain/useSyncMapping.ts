@@ -150,14 +150,20 @@ export type RemoteRow = RemoteBookmarkRow | RemoteGroupRow | RemoteCategoryRow |
 
 // ── 字段名映射（本地 camelCase → 远端 snake_case）──
 
-/* eslint-disable no-redeclare */
-export function toRemoteRow(type: 'bookmark', item: Record<string, unknown>, _isNew: boolean): RemoteBookmarkRow
-export function toRemoteRow(type: 'group', item: Record<string, unknown>, _isNew: boolean): RemoteGroupRow
-export function toRemoteRow(type: 'category', item: Record<string, unknown>, _isNew: boolean): RemoteCategoryRow
-export function toRemoteRow(type: 'attribute', item: Record<string, unknown>, _isNew: boolean): RemoteAttributeRow
-/** 联合实体类型：返回 RemoteRow 并集（调用方按需 narrow 或用索引访问） */
-export function toRemoteRow(type: EntityType, item: Record<string, unknown>, _isNew: boolean): RemoteRow
-export function toRemoteRow(type: string, item: Record<string, unknown>): RemoteRow {
+// 单一泛型签名：按 type 字面量精确推导返回类型，既消除 no-redeclare 重复声明，
+// 又保留各调用点的精确返回类型（无需 eslint-disable no-redeclare）。
+type RemoteRowByType = {
+  bookmark: RemoteBookmarkRow
+  group: RemoteGroupRow
+  category: RemoteCategoryRow
+  attribute: RemoteAttributeRow
+}
+
+export function toRemoteRow<K extends EntityType>(
+  type: K,
+  item: Record<string, unknown>,
+  _isNew: boolean,
+): RemoteRowByType[K] {
   const now = Date.now()
   if (type === 'bookmark') {
     const row: RemoteBookmarkRow = {
@@ -174,10 +180,10 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       pinned_at: (item.pinnedAt as number | undefined) ?? null,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
     }
-    return row
+    return row as RemoteRowByType[K]
   }
   if (type === 'group') {
-    return {
+    const row: RemoteGroupRow = {
       id: item.id as string, user_id: item._userId as string,
       name: item.name as string, category_id: item.categoryId as string,
       icon: (item.icon as string) || '', order: (item.order as number) || 0,
@@ -189,24 +195,27 @@ export function toRemoteRow(type: string, item: Record<string, unknown>): Remote
       updated_at_num: (item.updatedAt as number) || now,
       pinned_at: (item.pinnedAt as number | undefined) ?? null,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-    } satisfies RemoteGroupRow
+    }
+    return row as RemoteRowByType[K]
   }
   if (type === 'category') {
-    return {
+    const row: RemoteCategoryRow = {
       id: item.id as string, user_id: item._userId as string,
       name: item.name as string, icon: (item.icon as string) || '',
       color: (item.color as string) || '',
       order: (item.order as number) || 0,
       updated_at_num: (item.updatedAt as number) || now,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-    } satisfies RemoteCategoryRow
+    }
+    return row as RemoteRowByType[K]
   }
-  return {
+  const row: RemoteAttributeRow = {
     id: item.id as string, user_id: item._userId as string,
     name: item.name as string, type: (item.type as string) || 'boolean',
     updated_at_num: (item.updatedAt as number) || now,
     deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
-  } satisfies RemoteAttributeRow
+  }
+  return row as RemoteRowByType[K]
 }
 
 // ── 从远端行映射回本地类型 ──
@@ -281,7 +290,12 @@ export function fromRemoteAttribute(r: RemoteAttributeRow): CustomAttribute | nu
 }
 
 /** EntityType → fromRemote* 映射（Realtime / pull 共用） */
-export const FROM_REMOTE: Record<EntityType, (r: any) => any> = {
+export const FROM_REMOTE: {
+  bookmark: (r: RemoteBookmarkRow) => Bookmark | null
+  group: (r: RemoteGroupRow) => SiblingGroup | null
+  category: (r: RemoteCategoryRow) => Category | null
+  attribute: (r: RemoteAttributeRow) => CustomAttribute | null
+} = {
   bookmark: fromRemoteBookmark,
   group: fromRemoteGroup,
   category: fromRemoteCategory,

@@ -5,12 +5,18 @@
 import { ref, nextTick } from 'vue'
 import { toast } from '../../lib/toast.js'
 
-export function useInlineRename(store: Record<string, any>, renameMethod: string) {
+/** 行内重命名目标：任意含 save() 与动态重命名方法的对象（CategoryModal / AttributeModal 等） */
+export interface RenameTarget {
+  save: () => void
+  [method: string]: unknown
+}
+
+export function useInlineRename(store: RenameTarget, renameMethod: string) {
   const editingId = ref<string | null>(null)
   const editingName = ref('')
   let editInputElement: HTMLInputElement | null = null
 
-  function setEditInputRef(el: any) {
+  function setEditInputRef(el: Element | null) {
     editInputElement = el as HTMLInputElement | null
   }
 
@@ -23,7 +29,10 @@ export function useInlineRename(store: Record<string, any>, renameMethod: string
   function confirmRename() {
     const name = editingName.value.trim()
     if (name && editingId.value) {
-      store[renameMethod](editingId.value, name)
+      const method = store[renameMethod]
+      if (typeof method === 'function') {
+        (method as (id: string, name: string) => void)(editingId.value, name)
+      }
       store.save()
       toast('已重命名')
     }

@@ -11,7 +11,7 @@
         <span class="mi-url">{{ item.bookmarkIds?.length || 0 }}个书签</span>
       </template>
       <template v-else>
-        <img :src="item.icon || favicon(item.url || '')" alt="">
+        <img :src="item.icon || favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url)">
         <span class="mi-name">{{ item.title || '' }}</span>
         <span class="mi-url">{{ domain(item.url || '') }}</span>
         <div v-if="item.subItems?.length" class="mention-sub-menu">
@@ -19,7 +19,7 @@
                class="mention-item mention-sub-item"
                :class="{ active: subIdx === activeSubIdx && idx === activeIdx }"
                @mousedown.prevent.stop="onSubItemMousedown(sub, $event)">
-            <img :src="sub.icon || favicon(sub.url || '')" alt="">
+            <img :src="sub.icon || favicon(sub.url || '')" alt="" @error="onFaviconError($event, sub.title || sub.url)">
             <span class="mi-name">{{ sub.title || '' }}</span>
             <span class="mi-url">{{ domain(sub.url || '') }}</span>
           </div>
@@ -32,7 +32,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { I } from '../../config/icons.js'
-import { favicon, domain } from '../../utils.js'
+import { favicon, domain, faviconInitials } from '../../utils.js'
 import { useMention } from '../../composables/domain/useMention.js'
 
 const {
@@ -50,9 +50,18 @@ function onItemMousedown(idx: number, event: MouseEvent) {
   item.type === 'group' ? selectGroupRef(item.id) : selectBookmark(item.id)
 }
 
-function onSubItemMousedown(sub: any, event: MouseEvent) {
+function onSubItemMousedown(sub: { id: string }, event: MouseEvent) {
   event.preventDefault(); event.stopPropagation()
   selectBookmark(sub.id)
+}
+
+// favicon 加载失败（第三方服务挂 / 隐私拦截）时降级为首字母占位，避免破图
+function onFaviconError(e: Event, name?: string) {
+  const img = e.target as HTMLImageElement
+  if (!img.dataset.fallback) {
+    img.dataset.fallback = '1'
+    img.src = faviconInitials(name)
+  }
 }
 
 function _onKeydown(e: KeyboardEvent) { onTrigger(e); onKeydown(e) }

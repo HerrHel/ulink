@@ -136,7 +136,7 @@ const ds = useDataStore()
 
 const cardEl = ref<HTMLElement | null>(null)
 let _entranceCleanup: (() => void) | null = null
-function setCardEl(el: any) {
+function setCardEl(el: Element | null) {
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
   cardEl.value = el as HTMLElement | null
   if (el) _entranceCleanup = stripEntranceAnim(el as HTMLElement)

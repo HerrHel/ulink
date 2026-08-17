@@ -9,7 +9,7 @@ import { safeGetItem, safeJsonParse } from '../lib/storageSafe.js'
 
 interface IDBRow {
   key: string
-  value: any
+  value: unknown
   updatedAt: number
 }
 
@@ -64,7 +64,7 @@ const db = new LinkVaultDB()
 // app.ts 的「存储不可用」toast 都依赖本函数如实上报。旧实现 catch 后 console.warn 即 resolve，
 // 上层 `await idbSet` 永不进 catch → saveData 恒返回 true → 用户在隐私模式/配额满时存的书签没落库
 // 却无任何提示（commit 36f8b39e 在 app.ts 加的 toast 因底层吞错被架空）。改为返回 boolean。
-export async function idbSet(key: string, value: any): Promise<boolean> {
+export async function idbSet(key: string, value: unknown): Promise<boolean> {
   try {
     await db.data.put({ key, value, updatedAt: Date.now() })
     return true
