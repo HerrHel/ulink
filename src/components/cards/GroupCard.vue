@@ -42,6 +42,9 @@
       <button class="ft-sb-btn" :class="{ active: fmt.ol }" title="有序列表" @click="fmtToggle('ol')" v-html="I.ol"></button>
       <button class="ft-sb-btn" :class="{ active: fmt.ul }" title="无序列表" @click="fmtToggle('ul')" v-html="I.ul"></button>
       <button class="ft-sb-btn" :class="{ active: fmt.task }" title="待办清单" @click="fmtToggle('task')" v-html="I.taskList"></button>
+      <div class="ft-sb-sep"></div>
+      <button class="ft-sb-btn" title="插入图片" @click="pickImage" v-html="I.image"></button>
+      <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
     </div>
   </div>
   <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
@@ -122,6 +125,7 @@ import { openDetail } from '../../composables/ui/useUI.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
 import { useEditorFormat, type FormatKey } from '../../composables/ui/useEditorFormat.js'
+import { uploadAndInsertImages } from '../../composables/domain/useImageUpload.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import type { SiblingGroup } from '../../types.js'
 
@@ -178,6 +182,19 @@ function toggleColorPalette() {
 
 function fmtToggle(f: FormatKey) { _fmtToggle(f); saveGroupBody(props.group.id) }
 function applyColor(hex: string) { _applyColor(hex); saveGroupBody(props.group.id) }
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function pickImage() {
+  fileInputRef.value?.click()
+}
+
+function onPickImage(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  if (files.length) void uploadAndInsertImages(props.group.id, files)
+  input.value = '' // 允许重复选择同一文件
+}
 
 let _selHandler: (() => void) | null = null
 function _attach() {

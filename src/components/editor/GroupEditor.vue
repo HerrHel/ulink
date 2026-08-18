@@ -32,6 +32,9 @@ import { debouncedSaveAppDataNotes } from '../../stores/app.js'
 import { EditorManager, isSilentSetContent } from '../../lib/editor.js'
 import { useMfbStore } from '../../stores/overlay.js'
 import { pushUndo } from '../../composables/domain/useUndo.js'
+import { isImageFile, uploadAndInsertImages } from '../../composables/domain/useImageUpload.js'
+// 自定义图片扩展：不可选中（打字不误删）+ hover 手柄拖拽改大小，行为对齐 Word 嵌入型
+import { UploadedImage } from '../../lib/imageExtension.js'
 
 // 内联卡片 DOM 属性名（TipTap 节点 attrs 键 + HTML 属性）
 const BM_ID_ATTR = 'data-bm-id'
@@ -176,13 +179,37 @@ onMounted(() => {
       TextStyle,
       TaskList,
       TaskItem.configure({ nested: true }),
+      // inline 模式：图片嵌入段落文本流，光标可在图片前后定位、图片后直接输入文字
+      UploadedImage.configure({ inline: true }),
       Placeholder.configure({ placeholder: '输入文案…，按 @ 插入书签，按 # 插入组引用' }),
       InlineCard,
       GroupRefCard,
     ],
     content: group.notes || '',
     editable: !isMobile() || ui.focusedGroupId === props.groupId,
-    editorProps: { attributes: { class: 'group-tiptap' } },
+    editorProps: {
+      attributes: { class: 'group-tiptap' },
+      // 粘贴图片：压缩 → 上传 → 插入；返回 true 阻止默认粘贴，其余交给 TipTap
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files || [])
+        const imgs = files.filter(isImageFile)
+        if (imgs.length) {
+          void uploadAndInsertImages(props.groupId, imgs)
+          return true
+        }
+        return false
+      },
+      // 拖拽外部图片文件：同上；拖拽编辑器内节点（无文件）交回 TipTap 处理
+      handleDrop: (_view, event) => {
+        const files = Array.from(event.dataTransfer?.files || [])
+        const imgs = files.filter(isImageFile)
+        if (imgs.length) {
+          void uploadAndInsertImages(props.groupId, imgs)
+          return true
+        }
+        return false
+      },
+    },
     onUpdate: ({ editor: ed }) => {
       // G1-003：远端 silentSetContent 期间勿 pushUndo/syncToStore（避免 _markDirty 回推）
       if (isSilentSetContent()) return

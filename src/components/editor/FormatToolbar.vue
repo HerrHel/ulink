@@ -23,6 +23,8 @@
                 :style="{ background: c.hex }" @click="applyColor(c.hex)"></button>
         <button class="mfb-color-reset" @click="applyColor('')">默认</button>
       </template>
+      <span class="ft-sep"></span>
+      <button class="ft-btn" title="插入图片" @click="pickImage" v-html="icons.image"></button>
     </div>
   </template>
   <div v-else class="format-toolbar" ref="toolbarRef" @mousedown.prevent>
@@ -46,7 +48,10 @@
         <ColorPalette v-show="paletteOpen" :activeColor="state.color" @apply="applyColor" />
       </Transition>
     </div>
+    <div class="ft-sb-sep"></div>
+    <button class="ft-btn ft-sb-btn" title="插入图片" @click="pickImage" v-html="icons.image"></button>
   </div>
+  <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
 </template>
 
 <script setup lang="ts">
@@ -57,6 +62,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { EditorManager } from '../../lib/editor.js'
 import { I } from '../../config/icons.js'
 import { saveGroupBody } from '../../composables/domain/useGroup.js'
+import { uploadAndInsertImages } from '../../composables/domain/useImageUpload.js'
 import { useEditorFormat, PALETTE } from '../../composables/ui/useEditorFormat.js'
 import { useMfbStore } from '../../stores/overlay.js'
 import type { FormatKey } from '../../composables/ui/useEditorFormat.js'
@@ -74,7 +80,7 @@ const gid = computed(() => store.focusedGroupId)
 const toolbarRef = ref<HTMLElement | null>(null)
 const mfbColorBtnRef = ref<HTMLElement | null>(null)
 
-const icons = { bold: I.bold, underline: I.underline, ol: I.ol, ul: I.ul, taskList: I.taskList, textColor: I.textColor }
+const icons = { bold: I.bold, underline: I.underline, ol: I.ol, ul: I.ul, taskList: I.taskList, textColor: I.textColor, image: I.image }
 
 function getEditor() {
   const focusGid = store.focusedGroupId || (document.activeElement as HTMLElement)?.closest?.('.group-body')?.getAttribute('data-gid') || undefined
@@ -93,6 +99,20 @@ function toggle(f: FormatKey) {
 }
 
 function applyColor(hex: string) { _applyColor(hex) }
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function pickImage() {
+  fileInputRef.value?.click()
+}
+
+function onPickImage(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  const gid = store.focusedGroupId
+  if (gid && files.length) void uploadAndInsertImages(gid, files)
+  input.value = '' // 允许重复选择同一文件
+}
 
 function toggleMfbPalette() {
   paletteOpen.value = !paletteOpen.value

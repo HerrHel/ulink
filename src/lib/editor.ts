@@ -29,6 +29,8 @@ interface IEditorManager {
   withSilent(fn: () => void): void
   insertAtCoords(gid: string, html: string, clientX: number, clientY: number): boolean
   insertText(gid: string, text: string): boolean
+  /** 在光标处插入图片节点（src 为 https 图片 URL；width/height 可选，指定初始显示尺寸） */
+  insertImage(gid: string, src: string, alt?: string, width?: number, height?: number): boolean
   /** 远端/程序化写回 notes：不触发 onUpdate→syncToStore 标脏回推 */
   silentSetContent(gid: string, html: string): boolean
 }
@@ -71,6 +73,21 @@ const editorManager: IEditorManager = {
     return this.insertInlineCardHTML(gid, html)
   },
   insertText: function (gid: string, text: string): boolean { const ed = _editors[gid]; if (!ed) return false; try { ed.chain().insertContent(text).run(); return true } catch (_) { return false } },
+
+  insertImage: function (gid: string, src: string, alt?: string, width?: number, height?: number): boolean {
+    const ed = _editors[gid]
+    if (!ed) return false
+    try {
+      const attrs: Record<string, unknown> = { src, alt: alt || '' }
+      if (typeof width === 'number' && width > 0) attrs.width = Math.round(width)
+      if (typeof height === 'number' && height > 0) attrs.height = Math.round(height)
+      ed.chain().focus().insertContent({ type: 'image', attrs }).run()
+      return true
+    } catch (_) {
+      return false
+    }
+  },
+
 
   silentSetContent: function (gid: string, html: string): boolean {
     const ed = _editors[gid]

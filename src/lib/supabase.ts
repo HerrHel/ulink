@@ -3,6 +3,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+/** 是否已配置 Supabase（未配置时为 null client，storage/auth 均为空实现） */
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+
 function createNullClient(): SupabaseClient {
   const nullError = new Error('Supabase 未配置')
   // D1-002：与官方 SDK 空结果形状对齐，避免 data.session 读 null 崩溃

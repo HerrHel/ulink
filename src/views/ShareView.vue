@@ -265,6 +265,10 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
 .share-group-notes { color: var(--text-secondary, #666); font-size: 14px; margin: 0 0 12px; line-height: 1.6; }
 .share-group-notes :deep(p) { margin: 0 0 0.5em; }
 .share-group-notes :deep(p:last-child) { margin-bottom: 0; }
+.share-group-notes :deep(img) {
+  max-width:100%; width:auto; height:auto;
+  border-radius:8px; display:inline-block; vertical-align:bottom;
+}
 .share-group-meta { display: flex; gap: 16px; margin-bottom: 16px; }
 .share-meta-item { font-size: 13px; color: var(--text-secondary, #888); }
 .share-group-actions { display: flex; gap: 8px; }

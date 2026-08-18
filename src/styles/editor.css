@@ -38,6 +38,76 @@
 }
 .group-tiptap .ProseMirror-selectednode{outline:2px solid var(--accent);border-radius:var(--radius-sm)}
 
+/* ---- 图片（编辑态：ResizableNodeView 容器 + 拖拽手柄）---- */
+/* 宽度上限为容器宽度（100%），不再限制 560px，图片可放大到占满卡片 */
+.group-tiptap [data-resize-container]{
+  position:relative;
+  display:inline-flex;
+  max-width:100%;
+  vertical-align:bottom;
+  margin:0.2em 0.1em;
+}
+.group-tiptap [data-resize-container] img{
+  display:block;
+  max-width:100%;
+  /* 高度永远按宽度等比（!important 压过拖拽写入的 inline style），任何方向拖拽都不变形 */
+  height:auto !important;
+  border-radius:var(--radius-md);
+}
+.group-tiptap [data-resize-container] [data-resize-handle]{
+  position:absolute;
+  width:8px;height:8px;
+  box-sizing:border-box;
+  background:#fff;
+  border:1.5px solid var(--accent);
+  border-radius:1px;
+  opacity:0;
+  transition:opacity .15s,background .12s;
+  z-index:2;
+}
+.group-tiptap [data-resize-container] [data-resize-handle]:hover{
+  background:var(--accent);
+}
+/* 角手柄光标：对角线双向箭头（Word 同款） */
+.group-tiptap [data-resize-handle="top-left"],
+.group-tiptap [data-resize-handle="bottom-right"]{
+  cursor:nwse-resize;
+}
+.group-tiptap [data-resize-handle="top-right"],
+.group-tiptap [data-resize-handle="bottom-left"]{
+  cursor:nesw-resize;
+}
+/* 边手柄光标：水平/垂直双向箭头 */
+.group-tiptap [data-resize-handle="top"],
+.group-tiptap [data-resize-handle="bottom"]{
+  cursor:ns-resize;
+}
+.group-tiptap [data-resize-handle="left"],
+.group-tiptap [data-resize-handle="right"]{
+  cursor:ew-resize;
+}
+/* 手柄：点击选中图片（lv-img-selected）或拖拽中（resize-state）才显示，悬停不显示（Word 行为） */
+.group-tiptap [data-resize-container].lv-img-selected [data-resize-handle],
+.group-tiptap [data-resize-container][data-resize-state="true"] [data-resize-handle]{
+  opacity:1;
+}
+/* 选中框直接画在 img 上（box-shadow 完美跟随图片圆角），避免容器 outline 与图边不齐 */
+.group-tiptap [data-resize-container].lv-img-selected img{
+  box-shadow:0 0 0 1.5px var(--accent);
+}
+
+/* ---- 图片（只读视图：GroupCard detailMode 等 v-html 渲染）---- */
+/* 与编辑态一致：宽度上限为容器宽度，不限制高度，保持用户调整后的尺寸 */
+.group-body img{
+  max-width:100%;
+  width:auto;height:auto;
+  border-radius:var(--radius-md);
+  display:inline-block;
+  vertical-align:bottom;
+  margin:0.2em 0.1em;
+}
+
+
 /* ---- 任务列表 ---- */
 .group-tiptap ul[data-type="taskList"]{
   list-style:none;padding-left:0;margin:0.4em 0

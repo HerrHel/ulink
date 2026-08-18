@@ -10,6 +10,7 @@ import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds, clearSearchCache } from '../lib/search.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
+import { cleanupGroupImagesOnDelete } from '../lib/imageStorage.js'
 import { localHistoryKey, clearAllSyncOps } from './storage.js'
 import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
@@ -885,6 +886,11 @@ export const useDataStore = defineStore('data', {
       this._searchIndexDirty = true
     },
     permanentDeleteGroup(id: string) {
+      const g = this._grpMap[id]
+      if (g) {
+        // 组彻底删除 → 清理云端图片（fire-and-forget）。免费计划容量有限，避免孤儿文件占满额度。
+        void cleanupGroupImagesOnDelete(id, g.notes || '')
+      }
       this._permanentDelete('sibling_groups', id)
       delete this._grpMap[id]
       // r10-attr-restore B1：永久删组时清其在 _deletedAttrMemberships 的预订 membership
