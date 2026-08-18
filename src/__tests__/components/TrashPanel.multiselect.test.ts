@@ -66,9 +66,12 @@ describe('TrashPanel 多选', () => {
     expect(items.length).toBe(6)
     expect(w.findAll('.trash-item-check').length).toBe(6)
     expect(w.findAll('.trash-section').length).toBe(4)
-    // 批量条常驻(有回收站内容时),按钮初始禁用
+    // 批量条常驻(有回收站内容时),清空按钮可用;底部批量按钮初始禁用
     expect(w.find('.trash-batch').exists()).toBe(true)
-    expect(w.findAll('.trash-batch-actions .btn')[0].attributes('disabled')).toBeDefined()
+    expect(w.find('.trash-batch-actions .btn').attributes('disabled')).toBeUndefined()
+    expect(w.findAll('.modal-foot .btn').length).toBe(2)
+    expect(w.findAll('.modal-foot .btn')[0].attributes('disabled')).toBeDefined()
+    expect(w.findAll('.modal-foot .btn')[1].attributes('disabled')).toBeDefined()
     w.unmount()
   })
 
@@ -111,7 +114,7 @@ describe('TrashPanel 多选', () => {
     await w.findAll('.trash-item-check')[0].trigger('change')
     await w.findAll('.trash-item-check')[1].trigger('change')
     await nextTick()
-    await w.findAll('.trash-batch-actions .btn')[0].trigger('click')
+    await w.findAll('.modal-foot .btn')[0].trigger('click') // 底部「批量恢复」
     await nextTick()
     expect(ds.trashedBookmarks.length).toBe(0)
     expect(ds.bookmarks.filter(b => !b.deletedAt).length).toBe(2)
@@ -130,7 +133,7 @@ describe('TrashPanel 多选', () => {
     await w.findAll('.trash-item-check')[2].trigger('change')
     await nextTick()
     showConfirmMock.mockResolvedValue(false)
-    await w.findAll('.trash-batch-actions .btn')[1].trigger('click')
+    await w.findAll('.modal-foot .btn')[1].trigger('click') // 底部「批量删除」
     await nextTick()
     expect(showConfirmMock).toHaveBeenCalledWith('确定永久删除选中的 2 项？此操作无法恢复。')
     expect(ds.trashedBookmarks.length).toBe(2)
@@ -150,7 +153,7 @@ describe('TrashPanel 多选', () => {
     await w.findAll('.trash-item-check')[2].trigger('change')
     await nextTick()
     showConfirmMock.mockResolvedValue(true)
-    await w.findAll('.trash-batch-actions .btn')[1].trigger('click')
+    await w.findAll('.modal-foot .btn')[1].trigger('click') // 底部「批量删除」
     await nextTick()
     expect(ds.bookmarks.length).toBe(1) // 仅剩 b2
     expect(ds.siblingGroups.length).toBe(1) // 仅剩 g2
@@ -173,7 +176,7 @@ describe('TrashPanel 多选', () => {
     await nextTick()
     expect(w.find('.trash-batch-count').text()).toContain('已选 1 项')
     // 批量恢复剩余 1 项(b2)
-    await w.findAll('.trash-batch-actions .btn')[0].trigger('click')
+    await w.findAll('.modal-foot .btn')[0].trigger('click')
     await nextTick()
     expect(ds.bookmarks.find(b => b.id === 'b2')?.deletedAt).toBeUndefined()
     expect(ds.trashedBookmarks.length).toBe(0)

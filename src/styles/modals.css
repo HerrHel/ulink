@@ -46,6 +46,7 @@
   padding:12px 20px;border-top:1px solid var(--border-light);
   flex-shrink:0;background:var(--surface);
 }
+.modal-foot .btn:disabled{opacity:0.45;cursor:not-allowed}
 
 .form-group{margin-bottom:14px}
 .form-label{display:block;font-size:0.76rem;font-weight:600;color:var(--text-secondary);margin-bottom:4px;letter-spacing:0.02em}

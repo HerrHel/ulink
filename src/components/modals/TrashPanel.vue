@@ -5,7 +5,7 @@
         <span class="modal-title"><span aria-hidden="true" v-html="I.trash" class="sp-icon"></span>回收站</span>
         <button class="modal-close" @click="emit('close')" aria-label="关闭">&times;</button>
       </div>
-      <!-- 批量操作条：常驻，0 选中时按钮禁用；介于 head 与 body 之间需 flex-shrink:0 不挤压滚动区 -->
+      <!-- 批量操作条：常驻（全选/计数 + 清空回收站）；介于 head 与 body 之间需 flex-shrink:0 不挤压滚动区 -->
       <div v-if="trashCount > 0" class="trash-batch">
         <label class="trash-batch-all">
           <input
@@ -18,8 +18,7 @@
         </label>
         <span v-if="selectedCount > 0" class="trash-batch-count">已选 {{ selectedCount }} 项</span>
         <span class="trash-batch-actions">
-          <button class="btn btn-ghost btn-xs" :disabled="selectedCount === 0" @click="batchRestore">批量恢复</button>
-          <button class="btn btn-ghost btn-xs text-danger" :disabled="selectedCount === 0" @click="batchPermanent">批量删除</button>
+          <button class="btn btn-ghost btn-xs text-danger" @click="onEmptyTrash">清空回收站</button>
         </span>
       </div>
       <div class="modal-body trash-body">
@@ -98,8 +97,8 @@
         </template>
       </div>
       <div class="modal-foot" v-if="trashCount > 0">
-        <button class="btn btn-secondary" @click="emit('close')">关闭</button>
-        <button class="btn btn-danger" @click="onEmptyTrash">清空回收站</button>
+        <button class="btn btn-secondary" :disabled="selectedCount === 0" @click="batchRestore">批量恢复</button>
+        <button class="btn btn-danger" :disabled="selectedCount === 0" @click="batchPermanent">批量删除</button>
       </div>
     </div>
   </div>

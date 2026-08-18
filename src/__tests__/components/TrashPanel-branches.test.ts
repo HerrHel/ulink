@@ -135,8 +135,8 @@ describe('TrashPanel 行内操作与边界契约', () => {
     // 批量按钮 disabled(selectedCount===0)，jsdom trigger 静默不触发 setupState —
     // 改经 setupState 直调覆盖空集早退分支（effectiveKeys 为空 → return）
     const s = w.vm.$ as any
-    // 先确诊未选中
-    expect(w.findAll('.trash-batch-actions .btn')[0].attributes('disabled')).toBeDefined()
+    // 先确诊未选中（底部「批量恢复」禁用）
+    expect(w.findAll('.modal-foot .btn')[0].attributes('disabled')).toBeDefined()
     // 直调 batchRestore 走 if(!items.length) return 早退
     ;(s.setupState as any).batchRestore()
     expect(ds.trashedBookmarks.length).toBe(2) // 不变
@@ -149,7 +149,7 @@ describe('TrashPanel 行内操作与边界契约', () => {
     const ds = useDataStore()
     seedTrash(ds)
     const w = await mountOpen()
-    expect(w.findAll('.trash-batch-actions .btn')[1].attributes('disabled')).toBeDefined()
+    expect(w.findAll('.modal-foot .btn')[1].attributes('disabled')).toBeDefined() // 底部「批量删除」禁用
     const s = w.vm.$ as any
     // effectiveKeys 为空 batchPermanent 走 if(!items.length) return，不 await showConfirm
     await (s.setupState as any).batchPermanent()
@@ -166,7 +166,7 @@ describe('TrashPanel 行内操作与边界契约', () => {
     const saveSpy = vi.spyOn(appStore, 'save')
     const w = await mountOpen()
     showConfirmMock.mockResolvedValue(false)
-    await w.find('.btn-danger').trigger('click') // 「清空回收站」按钮（无 disabled）
+    await w.find('.trash-batch-actions .btn').trigger('click') // 批量条「清空回收站」按钮（无 disabled）
     await nextTick()
     expect(showConfirmMock).toHaveBeenCalledWith('确定清空回收站？所有内容将被永久删除，无法恢复。')
     expect(ds.trashCount).toBe(6) // 不变
@@ -184,7 +184,7 @@ describe('TrashPanel 行内操作与边界契约', () => {
     const saveSpy = vi.spyOn(appStore, 'save')
     const w = await mountOpen()
     showConfirmMock.mockResolvedValue(true)
-    await w.find('.btn-danger').trigger('click')
+    await w.find('.trash-batch-actions .btn').trigger('click') // 批量条「清空回收站」
     await nextTick()
     expect(ds.trashCount).toBe(0)
     expect(ds.trashedBookmarks.length).toBe(0)
@@ -204,7 +204,7 @@ describe('TrashPanel 行内操作与边界契约', () => {
     await nextTick()
     expect(w.find('.trash-batch-count').text()).toContain('已选 6 项')
     showConfirmMock.mockResolvedValue(true)
-    await w.find('.btn-danger').trigger('click')
+    await w.find('.trash-batch-actions .btn').trigger('click') // 批量条「清空回收站」
     await nextTick()
     // 清空后内容为 0，批量条不再渲染；选中集合内部已 clear（无 gui 可见但再 toggleAll 应得全选=空集）
     expect(ds.trashCount).toBe(0)
