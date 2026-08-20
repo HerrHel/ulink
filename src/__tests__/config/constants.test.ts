@@ -59,13 +59,14 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     expect(MAX_UNDO_BYTES).toBe(512 * 1024)
   })
 
-  it('ACTIONS 17 键存在互不重复 + 全值非空 string + DELETE 同源锚点直锁（ContextMenu 右键 action 匹配）', () => {
+  it('ACTIONS 19 键存在互不重复 + 全值非空 string + DELETE 同源锚点直锁（ContextMenu 右键 action 匹配）', () => {
     const keys = Object.keys(ACTIONS)
-    expect(keys.length).toBe(17)
+    expect(keys.length).toBe(19)
     const EXPECTED_KEYS = [
       'VISIT', 'EDIT', 'DELETE', 'MOVE_TO_CAT', 'MOVE_TO_SPACE', 'SHARE_GROUP',
       'ADD_BOOKMARK', 'ADD_GROUP', 'ADD_CAT', 'MULTI_SELECT', 'HISTORY',
       'RENAME_ATTR', 'DETAIL', 'PIN', 'COPY_URL', 'EXPAND', 'FOCUS',
+      'ADD_SUB', 'ADD_TO_GROUP',
     ] as const
     for (const k of EXPECTED_KEYS) expect(ACTIONS[k], `ACTIONS.${k} 应存在`).toBeDefined()
     const values = Object.values(ACTIONS)

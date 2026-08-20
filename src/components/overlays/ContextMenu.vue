@@ -17,7 +17,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { ACTIONS } from '../../config/constants.js'
-import { MENU_RULES, MENU_ITEMS, dispatchMenuAction } from '../../lib/menuConfig.js'
+import { MENU_RULES, MENU_ITEMS, dispatchMenuAction, canAddSub } from '../../lib/menuConfig.js'
 
 const ctx = useContextMenuStore()
 const uiStore = useUIStore()
@@ -53,6 +53,8 @@ const visibleItems = computed(() => {
   for (const entry of rules) {
     // 私密空间内不显示「移入私密空间」（已经在私密空间）
     if (entry.action === ACTIONS.MOVE_TO_SPACE && uiStore.curSpace !== 'main') continue
+    // 添加子网站仅顶层书签（子书签无此能力）
+    if (entry.action === ACTIONS.ADD_SUB && !canAddSub(ctx.id)) continue
     let text = entry.label || MENU_ITEMS[entry.action]?.label || entry.action
     // 动态标签：置顶/取消置顶
     if (entry.action === ACTIONS.PIN) {

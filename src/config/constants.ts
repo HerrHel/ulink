@@ -46,6 +46,10 @@ export const ACTIONS: Record<string, string> = {
   EXPAND: 'expand',
   /** 聚焦编辑组（长按菜单） */
   FOCUS: 'focus',
+  /** 添加子网站（顶层书签菜单项） */
+  ADD_SUB: 'addSub',
+  /** 添加书签或组到组（组菜单项，替代原 foot + 按钮） */
+  ADD_TO_GROUP: 'addToGroup',
 }
 
 export const DEFAULTS: AppData = {

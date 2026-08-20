@@ -77,8 +77,8 @@
         <button class="btn-xs btn-danger" @click.stop="del" title="删除" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
+    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list'" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode" class="card-menu-btn" @click.stop="openMenu($event)" :title="uiStore.isMobile ? '详情' : '更多操作'" :aria-label="uiStore.isMobile ? '详情' : '更多操作'" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>
@@ -98,11 +98,13 @@ import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useE2EStore } from '../../stores/e2e.js'
+import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useInlineEdit } from '../../composables/ui/useInlineEdit.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { bookmarkPreview } from '../../lib/preview.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
+import { useListNav } from '../../composables/useListNav.js'
 import type { Bookmark } from '../../types.js'
 
 function onImgError(e: Event) {
@@ -125,6 +127,7 @@ const props = defineProps({
 })
 const dataStore = useDataStore()
 const uiStore = useUIStore()
+const listNav = useListNav()
 const cardEl = ref(null)
 // useCardOverflow 副作用：给 .card-body 加 .card-overflow 类驱动淡出遮罩，返回值此处不消费
 useCardOverflow(cardEl)
@@ -199,7 +202,11 @@ function del() { deleteBookmarkWithUndo(props.bookmark.id) }
 function doAddSub() { addSub(props.bookmark.id) }
 function doOpenDetail(bmId: string) { openDetail(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
-function openMenu() { openDetail(props.bookmark.id) }
+function openMenu(e: MouseEvent) {
+  // 移动端：⋯ = 打开详情面板（抽屉）；PC 列表：⋯ = 上下文菜单（收敛编辑/删除/复制等）
+  if (uiStore.isMobile) { openDetail(props.bookmark.id); return }
+  useContextMenuStore().show(e, 'card', props.bookmark.id)
+}
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
 function toggleExpand() { uiStore.toggleExpanded(props.bookmark.id) }
 // 完整分区：PC 列表可键盘聚焦；Enter 打开，Space 详情，→/← 展开收起；空白单击主操作
@@ -225,7 +232,7 @@ function onCardKeydown(e: KeyboardEvent) {
   const action = handleListCardKeydown(e, cardEl.value as HTMLElement | null, {
     canExpand: hasExpandableContent.value,
     expanded: isExpanded.value,
-  })
+  }, listNav.value ?? undefined)
   if (action.type === 'primary') visit()
   else if (action.type === 'detail') openDetail(props.bookmark.id)
   else if (action.type === 'expand' || action.type === 'collapse' || action.type === 'toggleExpand') toggleExpand()

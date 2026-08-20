@@ -149,6 +149,15 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
     }
   })
 
+  /** 滚动到指定数据索引（键盘跨屏导航用；未挂载时静默） */
+  function scrollToIndex(index: number) {
+    if (!scrollEl) return
+    const h = itemHeight.value
+    const target = Math.max(0, Math.min(index, Math.max(0, items.value.length - 1))) * h
+    scrollEl.scrollTop = target
+    scrollTop.value = target
+  }
+
   return {
     containerRef,
     visibleItems,
@@ -156,5 +165,6 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
     startIndex,
     endIndex,
     measuredHeight,
+    scrollToIndex,
   }
 }

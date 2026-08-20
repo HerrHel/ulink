@@ -43,6 +43,7 @@ import { useMobileDragReorder } from '../../composables/interaction/useMobileDra
 import type { CardItem } from '../../types.js'
 import BookmarkCard from './BookmarkCard.vue'
 import GroupCard from './GroupCard.vue'
+import { provideListNav, type ListNav, type ListNavTarget } from '../../composables/useListNav.js'
 
 const ui = useUIStore()
 const bookmarkIcon = I.emptyBookmark
@@ -64,7 +65,7 @@ watch(useVirtual, (v, prev) => {
 const virtualList = computed<CardItem[]>(() => useVirtual.value ? combinedList.value : [])
 // A1-005：行高跟 isMobile 响应，避免 setup 时 isMobile() 写死；虚拟模式强制 list-view
 const virtualItemHeight = computed(() => (ui.isMobile ? 100 : 140))
-const { visibleItems, totalHeight } = useVirtualScroll(
+const { visibleItems, totalHeight, scrollToIndex } = useVirtualScroll(
   virtualList,
   {
     itemHeight: virtualItemHeight,
@@ -73,6 +74,51 @@ const { visibleItems, totalHeight } = useVirtualScroll(
     scrollRootSelector: '#panelContent',
   }
 )
+
+// 键盘跨屏导航（listCardKeyboard 数据索引级替代 DOM 可见项导航）：
+// 虚拟滚动只渲染可见片段，DOM 导航会在屏幕边缘断裂；此处基于 combinedList 全量索引
+// 定位目标，未渲染（屏幕外）时先 scrollToIndex 滚动，下一帧渲染后再聚焦。
+const _cardSelFor = (t: ListNavTarget) =>
+  t.type === 'group'
+    ? `#cardGrid .group-card[data-group-id="${t.id}"]`
+    : `#cardGrid .card[data-id="${t.id}"]:not(.group-card)`
+const _focusByTarget = (t: ListNavTarget, smooth: boolean) => {
+  const sel = _cardSelFor(t)
+  const el = document.querySelector(sel) as HTMLElement | null
+  if (!el) return false
+  el.focus({ preventScroll: false })
+  el.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' })
+  return true
+}
+const listNav = ref<ListNav | null>({
+  navigate(from: ListNavTarget, delta: number): boolean {
+    const list = combinedList.value
+    const fromIdx = list.findIndex(item => item.type === from.type && item.data.id === from.id)
+    if (fromIdx < 0) return false
+    const next = Math.min(Math.max(fromIdx + delta, 0), list.length - 1)
+    if (next === fromIdx) return false
+    const target = list[next]
+    const t: ListNavTarget = { type: target.type, id: target.data.id }
+    if (_focusByTarget(t, true)) return true
+    // 虚拟滚动未渲染：先滚到索引，下一帧渲染后聚焦
+    scrollToIndex(next)
+    requestAnimationFrame(() => _focusByTarget(t, false))
+    return true
+  },
+  navigateEdge(from: ListNavTarget, edge: 'start' | 'end'): boolean {
+    const list = combinedList.value
+    if (!list.length) return false
+    const idx = edge === 'start' ? 0 : list.length - 1
+    const target = list[idx]
+    const t: ListNavTarget = { type: target.type, id: target.data.id }
+    if (_focusByTarget(t, true)) return true
+    scrollToIndex(idx)
+    requestAnimationFrame(() => _focusByTarget(t, false))
+    return true
+  },
+})
+// 卡片组件 inject 使用；ref 常量即可（导航实现闭包引用响应式 combinedList/scrollToIndex）
+provideListNav(listNav)
 
 const gridClass = computed(() => {
   if (ui.focusedGroupId) return 'card-grid focus-view' + (ui.isMobile ? ' focus-mobile' : '')

@@ -29,12 +29,14 @@ const mocks = vi.hoisted(() => ({
   toggleBatchMode: vi.fn(),
   pushNavState: vi.fn(),
   copyToClipboard: vi.fn(),
+  addSub: vi.fn(),
 }))
 
 vi.mock('../../composables/domain/useBookmark.js', () => ({
   visit: mocks.visit,
   openBmModal: mocks.openBmModal,
   deleteBookmarkWithUndo: mocks.deleteBookmarkWithUndo,
+  addSub: mocks.addSub,
 }))
 vi.mock('../../composables/ui/useUI.js', () => ({
   openDetail: mocks.openDetail,
@@ -131,6 +133,13 @@ describe('menuConfig — 规则结构', () => {
     expect(actions).not.toContain(ACTIONS.HISTORY)
     expect(actions).not.toContain(ACTIONS.MULTI_SELECT)
   })
+
+  it('card 右键含 ADD_SUB、group 右键含 ADD_TO_GROUP（替代原 foot 按钮）', () => {
+    expect(MENU_RULES.card.some(e => e.action === ACTIONS.ADD_SUB)).toBe(true)
+    expect(MENU_RULES.group.some(e => e.action === ACTIONS.ADD_TO_GROUP)).toBe(true)
+    expect(MENU_ITEMS[ACTIONS.ADD_SUB].label).toBe('添加子网站')
+    expect(MENU_ITEMS[ACTIONS.ADD_TO_GROUP].label).toBe('添加书签或组')
+  })
 })
 
 describe('menuConfig — dispatchMenuAction 转发', () => {
@@ -168,6 +177,21 @@ describe('menuConfig — dispatchMenuAction 转发', () => {
     expect(mocks.moveBookmarksToVault).toHaveBeenCalledWith(['b1'])
   })
 
+  it('card ADD_SUB：顶层书签 → addSub(id)；子书签被守卫', () => {
+    dispatchMenuAction('card', ACTIONS.ADD_SUB, 'b1')
+    expect(mocks.addSub).toHaveBeenCalledWith('b1')
+    mocks.addSub.mockClear()
+    ds.bookmarks[0].parentId = 'p1'
+    dispatchMenuAction('card', ACTIONS.ADD_SUB, 'b1')
+    expect(mocks.addSub).not.toHaveBeenCalled()
+  })
+
+  it('group ADD_TO_GROUP → 打开添加 Popover（addToGid + overlays.addPopover）', () => {
+    dispatchMenuAction('group', ACTIONS.ADD_TO_GROUP, 'g1')
+    expect(ui.addToGid).toBe('g1')
+    expect(ui.overlays.addPopover).toBe(true)
+  })
+
   it('group 转发：EDIT/DELETE/PIN/SHARE_GROUP/FOCUS/DETAIL', () => {
     dispatchMenuAction('group', ACTIONS.EDIT, 'g1')
     expect(mocks.editGroup).toHaveBeenCalledWith('g1')
@@ -202,6 +226,20 @@ describe('menuConfig — buildLongPressItems', () => {
     const items = buildLongPressItems('card', 'b1')
     expect(items.some(i => i.label === '展开' || i.label === '收起')).toBe(false)
     expect(items.map(i => i.label)).not.toContain('展开')
+  })
+
+  it('子书签：ADD_SUB 条件项被过滤（长按菜单）', () => {
+    ds.bookmarks[0].parentId = 'p1'
+    const items = buildLongPressItems('card', 'b1')
+    expect(items.map(i => i.label)).not.toContain('添加子网站')
+  })
+
+  it('顶层书签：长按菜单含 添加子网站 且 action 走 dispatch', () => {
+    const items = buildLongPressItems('card', 'b1')
+    const sub = items.find(i => i.label === '添加子网站')
+    expect(sub).toBeTruthy()
+    sub?.action()
+    expect(mocks.addSub).toHaveBeenCalledWith('b1')
   })
 
   it('置顶动态文案：已置顶 → 取消置顶', () => {

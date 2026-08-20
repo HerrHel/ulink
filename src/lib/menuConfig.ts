@@ -17,7 +17,7 @@ import { useAppStore } from '../stores/app.js'
 import { useActionSheetStore } from '../stores/actionSheet.js'
 import { copyToClipboard } from '../utils.js'
 import { ACTIONS } from '../config/constants.js'
-import { visit, openBmModal, deleteBookmarkWithUndo } from '../composables/domain/useBookmark.js'
+import { visit, openBmModal, deleteBookmarkWithUndo, addSub } from '../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup, toggleGroupFocus } from '../composables/domain/useGroup.js'
 import { shareGroup } from '../composables/domain/useDataShare.js'
@@ -52,12 +52,15 @@ export const MENU_ITEMS: Record<string, { label: string; danger?: boolean }> = {
   [ACTIONS.RENAME_ATTR]: { label: '重命名' },
   [ACTIONS.EXPAND]: { label: '展开' },
   [ACTIONS.FOCUS]: { label: '聚焦编辑' },
+  [ACTIONS.ADD_SUB]: { label: '添加子网站' },
+  [ACTIONS.ADD_TO_GROUP]: { label: '添加书签或组' },
 }
 
 /** 右键菜单规则（PC） */
 export const MENU_RULES: Record<string, MenuEntry[]> = {
   card: [
     { action: ACTIONS.COPY_URL },
+    { action: ACTIONS.ADD_SUB },
     { action: ACTIONS.EDIT },
     { action: ACTIONS.HISTORY },
     { action: ACTIONS.PIN },
@@ -84,6 +87,7 @@ export const MENU_RULES: Record<string, MenuEntry[]> = {
   group: [
     { action: ACTIONS.DETAIL },
     { action: ACTIONS.EDIT, label: '编辑组名' },
+    { action: ACTIONS.ADD_TO_GROUP },
     { action: ACTIONS.HISTORY },
     { action: ACTIONS.PIN },
     { action: ACTIONS.MOVE_TO_CAT },
@@ -110,6 +114,7 @@ export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
     { action: ACTIONS.EXPAND },
     { action: ACTIONS.PIN },
     { action: ACTIONS.COPY_URL },
+    { action: ACTIONS.ADD_SUB },
     { action: ACTIONS.DETAIL },
     { action: ACTIONS.EDIT },
     { action: ACTIONS.MOVE_TO_CAT },
@@ -122,6 +127,7 @@ export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
     { action: ACTIONS.DETAIL },
     { action: ACTIONS.FOCUS },
     { action: ACTIONS.EDIT, label: '编辑组' },
+    { action: ACTIONS.ADD_TO_GROUP },
     { action: ACTIONS.MOVE_TO_CAT },
     { action: ACTIONS.MOVE_TO_SPACE },
     { action: ACTIONS.SHARE_GROUP },
@@ -140,6 +146,12 @@ export function canExpandEntry(type: 'card' | 'group', id: string): boolean {
   }
   const g = ds.groupMap[id]
   return !!g && !!(g.notes && g.notes.trim())
+}
+
+/** ADD_SUB 条件项：仅顶层书签（!parentId）可添加子网站 */
+export function canAddSub(id: string): boolean {
+  const bm = useDataStore().bookmarkMap[id]
+  return !!bm && !bm.parentId
 }
 
 /** 生成长按菜单 items（条件项过滤 + 置顶/展开动态文案） */
@@ -161,6 +173,7 @@ export function buildLongPressItems(
       })
       continue
     }
+    if (entry.action === ACTIONS.ADD_SUB && !canAddSub(id)) continue
     if (entry.action === ACTIONS.MOVE_TO_SPACE && !isMain) continue
     let label = entry.label || MENU_ITEMS[entry.action]?.label || entry.action
     if (entry.action === ACTIONS.PIN) {
@@ -184,6 +197,10 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     if (action === ACTIONS.COPY_URL) {
       const bm = dataStore.bookmarkMap[id]
       if (bm && bm.url) copyToClipboard(bm.url, '网址')
+      return
+    }
+    if (action === ACTIONS.ADD_SUB) {
+      if (canAddSub(id)) addSub(id)
       return
     }
     if (action === ACTIONS.DETAIL) openDetail(id)
@@ -239,6 +256,12 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
   if (type === 'group') {
     if (action === ACTIONS.DETAIL) openDetail('group:' + id)
     if (action === ACTIONS.EDIT) editGroup(id)
+    if (action === ACTIONS.ADD_TO_GROUP) {
+      // 打开「添加书签或组」Popover（无 trigger 位置时 AddPopover 用默认居中定位）
+      ui.addToGid = id
+      ui._addPopoverTrigger = null
+      ui.overlays.addPopover = true
+    }
     if (action === ACTIONS.DELETE) deleteGroup(id)
     if (action === ACTIONS.PIN) { dataStore.togglePin('group', id); debouncedSaveAppData() }
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
