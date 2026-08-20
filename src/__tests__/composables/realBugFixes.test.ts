@@ -221,15 +221,14 @@ describe('useDataShare.forkPublicGroup', () => {
 // 6. useDataShare.detectShareRoute — path 风格 /s/<gid> 优先，hash #share/<gid> 兼容
 // ──────────────────────────────────────────────────────────────
 describe('useDataShare.detectShareRoute', () => {
-  const _origLoc = (globalThis as any).location
-  function mockLoc(p: { pathname: string; hash?: string; origin?: string }) {
-    Object.defineProperty(window, 'location', {
-      value: { ...(window as any).location, pathname: p.pathname, hash: p.hash || '', origin: p.origin || 'https://x', search: '' },
-      configurable: true,
-    })
+  // 用 history.pushState 设 pathname+hash（jsdom 同步到 location），绝不 Object.defineProperty
+  // 覆盖 window.location——否则 afterEach 恢复会把 jsdom 原生 getter 固化成数据属性，
+  // 且模块顶层捕获的 _origLoc 可能已是同 worker 前序文件污染后的值，造成跨文件泄漏。
+  function mockLoc(p: { pathname: string; hash?: string }) {
+    history.pushState({}, '', `${p.pathname}${p.hash || ''}`)
   }
   afterEach(() => {
-    if (_origLoc) Object.defineProperty(window, 'location', { value: _origLoc, configurable: true })
+    history.pushState({}, '', '/')
   })
 
   it('path 风格 /s/<gid> 解析出 gid', async () => {

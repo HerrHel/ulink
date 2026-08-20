@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
@@ -97,9 +97,15 @@ describe('TrashPanel 行内操作与边界契约', () => {
     expect(w.find('.trash-batch-count').text()).toContain('已选 1 项')
     showConfirmMock.mockResolvedValue(true)
     await w.findAll('.trash-item')[0].findAll('button')[1].trigger('click') // 行内「删除」
-    await nextTick()
+    // 用 flushPromises 而非单次 nextTick：showConfirm 是 mockResolvedValue 的异步链，
+    // CI（Node 20 / 2 核）下微任务调度与本地（Node 22）不同，单次 nextTick 可能等不到
+    // permanent() 里 await showConfirm 的续体执行完，导致 b1 仍在 bookmarks 里（线上红）。
+    await flushPromises()
     // b1 彻底消失（bookmarks 与 trashed 双无）
-    expect(ds.bookmarks.find(b => b.id === 'b1')).toBeUndefined()
+    expect(
+      ds.bookmarks.find(b => b.id === 'b1'),
+      `showConfirm calls=${JSON.stringify(showConfirmMock.mock.calls)} toast=${JSON.stringify(toastMock.mock.calls)} remaining=${ds.bookmarks.map(b => b.id).join(',')}`,
+    ).toBeUndefined()
     expect(ds.trashedBookmarks.find(b => b.id === 'b1')).toBeUndefined()
     expect(toastMock).toHaveBeenCalledWith('已永久删除')
     expect(saveSpy).toHaveBeenCalled()
