@@ -14,7 +14,7 @@ const FIELD_LABELS: Record<string, string> = {
   title: '标题', name: '名称', url: '链接', username: '账户',
   password: '密码', notes: '备注', icon: '图标', categoryId: '分类',
   parentId: '父级', order: '排序', useCount: '使用次数',
-  attributes: '属性', isExpanded: '展开状态', bookmarkIds: '书签列表',
+  attributes: '属性', bookmarkIds: '书签列表',
   isPublic: '公开', deletedAt: '删除时间',
 }
 

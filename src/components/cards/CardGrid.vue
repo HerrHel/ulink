@@ -33,8 +33,9 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { I } from '../../config/icons.js'
+import { toast } from '../../lib/toast.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useCombinedList } from '../../composables/useCombinedList.js'
 import { useVirtualScroll } from '../../composables/useVirtualScroll.js'
@@ -55,6 +56,11 @@ const { combinedList } = useCombinedList()
 // 才能拖拽排序，故 batchMode 时强制走非虚拟完整列表（normalGridRef 挂载），>100 项
 // 仅在非批量时启用虚拟滚动。
 const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMode)
+// 虚拟滚动强制 list-view：用户在 grid 布局下条目超过 100 会被静默切换渲染方式，
+// 布局与点击语义（行主体=主操作）一并变化，进入时提示一次避免困惑
+watch(useVirtual, (v, prev) => {
+  if (v && !prev) toast('条目较多，已切换为列表视图')
+})
 const virtualList = computed<CardItem[]>(() => useVirtual.value ? combinedList.value : [])
 // A1-005：行高跟 isMobile 响应，避免 setup 时 isMobile() 写死；虚拟模式强制 list-view
 const virtualItemHeight = computed(() => (ui.isMobile ? 100 : 140))

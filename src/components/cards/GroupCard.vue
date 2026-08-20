@@ -108,14 +108,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { getTagNames, isMobile, stripEntranceAnim, sanitizeReadonlyHTML } from '../../utils.js'
+import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML } from '../../utils.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
 import ColorPalette from '../editor/ColorPalette.vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useUndoStore } from '../../stores/undo.js'
-import { debouncedSaveAppData } from '../../stores/app.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -149,7 +148,7 @@ function setCardEl(el: Element | null) {
 useCardOverflow(cardEl)
 
 const isFocused = computed(() => !props.detailMode && ui.focusedGroupId === props.group.id)
-const isExpanded = computed(() => ui.layoutMode === 'list' && props.group.isExpanded && !ui.batchMode)
+const isExpanded = computed(() => ui.layoutMode === 'list' && ui.expandedIds.includes(props.group.id) && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
 const noteIcon = I.note
 const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim()))
@@ -229,12 +228,12 @@ function filterByTagName(name: string) {
   if (attr) toggleAttrFilter(attr.id)
 }
 function openMenu() { openDetail('group:' + props.group.id) }
-function toggleExpand() { ds.updateGroup(props.group.id, { isExpanded: !props.group.isExpanded }); debouncedSaveAppData() }
+function toggleExpand() { ui.toggleExpanded(props.group.id) }
 function onFocusClick() {
   if (ui.batchMode) { toggleSelect(); return }
   toggleFocus()
 }
-// 完整分区：PC 列表可键盘聚焦；Enter 聚焦组，Space/→ 展开；空白单击开详情（辅助栏内关闭）
+// 完整分区：PC 列表可键盘聚焦；Enter 聚焦组，Space 详情，→/← 展开收起；空白单击主操作（辅助栏内关闭）
 const listKeyboardNav = computed(() => !props.detailMode && ui.layoutMode === 'list' && !ui.isMobile && !ui.batchMode)
 const LIST_INTERACTIVE_SEL = 'button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .list-expand-btn, .card-menu-btn, .group-body, .card-tag, .group-head-actions'
 
@@ -244,13 +243,10 @@ function onCardClick(e: MouseEvent) {
   if (ui.layoutMode === 'mini-grid') { toggleFocus(); return }
   if (ui.layoutMode !== 'list') return
   if ((e.target as HTMLElement).closest(LIST_INTERACTIVE_SEL)) return
-  if (isMobile()) {
-    // 移动端：非交互区单击聚焦（详情由「⋯」触发）
-    toggleFocus()
-    return
-  }
-  // PC 列表：空白单击打开右侧详情（管理器模式，不聚焦/不跳转）
-  openDetail('group:' + props.group.id)
+  // 列表（PC/移动端一致）：展开态点空白收起；折叠态点空白 = 主操作（聚焦组）。
+  // 与 mini-grid / 移动端行为对齐，详情改由「⋯」/右键/键盘 Space 显式触发。
+  if (isExpanded.value) { toggleExpand(); return }
+  toggleFocus()
   cardEl.value?.focus({ preventScroll: true })
 }
 

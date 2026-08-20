@@ -97,6 +97,13 @@ export interface UIState {
   _preferredLayoutMode: LayoutMode | null
   /** 移动端记住的布局（list/mini-grid），移动端不可用 grid */
   _mobileLayoutMode: 'list' | 'mini-grid'
+  /**
+   * 列表模式展开/收起的 id 集合（含书签与组 id）。
+   * 纯 UI 态：仅进 UI_STATE_KEY，不写数据层、不参与 saveAppData/云同步。
+   * 历史：isExpanded 曾存 Bookmark/SiblingGroup 数据字段，展开=updateBookmark/updateGroup
+   * 触发脏标记+updatedAt+同步队列，已迁移至此（存量数据在 restoreUIState 一次性读入）。
+   */
+  expandedIds: string[]
 
   // 分组状态
   modals: ModalState
@@ -166,6 +173,7 @@ export const useUIStore = defineStore('ui', {
     _prevLayoutMode: null,
     _preferredLayoutMode: null,
     _mobileLayoutMode: 'list',
+    expandedIds: [],
   }),
 
   actions: {
@@ -177,6 +185,26 @@ export const useUIStore = defineStore('ui', {
         ...ds.filteredBookmarks.filter(b => !b.parentId).map(b => b.id),
         ...ds.filteredGroups.map(g => 'group:' + g.id)
       ]
+    },
+
+    // ── 列表模式展开/收起（纯 UI 态，零数据副作用）──
+    /** 切换列表模式展开态（书签/组 id 统一存放，不写数据层） */
+    toggleExpanded(id: string) {
+      const idx = this.expandedIds.indexOf(id)
+      if (idx > -1) this.expandedIds.splice(idx, 1)
+      else this.expandedIds.push(id)
+    },
+    /** 收起全部（列表模式顶部操作预留） */
+    collapseAllExpanded() {
+      this.expandedIds.splice(0)
+    },
+    /** 存量迁移：数据层 isExpanded=true 一次性读入 expandedIds（restoreUIState 内调用，不写回） */
+    _migrateLegacyExpanded() {
+      const ds = useDataStore()
+      const ids: string[] = []
+      for (const b of ds.bookmarks) if (b.isExpanded) ids.push(b.id)
+      for (const g of ds.siblingGroups) if (g.isExpanded) ids.push(g.id)
+      if (ids.length) this.expandedIds = Array.from(new Set(ids))
     },
 
     setMobile(value: boolean) {
@@ -222,6 +250,7 @@ export const useUIStore = defineStore('ui', {
           layoutMode: this.layoutMode,
           historyMax: this.historyMax,
           docScrollTop: document.documentElement.scrollTop || 0,
+          expandedIds: this.expandedIds.slice(),
           _preferredLayoutMode: this._preferredLayoutMode || null,
           _mobileLayoutMode: this._mobileLayoutMode,
           _customCardOrder: ds._customCardOrder || null,
@@ -247,6 +276,7 @@ export const useUIStore = defineStore('ui', {
           excludedAttrs?: string[]
           focusedGroupId?: string
           detailCards?: string[]
+          expandedIds?: string[]
           _preferredLayoutMode?: LayoutMode
           _mobileLayoutMode?: LayoutMode
           _customCardOrder?: Array<{ t: 'g' | 'b'; id: string }>
@@ -295,6 +325,19 @@ export const useUIStore = defineStore('ui', {
             return !!b && !b.deletedAt
           })
         }
+        // expandedIds 同 detailCards 模式过滤已删/软删项，避免渲染已删卡片的展开态
+        if (Array.isArray(s.expandedIds)) {
+          const gMap = ds.groupMap
+          const bMap = ds.bookmarkMap
+          this.expandedIds = s.expandedIds.filter((id: string) => {
+            const g = gMap[id]
+            if (g) return !g.deletedAt
+            const b = bMap[id]
+            return !!b && !b.deletedAt
+          })
+        }
+        // 存量迁移：数据层 isExpanded=true → expandedIds（历史版本遗留，一次性读入不写回）
+        this._migrateLegacyExpanded()
         if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list' || s._preferredLayoutMode === 'mini-grid') {
           this._preferredLayoutMode = s._preferredLayoutMode
         }

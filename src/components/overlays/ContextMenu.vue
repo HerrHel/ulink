@@ -13,25 +13,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
-import { useAppStore } from '../../stores/app.js'
-import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { useSpaceMove } from '../../composables/domain/useSpaceMove.js'
+import { useDataStore } from '../../stores/data.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { ACTIONS } from '../../config/constants.js'
-import { useActionSheetStore } from '../../stores/actionSheet.js'
-import { visit, openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
-import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../../composables/ui/useUI.js'
-import { editGroup, deleteGroup, removeBmFromGroup, createGroup } from '../../composables/domain/useGroup.js'
-import { shareGroup } from '../../composables/domain/useDataShare.js'
-import { toggleBatchMode } from '../../composables/domain/useBatch.js'
-import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
-import { debouncedSaveAppData } from '../../stores/app.js'
+import { MENU_RULES, MENU_ITEMS, dispatchMenuAction } from '../../lib/menuConfig.js'
 
-const store = useAppStore()
 const ctx = useContextMenuStore()
 const uiStore = useUIStore()
-const spaceMove = useSpaceMove()
 
 // 视口边缘 clamp：contextMenu.show 用 e.clientX/Y 作 left/top，右/下边缘右键时菜单
 // 固定定位会溢出视口（右下 1/3 区域高频）。菜单高度随 type 动态（card=6 项、rail-empty=1 项），
@@ -56,58 +45,25 @@ watch(() => [ctx.open, ctx.x, ctx.y], async ([open]) => {
   }
 })
 
-  const allItems = [
-    { action: ACTIONS.VISIT, text: '打开网站' },
-    { action: ACTIONS.EDIT, text: '编辑' },
-    { action: ACTIONS.HISTORY, text: '版本历史' },
-    { action: ACTIONS.PIN, text: '置顶' },
-    { action: ACTIONS.MOVE_TO_CAT, text: '移动到' },
-    { action: ACTIONS.MOVE_TO_SPACE, text: '设为私密' },
-    { action: ACTIONS.SHARE_GROUP, text: '分享组' },
-    { action: ACTIONS.MULTI_SELECT, text: '多选' },
-    { action: ACTIONS.DETAIL, text: '查看详情' },
-    { action: ACTIONS.DELETE, text: '删除', danger: true },
-    { action: ACTIONS.ADD_BOOKMARK, text: '添加书签' },
-    { action: ACTIONS.ADD_GROUP, text: '添加组' },
-    { action: ACTIONS.ADD_CAT, text: '添加分类' },
-    { action: ACTIONS.RENAME_ATTR, text: '重命名' },
-  ]
-
-const RULES: Record<string, { show: string[]; text: Record<string, string> }> = {
-  card:         { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.MULTI_SELECT, ACTIONS.DETAIL, ACTIONS.DELETE], text: {} },
-  sub:          { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情' } },
-  cat:          { show: [ACTIONS.EDIT, ACTIONS.MOVE_TO_SPACE, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '重命名' } },
-  attr:         { show: [ACTIONS.RENAME_ATTR, ACTIONS.DELETE], text: { [ACTIONS.RENAME_ATTR]: '重命名' } },
-  group:        { show: [ACTIONS.DETAIL, ACTIONS.EDIT, ACTIONS.HISTORY, ACTIONS.PIN, ACTIONS.MOVE_TO_CAT, ACTIONS.MOVE_TO_SPACE, ACTIONS.SHARE_GROUP, ACTIONS.DELETE], text: { [ACTIONS.EDIT]: '编辑组名', [ACTIONS.DELETE]: '删除组', [ACTIONS.SHARE_GROUP]: '分享组' } },
-  'group-card': { show: [ACTIONS.VISIT, ACTIONS.EDIT, ACTIONS.DELETE], text: { [ACTIONS.VISIT]: '查看详情', [ACTIONS.EDIT]: '编辑书签', [ACTIONS.DELETE]: '从组移除' } },
-  'rail-empty': { show: [ACTIONS.ADD_CAT], text: {} },
-  'grid-empty': { show: [ACTIONS.ADD_BOOKMARK, ACTIONS.ADD_GROUP, ACTIONS.MULTI_SELECT], text: {} },
-}
-
-const DEFAULT_TEXT: Record<string, string> = { [ACTIONS.VISIT]: '打开网站', [ACTIONS.EDIT]: '编辑', [ACTIONS.DELETE]: '删除' }
-
+// 菜单项由 menuConfig 单一来源驱动（MENU_RULES 顺序 + MENU_ITEMS 文案/危险标记）
 const visibleItems = computed(() => {
-  const rule = RULES[ctx.type] || { show: [], text: {} }
-  const showSet = new Set(rule.show)
-  // 私密空间内不显示「移入私密空间」（已经在私密空间）
-  if (uiStore.curSpace !== 'main') showSet.delete(ACTIONS.MOVE_TO_SPACE)
-  const textMap = { ...DEFAULT_TEXT, ...rule.text }
-  const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
+  const rules = MENU_RULES[ctx.type] || []
   const dataStore = useDataStore()
-  for (const item of allItems) {
-    if (!showSet.has(item.action)) continue
-    const text = textMap[item.action] || item.text
+  const items: Array<{ action: string; text: string; danger?: boolean; divider?: boolean }> = []
+  for (const entry of rules) {
+    // 私密空间内不显示「移入私密空间」（已经在私密空间）
+    if (entry.action === ACTIONS.MOVE_TO_SPACE && uiStore.curSpace !== 'main') continue
+    let text = entry.label || MENU_ITEMS[entry.action]?.label || entry.action
     // 动态标签：置顶/取消置顶
-    if (item.action === ACTIONS.PIN) {
+    if (entry.action === ACTIONS.PIN) {
       const isPinned = ctx.type === 'card'
         ? !!dataStore.bookmarkMap[ctx.id]?.pinnedAt
         : ctx.type === 'group'
           ? !!dataStore.groupMap[ctx.id]?.pinnedAt
           : false
-      items.push({ ...item, text: isPinned ? '取消置顶' : '置顶' })
-    } else {
-      items.push({ ...item, text })
+      text = isPinned ? '取消置顶' : '置顶'
     }
+    items.push({ action: entry.action, text, danger: entry.danger ?? MENU_ITEMS[entry.action]?.danger })
   }
   return items
 })
@@ -116,84 +72,7 @@ function onItemClick(action: string) {
   const tid = ctx.id
   const ttype = ctx.type
   ctx.hide()
-  _dispatchAction(ttype, action, tid)
-}
-
-function _dispatchAction(type: string, action: string, id: string) {
-  const dataStore = useDataStore()
-  if (type === 'card') {
-    if (action === ACTIONS.DETAIL) openDetail(id)
-    if (action === ACTIONS.VISIT) visit(null, id)
-    if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
-    if (action === ACTIONS.HISTORY) {
-      // E3-001：打开前 push，浏览器后退可关 HistoryPanel
-      pushNavState()
-      store.historyItemId = id
-      store.historyItemType = 'bookmark'
-      store.panels.history = true
-    }
-    if (action === ACTIONS.PIN) { dataStore.togglePin('bookmark', id); debouncedSaveAppData() }
-    // A3-001：补齐移动到 / 多选分发（与 group 路径一致）
-    if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showBmCategoryPicker(id)
-    if (action === ACTIONS.MOVE_TO_SPACE) void spaceMove.moveBookmarksToVault([id])
-    if (action === ACTIONS.MULTI_SELECT) {
-      const ui = store // app facade 暴露 batch
-      if (!ui.batchMode) toggleBatchMode()
-      if (id && !ui.batchSelected.includes(id)) ui.batchSelected.push(id)
-    }
-  } else if (type === 'sub') {
-    if (action === ACTIONS.VISIT) openDetail(id)
-    if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
-  } else if (type === 'cat') {
-    if (action === ACTIONS.EDIT) openCatModal()
-    if (action === ACTIONS.MOVE_TO_SPACE) {
-      const cat = useDataStore().categoryMap[id]
-      if (cat && window.confirm(`确认将分类「${cat.name}」及其全部书签/组移入私密空间?`)) {
-        void spaceMove.moveCategoryToVault(id)
-      }
-    }
-    if (action === ACTIONS.DELETE) deleteCategory(id)
-  } else if (type === 'attr') {
-    if (action === ACTIONS.RENAME_ATTR) {
-      const dataStore = useDataStore()
-      const attr = store.attributeMap[id]
-      if (attr) {
-        const input = window.prompt('重命名属性', attr.name)
-        if (input && input.trim() && input.trim() !== attr.name) {
-          dataStore.renameAttribute(id, input.trim())
-          store.save()
-        }
-      }
-    }
-    if (action === ACTIONS.DELETE) deleteAttribute(id)
-  } else if (type === 'group') {
-    if (action === ACTIONS.DETAIL) openDetail('group:' + id)
-    if (action === ACTIONS.EDIT) editGroup(id)
-    if (action === ACTIONS.DELETE) deleteGroup(id)
-    if (action === ACTIONS.PIN) { dataStore.togglePin('group', id); debouncedSaveAppData() }
-    if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
-    if (action === ACTIONS.MOVE_TO_SPACE) void spaceMove.moveGroupsToVault([id])
-    if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
-    if (action === ACTIONS.HISTORY) {
-      pushNavState()
-      store.historyItemId = id
-      store.historyItemType = 'group'
-      store.panels.history = true
-    }
-  } else if (type === 'group-card') {
-    if (action === ACTIONS.VISIT) openDetail(id)
-    if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) removeBmFromGroup(id, store.ctxGid!)
-  } else if (type === 'grid-empty') {
-    if (action === ACTIONS.ADD_BOOKMARK) openBmModal()
-    if (action === ACTIONS.ADD_GROUP) createGroup()
-    // A3-001：空白网格右键「多选」
-    if (action === ACTIONS.MULTI_SELECT) toggleBatchMode()
-  } else if (type === 'rail-empty') {
-    if (action === ACTIONS.ADD_CAT) { openCatModal(); setTimeout(() => document.getElementById('newCatName')?.focus(), 200) }
-  }
+  dispatchMenuAction(ttype, action, tid)
 }
 
 function _onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('#ctxMenu')) ctx.hide() }

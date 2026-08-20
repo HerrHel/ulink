@@ -292,34 +292,34 @@ describe('BookmarkCard — onCardClick 分流契约', () => {
     expect(mocks.openDetail).not.toHaveBeenCalled()
   })
 
-  it('list 布局移动端非交互区走 visit（openBookmark）', async () => {
+  it('list 布局非交互区点空白走 visit（主操作，PC/移动端一致）', async () => {
     ui.layoutMode = 'list'
-    mocks.isMobile.mockReturnValue(true)
     const w = mountCard()
     await w.vm.onCardClick({ target: makeTarget() } as any)
     expect(mocks.openBookmark).toHaveBeenCalledTimes(1)
     expect(mocks.openDetail).not.toHaveBeenCalled()
   })
 
-  it('list 布局 PC 端展开态点空白走 toggleExpand（收起）', async () => {
+  it('list 布局展开态点空白走 toggleExpand（收起，纯 UI 态零数据写）', async () => {
     ui.layoutMode = 'list'
-    mocks.isMobile.mockReturnValue(false)
-    const w = mountCard({ bm: { isExpanded: true } })
-    // isExpanded computed 依赖 uiStore.layoutMode==='list' + bookmark.isExpanded + !batchMode
+    // 展开态现由 ui.expandedIds 决定（已从数据字段迁移）
+    ui.expandedIds = ['b1']
+    const w = mountCard()
     const updateSpy = vi.spyOn(ds, 'updateBookmark').mockImplementation(() => ({} as any))
     await w.vm.onCardClick({ target: makeTarget() } as any)
-    expect(updateSpy).toHaveBeenCalledWith('b1', { isExpanded: false })
+    expect(ui.expandedIds.includes('b1')).toBe(false)
+    expect(updateSpy).not.toHaveBeenCalled()
     expect(mocks.openDetail).not.toHaveBeenCalled()
+    expect(mocks.openBookmark).not.toHaveBeenCalled()
     updateSpy.mockRestore()
   })
 
-  it('list 布局 PC 端未展开点空白走 openDetail', async () => {
+  it('list 布局未展开点空白走 visit（主操作，不再弹详情面板）', async () => {
     ui.layoutMode = 'list'
-    mocks.isMobile.mockReturnValue(false)
     const w = mountCard()
     await w.vm.onCardClick({ target: makeTarget() } as any)
-    expect(mocks.openDetail).toHaveBeenCalledWith('b1')
-    expect(mocks.openBookmark).not.toHaveBeenCalled()
+    expect(mocks.openBookmark).toHaveBeenCalledTimes(1)
+    expect(mocks.openDetail).not.toHaveBeenCalled()
   })
 })
 
@@ -354,14 +354,15 @@ describe('BookmarkCard — onCardKeydown 分流契约', () => {
     expect(mocks.openBookmark).not.toHaveBeenCalled()
   })
 
-  it('action=expand/collapse/toggleExpand → toggleExpand（updateBookmark 翻转 isExpanded）', async () => {
+  it('action=expand/collapse/toggleExpand → toggleExpand（纯 UI 态翻转 expandedIds）', async () => {
     ui.layoutMode = 'list'
     mocks.isMobile.mockReturnValue(false)
     mocks.handleListCardKeydown.mockReturnValue({ type: 'expand' })
-    const w = mountCard({ bm: { isExpanded: false } })
+    const w = mountCard()
     const updateSpy = vi.spyOn(ds, 'updateBookmark').mockImplementation(() => ({} as any))
     await w.vm.onCardKeydown(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
-    expect(updateSpy).toHaveBeenCalledWith('b1', { isExpanded: true })
+    expect(ui.expandedIds.includes('b1')).toBe(true)
+    expect(updateSpy).not.toHaveBeenCalled()
     updateSpy.mockRestore()
   })
 
@@ -567,11 +568,12 @@ describe('BookmarkCard — 转发函数契约', () => {
     expect(mocks.openDetail).toHaveBeenCalledWith('b1')
   })
 
-  it('toggleExpand → updateBookmark 翻转 isExpanded + debouncedSave 触发', async () => {
-    const w = mountCard({ bm: { isExpanded: false } })
+  it('toggleExpand → 纯 UI 态翻转 expandedIds，零数据写（不 updateBookmark 不落盘）', async () => {
+    const w = mountCard()
     const updateSpy = vi.spyOn(ds, 'updateBookmark').mockImplementation(() => ({} as any))
     await w.vm.toggleExpand()
-    expect(updateSpy).toHaveBeenCalledWith('b1', { isExpanded: true })
+    expect(ui.expandedIds.includes('b1')).toBe(true)
+    expect(updateSpy).not.toHaveBeenCalled()
     updateSpy.mockRestore()
   })
 })

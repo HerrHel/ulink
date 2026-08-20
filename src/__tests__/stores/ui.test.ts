@@ -26,6 +26,64 @@ describe('UIStore', () => {
       expect(store.detailCards).toEqual([])
       expect(store.panels.detail).toBe(false)
       expect(store.panels.rail).toBe(false)
+      expect(store.expandedIds).toEqual([])
+    })
+  })
+
+  describe('列表展开态（expandedIds）', () => {
+    it('toggleExpanded 翻转加入/移除 id', () => {
+      store.toggleExpanded('b1')
+      expect(store.expandedIds).toEqual(['b1'])
+      store.toggleExpanded('b1')
+      expect(store.expandedIds).toEqual([])
+      // 书签与组 id 统一存放互不干扰
+      store.toggleExpanded('b1')
+      store.toggleExpanded('g1')
+      expect(store.expandedIds).toEqual(['b1', 'g1'])
+    })
+
+    it('collapseAllExpanded 清空全部', () => {
+      store.expandedIds = ['b1', 'g1']
+      store.collapseAllExpanded()
+      expect(store.expandedIds).toEqual([])
+    })
+
+    it('saveUIState 序列化 expandedIds；restoreUIState 恢复并过滤已删/软删项', () => {
+      const dataStore = useDataStore()
+      dataStore.bookmarks = [
+        { id: 'live', title: 't', url: 'u', isExpanded: false, deletedAt: null } as any,
+        { id: 'gone', title: 't2', url: 'u2', isExpanded: false, deletedAt: 123 } as any,
+      ]
+      dataStore.siblingGroups = [
+        { id: 'glive', name: 'g', categoryId: 'c', isExpanded: false, deletedAt: null } as any,
+      ]
+      ;(dataStore as any)._syncMaps()
+
+      store.expandedIds = ['live', 'gone', 'glive']
+      store.saveUIState()
+      const saved = JSON.parse((localStorage.setItem as any).mock.calls[0][1])
+      expect(saved.expandedIds).toEqual(['live', 'gone', 'glive'])
+
+      store.expandedIds = []
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({ expandedIds: ['live', 'gone', 'glive'] }))
+      store.restoreUIState()
+      // gone 已软删被过滤
+      expect(store.expandedIds).toEqual(['live', 'glive'])
+    })
+
+    it('restoreUIState 存量迁移：数据层 isExpanded=true 一次性读入 expandedIds，不写回', () => {
+      const dataStore = useDataStore()
+      dataStore.bookmarks = [
+        { id: 'b1', title: 't', url: 'u', isExpanded: true, deletedAt: null } as any,
+        { id: 'b2', title: 't2', url: 'u2', isExpanded: false, deletedAt: null } as any,
+      ]
+      dataStore.siblingGroups = [
+        { id: 'g1', name: 'g', categoryId: 'c', isExpanded: true, deletedAt: null } as any,
+      ]
+      ;(dataStore as any)._syncMaps()
+
+      store.restoreUIState()
+      expect(store.expandedIds).toEqual(['b1', 'g1'])
     })
   })
 

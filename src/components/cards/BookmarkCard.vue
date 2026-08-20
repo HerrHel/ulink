@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, isMobile, copyToClipboard, domain, displayText, stripEntranceAnim, faviconInitials } from '../../utils.js'
+import { favicon, getTagNames, copyToClipboard, domain, displayText, stripEntranceAnim, faviconInitials } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { decryptPasswordWithKey } from '../../crypto.js'
 import { highlight } from './highlight.js'
@@ -167,7 +167,7 @@ const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttr
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])
 const hasExpandableContent = computed(() => !!(displayText(props.bookmark.username) || props.bookmark.password || children.value.length))
 const previewText = computed(() => bookmarkPreview(props.bookmark))
-const isExpanded = computed(() => uiStore.layoutMode === 'list' && props.bookmark.isExpanded && !uiStore.batchMode)
+const isExpanded = computed(() => uiStore.layoutMode === 'list' && uiStore.expandedIds.includes(props.bookmark.id) && !uiStore.batchMode)
 const isSelected = computed(() => (uiStore.batchSelected ?? []).includes(props.bookmark.id))
 const isDeadLink = computed(() => !!props.bookmark.attributes?.['dead-link'])
 const isGfwBlocked = computed(() => !!props.bookmark.attributes?.['gfw-blocked'])
@@ -201,8 +201,8 @@ function doOpenDetail(bmId: string) { openDetail(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
 function openMenu() { openDetail(props.bookmark.id) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }
-function toggleExpand() { dataStore.updateBookmark(props.bookmark.id, { isExpanded: !props.bookmark.isExpanded }); debouncedSaveAppData() }
-// 完整分区：PC 列表可键盘聚焦；Enter 打开，Space/→ 展开；空白单击开详情
+function toggleExpand() { uiStore.toggleExpanded(props.bookmark.id) }
+// 完整分区：PC 列表可键盘聚焦；Enter 打开，Space 详情，→/← 展开收起；空白单击主操作
 const listKeyboardNav = computed(() => uiStore.layoutMode === 'list' && !uiStore.isMobile && !uiStore.batchMode)
 // 列表空白区排除：按钮/标签/标题/logo 等已有独立行为
 const LIST_INTERACTIVE_SEL = 'button, input, .btn-xs, .card-actions, .card-logo, .card-titlewrap, [contenteditable="true"], .gic-btn, .gic-remove, .gic-name, .acct-copy-btn, .acct-show-pw, .list-expand-btn, .card-menu-btn, .card-tag, .card-acct-toggle, .acct-row'
@@ -212,14 +212,10 @@ function onCardClick(e: MouseEvent) {
   if (uiStore.layoutMode === 'mini-grid') { visit(); return }
   if (uiStore.layoutMode !== 'list') return
   if ((e.target as HTMLElement).closest(LIST_INTERACTIVE_SEL)) return
-  if (isMobile()) {
-    // 移动端：非交互区单击打开网页（详情由「⋯」触发）
-    visit()
-    return
-  }
-  // PC 列表：展开态点空白收起，未展开点空白打开详情
+  // 列表（PC/移动端一致）：展开态点空白收起；折叠态点空白 = 主操作（打开网页）。
+  // 与 mini-grid / 移动端行为对齐，详情改由「⋯」/右键/键盘 Space 显式触发。
   if (isExpanded.value) { toggleExpand(); return }
-  openDetail(props.bookmark.id)
+  visit()
   // 便于紧接着用键盘继续操作
   ;(cardEl.value as HTMLElement | null)?.focus({ preventScroll: true })
 }

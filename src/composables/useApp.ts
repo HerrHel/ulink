@@ -7,20 +7,16 @@
 import { watch } from 'vue'
 import { useUIStore } from '../stores/ui.js'
 import { useContextMenuStore } from '../stores/contextMenu.js'
-import { useActionSheetStore } from '../stores/actionSheet.js'
-import { useDataStore } from '../stores/data.js'
-import { toggleGroupFocus, removeBmFromGroup, removeGroupRef, editGroup, deleteGroup } from './domain/useGroup.js'
-import { visit, openBmModal, deleteBookmarkWithUndo as deleteBookmark } from './domain/useBookmark.js'
+import { toggleGroupFocus, removeBmFromGroup, removeGroupRef } from './domain/useGroup.js'
+import { visit } from './domain/useBookmark.js'
 import { openDetail } from './ui/useUI.js'
-import { shareGroup } from './domain/useDataShare.js'
-import { useSpaceMove } from './domain/useSpaceMove.js'
+import { buildLongPressItems } from '../lib/menuConfig.js'
 import { useGlobalEvents } from './useGlobalEvents.js'
 import { useScrollHeader } from './interaction/useScrollHeader.js'
 import { useResize } from './interaction/useResize.js'
 import { useKeyboard } from './interaction/useKeyboard.js'
 import { useDragDrop } from './interaction/useDragDrop.js'
 import { useLongPress } from './interaction/useLongPress.js'
-import { debouncedSaveAppData } from '../stores/app.js'
 
 export function useApp() {
   // ── 0. 初始化 is-mobile class（CSS 据此区分真手机 vs PC 窄窗口） ──
@@ -32,49 +28,11 @@ export function useApp() {
   // ── 1. 注册全局交互 composables ──
   useScrollHeader(); useResize(); useKeyboard(); useDragDrop()
 
-  // ── 2. 长按操作菜单 ──
-  const spaceMove = useSpaceMove()
+  // ── 2. 长按操作菜单（menuConfig 单一来源：LONGPRESS_RULES + buildLongPressItems）──
   const longPress = useLongPress((card) => {
     const bmId = card.dataset.id; const gid = card.dataset.groupId
-    const dataStore = useDataStore()
-    if (bmId) {
-      const bm = dataStore.bookmarkMap[bmId]
-      const isMain = useUIStore().curSpace === 'main'
-      const items: Array<{ label: string; action: () => void; danger?: boolean }> = []
-      // 列表视图下书签有账户信息或子站时可展开/收起（移动端无独立按钮，放进长按菜单）
-      const canExpand = !!bm && useUIStore().layoutMode === 'list'
-        && !!(bm.username || bm.password || (dataStore.childrenMap[bmId]?.length))
-      if (canExpand) {
-        items.push({ label: bm?.isExpanded ? '收起' : '展开', action: () => { dataStore.updateBookmark(bmId, { isExpanded: !bm?.isExpanded }); debouncedSaveAppData() } })
-      }
-      items.push({ label: bm?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('bookmark', bmId); debouncedSaveAppData() } })
-      items.push({ label: '打开链接', action: () => visit(null, bmId) })
-      items.push({ label: '查看详情', action: () => openDetail(bmId) })
-      items.push({ label: '编辑', action: () => openBmModal(bmId) })
-      items.push({ label: '移动到', action: () => useActionSheetStore().showBmCategoryPicker(bmId) })
-      if (isMain) items.push({ label: '设为私密', action: () => spaceMove.moveBookmarksToVault([bmId]) })
-      items.push({ label: '删除', action: () => deleteBookmark(bmId), danger: true })
-      return items
-    }
-    if (gid) {
-      const g = dataStore.groupMap[gid]
-      const isMain = useUIStore().curSpace === 'main'
-      const items: Array<{ label: string; action: () => void; danger?: boolean }> = []
-      // 列表视图下组有笔记时可展开/收起（移动端无独立按钮，放进长按菜单）
-      const canExpand = !!g && useUIStore().layoutMode === 'list' && !!(g.notes && g.notes.trim())
-      if (canExpand) {
-        items.push({ label: g?.isExpanded ? '收起' : '展开', action: () => { dataStore.updateGroup(gid, { isExpanded: !g?.isExpanded }); debouncedSaveAppData() } })
-      }
-      items.push({ label: g?.pinnedAt ? '取消置顶' : '置顶', action: () => { dataStore.togglePin('group', gid); debouncedSaveAppData() } })
-      items.push({ label: '查看详情', action: () => openDetail('group:' + gid) })
-      items.push({ label: '聚焦编辑', action: () => toggleGroupFocus(gid) })
-      items.push({ label: '编辑组', action: () => editGroup(gid) })
-      items.push({ label: '移动到', action: () => useActionSheetStore().showGroupCategoryPicker(gid) })
-      if (isMain) items.push({ label: '设为私密', action: () => spaceMove.moveGroupsToVault([gid]) })
-      items.push({ label: '分享组', action: () => shareGroup(gid) })
-      items.push({ label: '删除组', action: () => deleteGroup(gid), danger: true })
-      return items
-    }
+    if (bmId) return buildLongPressItems('card', bmId)
+    if (gid) return buildLongPressItems('group', gid)
     return null
   })
   // H17：fired 现为 Ref，直接 watch 该 ref 即可响应长按触发

@@ -22,9 +22,14 @@ const securityHeaders: Record<string, string> = {
   //   放大数据外泄面。收紧前先统一死链走 Edge、去掉浏览器直连任意 URL。
   // L1：已记录架构取舍，死链改走 Edge 后收窄 connect-src（去掉 https: 通配）。
   // 勿在未改 checkDirect 前私自收紧，否则死链检测失效。
+  // worker-src 'self' blob:：Vite dev/preview client 断线重连时用 blob Worker 做
+  // 心跳 ping（waitForSuccessfulPing），未显式声明 worker-src 时回退 script-src
+  // （无 blob:）会拦截 → HMR 无法自动恢复。blob worker 脚本源自页面自身同源 JS，
+  // 风险可控。生产部署（GitHub Pages 不带 CSP 头）不受影响。
   'Content-Security-Policy': [
     "default-src 'self'",
     "script-src 'self'",
+    "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
     "connect-src 'self' https: wss://*.supabase.co",
@@ -47,6 +52,8 @@ function headersPlugin(): Plugin {
         const devCSP = [
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          // HMR 断线重连的 blob Worker 心跳（waitForSuccessfulPing）必须放行 blob:
+          "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "img-src 'self' data: https:",
           "connect-src 'self' ws: wss: https:",

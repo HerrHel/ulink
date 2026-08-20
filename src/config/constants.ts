@@ -40,6 +40,12 @@ export const ACTIONS: Record<string, string> = {
   RENAME_ATTR: 'renameAttr',
   DETAIL: 'detail',
   PIN: 'pin',
+  /** 复制网址（右键/长按菜单书签主项，替代打开网站——行主体单击即主操作） */
+  COPY_URL: 'copyUrl',
+  /** 列表模式展开/收起（长按菜单条件项） */
+  EXPAND: 'expand',
+  /** 聚焦编辑组（长按菜单） */
+  FOCUS: 'focus',
 }
 
 export const DEFAULTS: AppData = {
