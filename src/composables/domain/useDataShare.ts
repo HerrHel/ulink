@@ -9,7 +9,7 @@ import { toast } from '../../lib/toast.js'
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
-import { SHARE_FUNCTION_BASE } from '../../config/urls.js'
+import { SHARE_BASE } from '../../config/urls.js'
 import { newId as genId } from '../../lib/newId.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
@@ -31,10 +31,10 @@ export async function shareGroup(gid: string) {
     }
   }
 
-  // 分享链接指向 SSR Edge Function（share-html）：爬虫与人类都拿到预渲染页，
-  // 社交预览 / 搜索引擎能读到服务端注入的 og:* 元数据。
-  // 旧 /s/<gid> 纯 SPA 路由（detectShareRoute）保留，作为向后兼容兜底。
-  const url = `${SHARE_FUNCTION_BASE}?gid=${gid}`
+  // 分享链接指向同域 SSR 路径（https://ulink.ren/s/<gid>）：Cloudflare Pages Function
+  // 在服务端渲染完整 HTML，爬虫与人类拿到同一份预渲染页，社交预览 / 搜索引擎可读 og:*。
+  // 旧链接（supabase 函数域 / #share/<gid> SPA 路由）由各端保留作向后兼容兜底。
+  const url = `${SHARE_BASE}/${gid}`
   copyToClipboard(url, '分享链接')
 }
 

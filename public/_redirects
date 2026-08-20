@@ -1,0 +1,3 @@
+# SPA fallback：真实存在的静态资源优先，未匹配路径回退到 index.html
+# /s/* 已被 Pages Functions（functions/_routes.json）优先接管，不受此规则影响
+/*    /index.html   200

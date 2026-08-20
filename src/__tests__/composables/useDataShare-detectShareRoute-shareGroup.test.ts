@@ -18,9 +18,9 @@
  *   - sg 已 isPublic=true → 跳过 setGroupPublic 直接 copyToClipboard(<SSR 函数 url>)
  *   - sg.isPublic=false + setGroupPublic 成功 → copyToClipboard
  *   - sg.isPublic=false + setGroupPublic 失败 → toast('分享需登录') + return 不 copy
- *   - 生成 url = `${SHARE_FUNCTION_BASE}?gid=<gid>`（SSR Edge Function，爬虫/人类拿到预渲染页），
- *     与 location.pathname/origin 解耦；旧 /s/<gid> + #share/<gid> 路由（detectShareRoute）
- *     保留作向后兼容兜底
+ *   - 生成 url = `${SHARE_BASE}/${gid}`（同域 SSR https://ulink.ren/s/<gid>，爬虫/人类拿到
+ *     预渲染页），与 location.pathname/origin 解耦；旧链接（supabase 函数域 / /s/<gid> +
+ *     #share/<gid> 路由）保留作向后兼容兜底
  *
  * 口径：纯加测试零源文件改动。detectShareRoute 直接 import 调（纯函数 location 读取，
  * 用 history.pushState 同时设 pathname + hash——不用 Object.defineProperty 覆盖 window.location，
@@ -56,16 +56,14 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
   useCloudSync: () => ({ fullSync: vi.fn(async () => {}), fetchPublicGroup: vi.fn() }),
 }))
 
-// ── SHARE_FUNCTION_BASE 钉为确定值 ──
-// CI 的 Unit Tests 步骤不注入 VITE_SUPABASE_URL（secrets 仅 build 步骤注入），
-// 否则 urls.ts 推导塌缩成纯路径 `/functions/v1/share-html`，下面 4 个断言期望完整
-// 域名 `https://<ref>.supabase.co/functions/v1/share-html` 会整组挂。钉死该导出使测试
-// 不依赖外部 env，本地/CI 一致；同时仍验证 shareGroup 用 SHARE_FUNCTION_BASE 且与 location 解耦。
+// ── SHARE_BASE 钉为确定值 ──
+// SHARE_BASE 在 urls.ts 中由 APP_CANONICAL_BASE 推导（恒定 https://ulink.ren/s，不依赖 env），
+// 显式钉死使测试与推导实现解耦、意图清晰；同时仍验证 shareGroup 用 SHARE_BASE 且与 location 解耦。
 vi.mock('../../config/urls.js', async () => {
   const actual = await vi.importActual<typeof import('../../config/urls.js')>('../../config/urls.js')
   return {
     ...actual,
-    SHARE_FUNCTION_BASE: 'https://yqouglfopbmujkqmjgpu.supabase.co/functions/v1/share-html',
+    SHARE_BASE: 'https://ulink.ren/s',
   }
 })
 
@@ -187,11 +185,11 @@ describe('shareGroup 分享编排契约', () => {
     await shareGroup('g-already')
 
     // setGroupPublic mock 未被 require（因 sg 已 public 跳过）：经 import spy 间接验——
-    // 直接断 copyToClipboard 被调 + url = SHARE_FUNCTION_BASE?gid=<gid>
-    const SHARE_FN = 'https://yqouglfopbmujkqmjgpu.supabase.co/functions/v1/share-html'
+    // 直接断 copyToClipboard 被调 + url = SHARE_BASE/<gid>（同域 SSR）
+    const SHARE_BASE = 'https://ulink.ren/s'
     expect(_copy.copyToClipboardSpy).toHaveBeenCalledTimes(1)
     const url = _copy.copyToClipboardSpy.mock.calls[0][0] as string
-    expect(url).toBe(`${SHARE_FN}?gid=g-already`)
+    expect(url).toBe(`${SHARE_BASE}/g-already`)
   })
 
   it('sg.isPublic=false + setGroupPublic 成功 → copy url', async () => {
@@ -201,10 +199,10 @@ describe('shareGroup 分享编排契约', () => {
     const { shareGroup } = await import('../../composables/domain/useDataShare.js')
     await shareGroup('g-new')
 
-    const SHARE_FN = 'https://yqouglfopbmujkqmjgpu.supabase.co/functions/v1/share-html'
+    const SHARE_BASE = 'https://ulink.ren/s'
     expect(_copy.copyToClipboardSpy).toHaveBeenCalledTimes(1)
     const url = _copy.copyToClipboardSpy.mock.calls[0][0] as string
-    expect(url).toBe(`${SHARE_FN}?gid=g-new`)
+    expect(url).toBe(`${SHARE_BASE}/g-new`)
   })
 
   it('sg.isPublic=false + setGroupPublic 失败 → toast("分享需登录") + return 不 copy', async () => {
@@ -217,22 +215,22 @@ describe('shareGroup 分享编排契约', () => {
     expect(_copy.copyToClipboardSpy).not.toHaveBeenCalled()
   })
 
-  it('链接与部署子路径/根路径无关：始终 = SHARE_FUNCTION_BASE?gid=<gid>', async () => {
-    const SHARE_FN = 'https://yqouglfopbmujkqmjgpu.supabase.co/functions/v1/share-html'
+  it('链接与部署子路径/根路径无关：始终 = SHARE_BASE/<gid>', async () => {
+    const SHARE_BASE = 'https://ulink.ren/s'
     // 部署在子路径 /linkvault/ 下：旧实现会拼 origin+/linkvault/；新实现与 location 无关
     await seedGroup('g-deploy', true)
     setLocation('/linkvault/bookmarks')
     const { shareGroup } = await import('../../composables/domain/useDataShare.js')
     await shareGroup('g-deploy')
-    expect(_copy.copyToClipboardSpy.mock.calls[0][0]).toBe(`${SHARE_FN}?gid=g-deploy`)
+    expect(_copy.copyToClipboardSpy.mock.calls[0][0]).toBe(`${SHARE_BASE}/g-deploy`)
   })
 
-  it('根路径部署同样走 SSR 函数 url（无 /s/<gid> 后缀）', async () => {
-    const SHARE_FN = 'https://yqouglfopbmujkqmjgpu.supabase.co/functions/v1/share-html'
+  it('根路径部署同样走同域 SSR url（https://ulink.ren/s/<gid>）', async () => {
+    const SHARE_BASE = 'https://ulink.ren/s'
     await seedGroup('g-root', true)
     setLocation('/bookmarks')
     const { shareGroup } = await import('../../composables/domain/useDataShare.js')
     await shareGroup('g-root')
-    expect(_copy.copyToClipboardSpy.mock.calls[0][0]).toBe(`${SHARE_FN}?gid=g-root`)
+    expect(_copy.copyToClipboardSpy.mock.calls[0][0]).toBe(`${SHARE_BASE}/g-root`)
   })
 })

@@ -105,7 +105,7 @@ composables 按职责分三组：
 - `components/overlays/` — ContextMenu、ActionSheet、BatchPopover、SearchSuggest、ToastContainer、MentionDropdown、AddPopover、AttrDropdown、CommandPalette、DeadLinksPopover、SyncConflictBanner
 - `components/shell/` — AppHeader、AppNav、FilterBar、BatchBar、BatchBottom、DetailPanel、SettingsPanel、AttrChips
 - 分享功能（原 `components/share/` 空占位目录已移除）：公开分享与 Fork 的实现位于 `views/ShareView.vue`（分享页 SPA UI，兼容兜底）+ `composables/domain/useDataShare.ts`（分享/Fork 逻辑 + 链接生成）+ `composables/domain/syncShare.ts`（云端公开读写）；后端公开读见 supabase migrations 005/010/012/013/014/015/018 与 `get_public_group` RPC。
-- **分享页 SSR（解决 OG 预览/SEO）**：`supabase/functions/share-html/index.ts` 是 Supabase Edge Function（Deno），取数与渲染 HTML 拆为纯函数（不碰 Deno 特有 API，便于迁 Netlify/Vercel），复用 `get_public_group` RPC，渲染 head 元数据 + 书签列表 + JSON-LD；og:image 一期用静态品牌图 `public/share-cover.png`；分享链接由 `SHARE_FUNCTION_BASE`（`src/config/urls.ts`）收口，指向该函数 `?gid=<gid>`。旧 `/s/<gid>` SPA 路由保留作向后兼容。
+- **分享页 SSR（解决 OG 预览/SEO）——终态同域**：分享链接为 `https://ulink.ren/s/<gid>`（`SHARE_BASE`，`src/config/urls.ts`），由 Cloudflare Pages Function `functions/s/[gid].ts` 服务端渲染（`functions/_routes.json` 仅 `/s/*` 走函数，`public/_redirects` 兜 SPA fallback）；渲染核为可移植纯函数 `functions/_lib/share-render.ts`（零运行时依赖）。历史方案 `supabase/functions/share-html/index.ts`（Deno Edge Function）保留作旧链接兜底，其渲染部分与 `share-render.ts` 保持同步。数据复用 `get_public_group` RPC；og:image 用静态品牌图 `public/share-cover.png`。部署：`npm run pages:deploy`（wrangler，项目 linkvault，env：SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN）。
 - `components/ui/` — E2ELockOverlay（主密码锁定覆盖层）、ErrorBoundary
 
 ### src/config/

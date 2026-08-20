@@ -25,3 +25,4 @@ task_plan.md
 /playwright-report/
 supabase/.temp/
 /extension/lib/supabase.js
+.dev.vars

@@ -65,22 +65,34 @@ supabase secrets set APP_ORIGIN=https://ulink.ren
 
 ## 链接生成
 
-前端 `useDataShare.shareGroup` 通过 `SHARE_FUNCTION_BASE`（`src/config/urls.ts`）
-拼出 `${SHARE_FUNCTION_BASE}?gid=<gid>`，由 VITE_SUPABASE_URL 自动推导函数域名。
-**未配置 Supabase 时为空串**——但分享本身要求登录云同步（`setGroupPublic` 需
-userId），未配置时不会走到生成链接分支。
+前端 `useDataShare.shareGroup` 通过 `SHARE_BASE`（`src/config/urls.ts`）拼出
+**同域链接** `https://ulink.ren/s/<gid>`（终态，由 Cloudflare Pages Function 服务端渲染）。
+旧 `SHARE_FUNCTION_BASE`（Supabase 函数域）保留导出，仅作旧链接向后兼容。
 
 ## 与 SPA 路由的关系
 
 旧 `/s/<gid>` + `#share/<gid>` 路由（`detectShareRoute` + `ShareView.vue`）保留：
-- 分享链接指向函数 URL（主入口，OG 友好）
-- 函数底部按钮跳转 `${APP_ORIGIN}/s/<gid>`（人类点击进 SPA 走"复制到我的库"流程）
-- 旧链接（直接粘 `/s/<gid>`）仍能自举 SPA（404.html 兜底，命中 `detectShareRoute`）
+- 分享链接指向同域 `/s/<gid>`（主入口，OG 友好）
+- 渲染页底部按钮跳转 `${APP_ORIGIN}/#share/<gid>`（人类点击进 SPA 走"复制到我的库"流程）
+- 旧链接（直接粘 `/s/<gid>`）仍能自举 SPA（GitHub Pages 404.html 兜底，命中 `detectShareRoute`）
 
-## 未来：迁自有域名（Netlify / Vercel / Cloudflare Pages）
+## 终态：Cloudflare Pages 同域 SSR（2026-08-21 已落地）
 
-把 `index.ts` 里的渲染核（`esc` / `fixUrl` / `buildHead` / `buildBody` /
-`buildItemListJsonLd` / `renderSharePage`）原样搬到新平台的 edge function，仅
-把 `serve` 入口换成该平台的 handler，把 `Deno.env.get` 换成 `process.env` / 平台
-对应 env API，`get_public_group` 调用方式保持一致。终态：分享链接 = `https://你的域名/s/<gid>`，
-同域直接 SSR，`APP_CANONICAL_BASE` 也换成你的域名（`src/config/urls.ts` 单源收口）。
+分享链接已从 Supabase 函数域升级为**同域 `https://ulink.ren/s/<gid>`**：
+
+- **渲染核**：`functions/_lib/share-render.ts`（与 `supabase/functions/share-html/index.ts`
+  渲染部分同步的纯函数，零运行时依赖，可继续平移到任意 edge 平台）。
+- **入口**：`functions/s/[gid].ts`（Pages Function，`GET /s/<gid>`），复用
+  `get_public_group` RPC（anon key + 列级隔离），输出与 Deno 版一致的 HTML。
+- **路由**：`functions/_routes.json` 仅 `/s/*` 走 Function；`public/_redirects`
+  提供 SPA fallback（`/* /index.html 200`），真实静态资源优先。
+- **环境变量**（Cloudflare Pages → Settings → Environment variables）：
+  `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `APP_ORIGIN=https://ulink.ren`。
+- **部署**：
+  ```bash
+  npm run pages:deploy   # = npm run build && npx wrangler pages deploy dist --project-name linkvault
+  ```
+  首次需 `npx wrangler login`。自定义域在 CF Dashboard → Workers & Pages → 项目 →
+  Custom domains 添加 `ulink.ren`，并按提示把 DNS（DNSPod）改为 CNAME 指向
+  `<project>.pages.dev`（apex 需 CNAME 扁平化）。
+- **Deno 版（Supabase 函数）保留**作旧链接兜底，DNS 切换完成后可下线。

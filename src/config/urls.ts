@@ -25,9 +25,17 @@ export const NETWORK_PROBE_URLS: readonly string[] = [
 export const APP_CANONICAL_BASE = 'https://ulink.ren/'
 
 /**
- * 公开分享页 SSR 函数基址（Supabase Edge Function `share-html`）。
+ * 同域分享链接基址（终态）：`https://ulink.ren/s/<gid>`。
+ * 由 Cloudflare Pages Function（functions/s/[gid].ts）在服务端渲染完整 HTML，
+ * canonical / og:url / og:image 与站点同域，社交爬虫可直接读到结构化数据。
+ * 与 APP_CANONICAL_BASE 同源收口，换域名只改一处。
+ */
+export const SHARE_BASE = `${APP_CANONICAL_BASE.replace(/\/+$/, '')}/s`
+
+/**
+ * 公开分享页 SSR 函数基址（Supabase Edge Function `share-html`，跨域止血方案）。
  * 分享链接由 `${SHARE_FUNCTION_BASE}?gid=<gid>` 生成，爬虫与人类都拿到预渲染 HTML。
  * 由 VITE_SUPABASE_URL 推导（`https://<ref>.supabase.co` + `/functions/v1/share-html`）。
- * 未配置 Supabase 时为空串——但分享功能本身要求登录云同步，未配置时不会走到生成链接。
+ * 同域 SSR 上线后此函数保留作向后兼容兜底（旧链接仍可访问），不再用于新链接生成。
  */
 export const SHARE_FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/share-html`
