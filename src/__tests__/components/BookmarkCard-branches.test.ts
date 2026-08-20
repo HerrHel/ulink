@@ -114,7 +114,6 @@ import BookmarkCard from '../../components/cards/BookmarkCard.vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useE2EStore } from '../../stores/e2e.js'
-import { useContextMenuStore } from '../../stores/contextMenu.js'
 import type { Bookmark } from '../../types.js'
 
 // ---- bookmark fixture ----
@@ -563,23 +562,10 @@ describe('BookmarkCard — 转发函数契约', () => {
     expect((mocks.openBookmark.mock.calls[0] as any[])[0]).toBe(sub)
   })
 
-  it('openMenu：移动端 → openDetail(bookmark.id)', async () => {
-    ui.isMobile = true
+  it('openMenu → openDetail(bookmark.id)', async () => {
     const w = mountCard()
-    await w.vm.openMenu({ clientX: 10, clientY: 20 } as MouseEvent)
+    await w.vm.openMenu()
     expect(mocks.openDetail).toHaveBeenCalledWith('b1')
-  })
-
-  it('openMenu：PC 列表 → 打开上下文菜单（card 类型）', async () => {
-    ui.isMobile = false
-    ui.layoutMode = 'list'
-    const w = mountCard()
-    const ctx = useContextMenuStore()
-    await w.vm.openMenu({ clientX: 30, clientY: 40 } as MouseEvent)
-    expect(ctx.open).toBe(true)
-    expect(ctx.type).toBe('card')
-    expect(ctx.id).toBe('b1')
-    expect(mocks.openDetail).not.toHaveBeenCalled()
   })
 
   it('toggleExpand → 纯 UI 态翻转 expandedIds，零数据写（不 updateBookmark 不落盘）', async () => {

@@ -151,15 +151,37 @@
 .list-view .card-acct-body,
 .list-view .sub-sites{display:none}
 
-/* ---- List: 底部操作条收敛进「⋯」菜单（grid/mini-grid/focus 保留 foot）---- */
-.list-view .card-foot{display:none}
+/* ---- List: card footer hidden by default (shown on hover/expanded) ---- */
+.list-view .card-foot{
+  position:absolute;top:8px;right:10px;
+  padding:4px;border-top:none;
+  background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-md);
+  display:none;grid-template-columns:repeat(3,32px);
+  gap:4px;z-index:5;
+  opacity:0;
+  box-shadow:var(--shadow-sm);
+  transition:opacity 0.2s var(--ease-out);
+}
+.list-view .card-foot .card-actions{display:contents}
+.list-view .card-foot .card-stat,
+.list-view .btn-undo-group,
+.list-view .btn-redo-group{display:none}
 
+/* 鼠标悬停时显示操作按钮（仅桌面端） */
+@media (hover: hover) and (pointer: fine) {
+  .list-view .card:hover .card-foot,
+  .list-view .group-card:hover .card-foot{
+    display:grid;
+    opacity:1;
+    animation:fadeInSubtle 0.15s ease;
+  }
+}
 @keyframes fadeInSubtle{
   from{opacity:0;transform:translateY(-6px) scale(0.95)}
   to{opacity:1;transform:translateY(0) scale(1)}
 }
 
-/* ---- List: expand button（PC/移动端均显示；移动端右移避开「⋯」按钮）---- */
+/* ---- List: expand button (桌面端列表保留；移动端由「⋯」详情按钮替代) ---- */
 .list-view .list-expand-btn{
   display:flex;
   position:absolute;top:50%;right:8px;
@@ -174,7 +196,7 @@
 }
 .list-view .list-expand-btn:hover{color:var(--accent)}
 .list-view .list-expand-btn:active{transform:translateY(-50%) scale(0.95);transition-duration:0.06s}
-/* 电脑端：展开按钮移到右下角，不与右侧「⋯」重叠 */
+/* 电脑端：展开按钮移到右下角，避免与悬浮操作按钮重叠 */
 @media(min-width:769px){
   .list-view .list-expand-btn{
     top:auto;bottom:6px;right:8px;
@@ -182,11 +204,11 @@
   }
   .list-view .list-expand-btn:active{transform:scale(0.95);transition-duration:0.06s}
 }
-/* 移动端：展开按钮右移至 ⋯（right:6px）左侧并排 */
+/* 移动端隐藏展开/收起键，改用「⋯」详情按钮 */
 @media(max-width:768px){
-  .list-view .list-expand-btn{right:48px}
+  .list-view .list-expand-btn{display:none}
 }
-/* ── 列表模式「⋯」更多按钮：移动端常显（详情面板）；PC hover 显示（上下文菜单）── */
+/* ── 列表模式「⋯」详情按钮（仅移动端，桌面端用 hover card-foot）── */
 .list-view .card-menu-btn{
   display:none;
   position:absolute;top:50%;right:6px;
@@ -204,11 +226,6 @@
 .list-view .card-menu-btn svg{width:18px;height:18px}
 @media(max-width:768px){
   .list-view .card-menu-btn{display:flex}
-}
-/* PC 列表：hover 行时显示「⋯」更多（点击开上下文菜单，替代原底部悬浮操作条） */
-@media(hover:hover) and (pointer:fine){
-  .list-view .card:hover .card-menu-btn,
-  .list-view .group-card:hover .card-menu-btn{display:flex}
 }
 .list-view .card:has(.batch-chk) .list-expand-btn,
 .list-view .card:has(.batch-chk) .card-menu-btn{display:none}
@@ -321,10 +338,12 @@
 .list-view .group-expanded .btn-undo-group,
 .list-view .group-expanded .btn-redo-group{display:inline-flex}
 
-/* 列表展开态也不显示 foot（操作已收敛进「⋯」菜单，见 .list-view .card-foot{display:none}） */
+/* Hide expand-btn, show footer when expanded */
 .list-view .card-expanded .card-foot,
 .list-view .group-expanded .card-foot{
-  display:none;
+  display:grid;
+  opacity:1;
+  gap:4px;
 }
 
 /* Hidden domain placeholder (group cards) */

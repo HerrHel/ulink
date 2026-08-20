@@ -95,8 +95,8 @@
         <button class="btn-xs btn-danger" @click.stop="delGrp" title="删除组" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode" class="card-menu-btn" @click.stop="openMenu($event)" :title="ui.isMobile ? '详情' : '更多操作'" :aria-label="ui.isMobile ? '详情' : '更多操作'" v-html="I.dotsV"></button>
+    <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
     <div v-if="ui.batchMode && ui.isMobile && ui.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
   <Teleport to="body">
@@ -115,7 +115,6 @@ import ColorPalette from '../editor/ColorPalette.vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useUndoStore } from '../../stores/undo.js'
-import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
@@ -230,11 +229,7 @@ function filterByTagName(name: string) {
   const attr = ds.attributeByName[name]
   if (attr) toggleAttrFilter(attr.id)
 }
-function openMenu(e: MouseEvent) {
-  // 移动端：⋯ = 打开详情面板（抽屉）；PC 列表：⋯ = 上下文菜单（收敛编辑/删除/复制等）
-  if (ui.isMobile) { openDetail('group:' + props.group.id); return }
-  useContextMenuStore().show(e, 'group', props.group.id)
-}
+function openMenu() { openDetail('group:' + props.group.id) }
 function toggleExpand() { ui.toggleExpanded(props.group.id) }
 function onFocusClick() {
   if (ui.batchMode) { toggleSelect(); return }
