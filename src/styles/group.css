@@ -290,6 +290,11 @@
   box-shadow:var(--shadow-xs);
 }
 .group-inline-card img,.group-inline-card svg{width:16px;height:16px;border-radius:2px;display:block;flex-shrink:0}
+/* BUMP-SPEC：特异性 (0,2,1) > editor.css 的 .group-body img/.group-tiptap img (0,1,1)。
+   否则 editor.css 后加载的 width:auto;height:auto 会覆盖 16px，SVG 内禀尺寸大的图标（如 DeepSeek 鲸鱼 logo）
+   就会撑开 inline-card，组内书签图标大小不一。 */
+.group-body .group-inline-card img,.group-body .group-inline-card svg,
+.group-tiptap .group-inline-card img,.group-tiptap .group-inline-card svg{width:16px;height:16px;border-radius:2px;display:block;flex-shrink:0;max-width:16px;max-height:16px}
 .group-inline-card .gic-note-icon{display:inline-flex;align-items:center;color:var(--accent)}
 .group-inline-card .gic-name{color:var(--text);cursor:pointer;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .group-inline-card .gic-name:hover{color:var(--accent)}

@@ -14,6 +14,7 @@ import Image, { type ImageOptions } from '@tiptap/extension-image'
 import { getRenderedAttributes, mergeAttributes, ResizableNodeView } from '@tiptap/core'
 import type { NodeViewRenderer, NodeViewRendererProps } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { GROUP_IMAGES_PUBLIC_PREFIX } from './imageStorage.js'
 
 /** resize 期间由 NodeView 内联管理的属性（style 驱动，不写回 DOM attribute） */
 const RESIZE_ATTRS = new Set(['src', 'width', 'height'])
@@ -21,6 +22,21 @@ const RESIZE_ATTRS = new Set(['src', 'width', 'height'])
 export const UploadedImage = Image.extend({
   selectable: false,
   draggable: false,
+
+  // 只把「上传到 group-images bucket 的图片」解析为图片节点。
+  // favicon 图标（xinac 服务 / 书签自定义 icon / 卡片内 img）一律不解析——
+  // 避免浏览器默认拖入/粘贴的卡片 HTML 把图标误解析成图片节点（多出大图标、大小不一）。
+  parseHTML() {
+    return [{
+      tag: 'img[src]',
+      getAttrs: (el) => {
+        const src = (el as HTMLElement).getAttribute('src') || ''
+        if (!src.startsWith(GROUP_IMAGES_PUBLIC_PREFIX)) return false
+        if ((el as HTMLElement).closest('.group-inline-card')) return false
+        return {}
+      },
+    }]
+  },
 
   addOptions() {
     return {

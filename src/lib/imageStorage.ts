@@ -9,6 +9,10 @@ import { supabase, isSupabaseConfigured } from './supabase.js'
 
 export const GROUP_IMAGES_BUCKET = 'group-images'
 
+/** 本 bucket 的 public URL 前缀（未配置 Supabase 时为空字符串） */
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || ''
+export const GROUP_IMAGES_PUBLIC_PREFIX = SUPABASE_URL + '/storage/v1/object/public/group-images/'
+
 /** 匹配 public URL 中 bucket 后的对象路径（含中文/空格，取到引号/空白/闭合标签前） */
 const PUBLIC_PATH_RE = /\/object\/public\/group-images\/([^"'\s>]+)/g
 

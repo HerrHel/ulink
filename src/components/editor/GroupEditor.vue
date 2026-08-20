@@ -199,12 +199,20 @@ onMounted(() => {
         }
         return false
       },
-      // 拖拽外部图片文件：同上；拖拽编辑器内节点（无文件）交回 TipTap 处理
+      // 拖拽外部图片文件：同上
+      // 拖入 DOM/HTML（如书签卡片）：拦截浏览器默认插入——其 HTML 内的 favicon 图标
+      // 会被 Image 扩展误解析成图片节点（多出大图标）。项目内拖拽（书签/组）由
+      // useDragDrop 的 document 层 drop 处理插入 inlineCardHTML，冒泡不受影响。
       handleDrop: (_view, event) => {
         const files = Array.from(event.dataTransfer?.files || [])
         const imgs = files.filter(isImageFile)
         if (imgs.length) {
           void uploadAndInsertImages(props.groupId, imgs)
+          return true
+        }
+        const types = event.dataTransfer?.types || []
+        if (types.includes('text/html')) {
+          event.preventDefault()
           return true
         }
         return false
