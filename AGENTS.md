@@ -104,7 +104,8 @@ composables 按职责分三组：
 - `components/modals/` — BookmarkModal、CategoryModal、AttributeModal、GroupEditModal、ConfirmModal、AuthModal、HistoryPanel（版本历史 diff）、TrashPanel（回收站）、E2ESetupModal、E2EUnlockModal；辅助纯函数模块：bookmarkFormFilters.ts、formatTimeEpoch.ts、groupEditUrl.ts、trashOps.ts
 - `components/overlays/` — ContextMenu、ActionSheet、BatchPopover、SearchSuggest、ToastContainer、MentionDropdown、AddPopover、AttrDropdown、CommandPalette、DeadLinksPopover、SyncConflictBanner
 - `components/shell/` — AppHeader、AppNav、FilterBar、BatchBar、BatchBottom、DetailPanel、SettingsPanel、AttrChips
-- 分享功能（原 `components/share/` 空占位目录已移除）：公开分享与 Fork 的实现位于 `views/ShareView.vue`（分享页 UI）+ `composables/domain/useDataShare.ts`（分享/Fork 逻辑）+ `composables/domain/syncShare.ts`（云端公开读写）；后端公开读见 supabase migrations 005/010/012/013/014/015/018 与 `get_public_group` RPC
+- 分享功能（原 `components/share/` 空占位目录已移除）：公开分享与 Fork 的实现位于 `views/ShareView.vue`（分享页 SPA UI，兼容兜底）+ `composables/domain/useDataShare.ts`（分享/Fork 逻辑 + 链接生成）+ `composables/domain/syncShare.ts`（云端公开读写）；后端公开读见 supabase migrations 005/010/012/013/014/015/018 与 `get_public_group` RPC。
+- **分享页 SSR（解决 OG 预览/SEO）**：`supabase/functions/share-html/index.ts` 是 Supabase Edge Function（Deno），取数与渲染 HTML 拆为纯函数（不碰 Deno 特有 API，便于迁 Netlify/Vercel），复用 `get_public_group` RPC，渲染 head 元数据 + 书签列表 + JSON-LD；og:image 一期用静态品牌图 `public/share-cover.png`；分享链接由 `SHARE_FUNCTION_BASE`（`src/config/urls.ts`）收口，指向该函数 `?gid=<gid>`。旧 `/s/<gid>` SPA 路由保留作向后兼容。
 - `components/ui/` — E2ELockOverlay（主密码锁定覆盖层）、ErrorBoundary
 
 ### src/config/

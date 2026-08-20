@@ -9,6 +9,7 @@ import { toast } from '../../lib/toast.js'
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
+import { SHARE_FUNCTION_BASE } from '../../config/urls.js'
 import { newId as genId } from '../../lib/newId.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 
@@ -30,12 +31,10 @@ export async function shareGroup(gid: string) {
     }
   }
 
-  // 分享链接升级为 path 风格 /s/<gid> 主入口，并带 hash 兜底 #share/<gid>：
-  // - path 便于未来 SSR(Functions 可拦截)、URL 语义更清晰；
-  // - hash 兜底保证即便直 path 直达 fallback 失败，客户端 detectShareRoute 仍能解析。
-  // pathname.replace 去掉末段（首页空段或文件名），保留部署子路径前缀（如 /linkvault/）。
-  const base = location.pathname.replace(/\/[^/]*$/, '/') || '/'
-  const url = location.origin + base + 's/' + gid + '#share/' + gid
+  // 分享链接指向 SSR Edge Function（share-html）：爬虫与人类都拿到预渲染页，
+  // 社交预览 / 搜索引擎能读到服务端注入的 og:* 元数据。
+  // 旧 /s/<gid> 纯 SPA 路由（detectShareRoute）保留，作为向后兼容兜底。
+  const url = `${SHARE_FUNCTION_BASE}?gid=${gid}`
   copyToClipboard(url, '分享链接')
 }
 

@@ -23,3 +23,11 @@ export const NETWORK_PROBE_URLS: readonly string[] = [
 
 /** 站点 canonical 基址。部署到别处时仅改此处，避免 SEO canonical 写死错误（TECH_DEBT C 类）。 */
 export const APP_CANONICAL_BASE = 'https://herrhel.github.io/'
+
+/**
+ * 公开分享页 SSR 函数基址（Supabase Edge Function `share-html`）。
+ * 分享链接由 `${SHARE_FUNCTION_BASE}?gid=<gid>` 生成，爬虫与人类都拿到预渲染 HTML。
+ * 由 VITE_SUPABASE_URL 推导（`https://<ref>.supabase.co` + `/functions/v1/share-html`）。
+ * 未配置 Supabase 时为空串——但分享功能本身要求登录云同步，未配置时不会走到生成链接。
+ */
+export const SHARE_FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/share-html`
