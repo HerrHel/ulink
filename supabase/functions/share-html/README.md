@@ -34,11 +34,11 @@ supabase functions deploy share-html
 # 必设环境变量
 supabase secrets set SUPABASE_URL=https://<ref>.supabase.co
 supabase secrets set SUPABASE_ANON_KEY=<anon key>
-supabase secrets set APP_ORIGIN=https://herrhel.github.io
+supabase secrets set APP_ORIGIN=https://ulink.ren
 ```
 
 `APP_ORIGIN` 用于 og:image 绝对地址与底部「在 LinkVault 中打开」跳转地址，默认
-`https://herrhel.github.io`。**买自定义域名后只需改这一处**。
+`https://ulink.ren`。**买自定义域名后只需改这一处**。
 
 ## 契约
 

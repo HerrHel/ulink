@@ -10,7 +10,7 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://herrhel.github.io/*",
+    "https://ulink.ren/*",
     "http://localhost:5173/*",
     "https://localhost:5173/*"
   ],

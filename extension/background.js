@@ -2,7 +2,7 @@
 
 import { decideOpenPwa } from './pwa-open.js'
 
-const PWA_URL = 'https://herrhel.github.io'
+const PWA_URL = 'https://ulink.ren'
 // H10：仅按 PWA / 本地 dev 域名匹配已开标签，无需 tabs 权限遍历全部标签 URL
 const PWA_TAB_URL_PATTERNS = [PWA_URL + '/*', 'http://localhost:5173/*', 'https://localhost:5173/*']
 

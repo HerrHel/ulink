@@ -20,7 +20,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!
 // 静态站基址（不含尾斜杠），用于 og:image 与「复制到我的库」跳转地址。
-const APP_ORIGIN = (Deno.env.get("APP_ORIGIN") || "https://herrhel.github.io").replace(/\/+$/, "")
+const APP_ORIGIN = (Deno.env.get("APP_ORIGIN") || "https://ulink.ren").replace(/\/+$/, "")
 // og:image 静态品牌图路径（public/share-cover.png 构建后随站部署）。
 const OG_IMAGE = `${APP_ORIGIN}/share-cover.png`
 // 本函数对外 https 完整 URL（canonical / og:url 用）。勿用 req.url 推导——Supabase 内部

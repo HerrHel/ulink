@@ -22,7 +22,7 @@ export const NETWORK_PROBE_URLS: readonly string[] = [
 ]
 
 /** 站点 canonical 基址。部署到别处时仅改此处，避免 SEO canonical 写死错误（TECH_DEBT C 类）。 */
-export const APP_CANONICAL_BASE = 'https://herrhel.github.io/'
+export const APP_CANONICAL_BASE = 'https://ulink.ren/'
 
 /**
  * 公开分享页 SSR 函数基址（Supabase Edge Function `share-html`）。
