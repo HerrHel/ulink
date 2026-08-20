@@ -23,7 +23,8 @@
  *     保留作向后兼容兜底
  *
  * 口径：纯加测试零源文件改动。detectShareRoute 直接 import 调（纯函数 location 读取，
- * 用 history.pushState 改 pathname + Object.defineProperty(window,'location',...) 改 hash）；
+ * 用 history.pushState 同时设 pathname + hash——不用 Object.defineProperty 覆盖 window.location，
+ * 避免污染同进程其他测试文件共享的 jsdom window）；
  * shareGroup mock copyToClipboard（spy 断 url）+ toast + setGroupPublic（可控成功/失败），
  * 用真实 useDataStore（验 groupMap.isPublic 态）。
  */
@@ -55,6 +56,19 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
   useCloudSync: () => ({ fullSync: vi.fn(async () => {}), fetchPublicGroup: vi.fn() }),
 }))
 
+// ── SHARE_FUNCTION_BASE 钉为确定值 ──
+// CI 的 Unit Tests 步骤不注入 VITE_SUPABASE_URL（secrets 仅 build 步骤注入），
+// 否则 urls.ts 推导塌缩成纯路径 `/functions/v1/share-html`，下面 4 个断言期望完整
+// 域名 `https://<ref>.supabase.co/functions/v1/share-html` 会整组挂。钉死该导出使测试
+// 不依赖外部 env，本地/CI 一致；同时仍验证 shareGroup 用 SHARE_FUNCTION_BASE 且与 location 解耦。
+vi.mock('../../config/urls.js', async () => {
+  const actual = await vi.importActual<typeof import('../../config/urls.js')>('../../config/urls.js')
+  return {
+    ...actual,
+    SHARE_FUNCTION_BASE: 'https://yqouglfopbmujkqmjgpu.supabase.co/functions/v1/share-html',
+  }
+})
+
 beforeEach(async () => {
   setActivePinia(createPinia())
   _copy.copyToClipboardSpy.mockClear()
@@ -64,23 +78,15 @@ beforeEach(async () => {
   history.pushState({}, '', '/')
 })
 
-// ── location 工具：设 pathname + hash（jsdom location 不可直接赋值，用 defineProperty 重定义）──
+// ── location 工具：设 pathname + hash ──
+// jsdom 的 window.location 属性不可直接赋值，但 history.pushState 可同时改 pathname 与 hash，
+// 且 pushState 会同步到 location.pathname / location.hash。绝不 Object.defineProperty 覆盖
+// window.location——delete 还原会破坏同进程后续测试文件共享的 jsdom window（曾致
+// TrashPanel-branches 在全量 CI 里随机挂：b1 永久删除后仍在 bookmarks 里）。
 function setLocation(pathname: string, hash = '') {
-  // 重写 window.location 为受控对象（jsdom 下 location 是特殊对象，用 Object.defineProperty 覆盖）
-  Object.defineProperty(window, 'location', {
-    configurable: true,
-    value: {
-      origin: 'https://app.example.com',
-      pathname,
-      hash,
-    },
-  })
+  history.pushState({}, '', `${pathname}${hash}`)
 }
 function restoreLocation() {
-  // 删除受控覆盖，恢复默认 location
-  // @ts-ignore
-  delete window.location
-  // 重新触发 jsdom 重建 location（pushState 触发 location getter 重绑）
   history.pushState({}, '', '/')
 }
 
