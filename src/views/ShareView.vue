@@ -269,6 +269,15 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
   max-width:100%; width:auto; height:auto;
   border-radius:8px; display:inline-block; vertical-align:bottom;
 }
+/* BUMP-SPEC：分享页 notes 容器是 .share-group-notes，editor 的 .group-body/.group-tiptap
+   BUMP 规则匹配不到；且 .share-group-notes :deep(img) (0,2,1) 会覆盖 group.css 的
+   .group-inline-card img (0,1,1)，使 inline 卡片里的 favicon 按 SVG 内禀尺寸撑开 → 图标大小不一。
+   这里提级到 (0,3,1) 专属压制，只约束组内 inline 卡片图标，不动上传图片的弹性尺寸。 */
+.share-group-notes :deep(.group-inline-card img),
+.share-group-notes :deep(.group-inline-card svg) {
+  width:16px; height:16px; max-width:16px; max-height:16px;
+  border-radius:2px; display:block; flex-shrink:0;
+}
 .share-group-meta { display: flex; gap: 16px; margin-bottom: 16px; }
 .share-meta-item { font-size: 13px; color: var(--text-secondary, #888); }
 .share-group-actions { display: flex; gap: 8px; }
