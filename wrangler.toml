@@ -2,12 +2,12 @@
 # 说明：SUPABASE_ANON_KEY 为 Supabase 公开的 anon key（已随前端 JS 下发浏览器），
 # 本仓库为 GitHub 用户页（须公开），故明文放此处无额外泄露风险。
 # 若日后想改为加密 secret，可执行：
-#   npx wrangler pages secret put SUPABASE_URL --project-name ulink
-#   npx wrangler pages secret put SUPABASE_ANON_KEY --project-name ulink
-#   npx wrangler pages secret put APP_ORIGIN --project-name ulink
+#   npx wrangler pages secret put SUPABASE_URL --project-name herrhel
+#   npx wrangler pages secret put SUPABASE_ANON_KEY --project-name herrhel
+#   npx wrangler pages secret put APP_ORIGIN --project-name herrhel
 # 并删除下方 [vars] 段。
 
-name = "ulink"
+name = "herrhel"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-09-01"
 

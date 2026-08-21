@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist_validate/
 coverage/
 .claude/
 .mimocode/
@@ -26,3 +27,6 @@ task_plan.md
 supabase/.temp/
 /extension/lib/supabase.js
 .dev.vars
+.wrangler/
+dist_deploy/
+verify_*.html
