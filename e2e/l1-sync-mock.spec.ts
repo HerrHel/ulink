@@ -8,6 +8,13 @@
 import { test, expect } from '@playwright/test'
 import { installSupabaseMock, injectConflictViaTestHook, L1_EMAIL } from './helpers/supabaseMock'
 
+// 锁定 zh-CN：CI 浏览器默认 en-US，i18n 会渲染英文导致「同步冲突」等中文断言失配
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('lv_locale', 'zh-CN')
+  })
+})
+
 test.describe('L1 同步 mock', () => {
   test('假 session + 手动同步 happy path', async ({ page }) => {
     test.setTimeout(60000)

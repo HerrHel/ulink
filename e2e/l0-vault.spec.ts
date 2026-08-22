@@ -33,9 +33,10 @@ async function getStoreState(page: import('@playwright/test').Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  // 跳过首启引导模态（与 app.spec.ts 一致）
+  // 跳过首启引导模态（与 app.spec.ts 一致）；并锁定 zh-CN（CI 浏览器默认 en-US，i18n 断言按中文）
   await page.addInitScript(() => {
     localStorage.setItem('lv_setup_done', '1')
+    localStorage.setItem('lv_locale', 'zh-CN')
   })
 })
 

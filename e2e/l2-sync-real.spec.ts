@@ -18,6 +18,13 @@ import {
 } from './helpers/l2Session'
 
 const L2_FLAG = !!process.env.LV_E2E_L2
+
+// 锁定 zh-CN：CI 浏览器默认 en-US，i18n 会渲染英文导致中文断言失配（与其它 spec 一致）
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('lv_locale', 'zh-CN')
+  })
+})
 const l2 = resolveL2Session()
 
 async function openAppAuthed(page: Page, session: L2Session) {

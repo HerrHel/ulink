@@ -18,6 +18,8 @@ test.describe('L0 E2E 真加密路径', () => {
 
     await page.addInitScript(() => {
       localStorage.setItem('lv_setup_done', '1')
+      // CI 浏览器默认 en-US，i18n 会渲染英文；测试断言全为中文，锁定 zh-CN
+      localStorage.setItem('lv_locale', 'zh-CN')
     })
 
     await page.goto('/')
