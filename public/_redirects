@@ -1,6 +1,6 @@
 # SPA fallback：未知路径回退到 index.html（由前端 hash 路由接管）
-# 2026-08-23 优化：.html 后缀请求显式先行接管，避免与 Cloudflare 的
-# pretty-URL 剥离（/foo.html → /foo）产生「/* → /index.html」无限循环警告；
-# 同时平台侧 HTML Handling 已设为 none（本应用无 .html 静态链接需要剥离）。
-/*.html  /index.html  200
-/*       /index.html  200
+# 注：Cloudflare 构建日志的 "Infinite loop ... ignored" 警告源于 auto pretty-URL
+# 剥离（/index.html → /index 再被本规则指回）。不影响功能（/* 规则仍有效）。
+# 永久消除：Dashboard → Pages → ulink → Settings → General → HTML Handling → None
+# （本项目无 .html 静态链接需要剥离，关闭零副作用）。
+/*    /index.html   200
