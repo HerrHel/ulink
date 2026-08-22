@@ -15,8 +15,8 @@
 /** 标记本模块动态注入的节点，cleanupInjectedHead 据此精确清理 */
 const MARK = 'data-lv-head'
 
-/** 站点默认 title（与 index.html 对齐） */
-const DEFAULT_TITLE = 'LinkVault — 个人书签管理器'
+/** 站点默认 title（与 index.html 对齐；品牌：中文「与链」/英文「ulink」） */
+const DEFAULT_TITLE = '与链 — 个人书签管理器'
 
 /** 覆盖静态 meta 前缓存的原 content，key = `${attrName}:${attrValue}` */
 const _staticMetaBackup = new Map<string, string>()

@@ -31,7 +31,6 @@ import {
   ACTIONS,
   DEFAULTS,
 } from '../../config/constants.js'
-import { WELCOME_NOTES, TIPS_NOTES } from '../../config/welcome-data.js'
 
 describe('config/constants.ts — 应用层常量快照护栏（精简版）', () => {
   // 存储键与魔法数是 outward-facing 锚点 + UI 边界,错改有真实回归后果(旧用户数据失访/UI 行为
@@ -139,31 +138,13 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     for (const a of attrs) expect(a.type).toBe('boolean')
   })
 
-  it('DEFAULTS.siblingGroups 2 项(sg_welcome/sg_tips) 全 attributes[is-group]:true + categoryId 无悬空', () => {
-    const groups = DEFAULTS.siblingGroups
-    expect(groups.length).toBe(2)
-    const ids = groups.map((g) => g.id)
-    expect(ids).toContain('sg_welcome')
-    expect(ids).toContain('sg_tips')
-    expect(new Set(ids).size).toBe(2)
-    for (const g of groups) {
-      expect(g.attributes[ATTR_IS_GROUP], `group ${g.id} attributes 应含 is-group:true`).toBe(true)
-    }
-    const catIds = new Set(DEFAULTS.categories.map((c) => c.id))
-    for (const g of groups) {
-      expect(catIds.has(g.categoryId), `group ${g.id} categoryId "${g.categoryId}" 应在 categories 内`).toBe(true)
-    }
-  })
-
-  it('DEFAULTS 组默认 notes 引用同一性 + sg_welcome.bookmarkIds 无悬空（防组默认笔记失锚）', () => {
-    const welcome = DEFAULTS.siblingGroups.find((g) => g.id === 'sg_welcome')
-    const tips = DEFAULTS.siblingGroups.find((g) => g.id === 'sg_tips')
-    expect(welcome?.notes).toBe(WELCOME_NOTES) // 引用同一性,防组默认笔记失锚
-    expect(tips?.notes).toBe(TIPS_NOTES)
-    expect(welcome).toBeDefined()
-    const bmIds = new Set(DEFAULTS.bookmarks.map((b) => b.id))
-    for (const id of welcome!.bookmarkIds) {
-      expect(bmIds.has(id), `sg_welcome.bookmarkIds 含悬空 ${id}`).toBe(true)
-    }
+  // 2026-08-22：初始示例组（欢迎使用/使用技巧）已按用户要求移除——种子数据干净起点。
+  // 原「DEFAULTS.siblingGroups 2 项(sg_welcome/sg_tips)」与「组默认 notes 引用同一性」护栏
+  // 随约束删除；新护栏锁 siblingGroups 为空 + 无默认示例组 id 复活。
+  it('DEFAULTS.siblingGroups 为空（初始示例组已移除，防默认组复活）', () => {
+    expect(DEFAULTS.siblingGroups).toEqual([])
+    const ids = DEFAULTS.siblingGroups.map((g) => g.id)
+    expect(ids).not.toContain('sg_welcome')
+    expect(ids).not.toContain('sg_tips')
   })
 })

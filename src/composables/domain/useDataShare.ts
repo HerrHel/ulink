@@ -5,6 +5,7 @@
 import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
@@ -20,13 +21,13 @@ export { isValidShareGroupId, setGroupPublic, fetchPublicGroup }
 export async function shareGroup(gid: string) {
   const ds = useDataStore()
   const sg = ds.groupMap[gid]
-  if (!sg) { toast('组不存在', false); return }
+  if (!sg) { toast(t('msg.groupNotExist'), false); return }
 
   // 尝试设置为公开
   if (!sg.isPublic) {
     const ok = await setGroupPublic(gid, true)
     if (!ok) {
-      toast('分享需要登录云同步，请先登录', false)
+      toast(t('msg.shareLoginRequired'), false)
       return
     }
   }
@@ -35,7 +36,7 @@ export async function shareGroup(gid: string) {
   // 在服务端渲染完整 HTML，爬虫与人类拿到同一份预渲染页，社交预览 / 搜索引擎可读 og:*。
   // 旧链接（supabase 函数域 / #share/<gid> SPA 路由）由各端保留作向后兼容兜底。
   const url = `${SHARE_BASE}/${gid}`
-  copyToClipboard(url, '分享链接')
+  copyToClipboard(url, t('msg.shareLinkLabel'))
 }
 
 // ── 从 URL 导入分享数据（path 风格 /s/<id> 优先，hash #share/<id> 向后兼容）──
@@ -151,5 +152,5 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
 
   // 报告实际入库条数（而非全部 bookmarks 数），避免跳过去重后仍夸大计数。
   const count = actualAdded.length
-  toast(`已复制「${group.name}」到你的库（${count} 个书签）`)
+  toast(t('msg.forkedGroup', { name: group.name, count }))
 }

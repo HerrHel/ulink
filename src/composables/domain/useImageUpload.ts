@@ -9,6 +9,7 @@ import { uploadGroupImage } from '../../lib/imageStorage.js'
 import { EditorManager } from '../../lib/editor.js'
 import { _getUserId } from './useSyncHistory.js'
 import { toast } from '../../lib/toast.js'
+import { t, tN } from '../../i18n/index.js'
 
 const IMAGE_TYPE_RE = /^image\/(png|jpe?g|webp|gif|svg\+xml)$/i
 
@@ -24,7 +25,7 @@ export function isImageFile(file: File | Blob): boolean {
 export async function uploadAndInsertImage(gid: string, file: File | Blob): Promise<boolean> {
   const userId = _getUserId()
   if (!userId) {
-    toast('上传图片需先登录云端账号', false)
+    toast(t('msg.imageUploadLoginRequired'), false)
     return false
   }
   if (!EditorManager.get(gid)) return false
@@ -33,7 +34,7 @@ export async function uploadAndInsertImage(gid: string, file: File | Blob): Prom
     const { blob, name, width: srcW, height: srcH } = await compressImage(file)
     const url = await uploadGroupImage(userId, gid, blob, name)
     if (!url) {
-      toast('图片上传失败，请稍后重试', false)
+      toast(t('msg.imageUploadFailedRetry'), false)
       return false
     }
     // 有原始尺寸时按最长边 560 计算初始显示尺寸（透传格式如 gif/svg 尺寸未知则不给初始尺寸）
@@ -48,7 +49,7 @@ export async function uploadAndInsertImage(gid: string, file: File | Blob): Prom
     return true
   } catch (e) {
     console.warn('[image] upload failed:', e instanceof Error ? e.message : e)
-    toast('图片上传失败', false)
+    toast(t('msg.imageUploadFailed'), false)
     return false
   }
 }
@@ -60,6 +61,6 @@ export async function uploadAndInsertImages(gid: string, files: Array<File | Blo
     if (!isImageFile(f)) continue
     if (await uploadAndInsertImage(gid, f)) ok += 1
   }
-  if (ok > 1) toast(`已插入 ${ok} 张图片`)
+  if (ok > 1) toast(tN('msg.imagesInserted', ok))
   return ok
 }

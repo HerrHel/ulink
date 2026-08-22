@@ -1,4 +1,4 @@
-// background.js — LinkVault Extension
+// background.js — 与链（ulink）Extension
 
 import { decideOpenPwa } from './pwa-open.js'
 
@@ -10,12 +10,12 @@ const PWA_TAB_URL_PATTERNS = [PWA_URL + '/*', 'http://localhost:5173/*', 'https:
 chrome.contextMenus.removeAll(function () {
   chrome.contextMenus.create({
     id: 'save-to-linkvault',
-    title: '保存到 LinkVault',
+    title: chrome.i18n.getMessage('menu_save_page'),
     contexts: ['page', 'link'],
   })
   chrome.contextMenus.create({
     id: 'save-selection-to-linkvault',
-    title: '保存选中文本到 LinkVault',
+    title: chrome.i18n.getMessage('menu_save_selection'),
     contexts: ['selection'],
   })
 })

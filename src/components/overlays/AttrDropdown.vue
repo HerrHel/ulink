@@ -2,12 +2,12 @@
   <div class="attr-dropdown" id="attrDropdown" v-show="attrDrp.open" @click.stop>
     <div class="attr-drop-search">
       <input type="text" class="attr-search-input" id="attrSearchInput"
-             placeholder="搜索/创建属性…" aria-label="搜索属性" v-model="query" @click.stop ref="searchInputRef">
-      <button class="attr-search-add" @click.stop="onAddAttr" title="新建属性" v-html="I.plus"></button>
+             :placeholder="t('attr.searchCreatePlaceholder')" :aria-label="t('attr.searchPlaceholder')" v-model="query" @click.stop ref="searchInputRef">
+      <button class="attr-search-add" @click.stop="onAddAttr" :title="t('attr.newAttribute')" v-html="I.plus"></button>
     </div>
     <div class="attr-drop-list" id="attrDropList">
       <div v-if="!filteredAttrs.length" class="drop-empty">
-        无匹配属性
+        {{ t('attr.noMatch') }}
       </div>
       <div v-for="a in filteredAttrs" :key="a.id"
            class="attr-drop-item" :class="{ active: isActive(a.id), excluded: isExcluded(a.id) }"
@@ -15,12 +15,12 @@
            @touchstart.passive="onTouchStart(a.id, $event)"
            @touchend="onTouchEnd"
            @touchmove.passive="onTouchMove">
-        <span class="attr-drop-main" @click="onToggleFilter(a.id)" title="包含此属性">
+        <span class="attr-drop-main" @click="onToggleFilter(a.id)" :title="t('attr.include')">
           <span class="attr-dot"></span>{{ a.name }}
         </span>
         <button class="attr-drop-exclude" :class="{ on: isExcluded(a.id) }"
                 @click="onToggleExclude(a.id)"
-                :title="isExcluded(a.id) ? '取消排除' : '排除此属性'"
+                :title="isExcluded(a.id) ? t('attr.unexclude') : t('attr.exclude')"
                 v-html="I.ban">
         </button>
       </div>
@@ -39,6 +39,7 @@ import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAttrDropdownStore } from '../../stores/attrDropdown.js'
 import { isMobile } from '../../utils.js'
+import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
 const attrDrp = useAttrDropdownStore()
@@ -68,9 +69,9 @@ function onAddAttr() {
   if (!name) return
   if (addAttrQuick(name)) {
     query.value = ''
-    toast('属性已添加')
+    toast(t('attr.addedToast'))
   } else {
-    toast('属性已存在', false)
+    toast(t('attr.existsToast'), false)
   }
 }
 
@@ -125,15 +126,15 @@ function showAttrActions(attrId: string) {
   const attr = store.attributeMap[attrId]
   if (!attr) return
   useActionSheetStore().showActions([
-    { label: '重命名', action: () => onRenameAttr(attrId) },
-    { label: '删除属性', action: () => onDeleteAttr(attrId), danger: true },
+    { label: t('ctx.renameAttr'), action: () => onRenameAttr(attrId) },
+    { label: t('attr.deleteAttribute'), action: () => onDeleteAttr(attrId), danger: true },
   ])
 }
 
 function onRenameAttr(attrId: string) {
   const attr = store.attributeMap[attrId]
   if (!attr) return
-  const input = window.prompt('重命名属性', attr.name)
+  const input = window.prompt(t('ctx.renameAttrPrompt'), attr.name)
   if (input && input.trim() && input.trim() !== attr.name) {
     const dataStore = useDataStore()
     dataStore.renameAttribute(attrId, input.trim())
@@ -144,7 +145,7 @@ function onRenameAttr(attrId: string) {
 async function onDeleteAttr(attrId: string) {
   const attr = store.attributeMap[attrId]
   if (!attr) return
-  const ok = await showConfirm('删除属性「' + attr.name + '」？')
+  const ok = await showConfirm(t('attr.confirmDelete', { name: attr.name }))
   if (!ok) return
   const dataStore = useDataStore()
   dataStore.deleteAttribute(attrId)

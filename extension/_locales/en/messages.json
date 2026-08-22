@@ -1,0 +1,350 @@
+{
+  "ext_name": {
+    "message": "ulink",
+    "description": "Extension name (brand: ulink)"
+  },
+  "ext_description": {
+    "message": "One-click save web pages to the ulink bookmark manager",
+    "description": "Extension description"
+  },
+  "action_default_title": {
+    "message": "Open ulink sidebar",
+    "description": "Toolbar button tooltip"
+  },
+  "command_save_description": {
+    "message": "Open ulink to save the current page",
+    "description": "Keyboard command description"
+  },
+  "menu_save_page": {
+    "message": "Save to ulink",
+    "description": "Context menu: save page/link"
+  },
+  "menu_save_selection": {
+    "message": "Save selected text to ulink",
+    "description": "Context menu: save selected text"
+  },
+  "login": {
+    "message": "Log in",
+    "description": "Login button"
+  },
+  "logout": {
+    "message": "Log out",
+    "description": "Logout button"
+  },
+  "logout_title": {
+    "message": "Log out",
+    "description": "Logout button tooltip"
+  },
+  "refresh": {
+    "message": "Refresh",
+    "description": "Refresh button tooltip"
+  },
+  "status_logged_out": {
+    "message": "Not logged in",
+    "description": "Auth status: logged out"
+  },
+  "status_connected": {
+    "message": "Connected",
+    "description": "Auth status: connected"
+  },
+  "login_banner_desc": {
+    "message": "After logging in, bookmarks sync to the cloud and are shared across devices",
+    "description": "Login banner description"
+  },
+  "email_placeholder": {
+    "message": "Enter email address",
+    "description": "Email input placeholder"
+  },
+  "send_code": {
+    "message": "Send code",
+    "description": "Send verification code button"
+  },
+  "cancel": {
+    "message": "Cancel",
+    "description": "Cancel button"
+  },
+  "otp_placeholder": {
+    "message": "Enter 6-digit code",
+    "description": "Verification code input placeholder"
+  },
+  "verify": {
+    "message": "Verify",
+    "description": "Verify button"
+  },
+  "login_gate_title": {
+    "message": "Log in to ulink",
+    "description": "Login gate title"
+  },
+  "login_gate_desc": {
+    "message": "Manage bookmarks in the sidebar after logging in<br>When not logged in, save to the cloud via the context menu or keyboard shortcut",
+    "description": "Login gate description"
+  },
+  "section_current_page": {
+    "message": "Current page",
+    "description": "Section title: current page"
+  },
+  "current_page_refresh_title": {
+    "message": "Click to refresh current page info (requires a user gesture to read the tab URL)",
+    "description": "Current page card tooltip"
+  },
+  "loading": {
+    "message": "Loading…",
+    "description": "Loading status text"
+  },
+  "tab_url_hint": {
+    "message": "Cannot read the current tab URL (the extension has no persistent tabs permission). Click the card above or the ↻ button to refresh before saving.",
+    "description": "Tab URL unreadable hint"
+  },
+  "save_current_page": {
+    "message": "Save current page",
+    "description": "Save button text"
+  },
+  "already_saved": {
+    "message": "Saved",
+    "description": "Detail panel badge"
+  },
+  "notes": {
+    "message": "Notes",
+    "description": "Detail panel label: notes"
+  },
+  "password": {
+    "message": "Password",
+    "description": "Detail panel label: password"
+  },
+  "show": {
+    "message": "Show",
+    "description": "Password show button"
+  },
+  "hide": {
+    "message": "Hide",
+    "description": "Password hide button"
+  },
+  "copy": {
+    "message": "Copy",
+    "description": "Copy button"
+  },
+  "edit_notes": {
+    "message": "Edit notes",
+    "description": "Edit notes button"
+  },
+  "copy_url": {
+    "message": "Copy link",
+    "description": "Copy link button"
+  },
+  "delete": {
+    "message": "Delete",
+    "description": "Delete button"
+  },
+  "search_placeholder": {
+    "message": "Search bookmarks...",
+    "description": "Search input placeholder"
+  },
+  "recent_saved": {
+    "message": "Recently saved",
+    "description": "Section title: recently saved"
+  },
+  "status_local": {
+    "message": "Local mode",
+    "description": "Status bar: local mode"
+  },
+  "err_unsafe_protocol": {
+    "message": "Cannot open: unsafe link protocol",
+    "description": "Unsafe link protocol toast"
+  },
+  "sync_just_now": {
+    "message": "Synced just now",
+    "description": "Sync time: just now"
+  },
+  "sync_seconds_ago": {
+    "message": "Synced $1s ago",
+    "description": "Sync time: seconds ago"
+  },
+  "sync_minutes_ago": {
+    "message": "Synced $1min ago",
+    "description": "Sync time: minutes ago"
+  },
+  "sync_hours_ago": {
+    "message": "Synced $1h ago",
+    "description": "Sync time: hours ago"
+  },
+  "load_failed": {
+    "message": "Load failed: ",
+    "description": "Load failed prefix"
+  },
+  "unknown_error": {
+    "message": "Unknown error",
+    "description": "Generic unknown error"
+  },
+  "extension_comm_error": {
+    "message": "Extension communication error",
+    "description": "Extension communication error toast"
+  },
+  "count_bookmarks": {
+    "message": "$1 bookmarks",
+    "description": "Bookmark count"
+  },
+  "search_no_results": {
+    "message": "🔍 No matching bookmarks found<br><span style=\"font-size:11px;opacity:.7\">Try other keywords</span>",
+    "description": "Search empty result"
+  },
+  "no_bookmarks": {
+    "message": "No bookmarks yet",
+    "description": "Empty list hint"
+  },
+  "empty_hint": {
+    "message": "💡 Right-click on a web page and choose \"Save to ulink\"<br>or press <kbd style=\"background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px\">Ctrl+Shift+S</kbd>",
+    "description": "Empty list action hint"
+  },
+  "found_count": {
+    "message": "Found $1 results",
+    "description": "Search/filter result count"
+  },
+  "show_limited_count": {
+    "message": "Showing only the latest 50, $1 in total",
+    "description": "List over 50 items hint"
+  },
+  "search_results": {
+    "message": "Search results",
+    "description": "Section title: search results"
+  },
+  "this_bookmark": {
+    "message": "this bookmark",
+    "description": "Default bookmark name in delete confirm"
+  },
+  "confirm_delete": {
+    "message": "Delete \"$1\"? It will be moved to the trash.",
+    "description": "Delete confirmation dialog"
+  },
+  "delete_failed": {
+    "message": "Delete failed: ",
+    "description": "Delete failed prefix"
+  },
+  "deleted": {
+    "message": "Deleted",
+    "description": "Delete success toast"
+  },
+  "cannot_read_page": {
+    "message": "Cannot read the current page",
+    "description": "Current page read failed"
+  },
+  "click_to_refresh": {
+    "message": "Click here or ↻ to refresh",
+    "description": "Click to refresh hint"
+  },
+  "no_active_tab": {
+    "message": "No active tab",
+    "description": "No active tab hint"
+  },
+  "untitled": {
+    "message": "Untitled",
+    "description": "Page without title placeholder"
+  },
+  "url_unavailable": {
+    "message": "Current page URL unavailable",
+    "description": "Current page URL unavailable"
+  },
+  "click_to_refresh_and_save": {
+    "message": "Click here or ↻ to refresh and save",
+    "description": "Refresh then save hint"
+  },
+  "use_count": {
+    "message": "👁️ $1 times",
+    "description": "Bookmark use count"
+  },
+  "crypto_lib_not_loaded": {
+    "message": "Decryption library not loaded",
+    "description": "Crypto library not loaded toast"
+  },
+  "prompt_master_password": {
+    "message": "Enter master password to decrypt:",
+    "description": "Master password prompt"
+  },
+  "unlock_data_unavailable": {
+    "message": "Cannot fetch unlock data from the cloud, please try again later",
+    "description": "Unlock data fetch failed toast"
+  },
+  "decrypt_failed_check_password": {
+    "message": "Decryption failed, please check the master password",
+    "description": "Decrypt failed toast"
+  },
+  "decrypt_failed": {
+    "message": "Decryption failed: ",
+    "description": "Decrypt failed prefix"
+  },
+  "password_copied": {
+    "message": "Password copied",
+    "description": "Password copied toast"
+  },
+  "copy_failed": {
+    "message": "Copy failed",
+    "description": "Copy failed toast"
+  },
+  "prompt_edit_notes": {
+    "message": "Edit notes:",
+    "description": "Edit notes prompt"
+  },
+  "url_copied": {
+    "message": "Link copied",
+    "description": "Link copied toast"
+  },
+  "saved_check": {
+    "message": "✓ Saved",
+    "description": "Save button success state"
+  },
+  "save_failed_x": {
+    "message": "✗ Save failed",
+    "description": "Save button failure state"
+  },
+  "cannot_get_page": {
+    "message": "Cannot get the current page, please refresh and try again",
+    "description": "Get current page failed toast"
+  },
+  "cannot_save_internal_page": {
+    "message": "Browser internal pages cannot be saved",
+    "description": "Browser internal page toast"
+  },
+  "save_failed": {
+    "message": "Save failed: ",
+    "description": "Save failed prefix"
+  },
+  "sent_to_vault": {
+    "message": "Sent to ulink to save",
+    "description": "Sent to ulink to save toast"
+  },
+  "save_failed_retry": {
+    "message": "Save failed, please try again",
+    "description": "Save failed retry toast"
+  },
+  "refreshed": {
+    "message": "Refreshed",
+    "description": "Refresh success toast"
+  },
+  "enter_email": {
+    "message": "Please enter your email",
+    "description": "Empty email toast"
+  },
+  "invalid_email": {
+    "message": "Invalid email format",
+    "description": "Invalid email format toast"
+  },
+  "sending": {
+    "message": "Sending…",
+    "description": "Sending status"
+  },
+  "code_sent": {
+    "message": "Code sent",
+    "description": "Code sent status"
+  },
+  "enter_code": {
+    "message": "Please enter the code",
+    "description": "Empty code toast"
+  },
+  "verifying": {
+    "message": "Verifying…",
+    "description": "Verifying status"
+  },
+  "login_success": {
+    "message": "Logged in successfully",
+    "description": "Login success toast"
+  }
+}

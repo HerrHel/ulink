@@ -46,7 +46,7 @@ describe('generateRecoveryKeyPDF（D1-10 护栏）', () => {
     generateRecoveryKeyPDF('TEST-KEY-1234')
     expect(downloadFileMock).toHaveBeenCalledTimes(1)
     const [filename, content, mime] = downloadFileMock.mock.calls[0]
-    expect(filename).toMatch(/^LinkVault-Recovery-Key-.*\.html$/)
+    expect(filename).toMatch(/^ulink-Recovery-Key-.*\.html$/)
     expect(mime).toBe('text/html')
     expect(typeof content).toBe('string')
     expect(content.length).toBeGreaterThan(0)
@@ -55,8 +55,8 @@ describe('generateRecoveryKeyPDF（D1-10 护栏）', () => {
   it('文件名含 dateStamp：YYYY-MM-DD 形态（导出物可按时归类）', () => {
     generateRecoveryKeyPDF('K')
     const filename = downloadFileMock.mock.calls[0][0] as string
-    // LinkVault-Recovery-Key-YYYY-MM-DD.html
-    expect(filename).toMatch(/^LinkVault-Recovery-Key-\d{4}-\d{2}-\d{2}\.html$/)
+    // ulink-Recovery-Key-YYYY-MM-DD.html
+    expect(filename).toMatch(/^ulink-Recovery-Key-\d{4}-\d{2}-\d{2}\.html$/)
   })
 
   it('完整性：合法 key 原样出现在 .key-value 区块（不丢字符）', () => {
@@ -110,7 +110,7 @@ describe('generateRecoveryKeyPDF（D1-10 护栏）', () => {
   it('结构不变：HTML 含 <title>、key-box、warning 必要块', () => {
     generateRecoveryKeyPDF('STRUCT-CHECK')
     const html = downloadFileMock.mock.calls[0][1] as string
-    expect(html).toContain('<title>LinkVault Recovery Key</title>')
+    expect(html).toContain('<title>与链 Recovery Key</title>')
     expect(html).toContain('class="key-box"')
     expect(html).toContain('class="key-value"')
     expect(html).toContain('class="warning"')
@@ -122,7 +122,7 @@ describe('generateRecoveryKeyPDF（D1-10 护栏）', () => {
     const html = downloadFileMock.mock.calls[0][1] as string
     expect(html).toContain('@media print')
     // footer 区有生成时间：非空且含中横线时间分隔
-    expect(html).toMatch(/生成时间：[^<]+LinkVault E2E Recovery Key/)
+    expect(html).toMatch(/生成时间：[^<]+与链 E2E Recovery Key/)
   })
 
   it('空 key 边界：不抛，key-value 区为空串（向后兼容，不强行拒空）', () => {

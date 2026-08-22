@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LinkVault</title>
+<title>__MSG_ext_name__</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#f8f9fa;--surface:#fff;--text:#1a1a1a;--text2:#6b7280;--border:#e5e7eb;--accent:#3b82f6;--accent-bg:#eff6ff;--accent-hover:#2563eb;--danger:#ef4444;--danger-bg:#fef2f2;--radius:8px;--radius-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.08);--kbd-bg:#e5e7eb;--toast-bg:#1a1a1a;--toast-color:#fff}
@@ -60,7 +60,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 .bookmark-item-del:hover{color:var(--danger);background:var(--danger-bg)}
 /* ── 加载遮罩 ── */
 .bookmark-list.loading{position:relative;min-height:60px}
-.bookmark-list.loading::after{content:'加载中…';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,249,250,.6);color:var(--text2);font-size:12px;border-radius:var(--radius-sm);z-index:2;backdrop-filter:blur(1px)}
+.bookmark-list.loading::after{content:'__MSG_loading__';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,249,250,.6);color:var(--text2);font-size:12px;border-radius:var(--radius-sm);z-index:2;backdrop-filter:blur(1px)}
 @media(prefers-color-scheme:dark){.bookmark-list.loading::after{background:rgba(26,27,30,.7)}}
 /* ── 已收藏详情面板 ── */
 .bookmark-detail{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
@@ -107,56 +107,56 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 <body>
 
 <div class="header">
-  <h1>📚 LinkVault</h1>
+  <h1>📚 __MSG_ext_name__</h1>
   <div class="header-actions">
-    <span id="headerLoginHint" style="font-size:11px;color:var(--text2)">未登录</span>
-    <button class="btn btn-sm btn-login" id="btnShowLogin">登录</button>
-    <button class="btn btn-sm btn-ghost hidden" id="btnLogout" title="退出登录">退出</button>
-    <button class="btn btn-ghost" id="btnRefresh" title="刷新">↻</button>
+    <span id="headerLoginHint" style="font-size:11px;color:var(--text2)">__MSG_status_logged_out__</span>
+    <button class="btn btn-sm btn-login" id="btnShowLogin">__MSG_login__</button>
+    <button class="btn btn-sm btn-ghost hidden" id="btnLogout" title="__MSG_logout_title__">__MSG_logout__</button>
+    <button class="btn btn-ghost" id="btnRefresh" title="__MSG_refresh__">↻</button>
   </div>
 </div>
 
 <!-- 登录横幅 -->
 <div class="login-banner hidden" id="loginBanner">
-  <p>登录后书签将同步到云端，多设备共享</p>
-  <input type="email" id="emailInput" placeholder="输入邮箱地址">
+  <p>__MSG_login_banner_desc__</p>
+  <input type="email" id="emailInput" placeholder="__MSG_email_placeholder__">
   <div class="login-banner-actions">
-    <button class="btn btn-primary btn-sm" id="btnLogin">发送验证码</button>
-    <button class="btn btn-ghost btn-sm" id="btnCancelLogin">取消</button>
+    <button class="btn btn-primary btn-sm" id="btnLogin">__MSG_send_code__</button>
+    <button class="btn btn-ghost btn-sm" id="btnCancelLogin">__MSG_cancel__</button>
   </div>
   <div id="otpSection" class="hidden" style="margin-top:8px">
-    <input type="text" id="otpInput" placeholder="输入 6 位验证码" maxlength="6">
-    <button class="btn btn-primary btn-sm" id="btnVerify" style="margin-top:6px;width:100%">验证</button>
+    <input type="text" id="otpInput" placeholder="__MSG_otp_placeholder__" maxlength="6">
+    <button class="btn btn-primary btn-sm" id="btnVerify" style="margin-top:6px;width:100%">__MSG_verify__</button>
   </div>
 </div>
 
 <!-- 登录门（未登录时显示） -->
 <div id="loginGate" class="login-gate">
   <div class="gate-icon">🔐</div>
-  <h2>请登录 LinkVault</h2>
-  <p>登录后即可在侧边栏管理书签<br>未登录时可通过右键菜单或快捷键保存到云端</p>
-  <button class="btn-gate" id="btnLoginGate">登录</button>
+  <h2>__MSG_login_gate_title__</h2>
+  <p>__MSG_login_gate_desc__</p>
+  <button class="btn-gate" id="btnLoginGate">__MSG_login__</button>
 </div>
 
 <!-- 主界面（登录后显示） -->
 <div id="mainSection" class="hidden">
   <!-- 当前页快速收藏 -->
   <div class="section">
-    <div class="section-title">当前页面</div>
-    <div class="current-page" id="currentPage" title="点击刷新当前页信息（需用户手势以读取标签 URL）" style="cursor:pointer">
+    <div class="section-title">__MSG_section_current_page__</div>
+    <div class="current-page" id="currentPage" title="__MSG_current_page_refresh_title__" style="cursor:pointer">
       <img id="pageIcon" src="" alt="">
       <div class="current-page-info">
-        <div class="current-page-title" id="pageTitle">加载中…</div>
+        <div class="current-page-title" id="pageTitle">__MSG_loading__</div>
         <div class="current-page-url" id="pageUrl"></div>
       </div>
     </div>
-    <p id="tabUrlHint" class="hidden" style="font-size:11px;color:var(--text2);margin:0 0 8px;line-height:1.5">无法读取当前标签 URL（扩展无持久 tabs 权限）。请点击上方卡片或「↻」刷新后再保存。</p>
-    <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ 保存当前页面</button>
+    <p id="tabUrlHint" class="hidden" style="font-size:11px;color:var(--text2);margin:0 0 8px;line-height:1.5">__MSG_tab_url_hint__</p>
+    <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ __MSG_save_current_page__</button>
     <!-- 已收藏详情面板 -->
     <div id="bookmarkDetail" class="bookmark-detail hidden">
-      <div class="bd-badge">✅ 已收藏</div>
+      <div class="bd-badge">✅ __MSG_already_saved__</div>
       <div id="bdNotesWrap" class="hidden">
-        <div class="bd-label">📝 备注</div>
+        <div class="bd-label">📝 __MSG_notes__</div>
         <div class="bd-text" id="bdNotes"></div>
       </div>
       <div class="bd-meta">
@@ -164,17 +164,17 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
         <span id="bdUseCount">👁️</span>
       </div>
       <div id="bdPasswordWrap" class="hidden" style="margin-top:6px">
-        <div class="bd-label">🔑 密码</div>
+        <div class="bd-label">🔑 __MSG_password__</div>
         <div class="bd-password">
           <span class="bd-pw-text" id="bdPasswordText">••••••••</span>
-          <button class="bd-pw-btn" id="bdPwShow">显示</button>
-          <button class="bd-pw-btn" id="bdPwCopy">复制</button>
+          <button class="bd-pw-btn" id="bdPwShow">__MSG_show__</button>
+          <button class="bd-pw-btn" id="bdPwCopy">__MSG_copy__</button>
         </div>
       </div>
       <div class="bd-actions">
-        <button class="btn btn-ghost btn-sm" id="bdEditNotes">📝 编辑备注</button>
-        <button class="btn btn-ghost btn-sm" id="bdCopyUrl">🔗 复制链接</button>
-        <button class="btn btn-danger btn-sm" id="bdDelete">🗑️ 删除</button>
+        <button class="btn btn-ghost btn-sm" id="bdEditNotes">📝 __MSG_edit_notes__</button>
+        <button class="btn btn-ghost btn-sm" id="bdCopyUrl">🔗 __MSG_copy_url__</button>
+        <button class="btn btn-danger btn-sm" id="bdDelete">🗑️ __MSG_delete__</button>
       </div>
     </div>
   </div>
@@ -183,14 +183,14 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
   <div class="search-box">
     <div class="search-wrap" id="searchWrap">
       <span class="search-icon">🔍</span>
-      <input type="text" id="searchInput" placeholder="搜索书签..." autocomplete="off">
+      <input type="text" id="searchInput" placeholder="__MSG_search_placeholder__" autocomplete="off">
       <span class="search-clear" id="searchClear">✕</span>
     </div>
   </div>
 
   <!-- 最近保存 -->
   <div class="section" style="border-bottom:none">
-    <div class="section-title" id="recentTitle">最近保存</div>
+    <div class="section-title" id="recentTitle">__MSG_recent_saved__</div>
     <div class="bookmark-list" id="bookmarkList"></div>
   </div>
 </div>
@@ -198,7 +198,7 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 <div class="status-bar">
   <span class="status-left">
     <span class="status-dot local" id="statusDot"></span>
-    <span id="statusText">本地模式</span>
+    <span id="statusText">__MSG_status_local__</span>
     <span id="lastSync" style="margin-left:6px;opacity:.7"></span>
   </span>
   <span id="bookmarkCount"></span>

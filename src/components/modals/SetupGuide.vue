@@ -1,8 +1,8 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="欢迎使用 LinkVault" :class="{ open: ui.modals.setupGuide }" @click.self="finish">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.setupGuide.welcome')" :class="{ open: ui.modals.setupGuide }" @click.self="finish">
     <div class="modal modal-sm" @click.stop>
       <div class="modal-head">
-        <span class="modal-title">欢迎使用 LinkVault</span>
+        <span class="modal-title">{{ t('modal.setupGuide.welcome') }}</span>
       </div>
       <div class="modal-body setup-body">
         <!-- 品牌视觉 -->
@@ -10,25 +10,25 @@
           <div class="setup-logo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
           </div>
-          <p class="setup-tagline">全能型书签管理工具，高效整理你的网络资源</p>
+          <p class="setup-tagline">{{ t('modal.setupGuide.tagline') }}</p>
         </div>
 
         <!-- 卡片选项 -->
         <div class="setup-cards">
           <button class="setup-card" @click="onFreshStart" autofocus>
             <span class="setup-card-icon setup-card-icon--accent" v-html="I.star"></span>
-            <span class="setup-card-title">全新开始</span>
-            <span class="setup-card-desc">从一个示例组开始，探索功能后再整理自己的书签</span>
+            <span class="setup-card-title">{{ t('modal.setupGuide.freshStart') }}</span>
+            <span class="setup-card-desc">{{ t('modal.setupGuide.freshStartDesc') }}</span>
           </button>
           <button class="setup-card" @click="onImport">
             <span class="setup-card-icon setup-card-icon--green" v-html="I.import"></span>
-            <span class="setup-card-title">从其他工具导入</span>
-            <span class="setup-card-desc">从浏览器书签、Raindrop 或 CSV 文件导入</span>
+            <span class="setup-card-title">{{ t('modal.setupGuide.importTitle') }}</span>
+            <span class="setup-card-desc">{{ t('modal.setupGuide.importDesc') }}</span>
           </button>
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-ghost" @click="onFreshStart">跳过，直接开始</button>
+        <button class="btn btn-ghost" @click="onFreshStart">{{ t('modal.setupGuide.skip') }}</button>
       </div>
     </div>
   </div>
@@ -38,6 +38,7 @@
 import { useUIStore } from '../../stores/ui.js'
 import { I } from '../../config/icons.js'
 import { safeSetItem } from '../../lib/storageSafe.js'
+import { t } from '../../i18n/index.js'
 
 const ui = useUIStore()
 const SETUP_DONE_KEY = 'lv_setup_done'

@@ -4,6 +4,7 @@ import { useUIStore } from '../../stores/ui.js';
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js';
 import { gid } from '../../utils.js';
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js';
+import { t } from '../../i18n/index.js';
 import { EditorManager } from '../../lib/editor.js';
 import { pushNavState } from '../interaction/useKeyboardOps.js';
 import { previewIconUrl, clearIcon } from '../ui/useIconPreview.js';
@@ -110,7 +111,7 @@ export function createGroup(catId?: string): string {
     bookmarkIds: [], notes: '',
     updatedAt: Date.now(), useCount: 0
   };
-  ds.addGroup(g); saveAppData(); toast('组已创建');
+  ds.addGroup(g); saveAppData(); toast(t('msg.groupCreated'));
   return g.id;
 }
 
@@ -123,13 +124,13 @@ export async function deleteGroup(dGid: string, skipConfirm?: boolean) {
     ds.deleteGroup(dGid);
     saveAppData();
     if (ui.focusedGroupId === dGid) ui.focusedGroupId = null;
-    toastWithUndo('已删除组', function () {
+    toastWithUndo(t('msg.groupDeleted'), function () {
       ds.restoreGroup(dGid);
-      debouncedSaveAppData(); toast('组已恢复');
+      debouncedSaveAppData(); toast(t('msg.groupRestored'));
     });
   };
   if (skipConfirm) doDelete();
-  else if (await showConfirm('确认删除组「' + (sg.name || '未命名') + '」？')) doDelete();
+  else if (await showConfirm(t('msg.confirmDeleteGroup', { name: sg.name || t('common.unnamed') }))) doDelete();
 }
 
 /** Directly add bookmark to group (for programmatic use, not popover) */
@@ -137,14 +138,14 @@ export function addToGroupDirect(bmId: string, tGid: string) {
   const ds = useDataStore();
   const sg = ds.groupMap[tGid];
   if (!sg) return;
-  if (sg.bookmarkIds.indexOf(bmId) !== -1) { toast('书签已在组内', false); return; }
+  if (sg.bookmarkIds.indexOf(bmId) !== -1) { toast(t('msg.bookmarkAlreadyInGroup'), false); return; }
   const bm = ds.bookmarkMap[bmId];
   if (!bm) return;
   ds.updateGroup(tGid, { bookmarkIds: [...sg.bookmarkIds, bmId] });
   const ed = EditorManager.get(tGid);
   if (ed) ed.chain().insertContent(inlineCardHTML(bm)).run();
   saveGroupBody(tGid); saveAppData();
-  toast('已添加到组');
+  toast(t('msg.addedToGroup'));
 }
 
 export function removeBmFromGroup(bmId: string, tGid: string) {
@@ -162,7 +163,7 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
   const ed = EditorManager.get(tGid);
   if (ed) EditorManager.deleteNode(tGid, 'data-bm-id', bmId);
   saveGroupBody(tGid); saveAppData();
-  toastWithUndo('已从组移除', function () {
+  toastWithUndo(t('msg.removedFromGroup'), function () {
     ds.updateGroup(tGid, { bookmarkIds: idsBefore.slice() });
     const currentEd = EditorManager.get(tGid);
     // 编辑器内若已无该卡片再插入，避免重复 inlineCard
@@ -173,7 +174,7 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
       })
       if (!hasCard) currentEd.chain().insertContent(inlineCardHTML(bm)).run()
     }
-    saveGroupBody(tGid); debouncedSaveAppData(); toast('已恢复');
+    saveGroupBody(tGid); debouncedSaveAppData(); toast(t('deadlinks.restored'));
   });
 }
 
@@ -341,7 +342,7 @@ export function saveGroupEdit() {
   geForm._origBookmarkIds = [...geForm.bookmarkIds];
   geForm._origNotes = editorHTML !== null ? editorHTML : (sg.notes || '');
   saveAppData();
-  closeGroupEdit({ discard: false }); toast('组已更新');
+  closeGroupEdit({ discard: false }); toast(t('msg.groupUpdated'));
 }
 
 export function previewGeIconUrl() { previewIconUrl(geForm); }

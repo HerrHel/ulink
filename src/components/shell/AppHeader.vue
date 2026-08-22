@@ -1,20 +1,20 @@
 <template>
   <header class="panel-header" @dblclick="onDblClick">
     <div class="header-left">
-      <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" title="菜单" aria-label="菜单">
+      <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" :title="t('shell.menu')" :aria-label="t('shell.menu')">
         <span aria-hidden="true" v-html="I.hamburger"></span>
       </button>
       <!-- Focus mode -->
       <template v-if="ui.focusedGroupId && focusedGroup">
-        <span class="panel-title-group-icon" @click="$emit('exit-focus')" title="返回">
+        <span class="panel-title-group-icon" @click="$emit('exit-focus')" :title="t('shell.back')">
           <img v-if="focusedGroup.icon" :src="focusedGroup.icon" alt="">
           <span v-else aria-hidden="true" v-html="I.note"></span>
         </span>
         <span class="focus-title-input" contenteditable="true"
-              :class="{ 'focus-title-unnamed': !focusedGroup.name || focusedGroup.name === '未命名' }"
+              :class="{ 'focus-title-unnamed': !focusedGroup.name || isUnnamed(focusedGroup.name) }"
               @blur="$emit('focus-title-change', $event)" @keydown.enter.prevent="($event.target as HTMLElement).blur()"
-              @focus="onTitleFocus">{{ focusedGroup.name || '未命名' }}</span>
-        <span class="panel-count">{{ focusBookmarkCount }} 个书签</span>
+              @focus="onTitleFocus">{{ displayName }}</span>
+        <span class="panel-count">{{ tN('count.bookmarks', focusBookmarkCount) }}</span>
       </template>
       <!-- Normal mode -->
       <template v-else>
@@ -25,25 +25,25 @@
     <div v-show="!ui.focusedGroupId" class="search-wrapper header-search">
       <div class="search-box">
         <span aria-hidden="true" v-html="I.search"></span>
-        <input type="text" class="search-input" aria-label="搜索" id="searchInput" data-testid="lv-search-input" v-model="localQuery"
-               placeholder="搜索…" autocomplete="off">
+        <input type="text" class="search-input" :aria-label="t('shell.search')" id="searchInput" data-testid="lv-search-input" v-model="localQuery"
+               :placeholder="t('shell.searchPlaceholder')" autocomplete="off">
       </div>
       <SearchSuggest />
     </div>
     <div class="header-right">
-      <button class="search-toggle-btn" id="searchToggleBtn" title="搜索" aria-label="搜索">
+      <button class="search-toggle-btn" id="searchToggleBtn" :title="t('shell.search')" :aria-label="t('shell.search')">
         <span aria-hidden="true" v-html="I.search"></span>
       </button>
       <template v-if="ui.focusedGroupId">
-        <button class="ft-sb-btn" @click="$emit('focus-edit-group')" title="编辑组" aria-label="编辑组">
+        <button class="ft-sb-btn" @click="$emit('focus-edit-group')" :title="t('shell.editGroup')" :aria-label="t('shell.editGroup')">
           <span aria-hidden="true" v-html="I.edit"></span>
         </button>
-        <button class="ft-sb-btn" @click="$emit('focus-share-group')" title="分享组" aria-label="分享组">
+        <button class="ft-sb-btn" @click="$emit('focus-share-group')" :title="t('shell.shareGroup')" :aria-label="t('shell.shareGroup')">
           <span aria-hidden="true" v-html="I.share"></span>
         </button>
       </template>
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
-        <button class="lt-btn" id="btnSettings" data-testid="lv-btn-settings" @click="toggleSettings" title="设置" aria-label="设置">
+        <button class="lt-btn" id="btnSettings" data-testid="lv-btn-settings" @click="toggleSettings" :title="t('shell.settings')" :aria-label="t('shell.settings')">
             <span aria-hidden="true" v-html="I.settings" class="icon-sm"></span>
         </button>
         <button
@@ -52,14 +52,14 @@
           :class="syncState.dotClass"
           @click.stop="toggleSyncPopover"
           :title="syncState.label"
-          aria-label="同步状态"
+          :aria-label="t('shell.syncStatus')"
         >
           <span class="sync-badge" v-if="syncState.showBadge">{{ syncState.count }}</span>
         </button>
         <SettingsPanel />
         <SyncStatusPopover v-if="auth.isLoggedIn" />
       </span>
-      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" title="右侧辅助栏" aria-label="右侧辅助栏">
+      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" :title="t('shell.detailPanel')" :aria-label="t('shell.detailPanel')">
         <span aria-hidden="true" v-html="I.panel" class="icon-sm"></span>
       </button>
     </div>
@@ -78,6 +78,7 @@ import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import SearchSuggest from '../overlays/SearchSuggest.vue'
 import SettingsPanel from './SettingsPanel.vue'
 import SyncStatusPopover from '../overlays/SyncStatusPopover.vue'
+import { t, tN } from '../../i18n/index.js'
 
 const ui = useUIStore()
 const dataStore = useDataStore()
@@ -110,11 +111,20 @@ watch(() => ui.searchQuery, (val) => {
 const focusedGroup = computed(() =>
   ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
 )
+/** 「未命名」同时兼容旧存量数据的中文占位值 */
+function isUnnamed(v: string): boolean {
+  return v === '未命名' || v === 'Untitled'
+}
+const displayName = computed(() =>
+  focusedGroup.value && focusedGroup.value.name && !isUnnamed(focusedGroup.value.name)
+    ? focusedGroup.value.name
+    : t('common.unnamed')
+)
 const panelTitle = computed(() =>
-  (dataStore.categoryMap[ui.curCat] || {}).name || '全部书签'
+  (dataStore.categoryMap[ui.curCat] || {}).name || t('shell.allBookmarks')
 )
 const panelCountText = computed(() =>
-  (dataStore.filteredBookmarks.filter(b => !b.parentId).length + dataStore.filteredGroups.length) + ' 个'
+  tN('count.items', dataStore.filteredBookmarks.filter(b => !b.parentId).length + dataStore.filteredGroups.length)
 )
 const focusBookmarkCount = computed(() => {
   const g = ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
@@ -129,7 +139,7 @@ function toggleSettings() {
 function onTitleFocus(e: FocusEvent) {
   const target = e.target as HTMLElement
   const txt = target.textContent?.trim() || ''
-  if (!txt || txt === '未命名') {
+  if (!txt || isUnnamed(txt)) {
     target.textContent = ''
     target.classList.remove('focus-title-unnamed')
   }

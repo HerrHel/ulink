@@ -1,9 +1,9 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="登录" :class="{ open: auth.authModalOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.auth.ariaLabel')" :class="{ open: auth.authModalOpen }" @click.self="onClose">
     <div class="modal modal-md">
       <div class="modal-head">
-        <h2>{{ step === 'email' ? '登录 / 注册' : '输入验证码' }}</h2>
-        <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
+        <h2>{{ step === 'email' ? t('settings.loginRegister') : t('modal.auth.enterCode') }}</h2>
+        <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
       </div>
       <div class="modal-body auth-body">
         <!-- 邮箱图标装饰 -->
@@ -14,9 +14,9 @@
         <!-- Step 1: 输入邮箱 -->
         <template v-if="step === 'email'">
           <p class="auth-hint">
-            输入邮箱地址，我们将发送一个 6 位验证码
+            {{ t('modal.auth.emailHint') }}
           </p>
-          <p class="auth-hint-sub">无需密码，首次登录即自动注册</p>
+          <p class="auth-hint-sub">{{ t('modal.auth.noPasswordHint') }}</p>
           <div class="form-group">
             <input
               type="email" class="form-input auth-input" id="authEmailInput"
@@ -29,10 +29,10 @@
         <!-- Step 2: 输入验证码 -->
         <template v-if="step === 'code'">
           <p class="auth-hint">
-            验证码已发送至
+            {{ t('modal.auth.codeSentTo') }}
           </p>
           <p class="auth-email-display">{{ email }}</p>
-          <p class="auth-hint-sub">请查收邮件（含垃圾箱），输入 6 位验证码</p>
+          <p class="auth-hint-sub">{{ t('modal.auth.checkEmailHint') }}</p>
           <div class="form-group">
             <div class="code-boxes" @click="focusCodeInput">
               <input
@@ -52,25 +52,25 @@
         </template>
 
         <div v-if="auth.authError" class="auth-error"><span class="auth-error-icon" v-html="I.alert"></span>{{ auth.authError }}</div>
-        <div v-if="verified" class="auth-success"><span class="auth-success-icon" v-html="I.listCheck"></span>登录成功</div>
+        <div v-if="verified" class="auth-success"><span class="auth-success-icon" v-html="I.listCheck"></span>{{ t('modal.auth.loginSuccess') }}</div>
       </div>
       <div class="modal-foot gap-2">
-        <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">返回修改</button>
+        <button v-if="step === 'code'" class="btn btn-ghost" @click="onBack">{{ t('modal.auth.backToEdit') }}</button>
         <button v-if="step === 'code'" class="btn btn-ghost" @click="onSendCode"
           :disabled="sending || cooldownSec > 0">
-          {{ sending ? '发送中...'
-            : (cooldownSec > 0 ? `重发 (${cooldownSec}s)` : '重发验证码') }}
+          {{ sending ? t('modal.auth.sending')
+            : (cooldownSec > 0 ? t('modal.auth.resendCountdown', { n: cooldownSec }) : t('modal.auth.resend')) }}
         </button>
         <span class="flex-1"></span>
-        <button class="btn btn-secondary" @click="onClose">取消</button>
+        <button class="btn btn-secondary" @click="onClose">{{ t('common.cancel') }}</button>
         <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode"
           :disabled="!emailTrim || sending || cooldownSec > 0">
-          {{ sending ? '发送中...'
-            : (cooldownSec > 0 ? `重新发送 (${cooldownSec}s)` : '发送验证码') }}
+          {{ sending ? t('modal.auth.sending')
+            : (cooldownSec > 0 ? t('modal.auth.resendCountdownFull', { n: cooldownSec }) : t('modal.auth.sendCode')) }}
         </button>
         <button v-if="step === 'code'" class="btn btn-primary" @click="onVerify"
           :disabled="code.length < 6 || verifying || lockSec > 0">
-          {{ verifying ? '验证中...' : '登录' }}
+          {{ verifying ? t('modal.auth.verifying') : t('modal.auth.login') }}
         </button>
       </div>
     </div>
@@ -83,6 +83,7 @@ import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
+import { t } from '../../i18n/index.js'
 
 const auth = useAuth()
 const sync = useCloudSync()
@@ -127,7 +128,7 @@ async function onSendCode() {
   if (!e) return
   const remain = cooldownSec.value
   if (remain > 0) {
-    auth.authError = `验证码已发送，请 ${remain} 秒后再试`
+    auth.authError = t('modal.auth.cooldownError', { n: remain })
     return
   }
   sending.value = true
@@ -145,7 +146,7 @@ async function onVerify() {
   if (c.length < 6) return
   const lockRemain = lockSec.value
   if (lockRemain > 0) {
-    auth.authError = `验证失败次数过多，请 ${lockRemain} 秒后重试或重新获取验证码`
+    auth.authError = t('modal.auth.lockError', { n: lockRemain })
     return
   }
   verifying.value = true

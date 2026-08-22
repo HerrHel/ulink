@@ -3,10 +3,13 @@ import { createPinia } from 'pinia'
 import './styles/main.css'
 import App from './App.vue'
 import { vueErrorHandler, unhandledRejectionHandler } from './lib/errorReporter.js'
+import { t, tN } from './i18n/index.js'
 
 const pinia = createPinia()
 const app = createApp(App)
 app.use(pinia)
+app.config.globalProperties.$t = t
+app.config.globalProperties.$tN = tN
 
 // Debug: catch rendering errors & prevent total white-screen
 app.config.errorHandler = (err, instance, info) => {
@@ -19,15 +22,15 @@ app.config.errorHandler = (err, instance, info) => {
     const wrap = document.createElement('div')
     wrap.style.cssText = 'padding:40px;text-align:center;font-family:sans-serif'
     const h2 = document.createElement('h2')
-    h2.textContent = '出错了'
+    h2.textContent = t('errors.crashTitle')
     const p = document.createElement('p')
     p.style.color = '#888'
-    p.textContent = err instanceof Error ? err.message : '未知错误'
+    p.textContent = err instanceof Error ? err.message : t('errors.unknown')
     const btn = document.createElement('button')
     btn.id = 'lv-reload-btn'
     btn.type = 'button'
     btn.style.cssText = 'margin-top:16px;padding:8px 24px'
-    btn.textContent = '重试'
+    btn.textContent = t('common.retry')
     btn.addEventListener('click', () => location.reload())
     wrap.append(h2, p, btn)
     root.appendChild(wrap)

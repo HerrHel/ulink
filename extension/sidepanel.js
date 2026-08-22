@@ -1,4 +1,4 @@
-// sidepanel.js — LinkVault Side Panel（仅云端模式，需登录使用）
+// sidepanel.js — 与链（ulink）Side Panel（仅云端模式，需登录使用）
 
 (function () {
   'use strict'
@@ -41,7 +41,7 @@
         // F1-005：仅允许 http(s)，拒绝 javascript:/data: 等
         var openUrl = target.dataset.url
         if (!isSafeHttpUrl(openUrl)) {
-          toast('无法打开：链接协议不安全', 2000)
+          toast(chrome.i18n.getMessage('err_unsafe_protocol'), 2000)
           return
         }
         chrome.tabs.create({ url: openUrl })
@@ -108,7 +108,7 @@
       bdPasswordText.textContent = '••••••••'
       bdPasswordText.className = 'bd-pw-text'
     }
-    if (bdPwShow) bdPwShow.textContent = '显示'
+    if (bdPwShow) bdPwShow.textContent = chrome.i18n.getMessage('show')
   }
 
   function scheduleClearMasterPassword() {
@@ -191,22 +191,22 @@
 
   function updateLoginUI() {
     if (loggedIn) {
-      headerLoginHint.textContent = '已连接'
+      headerLoginHint.textContent = chrome.i18n.getMessage('status_connected')
       headerLoginHint.style.color = '#22c55e'
       btnShowLogin.classList.add('hidden')
       btnLogout.classList.remove('hidden')
       loginBanner.classList.add('hidden')
       loginGate.classList.add('hidden')
       mainContent.classList.remove('hidden')
-      setStatus('ok', '已连接')
+      setStatus('ok', chrome.i18n.getMessage('status_connected'))
     } else {
-      headerLoginHint.textContent = '未登录'
+      headerLoginHint.textContent = chrome.i18n.getMessage('status_logged_out')
       headerLoginHint.style.color = ''
       btnShowLogin.classList.remove('hidden')
       btnLogout.classList.add('hidden')
       loginGate.classList.remove('hidden')
       mainContent.classList.add('hidden')
-      setStatus('local', '未登录')
+      setStatus('local', chrome.i18n.getMessage('status_logged_out'))
     }
   }
 
@@ -214,10 +214,10 @@
     if (lastSyncTime && lastSyncEl) {
       var ago = Math.round((Date.now() - lastSyncTime) / 1000)
       var text = ''
-      if (ago < 10) text = '刚刚同步'
-      else if (ago < 60) text = ago + '秒前同步'
-      else if (ago < 3600) text = Math.round(ago / 60) + '分钟前同步'
-      else text = Math.round(ago / 3600) + '小时前同步'
+      if (ago < 10) text = chrome.i18n.getMessage('sync_just_now')
+      else if (ago < 60) text = chrome.i18n.getMessage('sync_seconds_ago', [String(ago)])
+      else if (ago < 3600) text = chrome.i18n.getMessage('sync_minutes_ago', [String(Math.round(ago / 60))])
+      else text = chrome.i18n.getMessage('sync_hours_ago', [String(Math.round(ago / 3600))])
       lastSyncEl.textContent = text
     }
   }
@@ -229,7 +229,7 @@
   }
 
   async function loadFromCloud() {
-    setStatus('sync', '加载中…')
+    setStatus('sync', chrome.i18n.getMessage('loading'))
     bookmarkList.classList.add('loading')
     // 并行拉 bookmarks 和 categories（categories 仅取 id 集用于后续可能的全量同步判定）
     var [result] = await Promise.all([
@@ -239,12 +239,12 @@
         .order('created_at_num', { ascending: false }).limit(500),
     ])
     bookmarkList.classList.remove('loading')
-    if (result.error) { setStatus('err', '加载失败: ' + (result.error.message || '未知错误')); return }
+    if (result.error) { setStatus('err', chrome.i18n.getMessage('load_failed') + (result.error.message || chrome.i18n.getMessage('unknown_error'))); return }
     allBookmarks = result.data || []
-    bookmarkCount.textContent = allBookmarks.length + ' 个书签'
+    bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(allBookmarks.length)])
     lastSyncTime = Date.now()
     updateSyncTime()
-    setStatus('ok', '已连接')
+    setStatus('ok', chrome.i18n.getMessage('status_connected'))
     if (searchQuery) {
       doSearch(searchInput.value)
     } else {
@@ -262,14 +262,13 @@
 
     if (!displayList.length) {
       if (isSearching) {
-        bookmarkList.innerHTML = '<div class="search-empty">🔍 未找到匹配的书签<br><span style="font-size:11px;opacity:.7">试试其他关键词</span></div>'
+        bookmarkList.innerHTML = '<div class="search-empty">' + chrome.i18n.getMessage('search_no_results') + '</div>'
       } else {
         bookmarkList.innerHTML = '<div class="empty">'
           + '<div style="font-size:24px;margin-bottom:8px">📑</div>'
-          + '<div style="font-weight:600;margin-bottom:4px">暂无书签</div>'
+          + '<div style="font-weight:600;margin-bottom:4px">' + chrome.i18n.getMessage('no_bookmarks') + '</div>'
           + '<div style="font-size:12px;color:var(--text2);line-height:1.6">'
-          + '💡 在网页上右键选择「保存到 LinkVault」<br>'
-          + '或快捷键 <kbd style="background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px">Ctrl+Shift+S</kbd>'
+          + chrome.i18n.getMessage('empty_hint')
           + '</div></div>'
       }
       return
@@ -298,12 +297,12 @@
     if (isSearching && displayList.length > 0) {
       var cf = document.createElement('div')
       cf.className = 'list-footer'
-      cf.textContent = '找到 ' + displayList.length + ' 条结果'
+      cf.textContent = chrome.i18n.getMessage('found_count', [String(displayList.length)])
       bookmarkList.appendChild(cf)
     } else if (!isSearching && displayList.length > 50) {
       var f2 = document.createElement('div')
       f2.className = 'list-footer'
-      f2.textContent = '仅显示最近 50 条，共 ' + displayList.length + ' 条'
+      f2.textContent = chrome.i18n.getMessage('show_limited_count', [String(displayList.length)])
       bookmarkList.appendChild(f2)
     }
 
@@ -315,9 +314,9 @@
     searchQuery = (query || '').trim()
     if (!searchQuery) {
       searchWrap.classList.remove('active')
-      recentTitle.textContent = '最近保存'
+      recentTitle.textContent = chrome.i18n.getMessage('recent_saved')
       renderBookmarks(allBookmarks)
-      bookmarkCount.textContent = allBookmarks.length + ' 个书签'
+      bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(allBookmarks.length)])
       return
     }
     searchWrap.classList.add('active')
@@ -328,8 +327,8 @@
         || (domain(b.url) && domain(b.url).toLowerCase().indexOf(q) !== -1)
         || (b.notes && b.notes.toLowerCase().indexOf(q) !== -1)
     })
-    recentTitle.textContent = '搜索结果'
-    bookmarkCount.textContent = '找到 ' + filtered.length + ' 条结果'
+    recentTitle.textContent = chrome.i18n.getMessage('search_results')
+    bookmarkCount.textContent = chrome.i18n.getMessage('found_count', [String(filtered.length)])
     renderBookmarks(filtered)
   }
 
@@ -368,11 +367,11 @@
   // ── 删除（仅云端）──
   // F1-009：删除前确认，避免列表/详情一键误删
   async function deleteBookmark(id, title) {
-    const label = (title && String(title).trim()) || '该书签'
-    if (!window.confirm('确定删除「' + label + '」？此操作将移入回收站。')) return
+    const label = (title && String(title).trim()) || chrome.i18n.getMessage('this_bookmark')
+    if (!window.confirm(chrome.i18n.getMessage('confirm_delete', [label]))) return
     const result = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
-    if (result.error) { toast('删除失败: ' + result.error.message); return }
-    toast('已删除', 2500)
+    if (result.error) { toast(chrome.i18n.getMessage('delete_failed') + result.error.message); return }
+    toast(chrome.i18n.getMessage('deleted'), 2500)
     if (currentMatchedBookmark && currentMatchedBookmark.id === id) {
       currentMatchedBookmark = null
       hideBookmarkDetail()
@@ -395,15 +394,15 @@
     chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
       if (chrome.runtime.lastError) {
         currentTab = null
-        pageTitle.textContent = '无法读取当前页'
-        pageUrl.textContent = '点击此处或 ↻ 刷新'
+        pageTitle.textContent = chrome.i18n.getMessage('cannot_read_page')
+        pageUrl.textContent = chrome.i18n.getMessage('click_to_refresh')
         setTabUrlHint(true)
         hideBookmarkDetail()
         return
       }
       if (!tab) {
         currentTab = null
-        pageTitle.textContent = '无活动标签'
+        pageTitle.textContent = chrome.i18n.getMessage('no_active_tab')
         pageUrl.textContent = ''
         setTabUrlHint(true)
         hideBookmarkDetail()
@@ -411,8 +410,8 @@
       }
       currentTab = tab
       const hasUrl = !!(tab.url && String(tab.url).trim())
-      pageTitle.textContent = tab.title || (hasUrl ? '无标题' : '当前页 URL 不可用')
-      pageUrl.textContent = hasUrl ? domain(tab.url) : '点击此处或 ↻ 刷新后保存'
+      pageTitle.textContent = tab.title || (hasUrl ? chrome.i18n.getMessage('untitled') : chrome.i18n.getMessage('url_unavailable'))
+      pageUrl.textContent = hasUrl ? domain(tab.url) : chrome.i18n.getMessage('click_to_refresh_and_save')
       if (tab.favIconUrl) {
         pageIcon.style.display = ''
         pageIcon.src = tab.favIconUrl
@@ -480,14 +479,14 @@
       bdPasswordWrap.classList.remove('hidden')
       bdPasswordText.textContent = '••••••••'
       bdPasswordText.className = 'bd-pw-text'
-      bdPwShow.textContent = '显示'
+      bdPwShow.textContent = chrome.i18n.getMessage('show')
     } else { bdPasswordWrap.classList.add('hidden') }
 
     if (bm.created_at_num) {
       var d = new Date(bm.created_at_num)
       bdCreatedAt.textContent = '📅 ' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
     } else { bdCreatedAt.textContent = '' }
-    bdUseCount.textContent = '👁️ ' + (bm.use_count || 0) + ' 次'
+    bdUseCount.textContent = '👁️ ' + chrome.i18n.getMessage('use_count', [String(bm.use_count || 0)])
   }
 
   function hideBookmarkDetail() {
@@ -511,7 +510,7 @@
     var localGen = _detailGen
     if (passwordRevealed) {
       bdPasswordText.textContent = '••••••••'; bdPasswordText.className = 'bd-pw-text'
-      bdPwShow.textContent = '显示'; passwordRevealed = false
+      bdPwShow.textContent = chrome.i18n.getMessage('show'); passwordRevealed = false
       // 隐藏时不强制清主密码（用户可能马上再显示），TTL 定时器负责清
       return
     }
@@ -531,16 +530,16 @@
       var isObjE2E = typeof stored === 'object' && stored && stored.encrypted === true && stored.iv && stored.data
       var isStrE2E = typeof stored === 'string' && stored.split('.').length === 3 && stored.split('.').every(function (p) { return !!p })
       if (isObjE2E || isStrE2E) {
-        if (!window.LinkVaultCrypto || !window.LinkVaultCrypto.decryptWithGlobalKey) { toast('解密库未加载'); return }
+        if (!window.LinkVaultCrypto || !window.LinkVaultCrypto.decryptWithGlobalKey) { toast(chrome.i18n.getMessage('crypto_lib_not_loaded')); return }
         if (!sessionMasterPassword) {
-          sessionMasterPassword = prompt('输入主密码以解密密码：')
+          sessionMasterPassword = prompt(chrome.i18n.getMessage('prompt_master_password'))
           if (!sessionMasterPassword) return
         }
         var canaryData = await ensureCanaryData()
         // R11-补：await 后代次可能已变（用户切标签触发新 showBookmarkDetail），丢弃本结果。
         if (localGen !== _detailGen) return
         if (!canaryData) {
-          toast('无法从云端取解锁数据，请稍后重试')
+          toast(chrome.i18n.getMessage('unlock_data_unavailable'))
           clearMasterPasswordNow()
           return
         }
@@ -549,7 +548,7 @@
         if (localGen !== _detailGen) return
         if (!plaintext) {
           // E2E 形态但解不开：主密码错 / canary 不匹配 / GCM 认证失败 —— 视为失败，清主密码
-          toast('解密失败，请检查主密码')
+          toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
           clearMasterPasswordNow()
           return
         }
@@ -563,11 +562,11 @@
       // R11-补：写 DOM 前最后一道 guard，确保护本 handler 始终是当前详情面板的 owner，杜绝泄漏。
       if (localGen !== _detailGen) return
       bdPasswordText.textContent = plaintext; bdPasswordText.className = 'bd-pw-text revealed'
-      bdPwShow.textContent = '隐藏'; passwordRevealed = true
+      bdPwShow.textContent = chrome.i18n.getMessage('hide'); passwordRevealed = true
       // F1-002/M6：成功后启动 TTL，到期清主密码并掩码 DOM 明文
       scheduleClearMasterPassword()
     } catch (e) {
-      toast('解密失败: ' + (e && e.message ? e.message : '未知错误'))
+      toast(chrome.i18n.getMessage('decrypt_failed') + (e && e.message ? e.message : chrome.i18n.getMessage('unknown_error')))
       // F1-003：任意解密失败一律清主密码，勿依赖中文错误子串
       clearMasterPasswordNow()
     }
@@ -591,13 +590,13 @@
     if (copyGen !== _detailGen) return
     var text = bdPasswordText.textContent
     if (text === '••••••••') return
-    navigator.clipboard.writeText(text).then(function () { toast('密码已复制', 1500) }).catch(function () { toast('复制失败', 1500) })
+    navigator.clipboard.writeText(text).then(function () { toast(chrome.i18n.getMessage('password_copied'), 1500) }).catch(function () { toast(chrome.i18n.getMessage('copy_failed'), 1500) })
   })
 
   // ── 编辑备注（仅云端）──
   bdEditNotes.addEventListener('click', function () {
     if (!currentMatchedBookmark) return
-    var newNotes = prompt('编辑备注：', currentMatchedBookmark.notes || '')
+    var newNotes = prompt(chrome.i18n.getMessage('prompt_edit_notes'), currentMatchedBookmark.notes || '')
     if (newNotes === null) return
     // B1：乐观写移到 update 成功之后——失败时不写本地引用，避免污染 allBookmarks
     sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId).then(function (r) {
@@ -610,7 +609,7 @@
 
   bdCopyUrl.addEventListener('click', function () {
     if (!currentMatchedBookmark || !currentMatchedBookmark.url) return
-    navigator.clipboard.writeText(currentMatchedBookmark.url).then(function () { toast('链接已复制', 1500) }).catch(function () { toast('复制失败', 1500) })
+    navigator.clipboard.writeText(currentMatchedBookmark.url).then(function () { toast(chrome.i18n.getMessage('url_copied'), 1500) }).catch(function () { toast(chrome.i18n.getMessage('copy_failed'), 1500) })
   })
 
   bdDelete.addEventListener('click', function () {
@@ -637,17 +636,17 @@
   // 这样确保保存操作经过 PWA 的 IndexedDB 队列 + 离线同步机制，
   // 与右键菜单 / 快捷键 Ctrl+Shift+S 行为一致。
   function flashSaveButton(success) {
-    if (success) { btnSave.innerHTML = '✓ 已保存'; btnSave.style.background = '#22c55e' }
-    else { btnSave.innerHTML = '✗ 保存失败'; btnSave.style.background = '#ef4444' }
-    setTimeout(function () { btnSave.innerHTML = '⚡ 保存当前页面'; btnSave.style.background = '' }, 2000)
+    if (success) { btnSave.innerHTML = chrome.i18n.getMessage('saved_check'); btnSave.style.background = '#22c55e' }
+    else { btnSave.innerHTML = chrome.i18n.getMessage('save_failed_x'); btnSave.style.background = '#ef4444' }
+    setTimeout(function () { btnSave.innerHTML = '⚡ ' + chrome.i18n.getMessage('save_current_page'); btnSave.style.background = '' }, 2000)
   }
 
   btnSave.addEventListener('click', function () {
     chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
-      if (!tab || !tab.url) { toast('无法获取当前页面，请刷新后重试'); return }
+      if (!tab || !tab.url) { toast(chrome.i18n.getMessage('cannot_get_page')); return }
       if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')
           || tab.url.startsWith('file:') || tab.url.startsWith('javascript:') || tab.url.startsWith('data:')
-          || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) { return toast('浏览器内部页面无法保存') }
+          || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) { return toast(chrome.i18n.getMessage('cannot_save_internal_page')) }
 
       // F1-008：等 background 回执再 flash 成功，避免未送达仍显示已保存
       chrome.runtime.sendMessage(
@@ -655,16 +654,16 @@
         function (resp) {
           if (chrome.runtime.lastError) {
             flashSaveButton(false)
-            toast('保存失败：' + (chrome.runtime.lastError.message || '扩展通信错误'))
+            toast(chrome.i18n.getMessage('save_failed') + (chrome.runtime.lastError.message || chrome.i18n.getMessage('extension_comm_error')))
             return
           }
           if (resp && resp.ok) {
             flashSaveButton(true)
-            setStatus('ok', '已连接')
-            toast('已发送到 LinkVault 保存')
+            setStatus('ok', chrome.i18n.getMessage('status_connected'))
+            toast(chrome.i18n.getMessage('sent_to_vault'))
           } else {
             flashSaveButton(false)
-            toast('保存失败，请重试')
+            toast(chrome.i18n.getMessage('save_failed_retry'))
           }
         },
       )
@@ -675,7 +674,7 @@
   $('#btnRefresh').addEventListener('click', function () {
     loadCurrentTab()
     loadBookmarks()
-    toast('已刷新')
+    toast(chrome.i18n.getMessage('refreshed'))
   })
 
   // ── 登录 ──
@@ -690,23 +689,23 @@
   })
   $('#btnLogin').addEventListener('click', async function () {
     const email = emailInput.value.trim()
-    if (!email) return toast('请输入邮箱')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('邮箱格式不正确')
-    setStatus('sync', '发送中…')
+    if (!email) return toast(chrome.i18n.getMessage('enter_email'))
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast(chrome.i18n.getMessage('invalid_email'))
+    setStatus('sync', chrome.i18n.getMessage('sending'))
     const result = await sb.auth.signInWithOtp({ email: email })
-    if (result.error) { setStatus('local', '未登录'); toast(result.error.message); return }
+    if (result.error) { setStatus('local', chrome.i18n.getMessage('status_logged_out')); toast(result.error.message); return }
     otpSection.classList.remove('hidden')
-    setStatus('ok', '验证码已发送')
+    setStatus('ok', chrome.i18n.getMessage('code_sent'))
     otpInput.focus()
   })
   $('#btnVerify').addEventListener('click', async function () {
     const email = emailInput.value.trim()
     const token = otpInput.value.trim()
-    if (!token) return toast('请输入验证码')
-    setStatus('sync', '验证中…')
+    if (!token) return toast(chrome.i18n.getMessage('enter_code'))
+    setStatus('sync', chrome.i18n.getMessage('verifying'))
     const result = await sb.auth.verifyOtp({ email: email, token: token, type: 'email' })
-    if (result.error) { setStatus('local', '未登录'); toast(result.error.message); return }
-    toast('登录成功')
+    if (result.error) { setStatus('local', chrome.i18n.getMessage('status_logged_out')); toast(result.error.message); return }
+    toast(chrome.i18n.getMessage('login_success'))
     loginBanner.classList.add('hidden'); otpSection.classList.add('hidden')
     emailInput.value = ''; otpInput.value = ''
   })

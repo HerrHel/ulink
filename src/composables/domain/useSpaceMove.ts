@@ -22,6 +22,7 @@ import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import { toast } from '../../lib/toast.js'
+import { t, tN } from '../../i18n/index.js'
 import { cloneDeep } from '../../lib/clone.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { AppData, Bookmark, SiblingGroup, Category } from '../../types.js'
@@ -94,7 +95,7 @@ export function useSpaceMove() {
   /** 仅在主页空间允许移入私密 */
   function _assertMain(): boolean {
     if (uiStore.curSpace !== 'main') {
-      toast('已在私密空间内，无法再移入', false)
+      toast(t('msg.alreadyInVault'), false)
       return false
     }
     return true
@@ -150,7 +151,7 @@ export function useSpaceMove() {
     dataStore._syncMaps()
     // 落主页数据集
     await useDataStoreSave()
-    toast(`已移入私密空间：${bms.length} 个书签${groupsFull.length ? `、${groupsFull.length} 个组` : ''}`)
+    toast(tN('msg.movedToVault', bms.length) + (groupsFull.length ? tN('msg.movedGroupsSuffix', groupsFull.length) : ''))
   }
 
   /**
@@ -197,7 +198,7 @@ export function useSpaceMove() {
     dataStore.permanentDeleteCategory(catId)
     dataStore._syncMaps()
     await useDataStoreSave()
-    toast(`已把分类「${cat.name}」连同 ${bms.length} 个书签、${groups.length} 个组移入私密空间`)
+    toast(t('msg.categoryMovedToVault', { name: cat.name, bookmarks: bms.length, groups: groups.length }))
   }
 
   /**
@@ -230,7 +231,7 @@ export function useSpaceMove() {
     for (const id of descendantIds) dataStore.permanentDeleteBookmark(id)
     dataStore._syncMaps()
     await useDataStoreSave()
-    toast(`已移入私密空间：${groups.length} 个组、${bms.length} 个书签`)
+    toast(t('msg.groupsMovedToVault', { groups: groups.length, bookmarks: bms.length }))
   }
 
   return {
@@ -247,7 +248,7 @@ export function useSpaceMove() {
 export async function moveBatchSelectedToVault(batchSelected: string[]): Promise<void> {
   if (!batchSelected.length) return
   const uiStore = useUIStore()
-  if (uiStore.curSpace !== 'main') { toast('已在私密空间内，无法再移入', false); return }
+  if (uiStore.curSpace !== 'main') { toast(t('msg.alreadyInVault'), false); return }
   const bmIds: string[] = []
   const groupIds: string[] = []
   for (const id of batchSelected) {

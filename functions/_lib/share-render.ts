@@ -5,9 +5,50 @@
  * Edge Function 版，本文件为 Cloudflare Pages Functions 版；两处均为「取数 + 渲染」
  * 结构，渲染核不触碰任何平台特有 API，切换平台只需替换外层薄薄一层胶水）。
  *
+ * 品牌：中文「与链」，英文「ulink」。支持中英双语：renderSharePage 传 locale
+ * （'zh-CN' | 'en-US'），渲染文案随之切换（og:locale / lang / 全部 UI 文案）。
+ *
  * 使用：Cloudflare Pages Function `functions/s/[gid].ts` 取数后调用
- * `renderSharePage(group, bookmarks, shareUrl, appOrigin)` 生成完整 HTML。
+ * `renderSharePage(group, bookmarks, shareUrl, appOrigin, locale)` 生成完整 HTML。
  */
+
+export type ShareLocale = 'zh-CN' | 'en-US'
+
+/** 渲染文案字典（无第三方依赖，保持纯函数可移植性）。品牌词：zh 与链 / en ulink。 */
+const T = {
+  'zh-CN': {
+    lang: 'zh-CN',
+    ogLocale: 'zh_CN',
+    siteName: 'ulink',
+    defaultGroupName: '分享组',
+    notFoundTitle: '分享不存在 - 与链',
+    notFoundHeading: '该分享不存在',
+    notFoundBody: '链接可能已失效，或分享者取消了公开',
+    logoText: '与链',
+    headSub: '公开分享',
+    desc: '{n} 个链接 · 由与链公开分享',
+    empty: '这个分享组还没有书签',
+    count: '{n} 个链接',
+    cta: '在与链中打开 · 复制到我的库',
+  },
+  'en-US': {
+    lang: 'en-US',
+    ogLocale: 'en_US',
+    siteName: 'ulink',
+    defaultGroupName: 'Shared group',
+    notFoundTitle: 'Share not found - ulink',
+    notFoundHeading: 'This share no longer exists',
+    notFoundBody: 'The link may have expired, or the owner stopped sharing it publicly',
+    logoText: 'ulink',
+    headSub: 'Public share',
+    desc: '{n} links · publicly shared via ulink',
+    desc_one: '{n} link · publicly shared via ulink',
+    empty: 'This shared group has no bookmarks yet',
+    count: '{n} links',
+    count_one: '{n} link',
+    cta: 'Open in ulink · Copy to my library',
+  },
+} as const
 
 export interface PublicGroup {
   id: string
@@ -56,21 +97,39 @@ function stripTags(html: string): string {
   return (html || "").replace(/<[^>]+>/g, "").trim()
 }
 
-/** 组 notes 纯文本描述：前 120 字，空则回退「N 个链接」。 */
-function descriptionOf(group: PublicGroup, n: number): string {
+/** 简单插值：替换 {n} 等占位。 */
+function fill(s: string, params: Record<string, string | number>): string {
+  let out = s
+  for (const [k, v] of Object.entries(params)) {
+    out = out.split(`{${k}}`).join(String(v))
+  }
+  return out
+}
+
+/** 英文单复数：选 *_one / 基础键（en 复数规则仅 one/other，0 与 >1 用基础键）。 */
+function pick(dict: typeof T['zh-CN'] | typeof T['en-US'], key: string, n: number): string {
+  const d = dict as unknown as Record<string, string>
+  const one = d[`${key}_one`]
+  if (one != null && n === 1) return one
+  return d[key] ?? key
+}
+
+/** 组 notes 纯文本描述：前 120 字，空则回退「N 个链接 · 由与链公开分享」。 */
+function descriptionOf(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGroup, n: number): string {
   const plain = stripTags(group.notes || "")
-  return (plain && plain.slice(0, 120)) || `${n} 个链接 · 由 LinkVault 公开分享`
+  return (plain && plain.slice(0, 120)) || fill(pick(dict, 'desc', n), { n })
 }
 
 /** 构建 <head>：title / description / og:* / twitter:* / canonical。 */
 function buildHead(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
   group: PublicGroup,
   bookmarks: PublicBookmark[],
   shareUrl: string,
   ogImage: string,
 ): string {
-  const title = `${group.name || "分享组"} - LinkVault 分享`
-  const desc = descriptionOf(group, bookmarks.length)
+  const title = `${group.name || dict.defaultGroupName} - ${dict.siteName}`
+  const desc = descriptionOf(dict, group, bookmarks.length)
   const escTitle = esc(title)
   const escDesc = esc(desc)
   const escUrl = esc(shareUrl)
@@ -82,12 +141,12 @@ function buildHead(
     `<link rel="canonical" href="${escUrl}">`,
     // Open Graph
     `<meta property="og:type" content="article">`,
-    `<meta property="og:site_name" content="LinkVault">`,
+    `<meta property="og:site_name" content="${dict.siteName}">`,
     `<meta property="og:title" content="${escTitle}">`,
     `<meta property="og:description" content="${escDesc}">`,
     `<meta property="og:url" content="${escUrl}">`,
     `<meta property="og:image" content="${esc(ogImage)}">`,
-    `<meta property="og:locale" content="zh_CN">`,
+    `<meta property="og:locale" content="${dict.ogLocale}">`,
     // Twitter
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${escTitle}">`,
@@ -120,25 +179,26 @@ function buildBookmarkItem(b: PublicBookmark): string {
 
 /** 构建 <body>：组聚焦风格（accent 竖条 + 组头 icon + 书签列表 + 底部 CTA）。 */
 function buildBody(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
   group: PublicGroup,
   bookmarks: PublicBookmark[],
   appOrigin: string,
 ): string {
-  const name = esc(group.name || "分享组")
+  const name = esc(group.name || dict.defaultGroupName)
   const initial = esc((group.name || "?").trim().charAt(0) || "?").toUpperCase()
   const notesPlain = stripTags(group.notes || "")
   const notesHtml = notesPlain ? `<div class="group-notes-preview">${esc(notesPlain)}</div>` : ""
   const count = bookmarks.length
   const list = count
     ? bookmarks.map(buildBookmarkItem).join("\n")
-    : `<div class="empty">这个分享组还没有书签</div>`
+    : `<div class="empty">${esc(dict.empty)}</div>`
   // CTA 跳 App 的 hash 路由（#share/<gid>），让人类用户进入 SPA 登录后 Fork。
   const appUrl = `${appOrigin}/#share/${esc(group.id)}`
   return [
     `<div class="page">`,
     `<header class="head">`,
-    `<a class="logo" href="${esc(appOrigin)}/"><span class="logo-mark">&#128279;</span>LinkVault</a>`,
-    `<span class="head-sub">公开分享</span>`,
+    `<a class="logo" href="${esc(appOrigin)}/"><span class="logo-mark">&#128279;</span>${esc(dict.logoText)}</a>`,
+    `<span class="head-sub">${esc(dict.headSub)}</span>`,
     `</header>`,
     `<main class="main">`,
     `<div class="focus-card">`,
@@ -147,13 +207,13 @@ function buildBody(
     `<span class="focus-icon">${initial}</span>`,
     `<div class="focus-titlewrap">`,
     `<h1 class="focus-name">${name}</h1>`,
-    `<span class="focus-meta">${count} 个链接</span>`,
+    `<span class="focus-meta">${esc(fill(pick(dict, 'count', count), { n: count }))}</span>`,
     `</div>`,
     `</div>`,
     notesHtml,
     `<div class="list">${list}</div>`,
     `<div class="focus-foot">`,
-    `<a class="cta" href="${appUrl}">在 LinkVault 中打开 · 复制到我的库</a>`,
+    `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
     `</div>`,
     `</div>`,
     `</main>`,
@@ -167,13 +227,15 @@ export function renderSharePage(
   bookmarks: PublicBookmark[],
   shareUrl: string,
   appOrigin: string,
+  locale: ShareLocale = 'zh-CN',
 ): string {
+  const dict = T[locale]
   const ogImage = `${appOrigin}/share-cover.png`
-  const head = buildHead(group, bookmarks, shareUrl, ogImage)
-  const body = buildBody(group, bookmarks, appOrigin)
+  const head = buildHead(dict, group, bookmarks, shareUrl, ogImage)
+  const body = buildBody(dict, group, bookmarks, appOrigin)
   return [
     `<!DOCTYPE html>`,
-    `<html lang="zh-CN">`,
+    `<html lang="${dict.lang}">`,
     `<head>${head}</head>`,
     `<style>${CSS}</style>`,
     `<body>${body}</body>`,
@@ -182,8 +244,9 @@ export function renderSharePage(
 }
 
 /** 404 兜底页（分享不存在 / 已取消公开）。 */
-export function renderNotFoundPage(): string {
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>分享不存在 - LinkVault</title></head><body style="font-family:system-ui,sans-serif;background:#F5EFEA;text-align:center;padding:80px 20px;color:#5E5852"><div style="font-size:34px;margin-bottom:14px">&#128279;</div><h1 style="font-size:20px;font-weight:700;color:#2C2824;margin-bottom:10px">该分享不存在</h1><p style="font-size:14px">链接可能已失效，或分享者取消了公开</p></body></html>`
+export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
+  const d = T[locale]
+  return `<!DOCTYPE html><html lang="${d.lang}"><head><meta charset="utf-8"><title>${esc(d.notFoundTitle)}</title></head><body style="font-family:system-ui,sans-serif;background:#F5EFEA;text-align:center;padding:80px 20px;color:#5E5852"><div style="font-size:34px;margin-bottom:14px">&#128279;</div><h1 style="font-size:20px;font-weight:700;color:#2C2824;margin-bottom:10px">${esc(d.notFoundHeading)}</h1><p style="font-size:14px">${esc(d.notFoundBody)}</p></body></html>`
 }
 
 const CSS = `

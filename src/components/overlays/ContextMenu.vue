@@ -1,5 +1,5 @@
 <template>
-  <div class="ctx-menu" id="ctxMenu" v-show="ctx.open" role="menu" aria-label="操作菜单"
+  <div class="ctx-menu" id="ctxMenu" v-show="ctx.open" role="menu" :aria-label="t('ctx.menu')"
        :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
     <template v-for="item in visibleItems" :key="item.action">
       <div v-if="item.divider" class="ctx-divider" role="separator"></div>
@@ -18,6 +18,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { ACTIONS } from '../../config/constants.js'
 import { MENU_RULES, MENU_ITEMS, dispatchMenuAction, canAddSub } from '../../lib/menuConfig.js'
+import { t } from '../../i18n/index.js'
 
 const ctx = useContextMenuStore()
 const uiStore = useUIStore()
@@ -55,7 +56,7 @@ const visibleItems = computed(() => {
     if (entry.action === ACTIONS.MOVE_TO_SPACE && uiStore.curSpace !== 'main') continue
     // 添加子网站仅顶层书签（子书签无此能力）
     if (entry.action === ACTIONS.ADD_SUB && !canAddSub(ctx.id)) continue
-    let text = entry.label || MENU_ITEMS[entry.action]?.label || entry.action
+    let text = t(entry.label || MENU_ITEMS[entry.action]?.label || entry.action)
     // 动态标签：置顶/取消置顶
     if (entry.action === ACTIONS.PIN) {
       const isPinned = ctx.type === 'card'
@@ -63,7 +64,7 @@ const visibleItems = computed(() => {
         : ctx.type === 'group'
           ? !!dataStore.groupMap[ctx.id]?.pinnedAt
           : false
-      text = isPinned ? '取消置顶' : '置顶'
+      text = isPinned ? t('ctx.unpin') : t('ctx.pin')
     }
     items.push({ action: entry.action, text, danger: entry.danger ?? MENU_ITEMS[entry.action]?.danger })
   }

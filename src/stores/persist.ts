@@ -9,7 +9,7 @@
  * - 写入策略：IDB 先写 → 成功后再写 localStorage（尽力），
  *   任一失败不回滚另一端（不阻塞主流程）
  */
-import { STORAGE_KEY, STORAGE_KEY_VAULT, DEFAULTS } from '../config/constants.js'
+import { STORAGE_KEY, STORAGE_KEY_VAULT, DEFAULTS, buildSeedDefaults } from '../config/constants.js'
 import { runMigrations, CURRENT_SCHEMA_VERSION } from './migrations.js'
 import { idbGet, idbSet } from './storage.js'
 import { AppDataSchema } from '../schemas.js'
@@ -163,7 +163,8 @@ export function loadFromLocalStorage(space: Space = 'main'): AppData {
       // 才回退 DEFAULTS，避免把"可被迁移修复的旧数据"误判为"损坏数据整体丢弃"。
       if (!d || typeof d !== 'object' || !Array.isArray(d.bookmarks) || !Array.isArray(d.siblingGroups)) {
         console.warn('[persist] localStorage data structure invalid, falling back to defaults')
-        return cloneDeep(DEFAULTS)
+        // 双语：种子数据按当前 locale 本地化（分类名 / 属性名 / 欢迎笔记）
+        return cloneDeep(buildSeedDefaults())
       }
       const result: AppData = {
         categories: d.categories || DEFAULTS.categories.slice(),
@@ -176,13 +177,13 @@ export function loadFromLocalStorage(space: Space = 'main'): AppData {
       const parsed = AppDataSchema.safeParse(result)
       if (!parsed.success) {
         console.warn('[persist] data validation failed after migration, falling back to defaults:', parsed.error.issues)
-        return cloneDeep(DEFAULTS)
+        return cloneDeep(buildSeedDefaults())
       }
       if (needsPersist) saveToLocalStorage(parsed.data, space)
       return parsed.data
     }
   } catch (e) { console.warn('[persist] localStorage load failed:', (e as Error).message) }
-  return cloneDeep(DEFAULTS)
+  return cloneDeep(buildSeedDefaults())
 }
 
 export async function loadFromIDB(space: Space = 'main'): Promise<AppData | null> {

@@ -7,6 +7,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useMentionStore } from '../../stores/overlay.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
 import { saveGroupBody } from './useGroup.js'
 import { groupRefCardHTML, inlineCardHTML } from '../useInlineCard.js'
@@ -124,7 +125,7 @@ export function useMention() {
     const ed = EditorManager.get(mentionStore.gid)
     _insertHTML(ed, groupRefCardHTML(src))
     saveGroupBody(mentionStore.gid); saveAppData(); hide()
-    toast('已添加组引用')
+    toast(t('msg.groupRefAdded'))
   }
 
   // 键盘/输入事件处理

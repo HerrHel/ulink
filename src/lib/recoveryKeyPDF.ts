@@ -1,18 +1,21 @@
 /**
  * recoveryKeyPDF.ts — 生成 Recovery Key 文件下载
  * 使用 <a download> 直接下载 HTML 文件，移动端和桌面端均可用
+ * 双语：文案与品牌随当前 locale（与链 / ulink）。
  */
 import { esc } from '../utils.js'
 import { downloadFile, dateStamp } from './download.js'
+import { t, getLocale } from '../i18n/index.js'
 
 export function generateRecoveryKeyPDF(recoveryKey: string) {
   // 与全站 HTML 转义一致（含单引号），避免局部实现漂移
   const safeKey = esc(recoveryKey)
+  const brand = t('app.brand')
   const html = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>LinkVault Recovery Key</title>
+<title>${esc(t('recoveryKey.title'))}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, 'Segoe UI', sans-serif; padding: 40px; color: #1a1a1a; max-width: 700px; margin: 0 auto; }
@@ -32,8 +35,8 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
 </style>
 </head>
 <body>
-  <h1>LinkVault Recovery Key</h1>
-  <p class="subtitle">端到端加密恢复密钥</p>
+  <h1>${esc(t('recoveryKey.title'))}</h1>
+  <p class="subtitle">${esc(t('recoveryKey.subtitle'))}</p>
 
   <div class="key-box">
     <div class="key-label">Recovery Key</div>
@@ -41,47 +44,44 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
   </div>
 
   <div class="warning">
-    <h3>重要提醒</h3>
+    <h3>${esc(t('recoveryKey.warningTitle'))}</h3>
     <ul>
-      <li>此 Recovery Key 用于在您<strong>忘记主密码时重设主密码</strong>，是重设的<strong>唯一方式</strong></li>
-      <li>忘记主密码且丢失此 Key 将导致无法重设，<strong>新数据也无法再写入加密保护</strong></li>
-      <li>请将此文件保存在安全的地方（如密码管理器、加密 U 盘）</li>
-      <li>建议打印一份纸质副本存放在保险箱</li>
-      <li><strong>不要</strong>将此文件存储在云端网盘或邮件中</li>
+      <li>${t('recoveryKey.warning1')}</li>
+      <li>${t('recoveryKey.warning2')}</li>
+      <li>${t('recoveryKey.warning3')}</li>
+      <li>${t('recoveryKey.warning4')}</li>
+      <li>${t('recoveryKey.warning5')}</li>
     </ul>
   </div>
 
   <div class="section">
-    <h2>使用说明</h2>
+    <h2>${esc(t('recoveryKey.usageTitle'))}</h2>
     <p>
-      <strong>忘记主密码时：</strong>在 LinkVault 的 E2E 解锁界面，点击"使用 Recovery Key"，
-      输入此 Recovery Key 即可重新设置主密码并继续使用端到端加密。
+      <strong>${esc(t('recoveryKey.forgotPwLabel'))}</strong>${t('recoveryKey.forgotPwBody')}
     </p>
     <p style="margin-top:8px;color:#856404">
-      <strong>注意：</strong>重设主密码后会用新主密码派生新密钥。<strong>此前用旧主密码加密、
-      且本地已无明文副本的数据将无法解密</strong>。请尽量在能登录的设备上记牢主密码，仅在确实遗忘时才使用本 Key 重设。
+      <strong>${esc(t('recoveryKey.noteLabel'))}</strong>${t('recoveryKey.noteBody')}
     </p>
     <p style="margin-top:8px">
-      <strong>换设备时：</strong>在新设备上安装 LinkVault，登录账户后，输入您的主密码即可解密数据。
-      请务必使用当初加密数据时所用的主密码；若该主密码已遗忘，只能用此 Recovery Key 重设（重设后的限制见上）。
+      <strong>${esc(t('recoveryKey.newDeviceLabel'))}</strong>${t('recoveryKey.newDeviceBody')}
     </p>
   </div>
 
   <div class="section">
-    <h2>安全建议</h2>
+    <h2>${esc(t('recoveryKey.securityTitle'))}</h2>
     <p>
-      • 主密码应足够复杂（建议 12 位以上，包含大小写字母、数字和符号）<br>
-      • 不要与其他账户使用相同的密码<br>
-      • 定期检查 Recovery Key 是否仍然可用<br>
-      • 如果怀疑 Recovery Key 泄露，重新生成新的主密码和 Recovery Key
+      ${t('recoveryKey.security1')}<br>
+      ${t('recoveryKey.security2')}<br>
+      ${t('recoveryKey.security3')}<br>
+      ${t('recoveryKey.security4')}
     </p>
   </div>
 
   <div class="footer">
-    生成时间：${new Date().toLocaleString('zh-CN')} | LinkVault E2E Recovery Key
+    ${t('recoveryKey.footer', { time: new Date().toLocaleString(getLocale() === 'zh-CN' ? 'zh-CN' : 'en-US', { hour12: false }), brand })}
   </div>
 </body>
 </html>`
 
-  downloadFile(`LinkVault-Recovery-Key-${dateStamp()}.html`, html, 'text/html')
+  downloadFile(`ulink-Recovery-Key-${dateStamp()}.html`, html, 'text/html')
 }

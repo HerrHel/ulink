@@ -77,6 +77,7 @@ import { MENU_ITEMS, MENU_RULES, LONGPRESS_RULES, dispatchMenuAction, buildLongP
 import { ACTIONS } from '../../config/constants.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { t } from '../../i18n/index.js'
 
 let ds: ReturnType<typeof useDataStore>
 let ui: ReturnType<typeof useUIStore>
@@ -110,20 +111,20 @@ describe('menuConfig — 规则结构', () => {
   it('card 右键首项为 COPY_URL（打开网站→复制网址），文案正确', () => {
     expect(MENU_RULES.card[0].action).toBe(ACTIONS.COPY_URL)
     expect(MENU_RULES.card.some(e => e.action === ACTIONS.VISIT)).toBe(false)
-    expect(MENU_ITEMS[ACTIONS.COPY_URL].label).toBe('复制网址')
+    expect(t(MENU_ITEMS[ACTIONS.COPY_URL].label!)).toBe('复制网址')
   })
 
   it('sub/group-card 的 VISIT 保持「查看详情」语义（openDetail）', () => {
     const sub = MENU_RULES.sub.find(e => e.action === ACTIONS.VISIT)
     const gc = MENU_RULES['group-card'].find(e => e.action === ACTIONS.VISIT)
-    expect(sub?.label).toBe('查看详情')
-    expect(gc?.label).toBe('查看详情')
+    expect(t(sub?.label ?? '')).toBe('查看详情')
+    expect(t(gc?.label ?? '')).toBe('查看详情')
   })
 
   it('group 右键含 SHARE_GROUP/HISTORY 且 DELETE 标记删除组', () => {
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.SHARE_GROUP)).toBe(true)
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.HISTORY)).toBe(true)
-    expect(MENU_RULES.group.find(e => e.action === ACTIONS.DELETE)?.label).toBe('删除组')
+    expect(t(MENU_RULES.group.find(e => e.action === ACTIONS.DELETE)?.label ?? '')).toBe('删除组')
   })
 
   it('长按 card 子集含 EXPAND（条件项）+ COPY_URL，无 HISTORY/MULTI_SELECT', () => {
@@ -137,8 +138,8 @@ describe('menuConfig — 规则结构', () => {
   it('card 右键含 ADD_SUB、group 右键含 ADD_TO_GROUP（替代原 foot 按钮）', () => {
     expect(MENU_RULES.card.some(e => e.action === ACTIONS.ADD_SUB)).toBe(true)
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.ADD_TO_GROUP)).toBe(true)
-    expect(MENU_ITEMS[ACTIONS.ADD_SUB].label).toBe('添加子网站')
-    expect(MENU_ITEMS[ACTIONS.ADD_TO_GROUP].label).toBe('添加书签或组')
+    expect(t(MENU_ITEMS[ACTIONS.ADD_SUB].label!)).toBe('添加子网站')
+    expect(t(MENU_ITEMS[ACTIONS.ADD_TO_GROUP].label!)).toBe('添加书签或组')
   })
 })
 

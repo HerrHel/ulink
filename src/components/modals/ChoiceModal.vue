@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="选择操作" :class="{ open: store.choiceOpen }" @click.self="store.resolveChoice(null)">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.choice.ariaLabel')" :class="{ open: store.choiceOpen }" @click.self="store.resolveChoice(null)">
     <div class="modal modal-sm">
       <div class="modal-body modal-body-center">
         <div class="choice-msg">{{ store.choiceDialog?.message }}</div>
@@ -17,7 +17,7 @@
       </div>
       <div class="modal-foot choice-foot">
         <button class="btn btn-secondary" @click="store.resolveChoice(null)">
-          {{ store.choiceDialog?.cancelLabel || '取消' }}
+          {{ store.choiceDialog?.cancelLabel || t('common.cancel') }}
         </button>
       </div>
     </div>
@@ -27,6 +27,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted, nextTick } from 'vue'
 import { useToastStore } from '../../stores/toast.js'
+import { t } from '../../i18n/index.js'
 
 const store = useToastStore()
 

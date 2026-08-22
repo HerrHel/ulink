@@ -1,22 +1,22 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="属性管理" :class="{ open: store.modals.attribute }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.attribute.ariaLabel')" :class="{ open: store.modals.attribute }" @click.self="onClose">
     <div class="modal">
-      <div class="modal-head"><h2>管理属性</h2><button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button></div>
+      <div class="modal-head"><h2>{{ t('modal.attribute.manage') }}</h2><button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button></div>
       <div class="modal-body">
         <div class="flex-center gap-2 mb-3">
-          <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" placeholder="属性名称" aria-label="属性名称" @keydown.enter="onAddAttr">
-          <button class="btn btn-primary btn-sm" @click="onAddAttr">添加</button>
+          <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" :placeholder="t('modal.attribute.name')" :aria-label="t('modal.attribute.name')" @keydown.enter="onAddAttr">
+          <button class="btn btn-primary btn-sm" @click="onAddAttr">{{ t('common.add') }}</button>
         </div>
         <div>
           <div v-for="attr in attributes" :key="attr.id" class="list-item">
             <template v-if="editingId === attr.id">
-              <input class="form-input flex-1 form-input-sm" v-model="editingName" aria-label="属性名称" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
-              <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名" v-html="I.listCheck"></button>
+              <input class="form-input flex-1 form-input-sm" v-model="editingName" :aria-label="t('modal.attribute.name')" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
+              <button class="btn btn-primary btn-sm" @click="confirmRename" :title="t('modal.category.confirmRename')" v-html="I.listCheck"></button>
             </template>
             <template v-else>
               <span class="flex-1">{{ attr.name }}</span>
-              <button class="btn-xs icon-xs" @click="startRename(attr)" title="编辑" v-html="I.edit"></button>
-              <button class="btn-xs btn-danger icon-xs" @click="onDelete(attr.id)" title="删除" v-html="I.trash"></button>
+              <button class="btn-xs icon-xs" @click="startRename(attr)" :title="t('common.edit')" v-html="I.edit"></button>
+              <button class="btn-xs btn-danger icon-xs" @click="onDelete(attr.id)" :title="t('common.delete')" v-html="I.trash"></button>
             </template>
           </div>
         </div>
@@ -33,6 +33,7 @@ import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
 const newName = ref('')
@@ -55,22 +56,22 @@ function onAddAttr() {
   // A2-007：查重仅对未软删属性，允许与回收站同名重建
   const byId = store.attributeMap[id]
   if ((byId && !byId.deletedAt) || store.attributeByName[name]) {
-    toast('属性已存在', false); return
+    toast(t('attr.existsToast'), false); return
   }
   store.addAttribute({ id, name, type: 'boolean' })
   store.save()
   newName.value = ''
-  toast('属性已添加')
+  toast(t('attr.addedToast'))
 }
 
 async function onDelete(id: string) {
   // A2-002：删除前确认；软删定义时会快照实体 attributes，恢复时可回写
   const attr = store.attributeMap[id]
   const name = attr?.name || id
-  const ok = await showConfirm(`确认删除属性「${name}」？已打标的书签/组将暂时去掉该标记；从回收站恢复属性时可还原关联。`)
+  const ok = await showConfirm(t('modal.attribute.confirmDelete', { name }))
   if (!ok) return
   store.deleteAttribute(id)
   store.save()
-  toast('属性已删除')
+  toast(t('modal.attribute.deleted'))
 }
 </script>

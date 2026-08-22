@@ -6,6 +6,7 @@
 <script setup lang="ts">
 import { ref, provide, onMounted, onBeforeUnmount, watch } from 'vue'
 import { isMobile, favicon, domain } from '../../utils.js'
+import { t, tN } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
 import { Editor, Node } from '@tiptap/core'
 import Document from '@tiptap/extension-document'
@@ -59,13 +60,13 @@ const InlineCard = Node.create({
         contenteditable: 'false',
         [BM_ID_ATTR]: id || '',
         draggable: 'false',
-      }, bm?.title || '（已删除）']
+      }, bm?.title || t('toolbar.deleted')]
     }
     return ['span', { class: 'group-inline-card', contenteditable: 'false', [BM_ID_ATTR]: id, draggable: 'true' },
       ['img', { src: favicon(bm.url, bm.icon), alt: '' }],
       ['span', { class: 'gic-name' }, bm.title],
       ['span', { class: 'gic-domain' }, domain(bm.url)],
-      ['span', { class: 'gic-btn' }, '详']
+      ['span', { class: 'gic-btn' }, t('cards.detailBtn')]
     ]
   },
 })
@@ -92,7 +93,7 @@ const GroupRefCard = Node.create({
     if (!g || g.deletedAt) {
       span.classList.add('is-deleted')
       span.setAttribute('draggable', 'false')
-      span.textContent = g?.name ? `${g.name}（已删除）` : '（已删除组）'
+      span.textContent = g?.name ? t('toolbar.deletedWithName', { name: g.name }) : t('toolbar.deletedGroup')
       return span
     }
 
@@ -112,17 +113,17 @@ const GroupRefCard = Node.create({
 
     const nameSpan = document.createElement('span')
     nameSpan.className = 'gic-name'
-    nameSpan.textContent = g.name || '未命名组'
+    nameSpan.textContent = g.name || t('cards.unnamedGroup')
     span.appendChild(nameSpan)
 
     const countSpan = document.createElement('span')
     countSpan.className = 'gic-count'
-    countSpan.textContent = (g.bookmarkIds?.length || 0) + '个书签'
+    countSpan.textContent = tN('count.bookmarks', g.bookmarkIds?.length || 0)
     span.appendChild(countSpan)
 
     const btnSpan = document.createElement('span')
     btnSpan.className = 'gic-btn'
-    btnSpan.textContent = '详'
+    btnSpan.textContent = t('cards.detailBtn')
     span.appendChild(btnSpan)
 
     return span
@@ -181,7 +182,7 @@ onMounted(() => {
       TaskItem.configure({ nested: true }),
       // inline 模式：图片嵌入段落文本流，光标可在图片前后定位、图片后直接输入文字
       UploadedImage.configure({ inline: true }),
-      Placeholder.configure({ placeholder: '输入文案…，按 @ 插入书签，按 # 插入组引用' }),
+      Placeholder.configure({ placeholder: t('toolbar.placeholder') }),
       InlineCard,
       GroupRefCard,
     ],

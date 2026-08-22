@@ -12,6 +12,7 @@ import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
 import { AppDataSchema } from '../schemas.js'
 import { toast } from '../lib/toast.js'
+import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
 
 /**
@@ -184,7 +185,7 @@ export const useAppStore = defineStore('app', () => {
           if (due) {
             _storageFailWarned = true
             _lastStorageFailToastAt = now
-            toast('存储不可用（如隐私模式/配额满），刷新后数据可能丢失，请尽快导出备份', false)
+            toast(t('msg.storageUnavailable'), false)
           }
         }
         return ok

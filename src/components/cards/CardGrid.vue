@@ -27,8 +27,8 @@
     </template>
     <div v-else class="empty">
       <div class="empty-icon" v-html="bookmarkIcon"></div>
-      <h3>暂无书签</h3>
-      <p>点击 + 按钮开始收藏</p>
+      <h3>{{ t('cards.emptyTitle') }}</h3>
+      <p>{{ t('cards.emptyHint') }}</p>
     </div>
   </div>
 </template>
@@ -44,6 +44,7 @@ import type { CardItem } from '../../types.js'
 import BookmarkCard from './BookmarkCard.vue'
 import GroupCard from './GroupCard.vue'
 import { provideListNav, type ListNav, type ListNavTarget } from '../../composables/useListNav.js'
+import { t } from '../../i18n/index.js'
 
 const ui = useUIStore()
 const bookmarkIcon = I.emptyBookmark
@@ -60,7 +61,7 @@ const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMo
 // 虚拟滚动强制 list-view：用户在 grid 布局下条目超过 100 会被静默切换渲染方式，
 // 布局与点击语义（行主体=主操作）一并变化，进入时提示一次避免困惑
 watch(useVirtual, (v, prev) => {
-  if (v && !prev) toast('条目较多，已切换为列表视图')
+  if (v && !prev) toast(t('cards.virtualSwitchToast'))
 })
 const virtualList = computed<CardItem[]>(() => useVirtual.value ? combinedList.value : [])
 // A1-005：行高跟 isMobile 响应，避免 setup 时 isMobile() 写死；虚拟模式强制 list-view

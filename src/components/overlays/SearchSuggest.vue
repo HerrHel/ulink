@@ -1,5 +1,5 @@
 <template>
-  <div class="search-suggest" v-show="visible && results.length > 0" role="listbox" aria-label="搜索建议">
+  <div class="search-suggest" v-show="visible && results.length > 0" role="listbox" :aria-label="t('search.suggestions')">
     <template v-for="(item, idx) in results" :key="item.id">
       <div v-if="item._divider" class="ss-divider">{{ item._divider }}</div>
       <!-- A3-002：active 用 selectable 下标，避免分隔线与键盘 activeIdx 错位 -->
@@ -9,7 +9,7 @@
         <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
         <img v-else :src="favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url || '')">
         <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
-        <span class="ss-url">{{ item._isGroup ? (item.bookmarkIds?.length || 0) + ' 个书签' : domain(item.url || '') }}</span>
+        <span class="ss-url">{{ item._isGroup ? tN('count.bookmarks', item.bookmarkIds?.length || 0) : domain(item.url || '') }}</span>
       </div>
     </template>
   </div>
@@ -28,6 +28,7 @@ import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
 import { searchWithHighlights } from '../../lib/search.js'
 import { I } from '../../config/icons.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
+import { t, tN } from '../../i18n/index.js'
 import type { SearchResultItem } from '../../lib/search.js'
 
 const ui = useUIStore()
@@ -60,7 +61,7 @@ const results = computed<SearchResultItem[]>(() => {
 
   // 在组和书签之间插入分隔线
   const firstBmIdx = items.findIndex(i => !i._isGroup)
-  if (firstBmIdx > 0) items.splice(firstBmIdx, 0, { id: '__divider', _divider: '书签', _highlights: {} })
+  if (firstBmIdx > 0) items.splice(firstBmIdx, 0, { id: '__divider', _divider: t('search.bookmarks'), _highlights: {} })
   return items.slice(0, MAX_SUGGESTIONS + 1)
 })
 

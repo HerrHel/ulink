@@ -9,6 +9,7 @@ import { useUndoStore, type UndoSnapshot } from '../../stores/undo.js'
 import { MAX_UNDO, UNDO_WINDOW, MAX_UNDO_BYTES } from '../../config/constants.js'
 import { EditorManager } from '../../lib/editor.js'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 
 let _restoring = false  // true while restoreSnapshot is running; suppress pushUndo
 
@@ -150,7 +151,7 @@ export function performUndo(gid: string): boolean {
   // M7：清 timer，下一次 pushUndo 必走 else 真正建栈并清 redo
   _clearPushTimer(gid)
   debouncedSaveAppData()
-  toast('已撤销')
+  toast(t('msg.undone'))
   return true
 }
 
@@ -173,6 +174,6 @@ export function performRedo(gid: string): boolean {
   // M7：同 performUndo，清 timer 使后续编辑真正建撤销点
   _clearPushTimer(gid)
   debouncedSaveAppData()
-  toast('已前进')
+  toast(t('msg.redone'))
   return true
 }

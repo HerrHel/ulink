@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useAppStore } from './app.js'
 import { toast } from '../lib/toast.js'
+import { t } from '../i18n/index.js'
 
 interface ActionItem {
   label: string
@@ -68,7 +69,7 @@ export const useActionSheetStore = defineStore('actionSheet', () => {
     }
     store.save()
     const cat = store.categoryMap[catId]
-    toast('已移动到 ' + (cat ? cat.name : ''))
+    toast(t('msg.movedTo', { name: cat ? cat.name : '' }))
   }
 
   // ── Touch drag-to-dismiss ──

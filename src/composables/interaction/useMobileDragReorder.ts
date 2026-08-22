@@ -11,6 +11,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 import { isMobile } from '../../utils.js'
 
 const EDGE_ZONE = 60     // 触发滚动的边缘区域 px
@@ -429,7 +430,7 @@ export function useMobileDragReorder<T>(
         if (uiStore.sortMode !== 'order') uiStore.sortMode = 'order'
         uiStore.saveUIState()
         saveAppData()
-        toast('排序已更新')
+        toast(t('msg.orderUpdated'))
       }
     }
   }

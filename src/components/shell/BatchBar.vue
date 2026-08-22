@@ -1,15 +1,16 @@
 <template>
   <div class="batch-bar" :class="{ show: uiStore.batchMode }">
-    <span class="batch-count">已选 {{ uiStore.batchSelected.length }} 项</span>
-    <button class="btn btn-ghost btn-sm" @click.stop="selectAll">全选</button>
+    <span class="batch-count">{{ tN('batch.selected', uiStore.batchSelected.length) }}</span>
+    <button class="btn btn-ghost btn-sm" @click.stop="selectAll">{{ t('batch.selectAll') }}</button>
     <span class="flex-1"></span>
-    <button class="btn btn-secondary btn-sm" @click.stop="cancel">取消</button>
+    <button class="btn btn-secondary btn-sm" @click.stop="cancel">{{ t('common.cancel') }}</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { t, tN } from '../../i18n/index.js'
 
 const dataStore = useDataStore()
 const uiStore = useUIStore()

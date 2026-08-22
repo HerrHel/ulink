@@ -1,6 +1,6 @@
 <template>
   <div id="batchMovePopover" class="batch-move-popover" :class="{ visible: bmStore.open }">
-    <div class="bmp-header">移动到分类</div>
+    <div class="bmp-header">{{ t('batch.moveToCategory') }}</div>
     <div id="batchMoveList" class="bmp-list">
       <button v-for="cat in categories" :key="cat.id" class="bmp-item"
               @click="onMoveToCat(cat.id)">
@@ -14,12 +14,12 @@
         <span class="bmp-item-icon" style="color: var(--vault-color, #9b59b6)">
           <span v-html="I.lock"></span>
         </span>
-        <span>私密空间</span>
+        <span>{{ t('vault.privateSpace') }}</span>
       </button>
     </div>
     <div class="bmp-new">
       <input type="text" class="bmp-new-input" v-model="newCatName"
-             placeholder="新建分类名称…" aria-label="新建分类名称" @keydown.enter="onAddNewCat">
+             :placeholder="t('batch.newCategoryPlaceholder')" :aria-label="t('batch.newCategoryPlaceholder')" @keydown.enter="onAddNewCat">
       <button class="bmp-new-btn" @click="onAddNewCat">+</button>
     </div>
   </div>
@@ -35,6 +35,7 @@ import { I, getCategoryIcon } from '../../config/icons.js'
 import { addNewCategory } from '../../utils.js'
 import { batchMoveToCat } from '../../composables/domain/useBatch.js'
 import { moveBatchSelectedToVault } from '../../composables/domain/useSpaceMove.js'
+import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
 const uiStore = useUIStore()

@@ -7,6 +7,7 @@ import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { toast, showConfirm } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 
@@ -66,8 +67,8 @@ export function openCatModal() {
 export function closeCatModal() { useUIStore().modals.category = false }
 
 export async function deleteCategory(id: string) {
-  if (id === CAT_ALL || id === CAT_UNCATEGORIZED) { toast('无法删除默认分类', false); return }
-  const ok = await showConfirm('确认删除此分类？')
+  if (id === CAT_ALL || id === CAT_UNCATEGORIZED) { toast(t('msg.cannotDeleteDefaultCategory'), false); return }
+  const ok = await showConfirm(t('msg.confirmDeleteCategory'))
   if (ok) { useDataStore().deleteCategory(id); saveAppData() }
 }
 

@@ -1,44 +1,44 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="死链检测" :class="{ open: visible }" @click.self="close">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('deadlinks.title')" :class="{ open: visible }" @click.self="close">
     <div class="modal modal-md" @click.stop>
       <!-- 标签切换 + 操作栏 -->
       <div class="modal-head">
         <div class="popover-tabs">
           <button v-if="deadList.length" class="popover-tab" :class="{ active: tab === 'dead' }" @click="switchTab('dead')">
-            失效 <span class="tab-count">{{ deadList.length }}</span>
+            {{ t('cards.deadLink') }} <span class="tab-count">{{ deadList.length }}</span>
           </button>
           <button v-if="blockedList.length" class="popover-tab" :class="{ active: tab === 'blocked' }" @click="switchTab('blocked')">
-            被墙 <span class="tab-count tab-count-gfw">{{ blockedList.length }}</span>
+            {{ t('cards.gfwBlocked') }} <span class="tab-count tab-count-gfw">{{ blockedList.length }}</span>
           </button>
           <button v-if="unconfirmedList.length" class="popover-tab" :class="{ active: tab === 'unconfirmed' }" @click="switchTab('unconfirmed')">
-            未确认 <span class="tab-count">{{ unconfirmedList.length }}</span>
+            {{ t('cards.unconfirmed') }} <span class="tab-count">{{ unconfirmedList.length }}</span>
           </button>
         </div>
         <div class="popover-actions">
-          <button v-if="!selectMode" class="pop-action-btn" @click="enterSelectMode" title="多选">
+          <button v-if="!selectMode" class="pop-action-btn" @click="enterSelectMode" :title="t('ctx.multiSelect')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>
           </button>
           <template v-else>
-            <button class="pop-action-btn" @click="toggleSelectAll" :title="allSelected ? '取消全选' : '全选'">
+            <button class="pop-action-btn" @click="toggleSelectAll" :title="allSelected ? t('deadlinks.deselectAll') : t('batch.selectAll')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path v-if="allSelected" d="M9 12l2 2 4-4"/><path v-else d="M8 12h8"/></svg>
             </button>
-            <button class="pop-action-btn pop-action-danger" :disabled="!selectedIds.size" @click="deleteSelected" title="删除选中">
+            <button class="pop-action-btn pop-action-danger" :disabled="!selectedIds.size" @click="deleteSelected" :title="t('batch.deleteSelected')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
-            <button class="pop-action-btn" :disabled="!selectedIds.size" @click="ignoreSelected" title="标记忽略">
+            <button class="pop-action-btn" :disabled="!selectedIds.size" @click="ignoreSelected" :title="t('deadlinks.markIgnored')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button class="pop-action-btn" @click="exitSelectMode" title="取消">
+            <button class="pop-action-btn" @click="exitSelectMode" :title="t('common.cancel')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </template>
         </div>
-        <button class="modal-close" @click="close" aria-label="关闭">&times;</button>
+        <button class="modal-close" @click="close" :aria-label="t('common.close')">&times;</button>
       </div>
       <!-- 结果列表 -->
       <div class="modal-body dead-links-body">
         <div v-if="!currentList.length" class="popover-result popover-empty">
-          暂无{{ tab === 'dead' ? '失效' : tab === 'blocked' ? '被墙' : '未确认' }}链接
+          {{ t('deadlinks.emptyLinks', { kind: tabKindLabel }) }}
         </div>
         <div v-for="b in currentList" :key="b.id" class="popover-result"
              :class="{ selected: selectedIds.has(b.id) }"
@@ -52,10 +52,10 @@
             <span class="pr-name">{{ b.title }}</span>
             <span class="pr-url">{{ domain(b.url) }}</span>
           </div>
-          <span v-if="tab === 'dead'" class="pr-badge dead">失效</span>
-          <span v-else-if="tab === 'blocked'" class="pr-badge blocked">被墙</span>
-          <span v-else class="pr-badge unconfirmed">未确认</span>
-          <button v-if="!selectMode" class="pr-delete" @click.stop="onDelete(b.id)" title="删除">
+          <span v-if="tab === 'dead'" class="pr-badge dead">{{ t('cards.deadLink') }}</span>
+          <span v-else-if="tab === 'blocked'" class="pr-badge blocked">{{ t('cards.gfwBlocked') }}</span>
+          <span v-else class="pr-badge unconfirmed">{{ t('cards.unconfirmed') }}</span>
+          <button v-if="!selectMode" class="pr-delete" @click.stop="onDelete(b.id)" :title="t('common.delete')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
@@ -74,6 +74,7 @@ import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/us
 import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
 import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
+import { t, tN } from '../../i18n/index.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
@@ -110,6 +111,11 @@ const unconfirmedList = computed(() => {
 
 const currentList = computed(() =>
   tab.value === 'dead' ? deadList.value : tab.value === 'blocked' ? blockedList.value : unconfirmedList.value
+)
+
+/** 空态文案的链接类型标签（失效/被墙/未确认） */
+const tabKindLabel = computed(() =>
+  tab.value === 'dead' ? t('cards.deadLink') : tab.value === 'blocked' ? t('cards.gfwBlocked') : t('cards.unconfirmed')
 )
 
 const allSelected = computed(() =>
@@ -184,7 +190,7 @@ function ignoreSelected() {
     }
   }
   debouncedSaveAppData()
-  toast('已标记忽略 ' + ids.length + ' 个链接')
+  toast(tN('deadlinks.ignoredToast', ids.length))
   selectedIds.value = new Set()
   exitSelectMode()
 }
@@ -199,7 +205,7 @@ function deleteSelected() {
   if (!count) return
   const ids = [...selectedIds.value]
   // A3-007：确认后再 close；取消时保持面板与多选态
-  showConfirm(`确认删除 ${count} 个书签？`).then(ok => {
+  showConfirm(tN('deadlinks.confirmDelete', count)).then(ok => {
     if (!ok) return
     // 复用底层 store 直删：deleteBookmark 会自动从所属组剔除并把组关系
     // 记到 _deletedGroupMemberships，undo/回收站恢复时能正确还原组关联。
@@ -214,10 +220,10 @@ function deleteSelected() {
     selectedIds.value = new Set()
     exitSelectMode()
     close()
-    toastWithUndo(`已删除 ${count} 个书签`, () => {
+    toastWithUndo(tN('deadlinks.deletedToast', count), () => {
       allIds.forEach(bid => dataStore.restoreBookmark(bid))
       debouncedSaveAppData()
-      toast('已恢复')
+      toast(t('deadlinks.restored'))
     })
   })
 }

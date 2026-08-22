@@ -44,7 +44,7 @@ import { clearSearchCache } from '../../lib/search.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { clearAllSyncOps } from '../../stores/storage.js'
 import { __testPendingSync } from '../../composables/domain/syncPending.js'
-import { DEFAULTS } from '../../config/constants.js'
+import { buildSeedDefaults } from '../../config/constants.js'
 
 /** 造一个非默认填充的 store 供 reset 覆盖验证：4 数组 + 4 脏标 + _customCardOrder + ui 5 状态 全 non-default */
 function seedNonDefaultState() {
@@ -120,6 +120,14 @@ describe('resetToDefaults DEFAULTS 覆盖 + _syncMaps 重建索引', () => {
     vi.clearAllMocks()
     confirmResult = true
     authLoggedIn = false
+    // 固定 Date.now：resetToDefaults 内部与断言期 buildSeedDefaults() 都会用 Date.now()
+    // 生成 createdAt/updatedAt，真实时钟会差 1ms 导致 toEqual 失败（全量并发时必现）。
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-22T00:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('4 个数组应被 DEFAULTS 覆盖：清空本机非默认数据', async () => {
@@ -127,10 +135,11 @@ describe('resetToDefaults DEFAULTS 覆盖 + _syncMaps 重建索引', () => {
     const ds = useDataStore()
     expect(ds.bookmarks.length).toBeGreaterThan(0)
     await resetToDefaults()
-    expect(ds.categories).toEqual(DEFAULTS.categories)
-    expect(ds.bookmarks).toEqual(DEFAULTS.bookmarks)
-    expect(ds.customAttributes).toEqual(DEFAULTS.customAttributes)
-    expect(ds.siblingGroups).toEqual(DEFAULTS.siblingGroups)
+    const expected = buildSeedDefaults()
+    expect(ds.categories).toEqual(expected.categories)
+    expect(ds.bookmarks).toEqual(expected.bookmarks)
+    expect(ds.customAttributes).toEqual(expected.customAttributes)
+    expect(ds.siblingGroups).toEqual(expected.siblingGroups)
   })
 
   it('覆盖后 _syncMaps 必被调，map 与数组同步（避免 map 条数相同时返回陈旧对象）', async () => {
@@ -139,11 +148,12 @@ describe('resetToDefaults DEFAULTS 覆盖 + _syncMaps 重建索引', () => {
     const spy = vi.spyOn(ds, '_syncMaps')
     await resetToDefaults()
     expect(spy).toHaveBeenCalledTimes(1)
-    // 索引确实反映 DEFAULTS：DEFAULTS.bookmarks 的 id 在 bookmarkMap 可查
-    for (const b of DEFAULTS.bookmarks) {
+    // 索引确实反映 seed defaults 的书签 id
+    const expected = buildSeedDefaults()
+    for (const b of expected.bookmarks) {
       expect(ds.bookmarkMap[b.id]).toBeTruthy()
     }
-    // 旧的非 DEFAULTS id 'bm-1' 应已从 map 中消失
+    // 旧的非默认 id 'bm-1' 应已从 map 中消失
     expect(ds.bookmarkMap['bm-1']).toBeUndefined()
   })
 })
@@ -267,6 +277,12 @@ describe('resetToDefaults undo 闭包：撤销必正确还原 + 重建索引', (
     vi.clearAllMocks()
     confirmResult = true
     authLoggedIn = false
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-22T00:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('undo 闭包执行后：4 数组 + curCat 回到 snapshot，_syncMaps 再调一次重建索引', async () => {
@@ -276,8 +292,8 @@ describe('resetToDefaults undo 闭包：撤销必正确还原 + 重建索引', (
     const expectedBmLen = ds.bookmarks.length
     // 先捕获 undo 闭包（toastWithUndo mock 第二参存到 __undo）
     await resetToDefaults()
-    // reset 后已被 DEFAULTS 覆盖
-    expect(ds.bookmarks).toEqual(DEFAULTS.bookmarks)
+    // reset 后已被 seed defaults 覆盖
+    expect(ds.bookmarks).toEqual(buildSeedDefaults().bookmarks)
     expect(ui.curCat).toBe('all')
     const undo = (toastWithUndo as any).__undo as () => void
     expect(typeof undo).toBe('function')

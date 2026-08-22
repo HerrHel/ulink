@@ -1,49 +1,49 @@
 <template>
-  <div class="modal child-modal-modal" data-testid="lv-child-bm-modal" role="dialog" aria-modal="true" aria-label="编辑子书签">
+  <div class="modal child-modal-modal" data-testid="lv-child-bm-modal" role="dialog" aria-modal="true" :aria-label="t('modal.bookmark.editChildBm')">
     <div class="modal-head">
-      <h2>编辑子书签</h2>
-      <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
+      <h2>{{ t('modal.bookmark.editChildBm') }}</h2>
+      <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label" for="cbmUrl">网址 *</label>
-        <input type="text" class="form-input" id="cbmUrl" data-testid="lv-cbm-url" v-model="form.url" placeholder="例如：github.com">
+        <label class="form-label" for="cbmUrl">{{ t('ctx.url') }} *</label>
+        <input type="text" class="form-input" id="cbmUrl" data-testid="lv-cbm-url" v-model="form.url" :placeholder="t('modal.bookmark.urlPlaceholder')">
       </div>
       <div class="form-group">
-        <label class="form-label" for="cbmTitle">网站名称</label>
-        <input type="text" class="form-input" id="cbmTitle" data-testid="lv-cbm-title" v-model="form.title" placeholder="留空将自动识别" ref="titleRef">
+        <label class="form-label" for="cbmTitle">{{ t('modal.bookmark.siteName') }}</label>
+        <input type="text" class="form-input" id="cbmTitle" data-testid="lv-cbm-title" v-model="form.title" :placeholder="t('modal.bookmark.titlePlaceholder')" ref="titleRef">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label" for="cbmUsername">账户</label>
+          <label class="form-label" for="cbmUsername">{{ t('cards.account') }}</label>
           <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintAccount" @hint-click="onE2EHintClick">
-            <input type="text" class="form-input" id="cbmUsername" v-model="form.username" placeholder="用户名">
+            <input type="text" class="form-input" id="cbmUsername" v-model="form.username" :placeholder="t('modal.bookmark.username')">
           </E2ELockOverlay>
         </div>
         <div class="form-group">
-          <label class="form-label" for="cbmPassword">密码</label>
+          <label class="form-label" for="cbmPassword">{{ t('cards.password') }}</label>
           <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintPassword" @hint-click="onE2EHintClick">
             <div class="pw-wrap">
-              <input :type="form.showPassword ? 'text' : 'password'" class="form-input pw-input" id="cbmPassword" v-model="form.password" placeholder="密码">
-              <button class="pw-toggle" type="button" :title="form.showPassword ? '隐藏密码' : '显示密码'" @click="form.showPassword = !form.showPassword" v-html="form.showPassword ? I.eyeOff : I.eye"></button>
+              <input :type="form.showPassword ? 'text' : 'password'" class="form-input pw-input" id="cbmPassword" v-model="form.password" :placeholder="t('cards.password')">
+              <button class="pw-toggle" type="button" :title="form.showPassword ? t('cards.hidePassword') : t('cards.showPassword')" @click="form.showPassword = !form.showPassword" v-html="form.showPassword ? I.eyeOff : I.eye"></button>
             </div>
           </E2ELockOverlay>
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label" for="cbmNotes">备注</label>
-        <textarea class="form-textarea" id="cbmNotes" v-model="form.notes" placeholder="备注…"></textarea>
+        <label class="form-label" for="cbmNotes">{{ t('modal.bookmark.notes') }}</label>
+        <textarea class="form-textarea" id="cbmNotes" v-model="form.notes" :placeholder="t('modal.bookmark.notesPlaceholder')"></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label" for="cbmIcon">自定义图标</label>
+        <label class="form-label" for="cbmIcon">{{ t('modal.bookmark.customIcon') }}</label>
         <div class="icon-input-row">
-          <input type="url" class="form-input" id="cbmIcon" v-model="form.icon" placeholder="https://… 输入图标URL">
+          <input type="url" class="form-input" id="cbmIcon" v-model="form.icon" :placeholder="t('modal.bookmark.iconUrlPlaceholder')">
         </div>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-secondary" @click="onClose">取消</button>
-      <button class="btn btn-primary" data-testid="lv-cbm-save" :disabled="saving" @click="onSave">更新</button>
+      <button class="btn btn-secondary" @click="onClose">{{ t('common.cancel') }}</button>
+      <button class="btn btn-primary" data-testid="lv-cbm-save" :disabled="saving" @click="onSave">{{ t('modal.bookmark.update') }}</button>
     </div>
   </div>
 </template>
@@ -62,6 +62,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { toast } from '../../lib/toast.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps<{ childId: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -171,7 +172,7 @@ async function onSave() {
 
 async function doSave(): Promise<void> {
   const url = fixUrl(form.url)
-  if (!url) { toast('请填写网址', false); return }
+  if (!url) { toast(t('modal.childBm.needUrl'), false); return }
   const title = form.title.trim() || domain(url)
 
   // 密码处理（与 saveBm 一致）
@@ -182,12 +183,12 @@ async function doSave(): Promise<void> {
         const raw = await encrypt(form.password, e2eStore.cryptoKey as CryptoKey)
         const parts = raw.split('.')
         if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-          toast('密码加密失败：输出格式异常，已取消保存', false)
+          toast(t('modal.childBm.encryptFail'), false)
           return
         }
         storedPassword = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
       } catch {
-        toast('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+        toast(t('modal.childBm.encryptFailHint'), false)
         return
       }
     } else if (e2eStore.isE2EEnabled) {
@@ -195,7 +196,7 @@ async function doSave(): Promise<void> {
       const unlocked = await new Promise<boolean>(resolve => {
         e2eStore.pendingUnlock.push(resolve)
       })
-      if (!unlocked) { toast('保存已取消', false); return }
+      if (!unlocked) { toast(t('modal.childBm.saveCancelled'), false); return }
       return await doSave()
     } else {
       storedPassword = btoa(form.password)
@@ -206,7 +207,7 @@ async function doSave(): Promise<void> {
   // 会覆盖原密文并经 saveAppData/push 回写云端丢失。须先解锁（decryptStoreItems 解回明文）。
   const orig = ds.bookmarkMap[props.childId]
   if (orig && [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
-    toast('该书签含加密字段，请先解锁主密码后再编辑', false)
+    toast(t('modal.childBm.encryptedBlocked'), false)
     return
   }
 
@@ -218,7 +219,7 @@ async function doSave(): Promise<void> {
     icon: form.icon.trim(),
   })
   saveAppData()
-  toast('子书签已更新')
+  toast(t('modal.childBm.updated'))
   form.password = ''
   emit('close')
 }

@@ -3,53 +3,53 @@
   <template v-if="mobile">
     <div class="mfb" :class="{ visible: isVisible }" :style="{ bottom: kbBottom + 'px' }"
          @mousedown.prevent>
-      <button class="ft-btn" @click="toggle('bold')" title="加粗" v-html="icons.bold"></button>
-      <button class="ft-btn" @click="toggle('underline')" title="下划线" v-html="icons.underline"></button>
-      <button class="ft-btn" @click="toggle('h1')" title="大标题">H1</button>
-      <button class="ft-btn" @click="toggle('h2')" title="中标题">H2</button>
-      <button class="ft-btn" @click="toggle('h3')" title="小标题">H3</button>
+      <button class="ft-btn" @click="toggle('bold')" :title="t('editor.bold')" v-html="icons.bold"></button>
+      <button class="ft-btn" @click="toggle('underline')" :title="t('editor.underline')" v-html="icons.underline"></button>
+      <button class="ft-btn" @click="toggle('h1')" :title="t('editor.h1')">H1</button>
+      <button class="ft-btn" @click="toggle('h2')" :title="t('editor.h2')">H2</button>
+      <button class="ft-btn" @click="toggle('h3')" :title="t('editor.h3')">H3</button>
       <span class="ft-sep"></span>
-      <button class="ft-btn" @click="toggle('ol')" title="有序列表" v-html="icons.ol"></button>
-      <button class="ft-btn" @click="toggle('ul')" title="无序列表" v-html="icons.ul"></button>
-      <button class="ft-btn" @click="toggle('task')" title="待办清单" v-html="icons.taskList"></button>
+      <button class="ft-btn" @click="toggle('ol')" :title="t('editor.ol')" v-html="icons.ol"></button>
+      <button class="ft-btn" @click="toggle('ul')" :title="t('editor.ul')" v-html="icons.ul"></button>
+      <button class="ft-btn" @click="toggle('task')" :title="t('editor.taskList')" v-html="icons.taskList"></button>
       <span class="ft-sep"></span>
       <button ref="mfbColorBtnRef" class="ft-btn ft-color-btn" :class="{ active: !!state.color }"
               :style="state.color ? { '--ft-color': state.color } : {}"
-              @click="toggleMfbPalette" title="文字颜色" v-html="icons.textColor"></button>
+              @click="toggleMfbPalette" :title="t('editor.textColor')" v-html="icons.textColor"></button>
       <template v-if="paletteOpen">
         <span class="ft-sep"></span>
         <button v-for="c in palette" :key="c.hex" class="mfb-color-dot"
                 :class="{ active: c.hex === state.color }"
                 :style="{ background: c.hex }" @click="applyColor(c.hex)"></button>
-        <button class="mfb-color-reset" @click="applyColor('')">默认</button>
+        <button class="mfb-color-reset" @click="applyColor('')">{{ t('toolbar.default') }}</button>
       </template>
       <span class="ft-sep"></span>
-      <button class="ft-btn" title="插入图片" @click="pickImage" v-html="icons.image"></button>
+      <button class="ft-btn" :title="t('editor.insertImage')" @click="pickImage" v-html="icons.image"></button>
     </div>
   </template>
   <div v-else class="format-toolbar" ref="toolbarRef" @mousedown.prevent>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.bold }" title="加粗 Ctrl+B" @click="toggle('bold')">
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.bold }" :title="t('editor.bold') + ' Ctrl+B'" @click="toggle('bold')">
       <strong>B</strong>
     </button>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.underline }" title="下划线 Ctrl+U" @click="toggle('underline')">
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.underline }" :title="t('editor.underline') + ' Ctrl+U'" @click="toggle('underline')">
       <span v-html="icons.underline"></span>
     </button>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.h1 }" title="大标题" @click="toggle('h1')">H1</button>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.h2 }" title="中标题" @click="toggle('h2')">H2</button>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.h3 }" title="小标题" @click="toggle('h3')">H3</button>
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.h1 }" :title="t('editor.h1')" @click="toggle('h1')">H1</button>
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.h2 }" :title="t('editor.h2')" @click="toggle('h2')">H2</button>
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.h3 }" :title="t('editor.h3')" @click="toggle('h3')">H3</button>
     <div class="ft-sb-sep"></div>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.ol }" title="有序列表" @click="toggle('ol')" v-html="icons.ol"></button>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.ul }" title="无序列表" @click="toggle('ul')" v-html="icons.ul"></button>
-    <button class="ft-btn ft-sb-btn" :class="{ active: state.task }" title="待办清单" @click="toggle('task')" v-html="icons.taskList"></button>
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.ol }" :title="t('editor.ol')" @click="toggle('ol')" v-html="icons.ol"></button>
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.ul }" :title="t('editor.ul')" @click="toggle('ul')" v-html="icons.ul"></button>
+    <button class="ft-btn ft-sb-btn" :class="{ active: state.task }" :title="t('editor.taskList')" @click="toggle('task')" v-html="icons.taskList"></button>
     <div class="ft-sb-sep"></div>
     <div class="ft-color-wrap">
-      <button class="ft-btn ft-sb-btn ft-color-btn" :class="{ active: !!state.color }" :style="state.color ? { '--ft-color': state.color } : {}" title="文字颜色" @click.stop="paletteOpen = !paletteOpen" v-html="icons.textColor"></button>
+      <button class="ft-btn ft-sb-btn ft-color-btn" :class="{ active: !!state.color }" :style="state.color ? { '--ft-color': state.color } : {}" :title="t('editor.textColor')" @click.stop="paletteOpen = !paletteOpen" v-html="icons.textColor"></button>
       <Transition name="cpalette">
         <ColorPalette v-show="paletteOpen" :activeColor="state.color" @apply="applyColor" />
       </Transition>
     </div>
     <div class="ft-sb-sep"></div>
-    <button class="ft-btn ft-sb-btn" title="插入图片" @click="pickImage" v-html="icons.image"></button>
+    <button class="ft-btn ft-sb-btn" :title="t('editor.insertImage')" @click="pickImage" v-html="icons.image"></button>
   </div>
   <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
 </template>
@@ -57,6 +57,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { isMobile } from '../../utils.js'
+import { t } from '../../i18n/index.js'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { EditorManager } from '../../lib/editor.js'

@@ -269,7 +269,7 @@ describe('MentionDropdown 渲染分支', () => {
     // 无 name → 「未命名组」
     expect(items[1].find('.mi-name').text()).toContain('未命名组')
     // 0 个书签文案
-    expect(items[1].find('.mi-url').text()).toContain('0个书签')
+    expect(items[1].find('.mi-url').text()).toContain('0 个书签')
     w.unmount()
   })
 

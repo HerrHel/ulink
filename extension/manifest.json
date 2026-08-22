@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "LinkVault",
+  "name": "__MSG_ext_name__",
   "version": "1.1.1",
-  "description": "一键保存网页到 LinkVault 书签管理器",
+  "description": "__MSG_ext_description__",
+  "default_locale": "zh_CN",
   "permissions": [
     "sidePanel",
     "activeTab",
@@ -18,7 +19,7 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "打开 LinkVault 侧边栏"
+    "default_title": "__MSG_action_default_title__"
   },
   "background": {
     "service_worker": "background.js",
@@ -30,7 +31,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "打开 LinkVault 保存当前页面"
+      "description": "__MSG_command_save_description__"
     }
   },
   "icons": {

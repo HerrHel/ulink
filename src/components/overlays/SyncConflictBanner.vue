@@ -4,9 +4,9 @@
       <div v-if="sync.conflicts.value.length > 0 && !sync.conflictBannerDismissed.value" class="conflict-banner" data-testid="lv-conflict-banner" role="alert">
         <div class="conflict-banner-head">
           <span class="conflict-icon" aria-hidden="true" v-html="I.alert"></span>
-          <span class="conflict-title">同步冲突 ({{ sync.conflicts.value.length }})</span>
-          <span class="conflict-subtitle">本地和云端同时修改了以下数据</span>
-          <button class="conflict-close" @click="sync.conflictBannerDismissed.value = true" title="暂时关闭">
+          <span class="conflict-title">{{ t('conflict.title', { n: sync.conflicts.value.length }) }}</span>
+          <span class="conflict-subtitle">{{ t('conflict.subtitle') }}</span>
+          <button class="conflict-close" @click="sync.conflictBannerDismissed.value = true" :title="t('conflict.dismiss')">
             <span aria-hidden="true" v-html="I.close"></span>
           </button>
         </div>
@@ -17,14 +17,14 @@
                 <span class="conflict-item-name">{{ itemName(c) }}</span>
               </div>
               <div class="conflict-item-actions">
-                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-keep-local" @click="sync.resolveConflict(c.id, true)">保留本地</button>
-                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-use-remote" @click="sync.resolveConflict(c.id, false)">用云端覆盖</button>
+                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-keep-local" @click="sync.resolveConflict(c.id, true)">{{ t('conflict.keepLocal') }}</button>
+                <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-use-remote" @click="sync.resolveConflict(c.id, false)">{{ t('conflict.useRemote') }}</button>
               </div>
             </div>
           </div>
           <div class="conflict-banner-foot">
-            <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(true)">全部保留本地</button>
-            <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(false)">全部用云端</button>
+            <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(true)">{{ t('conflict.keepAllLocal') }}</button>
+            <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(false)">{{ t('conflict.useAllRemote') }}</button>
           </div>
       </div>
     </Transition>
@@ -38,6 +38,7 @@ import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
 import { typeLabel } from './typeLabel.js'
 import { resolveConflictItemName } from './resolveConflictItemName.js'
+import { t } from '../../i18n/index.js'
 
 const sync = useCloudSync()
 const ds = useDataStore()

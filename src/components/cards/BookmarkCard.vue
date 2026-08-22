@@ -9,19 +9,19 @@
             @change.stop @click.stop="toggleSelect">
     <div class="card-topline">
       <div class="card-toprow">
-        <div class="card-logo" title="打开链接" @click.stop="onOpenClick">
+        <div class="card-logo" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <img v-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
           <span class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
         </div>
-        <div class="card-titlewrap" title="打开链接" @click.stop="onOpenClick">
+        <div class="card-titlewrap" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <div class="card-titlewrap-text">
             <div class="card-name">
               <span v-if="searchQuery" v-html="hlTitle"></span>
               <template v-else>{{ displayText(bookmark.title) }}</template>
-              <span v-if="isDeadLink" class="dead-link-badge" title="链接已失效">失效</span>
-              <span v-if="isGfwBlocked" class="gfw-blocked-badge" title="疑似被墙">被墙</span>
-              <span v-if="isUnconfirmed" class="unconfirmed-badge" title="本次检测未能确认（离线/超时/信号冲突）">未确认</span>
-              <span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span>
+              <span v-if="isDeadLink" class="dead-link-badge" :title="t('cards.deadLinkTitle')">{{ t('cards.deadLink') }}</span>
+              <span v-if="isGfwBlocked" class="gfw-blocked-badge" :title="t('cards.gfwBlockedTitle')">{{ t('cards.gfwBlocked') }}</span>
+              <span v-if="isUnconfirmed" class="unconfirmed-badge" :title="t('cards.unconfirmedTitle')">{{ t('cards.unconfirmed') }}</span>
+              <span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span>
             </div>
             <div class="card-domain">
               <span v-if="searchQuery" v-html="hlDomain"></span>
@@ -33,12 +33,12 @@
       </div>
       <div class="card-domain mini-domain" v-if="uiStore.layoutMode === 'mini-grid'">{{ domainStr }}</div>
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode === 'list'">
-        <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
     </div>
     <div class="card-body">
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode !== 'list'">
-        <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
       <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="uiStore.layoutMode !== 'list' && editNotes($event)">
         <span v-if="searchQuery" v-html="hlNotes"></span>
@@ -46,17 +46,17 @@
       </div>
       <template v-if="displayText(bookmark.username) || bookmark.password">
           <button class="card-acct-toggle" :class="{ open: acctOpen || isExpanded }" @click.stop="acctOpen = !acctOpen">
-            <span aria-hidden="true" v-html="I.chevronDown"></span> 账户信息
+            <span aria-hidden="true" v-html="I.chevronDown"></span> {{ t('cards.accountInfo') }}
           </button>
         <div class="card-acct-body" :class="{ show: acctOpen || isExpanded }">
           <div class="acct-row" v-if="displayText(bookmark.username)">
-            <span class="acct-label">账户</span><span class="acct-val">{{ displayText(bookmark.username) }}</span>
-            <button class="acct-copy-btn" @click.stop="copyUser" title="复制" v-html="I.copy"></button>
+            <span class="acct-label">{{ t('cards.account') }}</span><span class="acct-val">{{ displayText(bookmark.username) }}</span>
+            <button class="acct-copy-btn" @click.stop="copyUser" :title="t('common.copy')" v-html="I.copy"></button>
           </div>
           <div class="acct-row" v-if="bookmark.password">
-            <span class="acct-label">密码</span><span class="acct-val">{{ isVisible(bookmark.id) ? decodedPw : '••••••' }}</span>
-            <button class="acct-show-pw" @click.stop="onTogglePw" :title="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" :aria-label="isVisible(bookmark.id) ? '隐藏密码' : '显示密码'" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
-            <button class="acct-copy-btn" @click.stop="copyPw" title="复制" v-html="I.copy"></button>
+            <span class="acct-label">{{ t('cards.password') }}</span><span class="acct-val">{{ isVisible(bookmark.id) ? decodedPw : '••••••' }}</span>
+            <button class="acct-show-pw" @click.stop="onTogglePw" :title="isVisible(bookmark.id) ? t('cards.hidePassword') : t('cards.showPassword')" :aria-label="isVisible(bookmark.id) ? t('cards.hidePassword') : t('cards.showPassword')" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
+            <button class="acct-copy-btn" @click.stop="copyPw" :title="t('common.copy')" v-html="I.copy"></button>
           </div>
         </div>
       </template>
@@ -64,21 +64,21 @@
         <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" :draggable="!uiStore.isMobile" @click.stop="visitSub(sub)">
           <img :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
           <span class="gic-name">{{ sub.title }}</span>
-          <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">详</span>
+          <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
         </span>
       </div>
       <div class="card-preview" v-if="previewText">{{ previewText }}</div>
     </div>
     <div class="card-foot">
-      <span class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ bookmark.useCount || 0 }}次</span>
+      <span class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
       <span class="card-actions">
-        <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" title="添加子网站" v-html="I.plus"></button>
-        <button class="btn-xs" @click.stop="edit" title="编辑" v-html="I.edit"></button>
-        <button class="btn-xs btn-danger" @click.stop="del" title="删除" v-html="I.trash"></button>
+        <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" v-html="I.plus"></button>
+        <button class="btn-xs" @click.stop="edit" :title="t('common.edit')" v-html="I.edit"></button>
+        <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
+    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>
@@ -104,6 +104,7 @@ import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.
 import { bookmarkPreview } from '../../lib/preview.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import { useListNav } from '../../composables/useListNav.js'
+import { t, tN } from '../../i18n/index.js'
 import type { Bookmark } from '../../types.js'
 
 function onImgError(e: Event) {
@@ -239,8 +240,8 @@ function filterByTagName(name: string) {
 function copyUser() {
   const v = props.bookmark.username || ''
   // E2E 密文（未解锁/解不开）复制无意义，提示解锁而非把空/密文写进剪贴板
-  if (v && !displayText(v)) { toast('该字段已加密，请先解锁主密码', false); return }
-  copyToClipboard(v, '账户')
+  if (v && !displayText(v)) { toast(t('cards.encryptedFieldLocked'), false); return }
+  copyToClipboard(v, t('cards.account'))
 }
 // 未解锁时 password 为 EncryptedPassword 对象、decryptPasswordWithKey 解不开返 ''；
 // 旧实现照常 copyToClipboard('') → utils toast「密码 已复制」误导用户以为复制成功，
@@ -248,16 +249,16 @@ function copyUser() {
 function copyPw() {
   // A1-004：锁定态禁止复制
   if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
-    toast('请先解锁主密码', false)
+    toast(t('cards.unlockMasterPasswordFirst'), false)
     return
   }
-  if (!decodedPw.value) { toast('密码未解锁，无法复制', false); return }
-  copyToClipboard(decodedPw.value, '密码')
+  if (!decodedPw.value) { toast(t('cards.passwordLockedNoCopy'), false); return }
+  copyToClipboard(decodedPw.value, t('cards.password'))
 }
 
 function onTogglePw() {
   if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
-    toast('请先解锁主密码', false)
+    toast(t('cards.unlockMasterPasswordFirst'), false)
     return
   }
   togglePw(props.bookmark.id)
@@ -268,14 +269,14 @@ const { startEditing } = useInlineEdit()
 function editNotes(e: Event) {
   const v = props.bookmark.notes ?? ''
   // E2E 密文不进入内联编辑：编辑会拿密文当明文覆盖（saveAppData/push 回写），数据风险
-  if (v && !displayText(v)) { toast('该字段已加密，请先解锁主密码', false); return }
+  if (v && !displayText(v)) { toast(t('cards.encryptedFieldLocked'), false); return }
   startEditing(e.currentTarget as HTMLElement, v, {
     multiline: true,
     onSave(newNotes) {
       if (newNotes !== (props.bookmark.notes ?? '')) {
         dataStore.updateBookmark(props.bookmark.id, { notes: newNotes })
         debouncedSaveAppData()
-        toast('备注已更新')
+        toast(t('cards.notesUpdated'))
       }
     },
   })

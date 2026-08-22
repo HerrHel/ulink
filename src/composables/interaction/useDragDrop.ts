@@ -6,6 +6,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { PAYLOAD_KEY, DRAG_SRC_DETAIL, CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 import { saveGroupBody, syncGroupBookmarks, addToGroupDirect, addGroupRefToGroup, removeFromSrcGroup } from '../domain/useGroup.js'
 import { inlineCardHTML, groupRefCardHTML } from '../useInlineCard.js'
 import { openDetail } from '../ui/useUI.js'
@@ -293,7 +294,7 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
       EditorManager.insertAtCoords(gid, groupRefCardHTML(src), e.clientX, e.clientY);
       saveGroupBody(gid);
       saveAppData();
-      toast('已移动组引用');
+      toast(t('msg.groupRefMoved'));
     } else {
       const sg = _findGroup(gid)
       const b = _findBm(p.id)
@@ -302,7 +303,7 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
       if (sg.bookmarkIds.indexOf(p.id) === -1) ds.updateGroup(gid, { bookmarkIds: [...sg.bookmarkIds, p.id] });
       saveGroupBody(gid);
       saveAppData();
-      toast('已加入组');
+      toast(t('msg.joinedGroup'));
     }
   }
 }
@@ -343,7 +344,7 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
     if (!onGroup || (onGroup as HTMLElement).dataset.groupId !== p.srcGid) {
       removeFromSrcGroup(p.srcGid, p.id);
       debouncedSaveAppData();
-      toast('已移出组');
+      toast(t('msg.movedOutOfGroup'));
     }
   }
 
@@ -367,7 +368,7 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   const b = _findBm(tid!)
   if (a && b) {
     if (a.parentId === b.parentId) { if (_swapAndMarkDirty(a, b)) { debouncedSaveAppData(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); } }
-    else toast('只能在同级书签间拖拽排序', false);
+    else toast(t('msg.onlySameLevelReorder'), false);
   }
 }
 
@@ -441,7 +442,7 @@ function handleGridDrop(e: DragEvent, p: DragPayload) {
     const di = ui.detailCards.indexOf(p.id);
     if (di >= 0) ui.detailCards.splice(di, 1);
   } else if (p.srcGid && removeFromSrcGroup(p.srcGid, p.id)) {
-    debouncedSaveAppData(); toast('已移出组');
+    debouncedSaveAppData(); toast(t('msg.movedOutOfGroup'));
   }
 }
 
@@ -476,7 +477,7 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (bm.categoryId === newCatId) return;
   ds.updateBookmark(bm.id, { categoryId: newCatId });
   debouncedSaveAppData();
-  toast('已移动到分类: ' + (ds.categoryMap[newCatId]?.name || newCatId));
+  toast(t('msg.movedToCategory', { name: ds.categoryMap[newCatId]?.name || newCatId }));
 }
 
 function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: number) {

@@ -1,10 +1,10 @@
 <template>
-  <nav class="icon-rail" :class="{ open: uiStore.panels.rail }" aria-label="导航">
+  <nav class="icon-rail" :class="{ open: uiStore.panels.rail }" :aria-label="t('nav.rail')">
     <div class="rail-logo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-      <span class="rail-logo-text" :data-space="uiStore.curSpace">{{ isVault ? '私密' : 'Link' }}<span v-if="!isVault">Vault</span></span>
+      <span class="rail-logo-text" :data-space="uiStore.curSpace">{{ isVault ? t('nav.vaultSpace') : t('nav.brand') }}</span>
     </div>
-    <div class="rail-section-label">分类</div>
+    <div class="rail-section-label">{{ t('nav.categories') }}</div>
     <div class="rail-nav" id="railNav">
       <!-- Phase 2: Vue 模板渲染替代 innerHTML -->
       <button
@@ -35,16 +35,16 @@
     <div class="rail-bottom">
       <button v-if="isVault" class="rail-item" data-testid="btnBackToMain" @click="onBackToMain">
         <span aria-hidden="true" v-html="I.back"></span>
-        返回主页
+        {{ t('nav.backToMain') }}
       </button>
       <button class="rail-item" id="btnManageCats" @click="openCatModalNav">
         <span aria-hidden="true" v-html="I.settings"></span>
-        管理分类
+        {{ t('nav.manageCategories') }}
       </button>
-      <button class="theme-toggle" @click="toggleTheme" aria-label="切换深浅色主题">
+      <button class="theme-toggle" @click="toggleTheme" :aria-label="t('nav.toggleThemeLabel')">
         <span class="icon-sun" aria-hidden="true" v-html="I.sun"></span>
         <span class="icon-moon" aria-hidden="true" v-html="I.moon"></span>
-        切换主题
+        {{ t('nav.toggleTheme') }}
       </button>
     </div>
   </nav>
@@ -60,6 +60,7 @@ import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { storageBarColorFor } from './storageBarColor.js'
+import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()

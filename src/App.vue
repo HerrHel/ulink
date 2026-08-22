@@ -88,6 +88,7 @@ import { useVaultStore } from './stores/vault.js'
 import { useUIStore } from './stores/ui.js'
 import { useDataStore } from './stores/data.js'
 import { toast } from './lib/toast.js'
+import { t } from './i18n/index.js'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -166,7 +167,7 @@ const E2EUnlockModal = defineAsyncComponent({
   loader: () => import('./components/modals/E2EUnlockModal.vue'),
   onError: (_err, _retry, fail) => {
     fail()
-    failPendingUnlock('解锁组件加载失败，请刷新后重试')
+    failPendingUnlock(t('appShell.unlockChunkLoadFailed'))
   },
 })
 const VaultSetupModal = defineAsyncComponent(() => import('./components/modals/VaultSetupModal.vue'))
@@ -214,7 +215,7 @@ watch(() => e2eStore.pendingUnlock.length, (len) => {
     if (_pendingUnlockTimer) clearTimeout(_pendingUnlockTimer)
     _pendingUnlockTimer = setTimeout(() => {
       _pendingUnlockTimer = null
-      failPendingUnlock('解锁超时，请重试')
+      failPendingUnlock(t('appShell.unlockTimeout'))
     }, PENDING_UNLOCK_TIMEOUT_MS)
   } else if (_pendingUnlockTimer) {
     clearTimeout(_pendingUnlockTimer)

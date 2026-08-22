@@ -1,5 +1,5 @@
 /**
- * crypto.js — LinkVault 扩展密码解密（Web Crypto API）
+ * crypto.js — 与链（ulink）扩展密码解密（Web Crypto API）
  *
  * 复用 PWA 主站 (src/crypto.ts) 的加密格式：
  *   PBKDF2 (600K) → AES-256-GCM

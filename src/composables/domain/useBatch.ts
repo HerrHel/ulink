@@ -4,6 +4,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { t, tN } from '../../i18n/index.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
 
 /**
@@ -40,7 +41,7 @@ export async function batchDelete() {
   const ui = useUIStore()
   if (!ui.batchSelected.length) return
   const count = ui.batchSelected.length
-  const confirmed = await showConfirm('确认删除选中的 ' + count + ' 项？')
+  const confirmed = await showConfirm(tN('msg.confirmDeleteSelectedItems', count))
   if (!confirmed) return
   const ds = useDataStore()
   const removedGroupIds: string[] = []
@@ -67,12 +68,12 @@ export async function batchDelete() {
   saveAppData()
   ui.batchSelected.splice(0)
   ui.batchMode = false
-  toastWithUndo('已删除 ' + count + ' 项', function () {
+  toastWithUndo(tN('msg.deletedItems', count), function () {
     removedGroupIds.forEach(gid => ds.restoreGroup(gid))
     // restoreBookmark 已用 _deleteBookmark 记录的组关系恢复 bookmarkIds，
     // 不再手动回加 —— 与回收站恢复路径统一。
     removedBookmarkIds.forEach(bid => ds.restoreBookmark(bid))
-    debouncedSaveAppData(); toast('已恢复')
+    debouncedSaveAppData(); toast(t('deadlinks.restored'))
   })
 }
 
@@ -101,5 +102,5 @@ export function batchMoveToCat(catId: string) {
   ui.batchMode = false
   ui.batchSelected.splice(0)
   hideBatchMovePopover()
-  toast('已移动 ' + count + ' 项')
+  toast(tN('msg.movedItems', count))
 }

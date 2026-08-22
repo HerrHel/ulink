@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## 项目概述
 
-LinkVault — 单页书签管理器（PWA），Vue 3 + Pinia + TipTap 编辑器，Vite 构建，TypeScript。数据持久化于 localStorage + IndexedDB（Dexie），可选 Supabase 云端同步。UI 为中文。
+与链（ulink，原 LinkVault）— 单页书签管理器（PWA），Vue 3 + Pinia + TipTap 编辑器，Vite 构建，TypeScript。数据持久化于 localStorage + IndexedDB（Dexie），可选 Supabase 云端同步。**双语文案**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板；首页静态 SEO 默认中文（应用内可在中文 / English 间切换，文档/首装/重置数据均跟随当前语言）。
 
 ## 常用命令
 
@@ -105,7 +105,7 @@ composables 按职责分三组：
 - `components/overlays/` — ContextMenu、ActionSheet、BatchPopover、SearchSuggest、ToastContainer、MentionDropdown、AddPopover、AttrDropdown、CommandPalette、DeadLinksPopover、SyncConflictBanner
 - `components/shell/` — AppHeader、AppNav、FilterBar、BatchBar、BatchBottom、DetailPanel、SettingsPanel、AttrChips
 - 分享功能（原 `components/share/` 空占位目录已移除）：公开分享与 Fork 的实现位于 `views/ShareView.vue`（分享页 SPA UI，兼容兜底）+ `composables/domain/useDataShare.ts`（分享/Fork 逻辑 + 链接生成）+ `composables/domain/syncShare.ts`（云端公开读写）；后端公开读见 supabase migrations 005/010/012/013/014/015/018 与 `get_public_group` RPC。
-- **分享页 SSR（解决 OG 预览/SEO）——终态同域**：分享链接为 `https://ulink.ren/s/<gid>`（`SHARE_BASE`，`src/config/urls.ts`），由 Cloudflare Pages Function `functions/s/[gid].ts` 服务端渲染（`functions/_routes.json` 仅 `/s/*` 走函数，`public/_redirects` 兜 SPA fallback）；渲染核为可移植纯函数 `functions/_lib/share-render.ts`（零运行时依赖）。历史方案 `supabase/functions/share-html/index.ts`（Deno Edge Function）保留作旧链接兜底，其渲染部分与 `share-render.ts` 保持同步。数据复用 `get_public_group` RPC；og:image 用静态品牌图 `public/share-cover.png`。部署：`npm run pages:deploy`（wrangler，项目 linkvault，env：SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN）。
+- **分享页 SSR（解决 OG 预览/SEO）——终态同域**：分享链接为 `https://ulink.ren/s/<gid>`（`SHARE_BASE`，`src/config/urls.ts`），由 Cloudflare Pages Function `functions/s/[gid].ts` 服务端渲染（`functions/_routes.json` 仅 `/s/*` 走函数，`public/_redirects` 兜 SPA fallback）；渲染核为可移植纯函数 `functions/_lib/share-render.ts`（零运行时依赖，支持 `ShareLocale = 'zh-CN' | 'en-US'`，按 `?lang=` 或 Accept-Language 头选择语言）。历史方案 `supabase/functions/share-html/index.ts`（Deno Edge Function）保留作旧链接兜底，其渲染部分与 `share-render.ts` 保持同步（同样的 T 字典）。数据复用 `get_public_group` RPC；og:image 用静态品牌图 `public/share-cover.png`（Pillow 生成，中英双品牌 + 域名）。部署：`npm run pages:deploy`（wrangler，项目 linkvault，env：SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN）。
 - `components/ui/` — E2ELockOverlay（主密码锁定覆盖层）、ErrorBoundary
 
 ### src/config/
@@ -130,11 +130,11 @@ composables 按职责分三组：
 
 ### CLI
 
-`cli/` 目录是 LinkVault 命令行工具（独立子项目：commander + @supabase/supabase-js + conf，独立 tsconfig/node_modules，不参与主项目构建与测试；vitest.config 已排除 `cli/node_modules/`）。
+`cli/` 目录是 与链（ulink，原 LinkVault）命令行工具（独立子项目：commander + @supabase/supabase-js + conf，独立 tsconfig/node_modules，不参与主项目构建与测试；vitest.config 已排除 `cli/node_modules/`）。
 
 ### Chrome 扩展
 
-`extension/` 目录包含 Manifest V3 浏览器扩展（background.js、sidepanel.html/js、config.js、crypto.js、auth-flow.js、keypress.js、notes-update.js、pwa-open.js），支持快捷键保存当前页面到 LinkVault（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏模式操作。`extension/lib/supabase.js` 为 `npm run ext:bundle-supabase` 生成的 bundle（不提交）。
+`extension/` 目录包含 Manifest V3 浏览器扩展（background.js、sidepanel.html/js、config.js、crypto.js、auth-flow.js、keypress.js、notes-update.js、pwa-open.js），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏模式操作。**双语文案**：扩展使用 Chrome 标准 i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` 为 `npm run ext:bundle-supabase` 生成的 bundle（不提交）。
 
 ### 样式
 

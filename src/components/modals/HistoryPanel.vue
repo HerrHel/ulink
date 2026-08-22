@@ -1,21 +1,21 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="版本历史" :class="{ open }" @click.self="emit('close')">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('ctx.history')" :class="{ open }" @click.self="emit('close')">
     <div class="modal modal-md">
       <div class="modal-head">
-        <span class="modal-title"><span aria-hidden="true" v-html="I.history" class="sp-icon"></span>版本历史</span>
-        <button class="modal-close" @click="emit('close')" aria-label="关闭">&times;</button>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.history" class="sp-icon"></span>{{ t('ctx.history') }}</span>
+        <button class="modal-close" @click="emit('close')" :aria-label="t('common.close')">&times;</button>
       </div>
       <div class="modal-body history-body">
-        <div v-if="loading" class="history-loading">加载中...</div>
-        <div v-else-if="versions.length === 0" class="history-empty">暂无历史版本</div>
+        <div v-if="loading" class="history-loading">{{ t('common.loading') }}</div>
+        <div v-else-if="versions.length === 0" class="history-empty">{{ t('modal.history.empty') }}</div>
 
         <!-- Diff 视图 -->
         <template v-else-if="diffMode">
           <div class="diff-header">
-            <span class="diff-title">版本对比</span>
-            <button class="btn btn-ghost btn-xs has-text" @click="exitDiffMode">返回列表</button>
+            <span class="diff-title">{{ t('modal.history.diffTitle') }}</span>
+            <button class="btn btn-ghost btn-xs has-text" @click="exitDiffMode">{{ t('modal.history.backToList') }}</button>
           </div>
-          <div v-if="diffFields.length === 0" class="history-empty">两个版本完全相同</div>
+          <div v-if="diffFields.length === 0" class="history-empty">{{ t('modal.history.identical') }}</div>
           <div v-else class="diff-list">
             <div v-for="f in diffFields" :key="f.key" class="diff-item" :class="'diff-' + f.type">
               <div class="diff-field-label">{{ f.label }}</div>
@@ -35,7 +35,7 @@
             </div>
           </div>
           <div class="diff-actions">
-            <button class="btn btn-primary btn-sm" :disabled="restoring" @click="onRestoreDiff">恢复到较早版本</button>
+            <button class="btn btn-primary btn-sm" :disabled="restoring" @click="onRestoreDiff">{{ t('modal.history.restoreOlder') }}</button>
           </div>
         </template>
 
@@ -50,16 +50,16 @@
               <div class="history-item-preview">{{ getPreview(v.data) }}</div>
             </div>
             <div class="history-item-actions">
-              <button v-if="selectedIdx >= 0 && selectedIdx !== idx" class="btn btn-ghost btn-xs" @click="enterDiffMode(idx)" title="对比差异">
-                <span aria-hidden="true" v-html="I.diff"></span>对比
+              <button v-if="selectedIdx >= 0 && selectedIdx !== idx" class="btn btn-ghost btn-xs" @click="enterDiffMode(idx)" :title="t('modal.history.compareDiff')">
+                <span aria-hidden="true" v-html="I.diff"></span>{{ t('modal.history.diff') }}
               </button>
-              <button class="btn btn-xs" :class="selectedIdx === idx ? 'btn-primary' : 'btn-ghost'" :disabled="restoring" @click="onRestore(v)">{{ selectedIdx === idx ? '恢复此版本' : '恢复' }}</button>
+              <button class="btn btn-xs" :class="selectedIdx === idx ? 'btn-primary' : 'btn-ghost'" :disabled="restoring" @click="onRestore(v)">{{ selectedIdx === idx ? t('modal.history.restoreThis') : t('modal.history.restore') }}</button>
             </div>
           </div>
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-secondary" @click="emit('close')">关闭</button>
+        <button class="btn btn-secondary" @click="emit('close')">{{ t('common.close') }}</button>
       </div>
     </div>
   </div>
@@ -75,6 +75,7 @@ import { showConfirm } from '../../lib/toast.js'
 import { diffVersions, type DiffField } from '../../lib/diffVersions.js'
 import { getPreview } from './getPreview.js'
 import { formatTime } from './formatTime.js'
+import { t } from '../../i18n/index.js'
 
 interface HistoryVersion {
   id: number
@@ -153,13 +154,13 @@ function exitDiffMode() {
 async function onRestore(v: HistoryVersion) {
   // A2-010：二次确认 + 在途锁，防误触/连点覆盖当前数据
   if (restoring.value) return
-  const okConfirm = await showConfirm('确认恢复到此历史版本？当前未保存的修改将被覆盖。')
+  const okConfirm = await showConfirm(t('modal.history.confirmRestore'))
   if (!okConfirm) return
   restoring.value = true
   try {
     const ok = await sync.restoreFromHistory(v.id, props.itemId, props.itemType)
-    if (ok) { toast('已恢复到历史版本'); emit('close') }
-    else toast('恢复失败', false)
+    if (ok) { toast(t('modal.history.restoredToast')); emit('close') }
+    else toast(t('modal.history.restoreFail'), false)
   } finally {
     restoring.value = false
   }
@@ -171,13 +172,13 @@ async function onRestoreDiff() {
   if (targetIdx < 0) return
   const v = versions.value[targetIdx]
   if (!v) return
-  const okConfirm = await showConfirm('确认恢复到较早版本？当前未保存的修改将被覆盖。')
+  const okConfirm = await showConfirm(t('modal.history.confirmRestoreOlder'))
   if (!okConfirm) return
   restoring.value = true
   try {
     const ok = await sync.restoreFromHistory(v.id, props.itemId, props.itemType)
-    if (ok) { toast('已恢复到较早版本'); emit('close') }
-    else toast('恢复失败', false)
+    if (ok) { toast(t('modal.history.restoredOlderToast')); emit('close') }
+    else toast(t('modal.history.restoreFail'), false)
   } finally {
     restoring.value = false
   }

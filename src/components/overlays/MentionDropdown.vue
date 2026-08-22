@@ -7,8 +7,8 @@
       <template v-if="mentionType === 'group'">
         <img v-if="item.icon" :src="item.icon" alt="">
         <span v-else class="note-icon" v-html="noteIcon"></span>
-        <span class="mi-name">{{ item.name || '未命名组' }}</span>
-        <span class="mi-url">{{ item.bookmarkIds?.length || 0 }}个书签</span>
+        <span class="mi-name">{{ item.name || t('cards.unnamedGroup') }}</span>
+        <span class="mi-url">{{ tN('count.bookmarks', item.bookmarkIds?.length || 0) }}</span>
       </template>
       <template v-else>
         <img :src="item.icon || favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url)">
@@ -34,6 +34,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { I } from '../../config/icons.js'
 import { favicon, domain, faviconInitials } from '../../utils.js'
 import { useMention } from '../../composables/domain/useMention.js'
+import { t, tN } from '../../i18n/index.js'
 
 const {
   isVisible, candidates, activeIdx, activeSubIdx, mentionType, pos,

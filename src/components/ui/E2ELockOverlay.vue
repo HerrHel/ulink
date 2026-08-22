@@ -11,12 +11,13 @@
       @keydown.space.prevent="onHintActivate"
     >
       <span aria-hidden="true" class="e2e-lock-icon" v-html="I.password"></span>
-      <span>{{ hint || '开启端到端加密后才可使用此功能' }}</span>
+      <span>{{ hint || t('boundary.e2eLockedHint') }}</span>
     </div>
     <slot v-else></slot>
   </div>
 </template>
 <script setup lang="ts">
+import { t } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
 
 const props = withDefaults(defineProps<{

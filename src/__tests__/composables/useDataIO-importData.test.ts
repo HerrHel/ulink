@@ -8,7 +8,7 @@
  *              (a) validateImportData(data)===null  → importFromDataInternal(data,'LinkVault')
  *              (b) data.items Array                  → parseRaindropJSON → 空守卫 toast / importFromDataInternal(...,'Raindrop.io')
  *              (c) Array.isArray(data) && data[0].link → parseRaindropJSON → 空守卫 toast / importFromDataInternal(...,'Raindrop.io')
- *              (d) 未识别                            → toast('JSON 格式不识别，请确认是 LinkVault 或 Raindrop.io 导出文件', false)
+ *              (d) 未识别                            → toast('JSON 格式不识别，请确认是与链（ulink）或 Raindrop.io 导出文件', false)
  *     html → parseBookmarkHTML → 空守卫 toast('未在 HTML 中找到书签') / importFromDataInternal(...,'浏览器书签')
  *     csv  → parseCSV → 空守卫 toast('CSV 文件为空或格式不正确') / importFromDataInternal(...,'CSV')
  *     null → toast('不支持的文件格式', false)
@@ -135,9 +135,9 @@ describe('useDataIO.importData 多格式分发 + 5 分支 toast 守卫编排护�
     expect(_toast.toastSpy).toHaveBeenCalled()
     // importFromDataInternal 真跑，bookmark 真并入 store（_mergeBookmarks 过同 ID 跳过，新 store 空→合入）
     expect(ds.bookmarks.length).toBe(before + 1)
-    // summary toast 含 '从 LinkVault 导入'
+    // summary toast 含 '从 与链 · ulink 导入'（品牌已由 LinkVault → 与链 · ulink）
     const msg = _toast.toastSpy.mock.calls[0][0] as string
-    expect(msg).toContain('从 LinkVault 导入')
+    expect(msg).toContain('从 与链 · ulink 导入')
     // 空守卫 toast / 未识别 toast / 不支持 toast / 失败 toast 都不应出现（仅 summary 一调）
     expect(msg).not.toContain('不识别')
     expect(msg).not.toContain('失败')
@@ -179,7 +179,7 @@ describe('useDataIO.importData 多格式分发 + 5 分支 toast 守卫编排护�
 
     expect(_toast.toastSpy).toHaveBeenCalled()
     const msg = _toast.toastSpy.mock.calls[0][0] as string
-    expect(msg).toBe('JSON 格式不识别，请确认是 LinkVault 或 Raindrop.io 导出文件')
+    expect(msg).toBe('JSON 格式不识别，请确认是与链（ulink）或 Raindrop.io 导出文件')
     // 未识别分支不调 importFromDataInternal → store 不增长
     expect(ds.bookmarks.length).toBe(before)
   })
@@ -209,7 +209,7 @@ describe('useDataIO.importData 多格式分发 + 5 分支 toast 守卫编排护�
     importData(new File([content], 'raindrop-arr-nolink.json', { type: 'application/json' }))
 
     expect(_toast.toastSpy).toHaveBeenCalled()
-    expect(_toast.toastSpy.mock.calls[0][0]).toBe('JSON 格式不识别，请确认是 LinkVault 或 Raindrop.io 导出文件')
+    expect(_toast.toastSpy.mock.calls[0][0]).toBe('JSON 格式不识别，请确认是与链（ulink）或 Raindrop.io 导出文件')
     expect(ds.bookmarks.length).toBe(before)
   })
 
@@ -224,7 +224,7 @@ describe('useDataIO.importData 多格式分发 + 5 分支 toast 守卫编排护�
     importData(new File([content], 'raindrop-arr-urlonly.json', { type: 'application/json' }))
 
     expect(_toast.toastSpy).toHaveBeenCalled()
-    expect(_toast.toastSpy.mock.calls[0][0]).toBe('JSON 格式不识别，请确认是 LinkVault 或 Raindrop.io 导出文件')
+    expect(_toast.toastSpy.mock.calls[0][0]).toBe('JSON 格式不识别，请确认是与链（ulink）或 Raindrop.io 导出文件')
     expect(ds.bookmarks.length).toBe(before)
   })
 

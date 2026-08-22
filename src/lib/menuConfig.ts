@@ -25,35 +25,36 @@ import { useSpaceMove } from '../composables/domain/useSpaceMove.js'
 import { toggleBatchMode } from '../composables/domain/useBatch.js'
 import { pushNavState } from '../composables/interaction/useKeyboardOps.js'
 import { debouncedSaveAppData } from '../stores/app.js'
+import { t } from '../i18n/index.js'
 
 export interface MenuEntry {
   action: string
-  /** 覆盖默认文案（同 action 在不同上下文语义不同，如 EDIT=编辑组名/编辑书签） */
+  /** 覆盖默认文案 key（同 action 在不同上下文语义不同，如 EDIT=编辑组名/编辑书签） */
   label?: string
   danger?: boolean
 }
 
-/** 默认文案与危险标记（per-type 可用 MENU_RULES/LONGPRESS_RULES 的 label 覆盖） */
+/** 默认文案 key 与危险标记（per-type 可用 MENU_RULES/LONGPRESS_RULES 的 label 覆盖） */
 export const MENU_ITEMS: Record<string, { label: string; danger?: boolean }> = {
-  [ACTIONS.COPY_URL]: { label: '复制网址' },
-  [ACTIONS.VISIT]: { label: '打开网站' },
-  [ACTIONS.EDIT]: { label: '编辑' },
-  [ACTIONS.HISTORY]: { label: '版本历史' },
-  [ACTIONS.PIN]: { label: '置顶' },
-  [ACTIONS.MOVE_TO_CAT]: { label: '移动到' },
-  [ACTIONS.MOVE_TO_SPACE]: { label: '设为私密' },
-  [ACTIONS.MULTI_SELECT]: { label: '多选' },
-  [ACTIONS.DETAIL]: { label: '查看详情' },
-  [ACTIONS.DELETE]: { label: '删除', danger: true },
-  [ACTIONS.SHARE_GROUP]: { label: '分享组' },
-  [ACTIONS.ADD_BOOKMARK]: { label: '添加书签' },
-  [ACTIONS.ADD_GROUP]: { label: '添加组' },
-  [ACTIONS.ADD_CAT]: { label: '添加分类' },
-  [ACTIONS.RENAME_ATTR]: { label: '重命名' },
-  [ACTIONS.EXPAND]: { label: '展开' },
-  [ACTIONS.FOCUS]: { label: '聚焦编辑' },
-  [ACTIONS.ADD_SUB]: { label: '添加子网站' },
-  [ACTIONS.ADD_TO_GROUP]: { label: '添加书签或组' },
+  [ACTIONS.COPY_URL]: { label: 'ctx.copyUrl' },
+  [ACTIONS.VISIT]: { label: 'ctx.visit' },
+  [ACTIONS.EDIT]: { label: 'common.edit' },
+  [ACTIONS.HISTORY]: { label: 'ctx.history' },
+  [ACTIONS.PIN]: { label: 'ctx.pin' },
+  [ACTIONS.MOVE_TO_CAT]: { label: 'ctx.moveToCat' },
+  [ACTIONS.MOVE_TO_SPACE]: { label: 'ctx.moveToSpace' },
+  [ACTIONS.MULTI_SELECT]: { label: 'ctx.multiSelect' },
+  [ACTIONS.DETAIL]: { label: 'ctx.detail' },
+  [ACTIONS.DELETE]: { label: 'common.delete', danger: true },
+  [ACTIONS.SHARE_GROUP]: { label: 'ctx.shareGroup' },
+  [ACTIONS.ADD_BOOKMARK]: { label: 'ctx.addBookmark' },
+  [ACTIONS.ADD_GROUP]: { label: 'ctx.addGroup' },
+  [ACTIONS.ADD_CAT]: { label: 'ctx.addCat' },
+  [ACTIONS.RENAME_ATTR]: { label: 'ctx.renameAttr' },
+  [ACTIONS.EXPAND]: { label: 'cards.expand' },
+  [ACTIONS.FOCUS]: { label: 'ctx.focus' },
+  [ACTIONS.ADD_SUB]: { label: 'cards.addSubSite' },
+  [ACTIONS.ADD_TO_GROUP]: { label: 'ctx.addToGroup' },
 }
 
 /** 右键菜单规则（PC） */
@@ -71,34 +72,34 @@ export const MENU_RULES: Record<string, MenuEntry[]> = {
     { action: ACTIONS.DELETE },
   ],
   sub: [
-    { action: ACTIONS.VISIT, label: '查看详情' },
+    { action: ACTIONS.VISIT, label: 'ctx.detail' },
     { action: ACTIONS.EDIT },
     { action: ACTIONS.DELETE },
   ],
   cat: [
-    { action: ACTIONS.EDIT, label: '重命名' },
+    { action: ACTIONS.EDIT, label: 'ctx.rename' },
     { action: ACTIONS.MOVE_TO_SPACE },
     { action: ACTIONS.DELETE },
   ],
   attr: [
-    { action: ACTIONS.RENAME_ATTR, label: '重命名' },
+    { action: ACTIONS.RENAME_ATTR, label: 'ctx.renameAttr' },
     { action: ACTIONS.DELETE },
   ],
   group: [
     { action: ACTIONS.DETAIL },
-    { action: ACTIONS.EDIT, label: '编辑组名' },
+    { action: ACTIONS.EDIT, label: 'ctx.editGroupName' },
     { action: ACTIONS.ADD_TO_GROUP },
     { action: ACTIONS.HISTORY },
     { action: ACTIONS.PIN },
     { action: ACTIONS.MOVE_TO_CAT },
     { action: ACTIONS.MOVE_TO_SPACE },
     { action: ACTIONS.SHARE_GROUP },
-    { action: ACTIONS.DELETE, label: '删除组' },
+    { action: ACTIONS.DELETE, label: 'ctx.deleteGroup' },
   ],
   'group-card': [
-    { action: ACTIONS.VISIT, label: '查看详情' },
-    { action: ACTIONS.EDIT, label: '编辑书签' },
-    { action: ACTIONS.DELETE, label: '从组移除' },
+    { action: ACTIONS.VISIT, label: 'ctx.detail' },
+    { action: ACTIONS.EDIT, label: 'ctx.editBookmark' },
+    { action: ACTIONS.DELETE, label: 'ctx.removeFromGroup' },
   ],
   'rail-empty': [{ action: ACTIONS.ADD_CAT }],
   'grid-empty': [
@@ -126,12 +127,12 @@ export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
     { action: ACTIONS.PIN },
     { action: ACTIONS.DETAIL },
     { action: ACTIONS.FOCUS },
-    { action: ACTIONS.EDIT, label: '编辑组' },
+    { action: ACTIONS.EDIT, label: 'ctx.editGroup' },
     { action: ACTIONS.ADD_TO_GROUP },
     { action: ACTIONS.MOVE_TO_CAT },
     { action: ACTIONS.MOVE_TO_SPACE },
     { action: ACTIONS.SHARE_GROUP },
-    { action: ACTIONS.DELETE, label: '删除组' },
+    { action: ACTIONS.DELETE, label: 'ctx.deleteGroup' },
   ],
 }
 
@@ -168,17 +169,17 @@ export function buildLongPressItems(
     if (entry.action === ACTIONS.EXPAND) {
       if (!canExpandEntry(type, id)) continue
       items.push({
-        label: ui.expandedIds.includes(id) ? '收起' : '展开',
+        label: ui.expandedIds.includes(id) ? t('cards.collapse') : t('cards.expand'),
         action: () => ui.toggleExpanded(id),
       })
       continue
     }
     if (entry.action === ACTIONS.ADD_SUB && !canAddSub(id)) continue
     if (entry.action === ACTIONS.MOVE_TO_SPACE && !isMain) continue
-    let label = entry.label || MENU_ITEMS[entry.action]?.label || entry.action
+    let label = t(entry.label || MENU_ITEMS[entry.action]?.label || entry.action)
     if (entry.action === ACTIONS.PIN) {
       const pinned = type === 'card' ? !!ds.bookmarkMap[id]?.pinnedAt : !!ds.groupMap[id]?.pinnedAt
-      label = pinned ? '取消置顶' : '置顶'
+      label = pinned ? t('ctx.unpin') : t('ctx.pin')
     }
     items.push({
       label,
@@ -196,7 +197,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
   if (type === 'card') {
     if (action === ACTIONS.COPY_URL) {
       const bm = dataStore.bookmarkMap[id]
-      if (bm && bm.url) copyToClipboard(bm.url, '网址')
+      if (bm && bm.url) copyToClipboard(bm.url, t('ctx.url'))
       return
     }
     if (action === ACTIONS.ADD_SUB) {
@@ -232,7 +233,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     if (action === ACTIONS.EDIT) openCatModal()
     if (action === ACTIONS.MOVE_TO_SPACE) {
       const cat = dataStore.categoryMap[id]
-      if (cat && window.confirm(`确认将分类「${cat.name}」及其全部书签/组移入私密空间?`)) {
+      if (cat && window.confirm(t('ctx.confirmMoveCategory', { name: cat.name }))) {
         void useSpaceMove().moveCategoryToVault(id)
       }
     }
@@ -243,7 +244,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     if (action === ACTIONS.RENAME_ATTR) {
       const attr = useAppStore().attributeMap[id]
       if (attr) {
-        const input = window.prompt('重命名属性', attr.name)
+        const input = window.prompt(t('ctx.renameAttrPrompt'), attr.name)
         if (input && input.trim() && input.trim() !== attr.name) {
           dataStore.renameAttribute(id, input.trim())
           useAppStore().save()

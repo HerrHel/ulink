@@ -3,11 +3,26 @@
  *
  * 从 constants.ts 中提取，缩小主 bundle 体积。
  * 仅在首次加载/数据重置时使用。
+ *
+ * 双语：根据当前 locale（zh-CN / en-US）返回对应语言版本。两版 HTML 结构对齐，
+ * 复用同一套示例书签的内联卡片 DOM（标题/域名/「详」按钮仍来自常量）。
  */
 
 import { FAVICON_PROVIDER_URL } from './urls.js'
+import type { Locale } from '../i18n/index.js'
 
-export const WELCOME_NOTES = '<h1>欢迎使用 LinkVault</h1>'
+/** 内联卡片公共片段（书签名/域名/「详」按钮 — 「详」改用 cat.refLabel 键由调用方注入）。 */
+const _inlineCard = (
+  bmId: string,
+  domain: string,
+  name: string,
+  detailLabel: string,
+): string =>
+  '<span class="group-inline-card" contenteditable="false" data-bm-id="' + bmId + '" draggable="true"><img src="' + FAVICON_PROVIDER_URL + domain + '" alt=""><span class="gic-name">' + name + '</span><span class="gic-domain">' + domain + '</span><span class="gic-btn">' + detailLabel + '</span></span>'
+
+/** zh-CN 欢迎笔记（保留原内容，仅品牌 LinkVault → 与链） */
+const WELCOME_ZH =
+  '<h1>欢迎使用 与链</h1>'
   + '<p>一个<span style="color: #3B82F6">全能型</span>书签与收藏管理工具，帮你<span style="color: #22C55E">高效</span>整理网络资源。</p>'
   + '<h2>核心功能</h2>'
   + '<ul>'
@@ -36,15 +51,54 @@ export const WELCOME_NOTES = '<h1>欢迎使用 LinkVault</h1>'
   + '<span class="group-inline-card group-ref-card" contenteditable="false" data-bm-id="ref:sg_tips" draggable="true"><span style="width:16px;height:16px;flex-shrink:0;color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.6602 10.44L20.6802 14.62C19.8402 18.23 18.1802 19.69 15.0602 19.39C14.5602 19.35 14.0202 19.26 13.4402 19.12L11.7602 18.72C7.59018 17.73 6.30018 15.67 7.28018 11.49L8.26018 7.30001C8.46018 6.45001 8.70018 5.71001 9.00018 5.10001C10.1702 2.68001 12.1602 2.03001 15.5002 2.82001L17.1702 3.21001C21.3602 4.19001 22.6402 6.26001 21.6602 10.44Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path opacity="0.4" d="M15.0603 19.3901C14.4403 19.8101 13.6603 20.1601 12.7103 20.4701L11.1303 20.9901C7.16034 22.2701 5.07034 21.2001 3.78034 17.2301L2.50034 13.2801C1.22034 9.3101 2.28034 7.2101 6.25034 5.9301L7.83034 5.4101C8.24034 5.2801 8.63034 5.1701 9.00034 5.1001C8.70034 5.7101 8.46034 6.4501 8.26034 7.3001L7.28034 11.4901C6.30034 15.6701 7.59034 17.7301 11.7603 18.7201L13.4403 19.1201C14.0203 19.2601 14.5603 19.3501 15.0603 19.3901Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="gic-name">使用技巧</span><span class="gic-count">2个书签</span><span class="gic-btn">详</span></span>'
   + '<h2>示例书签</h2>'
   + '<p><span style="color: #EC4899">拖拽</span>它们到组中，或直接点击访问：</p>'
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b1" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'github.com" alt=""><span class="gic-name">GitHub</span><span class="gic-domain">github.com</span><span class="gic-btn">详</span></span> '
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b2" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'mail.qq.com" alt=""><span class="gic-name">QQ邮箱</span><span class="gic-domain">mail.qq.com</span><span class="gic-btn">详</span></span> '
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b3" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'www.deepseek.com" alt=""><span class="gic-name">DeepSeek</span><span class="gic-domain">deepseek.com</span><span class="gic-btn">详</span></span> '
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b4" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'www.douyin.com" alt=""><span class="gic-name">抖音</span><span class="gic-domain">douyin.com</span><span class="gic-btn">详</span></span> '
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b5" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'store.steampowered.com" alt=""><span class="gic-name">Steam</span><span class="gic-domain">steampowered.com</span><span class="gic-btn">详</span></span>'
+  + _inlineCard('b1', 'github.com', 'GitHub', '详') + ' '
+  + _inlineCard('b2', 'mail.qq.com', 'QQ邮箱', '详') + ' '
+  + _inlineCard('b3', 'www.deepseek.com', 'DeepSeek', '详') + ' '
+  + _inlineCard('b4', 'www.douyin.com', '抖音', '详') + ' '
+  + _inlineCard('b5', 'store.steampowered.com', 'Steam', '详')
 
-export const TIPS_NOTES = '<h1>LinkVault 使用指南</h1>'
+/** en-US 欢迎笔记（结构对齐中文版，品牌 ulink） */
+const WELCOME_EN =
+  '<h1>Welcome to ulink</h1>'
+  + '<p>A <span style="color: #3B82F6">versatile</span> bookmark manager that helps you <span style="color: #22C55E">organize</span> web resources efficiently.</p>'
+  + '<h2>Core features</h2>'
+  + '<ul>'
+  + '<li><strong>Bookmark capture</strong> — One-click save with auto icon and domain lookup</li>'
+  + '<li><strong>Group editor</strong> — Rich text: <u>titles</u>, <strong>bold</strong>, <span style="color: #EAB308">colors</span>, <u>underline</u> and more</li>'
+  + '<li><strong>Inline cards</strong> — Embed bookmark or group references inside notes, drag to reorder</li>'
+  + '<li><strong>Attribute tags</strong> — Custom tags for fast filtering of target bookmarks</li>'
+  + '<li><strong>Responsive design</strong> — <span style="color: #A855F7">First-class</span> experience on desktop and mobile</li>'
+  + '</ul>'
+  + '<h2>Quick start</h2>'
+  + '<ol>'
+  + '<li>Click the <strong>+</strong> button to create a bookmark or group</li>'
+  + '<li><span style="color: #F97316">Drag</span> bookmarks onto a group card to add them</li>'
+  + '<li>Focus a group and use the <u>rich text toolbar</u> to edit its notes</li>'
+  + '<li>Type <strong>@</strong> inside the editor to search and insert bookmarks</li>'
+  + '</ol>'
+  + '<h2>Todo list</h2>'
+  + '<ul data-type="taskList">'
+  + '<li data-type="taskItem" data-checked="true">Browse the sample bookmarks below</li>'
+  + '<li data-type="taskItem" data-checked="false">Create your first collection group</li>'
+  + '<li data-type="taskItem" data-checked="false">Try drag-to-reorder on cards</li>'
+  + '<li data-type="taskItem" data-checked="false">Explore attribute filtering</li>'
+  + '</ul>'
+  + '<h2>Group references</h2>'
+  + '<p>Click the <strong>+</strong> on a group card, switch to the <span style="color: #A855F7">Groups</span> tab, then search and <u>embed</u> other groups into the current note. Supports <strong>cross-group references</strong> and <span style="color: #3B82F6">hierarchical navigation</span> to build a knowledge network:</p>'
+  + '<span class="group-inline-card group-ref-card" contenteditable="false" data-bm-id="ref:sg_tips" draggable="true"><span style="width:16px;height:16px;flex-shrink:0;color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.6602 10.44L20.6802 14.62C19.8402 18.23 18.1802 19.69 15.0602 19.39C14.5602 19.35 14.0202 19.26 13.4402 19.12L11.7602 18.72C7.59018 17.73 6.30018 15.67 7.28018 11.49L8.26018 7.30001C8.46018 6.45001 8.70018 5.71001 9.00018 5.10001C10.1702 2.68001 12.1602 2.03001 15.5002 2.82001L17.1702 3.21001C21.3602 4.19001 22.6402 6.26001 21.6602 10.44Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path opacity="0.4" d="M15.0603 19.3901C14.4403 19.8101 13.6603 20.1601 12.7103 20.4701L11.1303 20.9901C7.16034 22.2701 5.07034 21.2001 3.78034 17.2301L2.50034 13.2801C1.22034 9.3101 2.28034 7.2101 6.25034 5.9301L7.83034 5.4101C8.24034 5.2801 8.63034 5.1701 9.00034 5.1001C8.70034 5.7101 8.46034 6.4501 8.26034 7.3001L7.28034 11.4901C6.30034 15.6701 7.59034 17.7301 11.7603 18.7201L13.4403 19.1201C14.0203 19.2601 14.5603 19.3501 15.0603 19.3901Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="gic-name">Tips & tricks</span><span class="gic-count">2 bookmarks</span><span class="gic-btn">i</span></span>'
+  + '<h2>Sample bookmarks</h2>'
+  + '<p><span style="color: #EC4899">Drag</span> them into a group, or just click to open:</p>'
+  + _inlineCard('b1', 'github.com', 'GitHub', 'i') + ' '
+  + _inlineCard('b2', 'mail.qq.com', 'QQ Mail', 'i') + ' '
+  + _inlineCard('b3', 'www.deepseek.com', 'DeepSeek', 'i') + ' '
+  + _inlineCard('b4', 'www.douyin.com', 'Douyin', 'i') + ' '
+  + _inlineCard('b5', 'store.steampowered.com', 'Steam', 'i')
+
+/** zh-CN 使用指南（保留原内容） */
+const TIPS_ZH =
+  '<h1>与链 使用指南</h1>'
   + '<h2>组功能详解</h2>'
-  + '<p><strong>组</strong>是 LinkVault 的核心组织单元，相当于一个<u>富文本笔记本</u> + <u>书签收纳夹</u>的结合体。</p>'
+  + '<p><strong>组</strong>是与链的核心组织单元，相当于一个<u>富文本笔记本</u> + <u>书签收纳夹</u>的结合体。</p>'
   + '<h3>组编辑器</h3>'
   + '<ul>'
   + '<li><strong>聚焦</strong> — 点击组图标的笔记按钮进入<u>全屏编辑模式</u>，侧边栏显示格式工具栏</li>'
@@ -115,5 +169,95 @@ export const TIPS_NOTES = '<h1>LinkVault 使用指南</h1>'
   + '<li><span style="color: #A855F7">#</span>  <u>编辑器内</u>触发组搜索并插入组引用</li>'
   + '</ul>'
   + '<p>把下面的书签<span style="color: #F97316">拖到</span>欢迎组里试试看：</p>'
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b3" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'www.deepseek.com" alt=""><span class="gic-name">DeepSeek</span><span class="gic-domain">deepseek.com</span><span class="gic-btn">详</span></span> '
-  + '<span class="group-inline-card" contenteditable="false" data-bm-id="b4" draggable="true"><img src="' + FAVICON_PROVIDER_URL + 'www.douyin.com" alt=""><span class="gic-name">抖音</span><span class="gic-domain">douyin.com</span><span class="gic-btn">详</span></span>'
+  + _inlineCard('b3', 'www.deepseek.com', 'DeepSeek', '详') + ' '
+  + _inlineCard('b4', 'www.douyin.com', '抖音', '详')
+
+/** en-US 使用指南（结构对齐中文版） */
+const TIPS_EN =
+  '<h1>ulink User Guide</h1>'
+  + '<h2>Group features in detail</h2>'
+  + '<p>A <strong>group</strong> is the core unit of ulink — a <u>rich-text notebook</u> plus a <u>bookmark tray</u> in one.</p>'
+  + '<h3>Group editor</h3>'
+  + '<ul>'
+  + '<li><strong>Focus</strong> — Click the note icon on a group card to enter <u>full-screen edit mode</u>, with the format toolbar on the side</li>'
+  + '<li><strong>Rich text</strong> — <span style="color: #3B82F6">H1/H2/H3 headings</span>, <strong>bold</strong>, <u>underline</u>, <span style="color: #EAB308">9 text colors</span>, ordered/unordered/task lists</li>'
+  + '<li><strong>Type @</strong> — Type <span style="color: #A855F7">@</span> in the editor to trigger the bookmark picker and insert an inline card</li>'
+  + '<li><strong>Type #</strong> — Type <span style="color: #A855F7">#</span> to search and insert <u>other group references</u>, building a hierarchy</li>'
+  + '<li><strong>Group reference cards</strong> — Click the <strong>+</strong> on a group card, switch to the <span style="color: #22C55E">Groups</span> tab, search and embed existing groups</li>'
+  + '<li><strong>Undo / Redo</strong> — Each group keeps its own history; <span style="color: #3B82F6">Ctrl+Z / Ctrl+Y</span></li>'
+  + '</ul>'
+  + '<h3>Group operations</h3>'
+  + '<ul>'
+  + '<li><strong>Reorder</strong> — Drag a group header to <u>swap places</u> with another group</li>'
+  + '<li><strong>Edit attributes</strong> — Use the edit button to change name, icon, category, tags</li>'
+  + '<li><strong>In-group search</strong> — Focus a group and use the search box to <u>filter its bookmarks</u></li>'
+  + '<li><strong>Batch select</strong> — In batch mode, tick groups to move or delete in bulk</li>'
+  + '</ul>'
+  + '<h2>Sub-bookmarks</h2>'
+  + '<p><strong>Sub-bookmarks</strong> (nested bookmarks) let you hang multiple child links under one parent — great for <u>different entry points into the same site</u>.</p>'
+  + '<ul>'
+  + '<li><strong>Create</strong> — When creating a bookmark, pick an existing top-level one as the parent in the dropdown</li>'
+  + '<li><strong>Expand / collapse</strong> — In list view, an expand button appears on items with children</li>'
+  + '<li><strong>Hierarchical reorder</strong> — Sub-bookmarks live <span style="color: #F97316">in the same DOM tree</span> as their parent, drag to reorder</li>'
+  + '<li><strong>Independent attributes</strong> — Each child has its own icon, URL, notes and tags</li>'
+  + '<li><span style="color: #EC4899">Example:</span> DeepSeek has two children (Start chat + API platform), visible in list view</li>'
+  + '</ul>'
+  + '<h2>Drag scenarios</h2>'
+  + '<ol>'
+  + '<li><strong>Bookmark onto group header</strong> — Drag onto the group\u2019s <u>header area</u> to swap positions</li>'
+  + '<li><strong>Bookmark onto group body</strong> — Drop inside the editor to <span style="color: #22C55E">insert an inline card</span> at the drop point</li>'
+  + '<li><strong>Bookmark onto bookmark</strong> — <u>Swap order</u> with a sibling</li>'
+  + '<li><strong>Group onto group</strong> — Drop onto another group card to embed a <span style="color: #A855F7">group reference card</span></li>'
+  + '<li><strong>Group onto group header</strong> — Two groups <u>swap places</u></li>'
+  + '<li><strong>Bookmark/group onto grid</strong> — Drop on empty grid to <u>remove from group</u> (if inside one)</li>'
+  + '<li><strong>Drop on detail panel</strong> — Quickly preview by dropping onto the right panel</li>'
+  + '<li><strong>Inline card drag</strong> — Inside the group editor, drag inline cards to <span style="color: #F97316">reorder</span></li>'
+  + '<li><strong>Sidebar category drag</strong> — Drag bookmarks to a left-side category to reassign; drag categories to reorder</li>'
+  + '<li><strong>Cross-group drag</strong> — Dragging a bookmark to another group means <u>move</u> (auto-removed from source)</li>'
+  + '</ol>'
+  + '<h2>More practical tips</h2>'
+  + '<ul>'
+  + '<li><strong>Right-click / long-press menu</strong> — Quickly <u>open, edit, move, delete</u> bookmarks or groups</li>'
+  + '<li><strong>Batch manage</strong> — Enter multi-select mode for <span style="color: #3B82F6">Ctrl+A select-all</span>, batch move, batch delete</li>'
+  + '<li><strong>Detail panel</strong> — Click the <u>i</u> on a bookmark to <u>preview multiple side-by-side</u> in the right panel</li>'
+  + '<li><strong>Inline rename</strong> — Double-click a bookmark or group name to <span style="color: #22C55E">edit in place</span></li>'
+  + '<li><strong>Attribute filter</strong> — Click <u>Attributes</u> and pick tags to filter (e.g. <span style="color: #EAB308">Requires login</span>, <span style="color: #A855F7">AI</span>)</li>'
+  + '<li><strong>Layout switch</strong> — Toggle between <span style="color: #3B82F6">grid / list</span> views from the top bar</li>'
+  + '<li><strong>Data security</strong> — Bookmark passwords can be <u>encrypted</u> with end-to-end protection</li>'
+  + '<li><strong>Import / Export</strong> — JSON-based <u>backup export</u> and <u>restore import</u>; storage usage shown in the sidebar</li>'
+  + '<li><strong>Theme & appearance</strong> — Light / dark / auto themes with several <u>color schemes</u></li>'
+  + '<li><strong>Mobile</strong> — Auto list layout, bottom sheets, <span style="color: #EC4899">touch-based drag</span></li>'
+  + '</ul>'
+  + '<h2>Keyboard shortcuts</h2>'
+  + '<p><span style="color: #6B7280">(On Mac, replace Ctrl with ⌘ Cmd)</span></p>'
+  + '<ul>'
+  + '<li><span style="color: #3B82F6">Ctrl + K</span>  Focus search box, search bookmarks and groups</li>'
+  + '<li><span style="color: #3B82F6">Ctrl + N</span>  Open new bookmark dialog</li>'
+  + '<li><span style="color: #3B82F6">Ctrl + B</span>  <strong>Bold</strong> selected text in the group editor</li>'
+  + '<li><span style="color: #3B82F6">Ctrl + Shift + 1</span>  Set to <strong>H1</strong></li>'
+  + '<li><span style="color: #3B82F6">Ctrl + Shift + 2</span>  Set to <strong>H2</strong></li>'
+  + '<li><span style="color: #3B82F6">Ctrl + Shift + 3</span>  Set to <strong>H3</strong></li>'
+  + '<li><span style="color: #3B82F6">Ctrl + Z</span>  Undo edits in group</li>'
+  + '<li><span style="color: #3B82F6">Ctrl + Y</span>  Redo last undone action</li>'
+  + '<li><span style="color: #EF4444">Esc</span>  Close dialog / exit focus / exit batch mode / close menu</li>'
+  + '<li><span style="color: #3B82F6">Tab</span>  <u>Cycle focus</u> between fields in a dialog</li>'
+  + '<li><span style="color: #3B82F6">Ctrl + A</span>  <u>In batch mode</u>, select all visible cards</li>'
+  + '<li><span style="color: #EF4444">Delete</span>  <u>In batch mode</u>, delete selected items</li>'
+  + '<li><span style="color: #A855F7">@</span>  <u>In editor</u>, search bookmarks and insert inline</li>'
+  + '<li><span style="color: #A855F7">#</span>  <u>In editor</u>, search groups and insert reference</li>'
+  + '</ul>'
+  + '<p><span style="color: #F97316">Drag</span> the bookmarks below into the welcome group to try it out:</p>'
+  + _inlineCard('b3', 'www.deepseek.com', 'DeepSeek', 'i') + ' '
+  + _inlineCard('b4', 'www.douyin.com', 'Douyin', 'i')
+
+/** 向后兼容：保留 WELCOME_NOTES / TIPS_NOTES 常量导出（zh 版本），原测试可能仍引用。 */
+export const WELCOME_NOTES = WELCOME_ZH
+export const TIPS_NOTES = TIPS_ZH
+
+/** 按 locale 返回欢迎/技巧 HTML。 */
+export function getWelcomeNotes(locale: Locale = 'zh-CN'): string {
+  return locale === 'en-US' ? WELCOME_EN : WELCOME_ZH
+}
+export function getTipsNotes(locale: Locale = 'zh-CN'): string {
+  return locale === 'en-US' ? TIPS_EN : TIPS_ZH
+}

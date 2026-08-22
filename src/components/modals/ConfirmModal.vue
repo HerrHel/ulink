@@ -1,12 +1,12 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="确认操作" :class="{ open: store.confirmOpen }" @click.self="store.resolveConfirm(false)">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.confirm.ariaLabel')" :class="{ open: store.confirmOpen }" @click.self="store.resolveConfirm(false)">
     <div class="modal modal-sm">
       <div class="modal-body modal-body-center">
         <div class="confirm-msg">{{ store.confirmMessage }}</div>
       </div>
       <div class="modal-foot confirm-foot">
-        <button class="btn btn-secondary" @click="store.resolveConfirm(false)">取消</button>
-        <button class="btn btn-danger" @click="store.resolveConfirm(true)">确认</button>
+        <button class="btn btn-secondary" @click="store.resolveConfirm(false)">{{ t('common.cancel') }}</button>
+        <button class="btn btn-danger" @click="store.resolveConfirm(true)">{{ t('common.confirm') }}</button>
       </div>
     </div>
   </div>
@@ -15,6 +15,7 @@
 <script setup lang="ts">
 import { watch, onUnmounted, nextTick } from 'vue'
 import { useToastStore } from '../../stores/toast.js'
+import { t } from '../../i18n/index.js'
 
 const store = useToastStore()
 

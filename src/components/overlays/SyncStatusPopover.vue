@@ -14,14 +14,14 @@
         :class="{ 'ssp-btn-primary': state.level === 'error' || state.level === 'offline' }"
         @click="onRetry"
       >
-        <span aria-hidden="true" v-html="I.refresh"></span>重试同步
+        <span aria-hidden="true" v-html="I.refresh"></span>{{ t('sync.retrySync') }}
       </button>
       <button
         v-if="state.level === 'conflict'"
         class="btn btn-ghost btn-sm ssp-btn"
         @click="onViewConflicts"
       >
-        <span aria-hidden="true" v-html="I.alert"></span>查看冲突
+        <span aria-hidden="true" v-html="I.alert"></span>{{ t('sync.viewConflicts') }}
       </button>
     </div>
   </div>
@@ -34,6 +34,7 @@ import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 
 const store = useSyncStatusStore()
 const state = useSyncState()
@@ -41,7 +42,7 @@ const sync = useCloudSync()
 
 function onRetry() {
   if (state.value.level !== 'error' && state.value.level !== 'offline') return
-  toast('开始同步...')
+  toast(t('sync.startSync'))
   sync.fullSync()
   store.hide()
 }

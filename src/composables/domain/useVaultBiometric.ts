@@ -10,6 +10,7 @@
  */
 import { encrypt, decrypt } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
+import { t } from '../../i18n/index.js'
 
 const BIO_KEY = 'lv_vault_biometric'
 const HKDF_SALT_RAW = 'lv-vault-biometric-hkdf-v1'
@@ -107,8 +108,8 @@ export function useVaultBiometric() {
       credential = (await navigator.credentials.create({
         publicKey: {
           challenge: _bs(challenge),
-          rp: { name: 'LinkVault' },
-          user: { id: _bs(userId), name: 'lv-vault-biometric', displayName: 'LinkVault Vault Unlock' },
+          rp: { name: t('app.brand') },
+          user: { id: _bs(userId), name: 'lv-vault-biometric', displayName: t('app.fullName') },
           pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
           authenticatorSelection: {
             userVerification: 'required',

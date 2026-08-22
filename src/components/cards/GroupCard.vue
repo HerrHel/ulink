@@ -9,7 +9,7 @@
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
           <div class="card-titlewrap-text">
-            <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}<span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span></div>
+            <div class="card-name" :data-group-name="group.id">{{ group.name || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
             <div class="card-domain group-domain"></div>
           </div>
         </div>
@@ -17,7 +17,7 @@
       <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
         <div class="card-scroll-wrap">
           <div class="card-tags" v-if="tagNames.length">
-            <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i">{{ t }}</span>
+            <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i">{{ tag }}</span>
           </div>
           <!-- 聚焦态始终挂编辑器 -->
           <GroupEditor :groupId="group.id" />
@@ -25,30 +25,30 @@
       </div>
     </div>
     <div class="focus-toolbar-side">
-      <button class="ft-sb-btn" :class="{ active: fmt.bold }" title="加粗" @click="fmtToggle('bold')"><strong>B</strong></button>
-      <button class="ft-sb-btn" :class="{ active: fmt.underline }" title="下划线" @click="fmtToggle('underline')">
+      <button class="ft-sb-btn" :class="{ active: fmt.bold }" :title="t('editor.bold')" @click="fmtToggle('bold')"><strong>B</strong></button>
+      <button class="ft-sb-btn" :class="{ active: fmt.underline }" :title="t('editor.underline')" @click="fmtToggle('underline')">
         <span aria-hidden="true" v-html="I.underline"></span>
       </button>
       <span class="ft-color-wrap">
-        <button ref="colorBtnRef" class="ft-sb-btn ft-color-btn" :class="{ active: !!fmt.color }" :style="fmt.color ? { '--ft-color': fmt.color } : {}" title="文字颜色" @click.stop="toggleColorPalette">
+        <button ref="colorBtnRef" class="ft-sb-btn ft-color-btn" :class="{ active: !!fmt.color }" :style="fmt.color ? { '--ft-color': fmt.color } : {}" :title="t('editor.textColor')" @click.stop="toggleColorPalette">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M9.5 4L5 16h1.8l1-3h8.3l1 3h1.8L14.5 4z"/></svg>
         </button>
       </span>
       <div class="ft-sb-sep"></div>
-      <button class="ft-sb-btn" :class="{ active: fmt.h1 }" title="大标题" @click="fmtToggle('h1')">H1</button>
-      <button class="ft-sb-btn" :class="{ active: fmt.h2 }" title="中标题" @click="fmtToggle('h2')">H2</button>
-      <button class="ft-sb-btn" :class="{ active: fmt.h3 }" title="小标题" @click="fmtToggle('h3')">H3</button>
+      <button class="ft-sb-btn" :class="{ active: fmt.h1 }" :title="t('editor.h1')" @click="fmtToggle('h1')">H1</button>
+      <button class="ft-sb-btn" :class="{ active: fmt.h2 }" :title="t('editor.h2')" @click="fmtToggle('h2')">H2</button>
+      <button class="ft-sb-btn" :class="{ active: fmt.h3 }" :title="t('editor.h3')" @click="fmtToggle('h3')">H3</button>
       <div class="ft-sb-sep"></div>
-      <button class="ft-sb-btn" :class="{ active: fmt.ol }" title="有序列表" @click="fmtToggle('ol')" v-html="I.ol"></button>
-      <button class="ft-sb-btn" :class="{ active: fmt.ul }" title="无序列表" @click="fmtToggle('ul')" v-html="I.ul"></button>
-      <button class="ft-sb-btn" :class="{ active: fmt.task }" title="待办清单" @click="fmtToggle('task')" v-html="I.taskList"></button>
+      <button class="ft-sb-btn" :class="{ active: fmt.ol }" :title="t('editor.ol')" @click="fmtToggle('ol')" v-html="I.ol"></button>
+      <button class="ft-sb-btn" :class="{ active: fmt.ul }" :title="t('editor.ul')" @click="fmtToggle('ul')" v-html="I.ul"></button>
+      <button class="ft-sb-btn" :class="{ active: fmt.task }" :title="t('editor.taskList')" @click="fmtToggle('task')" v-html="I.taskList"></button>
       <div class="ft-sb-sep"></div>
-      <button class="ft-sb-btn" title="插入图片" @click="pickImage" v-html="I.image"></button>
+      <button class="ft-sb-btn" :title="t('editor.insertImage')" @click="pickImage" v-html="I.image"></button>
       <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
     </div>
   </div>
   <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
-       role="listitem" :aria-label="group.name || '未命名组'"
+       role="listitem" :aria-label="group.name || t('cards.unnamedGroup')"
        :data-group-id="group.id" :draggable="!ui.isMobile"
        :tabindex="listKeyboardNav ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
@@ -57,28 +57,28 @@
            :id="'batchChk_group:' + group.id" :checked="isSelected"
            @change.stop @click.stop="toggleSelect">
     <div class="group-card-head">
-      <div class="card-logo group-card-icon" title="聚焦组" @click.stop="onFocusClick">
+      <div class="card-logo group-card-icon" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <img v-if="group.icon" :src="group.icon" alt="">
         <span v-else v-html="noteIcon" class="display-contents"></span>
       </div>
-      <div class="card-titlewrap" title="聚焦组" @click.stop="onFocusClick">
+      <div class="card-titlewrap" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <div class="card-titlewrap-text">
-          <div class="card-name" :data-group-name="group.id">{{ group.name || '未命名组' }}<span v-if="isPinned" class="pinned-badge" title="已置顶" v-html="I.pin"></span></div>
+          <div class="card-name" :data-group-name="group.id">{{ group.name || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
           <div class="card-domain group-domain"></div>
         </div>
       </div>
       <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list' && !detailMode">
-        <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
+        <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
       <div class="group-head-actions" v-if="!ui.batchMode">
-        <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" title="撤销" v-html="I.undo"></button>
-        <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" title="重做" v-html="I.redo"></button>
+        <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" :title="t('common.undo')" v-html="I.undo"></button>
+        <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" :title="t('common.redo')" v-html="I.redo"></button>
       </div>
     </div>
     <div class="card-body" :class="{'grp-scroll-body':showFullBody}">
       <div class="card-scroll-wrap">
         <div class="card-tags" v-if="tagNames.length && showFullBody">
-          <span class="card-tag tag-custom" v-for="(t, i) in tagNames" :key="t + '-' + i" @click.stop="filterByTagName(t)">{{ t }}</span>
+          <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
         </div>
         <!-- 辅助栏：只读 HTML（避免与主网格 GroupEditor 抢同一 groupId 注册表） -->
         <div v-if="detailMode" class="group-body group-body-readonly" v-html="safeNotesHtml"></div>
@@ -88,15 +88,15 @@
       </div>
     </div>
     <div class="card-foot">
-      <span class="card-stat">{{ group.bookmarkIds?.length || 0 }} 个书签</span>
+      <span class="card-stat">{{ tN('count.bookmarks', group.bookmarkIds?.length || 0) }}</span>
       <span class="card-actions">
-        <button class="btn-xs" @click.stop="addToGrp" title="添加书签或组" v-html="I.plus"></button>
-        <button class="btn-xs" @click.stop="editGrp" title="编辑组" v-html="I.edit"></button>
-        <button class="btn-xs btn-danger" @click.stop="delGrp" title="删除组" v-html="I.trash"></button>
+        <button class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
+        <button class="btn-xs" @click.stop="editGrp" :title="t('cards.editGroup')" v-html="I.edit"></button>
+        <button class="btn-xs btn-danger" @click.stop="delGrp" :title="t('cards.deleteGroup')" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? '收起' : '展开'" :aria-label="isExpanded ? '收起' : '展开'" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" title="详情" v-html="I.dotsV"></button>
+    <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="ui.batchMode && ui.isMobile && ui.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
   <Teleport to="body">
@@ -127,6 +127,7 @@ import { useEditorFormat, type FormatKey } from '../../composables/ui/useEditorF
 import { uploadAndInsertImages } from '../../composables/domain/useImageUpload.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import { useListNav } from '../../composables/useListNav.js'
+import { t, tN } from '../../i18n/index.js'
 import type { SiblingGroup } from '../../types.js'
 
 const props = defineProps({

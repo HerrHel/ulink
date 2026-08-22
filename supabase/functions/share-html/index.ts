@@ -27,6 +27,65 @@ const OG_IMAGE = `${APP_ORIGIN}/share-cover.png`
 // 代理转发给函数的是 http 且去掉了 /functions/v1/ 前缀，直接拼会得到错误协议与残缺路径。
 const SHARE_FN_URL = `${SUPABASE_URL}/functions/v1/share-html`
 
+// ── 双语文案字典（与 functions/_lib/share-render.ts 的 T 保持一致）──
+type ShareLocale = "zh-CN" | "en-US"
+const T = {
+  "zh-CN": {
+    lang: "zh-CN",
+    ogLocale: "zh_CN",
+    siteName: "ulink",
+    defaultGroupName: "分享组",
+    notFoundTitle: "分享不存在 - 与链",
+    notFoundHeading: "该分享不存在",
+    notFoundBody: "链接可能已失效，或分享者取消了公开",
+    logoText: "与链",
+    headSub: "公开分享",
+    desc: "{n} 个链接 · 由与链公开分享",
+    empty: "这个分享组还没有书签",
+    count: "{n} 个链接",
+    cta: "在与链中打开 · 复制到我的库",
+  },
+  "en-US": {
+    lang: "en-US",
+    ogLocale: "en_US",
+    siteName: "ulink",
+    defaultGroupName: "Shared group",
+    notFoundTitle: "Share not found - ulink",
+    notFoundHeading: "This share no longer exists",
+    notFoundBody: "The link may have expired, or the owner stopped sharing it publicly",
+    logoText: "ulink",
+    headSub: "Public share",
+    desc: "{n} links · publicly shared via ulink",
+    desc_one: "{n} link · publicly shared via ulink",
+    empty: "This shared group has no bookmarks yet",
+    count: "{n} links",
+    count_one: "{n} link",
+    cta: "Open in ulink · Copy to my library",
+  },
+} as const
+
+/** 解析渲染语言：显式 ?lang= 优先，其次 Accept-Language 头，兜底 zh-CN。 */
+function resolveLocale(url: URL, acceptLanguage: string): ShareLocale {
+  const explicit = url.searchParams.get("lang")
+  if (explicit === "zh-CN" || explicit === "en-US") return explicit
+  const al = (acceptLanguage || "").toLowerCase()
+  if (al.startsWith("zh")) return "zh-CN"
+  return "en-US"
+}
+
+function fill(s: string, params: Record<string, string | number>): string {
+  let out = s
+  for (const [k, v] of Object.entries(params)) out = out.split(`{${k}}`).join(String(v))
+  return out
+}
+
+function pick(dict: (typeof T)["zh-CN"], key: string, n: number): string {
+  const d = dict as unknown as Record<string, string>
+  const one = d[`${key}_one`]
+  if (one != null && n === 1) return one
+  return d[key] ?? key
+}
+
 // ── 纯函数：安全工具（语义与 src/utils.ts 对齐，改动请保持两端一致）──
 
 /** HTML 转义：& < > " '，使结果在「属性值（双引号）」与「文本节点」两种上下文都安全。 */
@@ -78,20 +137,21 @@ interface PublicBookmark {
   [k: string]: unknown
 }
 
-/** 组 notes 纯文本描述：前 120 字，空则回退「N 个链接」。 */
-function descriptionOf(group: PublicGroup, n: number): string {
+/** 组 notes 纯文本描述：前 120 字，空则回退「N 个链接 · 由与链公开分享」。 */
+function descriptionOf(dict: (typeof T)["zh-CN"], group: PublicGroup, n: number): string {
   const plain = stripTags(group.notes || "")
-  return (plain && plain.slice(0, 120)) || `${n} 个链接 · 由 LinkVault 公开分享`
+  return (plain && plain.slice(0, 120)) || fill(pick(dict, "desc", n), { n })
 }
 
 /** 构建 <head>：title / description / og:* / twitter:* / canonical。 */
 function buildHead(
+  dict: (typeof T)["zh-CN"],
   group: PublicGroup,
   bookmarks: PublicBookmark[],
   shareUrl: string,
 ): string {
-  const title = `${group.name || "分享组"} - LinkVault 分享`
-  const desc = descriptionOf(group, bookmarks.length)
+  const title = `${group.name || dict.defaultGroupName} - ${dict.siteName}`
+  const desc = descriptionOf(dict, group, bookmarks.length)
   const escTitle = esc(title)
   const escDesc = esc(desc)
   const escUrl = esc(shareUrl)
@@ -103,12 +163,12 @@ function buildHead(
     `<link rel="canonical" href="${escUrl}">`,
     // Open Graph
     `<meta property="og:type" content="article">`,
-    `<meta property="og:site_name" content="LinkVault">`,
+    `<meta property="og:site_name" content="${dict.siteName}">`,
     `<meta property="og:title" content="${escTitle}">`,
     `<meta property="og:description" content="${escDesc}">`,
     `<meta property="og:url" content="${escUrl}">`,
     `<meta property="og:image" content="${esc(OG_IMAGE)}">`,
-    `<meta property="og:locale" content="zh_CN">`,
+    `<meta property="og:locale" content="${dict.ogLocale}">`,
     // Twitter
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta name="twitter:title" content="${escTitle}">`,
@@ -141,25 +201,26 @@ function buildBookmarkItem(b: PublicBookmark): string {
 
 /** 构建 <body>：组聚焦风格（accent 竖条 + 组头 icon + 书签列表 + 底部 CTA）。 */
 function buildBody(
+  dict: (typeof T)["zh-CN"],
   group: PublicGroup,
   bookmarks: PublicBookmark[],
   appOrigin: string,
   gid: string,
 ): string {
-  const name = esc(group.name || "分享组")
+  const name = esc(group.name || dict.defaultGroupName)
   const initial = esc((group.name || "?").trim().charAt(0) || "?").toUpperCase()
   const notesPlain = stripTags(group.notes || "")
   const notesHtml = notesPlain ? `<div class="group-notes-preview">${esc(notesPlain)}</div>` : ""
   const count = bookmarks.length
   const list = count
     ? bookmarks.map(buildBookmarkItem).join("\n")
-    : `<div class="empty">这个分享组还没有书签</div>`
+    : `<div class="empty">${esc(dict.empty)}</div>`
   const appUrl = `${appOrigin}/s/${esc(gid)}`
   return [
     `<div class="page">`,
     `<header class="head">`,
-    `<a class="logo" href="${esc(appOrigin)}/"><span class="logo-mark">&#128279;</span>LinkVault</a>`,
-    `<span class="head-sub">公开分享</span>`,
+    `<a class="logo" href="${esc(appOrigin)}/"><span class="logo-mark">&#128279;</span>${esc(dict.logoText)}</a>`,
+    `<span class="head-sub">${esc(dict.headSub)}</span>`,
     `</header>`,
     `<main class="main">`,
     `<div class="focus-card">`,
@@ -168,13 +229,13 @@ function buildBody(
     `<span class="focus-icon">${initial}</span>`,
     `<div class="focus-titlewrap">`,
     `<h1 class="focus-name">${name}</h1>`,
-    `<span class="focus-meta">${count} 个链接</span>`,
+    `<span class="focus-meta">${esc(fill(pick(dict, "count", count), { n: count }))}</span>`,
     `</div>`,
     `</div>`,
     notesHtml,
     `<div class="list">${list}</div>`,
     `<div class="focus-foot">`,
-    `<a class="cta" href="${appUrl}">在 LinkVault 中打开 · 复制到我的库</a>`,
+    `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
     `</div>`,
     `</div>`,
     `</main>`,
@@ -184,16 +245,17 @@ function buildBody(
 
 /** 组装完整 HTML 文档。 */
 function renderSharePage(
+  dict: (typeof T)["zh-CN"],
   group: PublicGroup,
   bookmarks: PublicBookmark[],
   shareUrl: string,
   appOrigin: string,
 ): string {
-  const head = buildHead(group, bookmarks, shareUrl)
-  const body = buildBody(group, bookmarks, appOrigin, group.id)
+  const head = buildHead(dict, group, bookmarks, shareUrl)
+  const body = buildBody(dict, group, bookmarks, appOrigin, group.id)
   return [
     `<!DOCTYPE html>`,
-    `<html lang="zh-CN">`,
+    `<html lang="${dict.lang}">`,
     `<head>${head}</head>`,
     `<style>${CSS}</style>`,
     `<body>${body}</body>`,
@@ -243,12 +305,14 @@ serve(async (req) => {
   if (!gid || !/^[a-zA-Z0-9_-]{2,64}$/.test(gid)) {
     return new Response("bad request", { status: 400 })
   }
+  const locale = resolveLocale(url, req.headers.get("accept-language") || "")
+  const dict = T[locale]
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
   const { data, error } = await supabase.rpc("get_public_group", { p_gid: gid })
 
   if (error || !data || !data.group) {
-    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>分享不存在 - LinkVault</title></head><body style="font-family:system-ui,sans-serif;background:#F5EFEA;text-align:center;padding:80px 20px;color:#5E5852"><div style="font-size:34px;margin-bottom:14px">&#128279;</div><h1 style="font-size:20px;font-weight:700;color:#2C2824;margin-bottom:10px">该分享不存在</h1><p style="font-size:14px">链接可能已失效，或分享者取消了公开</p></body></html>`
+    const html = `<!DOCTYPE html><html lang="${dict.lang}"><head><meta charset="utf-8"><title>${esc(dict.notFoundTitle)}</title></head><body style="font-family:system-ui,sans-serif;background:#F5EFEA;text-align:center;padding:80px 20px;color:#5E5852"><div style="font-size:34px;margin-bottom:14px">&#128279;</div><h1 style="font-size:20px;font-weight:700;color:#2C2824;margin-bottom:10px">${esc(dict.notFoundHeading)}</h1><p style="font-size:14px">${esc(dict.notFoundBody)}</p></body></html>`
     return new Response(html, {
       status: 404,
       headers: { "content-type": "text/html; charset=utf-8" },
@@ -260,7 +324,7 @@ serve(async (req) => {
   // canonical/og:url 用固定 https 函数 URL（仅保留 gid 参数）。
   const shareUrl = `${SHARE_FN_URL}?gid=${encodeURIComponent(gid)}`
 
-  const html = renderSharePage(group, bookmarks, shareUrl, APP_ORIGIN)
+  const html = renderSharePage(dict, group, bookmarks, shareUrl, APP_ORIGIN)
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",

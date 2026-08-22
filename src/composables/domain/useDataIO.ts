@@ -9,13 +9,14 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { t, tN } from '../../i18n/index.js'
 import { downloadFile, dateStamp } from '../../lib/download.js'
 import { esc as escHtml } from '../../utils.js'
 
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 import { clearSearchCache } from '../../lib/search.js'
-import { DEFAULTS } from '../../config/constants.js'
+import { buildSeedDefaults } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
 import { clearAllSyncOps } from '../../stores/storage.js'
 import { useE2EStore } from '../../stores/e2e.js'
@@ -85,8 +86,8 @@ export function exportData() {
     if (vaultCanary) snapshot.__vaultCanary = vaultCanary
     downloadFile('linkvault-backup-' + dateStamp() + '.json',
       JSON.stringify(snapshot, null, 2), 'application/json')
-    toast('数据已导出')
-  } catch (e) { console.warn('[export] JSON export failed:', e); toast('导出失败', false) }
+    toast(t('msg.dataExported'))
+  } catch (e) { console.warn('[export] JSON export failed:', e); toast(t('msg.exportFailed'), false) }
 }
 
 /** 导出为 Netscape Bookmark HTML，可导入 Chrome/Firefox/Edge。按分类组织目录。 */
@@ -102,15 +103,15 @@ export function exportHTML() {
     }
     const catMap = ds.categoryMap
     const catName = (cid: string) => catMap[cid]?.name
-      || (cid === CAT_UNCATEGORIZED ? '未分类' : '其他')
+      || (cid === CAT_UNCATEGORIZED ? t('cat.uncategorized') : t('msg.otherCategory'))
 
     // 复用 utils.esc（含 ' 转义），避免局部实现与属性注入防护漂移
     const esc = (s: string) => escHtml(s || '')
     const lines: string[] = [
       '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
       '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
-      '<TITLE>LinkVault 书签导出</TITLE>',
-      '<H1>LinkVault 书签</H1>',
+      `<TITLE>${esc(t('msg.exportHtmlTitle'))}</TITLE>`,
+      `<H1>${esc(t('msg.exportHtmlH1'))}</H1>`,
       '<DL><p>',
     ]
     for (const [cid, bms] of byCat) {
@@ -125,9 +126,9 @@ export function exportHTML() {
       lines.push('    </DL><p>')
     }
     lines.push('</DL><p>')
-    downloadFile('linkvault-bookmarks-' + dateStamp() + '.html', lines.join('\n'), 'text/html')
-    toast(`已导出 ${live.length} 个书签（HTML）`)
-  } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
+    downloadFile('ulink-bookmarks-' + dateStamp() + '.html', lines.join('\n'), 'text/html')
+    toast(tN('msg.exportedBookmarks', live.length, { format: 'HTML' }))
+  } catch (e) { console.warn('[export] failed:', e); toast(t('msg.exportFailed'), false) }
 }
 
 /** 导出为 CSV（title,url,tags,notes,category），表格工具可读。不含账户密码。 */
@@ -150,8 +151,8 @@ export function exportCSV() {
     }
     downloadFile('linkvault-bookmarks-' + dateStamp() + '.csv',
       rows.map(r => r.join(',')).join('\n'), 'text/csv')
-    toast(`已导出 ${live.length} 个书签（CSV）`)
-  } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
+    toast(tN('msg.exportedBookmarks', live.length, { format: 'CSV' }))
+  } catch (e) { console.warn('[export] failed:', e); toast(t('msg.exportFailed'), false) }
 }
 
 /** 导出为 Raindrop.io 兼容 JSON（{ items: [...] }），与导入对称。不含账户密码。 */
@@ -170,8 +171,8 @@ export function exportRaindrop() {
     }))
     downloadFile('linkvault-raindrop-' + dateStamp() + '.json',
       JSON.stringify({ items }, null, 2), 'application/json')
-    toast(`已导出 ${live.length} 个书签（Raindrop JSON）`)
-  } catch (e) { console.warn('[export] failed:', e); toast('导出失败', false) }
+    toast(tN('msg.exportedBookmarks', live.length, { format: 'Raindrop JSON' }))
+  } catch (e) { console.warn('[export] failed:', e); toast(t('msg.exportFailed'), false) }
 }
 
 // ── 多格式导入入口（A3）──
@@ -184,34 +185,34 @@ export function importData(file: File) {
       const fmt = detectFormat(file.name, content)
       if (fmt === 'json') {
         const data = JSON.parse(content)
-        // 判断是 LinkVault 原生 JSON 还是 Raindrop.io JSON
+        // 判断是与链（ulink）原生 JSON 还是 Raindrop.io JSON
         if (validateImportData(data) === null) {
-          importFromDataInternal(data, 'LinkVault')
+          importFromDataInternal(data, t('app.fullName'))
         } else if (data.items && Array.isArray(data.items)) {
           // Raindrop.io 格式：{ items: [...] }
           const bookmarks = parseRaindropJSON(data)
-          if (!bookmarks.length) { toast('Raindrop JSON 格式不正确或为空', false); return }
+          if (!bookmarks.length) { toast(t('msg.raindropInvalid'), false); return }
           importFromDataInternal({ categories: [], bookmarks, customAttributes: [], siblingGroups: [] }, 'Raindrop.io')
         } else if (Array.isArray(data) && data[0]?.link) {
           // Raindrop.io 直接数组格式：[{ title, link, ... }]
           const bookmarks = parseRaindropJSON(data)
-          if (!bookmarks.length) { toast('Raindrop JSON 格式不正确或为空', false); return }
+          if (!bookmarks.length) { toast(t('msg.raindropInvalid'), false); return }
           importFromDataInternal({ categories: [], bookmarks, customAttributes: [], siblingGroups: [] }, 'Raindrop.io')
         } else {
-          toast('JSON 格式不识别，请确认是 LinkVault 或 Raindrop.io 导出文件', false)
+          toast(t('msg.jsonFormatUnrecognized'), false)
         }
       } else if (fmt === 'html') {
         const bookmarks = parseBookmarkHTML(content)
-        if (!bookmarks.length) { toast('未在 HTML 中找到书签', false); return }
-        importFromDataInternal({ categories: [], bookmarks, customAttributes: [], siblingGroups: [] }, '浏览器书签')
+        if (!bookmarks.length) { toast(t('msg.noBookmarksInHtml'), false); return }
+        importFromDataInternal({ categories: [], bookmarks, customAttributes: [], siblingGroups: [] }, t('settings.exportHtml'))
       } else if (fmt === 'csv') {
         const bookmarks = parseCSV(content)
-        if (!bookmarks.length) { toast('CSV 文件为空或格式不正确', false); return }
+        if (!bookmarks.length) { toast(t('msg.csvInvalid'), false); return }
         importFromDataInternal({ categories: [], bookmarks, customAttributes: [], siblingGroups: [] }, 'CSV')
       } else {
-        toast('不支持的文件格式', false)
+        toast(t('msg.unsupportedFormat'), false)
       }
-    } catch (e) { toast('导入失败：' + (e as Error).message, false) }
+    } catch (e) { toast(t('msg.importFailed', { msg: (e as Error).message }), false) }
   }
   reader.readAsText(file)
 }
@@ -363,15 +364,15 @@ export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const total = cats.imported + bms.imported + groups.imported + attrs.imported
   const skipped = cats.skipped + bms.skipped + groups.skipped + attrs.skipped
   if (total === 0) {
-    toast(`从 ${source} 导入：所有数据已存在，无新增项${skipped ? `（${skipped} 条格式错误已跳过）` : ''}`)
+    toast(t('msg.importAllExists', { source }) + (skipped ? tN('msg.importSkippedSuffix', skipped) : ''))
   } else {
     const parts: string[] = []
-    if (bms.imported) parts.push(`${bms.imported} 个书签`)
-    if (cats.imported) parts.push(`${cats.imported} 个分类`)
-    if (groups.imported) parts.push(`${groups.imported} 个组`)
-    if (attrs.imported) parts.push(`${attrs.imported} 个属性`)
-    const skippedMsg = skipped ? `（${skipped} 条格式错误已跳过）` : ''
-    toast(`从 ${source} 导入：${parts.join('、')}${skippedMsg}`)
+    if (bms.imported) parts.push(tN('msg.importedBookmarks', bms.imported))
+    if (cats.imported) parts.push(tN('msg.importedCategories', cats.imported))
+    if (groups.imported) parts.push(tN('msg.importedGroups', groups.imported))
+    if (attrs.imported) parts.push(tN('msg.importedAttributes', attrs.imported))
+    const skippedMsg = skipped ? tN('msg.importSkippedSuffix', skipped) : ''
+    toast(t('msg.importSummary', { source, list: parts.join(t('msg.listSeparator')) }) + skippedMsg)
   }
 }
 
@@ -389,8 +390,8 @@ export async function resetToDefaults() {
     loggedIn = !!useAuth().isLoggedIn
   } catch { /* ignore */ }
   const msg = loggedIn
-    ? '确认清除本机所有数据并恢复默认？不会删除云端数据；下次同步时云端内容可能重新合并回本机。'
-    : '确认清除所有数据？将恢复为默认状态。'
+    ? t('msg.resetAllConfirmLoggedIn')
+    : t('msg.resetAllConfirm')
   const ok = await showConfirm(msg)
   if (!ok) return
   const snapshot = {
@@ -400,7 +401,7 @@ export async function resetToDefaults() {
       siblingGroups: cloneDeep(ds.siblingGroups),
       curCat: ui.curCat,
     }
-    const d = cloneDeep(DEFAULTS)
+    const d = cloneDeep(buildSeedDefaults())
     ds.categories = d.categories
     ds.bookmarks = d.bookmarks
     ds.customAttributes = d.customAttributes
@@ -425,7 +426,7 @@ export async function resetToDefaults() {
     ui.excludedAttrs = []
     ui.detailCards = []
     saveAppData()
-    toastWithUndo('数据已重置为默认', () => {
+    toastWithUndo(t('msg.dataResetToDefault'), () => {
       ds.categories = snapshot.categories
       ds.bookmarks = snapshot.bookmarks
       ds.customAttributes = snapshot.customAttributes
@@ -436,6 +437,6 @@ export async function resetToDefaults() {
       // 会 miss、过滤/排序 getter 走懒回退分支（性能退化）、_syncMaps 才能恢复正常索引。
       ds._syncMaps()
       debouncedSaveAppData()
-      toast('数据已恢复')
+      toast(t('msg.dataRestored'))
     })
   }

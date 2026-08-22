@@ -3,7 +3,7 @@
     <div class="cmd-palette">
       <div class="cmd-input-wrap">
         <span class="cmd-icon" aria-hidden="true" v-html="I.search"></span>
-        <input class="cmd-input" data-testid="lv-cmd-input" v-model="query" placeholder="搜索书签、组或输入命令…"
+        <input class="cmd-input" data-testid="lv-cmd-input" v-model="query" :placeholder="t('cmd.placeholder')"
                ref="inputRef" @keydown="onKeydown" @input="onInput">
         <kbd class="cmd-kbd">Esc</kbd>
       </div>
@@ -21,7 +21,7 @@
         </template>
       </div>
       <div class="cmd-empty" v-else-if="query.trim()">
-        没有匹配结果
+        {{ t('cmd.noMatch') }}
       </div>
     </div>
   </div>
@@ -41,6 +41,7 @@ import { useAuth } from '../../composables/domain/useAuth.js'
 import { toast } from '../../lib/toast.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { extractHostname } from './extractHostname.js'
+import { t, tN } from '../../i18n/index.js'
 import type { SearchResultItem } from '../../lib/search.js'
 
 interface CommandItem {
@@ -63,16 +64,17 @@ const ui = useUIStore()
 const sync = useCloudSync()
 const auth = useAuth()
 
-const commands: CommandItem[] = [
-  { id: 'new-bm', label: '新建书签', icon: I.plus, shortcut: 'Ctrl+N', section: 'command', action() { close(); openBmModal() } },
-  { id: 'new-group', label: '新建组', icon: I.note, section: 'command', action() { close(); ui.modals.groupEdit = true } },
-  { id: 'import', label: '导入数据', icon: I.import, section: 'command', action() { close(); document.getElementById('importFile')?.click() } },
-  { id: 'export', label: '导出数据', icon: I.export, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
-  { id: 'sync', label: '同步到云端', icon: I.cloud, section: 'command', async action() { close(); if (!auth.isLoggedIn) { toast('请先登录云同步', false); auth.authModalOpen = true; return } toast('开始同步...'); await sync.fullSync() } },
-  { id: 'trash', label: '打开回收站', icon: I.trash, section: 'command', action() { close(); pushNavState(); ui.panels.trash = true } },
-  { id: 'settings', label: '打开设置', icon: I.settings, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
-  { id: 'shortcuts', label: '快捷键速查', icon: I.search, shortcut: 'Ctrl /', section: 'command', action() { close(); pushNavState(); ui.panels.shortcutHelp = true } },
-]
+// 命令项随语言切换重建（computed 依赖 locale ref，切换后重新求值）
+const commands = computed<CommandItem[]>(() => [
+  { id: 'new-bm', label: t('filter.newBookmark'), icon: I.plus, shortcut: 'Ctrl+N', section: 'command', action() { close(); openBmModal() } },
+  { id: 'new-group', label: t('filter.newGroup'), icon: I.note, section: 'command', action() { close(); ui.modals.groupEdit = true } },
+  { id: 'import', label: t('cmd.importData'), icon: I.import, section: 'command', action() { close(); document.getElementById('importFile')?.click() } },
+  { id: 'export', label: t('cmd.exportData'), icon: I.export, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
+  { id: 'sync', label: t('cmd.syncCloud'), icon: I.cloud, section: 'command', async action() { close(); if (!auth.isLoggedIn) { toast(t('cmd.loginFirst'), false); auth.authModalOpen = true; return } toast(t('sync.startSync')); await sync.fullSync() } },
+  { id: 'trash', label: t('cmd.openTrash'), icon: I.trash, section: 'command', action() { close(); pushNavState(); ui.panels.trash = true } },
+  { id: 'settings', label: t('cmd.openSettings'), icon: I.settings, section: 'command', action() { close(); pushNavState(); ui.panels.settings = true } },
+  { id: 'shortcuts', label: t('settings.shortcutHelp'), icon: I.search, shortcut: 'Ctrl /', section: 'command', action() { close(); pushNavState(); ui.panels.shortcutHelp = true } },
+])
 
 const searchResults = computed<SearchResultItem[]>(() => {
   const q = query.value.trim()
@@ -95,15 +97,15 @@ const searchResults = computed<SearchResultItem[]>(() => {
 
 const filtered = computed<CommandItem[]>(() => {
   const q = query.value.trim().toLowerCase()
-  if (!q) return commands
-  const matchedCmds = commands.filter(c => c.label.toLowerCase().includes(q))
+  if (!q) return commands.value
+  const matchedCmds = commands.value.filter(c => c.label.toLowerCase().includes(q))
   const matchedGroups: CommandItem[] = searchResults.value
     .filter(r => r._isGroup)
     .map(r => ({
       id: 'g:' + r.id,
-      label: r.name || r._displayTitle || '未命名组',
+      label: r.name || r._displayTitle || t('cards.unnamedGroup'),
       icon: I.note,
-      hint: (r.bookmarkIds?.length || 0) + ' 个书签',
+      hint: tN('count.bookmarks', r.bookmarkIds?.length || 0),
       section: 'group' as const,
       action() { close(); toggleGroupFocus(r.id) },
     }))
@@ -126,9 +128,9 @@ const grouped = computed(() => {
   for (const item of filtered.value) {
     bySection[item.section]?.push(item)
   }
-  if (bySection.command.length) sections.push({ label: '操作', items: bySection.command })
-  if (bySection.group.length) sections.push({ label: '组', items: bySection.group })
-  if (bySection.bookmark.length) sections.push({ label: '书签', items: bySection.bookmark })
+  if (bySection.command.length) sections.push({ label: t('cmd.sectionCommands'), items: bySection.command })
+  if (bySection.group.length) sections.push({ label: t('group.group'), items: bySection.group })
+  if (bySection.bookmark.length) sections.push({ label: t('search.bookmarks'), items: bySection.bookmark })
   return sections
 })
 

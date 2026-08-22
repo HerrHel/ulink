@@ -8,7 +8,7 @@
           <div class="card-list-inner">
             <template v-for="entry in entries" :key="entry.rawId">
               <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="entry.realIdx">
-                <button class="detail-close" @click.stop="closeDetail(entry.rawId)" title="关闭">&times;</button>
+                <button class="detail-close" @click.stop="closeDetail(entry.rawId)" :title="t('common.close')">&times;</button>
                 <GroupCard v-if="entry.isGroup" :group="entry.data" detail-mode />
                 <BookmarkCard v-else :bookmark="entry.data" :default-acct-open="true" />
               </div>
@@ -18,8 +18,8 @@
       </template>
       <div v-else class="empty empty-compact">
         <div class="empty-icon" v-html="bookmarkIcon"></div>
-        <h3>辅助栏</h3>
-        <p>拖拽书签到此处查看</p>
+        <h3>{{ t('detail.panel') }}</h3>
+        <p>{{ t('detail.dragHint') }}</p>
       </div>
     </div>
   </div>
@@ -35,6 +35,7 @@ import BookmarkCard from '../cards/BookmarkCard.vue'
 import GroupCard from '../cards/GroupCard.vue'
 import { buildDetailCards } from './buildDetailCards.js'
 import type { DetailEntry } from './buildDetailCards.js'
+import { t } from '../../i18n/index.js'
 
 const ui = useUIStore()
 const ds = useDataStore()

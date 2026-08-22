@@ -10,6 +10,7 @@ import type { Bookmark, SiblingGroup, CustomAttribute, Category } from './types.
 import { ATTR_IS_GROUP } from './config/constants.js'
 import { FAVICON_PROVIDER_URL } from './config/urls.js'
 import { isThreePartCipher } from './crypto.js'
+import { t } from './i18n/index.js'
 
 interface AppStore {
   categories: Category[]
@@ -172,8 +173,10 @@ export function swapOrder(a: { order: number }, b: { order: number }): void { if
 
 /** D2-005：仅在真正写入剪贴板成功后 toast「已复制」 */
 export function copyToClipboard(text: string, label?: string): void {
-  const okMsg = (label || '') + ' 已复制'
-  const failMsg = (label || '内容') + ' 复制失败'
+  // 保留旧契约：okMsg 用空 label 兜底（zh: ' 已复制'），failMsg 用「内容」兜底（zh: '内容 复制失败'），
+  // 与 utils-copyToClipboard-deep.test 的 toHaveBeenCalledWith 断言完全一致。
+  const okMsg = t('common.copyOk', { label: label || '' })
+  const failMsg = t('common.copyFail', { label: label || t('common.copyTarget') })
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(text).then(
       () => toast(okMsg),
@@ -245,14 +248,14 @@ export function createCategory(name: string): Category {
 
 export function addNewCategory(name: string, store: AppStore): Category | null {
   const trimmed = name.trim()
-  if (!trimmed) { toast('请输入分类名称', false); return null }
-  if (store.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) { toast('分类名称已存在', false); return null }
+  if (!trimmed) { toast(t('msg.enterCategoryName'), false); return null }
+  if (store.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) { toast(t('msg.categoryNameExists'), false); return null }
   const cat = createCategory(trimmed)
   // B-12：序号语义——新分类排最后（非软删分类计数），勿用毫秒时间戳（溢出远端 INTEGER order 列）
   cat.order = store.categories.filter(c => !c.deletedAt).length
   store.addCategory(cat)
   store.save()
-  toast('分类已添加')
+  toast(t('msg.categoryAdded'))
   return cat
 }
 

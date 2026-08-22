@@ -9,16 +9,17 @@
     ref="fallbackRef"
   >
     <div class="error-boundary-icon" v-html="I.alert"></div>
-    <h3>出错了</h3>
+    <h3>{{ t('errors.crashTitle') }}</h3>
     <p>{{ errorMsg }}</p>
     <!-- A6-002：生产不渲染 stack；仅 dev 或 ?debug=1 可见 -->
     <pre v-if="showStack && errStack" style="font-size:11px;max-height:200px;overflow:auto;text-align:left">{{ errStack }}</pre>
-    <button ref="retryBtnRef" class="btn btn-secondary" @click="reload">重试</button>
+    <button ref="retryBtnRef" class="btn btn-secondary" @click="reload">{{ t('common.retry') }}</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick, onErrorCaptured } from 'vue'
+import { t } from '../../i18n/index.js'
 import { reportError } from '../../lib/errorReporter.js'
 import { I } from '../../config/icons.js'
 
@@ -35,7 +36,7 @@ const showStack = import.meta.env.DEV ||
 
 onErrorCaptured((err: Error) => {
   errored.value = true
-  errorMsg.value = err.message || '未知错误'
+  errorMsg.value = err.message || t('errors.unknown')
   errStack.value = showStack ? (err.stack || '').split('\n').slice(0, 6).join('\n') : ''
   console.error('[ErrorBoundary]', props.name || 'boundary', err)
   // A6-001：return false 会阻断 app.config.errorHandler；此处主动上报，消除监控黑洞

@@ -3,24 +3,24 @@
     <header class="share-header">
       <div class="share-logo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-        <span class="share-logo-text">LinkVault</span>
+        <span class="share-logo-text">{{ t('app.brand') }}</span>
       </div>
       <button class="btn btn-ghost btn-sm" @click="backToApp">
-        <span aria-hidden="true" v-html="I.back" class="sp-icon"></span>返回
+        <span aria-hidden="true" v-html="I.back" class="sp-icon"></span>{{ t('common.back') }}
       </button>
     </header>
 
     <div v-if="loading" class="share-loading">
       <div class="share-spinner"></div>
-      <span>加载中...</span>
+      <span>{{ t('common.loading') }}</span>
     </div>
 
     <div v-else-if="error" class="share-error">
       <span aria-hidden="true" v-html="I.alert" class="share-error-icon"></span>
       <p>{{ error }}</p>
       <div class="share-error-actions">
-        <button class="btn btn-primary btn-sm" @click="onRetry">重试</button>
-        <button class="btn btn-ghost btn-sm" @click="backToApp">返回首页</button>
+        <button class="btn btn-primary btn-sm" @click="onRetry">{{ t('common.retry') }}</button>
+        <button class="btn btn-ghost btn-sm" @click="backToApp">{{ t('nav.backToMain') }}</button>
       </div>
     </div>
 
@@ -35,11 +35,11 @@
         <!-- E2-003：TipTap HTML 经 sanitize 后 v-html，禁止原文插值 / 未清洗 v-html -->
         <div v-if="groupNotesHtml" class="share-group-notes" v-html="groupNotesHtml"></div>
         <div class="share-group-meta">
-          <span class="share-meta-item">{{ bookmarks.length }} 个链接</span>
+          <span class="share-meta-item">{{ tN('count.links', bookmarks.length) }}</span>
         </div>
         <div class="share-group-actions">
           <button class="btn btn-primary btn-sm" @click="onFork" :disabled="forking">
-            {{ forking ? '复制中...' : isLoggedIn ? '复制到我的库' : '登录后复制' }}
+            {{ forking ? t('shareView.forking') : isLoggedIn ? t('shareView.forkToMyLibrary') : t('shareView.loginThenCopy') }}
           </button>
         </div>
       </div>
@@ -83,6 +83,7 @@ import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
 import { deriveShareUrl } from './deriveShareUrl.js'
 import { I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
+import { t, tN } from '../i18n/index.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
@@ -146,7 +147,7 @@ function backToApp() {
 async function onFork() {
   if (!auth.isLoggedIn) {
     auth.authModalOpen = true
-    toast('请先登录后再复制', false)
+    toast(t('shareView.loginRequiredToast'), false)
     return
   }
   if (!group.value || forking.value) return
@@ -155,7 +156,7 @@ async function onFork() {
     await forkPublicGroup(group.value, bookmarks.value)
     backToApp()
   } catch (e) {
-    toast('复制失败：' + (e as Error).message, false)
+    toast(t('shareView.copyFailed', { msg: (e as Error).message }), false)
   } finally {
     forking.value = false
   }
@@ -168,7 +169,7 @@ async function loadGroup() {
     const data = await fetchPublicGroup(props.groupId)
     if (_unmounted.value) return
     if (!data) {
-      error.value = '该分享链接不存在或已取消公开'
+      error.value = t('shareView.notFound')
       return
     }
     group.value = data.group
@@ -178,7 +179,7 @@ async function loadGroup() {
     _applyShareHead(data.group, data.bookmarks)
   } catch (e) {
     if (_unmounted.value) return
-    error.value = '加载失败：' + (e as Error).message
+    error.value = t('shareView.loadFailed', { msg: (e as Error).message })
   } finally {
     if (!_unmounted.value) loading.value = false
   }
@@ -205,9 +206,9 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
   // 又一遍 `s/` 产生 `/s/s/<gid>` 双段错误 URL）。该推导剥成纯函数 deriveShareUrl 直测，
   // 见 src/views/deriveShareUrl.ts 与单测护栏。
   const shareUrl = deriveShareUrl(location.pathname, location.origin, g.id)
-  const title = `${g.name || '分享组'} - LinkVault 分享`
+  const title = t('shareView.pageTitle', { name: g.name || t('shareView.defaultGroupName') })
   const notesPlain = g.notes ? g.notes.replace(/<[^>]+>/g, '').trim() : ''
-  const desc = (notesPlain && notesPlain.slice(0, 120)) || `${bms.length} 个链接 · 由 LinkVault 公开分享`
+  const desc = (notesPlain && notesPlain.slice(0, 120)) || tN('shareView.shareDesc', bms.length)
   setTitle(title)
   setMetaByAttr('name', 'description', desc)
   setMetaByAttr('property', 'og:title', title)

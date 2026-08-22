@@ -1,17 +1,17 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="分类管理" id="catModal" :class="{ open: store.modals.category }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.category.ariaLabel')" id="catModal" :class="{ open: store.modals.category }" @click.self="onClose">
     <div class="modal">
       <div class="modal-head">
-        <h2>{{ isVault ? '管理分类（私密）' : '管理分类' }}</h2>
+        <h2>{{ isVault ? t('modal.category.manageVault') : t('modal.category.manage') }}</h2>
         <button v-if="!isVault" class="btn btn-sm btn-ghost" data-testid="btnVaultEntry" style="margin-right:auto" @click="onVaultEntry">
-          <span aria-hidden="true" v-html="I.lock"></span> 私密空间
+          <span aria-hidden="true" v-html="I.lock"></span> {{ t('vault.privateSpace') }}
         </button>
-        <button class="modal-close" @click="onClose" title="关闭" aria-label="关闭" v-html="I.close"></button>
+        <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
       </div>
       <div class="modal-body">
         <div class="flex-center gap-2 mb-3">
-          <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" placeholder="新分类名称" aria-label="新分类名称" @keydown.enter="onAddCat">
-          <button class="btn btn-primary btn-sm" @click="onAddCat">添加</button>
+          <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" :placeholder="t('modal.category.newName')" :aria-label="t('modal.category.newName')" @keydown.enter="onAddCat">
+          <button class="btn btn-primary btn-sm" @click="onAddCat">{{ t('common.add') }}</button>
         </div>
         <div class="cat-sort-list" ref="catListRef">
           <div class="cat-list-item cat-no-drag">
@@ -20,13 +20,13 @@
           <div v-for="cat in sortableList" :key="cat.id" class="cat-list-item" :data-cat-id="cat.id">
             <span class="cat-drag-handle" aria-hidden="true" v-html="I.grip"></span>
             <template v-if="editingId === cat.id">
-              <input class="form-input flex-1 form-input-sm" v-model="editingName" aria-label="分类名称" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
-              <button class="btn btn-primary btn-sm" @click="confirmRename" title="确认重命名" v-html="I.listCheck"></button>
+              <input class="form-input flex-1 form-input-sm" v-model="editingName" :aria-label="t('modal.category.name')" @keydown.enter="confirmRename" @keydown.escape="cancelRename" :ref="setEditInputRef">
+              <button class="btn btn-primary btn-sm" @click="confirmRename" :title="t('modal.category.confirmRename')" v-html="I.listCheck"></button>
             </template>
             <template v-else>
               <span class="flex-1">{{ cat.name }}</span>
-              <button class="btn-xs icon-xs" @click="startRename(cat)" title="编辑" v-html="I.edit"></button>
-              <button class="btn-xs btn-danger icon-xs" @click="onDelete(cat.id)" title="删除" v-html="I.trash"></button>
+              <button class="btn-xs icon-xs" @click="startRename(cat)" :title="t('common.edit')" v-html="I.edit"></button>
+              <button class="btn-xs btn-danger icon-xs" @click="onDelete(cat.id)" :title="t('common.delete')" v-html="I.trash"></button>
             </template>
           </div>
         </div>
@@ -48,6 +48,7 @@ import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 import { useMobileDragReorder } from '../../composables/interaction/useMobileDragReorder.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Category } from '../../types.js'
+import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
@@ -95,7 +96,7 @@ useMobileDragReorder(catListRef, sortableList, {
     // B-11：写 order/updatedAt + dirty/track，保证跨设备 pull 能应用顺序
     dataStore.reorderCategories([...special, ...arr])
     store.debouncedSave()
-    toast('分类顺序已更新')
+    toast(t('modal.category.orderUpdated'))
   }
 })
 
@@ -118,16 +119,16 @@ function onAddCat() {
 
 function onDelete(id: string) {
   const cat = dataStore.categoryMap[id]
-  const catName = cat?.name || '此分类'
+  const catName = cat?.name || t('modal.category.thisCat')
   const bmCount = dataStore.bookmarks.filter(b => b.categoryId === id).length
   const msg = bmCount > 0
-    ? `删除「${catName}」后，其中 ${bmCount} 个书签将移至"未分类"，确定删除吗？`
-    : `确定删除「${catName}」吗？`
+    ? t('modal.category.deleteWithMove', { name: catName, n: bmCount })
+    : t('modal.category.confirmDelete', { name: catName })
   showConfirm(msg).then(ok => {
     if (!ok) return
     store.deleteCategory(id)
     store.save()
-    toast('分类已删除')
+    toast(t('modal.category.deleted'))
   })
 }
 </script>

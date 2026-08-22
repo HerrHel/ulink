@@ -1,40 +1,40 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="解锁数据" :class="{ open }" @click.self="onCancel">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('e2e.unlockData')" :class="{ open }" @click.self="onCancel">
     <div class="modal modal-sm">
       <div class="modal-head">
-        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? '重置主密码' : mode === 'changePw' ? '修改主密码' : '解锁数据' }}</span>
+        <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? t('e2e.resetMasterPassword') : mode === 'changePw' ? t('settings.changeMasterPassword') : t('e2e.unlockData') }}</span>
       </div>
       <div class="modal-body">
         <!-- 解锁模式 -->
         <template v-if="mode === 'unlock'">
           <div class="e2e-info">
-            <p>输入主密码以解密您的数据</p>
+            <p>{{ t('e2e.unlockIntro') }}</p>
           </div>
           <div v-if="e2e.isBiometricEnrolled.value && bioAvailable" class="form-group">
             <button class="btn btn-primary btn-block" :disabled="bioLoading" @click="onBiometricUnlock">
-              <span aria-hidden="true" v-html="I.lock"></span> {{ bioLoading ? '验证中…' : '指纹解锁' }}
+              <span aria-hidden="true" v-html="I.lock"></span> {{ bioLoading ? t('e2e.verifying') : t('settings.biometricUnlock') }}
             </button>
             <div class="e2e-separator" style="display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--text-muted);font-size:0.8rem">
               <span style="flex:1;height:1px;background:var(--border)"></span>
-              <span>或</span>
+              <span>{{ t('e2e.or') }}</span>
               <span style="flex:1;height:1px;background:var(--border)"></span>
             </div>
           </div>
           <div class="form-group">
             <div class="pw-input-wrap">
-              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-unlock-password" v-model="masterPw" placeholder="主密码" @keydown.enter="onUnlock" autofocus>
+              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-unlock-password" v-model="masterPw" :placeholder="t('cards.password')" @keydown.enter="onUnlock" autofocus>
               <button class="pw-toggle" @click="showPw = !showPw" v-html="showPw ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div v-if="error" class="e2e-error">{{ error }}</div>
-          <div class="e2e-link" @click="enterReset">忘记主密码？使用 Recovery Key 重置</div>
+          <div class="e2e-link" @click="enterReset">{{ t('e2e.forgotRecoveryReset') }}</div>
         </template>
 
         <!-- 重置模式（必须 v-else-if，否则 changePw 模式会误渲染本块） -->
         <template v-else-if="mode === 'reset'">
           <div class="e2e-info e2e-warn">
-            <p>使用 Recovery Key 设置新的主密码。原主密码将被替换。</p>
-            <p style="margin-top:6px">重设后会用新主密码派生新密钥，此前用旧主密码加密且本地无明文副本的数据将无法解密。</p>
+            <p>{{ t('e2e.resetIntro1') }}</p>
+            <p style="margin-top:6px">{{ t('e2e.resetIntro2') }}</p>
           </div>
           <div class="form-group">
             <label class="form-label">Recovery Key</label>
@@ -44,71 +44,71 @@
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">新主密码</label>
+            <label class="form-label">{{ t('e2e.newMasterPwLabel') }}</label>
             <div class="pw-input-wrap">
-              <input :type="showPw ? 'text' : 'password'" class="form-input" v-model="newPw" placeholder="输入新主密码（至少 8 位）" @keydown.enter="onReset">
+              <input :type="showPw ? 'text' : 'password'" class="form-input" v-model="newPw" :placeholder="t('e2e.newMasterPwPlaceholder')" @keydown.enter="onReset">
               <button class="pw-toggle" @click="showPw = !showPw" v-html="showPw ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">确认新主密码</label>
+            <label class="form-label">{{ t('e2e.confirmNewPwLabel') }}</label>
             <div class="pw-input-wrap">
-              <input :type="showPw2 ? 'text' : 'password'" class="form-input" v-model="newPw2" placeholder="再次输入新主密码" @keydown.enter="onReset">
+              <input :type="showPw2 ? 'text' : 'password'" class="form-input" v-model="newPw2" :placeholder="t('e2e.confirmNewPwPlaceholder')" @keydown.enter="onReset">
               <button class="pw-toggle" @click="showPw2 = !showPw2" v-html="showPw2 ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div v-if="error" class="e2e-error">{{ error }}</div>
-          <div v-else-if="newPw.length > 0 && newPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">还需 {{ 8 - newPw.length }} 位（至少 8 位）</div>
-          <div class="e2e-link" @click="enterUnlock">← 返回解锁</div>
+          <div v-else-if="newPw.length > 0 && newPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">{{ t('e2e.pwRemaining', { n: 8 - newPw.length }) }}</div>
+          <div class="e2e-link" @click="enterUnlock">← {{ t('e2e.backToUnlock') }}</div>
         </template>
 
         <!-- 修改主密码模式 -->
         <template v-if="mode === 'changePw'">
           <div class="e2e-info">
-            <p>修改主密码会用旧密码解密所有数据、用新密码重新加密并同步到云端。</p>
-            <p style="margin-top:6px">若当前已解锁，旧密码无需再输入。</p>
+            <p>{{ t('e2e.changePwIntro1') }}</p>
+            <p style="margin-top:6px">{{ t('e2e.changePwIntro2') }}</p>
           </div>
           <div v-if="alreadyUnlocked" class="e2e-info">
-            <p>当前已解锁，将直接解密并重新加密。</p>
+            <p>{{ t('e2e.changePwAlreadyUnlocked') }}</p>
           </div>
           <div v-else class="form-group">
-            <label class="form-label">旧主密码</label>
+            <label class="form-label">{{ t('e2e.oldMasterPwLabel') }}</label>
             <div class="pw-input-wrap">
-              <input :type="showOldPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-old" v-model="oldPw" placeholder="当前主密码" @keydown.enter="onChangePw" autofocus>
+              <input :type="showOldPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-old" v-model="oldPw" :placeholder="t('e2e.currentMasterPwPlaceholder')" @keydown.enter="onChangePw" autofocus>
               <button class="pw-toggle" @click="showOldPw = !showOldPw" v-html="showOldPw ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">新主密码</label>
+            <label class="form-label">{{ t('e2e.newMasterPwLabel') }}</label>
             <div class="pw-input-wrap">
-              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-new" v-model="newPw" placeholder="输入新主密码（至少 8 位）" @keydown.enter="onChangePw">
+              <input :type="showPw ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-new" v-model="newPw" :placeholder="t('e2e.newMasterPwPlaceholder')" @keydown.enter="onChangePw">
               <button class="pw-toggle" @click="showPw = !showPw" v-html="showPw ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">确认新主密码</label>
+            <label class="form-label">{{ t('e2e.confirmNewPwLabel') }}</label>
             <div class="pw-input-wrap">
-              <input :type="showPw2 ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-new2" v-model="newPw2" placeholder="再次输入新主密码" @keydown.enter="onChangePw">
+              <input :type="showPw2 ? 'text' : 'password'" class="form-input" data-testid="lv-e2e-changepw-new2" v-model="newPw2" :placeholder="t('e2e.confirmNewPwPlaceholder')" @keydown.enter="onChangePw">
               <button class="pw-toggle" @click="showPw2 = !showPw2" v-html="showPw2 ? I.eyeOff : I.eye"></button>
             </div>
           </div>
           <div v-if="error" class="e2e-error">{{ error }}</div>
-          <div v-else-if="newPw.length > 0 && newPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">还需 {{ 8 - newPw.length }} 位（至少 8 位）</div>
-          <div class="e2e-link" @click="enterUnlock">← 返回解锁</div>
+          <div v-else-if="newPw.length > 0 && newPw.length < 8" class="e2e-error" style="background:transparent;padding:4px 8px;font-size:0.75rem">{{ t('e2e.pwRemaining', { n: 8 - newPw.length }) }}</div>
+          <div class="e2e-link" @click="enterUnlock">← {{ t('e2e.backToUnlock') }}</div>
         </template>
       </div>
       <div class="modal-foot">
         <template v-if="mode === 'unlock'">
-          <button class="btn btn-primary" data-testid="lv-e2e-unlock-submit" :disabled="!masterPw" @click="onUnlock">解锁</button>
-          <button class="btn btn-secondary" @click="onCancel">跳过</button>
+          <button class="btn btn-primary" data-testid="lv-e2e-unlock-submit" :disabled="!masterPw" @click="onUnlock">{{ t('settings.unlock') }}</button>
+          <button class="btn btn-secondary" @click="onCancel">{{ t('e2e.skip') }}</button>
         </template>
         <template v-else-if="mode === 'reset'">
-          <button class="btn btn-primary" :disabled="!canReset || loading" @click="onReset">{{ loading ? '重置中…' : '重置主密码' }}</button>
-          <button class="btn btn-secondary" @click="onCancel">取消</button>
+          <button class="btn btn-primary" :disabled="!canReset || loading" @click="onReset">{{ loading ? t('e2e.resetting') : t('e2e.resetMasterPassword') }}</button>
+          <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
         </template>
         <template v-if="mode === 'changePw'">
-          <button class="btn btn-primary" data-testid="lv-e2e-changepw-submit" :disabled="!canChangePw || loading" @click="onChangePw">{{ loading ? '重新加密中…' : '修改主密码' }}</button>
-          <button class="btn btn-secondary" @click="onCancel">取消</button>
+          <button class="btn btn-primary" data-testid="lv-e2e-changepw-submit" :disabled="!canChangePw || loading" @click="onChangePw">{{ loading ? t('e2e.reencrypting') : t('settings.changeMasterPassword') }}</button>
+          <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
         </template>
       </div>
     </div>
@@ -120,6 +120,7 @@ import { I } from '../../config/icons.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { showConfirm } from '../../lib/toast.js'
 import { recoveryKeyEmptyError, newPasswordLengthError, newPasswordMismatchError, oldPasswordEmptyError } from './validatePwResetInput.js'
+import { t } from '../../i18n/index.js'
 
 const props = defineProps<{ open: boolean; initialMode?: 'unlock' | 'reset' | 'changePw' }>()
 const emit = defineEmits<{ close: []; unlocked: [] }>()
@@ -226,7 +227,7 @@ async function onUnlock() {
     emit('unlocked')
     emit('close')
   } else {
-    error.value = '主密码错误'
+    error.value = t('e2e.masterPwWrong')
   }
 }
 
@@ -250,7 +251,7 @@ async function onReset() {
     emit('unlocked')
     emit('close')
   } else {
-    error.value = 'Recovery Key 错误或重置失败'
+    error.value = t('e2e.resetFailed')
   }
 }
 
@@ -278,13 +279,13 @@ async function onChangePw() {
       // 本设备 push 的新 key 密文 → 业务数据对它们永久不可读。引导用户在其他设备用
       // Recovery Key 走「重置主密码」（清空重建空库），把"永久丢失卡死"降级为"需重置"。
       await showConfirm(
-        '本机主密码已修改，但云端同步失败：其他设备将无法解密已同步的加密内容。\n\n请在其他设备上用恢复密钥（Recovery Key）执行「重置主密码」以清空重建数据，否则那些设备上的加密内容将永久丢失。'
+        t('e2e.changePwCloudStaleConfirm')
       )
     }
     emit('unlocked')
     emit('close')
   } else {
-    error.value = '修改失败：旧密码错误或重加密/同步异常，已保持原密码'
+    error.value = t('e2e.changePwFailed')
   }
 }
 
@@ -313,7 +314,7 @@ async function onBiometricUnlock() {
     emit('unlocked')
     emit('close')
   } else {
-    error.value = '指纹解锁失败，请手动输入主密码'
+    error.value = t('e2e.biometricUnlockFailed')
   }
 }
 </script>

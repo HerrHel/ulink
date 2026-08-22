@@ -1,0 +1,350 @@
+{
+  "ext_name": {
+    "message": "与链",
+    "description": "扩展名称（品牌：与链）"
+  },
+  "ext_description": {
+    "message": "一键保存网页到与链书签管理器",
+    "description": "扩展描述"
+  },
+  "action_default_title": {
+    "message": "打开与链侧边栏",
+    "description": "工具栏按钮悬停提示"
+  },
+  "command_save_description": {
+    "message": "打开与链保存当前页面",
+    "description": "快捷键命令说明"
+  },
+  "menu_save_page": {
+    "message": "保存到与链",
+    "description": "右键菜单：保存页面/链接"
+  },
+  "menu_save_selection": {
+    "message": "保存选中文本到与链",
+    "description": "右键菜单：保存选中文本"
+  },
+  "login": {
+    "message": "登录",
+    "description": "登录按钮"
+  },
+  "logout": {
+    "message": "退出",
+    "description": "退出按钮"
+  },
+  "logout_title": {
+    "message": "退出登录",
+    "description": "退出按钮悬停提示"
+  },
+  "refresh": {
+    "message": "刷新",
+    "description": "刷新按钮悬停提示"
+  },
+  "status_logged_out": {
+    "message": "未登录",
+    "description": "登录状态：未登录"
+  },
+  "status_connected": {
+    "message": "已连接",
+    "description": "登录状态：已连接"
+  },
+  "login_banner_desc": {
+    "message": "登录后书签将同步到云端，多设备共享",
+    "description": "登录横幅说明"
+  },
+  "email_placeholder": {
+    "message": "输入邮箱地址",
+    "description": "邮箱输入框占位"
+  },
+  "send_code": {
+    "message": "发送验证码",
+    "description": "发送验证码按钮"
+  },
+  "cancel": {
+    "message": "取消",
+    "description": "取消按钮"
+  },
+  "otp_placeholder": {
+    "message": "输入 6 位验证码",
+    "description": "验证码输入框占位"
+  },
+  "verify": {
+    "message": "验证",
+    "description": "验证按钮"
+  },
+  "login_gate_title": {
+    "message": "请登录与链",
+    "description": "登录门标题"
+  },
+  "login_gate_desc": {
+    "message": "登录后即可在侧边栏管理书签<br>未登录时可通过右键菜单或快捷键保存到云端",
+    "description": "登录门说明"
+  },
+  "section_current_page": {
+    "message": "当前页面",
+    "description": "分区标题：当前页面"
+  },
+  "current_page_refresh_title": {
+    "message": "点击刷新当前页信息（需用户手势以读取标签 URL）",
+    "description": "当前页卡片悬停提示"
+  },
+  "loading": {
+    "message": "加载中…",
+    "description": "加载状态文本"
+  },
+  "tab_url_hint": {
+    "message": "无法读取当前标签 URL（扩展无持久 tabs 权限）。请点击上方卡片或「↻」刷新后再保存。",
+    "description": "标签 URL 不可读提示"
+  },
+  "save_current_page": {
+    "message": "保存当前页面",
+    "description": "保存按钮文本"
+  },
+  "already_saved": {
+    "message": "已收藏",
+    "description": "详情面板徽标"
+  },
+  "notes": {
+    "message": "备注",
+    "description": "详情面板标签：备注"
+  },
+  "password": {
+    "message": "密码",
+    "description": "详情面板标签：密码"
+  },
+  "show": {
+    "message": "显示",
+    "description": "密码显示按钮"
+  },
+  "hide": {
+    "message": "隐藏",
+    "description": "密码隐藏按钮"
+  },
+  "copy": {
+    "message": "复制",
+    "description": "复制按钮"
+  },
+  "edit_notes": {
+    "message": "编辑备注",
+    "description": "编辑备注按钮"
+  },
+  "copy_url": {
+    "message": "复制链接",
+    "description": "复制链接按钮"
+  },
+  "delete": {
+    "message": "删除",
+    "description": "删除按钮"
+  },
+  "search_placeholder": {
+    "message": "搜索书签...",
+    "description": "搜索框占位"
+  },
+  "recent_saved": {
+    "message": "最近保存",
+    "description": "分区标题：最近保存"
+  },
+  "status_local": {
+    "message": "本地模式",
+    "description": "状态栏：本地模式"
+  },
+  "err_unsafe_protocol": {
+    "message": "无法打开：链接协议不安全",
+    "description": "不安全链接协议提示"
+  },
+  "sync_just_now": {
+    "message": "刚刚同步",
+    "description": "同步时间：刚刚"
+  },
+  "sync_seconds_ago": {
+    "message": "$1秒前同步",
+    "description": "同步时间：秒前"
+  },
+  "sync_minutes_ago": {
+    "message": "$1分钟前同步",
+    "description": "同步时间：分钟前"
+  },
+  "sync_hours_ago": {
+    "message": "$1小时前同步",
+    "description": "同步时间：小时前"
+  },
+  "load_failed": {
+    "message": "加载失败: ",
+    "description": "加载失败前缀"
+  },
+  "unknown_error": {
+    "message": "未知错误",
+    "description": "通用未知错误"
+  },
+  "extension_comm_error": {
+    "message": "扩展通信错误",
+    "description": "扩展通信错误提示"
+  },
+  "count_bookmarks": {
+    "message": "$1 个书签",
+    "description": "书签数量"
+  },
+  "search_no_results": {
+    "message": "🔍 未找到匹配的书签<br><span style=\"font-size:11px;opacity:.7\">试试其他关键词</span>",
+    "description": "搜索无结果"
+  },
+  "no_bookmarks": {
+    "message": "暂无书签",
+    "description": "空列表提示"
+  },
+  "empty_hint": {
+    "message": "💡 在网页上右键选择「保存到与链」<br>或快捷键 <kbd style=\"background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px\">Ctrl+Shift+S</kbd>",
+    "description": "空列表操作提示"
+  },
+  "found_count": {
+    "message": "找到 $1 条结果",
+    "description": "搜索/筛选结果数量"
+  },
+  "show_limited_count": {
+    "message": "仅显示最近 50 条，共 $1 条",
+    "description": "列表超 50 条提示"
+  },
+  "search_results": {
+    "message": "搜索结果",
+    "description": "分区标题：搜索结果"
+  },
+  "this_bookmark": {
+    "message": "该书签",
+    "description": "删除确认中的默认书签名"
+  },
+  "confirm_delete": {
+    "message": "确定删除「$1」？此操作将移入回收站。",
+    "description": "删除确认弹窗"
+  },
+  "delete_failed": {
+    "message": "删除失败: ",
+    "description": "删除失败前缀"
+  },
+  "deleted": {
+    "message": "已删除",
+    "description": "删除成功提示"
+  },
+  "cannot_read_page": {
+    "message": "无法读取当前页",
+    "description": "当前页读取失败提示"
+  },
+  "click_to_refresh": {
+    "message": "点击此处或 ↻ 刷新",
+    "description": "点击刷新提示"
+  },
+  "no_active_tab": {
+    "message": "无活动标签",
+    "description": "无活动标签提示"
+  },
+  "untitled": {
+    "message": "无标题",
+    "description": "页面无标题占位"
+  },
+  "url_unavailable": {
+    "message": "当前页 URL 不可用",
+    "description": "当前页 URL 不可用提示"
+  },
+  "click_to_refresh_and_save": {
+    "message": "点击此处或 ↻ 刷新后保存",
+    "description": "刷新后保存提示"
+  },
+  "use_count": {
+    "message": "👁️ $1 次",
+    "description": "书签使用次数"
+  },
+  "crypto_lib_not_loaded": {
+    "message": "解密库未加载",
+    "description": "解密库未加载提示"
+  },
+  "prompt_master_password": {
+    "message": "输入主密码以解密密码：",
+    "description": "主密码输入弹窗"
+  },
+  "unlock_data_unavailable": {
+    "message": "无法从云端取解锁数据，请稍后重试",
+    "description": "取解锁数据失败提示"
+  },
+  "decrypt_failed_check_password": {
+    "message": "解密失败，请检查主密码",
+    "description": "解密失败提示"
+  },
+  "decrypt_failed": {
+    "message": "解密失败: ",
+    "description": "解密失败前缀"
+  },
+  "password_copied": {
+    "message": "密码已复制",
+    "description": "密码复制成功提示"
+  },
+  "copy_failed": {
+    "message": "复制失败",
+    "description": "复制失败提示"
+  },
+  "prompt_edit_notes": {
+    "message": "编辑备注：",
+    "description": "编辑备注弹窗"
+  },
+  "url_copied": {
+    "message": "链接已复制",
+    "description": "链接复制成功提示"
+  },
+  "saved_check": {
+    "message": "✓ 已保存",
+    "description": "保存按钮成功态"
+  },
+  "save_failed_x": {
+    "message": "✗ 保存失败",
+    "description": "保存按钮失败态"
+  },
+  "cannot_get_page": {
+    "message": "无法获取当前页面，请刷新后重试",
+    "description": "取当前页失败提示"
+  },
+  "cannot_save_internal_page": {
+    "message": "浏览器内部页面无法保存",
+    "description": "浏览器内部页保存提示"
+  },
+  "save_failed": {
+    "message": "保存失败：",
+    "description": "保存失败前缀"
+  },
+  "sent_to_vault": {
+    "message": "已发送到与链保存",
+    "description": "已发送到与链保存提示"
+  },
+  "save_failed_retry": {
+    "message": "保存失败，请重试",
+    "description": "保存失败重试提示"
+  },
+  "refreshed": {
+    "message": "已刷新",
+    "description": "刷新成功提示"
+  },
+  "enter_email": {
+    "message": "请输入邮箱",
+    "description": "邮箱为空提示"
+  },
+  "invalid_email": {
+    "message": "邮箱格式不正确",
+    "description": "邮箱格式错误提示"
+  },
+  "sending": {
+    "message": "发送中…",
+    "description": "发送中状态"
+  },
+  "code_sent": {
+    "message": "验证码已发送",
+    "description": "验证码已发送状态"
+  },
+  "enter_code": {
+    "message": "请输入验证码",
+    "description": "验证码为空提示"
+  },
+  "verifying": {
+    "message": "验证中…",
+    "description": "验证中状态"
+  },
+  "login_success": {
+    "message": "登录成功",
+    "description": "登录成功提示"
+  }
+}

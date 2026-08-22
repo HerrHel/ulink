@@ -4,6 +4,7 @@
  */
 import { ref, nextTick } from 'vue'
 import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 
 /** 行内重命名目标：任意含 save() 与动态重命名方法的对象（CategoryModal / AttributeModal 等） */
 export interface RenameTarget {
@@ -34,7 +35,7 @@ export function useInlineRename(store: RenameTarget, renameMethod: string) {
         (method as (id: string, name: string) => void)(editingId.value, name)
       }
       store.save()
-      toast('已重命名')
+      toast(t('msg.renamed'))
     }
     editingId.value = null
   }

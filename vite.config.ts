@@ -206,9 +206,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'LinkVault',
-        short_name: 'LinkVault',
-        description: '个人书签管理器',
+        name: '与链',
+        short_name: 'ulink',
+        description: '与链（ulink）— 个人书签管理器，支持云同步与端到端加密',
         theme_color: '#122E8A',
         background_color: '#F5EFEA',
         display: 'standalone',

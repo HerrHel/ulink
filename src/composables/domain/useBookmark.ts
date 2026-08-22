@@ -6,6 +6,7 @@ import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { favicon, domain, fixUrl, displayText } from '../../utils.js'
 
 import { toast, toastWithUndo, showConfirm, showChoice } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import { newBookmarkId } from '../../lib/newId.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
@@ -119,7 +120,7 @@ export function openBookmark(bm: Bookmark) {
   // S1：fixUrl 对 javascript:/data: 等危险 scheme 返回空串，此时阻止弹窗导航并提示。
   const safeUrl = fixUrl(bm.url)
   if (!safeUrl) {
-    toast('该链接地址不安全，已阻止打开', false)
+    toast(t('msg.unsafeUrlBlocked'), false)
     return
   }
   const ds = useDataStore()
@@ -228,7 +229,7 @@ export async function saveBm() {
   try {
     const ds = useDataStore()
     const url = fixUrl(bmForm.url)
-    if (!url) { toast('请填写网址', false); return }
+    if (!url) { toast(t('modal.childBm.needUrl'), false); return }
 
     // 新建书签时检测重复
     if (!bmForm.id) {
@@ -237,7 +238,7 @@ export async function saveBm() {
 
       // 完全重复：阻止添加
       if (exact) {
-        toast('该网址已存在书签「' + (exact.title || '未命名') + '」', false)
+        toast(t('msg.urlExistsBookmark', { title: exact.title || t('common.unnamed') }), false)
         closeBmModal()
         return
       }
@@ -271,12 +272,12 @@ export async function saveBm() {
           const raw = await encrypt(bmForm.password, e2eStore.cryptoKey as CryptoKey)
           const parts = raw.split('.')
           if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
-            toast('密码加密失败：输出格式异常，已取消保存', false)
+            toast(t('modal.childBm.encryptFail'), false)
             return
           }
           storedPassword = { encrypted: true, salt: parts[0], iv: parts[1], data: parts[2] }
         } catch {
-          toast('密码加密失败，请重试或稍后解锁 E2E 后再保存', false)
+          toast(t('modal.childBm.encryptFailHint'), false)
           return
         }
       } else if (e2eStore.isE2EEnabled) {
@@ -287,7 +288,7 @@ export async function saveBm() {
           e2eStore.pendingUnlock.push(resolve)
         })
         if (!unlocked) {
-          toast('保存已取消', false)
+          toast(t('modal.childBm.saveCancelled'), false)
           return
         }
         // 解锁后重试加密（递归调用自身，解锁后 isUnlocked=true 走上一分支）
@@ -316,11 +317,11 @@ export async function saveBm() {
       // 覆盖明文，造成不可逆丢失。须先解锁（decryptStoreItems 解回明文）再编辑。
       const orig = ds.bookmarkMap[bmForm.id]
       if (orig && [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
-        toast('该书签含加密字段，请先解锁主密码后再编辑', false)
+        toast(t('modal.childBm.encryptedBlocked'), false)
         return
       }
       ds.updateBookmark(bmForm.id, data)
-      toast('书签已更新')
+      toast(t('msg.bookmarkUpdated'))
     } else {
       const newBm = data as Bookmark
       newBm.id = newBookmarkId()
@@ -343,7 +344,7 @@ export async function saveBm() {
         }
       }
       saveAppData()
-      toast('书签已添加')
+      toast(t('msg.bookmarkAdded'))
     }
     if (bmForm.id) saveAppData()
     closeBmModal()
@@ -476,14 +477,14 @@ export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) 
     const ids = collectSubIds(id)
     ids.forEach(bid => ds.deleteBookmark(bid))
     debouncedSaveAppData()
-    toastWithUndo('书签已删除', () => {
+    toastWithUndo(t('msg.bookmarkDeleted'), () => {
       ids.forEach(bid => ds.restoreBookmark(bid))
       debouncedSaveAppData()
-      toast('已恢复')
+      toast(t('deadlinks.restored'))
     })
   }
   if (skipConfirm) doDelete()
-  else if (await showConfirm('确认删除书签「' + (bm.title || '未命名') + '」？')) doDelete()
+  else if (await showConfirm(t('msg.confirmDeleteBookmark', { title: bm.title || t('common.unnamed') }))) doDelete()
 }
 
 /**
@@ -495,20 +496,20 @@ export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) 
 export function saveFromExtension(url: string, title?: string, notes?: string): boolean {
   if (!isDataHydrated()) {
     console.warn('[LinkVault] saveFromExtension 在 dataReady 前被调用，已拒绝')
-    toast('数据尚未就绪，请稍后重试', false)
+    toast(t('msg.dataNotReady'), false)
     return false
   }
   const ds = useDataStore()
   const safeUrl = fixUrl(url)
   if (!safeUrl) {
-    toast('无法保存该链接', false)
+    toast(t('msg.cannotSaveLink'), false)
     return false
   }
 
   // 检测完全重复的URL
   const { exact } = findDuplicateBookmarks(safeUrl)
   if (exact) {
-    toast('该网址已存在书签「' + (exact.title || '未命名') + '」', false)
+    toast(t('msg.urlExistsBookmark', { title: exact.title || t('common.unnamed') }), false)
     return false
   }
 
@@ -537,10 +538,10 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
 
   ds.addBookmark(newBm)
   saveAppData()
-  toastWithUndo('已保存到书签', () => {
+  toastWithUndo(t('msg.savedToBookmarks'), () => {
     ds.deleteBookmark(newBm.id)
     debouncedSaveAppData()
-    toast('已撤销')
+    toast(t('msg.undone'))
   })
 
   return true
@@ -551,7 +552,7 @@ export function saveFromExtension(url: string, title?: string, notes?: string): 
  * 让用户选择：成为已有书签的子书签、作为顶级书签添加、或取消
  */
 async function showSuffixVariantDialog(existingBookmark: Bookmark, newUrl: string): Promise<'child' | 'sibling' | 'cancel'> {
-  const existingTitle = existingBookmark.title || '未命名'
+  const existingTitle = existingBookmark.title || t('common.unnamed')
   const existingDomain = domain(existingBookmark.url)
   const newDomain = domain(newUrl)
 
@@ -559,26 +560,26 @@ async function showSuffixVariantDialog(existingBookmark: Bookmark, newUrl: strin
   const options = [
     {
       id: 'child',
-      label: '成为「' + existingTitle + '」的子书签',
-      description: '将新书签作为已有书签的子项保存',
+      label: t('msg.dupeChildLabel', { title: existingTitle }),
+      description: t('msg.dupeChildDesc'),
     },
     {
       id: 'sibling',
-      label: '作为独立书签添加',
-      description: '与已有书签平级保存',
+      label: t('msg.dupeSiblingLabel'),
+      description: t('msg.dupeSiblingDesc'),
     },
   ]
 
   // 构建消息
-  let message = '发现已有书签「' + existingTitle + '」'
+  let message = t('msg.dupeFound', { title: existingTitle })
   if (existingDomain === newDomain) {
-    message += '，网址域名相同但路径不同。'
+    message += t('msg.dupeSameDomain')
   } else {
-    message += '，网址相似。'
+    message += t('msg.dupeSimilar')
   }
-  message += '\n\n如何处理新书签？'
+  message += t('msg.dupeHowProceed')
 
-  const result = await showChoice(message, options)
+  const result = await showChoice(message, options, t('common.cancel'))
 
   if (result === 'child') return 'child'
   if (result === 'sibling') return 'sibling'

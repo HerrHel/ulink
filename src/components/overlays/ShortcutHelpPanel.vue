@@ -1,16 +1,16 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" aria-label="快捷键速查" :class="{ open: ui.panels.shortcutHelp }" @click.self="close">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('settings.shortcutHelp')" :class="{ open: ui.panels.shortcutHelp }" @click.self="close">
     <div class="modal modal-md sh-modal" @click.stop>
       <div class="modal-head">
-        <span class="modal-title"><span class="sp-icon" v-html="keyboardIcon"></span>快捷键速查</span>
-        <button class="modal-close" @click="close" aria-label="关闭">&times;</button>
+        <span class="modal-title"><span class="sp-icon" v-html="keyboardIcon"></span>{{ t('settings.shortcutHelp') }}</span>
+        <button class="modal-close" @click="close" :aria-label="t('common.close')">&times;</button>
       </div>
       <div class="modal-body sh-body">
-        <p class="sh-tip">Mac 用户将 Ctrl 替换为 ⌘ Cmd</p>
+        <p class="sh-tip">{{ t('shortcut.macTip') }}</p>
         <div v-for="g in groups" :key="g.title" class="sh-group">
-          <div class="sh-group-title">{{ g.title }}</div>
+          <div class="sh-group-title">{{ t(g.title) }}</div>
           <div v-for="item in g.items" :key="item.desc" class="sh-row">
-            <span class="sh-label">{{ item.desc }}</span>
+            <span class="sh-label">{{ t(item.desc) }}</span>
             <span class="sh-keys">
               <kbd v-for="(k, i) in item.keys" :key="i">{{ k }}</kbd>
             </span>
@@ -18,7 +18,7 @@
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-secondary" @click="close">关闭</button>
+        <button class="btn btn-secondary" @click="close">{{ t('common.close') }}</button>
       </div>
     </div>
   </div>
@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount } from 'vue'
+import { t } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { isTyping } from './isTyping.js'
@@ -41,43 +42,43 @@ interface ShortcutGroup { title: string; items: ShortcutItem[] }
 
 const groups: ShortcutGroup[] = [
   {
-    title: '全局',
+    title: 'shortcut.groupGlobal',
     items: [
-      { desc: '命令面板 / 全局搜索书签与组', keys: ['Ctrl', 'K'] },
-      { desc: '新建书签', keys: ['Ctrl', 'N'] },
-      { desc: '快捷键速查（本面板）', keys: ['Ctrl', '/'] },
-      { desc: '关闭弹窗 / 退出聚焦 / 退出批量模式', keys: ['Esc'] },
-      { desc: '弹窗内字段间循环切换焦点', keys: 'Tab'.split(' ') },
+      { desc: 'shortcut.cmdPanel', keys: ['Ctrl', 'K'] },
+      { desc: 'filter.newBookmark', keys: ['Ctrl', 'N'] },
+      { desc: 'shortcut.panelShortcut', keys: ['Ctrl', '/'] },
+      { desc: 'shortcut.esc', keys: ['Esc'] },
+      { desc: 'shortcut.cycleFocus', keys: 'Tab'.split(' ') },
     ],
   },
   {
-    title: '组编辑器',
+    title: 'shortcut.groupEditor',
     items: [
-      { desc: '加粗选中文字', keys: ['Ctrl', 'B'] },
-      { desc: '设为 H1 大标题', keys: ['Ctrl', 'Shift', '1'] },
-      { desc: '设为 H2 中标题', keys: ['Ctrl', 'Shift', '2'] },
-      { desc: '设为 H3 小标题', keys: ['Ctrl', 'Shift', '3'] },
-      { desc: '撤销组内编辑', keys: ['Ctrl', 'Z'] },
-      { desc: '重做已撤销操作', keys: ['Ctrl', 'Y'] },
-      { desc: '触发书签搜索并内联插入', keys: ['@'] },
-      { desc: '触发组搜索并插入组引用', keys: ['#'] },
+      { desc: 'shortcut.boldText', keys: ['Ctrl', 'B'] },
+      { desc: 'shortcut.setH1', keys: ['Ctrl', 'Shift', '1'] },
+      { desc: 'shortcut.setH2', keys: ['Ctrl', 'Shift', '2'] },
+      { desc: 'shortcut.setH3', keys: ['Ctrl', 'Shift', '3'] },
+      { desc: 'shortcut.undoGroup', keys: ['Ctrl', 'Z'] },
+      { desc: 'shortcut.redoGroup', keys: ['Ctrl', 'Y'] },
+      { desc: 'shortcut.insertBookmarkSearch', keys: ['@'] },
+      { desc: 'shortcut.insertGroupSearch', keys: ['#'] },
     ],
   },
   {
-    title: '批量模式',
+    title: 'shortcut.groupBatch',
     items: [
-      { desc: '全选所有可见卡片', keys: ['Ctrl', 'A'] },
-      { desc: '删除所有选中项', keys: ['Delete'] },
+      { desc: 'shortcut.selectAllVisible', keys: ['Ctrl', 'A'] },
+      { desc: 'shortcut.deleteSelected', keys: ['Delete'] },
     ],
   },
   {
-    title: '列表模式（桌面）',
+    title: 'shortcut.groupList',
     items: [
-      { desc: '打开书签 / 聚焦组（标题区或 Enter）', keys: ['Enter'] },
-      { desc: '打开右侧详情（空白单击或 Space）', keys: ['Space'] },
-      { desc: '展开 / 收起', keys: ['→', '←'] },
-      { desc: '上一条 / 下一条', keys: ['↑', '↓'] },
-      { desc: '首条 / 末条', keys: ['Home', 'End'] },
+      { desc: 'shortcut.openBookmarkFocus', keys: ['Enter'] },
+      { desc: 'shortcut.openDetail', keys: ['Space'] },
+      { desc: 'shortcut.expandCollapse', keys: ['→', '←'] },
+      { desc: 'shortcut.prevNext', keys: ['↑', '↓'] },
+      { desc: 'shortcut.firstLast', keys: ['Home', 'End'] },
     ],
   },
 ]
