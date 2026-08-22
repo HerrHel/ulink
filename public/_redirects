@@ -1,3 +1,6 @@
-# SPA fallback：真实存在的静态资源优先，未匹配路径回退到 index.html
-# /s/* 已被 Pages Functions（functions/_routes.json）优先接管，不受此规则影响
-/*    /index.html   200
+# SPA fallback：未知路径回退到 index.html（由前端 hash 路由接管）
+# 2026-08-23 优化：.html 后缀请求显式先行接管，避免与 Cloudflare 的
+# pretty-URL 剥离（/foo.html → /foo）产生「/* → /index.html」无限循环警告；
+# 同时平台侧 HTML Handling 已设为 none（本应用无 .html 静态链接需要剥离）。
+/*.html  /index.html  200
+/*       /index.html  200
