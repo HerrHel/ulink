@@ -207,8 +207,25 @@ export default defineConfig({
         },
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // HTML 不 precache：precache 旧 index.html 会让已装 PWA 的用户在部署后
+        // 首刷命中旧版（autoUpdate 需等 SW 换代才切新）。改为导航请求 NetworkFirst
+        // （网络优先，离线回退 pages-cache），部署后刷新即拿新 HTML —— 一次刷新即新。
+        globPatterns: ['**/*.{js,css,svg,woff2}'],
+        // 必须显式覆盖 VitePWA 默认 navigateFallback:"index.html"——HTML 已不 precache，
+        // 默认值会让 workbox 生成指向不存在 precache 条目的 NavigationRoute（SW 顶层抛错失效）。
+        // 置 undefined 后导航统一走下方 NetworkFirst（网络优先 + pages-cache 离线兜底）。
+        navigateFallback: undefined,
         runtimeCaching: [{
+          // 导航（页面跳转/刷新）网络优先：网络返回新 HTML 并更新 pages-cache；
+          // 网络失败（离线）回退最近缓存的页面。3s 内网络无响应也回退缓存（慢网保护）。
+          urlPattern: ({ request }) => request.mode === 'navigate',
+          handler: 'NetworkFirst',
+          options: {
+            cacheName: 'pages-cache',
+            networkTimeoutSeconds: 3,
+            expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }
+          }
+        }, {
           urlPattern: /^https:\/\/api\.xinac\.net\/icon\//i,
           handler: 'CacheFirst',
           options: {
