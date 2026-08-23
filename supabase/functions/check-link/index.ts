@@ -246,7 +246,7 @@ async function _validateUrl(raw: string): Promise<URL> {
 }
 
 const BROWSER_UA =
-  'Mozilla/5.0 (compatible; LinkVaultCheck/1.1; +https://github.com/HerrHel/HerrHel.github.io)'
+  'Mozilla/5.0 (compatible; LinkVaultCheck/1.1; +https://ulink.ren)'
 
 /** 手动逐跳 fetch：redirect:manual，每跳对 Location 重新走完整 _validateUrl，
  *  命中内网/协议/端口违规或超 MAX_REDIRECTS 即终止。
