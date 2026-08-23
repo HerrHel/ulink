@@ -168,7 +168,7 @@ function purgeCssPlugin(): Plugin {
  * dist/404.html）。托管已迁 Cloudflare Pages——它检测到顶层 404.html 会判定为
  * 非 SPA，导致未知路径返回 404（原生 SPA 支持被关闭）。移除后 dist 无 404.html，
  * Cloudflare 原生 SPA：未知路径自动匹配根 /（200 index.html）。
- * GitHub Pages 已退居备用（herrhel.github.io 301 回自定义域），不再需要该插件。
+ * GitHub Pages 已停用（ulink.ren 由 Cloudflare Pages 同域托管），不再需要该插件。
  */
 
 export default defineConfig({
