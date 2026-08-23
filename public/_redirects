@@ -1,6 +1,4 @@
-# SPA fallback：未知路径回退到 index.html（由前端 hash 路由接管）
-# ⚠️ 依赖面板设置：Cloudflare Pages → ulink → Settings → General → HTML Handling = None。
-# auto pretty-URL（/index.html → / 的 308 剥离）会让本规则的 fallback 目标失效：
-# 深链直接访问会 404，且构建日志出现 "Infinite loop ... ignored" 警告。
-# 本项目无 .html 静态链接需要剥离，关闭零副作用（2026-08-23 已设，验证通过）。
-/*    /index.html   200
+# 2026-08-23：Cloudflare Pages 原生 SPA 支持（项目无顶层 404.html 时，
+# 未知路径自动匹配根 /，返回 200 index.html）。
+# 此前 /* /index.html 200 会与 auto pretty-URL（/index.html → / 的 308）冲突而失效，
+# 并触发 "Infinite loop" 构建警告——已移除，勿恢复。
