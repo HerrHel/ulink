@@ -173,12 +173,12 @@ function descriptionOf(dict: typeof T['zh-CN'] | typeof T['en-US'], group: Publi
 
 // ── 富文本 notes 白名单清洗（语义对齐 App sanitizeReadonlyHTML，零依赖纯函数）──
 
-/** 允许的标签（与 App _purifyReadonlyConfig.ALLOWED_TAGS 一致）。 */
+/** 允许的标签（与 App _purifyReadonlyConfig.ALLOWED_TAGS 一致 + mark 高亮）。 */
 const NOTES_TAGS = new Set([
   'p', 'br', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'h1', 'h2', 'h3',
-  'blockquote', 'a', 'code', 'pre', 'hr', 'span', 'img',
+  'blockquote', 'a', 'code', 'pre', 'hr', 'span', 'img', 'mark',
 ])
-/** 允许的属性（与 App ALLOWED_ATTR 一致 + style 仅放行 color 子集；data-* 整族放行）。 */
+/** 允许的属性（与 App ALLOWED_ATTR 一致 + style 白名单子集；data-* 整族放行）。 */
 const NOTES_ATTRS = new Set(['class', 'href', 'target', 'rel', 'src', 'alt', 'style'])
 /** class 白名单（其余 class 剥离；data-* 无事件无协议，放行无注入面）。 */
 const NOTES_CLASSES = new Set(['group-inline-card', 'group-ref-card', 'gic-name', 'is-deleted'])
@@ -187,20 +187,42 @@ const NOTES_CLASSES = new Set(['group-inline-card', 'group-ref-card', 'gic-name'
 export interface NotesBmMap { [id: string]: { url?: string } }
 
 /**
- * 从 style 值中提取 color 声明并校验（白名单，杜绝 CSS 注入）：
- * 仅放行 hex / rgb() / rgba() / hsl() / hsla()（数值域内无字母）/ 纯字母命名色。
- * 其余声明（url()、background 等）整体剥除。返回合法 color 值或空串。
+ * 颜色值校验（白名单，杜绝 CSS 注入）：仅放行 hex / rgb() / rgba() / hsl() / hsla()
+ * （数值域限定 [\d\s.,%] 无字母，无法构造 url()/var()/expression 等）/ 纯字母命名色。
  */
-function safeColorValue(v: string): string {
-  const m = (v || "").match(/(?:^|;)\s*color\s*:\s*([^;]+)/i)
-  if (!m) return ""
-  const c = m[1].trim()
+function safeColorValue(c: string): string {
   if (/^#[0-9a-fA-F]{3,8}$/.test(c)) return c
-  // rgb/rgba/hsl/hsla：数值域限定 [\d\s.,%]，无字母 → 无法构造 url()/var()/expression 等
   if (/^rgba?\([\d\s.,%]+\)$/i.test(c)) return c
   if (/^hsla?\([\d\s.,%]+\)$/i.test(c)) return c
-  if (/^[a-zA-Z]{3,20}$/.test(c)) return c // CSS 命名色 / currentColor / transparent（无标点注入面）
+  if (/^[a-zA-Z]{3,20}$/.test(c)) return c
   return ""
+}
+
+/**
+ * style 值白名单清洗（对齐组内 TipTap 渲染的样式子集）：
+ * - color / background-color（文字色 + 高亮底色）
+ * - font-size（字号：数值+px/em/rem/% 或 inherit）
+ * - text-align（对齐：left/center/right/justify）
+ * 其余声明（url()、background 简写等）整体剥除，杜绝 CSS 注入。
+ */
+function safeStyleValue(v: string): string {
+  const out: string[] = []
+  const decls = (v || "").split(";")
+  for (const d of decls) {
+    const m = d.match(/^\s*([a-zA-Z-]+)\s*:\s*(.*?)\s*$/)
+    if (!m) continue
+    const prop = m[1].toLowerCase()
+    const val = m[2].trim()
+    if (prop === "color" || prop === "background-color") {
+      const c = safeColorValue(val)
+      if (c) out.push(`${prop}: ${c}`)
+    } else if (prop === "font-size") {
+      if (/^\d+(\.\d+)?(px|em|rem|%)$/.test(val) || val === "inherit") out.push(`font-size: ${val}`)
+    } else if (prop === "text-align") {
+      if (/^(left|center|right|justify)$/.test(val)) out.push(`text-align: ${val}`)
+    }
+  }
+  return out.join("; ")
 }
 
 /**
@@ -250,9 +272,9 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
           if (!cls) continue
           attrs.push(`class="${cls}"`)
         } else if (name === "style") {
-          const color = safeColorValue(unq)
-          if (!color) continue
-          attrs.push(`style="color: ${color}"`)
+          const st = safeStyleValue(unq)
+          if (!st) continue
+          attrs.push(`style="${st}"`)
         } else if (name === "href") {
           attrs.push(`href="${unq.replace(/"/g, "&quot;")}"`, 'target="_blank"', 'rel="noopener noreferrer nofollow"')
         } else {
@@ -524,6 +546,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes p:first-child{margin-top:0}
 .focus-notes p:last-child{margin-bottom:0}
 .focus-notes strong,.focus-notes b{font-weight:700}
+.focus-notes mark{background-color:transparent;color:inherit}
 .focus-notes h1{font-size:1.4rem;font-weight:600;margin:.5em 0;border-left:3px solid #122E8A;padding-left:10px}
 .focus-notes h2{font-size:1.15rem;font-weight:600;margin:.4em 0}
 .focus-notes h3{font-size:1rem;font-weight:600;margin:.3em 0}
