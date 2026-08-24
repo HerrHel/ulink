@@ -164,7 +164,7 @@ function stripTags(html: string): string {
 
 const NOTES_TAGS = new Set([
   "p", "br", "strong", "em", "u", "s", "ul", "ol", "li", "h1", "h2", "h3",
-  "blockquote", "a", "code", "pre", "hr", "span", "img",
+  "blockquote", "a", "code", "pre", "hr", "span", "img", "mark",
 ])
 const NOTES_ATTRS = new Set(["class", "href", "target", "rel", "src", "alt", "style"])
 const NOTES_CLASSES = new Set(["group-inline-card", "group-ref-card", "gic-name", "is-deleted"])
@@ -172,17 +172,36 @@ const NOTES_CLASSES = new Set(["group-inline-card", "group-ref-card", "gic-name"
 /** 书签 id → url 映射（用于把内联书签 data-bm-id 转成可跳转 <a>）。 */
 interface NotesBmMap { [id: string]: { url?: string } }
 
-/** 从 style 值中提取 color 声明并校验（白名单，杜绝 CSS 注入）：仅放行
- *  hex / rgb() / rgba() / hsl() / hsla()（数值域内无字母）/ 纯字母命名色。 */
-function safeColorValue(v: string): string {
-  const m = (v || "").match(/(?:^|;)\s*color\s*:\s*([^;]+)/i)
-  if (!m) return ""
-  const c = m[1].trim()
+/** 颜色值校验（白名单，杜绝 CSS 注入）：hex / rgb() / rgba() / hsl() / hsla() / 命名色。 */
+function safeColorValue(c: string): string {
   if (/^#[0-9a-fA-F]{3,8}$/.test(c)) return c
   if (/^rgba?\([\d\s.,%]+\)$/i.test(c)) return c
   if (/^hsla?\([\d\s.,%]+\)$/i.test(c)) return c
   if (/^[a-zA-Z]{3,20}$/.test(c)) return c
   return ""
+}
+
+/** style 值白名单清洗（对齐组内 TipTap 渲染样式子集）：
+ *  color / background-color（文字色 + 高亮底色）、font-size（数值+px/em/rem/%）、
+ *  text-align（left/center/right/justify）；其余声明整体剥除。 */
+function safeStyleValue(v: string): string {
+  const out: string[] = []
+  const decls = (v || "").split(";")
+  for (const d of decls) {
+    const m = d.match(/^\s*([a-zA-Z-]+)\s*:\s*(.*?)\s*$/)
+    if (!m) continue
+    const prop = m[1].toLowerCase()
+    const val = m[2].trim()
+    if (prop === "color" || prop === "background-color") {
+      const c = safeColorValue(val)
+      if (c) out.push(`${prop}: ${c}`)
+    } else if (prop === "font-size") {
+      if (/^\d+(\.\d+)?(px|em|rem|%)$/.test(val) || val === "inherit") out.push(`font-size: ${val}`)
+    } else if (prop === "text-align") {
+      if (/^(left|center|right|justify)$/.test(val)) out.push(`text-align: ${val}`)
+    }
+  }
+  return out.join("; ")
 }
 
 /** 白名单清洗组 notes（TipTap HTML）→ 安全富文本。剥危险标签/事件/协议；
@@ -225,9 +244,9 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
           if (!cls) continue
           attrs.push(`class="${cls}"`)
         } else if (name === "style") {
-          const color = safeColorValue(unq)
-          if (!color) continue
-          attrs.push(`style="color: ${color}"`)
+          const st = safeStyleValue(unq)
+          if (!st) continue
+          attrs.push(`style="${st}"`)
         } else if (name === "href") {
           attrs.push(`href="${unq.replace(/"/g, "&quot;")}"`, 'target="_blank"', 'rel="noopener noreferrer nofollow"')
         } else {
@@ -463,6 +482,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes p:first-child{margin-top:0}
 .focus-notes p:last-child{margin-bottom:0}
 .focus-notes strong,.focus-notes b{font-weight:700}
+.focus-notes mark{background-color:transparent;color:inherit}
 .focus-notes h1{font-size:1.4rem;font-weight:600;margin:.5em 0;border-left:3px solid #122E8A;padding-left:10px}
 .focus-notes h2{font-size:1.15rem;font-weight:600;margin:.4em 0}
 .focus-notes h3{font-size:1rem;font-weight:600;margin:.3em 0}
