@@ -6,7 +6,7 @@ const richNotes =
   "<p>这段有 <span style=\"color: rgb(190, 18, 60)\">红字</span>、<span style=\"color: #0d7a6f\">青字</span>、<mark data-color=\"#ffd666\" style=\"background-color: rgb(255, 214, 102); color: inherit\">高亮底</mark>、<span style=\"font-size: 18px\">大字号</span>。</p>" +
   '<p style="text-align: center">居中段落</p>' +
   "<h2>二级标题</h2><ul><li>列表项 A</li><li>列表项 B</li></ul>" +
-  '<p>内联书签：<span class="group-inline-card" contenteditable="false" draggable="true" data-bm-id="b1"><img src="https://api.xinac.net/icon/?url=kdocs.cn" alt=""><span class="gic-name">联想异常修复</span></span> 与 <span class="group-inline-card" data-bm-id="ghost"><span class="gic-name">不存在书签</span></span></p>' +
+  '<p>内联书签：<span class="group-inline-card" contenteditable="false" draggable="true" data-bm-id="b1"><img src="https://api.xinac.net/icon/?url=kdocs.cn" alt=""><span class="gic-name">联想异常修复</span><span class="gic-domain">kdocs.cn</span></span> 与 <span class="group-inline-card" data-bm-id="ghost"><span class="gic-name">不存在书签</span><span class="gic-domain">ghost.example</span></span>、组引用 <span class="group-inline-card group-ref-card" data-bm-id="ref:g9"><span class="gic-note-icon">i</span><span class="gic-name">子组</span><span class="gic-count">3个书签</span></span></p>' +
   '<ul data-type="taskList"><li data-type="taskItem" data-checked="true">已完成任务</li><li data-type="taskItem" data-checked="false">未完成任务</li></ul>'
 
 const group = {
@@ -65,15 +65,18 @@ assert(zh.includes('<p style="text-align: center">居中段落</p>'), "text-alig
 assert(!zh.includes('style="color: red;'), "style 其他声明剥除")
 // ── 4. 内联书签转可点击 <a> ──
 assert(zh.includes('<a class="group-inline-card" data-bm-id="b1" href="https://www.kdocs.cn/l/chkUaTa2a2K7" target="_blank" rel="noopener nofollow"'), "内联书签命中 bmMap → 可点击 a")
-assert(zh.includes('<a class="group-inline-card" data-bm-id="b1"'), "内联书签 a 保留 class/data-bm-id")
-assert(/<a class="group-inline-card"[\s\S]*?联想异常修复<\/a>/.test(zh), "内联书签 a 正确闭合（含 gic-name）")
-assert(zh.includes('<span class="group-inline-card" data-bm-id="ghost"'), "未命中 bmMap 的内联书签保持 span")
+assert(zh.includes('class="gic-name">联想异常修复</span><span class="gic-domain">kdocs.cn</span>'), "内联书签卡片含 gic-name + gic-domain（与组内一致）")
+assert(zh.includes('联想异常修复</span><span class="gic-domain">kdocs.cn</span></a>'), "内联书签 a 正确闭合（favicon+标题+域名全部在卡片内）")
+assert(zh.includes('class="gic-domain">ghost.example</span>'), "未命中 bmMap 的内联书签保持 span + 域名样式")
+assert(zh.includes('class="group-inline-card group-ref-card"') && zh.includes('class="gic-count">3个书签</span>'), "组引用 gic-count 保留")
 assert(zh.includes('rel="noopener nofollow"'), "内联书签 a 安全 rel")
-// ── 5. taskItem ──
+// ── 5. taskItem：checkbox 对齐组内原生样式（伪元素方形勾选）──
 assert(zh.includes('data-type="taskItem" data-checked="true"') && zh.includes('data-type="taskItem" data-checked="false"'), "taskItem data-checked 保留")
 assert(!zh.includes("<input") && !zh.includes("<label>") && !zh.includes("<div>"), "input/label/div 剥除")
 assert(zh.includes("已完成任务") && zh.includes("未完成任务"), "task 文本保留")
 assert(zh.includes('li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through'), "勾选划线 CSS")
+assert(zh.includes('width:16px;height:16px;box-sizing:border-box;border:1.5px solid #C9C0B4;border-radius:4px'), "checkbox 伪元素方形样式（对齐原生 input checkbox）")
+assert(!zh.includes('content:"☐"') && !zh.includes('content:"☑"'), "旧的 ☐/☑ 字符方案移除")
 assert(zh.includes("data-checked") && zh.includes("taskItem") && zh.includes("addEventListener('click'"), "taskItem 点击切换 JS")
 
 // ── 6. XSS / 注入剥离 ──
