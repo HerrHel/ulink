@@ -166,24 +166,48 @@ const NOTES_TAGS = new Set([
   "p", "br", "strong", "em", "u", "s", "ul", "ol", "li", "h1", "h2", "h3",
   "blockquote", "a", "code", "pre", "hr", "span", "img",
 ])
-const NOTES_ATTRS = new Set(["class", "href", "target", "rel", "src", "alt"])
+const NOTES_ATTRS = new Set(["class", "href", "target", "rel", "src", "alt", "style"])
 const NOTES_CLASSES = new Set(["group-inline-card", "group-ref-card", "gic-name", "is-deleted"])
 
-/** 白名单清洗组 notes（TipTap HTML）→ 安全富文本。剥危险标签/事件/协议。 */
-function sanitizeNotesHtml(html: string): string {
+/** 书签 id → url 映射（用于把内联书签 data-bm-id 转成可跳转 <a>）。 */
+interface NotesBmMap { [id: string]: { url?: string } }
+
+/** 从 style 值中提取 color 声明并校验（白名单，杜绝 CSS 注入）：仅放行
+ *  hex / rgb() / rgba() / hsl() / hsla()（数值域内无字母）/ 纯字母命名色。 */
+function safeColorValue(v: string): string {
+  const m = (v || "").match(/(?:^|;)\s*color\s*:\s*([^;]+)/i)
+  if (!m) return ""
+  const c = m[1].trim()
+  if (/^#[0-9a-fA-F]{3,8}$/.test(c)) return c
+  if (/^rgba?\([\d\s.,%]+\)$/i.test(c)) return c
+  if (/^hsla?\([\d\s.,%]+\)$/i.test(c)) return c
+  if (/^[a-zA-Z]{3,20}$/.test(c)) return c
+  return ""
+}
+
+/** 白名单清洗组 notes（TipTap HTML）→ 安全富文本。剥危险标签/事件/协议；
+ *  style 仅保留 color；内联书签 data-bm-id 命中 bmMap 且 URL 安全时转可点击 <a>。 */
+function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
   let out = (html || "").replace(/<!--[\s\S]*?-->/g, "")
   for (const t of NOTES_BLOCKLIST) {
     out = out
       .replace(new RegExp(`<\\s*${t}[\\s\\S]*?<\\s*/\\s*${t}\\s*>`, "gi"), "")
       .replace(new RegExp(`<\\s*/?\\s*${t}[\\s\\S]*?>`, "gi"), "")
   }
+  let icDepth = 0
   return out
     .replace(/<[^>]*>/g, (raw: string) => {
       const m = raw.match(/^<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)/)
       if (!m) return ""
       const close = !!m[1]
       const tag = m[2].toLowerCase()
-      if (close) return NOTES_TAGS.has(tag) ? `</${tag}>` : ""
+      if (close) {
+        if (tag === "span" && icDepth > 0) {
+          icDepth--
+          return icDepth === 0 ? "</a>" : "</span>"
+        }
+        return NOTES_TAGS.has(tag) ? `</${tag}>` : ""
+      }
       if (!NOTES_TAGS.has(tag)) return ""
       const attrs: string[] = []
       const attrRe = /([a-zA-Z-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+)/g
@@ -200,10 +224,28 @@ function sanitizeNotesHtml(html: string): string {
           const cls = unq.split(/\s+/).filter((c: string) => NOTES_CLASSES.has(c)).join(" ")
           if (!cls) continue
           attrs.push(`class="${cls}"`)
+        } else if (name === "style") {
+          const color = safeColorValue(unq)
+          if (!color) continue
+          attrs.push(`style="color: ${color}"`)
         } else if (name === "href") {
           attrs.push(`href="${unq.replace(/"/g, "&quot;")}"`, 'target="_blank"', 'rel="noopener noreferrer nofollow"')
         } else {
           attrs.push(`${name}="${unq.replace(/"/g, "&quot;")}"`)
+        }
+      }
+      // 内联书签：转可点击 <a>（data-bm-id → 组书签 URL）
+      if (tag === "span") {
+        const cls = (attrs.find((a) => a.startsWith("class=")) || "").slice(7).replace(/"/g, "")
+        const bmId = (attrs.find((a) => a.startsWith("data-bm-id=")) || "").slice(11).replace(/"/g, "")
+        if (cls.split(/\s+/).includes("group-inline-card")) {
+          icDepth++
+          const url = bmId && bmMap?.[bmId]?.url ? fixUrl(bmMap[bmId].url as string) : ""
+          if (url) {
+            attrs.push(`href="${esc(url)}"`, 'target="_blank"', 'rel="noopener nofollow"')
+            return attrs.length ? `<a ${attrs.join(" ")}>` : `<a>`
+          }
+          return attrs.length ? `<span ${attrs.join(" ")}>` : `<span>`
         }
       }
       return attrs.length ? `<${tag} ${attrs.join(" ")}>` : `<${tag}>`
@@ -266,7 +308,7 @@ function buildHead(
   ].join("\n")
 }
 
-/** 图标位：favicon/URL 图标 + 首字母共存（:has() 方案，杜绝重叠，同 App cards.css）。 */
+/** 图标位：favicon/URL 图标 + 首字母占位共存（:has() 方案，杜绝重叠，同 App cards.css）。 */
 function iconMarkup(imgSrc: string, letter: string, cls: string): string {
   const img = imgSrc
     ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.classList.add('${cls}-img-err')">`
@@ -310,15 +352,15 @@ function groupIconMarkup(group: PublicGroup, letter: string): string {
   return iconMarkup(imgSrc, letter, "hero")
 }
 
-/** 组 notes 富文本渲染（白名单清洗后直接输出；空则返回空串）。 */
-function notesHtml(group: PublicGroup): string {
+/** 组 notes 富文本渲染（白名单清洗 + 内联书签转链接后输出；空则返回空串）。 */
+function notesHtml(group: PublicGroup, bmMap?: NotesBmMap): string {
   const raw = (group.notes || "").trim()
   if (!raw) return ""
-  const cleaned = sanitizeNotesHtml(raw).trim()
+  const cleaned = sanitizeNotesHtml(raw, bmMap).trim()
   return cleaned ? `<div class="focus-notes">${cleaned}</div>` : ""
 }
 
-/** 构建 <body>：白色聚焦卡片（组头 + CTA 右上 + 富文本 notes + 等高书签列表）。 */
+/** 构建 <body>：双列布局（左侧白卡聚焦 + 右侧书签列表竖排，窄屏回退单列）。 */
 function buildBody(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -335,6 +377,9 @@ function buildBody(
   const list = count
     ? bookmarks.map(buildBookmarkItem).join("\n")
     : `<div class="empty">${esc(dict.empty)}</div>`
+  // data-bm-id → 书签 URL 映射（内联书签转可点击 <a>）
+  const bmMap: NotesBmMap = {}
+  for (const b of bookmarks) bmMap[b.id] = { url: b.url }
   // CTA 跳 App 的 hash 路由（#share/<gid>），让人类用户进入 SPA 登录后 Fork。
   const appUrl = `${appOrigin}/#share/${esc(gid)}`
   const year = new Date().getUTCFullYear()
@@ -355,9 +400,9 @@ function buildBody(
     `</div>`,
     `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
     `</div>`,
-    notesHtml(group),
-    `<div class="bm-list">${list}</div>`,
+    notesHtml(group, bmMap),
     `</div>`,
+    `<aside class="bm-list">${list}</aside>`,
     `</main>`,
     `<footer class="foot">`,
     `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
@@ -393,12 +438,13 @@ const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
 body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-.page{max-width:760px;margin:0 auto;padding:0 20px 56px}
+.page{max-width:1080px;margin:0 auto;padding:0 20px 56px}
 .head{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid #E5DDD3;margin-bottom:26px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
-.focus-card{position:relative;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
+.main{display:flex;align-items:flex-start;gap:20px}
+.focus-card{position:relative;flex:1;min-width:0;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
 .focus-accent{position:absolute;left:0;top:6px;bottom:6px;width:3px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);border-radius:0 2px 2px 0;opacity:1}
 .focus-head{display:flex;align-items:flex-start;gap:14px}
 .focus-icon{width:48px;height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:12px;overflow:hidden;position:relative}
@@ -412,7 +458,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .meta-tag{display:inline-flex;align-items:center;font-size:12px;font-weight:600;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3;padding:3px 11px;border-radius:999px;white-space:nowrap}
 .cta{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);color:#fff;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 10px rgba(18,46,138,0.25);flex-shrink:0;margin-left:auto;transition:box-shadow .2s ease,transform .2s ease}
 .cta:hover{box-shadow:0 4px 18px rgba(18,46,138,0.35);transform:translateY(-1px)}
-.focus-notes{font-size:13.5px;line-height:1.7;color:#2C2824;word-break:break-word;margin:16px 0 8px;padding:0 2px;max-height:320px;overflow:auto;scrollbar-width:thin}
+.focus-notes{font-size:13.5px;line-height:1.7;color:#2C2824;word-break:break-word;margin:16px 0 8px;padding:0 2px;max-height:60vh;overflow:auto;scrollbar-width:thin}
 .focus-notes p{margin:.2em 0}
 .focus-notes p:first-child{margin-top:0}
 .focus-notes p:last-child{margin-bottom:0}
@@ -430,13 +476,25 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes a{color:#122E8A;text-decoration:underline}
 .focus-notes img{max-width:100%;height:auto;border-radius:8px}
 .focus-notes hr{border:none;border-top:1px solid #E5DDD3;margin:.6em 0}
-.focus-notes .group-inline-card,.focus-notes .group-ref-card{display:inline-flex;align-items:center;gap:4px;vertical-align:middle;max-width:100%;opacity:.9}
-.focus-notes .group-inline-card img,.focus-notes .group-inline-card svg,.focus-notes .group-ref-card img,.focus-notes .group-ref-card svg{width:16px;height:16px;max-width:16px;max-height:16px;border-radius:2px;display:block;flex-shrink:0}
+.focus-notes a.group-inline-card,.focus-notes span.group-inline-card,.focus-notes .group-ref-card{
+  display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;margin:0 4px;
+  border:1px solid #E5DDD3;border-radius:8px;background:#FDFBF9;
+  font-size:.85rem;font-weight:500;white-space:nowrap;vertical-align:middle;
+  color:#2C2824;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.04);
+  transition:border-color .18s ease,box-shadow .18s ease,transform .18s cubic-bezier(0.16,1,0.3,1);
+}
+.focus-notes a.group-inline-card:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13);transform:translateY(-1px)}
+.focus-notes .group-inline-card img,.focus-notes .group-inline-card svg,
+.focus-notes .group-ref-card img,.focus-notes .group-ref-card svg{width:16px;height:16px;max-width:16px;max-height:16px;border-radius:2px;display:block;flex-shrink:0}
+.focus-notes .gic-name{color:#2C2824;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .focus-notes .gic-btn,.focus-notes .gic-remove{display:none}
-.focus-notes li[data-type="taskItem"]{list-style:none;display:flex;gap:6px;align-items:flex-start;margin-left:-1.5rem}
-.focus-notes li[data-type="taskItem"]::before{content:"☐";margin-right:4px;flex-shrink:0;color:#6A6660}
+.focus-notes ul[data-type="taskList"]{list-style:none;padding-left:0;margin:.4em 0}
+.focus-notes li[data-type="taskItem"]{list-style:none;display:flex;gap:8px;align-items:flex-start;margin:2px 0;cursor:pointer;-webkit-user-select:none;user-select:none}
+.focus-notes li[data-type="taskItem"]::before{content:"☐";margin-top:2px;flex-shrink:0;color:#6A6660;font-size:14px;line-height:1.4}
 .focus-notes li[data-type="taskItem"][data-checked="true"]::before{content:"☑";color:#122E8A}
-.bm-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.focus-notes li[data-type="taskItem"] p{margin:0;line-height:1.5}
+.focus-notes li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through;color:#6A6660}
+.bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
 .bm{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border:1px solid #E5DDD3;border-radius:12px;background:#FDFBF9;box-shadow:0 1px 2px rgba(0,0,0,0.03);text-decoration:none;color:inherit;transition:border-color .2s ease,box-shadow .2s ease,transform .2s cubic-bezier(0.16,1,0.3,1)}
 .bm:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 4px 14px rgba(0,0,0,0.06);transform:translateY(-1px)}
 .bm-icon{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:10px;overflow:hidden;position:relative}
@@ -461,6 +519,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
+@media(max-width:920px){
+  .page{max-width:760px}
+  .main{flex-direction:column}
+  .bm-list{width:100%}
+}
 @media(max-width:560px){
   .page{padding:0 14px 40px}
   .head{margin-bottom:20px}
@@ -473,8 +536,10 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 }
 `
 
-/** favicon 降级脚本（渐进增强）：img[data-fb] 加载失败时加 .img-err 类 → CSS 隐藏、露出首字母。 */
-const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}})()`
+/** 渐进增强脚本（无 JS 时页面完整可用）：
+ *  1) favicon 降级：img[data-fb] 加载失败加 .img-err → CSS 隐藏、:has() 露出首字母
+ *  2) taskItem 未完成项可点击勾选（纯前端视觉）：点击切换 data-checked */
+const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}})()`
 
 // ── 入口 ──
 
