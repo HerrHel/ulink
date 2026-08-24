@@ -12,9 +12,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
  * 数据来源复用现有公开读 RPC `get_public_group`（SECURITY DEFINER，列级隔离，
  * 已排除 username/password/user_id），以 anon key 调用即可——最小权限、零额外授权。
  *
- * 架构要点（迁移友好）：渲染核心（esc/fixUrl/domainOf/stripTags/buildHead/buildBody/
- * renderSharePage）均为纯函数，不触碰 Deno 特有 API（serve/Deno.env）；未来迁到
- * Netlify/Vercel/Cloudflare Pages 的 edge function 时只替换外层薄薄一层胶水。
+ * 架构要点（迁移友好）：渲染核心（esc/fixUrl/domainOf/stripTags/sanitizeNotesHtml/
+ * buildHead/buildBody/renderSharePage）均为纯函数，不触碰 Deno 特有 API（serve/Deno.env）；
+ * 未来迁到 Netlify/Vercel/Cloudflare Pages 的 edge function 时只替换外层薄薄一层胶水。
  * 渲染核与 functions/_lib/share-render.ts 保持同步（同样的 T 字典 + HTML/CSS 结构）。
  */
 
@@ -144,9 +144,70 @@ function fmtDate(ts: number): string {
   return `${y}-${m}-${day}`
 }
 
-/** 剥离 HTML 标签得纯文本（组 notes 是 TipTap HTML，服务端不做 DOM 清洗、只降级为文本）。 */
+/** 带内容的危险容器：整块剥离（含其文本），防脚本内容泄漏为可见文本（如 SEO 描述）。 */
+const NOTES_BLOCKLIST = ["script", "style", "iframe", "object", "embed", "svg", "math", "noscript", "template"]
+
+/** 剥离 HTML 标签得纯文本（组 notes 是 TipTap HTML，用于 SEO 描述等纯文本场景）。
+ *  先删危险容器块（script/style 等连同内容），再剥标签——防 <script>alert(1)</script>
+ *  剥标签后剩 alert(1) 文本泄漏进 meta description（内容污染，非 XSS）。 */
 function stripTags(html: string): string {
-  return (html || "").replace(/<[^>]+>/g, "").trim()
+  let out = (html || "").replace(/<!--[\s\S]*?-->/g, "")
+  for (const t of NOTES_BLOCKLIST) {
+    out = out
+      .replace(new RegExp(`<\\s*${t}[\\s\\S]*?<\\s*/\\s*${t}\\s*>`, "gi"), "")
+      .replace(new RegExp(`<\\s*/?\\s*${t}[\\s\\S]*?>`, "gi"), "")
+  }
+  return out.replace(/<[^>]+>/g, "").trim()
+}
+
+// ── 富文本 notes 白名单清洗（语义对齐 App sanitizeReadonlyHTML，零依赖纯函数）──
+
+const NOTES_TAGS = new Set([
+  "p", "br", "strong", "em", "u", "s", "ul", "ol", "li", "h1", "h2", "h3",
+  "blockquote", "a", "code", "pre", "hr", "span", "img",
+])
+const NOTES_ATTRS = new Set(["class", "href", "target", "rel", "src", "alt"])
+const NOTES_CLASSES = new Set(["group-inline-card", "group-ref-card", "gic-name", "is-deleted"])
+
+/** 白名单清洗组 notes（TipTap HTML）→ 安全富文本。剥危险标签/事件/协议。 */
+function sanitizeNotesHtml(html: string): string {
+  let out = (html || "").replace(/<!--[\s\S]*?-->/g, "")
+  for (const t of NOTES_BLOCKLIST) {
+    out = out
+      .replace(new RegExp(`<\\s*${t}[\\s\\S]*?<\\s*/\\s*${t}\\s*>`, "gi"), "")
+      .replace(new RegExp(`<\\s*/?\\s*${t}[\\s\\S]*?>`, "gi"), "")
+  }
+  return out
+    .replace(/<[^>]*>/g, (raw: string) => {
+      const m = raw.match(/^<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)/)
+      if (!m) return ""
+      const close = !!m[1]
+      const tag = m[2].toLowerCase()
+      if (close) return NOTES_TAGS.has(tag) ? `</${tag}>` : ""
+      if (!NOTES_TAGS.has(tag)) return ""
+      const attrs: string[] = []
+      const attrRe = /([a-zA-Z-]+)\s*=\s*("[^"]*"|'[^']*'|[^\s"'=<>`]+)/g
+      let am: RegExpExecArray | null
+      while ((am = attrRe.exec(raw)) !== null) {
+        const name = am[1].toLowerCase()
+        if (name.startsWith("on")) continue
+        if (!NOTES_ATTRS.has(name) && !name.startsWith("data-")) continue
+        const unq = am[2].replace(/^["']|["']$/g, "")
+        if (name === "href" || name === "src") {
+          if (!/^https?:\/\//i.test(unq)) continue
+        }
+        if (name === "class") {
+          const cls = unq.split(/\s+/).filter((c: string) => NOTES_CLASSES.has(c)).join(" ")
+          if (!cls) continue
+          attrs.push(`class="${cls}"`)
+        } else if (name === "href") {
+          attrs.push(`href="${unq.replace(/"/g, "&quot;")}"`, 'target="_blank"', 'rel="noopener noreferrer nofollow"')
+        } else {
+          attrs.push(`${name}="${unq.replace(/"/g, "&quot;")}"`)
+        }
+      }
+      return attrs.length ? `<${tag} ${attrs.join(" ")}>` : `<${tag}>`
+    })
 }
 
 // ── 纯函数：渲染核 ──
@@ -205,17 +266,12 @@ function buildHead(
   ].join("\n")
 }
 
-/** 首字母占位图标（本地降级）。favicon / 组 icon 加载失败或为空时兜底显示。 */
-function fallbackChip(ch: string, cls: string): string {
-  return `<span class="${cls}-fb">${esc(ch)}</span>`
-}
-
-/** 图标位渲染：优先 favicon/URL 图标（带 onerror 降级），否则首字母占位（grid 同格）。 */
+/** 图标位：favicon/URL 图标 + 首字母共存（:has() 方案，杜绝重叠，同 App cards.css）。 */
 function iconMarkup(imgSrc: string, letter: string, cls: string): string {
   const img = imgSrc
-    ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.style.display='none'">`
+    ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.classList.add('${cls}-img-err')">`
     : ""
-  return img + fallbackChip(letter, cls)
+  return `<span class="${cls}-fb">${esc(letter)}</span>${img}`
 }
 
 /** 品牌链接图标（与 App 端 ShareView logo 同一枚 SVG）。 */
@@ -226,10 +282,7 @@ const LOGO_SVG =
 const ARROW_SVG =
   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12L12 4"/><path d="M5.5 4H12v6.5"/></svg>`
 
-/**
- * 书签列表项：favicon/首字母 + 标题 + 域名 + 备注 + 箭头。
- * 标题为空时回退展示域名。纯静态 <a>，无需 JS。
- */
+/** 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名）。 */
 function buildBookmarkItem(b: PublicBookmark): string {
   const safe = fixUrl(b.url)
   const href = safe ? esc(safe) : "#"
@@ -238,15 +291,12 @@ function buildBookmarkItem(b: PublicBookmark): string {
   const dm = safe ? domainOf(safe) : ""
   const title = (b.title || "").trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const notes = (b.notes || "").trim()
-  const notesHtml = notes ? `<span class="bm-note">${esc(notes)}</span>` : ""
   return [
     `<a class="bm" href="${href}"${target}${rel}>`,
     `<span class="bm-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bm")}</span>`,
     `<span class="bm-info">`,
     `<span class="bm-title">${esc(title)}</span>`,
-    dm ? `<span class="bm-url">${esc(dm)}</span>` : "",
-    notesHtml,
+    dm ? `<span class="bm-url">${esc(dm)}</span>` : `<span class="bm-url">&nbsp;</span>`,
     `</span>`,
     `<span class="bm-arrow">${ARROW_SVG}</span>`,
     `</a>`,
@@ -257,13 +307,18 @@ function buildBookmarkItem(b: PublicBookmark): string {
 function groupIconMarkup(group: PublicGroup, letter: string): string {
   const icon = typeof group.icon === "string" ? group.icon.trim() : ""
   const imgSrc = /^https?:\/\//i.test(icon) ? icon : ""
-  const img = imgSrc
-    ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.style.display='none'">`
-    : ""
-  return img + fallbackChip(letter, "hero")
+  return iconMarkup(imgSrc, letter, "hero")
 }
 
-/** 构建 <body>：开放布局（hero + hairline 列表 + 居中 CTA + 品牌页脚）。 */
+/** 组 notes 富文本渲染（白名单清洗后直接输出；空则返回空串）。 */
+function notesHtml(group: PublicGroup): string {
+  const raw = (group.notes || "").trim()
+  if (!raw) return ""
+  const cleaned = sanitizeNotesHtml(raw).trim()
+  return cleaned ? `<div class="focus-notes">${cleaned}</div>` : ""
+}
+
+/** 构建 <body>：白色聚焦卡片（组头 + CTA 右上 + 富文本 notes + 等高书签列表）。 */
 function buildBody(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -273,8 +328,6 @@ function buildBody(
 ): string {
   const name = esc(group.name || dict.defaultGroupName)
   const initial = esc((group.name || "?").trim().charAt(0) || "?").toUpperCase()
-  const notesPlain = stripTags(group.notes || "")
-  const notesHtml = notesPlain ? `<p class="hero-notes">${esc(notesPlain)}</p>` : ""
   const count = bookmarks.length
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, "count", count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
@@ -292,25 +345,24 @@ function buildBody(
     `<span class="head-sub">${esc(dict.headSub)}</span>`,
     `</header>`,
     `<main class="main">`,
-    `<section class="hero">`,
-    `<div class="hero-row">`,
-    `<span class="hero-icon">${groupIconMarkup(group, initial)}</span>`,
-    `<div class="hero-title">`,
-    `<h1 class="hero-name">${name}</h1>`,
-    `<div class="hero-meta">${countTag}${updatedTag}</div>`,
+    `<div class="focus-card">`,
+    `<span class="focus-accent" aria-hidden="true"></span>`,
+    `<div class="focus-head">`,
+    `<span class="focus-icon">${groupIconMarkup(group, initial)}</span>`,
+    `<div class="focus-titlewrap">`,
+    `<h1 class="focus-name">${name}</h1>`,
+    `<div class="focus-meta">${countTag}${updatedTag}</div>`,
     `</div>`,
-    `</div>`,
-    notesHtml,
-    `</section>`,
-    `<div class="list">${list}</div>`,
-    `<div class="list-foot">`,
     `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
+    `</div>`,
+    notesHtml(group),
+    `<div class="bm-list">${list}</div>`,
     `</div>`,
     `</main>`,
     `<footer class="foot">`,
     `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
     `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
-    `<span class="foot-copy">© ${year} ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
     `</footer>`,
     `</div>`,
   ].join("\n")
@@ -341,41 +393,65 @@ const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
 body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-.page{max-width:720px;margin:0 auto;padding:0 20px 56px}
-.head{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid #E5DDD3}
+.page{max-width:760px;margin:0 auto;padding:0 20px 56px}
+.head{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid #E5DDD3;margin-bottom:26px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
-.hero{padding:38px 0 26px;display:flex;flex-direction:column;gap:16px}
-.hero-row{display:flex;align-items:center;gap:16px}
-.hero-icon{width:56px;height:56px;flex-shrink:0;display:grid;place-items:center;background:linear-gradient(135deg,#EDE4DA,#E1D5C6);border:1px solid #E5DDD3;border-radius:16px;font-size:22px;font-weight:700;color:#122E8A;text-transform:uppercase;overflow:hidden}
-.hero-icon img{grid-area:1/1;width:28px;height:28px;object-fit:contain;display:block}
-.hero-fb{grid-area:1/1;line-height:1}
-.hero-title{flex:1;min-width:0}
-.hero-name{font-size:28px;font-weight:800;color:#2C2824;letter-spacing:-.6px;line-height:1.25;overflow-wrap:anywhere}
-.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.focus-card{position:relative;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
+.focus-accent{position:absolute;left:0;top:6px;bottom:6px;width:3px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);border-radius:0 2px 2px 0;opacity:1}
+.focus-head{display:flex;align-items:flex-start;gap:14px}
+.focus-icon{width:48px;height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:12px;overflow:hidden;position:relative}
+.focus-icon img{width:28px;height:28px;object-fit:contain}
+.focus-icon img.img-err{display:none}
+.focus-icon:has(img:not(.img-err)) .hero-fb{display:none}
+.hero-fb{display:flex;align-items:center;justify-content:center;width:28px;height:28px;font-size:17px;font-weight:700;color:#122E8A;text-transform:uppercase;line-height:1}
+.focus-titlewrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;padding-top:1px}
+.focus-name{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.5px;line-height:1.3;overflow-wrap:anywhere}
+.focus-meta{display:flex;flex-wrap:wrap;gap:8px}
 .meta-tag{display:inline-flex;align-items:center;font-size:12px;font-weight:600;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3;padding:3px 11px;border-radius:999px;white-space:nowrap}
-.hero-notes{font-size:14px;line-height:1.75;color:#5E5852;word-break:break-word;max-width:640px;padding:0 2px}
-.list{display:flex;flex-direction:column;border-top:1px solid #E5DDD3}
-.bm{display:flex;align-items:center;gap:14px;padding:14px 12px;border-radius:12px;text-decoration:none;color:inherit;transition:background .15s ease}
-.bm + .bm{border-top:1px solid #EFE8DF}
-.bm:hover{background:#F7F2EC}
-.bm-icon{width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:11px;font-size:14px;font-weight:700;color:#122E8A;text-transform:uppercase;overflow:hidden;transition:border-color .18s ease,transform .18s ease}
-.bm:hover .bm-icon{border-color:#122E8A;transform:scale(1.04)}
-.bm-icon img{grid-area:1/1;width:20px;height:20px;object-fit:contain;display:block}
-.bm-fb{grid-area:1/1;line-height:1}
-.bm-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.bm-title{display:block;font-weight:600;font-size:14.5px;color:#2C2824;line-height:1.45;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s ease}
+.cta{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);color:#fff;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 10px rgba(18,46,138,0.25);flex-shrink:0;margin-left:auto;transition:box-shadow .2s ease,transform .2s ease}
+.cta:hover{box-shadow:0 4px 18px rgba(18,46,138,0.35);transform:translateY(-1px)}
+.focus-notes{font-size:13.5px;line-height:1.7;color:#2C2824;word-break:break-word;margin:16px 0 8px;padding:0 2px;max-height:320px;overflow:auto;scrollbar-width:thin}
+.focus-notes p{margin:.2em 0}
+.focus-notes p:first-child{margin-top:0}
+.focus-notes p:last-child{margin-bottom:0}
+.focus-notes strong,.focus-notes b{font-weight:700}
+.focus-notes h1{font-size:1.4rem;font-weight:600;margin:.5em 0;border-left:3px solid #122E8A;padding-left:10px}
+.focus-notes h2{font-size:1.15rem;font-weight:600;margin:.4em 0}
+.focus-notes h3{font-size:1rem;font-weight:600;margin:.3em 0}
+.focus-notes ul,.focus-notes ol{margin:.3em 0;padding-left:1.5rem}
+.focus-notes ol{list-style:decimal}
+.focus-notes ul{list-style:disc}
+.focus-notes li{margin:.15em 0}
+.focus-notes blockquote{border-left:3px solid #E5DDD3;padding-left:10px;color:#5E5852;margin:.4em 0}
+.focus-notes code{background:#F7F2EC;border-radius:4px;padding:1px 5px;font-size:.9em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.focus-notes pre{background:#F7F2EC;border:1px solid #E5DDD3;border-radius:8px;padding:10px 12px;overflow-x:auto;margin:.4em 0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+.focus-notes a{color:#122E8A;text-decoration:underline}
+.focus-notes img{max-width:100%;height:auto;border-radius:8px}
+.focus-notes hr{border:none;border-top:1px solid #E5DDD3;margin:.6em 0}
+.focus-notes .group-inline-card,.focus-notes .group-ref-card{display:inline-flex;align-items:center;gap:4px;vertical-align:middle;max-width:100%;opacity:.9}
+.focus-notes .group-inline-card img,.focus-notes .group-inline-card svg,.focus-notes .group-ref-card img,.focus-notes .group-ref-card svg{width:16px;height:16px;max-width:16px;max-height:16px;border-radius:2px;display:block;flex-shrink:0}
+.focus-notes .gic-btn,.focus-notes .gic-remove{display:none}
+.focus-notes li[data-type="taskItem"]{list-style:none;display:flex;gap:6px;align-items:flex-start;margin-left:-1.5rem}
+.focus-notes li[data-type="taskItem"]::before{content:"☐";margin-right:4px;flex-shrink:0;color:#6A6660}
+.focus-notes li[data-type="taskItem"][data-checked="true"]::before{content:"☑";color:#122E8A}
+.bm-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.bm{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border:1px solid #E5DDD3;border-radius:12px;background:#FDFBF9;box-shadow:0 1px 2px rgba(0,0,0,0.03);text-decoration:none;color:inherit;transition:border-color .2s ease,box-shadow .2s ease,transform .2s cubic-bezier(0.16,1,0.3,1)}
+.bm:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 4px 14px rgba(0,0,0,0.06);transform:translateY(-1px)}
+.bm-icon{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:10px;overflow:hidden;position:relative}
+.bm-icon img{width:24px;height:24px;object-fit:contain}
+.bm-icon img.img-err{display:none}
+.bm-icon:has(img:not(.img-err)) .bm-fb{display:none}
+.bm-fb{display:flex;align-items:center;justify-content:center;width:24px;height:24px;font-size:13px;font-weight:700;color:#122E8A;text-transform:uppercase;line-height:1}
+.bm-info{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:1px;align-self:stretch}
+.bm-title{display:block;font-weight:600;font-size:14px;color:#2C2824;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s ease}
 .bm:hover .bm-title{color:#122E8A}
 .bm-url{display:block;font-size:12px;color:#8A847C;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bm-note{font-size:12.5px;color:#6A6660;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.5}
 .bm-arrow{flex-shrink:0;color:#B8B1A8;opacity:0;transform:translateX(-4px);transition:opacity .18s ease,transform .18s ease,color .18s ease}
 .bm:hover .bm-arrow{opacity:1;transform:translateX(0);color:#122E8A}
 .bm-arrow svg{width:15px;height:15px;display:block}
-.empty{text-align:center;color:#6A6660;font-size:13px;padding:34px 0;margin-top:14px;background:#F7F2EC;border:1px dashed #D5CBBE;border-radius:14px}
-.list-foot{display:flex;justify-content:center;padding:28px 0 8px;border-top:1px solid #EFE8DF;margin-top:10px}
-.cta{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:10px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);color:#fff;font-size:14px;font-weight:600;text-decoration:none;box-shadow:0 2px 10px rgba(18,46,138,0.25);transition:box-shadow .2s ease,transform .2s ease}
-.cta:hover{box-shadow:0 4px 18px rgba(18,46,138,0.35);transform:translateY(-1px)}
+.empty{text-align:center;color:#6A6660;font-size:13px;padding:32px 0;background:#F7F2EC;border:1px dashed #D5CBBE;border-radius:14px}
 .foot{display:flex;flex-direction:column;align-items:center;gap:5px;padding:36px 0 0;text-align:center}
 .foot-brand{font-size:13px;font-weight:700;color:#2C2824;letter-spacing:-.2px}
 .foot-slogan{font-size:12px;color:#8A847C}
@@ -385,19 +461,20 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
-@media(max-width:520px){
+@media(max-width:560px){
   .page{padding:0 14px 40px}
-  .hero{padding:30px 0 22px}
-  .hero-name{font-size:23px}
-  .hero-icon{width:48px;height:48px;border-radius:14px;font-size:19px}
-  .bm{padding:12px 8px;gap:12px}
-  .bm-title{font-size:14px}
-  .cta{width:100%;justify-content:center}
+  .head{margin-bottom:20px}
+  .focus-card{padding:16px 14px 14px;border-radius:14px}
+  .focus-head{flex-wrap:wrap}
+  .focus-name{font-size:19px}
+  .cta{width:100%;justify-content:center;margin-left:0}
+  .focus-icon{width:44px;height:44px;border-radius:11px}
+  .bm{min-height:54px;padding:7px 10px;gap:10px}
 }
 `
 
-/** favicon 降级脚本（渐进增强）：img[data-fb] 加载失败时隐藏自身，露出同格首字母。 */
-const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function h(e){e.style.display='none'}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){h(im)});if(im.complete&&im.naturalWidth===0){h(im)}})(a[i])}})()`
+/** favicon 降级脚本（渐进增强）：img[data-fb] 加载失败时加 .img-err 类 → CSS 隐藏、露出首字母。 */
+const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}})()`
 
 // ── 入口 ──
 
