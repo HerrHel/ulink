@@ -167,7 +167,7 @@ const NOTES_TAGS = new Set([
   "blockquote", "a", "code", "pre", "hr", "span", "img", "mark",
 ])
 const NOTES_ATTRS = new Set(["class", "href", "target", "rel", "src", "alt", "style"])
-const NOTES_CLASSES = new Set(["group-inline-card", "group-ref-card", "gic-name", "is-deleted"])
+const NOTES_CLASSES = new Set(["group-inline-card", "group-ref-card", "gic-name", "gic-domain", "gic-count", "is-deleted"])
 
 /** 书签 id → url 映射（用于把内联书签 data-bm-id 转成可跳转 <a>）。 */
 interface NotesBmMap { [id: string]: { url?: string } }
@@ -253,11 +253,12 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
           attrs.push(`${name}="${unq.replace(/"/g, "&quot;")}"`)
         }
       }
-      // 内联书签：转可点击 <a>（data-bm-id → 组书签 URL）
+      // 内联书签：转可点击 <a>（data-bm-id → 组书签 URL）；内部嵌套 span 深度计数
       if (tag === "span") {
         const cls = (attrs.find((a) => a.startsWith("class=")) || "").slice(7).replace(/"/g, "")
         const bmId = (attrs.find((a) => a.startsWith("data-bm-id=")) || "").slice(11).replace(/"/g, "")
-        if (cls.split(/\s+/).includes("group-inline-card")) {
+        const isInlineCard = cls.split(/\s+/).includes("group-inline-card")
+        if (isInlineCard) {
           icDepth++
           const url = bmId && bmMap?.[bmId]?.url ? fixUrl(bmMap[bmId].url as string) : ""
           if (url) {
@@ -266,6 +267,9 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
           }
           return attrs.length ? `<span ${attrs.join(" ")}>` : `<span>`
         }
+        // inline-card 内部的嵌套 span（gic-name/gic-domain/gic-count/gic-note-icon）也要计数，
+        // 否则其 </span> 会提前输出为 </a>，导致 gic-domain 等跑到卡片外
+        if (icDepth > 0) icDepth++
       }
       return attrs.length ? `<${tag} ${attrs.join(" ")}>` : `<${tag}>`
     })
@@ -507,11 +511,16 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes .group-inline-card img,.focus-notes .group-inline-card svg,
 .focus-notes .group-ref-card img,.focus-notes .group-ref-card svg{width:16px;height:16px;max-width:16px;max-height:16px;border-radius:2px;display:block;flex-shrink:0}
 .focus-notes .gic-name{color:#2C2824;min-width:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.focus-notes .gic-domain{color:#8A847C;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.focus-notes .gic-domain:hover{color:#122E8A}
+.focus-notes .gic-count{color:#8A847C;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .focus-notes .gic-btn,.focus-notes .gic-remove{display:none}
 .focus-notes ul[data-type="taskList"]{list-style:none;padding-left:0;margin:.4em 0}
-.focus-notes li[data-type="taskItem"]{list-style:none;display:flex;gap:8px;align-items:flex-start;margin:2px 0;cursor:pointer;-webkit-user-select:none;user-select:none}
-.focus-notes li[data-type="taskItem"]::before{content:"☐";margin-top:2px;flex-shrink:0;color:#6A6660;font-size:14px;line-height:1.4}
-.focus-notes li[data-type="taskItem"][data-checked="true"]::before{content:"☑";color:#122E8A}
+.focus-notes li[data-type="taskItem"]{list-style:none;position:relative;padding-left:26px;margin:2px 0;cursor:pointer;-webkit-user-select:none;user-select:none}
+.focus-notes li[data-type="taskItem"]::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;box-sizing:border-box;border:1.5px solid #C9C0B4;border-radius:4px;background:#fff;transition:background .15s ease,border-color .15s ease}
+.focus-notes li[data-type="taskItem"]::after{content:"";position:absolute;left:5px;top:1px;width:10px;height:5px;box-sizing:border-box;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) scale(0);opacity:0;transition:transform .12s ease,opacity .12s ease}
+.focus-notes li[data-type="taskItem"][data-checked="true"]::before{background:#122E8A;border-color:#122E8A}
+.focus-notes li[data-type="taskItem"][data-checked="true"]::after{transform:rotate(-45deg) scale(1);opacity:1}
 .focus-notes li[data-type="taskItem"] p{margin:0;line-height:1.5}
 .focus-notes li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through;color:#6A6660}
 .bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
