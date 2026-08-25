@@ -40,6 +40,7 @@ const T = {
     count: '{n} 个链接',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
+    tocTitle: '目录',
     footerBrand: '与链 · ulink',
     footerSlogan: '收藏 · 整理 · 分享',
   },
@@ -61,6 +62,7 @@ const T = {
     count_one: '{n} link',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
+    tocTitle: 'Contents',
     footerBrand: 'ulink',
     footerSlogan: 'Collect · Organize · Share',
   },
@@ -181,8 +183,9 @@ const NOTES_TAGS = new Set([
 /** 允许的属性（与 App ALLOWED_ATTR 一致 + style 白名单子集；data-* 整族放行）。 */
 const NOTES_ATTRS = new Set(['class', 'href', 'target', 'rel', 'src', 'alt', 'style'])
 /** class 白名单（其余 class 剥离；data-* 无事件无协议，放行无注入面）。
- *  对齐组内 inlineCardHTML/groupRefCardHTML（useInlineCard.ts）：名称/域名/计数保留样式 */
-const NOTES_CLASSES = new Set(['group-inline-card', 'group-ref-card', 'gic-name', 'gic-domain', 'gic-count', 'is-deleted'])
+ *  对齐组内 inlineCardHTML/groupRefCardHTML（useInlineCard.ts）：名称/域名/计数保留样式；
+ *  gic-btn（详）/gic-remove 保留 class 由 CSS display:none 隐藏（剥 class 会导致「详」字裸奔） */
+const NOTES_CLASSES = new Set(['group-inline-card', 'group-ref-card', 'gic-name', 'gic-domain', 'gic-count', 'gic-btn', 'gic-remove', 'is-deleted'])
 
 /** 书签 id → url 映射（用于把内联书签 data-bm-id 转成可跳转 <a>）。 */
 export interface NotesBmMap { [id: string]: { url?: string } }
@@ -395,12 +398,34 @@ function groupIconMarkup(group: PublicGroup, letter: string): string {
   return iconMarkup(imgSrc, letter, "hero")
 }
 
-/** 组 notes 富文本渲染（白名单清洗 + 内联书签转链接后输出；空则返回空串）。 */
-function notesHtml(group: PublicGroup, bmMap?: NotesBmMap): string {
+/** notes 渲染结果：html（清洗后的富文本）+ toc（左侧标题导航，无数标题为空串）。 */
+interface NotesResult {
+  html: string
+  toc: string
+}
+
+/** 组 notes 富文本渲染：白名单清洗 + 内联书签转链接 + 标题提取（TOC 锚点）。空则返回空。 */
+function notesHtml(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGroup, bmMap?: NotesBmMap): NotesResult {
   const raw = (group.notes || "").trim()
-  if (!raw) return ""
-  const cleaned = sanitizeNotesHtml(raw, bmMap).trim()
-  return cleaned ? `<div class="focus-notes">${cleaned}</div>` : ""
+  if (!raw) return { html: "", toc: "" }
+  let cleaned = sanitizeNotesHtml(raw, bmMap).trim()
+  if (!cleaned) return { html: "", toc: "" }
+  // 提取 h1/h2/h3 标题并注入锚点 id（toc-N），文档级滚动定位（纯锚点 + scroll-behavior:smooth）
+  let n = 0
+  const headings: { level: number; text: string }[] = []
+  cleaned = cleaned.replace(/<h([1-3])([^>]*)>([\s\S]*?)<\/h\1>/g, (all, level, attrs, inner) => {
+    const text = inner.replace(/<[^>]+>/g, "").trim()
+    if (!text) return all
+    const id = `toc-${n++}`
+    headings.push({ level: Number(level), text })
+    return `<h${level} id="${id}"${attrs}>${inner}</h${level}>`
+  })
+  const toc = headings.length
+    ? `<nav class="toc" aria-label="${esc(dict.tocTitle)}"><div class="toc-title">${esc(dict.tocTitle)}</div>` +
+      headings.map((h, i) => `<a class="toc-item toc-l${h.level}" href="#toc-${i}" title="${esc(h.text)}">${esc(h.text)}</a>`).join("") +
+      `</nav>`
+    : ""
+  return { html: `<div class="focus-notes">${cleaned}</div>`, toc }
 }
 
 /** 构建 <body>：双列布局（左侧白卡聚焦 + 右侧书签列表竖排，窄屏回退单列）。 */
@@ -422,6 +447,7 @@ function buildBody(
   // data-bm-id → 书签 URL 映射（内联书签转可点击 <a>）
   const bmMap: NotesBmMap = {}
   for (const b of bookmarks) bmMap[b.id] = { url: b.url }
+  const notes = notesHtml(dict, group, bmMap)
   // CTA 跳 App 的 hash 路由（#share/<gid>），让人类用户进入 SPA 登录后 Fork。
   const appUrl = `${appOrigin}/#share/${esc(group.id)}`
   const year = new Date().getUTCFullYear()
@@ -431,6 +457,8 @@ function buildBody(
     `<a class="logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
     `<span class="head-sub">${esc(dict.headSub)}</span>`,
     `</header>`,
+    `<div class="layout">`,
+    notes.toc,
     `<main class="main">`,
     `<div class="focus-card">`,
     `<span class="focus-accent" aria-hidden="true"></span>`,
@@ -442,10 +470,11 @@ function buildBody(
     `</div>`,
     `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
     `</div>`,
-    notesHtml(group, bmMap),
+    notes.html,
     `</div>`,
     `<aside class="bm-list">${list}</aside>`,
     `</main>`,
+    `</div>`,
     `<footer class="foot">`,
     `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
     `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
@@ -519,16 +548,24 @@ const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]')
 
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
-.page{max-width:1080px;margin:0 auto;padding:0 20px 56px}
+.page{max-width:1320px;margin:0 auto;padding:0 20px 56px}
 /* ── header ── */
 .head{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid #E5DDD3;margin-bottom:26px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
 /* ── 双列主体：左白卡聚焦 + 右书签列表 ── */
-.main{display:flex;align-items:flex-start;gap:20px}
+/* ── 三区布局：左 TOC 导航 + 内容区（卡片+列表）整体居中 ── */
+.layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}
+.toc{width:200px;flex-shrink:0;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow-y:auto;padding:4px 10px 12px 0;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
+.toc-title{font-size:11px;font-weight:700;color:#8A847C;text-transform:uppercase;letter-spacing:.8px;margin:0 0 6px;padding:0 10px}
+.toc-item{display:block;font-size:12.5px;color:#6A6660;text-decoration:none;line-height:1.45;padding:4px 10px;border-radius:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background .15s ease,color .15s ease}
+.toc-item:hover{background:#EDE4DA;color:#2C2824}
+.toc-l2{padding-left:20px}
+.toc-l3{padding-left:30px}
+.main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}
 /* ── 聚焦卡片：与 App 组聚焦一致（surface 底 + 边框 + accent 竖条 + 光晕）── */
 .focus-card{position:relative;flex:1;min-width:0;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
 .focus-accent{position:absolute;left:0;top:6px;bottom:6px;width:3px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);border-radius:0 2px 2px 0;opacity:1}
@@ -546,7 +583,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .cta{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);color:#fff;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 10px rgba(18,46,138,0.25);flex-shrink:0;margin-left:auto;transition:box-shadow .2s ease,transform .2s ease}
 .cta:hover{box-shadow:0 4px 18px rgba(18,46,138,0.35);transform:translateY(-1px)}
 /* ── 富文本 notes（样式对齐 App .group-tiptap；颜色保留）── */
-.focus-notes{font-size:13.5px;line-height:1.7;color:#2C2824;word-break:break-word;margin:16px 0 8px;padding:0 2px;max-height:60vh;overflow:auto;scrollbar-width:thin}
+.focus-notes{font-size:13.5px;line-height:1.7;color:#2C2824;word-break:break-word;margin:16px 0 8px;padding:0 2px}
 .focus-notes p{margin:.2em 0}
 .focus-notes p:first-child{margin-top:0}
 .focus-notes p:last-child{margin-bottom:0}
@@ -618,6 +655,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
+@media(max-width:1240px){
+  .toc{display:none}
+  .layout{justify-content:stretch}
+  .main{width:100%}
+}
 @media(max-width:920px){
   .page{max-width:760px}
   .main{flex-direction:column}
