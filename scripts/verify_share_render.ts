@@ -63,9 +63,16 @@ assert(zh.includes('class="toc-item toc-l2" href="#toc-1"') && zh.includes('>二
 assert(zh.includes('class="toc-item toc-l3" href="#toc-2"') && zh.includes('>三级小节</a>'), "TOC h3 项（缩进 2 级）")
 assert(zh.includes('<h1 id="toc-0">文档总标题</h1>') && zh.includes('<h2 id="toc-1">二级标题</h2>') && zh.includes('<h3 id="toc-2">三级小节</h3>'), "标题注入锚点 id")
 assert(zh.includes("scroll-behavior:smooth"), "锚点平滑滚动")
-assert(zh.includes(".toc{width:200px;flex-shrink:0;position:sticky"), "TOC sticky 左栏")
+assert(zh.includes("width:200px;flex-shrink:0;position:sticky;top:24px"), "TOC sticky 左栏")
 assert(zh.includes(".layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}"), "内容区整体居中布局")
 assert(zh.includes("@media(max-width:1240px)"), "TOC 窄屏隐藏断点")
+// ── 1.6 TOC 面板美化 + scrollspy ──
+assert(zh.includes("background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px") && zh.includes("box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05)"), "TOC 面板化（白底圆角阴影，与主卡呼应）")
+assert(zh.includes(".toc-title::before") && zh.includes("linear-gradient(135deg,#122E8A 0%,#1E40AF 100%)"), "TOC 标题 accent 竖条图标")
+assert(zh.includes(".toc-item.active{background:rgba(18,46,138,0.09);color:#122E8A;font-weight:600}"), "TOC active 高亮（scrollspy）")
+assert(zh.includes(".toc-item.active::before") && zh.includes("width:3px"), "TOC active 左侧竖条")
+assert(zh.includes("scroll-margin-top:20px"), "标题锚点滚动偏移")
+assert(zh.includes("classList.toggle('active'") && zh.includes("onScroll") && zh.includes("window.addEventListener('scroll'"), "scrollspy JS 注入")
 // 无数标题的组 → 不渲染 TOC
 const gNoToc = { ...group, notes: "<p>只有正文没有标题</p>" }
 const zhNoToc = renderSharePage(gNoToc as never, bookmarks as never, "https://ulink.ren/s/x", "https://ulink.ren", "zh-CN")
