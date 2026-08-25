@@ -543,8 +543,9 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
  * 渐进增强脚本（无 JS 时页面完整可用）：
  * 1) favicon 降级：img[data-fb] 加载失败加 .*-img-err → CSS 隐藏、:has() 露出首字母
  * 2) taskItem 未完成项可点击勾选（纯前端视觉，不持久化）：点击切换 data-checked
+ * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  */
-const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}})()`
+const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var y=window.scrollY+100,idx=0;for(var m=0;m<s.length;m++){if(s[m].offsetTop<=y)idx=m}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});onScroll()}}})()`
 
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
@@ -559,12 +560,34 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 /* ── 双列主体：左白卡聚焦 + 右书签列表 ── */
 /* ── 三区布局：左 TOC 导航 + 内容区（卡片+列表）整体居中 ── */
 .layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}
-.toc{width:200px;flex-shrink:0;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow-y:auto;padding:4px 10px 12px 0;display:flex;flex-direction:column;gap:2px;scrollbar-width:thin}
-.toc-title{font-size:11px;font-weight:700;color:#8A847C;text-transform:uppercase;letter-spacing:.8px;margin:0 0 6px;padding:0 10px}
-.toc-item{display:block;font-size:12.5px;color:#6A6660;text-decoration:none;line-height:1.45;padding:4px 10px;border-radius:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background .15s ease,color .15s ease}
+/* ── 左侧标题导航：与主卡呼应的面板（白底圆角阴影），滚动高亮当前标题 ── */
+.toc{
+  width:200px;flex-shrink:0;position:sticky;top:24px;
+  max-height:calc(100vh - 48px);overflow-y:auto;
+  background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05);
+  padding:14px 10px;display:flex;flex-direction:column;gap:1px;
+  scrollbar-width:thin;
+}
+.toc-title{
+  font-size:11px;font-weight:700;color:#8A847C;text-transform:uppercase;letter-spacing:.8px;
+  margin:0 0 8px;padding:0 8px;display:flex;align-items:center;gap:7px;
+}
+.toc-title::before{content:"";width:3px;height:12px;border-radius:2px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%)}
+.toc-item{
+  display:block;font-size:12.5px;color:#5E5852;text-decoration:none;line-height:1.45;
+  padding:5px 8px;border-radius:8px;position:relative;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  transition:background .15s ease,color .15s ease,font-weight .15s ease;
+}
 .toc-item:hover{background:#EDE4DA;color:#2C2824}
-.toc-l2{padding-left:20px}
-.toc-l3{padding-left:30px}
+/* scrollspy 当前标题：淡蓝底 + 左侧 accent 竖条 + 加粗 */
+.toc-item.active{background:rgba(18,46,138,0.09);color:#122E8A;font-weight:600}
+.toc-item.active::before{content:"";position:absolute;left:0;top:5px;bottom:5px;width:3px;border-radius:0 2px 2px 0;background:#122E8A}
+.toc-l2{padding-left:18px}
+.toc-l3{padding-left:28px}
+/* 锚点跳转留出呼吸空间（标题贴顶时不被 sticky 遮挡） */
+.focus-notes h1,.focus-notes h2,.focus-notes h3{scroll-margin-top:20px}
 .main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}
 /* ── 聚焦卡片：与 App 组聚焦一致（surface 底 + 边框 + accent 竖条 + 光晕）── */
 .focus-card{position:relative;flex:1;min-width:0;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
