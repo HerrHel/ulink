@@ -73,6 +73,11 @@ assert(zh.includes(".toc-item.active{background:rgba(18,46,138,0.09);color:#122E
 assert(zh.includes(".toc-item.active::before") && zh.includes("width:3px"), "TOC active 左侧竖条")
 assert(zh.includes("scroll-margin-top:20px"), "标题锚点滚动偏移")
 assert(zh.includes("classList.toggle('active'") && zh.includes("onScroll") && zh.includes("window.addEventListener('scroll'"), "scrollspy JS 注入")
+// scrollspy 用视口相对坐标（getBoundingClientRect），选「视口顶部第一个 top>=0 的标题」，
+// 滚动到底时兜底选最后一项；不得用 offsetTop——标题在 .focus-card(position:relative) 内，
+// offsetTop 相对卡片导致滚动后高亮锁死在最后一项（曾导致点击小标题后高亮乱）
+assert(zh.includes("getBoundingClientRect().top>=0") && zh.includes("scrollHeight-window.innerHeight-4"), "scrollspy 视口坐标 + 底部兜底")
+assert(!zh.includes("offsetTop"), "scrollspy 未用 offsetTop（防回归）")
 // 无数标题的组 → 不渲染 TOC
 const gNoToc = { ...group, notes: "<p>只有正文没有标题</p>" }
 const zhNoToc = renderSharePage(gNoToc as never, bookmarks as never, "https://ulink.ren/s/x", "https://ulink.ren", "zh-CN")
