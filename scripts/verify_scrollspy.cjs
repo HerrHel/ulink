@@ -7,7 +7,7 @@ const { chromium } = require('playwright')
   const errs = []
   page.on('pageerror', e => errs.push('pageerror: ' + e.message))
   page.on('console', m => { if (m.type() === 'error') errs.push('console: ' + m.text()) })
-  await page.goto('http://localhost:7799/.verify_scroll_long.html', { waitUntil: 'networkidle', timeout: 30000 })
+  await page.goto('http://localhost:7800/.verify_scroll_long.html', { waitUntil: 'networkidle', timeout: 30000 })
   await page.waitForTimeout(500)
 
   const getActive = () => page.$$eval('.toc-item', els => els.filter(e => e.classList.contains('active')).map(e => e.textContent.trim()))

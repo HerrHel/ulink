@@ -78,6 +78,10 @@ assert(zh.includes("classList.toggle('active'") && zh.includes("onScroll") && zh
 // offsetTop 相对卡片导致滚动后高亮锁死在最后一项（曾导致点击小标题后高亮乱）
 assert(zh.includes("getBoundingClientRect().top>=0") && zh.includes("scrollHeight-window.innerHeight-4"), "scrollspy 视口坐标 + 底部兜底")
 assert(!zh.includes("offsetTop"), "scrollspy 未用 offsetTop（防回归）")
+// 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC：JS 判断 + load/resize 复查 + removeProperty 回归 CSS
+assert(zh.includes("var tc=document.querySelector('.toc')") && zh.includes("if(d<120){tc.style.display='none'}"), "TOC 短内容隐藏 JS")
+assert(zh.includes("removeProperty('display')"), "TOC 恢复时移除 inline display 回归 CSS")
+assert(zh.includes("window.addEventListener('load',h)") && zh.includes("window.addEventListener('resize',h)"), "TOC 隐藏 load/resize 复查")
 // 无数标题的组 → 不渲染 TOC
 const gNoToc = { ...group, notes: "<p>只有正文没有标题</p>" }
 const zhNoToc = renderSharePage(gNoToc as never, bookmarks as never, "https://ulink.ren/s/x", "https://ulink.ren", "zh-CN")
