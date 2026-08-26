@@ -38,12 +38,12 @@ const { chromium } = require('playwright')
     if (m.listD !== 'none') check(`${w}px 列表不与主卡重叠且不溢出`, m.list.l >= m.card.r && m.list.r <= m.winW)
   }
 
-  // 5:8 比例检查（1400 视口：toc:list ≈ 5:8）
+  // 布局细节（1400 视口）：TOC 紧贴主卡左侧（gap 24）、列表占满右侧（留 24px 边距）
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.waitForTimeout(400)
   const m1400 = await measure()
-  const ratio = m1400.toc.w / m1400.list.w
-  check('1400 视口 toc:list ≈ 5:8', Math.abs(ratio - 5 / 8) <= 0.02, `toc=${m1400.toc.w} list=${m1400.list.w} ratio=${ratio.toFixed(3)}`)
+  check('TOC 紧贴主卡左侧（gap≈24）', m1400.toc.r >= m1400.card.l - 26 && m1400.toc.r <= m1400.card.l - 22, `toc.r=${m1400.toc.r} card.l=${m1400.card.l} gap=${m1400.card.l - m1400.toc.r}`)
+  check('列表占满右侧（右缘≈视口-24）', Math.abs(m1400.list.r - (m1400.winW - 24)) <= 2, `list.r=${m1400.list.r} 期望=${m1400.winW - 24}`)
 
   // resize 动态：1400 → 1000 → 1400 主卡始终居中（dl 重算）
   await page.setViewportSize({ width: 1400, height: 900 })
