@@ -663,7 +663,7 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var tc=document.querySelector('.toc');if(tc){function h(){var d=document.documentElement.scrollHeight-window.innerHeight;if(d<120){tc.style.display='none'}else{tc.style.removeProperty('display')}}h();window.addEventListener('load',h);window.addEventListener('resize',h)}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}})()`
+const FALLBACK_JS = `(function(){var tc=document.querySelector('.toc'),mn=document.querySelector('.main'),ls=document.querySelector('.bm-list');if(tc&&mn&&ls){function dl(){var W=window.innerWidth,GP=24,cardW=Math.max(320,Math.min(660,Math.round(W*0.55))),half=(W-cardW-GP*2)/2,tcW=Math.min(200,Math.round(half*5/13)),lsW=Math.min(320,Math.round(half*8/13)),sT=tcW>=120,sL=lsW>=200,canScroll=document.documentElement.scrollHeight-window.innerHeight>=120;mn.style.width=cardW+'px';mn.style.marginLeft='auto';mn.style.marginRight='auto';tc.style.position='fixed';tc.style.top='24px';tc.style.left=Math.max(0,(W-cardW)/2-GP-tcW)+'px';tc.style.width=tcW+'px';tc.style.display=(sT&&canScroll)?'':'none';ls.style.position='fixed';ls.style.top='24px';ls.style.left=((W+cardW)/2+GP)+'px';ls.style.width=lsW+'px';ls.style.display=sL?'':'none'}window.addEventListener('load',dl);window.addEventListener('resize',dl);dl()}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}})()`
 
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
@@ -675,11 +675,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
-/* ── 三区布局：TOC 左侧 fixed / 主卡严格居中 / 书签列表右侧 fixed（窄屏回退两栏）── */
-.layout{display:flex;justify-content:center}
-/* ── 左侧标题导航：fixed 悬挂视口左缘（不占布局，主卡才能严格居中于屏幕）── */
+/* ── 布局基础（v5.3 流内）：TOC / 主卡+列表整体居中；JS 动态计算悬挂两侧宽度、主卡永远居中 ── */
+.layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}
+/* ── 左侧标题导航：与主卡呼应的面板（白底圆角阴影），滚动高亮当前标题 ── */
 .toc{
-  position:fixed;left:24px;top:24px;width:200px;
+  width:200px;flex-shrink:0;position:sticky;top:24px;
   max-height:calc(100vh - 48px);overflow-y:auto;
   background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;
   box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05);
@@ -705,7 +705,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .toc-l3{padding-left:28px}
 /* 锚点跳转留出呼吸空间（标题贴顶时不被 sticky 遮挡） */
 .focus-notes h1,.focus-notes h2,.focus-notes h3{scroll-margin-top:20px}
-.main{width:660px;flex-shrink:0;margin:0 auto;display:flex;align-items:flex-start;gap:20px}
+.main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}
 /* ── 聚焦卡片：与 App 组聚焦一致（surface 底 + 边框 + accent 竖条 + 光晕）── */
 .focus-card{position:relative;flex:1;min-width:0;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
 .focus-accent{position:absolute;left:0;top:6px;bottom:6px;width:3px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);border-radius:0 2px 2px 0;opacity:1}
@@ -767,8 +767,8 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes li[data-type="taskItem"][data-checked="true"]::after{transform:rotate(-45deg) scale(1);opacity:1}
 .focus-notes li[data-type="taskItem"] p{margin:0;line-height:1.5}
 .focus-notes li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through;color:#6A6660}
-/* ── 右侧书签列表：fixed 悬挂视口右缘（App 列表模式：等高独立圆角卡，垂直排列）── */
-.bm-list{position:fixed;right:24px;top:24px;width:320px;max-height:calc(100vh - 48px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
+/* ── 右侧书签列表（App 列表模式：等高独立圆角卡，垂直排列；JS 动态提升 fixed 悬挂右侧）── */
+.bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
 .bm{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border:1px solid #E5DDD3;border-radius:12px;background:#FDFBF9;box-shadow:0 1px 2px rgba(0,0,0,0.03);text-decoration:none;color:inherit;transition:border-color .2s ease,box-shadow .2s ease,transform .2s cubic-bezier(0.16,1,0.3,1)}
 .bm:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 4px 14px rgba(0,0,0,0.06);transform:translateY(-1px)}
 .bm-icon{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:10px;overflow:hidden;position:relative}
@@ -800,18 +800,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
-/* 宽屏三栏放不下（视口 < 1400：主卡居中 + 两侧 fixed 会重叠）→ 回退两栏：
-   TOC 隐藏、书签列表回归 main 内右侧、main 恢复 1000px 整体居中 */
-@media(max-width:1399px){
-  .toc{display:none}
-  .layout{justify-content:center}
-  .main{width:1000px;margin:0 auto}
-  .bm-list{position:static;max-height:none;overflow:visible}
-}
+/* 无 JS 时的兜底（JS 动态布局接管后覆盖）：中等视口隐藏 TOC、主卡+列表整体居中 */
 @media(max-width:1240px){
   .toc{display:none}
   .layout{justify-content:stretch}
-  .main{width:100%;margin:0}
+  .main{width:100%}
 }
 @media(max-width:920px){
   .page{max-width:760px}
