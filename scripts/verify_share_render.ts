@@ -50,11 +50,11 @@ assert(/focus-head[\s\S]*<a class="cta"/.test(zh), "CTA 位于 focus-head 内（
 // 双列：bm-list 在 focus-card 闭合之后（main 内右侧）
 assert(zh.includes('<aside class="bm-list">'), "bm-list 为 aside（卡片外）")
 assert(/<\/div>\n<aside class="bm-list">/.test(zh), "bm-list 在 focus-card 之后（右侧竖排）")
-assert(zh.includes(".main{width:660px;flex-shrink:0;margin:0 auto;display:flex;align-items:flex-start;gap:20px}"), "main 660px 严格居中（主卡居中）")
-assert(zh.includes(".bm-list{position:fixed;right:24px;top:24px;width:320px"), "bm-list fixed 悬挂视口右缘 320px")
+assert(zh.includes(".main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}"), "main 流内 1000px（v5.3 布局）")
+assert(zh.includes(".bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}"), "bm-list 流内 320px（v5.3 布局）")
 assert(zh.includes("@media(max-width:920px)"), "窄屏回退单列断点")
 
-// ── 1.5 三区布局：TOC 导航 + 主卡居中 ──
+// ── 1.5 三区布局：TOC 导航 + JS 动态主卡居中 ──
 assert(zh.includes('<nav class="toc" aria-label="目录">'), "TOC 导航渲染（zh）")
 assert(zh.includes('<div class="toc-title">目录</div>'), "TOC 标题 zh")
 assert(en.includes('<nav class="toc" aria-label="Contents">') && en.includes('<div class="toc-title">Contents</div>'), "TOC 标题 en")
@@ -63,9 +63,18 @@ assert(zh.includes('class="toc-item toc-l2" href="#toc-1"') && zh.includes('>二
 assert(zh.includes('class="toc-item toc-l3" href="#toc-2"') && zh.includes('>三级小节</a>'), "TOC h3 项（缩进 2 级）")
 assert(zh.includes('<h1 id="toc-0">文档总标题</h1>') && zh.includes('<h2 id="toc-1">二级标题</h2>') && zh.includes('<h3 id="toc-2">三级小节</h3>'), "标题注入锚点 id")
 assert(zh.includes("scroll-behavior:smooth"), "锚点平滑滚动")
-assert(zh.includes("position:fixed;left:24px;top:24px;width:200px"), "TOC fixed 悬挂视口左缘")
-assert(zh.includes(".layout{display:flex;justify-content:center}"), "layout 主卡居中")
-assert(zh.includes("@media(max-width:1399px)"), "宽屏三栏回退断点（1400px）")
+assert(zh.includes("width:200px;flex-shrink:0;position:sticky;top:24px"), "TOC 流内 sticky（v5.3 布局）")
+assert(zh.includes(".layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}"), "layout 流内整体居中（v5.3）")
+assert(zh.includes("@media(max-width:1240px)"), "无 JS 兜底断点")
+// ── 1.55 JS 动态布局：按视口比例计算悬挂两侧宽度、主卡永远居中 ──
+assert(zh.includes("function dl()") && zh.includes("cardW=Math.max(320,Math.min(660,Math.round(W*0.55)))"), "dl 动态主卡宽（视口 55% 封顶 660）")
+assert(zh.includes("half=(W-cardW-GP*2)/2") && zh.includes("tcW=Math.min(200,Math.round(half*5/13))") && zh.includes("lsW=Math.min(320,Math.round(half*8/13))"), "两侧按 5:8 比例分配")
+assert(zh.includes("mn.style.width=cardW+'px'"), "main 宽 = 主卡宽")
+assert(zh.includes("tc.style.position='fixed'") && zh.includes("tc.style.left=Math.max(0,(W-cardW)/2-GP-tcW)"), "TOC 动态 fixed 悬挂左侧")
+assert(zh.includes("ls.style.position='fixed'") && zh.includes("ls.style.left=((W+cardW)/2+GP)"), "列表动态 fixed 悬挂右侧")
+assert(zh.includes("sT=tcW>=120") && zh.includes("sL=lsW>=200"), "窄屏按阈值隐藏")
+assert(zh.includes("canScroll=document.documentElement.scrollHeight-window.innerHeight>=120"), "短内容隐藏并入 dl（canScroll）")
+assert(zh.includes("window.addEventListener('resize',dl)"), "dl resize 重算（永远居中）")
 // ── 1.6 TOC 面板美化 + scrollspy ──
 assert(zh.includes("background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px") && zh.includes("box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05)"), "TOC 面板化（白底圆角阴影，与主卡呼应）")
 assert(zh.includes(".toc-title::before") && zh.includes("linear-gradient(135deg,#122E8A 0%,#1E40AF 100%)"), "TOC 标题 accent 竖条图标")
@@ -78,10 +87,8 @@ assert(zh.includes("classList.toggle('active'") && zh.includes("onScroll") && zh
 // offsetTop 相对卡片导致滚动后高亮锁死在最后一项（曾导致点击小标题后高亮乱）
 assert(zh.includes("getBoundingClientRect().top>=0") && zh.includes("scrollHeight-window.innerHeight-4"), "scrollspy 视口坐标 + 底部兜底")
 assert(!zh.includes("offsetTop"), "scrollspy 未用 offsetTop（防回归）")
-// 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC：JS 判断 + load/resize 复查 + removeProperty 回归 CSS
-assert(zh.includes("var tc=document.querySelector('.toc')") && zh.includes("if(d<120){tc.style.display='none'}"), "TOC 短内容隐藏 JS")
-assert(zh.includes("removeProperty('display')"), "TOC 恢复时移除 inline display 回归 CSS")
-assert(zh.includes("window.addEventListener('load',h)") && zh.includes("window.addEventListener('resize',h)"), "TOC 隐藏 load/resize 复查")
+// 短内容隐藏已并入 dl（canScroll 判断）；旧 h()/removeProperty 逻辑已移除
+assert(!zh.includes("removeProperty('display')"), "旧 TOC 显隐逻辑已并入 dl（无残留）")
 // 无数标题的组 → 不渲染 TOC
 const gNoToc = { ...group, notes: "<p>只有正文没有标题</p>" }
 const zhNoToc = renderSharePage(gNoToc as never, bookmarks as never, "https://ulink.ren/s/x", "https://ulink.ren", "zh-CN")
