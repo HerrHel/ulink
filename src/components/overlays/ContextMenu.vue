@@ -54,6 +54,11 @@ const visibleItems = computed(() => {
   for (const entry of rules) {
     // 私密空间内不显示「移入私密空间」（已经在私密空间）
     if (entry.action === ACTIONS.MOVE_TO_SPACE && uiStore.curSpace !== 'main') continue
+    // 私密空间内不显示「分享分类」（分享=公开；入口仅主页）
+    if (entry.action === ACTIONS.SHARE_CATEGORY && uiStore.curSpace !== 'main') continue
+    // 虚拟分类（全部/未分类）不显示「分享分类」「导出分类」
+    if ((entry.action === ACTIONS.SHARE_CATEGORY || entry.action === ACTIONS.EXPORT_CATEGORY)
+      && (ctx.id === 'all' || ctx.id === 'uncategorized')) continue
     // 添加子网站仅顶层书签（子书签无此能力）
     if (entry.action === ACTIONS.ADD_SUB && !canAddSub(ctx.id)) continue
     let text = t(entry.label || MENU_ITEMS[entry.action]?.label || entry.action)

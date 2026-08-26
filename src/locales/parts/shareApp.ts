@@ -11,6 +11,9 @@ export const shareAppZh = {
     loadFailed: '加载失败：{msg}',
     pageTitle: '{name} - 与链 分享',
     shareDesc: '{n} 个链接 · 由与链公开分享',
+    categoryPageTitle: '{name} - 与链 分类分享',
+    categoryMeta: '{n} 个书签 · {groups} 个组',
+    categoryShareDesc: '{n} 个书签 · {groups} 个组 · 由与链公开分享',
   },
   appShell: {
     unlockChunkLoadFailed: '解锁组件加载失败，请刷新后重试',
@@ -32,6 +35,11 @@ export const shareAppEn = {
     pageTitle: '{name} - shared via ulink',
     shareDesc: '{n} links · publicly shared via ulink',
     shareDesc_one: '{n} link · publicly shared via ulink',
+    categoryPageTitle: '{name} - category shared via ulink',
+    categoryMeta: '{n} bookmarks · {groups} groups',
+    categoryMeta_one: '{n} bookmark · {groups} groups',
+    categoryShareDesc: '{n} bookmarks · {groups} groups · publicly shared via ulink',
+    categoryShareDesc_one: '{n} bookmark · {groups} groups · publicly shared via ulink',
   },
   appShell: {
     unlockChunkLoadFailed: 'Failed to load the unlock dialog — please refresh and retry',

@@ -35,7 +35,26 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
   function onPtrDown(e: PointerEvent) {
     if (!isMobile()) return
     if (useUIStore().batchMode) return
-    if ((e.target as HTMLElement).closest('input, button, textarea, select, [contenteditable="true"]')) return
+    if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')) return
+    // 分类（rail-item）长按优先：rail-item 自身是 <button>，须在 button 排除前命中。
+    // 仅带 data-cat-id 的真实分类（全部/未分类虚拟项由调用方 getActions 过滤）。
+    const rail = (e.target as HTMLElement).closest('.rail-item') as HTMLElement | null
+    if (rail) {
+      if (rail.dataset.catId && !rail.closest('.rail-bottom')) {
+        _target = rail
+        _startX = e.clientX
+        _startY = e.clientY
+        _timer = setTimeout(() => {
+          _timer = null
+          fired.value = true
+          const actions = getActions(rail)
+          if (actions) showActionSheet(actions)
+        }, LP_DELAY)
+        return
+      }
+      return
+    }
+    if ((e.target as HTMLElement).closest('button')) return
     const card = (e.target as HTMLElement).closest('.card,.group-card') as HTMLElement
     if (!card || card.classList.contains('group-card-focus')) return
     _target = card

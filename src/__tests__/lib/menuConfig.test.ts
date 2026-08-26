@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   createGroup: vi.fn(),
   toggleGroupFocus: vi.fn(),
   shareGroup: vi.fn(),
+  shareCategory: vi.fn(),
+  exportCategory: vi.fn(),
   moveBookmarksToVault: vi.fn(),
   moveGroupsToVault: vi.fn(),
   moveCategoryToVault: vi.fn(),
@@ -53,6 +55,10 @@ vi.mock('../../composables/domain/useGroup.js', () => ({
 }))
 vi.mock('../../composables/domain/useDataShare.js', () => ({
   shareGroup: mocks.shareGroup,
+  shareCategory: mocks.shareCategory,
+}))
+vi.mock('../../composables/domain/useDataIO.js', () => ({
+  exportCategory: mocks.exportCategory,
 }))
 vi.mock('../../composables/domain/useSpaceMove.js', () => ({
   useSpaceMove: () => ({
@@ -141,6 +147,21 @@ describe('menuConfig — 规则结构', () => {
     expect(t(MENU_ITEMS[ACTIONS.ADD_SUB].label!)).toBe('添加子网站')
     expect(t(MENU_ITEMS[ACTIONS.ADD_TO_GROUP].label!)).toBe('添加书签或组')
   })
+
+  it('cat 右键含 分享分类/导出分类 且文案正确', () => {
+    expect(MENU_RULES.cat.some(e => e.action === ACTIONS.SHARE_CATEGORY)).toBe(true)
+    expect(MENU_RULES.cat.some(e => e.action === ACTIONS.EXPORT_CATEGORY)).toBe(true)
+    expect(t(MENU_ITEMS[ACTIONS.SHARE_CATEGORY].label!)).toBe('分享分类')
+    expect(t(MENU_ITEMS[ACTIONS.EXPORT_CATEGORY].label!)).toBe('导出分类')
+  })
+
+  it('cat 长按规则含 分享分类/导出分类/删除分类，无编辑', () => {
+    const actions = LONGPRESS_RULES.cat.map(e => e.action)
+    expect(actions).toContain(ACTIONS.SHARE_CATEGORY)
+    expect(actions).toContain(ACTIONS.EXPORT_CATEGORY)
+    expect(actions).toContain(ACTIONS.DELETE)
+    expect(actions).not.toContain(ACTIONS.EDIT)
+  })
 })
 
 describe('menuConfig — dispatchMenuAction 转发', () => {
@@ -209,6 +230,27 @@ describe('menuConfig — dispatchMenuAction 转发', () => {
   it('sub VISIT → openDetail（查看详情语义）', () => {
     dispatchMenuAction('sub', ACTIONS.VISIT, 'b1')
     expect(mocks.openDetail).toHaveBeenCalledWith('b1')
+  })
+
+  it('cat SHARE_CATEGORY → shareCategory(id)；EXPORT_CATEGORY → exportCategory(id)', () => {
+    dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, 'c-tools')
+    expect(mocks.shareCategory).toHaveBeenCalledWith('c-tools')
+    dispatchMenuAction('cat', ACTIONS.EXPORT_CATEGORY, 'c-tools')
+    expect(mocks.exportCategory).toHaveBeenCalledWith('c-tools')
+  })
+
+  it('cat SHARE_CATEGORY：虚拟分类（全部/未分类）被守卫，不触发', () => {
+    dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, 'all')
+    dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, CAT_UNCATEGORIZED)
+    expect(mocks.shareCategory).not.toHaveBeenCalled()
+    dispatchMenuAction('cat', ACTIONS.EXPORT_CATEGORY, 'all')
+    expect(mocks.exportCategory).not.toHaveBeenCalled()
+  })
+
+  it('cat SHARE_CATEGORY：私密空间被守卫，不触发', () => {
+    ui.curSpace = 'vault'
+    dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, 'c-tools')
+    expect(mocks.shareCategory).not.toHaveBeenCalled()
   })
 })
 
@@ -282,5 +324,33 @@ describe('menuConfig — buildLongPressItems', () => {
     ds.siblingGroups[0].notes = ''
     const items = buildLongPressItems('group', 'g1')
     expect(items.map(i => i.label)).not.toContain('展开')
+  })
+
+  it('cat 长按：含 分享分类/导出分类/删除分类，私密空间过滤分享', () => {
+    ui.curSpace = 'main'
+    const items = buildLongPressItems('cat', 'c-tools')
+    const labels = items.map(i => i.label)
+    expect(labels).toContain('分享分类')
+    expect(labels).toContain('导出分类')
+    expect(labels).toContain('删除分类')
+    const del = items.find(i => i.label === '删除分类')
+    expect(del?.danger).toBe(true)
+    // action 走 dispatch → shareCategory / exportCategory
+    items.find(i => i.label === '分享分类')?.action()
+    expect(mocks.shareCategory).toHaveBeenCalledWith('c-tools')
+    items.find(i => i.label === '导出分类')?.action()
+    expect(mocks.exportCategory).toHaveBeenCalledWith('c-tools')
+  })
+
+  it('cat 长按：私密空间过滤分享分类（分享=公开）', () => {
+    ui.curSpace = 'vault'
+    const items = buildLongPressItems('cat', 'c-tools')
+    expect(items.some(i => i.label === '分享分类')).toBe(false)
+  })
+
+  it('cat 长按：虚拟分类（全部/未分类）过滤分享分类', () => {
+    ui.curSpace = 'main'
+    expect(buildLongPressItems('cat', 'all').some(i => i.label === '分享分类')).toBe(false)
+    expect(buildLongPressItems('cat', CAT_UNCATEGORIZED).some(i => i.label === '分享分类')).toBe(false)
   })
 })

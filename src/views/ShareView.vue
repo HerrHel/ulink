@@ -24,23 +24,31 @@
       </div>
     </div>
 
-    <template v-else-if="group">
+    <template v-else-if="subject">
       <div class="share-group-header">
         <h1 class="share-group-name">
           <!-- D2-006：icon 键 → SVG；http(s) → img；其它不渲染 -->
-          <img v-if="groupIconImg" :src="groupIconImg" class="share-group-icon-img" referrerpolicy="no-referrer" alt="" />
-          <span v-else-if="groupIconSvg" v-html="groupIconSvg" class="share-group-icon"></span>
-          {{ group.name }}
+          <img v-if="subjectIconImg" :src="subjectIconImg" class="share-group-icon-img" referrerpolicy="no-referrer" alt="" />
+          <span v-else-if="subjectIconSvg" v-html="subjectIconSvg" class="share-group-icon"></span>
+          {{ subject.name }}
         </h1>
         <!-- E2-003：TipTap HTML 经 sanitize 后 v-html，禁止原文插值 / 未清洗 v-html -->
-        <div v-if="groupNotesHtml" class="share-group-notes" v-html="groupNotesHtml"></div>
+        <div v-if="subjectNotesHtml" class="share-group-notes" v-html="subjectNotesHtml"></div>
         <div class="share-group-meta">
-          <span class="share-meta-item">{{ tN('count.links', bookmarks.length) }}</span>
+          <span class="share-meta-item">{{ metaText }}</span>
         </div>
         <div class="share-group-actions">
           <button class="btn btn-primary btn-sm" @click="onFork" :disabled="forking">
             {{ forking ? t('shareView.forking') : isLoggedIn ? t('shareView.forkToMyLibrary') : t('shareView.loginThenCopy') }}
           </button>
+        </div>
+      </div>
+
+      <!-- 分类分享：组区块（组名 + 笔记；组内书签已在下方列表统一平铺，不重复渲染） -->
+      <div v-if="isCategory && groups.length" class="share-groups">
+        <div v-for="g in groups" :key="g.id" class="share-group-block">
+          <h2 class="share-group-block-name">{{ g.name }}</h2>
+          <div v-if="groupNotesHtmlOf(g)" class="share-group-notes" v-html="groupNotesHtmlOf(g)"></div>
         </div>
       </div>
 
@@ -73,7 +81,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { fetchPublicGroup, forkPublicGroup } from '../composables/domain/useDataShare.js'
+import { fetchPublicGroup, forkPublicGroup, fetchPublicCategory, forkPublicCategory, parseCategoryShareRoute, type PublicCategoryData } from '../composables/domain/useDataShare.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
 import { safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
@@ -81,11 +89,11 @@ import { buildShareEntries } from './buildShareEntries.js'
 import { buildItemListJsonLd } from './buildItemListJsonLd.js'
 import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
 import { deriveShareUrl } from './deriveShareUrl.js'
-import { I } from '../config/icons.js'
+import { getCategoryIcon, I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
 import { t, tN } from '../i18n/index.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
-import type { Bookmark, SiblingGroup } from '../types.js'
+import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 const props = defineProps<{ groupId: string }>()
 const emit = defineEmits<{ close: [] }>()
@@ -93,8 +101,16 @@ const emit = defineEmits<{ close: [] }>()
 const loading = ref(true)
 const error = ref('')
 const group = ref<SiblingGroup | null>(null)
+const category = ref<Category | null>(null)
+const groups = ref<SiblingGroup[]>([])
 const bookmarks = ref<Bookmark[]>([])
 const forking = ref(false)
+
+// 分类分享路由编码（useDataShare.detectShareRoute 返回 `cat:<share_id>`）：
+// 非空即分类分享模式，否则组分享模式。
+const categoryShareId = computed(() => parseCategoryShareRoute(props.groupId))
+const isCategory = computed(() => !!categoryShareId.value)
+
 // 组件实例级卸载标志。必须在 setup 内声明（非模块级），否则 defineAsyncComponent +
 // v-if 反复挂/卸会共享同一模块变量：A 卸载置 true 后永不重置，B 重挂时仍是 true 直接
 // 杀死 fetch → 永久"加载中..."。实例级每挂一次新值初 false，卸载只失效本实例。
@@ -103,28 +119,50 @@ const _unmounted = ref(false)
 const auth = useAuth()
 const isLoggedIn = auth.isLoggedIn
 
+/** 分享主体（组分享 = 组；分类分享 = 分类），两者都带 name/icon 供标题渲染 */
+const subject = computed<SiblingGroup | Category | null>(() => group.value || category.value)
+
+/** 分类分享元信息：N 个书签 · M 个组 */
+const metaText = computed(() => {
+  if (isCategory.value) {
+    return tN('shareView.categoryMeta', bookmarks.value.length, { groups: groups.value.length })
+  }
+  return tN('count.links', bookmarks.value.length)
+})
+
 /** D2-006：已知图标键 → SVG；http(s) 自定义 → 安全 URL；其它空 */
-const groupIconImg = computed(() => {
+const subjectIconImg = computed(() => {
   const icon = group.value?.icon
   if (!icon) return ''
   const safe = safeIconUrl(icon)
   if (safe && /^https?:\/\//i.test(safe)) return safe
   return ''
 })
-const groupIconSvg = computed(() => {
+const subjectIconSvg = computed(() => {
+  if (isCategory.value) {
+    const c = category.value
+    if (!c?.icon) return ''
+    return getCategoryIcon(c.icon)
+  }
   const icon = group.value?.icon
-  if (!icon || groupIconImg.value) return ''
+  if (!icon || subjectIconImg.value) return ''
   // 仅匹配 icons.ts 已知键；未知字符串不渲染（勿把任意串当 SVG 键回落 star）
   // 白名单严格判定（hasOwnProperty）抽到 resolveGroupIconSvg 纯函数，见单测护栏
   return resolveGroupIconSvg(icon, I)
 })
 
-/** E2-003：分享页 notes 展示用白名单 HTML */
-const groupNotesHtml = computed(() => {
+/** E2-003：分享主体 notes 展示用白名单 HTML（仅组模式有 notes） */
+const subjectNotesHtml = computed(() => {
   const n = group.value?.notes
   if (!n || !n.trim()) return ''
   return sanitizeReadonlyHTML(n)
 })
+
+/** 分类分享：单个组的 notes（TipTap HTML sanitize 后展示） */
+function groupNotesHtmlOf(g: SiblingGroup): string {
+  if (!g.notes || !g.notes.trim()) return ''
+  return sanitizeReadonlyHTML(g.notes)
+}
 
 /**
  * 分享页书签列表预渲染条目：预计算核抽至 src/views/buildShareEntries.ts（纯函数，
@@ -139,7 +177,7 @@ function backToApp() {
   // 恢复全站默认 head，再回到站点根（保留部署子路径前缀），清除 share 标识
   cleanupInjectedHead()
   setCanonical(APP_CANONICAL_BASE)
-  const base = location.pathname.replace(/\/s\/.*$/, '/') || '/'
+  const base = location.pathname.replace(/\/s\/(c\/)?[^/]*$/, '/') || '/'
   history.replaceState(null, '', base + location.search)
   emit('close')
 }
@@ -150,10 +188,19 @@ async function onFork() {
     toast(t('shareView.loginRequiredToast'), false)
     return
   }
-  if (!group.value || forking.value) return
+  if ((!group.value && !category.value) || forking.value) return
   forking.value = true
   try {
-    await forkPublicGroup(group.value, bookmarks.value)
+    if (isCategory.value && category.value) {
+      const data: PublicCategoryData = {
+        category: category.value,
+        groups: groups.value,
+        bookmarks: bookmarks.value,
+      }
+      await forkPublicCategory(data)
+    } else if (group.value) {
+      await forkPublicGroup(group.value, bookmarks.value)
+    }
     backToApp()
   } catch (e) {
     toast(t('shareView.copyFailed', { msg: (e as Error).message }), false)
@@ -162,21 +209,34 @@ async function onFork() {
   }
 }
 
-async function loadGroup() {
+async function loadShare() {
   loading.value = true
   error.value = ''
   try {
-    const data = await fetchPublicGroup(props.groupId)
-    if (_unmounted.value) return
-    if (!data) {
-      error.value = t('shareView.notFound')
-      return
+    if (isCategory.value) {
+      const data = await fetchPublicCategory(categoryShareId.value!)
+      if (_unmounted.value) return
+      if (!data) {
+        error.value = t('shareView.notFound')
+        return
+      }
+      category.value = data.category
+      groups.value = data.groups
+      bookmarks.value = data.bookmarks
+      _applyCategoryShareHead(data)
+    } else {
+      const data = await fetchPublicGroup(props.groupId)
+      if (_unmounted.value) return
+      if (!data) {
+        error.value = t('shareView.notFound')
+        return
+      }
+      group.value = data.group
+      bookmarks.value = data.bookmarks
+      // 客户端动态 SEO 注入（无 SSR：仅对 Googlebot 二次 JS 抓取与已加载用户生效；
+      // 社交 OG 预览器不执行 JS，首次预览仍是 index.html 静态默认值 —— 彻底解决需后续 SSR 轮）
+      _applyShareHead(data.group, data.bookmarks)
     }
-    group.value = data.group
-    bookmarks.value = data.bookmarks
-    // 客户端动态 SEO 注入（无 SSR：仅对 Googlebot 二次 JS 抓取与已加载用户生效；
-    // 社交 OG 预览器不执行 JS，首次预览仍是 index.html 静态默认值 —— 彻底解决需后续 SSR 轮）
-    _applyShareHead(data.group, data.bookmarks)
   } catch (e) {
     if (_unmounted.value) return
     error.value = t('shareView.loadFailed', { msg: (e as Error).message })
@@ -185,10 +245,10 @@ async function loadGroup() {
   }
 }
 
-onMounted(loadGroup)
+onMounted(loadShare)
 
 function onRetry() {
-  loadGroup()
+  loadShare()
 }
 
 onUnmounted(() => {
@@ -219,6 +279,23 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
   setMetaByAttr('name', 'twitter:description', desc)
   setCanonical(shareUrl)
   setJsonLd('shareItemList', buildItemListJsonLd(g, bms, shareUrl))
+}
+
+/** 分类分享的 head 注入：canonical 直接用当前 /s/c/<share_id> 路径（无组 id 可拼）。 */
+function _applyCategoryShareHead(data: PublicCategoryData) {
+  const shareUrl = location.origin + location.pathname
+  const title = t('shareView.categoryPageTitle', { name: data.category.name })
+  const desc = tN('shareView.categoryShareDesc', data.bookmarks.length, { groups: data.groups.length })
+  setTitle(title)
+  setMetaByAttr('name', 'description', desc)
+  setMetaByAttr('property', 'og:title', title)
+  setMetaByAttr('property', 'og:description', desc)
+  setMetaByAttr('property', 'og:url', shareUrl)
+  setMetaByAttr('property', 'og:type', 'article')
+  setMetaByAttr('name', 'twitter:title', title)
+  setMetaByAttr('name', 'twitter:description', desc)
+  setCanonical(shareUrl)
+  setJsonLd('shareItemList', buildItemListJsonLd(data.category as unknown as SiblingGroup, data.bookmarks, shareUrl))
 }
 </script>
 
@@ -282,6 +359,20 @@ function _applyShareHead(g: SiblingGroup, bms: Bookmark[]) {
 .share-group-meta { display: flex; gap: 16px; margin-bottom: 16px; }
 .share-meta-item { font-size: 13px; color: var(--text-secondary, #888); }
 .share-group-actions { display: flex; gap: 8px; }
+
+/* 分类分享：组区块（组名 + 笔记） */
+.share-groups { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.share-group-block {
+  padding: 14px 16px; border-radius: 12px;
+  background: var(--surface-secondary, #f7f2ec);
+  border: 1px solid var(--border, #e5e7eb);
+}
+.share-group-block-name {
+  font-size: 15px; font-weight: 700; margin: 0 0 6px;
+  display: flex; align-items: center; gap: 8px;
+  letter-spacing: -0.3px;
+}
+.share-group-block .share-group-notes { margin: 0; font-size: 13px; }
 
 .share-bookmarks { display: flex; flex-direction: column; gap: 8px; }
 .share-bookmark-card {
