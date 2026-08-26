@@ -50,11 +50,11 @@ assert(/focus-head[\s\S]*<a class="cta"/.test(zh), "CTA 位于 focus-head 内（
 // 双列：bm-list 在 focus-card 闭合之后（main 内右侧）
 assert(zh.includes('<aside class="bm-list">'), "bm-list 为 aside（卡片外）")
 assert(/<\/div>\n<aside class="bm-list">/.test(zh), "bm-list 在 focus-card 之后（右侧竖排）")
-assert(zh.includes(".main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}"), "main 固定 1000px 双列")
-assert(zh.includes(".bm-list{width:320px"), "bm-list 固定宽 320px（右侧）")
+assert(zh.includes(".main{width:660px;flex-shrink:0;margin:0 auto;display:flex;align-items:flex-start;gap:20px}"), "main 660px 严格居中（主卡居中）")
+assert(zh.includes(".bm-list{position:fixed;right:24px;top:24px;width:320px"), "bm-list fixed 悬挂视口右缘 320px")
 assert(zh.includes("@media(max-width:920px)"), "窄屏回退单列断点")
 
-// ── 1.5 三区布局：左 TOC 导航 + 内容居中 ──
+// ── 1.5 三区布局：TOC 导航 + 主卡居中 ──
 assert(zh.includes('<nav class="toc" aria-label="目录">'), "TOC 导航渲染（zh）")
 assert(zh.includes('<div class="toc-title">目录</div>'), "TOC 标题 zh")
 assert(en.includes('<nav class="toc" aria-label="Contents">') && en.includes('<div class="toc-title">Contents</div>'), "TOC 标题 en")
@@ -63,9 +63,9 @@ assert(zh.includes('class="toc-item toc-l2" href="#toc-1"') && zh.includes('>二
 assert(zh.includes('class="toc-item toc-l3" href="#toc-2"') && zh.includes('>三级小节</a>'), "TOC h3 项（缩进 2 级）")
 assert(zh.includes('<h1 id="toc-0">文档总标题</h1>') && zh.includes('<h2 id="toc-1">二级标题</h2>') && zh.includes('<h3 id="toc-2">三级小节</h3>'), "标题注入锚点 id")
 assert(zh.includes("scroll-behavior:smooth"), "锚点平滑滚动")
-assert(zh.includes("width:200px;flex-shrink:0;position:sticky;top:24px"), "TOC sticky 左栏")
-assert(zh.includes(".layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}"), "内容区整体居中布局")
-assert(zh.includes("@media(max-width:1240px)"), "TOC 窄屏隐藏断点")
+assert(zh.includes("position:fixed;left:24px;top:24px;width:200px"), "TOC fixed 悬挂视口左缘")
+assert(zh.includes(".layout{display:flex;justify-content:center}"), "layout 主卡居中")
+assert(zh.includes("@media(max-width:1399px)"), "宽屏三栏回退断点（1400px）")
 // ── 1.6 TOC 面板美化 + scrollspy ──
 assert(zh.includes("background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px") && zh.includes("box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05)"), "TOC 面板化（白底圆角阴影，与主卡呼应）")
 assert(zh.includes(".toc-title::before") && zh.includes("linear-gradient(135deg,#122E8A 0%,#1E40AF 100%)"), "TOC 标题 accent 竖条图标")

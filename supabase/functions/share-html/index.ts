@@ -494,10 +494,10 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
-/* ── 三区布局：左 TOC 导航 + 内容区（卡片+列表）整体居中 ── */
-.layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}
+/* ── 三区布局：TOC 左侧 fixed / 主卡严格居中 / 书签列表右侧 fixed（窄屏回退两栏）── */
+.layout{display:flex;justify-content:center}
 .toc{
-  width:200px;flex-shrink:0;position:sticky;top:24px;
+  position:fixed;left:24px;top:24px;width:200px;
   max-height:calc(100vh - 48px);overflow-y:auto;
   background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;
   box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05);
@@ -521,7 +521,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .toc-l2{padding-left:18px}
 .toc-l3{padding-left:28px}
 .focus-notes h1,.focus-notes h2,.focus-notes h3{scroll-margin-top:20px}
-.main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}
+.main{width:660px;flex-shrink:0;margin:0 auto;display:flex;align-items:flex-start;gap:20px}
 .focus-card{position:relative;flex:1;min-width:0;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
 .focus-accent{position:absolute;left:0;top:6px;bottom:6px;width:3px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);border-radius:0 2px 2px 0;opacity:1}
 .focus-head{display:flex;align-items:flex-start;gap:14px}
@@ -578,7 +578,8 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes li[data-type="taskItem"][data-checked="true"]::after{transform:rotate(-45deg) scale(1);opacity:1}
 .focus-notes li[data-type="taskItem"] p{margin:0;line-height:1.5}
 .focus-notes li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through;color:#6A6660}
-.bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+/* ── 右侧书签列表：fixed 悬挂视口右缘（App 列表模式：等高独立圆角卡，垂直排列）── */
+.bm-list{position:fixed;right:24px;top:24px;width:320px;max-height:calc(100vh - 48px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
 .bm{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border:1px solid #E5DDD3;border-radius:12px;background:#FDFBF9;box-shadow:0 1px 2px rgba(0,0,0,0.03);text-decoration:none;color:inherit;transition:border-color .2s ease,box-shadow .2s ease,transform .2s cubic-bezier(0.16,1,0.3,1)}
 .bm:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 4px 14px rgba(0,0,0,0.06);transform:translateY(-1px)}
 .bm-icon{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:10px;overflow:hidden;position:relative}
@@ -603,10 +604,18 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
+/* 宽屏三栏放不下（视口 < 1400：主卡居中 + 两侧 fixed 会重叠）→ 回退两栏：
+   TOC 隐藏、书签列表回归 main 内右侧、main 恢复 1000px 整体居中 */
+@media(max-width:1399px){
+  .toc{display:none}
+  .layout{justify-content:center}
+  .main{width:1000px;margin:0 auto}
+  .bm-list{position:static;max-height:none;overflow:visible}
+}
 @media(max-width:1240px){
   .toc{display:none}
   .layout{justify-content:stretch}
-  .main{width:100%}
+  .main{width:100%;margin:0}
 }
 @media(max-width:920px){
   .page{max-width:760px}
