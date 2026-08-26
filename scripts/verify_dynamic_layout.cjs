@@ -19,6 +19,9 @@ const { chromium } = require('playwright')
       list: r(document.querySelector('.bm-list')),
       tocD: getComputedStyle(document.querySelector('.toc')).display,
       listD: getComputedStyle(document.querySelector('.bm-list')).display,
+      tocPos: getComputedStyle(document.querySelector('.toc')).position,
+      listPos: getComputedStyle(document.querySelector('.bm-list')).position,
+      main: r(document.querySelector('.main')),
     }
   })
 
@@ -28,11 +31,19 @@ const { chromium } = require('playwright')
     await page.waitForTimeout(400)
     const m = await measure()
     const centered = Math.abs(m.card.c - m.winW / 2) <= 2
-    console.log(`W=${w}: card.c=${m.card.c} win/2=${m.winW / 2} toc=[${m.toc.w}px,${m.tocD}] list=[${m.list.w}px,${m.listD}]`)
+    console.log(`W=${w}: card.c=${m.card.c} win/2=${m.winW / 2} toc=[${m.toc.w}px,${m.tocD},${m.tocPos}] list=[${m.list.w}px,${m.listD},${m.listPos}]`)
     check(`${w}px 主卡居中`, centered)
+    check(`${w}px TOC/列表流内（非 fixed）`, m.tocPos !== 'fixed' && m.listPos !== 'fixed')
     if (m.tocD !== 'none') check(`${w}px TOC 不与主卡重叠`, m.toc.r <= m.card.l)
     if (m.listD !== 'none') check(`${w}px 列表不与主卡重叠且不溢出`, m.list.l >= m.card.r && m.list.r <= m.winW)
   }
+
+  // 5:8 比例检查（1400 视口：toc:list ≈ 5:8）
+  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.waitForTimeout(400)
+  const m1400 = await measure()
+  const ratio = m1400.toc.w / m1400.list.w
+  check('1400 视口 toc:list ≈ 5:8', Math.abs(ratio - 5 / 8) <= 0.02, `toc=${m1400.toc.w} list=${m1400.list.w} ratio=${ratio.toFixed(3)}`)
 
   // resize 动态：1400 → 1000 → 1400 主卡始终居中（dl 重算）
   await page.setViewportSize({ width: 1400, height: 900 })
