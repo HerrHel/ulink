@@ -1,20 +1,21 @@
 /**
- * useDataShare — 分享组与 Fork
- * 从 useDataIO 拆分，A4: 公开分享链接，A5: Fork 公开组
+ * useDataShare — 分享组 / 分享分类 / Fork
+ * 从 useDataIO 拆分，A4: 公开分享链接，A5: Fork 公开组，C4: 分类级分享与 Fork
  */
 import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
-import { t } from '../../i18n/index.js'
 
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { useCloudSync } from './useCloudSync.js'
-import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
+import { setGroupPublic, fetchPublicGroup, upsertPublicCategoryShare, fetchPublicCategory, CATEGORY_SHARE_PATH, CATEGORY_SHARE_PREFIX, type PublicCategoryData } from './syncShare.js'
 import { SHARE_BASE } from '../../config/urls.js'
 import { newId as genId } from '../../lib/newId.js'
-import type { Bookmark, SiblingGroup } from '../../types.js'
+import { t, tN } from '../../i18n/index.js'
+import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 
-export { isValidShareGroupId, setGroupPublic, fetchPublicGroup }
+export { isValidShareGroupId, setGroupPublic, fetchPublicGroup, upsertPublicCategoryShare, fetchPublicCategory }
+export type { PublicCategoryData }
 
 // ── 分享组（A4: 公开分享链接，升级为数据库持久化 + URL 路由）──
 
@@ -39,17 +40,64 @@ export async function shareGroup(gid: string) {
   copyToClipboard(url, t('msg.shareLinkLabel'))
 }
 
+// ── 分享分类（C4: 分享该分类及其全部书签与组，不含敏感内容，实时读库热更新）──
+
+/**
+ * 分享「一个分类及其全部书签与组」。
+ *
+ * - 链接：https://ulink.ren/s/c/<share_id>（/s/c/ 前缀区分组分享 /s/<gid>）
+ * - 数据：数据库分享记录（public_category_shares）+ RPC get_public_category 实时拉取，
+ *   分享后分类下书签/组的增删改自动反映到分享页（热更新），无需重新分享。
+ * - 安全：RPC 列级隔离，绝不返回 username/password；私密空间内不提供分享入口
+ *   （菜单已按 curSpace 隐藏）。
+ */
+export async function shareCategory(catId: string) {
+  const ds = useDataStore()
+  const cat = ds.categoryMap[catId]
+  if (!cat || cat.deletedAt) { toast(t('msg.categoryNotExist'), false); return }
+
+  const shareId = await upsertPublicCategoryShare(catId)
+  if (!shareId) {
+    toast(t('msg.shareLoginRequired'), false)
+    return
+  }
+  const url = `${SHARE_BASE}/${CATEGORY_SHARE_PATH}/${shareId}`
+  copyToClipboard(url, t('msg.shareLinkLabel'))
+}
+
 // ── 从 URL 导入分享数据（path 风格 /s/<id> 优先，hash #share/<id> 向后兼容）──
 
+/**
+ * 解析当前 URL 中的分享路由：
+ * - path `/s/<gid>` → 组分享 gid
+ * - path `/s/c/<share_id>` → 分类分享，返回 `cat:<share_id>`（CATEGORY_SHARE_PREFIX）
+ * - hash `#share/<gid>` / `#share/c/<share_id>` → 向后兼容兜底
+ *
+ * 返回值语义：ShareView/App 收到非 `cat:` 前缀即组分享，`cat:` 前缀即分类分享。
+ */
 export function detectShareRoute(): string | null {
-  // 1) path 风格：/s/<gid>（路由末段）
+  // 1) path 分类分享：/s/c/<share_id>（段前缀优先于组，避免 /s/c/x 被组正则吃掉）
+  const cm = location.pathname.match(/\/s\/c\/([a-zA-Z0-9_-]+)\/?$/)
+  if (cm) return isValidShareGroupId(cm[1]) ? CATEGORY_SHARE_PREFIX + cm[1] : null
+  // 2) path 风格：/s/<gid>（路由末段）
   const m = location.pathname.match(/\/s\/([a-zA-Z0-9_-]+)\/?$/)
   if (m) return isValidShareGroupId(m[1]) ? m[1] : null
-  // 2) hash 兜底：#share/<gid>（向后兼容旧链接 + 新链接里的 hash 兜底段）
+  // 3) hash 兜底：#share/c/<share_id> 与 #share/<gid>（向后兼容旧链接 + 新链接里的 hash 兜底段）
   const hash = location.hash
   if (hash) {
+    const cmatch = hash.match(/^#share\/c\/([a-zA-Z0-9_-]+)$/)
+    if (cmatch) return isValidShareGroupId(cmatch[1]) ? CATEGORY_SHARE_PREFIX + cmatch[1] : null
     const match = hash.match(/^#share\/([a-zA-Z0-9_-]+)$/)
     if (match) return isValidShareGroupId(match[1]) ? match[1] : null
+  }
+  return null
+}
+
+/** 解析 detectShareRoute 返回值：是分类分享则返回 share_id，否则 null */
+export function parseCategoryShareRoute(route: string): string | null {
+  if (route.startsWith(CATEGORY_SHARE_PREFIX)) {
+    const id = route.slice(CATEGORY_SHARE_PREFIX.length)
+    return isValidShareGroupId(id) ? id : null
   }
   return null
 }
@@ -153,4 +201,111 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
   // 报告实际入库条数（而非全部 bookmarks 数），避免跳过去重后仍夸大计数。
   const count = actualAdded.length
   toast(t('msg.forkedGroup', { name: group.name, count }))
+}
+
+// ── Fork 公开分类到自己库（C4：分类 + 其下全部书签与组）──
+
+/**
+ * 复制公开分类到本地库：
+ * - 本地存在同名分类 → 归入该分类；否则新建（沿用分享的名称/图标/颜色）
+ * - 书签按 URL 去重（同 URL 跳过，沿用本地已有项），不复制密码/用户名
+ * - 组整体复制（bookmarkIds 映射到实际入库/本地已有书签 id，丢弃悬空引用）
+ */
+export async function forkPublicCategory(data: PublicCategoryData) {
+  const ds = useDataStore()
+  const sync = useCloudSync()
+  const now = Date.now()
+  const cat: Category = data.category
+
+  // ── 1. 目标分类：同名复用，否则新建 ──
+  let catId = cat.id
+  const existingCat = ds.categories.find(c => !c.deletedAt && c.name === cat.name)
+  if (existingCat) {
+    catId = existingCat.id
+  } else {
+    catId = genId('cat')
+    const order = ds.categories.reduce((m, c) => (c.order ?? 0) > m ? c.order : m, -1) + 1
+    ds.addCategory({ id: catId, name: cat.name, icon: cat.icon || 'star', color: cat.color || '', order })
+  }
+
+  // ── 2. 书签：生成新 id + URL 去重入库 ──
+  const idMap = new Map<string, string>()
+  const newBookmarks: Bookmark[] = []
+  for (const b of data.bookmarks) {
+    const newId = genId('b', newBookmarks.length)
+    idMap.set(b.id, newId)
+    newBookmarks.push({
+      ...b,
+      id: newId,
+      categoryId: catId,
+      password: '',  // 不复制密码
+      username: '',  // 不复制用户名
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+
+  const addedIds = new Set<string>()
+  const actualAdded = [] as Bookmark[]
+  const reverseIdMap = new Map<string, string>()
+  for (const [oldId, newId] of idMap) reverseIdMap.set(newId, oldId)
+  const oldToLocal = new Map<string, string>()
+  const urlToLocal = new Map<string, Bookmark>()
+  for (const e of ds.bookmarks) {
+    const key = e.url?.toLowerCase()
+    if (key && !urlToLocal.has(key)) urlToLocal.set(key, e)
+  }
+  for (const b of newBookmarks) {
+    const oldId = reverseIdMap.get(b.id)
+    const urlKey = b.url?.toLowerCase() || ''
+    const existing = urlKey ? urlToLocal.get(urlKey) : undefined
+    if (!existing) {
+      ds.addBookmark(b)
+      addedIds.add(b.id)
+      actualAdded.push(b)
+      if (oldId) oldToLocal.set(oldId, b.id)
+      if (urlKey) urlToLocal.set(urlKey, b)
+    } else if (oldId) {
+      oldToLocal.set(oldId, existing.id)
+    }
+  }
+
+  // 父子关系映射（同 forkPublicGroup B-10 修复）
+  for (const b of actualAdded) {
+    if (b.parentId) {
+      const newParentId = oldToLocal.get(b.parentId)
+      if (newParentId && newParentId !== b.id) {
+        ds.updateBookmark(b.id, { parentId: newParentId })
+      } else {
+        ds.updateBookmark(b.id, { parentId: null })
+      }
+    }
+  }
+
+  // ── 3. 组：整体复制，bookmarkIds 映射到实际 id，丢弃悬空 ──
+  const newGroups: SiblingGroup[] = []
+  for (const g of data.groups) {
+    const newGid = genId('g', newGroups.length)
+    idMap.set(g.id, newGid)
+    const newBookmarkIds = (g.bookmarkIds || [])
+      .map(bid => idMap.get(bid))
+      .filter((id): id is string => !!id && addedIds.has(id))
+    newGroups.push({
+      ...g,
+      id: newGid,
+      categoryId: catId,
+      bookmarkIds: newBookmarkIds,
+      isPublic: false,
+      updatedAt: now,
+      useCount: 0,
+    })
+  }
+  for (const g of newGroups) ds.addGroup(g)
+
+  saveAppData()
+  try { sync.fullSync().catch(() => {}) } catch { /* 静默 */ }
+
+  const count = actualAdded.length
+  const groupCount = newGroups.length
+  toast(tN('msg.forkedCategory', count, { name: cat.name, groups: groupCount }))
 }

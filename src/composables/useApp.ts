@@ -7,6 +7,7 @@
 import { watch } from 'vue'
 import { useUIStore } from '../stores/ui.js'
 import { useContextMenuStore } from '../stores/contextMenu.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { toggleGroupFocus, removeBmFromGroup, removeGroupRef } from './domain/useGroup.js'
 import { visit } from './domain/useBookmark.js'
 import { openDetail } from './ui/useUI.js'
@@ -33,6 +34,8 @@ export function useApp() {
     const bmId = card.dataset.id; const gid = card.dataset.groupId
     if (bmId) return buildLongPressItems('card', bmId)
     if (gid) return buildLongPressItems('group', gid)
+    const catId = card.dataset.catId
+    if (catId && catId !== CAT_ALL && catId !== CAT_UNCATEGORIZED) return buildLongPressItems('cat', catId)
     return null
   })
   // H17：fired 现为 Ref，直接 watch 该 ref 即可响应长按触发

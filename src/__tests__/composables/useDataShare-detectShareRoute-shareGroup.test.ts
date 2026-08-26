@@ -44,11 +44,15 @@ vi.mock('../../lib/toast.js', () => ({ toast: _toast.toastSpy }))
 
 // ── setGroupPublic mock（shareGroup 编排用，可控成功/失败）──
 // 注：需绕过 import 顺序——useDataShare 直接 import setGroupPublic from syncShare.js，
-// 此 mock 必须在 useDataShare import 前生效
+// 此 mock 必须在 useDataShare import 前生效。分类分享新增导出一并提供（保持模块形状完整）。
 const _sgp = vi.hoisted(() => ({ returns: true as boolean }))
 vi.mock('../../composables/domain/syncShare.js', () => ({
   setGroupPublic: vi.fn(async (_gid: string, _isPublic: boolean) => _sgp.returns),
   fetchPublicGroup: vi.fn(),
+  upsertPublicCategoryShare: vi.fn(async () => null),
+  fetchPublicCategory: vi.fn(),
+  CATEGORY_SHARE_PATH: 'c',
+  CATEGORY_SHARE_PREFIX: 'cat:',
 }))
 
 // ── 抑制 useCloudSync import 链（shareGroup 不调 useCloudSync，但模块顶层 import 链可能拉它）──
@@ -166,6 +170,43 @@ describe('detectShareRoute 纯路由解析', () => {
     setLocation('/s/g-pub/extra')
     const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
     expect(detectShareRoute()).toBeNull()
+  })
+
+  it('path 分类分享 /s/c/<share_id> → "cat:<share_id>"', async () => {
+    setLocation('/s/c/cat_share123')
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('cat:cat_share123')
+  })
+
+  it('path 分类分享 /s/c/<share_id>/ 末尾斜杠 → 命中', async () => {
+    setLocation('/s/c/cat_share456/')
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('cat:cat_share456')
+  })
+
+  it('path 分类分享 share_id 不合法 → null', async () => {
+    setLocation('/s/c/x')
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBeNull()
+  })
+
+  it('hash 分类分享 #share/c/<share_id> 兜底 → "cat:<share_id>"', async () => {
+    setLocation('/bookmarks', '#share/c/cat_share789')
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('cat:cat_share789')
+  })
+
+  it('分类段 /s/c/<share_id> 优先于组匹配（不会被组正则吃掉）', async () => {
+    setLocation('/s/c/cat_share999', '#share/hash-loses')
+    const { detectShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(detectShareRoute()).toBe('cat:cat_share999')
+  })
+
+  it('parseCategoryShareRoute：cat: 前缀 → share_id；组 gid → null', async () => {
+    const { parseCategoryShareRoute } = await import('../../composables/domain/useDataShare.js')
+    expect(parseCategoryShareRoute('cat:share_id_1')).toBe('share_id_1')
+    expect(parseCategoryShareRoute('g-pub-1')).toBeNull()
+    expect(parseCategoryShareRoute('cat:')).toBeNull()
   })
 })
 

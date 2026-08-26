@@ -93,6 +93,9 @@ export const programmaticZh = {
     shareLoginRequired: '分享需要登录云同步，请先登录',
     shareLinkLabel: '分享链接',
     forkedGroup: '已复制「{name}」到你的库（{count} 个书签）',
+    categoryNotExist: '分类不存在',
+    exportedCategory: '已导出分类「{name}」（{n} 个书签 · {groups} 个组）',
+    forkedCategory: '已复制分类「{name}」到你的库（{count} 个书签 · {groups} 个组）',
 
     // ── 撤销 / 前进（useUndo）──
     redone: '已前进',
@@ -211,6 +214,12 @@ export const programmaticEn = {
     shareLoginRequired: 'Sharing requires signing in to cloud sync — please sign in first',
     shareLinkLabel: 'Share link',
     forkedGroup: 'Copied "{name}" to your library ({count} bookmarks)',
+    forkedGroup_one: 'Copied "{name}" to your library ({count} bookmark)',
+    categoryNotExist: 'Category does not exist',
+    exportedCategory: 'Exported category "{name}" ({n} bookmarks · {groups} groups)',
+    exportedCategory_one: 'Exported category "{name}" ({n} bookmark · {groups} groups)',
+    forkedCategory: 'Copied category "{name}" to your library ({count} bookmarks · {groups} groups)',
+    forkedCategory_one: 'Copied category "{name}" to your library ({count} bookmark · {groups} groups)',
 
     // ── Undo / Redo (useUndo) ──
     redone: 'Redone',

@@ -16,11 +16,12 @@ import { useUIStore } from '../stores/ui.js'
 import { useAppStore } from '../stores/app.js'
 import { useActionSheetStore } from '../stores/actionSheet.js'
 import { copyToClipboard } from '../utils.js'
-import { ACTIONS } from '../config/constants.js'
+import { ACTIONS, CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { visit, openBmModal, deleteBookmarkWithUndo, addSub } from '../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup, toggleGroupFocus } from '../composables/domain/useGroup.js'
-import { shareGroup } from '../composables/domain/useDataShare.js'
+import { shareGroup, shareCategory } from '../composables/domain/useDataShare.js'
+import { exportCategory } from '../composables/domain/useDataIO.js'
 import { useSpaceMove } from '../composables/domain/useSpaceMove.js'
 import { toggleBatchMode } from '../composables/domain/useBatch.js'
 import { pushNavState } from '../composables/interaction/useKeyboardOps.js'
@@ -55,6 +56,8 @@ export const MENU_ITEMS: Record<string, { label: string; danger?: boolean }> = {
   [ACTIONS.FOCUS]: { label: 'ctx.focus' },
   [ACTIONS.ADD_SUB]: { label: 'cards.addSubSite' },
   [ACTIONS.ADD_TO_GROUP]: { label: 'ctx.addToGroup' },
+  [ACTIONS.SHARE_CATEGORY]: { label: 'ctx.shareCategory' },
+  [ACTIONS.EXPORT_CATEGORY]: { label: 'ctx.exportCategory' },
 }
 
 /** 右键菜单规则（PC） */
@@ -78,6 +81,8 @@ export const MENU_RULES: Record<string, MenuEntry[]> = {
   ],
   cat: [
     { action: ACTIONS.EDIT, label: 'ctx.rename' },
+    { action: ACTIONS.SHARE_CATEGORY },
+    { action: ACTIONS.EXPORT_CATEGORY },
     { action: ACTIONS.MOVE_TO_SPACE },
     { action: ACTIONS.DELETE },
   ],
@@ -134,10 +139,17 @@ export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
     { action: ACTIONS.SHARE_GROUP },
     { action: ACTIONS.DELETE, label: 'ctx.deleteGroup' },
   ],
+  cat: [
+    { action: ACTIONS.SHARE_CATEGORY },
+    { action: ACTIONS.EXPORT_CATEGORY },
+    { action: ACTIONS.MOVE_TO_SPACE },
+    { action: ACTIONS.DELETE, label: 'ctx.deleteCategory' },
+  ],
 }
 
 /** 书签/组是否可展开（长按菜单 EXPAND 条件项） */
-export function canExpandEntry(type: 'card' | 'group', id: string): boolean {
+export function canExpandEntry(type: 'card' | 'group' | 'cat', id: string): boolean {
+  if (type === 'cat') return false
   const ui = useUIStore()
   if (ui.layoutMode !== 'list') return false
   const ds = useDataStore()
@@ -157,7 +169,7 @@ export function canAddSub(id: string): boolean {
 
 /** 生成长按菜单 items（条件项过滤 + 置顶/展开动态文案） */
 export function buildLongPressItems(
-  type: 'card' | 'group',
+  type: 'card' | 'group' | 'cat',
   id: string,
 ): Array<{ label: string; action: () => void; danger?: boolean }> {
   const ui = useUIStore()
@@ -176,6 +188,9 @@ export function buildLongPressItems(
     }
     if (entry.action === ACTIONS.ADD_SUB && !canAddSub(id)) continue
     if (entry.action === ACTIONS.MOVE_TO_SPACE && !isMain) continue
+    // 私密空间内不显示「分享分类」（分享=公开；入口仅主页）
+    if (entry.action === ACTIONS.SHARE_CATEGORY && !isMain) continue
+    if (entry.action === ACTIONS.SHARE_CATEGORY && (id === CAT_ALL || id === CAT_UNCATEGORIZED)) continue
     let label = t(entry.label || MENU_ITEMS[entry.action]?.label || entry.action)
     if (entry.action === ACTIONS.PIN) {
       const pinned = type === 'card' ? !!ds.bookmarkMap[id]?.pinnedAt : !!ds.groupMap[id]?.pinnedAt
@@ -231,6 +246,17 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
   }
   if (type === 'cat') {
     if (action === ACTIONS.EDIT) openCatModal()
+    if (action === ACTIONS.SHARE_CATEGORY) {
+      // 虚拟分类/私密空间无分享入口（菜单已按条件隐藏，此处防御）
+      if (id !== CAT_ALL && id !== CAT_UNCATEGORIZED && ui.curSpace === 'main') {
+        void shareCategory(id)
+      }
+      return
+    }
+    if (action === ACTIONS.EXPORT_CATEGORY) {
+      if (id !== CAT_ALL && id !== CAT_UNCATEGORIZED) exportCategory(id)
+      return
+    }
     if (action === ACTIONS.MOVE_TO_SPACE) {
       const cat = dataStore.categoryMap[id]
       if (cat && window.confirm(t('ctx.confirmMoveCategory', { name: cat.name }))) {

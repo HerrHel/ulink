@@ -161,6 +161,14 @@
                 </div>
               </div>
               <div class="sp-divider"></div>
+              <div class="sp-toggle-row" :class="{ active: exportKeepSensitive }" @click="onToggleExportKeepSensitive" data-testid="lv-export-sensitive-toggle">
+                <span class="sp-toggle-label">
+                  {{ t('settings.exportKeepSensitive') }}
+                  <span class="sp-toggle-sub">{{ t('settings.exportKeepSensitiveHint') }}</span>
+                </span>
+                <span class="sp-switch"></span>
+              </div>
+              <div class="sp-divider"></div>
               <div class="sp-row">
                 <span class="sp-row-label">{{ t('settings.historyMax') }}</span>
                 <span class="sp-range-value">{{ t('settings.historyMaxValue', { n: uiStore.historyMax }) }}</span>
@@ -221,7 +229,7 @@ import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
 import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle, K_THEME_MODE } from '../../lib/theme.js'
-import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults } from '../../composables/domain/useDataIO.js'
+import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults, getExportKeepSensitive, setExportKeepSensitive } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
@@ -333,6 +341,14 @@ function onExport(fmt: 'json' | 'html' | 'csv' | 'raindrop') {
   else if (fmt === 'raindrop') exportRaindrop()
   exportMenuOpen.value = false
   uiStore.panels.settings = false
+}
+
+// 导出是否保留敏感内容（username/password）：默认关闭，分类导出/完整备份按此开关清洗
+const exportKeepSensitive = ref(getExportKeepSensitive())
+function onToggleExportKeepSensitive() {
+  exportKeepSensitive.value = !exportKeepSensitive.value
+  setExportKeepSensitive(exportKeepSensitive.value)
+  toast(exportKeepSensitive.value ? t('settings.exportSensitiveOn') : t('settings.exportSensitiveOff'))
 }
 function _closeExportMenu(e: MouseEvent) {
   const t = e.target as HTMLElement

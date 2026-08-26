@@ -127,6 +127,8 @@
 [data-theme="dark"] .auto-icon-sun{display:none}
 [data-theme="dark"] .auto-icon-moon{display:flex}
 .sp-toggle-label{flex:1;font-size:0.8rem;font-weight:500;color:var(--text-secondary);transition:color 0.2s ease}
+/* 设置项副说明（如「导出保留敏感内容」的提示行） */
+.sp-toggle-sub{display:block;font-size:0.7rem;font-weight:400;color:var(--text-muted);margin-top:1px;line-height:1.4}
 .sp-toggle-row:hover .sp-icon{color:var(--text)}
 .sp-toggle-row:hover .sp-toggle-label{color:var(--text)}
 /* Switch */

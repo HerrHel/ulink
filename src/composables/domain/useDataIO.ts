@@ -54,9 +54,81 @@ function _writeVaultCanary(data: Record<string, unknown>): boolean {
 
 // ── 导出 ──
 
+/**
+ * 导出是否保留敏感内容（username/password）的本地开关。
+ * 默认 false：分类导出/通用导出不含账户密码。仅本机偏好，不参与云同步。
+ */
+const EXPORT_SENSITIVE_KEY = 'lv_exportKeepSensitive'
+
+/** 读导出敏感开关（默认不保留） */
+export function getExportKeepSensitive(): boolean {
+  return safeGetItem(EXPORT_SENSITIVE_KEY) === '1'
+}
+
+/** 写导出敏感开关 */
+export function setExportKeepSensitive(v: boolean): void {
+  safeSetItem(EXPORT_SENSITIVE_KEY, v ? '1' : '0')
+}
+
+/** 按开关清洗书签敏感字段：关闭时 username/password 一律置空（含 E2E 加密密码对象） */
+function _stripSensitive<T extends { username?: unknown; password?: unknown }>(b: T): T {
+  if (!getExportKeepSensitive()) {
+    return { ...b, username: '', password: '' }
+  }
+  return b
+}
+
 /** 仅导出未软删的活书签，供通用格式（HTML/CSV/Raindrop）使用 */
 function _liveBookmarks(ds: ReturnType<typeof useDataStore>): Bookmark[] {
   return ds.bookmarks.filter(b => !b.deletedAt && b.url)
+}
+
+/**
+ * 单独导出「一个分类及其全部书签与组」（LinkVault JSON，可再导入）。
+ *
+ * 内容：
+ * - categories：仅该分类（未软删）
+ * - bookmarks：该分类下所有书签（含子书签，子书签 categoryId 与父一致）；
+ *   另补全本分类组引用的、归属其他分类的书签（避免导入后组内悬空引用）
+ * - siblingGroups：该分类下所有组（未软删）
+ * - customAttributes：以上书签/组实际用到的属性定义（去重）
+ *
+ * 敏感内容：默认剔除（username/password 置空）；设置面板「导出保留敏感内容」
+ * 开启后原样保留（password 可能为 E2E 加密对象）。
+ */
+export function exportCategory(catId: string) {
+  const ds = useDataStore()
+  const cat = ds.categoryMap[catId]
+  try {
+    if (!cat || cat.deletedAt) { toast(t('msg.categoryNotExist'), false); return }
+    const catBookmarks = ds.bookmarks.filter(b => !b.deletedAt && b.categoryId === catId)
+    const catGroups = ds.siblingGroups.filter(g => !g.deletedAt && g.categoryId === catId)
+    // 组引用的书签补全：即使归属其他分类也带上，保证组导入后不悬空
+    const refIds = new Set<string>()
+    for (const g of catGroups) for (const bid of g.bookmarkIds || []) refIds.add(bid)
+    const refBookmarks = ds.bookmarks.filter(b => !b.deletedAt && refIds.has(b.id) && b.categoryId !== catId)
+
+    const bookmarks = [...catBookmarks, ...refBookmarks].map(_stripSensitive)
+    const groups = catGroups.map(g => ({ ...g }))
+    // 用到的属性（去重、按 id 保序）
+    const attrIds = new Set<string>()
+    for (const b of bookmarks) for (const k of Object.keys(b.attributes || {})) attrIds.add(k)
+    for (const g of groups) for (const k of Object.keys(g.attributes || {})) attrIds.add(k)
+    const customAttributes = ds.customAttributes.filter(a => !a.deletedAt && attrIds.has(a.id))
+
+    const payload = {
+      categories: [{ ...cat }],
+      bookmarks,
+      siblingGroups: groups,
+      customAttributes,
+      _schemaVersion: 2,
+      _dataVersion: 2,
+    }
+    const slug = (cat.name || 'category').trim().replace(/[^\p{L}\p{N}\-_]+/gu, '-').replace(/^-+|-+$/g, '') || 'category'
+    downloadFile(`ulink-category-${slug}-${dateStamp()}.json`,
+      JSON.stringify(payload, null, 2), 'application/json')
+    toast(tN('msg.exportedCategory', bookmarks.length, { name: cat.name, groups: groups.length }))
+  } catch (e) { console.warn('[export] category export failed:', e); toast(t('msg.exportFailed'), false) }
 }
 
 /** attributes → 标签名数组（用属性 name，找不到则去掉 tag_ 前缀） */

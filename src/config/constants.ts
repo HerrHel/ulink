@@ -50,6 +50,10 @@ export const ACTIONS: Record<string, string> = {
   ADD_SUB: 'addSub',
   /** 添加书签或组到组（组菜单项，替代原 foot + 按钮） */
   ADD_TO_GROUP: 'addToGroup',
+  /** 分享分类（分类菜单项：分享该分类及其全部书签与组，不含敏感内容，热更新） */
+  SHARE_CATEGORY: 'shareCategory',
+  /** 导出分类（分类菜单项：导出该分类及其全部书签与组） */
+  EXPORT_CATEGORY: 'exportCategory',
 }
 
 export const DEFAULTS: AppData = {
