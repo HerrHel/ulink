@@ -396,10 +396,11 @@ function buildBookmarkItem(b: PublicBookmark): string {
 }
 
 /**
- * 组图标位：group.icon 仅当为 http(s) URL 时渲染 <img>（跨用户数据不可信，
- * 非 URL 一律回退首字母，不把任意字符串当图标键使用）。
+ * 组/分类图标位：icon 仅当为 http(s) URL 时渲染 <img>（跨用户数据不可信，
+ * 非 URL 一律回退首字母，不把任意字符串当图标键使用）。参数为带 index signature
+ * 的宽对象，组与分类分享共用（分类 icon 为图标键，非 URL → 一律回退首字母）。
  */
-function groupIconMarkup(group: PublicGroup, letter: string): string {
+function groupIconMarkup(group: Record<string, unknown>, letter: string): string {
   const icon = typeof group.icon === "string" ? group.icon.trim() : ""
   const imgSrc = /^https?:\/\//i.test(icon) ? icon : ""
   return iconMarkup(imgSrc, letter, "hero")
@@ -663,7 +664,7 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var tc=document.querySelector('.toc'),mn=document.querySelector('.main'),ls=document.querySelector('.bm-list');if(tc&&mn&&ls){function dl(){var W=window.innerWidth,GP=24,cardW=Math.max(320,Math.min(660,Math.round(W*0.55))),half=(W-cardW-GP*2)/2,tcW=Math.min(200,Math.round(half*5/13)),lsW=Math.min(320,Math.round(half*8/13)),sT=tcW>=120,sL=lsW>=200,canScroll=document.documentElement.scrollHeight-window.innerHeight>=120;mn.style.width=cardW+'px';mn.style.marginLeft='auto';mn.style.marginRight='auto';tc.style.position='fixed';tc.style.top='24px';tc.style.left=Math.max(0,(W-cardW)/2-GP-tcW)+'px';tc.style.width=tcW+'px';tc.style.display=(sT&&canScroll)?'':'none';ls.style.position='fixed';ls.style.top='24px';ls.style.left=((W+cardW)/2+GP)+'px';ls.style.width=lsW+'px';ls.style.display=sL?'':'none'}window.addEventListener('load',dl);window.addEventListener('resize',dl);dl()}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}})()`
+const FALLBACK_JS = `(function(){var tc=document.querySelector(".toc"),mn=document.querySelector(".main"),ls=document.querySelector(".bm-list"),lay=document.querySelector(".layout");if(tc&&mn&&ls&&lay){lay.appendChild(ls);function dl(){var V=window.innerWidth,L=lay.offsetWidth||V,po=(V-L)/2,GP=24,cardW=Math.max(320,Math.min(660,Math.round(V*0.55))),half=(V-cardW-GP*2)/2,tcW=Math.min(200,Math.round(half*5/13)),lsW=Math.min(320,Math.round(half*8/13)),sT=tcW>=120,sL=lsW>=200,canScroll=document.documentElement.scrollHeight-window.innerHeight>=120,showT=sT&&canScroll;mn.style.width=cardW+'px';tc.style.width=tcW+'px';tc.style.display=showT?'':'none';mn.style.marginLeft=showT?(((V-cardW)/2-tcW-GP-po)+'px'):'auto';mn.style.marginRight=showT?'0':'auto';mn.style.marginRight=showT?'0':'auto';ls.style.width=lsW+'px';ls.style.display=sL?'':'none'}window.addEventListener('load',dl);window.addEventListener('resize',dl);dl()}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}})()`
 
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
@@ -676,7 +677,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
 /* ── 布局基础（v5.3 流内）：TOC / 主卡+列表整体居中；JS 动态计算悬挂两侧宽度、主卡永远居中 ── */
-.layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}
+.layout{display:flex;gap:24px;align-items:flex-start;justify-content:flex-start}
 /* ── 左侧标题导航：与主卡呼应的面板（白底圆角阴影），滚动高亮当前标题 ── */
 .toc{
   width:200px;flex-shrink:0;position:sticky;top:24px;
