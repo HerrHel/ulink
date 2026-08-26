@@ -29,6 +29,7 @@ const T = {
     ogLocale: 'zh_CN',
     siteName: 'ulink',
     defaultGroupName: '分享组',
+    defaultCategoryName: '分享分类',
     notFoundTitle: '分享不存在 - 与链',
     notFoundHeading: '该分享不存在',
     notFoundBody: '链接可能已失效，或分享者取消了公开',
@@ -37,7 +38,9 @@ const T = {
     headSub: '公开分享',
     desc: '{n} 个链接 · 由与链公开分享',
     empty: '这个分享组还没有书签',
+    emptyCategory: '这个分享分类还没有书签',
     count: '{n} 个链接',
+    categoryMeta: '{n} 个书签 · {m} 个组',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
     tocTitle: '目录',
@@ -49,6 +52,7 @@ const T = {
     ogLocale: 'en_US',
     siteName: 'ulink',
     defaultGroupName: 'Shared group',
+    defaultCategoryName: 'Shared category',
     notFoundTitle: 'Share not found - ulink',
     notFoundHeading: 'This share no longer exists',
     notFoundBody: 'The link may have expired, or the owner stopped sharing it publicly',
@@ -58,8 +62,11 @@ const T = {
     desc: '{n} links · publicly shared via ulink',
     desc_one: '{n} link · publicly shared via ulink',
     empty: 'This shared group has no bookmarks yet',
+    emptyCategory: 'This shared category has no bookmarks yet',
     count: '{n} links',
     count_one: '{n} link',
+    categoryMeta: '{n} bookmarks · {m} groups',
+    categoryMeta_one: '{n} bookmark · {m} groups',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
     tocTitle: 'Contents',
@@ -507,6 +514,116 @@ export function renderSharePage(
   ].join("\n")
 }
 
+/** 分类分享数据结构（RPC get_public_category 的 category 节点） */
+export interface PublicCategory {
+  id: string
+  name: string
+  icon: string
+  color: string
+  [k: string]: unknown
+}
+
+/**
+ * 分类分享：组区块（组名 + 笔记；组内书签已在下方列表统一平铺，不重复渲染）。
+ * notes 走与组分享一致的 sanitize + 内联书签转链接。
+ */
+function categoryGroupsHtml(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  groups: PublicGroup[],
+  bmMap: NotesBmMap,
+): string {
+  if (!groups || !groups.length) return ""
+  const blocks = groups.map((g) => {
+    const name = esc((g.name || "").trim() || "?")
+    const notes = notesHtml(dict, g, bmMap).html
+    return `<section class="cat-group"><h2 class="cat-group-name">${name}</h2>${notes}</section>`
+  })
+  return `<div class="cat-groups">${blocks.join("\n")}</div>`
+}
+
+/** 分类分享 <body>：分类名 + 元信息 + 组区块 + 书签列表（与组分享同一视觉语言）。 */
+function buildCategoryBody(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  category: PublicCategory,
+  groups: PublicGroup[],
+  bookmarks: PublicBookmark[],
+  shareId: string,
+  appOrigin: string,
+): string {
+  const name = esc(category.name || dict.defaultCategoryName)
+  const initial = esc((category.name || "?").trim().charAt(0) || "?").toUpperCase()
+  const count = bookmarks.length
+  const meta = esc(fill(pick(dict, 'categoryMeta', count), { n: count, m: groups.length }))
+  const list = count
+    ? bookmarks.map(buildBookmarkItem).join("\n")
+    : `<div class="empty">${esc(dict.emptyCategory)}</div>`
+  // data-bm-id → 书签 URL 映射（组 notes 内联书签转可点击 <a>）
+  const bmMap: NotesBmMap = {}
+  for (const b of bookmarks) bmMap[b.id] = { url: b.url }
+  const groupsHtml = categoryGroupsHtml(dict, groups, bmMap)
+  // CTA 跳 App 的 hash 路由（#share/c/<share_id>），进入 SPA 登录后 Fork。
+  const appUrl = `${appOrigin}/#share/c/${esc(shareId)}`
+  const year = new Date().getUTCFullYear()
+  return [
+    `<div class="page">`,
+    `<header class="head">`,
+    `<a class="logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
+    `<span class="head-sub">${esc(dict.headSub)}</span>`,
+    `</header>`,
+    `<div class="layout">`,
+    `<main class="main">`,
+    `<div class="focus-card">`,
+    `<span class="focus-accent" aria-hidden="true"></span>`,
+    `<div class="focus-head">`,
+    `<span class="focus-icon">${groupIconMarkup(category, initial)}</span>`,
+    `<div class="focus-titlewrap">`,
+    `<h1 class="focus-name">${name}</h1>`,
+    `<div class="focus-meta"><span class="meta-tag">${meta}</span></div>`,
+    `</div>`,
+    `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
+    `</div>`,
+    groupsHtml,
+    `</div>`,
+    `<aside class="bm-list">${list}</aside>`,
+    `</main>`,
+    `</div>`,
+    `<footer class="foot">`,
+    `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
+    `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
+    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `</footer>`,
+    `</div>`,
+  ].join("\n")
+}
+
+/**
+ * 分类分享完整 HTML 文档（/s/c/<share_id>，函数 functions/s/c/[sid].ts 取数后调用）。
+ * 与 renderSharePage 同款 head/样式；数据不含 username/password（RPC 列级隔离）。
+ */
+export function renderShareCategoryPage(
+  category: PublicCategory,
+  groups: PublicGroup[],
+  bookmarks: PublicBookmark[],
+  shareId: string,
+  shareUrl: string,
+  appOrigin: string,
+  locale: ShareLocale = 'zh-CN',
+): string {
+  const dict = T[locale]
+  const ogImage = `${appOrigin}/share-cover.png`
+  const head = buildHead(dict, category as unknown as PublicGroup, bookmarks, shareUrl, ogImage)
+  const body = buildCategoryBody(dict, category, groups, bookmarks, shareId, appOrigin)
+  return [
+    `<!DOCTYPE html>`,
+    `<html lang="${dict.lang}">`,
+    `<head>${head}</head>`,
+    `<style>${CSS}</style>`,
+    `<body>${body}</body>`,
+    `<script>${FALLBACK_JS}</script>`,
+    `</html>`,
+  ].join("\n")
+}
+
 /** 404 兜底页（分享不存在 / 已取消公开），与主页面同一视觉语言。 */
 export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
   const d = T[locale]
@@ -558,12 +675,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
-/* ── 双列主体：左白卡聚焦 + 右书签列表 ── */
-/* ── 三区布局：左 TOC 导航 + 内容区（卡片+列表）整体居中 ── */
-.layout{display:flex;gap:24px;align-items:flex-start;justify-content:center}
-/* ── 左侧标题导航：与主卡呼应的面板（白底圆角阴影），滚动高亮当前标题 ── */
+/* ── 三区布局：TOC 左侧 fixed / 主卡严格居中 / 书签列表右侧 fixed（窄屏回退两栏）── */
+.layout{display:flex;justify-content:center}
+/* ── 左侧标题导航：fixed 悬挂视口左缘（不占布局，主卡才能严格居中于屏幕）── */
 .toc{
-  width:200px;flex-shrink:0;position:sticky;top:24px;
+  position:fixed;left:24px;top:24px;width:200px;
   max-height:calc(100vh - 48px);overflow-y:auto;
   background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;
   box-shadow:0 1px 2px rgba(0,0,0,0.03),0 4px 16px rgba(0,0,0,0.05);
@@ -589,7 +705,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .toc-l3{padding-left:28px}
 /* 锚点跳转留出呼吸空间（标题贴顶时不被 sticky 遮挡） */
 .focus-notes h1,.focus-notes h2,.focus-notes h3{scroll-margin-top:20px}
-.main{width:1000px;flex-shrink:0;display:flex;align-items:flex-start;gap:20px}
+.main{width:660px;flex-shrink:0;margin:0 auto;display:flex;align-items:flex-start;gap:20px}
 /* ── 聚焦卡片：与 App 组聚焦一致（surface 底 + 边框 + accent 竖条 + 光晕）── */
 .focus-card{position:relative;flex:1;min-width:0;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:16px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);padding:20px 22px 18px;overflow:hidden}
 .focus-accent{position:absolute;left:0;top:6px;bottom:6px;width:3px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);border-radius:0 2px 2px 0;opacity:1}
@@ -651,8 +767,8 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes li[data-type="taskItem"][data-checked="true"]::after{transform:rotate(-45deg) scale(1);opacity:1}
 .focus-notes li[data-type="taskItem"] p{margin:0;line-height:1.5}
 .focus-notes li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through;color:#6A6660}
-/* ── 右侧书签列表（App 列表模式：等高独立圆角卡，垂直排列）── */
-.bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+/* ── 右侧书签列表：fixed 悬挂视口右缘（App 列表模式：等高独立圆角卡，垂直排列）── */
+.bm-list{position:fixed;right:24px;top:24px;width:320px;max-height:calc(100vh - 48px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
 .bm{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border:1px solid #E5DDD3;border-radius:12px;background:#FDFBF9;box-shadow:0 1px 2px rgba(0,0,0,0.03);text-decoration:none;color:inherit;transition:border-color .2s ease,box-shadow .2s ease,transform .2s cubic-bezier(0.16,1,0.3,1)}
 .bm:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 4px 14px rgba(0,0,0,0.06);transform:translateY(-1px)}
 .bm-icon{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:10px;overflow:hidden;position:relative}
@@ -668,6 +784,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .bm:hover .bm-arrow{opacity:1;transform:translateX(0);color:#122E8A}
 .bm-arrow svg{width:15px;height:15px;display:block}
 .empty{text-align:center;color:#6A6660;font-size:13px;padding:32px 0;background:#F7F2EC;border:1px dashed #D5CBBE;border-radius:14px}
+/* ── 分类分享：组区块（组名 + 笔记，卡片内连排）── */
+.cat-groups{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.cat-group{background:#F7F2EC;border:1px solid #E5DDD3;border-radius:12px;padding:12px 14px}
+.cat-group-name{font-size:14px;font-weight:700;color:#2C2824;margin:0 0 6px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
+.cat-group .focus-notes{margin:0;font-size:13px}
 /* ── footer ── */
 .foot{display:flex;flex-direction:column;align-items:center;gap:5px;padding:36px 0 0;text-align:center}
 .foot-brand{font-size:13px;font-weight:700;color:#2C2824;letter-spacing:-.2px}
@@ -679,10 +800,18 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
+/* 宽屏三栏放不下（视口 < 1400：主卡居中 + 两侧 fixed 会重叠）→ 回退两栏：
+   TOC 隐藏、书签列表回归 main 内右侧、main 恢复 1000px 整体居中 */
+@media(max-width:1399px){
+  .toc{display:none}
+  .layout{justify-content:center}
+  .main{width:1000px;margin:0 auto}
+  .bm-list{position:static;max-height:none;overflow:visible}
+}
 @media(max-width:1240px){
   .toc{display:none}
   .layout{justify-content:stretch}
-  .main{width:100%}
+  .main{width:100%;margin:0}
 }
 @media(max-width:920px){
   .page{max-width:760px}
