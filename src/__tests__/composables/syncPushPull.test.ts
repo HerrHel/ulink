@@ -83,6 +83,7 @@ import {
 } from '../../composables/domain/useCloudSync.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { _redactOpData } from '../../composables/domain/syncPush.js'
+import { enqueueDirtyAsOps } from '../../composables/domain/syncPush.js'
 
 function makeBm(partial: Record<string, unknown> = {}) {
   return {
@@ -279,6 +280,67 @@ describe('syncPushPull via SyncRemotePort', () => {
     // 锁定跳过的 op 被显式计入 pendingLockedCount，徽章据此显示「等待解锁后同步」
     // 而非笼统「N 项待同步」无从归因。
     expect(useSyncStore().pendingLockedCount).toBe(1)
+  })
+
+  // LOCK-FIX 回归：saveBm 走全量 patch（username 等字段即使未改也进 changes）。
+  // 修复前 updateBookmark 无条件 _trackChange + encryptItem 按「当前值扫描」→ 锁定态下
+  // 仅移动/改标题的书签被误判为需解锁，徽章误显「等待解锁后同步」。
+  it('LOCK-FIX: 锁定态移动书签（username 值未变）→ 正常 update 推送，不误报等待解锁', async () => {
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    const e2e = useE2EStore()
+    e2e.setEnabled(true)
+    e2e.setUnlocked(false)
+
+    // 已有书签带 username（本地明文态）
+    ds.addBookmark(makeBm({ id: 'bm-move', username: 'alice', updatedAt: Date.now() }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    // 模拟 saveBm 全量表单 patch：username 保持 alice 不变，仅 categoryId 真实变化
+    ds.updateBookmark('bm-move', {
+      title: 't', url: 'https://x.example', username: 'alice', password: '',
+      notes: '', icon: '', categoryId: 'cat-2', parentId: null, attributes: {},
+    } as any)
+
+    enqueueDirtyAsOps()
+
+    const sync = useCloudSync()
+    const ok = await sync.pushToCloud()
+
+    expect(ok).toBe(true)
+    // update 分支被调用（categoryId partial update），未被锁定跳过
+    expect(port.updates.length).toBe(1)
+    expect(port.updates[0].id).toBe('bm-move')
+    expect(useSyncStore().pendingLockedCount).toBe(0)
+    expect(await syncOpsCount()).toBe(0)
+  })
+
+  it('LOCK-FIX: 锁定态真实修改 username → 仍排队等待解锁（E2E 底线不变）', async () => {
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    const e2e = useE2EStore()
+    e2e.setEnabled(true)
+    e2e.setUnlocked(false)
+
+    ds.addBookmark(makeBm({ id: 'bm-user', username: 'alice', updatedAt: Date.now() }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    ds.updateBookmark('bm-user', { username: 'bob' } as any)
+
+    enqueueDirtyAsOps()
+
+    const sync = useCloudSync()
+    await sync.pushToCloud()
+
+    expect(port.upserts.length).toBe(0)
+    expect(port.updates.length).toBe(0)
+    // 真实改 username 的 op 被跳过并计入锁定积压，解锁后重推
+    expect(useSyncStore().pendingLockedCount).toBe(1)
+    expect(await syncOpsCount()).toBe(1)
   })
 
   it('4b 解锁态重推：lockedItemKeys 为空 → pendingLockedCount 复位为 0', async () => {

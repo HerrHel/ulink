@@ -49,6 +49,29 @@ describe('DataStore', () => {
       expect(store.bookmarks).toHaveLength(0)
     })
 
+    // LOCK-FIX 回归：saveBm 编辑/移动书签走全量 patch（username 等字段即使未改也进 changes）。
+    // 修复前 updateBookmark 无条件 _trackChange → changedFields 含 username → E2E 锁定态下
+    // _opNeedsUnlock 误判为「触及敏感字段」→ 同步徽章误显「N 项等待解锁后同步」。
+    it('LOCK-FIX: 全量 patch 但 username 值未变 → changedFields 不含 username', () => {
+      store.addBookmark({ id: 'b-lockfix', title: 'Old', url: 'https://a.example', username: 'u1' } as any)
+      store.drainDirtyIds()
+      // 模拟 saveBm 全量表单 patch：仅 categoryId 真实变化，username 保持 u1
+      store.updateBookmark('b-lockfix', {
+        title: 'Old', url: 'https://a.example', username: 'u1', password: '',
+        notes: '', icon: '', categoryId: 'cat-2', parentId: null, attributes: {},
+      } as any)
+      const changed = store._changedFields.get('b-lockfix')
+      expect(changed?.has('username')).toBe(false)
+      expect(changed?.has('categoryId')).toBe(true)
+    })
+
+    it('LOCK-FIX: 真实修改 username → changedFields 含 username（锁定态仍需排队）', () => {
+      store.addBookmark({ id: 'b-lockfix2', title: 'Old', url: 'https://a.example', username: 'u1' } as any)
+      store.drainDirtyIds()
+      store.updateBookmark('b-lockfix2', { username: 'u2' } as any)
+      expect(store._changedFields.get('b-lockfix2')?.has('username')).toBe(true)
+    })
+
     it('deleteBookmark - 应该软删除书签', () => {
       store.addBookmark({ id: 'b1' } as any)
       store.addBookmark({ id: 'b2' } as any)

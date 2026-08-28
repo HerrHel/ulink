@@ -64,4 +64,26 @@ describe('preview', () => {
     ds.addGroup(grp({ id: 'g1', bookmarkIds: ['ghost'] }))
     expect(groupPreview(ds.groupMap['g1'])).toBe('')
   })
+
+  // LOCK-FIX 回归：新设备首次登录未解锁 E2E 时，云端历史密文（LEGACY 字段）经
+  // Realtime/pull 原样落盘。预览抽纯文本会把整段三段密文当文本输出 → 卡片备注乱码。
+  // 密文整串应返回空（解锁后 decryptStoreItems 还原明文），明文 HTML 不受影响。
+  it('LOCK-FIX: bookmarkPreview 遇三段密文 notes 返回空（锁定态不乱码）', () => {
+    // 三段格式：salt 44 + iv 16 + data ≥24，base64 字形（复用真实密文段长构造）
+    const cipher = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
+    expect(bookmarkPreview(bm({ id: 'b1', notes: cipher }))).toBe('')
+  })
+
+  it('LOCK-FIX: groupPreview 遇三段密文 notes 返回空（组预览不乱码）', () => {
+    const ds = useDataStore()
+    const cipher = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
+    ds.addGroup(grp({ id: 'g1', notes: cipher, bookmarkIds: [] }))
+    expect(groupPreview(ds.groupMap['g1'])).toBe('')
+  })
+
+  it('LOCK-FIX: 明文普通三段文本（域名/版本号）不被误判为密文', () => {
+    // isThreePartCipher 已收紧段长 + base64 字形，v1.2.3 / www.example.com 不应被过滤
+    expect(bookmarkPreview(bm({ id: 'b1', notes: 'v1.2.3' }))).toBe('v1.2.3')
+    expect(bookmarkPreview(bm({ id: 'b1', notes: 'www.example.com' }))).toBe('www.example.com')
+  })
 })

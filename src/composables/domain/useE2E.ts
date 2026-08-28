@@ -29,7 +29,7 @@ import { _getUserId } from './useSyncHistory.js'
 import { withLock } from '../../lib/withLock.js'
 import { flushSaveAppData } from '../../stores/app.js'
 import type { EntityType } from '../../types.js'
-import { ENCRYPT_FIELDS, LEGACY_DECRYPT_FIELDS } from '../../lib/e2eFields.js'
+import { ENCRYPT_FIELDS, LEGACY_DECRYPT_FIELDS, _fieldsNeedUnlock } from '../../lib/e2eFields.js'
 import type { E2ECanaryMismatch } from '../../lib/e2eFields.js'
 export { ENCRYPT_FIELDS, LEGACY_DECRYPT_FIELDS }
 export type { E2ECanaryMismatch }
@@ -374,19 +374,25 @@ export function useE2E() {
     return decryptForDisplay(value, key)
   }
 
-  async function encryptItem<T extends Record<string, unknown>>(type: EntityType, item: T): Promise<T> {
+  async function encryptItem<T extends Record<string, unknown>>(
+    type: EntityType,
+    item: T,
+    opts?: { changedFields?: string[] | null },
+  ): Promise<T> {
     const key = _getKey()
     // E2E 启用但未解锁时禁止静默返回明文：若本次确有非空敏感字段需加密，则 throw，
     // 由调用方（_pushFromQueue）判定该条目静默排队等解锁。若敏感字段全空（如只改了
     // title/url 的书签、或无所谓敏感的 category），无需 key 即可明文推送——支持锁定态
     // 同步普通内容。未启用 E2E 时无 key 属正常路径，原样透传。
+    // LOCK-FIX：判定与 syncPush._opNeedsUnlock 共用 _fieldsNeedUnlock，基于「本次真实
+    // 变更字段」（opts.changedFields）而非「数据当前值」。全量 patch（saveBm）携带未改动
+    // 的 username 时，仅移动/改标题的变更不再被误判需解锁；partial update 只上云
+    // changedFields，username 明文不出本地，锁定态可安全推送。
     if (!key) {
       if (isE2EEnabled.value) {
-        const needsEnc = ENCRYPT_FIELDS[type].some(f => {
-          const v = (item as Record<string, unknown>)[f]
-          return typeof v === 'string' && v.length > 0
-        })
-        if (needsEnc) throw new Error('E2E 已启用但未解锁，无法加密后推送')
+        if (_fieldsNeedUnlock(type, item, opts?.changedFields)) {
+          throw new Error('E2E 已启用但未解锁，无法加密后推送')
+        }
       }
       return item
     }

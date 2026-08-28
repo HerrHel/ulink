@@ -6,6 +6,7 @@
 <script setup lang="ts">
 import { ref, provide, onMounted, onBeforeUnmount, watch } from 'vue'
 import { isMobile, favicon, domain } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { t, tN } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
 import { Editor, Node } from '@tiptap/core'
@@ -186,7 +187,9 @@ onMounted(() => {
       InlineCard,
       GroupRefCard,
     ],
-    content: group.notes || '',
+    // E2E 锁定态遗留密文（整字段加密 → 整串三段）：不注入编辑器，避免渲染乱码长串；
+    // 解锁后 decryptStoreItems 还原明文、store 更新自动回填。
+    content: isThreePartCipher(group.notes || '') ? '' : (group.notes || ''),
     editable: !isMobile() || ui.focusedGroupId === props.groupId,
     editorProps: {
       attributes: { class: 'group-tiptap' },

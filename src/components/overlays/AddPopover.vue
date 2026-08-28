@@ -23,8 +23,8 @@
           </div>
           <div v-for="b in bookmarkResults" :key="b.id" class="popover-result"
                @click="onSelectBm(b.id)">
-            <img :src="b.icon || favicon(b.url)" alt="" @error="onFaviconError($event, b.title || b.url)">
-            <span class="pr-name">{{ b.title }}</span>
+            <img :src="b.icon || favicon(b.url)" alt="" @error="onFaviconError($event, displayText(b.title) || displayText(b.url))">
+            <span class="pr-name">{{ displayText(b.title) }}</span>
             <span class="pr-url">{{ domain(b.url) }}</span>
           </div>
         </template>
@@ -37,7 +37,7 @@
                @click="onSelectGroup(g.id)">
             <img v-if="g.icon" :src="g.icon" alt="" class="pr-img">
             <span v-else class="pr-icon-fallback" aria-hidden="true" v-html="I.note"></span>
-            <span class="pr-name">{{ g.name || t('cards.unnamedGroup') }}</span>
+            <span class="pr-name">{{ displayText(g.name) || t('cards.unnamedGroup') }}</span>
             <span class="pr-meta">{{ tN('count.bookmarks', g.bookmarkIds?.length || 0) }}</span>
           </div>
         </template>
@@ -50,7 +50,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
-import { favicon, domain, faviconInitials } from '../../utils.js'
+import { favicon, domain, faviconInitials, displayText } from '../../utils.js'
 import { addToGroupDirect, addGroupRefToGroup } from '../../composables/domain/useGroup.js'
 import { openBmModal, bmForm } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
@@ -95,14 +95,14 @@ const cardStyle = computed(() => {
   }
 })
 
-/** 书签搜索结果 */
+/** 书签搜索结果（密文不进匹配：锁定态遗留密文按 displayText 语义过滤为空，防假阳性+乱码） */
 const bookmarkResults = computed(() => {
   const q = query.value.toLowerCase()
   let results = store.bookmarks.slice()
   if (q) results = results.filter(b =>
-    b.title.toLowerCase().includes(q) ||
-    b.url.toLowerCase().includes(q) ||
-    (b.notes || '').toLowerCase().includes(q)
+    displayText(b.title).toLowerCase().includes(q) ||
+    displayText(b.url).toLowerCase().includes(q) ||
+    displayText(b.notes || '').toLowerCase().includes(q)
   )
   return results.slice(0, 20)
 })
@@ -113,7 +113,7 @@ const groupResults = computed(() => {
   let results = store.siblingGroups.slice()
   if (store.addToGid) results = results.filter(g => g.id !== store.addToGid)
   if (q) results = results.filter(g =>
-    (g.name || '').toLowerCase().includes(q)
+    displayText(g.name || '').toLowerCase().includes(q)
   )
   return results.slice(0, 20)
 })

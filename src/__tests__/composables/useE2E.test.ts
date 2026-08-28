@@ -314,6 +314,30 @@ describe('useE2E.encryptItem / decryptItem 契约（RE-1 / RE-2）', () => {
     expect(cat.name).toBe('工作')
   }, 15000)
 
+  // LOCK-FIX 回归：encryptItem 锁定判定基于 changedFields（真实变更字段）而非数据当前值。
+  // saveBm 全量 patch 会把未改动的 username 也带进 op.data——仅移动/改标题的变更若按
+  // 「当前值扫描」会被误拦截，partial update 实际只上云 changedFields，username 不出本地。
+  it('LOCK-FIX: 锁定态 + changedFields 不含敏感字段（username 有值但未改）→ 透传', async () => {
+    const e2e = useE2E()
+    await e2e.setupMasterPassword('lockfix-pw')
+    e2e.lock()
+    expect(e2e.isE2EEnabled.value).toBe(true)
+    expect(e2e.isUnlocked.value).toBe(false)
+    // 模拟 saveBm 移动书签：data 携带 username='alice'，但本次只真实改了 categoryId
+    const moved = await e2e.encryptItem('bookmark', {
+      title: 't', url: 'https://x.example', username: 'alice', notes: '',
+    } as any, { changedFields: ['categoryId'] })
+    expect(moved.username).toBe('alice')
+    // 真实修改 username（changedFields 含 username）→ 仍抛错，锁定态排队等解锁
+    await expect(
+      e2e.encryptItem('bookmark', { title: 't', url: 'https://x.example', username: 'alice2' } as any, { changedFields: ['username'] })
+    ).rejects.toThrow(/未解锁/)
+    // 无 changedFields（新建 addBookmark 语义）+ username 非空 → 仍抛错（E2E 底线不变）
+    await expect(
+      e2e.encryptItem('bookmark', { title: 't', url: 'https://x.example', username: 'alice' } as any)
+    ).rejects.toThrow(/未解锁/)
+  }, 15000)
+
   it('E2E 未启用时 encryptItem 无 key 透传原文', async () => {
     const e2e = useE2E()
     // 不 setup，isE2EEnabled=false，无 cryptoKey
