@@ -114,7 +114,12 @@ function onVaultEntry() {
 }
 
 function onAddCat() {
-  if (addNewCategory(newName.value, store)) newName.value = ''
+  // FIX(repro): 新分类 order=计数恒排列表末尾，分类多时被 50vh 折叠区裁掉——
+  // 添加成功后滚动到列表末尾让新分类立即可见
+  if (addNewCategory(newName.value, store)) {
+    newName.value = ''
+    nextTick(() => catListRef.value?.lastElementChild?.scrollIntoView({ block: 'nearest' }))
+  }
 }
 
 function onDelete(id: string) {

@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch, nextTick } from 'vue'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -51,6 +51,17 @@ const uiStore = useUIStore()
 const vaultStore = useVaultStore()
 
 const showVaultOption = computed(() => vaultStore.isVaultEnabled && uiStore.curSpace === 'main')
+
+// FIX(repro): 分类选择器列表最新分类排末尾，被折叠区裁掉看不到——
+// 打开分类模式时滚动到底部让最新分类立即可见（与 BatchPopover 同源修复）
+watch(() => [store.visible, store.mode], ([visible, mode]) => {
+  if (visible && mode === 'category') {
+    nextTick(() => {
+      const list = document.querySelector('.action-sheet .bmp-list')
+      if (list) list.scrollTop = list.scrollHeight
+    })
+  }
+})
 
 function onAddNewCat() {
   const cat = addNewCategory(store.newCatName, useAppStore())
