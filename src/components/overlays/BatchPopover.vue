@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useVaultStore } from '../../stores/vault.js'
@@ -74,9 +74,20 @@ function _closeOnOutsideClick(e: MouseEvent) {
   }
 }
 
+// FIX(repro): 多选模式「移动到」列表看不到最新分类——新分类 order=分类计数恒排列表
+// 末尾，分类多时（>8 个）被 280px 折叠区裁掉，打开弹层停留在顶部看不到。
+// 打开时滚动到列表底部，让最新分类（末尾）立即可见；分类少时无滚动不受影响。
+function _scrollNewestIntoView() {
+  nextTick(() => {
+    const list = document.getElementById('batchMoveList')
+    if (list) list.scrollTop = list.scrollHeight
+  })
+}
+
 watch(() => bmStore.open, (open) => {
   if (open) {
     newCatName.value = ''
+    _scrollNewestIntoView()
     document.addEventListener('click', _closeOnOutsideClick)
   } else {
     document.removeEventListener('click', _closeOnOutsideClick)
