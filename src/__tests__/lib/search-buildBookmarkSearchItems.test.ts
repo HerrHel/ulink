@@ -95,4 +95,30 @@ describe('_buildBookmarkSearchItems 索引构建契约护栏', () => {
     expect(items[1].attrNames).toBe('工作')
     expect(items[1].titlePy.length).toBeGreaterThan(0)
   })
+
+  // LOCK-FIX 回归：E2E 锁定态下云端历史密文（LEGACY 字段）原样落盘进 store，
+  // 若原文进索引 → base64 密文长串污染索引（英文/数字查询假阳性）+ 建议项渲染乱码。
+  // 三段密文（salt 44 + iv 16 + data ≥24，base64 字形）应过滤为空，明文不受影响。
+  it('LOCK-FIX: 三段密文 title/url/notes/username 过滤为空串（索引不被密文污染）', () => {
+    const cipher = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
+    const [item] = _buildBookmarkSearchItems(
+      [bm({ id: 'b', title: cipher, url: cipher, notes: cipher, username: cipher })],
+      [],
+    )
+    expect(item.title).toBe('')
+    expect(item.url).toBe('')
+    expect(item.notes).toBe('')
+    expect(item.username).toBe('')
+    // 拼音基于过滤后文本 → 密文不产生拼音索引
+    expect(item.titlePy).toBe('')
+  })
+
+  it('LOCK-FIX: 明文普通三段文本（域名/版本号）不进过滤', () => {
+    const [item] = _buildBookmarkSearchItems(
+      [bm({ id: 'b', title: 'www.example.com', notes: 'v1.2.3' })],
+      [],
+    )
+    expect(item.title).toBe('www.example.com')
+    expect(item.notes).toBe('v1.2.3')
+  })
 })

@@ -452,7 +452,17 @@ export const useDataStore = defineStore('data', {
       if (idx >= 0) {
         const prev = this.bookmarks[idx]
         this._saveLocalHistory(id, { ...prev })
-        for (const key of Object.keys(changes)) this._trackChange(id, key)
+        for (const key of Object.keys(changes)) {
+          // LOCK-FIX：仅 track 真实变化的字段。全量 patch 调用方（saveBm 编辑/移动书签等）
+          // 会把未改动的 username 等字段一并放进 changes，无条件 track 会使锁定态下
+          // 仅改分类/标题的书签被 _opNeedsUnlock 误判为「触及敏感字段」，同步徽章误显
+          // 「N 项等待解锁后同步」。值未变的字段不 track：partial push 也不推送，云端
+          // 值本相同，无副作用。对象/数组字段每次 spread 恒为新引用（attributes 等），
+          // 行为与修复前一致。
+          if ((changes as Record<string, unknown>)[key] !== (prev as Record<string, unknown>)[key]) {
+            this._trackChange(id, key)
+          }
+        }
         // DATA-4：parentId 变更时维护 _childrenIdx，否则 childrenMap 残留/缺失
         if ('parentId' in changes && changes.parentId !== prev.parentId) {
           if (prev.parentId) {

@@ -63,7 +63,7 @@
       <div class="sub-sites" v-if="children.length">
         <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" :draggable="!uiStore.isMobile" @click.stop="visitSub(sub)">
           <img :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
-          <span class="gic-name">{{ sub.title }}</span>
+          <span class="gic-name">{{ displayText(sub.title) }}</span>
           <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
         </span>
       </div>

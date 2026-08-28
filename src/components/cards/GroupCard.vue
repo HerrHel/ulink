@@ -9,7 +9,7 @@
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
           <div class="card-titlewrap-text">
-            <div class="card-name" :data-group-name="group.id">{{ group.name || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
+            <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
             <div class="card-domain group-domain"></div>
           </div>
         </div>
@@ -63,7 +63,7 @@
       </div>
       <div class="card-titlewrap" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <div class="card-titlewrap-text">
-          <div class="card-name" :data-group-name="group.id">{{ group.name || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
+          <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
           <div class="card-domain group-domain"></div>
         </div>
       </div>
@@ -108,7 +108,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML } from '../../utils.js'
+import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML, displayText } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
 import ColorPalette from '../editor/ColorPalette.vue'
@@ -158,7 +159,13 @@ const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim())
 // 辅助栏用只读 HTML；主网格宫格/列表展开挂 TipTap
 const showEditor = computed(() => !props.detailMode && (isExpanded.value || ui.layoutMode === 'grid'))
 const showFullBody = computed(() => props.detailMode || ui.layoutMode !== 'list')
-const safeNotesHtml = computed(() => sanitizeReadonlyHTML(props.group.notes || ''))
+const safeNotesHtml = computed(() => {
+  const n = props.group.notes || ''
+  // E2E 锁定态遗留密文（整字段加密 → 整串三段 salt.iv.data）：不渲染，避免 v-html 显示
+  // 乱码长串；解锁后 decryptStoreItems 还原明文自动恢复。明文 HTML 不受影响。
+  if (isThreePartCipher(n)) return ''
+  return sanitizeReadonlyHTML(n)
+})
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 const isPinned = computed(() => !!props.group.pinnedAt)

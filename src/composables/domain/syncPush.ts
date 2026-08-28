@@ -26,24 +26,18 @@ export const MAX_PUSH_RETRIES = 3
  * (一处新增敏感字段另一处漏加 → 锁定态把仍加密的旧密文/明文敏感内容误推云)。
  */
 import { ENCRYPT_FIELDS } from './useE2E.js'
+import { _fieldsNeedUnlock } from '../../lib/e2eFields.js'
 import { tableToEntityType, entityTypeToTable, SYNC_ENTITY_ORDER, type TableName } from './syncMappingTables.js'
 
 /** 锁定态下该 upsert op 是否需要等解锁才能安全推送 */
 export function _opNeedsUnlock(op: SyncOp): boolean {
   if (!op.data) return false
   const type = tableToEntityType[op.table as TableName]
-  const sens: readonly string[] | undefined = type ? ENCRYPT_FIELDS[type] : undefined
-  if (!sens || sens.length === 0) return false
-  const data = op.data as Record<string, unknown>
-  const changedFields = data._changedFields as string[] | null
-  if (changedFields && changedFields.length > 0) {
-    return changedFields.some(f => sens.includes(f))
-  }
-  for (const f of sens) {
-    const v = data[f]
-    if (typeof v === 'string' && v.length > 0) return true
-  }
-  return false
+  if (!type) return false
+  // 与 useE2E.encryptItem 锁定判定共用 _fieldsNeedUnlock（单一来源），基于
+  // op.data._changedFields（真实变更字段）判定，避免全量 patch 携带未改动 username
+  // 时把仅移动/改标题的变更误判为需解锁。
+  return _fieldsNeedUnlock(type, op.data as Record<string, unknown>, (op.data as Record<string, unknown>)._changedFields as string[] | null)
 }
 
 /** 脱敏 op.data 用于日志输出：复用 ENCRYPT_FIELDS 单一来源确定每类型敏感字段，
@@ -236,7 +230,10 @@ export async function pushFromQueue(): Promise<boolean> {
 
       let row: Record<string, unknown>
       try {
-        const encryptedData = await e2e.encryptItem(itemType, data)
+        // LOCK-FIX：传真实变更字段给 encryptItem —— 锁定态下仅移动/改标题的 partial
+        // 更新（changedFields 不含敏感字段）不再被 encryptItem 的「当前值扫描」误拦截，
+        // 可安全明文推送（partial 只上云 changedFields，username 明文不出本地）。
+        const encryptedData = await e2e.encryptItem(itemType, data, { changedFields })
         row = toRemoteRow(itemType, { ...encryptedData, _userId: userId }, isNew) as unknown as Record<string, unknown>
       } catch (err) {
         encFailedOps.push({ table: op.table, itemId: op.itemId, error: `加密/序列化失败: ${err instanceof Error ? err.message : String(err)}`, op })

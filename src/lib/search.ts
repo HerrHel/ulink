@@ -5,6 +5,22 @@
  * PERF-5：fuse.js / pinyin-pro 动态 import，不进首包；未就绪时用 includes 降级。
  */
 import type { Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
+import { isThreePartCipher } from '../crypto.js'
+
+/**
+ * E2E 锁定态遗留密文不进搜索索引 / 不参与匹配：encryptItem 加密整字段 → 整串三段
+ * salt.iv.data 密文，过滤为空，与 displayText 展示语义一致。否则锁定态（新设备首次
+ * 登录未解锁）下密文 base64 长串进索引会带来两个问题：
+ *   1) 用户输英文/数字时 Fuse 模糊匹配（minMatchCharLength=1）假阳性命中一批本不该
+ *      匹配的书签/组（base64 字母数字密集）；
+ *   2) SearchSuggest / CommandPalette 建议项渲染密文 title/name 显示乱码。
+ * 解锁后 store 被 decryptStoreItems 还原明文、_searchVersion 递增触发索引重建，搜索
+ * 自动恢复。明文 / 普通三段文本（域名、版本号）不受影响（isThreePartCipher 已按
+ * 段长 + base64 字形收紧判定）。
+ */
+function _plain(v: string): string {
+  return isThreePartCipher(v) ? '' : v
+}
 
 type FuseInstance<T> = {
   search: (q: string, opts?: { limit?: number }) => Array<{ item: T; matches?: ReadonlyArray<{ key?: string; value?: string; indices: ReadonlyArray<readonly [number, number]> }> }>
@@ -146,7 +162,7 @@ export function _buildAttrNameMap(customAttributes: CustomAttribute[]): Map<stri
   return new Map(customAttributes.map(a => [a.id, a.name]))
 }
 
-/** 将勾选属性 id 映射为可搜的空格分隔名称串 */
+/** 将勾选属性 id 映射为可搜的空格分隔名称串（名称密文过滤为空，防锁定态索引污染） */
 export function _attrsToAttrNames(
   attributes: Record<string, boolean> | undefined,
   attrNameMap: Map<string, string>,
@@ -154,7 +170,7 @@ export function _attrsToAttrNames(
   if (!attributes) return ''
   return Object.keys(attributes)
     .filter(k => attributes[k])
-    .map(k => attrNameMap.get(k) || '')
+    .map(k => _plain(attrNameMap.get(k) || ''))
     .filter(Boolean)
     .join(' ')
 }
@@ -164,16 +180,20 @@ export function _buildBookmarkSearchItems(
   customAttributes: CustomAttribute[],
 ): BookmarkSearchItem[] {
   const attrNameMap = _buildAttrNameMap(customAttributes)
-  return bookmarks.map(b => ({
-    id: b.id,
-    title: b.title || '',
-    url: b.url || '',
-    notes: b.notes || '',
-    username: b.username || '',
-    attrNames: _attrsToAttrNames(b.attributes, attrNameMap),
-    titlePy: _toPy(b.title || ''),
-    notesPy: _toPy(b.notes || ''),
-  }))
+  return bookmarks.map(b => {
+    const title = _plain(b.title || '')
+    const notes = _plain(b.notes || '')
+    return {
+      id: b.id,
+      title,
+      url: _plain(b.url || ''),
+      notes,
+      username: _plain(b.username || ''),
+      attrNames: _attrsToAttrNames(b.attributes, attrNameMap),
+      titlePy: _toPy(title),
+      notesPy: _toPy(notes),
+    }
+  })
 }
 
 function _buildGroupSearchItems(
@@ -187,16 +207,16 @@ function _buildGroupSearchItems(
     const childUrls: string[] = []
     for (const bid of g.bookmarkIds || []) {
       const b = bookmarkMap[bid]
-      if (b) { childTitles.push(b.title || ''); childUrls.push(b.url || '') }
+      if (b) { childTitles.push(_plain(b.title || '')); childUrls.push(_plain(b.url || '')) }
     }
     const ct = childTitles.join(' ')
     return {
       id: g.id,
-      name: g.name || '',
+      name: _plain(g.name || ''),
       attrNames: _attrsToAttrNames(g.attributes, attrNameMap),
       childTitle: ct,
       childUrl: childUrls.join(' '),
-      namePy: _toPy(g.name || ''),
+      namePy: _toPy(_plain(g.name || '')),
       childTitlePy: _toPy(ct),
       // D2-2：透传原 bookmarkIds（g 无此字段时 undefined），供 searchWithHighlights O(1) 取用。
       bookmarkIds: g.bookmarkIds,
@@ -264,10 +284,11 @@ export function _fallbackBmIds(bookmarks: Bookmark[], query: string, customAttri
   return new Set(
     bookmarks
       .filter(b => {
-        if ((b.title || '').toLowerCase().includes(q)) return true
-        if ((b.url || '').toLowerCase().includes(q)) return true
-        if ((b.notes || '').toLowerCase().includes(q)) return true
-        if ((b.username || '').toLowerCase().includes(q)) return true
+        // 密文不进匹配：与 Fuse 索引路径口径一致（防锁定态密文 base64 假阳性）
+        if (_plain(b.title || '').toLowerCase().includes(q)) return true
+        if (_plain(b.url || '').toLowerCase().includes(q)) return true
+        if (_plain(b.notes || '').toLowerCase().includes(q)) return true
+        if (_plain(b.username || '').toLowerCase().includes(q)) return true
         // 属性名匹配：与 Fuse 路径的 attrNames 覆盖范围一致
         if (q && _attrsToAttrNames(b.attributes, attrNameMap).toLowerCase().includes(q)) return true
         return false
@@ -281,10 +302,11 @@ export function _fallbackGrpIds(groups: SiblingGroup[], query: string, bookmarkM
   return new Set(
     groups
       .filter(g => {
-        if ((g.name || '').toLowerCase().includes(q)) return true
+        // 密文不进匹配：与 Fuse 索引路径口径一致
+        if (_plain(g.name || '').toLowerCase().includes(q)) return true
         for (const bid of g.bookmarkIds || []) {
           const b = bookmarkMap[bid]
-          if (b && ((b.title || '').toLowerCase().includes(q) || (b.url || '').toLowerCase().includes(q))) return true
+          if (b && (_plain(b.title || '').toLowerCase().includes(q) || _plain(b.url || '').toLowerCase().includes(q))) return true
         }
         return false
       })
@@ -415,7 +437,7 @@ export function searchWithHighlights(
     // 降级：无高亮
     const bmIds = _fallbackBmIds(bookmarks, q, customAttributes)
     const bookmarkResults: SearchResultItem[] = bookmarks.filter(b => bmIds.has(b.id)).slice(0, maxResults).map(b => ({
-      id: b.id, title: b.title, url: b.url, _highlights: {},
+      id: b.id, title: _plain(b.title || ''), url: _plain(b.url || ''), _highlights: {},
     }))
     // M10 修复：旧实现降级时仅处理书签并 return，从不调用组降级，导致 fuse.js/pinyin-pro
     // 分包加载失败时搜索建议和命令面板完全无法搜到任何组（与正常路径行为不一致）。
@@ -423,8 +445,8 @@ export function searchWithHighlights(
     // 降级时调用 _fallbackGrpIds 构建组结果项与书签降级结果合并返回，保持降级与正常路径一致。
     const grpIds = _fallbackGrpIds(groups, q, bookmarkMap)
     const groupResults: SearchResultItem[] = groups.filter(g => grpIds.has(g.id)).slice(0, GROUP_SUGGEST_LIMIT).map(g => ({
-      id: g.id, name: g.name, _isGroup: true,
-      _displayTitle: g.name || '未命名组',
+      id: g.id, name: _plain(g.name || ''), _isGroup: true,
+      _displayTitle: _plain(g.name || '') || '未命名组',
       bookmarkIds: g.bookmarkIds,
       _highlights: {},
     }))

@@ -51,6 +51,36 @@ export const LEGACY_DECRYPT_FIELDS: Record<EntityType, readonly string[]> = {
   attribute: ['name'] as const,
 }
 
+/**
+ * 判定「该数据在 E2E 锁定态（启用未解锁、key 不在内存）下是否必须等解锁才能推送」。
+ *
+ * 语义：只拦截本次**真实触及敏感字段**的变更，支持锁定态同步普通内容。
+ * - 有字段级变更信息（changedFields 非空）→ 只看其中是否含敏感字段。全量 patch 调用方
+ *   （saveBm 编辑/移动书签等）会把未改动的 username 也放进 op.data，但 changedFields
+ *   精确记录真实变化——仅移动/改标题等不触及敏感字段的变更，锁定态可安全明文推送
+ *   （partial update 只上云 changedFields，username 明文不会出本地）。
+ * - 无字段级信息（新建 addBookmark / 遗留 op / changedFields 为空数组）→ 回退扫描当前值：
+ *   敏感字段非空即需解锁（新建带账户的书签必须加密上云，锁定态无 key 只能排队等解锁）。
+ *
+ * syncPush._opNeedsUnlock 与 useE2E.encryptItem 的锁定判定共用本函数，避免两份逻辑漂移。
+ */
+export function _fieldsNeedUnlock(
+  type: EntityType,
+  data: Record<string, unknown>,
+  changedFields?: string[] | null,
+): boolean {
+  const sens: readonly string[] = ENCRYPT_FIELDS[type]
+  if (!sens || sens.length === 0) return false
+  if (changedFields && changedFields.length > 0) {
+    return changedFields.some(f => sens.includes(f))
+  }
+  for (const f of sens) {
+    const v = data[f]
+    if (typeof v === 'string' && v.length > 0) return true
+  }
+  return false
+}
+
 export interface E2ECanaryMismatch {
   mismatch: boolean
   hasLocal: boolean

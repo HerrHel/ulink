@@ -6,6 +6,7 @@
  */
 import { useDataStore } from '../stores/data.js'
 import { sanitizeHTML } from '../utils.js'
+import { isThreePartCipher } from '../crypto.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
 /** 纯文本摘要字符上限（超出省略号），约四行小宫格所见 */
@@ -17,6 +18,11 @@ let _htmlToTextEl: HTMLDivElement | null = null
 /** 把 HTML 富文本抽成单行纯文本 */
 function htmlToText(html: string): string {
   if (!html) return ''
+  // E2E 锁定态遗留密文：encryptItem 加密整字段 → 整串即三段 salt.iv.data 密文。
+  // 锁定态（新设备首次登录未解锁）Realtime/pull 原样落盘不解密，此时渲染会显示乱码
+  // 长串；解锁后 decryptStoreItems 会还原明文。故密文整串直接返回空（UI 不显乱码），
+  // 与 displayText 展示语义一致。明文 HTML（含普通三段文本）不受影响。
+  if (isThreePartCipher(html)) return ''
   if (!_htmlToTextEl) _htmlToTextEl = document.createElement('div')
   _htmlToTextEl.innerHTML = sanitizeHTML(html)
   _htmlToTextEl.querySelectorAll('.gic-btn, .gic-remove, .gic-domain').forEach(el => el.remove())

@@ -66,6 +66,16 @@ describe('searchBookmarkIds', () => {
     expect(result!.size).toBe(0)
   })
 
+  // LOCK-FIX 回归：锁定态下云端历史密文（三段 base64）原样落盘进 store。
+  // 修复前密文进 Fuse 索引 → 用户输入英文/数字（minMatchCharLength=1 + 模糊匹配）时
+  // 假阳性命中密文条目；修复后密文字段过滤为空，不参与匹配。
+  it('LOCK-FIX: 密文 title 不进索引（搜密文片段不假阳性命中）', () => {
+    const cipher = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
+    const ciphered = [...SAMPLE_BOOKMARKS, { ...SAMPLE_BOOKMARKS[0], id: 'b-cipher', title: cipher }]
+    const result = searchBookmarkIds(ciphered, cipher.slice(0, 12), EMPTY_ATTRS)
+    expect(result!.has('b-cipher')).toBe(false)
+  })
+
   it('M21：中文标题可用拼音全拼/首字母搜到（titlePy 索引）', () => {
     // search.ts 把 titlePy/notesPy 作为 Fuse 搜索键，拼音匹配是中文搜索核心能力。
     // 组「开发工具」全拼 kaifa 命中；书签 b1 notes='代码托管' 全拼 daima 命中。
@@ -183,6 +193,20 @@ describe('searchWithHighlights', () => {
   it('returns empty for no match', () => {
     const results = searchWithHighlights(SAMPLE_BOOKMARKS, SAMPLE_GROUPS, 'zzzznonexistent', BOOKMARK_MAP, EMPTY_ATTRS)
     expect(results).toEqual([])
+  })
+
+  // LOCK-FIX 回归：锁定态密文条目不进索引 → 建议项不渲染密文 title（不会乱码）。
+  it('LOCK-FIX: 密文 title 书签不被命中，建议项 title 不含密文', () => {
+    const cipher = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
+    // title 为密文（锁定态落盘），url 独立为不相关域名——确保不会因 url 命中而误判
+    const ciphered = [...SAMPLE_BOOKMARKS, { ...SAMPLE_BOOKMARKS[0], id: 'b-cipher', title: cipher, url: 'https://cipher.example' }]
+    const map = { ...BOOKMARK_MAP, 'b-cipher': ciphered[ciphered.length - 1] }
+    const results = searchWithHighlights(ciphered, SAMPLE_GROUPS, 'GitHub', map, EMPTY_ATTRS)
+    const hit = results.find(r => r.id === 'b-cipher')
+    expect(hit).toBeUndefined()
+    // 正常命中项的 title 仍是明文（不受密文过滤影响）
+    const gh = results.find(r => r.id === 'b1')
+    expect(gh?.title).toBe('GitHub')
   })
 
   it('M8：拼音命中时不输出拼音串作高亮段（避免建议项显示拼音乱码）', () => {
