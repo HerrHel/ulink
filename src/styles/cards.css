@@ -413,7 +413,7 @@
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-thumb{background:transparent;border-radius:2px}
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap:hover::-webkit-scrollbar-thumb{background:var(--border)}
 .card-grid:not(.list-view) .grp-scroll-body .card-scroll-wrap::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
-.card-grid:not(.list-view) .grp-scroll-body .group-body{overflow:visible;padding:0}
+.card-grid:not(.list-view) .grp-scroll-body .group-body{overflow:visible;padding:4px 0 0}
 
 .card-toprow{
   display:flex;align-items:flex-start;gap:10px;
