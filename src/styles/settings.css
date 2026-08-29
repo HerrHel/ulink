@@ -360,7 +360,12 @@
 
 /* ── 反馈弹窗：表单直投企业邮箱 ── */
 .sp-feedback-text{margin-top:12px;width:100%}
-.sp-feedback-contact{margin-top:8px}
+/* 联系方式：占位符只能示例格式，必须配可见标签才说得清用途 */
+.sp-feedback-label{
+  display:block;margin-top:10px;margin-bottom:4px;
+  font-size:0.72rem;color:var(--text-secondary);
+}
+.sp-feedback-contact{margin-top:0}
 /* honeypot：移出视口而非 display:none —— 后者可能被机器人直接跳过 */
 .sp-feedback-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 .sp-feedback-turnstile{margin-top:10px}
