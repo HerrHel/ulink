@@ -14,6 +14,13 @@ export const shareAppZh = {
     categoryPageTitle: '{name} - 与链 分类分享',
     categoryMeta: '{n} 个书签 · {groups} 个组',
     categoryShareDesc: '{n} 个书签 · {groups} 个组 · 由与链公开分享',
+    categoryEmpty: '这个分享分类还没有书签',
+    // 分类页（卡片网格）：Hero 计数 / 组卡展开 / 空态
+    catBookmarks: '{n} 个书签',
+    catGroups: '{m} 个组',
+    catExpand: '展开 / 收起组内书签',
+    catGroupEmpty: '这个组还没有书签',
+    catNoNotes: '暂无笔记',
   },
   appShell: {
     unlockChunkLoadFailed: '解锁组件加载失败，请刷新后重试',
@@ -40,6 +47,15 @@ export const shareAppEn = {
     categoryMeta_one: '{n} bookmark · {groups} groups',
     categoryShareDesc: '{n} bookmarks · {groups} groups · publicly shared via ulink',
     categoryShareDesc_one: '{n} bookmark · {groups} groups · publicly shared via ulink',
+    categoryEmpty: 'This shared category has no bookmarks yet',
+    // category page (card grid): hero counts / group card expand / empty states
+    catBookmarks: '{n} bookmarks',
+    catBookmarks_one: '{n} bookmark',
+    catGroups: '{m} groups',
+    catGroups_one: '{m} group',
+    catExpand: 'Show / hide bookmarks in this group',
+    catGroupEmpty: 'No bookmarks in this group yet',
+    catNoNotes: 'No notes yet',
   },
   appShell: {
     unlockChunkLoadFailed: 'Failed to load the unlock dialog — please refresh and retry',

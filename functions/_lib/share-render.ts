@@ -41,6 +41,13 @@ const T = {
     emptyCategory: '这个分享分类还没有书签',
     count: '{n} 个链接',
     categoryMeta: '{n} 个书签 · {m} 个组',
+    // ── 分类页（v2 卡片网格）──
+    catDesc: '{n} 个书签 · {m} 个组 · 由与链公开分享',
+    catBookmarks: '{n} 个书签',
+    catGroups: '{m} 个组',
+    catExpand: '展开 / 收起组内书签',
+    catGroupEmpty: '这个组还没有书签',
+    catNoNotes: '暂无笔记',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
     tocTitle: '目录',
@@ -67,6 +74,16 @@ const T = {
     count_one: '{n} link',
     categoryMeta: '{n} bookmarks · {m} groups',
     categoryMeta_one: '{n} bookmark · {m} groups',
+    // ── category page (v2 card grid) ──
+    catDesc: '{n} bookmarks · {m} groups · publicly shared via ulink',
+    catDesc_one: '{n} bookmark · {m} groups · publicly shared via ulink',
+    catBookmarks: '{n} bookmarks',
+    catBookmarks_one: '{n} bookmark',
+    catGroups: '{m} groups',
+    catGroups_one: '{m} group',
+    catExpand: 'Show / hide bookmarks in this group',
+    catGroupEmpty: 'No bookmarks in this group yet',
+    catNoNotes: 'No notes yet',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
     tocTitle: 'Contents',
@@ -371,6 +388,10 @@ const LOGO_SVG =
 const ARROW_SVG =
   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12L12 4"/><path d="M5.5 4H12v6.5"/></svg>`
 
+/** 组卡展开箭头（收起态朝下，展开态旋转 180°）。 */
+const CHEVRON_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`
+
 /**
  * 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名，无 notes，行高统一）。
  * 标题为空时回退展示域名。纯静态 <a>，无需 JS。
@@ -525,24 +546,104 @@ export interface PublicCategory {
 }
 
 /**
- * 分类分享：组区块（组名 + 笔记；组内书签已在下方列表统一平铺，不重复渲染）。
- * notes 走与组分享一致的 sanitize + 内联书签转链接。
+ * 分类分享：把书签按归属切成「组内书签」与「散落书签」两套视图模型（对齐 App 分类视图的
+ * 混排逻辑：组卡在前，散落书签卡在后，一张书签只出现一次）。
+ * - 组内书签按 group.bookmark_ids 顺序取（与 App 组内顺序一致）
+ * - 散落书签 = 不属于任何组 且 非子书签（parent_id 非空在 App 内嵌在父书签下，不单独成卡）
+ * - 同一书签被多组引用时以首个组为准（used 去重，避免重复成卡）
  */
-function categoryGroupsHtml(
-  dict: typeof T['zh-CN'] | typeof T['en-US'],
-  groups: PublicGroup[],
-  bmMap: NotesBmMap,
-): string {
-  if (!groups || !groups.length) return ""
-  const blocks = groups.map((g) => {
-    const name = esc((g.name || "").trim() || "?")
-    const notes = notesHtml(dict, g, bmMap).html
-    return `<section class="cat-group"><h2 class="cat-group-name">${name}</h2>${notes}</section>`
-  })
-  return `<div class="cat-groups">${blocks.join("\n")}</div>`
+interface CategoryItems {
+  groupCards: { group: PublicGroup; items: PublicBookmark[] }[]
+  loose: PublicBookmark[]
 }
 
-/** 分类分享 <body>：分类名 + 元信息 + 组区块 + 书签列表（与组分享同一视觉语言）。 */
+function splitCategoryItems(groups: PublicGroup[], bookmarks: PublicBookmark[]): CategoryItems {
+  const byId: { [id: string]: PublicBookmark } = {}
+  for (const b of bookmarks || []) {
+    if (b && b.id) byId[String(b.id)] = b
+  }
+  const used = new Set<string>()
+  const groupCards = (groups || []).map((g) => {
+    const ids = Array.isArray(g.bookmark_ids) ? (g.bookmark_ids as unknown[]) : []
+    const items: PublicBookmark[] = []
+    for (const raw of ids) {
+      const id = String(raw ?? "")
+      const b = byId[id]
+      if (!b || used.has(id)) continue
+      used.add(id)
+      items.push(b)
+    }
+    return { group: g, items }
+  })
+  const loose = (bookmarks || []).filter((b) => {
+    if (!b || !b.id) return false
+    if (used.has(String(b.id))) return false
+    const pid = typeof b.parent_id === "string" ? b.parent_id : ""
+    return !pid
+  })
+  return { groupCards, loose }
+}
+
+/**
+ * 分类分享·组卡片（对齐 App GroupCard 宫格态）：图标 + 组名 + 书签计数 + 笔记富文本；
+ * 点卡片用 hidden checkbox + label 展开组内书签列表（无 JS 可用，:has() 控制跨列展开）。
+ * notes 走与组分享一致的 sanitize + 内联书签转链接。
+ */
+function buildGroupCard(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  entry: { group: PublicGroup; items: PublicBookmark[] },
+  idx: number,
+  bmMap: NotesBmMap,
+): string {
+  const g = entry.group
+  const name = esc((g.name || "").trim() || "?")
+  const initial = esc(((g.name || "?").trim().charAt(0) || "?").toUpperCase())
+  const notes = notesHtml(dict, g, bmMap).html
+  const body = notes || `<div class="focus-notes gcard-nonotes">${esc(dict.catNoNotes)}</div>`
+  const n = entry.items.length
+  const itemsHtml = n
+    ? entry.items.map(buildBookmarkItem).join("")
+    : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
+  const toggleId = `gcat-${idx}`
+  return [
+    `<article class="gcard">`,
+    `<input type="checkbox" class="gcard-toggle" id="${toggleId}" aria-label="${esc(dict.catExpand)}">`,
+    `<label class="gcard-head" for="${toggleId}" title="${esc(dict.catExpand)}">`,
+    `<span class="gcard-icon">${groupIconMarkup(g, initial)}</span>`,
+    `<span class="gcard-title">${name}</span>`,
+    `<span class="gcard-count">${esc(fill(pick(dict, 'catBookmarks', n), { n }))}</span>`,
+    `<span class="gcard-chev">${CHEVRON_SVG}</span>`,
+    `</label>`,
+    body,
+    `<div class="gcard-items">${itemsHtml}</div>`,
+    `</article>`,
+  ].join("")
+}
+
+/** 分类分享·散落书签卡（对齐 App BookmarkCard 宫格态）：图标 + 标题 + 域名 + 笔记（2 行截断）。 */
+function buildLooseBookmarkCard(b: PublicBookmark): string {
+  const safe = fixUrl(b.url)
+  const href = safe ? esc(safe) : "#"
+  const rel = safe ? ' rel="noopener nofollow"' : ""
+  const target = safe ? ' target="_blank"' : ""
+  const dm = safe ? domainOf(safe) : ""
+  const title = (b.title || "").trim() || dm || "?"
+  const ch = title.charAt(0).toUpperCase()
+  const notes = (b.notes || "").trim()
+  return [
+    `<a class="bmcard" href="${href}"${target}${rel}>`,
+    `<span class="bmcard-head">`,
+    `<span class="bmcard-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bmcard")}</span>`,
+    `<span class="bmcard-title">${esc(title)}</span>`,
+    `</span>`,
+    dm ? `<span class="bmcard-url">${esc(dm)}</span>` : `<span class="bmcard-url">&nbsp;</span>`,
+    notes ? `<p class="bmcard-notes">${esc(notes)}</p>` : "",
+    `<span class="bmcard-arrow" aria-hidden="true">${ARROW_SVG}</span>`,
+    `</a>`,
+  ].join("")
+}
+
+/** 分类分享 <body>：分类 Hero（分类色 accent）+ 卡片网格（组卡在前 + 散落书签卡）。 */
 function buildCategoryBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   category: PublicCategory,
@@ -552,18 +653,34 @@ function buildCategoryBody(
   appOrigin: string,
 ): string {
   const name = esc(category.name || dict.defaultCategoryName)
-  const initial = esc((category.name || "?").trim().charAt(0) || "?").toUpperCase()
-  const count = bookmarks.length
-  const meta = esc(fill(pick(dict, 'categoryMeta', count), { n: count, m: groups.length }))
-  const list = count
-    ? bookmarks.map(buildBookmarkItem).join("\n")
-    : `<div class="empty">${esc(dict.emptyCategory)}</div>`
+  const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
+  const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
   // data-bm-id → 书签 URL 映射（组 notes 内联书签转可点击 <a>）
   const bmMap: NotesBmMap = {}
-  for (const b of bookmarks) bmMap[b.id] = { url: b.url }
-  const groupsHtml = categoryGroupsHtml(dict, groups, bmMap)
+  for (const b of bookmarks || []) {
+    if (b && b.id) bmMap[b.id] = { url: b.url }
+  }
+  // 展示口径：与网格里实际渲染的卡片数一致（组内 + 散落，子书签不计）
+  const count = loose.length + groupCards.reduce((s, e) => s + e.items.length, 0)
+  const groupCount = groupCards.length
+  const tags = [
+    `<span class="meta-tag">${esc(fill(pick(dict, 'catBookmarks', count), { n: count }))}</span>`,
+    groupCount
+      ? `<span class="meta-tag">${esc(fill(pick(dict, 'catGroups', groupCount), { m: groupCount }))}</span>`
+      : "",
+  ].join("")
+  const cards = [
+    ...groupCards.map((e, i) => buildGroupCard(dict, e, i, bmMap)),
+    ...loose.map(buildLooseBookmarkCard),
+  ]
+  const grid = cards.length
+    ? `<div class="cat-grid">${cards.join("\n")}</div>`
+    : `<div class="empty">${esc(dict.emptyCategory)}</div>`
   // CTA 跳 App 的 hash 路由（#share/c/<share_id>），进入 SPA 登录后 Fork。
   const appUrl = `${appOrigin}/#share/c/${esc(shareId)}`
+  // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
+  const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
+  const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
   const year = new Date().getUTCFullYear()
   return [
     `<div class="page">`,
@@ -571,23 +688,16 @@ function buildCategoryBody(
     `<a class="logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
     `<span class="head-sub">${esc(dict.headSub)}</span>`,
     `</header>`,
-    `<div class="layout">`,
-    `<main class="main">`,
-    `<div class="focus-card">`,
-    `<span class="focus-accent" aria-hidden="true"></span>`,
-    `<div class="focus-head">`,
-    `<span class="focus-icon">${groupIconMarkup(category, initial)}</span>`,
-    `<div class="focus-titlewrap">`,
-    `<h1 class="focus-name">${name}</h1>`,
-    `<div class="focus-meta"><span class="meta-tag">${meta}</span></div>`,
+    `<section class="cat-hero"${accentStyle}>`,
+    `<span class="cat-hero-accent" aria-hidden="true"></span>`,
+    `<span class="cat-hero-icon">${groupIconMarkup(category, initial)}</span>`,
+    `<div class="cat-hero-text">`,
+    `<h1 class="cat-hero-name">${name}</h1>`,
+    `<div class="cat-hero-meta">${tags}</div>`,
     `</div>`,
     `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
-    `</div>`,
-    groupsHtml,
-    `</div>`,
-    `<aside class="bm-list">${list}</aside>`,
-    `</main>`,
-    `</div>`,
+    `</section>`,
+    grid,
     `<footer class="foot">`,
     `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
     `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
@@ -597,9 +707,44 @@ function buildCategoryBody(
   ].join("\n")
 }
 
+/** 分类分享 <head>：分类名进 title，描述用「N 个书签 · M 个组 · 由与链公开分享」。 */
+function buildCategoryHead(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  category: PublicCategory,
+  count: number,
+  groupCount: number,
+  shareUrl: string,
+  ogImage: string,
+): string {
+  const title = `${category.name || dict.defaultCategoryName} - ${dict.siteName}`
+  const escTitle = esc(title)
+  const escDesc = esc(fill(pick(dict, 'catDesc', count), { n: count, m: groupCount }))
+  const escUrl = esc(shareUrl)
+  return [
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">`,
+    `<title>${escTitle}</title>`,
+    `<meta name="description" content="${escDesc}">`,
+    `<link rel="canonical" href="${escUrl}">`,
+    // Open Graph
+    `<meta property="og:type" content="article">`,
+    `<meta property="og:site_name" content="${dict.siteName}">`,
+    `<meta property="og:title" content="${escTitle}">`,
+    `<meta property="og:description" content="${escDesc}">`,
+    `<meta property="og:url" content="${escUrl}">`,
+    `<meta property="og:image" content="${esc(ogImage)}">`,
+    `<meta property="og:locale" content="${dict.ogLocale}">`,
+    // Twitter
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${escTitle}">`,
+    `<meta name="twitter:description" content="${escDesc}">`,
+    `<meta name="twitter:image" content="${esc(ogImage)}">`,
+  ].join("\n")
+}
+
 /**
  * 分类分享完整 HTML 文档（/s/c/<share_id>，函数 functions/s/c/[sid].ts 取数后调用）。
- * 与 renderSharePage 同款 head/样式；数据不含 username/password（RPC 列级隔离）。
+ * 与 renderSharePage 同款样式；数据不含 username/password（RPC 列级隔离）。
  */
 export function renderShareCategoryPage(
   category: PublicCategory,
@@ -612,7 +757,9 @@ export function renderShareCategoryPage(
 ): string {
   const dict = T[locale]
   const ogImage = `${appOrigin}/share-cover.png`
-  const head = buildHead(dict, category as unknown as PublicGroup, bookmarks, shareUrl, ogImage)
+  const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
+  const count = loose.length + groupCards.reduce((s, e) => s + e.items.length, 0)
+  const head = buildCategoryHead(dict, category, count, groupCards.length, shareUrl, ogImage)
   const body = buildCategoryBody(dict, category, groups, bookmarks, shareId, appOrigin)
   return [
     `<!DOCTYPE html>`,
@@ -785,11 +932,61 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .bm:hover .bm-arrow{opacity:1;transform:translateX(0);color:#122E8A}
 .bm-arrow svg{width:15px;height:15px;display:block}
 .empty{text-align:center;color:#6A6660;font-size:13px;padding:32px 0;background:#F7F2EC;border:1px dashed #D5CBBE;border-radius:14px}
-/* ── 分类分享：组区块（组名 + 笔记，卡片内连排）── */
-.cat-groups{display:flex;flex-direction:column;gap:10px;margin-top:16px}
-.cat-group{background:#F7F2EC;border:1px solid #E5DDD3;border-radius:12px;padding:12px 14px}
-.cat-group-name{font-size:14px;font-weight:700;color:#2C2824;margin:0 0 6px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px}
-.cat-group .focus-notes{margin:0;font-size:13px}
+/* ── 分类分享页（v2：Hero + 卡片网格，对齐 App 分类视图）── */
+.cat-hero{position:relative;display:flex;align-items:center;gap:16px;padding:18px 22px;margin-bottom:20px;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:18px;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 10px 30px rgba(0,0,0,0.07),0 2px 6px rgba(0,0,0,0.03);overflow:hidden}
+.cat-hero-accent{position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 3px 3px 0;background:var(--cat,#122E8A);opacity:.85}
+.cat-hero-icon{width:56px;height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:14px;overflow:hidden;position:relative;color:var(--cat,#122E8A)}
+.cat-hero-icon img{width:32px;height:32px;object-fit:contain}
+.cat-hero-icon img.img-err{display:none}
+.cat-hero-icon:has(img:not(.img-err)) .hero-fb{display:none}
+.cat-hero-icon .hero-fb{width:32px;height:32px;font-size:22px;color:var(--cat,#122E8A)}
+.cat-hero-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.cat-hero-name{font-size:24px;font-weight:800;color:#2C2824;letter-spacing:-.6px;line-height:1.25;overflow-wrap:anywhere}
+.cat-hero-meta{display:flex;flex-wrap:wrap;gap:8px}
+/* 网格：与 App .card-grid 同参（auto-fill 280px / gap 12px） */
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.gcard,.bmcard{position:relative;height:232px;display:flex;flex-direction:column;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 0 0 1px rgba(0,0,0,.02);overflow:hidden;transition:border-color .18s ease,box-shadow .18s ease,transform .18s cubic-bezier(.16,1,.3,1)}
+.gcard:hover,.bmcard:hover{border-color:#D5CBBE;box-shadow:0 8px 28px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.03);transform:translateY(-3px)}
+/* ── 组卡（对齐 App GroupCard 宫格态）── */
+.gcard{padding:14px 14px 12px}
+.gcard::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 2px 2px 0;background:var(--cat,#122E8A);opacity:.5;transition:opacity .18s ease}
+.gcard:hover::before{opacity:.9}
+.gcard-toggle{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.gcard-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.gcard-icon{width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:9px;overflow:hidden;position:relative}
+.gcard-icon img{width:22px;height:22px;object-fit:contain}
+.gcard-icon img.img-err{display:none}
+.gcard-icon:has(img:not(.img-err)) .hero-fb{display:none}
+.gcard-icon .hero-fb{width:22px;height:22px;font-size:14px;color:var(--cat,#122E8A)}
+.gcard-title{flex:1;min-width:0;font-size:15px;font-weight:700;color:#2C2824;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcard-count{flex-shrink:0;font-size:11.5px;font-weight:600;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.gcard-chev{flex-shrink:0;color:#B8B1A8;transition:transform .2s ease,color .2s ease}
+.gcard-chev svg{width:14px;height:14px;display:block}
+.gcard .focus-notes{flex:1;min-height:0;overflow:hidden;margin:0;padding:0 2px;font-size:13px;line-height:1.7;color:#5E5852;-webkit-mask-image:linear-gradient(180deg,#000 76%,transparent 100%);mask-image:linear-gradient(180deg,#000 76%,transparent 100%)}
+.gcard-nonotes{color:#B0A9A0;font-size:12.5px}
+.gcard-items{display:none}
+.gcard-empty{font-size:12.5px;color:#8A847C;text-align:center;padding:18px 0;background:#F7F2EC;border:1px dashed #D5CBBE;border-radius:10px}
+/* 展开：跨整行 + 高度自适应 + 组内书签列表（无 JS 可用：checkbox + :has） */
+.gcard:has(.gcard-toggle:checked){grid-column:1/-1;height:auto}
+.gcard:has(.gcard-toggle:checked) .gcard-chev{transform:rotate(180deg);color:var(--cat,#122E8A)}
+.gcard:has(.gcard-toggle:checked) .focus-notes{overflow:visible;-webkit-mask-image:none;mask-image:none}
+.gcard:has(.gcard-toggle:checked) .gcard-items{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed #E5DDD3}
+.gcard-items .bm{min-height:50px;padding:6px 10px;border-radius:10px}
+/* ── 散落书签卡（对齐 App BookmarkCard 宫格态）── */
+.bmcard{padding:14px;text-decoration:none;color:inherit}
+.bmcard-head{display:flex;align-items:center;gap:10px}
+.bmcard-icon{width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:9px;overflow:hidden;position:relative}
+.bmcard-icon img{width:22px;height:22px;object-fit:contain}
+.bmcard-icon img.img-err{display:none}
+.bmcard-icon:has(img:not(.img-err)) .bmcard-fb{display:none}
+.bmcard-fb{display:flex;align-items:center;justify-content:center;width:22px;height:22px;font-size:13px;font-weight:700;color:var(--cat,#122E8A);text-transform:uppercase;line-height:1}
+.bmcard-title{font-size:14.5px;font-weight:600;color:#2C2824;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s ease}
+.bmcard-url{margin-top:6px;display:block;font-size:12px;color:#8A847C;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bmcard-notes{margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;color:#6A6660;line-height:1.5}
+.bmcard-arrow{position:absolute;right:12px;bottom:12px;color:#B8B1A8;opacity:0;transform:translate(-2px,2px);transition:opacity .18s ease,transform .18s ease,color .18s ease}
+.bmcard-arrow svg{width:15px;height:15px;display:block}
+.bmcard:hover .bmcard-title{color:var(--cat,#122E8A)}
+.bmcard:hover .bmcard-arrow{opacity:1;transform:translate(0,0);color:var(--cat,#122E8A)}
 /* ── footer ── */
 .foot{display:flex;flex-direction:column;align-items:center;gap:5px;padding:36px 0 0;text-align:center}
 .foot-brand{font-size:13px;font-weight:700;color:#2C2824;letter-spacing:-.2px}
@@ -811,6 +1008,8 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
   .page{max-width:760px}
   .main{flex-direction:column}
   .bm-list{width:100%}
+  .cat-hero{flex-wrap:wrap}
+  .cat-hero .cta{width:100%;justify-content:center;margin-left:0}
 }
 @media(max-width:560px){
   .page{padding:0 14px 40px}
@@ -821,5 +1020,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
   .cta{width:100%;justify-content:center;margin-left:0}
   .focus-icon{width:44px;height:44px;border-radius:11px}
   .bm{min-height:54px;padding:7px 10px;gap:10px}
+  .cat-hero{padding:16px;gap:12px;border-radius:14px}
+  .cat-hero-name{font-size:20px}
+  .cat-hero-icon{width:48px;height:48px;border-radius:12px}
+  .cat-hero-icon img,.cat-hero-icon .hero-fb{width:28px;height:28px;font-size:19px}
+  .cat-grid{grid-template-columns:1fr;gap:10px}
+  .gcard,.bmcard{height:auto;min-height:170px}
 }
 `
