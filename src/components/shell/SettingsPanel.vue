@@ -220,12 +220,13 @@
               :aria-label="t('settings.feedback')"
               v-model="feedbackText"
             ></textarea>
+            <label class="sp-feedback-label" for="lv-feedback-contact">{{ t('settings.feedbackContact') }}</label>
             <input
+              id="lv-feedback-contact"
               class="form-input sp-feedback-contact"
               type="text"
               maxlength="200"
               :placeholder="t('settings.feedbackContactPlaceholder')"
-              :aria-label="t('settings.feedbackContact')"
               v-model="feedbackContact"
             />
             <!-- honeypot：真人看不到也填不到，机器人填了就在服务端被静默丢弃 -->
