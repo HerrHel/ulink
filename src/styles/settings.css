@@ -377,4 +377,6 @@
   background:none;border:0;padding:0;margin:0;font:inherit;
   color:var(--accent);cursor:pointer;text-decoration:underline;
 }
+/* 未达最小长度：占用计数位，直接说明发送按钮为什么点不了 */
+.sp-feedback-short{color:var(--danger)}
 

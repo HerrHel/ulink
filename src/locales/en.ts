@@ -359,7 +359,7 @@ export const en = {
     feedbackSending: 'Sending…',
     feedbackSent: 'Got it — thanks for the feedback!',
     feedbackFailed: 'Sending failed. Please try again later or email us.',
-    feedbackTooShort: 'Please write at least 5 characters',
+    feedbackTooShort: 'At least 5 characters to send',
     feedbackTooLong: 'Message exceeds the length limit',
     feedbackRateLimited: 'Too many submissions — please try again later',
     feedbackCount: '{n} / 2000',

@@ -187,6 +187,18 @@ export async function pushFromQueue(): Promise<boolean> {
         if (isLocked && lockedItemKeys.has(itemKey)) continue
         const existing = existingByType[type](op.itemId)
         if (existing) {
+          // HISTORY-E2E：history 是**整条上云**（supabase data_history，见 _saveHistory），
+          // 加密口径必须是「全字段」而非本次 changedFields —— 快照里含 existing 的
+          // username/notes，若按 changedFields 放宽，锁定态改标题就会把未改动的敏感字段
+          // 明文写进云端历史，等于绕过 E2E。故此处不传 changedFields，锁定态下含非空
+          // 敏感字段的条目一律 skip（等解锁后再补记）。
+          //
+          // 用 _fieldsNeedUnlock 预判（与 encryptItem 无 key 分支同判定，changedFields=null
+          // 即全字段扫描），把「锁定态预期跳过」从抛异常 + warn 改成静默 continue：
+          // 旧实现每条 upsert 都构造一次 Error 并打满控制台（锁定态同步时刷屏
+          // `[sync] history encrypt skipped`），噪声掩盖真实异常。try/catch 保留作兜底，
+          // 解锁态的加密异常仍照旧 warn。
+          if (isLocked && _fieldsNeedUnlock(type as EntityType, existing as Record<string, unknown>, null)) continue
           try {
             const encData = await histE2e.encryptItem(type as EntityType, { ...(existing as Record<string, unknown>) })
             historyItems.push({ id: op.itemId, type, data: encData })

@@ -350,7 +350,7 @@ export const zh = {
     feedbackSending: '发送中…',
     feedbackSent: '已收到，感谢你的反馈！',
     feedbackFailed: '发送失败，请稍后再试，或直接发邮件给我们',
-    feedbackTooShort: '请至少写 5 个字',
+    feedbackTooShort: '还需至少 5 个字才能发送',
     feedbackTooLong: '内容超出长度上限',
     feedbackRateLimited: '提交太频繁了，请稍后再试',
     feedbackCount: '{n} / 2000',
