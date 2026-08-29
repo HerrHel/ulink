@@ -157,6 +157,12 @@
   display:flex;gap:6px;
   padding:4px 8px;
 }
+/* 导入 / 导出 同行两按钮：flex:1 1 0% 在“含 width:100% 子项的包裹层”上会分配不均，
+   改用 grid 1fr 1fr 保证严格等宽（不影响回收站 / 反馈等单按钮行） */
+.sp-actions.sp-actions--split{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+}
 .sp-action{
   flex:1;min-width:0;
   display:flex;align-items:center;justify-content:center;gap:6px;

@@ -136,7 +136,7 @@
               <div class="sp-actions">
                 <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>{{ t('settings.trash') }}</button>
               </div>
-              <div class="sp-actions">
+              <div class="sp-actions sp-actions--split">
                 <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" v-html="I.import"></span>{{ t('settings.import') }}</button>
                 <div class="sp-export-wrap" @click.stop>
                   <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span aria-hidden="true" v-html="I.export"></span>{{ t('settings.export') }}</button>
