@@ -69,6 +69,27 @@ const evilColor = renderShareCategoryPage(
   origin,
   "zh-CN",
 )
+// 列表 / 小宫格布局（?layout=list|mini-grid）
+const zhList = renderShareCategoryPage(
+  category as never,
+  groups as never,
+  bookmarks as never,
+  "cat_share_test",
+  shareUrl,
+  origin,
+  "zh-CN",
+  "list",
+)
+const zhMini = renderShareCategoryPage(
+  category as never,
+  groups as never,
+  bookmarks as never,
+  "cat_share_test",
+  shareUrl,
+  origin,
+  "zh-CN",
+  "mini-grid",
+)
 // 空分类：无组无书签
 const empty = renderShareCategoryPage(
   category as never,
@@ -193,6 +214,24 @@ assert(zh.includes('font-size:11.5px;line-height:18px;color:#8A847C;font-family:
 assert(zh.includes('font-size:13.6px'), "笔记 0.85rem 对齐 .card-notes")
 assert(zh.includes('.gcard-icon{width:38px;height:38px') && zh.includes('.gcard-icon{width:38px'), "logo 38px 对齐 .card-logo")
 assert(zh.includes('border-radius:10px;overflow:hidden;position:relative}'), "logo 圆角 10px 对齐 --radius-md")
+
+// ── 9. 三布局（宫格 / 列表 / 小宫格，对齐主站 uiStore.layoutMode）──
+assert(zh.includes('class="cat-layout-switch"'), "布局切换器存在")
+assert(zh.includes('href="https://ulink.ren/s/c/cat_share_test?layout=grid"'), "grid 切换链接")
+assert(zh.includes('href="https://ulink.ren/s/c/cat_share_test?layout=list"'), "list 切换链接")
+assert(zh.includes('href="https://ulink.ren/s/c/cat_share_test?layout=mini-grid"'), "mini-grid 切换链接")
+assert(zh.includes('cat-layout-btn active'), "当前布局按钮高亮")
+assert(zh.includes('cat-layout-btn active hide-mobile'), "宫格按钮（当前项）带移动端隐藏标记")
+assert(zh.includes('@media(max-width:768px){.cat-layout-btn.hide-mobile{display:none}}'), "移动端 CSS 只留列表/小宫格")
+assert(zh.includes('<div class="cat-grid">'), "默认 grid 布局容器")
+assert(zhList.includes('<div class="cat-grid list-view">'), "list 布局容器挂 list-view 类")
+assert(zhList.includes('.cat-grid.list-view{display:flex;flex-direction:column;gap:8px'), "list 容器规则对齐主站（flex column gap 8）")
+assert(zhList.includes('.cat-grid.list-view .gcard:not(.is-open),.cat-grid.list-view .bmcard:not(.is-open){height:82px'), "list 折叠 82px 对齐主站")
+assert(zhList.includes('class="cat-layout-btn active"') && zhList.includes('?layout=list"'), "list 页面当前项为 list")
+assert(zhMini.includes('<div class="cat-grid mini-grid-view">'), "mini-grid 容器挂 mini-grid-view 类")
+assert(zhMini.includes('.cat-grid.mini-grid-view{display:block;column-gap:10px;column-fill:balance;column-width:clamp(140px,11vw,200px)}'), "mini-grid 瀑布流容器对齐主站")
+assert(zhMini.includes('.cat-grid.mini-grid-view .bmcard-notes'), "mini-grid 隐藏备注/组笔记/计数/展开条")
+assert(zhMini.includes('class="cat-layout-btn active"') && zhMini.includes('?layout=mini-grid"'), "mini-grid 页面当前项为 mini-grid")
 
 console.log(failed ? `\n${failed} FAILED` : "\nALL PASS")
 process.exitCode = failed ? 1 : 0

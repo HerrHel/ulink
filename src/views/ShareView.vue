@@ -41,6 +41,15 @@
           </div>
         </div>
         <div class="share-cat-actions">
+          <!-- 布局切换（对齐主站三种布局；移动端隐藏宫格，只留列表/小宫格） -->
+          <div class="share-layout-switch" role="group" aria-label="view layout">
+            <button v-if="!isMobile" type="button" :class="{ active: displayLayout === 'grid' }"
+                    :title="t('settings.gridView')" @click="setLayout('grid')" v-html="I.grid"></button>
+            <button type="button" :class="{ active: displayLayout === 'list' }"
+                    :title="t('settings.listView')" @click="setLayout('list')" v-html="I.list"></button>
+            <button type="button" :class="{ active: displayLayout === 'mini-grid' }"
+                    :title="t('settings.miniGridView')" @click="setLayout('mini-grid')" v-html="I.miniGrid"></button>
+          </div>
           <button class="btn btn-primary btn-sm" @click="onFork" :disabled="forking">
             {{ forking ? t('shareView.forking') : isLoggedIn ? t('shareView.forkToMyLibrary') : t('shareView.loginThenCopy') }}
           </button>
@@ -71,7 +80,7 @@
            卡片 DOM 复用主站 BookmarkCard/GroupCard 的类名（.card / .group-card / .card-logo /
            .card-titlewrap / .card-name / .card-domain / .card-notes 等），样式直接由全局
            cards.css 提供 → 与主站像素级一致，App 改卡片样式时分享页自动跟随、零维护。 -->
-      <div v-if="isCategory" class="share-cat-grid">
+      <div v-if="isCategory" class="share-cat-grid" :class="layoutClass">
         <!-- ── 组卡（对齐主站 GroupCard 宫格态）── -->
         <article v-for="entry in categoryCards.groupCards" :key="entry.group.id"
                  class="card group-card share-gcard" :class="{ 'is-open': isGroupOpen(entry.group.id) }">
@@ -232,6 +241,7 @@ import { resolveGroupIconSvg } from './resolveGroupIconSvg.js'
 import { deriveShareUrl } from './deriveShareUrl.js'
 import { getCategoryIcon, I } from '../config/icons.js'
 import { toast } from '../lib/toast.js'
+import { safeGetItem, safeSetItem } from '../lib/storageSafe.js'
 import { t, tN } from '../i18n/index.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
@@ -295,6 +305,29 @@ function toggleLoose(id: string): void {
   if (next.has(id)) next.delete(id)
   else next.add(id)
   openLoose.value = next
+}
+
+// ── 布局切换（宫格 / 列表 / 小宫格，对齐主站 uiStore.layoutMode；移动端只保留列表与小宫格）──
+type ShareLayoutMode = 'grid' | 'list' | 'mini-grid'
+const LAYOUT_KEY = 'lv_share_layout'
+const MOBILE_QUERY = '(max-width: 768px)'
+const layoutMode = ref<ShareLayoutMode>(readLayout())
+const isMobile = ref(typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches)
+/** 实际生效布局：移动端 grid 不可用 → 临时用 list（不改用户 PC 偏好） */
+const displayLayout = computed<ShareLayoutMode>(() =>
+  isMobile.value && layoutMode.value === 'grid' ? 'list' : layoutMode.value,
+)
+const layoutClass = computed(() => (displayLayout.value === 'grid' ? '' : `${displayLayout.value}-view`))
+function readLayout(): ShareLayoutMode {
+  const v = safeGetItem(LAYOUT_KEY)
+  return v === 'list' || v === 'mini-grid' ? v : 'grid'
+}
+function setLayout(m: ShareLayoutMode): void {
+  layoutMode.value = m
+  safeSetItem(LAYOUT_KEY, m)
+}
+function onMqChange(e: MediaQueryListEvent): void {
+  isMobile.value = e.matches
 }
 
 /** 单条书签 → 预渲染条目（逐条走 buildShareEntries，保持同一安全口径） */
@@ -485,7 +518,11 @@ async function loadShare() {
   }
 }
 
-onMounted(loadShare)
+onMounted(() => {
+  loadShare()
+  const mq = window.matchMedia(MOBILE_QUERY)
+  mq.addEventListener('change', onMqChange)
+})
 
 function onRetry() {
   loadShare()
@@ -495,6 +532,7 @@ onUnmounted(() => {
   _unmounted.value = true
   cleanupInjectedHead()
   setCanonical(APP_CANONICAL_BASE)
+  window.matchMedia(MOBILE_QUERY).removeEventListener('change', onMqChange)
 })
 
 /**
@@ -627,7 +665,37 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
 .share-cat-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .share-cat-name { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.5px; overflow-wrap: anywhere; }
 .share-cat-meta { display: flex; flex-wrap: wrap; gap: 14px; }
-.share-cat-actions { flex-shrink: 0; }
+.share-cat-actions { flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 布局切换器（对齐主站设置面板的分段按钮观感） */
+.share-layout-switch {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--bg-alt, #F7F2EC); border: 1px solid var(--border-light, #E5DDD3); border-radius: 9px;
+}
+.share-layout-switch button {
+  display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; color: var(--text-muted, #8A847C);
+  cursor: pointer; transition: background .15s ease, color .15s ease;
+}
+.share-layout-switch button:hover { color: var(--text, #2C2824); }
+.share-layout-switch button.active { background: var(--surface, #fff); color: var(--accent, #3B82F6); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.share-layout-switch :deep(svg) { width: 15px; height: 15px; display: block; }
+
+/* 三布局容器（对齐主站 .card-grid.list-view / .card-grid.mini-grid-view；卡片内部规则由
+   全局 cards.css 的 .list-view .card / .mini-grid-view .card 提供，容器挂类即生效） */
+.share-cat-grid.list-view { display: flex; flex-direction: column; gap: 8px; grid-template-columns: none; }
+.share-cat-grid.mini-grid-view { display: block; column-gap: 10px; column-fill: balance; column-width: clamp(140px, 11vw, 200px); }
+/* list：分享页展开态覆盖主站「折叠 82px」限制 */
+.list-view .share-gcard.is-open,
+.list-view .share-bmcard.is-open { height: auto; }
+/* mini-grid：分享页特有元素按主站口径隐藏（只留图标+标题+域名+计数） */
+.mini-grid-view .share-bmcard-toggle,
+.mini-grid-view .share-bmcard-children,
+.mini-grid-view .share-gcard-chev,
+.mini-grid-view .share-gcard-count,
+.mini-grid-view .share-gcard-items,
+.mini-grid-view .share-gcard-nonotes,
+.mini-grid-view .share-bmcard-badge { display: none !important; }
+.mini-grid-view .share-gcard.is-open { height: auto; }
 
 /* 分类分享：卡片网格（与 App .card-grid 同参：auto-fill 280px / gap 12px） */
 .share-cat-grid {
@@ -731,12 +799,14 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
   display: flex; flex-direction: column; gap: 4px;
   padding: 8px 10px 12px; border-top: 1px dashed var(--border, #E5DDD3);
 }
+/* 子书签行：与组内书签（share-gcard-item）同款带边框紧凑卡，观感一致 */
 .share-bmcard-child {
-  display: flex; align-items: flex-start; gap: 8px; padding: 5px 8px;
-  border-radius: 8px; text-decoration: none; color: inherit;
-  transition: background .15s ease;
+  display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px;
+  border: 1px solid var(--border, #E5DDD3); border-radius: 10px;
+  text-decoration: none; color: inherit;
+  transition: border-color .15s ease, background .15s ease;
 }
-.share-bmcard-child:hover { background: var(--bg-alt, #F7F2EC); }
+.share-bmcard-child:hover { border-color: var(--accent, #3B82F6); background: var(--bg-alt, #F7F2EC); }
 .share-bmcard-child.is-disabled { opacity: .55; cursor: default; }
 .share-bmcard-child-ic {
   position: relative; width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px;

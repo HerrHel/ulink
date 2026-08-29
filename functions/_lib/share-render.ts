@@ -52,6 +52,9 @@ const T = {
     catChildren: '{n} 个子书签',
     catHide: '收起',
     cipherPlaceholder: '（内容已加密）',
+    gridView: '宫格视图',
+    listView: '列表视图',
+    miniGridView: '小宫格视图',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
     tocTitle: '目录',
@@ -92,6 +95,9 @@ const T = {
     catChildren: '{n} sub-items',
     catHide: 'Collapse',
     cipherPlaceholder: '(encrypted content)',
+    gridView: 'Grid view',
+    listView: 'List view',
+    miniGridView: 'Mini grid view',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
     tocTitle: 'Contents',
@@ -425,6 +431,14 @@ const ARROW_SVG =
 /** 组卡展开箭头（收起态朝下，展开态旋转 180°）。 */
 const CHEVRON_SVG =
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`
+
+/** 布局切换图标（与 src/config/icons.ts 同款：宫格 / 列表 / 小宫格）。 */
+const GRID_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`
+const LIST_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L21 6.00078M8 12L21 12.0008M8 18L21 18.0007M3 6.5H4V5.5H3V6.5ZM3 12.5H4V11.5H3V12.5ZM3 18.5H4V17.5H3V18.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+const MINIGRID_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.25" cy="5.25" r="1.8"/><circle cx="12" cy="5.25" r="1.8"/><circle cx="18.75" cy="5.25" r="1.8"/><circle cx="5.25" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.75" cy="12" r="1.8"/><circle cx="5.25" cy="18.75" r="1.8"/><circle cx="12" cy="18.75" r="1.8"/><circle cx="18.75" cy="18.75" r="1.8"/></svg>`
 
 /**
  * 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名，无 notes，行高统一）。
@@ -778,13 +792,41 @@ function buildLooseBookmarkCard(
 }
 
 /** 分类分享 <body>：分类 Hero（分类色 accent）+ 卡片网格（组卡在前 + 散落书签卡）。 */
+/** 分类页布局（对齐主站 uiStore.layoutMode；移动端 CSS 隐藏宫格入口，只留列表/小宫格） */
+export type CatLayout = 'grid' | 'list' | 'mini-grid'
+
+/** 布局切换器：三个链接（?layout=xx），当前项高亮；无 JS 也能切换（整页重渲染）。 */
+function buildLayoutSwitch(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  baseUrl: string,
+  current: CatLayout,
+): string {
+  const btn = (mode: CatLayout, title: string, svg: string, mobileHidden = false): string => {
+    const sep = baseUrl.includes("?") ? "&" : "?"
+    const href = `${baseUrl}${sep}layout=${mode}`
+    const cls = ["cat-layout-btn", current === mode ? "active" : "", mobileHidden ? "hide-mobile" : ""]
+      .filter(Boolean)
+      .join(" ")
+    return `<a class="${cls}" href="${esc(href)}" title="${esc(title)}" rel="nofollow">${svg}</a>`
+  }
+  return [
+    `<div class="cat-layout-switch" role="group" aria-label="${esc(dict.gridView)}">`,
+    btn("grid", dict.gridView, GRID_SVG, true),
+    btn("list", dict.listView, LIST_SVG),
+    btn("mini-grid", dict.miniGridView, MINIGRID_SVG),
+    `</div>`,
+  ].join("")
+}
+
 function buildCategoryBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   category: PublicCategory,
   groups: PublicGroup[],
   bookmarks: PublicBookmark[],
   shareId: string,
+  shareUrl: string,
   appOrigin: string,
+  layout: CatLayout = 'grid',
 ): string {
   const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
   const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
@@ -810,7 +852,7 @@ function buildCategoryBody(
     ...loose.map((c) => buildLooseBookmarkCard(dict, c)),
   ]
   const grid = cards.length
-    ? `<div class="cat-grid">${cards.join("\n")}</div>`
+    ? `<div class="cat-grid${layout !== 'grid' ? ` ${layout}-view` : ''}">${cards.join("\n")}</div>`
     : `<div class="empty">${esc(dict.emptyCategory)}</div>`
   // CTA 跳 App 的 hash 路由（#share/c/<share_id>），进入 SPA 登录后 Fork。
   const appUrl = `${appOrigin}/#share/c/${esc(shareId)}`
@@ -831,7 +873,10 @@ function buildCategoryBody(
     `<h1 class="cat-hero-name">${name}</h1>`,
     `<div class="cat-hero-meta">${tags}</div>`,
     `</div>`,
+    `<div class="cat-hero-actions">`,
+    buildLayoutSwitch(dict, shareUrl, layout),
     `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
+    `</div>`,
     `</section>`,
     grid,
     `<footer class="foot">`,
@@ -890,6 +935,7 @@ export function renderShareCategoryPage(
   shareUrl: string,
   appOrigin: string,
   locale: ShareLocale = 'zh-CN',
+  layout: CatLayout = 'grid',
 ): string {
   const dict = T[locale]
   const ogImage = `${appOrigin}/share-cover.png`
@@ -898,7 +944,7 @@ export function renderShareCategoryPage(
     groupCards.reduce((s, e) => s + e.items.length, 0) +
     loose.reduce((s, c) => s + 1 + c.children.length, 0)
   const head = buildCategoryHead(dict, category, count, groupCards.length, shareUrl, ogImage)
-  const body = buildCategoryBody(dict, category, groups, bookmarks, shareId, appOrigin)
+  const body = buildCategoryBody(dict, category, groups, bookmarks, shareId, shareUrl, appOrigin, layout)
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
@@ -1007,6 +1053,13 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .meta-tag{display:inline-flex;align-items:center;font-size:12px;font-weight:600;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3;padding:3px 11px;border-radius:999px;white-space:nowrap}
 /* CTA 右上（focus-head 内 margin-left:auto） */
 .cta{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;background:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);color:#fff;font-size:13px;font-weight:600;text-decoration:none;box-shadow:0 2px 10px rgba(18,46,138,0.25);flex-shrink:0;margin-left:auto;transition:box-shadow .2s ease,transform .2s ease}
+.cat-hero-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.cat-layout-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;background:#F7F2EC;border:1px solid #E5DDD3;border-radius:9px}
+.cat-layout-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;color:#8A847C;text-decoration:none;transition:background .15s ease,color .15s ease}
+.cat-layout-btn:hover{color:#2C2824}
+.cat-layout-btn.active{background:#fff;color:#122E8A;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.cat-layout-btn svg{width:15px;height:15px;display:block}
+@media(max-width:768px){.cat-layout-btn.hide-mobile{display:none}}
 .cta:hover{box-shadow:0 4px 18px rgba(18,46,138,0.35);transform:translateY(-1px)}
 /* ── 富文本 notes（样式对齐 App .group-tiptap；颜色保留）── */
 .focus-notes{font-size:13.5px;line-height:1.7;color:#2C2824;word-break:break-word;margin:16px 0 8px;padding:0 2px}
@@ -1100,6 +1153,25 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .gcard-icon:has(img:not(.img-err)) .hero-fb{display:none}
 .gcard-icon .hero-fb{width:28px;height:28px;font-size:13px;color:var(--cat,#122E8A)}
 .gcard-title{flex:1;min-width:0;font-size:14px;font-weight:600;line-height:18px;color:#2C2824;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ── 三布局：列表 / 小宫格（对齐主站 .card-grid.list-view / .card-grid.mini-grid-view，
+   卡片 DOM 不变、容器挂类即切换）── */
+.cat-grid.list-view{display:flex;flex-direction:column;gap:8px;grid-template-columns:none}
+.cat-grid.list-view .gcard,.cat-grid.list-view .bmcard{height:auto;min-height:56px;padding:8px 12px;flex-direction:column;align-items:stretch;flex-wrap:nowrap;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 0 0 1px rgba(0,0,0,.02);border:1px solid #E5DDD3;overflow:hidden}
+.cat-grid.list-view .gcard:not(.is-open),.cat-grid.list-view .bmcard:not(.is-open){height:82px;min-height:0}
+.cat-grid.list-view .gcard:hover,.cat-grid.list-view .bmcard:hover{transform:translateY(-1px);border-color:#D5CBBE;box-shadow:0 8px 28px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.03)}
+.cat-grid.list-view .gcard.is-open,.cat-grid.list-view .bmcard.is-open{height:auto}
+.cat-grid.list-view .bmcard-main{padding:0}
+.cat-grid.list-view .gcard-head{margin-bottom:0}
+.cat-grid.mini-grid-view{display:block;column-gap:10px;column-fill:balance;column-width:clamp(140px,11vw,200px)}
+.cat-grid.mini-grid-view .gcard,.cat-grid.mini-grid-view .bmcard{display:block;width:100%;height:auto;margin:0 0 10px;padding:8px 10px;min-height:auto;break-inside:avoid;-webkit-column-break-inside:avoid;page-break-inside:avoid}
+.cat-grid.mini-grid-view .gcard::before{display:none}
+.cat-grid.mini-grid-view .bmcard-main{padding:0}
+.cat-grid.mini-grid-view .bmcard-head,.cat-grid.mini-grid-view .gcard-head{gap:6px;margin-bottom:2px;padding:0}
+.cat-grid.mini-grid-view .bmcard-icon,.cat-grid.mini-grid-view .gcard-icon{width:20px;height:20px;border-radius:5px}
+.cat-grid.mini-grid-view .bmcard-icon img,.cat-grid.mini-grid-view .gcard-icon img{width:16px;height:16px}
+.cat-grid.mini-grid-view .bmcard-title{font-size:13px;font-weight:600;line-height:18px}
+.cat-grid.mini-grid-view .bmcard-url{font-size:10px;opacity:.6}
+.cat-grid.mini-grid-view .bmcard-notes,.cat-grid.mini-grid-view .group-notes-preview,.cat-grid.mini-grid-view .gcard-count,.cat-grid.mini-grid-view .gcard-chev,.cat-grid.mini-grid-view .gcard-nonotes,.cat-grid.mini-grid-view .gcard-items,.cat-grid.mini-grid-view .bmcard-toggle-input,.cat-grid.mini-grid-view .bmcard-toggle-label,.cat-grid.mini-grid-view .bmcard-children,.cat-grid.mini-grid-view .bmcard-badge{display:none !important}
 .gcard-count{flex-shrink:0;font-size:11.5px;font-weight:600;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3;padding:2px 9px;border-radius:999px;white-space:nowrap}
 .gcard-chev{flex-shrink:0;color:#B8B1A8;transition:transform .2s ease,color .2s ease}
 .gcard-chev svg{width:14px;height:14px;display:block}
@@ -1129,8 +1201,8 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .bmcard-toggle-input:checked~.bmcard-toggle-label svg{transform:rotate(180deg)}
 .bmcard-toggle-input:checked~.bmcard-children{display:flex}
 .bmcard-children{display:none;flex-direction:column;gap:4px;padding:8px 10px 12px;border-top:1px dashed #E5DDD3}
-.bmcard-child{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:8px;text-decoration:none;color:inherit;transition:background .15s ease}
-.bmcard-child:hover{background:#F7F2EC}
+.bmcard-child{display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border:1px solid #E5DDD3;border-radius:10px;text-decoration:none;color:inherit;transition:border-color .15s ease,background .15s ease}
+.bmcard-child:hover{border-color:var(--cat,#122E8A);background:#F7F2EC}
 .bmcard-child-ic{position:relative;width:20px;height:20px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #E5DDD3;border-radius:6px;overflow:hidden}
 .bmcard-child-ic img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .bmcard-child-ic img.img-err{display:none}
