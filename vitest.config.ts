@@ -13,7 +13,9 @@ export default defineConfig({
     setupFiles: ['./src/__tests__/setup.js'],
     // .claude/worktrees/** 兜底排除：长跑 worktree 残留目录（含 node_modules）曾被 vitest 误扫
     // 出 4994 测 4 fail（board-locks 第十轮 A2 段血泪），排除后残留不再污染基线
-    exclude: ['e2e/**', 'node_modules/**', 'cli/node_modules/**', '.claude/worktrees/**'],
+    // .workbuddy/** 兜底排除：该目录存的是会话备份（含 .vue/.test.ts 副本），
+    // 曾被 vitest 误扫成 259 文件中的第 3 个失败项，污染基线
+    exclude: ['e2e/**', 'node_modules/**', 'cli/node_modules/**', '.claude/worktrees/**', '.workbuddy/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
