@@ -174,5 +174,20 @@ assert(!empty.includes('<span class="meta-tag">0 个组</span>'), "0 组不显�
 assert(!zh.includes('class="layout"') && !zh.includes('class="bm-list"'), "分类页不再依赖组分享的双列布局")
 assert(zh.includes("html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}"), "样式表内联")
 
+// ── 8. 与主站卡片样式对齐（tokens：--radius-lg 14px / --shadow-card / 232px /
+//        padding 16 16 10 / card-name 0.9rem / card-domain 0.72rem / card-notes 0.85rem）──
+assert(zh.includes('.gcard,.bmcard{position:relative;height:232px'), "卡片高度 232px 对齐主站 .card")
+assert(zh.includes('border-radius:14px'), "圆角 14px 对齐 --radius-lg")
+assert(zh.includes('box-shadow:0 1px 3px rgba(0,0,0,.04),0 0 0 1px rgba(0,0,0,.02)'), "卡片阴影对齐 --shadow-card")
+assert(zh.includes('.gcard{padding:16px 16px 10px}'), "组卡 padding 16 16 10 对齐 .card")
+assert(zh.includes('padding:16px 16px 10px;text-decoration:none'), "散落卡 padding 16 16 10 对齐 .card")
+assert(zh.includes('@keyframes scardIn'), "入场动画（主站 cardIn 同感）")
+assert(zh.includes('transform:translateY(-3px)'), "hover 上浮 -3px 对齐主站")
+assert(zh.includes('font-size:14px;font-weight:600;line-height:18px'), "标题 0.9rem/600/18px 对齐 .card-name")
+assert(zh.includes('font-size:11.5px;line-height:18px;color:#8A847C;font-family:ui-monospace'), "域名 0.72rem mono 对齐 .card-domain")
+assert(zh.includes('font-size:13.6px'), "笔记 0.85rem 对齐 .card-notes")
+assert(zh.includes('.gcard-icon{width:38px;height:38px') && zh.includes('.gcard-icon{width:38px'), "logo 38px 对齐 .card-logo")
+assert(zh.includes('border-radius:10px;overflow:hidden;position:relative}'), "logo 圆角 10px 对齐 --radius-md")
+
 console.log(failed ? `\n${failed} FAILED` : "\nALL PASS")
 process.exitCode = failed ? 1 : 0
