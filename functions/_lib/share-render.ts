@@ -48,6 +48,7 @@ const T = {
     catExpand: '展开 / 收起组内书签',
     catGroupEmpty: '这个组还没有书签',
     catNoNotes: '暂无笔记',
+    subBookmark: '子书签',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
     tocTitle: '目录',
@@ -84,6 +85,7 @@ const T = {
     catExpand: 'Show / hide bookmarks in this group',
     catGroupEmpty: 'No bookmarks in this group yet',
     catNoNotes: 'No notes yet',
+    subBookmark: 'Sub-item',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
     tocTitle: 'Contents',
@@ -396,7 +398,7 @@ const CHEVRON_SVG =
  * 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名，无 notes，行高统一）。
  * 标题为空时回退展示域名。纯静态 <a>，无需 JS。
  */
-function buildBookmarkItem(b: PublicBookmark): string {
+function buildBookmarkItem(b: PublicBookmark, child = false): string {
   const safe = fixUrl(b.url)
   const href = safe ? esc(safe) : "#"
   const rel = safe ? ' rel="noopener nofollow"' : ""
@@ -405,7 +407,8 @@ function buildBookmarkItem(b: PublicBookmark): string {
   const title = (b.title || "").trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
   return [
-    `<a class="bm" href="${href}"${target}${rel}>`,
+    // child：组内子书签 → 缩进 + 连接线（属性照常完整展示）
+    `<a class="bm${child ? " is-child" : ""}" href="${href}"${target}${rel}>`,
     `<span class="bm-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bm")}</span>`,
     `<span class="bm-info">`,
     `<span class="bm-title">${esc(title)}</span>`,
@@ -545,16 +548,31 @@ export interface PublicCategory {
   [k: string]: unknown
 }
 
+/** 散落卡片下的子书签（含层级，depth 从 1 起 = 直接子级） */
+interface CategoryLooseChild {
+  bookmark: PublicBookmark
+  depth: number
+}
+
+/** 散落书签卡：顶层书签 + 其子孙（DFS 扁平化，depth 表示缩进层级） */
+interface CategoryLooseCard {
+  bookmark: PublicBookmark
+  children: CategoryLooseChild[]
+}
+
 /**
  * 分类分享：把书签按归属切成「组内书签」与「散落书签」两套视图模型（对齐 App 分类视图的
  * 混排逻辑：组卡在前，散落书签卡在后，一张书签只出现一次）。
- * - 组内书签按 group.bookmark_ids 顺序取（与 App 组内顺序一致）
- * - 散落书签 = 不属于任何组 且 非子书签（parent_id 非空在 App 内嵌在父书签下，不单独成卡）
+ * - 组内书签按 group.bookmark_ids 顺序取（与 App 组内顺序一致），**子书签也保留**，
+ *   由渲染层按 parent_id 缩进体现层级
+ * - 散落书签 = 不属于任何组的书签；**子书签不丢弃**：父也在散落集合里的挂到父卡片的
+ *   children（支持多层级，depth 表示缩进深度），父在组内/不在本分类的孤儿则独立成卡
+ *   （渲染层据 parent_id 打「子书签」标记，说明父级不在当前展示范围）
  * - 同一书签被多组引用时以首个组为准（used 去重，避免重复成卡）
  */
 interface CategoryItems {
   groupCards: { group: PublicGroup; items: PublicBookmark[] }[]
-  loose: PublicBookmark[]
+  loose: CategoryLooseCard[]
 }
 
 function splitCategoryItems(groups: PublicGroup[], bookmarks: PublicBookmark[]): CategoryItems {
@@ -575,12 +593,35 @@ function splitCategoryItems(groups: PublicGroup[], bookmarks: PublicBookmark[]):
     }
     return { group: g, items }
   })
-  const loose = (bookmarks || []).filter((b) => {
+  // 未被任何组包含的书签（子书签在内，随后按 parent_id 归位到父卡片）
+  const rest: PublicBookmark[] = (bookmarks || []).filter((b) => {
     if (!b || !b.id) return false
-    if (used.has(String(b.id))) return false
-    const pid = typeof b.parent_id === "string" ? b.parent_id : ""
-    return !pid
+    return !used.has(String(b.id))
   })
+  const restIds = new Set(rest.map((b) => String(b.id)))
+  // 父 id → 直接子书签（保持原顺序）
+  const kidsOf: { [pid: string]: PublicBookmark[] } = {}
+  for (const b of rest) {
+    const pid = typeof b.parent_id === "string" ? b.parent_id.trim() : ""
+    if (!pid || !restIds.has(pid)) continue
+    ;(kidsOf[pid] = kidsOf[pid] || []).push(b)
+  }
+  // DFS 收集全部后代（支持孙级），扁平化后由 depth 表达缩进
+  const collect = (pid: string, depth: number, out: CategoryLooseChild[]): void => {
+    for (const kid of kidsOf[pid] || []) {
+      out.push({ bookmark: kid, depth })
+      collect(String(kid.id), depth + 1, out)
+    }
+  }
+  const loose: CategoryLooseCard[] = []
+  for (const b of rest) {
+    const pid = typeof b.parent_id === "string" ? b.parent_id.trim() : ""
+    // 父也在散落集合 → 该书签作为父卡片的子项出现（由父那轮 DFS 收集），此处不重复成卡
+    if (pid && restIds.has(pid)) continue
+    const children: CategoryLooseChild[] = []
+    collect(String(b.id), 1, children)
+    loose.push({ bookmark: b, children })
+  }
   return { groupCards, loose }
 }
 
@@ -602,7 +643,7 @@ function buildGroupCard(
   const body = notes || `<div class="focus-notes gcard-nonotes">${esc(dict.catNoNotes)}</div>`
   const n = entry.items.length
   const itemsHtml = n
-    ? entry.items.map(buildBookmarkItem).join("")
+    ? entry.items.map((b) => buildBookmarkItem(b, !!b.parent_id)).join("")
     : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
   const toggleId = `gcat-${idx}`
   return [
@@ -620,8 +661,9 @@ function buildGroupCard(
   ].join("")
 }
 
-/** 分类分享·散落书签卡（对齐 App BookmarkCard 宫格态）：图标 + 标题 + 域名 + 笔记（2 行截断）。 */
-function buildLooseBookmarkCard(b: PublicBookmark): string {
+/** 子书签行（挂在散落父卡内，depth 决定缩进量）：图标 + 标题 + 域名 + 笔记，属性全保留。 */
+function buildLooseChildItem(child: CategoryLooseChild): string {
+  const b = child.bookmark
   const safe = fixUrl(b.url)
   const href = safe ? esc(safe) : "#"
   const rel = safe ? ' rel="noopener nofollow"' : ""
@@ -630,16 +672,55 @@ function buildLooseBookmarkCard(b: PublicBookmark): string {
   const title = (b.title || "").trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
   const notes = (b.notes || "").trim()
+  const pad = 10 + (child.depth - 1) * 14
   return [
-    `<a class="bmcard" href="${href}"${target}${rel}>`,
+    `<a class="bmcard-child" style="padding-left:${pad}px" href="${href}"${target}${rel}>`,
+    `<span class="bmcard-child-ic">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bmc")}</span>`,
+    `<span class="bmcard-child-text">`,
+    `<span class="bmcard-child-title">${esc(title)}</span>`,
+    dm ? `<span class="bmcard-child-url">${esc(dm)}</span>` : "",
+    notes ? `<p class="bmcard-child-notes">${esc(notes)}</p>` : "",
+    `</span>`,
+    `</a>`,
+  ].join("")
+}
+
+/**
+ * 分类分享·散落书签卡（对齐 App BookmarkCard 宫格态）：图标 + 标题 + 域名 + 笔记（2 行截断）。
+ * 卡片下挂子书签区：父卡与子项都是链接，故外层用 article（HTML 不允许 <a> 嵌套 <a>）。
+ */
+function buildLooseBookmarkCard(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  card: CategoryLooseCard,
+): string {
+  const b = card.bookmark
+  const safe = fixUrl(b.url)
+  const href = safe ? esc(safe) : "#"
+  const rel = safe ? ' rel="noopener nofollow"' : ""
+  const target = safe ? ' target="_blank"' : ""
+  const dm = safe ? domainOf(safe) : ""
+  const title = (b.title || "").trim() || dm || "?"
+  const ch = title.charAt(0).toUpperCase()
+  const notes = (b.notes || "").trim()
+  const isChild = !!(typeof b.parent_id === "string" && b.parent_id.trim())
+  const children = card.children.length
+    ? `<div class="bmcard-children">${card.children.map(buildLooseChildItem).join("")}</div>`
+    : ""
+  return [
+    `<article class="bmcard${children ? " has-children" : ""}">`,
+    `<a class="bmcard-main" href="${href}"${target}${rel}>`,
     `<span class="bmcard-head">`,
     `<span class="bmcard-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bmcard")}</span>`,
     `<span class="bmcard-title">${esc(title)}</span>`,
+    // 孤儿子书签：父在组内或不在本分类，标出来说明层级来源
+    isChild ? `<span class="bmcard-badge">${esc(dict.subBookmark)}</span>` : "",
     `</span>`,
     dm ? `<span class="bmcard-url">${esc(dm)}</span>` : `<span class="bmcard-url">&nbsp;</span>`,
     notes ? `<p class="bmcard-notes">${esc(notes)}</p>` : "",
     `<span class="bmcard-arrow" aria-hidden="true">${ARROW_SVG}</span>`,
     `</a>`,
+    children,
+    `</article>`,
   ].join("")
 }
 
@@ -660,8 +741,10 @@ function buildCategoryBody(
   for (const b of bookmarks || []) {
     if (b && b.id) bmMap[b.id] = { url: b.url }
   }
-  // 展示口径：与网格里实际渲染的卡片数一致（组内 + 散落，子书签不计）
-  const count = loose.length + groupCards.reduce((s, e) => s + e.items.length, 0)
+  // 展示口径：与网格里实际渲染的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
+  const count =
+    groupCards.reduce((s, e) => s + e.items.length, 0) +
+    loose.reduce((s, c) => s + 1 + c.children.length, 0)
   const groupCount = groupCards.length
   const tags = [
     `<span class="meta-tag">${esc(fill(pick(dict, 'catBookmarks', count), { n: count }))}</span>`,
@@ -671,7 +754,7 @@ function buildCategoryBody(
   ].join("")
   const cards = [
     ...groupCards.map((e, i) => buildGroupCard(dict, e, i, bmMap)),
-    ...loose.map(buildLooseBookmarkCard),
+    ...loose.map((c) => buildLooseBookmarkCard(dict, c)),
   ]
   const grid = cards.length
     ? `<div class="cat-grid">${cards.join("\n")}</div>`
@@ -758,7 +841,9 @@ export function renderShareCategoryPage(
   const dict = T[locale]
   const ogImage = `${appOrigin}/share-cover.png`
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
-  const count = loose.length + groupCards.reduce((s, e) => s + e.items.length, 0)
+  const count =
+    groupCards.reduce((s, e) => s + e.items.length, 0) +
+    loose.reduce((s, c) => s + 1 + c.children.length, 0)
   const head = buildCategoryHead(dict, category, count, groupCards.length, shareUrl, ogImage)
   const body = buildCategoryBody(dict, category, groups, bookmarks, shareId, appOrigin)
   return [
@@ -972,8 +1057,26 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .gcard:has(.gcard-toggle:checked) .focus-notes{overflow:visible;-webkit-mask-image:none;mask-image:none}
 .gcard:has(.gcard-toggle:checked) .gcard-items{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding-top:12px;border-top:1px dashed #E5DDD3}
 .gcard-items .bm{min-height:50px;padding:6px 10px;border-radius:10px}
-/* ── 散落书签卡（对齐 App BookmarkCard 宫格态）── */
-.bmcard{padding:14px;text-decoration:none;color:inherit}
+/* 组内子书签：缩进 + 连接线，体现层级（属性照常完整展示） */
+.gcard-items .bm.is-child{margin-left:16px;position:relative}
+.gcard-items .bm.is-child::before{content:"";position:absolute;left:-10px;top:50%;width:8px;height:1px;background:#D5CBBE}
+/* ── 散落书签卡（article 容器：主区链接 + 子书签区，<a> 不可嵌套）── */
+.bmcard{padding:0;text-decoration:none;color:inherit}
+.bmcard.has-children{height:auto}
+.bmcard-main{position:relative;display:flex;flex-direction:column;padding:14px;text-decoration:none;color:inherit}
+.bmcard-badge{flex-shrink:0;font-size:10.5px;font-weight:600;line-height:1;padding:3px 6px;border-radius:5px;white-space:nowrap;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3}
+.bmcard-children{display:flex;flex-direction:column;gap:4px;padding:8px 10px 12px;border-top:1px dashed #E5DDD3}
+.bmcard-child{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:8px;text-decoration:none;color:inherit;transition:background .15s ease}
+.bmcard-child:hover{background:#F7F2EC}
+.bmcard-child-ic{position:relative;width:20px;height:20px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #E5DDD3;border-radius:6px;overflow:hidden}
+.bmcard-child-ic img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.bmcard-child-ic img.img-err{display:none}
+.bmcard-child-ic:has(img:not(.img-err)) .bmc-fb{display:none}
+.bmc-fb{display:flex;align-items:center;justify-content:center;width:20px;height:20px;font-size:10px;font-weight:700;color:var(--cat,#122E8A);text-transform:uppercase;line-height:1}
+.bmcard-child-text{flex:1;min-width:0}
+.bmcard-child-title{display:block;font-size:13px;font-weight:600;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bmcard-child-url{display:block;font-size:11px;color:#8A847C;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bmcard-child-notes{margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:11.5px;color:#6A6660;line-height:1.45}
 .bmcard-head{display:flex;align-items:center;gap:10px}
 .bmcard-icon{width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:9px;overflow:hidden;position:relative}
 .bmcard-icon img{width:22px;height:22px;object-fit:contain}

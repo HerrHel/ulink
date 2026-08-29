@@ -89,18 +89,18 @@ assert(zh.includes('class="cat-hero" style="--cat: #B45309"'), "Hero 注入合�
 assert(zh.includes('<h1 class="cat-hero-name">设计资源</h1>'), "Hero 分类名")
 assert(zh.includes('class="cat-hero-accent"'), "Hero accent 竖条（分类色）")
 assert(zh.includes('href="https://ulink.ren/#share/c/cat_share_test"'), "CTA 跳 App hash 路由")
-// 计数口径：组内 2（b1/b2）+ 散落 3（b4 父书签 / b5 危险链接 / b6 未入组）；b3 子书签、ghost 不存在均不计
-assert(zh.includes('<span class="meta-tag">5 个书签</span>'), "计数=组内2+散落3（子书签与不存在 id 不计）")
+// 计数口径：组内 2（b1/b2）+ 散落 3（b4 父书签 / b5 危险链接 / b6 未入组）+ b3 子书签 1；ghost 不存在不计
+assert(zh.includes('<span class="meta-tag">6 个书签</span>'), "计数=组内2+散落3+子书签1（全部显示）")
 assert(zh.includes('<span class="meta-tag">2 个组</span>'), "组计数标签")
 assert(zh.includes('class="hero-fb"'), "非 URL 图标 → 首字母回退")
 
 // ── 2. 卡片网格：组在前，散落在后 ──
 assert(zh.includes('<div class="cat-grid">'), "网格容器")
 const gcardCount = (zh.match(/<article class="gcard">/g) || []).length
-const bmcardCount = (zh.match(/<a class="bmcard"/g) || []).length
+const bmcardCount = (zh.match(/<article class="bmcard/g) || []).length
 assert(gcardCount === 2, `组卡 2 张（实际 ${gcardCount}）`)
 assert(bmcardCount === 3, `散落书签卡 3 张（实际 ${bmcardCount}）`)
-assert(zh.indexOf('<article class="gcard">') < zh.indexOf('<a class="bmcard"'), "组卡排在散落书签卡之前")
+assert(zh.indexOf('<article class="gcard">') < zh.indexOf('<article class="bmcard'), "组卡排在散落书签卡之前")
 assert(zh.includes(".cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"), "网格参数对齐 App card-grid")
 
 // ── 3. 组内书签 / 子书签 / 去重 ──
@@ -110,16 +110,25 @@ assert(zh.includes('<input type="checkbox" class="gcard-toggle" id="gcat-0"'), "
 assert(zh.includes('<label class="gcard-head" for="gcat-0"'), "label 绑定 checkbox")
 assert(zh.includes('.gcard:has(.gcard-toggle:checked){grid-column:1/-1;height:auto}'), "展开跨整行 CSS")
 assert(zh.includes('class="bm" href="https://coolors.co/"'), "组内书签 b1 在组卡内")
-assert(zh.includes("b1 已在组内 → 不重复出现在散落区") || !zh.includes('class="bmcard-title">Coolors</span>'), "组内书签不重复成散落卡")
-assert(!zh.includes('class="bmcard-title">子书签（不应单独成卡）</span>'), "子书签不单独成卡")
+assert(!zh.includes('class="bmcard-title">Coolors</span>'), "组内书签不重复出现在散落区")
 assert(zh.includes('class="bmcard-title">散落书签父</span>'), "散落父书签成卡")
 assert(zh.includes('class="bmcard-notes">父书签笔记</p>'), "散落卡渲染 notes")
+
+// ── 3.5 子书签：全部保留显示，挂在父卡内缩进（不丢数据）──
+const childCount = (zh.match(/<a class="bmcard-child"/g) || []).length
+assert(childCount === 1, `子书签行 1 条（实际 ${childCount}）`)
+assert(zh.includes('class="bmcard-child-title">子书签（不应单独成卡）</span>'), "子书签标题完整显示")
+assert(zh.includes('<article class="bmcard has-children">'), "有子项的父卡打 has-children（高度自适应）")
+assert(zh.includes('style="padding-left:10px"'), "depth=1 子书签缩进 10px")
+assert(zh.includes('<div class="bmcard-children">'), "子书签区容器")
+assert(!zh.includes('class="bmcard-badge"'), "非孤儿子书签不打「子书签」角标")
+assert(zh.includes("color:var(--cat,#122E8A)"), "子书签图标沿用分类色")
 assert(zh.includes('class="focus-notes gcard-nonotes">暂无笔记</div>'), "空组回退「暂无笔记」")
 assert(zh.includes('class="gcard-empty">这个组还没有书签</div>'), "空组展开态回退")
 
 // ── 4. 安全 ──
 assert(!zh.includes("javascript:alert(1)"), "危险 scheme 不进 href（fixUrl 剥为空）")
-assert(zh.includes('class="bmcard" href="#"'), "危险 scheme 降级为 #（不跳页内锚点）")
+assert(zh.includes('class="bmcard-main" href="#"'), "危险 scheme 降级为 #（不跳页内锚点）")
 assert(zh.includes('<p class="bmcard-notes">&lt;script&gt;alert(1)&lt;/script&gt;</p>'), "书签 notes 按纯文本转义")
 assert(zh.includes('class="bmcard-title">带引号 &quot;x&quot; &amp; &lt;tag&gt;</span>'), "标题 HTML 转义")
 assert(evilColor.includes('class="cat-hero"') && !evilColor.includes("--cat:"), "非法分类色不注入（CSS 注入防护）")
@@ -128,9 +137,9 @@ assert(zh.includes('class="group-inline-card" data-bm-id="b1" href="https://cool
 
 // ── 5. SEO head / 双语 ──
 assert(zh.includes("<title>设计资源 - ulink</title>"), "title 含分类名")
-assert(zh.includes('content="5 个书签 · 2 个组 · 由与链公开分享"'), "zh 描述（分类口径）")
+assert(zh.includes('content="6 个书签 · 2 个组 · 由与链公开分享"'), "zh 描述（分类口径）")
 assert(zh.includes('<link rel="canonical" href="https://ulink.ren/s/c/cat_share_test">'), "canonical 同域")
-assert(en.includes("5 bookmarks · 2 groups · publicly shared via ulink"), "en 描述")
+assert(en.includes("6 bookmarks · 2 groups · publicly shared via ulink"), "en 描述")
 assert(en.includes("Show / hide bookmarks in this group"), "en 展开提示")
 assert(en.includes('<span class="gcard-count">2 bookmarks</span>'), "en 组计数复数")
 

@@ -92,41 +92,68 @@
                v-html="groupNotesHtmlOf(entry.group)"></div>
           <div v-else class="share-gcard-nonotes">{{ t('shareView.catNoNotes') }}</div>
           <div v-if="isGroupOpen(entry.group.id)" class="share-gcard-items">
-            <a v-for="e in entry.entries" :key="e.b.id"
-               :href="e.safeUrl || '#'"
-               :target="e.safeUrl ? '_blank' : '_self'"
-               :rel="e.safeUrl ? 'noopener' : undefined"
-               :class="['share-gcard-item', { 'is-disabled': !e.safeUrl }]"
-               @click="!e.safeUrl ? $event.preventDefault() : null">
+            <a v-for="item in entry.entries" :key="item.entry.b.id"
+               :href="item.entry.safeUrl || '#'"
+               :target="item.entry.safeUrl ? '_blank' : '_self'"
+               :rel="item.entry.safeUrl ? 'noopener' : undefined"
+               :class="['share-gcard-item', { 'is-disabled': !item.entry.safeUrl, 'is-child': item.isChild }]"
+               @click="!item.entry.safeUrl ? $event.preventDefault() : null">
               <span class="share-gcard-item-ic">
-                <span class="share-gcard-item-fb">{{ (e.b.title || e.urlDomain || '?')[0].toUpperCase() }}</span>
-                <img v-if="e.icon" :src="e.icon" class="share-gcard-item-icon" referrerpolicy="no-referrer"
+                <span class="share-gcard-item-fb">{{ (item.entry.b.title || item.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <img v-if="item.entry.icon" :src="item.entry.icon" class="share-gcard-item-icon" referrerpolicy="no-referrer"
                      loading="lazy" @error="markIconError" />
               </span>
-              <span class="share-gcard-item-title">{{ e.b.title || e.urlDomain }}</span>
-              <span class="share-gcard-item-url">{{ e.urlDomain }}</span>
+              <span class="share-gcard-item-title">{{ item.entry.b.title || item.entry.urlDomain }}</span>
+              <span class="share-gcard-item-url">{{ item.entry.urlDomain }}</span>
             </a>
             <div v-if="!entry.entries.length" class="share-gcard-empty">{{ t('shareView.catGroupEmpty') }}</div>
           </div>
         </article>
 
-        <a v-for="entry in categoryCards.loose" :key="entry.b.id"
-           :href="entry.safeUrl || '#'"
-           :target="entry.safeUrl ? '_blank' : '_self'"
-           :rel="entry.safeUrl ? 'noopener' : undefined"
-           :class="['share-bmcard', { 'is-disabled': !entry.safeUrl }]"
-           @click="!entry.safeUrl ? $event.preventDefault() : null">
-          <span class="share-bmcard-head">
-            <span class="share-bmcard-icon">
-              <span class="share-bmcard-fb">{{ (entry.b.title || entry.urlDomain || '?')[0].toUpperCase() }}</span>
-              <img v-if="entry.icon" :src="entry.icon" referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
+        <!-- 散落书签卡：父卡 + 子书签（挂在卡内缩进显示；<a> 不可嵌套，故外层用 article） -->
+        <article v-for="card in categoryCards.loose" :key="card.entry.b.id"
+                 class="share-bmcard" :class="{ 'has-children': card.children.length }">
+          <a class="share-bmcard-main"
+             :href="card.entry.safeUrl || '#'"
+             :target="card.entry.safeUrl ? '_blank' : '_self'"
+             :rel="card.entry.safeUrl ? 'noopener' : undefined"
+             :class="{ 'is-disabled': !card.entry.safeUrl }"
+             @click="!card.entry.safeUrl ? $event.preventDefault() : null">
+            <span class="share-bmcard-head">
+              <span class="share-bmcard-icon">
+                <span class="share-bmcard-fb">{{ (card.entry.b.title || card.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <img v-if="card.entry.icon" :src="card.entry.icon" referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
+              </span>
+              <span class="share-bmcard-title">{{ card.entry.b.title || card.entry.urlDomain }}</span>
+              <!-- 孤儿子书签：父在组内或不在本分类，标出来说明层级来源 -->
+              <span v-if="card.isChild" class="share-bmcard-badge">{{ t('shareView.subBookmark') }}</span>
             </span>
-            <span class="share-bmcard-title">{{ entry.b.title || entry.urlDomain }}</span>
-          </span>
-          <span class="share-bmcard-url">{{ entry.urlDomain }}</span>
-          <p v-if="entry.b.notes" class="share-bmcard-notes">{{ entry.b.notes }}</p>
-          <span aria-hidden="true" v-html="I.external" class="share-bmcard-arrow"></span>
-        </a>
+            <span class="share-bmcard-url">{{ card.entry.urlDomain }}</span>
+            <p v-if="card.entry.b.notes" class="share-bmcard-notes">{{ card.entry.b.notes }}</p>
+            <span aria-hidden="true" v-html="I.external" class="share-bmcard-arrow"></span>
+          </a>
+          <div v-if="card.children.length" class="share-bmcard-children">
+            <a v-for="child in card.children" :key="child.entry.b.id"
+               class="share-bmcard-child"
+               :style="{ paddingLeft: (10 + (child.depth - 1) * 14) + 'px' }"
+               :href="child.entry.safeUrl || '#'"
+               :target="child.entry.safeUrl ? '_blank' : '_self'"
+               :rel="child.entry.safeUrl ? 'noopener' : undefined"
+               :class="{ 'is-disabled': !child.entry.safeUrl }"
+               @click="!child.entry.safeUrl ? $event.preventDefault() : null">
+              <span class="share-bmcard-child-ic">
+                <span class="share-gcard-item-fb">{{ (child.entry.b.title || child.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <img v-if="child.entry.icon" :src="child.entry.icon" class="share-bmcard-child-icon"
+                     referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
+              </span>
+              <span class="share-bmcard-child-text">
+                <span class="share-bmcard-child-title">{{ child.entry.b.title || child.entry.urlDomain }}</span>
+                <span class="share-bmcard-child-url">{{ child.entry.urlDomain }}</span>
+                <p v-if="child.entry.b.notes" class="share-bmcard-child-notes">{{ child.entry.b.notes }}</p>
+              </span>
+            </a>
+          </div>
+        </article>
 
         <div v-if="!categoryCards.groupCards.length && !categoryCards.loose.length" class="share-empty">
           {{ t('shareView.categoryEmpty') }}
@@ -227,24 +254,37 @@ function toggleGroup(id: string): void {
   openGroups.value = next
 }
 
-/** 组卡（组 + 组内书签 entries）与散落书签卡 entries */
+/** 单条书签 → 预渲染条目（逐条走 buildShareEntries，保持同一安全口径） */
+function entryOf(b: Bookmark) {
+  return buildShareEntries([b])[0]
+}
+
+/**
+ * 组卡（组 + 组内书签 entries，子书签标 isChild 供渲染层缩进）与散落书签卡
+ * （顶层书签 + 其子孙 children，depth 表达缩进层级；父在组内/不在本分类的孤儿子书签
+ * 独立成卡并标 isChild —— 子书签一律保留显示，不丢数据）。
+ */
 const categoryCards = computed(() => {
   const { groupCards, loose } = splitCategoryItems(groups.value, bookmarks.value)
   return {
     groupCards: groupCards.map((e) => ({
       group: e.group,
       items: e.items,
-      entries: buildShareEntries(e.items),
+      entries: e.items.map((b) => ({ entry: entryOf(b), isChild: !!b.parentId })),
     })),
-    loose: buildShareEntries(loose),
+    loose: loose.map((card) => ({
+      entry: entryOf(card.bookmark),
+      isChild: !!card.bookmark.parentId,
+      children: card.children.map((c) => ({ entry: entryOf(c.bookmark), depth: c.depth })),
+    })),
   }
 })
 
-/** 展示口径：网格里实际渲染的书签数（组内 + 散落；子书签不单独成卡） */
+/** 展示口径：网格里实际渲染的书签数（组内 + 散落顶层 + 散落子书签，全部计入） */
 const catBookmarkCount = computed(
   () =>
     categoryCards.value.groupCards.reduce((s, e) => s + e.entries.length, 0) +
-    categoryCards.value.loose.length,
+    categoryCards.value.loose.reduce((s, c) => s + 1 + c.children.length, 0),
 )
 const catBookmarkText = computed(() => tN('shareView.catBookmarks', catBookmarkCount.value))
 const catGroupText = computed(() =>
@@ -614,6 +654,12 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
 }
 .share-gcard-item:hover { border-color: var(--cat, var(--accent, #3B82F6)); background: var(--surface-secondary, #F7F2EC); }
 .share-gcard-item.is-disabled { opacity: .55; cursor: default; }
+/* 组内子书签：缩进 + 左侧连接线，体现层级（属性照常完整展示） */
+.share-gcard-item.is-child { margin-left: 16px; position: relative; }
+.share-gcard-item.is-child::before {
+  content: ""; position: absolute; left: -10px; top: 50%; width: 8px; height: 1px;
+  background: var(--border, #D5CBBE);
+}
 .share-gcard-item-icon { border-radius: 3px; } /* 尺寸/定位见上方叠放规则（absolute inset 0） */
 .share-gcard-item-fb {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
@@ -632,9 +678,57 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
   font-size: 12.5px; color: var(--text-secondary, #8A847C); text-align: center; padding: 16px 0;
   background: var(--surface-secondary, #F7F2EC); border: 1px dashed var(--border, #D5CBBE); border-radius: 10px;
 }
-/* ── 散落书签卡 ── */
-.share-bmcard { text-decoration: none; color: inherit; }
+/* ── 散落书签卡（article 容器：主区链接 + 子书签区，<a> 不可嵌套）── */
+.share-bmcard { padding: 0; }
+.share-bmcard.has-children { height: auto; }
+.share-bmcard-main {
+  position: relative; display: flex; flex-direction: column; padding: 14px;
+  text-decoration: none; color: inherit;
+}
+.share-bmcard-main.is-disabled { opacity: .55; cursor: default; }
 .share-bmcard-head { display: flex; align-items: center; gap: 10px; }
+.share-bmcard-badge {
+  flex-shrink: 0; font-size: 10.5px; font-weight: 600; line-height: 1;
+  padding: 3px 6px; border-radius: 5px; white-space: nowrap;
+  color: var(--text-muted, #6A6660); background: var(--surface-secondary, #F7F2EC);
+  border: 1px solid var(--border, #E5DDD3);
+}
+/* 子书签区：与主区之间加虚线分隔，逐条缩进（缩进量由 depth 内联控制） */
+.share-bmcard-children {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px 12px; border-top: 1px dashed var(--border, #E5DDD3);
+}
+.share-bmcard-child {
+  display: flex; align-items: flex-start; gap: 8px; padding: 5px 8px;
+  border-radius: 8px; text-decoration: none; color: inherit;
+  transition: background .15s ease;
+}
+.share-bmcard-child:hover { background: var(--surface-secondary, #F7F2EC); }
+.share-bmcard-child.is-disabled { opacity: .55; cursor: default; }
+.share-bmcard-child-ic {
+  position: relative; width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-secondary, #EDE4DA); border: 1px solid var(--border, #E5DDD3);
+  border-radius: 6px; overflow: hidden;
+}
+.share-bmcard-child-icon { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.share-bmcard-child-ic:has(img:not(.img-err)) .share-gcard-item-fb { display: none; }
+.share-bmcard-child-ic img.img-err { display: none; }
+.share-bmcard-child-ic .share-gcard-item-fb { font-size: 10px; }
+.share-bmcard-child-text { flex: 1; min-width: 0; }
+.share-bmcard-child-title {
+  display: block; font-size: 13px; font-weight: 600; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.share-bmcard-child-url {
+  display: block; font-size: 11px; color: var(--text-secondary, #888);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.share-bmcard-child-notes {
+  margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 11.5px; color: var(--text-secondary, #666); line-height: 1.45;
+}
 .share-bmcard-icon {
   width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   background: var(--surface-secondary, #EDE4DA); border: 1px solid var(--border, #E5DDD3);
