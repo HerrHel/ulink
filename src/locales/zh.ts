@@ -342,7 +342,7 @@ export const zh = {
     openEmail: '打开邮箱',
     emailCopied: '邮箱地址已复制',
     copyEmailFailed: '复制失败，请手动选中邮箱地址复制',
-    feedbackFormHint: '感谢使用与链（ulink）。如您在使用过程中遇到问题，或有任何建议，欢迎通过以下表单反馈，我们将尽快查收并回复。',
+    feedbackFormHint: '欢迎反馈使用问题与改进建议，我们将尽快回复。',
     feedbackPlaceholder: '请描述您遇到的问题，或希望改进的功能…',
     feedbackContact: '联系方式（选填）',
     feedbackContactPlaceholder: '邮箱 / 微信号 / 其他',

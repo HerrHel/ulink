@@ -351,7 +351,7 @@ export const en = {
     openEmail: 'Open email',
     emailCopied: 'Email address copied',
     copyEmailFailed: 'Copy failed — please select and copy the email manually',
-    feedbackFormHint: 'Thank you for using ulink. Please share any issues you have encountered or features you would like to see — we will review and respond as soon as possible.',
+    feedbackFormHint: 'Please share any issues or suggestions — we will respond as soon as possible.',
     feedbackPlaceholder: 'Describe the issue you encountered, or a feature you would like to request…',
     feedbackContact: 'Contact (optional)',
     feedbackContactPlaceholder: 'Email / WeChat ID / other',
