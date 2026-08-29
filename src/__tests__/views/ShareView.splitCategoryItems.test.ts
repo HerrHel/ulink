@@ -56,15 +56,59 @@ describe('splitCategoryItems — 分类分享卡片切分', () => {
 
   it('未入组的书签进散落区（保持原顺序）', () => {
     const { loose } = splitCategoryItems([grp('g1', ['b1'])], [bm('b1'), bm('b2'), bm('b3')])
-    expect(loose.map((b) => b.id)).toEqual(['b2', 'b3'])
+    expect(loose.map((c) => c.bookmark.id)).toEqual(['b2', 'b3'])
   })
 
-  it('子书签（parentId 非空）不单独成卡', () => {
+  // ── 子书签：一律保留显示（分享页是只读展示，不丢数据）──
+
+  it('子书签挂到散落父卡的 children（depth=1），不单独成卡', () => {
     const { loose } = splitCategoryItems(
       [],
-      [bm('b1'), bm('b1-child', { parentId: 'b1' })],
+      [bm('b1'), bm('b1-c1', { parentId: 'b1' }), bm('b1-c2', { parentId: 'b1' })],
     )
-    expect(loose.map((b) => b.id)).toEqual(['b1'])
+    expect(loose).toHaveLength(1)
+    expect(loose[0].bookmark.id).toBe('b1')
+    expect(loose[0].children.map((c) => c.bookmark.id)).toEqual(['b1-c1', 'b1-c2'])
+    expect(loose[0].children.map((c) => c.depth)).toEqual([1, 1])
+  })
+
+  it('多层级子书签：DFS 扁平化，depth 逐级 +1（孙级也不丢）', () => {
+    const { loose } = splitCategoryItems(
+      [],
+      [
+        bm('b1'),
+        bm('b1-c1', { parentId: 'b1' }),
+        bm('b1-c1-g1', { parentId: 'b1-c1' }),
+        bm('b1-c2', { parentId: 'b1' }),
+      ],
+    )
+    expect(loose).toHaveLength(1)
+    expect(loose[0].children.map((c) => [c.bookmark.id, c.depth])).toEqual([
+      ['b1-c1', 1],
+      ['b1-c1-g1', 2],
+      ['b1-c2', 1],
+    ])
+  })
+
+  it('孤儿子书签（父在组内 / 父不在本分类）独立成卡，由渲染层打标记', () => {
+    // 父 b1 在组内，子 b1-c1 未被任何组包含 → 父不在散落集合，子自成卡且 parentId 非空
+    const { groupCards, loose } = splitCategoryItems(
+      [grp('g1', ['b1'])],
+      [bm('b1'), bm('b1-c1', { parentId: 'b1' })],
+    )
+    expect(groupCards[0].items.map((b) => b.id)).toEqual(['b1'])
+    expect(loose.map((c) => c.bookmark.id)).toEqual(['b1-c1'])
+    expect(loose[0].bookmark.parentId).toBe('b1')
+    expect(loose[0].children).toHaveLength(0)
+  })
+
+  it('组内子书签随组顺序保留（渲染层按 parentId 缩进）', () => {
+    const { groupCards } = splitCategoryItems(
+      [grp('g1', ['b1', 'b1-c1', 'b2'])],
+      [bm('b1'), bm('b1-c1', { parentId: 'b1' }), bm('b2')],
+    )
+    expect(groupCards[0].items.map((b) => b.id)).toEqual(['b1', 'b1-c1', 'b2'])
+    expect(groupCards[0].items[1].parentId).toBe('b1')
   })
 
   it('同一书签被多组引用时只出现在首个组（不重复成卡）', () => {
@@ -77,10 +121,10 @@ describe('splitCategoryItems — 分类分享卡片切分', () => {
     expect(loose).toHaveLength(0)
   })
 
-  it('无组时全部非子书签进散落区', () => {
+  it('无组时全部顶层书签进散落区', () => {
     const { groupCards, loose } = splitCategoryItems([], [bm('b1'), bm('b2')])
     expect(groupCards).toHaveLength(0)
-    expect(loose.map((b) => b.id)).toEqual(['b1', 'b2'])
+    expect(loose.map((c) => c.bookmark.id)).toEqual(['b1', 'b2'])
   })
 
   it('空数据不炸：undefined / 空数组都返回空结果', () => {
@@ -97,6 +141,6 @@ describe('splitCategoryItems — 分类分享卡片切分', () => {
       [bm('b1')],
     )
     expect(groupCards[0].items).toHaveLength(0)
-    expect(loose.map((b) => b.id)).toEqual(['b1'])
+    expect(loose.map((c) => c.bookmark.id)).toEqual(['b1'])
   })
 })
