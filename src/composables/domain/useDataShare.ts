@@ -7,6 +7,7 @@ import { saveAppData } from '../../stores/app.js'
 import { toast } from '../../lib/toast.js'
 
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { useCloudSync } from './useCloudSync.js'
 import { setGroupPublic, fetchPublicGroup, upsertPublicCategoryShare, fetchPublicCategory, CATEGORY_SHARE_PATH, CATEGORY_SHARE_PREFIX, type PublicCategoryData } from './syncShare.js'
 import { SHARE_BASE } from '../../config/urls.js'
@@ -16,6 +17,19 @@ import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 
 export { isValidShareGroupId, setGroupPublic, fetchPublicGroup, upsertPublicCategoryShare, fetchPublicCategory }
 export type { PublicCategoryData }
+
+/**
+ * M15：fork 复制的书签把 E2E 历史密文置空 —— 分享 RPC 返回的云端数据可能含旧版
+ * 密文（title/url/notes），本地无 key 时照搬进 store 会显示乱码（还污染 URL 去重）。
+ */
+function stripCipherBookmark(b: Bookmark): Bookmark {
+  return {
+    ...b,
+    title: isThreePartCipher(b.title) ? '' : b.title,
+    url: isThreePartCipher(b.url) ? '' : b.url,
+    notes: isThreePartCipher(b.notes) ? '' : b.notes,
+  }
+}
 
 // ── 分享组（A4: 公开分享链接，升级为数据库持久化 + URL 路由）──
 
@@ -120,7 +134,7 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     const newId = genId('b', newBookmarks.length)
     idMap.set(b.id, newId)
     newBookmarks.push({
-      ...b,
+      ...stripCipherBookmark(b),
       id: newId,
       password: '',  // 不复制密码
       username: '',  // 不复制用户名
@@ -235,7 +249,7 @@ export async function forkPublicCategory(data: PublicCategoryData) {
     const newId = genId('b', newBookmarks.length)
     idMap.set(b.id, newId)
     newBookmarks.push({
-      ...b,
+      ...stripCipherBookmark(b),
       id: newId,
       categoryId: catId,
       password: '',  // 不复制密码

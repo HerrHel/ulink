@@ -10,6 +10,7 @@
  * 时强制 icon = ''，不对危险 url 派生任何图标 URL，杜绝跨用户图标注入面。
  */
 import { fixUrl, domain, favicon } from '../utils.js'
+import { isThreePartCipher } from '../crypto.js'
 import type { Bookmark } from '../types.js'
 
 /** bookmarkEntries computed 暴露给模板的预渲染条目结构 */
@@ -27,10 +28,19 @@ export interface ShareEntry {
 /**
  * 把书签到预渲染条目：对每条 bookmark 预计算 safeUrl / urlDomain / icon。
  * 纯函数：输入 bookmarks 数组 → 输出 ShareEntry 数组，无响应式 / DOM / store 副作用。
+ *
+ * M15：E2E 历史密文 URL（salt.iv.data 三段）按无效处理 —— 分享侧无 key 不可解，
+ * 不派生可跳转链接、不派生图标，否则密文会被 fixUrl 当相对路径拼出乱码地址。
  */
 export function buildShareEntries(bookmarks: Bookmark[]): ShareEntry[] {
   return bookmarks.map(b => {
-    const safeUrl = fixUrl(b.url)
-    return { b, safeUrl, urlDomain: domain(b.url), icon: safeUrl ? favicon(safeUrl) : '' }
+    const cipherUrl = isThreePartCipher(b.url)
+    const safeUrl = cipherUrl ? '' : fixUrl(b.url)
+    return {
+      b,
+      safeUrl,
+      urlDomain: cipherUrl ? '' : domain(b.url),
+      icon: safeUrl ? favicon(safeUrl) : '',
+    }
   })
 }
