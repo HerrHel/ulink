@@ -22,6 +22,8 @@ export const shareAppZh = {
     catGroupEmpty: '这个组还没有书签',
     catNoNotes: '暂无笔记',
     subBookmark: '子书签',
+    catChildren: '{n} 个子书签',
+    catHide: '收起',
     encryptedPlaceholder: '（内容已加密）',
   },
   appShell: {
@@ -59,6 +61,9 @@ export const shareAppEn = {
     catGroupEmpty: 'No bookmarks in this group yet',
     catNoNotes: 'No notes yet',
     subBookmark: 'Sub-item',
+    catChildren: '{n} sub-items',
+    catChildren_one: '{n} sub-item',
+    catHide: 'Collapse',
     encryptedPlaceholder: '(encrypted content)',
   },
   appShell: {

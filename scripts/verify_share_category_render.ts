@@ -124,7 +124,12 @@ assert(zh.includes('class="bmcard-notes">父书签笔记</p>'), "散落卡渲染
 const childCount = (zh.match(/<a class="bmcard-child"/g) || []).length
 assert(childCount === 1, `子书签行 1 条（实际 ${childCount}）`)
 assert(zh.includes('class="bmcard-child-title">子书签（不应单独成卡）</span>'), "子书签标题完整显示")
-assert(zh.includes('<article class="bmcard has-children">'), "有子项的父卡打 has-children（高度自适应）")
+assert(zh.includes('<article class="bmcard has-children">'), "有子项的父卡打 has-children")
+assert(zh.includes('<input type="checkbox" class="bmcard-toggle-input" id="bmc-b4">'), "子书签展开 checkbox（无 JS 可展开）")
+assert(zh.includes('<label class="bmcard-toggle-label" for="bmc-b4">'), "展开条 label 绑定 checkbox")
+assert(zh.includes(">1 个子书签</span>"), "展开条计数文案")
+assert(zh.includes('.bmcard:has(.bmcard-toggle-input:checked){grid-column:1/-1;height:auto}'), "勾选 → 跨行展开（折叠仍 232px 等高）")
+assert(zh.includes('.bmcard-toggle-input:checked~.bmcard-children{display:flex}'), "勾选 → 子项区显示")
 assert(zh.includes('style="padding-left:10px"'), "depth=1 子书签缩进 10px")
 assert(zh.includes('<div class="bmcard-children">'), "子书签区容器")
 assert(!zh.includes('class="bmcard-badge"'), "非孤儿子书签不打「子书签」角标")

@@ -123,10 +123,11 @@
           </div>
         </article>
 
-        <!-- ── 散落书签卡（对齐主站 BookmarkCard 宫格态）：父卡 + 子书签
-             （<a> 不可嵌套，整卡链接在 card-main，子书签区独立列出）── -->
+        <!-- ── 散落书签卡（对齐主站 BookmarkCard 宫格态）：等高 232px，与无子项的卡一致。
+             子书签通过卡片底部「N 个子书签」按钮展开（跨行显示，交互与组卡一致；
+             <a> 不可嵌套，整卡链接在 card-main，按钮与子项区独立列出）── -->
         <article v-for="card in categoryCards.loose" :key="card.entry.b.id"
-                 class="card share-bmcard" :class="{ 'has-children': card.children.length }">
+                 class="card share-bmcard" :class="{ 'has-children': card.children.length, 'is-open': isLooseOpen(card.entry.b.id) }">
           <a class="share-bmcard-main"
              :href="card.entry.safeUrl || '#'"
              :target="card.entry.safeUrl ? '_blank' : '_self'"
@@ -154,7 +155,14 @@
               <p v-if="displayText(card.entry.b.notes)" class="card-notes share-bmcard-notes">{{ displayText(card.entry.b.notes) }}</p>
             </div>
           </a>
-          <div v-if="card.children.length" class="share-bmcard-children">
+          <button v-if="card.children.length" type="button" class="share-bmcard-toggle"
+                  :aria-expanded="isLooseOpen(card.entry.b.id)"
+                  :title="t('shareView.catExpand')"
+                  @click="toggleLoose(card.entry.b.id)">
+            <span>{{ isLooseOpen(card.entry.b.id) ? t('shareView.catHide') : tN('shareView.catChildren', card.children.length) }}</span>
+            <span aria-hidden="true" v-html="I.chevronDown" class="share-bmcard-chev"></span>
+          </button>
+          <div v-if="isLooseOpen(card.entry.b.id)" class="share-bmcard-children">
             <a v-for="child in card.children" :key="child.entry.b.id"
                class="share-bmcard-child"
                :style="{ paddingLeft: (10 + (child.depth - 1) * 14) + 'px' }"
@@ -275,6 +283,18 @@ function toggleGroup(id: string): void {
   if (next.has(id)) next.delete(id)
   else next.add(id)
   openGroups.value = next
+}
+
+/** 展开的子书签卡（默认收起：保证所有卡片等高 232px，与主站 .card 一致；展开时跨行显示子项） */
+const openLoose = ref(new Set<string>())
+function isLooseOpen(id: string): boolean {
+  return openLoose.value.has(id)
+}
+function toggleLoose(id: string): void {
+  const next = new Set(openLoose.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  openLoose.value = next
 }
 
 /** 单条书签 → 预渲染条目（逐条走 buildShareEntries，保持同一安全口径） */
@@ -682,13 +702,24 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
 .share-bmcard-child-ic img.img-error { display: none; }
 .share-bmcard-child-ic:has(img:not(.img-error)) .share-gcard-item-fb { display: none; }
 
-/* ── 散落书签卡增量：本体 .card 主站视觉，整卡链接 + 子书签区（<a> 不可嵌套）── */
-.share-bmcard.has-children { height: auto; }
+/* ── 散落书签卡增量：本体 .card 主站视觉（等高 232px），整卡链接 + 子书签展开条
+     （<a> 不可嵌套；有子项的卡也保持 232px，展开时跨行）── */
 .share-bmcard-main {
   position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0;
   text-decoration: none; color: inherit;
 }
 .share-bmcard-main.is-disabled { opacity: .55; cursor: default; }
+.share-bmcard.is-open { grid-column: 1 / -1; height: auto; }
+.share-bmcard-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 7px 10px; border: 0; border-top: 1px dashed var(--border, #E5DDD3);
+  background: transparent; font-size: 12px; color: var(--text-muted, #8A847C);
+  cursor: pointer; transition: background .15s ease, color .15s ease;
+}
+.share-bmcard-toggle:hover { background: var(--bg-alt, #F7F2EC); color: var(--text-secondary, #6A6660); }
+.share-bmcard-chev { display: flex; transition: transform .2s ease; }
+.share-bmcard-chev :deep(svg) { width: 12px; height: 12px; display: block; }
+.share-bmcard.is-open .share-bmcard-chev { transform: rotate(180deg); }
 .share-bmcard-badge {
   flex-shrink: 0; align-self: flex-start; font-size: 10.5px; font-weight: 600; line-height: 1;
   padding: 3px 6px; border-radius: 5px; white-space: nowrap;

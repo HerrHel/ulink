@@ -49,6 +49,8 @@ const T = {
     catGroupEmpty: '这个组还没有书签',
     catNoNotes: '暂无笔记',
     subBookmark: '子书签',
+    catChildren: '{n} 个子书签',
+    catHide: '收起',
     cipherPlaceholder: '（内容已加密）',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
@@ -87,6 +89,8 @@ const T = {
     catGroupEmpty: 'No bookmarks in this group yet',
     catNoNotes: 'No notes yet',
     subBookmark: 'Sub-item',
+    catChildren: '{n} sub-items',
+    catHide: 'Collapse',
     cipherPlaceholder: '(encrypted content)',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
@@ -743,8 +747,17 @@ function buildLooseBookmarkCard(
   const ch = title.charAt(0).toUpperCase()
   const notes = deCipherText(dict, b.notes).trim()
   const isChild = !!(typeof b.parent_id === "string" && b.parent_id.trim())
+  // 有子项：卡片底部「N 个子书签」展开条（hidden checkbox + label + :has()，
+  // 无 JS 也可展开，与组卡同款；展开时跨行显示子项 → 折叠态所有卡等高 232px 与主站一致）
   const children = card.children.length
-    ? `<div class="bmcard-children">${card.children.map((c) => buildLooseChildItem(dict, c)).join("")}</div>`
+    ? [
+        `<input type="checkbox" class="bmcard-toggle-input" id="bmc-${esc(String(b.id))}">`,
+        `<label class="bmcard-toggle-label" for="bmc-${esc(String(b.id))}">`,
+        `<span>${fill(pick(dict, "catChildren", card.children.length), { n: card.children.length })}</span>`,
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`,
+        `</label>`,
+        `<div class="bmcard-children">${card.children.map((c) => buildLooseChildItem(dict, c)).join("")}</div>`,
+      ].join("")
     : ""
   return [
     `<article class="bmcard${children ? " has-children" : ""}">`,
@@ -1108,7 +1121,14 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .bmcard.has-children{height:auto}
 .bmcard-main{position:relative;display:flex;flex-direction:column;padding:16px 16px 10px;text-decoration:none;color:inherit}
 .bmcard-badge{flex-shrink:0;font-size:10.5px;font-weight:600;line-height:1;padding:3px 6px;border-radius:5px;white-space:nowrap;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3}
-.bmcard-children{display:flex;flex-direction:column;gap:4px;padding:8px 10px 12px;border-top:1px dashed #E5DDD3}
+.bmcard-toggle-input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.bmcard-toggle-label{display:flex;align-items:center;justify-content:center;gap:4px;padding:7px 10px;border-top:1px dashed #E5DDD3;font-size:12px;color:#8A847C;cursor:pointer;-webkit-user-select:none;user-select:none;transition:background .15s ease,color .15s ease}
+.bmcard-toggle-label:hover{background:#F7F2EC;color:#6A6660}
+.bmcard-toggle-label svg{width:12px;height:12px;display:block;transition:transform .2s ease}
+.bmcard:has(.bmcard-toggle-input:checked){grid-column:1/-1;height:auto}
+.bmcard-toggle-input:checked~.bmcard-toggle-label svg{transform:rotate(180deg)}
+.bmcard-toggle-input:checked~.bmcard-children{display:flex}
+.bmcard-children{display:none;flex-direction:column;gap:4px;padding:8px 10px 12px;border-top:1px dashed #E5DDD3}
 .bmcard-child{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:8px;text-decoration:none;color:inherit;transition:background .15s ease}
 .bmcard-child:hover{background:#F7F2EC}
 .bmcard-child-ic{position:relative;width:20px;height:20px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #E5DDD3;border-radius:6px;overflow:hidden}
