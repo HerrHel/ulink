@@ -1068,22 +1068,25 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .cat-hero-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
 .cat-hero-name{font-size:24px;font-weight:800;color:#2C2824;letter-spacing:-.6px;line-height:1.25;overflow-wrap:anywhere}
 .cat-hero-meta{display:flex;flex-wrap:wrap;gap:8px}
-/* 网格：与 App .card-grid 同参（auto-fill 280px / gap 12px） */
+/* 网格：与 App .card-grid 同参（auto-fill 280px / gap 12px）
+   卡片本体取值对齐主站 cards.css/group.css（--radius-lg:14px、--shadow-card、
+   232px、padding:16px 16px 10px、cardIn 入场动画、hover 上浮 -3px）→ 与主站观感一致 */
 .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
-.gcard,.bmcard{position:relative;height:232px;display:flex;flex-direction:column;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 0 0 1px rgba(0,0,0,.02);overflow:hidden;transition:border-color .18s ease,box-shadow .18s ease,transform .18s cubic-bezier(.16,1,.3,1)}
+@keyframes scardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.gcard,.bmcard{position:relative;height:232px;display:flex;flex-direction:column;background:#FDFBF9;border:1px solid #E5DDD3;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 0 0 1px rgba(0,0,0,.02);overflow:hidden;animation:scardIn .32s cubic-bezier(.16,1,.3,1) backwards;transition:border-color .18s ease,box-shadow .18s ease,transform .18s cubic-bezier(.16,1,.3,1)}
 .gcard:hover,.bmcard:hover{border-color:#D5CBBE;box-shadow:0 8px 28px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.03);transform:translateY(-3px)}
-/* ── 组卡（对齐 App GroupCard 宫格态）── */
-.gcard{padding:14px 14px 12px}
+/* ── 组卡（对齐 App GroupCard 宫格态：accent 竖条 + head + 笔记预览滚动）── */
+.gcard{padding:16px 16px 10px}
 .gcard::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 2px 2px 0;background:var(--cat,#122E8A);opacity:.5;transition:opacity .18s ease}
 .gcard:hover::before{opacity:.9}
 .gcard-toggle{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.gcard-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer;-webkit-user-select:none;user-select:none}
-.gcard-icon{width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:9px;overflow:hidden;position:relative}
-.gcard-icon img{width:22px;height:22px;object-fit:contain}
+.gcard-head{display:flex;align-items:center;gap:10px;margin-bottom:5px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.gcard-icon{width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#EDE4DA;border:1px solid #EFE8DF;border-radius:10px;overflow:hidden;position:relative}
+.gcard-icon img{width:28px;height:28px;object-fit:contain}
 .gcard-icon img.img-err{display:none}
 .gcard-icon:has(img:not(.img-err)) .hero-fb{display:none}
-.gcard-icon .hero-fb{width:22px;height:22px;font-size:14px;color:var(--cat,#122E8A)}
-.gcard-title{flex:1;min-width:0;font-size:15px;font-weight:700;color:#2C2824;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gcard-icon .hero-fb{width:28px;height:28px;font-size:13px;color:var(--cat,#122E8A)}
+.gcard-title{flex:1;min-width:0;font-size:14px;font-weight:600;line-height:18px;color:#2C2824;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gcard-count{flex-shrink:0;font-size:11.5px;font-weight:600;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3;padding:2px 9px;border-radius:999px;white-space:nowrap}
 .gcard-chev{flex-shrink:0;color:#B8B1A8;transition:transform .2s ease,color .2s ease}
 .gcard-chev svg{width:14px;height:14px;display:block}
@@ -1103,7 +1106,7 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 /* ── 散落书签卡（article 容器：主区链接 + 子书签区，<a> 不可嵌套）── */
 .bmcard{padding:0;text-decoration:none;color:inherit}
 .bmcard.has-children{height:auto}
-.bmcard-main{position:relative;display:flex;flex-direction:column;padding:14px;text-decoration:none;color:inherit}
+.bmcard-main{position:relative;display:flex;flex-direction:column;padding:16px 16px 10px;text-decoration:none;color:inherit}
 .bmcard-badge{flex-shrink:0;font-size:10.5px;font-weight:600;line-height:1;padding:3px 6px;border-radius:5px;white-space:nowrap;color:#6A6660;background:#F7F2EC;border:1px solid #E5DDD3}
 .bmcard-children{display:flex;flex-direction:column;gap:4px;padding:8px 10px 12px;border-top:1px dashed #E5DDD3}
 .bmcard-child{display:flex;align-items:flex-start;gap:8px;padding:5px 8px;border-radius:8px;text-decoration:none;color:inherit;transition:background .15s ease}
@@ -1123,9 +1126,9 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .bmcard-icon img.img-err{display:none}
 .bmcard-icon:has(img:not(.img-err)) .bmcard-fb{display:none}
 .bmcard-fb{display:flex;align-items:center;justify-content:center;width:22px;height:22px;font-size:13px;font-weight:700;color:var(--cat,#122E8A);text-transform:uppercase;line-height:1}
-.bmcard-title{font-size:14.5px;font-weight:600;color:#2C2824;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s ease}
-.bmcard-url{margin-top:6px;display:block;font-size:12px;color:#8A847C;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bmcard-notes{margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;color:#6A6660;line-height:1.5}
+.bmcard-title{font-size:14px;font-weight:600;line-height:18px;color:#2C2824;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s ease}
+.bmcard-url{display:block;font-size:11.5px;line-height:18px;color:#8A847C;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bmcard-notes{margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13.6px;color:#6A6660;line-height:1.5}
 .bmcard-arrow{position:absolute;right:12px;bottom:12px;color:#B8B1A8;opacity:0;transform:translate(-2px,2px);transition:opacity .18s ease,transform .18s ease,color .18s ease}
 .bmcard-arrow svg{width:15px;height:15px;display:block}
 .bmcard:hover .bmcard-title{color:var(--cat,#122E8A)}

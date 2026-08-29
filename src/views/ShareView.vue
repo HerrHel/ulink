@@ -67,70 +67,92 @@
         </div>
       </div>
 
-      <!-- 分类分享：卡片网格（组卡在前 + 散落书签卡，对齐应用内分类视图） -->
+      <!-- 分类分享：卡片网格（组卡在前 + 散落书签卡）。
+           卡片 DOM 复用主站 BookmarkCard/GroupCard 的类名（.card / .group-card / .card-logo /
+           .card-titlewrap / .card-name / .card-domain / .card-notes 等），样式直接由全局
+           cards.css 提供 → 与主站像素级一致，App 改卡片样式时分享页自动跟随、零维护。 -->
       <div v-if="isCategory" class="share-cat-grid">
+        <!-- ── 组卡（对齐主站 GroupCard 宫格态）── -->
         <article v-for="entry in categoryCards.groupCards" :key="entry.group.id"
-                 class="share-gcard" :class="{ 'is-open': isGroupOpen(entry.group.id) }">
-          <div class="share-gcard-head" role="button" tabindex="0"
+                 class="card group-card share-gcard" :class="{ 'is-open': isGroupOpen(entry.group.id) }">
+          <span class="group-card-accent" aria-hidden="true"></span>
+          <div class="group-card-head share-gcard-head" role="button" tabindex="0"
                :aria-expanded="isGroupOpen(entry.group.id)"
                :title="t('shareView.catExpand')"
                @click="toggleGroup(entry.group.id)"
                @keydown.enter.prevent="toggleGroup(entry.group.id)"
                @keydown.space.prevent="toggleGroup(entry.group.id)">
             <!-- 图标位：首字母常显，img 加载成功后由 :has() 遮住（加载失败 → 露出首字母） -->
-            <span class="share-gcard-icon">
-              <span class="share-gcard-icon-fb">{{ groupInitialOf(entry.group) }}</span>
+            <div class="card-logo group-card-icon">
+              <span class="card-logo-fallback">{{ groupInitialOf(entry.group) }}</span>
               <img v-if="groupIconImgOf(entry.group)" :src="groupIconImgOf(entry.group)"
                    class="share-gcard-icon-img" referrerpolicy="no-referrer" alt="" @error="markIconError" />
-            </span>
-            <span class="share-gcard-title">{{ entry.group.name }}</span>
+            </div>
+            <div class="card-titlewrap">
+              <div class="card-titlewrap-text">
+                <div class="card-name">{{ displayText(entry.group.name) }}</div>
+              </div>
+            </div>
             <span class="share-gcard-count">{{ tN('shareView.catBookmarks', entry.items.length) }}</span>
             <span aria-hidden="true" v-html="I.chevronDown" class="share-gcard-chev"></span>
           </div>
-          <!-- 组笔记（sanitize 后）；无笔记时给灰字回退，避免卡片中空一大块 -->
-          <div v-if="groupNotesHtmlOf(entry.group)" class="share-group-notes share-gcard-notes"
-               v-html="groupNotesHtmlOf(entry.group)"></div>
-          <div v-else class="share-gcard-nonotes">{{ t('shareView.catNoNotes') }}</div>
-          <div v-if="isGroupOpen(entry.group.id)" class="share-gcard-items">
-            <a v-for="item in entry.entries" :key="item.entry.b.id"
-               :href="item.entry.safeUrl || '#'"
-               :target="item.entry.safeUrl ? '_blank' : '_self'"
-               :rel="item.entry.safeUrl ? 'noopener' : undefined"
-               :class="['share-gcard-item', { 'is-disabled': !item.entry.safeUrl, 'is-child': item.isChild }]"
-               @click="!item.entry.safeUrl ? $event.preventDefault() : null">
-              <span class="share-gcard-item-ic">
-                <span class="share-gcard-item-fb">{{ (displayText(item.entry.b.title) || item.entry.urlDomain || '?')[0].toUpperCase() }}</span>
-                <img v-if="item.entry.icon" :src="item.entry.icon" class="share-gcard-item-icon" referrerpolicy="no-referrer"
-                     loading="lazy" @error="markIconError" />
-              </span>
-              <span class="share-gcard-item-title">{{ displayText(item.entry.b.title) || item.entry.urlDomain }}</span>
-              <span class="share-gcard-item-url">{{ item.entry.urlDomain }}</span>
-            </a>
-            <div v-if="!entry.entries.length" class="share-gcard-empty">{{ t('shareView.catGroupEmpty') }}</div>
+          <!-- 组笔记（sanitize 后，类名与主站组卡折叠态一致）；无笔记时给灰字回退 -->
+          <div class="card-body grp-scroll-body">
+            <div class="card-scroll-wrap">
+              <div v-if="groupNotesHtmlOf(entry.group)" class="group-notes-preview"
+                   v-html="groupNotesHtmlOf(entry.group)"></div>
+              <div v-else class="share-gcard-nonotes">{{ t('shareView.catNoNotes') }}</div>
+              <div v-if="isGroupOpen(entry.group.id)" class="share-gcard-items">
+                <a v-for="item in entry.entries" :key="item.entry.b.id"
+                   :href="item.entry.safeUrl || '#'"
+                   :target="item.entry.safeUrl ? '_blank' : '_self'"
+                   :rel="item.entry.safeUrl ? 'noopener' : undefined"
+                   :class="['share-gcard-item', { 'is-disabled': !item.entry.safeUrl, 'is-child': item.isChild }]"
+                   @click="!item.entry.safeUrl ? $event.preventDefault() : null">
+                  <span class="share-gcard-item-ic">
+                    <span class="share-gcard-item-fb">{{ (displayText(item.entry.b.title) || item.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                    <img v-if="item.entry.icon" :src="item.entry.icon" class="share-gcard-item-icon" referrerpolicy="no-referrer"
+                         loading="lazy" @error="markIconError" />
+                  </span>
+                  <span class="share-gcard-item-title">{{ displayText(item.entry.b.title) || item.entry.urlDomain }}</span>
+                  <span class="share-gcard-item-url">{{ item.entry.urlDomain }}</span>
+                </a>
+                <div v-if="!entry.entries.length" class="share-gcard-empty">{{ t('shareView.catGroupEmpty') }}</div>
+              </div>
+            </div>
           </div>
         </article>
 
-        <!-- 散落书签卡：父卡 + 子书签（挂在卡内缩进显示；<a> 不可嵌套，故外层用 article） -->
+        <!-- ── 散落书签卡（对齐主站 BookmarkCard 宫格态）：父卡 + 子书签
+             （<a> 不可嵌套，整卡链接在 card-main，子书签区独立列出）── -->
         <article v-for="card in categoryCards.loose" :key="card.entry.b.id"
-                 class="share-bmcard" :class="{ 'has-children': card.children.length }">
+                 class="card share-bmcard" :class="{ 'has-children': card.children.length }">
           <a class="share-bmcard-main"
              :href="card.entry.safeUrl || '#'"
              :target="card.entry.safeUrl ? '_blank' : '_self'"
              :rel="card.entry.safeUrl ? 'noopener' : undefined"
              :class="{ 'is-disabled': !card.entry.safeUrl }"
              @click="!card.entry.safeUrl ? $event.preventDefault() : null">
-            <span class="share-bmcard-head">
-              <span class="share-bmcard-icon">
-                <span class="share-bmcard-fb">{{ (displayText(card.entry.b.title) || card.entry.urlDomain || '?')[0].toUpperCase() }}</span>
-                <img v-if="card.entry.icon" :src="card.entry.icon" referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
-              </span>
-              <span class="share-bmcard-title">{{ displayText(card.entry.b.title) || card.entry.urlDomain }}</span>
-              <!-- 孤儿子书签：父在组内或不在本分类，标出来说明层级来源 -->
-              <span v-if="card.isChild" class="share-bmcard-badge">{{ t('shareView.subBookmark') }}</span>
-            </span>
-            <span class="share-bmcard-url">{{ card.entry.urlDomain }}</span>
-            <p v-if="displayText(card.entry.b.notes)" class="share-bmcard-notes">{{ displayText(card.entry.b.notes) }}</p>
-            <span aria-hidden="true" v-html="I.external" class="share-bmcard-arrow"></span>
+            <div class="card-topline">
+              <div class="card-toprow">
+                <div class="card-logo">
+                  <span class="card-logo-fallback">{{ (displayText(card.entry.b.title) || card.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                  <img v-if="card.entry.icon" :src="card.entry.icon" referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
+                </div>
+                <div class="card-titlewrap">
+                  <div class="card-titlewrap-text">
+                    <div class="card-name">{{ displayText(card.entry.b.title) || card.entry.urlDomain }}</div>
+                    <div class="card-domain">{{ card.entry.urlDomain }}</div>
+                  </div>
+                  <span aria-hidden="true" v-html="I.external" class="card-open-hint"></span>
+                </div>
+                <!-- 孤儿子书签：父在组内或不在本分类，标出来说明层级来源 -->
+                <span v-if="card.isChild" class="share-bmcard-badge">{{ t('shareView.subBookmark') }}</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <p v-if="displayText(card.entry.b.notes)" class="card-notes share-bmcard-notes">{{ displayText(card.entry.b.notes) }}</p>
+            </div>
           </a>
           <div v-if="card.children.length" class="share-bmcard-children">
             <a v-for="child in card.children" :key="child.entry.b.id"
@@ -319,12 +341,13 @@ function groupInitialOf(g: SiblingGroup): string {
 }
 
 /**
- * favicon 加载失败：给 img 打 .img-err（CSS 隐藏 img，:has() 露出首字母占位）。
- * 不用 style.display='none'，否则 :has(img:not(.img-err)) 仍命中 → 首字母被永久遮住。
+ * favicon 加载失败：给 img 打 .img-error（与 cards.css 的 .card-logo:has(img:not(.img-error))
+ * 类名一致）→ CSS 隐藏 img、:has() 露出首字母占位。不用 style.display='none'，
+ * 否则 :has(img:not(.img-error)) 仍命中 → 首字母被永久遮住。
  */
 function markIconError(e: Event): void {
   const el = e.target as HTMLElement | null
-  el?.classList?.add("img-err")
+  el?.classList?.add("img-error")
 }
 
 /** D2-006：已知图标键 → SVG；http(s) 自定义 → 安全 URL；其它空 */
@@ -586,72 +609,33 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
 .share-cat-meta { display: flex; flex-wrap: wrap; gap: 14px; }
 .share-cat-actions { flex-shrink: 0; }
 
-/* 分类分享：卡片网格（对齐 App .card-grid：auto-fill 280px / gap 12px） */
+/* 分类分享：卡片网格（与 App .card-grid 同参：auto-fill 280px / gap 12px） */
 .share-cat-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px; align-items: start;
 }
-.share-gcard, .share-bmcard {
-  position: relative; display: flex; flex-direction: column; padding: 14px;
-  background: var(--surface, #FDFBF9); border: 1px solid var(--border, #E5DDD3); border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04); overflow: hidden;
-  transition: border-color .18s ease, box-shadow .18s ease, transform .18s cubic-bezier(.16,1,.3,1);
-}
-.share-gcard:hover, .share-bmcard:hover {
-  border-color: var(--border-hover, #D5CBBE);
-  box-shadow: 0 8px 28px rgba(0,0,0,.08); transform: translateY(-3px);
-}
-/* ── 组卡 ── */
-.share-gcard::before {
-  content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
-  border-radius: 0 2px 2px 0; background: var(--cat, var(--accent, #3B82F6)); opacity: .5;
-  transition: opacity .18s ease;
-}
-.share-gcard:hover::before { opacity: .9; }
-.share-gcard-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer; user-select: none; }
-.share-gcard-icon {
-  width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  background: var(--surface-secondary, #EDE4DA); border: 1px solid var(--border, #E5DDD3);
-  border-radius: 9px; overflow: hidden; font-weight: 700; color: var(--cat, var(--accent, #3B82F6));
-}
-/* 图标位：首字母与 favicon 叠放（容器定宽，img 绝对定位覆盖）；
-   img 加载失败打 .img-err → CSS 隐藏 img，:has() 露出首字母（与 SSR 分类页同款方案） */
-.share-gcard-icon, .share-bmcard-icon, .share-gcard-item-ic { position: relative; }
-.share-gcard-icon-img, .share-bmcard-icon img {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 22px; height: 22px; object-fit: contain;
-}
-.share-gcard-item-icon { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.share-gcard-item-ic {
-  position: relative; width: 22px; height: 22px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-}
-.share-gcard-icon-fb { font-size: 13px; font-weight: 700; text-transform: uppercase; }
-.share-gcard-icon img.img-err, .share-gcard-item-icon.img-err, .share-bmcard-icon img.img-err { display: none; }
-.share-gcard-icon:has(img:not(.img-err)) .share-gcard-icon-fb,
-.share-gcard-item-ic:has(img:not(.img-err)) .share-gcard-item-fb,
-.share-bmcard-icon:has(img:not(.img-err)) .share-bmcard-fb { display: none; }
-.share-gcard-title {
-  flex: 1; min-width: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.2px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+/* 卡片本体视觉（背景/圆角/阴影/高度/入场动画/hover 上浮）全部由全局 cards.css 的
+   .card 与 group.css 的 .group-card 提供 → 与主站像素级一致、改主站样式自动跟随。
+   本段只保留分享页特有的「只读交互增量」。 */
+
+/* ── 组卡增量 ── */
+.share-cat-grid .group-card-head { flex-shrink: 0; z-index: 2; background: var(--surface, #FDFBF9); } /* 对齐 .card-grid:not(.list-view) 规则 */
+.share-gcard-head { cursor: pointer; user-select: none; }
 .share-gcard-count {
-  flex-shrink: 0; font-size: 11.5px; font-weight: 600; color: var(--text-muted, #6A6660);
-  background: var(--surface-secondary, #F7F2EC); border: 1px solid var(--border, #E5DDD3);
-  padding: 2px 9px; border-radius: 999px; white-space: nowrap;
+  flex-shrink: 0; align-self: center; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  color: var(--text-muted, #6A6660); background: var(--bg-alt, #F7F2EC);
+  border: 1px solid var(--border-light, #E5DDD3); padding: 2px 9px; border-radius: 999px;
 }
-.share-gcard-chev { flex-shrink: 0; color: var(--text-muted, #B8B1A8); transition: transform .2s ease, color .2s ease; }
+.share-gcard-chev {
+  flex-shrink: 0; align-self: center; display: flex; align-items: center;
+  color: var(--text-muted, #B8B1A8); transition: transform .2s ease, color .2s ease;
+}
 .share-gcard-chev :deep(svg) { width: 14px; height: 14px; display: block; }
-/* 展开：跨整行 + 笔记不再截断 */
-.share-gcard.is-open { grid-column: 1 / -1; }
-.share-gcard.is-open .share-gcard-chev { transform: rotate(180deg); color: var(--cat, var(--accent, #3B82F6)); }
-.share-gcard-notes {
-  flex: 1; min-height: 0; max-height: 132px; overflow: hidden; margin: 0; font-size: 13px;
-  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
-}
-.share-gcard.is-open .share-gcard-notes { max-height: none; overflow: visible; -webkit-mask-image: none; mask-image: none; }
-.share-gcard-nonotes { font-size: 12.5px; color: var(--text-muted, #B0A9A0); }
+.share-gcard-nonotes { font-size: 12.5px; color: var(--text-muted, #B0A9A0); padding: 2px 0; }
+/* 展开：跨整行 + 高度自适应 + 笔记可点（折叠态主站语义 pointer-events:none） */
+.share-gcard.is-open { grid-column: 1 / -1; height: auto; }
+.share-gcard.is-open .share-gcard-chev { transform: rotate(180deg); color: var(--accent, #3B82F6); }
+.share-gcard.is-open .group-notes-preview { pointer-events: auto; }
 .share-gcard-items {
   display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding-top: 10px;
   border-top: 1px dashed var(--border, #E5DDD3);
@@ -662,7 +646,7 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
   text-decoration: none; color: inherit;
   transition: border-color .15s ease, background .15s ease;
 }
-.share-gcard-item:hover { border-color: var(--cat, var(--accent, #3B82F6)); background: var(--surface-secondary, #F7F2EC); }
+.share-gcard-item:hover { border-color: var(--accent, #3B82F6); background: var(--bg-alt, #F7F2EC); }
 .share-gcard-item.is-disabled { opacity: .55; cursor: default; }
 /* 组内子书签：缩进 + 左侧连接线，体现层级（属性照常完整展示） */
 .share-gcard-item.is-child { margin-left: 16px; position: relative; }
@@ -670,10 +654,14 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
   content: ""; position: absolute; left: -10px; top: 50%; width: 8px; height: 1px;
   background: var(--border, #D5CBBE);
 }
-.share-gcard-item-icon { border-radius: 3px; } /* 尺寸/定位见上方叠放规则（absolute inset 0） */
+.share-gcard-item-ic {
+  position: relative; width: 22px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.share-gcard-item-icon { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
 .share-gcard-item-fb {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: var(--cat, var(--accent, #3B82F6)); text-transform: uppercase;
+  font-size: 12px; font-weight: 700; color: var(--accent, #3B82F6); text-transform: uppercase;
 }
 .share-gcard-item-title {
   flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600;
@@ -686,22 +674,26 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
 }
 .share-gcard-empty {
   font-size: 12.5px; color: var(--text-secondary, #8A847C); text-align: center; padding: 16px 0;
-  background: var(--surface-secondary, #F7F2EC); border: 1px dashed var(--border, #D5CBBE); border-radius: 10px;
+  background: var(--bg-alt, #F7F2EC); border: 1px dashed var(--border, #D5CBBE); border-radius: 10px;
 }
-/* ── 散落书签卡（article 容器：主区链接 + 子书签区，<a> 不可嵌套）── */
-.share-bmcard { padding: 0; }
+/* favicon 失败：img-error（与 cards.css 类名一致）隐藏，:has() 露出首字母 */
+.share-gcard-item-ic img.img-error { display: none; }
+.share-gcard-item-ic:has(img:not(.img-error)) .share-gcard-item-fb { display: none; }
+.share-bmcard-child-ic img.img-error { display: none; }
+.share-bmcard-child-ic:has(img:not(.img-error)) .share-gcard-item-fb { display: none; }
+
+/* ── 散落书签卡增量：本体 .card 主站视觉，整卡链接 + 子书签区（<a> 不可嵌套）── */
 .share-bmcard.has-children { height: auto; }
 .share-bmcard-main {
-  position: relative; display: flex; flex-direction: column; padding: 14px;
+  position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0;
   text-decoration: none; color: inherit;
 }
 .share-bmcard-main.is-disabled { opacity: .55; cursor: default; }
-.share-bmcard-head { display: flex; align-items: center; gap: 10px; }
 .share-bmcard-badge {
-  flex-shrink: 0; font-size: 10.5px; font-weight: 600; line-height: 1;
+  flex-shrink: 0; align-self: flex-start; font-size: 10.5px; font-weight: 600; line-height: 1;
   padding: 3px 6px; border-radius: 5px; white-space: nowrap;
-  color: var(--text-muted, #6A6660); background: var(--surface-secondary, #F7F2EC);
-  border: 1px solid var(--border, #E5DDD3);
+  color: var(--text-muted, #6A6660); background: var(--bg-alt, #F7F2EC);
+  border: 1px solid var(--border-light, #E5DDD3);
 }
 /* 子书签区：与主区之间加虚线分隔，逐条缩进（缩进量由 depth 内联控制） */
 .share-bmcard-children {
@@ -713,17 +705,15 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
   border-radius: 8px; text-decoration: none; color: inherit;
   transition: background .15s ease;
 }
-.share-bmcard-child:hover { background: var(--surface-secondary, #F7F2EC); }
+.share-bmcard-child:hover { background: var(--bg-alt, #F7F2EC); }
 .share-bmcard-child.is-disabled { opacity: .55; cursor: default; }
 .share-bmcard-child-ic {
   position: relative; width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--surface-secondary, #EDE4DA); border: 1px solid var(--border, #E5DDD3);
+  background: var(--bg-alt, #EDE4DA); border: 1px solid var(--border-light, #E5DDD3);
   border-radius: 6px; overflow: hidden;
 }
 .share-bmcard-child-icon { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.share-bmcard-child-ic:has(img:not(.img-err)) .share-gcard-item-fb { display: none; }
-.share-bmcard-child-ic img.img-err { display: none; }
 .share-bmcard-child-ic .share-gcard-item-fb { font-size: 10px; }
 .share-bmcard-child-text { flex: 1; min-width: 0; }
 .share-bmcard-child-title {
@@ -739,36 +729,9 @@ function _applyCategoryShareHead(data: PublicCategoryData) {
   margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; font-size: 11.5px; color: var(--text-secondary, #666); line-height: 1.45;
 }
-.share-bmcard-icon {
-  width: 38px; height: 38px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  background: var(--surface-secondary, #EDE4DA); border: 1px solid var(--border, #E5DDD3);
-  border-radius: 9px; overflow: hidden;
-}
-.share-bmcard-icon img { width: 22px; height: 22px; object-fit: contain; }
-.share-bmcard-fb { font-size: 13px; font-weight: 700; color: var(--cat, var(--accent, #3B82F6)); text-transform: uppercase; }
-.share-bmcard-title {
-  font-size: 14.5px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .15s ease;
-}
-.share-bmcard:hover .share-bmcard-title { color: var(--cat, var(--accent, #3B82F6)); }
-.share-bmcard-url {
-  margin-top: 6px; display: block; font-size: 12px; color: var(--text-secondary, #888);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.share-bmcard-notes {
-  margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; font-size: 12.5px; color: var(--text-secondary, #666); line-height: 1.5;
-}
-.share-bmcard-arrow {
-  position: absolute; right: 12px; bottom: 12px; color: var(--text-secondary, #888); opacity: .35;
-  transition: opacity .18s ease, transform .18s ease, color .18s ease;
-}
-.share-bmcard-arrow :deep(svg) { width: 15px; height: 15px; display: block; }
-.share-bmcard:hover .share-bmcard-arrow { opacity: 1; transform: translate(0, 0); color: var(--cat, var(--accent, #3B82F6)); }
 .share-empty {
   grid-column: 1 / -1; text-align: center; color: var(--text-secondary, #666); font-size: 13px;
-  padding: 32px 0; background: var(--surface-secondary, #f7f2ec);
+  padding: 32px 0; background: var(--bg-alt, #f7f2ec);
   border: 1px dashed var(--border, #e5e7eb); border-radius: 14px;
 }
 
