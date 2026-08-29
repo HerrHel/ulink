@@ -233,7 +233,10 @@
             <input class="sp-feedback-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" v-model="feedbackHoneypot" />
             <div v-if="TURNSTILE_SITE_KEY" id="lv-turnstile" class="sp-feedback-turnstile"></div>
             <div class="sp-feedback-meta">
-              <span>{{ t('settings.feedbackCount', { n: feedbackText.length }) }}</span>
+              <!-- 按钮被禁用时必须给出原因：只显示计数的话，用户不知道还差几个字 -->
+              <span :class="{ 'sp-feedback-short': feedbackTooShort }">
+                {{ feedbackTooShort ? t('settings.feedbackTooShort') : t('settings.feedbackCount', { n: feedbackText.length }) }}
+              </span>
               <span>{{ t('settings.feedbackOrEmail') }}
                 <button class="sp-feedback-link" @click="openFeedbackMail">{{ FEEDBACK_EMAIL }}</button>
               </span>
@@ -454,12 +457,21 @@ const feedbackHoneypot = ref('')
 const feedbackSending = ref(false)
 const turnstileToken = ref('')
 
+/** 正文最小长度（与 Edge Function 的 MIN_MESSAGE 保持一致）。 */
+const MIN_FEEDBACK = 5
+
 const canSendFeedback = computed(
   () =>
-    feedbackText.value.trim().length >= 5 &&
+    feedbackText.value.trim().length >= MIN_FEEDBACK &&
     !feedbackSending.value &&
     (!TURNSTILE_SITE_KEY || !!turnstileToken.value),
 )
+
+/** 已输入但未达最小长度——此时按钮是禁用的，必须让用户知道原因。 */
+const feedbackTooShort = computed(() => {
+  const n = feedbackText.value.trim().length
+  return n > 0 && n < MIN_FEEDBACK
+})
 
 function onFeedback() {
   pushNavState()

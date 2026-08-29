@@ -71,6 +71,29 @@ vi.mock('../../lib/supabase.js', () => {
   }
 })
 
+/**
+ * 加密阶段失败注入：crypto.encrypt 抛错开关。
+ *
+ * 为什么需要它：LOCK-FIX 之后「E2E 锁定 + changedFields 绕 lockedItemKeys」已**不可能**
+ * 让 encryptItem 抛错 —— syncPush._opNeedsUnlock 与 useE2E.encryptItem 共用
+ * _fieldsNeedUnlock 判定，锁定态下同一条 op 要么被 lockedItemKeys 跳过、要么放行
+ * （放行即说明本次变更不含敏感字段，不 throw）。encFailedOps 的真实可达路径是
+ * 「key 在内存但加密本身失败」，故用开关 mock crypto.encrypt 复现，避免测试继续锁在
+ * 一个不存在的分支上（旧断言因此恒真失败，而「死信出队」用例因成功路径同样满足断言
+ * 而假阳性变绿）。
+ */
+const { _encryptFail } = vi.hoisted(() => ({ _encryptFail: { on: false } }))
+vi.mock('../../crypto.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../crypto.js')>()
+  return {
+    ...actual,
+    encrypt: async (...args: unknown[]) => {
+      if (_encryptFail.on) throw new Error('mock 加密失败')
+      return (actual.encrypt as unknown as (...a: unknown[]) => Promise<string>)(...args)
+    },
+  }
+})
+
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { useAuthStore } from '../../stores/auth.js'
@@ -427,17 +450,30 @@ describe('pushFromQueue 离线守门', () => {
   })
 })
 
-describe('pushFromQueue 加密失败一条龙（E2E 锁定 + changedFields 绕 lockedItemKeys）', () => {
-  // 锁：E2E 启用锁定态下，changedFields 指向非敏感字段（如 title）让 _opNeedsUnlock 返 false
-  // 绕过 lockedItemKeys 早退，但 data 含非空真凭证字段（username）触发 encryptItem needsEnc throw
-  // 「E2E 已启用但未解锁无法加密」。该 op 走 encFailedOps → retry+1 链路（非误判成功出队），
-  // 失败 warn 经 _redactOpData 脱敏（password 明文不打控制台）。锁住「加密失败不丢本地变更 +
-  // 失败经重试链路不死信过早/过晚 + 敏感字段不落 warn 明文」三重契约。
+describe('pushFromQueue 加密失败一条龙（已解锁但 encrypt 抛错）', () => {
+  // 锁：加密阶段失败（encryptItem throw）走 encFailedOps —— 不静默出队丢本地变更，
+  // 未达 MAX 留队 retry+1 + 状态 error，失败 warn 经 _redactOpData 脱敏（password 明文
+  // 不打控制台）。锁住「加密失败不丢本地变更 + 失败经重试链路不死信过早/过晚 +
+  // 敏感字段不落 warn 明文」三重契约。
+  //
+  // 2026-08-29 修正触发方式：旧版用「E2E 锁定 + changedFields 绕 lockedItemKeys」触发
+  // encryptItem throw。LOCK-FIX 后 _opNeedsUnlock 与 encryptItem 共用 _fieldsNeedUnlock，
+  // 锁定态下同一条 op 要么被 lockedItemKeys 跳过、要么放行（放行即不 throw），该组合恒
+  // 不产生 encFailedOps —— 用例 1 因此必失败（ok 走成功路径返 true），用例 2 则因成功路径
+  // 同样满足「出队 + clearPending」而假阳性变绿。现改用 _encryptFail 开关注入真实可达的
+  // 加密失败路径（key 在内存、crypto.encrypt 抛错）。
 
   beforeEach(() => {
     const e2e = useE2EStore()
     e2e.setEnabled(true)
-    e2e.setUnlocked(false) // 锁定：isLocked=true，但 key=null → encryptItem 遇 needsEnc throw
+    e2e.setUnlocked(true) // 已解锁 → isLocked=false，不会被 lockedItemKeys 提前跳过
+    e2e.setKey({} as CryptoKey) // 仅需非空：encryptField 见 key 才调 crypto.encrypt
+    _encryptFail.on = true
+  })
+
+  afterEach(() => {
+    _encryptFail.on = false
+    useE2EStore().setKey(null)
   })
 
   it('加密失败 op 未达 MAX → 留队 retries+1 + 状态 error + warn 脱敏不含明文', async () => {
@@ -448,8 +484,8 @@ describe('pushFromQueue 加密失败一条龙（E2E 锁定 + changedFields 绕 l
     ds._dirtyIds.clear()
     ds._newIds.clear()
 
-    // changedFields=['title'] 非敏感 → _opNeedsUnlock=false → 不进 lockedItemKeys；
-    // username 非空 → encryptItem needsEnc=true → 锁定态 !key → throw → encFailedOps。
+    // username 非空 + key 在内存 → encryptField 走 crypto.encrypt → 开关注入抛错 →
+    // encryptItem throw → encFailedOps（留队重试，不静默出队）。
     await enqueueSyncOps([{
       action: 'upsert', table: 'bookmarks', itemId: 'bm-enc',
       data: {
@@ -497,12 +533,72 @@ describe('pushFromQueue 加密失败一条龙（E2E 锁定 + changedFields 绕 l
     await (await import('../../stores/storage.js')).updateSyncOpRetry(ops0[0]!.id as number, MAX_PUSH_RETRIES - 1)
     __testPendingSync.add('bm-enc2')
 
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     await useCloudSync().pushToCloud()
 
     expect(await syncOpsCount()).toBe(0) // 死信出队
     expect(__testPendingSync.has('bm-enc2')).toBe(false) // clearPending
-    vi.mocked(console.warn).mockClear?.()
+    // 死信 ≠ 成功出队：两者都会清空队列、都会 clearPending（旧用例正因此假阳性变绿，
+    // 掩盖了「加密失败根本没被触发」）。真正判据是——加密在触碰端口之前就失败，
+    // 所以 port 一条推送都没收到，且同步状态为 error。
+    expect(port.updates).toHaveLength(0)
+    expect(port.upserts).toHaveLength(0)
+    expect(useSyncStore().syncStatus).toBe('error')
+    expect(useSyncStore().syncError).toMatch(/加密\/序列化失败/)
+    // 顺带锁脱敏：失败 warn 里的 op data 不得带明文 username/notes
+    const warnArgs = warnSpy.mock.calls.map(c => JSON.stringify(c)).join('\n')
+    expect(warnArgs).not.toContain('secret-user2')
+    expect(warnArgs).toContain('[redacted]')
+    warnSpy.mockRestore()
+  })
+})
+
+describe('pushFromQueue 锁定态 LOCK-FIX：非敏感变更不误判失败', () => {
+  // 锁 LOCK-FIX 契约（与上方「加密失败」用例互补，防回归到「携带未改动 username 就锁定」）：
+  // E2E 启用未解锁 + changedFields 不含敏感字段 →
+  //   ① _opNeedsUnlock=false → 不进 lockedItemKeys，锁定态也能同步普通内容（不卡同步）
+  //   ② encryptItem 不 throw（与 ① 共用 _fieldsNeedUnlock，判定恒一致，不存在「绕过锁
+  //      却在加密阶段炸掉」的中间态）
+  //   ③ partial update 只带 changedFields →username/password 明文不出本地
+  // 旧的「加密失败一条龙」曾断言 ② 会 throw，是 LOCK-FIX 前的过期契约。
+
+  it('锁定态仅改 title → 推送成功出队，partial 只含 changedFields（明文凭证不出本地）', async () => {
+    const e2e = useE2EStore()
+    e2e.setEnabled(true)
+    e2e.setUnlocked(false) // 锁定：key=null
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-lock', username: 'secret-user', password: 'p-plain' }) as any)
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-lock',
+      data: {
+        ...makeBm({ id: 'bm-lock', username: 'secret-user', password: 'p-plain' }),
+        _userId: 'user-sp', _isNew: false, _changedFields: ['title'],
+      },
+      ts: 1,
+    }])
+
+    // 噪声回归护栏：history 走「全字段加密」口径（快照整条上云 supabase data_history，
+    // 不能按 changedFields 放宽），锁定态含非空敏感字段的条目应**静默 skip**，不再靠
+    // 抛异常 + warn 表达「预期跳过」（旧实现每条 upsert 打一次 `history encrypt
+    // skipped`，锁定态同步时刷屏，还会构造无谓的 Error 对象）。
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const ok = await useCloudSync().pushToCloud()
+    const warnArgs = warnSpy.mock.calls.map(c => JSON.stringify(c)).join('\n')
+    warnSpy.mockRestore()
+    expect(warnArgs).not.toContain('history encrypt skipped')
+    expect(ok).toBe(true) // 锁定态仅改非敏感字段 → 成功，不再被误判为加密失败
+    expect(await syncOpsCount()).toBe(0) // 成功出队（非留队）
+    expect(port.updates).toHaveLength(1)
+    const patchJson = JSON.stringify(port.updates[0]!.patch)
+    expect(Object.keys(port.updates[0]!.patch)).toContain('title')
+    expect(patchJson).not.toContain('secret-user') // 明文 username 不出本地
+    expect(patchJson).not.toContain('p-plain') // 明文 password 不出本地
   })
 })
 
