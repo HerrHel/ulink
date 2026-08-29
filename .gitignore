@@ -30,3 +30,4 @@ supabase/.temp/
 .wrangler/
 dist_deploy/
 verify_*.html
+.workbuddy/

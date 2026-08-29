@@ -205,18 +205,44 @@
     </Transition>
   </Teleport>
 
-  <!-- 反馈 / 建议 弹窗：邮箱地址 + 打开邮箱客户端 / 复制邮箱 双按钮 -->
+  <!-- 反馈 / 建议 弹窗：直接填写内容提交到企业邮箱（保留复制 / mailto 兜底） -->
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="uiStore.overlays.feedback" class="modal-mask open" role="dialog" aria-modal="true" :aria-label="t('settings.feedback')" @click.self="uiStore.overlays.feedback = false">
         <div class="modal modal-sm">
-          <div class="modal-body modal-body-center">
-            <div class="confirm-msg">{{ t('settings.feedbackHint') }}</div>
-            <div class="sp-feedback-email" style="margin-top:12px;font-size:15px;word-break:break-all;">{{ FEEDBACK_EMAIL }}</div>
+          <div class="modal-body">
+            <div class="confirm-msg">{{ t('settings.feedbackFormHint') }}</div>
+            <textarea
+              class="form-textarea sp-feedback-text"
+              rows="5"
+              maxlength="2000"
+              :placeholder="t('settings.feedbackPlaceholder')"
+              :aria-label="t('settings.feedback')"
+              v-model="feedbackText"
+            ></textarea>
+            <input
+              class="form-input sp-feedback-contact"
+              type="text"
+              maxlength="200"
+              :placeholder="t('settings.feedbackContactPlaceholder')"
+              :aria-label="t('settings.feedbackContact')"
+              v-model="feedbackContact"
+            />
+            <!-- honeypot：真人看不到也填不到，机器人填了就在服务端被静默丢弃 -->
+            <input class="sp-feedback-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" v-model="feedbackHoneypot" />
+            <div v-if="TURNSTILE_SITE_KEY" id="lv-turnstile" class="sp-feedback-turnstile"></div>
+            <div class="sp-feedback-meta">
+              <span>{{ t('settings.feedbackCount', { n: feedbackText.length }) }}</span>
+              <span>{{ t('settings.feedbackOrEmail') }}
+                <button class="sp-feedback-link" @click="openFeedbackMail">{{ FEEDBACK_EMAIL }}</button>
+              </span>
+            </div>
           </div>
           <div class="modal-foot confirm-foot">
             <button class="btn btn-secondary" @click="copyFeedbackEmail">{{ t('settings.copyEmail') }}</button>
-            <button class="btn btn-primary" @click="openFeedbackMail">{{ t('settings.openEmail') }}</button>
+            <button class="btn btn-primary" :disabled="!canSendFeedback" @click="submitFeedback">
+              {{ feedbackSending ? t('settings.feedbackSending') : t('settings.feedbackSend') }}
+            </button>
           </div>
         </div>
       </div>
@@ -225,7 +251,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, onBeforeUnmount } from 'vue'
+import { computed, nextTick, onMounted, ref, onBeforeUnmount } from 'vue'
 import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle, K_THEME_MODE } from '../../lib/theme.js'
@@ -403,12 +429,79 @@ function onToggleAutoDeadCheck() {
 }
 
 // ── 反馈（A4-007：状态进 overlays.feedback，支持 Esc / popstate）──
-const FEEDBACK_EMAIL = '2629490959@qq.com'
+const FEEDBACK_EMAIL = 'support@ulink.ren'
+/** 反馈接口 = Supabase Edge Function（--no-verify-jwt，凭 anon key 调用）。 */
+const FEEDBACK_ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/send-feedback`
+const FEEDBACK_ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '')
+/**
+ * Turnstile 站点密钥。未配置则跳过人机校验，仅靠 honeypot + 服务端限流；
+ * 配置后需同步放开 CSP：script-src 加 https://challenges.cloudflare.com、
+ * frame-src 加 https://challenges.cloudflare.com。
+ */
+const TURNSTILE_SITE_KEY = String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '')
+
+/** 服务端错误码 → 提示文案键（未列出的错误统一走 feedbackFailed）。 */
+const FEEDBACK_ERROR_KEYS: Record<string, string> = {
+  message_too_short: 'settings.feedbackTooShort',
+  message_too_long: 'settings.feedbackTooLong',
+  rate_limited: 'settings.feedbackRateLimited',
+}
+
+const feedbackText = ref('')
+const feedbackContact = ref('')
+const feedbackHoneypot = ref('')
+const feedbackSending = ref(false)
+const turnstileToken = ref('')
+
+const canSendFeedback = computed(
+  () =>
+    feedbackText.value.trim().length >= 5 &&
+    !feedbackSending.value &&
+    (!TURNSTILE_SITE_KEY || !!turnstileToken.value),
+)
 
 function onFeedback() {
   pushNavState()
+  feedbackText.value = ''
+  feedbackContact.value = ''
+  feedbackHoneypot.value = ''
+  turnstileToken.value = ''
   uiStore.overlays.feedback = true
   uiStore.panels.settings = false
+  nextTick(ensureTurnstile)
+}
+
+// ── Turnstile（按需加载，未配置站点密钥时完全不拉脚本）──
+type TurnstileApi = {
+  render: (el: HTMLElement, opts: Record<string, unknown>) => void
+  reset: (el?: HTMLElement) => void
+}
+function turnstileApi(): TurnstileApi | undefined {
+  return (window as unknown as { turnstile?: TurnstileApi }).turnstile
+}
+function renderTurnstile(): void {
+  const api = turnstileApi()
+  const el = document.getElementById('lv-turnstile')
+  if (!api || !el) return
+  api.render(el, {
+    sitekey: TURNSTILE_SITE_KEY,
+    theme: 'auto',
+    callback: (token: string) => { turnstileToken.value = token },
+    'expired-callback': () => { turnstileToken.value = '' },
+    'error-callback': () => { turnstileToken.value = '' },
+  })
+}
+function ensureTurnstile(): void {
+  if (!TURNSTILE_SITE_KEY) return
+  if (turnstileApi()) { renderTurnstile(); return }
+  if (document.getElementById('lv-turnstile-script')) return
+  const s = document.createElement('script')
+  s.id = 'lv-turnstile-script'
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+  s.async = true
+  s.defer = true
+  s.onload = renderTurnstile
+  document.head.appendChild(s)
 }
 
 async function copyFeedbackEmail() {
@@ -425,5 +518,40 @@ async function copyFeedbackEmail() {
 function openFeedbackMail() {
   window.open('mailto:' + FEEDBACK_EMAIL + '?subject=' + encodeURIComponent(t('settings.feedbackSubject')), '_blank')
   uiStore.overlays.feedback = false
+}
+
+async function submitFeedback() {
+  if (!canSendFeedback.value) return
+  if (!FEEDBACK_ENDPOINT || !FEEDBACK_ANON_KEY) { toast(t('settings.feedbackFailed'), false); return }
+  feedbackSending.value = true
+  try {
+    const res = await fetch(FEEDBACK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: FEEDBACK_ANON_KEY },
+      body: JSON.stringify({
+        message: feedbackText.value.trim(),
+        contact: feedbackContact.value.trim(),
+        locale: locale.value,
+        appVersion: APP_VERSION,
+        turnstileToken: turnstileToken.value,
+        website: feedbackHoneypot.value,
+      }),
+    })
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) {
+      toast(t(FEEDBACK_ERROR_KEYS[data.error || ''] || 'settings.feedbackFailed'), false)
+      return
+    }
+    toast(t('settings.feedbackSent'), true)
+    feedbackText.value = ''
+    feedbackContact.value = ''
+    turnstileToken.value = ''
+    turnstileApi()?.reset()
+    uiStore.overlays.feedback = false
+  } catch {
+    toast(t('settings.feedbackFailed'), false)
+  } finally {
+    feedbackSending.value = false
+  }
 }
 </script>
