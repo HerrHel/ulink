@@ -111,6 +111,22 @@ describe('buildShareEntries — ShareView bookmarkEntries 预计算核', () => {
     })
   })
 
+  describe('E2E 历史密文 URL（M15：分享侧无 key，密文按无效处理）', () => {
+    it('三段密文 URL → safeUrl/urlDomain/icon 全空（不派生链接与图标，防止拼出乱码地址）', () => {
+      const cipher = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(32)
+      const entries = buildShareEntries([mk(cipher, 't', 'b1')])
+      expect(entries[0].safeUrl).toBe('')
+      expect(entries[0].urlDomain).toBe('')
+      expect(entries[0].icon).toBe('')
+    })
+
+    it('普通 url 不受影响（密文判定只命中三段格式）', () => {
+      const entries = buildShareEntries([mk('https://example.com/a?b=1&c=2', 't', 'b1')])
+      expect(entries[0].safeUrl).toBe('https://example.com/a?b=1&c=2')
+      expect(entries[0].urlDomain).toBe('example.com')
+    })
+  })
+
   describe('icon 短路 + 空输入边界', () => {
     it('空 url —— safeUrl 空、urlDomain 空、icon 空短路（不调 favicon 派生）', () => {
       const entries = buildShareEntries([mk('', 'a', 'b1')])

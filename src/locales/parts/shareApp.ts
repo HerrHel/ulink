@@ -22,6 +22,7 @@ export const shareAppZh = {
     catGroupEmpty: '这个组还没有书签',
     catNoNotes: '暂无笔记',
     subBookmark: '子书签',
+    encryptedPlaceholder: '（内容已加密）',
   },
   appShell: {
     unlockChunkLoadFailed: '解锁组件加载失败，请刷新后重试',
@@ -58,6 +59,7 @@ export const shareAppEn = {
     catGroupEmpty: 'No bookmarks in this group yet',
     catNoNotes: 'No notes yet',
     subBookmark: 'Sub-item',
+    encryptedPlaceholder: '(encrypted content)',
   },
   appShell: {
     unlockChunkLoadFailed: 'Failed to load the unlock dialog — please refresh and retry',

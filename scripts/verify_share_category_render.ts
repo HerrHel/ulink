@@ -1,7 +1,7 @@
 // 分类分享页渲染核自测脚本（v2 卡片网格）：
 // 直接 import share-render.ts 验证输出（node --experimental-strip-types 运行）
 //   node --experimental-strip-types scripts/verify_share_category_render.ts
-import { renderShareCategoryPage } from "../functions/_lib/share-render.ts"
+import { renderShareCategoryPage, renderSharePage } from "../functions/_lib/share-render.ts"
 import { writeFileSync } from "node:fs"
 
 const category = {
@@ -23,6 +23,9 @@ const groups = [
   { id: "g2", name: "空组（无书签无笔记）", notes: "", bookmark_ids: [], updated_at_num: 0, icon: "" },
 ]
 
+// E2E 三段密文样本：salt(44) + iv(16) + data(≥24)，全 B64 字符（与 crypto.isThreePartCipher 判定一致）
+const C1 = "A".repeat(44) + "." + "B".repeat(16) + "." + "C".repeat(32)
+
 const bookmarks = [
   { id: "b1", title: "Coolors", url: "https://coolors.co/", notes: "超好用的配色生成器" },
   { id: "b2", title: "", url: "https://www.figma.com/", notes: "" }, // 空标题 → 回退域名
@@ -30,6 +33,9 @@ const bookmarks = [
   { id: "b4", title: "散落书签父", url: "https://example.com/", notes: "父书签笔记" },
   { id: "b5", title: '带引号 "x" & <tag>', url: "javascript:alert(1)", notes: "<script>alert(1)</script>" },
   { id: "b6", title: "重复引用（g1 已含 b1）", url: "https://coolors.co/palettes", notes: "" },
+  // E2E 历史密文（旧版加密过 notes/title，云端遗留 salt.iv.data 三段）：分享侧无 key 必须降级占位，绝不外泄密文串
+  { id: "b7", title: "密文备注书签", url: "https://example.com/cipher", notes: C1, parent_id: "" },
+  { id: "b8", title: C1, url: "https://example.com/cipher-title", notes: "明文备注", parent_id: "" },
 ]
 
 const shareUrl = "https://ulink.ren/s/c/cat_share_test"
@@ -89,8 +95,8 @@ assert(zh.includes('class="cat-hero" style="--cat: #B45309"'), "Hero 注入合�
 assert(zh.includes('<h1 class="cat-hero-name">设计资源</h1>'), "Hero 分类名")
 assert(zh.includes('class="cat-hero-accent"'), "Hero accent 竖条（分类色）")
 assert(zh.includes('href="https://ulink.ren/#share/c/cat_share_test"'), "CTA 跳 App hash 路由")
-// 计数口径：组内 2（b1/b2）+ 散落 3（b4 父书签 / b5 危险链接 / b6 未入组）+ b3 子书签 1；ghost 不存在不计
-assert(zh.includes('<span class="meta-tag">6 个书签</span>'), "计数=组内2+散落3+子书签1（全部显示）")
+// 计数口径：组内 2（b1/b2）+ 散落顶层 5（b4/b5/b6/b7/b8）+ 子书签 1（b3）；ghost 不存在不计
+assert(zh.includes('<span class="meta-tag">8 个书签</span>'), "计数=组内2+散落5+子书签1（全部显示）")
 assert(zh.includes('<span class="meta-tag">2 个组</span>'), "组计数标签")
 assert(zh.includes('class="hero-fb"'), "非 URL 图标 → 首字母回退")
 
@@ -99,7 +105,7 @@ assert(zh.includes('<div class="cat-grid">'), "网格容器")
 const gcardCount = (zh.match(/<article class="gcard">/g) || []).length
 const bmcardCount = (zh.match(/<article class="bmcard/g) || []).length
 assert(gcardCount === 2, `组卡 2 张（实际 ${gcardCount}）`)
-assert(bmcardCount === 3, `散落书签卡 3 张（实际 ${bmcardCount}）`)
+assert(bmcardCount === 5, `散落书签卡 5 张（实际 ${bmcardCount}）`)
 assert(zh.indexOf('<article class="gcard">') < zh.indexOf('<article class="bmcard'), "组卡排在散落书签卡之前")
 assert(zh.includes(".cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"), "网格参数对齐 App card-grid")
 
@@ -135,11 +141,27 @@ assert(evilColor.includes('class="cat-hero"') && !evilColor.includes("--cat:"), 
 assert(zh.includes('href="https://coolors.co/" target="_blank" rel="noopener nofollow"'), "书签链接安全 rel/target")
 assert(zh.includes('class="group-inline-card" data-bm-id="b1" href="https://coolors.co/"'), "组 notes 内联书签转可点击 a")
 
+// ── 4.5 E2E 历史密文降级（M15：分享侧无 key，密文绝不外泄，降级为占位）──
+assert(!zh.includes(C1), "密文串绝不渲染进页面（notes/title 均降级）")
+assert(zh.includes('class="bmcard-title">（内容已加密）</span>'), "title 密文 → 占位标题")
+assert(zh.includes('class="bmcard-notes">（内容已加密）</p>'), "notes 密文 → 占位备注")
+assert(en.includes('> (encrypted content) <') || en.includes("(encrypted content)"), "en 占位文案")
+assert(!zh.includes("https://" + C1), "密文不派生可跳转链接")
+const zhGrpCipher = renderSharePage(
+  { id: "gc", name: "密文组", notes: C1 } as never,
+  [{ id: "gb", title: C1, url: "https://example.com/g", notes: "" }] as never,
+  shareUrl,
+  origin,
+  "zh-CN",
+)
+assert(!zhGrpCipher.includes(C1), "组分享页同样不渲染密文（组 notes 与书签 title）")
+assert(zhGrpCipher.includes("（内容已加密）"), "组分享页密文 → 占位")
+
 // ── 5. SEO head / 双语 ──
 assert(zh.includes("<title>设计资源 - ulink</title>"), "title 含分类名")
-assert(zh.includes('content="6 个书签 · 2 个组 · 由与链公开分享"'), "zh 描述（分类口径）")
+assert(zh.includes('content="8 个书签 · 2 个组 · 由与链公开分享"'), "zh 描述（分类口径）")
 assert(zh.includes('<link rel="canonical" href="https://ulink.ren/s/c/cat_share_test">'), "canonical 同域")
-assert(en.includes("6 bookmarks · 2 groups · publicly shared via ulink"), "en 描述")
+assert(en.includes("8 bookmarks · 2 groups · publicly shared via ulink"), "en 描述")
 assert(en.includes("Show / hide bookmarks in this group"), "en 展开提示")
 assert(en.includes('<span class="gcard-count">2 bookmarks</span>'), "en 组计数复数")
 

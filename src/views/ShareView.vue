@@ -99,11 +99,11 @@
                :class="['share-gcard-item', { 'is-disabled': !item.entry.safeUrl, 'is-child': item.isChild }]"
                @click="!item.entry.safeUrl ? $event.preventDefault() : null">
               <span class="share-gcard-item-ic">
-                <span class="share-gcard-item-fb">{{ (item.entry.b.title || item.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <span class="share-gcard-item-fb">{{ (displayText(item.entry.b.title) || item.entry.urlDomain || '?')[0].toUpperCase() }}</span>
                 <img v-if="item.entry.icon" :src="item.entry.icon" class="share-gcard-item-icon" referrerpolicy="no-referrer"
                      loading="lazy" @error="markIconError" />
               </span>
-              <span class="share-gcard-item-title">{{ item.entry.b.title || item.entry.urlDomain }}</span>
+              <span class="share-gcard-item-title">{{ displayText(item.entry.b.title) || item.entry.urlDomain }}</span>
               <span class="share-gcard-item-url">{{ item.entry.urlDomain }}</span>
             </a>
             <div v-if="!entry.entries.length" class="share-gcard-empty">{{ t('shareView.catGroupEmpty') }}</div>
@@ -121,15 +121,15 @@
              @click="!card.entry.safeUrl ? $event.preventDefault() : null">
             <span class="share-bmcard-head">
               <span class="share-bmcard-icon">
-                <span class="share-bmcard-fb">{{ (card.entry.b.title || card.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <span class="share-bmcard-fb">{{ (displayText(card.entry.b.title) || card.entry.urlDomain || '?')[0].toUpperCase() }}</span>
                 <img v-if="card.entry.icon" :src="card.entry.icon" referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
               </span>
-              <span class="share-bmcard-title">{{ card.entry.b.title || card.entry.urlDomain }}</span>
+              <span class="share-bmcard-title">{{ displayText(card.entry.b.title) || card.entry.urlDomain }}</span>
               <!-- 孤儿子书签：父在组内或不在本分类，标出来说明层级来源 -->
               <span v-if="card.isChild" class="share-bmcard-badge">{{ t('shareView.subBookmark') }}</span>
             </span>
             <span class="share-bmcard-url">{{ card.entry.urlDomain }}</span>
-            <p v-if="card.entry.b.notes" class="share-bmcard-notes">{{ card.entry.b.notes }}</p>
+            <p v-if="displayText(card.entry.b.notes)" class="share-bmcard-notes">{{ displayText(card.entry.b.notes) }}</p>
             <span aria-hidden="true" v-html="I.external" class="share-bmcard-arrow"></span>
           </a>
           <div v-if="card.children.length" class="share-bmcard-children">
@@ -142,14 +142,14 @@
                :class="{ 'is-disabled': !child.entry.safeUrl }"
                @click="!child.entry.safeUrl ? $event.preventDefault() : null">
               <span class="share-bmcard-child-ic">
-                <span class="share-gcard-item-fb">{{ (child.entry.b.title || child.entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <span class="share-gcard-item-fb">{{ (displayText(child.entry.b.title) || child.entry.urlDomain || '?')[0].toUpperCase() }}</span>
                 <img v-if="child.entry.icon" :src="child.entry.icon" class="share-bmcard-child-icon"
                      referrerpolicy="no-referrer" loading="lazy" @error="markIconError" />
               </span>
               <span class="share-bmcard-child-text">
-                <span class="share-bmcard-child-title">{{ child.entry.b.title || child.entry.urlDomain }}</span>
+                <span class="share-bmcard-child-title">{{ displayText(child.entry.b.title) || child.entry.urlDomain }}</span>
                 <span class="share-bmcard-child-url">{{ child.entry.urlDomain }}</span>
-                <p v-if="child.entry.b.notes" class="share-bmcard-child-notes">{{ child.entry.b.notes }}</p>
+                <p v-if="displayText(child.entry.b.notes)" class="share-bmcard-child-notes">{{ displayText(child.entry.b.notes) }}</p>
               </span>
             </a>
           </div>
@@ -174,12 +174,12 @@
             <!-- M5：跨用户 b.icon 不可信（追踪像素/任意 URL）；统一由书签 url 派生受控 favicon，并禁 Referer -->
             <img v-if="entry.icon" :src="entry.icon" referrerpolicy="no-referrer" loading="lazy"
                  @error="($event.target as HTMLImageElement).style.display='none'" />
-            <span v-else class="share-bm-icon-fallback">{{ (entry.b.title || '?')[0].toUpperCase() }}</span>
+            <span v-else class="share-bm-icon-fallback">{{ (displayText(entry.b.title) || '?')[0].toUpperCase() }}</span>
           </div>
           <div class="share-bm-info">
-            <span class="share-bm-title">{{ entry.b.title }}</span>
+            <span class="share-bm-title">{{ displayText(entry.b.title) || entry.urlDomain }}</span>
             <span class="share-bm-url">{{ entry.urlDomain }}</span>
-            <p v-if="entry.b.notes" class="share-bm-notes">{{ entry.b.notes }}</p>
+            <p v-if="displayText(entry.b.notes)" class="share-bm-notes">{{ displayText(entry.b.notes) }}</p>
           </div>
           <span aria-hidden="true" v-html="I.external" class="share-bm-arrow"></span>
         </a>
@@ -194,6 +194,7 @@ import { fetchPublicGroup, forkPublicGroup, fetchPublicCategory, forkPublicCateg
 import { useAuth } from '../composables/domain/useAuth.js'
 import { setTitle, setMetaByAttr, setCanonical, setJsonLd, cleanupInjectedHead } from '../lib/head.js'
 import { safeIconUrl, sanitizeReadonlyHTML } from '../utils.js'
+import { isThreePartCipher } from '../crypto.js'
 import { buildShareEntries } from './buildShareEntries.js'
 import { splitCategoryItems } from './splitCategoryItems.js'
 import { buildItemListJsonLd } from './buildItemListJsonLd.js'
@@ -257,6 +258,15 @@ function toggleGroup(id: string): void {
 /** 单条书签 → 预渲染条目（逐条走 buildShareEntries，保持同一安全口径） */
 function entryOf(b: Bookmark) {
   return buildShareEntries([b])[0]
+}
+
+/**
+ * M15：E2E 历史密文（salt.iv.data 三段，云端遗留旧版加密数据）→ 占位提示，绝不渲染密文
+ * （对齐 App 未解锁时 UI 显空不显乱码的语义；密文串外泄是信息泄露面）。
+ */
+function displayText(v: string | undefined | null): string {
+  const s = (v || '').trim()
+  return isThreePartCipher(s) ? t('shareView.encryptedPlaceholder') : s
 }
 
 /**

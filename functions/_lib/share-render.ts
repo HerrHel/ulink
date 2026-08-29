@@ -49,6 +49,7 @@ const T = {
     catGroupEmpty: '这个组还没有书签',
     catNoNotes: '暂无笔记',
     subBookmark: '子书签',
+    cipherPlaceholder: '（内容已加密）',
     updatedAt: '更新于 {d}',
     cta: '在与链中打开 · 复制到我的库',
     tocTitle: '目录',
@@ -86,6 +87,7 @@ const T = {
     catGroupEmpty: 'No bookmarks in this group yet',
     catNoNotes: 'No notes yet',
     subBookmark: 'Sub-item',
+    cipherPlaceholder: '(encrypted content)',
     updatedAt: 'Updated {d}',
     cta: 'Open in ulink · Copy to my library',
     tocTitle: 'Contents',
@@ -119,6 +121,29 @@ function esc(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;")
+}
+
+// ── E2E 历史密文识别（与 src/crypto.ts 的 isThreePartCipher 语义一致，零依赖）──
+// 旧版 E2E 曾加密 bookmarks 的 title/url/notes 与 group 的 name/notes；当前版本不再加密，
+// 但云端仍存有历史密文（salt.iv.data 三段）。分享 RPC 直读云端 → 分享页无 key 无法解密，
+// 直接渲染会把密文显示成乱码（且密文串外泄是信息泄露面）。分享页遇到密文字段一律
+// 降级为占位提示，绝不渲染原文。
+const B64_SEG_RE = /^[A-Za-z0-9+/]+={0,2}$/
+
+function isCipherText(s: unknown): boolean {
+  if (typeof s !== "string" || !s) return false
+  const parts = s.split(".")
+  if (parts.length !== 3) return false
+  const [salt, iv, data] = parts
+  if (!salt || !iv || !data) return false
+  if (salt.length !== 44 || iv.length !== 16 || data.length < 24) return false
+  return B64_SEG_RE.test(salt) && B64_SEG_RE.test(iv) && B64_SEG_RE.test(data)
+}
+
+/** 分享页文本降级：E2E 历史密文 → 占位提示（对齐 App 未解锁时 UI 显空不显乱码的语义）。 */
+function deCipherText(dict: typeof T['zh-CN'] | typeof T['en-US'], v: unknown): string {
+  const s = typeof v === "string" ? v : ""
+  return isCipherText(s) ? dict.cipherPlaceholder : s
 }
 
 /** 协议白名单：仅放行 http/https，其余可导航 scheme（javascript:/data:/vbscript: 等）返空串。 */
@@ -193,9 +218,12 @@ function pick(dict: typeof T['zh-CN'] | typeof T['en-US'], key: string, n: numbe
   return d[key] ?? key
 }
 
-/** 组 notes 纯文本描述：前 120 字，空则回退「N 个链接 · 由与链公开分享」。 */
+/** 组 notes 纯文本描述：前 120 字，空则回退「N 个链接 · 由与链公开分享」。
+ *  E2E 历史密文整段剥掉（回退默认描述），否则密文串会进 meta description/og:*。 */
 function descriptionOf(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGroup, n: number): string {
-  const plain = stripTags(group.notes || "")
+  const raw = (group.notes || "").trim()
+  if (!raw || isCipherText(raw)) return fill(pick(dict, 'desc', n), { n })
+  const plain = stripTags(raw)
   return (plain && plain.slice(0, 120)) || fill(pick(dict, 'desc', n), { n })
 }
 
@@ -398,13 +426,19 @@ const CHEVRON_SVG =
  * 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名，无 notes，行高统一）。
  * 标题为空时回退展示域名。纯静态 <a>，无需 JS。
  */
-function buildBookmarkItem(b: PublicBookmark, child = false): string {
-  const safe = fixUrl(b.url)
+function buildBookmarkItem(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  b: PublicBookmark,
+  child = false,
+): string {
+  // E2E 历史密文 URL 不派生链接（不跳转乱码地址、不派生图标）
+  const urlCipher = isCipherText(b.url)
+  const safe = urlCipher ? "" : fixUrl(b.url)
   const href = safe ? esc(safe) : "#"
   const rel = safe ? ' rel="noopener nofollow"' : ""
   const target = safe ? ' target="_blank"' : ""
   const dm = safe ? domainOf(safe) : ""
-  const title = (b.title || "").trim() || dm || "?"
+  const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
   return [
     // child：组内子书签 → 缩进 + 连接线（属性照常完整展示）
@@ -439,7 +473,8 @@ interface NotesResult {
 /** 组 notes 富文本渲染：白名单清洗 + 内联书签转链接 + 标题提取（TOC 锚点）。空则返回空。 */
 function notesHtml(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGroup, bmMap?: NotesBmMap): NotesResult {
   const raw = (group.notes || "").trim()
-  if (!raw) return { html: "", toc: "" }
+  // E2E 历史密文笔记：整体是 salt.iv.data 三段串，无 key 不可解 → 不渲染（调用方回退「暂无笔记」）
+  if (!raw || isCipherText(raw)) return { html: "", toc: "" }
   let cleaned = sanitizeNotesHtml(raw, bmMap).trim()
   if (!cleaned) return { html: "", toc: "" }
   // 提取 h1/h2/h3 标题并注入锚点 id（toc-N），文档级滚动定位（纯锚点 + scroll-behavior:smooth）
@@ -467,14 +502,14 @@ function buildBody(
   bookmarks: PublicBookmark[],
   appOrigin: string,
 ): string {
-  const name = esc(group.name || dict.defaultGroupName)
+  const name = esc(deCipherText(dict, group.name) || dict.defaultGroupName)
   const initial = esc((group.name || "?").trim().charAt(0) || "?").toUpperCase()
   const count = bookmarks.length
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, 'count', count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
   const updatedTag = updated ? `<span class="meta-tag">${esc(fill(dict.updatedAt, { d: updated }))}</span>` : ""
   const list = count
-    ? bookmarks.map(buildBookmarkItem).join("\n")
+    ? bookmarks.map((b) => buildBookmarkItem(dict, b)).join("\n")
     : `<div class="empty">${esc(dict.empty)}</div>`
   // data-bm-id → 书签 URL 映射（内联书签转可点击 <a>）
   const bmMap: NotesBmMap = {}
@@ -637,13 +672,13 @@ function buildGroupCard(
   bmMap: NotesBmMap,
 ): string {
   const g = entry.group
-  const name = esc((g.name || "").trim() || "?")
+  const name = esc(deCipherText(dict, g.name).trim() || "?")
   const initial = esc(((g.name || "?").trim().charAt(0) || "?").toUpperCase())
   const notes = notesHtml(dict, g, bmMap).html
   const body = notes || `<div class="focus-notes gcard-nonotes">${esc(dict.catNoNotes)}</div>`
   const n = entry.items.length
   const itemsHtml = n
-    ? entry.items.map((b) => buildBookmarkItem(b, !!b.parent_id)).join("")
+    ? entry.items.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
     : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
   const toggleId = `gcat-${idx}`
   return [
@@ -662,16 +697,20 @@ function buildGroupCard(
 }
 
 /** 子书签行（挂在散落父卡内，depth 决定缩进量）：图标 + 标题 + 域名 + 笔记，属性全保留。 */
-function buildLooseChildItem(child: CategoryLooseChild): string {
+function buildLooseChildItem(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  child: CategoryLooseChild,
+): string {
   const b = child.bookmark
-  const safe = fixUrl(b.url)
+  const urlCipher = isCipherText(b.url)
+  const safe = urlCipher ? "" : fixUrl(b.url)
   const href = safe ? esc(safe) : "#"
   const rel = safe ? ' rel="noopener nofollow"' : ""
   const target = safe ? ' target="_blank"' : ""
   const dm = safe ? domainOf(safe) : ""
-  const title = (b.title || "").trim() || dm || "?"
+  const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const notes = (b.notes || "").trim()
+  const notes = deCipherText(dict, b.notes).trim()
   const pad = 10 + (child.depth - 1) * 14
   return [
     `<a class="bmcard-child" style="padding-left:${pad}px" href="${href}"${target}${rel}>`,
@@ -694,17 +733,18 @@ function buildLooseBookmarkCard(
   card: CategoryLooseCard,
 ): string {
   const b = card.bookmark
-  const safe = fixUrl(b.url)
+  const urlCipher = isCipherText(b.url)
+  const safe = urlCipher ? "" : fixUrl(b.url)
   const href = safe ? esc(safe) : "#"
   const rel = safe ? ' rel="noopener nofollow"' : ""
   const target = safe ? ' target="_blank"' : ""
   const dm = safe ? domainOf(safe) : ""
-  const title = (b.title || "").trim() || dm || "?"
+  const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const notes = (b.notes || "").trim()
+  const notes = deCipherText(dict, b.notes).trim()
   const isChild = !!(typeof b.parent_id === "string" && b.parent_id.trim())
   const children = card.children.length
-    ? `<div class="bmcard-children">${card.children.map(buildLooseChildItem).join("")}</div>`
+    ? `<div class="bmcard-children">${card.children.map((c) => buildLooseChildItem(dict, c)).join("")}</div>`
     : ""
   return [
     `<article class="bmcard${children ? " has-children" : ""}">`,
@@ -733,7 +773,7 @@ function buildCategoryBody(
   shareId: string,
   appOrigin: string,
 ): string {
-  const name = esc(category.name || dict.defaultCategoryName)
+  const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
   const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
   // data-bm-id → 书签 URL 映射（组 notes 内联书签转可点击 <a>）
