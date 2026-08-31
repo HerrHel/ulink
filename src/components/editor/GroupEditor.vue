@@ -190,7 +190,9 @@ onMounted(() => {
     // E2E 锁定态遗留密文（整字段加密 → 整串三段）：不注入编辑器，避免渲染乱码长串；
     // 解锁后 decryptStoreItems 还原明文、store 更新自动回填。
     content: isThreePartCipher(group.notes || '') ? '' : (group.notes || ''),
-    editable: !isMobile() || ui.focusedGroupId === props.groupId,
+    // 分享只读态（ui.shareMode）一律不可编辑：他人内容不挂可编辑光标，
+    // 且 TipTap 不可编辑时不触发 onUpdate → 不会走 syncToStore 的 store 写入。
+    editable: !ui.shareMode && (!isMobile() || ui.focusedGroupId === props.groupId),
     editorProps: {
       attributes: { class: 'group-tiptap' },
       // 粘贴图片：压缩 → 上传 → 插入；返回 true 阻止默认粘贴，其余交给 TipTap
@@ -244,10 +246,10 @@ onMounted(() => {
     el.addEventListener('focusout', _onFocusOut)
   }
 
-  // 移动端：只有聚焦后才可编辑
+  // 移动端：只有聚焦后才可编辑（分享态永远不可编辑）
   if (isMobile()) {
-    watch(() => ui.focusedGroupId, (fid) => {
-      editor?.setEditable(fid === props.groupId)
+    watch(() => [ui.focusedGroupId, ui.shareMode] as const, () => {
+      editor?.setEditable(!ui.shareMode && ui.focusedGroupId === props.groupId)
     })
   }
 })

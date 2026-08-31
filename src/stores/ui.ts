@@ -29,6 +29,21 @@ export type Space = 'main' | 'vault'
 /** E2EUnlockModal 初始模式透传槽（非 modal flag，仅用于打开时指定初始 mode） */
 export type E2EUnlockInitialMode = 'unlock' | 'reset' | 'changePw'
 
+/**
+ * 主应用内「分享只读态」。非空 = 正在看他人公开分享的内容：
+ * - kind 'group'    → 组分享，主应用呈聚焦组形态（大组卡 + 只读笔记）
+ * - kind 'category' → 分类分享，主应用呈选中某分类形态（卡片网格）
+ *
+ * 只读锁的唯一判据：data.ts 的 mutation 与 app.ts 的 save() 都据此拒写，
+ * 防止他人的分享内容被写进访问者的本地库或推上其云空间。
+ * 纯运行时状态，不进 UI_STATE_KEY（刷新后由 URL 重新判定，见 useAppLifecycle）。
+ */
+export interface ShareModeState {
+  kind: 'group' | 'category'
+  /** 组分享 = 组 id；分类分享 = public_category_shares.share_id */
+  id: string
+}
+
 interface ModalState {
   bookmark: boolean
   category: boolean
@@ -70,6 +85,8 @@ export interface UIState {
   groupsOnTop: boolean
   searchQuery: string
   focusedGroupId: string | null
+  /** 分享只读态（null = 正常模式）。详见 ShareModeState 注释。 */
+  shareMode: ShareModeState | null
   batchMode: boolean
   batchSelected: string[]
   activeAttrs: string[]
@@ -121,6 +138,7 @@ export const useUIStore = defineStore('ui', {
     layoutMode: 'grid',
     searchQuery: '',
     focusedGroupId: null,
+    shareMode: null,
     batchMode: false,
     batchSelected: [],
     activeAttrs: [],

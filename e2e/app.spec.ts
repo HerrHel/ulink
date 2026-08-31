@@ -116,21 +116,19 @@ test.describe('LinkVault 核心功能', () => {
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 
-  // M19：分享路由 — 无真实公开组时至少渲染 ShareView 壳（加载/错误态）
-  test('分享路由 #share/ 进入 ShareView 壳', async ({ page }) => {
+  // M19：分享路由 — 进入主应用内分享只读态（加载/错误占位；成功态由 CardGrid 渲染）
+  test('分享路由 #share/ 进入分享只读态', async ({ page }) => {
     await page.goto('/#share/nonexistent-group-for-e2e')
-    await expect(page.locator('.share-page')).toBeVisible({ timeout: 10000 })
-    // 加载中 或 错误态 二选一（远端无数据时为错误）
-    const loadingOrError = page.locator('.share-loading, .share-error, .share-group-header')
-    await expect(loadingOrError.first()).toBeVisible({ timeout: 15000 })
+    // 远端无数据时落错误态（loading → error），二者都挂在 .share-state 下
+    await expect(page.locator('.share-state').first()).toBeVisible({ timeout: 15000 })
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 
-  // 非法超长 gid 被白名单拒绝 → 不进 ShareView，落主应用
-  test('分享路由非法超长 id 不进入 ShareView', async ({ page }) => {
+  // 非法超长 gid 被白名单拒绝 → 不进分享态，落主应用
+  test('分享路由非法超长 id 不进入分享态', async ({ page }) => {
     const long = 'a'.repeat(65)
     await page.goto(`/#share/${long}`)
-    await expect(page.locator('.share-page')).not.toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.share-state')).not.toBeVisible({ timeout: 5000 })
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })

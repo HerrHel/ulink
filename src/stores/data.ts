@@ -13,10 +13,51 @@ import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { cleanupGroupImagesOnDelete } from '../lib/imageStorage.js'
 import { localHistoryKey, clearAllSyncOps } from './storage.js'
 import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
+import { shadowData, shadowHasAny } from './shareShadow.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
 import type { Space } from './ui.js'
 
 export const DGM_KEY = 'lv_delGroupMems'
+
+/**
+ * 分享只读态的写保护判据（供所有 mutation action 前置调用）。
+ *
+ * 他人分享的内容只以影子 Map 形式存在（见 shareShadow.ts），不属于访问者的库。
+ * 一旦允许 mutation，就会出现「改不动（影子数据不在数组里）却留下了脏标记 /
+ * 历史快照 / 同步队列」的半写状态，甚至把他人数据推上访问者的云空间。
+ * 故分享态下一律静默拒写——UI 层的写类入口已隐藏，这里是兜底第二道闸。
+ */
+function _denyWrite(): boolean {
+  try {
+    return !!useUIStore().shareMode
+  } catch {
+    // Pinia 尚未激活（单测裸调 action）时不拦截，保持原行为
+    return false
+  }
+}
+
+/**
+ * 把影子数据合并进 map 型 getter（分享态下）。
+ *
+ * 只合并 map、不碰数组：数组是 filtered* / 侧栏计数 / 搜索 / 落盘 / 云同步的
+ * 共同数据源，影子数据一旦进数组就会污染访问者的库。合并 map 则让卡片组件、
+ * 内联卡片、DetailPanel 能只读渲染，同时天然对一切遍历数组的路径隐身。
+ */
+function _mergeShadow<T>(
+  kind: 'bookmarks' | 'groups' | 'categories',
+  base: Record<string, T>,
+): Record<string, T> {
+  let active = false
+  try {
+    active = !!useUIStore().shareMode
+  } catch {
+    return base
+  }
+  if (!active || !shadowHasAny()) return base
+  const sh = shadowData()[kind] as unknown as Record<string, T>
+  if (!Object.keys(sh).length) return base
+  return { ...base, ...sh }
+}
 
 // ── 空间切换：仅当该空间 localStorage 键存在真数据时读取，绝不 fallback DEFAULTS ──
 // （私密空间首进必须是真空库；loadFromLocalStorage 无数据时返回 DEFAULTS 含示例数据）
@@ -207,25 +248,25 @@ export const useDataStore = defineStore('data', {
       return this.trashedBookmarks.length + this.trashedGroups.length + this.trashedCategories.length + this.trashedAttributes.length
     },
 
-    /** O(1) 书签查找 Map（含软删除——由 _syncMaps 维护，懒回退） */
+    /** O(1) 书签查找 Map（含软删除——由 _syncMaps 维护，懒回退；分享态叠加影子书签） */
     bookmarkMap(state): Record<string, Bookmark> {
       if (Object.keys(state._bmMap).length !== state.bookmarks.length) {
-        const map: Record<string, Bookmark> = {}; state.bookmarks.forEach(b => { map[b.id] = b }); return map
+        const map: Record<string, Bookmark> = {}; state.bookmarks.forEach(b => { map[b.id] = b }); return _mergeShadow('bookmarks', map)
       }
-      return state._bmMap
+      return _mergeShadow('bookmarks', state._bmMap)
     },
     groupMap(state): Record<string, SiblingGroup> {
       if (Object.keys(state._grpMap).length !== state.siblingGroups.length) {
-        const map: Record<string, SiblingGroup> = {}; state.siblingGroups.forEach(g => { map[g.id] = g }); return map
+        const map: Record<string, SiblingGroup> = {}; state.siblingGroups.forEach(g => { map[g.id] = g }); return _mergeShadow('groups', map)
       }
-      return state._grpMap
+      return _mergeShadow('groups', state._grpMap)
     },
-    /** O(1) 分类查找（含软删除——由 _syncMaps 维护，懒回退） */
+    /** O(1) 分类查找（含软删除——由 _syncMaps 维护，懒回退；分享态叠加影子分类） */
     categoryMap(state): Record<string, Category> {
       if (Object.keys(state._catMap).length !== state.categories.length) {
-        const map: Record<string, Category> = {}; state.categories.forEach(c => { map[c.id] = c }); return map
+        const map: Record<string, Category> = {}; state.categories.forEach(c => { map[c.id] = c }); return _mergeShadow('categories', map)
       }
-      return state._catMap
+      return _mergeShadow('categories', state._catMap)
     },
     /** O(1) 属性查找（含软删除——由 _syncMaps 维护，懒回退） */
     attributeMap(state): Record<string, CustomAttribute> {
@@ -328,6 +369,7 @@ export const useDataStore = defineStore('data', {
 
     /** M18：分类整对象补丁（冲突解决「用远端」），走 dirty/track/map */
     updateCategory(id: string, changes: Partial<Category>) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.categories, this._catMap, id)
       if (idx < 0) return
       for (const key of Object.keys(changes)) this._trackChange(id, key)
@@ -339,6 +381,7 @@ export const useDataStore = defineStore('data', {
 
     /** M18：属性整对象补丁 */
     updateAttribute(id: string, changes: Partial<CustomAttribute>) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.customAttributes, this._attrMap, id)
       if (idx < 0) return
       for (const key of Object.keys(changes)) this._trackChange(id, key)
@@ -353,6 +396,7 @@ export const useDataStore = defineStore('data', {
      * 用于死链全量检查等「多 id 同字段」场景，避免 N 次 updateBookmark 风暴。
      */
     batchPatchBookmarkAttributes(patches: Record<string, Record<string, unknown>>) {
+      if (_denyWrite()) return
       const ids = Object.keys(patches)
       if (!ids.length) return
       let bumped = false
@@ -419,6 +463,7 @@ export const useDataStore = defineStore('data', {
       this._searchIndexDirty = true
     },
     addBookmark(bm: Bookmark) {
+      if (_denyWrite()) return
       const entry = { ...bm }
       this.bookmarks = [...this.bookmarks, entry]
       this._bmMap[entry.id] = entry
@@ -448,6 +493,7 @@ export const useDataStore = defineStore('data', {
       }, _HISTORY_DEBOUNCE_MS))
     },
     updateBookmark(id: string, changes: Partial<Bookmark>) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.bookmarks, this._bmMap, id)
       if (idx >= 0) {
         const prev = this.bookmarks[idx]
@@ -489,6 +535,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteBookmark(id: string) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.bookmarks, this._bmMap, id)
       if (idx < 0) return
       const bm = this.bookmarks[idx]
@@ -519,8 +566,9 @@ export const useDataStore = defineStore('data', {
       this._persistDeletedGroupMemberships()
       this._searchIndexDirty = true
     },
-    addGroup(g: SiblingGroup) { this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id); this._searchIndexDirty = true },
+    addGroup(g: SiblingGroup) { if (_denyWrite()) return; this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id); this._searchIndexDirty = true },
     updateGroup(id: string, changes: Partial<SiblingGroup>) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
       if (idx >= 0) {
         this._saveLocalHistory(id, { ...this.siblingGroups[idx] })
@@ -532,6 +580,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteGroup(id: string) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
       if (idx < 0) return
       const g = this.siblingGroups[idx]
@@ -542,6 +591,7 @@ export const useDataStore = defineStore('data', {
     },
     /** 切换置顶状态：已置顶则取消，未置顶则设为当前时间 */
     togglePin(entityType: 'bookmark' | 'group', id: string) {
+      if (_denyWrite()) return
       if (entityType === 'bookmark') {
         const idx = _indexOfById(this.bookmarks, this._bmMap, id)
         if (idx < 0) return
@@ -566,6 +616,7 @@ export const useDataStore = defineStore('data', {
       this._searchIndexDirty = true
     },
     addCategory(cat: Category) {
+      if (_denyWrite()) return
       cat.updatedAt = Date.now()
       this.categories = [...this.categories, cat]
       this._catMap[cat.id] = cat
@@ -578,6 +629,7 @@ export const useDataStore = defineStore('data', {
      * 未出现在 ordered 中的项（如软删分类）保留在末尾，避免被拖拽路径抹掉。
      */
     reorderCategories(ordered: Category[]) {
+      if (_denyWrite()) return
       const now = Date.now()
       const orderedIds = new Set(ordered.map(c => c.id))
       const rest = this.categories.filter(c => !orderedIds.has(c.id))
@@ -594,6 +646,7 @@ export const useDataStore = defineStore('data', {
       this._searchIndexDirty = true
     },
     renameCategory(id: string, name: string) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.categories, this._catMap, id)
       if (idx >= 0) {
         this._trackChange(id, 'name')
@@ -603,6 +656,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteCategory(id: string) {
+      if (_denyWrite()) return
       const now = Date.now()
       // RE-4：级联改写的 bookmark/group 必须 _markDirty + _trackChange，否则跨设备不同步
       this.bookmarks = this.bookmarks.map(b => {
@@ -630,6 +684,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     addAttribute(attr: CustomAttribute) {
+      if (_denyWrite()) return
       attr.updatedAt = Date.now()
       this.customAttributes = [...this.customAttributes, attr]
       this._attrMap[attr.id] = attr
@@ -637,6 +692,7 @@ export const useDataStore = defineStore('data', {
       this._searchIndexDirty = true
     },
     renameAttribute(id: string, name: string) {
+      if (_denyWrite()) return
       const idx = _indexOfById(this.customAttributes, this._attrMap, id)
       if (idx >= 0) {
         this._trackChange(id, 'name')
@@ -646,6 +702,7 @@ export const useDataStore = defineStore('data', {
       }
     },
     deleteAttribute(id: string) {
+      if (_denyWrite()) return
       const aIdx = _indexOfById(this.customAttributes, this._attrMap, id)
       if (aIdx >= 0) {
         this.customAttributes[aIdx] = { ...this.customAttributes[aIdx], deletedAt: Date.now(), updatedAt: Date.now() }
@@ -689,6 +746,7 @@ export const useDataStore = defineStore('data', {
 
     // ── 回收站：恢复 ──
     restoreBookmark(id: string) {
+      if (_denyWrite()) return
       this._restoreItem('bookmarks', id)
       // RE-8：恢复后重建 _childrenIdx，否则父下子书签不可见直至下次 _syncMaps
       const bm = this._bmMap[id]
@@ -726,12 +784,14 @@ export const useDataStore = defineStore('data', {
       this._restoreAttrMemberships(id, 'bookmark')
     },
     restoreGroup(id: string) {
+      if (_denyWrite()) return
       this._restoreItem('sibling_groups', id)
       // r10-attr-restore B1：回填此组被删属性时抹掉的 attributes 键
       this._restoreAttrMemberships(id, 'group')
     },
-    restoreCategory(id: string) { this._restoreItem('categories', id) },
+    restoreCategory(id: string) { if (_denyWrite()) return; this._restoreItem('categories', id) },
     restoreAttribute(id: string) {
+      if (_denyWrite()) return
       this._restoreItem('custom_attributes', id)
       // A2-002：回写软删时抹掉的 attributes 键。
       // r10-attr-restore 修真 bug：旧实现末尾无条件 _deletedAttrMemberships.delete(id)，
@@ -863,6 +923,7 @@ export const useDataStore = defineStore('data', {
 
     // ── 回收站：永久删除 ──
     permanentDeleteBookmark(id: string) {
+      if (_denyWrite()) return
       // 先记录 children 关系，移除前清理索引
       const bm = this._bmMap[id]
       if (bm?.parentId && this._childrenIdx[bm.parentId]) {
@@ -896,6 +957,7 @@ export const useDataStore = defineStore('data', {
       this._searchIndexDirty = true
     },
     permanentDeleteGroup(id: string) {
+      if (_denyWrite()) return
       const g = this._grpMap[id]
       if (g) {
         // 组彻底删除 → 清理云端图片（fire-and-forget）。免费计划容量有限，避免孤儿文件占满额度。
@@ -907,8 +969,9 @@ export const useDataStore = defineStore('data', {
       this._dropAttrMemberships(id)
       this._searchIndexDirty = true
     },
-    permanentDeleteCategory(id: string) { this._permanentDelete('categories', id); delete this._catMap[id]; this._searchIndexDirty = true },
+    permanentDeleteCategory(id: string) { if (_denyWrite()) return; this._permanentDelete('categories', id); delete this._catMap[id]; this._searchIndexDirty = true },
     permanentDeleteAttribute(id: string) {
+      if (_denyWrite()) return
       this._permanentDelete('custom_attributes', id)
       delete this._attrMap[id]
       this._deletedAttrMemberships.delete(id)
@@ -930,6 +993,7 @@ export const useDataStore = defineStore('data', {
 
     /** 清空回收站（永久删除所有已软删除项） */
     emptyTrash() {
+      if (_denyWrite()) return
       const bms = this.bookmarks.filter(b => b.deletedAt)
       const groups = this.siblingGroups.filter(g => g.deletedAt)
       const cats = this.categories.filter(c => c.deletedAt)
@@ -992,6 +1056,7 @@ export const useDataStore = defineStore('data', {
       return false
     },
     importFromData(data: Partial<AppData>) {
+      if (_denyWrite()) return
       const { categories = [], bookmarks = [], customAttributes = [], siblingGroups = [] } = data || {}
       // 防御性结构检查：确保输入是包含 id 的对象数组
       if (!Array.isArray(bookmarks) || !Array.isArray(categories) || !Array.isArray(customAttributes) || !Array.isArray(siblingGroups)) return

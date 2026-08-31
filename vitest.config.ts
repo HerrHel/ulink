@@ -1,10 +1,24 @@
 import { defineConfig, UserConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { fileURLToPath } from 'node:url'
 
 // 注入 @vitejs/plugin-vue：vitest 默认不继承 vite.config.ts 的 plugins，
 // 缺它则 import *.vue 报 "Failed to parse ... Install @vitejs/plugin-vue"。
 // 仅作用 .vue 文件，对纯 ts/js 测无副作用。
 export default defineConfig({
+  // 允许测试 import functions/_lib/（SSR 共享纯函数，无运行时依赖）。
+  // 默认 vite fs.allow 不含 functions/，否则 SSR 测试会被 import-analysis 拒绝。
+  server: { fs: { allow: ['./functions'] } },
+  resolve: {
+    alias: [
+      // 让 vitest 看到 SSR 共享纯函数模块（Node ESM 解析 .ts 时不自动 .js → .ts，
+      // 这里把 functions/_lib/* 显式映射到 .ts，避免 vite import-analysis 拒绝）
+      {
+        find: /.*functions[\\/]_lib[\\/]([^\\/]+)\.js$/,
+        replacement: fileURLToPath(new URL('./functions/_lib/$1.ts', import.meta.url)),
+      },
+    ],
+  },
   plugins: [vue()],
   test: {
     globals: true,

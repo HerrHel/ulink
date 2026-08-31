@@ -1,7 +1,7 @@
 <template>
   <div ref="cardEl" class="card" :class="{ 'card-expanded': isExpanded, 'acct-open': acctOpen, 'batch-mode': uiStore.batchMode }"
        role="listitem" :aria-label="bookmark.title"
-       :data-id="bookmark.id" :draggable="!uiStore.isMobile"
+       :data-id="bookmark.id" :draggable="!uiStore.isMobile && !isShareReadonly"
        :tabindex="listKeyboardNav ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
@@ -40,7 +40,7 @@
       <div class="card-tags" v-if="tagNames.length && uiStore.layoutMode !== 'list'">
         <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
-      <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="uiStore.layoutMode !== 'list' && editNotes($event)">
+      <div class="card-notes" v-if="bookmark.notes" @dblclick.stop="!isShareReadonly && uiStore.layoutMode !== 'list' && editNotes($event)">
         <span v-if="searchQuery" v-html="hlNotes"></span>
         <template v-else>{{ displayText(bookmark.notes) }}</template>
       </div>
@@ -71,7 +71,7 @@
     </div>
     <div class="card-foot">
       <span class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
-      <span class="card-actions">
+      <span class="card-actions" v-if="!isShareReadonly">
         <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="edit" :title="t('common.edit')" v-html="I.edit"></button>
         <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" v-html="I.trash"></button>
@@ -128,6 +128,8 @@ const props = defineProps({
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const listNav = useListNav()
+/** 分享只读态：隐藏一切写操作（编辑/删除/加子书签/拖拽/双击改笔记） */
+const isShareReadonly = computed(() => !!uiStore.shareMode)
 const cardEl = ref(null)
 // useCardOverflow 副作用：给 .card-body 加 .card-overflow 类驱动淡出遮罩，返回值此处不消费
 useCardOverflow(cardEl)

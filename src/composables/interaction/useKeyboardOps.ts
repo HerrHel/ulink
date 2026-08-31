@@ -18,6 +18,8 @@ import { useBatchMoveStore, useMfbStore } from '../../stores/overlay.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { useE2EStore } from '../../stores/e2e.js'
+import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 
 interface NavState {
   curCat: string
@@ -104,6 +106,20 @@ export function restoreNavState(prev: NavState) {
 
 export function _onGlobalKeydown(e: KeyboardEvent) {
   const ui = useUIStore()
+  // 分享只读态：拦截写类快捷键（新建/撤销/格式等），保留 Esc 关闭与只读导航。
+  // 数据层已有 mutation 守卫兜底，这里只做「写操作被拦截」的一次性提示（体验需求）。
+  if (ui.shareMode) {
+    const k = e.key.toLowerCase()
+    const mod = e.ctrlKey || e.metaKey
+    const writeKey = mod
+      ? ['n', 'z', 'y', 'b', 'd', 'g', 's'].includes(k)
+      : ['delete', 'backspace', 'f2'].includes(k)
+    if (writeKey) {
+      e.preventDefault()
+      _toastShareDenied()
+      return
+    }
+  }
   const _ae = document.activeElement
   const _gb = _ae && _ae.closest ? _ae.closest('.group-body') : null
   if (_gb && (e.ctrlKey || e.metaKey)) {
@@ -205,4 +221,13 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
       e.preventDefault(); batchDelete(); return
     }
   }
+}
+
+/** 分享只读态写操作拦截提示（2s 节流，避免连按刷屏） */
+let _shareDeniedAt = 0
+function _toastShareDenied() {
+  const now = Date.now()
+  if (now - _shareDeniedAt < 2000) return
+  _shareDeniedAt = now
+  toast(t('share.denied'), false)
 }

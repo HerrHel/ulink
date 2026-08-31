@@ -1,7 +1,16 @@
 <template>
-  <div class="filter-row" :class="{ 'focus-active': store.focusedGroupId }">
+  <div class="filter-row" :class="{ 'focus-active': store.focusedGroupId, 'share-readonly-row': shareMode }">
+    <!-- Share readonly mode：全部写工具隐藏，只保留「返回我的库」 -->
+    <template v-if="shareMode">
+      <span class="share-filter-left">
+        <button class="btn btn-ghost btn-sm" @click="onExitShare" :title="t('share.backToMine')">
+          <span aria-hidden="true" v-html="I.back" class="icon-sm"></span>{{ t('share.backToMine') }}
+        </button>
+        <span class="share-filter-hint">{{ t('share.readonlyTitle') }}</span>
+      </span>
+    </template>
     <!-- Focus mode tools -->
-    <span v-if="store.focusedGroupId" class="focus-tools">
+    <span v-else-if="store.focusedGroupId" class="focus-tools">
       <button class="ft-sb-btn" @click="$emit('exit-focus')" :title="t('common.back')">
         <span aria-hidden="true" v-html="I.back"></span>
       </button>
@@ -47,10 +56,13 @@ import { I } from '../../config/icons.js'
 import AttrChips from './AttrChips.vue'
 import AttrDropdown from '../overlays/AttrDropdown.vue'
 import { toggleBatchMode } from '../../composables/domain/useBatch.js'
+import { useShareStore } from '../../stores/share.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
 const undo = useUndoStore()
+const share = useShareStore()
+const shareMode = computed(() => store.shareMode)
 defineEmits(['exit-focus', 'focus-add-bm', 'focus-edit-group', 'focus-undo', 'focus-redo', 'toggle-attr-filter', 'add-bookmark', 'add-group'])
 
 const focusCanUndo = computed(() => !!store.focusedGroupId && !!undo.canUndo(store.focusedGroupId))
@@ -58,4 +70,10 @@ const focusCanRedo = computed(() => !!store.focusedGroupId && !!undo.canRedo(sto
 
 const toggleBatch = toggleBatchMode
 function onAddClick() { store.overlays.addDropdown = !store.overlays.addDropdown }
+function onExitShare() { share.exit() }
 </script>
+
+<style scoped>
+.share-filter-left { display: flex; align-items: center; gap: 10px; }
+.share-filter-hint { font-size: 12px; color: var(--text-secondary, #888); }
+</style>

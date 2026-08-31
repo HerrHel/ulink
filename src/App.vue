@@ -1,7 +1,6 @@
 <template>
-<!-- E2-001：Auth/Toast/Confirm 常驻在 Share 与 MainLayout 共同父级，分享页「登录后复制」可用 -->
-<ShareView v-if="shareGroupId" :group-id="shareGroupId" @close="shareGroupId = null" />
-<template v-else>
+<!-- E2-001：Auth/Toast/Confirm 常驻在 MainLayout 父级。分享态不再是独立页面，
+     而是主应用内的只读状态（见 stores/share.ts），与常规模式共用同一套覆盖层。 -->
 <ErrorBoundary name="MainLayout">
 <div class="lv-panel">
   <AppNav />
@@ -17,7 +16,16 @@
       <BatchBottom @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       <div class="flex-1" style="display:flex;overflow:hidden">
         <div class="panel-content" id="panelContent">
-          <ErrorBoundary name="CardGrid">
+          <!-- 分享只读态：加载 / 出错时的占位（成功态由 CardGrid 按聚焦/分类渲染） -->
+          <div v-if="share.loading" class="share-state">
+            <div class="share-spinner"></div>
+            <span>{{ t('share.loading') }}</span>
+          </div>
+          <div v-else-if="share.error" class="share-state share-state-error">
+            <p>{{ share.error }}</p>
+            <button class="btn btn-ghost btn-sm" @click="share.retry()">{{ t('common.retry') }}</button>
+          </div>
+          <ErrorBoundary name="CardGrid" v-else>
             <CardGrid />
           </ErrorBoundary>
         </div>
@@ -64,8 +72,7 @@
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false; store.detailCards.splice(0)"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>
-</template>
-<!-- 全局覆盖层：Share 路由与主布局共用 -->
+<!-- 全局覆盖层：分享态与主布局共用 -->
 <ConfirmModal />
 <ChoiceModal />
 <AuthModal />
@@ -73,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, ref, onMounted, watch } from 'vue'
+import { defineAsyncComponent, onMounted, watch } from 'vue'
 import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
@@ -87,6 +94,7 @@ import { useE2EStore } from './stores/e2e.js'
 import { useVaultStore } from './stores/vault.js'
 import { useUIStore } from './stores/ui.js'
 import { useDataStore } from './stores/data.js'
+import { useShareStore } from './stores/share.js'
 import { toast } from './lib/toast.js'
 import { t } from './i18n/index.js'
 import AppHeader from './components/shell/AppHeader.vue'
@@ -174,10 +182,9 @@ const VaultSetupModal = defineAsyncComponent(() => import('./components/modals/V
 const VaultUnlockModal = defineAsyncComponent(() => import('./components/modals/VaultUnlockModal.vue'))
 const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
 
-// A4: 公开分享页面
-const ShareView = defineAsyncComponent(() => import('./views/ShareView.vue'))
-const shareGroupId = ref<string | null>(null)
-onShareRoute((gid: string) => { shareGroupId.value = gid })
+// 分享只读态（主应用内）：见 stores/share.ts。分享路由由 useAppLifecycle 检测后回调。
+const share = useShareStore()
+onShareRoute((gid: string) => { void share.enter(gid) })
 
 onMounted(async () => {
   // P1: E2E 改为按需引导 — 不再是「设过主密码就每次启动必解锁」。
@@ -263,3 +270,19 @@ watch(() => uiStore.curSpace, (next, prev) => {
   if (prev === 'vault' && next === 'main' && vaultStore.isVaultUnlocked) vault.lockVault()
 })
 </script>
+
+<style scoped>
+/* 分享只读态：加载 / 出错占位（成功态由主站卡片区渲染，无额外样式） */
+.share-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; height: 100%; min-height: 240px;
+  color: var(--text-secondary, #888); font-size: 13px;
+}
+.share-spinner {
+  width: 28px; height: 28px; border: 3px solid var(--border, #e5e7eb);
+  border-top-color: var(--accent, #3B82F6); border-radius: 50%;
+  animation: shareSpin 0.8s linear infinite;
+}
+@keyframes shareSpin { to { transform: rotate(360deg) } }
+.share-state-error p { max-width: 420px; text-align: center; line-height: 1.6; }
+</style>

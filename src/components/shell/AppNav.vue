@@ -37,7 +37,7 @@
         <span aria-hidden="true" v-html="I.back"></span>
         {{ t('nav.backToMain') }}
       </button>
-      <button class="rail-item" id="btnManageCats" @click="openCatModalNav">
+      <button v-if="!shareMode" class="rail-item" id="btnManageCats" @click="openCatModalNav">
         <span aria-hidden="true" v-html="I.settings"></span>
         {{ t('nav.manageCategories') }}
       </button>
@@ -66,6 +66,9 @@ const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
 const vault = useVault()
+
+// 分享只读态：隐藏「管理分类」等写类入口（点分类/切走即退出分享，见 share store 的 watch）
+const shareMode = computed(() => uiStore.shareMode)
 
 // 当前是否在私密空间（数据集）；入口/返回按钮与 logo 切换依此
 const isVault = computed(() => uiStore.curSpace === 'vault')
