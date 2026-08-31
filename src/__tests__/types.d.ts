@@ -4,12 +4,14 @@
 declare module '*functions/_lib/share-render.js' {
   import type { Bookmark, SiblingGroup, Category } from '../../src/types.js'
   export type ShareLocale = 'zh-CN' | 'en-US'
+  export function extractAppAssets(indexHtml: string): string
   export function renderSharePage(
     group: SiblingGroup,
     bookmarks: Bookmark[],
     shareUrl: string,
     appOrigin: string,
     locale?: ShareLocale,
+    appAssets?: string,
   ): string
   export function renderShareCategoryPage(
     category: Category,
@@ -19,6 +21,8 @@ declare module '*functions/_lib/share-render.js' {
     shareUrl: string,
     appOrigin: string,
     locale?: ShareLocale,
+    layout?: string,
+    appAssets?: string,
   ): string
   export function renderNotFoundPage(locale?: ShareLocale): string
 }

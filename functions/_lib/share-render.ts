@@ -56,7 +56,7 @@ const T = {
     listView: '列表视图',
     miniGridView: '小宫格视图',
     updatedAt: '更新于 {d}',
-    cta: '在与链中打开 · 复制到我的库',
+    cta: '保存至我的库',
     tocTitle: '目录',
     footerBrand: '与链 · ulink',
     footerSlogan: '收藏 · 整理 · 分享',
@@ -99,7 +99,7 @@ const T = {
     listView: 'List view',
     miniGridView: 'Mini grid view',
     updatedAt: 'Updated {d}',
-    cta: 'Open in ulink · Copy to my library',
+    cta: 'Save to my library',
     tocTitle: 'Contents',
     footerBrand: 'ulink',
     footerSlogan: 'Collect · Organize · Share',
@@ -548,7 +548,9 @@ function buildAppShell(
   ].join("\n")
 }
 
-/** 构建 <body>：主应用外壳（左导航占位 + 顶部只读条）+ 聚焦卡 + 书签列表双列，窄屏回退单列。 */
+/** 构建 <body>（组分享）：主应用外壳（左导航占位 + 顶部只读条 + CTA）+ 聚焦卡（组名 + 笔记）。
+ *  组内书签不渲染独立列表（对齐新版：组分享 = 聚焦组形态，书签仅以内联卡片出现在笔记中；
+ *  SPA 接管后由主应用只读态渲染，SSR 只负责首屏与爬虫）。 */
 function buildBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   group: PublicGroup,
@@ -561,14 +563,11 @@ function buildBody(
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, 'count', count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
   const updatedTag = updated ? `<span class="meta-tag">${esc(fill(dict.updatedAt, { d: updated }))}</span>` : ""
-  const list = count
-    ? bookmarks.map((b) => buildBookmarkItem(dict, b)).join("\n")
-    : `<div class="empty">${esc(dict.empty)}</div>`
   // data-bm-id → 书签 URL 映射（内联书签转可点击 <a>）
   const bmMap: NotesBmMap = {}
   for (const b of bookmarks) bmMap[b.id] = { url: b.url }
   const notes = notesHtml(dict, group, bmMap)
-  // CTA 跳 App 的 hash 路由（#share/<gid>），让人类用户进入 SPA 登录后 Fork。
+  // CTA 跳 App 的 hash 路由（#share/<gid>），降级入口（bundle 加载失败时手动进入 SPA）
   const appUrl = `${appOrigin}/#share/${esc(group.id)}`
   const inner = [
     `<div class="grp-layout">`,
@@ -583,19 +582,46 @@ function buildBody(
     `</div>`,
     notes.html,
     `</div>`,
-    `<aside class="grp-list">${list}</aside>`,
     `</div>`,
   ].join("\n")
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
-/** 组装完整 HTML 文档。og:image 从 appOrigin 推导（静态品牌图，随站部署于根路径）。 */
+/**
+ * 从主应用 index.html 提取 SPA 资源标签（主 CSS + modulepreload + module script）。
+ * 分享页 SSR 注入后，SPA bundle 在同域 /s/<gid> 下启动，detectShareRoute 识别 path
+ * 路由自动接管为只读态（不再需要用户手动点击 CTA）。纯函数，供 CF Functions 用
+ * env.ASSETS 读 index.html 后调用（Deno 保底版无此能力，跳过注入）。
+ */
+export function extractAppAssets(indexHtml: string): string {
+  const out: string[] = []
+  const pushAll = (re: RegExp, wrap: (href: string) => string) => {
+    const re2 = new RegExp(re.source, 'g')
+    let m: RegExpExecArray | null
+    while ((m = re2.exec(indexHtml))) {
+      const href = m[1]
+      if (!href || /^https?:\/\//i.test(href)) continue
+      out.push(wrap(href))
+    }
+  }
+  pushAll(/<link\s[^>]*rel="stylesheet"[^>]*href="([^"]+)"[^>]*>/i, (h) => `<link rel="stylesheet" href="${h}">`)
+  pushAll(/<link\s[^>]*rel="modulepreload"[^>]*href="([^"]+)"[^>]*>/i, (h) => `<link rel="modulepreload" crossorigin href="${h}">`)
+  pushAll(/<script\s[^>]*type="module"[^>]*src="([^"]+)"[^>]*>/i, (h) => `<script type="module" crossorigin src="${h}"></script>`)
+  return out.join("\n")
+}
+
+/** 组装完整 HTML 文档。og:image 从 appOrigin 推导（静态品牌图，随站部署于根路径）。
+ *  appAssets：主应用 SPA 的资源标签（stylesheet/modulepreload/module script，由函数层
+ *  用 env.ASSETS 读 index.html 经 extractAppAssets 提取）。注入后 SPA 启动即识别
+ *  /s/<gid> path 路由（detectShareRoute）自动接管为只读态；body 内 <div id="app">
+ *  为 Vue mount 挂载点，接管时整段骨架被主应用重建。 */
 export function renderSharePage(
   group: PublicGroup,
   bookmarks: PublicBookmark[],
   shareUrl: string,
   appOrigin: string,
   locale: ShareLocale = 'zh-CN',
+  appAssets = '',
 ): string {
   const dict = T[locale]
   const ogImage = `${appOrigin}/share-cover.png`
@@ -604,10 +630,9 @@ export function renderSharePage(
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}</head>`,
+    `<head>${head}${appAssets}</head>`,
     `<style>${CSS}</style>`,
-    `<body>${body}</body>`,
-    `<script>${FALLBACK_JS}</script>`,
+    `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
   ].join("\n")
 }
@@ -838,6 +863,8 @@ function buildLayoutSwitch(
   ].join("")
 }
 
+/** 构建 <body>（分类分享）：主应用外壳 + 分类头（真实分类名/计数）+ 卡片网格骨架占位。
+ *  真实书签卡片由 SPA 接管后渲染（分类分享 = 选中分类形态）；SSR 只负责首屏与爬虫。 */
 function buildCategoryBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   category: PublicCategory,
@@ -851,12 +878,7 @@ function buildCategoryBody(
   const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
   const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
-  // data-bm-id → 书签 URL 映射（组 notes 内联书签转可点击 <a>）
-  const bmMap: NotesBmMap = {}
-  for (const b of bookmarks || []) {
-    if (b && b.id) bmMap[b.id] = { url: b.url }
-  }
-  // 展示口径：与网格里实际渲染的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
+  // 计数口径：与网格里实际渲染的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
   const count =
     groupCards.reduce((s, e) => s + e.items.length, 0) +
     loose.reduce((s, c) => s + 1 + c.children.length, 0)
@@ -867,18 +889,15 @@ function buildCategoryBody(
       ? `<span class="meta-tag">${esc(fill(pick(dict, 'catGroups', groupCount), { m: groupCount }))}</span>`
       : "",
   ].join("")
-  const cards = [
-    ...groupCards.map((e, i) => buildGroupCard(dict, e, i, bmMap)),
-    ...loose.map((c) => buildLooseBookmarkCard(dict, c)),
-  ]
-  const grid = cards.length
-    ? `<div class="cat-grid${layout !== 'grid' ? ` ${layout}-view` : ''}">${cards.join("\n")}</div>`
-    : `<div class="empty">${esc(dict.emptyCategory)}</div>`
-  // CTA 跳 App 的 hash 路由（#share/c/<share_id>），进入 SPA 登录后 Fork。
+  // CTA 跳 App 的 hash 路由（#share/c/<share_id>），降级入口（bundle 加载失败时手动进入 SPA）
   const appUrl = `${appOrigin}/#share/c/${esc(shareId)}`
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
+  const skelGrid = Array.from(
+    { length: 6 },
+    () => `<div class="cat-skel"><span class="cat-skel-bar w60"></span><span class="cat-skel-bar w80"></span><span class="cat-skel-bar w40"></span></div>`,
+  ).join("\n")
   const inner = [
     `<section class="cat-hero"${accentStyle}>`,
     `<span class="cat-hero-accent" aria-hidden="true"></span>`,
@@ -891,7 +910,7 @@ function buildCategoryBody(
     buildLayoutSwitch(dict, shareUrl, layout),
     `</div>`,
     `</section>`,
-    grid,
+    `<div class="cat-grid">${skelGrid}</div>`,
   ].join("\n")
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
@@ -944,6 +963,7 @@ export function renderShareCategoryPage(
   appOrigin: string,
   locale: ShareLocale = 'zh-CN',
   layout: CatLayout = 'grid',
+  appAssets = '',
 ): string {
   const dict = T[locale]
   const ogImage = `${appOrigin}/share-cover.png`
@@ -956,10 +976,9 @@ export function renderShareCategoryPage(
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}</head>`,
+    `<head>${head}${appAssets}</head>`,
     `<style>${CSS}</style>`,
-    `<body>${body}</body>`,
-    `<script>${FALLBACK_JS}</script>`,
+    `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
   ].join("\n")
 }
@@ -1279,6 +1298,11 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .rail-nav{display:flex;flex-direction:column;gap:5px;margin-top:14px}
 .rail-skel{height:34px;border-radius:10px;background:linear-gradient(90deg,#EDE4DA 25%,#F6F1EB 50%,#EDE4DA 75%);background-size:200% 100%;animation:railSkel 1.5s ease-in-out infinite}
 @keyframes railSkel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.cat-skel{height:168px;border:1px solid #E5DDD3;border-radius:14px;background:#FDFBF9;padding:16px;display:flex;flex-direction:column;gap:10px;justify-content:center}
+.cat-skel-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,#EDE4DA 25%,#F6F1EB 50%,#EDE4DA 75%);background-size:200% 100%;animation:railSkel 1.5s ease-in-out infinite}
+.cat-skel-bar.w60{width:60%}
+.cat-skel-bar.w80{width:80%}
+.cat-skel-bar.w40{width:40%}
 .panel{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 26px 48px;max-width:1320px;margin:0 auto;width:100%}
 .panel-hdr{display:flex;align-items:center;gap:12px;padding:18px 0 14px;border-bottom:1px solid #E5DDD3;margin-bottom:22px}
 .hdr-chip{font-size:11px;font-weight:600;line-height:1;color:#122E8A;background:#EDE4DA;border:1px solid #E5DDD3;padding:5px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0}
