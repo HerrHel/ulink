@@ -88,6 +88,8 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
   }
 
   function onContextMenu(e: MouseEvent) {
+    // 分享只读态：一律不弹右键菜单（菜单项全是写操作），并阻止浏览器默认菜单
+    if (ui.shareMode) { e.preventDefault(); return }
     if (isMobile()) { e.preventDefault(); return }
     if (ui.batchMode && (e.target as HTMLElement).closest('.card, .group-card, .group-body, .sub-sites')) return
     if (!onShowCtxMenu) return

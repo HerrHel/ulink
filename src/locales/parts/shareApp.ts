@@ -26,6 +26,17 @@ export const shareAppZh = {
     catHide: '收起',
     encryptedPlaceholder: '（内容已加密）',
   },
+  /** 主应用内分享只读态（分享页改为只读态后的外壳文案） */
+  share: {
+    readonly: '只读',
+    readonlyTitle: '这是他人分享的只读内容',
+    denied: '这是他人分享的只读内容，无法修改',
+    saveToLibrary: '保存至我的库',
+    saving: '保存中…',
+    loginThenSave: '登录后保存',
+    loading: '正在加载分享内容…',
+    backToMine: '返回我的库',
+  },
   appShell: {
     unlockChunkLoadFailed: '解锁组件加载失败，请刷新后重试',
     unlockTimeout: '解锁超时，请重试',
@@ -65,6 +76,17 @@ export const shareAppEn = {
     catChildren_one: '{n} sub-item',
     catHide: 'Collapse',
     encryptedPlaceholder: '(encrypted content)',
+  },
+  /** in-app share read-only mode (shell copy after the share page became a read-only state) */
+  share: {
+    readonly: 'Read-only',
+    readonlyTitle: 'Read-only content shared by someone else',
+    denied: 'This is shared read-only content and cannot be modified',
+    saveToLibrary: 'Save to my library',
+    saving: 'Saving…',
+    loginThenSave: 'Sign in to save',
+    loading: 'Loading shared content…',
+    backToMine: 'Back to my library',
   },
   appShell: {
     unlockChunkLoadFailed: 'Failed to load the unlock dialog — please refresh and retry',

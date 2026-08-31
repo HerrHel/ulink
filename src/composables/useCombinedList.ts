@@ -7,16 +7,20 @@
 import { computed, type ComputedRef } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
+import { shadowData } from '../stores/shareShadow.js'
 import type { CardItem, Bookmark, SiblingGroup } from '../types.js'
 
-export type CombinedMode = 'focus' | 'custom' | 'normal'
+export type CombinedMode = 'focus' | 'custom' | 'normal' | 'share-category'
 
 export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode: ComputedRef<CombinedMode> } {
   const ds = useDataStore()
   const ui = useUIStore()
 
   const mode = computed<CombinedMode>(() => {
+    // 聚焦优先：分类分享态下聚焦影子组同样走聚焦视图
     if (ui.focusedGroupId) return 'focus'
+    // 分类分享态：列表直接来自影子数据（filtered* 看不到影子内容）
+    if (ui.shareMode?.kind === 'category') return 'share-category'
     if (ds._customCardOrder != null && ui.sortMode === 'order') return 'custom'
     return 'normal'
   })
@@ -26,6 +30,16 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
       case 'focus': {
         const g = ds.groupMap[ui.focusedGroupId!]
         return g ? [{ type: 'group' as const, data: g }] : []
+      }
+      case 'share-category': {
+        // 只读分类分享：影子组 + 影子顶层书签（shareShadow 由 share store 装载）
+        const sh = shadowData()
+        const groups = Object.values(sh.groups).filter((g) => !g.deletedAt)
+        const topLevel = Object.values(sh.bookmarks).filter((b) => !b.deletedAt && !b.parentId)
+        const combined: CardItem[] = []
+        for (const g of groups) combined.push({ type: 'group', data: g })
+        for (const b of topLevel) combined.push({ type: 'bm', data: b })
+        return combined
       }
       case 'custom': {
         // A1-002：候选集一律 filtered*，避免分类/搜索/属性被自定义顺序旁路

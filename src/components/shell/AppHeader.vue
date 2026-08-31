@@ -4,8 +4,13 @@
       <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" :title="t('shell.menu')" :aria-label="t('shell.menu')">
         <span aria-hidden="true" v-html="I.hamburger"></span>
       </button>
+      <!-- Share readonly mode：分享态优先于聚焦/常规，标题只读 + 只读 chip -->
+      <template v-if="shareMode">
+        <span class="share-subject-title">{{ share.subjectName || t('shareView.defaultGroupName') }}</span>
+        <span class="share-readonly-chip" :title="t('share.readonlyTitle')">{{ t('share.readonly') }}</span>
+      </template>
       <!-- Focus mode -->
-      <template v-if="ui.focusedGroupId && focusedGroup">
+      <template v-else-if="ui.focusedGroupId && focusedGroup">
         <span class="panel-title-group-icon" @click="$emit('exit-focus')" :title="t('shell.back')">
           <img v-if="focusedGroup.icon" :src="focusedGroup.icon" alt="">
           <span v-else aria-hidden="true" v-html="I.note"></span>
@@ -22,7 +27,7 @@
         <span class="panel-count">{{ panelCountText }}</span>
       </template>
     </div>
-    <div v-show="!ui.focusedGroupId" class="search-wrapper header-search">
+    <div v-show="!ui.focusedGroupId && !shareMode" class="search-wrapper header-search">
       <div class="search-box">
         <span aria-hidden="true" v-html="I.search"></span>
         <input type="text" class="search-input" :aria-label="t('shell.search')" id="searchInput" data-testid="lv-search-input" v-model="localQuery"
@@ -31,7 +36,14 @@
       <SearchSuggest />
     </div>
     <div class="header-right">
-      <button class="search-toggle-btn" id="searchToggleBtn" :title="t('shell.search')" :aria-label="t('shell.search')">
+      <!-- Share readonly mode：右上角写类按钮整体换成「保存至我的库」 -->
+      <template v-if="shareMode">
+        <button class="btn btn-primary btn-sm share-save-btn" @click="onShareFork" :disabled="share.forking">
+          {{ forkLabel }}
+        </button>
+      </template>
+      <template v-else>
+      <button v-show="!ui.focusedGroupId" class="search-toggle-btn" id="searchToggleBtn" :title="t('shell.search')" :aria-label="t('shell.search')">
         <span aria-hidden="true" v-html="I.search"></span>
       </button>
       <template v-if="ui.focusedGroupId">
@@ -59,9 +71,10 @@
         <SettingsPanel />
         <SyncStatusPopover v-if="auth.isLoggedIn" />
       </span>
-      <button class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" :title="t('shell.detailPanel')" :aria-label="t('shell.detailPanel')">
+      <button v-show="!shareMode" class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" :title="t('shell.detailPanel')" :aria-label="t('shell.detailPanel')">
         <span aria-hidden="true" v-html="I.panel" class="icon-sm"></span>
       </button>
+      </template>
     </div>
   </header>
 </template>
@@ -75,6 +88,7 @@ import { useSyncStatusStore } from '../../stores/overlay.js'
 import { I } from '../../config/icons.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
+import { useShareStore } from '../../stores/share.js'
 import SearchSuggest from '../overlays/SearchSuggest.vue'
 import SettingsPanel from './SettingsPanel.vue'
 import SyncStatusPopover from '../overlays/SyncStatusPopover.vue'
@@ -87,6 +101,15 @@ const emit = defineEmits(['toggle-rail', 'exit-focus', 'focus-title-change', 'to
 const auth = useAuth()
 const syncState = useSyncState()
 const syncPopover = useSyncStatusStore()
+
+// 分享只读态：标题 + 只读 chip + 「保存至我的库」
+const share = useShareStore()
+const shareMode = computed(() => ui.shareMode)
+const forkLabel = computed(() => {
+  if (share.forking) return t('share.saving')
+  return auth.isLoggedIn ? t('share.saveToLibrary') : t('share.loginThenSave')
+})
+function onShareFork() { void share.fork() }
 
 function toggleSyncPopover() {
   if (syncPopover.open) syncPopover.hide()
@@ -151,3 +174,18 @@ function onDblClick(e: MouseEvent) {
   }
 }
 </script>
+
+<style scoped>
+/* 分享只读态：标题 + 只读 chip + 保存按钮 */
+.share-subject-title {
+  font-weight: 600; font-size: 15px; letter-spacing: -0.3px;
+  max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.share-readonly-chip {
+  flex-shrink: 0; font-size: 11px; font-weight: 600; line-height: 1;
+  padding: 4px 8px; border-radius: 999px;
+  color: var(--accent, #3B82F6); background: var(--bg-alt, #f3f4f6);
+  border: 1px solid var(--border-light, #e5e7eb);
+}
+.share-save-btn { white-space: nowrap; }
+</style>

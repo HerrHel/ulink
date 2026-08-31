@@ -82,6 +82,7 @@ export const useAppStore = defineStore('app', () => {
     layoutMode: uiProp('layoutMode'),
     searchQuery: uiProp('searchQuery'),
     focusedGroupId: uiProp('focusedGroupId'),
+    shareMode: uiProp('shareMode'),
     batchMode: uiProp('batchMode'),
     batchSelected: uiProp('batchSelected'),
     activeAttrs: uiProp('activeAttrs'),
@@ -156,6 +157,10 @@ export const useAppStore = defineStore('app', () => {
     tryLoadFromIDB() { return ds().tryLoadFromIDB() },
 
     save(): Promise<boolean> {
+      // 分享只读态：一律拒写。影子数据虽只在 map 层（进不了落盘快照），
+      // 但分享态下仍可能有本地路径触发保存，且落盘会连带把 _writeSeq /
+      // localStorage 缓存推高。返回 true 表示「无需保存」，避免误报存储失败。
+      if (ui().shareMode) return Promise.resolve(true)
       const d = ds()
       const data = d._dataSnapshot()
       const fp = _fingerprint(data)

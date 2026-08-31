@@ -513,7 +513,42 @@ function notesHtml(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGro
   return { html: `<div class="focus-notes">${cleaned}</div>`, toc }
 }
 
-/** 构建 <body>：双列布局（左侧白卡聚焦 + 右侧书签列表竖排，窄屏回退单列）。 */
+/**
+ * 主应用外壳（方案 B 骨架近似）：左侧导航占位 + 顶部条（只读 chip + CTA）+ 内容区。
+ * 类名刻意避开 FALLBACK_JS 依赖的 .layout/.main/.bm-list/.toc，使旧布局 JS 自动失效
+ * （img-error / taskItem 点击逻辑仍生效）。SPA 接管后整个 <body> 被 Vue 重建。
+ */
+function buildAppShell(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  appOrigin: string,
+  opts: { hdrMeta: string; ctaUrl: string; inner: string },
+): string {
+  const year = new Date().getUTCFullYear()
+  return [
+    `<div class="app">`,
+    `<aside class="rail">`,
+    `<a class="rail-logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
+    `<nav class="rail-nav">`,
+    `<span class="rail-skel"></span><span class="rail-skel"></span><span class="rail-skel"></span>`,
+    `</nav>`,
+    `</aside>`,
+    `<div class="panel">`,
+    `<header class="panel-hdr">`,
+    `<span class="hdr-chip">${esc(dict.headSub)}</span>`,
+    `<div class="hdr-right">${opts.hdrMeta}<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a></div>`,
+    `</header>`,
+    `<div class="panel-body">${opts.inner}</div>`,
+    `<footer class="foot">`,
+    `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
+    `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
+    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `</footer>`,
+    `</div>`,
+    `</div>`,
+  ].join("\n")
+}
+
+/** 构建 <body>：主应用外壳（左导航占位 + 顶部只读条）+ 聚焦卡 + 书签列表双列，窄屏回退单列。 */
 function buildBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   group: PublicGroup,
@@ -535,16 +570,8 @@ function buildBody(
   const notes = notesHtml(dict, group, bmMap)
   // CTA 跳 App 的 hash 路由（#share/<gid>），让人类用户进入 SPA 登录后 Fork。
   const appUrl = `${appOrigin}/#share/${esc(group.id)}`
-  const year = new Date().getUTCFullYear()
-  return [
-    `<div class="page">`,
-    `<header class="head">`,
-    `<a class="logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
-    `<span class="head-sub">${esc(dict.headSub)}</span>`,
-    `</header>`,
-    `<div class="layout">`,
-    notes.toc,
-    `<main class="main">`,
+  const inner = [
+    `<div class="grp-layout">`,
     `<div class="focus-card">`,
     `<span class="focus-accent" aria-hidden="true"></span>`,
     `<div class="focus-head">`,
@@ -553,20 +580,13 @@ function buildBody(
     `<h1 class="focus-name">${name}</h1>`,
     `<div class="focus-meta">${countTag}${updatedTag}</div>`,
     `</div>`,
-    `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
     `</div>`,
     notes.html,
     `</div>`,
-    `<aside class="bm-list">${list}</aside>`,
-    `</main>`,
-    `</div>`,
-    `<footer class="foot">`,
-    `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
-    `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
-    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
-    `</footer>`,
+    `<aside class="grp-list">${list}</aside>`,
     `</div>`,
   ].join("\n")
+  return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
 /** 组装完整 HTML 文档。og:image 从 appOrigin 推导（静态品牌图，随站部署于根路径）。 */
@@ -859,13 +879,7 @@ function buildCategoryBody(
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
-  const year = new Date().getUTCFullYear()
-  return [
-    `<div class="page">`,
-    `<header class="head">`,
-    `<a class="logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
-    `<span class="head-sub">${esc(dict.headSub)}</span>`,
-    `</header>`,
+  const inner = [
     `<section class="cat-hero"${accentStyle}>`,
     `<span class="cat-hero-accent" aria-hidden="true"></span>`,
     `<span class="cat-hero-icon">${groupIconMarkup(category, initial)}</span>`,
@@ -875,17 +889,11 @@ function buildCategoryBody(
     `</div>`,
     `<div class="cat-hero-actions">`,
     buildLayoutSwitch(dict, shareUrl, layout),
-    `<a class="cta" href="${appUrl}">${esc(dict.cta)}</a>`,
     `</div>`,
     `</section>`,
     grid,
-    `<footer class="foot">`,
-    `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
-    `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
-    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
-    `</footer>`,
-    `</div>`,
   ].join("\n")
+  return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
 /** 分类分享 <head>：分类名进 title，描述用「N 个书签 · M 个组 · 由与链公开分享」。 */
@@ -956,7 +964,7 @@ export function renderShareCategoryPage(
   ].join("\n")
 }
 
-/** 404 兜底页（分享不存在 / 已取消公开），与主页面同一视觉语言。 */
+/** 404 兜底页（分享不存在 / 已取消公开），主应用外壳 + 同一视觉语言。 */
 export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
   const d = T[locale]
   const origin = 'https://ulink.ren'
@@ -970,19 +978,17 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
     `</head>`,
     `<style>${CSS}</style>`,
     `<body>`,
-    `<div class="page">`,
-    `<header class="head">`,
-    `<a class="logo" href="${origin}/">${LOGO_SVG}<span>${esc(d.logoText)}</span></a>`,
-    `</header>`,
-    `<main class="main">`,
-    `<div class="nf">`,
-    `<span class="nf-icon">${LOGO_SVG}</span>`,
-    `<h1 class="nf-title">${esc(d.notFoundHeading)}</h1>`,
-    `<p class="nf-body">${esc(d.notFoundBody)}</p>`,
-    `<a class="cta" href="${origin}/">${esc(d.backHome)}</a>`,
-    `</div>`,
-    `</main>`,
-    `</div>`,
+    buildAppShell(d, origin, {
+      hdrMeta: "",
+      ctaUrl: `${origin}/`,
+      inner: [
+        `<div class="nf">`,
+        `<span class="nf-icon">${LOGO_SVG}</span>`,
+        `<h1 class="nf-title">${esc(d.notFoundHeading)}</h1>`,
+        `<p class="nf-body">${esc(d.notFoundBody)}</p>`,
+        `</div>`,
+      ].join("\n"),
+    }),
     `</body>`,
     `</html>`,
   ].join("\n")
@@ -1264,5 +1270,27 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
   .cat-hero-icon img,.cat-hero-icon .hero-fb{width:28px;height:28px;font-size:19px}
   .cat-grid{grid-template-columns:1fr;gap:10px}
   .gcard,.bmcard{height:auto;min-height:170px}
+}
+/* ── 主应用外壳骨架（方案 B 骨架近似：SSR 首屏近似主 UI 布局，SPA 接管后由 Vue 重建）── */
+.app{display:flex;min-height:100vh;align-items:stretch}
+.rail{width:224px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;padding:16px 12px 20px;background:#F8F3ED;border-right:1px solid #EBE3D9;position:sticky;top:0;height:100vh}
+.rail-logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;color:#2C2824;text-decoration:none;padding:6px 10px;letter-spacing:-.3px}
+.rail-logo svg{width:20px;height:20px;color:#122E8A;flex-shrink:0}
+.rail-nav{display:flex;flex-direction:column;gap:5px;margin-top:14px}
+.rail-skel{height:34px;border-radius:10px;background:linear-gradient(90deg,#EDE4DA 25%,#F6F1EB 50%,#EDE4DA 75%);background-size:200% 100%;animation:railSkel 1.5s ease-in-out infinite}
+@keyframes railSkel{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.panel{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 26px 48px;max-width:1320px;margin:0 auto;width:100%}
+.panel-hdr{display:flex;align-items:center;gap:12px;padding:18px 0 14px;border-bottom:1px solid #E5DDD3;margin-bottom:22px}
+.hdr-chip{font-size:11px;font-weight:600;line-height:1;color:#122E8A;background:#EDE4DA;border:1px solid #E5DDD3;padding:5px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.hdr-right .meta-tag{margin:0}
+.grp-layout{display:flex;align-items:flex-start;gap:22px}
+.grp-list{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+@media(max-width:900px){
+  .rail{display:none}
+  .panel{padding:0 16px 40px}
+  .grp-layout{flex-direction:column}
+  .grp-list{width:100%}
+  .panel-hdr{flex-wrap:wrap}
 }
 `

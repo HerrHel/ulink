@@ -31,7 +31,6 @@
               <img :src="bm.icon || faviconUrl(bm.url)" class="icon-xs" alt="">
               <span class="flex-1 text-sm text-ellipsis">{{ bm.title }}</span>
               <span class="text-xs text-muted">{{ domainName(bm.url) }}</span>
-              <button class="btn-xs btn-danger icon-xs" @click="onRemoveBm(bm.id)" :title="t('modal.groupEdit.remove')" v-html="I.trash"></button>
             </div>
           </div>
         </div>
@@ -48,7 +47,6 @@ import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { faviconUrl, domainName } from './groupEditUrl.js'
 import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } from '../../composables/domain/useGroup.js'
-import { EditorManager } from '../../lib/editor.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -68,16 +66,6 @@ const geBookmarkList = computed(() => {
     .map(id => store.bookmarkMap[id])
     .filter(Boolean)
 })
-
-function onRemoveBm(bmId: string) {
-  const gId = geForm.id || store.editingGeId
-  if (!gId) return
-  geForm.bookmarkIds = geForm.bookmarkIds.filter(id => id !== bmId)
-  // A2-003：silent 删除节点，避免 onUpdate→syncToStore 提前写 store
-  EditorManager.withSilent(() => {
-    EditorManager.deleteNode(gId, 'data-bm-id', bmId)
-  })
-}
 
 function onMaskClick() { onClose() }
 function onClose() {

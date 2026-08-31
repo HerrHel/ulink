@@ -19,12 +19,27 @@
           <div class="card-tags" v-if="tagNames.length">
             <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i">{{ tag }}</span>
           </div>
-          <!-- 聚焦态始终挂编辑器 -->
+          <!-- 聚焦态始终挂编辑器（分享态下 GroupEditor 以 editable:false 只读渲染） -->
           <GroupEditor :groupId="group.id" />
+          <!-- 分享态兜底：笔记里没有内联书签卡片、但组确实有书签 → 列表展示，避免空白分享页 -->
+          <div v-if="isShareReadonly && fallbackEntries.length" class="share-fallback-list">
+            <a v-for="entry in fallbackEntries" :key="entry.b.id"
+               :href="entry.safeUrl || '#'" :target="entry.safeUrl ? '_blank' : '_self'"
+               :rel="entry.safeUrl ? 'noopener' : undefined"
+               :class="['share-fallback-item', { 'is-disabled': !entry.safeUrl }]"
+               @click="!entry.safeUrl ? $event.preventDefault() : null">
+              <span class="share-fallback-ic">
+                <span class="share-fallback-fb">{{ (displayText(entry.b.title) || entry.urlDomain || '?')[0].toUpperCase() }}</span>
+                <img v-if="entry.icon" :src="entry.icon" alt="" referrerpolicy="no-referrer" loading="lazy" @error="markFbIconError" />
+              </span>
+              <span class="share-fallback-title">{{ displayText(entry.b.title) || entry.urlDomain }}</span>
+              <span class="share-fallback-url">{{ entry.urlDomain }}</span>
+            </a>
+          </div>
         </div>
       </div>
     </div>
-    <div class="focus-toolbar-side">
+    <div v-if="!isShareReadonly" class="focus-toolbar-side">
       <button class="ft-sb-btn" :class="{ active: fmt.bold }" :title="t('editor.bold')" @click="fmtToggle('bold')"><strong>B</strong></button>
       <button class="ft-sb-btn" :class="{ active: fmt.underline }" :title="t('editor.underline')" @click="fmtToggle('underline')">
         <span aria-hidden="true" v-html="I.underline"></span>
@@ -70,7 +85,7 @@
       <div class="card-tags" v-if="tagNames.length && ui.layoutMode === 'list' && !detailMode">
         <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
-      <div class="group-head-actions" v-if="!ui.batchMode">
+      <div class="group-head-actions" v-if="!ui.batchMode && !isShareReadonly">
         <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" :title="t('common.undo')" v-html="I.undo"></button>
         <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" :title="t('common.redo')" v-html="I.redo"></button>
       </div>
@@ -80,8 +95,8 @@
         <div class="card-tags" v-if="tagNames.length && showFullBody">
           <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
         </div>
-        <!-- 辅助栏：只读 HTML（避免与主网格 GroupEditor 抢同一 groupId 注册表） -->
-        <div v-if="detailMode" class="group-body group-body-readonly" v-html="safeNotesHtml"></div>
+        <!-- 辅助栏 / 分享只读态：只读 HTML（分享态不挂可编辑 TipTap，避免写本地库） -->
+        <div v-if="detailMode || (isShareReadonly && hasBody)" class="group-body group-body-readonly" v-html="safeNotesHtml"></div>
         <!-- grid 折叠态 / list 展开态挂 TipTap；mini-grid 用纯文本摘要 -->
         <GroupEditor v-else-if="showEditor" :groupId="group.id" />
         <div class="card-preview" v-else-if="previewText">{{ previewText }}</div>
@@ -89,7 +104,7 @@
     </div>
     <div class="card-foot">
       <span class="card-stat">{{ tN('count.bookmarks', group.bookmarkIds?.length || 0) }}</span>
-      <span class="card-actions">
+      <span class="card-actions" v-if="!isShareReadonly">
         <button class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="editGrp" :title="t('cards.editGroup')" v-html="I.edit"></button>
         <button class="btn-xs btn-danger" @click.stop="delGrp" :title="t('cards.deleteGroup')" v-html="I.trash"></button>
@@ -120,6 +135,7 @@ import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { I } from '../../config/icons.js'
 import { EditorManager } from '../../lib/editor.js'
 import { groupPreview } from '../../lib/preview.js'
+import { buildShareEntries } from '../../views/buildShareEntries.js'
 import { editGroup as _editGroup, toggleGroupFocus, saveGroupBody, deleteGroup as _deleteGroup } from '../../composables/domain/useGroup.js'
 import { openDetail } from '../../composables/ui/useUI.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
@@ -129,7 +145,7 @@ import { uploadAndInsertImages } from '../../composables/domain/useImageUpload.j
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import { useListNav } from '../../composables/useListNav.js'
 import { t, tN } from '../../i18n/index.js'
-import type { SiblingGroup } from '../../types.js'
+import type { Bookmark, SiblingGroup } from '../../types.js'
 
 const props = defineProps({
   group: { type: Object as () => SiblingGroup, required: true },
@@ -152,12 +168,14 @@ function setCardEl(el: Element | null) {
 useCardOverflow(cardEl)
 
 const isFocused = computed(() => !props.detailMode && ui.focusedGroupId === props.group.id)
+/** 分享只读态：任何分享态下组卡一律只读（组分享聚焦 / 分类分享网格内聚焦） */
+const isShareReadonly = computed(() => !!ui.shareMode)
 const isExpanded = computed(() => ui.layoutMode === 'list' && ui.expandedIds.includes(props.group.id) && !ui.batchMode)
 const isSelected = computed(() => (ui.batchSelected ?? []).includes('group:' + props.group.id))
 const noteIcon = I.note
 const hasBody = computed(() => !!(props.group.notes && props.group.notes.trim()))
-// 辅助栏用只读 HTML；主网格宫格/列表展开挂 TipTap
-const showEditor = computed(() => !props.detailMode && (isExpanded.value || ui.layoutMode === 'grid'))
+// 辅助栏用只读 HTML；主网格宫格/列表展开挂 TipTap（分享态不挂可编辑编辑器）
+const showEditor = computed(() => !props.detailMode && !isShareReadonly.value && (isExpanded.value || ui.layoutMode === 'grid'))
 const showFullBody = computed(() => props.detailMode || ui.layoutMode !== 'list')
 const safeNotesHtml = computed(() => {
   const n = props.group.notes || ''
@@ -166,6 +184,25 @@ const safeNotesHtml = computed(() => {
   if (isThreePartCipher(n)) return ''
   return sanitizeReadonlyHTML(n)
 })
+
+/**
+ * 分享态兜底（决策：严格照搬聚焦态 + 仅笔记为空时兜底）：
+ * 笔记正文里没有任何内联书签卡片、但组的 bookmarkIds 非空 → 把组内书签以只读
+ * 列表渲染在笔记下方。否则分享者「只往组里塞书签、没拖进笔记」时分享页会是空白。
+ */
+const notesHaveInlineCards = computed(() => /group-inline-card/.test(props.group.notes || ''))
+const fallbackBookmarks = computed(() => {
+  if (!isShareReadonly.value || notesHaveInlineCards.value) return []
+  return (props.group.bookmarkIds || [])
+    .map((id) => ds.bookmarkMap[id])
+    .filter((b): b is Bookmark => !!b && !b.deletedAt)
+})
+/** 预计算安全 URL / 域名 / favicon（与分享页同口径，跨用户 url/icon 不可信） */
+const fallbackEntries = computed(() => buildShareEntries(fallbackBookmarks.value))
+function markFbIconError(e: Event) {
+  const el = e.target as HTMLElement | null
+  el?.classList?.add('img-error')
+}
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 const isPinned = computed(() => !!props.group.pinnedAt)
@@ -271,3 +308,37 @@ function onCardKeydown(e: KeyboardEvent) {
   else if (action.type === 'expand' || action.type === 'collapse' || action.type === 'toggleExpand') toggleExpand()
 }
 </script>
+
+<style scoped>
+/* 分享态兜底书签列表（聚焦视图内，笔记下方） */
+.share-fallback-list {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 14px; padding-top: 12px;
+  border-top: 1px dashed var(--border, #e5e7eb);
+}
+.share-fallback-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border: 1px solid var(--border, #e5e7eb); border-radius: 10px;
+  text-decoration: none; color: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.share-fallback-item:hover { border-color: var(--accent, #3B82F6); background: var(--bg-alt, #f7f2ec); }
+.share-fallback-item.is-disabled { opacity: 0.55; cursor: default; }
+.share-fallback-ic {
+  position: relative; width: 24px; height: 24px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-alt, #f3f4f6); border-radius: 6px; overflow: hidden;
+}
+.share-fallback-ic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.share-fallback-ic img.img-error { display: none; }
+.share-fallback-ic:has(img:not(.img-error)) .share-fallback-fb { display: none; }
+.share-fallback-fb { font-size: 12px; font-weight: 700; color: var(--accent, #3B82F6); text-transform: uppercase; }
+.share-fallback-title {
+  flex: 1; min-width: 0; font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.share-fallback-url {
+  flex-shrink: 0; max-width: 40%; font-size: 11px; color: var(--text-secondary, #888);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+</style>
