@@ -21,6 +21,16 @@ import { _markPendingSync, _clearPendingSync } from './syncPending.js'
 export const MAX_PUSH_RETRIES = 3
 
 /**
+ * 单批并发推送上限。
+ * 旧实现把整批 op 一次性 Promise.all 打出去：首次注册/首次登录的用户要把本机
+ * 累积的成百上千条书签全量 upsert 上云，瞬时并发数百请求直接触发 Supabase 限流
+ * 与连接超时 → 大面积 push 失败 → 队列积压。而「云端空库 + 队列积压」正是
+ * fullSync 全量对账把本地整库软删进回收站的触发条件（见 syncPull 的对账守卫）。
+ * 分块限并发可显著降低首轮基线上传的失败率；串行化过度会拖慢日常增量，取 8。
+ */
+export const PUSH_CONCURRENCY = 8
+
+/**
  * 锁定态判定所用的敏感字段表,复用 useE2E 的 ENCRYPT_FIELDS 单一来源,
  * 通过 tableToEntityType 把表名映射到 EntityType 查表。避免两份硬编码漂移
  * (一处新增敏感字段另一处漏加 → 锁定态把仍加密的旧密文/明文敏感内容误推云)。
@@ -210,7 +220,9 @@ export async function pushFromQueue(): Promise<boolean> {
     }
     _saveHistory(userId, historyItems).catch(() => {})
 
-    const tasks: Promise<{ op: SyncOp; result: SyncPortResult }>[] = []
+    // 收集的是「任务工厂」而非已启动的 Promise：直接 push 已 await 的 Promise 会
+    // 让整批请求同时发出（首次全量上传 = 数百并发 → 限流），必须延迟到分块时才启动。
+    const taskFactories: Array<() => Promise<{ op: SyncOp; result: SyncPortResult }>> = []
     const succeededIds: number[] = []
     // encFailedOps 保留对应 merged op 引用：retry 决策需用 merged.retries（即 _mergeOps 算的
     // maxRetries），而非末条 raw.retries（与 _mergeOps 不对称会致死信计数漂移，见 cleanup 段）。
@@ -220,11 +232,9 @@ export async function pushFromQueue(): Promise<boolean> {
 
     for (const op of ops) {
       if (op.action === 'delete') {
-        tasks.push(
-          port.delete(op.table, op.itemId, userId)
-            .then(r => ({ op, result: r }))
-            .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })),
-        )
+        taskFactories.push(() => port.delete(op.table, op.itemId, userId)
+          .then(r => ({ op, result: r }))
+          .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })))
         continue
       }
       if (!op.data) continue
@@ -254,11 +264,9 @@ export async function pushFromQueue(): Promise<boolean> {
       }
 
       if (isNew || !changedFields) {
-        tasks.push(
-          port.upsert(op.table, row)
-            .then(r => ({ op, result: r }))
-            .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })),
-        )
+        taskFactories.push(() => port.upsert(op.table, row)
+          .then(r => ({ op, result: r }))
+          .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })))
       } else {
         const partial: Record<string, unknown> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
         for (const f of changedFields) {
@@ -268,11 +276,9 @@ export async function pushFromQueue(): Promise<boolean> {
           }
         }
         const { id, ...updateData } = partial
-        tasks.push(
-          port.update(op.table, id as string, userId, updateData)
-            .then(r => ({ op, result: r }))
-            .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })),
-        )
+        taskFactories.push(() => port.update(op.table, id as string, userId, updateData)
+          .then(r => ({ op, result: r }))
+          .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })))
       }
     }
 
@@ -289,7 +295,16 @@ export async function pushFromQueue(): Promise<boolean> {
       rawsByKey.set(k, arr)
     }
     const rawsOf = (table: string, itemId: string) => rawsByKey.get(`${table}:${itemId}`) ?? []
-    const results = await Promise.all(tasks)
+
+    // 分块限并发执行：整批一次性 Promise.all 会在首次全量上传（数百条）时打爆
+    // 远端限流。注意 tasks.length 语义被后续「是否推送过任务」判断复用，保持同名。
+    const results: Array<{ op: SyncOp; result: SyncPortResult }> = []
+    for (let i = 0; i < taskFactories.length; i += PUSH_CONCURRENCY) {
+      const chunk = taskFactories.slice(i, i + PUSH_CONCURRENCY)
+      const chunkResults = await Promise.all(chunk.map(f => f()))
+      for (const r of chunkResults) results.push(r)
+    }
+    const tasks = results
 
     const failedOps: Array<{ table: string; itemId: string; error: string; op?: SyncOp }> = [
       ...encFailedOps.map(f => ({ ...f })),

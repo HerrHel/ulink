@@ -33,6 +33,13 @@ export type DecideRemoteApplyInput = {
   lastSyncAt: number
   /** 全量对账模式：仅在 remoteItem===null 时消费 full 分支 */
   full?: boolean
+  /**
+   * 全量对账开关：false 时即便命中 full-absent-delete 条件也降级为 skip。
+   * 由 pullChanges 依据云端实况计算（见 syncPull 的「空库守卫 / 队列未清空守卫 /
+   * 批量删除比例守卫」）——首次注册用户云端空库时，本地数据是「尚未上云」而非
+   * 「远端已删」，必须整类关闭对账删除，否则整个书签库被软删进回收站。
+   */
+  allowFullAbsentDelete?: boolean
 }
 
 function isRemoteNewer(remote: MergeEntity, local: MergeEntity): boolean {
@@ -44,17 +51,14 @@ function isRemoteNewer(remote: MergeEntity, local: MergeEntity): boolean {
  * 不读 store、不改数据；调用方按 action 执行副作用。
  */
 export function decideRemoteApply(input: DecideRemoteApplyInput): MergeDecision {
-  const { localItem, remoteItem, isDirty, isPending, lastSyncAt, full = false } = input
+  const {
+    localItem, remoteItem, isDirty, isPending, lastSyncAt, full = false,
+    allowFullAbsentDelete = true,
+  } = input
 
   // full 对账：远端集合中无此 id
   if (remoteItem == null) {
-    if (
-      full &&
-      localItem &&
-      !isDirty &&
-      !isPending &&
-      lastSyncAt > 0
-    ) {
+    if (full && localItem && !isDirty && !isPending && lastSyncAt > 0 && allowFullAbsentDelete) {
       return { action: 'full-absent-delete' }
     }
     return { action: 'skip' }

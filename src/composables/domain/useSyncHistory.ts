@@ -17,13 +17,26 @@ export function _getUserId(): string | null {
   return auth.user?.id ?? null
 }
 
+/**
+ * 单次 insert 的快照条数上限。
+ * 首次登录/注册的用户首轮基线上传会把本机所有 bookmark/group 快照一次性写进
+ * data_history；notes 字段可达数十 KB，几百条合并成一个请求容易超出网关 payload
+ * 上限 → 整批 insert 失败（fire-and-forget，静默丢历史）。分块发送。
+ */
+const HISTORY_INSERT_CHUNK = 50
+
 /** 保存旧状态到云端版本历史（服务端触发器自动清理超过 10 条的旧版本） */
 export async function _saveHistory(userId: string, items: Array<{ id: string; type: string; data: Record<string, any> }>) {
   if (!items.length) return
   try {
-    await supabase.from('data_history').insert(
-      items.map(i => ({ user_id: userId, item_id: i.id, item_type: i.type, data: i.data }))
-    )
+    for (let i = 0; i < items.length; i += HISTORY_INSERT_CHUNK) {
+      const chunk = items.slice(i, i + HISTORY_INSERT_CHUNK)
+      const { error } = await supabase.from('data_history').insert(
+        chunk.map(c => ({ user_id: userId, item_id: c.id, item_type: c.type, data: c.data })),
+      )
+      // 单块失败不阻断后续块：历史是尽力而为的旁路写入，主同步链路不受其影响
+      if (error) console.warn('[sync] history save failed:', error.message)
+    }
   } catch (e) {
     console.warn('[sync] history save failed:', e)
   }

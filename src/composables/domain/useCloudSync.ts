@@ -157,7 +157,21 @@ export function useCloudSync() {
       pushIf(ds.categories, 'categories')
       pushIf(ds.customAttributes, 'custom_attributes')
       if (allOps.length) await enqueueSyncOps(allOps)
-      await pushFromQueue()
+
+      // 首轮基线上传失败退避重试：首次登录/注册的用户要把本机长期积累的成百上千条
+      // 数据一次性上云，瞬时故障（限流、握手、冷启动）概率远高于日常增量。
+      // pushFromQueue 内部按 MAX_PUSH_RETRIES 累计重试计数，3 次即进死信永久出队——
+      // 若首轮全军覆没，这些数据就再没机会上云，而云端空库又会触发对账删除的误判链
+      // （见 syncPull 守卫）。故在编排层补两轮退避重试，给瞬时故障留恢复窗口。
+      // 仅补 1 轮退避重试，不再多补：pushFromQueue 每次失败都会给 op 累加 retries，
+      // 达到 MAX_PUSH_RETRIES 即进死信永久出队。补 2 轮会让首轮故障一次性吃满 3 次
+      // 机会、op 直接死信（本地数据再无上云机会，且队列清空会让对账的「队列未清空」
+      // 守卫失效）。留一轮给后续常规同步，兼顾瞬时故障恢复与死信语义。
+      let pushed = await pushFromQueue()
+      if (!pushed && (await syncOpsCount())) {
+        await new Promise(r => setTimeout(r, 1000))
+        pushed = await pushFromQueue()
+      }
       await pullChanges(false)
     })
 

@@ -994,10 +994,19 @@ describe('sync 逆回归（81e926a3 降频把对账入口关死 + redact 漏 pas
     ds.addBookmark(makeBm({ id: 'bm-ghost', title: '幽灵残留' }) as any)
     useSyncStore().setLastSyncAt(9000)
 
-    // 远端任何查询都没有 bm-ghost：sinceRows 无（增量拉不回）、allIds 无（对账判它远端已删）
+    // 远端任何查询都没有 bm-ghost：sinceRows 无（增量拉不回）、allIds 无（对账判它远端已删）。
+    // allIds 必须保留该用户其它书签行（bm-other）：
+    // 「某类型云端零行」已被 syncPull 判定为「本地数据尚未上云」（首次注册用户场景）
+    // 而整类关闭对账删除——那正是登录即清库事故的成因。物理删除兜底的真实语义是
+    // 「云端仍有该类型数据，只是缺这一行」，故这里必须留一条存活行作基准。
     const port = createMemorySyncPort({
       sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
-      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: {
+        bookmarks: [{ id: 'bm-other' }],
+        sibling_groups: [],
+        categories: [],
+        custom_attributes: [],
+      },
       softDeleted: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
     })
     setSyncRemotePort(port)
@@ -1007,6 +1016,47 @@ describe('sync 逆回归（81e926a3 降频把对账入口关死 + redact 漏 pas
     // 回归断言：fullSync 若仍按旧 bug 调 pullChanges(false)，reconcile 死代码不跑，
     // bm-ghost 不会软删（增量增量查不到它）→ 本断言失败。修复后 full=true 对账软删它。
     expect(ds.bookmarkMap['bm-ghost'].deletedAt).toBeDefined()
+  })
+
+  it('云端该类型零行（首次注册/未上云）→ 对账删除整类关闭，本地数据不进回收站', async () => {
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    ds.addBookmark(makeBm({ id: 'bm-never-uploaded', title: '本机存量' }) as any)
+    useSyncStore().setLastSyncAt(9000)
+
+    // 云端四类全空 + 无软删行 = 该账号云端从未有过数据 → 不是「别处清空」而是「未上云」
+    const port = createMemorySyncPort({
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      softDeleted: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+    })
+    setSyncRemotePort(port)
+
+    await useCloudSync().fullSync()
+    expect(ds.bookmarkMap['bm-never-uploaded'].deletedAt).toBeUndefined()
+  })
+
+  it('云端有该类型软删行（别处清空过）→ 对账删除照常生效', async () => {
+    const ds = useDataStore()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+    ds._deletedIds.clear()
+    ds.addBookmark(makeBm({ id: 'bm-orphan', title: '孤儿残留' }) as any)
+    useSyncStore().setLastSyncAt(9000)
+
+    // bookmarks 表无存活行但有软删行 ⇒ 云端确实曾有过该类型数据（用户在别处删光了），
+    // 此时「selectAllIds 查不到」= 真的不在云端，对账删除应照常工作。
+    const port = createMemorySyncPort({
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      softDeleted: { bookmarks: [{ id: 'bm-long-gone', updated_at_num: 5000 }] },
+    })
+    setSyncRemotePort(port)
+
+    await useCloudSync().fullSync()
+    expect(ds.bookmarkMap['bm-orphan'].deletedAt).toBeDefined()
   })
 
   it('fullSync 用 full=true 但不误删仍在重试(pending)的本地项', async () => {
