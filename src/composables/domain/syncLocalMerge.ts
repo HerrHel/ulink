@@ -84,7 +84,24 @@ export function _deleteWithoutEcho(
  */
 export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; deletedAt?: number }>(
   local: T[], remote: T[], type: EntityType, full = false, onWrite?: () => void,
+  opts?: {
+    /**
+     * 全量对账关闭开关：false 时即便命中 full-absent-delete 条件也降级为 skip。
+     * 首次注册用户云端空库时由 pullChanges 置 false（本地数据是「尚未上云」
+     * 而非「远端已删」），避免整库被软删进回收站。默认 true 保持旧语义。
+     */
+    allowFullAbsentDelete?: boolean
+    /**
+     * 受保护 ID：即使未出现在本次 selectSince 结果里也不得对账删除。
+     * 来源 = selectAllIds 全量 ID 查询（权威）。selectSince 靠 updated_at_num
+     * 增量过滤，远端行 updated_at_num 为 0/null 时会漏收，若只用 sinceRows 做
+     * full-absent-delete 基准就会把「拉不下但确实存在」的行误删。
+     */
+    protectedIds?: ReadonlySet<string>
+  },
 ) {
+  const allowFullAbsentDelete = opts?.allowFullAbsentDelete !== false
+  const protectedIds = opts?.protectedIds
   const ds = useDataStore()
   const syncStore = useSyncStore()
   const localMap = new Map(local.map(i => [i.id, i]))
@@ -150,6 +167,8 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
       // 虚拟分类（全部/未分类）是本地常量，云端 categories 表可能从未有过它们的
       // 记录（未重排过分类的用户从不推送）——全量对账不得把它们当「远端已删」软删。
       if (type === 'category' && (lItem.id === CAT_ALL || lItem.id === CAT_UNCATEGORIZED)) continue
+      // selectAllIds 查得到 → 远端确实有此行，本次 selectSince 漏收不代表远端已删
+      if (protectedIds?.has(lItem.id)) continue
       const decision = decideRemoteApply({
         localItem: lItem,
         remoteItem: null,
@@ -157,6 +176,7 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         isPending: _isPendingSync(lItem.id),
         lastSyncAt: syncStore.lastSyncAt,
         full: true,
+        allowFullAbsentDelete,
       })
       if (decision.action !== 'full-absent-delete') continue
       // 复用 _deleteWithoutEcho：bookmark 父被删时一并解孤儿后代 + 统一回声清理，
