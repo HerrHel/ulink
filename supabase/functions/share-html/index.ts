@@ -49,7 +49,7 @@ const T = {
     empty: "这个分享组还没有书签",
     count: "{n} 个链接",
     updatedAt: "更新于 {d}",
-    cta: "在与链中打开 · 复制到我的库",
+    cta: "保存至我的库",
     tocTitle: "目录",
     footerBrand: "与链 · ulink",
     footerSlogan: "收藏 · 整理 · 分享",
@@ -71,7 +71,7 @@ const T = {
     count: "{n} links",
     count_one: "{n} link",
     updatedAt: "Updated {d}",
-    cta: "Open in ulink · Copy to my library",
+    cta: "Save to my library",
     tocTitle: "Contents",
     footerBrand: "ulink",
     footerSlogan: "Collect · Organize · Share",
@@ -407,11 +407,8 @@ function notesHtml(dict: (typeof T)["zh-CN"], group: PublicGroup, bmMap?: NotesB
   return { html: `<div class="focus-notes">${cleaned}</div>`, toc }
 }
 
-/** 构建 <body>：双列布局（左侧白卡聚焦 + 右侧书签列表竖排，窄屏回退单列）。 */
-/**
- * 主应用外壳（方案 B 骨架近似）：左导航占位 + 顶部条（只读 chip + CTA）+ 内容区。
- * 与 CF 版 functions/_lib/share-render.ts 的 buildAppShell 保持同步。
- */
+/** 主应用外壳（方案 B 骨架近似）：左导航占位 + 顶部条（只读 chip + CTA）+ 内容区。
+ * 与 CF 版 functions/_lib/share-render.ts 的 buildAppShell 保持同步。 */
 function buildAppShell(
   dict: (typeof T)["zh-CN"],
   appOrigin: string,
@@ -442,6 +439,8 @@ function buildAppShell(
   ].join("\n")
 }
 
+/** 构建 <body>（组分享）：主应用外壳 + 聚焦卡（组名 + 笔记）。组内书签不渲染独立列表
+ *  （对齐新版：组分享 = 聚焦组形态，书签仅以内联卡片出现在笔记中）。与 CF 版同步。 */
 function buildBody(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -455,14 +454,11 @@ function buildBody(
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, "count", count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
   const updatedTag = updated ? `<span class="meta-tag">${esc(fill(dict.updatedAt, { d: updated }))}</span>` : ""
-  const list = count
-    ? bookmarks.map(buildBookmarkItem).join("\n")
-    : `<div class="empty">${esc(dict.empty)}</div>`
   // data-bm-id → 书签 URL 映射（内联书签转可点击 <a>）
   const bmMap: NotesBmMap = {}
   for (const b of bookmarks) bmMap[b.id] = { url: b.url }
   const notes = notesHtml(dict, group, bmMap)
-  // CTA 跳 App 的 hash 路由（#share/<gid>），让人类用户进入 SPA 登录后 Fork。
+  // CTA 跳 App 的 hash 路由（#share/<gid>），降级入口。
   const appUrl = `${appOrigin}/#share/${esc(gid)}`
   const inner = [
     `<div class="grp-layout">`,
@@ -477,13 +473,13 @@ function buildBody(
     `</div>`,
     notes.html,
     `</div>`,
-    `<aside class="grp-list">${list}</aside>`,
     `</div>`,
   ].join("\n")
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
-/** 组装完整 HTML 文档。 */
+/** 组装完整 HTML 文档。body 外包 #app（与 CF 版结构一致；Deno 保底版不注入 SPA bundle，
+ *  无 bundle 即不 mount，页面仍为纯静态 SSR）。 */
 function renderSharePage(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -498,8 +494,7 @@ function renderSharePage(
     `<html lang="${dict.lang}">`,
     `<head>${head}</head>`,
     `<style>${CSS}</style>`,
-    `<body>${body}</body>`,
-    `<script>${FALLBACK_JS}</script>`,
+    `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
   ].join("\n")
 }
