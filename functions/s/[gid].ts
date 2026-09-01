@@ -17,40 +17,10 @@
  *   SUPABASE_ANON_KEY 项目的 anon key（同 .env 的 VITE_SUPABASE_ANON_KEY）
  *   APP_ORIGIN       例如 https://ulink.ren（og:image / CTA 跳转用）
  */
-import { renderSharePage, renderNotFoundPage, extractAppAssets, type ShareLocale } from "../_lib/share-render.js"
+import { renderSharePage, renderNotFoundPage, type ShareLocale } from "../_lib/share-render.js"
+import { getAppAssets, type AppAssetsEnv } from "../_lib/app-assets.js"
 
-interface ShareEnv {
-  SUPABASE_URL?: string
-  SUPABASE_ANON_KEY?: string
-  APP_ORIGIN?: string
-  /** Cloudflare Pages ASSETS binding：用于读取主应用 index.html 提取 SPA bundle 标签 */
-  ASSETS?: { fetch: (input: Request | string) => Promise<Response> }
-}
-
-/** 模块级缓存：同 isolate 内只读一次 index.html（bundle 名按构建产物 hash，部署间稳定）。 */
-let _appAssetsCache: string | null = null
-
-/** 读取主应用 index.html → 提取 SPA 资源标签（失败静默降级为空串，页面仍可静态展示）。 */
-async function getAppAssets(env: ShareEnv): Promise<string> {
-  if (_appAssetsCache !== null) return _appAssetsCache
-  try {
-    if (!env.ASSETS) {
-      _appAssetsCache = ""
-      return ""
-    }
-    const res = await env.ASSETS.fetch("/index.html")
-    if (!res.ok) {
-      _appAssetsCache = ""
-      return ""
-    }
-    _appAssetsCache = extractAppAssets(await res.text())
-  } catch {
-    _appAssetsCache = ""
-  }
-  return _appAssetsCache
-}
-
-interface ShareEnv {
+interface ShareEnv extends AppAssetsEnv {
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
   APP_ORIGIN?: string
@@ -123,7 +93,7 @@ export async function onRequestGet(context: {
     shareUrl,
     appOrigin,
     locale,
-    await getAppAssets(context.env),
+    await getAppAssets(context.env, context.request.url),
   )
   return new Response(html, {
     headers: {
