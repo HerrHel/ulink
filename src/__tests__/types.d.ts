@@ -26,3 +26,13 @@ declare module '*functions/_lib/share-render.js' {
   ): string
   export function renderNotFoundPage(locale?: ShareLocale): string
 }
+
+// 同上：functions/_lib/app-assets.js 的静态补齐（Cloudflare Pages Functions 共享模块）。
+declare module '*functions/_lib/app-assets.js' {
+  export interface AppAssetsEnv {
+    ASSETS?: { fetch: (input: Request | string | URL) => Promise<Response> }
+    APP_ORIGIN?: string
+  }
+  /** 读取主应用 index.html → 提取 SPA 资源标签；全部策略失败返回空串。 */
+  export function getAppAssets(env: AppAssetsEnv, requestUrl: string): Promise<string>
+}
