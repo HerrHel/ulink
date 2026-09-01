@@ -16,7 +16,12 @@
  * DetailPanel 能正常只读渲染，而任何「遍历数组」的路径天然看不到影子数据。
  *
  * 独立成文件的原因：data.ts 与 share.ts 都要用它，避免两店互相 import 成环。
+ *
+ * **响应式追踪关键点**：`shadowData()` 返回的是普通模块变量，Vue/Pinia
+ * 不会自动追踪它的变化。data.ts 的 getter 必须读取 `shadowVersion.value`
+ * 作依赖，shadowSet/shadowClear 递增它，getter 才会重算。
  */
+import { ref } from 'vue'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 export interface ShadowData {
@@ -32,6 +37,12 @@ function emptyShadow(): ShadowData {
 /** 当前影子数据（空对象表示非分享态）。整体替换而非逐项改，保证引用稳定。 */
 let _shadow: ShadowData = emptyShadow()
 
+/**
+ * 影子版本号：每次 shadowSet/shadowClear 递增，供 data.ts getter 作响应式依赖。
+ * 读取 `shadowVersion.value` 的 getter 在该值变化时会自动重算。
+ */
+export const shadowVersion = ref(0)
+
 export function shadowData(): ShadowData {
   return _shadow
 }
@@ -39,11 +50,13 @@ export function shadowData(): ShadowData {
 /** 整体设置影子数据（进入分享态时调用一次） */
 export function shadowSet(next: ShadowData): void {
   _shadow = next
+  shadowVersion.value++
 }
 
 /** 清空影子数据（退出分享态 / fork 前调用） */
 export function shadowClear(): void {
   _shadow = emptyShadow()
+  shadowVersion.value++
 }
 
 /** 影子数据是否非空（data.ts getter 据此决定要不要新建合并对象） */
