@@ -13,7 +13,7 @@ import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { cleanupGroupImagesOnDelete } from '../lib/imageStorage.js'
 import { localHistoryKey, clearAllSyncOps } from './storage.js'
 import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
-import { shadowData, shadowHasAny } from './shareShadow.js'
+import { shadowData, shadowHasAny, shadowVersion } from './shareShadow.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, TableName } from '../types.js'
 import type { Space } from './ui.js'
 
@@ -250,12 +250,16 @@ export const useDataStore = defineStore('data', {
 
     /** O(1) 书签查找 Map（含软删除——由 _syncMaps 维护，懒回退；分享态叠加影子书签） */
     bookmarkMap(state): Record<string, Bookmark> {
+      // 读取 shadowVersion 作响应式依赖：shadow 变化时本 getter 必须重算
+      void shadowVersion.value
       if (Object.keys(state._bmMap).length !== state.bookmarks.length) {
         const map: Record<string, Bookmark> = {}; state.bookmarks.forEach(b => { map[b.id] = b }); return _mergeShadow('bookmarks', map)
       }
       return _mergeShadow('bookmarks', state._bmMap)
     },
     groupMap(state): Record<string, SiblingGroup> {
+      // 读取 shadowVersion 作响应式依赖
+      void shadowVersion.value
       if (Object.keys(state._grpMap).length !== state.siblingGroups.length) {
         const map: Record<string, SiblingGroup> = {}; state.siblingGroups.forEach(g => { map[g.id] = g }); return _mergeShadow('groups', map)
       }
@@ -263,6 +267,8 @@ export const useDataStore = defineStore('data', {
     },
     /** O(1) 分类查找（含软删除——由 _syncMaps 维护，懒回退；分享态叠加影子分类） */
     categoryMap(state): Record<string, Category> {
+      // 读取 shadowVersion 作响应式依赖
+      void shadowVersion.value
       if (Object.keys(state._catMap).length !== state.categories.length) {
         const map: Record<string, Category> = {}; state.categories.forEach(c => { map[c.id] = c }); return _mergeShadow('categories', map)
       }

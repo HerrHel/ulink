@@ -154,5 +154,26 @@ describe('分享只读态护栏', () => {
       expect(ds.bookmarkMap['s-b1']).toBeUndefined()
       expect(ds.categoryMap['s-c1']).toBeUndefined()
     })
+
+    it('shadowSet 后 map 立即可见（响应式依赖：shadowVersion 触发 getter 重算）', () => {
+      // 关键：shadowSet 之前查询 map，缓存空影子；shadowSet 之后必须能查到新影子
+      // ——这要求 bookmarkMap/groupMap/categoryMap 读取 shadowVersion 作 Vue 依赖，
+      // 否则 Pinia getter 不会因影子变化而重算（shadowData() 是普通模块函数，非响应式）。
+      ui.shareMode = null
+      shadowClear()
+      expect(ds.groupMap['late']).toBeUndefined()
+
+      // 进入分享态后再 set
+      enterShare('group', 'g1')
+      shadowSet({
+        bookmarks: { 'late-b': bm('late-b') },
+        groups: { 'late': grp('late') },
+        categories: { 'late-c': cat('late-c') },
+      })
+      // 不需要任何额外操作，访问 map 即可触发 getter 重算
+      expect(ds.groupMap['late']).toBeDefined()
+      expect(ds.bookmarkMap['late-b']).toBeDefined()
+      expect(ds.categoryMap['late-c']).toBeDefined()
+    })
   })
 })
