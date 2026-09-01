@@ -133,6 +133,22 @@ test.describe('LinkVault 核心功能', () => {
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 
+  // 路径路由 /s/<gid>：与 hash 路由并行——SPA 启动时 detectShareRoute 识别
+  // path 形式自动进入分享态。生产环境由 CF Pages Function SSR 注入 bundle，
+  // 此处用 vite dev 仅验证 SPA 端的 path 路由识别。
+  test('分享路径路由 /s/<gid> 触发只读态', async ({ page }) => {
+    await page.goto('/s/nonexistent-group-path-route-e2e')
+    await expect(page.locator('.share-state').first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
+  })
+
+  // 分类路径路由 /s/c/<share_id>
+  test('分享分类路径路由 /s/c/<sid> 触发只读态', async ({ page }) => {
+    await page.goto('/s/c/nonexistent-category-path-route-e2e')
+    await expect(page.locator('.share-state').first()).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
+  })
+
   // 登录/OTP 依赖真实 Supabase 测试后端，本地无凭据时 skip
   test.skip('登录 OTP 流（需测试后端）', async () => {
     // 预留：有 VITE_E2E_AUTH_* 时再启用
