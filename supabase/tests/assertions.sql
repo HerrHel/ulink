@@ -103,6 +103,15 @@ SELECT 'A10',
       AND (p.proconfig IS NULL OR NOT p.proconfig::text LIKE '%search_path%')) = 0,
   '全部 SECURITY DEFINER 函数固定 search_path';
 
+-- ── 11. 策略角色显式化：无任何 TO PUBLIC 策略 ──
+-- 029 落地：owner 语义策略全部 TO authenticated；030 落地：error_logs 匿名
+-- INSERT 撤除（唯一写入口 = report-error 函数）——至此 public 表零 public 角色策略。
+INSERT INTO _t_assert
+SELECT 'A11',
+  (SELECT count(*) FROM pg_policies
+    WHERE schemaname = 'public' AND roles = '{public}') = 0,
+  'public 表无任何 TO PUBLIC 策略（029+030）';
+
 -- ── 汇总 ──
 DO $$
 DECLARE

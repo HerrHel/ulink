@@ -18,7 +18,7 @@
 
 BEGIN;
 
-SELECT plan(10);
+SELECT plan(11);
 
 -- ── 1. FORCE RLS：public 下所有用户表必须开启 ──
 -- 015 只覆盖当时 8 张表；024/025 新增表在 028 才补齐。此处断言"一张都不能漏"。
@@ -116,6 +116,16 @@ SELECT is(
       AND (p.proconfig IS NULL OR NOT p.proconfig::text LIKE '%search_path%')),
   0,
   '全部 SECURITY DEFINER 函数固定 search_path'
+);
+
+-- ── 11. 策略角色显式化：无任何 TO PUBLIC 策略 ──
+-- 029 落地 owner 语义策略全部 TO authenticated；030 撤除 error_logs 匿名 INSERT
+-- （唯一写入口 = report-error 函数）——public 表至此零 public 角色策略。
+SELECT is(
+  (SELECT count(*) FROM pg_policies
+    WHERE schemaname = 'public' AND roles = '{public}'),
+  0,
+  'public 表无任何 TO PUBLIC 策略（029+030）'
 );
 
 SELECT * FROM finish();
