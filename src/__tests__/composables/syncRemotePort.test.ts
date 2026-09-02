@@ -17,12 +17,14 @@ type FakeResult = { data: unknown; error: { message: string; code?: string } | n
 type OpKey = string // 'upsert' | 'update' | 'delete' | 'selectSince' | 'selectSoftDeleted' | 'selectAllIds'
 
 function makeFakeSupabase(rows: Partial<Record<SyncTable, Partial<Record<OpKey, FakeResult>>>>) {
+  /** 记录终端操作的调用实参：用于锁定「upsert 不传 onConflict」这类参数级契约 */
+  const calls: Array<{ table: SyncTable; op: OpKey; args: unknown[] }> = []
   function builder(table: SyncTable, op: OpKey) {
     const resolve = (): FakeResult => rows[table]?.[op] ?? { data: null, error: null }
     const b = {
       // 终端操作：标记当前 op
-      upsert: () => mk(table, 'upsert'),
-      update: () => mk(table, 'update'),
+      upsert: (...args: unknown[]) => { calls.push({ table, op: 'upsert', args }); return mk(table, 'upsert') },
+      update: (...args: unknown[]) => { calls.push({ table, op: 'update', args }); return mk(table, 'update') },
       delete: () => mk(table, 'delete'),
       select: (cols: string) => mk(table, opFromSelect(cols)),
       // 链式过滤：不改返回
@@ -52,6 +54,7 @@ function makeFakeSupabase(rows: Partial<Record<SyncTable, Partial<Record<OpKey, 
         onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
       },
     },
+    calls,
   }
 }
 
@@ -290,6 +293,29 @@ describe('createSupabaseSyncPort — 生产 error→{message,code} 映射 + coun
     const r = await port.upsert('bookmarks', { id: 'b1' })
     expect(r.error).toBeNull()
     expect(r.data).toEqual([{ id: 'b1' }])
+  })
+
+  // 回归：新账户首次同步报 `new row violates row-level security policy (USING expression)
+  // for table "bookmarks"`。根因是 upsert 写死 { onConflict:'id' }，而同步表主键曾是
+  // 单列 id（全局唯一）；首装种子数据是全局固定 id（b1~b5/sb1/sb2 等 15 项），
+  // 第一个上云的用户占住这些 id 后，此后每个新账户 upsert 都撞行 → ON CONFLICT DO UPDATE
+  // → UPDATE 策略 USING (auth.uid()=user_id) 为假 → RLS 拒绝。
+  // 修复：主键改 (user_id,id)（迁移 027）+ 此处不再写死 onConflict，交给 PostgREST
+  // 读「当前主键」作冲突目标，迁移前后两个阶段都正确。本用例锁死该参数级契约。
+  it('upsert 不传 onConflict：冲突目标交由 PostgREST 取当前主键（跨用户固定 id 冲突回归）', async () => {
+    const fake = makeFakeSupabase({ bookmarks: { upsert: { data: null, error: null } } })
+    setSupabase(fake)
+    port = createSupabaseSyncPort()
+    await port.upsert('bookmarks', { id: 'b1', user_id: 'u1' })
+
+    const call = fake.calls.find(c => c.op === 'upsert')
+    expect(call).toBeDefined()
+    // 只传 row、不传 options：一旦有人把 onConflict 加回来，args 长度变 2，契约破裂。
+    // onConflict 指定的列组必须与库内某个唯一约束精确匹配，写死就会与主键 DDL 耦合，
+    // 而 DDL 与前端资源无法原子切换，迁移前后必有一段不匹配窗口。
+    expect(call!.args).toHaveLength(1)
+    // 不指定冲突目标时 PostgREST 用主键定位，故 row 必须带齐主键列 id + user_id
+    expect(call!.args[0]).toEqual({ id: 'b1', user_id: 'u1' })
   })
 
   it('update 返 error+count → error 映射 + count 透传（核心契约门：syncPush 据 count 区分静默失败）', async () => {

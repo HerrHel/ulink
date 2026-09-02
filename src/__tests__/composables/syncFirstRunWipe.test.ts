@@ -309,4 +309,61 @@ describe('首次注册用户同步不清空本地数据', () => {
     expect(peak).toBeLessThanOrEqual(PUSH_CONCURRENCY)
     expect(peak).toBeGreaterThan(1) // 仍是并发而非串行退化
   })
+
+  it('resyncAllToCloud：死信 op 强制全量重传恢复上云（种子固定 id 撞车场景）', async () => {
+    const ds = seedLocalData(6)
+    // 系统性失败（不是瞬时抖动）：模拟「种子固定 id 撞别人占的行 → RLS USING 拒绝」。
+    // 修复前每个新账户 initialSync 都会踩：upsert 每轮都失败，3 轮后 op 进死信被永久移除。
+    const failPort = createMemorySyncPort({
+      upsertError: () => ({ message: 'new row violates row-level security policy (USING expression)' }),
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      softDeleted: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+    })
+    setSyncRemotePort(failPort)
+
+    await useCloudSync().initialSync()
+    // 编排层补了一轮退避重试（retries 0→2），队列里还有 6 条待重试
+    expect(await syncOpsCount()).toBeGreaterThan(0)
+    // 用户再点「重试同步」→ fullSync 内 pushFromQueue：retries 2→3 全部进死信，队列清空
+    await useCloudSync().fullSync()
+    expect(await syncOpsCount()).toBe(0)
+    // 死信清空队列后，云端仍是空库：full 对账的「云端零行守卫」保证本地不被软删
+    expect(ds.bookmarkMap['bm-0']?.deletedAt).toBeUndefined()
+
+    // 根因修复后（主键已改、RLS 已放行）：云端从空库开始，但 op 已死信，fullSync 推不动
+    const okPort = createMemorySyncPort({
+      sinceRows: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      softDeleted: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+      allIds: { bookmarks: [], sibling_groups: [], categories: [], custom_attributes: [] },
+    })
+    // memory port 的 selectAllIds 默认只返回静态配置；模拟 PostgREST 真实行为——
+    // 已 upsert 成功的行在后续 ID 探测（幂等判据的数据源）中可见
+    const realSelectAllIds = okPort.selectAllIds.bind(okPort)
+    okPort.selectAllIds = async (table, userId) => {
+      const res = await realSelectAllIds(table, userId)
+      const staticRows = res.data ?? []
+      const pushed = okPort.upserts
+        .filter(u => u.table === table)
+        .map(u => ({ id: String((u.row as { id?: unknown }).id ?? '') }))
+        .filter(r => r.id)
+      return { data: [...staticRows, ...pushed], error: res.error }
+    }
+    setSyncRemotePort(okPort)
+
+    // 用户点「强制全量重传」：清空队列 → 按云端缺失重新入队 → 推送 → 拉取
+    const ok = await useCloudSync().resyncAllToCloud()
+    expect(ok).toBe(true)
+    expect(okPort.upserts.filter(u => u.table === 'bookmarks').length).toBe(6)
+    expect(okPort.upserts.some(u => u.table === 'sibling_groups' && (u.row as { id: string }).id === 'g-mine')).toBe(true)
+    expect(await syncOpsCount()).toBe(0)
+    for (let i = 0; i < 6; i++) {
+      expect(ds.bookmarkMap[`bm-${i}`]?.deletedAt).toBeUndefined()
+    }
+
+    // 幂等：再跑一次不重复推送（云端已有全部 id，本地无 dirty → 0 个 op 入队）
+    const upsertCount = okPort.upserts.length
+    await useCloudSync().resyncAllToCloud()
+    expect(okPort.upserts.length).toBe(upsertCount)
+  }, 20000)
 })

@@ -231,6 +231,10 @@ export const en = {
     retrySync: 'Retry sync',
     viewConflicts: 'View conflicts',
     startSync: 'Starting sync…',
+    resyncAll: 'Force full re-upload',
+    resyncAllHint: 'Clear the push queue and re-upload local data — fixes permanently failed pushes',
+    resyncAllDone: 'Full re-upload complete',
+    resyncAllFailed: 'Some items still failed to upload, please retry later',
   },
   toast: {
     undo: 'Undo',

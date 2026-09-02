@@ -23,12 +23,20 @@
       >
         <span aria-hidden="true" v-html="I.alert"></span>{{ t('sync.viewConflicts') }}
       </button>
+      <button
+        class="btn btn-ghost btn-sm ssp-btn"
+        :title="t('sync.resyncAllHint')"
+        :disabled="resyncing"
+        @click="onResyncAll"
+      >
+        <span aria-hidden="true" v-html="I.cloud"></span>{{ t('sync.resyncAll') }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { watch, onUnmounted } from 'vue'
+import { watch, onUnmounted, ref } from 'vue'
 import { useSyncStatusStore } from '../../stores/overlay.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -39,11 +47,32 @@ import { t } from '../../i18n/index.js'
 const store = useSyncStatusStore()
 const state = useSyncState()
 const sync = useCloudSync()
+const resyncing = ref(false)
 
 function onRetry() {
   if (state.value.level !== 'error' && state.value.level !== 'offline') return
   toast(t('sync.startSync'))
   sync.fullSync()
+  store.hide()
+}
+
+/**
+ * 强制全量重传：清空队列后按「云端缺失」重新入队本地数据并推送。
+ *
+ * 普通「重试同步」(fullSync) 只推队列里**剩下**的 op；而 op 失败重试到上限后会被
+ * 永久移除（死信），这类数据此后无论如何重试都不会再上云。本入口重建队列，
+ * 让它们重新获得推送机会——典型场景见 useCloudSync 的 resyncAllToCloud 注释。
+ */
+async function onResyncAll() {
+  if (resyncing.value) return
+  resyncing.value = true
+  toast(t('sync.startSync'))
+  try {
+    const ok = await sync.resyncAllToCloud()
+    toast(ok ? t('sync.resyncAllDone') : t('sync.resyncAllFailed'), ok)
+  } finally {
+    resyncing.value = false
+  }
   store.hide()
 }
 
