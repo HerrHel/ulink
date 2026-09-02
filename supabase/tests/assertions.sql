@@ -41,25 +41,46 @@ SELECT 'A2',
       AND i.indnkeyatts = 2) = 4,
   '4 张同步表主键为复合主键 (user_id, id)';
 
--- ── 3. 匿名直读 sibling_groups 被拒 ──
+-- ── 3. 匿名直读 sibling_groups 被拒（031 后 GRANT 层 42501 或 RLS 空返回）──
 SET ROLE anon;
-INSERT INTO _t_assert
-SELECT 'A3', (SELECT count(*) FROM sibling_groups) = 0,
-  '匿名无法直读 sibling_groups（028 撤除公开 SELECT 策略）';
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO _t_assert
+    SELECT 'A3', (SELECT count(*) FROM sibling_groups) = 0,
+      '匿名无法直读 sibling_groups';
+  EXCEPTION WHEN insufficient_privilege THEN
+    INSERT INTO _t_assert VALUES ('A3', true, 'anon 被 GRANT 层拒绝（031）');
+  END;
+END $$;
 RESET ROLE;
 
 -- ── 4. 匿名直读 bookmarks 被拒 ──
 SET ROLE anon;
-INSERT INTO _t_assert
-SELECT 'A4', (SELECT count(*) FROM bookmarks) = 0,
-  '匿名无法直读 bookmarks';
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO _t_assert
+    SELECT 'A4', (SELECT count(*) FROM bookmarks) = 0,
+      '匿名无法直读 bookmarks';
+  EXCEPTION WHEN insufficient_privilege THEN
+    INSERT INTO _t_assert VALUES ('A4', true, 'anon 被 GRANT 层拒绝（031）');
+  END;
+END $$;
 RESET ROLE;
 
 -- ── 5. 匿名直读 public_category_shares 被拒 ──
 SET ROLE anon;
-INSERT INTO _t_assert
-SELECT 'A5', (SELECT count(*) FROM public_category_shares) = 0,
-  '匿名无法直读 public_category_shares';
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO _t_assert
+    SELECT 'A5', (SELECT count(*) FROM public_category_shares) = 0,
+      '匿名无法直读 public_category_shares';
+  EXCEPTION WHEN insufficient_privilege THEN
+    INSERT INTO _t_assert VALUES ('A5', true, 'anon 被 GRANT 层拒绝（031）');
+  END;
+END $$;
 RESET ROLE;
 
 -- ── 6. 所有 UPDATE 策略必须带 WITH CHECK ──
@@ -111,6 +132,35 @@ SELECT 'A11',
   (SELECT count(*) FROM pg_policies
     WHERE schemaname = 'public' AND roles = '{public}') = 0,
   'public 表无任何 TO PUBLIC 策略（029+030）';
+
+-- ── 12. anon 对 public 表零 GRANT（031 纵深防御）──
+-- 公开读全走 SECURITY DEFINER RPC；anon 不应有任何表级权限
+-- （TRUNCATE/TRIGGER 绕过 RLS，GRANT 层必须为零）。
+INSERT INTO _t_assert
+SELECT 'A12',
+  (SELECT count(*) FROM information_schema.role_table_grants
+    WHERE grantee = 'anon' AND table_schema = 'public') = 0,
+  'anon 对 public 表零 GRANT（031）';
+
+-- ── 13. authenticated 无 TRUNCATE/TRIGGER/REFERENCES（031）──
+-- CRUD 由 RLS 精确控行；TRUNCATE 绕过 RLS 必须从 GRANT 层剥除。
+INSERT INTO _t_assert
+SELECT 'A13',
+  (SELECT count(*) FROM information_schema.role_table_grants
+    WHERE grantee = 'authenticated' AND table_schema = 'public'
+      AND privilege_type IN ('TRUNCATE', 'TRIGGER', 'REFERENCES')) = 0,
+  'authenticated 无 TRUNCATE/TRIGGER/REFERENCES（031）';
+
+-- ── 14. 触发器函数无 PUBLIC EXECUTE（031）──
+-- prune_data_history / throttle_error_logs / update_updated_at 只能被
+-- 触发器调用链（authenticated/service_role）执行，匿名不可直接调用。
+INSERT INTO _t_assert
+SELECT 'A14',
+  (SELECT count(*) FROM pg_proc p
+     JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.prokind = 'f'
+      AND p.proacl::text LIKE '{=X/%') = 0,
+  'public 函数无 PUBLIC EXECUTE（031）';
 
 -- ── 汇总 ──
 DO $$

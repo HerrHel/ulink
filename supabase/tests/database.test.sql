@@ -18,7 +18,7 @@
 
 BEGIN;
 
-SELECT plan(11);
+SELECT plan(14);
 
 -- ── 1. FORCE RLS：public 下所有用户表必须开启 ──
 -- 015 只覆盖当时 8 张表；024/025 新增表在 028 才补齐。此处断言"一张都不能漏"。
@@ -45,29 +45,30 @@ SELECT is(
 );
 
 -- ── 3. 匿名直读 sibling_groups 被拒（SEC-02 核心不变量）──
+-- 028 撤策略 + 031 撤 anon GRANT：匿名 SELECT 在 GRANT 层即抛 42501。
 SET ROLE anon;
-SELECT is(
-  (SELECT count(*) FROM sibling_groups),
-  0,
-  '匿名无法直读 sibling_groups（028 撤除 Anyone can view public groups）'
+SELECT throws_ok(
+  $$SELECT count(*) FROM sibling_groups$$,
+  '42501',
+  '匿名无法直读 sibling_groups（031 GRANT 层拒绝）'
 );
 RESET ROLE;
 
 -- ── 4. 匿名直读 bookmarks 被拒 ──
 SET ROLE anon;
-SELECT is(
-  (SELECT count(*) FROM bookmarks),
-  0,
-  '匿名无法直读 bookmarks（018 列隔离）'
+SELECT throws_ok(
+  $$SELECT count(*) FROM bookmarks$$,
+  '42501',
+  '匿名无法直读 bookmarks（031 GRANT 层拒绝）'
 );
 RESET ROLE;
 
 -- ── 5. 匿名直读 public_category_shares 被拒 ──
 SET ROLE anon;
-SELECT is(
-  (SELECT count(*) FROM public_category_shares),
-  0,
-  '匿名无法直读 public_category_shares（025 分类分享）'
+SELECT throws_ok(
+  $$SELECT count(*) FROM public_category_shares$$,
+  '42501',
+  '匿名无法直读 public_category_shares（031 GRANT 层拒绝）'
 );
 RESET ROLE;
 
@@ -126,6 +127,33 @@ SELECT is(
     WHERE schemaname = 'public' AND roles = '{public}'),
   0,
   'public 表无任何 TO PUBLIC 策略（029+030）'
+);
+
+-- ── 12. anon 对 public 表零 GRANT（031 纵深防御）──
+SELECT is(
+  (SELECT count(*) FROM information_schema.role_table_grants
+    WHERE grantee = 'anon' AND table_schema = 'public'),
+  0,
+  'anon 对 public 表零 GRANT（031）'
+);
+
+-- ── 13. authenticated 无 TRUNCATE/TRIGGER/REFERENCES（031）──
+SELECT is(
+  (SELECT count(*) FROM information_schema.role_table_grants
+    WHERE grantee = 'authenticated' AND table_schema = 'public'
+      AND privilege_type IN ('TRUNCATE', 'TRIGGER', 'REFERENCES')),
+  0,
+  'authenticated 无 TRUNCATE/TRIGGER/REFERENCES（031）'
+);
+
+-- ── 14. 触发器函数无 PUBLIC EXECUTE（031）──
+SELECT is(
+  (SELECT count(*) FROM pg_proc p
+     JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.prokind = 'f'
+      AND p.proacl::text LIKE '{=X/%'),
+  0,
+  'public 函数无 PUBLIC EXECUTE（031）'
 );
 
 SELECT * FROM finish();

@@ -18,7 +18,8 @@ import { resolve } from 'node:path'
  *      （share-render 是功能超集：多分类分享 key；share-html 不应有它没有的 key，
  *       否则说明改动顺序反了——CF 真源漏抄了 Deno 旧版）
  *   2. 上述子集关系对 zh-CN 与 en-US 两个语言分支分别成立
- *   3. 共享 key 的文案值必须逐字一致（双语都是）——同义不同文是漂移
+ *   3. 共享 key 的文案值必须逐字一致（双语都是）——同义不同文是漂移。
+ *      实测基线：zh 18 / en 20 个共享 key 文案零差异（2026-09-02）。
  *
  * 注意：文案一致性断言较严，若未来有意让旧保底版文案不同步（例如停更文案），
  * 需先在注释中说明并拆分断言，不要直接放宽到「仅 key 子集」。
@@ -61,8 +62,8 @@ function extractConst(src: string, name: string): string {
  * 仅支持纯字面量（key: string | { … }），不支持函数/模板串——T 字典满足该前提，
  * 若未来 T 引入函数值需先升级本解析器。
  */
-function collectKeyPaths(body: string): Set<string> {
-  const keys = new Set<string>()
+function collectKeyValues(body: string): Map<string, string> {
+  const values = new Map<string, string>()
   const n = body.length
 
   function skipTrivia(i: number): number {
@@ -121,14 +122,15 @@ function collectKeyPaths(body: string): Set<string> {
       i = skipTrivia(i + 1)
       if (body[i] === '{') {
         i = parseObject(i, path)
+      } else if (body[i] === "'" || body[i] === '"') {
+        // 字符串叶子：记录 key → value（readString 已解转义）
+        const [v, ni] = readString(i)
+        values.set(path, v)
+        i = ni
       } else {
-        // 标量值：字符串或裸 token，消费到 , 或 }（跳过嵌套字符串）
-        while (i < n) {
-          if (body[i] === "'" || body[i] === '"') i = readString(i)[1]
-          else if (body[i] === ',' || body[i] === '}') break
-          else i++
-        }
-        keys.add(path)
+        // 裸标量（不应出现于纯文案字典）：跳至分隔符，值记空串
+        while (i < n && body[i] !== ',' && body[i] !== '}') i++
+        values.set(path, '')
       }
       i = skipTrivia(i)
       if (i < n && body[i] === ',') i++
@@ -137,19 +139,18 @@ function collectKeyPaths(body: string): Set<string> {
   }
 
   parseObject(0, '')
-  return keys
+  return values
 }
 
-/** 提取字典并按语言分支返回扁平 key 集合 + 文案映射 */
+/** 提取字典并按语言分支返回扁平 key → 文案 映射（去掉 zh-CN./en-US. 前缀） */
 function dictOf(src: string): Record<'zh' | 'en', Map<string, string>> {
   const body = extractConst(src, 'T')
-  // 把顶层 { "zh-CN": {...}, "en-US": {...} } 的 key 路径按语言拆分
-  const all = collectKeyPaths(body)
+  const all = collectKeyValues(body)
   const zh = new Map<string, string>()
   const en = new Map<string, string>()
-  for (const p of all) {
-    if (p.startsWith('zh-CN.')) zh.set(p.slice('zh-CN.'.length), '')
-    else if (p.startsWith('en-US.')) en.set(p.slice('en-US.'.length), '')
+  for (const [p, v] of all) {
+    if (p.startsWith('zh-CN.')) zh.set(p.slice('zh-CN.'.length), v)
+    else if (p.startsWith('en-US.')) en.set(p.slice('en-US.'.length), v)
   }
   return { zh, en }
 }
@@ -185,5 +186,25 @@ describe('P2-7 双份分享渲染 T 字典同步', () => {
       expect(render.zh.has(k), `zh.${k}`).toBe(true)
       expect(render.en.has(k), `en.${k}`).toBe(true)
     }
+  })
+
+  it('共享 key 文案逐字一致 —— zh-CN（防手工同步漂移）', () => {
+    const render = dictOf(renderSrc)
+    const html = dictOf(htmlSrc)
+    const drifted: string[] = []
+    for (const [k, v] of html.zh) {
+      if (render.zh.has(k) && render.zh.get(k) !== v) drifted.push(`${k}: html=${JSON.stringify(v)} render=${JSON.stringify(render.zh.get(k))}`)
+    }
+    expect(drifted).toEqual([])
+  })
+
+  it('共享 key 文案逐字一致 —— en-US（防手工同步漂移）', () => {
+    const render = dictOf(renderSrc)
+    const html = dictOf(htmlSrc)
+    const drifted: string[] = []
+    for (const [k, v] of html.en) {
+      if (render.en.has(k) && render.en.get(k) !== v) drifted.push(`${k}: html=${JSON.stringify(v)} render=${JSON.stringify(render.en.get(k))}`)
+    }
+    expect(drifted).toEqual([])
   })
 })
