@@ -11,41 +11,32 @@
  * 三函数是全 App 运行时错误上报唯一入口，承载三道模块级安全契约编排：
  *   H8 URL 脱敏集成（payload.url 缺则用 window.href，均经 sanitizeReportUrl 只存 origin+pathname）
  *   H9 含密抑制短路（looksLikeSecret(message)||looksLikeSecret(stack) 命中即 console.warn + return 不入库）
- *   R28 孤儿 timer 清理（insertP.finally clearTimeout，慢网兜底防泄漏 timer 句柄）
+ *   R28 孤儿 timer 清理（invokeP.finally clearTimeout，慢网兜底防泄漏 timer 句柄）
  *   外加 5s 节流 + LRU 100 上限防 error_logs 表穷举。
  * 回归即让用户书签 URL/笔记/密码以报错形态进云端 error_logs 表（RLS 匿名 INSERT）= silent credential leak。
  *
  * 纯加测试零源文件改动：三函数均 src/lib/errorReporter.ts:75/129/156 export，直接 import 测。
- * mock 仅桩：useAuthStore（可控 user.id / 抛错验证 try）+ supabase.from().insert()（可控 success/error
- * + spy 断言 row 字段）+ fake timers 验 R28 clearTimeout + Promise.race 超时。
+ * mock 仅桩：supabase.functions.invoke()（可控 success/error + spy 断言 body 字段）
+ * + fake timers 验 R28 clearTimeout + Promise.race 超时。
+ * P1-4 方案 B：user_id 不再前端直传（函数侧仅信 JWT），auth store 读取已移除。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
-// ── useAuthStore mock：可控 user.id 供 reportError 取 user_id（登录/未登录/抛错三分态）──
-const _auth = vi.hoisted(() => ({
-  user: { id: 'user-abc' } as { id: string } | null,
-  throwOnAccess: false,
-}))
-vi.mock('../../stores/auth.js', () => ({
-  useAuthStore: () => {
-    if (_auth.throwOnAccess) throw new Error('auth not ready')
-    return { user: _auth.user }
-  },
-}))
-
-// ── supabase mock：from().insert(row) 链可控 success/error + spy 断言 row ──
+// ── supabase mock：functions.invoke('report-error', { body }) 可控 success/error + spy 断言 body ──
+// P1-4 方案 B（2026-09-02）：写入通道从直插 error_logs 表改为调 Edge Function
+// report-error（迁移 030 撤匿名直插策略，函数是唯一写入口）。
 const _sb = vi.hoisted(() => ({
-  insertSpy: vi.fn(),
+  invokeSpy: vi.fn(),
   resolved: { error: null } as { error: { message: string } | null } | Promise<{ error: { message: string } | null }>,
 }))
 vi.mock('../../lib/supabase.js', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      insert: (row: unknown) => {
-        _sb.insertSpy(row)
+    functions: {
+      invoke: (fn: string, opts?: { body?: unknown }) => {
+        _sb.invokeSpy(opts?.body)
         return _sb.resolved
       },
-    })),
+    },
   },
 }))
 
@@ -61,10 +52,8 @@ describe('reportError 编排护栏', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    _auth.user = { id: 'user-abc' }
-    _auth.throwOnAccess = false
-    _sb.insertSpy.mockClear()
-    // 默认 insert 返回速成功的 thenable（fake timers 下不带 timer）
+    _sb.invokeSpy.mockClear()
+    // 默认 invoke 返回速成功的 thenable（fake timers 下不带 timer）
     _sb.resolved = Promise.resolve({ error: null })
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -76,7 +65,7 @@ describe('reportError 编排护栏', () => {
     errSpy.mockRestore()
   })
 
-  it('正常上报：from(error_logs).insert(row) 被调 + row 字段正确（user_id + message + stack + component + sanitized url + user_agent）', async () => {
+  it('正常上报：functions.invoke(body) 被调 + body 字段正确（message + stack + component + sanitized url + user_agent，且无 user_id 直传）', async () => {
     reportError({
       message: 'boom',
       stack: 'at foo',
@@ -87,9 +76,9 @@ describe('reportError 编排护栏', () => {
     // 触发微任务让 spy 被 sync 段调用（insert 是 fire-and-forget 但 resolve 同步触发 spy）
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
-    expect(row.user_id).toBe('user-abc')
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
+    expect(row.user_id).toBeUndefined() // P1-4：user_id 不随 body，函数侧仅信 JWT
     expect(row.message).toBe('boom')
     expect(row.stack).toBe('at foo')
     expect(row.component).toBe('Comp')
@@ -105,8 +94,8 @@ describe('reportError 编排护栏', () => {
     try {
       reportError({ message: 'no-url' })
       await vi.advanceTimersByTimeAsync(0)
-      expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
-      const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+      expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
+      const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
       expect(row.url).toBe('https://app.example.com/current')
     } finally {
       hrefSpy.mockRestore()
@@ -115,7 +104,7 @@ describe('reportError 编排护栏', () => {
 
   it('H9 含密 message 抑制：looksLikeSecret(message) 命中 → insert 不调 + console.warn 入', () => {
     reportError({ message: 'password=supersecret123', stack: 'ok' })
-    expect(_sb.insertSpy).not.toHaveBeenCalled()
+    expect(_sb.invokeSpy).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('suppressed report containing secret-like content'),
     )
@@ -126,31 +115,31 @@ describe('reportError 编排护栏', () => {
       message: 'clean error msg',
       stack: 'at foo (Bearer abcdefghijklmnopqrstuvwxyz012345)',
     })
-    expect(_sb.insertSpy).not.toHaveBeenCalled()
+    expect(_sb.invokeSpy).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
   })
 
   it('节流命中：同 message 5s 内二次调 insert 仅 1 次', async () => {
     reportError({ message: 'throttled-msg' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
 
     // 同 message 再调：节流命中 return，不 insert
     reportError({ message: 'throttled-msg' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
   })
 
   it('节流过期放行：同 message 超过 5s 后再次上报 insert 2 次', async () => {
     reportError({ message: 'after-5s' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
 
     // 推进超过 THROTTLE_MS=5000
     await vi.advanceTimersByTimeAsync(5001)
     reportError({ message: 'after-5s' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(2)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(2)
   })
 
   it('MAX 表满不清零整表：中间项重复仍被节流（修复前满即 .clear() 致重复绕过节流）', async () => {
@@ -160,13 +149,13 @@ describe('reportError 编排护栏', () => {
       reportError({ message: `m${i}` })
       await vi.advanceTimersByTimeAsync(1)
     }
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(100)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(100)
 
     // 第 101 条不同 message：修复前触发 _throttled.clear() 全清 + 自身 set 放行；
     // 修复后仅淘汰最旧的 m0、自身 set 放行——两者自身均 insert，都 +1。
     reportError({ message: 'm100' })
     await vi.advanceTimersByTimeAsync(1)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(101)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(101)
 
     // 紧随其后的 m50（中间项，不是被淘汰的最旧 m0）仍在 5s 窗口内：
     // 修复前——被 m100 触发的 .clear() 清掉，get 命中 undefined → 不节流 → insert（绕过节流）；
@@ -174,33 +163,17 @@ describe('reportError 编排护栏', () => {
     reportError({ message: 'm50' })
     await vi.advanceTimersByTimeAsync(0)
     // 修复后总 insert 仍 101（m50 被节流）；修复前会变 102（m50 绕过节流多 insert 一次）。
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(101)
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(101)
   })
 
   it('H9 抑制不计入节流后续放行（含密独立 message 不占节流槽后正常 message 仍上报）', async () => {
     reportError({ message: 'password=wrong1' }) // 被抑制 return
     await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).not.toHaveBeenCalled()
+    expect(_sb.invokeSpy).not.toHaveBeenCalled()
 
     reportError({ message: 'clean-msg-after-suppress' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
-  })
-
-  it('auth try/catch：useAuthStore 抛错 → user_id=null 不阻断 insert', async () => {
-    _auth.throwOnAccess = true
-    reportError({ message: 'auth-throws' })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
-    expect((_sb.insertSpy.mock.calls[0][0] as Record<string, unknown>).user_id).toBeNull()
-  })
-
-  it('未登录：user=null → row.user_id=null', async () => {
-    _auth.user = null
-    reportError({ message: 'anon' })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
-    expect((_sb.insertSpy.mock.calls[0][0] as Record<string, unknown>).user_id).toBeNull()
+    expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
   })
 
   it('row slice 长度上界：message<=1000 / stack<=5000 / component<=200 / url<=2048 / user_agent<=1024', async () => {
@@ -217,7 +190,7 @@ describe('reportError 编排护栏', () => {
       user_agent: longUA,
     })
     await vi.advanceTimersByTimeAsync(0)
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect((row.message as string).length).toBe(1000)
     expect((row.stack as string).length).toBe(5000)
     expect((row.component as string).length).toBe(200)
@@ -228,14 +201,14 @@ describe('reportError 编排护栏', () => {
   it('payload 缺省栈/组件/url/user_agent：stack=空串 / component=空串 / url 走 window.href / user_agent 走 navigator.userAgent', async () => {
     reportError({ message: 'minimal' })
     await vi.advanceTimersByTimeAsync(0)
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.stack).toBe('')
     expect(row.component).toBe('')
     expect(typeof row.url).toBe('string')
     expect(typeof row.user_agent).toBe('string')
   })
 
-  it('R28 孤儿 timer 清理：insertP settle 后 clearTimeout 被调（防成功上报泄漏 timer 句柄）', async () => {
+  it('R28 孤儿 timer 清理：invokeP settle 后 clearTimeout 被调（防成功上报泄漏 timer 句柄）', async () => {
     const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
     reportError({ message: 'r28-cleanup' })
     // 触发 Promise.race resolve + .finally
@@ -245,7 +218,7 @@ describe('reportError 编排护栏', () => {
     clearTimeoutSpy.mockRestore()
   })
 
-  it('R28 超时兜底分支：insert 8s 不 settle → Promise.race 取 timeoutP，error.message==="timeout" 不 console.warn', async () => {
+  it('R28 超时兜底分支：invoke 8s 不 settle → Promise.race 取 timeoutP，error.message==="timeout" 不 console.warn', async () => {
     // pending insert 永不 settle
     _sb.resolved = new Promise(() => {})
     reportError({ message: 'slow-insert' })
@@ -262,7 +235,7 @@ describe('reportError 编排护栏', () => {
     reportError({ message: 'insert-fails' })
     await vi.advanceTimersByTimeAsync(0)
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[errorReporter] insert failed:'),
+      expect.stringContaining('[errorReporter] invoke failed:'),
       expect.anything(),
     )
   })
@@ -273,8 +246,7 @@ describe('vueErrorHandler 编排护栏', () => {
   let errSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    _auth.user = { id: 'user-abc' }
-    _sb.insertSpy.mockClear()
+    _sb.invokeSpy.mockClear()
     _sb.resolved = Promise.resolve({ error: null })
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -288,7 +260,7 @@ describe('vueErrorHandler 编排护栏', () => {
   it('component name 三段降序 ①：instance.$options.name 命中', async () => {
     const err = new Error('render fail')
     vueErrorHandler(err, { $options: { name: 'TopComp' } } as any, 'render')
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.component).toBe('TopComp [render]')
     expect(row.message).toBe('render fail')
   })
@@ -297,34 +269,34 @@ describe('vueErrorHandler 编排护栏', () => {
     const err = new Error('render fail 2')
     vueErrorHandler(err, { $: { type: { name: 'MidComp' } } } as any, 'setup')
     // promise 异步；不 await，断 row.component
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.component).toBe('MidComp [setup]')
   })
 
   it('component name 三段降序 ③：$options.name + $?.type.name 均缺则走 $options._componentTag', async () => {
     const err = new Error('render fail 3')
     vueErrorHandler(err, { $options: { _componentTag: '<my-tag>' } } as any, 'beforeCreate')
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.component).toBe('<my-tag> [beforeCreate]')
   })
 
   it('component name 三段全缺 → "unknown" 兜底', async () => {
     const err = new Error('render fail 4')
     vueErrorHandler(err, {} as any, 'render')
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.component).toBe('unknown [render]')
   })
 
   it('err 非 Error（裸 string）→ message 走 String(err) + stack undefined', async () => {
     vueErrorHandler('bare string err', { $options: { name: 'X' } } as any, 'hook')
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.message).toBe('bare string err')
     expect(row.stack).toBe('')
   })
 
   it('err 非 Error（数字）→ String(err) 数字串', async () => {
     vueErrorHandler(404 as any, { $options: { name: 'X' } } as any, 'hook')
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.message).toBe('404')
   })
 
@@ -342,11 +314,11 @@ describe('vueErrorHandler 编排护栏', () => {
     try {
       vueErrorHandler(new Error('dup'), { $options: { name: 'C' } } as any, 'i')
       await vi.advanceTimersByTimeAsync(0)
-      expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+      expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
       vueErrorHandler(new Error('dup'), { $options: { name: 'C' } } as any, 'i')
       await vi.advanceTimersByTimeAsync(0)
       // reportError 节流同 message（'dup'）5s 内不再 insert
-      expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+      expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
@@ -357,8 +329,7 @@ describe('unhandledRejectionHandler 编排护栏', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    _auth.user = { id: 'user-abc' }
-    _sb.insertSpy.mockClear()
+    _sb.invokeSpy.mockClear()
     _sb.resolved = Promise.resolve({ error: null })
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
@@ -371,7 +342,7 @@ describe('unhandledRejectionHandler 编排护栏', () => {
     const err = new Error('async boom')
     const fakeEvent = { reason: err } as PromiseRejectionEvent
     unhandledRejectionHandler(fakeEvent)
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.message).toBe('[UnhandledRejection] async boom')
     expect(row.stack).toBe(err.stack)
     expect(row.component).toBe('global')
@@ -380,7 +351,7 @@ describe('unhandledRejectionHandler 编排护栏', () => {
   it('reason 非 Error（裸 string）：String(reason) 加前缀', async () => {
     const fakeEvent = { reason: 'a rejected string' } as unknown as PromiseRejectionEvent
     unhandledRejectionHandler(fakeEvent)
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.message).toBe('[UnhandledRejection] a rejected string')
     expect(row.stack).toBe('')
   })
@@ -388,7 +359,7 @@ describe('unhandledRejectionHandler 编排护栏', () => {
   it('reason 非 Error（数字）：String(reason) 加前缀', async () => {
     const fakeEvent = { reason: 500 } as unknown as PromiseRejectionEvent
     unhandledRejectionHandler(fakeEvent)
-    const row = _sb.insertSpy.mock.calls[0][0] as Record<string, unknown>
+    const row = _sb.invokeSpy.mock.calls[0][0] as Record<string, unknown>
     expect(row.message).toBe('[UnhandledRejection] 500')
   })
 
@@ -397,10 +368,10 @@ describe('unhandledRejectionHandler 编排护栏', () => {
     try {
       unhandledRejectionHandler({ reason: new Error('ur-throttle') } as PromiseRejectionEvent)
       await vi.advanceTimersByTimeAsync(0)
-      expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+      expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
       unhandledRejectionHandler({ reason: new Error('ur-throttle') } as PromiseRejectionEvent)
       await vi.advanceTimersByTimeAsync(0)
-      expect(_sb.insertSpy).toHaveBeenCalledTimes(1)
+      expect(_sb.invokeSpy).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }

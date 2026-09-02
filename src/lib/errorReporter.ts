@@ -8,12 +8,13 @@
  * - URL 脱敏（只报 origin+pathname，丢弃 search/hash）
  * - 含密模式本地 console 不入库
  *
- * SEC-07 权衡：error_logs 表 RLS 允许匿名 INSERT（user_id IS NULL OR = auth.uid()，
- * 见 migration 019），客户端节流可被直打 PostgREST 绕过。SELECT 仅本人；字段有长度 CHECK。
- * 若滥用上升再上 Edge 写入 / IP 限流 / 定期 prune。
+ * P1-4 方案 B（2026-09-02）：写入通道从「直插 error_logs 表」改为调
+ * Edge Function report-error（迁移 030 已撤匿名直插策略，函数是唯一
+ * 写入入口）。函数侧按 IP 计数限流（1min/30）+ 028 全局熔断兜底；
+ * supabase.functions.invoke 自动携带 apikey 与登录态 Authorization，
+ * 函数据此解析真实 user_id（客户端传入的一律忽略，防伪造）。
  */
 import { supabase } from './supabase.js'
-import { useAuthStore } from '../stores/auth.js'
 
 /** 节流 Map：最近 N 毫秒内已上报的错误消息 */
 const _throttled = new Map<string, number>()
@@ -103,17 +104,10 @@ export function reportError(payload: ErrorPayload): void {
     return
   }
 
-  let userId: string | null = null
-  try {
-    const authStore = useAuthStore()
-    userId = authStore.user?.id || null
-  } catch {
-    userId = null
-  }
-
+  // user_id 不在此组装：supabase.functions.invoke 自动携带登录态
+  // Authorization，report-error 函数据此解析真实 user_id（防伪造）。
   const href = typeof window !== 'undefined' ? window.location.href : ''
-  const row = {
-    user_id: userId,
+  const body = {
     message: rawMsg.slice(0, 1000),
     stack: rawStack.slice(0, 5000) || '',
     component: payload.component?.slice(0, 200) || '',
@@ -122,20 +116,22 @@ export function reportError(payload: ErrorPayload): void {
     user_agent: (payload.user_agent || (typeof navigator !== 'undefined' ? navigator.userAgent : '')).slice(0, 1024),
   }
 
-  // H9：insert 包超时，避免慢网挂死。审计 R28：timeoutP 的 setTimeout 在 insert 早 settle
-  // 时仍挂事件循环 8s，无人 clearTimeout 致每次成功上报泄漏一个 timer 句柄。
-  // 在 insertP settle 后清理 timer，保留超时兜底语义同时消除孤儿 timer。
+  // H9：invoke 包超时，避免慢网挂死。审计 R28：timeoutP 的 setTimeout 在 invoke 早
+  // settle 时仍挂事件循环 8s，无人 clearTimeout 致每次成功上报泄漏一个 timer 句柄。
+  // 在 invokeP settle 后清理 timer，保留超时兜底语义同时消除孤儿 timer。
   let timer: ReturnType<typeof setTimeout> | undefined
-  const insertP = Promise.resolve(supabase.from('error_logs').insert(row))
+  const invokeP = Promise.resolve(
+    supabase.functions.invoke('report-error', { body }),
+  )
   const timeoutP = new Promise<{ error: { message: string } }>((resolve) => {
     timer = setTimeout(() => resolve({ error: { message: 'timeout' } }), INSERT_TIMEOUT_MS)
   })
-  insertP.finally(() => {
+  invokeP.finally(() => {
     if (timer) clearTimeout(timer)
   })
-  Promise.race([insertP, timeoutP]).then((res: { error?: { message?: string } | null }) => {
+  Promise.race([invokeP, timeoutP]).then((res: { error?: { message?: string } | null }) => {
     if (res?.error && res.error.message !== 'timeout') {
-      console.warn('[errorReporter] insert failed:', res.error)
+      console.warn('[errorReporter] invoke failed:', res.error)
     }
   }).catch(() => {
     // 完全静默
