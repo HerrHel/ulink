@@ -1,0 +1,59 @@
+# Supabase 项目配置（supabase/config.toml）
+#
+# 项目 ref : yqouglfopbmujkqmjgpu（与链 / ulink）
+# 用途     : 本地开发（supabase start）+ Edge Function 部署约定（verify_jwt）
+# 生成时间 : 2026-09-02（后端审计第二阶段：补配置基线）
+#
+# ⚠️ 本地启动需自行初始化数据库迁移：
+#   supabase start && supabase db push --linked（或 supabase db reset）
+
+project_id = "ulink"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+# 允许 PostgREST 以 /rpc/ 形式调用扩展 schema 内的函数
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+# 前端本地开发地址（Vite 默认 5173，此处对齐 .env 的开发基址）
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173/**"]
+jwt_expiry = 3600
+enable_signup = true
+
+[functions]
+enabled = true
+
+# ── 公开函数（无 JWT 校验）──
+# share-html    : 分享页 SSR 兜底（旧链接 /s/<gid>），匿名访客访问，部署曾用 --no-verify-jwt
+# send-feedback : 匿名反馈上报，安全靠 Turnstile 验证（非 JWT）
+[functions.share-html]
+verify_jwt = false
+
+[functions.send-feedback]
+verify_jwt = false
+
+# ── 私有函数（默认 JWT 校验，显式声明以留档）──
+# check-link    : 死链检查，函数内二次 auth.getUser() 校验用户态
+[functions.check-link]
+verify_jwt = true
