@@ -42,3 +42,19 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
+  # 后端门禁：本地栈应用迁移 + pgTAP 断言（防 018 型「history applied ≠ 实际 schema」事故）。
+  # 跑 supabase/tests/database.test.sql，与前端 lint/typecheck/test 并行、同属 PR 门禁。
+  supabase-db-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # 官方镜像自带 pgTAP；本地栈不连远程库，无需任何 secrets（CI 无 SUPABASE_* 也可跑）
+      - name: Start Supabase local stack
+        run: supabase start
+      - name: Apply migrations
+        run: supabase db reset
+      - name: Run pgTAP tests
+        run: supabase db test
