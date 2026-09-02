@@ -111,52 +111,107 @@ export function useCloudSync() {
     })
   }
 
+  /**
+   * 探测云端已有 id，把本地「云端缺失 / 本地脏 / 新建 / 软删」的项补入推送队列。
+   * 返回入队条数。
+   *
+   * initialSync（首次登录建基线）与 resyncAllToCloud（死信恢复）共用同一套补推判据，
+   * 避免两处语义漂移。
+   *
+   * 判据说明：
+   * - `!remoteIds.has(id)`：云端没有 → 必须补推（首次登录、或此前推送失败未上云）。
+   * - `_dirtyIds / _newIds`：本地改过/新建 → 即使云端已有也要推（覆盖远端旧值）。
+   * - `deletedAt`：软删项以 upsert 携带 deleted_at 的形式同步（不走 delete action），
+   *   故软删项同样要入队，否则回收站状态无法同步到云端。
+   */
+  async function _enqueueMissingToCloud(userId: string): Promise<number> {
+    const ds = useDataStore()
+    const port = getSyncRemotePort()
+    const [bmIds, gIds, cIds, aIds] = await Promise.all([
+      port.selectAllIds('bookmarks', userId),
+      port.selectAllIds('sibling_groups', userId),
+      port.selectAllIds('categories', userId),
+      port.selectAllIds('custom_attributes', userId),
+    ])
+    const remoteIds = new Set<string>()
+    for (const r of [bmIds, gIds, cIds, aIds]) {
+      if (r.error) { console.warn('[sync] id probe failed:', r.error); continue }
+      for (const row of r.data || []) remoteIds.add((row as { id: string }).id)
+    }
+
+    const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
+    const now = Date.now()
+    const shouldPush = (id: string, deletedAt?: number) =>
+      ds._dirtyIds.has(id) || ds._newIds.has(id) || deletedAt || !remoteIds.has(id)
+
+    const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
+      items: T[], table: SyncOp['table'],
+    ) => {
+      for (const item of items) {
+        if (!shouldPush(item.id, item.deletedAt)) continue
+        allOps.push({
+          action: 'upsert', table, itemId: item.id,
+          data: { ...item, _userId: userId },
+          ts: item.updatedAt || now,
+        })
+      }
+    }
+    pushIf(ds.bookmarks, 'bookmarks')
+    pushIf(ds.siblingGroups, 'sibling_groups')
+    pushIf(ds.categories, 'categories')
+    pushIf(ds.customAttributes, 'custom_attributes')
+    if (allOps.length) await enqueueSyncOps(allOps)
+    return allOps.length
+  }
+
+  /**
+   * 强制全量重传：清空推送队列后，按「云端缺失」重新入队本地数据并推送。
+   *
+   * 存在意义 —— 修复「op 进死信后本地数据永久无法上云」：
+   * pushFromQueue 的 op 失败重试到 MAX_PUSH_RETRIES 即被 removeSyncOps 永久移除，
+   * 而 fullSync 只推**队列里剩下**的 op，不会重新入队本地数据。于是某批数据一旦
+   * 连续推送失败，就再没有第二次机会上云——用户看到的现象是「同步一直失败，
+   * 但重试也没用」。
+   *
+   * 触发该场景的典型 bug（已修）：新账户首次全量推送时，首装种子数据的全局固定 id
+   * （b1~b5/sb1/sb2、all/uncategorized/email/...、requires-login 等共 15 项）撞上
+   * 别的用户已占的行 → ON CONFLICT DO UPDATE → UPDATE 策略 USING (auth.uid()=user_id)
+   * 为假 → `new row violates row-level security policy (USING expression)`。
+   * 根因修复见迁移 027（主键 id → (user_id, id)）与 syncRemotePort 不再写死 onConflict；
+   * 本函数则负责让**已受损**账户重新拿到上云机会，无需手动重新编辑每条数据。
+   *
+   * 安全：入队前清空队列（坏 op 不再占用重试次数，新 op retries 从 0 开始）；
+   * 入队按云端 id 探测，已在云端且本地未改的项不重复推，幂等且省流量。
+   */
+  async function resyncAllToCloud(): Promise<boolean> {
+    if (!isLoggedIn.value) return false
+    const userId = _getUserId()
+    if (!userId) return false
+    return withLock('linkvault-sync', async () => {
+      await clearAllSyncOps()
+      await _enqueueMissingToCloud(userId)
+      // 与 initialSync 一致：首轮失败退避 1s 重试一轮，给瞬时故障留恢复窗口
+      let pushed = await pushFromQueue()
+      if (!pushed && (await syncOpsCount())) {
+        await new Promise(r => setTimeout(r, 1000))
+        pushed = await pushFromQueue()
+      }
+      await pullChanges(false)
+      void refreshPendingCount()
+      return pushed
+    })
+  }
+
   async function initialSync(): Promise<void> {
     if (_initialized || !isLoggedIn.value) return
     _initialized = true
 
     await withLock('linkvault-sync', async () => {
-      const ds = useDataStore()
       const userId = _getUserId()
       if (!userId) return
 
       await pullChanges(false)
-
-      const remoteIds = new Set<string>()
-      const port = getSyncRemotePort()
-      const [bmIds, gIds, cIds, aIds] = await Promise.all([
-        port.selectAllIds('bookmarks', userId),
-        port.selectAllIds('sibling_groups', userId),
-        port.selectAllIds('categories', userId),
-        port.selectAllIds('custom_attributes', userId),
-      ])
-      for (const r of [bmIds, gIds, cIds, aIds]) {
-        if (r.error) { console.warn('[sync] initialSync id probe failed:', r.error); continue }
-        for (const row of r.data || []) remoteIds.add((row as { id: string }).id)
-      }
-
-      const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
-      const now = Date.now()
-      const shouldPush = (id: string, deletedAt?: number) =>
-        ds._dirtyIds.has(id) || ds._newIds.has(id) || deletedAt || !remoteIds.has(id)
-
-      const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
-        items: T[], table: SyncOp['table'],
-      ) => {
-        for (const item of items) {
-          if (!shouldPush(item.id, item.deletedAt)) continue
-          allOps.push({
-            action: 'upsert', table, itemId: item.id,
-            data: { ...item, _userId: userId },
-            ts: item.updatedAt || now,
-          })
-        }
-      }
-      pushIf(ds.bookmarks, 'bookmarks')
-      pushIf(ds.siblingGroups, 'sibling_groups')
-      pushIf(ds.categories, 'categories')
-      pushIf(ds.customAttributes, 'custom_attributes')
-      if (allOps.length) await enqueueSyncOps(allOps)
+      await _enqueueMissingToCloud(userId)
 
       // 首轮基线上传失败退避重试：首次登录/注册的用户要把本机长期积累的成百上千条
       // 数据一次性上云，瞬时故障（限流、握手、冷启动）概率远高于日常增量。
@@ -251,7 +306,7 @@ export function useCloudSync() {
     syncLabel,
 
     pushToCloud: pushFromQueue, pullFromCloud: pullChanges, fullSync,
-    debouncedSync, initialSync, resetSyncState,
+    debouncedSync, initialSync, resetSyncState, resyncAllToCloud,
     initOnlineListener, destroyOnlineListener,
     refreshPendingCount,
 

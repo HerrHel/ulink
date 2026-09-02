@@ -46,7 +46,24 @@ export interface SyncRemotePort {
 export function createSupabaseSyncPort(): SyncRemotePort {
   return {
     async upsert(table, row) {
-      const r = await supabase.from(table).upsert(row as any, { onConflict: 'id' })
+      // 刻意不指定 onConflict：让 PostgREST 以「表当前主键」为冲突目标。
+      //
+      // 历史 bug：原先写死 { onConflict: 'id' }，而同步表主键一度是单列
+      // `id TEXT PRIMARY KEY`（**全局唯一，而非 per-user 唯一**）。首装种子数据用的
+      // 是全局固定 id（bookmarks: b1~b5/sb1/sb2；categories: all/uncategorized/email/
+      // tools/ai/social/game；attributes: requires-login/ai/is-group，共 15 项推送项），
+      // 于是第一个把种子推上云的用户会占住这些 id；此后**每一个**新账户 upsert 都撞
+      // 这些行 → ON CONFLICT DO UPDATE → 触发 UPDATE 策略的 USING (auth.uid()=user_id)
+      // → 行属于别人，USING 为假 → `new row violates row-level security policy
+      // (USING expression)`，整批推送失败。
+      //
+      // 修复见迁移 027_per_user_id_composite_pk.sql：主键改为 (user_id, id) 复合主键。
+      // 但主键是 DDL、代码是前端资源，两者无法原子切换——若写死 onConflict，
+      // 迁移前后必有一段时间与库内主键不匹配（onConflict 指定的列组必须存在对应唯一
+      // 约束，否则 PostgREST 报 "no unique or exclusion constraint matching"）。
+      // 交给 PostgREST 读当前主键即可两个阶段都正确：迁移前 (id)、迁移后 (user_id, id)。
+      // 前提：row 必须携带全部主键列——toRemoteRow 已输出 id 与 user_id，满足。
+      const r = await supabase.from(table).upsert(row as any)
       return { data: r.data, error: r.error ? { message: r.error.message, code: r.error.code } : null }
     },
     async update(table, id, userId, patch) {

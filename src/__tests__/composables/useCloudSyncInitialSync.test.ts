@@ -236,7 +236,7 @@ describe('initialSync 编排护栏', () => {
     await sync.initialSync()
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('initialSync id probe failed'),
+      expect.stringContaining('[sync] id probe failed:'),
       expect.objectContaining({ message: 'probe boom' }),
     )
     const pushedIds = port.upserts.map(u => u.row.id)

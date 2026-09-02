@@ -228,6 +228,10 @@ export const zh = {
     retrySync: '重试同步',
     viewConflicts: '查看冲突',
     startSync: '开始同步…',
+    resyncAll: '强制全量重传',
+    resyncAllHint: '清空推送队列并重新上传本地数据，用于修复推送永久失败',
+    resyncAllDone: '全量重传完成',
+    resyncAllFailed: '仍有条目推送失败，请稍后重试',
   },
   toast: {
     undo: '撤回',
