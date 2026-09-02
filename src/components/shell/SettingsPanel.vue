@@ -9,16 +9,6 @@
             <button class="modal-close" @click="uiStore.panels.settings = false" :aria-label="t('settings.closeSettings')">&times;</button>
           </div>
           <div class="settings-drawer-body">
-            <!-- Language -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.language') }}</span>
-              <div class="sp-row">
-                <div class="sp-seg" data-testid="lv-lang-switch">
-                  <button class="sp-seg-btn" :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
-                  <button class="sp-seg-btn" :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">English</button>
-                </div>
-              </div>
-            </div>
             <!-- Theme -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.theme') }}</span>
@@ -182,6 +172,15 @@
             <!-- 关于 -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.about') }}</span>
+              <!-- 语言切换属低频偏好，收在「关于」区顶部，避免占据高频设置位 -->
+              <div class="sp-row" data-testid="lv-lang-switch">
+                <span class="sp-row-label">{{ t('settings.language') }}</span>
+                <div class="sp-seg">
+                  <button class="sp-seg-btn" :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
+                  <button class="sp-seg-btn" :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">English</button>
+                </div>
+              </div>
+              <div class="sp-divider"></div>
               <div class="sp-row">
                 <span class="sp-row-label">{{ t('settings.version') }}</span>
                 <span class="sp-sync-status" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
