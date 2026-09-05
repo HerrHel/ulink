@@ -124,7 +124,9 @@ export function openBookmark(bm: Bookmark) {
     return
   }
   const ds = useDataStore()
-  ds.updateBookmark(bm.id, { useCount: (bm.useCount || 0) + 1 })
+  // R-RESURRECT：计数走静默累加（不标脏/不刷 updatedAt）——点开书签不再生成同步
+  // op，避免离线积压的存活快照上线后复活远端墓碑。
+  ds.bumpBookmarkUseCount(bm.id)
   debouncedSaveAppData()
   window.open(safeUrl, '_blank')
 }

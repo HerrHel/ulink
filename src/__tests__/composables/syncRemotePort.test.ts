@@ -255,6 +255,7 @@ describe('getSyncRemotePort / setSyncRemotePort — 注入回退契约', () => {
       selectSince: vi.fn(),
       selectSoftDeleted: vi.fn(),
       selectAllIds: vi.fn(),
+      selectGraveyardIds: vi.fn(),
     }
     setSyncRemotePort(fake)
     expect(getSyncRemotePort()).toBe(fake)
@@ -264,6 +265,7 @@ describe('getSyncRemotePort / setSyncRemotePort — 注入回退契约', () => {
     const fake: SyncRemotePort = {
       upsert: vi.fn(), update: vi.fn(), delete: vi.fn(),
       selectSince: vi.fn(), selectSoftDeleted: vi.fn(), selectAllIds: vi.fn(),
+      selectGraveyardIds: vi.fn(),
     }
     setSyncRemotePort(fake)
     expect(getSyncRemotePort()).toBe(fake)

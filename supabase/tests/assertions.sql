@@ -152,8 +152,8 @@ SELECT 'A13',
   'authenticated 无 TRUNCATE/TRIGGER/REFERENCES（031）';
 
 -- ── 14. 触发器函数无 PUBLIC EXECUTE（031）──
--- prune_data_history / throttle_error_logs / update_updated_at 只能被
--- 触发器调用链（authenticated/service_role）执行，匿名不可直接调用。
+-- prune_data_history / throttle_error_logs / update_updated_at / 032 两个守卫函数
+-- 只能被触发器调用链执行，匿名不可直接调用。
 INSERT INTO _t_assert
 SELECT 'A14',
   (SELECT count(*) FROM pg_proc p
@@ -161,6 +161,40 @@ SELECT 'A14',
     WHERE n.nspname = 'public' AND p.prokind = 'f'
       AND p.proacl::text LIKE '{=X/%') = 0,
   'public 函数无 PUBLIC EXECUTE（031）';
+
+-- ── 15. 复活守卫触发器存在（032）──
+INSERT INTO _t_assert
+SELECT 'A15',
+  (SELECT count(*) FROM pg_trigger t
+     JOIN pg_class c ON c.oid = t.tgrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND NOT t.tgisinternal
+      AND t.tgname = 'trg_' || c.relname || '_resurrect_guard'
+      AND c.relname IN ('bookmarks','sibling_groups','categories','custom_attributes')) = 4,
+  '4 张同步表存在复活守卫触发器（032）';
+
+-- ── 16. 墓园记录触发器存在（032）──
+INSERT INTO _t_assert
+SELECT 'A16',
+  (SELECT count(*) FROM pg_trigger t
+     JOIN pg_class c ON c.oid = t.tgrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND NOT t.tgisinternal
+      AND t.tgname = 'trg_' || c.relname || '_graveyard'
+      AND c.relname IN ('bookmarks','sibling_groups','categories','custom_attributes')) = 4,
+  '4 张同步表存在物理删除墓园记录触发器（032）';
+
+-- ── 17. 墓园表不可变（032）──
+INSERT INTO _t_assert
+SELECT 'A17',
+  (SELECT count(*) FROM pg_policy p
+     JOIN pg_class c ON c.oid = p.polrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'deleted_item_graveyard'
+      AND p.polcmd IN ('u','d')) = 0,
+  'deleted_item_graveyard 无 UPDATE/DELETE 策略（墓园不可变）';
+-- 注：032 行为级断言（旧快照复活拦截 / 墓园存活重插拦截）因需写 auth.users 夹具，
+-- 仅在 database.test.sql（pgTAP，本地栈）覆盖。
 
 -- ── 汇总 ──
 DO $$

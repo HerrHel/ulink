@@ -100,13 +100,18 @@ export function useCloudSync() {
         // 安全：_mergeIntoLocal 的 full-absent-delete 与 reconcileDelete 都各自要求
         // lastSyncAt>0 + 非 dirty + 非 pending，fresh(未首登)状态不会误删本地。
         await pullChanges(true)
-        if (pushErr) {
+        // R-RESURRECT：pullChanges(full) 的墓碑重申可能已入队（云端存活但早于本地
+        // 墓碑的分叉残留），补一轮 push 让重申即刻上云；队列为空时是无副作用 no-op。
+        const retried = await pushFromQueue()
+        if (pushErr && !retried) {
           syncStore.setSyncStatus('error')
           syncStore.setSyncError(pushErr)
         }
         return pushed
       }
       await pullChanges(true)
+      // R-RESURRECT：同上，墓碑重申补推（空队列 no-op）。
+      await pushFromQueue()
       return pushed
     })
   }
@@ -123,32 +128,62 @@ export function useCloudSync() {
    * - `_dirtyIds / _newIds`：本地改过/新建 → 即使云端已有也要推（覆盖远端旧值）。
    * - `deletedAt`：软删项以 upsert 携带 deleted_at 的形式同步（不走 delete action），
    *   故软删项同样要入队，否则回收站状态无法同步到云端。
+   * - 墓园（032 graveyard）：任意端已彻底删除的条目永不当「云端缺失」补推——
+   *   存活快照重推会被服务端 032 触发器静默拦截，反复入队只是制造死 op；
+   *   本地残墓由 fullSync 的 full-absent-delete 对账清理。
    */
   async function _enqueueMissingToCloud(userId: string): Promise<number> {
     const ds = useDataStore()
     const port = getSyncRemotePort()
-    const [bmIds, gIds, cIds, aIds] = await Promise.all([
+    const [bmIds, gIds, cIds, aIds, graveyard] = await Promise.all([
       port.selectAllIds('bookmarks', userId),
       port.selectAllIds('sibling_groups', userId),
       port.selectAllIds('categories', userId),
       port.selectAllIds('custom_attributes', userId),
+      port.selectGraveyardIds(userId),
     ])
+
+    // id 探测 fail-closed：探测失败的表跳过补推。旧行为把探测失败当「该表云端为空」，
+    // 整表本地项按「云端缺失」入队——他端刚删除的墓碑会被旧存活快照整批复活
+    // （push 是无条件 upsert 覆盖）。fail-closed 代价仅是该表本轮不补推，下轮重试。
+    const probeFailed = new Set<SyncOp['table']>()
     const remoteIds = new Set<string>()
-    for (const r of [bmIds, gIds, cIds, aIds]) {
-      if (r.error) { console.warn('[sync] id probe failed:', r.error); continue }
+    const probes: Array<[SyncOp['table'], typeof bmIds]> = [
+      ['bookmarks', bmIds],
+      ['sibling_groups', gIds],
+      ['categories', cIds],
+      ['custom_attributes', aIds],
+    ]
+    for (const [table, r] of probes) {
+      if (r.error) {
+        console.warn(`[sync] id probe failed, skip ${table} backfill this round:`, r.error)
+        probeFailed.add(table)
+        continue
+      }
       for (const row of r.data || []) remoteIds.add((row as { id: string }).id)
+    }
+
+    // 墓园 id 集（table:id）。探测失败 fail-open：服务端 032 触发器仍会拦截存活重推。
+    const graveyardKeys = new Set<string>()
+    if (graveyard.error) {
+      console.warn('[sync] graveyard probe failed (server guard remains as backstop):', graveyard.error)
+    } else {
+      for (const row of graveyard.data || []) graveyardKeys.add(`${row.table_name}:${row.item_id}`)
     }
 
     const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
     const now = Date.now()
-    const shouldPush = (id: string, deletedAt?: number) =>
-      ds._dirtyIds.has(id) || ds._newIds.has(id) || deletedAt || !remoteIds.has(id)
+    const shouldPush = (table: SyncOp['table'], id: string, deletedAt?: number) => {
+      if (graveyardKeys.has(`${table}:${id}`)) return false
+      return ds._dirtyIds.has(id) || ds._newIds.has(id) || !!deletedAt
+        || (!probeFailed.has(table) && !remoteIds.has(id))
+    }
 
     const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
       items: T[], table: SyncOp['table'],
     ) => {
       for (const item of items) {
-        if (!shouldPush(item.id, item.deletedAt)) continue
+        if (!shouldPush(table, item.id, item.deletedAt)) continue
         allOps.push({
           action: 'upsert', table, itemId: item.id,
           data: { ...item, _userId: userId },
@@ -210,8 +245,12 @@ export function useCloudSync() {
       const userId = _getUserId()
       if (!userId) return
 
-      await pullChanges(false)
-      await _enqueueMissingToCloud(userId)
+      const pulled = await pullChanges(false)
+      // R-RESURRECT：pull 失败（离线/限流/解密中断）时本地视图可能落后云端——此刻
+      // 按「云端缺失」补推会把 A 端已删除的条目以旧存活快照推回云端（复活）。故
+      // pull 成功才补推；失败侧的本地脏数据由 _onOnline/_onVisibilityChange 的
+      // 常规增量链路补上，不因跳过本轮补推而丢失。
+      if (pulled) await _enqueueMissingToCloud(userId)
 
       // 首轮基线上传失败退避重试：首次登录/注册的用户要把本机长期积累的成百上千条
       // 数据一次性上云，瞬时故障（限流、握手、冷启动）概率远高于日常增量。
@@ -242,10 +281,16 @@ export function useCloudSync() {
       // 显式 pullChanges 已做全面拉取，重连后靠 Realtime 增量事件即可。
       unsubscribeRealtime()
       subscribeRealtime()
-      void withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
-      return
     }
-    void withLock('linkvault-sync', pushFromQueue).then(() => pullChanges())
+    // R-RESURRECT：先 pull 后 push。旧顺序先推后拉——离线期间积压的 op（op.data 是
+    // 入队时刻的存活快照）会把远端刚写入的软删墓碑盖掉（删除复活；且复活行携带旧
+    // updated_at_num，删除端的增量 pull 走 gt 过滤永远看不到，分叉无法自愈）。先
+    // pull 让 dirty/pending 项经 decideRemoteApply 转 conflict/soft-delete，再推剩余
+    // op；服务端 032 触发器对残留的旧快照复活做最终兜底。
+    void withLock('linkvault-sync', async () => {
+      await pullChanges()
+      await pushFromQueue()
+    })
   }
 
   function _onVisibilityChange() {

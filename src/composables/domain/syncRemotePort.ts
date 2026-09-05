@@ -40,6 +40,15 @@ export interface SyncRemotePort {
     table: SyncTable,
     userId: string,
   ): Promise<SyncPortResult<Array<{ id: string }>>>
+  /**
+   * 墓园查询（032 迁移 deleted_item_graveyard）：已被任意端彻底删除（物理 DELETE）
+   * 的条目 id。补推判据（_enqueueMissingToCloud）据此把「云端缺 id」中真正属于
+   * 「远端已彻底删」的部分排除——存活快照重推会被服务端 032 触发器拦截成静默
+   * no-op，客户端预排除可避免每次 initialSync 反复入队注定失败的 op。
+   */
+  selectGraveyardIds(
+    userId: string,
+  ): Promise<SyncPortResult<Array<{ table_name: string; item_id: string }>>>
 }
 
 /** 默认 Supabase 实现 */
@@ -111,6 +120,16 @@ export function createSupabaseSyncPort(): SyncRemotePort {
         error: r.error ? { message: r.error.message, code: r.error.code } : null,
       }
     },
+    async selectGraveyardIds(userId) {
+      const r = await supabase
+        .from('deleted_item_graveyard')
+        .select('table_name, item_id')
+        .eq('user_id', userId)
+      return {
+        data: (r.data as Array<{ table_name: string; item_id: string }>) || null,
+        error: r.error ? { message: r.error.message, code: r.error.code } : null,
+      }
+    },
   }
 }
 
@@ -139,6 +158,9 @@ export function createMemorySyncPort(opts?: {
   allIds?: Partial<Record<SyncTable, Array<{ id: string }>>>
   allIdsError?: Partial<Record<SyncTable, SyncPortError>>
   selectSinceError?: SyncPortError
+  /** 032 墓园行：补推排除判据（_enqueueMissingToCloud） */
+  graveyard?: Array<{ table_name: string; item_id: string }>
+  graveyardError?: SyncPortError
 }): SyncRemotePort & {
   upserts: Array<{ table: SyncTable; row: Record<string, unknown> }>
   updates: Array<{ table: SyncTable; id: string; patch: Record<string, unknown> }>
@@ -180,6 +202,10 @@ export function createMemorySyncPort(opts?: {
       const err = opts?.allIdsError?.[table] ?? null
       if (err) return { data: null, error: err }
       return { data: opts?.allIds?.[table] ?? [], error: null }
+    },
+    async selectGraveyardIds() {
+      if (opts?.graveyardError) return { data: null, error: opts.graveyardError }
+      return { data: opts?.graveyard ?? [], error: null }
     },
   }
 }

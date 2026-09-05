@@ -189,6 +189,17 @@ describe('useCloudSync online/visibility 核心契约护栏', () => {
     expect(_push.pushFromQueueSpy).not.toHaveBeenCalled()
   })
 
+  it('online → pull 先于 push（R-RESURRECT 顺序契约：离线积压 op 不再先落盘盖掉远端墓碑）', async () => {
+    const order: string[] = []
+    _pull.pullChangesSpy.mockImplementation(async () => { order.push('pull'); return true })
+    _push.enqueueSpy.mockImplementation(() => { order.push('enqueue') })
+    _push.pushFromQueueSpy.mockImplementation(async () => { order.push('push'); return true })
+    initAndDispatch('online')
+    await vi.runAllTimersAsync()
+    expect(order).toContain('enqueue')
+    expect(order.indexOf('pull')).toBeLessThan(order.indexOf('push'))
+  })
+
   it('online 门控响应式重判：false 态 no-op，切 true 再派走完整编排（非 setup 快照）', async () => {
     _auth.isLoggedInRef.value = false
     const { initOnlineListener } = useCloudSync()

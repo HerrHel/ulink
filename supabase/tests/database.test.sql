@@ -9,16 +9,19 @@
 --   5. storage.objects 无匿名策略（防 storage 列举泄露）
 --   6. error_logs 写入熔断存在（防无限写入）
 --   7. SECURITY DEFINER RPC 存在且固定 search_path（防 search_path 注入）
+--   8. 032 删除防线：复活守卫触发器 + 墓园表不可变 + 行为级拦截（旧快照复活 /
+--      墓园存活重插被拦；正规恢复 / 墓碑重插放行）
 --
 -- 运行方式（需要 Docker 起本地栈，官方镜像自带 pgTAP）：
 --   supabase start && supabase db reset && supabase db test
 --   （CI 见 .github/workflows/ci.yml 的 supabase-db-test job）
 --
--- 无 Docker 环境的替代：supabase/tests/assertions.sql（零依赖，可对远程库直跑）
+-- 无 Docker 环境的替代：supabase/tests/assertions.sql（零依赖，可对远程库直跑；
+-- 行为级断言因需写 auth.users 夹具仅在本文件覆盖）
 
 BEGIN;
 
-SELECT plan(14);
+SELECT plan(23);
 
 -- ── 1. FORCE RLS：public 下所有用户表必须开启 ──
 -- 015 只覆盖当时 8 张表；024/025 新增表在 028 才补齐。此处断言"一张都不能漏"。
@@ -155,6 +158,106 @@ SELECT is(
   0,
   'public 函数无 PUBLIC EXECUTE（031）'
 );
+
+-- ── 15. 复活守卫触发器存在（032）──
+-- 4 张同步表各挂 trg_<table>_resurrect_guard（BEFORE INSERT OR UPDATE）。
+SELECT is(
+  (SELECT count(*) FROM pg_trigger t
+     JOIN pg_class c ON c.oid = t.tgrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND NOT t.tgisinternal
+      AND t.tgname = 'trg_' || c.relname || '_resurrect_guard'
+      AND c.relname IN ('bookmarks','sibling_groups','categories','custom_attributes')),
+  4,
+  '4 张同步表存在复活守卫触发器（032）'
+);
+
+-- ── 16. 墓园记录触发器存在（032）──
+SELECT is(
+  (SELECT count(*) FROM pg_trigger t
+     JOIN pg_class c ON c.oid = t.tgrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND NOT t.tgisinternal
+      AND t.tgname = 'trg_' || c.relname || '_graveyard'
+      AND c.relname IN ('bookmarks','sibling_groups','categories','custom_attributes')),
+  4,
+  '4 张同步表存在物理删除墓园记录触发器（032）'
+);
+
+-- ── 17. 墓园表不可变（032）──
+-- 仅 owner SELECT（客户端补推排除）+ 触发器/INSERT 兜底写入；无 UPDATE/DELETE 策略。
+SELECT is(
+  (SELECT count(*) FROM pg_policy p
+     JOIN pg_class c ON c.oid = p.polrelid
+     JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relname = 'deleted_item_graveyard'
+      AND p.polcmd IN ('u','d')),
+  0,
+  'deleted_item_graveyard 无 UPDATE/DELETE 策略（墓园不可变）'
+);
+
+-- ── 18. 行为级：032 删除防线核心不变量 ──
+-- 夹具 auth.users + authenticated JWT 模拟；全部改动随外层 ROLLBACK 丢弃。
+INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+VALUES ('11111111-1111-1111-1111-111111111111', 'pgtap-guard@test.local', 'x', NOW(),
+        '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, NOW(), NOW());
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
+
+-- 18a. 墓碑基线：软删行可写入
+INSERT INTO bookmarks (id, user_id, title, updated_at_num, deleted_at)
+VALUES ('pgtap-guard-bm', '11111111-1111-1111-1111-111111111111', '删除守卫测试', 1000, NOW());
+SELECT is(
+  (SELECT deleted_at IS NOT NULL FROM bookmarks WHERE id = 'pgtap-guard-bm'),
+  true,
+  '软删墓碑可正常写入（18a 基线）'
+);
+
+-- 18b. 旧存活快照 UPDATE 复活 → 拦截（updated_at_num 未超过墓碑）
+UPDATE bookmarks SET deleted_at = NULL, updated_at_num = 500 WHERE id = 'pgtap-guard-bm';
+SELECT is(
+  (SELECT deleted_at IS NOT NULL FROM bookmarks WHERE id = 'pgtap-guard-bm'),
+  true,
+  '旧存活快照无法复活软删墓碑（updated_at_num 未超过墓碑时间）'
+);
+
+-- 18c. 正规恢复（updated_at_num 更新）→ 放行
+UPDATE bookmarks SET deleted_at = NULL, updated_at_num = 2000 WHERE id = 'pgtap-guard-bm';
+SELECT is(
+  (SELECT deleted_at IS NULL FROM bookmarks WHERE id = 'pgtap-guard-bm'),
+  true,
+  'updated_at_num 更新的正规恢复放行（回收站恢复语义不受限）'
+);
+
+-- 18d. 物理 DELETE → 墓园记录
+DELETE FROM bookmarks WHERE id = 'pgtap-guard-bm';
+SELECT is(
+  (SELECT count(*) FROM deleted_item_graveyard
+    WHERE item_id = 'pgtap-guard-bm' AND table_name = 'bookmarks'),
+  1,
+  '物理 DELETE 写入墓园（彻底删除在其他端不可被补推复活）'
+);
+
+-- 18e. 墓园条目以存活态重新 INSERT → 拦截
+INSERT INTO bookmarks (id, user_id, title, updated_at_num)
+VALUES ('pgtap-guard-bm', '11111111-1111-1111-1111-111111111111', 'x', 3000);
+SELECT is(
+  (SELECT count(*) FROM bookmarks WHERE id = 'pgtap-guard-bm'),
+  0,
+  '墓园条目无法以存活态重新 INSERT'
+);
+
+-- 18f. 墓园条目以墓碑态重新 INSERT → 放行（跨端删除状态再传播）
+INSERT INTO bookmarks (id, user_id, title, updated_at_num, deleted_at)
+VALUES ('pgtap-guard-bm', '11111111-1111-1111-1111-111111111111', 'x', 3000, NOW());
+SELECT is(
+  (SELECT deleted_at IS NOT NULL FROM bookmarks WHERE id = 'pgtap-guard-bm'),
+  true,
+  '墓碑态重插放行（删除状态可跨端再传播）'
+);
+
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;

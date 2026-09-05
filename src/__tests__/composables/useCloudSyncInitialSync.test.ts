@@ -5,9 +5,12 @@
  *   1. _initialized 幂等守卫：首次跑完后第二次直接空跑（不再 pull/push/not lazy subscribe 标记）。
  *   2. 未登录（auth.user 缺失）→ 直接 return。
  *   3. 双轮 pullChanges：首尾各一次（依据 setLastSyncAt 被设成功标记首 pull 跑通）。
- *   4. remoteIds id 探针：4 表 selectAllIds 合集；某表 error 跳过（该表项 fallback 全当远端无 → 全推）。
- *   5. shouldPush 四元回推条件：(a) 在 _dirtyIds、(b) 在 _newIds、(c) deletedAt 非空、
- *      (d) 远端无该 id 全部入 backfill；远端有 + 未脏未新 + 未删 → 不推（避免回环）。
+ *   4. remoteIds id 探针：4 表 selectAllIds 合集；某表 error → fail-closed 该表整表
+ *      跳过补推（R-RESURRECT：旧行为「error 当空库 → 全推」会把 A 端刚删的条目以
+ *      旧存活快照复活回云端）。
+ *   5. shouldPush 五元回推条件：(a) 在 _dirtyIds、(b) 在 _newIds、(c) deletedAt 非空、
+ *      (d) 远端无该 id 且探测未失败 → backfill；(e) 墓园（graveyard）条目一律不推。
+ *      远端有 + 未脏未新 + 未删 → 不推（避免回环）。
  *   6. polled-and-push 落盘：被推项经 enqueueSyncOps+pushFromQueue 进去并转发至 port.upserts/updates。
  *
  * pullChanges / pushFromQueue 内部语义由各自独立测试覆盖，本护栏聚焦 initialSync 顶层流程的
@@ -217,10 +220,11 @@ describe('initialSync 编排护栏', () => {
     expect(pushedIds).toContain('bm-del') // deletedAt 作为独立回推因子触发
   })
 
-  it('5 selectAllIds 某表 error：不抛错，warn 后 continue；该表 remoteIds 落空 → 该表本地项 fallback 全当远端无 → 全推', async () => {
-    // 远端实际无 bm-only，但 selectAllIds('bookmarks') 报 error。
-    // 行为：循环遇 r.error 跳过该表 → remoteIds 没有它的任何 id → fallback `!remoteIds.has` 把本地项全推。
-    // 这是容错设计（id probe 失败不阻塞同步，宁可多推让对账修正）。
+  it('5 selectAllIds 某表 error：fail-closed 该表本轮不补推，其他表照常（R-RESURRECT 防复活）', async () => {
+    // 旧行为：id probe 失败 → 该表 remoteIds 落空 → 本地项 fallback「远端无」全推。
+    // push 是无条件 upsert 覆盖，A 端刚删除的条目会以旧存活快照整批复活回云端。
+    // 修后 fail-closed：探测失败的表整表跳过补推（该表真实脏数据仍由常规增量链路上推），
+    // 其他探测成功的表照常 backfill。
     const port = createMemorySyncPort({
       allIdsError: { bookmarks: { message: 'probe boom' } },
       allIds: {
@@ -229,18 +233,25 @@ describe('initialSync 编排护栏', () => {
       },
     })
     setSyncRemotePort(port)
-    await prepareBookmarks([{ id: 'bm-only' }])
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'bm-only' }) as any)
+    ds.addCategory({ id: 'cat-only', name: 'n', icon: '', color: '', order: 0 } as any)
+    // addBookmark/addCategory 自带 dirty/new 标记：真实编辑不依赖 backfill 判据，
+    // 此处清空以精确锁定「云端缺失」分支的行为
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
     const sync = useCloudSync()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await sync.initialSync()
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[sync] id probe failed:'),
+      expect.stringContaining('[sync] id probe failed'),
       expect.objectContaining({ message: 'probe boom' }),
     )
     const pushedIds = port.upserts.map(u => u.row.id)
-    expect(pushedIds).toContain('bm-only')
+    expect(pushedIds).not.toContain('bm-only')  // 探测失败的表：fail-closed 不补推
+    expect(pushedIds).toContain('cat-only')     // 探测成功的表：照常 backfill
     warnSpy.mockRestore()
   })
 
