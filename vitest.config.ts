@@ -25,6 +25,10 @@ export default defineConfig({
     environment: 'jsdom',
     environmentOptions: { jsdom: { url: 'http://localhost:3000' } },
     setupFiles: ['./src/__tests__/setup.js'],
+    // 默认 5s 对真实 PBKDF2（600K 迭代）× 多次派生的重测试过紧：低核/高负载机器上
+    // 4s 级用例（useVault resetVaultWithRecoveryKey / forkPublicGroup 等）偶发超时红，
+    // 且 stash 对照实验证明与改动无关（基线同样抖）。放宽到 30s 消除该类调度抖动。
+    testTimeout: 30000,
     // .claude/worktrees/** 兜底排除：长跑 worktree 残留目录（含 node_modules）曾被 vitest 误扫
     // 出 4994 测 4 fail（board-locks 第十轮 A2 段血泪），排除后残留不再污染基线
     // .workbuddy/** 兜底排除：该目录存的是会话备份（含 .vue/.test.ts 副本），

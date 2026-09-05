@@ -42,6 +42,15 @@ function seedTrash(ds: ReturnType<typeof useDataStore>) {
   ds.deleteCategory('c1')
   ds.addAttribute({ id: 'a1', name: '属性一', type: 'boolean' } as any)
   ds.deleteAttribute('a1')
+  // trashedBookmarks 按 deletedAt **降序**排列：b1/b2 同毫秒软删时 sort 稳定序保持
+  // [b1,b2]，跨毫秒则翻转为 [b2,b1]——「第 0 行 = b1」的点击假设随机落空，实际删掉
+  // 的是 b2 而 b1 带着 seed 时间戳残留（高负载全量跑约半数复现的存量抖动真因，
+  // stash 基线同样抖）。显式钉死时间戳：b1 恒为第 0 行，测试不再依赖毫秒边界运气。
+  const t = Date.now()
+  const row1 = ds.bookmarks.find(b => b.id === 'b1')!
+  const row2 = ds.bookmarks.find(b => b.id === 'b2')!
+  row1.deletedAt = t + 2
+  row2.deletedAt = t + 1
 }
 
 /** seeding 含无 title 书签 + 无 name 组（走模板 `||` 右侧兜底分支） */
@@ -97,15 +106,19 @@ describe('TrashPanel 行内操作与边界契约', () => {
     expect(w.find('.trash-batch-count').text()).toContain('已选 1 项')
     showConfirmMock.mockResolvedValue(true)
     await w.findAll('.trash-item')[0].findAll('button')[1].trigger('click') // 行内「删除」
-    // 用 flushPromises 而非单次 nextTick：showConfirm 是 mockResolvedValue 的异步链，
-    // CI（Node 20 / 2 核）下微任务调度与本地（Node 22）不同，单次 nextTick 可能等不到
-    // permanent() 里 await showConfirm 的续体执行完，导致 b1 仍在 bookmarks 里（线上红）。
+    // flushPromises + vi.waitFor 双保险：showConfirm 是 mockResolvedValue 的异步链，
+    // 高负载（CI 2 核 / 并行 worker 抢占）下单次 flushPromises 偶发等不到 permanent()
+    // 里 await showConfirm 的续体执行完 → b1 仍在 bookmarks（线上红；实测基线未改动
+    // 代码也复现）。waitFor 轮询至 b1 真正消失（上限 1s），彻底消除调度抖动。
     await flushPromises()
-    // b1 彻底消失（bookmarks 与 trashed 双无）
-    expect(
-      ds.bookmarks.find(b => b.id === 'b1'),
-      `showConfirm calls=${JSON.stringify(showConfirmMock.mock.calls)} toast=${JSON.stringify(toastMock.mock.calls)} remaining=${ds.bookmarks.map(b => b.id).join(',')}`,
-    ).toBeUndefined()
+    await vi.waitFor(() => {
+      // b1 彻底消失（bookmarks 与 trashed 双无）
+      expect(
+        ds.bookmarks.find(b => b.id === 'b1'),
+        `showConfirm calls=${JSON.stringify(showConfirmMock.mock.calls)} toast=${JSON.stringify(toastMock.mock.calls)} remaining=${ds.bookmarks.map(b => b.id).join(',')}`,
+      ).toBeUndefined()
+    })
+    await nextTick()
     expect(ds.trashedBookmarks.find(b => b.id === 'b1')).toBeUndefined()
     expect(toastMock).toHaveBeenCalledWith('已永久删除')
     expect(saveSpy).toHaveBeenCalled()
