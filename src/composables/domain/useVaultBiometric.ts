@@ -10,6 +10,7 @@
  */
 import { encrypt, decrypt } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
+import { isBiometricCapableContext } from '../../lib/secureContext.js'
 import { t } from '../../i18n/index.js'
 
 const BIO_KEY = 'lv_vault_biometric'
@@ -86,8 +87,7 @@ export function useVaultBiometric() {
   function isBiometricAvailable(): boolean {
     if (typeof window === 'undefined') return false
     if (!window.PublicKeyCredential) return false
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return false
-    return true
+    return isBiometricCapableContext()
   }
 
   /** 是否已录入保险柜指纹凭据 */

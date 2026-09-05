@@ -1,8 +1,7 @@
 /**
  * actionSheet.ts — Action Sheet 状态 Store
  *
- * 替代 bridge.ts actionSheetAPI 服务定位器模式。
- * 管理：通用操作列表/分类选择器/手势拖拽。
+ * 管理：通用操作列表/分类选择器/手势拖拽，全部经 Pinia action 暴露。
  */
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'

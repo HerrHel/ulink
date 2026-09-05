@@ -1,8 +1,7 @@
 /**
  * toast.ts — Toast / Confirm / Undo / Choice 状态 Store
  *
- * 替代 bridge.ts toastAPI 服务定位器模式。
- * 所有 toast 操作通过 Pinia action 调用，消除模块级可变状态。
+ * Toast / Confirm / Undo / Choice 全部走 Pinia action，无模块级可变状态；
  */
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
