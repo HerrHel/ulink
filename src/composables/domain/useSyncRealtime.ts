@@ -16,7 +16,7 @@ import { decideRemoteApply } from './syncMergeCore.js'
 import { EditorManager } from '../../lib/editor.js'
 import { cloneDeep } from '../../lib/clone.js'
 import { withLock } from '../../lib/withLock.js'
-import type { EntityType } from '../../types.js'
+import type { EntityType, Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -134,9 +134,16 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
   // （与 useCloudSync M1 pull 循环同构：快照 + 返回后二次校验）
   const wasUnlocked = e2e.isUnlocked.value
 
-  const HANDLERS: Record<EntityType, { upsert: (m: any) => void }> = {
+  // HANDLERS 逐类型入参（m: 具体实体类型，body 内字段全量受检）；
+  // type → handler 的关联性 TS 无法跨动态键推导，唯一 cast 在底部 h.upsert 调用点。
+  const HANDLERS: {
+    bookmark: { upsert: (m: Bookmark) => void }
+    group: { upsert: (m: SiblingGroup) => void }
+    category: { upsert: (m: Category) => void }
+    attribute: { upsert: (m: CustomAttribute) => void }
+  } = {
     bookmark: {
-      upsert: (m: any) => {
+      upsert: (m) => {
         if (ds.bookmarkMap[m.id]) {
           const oldParentId = ds.bookmarkMap[m.id]?.parentId
           const remoteUpdatedAt = m.updatedAt
@@ -163,7 +170,7 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
       },
     },
     group: {
-      upsert: (m: any) => {
+      upsert: (m) => {
         if (ds.groupMap[m.id]) {
           const remoteUpdatedAt = m.updatedAt
           ds.updateGroup(m.id, m)
@@ -192,7 +199,7 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
       },
     },
     category: {
-      upsert: (m: any) => {
+      upsert: (m) => {
         if (ds.categoryMap[m.id]) {
           const remoteUpdatedAt = m.updatedAt
           ds.updateCategory(m.id, m)
@@ -209,7 +216,7 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
       },
     },
     attribute: {
-      upsert: (m: any) => {
+      upsert: (m) => {
         if (ds.attributeMap[m.id]) {
           const remoteUpdatedAt = m.updatedAt
           ds.updateAttribute(m.id, m)
@@ -230,7 +237,7 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
   // 入口已解锁则 await decrypt，若 await 期间 lock 则丢弃不 upsert。
   let plain = mapped
   if (wasUnlocked) {
-    plain = await e2e.decryptItem(type, mapped as any)
+    plain = await e2e.decryptItem(type, mapped)
     if (!e2e.isUnlocked.value) return
   }
   // R13：await decrypt 期间可能 yield，与并发本地编辑交错——用户可能在 await 期间编辑该实体，
@@ -250,7 +257,9 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
   if (decision.action === 'revive-assign' && plain && typeof plain === 'object') {
     ;(plain as { deletedAt?: unknown }).deletedAt = undefined
   }
-  h.upsert(plain)
+  // type（动态键）与 HANDLERS 成员在运行时一一对应，TS 无法跨动态键做关联推导——
+  // 唯一的显式收窄点：plain 即 FROM_REMOTE[type] 的产物，与该 handler 入参同型。
+  ;(h.upsert as (m: typeof plain) => void)(plain)
   // 清除本次 merge 产生的 _changedFields：updateBookmark/updateGroup 内部会
   // 对传入的所有字段 _trackChange，把这些远端来的字段累积进 _changedFields。
   // 若不清，下次本地真改动触发 debouncedSync 时，drainChangedFields() 会把

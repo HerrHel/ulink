@@ -72,7 +72,7 @@ export function createSupabaseSyncPort(): SyncRemotePort {
       // 约束，否则 PostgREST 报 "no unique or exclusion constraint matching"）。
       // 交给 PostgREST 读当前主键即可两个阶段都正确：迁移前 (id)、迁移后 (user_id, id)。
       // 前提：row 必须携带全部主键列——toRemoteRow 已输出 id 与 user_id，满足。
-      const r = await supabase.from(table).upsert(row as any)
+      const r = await supabase.from(table).upsert(row)
       return { data: r.data, error: r.error ? { message: r.error.message, code: r.error.code } : null }
     },
     async update(table, id, userId, patch) {
@@ -81,7 +81,7 @@ export function createSupabaseSyncPort(): SyncRemotePort {
       // 仅靠 error 无法识别静默失败，必须靠 count 透传，否则 syncPush 会误判成功永久出队丢本地变更。
       const r = await supabase
         .from(table)
-        .update(patch as any, { count: 'exact' })
+        .update(patch, { count: 'exact' })
         .eq('id', id)
         .eq('user_id', userId)
       return {

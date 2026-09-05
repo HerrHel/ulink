@@ -14,7 +14,10 @@ function createNullClient(): SupabaseClient {
   const emptyAuth = { data: { user: null, session: null }, error: nullError }
   const nullQueryResult = { data: null, error: nullError, count: null, status: 0, statusText: '' }
 
-  /** 创建 thenable 的查询构造器 Proxy，支持无限链式调用后 await */
+  /** 创建 thenable 的查询构造器 Proxy，支持无限链式调用后 await。
+   *  返回值刻意为 any：此空对象需在类型层冒充任意 supabase 链式调用终点
+   *  （.select().eq().single()… / auth / rpc 的各返参形状），非 any 无以表达
+   *  「与真实 builder 同形」这一运行时承诺；真实客户端未配置时才启用。 */
   function createNullQuery(): any {
     return new Proxy(() => {}, {
       get(_t, prop) {
