@@ -135,10 +135,48 @@ const isVisible = ref(false)
 const kbBottom = ref(0)
 let _showTimer: ReturnType<typeof setTimeout> | null = null
 
+// 键盘开合阈值：弹起判定 kbBottom > 120px（过滤 iOS 工具栏/地址栏高度抖动）；
+// 收起判定 vv.height 恢复到距 innerHeight < 60px（只看视口高度，不受 offsetTop 平移干扰）
+const KB_OPEN_THRESHOLD = 120
+const KB_CLOSED_GAP = 60
+let _kbOpen = false
+let _vvBound = false
+
 function updateViewport() {
   const vv = window.visualViewport
   if (!vv) return
   kbBottom.value = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+  if (!_kbOpen && kbBottom.value > KB_OPEN_THRESHOLD) {
+    _kbOpen = true
+    // 键盘重新弹起但编辑器焦点从未离开（收键盘后再点文本无新 focusin）：重浮工具栏
+    if (store.focusedGroupId && !ui.shareMode) {
+      const ae = document.activeElement as HTMLElement | null
+      if (ae?.closest?.('.group-body')) useMfbStore().show()
+    }
+  } else if (_kbOpen && vv.height >= window.innerHeight - KB_CLOSED_GAP) {
+    // 键盘收起即收栏：Android 返回键 / iOS「完成」收起键盘不触发编辑器 blur，
+    // 仅靠 focusout 永远收不掉（工具栏降到页底常驻，刷新前不消失）
+    _kbOpen = false
+    useMfbStore().hide()
+  }
+}
+
+// vv 监听随 bindMobile 常驻（而非 show/hide 挂卸）：键盘开合检测必须独立于工具栏
+// 可见性运行，否则收起键盘时（栏还开着）没有事件源去收它
+function bindVV() {
+  const vv = window.visualViewport
+  if (_vvBound || !vv) return
+  vv.addEventListener('resize', updateViewport)
+  vv.addEventListener('scroll', updateViewport)
+  _vvBound = true
+}
+function unbindVV() {
+  const vv = window.visualViewport
+  if (!_vvBound || !vv) return
+  vv.removeEventListener('resize', updateViewport)
+  vv.removeEventListener('scroll', updateViewport)
+  _vvBound = false
+  _kbOpen = false
 }
 
 function show() {
@@ -147,10 +185,6 @@ function show() {
   isVisible.value = true
   // A5-007：移动端同样挂 selectionUpdate，避免格式钮 active 与选区脱节
   _attachSync()
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', updateViewport)
-    window.visualViewport.addEventListener('scroll', updateViewport)
-  }
   requestAnimationFrame(() => updateViewport())
   if (_showTimer) clearTimeout(_showTimer)
   _showTimer = setTimeout(updateViewport, 300)
@@ -162,10 +196,6 @@ function hide() {
   paletteOpen.value = false
   _detachSync()
   if (_showTimer) { clearTimeout(_showTimer); _showTimer = null }
-  if (window.visualViewport) {
-    window.visualViewport.removeEventListener('resize', updateViewport)
-    window.visualViewport.removeEventListener('scroll', updateViewport)
-  }
 }
 
 // 审计 R3：切组时旧编辑器 selectionUpdate 监听泄漏累积。原 _detachSync 调 getEditor()
@@ -197,8 +227,14 @@ watch(gid, (v) => {
   paletteOpen.value = false
   if (mobile.value) {
     const mfb = useMfbStore()
-    if (mfb.open && v) _attachSync()
-    else if (!v) _detachSync()
+    if (!v) {
+      // 退出聚焦组：无论编辑器是否仍持焦点（键盘收起后焦点滞留 contenteditable、
+      // 不触发 focusout），浮动格式栏必须收起
+      mfb.hide()
+      _detachSync()
+      return
+    }
+    if (mfb.open) _attachSync()
     return
   }
   if (v) _attachSync()
@@ -215,6 +251,7 @@ function unbindDesktop() {
 let _mfbWatchStop: (() => void) | null = null
 function bindMobile() {
   document.addEventListener('touchstart', _mfbOnDocTouch, true)
+  bindVV()
   if (_mfbWatchStop) { _mfbWatchStop(); _mfbWatchStop = null }
   const mfb = useMfbStore()
   _mfbWatchStop = watch(() => mfb.open, (open) => {
@@ -224,6 +261,7 @@ function bindMobile() {
 }
 function unbindMobile() {
   document.removeEventListener('touchstart', _mfbOnDocTouch, true)
+  unbindVV()
   if (_mfbWatchStop) { _mfbWatchStop(); _mfbWatchStop = null }
   hide()
 }
