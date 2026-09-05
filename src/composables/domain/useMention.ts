@@ -12,13 +12,11 @@ import { MAX_SUGGESTIONS } from '../../config/constants.js'
 import { saveGroupBody } from './useGroup.js'
 import { groupRefCardHTML, inlineCardHTML } from '../useInlineCard.js'
 import { EditorManager } from '../../lib/editor.js'
-import type { Bookmark } from '../../types.js'
+import type { Editor } from '@tiptap/core'
+import type { Bookmark, SiblingGroup } from '../../types.js'
 
-interface MentionItem {
-  type: 'bookmark' | 'group'
-  subItems?: Bookmark[]
-  [key: string]: any
-}
+/** 候选项：书签（携带子书签）或组（整组引用）。字段即实体自身字段 + type 判别。 */
+type MentionItem = ({ type: 'bookmark'; subItems: Bookmark[] | null } & Bookmark) | ({ type: 'group' } & SiblingGroup)
 
 export function useMention() {
   const ds = useDataStore()
@@ -47,15 +45,20 @@ export function useMention() {
 
   function showNear(query: string) {
     const isGroup = mentionStore.type === 'group'
-    const matches = isGroup
-      ? ds.siblingGroups.filter(g => g.id !== mentionStore.gid && (g.name || '').toLowerCase().includes(query)).slice(0, MAX_SUGGESTIONS)
-      : ds.bookmarks.filter(b => !b.parentId && (b.title.toLowerCase().includes(query) || b.url.toLowerCase().includes(query))).slice(0, MAX_SUGGESTIONS)
+    // 过滤+映射在同一 ternary 分支内完成：分支表达式内 g/b 即精确实体类型
+    //（若先存 matches 联合数组再 map，元素类型无法随 isGroup 收窄，只能靠 index 签名 any 兜底）
+    const next: MentionItem[] = isGroup
+      ? ds.siblingGroups
+          .filter(g => g.id !== mentionStore.gid && (g.name || '').toLowerCase().includes(query))
+          .slice(0, MAX_SUGGESTIONS)
+          .map(g => ({ ...g, type: 'group' as const }))
+      : ds.bookmarks
+          .filter(b => !b.parentId && (b.title.toLowerCase().includes(query) || b.url.toLowerCase().includes(query)))
+          .slice(0, MAX_SUGGESTIONS)
+          .map(b => ({ ...b, type: 'bookmark' as const, subItems: ds.bookmarks.filter(s => s.parentId === b.id) || null }))
 
-    if (!matches.length) { isVisible.value = false; return }
-
-    candidates.value = isGroup
-      ? matches.map(g => ({ ...g, type: 'group' as const }))
-      : matches.map(b => ({ ...b, type: 'bookmark' as const, subItems: ds.bookmarks.filter(s => s.parentId === b.id) || null }))
+    if (!next.length) { isVisible.value = false; return }
+    candidates.value = next
 
     activeIdx.value = 0
     mentionType.value = isGroup ? 'group' : 'bm'
@@ -68,7 +71,7 @@ export function useMention() {
     isVisible.value = true
   }
 
-  function _toPMRange(ed: any, range: Range): { from: number; to: number } | null {
+  function _toPMRange(ed: Editor, range: Range): { from: number; to: number } | null {
     if (!range) return null
     try {
       const from = ed.view.posAtDOM(range.startContainer, range.startOffset)
@@ -78,7 +81,7 @@ export function useMention() {
     return null
   }
 
-  function _insertHTML(ed: any, html: string) {
+  function _insertHTML(ed: Editor | null, html: string) {
     if (!ed) return
     const trigger = mentionStore.type === 'group' ? '#' : '@'
     const sel = window.getSelection()

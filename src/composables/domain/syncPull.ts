@@ -69,11 +69,13 @@ export async function pullChanges(full = false): Promise<boolean> {
     }
 
     if (e2e.isUnlocked.value) {
-      const decryptList = async <T extends { id: string }>(arr: T[], type: EntityType): Promise<T[]> => {
+      // T 带 Record<string, unknown> 约束以满足 decryptItem 入参（远端行映射产物均为
+      // z.infer 对象别名，天然满足；无需 as any）。decryptItem<T> 已保返回 T，不再二次断言。
+      const decryptList = async <T extends { id: string } & Record<string, unknown>>(arr: T[], type: EntityType): Promise<T[]> => {
         const out: T[] = []
         for (const item of arr) {
           if (!e2e.isUnlocked.value) break
-          const decrypted = await e2e.decryptItem(type, item as any) as T
+          const decrypted = await e2e.decryptItem(type, item)
           if (e2e.isUnlocked.value) out.push(decrypted)
         }
         return out
