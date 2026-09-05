@@ -31,3 +31,4 @@ supabase/.temp/
 dist_deploy/
 verify_*.html
 .workbuddy/
+/outputs/

@@ -1,8 +1,7 @@
 /**
  * contextMenu.ts — 右键菜单状态 Store
  *
- * 替代 bridge.ts ctxMenuAPI 服务定位器模式。
- * 菜单组件（ContextMenu.vue）读取 store 渲染，消除模块级可变状态。
+ * 菜单组件（ContextMenu.vue）读取 store 渲染，无模块级可变状态。
  */
 import { ref } from 'vue'
 import { defineStore } from 'pinia'

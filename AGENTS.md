@@ -65,7 +65,7 @@ composables 按职责分三组：
 
 ### 数据模型
 
-类型定义见 `src/types.ts`，Zod 运行时校验见 `src/schemas.ts`（两者需保持同步）：
+**单一真相源**：`src/schemas.ts` 用 Zod 定义数据模型并做运行时校验，`src/types.ts` 全部经 `z.infer` 从 schema 推导（勿手写平行 interface）：
 - **Bookmark**：id, title, url, icon, username, password（string | EncryptedPassword）, notes, categoryId, parentId（支持子书签嵌套）, order, useCount, attributes, isExpanded, createdAt, updatedAt, deletedAt, pinnedAt（置顶时间戳，可选）
 - **SiblingGroup**：id, name, categoryId, icon, order, isExpanded, attributes, bookmarkIds[], notes (HTML), updatedAt, useCount, isPublic, pinnedAt（置顶时间戳，可选）
 - **Category**：id, name, icon, color, order
