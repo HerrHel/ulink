@@ -540,6 +540,17 @@ export const useDataStore = defineStore('data', {
         this._searchIndexDirty = true
       }
     },
+    /** useCount 静默累加（R-RESURRECT）：统计计数不 bump updatedAt、不标脏/track。
+     *  旧实现 openBookmark 走 updateBookmark——「点开书签」这种无实质编辑的行为也会
+     *  生成同步 op，离线积压的存活快照上线后会把远端更新的软删墓碑盖掉（删除复活）。
+     *  计数仍随调用方的 debouncedSaveAppData 落盘，并在该项下次因真实编辑入队时搭车
+     *  同步到云端。 */
+    bumpBookmarkUseCount(id: string) {
+      if (_denyWrite()) return
+      const bm = this._bmMap[id]
+      if (!bm || bm.deletedAt) return
+      bm.useCount = (bm.useCount || 0) + 1
+    },
     deleteBookmark(id: string) {
       if (_denyWrite()) return
       const idx = _indexOfById(this.bookmarks, this._bmMap, id)

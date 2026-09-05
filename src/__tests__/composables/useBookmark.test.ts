@@ -22,6 +22,11 @@ const mockData = {
     const bm = mockData.bookmarkMap[id]
     if (bm) Object.assign(bm, changes)
   }),
+  // R-RESURRECT：openBookmark 计数改走静默累加（不标脏/不刷 updatedAt），与 data store 同语义
+  bumpBookmarkUseCount: vi.fn((id: string) => {
+    const bm = mockData.bookmarkMap[id]
+    if (bm && !bm.deletedAt) bm.useCount = (bm.useCount || 0) + 1
+  }),
   updateGroup: vi.fn((id: string, changes: any) => {
     const g = mockData.groupMap[id]
     if (g) Object.assign(g, changes)
@@ -215,6 +220,7 @@ function resetMockStore() {
   mockData.customAttributes = []
   mockData.addBookmark.mockClear()
   mockData.updateBookmark.mockClear()
+  mockData.bumpBookmarkUseCount.mockClear()
   mockData.updateGroup.mockClear()
   mockData.deleteBookmark.mockClear()
   mockData.restoreBookmark.mockClear()
@@ -1736,15 +1742,15 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
     vi.restoreAllMocks()
   })
 
-  it('A：bm=null 空守卫→早退零副作用（不 updateBookmark/不 save/不 open/不 toast）', () => {
+  it('A：bm=null 空守卫→早退零副作用（不计数/不 save/不 open/不 toast）', () => {
     openBookmark(null as any)
 
-    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.bumpBookmarkUseCount).not.toHaveBeenCalled()
     expect(debouncedSaveAppData).not.toHaveBeenCalled()
     expect(window.open).not.toHaveBeenCalled()
   })
 
-  it('B-S1：fixUrl 返空串（javascript:/data: 危险 scheme）→toast 阻止打开且不 updateBookmark/不 open', async () => {
+  it('B-S1：fixUrl 返空串（javascript:/data: 危险 scheme）→toast 阻止打开且不计数/不 open', async () => {
     const bm: any = { id: 'b1', url: 'javascript:alert(1)', useCount: 3 }
     // mockData.bookmarkMap 让真实路径可触；fixUrl mock 已默认对非 http 补 https，此处覆写返空触发安全守卫
     const { fixUrl } = await import('../../utils.js')
@@ -1754,19 +1760,21 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
 
     const { toast } = await import('../../lib/toast.js')
     expect(toast).toHaveBeenCalledWith('该链接地址不安全，已阻止打开', false)
-    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.bumpBookmarkUseCount).not.toHaveBeenCalled()
     expect(debouncedSaveAppData).not.toHaveBeenCalled()
     expect(window.open).not.toHaveBeenCalled()
   })
 
-  it('C：正路径合法 https url→updateBookmark(useCount+1)+debouncedSaveAppData+window.open(safeUrl) 各一次', () => {
+  it('C：正路径合法 https url→bumpBookmarkUseCount+debouncedSaveAppData+window.open(safeUrl) 各一次（R-RESURRECT：不再走 updateBookmark 生成同步 op）', () => {
     const bm: any = { id: 'b1', url: 'https://github.com/x/y', useCount: 5 }
     mockData.bookmarkMap['b1'] = bm
 
     openBookmark(bm)
 
-    expect(mockData.updateBookmark).toHaveBeenCalledTimes(1)
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 6 })
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledTimes(1)
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledWith('b1')
+    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(bm.useCount).toBe(6)
     expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
     expect(window.open).toHaveBeenCalledTimes(1)
     expect(window.open).toHaveBeenCalledWith('https://github.com/x/y', '_blank')
@@ -1779,7 +1787,8 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
 
     openBookmark(bm)
 
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+    expect(bm.useCount).toBe(1)
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledWith('b1')
   })
 
   it('E：useCount=0 走 `||0` 兜底递增至 1（0 falsy 也走兜底而非 0+1=1 巧合同值但语义锁住）', () => {
@@ -1789,7 +1798,7 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
     openBookmark(bm)
 
     // 0 是合法值||(0) → 0+1=1；若误改成 `??0`(只不 null/undefined) 则 0 仍 0+1=1 同值，但边界直锁
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+    expect(bm.useCount).toBe(1)
   })
 
   it('F：协议前缀 url(example.com)经 fixUrl 补 https→window.open 收到补全后的 safeUrl 非原 url', async () => {
@@ -1804,7 +1813,7 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
     expect(fixUrl).toHaveBeenCalledWith('example.com')
   })
 
-  it('G：危险 scheme 安全守卫早退在 updateBookmark 之前（守卫顺序敏感：useCount 不被递增）', async () => {
+  it('G：危险 scheme 安全守卫早退在计数之前（守卫顺序敏感：useCount 不被递增）', async () => {
     const bm: any = { id: 'b1', url: 'data:text/html,evil', useCount: 7 }
     mockData.bookmarkMap['b1'] = bm
     const { fixUrl } = await import('../../utils.js')
@@ -1812,9 +1821,8 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
 
     openBookmark(bm)
 
-    // 关键：守卫 return 在 updateBookmark 之前，故危险 scheme 不递增 useCount
-    expect(mockData.updateBookmark).not.toHaveBeenCalled()
-    expect(mockData.updateBookmark).not.toHaveBeenCalledWith('b1', expect.anything())
+    // 关键：守卫 return 在 bumpBookmarkUseCount 之前，故危险 scheme 不递增 useCount
+    expect(mockData.bumpBookmarkUseCount).not.toHaveBeenCalled()
   })
 
   it('H：bm.url 空串→!bm?.url 早退（空守卫优先于 fixUrl，不弹 toast 不递增）', async () => {
@@ -1825,7 +1833,7 @@ describe('openBookmark 打开书签弹新窗口编排', () => {
 
     const { toast } = await import('../../lib/toast.js')
     expect(toast).not.toHaveBeenCalled()
-    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.bumpBookmarkUseCount).not.toHaveBeenCalled()
     expect(window.open).not.toHaveBeenCalled()
   })
 })
@@ -1876,8 +1884,8 @@ describe('visit 卡片点击分流到 openBookmark', () => {
     mockData.bookmarkMap['b1'] = { id: 'b1', url: 'https://a.com', useCount: 0 } as any
     visit(null, 'b1')
 
-    expect(mockData.updateBookmark).toHaveBeenCalledTimes(1)
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 1 })
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledTimes(1)
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledWith('b1')
     expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
     expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
   })
@@ -1886,7 +1894,7 @@ describe('visit 卡片点击分流到 openBookmark', () => {
     mockData.bookmarkMap['b2'] = { id: 'b2', url: 'https://b.com', useCount: 4 } as any
     visit(makeFakeEvent(makeCardTarget('b2')), undefined)
 
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b2', { useCount: 5 })
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledWith('b2')
     expect(window.open).toHaveBeenCalledWith('https://b.com', '_blank')
   })
 
@@ -1918,7 +1926,7 @@ describe('visit 卡片点击分流到 openBookmark', () => {
   it('F：bmId 取到但 bookmarkMap 缺键→委托 openBookmark(undefined)→openBookmark 内 !bm?.url 早退兜底零副作用（visit 不崩）', () => {
     visit(null, 'missing')
 
-    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.bumpBookmarkUseCount).not.toHaveBeenCalled()
     expect(debouncedSaveAppData).not.toHaveBeenCalled()
     expect(window.open).not.toHaveBeenCalled()
   })
@@ -1932,7 +1940,7 @@ describe('visit 卡片点击分流到 openBookmark', () => {
     } as any
     visit(makeFakeEvent(target), undefined)
 
-    expect(mockData.updateBookmark).not.toHaveBeenCalled()
+    expect(mockData.bumpBookmarkUseCount).not.toHaveBeenCalled()
     expect(window.open).not.toHaveBeenCalled()
   })
 
@@ -1941,7 +1949,7 @@ describe('visit 卡片点击分流到 openBookmark', () => {
     // e.target.closest('.card[data-id]') 取到 'b1'，但传入 id='b2' 应优先
     visit(makeFakeEvent(makeCardTarget('b1')), 'b2')
 
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b2', { useCount: 2 })
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledWith('b2')
     expect(window.open).toHaveBeenCalledWith('https://b.com', '_blank')
   })
 
@@ -1951,7 +1959,7 @@ describe('visit 卡片点击分流到 openBookmark', () => {
     const targetWithoutClosest = {} as any
     visit(makeFakeEvent(targetWithoutClosest), 'b1')
 
-    expect(mockData.updateBookmark).toHaveBeenCalledWith('b1', { useCount: 3 })
+    expect(mockData.bumpBookmarkUseCount).toHaveBeenCalledWith('b1')
     expect(window.open).toHaveBeenCalledWith('https://a.com', '_blank')
   })
 })

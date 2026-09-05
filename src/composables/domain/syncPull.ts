@@ -11,9 +11,20 @@ import { FROM_REMOTE, type AnyRemoteRow } from './useSyncMapping.js'
 import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
-import { syncOpsCount } from '../../stores/storage.js'
+import { enqueueSyncOps, syncOpsCount, type SyncOp } from '../../stores/storage.js'
 import { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
+
+/**
+ * 增量 pull 游标安全余量。
+ *
+ * lastSyncAt 与远端行 updated_at_num 都来自**各设备自己的本地时钟**：设备间时钟
+ * 偏差会让「他端刚写入的软删墓碑」时间戳 ≤ 本机 lastSyncAt，被 selectSince 的
+ * `gt updated_at_num > since` 过滤掉，本机永远拉不到这条删除（随后本地存活快照
+ * 一旦上推就是复活）。回拉一个重叠窗口，merge 对非更新的行幂等 skip，多拉的行
+ * 无副作用。取 10 分钟：远大于常见 NTP 偏差，又不会显著放大常规 pull 的 payload。
+ */
+export const PULL_SINCE_SAFETY_MS = 10 * 60 * 1000
 
 /** 拉取远端变更（full=true 时 since=0 且启用 full-absent 对账） */
 export async function pullChanges(full = false): Promise<boolean> {
@@ -26,7 +37,8 @@ export async function pullChanges(full = false): Promise<boolean> {
   syncStore.setSyncError(null)
 
   try {
-    const since = full ? 0 : (syncStore.lastSyncAt || 0)
+    // 时钟偏移安全余量只作用于增量游标；full（since=0）本身无偏移问题
+    const since = full ? 0 : Math.max(0, (syncStore.lastSyncAt || 0) - PULL_SINCE_SAFETY_MS)
     const port = getSyncRemotePort()
 
     // 三批查询并行发出。软删批次与（full 时的）全量 ID 对账必须在 _mergeIntoLocal
@@ -210,6 +222,48 @@ export async function pullChanges(full = false): Promise<boolean> {
           if (type === 'category' && (item.id === CAT_ALL || item.id === CAT_UNCATEGORIZED)) continue
           reconcileDelete(type, item.id)
         }
+      }
+    }
+
+    // R-RESURRECT 反向对账（仅 full）：「云端存活但 updated_at_num 早于本地墓碑」
+    // 是他端旧存活快照复活后的残留分叉（032 触发器落地前的历史数据 / 时钟偏差放行
+    // 的更晚编辑被人工撤销等）——复活行携带旧 updated_at_num，删除端增量 pull 走
+    // gt 过滤永远看不到它，需要把本地墓碑重推上云收敛。正规复活（远端时间更新）
+    // 走 revive-assign 分支已把本地复活，不会进入本分支；dirty/pending 项交给常规
+    // 推送链路，不重复入队。
+    if (full) {
+      const remoteAliveAt: Record<EntityType, Map<string, number>> = {
+        category: new Map(), bookmark: new Map(), group: new Map(), attribute: new Map(),
+      }
+      for (const type of SYNC_ENTITY_ORDER) {
+        for (const r of remotes[type]) {
+          if (!r.deletedAt) remoteAliveAt[type].set(r.id, r.updatedAt || 0)
+        }
+      }
+      const locals: Record<EntityType, Array<{ id: string; updatedAt?: number; deletedAt?: number }>> = {
+        category: ds.categories,
+        bookmark: ds.bookmarks,
+        group: ds.siblingGroups,
+        attribute: ds.customAttributes,
+      }
+      const reassertOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
+      for (const type of SYNC_ENTITY_ORDER) {
+        for (const item of locals[type]) {
+          if (!item.deletedAt) continue
+          const remoteUpdatedAt = remoteAliveAt[type].get(item.id)
+          if (remoteUpdatedAt === undefined) continue
+          if (ds._dirtyIds.has(item.id) || _isPendingSync(item.id)) continue
+          if ((item.updatedAt || 0) <= remoteUpdatedAt) continue
+          reassertOps.push({
+            action: 'upsert', table: entityTypeToTable[type], itemId: item.id,
+            data: { ...item, _userId: userId },
+            ts: item.updatedAt || Date.now(),
+          })
+        }
+      }
+      if (reassertOps.length) {
+        console.warn(`[sync] 墓碑重申：${reassertOps.length} 项云端存活但早于本地删除时间，重新入队墓碑`)
+        await enqueueSyncOps(reassertOps)
       }
     }
 
