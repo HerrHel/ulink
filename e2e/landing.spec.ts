@@ -43,14 +43,31 @@ test.describe('宣传落地页', () => {
     await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
   })
 
-  test('返客（已有应用数据）自动跳转 /app', async ({ page }) => {
+  test('返客首次到访：曝光一次落地页并落标记，再次到访秒跳 /app', async ({ page }) => {
     // persist.ts 每次保存都写 linkvault_v2 缓存；注入即模拟老用户
     await page.addInitScript(() => {
       localStorage.setItem('linkvault_v2', '{}')
     })
     await page.goto('/')
+    // 无 seen 标记 → 首次到访曝光落地页（一次性曝光策略），并写入标记
+    await page.waitForURL('/')
+    await expect(page.locator('h1')).toContainText('把收藏')
+    expect(await page.evaluate(() => localStorage.getItem('lv_landing_seen_v1'))).toBe('1')
+    // 再次到访 → 恢复秒跳
+    await page.goto('/')
     await page.waitForURL(/\/app/, { timeout: 10000 })
     await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
+  })
+
+  test('?stay=1 豁免秒跳（官网书签/手动分享链接场景）', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('linkvault_v2', '{}')
+      localStorage.setItem('lv_landing_seen_v1', '1')
+    })
+    await page.goto('/?stay=1')
+    // 未被秒跳：URL 仍带 stay 参数，落地页正常渲染
+    await expect(page).toHaveURL(/stay=1/)
+    await expect(page.locator('h1')).toContainText('把收藏')
   })
 
   test('扩展保存参数直通应用，不落宣传页', async ({ page }) => {

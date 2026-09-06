@@ -7,7 +7,10 @@
  *  2. 关键参数直通 —— 不论新老用户，凡是带「任务上下文」的 URL（扩展保存
  *     ?ext_save、系统分享 share_target 参数、#share/ 旧分享兜底、Supabase
  *     token/错误参数）一律透传 search+hash 直达 /app，不落入宣传页；
- *  3. 双语切换 —— 中文是 HTML 静态默认（SEO 与全站惯例一致）；切到英文由本脚本
+ *  3. 老用户一次性曝光 —— ?stay=1 豁免秒跳（应用内官网书签/手动分享链接携带）；
+ *     无豁免时老用户仅在首次访问 / 时看到落地页（写入 lv_landing_seen_v1），
+ *     之后恢复秒跳 —— 宣传页对老用户是低频信息，不做反复打扰；
+ *  4. 双语切换 —— 中文是 HTML 静态默认（SEO 与全站惯例一致）；切到英文由本脚本
  *     按 ?lang= → lv_locale → navigator.language（与 /s/* 的 resolveLocale
  *     顺序一致）即时替换 data-i18n 文案；切回中文整页还原（reload 到静态原文）。
  */
@@ -16,8 +19,9 @@
 
   var LOCALE_KEY = 'lv_locale';            // 与 src/i18n/index.ts 的 LOCALE_KEY 一致
   var APP_PATH = '/app';
+  var SEEN_KEY = 'lv_landing_seen_v1';     // 老用户一次性曝光标记（版本化，bump 可重新曝光）
 
-  /* ── 1 & 2：返客秒跳 + 关键参数直通（head 阻塞期执行，DOM 无需就绪） ── */
+  /* ── 1 & 2 & 3：跳转决策（head 阻塞期执行，DOM 无需就绪） ── */
   var search = location.search;
   var hash = location.hash;
   // share_target 发送 ?title=&text=&url=（扩展走 ?ext_save=1&ext_save_url=...）
@@ -28,16 +32,25 @@
   var hasAuthPayload = /access_token|refresh_token|error_description/.test(hash) ||
     /[?&](code|error|error_description)=/.test(search);
   var returning = false;
+  var seen = false;
   try {
     // persist.ts 每次保存都写 localStorage 缓存（linkvault_v2）；
     // lv_setup_done 是首启引导完成标记。二者任一存在即视为老用户。
     returning = !!(localStorage.getItem('linkvault_v2') || localStorage.getItem('lv_setup_done'));
+    seen = !!localStorage.getItem(SEEN_KEY);
   } catch (e) { /* 隐私模式等存取失败时按新访客处理 */ }
+  // 任务上下文优先级最高：stay/曝光规则都拦不住它
+  var missionParams = hasSaveFlow || hasShareHash || hasAuthPayload;
+  // ?stay=1：显式要看落地页（应用内官网书签即带此参数），豁免秒跳
+  var stayRequested = /[?&]stay=1/.test(search);
 
-  if (returning || hasSaveFlow || hasShareHash || hasAuthPayload) {
+  if (missionParams || (returning && !stayRequested && seen)) {
     location.replace(APP_PATH + search + hash);
     return; // 跳转中，不再做语言增强
   }
+  // 本次落地页确定渲染（新访客 / stay 豁免 / 老用户首次曝光），记录已见。
+  // 新访客也写入：避免其成为老用户后被二次强制曝光（首次到达即已看过）。
+  try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* ignore */ }
 
   /* ── 3：双语 ── */
   // 英文字典（中文是 HTML 内的静态默认，无需字典）

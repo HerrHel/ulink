@@ -83,6 +83,10 @@ export function useAppLifecycle() {
     const shareGid = detectShareRoute()
     if (shareGid) {
       _onShareRoute?.(shareGid)
+    } else {
+      // 双入口配套：给库补官网落地页书签（幂等，见 dataActionsBookmarks.ensureOfficialSiteBookmark）。
+      // 分享态跳过——访问 /s/* 是看别人的组，不该写自己的库（_denyWrite 亦兜底）。
+      ds.ensureOfficialSiteBookmark()
     }
 
     // D1: 首启分流引导
