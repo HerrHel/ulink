@@ -22,7 +22,7 @@ test.describe('L0 E2E 真加密路径', () => {
       localStorage.setItem('lv_locale', 'zh-CN')
     })
 
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
 
     await page.getByTestId('lv-btn-settings').click()

@@ -29,7 +29,7 @@ const l2 = resolveL2Session()
 
 async function openAppAuthed(page: Page, session: L2Session) {
   await injectL2Session(page, session)
-  await page.goto('/')
+  await page.goto('/app')
   await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 20000 })
 }
 

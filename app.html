@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- S4 收紧后的 CSP：生产注入为 HTML meta 标签以在 GitHub Pages 上生效
+     （GH Pages 不解析 _headers 文件，vite headersPlugin 仅作用于 dev/preview）。
+     注：frame-ancestors/form-action/base-uri 在 meta CSP 中不支持，仅服务器端头生效。-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; connect-src 'self' https: wss://*.supabase.co; font-src 'self' https://fonts.gstatic.com">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#122E8A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- 应用主体入口（/app）。站点首页 `/` 是宣传落地页（index.html），SEO 由其承担：
+     本页 noindex 避免与落地页内容重复竞争；WebApplication 结构化数据一并迁至落地页。 -->
+<meta name="robots" content="noindex, follow">
+<title>与链 — 个人书签管理器</title>
+<meta name="description" content="与链（ulink）是支持云同步与端到端加密的个人书签管理器，可公开分享书签组供他人查看与收藏。">
+<link rel="canonical" href="https://ulink.ren/app">
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ulink">
+<meta property="og:title" content="与链 — 个人书签管理器">
+<meta property="og:description" content="支持云同步与端到端加密的个人书签管理器，可公开分享书签组。">
+<meta property="og:url" content="https://ulink.ren/app">
+<meta property="og:locale" content="zh_CN">
+<!-- Twitter -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="与链 — 个人书签管理器">
+<meta name="twitter:description" content="支持云同步与端到端加密的个人书签管理器。">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>">
+
+<!-- 预连接：仅保留字体源（favicon 域名非首屏关键路径，移除以释放连接槽） -->
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<!-- DNS 预解析 -->
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+
+<link href="/fonts/fonts.css" rel="stylesheet">
+<!-- Google Fonts：JetBrains Mono（代码字体）。直接以 stylesheet 引入而非 preload+inline onload，
+     以消除原生内联事件 onload=，为后续收紧 CSP script-src（移除 'unsafe-inline'）扫清依赖。 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
+</head>
+<body>
+<div id="app"></div>
+<!-- src 必须根绝对路径：本页会被 /s/* SSR-接管与 dev 中间件在任意路径下服务，
+     相对路径会基于当前页面 URL 解析而出错 -->
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

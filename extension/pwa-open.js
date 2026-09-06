@@ -16,7 +16,8 @@ export function decideOpenPwa(url, title, notes, pwaUrl) {
   }
   var params = new URLSearchParams({ ext_save_url: url, ext_save_title: title || url })
   if (notes) params.set('ext_save_notes', notes)
-  return { shouldOpen: true, reason: null, targetUrl: pwaUrl + '/?ext_save=1&' + params.toString() }
+  // /app：应用主体路径（/ 现为宣传落地页，落地页脚本虽会透传直通，仍直达减少一跳）
+  return { shouldOpen: true, reason: null, targetUrl: pwaUrl + '/app?ext_save=1&' + params.toString() }
 }
 
 // jsdom 测试上下文挂 window 全局（SW 无 window 故 background.js 走 import，不依赖此挂载）。

@@ -41,7 +41,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('保险柜完整链路：设置 → 解锁 → 切换 → 返回 → 存储隔离', async ({ page }) => {
-  await page.goto('/')
+  await page.goto('/app')
   await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
 
   // ── Step 1：初始状态 ──

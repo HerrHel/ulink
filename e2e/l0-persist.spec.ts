@@ -16,7 +16,7 @@ test.describe('L0 持久化', () => {
   test('新建书签后刷新仍可见', async ({ page }) => {
     const uniqueTitle = `L0-persist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
 
     await page.keyboard.press('Control+n')

@@ -90,10 +90,10 @@ export const useShareStore = defineStore('share', () => {
     shadowSet(shadow)
   }
 
-  /** 剥掉 URL 里的 /s/<gid> 或 /s/c/<id> 段，回到站点根路径 */
+  /** 剥掉 URL 里的 /s/<gid> 或 /s/c/<id> 段，回到应用主体 /app（/ 现为宣传落地页） */
   function _stripSharePath(): void {
     try {
-      const base = location.pathname.replace(/\/s\/(c\/)?[^/]*$/, '/') || '/'
+      const base = location.pathname.replace(/\/s\/(c\/)?[^/]*$/, '/app')
       history.replaceState(null, '', base + location.search)
     } catch {
       /* 无痕模式下 replaceState 可能抛错，忽略即可 */

@@ -2,7 +2,11 @@ import { defineConfig, Plugin } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import { PurgeCSS } from 'purgecss';
+import { fileURLToPath } from 'node:url';
 import pkg from './package.json';
+
+/** 以本配置文件为基准解析项目内路径（ESM 无 __dirname） */
+const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 /* ── 安全 & 缓存 HTTP 响应头 ── */
 const securityHeaders: Record<string, string> = {
@@ -108,6 +112,7 @@ function purgeCssPlugin(): Plugin {
             const result = await new PurgeCSS().purge({
               content: [
                 './index.html',
+                './app.html',
                 './src/**/*.vue',
                 './src/**/*.js',
                 './src/**/*.ts'
@@ -171,6 +176,35 @@ function purgeCssPlugin(): Plugin {
  * GitHub Pages 已停用（ulink.ren 由 Cloudflare Pages 同域托管），不再需要该插件。
  */
 
+/**
+ * 双入口 MPA 路径别名：把 `/app` 重写到 `app.html`，对齐 Cloudflare Pages 的
+ * Pretty URL 行为（/app → app.html），dev / preview / e2e 与生产保持同一 URL。
+ * dev 下 `/s/*` 无 SSR Function（生产走 Pages Function），同样重写到 app.html，
+ * 模拟生产「SSR 壳内接管 SPA」的分享路由环境，e2e 分享用例行为不变。
+ * 落地页（index.html）自身位于 /，无需别名。
+ */
+function mpaAliasPlugin(): Plugin {
+  const rewrite = (reqUrl: string | undefined): string | null => {
+    if (!reqUrl) return null
+    const q = reqUrl.indexOf('?')
+    const path = q === -1 ? reqUrl : reqUrl.slice(0, q)
+    const rest = q === -1 ? '' : reqUrl.slice(q)
+    if (path === '/app' || path === '/app/') return '/app.html' + rest
+    if (path.startsWith('/s/')) return '/app.html' + rest
+    return null
+  };
+  const middleware = (req: { url?: string }, _res: unknown, next: () => void) => {
+    const rewritten = rewrite(req.url)
+    if (rewritten) req.url = rewritten
+    next();
+  };
+  return {
+    name: 'mpa-app-alias',
+    configureServer(server) { server.middlewares.use(middleware) },
+    configurePreviewServer(server) { server.middlewares.use(middleware) },
+  };
+}
+
 export default defineConfig({
   define: {
     // 构建时注入版本信息：__BUILD_TIME__ 每次部署必变，设置面板显示以确认线上是否为最新构建
@@ -188,13 +222,16 @@ export default defineConfig({
         theme_color: '#122E8A',
         background_color: '#F5EFEA',
         display: 'standalone',
+        // 应用主体在 /app（/ 是宣传落地页）：已装 PWA 启动直达应用，不经落地页
+        scope: '/',
+        start_url: '/app',
         icons: [{
           src: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23122E8A" stroke-width="2.5"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
           sizes: 'any',
           type: 'image/svg+xml'
         }],
         share_target: {
-          action: '/',
+          action: '/app',
           method: 'GET',
           // GET 方法唯一合法的 enctype；显式声明可消除 Chromium 的
           // "Enctype should be set to..." manifest 警告
@@ -243,12 +280,18 @@ export default defineConfig({
       }
     }),
     purgeCssPlugin(),
+    mpaAliasPlugin(),
     headersPlugin()],
   root: '.',
   build: {
     outDir: 'dist',
     rollupOptions: {
-      input: 'index.html',
+      // 双入口：/ = 宣传落地页（index.html），/app = 应用主体（app.html，
+      // Cloudflare Pages Pretty URL 自动映射，dev/preview 由 mpaAliasPlugin 对齐）
+      input: {
+        landing: here('./index.html'),
+        app: here('./app.html'),
+      },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
