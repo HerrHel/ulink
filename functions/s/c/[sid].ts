@@ -14,11 +14,24 @@
  */
 import { renderShareCategoryPage, renderNotFoundPage, renderUnavailablePage, type ShareLocale, type PublicGroup, type PublicBookmark } from "../../_lib/share-render.js"
 import { getAppAssets, type AppAssetsEnv } from "../../_lib/app-assets.js"
+// 函数内边缘缓存（Cache API）：与 s/[gid].ts 同口径，设计见 _lib/share-cache.ts
+import {
+  matchShareCache, putShareCache, shareCacheKey, shareStaleKey,
+  EDGE_TTL_S, STALE_TTL_S,
+} from "../../_lib/share-cache.js"
 
 interface ShareEnv extends AppAssetsEnv {
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
   APP_ORIGIN?: string
+}
+
+interface ShareContext {
+  params: { sid?: string }
+  env: ShareEnv
+  request: Request
+  /** Pages Functions 运行时提供；类型面手动声明（functions 不参与 tsc 门禁） */
+  waitUntil: (p: Promise<unknown>) => void
 }
 
 /** 校验分享 id：与组分享同口径（字母数字 _ -，2-64 位）。 */
@@ -35,24 +48,30 @@ function resolveLocale(url: URL, acceptLanguage: string): ShareLocale {
   return "en-US"
 }
 
-export async function onRequestGet(context: {
-  params: { sid?: string }
-  env: ShareEnv
-  request: Request
-}): Promise<Response> {
+export async function onRequestGet(context: ShareContext): Promise<Response> {
   const sid = String(context.params.sid || "").trim()
   if (!isValidShareId(sid)) {
-    return new Response("bad request", { status: 400 })
+    return new Response("bad request", { status: 400, headers: { "x-share-render": "v2" } })
   }
 
   const url = new URL(context.request.url)
   const locale = resolveLocale(url, context.request.headers.get("accept-language") || "")
 
+  // 边缘新鲜命中：直接返回，不打 Supabase RPC
+  const cacheKey = shareCacheKey(url.origin, url.pathname, url.search)
+  const hit = await matchShareCache(cacheKey)
+  if (hit) {
+    const res = new Response(hit.body, hit)
+    res.headers.set("x-share-cache", "HIT")
+    res.headers.set("x-share-render", "v2")
+    return res
+  }
+
   const supabaseUrl = (context.env.SUPABASE_URL || "").replace(/\/+$/, "")
   const anonKey = context.env.SUPABASE_ANON_KEY || ""
   const appOrigin = (context.env.APP_ORIGIN || "https://ulink.ren").replace(/\/+$/, "")
   if (!supabaseUrl || !anonKey) {
-    return new Response("server misconfigured", { status: 500 })
+    return new Response("server misconfigured", { status: 500, headers: { "x-share-render": "v2" } })
   }
 
   let data: { category?: unknown; groups?: unknown; bookmarks?: unknown } | null = null
@@ -76,13 +95,22 @@ export async function onRequestGet(context: {
     upstreamFailed = true
   }
 
-  // 与 /s/[gid].ts 同口径：上游故障 ≠ 分享不存在，503 兜底且不缓存
+  // 与 /s/[gid].ts 同口径：上游故障先试 24h 兜底副本（STALE），没有才 503（no-store）
   if (upstreamFailed) {
+    const stale = await matchShareCache(shareStaleKey(cacheKey))
+    if (stale) {
+      const res = new Response(stale.body, stale)
+      res.headers.set("x-share-cache", "STALE")
+      res.headers.set("x-share-render", "v2")
+      res.headers.set("cache-control", "public, max-age=60")
+      return res
+    }
     return new Response(renderUnavailablePage(locale), {
       status: 503,
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
+        "x-share-render": "v2",
       },
     })
   }
@@ -90,7 +118,7 @@ export async function onRequestGet(context: {
   if (!data || !data.category) {
     return new Response(renderNotFoundPage(locale), {
       status: 404,
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers: { "content-type": "text/html; charset=utf-8", "x-share-render": "v2" },
     })
   }
 
@@ -107,11 +135,16 @@ export async function onRequestGet(context: {
     "grid",
     await getAppAssets(context.env, context.request.url),
   )
+  // 双写边缘缓存：主键 5 分钟新鲜 + 24h 故障兜底副本
+  context.waitUntil((async () => {
+    await putShareCache(context.waitUntil, cacheKey, html, EDGE_TTL_S)
+    await putShareCache(context.waitUntil, shareStaleKey(cacheKey), html, STALE_TTL_S)
+  })())
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      // 与 /s/[gid].ts 同口径：拉长边缘缓存窗口解耦匿名流量与 Supabase 配额
-      "cache-control": "public, max-age=300, stale-while-revalidate=1800",
+      "x-share-render": "v2",
+      "x-share-cache": "MISS",
     },
   })
 }
