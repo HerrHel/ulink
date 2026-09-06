@@ -7,11 +7,15 @@
     <div v-if="sync.syncError.value && state.level === 'error'" class="ssp-error">
       {{ sync.syncError.value }}
     </div>
+    <!-- 配额触顶：安抚文案优先于原始报错（用户最需要知道的是本地数据安全） -->
+    <div v-if="state.level === 'quota'" class="ssp-error ssp-error-quota">
+      云端存储空间已满，你的数据已安全保存在本机，不受影响；空间恢复后点「重建同步队列」自动追平。
+    </div>
     <div class="ssp-actions">
       <button
         class="btn btn-ghost btn-sm ssp-btn"
-        :disabled="state.level !== 'error' && state.level !== 'offline'"
-        :class="{ 'ssp-btn-primary': state.level === 'error' || state.level === 'offline' }"
+        :disabled="!canRetry"
+        :class="{ 'ssp-btn-primary': canRetry }"
         @click="onRetry"
       >
         <span aria-hidden="true" v-html="I.refresh"></span>{{ t('sync.retrySync') }}
@@ -36,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, onUnmounted, ref } from 'vue'
+import { watch, onUnmounted, ref, computed } from 'vue'
 import { useSyncStatusStore } from '../../stores/overlay.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -49,8 +53,12 @@ const state = useSyncState()
 const sync = useCloudSync()
 const resyncing = ref(false)
 
+/** 重试按钮可用态：error / offline / quota（触顶后升级了空间也需手动触发一轮） */
+const canRetry = computed(() =>
+  state.value.level === 'error' || state.value.level === 'offline' || state.value.level === 'quota')
+
 function onRetry() {
-  if (state.value.level !== 'error' && state.value.level !== 'offline') return
+  if (!canRetry.value) return
   toast(t('sync.startSync'))
   sync.fullSync()
   store.hide()
@@ -131,6 +139,7 @@ onUnmounted(() => {
   background:rgba(239,68,68,.06);border-bottom:1px solid var(--border-light);
   word-break:break-all;
 }
+.ssp-error-quota{color:var(--amber,#b45309);background:rgba(245,158,11,.08)}
 .ssp-actions{
   display:flex;gap:6px;padding:10px 14px;
 }

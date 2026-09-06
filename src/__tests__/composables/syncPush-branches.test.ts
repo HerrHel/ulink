@@ -104,6 +104,7 @@ import {
 import {
   useCloudSync, __testPendingSync, setSyncRemotePort, createMemorySyncPort,
 } from '../../composables/domain/useCloudSync.js'
+import { getSyncCircuitSnapshot } from '../../composables/domain/syncCircuit.js'
 import {
   _opNeedsUnlock, _mergeOps, _redactOpData, enqueueDirtyAsOps,
   MAX_PUSH_RETRIES,
@@ -1172,6 +1173,36 @@ describe('pushFromQueue partial update 字段过滤（line 254-258 snakeKey 守�
     expect(patch.totallynonexistentfield).toBeUndefined()
     // 但 notes 正常通过守门入 patch
     expect(patch.notes).toBeDefined()
+  })
+})
+
+describe('pushFromQueue ↔ syncCircuit 熔断接线', () => {
+  // 锁：push 失败轮计入熔断器（按「轮」计数一次 + classifySyncError 归因写 store），
+  // 成功轮复位。useCloudSync 的门禁退避与配额文案全依赖这两个信号源，接线断即全失效。
+
+  it('upsert 429 失败轮 → failures+1 + kind=quota + syncErrorKind=quota；成功轮复位', async () => {
+    const failPort = createMemorySyncPort({ upsertError: () => ({ message: '429 Too Many Requests' }) })
+    setSyncRemotePort(failPort)
+
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-cir',
+      data: { ...makeBm({ id: 'bm-cir' }), _userId: 'user-sp', _isNew: true, _changedFields: null },
+      ts: 1,
+    }])
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await useCloudSync().pushToCloud()).toBe(false)
+    // 失败轮：熔断计数 +1，归因 quota（store 与熔断器双写）
+    expect(getSyncCircuitSnapshot().failures).toBe(1)
+    expect(getSyncCircuitSnapshot().kind).toBe('quota')
+    expect(useSyncStore().syncErrorKind).toBe('quota')
+    warnSpy.mockRestore()
+
+    // 成功轮（op 失败轮已留队 retries=1，换成功端口重推同一条）：计数与归因复位
+    setSyncRemotePort(createMemorySyncPort())
+    expect(await useCloudSync().pushToCloud()).toBe(true)
+    expect(getSyncCircuitSnapshot().failures).toBe(0)
+    expect(useSyncStore().syncErrorKind).toBe(null)
   })
 })
 

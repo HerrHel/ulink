@@ -17,7 +17,7 @@
  *   SUPABASE_ANON_KEY 项目的 anon key（同 .env 的 VITE_SUPABASE_ANON_KEY）
  *   APP_ORIGIN       例如 https://ulink.ren（og:image / CTA 跳转用）
  */
-import { renderSharePage, renderNotFoundPage, type ShareLocale } from "../_lib/share-render.js"
+import { renderSharePage, renderNotFoundPage, renderUnavailablePage, type ShareLocale } from "../_lib/share-render.js"
 import { getAppAssets, type AppAssetsEnv } from "../_lib/app-assets.js"
 
 interface ShareEnv extends AppAssetsEnv {
@@ -61,6 +61,7 @@ export async function onRequestGet(context: {
   }
 
   let data: { group?: unknown; bookmarks?: unknown } | null = null
+  let upstreamFailed = false
   try {
     const res = await fetch(`${supabaseUrl}/rest/v1/rpc/get_public_group`, {
       method: "POST",
@@ -73,9 +74,24 @@ export async function onRequestGet(context: {
     })
     if (res.ok) {
       data = (await res.json()) as { group?: unknown; bookmarks?: unknown }
+    } else {
+      upstreamFailed = true
     }
   } catch {
-    data = null
+    upstreamFailed = true
+  }
+
+  // 上游不可达/5xx ≠ 分享不存在：404 语义保留给「组不存在或未公开」，否则
+  // Supabase 宕机/触顶时所有正常分享链接都会对外表现为「链接失效」。
+  // 503 不缓存（no-store），恢复后的下一次请求立即拿到真数据。
+  if (upstreamFailed) {
+    return new Response(renderUnavailablePage(locale), {
+      status: 503,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    })
   }
 
   if (!data || !data.group) {
@@ -98,7 +114,10 @@ export async function onRequestGet(context: {
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "public, max-age=60, stale-while-revalidate=300",
+      // max-age 5min + SWR 30min：公开组内容低频变化，拉长边缘缓存窗口 = 把匿名
+      // 分享流量与 Supabase egress/配额解耦（触顶防护）；代价是更新可见延迟与
+      // Accept-Language 语言变体混缓窗口变长（CF 缓存键仅 URL，已有权衡，非本次引入）。
+      "cache-control": "public, max-age=300, stale-while-revalidate=1800",
     },
   })
 }

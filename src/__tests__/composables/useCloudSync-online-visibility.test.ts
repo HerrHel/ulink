@@ -83,6 +83,7 @@ vi.mock('../../stores/storage.js', async (importOriginal) => {
 
 import { useSyncStore } from '../../stores/sync.js'
 import { useCloudSync, __resetInitialSync } from '../../composables/domain/useCloudSync.js'
+import { recordSyncFailure } from '../../composables/domain/syncCircuit.js'
 
 let _winHandlers: { [type: string]: EventListener } = {}
 let _docHandlers: { [type: string]: EventListener } = {}
@@ -210,5 +211,27 @@ describe('useCloudSync online/visibility 核心契约护栏', () => {
     _winHandlers['online']?.(new Event('online'))
     expect(_push.enqueueSpy).toHaveBeenCalledTimes(1)
     expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('熔断 open 期间 visibility visible → 网络同步被门禁跳过（防触顶后请求风暴）', async () => {
+    // 连续 3 轮失败信号（真实信号源是 syncPush/syncPull 的 recordSyncFailure，此处直写）
+    for (let i = 0; i < 3; i++) recordSyncFailure('429 Too Many Requests')
+    syncStore.setAutoSync(true)
+    initAndDispatch('visibilitychange', true)
+    await vi.runAllTimersAsync()
+    expect(_pull.pullChangesSpy).not.toHaveBeenCalled()
+    expect(_push.pushFromQueueSpy).not.toHaveBeenCalled()
+    expect(_lock.withLockSpy).not.toHaveBeenCalled()
+  })
+
+  it('熔断退避到期 → 放行探活轮（half-open 恢复链路入口）', async () => {
+    for (let i = 0; i < 3; i++) recordSyncFailure('429 Too Many Requests')
+    // 退避第一步 1min；fake timers 下推进系统时间越过退避窗口
+    vi.setSystemTime(Date.now() + 60_000 + 1)
+    syncStore.setAutoSync(true)
+    initAndDispatch('visibilitychange', true)
+    await vi.runAllTimersAsync()
+    expect(_pull.pullChangesSpy).toHaveBeenCalledTimes(1)
+    expect(_push.pushFromQueueSpy).toHaveBeenCalledTimes(1)
   })
 })
