@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('LinkVault 核心功能', () => {
 
   test('应用加载并显示默认书签', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     const errorOverlay = page.locator('.error-boundary-fallback')
@@ -34,7 +34,7 @@ test.describe('LinkVault 核心功能', () => {
   })
 
   test('分类导航工作', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     const navCat = page.locator('.nav-cat, .icon-rail button, .rail-btn').first()
     await expect(navCat).toBeVisible({ timeout: 5000 })
@@ -43,7 +43,7 @@ test.describe('LinkVault 核心功能', () => {
   })
 
   test('布局切换（设置抽屉强断言）', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     await page.getByTestId('lv-btn-settings').click()
     const settingsPanel = page.getByTestId('lv-settings-drawer')
@@ -60,7 +60,7 @@ test.describe('LinkVault 核心功能', () => {
   })
 
   test('添加书签模态框可以打开并关闭', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     await page.keyboard.press('Control+n')
     const modal = page.getByTestId('lv-bm-modal')
@@ -71,7 +71,7 @@ test.describe('LinkVault 核心功能', () => {
 
   // 部分 CI/浏览器可能拦截 contextmenu；无法保证菜单必出时显式 skip，禁止 silent catch pass
   test('右键菜单显示', async ({ page }, testInfo) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     const card = page.locator('.bookmark-card, .card, .group-card').first()
     await expect(card).toBeVisible({ timeout: 10000 })
@@ -91,7 +91,7 @@ test.describe('LinkVault 核心功能', () => {
   })
 
   test('搜索输入不崩溃且可清除', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     const searchInput = page.getByTestId('lv-search-input')
     await expect(searchInput).toBeVisible({ timeout: 5000 })
@@ -102,7 +102,7 @@ test.describe('LinkVault 核心功能', () => {
   })
 
   test('键盘快捷键不崩溃', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     await page.getByTestId('lv-btn-settings').click()
     await expect(page.getByTestId('lv-settings-drawer')).toBeVisible({ timeout: 5000 })
@@ -118,7 +118,7 @@ test.describe('LinkVault 核心功能', () => {
 
   // M19：分享路由 — 进入主应用内分享只读态（加载/错误占位；成功态由 CardGrid 渲染）
   test('分享路由 #share/ 进入分享只读态', async ({ page }) => {
-    await page.goto('/#share/nonexistent-group-for-e2e')
+    await page.goto('/app#share/nonexistent-group-for-e2e')
     // 远端无数据时落错误态（loading → error），二者都挂在 .share-state 下
     await expect(page.locator('.share-state').first()).toBeVisible({ timeout: 15000 })
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
@@ -169,7 +169,7 @@ test.describe('LinkVault 核心功能', () => {
         salt: Array.from({ length: 32 }, (_, i) => i),
       }))
     })
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
 
     await page.getByTestId('lv-btn-settings').click()

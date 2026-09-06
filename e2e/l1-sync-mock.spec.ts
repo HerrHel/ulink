@@ -20,7 +20,7 @@ test.describe('L1 同步 mock', () => {
     test.setTimeout(60000)
     const { stats } = await installSupabaseMock(page)
 
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 15000 })
 
     // 设置抽屉：已登录 + 同步状态文案非「同步失败」
@@ -54,7 +54,7 @@ test.describe('L1 同步 mock', () => {
   test('冲突横幅 UI（testid + 操作按钮）', async ({ page }) => {
     await installSupabaseMock(page)
 
-    await page.goto('/')
+    await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 15000 })
 
     // 等 DEV 钩子挂上

@@ -55,7 +55,7 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 
 composables 按职责分三组：
 
-- `composables/domain/` — 业务逻辑：useBookmark、useGroup、useBatch、useAttrFilter、useDataIO、useDataShare、useUndo、useMention、useCloudSync、useSyncMapping、useSyncConflict、useSyncRealtime、useSyncHistory、useAuth、useDeadLinkChecker、useE2E、useVault、useVaultBiometric、useBiometric、useSpaceMove、attrSlug；sync 子逻辑另有独立模块：syncPush、syncPull、syncMergeCore、syncLocalMerge、syncMappingTables、syncPending、syncRemotePort、syncShare
+- `composables/domain/` — 业务逻辑：useBookmark、useGroup、useBatch、useAttrFilter、useDataIO、useDataShare、useUndo、useMention、useCloudSync、useSyncMapping、useSyncConflict、useSyncRealtime、useSyncHistory、useAuth、useDeadLinkChecker、useE2E、useVault、useVaultBiometric、useBiometric、useSpaceMove、attrSlug；sync 子逻辑另有独立模块：syncPush、syncPull、syncMergeCore、syncLocalMerge、syncMappingTables、syncPending、syncRemotePort、syncShare、syncCircuit（客户端同步熔断器：连续失败退避 + half-open 探活 + 恢复自动补推死信）
 - `composables/interaction/` — 交互行为：useKeyboard、useDragDrop、useMobileDragReorder、useResize、useScrollHeader、useLongPress、useKeyboardOps、listCardKeyboard
 - `composables/ui/` — UI 辅助：useUI、useEditorFormat、useInlineRename、useInlineEdit、useIconPreview、usePasswordVisibility、useSyncStatus、useCardOverflow
 
@@ -120,13 +120,14 @@ composables 按职责分三组：
 
 ### 构建配置
 
+- **双入口 MPA**：`/` = 宣传落地页（`index.html` 静态：Hero 书签星图 Canvas + 特性/上手/FAQ；双语由 `/landing.js` 切换，`/hero-visual.js` 为星图动效），`/app` = 应用主体（`app.html`，noindex，SEO 归落地页；Cloudflare Pages Pretty URL 映射，dev/preview 由 `mpaAliasPlugin` 重写对齐）。`public/landing.js` 负责返客秒跳（localStorage `linkvault_v2`/`lv_setup_done` → `/app`）与关键参数直通（`?ext_save`/share_target 参数/`#share/`/Supabase token 一律透传直达 `/app`）；PWA `start_url`、`share_target.action` 与扩展 `pwa-open.js` 均指向 `/app`；分享态退出剥路径回 `/app`（stores/share.ts `_stripSharePath`）
 - **路径别名**：`@/*` → `src/*`（tsconfig.json + jsconfig.json）
 - **手动分包**：tiptap-core、tiptap-extensions、prosemirror、dexie、dompurify、supabase、fuse、pinyin-pro、vue-vendor、vendor（vite.config.ts）
 - **PurgeCSS**：自定义 Vite 插件，safelist 保护动态类名（`/^card-/`, `/^modal-/`, `/^ctx-/` 等前缀）
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
 - **安全头**：自定义 headersPlugin 注入 CSP、X-Content-Type-Options 等
-- **SPA 404 回退**：spa404Plugin 为 GitHub Pages 生成 404.html
-- **部署**：GitHub Actions → GitHub Pages（`.github/workflows/static.yml`）
+- **SPA 404 回退**：spa404Plugin 已移除（2026-08-23），GitHub Pages 已停用；现由 Cloudflare Pages 原生 SPA 支持，未知路径回退 `/`（落地页）
+- **部署**：Cloudflare Pages（`npm run pages:deploy`，wrangler 项目 ulink）
 
 ### CLI
 

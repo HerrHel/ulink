@@ -42,7 +42,7 @@ describe('extension/pwa-open.js — decideOpenPwa PWA 打开决策（B2）', () 
     expect(d.shouldOpen).toBe(true)
     expect(d.targetUrl).toContain('ext_save_url=https%3A%2F%2Fexample.com')
     expect(d.targetUrl).toContain('ext_save_title=My+Page')
-    expect(d.targetUrl).toContain('https://app.example/?ext_save=1')
+    expect(d.targetUrl).toContain('https://app.example/app?ext_save=1')
   })
 
   it('有选中文本时 notes 参数加入 targetUrl', () => {

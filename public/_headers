@@ -9,9 +9,27 @@
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
+# 双入口 HTML——/ = 宣传落地页（index.html），/app = 应用（app.html；
+# Cloudflare Pretty URL 映射）。均需 no-cache，部署后首刷即拿新页。
+# 注：/index.html 直链会被 308 到 /，规则随路径名一并列出。
+/
+  Cache-Control: no-cache
+  Content-Type: text/html; charset=utf-8
 /index.html
   Cache-Control: no-cache
   Content-Type: text/html; charset=utf-8
+/app
+  Cache-Control: no-cache
+  Content-Type: text/html; charset=utf-8
+/app.html
+  Cache-Control: no-cache
+  Content-Type: text/html; charset=utf-8
+
+# 落地页脚本——返客跳转逻辑常更新，短缓存
+/landing.js
+  Cache-Control: public, max-age=300
+/hero-visual.js
+  Cache-Control: public, max-age=300
 
 # PWA Service Worker——必须 no-cache，否则浏览器缓存住旧 SW 永不更新
 /sw.js
