@@ -12,7 +12,7 @@
  * 环境变量（同 /s/[gid].ts）：
  *   SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN
  */
-import { renderShareCategoryPage, renderNotFoundPage, type ShareLocale, type PublicGroup, type PublicBookmark } from "../../_lib/share-render.js"
+import { renderShareCategoryPage, renderNotFoundPage, renderUnavailablePage, type ShareLocale, type PublicGroup, type PublicBookmark } from "../../_lib/share-render.js"
 import { getAppAssets, type AppAssetsEnv } from "../../_lib/app-assets.js"
 
 interface ShareEnv extends AppAssetsEnv {
@@ -56,6 +56,7 @@ export async function onRequestGet(context: {
   }
 
   let data: { category?: unknown; groups?: unknown; bookmarks?: unknown } | null = null
+  let upstreamFailed = false
   try {
     const res = await fetch(`${supabaseUrl}/rest/v1/rpc/get_public_category`, {
       method: "POST",
@@ -68,9 +69,22 @@ export async function onRequestGet(context: {
     })
     if (res.ok) {
       data = (await res.json()) as { category?: unknown; groups?: unknown; bookmarks?: unknown }
+    } else {
+      upstreamFailed = true
     }
   } catch {
-    data = null
+    upstreamFailed = true
+  }
+
+  // 与 /s/[gid].ts 同口径：上游故障 ≠ 分享不存在，503 兜底且不缓存
+  if (upstreamFailed) {
+    return new Response(renderUnavailablePage(locale), {
+      status: 503,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    })
   }
 
   if (!data || !data.category) {
@@ -96,7 +110,8 @@ export async function onRequestGet(context: {
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": "public, max-age=60, stale-while-revalidate=300",
+      // 与 /s/[gid].ts 同口径：拉长边缘缓存窗口解耦匿名流量与 Supabase 配额
+      "cache-control": "public, max-age=300, stale-while-revalidate=1800",
     },
   })
 }

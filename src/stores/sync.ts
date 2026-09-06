@@ -7,6 +7,8 @@
  */
 import { ref, readonly } from 'vue'
 import { defineStore } from 'pinia'
+// 仅类型引入（运行时零依赖，不产生 store↔composable 循环）
+import type { SyncErrorKind } from '../composables/domain/syncCircuit.js'
 
 export interface SyncConflict {
   id: string
@@ -20,6 +22,9 @@ export const useSyncStore = defineStore('sync', () => {
   const syncStatus = ref<'idle' | 'syncing' | 'success' | 'error'>('idle')
   const lastSyncAt = ref(0)
   const syncError = ref<string | null>(null)
+  // 错误归因（classifySyncError 产出）：quota 触顶时 UI 必须把「云端满了、本地
+  // 数据安全」与泛「同步失败」区分开，否则用户会误以为本地丢数据。
+  const syncErrorKind = ref<SyncErrorKind | null>(null)
   const autoSync = ref(true)
   const pendingCount = ref(0)
 
@@ -47,6 +52,7 @@ export const useSyncStore = defineStore('sync', () => {
 
   function setSyncStatus(v: typeof syncStatus.value) { syncStatus.value = v }
   function setSyncError(v: string | null) { syncError.value = v }
+  function setSyncErrorKind(v: SyncErrorKind | null) { syncErrorKind.value = v }
   function setLastSyncAt(v: number) { lastSyncAt.value = v }
   // L16：setAutoSync/clearConflicts/dismissConflictBanner 供设置页与测试；
   // autoSync 默认 true，UI 暂无开关时仍保留 API 以便后续 Settings 接线与单测。
@@ -61,6 +67,7 @@ export const useSyncStore = defineStore('sync', () => {
     lastSyncAt.value = 0
     syncStatus.value = 'idle'
     syncError.value = null
+    syncErrorKind.value = null
     conflicts.value = []
     conflictBannerDismissed.value = false
     pendingLockedCount.value = 0
@@ -102,6 +109,7 @@ export const useSyncStore = defineStore('sync', () => {
     syncStatus: readonly(syncStatus),
     lastSyncAt: readonly(lastSyncAt),
     syncError: readonly(syncError),
+    syncErrorKind: readonly(syncErrorKind),
     autoSync: readonly(autoSync),
     pendingCount: readonly(pendingCount),
     pendingLockedCount: readonly(pendingLockedCount),
@@ -112,7 +120,7 @@ export const useSyncStore = defineStore('sync', () => {
     isReencrypting: readonly(isReencrypting),
 
     // 可写 actions
-    setSyncStatus, setSyncError, setLastSyncAt, setAutoSync,
+    setSyncStatus, setSyncError, setSyncErrorKind, setLastSyncAt, setAutoSync,
     setPendingCount, setPendingLockedCount, setRealtimeStatus, setReencrypting,
     resetSyncState,
     addConflict, removeConflict, getConflict, clearConflicts,

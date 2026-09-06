@@ -14,6 +14,7 @@ import { getSyncRemotePort } from './syncRemotePort.js'
 import { enqueueSyncOps, syncOpsCount, type SyncOp } from '../../stores/storage.js'
 import { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
+import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
 
 /**
  * 增量 pull 游标安全余量。
@@ -31,10 +32,11 @@ export async function pullChanges(full = false): Promise<boolean> {
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId) return false
-  if (!navigator.onLine) { syncStore.setSyncError('网络离线'); return false }
+  if (!navigator.onLine) { syncStore.setSyncError('网络离线'); syncStore.setSyncErrorKind('network'); return false }
 
   syncStore.setSyncStatus('syncing')
   syncStore.setSyncError(null)
+  syncStore.setSyncErrorKind(null)
 
   try {
     // 时钟偏移安全余量只作用于增量游标；full（since=0）本身无偏移问题
@@ -281,11 +283,15 @@ export async function pullChanges(full = false): Promise<boolean> {
 
     syncStore.setLastSyncAt(Date.now())
     syncStore.setSyncStatus('success')
+    syncStore.setSyncErrorKind(null)
+    recordSyncSuccess()
     return true
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '同步失败'
     syncStore.setSyncStatus('error')
     syncStore.setSyncError(msg)
+    syncStore.setSyncErrorKind(classifySyncError(msg))
+    recordSyncFailure(msg)
     console.warn('[sync] pull failed:', e)
     return false
   }

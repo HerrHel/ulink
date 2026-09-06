@@ -8,7 +8,7 @@
 import { computed } from 'vue'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 
-export type SyncLevel = 'ok' | 'syncing' | 'pending' | 'conflict' | 'offline' | 'error'
+export type SyncLevel = 'ok' | 'syncing' | 'pending' | 'conflict' | 'offline' | 'error' | 'quota'
 
 export interface SyncState {
   level: SyncLevel
@@ -36,6 +36,10 @@ export function useSyncState() {
       return { level: 'conflict', dotClass: 'dot-conflict', label: `${conflicts} 项冲突`, count: conflicts, showBadge: true }
     }
     if (sync.syncStatus.value === 'error') {
+      // 配额触顶单独归因：文案必须让用户知道「本地数据安全」，与断网/故障区分开
+      if (sync.syncErrorKind.value === 'quota') {
+        return { level: 'quota', dotClass: 'dot-error', label: '云端空间已满', count: 0, showBadge: false }
+      }
       return { level: 'error', dotClass: 'dot-error', label: '同步失败', count: 0, showBadge: false }
     }
     if (_isOffline(sync)) {

@@ -30,6 +30,7 @@ import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
 import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
+import { canAttemptSync, takeSyncRecovered, classifySyncError } from './syncCircuit.js'
 import { withLock } from '../../lib/withLock.js'
 
 export { setSyncRemotePort, createMemorySyncPort, getSyncRemotePort } from './syncRemotePort.js'
@@ -55,7 +56,10 @@ export function useCloudSync() {
 
   const syncLabel = computed(() => {
     if (syncStore.syncStatus === 'syncing') return '同步中...'
-    if (syncStore.syncStatus === 'error') return '同步失败'
+    if (syncStore.syncStatus === 'error') {
+      // 配额触顶与泛失败分流：让用户第一眼看到「云端满了」而不是误以为本地同步坏了
+      return syncStore.syncErrorKind === 'quota' ? '云端空间已满' : '同步失败'
+    }
     const ds = useDataStore()
     const pending = ds._dirtyIds.size + ds._deletedIds.size + ds._newIds.size
     if (pending > 0) return `${pending} 项待同步`
@@ -78,8 +82,26 @@ export function useCloudSync() {
     if (_syncTimer) clearTimeout(_syncTimer)
     _syncTimer = setTimeout(() => {
       _syncTimer = null
+      // 熔断 open 期间跳过推送：本地队列照常积压，探活到期后由事件触发补推
+      if (!canAttemptSync()) return
       void withLock('linkvault-sync', pushFromQueue)
     }, 3000)
+  }
+
+  /**
+   * 熔断门内的后台同步轮：open 期间跳过网络调用（本地写入不受影响），
+   * 探活成功从熔断恢复后自动 resyncAllToCloud 把死信/积压一次追平——
+   * 宕机期间 op 重试 3 次即永久出队，常规 pull/push 不会重推它们，必须走
+   * 「清队列 + 按云端缺失重建」的补推路径，否则恢复后数据静默不上云。
+   */
+  async function guardedBackgroundSync(round: () => Promise<void>): Promise<void> {
+    if (!canAttemptSync()) return
+    await round()
+    if (takeSyncRecovered()) {
+      console.info('[sync] 云端已恢复，自动重建同步队列补推（含死信恢复）')
+      // 失败静默：resyncAllToCloud 内部 push/pull 失败已各自落 error 状态与熔断计数
+      void resyncAllToCloud().catch(() => {})
+    }
   }
 
   async function fullSync(): Promise<boolean> {
@@ -106,6 +128,8 @@ export function useCloudSync() {
         if (pushErr && !retried) {
           syncStore.setSyncStatus('error')
           syncStore.setSyncError(pushErr)
+          // pullChanges 成功路径已清 kind；此处恢复 push 的错误态时同步恢复归因
+          syncStore.setSyncErrorKind(classifySyncError(pushErr))
         }
         return pushed
       }
@@ -287,10 +311,10 @@ export function useCloudSync() {
     // updated_at_num，删除端的增量 pull 走 gt 过滤永远看不到，分叉无法自愈）。先
     // pull 让 dirty/pending 项经 decideRemoteApply 转 conflict/soft-delete，再推剩余
     // op；服务端 032 触发器对残留的旧快照复活做最终兜底。
-    void withLock('linkvault-sync', async () => {
+    void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
       await pullChanges()
       await pushFromQueue()
-    })
+    }))
   }
 
   function _onVisibilityChange() {
@@ -298,22 +322,22 @@ export function useCloudSync() {
     if (syncStore.realtimeStatus !== 'connected' && syncStore.realtimeStatus !== 'connecting') {
       unsubscribeRealtime()
       subscribeRealtime()
-      void withLock('linkvault-sync', async () => {
+      void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
         await pullChanges()
         if (syncStore.autoSync) {
           enqueueDirtyAsOps()
           await pushFromQueue()
         }
-      })
+      }))
       return
     }
-    void withLock('linkvault-sync', async () => {
+    void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
       await pullChanges()
       if (syncStore.autoSync) {
         enqueueDirtyAsOps()
         await pushFromQueue()
       }
-    })
+    }))
   }
 
   function initOnlineListener() {
@@ -344,6 +368,7 @@ export function useCloudSync() {
     syncStatus: toRef(syncStore, 'syncStatus'),
     lastSyncAt: toRef(syncStore, 'lastSyncAt'),
     syncError: toRef(syncStore, 'syncError'),
+    syncErrorKind: toRef(syncStore, 'syncErrorKind'),
     autoSync: toRef(syncStore, 'autoSync'),
     pendingCount: toRef(syncStore, 'pendingCount'),
     pendingLockedCount: toRef(syncStore, 'pendingLockedCount'),

@@ -15,6 +15,7 @@ import { setActivePinia, createPinia } from 'pinia'
 // ── 可控 mock 状态 ──
 let _onLine = true
 let _syncStatus = 'idle'
+let _syncErrorKind: 'network' | 'quota' | 'auth' | 'server' | null = null
 let _realtimeStatus: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected'
 let _pendingCount = 0
 let _pendingLockedCount = 0
@@ -24,6 +25,7 @@ let _syncLabel = '已同步'
 vi.mock('../../composables/domain/useCloudSync.js', () => ({
   useCloudSync: () => ({
     syncStatus: ref(_syncStatus),
+    syncErrorKind: ref(_syncErrorKind),
     realtimeStatus: ref(_realtimeStatus),
     pendingCount: ref(_pendingCount),
     pendingLockedCount: ref(_pendingLockedCount),
@@ -47,6 +49,7 @@ function state() {
 function setCtx(opts: {
   onLine?: boolean
   syncStatus?: string
+  syncErrorKind?: 'network' | 'quota' | 'auth' | 'server' | null
   realtime?: 'disconnected' | 'connecting' | 'connected' | 'error'
   pending?: number
   pendingLocked?: number
@@ -54,6 +57,7 @@ function setCtx(opts: {
 }) {
   _onLine = opts.onLine ?? true
   _syncStatus = opts.syncStatus ?? 'idle'
+  _syncErrorKind = opts.syncErrorKind ?? null
   _realtimeStatus = opts.realtime ?? 'connected'
   _pendingCount = opts.pending ?? 0
   _pendingLockedCount = opts.pendingLocked ?? 0
@@ -118,6 +122,19 @@ describe('useSyncState 离线语义', () => {
   it('syncStatus=error 优先于 offline', () => {
     setCtx({ onLine: false, syncStatus: 'error', realtime: 'error', pending: 0 })
     expect(state().level).toBe('error')
+  })
+
+  it('error + kind=quota → level "quota"，label 明示云端已满（触顶归因，安抚本地数据安全）', () => {
+    setCtx({ syncStatus: 'error', syncErrorKind: 'quota' })
+    const s = state()
+    expect(s.level).toBe('quota')
+    expect(s.label).toBe('云端空间已满')
+  })
+
+  it('error + kind=network → 仍为 error（仅 quota 分流，不放大归因面）', () => {
+    setCtx({ syncStatus: 'error', syncErrorKind: 'network' })
+    expect(state().level).toBe('error')
+    expect(state().label).toBe('同步失败')
   })
 
   it('conflict 优先于一切（含 error 与 offline）', () => {

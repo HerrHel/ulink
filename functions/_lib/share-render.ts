@@ -33,6 +33,9 @@ const T = {
     notFoundTitle: '分享不存在 - 与链',
     notFoundHeading: '该分享不存在',
     notFoundBody: '链接可能已失效，或分享者取消了公开',
+    unavailableTitle: '分享暂时无法访问 - 与链',
+    unavailableHeading: '分享暂时无法访问',
+    unavailableBody: '服务暂时不可用，请稍后重试；分享内容并未失效',
     backHome: '返回与链首页',
     logoText: '与链',
     headSub: '公开分享',
@@ -70,6 +73,9 @@ const T = {
     notFoundTitle: 'Share not found - ulink',
     notFoundHeading: 'This share no longer exists',
     notFoundBody: 'The link may have expired, or the owner stopped sharing it publicly',
+    unavailableTitle: 'Share temporarily unavailable - ulink',
+    unavailableHeading: 'Share temporarily unavailable',
+    unavailableBody: 'The service is temporarily unavailable. Please try again later — the share itself is fine',
     backHome: 'Back to ulink',
     logoText: 'ulink',
     headSub: 'Public share',
@@ -1005,6 +1011,40 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
         `<span class="nf-icon">${LOGO_SVG}</span>`,
         `<h1 class="nf-title">${esc(d.notFoundHeading)}</h1>`,
         `<p class="nf-body">${esc(d.notFoundBody)}</p>`,
+        `</div>`,
+      ].join("\n"),
+    }),
+    `</body>`,
+    `</html>`,
+  ].join("\n")
+}
+
+/**
+ * 503 兜底页（上游 Supabase 不可达 / 5xx），与 404 同视觉骨架但语义不同：
+ * 「暂时不可用，分享本身没失效」。调用方必须配 no-store（或不缓存），让恢复后
+ * 的下一次请求立即拿到真数据，而不是把故障页缓存进边缘。
+ */
+export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
+  const d = T[locale]
+  const origin = 'https://ulink.ren'
+  return [
+    `<!DOCTYPE html>`,
+    `<html lang="${d.lang}">`,
+    `<head>`,
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
+    `<title>${esc(d.unavailableTitle)}</title>`,
+    `</head>`,
+    `<style>${CSS}</style>`,
+    `<body>`,
+    buildAppShell(d, origin, {
+      hdrMeta: "",
+      ctaUrl: `${origin}/`,
+      inner: [
+        `<div class="nf">`,
+        `<span class="nf-icon">${LOGO_SVG}</span>`,
+        `<h1 class="nf-title">${esc(d.unavailableHeading)}</h1>`,
+        `<p class="nf-body">${esc(d.unavailableBody)}</p>`,
         `</div>`,
       ].join("\n"),
     }),

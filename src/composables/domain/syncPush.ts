@@ -16,6 +16,7 @@ import { toRemoteRow, camelToSnake } from './useSyncMapping.js'
 import { _saveHistory, _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort, type SyncPortResult } from './syncRemotePort.js'
 import { _markPendingSync, _clearPendingSync } from './syncPending.js'
+import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
 
 /** 单条 sync op 最大推送重试次数 */
 export const MAX_PUSH_RETRIES = 3
@@ -161,7 +162,7 @@ export async function pushFromQueue(): Promise<boolean> {
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId) return false
-  if (!navigator.onLine) { syncStore.setSyncError('网络离线'); return false }
+  if (!navigator.onLine) { syncStore.setSyncError('网络离线'); syncStore.setSyncErrorKind('network'); return false }
 
   const e2eGuard = useE2E()
   const isLocked = e2eGuard.isE2EEnabled.value && !e2eGuard.isUnlocked.value
@@ -172,6 +173,7 @@ export async function pushFromQueue(): Promise<boolean> {
   const ops = _mergeOps(rawOps)
   syncStore.setSyncStatus('syncing')
   syncStore.setSyncError(null)
+  syncStore.setSyncErrorKind(null)
 
   try {
     const ds = useDataStore()
@@ -384,6 +386,9 @@ export async function pushFromQueue(): Promise<boolean> {
       if (first?.op?.data) console.warn(`[sync] 首条失败 op 原始 data:`, _redactOpData(first.op))
       syncStore.setSyncStatus('error')
       syncStore.setSyncError(`${failedOps.length} 项推送失败：${failedOps[0].error}`)
+      // 熔断计数按「轮」记录：一轮内无论多少 op 失败都只记一次，错误分类取首条
+      syncStore.setSyncErrorKind(classifySyncError(failedOps[0].error || ''))
+      recordSyncFailure(failedOps[0].error || '')
       return false
     }
 
@@ -395,13 +400,19 @@ export async function pushFromQueue(): Promise<boolean> {
     }
     // 部分跳过（isLocked 但有非敏感 op 仍成功推送）：跳过的那批留队列，计数如实反映。
     syncStore.setPendingLockedCount(lockedItemKeys.size)
-    if (tasks.length > 0) syncStore.setLastSyncAt(Date.now())
+    if (tasks.length > 0) {
+      syncStore.setLastSyncAt(Date.now())
+      syncStore.setSyncErrorKind(null)
+      recordSyncSuccess()
+    }
     syncStore.setSyncStatus('success')
     return true
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '同步失败'
     syncStore.setSyncStatus('error')
     syncStore.setSyncError(msg)
+    syncStore.setSyncErrorKind(classifySyncError(msg))
+    recordSyncFailure(msg)
     console.warn('[sync] push failed:', e)
     return false
   }

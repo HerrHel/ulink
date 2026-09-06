@@ -1,5 +1,6 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { vi, beforeEach } from 'vitest'
+import { __resetSyncCircuit } from '../composables/domain/syncCircuit.js'
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {}
@@ -22,6 +23,8 @@ localStorageMock.setItem('lv_locale', 'zh-CN')
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  // 熔断器是模块级单例（非 Pinia），必须随每个用例复位，防失败场景跨用例污染门控
+  __resetSyncCircuit()
   localStorageMock.clear()
   // clear() 不会重置 i18n 模块已缓存的 locale ref（模块级常量），但保险起见重新钉一下，
   // 防止某些测试调 setLocale('en-US') 后下一个测试默认跑到了 en。
