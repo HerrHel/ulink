@@ -1,16 +1,15 @@
 /*
- * 与链 ulink — Hero 主视觉「书签星图」（/ 首页专用，Canvas 2D，零依赖）
+ * 与链 ulink — Hero 主视觉「星链」（/ 首页专用，Canvas 2D，零依赖）
  *
- * 叙事与产品同构：点 = 书签，线 = 链接与关联，带光环的节点 = 分组（卫星节点
- * 环绕轨道运行），2-3 个节点以品牌链条形状勾勒（呼应 logo）。
+ * 叙事：中心一颗最亮的星 = 与链站点，四周较小的站点节点沿椭圆轨道缓慢流转，
+ * 各自连向中心（星链）；每隔几秒一颗节点向中心发出一道「脉冲」——一枚光点
+ * 沿连线流入，中心泛起涟漪：像又有网页被收进库里。
+ * 浅色设计：画布置于主页面底色 #F5EFEA 之上，节点/连线用品牌蓝 #122E8A 系。
  *
- * 交互：指针深度视差（按景深 z 分层偏移）+ 指针邻近的连线增亮。
- * 性能：节点数按面积自适应并封顶、DPR 上限 2、glow 用预渲染精灵而非
- * shadowBlur、dt 驱动、hero 滚出视口 / 页签隐藏即暂停 rAF。
- * 可访问性：prefers-reduced-motion → 渲染单帧静态星图；canvas aria-hidden。
- *
- * 颜色与 index.html 内联 CSS 的设计令牌保持一致（--night/--cream/--glow），
- * 修改品牌色时两处同步。
+ * 交互：指针轻视差（按节点半径分层）。
+ * 性能：节点数按面积自适应、DPR 上限 2、glow 用预渲染精灵而非 shadowBlur、
+ * dt 驱动、hero 滚出视口 / 页签隐藏即暂停 rAF。
+ * 可访问性：prefers-reduced-motion → 渲染单帧静态星链；canvas aria-hidden。
  */
 (function () {
   'use strict';
@@ -20,97 +19,82 @@
   var ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  var wrapper = canvas.parentElement; // .stars（overflow:hidden，尺寸即 hero）
+  var wrapper = canvas.parentElement; // .hero-visual（容器即视口）
   var reducedMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ── 调色 ── */
-  var GLOW_BLUE = '143,176,255';   // --glow：连线/淡蓝节点
-  var GLOW_CREAM = '245,239,234';  // --cream：米白节点
-  var LINK_COLOR = GLOW_BLUE;
+  /* ── 调色（与 index.html 内联 CSS 的品牌令牌一致，改色两处同步） ── */
+  var BRAND = '18,46,138';        // #122E8A 主站主题色
+  var BRAND_SOFT = '79,124,255';  // 亮蓝节点点缀
 
   /* ── 状态 ── */
   var W = 0, H = 0, DPR = 1;
-  var nodes = [];        // {x,y,z,vx,vy,r,kind,phase,twinkle,color,orbit?}
-  var groups = [];       // 分组节点索引（卫星随其公转）
-  var linkDist = 130;
-  var pointer = { tx: 0, ty: 0, x: 0, y: 0, cx: -9999, cy: -9999 }; // 视差目标/当前 + 画布坐标
-  var rafId = 0, running = false, lastT = 0, elapsed = 0;
-  var inView = true;
+  var hub = { x: 0, y: 0 };
+  var nodes = [];        // 轨道站点节点
+  var chords = [];       // 少量节点间弦线 [i, j]
+  var pulses = [];       // 流入中心的光点
+  var ripples = [];      // 中心涟漪
+  var nextPulseAt = 1.6;
+  var elapsed = 0;
+  var pointer = { tx: 0, ty: 0, x: 0, y: 0 };
+  var rafId = 0, running = false, lastT = 0, inView = true;
 
-  /* ── glow 精灵：预渲染径向渐变，drawImage 复用（远快于 shadowBlur） ── */
+  /* ── glow 精灵：预渲染径向渐变，drawImage 复用 ── */
   function makeGlow(rgb) {
     var s = document.createElement('canvas');
     s.width = s.height = 64;
     var g = s.getContext('2d');
     var grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(' + rgb + ',1)');
-    grad.addColorStop(0.25, 'rgba(' + rgb + ',.5)');
+    grad.addColorStop(0, 'rgba(' + rgb + ',.55)');
+    grad.addColorStop(0.4, 'rgba(' + rgb + ',.18)');
     grad.addColorStop(1, 'rgba(' + rgb + ',0)');
     g.fillStyle = grad;
     g.fillRect(0, 0, 64, 64);
     return s;
   }
-  var spriteBlue = makeGlow(GLOW_BLUE);
-  var spriteCream = makeGlow(GLOW_CREAM);
-
-  // 品牌链条 logo 路径（与 manifest/favicon 同源，24×24 视箱）
-  var chainPath = new Path2D('M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71 M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71');
+  var spriteBrand = makeGlow(BRAND);
+  var spriteSoft = makeGlow(BRAND_SOFT);
 
   /* ── 场景构建 ── */
   function rand(a, b) { return a + Math.random() * (b - a); }
 
   function build() {
     nodes = [];
-    groups = [];
-    var count = Math.round((W * H) / 14000);
-    count = Math.max(40, Math.min(120, count));
-    var i, n;
-    for (i = 0; i < count; i++) {
-      var z = rand(0.35, 1); // 景深：0.35 远 → 1 近
+    chords = [];
+    pulses = [];
+    ripples = [];
+    hub.x = W / 2; hub.y = H / 2;
+    var base = Math.min(W, H);
+    var count = Math.round(base / 42);
+    count = Math.max(8, Math.min(14, count));
+    for (var i = 0; i < count; i++) {
+      var frac = (i + 0.55) / count;                 // 半径错开，避免环带重叠
       nodes.push({
-        x: rand(0, W), y: rand(0, H), z: z,
-        vx: rand(-5, 5), vy: rand(-5, 5),          // px/s，缓慢漂移
-        r: rand(1.1, 2.6) * z,
-        kind: 'dot',
+        R: base * (0.24 + 0.32 * frac + rand(-0.03, 0.05)),
+        a: (i / count) * Math.PI * 2 + rand(-0.25, 0.25),
+        w: rand(0.05, 0.11) * (i % 2 ? 1 : -1),      // rad/s：一圈约 1-2 分钟
+        r: rand(2.4, 4.4),
+        soft: i % 3 === 1,                            // 约 1/3 用亮蓝点缀
         phase: rand(0, Math.PI * 2),
-        twinkle: rand(0.4, 1.1),                    // 明暗呼吸频率
-        color: Math.random() < 0.72 ? GLOW_CREAM : GLOW_BLUE,
-        alpha: rand(0.5, 1)
+        tw: rand(0.5, 1),
+        px: 0, py: 0
       });
     }
-    // 3 个「分组」节点：更亮更大，带光环；从普通节点中挑 4 个改成其卫星
-    var GROUPS = 3;
-    for (i = 0; i < GROUPS; i++) {
-      var g = nodes[Math.floor((i + 0.5) / GROUPS * nodes.length)];
-      g.kind = 'group';
-      g.r = 3.2 * g.z;
-      g.color = GLOW_CREAM;
-      g.alpha = 1;
-      g.orbitR = rand(26, 40) * g.z;
-      g.orbitW = rand(0.25, 0.45) * (i % 2 ? 1 : -1); // rad/s，方向交替
-      groups.push(g);
-      for (var k = 0; k < 4; k++) {
-        var sat = nodes[(nodes.indexOf(g) + 3 + k * 7) % nodes.length];
-        if (sat.kind !== 'dot') continue;
-        sat.kind = 'sat';
-        sat.host = g;
-        sat.orbitA = (k / 4) * Math.PI * 2 + rand(-0.3, 0.3);
-        // 构建期即落位到轨道（静态单帧渲染时无需等 update）
-        sat.x = g.x + Math.cos(sat.orbitA) * g.orbitR;
-        sat.y = g.y + Math.sin(sat.orbitA) * g.orbitR * 0.7;
-      }
+    // 少量弦线：相邻半径节点相连，形成「链与链」的网感
+    for (var k = 0; k < nodes.length; k++) {
+      var j = (k + 2) % nodes.length;
+      if (j !== k && Math.abs(nodes[k].R - nodes[j].R) < base * 0.16) chords.push([k, j]);
     }
-    // 2 个链条形状节点（品牌点缀）
-    var placed = 0;
-    for (i = 0; i < nodes.length && placed < 2; i++) {
-      if (nodes[i].kind === 'dot' && nodes[i].z > 0.75 && i % 5 === 0) {
-        nodes[i].kind = 'chain';
-        nodes[i].r = 4.4 * nodes[i].z;
-        placed++;
-      }
-    }
-    linkDist = Math.max(90, Math.min(150, Math.min(W, H) * 0.16));
+  }
+
+  /* ── 节点当前位置（含视差） ── */
+  function nodePos(n, t) {
+    var wob = 1 + 0.045 * Math.sin(t * 0.35 + n.phase);   // 半径微呼吸
+    var squash = H > W ? 0.92 : 0.86;                      // 椭圆轨道压扁率
+    return {
+      x: hub.x + Math.cos(n.a) * n.R * wob + pointer.x * 8,
+      y: hub.y + Math.sin(n.a) * n.R * wob * squash + pointer.y * 8
+    };
   }
 
   /* ── 尺寸 ── */
@@ -123,116 +107,123 @@
     canvas.height = Math.round(H * DPR);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     build();
-    if (reducedMotion) draw(0); // 静态：单帧
+    if (reducedMotion) draw(0);
   }
 
   /* ── 更新 ── */
-  function update(dt) {
-    elapsed += dt;
-    var m = 30, i, n;
+  function update(dt, t) {
+    elapsed = t;
+    var i, n;
     for (i = 0; i < nodes.length; i++) {
       n = nodes[i];
-      if (n.kind === 'sat') {
-        n.orbitA += n.host.orbitW * dt * 0.6;
-        n.x = n.host.x + Math.cos(n.orbitA) * n.host.orbitR;
-        n.y = n.host.y + Math.sin(n.orbitA) * n.host.orbitR * 0.7; // 椭圆轨道
-        continue;
-      }
-      n.x += n.vx * dt; n.y += n.vy * dt;
-      if (n.x < -m) n.x = W + m; else if (n.x > W + m) n.x = -m;
-      if (n.y < -m) n.y = H + m; else if (n.y > H + m) n.y = -m;
+      n.a += n.w * dt;
+      var p = nodePos(n, t);
+      n.px = p.x; n.py = p.y;
     }
-    // 指针视差缓动
-    pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 3.2);
-    pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 3.2);
+    // 脉冲生成
+    nextPulseAt -= dt;
+    if (nextPulseAt <= 0 && nodes.length) {
+      nextPulseAt = rand(2.2, 4.2);
+      var src = nodes[Math.floor(Math.random() * nodes.length)];
+      pulses.push({ node: src, t: 0, dur: rand(1.1, 1.5) });
+    }
+    // 脉冲推进
+    for (i = pulses.length - 1; i >= 0; i--) {
+      var pu = pulses[i];
+      pu.t += dt / pu.dur;
+      if (pu.t >= 1) {
+        pulses.splice(i, 1);
+        ripples.push({ r: 10, alpha: 0.5 });
+      }
+    }
+    // 涟漪推进
+    for (i = ripples.length - 1; i >= 0; i--) {
+      var rp = ripples[i];
+      rp.r += 42 * dt;
+      rp.alpha -= 0.75 * dt;
+      if (rp.alpha <= 0) ripples.splice(i, 1);
+    }
+    // 视差缓动
+    pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 3);
+    pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 3);
   }
 
   /* ── 绘制 ── */
-  function nodePos(n) { // 含视差层偏移（近景偏移大）
-    return {
-      x: n.x + pointer.x * 16 * n.z,
-      y: n.y + pointer.y * 16 * n.z
-    };
-  }
-
-  function draw() {
+  function draw(t) {
     ctx.clearRect(0, 0, W, H);
-    var i, j, n, p;
+    var i, k;
 
-    // 连线在下层
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(' + LINK_COLOR + ',0)';
-    var d2, dx, dy, a, boost;
-    var px = pointer.cx, py = pointer.cy;
-    for (i = 0; i < nodes.length; i++) {
-      var ni = nodePos(nodes[i]);
-      for (j = i + 1; j < nodes.length; j++) {
-        var nj = nodePos(nodes[j]);
-        dx = ni.x - nj.x; dy = ni.y - nj.y;
-        if (dx > linkDist || dx < -linkDist || dy > linkDist || dy < -linkDist) continue;
-        d2 = dx * dx + dy * dy;
-        if (d2 > linkDist * linkDist) continue;
-        a = 1 - Math.sqrt(d2) / linkDist;
-        a = a * a * 0.42 * Math.min(nodes[i].z, nodes[j].z);
-        // 指针邻近增亮
-        boost = 0;
-        if (px > -999) {
-          var mx = (ni.x + nj.x) / 2 - px, my = (ni.y + nj.y) / 2 - py;
-          var md2 = mx * mx + my * my;
-          if (md2 < 160 * 160) boost = 1 - Math.sqrt(md2) / 160;
-        }
-        ctx.strokeStyle = 'rgba(' + LINK_COLOR + ',' + (a * (1 + boost * 1.4)).toFixed(3) + ')';
-        ctx.beginPath();
-        ctx.moveTo(ni.x, ni.y);
-        ctx.lineTo(nj.x, nj.y);
-        ctx.stroke();
-      }
+    // 中心辉光（最亮的星）
+    var hubGlow = Math.min(W, H) * 0.34;
+    ctx.drawImage(spriteBrand, hub.x - hubGlow / 2, hub.y - hubGlow / 2, hubGlow, hubGlow);
+    // 涟漪
+    for (i = 0; i < ripples.length; i++) {
+      var rp = ripples[i];
+      ctx.strokeStyle = 'rgba(' + BRAND + ',' + rp.alpha.toFixed(3) + ')';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(hub.x, hub.y, rp.r, 0, 6.2832); ctx.stroke();
     }
-
-    // 节点在上层
+    // 连线：节点 → 中心
+    ctx.lineWidth = 1;
     for (i = 0; i < nodes.length; i++) {
-      n = nodes[i];
-      p = nodePos(n);
-      var tw = n.alpha * (0.72 + 0.28 * Math.sin(n.phase + elapsed * n.twinkle));
-      var size = n.r * 6;
-
-      if (n.kind === 'chain') {
-        ctx.drawImage(spriteCream, p.x - size / 2, p.y - size / 2, size, size);
-        var s = (n.r * 2.2) / 24;
-        ctx.save();
-        ctx.translate(p.x - 12 * s, p.y - 12 * s);
-        ctx.scale(s, s);
-        ctx.strokeStyle = 'rgba(' + GLOW_CREAM + ',' + Math.min(1, tw + 0.3).toFixed(3) + ')';
-        ctx.lineWidth = 2.5 / s * 0.8;
-        ctx.lineCap = 'round';
-        ctx.stroke(chainPath);
-        ctx.restore();
-        continue;
-      }
-      if (n.kind === 'group') {
-        // 光环 + 双环
-        ctx.drawImage(spriteCream, p.x - size * 1.15, p.y - size * 1.15, size * 2.3, size * 2.3);
-        ctx.strokeStyle = 'rgba(' + GLOW_CREAM + ',' + (0.35 * tw).toFixed(3) + ')';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(p.x, p.y, n.r * 2.6, 0, 6.2832); ctx.stroke();
-        ctx.strokeStyle = 'rgba(' + GLOW_BLUE + ',' + (0.22 * tw).toFixed(3) + ')';
-        ctx.beginPath(); ctx.arc(p.x, p.y, n.r * 3.7, 0, 6.2832); ctx.stroke();
-        continue;
-      }
-      var sprite = n.color === GLOW_BLUE ? spriteBlue : spriteCream;
-      ctx.globalAlpha = Math.max(0.15, Math.min(1, tw));
-      ctx.drawImage(sprite, p.x - size / 2, p.y - size / 2, size, size);
-      ctx.globalAlpha = 1;
+      var n = nodes[i];
+      var p = n.px ? { x: n.px, y: n.py } : nodePos(n, t);
+      var d = Math.hypot(p.x - hub.x, p.y - hub.y);
+      var a = Math.max(0.06, 0.26 - d / (Math.min(W, H) * 2.2));
+      a *= 0.8 + 0.2 * Math.sin(n.phase + elapsed * n.tw);
+      ctx.strokeStyle = 'rgba(' + BRAND + ',' + a.toFixed(3) + ')';
+      ctx.beginPath(); ctx.moveTo(hub.x, hub.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    }
+    // 弦线（链与链）
+    for (k = 0; k < chords.length; k++) {
+      var n1 = nodes[chords[k][0]], n2 = nodes[chords[k][1]];
+      var p1 = n1.px ? { x: n1.px, y: n1.py } : nodePos(n1, t);
+      var p2 = n2.px ? { x: n2.px, y: n2.py } : nodePos(n2, t);
+      ctx.strokeStyle = 'rgba(' + BRAND + ',0.08)';
+      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+    }
+    // 节点
+    for (i = 0; i < nodes.length; i++) {
+      var nd = nodes[i];
+      var pp = nd.px ? { x: nd.px, y: nd.py } : nodePos(nd, t);
+      var tw = 0.72 + 0.28 * Math.sin(nd.phase + elapsed * nd.tw);
+      var glowR = nd.r * 6.5;
+      ctx.drawImage(nd.soft ? spriteSoft : spriteBrand, pp.x - glowR / 2, pp.y - glowR / 2, glowR, glowR);
+      ctx.fillStyle = 'rgba(' + (nd.soft ? BRAND_SOFT : BRAND) + ',' + (0.85 * tw).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(pp.x, pp.y, nd.r, 0, 6.2832); ctx.fill();
+    }
+    // 中心本体：白核 + 蓝环
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.beginPath(); ctx.arc(hub.x, hub.y, 5.2, 0, 6.2832); ctx.fill();
+    ctx.strokeStyle = 'rgba(' + BRAND + ',0.85)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(hub.x, hub.y, 7.4, 0, 6.2832); ctx.stroke();
+    ctx.strokeStyle = 'rgba(' + BRAND + ',0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(hub.x, hub.y, 11.5, 0, 6.2832); ctx.stroke();
+    // 脉冲光点（沿连线流向中心）
+    for (i = 0; i < pulses.length; i++) {
+      var pu2 = pulses[i];
+      var sn = pu2.node;
+      var sp = sn.px ? { x: sn.px, y: sn.py } : nodePos(sn, t);
+      var e = pu2.t < 0.5 ? 2 * pu2.t * pu2.t : 1 - Math.pow(-2 * pu2.t + 2, 2) / 2; // easeInOut
+      var x = sp.x + (hub.x - sp.x) * e;
+      var y = sp.y + (hub.y - sp.y) * e;
+      var pr = 2.6 + 1.2 * e;
+      ctx.drawImage(spriteBrand, x - pr * 2.6, y - pr * 2.6, pr * 5.2, pr * 5.2);
+      ctx.fillStyle = 'rgba(' + BRAND + ',0.9)';
+      ctx.beginPath(); ctx.arc(x, y, pr * 0.55, 0, 6.2832); ctx.fill();
     }
   }
 
   /* ── 主循环 ── */
-  function frame(t) {
+  function frame(ts) {
     if (!running) return;
-    var dt = Math.min((t - lastT) / 1000, 0.05);
-    lastT = t;
-    update(dt);
-    draw();
+    var dt = Math.min((ts - lastT) / 1000, 0.05);
+    lastT = ts;
+    var t = ts / 1000;
+    update(dt, t);
+    draw(t);
     rafId = requestAnimationFrame(frame);
   }
 
@@ -248,29 +239,23 @@
     rafId = 0;
   }
 
-  /* ── 指针：视差目标 + 增亮定位（画布坐标） ── */
+  /* ── 指针 ── */
   function onPointerMove(e) {
     var rect = canvas.getBoundingClientRect();
-    pointer.cx = e.clientX - rect.left;
-    pointer.cy = e.clientY - rect.top;
-    pointer.tx = (pointer.cx / Math.max(1, W) - 0.5) * 2;
-    pointer.ty = (pointer.cy / Math.max(1, H) - 0.5) * 2;
+    pointer.tx = ((e.clientX - rect.left) / Math.max(1, W) - 0.5) * 2;
+    pointer.ty = ((e.clientY - rect.top) / Math.max(1, H) - 0.5) * 2;
   }
-  function onPointerLeave() {
-    pointer.tx = 0; pointer.ty = 0;
-    pointer.cx = -9999; pointer.cy = -9999;
-  }
+  function onPointerLeave() { pointer.tx = 0; pointer.ty = 0; }
 
   /* ── 生命周期 ── */
   function start() {
     resize();
-    if (reducedMotion) return; // 单帧已在 resize 中绘制
+    if (reducedMotion) return;
     var host = canvas.closest('.hero') || wrapper;
     if (host) {
       host.addEventListener('pointermove', onPointerMove);
       host.addEventListener('pointerleave', onPointerLeave);
     }
-    // hero 滚出视口即暂停（省电），回到视口恢复
     if ('IntersectionObserver' in window) {
       inView = true;
       new IntersectionObserver(function (entries) {
@@ -282,16 +267,10 @@
       if (document.hidden) pause();
       else if (inView) play();
     });
-    var resizeTimer = 0;
-    var onResize = function () {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(resize, 150);
-    };
-    if ('ResizeObserver' in window && wrapper) {
-      new ResizeObserver(onResize).observe(wrapper);
-    } else {
-      window.addEventListener('resize', onResize);
-    }
+    var timer = 0;
+    var onResize = function () { clearTimeout(timer); timer = setTimeout(resize, 150); };
+    if ('ResizeObserver' in window && wrapper) new ResizeObserver(onResize).observe(wrapper);
+    else window.addEventListener('resize', onResize);
     play();
   }
 

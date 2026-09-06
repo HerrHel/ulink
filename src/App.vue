@@ -94,6 +94,7 @@ import { useE2EStore } from './stores/e2e.js'
 import { useVaultStore } from './stores/vault.js'
 import { useUIStore } from './stores/ui.js'
 import { useDataStore } from './stores/data.js'
+import { useAuthStore } from './stores/auth.js'
 import { useShareStore } from './stores/share.js'
 import { toast } from './lib/toast.js'
 import { t } from './i18n/index.js'
@@ -202,6 +203,11 @@ onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const extSaveUrl = params.get('ext_save_url')
   const shareUrl = params.get('url')
+  // 宣传页「登录」按钮经 /app?login=1 直开认证弹窗（H8：读参即清 query）
+  if (params.get('login') === '1') {
+    window.history.replaceState(null, '', window.location.origin + window.location.pathname)
+    useAuthStore().authModalOpen = true
+  }
   // ext_save 优先，share_target 次之
   const incomingUrl = extSaveUrl || shareUrl
   if (incomingUrl) {
