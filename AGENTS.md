@@ -120,7 +120,7 @@ composables 按职责分三组：
 
 ### 构建配置
 
-- **双入口 MPA**：`/` = 宣传落地页（`index.html` 静态：Hero 书签星图 Canvas + 特性/上手/FAQ；双语由 `/landing.js` 切换，`/hero-visual.js` 为星图动效），`/app` = 应用主体（`app.html`，noindex，SEO 归落地页；Cloudflare Pages Pretty URL 映射，dev/preview 由 `mpaAliasPlugin` 重写对齐）。`public/landing.js` 负责返客秒跳（localStorage `linkvault_v2`/`lv_setup_done` → `/app`）与关键参数直通（`?ext_save`/share_target 参数/`#share/`/Supabase token 一律透传直达 `/app`）；PWA `start_url`、`share_target.action` 与扩展 `pwa-open.js` 均指向 `/app`；分享态退出剥路径回 `/app`（stores/share.ts `_stripSharePath`）
+- **双入口 MPA**：`/` = 宣传落地页（`index.html` 静态：Hero 书签星图 Canvas + 特性/上手/FAQ；双语由 `/landing.js` 切换，`/hero-visual.js` 为星图动效），`/app` = 应用主体（`app.html`，noindex，SEO 归落地页；Cloudflare Pages Pretty URL 映射，dev/preview 由 `mpaAliasPlugin` 重写对齐）。`public/landing.js` 跳转决策（优先级递减）：任务参数直通（`?ext_save`/share_target 参数/`#share/`/Supabase token 一律透传直达 `/app`）→ 老用户秒跳（localStorage `linkvault_v2`/`lv_setup_done`，但首次访问 `/` 曝光一次落地页并写 `lv_landing_seen_v1`，此后秒跳）→ `?stay=1` 显式豁免秒跳（应用内官网书签携带；bump 该 key 版本号可对老用户重新曝光）。应用内入口 = 官网书签：`dataActionsBookmarks.ensureOfficialSiteBookmark` 启动时幂等补种固定 id `bm_ulink_home`（未分类置顶、URL 带 `?stay=1`；跨设备靠同 id 去重，`lv_landing_bm_done` 防彻底删除后被启动重灌）。PWA `start_url`、`share_target.action` 与扩展 `pwa-open.js` 均指向 `/app`；分享态退出剥路径回 `/app`（stores/share.ts `_stripSharePath`）
 - **路径别名**：`@/*` → `src/*`（tsconfig.json + jsconfig.json）
 - **手动分包**：tiptap-core、tiptap-extensions、prosemirror、dexie、dompurify、supabase、fuse、pinyin-pro、vue-vendor、vendor（vite.config.ts）
 - **PurgeCSS**：自定义 Vite 插件，safelist 保护动态类名（`/^card-/`, `/^modal-/`, `/^ctx-/` 等前缀）
@@ -164,7 +164,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 ## 运维与安全
 
 - **CSP**：`public/_headers`（生产）和 `vite.config.ts`（dev）。生产 script-src `'self'`（无 unsafe-inline），connect-src 有意放宽 `'self' https: wss://*.supabase.co`（死链 checkDirect 直连任意 URL 所需，勿私自收紧，见 vite.config.ts SEC-05 注释）；仅 dev 放宽 script-src 支持 HMR
-- **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）
+- **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）；每用户限流（迁移 034 `consume_rate_limit` 计数器 + `private.rate_limit_counters`，默认 1200 次/分，`CHECK_LINK_RATE_LIMIT_PER_MIN` 可覆盖）；history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT 允许）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
 - **CI/CD**：`.github/workflows/` — 部署（lint+test+build+deploy）、CI（PR 触发 lint+test）、Dependabot 周检

@@ -11,6 +11,8 @@
 --   7. SECURITY DEFINER RPC 存在且固定 search_path（防 search_path 注入）
 --   8. 032 删除防线：复活守卫触发器 + 墓园表不可变 + 行为级拦截（旧快照复活 /
 --      墓园存活重插被拦；正规恢复 / 墓碑重插放行）
+--   9. 033/034 容量防护：link_check_history 剪枝触发器（每书签留 5 条）+
+--      consume_rate_limit 配额函数（放行至配额、超额拒绝）
 --
 -- 运行方式（需要 Docker 起本地栈，官方镜像自带 pgTAP）：
 --   supabase start && supabase db reset && supabase db test
@@ -21,7 +23,7 @@
 
 BEGIN;
 
-SELECT plan(23);
+SELECT plan(28);
 
 -- ── 1. FORCE RLS：public 下所有用户表必须开启 ──
 -- 015 只覆盖当时 8 张表；024/025 新增表在 028 才补齐。此处断言"一张都不能漏"。
@@ -256,6 +258,33 @@ SELECT is(
   true,
   '墓碑态重插放行（删除状态可跨端再传播）'
 );
+
+-- ── 19. link_check_history 剪枝触发器存在（033）──
+SELECT is(
+  (SELECT count(*) FROM pg_trigger t
+     JOIN pg_class c ON c.oid = t.tgrelid
+    WHERE NOT t.tgisinternal AND c.relname = 'link_check_history'
+      AND t.tgname = 'trg_prune_link_check_history'),
+  1,
+  'link_check_history 存在自动剪枝触发器（033）'
+);
+
+-- ── 20. 行为级：link_check_history 每 (user, bookmark) 只留最近 5 条（033）──
+-- 与客户端 useDeadLinkChecker MAX_HIST=5 同口径；仍处于 authenticated + JWT 上下文。
+INSERT INTO link_check_history (user_id, bookmark_id, url, fetch_outcome)
+SELECT '11111111-1111-1111-1111-111111111111', 'pgtap-prune-bm', 'https://prune-' || g || '.test', 'ok'
+FROM generate_series(1, 7) AS g;
+SELECT is(
+  (SELECT count(*) FROM link_check_history WHERE bookmark_id = 'pgtap-prune-bm'),
+  5,
+  'link_check_history 连插 7 条后自动剪枝到 5 条（033）'
+);
+
+-- ── 21. consume_rate_limit 限流函数（034）：放行至配额、超额拒绝 ──
+-- SECURITY DEFINER（内部计数表 private.rate_limit_counters，对调用角色不可直访）。
+SELECT is(consume_rate_limit('pgtap:rl', 2, 60), true, '限流计数 1/2 放行');
+SELECT is(consume_rate_limit('pgtap:rl', 2, 60), true, '限流计数 2/2 放行');
+SELECT is(consume_rate_limit('pgtap:rl', 2, 60), false, '限流超额 3/2 拒绝（034）');
 
 RESET ROLE;
 

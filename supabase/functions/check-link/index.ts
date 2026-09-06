@@ -26,6 +26,9 @@ const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').filte
 
 /** 默认超时 ms（可由环境变量覆盖） */
 const DEFAULT_TIMEOUT_MS = parseInt(Deno.env.get('CHECK_LINK_TIMEOUT_MS') || '10000', 10)
+/** 每用户限流（次/分钟）：合法全量检测节奏上限约 25 req/s（batchSize=5 × 200ms），
+ * 1200/min 足以覆盖约千条书签的一次全量检测，更高频视为滥用。可由环境变量覆盖。 */
+const RATE_LIMIT_PER_MIN = parseInt(Deno.env.get('CHECK_LINK_RATE_LIMIT_PER_MIN') || '1200', 10)
 /** 重定向最大跳数 */
 const MAX_REDIRECTS = 5
 
@@ -163,6 +166,22 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...cors, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 每用户限流（034 consume_rate_limit：独立计数器，绕开 033 剪枝对 history 计数的干扰）。
+    // RPC 失败 fail-open：鉴权 + SSRF + history 剪枝仍兜底，限流器故障不放大可用性损失。
+    const { data: rlAllowed, error: rlError } = await supabase.rpc('consume_rate_limit', {
+      p_key: `check-link:${user.id}`,
+      p_limit: RATE_LIMIT_PER_MIN,
+      p_window_secs: 60,
+    })
+    if (rlError) {
+      console.error('[check-link] rate limit rpc failed (fail-open):', rlError)
+    } else if (rlAllowed === false) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded' }),
+        { status: 429, headers: { ...cors, 'Content-Type': 'application/json', 'Retry-After': '60' } }
       )
     }
 

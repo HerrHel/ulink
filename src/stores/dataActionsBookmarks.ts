@@ -8,6 +8,15 @@ import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite, DGM_KEY } from './dataShared.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { Bookmark } from '../types.js'
+import { CAT_UNCATEGORIZED } from '../config/constants.js'
+import { APP_CANONICAL_BASE } from '../config/urls.js'
+import { getLocale } from '../i18n/index.js'
+
+/** 官网落地页书签的固定 id：跨设备云同步去重的关键，勿改动已有用户的此 id */
+export const OFFICIAL_SITE_BM_ID = 'bm_ulink_home'
+/** 品牌链条图标（与 app.html/favicon 同源 SVG data URI），img-src data: 合法 */
+const OFFICIAL_SITE_ICON =
+  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>"
 
 export const bookmarkActions = {
   /** L10：现存书签最大 order + 1，新建书签统一入口 */
@@ -65,6 +74,53 @@ export const bookmarkActions = {
     }
     this._markDirty(entry.id); this._newIds.add(entry.id)
     this._searchIndexDirty = true
+  },
+
+  /**
+   * 官网落地页书签（双入口改造配套）：给每个库补一条指向宣传页的入口书签，
+   * 点击以 ?stay=1 打开 / —— 落地页脚本据此豁免返客秒跳，老用户随时能看/分享新页。
+   *
+   * 幂等三重护栏：
+   *  1. localStorage 标记（lv_landing_bm_done）：本机一旦处理过就不再动，
+   *     用户「彻底删除」该书签后也不会被下次启动复活；
+   *  2. 固定 id（bm_ulink_home）全表查重（含 deletedAt 软删墓碑）：跨设备经云同步
+   *     去重——设备 A 添加并上云后，设备 B 启动时查到同 id 即跳过，不产生副本；
+   *  3. _denyWrite()：分享只读态下不写入。
+   * 启动时机见 useAppLifecycle（数据装载后、分享路由分流之后）。
+   */
+  ensureOfficialSiteBookmark(this: DataStoreThis) {
+    if (safeGetItem('lv_landing_bm_done')) return
+    if (this.bookmarks.some(b => b.id === OFFICIAL_SITE_BM_ID)) {
+      safeSetItem('lv_landing_bm_done', '1')
+      return
+    }
+    if (_denyWrite()) return
+    const isEn = getLocale() === 'en-US'
+    // 置顶于「未分类」顶层（同级最小 order - 1）；无同级则 0。
+    // 兼容历史数据里 categoryId 为 '' 的旧记录（schema .catch 前的遗留）。
+    const sibs = this.bookmarks.filter(
+      b => !b.parentId && (b.categoryId === CAT_UNCATEGORIZED || b.categoryId === '')
+    )
+    const order = sibs.length ? Math.min(...sibs.map(b => b.order)) - 1 : 0
+    const now = Date.now()
+    this.addBookmark({
+      id: OFFICIAL_SITE_BM_ID,
+      title: isEn ? 'ulink website' : '与链官网',
+      url: `${APP_CANONICAL_BASE}?stay=1`,
+      username: '',
+      password: '',
+      notes: isEn ? 'Our new landing page — see what ulink can do.' : '新版宣传页 —— 看看与链能做什么。',
+      icon: OFFICIAL_SITE_ICON,
+      categoryId: CAT_UNCATEGORIZED,
+      parentId: null,
+      order,
+      useCount: 0,
+      attributes: {},
+      isExpanded: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+    safeSetItem('lv_landing_bm_done', '1')
   },
   updateBookmark(this: DataStoreThis, id: string, changes: Partial<Bookmark>) {
     if (_denyWrite()) return

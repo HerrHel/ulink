@@ -26,14 +26,31 @@ const attributesSchema = z.preprocess((v) => {
   return out
 }, z.record(z.string(), z.boolean())).catch({})
 
+/**
+ * 容量护栏：超长字段静默截断（bound 而非 reject）。
+ * 为什么不用 .max()：保存路径（stores/app.ts saveAppData）对 safeParse 失败会整包
+ * 跳过写盘——.max() 会因单条超长 notes 让**所有**数据存不进去；而 catch 侧用 '' 兜底
+ * 会把存量超长内容清空。截断是唯一「不丢数据、不阻断保存」的语义，同时为云端 DB
+ * 触顶防护提供行级体积上界（notes 大时 data_history 单项快照可达数百 KB）。
+ * 阈值取宽松值：只截病态数据（如粘贴进 notes 的整篇文章 ×多），正常使用无感。
+ */
+function boundedString(max: number): (s: string) => string {
+  return (s) => (s.length > max ? s.slice(0, max) : s)
+}
+const boundTitle = boundedString(500)
+const boundUrl = boundedString(4096)
+const boundNotes = boundedString(131_072)
+const boundName = boundedString(200)
+const boundIcon = boundedString(8_192)
+
 export const BookmarkSchema = z.object({
   id: z.string(),
-  title: z.string(),
-  url: z.string(),
+  title: z.string().transform(boundTitle),
+  url: z.string().transform(boundUrl),
   username: z.string().catch(''),
   password: z.union([z.string(), EncryptedPasswordSchema]).catch(''),
-  notes: z.string().catch(''),
-  icon: z.string().catch(''),
+  notes: z.string().catch('').transform(boundNotes),
+  icon: z.string().catch('').transform(boundIcon),
   categoryId: z.string().catch('uncategorized'),
   parentId: z.string().nullable().catch(null),
   // C2/D2-004：可降级语义字段；类型可修复时优先 coerce，避免整字段清空。
@@ -49,14 +66,14 @@ export const BookmarkSchema = z.object({
 
 export const SiblingGroupSchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: z.string().transform(boundName),
   categoryId: z.string().catch('uncategorized'),
-  icon: z.string().catch(''),
+  icon: z.string().catch('').transform(boundIcon),
   order: coerceNum(0),
   isExpanded: z.boolean().catch(false),
   attributes: attributesSchema,
   bookmarkIds: z.array(z.string()).catch([]),
-  notes: z.string().catch(''),
+  notes: z.string().catch('').transform(boundNotes),
   updatedAt: coerceNum(() => Date.now()),
   useCount: coerceNum(0),
   isPublic: z.boolean().optional(),
@@ -67,8 +84,8 @@ export const SiblingGroupSchema = z.object({
 // D2-003：icon/color 必须 .catch，单条坏分类不能拖垮 AppData → DEFAULTS
 export const CategorySchema = z.object({
   id: z.string(),
-  name: z.string(),
-  icon: z.string().catch(''),
+  name: z.string().transform(boundName),
+  icon: z.string().catch('').transform(boundIcon),
   color: z.string().catch(''),
   order: coerceNum(0),
   updatedAt: z.number().optional(),
@@ -77,7 +94,7 @@ export const CategorySchema = z.object({
 
 export const CustomAttributeSchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: z.string().transform(boundName),
   type: z.literal('boolean'),
   updatedAt: z.number().optional(),
   deletedAt: z.number().optional(),
