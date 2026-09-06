@@ -19,11 +19,25 @@
  */
 import { renderSharePage, renderNotFoundPage, renderUnavailablePage, type ShareLocale } from "../_lib/share-render.js"
 import { getAppAssets, type AppAssetsEnv } from "../_lib/app-assets.js"
+// 函数内边缘缓存（Cache API）：CF Pages 会覆写 Function 响应的 Cache-Control
+// （实测恒为 max-age=0，旧 60s 头从未生效），必须走显式缓存通道，设计见 share-cache.ts
+import {
+  matchShareCache, putShareCache, shareCacheKey, shareStaleKey,
+  EDGE_TTL_S, STALE_TTL_S,
+} from "../_lib/share-cache.js"
 
 interface ShareEnv extends AppAssetsEnv {
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
   APP_ORIGIN?: string
+}
+
+interface ShareContext {
+  params: { gid?: string }
+  env: ShareEnv
+  request: Request
+  /** Pages Functions 运行时提供；类型面手动声明（functions 不参与 tsc 门禁） */
+  waitUntil: (p: Promise<unknown>) => void
 }
 
 /** 校验分享组 ID：与 App 端 generateId 格式对齐（字母数字 _ -，2-64 位）。 */
@@ -40,24 +54,30 @@ function resolveLocale(url: URL, acceptLanguage: string): ShareLocale {
   return "en-US"
 }
 
-export async function onRequestGet(context: {
-  params: { gid?: string }
-  env: ShareEnv
-  request: Request
-}): Promise<Response> {
+export async function onRequestGet(context: ShareContext): Promise<Response> {
   const gid = String(context.params.gid || "").trim()
   if (!isValidShareGroupId(gid)) {
-    return new Response("bad request", { status: 400 })
+    return new Response("bad request", { status: 400, headers: { "x-share-render": "v2" } })
   }
 
   const url = new URL(context.request.url)
   const locale = resolveLocale(url, context.request.headers.get("accept-language") || "")
 
+  // 边缘新鲜命中：直接返回，不打 Supabase RPC
+  const cacheKey = shareCacheKey(url.origin, url.pathname, url.search)
+  const hit = await matchShareCache(cacheKey)
+  if (hit) {
+    const res = new Response(hit.body, hit)
+    res.headers.set("x-share-cache", "HIT")
+    res.headers.set("x-share-render", "v2")
+    return res
+  }
+
   const supabaseUrl = (context.env.SUPABASE_URL || "").replace(/\/+$/, "")
   const anonKey = context.env.SUPABASE_ANON_KEY || ""
   const appOrigin = (context.env.APP_ORIGIN || "https://ulink.ren").replace(/\/+$/, "")
   if (!supabaseUrl || !anonKey) {
-    return new Response("server misconfigured", { status: 500 })
+    return new Response("server misconfigured", { status: 500, headers: { "x-share-render": "v2" } })
   }
 
   let data: { group?: unknown; bookmarks?: unknown } | null = null
@@ -83,13 +103,23 @@ export async function onRequestGet(context: {
 
   // 上游不可达/5xx ≠ 分享不存在：404 语义保留给「组不存在或未公开」，否则
   // Supabase 宕机/触顶时所有正常分享链接都会对外表现为「链接失效」。
-  // 503 不缓存（no-store），恢复后的下一次请求立即拿到真数据。
+  // 先试 24h 故障兜底副本（200 + STALE，分享内容只是旧不是失效）；没有才 503
+  // （no-store，恢复后的下一次请求立即拿到真数据）。
   if (upstreamFailed) {
+    const stale = await matchShareCache(shareStaleKey(cacheKey))
+    if (stale) {
+      const res = new Response(stale.body, stale)
+      res.headers.set("x-share-cache", "STALE")
+      res.headers.set("x-share-render", "v2")
+      res.headers.set("cache-control", "public, max-age=60")
+      return res
+    }
     return new Response(renderUnavailablePage(locale), {
       status: 503,
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
+        "x-share-render": "v2",
       },
     })
   }
@@ -97,7 +127,7 @@ export async function onRequestGet(context: {
   if (!data || !data.group) {
     return new Response(renderNotFoundPage(locale), {
       status: 404,
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers: { "content-type": "text/html; charset=utf-8", "x-share-render": "v2" },
     })
   }
 
@@ -111,13 +141,16 @@ export async function onRequestGet(context: {
     locale,
     await getAppAssets(context.env, context.request.url),
   )
+  // 双写边缘缓存（waitUntil 异步，不阻塞响应）：主键 5 分钟新鲜 + 24h 故障兜底副本
+  context.waitUntil((async () => {
+    await putShareCache(context.waitUntil, cacheKey, html, EDGE_TTL_S)
+    await putShareCache(context.waitUntil, shareStaleKey(cacheKey), html, STALE_TTL_S)
+  })())
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      // max-age 5min + SWR 30min：公开组内容低频变化，拉长边缘缓存窗口 = 把匿名
-      // 分享流量与 Supabase egress/配额解耦（触顶防护）；代价是更新可见延迟与
-      // Accept-Language 语言变体混缓窗口变长（CF 缓存键仅 URL，已有权衡，非本次引入）。
-      "cache-control": "public, max-age=300, stale-while-revalidate=1800",
+      "x-share-render": "v2",
+      "x-share-cache": "MISS",
     },
   })
 }
