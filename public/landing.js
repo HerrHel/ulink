@@ -12,7 +12,8 @@
  *     之后恢复秒跳 —— 宣传页对老用户是低频信息，不做反复打扰；
  *  4. 双语切换 —— 中文是 HTML 静态默认（SEO 与全站惯例一致）；切到英文由本脚本
  *     按 ?lang= → lv_locale → navigator.language（与 /s/* 的 resolveLocale
- *     顺序一致）即时替换 data-i18n 文案；切回中文整页还原（reload 到静态原文）。
+ *     顺序一致）即时替换 data-i18n 文案；切回中文整页还原（reload 到静态原文）；
+ *  5. 页面增强 —— 滚动显现（.reveal）、视图演示卡填充、主题/深浅色演示切换。
  */
 (function () {
   'use strict';
@@ -46,65 +47,66 @@
 
   if (missionParams || (returning && !stayRequested && seen)) {
     location.replace(APP_PATH + search + hash);
-    return; // 跳转中，不再做语言增强
+    return; // 跳转中，不再做页面增强
   }
   // 本次落地页确定渲染（新访客 / stay 豁免 / 老用户首次曝光），记录已见。
   // 新访客也写入：避免其成为老用户后被二次强制曝光（首次到达即已看过）。
   try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) { /* ignore */ }
 
-  /* ── 3：双语 ── */
+  // JS 可用标记：CSS 据此启用「滚动显现」初始隐藏态（无 JS 时内容直接可见）
+  document.documentElement.className += ' js';
+
+  /* ── 4：双语 ── */
   // 英文字典（中文是 HTML 内的静态默认，无需字典）
   var EN = {
-    'nav.features': 'Features',
-    'nav.steps': 'Get started',
-    'nav.faq': 'FAQ',
-    'nav.start': 'Start free',
-    'hero.title1': 'Your bookmarks, ',
-    'hero.title2': 'one living web',
-    'hero.sub': 'ulink is a local-first bookmark manager: end-to-end encrypted, synced across devices, shareable with a single link — your data stays yours.',
-    'cta.start': 'Start for free',
-    'cta.more': 'See what it can do',
-    'mock.title': 'ulink — my library',
-    'mock.search': 'Search bookmarks, groups…',
-    'mock.c1t': 'GitHub',
-    'mock.c1u': 'github.com',
-    'mock.c2t': 'Design · 12',
-    'mock.c2a': 'Dribbble',
-    'mock.c2c': 'Zcool',
-    'mock.pin': 'Pinned',
-    'mock.c3t': 'Weekly report',
-    'mock.c3u': 'docs.example.com',
-    'mock.c4t': 'TypeScript handbook',
-    'mock.c5t': 'Daily mix',
-    'mock.c5u': 'music.example.com',
-    'mock.c6t': 'Shortcuts cheat-sheet',
-    'mock.c6u': 'shortcuts.dev',
-    'feat.eyebrow': 'Features',
-    'feat.title': 'A small, complete bookmark library',
-    'feat.intro': 'No bloat — collecting, organizing and finding things again, done properly.',
-    'f1.title': 'End-to-end encrypted',
-    'f1.desc': 'Sensitive fields like passwords are encrypted on your device before they ever leave it — the server only sees ciphertext.',
-    'f2.title': 'Sync across devices',
-    'f2.desc': 'Bookmarks, groups and edits sync in real time; conflicts merge automatically and every version stays retrievable.',
-    'f3.title': 'Share with a single link',
-    'f3.desc': 'Publish a group at its own /s/ link — anyone can browse without an account, and fork it into their own copy in one click.',
-    'f4.title': 'Local-first, works offline',
-    'f4.desc': 'Your data lives in your own browser and works without a network. Install it as a PWA to your desktop or home screen.',
-    'f5.desc1': 'Press ',
-    'f5.desc2': ' in the Chrome extension — or share from your OS menu — and the page is filed instantly.',
-    'f6.title': 'Organized, and reversible',
-    'f6.desc': 'Groups, categories, custom attributes and pinyin-aware search. Mistakes go to trash; actions can be undone.',
-    'steps.eyebrow': 'Get started',
-    'steps.title': 'Three steps to your ulink',
-    's1.t': 'Open and go',
-    's1.d': 'No sign-up. Open the app and start filing — data lands locally first.',
-    's2.t': 'Connect the cloud',
-    's2.d': 'Sign in with an email code; devices sync in real time and every version stays retrievable.',
-    's3.t': 'Save anywhere, share anywhere',
-    's3.d': "Capture with the extension's shortcut, then publish a group with a single /s/ link.",
-    'steps.cta': 'Start now',
-    'faq.eyebrow': 'FAQ',
-    'faq.title': 'Questions you might have',
+    'head.login': 'Sign in',
+    'head.start': 'Start free',
+    'hero.title1': 'Save, organize & share,',
+    'hero.title2': ' anywhere',
+    'hero.sub': 'ulink is a bookmark manager that works the moment you open it: sub-bookmarks, categories and attribute tags keep collections deeply organized; cloud sync keeps them safe across devices; a single link shares them with anyone.',
+    'hero.note': 'Free · No sign-up required · Your data lives on your own device',
+    'cta.start': 'Get started',
+    'why.title': 'Why ulink',
+    'manage.title': 'Deep organization: chains within chains',
+    'manage.sub': 'Not just storing URLs — every bookmark stays exactly where it belongs.',
+    'm1.t': 'Sub-bookmarks',
+    'm1.d': 'Hang multiple links under one bookmark — every entrance to a site, gathered in one place.',
+    'm2.t': 'Categories & groups',
+    'm2.d': 'Categories cut across the sidebar; group cards collect vertically, with in-group search and batch tools.',
+    'm3.t': 'Attribute tags',
+    'm3.d': 'Define tags like “Requires login” or “AI” — one click to filter, one second to find.',
+    'dm.all': 'All',
+    'dm.tools': 'Tools',
+    'dm.ai': 'AI',
+    'dm.parent': 'Dev resources',
+    'dm.child1': 'TypeScript handbook',
+    'dm.chip1': 'Requires login',
+    'dev.l': 'This device',
+    'dev.r': 'Phone',
+    'dev.c': 'End-to-end encrypted',
+    'looks.title': 'Simple, refined',
+    'looks.sub': 'Two theme styles, light & dark, three view modes — the switches below are real, try them.',
+    'theme.eff': 'Efficiency',
+    'theme.comfort': 'Comfort',
+    'view.grid': 'Grid',
+    'view.list': 'List',
+    'view.mini': 'Mini grid',
+    'looks.note': 'Theme and view preferences are remembered per device — and follow you after signing in.',
+    'create.title': 'Create & share',
+    'create.d1': 'Publish a bookmark collection (a category) or a single group with one link: anyone can browse without an account, and fork it into their own copy in one click.',
+    'create.d2': 'A group is a rich-text notebook — headings, colors, task lists, @ mentions that embed bookmark cards. Writing an install guide or a getting-started tutorial fits right in.',
+    'cm.tut': 'Install guide',
+    'extra.title': 'And the little things',
+    'x1.t': 'One-keystroke capture',
+    'x1.d': 'Press ',
+    'x1.d2': ' in the Chrome extension and the page is filed instantly.',
+    'x2.t': 'Offline, installable',
+    'x2.d': 'Install as a PWA to your desktop or home screen; works without a network.',
+    'x3.t': 'Pinyin fuzzy search',
+    'x3.d': 'Type “js” to find 键盘快捷键 — perfect recall of full names not required.',
+    'x4.t': 'Trash & undo',
+    'x4.d': 'Deleted items go to trash, actions can be undone — nothing is ever lost to a slip.',
+    'faq.title': 'FAQ',
     'q1': 'Is it really free?',
     'a1': 'Yes. Local features are completely free with no ads; cloud sync and public sharing are free as of today.',
     'q2': 'Where does my data live?',
@@ -113,6 +115,8 @@
     'a3': 'Sign in with the same account and everything syncs. You can also export your data to a file and import it elsewhere anytime.',
     'q4': 'How is this different from built-in browser bookmarks?',
     'a4': 'It travels across browsers and devices, organizes with groups, attributes and pinyin-aware search, shares publicly, and captures any page via the extension or OS share.',
+    'cta.title': 'Link your library together',
+    'cta.sub': 'Open it and start — no account needed.',
     'foot.slogan': 'Collect · Organize · Share',
     'foot.privacy': 'Privacy policy',
     'foot.rights': '© 2026 ulink.ren · ulink',
@@ -120,7 +124,7 @@
     'lang.aria': 'Switch to 中文',
     'lang.labelFoot': '中文'
   };
-  var EN_TITLE = 'ulink — a local-first bookmark manager';
+  var EN_TITLE = 'ulink — collect, organize & share, anywhere';
 
   function resolveLocale() {
     // 与 functions/s/[gid].ts 的 resolveLocale 顺序一致：?lang= 优先
@@ -178,10 +182,80 @@
     });
   }
 
+  /* ── 5：页面增强 ── */
+  var reducedMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /** 滚动显现：进入视口一次性加 .in */
+  function initReveal() {
+    var els = document.querySelectorAll('.reveal');
+    if (reducedMotion || !('IntersectionObserver' in window)) {
+      for (var i = 0; i < els.length; i++) els[i].classList.add('in');
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      for (var k = 0; k < entries.length; k++) {
+        if (entries[k].isIntersecting) {
+          entries[k].target.classList.add('in');
+          io.unobserve(entries[k].target);
+        }
+      }
+    }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
+    for (var j = 0; j < els.length; j++) io.observe(els[j]);
+  }
+
+  /** 视图演示：填充三种视图的滚动卡片（装饰性，aria-hidden 区域内） */
+  function populateDemo() {
+    var items = ['github.com', 'figma.com', 'notion.so', 'mail.qq.com', 'zhihu.com', 'douban.com', 'store.steam', 'deepseek'];
+    var cols = ['demo-col-grid', 'demo-col-list', 'demo-col-mini'];
+    for (var c = 0; c < cols.length; c++) {
+      var col = document.getElementById(cols[c]);
+      if (!col) continue;
+      // 双份内容 + translateY(-50%) 无缝循环
+      for (var rep = 0; rep < 2; rep++) {
+        for (var i = 0; i < items.length; i++) {
+          var card = document.createElement('div');
+          card.className = 'mk-card';
+          var dot = document.createElement('i');
+          var label = document.createElement('b');
+          label.textContent = items[i];
+          card.appendChild(dot);
+          card.appendChild(label);
+          col.appendChild(card);
+        }
+      }
+    }
+  }
+
+  /** 主题 / 深浅色演示切换（只作用于演示舞台，不写应用偏好） */
+  function initDemoControls() {
+    var stage = document.getElementById('demo-stage');
+    if (!stage) return;
+    function bindGroup(attr, key) {
+      var btns = document.querySelectorAll('[data-' + attr + ']');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].addEventListener('click', function (e) {
+          var val = e.currentTarget.getAttribute('data-' + attr);
+          stage.setAttribute('data-' + key, val);
+          var group = e.currentTarget.parentElement;
+          var all = group.querySelectorAll('button');
+          for (var k = 0; k < all.length; k++) {
+            all[k].setAttribute('aria-pressed', all[k] === e.currentTarget ? 'true' : 'false');
+          }
+        });
+      }
+    }
+    bindGroup('demo-style', 'style');
+    bindGroup('demo-mode', 'mode');
+  }
+
   function boot() {
     if (resolveLocale() === 'en-US') applyEnglish();
     else setToggleLabels(true);
     bindToggles();
+    populateDemo();
+    initDemoControls();
+    initReveal();
     document.documentElement.removeAttribute('data-lv-boot');
   }
 
