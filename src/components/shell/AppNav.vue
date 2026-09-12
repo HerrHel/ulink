@@ -1,7 +1,7 @@
 <template>
   <nav class="icon-rail" :class="{ open: uiStore.panels.rail }" :aria-label="t('nav.rail')">
     <div class="rail-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <BrandLogo :size="22" />
       <span class="rail-logo-text" :data-space="uiStore.curSpace">{{ isVault ? t('nav.vaultSpace') : t('nav.brand') }}</span>
     </div>
     <div class="rail-section-label">{{ t('nav.categories') }}</div>
@@ -58,6 +58,7 @@ import { useVault } from '../../composables/domain/useVault.js'
 import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
+import BrandLogo from '../ui/BrandLogo.vue'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { storageBarColorFor } from './storageBarColor.js'
 import { t } from '../../i18n/index.js'

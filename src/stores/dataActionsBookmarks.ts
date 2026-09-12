@@ -16,7 +16,7 @@ import { getLocale } from '../i18n/index.js'
 export const OFFICIAL_SITE_BM_ID = 'bm_ulink_home'
 /** 品牌链条图标（与 app.html/favicon 同源 SVG data URI），img-src data: 合法 */
 const OFFICIAL_SITE_ICON =
-  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>"
+  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><style>    .blue-path { stroke: %23122E8A; }    .green-path { stroke: %2310B981; }    @media (prefers-color-scheme: dark) {      .blue-path { stroke: %234F6BFF; }      .green-path { stroke: %2310B981; }    }  </style><defs><mask id='mb'><rect width='240' height='240' fill='white'/><line x1='173' y1='144' x2='211' y2='144' stroke='black' stroke-width='38' stroke-linecap='round'/></mask><mask id='mg'><rect width='240' height='240' fill='white'/><line x1='29' y1='96' x2='67' y2='96' stroke='black' stroke-width='38' stroke-linecap='round'/></mask></defs><path class='blue-path' d='M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192' fill='none' stroke-width='26' stroke-linecap='round' stroke-linejoin='round' mask='url(%23mb)'/><path class='green-path' d='M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48' fill='none' stroke-width='26' stroke-linecap='round' stroke-linejoin='round' mask='url(%23mg)'/></svg>"
 
 export const bookmarkActions = {
   /** L10：现存书签最大 order + 1，新建书签统一入口 */

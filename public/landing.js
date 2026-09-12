@@ -61,66 +61,80 @@
   var EN = {
     'head.login': 'Sign in',
     'head.start': 'Start free',
+    'hero.pill': 'Offline-first · End-to-End Zero-Knowledge Encrypted · Free Public Distribution',
     'hero.title1': 'Save, organize & share,',
     'hero.title2': ' anywhere',
-    'hero.sub': 'ulink is a bookmark manager that works the moment you open it: sub-bookmarks, categories and attribute tags keep collections deeply organized; cloud sync keeps them safe across devices; a single link shares them with anyone.',
-    'hero.note': 'Free · No sign-up required · Your data lives on your own device',
+    'hero.sub': 'ulink is a next-generation professional bookmark and knowledge management system: tree-nested sub-bookmarks, multidimensional attribute filtering, end-to-end zero-knowledge encryption, and one-click public Fork collaboration.',
+    'hero.explore': 'Explore Features',
+    'hero.note': 'Ready out-of-the-box · Local authority storage · End-to-end zero-knowledge encrypted · Free & open distribution',
     'cta.start': 'Get started',
+    'why.eyebrow': 'Deep Organization',
     'why.title': 'Why ulink',
-    'manage.title': 'Deep organization: chains within chains',
-    'manage.sub': 'Not just storing URLs — every bookmark stays exactly where it belongs.',
-    'm1.t': 'Sub-bookmarks',
-    'm1.d': 'Hang multiple links under one bookmark — every entrance to a site, gathered in one place.',
-    'm2.t': 'Categories & groups',
-    'm2.d': 'Categories cut across the sidebar; group cards collect vertically, with in-group search and batch tools.',
-    'm3.t': 'Attribute tags',
-    'm3.d': 'Define tags like “Requires login” or “AI” — one click to filter, one second to find.',
-    'dm.all': 'All',
-    'dm.tools': 'Tools',
-    'dm.ai': 'AI',
-    'dm.parent': 'Dev resources',
-    'dm.child1': 'TypeScript handbook',
-    'dm.chip1': 'Requires login',
-    'dev.l': 'This device',
-    'dev.r': 'Phone',
-    'dev.c': 'End-to-end encrypted',
-    'looks.title': 'Simple, refined',
-    'looks.sub': 'Two theme styles, light & dark, three view modes — the switches below are real, try them.',
+    'manage.title': 'Deep Organization: Connect Links & People',
+    'manage.sub': '“ulink” means “Connect Links & People” (ulink.ren). Move beyond flat bookmark bars and establish structured topology across links and knowledge.',
+    'm1.t': 'Tree-nested Sub-bookmarks',
+    'm1.d': 'Deconstruct complex web structures. Mount documentation, consoles, and repositories seamlessly under a single entry.',
+    'm2.t': 'Taxonomy & Rich-text Notebooks',
+    'm2.d': 'Categorize workspaces with clear boundaries; write full-featured notebooks with @ card references and focused editing.',
+    'm3.t': 'Custom Attribute Slicing',
+    'm3.d': 'Define multidimensional attribute tags with boolean intersection filtering for sub-millisecond precision discovery.',
+    'sync.eyebrow': 'Sync & Privacy',
+    'sync.title': 'Real-time Multi-device Sync, Zero-Knowledge Encryption',
+    'sync.d1': 'Eliminate vendor lock-in and device-loss risks. Millisecond incremental sync with deterministic conflict resolution and revision history.',
+    'sync.d2': 'Credentials and passwords are physically encrypted on-device via AES-256-GCM before upload. The cloud remains zero-knowledge.',
+    'dev.l': 'This Device · Authority Store',
+    'dev.r': 'Mobile · Realtime Synced',
+    'dev.c': 'End-to-End Zero-Knowledge Encryption',
+    'looks.eyebrow': 'Design System',
+    'looks.title': 'Simple, Refined: Crafted to the Pixel',
+    'looks.sub': 'Dual efficiency and comfort palettes, seamless dark/light modes, and three flexible views — grid, list, and compact mini-grid.',
+    'theme.aria': 'Theme style',
     'theme.eff': 'Efficiency',
     'theme.comfort': 'Comfort',
+    'mode.aria': 'Color scheme',
+    'mode.light': 'Light mode',
+    'mode.dark': 'Dark mode',
     'view.grid': 'Grid',
     'view.list': 'List',
     'view.mini': 'Mini grid',
-    'looks.note': 'Theme and view preferences are remembered per device — and follow you after signing in.',
-    'create.title': 'Create & share',
-    'create.d1': 'Publish a bookmark collection (a category) or a single group with one link: anyone can browse without an account, and fork it into their own copy in one click.',
-    'create.d2': 'A group is a rich-text notebook — headings, colors, task lists, @ mentions that embed bookmark cards. Writing an install guide or a getting-started tutorial fits right in.',
-    'cm.tut': 'Install guide',
-    'extra.title': 'And the little things',
-    'x1.t': 'One-keystroke capture',
+    'looks.note': 'Visual theme and view preferences are persisted per device and roam globally upon sign-in.',
+    'create.eyebrow': 'Collaboration',
+    'create.title': 'Connect & Fork Knowledge Freely',
+    'create.d1': 'Publish collections or notebooks with a single link. Visitors explore with zero sign-up and can fork independent local copies with one click.',
+    'create.d2': 'Integrated TipTap editor with headings, highlights, task checklists, and @ card mentions — bridging collection and creation in a natural closed loop.',
+    'cm.n1': 'Creator · Outgoing Link',
+    'cm.n2': 'Visitor · Zero Sign-up Reading',
+    'cm.n3': '⚡ One-click Fork Copy',
+    'cm.n4': '📱 Multi-device Responsive',
+    'cm.public': 'Public Share',
+    'cm.fork': 'Fork Copy',
+    'extra.eyebrow': 'Crafted Details',
+    'extra.title': 'And Thoughtful Everyday Delights',
+    'x1.t': 'One-keystroke Capture',
     'x1.d': 'Press ',
-    'x1.d2': ' in the Chrome extension and the page is filed instantly.',
-    'x2.t': 'Offline, installable',
-    'x2.d': 'Install as a PWA to your desktop or home screen; works without a network.',
-    'x3.t': 'Pinyin fuzzy search',
-    'x3.d': 'Type “js” to find 键盘快捷键 — perfect recall of full names not required.',
-    'x4.t': 'Trash & undo',
-    'x4.d': 'Deleted items go to trash, actions can be undone — nothing is ever lost to a slip.',
-    'faq.title': 'FAQ',
-    'q1': 'Is it really free?',
-    'a1': 'Yes. Local features are completely free with no ads; cloud sync and public sharing are free as of today.',
+    'x1.d2': ' in Chrome extension to file the page and notes immediately.',
+    'x2.t': 'Offline-first Architecture & PWA',
+    'x2.d': 'Built upon IndexedDB authority storage; installable on desktop and mobile with full offline functionality.',
+    'x5.t': 'Fluid Drag & Drop',
+    'x5.d': 'Freely reorder cards, drop into categories or group notes to cite; native 60fps gesture physics on mobile.',
+    'x3.t': 'Pinyin & Instant Fuzzy Search',
+    'x3.d': 'Type “js” to find 键盘快捷键 (keyboard shortcuts) — no need to recall full names.',
+    'x4.t': 'Safety Trash & Multi-step Undo',
+    'x4.d': 'Full undo/redo history stack and safety trash can recovery prevent accidental losses.',
+    'faq.eyebrow': 'FAQ',
+    'faq.title': 'Frequently Asked Questions',
     'q2': 'Where does my data live?',
-    'a2': 'By default, only in your own browser (IndexedDB) — nothing is uploaded. Once you enable cloud sync, data syncs to your account, with password fields end-to-end encrypted: the server only sees ciphertext.',
+    'a2': 'By default, it lives only in your browser (IndexedDB) with zero server tracking. With cloud sync enabled, incremental data syncs to your account — credentials are encrypted with AES-256-GCM before leaving your device.',
     'q3': 'What about switching devices or browsers?',
-    'a3': 'Sign in with the same account and everything syncs. You can also export your data to a file and import it elsewhere anytime.',
-    'q4': 'How is this different from built-in browser bookmarks?',
-    'a4': 'It travels across browsers and devices, organizes with groups, attributes and pinyin-aware search, shares publicly, and captures any page via the extension or OS share.',
-    'cta.title': 'Link your library together',
-    'cta.sub': 'Open it and start — no account needed.',
+    'a3': 'Sign in to sync in milliseconds; you can also export a full JSON backup file anytime and import it on any device.',
+    'q4': 'How does this differ from browser bookmarks?',
+    'a4': 'It travels across browsers and devices, supports sub-bookmark nesting, rich-text notebook groups, pinyin search, public sharing, and one-click capture via extension.',
+    'cta.title': 'Link your library together today',
+    'cta.sub': 'Works immediately without sign-up · Import existing browser bookmarks in seconds',
     'foot.slogan': 'Collect · Organize · Share',
     'foot.privacy': 'Privacy policy',
     'foot.rights': '© 2026 ulink.ren · ulink',
-    'foot.note': 'Start without sign-up · Cloud sync optional',
+    'foot.note': 'Ready to use · Privacy in your control · Cloud sync optional',
     'lang.aria': 'Switch to 中文',
     'lang.labelFoot': '中文'
   };
@@ -153,6 +167,12 @@
     document.documentElement.lang = 'en-US';
     document.title = EN_TITLE;
     setToggleLabels(false);
+    populateDemo();
+    if (window.__updateDemoGliders) {
+      requestAnimationFrame(function () {
+        window.__updateDemoGliders(true);
+      });
+    }
   }
 
   /** 两个语言切换入口的可见标签 = 目标语言 */
@@ -204,23 +224,92 @@
     for (var j = 0; j < els.length; j++) io.observe(els[j]);
   }
 
-  /** 视图演示：填充三种视图的滚动卡片（装饰性，aria-hidden 区域内） */
+  var DEMO_ITEMS = [
+    { title: '工作台', titleEn: 'Workspace', domain: 'workspace.io', tag: '日常', tagEn: 'Daily', icon: '作', iconEn: 'WK', color: '#122E8A', isTheme: true },
+    { title: '设计库', titleEn: 'Design Hub', domain: 'design.assets', tag: '创意', tagEn: 'Design', icon: '设', iconEn: 'DS', color: '#7C3AED' },
+    { title: '阅读清单', titleEn: 'Reading List', domain: 'reading.digest', tag: '知识', tagEn: 'Read', icon: '阅', iconEn: 'RD', color: '#0D9488' },
+    { title: 'AI 助手', titleEn: 'AI Tools', domain: 'ai.models', tag: '智能', tagEn: 'AI', icon: 'AI', iconEn: 'AI', color: '#2563EB' },
+    { title: '灵感集', titleEn: 'Inspirations', domain: 'inspo.gallery', tag: '素材', tagEn: 'Inspo', icon: '灵', iconEn: 'IN', color: '#EA580C' },
+    { title: '云服务', titleEn: 'Cloud Ops', domain: 'cloud.console', tag: '工具', tagEn: 'Ops', icon: '云', iconEn: 'CL', color: '#475569' },
+    { title: '财务账单', titleEn: 'Finance', domain: 'finance.ledger', tag: '资产', tagEn: 'Pay', icon: '财', iconEn: 'FN', color: '#059669' },
+    { title: '学习笔记', titleEn: 'Study Notes', domain: 'notes.study', tag: '资料', tagEn: 'Notes', icon: '学', iconEn: 'ST', color: '#D97706' }
+  ];
+
+  /** 视图演示：填充三种视图的滚动卡片（拟真微缩 UI） */
   function populateDemo() {
-    var items = ['github.com', 'figma.com', 'notion.so', 'mail.qq.com', 'zhihu.com', 'douban.com', 'store.steam', 'deepseek'];
-    var cols = ['demo-col-grid', 'demo-col-list', 'demo-col-mini'];
+    var cols = [
+      { id: 'demo-col-grid', type: 'grid' },
+      { id: 'demo-col-list', type: 'list' },
+      { id: 'demo-col-mini', type: 'mini' }
+    ];
+    var isEn = document.documentElement.lang === 'en-US';
     for (var c = 0; c < cols.length; c++) {
-      var col = document.getElementById(cols[c]);
+      var col = document.getElementById(cols[c].id);
       if (!col) continue;
+      col.innerHTML = '';
+      var type = cols[c].type;
       // 双份内容 + translateY(-50%) 无缝循环
       for (var rep = 0; rep < 2; rep++) {
-        for (var i = 0; i < items.length; i++) {
+        for (var i = 0; i < DEMO_ITEMS.length; i++) {
+          var item = DEMO_ITEMS[i];
           var card = document.createElement('div');
           card.className = 'mk-card';
-          var dot = document.createElement('i');
-          var label = document.createElement('b');
-          label.textContent = items[i];
-          card.appendChild(dot);
-          card.appendChild(label);
+
+          var icon = document.createElement('div');
+          icon.className = 'mk-icon' + (item.isTheme ? ' mk-icon-accent' : '');
+          if (!item.isTheme) {
+            icon.style.background = item.color;
+          }
+          icon.textContent = isEn ? (item.iconEn || item.icon) : item.icon;
+
+          var name = document.createElement('div');
+          name.className = 'mk-name';
+          name.textContent = isEn ? (item.titleEn || item.title) : item.title;
+
+          if (type === 'grid') {
+            var head = document.createElement('div');
+            head.className = 'mk-head';
+            head.appendChild(icon);
+            var titleWrap = document.createElement('div');
+            titleWrap.style.minWidth = '0';
+            titleWrap.style.flex = '1';
+            titleWrap.appendChild(name);
+            var domain = document.createElement('div');
+            domain.className = 'mk-domain';
+            domain.textContent = item.domain;
+            titleWrap.appendChild(domain);
+            head.appendChild(titleWrap);
+            card.appendChild(head);
+
+            var tag = document.createElement('span');
+            tag.className = 'mk-tag';
+            tag.textContent = isEn ? (item.tagEn || item.tag) : item.tag;
+            card.appendChild(tag);
+
+            var foot = document.createElement('div');
+            foot.className = 'mk-foot';
+            foot.innerHTML = '<span><i class="mk-dot"></i>42</span><span class="mk-arrow">↗</span>';
+            card.appendChild(foot);
+          } else if (type === 'list') {
+            var main = document.createElement('div');
+            main.className = 'mk-main';
+            main.appendChild(icon);
+            main.appendChild(name);
+            var tagL = document.createElement('span');
+            tagL.className = 'mk-tag';
+            tagL.textContent = isEn ? (item.tagEn || item.tag) : item.tag;
+            main.appendChild(tagL);
+            card.appendChild(main);
+
+            var hint = document.createElement('span');
+            hint.className = 'mk-hint';
+            hint.textContent = '↗';
+            card.appendChild(hint);
+          } else {
+            // mini
+            card.appendChild(icon);
+            card.appendChild(name);
+          }
           col.appendChild(card);
         }
       }
@@ -229,24 +318,76 @@
 
   /** 主题 / 深浅色演示切换（只作用于演示舞台，不写应用偏好） */
   function initDemoControls() {
+    var looks = document.getElementById('looks');
     var stage = document.getElementById('demo-stage');
     if (!stage) return;
+
+    var segs = document.querySelectorAll('.looks .seg');
+
+    function updateGliders(animate) {
+      for (var s = 0; s < segs.length; s++) {
+        var seg = segs[s];
+        var glider = seg.querySelector('.seg-glider');
+        var activeBtn = seg.querySelector('button[aria-pressed="true"]');
+        if (!glider || !activeBtn) continue;
+        if (!animate) {
+          glider.style.transition = 'none';
+        }
+        var left = activeBtn.offsetLeft;
+        var top = activeBtn.offsetTop;
+        var w = activeBtn.offsetWidth;
+        var h = activeBtn.offsetHeight;
+        glider.style.transform = 'translate3d(' + left + 'px,' + top + 'px,0)';
+        glider.style.width = w + 'px';
+        glider.style.height = h + 'px';
+        if (!animate) {
+          glider.offsetHeight; // force reflow
+          glider.style.transition = '';
+        } else {
+          glider.classList.remove('pulse');
+          void glider.offsetWidth; // trigger reflow for pulse animation
+          glider.classList.add('pulse');
+        }
+      }
+    }
+
     function bindGroup(attr, key) {
       var btns = document.querySelectorAll('[data-' + attr + ']');
       for (var i = 0; i < btns.length; i++) {
         btns[i].addEventListener('click', function (e) {
-          var val = e.currentTarget.getAttribute('data-' + attr);
+          var target = e.currentTarget;
+          var val = target.getAttribute('data-' + attr);
+          if (looks) looks.setAttribute('data-' + key, val);
           stage.setAttribute('data-' + key, val);
-          var group = e.currentTarget.parentElement;
+          var group = target.parentElement;
           var all = group.querySelectorAll('button');
           for (var k = 0; k < all.length; k++) {
-            all[k].setAttribute('aria-pressed', all[k] === e.currentTarget ? 'true' : 'false');
+            all[k].setAttribute('aria-pressed', all[k] === target ? 'true' : 'false');
           }
+          updateGliders(true);
         });
       }
     }
+
     bindGroup('demo-style', 'style');
     bindGroup('demo-mode', 'mode');
+
+    // 初始位置测算（无动效）
+    updateGliders(false);
+
+    // 屏幕尺寸变更 / 旋转重同步
+    window.addEventListener('resize', function () {
+      updateGliders(false);
+    });
+
+    // 字体就绪后重新校验位置（消除 WebFont 导致的宽度差异）
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () {
+        updateGliders(false);
+      });
+    }
+
+    window.__updateDemoGliders = updateGliders;
   }
 
   function boot() {

@@ -1,15 +1,18 @@
 /*
- * 与链 ulink — Hero 主视觉「星链」（/ 首页专用，Canvas 2D，零依赖）
+ * 与链 ulink — Hero 主视觉「星链 · 精工几何星网」（/ 首页专用，Canvas 2D，零依赖）
  *
- * 叙事：中心一颗最亮的星 = 与链站点，四周较小的站点节点沿椭圆轨道缓慢流转，
- * 各自连向中心（星链）；每隔几秒一颗节点向中心发出一道「脉冲」——一枚光点
- * 沿连线流入，中心泛起涟漪：像又有网页被收进库里。
- * 浅色设计：画布置于主页面底色 #F5EFEA 之上，节点/连线用品牌蓝 #122E8A 系。
+ * 叙事隐喻：
+ * 中心为「与链」精工双环徽标核心，四周节点沿克制的天球轨道缓缓运行，
+ * 节点与中心通过渐变能量连线相牵引（如万千网址归集入库）；
+ * 周期性有节点向中心射出一道渐变流光（Light Streak），在中心激起纯净的双波涟漪；
+ * 鼠标滑过时，邻近节点平滑唤醒增亮，充满温润而灵动的交互呼吸感。
  *
- * 交互：指针轻视差（按节点半径分层）。
- * 性能：节点数按面积自适应、DPR 上限 2、glow 用预渲染精灵而非 shadowBlur、
- * dt 驱动、hero 滚出视口 / 页签隐藏即暂停 rAF。
- * 可访问性：prefers-reduced-motion → 渲染单帧静态星链；canvas aria-hidden。
+ * 审美与工艺设计（借鉴 Linear / Stripe 等顶级站点的克制美学）：
+ * 1. 纯 2D 原生向量渲染，数学保证 100% 稳定，零 3D 穿模，零锯齿；
+ * 2. 渐变能量光丝（Linear Gradient）：告别纯色生硬线条，两端自发光；
+ * 3. 精致微晶节点：白晶内核 + 品牌深蓝/皇家蓝/翡翠绿外圈 + 柔和呼吸光晕；
+ * 4. 中心双环徽标微盘：高透白磨砂微盘内嵌精密「与链」交叠双环矢量标记；
+ * 5. 极简秩序天球环：极细微的背景椭圆引导环，提供宁静的运行秩序，绝不杂乱。
  */
 (function () {
   'use strict';
@@ -19,85 +22,114 @@
   var ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  var wrapper = canvas.parentElement; // .hero-visual（容器即视口）
+  var wrapper = canvas.parentElement;
   var reducedMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ── 调色（与 index.html 内联 CSS 的品牌令牌一致，改色两处同步） ── */
-  var BRAND = '18,46,138';        // #122E8A 主站主题色
-  var BRAND_SOFT = '79,124,255';  // 亮蓝节点点缀
+  /* ── 色彩令牌 ── */
+  var BRAND = '18,46,138';       // #122E8A 品牌深海蓝
+  var ACCENT = '59,130,246';     // #3B82F6 皇家亮蓝
+  var TEAL = '16,185,129';       // #10B981 翡翠绿
 
-  /* ── 状态 ── */
+  /* ── 状态池 ── */
   var W = 0, H = 0, DPR = 1;
-  var hub = { x: 0, y: 0 };
-  var nodes = [];        // 轨道站点节点
-  var chords = [];       // 少量节点间弦线 [i, j]
-  var pulses = [];       // 流入中心的光点
-  var ripples = [];      // 中心涟漪
-  var nextPulseAt = 1.6;
-  var elapsed = 0;
-  var pointer = { tx: 0, ty: 0, x: 0, y: 0 };
+  var hub = { x: 0, y: 0, r: 18, flash: 0 };
+  var nodes = [];
+  var guideOrbits = [];
+  var chords = [];
+  var pulses = [];
+  var ripples = [];
+  var nextPulseAt = 1.8;
+  var pointer = { x: 0, y: 0, tx: 0, ty: 0, active: false, mouseCanvasX: 0, mouseCanvasY: 0 };
   var rafId = 0, running = false, lastT = 0, inView = true;
 
-  /* ── glow 精灵：预渲染径向渐变，drawImage 复用 ── */
-  function makeGlow(rgb) {
+  // 预渲染高质感径向光晕精灵（离屏缓存，零 shadowBlur 性能开销）
+  function makeGlow(rgb, size) {
     var s = document.createElement('canvas');
-    s.width = s.height = 64;
+    s.width = s.height = size;
     var g = s.getContext('2d');
-    var grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(' + rgb + ',.55)');
-    grad.addColorStop(0.4, 'rgba(' + rgb + ',.18)');
-    grad.addColorStop(1, 'rgba(' + rgb + ',0)');
+    var half = size / 2;
+    var grad = g.createRadialGradient(half, half, 0, half, half, half);
+    grad.addColorStop(0, 'rgba(' + rgb + ', 0.65)');
+    grad.addColorStop(0.35, 'rgba(' + rgb + ', 0.2)');
+    grad.addColorStop(1, 'rgba(' + rgb + ', 0)');
     g.fillStyle = grad;
-    g.fillRect(0, 0, 64, 64);
+    g.fillRect(0, 0, size, size);
     return s;
   }
-  var spriteBrand = makeGlow(BRAND);
-  var spriteSoft = makeGlow(BRAND_SOFT);
 
-  /* ── 场景构建 ── */
+  var spriteAccent = makeGlow(ACCENT, 64);
+  var spriteTeal = makeGlow(TEAL, 64);
+
+  // 绘制与链官方品牌矢量徽标（U-Knot 与字结）
+  function drawBrandLogo(ctx, cx, cy, size, bgColor) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    var s = size / 2;
+    var lw = s * 0.22;
+    var gapLw = lw * 1.58;
+    var bg = bgColor || '#FFFFFF';
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var blueColor = isDark ? '#4F6BFF' : '#122E8A';
+      var greenColor = '#10B981'; // Green stays the same
+      
+      // 1. Full Blue shape (G2 B茅zier)
+      ctx.strokeStyle = blueColor;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(-0.8 * s, -0.2 * s);
+      ctx.lineTo(0, -0.2 * s);
+      ctx.bezierCurveTo((7/15) * s, -0.2 * s, 0.6 * s, -(2/15) * s, 0.6 * s, 0.2 * s);
+      ctx.bezierCurveTo(0.6 * s, (8/15) * s, (7/15) * s, 0.6 * s, 0, 0.6 * s);
+      ctx.lineTo(-0.6 * s, 0.6 * s);
+      ctx.stroke();
+  
+      // 2. Optical Gap at Crossing 2
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = lw + 14;
+      ctx.beginPath();
+      ctx.moveTo(0, 0.2 * s);
+      ctx.lineTo(0.3 * s, 0.2 * s);
+      ctx.stroke();
+  
+      // 3. Full Green shape
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = greenColor;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(0.8 * s, 0.2 * s);
+      ctx.lineTo(0, 0.2 * s);
+      ctx.bezierCurveTo(-(7/15) * s, 0.2 * s, -0.6 * s, (2/15) * s, -0.6 * s, -0.2 * s);
+      ctx.bezierCurveTo(-0.6 * s, -(8/15) * s, -(7/15) * s, -0.6 * s, 0, -0.6 * s);
+      ctx.lineTo(0.6 * s, -0.6 * s);
+      ctx.stroke();
+  
+      // 4. Optical Gap at Crossing 1
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = lw + 14;
+      ctx.beginPath();
+      ctx.moveTo(0, -0.2 * s);
+      ctx.lineTo(-0.3 * s, -0.2 * s);
+      ctx.stroke();
+  
+      // 5. Seamless re-stroke Blue top line
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = blueColor;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(-0.8 * s, -0.2 * s);
+      ctx.lineTo(-0.01 * s, -0.2 * s);
+      ctx.stroke();
+
+    ctx.restore();
+  }
+
   function rand(a, b) { return a + Math.random() * (b - a); }
 
-  function build() {
-    nodes = [];
-    chords = [];
-    pulses = [];
-    ripples = [];
-    hub.x = W / 2; hub.y = H / 2;
-    var base = Math.min(W, H);
-    var count = Math.round(base / 42);
-    count = Math.max(8, Math.min(14, count));
-    for (var i = 0; i < count; i++) {
-      var frac = (i + 0.55) / count;                 // 半径错开，避免环带重叠
-      nodes.push({
-        R: base * (0.24 + 0.32 * frac + rand(-0.03, 0.05)),
-        a: (i / count) * Math.PI * 2 + rand(-0.25, 0.25),
-        w: rand(0.05, 0.11) * (i % 2 ? 1 : -1),      // rad/s：一圈约 1-2 分钟
-        r: rand(2.4, 4.4),
-        soft: i % 3 === 1,                            // 约 1/3 用亮蓝点缀
-        phase: rand(0, Math.PI * 2),
-        tw: rand(0.5, 1),
-        px: 0, py: 0
-      });
-    }
-    // 少量弦线：相邻半径节点相连，形成「链与链」的网感
-    for (var k = 0; k < nodes.length; k++) {
-      var j = (k + 2) % nodes.length;
-      if (j !== k && Math.abs(nodes[k].R - nodes[j].R) < base * 0.16) chords.push([k, j]);
-    }
-  }
-
-  /* ── 节点当前位置（含视差） ── */
-  function nodePos(n, t) {
-    var wob = 1 + 0.045 * Math.sin(t * 0.35 + n.phase);   // 半径微呼吸
-    var squash = H > W ? 0.92 : 0.86;                      // 椭圆轨道压扁率
-    return {
-      x: hub.x + Math.cos(n.a) * n.R * wob + pointer.x * 8,
-      y: hub.y + Math.sin(n.a) * n.R * wob * squash + pointer.y * 8
-    };
-  }
-
-  /* ── 尺寸 ── */
   function resize() {
     if (!wrapper) return;
     DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -110,113 +142,280 @@
     if (reducedMotion) draw(0);
   }
 
-  /* ── 更新 ── */
-  function update(dt, t) {
-    elapsed = t;
-    var i, n;
-    for (i = 0; i < nodes.length; i++) {
-      n = nodes[i];
-      n.a += n.w * dt;
-      var p = nodePos(n, t);
-      n.px = p.x; n.py = p.y;
+  function build() {
+    hub.x = W / 2;
+    hub.y = H / 2;
+    var base = Math.min(W, H);
+
+    // 三条克制的背景天球椭圆轨道（如瑞士钟表刻度发丝线，提供空间秩序）
+    guideOrbits = [
+      { r: base * 0.25, rot: 0.1 },
+      { r: base * 0.38, rot: -0.08 },
+      { r: base * 0.49, rot: 0.05 }
+    ];
+
+    nodes = [];
+    chords = [];
+    pulses = [];
+    ripples = [];
+
+    var count = Math.max(8, Math.min(12, Math.round(base / 40)));
+    for (var i = 0; i < count; i++) {
+      var orbitIdx = i % 3;
+      var orb = guideOrbits[orbitIdx];
+      var isMajor = i < 3;
+      var isTeal = i === 1 || i === 4;
+
+      nodes.push({
+        id: i,
+        orbitR: orb.r * rand(0.94, 1.06),
+        angle: (i / count) * Math.PI * 2 + rand(-0.2, 0.2),
+        speed: rand(0.04, 0.08) * (i % 2 === 0 ? 1 : -1),
+        r: isMajor ? rand(3.8, 4.4) : rand(2.4, 3.2),
+        isMajor: isMajor,
+        colorType: isTeal ? 'teal' : isMajor ? 'accent' : 'brand',
+        phase: rand(0, Math.PI * 2),
+        tw: rand(0.8, 1.6),
+        hoverFactor: 0,
+        px: 0, py: 0
+      });
     }
+
+    // 少量两两弦线（带来轻量有机拓扑感）
+    for (var k = 0; k < nodes.length; k++) {
+      var j = (k + 2) % nodes.length;
+      if (j !== k && Math.abs(nodes[k].orbitR - nodes[j].orbitR) < base * 0.18) {
+        chords.push([k, j]);
+      }
+    }
+  }
+
+  function update(dt, t) {
+    pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 3.5);
+    pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 3.5);
+
+    if (hub.flash > 0) hub.flash = Math.max(0, hub.flash - dt * 2.5);
+
+    var base = Math.min(W, H);
+    var squash = 0.88;
+
+    // 节点位置与鼠标邻近感应
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      n.angle += n.speed * dt;
+
+      var wob = 1 + 0.03 * Math.sin(t * 0.4 + n.phase);
+      var x = hub.x + Math.cos(n.angle) * n.orbitR * wob + pointer.x * (n.isMajor ? 12 : 7);
+      var y = hub.y + Math.sin(n.angle) * n.orbitR * wob * squash + pointer.y * (n.isMajor ? 12 : 7);
+
+      n.px = x;
+      n.py = y;
+
+      if (pointer.active) {
+        var dx = pointer.mouseCanvasX - x;
+        var dy = pointer.mouseCanvasY - y;
+        var dist = Math.hypot(dx, dy);
+        var triggerDist = base * 0.22;
+        if (dist < triggerDist) {
+          n.hoverFactor += ((1 - dist / triggerDist) - n.hoverFactor) * Math.min(1, dt * 6);
+        } else {
+          n.hoverFactor += (0 - n.hoverFactor) * Math.min(1, dt * 4);
+        }
+      } else {
+        n.hoverFactor += (0 - n.hoverFactor) * Math.min(1, dt * 4);
+      }
+    }
+
     // 脉冲生成
     nextPulseAt -= dt;
     if (nextPulseAt <= 0 && nodes.length) {
-      nextPulseAt = rand(2.2, 4.2);
+      nextPulseAt = rand(2.2, 3.8);
       var src = nodes[Math.floor(Math.random() * nodes.length)];
-      pulses.push({ node: src, t: 0, dur: rand(1.1, 1.5) });
+      pulses.push({
+        node: src,
+        progress: 0,
+        dur: rand(1.1, 1.4)
+      });
     }
+
     // 脉冲推进
-    for (i = pulses.length - 1; i >= 0; i--) {
-      var pu = pulses[i];
-      pu.t += dt / pu.dur;
-      if (pu.t >= 1) {
-        pulses.splice(i, 1);
-        ripples.push({ r: 10, alpha: 0.5 });
+    for (var p = pulses.length - 1; p >= 0; p--) {
+      var pu = pulses[p];
+      pu.progress += dt / pu.dur;
+      if (pu.progress >= 1) {
+        pulses.splice(p, 1);
+        hub.flash = 1;
+        ripples.push({ r: 18, alpha: 0.65, speed: 65, lw: 1.6 });
       }
     }
+
     // 涟漪推进
-    for (i = ripples.length - 1; i >= 0; i--) {
-      var rp = ripples[i];
-      rp.r += 42 * dt;
-      rp.alpha -= 0.75 * dt;
-      if (rp.alpha <= 0) ripples.splice(i, 1);
+    for (var r = ripples.length - 1; r >= 0; r--) {
+      var rp = ripples[r];
+      rp.r += rp.speed * dt;
+      rp.alpha -= dt * 0.75;
+      if (rp.alpha <= 0) ripples.splice(r, 1);
     }
-    // 视差缓动
-    pointer.x += (pointer.tx - pointer.x) * Math.min(1, dt * 3);
-    pointer.y += (pointer.ty - pointer.y) * Math.min(1, dt * 3);
   }
 
-  /* ── 绘制 ── */
   function draw(t) {
     ctx.clearRect(0, 0, W, H);
-    var i, k;
+    var base = Math.min(W, H);
+    var squash = 0.88;
+    var i;
 
-    // 中心辉光（最亮的星）
-    var hubGlow = Math.min(W, H) * 0.34;
-    ctx.drawImage(spriteBrand, hub.x - hubGlow / 2, hub.y - hubGlow / 2, hubGlow, hubGlow);
-    // 涟漪
-    for (i = 0; i < ripples.length; i++) {
-      var rp = ripples[i];
-      ctx.strokeStyle = 'rgba(' + BRAND + ',' + rp.alpha.toFixed(3) + ')';
+    // ── 1. 克制纯净的几何天球轨道 ──
+    for (var o = 0; o < guideOrbits.length; o++) {
+      var orb = guideOrbits[o];
+      ctx.save();
+      ctx.translate(hub.x, hub.y);
+      ctx.scale(1, squash);
+      ctx.rotate(orb.rot);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, orb.r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(' + BRAND + ', 0.07)';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(hub.x, hub.y, rp.r, 0, 6.2832); ctx.stroke();
+      ctx.stroke();
+
+      ctx.restore();
     }
-    // 连线：节点 → 中心
-    ctx.lineWidth = 1;
+
+    // ── 2. 节点连向中心的渐变能量线 ──
     for (i = 0; i < nodes.length; i++) {
       var n = nodes[i];
-      var p = n.px ? { x: n.px, y: n.py } : nodePos(n, t);
-      var d = Math.hypot(p.x - hub.x, p.y - hub.y);
-      var a = Math.max(0.06, 0.26 - d / (Math.min(W, H) * 2.2));
-      a *= 0.8 + 0.2 * Math.sin(n.phase + elapsed * n.tw);
-      ctx.strokeStyle = 'rgba(' + BRAND + ',' + a.toFixed(3) + ')';
-      ctx.beginPath(); ctx.moveTo(hub.x, hub.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      var lineAlpha = 0.12 + n.hoverFactor * 0.35;
+
+      var lineGrad = ctx.createLinearGradient(n.px, n.py, hub.x, hub.y);
+      var cRGB = n.colorType === 'teal' ? TEAL : n.colorType === 'accent' ? ACCENT : BRAND;
+      lineGrad.addColorStop(0, 'rgba(' + cRGB + ',' + (lineAlpha * 1.8).toFixed(3) + ')');
+      lineGrad.addColorStop(0.7, 'rgba(' + BRAND + ',' + (lineAlpha * 0.8).toFixed(3) + ')');
+      lineGrad.addColorStop(1, 'rgba(' + BRAND + ', 0.02)');
+
+      ctx.beginPath();
+      ctx.moveTo(n.px, n.py);
+      ctx.lineTo(hub.x, hub.y);
+      ctx.strokeStyle = lineGrad;
+      ctx.lineWidth = 1.0 + n.hoverFactor * 0.8;
+      ctx.stroke();
     }
-    // 弦线（链与链）
-    for (k = 0; k < chords.length; k++) {
+
+    // ── 3. 弦线（节点呼应网感） ──
+    for (var k = 0; k < chords.length; k++) {
       var n1 = nodes[chords[k][0]], n2 = nodes[chords[k][1]];
-      var p1 = n1.px ? { x: n1.px, y: n1.py } : nodePos(n1, t);
-      var p2 = n2.px ? { x: n2.px, y: n2.py } : nodePos(n2, t);
-      ctx.strokeStyle = 'rgba(' + BRAND + ',0.08)';
-      ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+      var cAlpha = 0.06 + Math.max(n1.hoverFactor, n2.hoverFactor) * 0.18;
+      ctx.beginPath();
+      ctx.moveTo(n1.px, n1.py);
+      ctx.lineTo(n2.px, n2.py);
+      ctx.strokeStyle = 'rgba(' + BRAND + ',' + cAlpha.toFixed(3) + ')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
-    // 节点
+
+    // ── 4. 沿连线流动的渐变流光痕（Streak） ──
+    for (var p = 0; p < pulses.length; p++) {
+      var pulse = pulses[p];
+      var src = pulse.node;
+      var prog = pulse.progress;
+
+      var trailLen = 0.22;
+      var headProg = prog;
+      var tailProg = Math.max(0, prog - trailLen);
+
+      var hx = src.px + (hub.x - src.px) * headProg;
+      var hy = src.py + (hub.y - src.py) * headProg;
+      var tx = src.px + (hub.x - src.px) * tailProg;
+      var ty = src.py + (hub.y - src.py) * tailProg;
+
+      var pGrad = ctx.createLinearGradient(tx, ty, hx, hy);
+      pGrad.addColorStop(0, 'rgba(' + ACCENT + ', 0)');
+      pGrad.addColorStop(0.6, 'rgba(' + ACCENT + ', 0.65)');
+      pGrad.addColorStop(1, 'rgba(255, 255, 255, 0.95)');
+
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(hx, hy);
+      ctx.strokeStyle = pGrad;
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(hx, hy, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ── 5. 中心吸收涟漪 ──
+    for (var r = 0; r < ripples.length; r++) {
+      var rp = ripples[r];
+      ctx.beginPath();
+      ctx.arc(hub.x, hub.y, rp.r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(' + ACCENT + ',' + rp.alpha.toFixed(3) + ')';
+      ctx.lineWidth = rp.lw;
+      ctx.stroke();
+    }
+
+    // ── 6. 中心「与链」精工微盘徽章（Precision Core Badge） ──
+    var hubGlowR = base * (0.28 + hub.flash * 0.08);
+    var hubGlowGrad = ctx.createRadialGradient(hub.x, hub.y, 0, hub.x, hub.y, hubGlowR);
+    hubGlowGrad.addColorStop(0, 'rgba(79, 124, 255, ' + (0.22 + hub.flash * 0.2).toFixed(3) + ')');
+    hubGlowGrad.addColorStop(0.5, 'rgba(18, 46, 138, 0.06)');
+    hubGlowGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = hubGlowGrad;
+    ctx.beginPath();
+    ctx.arc(hub.x, hub.y, hubGlowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 磨砂白微盘底座
+    var discR = 20 * (1 + hub.flash * 0.15);
+    ctx.shadowColor = 'rgba(18, 46, 138, 0.15)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(hub.x, hub.y, discR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    ctx.strokeStyle = 'rgba(' + BRAND + ', 0.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // 徽标矢量（与链 U-Knot）
+    drawBrandLogo(ctx, hub.x, hub.y, 24 * (1 + hub.flash * 0.1), '#FFFFFF');
+
+    // ── 7. 星网节点（精致微晶发光圆点） ──
     for (i = 0; i < nodes.length; i++) {
       var nd = nodes[i];
-      var pp = nd.px ? { x: nd.px, y: nd.py } : nodePos(nd, t);
-      var tw = 0.72 + 0.28 * Math.sin(nd.phase + elapsed * nd.tw);
-      var glowR = nd.r * 6.5;
-      ctx.drawImage(nd.soft ? spriteSoft : spriteBrand, pp.x - glowR / 2, pp.y - glowR / 2, glowR, glowR);
-      ctx.fillStyle = 'rgba(' + (nd.soft ? BRAND_SOFT : BRAND) + ',' + (0.85 * tw).toFixed(3) + ')';
-      ctx.beginPath(); ctx.arc(pp.x, pp.y, nd.r, 0, 6.2832); ctx.fill();
-    }
-    // 中心本体：白核 + 蓝环
-    ctx.fillStyle = 'rgba(255,255,255,0.95)';
-    ctx.beginPath(); ctx.arc(hub.x, hub.y, 5.2, 0, 6.2832); ctx.fill();
-    ctx.strokeStyle = 'rgba(' + BRAND + ',0.85)';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(hub.x, hub.y, 7.4, 0, 6.2832); ctx.stroke();
-    ctx.strokeStyle = 'rgba(' + BRAND + ',0.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(hub.x, hub.y, 11.5, 0, 6.2832); ctx.stroke();
-    // 脉冲光点（沿连线流向中心）
-    for (i = 0; i < pulses.length; i++) {
-      var pu2 = pulses[i];
-      var sn = pu2.node;
-      var sp = sn.px ? { x: sn.px, y: sn.py } : nodePos(sn, t);
-      var e = pu2.t < 0.5 ? 2 * pu2.t * pu2.t : 1 - Math.pow(-2 * pu2.t + 2, 2) / 2; // easeInOut
-      var x = sp.x + (hub.x - sp.x) * e;
-      var y = sp.y + (hub.y - sp.y) * e;
-      var pr = 2.6 + 1.2 * e;
-      ctx.drawImage(spriteBrand, x - pr * 2.6, y - pr * 2.6, pr * 5.2, pr * 5.2);
-      ctx.fillStyle = 'rgba(' + BRAND + ',0.9)';
-      ctx.beginPath(); ctx.arc(x, y, pr * 0.55, 0, 6.2832); ctx.fill();
+      var tw = 0.8 + 0.2 * Math.sin(t * nd.tw + nd.phase);
+      var sprite = nd.colorType === 'teal' ? spriteTeal : spriteAccent;
+      var nodeRGB = nd.colorType === 'teal' ? TEAL : nd.colorType === 'accent' ? ACCENT : BRAND;
+
+      var currentR = nd.r * (1 + nd.hoverFactor * 0.35);
+      var glowR = currentR * 6.0;
+
+      ctx.drawImage(sprite, nd.px - glowR / 2, nd.py - glowR / 2, glowR, glowR);
+
+      if (nd.isMajor) {
+        ctx.beginPath();
+        ctx.arc(nd.px, nd.py, currentR * 2.1, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(' + nodeRGB + ',' + (0.28 * tw + nd.hoverFactor * 0.4).toFixed(3) + ')';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(' + nodeRGB + ',' + (0.92 * tw).toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(nd.px, nd.py, currentR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 微晶白核
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(nd.px, nd.py, currentR * 0.4, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
-  /* ── 主循环 ── */
   function frame(ts) {
     if (!running) return;
     var dt = Math.min((ts - lastT) / 1000, 0.05);
@@ -233,29 +432,36 @@
     lastT = performance.now();
     rafId = requestAnimationFrame(frame);
   }
+
   function pause() {
     running = false;
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
   }
 
-  /* ── 指针 ── */
   function onPointerMove(e) {
     var rect = canvas.getBoundingClientRect();
-    pointer.tx = ((e.clientX - rect.left) / Math.max(1, W) - 0.5) * 2;
-    pointer.ty = ((e.clientY - rect.top) / Math.max(1, H) - 0.5) * 2;
+    pointer.mouseCanvasX = (e.clientX - rect.left);
+    pointer.mouseCanvasY = (e.clientY - rect.top);
+    pointer.tx = (pointer.mouseCanvasX / Math.max(1, W) - 0.5) * 2;
+    pointer.ty = (pointer.mouseCanvasY / Math.max(1, H) - 0.5) * 2;
+    pointer.active = true;
   }
-  function onPointerLeave() { pointer.tx = 0; pointer.ty = 0; }
 
-  /* ── 生命周期 ── */
+  function onPointerLeave() {
+    pointer.tx = 0; pointer.ty = 0; pointer.active = false;
+  }
+
   function start() {
     resize();
     if (reducedMotion) return;
+
     var host = canvas.closest('.hero') || wrapper;
     if (host) {
       host.addEventListener('pointermove', onPointerMove);
       host.addEventListener('pointerleave', onPointerLeave);
     }
+
     if ('IntersectionObserver' in window) {
       inView = true;
       new IntersectionObserver(function (entries) {
@@ -263,14 +469,20 @@
         if (inView && !document.hidden) play(); else pause();
       }, { threshold: 0.02 }).observe(canvas);
     }
+
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) pause();
       else if (inView) play();
     });
+
     var timer = 0;
-    var onResize = function () { clearTimeout(timer); timer = setTimeout(resize, 150); };
+    var onResize = function () {
+      clearTimeout(timer);
+      timer = setTimeout(resize, 150);
+    };
     if ('ResizeObserver' in window && wrapper) new ResizeObserver(onResize).observe(wrapper);
     else window.addEventListener('resize', onResize);
+
     play();
   }
 
