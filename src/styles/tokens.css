@@ -16,6 +16,8 @@
   /* B1-002：相对 --bg/#F5EFEA 与 --surface 对比度 ≥4.5 */
   --text-muted:#6A6660;
   --accent:#122E8A;
+  --brand-logo-blue:#122E8A;
+  --brand-logo-green:#10B981;
   --accent-light:rgba(18,46,138,0.07);
   --accent-glow:rgba(18,46,138,0.13);
   --accent-grad:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);
@@ -78,6 +80,8 @@
   /* B1-002：暗色 muted 相对 surface/#25252B ≥4.5 */
   --text-muted:#9B968E;
   --accent:#F04A8A;
+  --brand-logo-blue:#4F6BFF;
+  --brand-logo-green:#10B981;
   --accent-light:rgba(230,57,124,0.1);
   --accent-glow:rgba(230,57,124,0.18);
   --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);

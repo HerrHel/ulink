@@ -14,6 +14,8 @@ task_plan.md
 !extension/icons/icon*.png
 !public/share-cover.png
 *.svg
+!public/favicon.svg
+!public/logo.svg
 *.md
 !CLAUDE.md
 !AGENTS.md

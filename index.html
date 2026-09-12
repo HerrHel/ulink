@@ -43,15 +43,32 @@
 }
 </script>
 
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/><path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/></svg>">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link href="/fonts/fonts.css" rel="stylesheet">
 <!-- 返客秒跳 / 关键参数直通 / 一次性曝光 / 双语 / 滚动显现 / 演示切换。阻塞于 head：跳转先于任何绘制发生 -->
 <script src="/landing.js"></script>
 <!-- 书签星链（Hero 主视觉）。defer：不阻塞首屏文本渲染 -->
 <script src="/hero-visual.js" defer></script>
+<!-- 深度管理（悬浮透光玻璃书签板）。defer -->
+<script src="/manage-visual.js" defer></script>
+<!-- 多端同频（双端真机悬浮透光舞台 + 零知识加密水晶芯片）。defer -->
+<script src="/sync-visual.js" defer></script>
+<!-- 创作与分享（双核引力共振与光子吸积桥）。defer -->
+<script src="/share-visual.js" defer></script>
 <style>
 /* ── 设计令牌：与主应用「效率 · 浅色」主题同源（tokens.css :root 块）──
    页面底色即应用底色 #F5EFEA；品牌蓝 #122E8A 为唯一强调色。 */
+:root {
+  --brand-logo-blue: #122E8A;
+  --brand-logo-green: #10B981;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --brand-logo-blue: #4F6BFF;
+    --brand-logo-green: #10B981;
+  }
+}
+
 :root{
   --bg:#F5EFEA;                 /* 主页面背景色 */
   --bg-alt:#EDE4DA;
@@ -66,6 +83,11 @@
   --brand-deep:#0E2270;
   --brand-soft:rgba(18,46,138,.07);
   --brand-glow:rgba(18,46,138,.13);
+  /* 品牌生命绿：连接、共创、生长（与应用舒适主题 / 知识生命树 #10B981 / #0D7A6F 同源） */
+  --brand-green:#0D7A6F;
+  --brand-green-bright:#10B981;
+  --brand-green-soft:rgba(16,185,129,.09);
+  --brand-green-glow:rgba(16,185,129,.16);
   --radius-sm:8px;
   --radius-md:12px;
   --radius-lg:16px;
@@ -101,7 +123,7 @@ button{font:inherit;cursor:pointer}
 /* 滚动显现：仅 JS 可用时隐藏初始态（.js 由 landing.js 添加） */
 .js .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
 .js .reveal.in{opacity:1;transform:none}
-.js .reveal.d1{transition-delay:.08s}.js .reveal.d2{transition-delay:.16s}.js .reveal.d3{transition-delay:.24s}
+.js .reveal.d1{transition-delay:.08s}.js .reveal.d2{transition-delay:.16s}.js .reveal.d3{transition-delay:.24s}.js .reveal.d4{transition-delay:.32s}
 
 /* ── 按钮 ── */
 .btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1rem;
@@ -119,7 +141,7 @@ button{font:inherit;cursor:pointer}
 .site-head{padding:20px 0}
 .head-row{display:flex;align-items:center;gap:14px}
 .logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;font-size:1.18rem;letter-spacing:.02em}
-.logo svg{width:26px;height:26px;stroke:var(--brand)}
+.logo svg{width:28px;height:28px;flex-shrink:0}
 .head-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
 .lang{background:none;border:1px solid var(--border-hover);color:var(--ink-2);
   font-weight:700;font-size:.8rem;letter-spacing:.08em;padding:7px 13px;border-radius:999px;transition:color .16s,border-color .16s}
@@ -128,177 +150,222 @@ button{font:inherit;cursor:pointer}
 /* ── Hero：左文右星链 ── */
 .hero{padding:clamp(40px,7vh,84px) 0 clamp(56px,8vh,96px)}
 .hero-grid{display:grid;grid-template-columns:minmax(0,10fr) minmax(0,9fr);gap:clamp(28px,5vw,64px);align-items:center}
+.hero-pill{display:inline-flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);
+  padding:5px 14px;border-radius:999px;box-shadow:var(--shadow-sm);font-size:.8rem;font-weight:600;color:var(--ink-2);margin-bottom:18px}
+.hero-pill .pill-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-green-bright);
+  box-shadow:0 0 8px rgba(16,185,129,.7);flex-shrink:0;animation:pill-pulse 2.2s ease-in-out infinite}
+@keyframes pill-pulse{0%,100%{opacity:.65;transform:scale(.92)} 50%{opacity:1;transform:scale(1.2)}}
+.hero-pill .pill-tag{background:var(--brand);color:#fff;font-size:.66rem;font-weight:800;padding:2px 7px;border-radius:999px;letter-spacing:.04em}
 .hero-copy h1{
   font-family:var(--font-display);font-weight:600;
   font-size:clamp(2.3rem,5.4vw,3.9rem);
   line-height:1.22;letter-spacing:.015em;margin-bottom:20px;
 }
 .hero-copy h1 em{font-style:normal;color:var(--brand)}
-.hero-sub{color:var(--ink-2);font-size:clamp(1rem,1.5vw,1.13rem);max-width:32em;margin-bottom:30px}
+.hero-sub{color:var(--ink-2);font-size:clamp(1rem,1.5vw,1.13rem);max-width:34em;margin-bottom:30px;line-height:1.75}
 .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-.hero-note{margin-top:16px;font-size:.86rem;color:var(--ink-3);letter-spacing:.02em}
+.hero-note{margin-top:18px;font-size:.86rem;color:var(--ink-3);letter-spacing:.02em}
 .hero-visual{position:relative;aspect-ratio:1/0.92;min-height:320px}
 .hero-visual canvas{position:absolute;inset:0;width:100%;height:100%}
-/* 星链后方一点品牌氛围光 */
-.hero-visual::before{content:"";position:absolute;inset:6%;border-radius:50%;
-  background:radial-gradient(circle,var(--brand-soft) 0%,transparent 68%);pointer-events:none}
+/* 星链后方蓝绿双相自然氛围光 */
+.hero-visual::before{content:"";position:absolute;inset:-4%;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,rgba(18,46,138,.08) 0%,transparent 55%),
+             radial-gradient(circle at 72% 68%,rgba(16,185,129,.075) 0%,transparent 58%);pointer-events:none}
 
 /* ── 分区通用 ── */
-.sect{padding:var(--sect-pad) 0 0}
+.sect{padding:var(--sect-pad) 0 0;position:relative}
 .sect:last-of-type{padding-bottom:var(--sect-pad)}
-.sect-head{max-width:620px;margin:0 auto clamp(40px,6vw,64px);text-align:center}
+.sect-head{max-width:640px;margin:0 auto clamp(40px,6vw,64px);text-align:center}
 .sect-head h2{font-family:var(--font-display);font-weight:600;font-size:clamp(1.7rem,3.4vw,2.4rem);line-height:1.3;letter-spacing:.01em}
-.sect-head p{color:var(--ink-2);margin-top:12px}
-.eyebrow{font-size:.78rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--brand);margin-bottom:12px}
-.eyebrow::before{content:"";display:inline-block;width:22px;height:1px;background:currentColor;vertical-align:middle;margin-right:10px;opacity:.6}
+.sect-head p{color:var(--ink-2);margin-top:12px;font-size:1.02rem}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.74rem;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--brand);background:var(--brand-soft);border:1px solid var(--brand-glow);
+  padding:3px 12px;border-radius:999px;margin-bottom:14px}
 .split{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,6vw,72px);align-items:center}
 .copy h3{font-family:var(--font-display);font-weight:600;font-size:clamp(1.4rem,2.6vw,1.9rem);line-height:1.35;margin-bottom:14px;letter-spacing:.01em}
-.copy .lead{color:var(--ink-2);margin-bottom:22px}
-.copy p{color:var(--ink-2)}
+.copy .lead{color:var(--ink-2);margin-bottom:20px;font-size:1.02rem}
+.copy p{color:var(--ink-2);line-height:1.75}
 
 /* 深度管理：三条能力小行 */
-.cap-row{display:flex;gap:14px;padding:13px 0;border-top:1px solid var(--border)}
+.cap-row{display:flex;gap:16px;padding:14px 12px;border-top:1px solid var(--border);border-radius:var(--radius-sm);transition:background .2s}
+.cap-row:hover{background:rgba(255,255,255,.5)}
 .cap-row:last-child{border-bottom:1px solid var(--border)}
-.cap-row svg{width:21px;height:21px;stroke:var(--brand);flex-shrink:0;margin-top:4px}
-.cap-row b{display:block;font-size:.98rem;margin-bottom:2px}
-.cap-row span{font-size:.9rem;color:var(--ink-2);display:block}
+.cap-icon{width:36px;height:36px;border-radius:8px;background:var(--brand-soft);border:1px solid var(--brand-glow);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;transition:background .2s,border-color .2s}
+.cap-icon svg{width:18px;height:18px;stroke:var(--brand);transition:stroke .2s}
+.cap-icon.green{background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
+.cap-icon.green svg{stroke:var(--brand-green)}
+.cap-row b{display:block;font-size:.98rem;margin-bottom:3px;color:var(--ink)}
+.cap-row span{font-size:.88rem;color:var(--ink-2);line-height:1.55;display:block}
 
-/* ── 视觉 1：管理演示（子书签展开 / 分类 / 属性）── */
-.demo-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  box-shadow:var(--shadow-lg);overflow:hidden;font-size:.85rem}
-.demo-bar{display:flex;align-items:center;gap:7px;padding:12px 16px;border-bottom:1px solid var(--border)}
-.demo-bar i{width:9px;height:9px;border-radius:50%;background:var(--border-hover)}
-.demo-bar i:first-child{background:var(--brand)}
-.demo-body{display:flex;min-height:236px}
-.demo-rail{width:96px;border-right:1px solid var(--border);padding:12px 10px;display:flex;flex-direction:column;gap:4px;background:var(--bg)}
-.demo-rail span{padding:6px 9px;border-radius:7px;color:var(--ink-2);font-size:.78rem;white-space:nowrap}
-.demo-main{flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:9px}
-.demo-card{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:9px 12px;display:flex;align-items:center;gap:9px}
-.demo-card i{width:14px;height:14px;border-radius:4px;background:var(--brand-soft);border:1px solid var(--brand-glow);flex-shrink:0}
-.demo-card b{font-weight:600;font-size:.83rem}
-.demo-card small{color:var(--ink-3);font-size:.72rem;margin-left:auto}
-.demo-kids{display:flex;flex-direction:column;gap:7px;overflow:hidden;max-height:0;opacity:0;
-  animation:dm-kids 9s var(--ease) infinite}
-.demo-kids .demo-card{margin-left:22px;background:var(--surface-hover)}
-.demo-chips{display:flex;gap:7px;padding:2px 0}
-.demo-chips span{font-size:.7rem;padding:3px 11px;border-radius:999px;border:1px solid var(--border);color:var(--ink-3);transition:none}
-.demo-chips span:nth-child(1){animation:dm-chip1 9s infinite}
-.demo-chips span:nth-child(2){animation:dm-chip2 9s infinite}
-.demo-rail span:nth-child(1){animation:dm-rail1 9s infinite}
-.demo-rail span:nth-child(2){animation:dm-rail2 9s infinite}
-.demo-rail span:nth-child(3){animation:dm-rail3 9s infinite}
-@keyframes dm-kids{0%,18%{max-height:0;opacity:0}26%,72%{max-height:120px;opacity:1}82%,100%{max-height:0;opacity:0}}
-@keyframes dm-chip1{0%,26%{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}34%,84%{background:none;border-color:var(--border);color:var(--ink-3)}92%,100%{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}}
-@keyframes dm-chip2{0%,40%{background:none;border-color:var(--border);color:var(--ink-3)}48%,68%{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}76%,100%{background:none;border-color:var(--border);color:var(--ink-3)}}
-@keyframes dm-rail1{0%,30%{background:var(--brand-soft);color:var(--brand);font-weight:700}38%,100%{background:none;color:var(--ink-2);font-weight:400}}
-@keyframes dm-rail2{0%,30%{background:none;color:var(--ink-2)}38%,64%{background:var(--brand-soft);color:var(--brand);font-weight:700}72%,100%{background:none;color:var(--ink-2)}}
-@keyframes dm-rail3{0%,62%{background:none;color:var(--ink-2)}70%,92%{background:var(--brand-soft);color:var(--brand);font-weight:700}100%{background:none;color:var(--ink-2)}}
+/* ── 视觉 1：深度管理（悬浮透光玻璃书签板 · 树状收纳）── */
+.manage-visual{position:relative;width:100%;aspect-ratio:1/0.92;min-height:340px}
+.manage-visual canvas{position:absolute;inset:0;width:100%;height:100%}
 
-/* ── 视觉 2：锁与端侧（数据流动线）── */
-.sync-visual{padding:10px 0}
-.sync-visual svg{width:100%;height:auto}
-.flow{stroke-dasharray:5 9;animation:flow 1.1s linear infinite}
-.flow.rev{animation-direction:reverse}
-@keyframes flow{to{stroke-dashoffset:-14}}
-.lock-pulse{transform-origin:center;animation:lockpulse 2.6s var(--ease) infinite}
-@keyframes lockpulse{0%,100%{transform:scale(1)}12%{transform:scale(1.05)}22%{transform:scale(1)}}
-.sync-label{font-size:.72rem;fill:var(--ink-3)}
+/* ── 视觉 2：同步与安全（双端悬浮透光舞台 + 零知识加密水晶芯片）── */
+.sect#sync::before{content:"";position:absolute;left:-8%;top:20%;width:440px;height:440px;border-radius:50%;
+  background:radial-gradient(circle,rgba(18,46,138,.045) 0%,transparent 70%);pointer-events:none}
+.sync-visual{position:relative;width:100%;aspect-ratio:1/0.88;min-height:320px}
+.sync-visual canvas{position:absolute;inset:0;width:100%;height:100%}
 
-/* ── 简洁精致：主题/视图演示 ── */
-.looks{padding:var(--sect-pad) 0 0}
-.demo-controls{display:flex;justify-content:center;gap:22px;flex-wrap:wrap;margin-bottom:clamp(30px,4vw,44px)}
-.seg{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px;gap:2px}
-.seg button{border:none;background:none;padding:8px 20px;border-radius:999px;color:var(--ink-2);font-weight:600;font-size:.88rem;transition:background .16s,color .16s}
-.seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
-.seg.icon button{padding:8px 14px;display:flex;align-items:center}
-.seg.icon svg{width:17px;height:17px;stroke:currentColor}
-.demo-stage{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,2.4vw,24px);
+/* ── 视觉 3：主题与视图演示（拟真微缩卡片）── */
+/* ── 视觉 3：主题与视图演示（拟真微缩卡片）── */
+.looks{padding:var(--sect-pad) 0 0;
   /* 演示主题 = 主应用真实 tokens（tokens.css 效率/舒适 × 浅/深） */
-  --d-bg:#F5EFEA;--d-surface:#FDFBF9;--d-border:#E5DDD3;--d-text:#2C2824;--d-muted:#6A6660;--d-accent:#122E8A;--d-accent-soft:rgba(18,46,138,.08)}
-.demo-stage[data-style="comfort"]{--d-bg:#F3F6EF;--d-surface:#F9FBF6;--d-border:#D2DAC8;--d-text:#262E24;--d-muted:#667362;--d-accent:#2C9678;--d-accent-soft:rgba(44,150,120,.1)}
-.demo-stage[data-mode="dark"]{--d-bg:#1A1A1D;--d-surface:#25252B;--d-border:#2F2F36;--d-text:#EEE9E2;--d-muted:#9B968E;--d-accent:#F04A8A;--d-accent-soft:rgba(230,57,124,.12)}
-.demo-stage[data-style="comfort"][data-mode="dark"]{--d-bg:#2B313F;--d-surface:#363D50;--d-border:#444C5E;--d-text:#E2E7BF;--d-muted:#B0B692;--d-accent:#E2E7BF;--d-accent-soft:rgba(226,231,191,.12)}
+  --d-bg:#F5EFEA;--d-bg-alt:#EDE4DA;--d-surface:#FDFBF9;--d-border:#E5DDD3;--d-border-hover:#D5CBBE;--d-text:#2C2824;--d-muted:#6A6660;--d-accent:#122E8A;--d-accent-soft:rgba(18,46,138,.08);--d-accent-glow:rgba(18,46,138,.20);--d-accent-contrast:#FFFFFF;
+}
+.looks[data-style="comfort"]{
+  --d-bg:#F3F6EF;--d-bg-alt:#E7ECE0;--d-surface:#F9FBF6;--d-border:#D2DAC8;--d-border-hover:#B8C4AC;--d-text:#262E24;--d-muted:#667362;--d-accent:#2C9678;--d-accent-soft:rgba(44,150,120,.10);--d-accent-glow:rgba(44,150,120,.22);--d-accent-contrast:#FFFFFF;
+}
+.looks[data-mode="dark"]{
+  --d-bg:#1A1A1D;--d-bg-alt:#202025;--d-surface:#25252B;--d-border:#2F2F36;--d-border-hover:#3D3D46;--d-text:#EEE9E2;--d-muted:#9B968E;--d-accent:#F04A8A;--d-accent-soft:rgba(240,74,138,.14);--d-accent-glow:rgba(240,74,138,.28);--d-accent-contrast:#FFFFFF;
+}
+.looks[data-style="comfort"][data-mode="dark"]{
+  --d-bg:#2B313F;--d-bg-alt:#333A4A;--d-surface:#363D50;--d-border:#444C5E;--d-border-hover:#525B70;--d-text:#E2E7BF;--d-muted:#B0B692;--d-accent:#E2E7BF;--d-accent-soft:rgba(226,231,191,.14);--d-accent-glow:rgba(226,231,191,.24);--d-accent-contrast:#252B38;
+}
+#looks .eyebrow{color:var(--d-accent);background:var(--d-accent-soft);border-color:var(--d-accent-glow);transition:color .35s var(--ease),background .35s var(--ease),border-color .35s var(--ease)}
+.demo-controls{display:flex;justify-content:center;gap:20px;flex-wrap:wrap;margin-bottom:clamp(30px,4vw,44px)}
+.seg{display:inline-flex;position:relative;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px;gap:2px;box-shadow:inset 0 1px 2px rgba(0,0,0,.03),0 2px 8px rgba(0,0,0,.03);transition:background .35s var(--ease),border-color .35s var(--ease),box-shadow .35s var(--ease)}
+.seg-glider{position:absolute;top:0;left:0;border-radius:999px;background:var(--d-accent);
+  box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 4px 18px var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08);
+  pointer-events:none;z-index:0;will-change:transform,width,background,box-shadow;
+  transition:transform .44s cubic-bezier(0.25,1.25,0.45,1),width .36s cubic-bezier(0.25,1.25,0.45,1),height .36s cubic-bezier(0.25,1.25,0.45,1),background .38s cubic-bezier(0.16,1,0.3,1),box-shadow .38s cubic-bezier(0.16,1,0.3,1)}
+.seg-glider.pulse{animation:glider-aura .48s cubic-bezier(0.16,1,0.3,1)}
+@keyframes glider-aura{
+  0%{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 0 0 0 var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08)}
+  50%{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 0 0 9px transparent,0 6px 24px var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08)}
+  100%{box-shadow:inset 0 1px 1.5px rgba(255,255,255,.45),0 4px 18px var(--d-accent-glow),0 2px 4px rgba(0,0,0,.08)}
+}
+.seg button{position:relative;z-index:1;border:none;background:transparent;padding:8px 22px;border-radius:999px;color:var(--ink-2);font-weight:600;font-size:.88rem;letter-spacing:.02em;cursor:pointer;
+  transition:color .28s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1),letter-spacing .28s ease;user-select:none;-webkit-tap-highlight-color:transparent}
+.seg button:hover{color:var(--ink)}
+.seg button:active{transform:scale(0.93)}
+.seg button[aria-pressed="true"]{color:var(--d-accent-contrast);font-weight:700;letter-spacing:.04em}
+html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#fff}
+.seg.icon button{padding:8px 16px;display:flex;align-items:center;justify-content:center}
+.seg.icon svg{width:18px;height:18px;stroke:currentColor;transform-origin:center;
+  transition:transform .44s cubic-bezier(0.25,1.25,0.45,1),opacity .28s ease,stroke-width .28s ease,filter .35s ease}
+
+/* 日夜微动效：太阳旋转升起、月牙优雅倾角 */
+[data-demo-mode="light"] svg{transform:rotate(-45deg) scale(0.9);opacity:.6}
+[data-demo-mode="light"][aria-pressed="true"] svg{transform:rotate(0deg) scale(1.14);opacity:1;stroke-width:2.2;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}
+[data-demo-mode="dark"] svg{transform:rotate(35deg) scale(0.9);opacity:.6}
+[data-demo-mode="dark"][aria-pressed="true"] svg{transform:rotate(-10deg) scale(1.14);opacity:1;stroke-width:2.2;filter:drop-shadow(0 0 4px rgba(255,255,255,.45))}
+[data-style="comfort"][data-mode="dark"] .seg button[aria-pressed="true"] svg{filter:drop-shadow(0 0 2px rgba(37,43,56,.2))}
+.demo-stage{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(14px,2.4vw,24px)}
 .demo-item{transition:transform .2s var(--ease)}
 .demo-item:hover{transform:translateY(-3px)}
-.demo-frame{height:230px;border-radius:var(--radius-md);border:1px solid var(--d-border);background:var(--d-bg);
-  overflow:hidden;position:relative;box-shadow:var(--shadow-md);transition:background .3s,border-color .3s}
-.demo-frame::before{content:"";position:absolute;inset:0 0 auto 0;height:26px;background:var(--d-surface);border-bottom:1px solid var(--d-border);z-index:2}
-.demo-frame::after{content:"";position:absolute;left:10px;top:9px;width:44px;height:8px;border-radius:4px;background:var(--d-accent);opacity:.85;z-index:2}
+.demo-frame{height:250px;border-radius:var(--radius-md);border:1px solid var(--d-border);background:var(--d-bg);
+  overflow:hidden;position:relative;box-shadow:var(--shadow-md);transition:background .35s var(--ease),border-color .35s var(--ease)}
+.demo-frame::before{content:"";position:absolute;inset:0 0 auto 0;height:26px;background-color:var(--d-surface);
+  background-image:radial-gradient(circle at 12px 13px,#ED6A5E 3px,transparent 3.5px),radial-gradient(circle at 22px 13px,#F5BF4F 3px,transparent 3.5px),radial-gradient(circle at 32px 13px,#62C554 3px,transparent 3.5px);
+  border-bottom:1px solid var(--d-border);z-index:2;transition:background-color .35s var(--ease),border-color .35s var(--ease)}
+.demo-frame::after{content:"";position:absolute;left:46px;top:9px;width:38px;height:8px;border-radius:4px;background:var(--d-accent);opacity:.9;z-index:2;transition:background .35s var(--ease)}
 /* 滚动内容：双份内容 translateY(-50%) 无缝循环 */
 .demo-scroll{position:absolute;inset:34px 10px 10px;overflow:hidden;
-  mask-image:linear-gradient(to bottom,transparent,#000 12%,#000 88%,transparent);
-  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 12%,#000 88%,transparent)}
-.demo-col{display:flex;flex-direction:column;gap:8px;animation:vscroll 16s linear infinite}
+  mask-image:linear-gradient(to bottom,transparent,#000 10%,#000 90%,transparent);
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 10%,#000 90%,transparent)}
+.demo-col{display:flex;flex-direction:column;gap:8px;animation:vscroll 18s linear infinite}
+.demo-col:hover{animation-play-state:paused}
 .demo-col > *{flex-shrink:0}
 @keyframes vscroll{to{transform:translateY(-50%)}}
-.mk-card{background:var(--d-surface);border:1px solid var(--d-border);border-radius:8px;padding:9px 11px;display:flex;align-items:center;gap:8px;transition:background .3s,border-color .3s}
-.mk-card i{width:13px;height:13px;border-radius:4px;background:var(--d-accent-soft);border:1px solid var(--d-accent);opacity:.55;flex-shrink:0}
-.mk-card b{font-weight:600;font-size:.76rem;color:var(--d-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.demo-grid .demo-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.demo-grid .demo-col > *{grid-column:auto}
-.demo-mini .demo-col{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
-.demo-mini .mk-card{padding:7px;flex-direction:column;align-items:flex-start;gap:6px}
-.demo-mini .mk-card b{font-size:.62rem}
-.demo-list .mk-card b{flex:1}
-.demo-label{text-align:center;margin-top:12px;font-size:.86rem;color:var(--ink-2);font-weight:600}
-.demo-note{text-align:center;margin-top:8px;font-size:.78rem;color:var(--ink-3)}
 
-/* ── 视觉 3：社区（书签芯片在节点间流转）── */
-.community{position:relative;aspect-ratio:10/8.6;min-height:280px}
-.cnode{position:absolute;width:52px;height:52px;border-radius:50%;background:var(--surface);
-  border:1px solid var(--border);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:center}
-.cnode svg{width:22px;height:22px;stroke:var(--ink-2)}
-.cnode.hub{width:64px;height:64px;background:var(--brand);border-color:var(--brand)}
-.cnode.hub svg{stroke:#fff}
-.cline{position:absolute;height:1px;background:var(--border-hover);transform-origin:0 0}
-.cchip{position:absolute;display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border-hover);
-  border-radius:999px;padding:4px 11px;font-size:.68rem;color:var(--ink-2);box-shadow:var(--shadow-sm);white-space:nowrap}
-.cchip i{width:8px;height:8px;border-radius:3px;background:var(--brand);opacity:.7}
-.cchip.a{animation:chipA 7s var(--ease) infinite}
-.cchip.b{animation:chipB 8.4s var(--ease) infinite;animation-delay:1.4s}
-.cchip.c{animation:chipC 9.2s var(--ease) infinite;animation-delay:3s}
-@keyframes chipA{0%,14%{transform:translate(0,0);opacity:0}20%,42%{opacity:1}56%,100%{transform:translate(150px,-92px);opacity:0}}
-@keyframes chipB{0%,12%{transform:translate(0,0);opacity:0}18%,44%{opacity:1}58%,100%{transform:translate(-176px,-38px);opacity:0}}
-@keyframes chipC{0%,16%{transform:translate(0,0);opacity:0}22%,46%{opacity:1}60%,100%{transform:translate(66px,96px);opacity:0}}
+/* 拟真微缩卡片结构 */
+.mk-card{background:var(--d-surface);border:1px solid var(--d-border);border-radius:8px;padding:8px 10px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03);transition:background .35s var(--ease),border-color .35s var(--ease),box-shadow .35s var(--ease)}
+.mk-card:hover{border-color:var(--d-border-hover);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.mk-icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  font-size:.65rem;font-weight:700;color:#fff;flex-shrink:0;transition:background .35s var(--ease),color .35s var(--ease)}
+.mk-icon-accent{background:var(--d-accent) !important;color:var(--d-accent-contrast) !important}
+.mk-name{font-weight:600;font-size:.76rem;color:var(--d-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .35s var(--ease)}
+.mk-domain{font-size:.64rem;color:var(--d-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;transition:color .35s var(--ease)}
+.mk-tag{display:inline-block;font-size:.58rem;font-weight:700;padding:1px 6px;border-radius:999px;
+  background:var(--d-accent-soft);color:var(--d-accent);white-space:nowrap;transition:background .35s var(--ease),color .35s var(--ease)}
+.mk-foot{display:flex;align-items:center;justify-content:space-between;margin-top:4px;padding-top:4px;
+  border-top:1px solid var(--d-border);font-size:.6rem;color:var(--d-muted);transition:border-color .35s var(--ease),color .35s var(--ease)}
+.mk-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--d-accent);margin-right:4px;vertical-align:middle;transition:background .35s var(--ease)}
+.mk-arrow{color:var(--d-accent);transition:color .35s var(--ease)}
+
+/* 宫格布局微卡 */
+.demo-grid .demo-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.demo-grid .mk-card{display:flex;flex-direction:column;gap:5px;padding:9px}
+.demo-grid .mk-head{display:flex;align-items:center;gap:6px}
+
+/* 列表布局微卡 */
+.demo-list .mk-card{display:flex;align-items:center;gap:9px;padding:7px 10px}
+.demo-list .mk-main{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+.demo-list .mk-name{flex:0 1 auto}
+.demo-list .mk-domain{display:none}
+.demo-list .mk-hint{font-size:.7rem;color:var(--d-accent);margin-left:auto;transition:color .35s var(--ease)}
+
+/* 小宫格布局微卡 */
+.demo-mini .demo-col{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.demo-mini .mk-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;padding:8px 4px}
+.demo-mini .mk-name{font-size:.64rem;max-width:100%}
+.demo-mini .mk-domain,.demo-mini .mk-tag,.demo-mini .mk-foot{display:none}
+
+.demo-label{text-align:center;margin-top:12px;font-size:.88rem;color:var(--ink-2);font-weight:600}
+.demo-note{text-align:center;margin-top:10px;font-size:.8rem;color:var(--ink-3)}
+
+/* ── 视觉 4：创作与分享（双核引力共振与光子吸积桥）── */
+.sect#create::before{content:"";position:absolute;right:-6%;top:18%;width:480px;height:480px;border-radius:50%;
+  background:radial-gradient(circle,rgba(16,185,129,.075) 0%,transparent 70%);pointer-events:none}
+.sect#create .eyebrow{color:var(--brand-green);background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
+.share-visual{position:relative;width:100%;aspect-ratio:1/0.88;min-height:340px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;border-radius:var(--radius-lg);overflow:hidden}
+.share-visual canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 
 /* ── 更多亮点 ── */
 .extras{padding:var(--sect-pad) 0 0}
-.extra-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.extra{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:22px 20px;box-shadow:var(--shadow-sm);
-  transition:transform .16s var(--ease),box-shadow .16s var(--ease)}
-.extra:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
-.extra svg{width:22px;height:22px;stroke:var(--brand);margin-bottom:12px}
-.extra b{display:block;font-size:.95rem;margin-bottom:4px}
-.extra span{font-size:.84rem;color:var(--ink-2)}
-.extra code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.82em;background:var(--bg-alt);border-radius:5px;padding:1px 6px}
+.extra-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+.extra{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:24px 20px;box-shadow:var(--shadow-sm);
+  transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s}
+.extra:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--border-hover)}
+.extra.green:hover{border-color:rgba(16,185,129,.35);box-shadow:0 8px 24px rgba(16,185,129,.08)}
+.extra-icon{width:42px;height:42px;border-radius:10px;background:var(--brand-soft);border:1px solid var(--brand-glow);
+  display:flex;align-items:center;justify-content:center;margin-bottom:14px;transition:background .2s,border-color .2s}
+.extra-icon svg{width:22px;height:22px;stroke:var(--brand);transition:stroke .2s}
+.extra-icon.green{background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
+.extra-icon.green svg{stroke:var(--brand-green)}
+.extra b{display:block;font-size:.98rem;margin-bottom:6px;color:var(--ink)}
+.extra span{font-size:.86rem;color:var(--ink-2);line-height:1.6}
+.extra code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.84em;background:var(--bg-alt);border-radius:5px;padding:2px 6px}
 
 /* ── FAQ ── */
 .faq-list{max-width:760px;margin:0 auto}
-.faq-list details{border-bottom:1px solid var(--border)}
+.faq-list details{border-bottom:1px solid var(--border);border-radius:var(--radius-sm);transition:background .2s}
+.faq-list details[open]{background:rgba(255,255,255,.5);box-shadow:var(--shadow-sm);border-color:transparent;margin:6px 0}
 .faq-list summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px;
-  font-weight:700;font-size:1.02rem;padding:21px 4px}
+  font-weight:700;font-size:1.02rem;padding:20px 14px}
 .faq-list summary::-webkit-details-marker{display:none}
 .faq-list summary::after{content:"+";font-family:var(--font-display);font-weight:600;font-size:1.4rem;color:var(--brand);transition:transform .18s var(--ease);flex-shrink:0}
 .faq-list details[open] summary::after{transform:rotate(45deg)}
-.faq-list details p{color:var(--ink-2);padding:0 4px 22px;max-width:62ch}
+.faq-list details p{color:var(--ink-2);padding:0 14px 20px;max-width:64ch;line-height:1.75;font-size:.92rem}
 
 /* ── 尾部 CTA ── */
-.cta-band{padding:var(--sect-pad) 0;text-align:center}
+.cta-band{padding:var(--sect-pad) 0;text-align:center;position:relative}
+.cta-band::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:540px;height:320px;border-radius:50%;
+  background:radial-gradient(circle at 40% 50%,rgba(18,46,138,.055) 0%,transparent 60%),
+             radial-gradient(circle at 62% 50%,rgba(16,185,129,.05) 0%,transparent 60%);pointer-events:none}
 .cta-band h2{font-family:var(--font-display);font-weight:600;font-size:clamp(1.8rem,4vw,2.8rem);margin-bottom:14px;letter-spacing:.01em}
-.cta-band p{color:var(--ink-2);margin-bottom:30px}
-.cta-band .btn{padding:15px 40px;font-size:1.05rem}
+.cta-band p{color:var(--ink-2);margin-bottom:30px;font-size:1.05rem}
+.cta-band .btn{padding:15px 42px;font-size:1.05rem}
 
 /* ── 页脚 ── */
 .footer{border-top:1px solid var(--border);padding:38px 0 34px;color:var(--ink-3);font-size:.9rem}
 .foot-row{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
 .foot-logo{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-weight:600;color:var(--ink);font-size:1.02rem}
-.foot-logo svg{width:20px;height:20px;stroke:var(--brand)}
+.foot-logo svg{width:22px;height:22px;flex-shrink:0}
 .foot-links{margin-left:auto;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
 .foot-links a:hover,.foot-links button:hover{color:var(--brand)}
 .foot-links button{background:none;border:none;color:inherit;padding:0}
 .foot-sub{margin-top:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.8rem}
 
 /* ── 响应式 ── */
+@media (max-width:1040px){
+  .extra-grid{grid-template-columns:1fr 1fr}
+  .extra-grid .extra:last-child{grid-column:1/-1;max-width:60%;margin:0 auto;width:100%}
+}
 @media (max-width:960px){
   .hero-grid{grid-template-columns:1fr;gap:12px}
   .hero-visual{order:2;max-width:480px;margin:0 auto;width:100%}
@@ -306,13 +373,13 @@ button{font:inherit;cursor:pointer}
   .split .visual{order:2}
   .demo-stage{grid-template-columns:1fr 1fr}
   .demo-item:last-child{grid-column:1/-1;max-width:70%;margin:0 auto;width:100%}
-  .extra-grid{grid-template-columns:1fr 1fr}
 }
 @media (max-width:640px){
   .head-cta{display:none}
   .demo-stage{grid-template-columns:1fr}
   .demo-item:last-child{max-width:100%}
   .extra-grid{grid-template-columns:1fr}
+  .extra-grid .extra:last-child{max-width:100%}
   .demo-body{min-height:0}
   .demo-rail{display:none}
 }
@@ -321,10 +388,10 @@ button{font:inherit;cursor:pointer}
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
   .js .reveal{opacity:1;transform:none;transition:none}
-  .btn,.demo-item,.extra{transition:none}
+  .btn,.demo-item,.extra,.seg-glider{transition:none}
   .btn:hover,.demo-item:hover,.extra:hover{transform:none}
   .demo-kids,.demo-chips span,.demo-rail span,.flow,.lock-pulse,
-  .demo-col,.cchip.a,.cchip.b,.cchip.c{animation:none}
+  .demo-col,.cchip.a,.cchip.b,.cchip.c,.hero-pill .pill-dot{animation:none}
   .demo-kids{max-height:120px;opacity:1}
 }
 </style>
@@ -336,7 +403,20 @@ button{font:inherit;cursor:pointer}
 <header class="site-head">
   <div class="wrap head-row">
     <a class="logo" href="/" aria-label="与链 ulink">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <mask id="hl-mb">
+            <rect width="240" height="240" fill="white" />
+            <line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round" />
+          </mask>
+          <mask id="hl-mg">
+            <rect width="240" height="240" fill="white" />
+            <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
+          </mask>
+        </defs>
+        <path d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke="var(--brand-logo-blue, #122E8A)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#hl-mb)" />
+        <path d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke="var(--brand-logo-green, #10B981)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#hl-mg)" />
+      </svg>
       <span>与链</span>
     </a>
     <div class="head-actions">
@@ -352,12 +432,14 @@ button{font:inherit;cursor:pointer}
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <h1><em data-i18n="hero.title1">随时随地</em><span data-i18n="hero.title2">收藏、整理、分享</span></h1>
-        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是免注册即用的个人书签管理器：子书签、分类与属性标签把收藏深度整理，多端云同步永不丢失，一条链接即可公开分享。</p>
+        <div class="hero-pill reveal"><span class="pill-dot" aria-hidden="true"></span><span class="pill-tag">OFFICIAL</span> <span data-i18n="hero.pill">离线优先架构 · 端到端零知识加密 · 自由公开分发</span></div>
+        <h1><em data-i18n="hero.title1">随时随地，</em><span data-i18n="hero.title2">收藏、整理、分享</span></h1>
+        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是新一代专业级书签与知识沉淀管理系统。支持子书签树状嵌套与多维属性切片，提供端到端物理加密与毫秒级增量多端同频，一条链接即可实现分布式知识分发与自由 Fork 协作。</p>
         <div class="hero-ctas">
           <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
+          <a class="btn btn-ghost" href="#why" data-i18n="hero.explore">探索特性</a>
         </div>
-        <p class="hero-note" data-i18n="hero.note">免费 · 免注册 · 数据存在你自己的设备上</p>
+        <p class="hero-note" data-i18n="hero.note">开箱即用 · 本地权威存储 · 端到端零知识加密 · 开源自由分发</p>
       </div>
       <div class="hero-visual" aria-hidden="true">
         <canvas id="constellation"></canvas>
@@ -369,46 +451,35 @@ button{font:inherit;cursor:pointer}
   <section class="sect" id="why">
     <div class="wrap">
       <div class="sect-head reveal">
+        <div class="eyebrow" data-i18n="why.eyebrow">Deep Organization</div>
         <h2 data-i18n="why.title">为什么选择与链</h2>
       </div>
       <div class="split">
         <div class="copy reveal">
           <h3 data-i18n="manage.title">深度管理：连接链与链与人</h3>
-          <p class="lead" data-i18n="manage.sub">不只是把网址存下来，而是让每条收藏都待在它该在的地方。</p>
+          <p class="lead" data-i18n="manage.sub">“与链”亦是“与人”（ulink.ren）。打破传统收藏夹扁平膨胀的结构限制，在链接与链接、知识与人之间建立清晰的拓扑层级，让每一次收藏都沉淀为结构化数字资产。</p>
           <div class="cap-row">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 10v4M12 10v4M16 10v4"/></svg>
-            <div><b data-i18n="m1.t">子书签</b><span data-i18n="m1.d">一个书签下再挂多条链接——同一站点的不同入口，归于一处。</span></div>
+            <div class="cap-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 10v4M12 10v4M16 10v4"/></svg>
+            </div>
+            <div><b data-i18n="m1.t">子书签树状嵌套</b><span data-i18n="m1.d">解构深层网络。单个主站点收纳多级子级入口，官方文档、管理控制台与代码仓库井然归于一处。</span></div>
           </div>
           <div class="cap-row">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M9 13h6"/></svg>
-            <div><b data-i18n="m2.t">分类与分组</b><span data-i18n="m2.d">侧栏分类横切，组卡片竖收；组内还能聚焦搜索、批量整理。</span></div>
+            <div class="cap-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M9 13h6"/></svg>
+            </div>
+            <div><b data-i18n="m2.t">多维分类与富文本组</b><span data-i18n="m2.d">侧栏分类划分业务边界，纵向全功能笔记本沉淀知识脉络，支持 @ 智能引用卡片与全屏沉浸编辑。</span></div>
           </div>
           <div class="cap-row">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7V4h9.6l7.4 7.4a2 2 0 0 1 0 2z"/><circle cx="7.5" cy="7.5" r="1"/></svg>
-            <div><b data-i18n="m3.t">属性标签</b><span data-i18n="m3.d">自定义「需要登录」「AI」等标签，一点筛选，一秒定位。</span></div>
+            <div class="cap-icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7V4h9.6l7.4 7.4a2 2 0 0 1 0 2z"/><circle cx="7.5" cy="7.5" r="1"/></svg>
+            </div>
+            <div><b data-i18n="m3.t">自定义属性标签</b><span data-i18n="m3.d">灵活定义业务维度属性标签，支持布尔组合过滤与多维交集切片，海量资源毫秒级精准定位。</span></div>
           </div>
         </div>
         <div class="visual reveal d1" aria-hidden="true">
-          <div class="demo-panel">
-            <div class="demo-bar"><i></i><i></i><i></i></div>
-            <div class="demo-body">
-              <div class="demo-rail">
-                <span data-i18n="dm.all">全部</span>
-                <span data-i18n="dm.tools">工具</span>
-                <span data-i18n="dm.ai">AI</span>
-              </div>
-              <div class="demo-main">
-                <div class="demo-card"><i></i><b data-i18n="dm.parent">开发资源</b><small>+2</small></div>
-                <div class="demo-kids">
-                  <div class="demo-card"><i></i><b data-i18n="dm.child1">TypeScript 手册</b></div>
-                  <div class="demo-card"><i></i><b>GitHub</b></div>
-                </div>
-                <div class="demo-chips">
-                  <span data-i18n="dm.chip1">需要登录</span>
-                  <span>AI</span>
-                </div>
-              </div>
-            </div>
+          <div class="manage-visual">
+            <canvas id="manage-canvas"></canvas>
           </div>
         </div>
       </div>
@@ -420,61 +491,38 @@ button{font:inherit;cursor:pointer}
     <div class="wrap split">
       <div class="visual reveal" aria-hidden="true">
         <div class="sync-visual">
-          <svg viewBox="0 0 440 240" fill="none">
-            <!-- 连线：左设备 → 锁 → 右设备，虚线流动 = 数据传输 -->
-            <path class="flow" d="M104 120 H 176" stroke="var(--brand)" stroke-width="1.6" opacity=".55"/>
-            <path class="flow rev" d="M264 120 H 336" stroke="var(--brand)" stroke-width="1.6" opacity=".55"/>
-            <path d="M104 120 H 176 M264 120 H 336" stroke="var(--brand)" stroke-width="1.6" opacity=".14"/>
-            <!-- 左：台式机 -->
-            <g stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="44" y="86" width="60" height="44" rx="5"/>
-              <path d="M62 146h24M74 130v16"/>
-            </g>
-            <!-- 右：手机 -->
-            <g stroke="var(--ink-2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="336" y="82" width="34" height="58" rx="6"/>
-              <path d="M349 132h8"/>
-            </g>
-            <!-- 中央锁 -->
-            <g class="lock-pulse">
-              <circle cx="220" cy="120" r="42" fill="var(--brand-soft)"/>
-              <g stroke="var(--brand)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="203" y="112" width="34" height="26" rx="5"/>
-                <path d="M210 112v-7a10 10 0 0 1 20 0v7"/>
-                <circle cx="220" cy="124" r="2.6" fill="var(--brand)" stroke="none"/>
-              </g>
-            </g>
-            <text class="sync-label" x="74" y="172" text-anchor="middle" data-i18n="dev.l">本机</text>
-            <text class="sync-label" x="353" y="172" text-anchor="middle" data-i18n="dev.r">手机</text>
-            <text class="sync-label" x="220" y="186" text-anchor="middle" fill="var(--brand)" data-i18n="dev.c">端到端加密</text>
-          </svg>
+          <canvas id="sync-canvas"></canvas>
         </div>
       </div>
       <div class="copy reveal d1">
-        <h3 data-i18n="sync.title">同步与安全</h3>
-        <p class="lead" data-i18n="sync.d1">传统书签管理器把收藏困在单一浏览器里——换设备、重装系统，说丢就丢。与链把你的库多端云同步，冲突自动合并，历史版本随时回溯。</p>
-        <p data-i18n="sync.d2">密码与账户凭据在你设备上端到端加密后才上传，服务端只见密文；数据默认存本地，上不上云由你决定。</p>
+        <div class="eyebrow" data-i18n="sync.eyebrow">Sync & Privacy</div>
+        <h3 data-i18n="sync.title">多端实时同频，凭据端到端零知识加密</h3>
+        <p class="lead" data-i18n="sync.d1">摆脱单一浏览器生态绑定与数据丢失风险。全端设备毫秒级增量同步，具备强鲁棒性的冲突自动仲裁机制与版本历史回溯能力。</p>
+        <p data-i18n="sync.d2">账户密码与敏感凭据在客户端基于 PBKDF2 派生密钥与 AES-256-GCM 工业级算法物理加密后出端。服务端全程零知识盲存，本地数据拥有最高权威。</p>
       </div>
     </div>
   </section>
 
   <!-- ═══ 简洁、精致：主题与视图 ═══ -->
-  <section class="looks" id="looks">
+  <section class="looks" id="looks" data-style="eff" data-mode="light">
     <div class="wrap">
       <div class="sect-head reveal">
-        <h2 data-i18n="looks.title">简洁、精致</h2>
-        <p data-i18n="looks.sub">两套主题、深浅两色、三种视图——下面是真的可以点的，切换即时生效。</p>
+        <div class="eyebrow" data-i18n="looks.eyebrow">Design System</div>
+        <h2 data-i18n="looks.title">简洁、精致：精于方寸</h2>
+        <p data-i18n="looks.sub">配备效率与舒适双调色体系，支持明暗外观自由切换；提供宫格、列表与紧凑小宫格三种布局视图，满足不同场景下的专业阅读需求。</p>
       </div>
-      <div class="demo-controls reveal">
+      <div class="demo-controls reveal" id="demo-controls">
         <div class="seg" role="group" data-i18n-aria="theme.aria" aria-label="主题风格">
+          <div class="seg-glider" aria-hidden="true"></div>
           <button type="button" data-demo-style="eff" aria-pressed="true" data-i18n="theme.eff">效率</button>
           <button type="button" data-demo-style="comfort" aria-pressed="false" data-i18n="theme.comfort">舒适</button>
         </div>
         <div class="seg icon" role="group" data-i18n-aria="mode.aria" aria-label="深浅色模式">
-          <button type="button" data-demo-mode="light" aria-pressed="true" data-i18n-aria="mode.light" aria-label="浅色模式">
+          <div class="seg-glider" aria-hidden="true"></div>
+          <button type="button" data-demo-mode="light" aria-pressed="true" data-i18n-aria="mode.light" aria-label="浅色模式" title="浅色模式">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"/></svg>
           </button>
-          <button type="button" data-demo-mode="dark" aria-pressed="false" data-i18n-aria="mode.dark" aria-label="深色模式">
+          <button type="button" data-demo-mode="dark" aria-pressed="false" data-i18n-aria="mode.dark" aria-label="深色模式" title="深色模式">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 14.2A8.3 8.3 0 0 1 9.8 3.6a8.3 8.3 0 1 0 10.6 10.6z"/></svg>
           </button>
         </div>
@@ -499,7 +547,7 @@ button{font:inherit;cursor:pointer}
           <div class="demo-label" data-i18n="view.mini">小宫格</div>
         </div>
       </div>
-      <p class="demo-note reveal" data-i18n="looks.note">主题与视图偏好各自记忆，换设备也跟着你走。</p>
+      <p class="demo-note reveal" data-i18n="looks.note">视觉主题与视图偏好按设备本地独立持久化，登录云端后全局自动漫游。</p>
     </div>
   </section>
 
@@ -507,25 +555,14 @@ button{font:inherit;cursor:pointer}
   <section class="sect" id="create">
     <div class="wrap split">
       <div class="copy reveal">
-        <h3 data-i18n="create.title">创作与分享</h3>
-        <p class="lead" data-i18n="create.d1">一条链接，把书签集（分类）或单个组公开出去：对方免注册即可浏览，还能一键 Fork 成自己的副本。</p>
-        <p data-i18n="create.d2">组是富文本笔记本——标题、颜色、任务清单、@ 引用书签卡片。写一篇安装教程、做一份上手指南，收集与创作在这里接上头。</p>
+        <div class="eyebrow" data-i18n="create.eyebrow">Collaboration</div>
+        <h3 data-i18n="create.title">以链会友，知识自由 Fork</h3>
+        <p class="lead" data-i18n="create.d1">一条公开链接，即可将精选书签集或专业知识库一键分发。访客免登录即可沉浸式全屏浏览，并支持一键 Fork 克隆为完全独立的本地副本。</p>
+        <p data-i18n="create.d2">组卡片原生集成全功能 TipTap 富文本编辑器——支持多级标题、高亮批注、任务清单及 @ 动态卡片引用。无论是编制行业工具集还是沉淀实操手册，输入与输出在此闭环。</p>
       </div>
       <div class="visual reveal d1" aria-hidden="true">
-        <div class="community" id="community">
-          <span class="cline" style="left:96px;top:64px;width:118px;transform:rotate(14deg)"></span>
-          <span class="cline" style="left:214px;top:88px;width:120px;transform:rotate(-12deg)"></span>
-          <span class="cline" style="left:88px;top:150px;width:130px;transform:rotate(-16deg)"></span>
-          <span class="cline" style="left:222px;top:168px;width:126px;transform:rotate(13deg)"></span>
-          <span class="cline" style="left:130px;top:196px;width:180px;transform:rotate(2deg)"></span>
-          <span class="cnode" style="left:44px;top:38px"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span>
-          <span class="cnode" style="right:52px;top:52px"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span>
-          <span class="cnode" style="left:66px;bottom:34px"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span>
-          <span class="cnode" style="right:64px;bottom:26px"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span>
-          <span class="cnode hub" style="left:50%;top:50%;transform:translate(-50%,-50%)"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-          <span class="cchip a" style="left:70px;top:104px"><i></i><span>figma.com</span></span>
-          <span class="cchip b" style="right:96px;top:96px"><i></i><span data-i18n="cm.tut">安装教程</span></span>
-          <span class="cchip c" style="left:210px;top:212px"><i></i><span>github.com</span></span>
+        <div class="share-visual" id="share-visual">
+          <canvas id="share-canvas"></canvas>
         </div>
       </div>
     </div>
@@ -535,21 +572,35 @@ button{font:inherit;cursor:pointer}
   <section class="extras" id="extras">
     <div class="wrap">
       <div class="sect-head reveal">
-        <h2 data-i18n="extra.title">还有这些，顺手就好</h2>
+        <div class="eyebrow" data-i18n="extra.eyebrow">Crafted Details</div>
+        <h2 data-i18n="extra.title">更多贴心细节，顺手就好</h2>
       </div>
       <div class="extra-grid">
         <article class="extra reveal">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
-          <b data-i18n="x1.t">扩展一键收藏</b><span><span data-i18n="x1.d">Chrome 扩展里按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，当前页面即刻入库。</span></span></article>
+          <div class="extra-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+          </div>
+          <b data-i18n="x1.t">扩展一键捕获</b><span><span data-i18n="x1.d">Chrome 扩展里按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，当前页面与选中文本即刻入库归档。</span></span></article>
         <article class="extra reveal d1">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-          <b data-i18n="x2.t">离线可用，装到桌面</b><span data-i18n="x2.d">PWA 安装到桌面与主屏，断网照常用。</span></article>
-        <article class="extra reveal d2">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
-          <b data-i18n="x3.t">拼音模糊搜索</b><span data-i18n="x3.d">「js」能搜到「键盘快捷键」，记不住全名也没关系。</span></article>
+          <div class="extra-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          </div>
+          <b data-i18n="x2.t">离线优先架构，桌面级 PWA</b><span data-i18n="x2.d">基于 IndexedDB 权威存储构建，支持安装至桌面与手机主屏，离线断网环境下各项功能完整可用。</span></article>
+        <article class="extra green reveal d2">
+          <div class="extra-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+          </div>
+          <b data-i18n="x5.t">自由拖拽，随心而动</b><span data-i18n="x5.d">支持卡片自由拖拽排序、拖入侧栏归类与拖入笔记引用；移动端搭载纯原生 60fps 跟手阻尼引擎。</span></article>
         <article class="extra reveal d3">
-          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/></svg>
-          <b data-i18n="x4.t">回收站与撤销</b><span data-i18n="x4.d">误删进回收站，操作可撤销，怎么做都不怕收不回。</span></article>
+          <div class="extra-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+          </div>
+          <b data-i18n="x3.t">拼音全拼与模糊智能检索</b><span data-i18n="x3.d">内置拼音分词与 Fuse.js 模糊匹配引擎，键入简拼首字母「js」即可秒出「键盘快捷键」，无惧全名遗忘。</span></article>
+        <article class="extra green reveal d4">
+          <div class="extra-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/></svg>
+          </div>
+          <b data-i18n="x4.t">安全回收站与多级撤销栈</b><span data-i18n="x4.d">误删误改支持操作级即时 Undo/Redo 栈式回退，软删除数据沉入安全回收站，每一次整理都安心无忧。</span></article>
       </div>
     </div>
   </section>
@@ -558,24 +609,21 @@ button{font:inherit;cursor:pointer}
   <section class="sect" id="faq">
     <div class="wrap">
       <div class="sect-head reveal">
+        <div class="eyebrow" data-i18n="faq.eyebrow">FAQ</div>
         <h2 data-i18n="faq.title">常见问题</h2>
       </div>
       <div class="faq-list reveal">
         <details>
-          <summary data-i18n="q1">真的免费吗？</summary>
-          <p data-i18n="a1">是。本地功能完全免费、无广告；云同步与公开分享当前同样免费。</p>
-        </details>
-        <details>
-          <summary data-i18n="q2">我的数据存在哪里？</summary>
-          <p data-i18n="a2">默认只在你设备的浏览器里（IndexedDB），不上传任何服务器；开启云同步后，数据才同步到你的账号——其中密码字段经端到端加密，服务端只见密文。</p>
+          <summary data-i18n="q2">我的数据存放在哪里？</summary>
+          <p data-i18n="a2">数据默认以绝对权威形式持久化于本地设备浏览器（IndexedDB）存储层，绝不主动外传。开启云同步后，数据增量同步至专属加密库——密码凭据在出端前经 AES-256-GCM 物理加密，云端绝对零知识。</p>
         </details>
         <details>
           <summary data-i18n="q3">换设备或换浏览器怎么办？</summary>
-          <p data-i18n="a3">登录同一账号即自动同步；也可以随时把数据导出为文件备份，在别处导入。</p>
+          <p data-i18n="a3">登录同一账号即可毫秒级自动增量同步；亦可随时将全量结构化数据导出为标准化 JSON 备份文档，在任意终端离线导入还原。</p>
         </details>
         <details>
-          <summary data-i18n="q4">和浏览器自带书签有什么不同？</summary>
-          <p data-i18n="a4">跨浏览器、跨设备随身携带；分组、属性与拼音搜索更强；可公开分享；配合扩展与系统分享，任何页面一键入库。</p>
+          <summary data-i18n="q4">与浏览器自带书签有什么根本不同？</summary>
+          <p data-i18n="a4">摆脱单一操作系统与浏览器厂商生态捆绑；原生支持多级子书签树状嵌套、富文本知识笔记、拼音即时搜索、公开链接 Fork 副本协作以及扩展一秒归档。</p>
         </details>
       </div>
     </div>
@@ -585,7 +633,7 @@ button{font:inherit;cursor:pointer}
   <section class="cta-band">
     <div class="wrap reveal">
       <h2 data-i18n="cta.title">现在，把收藏连成链</h2>
-      <p data-i18n="cta.sub">打开就能用，不需要注册任何账号。</p>
+      <p data-i18n="cta.sub">免注册即开即用 · 自由导入已有书签 · 开启结构化知识管理新范式</p>
       <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
     </div>
   </section>
@@ -596,7 +644,20 @@ button{font:inherit;cursor:pointer}
   <div class="wrap">
     <div class="foot-row">
       <span class="foot-logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs>
+            <mask id="fl-mb">
+              <rect width="240" height="240" fill="white" />
+              <line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round" />
+            </mask>
+            <mask id="fl-mg">
+              <rect width="240" height="240" fill="white" />
+              <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
+            </mask>
+          </defs>
+          <path d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke="var(--brand-logo-blue, #122E8A)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#fl-mb)" />
+          <path d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke="var(--brand-logo-green, #10B981)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#fl-mg)" />
+        </svg>
         <span>与链 ulink</span>
       </span>
       <span data-i18n="foot.slogan">收藏 · 整理 · 分享</span>
@@ -607,7 +668,7 @@ button{font:inherit;cursor:pointer}
     </div>
     <div class="foot-sub">
       <span data-i18n="foot.rights">© 2026 ulink.ren · 与链</span>
-      <span data-i18n="foot.note">免注册开始 · 云同步可选</span>
+      <span data-i18n="foot.note">开箱即用 · 隐私自主掌控 · 云同步可选</span>
     </div>
   </div>
 </footer>

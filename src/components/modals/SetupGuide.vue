@@ -8,7 +8,7 @@
         <!-- 品牌视觉 -->
         <div class="setup-brand">
           <div class="setup-logo">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            <BrandLogo :size="32" />
           </div>
           <p class="setup-tagline">{{ t('modal.setupGuide.tagline') }}</p>
         </div>
@@ -37,6 +37,7 @@
 <script setup lang="ts">
 import { useUIStore } from '../../stores/ui.js'
 import { I } from '../../config/icons.js'
+import BrandLogo from '../ui/BrandLogo.vue'
 import { safeSetItem } from '../../lib/storageSafe.js'
 import { t } from '../../i18n/index.js'
 
@@ -69,10 +70,12 @@ function onImport() {
 .setup-logo{
   display:inline-flex;align-items:center;justify-content:center;
   width:56px;height:56px;border-radius:16px;
-  background:var(--accent-grad);
-  color:#fff;margin-bottom:12px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  box-shadow:var(--shadow-sm);
+  margin-bottom:12px;
 }
-.setup-logo svg{width:28px;height:28px}
+.setup-logo svg{width:32px;height:32px}
 .setup-tagline{
   font-size:0.82rem;color:var(--text-muted);
   margin:0;line-height:1.5;
