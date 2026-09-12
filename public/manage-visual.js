@@ -61,66 +61,65 @@
   }
 
   // 绘制与链官方品牌矢量徽标（U-Knot 与字结）
-  function drawUlinkLogo(c, cx, cy, r) {
+  function drawUlinkLogo(c, cx, cy, r, bgColor) {
     c.save();
     c.translate(cx, cy);
     var s = r * 1.1;
-    var lw = s * 0.22;
-    var gapLw = lw * 1.58;
-    var bg = '#FFFFFF';
+    var lw = s * (26 / 120);
+    var gapLw = s * (38 / 120);
+    var bg = bgColor || '#EDE4DA';
 
     c.lineCap = 'round';
     c.lineJoin = 'round';
 
     var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     var blueColor = isDark ? '#4F6BFF' : '#122E8A';
+    var greenColor = '#10B981';
 
-    // 1. Full Blue shape
+    // 1. Full Blue shape (G2 Bézier)
     c.strokeStyle = blueColor;
     c.lineWidth = lw;
     c.beginPath();
     c.moveTo(-0.8 * s, -0.2 * s);
     c.lineTo(0, -0.2 * s);
-    c.bezierCurveTo((7/15) * s, -0.2 * s, 0.6 * s, -(2/15) * s, 0.6 * s, 0.2 * s);
-    c.bezierCurveTo(0.6 * s, (8/15) * s, (7/15) * s, 0.6 * s, 0, 0.6 * s);
+    c.bezierCurveTo((7 / 15) * s, -0.2 * s, 0.6 * s, -(2 / 15) * s, 0.6 * s, 0.2 * s);
+    c.bezierCurveTo(0.6 * s, (8 / 15) * s, (7 / 15) * s, 0.6 * s, 0, 0.6 * s);
     c.lineTo(-0.6 * s, 0.6 * s);
     c.stroke();
 
-    // 2. Optical Gap
-    c.globalCompositeOperation = 'destination-out';
-    c.lineWidth = lw + 14;
+    // 2. Optical Gap at Crossing 2
+    c.strokeStyle = bg;
+    c.lineWidth = gapLw;
     c.beginPath();
-    c.moveTo(0, 0.2 * s);
-    c.lineTo(0.3 * s, 0.2 * s);
+    c.moveTo((53 / 120) * s, 0.2 * s);
+    c.lineTo((91 / 120) * s, 0.2 * s);
     c.stroke();
 
-    // 3. Full Green shape
-    c.globalCompositeOperation = 'source-over';
-    c.strokeStyle = '#10B981';
+    // 3. Full Green shape (G2 Bézier)
+    c.strokeStyle = greenColor;
     c.lineWidth = lw;
     c.beginPath();
     c.moveTo(0.8 * s, 0.2 * s);
     c.lineTo(0, 0.2 * s);
-    c.bezierCurveTo(-(7/15) * s, 0.2 * s, -0.6 * s, (2/15) * s, -0.6 * s, -0.2 * s);
-    c.bezierCurveTo(-0.6 * s, -(8/15) * s, -(7/15) * s, -0.6 * s, 0, -0.6 * s);
+    c.bezierCurveTo(-(7 / 15) * s, 0.2 * s, -0.6 * s, (2 / 15) * s, -0.6 * s, -0.2 * s);
+    c.bezierCurveTo(-0.6 * s, -(8 / 15) * s, -(7 / 15) * s, -0.6 * s, 0, -0.6 * s);
     c.lineTo(0.6 * s, -0.6 * s);
     c.stroke();
 
-    // 4. Optical Gap 1
-    c.globalCompositeOperation = 'destination-out';
-    c.lineWidth = lw + 14;
+    // 4. Optical Gap at Crossing 1
+    c.strokeStyle = bg;
+    c.lineWidth = gapLw;
     c.beginPath();
-    c.moveTo(0, -0.2 * s);
-    c.lineTo(-0.3 * s, -0.2 * s);
+    c.moveTo(-(91 / 120) * s, -0.2 * s);
+    c.lineTo(-(53 / 120) * s, -0.2 * s);
     c.stroke();
 
     // 5. Seamless re-stroke Blue top line
-    c.globalCompositeOperation = 'source-over';
     c.strokeStyle = blueColor;
     c.lineWidth = lw;
     c.beginPath();
     c.moveTo(-0.8 * s, -0.2 * s);
-    c.lineTo(-0.01 * s, -0.2 * s);
+    c.lineTo(0, -0.2 * s);
     c.stroke();
 
     c.restore();

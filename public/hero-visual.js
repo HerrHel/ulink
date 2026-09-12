@@ -66,64 +66,62 @@
     ctx.save();
     ctx.translate(cx, cy);
     var s = size / 2;
-    var lw = s * 0.22;
-    var gapLw = lw * 1.58;
+    var lw = s * (26 / 120);
+    var gapLw = s * (38 / 120);
     var bg = bgColor || '#FFFFFF';
 
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var blueColor = isDark ? '#4F6BFF' : '#122E8A';
-      var greenColor = '#10B981'; // Green stays the same
-      
-      // 1. Full Blue shape (G2 B茅zier)
-      ctx.strokeStyle = blueColor;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.moveTo(-0.8 * s, -0.2 * s);
-      ctx.lineTo(0, -0.2 * s);
-      ctx.bezierCurveTo((7/15) * s, -0.2 * s, 0.6 * s, -(2/15) * s, 0.6 * s, 0.2 * s);
-      ctx.bezierCurveTo(0.6 * s, (8/15) * s, (7/15) * s, 0.6 * s, 0, 0.6 * s);
-      ctx.lineTo(-0.6 * s, 0.6 * s);
-      ctx.stroke();
-  
-      // 2. Optical Gap at Crossing 2
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = lw + 14;
-      ctx.beginPath();
-      ctx.moveTo(0, 0.2 * s);
-      ctx.lineTo(0.3 * s, 0.2 * s);
-      ctx.stroke();
-  
-      // 3. Full Green shape
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = greenColor;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.moveTo(0.8 * s, 0.2 * s);
-      ctx.lineTo(0, 0.2 * s);
-      ctx.bezierCurveTo(-(7/15) * s, 0.2 * s, -0.6 * s, (2/15) * s, -0.6 * s, -0.2 * s);
-      ctx.bezierCurveTo(-0.6 * s, -(8/15) * s, -(7/15) * s, -0.6 * s, 0, -0.6 * s);
-      ctx.lineTo(0.6 * s, -0.6 * s);
-      ctx.stroke();
-  
-      // 4. Optical Gap at Crossing 1
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = lw + 14;
-      ctx.beginPath();
-      ctx.moveTo(0, -0.2 * s);
-      ctx.lineTo(-0.3 * s, -0.2 * s);
-      ctx.stroke();
-  
-      // 5. Seamless re-stroke Blue top line
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = blueColor;
-      ctx.lineWidth = lw;
-      ctx.beginPath();
-      ctx.moveTo(-0.8 * s, -0.2 * s);
-      ctx.lineTo(-0.01 * s, -0.2 * s);
-      ctx.stroke();
+    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var blueColor = isDark ? '#4F6BFF' : '#122E8A';
+    var greenColor = '#10B981';
+
+    // 1. Full Blue shape (G2 Bézier)
+    ctx.strokeStyle = blueColor;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-0.8 * s, -0.2 * s);
+    ctx.lineTo(0, -0.2 * s);
+    ctx.bezierCurveTo((7 / 15) * s, -0.2 * s, 0.6 * s, -(2 / 15) * s, 0.6 * s, 0.2 * s);
+    ctx.bezierCurveTo(0.6 * s, (8 / 15) * s, (7 / 15) * s, 0.6 * s, 0, 0.6 * s);
+    ctx.lineTo(-0.6 * s, 0.6 * s);
+    ctx.stroke();
+
+    // 2. Optical Gap at Crossing 2
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = gapLw;
+    ctx.beginPath();
+    ctx.moveTo((53 / 120) * s, 0.2 * s);
+    ctx.lineTo((91 / 120) * s, 0.2 * s);
+    ctx.stroke();
+
+    // 3. Full Green shape (G2 Bézier)
+    ctx.strokeStyle = greenColor;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(0.8 * s, 0.2 * s);
+    ctx.lineTo(0, 0.2 * s);
+    ctx.bezierCurveTo(-(7 / 15) * s, 0.2 * s, -0.6 * s, (2 / 15) * s, -0.6 * s, -0.2 * s);
+    ctx.bezierCurveTo(-0.6 * s, -(8 / 15) * s, -(7 / 15) * s, -0.6 * s, 0, -0.6 * s);
+    ctx.lineTo(0.6 * s, -0.6 * s);
+    ctx.stroke();
+
+    // 4. Optical Gap at Crossing 1
+    ctx.strokeStyle = bg;
+    ctx.lineWidth = gapLw;
+    ctx.beginPath();
+    ctx.moveTo(-(91 / 120) * s, -0.2 * s);
+    ctx.lineTo(-(53 / 120) * s, -0.2 * s);
+    ctx.stroke();
+
+    // 5. Seamless re-stroke Blue top line
+    ctx.strokeStyle = blueColor;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-0.8 * s, -0.2 * s);
+    ctx.lineTo(0, -0.2 * s);
+    ctx.stroke();
 
     ctx.restore();
   }
