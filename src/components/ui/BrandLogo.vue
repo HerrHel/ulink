@@ -19,6 +19,7 @@
       </mask>
     </defs>
     <path
+      class="brand-logo-blue"
       d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192"
       fill="none"
       :stroke="blueColor"
@@ -28,6 +29,7 @@
       :mask="`url(#${maskBlue})`"
     />
     <path
+      class="brand-logo-green"
       d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48"
       fill="none"
       :stroke="greenColor"
@@ -68,5 +70,9 @@ const svgSize = computed(() => {
   display: inline-block;
   flex-shrink: 0;
   vertical-align: middle;
+}
+.brand-logo-blue,
+.brand-logo-green {
+  transition: stroke 0.3s ease;
 }
 </style>

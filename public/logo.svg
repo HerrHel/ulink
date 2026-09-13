@@ -4,6 +4,7 @@
     .logo-green { stroke: #10B981; }
     @media (prefers-color-scheme: dark) {
       .logo-blue { stroke: #4F6BFF; }
+      .logo-green { stroke: #34D399; }
     }
   </style>
   <defs>

@@ -359,6 +359,12 @@
           var val = target.getAttribute('data-' + attr);
           if (looks) looks.setAttribute('data-' + key, val);
           stage.setAttribute('data-' + key, val);
+          if (key === 'mode') {
+            document.documentElement.setAttribute('data-theme', val);
+            try {
+              window.dispatchEvent(new CustomEvent('lv-demo-mode-change', { detail: val }));
+            } catch (err) {}
+          }
           var group = target.parentElement;
           var all = group.querySelectorAll('button');
           for (var k = 0; k < all.length; k++) {
