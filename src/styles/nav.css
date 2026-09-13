@@ -23,8 +23,8 @@
 .brand-logo-blue, .brand-logo-green { transition: stroke 0.3s ease; }
 .brand-logo-blue { stroke: var(--brand-logo-blue, #122E8A) !important; }
 .brand-logo-green { stroke: var(--brand-logo-green, #10B981) !important; }
-[data-theme="dark"] .brand-logo-blue { stroke: var(--brand-logo-blue, #4F6BFF) !important; }
-[data-theme="dark"] .brand-logo-green { stroke: var(--brand-logo-green, #34D399) !important; }
+[data-theme="dark"] .brand-logo-blue { stroke: var(--brand-logo-blue, #F04A8A) !important; }
+[data-theme="dark"] .brand-logo-green { stroke: var(--brand-logo-green, #E2E7BF) !important; }
 [data-theme="light"] .brand-logo-blue { stroke: var(--brand-logo-blue, #122E8A) !important; }
 [data-theme="light"] .brand-logo-green { stroke: var(--brand-logo-green, #10B981) !important; }
 .rail-section-label{
