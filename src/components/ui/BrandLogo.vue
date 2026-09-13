@@ -62,32 +62,4 @@ const svgSize = computed(() => {
 })
 </script>
 
-<style scoped>
-.brand-logo-icon {
-  display: inline-block;
-  flex-shrink: 0;
-  vertical-align: middle;
-}
-.brand-logo-blue,
-.brand-logo-green {
-  transition: stroke 0.3s ease;
-}
-.brand-logo-blue {
-  stroke: var(--brand-logo-blue, #122E8A) !important;
-}
-.brand-logo-green {
-  stroke: var(--brand-logo-green, #10B981) !important;
-}
-:global([data-theme="dark"]) .brand-logo-blue {
-  stroke: var(--brand-logo-blue, #4F6BFF) !important;
-}
-:global([data-theme="dark"]) .brand-logo-green {
-  stroke: var(--brand-logo-green, #34D399) !important;
-}
-:global([data-theme="light"]) .brand-logo-blue {
-  stroke: var(--brand-logo-blue, #122E8A) !important;
-}
-:global([data-theme="light"]) .brand-logo-green {
-  stroke: var(--brand-logo-green, #10B981) !important;
-}
-</style>
+
