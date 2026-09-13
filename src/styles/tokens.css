@@ -66,8 +66,8 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --brand-logo-blue: #4F6BFF;
-    --brand-logo-green: #34D399;
+      --brand-logo-blue: #F04A8A;
+      --brand-logo-green: #E2E7BF;
   }
 }
 [data-theme="dark"]{
@@ -86,8 +86,8 @@
   /* B1-002：暗色 muted 相对 surface/#25252B ≥4.5 */
   --text-muted:#9B968E;
   --accent:#F04A8A;
-  --brand-logo-blue:#4F6BFF;
-  --brand-logo-green:#34D399;
+  --brand-logo-blue:#F04A8A;
+  --brand-logo-green:#E2E7BF;
   --accent-light:rgba(230,57,124,0.1);
   --accent-glow:rgba(230,57,124,0.18);
   --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);
@@ -171,8 +171,8 @@
   --accent-light:rgba(226,231,191,0.1);
   --accent-glow:rgba(226,231,191,0.18);
   --accent-grad:linear-gradient(135deg,#E2E7BF 0%,#C8CE9A 100%);
-  --brand-logo-blue:#4F6BFF;
-  --brand-logo-green:#34D399;
+  --brand-logo-blue:#F04A8A;
+  --brand-logo-green:#E2E7BF;
   --rail-bg:#252B38;
   --rail-border:#3A4152;
   --card-badge-bg:rgba(226,231,191,0.08);
