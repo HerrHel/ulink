@@ -63,10 +63,21 @@
   --brand-logo-green: #10B981;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --brand-logo-blue: #4F6BFF;
-    --brand-logo-green: #10B981;
+    --brand-logo-green: #34D399;
   }
+}
+[data-theme="dark"] {
+  --brand-logo-blue: #4F6BFF !important;
+  --brand-logo-green: #34D399 !important;
+}
+[data-theme="light"] {
+  --brand-logo-blue: #122E8A !important;
+  --brand-logo-green: #10B981 !important;
+}
+.logo path, .foot-logo path {
+  transition: stroke 0.35s ease;
 }
 
 :root{

@@ -72,9 +72,15 @@
     c.lineCap = 'round';
     c.lineJoin = 'round';
 
-    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var isDark = (function () {
+      var dt = document.documentElement.getAttribute('data-theme');
+      if (dt) return dt === 'dark';
+      var looks = document.getElementById('looks');
+      if (looks && looks.getAttribute('data-mode') === 'dark') return true;
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    })();
     var blueColor = isDark ? '#4F6BFF' : '#122E8A';
-    var greenColor = '#10B981';
+    var greenColor = isDark ? '#34D399' : '#10B981';
 
     // 1. Full Blue shape (G2 Bézier)
     c.strokeStyle = blueColor;

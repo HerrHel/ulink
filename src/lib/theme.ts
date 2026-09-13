@@ -45,13 +45,13 @@ function applyTheme(theme: string): void {
 }
 
 function applySystemTheme(): void {
-  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  const isDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
   applyTheme(isDark ? V_DARK : V_LIGHT)
   safeSetItem(K_THEME, isDark ? V_DARK : V_LIGHT)
 }
 
 function startAutoTheme(): void {
-  if (_autoThemeMedia) return
+  if (_autoThemeMedia || typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
   applySystemTheme()
   _autoThemeMedia = window.matchMedia('(prefers-color-scheme: dark)')
   _autoThemeHandler = function (e: MediaQueryListEvent) {
