@@ -65,7 +65,7 @@
   --ft-color:var(--accent);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     --brand-logo-blue: #4F6BFF;
     --brand-logo-green: #34D399;
   }

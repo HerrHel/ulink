@@ -22,7 +22,7 @@
       class="brand-logo-blue"
       d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192"
       fill="none"
-      :stroke="blueColor"
+      :style="blueColor ? { stroke: blueColor } : undefined"
       stroke-width="26"
       stroke-linecap="round"
       stroke-linejoin="round"
@@ -32,7 +32,7 @@
       class="brand-logo-green"
       d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48"
       fill="none"
-      :stroke="greenColor"
+      :style="greenColor ? { stroke: greenColor } : undefined"
       stroke-width="26"
       stroke-linecap="round"
       stroke-linejoin="round"
@@ -46,22 +46,19 @@ import { computed } from 'vue'
 
 let uidCounter = 0
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   size?: number | string
   blueColor?: string
   greenColor?: string
-}>(), {
-  size: 24,
-  blueColor: 'var(--brand-logo-blue, #122E8A)',
-  greenColor: 'var(--brand-logo-green, #10B981)',
-})
+}>()
 
 const uid = ++uidCounter
 const maskBlue = `bl-mb-${uid}`
 const maskGreen = `bl-mg-${uid}`
 
 const svgSize = computed(() => {
-  return typeof props.size === 'number' ? `${props.size}px` : props.size
+  const s = props.size ?? 24
+  return typeof s === 'number' ? `${s}px` : s
 })
 </script>
 
@@ -74,5 +71,23 @@ const svgSize = computed(() => {
 .brand-logo-blue,
 .brand-logo-green {
   transition: stroke 0.3s ease;
+}
+.brand-logo-blue {
+  stroke: var(--brand-logo-blue, #122E8A);
+}
+.brand-logo-green {
+  stroke: var(--brand-logo-green, #10B981);
+}
+:global([data-theme="dark"]) .brand-logo-blue {
+  stroke: var(--brand-logo-blue, #4F6BFF);
+}
+:global([data-theme="dark"]) .brand-logo-green {
+  stroke: var(--brand-logo-green, #34D399);
+}
+:global([data-theme="light"]) .brand-logo-blue {
+  stroke: var(--brand-logo-blue, #122E8A);
+}
+:global([data-theme="light"]) .brand-logo-green {
+  stroke: var(--brand-logo-green, #10B981);
 }
 </style>
