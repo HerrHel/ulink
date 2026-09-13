@@ -140,7 +140,8 @@ function purgeCssPlugin(): Plugin {
                   // HistoryPanel diff-* 动态拼接 class
                   /^diff-/,
                 ],
-                deep: [/expanded/, /active/, /open/, /show/, /visible/]
+                deep: [/expanded/, /active/, /open/, /show/, /visible/],
+                variables: [/^--brand-logo-/]
               },
               variables: true
             })
