@@ -100,8 +100,9 @@ function toggleAutoTheme(): void {
     applySystemTheme()
     startAutoTheme()
   } else {
-    const t = safeGetItem(K_THEME) || V_LIGHT
-    applyTheme(t)
+    const t = safeGetItem(K_THEME)
+    if (t) applyTheme(t)
+    else if (!document.documentElement.getAttribute(A_THEME)) applyTheme(V_LIGHT)
   }
   const s = safeGetItem(K_THEME_STYLE)
   if (s === V_COMFORTABLE) document.documentElement.setAttribute(A_THEME_STYLE, V_COMFORTABLE)

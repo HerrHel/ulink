@@ -139,6 +139,7 @@ function purgeCssPlugin(): Plugin {
                   /^cpalette-/, /^drawer-/,
                   // HistoryPanel diff-* 动态拼接 class
                   /^diff-/,
+                  /^brand-logo-/,
                 ],
                 deep: [/expanded/, /active/, /open/, /show/, /visible/],
                 variables: [/^--brand-logo-/]
