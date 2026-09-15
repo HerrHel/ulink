@@ -10,8 +10,9 @@
     <div class="card-topline">
       <div class="card-toprow">
         <div class="card-logo" :title="t('cards.openLink')" @click.stop="onOpenClick">
-          <img v-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
-          <span class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
+          <BrandLogo v-if="isOfficialBrand" :size="28" />
+          <img v-else-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
+          <span v-else class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
         </div>
         <div class="card-titlewrap" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <div class="card-titlewrap-text">
@@ -62,7 +63,8 @@
       </template>
       <div class="sub-sites" v-if="children.length">
         <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" :draggable="!uiStore.isMobile" @click.stop="visitSub(sub)">
-          <img :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
+          <BrandLogo v-if="isOfficialSubBrand(sub)" :size="16" />
+          <img v-else :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
           <span class="gic-name">{{ displayText(sub.title) }}</span>
           <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
         </span>
@@ -106,6 +108,8 @@ import { handleListCardKeydown } from '../../composables/interaction/listCardKey
 import { useListNav } from '../../composables/useListNav.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark } from '../../types.js'
+import BrandLogo from '../ui/BrandLogo.vue'
+import { OFFICIAL_SITE_BM_ID, OFFICIAL_SITE_LANDING_ID, OFFICIAL_SITE_APP_ID } from '../../stores/dataActionsBookmarks.js'
 
 function onImgError(e: Event) {
   (e.target as HTMLImageElement).classList.add('img-error')
@@ -167,6 +171,12 @@ watch(() => e2eStore.isUnlocked, decodePassword)
 watch(() => e2eStore.isE2EEnabled, decodePassword)
 
 const domainStr = computed(() => domain(props.bookmark.url))
+const isOfficialBrand = computed(() =>
+  props.bookmark.id === OFFICIAL_SITE_BM_ID || props.bookmark.icon === '/logo.svg' || props.bookmark.icon === '/favicon.svg'
+)
+function isOfficialSubBrand(sub: Bookmark): boolean {
+  return sub.id === OFFICIAL_SITE_LANDING_ID || sub.id === OFFICIAL_SITE_APP_ID || sub.icon === '/logo.svg' || sub.icon === '/favicon.svg'
+}
 const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))
 const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttributes))
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])

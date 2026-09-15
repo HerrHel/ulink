@@ -440,6 +440,7 @@
   object-fit:contain;
 }
 .card-logo svg{width:36px;height:36px}
+.card-logo .brand-logo-icon{width:28px;height:28px}
 .card-logo-fallback{
   display:flex;
   align-items:center;justify-content:center;

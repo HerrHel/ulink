@@ -56,6 +56,24 @@
   // JS 可用标记：CSS 据此启用「滚动显现」初始隐藏态（无 JS 时内容直接可见）
   document.documentElement.className += ' js';
 
+  /* ── 移动端视口与画面比例锁定（禁止双指放大缩小、iOS 手势捏合等） ── */
+  (function lockViewport() {
+    if (typeof document === 'undefined') return;
+    // 拦截 iOS Safari 专有的双指放大缩小手势（gesturestart / gesturechange）
+    document.addEventListener('gesturestart', function (e) {
+      e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('gesturechange', function (e) {
+      e.preventDefault();
+    }, { passive: false });
+    // 拦截双指或多指触控移动（防止 pinch 缩放画面，单指正常上下滑动不受任何影响）
+    document.addEventListener('touchmove', function (e) {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  })();
+
   /* ── 4：双语 ── */
   // 英文字典（中文是 HTML 内的静态默认，无需字典）
   var EN = {
