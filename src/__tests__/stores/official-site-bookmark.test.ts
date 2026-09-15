@@ -13,7 +13,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { OFFICIAL_SITE_BM_ID } from '../../stores/dataActionsBookmarks.js'
+import { OFFICIAL_SITE_BM_ID, OFFICIAL_SITE_LANDING_ID, OFFICIAL_SITE_APP_ID } from '../../stores/dataActionsBookmarks.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark } from '../../types.js'
 
@@ -31,17 +31,62 @@ describe('ensureOfficialSiteBookmark', () => {
     setActivePinia(createPinia())
   })
 
-  it('空库首次调用：写入官网书签（固定 id / ?stay=1 / 未分类 / order 0）并落 flag', () => {
+  it('空库首次调用：写入主书签「与链ulink」及两个子书签（宣传页 / app页）并落 flag', () => {
     const ds = useDataStore()
     ds.ensureOfficialSiteBookmark()
-    expect(ds.bookmarks).toHaveLength(1)
-    const bm = ds.bookmarks[0]
-    expect(bm.id).toBe(OFFICIAL_SITE_BM_ID)
-    expect(bm.url).toBe('https://ulink.ren/?stay=1')
-    expect(bm.categoryId).toBe(CAT_UNCATEGORIZED)
-    expect(bm.parentId).toBeNull()
-    expect(bm.order).toBe(0)
+    expect(ds.bookmarks).toHaveLength(3)
+
+    // 1. 主书签
+    const home = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
+    expect(home).toBeDefined()
+    expect(home!.title).toBe('与链ulink')
+    expect(home!.url).toBe('https://ulink.ren/?stay=1')
+    expect(home!.categoryId).toBe(CAT_UNCATEGORIZED)
+    expect(home!.parentId).toBeNull()
+    expect(home!.order).toBe(0)
+    expect(home!.isExpanded).toBe(true)
+    expect(home!.icon).toBe('/logo.svg')
+
+    // 2. 子书签 1：宣传页
+    const landing = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
+    expect(landing).toBeDefined()
+    expect(landing!.title).toBe('宣传页')
+    expect(landing!.url).toBe('https://ulink.ren/?stay=1')
+    expect(landing!.parentId).toBe(OFFICIAL_SITE_BM_ID)
+    expect(landing!.order).toBe(0)
+    expect(landing!.icon).toBe('/logo.svg')
+
+    // 3. 子书签 2：app页
+    const app = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_APP_ID)
+    expect(app).toBeDefined()
+    expect(app!.title).toBe('app页')
+    expect(app!.url).toBe('https://ulink.ren/app')
+    expect(app!.parentId).toBe(OFFICIAL_SITE_BM_ID)
+    expect(app!.order).toBe(1)
+    expect(app!.icon).toBe('/logo.svg')
+
     expect(localStorage.getItem('lv_landing_bm_done')).toBe('1')
+  })
+
+  it('存量用户已有单节点「与链官网」：调用时自动升级标题为「与链ulink」并补齐两个子书签', () => {
+    const ds = useDataStore()
+    ds.bookmarks = [
+      makeBm({
+        id: OFFICIAL_SITE_BM_ID,
+        title: '与链官网',
+        url: 'https://ulink.ren/?stay=1',
+        isExpanded: false
+      })
+    ]
+    ds._syncMaps()
+    ds.ensureOfficialSiteBookmark()
+
+    expect(ds.bookmarks).toHaveLength(3)
+    const home = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
+    expect(home!.title).toBe('与链ulink')
+    expect(home!.isExpanded).toBe(true)
+    expect(ds.bookmarks.some(b => b.id === OFFICIAL_SITE_LANDING_ID)).toBe(true)
+    expect(ds.bookmarks.some(b => b.id === OFFICIAL_SITE_APP_ID)).toBe(true)
   })
 
   it('未分类已有书签时置顶（同级最小 order - 1）', () => {
@@ -62,6 +107,9 @@ describe('ensureOfficialSiteBookmark', () => {
     ds.ensureOfficialSiteBookmark()
     ds.ensureOfficialSiteBookmark()
     expect(ds.bookmarks.filter(b => b.id === OFFICIAL_SITE_BM_ID)).toHaveLength(1)
+    expect(ds.bookmarks.filter(b => b.id === OFFICIAL_SITE_LANDING_ID)).toHaveLength(1)
+    expect(ds.bookmarks.filter(b => b.id === OFFICIAL_SITE_APP_ID)).toHaveLength(1)
+    expect(ds.bookmarks).toHaveLength(3)
   })
 
   it('同 id 已存在（软删墓碑）→ 不重加，仅落 flag', () => {
@@ -89,6 +137,42 @@ describe('ensureOfficialSiteBookmark', () => {
     expect(localStorage.getItem('lv_landing_bm_done')).toBeNull()
     ui.shareMode = null
     ds.ensureOfficialSiteBookmark()
-    expect(ds.bookmarks).toHaveLength(1)
+    expect(ds.bookmarks).toHaveLength(3)
+  })
+
+  it('存量用户已有旧 icon（如 data: URI 或空）：升级时自动刷为 OFFICIAL_SITE_ICON (/logo.svg)', () => {
+    const ds = useDataStore()
+    ds.bookmarks = [
+      makeBm({
+        id: OFFICIAL_SITE_BM_ID,
+        title: '与链ulink',
+        url: 'https://ulink.ren/?stay=1',
+        icon: 'data:image/svg+xml,<svg>old</svg>',
+      }),
+      makeBm({
+        id: OFFICIAL_SITE_LANDING_ID,
+        title: '宣传页',
+        url: 'https://ulink.ren/?stay=1',
+        icon: '',
+        parentId: OFFICIAL_SITE_BM_ID,
+      }),
+      makeBm({
+        id: OFFICIAL_SITE_APP_ID,
+        title: 'app页',
+        url: 'https://ulink.ren/app',
+        icon: 'data:image/svg+xml,<svg>old</svg>',
+        parentId: OFFICIAL_SITE_BM_ID,
+      }),
+    ]
+    ds._syncMaps()
+    ds.ensureOfficialSiteBookmark()
+
+    const home = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
+    const landing = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
+    const app = ds.bookmarks.find(b => b.id === OFFICIAL_SITE_APP_ID)
+
+    expect(home!.icon).toBe('/logo.svg')
+    expect(landing!.icon).toBe('/logo.svg')
+    expect(app!.icon).toBe('/logo.svg')
   })
 })

@@ -14,9 +14,10 @@ import { getLocale } from '../i18n/index.js'
 
 /** 官网落地页书签的固定 id：跨设备云同步去重的关键，勿改动已有用户的此 id */
 export const OFFICIAL_SITE_BM_ID = 'bm_ulink_home'
-/** 品牌链条图标（与 app.html/favicon 同源 SVG data URI），img-src data: 合法 */
-const OFFICIAL_SITE_ICON =
-  "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><style>    .blue-path { stroke: %23122E8A; }    .green-path { stroke: %2310B981; }    @media (prefers-color-scheme: dark) {      .blue-path { stroke: %234F6BFF; }      .green-path { stroke: %2334D399; }    }  </style><defs><mask id='mb'><rect width='240' height='240' fill='white'/><line x1='173' y1='144' x2='211' y2='144' stroke='black' stroke-width='38' stroke-linecap='round'/></mask><mask id='mg'><rect width='240' height='240' fill='white'/><line x1='29' y1='96' x2='67' y2='96' stroke='black' stroke-width='38' stroke-linecap='round'/></mask></defs><path class='blue-path' d='M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192' fill='none' stroke-width='26' stroke-linecap='round' stroke-linejoin='round' mask='url(%23mb)'/><path class='green-path' d='M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48' fill='none' stroke-width='26' stroke-linecap='round' stroke-linejoin='round' mask='url(%23mg)'/></svg>"
+export const OFFICIAL_SITE_LANDING_ID = 'bm_ulink_landing'
+export const OFFICIAL_SITE_APP_ID = 'bm_ulink_app'
+/** 品牌链条图标（本地静态 /logo.svg，安全相对路径，杜绝 data: 协议被 safeIconUrl 拒拦） */
+export const OFFICIAL_SITE_ICON = '/logo.svg'
 
 export const bookmarkActions = {
   /** L10：现存书签最大 order + 1，新建书签统一入口 */
@@ -88,38 +89,158 @@ export const bookmarkActions = {
    *  3. _denyWrite()：分享只读态下不写入。
    * 启动时机见 useAppLifecycle（数据装载后、分享路由分流之后）。
    */
+  /**
+   * 官网与主应用入口书签：
+   * 主书签「与链ulink」挂载两个子书签：
+   *  1.「宣传页」指向 /?stay=1（落地页脚本据此豁免返客秒跳）；
+   *  2.「app页」指向 /app。
+   *
+   * 幂等与升级护栏：
+   *  1. 用户彻底删除该书签后（lv_landing_bm_done 且全表无此 id）不复活；
+   *  2. 存量老用户（已有 bm_ulink_home）自动迁移：更新旧名「与链官网」为「与链ulink」，
+   *     并幂等补齐缺失的「宣传页」和「app页」两个子书签；
+   *  3. 全新安装：直接写入主书签（默认展开）+ 两个子书签；
+   *  4. 分享只读态（_denyWrite）下不写入。
+   */
   ensureOfficialSiteBookmark(this: DataStoreThis) {
-    if (safeGetItem('lv_landing_bm_done')) return
-    if (this.bookmarks.some(b => b.id === OFFICIAL_SITE_BM_ID)) {
-      safeSetItem('lv_landing_bm_done', '1')
-      return
-    }
     if (_denyWrite()) return
     const isEn = getLocale() === 'en-US'
-    // 置顶于「未分类」顶层（同级最小 order - 1）；无同级则 0。
-    // 兼容历史数据里 categoryId 为 '' 的旧记录（schema .catch 前的遗留）。
+    const now = Date.now()
+
+    const existingHome = this.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
+    // 护栏 1：用户曾经彻底删除了该书签，尊重删除，绝不强行复活
+    if (!existingHome && safeGetItem('lv_landing_bm_done')) {
+      return
+    }
+
+    // 护栏 2：存量平滑升级（已有主书签且未软删）
+    if (existingHome) {
+      safeSetItem('lv_landing_bm_done', '1')
+      if (!existingHome.deletedAt) {
+        const expectedTitle = isEn ? 'ulink' : '与链ulink'
+        const updates: Partial<Bookmark> = {}
+        if (existingHome.title === '与链官网' || existingHome.title === 'ulink website') {
+          updates.title = expectedTitle
+          updates.isExpanded = true
+        }
+        if (existingHome.icon !== OFFICIAL_SITE_ICON) {
+          updates.icon = OFFICIAL_SITE_ICON
+        }
+        if (Object.keys(updates).length > 0) {
+          this.updateBookmark(OFFICIAL_SITE_BM_ID, updates)
+        }
+
+        // 补齐或升级子书签 1：宣传页
+        const landingBm = this.bookmarks.find(b => b.id === OFFICIAL_SITE_LANDING_ID)
+        if (!landingBm) {
+          this.addBookmark({
+            id: OFFICIAL_SITE_LANDING_ID,
+            title: isEn ? 'Landing' : '宣传页',
+            url: `${APP_CANONICAL_BASE}?stay=1`,
+            username: '',
+            password: '',
+            notes: isEn ? 'Showcase landing page (?stay=1)' : '宣传落地页（?stay=1）',
+            icon: OFFICIAL_SITE_ICON,
+            categoryId: existingHome.categoryId || CAT_UNCATEGORIZED,
+            parentId: OFFICIAL_SITE_BM_ID,
+            order: 0,
+            useCount: 0,
+            attributes: {},
+            isExpanded: false,
+            createdAt: now,
+            updatedAt: now,
+          })
+        } else if (landingBm.icon !== OFFICIAL_SITE_ICON) {
+          this.updateBookmark(OFFICIAL_SITE_LANDING_ID, { icon: OFFICIAL_SITE_ICON })
+        }
+
+        // 补齐或升级子书签 2：app页
+        const appBm = this.bookmarks.find(b => b.id === OFFICIAL_SITE_APP_ID)
+        if (!appBm) {
+          this.addBookmark({
+            id: OFFICIAL_SITE_APP_ID,
+            title: isEn ? 'App' : 'app页',
+            url: `${APP_CANONICAL_BASE}app`,
+            username: '',
+            password: '',
+            notes: isEn ? 'Main app (/app)' : '应用主体入口（/app）',
+            icon: OFFICIAL_SITE_ICON,
+            categoryId: existingHome.categoryId || CAT_UNCATEGORIZED,
+            parentId: OFFICIAL_SITE_BM_ID,
+            order: 1,
+            useCount: 0,
+            attributes: {},
+            isExpanded: false,
+            createdAt: now,
+            updatedAt: now,
+          })
+        } else if (appBm.icon !== OFFICIAL_SITE_ICON) {
+          this.updateBookmark(OFFICIAL_SITE_APP_ID, { icon: OFFICIAL_SITE_ICON })
+        }
+      }
+      return
+    }
+
+    // 全新安装：写入主书签 + 2 个子书签
     const sibs = this.bookmarks.filter(
       b => !b.parentId && (b.categoryId === CAT_UNCATEGORIZED || b.categoryId === '')
     )
     const order = sibs.length ? Math.min(...sibs.map(b => b.order)) - 1 : 0
-    const now = Date.now()
+
     this.addBookmark({
       id: OFFICIAL_SITE_BM_ID,
-      title: isEn ? 'ulink website' : '与链官网',
+      title: isEn ? 'ulink' : '与链ulink',
       url: `${APP_CANONICAL_BASE}?stay=1`,
       username: '',
       password: '',
-      notes: isEn ? 'Our new landing page — see what ulink can do.' : '新版宣传页 —— 看看与链能做什么。',
+      notes: isEn ? 'ulink official entry' : '与链官方站点',
       icon: OFFICIAL_SITE_ICON,
       categoryId: CAT_UNCATEGORIZED,
       parentId: null,
       order,
       useCount: 0,
       attributes: {},
+      isExpanded: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    this.addBookmark({
+      id: OFFICIAL_SITE_LANDING_ID,
+      title: isEn ? 'Landing' : '宣传页',
+      url: `${APP_CANONICAL_BASE}?stay=1`,
+      username: '',
+      password: '',
+      notes: isEn ? 'Showcase landing page (?stay=1)' : '宣传落地页（?stay=1）',
+      icon: OFFICIAL_SITE_ICON,
+      categoryId: CAT_UNCATEGORIZED,
+      parentId: OFFICIAL_SITE_BM_ID,
+      order: 0,
+      useCount: 0,
+      attributes: {},
       isExpanded: false,
       createdAt: now,
       updatedAt: now,
     })
+
+    this.addBookmark({
+      id: OFFICIAL_SITE_APP_ID,
+      title: isEn ? 'App' : 'app页',
+      url: `${APP_CANONICAL_BASE}app`,
+      username: '',
+      password: '',
+      notes: isEn ? 'Main app (/app)' : '应用主体入口（/app）',
+      icon: OFFICIAL_SITE_ICON,
+      categoryId: CAT_UNCATEGORIZED,
+      parentId: OFFICIAL_SITE_BM_ID,
+      order: 1,
+      useCount: 0,
+      attributes: {},
+      isExpanded: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+
     safeSetItem('lv_landing_bm_done', '1')
   },
   updateBookmark(this: DataStoreThis, id: string, changes: Partial<Bookmark>) {

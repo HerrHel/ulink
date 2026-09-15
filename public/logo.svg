@@ -3,8 +3,8 @@
     .logo-blue { stroke: #122E8A; }
     .logo-green { stroke: #10B981; }
     @media (prefers-color-scheme: dark) {
-      .logo-blue { stroke: #4F6BFF; }
-      .logo-green { stroke: #34D399; }
+      .logo-blue { stroke: #F04A8A; }
+      .logo-green { stroke: #E2E7BF; }
     }
   </style>
   <defs>

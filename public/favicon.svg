@@ -5,8 +5,8 @@
     .green-ring { stroke: #10B981; }
     @media (prefers-color-scheme: dark) {
       .bg { fill: #1c1c1e; } /* Mac-like dark icon background, or #1A1A1D */
-      .blue-ring { stroke: #4F6BFF; }
-      .green-ring { stroke: #34D399; }
+      .blue-ring { stroke: #F04A8A; }
+      .green-ring { stroke: #E2E7BF; }
     }
   </style>
   <rect class="bg" width="240" height="240" rx="54" />
