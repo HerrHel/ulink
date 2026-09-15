@@ -62,4 +62,20 @@ const svgSize = computed(() => {
 })
 </script>
 
-
+<style scoped>
+.brand-logo-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.brand-logo-blue,
+.brand-logo-green {
+  transition: stroke 0.3s ease;
+}
+.brand-logo-blue {
+  stroke: var(--brand-logo-blue, #122E8A);
+}
+.brand-logo-green {
+  stroke: var(--brand-logo-green, #10B981);
+}
+</style>

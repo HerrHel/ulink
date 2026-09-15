@@ -18,6 +18,7 @@
   --accent:#122E8A;
   --brand-logo-blue:#122E8A;
   --brand-logo-green:#10B981;
+  --brand-logo-text:#122E8A;
   --accent-light:rgba(18,46,138,0.07);
   --accent-glow:rgba(18,46,138,0.13);
   --accent-grad:linear-gradient(135deg,#122E8A 0%,#1E40AF 100%);
@@ -64,12 +65,6 @@
   --hover:var(--surface-hover);
   --ft-color:var(--accent);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-      --brand-logo-blue: #F04A8A;
-      --brand-logo-green: #E2E7BF;
-  }
-}
 [data-theme="dark"]{
   /* B1-003：与浅色块对应，原生控件/滚动条随暗色主题渲染 */
   color-scheme:dark;
@@ -88,6 +83,7 @@
   --accent:#F04A8A;
   --brand-logo-blue:#F04A8A;
   --brand-logo-green:#E2E7BF;
+  --brand-logo-text:#F04A8A;
   --accent-light:rgba(230,57,124,0.1);
   --accent-glow:rgba(230,57,124,0.18);
   --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);
@@ -136,6 +132,9 @@
   --text-secondary:#4A5A46;
   --text-muted:#667362;
   --accent:#2C9678;
+  --brand-logo-blue:#122E8A;
+  --brand-logo-green:#10B981;
+  --brand-logo-text:#2C9678;
   --accent-light:rgba(44,150,120,0.08);
   --accent-glow:rgba(44,150,120,0.18);
   --accent-grad:linear-gradient(135deg,#2C9678 0%,#3AAF8C 100%);
@@ -173,6 +172,7 @@
   --accent-grad:linear-gradient(135deg,#E2E7BF 0%,#C8CE9A 100%);
   --brand-logo-blue:#F04A8A;
   --brand-logo-green:#E2E7BF;
+  --brand-logo-text:#E2E7BF;
   --rail-bg:#252B38;
   --rail-border:#3A4152;
   --card-badge-bg:rgba(226,231,191,0.08);

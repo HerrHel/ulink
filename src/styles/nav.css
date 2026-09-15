@@ -17,16 +17,8 @@
   letter-spacing:-0.01em;
   flex-shrink:0;
 }
-.rail-logo span{color:var(--brand-logo-blue, var(--accent)) !important;transition:color 0.3s ease}
+.rail-logo span{color:var(--brand-logo-text, var(--accent));transition:color 0.3s ease}
 .rail-logo svg{width:22px;height:22px}
-.brand-logo-icon { display: inline-block; flex-shrink: 0; vertical-align: middle; }
-.brand-logo-blue, .brand-logo-green { transition: stroke 0.3s ease; }
-.brand-logo-blue { stroke: var(--brand-logo-blue, #122E8A) !important; }
-.brand-logo-green { stroke: var(--brand-logo-green, #10B981) !important; }
-[data-theme="dark"] .brand-logo-blue { stroke: var(--brand-logo-blue, #F04A8A) !important; }
-[data-theme="dark"] .brand-logo-green { stroke: var(--brand-logo-green, #E2E7BF) !important; }
-[data-theme="light"] .brand-logo-blue { stroke: var(--brand-logo-blue, #122E8A) !important; }
-[data-theme="light"] .brand-logo-green { stroke: var(--brand-logo-green, #10B981) !important; }
 .rail-section-label{
   padding:10px 14px 4px;
   font-size:0.65rem;font-weight:700;
