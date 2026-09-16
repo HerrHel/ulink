@@ -110,7 +110,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
                     particles.push({
                         delay: Math.random() * 25,
                         progress: 0,
-                        speed: 0.04 + Math.random() * 0.04
+                        speed: 0.015 + Math.random() * 0.025
                     });
                 }
             }
@@ -165,7 +165,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
             ctx.globalAlpha = 1;
 
             // 3D Rot
-            let targetSpeed = isHovered ? 0.025 : 0.005;
+            let targetSpeed = isHovered ? 0.015 : 0.003;
             angleY += targetSpeed; angleX += targetSpeed * 0.5;
             let cosY = Math.cos(angleY), sinY = Math.sin(angleY);
             let cosX = Math.cos(angleX), sinX = Math.sin(angleX);
@@ -201,7 +201,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
             drawConstellation(originCenter, originColor, 1);
 
             if (state === 'forking') {
-                forkProgress += 0.015;
+                forkProgress += 0.008;
                 
                 let tetherEnd = {
                     x: originCenter.x + (localCenter.x - originCenter.x) * Math.min(1, forkProgress * 2),
@@ -264,7 +264,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
         canvas.addEventListener('click', clickHandler);
 
         let packets = Array.from({length: 12}, () => ({
-            y: Math.random() * 1000, speed: 4 + Math.random() * 3, length: 15 + Math.random() * 30
+            y: Math.random() * 1000, speed: 2 + Math.random() * 1.5, length: 15 + Math.random() * 30
         }));
         let localPackets = [];
 
@@ -298,7 +298,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
                 ctx.beginPath(); ctx.moveTo(trunkX, p.y - p.length); ctx.lineTo(trunkX, p.y); ctx.stroke();
 
                 if (state !== 'idle' && Math.abs(p.y - branchY) < p.speed) {
-                    localPackets.push({ progress: 0, y: 0, speed: p.speed * 0.005, trunkSpeed: p.speed, length: p.length });
+                    localPackets.push({ progress: 0, y: 0, speed: p.speed * 0.003, trunkSpeed: p.speed, length: p.length });
                 }
             });
             ctx.shadowBlur = 0; ctx.lineCap = 'butt';
@@ -308,7 +308,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
             ctx.fillText('ORIGIN TRUNK', trunkX - 20, branchY); ctx.globalAlpha = 1;
 
             if (state === 'forking') {
-                forkProgress += 0.015;
+                forkProgress += 0.006;
                 if (forkProgress >= 1) { state = 'forked'; if(onStateChange) onStateChange('forked'); }
             }
 
