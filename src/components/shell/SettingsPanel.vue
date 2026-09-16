@@ -9,9 +9,174 @@
             <button class="modal-close" @click="uiStore.panels.settings = false" :aria-label="t('settings.closeSettings')">&times;</button>
           </div>
           <div class="settings-drawer-body">
+            <!-- 同步与安全（置顶，提升账户优先级） -->
+            <div class="sp-section sp-section-sync-hero">
+              <span class="sp-section-title">{{ t('settings.syncSecurity') }}</span>
+              <template v-if="auth.isLoggedIn">
+                <div class="sp-user-card">
+                  <div class="sp-user-main">
+                    <div class="sp-user-avatar">
+                      <span v-if="auth.avatar" class="sp-user-emoji">{{ auth.avatar }}</span>
+                      <span v-else class="sp-user-initial">{{ userInitial }}</span>
+                    </div>
+                    <div class="sp-user-info">
+                      <div class="sp-user-name-row">
+                        <span class="sp-user-name">{{ auth.displayName || userDisplay }}</span>
+                        <button class="up-edit-btn" @click.stop="toggleProfileEditor" :title="isEditingProfile ? t('userPopover.closeEdit') : t('userPopover.editProfile')">
+                          <span aria-hidden="true" v-html="I.edit"></span>
+                          <span>{{ isEditingProfile ? t('userPopover.closeEdit') : t('userPopover.editProfile') }}</span>
+                        </button>
+                      </div>
+                      <span class="sp-user-email">{{ auth.userEmail }}</span>
+                      <div class="sp-sync-badge-row">
+                        <span class="sp-sync-status" data-testid="lv-sync-label" :class="syncState.level">
+                          <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 个人资料编辑卡片（展开态，与侧边栏气泡样式完全一致） -->
+                  <div v-if="isEditingProfile" class="up-edit-box sp-profile-edit-box">
+                    <div class="up-field">
+                      <label class="up-label">{{ t('settings.nickname') }}</label>
+                      <input
+                        v-model="profileForm.nickname"
+                        type="text"
+                        maxlength="20"
+                        class="up-input"
+                        :placeholder="t('settings.nicknamePlaceholder')"
+                        @keydown.enter="onSaveProfile"
+                      />
+                    </div>
+                    <div class="up-field">
+                      <label class="up-label">{{ t('settings.avatar') }}</label>
+                      <div class="up-emoji-grid">
+                        <button
+                          v-for="emoji in PRESET_AVATAR_EMOJIS"
+                          :key="emoji"
+                          type="button"
+                          class="up-emoji-btn"
+                          :class="{ active: profileForm.avatar === emoji }"
+                          @click="profileForm.avatar = emoji"
+                        >
+                          {{ emoji }}
+                        </button>
+                      </div>
+                      <div class="up-reset-row">
+                        <button
+                          v-if="profileForm.avatar"
+                          type="button"
+                          class="up-link-btn"
+                          @click="profileForm.avatar = ''"
+                        >
+                          {{ t('settings.resetToDefaultAvatar') }}
+                        </button>
+                        <span v-else class="up-hint">{{ t('settings.defaultAvatarTip') }}</span>
+                      </div>
+                    </div>
+                    <div class="up-edit-actions">
+                      <button
+                        class="btn btn-primary btn-sm up-action-btn"
+                        :disabled="savingProfile"
+                        @click="onSaveProfile"
+                      >
+                        {{ savingProfile ? (t('common.saving') || '保存中…') : t('common.save') }}
+                      </button>
+                      <button
+                        class="btn btn-ghost btn-sm up-action-btn"
+                        @click="isEditingProfile = false"
+                      >
+                        {{ t('common.cancel') }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="sp-logout-wrap">
+                    <button class="up-menu-item up-danger-item sp-logout-btn" @click.stop="onLogout">
+                      <div class="up-item-left">
+                        <span class="up-item-icon" aria-hidden="true" v-html="I.logout"></span>
+                        <span class="up-item-title">{{ t('userPopover.signOut') }}</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+                <div v-if="syncState.level === 'error' && sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
+              </template>
+              <template v-else>
+                <div class="sp-row">
+                  <span class="sp-hint">{{ t('settings.loginHint') }}</span>
+                </div>
+                <div class="sp-row">
+                  <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">{{ t('settings.loginRegister') }}</button>
+                </div>
+              </template>
+              <div class="sp-divider"></div>
+              <!-- 数据解密状态与控制卡片（对齐侧边栏气泡解密样式） -->
+              <div class="sp-e2e-card">
+                <div class="sp-e2e-left">
+                  <span class="sp-e2e-icon" aria-hidden="true" v-html="I.password"></span>
+                  <div class="sp-e2e-text">
+                    <div class="sp-e2e-title-row">
+                      <span class="sp-e2e-title">{{ t('userPopover.e2eTitle') }}</span>
+                      <span class="sp-sync-status" data-testid="lv-e2e-status" :class="e2eEnabled ? (e2eUnlocked ? 'ok' : 'pending') : 'error'">
+                        {{ e2eEnabled ? (e2eUnlocked ? t('settings.e2eUnlocked') : t('settings.e2eLocked')) : t('settings.e2eDisabled') }}
+                      </span>
+                    </div>
+                    <span class="sp-e2e-desc">{{ t('settings.e2eHint') }}<span v-if="!auth.isLoggedIn">（{{ t('settings.e2eHintLocalOnly') }}）</span></span>
+                  </div>
+                </div>
+                <div class="sp-e2e-right">
+                  <button
+                    v-if="!e2eEnabled"
+                    class="up-tag tag-disabled"
+                    data-testid="lv-e2e-setup-btn"
+                    @click.stop="onOpenE2ESetup"
+                  >
+                    {{ t('userPopover.enableE2E') }}
+                  </button>
+                  <button
+                    v-else-if="!e2eUnlocked"
+                    class="up-tag tag-locked"
+                    data-testid="lv-e2e-unlock-btn"
+                    @click.stop="onOpenE2EUnlock"
+                  >
+                    {{ e2e.isBiometricEnrolled.value ? (t('settings.biometricUnlock') || '指纹解密') : t('userPopover.decrypt') }}
+                  </button>
+                  <button
+                    v-else
+                    class="up-tag tag-unlocked"
+                    data-testid="lv-e2e-lock-btn"
+                    @click.stop="onE2ELock"
+                  >
+                    {{ t('userPopover.lock') }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 已解密状态下的附属操作：修改密码 / 移除指纹 -->
+              <div v-if="e2eEnabled && e2eUnlocked" class="sp-e2e-sub-actions">
+                <button class="btn btn-ghost btn-xs" data-testid="lv-e2e-changepw-btn" @click.stop="onOpenE2EChangePw">
+                  <span aria-hidden="true" v-html="I.edit"></span> {{ t('settings.changeMasterPassword') }}
+                </button>
+                <button v-if="e2e.isBiometricEnrolled.value" class="btn btn-ghost btn-xs" data-testid="lv-e2e-biometric-remove" @click.stop="onRemoveBiometric">
+                  {{ t('settings.removeBiometric') }}
+                </button>
+              </div>
+            </div>
             <!-- Theme -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.theme') }}</span>
+              <div class="sp-row">
+                <div class="sp-seg">
+                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click="onSetThemeColor('light')">
+                    <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
+                  </button>
+                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click="onSetThemeColor('dark')">
+                    <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
+                  </button>
+                </div>
+              </div>
               <div class="sp-row">
                 <div class="sp-seg">
                   <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">{{ t('settings.themePremium') }}</button>
@@ -74,55 +239,19 @@
                 <span class="sp-switch"></span>
               </div>
             </div>
-            <!-- 同步与安全 -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.syncSecurity') }}</span>
-              <template v-if="auth.isLoggedIn">
-                <div class="sp-row">
-                  <span class="sp-row-label"><span aria-hidden="true" v-html="I.cloud" class="sp-icon"></span>{{ t('settings.cloudSync') }}</span>
-                  <span class="sp-sync-status" data-testid="lv-sync-label" :class="syncState.level">
-                    <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
-                  </span>
-                </div>
-                <div class="sp-row">
-                  <span class="sp-user-email">{{ auth.userEmail }}</span>
-                </div>
-                <div class="sp-row sp-row-actions">
-                  <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">{{ t('settings.logout') }}</button>
-                </div>
-                <div v-if="syncState.level === 'error' && sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
-              </template>
-              <template v-else>
-                <div class="sp-row">
-                  <span class="sp-hint">{{ t('settings.loginHint') }}</span>
-                </div>
-                <div class="sp-row">
-                  <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">{{ t('settings.loginRegister') }}</button>
-                </div>
-              </template>
-              <div class="sp-divider"></div>
-              <div class="sp-row">
-                <span class="sp-row-label"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span>{{ t('settings.e2eEncryption') }}</span>
-                <span class="sp-sync-status" data-testid="lv-e2e-status" :class="e2eEnabled ? 'ok' : 'error'">
-                  {{ e2eEnabled ? (e2eUnlocked ? t('settings.e2eUnlocked') : t('settings.e2eLocked')) : t('settings.e2eDisabled') }}
-                </span>
-              </div>
-              <div class="sp-row">
-                <span class="sp-hint">{{ t('settings.e2eHint') }}<span v-if="!auth.isLoggedIn">{{ t('settings.e2eHintLocalOnly') }}</span></span>
-              </div>
-              <div class="sp-row sp-row-actions">
-                <button v-if="!e2eEnabled" class="btn btn-primary btn-sm" data-testid="lv-e2e-setup-btn" @click.stop="onOpenE2ESetup"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ t('settings.enableEncryption') }}</button>
-                <button v-else-if="!e2eUnlocked" class="btn btn-primary btn-sm" data-testid="lv-e2e-unlock-btn" @click.stop="onOpenE2EUnlock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ e2e.isBiometricEnrolled.value ? t('settings.biometricUnlock') : t('settings.unlock') }}</button>
-                <template v-else>
-                  <button class="btn btn-ghost btn-sm" data-testid="lv-e2e-lock-btn" @click.stop="onE2ELock"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ t('settings.lock') }}</button>
-                  <button class="btn btn-ghost btn-sm" data-testid="lv-e2e-changepw-btn" @click.stop="onOpenE2EChangePw"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ t('settings.changeMasterPassword') }}</button>
-                  <button v-if="e2e.isBiometricEnrolled.value" class="btn btn-ghost btn-sm" data-testid="lv-e2e-biometric-remove" @click.stop="onRemoveBiometric">{{ t('settings.removeBiometric') }}</button>
-                </template>
-              </div>
-            </div>
             <!-- 数据 -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.data') }}</span>
+              <!-- 存储占用指示条（从侧边栏移入，归位数据管理） -->
+              <div v-if="storageInfo" class="sp-storage-card">
+                <div class="sp-row">
+                  <span class="sp-row-label">{{ t('settings.storageOccupied') }}</span>
+                  <span class="sp-range-value">{{ storageInfo.label }} ({{ storageInfo.percent }}%)</span>
+                </div>
+                <div class="sp-storage-track">
+                  <div class="sp-storage-bar" :style="{ width: storageInfo.percent + '%', background: storageBarColor }"></div>
+                </div>
+              </div>
               <div class="sp-actions">
                 <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>{{ t('settings.trash') }}</button>
               </div>
@@ -254,10 +383,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, onBeforeUnmount } from 'vue'
+import { computed, nextTick, onMounted, ref, reactive, watch, onBeforeUnmount } from 'vue'
 import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
-import { toggleAutoTheme as themeToggleAuto, setThemeStyle as themeSetStyle, K_THEME_MODE } from '../../lib/theme.js'
+import { useAppStore } from '../../stores/app.js'
+import { storageBarColorFor } from './storageBarColor.js'
+import { setThemeStyle as themeSetStyle } from '../../lib/theme.js'
 import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults, getExportKeepSensitive, setExportKeepSensitive } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -267,8 +398,8 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
-import { safeGetItem } from '../../lib/storageSafe.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
+import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
 
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
@@ -281,8 +412,59 @@ function onOpenShortcutHelp() { pushNavState(); uiStore.panels.shortcutHelp = tr
 
 const uiStore = useUIStore()
 const dataStore = useDataStore()
+const appStore = useAppStore()
+
+const storageInfo = computed(() => {
+  try { return appStore.getStorageInfo() } catch { return null }
+})
+const storageBarColor = computed(() => storageBarColorFor(storageInfo.value?.percent))
 const auth = useAuth()
 const sync = useCloudSync()
+
+const userInitial = computed(() => {
+  const name = auth.displayName || auth.userEmail
+  if (!name) return 'U'
+  return name.charAt(0).toUpperCase()
+})
+
+const userDisplay = computed(() => {
+  if (!auth.userEmail) return ''
+  return auth.userEmail.split('@')[0]
+})
+
+const isEditingProfile = ref(false)
+const savingProfile = ref(false)
+const profileForm = reactive({
+  nickname: '',
+  avatar: '',
+})
+
+function toggleProfileEditor() {
+  if (!isEditingProfile.value) {
+    profileForm.nickname = auth.displayName !== userDisplay.value ? (auth.customNickname || auth.displayName) : (auth.customNickname || '')
+    profileForm.avatar = auth.avatar || ''
+    isEditingProfile.value = true
+  } else {
+    isEditingProfile.value = false
+  }
+}
+
+async function onSaveProfile() {
+  savingProfile.value = true
+  try {
+    await auth.updateProfile({
+      nickname: profileForm.nickname,
+      avatar: profileForm.avatar,
+    })
+    toast(t('settings.profileSavedToast'))
+    isEditingProfile.value = false
+  } catch (err) {
+    console.error('Failed to save profile', err)
+  } finally {
+    savingProfile.value = false
+  }
+}
+
 const dl = useDeadLinkChecker()
 const e2e = useE2E()
 const e2eEnabled = computed(() => e2e.isE2EEnabled.value)
@@ -322,15 +504,23 @@ const sortModes: { id: SortMode; labelKey: string }[] = [
   { id: 'useCount', labelKey: 'settings.sortUseCount' },
 ]
 
+function onSetThemeColor(val: 'light' | 'dark') {
+  uiStore.setThemeColor(val)
+}
+
 function onSetThemeStyle(style: ThemeStyle) {
   themeSetStyle(style)
   uiStore.themeStyle = style
 }
 
 function onToggleAutoTheme() {
-  themeToggleAuto()
-  uiStore.themeMode = safeGetItem(K_THEME_MODE) === 'auto' ? 'auto' : 'manual'
+  uiStore.toggleAutoTheme()
 }
+
+// 抽屉展开时确保深浅主题与当前实际 DOM 保持同步
+watch(() => uiStore.panels.settings, (open) => {
+  if (open) uiStore.syncThemeFromDOM()
+})
 
 function onSetLayout(mode: LayoutMode) {
   if (uiStore.focusedGroupId) return

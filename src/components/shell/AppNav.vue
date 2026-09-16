@@ -21,52 +21,81 @@
         <span class="rail-count">{{ cardCounts[cat.id] || 0 }}</span>
       </button>
     </div>
-    <div class="rail-storage" id="railStorage">
-      <div v-if="storageInfo" class="flex-1">
-        <div class="rail-storage-track">
-          <div class="rail-storage-bar" :style="{ width: storageInfo.percent + '%', background: storageBarColor }"></div>
-        </div>
-      </div>
-      <span v-if="storageInfo" class="rail-storage-text">
-        {{ storageInfo.label }}
-        <span class="rail-storage-pct">({{ storageInfo.percent }}%)</span>
-      </span>
-    </div>
     <div class="rail-bottom">
       <button v-if="isVault" class="rail-item" data-testid="btnBackToMain" @click="onBackToMain">
         <span aria-hidden="true" v-html="I.back"></span>
         {{ t('nav.backToMain') }}
       </button>
-      <button v-if="!shareMode" class="rail-item" id="btnManageCats" @click="openCatModalNav">
-        <span aria-hidden="true" v-html="I.settings"></span>
-        {{ t('nav.manageCategories') }}
-      </button>
-      <button class="theme-toggle" @click="toggleTheme" :aria-label="t('nav.toggleThemeLabel')">
-        <span class="icon-sun" aria-hidden="true" v-html="I.sun"></span>
-        <span class="icon-moon" aria-hidden="true" v-html="I.moon"></span>
-        {{ t('nav.toggleTheme') }}
-      </button>
+      <div v-if="!shareMode" class="rail-action-row">
+        <button class="rail-item rail-action-main" id="btnManageCats" @click="openCatModalNav" :title="t('nav.manageCategories')">
+          <span aria-hidden="true" v-html="I.settings"></span>
+          {{ t('nav.manageCategories') }}
+        </button>
+        <button
+          class="rail-action-icon-btn"
+          id="btnToggleThemeQuick"
+          data-testid="btn-toggle-theme-quick"
+          @click="toggleThemeQuick"
+          :title="t('nav.toggleThemeLabel')"
+          :aria-label="t('nav.toggleThemeLabel')"
+        >
+          <span class="icon-sun" aria-hidden="true" v-html="I.sun"></span>
+          <span class="icon-moon" aria-hidden="true" v-html="I.moon"></span>
+        </button>
+      </div>
+      <!-- 专属账户底座 -->
+      <div
+        ref="railUserRef"
+        class="rail-user"
+        :class="{ logged: auth.isLoggedIn, unlogged: !auth.isLoggedIn }"
+        data-testid="rail-user-card"
+        @click="onUserClick"
+        :title="auth.isLoggedIn ? (auth.userEmail || t('nav.loggedIn')) : t('nav.loginTitle')"
+        :aria-label="auth.isLoggedIn ? (auth.userEmail || t('nav.loggedIn')) : t('nav.loginTitle')"
+        role="button"
+        tabindex="0"
+        @keydown.enter="onUserClick"
+        @keydown.space.prevent="onUserClick"
+      >
+        <div class="rail-user-avatar">
+          <template v-if="auth.isLoggedIn">
+            <span v-if="customAvatarEmoji" class="rail-user-emoji">{{ customAvatarEmoji }}</span>
+            <span v-else class="rail-user-initial">{{ userInitial }}</span>
+            <span class="rail-user-dot" :class="syncState.dotClass"></span>
+          </template>
+          <template v-else>
+            <span class="rail-user-cloud-icon" aria-hidden="true" v-html="I.cloud"></span>
+          </template>
+        </div>
+        <div class="rail-user-meta">
+          <span class="rail-user-title">{{ auth.isLoggedIn ? (auth.displayName || userDisplay) : t('nav.loginTitle') }}</span>
+          <span class="rail-user-sub">{{ auth.isLoggedIn ? syncState.label : t('nav.loginSubtitle') }}</span>
+        </div>
+      </div>
     </div>
   </nav>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useAppStore } from '../../stores/app.js'
+import { ref, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useUserPopoverStore } from '../../stores/overlay.js'
 import { useVault } from '../../composables/domain/useVault.js'
-import { toggleTheme as _toggleTheme } from '../../lib/theme.js'
 import { openCatModal } from '../../composables/ui/useUI.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
 import BrandLogo from '../ui/BrandLogo.vue'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { storageBarColorFor } from './storageBarColor.js'
+import { useAuth } from '../../composables/domain/useAuth.js'
+import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { t } from '../../i18n/index.js'
 
-const store = useAppStore()
 const dataStore = useDataStore()
 const uiStore = useUIStore()
+const userPopover = useUserPopoverStore()
 const vault = useVault()
+const auth = useAuth()
+const syncState = useSyncState()
+const railUserRef = ref<HTMLElement | null>(null)
 
 // 分享只读态：隐藏「管理分类」等写类入口（点分类/切走即退出分享，见 share store 的 watch）
 const shareMode = computed(() => uiStore.shareMode)
@@ -83,18 +112,26 @@ const categories = computed(() => {
   const virtual = all.filter(c => !c.deletedAt && (c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED))
   const rest = all
     .filter(c => !c.deletedAt && c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED)
-    .slice()
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-  return [...virtual, ...rest]
+  const restSorted = rest.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  return [...virtual, ...restSorted]
 })
 const curCat = computed(() => uiStore.curCat)
 const cardCounts = computed(() => dataStore.cardCounts)
 
-const storageInfo = computed(() => {
-  try { return store.getStorageInfo() } catch { return null }
+const customAvatarEmoji = computed(() => {
+  return auth.avatar || ''
 })
 
-const storageBarColor = computed(() => storageBarColorFor(storageInfo.value?.percent))
+const userInitial = computed(() => {
+  const name = auth.displayName || auth.userEmail
+  if (!name) return 'U'
+  return name.charAt(0).toUpperCase()
+})
+
+const userDisplay = computed(() => {
+  if (!auth.userEmail) return ''
+  return auth.userEmail.split('@')[0]
+})
 
 function selectCat(id: string) {
   uiStore.curCat = id
@@ -103,18 +140,27 @@ function selectCat(id: string) {
   if (uiStore.isMobile) uiStore.panels.rail = false
 }
 
-
 /** 退出私密空间：锁保险柜并切回主页数据集 */
 async function onBackToMain() {
   vault.lockVault()
   await dataStore.switchSpace('main')
 }
 
-function toggleTheme() {
-  _toggleTheme()
-  if (uiStore.themeMode === 'auto') {
-    uiStore.themeMode = 'manual'
+function onUserClick() {
+  if (!auth.isLoggedIn) {
+    auth.authModalOpen = true
+    if (uiStore.isMobile) {
+      uiStore.panels.rail = false
+    }
+  } else {
+    const rect = railUserRef.value?.getBoundingClientRect()
+    userPopover.toggle(rect)
   }
 }
+
+function toggleThemeQuick() {
+  uiStore.toggleTheme()
+}
+
 function openCatModalNav() { openCatModal() }
 </script>

@@ -15,6 +15,7 @@ vi.mock('../../lib/supabase.js', () => {
         signInWithOtp: vi.fn(async () => ({ data: {}, error: null })),
         verifyOtp: vi.fn(async () => ({ data: {}, error: null })),
         signOut: vi.fn(async () => ({ error: null })),
+        updateUser: vi.fn(async ({ data }) => ({ data: { user: { id: 'u1', user_metadata: data } }, error: null })),
         getSession: vi.fn(async () => ({ data: { session: null } })),
         onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: () => {} } } })),
       },
@@ -339,6 +340,77 @@ describe('auth 限流纯函数护栏 — lockDurationFor / _isRateLimitError', (
       expect(_isRateLimitError({ code: 123 as any, message: 'rate limit' })).toBe(true)
       expect(_isRateLimitError({ code: 123 as any, message: 'normal error' })).toBe(false)
       expect(_isRateLimitError({ code: { x: 1 } as any, message: 'ok' })).toBe(false)
+    })
+  })
+
+  describe('用户个性化资料 (Profile) — useAuthStore', () => {
+    beforeEach(() => {
+      localStorage.clear()
+      setActivePinia(createPinia())
+      vi.clearAllMocks()
+    })
+
+    it('未设置自定义昵称时，displayName 优先读取 user_metadata，兜底取邮箱前缀', () => {
+      const auth = useAuthStore()
+      expect(auth.displayName).toBe('')
+
+      // 仅有邮箱
+      auth.user = { id: 'u1', email: 'alice@example.com' } as any
+      expect(auth.displayName).toBe('alice')
+
+      // user_metadata 存在 display_name
+      auth.user = {
+        id: 'u1',
+        email: 'alice@example.com',
+        user_metadata: { display_name: '爱丽丝' },
+      } as any
+      expect(auth.displayName).toBe('爱丽丝')
+    })
+
+    it('设置自定义昵称后，displayName 优先使用自定义昵称', async () => {
+      const auth = useAuthStore()
+      auth.user = {
+        id: 'u1',
+        email: 'alice@example.com',
+        user_metadata: { display_name: '爱丽丝' },
+      } as any
+
+      await auth.updateProfile({ nickname: '极客小明' })
+      expect(auth.displayName).toBe('极客小明')
+      expect(localStorage.getItem('lv_user_nickname')).toBe('极客小明')
+    })
+
+    it('updateProfile 支持设置与清除头像 Emoji，并同步更新', async () => {
+      const auth = useAuthStore()
+      auth.user = { id: 'u1', email: 'alice@example.com' } as any
+
+      expect(auth.avatar).toBe('')
+      await auth.updateProfile({ avatar: '🚀' })
+      expect(auth.avatar).toBe('🚀')
+      expect(localStorage.getItem('lv_user_avatar')).toBe('🚀')
+      expect(supabase.auth.updateUser).toHaveBeenCalledWith({
+        data: { avatar: '🚀' },
+      })
+
+      // 清空头像（恢复默认渐变）
+      await auth.updateProfile({ avatar: '' })
+      expect(auth.avatar).toBe('')
+      expect(localStorage.getItem('lv_user_avatar')).toBeNull()
+    })
+
+    it('signOut 会清空自定义昵称和头像，防止换号残留', async () => {
+      const auth = useAuthStore()
+      auth.user = { id: 'u1', email: 'alice@example.com' } as any
+      await auth.updateProfile({ nickname: '测试用户', avatar: '🦊' })
+
+      expect(auth.displayName).toBe('测试用户')
+      expect(auth.avatar).toBe('🦊')
+
+      await auth.signOut()
+      expect(auth.customNickname).toBe('')
+      expect(auth.customAvatar).toBe('')
+      expect(localStorage.getItem('lv_user_nickname')).toBeNull()
+      expect(localStorage.getItem('lv_user_avatar')).toBeNull()
     })
   })
 })

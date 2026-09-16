@@ -277,4 +277,35 @@ describe('UIStore', () => {
       expect(store.layoutMode).toBe('grid') // 保持默认值
     })
   })
+
+  describe('主题状态与操作（themeColor / themeMode）', () => {
+    it('setThemeColor 修改深浅色并将模式置为 manual', () => {
+      store.setThemeColor('dark')
+      expect(store.themeColor).toBe('dark')
+      expect(store.themeMode).toBe('manual')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+
+      store.setThemeColor('light')
+      expect(store.themeColor).toBe('light')
+      expect(store.themeMode).toBe('manual')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    })
+
+    it('toggleTheme 翻转当前主题并同步 themeColor', () => {
+      store.setThemeColor('light')
+      store.toggleTheme()
+      expect(store.themeColor).toBe('dark')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+
+      store.toggleTheme()
+      expect(store.themeColor).toBe('light')
+      expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    })
+
+    it('syncThemeFromDOM 从 DOM 与 localStorage 同步状态', () => {
+      document.documentElement.setAttribute('data-theme', 'dark')
+      store.syncThemeFromDOM()
+      expect(store.themeColor).toBe('dark')
+    })
+  })
 })

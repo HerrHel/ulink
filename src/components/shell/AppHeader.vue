@@ -54,6 +54,18 @@
           <span aria-hidden="true" v-html="I.share"></span>
         </button>
       </template>
+      <!-- 未登录时顶栏显式登录入口 -->
+      <button
+        v-if="!auth.isLoggedIn && !ui.focusedGroupId"
+        class="btn btn-ghost btn-sm header-login-btn"
+        data-testid="header-login-btn"
+        @click="auth.authModalOpen = true"
+        :title="t('settings.loginRegister')"
+        :aria-label="t('settings.loginRegister')"
+      >
+        <span aria-hidden="true" v-html="I.user" class="icon-sm"></span>
+        <span class="header-login-text">{{ t('settings.loginRegister') }}</span>
+      </button>
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
         <button class="lt-btn" id="btnSettings" data-testid="lv-btn-settings" @click="toggleSettings" :title="t('shell.settings')" :aria-label="t('shell.settings')">
             <span aria-hidden="true" v-html="I.settings" class="icon-sm"></span>

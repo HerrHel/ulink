@@ -87,8 +87,26 @@
 }
 .lt-btn>span{display:contents}
 .lt-btn svg{width:15px;height:15px}
-.lt-btn.active{color:var(--accent);background:var(--accent-light)}
-.lt-btn:not(.active):hover{background:var(--surface-hover);color:var(--text)}
+.header-login-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px;
+  font-size:0.82rem;font-weight:500;
+  color:var(--text);
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-md);
+  background:var(--surface);
+  transition:all 0.15s ease;
+  flex-shrink:0;
+}
+.header-login-btn:hover{
+  border-color:var(--accent);
+  color:var(--accent);
+  background:var(--accent-light);
+}
+.header-login-btn .icon-sm svg{
+  width:14px;height:14px;
+}
+
 .header-sync-btn{
   /* B2-003：视觉 10px 圆点，热区 ≥36×36 便于移动端点中 */
   position:relative;

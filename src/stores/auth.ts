@@ -1,7 +1,11 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { supabase } from '../lib/supabase.js'
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../lib/storageSafe.js'
 import type { User, Session } from '@supabase/supabase-js'
+
+export const K_CUSTOM_NICKNAME = 'lv_user_nickname'
+export const K_CUSTOM_AVATAR = 'lv_user_avatar'
 
 /**
  * S12：OTP 客户端前置限流。
@@ -93,6 +97,51 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = computed(() => !!user.value)
   const userEmail = computed(() => user.value?.email || '')
 
+  // 用户个性化资料（昵称与头像 Emoji/图标）
+  const customNickname = ref<string>(safeGetItem(K_CUSTOM_NICKNAME) || '')
+  const customAvatar = ref<string>(safeGetItem(K_CUSTOM_AVATAR) || '')
+
+  /** 显示昵称：自定义昵称 > Supabase metadata > 邮箱前缀 > '' */
+  const displayName = computed(() => {
+    if (customNickname.value.trim()) return customNickname.value.trim()
+    const meta = user.value?.user_metadata
+    if (meta?.display_name && typeof meta.display_name === 'string' && meta.display_name.trim()) {
+      return meta.display_name.trim()
+    }
+    if (meta?.nickname && typeof meta.nickname === 'string' && meta.nickname.trim()) {
+      return meta.nickname.trim()
+    }
+    const email = userEmail.value
+    if (email) {
+      const prefix = email.split('@')[0]
+      return prefix || email
+    }
+    return ''
+  })
+
+  /** 显示头像 Emoji/标识：自定义头像 > Supabase metadata > '' */
+  const avatar = computed(() => {
+    if (customAvatar.value.trim()) return customAvatar.value.trim()
+    const meta = user.value?.user_metadata
+    if (meta?.avatar && typeof meta.avatar === 'string' && meta.avatar.trim()) {
+      return meta.avatar.trim()
+    }
+    return ''
+  })
+
+  function _syncFromMetadata(u: User | null) {
+    if (!u) return
+    const meta = u.user_metadata
+    if (meta?.display_name && !customNickname.value) {
+      customNickname.value = meta.display_name
+      safeSetItem(K_CUSTOM_NICKNAME, meta.display_name)
+    }
+    if (meta?.avatar && !customAvatar.value) {
+      customAvatar.value = meta.avatar
+      safeSetItem(K_CUSTOM_AVATAR, meta.avatar)
+    }
+  }
+
   function _ensureTicker() {
     if (_ticker) return
     _ticker = setInterval(() => {
@@ -143,12 +192,55 @@ export const useAuthStore = defineStore('auth', () => {
     const { data } = await supabase.auth.getSession()
     session.value = data.session
     user.value = data.session?.user ?? null
+    _syncFromMetadata(user.value)
     loading.value = false
 
     supabase.auth.onAuthStateChange((_event, s) => {
       session.value = s
       user.value = s?.user ?? null
+      _syncFromMetadata(user.value)
     })
+  }
+
+  async function updateProfile(data: { nickname?: string; avatar?: string }): Promise<boolean> {
+    if (data.nickname !== undefined) {
+      const trimmed = data.nickname.trim()
+      customNickname.value = trimmed
+      if (trimmed) {
+        safeSetItem(K_CUSTOM_NICKNAME, trimmed)
+      } else {
+        safeRemoveItem(K_CUSTOM_NICKNAME)
+      }
+    }
+    if (data.avatar !== undefined) {
+      const trimmed = data.avatar.trim()
+      customAvatar.value = trimmed
+      if (trimmed) {
+        safeSetItem(K_CUSTOM_AVATAR, trimmed)
+      } else {
+        safeRemoveItem(K_CUSTOM_AVATAR)
+      }
+    }
+
+    if (user.value) {
+      try {
+        const updates: Record<string, unknown> = {}
+        if (data.nickname !== undefined) updates.display_name = data.nickname.trim()
+        if (data.avatar !== undefined) updates.avatar = data.avatar.trim()
+
+        const { data: updatedData, error } = await supabase.auth.updateUser({
+          data: updates
+        })
+        if (error) {
+          console.warn('[auth] updateUser metadata failed:', error)
+        } else if (updatedData.user) {
+          user.value = updatedData.user
+        }
+      } catch (err) {
+        console.warn('[auth] updateUser metadata error:', err)
+      }
+    }
+    return true
   }
 
   async function sendOtp(email: string): Promise<boolean> {
@@ -224,12 +316,17 @@ export const useAuthStore = defineStore('auth', () => {
       authError.value = error.message
       return false
     }
+    customNickname.value = ''
+    customAvatar.value = ''
+    safeRemoveItem(K_CUSTOM_NICKNAME)
+    safeRemoveItem(K_CUSTOM_AVATAR)
     return true
   }
 
   return {
     user, session, loading, authError, authModalOpen,
     isLoggedIn, userEmail,
+    customNickname, customAvatar, displayName, avatar, updateProfile,
     init, sendOtp, verifyOtp, signOut, resetVerifyState,
     sendCooldownRemaining, verifyLockRemaining, cooldownTick,
   }
