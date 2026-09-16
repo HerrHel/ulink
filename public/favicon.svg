@@ -1,4 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <style>
+    .blue-ring { stroke: #122E8A; }
+    .green-ring { stroke: #10B981; }
+    @media (prefers-color-scheme: dark) {
+      .blue-ring { stroke: #F04A8A; }
+      .green-ring { stroke: #E2E7BF; }
+    }
+  </style>
   <defs>
     <mask id="mb">
       <rect width="240" height="240" fill="white" />
@@ -9,6 +17,6 @@
       <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
     </mask>
   </defs>
-  <path d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" fill="none" stroke="#122E8A" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#mb)" />
-  <path d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" fill="none" stroke="#10B981" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#mg)" />
+  <path class="blue-ring" d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#mb)" />
+  <path class="green-ring" d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#mg)" />
 </svg>
