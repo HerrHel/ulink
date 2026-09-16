@@ -311,10 +311,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
 .demo-note{text-align:center;margin-top:10px;font-size:.8rem;color:var(--ink-3)}
 
 /* ── 视觉 4：创作与分享（人际拓扑克隆）── */
+.sect#create .eyebrow{color:var(--brand-green);background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
 .share-visual{position:relative;width:100%;aspect-ratio:1/0.88;min-height:340px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;border-radius:var(--radius-lg);overflow:hidden}
 .share-visual canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
-.sect#create .eyebrow{color:var(--brand-green);background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
 
 /* ── 更多亮点 ── */
 .extras{padding:var(--sect-pad) 0 0}
@@ -479,10 +479,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           </div>
         </div>
         <div class="visual reveal d1" aria-hidden="true">
-        <div class="share-visual" id="share-visual">
-          <canvas id="share-canvas"></canvas>
+          <div class="manage-visual">
+            <canvas id="manage-canvas"></canvas>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   </section>
@@ -562,7 +562,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
         <p data-i18n="create.d2">组卡片原生集成全功能 TipTap 富文本编辑器——支持多级标题、高亮批注、任务清单及 @ 动态卡片引用。无论是编制行业工具集还是沉淀实操手册，输入与输出在此闭环。</p>
       </div>
       <div class="visual reveal d1" aria-hidden="true">
-        <div style="width:100%; aspect-ratio:1/0.88; min-height:340px; border-radius:var(--radius-lg); background:rgba(255,255,255,0.2); border:1px dashed var(--border-hover);">
+        <div class="share-visual" id="share-visual">
+          <canvas id="share-canvas"></canvas>
         </div>
       </div>
     </div>
