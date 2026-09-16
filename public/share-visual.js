@@ -353,7 +353,7 @@ window.renderShareVisual = function renderShareVisual(canvas, options = {}) {
     }
 }
 
-
+;
 // Auto-mount for landing page (index.html)
 (function() {
     if (typeof document !== 'undefined' && document.getElementById('share-canvas') && !window.__shareVisualMounted) {
