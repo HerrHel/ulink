@@ -22,7 +22,12 @@
 <meta property="og:title" content="与链 — 个人书签管理器">
 <meta property="og:description" content="支持云同步与端到端加密的个人书签管理器，可公开分享书签组。">
 <meta property="og:url" content="https://ulink.ren/app">
+<meta property="og:image" content="https://ulink.ren/share-cover.png">
 <meta property="og:locale" content="zh_CN">
+<!-- QQ / 微信爬虫识别标签（Microdata / itemprop） -->
+<meta itemprop="name" content="与链 — 个人书签管理器">
+<meta itemprop="description" content="与链（ulink）是支持云同步与端到端加密的个人书签管理器，可公开分享书签组供他人查看与收藏。">
+<meta itemprop="image" content="https://ulink.ren/share-cover.png">
 <!-- Twitter -->
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="与链 — 个人书签管理器">
@@ -43,6 +48,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap">
 </head>
 <body>
+<!-- 微信/QQ 爬虫首图兜底 -->
+<div style="display:none;font-size:0;line-height:0;" aria-hidden="true">
+  <img src="https://ulink.ren/share-cover.png" alt="与链 ulink" width="300" height="300">
+</div>
 <div id="app"></div>
 <!-- src 必须根绝对路径：本页会被 /s/* SSR-接管与 dev 中间件在任意路径下服务，
      相对路径会基于当前页面 URL 解析而出错 -->

@@ -22,6 +22,10 @@
 <meta property="og:image" content="https://ulink.ren/share-cover.png">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:locale:alternate" content="en_US">
+<!-- QQ / 微信爬虫识别标签（Microdata / itemprop） -->
+<meta itemprop="name" content="与链 ulink — 随时随地收藏、整理、分享">
+<meta itemprop="description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，密码端到端加密，一条链接即可公开分享。">
+<meta itemprop="image" content="https://ulink.ren/share-cover.png">
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="与链 ulink — 随时随地收藏、整理、分享">
@@ -394,6 +398,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
 <noscript><style>html[data-lv-boot] body{visibility:visible}</style></noscript>
 </head>
 <body>
+<!-- 微信/QQ 爬虫首图兜底（display:none，优先抓取该图作为分享缩略图，>= 300x300） -->
+<div style="display:none;font-size:0;line-height:0;" aria-hidden="true">
+  <img src="https://ulink.ren/share-cover.png" alt="与链 ulink" width="300" height="300">
+</div>
 
 <!-- ═══ 顶栏 ═══ -->
 <header class="site-head">
