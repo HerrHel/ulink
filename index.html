@@ -53,7 +53,8 @@
 <script src="/manage-visual.js" defer></script>
 <!-- 多端同频（双端真机悬浮透光舞台 + 零知识加密水晶芯片）。defer -->
 <script src="/sync-visual.js" defer></script>
-<!-- 创作与分享（留白）。defer -->
+<!-- 创作与分享（人际拓扑克隆）。defer -->
+<script src="/share-visual.js" defer></script>
 <style>
 /* ── 设计令牌：与主应用「效率 · 浅色」主题同源（tokens.css :root 块）──
    页面底色即应用底色 #F5EFEA；品牌蓝 #122E8A 为唯一强调色。 */
@@ -309,7 +310,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
 .demo-label{text-align:center;margin-top:12px;font-size:.88rem;color:var(--ink-2);font-weight:600}
 .demo-note{text-align:center;margin-top:10px;font-size:.8rem;color:var(--ink-3)}
 
-/* ── 视觉 4：创作与分享（目前留白）── */
+/* ── 视觉 4：创作与分享（人际拓扑克隆）── */
+.share-visual{position:relative;width:100%;aspect-ratio:1/0.88;min-height:340px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;border-radius:var(--radius-lg);overflow:hidden}
+.share-visual canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
 .sect#create .eyebrow{color:var(--brand-green);background:var(--brand-green-soft);border-color:var(--brand-green-glow)}
 
 /* ── 更多亮点 ── */
@@ -475,10 +479,10 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           </div>
         </div>
         <div class="visual reveal d1" aria-hidden="true">
-          <div class="manage-visual">
-            <canvas id="manage-canvas"></canvas>
-          </div>
+        <div class="share-visual" id="share-visual">
+          <canvas id="share-canvas"></canvas>
         </div>
+      </div>
       </div>
     </div>
   </section>
