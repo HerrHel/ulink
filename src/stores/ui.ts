@@ -9,7 +9,14 @@ import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { clampHistoryMax } from '../lib/historyMax.js'
-import { K_THEME_MODE, K_THEME_STYLE } from '../lib/theme.js'
+import {
+  K_THEME_MODE,
+  K_THEME_STYLE,
+  getActiveTheme,
+  setTheme as _setTheme,
+  toggleTheme as _toggleTheme,
+  toggleAutoTheme as _toggleAutoTheme,
+} from '../lib/theme.js'
 
 // ── 严格字面量类型 ──
 export type ThemeStyle = 'premium' | 'comfortable'
@@ -98,6 +105,7 @@ export interface UIState {
   /** E2EUnlockModal 打开时初始模式（'unlock' | 'reset' | 'changePw'），非持久化 */
   e2eUnlockInitialMode: E2EUnlockInitialMode
   themeMode: 'auto' | 'manual'
+  themeColor: 'light' | 'dark'
   themeStyle: ThemeStyle
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
@@ -149,6 +157,7 @@ export const useUIStore = defineStore('ui', {
     e2eUnlockInitialMode: 'unlock' as E2EUnlockInitialMode,
     // D1-004：默认 manual，与 theme.ts 缺省 lv_themeMode 一致
     themeMode: 'manual',
+    themeColor: getActiveTheme(),
     themeStyle: 'premium',
     historyItemId: '',
     historyItemType: 'bookmark',
@@ -384,7 +393,36 @@ export const useUIStore = defineStore('ui', {
         // D1-004：themeMode 同样以 lv_themeMode 为真相源，避免面板默认误显「跟随系统」
         const tm = safeGetItem(K_THEME_MODE)
         this.themeMode = tm === 'auto' ? 'auto' : 'manual'
+        this.themeColor = getActiveTheme()
       } catch (e) { console.warn('[LinkVault] Failed to restore UI state:', (e as Error).message) }
+    },
+
+    setThemeColor(val: 'light' | 'dark') {
+      _setTheme(val)
+      this.themeColor = val
+      this.themeMode = 'manual'
+    },
+
+    toggleTheme() {
+      _toggleTheme()
+      this.themeColor = getActiveTheme()
+      if (this.themeMode === 'auto') {
+        this.themeMode = 'manual'
+      }
+    },
+
+    toggleAutoTheme() {
+      _toggleAutoTheme()
+      this.themeMode = safeGetItem(K_THEME_MODE) === 'auto' ? 'auto' : 'manual'
+      this.themeColor = getActiveTheme()
+    },
+
+    syncThemeFromDOM() {
+      this.themeColor = getActiveTheme()
+      const tm = safeGetItem(K_THEME_MODE)
+      this.themeMode = tm === 'auto' ? 'auto' : 'manual'
+      const ts = safeGetItem(K_THEME_STYLE)
+      if (ts === 'comfortable' || ts === 'premium') this.themeStyle = ts
     },
   },
 })

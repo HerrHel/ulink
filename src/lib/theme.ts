@@ -76,6 +76,21 @@ function toggleTheme(): void {
   safeSetItem(K_THEME, next)
 }
 
+function setTheme(theme: 'light' | 'dark'): void {
+  const mode = safeGetItem(K_THEME_MODE) || V_MANUAL
+  if (mode === V_AUTO) { stopAutoTheme(); safeSetItem(K_THEME_MODE, V_MANUAL) }
+  applyTheme(theme)
+  safeSetItem(K_THEME, theme)
+}
+
+function getActiveTheme(): 'light' | 'dark' {
+  if (typeof document !== 'undefined') {
+    const cur = document.documentElement.getAttribute(A_THEME) || (document.documentElement.style.colorScheme === V_DARK ? V_DARK : V_LIGHT)
+    if (cur === V_DARK) return V_DARK
+  }
+  return V_LIGHT
+}
+
 function setThemeStyle(style: string): void {
   const el = document.documentElement
   if (style === V_COMFORTABLE) { el.setAttribute(A_THEME_STYLE, V_COMFORTABLE) }
@@ -108,4 +123,4 @@ function toggleAutoTheme(): void {
   if (s === V_COMFORTABLE) document.documentElement.setAttribute(A_THEME_STYLE, V_COMFORTABLE)
 })()
 
-export { toggleTheme, setThemeStyle, toggleAutoTheme }
+export { toggleTheme, setThemeStyle, toggleAutoTheme, setTheme, getActiveTheme }

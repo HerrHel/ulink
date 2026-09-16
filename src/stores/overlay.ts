@@ -71,3 +71,43 @@ export const useSyncStatusStore = defineStore('syncStatus', () => {
   function hide() { open.value = false }
   return { open, show, hide }
 })
+
+export interface TriggerRect {
+  top: number
+  bottom: number
+  left: number
+  right: number
+  width?: number
+  height?: number
+}
+
+export const useUserPopoverStore = defineStore('userPopover', () => {
+  const open = ref(false)
+  const triggerRect = ref<TriggerRect | null>(null)
+
+  function show(rect?: DOMRect | TriggerRect) {
+    if (rect) {
+      triggerRect.value = {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+      }
+    }
+    open.value = true
+  }
+
+  function hide() {
+    open.value = false
+  }
+
+  function toggle(rect?: DOMRect | TriggerRect) {
+    if (open.value) hide()
+    else show(rect)
+  }
+
+  return { open, triggerRect, show, hide, toggle }
+})
+

@@ -67,6 +67,7 @@
 <SyncConflictBanner />
 <CommandPalette />
 <ShortcutHelpPanel />
+<UserPopover />
 </ErrorBoundary>
 
 <div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false; store.detailCards.splice(0)"></div>
@@ -118,6 +119,7 @@ const MentionDropdown = defineAsyncComponent(() => import('./components/overlays
 const SyncConflictBanner = defineAsyncComponent(() => import('./components/overlays/SyncConflictBanner.vue'))
 const CommandPalette = defineAsyncComponent(() => import('./components/overlays/CommandPalette.vue'))
 const ShortcutHelpPanel = defineAsyncComponent(() => import('./components/overlays/ShortcutHelpPanel.vue'))
+const UserPopover = defineAsyncComponent(() => import('./components/overlays/UserPopover.vue'))
 const ConfirmModal = defineAsyncComponent(() => import('./components/modals/ConfirmModal.vue'))
 const ChoiceModal = defineAsyncComponent(() => import('./components/modals/ChoiceModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))

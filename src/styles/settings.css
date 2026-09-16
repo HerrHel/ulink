@@ -256,6 +256,159 @@
 .dot-conflict{background:var(--rose,#ef4444);animation:dot-pulse 1s ease-in-out infinite}
 .dot-offline{background:var(--text-muted,#9ca3af)}
 @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+/* User Profile Hero Card */
+.sp-user-card{
+  display:flex;
+  flex-direction:column;
+  padding:10px 12px 6px;
+  margin:4px 6px 8px;
+  background:var(--surface);
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-lg);
+  transition:var(--transition-fast);
+}
+.sp-user-main{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.sp-user-avatar{
+  width:44px;height:44px;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  background:var(--accent-light);
+  color:var(--accent);
+  border:1px solid var(--border);
+  font-weight:700;
+  font-size:1.15rem;
+}
+.sp-user-avatar .sp-user-emoji{
+  font-size:1.35rem;
+  line-height:1;
+}
+.sp-user-info{
+  display:flex;flex-direction:column;
+  min-width:0;flex:1;
+  gap:2px;
+}
+.sp-user-name-row{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+}
+.sp-user-name{
+  font-size:0.86rem;font-weight:700;
+  color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.sp-edit-profile-btn{
+  display:inline-flex;align-items:center;gap:3px;
+  padding:2px 6px;
+  font-size:0.7rem;font-weight:500;
+  color:var(--accent);
+  background:var(--accent-light);
+  border:none;border-radius:var(--radius-sm);
+  cursor:pointer;
+  transition:var(--transition-fast);
+}
+.sp-edit-profile-btn:hover{
+  background:var(--accent);
+  color:#fff;
+}
+.sp-edit-profile-btn svg{width:12px;height:12px}
+.sp-sync-badge-row{
+  margin-top:2px;
+}
+
+/* Profile Edit Box */
+.sp-profile-edit-box{
+  background:var(--surface);
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-md);
+  padding:12px;
+  margin:8px 0 4px;
+  display:flex;flex-direction:column;
+  gap:12px;
+  animation:spFadeDown 0.2s var(--ease-out);
+}
+.sp-profile-edit-box.up-edit-box{
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-md);
+  margin:8px 0 4px;
+  box-shadow:none;
+  animation:spFadeDown 0.2s var(--ease-out);
+}
+.sp-logout-wrap{
+  margin:8px -12px 0;
+  padding:4px 6px 0;
+  border-top:1px solid var(--border-light);
+}
+.sp-logout-btn{
+  width:100%;
+  border-radius:var(--radius-md);
+  padding:6px 8px;
+}
+@keyframes spFadeDown{
+  from{opacity:0;transform:translateY(-6px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.sp-form-item{
+  display:flex;flex-direction:column;
+  gap:6px;
+}
+.sp-form-label{
+  font-size:0.75rem;font-weight:600;
+  color:var(--text-secondary);
+  display:flex;align-items:center;gap:4px;
+}
+.sp-form-tip{
+  font-size:0.7rem;font-weight:400;color:var(--text-muted);
+}
+.sp-emoji-grid{
+  display:grid;
+  grid-template-columns:repeat(8, 1fr);
+  gap:6px;
+  padding:2px;
+}
+.sp-emoji-item{
+  width:100%;aspect-ratio:1;
+  border-radius:var(--radius-md);
+  border:1px solid var(--border-light);
+  background:var(--bg-alt);
+  font-size:1.1rem;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:var(--transition-fast);
+  padding:0;
+}
+.sp-emoji-item:hover{
+  background:var(--surface-hover);
+  border-color:var(--accent);
+  transform:scale(1.1);
+}
+.sp-emoji-item.active{
+  background:var(--accent-light);
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-light);
+}
+.sp-profile-tip-row{
+  display:flex;align-items:center;
+  margin-top:2px;
+}
+.sp-form-hint{
+  font-size:0.7rem;color:var(--text-muted);line-height:1.4;
+}
+.sp-link-btn{
+  font-size:0.72rem;color:var(--accent);
+  background:none;border:none;padding:0;
+  cursor:pointer;text-decoration:underline;
+  transition:var(--transition-fast);
+}
+.sp-link-btn:hover{color:var(--accent-hover, #6366f1)}
+.sp-profile-actions{
+  display:flex;align-items:center;gap:8px;
+  margin-top:4px;
+}
+
 .sp-user-email{
   font-size:0.76rem;color:var(--text-secondary);
   word-break:break-all;
@@ -385,4 +538,128 @@
 }
 /* 未达最小长度：占用计数位，直接说明发送按钮为什么点不了 */
 .sp-feedback-short{color:var(--danger)}
+
+/* ── 置顶同步 Hero 区块 ── */
+.sp-section-sync-hero{
+  background:var(--surface-hover);
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-lg);
+  padding:10px 4px;
+  margin:4px 6px 12px;
+}
+.sp-section-sync-hero .sp-section-title{
+  color:var(--text);
+  font-size:0.8rem;
+  padding-bottom:4px;
+}
+
+/* ── 存储指示条（从侧边栏移入设置） ── */
+.sp-storage-card{
+  padding:4px 0 8px;
+}
+.sp-storage-card .sp-row{
+  justify-content:space-between;
+}
+.sp-storage-track{
+  margin:4px 12px 0;
+  height:5px;
+  background:var(--border-light);
+  border-radius:3px;
+  overflow:hidden;
+}
+.sp-storage-bar{
+  height:100%;
+  border-radius:3px;
+  min-width:0;
+  transition:width 0.3s ease;
+}
+
+/* ── 数据解密卡片（对齐侧边栏气泡解密样式） ── */
+.sp-e2e-card{
+  margin:4px 6px 6px;
+  padding:10px 12px;
+  background:var(--surface);
+  border:1px solid var(--border-light);
+  border-radius:var(--radius-md);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  transition:border-color 0.15s ease;
+}
+.sp-e2e-card:hover{
+  border-color:var(--border);
+}
+.sp-e2e-left{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  flex:1;
+}
+.sp-e2e-icon{
+  width:16px;height:16px;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-muted);
+  flex-shrink:0;
+}
+.sp-e2e-icon svg{width:16px;height:16px}
+.sp-e2e-text{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.sp-e2e-title-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.sp-e2e-title{
+  font-size:0.82rem;
+  font-weight:600;
+  color:var(--text);
+}
+.sp-e2e-desc{
+  font-size:0.68rem;
+  color:var(--text-muted);
+  line-height:1.3;
+}
+.sp-e2e-right{
+  flex-shrink:0;
+}
+.sp-e2e-card .up-tag{
+  cursor:pointer;
+  border:none;
+  padding:3px 8px;
+  font-size:0.72rem;
+  font-weight:600;
+  transition:var(--transition-fast);
+}
+.sp-e2e-card .up-tag:hover{
+  filter:brightness(0.96);
+}
+.sp-e2e-card .up-tag.tag-locked:hover{
+  background:var(--amber, #d97706);
+  color:#fff;
+}
+.sp-e2e-sub-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:2px 10px 6px;
+}
+.sp-e2e-sub-actions .btn{
+  font-size:0.7rem;
+  color:var(--text-muted);
+  padding:2px 6px;
+}
+.sp-e2e-sub-actions .btn svg{
+  width:12px;height:12px;margin-right:2px;
+}
+.sp-e2e-sub-actions .btn:hover{
+  color:var(--text);
+}
+
+
 
