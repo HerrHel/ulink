@@ -279,56 +279,7 @@
     var c2y = cy + S * 0.31 + c2Bob + c2ParallaxY;
     var c2Tilt = 0.05 + pointer.x * 0.04;
 
-    // ── 4. 树状嵌套连接分支（Tree Branch Connectors）──
-    var startX = px + pw * 0.18;
-    var startY = py + ph * 0.32;
-    var target1X = c1x - c1w * 0.48;
-    var target1Y = c1y;
-    var target2X = c2x - c2w * 0.48;
-    var target2Y = c2y;
-    var forkX = px + pw * 0.38;
-    var forkY = (startY + target1Y) / 2;
-
-    ctx.save();
-    ctx.lineWidth = 1.8;
-
-    var treeGrad1 = ctx.createLinearGradient(startX, startY, target1X, target1Y);
-    treeGrad1.addColorStop(0, 'rgba(18, 46, 138, 0.35)');
-    treeGrad1.addColorStop(0.5, 'rgba(79, 124, 255, 0.45)');
-    treeGrad1.addColorStop(1, 'rgba(16, 185, 129, 0.55)');
-
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.bezierCurveTo(forkX, startY, forkX, target1Y, target1X, target1Y);
-    ctx.strokeStyle = treeGrad1;
-    ctx.stroke();
-
-    var treeGrad2 = ctx.createLinearGradient(forkX, forkY, target2X, target2Y);
-    treeGrad2.addColorStop(0, 'rgba(79, 124, 255, 0.35)');
-    treeGrad2.addColorStop(1, 'rgba(18, 46, 138, 0.55)');
-
-    ctx.beginPath();
-    ctx.moveTo(forkX, forkY);
-    ctx.bezierCurveTo(forkX + 22, forkY + 26, forkX, target2Y, target2X, target2Y);
-    ctx.strokeStyle = treeGrad2;
-    ctx.stroke();
-
-    // 脉冲能量光点流向子卡
-    var pulseT = (t * 0.5) % 1;
-    var p1x = (1 - pulseT) * startX + pulseT * target1X;
-    var p1y = (1 - pulseT) * startY + pulseT * target1Y;
-    ctx.fillStyle = '#4F7CFF';
-    ctx.beginPath(); ctx.arc(p1x, p1y, 2.6, 0, Math.PI * 2); ctx.fill();
-
-    var pulse2T = ((t * 0.5) + 0.4) % 1;
-    var p2x = (1 - pulse2T) * forkX + pulse2T * target2X;
-    var p2y = (1 - pulse2T) * forkY + pulse2T * target2Y;
-    ctx.fillStyle = '#10B981';
-    ctx.beginPath(); ctx.arc(p2x, p2y, 2.2, 0, Math.PI * 2); ctx.fill();
-
-    ctx.restore();
-
-    // ── 5. 渲染主卡片（Parent BookmarkCard.vue）──
+    // ── 4. 渲染主卡片（Parent BookmarkCard.vue）──
     ctx.save();
     ctx.translate(px, py);
     ctx.rotate(pTilt);
@@ -442,8 +393,15 @@
     ctx.font = Math.round(9.5 * sc) + 'px sans-serif';
     ctx.textAlign = 'left';
     var notesText = isEn
-      ? 'Official ulink portals: landing presentation & zero-config web application.'
-      : '与链官方双端入口：宣传展示页与免注册即用 Web 应用端。';
+      ? 'Official portals: Landing & App'
+      : '官方双端入口：宣传页与 app页';
+    var maxNotesW = pw - 34;
+    if (ctx.measureText(notesText).width > maxNotesW) {
+      while (notesText.length > 0 && ctx.measureText(notesText + '…').width > maxNotesW) {
+        notesText = notesText.slice(0, -1);
+      }
+      notesText += '…';
+    }
     ctx.fillText(notesText, -pw / 2 + 16, notesY + 10);
 
     // 5. 子书签挂载指引区（.sub-sites 提示条）
@@ -455,7 +413,14 @@
 
     ctx.fillStyle = '#122E8A';
     ctx.font = '600 ' + Math.round(9 * sc) + 'px sans-serif';
-    var subHintText = isEn ? '↳ 2 core portal entrances mounted' : '↳ 已挂载 2 个官方核心入口';
+    var subHintText = isEn ? '↳ 2 core sub-bookmarks mounted' : '↳ 已挂载 2 个核心子书签';
+    var maxSubHintW = pw - 52;
+    if (ctx.measureText(subHintText).width > maxSubHintW) {
+      while (subHintText.length > 0 && ctx.measureText(subHintText + '…').width > maxSubHintW) {
+        subHintText = subHintText.slice(0, -1);
+      }
+      subHintText += '…';
+    }
     ctx.fillText(subHintText, -pw / 2 + 26, subHintY + 14);
 
     // ── 主卡 Footer（.card-foot）──
@@ -533,7 +498,7 @@
     ctx.beginPath(); ctx.moveTo(-c1w / 2 + 17.5, 0); ctx.lineTo(-c1w / 2 + 32.5, 0); ctx.stroke();
 
     // 标题与域名
-    var c1Title = isEn ? 'Landing Page' : '宣传页';
+    var c1Title = isEn ? 'Landing' : '宣传页';
     ctx.fillStyle = '#2C2824';
     ctx.font = '600 ' + Math.round(11 * sc) + 'px sans-serif';
     ctx.textAlign = 'left';
@@ -586,7 +551,7 @@
     ctx.beginPath(); ctx.arc(-c2w / 2 + 26.5, -4.2, 1, 0, Math.PI * 2); ctx.fill();
 
     // 标题与域名
-    var c2Title = isEn ? 'Web App' : '应用端';
+    var c2Title = isEn ? 'App' : 'app页';
     ctx.fillStyle = '#2C2824';
     ctx.font = '600 ' + Math.round(11 * sc) + 'px sans-serif';
     ctx.textAlign = 'left';
