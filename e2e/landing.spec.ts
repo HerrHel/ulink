@@ -163,7 +163,7 @@ test.describe('宣传落地页', () => {
     ).toBe('rgb(18, 46, 138)')
   })
 
-  test('创作与分享：以链会友区块呈现', async ({ page }) => {
+  test('创作与分享：轻松分享区块呈现', async ({ page }) => {
     await page.goto('/?stay=1#create')
     const createSec = page.locator('#create')
     await expect(createSec).toBeVisible()
