@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.attribute.ariaLabel')" :class="{ open: store.modals.attribute }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.attribute.ariaLabel')" :class="{ open: store.modals.attribute }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head"><h2>{{ t('modal.attribute.manage') }}</h2><button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button></div>
       <div class="modal-body">
@@ -33,6 +33,7 @@ import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -48,6 +49,7 @@ watch(() => store.modals.attribute, (open) => {
 })
 
 function onClose() { store.modals.attribute = false }
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 
 function onAddAttr() {
   const name = newName.value.trim()
