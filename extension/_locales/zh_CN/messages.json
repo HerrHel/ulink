@@ -39,6 +39,10 @@
     "message": "刷新",
     "description": "刷新按钮悬停提示"
   },
+  "open_web_app": {
+    "message": "打开网页版",
+    "description": "在网页中打开与链"
+  },
   "status_logged_out": {
     "message": "未登录",
     "description": "登录状态：未登录"
@@ -92,8 +96,8 @@
     "description": "加载状态文本"
   },
   "tab_url_hint": {
-    "message": "无法读取当前标签 URL（扩展无持久 tabs 权限）。请点击上方卡片或「↻」刷新后再保存。",
-    "description": "标签 URL 不可读提示"
+    "message": "无法读取当前标签 URL（扩展无持久 tabs 权限）。请点击上方卡片或刷新按钮后再保存。",
+    "description": "缺少激活标签 URL 时的内嵌提示"
   },
   "save_current_page": {
     "message": "保存当前页面",
@@ -184,7 +188,7 @@
     "description": "书签数量"
   },
   "search_no_results": {
-    "message": "🔍 未找到匹配的书签<br><span style=\"font-size:11px;opacity:.7\">试试其他关键词</span>",
+    "message": "未找到匹配的书签<br><span style=\"font-size:11px;opacity:.7\">试试其他关键词</span>",
     "description": "搜索无结果"
   },
   "no_bookmarks": {
@@ -192,7 +196,7 @@
     "description": "空列表提示"
   },
   "empty_hint": {
-    "message": "💡 在网页上右键选择「保存到与链」<br>或快捷键 <kbd style=\"background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px\">Ctrl+Shift+S</kbd>",
+    "message": "在网页上右键选择「保存到与链」<br>或快捷键 <kbd style=\"background:var(--border-light);padding:1px 5px;border-radius:3px;font-size:11px\">Ctrl+Shift+S</kbd>",
     "description": "空列表操作提示"
   },
   "found_count": {
@@ -228,7 +232,7 @@
     "description": "当前页读取失败提示"
   },
   "click_to_refresh": {
-    "message": "点击此处或 ↻ 刷新",
+    "message": "点击此处或刷新",
     "description": "点击刷新提示"
   },
   "no_active_tab": {
@@ -244,11 +248,11 @@
     "description": "当前页 URL 不可用提示"
   },
   "click_to_refresh_and_save": {
-    "message": "点击此处或 ↻ 刷新后保存",
+    "message": "点击此处或刷新后保存",
     "description": "刷新后保存提示"
   },
   "use_count": {
-    "message": "👁️ $1 次",
+    "message": "$1 次",
     "description": "书签使用次数"
   },
   "crypto_lib_not_loaded": {
@@ -288,11 +292,11 @@
     "description": "链接复制成功提示"
   },
   "saved_check": {
-    "message": "✓ 已保存",
+    "message": "已保存",
     "description": "保存按钮成功态"
   },
   "save_failed_x": {
-    "message": "✗ 保存失败",
+    "message": "保存失败",
     "description": "保存按钮失败态"
   },
   "cannot_get_page": {
@@ -346,5 +350,77 @@
   "login_success": {
     "message": "登录成功",
     "description": "登录成功提示"
+  },
+  "category": {
+    "message": "分类",
+    "description": "分类标签"
+  },
+  "uncategorized": {
+    "message": "未分类",
+    "description": "未分类标签"
+  },
+  "category_all": {
+    "message": "全部",
+    "description": "全部类别"
+  },
+  "undo": {
+    "message": "撤销",
+    "description": "撤销按钮"
+  },
+  "undone": {
+    "message": "已撤销保存",
+    "description": "已撤销提示"
+  },
+  "saved_with_undo": {
+    "message": "已保存到与链",
+    "description": "保存成功带撤销提示"
+  },
+  "save": {
+    "message": "保存",
+    "description": "保存按钮"
+  },
+  "cancel": {
+    "message": "取消",
+    "description": "取消按钮"
+  },
+  "save_notes_hint": {
+    "message": "Ctrl+Enter 快速保存",
+    "description": "备注保存快捷键提示"
+  },
+  "master_password_title": {
+    "message": "解锁主密码",
+    "description": "主密码模态框标题"
+  },
+  "master_password_desc": {
+    "message": "请输入主密码以解密此书签密码",
+    "description": "主密码模态框描述"
+  },
+  "master_password_placeholder": {
+    "message": "输入主密码",
+    "description": "主密码输入框占位"
+  },
+  "unlock": {
+    "message": "解锁",
+    "description": "解锁按钮"
+  },
+  "notes_placeholder": {
+    "message": "添加备注（可选）…",
+    "description": "备注输入框占位"
+  },
+  "quick_notes_toggle": {
+    "message": "添加备注",
+    "description": "快速备注展开按钮"
+  },
+  "sync_web_login": {
+    "message": "一键同步网页端登录",
+    "description": "从网页端标签页同步登录状态"
+  },
+  "login_with_email": {
+    "message": "使用邮箱验证码登录",
+    "description": "邮箱验证码登录入口"
+  },
+  "sync_login_no_tab": {
+    "message": "未检测到已登录的与链网页标签，请先在浏览器打开并登录 ulink.ren",
+    "description": "无网页标签提示"
   }
 }

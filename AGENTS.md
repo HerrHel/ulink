@@ -133,9 +133,9 @@ composables 按职责分三组：
 
 `cli/` 目录是 与链（ulink，原 LinkVault）命令行工具（独立子项目：commander + @supabase/supabase-js + conf，独立 tsconfig/node_modules，不参与主项目构建与测试；vitest.config 已排除 `cli/node_modules/`）。
 
-### Chrome 扩展
+### 浏览器扩展
 
-`extension/` 目录包含 Manifest V3 浏览器扩展（background.js、sidepanel.html/js、config.js、crypto.js、auth-flow.js、keypress.js、notes-update.js、pwa-open.js），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏模式操作。**双语文案**：扩展使用 Chrome 标准 i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` 为 `npm run ext:bundle-supabase` 生成的 bundle（不提交）。
+`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc 等多浏览器；通过 `npm run ext:pack` 打包），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏（side_panel / sidebar_action）沉浸式操作。**双语文案**：扩展使用标准 WebExtensions i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` 为 `npm run ext:bundle-supabase` 生成的 bundle（不提交）。
 
 ### 样式
 

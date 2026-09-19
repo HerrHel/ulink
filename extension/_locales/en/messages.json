@@ -39,6 +39,10 @@
     "message": "Refresh",
     "description": "Refresh button tooltip"
   },
+  "open_web_app": {
+    "message": "Open Web App",
+    "description": "Open ulink web app in new tab"
+  },
   "status_logged_out": {
     "message": "Not logged in",
     "description": "Auth status: logged out"
@@ -92,7 +96,7 @@
     "description": "Loading status text"
   },
   "tab_url_hint": {
-    "message": "Cannot read the current tab URL (the extension has no persistent tabs permission). Click the card above or the ↻ button to refresh before saving.",
+    "message": "Cannot read the current tab URL (the extension has no persistent tabs permission). Click the card above or the refresh button to refresh before saving.",
     "description": "Tab URL unreadable hint"
   },
   "save_current_page": {
@@ -184,7 +188,7 @@
     "description": "Bookmark count"
   },
   "search_no_results": {
-    "message": "🔍 No matching bookmarks found<br><span style=\"font-size:11px;opacity:.7\">Try other keywords</span>",
+    "message": "No matching bookmarks found<br><span style=\"font-size:11px;opacity:.7\">Try other keywords</span>",
     "description": "Search empty result"
   },
   "no_bookmarks": {
@@ -192,7 +196,7 @@
     "description": "Empty list hint"
   },
   "empty_hint": {
-    "message": "💡 Right-click on a web page and choose \"Save to ulink\"<br>or press <kbd style=\"background:#e5e7eb;padding:1px 5px;border-radius:3px;font-size:11px\">Ctrl+Shift+S</kbd>",
+    "message": "Right-click on a web page and choose \"Save to ulink\"<br>or press <kbd style=\"background:var(--border-light);padding:1px 5px;border-radius:3px;font-size:11px\">Ctrl+Shift+S</kbd>",
     "description": "Empty list action hint"
   },
   "found_count": {
@@ -228,7 +232,7 @@
     "description": "Current page read failed"
   },
   "click_to_refresh": {
-    "message": "Click here or ↻ to refresh",
+    "message": "Click here or refresh",
     "description": "Click to refresh hint"
   },
   "no_active_tab": {
@@ -244,11 +248,11 @@
     "description": "Current page URL unavailable"
   },
   "click_to_refresh_and_save": {
-    "message": "Click here or ↻ to refresh and save",
+    "message": "Click here or refresh and save",
     "description": "Refresh then save hint"
   },
   "use_count": {
-    "message": "👁️ $1 times",
+    "message": "$1 times",
     "description": "Bookmark use count"
   },
   "crypto_lib_not_loaded": {
@@ -288,11 +292,11 @@
     "description": "Link copied toast"
   },
   "saved_check": {
-    "message": "✓ Saved",
+    "message": "Saved",
     "description": "Save button success state"
   },
   "save_failed_x": {
-    "message": "✗ Save failed",
+    "message": "Save failed",
     "description": "Save button failure state"
   },
   "cannot_get_page": {
@@ -346,5 +350,77 @@
   "login_success": {
     "message": "Logged in successfully",
     "description": "Login success toast"
+  },
+  "category": {
+    "message": "Category",
+    "description": "Category label"
+  },
+  "uncategorized": {
+    "message": "Uncategorized",
+    "description": "Uncategorized label"
+  },
+  "category_all": {
+    "message": "All",
+    "description": "All categories"
+  },
+  "undo": {
+    "message": "Undo",
+    "description": "Undo button"
+  },
+  "undone": {
+    "message": "Save undone",
+    "description": "Save undone toast"
+  },
+  "saved_with_undo": {
+    "message": "Saved to ulink",
+    "description": "Saved toast with undo"
+  },
+  "save": {
+    "message": "Save",
+    "description": "Save button"
+  },
+  "cancel": {
+    "message": "Cancel",
+    "description": "Cancel button"
+  },
+  "save_notes_hint": {
+    "message": "Ctrl+Enter to save",
+    "description": "Notes save shortcut hint"
+  },
+  "master_password_title": {
+    "message": "Unlock Master Password",
+    "description": "Master password modal title"
+  },
+  "master_password_desc": {
+    "message": "Enter your master password to decrypt this password",
+    "description": "Master password modal description"
+  },
+  "master_password_placeholder": {
+    "message": "Enter master password",
+    "description": "Master password input placeholder"
+  },
+  "unlock": {
+    "message": "Unlock",
+    "description": "Unlock button"
+  },
+  "notes_placeholder": {
+    "message": "Add notes (optional)…",
+    "description": "Notes input placeholder"
+  },
+  "quick_notes_toggle": {
+    "message": "Add note",
+    "description": "Quick notes toggle button"
+  },
+  "sync_web_login": {
+    "message": "Sync login from web app",
+    "description": "Sync session from web tab"
+  },
+  "login_with_email": {
+    "message": "Log in with email code",
+    "description": "Email code login option"
+  },
+  "sync_login_no_tab": {
+    "message": "No logged-in ulink tab detected. Please open and log in to ulink.ren first",
+    "description": "No web tab hint"
   }
 }

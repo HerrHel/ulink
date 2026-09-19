@@ -1,5 +1,10 @@
 // background.js — 与链（ulink）Extension
 
+// ── 跨浏览器 API 统一兼容（Chrome, Edge, Firefox, Brave, Arc 等）──
+if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'undefined') {
+  globalThis.chrome = globalThis.browser
+}
+
 import { decideOpenPwa } from './pwa-open.js'
 
 const PWA_URL = 'https://ulink.ren'
@@ -22,7 +27,9 @@ chrome.contextMenus.removeAll(function () {
 
 // ── 安装/更新时 ──
 chrome.runtime.onInstalled.addListener(function () {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(function () {})
+  if (chrome.sidePanel && typeof chrome.sidePanel.setPanelBehavior === 'function') {
+    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(function () {})
+  }
 })
 
 // ── 右键菜单 ──
