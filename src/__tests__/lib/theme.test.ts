@@ -276,4 +276,63 @@ describe('theme.ts 三件套护栏', () => {
     expect(setThemeStyle('comfortable')).toBeUndefined()
     expect(toggleAutoTheme()).toBeUndefined()
   })
+
+  // ---------- View Transitions 动效与降级护栏 ----------
+
+  it('支持 startViewTransition 时触发柔光交叉溶解（dissolve）并安全清理', async () => {
+    localStorageMock.setItem(K_THEME_MODE, 'manual')
+    document.documentElement.setAttribute(A_THEME, 'light')
+
+    let cbExecuted = false
+    const finishedPromise = Promise.resolve()
+    const transitionSpy = vi.fn((cb: () => void) => {
+      cb()
+      cbExecuted = true
+      return {
+        ready: Promise.resolve(),
+        finished: finishedPromise,
+        updateCallbackDone: Promise.resolve(),
+      }
+    })
+
+    const doc = document as unknown as Record<string, unknown>
+    doc.startViewTransition = transitionSpy
+
+    const { toggleTheme } = await importTheme()
+    toggleTheme()
+
+    expect(transitionSpy).toHaveBeenCalledTimes(1)
+    expect(cbExecuted).toBe(true)
+    expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
+
+    await finishedPromise
+    expect(document.documentElement.hasAttribute('data-theme-transition')).toBe(false)
+
+    delete doc.startViewTransition
+  })
+
+  it('开启 prefers-reduced-motion 时跳过 startViewTransition 走直接切换', async () => {
+    localStorageMock.setItem(K_THEME_MODE, 'manual')
+    document.documentElement.setAttribute(A_THEME, 'light')
+
+    const transitionSpy = vi.fn()
+    const doc = document as unknown as Record<string, unknown>
+    doc.startViewTransition = transitionSpy
+
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })))
+
+    const { toggleTheme } = await importTheme()
+    toggleTheme({ clientX: 50, clientY: 50 } as MouseEvent)
+
+    expect(transitionSpy).not.toHaveBeenCalled()
+    expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
+
+    delete doc.startViewTransition
+  })
 })
+

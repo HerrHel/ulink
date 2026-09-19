@@ -158,8 +158,8 @@ function onUserClick() {
   }
 }
 
-function toggleThemeQuick() {
-  uiStore.toggleTheme()
+function toggleThemeQuick(e?: MouseEvent) {
+  uiStore.toggleTheme(e)
 }
 
 function openCatModalNav() { openCatModal() }

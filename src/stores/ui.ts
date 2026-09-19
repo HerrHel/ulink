@@ -16,6 +16,7 @@ import {
   setTheme as _setTheme,
   toggleTheme as _toggleTheme,
   toggleAutoTheme as _toggleAutoTheme,
+  type ThemeTransitionTrigger,
 } from '../lib/theme.js'
 
 // ── 严格字面量类型 ──
@@ -397,14 +398,14 @@ export const useUIStore = defineStore('ui', {
       } catch (e) { console.warn('[LinkVault] Failed to restore UI state:', (e as Error).message) }
     },
 
-    setThemeColor(val: 'light' | 'dark') {
-      _setTheme(val)
+    setThemeColor(val: 'light' | 'dark', trigger?: ThemeTransitionTrigger) {
+      _setTheme(val, trigger)
       this.themeColor = val
       this.themeMode = 'manual'
     },
 
-    toggleTheme() {
-      _toggleTheme()
+    toggleTheme(trigger?: ThemeTransitionTrigger) {
+      _toggleTheme(trigger)
       this.themeColor = getActiveTheme()
       if (this.themeMode === 'auto') {
         this.themeMode = 'manual'

@@ -44,6 +44,44 @@ function applyTheme(theme: string): void {
   applyThemeColor(theme)
 }
 
+export type ThemeTransitionTrigger =
+  | MouseEvent
+  | TouchEvent
+  | { clientX?: number; clientY?: number }
+  | null
+  | undefined
+
+function supportsViewTransition(): boolean {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return false
+  if (!('startViewTransition' in document) || typeof document.startViewTransition !== 'function') return false
+  try {
+    return !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  } catch {
+    return true
+  }
+}
+
+function applyThemeWithTransition(theme: string, _trigger?: ThemeTransitionTrigger): void {
+  if (!supportsViewTransition()) {
+    applyTheme(theme)
+    return
+  }
+
+  const docEl = document.documentElement
+  docEl.setAttribute('data-theme-transition', 'dissolve')
+  try {
+    const transition = document.startViewTransition!(() => {
+      applyTheme(theme)
+    })
+    transition.finished.finally(() => {
+      docEl.removeAttribute('data-theme-transition')
+    })
+  } catch {
+    docEl.removeAttribute('data-theme-transition')
+    applyTheme(theme)
+  }
+}
+
 function applySystemTheme(): void {
   const isDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
   applyTheme(isDark ? V_DARK : V_LIGHT)
@@ -55,8 +93,9 @@ function startAutoTheme(): void {
   applySystemTheme()
   _autoThemeMedia = window.matchMedia('(prefers-color-scheme: dark)')
   _autoThemeHandler = function (e: MediaQueryListEvent) {
-    applyTheme(e.matches ? V_DARK : V_LIGHT)
-    safeSetItem(K_THEME, e.matches ? V_DARK : V_LIGHT)
+    const next = e.matches ? V_DARK : V_LIGHT
+    applyThemeWithTransition(next)
+    safeSetItem(K_THEME, next)
   }
   _autoThemeMedia.addEventListener('change', _autoThemeHandler)
 }
@@ -66,20 +105,20 @@ function stopAutoTheme(): void {
   _autoThemeMedia = null; _autoThemeHandler = null
 }
 
-function toggleTheme(): void {
+function toggleTheme(trigger?: ThemeTransitionTrigger): void {
   const mode = safeGetItem(K_THEME_MODE) || V_MANUAL
   if (mode === V_AUTO) { stopAutoTheme(); safeSetItem(K_THEME_MODE, V_MANUAL) }
   const el = document.documentElement
   const cur = el.getAttribute(A_THEME) || (el.style.colorScheme === V_DARK ? V_DARK : V_LIGHT)
   const next = cur === V_DARK ? V_LIGHT : V_DARK
-  applyTheme(next)
+  applyThemeWithTransition(next, trigger)
   safeSetItem(K_THEME, next)
 }
 
-function setTheme(theme: 'light' | 'dark'): void {
+function setTheme(theme: 'light' | 'dark', trigger?: ThemeTransitionTrigger): void {
   const mode = safeGetItem(K_THEME_MODE) || V_MANUAL
   if (mode === V_AUTO) { stopAutoTheme(); safeSetItem(K_THEME_MODE, V_MANUAL) }
-  applyTheme(theme)
+  applyThemeWithTransition(theme, trigger)
   safeSetItem(K_THEME, theme)
 }
 
@@ -123,4 +162,4 @@ function toggleAutoTheme(): void {
   if (s === V_COMFORTABLE) document.documentElement.setAttribute(A_THEME_STYLE, V_COMFORTABLE)
 })()
 
-export { toggleTheme, setThemeStyle, toggleAutoTheme, setTheme, getActiveTheme }
+export { toggleTheme, setThemeStyle, toggleAutoTheme, setTheme, getActiveTheme, applyThemeWithTransition }
