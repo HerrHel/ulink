@@ -38,20 +38,20 @@
 
 
 
-  // ── 6 颗精选代表性天体（数码设备与微晶穿插，节奏优雅、极简精工）──
+  // ── 6 颗精选代表性天体（数码设备与微晶穿插，节奏稳重沉静、极简精工）──
   var planets = [
     // 0: 移动手机端（近轨道，纯正翡翠绿，微型手机形态）
-    { id: 'mobile', orbitA: 104, orbitB: 60, speed: 0.44, theta: 0.6, w: 22, h: 36, r: 5, tilt: -0.12, color: '#10B981', type: 'mobile', trail: [], hover: 0 },
+    { id: 'mobile', orbitA: 104, orbitB: 60, speed: 0.17, theta: 0.6, w: 22, h: 36, r: 5, tilt: -0.12, color: '#10B981', type: 'mobile', trail: [], hover: 0 },
     // 1: 极简伴生微星 A（近中轨道，极光青晶体）
-    { id: 'crystal_a', orbitA: 140, orbitB: 82, speed: -0.52, theta: 3.2, w: 8, h: 8, r: 4, tilt: 0, color: '#2DD4BF', type: 'orb', trail: [], hover: 0 },
+    { id: 'crystal_a', orbitA: 140, orbitB: 82, speed: -0.20, theta: 3.2, w: 8, h: 8, r: 4, tilt: 0, color: '#2DD4BF', type: 'orb', trail: [], hover: 0 },
     // 2: 开发者桌面端（中轨道，科技湛蓝，微型显示器与窗口形态）
-    { id: 'desktop', orbitA: 178, orbitB: 104, speed: 0.32, theta: 1.8, w: 42, h: 28, r: 4, tilt: 0.10, color: '#4F6BFF', type: 'desktop', trail: [], hover: 0 },
+    { id: 'desktop', orbitA: 178, orbitB: 104, speed: 0.12, theta: 1.8, w: 42, h: 28, r: 4, tilt: 0.10, color: '#4F6BFF', type: 'desktop', trail: [], hover: 0 },
     // 3: 澄澈伴生小星 B（中外轨道，冰蓝微晶）
-    { id: 'crystal_b', orbitA: 202, orbitB: 118, speed: 0.38, theta: 5.4, w: 9, h: 9, r: 4.5, tilt: 0, color: '#60A5FA', type: 'orb', trail: [], hover: 0 },
+    { id: 'crystal_b', orbitA: 202, orbitB: 118, speed: 0.15, theta: 5.4, w: 9, h: 9, r: 4.5, tilt: 0, color: '#60A5FA', type: 'orb', trail: [], hover: 0 },
     // 4: 平板阅读端（外轨道，薄荷青绿，双栏卡片微排版）
-    { id: 'tablet', orbitA: 228, orbitB: 132, speed: -0.26, theta: 4.5, w: 34, h: 24, r: 4, tilt: -0.06, color: '#059669', type: 'tablet', trail: [], hover: 0 },
+    { id: 'tablet', orbitA: 228, orbitB: 132, speed: -0.09, theta: 4.5, w: 34, h: 24, r: 4, tilt: -0.06, color: '#059669', type: 'tablet', trail: [], hover: 0 },
     // 5: 公开知识库 / 社区大星（大外轨道，多重同心刻度晶盘）
-    { id: 'community', orbitA: 258, orbitB: 150, speed: 0.18, theta: 0.2, w: 30, h: 30, r: 15, tilt: 0.16, color: '#10B981', type: 'community', trail: [], hover: 0 }
+    { id: 'community', orbitA: 258, orbitB: 150, speed: 0.07, theta: 0.2, w: 30, h: 30, r: 15, tilt: 0.16, color: '#10B981', type: 'community', trail: [], hover: 0 }
   ];
 
   function getIsDark() {
@@ -478,7 +478,7 @@
     }
 
     // 2. 桌面轨道上的单颗【穿梭数据微光子】（象征光纤同频流动）
-    var photonAngle = (t * 0.00035) % (Math.PI * 2);
+    var photonAngle = (t * 0.00014) % (Math.PI * 2);
     var phA = 178 * sc, phB = 104 * sc * 0.58;
     var phX0 = phA * Math.cos(photonAngle);
     var phY0 = phB * Math.sin(photonAngle);
@@ -500,7 +500,8 @@
 
     for (var pi = 0; pi < planets.length; pi++) {
       var p = planets[pi];
-      p.theta += p.speed * dt;
+      var effSpeed = p.speed * (1 - p.hover * 0.55);
+      p.theta += effSpeed * dt;
 
       var a = p.orbitA * sc;
       var b = p.orbitB * sc;
