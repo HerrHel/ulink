@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.category.ariaLabel')" id="catModal" :class="{ open: store.modals.category }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.category.ariaLabel')" id="catModal" :class="{ open: store.modals.category }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head">
         <h2>{{ isVault ? t('modal.category.manageVault') : t('modal.category.manage') }}</h2>
@@ -48,6 +48,7 @@ import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 import { useMobileDragReorder } from '../../composables/interaction/useMobileDragReorder.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Category } from '../../types.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -101,6 +102,7 @@ useMobileDragReorder(catListRef, sortableList, {
 })
 
 function onClose() { store.modals.category = false }
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 
 /** 私密空间入口：未启用保险柜 → 弹设置；已启用未解锁 → 弹解锁（解锁成功后 App.vue 接 switchSpace，进私密后自动关本弹窗） */
 function onVaultEntry() {

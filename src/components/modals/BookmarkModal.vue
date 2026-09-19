@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" data-testid="lv-bm-modal" role="dialog" aria-modal="true" :aria-label="t('modal.bookmark.ariaLabel')" :class="{ open: bmForm.isOpen, 'has-child-modal': childModalOpen }" @click.self="onClose">
+  <div class="modal-mask" data-testid="lv-bm-modal" role="dialog" aria-modal="true" :aria-label="t('modal.bookmark.ariaLabel')" :class="{ open: bmForm.isOpen, 'has-child-modal': childModalOpen }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head">
         <h2>{{ bmForm.isEdit ? t('ctx.editBookmark') : bmForm.addToGroupMode ? t('modal.bookmark.addToGroupNew') : bmForm.parentId ? t('modal.bookmark.addChildBm') : t('ctx.addBookmark') }}</h2>
@@ -111,6 +111,7 @@ import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 import ChildBookmarkEditModal from './ChildBookmarkEditModal.vue'
 import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
 import { selectableParents, selectableChildren } from './bookmarkFormFilters.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -166,6 +167,7 @@ function toggleAttr(attrId: string, event: Event) {
 }
 
 function onClose() { closeBmModal() }
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 async function onSave() {
   if (saving.value || isBmSaving()) return
   saving.value = true

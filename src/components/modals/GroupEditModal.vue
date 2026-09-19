@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('ctx.editGroup')" :class="{ open: store.modals.groupEdit }" @click.self="onMaskClick">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('ctx.editGroup')" :class="{ open: store.modals.groupEdit }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head"><h2>{{ t('ctx.editGroup') }}</h2><button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button></div>
       <div class="modal-body">
@@ -47,6 +47,7 @@ import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { faviconUrl, domainName } from './groupEditUrl.js'
 import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } from '../../composables/domain/useGroup.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -67,11 +68,11 @@ const geBookmarkList = computed(() => {
     .filter(Boolean)
 })
 
-function onMaskClick() { onClose() }
 function onClose() {
   // L8：焦点恢复已并入 closeGroupEdit，避免双重 focus
   closeGroupEdit({ discard: true })
 }
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 
 function onPreviewGeIconUrl() { previewGeIconUrl() }
 function onClearGeIcon() { clearGeIcon() }
