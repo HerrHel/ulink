@@ -141,7 +141,7 @@ function purgeCssPlugin(): Plugin {
                   /^diff-/,
                   /^brand-logo-/,
                 ],
-                deep: [/expanded/, /active/, /open/, /show/, /visible/],
+                deep: [/expanded/, /active/, /open/, /show/, /visible/, /view-transition/, /theme-transition/],
                 variables: [/^--brand-logo-/]
               },
               variables: true

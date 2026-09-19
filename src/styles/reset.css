@@ -39,3 +39,38 @@ img.img-error{display:none!important}
 .card-logo img.img-error+.card-logo-fallback,
 .card-icon img.img-error+.icon-fallback,
 .panel-title-group-icon img.img-error+.panel-title-group-icon-fallback{display:flex!important}
+
+/* ==================== VIEW TRANSITIONS (SOFT CROSS-DISSOLVE) ==================== */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.45s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  animation-name: theme-fade-out;
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  animation-name: theme-fade-in;
+  z-index: 2;
+}
+
+[data-theme-transition] body,
+[data-theme-transition] .icon-rail,
+[data-theme-transition] .panel-header {
+  transition: none !important;
+}
+
+@keyframes theme-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes theme-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

@@ -169,10 +169,10 @@
               <span class="sp-section-title">{{ t('settings.theme') }}</span>
               <div class="sp-row">
                 <div class="sp-seg">
-                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click="onSetThemeColor('light')">
+                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click="onSetThemeColor('light', $event)">
                     <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
                   </button>
-                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click="onSetThemeColor('dark')">
+                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click="onSetThemeColor('dark', $event)">
                     <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
                   </button>
                 </div>
@@ -504,8 +504,8 @@ const sortModes: { id: SortMode; labelKey: string }[] = [
   { id: 'useCount', labelKey: 'settings.sortUseCount' },
 ]
 
-function onSetThemeColor(val: 'light' | 'dark') {
-  uiStore.setThemeColor(val)
+function onSetThemeColor(val: 'light' | 'dark', e?: MouseEvent) {
+  uiStore.setThemeColor(val, e)
 }
 
 function onSetThemeStyle(style: ThemeStyle) {
