@@ -1,9 +1,14 @@
-// sidepanel.js — 与链（ulink）Side Panel（仅云端模式，需登录使用）
+// sidepanel.js — 与链（ulink）Side Panel（云端模式，就地静默保存与分类管理）
 
 (function () {
   'use strict'
 
-  // ── Supabase 配置（L2：来自 config.js，与主项目 .env 对齐）──
+  // ── 跨浏览器 API 统一兼容（Chrome, Edge, Firefox, Brave, Arc 等）──
+  if (typeof window !== 'undefined' && typeof window.chrome === 'undefined' && typeof window.browser !== 'undefined') {
+    window.chrome = window.browser
+  }
+
+  // ── Supabase 配置（来自 config.js，与主项目 .env 对齐）──
   const _cfg = window.LinkVaultExtConfig || {}
   const SUPABASE_URL = _cfg.SUPABASE_URL || ''
   const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY || ''
@@ -16,6 +21,51 @@
     auth: { autoRefreshToken: true, persistSession: true, storage: localStorage, storageKey: 'linkvault_ext_auth' }
   })
 
+  // ── 静态 HTML 国际化替换（Chrome 仅对 manifest/CSS 自动替换，HTML 需脚本替换）──
+  function localizeHtml() {
+    if (typeof chrome === 'undefined' || !chrome.i18n || !chrome.i18n.getMessage) return
+
+    // 1. 遍历所有文本节点替换 __MSG_xxx__，即使父容器含有子元素亦不漏网
+    if (document.body && typeof document.createTreeWalker === 'function') {
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false)
+      var node
+      while ((node = walker.nextNode())) {
+        if (node.nodeValue && node.nodeValue.indexOf('__MSG_') !== -1) {
+          node.nodeValue = node.nodeValue.replace(/__MSG_(\w+)__/g, function (_, k) {
+            return chrome.i18n.getMessage(k) || k
+          })
+        }
+      }
+    }
+
+    // 2. 遍历所有常用文本属性（placeholder, title, alt, aria-label）
+    var all = document.querySelectorAll('*')
+    var attrs = ['placeholder', 'title', 'alt', 'aria-label']
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i]
+      for (var a = 0; a < attrs.length; a++) {
+        var attr = attrs[a]
+        var val = el.getAttribute(attr)
+        if (val && val.indexOf('__MSG_') !== -1) {
+          el.setAttribute(attr, val.replace(/__MSG_(\w+)__/g, function (_, k) {
+            return chrome.i18n.getMessage(k) || k
+          }))
+        }
+      }
+    }
+
+    if (document.title && document.title.indexOf('__MSG_') !== -1) {
+      document.title = document.title.replace(/__MSG_(\w+)__/g, function (_, k) {
+        return chrome.i18n.getMessage(k) || k
+      })
+    }
+  }
+
+  localizeHtml()
+
+  // ── 主站标准矢量图标库 ──
+  const Icons = window.LinkVaultIcons || {}
+
   // ── DOM ──
   const $ = function (s) { return document.querySelector(s) }
 
@@ -23,33 +73,6 @@
   const pageUrl = $('#pageUrl')
   const pageIcon = $('#pageIcon')
   const bookmarkList = $('#bookmarkList')
-  // R16：MV3 CSP 拦截内联 onerror 属性，导致无 favicon 书签留碎图标。
-  // 用事件委托 capture 替代内联 onerror，兼容 CSP。
-  bookmarkList.addEventListener('error', function (e) {
-    if (e.target.tagName === 'IMG' && e.target.src) e.target.style.display = 'none'
-  }, true)
-  // F1-001：click 委托只注册一次，禁止 renderBookmarks 每次重绘叠加监听
-  bookmarkList.addEventListener('click', function (e) {
-    var target = e.target
-    while (target && target !== bookmarkList) {
-      if (target.dataset && target.dataset.action === 'delete') {
-        e.stopPropagation()
-        deleteBookmark(target.dataset.id, target.dataset.title)
-        return
-      }
-      if (target.classList && target.classList.contains('bookmark-item')) {
-        // F1-005：仅允许 http(s)，拒绝 javascript:/data: 等
-        var openUrl = target.dataset.url
-        if (!isSafeHttpUrl(openUrl)) {
-          toast(chrome.i18n.getMessage('err_unsafe_protocol'), 2000)
-          return
-        }
-        chrome.tabs.create({ url: openUrl })
-        return
-      }
-      target = target.parentElement
-    }
-  })
   const statusDot = $('#statusDot')
   const statusText = $('#statusText')
   const bookmarkCount = $('#bookmarkCount')
@@ -66,6 +89,10 @@
   const bookmarkDetail = $('#bookmarkDetail')
   const bdNotes = $('#bdNotes')
   const bdNotesWrap = $('#bdNotesWrap')
+  const bdNotesEditWrap = $('#bdNotesEditWrap')
+  const bdNotesInput = $('#bdNotesInput')
+  const bdNotesSave = $('#bdNotesSave')
+  const bdNotesCancel = $('#bdNotesCancel')
   const bdCreatedAt = $('#bdCreatedAt')
   const bdUseCount = $('#bdUseCount')
   const bdEditNotes = $('#bdEditNotes')
@@ -75,15 +102,143 @@
   const bdPasswordText = $('#bdPasswordText')
   const bdPwShow = $('#bdPwShow')
   const bdPwCopy = $('#bdPwCopy')
+  const bdCategorySelect = $('#bdCategorySelect')
   const searchInput = $('#searchInput')
   const searchWrap = $('#searchWrap')
+  const searchIcon = $('#searchIcon')
   const searchClear = $('#searchClear')
   const recentTitle = $('#recentTitle')
   const mainContent = $('#mainSection')
   const loginGate = $('#loginGate')
+  const saveOptionsWrap = $('#saveOptionsWrap')
+  const saveCategorySelect = $('#saveCategorySelect')
+  const saveCatIconWrap = $('#saveCatIconWrap')
+  const bdCatIconWrap = $('#bdCatIconWrap')
+  const bdSavedBadge = $('#bdSavedBadge')
+  const bdNotesLabel = $('#bdNotesLabel')
+  const bdNotesEditLabel = $('#bdNotesEditLabel')
+  const bdPasswordLabel = $('#bdPasswordLabel')
+  const btnToggleNotes = $('#btnToggleNotes')
+  const quickNotesWrap = $('#quickNotesWrap')
+  const quickNotesInput = $('#quickNotesInput')
+  const categoryBar = $('#categoryBar')
+  const tabUrlHint = $('#tabUrlHint')
+  const currentPageEl = $('#currentPage')
+  const masterPwModal = $('#masterPwModal')
+  const masterPwModalTitle = $('#masterPwModalTitle')
+  const modalMasterPwInput = $('#modalMasterPwInput')
+  const modalMasterPwSubmit = $('#modalMasterPwSubmit')
+  const modalMasterPwCancel = $('#modalMasterPwCancel')
+  const deleteConfirmModal = $('#deleteConfirmModal')
+  const deleteConfirmModalTitle = $('#deleteConfirmModalTitle')
+  const deleteConfirmText = $('#deleteConfirmText')
+  const btnConfirmDelete = $('#btnConfirmDelete')
+  const btnCancelDelete = $('#btnCancelDelete')
+  const btnThemeToggle = $('#btnThemeToggle')
+  const btnRefresh = $('#btnRefresh')
+  const btnSyncWebLogin = $('#btnSyncWebLogin')
+
+  // ── 主题管理（对齐主站 lv_theme / tokens.css）──
+  function applyTheme(theme) {
+    if (theme === 'dark' || theme === 'light') {
+      document.documentElement.setAttribute('data-theme', theme)
+      document.documentElement.style.colorScheme = theme
+      localStorage.setItem('lv_theme', theme)
+      if (btnThemeToggle) {
+        btnThemeToggle.innerHTML = theme === 'dark' ? (Icons.sun || '') : (Icons.moon || '')
+        btnThemeToggle.title = theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'
+      }
+    } else {
+      document.documentElement.removeAttribute('data-theme')
+      document.documentElement.style.colorScheme = ''
+      localStorage.removeItem('lv_theme')
+      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (btnThemeToggle) {
+        btnThemeToggle.innerHTML = isDark ? (Icons.sun || '') : (Icons.moon || '')
+        btnThemeToggle.title = isDark ? '切换到浅色模式' : '切换到深色模式'
+      }
+    }
+  }
+
+  function initTheme() {
+    var savedTheme = localStorage.getItem('lv_theme')
+    if (savedTheme) {
+      applyTheme(savedTheme)
+    } else {
+      var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (btnThemeToggle) {
+        btnThemeToggle.innerHTML = isDark ? (Icons.sun || '') : (Icons.moon || '')
+        btnThemeToggle.title = isDark ? '切换到浅色模式' : '切换到深色模式'
+      }
+    }
+  }
+
+  if (btnThemeToggle) {
+    btnThemeToggle.addEventListener('click', function () {
+      var current = document.documentElement.getAttribute('data-theme')
+      if (!current) {
+        current = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      }
+      var next = current === 'dark' ? 'light' : 'dark'
+      applyTheme(next)
+    })
+  }
+
+  // ── 静态矢量图标挂载（全面淘汰 Emoji，与主站设计语言严格一致）──
+  function initStaticIcons() {
+    if (btnRefresh) btnRefresh.innerHTML = Icons.refresh || ''
+    if (searchIcon) searchIcon.innerHTML = Icons.search || ''
+    if (searchClear) searchClear.innerHTML = Icons.close || ''
+    if (saveCatIconWrap) saveCatIconWrap.innerHTML = Icons.folder || ''
+    if (bdCatIconWrap) bdCatIconWrap.innerHTML = Icons.folder || ''
+    if (btnToggleNotes) btnToggleNotes.innerHTML = (Icons.note || '') + ' <span>' + esc(chrome.i18n.getMessage('quick_notes_toggle')) + '</span>'
+    if (btnSave) btnSave.innerHTML = (Icons.zap || '') + ' <span>' + esc(chrome.i18n.getMessage('save_current_page')) + '</span>'
+    if (btnSyncWebLogin) btnSyncWebLogin.innerHTML = (Icons.sync || '') + ' <span>' + esc(chrome.i18n.getMessage('sync_web_login')) + '</span>'
+    if (bdSavedBadge) bdSavedBadge.innerHTML = (Icons.check || '') + ' <span>' + esc(chrome.i18n.getMessage('already_saved')) + '</span>'
+    if (bdNotesLabel) bdNotesLabel.innerHTML = (Icons.note || '') + ' <span>' + esc(chrome.i18n.getMessage('notes')) + '</span>'
+    if (bdNotesEditLabel) bdNotesEditLabel.innerHTML = (Icons.note || '') + ' <span>' + esc(chrome.i18n.getMessage('notes')) + '</span>'
+    if (bdEditNotes) bdEditNotes.innerHTML = (Icons.edit || '') + ' <span>' + esc(chrome.i18n.getMessage('edit_notes')) + '</span>'
+    if (bdPasswordLabel) bdPasswordLabel.innerHTML = (Icons.lock || '') + ' <span>' + esc(chrome.i18n.getMessage('password')) + '</span>'
+    if (bdCopyUrl) bdCopyUrl.innerHTML = (Icons.link || '') + ' <span>' + esc(chrome.i18n.getMessage('copy_url')) + '</span>'
+    if (bdDelete) bdDelete.innerHTML = (Icons.trash || '') + ' <span>' + esc(chrome.i18n.getMessage('delete')) + '</span>'
+    if (masterPwModalTitle) masterPwModalTitle.innerHTML = (Icons.lock || '') + ' <span>' + esc(chrome.i18n.getMessage('master_password_title')) + '</span>'
+    if (deleteConfirmModalTitle) deleteConfirmModalTitle.innerHTML = (Icons.trash || '') + ' <span>' + esc(chrome.i18n.getMessage('delete')) + '</span>'
+  }
+
+  initTheme()
+  initStaticIcons()
+
+  // R16：MV3 CSP 拦截内联 onerror 属性，用事件委托 capture 替代
+  bookmarkList.addEventListener('error', function (e) {
+    if (e.target.tagName === 'IMG' && e.target.src) e.target.style.display = 'none'
+  }, true)
+
+  // F1-001：click 委托只注册一次
+  bookmarkList.addEventListener('click', function (e) {
+    var target = e.target
+    while (target && target !== bookmarkList) {
+      if (target.dataset && target.dataset.action === 'delete') {
+        e.stopPropagation()
+        deleteBookmark(target.dataset.id, target.dataset.title)
+        return
+      }
+      if (target.classList && target.classList.contains('bookmark-item')) {
+        var openUrl = target.dataset.url
+        if (!isSafeHttpUrl(openUrl)) {
+          toast(chrome.i18n.getMessage('err_unsafe_protocol'), 2000)
+          return
+        }
+        chrome.tabs.create({ url: openUrl })
+        return
+      }
+      target = target.parentElement
+    }
+  })
 
   let currentTab = null
   let allBookmarks = []
+  let allCategories = []
+  let selectedCategory = 'all'
   let userId = null
   let loggedIn = false
   let lastSyncTime = null
@@ -94,21 +249,19 @@
   let sessionMasterPassword = ''
   let passwordRevealed = false
   let _mpClearTimer = null
-  // AUDIT-R19+R44 方向 E：扩展端解 E2E 密码需用主项目 global cryptoKey，其派生参数 canaryData
-  //（含 salt + it）存 Supabase user_security.master_canary。首解时拉一次缓存于内存，
-  // 后续同 sidepanel 生命周期复用，避免每条密码解密都查 DB。随 sidepanel 关闭自然清除，
-  // 不持久化（canaryData 单独不可派生 key——缺主密码仍是死数据，与主项目存云端同敏感度）。
   let cachedCanaryData = null
+  let _masterPwResolver = null
+  let _deleteResolver = null
+  let _isSaving = false
 
-  /** M6：主密码用后定时清空，缩短明文常驻 sidepanel 内存窗口 */
-  /** F1-002：主密码 TTL 到期时同步掩码 DOM 明文密码 */
+  /** M6/F1-002：主密码 TTL 到期时同步掩码 DOM 明文密码 */
   function maskRevealedPassword() {
     passwordRevealed = false
     if (bdPasswordText) {
       bdPasswordText.textContent = '••••••••'
       bdPasswordText.className = 'bd-pw-text'
     }
-    if (bdPwShow) bdPwShow.textContent = chrome.i18n.getMessage('show')
+    if (bdPwShow) bdPwShow.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('show')) + '</span>'
   }
 
   function scheduleClearMasterPassword() {
@@ -116,7 +269,6 @@
     _mpClearTimer = setTimeout(function () {
       sessionMasterPassword = ''
       _mpClearTimer = null
-      // F1-002：TTL 到同时清 DOM 明文
       maskRevealedPassword()
     }, MASTER_PASSWORD_TTL_MS)
   }
@@ -127,12 +279,6 @@
     maskRevealedPassword()
   }
 
-  /**
-   * AUDIT-R19+R44 方向 E：从 Supabase user_security.master_canary 拉主项目 unlock 写入的 canaryData
-   *（{ salt: number[], it?: number, canary: string }）。RLS 限 owner 读，同账号登录即可。
-   * 拉到后缓存于 cachedCanaryData 供本 session 复用，避免每条密码解密都查 DB。
-   * @returns {Promise<Object|null>} canaryData；失败返 null（调用方据此提示「无法取解锁数据」）
-   */
   async function ensureCanaryData() {
     if (cachedCanaryData) return cachedCanaryData
     try {
@@ -146,7 +292,6 @@
     } catch (e) { return null }
   }
 
-  /** F1-005：与 background openPwaWithUrl 对齐的 http(s) scheme 白名单 */
   function isSafeHttpUrl(url) {
     if (!url || typeof url !== 'string') return false
     try {
@@ -161,8 +306,6 @@
   function toast(msg, dur, action) {
     if (dur === undefined) { dur = 2000 }
     if (action) {
-      // R45：action 分支使用 innerHTML，msg 与 label 直接拼接——当前无调用（死代码），但若将来
-      // 含远端不可信串（如 error.message）则 XSS。改为先 esc 再拼接。
       toastEl.innerHTML = esc(msg) + '<button class="toast-action" id="toastAction">' + esc(action.label) + '</button>'
     } else {
       toastEl.textContent = msg
@@ -191,21 +334,25 @@
 
   function updateLoginUI() {
     if (loggedIn) {
-      headerLoginHint.textContent = chrome.i18n.getMessage('status_connected')
-      headerLoginHint.style.color = '#22c55e'
-      btnShowLogin.classList.add('hidden')
-      btnLogout.classList.remove('hidden')
-      loginBanner.classList.add('hidden')
-      loginGate.classList.add('hidden')
-      mainContent.classList.remove('hidden')
+      if (headerLoginHint) {
+        headerLoginHint.textContent = chrome.i18n.getMessage('status_connected')
+        headerLoginHint.style.color = '#22c55e'
+      }
+      if (btnShowLogin) btnShowLogin.classList.add('hidden')
+      if (btnLogout) btnLogout.classList.remove('hidden')
+      if (loginBanner) loginBanner.classList.add('hidden')
+      if (loginGate) loginGate.classList.add('hidden')
+      if (mainContent) mainContent.classList.remove('hidden')
       setStatus('ok', chrome.i18n.getMessage('status_connected'))
     } else {
-      headerLoginHint.textContent = chrome.i18n.getMessage('status_logged_out')
-      headerLoginHint.style.color = ''
-      btnShowLogin.classList.remove('hidden')
-      btnLogout.classList.add('hidden')
-      loginGate.classList.remove('hidden')
-      mainContent.classList.add('hidden')
+      if (headerLoginHint) {
+        headerLoginHint.textContent = chrome.i18n.getMessage('status_logged_out')
+        headerLoginHint.style.color = ''
+      }
+      if (btnShowLogin) btnShowLogin.classList.remove('hidden')
+      if (btnLogout) btnLogout.classList.add('hidden')
+      if (loginGate) loginGate.classList.remove('hidden')
+      if (mainContent) mainContent.classList.add('hidden')
       setStatus('local', chrome.i18n.getMessage('status_logged_out'))
     }
   }
@@ -222,6 +369,86 @@
     }
   }
 
+  // ── 分类支持 ──
+  function isReservedCategory(id, name) {
+    var rawId = (id || '').trim().toLowerCase()
+    var rawName = (name || '').trim().toLowerCase()
+    return rawId === 'all' || rawId === 'uncategorized' ||
+           rawName === '全部' || rawName === '未分类' ||
+           rawName === 'all' || rawName === 'uncategorized'
+  }
+
+  function getCategoryName(catId) {
+    if (!catId || catId === 'uncategorized') {
+      var uncat = allCategories.find(function (c) {
+        return c.id === 'uncategorized' || (c.name && (c.name === '未分类' || c.name.toLowerCase() === 'uncategorized'))
+      })
+      return (uncat && uncat.name) || chrome.i18n.getMessage('uncategorized')
+    }
+    var found = allCategories.find(function (c) { return c.id === catId })
+    return found ? found.name : catId
+  }
+
+  function renderCategoryOptions() {
+    var uncatObj = allCategories.find(function (c) {
+      return c.id === 'uncategorized' || (c.name && (c.name === '未分类' || c.name.toLowerCase() === 'uncategorized'))
+    })
+    var uncatName = (uncatObj && uncatObj.name) || chrome.i18n.getMessage('uncategorized')
+    var optsHtml = '<option value="uncategorized">' + esc(uncatName) + '</option>'
+
+    var seenIds = { all: true, uncategorized: true }
+    for (var i = 0; i < allCategories.length; i++) {
+      var c = allCategories[i]
+      if (isReservedCategory(c.id, c.name)) continue
+      if (seenIds[c.id]) continue
+      seenIds[c.id] = true
+      optsHtml += '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>'
+    }
+    if (saveCategorySelect) saveCategorySelect.innerHTML = optsHtml
+    if (bdCategorySelect) bdCategorySelect.innerHTML = optsHtml
+  }
+
+  function renderCategoryChips() {
+    if (!categoryBar) return
+    var folderSvg = Icons.folder || ''
+    var uncatObj = allCategories.find(function (c) {
+      return c.id === 'uncategorized' || (c.name && (c.name === '未分类' || c.name.toLowerCase() === 'uncategorized'))
+    })
+    var uncatIcon = (uncatObj && uncatObj.icon && Icons.getCategoryIcon ? Icons.getCategoryIcon(uncatObj.icon) : folderSvg) || folderSvg
+    var uncatName = (uncatObj && uncatObj.name) || chrome.i18n.getMessage('uncategorized')
+
+    // 1. 全部
+    var html = '<button class="cat-chip ' + (selectedCategory === 'all' ? 'active' : '') + '" data-id="all">' + esc(chrome.i18n.getMessage('category_all')) + '</button>'
+    // 2. 未分类
+    html += '<button class="cat-chip ' + (selectedCategory === 'uncategorized' ? 'active' : '') + '" data-id="uncategorized">' + uncatIcon + ' ' + esc(uncatName) + '</button>'
+
+    // 3. 用户真实分类（去重且排除保留分类）
+    var seenIds = { all: true, uncategorized: true }
+    for (var i = 0; i < allCategories.length; i++) {
+      var c = allCategories[i]
+      if (isReservedCategory(c.id, c.name)) continue
+      if (seenIds[c.id]) continue
+      seenIds[c.id] = true
+      var isActive = selectedCategory === c.id
+      var catIcon = (Icons.getCategoryIcon ? Icons.getCategoryIcon(c.icon) : folderSvg) || folderSvg
+      html += '<button class="cat-chip ' + (isActive ? 'active' : '') + '" data-id="' + esc(c.id) + '">' + catIcon + ' ' + esc(c.name) + '</button>'
+    }
+    categoryBar.innerHTML = html
+  }
+
+  if (categoryBar) {
+    categoryBar.addEventListener('click', function (e) {
+      var btn = e.target.closest('.cat-chip')
+      if (!btn) return
+      selectedCategory = btn.dataset.id || 'all'
+      var chips = categoryBar.querySelectorAll('.cat-chip')
+      for (var i = 0; i < chips.length; i++) {
+        chips[i].classList.toggle('active', chips[i].dataset.id === selectedCategory)
+      }
+      applyFilterAndRender()
+    })
+  }
+
   // ── 云端加载 ──
   function loadBookmarks() {
     if (!loggedIn || !userId) return
@@ -231,43 +458,99 @@
   async function loadFromCloud() {
     setStatus('sync', chrome.i18n.getMessage('loading'))
     bookmarkList.classList.add('loading')
-    // 并行拉 bookmarks 和 categories（categories 仅取 id 集用于后续可能的全量同步判定）
-    var [result] = await Promise.all([
-      sb.from('bookmarks')
-        .select('id,title,url,icon,category_id,notes,use_count,created_at_num')
-        .eq('user_id', userId).is('deleted_at', null)
-        .order('created_at_num', { ascending: false }).limit(500),
-    ])
-    bookmarkList.classList.remove('loading')
-    if (result.error) { setStatus('err', chrome.i18n.getMessage('load_failed') + (result.error.message || chrome.i18n.getMessage('unknown_error'))); return }
-    allBookmarks = result.data || []
-    bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(allBookmarks.length)])
-    lastSyncTime = Date.now()
-    updateSyncTime()
-    setStatus('ok', chrome.i18n.getMessage('status_connected'))
-    if (searchQuery) {
-      doSearch(searchInput.value)
-    } else {
-      renderBookmarks(allBookmarks)
+    try {
+      var [bmRes, catRes] = await Promise.race([
+        Promise.all([
+          sb.from('bookmarks')
+            .select('id,title,url,icon,category_id,notes,use_count,created_at_num,order')
+            .eq('user_id', userId).is('deleted_at', null)
+            .order('created_at_num', { ascending: false }).limit(500),
+          sb.from('categories')
+            .select('id,name,icon,color,order')
+            .eq('user_id', userId).is('deleted_at', null)
+            .order('order', { ascending: true }),
+        ]),
+        new Promise(function (_, reject) {
+          setTimeout(function () { reject(new Error('TIMEOUT')) }, 10000)
+        })
+      ])
+
+      if (bmRes.error) {
+        setStatus('err', chrome.i18n.getMessage('load_failed') + (bmRes.error.message || chrome.i18n.getMessage('unknown_error')))
+        applyFilterAndRender()
+        return
+      }
+      allBookmarks = bmRes.data || []
+      allCategories = (catRes && catRes.data) || []
+      renderCategoryOptions()
+      renderCategoryChips()
+      lastSyncTime = Date.now()
+      updateSyncTime()
+      setStatus('ok', chrome.i18n.getMessage('status_connected'))
+      applyFilterAndRender()
+      checkCurrentPageMatch(currentTab && currentTab.url)
+      clearInterval(window._syncTimer)
+      window._syncTimer = setInterval(updateSyncTime, 30000)
+    } catch (err) {
+      console.error('[sidepanel] loadFromCloud error:', err)
+      setStatus('err', chrome.i18n.getMessage('load_failed') + (err.message === 'TIMEOUT' ? '超时' : err.message || ''))
+      applyFilterAndRender()
+    } finally {
+      bookmarkList.classList.remove('loading')
     }
-    checkCurrentPageMatch(currentTab && currentTab.url)
-    clearInterval(window._syncTimer)
-    window._syncTimer = setInterval(updateSyncTime, 30000)
   }
 
-  // ── 渲染 ──
+  // ── 过滤与渲染 ──
+  function getFilteredBookmarks() {
+    var list = allBookmarks
+    if (selectedCategory && selectedCategory !== 'all') {
+      list = list.filter(function (b) {
+        var c = b.category_id || 'uncategorized'
+        return c === selectedCategory
+      })
+    }
+    if (searchQuery) {
+      var q = searchQuery.toLowerCase()
+      list = list.filter(function (b) {
+        return (b.title && b.title.toLowerCase().indexOf(q) !== -1)
+          || (b.url && b.url.toLowerCase().indexOf(q) !== -1)
+          || (domain(b.url) && domain(b.url).toLowerCase().indexOf(q) !== -1)
+          || (b.notes && b.notes.toLowerCase().indexOf(q) !== -1)
+      })
+    }
+    return list
+  }
+
+  function applyFilterAndRender() {
+    var filtered = getFilteredBookmarks()
+    if (searchQuery) {
+      recentTitle.textContent = chrome.i18n.getMessage('search_results')
+      bookmarkCount.textContent = chrome.i18n.getMessage('found_count', [String(filtered.length)])
+    } else if (selectedCategory !== 'all') {
+      recentTitle.textContent = getCategoryName(selectedCategory)
+      bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(filtered.length)])
+    } else {
+      recentTitle.textContent = chrome.i18n.getMessage('recent_saved')
+      bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(allBookmarks.length)])
+    }
+    renderBookmarks(filtered)
+  }
+
   function renderBookmarks(list) {
     var displayList = list || allBookmarks
     var isSearching = searchQuery.trim().length > 0
 
     if (!displayList.length) {
       if (isSearching) {
-        bookmarkList.innerHTML = '<div class="search-empty">' + chrome.i18n.getMessage('search_no_results') + '</div>'
+        bookmarkList.innerHTML = '<div class="search-empty">'
+          + '<div style="margin-bottom:8px;opacity:0.35">' + (Icons.search || '') + '</div>'
+          + '<div>' + chrome.i18n.getMessage('search_no_results') + '</div>'
+          + '</div>'
       } else {
         bookmarkList.innerHTML = '<div class="empty">'
-          + '<div style="font-size:24px;margin-bottom:8px">📑</div>'
+          + '<div style="margin-bottom:8px">' + (Icons.emptyBookmark || Icons.bookmark || '') + '</div>'
           + '<div style="font-weight:600;margin-bottom:4px">' + chrome.i18n.getMessage('no_bookmarks') + '</div>'
-          + '<div style="font-size:12px;color:var(--text2);line-height:1.6">'
+          + '<div style="font-size:12px;color:var(--text-muted);line-height:1.6">'
           + chrome.i18n.getMessage('empty_hint')
           + '</div></div>'
       }
@@ -275,6 +558,7 @@
     }
 
     var query = isSearching ? searchQuery.toLowerCase() : ''
+    var closeSvg = Icons.close || '&times;'
     bookmarkList.innerHTML = displayList.slice(0, 50).map(function (b) {
       const host = domain(b.url)
       const icon = b.icon || (host ? 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32' : '')
@@ -284,13 +568,20 @@
         titleHtml = highlightMatch(titleHtml, query)
         urlHtml = highlightMatch(urlHtml, query)
       }
+      var catBadge = ''
+      if (b.category_id && b.category_id !== 'uncategorized') {
+        catBadge = '<span class="bookmark-item-cat">' + esc(getCategoryName(b.category_id)) + '</span>'
+      }
       return '<div class="bookmark-item" data-id="' + esc(b.id) + '" data-url="' + esc(b.url) + '">'
         + (icon ? '<img src="' + esc(icon) + '" alt="">' : '')
         + '<div class="bookmark-item-info">'
         + '<div class="bookmark-item-title">' + titleHtml + '</div>'
-        + '<div class="bookmark-item-url">' + urlHtml + '</div>'
+        + '<div class="bookmark-item-sub">'
+        + '<span class="bookmark-item-url">' + urlHtml + '</span>'
+        + catBadge
         + '</div>'
-        + '<span class="bookmark-item-del" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '">&times;</span>'
+        + '</div>'
+        + '<span class="bookmark-item-del" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '" title="' + esc(chrome.i18n.getMessage('delete')) + '">' + closeSvg + '</span>'
         + '</div>'
     }).join('')
 
@@ -305,8 +596,6 @@
       f2.textContent = chrome.i18n.getMessage('show_limited_count', [String(displayList.length)])
       bookmarkList.appendChild(f2)
     }
-
-    // F1-001：click 委托已在模块初始化注册一次，禁止此处每次重绘叠加
   }
 
   // ── 搜索 ──
@@ -314,22 +603,10 @@
     searchQuery = (query || '').trim()
     if (!searchQuery) {
       searchWrap.classList.remove('active')
-      recentTitle.textContent = chrome.i18n.getMessage('recent_saved')
-      renderBookmarks(allBookmarks)
-      bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(allBookmarks.length)])
-      return
+    } else {
+      searchWrap.classList.add('active')
     }
-    searchWrap.classList.add('active')
-    var q = searchQuery.toLowerCase()
-    var filtered = allBookmarks.filter(function (b) {
-      return (b.title && b.title.toLowerCase().indexOf(q) !== -1)
-        || (b.url && b.url.toLowerCase().indexOf(q) !== -1)
-        || (domain(b.url) && domain(b.url).toLowerCase().indexOf(q) !== -1)
-        || (b.notes && b.notes.toLowerCase().indexOf(q) !== -1)
-    })
-    recentTitle.textContent = chrome.i18n.getMessage('search_results')
-    bookmarkCount.textContent = chrome.i18n.getMessage('found_count', [String(filtered.length)])
-    renderBookmarks(filtered)
+    applyFilterAndRender()
   }
 
   function highlightMatch(text, query) {
@@ -351,7 +628,6 @@
   })
 
   document.addEventListener('keydown', function (e) {
-    // B3：Ctrl+F / 快捷键劫持判定抽到 keypress.js（INPUT 内不劫，含 Ctrl+F 分支补 tagName 限制）
     if (window.LinkVaultKeyHijack && window.LinkVaultKeyHijack.shouldHijackSearchKey(e)) {
       e.preventDefault()
       searchInput.focus()
@@ -364,26 +640,44 @@
     }
   })
 
-  // ── 删除（仅云端）──
-  // F1-009：删除前确认，避免列表/详情一键误删
+  // ── 模态框：删除确认 ──
+  function confirmDeleteDialog(title) {
+    return new Promise(function (resolve) {
+      _deleteResolver = resolve
+      var label = (title && String(title).trim()) || chrome.i18n.getMessage('this_bookmark')
+      deleteConfirmText.textContent = chrome.i18n.getMessage('confirm_delete', [label])
+      deleteConfirmModal.classList.remove('hidden')
+    })
+  }
+
+  function closeDeleteModal(ok) {
+    deleteConfirmModal.classList.add('hidden')
+    if (_deleteResolver) {
+      var r = _deleteResolver
+      _deleteResolver = null
+      r(ok)
+    }
+  }
+
+  btnConfirmDelete.addEventListener('click', function () { closeDeleteModal(true) })
+  btnCancelDelete.addEventListener('click', function () { closeDeleteModal(false) })
+
+  // ── 删除 ──
   async function deleteBookmark(id, title) {
-    const label = (title && String(title).trim()) || chrome.i18n.getMessage('this_bookmark')
-    if (!window.confirm(chrome.i18n.getMessage('confirm_delete', [label]))) return
+    var ok = await confirmDeleteDialog(title)
+    if (!ok) return
     const result = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
     if (result.error) { toast(chrome.i18n.getMessage('delete_failed') + result.error.message); return }
     toast(chrome.i18n.getMessage('deleted'), 2500)
+    allBookmarks = allBookmarks.filter(function (b) { return b.id !== id })
     if (currentMatchedBookmark && currentMatchedBookmark.id === id) {
       currentMatchedBookmark = null
       hideBookmarkDetail()
     }
-    loadBookmarks()
+    applyFilterAndRender()
   }
 
   // ── 当前标签页 ──
-  // F1-007：无 tabs 权限时 onActivated 常拿不到 url；UI 降级提示，需用户手势刷新
-  const tabUrlHint = $('#tabUrlHint')
-  const currentPageEl = $('#currentPage')
-
   function setTabUrlHint(show) {
     if (!tabUrlHint) return
     if (show) tabUrlHint.classList.remove('hidden')
@@ -391,15 +685,7 @@
   }
 
   function loadCurrentTab() {
-    chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
-      if (chrome.runtime.lastError) {
-        currentTab = null
-        pageTitle.textContent = chrome.i18n.getMessage('cannot_read_page')
-        pageUrl.textContent = chrome.i18n.getMessage('click_to_refresh')
-        setTabUrlHint(true)
-        hideBookmarkDetail()
-        return
-      }
+    function handleTab(tab) {
       if (!tab) {
         currentTab = null
         pageTitle.textContent = chrome.i18n.getMessage('no_active_tab')
@@ -422,10 +708,44 @@
       setTabUrlHint(!hasUrl)
       if (hasUrl) checkCurrentPageMatch(tab.url)
       else hideBookmarkDetail()
+    }
+
+    if (chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (tabs) {
+        if (!chrome.runtime.lastError && tabs && tabs[0] && tabs[0].url) {
+          handleTab(tabs[0])
+          return
+        }
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs2) {
+          if (!chrome.runtime.lastError && tabs2 && tabs2[0] && tabs2[0].url) {
+            handleTab(tabs2[0])
+            return
+          }
+          chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
+            handleTab(tab)
+          })
+        })
+      })
+    } else {
+      chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
+        handleTab(tab)
+      })
+    }
+  }
+
+  if (chrome.tabs && chrome.tabs.onActivated) {
+    chrome.tabs.onActivated.addListener(function () {
+      loadCurrentTab()
+    })
+  }
+  if (chrome.tabs && chrome.tabs.onUpdated) {
+    chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+      if (changeInfo.status === 'complete' || changeInfo.url) {
+        loadCurrentTab()
+      }
     })
   }
 
-  // 用户手势刷新：点击当前页卡片重新触发 activeTab 读取
   if (currentPageEl) {
     currentPageEl.addEventListener('click', function () {
       loadCurrentTab()
@@ -434,109 +754,137 @@
 
   function checkCurrentPageMatch(url) {
     if (!url || !allBookmarks.length) { hideBookmarkDetail(); return }
-    var nUrl = url.replace(/\/+$/, '').replace(/^http:\/\//, 'https://')
+    var normUrl = window.LinkVaultSavePayload ? window.LinkVaultSavePayload.normalizeUrlForMatch(url) : url.replace(/\/+$/, '')
     var matched = allBookmarks.find(function (b) {
-      var bUrl = (b.url || '').replace(/\/+$/, '').replace(/^http:\/\//, 'https://')
-      return bUrl === nUrl
+      var bNorm = window.LinkVaultSavePayload ? window.LinkVaultSavePayload.normalizeUrlForMatch(b.url) : (b.url || '').replace(/\/+$/, '')
+      return bNorm === normUrl
     })
     if (matched) showBookmarkDetail(matched)
     else hideBookmarkDetail()
   }
 
   // ── 详情面板 ──
-  var _detailGen = 0 // 审计 R4：异步竞态 generation token
+  var _detailGen = 0
   async function showBookmarkDetail(bm) {
     var localGen = ++_detailGen
     currentMatchedBookmark = bm
-    btnSave.classList.add('hidden')
+    if (saveOptionsWrap) saveOptionsWrap.classList.add('hidden')
     bookmarkDetail.classList.remove('hidden')
     passwordRevealed = false
 
-    if (bm.notes && bm.notes.trim()) { bdNotesWrap.classList.remove('hidden'); bdNotes.textContent = bm.notes }
-    else { bdNotesWrap.classList.add('hidden') }
+    if (bdCategorySelect) {
+      bdCategorySelect.value = bm.category_id || 'uncategorized'
+    }
 
-    // 安全：列表 SELECT 不含 password（避免 N 条密码 base64 常驻 allBookmarks），
-    // 仅在进入单个详情面板时按 id 单查一次 password，挂到独立模块变量
-    // currentDetailPassword（**不写回 bm/allBookmarks**——find 返回的是 allBookmarks
-    // 元素引用，直接挂会污染全局数组，违背审计降暴露面意图），供显示/复制按钮解密使用。
+    if (bdNotesEditWrap) bdNotesEditWrap.classList.add('hidden')
+    if (bm.notes && bm.notes.trim()) {
+      bdNotesWrap.classList.remove('hidden')
+      bdNotes.textContent = bm.notes
+    } else {
+      bdNotesWrap.classList.add('hidden')
+    }
+
     currentDetailPassword = null
     var hasPw = false
     if (loggedIn && userId && bm.id) {
       try {
         var pwRes = await sb.from('bookmarks').select('password').eq('id', bm.id).eq('user_id', userId).is('deleted_at', null).single()
-        // R4：await 期间用户可能导航到另一书签触发新 showBookmarkDetail，generation 增长；
-        // 若 generation 不匹配，当前结果已过期，丢弃不写 DOM。
         if (localGen !== _detailGen) return
         if (!pwRes.error && pwRes.data) {
           var pw = pwRes.data.password
           currentDetailPassword = pw || null
           hasPw = pw && pw !== '' && pw !== '""' && JSON.stringify(pw) !== '""'
         }
-      } catch (e) { /* 单查失败按无密码处理 */ }
+      } catch (e) { }
     }
     if (localGen !== _detailGen) return
     if (hasPw) {
       bdPasswordWrap.classList.remove('hidden')
       bdPasswordText.textContent = '••••••••'
       bdPasswordText.className = 'bd-pw-text'
-      bdPwShow.textContent = chrome.i18n.getMessage('show')
+      bdPwShow.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('show')) + '</span>'
+      bdPwCopy.innerHTML = (Icons.copy || '') + ' <span>' + esc(chrome.i18n.getMessage('copy')) + '</span>'
     } else { bdPasswordWrap.classList.add('hidden') }
 
     if (bm.created_at_num) {
       var d = new Date(bm.created_at_num)
-      bdCreatedAt.textContent = '📅 ' + d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
-    } else { bdCreatedAt.textContent = '' }
-    bdUseCount.textContent = '👁️ ' + chrome.i18n.getMessage('use_count', [String(bm.use_count || 0)])
+      var dateStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0')
+      bdCreatedAt.innerHTML = (Icons.history || '') + ' <span>' + esc(dateStr) + '</span>'
+    } else { bdCreatedAt.innerHTML = '' }
+    bdUseCount.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('use_count', [String(bm.use_count || 0)])) + '</span>'
   }
 
   function hideBookmarkDetail() {
-    _detailGen++ // R4：任何进行中的 showBookmarkDetail 异步结果应被丢弃
+    _detailGen++
     currentMatchedBookmark = null
     currentDetailPassword = null
     bookmarkDetail.classList.add('hidden')
+    if (bdNotesEditWrap) bdNotesEditWrap.classList.add('hidden')
+    if (saveOptionsWrap) saveOptionsWrap.classList.remove('hidden')
     btnSave.classList.remove('hidden')
   }
 
-  // ── 密码 ──
+  // ── 模态框：主密码解锁 ──
+  function requestMasterPassword() {
+    return new Promise(function (resolve) {
+      _masterPwResolver = resolve
+      modalMasterPwInput.value = ''
+      masterPwModal.classList.remove('hidden')
+      setTimeout(function () { modalMasterPwInput.focus() }, 50)
+    })
+  }
+
+  function closeMasterPwModal(val) {
+    masterPwModal.classList.add('hidden')
+    if (_masterPwResolver) {
+      var r = _masterPwResolver
+      _masterPwResolver = null
+      r(val)
+    }
+  }
+
+  modalMasterPwSubmit.addEventListener('click', function () {
+    closeMasterPwModal(modalMasterPwInput.value)
+  })
+
+  modalMasterPwCancel.addEventListener('click', function () {
+    closeMasterPwModal(null)
+  })
+
+  modalMasterPwInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      closeMasterPwModal(modalMasterPwInput.value)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      closeMasterPwModal(null)
+    }
+  })
+
+  // ── 密码解密 ──
   bdPwShow.addEventListener('click', async function () {
     if (!currentMatchedBookmark || !currentDetailPassword) return
-    // R11-补：解密 handler 同款 generation guard。bdPwShow 旧实现遗漏 _detailGen 检查——
-    // await ensureCanaryData() / decryptWithGlobalKey() / autoDecryptPassword() 期间用户若切到
-    // 另一已收藏 URL 标签，onActivated→loadCurrentTab→checkCurrentPageMatch→showBookmarkDetail(B)
-    // 会 ++_detailGen 并把详情面板重置到书签 B（B 的密码单查带 guard 见 line 469/477）；
-    // 旧 await 返回后仍执行 line 548 把**书签 A 的明文密码**写入 B 的面板并 passwordRevealed=true，
-    // 造成跨书签明文密码视觉泄漏。与同模块 bdPwCopy（line 562/570/574）+ showBookmarkDetail
-    //（line 469/477）的 guard 对称补齐：handler 开头记本代次，每个 await 后 + 写 DOM 前检查代次不一致即 return。
     var localGen = _detailGen
     if (passwordRevealed) {
       bdPasswordText.textContent = '••••••••'; bdPasswordText.className = 'bd-pw-text'
-      bdPwShow.textContent = chrome.i18n.getMessage('show'); passwordRevealed = false
-      // 隐藏时不强制清主密码（用户可能马上再显示），TTL 定时器负责清
+      bdPwShow.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('show')) + '</span>'; passwordRevealed = false
       return
     }
     try {
       var stored = currentDetailPassword
-      // 自救旧版损坏形态：若远端原样存的是 JSON 文本（旧 toRemoteRow 用 JSON.stringify 把
-      // EncryptedPassword 对象降级写入的形态），先 parse 还原为对象；失败则按 string 继续
-      // （可能是当前正常的三段串，或旧 base64）。
       if (typeof stored === 'string' && stored.charAt(0) === '{' && stored.charAt(stored.length - 1) === '}') {
         try { stored = JSON.parse(stored) } catch (e) {}
       }
       var plaintext = ''
-      // AUDIT-R19+R44 方向 E：E2E 加密形态（EncryptedPassword 对象或三段串）走 global-key 重建路径，
-      // 从 user_security.master_canary 拉 canaryData 重建主项目同一把 global cryptoKey 解密。
-      // 旧版用 autoDecryptPassword 把 EncryptedPassword.salt 当作派生盐——那是占位盐，
-      // 派生出的 key 与主项目不一致 → GCM 认证失败 → 显示密文长串/失败 toast（pre-existing bug）。
       var isObjE2E = typeof stored === 'object' && stored && stored.encrypted === true && stored.iv && stored.data
       var isStrE2E = typeof stored === 'string' && stored.split('.').length === 3 && stored.split('.').every(function (p) { return !!p })
       if (isObjE2E || isStrE2E) {
         if (!window.LinkVaultCrypto || !window.LinkVaultCrypto.decryptWithGlobalKey) { toast(chrome.i18n.getMessage('crypto_lib_not_loaded')); return }
         if (!sessionMasterPassword) {
-          sessionMasterPassword = prompt(chrome.i18n.getMessage('prompt_master_password'))
+          sessionMasterPassword = await requestMasterPassword()
           if (!sessionMasterPassword) return
         }
         var canaryData = await ensureCanaryData()
-        // R11-补：await 后代次可能已变（用户切标签触发新 showBookmarkDetail），丢弃本结果。
         if (localGen !== _detailGen) return
         if (!canaryData) {
           toast(chrome.i18n.getMessage('unlock_data_unavailable'))
@@ -544,39 +892,30 @@
           return
         }
         plaintext = await window.LinkVaultCrypto.decryptWithGlobalKey(stored, sessionMasterPassword, canaryData)
-        // R11-补：PBKDF2+GCM 解密秒级，await 期间用户极可能已切到另一书签。代次不一致丢弃，勿把 A 明文写入 B 面板。
         if (localGen !== _detailGen) return
         if (!plaintext) {
-          // E2E 形态但解不开：主密码错 / canary 不匹配 / GCM 认证失败 —— 视为失败，清主密码
           toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
           clearMasterPasswordNow()
           return
         }
       } else {
-        // 非加密形态：旧 base64 string / 纯文本 → 作 base64 解码（旧路径，不需主密码）
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
         else plaintext = typeof stored === 'string' ? stored : ''
-        // R11-补：autoDecryptPassword 亦 async（base64 解码虽快但 await 让出执行权，切标签竞态同款）。
         if (localGen !== _detailGen) return
       }
-      // R11-补：写 DOM 前最后一道 guard，确保护本 handler 始终是当前详情面板的 owner，杜绝泄漏。
       if (localGen !== _detailGen) return
       bdPasswordText.textContent = plaintext; bdPasswordText.className = 'bd-pw-text revealed'
-      bdPwShow.textContent = chrome.i18n.getMessage('hide'); passwordRevealed = true
-      // F1-002/M6：成功后启动 TTL，到期清主密码并掩码 DOM 明文
+      bdPwShow.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('hide')) + '</span>'; passwordRevealed = true
       scheduleClearMasterPassword()
     } catch (e) {
       toast(chrome.i18n.getMessage('decrypt_failed') + (e && e.message ? e.message : chrome.i18n.getMessage('unknown_error')))
-      // F1-003：任意解密失败一律清主密码，勿依赖中文错误子串
       clearMasterPasswordNow()
     }
   })
 
   bdPwCopy.addEventListener('click', async function () {
     if (!currentMatchedBookmark || !currentDetailPassword) return
-    // R18：轮询期间用户可能导航到另一书签，generation 增长，本轮复制应 abort。
     var copyGen = _detailGen
-    // F1-006：等待解密完成（prompt+PBKDF2 可能远超 100ms），轮询 passwordRevealed
     if (!passwordRevealed) {
       bdPwShow.click()
       var waited = 0
@@ -593,18 +932,64 @@
     navigator.clipboard.writeText(text).then(function () { toast(chrome.i18n.getMessage('password_copied'), 1500) }).catch(function () { toast(chrome.i18n.getMessage('copy_failed'), 1500) })
   })
 
-  // ── 编辑备注（仅云端）──
+  // ── 行内编辑备注 ──
   bdEditNotes.addEventListener('click', function () {
     if (!currentMatchedBookmark) return
-    var newNotes = prompt(chrome.i18n.getMessage('prompt_edit_notes'), currentMatchedBookmark.notes || '')
-    if (newNotes === null) return
-    // B1：乐观写移到 update 成功之后——失败时不写本地引用，避免污染 allBookmarks
-    sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId).then(function (r) {
-      var outcome = window.LinkVaultNotesUpdate.notesUpdateOutcome(newNotes, r)
-      if (outcome.writeLocal) currentMatchedBookmark.notes = newNotes
-      toast(outcome.toast, outcome.refresh ? 1500 : undefined)
-      if (outcome.refresh) showBookmarkDetail(currentMatchedBookmark)
-    })
+    bdNotesWrap.classList.add('hidden')
+    bdNotesEditWrap.classList.remove('hidden')
+    bdNotesInput.value = currentMatchedBookmark.notes || ''
+    bdNotesInput.focus()
+  })
+
+  bdNotesCancel.addEventListener('click', function () {
+    bdNotesEditWrap.classList.add('hidden')
+    if (currentMatchedBookmark && currentMatchedBookmark.notes) {
+      bdNotesWrap.classList.remove('hidden')
+    }
+  })
+
+  async function saveInlineNotes() {
+    if (!currentMatchedBookmark) return
+    var newNotes = bdNotesInput.value.trim()
+    var r = await sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId)
+    var outcome = window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.notesUpdateOutcome(newNotes, r) : { writeLocal: true, toast: chrome.i18n.getMessage('refreshed') }
+    if (outcome.writeLocal) {
+      currentMatchedBookmark.notes = newNotes
+      var found = allBookmarks.find(function (b) { return b.id === currentMatchedBookmark.id })
+      if (found) found.notes = newNotes
+      bdNotes.textContent = newNotes
+    }
+    toast(outcome.toast, 1500)
+    bdNotesEditWrap.classList.add('hidden')
+    if (newNotes) bdNotesWrap.classList.remove('hidden')
+    else bdNotesWrap.classList.add('hidden')
+  }
+
+  bdNotesSave.addEventListener('click', saveInlineNotes)
+  bdNotesInput.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault()
+      saveInlineNotes()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      bdNotesCancel.click()
+    }
+  })
+
+  // ── 切换已保存书签分类 ──
+  bdCategorySelect.addEventListener('change', async function () {
+    if (!currentMatchedBookmark) return
+    var newCat = bdCategorySelect.value
+    var res = await sb.from('bookmarks').update({ category_id: newCat, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId)
+    if (res.error) {
+      toast(chrome.i18n.getMessage('save_failed') + res.error.message)
+      return
+    }
+    currentMatchedBookmark.category_id = newCat
+    var found = allBookmarks.find(function (b) { return b.id === currentMatchedBookmark.id })
+    if (found) found.category_id = newCat
+    applyFilterAndRender()
+    toast(chrome.i18n.getMessage('refreshed'), 1500)
   })
 
   bdCopyUrl.addEventListener('click', function () {
@@ -631,46 +1016,112 @@
     })
   }
 
-  // ── 保存按钮 ──
-  // 数据流：side panel → background → 打开 PWA 标签页 → PWA 走 sync queue 保存
-  // 这样确保保存操作经过 PWA 的 IndexedDB 队列 + 离线同步机制，
-  // 与右键菜单 / 快捷键 Ctrl+Shift+S 行为一致。
-  function flashSaveButton(success) {
-    if (success) { btnSave.innerHTML = chrome.i18n.getMessage('saved_check'); btnSave.style.background = '#22c55e' }
-    else { btnSave.innerHTML = chrome.i18n.getMessage('save_failed_x'); btnSave.style.background = '#ef4444' }
-    setTimeout(function () { btnSave.innerHTML = '⚡ ' + chrome.i18n.getMessage('save_current_page'); btnSave.style.background = '' }, 2000)
+  // ── 保存按钮（就地直接写 Supabase，绝不跳标签页）──
+  if (btnToggleNotes) {
+    btnToggleNotes.addEventListener('click', function () {
+      if (!quickNotesWrap) return
+      quickNotesWrap.classList.toggle('hidden')
+      if (!quickNotesWrap.classList.contains('hidden') && quickNotesInput) {
+        quickNotesInput.focus()
+      }
+    })
+  }
+
+  async function saveCurrentPageDirectly() {
+    if (!loggedIn || !userId) {
+      toast(chrome.i18n.getMessage('status_logged_out'))
+      return
+    }
+    if (_isSaving) return
+    if (!currentTab || !currentTab.url) {
+      toast(chrome.i18n.getMessage('cannot_get_page'))
+      return
+    }
+
+    var savePayloadApi = window.LinkVaultSavePayload
+    if (!savePayloadApi || !savePayloadApi.isSafeHttpUrl(currentTab.url)) {
+      toast(chrome.i18n.getMessage('cannot_save_internal_page'))
+      return
+    }
+
+    var normUrl = savePayloadApi.normalizeUrlForMatch(currentTab.url)
+    var existing = allBookmarks.find(function (b) {
+      return savePayloadApi.normalizeUrlForMatch(b.url) === normUrl
+    })
+    if (existing) {
+      showBookmarkDetail(existing)
+      toast(chrome.i18n.getMessage('already_saved'))
+      return
+    }
+
+    var selectedCat = (saveCategorySelect && saveCategorySelect.value) || 'uncategorized'
+    var notesVal = (quickNotesInput && quickNotesInput.value.trim()) || ''
+
+    var payload
+    try {
+      payload = savePayloadApi.buildBookmarkPayload({
+        url: currentTab.url,
+        title: currentTab.title,
+        categoryId: selectedCat,
+        notes: notesVal,
+        favIconUrl: currentTab.favIconUrl,
+        userId: userId,
+        existingBookmarks: allBookmarks,
+      })
+    } catch (err) {
+      toast(chrome.i18n.getMessage('save_failed') + err.message)
+      return
+    }
+
+    _isSaving = true
+    btnSave.disabled = true
+    var spinSync = (Icons.sync || '').replace('class="svg-icon"', 'class="svg-icon svg-spin"')
+    btnSave.innerHTML = spinSync + ' <span>' + esc(chrome.i18n.getMessage('sending') || '...') + '</span>'
+
+    var res = await sb.from('bookmarks').insert(payload).select().single()
+    _isSaving = false
+    btnSave.disabled = false
+    btnSave.innerHTML = (Icons.zap || '') + ' <span>' + esc(chrome.i18n.getMessage('save_current_page')) + '</span>'
+
+    if (res.error) {
+      toast(chrome.i18n.getMessage('save_failed') + (res.error.message || ''))
+      return
+    }
+
+    var savedBm = res.data || payload
+    allBookmarks.unshift(savedBm)
+    if (quickNotesInput) quickNotesInput.value = ''
+    if (quickNotesWrap) quickNotesWrap.classList.add('hidden')
+
+    applyFilterAndRender()
+    showBookmarkDetail(savedBm)
+
+    toast(chrome.i18n.getMessage('saved_with_undo'), 5000, {
+      label: chrome.i18n.getMessage('undo'),
+      onClick: function () {
+        undoSave(savedBm.id)
+      },
+    })
+  }
+
+  async function undoSave(id) {
+    var res = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
+    if (res.error) {
+      toast(chrome.i18n.getMessage('unknown_error'))
+      return
+    }
+    allBookmarks = allBookmarks.filter(function (b) { return b.id !== id })
+    if (currentMatchedBookmark && currentMatchedBookmark.id === id) {
+      hideBookmarkDetail()
+    }
+    applyFilterAndRender()
+    toast(chrome.i18n.getMessage('undone'), 2000)
   }
 
   btnSave.addEventListener('click', function () {
-    chrome.runtime.sendMessage({ type: 'GET_CURRENT_TAB' }, function (tab) {
-      if (!tab || !tab.url) { toast(chrome.i18n.getMessage('cannot_get_page')); return }
-      if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')
-          || tab.url.startsWith('file:') || tab.url.startsWith('javascript:') || tab.url.startsWith('data:')
-          || tab.url.startsWith('blob:') || tab.url.startsWith('view-source:')) { return toast(chrome.i18n.getMessage('cannot_save_internal_page')) }
-
-      // F1-008：等 background 回执再 flash 成功，避免未送达仍显示已保存
-      chrome.runtime.sendMessage(
-        { type: 'SAVE_TO_VAULT', url: tab.url, title: tab.title || tab.url },
-        function (resp) {
-          if (chrome.runtime.lastError) {
-            flashSaveButton(false)
-            toast(chrome.i18n.getMessage('save_failed') + (chrome.runtime.lastError.message || chrome.i18n.getMessage('extension_comm_error')))
-            return
-          }
-          if (resp && resp.ok) {
-            flashSaveButton(true)
-            setStatus('ok', chrome.i18n.getMessage('status_connected'))
-            toast(chrome.i18n.getMessage('sent_to_vault'))
-          } else {
-            flashSaveButton(false)
-            toast(chrome.i18n.getMessage('save_failed_retry'))
-          }
-        },
-      )
-    })
+    saveCurrentPageDirectly()
   })
 
-  // F1-007：刷新同时用用户手势重读当前标签 URL
   $('#btnRefresh').addEventListener('click', function () {
     loadCurrentTab()
     loadBookmarks()
@@ -709,22 +1160,91 @@
     loginBanner.classList.add('hidden'); otpSection.classList.add('hidden')
     emailInput.value = ''; otpInput.value = ''
   })
-  // F1-004：退出时清主密码/明文/内存书签，避免跨会话残留
+
   $('#btnLogout').addEventListener('click', async function () {
     clearMasterPasswordNow()
     passwordRevealed = false
     allBookmarks = []
+    allCategories = []
     currentMatchedBookmark = null
     if (bookmarkList) bookmarkList.innerHTML = ''
     hideBookmarkDetail()
     await sb.auth.signOut()
   })
 
-  // ── 登录门上的登录按钮 ──
   $('#btnLoginGate').addEventListener('click', function () {
     loginBanner.classList.remove('hidden')
     emailInput.focus()
   })
+
+  // ── 一键同步已打开网页端的登录状态 ──
+  async function trySyncSessionFromWeb(showToast) {
+    return new Promise(function (resolve) {
+      if (!chrome.tabs || !chrome.scripting) {
+        if (showToast) toast(chrome.i18n.getMessage('sync_login_no_tab'), 2500)
+        resolve(false)
+        return
+      }
+      chrome.tabs.query({ url: ['https://ulink.ren/*', 'http://localhost:5173/*', 'https://localhost:5173/*'] }, function (tabs) {
+        if (chrome.runtime.lastError || !tabs || !tabs.length) {
+          if (showToast) toast(chrome.i18n.getMessage('sync_login_no_tab'), 2500)
+          resolve(false)
+          return
+        }
+        var targetTab = tabs[0]
+        chrome.scripting.executeScript({
+          target: { tabId: targetTab.id },
+          func: function () {
+            try {
+              return {
+                auth: localStorage.getItem('linkvault_auth'),
+                theme: localStorage.getItem('lv_theme'),
+              }
+            } catch (e) {
+              return null
+            }
+          }
+        }, async function (results) {
+          if (chrome.runtime.lastError || !results || !results[0] || !results[0].result) {
+            if (showToast) toast(chrome.i18n.getMessage('sync_login_no_tab'), 2500)
+            resolve(false)
+            return
+          }
+          try {
+            var raw = results[0].result
+            if (raw && raw.theme && (raw.theme === 'light' || raw.theme === 'dark')) {
+              applyTheme(raw.theme)
+            }
+            var authRaw = raw && raw.auth
+            var sessionData = typeof authRaw === 'string' ? JSON.parse(authRaw) : authRaw
+            if (sessionData && sessionData.access_token && sessionData.refresh_token) {
+              var res = await sb.auth.setSession({
+                access_token: sessionData.access_token,
+                refresh_token: sessionData.refresh_token,
+              })
+              if (res.data && res.data.session && res.data.session.user) {
+                userId = res.data.session.user.id
+                loggedIn = true
+                updateLoginUI()
+                await loadFromCloud()
+                toast(chrome.i18n.getMessage('login_success'), 1500)
+                resolve(true)
+                return
+              }
+            }
+          } catch (e) { }
+          if (showToast) toast(chrome.i18n.getMessage('sync_login_no_tab'), 2500)
+          resolve(false)
+        })
+      })
+    })
+  }
+
+  if (btnSyncWebLogin) {
+    btnSyncWebLogin.addEventListener('click', function () {
+      trySyncSessionFromWeb(true)
+    })
+  }
 
   // ── 认证检查 ──
   async function checkAuth() {
@@ -735,18 +1255,17 @@
       updateLoginUI()
       await loadFromCloud()
     } else {
-      userId = null; loggedIn = false
-      updateLoginUI()
+      var synced = await trySyncSessionFromWeb(false)
+      if (!synced) {
+        userId = null
+        loggedIn = false
+        updateLoginUI()
+      }
     }
     loadCurrentTab()
   }
 
   // ── Auth 状态变化 ──
-  // A3（2026-08-10 裁定修复 + 本轮纯函数化锁契约）：Supabase v2 onAuthStateChange 注册即发
-  // INITIAL_SESSION 事件（带当前会话快照），与 checkAuth() 的 getSession() 重复触发 loadFromCloud——
-  // 每次打开面板多一次网络查询 + 双渲染。INITIAL_SESSION 快照由 checkAuth() 独占加载，
-  // 此处跳过；后续真实事件（SIGNED_IN/TOKEN_REFRESH/SIGNED_OUT）仍正常拉数据。
-  // 决策抽到 auth-flow.js 纯函数（vitest 锁契约），listener 据 action 执行副作用。
   sb.auth.onAuthStateChange(async function (event, session) {
     var decision = window.LinkVaultAuthFlow.handleAuthStateChange(event, session)
     if (decision.action === 'skip') return

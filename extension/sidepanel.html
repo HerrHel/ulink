@@ -6,115 +6,511 @@
 <title>__MSG_ext_name__</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#f8f9fa;--surface:#fff;--text:#1a1a1a;--text2:#6b7280;--border:#e5e7eb;--accent:#3b82f6;--accent-bg:#eff6ff;--accent-hover:#2563eb;--danger:#ef4444;--danger-bg:#fef2f2;--radius:8px;--radius-sm:6px;--shadow:0 1px 3px rgba(0,0,0,.08);--kbd-bg:#e5e7eb;--toast-bg:#1a1a1a;--toast-color:#fff}
-@media(prefers-color-scheme:dark){
-:root{--bg:#1a1b1e;--surface:#25262b;--text:#e4e4e7;--text2:#a1a1aa;--border:#3f3f46;--accent:#60a5fa;--accent-bg:#1e293b;--accent-hover:#3b82f6;--danger:#f87171;--danger-bg:#3b1f1f;--shadow:0 1px 3px rgba(0,0,0,.3);--kbd-bg:#3f3f46;--toast-bg:#e4e4e7;--toast-color:#1a1a1a}
+:root,[data-theme="light"]{
+  color-scheme:light;
+  --bg:#F5EFEA;
+  --bg-alt:#EDE4DA;
+  --surface:#FDFBF9;
+  --surface-hover:#F7F2EC;
+  --surface-active:#EFE8DF;
+  --border:#E5DDD3;
+  --border-light:#EFE8DF;
+  --border-hover:#D5CBBE;
+  --text:#2C2824;
+  --text-secondary:#5E5852;
+  --text-muted:#6A6660;
+  --accent:#122E8A;
+  --accent-light:rgba(18,46,138,0.07);
+  --accent-glow:rgba(18,46,138,0.13);
+  --accent-hover:#1E40AF;
+  --brand-logo-blue:#122E8A;
+  --brand-logo-green:#10B981;
+  --brand-logo-text:#122E8A;
+  --danger:#DC2626;
+  --danger-bg:#FEE2E2;
+  --card-badge-bg:#EDE5DB;
+  --radius-sm:6px;
+  --radius-base:8px;
+  --radius-md:10px;
+  --radius-lg:14px;
+  --radius-full:9999px;
+  --shadow-card:0 1px 3px rgba(0,0,0,0.04),0 0 0 1px rgba(0,0,0,0.02);
+  --shadow-card-hover:0 8px 24px rgba(0,0,0,0.08),0 2px 6px rgba(0,0,0,0.03);
+  --shadow-md:0 4px 14px rgba(0,0,0,0.06),0 2px 4px rgba(0,0,0,0.02);
+  --toast-bg:#2C2824;
+  --toast-color:#FFFFFF;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:13px;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
+[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#1A1A1D;
+  --bg-alt:#202025;
+  --surface:#25252B;
+  --surface-hover:#2E2E35;
+  --surface-active:#383842;
+  --border:#2F2F36;
+  --border-light:#28282F;
+  --border-hover:#3D3D46;
+  --text:#EEE9E2;
+  --text-secondary:#B5AFA6;
+  --text-muted:#9B968E;
+  --accent:#F04A8A;
+  --accent-light:rgba(230,57,124,0.1);
+  --accent-glow:rgba(230,57,124,0.18);
+  --accent-hover:#F43F5E;
+  --brand-logo-blue:#F04A8A;
+  --brand-logo-green:#E2E7BF;
+  --brand-logo-text:#F04A8A;
+  --danger:#F87171;
+  --danger-bg:#451212;
+  --card-badge-bg:#2D2D35;
+  --shadow-card:0 1px 3px rgba(0,0,0,0.18),0 1px 2px rgba(0,0,0,0.1);
+  --shadow-card-hover:0 8px 24px rgba(0,0,0,0.28),0 2px 6px rgba(0,0,0,0.15);
+  --shadow-md:0 4px 14px rgba(0,0,0,0.22),0 2px 4px rgba(0,0,0,0.1);
+  --toast-bg:#EEE9E2;
+  --toast-color:#1A1A1D;
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#1A1A1D;
+    --bg-alt:#202025;
+    --surface:#25252B;
+    --surface-hover:#2E2E35;
+    --surface-active:#383842;
+    --border:#2F2F36;
+    --border-light:#28282F;
+    --border-hover:#3D3D46;
+    --text:#EEE9E2;
+    --text-secondary:#B5AFA6;
+    --text-muted:#9B968E;
+    --accent:#F04A8A;
+    --accent-light:rgba(230,57,124,0.1);
+    --accent-glow:rgba(230,57,124,0.18);
+    --accent-hover:#F43F5E;
+    --brand-logo-blue:#F04A8A;
+    --brand-logo-green:#E2E7BF;
+    --brand-logo-text:#F04A8A;
+    --danger:#F87171;
+    --danger-bg:#451212;
+    --card-badge-bg:#2D2D35;
+    --shadow-card:0 1px 3px rgba(0,0,0,0.18),0 1px 2px rgba(0,0,0,0.1);
+    --shadow-card-hover:0 8px 24px rgba(0,0,0,0.28),0 2px 6px rgba(0,0,0,0.15);
+    --shadow-md:0 4px 14px rgba(0,0,0,0.22),0 2px 4px rgba(0,0,0,0.1);
+    --toast-bg:#EEE9E2;
+    --toast-color:#1A1A1D;
+  }
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  font-size:13px;
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.5;
+  overflow-x:hidden;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  transition:background-color .2s ease,color .2s ease;
+}
+#mainSection{flex:1;display:flex;flex-direction:column}
 button{cursor:pointer;font:inherit;border:none;background:none}
-input{font:inherit;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;width:100%;outline:none;font-size:13px;background:var(--surface);color:var(--text)}
-input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
-.header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
-.header h1{font-size:15px;font-weight:700}
-.header-actions{display:flex;gap:6px;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;transition:all .15s}
-.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
-.btn-ghost{color:var(--text2)}.btn-ghost:hover{background:var(--accent-bg);color:var(--accent)}
-.btn-danger{color:var(--danger)}.btn-danger:hover{background:var(--danger-bg)}
+input,select,textarea{
+  font:inherit;
+  border:1px solid var(--border);
+  border-radius:var(--radius-base);
+  padding:7px 11px;
+  font-size:12px;
+  background:var(--surface);
+  color:var(--text);
+  outline:none;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-light);
+}
+input{width:100%}
+textarea{width:100%;resize:vertical;line-height:1.45;min-height:56px}
+/* ── SVG 图标通用规范 ── */
+.svg-icon{width:14px;height:14px;display:inline-block;vertical-align:-0.15em;flex-shrink:0}
+.svg-icon-sm{width:12px;height:12px}
+.svg-icon-lg{width:16px;height:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.svg-spin{animation:spin 1s linear infinite}
+/* ── 品牌图标（登录门等使用） ── */
+.brand-logo-icon{width:22px;height:22px;flex-shrink:0}
+.brand-logo-blue{stroke:var(--brand-logo-blue);transition:stroke .2s ease}
+.brand-logo-green{stroke:var(--brand-logo-green);transition:stroke .2s ease}
+/* ── 按钮通用 ── */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  padding:6px 12px;
+  border-radius:var(--radius-base);
+  font-size:12px;
+  font-weight:500;
+  transition:all .15s ease;
+}
+.btn-primary{
+  background:var(--accent);
+  color:#fff;
+  font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.08);
+}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-ghost{color:var(--text-secondary)}
+.btn-ghost:hover{background:var(--accent-light);color:var(--accent)}
+.btn-danger{color:var(--danger)}
+.btn-danger:hover{background:var(--danger-bg)}
 .btn-sm{padding:4px 8px;font-size:11px}
-.btn-login{color:var(--accent);font-weight:600}.btn-login:hover{background:var(--accent-bg)}
+.btn-login{color:var(--accent);font-weight:600}
+.btn-login:hover{background:var(--accent-light)}
+/* ── 区块 ── */
 .section{padding:12px 16px;border-bottom:1px solid var(--border)}
-.section-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-.current-page{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--accent-bg);border-radius:var(--radius);margin-bottom:10px;box-shadow:var(--shadow)}
-.current-page img{width:20px;height:20px;border-radius:4px;flex-shrink:0}
+.section-title{
+  font-size:11px;
+  font-weight:600;
+  color:var(--text-muted);
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  margin-bottom:8px;
+}
+/* ── 当前页卡片 ── */
+.current-page{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  margin-bottom:8px;
+  box-shadow:var(--shadow-card);
+  transition:border-color .2s ease,box-shadow .2s ease;
+}
+.current-page:hover{
+  border-color:var(--border-hover);
+  box-shadow:var(--shadow-card-hover);
+}
+.current-page img{width:22px;height:22px;border-radius:4px;flex-shrink:0}
 .current-page-info{flex:1;min-width:0}
-.current-page-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.current-page-url{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.current-page-title{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.current-page-url{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.save-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.cat-dropdown{flex:1;min-width:0;max-width:180px;padding:5px 8px;font-size:11.5px;border-radius:var(--radius-base)}
+.quick-notes-wrap{margin-bottom:8px}
 /* ── 搜索框 ── */
-.search-box{padding:12px 16px 8px}
-.search-wrap{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;transition:border-color .15s}
-.search-wrap:focus-within{border-color:var(--accent)}
-.search-wrap .search-icon{font-size:13px;flex-shrink:0;color:var(--text2);opacity:.6}
-.search-wrap input{flex:1;border:none;background:transparent;outline:none;font-size:13px;color:var(--text);padding:0;min-width:0}
-.search-wrap input::placeholder{color:var(--text2);opacity:.5}
-.search-clear{font-size:14px;flex-shrink:0;color:var(--text2);cursor:pointer;padding:2px 4px;display:none;line-height:1;border-radius:3px}
-.search-clear:hover{background:var(--accent-bg);color:var(--accent)}
-.search-wrap.active .search-clear{display:block}
+.search-box{padding:10px 16px 8px}
+.search-wrap{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-full);
+  padding:7px 12px;
+  box-shadow:var(--shadow-card);
+  transition:all .15s ease;
+}
+.search-wrap:focus-within{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-light);
+}
+.search-wrap .search-icon{display:flex;align-items:center;color:var(--text-muted)}
+.search-wrap input{flex:1;border:none;background:transparent;outline:none;font-size:12px;color:var(--text);padding:0;min-width:0}
+.search-wrap input::placeholder{color:var(--text-muted);opacity:.75}
+.search-clear{display:none;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;padding:2px;border-radius:var(--radius-full)}
+.search-clear:hover{background:var(--accent-light);color:var(--accent)}
+.search-wrap.active .search-clear{display:flex}
+/* ── 分类筛选横条 ── */
+.category-bar-wrap{padding:0 16px 8px;overflow-x:auto}
+.category-bar{display:flex;gap:6px;align-items:center}
+.category-bar::-webkit-scrollbar{display:none}
+.cat-chip{
+  padding:4px 11px;
+  font-size:11.5px;
+  border-radius:var(--radius-full);
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--text-secondary);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all .15s ease;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.cat-chip:hover{
+  border-color:var(--border-hover);
+  color:var(--text);
+  background:var(--surface-hover);
+}
+.cat-chip.active{
+  background:var(--accent);
+  color:#fff;
+  border-color:var(--accent);
+  font-weight:600;
+  box-shadow:0 1px 3px rgba(0,0,0,.12);
+}
 /* ── 搜索无结果 ── */
-.search-empty{text-align:center;padding:32px 16px;color:var(--text2);font-size:12px;line-height:1.6}
-/* ── 书签列表（含自定义滚动条）── */
-.bookmark-list{max-height:calc(100vh - 360px);overflow-y:auto;position:relative}
+.search-empty{text-align:center;padding:36px 16px;color:var(--text-muted);font-size:12px;line-height:1.6}
+/* ── 书签列表 ── */
+.bookmark-list{max-height:calc(100vh - 380px);overflow-y:auto;position:relative}
 .bookmark-list::-webkit-scrollbar{width:5px}
 .bookmark-list::-webkit-scrollbar-track{background:transparent}
 .bookmark-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-.bookmark-list::-webkit-scrollbar-thumb:hover{background:var(--text2)}
-.bookmark-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;transition:background .1s}
-.bookmark-item:hover{background:var(--accent-bg)}
-.bookmark-item img{width:18px;height:18px;border-radius:3px;flex-shrink:0}
+.bookmark-list::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+.bookmark-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 12px;
+  margin-bottom:6px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-md);
+  box-shadow:var(--shadow-card);
+  cursor:pointer;
+  transition:all .2s cubic-bezier(0.16,1,0.3,1);
+}
+.bookmark-item:hover{
+  transform:translateY(-1px);
+  border-color:var(--border-hover);
+  box-shadow:var(--shadow-card-hover);
+  background:var(--surface-hover);
+}
+.bookmark-item:active{
+  transform:translateY(0);
+  background:var(--surface-active);
+}
+.bookmark-item img{width:18px;height:18px;border-radius:4px;flex-shrink:0}
 .bookmark-item-info{flex:1;min-width:0}
-.bookmark-item-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bookmark-item-url{font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bookmark-item mark{background:rgba(59,130,246,.2);color:inherit;border-radius:2px;padding:0 2px}
-.bookmark-item-del{color:var(--text2);font-size:16px;padding:4px;border-radius:4px;flex-shrink:0;opacity:0;transition:opacity .15s}
+.bookmark-item-title{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.bookmark-item-sub{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);margin-top:2px}
+.bookmark-item-url{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.bookmark-item-cat{font-size:10px;padding:1px 5px;background:var(--card-badge-bg);border:1px solid var(--border-light);border-radius:4px;color:var(--text-secondary);flex-shrink:0}
+.bookmark-item mark{background:rgba(217,119,6,.22);color:inherit;border-radius:2px;padding:0 2px}
+.bookmark-item-del{color:var(--text-muted);display:flex;align-items:center;justify-content:center;padding:4px;border-radius:4px;flex-shrink:0;opacity:0;transition:opacity .15s}
 .bookmark-item:hover .bookmark-item-del{opacity:1}
 .bookmark-item-del:hover{color:var(--danger);background:var(--danger-bg)}
 /* ── 加载遮罩 ── */
 .bookmark-list.loading{position:relative;min-height:60px}
-.bookmark-list.loading::after{content:'__MSG_loading__';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,249,250,.6);color:var(--text2);font-size:12px;border-radius:var(--radius-sm);z-index:2;backdrop-filter:blur(1px)}
-@media(prefers-color-scheme:dark){.bookmark-list.loading::after{background:rgba(26,27,30,.7)}}
+.bookmark-list.loading::after{content:'加载中…';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(245,239,234,.75);color:var(--text-muted);font-size:12px;border-radius:var(--radius-base);z-index:2;backdrop-filter:blur(1px)}
+[data-theme="dark"] .bookmark-list.loading::after{background:rgba(26,26,29,.75)}
 /* ── 已收藏详情面板 ── */
-.bookmark-detail{margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px}
-.bd-badge{display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-bottom:8px}
-.bd-label{font-size:11px;font-weight:600;color:var(--text2);margin-top:8px;margin-bottom:2px}
+.bookmark-detail{
+  margin-top:8px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:12px 14px;
+  background:var(--surface);
+  box-shadow:var(--shadow-card);
+}
+.bd-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.bd-badge{display:inline-flex;align-items:center;gap:4px;background:#10b981;color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--radius-full)}
+.bd-cat-select{padding:3px 6px;font-size:11px;border-radius:var(--radius-sm)}
+.bd-label{font-size:11px;font-weight:600;color:var(--text-muted);margin-top:8px;margin-bottom:2px;display:flex;align-items:center;gap:4px}
 .bd-text{font-size:12px;line-height:1.6;color:var(--text);word-break:break-word}
-.bd-empty{font-size:12px;color:var(--text2);font-style:italic}
-.bd-meta{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text2)}
-.bd-meta span{display:flex;align-items:center;gap:3px}
-.bd-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.bd-meta{display:flex;gap:12px;margin-top:8px;font-size:11px;color:var(--text-muted)}
+.bd-meta span{display:inline-flex;align-items:center;gap:4px}
+.bd-actions{display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-light)}
 /* ── 密码显示 ── */
 .bd-password{display:flex;align-items:center;gap:6px;font-size:13px;font-family:monospace;margin-top:2px}
 .bd-pw-text{flex:1;min-width:0;color:var(--text);letter-spacing:1px;user-select:all}
 .bd-pw-text.revealed{letter-spacing:0;font-family:inherit;font-size:12px;color:var(--text)}
 .bd-pw-btn{font-size:11px;padding:2px 8px;border-radius:4px;color:var(--accent);font-weight:600;cursor:pointer;flex-shrink:0;border:1px solid var(--border);background:var(--surface)}
-.bd-pw-btn:hover{background:var(--accent-bg);border-color:var(--accent)}
-/* ── 列表底部分页提示 ── */
-.list-footer{text-align:center;padding:8px 10px 12px;font-size:11px;color:var(--text2)}
-.login-banner{background:var(--accent-bg);border-bottom:1px solid var(--border);padding:12px 16px}
-.login-banner p{font-size:12px;color:var(--text2);margin-bottom:8px}
+.bd-pw-btn:hover{background:var(--accent-light);border-color:var(--accent)}
+/* ── 模态框遮罩与卡片 ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:200;padding:16px}
+.modal-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:16px;
+  width:100%;
+  max-width:290px;
+  box-shadow:var(--shadow-md);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.modal-title{font-weight:700;font-size:13.5px;color:var(--text);display:flex;align-items:center;gap:6px}
+.modal-desc{font-size:11.5px;color:var(--text-secondary);line-height:1.5}
+.modal-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
+/* ── 状态条与提示 ── */
+.list-footer{text-align:center;padding:8px 10px 12px;font-size:11px;color:var(--text-muted)}
+.login-banner{background:var(--accent-light);border-bottom:1px solid var(--border);padding:12px 16px}
+.login-banner p{font-size:12px;color:var(--text-secondary);margin-bottom:8px}
 .login-banner input{margin-bottom:6px}
 .login-banner-actions{display:flex;gap:6px}
-.status-bar{padding:8px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--text2);display:flex;justify-content:space-between;align-items:center}
+.status-bar{
+  padding:8px 14px;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  font-size:11px;
+  color:var(--text-muted);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  position:sticky;
+  bottom:0;
+  z-index:10;
+  margin-top:auto;
+}
 .status-left{display:flex;align-items:center;gap:6px}
+.status-right{display:flex;align-items:center;gap:6px}
 .status-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
-.status-dot.ok{background:#22c55e}.status-dot.local{background:#f59e0b}.status-dot.err{background:#ef4444}.status-dot.sync{background:#f59e0b;animation:pulse 1s infinite}
+.status-dot.ok{background:#10b981}.status-dot.local{background:#f59e0b}.status-dot.err{background:#ef4444}.status-dot.sync{background:#f59e0b;animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 /* ── 登录门 ── */
-.login-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:48px 32px;text-align:center;gap:12px}
-.login-gate .gate-icon{font-size:48px;opacity:.4}
+.login-gate{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  flex:1;
+  padding:48px 32px;
+  text-align:center;
+  gap:12px;
+}
+.login-gate .gate-icon{display:flex;align-items:center;justify-content:center;margin-bottom:4px}
 .login-gate h2{font-size:16px;font-weight:700;color:var(--text)}
-.login-gate p{font-size:12px;color:var(--text2);line-height:1.6}
-.login-gate .btn-gate{background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);padding:8px 24px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
-.login-gate .btn-gate:hover{background:var(--accent-hover)}
+.login-gate p{font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:4px}
 
-.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--toast-bg);color:var(--toast-color);padding:8px 16px;border-radius:var(--radius);font-size:12px;z-index:100;opacity:0;transition:opacity .2s;pointer-events:auto;display:flex;align-items:center;gap:12px;white-space:nowrap}
+.toast{
+  position:fixed;
+  top:16px;
+  left:50%;
+  transform:translateX(-50%);
+  background:var(--toast-bg);
+  color:var(--toast-color);
+  padding:8px 16px;
+  border-radius:var(--radius-base);
+  font-size:12px;
+  z-index:300;
+  opacity:0;
+  transition:opacity .2s;
+  pointer-events:auto;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  white-space:nowrap;
+  box-shadow:var(--shadow-md);
+}
 .toast.show{opacity:1}
-.toast-action{background:var(--accent);color:#fff;border:none;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0}
+.toast-action{
+  background:var(--accent);
+  color:#fff;
+  border:none;
+  border-radius:4px;
+  padding:3px 10px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  flex-shrink:0;
+}
 .toast-action:hover{background:var(--accent-hover)}
-.empty{text-align:center;padding:32px 16px;color:var(--text2);font-size:12px}
+.empty{text-align:center;padding:36px 16px;color:var(--text-muted);font-size:12px}
 .hidden{display:none!important}
+.brand-logo-blue{stroke:var(--brand-logo-blue,#122E8A)}
+.brand-logo-green{stroke:var(--brand-logo-green,#10B981)}
+/* ── 顶部精致功能条（方案1：品牌 Logo + 快捷操作） ── */
+.panel-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:9px 16px 8px;
+  background:var(--bg);
+  border-bottom:1px solid var(--border-light);
+  user-select:none;
+}
+.topbar-brand{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  text-decoration:none;
+  color:var(--text);
+  cursor:pointer;
+  padding:2px 4px;
+  margin-left:-4px;
+  border-radius:var(--radius-sm);
+  transition:opacity .15s ease;
+}
+.topbar-brand:hover{opacity:.82}
+.topbar-brand svg{flex-shrink:0}
+.topbar-title{
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:-.1px;
+  color:var(--text);
+  font-family:inherit;
+}
+.topbar-actions{
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+.topbar-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:26px;
+  height:26px;
+  padding:0;
+  border-radius:var(--radius-sm);
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--text-muted);
+  cursor:pointer;
+  transition:all .15s ease;
+  line-height:1;
+  text-decoration:none;
+}
+.topbar-btn:hover{
+  background:var(--surface);
+  border-color:var(--border);
+  color:var(--text);
+}
+.topbar-btn svg{
+  width:14px;
+  height:14px;
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>📚 __MSG_ext_name__</h1>
-  <div class="header-actions">
-    <span id="headerLoginHint" style="font-size:11px;color:var(--text2)">__MSG_status_logged_out__</span>
-    <button class="btn btn-sm btn-login" id="btnShowLogin">__MSG_login__</button>
-    <button class="btn btn-sm btn-ghost hidden" id="btnLogout" title="__MSG_logout_title__">__MSG_logout__</button>
-    <button class="btn btn-ghost" id="btnRefresh" title="__MSG_refresh__">↻</button>
+<!-- 顶部精致功能条（方案1：品牌 Logo + 快捷操作） -->
+<header class="panel-topbar">
+  <a href="https://ulink.ren/app" target="_blank" class="topbar-brand" id="btnBrandWeb" title="__MSG_open_web_app__">
+    <svg width="20" height="20" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" class="brand-logo-icon">
+      <defs>
+        <mask id="tbMaskBlue">
+          <rect width="240" height="240" fill="white" />
+          <line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round" />
+        </mask>
+        <mask id="tbMaskGreen">
+          <rect width="240" height="240" fill="white" />
+          <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
+        </mask>
+      </defs>
+      <path class="brand-logo-blue" d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#tbMaskBlue)" />
+      <path class="brand-logo-green" d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#tbMaskGreen)" />
+    </svg>
+    <span class="topbar-title">ulink</span>
+  </a>
+  <div class="topbar-actions">
+    <button class="topbar-btn" id="btnRefresh" title="__MSG_refresh__"></button>
+    <a href="https://ulink.ren/app" target="_blank" class="topbar-btn" id="btnOpenWebApp" title="__MSG_open_web_app__">
+      <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <line x1="10" y1="14" x2="21" y2="3"></line>
+      </svg>
+    </a>
   </div>
-</div>
+</header>
 
 <!-- 登录横幅 -->
 <div class="login-banner hidden" id="loginBanner">
@@ -132,17 +528,33 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
 
 <!-- 登录门（未登录时显示） -->
 <div id="loginGate" class="login-gate">
-  <div class="gate-icon">🔐</div>
+  <div class="gate-icon">
+    <svg width="56" height="56" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" class="brand-logo-icon">
+      <defs>
+        <mask id="gateMaskBlue">
+          <rect width="240" height="240" fill="white" />
+          <line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round" />
+        </mask>
+        <mask id="gateMaskGreen">
+          <rect width="240" height="240" fill="white" />
+          <line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round" />
+        </mask>
+      </defs>
+      <path class="brand-logo-blue" d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#gateMaskBlue)" />
+      <path class="brand-logo-green" d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" fill="none" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#gateMaskGreen)" />
+    </svg>
+  </div>
   <h2>__MSG_login_gate_title__</h2>
   <p>__MSG_login_gate_desc__</p>
-  <button class="btn-gate" id="btnLoginGate">__MSG_login__</button>
+  <button class="btn btn-primary" id="btnSyncWebLogin" style="width:100%;max-width:220px;padding:8px 16px;margin-bottom:6px">__MSG_sync_web_login__</button>
+  <button class="btn btn-ghost btn-sm" id="btnLoginGate">__MSG_login_with_email__</button>
 </div>
 
 <!-- 主界面（登录后显示） -->
 <div id="mainSection" class="hidden">
   <!-- 当前页快速收藏 -->
-  <div class="section">
-    <div class="section-title">__MSG_section_current_page__</div>
+  <div class="section" style="padding-top:12px">
+    <div class="section-title" style="margin-bottom:8px">__MSG_section_current_page__</div>
     <div class="current-page" id="currentPage" title="__MSG_current_page_refresh_title__" style="cursor:pointer">
       <img id="pageIcon" src="" alt="">
       <div class="current-page-info">
@@ -150,21 +562,61 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
         <div class="current-page-url" id="pageUrl"></div>
       </div>
     </div>
-    <p id="tabUrlHint" class="hidden" style="font-size:11px;color:var(--text2);margin:0 0 8px;line-height:1.5">__MSG_tab_url_hint__</p>
-    <button class="btn btn-primary" id="btnSave" style="width:100%">⚡ __MSG_save_current_page__</button>
+    <p id="tabUrlHint" class="hidden" style="font-size:11px;color:var(--text-muted);margin:0 0 8px;line-height:1.5">__MSG_tab_url_hint__</p>
+
+    <!-- 保存选项（分类与备注） -->
+    <div id="saveOptionsWrap">
+      <div class="save-controls">
+        <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">
+          <span id="saveCatIconWrap" style="display:flex;align-items:center;color:var(--text-muted)"></span>
+          <select id="saveCategorySelect" class="cat-dropdown"></select>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnToggleNotes">__MSG_quick_notes_toggle__</button>
+      </div>
+      <div id="quickNotesWrap" class="quick-notes-wrap hidden">
+        <textarea id="quickNotesInput" placeholder="__MSG_notes_placeholder__" rows="2"></textarea>
+      </div>
+      <button class="btn btn-primary" id="btnSave" style="width:100%">__MSG_save_current_page__</button>
+    </div>
+
     <!-- 已收藏详情面板 -->
     <div id="bookmarkDetail" class="bookmark-detail hidden">
-      <div class="bd-badge">✅ __MSG_already_saved__</div>
+      <div class="bd-header">
+        <div class="bd-badge" id="bdSavedBadge">__MSG_already_saved__</div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span id="bdCatIconWrap" style="display:flex;align-items:center;color:var(--text-muted)"></span>
+          <select id="bdCategorySelect" class="bd-cat-select"></select>
+        </div>
+      </div>
+
+      <!-- 备注查看模式 -->
       <div id="bdNotesWrap" class="hidden">
-        <div class="bd-label">📝 __MSG_notes__</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;margin-bottom:2px">
+          <div class="bd-label" id="bdNotesLabel">__MSG_notes__</div>
+          <button class="btn btn-ghost btn-sm" id="bdEditNotes" style="padding:1px 6px;font-size:11px">__MSG_edit_notes__</button>
+        </div>
         <div class="bd-text" id="bdNotes"></div>
       </div>
+
+      <!-- 备注行内编辑模式 -->
+      <div id="bdNotesEditWrap" class="hidden" style="margin-top:6px">
+        <div class="bd-label" id="bdNotesEditLabel">__MSG_notes__</div>
+        <textarea id="bdNotesInput" rows="2" placeholder="__MSG_notes_placeholder__"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+          <span style="font-size:10px;color:var(--text-muted)">__MSG_save_notes_hint__</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-primary btn-sm" id="bdNotesSave">__MSG_save__</button>
+            <button class="btn btn-ghost btn-sm" id="bdNotesCancel">__MSG_cancel__</button>
+          </div>
+        </div>
+      </div>
+
       <div class="bd-meta">
-        <span id="bdCreatedAt">📅</span>
-        <span id="bdUseCount">👁️</span>
+        <span id="bdCreatedAt"></span>
+        <span id="bdUseCount"></span>
       </div>
       <div id="bdPasswordWrap" class="hidden" style="margin-top:6px">
-        <div class="bd-label">🔑 __MSG_password__</div>
+        <div class="bd-label" id="bdPasswordLabel">__MSG_password__</div>
         <div class="bd-password">
           <span class="bd-pw-text" id="bdPasswordText">••••••••</span>
           <button class="bd-pw-btn" id="bdPwShow">__MSG_show__</button>
@@ -172,9 +624,8 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
         </div>
       </div>
       <div class="bd-actions">
-        <button class="btn btn-ghost btn-sm" id="bdEditNotes">📝 __MSG_edit_notes__</button>
-        <button class="btn btn-ghost btn-sm" id="bdCopyUrl">🔗 __MSG_copy_url__</button>
-        <button class="btn btn-danger btn-sm" id="bdDelete">🗑️ __MSG_delete__</button>
+        <button class="btn btn-ghost btn-sm" id="bdCopyUrl">__MSG_copy_url__</button>
+        <button class="btn btn-danger btn-sm" id="bdDelete">__MSG_delete__</button>
       </div>
     </div>
   </div>
@@ -182,13 +633,20 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
   <!-- 搜索 -->
   <div class="search-box">
     <div class="search-wrap" id="searchWrap">
-      <span class="search-icon">🔍</span>
+      <span class="search-icon" id="searchIcon"></span>
       <input type="text" id="searchInput" placeholder="__MSG_search_placeholder__" autocomplete="off">
-      <span class="search-clear" id="searchClear">✕</span>
+      <span class="search-clear" id="searchClear"></span>
     </div>
   </div>
 
-  <!-- 最近保存 -->
+  <!-- 分类筛选横条 -->
+  <div class="category-bar-wrap">
+    <div class="category-bar" id="categoryBar">
+      <button class="cat-chip active" data-id="all">__MSG_category_all__</button>
+    </div>
+  </div>
+
+  <!-- 最近保存列表 -->
   <div class="section" style="border-bottom:none">
     <div class="section-title" id="recentTitle">__MSG_recent_saved__</div>
     <div class="bookmark-list" id="bookmarkList"></div>
@@ -199,16 +657,49 @@ input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
   <span class="status-left">
     <span class="status-dot local" id="statusDot"></span>
     <span id="statusText">__MSG_status_local__</span>
-    <span id="lastSync" style="margin-left:6px;opacity:.7"></span>
+    <span id="lastSync" style="margin-left:4px;opacity:.7"></span>
   </span>
-  <span id="bookmarkCount"></span>
+  <span class="status-right">
+    <span id="bookmarkCount"></span>
+    <button class="btn btn-ghost" id="btnThemeToggle" title="切换主题" style="padding:2px 4px;font-size:11px;line-height:1;border-radius:var(--radius-sm)"></button>
+    <button class="btn btn-ghost btn-sm hidden" id="btnLogout" title="__MSG_logout_title__" style="padding:1px 5px;font-size:10.5px">__MSG_logout__</button>
+    <button class="btn btn-sm btn-login hidden" id="btnShowLogin">__MSG_login__</button>
+    <span id="headerLoginHint" class="hidden"></span>
+  </span>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<!-- 主密码输入模态框 -->
+<div id="masterPwModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-title" id="masterPwModalTitle">__MSG_master_password_title__</div>
+    <p class="modal-desc">__MSG_master_password_desc__</p>
+    <input type="password" id="modalMasterPwInput" placeholder="__MSG_master_password_placeholder__" autocomplete="current-password">
+    <div class="modal-actions">
+      <button class="btn btn-primary btn-sm" id="modalMasterPwSubmit">__MSG_unlock__</button>
+      <button class="btn btn-ghost btn-sm" id="modalMasterPwCancel">__MSG_cancel__</button>
+    </div>
+  </div>
+</div>
+
+<!-- 删除确认模态框 -->
+<div id="deleteConfirmModal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-title" id="deleteConfirmModalTitle" style="color:var(--danger)">__MSG_delete__</div>
+    <p class="modal-desc" id="deleteConfirmText"></p>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" id="btnConfirmDelete">__MSG_delete__</button>
+      <button class="btn btn-ghost btn-sm" id="btnCancelDelete">__MSG_cancel__</button>
+    </div>
+  </div>
+</div>
+
 <script src="lib/supabase.js"></script>
 <script src="config.js"></script>
 <script src="crypto.js"></script>
+<script src="icons.js"></script>
+<script src="save-payload.js"></script>
 <script src="keypress.js"></script>
 <script src="notes-update.js"></script>
 <script src="auth-flow.js"></script>

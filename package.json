@@ -14,6 +14,7 @@
     "test:e2e": "playwright test",
     "coverage": "vitest run --coverage",
     "ext:bundle-supabase": "npx esbuild@latest --bundle --format=iife --global-name=supabase --outfile=extension/lib/supabase.js @supabase/supabase-js",
+    "ext:pack": "node scripts/pack-extension.js",
     "pages:dev": "npm run build && npx wrangler@latest pages dev dist --port 8788",
     "pages:deploy": "npm run build && npx wrangler@latest pages deploy dist --project-name ulink"
   },

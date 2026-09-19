@@ -130,7 +130,7 @@
     'extra.title': 'And Thoughtful Everyday Delights',
     'x1.t': 'One-keystroke Capture',
     'x1.d': 'Press ',
-    'x1.d2': ' in Chrome extension to file the page and notes immediately.',
+    'x1.d2': ' in browser extension to file the page and notes immediately.',
     'x2.t': 'Offline-first Architecture & PWA',
     'x2.d': 'Built upon IndexedDB authority storage; installable on desktop and mobile with full offline functionality.',
     'x5.t': 'Fluid Drag & Drop',
