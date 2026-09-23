@@ -103,8 +103,9 @@ export const useShareStore = defineStore('share', () => {
   /**
    * 拆掉分享态：清影子数据 → 解只读锁 → 还原 head 与 URL → 还原视图快照。
    * fork 与「退出分享」共用：fork 之前必须走这里，否则写入被只读锁挡下。
+   * stripUrl: 是否把 URL 剥离回 /app（真正离开分享时为 true；进入新分享初始化时为 false，避免破坏分享路由）
    */
-  function _teardown() {
+  function _teardown(stripUrl = true) {
     if (!ui.shareMode) return
     shadowClear()
     ui.shareMode = null
@@ -117,14 +118,14 @@ export const useShareStore = defineStore('share', () => {
     uiSnapshot.value = null
     cleanupInjectedHead()
     setCanonical(APP_CANONICAL_BASE)
-    _stripSharePath()
+    if (stripUrl) _stripSharePath()
     _resetData()
   }
 
   async function enter(route: string) {
     const seq = ++_enterSeq
     const catId = parseCategoryShareRoute(route)
-    _teardown()
+    _teardown(false)
     _resetData()
 
     uiSnapshot.value = {
@@ -135,6 +136,33 @@ export const useShareStore = defineStore('share', () => {
     // 先上锁：后续任何 mutation 都被拒，避免 fetch 期间的中间态写进本地库
     ui.shareMode = { kind: catId ? 'category' : 'group', id: catId || route }
     ui.searchQuery = ''
+
+    // ── SSR 预注入数据秒级水合（零网络等待，杜绝客户端直连 Supabase 延时与转圈卡死）──
+    const winData = typeof window !== 'undefined' ? (window as unknown as { __INITIAL_SHARE_DATA__?: any }).__INITIAL_SHARE_DATA__ : null
+    if (winData) {
+      if (catId && winData.type === 'category' && winData.id === catId && winData.data?.category) {
+        category.value = winData.data.category
+        groups.value = winData.data.groups || []
+        bookmarks.value = (winData.data.bookmarks || []).map((b: Bookmark) => ({ ...b, categoryId: winData.data.category.id }))
+        _fillShadow()
+        ui.curCat = winData.data.category.id
+        _applyCategoryHead(winData.data)
+        loading.value = false
+        error.value = ''
+        return
+      }
+      if (!catId && winData.type === 'group' && winData.id === route && winData.data?.group) {
+        group.value = winData.data.group
+        bookmarks.value = winData.data.bookmarks || []
+        _fillShadow()
+        ui.focusedGroupId = winData.data.group.id
+        _applyGroupHead(winData.data.group, winData.data.bookmarks || [])
+        loading.value = false
+        error.value = ''
+        return
+      }
+    }
+
     loading.value = true
     error.value = ''
     try {
@@ -174,7 +202,7 @@ export const useShareStore = defineStore('share', () => {
   }
 
   function exit() {
-    _teardown()
+    _teardown(true)
   }
 
   function retry() {
@@ -207,7 +235,7 @@ export const useShareStore = defineStore('share', () => {
     if (!payload || forking.value) return
     forking.value = true
     // 关键：fork 写的是访问者自己的库，必须先解锁并清空影子数据
-    _teardown()
+    _teardown(true)
     try {
       if (payload.kind === 'category') await forkPublicCategory(payload.data)
       else await forkPublicGroup(payload.group, payload.bookmarks)
@@ -220,17 +248,19 @@ export const useShareStore = defineStore('share', () => {
 
   // ── 视图状态被外部改动即视为「离开分享内容」→ 自动退出分享态 ──
   // 覆盖 AppNav 切分类、搜索、快捷键、命令面板等所有路径，无需逐个埋点。
-  // _teardown 先清 shareMode 再改 curCat，故不会递归触发。
+  // 加载期间或数据未就绪时严禁退出（防异步请求期间的误退）。
   watch(
     () => ui.curCat,
     (v) => {
-      if (ui.shareMode?.kind === 'category' && v !== category.value?.id) exit()
+      if (loading.value) return
+      if (ui.shareMode?.kind === 'category' && category.value && v !== category.value.id) exit()
     },
   )
   watch(
     () => ui.focusedGroupId,
     (v) => {
-      if (ui.shareMode?.kind === 'group' && v !== group.value?.id) exit()
+      if (loading.value) return
+      if (ui.shareMode?.kind === 'group' && group.value && v !== group.value.id) exit()
     },
   )
 

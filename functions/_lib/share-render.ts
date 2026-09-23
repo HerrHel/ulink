@@ -641,6 +641,15 @@ export function extractAppAssets(indexHtml: string): string {
   return out.join("\n")
 }
 
+/** 安全序列化 JSON 到 <script> 中（转义 < 和 \u2028/\u2029，防 XSS 与闭合标签） */
+export function serializeScriptData(data: unknown): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
 /** 组装完整 HTML 文档。og:image 从 appOrigin 推导（静态品牌图，随站部署于根路径）。
  *  appAssets：主应用 SPA 的资源标签（stylesheet/modulepreload/module script，由函数层
  *  用 env.ASSETS 读 index.html 经 extractAppAssets 提取）。注入后 SPA 启动即识别
@@ -658,10 +667,15 @@ export function renderSharePage(
   const ogImage = `${appOrigin}/share-cover.png`
   const head = buildHead(dict, group, bookmarks, shareUrl, ogImage)
   const body = buildBody(dict, group, bookmarks, appOrigin)
+  const initDataScript = `<script id="__SHARE_DATA__">window.__INITIAL_SHARE_DATA__=${serializeScriptData({
+    type: 'group',
+    id: group.id,
+    data: { group, bookmarks },
+  })};</script>`
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}${appAssets}</head>`,
+    `<head>${head}${initDataScript}${appAssets}</head>`,
     `<style>${CSS}</style>`,
     `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
@@ -1012,10 +1026,15 @@ export function renderShareCategoryPage(
     loose.reduce((s, c) => s + 1 + c.children.length, 0)
   const head = buildCategoryHead(dict, category, count, groupCards.length, shareUrl, ogImage)
   const body = buildCategoryBody(dict, category, groups, bookmarks, shareId, shareUrl, appOrigin, layout)
+  const initDataScript = `<script id="__SHARE_DATA__">window.__INITIAL_SHARE_DATA__=${serializeScriptData({
+    type: 'category',
+    id: shareId,
+    data: { category, groups, bookmarks },
+  })};</script>`
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}${appAssets}</head>`,
+    `<head>${head}${initDataScript}${appAssets}</head>`,
     `<style>${CSS}</style>`,
     `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
