@@ -13,14 +13,13 @@
  *   SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN
  */
 import { renderShareCategoryPage, renderNotFoundPage, renderUnavailablePage, type ShareLocale, type PublicGroup, type PublicBookmark, type CatLayout } from "../../_lib/share-render.js"
-import { getAppAssets, type AppAssetsEnv } from "../../_lib/app-assets.js"
 // 函数内边缘缓存（Cache API）：与 s/[gid].ts 同口径，设计见 _lib/share-cache.ts
 import {
   matchShareCache, putShareCache, shareCacheKey, shareStaleKey,
   EDGE_TTL_S, STALE_TTL_S,
 } from "../../_lib/share-cache.js"
 
-interface ShareEnv extends AppAssetsEnv {
+interface ShareEnv {
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
   APP_ORIGIN?: string
@@ -135,7 +134,6 @@ export async function onRequestGet(context: ShareContext): Promise<Response> {
     appOrigin,
     locale,
     layout,
-    await getAppAssets(context.env, context.request.url),
   )
   // 双写边缘缓存：主键 5 分钟新鲜 + 24h 故障兜底副本
   context.waitUntil((async () => {

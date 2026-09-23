@@ -582,8 +582,8 @@ function buildBody(
   const bmMap: NotesBmMap = {}
   for (const b of bookmarks) bmMap[b.id] = { url: b.url }
   const notes = notesHtml(dict, group, bmMap)
-  // CTA 跳 App 的 hash 路由（#share/<gid>），降级入口（bundle 加载失败时手动进入 SPA）
-  const appUrl = `${appOrigin}/#share/${esc(group.id)}`
+  // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存
+  const appUrl = `${appOrigin}/app#share/${esc(group.id)}`
 
   const isZh = dict.lang === 'zh-CN'
   const bmSectionTitle = isZh ? '收录的书签' : 'Bookmarks in this group'
@@ -946,8 +946,8 @@ function buildCategoryBody(
   const grid = cards.length
     ? `<div class="cat-grid${layoutCls}">${cards.join("\n")}</div>`
     : `<div class="empty">${esc(dict.emptyCategory)}</div>`
-  // CTA 跳 App 的 hash 路由（#share/c/<share_id>），降级入口（bundle 加载失败时手动进入 SPA）
-  const appUrl = `${appOrigin}/#share/c/${esc(shareId)}`
+  // CTA 跳 App 的 hash 路由（/app#share/c/<share_id>），直达应用主体完成保存
+  const appUrl = `${appOrigin}/app#share/c/${esc(shareId)}`
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
