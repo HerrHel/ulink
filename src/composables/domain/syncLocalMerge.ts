@@ -78,6 +78,33 @@ export function _deleteWithoutEcho(
   for (const did of affectedIds) ds._newIds.delete(did)
 }
 
+const _permanentDeleteHandlers: Record<EntityType, (ds: DataStore, id: string) => void> = {
+  bookmark: (ds, id) => ds.permanentDeleteBookmark(id),
+  group: (ds, id) => ds.permanentDeleteGroup(id),
+  category: (ds, id) => ds.permanentDeleteCategory(id),
+  attribute: (ds, id) => ds.permanentDeleteAttribute(id),
+}
+
+/** 远端物理删除/墓园对账触发的本机彻底物理删除：清衍生 dirty 与 deletedIds，避免回声推送 */
+export function _permanentDeleteWithoutEcho(
+  ds: DataStore,
+  type: EntityType,
+  id: string,
+) {
+  const descendantIds = type === 'bookmark' ? _collectLiveDescendants(ds, id) : []
+  const affectedIds = new Set([id, ...descendantIds])
+  const dirtyBefore = new Set(ds._dirtyIds)
+  const changedBefore = new Set(ds._changedFields.keys())
+  const deletedBefore = new Set(ds._deletedIds.keys())
+
+  _permanentDeleteHandlers[type]?.(ds, id)
+
+  for (const did of ds._dirtyIds) if (!dirtyBefore.has(did) || affectedIds.has(did)) ds._dirtyIds.delete(did)
+  for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || affectedIds.has(cid)) ds._changedFields.delete(cid)
+  for (const did of affectedIds) ds._newIds.delete(did)
+  for (const did of ds._deletedIds.keys()) if (!deletedBefore.has(did) || affectedIds.has(did)) ds._deletedIds.delete(did)
+}
+
 /** 智能合并：远端 → 本地（decision → store 副作用）
  *  onWrite：可选回调，每当本次 merge 实际向本地写入/插入/删除/复活一项时调用，
  *  供调用方（syncPull）据此跳过空 pull 的 saveAppData 落盘。不调用 = 本次无本地变更。

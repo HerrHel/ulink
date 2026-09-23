@@ -111,6 +111,7 @@ import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { formatTime } from './formatTimeEpoch.js'
 import { restoreItems, permanentDeleteItems, trashKey, splitTrashKey, type TrashType } from './trashOps.js'
+import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { t, tN } from '../../i18n/index.js'
 
 const props = defineProps<{ open: boolean }>()
@@ -160,6 +161,7 @@ async function permanent(type: TrashType, id: string) {
   if (!ok) return
   permanentDeleteItems(ds, [{ type, id }])
   appStore.save()
+  void useCloudSync().syncImmediate().catch(() => {})
   toast(t('modal.trash.permanentToast'))
   selected.value.delete(trashKey(type, id))
 }
@@ -181,6 +183,7 @@ async function batchPermanent() {
   if (!ok) return
   permanentDeleteItems(ds, items)
   appStore.save()
+  void useCloudSync().syncImmediate().catch(() => {})
   toast(tN('modal.trash.permanentCount', items.length))
   selected.value.clear()
 }
@@ -190,6 +193,7 @@ async function onEmptyTrash() {
   if (!ok) return
   ds.emptyTrash()
   appStore.save()
+  void useCloudSync().syncImmediate().catch(() => {})
   toast(t('modal.trash.emptiedToast'))
   selected.value.clear()
   emit('close')

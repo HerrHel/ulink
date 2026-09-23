@@ -12,7 +12,7 @@ import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { enqueueSyncOps, syncOpsCount, type SyncOp } from '../../stores/storage.js'
-import { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
+import { _mergeIntoLocal, _deleteWithoutEcho, _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
 import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
 
@@ -151,6 +151,20 @@ export async function pullChanges(full = false): Promise<boolean> {
       console.warn(`[sync] 仍有 ${pendingOps} 条待重试同步 op，跳过本轮对账删除，避免误删未上云数据`)
     }
 
+    // 记录本次 pull 启动前本地已处于回收站的 ID 集：
+    // 用于区分「原本已在回收站发霉、云端已彻底清空的幽灵项（全量对账应彻底物理抹除）」
+    // 与「原本存活但在云端缺失、本次 pull 防灾软删进回收站的项（应保留在回收站防误删）」。
+    const preTrashedIds: Record<EntityType, Set<string>> = {
+      category: new Set(), bookmark: new Set(), group: new Set(), attribute: new Set(),
+    }
+    if (full) {
+      for (const type of SYNC_ENTITY_ORDER) {
+        for (const item of localByType[type]) {
+          if (item.deletedAt) preTrashedIds[type].add(item.id)
+        }
+      }
+    }
+
     // 跟踪本次 pull 是否实际产生本地变更（insert/assign/revive/soft-delete/reconcileDelete）。
     // 末尾据此决定是否 saveAppData：空 pull（远端无新变更、本地无对账删除）跳过 IDB 写入，
     // 避免每次 realtime/visible 触发的增量 pull 都无效落盘。lastSyncAt/syncStatus 不受影响。
@@ -208,6 +222,11 @@ export async function pullChanges(full = false): Promise<boolean> {
         _deleteWithoutEcho(ds, type, id)
         localChanged = true
       }
+      const reconcilePermanentDelete = (type: EntityType, id: string) => {
+        if (ds._dirtyIds.has(id) || _isPendingSync(id)) return
+        _permanentDeleteWithoutEcho(ds, type, id)
+        localChanged = true
+      }
       const localByEntity: Record<EntityType, Array<{ id: string; deletedAt?: number }>> = {
         category: ds.categories,
         bookmark: ds.bookmarks,
@@ -219,12 +238,18 @@ export async function pullChanges(full = false): Promise<boolean> {
       const canReconcile = syncStore.lastSyncAt > 0
       for (const type of SYNC_ENTITY_ORDER) {
         if (!canReconcile || !allowReconcile[type] || queueBackedUp) continue
-        for (const item of localByEntity[type]) {
-          if (item.deletedAt || remoteAllIds[type].has(item.id)) continue
+        for (const item of [...localByEntity[type]]) {
+          if (remoteAllIds[type].has(item.id)) continue
           // 虚拟分类（全部/未分类）是本地常量：未重排过分类的用户云端 categories
           // 表从未有它们的记录，对账不得当「远端已删」软删，否则侧栏两项消失。
           if (type === 'category' && (item.id === CAT_ALL || item.id === CAT_UNCATEGORIZED)) continue
-          reconcileDelete(type, item.id)
+          if (preTrashedIds[type].has(item.id)) {
+            // 本地原本已在回收站且云端全表缺失（包含软删行）：远端已物理彻底删除，本机直接物理清除防发霉复活
+            reconcilePermanentDelete(type, item.id)
+          } else if (!item.deletedAt) {
+            // 本地存活但云端缺失：软删进回收站防误删
+            reconcileDelete(type, item.id)
+          }
         }
       }
     }
