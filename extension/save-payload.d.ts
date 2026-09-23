@@ -4,6 +4,7 @@ export interface BuildBookmarkPayloadParams {
   url: string
   title?: string
   categoryId?: string
+  parentId?: string | null
   notes?: string
   favIconUrl?: string
   userId?: string
@@ -21,7 +22,8 @@ export interface BookmarkPayloadRow {
   notes: string
   icon: string
   category_id: string
-  parent_id: null
+  parent_id: string | null
+
   order: number
   use_count: number
   attributes: Record<string, unknown>

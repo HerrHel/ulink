@@ -121,8 +121,24 @@
   const btnToggleNotes = $('#btnToggleNotes')
   const quickNotesWrap = $('#quickNotesWrap')
   const quickNotesInput = $('#quickNotesInput')
+  const saveParentRow = $('#saveParentRow')
+  const saveParentSelect = $('#saveParentSelect')
+  const bdParentWrap = $('#bdParentWrap')
+  const bdParentLink = $('#bdParentLink')
+  const bdParentTitle = $('#bdParentTitle')
+  const bdSubsWrap = $('#bdSubsWrap')
+  const bdSubsCount = $('#bdSubsCount')
+  const bdSubsList = $('#bdSubsList')
+  const bdParentNotesWrap = $('#bdParentNotesWrap')
+  const bdParentNotes = $('#bdParentNotes')
+  const bdParentNotesSource = $('#bdParentNotesSource')
+  const bdEditParentNotes = $('#bdEditParentNotes')
+  const domainParentNotice = $('#domainParentNotice')
+  const dpNoticeName = $('#dpNoticeName')
+  const dpNotesPreview = $('#dpNotesPreview')
   const categoryBar = $('#categoryBar')
   const tabUrlHint = $('#tabUrlHint')
+
   const currentPageEl = $('#currentPage')
   const masterPwModal = $('#masterPwModal')
   const masterPwModalTitle = $('#masterPwModalTitle')
@@ -137,6 +153,45 @@
   const btnThemeToggle = $('#btnThemeToggle')
   const btnRefresh = $('#btnRefresh')
   const btnSyncWebLogin = $('#btnSyncWebLogin')
+  const tabBtnCurrent = $('#tabBtnCurrent')
+  const tabBtnLibrary = $('#tabBtnLibrary')
+  const paneCurrent = $('#paneCurrent')
+  const paneLibrary = $('#paneLibrary')
+  const tabBadgeCount = $('#tabBadgeCount')
+  const tabIconCurrent = $('#tabIconCurrent')
+  const tabIconLibrary = $('#tabIconLibrary')
+
+  let activeTabName = 'current'
+  function switchTab(tabName) {
+    activeTabName = tabName
+    if (tabName === 'current') {
+      if (tabBtnCurrent) {
+        tabBtnCurrent.classList.add('active')
+        tabBtnCurrent.setAttribute('aria-selected', 'true')
+      }
+      if (tabBtnLibrary) {
+        tabBtnLibrary.classList.remove('active')
+        tabBtnLibrary.setAttribute('aria-selected', 'false')
+      }
+      if (paneCurrent) paneCurrent.classList.remove('hidden')
+      if (paneLibrary) paneLibrary.classList.add('hidden')
+    } else {
+      if (tabBtnLibrary) {
+        tabBtnLibrary.classList.add('active')
+        tabBtnLibrary.setAttribute('aria-selected', 'true')
+      }
+      if (tabBtnCurrent) {
+        tabBtnCurrent.classList.remove('active')
+        tabBtnCurrent.setAttribute('aria-selected', 'false')
+      }
+      if (paneLibrary) paneLibrary.classList.remove('hidden')
+      if (paneCurrent) paneCurrent.classList.add('hidden')
+      if (searchInput) searchInput.focus()
+    }
+  }
+
+  if (tabBtnCurrent) tabBtnCurrent.addEventListener('click', function () { switchTab('current') })
+  if (tabBtnLibrary) tabBtnLibrary.addEventListener('click', function () { switchTab('library') })
 
   // ── 主题管理（对齐主站 lv_theme / tokens.css）──
   function applyTheme(theme) {
@@ -203,6 +258,8 @@
     if (bdDelete) bdDelete.innerHTML = (Icons.trash || '') + ' <span>' + esc(chrome.i18n.getMessage('delete')) + '</span>'
     if (masterPwModalTitle) masterPwModalTitle.innerHTML = (Icons.lock || '') + ' <span>' + esc(chrome.i18n.getMessage('master_password_title')) + '</span>'
     if (deleteConfirmModalTitle) deleteConfirmModalTitle.innerHTML = (Icons.trash || '') + ' <span>' + esc(chrome.i18n.getMessage('delete')) + '</span>'
+    if (tabIconCurrent) tabIconCurrent.innerHTML = Icons.bookmark || ''
+    if (tabIconLibrary) tabIconLibrary.innerHTML = Icons.grid || Icons.folder || ''
   }
 
   initTheme()
@@ -222,6 +279,16 @@
         deleteBookmark(target.dataset.id, target.dataset.title)
         return
       }
+      if (target.classList && (target.classList.contains('bookmark-sub-card') || target.classList.contains('sub-chip'))) {
+        e.stopPropagation()
+        var subUrl = target.dataset.url
+        if (!isSafeHttpUrl(subUrl)) {
+          toast(chrome.i18n.getMessage('err_unsafe_protocol'), 2000)
+          return
+        }
+        chrome.tabs.create({ url: subUrl })
+        return
+      }
       if (target.classList && target.classList.contains('bookmark-item')) {
         var openUrl = target.dataset.url
         if (!isSafeHttpUrl(openUrl)) {
@@ -234,6 +301,20 @@
       target = target.parentElement
     }
   })
+
+  if (bdSubsList) {
+    bdSubsList.addEventListener('click', function (e) {
+      var item = e.target.closest('.bd-sub-item')
+      if (!item) return
+      var subUrl = item.dataset.url
+      if (!isSafeHttpUrl(subUrl)) {
+        toast(chrome.i18n.getMessage('err_unsafe_protocol'), 2000)
+        return
+      }
+      chrome.tabs.create({ url: subUrl })
+    })
+  }
+
 
   let currentTab = null
   let allBookmarks = []
@@ -264,19 +345,56 @@
     if (bdPwShow) bdPwShow.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('show')) + '</span>'
   }
 
+  /** 批量解密内存中所有书签的加密字段（notes/title），在解锁时调用 */
+  async function decryptAllNotesIfUnlocked() {
+    if (!sessionMasterPassword || !window.LinkVaultCrypto) return
+    var canary = await ensureCanaryData()
+    if (!canary) return
+    var promises = []
+    for (var i = 0; i < allBookmarks.length; i++) {
+      var b = allBookmarks[i]
+      if (b.notes && window.LinkVaultCrypto.isThreePartCipher(b.notes) && !b._decryptedNotes) {
+        (function (bm) {
+          promises.push(window.LinkVaultCrypto.decryptTextIfCipher(bm.notes, sessionMasterPassword, canary).then(function (dec) {
+            if (dec) bm._decryptedNotes = dec
+          }))
+        })(b)
+      }
+      if (b.title && window.LinkVaultCrypto.isThreePartCipher(b.title) && !b._decryptedTitle) {
+        (function (bm) {
+          promises.push(window.LinkVaultCrypto.decryptTextIfCipher(bm.title, sessionMasterPassword, canary).then(function (dec) {
+            if (dec) bm._decryptedTitle = dec
+          }))
+        })(b)
+      }
+    }
+    if (promises.length > 0) {
+      await Promise.all(promises)
+    }
+  }
+
   function scheduleClearMasterPassword() {
     if (_mpClearTimer) clearTimeout(_mpClearTimer)
     _mpClearTimer = setTimeout(function () {
-      sessionMasterPassword = ''
-      _mpClearTimer = null
-      maskRevealedPassword()
+      clearMasterPasswordNow()
     }, MASTER_PASSWORD_TTL_MS)
   }
 
   function clearMasterPasswordNow() {
     if (_mpClearTimer) { clearTimeout(_mpClearTimer); _mpClearTimer = null }
     sessionMasterPassword = ''
+    if (window.LinkVaultCrypto && window.LinkVaultCrypto.clearKeyCache) {
+      window.LinkVaultCrypto.clearKeyCache()
+    }
+    for (var i = 0; i < allBookmarks.length; i++) {
+      delete allBookmarks[i]._decryptedNotes
+      delete allBookmarks[i]._decryptedTitle
+    }
     maskRevealedPassword()
+    if (currentMatchedBookmark) {
+      showBookmarkDetail(currentMatchedBookmark)
+    }
+    applyFilterAndRender()
   }
 
   async function ensureCanaryData() {
@@ -408,6 +526,36 @@
     if (bdCategorySelect) bdCategorySelect.innerHTML = optsHtml
   }
 
+  function renderParentOptions(currentUrl) {
+    if (!saveParentSelect) return
+    var topLevelBms = allBookmarks.filter(function (b) { return !b.parent_id && !b.deleted_at })
+    var optsHtml = '<option value="">' + esc(chrome.i18n.getMessage('top_level_bookmark')) + '</option>'
+
+    var curHost = currentUrl ? domain(currentUrl).toLowerCase() : ''
+    var matchedParentId = ''
+
+    for (var i = 0; i < topLevelBms.length; i++) {
+      var b = topLevelBms[i]
+      var bHost = domain(b.url).toLowerCase()
+      var isDomainMatch = curHost && bHost && (curHost === bHost || curHost.endsWith('.' + bHost))
+      if (isDomainMatch && !matchedParentId) {
+        matchedParentId = b.id
+      }
+      var bTitle = b.title || bHost || b.id
+      optsHtml += '<option value="' + esc(b.id) + '">' + esc(bTitle) + '</option>'
+    }
+
+    saveParentSelect.innerHTML = optsHtml
+
+    if (matchedParentId) {
+      saveParentSelect.value = matchedParentId
+      if (saveParentRow) saveParentRow.classList.remove('hidden')
+    } else {
+      saveParentSelect.value = ''
+      if (saveParentRow) saveParentRow.classList.add('hidden')
+    }
+  }
+
   function renderCategoryChips() {
     if (!categoryBar) return
     var folderSvg = Icons.folder || ''
@@ -462,7 +610,7 @@
       var [bmRes, catRes] = await Promise.race([
         Promise.all([
           sb.from('bookmarks')
-            .select('id,title,url,icon,category_id,notes,use_count,created_at_num,order')
+            .select('id,title,url,icon,category_id,parent_id,notes,use_count,created_at_num,order')
             .eq('user_id', userId).is('deleted_at', null)
             .order('created_at_num', { ascending: false }).limit(500),
           sb.from('categories')
@@ -483,12 +631,14 @@
       allBookmarks = bmRes.data || []
       allCategories = (catRes && catRes.data) || []
       renderCategoryOptions()
+      renderParentOptions(currentTab && currentTab.url)
       renderCategoryChips()
       lastSyncTime = Date.now()
       updateSyncTime()
       setStatus('ok', chrome.i18n.getMessage('status_connected'))
       applyFilterAndRender()
       checkCurrentPageMatch(currentTab && currentTab.url)
+
       clearInterval(window._syncTimer)
       window._syncTimer = setInterval(updateSyncTime, 30000)
     } catch (err) {
@@ -502,7 +652,10 @@
 
   // ── 过滤与渲染 ──
   function getFilteredBookmarks() {
-    var list = allBookmarks
+    if (window.LinkVaultSidepanelMatch) {
+      return window.LinkVaultSidepanelMatch.filterRootBookmarks(allBookmarks, selectedCategory, searchQuery)
+    }
+    var list = allBookmarks.filter(function (b) { return !b.parent_id && !b.deleted_at })
     if (selectedCategory && selectedCategory !== 'all') {
       list = list.filter(function (b) {
         var c = b.category_id || 'uncategorized'
@@ -531,7 +684,10 @@
       bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(filtered.length)])
     } else {
       recentTitle.textContent = chrome.i18n.getMessage('recent_saved')
-      bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(allBookmarks.length)])
+      bookmarkCount.textContent = chrome.i18n.getMessage('count_bookmarks', [String(filtered.length)])
+    }
+    if (tabBadgeCount) {
+      tabBadgeCount.textContent = allBookmarks && allBookmarks.length ? String(allBookmarks.length) : ''
     }
     renderBookmarks(filtered)
   }
@@ -559,29 +715,76 @@
 
     var query = isSearching ? searchQuery.toLowerCase() : ''
     var closeSvg = Icons.close || '&times;'
+    var openTitle = esc(chrome.i18n.getMessage('open_link'))
+    var deleteTitle = esc(chrome.i18n.getMessage('delete'))
+
     bookmarkList.innerHTML = displayList.slice(0, 50).map(function (b) {
-      const host = domain(b.url)
-      const icon = b.icon || (host ? 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32' : '')
-      var titleHtml = esc(b.title || host)
+      var host = domain(b.url)
+      var icon = b.icon || (host ? 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32' : '')
+      var isTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(b.title) : false
+      var rawTitle = b._decryptedTitle || (isTitleCipher ? (host || chrome.i18n.getMessage('encrypted_bookmark')) : (b.title || host))
+      var initial = (rawTitle || '?').charAt(0).toUpperCase()
+      var titleHtml = esc(rawTitle)
       var urlHtml = esc(host)
       if (isSearching) {
         titleHtml = highlightMatch(titleHtml, query)
         urlHtml = highlightMatch(urlHtml, query)
       }
+
       var catBadge = ''
       if (b.category_id && b.category_id !== 'uncategorized') {
-        catBadge = '<span class="bookmark-item-cat">' + esc(getCategoryName(b.category_id)) + '</span>'
+        catBadge = '<span class="bookmark-cat-pill">' + esc(getCategoryName(b.category_id)) + '</span>'
       }
+
+      // 单行备注纯文本预览（对齐主站列表模式特征）
+      var notesCandidate = b._decryptedNotes !== undefined ? b._decryptedNotes : b.notes
+      var previewRaw = window.LinkVaultSidepanelMatch ? window.LinkVaultSidepanelMatch.getNotesPreviewText(notesCandidate, 75) : ''
+      var previewHtml = previewRaw ? esc(previewRaw) : ''
+      if (isSearching && previewHtml) {
+        previewHtml = highlightMatch(previewHtml, query)
+      }
+
+      // 关联子书签
+      var subsHtml = ''
+      var subs = allBookmarks.filter(function (s) { return s.parent_id === b.id && !s.deleted_at })
+      if (subs.length > 0) {
+        subsHtml = '<div class="bookmark-sub-sites">' + subs.map(function (s) {
+          var sHost = domain(s.url)
+          var sIcon = s.icon || (sHost ? 'https://www.google.com/s2/favicons?domain=' + sHost + '&sz=16' : '')
+          var isSubTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(s.title) : false
+          var sRawTitle = s._decryptedTitle || (isSubTitleCipher ? (sHost || chrome.i18n.getMessage('encrypted_bookmark')) : (s.title || sHost))
+          var sTitle = esc(sRawTitle)
+          if (isSearching) {
+            sTitle = highlightMatch(sTitle, query)
+          }
+          return '<span class="bookmark-sub-card" data-url="' + esc(s.url) + '" title="' + esc(s.title || s.url) + '">'
+            + (sIcon ? '<img src="' + esc(sIcon) + '" alt="">' : '')
+            + '<span class="sub-title">' + sTitle + '</span>'
+            + '<span class="sub-arrow">↗</span>'
+            + '</span>'
+        }).join('') + '</div>'
+      }
+
       return '<div class="bookmark-item" data-id="' + esc(b.id) + '" data-url="' + esc(b.url) + '">'
+        + '<div class="bookmark-topline">'
+        + '<div class="bookmark-logo" title="' + openTitle + '">'
         + (icon ? '<img src="' + esc(icon) + '" alt="">' : '')
-        + '<div class="bookmark-item-info">'
-        + '<div class="bookmark-item-title">' + titleHtml + '</div>'
-        + '<div class="bookmark-item-sub">'
-        + '<span class="bookmark-item-url">' + urlHtml + '</span>'
+        + '<span class="bookmark-logo-fallback" style="' + (icon ? 'display:none' : '') + '">' + esc(initial) + '</span>'
+        + '</div>'
+        + '<div class="bookmark-titlewrap" title="' + openTitle + '">'
+        + '<div class="bookmark-title-row">'
+        + '<span class="bookmark-name">' + titleHtml + '</span>'
+        + '<span class="bookmark-open-hint">↗</span>'
+        + '</div>'
+        + '<div class="bookmark-meta-row">'
+        + '<span class="bookmark-domain">' + urlHtml + '</span>'
         + catBadge
         + '</div>'
         + '</div>'
-        + '<span class="bookmark-item-del" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '" title="' + esc(chrome.i18n.getMessage('delete')) + '">' + closeSvg + '</span>'
+        + '<span class="bookmark-del-btn" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '" title="' + deleteTitle + '">' + closeSvg + '</span>'
+        + '</div>'
+        + (previewHtml ? '<div class="bookmark-preview">' + previewHtml + '</div>' : '')
+        + subsHtml
         + '</div>'
     }).join('')
 
@@ -753,14 +956,50 @@
   }
 
   function checkCurrentPageMatch(url) {
-    if (!url || !allBookmarks.length) { hideBookmarkDetail(); return }
-    var normUrl = window.LinkVaultSavePayload ? window.LinkVaultSavePayload.normalizeUrlForMatch(url) : url.replace(/\/+$/, '')
-    var matched = allBookmarks.find(function (b) {
-      var bNorm = window.LinkVaultSavePayload ? window.LinkVaultSavePayload.normalizeUrlForMatch(b.url) : (b.url || '').replace(/\/+$/, '')
-      return bNorm === normUrl
-    })
-    if (matched) showBookmarkDetail(matched)
-    else hideBookmarkDetail()
+    if (!url || !allBookmarks.length) {
+      hideBookmarkDetail()
+      renderParentOptions(url)
+      return
+    }
+    var matchRes = window.LinkVaultSidepanelMatch
+      ? window.LinkVaultSidepanelMatch.findBookmarkMatch(allBookmarks, url)
+      : { exactMatch: null, domainParent: null }
+
+    if (!matchRes.exactMatch && !window.LinkVaultSidepanelMatch) {
+      var normUrl = (url || '').replace(/\/+$/, '')
+      matchRes.exactMatch = allBookmarks.find(function (b) {
+        return (b.url || '').replace(/\/+$/, '') === normUrl
+      }) || null
+    }
+
+    if (matchRes.exactMatch) {
+      if (domainParentNotice) domainParentNotice.classList.add('hidden')
+      showBookmarkDetail(matchRes.exactMatch)
+    } else {
+      hideBookmarkDetail()
+      renderParentOptions(url)
+      // 若当前页未被收藏，但属于某个已收藏的主站
+      if (matchRes.domainParent && domainParentNotice) {
+        var dp = matchRes.domainParent
+        var isDpTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(dp.title) : false
+        if (dpNoticeName) dpNoticeName.textContent = dp._decryptedTitle || (isDpTitleCipher ? (domain(dp.url) || chrome.i18n.getMessage('encrypted_bookmark')) : (dp.title || domain(dp.url)))
+        var isDpNotesCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(dp.notes) : false
+        var dpNoteCandidate = dp._decryptedNotes !== undefined ? dp._decryptedNotes : (isDpNotesCipher ? '' : dp.notes)
+        var pNotes = dpNoteCandidate ? (window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.formatNotesForDisplay(dpNoteCandidate) : dpNoteCandidate.trim()) : ''
+        if (isDpNotesCipher && !dp._decryptedNotes && dpNotesPreview) {
+          dpNotesPreview.innerHTML = '<span class="bd-encrypted-lock-hint" data-action="unlock-notes" title="' + esc(chrome.i18n.getMessage('click_to_unlock')) + '">🔒 ' + esc(chrome.i18n.getMessage('encrypted_notes_locked')) + '</span>'
+          dpNotesPreview.classList.remove('hidden')
+        } else if (pNotes && dpNotesPreview) {
+          dpNotesPreview.textContent = pNotes
+          dpNotesPreview.classList.remove('hidden')
+        } else if (dpNotesPreview) {
+          dpNotesPreview.classList.add('hidden')
+        }
+        domainParentNotice.classList.remove('hidden')
+      } else if (domainParentNotice) {
+        domainParentNotice.classList.add('hidden')
+      }
+    }
   }
 
   // ── 详情面板 ──
@@ -769,6 +1008,7 @@
     var localGen = ++_detailGen
     currentMatchedBookmark = bm
     if (saveOptionsWrap) saveOptionsWrap.classList.add('hidden')
+    if (domainParentNotice) domainParentNotice.classList.add('hidden')
     bookmarkDetail.classList.remove('hidden')
     passwordRevealed = false
 
@@ -776,19 +1016,135 @@
       bdCategorySelect.value = bm.category_id || 'uncategorized'
     }
 
-    if (bdNotesEditWrap) bdNotesEditWrap.classList.add('hidden')
-    if (bm.notes && bm.notes.trim()) {
-      bdNotesWrap.classList.remove('hidden')
-      bdNotes.textContent = bm.notes
-    } else {
-      bdNotesWrap.classList.add('hidden')
+    var hierarchy = window.LinkVaultSidepanelMatch
+      ? window.LinkVaultSidepanelMatch.resolveSiteHierarchy(allBookmarks, bm, currentTab && currentTab.url)
+      : { isSub: !!bm.parent_id, parentBm: null, mainSiteTitle: '', mainSiteNotes: bm.notes || '', pageNotes: '', subBookmarks: [], effectivePasswordBm: bm }
+
+    // 徽标状态更新：主书签显示「已收藏」，子书签显示「已收藏 (子书签)」
+    if (bdSavedBadge) {
+      bdSavedBadge.textContent = hierarchy.isSub ? chrome.i18n.getMessage('already_saved_sub') : chrome.i18n.getMessage('already_saved')
     }
 
+    // ── 父子书签关系展示 ──
+    if (hierarchy.isSub && hierarchy.parentBm) {
+      var parentBm = hierarchy.parentBm
+      var isParentTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(parentBm.title) : false
+      var pTitle = parentBm._decryptedTitle || (isParentTitleCipher ? (domain(parentBm.url) || chrome.i18n.getMessage('encrypted_bookmark')) : (parentBm.title || domain(parentBm.url)))
+      if (bdParentWrap && bdParentTitle && bdParentLink) {
+        bdParentTitle.textContent = pTitle
+        bdParentLink.onclick = function (e) {
+          e.preventDefault()
+          if (parentBm.url && isSafeHttpUrl(parentBm.url)) {
+            chrome.tabs.create({ url: parentBm.url })
+          }
+        }
+        bdParentWrap.classList.remove('hidden')
+      }
+    } else if (bdParentWrap) {
+      bdParentWrap.classList.add('hidden')
+    }
+
+    // ── 主站备注展示（子书签时重点展示所属主站的备注） ──
+    if (hierarchy.isSub && hierarchy.parentBm) {
+      var pRawNotes = hierarchy.mainSiteNotes || ''
+      var isParentCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(pRawNotes) : false
+      var pDecrypted = hierarchy.parentBm._decryptedNotes
+      if (isParentCipher && !pDecrypted && sessionMasterPassword) {
+        var canary = await ensureCanaryData()
+        if (canary && window.LinkVaultCrypto) {
+          pDecrypted = await window.LinkVaultCrypto.decryptTextIfCipher(pRawNotes, sessionMasterPassword, canary)
+          if (pDecrypted) hierarchy.parentBm._decryptedNotes = pDecrypted
+        }
+      }
+      if (localGen !== _detailGen) return
+
+      var pFinalNotes = pDecrypted !== undefined ? pDecrypted : (isParentCipher ? '' : pRawNotes)
+      var pDisplayNotes = window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.formatNotesForDisplay(pFinalNotes) : pFinalNotes.trim()
+      if (bdParentNotesWrap && bdParentNotes) {
+        if (isParentCipher && !pDecrypted) {
+          bdParentNotes.innerHTML = '<span class="bd-encrypted-lock-hint" data-action="unlock-notes" title="' + esc(chrome.i18n.getMessage('click_to_unlock')) + '">🔒 ' + esc(chrome.i18n.getMessage('encrypted_notes_locked')) + '</span>'
+        } else {
+          bdParentNotes.textContent = pDisplayNotes || chrome.i18n.getMessage('no_parent_notes')
+        }
+        if (bdParentNotesSource) {
+          var pSrcTitle = hierarchy.parentBm._decryptedTitle || (isParentTitleCipher ? domain(hierarchy.parentBm.url) : (hierarchy.mainSiteTitle || ''))
+          bdParentNotesSource.textContent = '(' + (pSrcTitle || '') + ')'
+        }
+        bdParentNotesWrap.classList.remove('hidden')
+      }
+    } else if (bdParentNotesWrap) {
+      bdParentNotesWrap.classList.add('hidden')
+    }
+
+    // ── 本页备注查看模式 ──
+    if (bdNotesEditWrap) bdNotesEditWrap.classList.add('hidden')
+    var rawNotes = hierarchy.isSub ? hierarchy.pageNotes : (bm.notes || '')
+    var isNotesCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(rawNotes) : false
+    var bmDecrypted = hierarchy.isSub ? bm._decryptedNotes : (bm._decryptedNotes || (hierarchy.matchedBm && hierarchy.matchedBm._decryptedNotes))
+    if (isNotesCipher && !bmDecrypted && sessionMasterPassword) {
+      var canary2 = await ensureCanaryData()
+      if (canary2 && window.LinkVaultCrypto) {
+        bmDecrypted = await window.LinkVaultCrypto.decryptTextIfCipher(rawNotes, sessionMasterPassword, canary2)
+        if (bmDecrypted) {
+          bm._decryptedNotes = bmDecrypted
+          if (hierarchy.matchedBm) hierarchy.matchedBm._decryptedNotes = bmDecrypted
+        }
+      }
+    }
+    if (localGen !== _detailGen) return
+
+    var finalNotes = bmDecrypted !== undefined ? bmDecrypted : (isNotesCipher ? '' : rawNotes)
+    var displayNotes = window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.formatNotesForDisplay(finalNotes) : finalNotes.trim()
+    if (bdNotesWrap && bdNotes) {
+      if (isNotesCipher && !bmDecrypted) {
+        bdNotesWrap.classList.remove('hidden')
+        bdNotes.innerHTML = '<span class="bd-encrypted-lock-hint" data-action="unlock-notes" title="' + esc(chrome.i18n.getMessage('click_to_unlock')) + '">🔒 ' + esc(chrome.i18n.getMessage('encrypted_notes_locked')) + '</span>'
+        if (bdNotesLabel) bdNotesLabel.textContent = hierarchy.isSub ? chrome.i18n.getMessage('page_notes') : chrome.i18n.getMessage('notes')
+      } else if (displayNotes) {
+        bdNotesWrap.classList.remove('hidden')
+        bdNotes.textContent = displayNotes
+        if (bdNotesLabel) bdNotesLabel.textContent = hierarchy.isSub ? chrome.i18n.getMessage('page_notes') : chrome.i18n.getMessage('notes')
+      } else if (!hierarchy.isSub) {
+        // 主站且暂无备注
+        bdNotesWrap.classList.remove('hidden')
+        bdNotes.textContent = chrome.i18n.getMessage('no_notes')
+        if (bdNotesLabel) bdNotesLabel.textContent = chrome.i18n.getMessage('notes')
+      } else {
+        // 子书签且暂无专属备注（用户已在上方看到主站备注）
+        bdNotesWrap.classList.add('hidden')
+      }
+    }
+
+    // ── 关联子书签列表展示（主站和子站均展示该站的全部子书签） ──
+    var subs = hierarchy.subBookmarks || []
+    if (subs.length > 0 && bdSubsWrap && bdSubsList) {
+      if (bdSubsCount) bdSubsCount.textContent = '(' + subs.length + ')'
+      var curNorm = window.LinkVaultSidepanelMatch ? window.LinkVaultSidepanelMatch.normalizeUrl(bm.url) : (bm.url || '').replace(/\/+$/, '')
+      bdSubsList.innerHTML = subs.map(function (s) {
+        var sHost = domain(s.url)
+        var sIcon = s.icon || (sHost ? 'https://www.google.com/s2/favicons?domain=' + sHost + '&sz=16' : '')
+        var sNorm = window.LinkVaultSidepanelMatch ? window.LinkVaultSidepanelMatch.normalizeUrl(s.url) : (s.url || '').replace(/\/+$/, '')
+        var isCurrent = sNorm === curNorm
+        var isSubTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(s.title) : false
+        var sTitleText = s._decryptedTitle || (isSubTitleCipher ? (sHost || chrome.i18n.getMessage('encrypted_bookmark')) : (s.title || sHost))
+        return '<div class="bd-sub-item' + (isCurrent ? ' current-sub' : '') + '" data-url="' + esc(s.url) + '" title="' + esc(s.url) + '">'
+          + (sIcon ? '<img src="' + esc(sIcon) + '" alt="">' : '')
+          + '<div class="bd-sub-title">' + esc(sTitleText) + '</div>'
+          + (isCurrent ? '<span class="bd-sub-tag">' + esc(chrome.i18n.getMessage('current_page_tag')) + '</span>' : '<span class="bd-sub-btn">↗</span>')
+          + '</div>'
+      }).join('')
+      bdSubsWrap.classList.remove('hidden')
+    } else if (bdSubsWrap) {
+      bdSubsWrap.classList.add('hidden')
+    }
+
+    // ── 密码展示与主站继承 ──
     currentDetailPassword = null
     var hasPw = false
-    if (loggedIn && userId && bm.id) {
+    var pwTargetId = hierarchy.effectivePasswordBm ? hierarchy.effectivePasswordBm.id : bm.id
+    if (loggedIn && userId && pwTargetId) {
       try {
-        var pwRes = await sb.from('bookmarks').select('password').eq('id', bm.id).eq('user_id', userId).is('deleted_at', null).single()
+        var pwRes = await sb.from('bookmarks').select('password').eq('id', pwTargetId).eq('user_id', userId).is('deleted_at', null).single()
         if (localGen !== _detailGen) return
         if (!pwRes.error && pwRes.data) {
           var pw = pwRes.data.password
@@ -802,6 +1158,11 @@
       bdPasswordWrap.classList.remove('hidden')
       bdPasswordText.textContent = '••••••••'
       bdPasswordText.className = 'bd-pw-text'
+      if (bdPasswordLabel) {
+        bdPasswordLabel.textContent = (hierarchy.isSub && hierarchy.effectivePasswordBm && hierarchy.effectivePasswordBm.id !== bm.id)
+          ? chrome.i18n.getMessage('parent_password')
+          : chrome.i18n.getMessage('password')
+      }
       bdPwShow.innerHTML = (Icons.eye || '') + ' <span>' + esc(chrome.i18n.getMessage('show')) + '</span>'
       bdPwCopy.innerHTML = (Icons.copy || '') + ' <span>' + esc(chrome.i18n.getMessage('copy')) + '</span>'
     } else { bdPasswordWrap.classList.add('hidden') }
@@ -820,9 +1181,13 @@
     currentDetailPassword = null
     bookmarkDetail.classList.add('hidden')
     if (bdNotesEditWrap) bdNotesEditWrap.classList.add('hidden')
+    if (bdParentWrap) bdParentWrap.classList.add('hidden')
+    if (bdParentNotesWrap) bdParentNotesWrap.classList.add('hidden')
+    if (bdSubsWrap) bdSubsWrap.classList.add('hidden')
     if (saveOptionsWrap) saveOptionsWrap.classList.remove('hidden')
     btnSave.classList.remove('hidden')
   }
+
 
   // ── 模态框：主密码解锁 ──
   function requestMasterPassword() {
@@ -898,6 +1263,10 @@
           clearMasterPasswordNow()
           return
         }
+        decryptAllNotesIfUnlocked().then(function () {
+          if (currentMatchedBookmark) showBookmarkDetail(currentMatchedBookmark)
+          applyFilterAndRender()
+        })
       } else {
         if (window.LinkVaultCrypto) plaintext = await window.LinkVaultCrypto.autoDecryptPassword(stored, '')
         else plaintext = typeof stored === 'string' ? stored : ''
@@ -912,6 +1281,58 @@
       clearMasterPasswordNow()
     }
   })
+
+  // ── 点击解锁加密备注事件 ──
+  async function handleUnlockEncryptedNotes() {
+    if (!sessionMasterPassword) {
+      var entered = await requestMasterPassword()
+      if (!entered) return
+      var canary = await ensureCanaryData()
+      if (!canary) {
+        toast(chrome.i18n.getMessage('unlock_data_unavailable'))
+        return
+      }
+      if (window.LinkVaultCrypto && window.LinkVaultCrypto.verifyMasterPassword) {
+        var ok = await window.LinkVaultCrypto.verifyMasterPassword(entered, canary)
+        if (!ok) {
+          toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
+          return
+        }
+      }
+      sessionMasterPassword = entered
+      scheduleClearMasterPassword()
+    }
+    await decryptAllNotesIfUnlocked()
+    if (currentMatchedBookmark) {
+      showBookmarkDetail(currentMatchedBookmark)
+    } else {
+      loadCurrentTab()
+    }
+    applyFilterAndRender()
+    toast(chrome.i18n.getMessage('refreshed'), 1000)
+  }
+
+  if (bookmarkDetail) {
+    bookmarkDetail.addEventListener('click', async function (e) {
+      var unlockBtn = e.target.closest('[data-action="unlock-notes"]')
+      if (unlockBtn) {
+        e.preventDefault()
+        e.stopPropagation()
+        await handleUnlockEncryptedNotes()
+      }
+    })
+  }
+
+  if (domainParentNotice) {
+    domainParentNotice.addEventListener('click', async function (e) {
+      var unlockBtn = e.target.closest('[data-action="unlock-notes"]')
+      if (unlockBtn) {
+        e.preventDefault()
+        e.stopPropagation()
+        await handleUnlockEncryptedNotes()
+      }
+    })
+  }
 
   bdPwCopy.addEventListener('click', async function () {
     if (!currentMatchedBookmark || !currentDetailPassword) return
@@ -933,37 +1354,131 @@
   })
 
   // ── 行内编辑备注 ──
-  bdEditNotes.addEventListener('click', function () {
+  var editingNotesTargetId = null
+
+  if (bdEditParentNotes) {
+    bdEditParentNotes.addEventListener('click', async function () {
+      if (!currentMatchedBookmark || !currentMatchedBookmark.parent_id) return
+      var parentBm = allBookmarks.find(function (p) { return p.id === currentMatchedBookmark.parent_id })
+      if (!parentBm) return
+      var raw = parentBm.notes || ''
+      var isCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(raw) : false
+      if (isCipher) {
+        if (!sessionMasterPassword) {
+          sessionMasterPassword = await requestMasterPassword()
+          if (!sessionMasterPassword) return
+          var canary = await ensureCanaryData()
+          if (!canary) {
+            toast(chrome.i18n.getMessage('unlock_data_unavailable'))
+            clearMasterPasswordNow()
+            return
+          }
+          if (window.LinkVaultCrypto && window.LinkVaultCrypto.verifyMasterPassword) {
+            var ok = await window.LinkVaultCrypto.verifyMasterPassword(sessionMasterPassword, canary)
+            if (!ok) {
+              toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
+              clearMasterPasswordNow()
+              return
+            }
+          }
+        }
+        var canary2 = await ensureCanaryData()
+        var dec = await window.LinkVaultCrypto.decryptTextIfCipher(raw, sessionMasterPassword, canary2)
+        if (!dec && raw) {
+          toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
+          clearMasterPasswordNow()
+          return
+        }
+        parentBm._decryptedNotes = dec
+        scheduleClearMasterPassword()
+      }
+      editingNotesTargetId = parentBm.id
+      bdNotesWrap.classList.add('hidden')
+      if (bdParentNotesWrap) bdParentNotesWrap.classList.add('hidden')
+      bdNotesEditWrap.classList.remove('hidden')
+      if (bdNotesEditLabel) bdNotesEditLabel.textContent = chrome.i18n.getMessage('parent_notes')
+      var noteToEdit = parentBm._decryptedNotes !== undefined ? parentBm._decryptedNotes : (isCipher ? '' : raw)
+      var clean = window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.formatNotesForDisplay(noteToEdit) : noteToEdit.trim()
+      bdNotesInput.value = clean
+      bdNotesInput.focus()
+    })
+  }
+
+  bdEditNotes.addEventListener('click', async function () {
     if (!currentMatchedBookmark) return
+    var raw = currentMatchedBookmark.notes || ''
+    var isCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(raw) : false
+    if (isCipher) {
+      if (!sessionMasterPassword) {
+        sessionMasterPassword = await requestMasterPassword()
+        if (!sessionMasterPassword) return
+        var canary = await ensureCanaryData()
+        if (!canary) {
+          toast(chrome.i18n.getMessage('unlock_data_unavailable'))
+          clearMasterPasswordNow()
+          return
+        }
+        if (window.LinkVaultCrypto && window.LinkVaultCrypto.verifyMasterPassword) {
+          var ok = await window.LinkVaultCrypto.verifyMasterPassword(sessionMasterPassword, canary)
+          if (!ok) {
+            toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
+            clearMasterPasswordNow()
+            return
+          }
+        }
+      }
+      var canary2 = await ensureCanaryData()
+      var dec = await window.LinkVaultCrypto.decryptTextIfCipher(raw, sessionMasterPassword, canary2)
+      if (!dec && raw) {
+        toast(chrome.i18n.getMessage('decrypt_failed_check_password'))
+        clearMasterPasswordNow()
+        return
+      }
+      currentMatchedBookmark._decryptedNotes = dec
+      scheduleClearMasterPassword()
+    }
+    editingNotesTargetId = currentMatchedBookmark.id
     bdNotesWrap.classList.add('hidden')
+    if (bdParentNotesWrap) bdParentNotesWrap.classList.add('hidden')
     bdNotesEditWrap.classList.remove('hidden')
-    bdNotesInput.value = currentMatchedBookmark.notes || ''
+    if (bdNotesEditLabel) {
+      bdNotesEditLabel.textContent = currentMatchedBookmark.parent_id ? chrome.i18n.getMessage('page_notes') : chrome.i18n.getMessage('notes')
+    }
+    var noteToEdit = currentMatchedBookmark._decryptedNotes !== undefined ? currentMatchedBookmark._decryptedNotes : (isCipher ? '' : raw)
+    var clean = window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.formatNotesForDisplay(noteToEdit) : noteToEdit.trim()
+    bdNotesInput.value = clean
     bdNotesInput.focus()
   })
 
   bdNotesCancel.addEventListener('click', function () {
     bdNotesEditWrap.classList.add('hidden')
-    if (currentMatchedBookmark && currentMatchedBookmark.notes) {
-      bdNotesWrap.classList.remove('hidden')
-    }
+    editingNotesTargetId = null
+    if (currentMatchedBookmark) showBookmarkDetail(currentMatchedBookmark)
   })
 
   async function saveInlineNotes() {
-    if (!currentMatchedBookmark) return
+    var targetId = editingNotesTargetId || (currentMatchedBookmark && currentMatchedBookmark.id)
+    if (!targetId) return
     var newNotes = bdNotesInput.value.trim()
-    var r = await sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', currentMatchedBookmark.id).eq('user_id', userId)
+    var r = await sb.from('bookmarks').update({ notes: newNotes, updated_at_num: Date.now() }).eq('id', targetId).eq('user_id', userId)
     var outcome = window.LinkVaultNotesUpdate ? window.LinkVaultNotesUpdate.notesUpdateOutcome(newNotes, r) : { writeLocal: true, toast: chrome.i18n.getMessage('refreshed') }
     if (outcome.writeLocal) {
-      currentMatchedBookmark.notes = newNotes
-      var found = allBookmarks.find(function (b) { return b.id === currentMatchedBookmark.id })
-      if (found) found.notes = newNotes
-      bdNotes.textContent = newNotes
+      var found = allBookmarks.find(function (b) { return b.id === targetId })
+      if (found) {
+        found.notes = newNotes
+        delete found._decryptedNotes
+      }
+      if (currentMatchedBookmark && currentMatchedBookmark.id === targetId) {
+        currentMatchedBookmark.notes = newNotes
+        delete currentMatchedBookmark._decryptedNotes
+      }
     }
     toast(outcome.toast, 1500)
     bdNotesEditWrap.classList.add('hidden')
-    if (newNotes) bdNotesWrap.classList.remove('hidden')
-    else bdNotesWrap.classList.add('hidden')
+    editingNotesTargetId = null
+    if (currentMatchedBookmark) showBookmarkDetail(currentMatchedBookmark)
   }
+
 
   bdNotesSave.addEventListener('click', saveInlineNotes)
   bdNotesInput.addEventListener('keydown', function (e) {
@@ -1055,6 +1570,7 @@
     }
 
     var selectedCat = (saveCategorySelect && saveCategorySelect.value) || 'uncategorized'
+    var selectedParent = (saveParentSelect && saveParentSelect.value) || null
     var notesVal = (quickNotesInput && quickNotesInput.value.trim()) || ''
 
     var payload
@@ -1063,6 +1579,7 @@
         url: currentTab.url,
         title: currentTab.title,
         categoryId: selectedCat,
+        parentId: selectedParent,
         notes: notesVal,
         favIconUrl: currentTab.favIconUrl,
         userId: userId,
@@ -1092,6 +1609,8 @@
     allBookmarks.unshift(savedBm)
     if (quickNotesInput) quickNotesInput.value = ''
     if (quickNotesWrap) quickNotesWrap.classList.add('hidden')
+    if (saveParentRow) saveParentRow.classList.add('hidden')
+
 
     applyFilterAndRender()
     showBookmarkDetail(savedBm)

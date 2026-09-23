@@ -34,6 +34,10 @@ function getApi() {
     ) => Promise<string>
     autoDecryptPassword: (stored: unknown, masterPassword: unknown) => Promise<string>
     encodeToBase64: (plaintext: unknown) => string
+    isThreePartCipher: (s: unknown) => boolean
+    decryptTextIfCipher: (text: unknown, masterPassword: unknown, canaryData: unknown) => Promise<string>
+    clearKeyCache: () => void
+    verifyMasterPassword: (masterPassword: unknown, canaryData: unknown) => Promise<boolean>
   }
 }
 
@@ -261,3 +265,58 @@ describe('extension/crypto.js — encodeToBase64 护栏', () => {
     expect(getApi().encodeToBase64('ñ').length).toBeGreaterThan(0)
   })
 })
+
+describe('extension/crypto.js — isThreePartCipher 密文精确识别', () => {
+  it('标准三段 Base64 密文识别为 true', () => {
+    const cipher = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24)
+    expect(getApi().isThreePartCipher(cipher)).toBe(true)
+  })
+
+  it('普通点号分隔文本（域名、版本号）识别为 false', () => {
+    expect(getApi().isThreePartCipher('www.example.com')).toBe(false)
+    expect(getApi().isThreePartCipher('v1.2.3')).toBe(false)
+    expect(getApi().isThreePartCipher('127.0.0.1')).toBe(false)
+  })
+
+  it('段长不符或非 base64 字符识别为 false', () => {
+    expect(getApi().isThreePartCipher('A.B.C')).toBe(false)
+    expect(getApi().isThreePartCipher('A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(10))).toBe(false)
+    expect(getApi().isThreePartCipher('A'.repeat(44) + '!' + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24))).toBe(false)
+  })
+
+  it('非字符串或空值识别为 false', () => {
+    expect(getApi().isThreePartCipher('')).toBe(false)
+    expect(getApi().isThreePartCipher(null)).toBe(false)
+    expect(getApi().isThreePartCipher(undefined)).toBe(false)
+    expect(getApi().isThreePartCipher(123)).toBe(false)
+  })
+})
+
+describe('extension/crypto.js — decryptTextIfCipher 安全解密与非密文放行', () => {
+  it('明文文本原样放行', async () => {
+    expect(await getApi().decryptTextIfCipher('普通备注', MASTER, CANARY)).toBe('普通备注')
+    expect(await getApi().decryptTextIfCipher('<p>HTML备注</p>', MASTER, CANARY)).toBe('<p>HTML备注</p>')
+    expect(await getApi().decryptTextIfCipher('', MASTER, CANARY)).toBe('')
+    expect(await getApi().decryptTextIfCipher(null, MASTER, CANARY)).toBe('')
+  })
+
+  it('未提供主密码或解锁数据时，密文返回空串（绝不回吐密文乱码）', async () => {
+    const cipher = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24)
+    expect(await getApi().decryptTextIfCipher(cipher, '', CANARY)).toBe('')
+    expect(await getApi().decryptTextIfCipher(cipher, null, CANARY)).toBe('')
+    expect(await getApi().decryptTextIfCipher(cipher, MASTER, null)).toBe('')
+    expect(await getApi().decryptTextIfCipher(cipher, MASTER, { salt: null })).toBe('')
+  })
+
+  it('clearKeyCache 不抛异常', () => {
+    expect(() => getApi().clearKeyCache()).not.toThrow()
+  })
+
+  it('verifyMasterPassword 在缺失参数时返回 false', async () => {
+    expect(await getApi().verifyMasterPassword('', CANARY)).toBe(false)
+    expect(await getApi().verifyMasterPassword(MASTER, null)).toBe(false)
+    expect(await getApi().verifyMasterPassword(MASTER, { salt: null, canary: 'abc' })).toBe(false)
+    expect(await getApi().verifyMasterPassword(MASTER, { salt: [1], canary: '' })).toBe(false)
+  })
+})
+

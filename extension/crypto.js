@@ -132,6 +132,30 @@
     return b64.test(salt) && b64.test(iv) && b64.test(data)
   }
 
+  var _cachedKey = null
+  var _cachedKeyMeta = null
+
+  async function getOrDeriveGlobalKey(masterPassword, canaryData) {
+    if (!masterPassword) throw new Error('需要主密码才能解密')
+    if (!canaryData || !canaryData.salt) throw new Error('缺少解锁数据 (canaryData)')
+    var it = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
+    var saltArr = canaryData.salt instanceof Uint8Array ? Array.from(canaryData.salt) : (canaryData.salt || [])
+    var saltStr = saltArr.join(',')
+    if (_cachedKey && _cachedKeyMeta && _cachedKeyMeta.pw === masterPassword && _cachedKeyMeta.salt === saltStr && _cachedKeyMeta.it === it) {
+      return _cachedKey
+    }
+    var canarySalt = new Uint8Array(canaryData.salt)
+    var key = await deriveKey(masterPassword, canarySalt, it)
+    _cachedKey = key
+    _cachedKeyMeta = { pw: masterPassword, salt: saltStr, it: it }
+    return key
+  }
+
+  function clearKeyCache() {
+    _cachedKey = null
+    _cachedKeyMeta = null
+  }
+
   async function decryptWithGlobalKey(stored, masterPassword, canaryData) {
     if (!stored) return ''
     // 形态 B：三段串 → 拆解为对象
@@ -145,9 +169,7 @@
     if (!masterPassword) throw new Error('需要主密码才能解密')
     if (!canaryData || !canaryData.salt) throw new Error('缺少解锁数据 (canaryData)')
     try {
-      var canarySalt = new Uint8Array(canaryData.salt)
-      var it = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
-      var globalKey = await deriveKey(masterPassword, canarySalt, it)
+      var globalKey = await getOrDeriveGlobalKey(masterPassword, canaryData)
       var iv = _base64ToBuf(stored.iv)
       var data = _base64ToBuf(stored.data)
       var decrypted = await crypto.subtle.decrypt(
@@ -162,14 +184,65 @@
     }
   }
 
+  async function verifyCanary(encrypted, key) {
+    if (!_isThreePartCipher(encrypted)) return false
+    try {
+      var parts = encrypted.split('.')
+      var iv = _base64ToBuf(parts[1])
+      var data = _base64ToBuf(parts[2])
+      var decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+      )
+      return _fromBuffer(decrypted) === 'linkvault-canary-v1'
+    } catch (_) {
+      return false
+    }
+  }
+
+  async function verifyMasterPassword(masterPassword, canaryData) {
+    if (!masterPassword || !canaryData || !canaryData.salt || !canaryData.canary) return false
+    try {
+      var key = await getOrDeriveGlobalKey(masterPassword, canaryData)
+      return await verifyCanary(canaryData.canary, key)
+    } catch (_) {
+      return false
+    }
+  }
+
+  async function decryptTextIfCipher(text, masterPassword, canaryData) {
+    if (!text || typeof text !== 'string') return text || ''
+    if (!_isThreePartCipher(text)) return text
+    if (!masterPassword || !canaryData || !canaryData.salt) return ''
+    try {
+      return await decryptWithGlobalKey(text, masterPassword, canaryData)
+    } catch (_) {
+      return ''
+    }
+  }
+
   /** base64 编码（保存时用） */
   function encodeToBase64(plaintext) {
     return btoa(plaintext)
   }
 
-  window.LinkVaultCrypto = {
+  var api = {
+    isThreePartCipher: _isThreePartCipher,
     autoDecryptPassword: autoDecryptPassword,
     decryptWithGlobalKey: decryptWithGlobalKey,
+    decryptTextIfCipher: decryptTextIfCipher,
+    getOrDeriveGlobalKey: getOrDeriveGlobalKey,
+    clearKeyCache: clearKeyCache,
+    verifyCanary: verifyCanary,
+    verifyMasterPassword: verifyMasterPassword,
     encodeToBase64: encodeToBase64,
+  }
+
+  if (typeof window !== 'undefined') {
+    window.LinkVaultCrypto = api
+  }
+  if (typeof globalThis !== 'undefined') {
+    globalThis.LinkVaultCrypto = api
   }
 })()

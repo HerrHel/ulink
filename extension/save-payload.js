@@ -54,6 +54,7 @@
     var title = (params.title && String(params.title).trim()) || host || 'Untitled'
     var url = rawUrl.trim()
     var categoryId = (params.categoryId && String(params.categoryId).trim()) || 'uncategorized'
+    var parentId = (params.parentId && String(params.parentId).trim()) || null
     var notes = (params.notes && String(params.notes).trim()) || ''
     var icon = (params.favIconUrl && String(params.favIconUrl).trim()) || (host ? 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32' : '')
     var userId = params.userId || ''
@@ -71,7 +72,7 @@
       notes: notes,
       icon: icon,
       category_id: categoryId,
-      parent_id: null,
+      parent_id: parentId,
       order: order,
       use_count: 0,
       attributes: {},
@@ -80,6 +81,7 @@
       pinned_at: null,
       deleted_at: null,
     }
+
   }
 
   const api = {
