@@ -469,8 +469,8 @@ function buildBody(
   const bmMap: NotesBmMap = {}
   for (const b of bookmarks) bmMap[b.id] = { url: b.url }
   const notes = notesHtml(dict, group, bmMap)
-  // CTA 跳 App 的 hash 路由（#share/<gid>），降级入口。
-  const appUrl = `${appOrigin}/#share/${esc(gid)}`
+  // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存。
+  const appUrl = `${appOrigin}/app#share/${esc(gid)}`
 
   const isZh = dict.lang === 'zh-CN'
   const bmSectionTitle = isZh ? '收录的书签' : 'Bookmarks in this group'

@@ -18,7 +18,6 @@
  *   APP_ORIGIN       例如 https://ulink.ren（og:image / CTA 跳转用）
  */
 import { renderSharePage, renderNotFoundPage, renderUnavailablePage, type ShareLocale } from "../_lib/share-render.js"
-import { getAppAssets, type AppAssetsEnv } from "../_lib/app-assets.js"
 // 函数内边缘缓存（Cache API）：CF Pages 会覆写 Function 响应的 Cache-Control
 // （实测恒为 max-age=0，旧 60s 头从未生效），必须走显式缓存通道，设计见 share-cache.ts
 import {
@@ -26,7 +25,7 @@ import {
   EDGE_TTL_S, STALE_TTL_S,
 } from "../_lib/share-cache.js"
 
-interface ShareEnv extends AppAssetsEnv {
+interface ShareEnv {
   SUPABASE_URL?: string
   SUPABASE_ANON_KEY?: string
   APP_ORIGIN?: string
@@ -139,7 +138,6 @@ export async function onRequestGet(context: ShareContext): Promise<Response> {
     shareUrl,
     appOrigin,
     locale,
-    await getAppAssets(context.env, context.request.url),
   )
   // 双写边缘缓存（waitUntil 异步，不阻塞响应）：主键 5 分钟新鲜 + 24h 故障兜底副本
   context.waitUntil((async () => {
