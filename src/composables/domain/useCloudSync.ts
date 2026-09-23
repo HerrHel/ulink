@@ -32,10 +32,13 @@ import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 import { canAttemptSync, takeSyncRecovered, classifySyncError } from './syncCircuit.js'
 import { withLock } from '../../lib/withLock.js'
+import { saveAppData } from '../../stores/app.js'
+import { _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
+import type { EntityType } from '../../types.js'
 
 export { setSyncRemotePort, createMemorySyncPort, getSyncRemotePort } from './syncRemotePort.js'
 export { _isPendingSync, __testPendingSync } from './syncPending.js'
-export { _mergeIntoLocal, _deleteWithoutEcho } from './syncLocalMerge.js'
+export { _mergeIntoLocal, _deleteWithoutEcho, _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
 export { _opNeedsUnlock } from './syncPush.js'
 export { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 
@@ -86,6 +89,18 @@ export function useCloudSync() {
       if (!canAttemptSync()) return
       void withLock('linkvault-sync', pushFromQueue)
     }, 3000)
+  }
+
+  /** 绕过 3 秒防抖即刻推送（用于清空回收站/单项彻底删除等高危操作） */
+  async function syncImmediate(): Promise<boolean> {
+    if (!isLoggedIn.value) return false
+    enqueueDirtyAsOps()
+    if (_syncTimer) {
+      clearTimeout(_syncTimer)
+      _syncTimer = null
+    }
+    if (!canAttemptSync()) return false
+    return withLock('linkvault-sync', pushFromQueue)
   }
 
   /**
@@ -193,6 +208,31 @@ export function useCloudSync() {
       console.warn('[sync] graveyard probe failed (server guard remains as backstop):', graveyard.error)
     } else {
       for (const row of graveyard.data || []) graveyardKeys.add(`${row.table_name}:${row.item_id}`)
+    }
+
+    // 墓园本地物理收敛：他端已彻底删除的条目，本机必须彻底永久抹除（含回收站与存活态），
+    // 避免本机因旧缓存残留而在回收站发霉，或在网络故障/时钟偏差时以软删快照复活
+    if (graveyardKeys.size > 0) {
+      const purgeConfigs: Array<[SyncOp['table'], Array<{ id: string }>, EntityType]> = [
+        ['bookmarks', ds.bookmarks, 'bookmark'],
+        ['sibling_groups', ds.siblingGroups, 'group'],
+        ['categories', ds.categories, 'category'],
+        ['custom_attributes', ds.customAttributes, 'attribute'],
+      ]
+      let localPurged = false
+      for (const [table, items, type] of purgeConfigs) {
+        for (let i = items.length - 1; i >= 0; i--) {
+          const item = items[i]
+          if (graveyardKeys.has(`${table}:${item.id}`)) {
+            _permanentDeleteWithoutEcho(ds, type, item.id)
+            localPurged = true
+          }
+        }
+      }
+      if (localPurged) {
+        ds._syncMaps()
+        await saveAppData()
+      }
     }
 
     const allOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
@@ -376,7 +416,7 @@ export function useCloudSync() {
     syncLabel,
 
     pushToCloud: pushFromQueue, pullFromCloud: pullChanges, fullSync,
-    debouncedSync, initialSync, resetSyncState, resyncAllToCloud,
+    debouncedSync, syncImmediate, initialSync, resetSyncState, resyncAllToCloud,
     initOnlineListener, destroyOnlineListener,
     refreshPendingCount,
 
