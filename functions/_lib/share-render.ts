@@ -32,20 +32,20 @@ const T = {
     defaultCategoryName: '分享分类',
     notFoundTitle: '分享不存在 - 与链',
     notFoundHeading: '该分享不存在',
-    notFoundBody: '链接可能已失效，或分享者取消了公开',
+    notFoundBody: '私有链接可能已失效，或分享者已停止分享',
     unavailableTitle: '分享暂时无法访问 - 与链',
     unavailableHeading: '分享暂时无法访问',
     unavailableBody: '服务暂时不可用，请稍后重试；分享内容并未失效',
     backHome: '返回与链首页',
     logoText: '与链',
-    headSub: '公开分享',
-    desc: '{n} 个链接 · 由与链公开分享',
+    headSub: '私有链接分享',
+    desc: '{n} 个链接 · 凭专属私有链接访问',
     empty: '这个分享组还没有书签',
     emptyCategory: '这个分享分类还没有书签',
     count: '{n} 个链接',
     categoryMeta: '{n} 个书签 · {m} 个组',
     // ── 分类页（v2 卡片网格）──
-    catDesc: '{n} 个书签 · {m} 个组 · 由与链公开分享',
+    catDesc: '{n} 个书签 · {m} 个组 · 凭专属私有链接访问',
     catBookmarks: '{n} 个书签',
     catGroups: '{m} 个组',
     catExpand: '展开 / 收起组内书签',
@@ -72,15 +72,15 @@ const T = {
     defaultCategoryName: 'Shared category',
     notFoundTitle: 'Share not found - ulink',
     notFoundHeading: 'This share no longer exists',
-    notFoundBody: 'The link may have expired, or the owner stopped sharing it publicly',
+    notFoundBody: 'The link may have expired, or the owner stopped sharing it',
     unavailableTitle: 'Share temporarily unavailable - ulink',
     unavailableHeading: 'Share temporarily unavailable',
     unavailableBody: 'The service is temporarily unavailable. Please try again later — the share itself is fine',
     backHome: 'Back to ulink',
     logoText: 'ulink',
-    headSub: 'Public share',
-    desc: '{n} links · publicly shared via ulink',
-    desc_one: '{n} link · publicly shared via ulink',
+    headSub: 'Private share',
+    desc: '{n} links · shared via private link',
+    desc_one: '{n} link · shared via private link',
     empty: 'This shared group has no bookmarks yet',
     emptyCategory: 'This shared category has no bookmarks yet',
     count: '{n} links',
@@ -88,8 +88,8 @@ const T = {
     categoryMeta: '{n} bookmarks · {m} groups',
     categoryMeta_one: '{n} bookmark · {m} groups',
     // ── category page (v2 card grid) ──
-    catDesc: '{n} bookmarks · {m} groups · publicly shared via ulink',
-    catDesc_one: '{n} bookmark · {m} groups · publicly shared via ulink',
+    catDesc: '{n} bookmarks · {m} groups · shared via private link',
+    catDesc_one: '{n} bookmark · {m} groups · shared via private link',
     catBookmarks: '{n} bookmarks',
     catBookmarks_one: '{n} bookmark',
     catGroups: '{m} groups',
@@ -520,9 +520,8 @@ function notesHtml(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGro
 }
 
 /**
- * 主应用外壳（方案 B 骨架近似）：左侧导航占位 + 顶部条（只读 chip + CTA）+ 内容区。
- * 类名刻意避开 FALLBACK_JS 依赖的 .layout/.main/.bm-list/.toc，使旧布局 JS 自动失效
- * （img-error / taskItem 点击逻辑仍生效）。SPA 接管后整个 <body> 被 Vue 重建。
+ * 专栏画卷外壳：吸顶毛玻璃顶栏 + 居中自适应专栏容器 + 品牌传播尾部。
+ * 去除原后台侧边栏，以内容为绝对主角，SPA 接管前/后体验统一。
  */
 function buildAppShell(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
@@ -530,33 +529,43 @@ function buildAppShell(
   opts: { hdrMeta: string; ctaUrl: string; inner: string },
 ): string {
   const year = new Date().getUTCFullYear()
+  const isZh = dict.lang === 'zh-CN'
+  const slogan = isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault'
+  const ctaFoot = isZh ? '免费体验与链 ulink →' : 'Try ulink for free →'
   return [
-    `<div class="app">`,
-    `<aside class="rail">`,
-    `<a class="rail-logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
-    `<nav class="rail-nav">`,
-    `<span class="rail-skel"></span><span class="rail-skel"></span><span class="rail-skel"></span>`,
-    `</nav>`,
-    `</aside>`,
-    `<div class="panel">`,
-    `<header class="panel-hdr">`,
-    `<span class="hdr-chip">${esc(dict.headSub)}</span>`,
-    `<div class="hdr-right">${opts.hdrMeta}<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a></div>`,
-    `</header>`,
-    `<div class="panel-body">${opts.inner}</div>`,
-    `<footer class="foot">`,
-    `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
-    `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
-    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
-    `</footer>`,
+    `<div class="share-app">`,
+    `<header class="share-bar">`,
+    `<div class="share-bar-wrap">`,
+    `<a class="share-brand" href="${esc(appOrigin)}/" title="${esc(dict.backHome)}">`,
+    `<span class="share-logo">${LOGO_SVG}</span>`,
+    `<span class="share-brand-title">${esc(dict.logoText)}</span>`,
+    `</a>`,
+    `<span class="share-badge">${esc(dict.headSub)}</span>`,
+    `<div class="share-actions">`,
+    opts.hdrMeta,
+    `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a>`,
     `</div>`,
+    `</div>`,
+    `</header>`,
+    `<main class="share-container">`,
+    opts.inner,
+    `</main>`,
+    `<footer class="share-footer">`,
+    `<div class="share-footer-inner">`,
+    `<div class="share-footer-brand">`,
+    `<span class="footer-logo">${LOGO_SVG}</span>`,
+    `<span class="footer-name">${esc(dict.footerBrand)}</span>`,
+    `</div>`,
+    `<p class="share-footer-slogan">${slogan}</p>`,
+    `<a class="share-footer-cta" href="${esc(appOrigin)}/">${ctaFoot}</a>`,
+    `<span class="share-footer-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `</div>`,
+    `</footer>`,
     `</div>`,
   ].join("\n")
 }
 
-/** 构建 <body>（组分享）：主应用外壳（左导航占位 + 顶部只读条 + CTA）+ 聚焦卡（组名 + 笔记）。
- *  组内书签不渲染独立列表（对齐新版：组分享 = 聚焦组形态，书签仅以内联卡片出现在笔记中；
- *  SPA 接管后由主应用只读态渲染，SSR 只负责首屏与爬虫）。 */
+/** 构建 <body>（组分享）：Hero 卡片（大图标+标题+元信息）+ 笔记排版 + 收录书签完整卡片网格。 */
 function buildBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   group: PublicGroup,
@@ -575,21 +584,37 @@ function buildBody(
   const notes = notesHtml(dict, group, bmMap)
   // CTA 跳 App 的 hash 路由（#share/<gid>），降级入口（bundle 加载失败时手动进入 SPA）
   const appUrl = `${appOrigin}/#share/${esc(group.id)}`
+
+  const isZh = dict.lang === 'zh-CN'
+  const bmSectionTitle = isZh ? '收录的书签' : 'Bookmarks in this group'
+
+  const bookmarksHtml = count
+    ? [
+        `<section class="group-bookmarks-section">`,
+        `<div class="section-header">`,
+        `<h2 class="section-title">${bmSectionTitle}</h2>`,
+        `<span class="section-count">${count}</span>`,
+        `</div>`,
+        `<div class="bm-grid">`,
+        bookmarks.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n"),
+        `</div>`,
+        `</section>`,
+      ].join("\n")
+    : `<div class="empty">${esc(dict.empty)}</div>`
+
   const inner = [
-    `<div class="grp-layout">`,
-    `<div class="focus-card">`,
-    `<span class="focus-accent" aria-hidden="true"></span>`,
-    `<div class="focus-head">`,
-    `<span class="focus-icon">${groupIconMarkup(group, initial)}</span>`,
-    `<div class="focus-titlewrap">`,
-    `<h1 class="focus-name">${name}</h1>`,
-    `<div class="focus-meta">${countTag}${updatedTag}</div>`,
+    `<header class="group-hero">`,
+    `<span class="group-hero-accent" aria-hidden="true"></span>`,
+    `<span class="group-hero-icon">${groupIconMarkup(group, initial)}</span>`,
+    `<div class="group-hero-info">`,
+    `<h1 class="group-hero-title">${name}</h1>`,
+    `<div class="group-hero-meta">${countTag}${updatedTag}</div>`,
     `</div>`,
-    `</div>`,
-    notes.html,
-    `</div>`,
-    `</div>`,
-  ].join("\n")
+    `</header>`,
+    notes.html ? `<section class="group-notes-card">${notes.html}</section>` : '',
+    bookmarksHtml,
+  ].filter(Boolean).join("\n")
+
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
@@ -869,8 +894,7 @@ function buildLayoutSwitch(
   ].join("")
 }
 
-/** 构建 <body>（分类分享）：主应用外壳 + 分类头（真实分类名/计数）+ 卡片网格骨架占位。
- *  真实书签卡片由 SPA 接管后渲染（分类分享 = 选中分类形态）；SSR 只负责首屏与爬虫。 */
+/** 构建 <body>（分类分享）：主应用外壳 + 分类头（真实分类名/计数）+ 卡片网格（组卡在前 + 散落书签卡）。 */
 function buildCategoryBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   category: PublicCategory,
@@ -884,6 +908,11 @@ function buildCategoryBody(
   const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
   const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
+  // data-bm-id → 书签 URL 映射（组 notes 内联书签转可点击 <a>）
+  const bmMap: NotesBmMap = {}
+  for (const b of bookmarks || []) {
+    if (b && b.id) bmMap[b.id] = { url: b.url }
+  }
   // 计数口径：与网格里实际渲染的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
   const count =
     groupCards.reduce((s, e) => s + e.items.length, 0) +
@@ -895,15 +924,19 @@ function buildCategoryBody(
       ? `<span class="meta-tag">${esc(fill(pick(dict, 'catGroups', groupCount), { m: groupCount }))}</span>`
       : "",
   ].join("")
+  const cards = [
+    ...groupCards.map((e, i) => buildGroupCard(dict, e, i, bmMap)),
+    ...loose.map((c) => buildLooseBookmarkCard(dict, c)),
+  ]
+  const layoutCls = layout !== 'grid' ? ` ${layout}-view` : ''
+  const grid = cards.length
+    ? `<div class="cat-grid${layoutCls}">${cards.join("\n")}</div>`
+    : `<div class="empty">${esc(dict.emptyCategory)}</div>`
   // CTA 跳 App 的 hash 路由（#share/c/<share_id>），降级入口（bundle 加载失败时手动进入 SPA）
   const appUrl = `${appOrigin}/#share/c/${esc(shareId)}`
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
-  const skelGrid = Array.from(
-    { length: 6 },
-    () => `<div class="cat-skel"><span class="cat-skel-bar w60"></span><span class="cat-skel-bar w80"></span><span class="cat-skel-bar w40"></span></div>`,
-  ).join("\n")
   const inner = [
     `<section class="cat-hero"${accentStyle}>`,
     `<span class="cat-hero-accent" aria-hidden="true"></span>`,
@@ -916,7 +949,7 @@ function buildCategoryBody(
     buildLayoutSwitch(dict, shareUrl, layout),
     `</div>`,
     `</section>`,
-    `<div class="cat-grid">${skelGrid}</div>`,
+    grid,
   ].join("\n")
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
@@ -1065,7 +1098,7 @@ const FALLBACK_JS = `(function(){var tc=document.querySelector(".toc"),mn=docume
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:radial-gradient(circle at 50% -20%,rgba(18,46,138,0.06) 0%,transparent 60%),#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;min-height:100vh}
 .page{max-width:1320px;margin:0 auto;padding:0 20px 56px}
 /* ── header ── */
 .head{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid #E5DDD3;margin-bottom:26px}
@@ -1330,31 +1363,97 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
   .cat-grid{grid-template-columns:1fr;gap:10px}
   .gcard,.bmcard{height:auto;min-height:170px}
 }
-/* ── 主应用外壳骨架（方案 B 骨架近似：SSR 首屏近似主 UI 布局，SPA 接管后由 Vue 重建）── */
-.app{display:flex;min-height:100vh;align-items:stretch}
-.rail{width:224px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;padding:16px 12px 20px;background:#F8F3ED;border-right:1px solid #EBE3D9;position:sticky;top:0;height:100vh}
-.rail-logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;color:#2C2824;text-decoration:none;padding:6px 10px;letter-spacing:-.3px}
-.rail-logo svg{width:20px;height:20px;color:#122E8A;flex-shrink:0}
-.rail-nav{display:flex;flex-direction:column;gap:5px;margin-top:14px}
-.rail-skel{height:34px;border-radius:10px;background:linear-gradient(90deg,#EDE4DA 25%,#F6F1EB 50%,#EDE4DA 75%);background-size:200% 100%;animation:railSkel 1.5s ease-in-out infinite}
-@keyframes railSkel{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.cat-skel{height:168px;border:1px solid #E5DDD3;border-radius:14px;background:#FDFBF9;padding:16px;display:flex;flex-direction:column;gap:10px;justify-content:center}
-.cat-skel-bar{height:12px;border-radius:6px;background:linear-gradient(90deg,#EDE4DA 25%,#F6F1EB 50%,#EDE4DA 75%);background-size:200% 100%;animation:railSkel 1.5s ease-in-out infinite}
-.cat-skel-bar.w60{width:60%}
-.cat-skel-bar.w80{width:80%}
-.cat-skel-bar.w40{width:40%}
-.panel{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 26px 48px;max-width:1320px;margin:0 auto;width:100%}
-.panel-hdr{display:flex;align-items:center;gap:12px;padding:18px 0 14px;border-bottom:1px solid #E5DDD3;margin-bottom:22px}
-.hdr-chip{font-size:11px;font-weight:600;line-height:1;color:#122E8A;background:#EDE4DA;border:1px solid #E5DDD3;padding:5px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0}
-.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.hdr-right .meta-tag{margin:0}
-.grp-layout{display:flex;align-items:flex-start;gap:22px}
-.grp-list{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
-@media(max-width:900px){
-  .rail{display:none}
-  .panel{padding:0 16px 40px}
-  .grp-layout{flex-direction:column}
-  .grp-list{width:100%}
-  .panel-hdr{flex-wrap:wrap}
+/* ── 专栏画卷外壳（方向 A：沉浸式专栏画卷）── */
+.share-app{display:flex;flex-direction:column;min-height:100vh}
+
+/* ── 悬浮毛玻璃顶栏 ── */
+.share-bar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(245,239,234,0.85);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(229,221,211,0.8);
+}
+.share-bar-wrap{
+  max-width:1040px;margin:0 auto;padding:12px 24px;
+  display:flex;align-items:center;gap:12px;
+}
+.share-brand{
+  display:flex;align-items:center;gap:8px;text-decoration:none;
+  color:#2C2824;font-weight:700;font-size:15px;letter-spacing:-.3px;
+}
+.share-logo{width:22px;height:22px;color:#122E8A;display:flex;align-items:center}
+.share-logo svg{width:100%;height:100%}
+.share-badge{
+  font-size:11px;font-weight:600;color:#6A6660;background:#EDE4DA;
+  padding:3px 10px;border-radius:999px;border:1px solid #E5DDD3;
+  letter-spacing:.2px;white-space:nowrap;
+}
+.share-actions{margin-left:auto;display:flex;align-items:center;gap:12px}
+
+/* ── 居中主容器 ── */
+.share-container{
+  max-width:960px;width:100%;margin:0 auto;padding:28px 24px 64px;
+  flex:1;display:flex;flex-direction:column;gap:24px;
+}
+
+/* ── 组分享 Hero ── */
+.group-hero{
+  position:relative;background:#FDFBF9;border:1px solid #E5DDD3;
+  border-radius:20px;padding:24px 28px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.03),0 12px 36px rgba(0,0,0,0.04);
+  display:flex;align-items:center;gap:20px;overflow:hidden;
+}
+.group-hero-accent{
+  position:absolute;left:0;top:8px;bottom:8px;width:4px;
+  border-radius:0 3px 3px 0;background:linear-gradient(135deg,#122E8A,#1E40AF);
+}
+.group-hero-icon{
+  width:52px;height:52px;border-radius:14px;background:#EDE4DA;
+  border:1px solid #EFE8DF;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;color:#122E8A;overflow:hidden;position:relative;
+}
+.group-hero-icon img{width:32px;height:32px;object-fit:contain}
+.group-hero-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.group-hero-title{font-size:24px;font-weight:800;color:#2C2824;letter-spacing:-.5px;line-height:1.25}
+.group-hero-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+
+/* ── 组笔记卡片 ── */
+.group-notes-card{
+  background:#FDFBF9;border:1px solid #E5DDD3;border-radius:18px;
+  padding:22px 26px;box-shadow:0 2px 6px rgba(0,0,0,0.02);
+}
+
+/* ── 收录的书签区 ── */
+.group-bookmarks-section{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.section-header{display:flex;align-items:center;gap:10px}
+.section-title{font-size:16px;font-weight:700;color:#2C2824;letter-spacing:-.2px}
+.section-count{
+  font-size:11px;font-weight:700;color:#122E8A;background:rgba(18,46,138,0.08);
+  border:1px solid rgba(18,46,138,0.15);padding:2px 8px;border-radius:999px;
+}
+.bm-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;
+}
+
+/* ── 尾部 Footer ── */
+.share-footer{margin-top:auto;border-top:1px solid #E5DDD3;padding:48px 24px 36px;text-align:center}
+.share-footer-inner{max-width:600px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:8px}
+.share-footer-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:#2C2824}
+.footer-logo{width:20px;height:20px;color:#122E8A;display:flex;align-items:center}
+.footer-logo svg{width:100%;height:100%}
+.share-footer-slogan{font-size:12.5px;color:#8A847C}
+.share-footer-cta{font-size:13px;font-weight:600;color:#122E8A;text-decoration:none;margin-top:2px;transition:opacity .15s ease}
+.share-footer-cta:hover{opacity:.8;text-decoration:underline}
+.share-footer-copy{font-size:11px;color:#B0A9A0;margin-top:4px}
+
+/* ── 移动端适配 ── */
+@media(max-width:640px){
+  .share-bar-wrap{padding:10px 16px}
+  .share-container{padding:20px 16px 40px}
+  .group-hero{padding:18px 16px;border-radius:16px;gap:14px}
+  .group-hero-icon{width:44px;height:44px;border-radius:12px}
+  .group-hero-title{font-size:20px}
+  .group-notes-card{padding:16px 18px;border-radius:16px}
+  .bm-grid{grid-template-columns:1fr}
 }
 `

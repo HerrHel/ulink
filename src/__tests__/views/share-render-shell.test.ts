@@ -1,5 +1,5 @@
 // S6/S7 SSR 外壳回归护栏：类名锚定 + 双语 + CTA 路径 + SPA 自动接管（bundle 注入 / #app 挂载点）
-// + 组页无独立书签列表（对齐新版"组分享 = 聚焦组形态"）+ 分类页骨架占位
+// + 组页无独立书签列表（对齐新版"组分享 = 聚焦组形态"）+ 分类页卡片网格
 import { describe, it, expect } from 'vitest'
 import { renderSharePage, renderShareCategoryPage, renderNotFoundPage, extractAppAssets } from '../../functions/_lib/share-render.js'
 
@@ -38,15 +38,19 @@ describe('S6/S7 SSR 外壳骨架', () => {
     'zh-CN',
   )
 
-  it('组页含主应用外壳', () => {
-    expect(zh).toContain('class="app"')
-    expect(zh).toContain('class="rail"')
-    expect(zh).toContain('class="panel-hdr"')
-    expect(zh).toContain('class="focus-card"')
+  it('组页含专栏画卷外壳（移除原后台侧边栏）', () => {
+    expect(zh).toContain('class="share-app"')
+    expect(zh).toContain('class="share-bar"')
+    expect(zh).toContain('class="share-container"')
+    expect(zh).toContain('class="group-hero"')
+    expect(zh).not.toContain('class="rail"')
   })
-  it('组页无独立书签列表（对齐新版聚焦组形态）', () => {
+  it('组页展示收录书签网格', () => {
+    expect(zh).toContain('class="group-bookmarks-section"')
+    expect(zh).toContain('class="bm-grid"')
+    expect(zh).toContain('Vite 官方文档')
+    expect(zh).toContain('Vue.js 文档')
     expect(zh).not.toContain('class="grp-list"')
-    expect(zh).not.toContain('class="bm-list"')
   })
   it('组页移除旧布局类名（FALLBACK_JS 自动失效）', () => {
     expect(zh).not.toContain('class="layout"')
@@ -54,8 +58,8 @@ describe('S6/S7 SSR 外壳骨架', () => {
   })
   it('组页 CTA 指向 SPA 分享路由 + 双语只读 chip + 新 CTA 文案', () => {
     expect(zh).toContain('#share/grp-demo-001')
-    expect(zh).toContain('公开分享')
-    expect(en).toContain('Public share')
+    expect(zh).toContain('私有链接分享')
+    expect(en).toContain('Private share')
     expect(zh).toContain('保存至我的库')
     expect(en).toContain('Save to my library')
     // 旧 CTA 文案彻底移除
@@ -63,15 +67,17 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).not.toContain('复制到我的库')
     expect(en).not.toContain('Open in ulink')
   })
-  it('分类页含外壳 + 骨架占位（无真实卡片网格）', () => {
-    expect(catHtml).toContain('class="app"')
+  it('分类页含外壳 + 真实卡片网格', () => {
+    expect(catHtml).toContain('class="share-app"')
     expect(catHtml).toContain('class="cat-hero"')
-    expect(catHtml).toContain('cat-skel')
+    expect(catHtml).toContain('class="cat-grid"')
+    expect(catHtml).toContain('Figma')
+    expect(catHtml).toContain('unDraw')
     expect(catHtml).not.toContain('class="page"')
   })
   it('404 页含外壳', () => {
     const nf = renderNotFoundPage('zh-CN')
-    expect(nf).toContain('class="app"')
+    expect(nf).toContain('class="share-app"')
     expect(nf).toContain('该分享不存在')
     expect(nf).not.toContain('class="page"')
   })

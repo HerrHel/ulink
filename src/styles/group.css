@@ -503,3 +503,172 @@
 .empty h3{font-family:var(--font-display);font-size:1.1rem;font-weight:600;margin-bottom:6px;color:var(--text-secondary)}
 .empty p{font-size:0.85rem;color:var(--text-muted);max-width:280px;line-height:1.6}
 
+/* ==================== SHARE MODE FOCUS CARD ==================== */
+.share-mode-layout .focus-card-wrap{
+  flex-direction:column;
+  gap:20px;
+  width:100%;
+}
+.share-mode-layout .focus-view .group-card-focus{
+  height:auto !important;
+  max-height:none !important;
+  overflow:visible !important;
+  border-radius:20px;
+  padding:24px 28px;
+  border:1px solid var(--border);
+  box-shadow:0 2px 8px rgba(0,0,0,0.03), 0 12px 36px rgba(0,0,0,0.04);
+  background:var(--surface);
+}
+.share-mode-layout .focus-view .group-card-focus .group-card-head{
+  display:flex !important;
+  align-items:center;
+  gap:18px;
+  margin-bottom:16px;
+}
+.share-mode-layout .group-card-icon{
+  width:52px;
+  height:52px;
+  border-radius:14px;
+  background:var(--accent-light);
+  border:1px solid var(--border-light);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  color:var(--accent);
+}
+.share-mode-layout .group-card-icon img{
+  width:32px;
+  height:32px;
+  object-fit:contain;
+}
+.share-mode-layout .focus-view .group-card-focus .card-name{
+  font-size:24px;
+  font-weight:800;
+  letter-spacing:-0.5px;
+  line-height:1.25;
+  color:var(--text);
+}
+.share-mode-layout .focus-view .group-card-focus .grp-scroll-body,
+.share-mode-layout .focus-view .group-card-focus .card-scroll-wrap{
+  overflow:visible !important;
+  max-height:none !important;
+}
+
+/* ── 收录的书签区 ── */
+.group-bookmarks-section{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-top:24px;
+  padding-top:20px;
+  border-top:1px dashed var(--border-light);
+}
+.section-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.section-title{
+  font-size:16px;
+  font-weight:700;
+  color:var(--text);
+  letter-spacing:-0.2px;
+}
+.section-count{
+  font-size:11px;
+  font-weight:700;
+  color:var(--accent);
+  background:var(--accent-light);
+  border:1px solid var(--border);
+  padding:2px 8px;
+  border-radius:999px;
+}
+.bm-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:12px;
+}
+.bm{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-height:58px;
+  padding:8px 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--surface);
+  box-shadow:0 1px 2px rgba(0,0,0,0.03);
+  text-decoration:none;
+  color:inherit;
+  transition:border-color 0.2s ease,box-shadow 0.2s ease,transform 0.2s cubic-bezier(0.16,1,0.3,1);
+}
+.bm:hover{
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px var(--accent-glow),0 4px 14px rgba(0,0,0,0.06);
+  transform:translateY(-1px);
+}
+.bm-icon{
+  width:40px;
+  height:40px;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--accent-light);
+  border:1px solid var(--border-light);
+  border-radius:10px;
+  overflow:hidden;
+  position:relative;
+}
+.bm-icon img{width:24px;height:24px;object-fit:contain}
+.bm-icon img.img-error{display:none}
+.bm-icon:has(img:not(.img-error)) .bm-fb{display:none}
+.bm-fb{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  font-size:13px;
+  font-weight:700;
+  color:var(--accent);
+  text-transform:uppercase;
+  line-height:1;
+}
+.bm-info{
+  flex:1;min-width:0;
+  display:flex;flex-direction:column;
+  justify-content:center;gap:1px;
+}
+.bm-title{
+  display:block;font-weight:600;font-size:14px;
+  color:var(--text);line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  transition:color 0.15s ease;
+}
+.bm:hover .bm-title{color:var(--accent)}
+.bm-url{
+  display:block;font-size:12px;color:var(--text-muted);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.bm-arrow{
+  flex-shrink:0;color:var(--text-muted);
+  opacity:0;transform:translateX(-4px);
+  transition:opacity 0.18s ease,transform 0.18s ease,color 0.18s ease;
+}
+.bm:hover .bm-arrow{opacity:1;transform:translateX(0);color:var(--accent)}
+.bm-arrow svg{width:15px;height:15px;display:block}
+
+/* ── 尾部 Footer ── */
+.share-footer{margin-top:auto;border-top:1px solid var(--border-light);padding:48px 24px 36px;text-align:center}
+.share-footer-inner{max-width:600px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:8px}
+.share-footer-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:var(--text)}
+.footer-name{color:var(--text)}
+.share-footer-slogan{font-size:12.5px;color:var(--text-muted)}
+.share-footer-cta{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;margin-top:2px;transition:opacity 0.15s ease}
+.share-footer-cta:hover{opacity:0.8;text-decoration:underline}
+.share-footer-copy{font-size:11px;color:var(--text-muted);margin-top:4px}
+
+

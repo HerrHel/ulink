@@ -10,7 +10,6 @@ import { createGroup, exitGroupFocus, editGroup, searchInFocusedGroup } from './
 import { openBmModal } from './domain/useBookmark.js'
 import { hideAddDropdown } from './ui/useUI.js'
 import { showBatchMovePopover, batchDelete } from './domain/useBatch.js'
-import { shareGroup } from './domain/useDataShare.js'
 import { importData } from './domain/useDataIO.js'
 import { performUndo, performRedo } from './domain/useUndo.js'
 
@@ -42,7 +41,7 @@ export function useAppHandlers() {
       ui.overlays.addPopover = true
     },
     onFocusEditGroup() { if (ui.focusedGroupId) editGroup(ui.focusedGroupId) },
-    onFocusShareGroup() { if (ui.focusedGroupId) shareGroup(ui.focusedGroupId) },
+    onFocusShareGroup() { if (ui.focusedGroupId) ui.openShareModal('group', ui.focusedGroupId) },
     onFocusUndo() { if (ui.focusedGroupId) performUndo(ui.focusedGroupId) },
     onFocusRedo() { if (ui.focusedGroupId) performRedo(ui.focusedGroupId) },
     onToggleAttrFilter() { useAttrDropdownStore().toggle() },

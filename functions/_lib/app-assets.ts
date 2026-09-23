@@ -41,19 +41,25 @@ export async function getAppAssets(env: AppAssetsEnv, requestUrl: string): Promi
 
   // 策略 1：ASSETS binding 直读静态资源（同 isolate，无外部网络往返）
   // 策略 2：同源自取（ASSETS 不可用或相对路径解析失败时的兜底）
+  // 候选路径：MPA 架构下应用主体为 /app.html，回退 /index.html（旧单入口或兜底）
+  const candidatePaths = ["/app.html", "/index.html"]
   const strategies: Array<() => Promise<Response>> = []
   if (env.ASSETS) {
     const assets = env.ASSETS
-    strategies.push(async () => {
-      const abs = new URL("/index.html", requestUrl).toString()
-      return assets.fetch(new Request(abs))
-    })
+    for (const p of candidatePaths) {
+      strategies.push(async () => {
+        const abs = new URL(p, requestUrl).toString()
+        return assets.fetch(new Request(abs))
+      })
+    }
   }
   if (origin) {
-    strategies.push(async () => {
-      const abs = new URL("/index.html", origin).toString()
-      return fetch(abs)
-    })
+    for (const p of candidatePaths) {
+      strategies.push(async () => {
+        const abs = new URL(p, origin).toString()
+        return fetch(abs)
+      })
+    }
   }
 
   let lastErr = ""

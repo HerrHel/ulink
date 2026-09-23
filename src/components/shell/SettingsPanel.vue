@@ -239,6 +239,73 @@
                 <span class="sp-switch"></span>
               </div>
             </div>
+            <!-- 公开分享管理 -->
+            <div class="sp-section sp-section-shares">
+              <div class="sp-section-head">
+                <span class="sp-section-title">
+                  {{ t('settings.shareManagement') }}
+                  <span v-if="allPublicShares.length > 0" class="sp-shares-count">({{ allPublicShares.length }})</span>
+                </span>
+                <button
+                  v-if="allPublicShares.length > 1"
+                  class="sp-shares-stop-all"
+                  :title="t('settings.stopAllShares')"
+                  @click.stop="onStopAllShares"
+                >
+                  {{ t('settings.stopAllShares') }}
+                </button>
+              </div>
+              <p class="sp-desc">{{ t('settings.publicSharesDesc') }}</p>
+
+              <div v-if="allPublicShares.length > 0" class="sp-shares-list">
+                <div
+                  v-for="item in allPublicShares"
+                  :key="item.type + ':' + item.id"
+                  class="sp-share-item"
+                >
+                  <div class="sp-share-info">
+                    <span
+                      class="sp-share-badge"
+                      :class="'sp-share-badge--' + item.type"
+                    >
+                      {{ item.type === 'group' ? t('settings.shareTypeGroup') : t('settings.shareTypeCategory') }}
+                    </span>
+                    <span class="sp-share-title" :title="item.title">{{ item.title }}</span>
+                  </div>
+                  <div class="sp-share-actions">
+                    <button
+                      type="button"
+                      class="sp-share-btn"
+                      :title="t('modal.share.copyLink')"
+                      :aria-label="t('modal.share.copyLink')"
+                      @click.stop="onCopyShare(item.url)"
+                      v-html="I.link"
+                    ></button>
+                    <a
+                      :href="item.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="sp-share-btn"
+                      :title="t('modal.share.preview')"
+                      :aria-label="t('modal.share.preview')"
+                      @click.stop
+                      v-html="I.external"
+                    ></a>
+                    <button
+                      type="button"
+                      class="sp-share-btn sp-share-btn--danger"
+                      :title="t('modal.share.stopShare')"
+                      :aria-label="t('modal.share.stopShare')"
+                      @click.stop="onStopShareItem(item)"
+                      v-html="I.close"
+                    ></button>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="sp-shares-empty">
+                {{ t('settings.noPublicShares') }}
+              </div>
+            </div>
             <!-- 数据 -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.data') }}</span>
@@ -397,7 +464,11 @@ import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
-import { toast } from '../../lib/toast.js'
+import { toast, showConfirm } from '../../lib/toast.js'
+import { copyToClipboard } from '../../utils.js'
+import { stopShareGroup, stopShareCategory, stopAllUserShares, fetchUserCategoryShares } from '../../composables/domain/useDataShare.js'
+import { SHARE_BASE } from '../../config/urls.js'
+import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
@@ -619,6 +690,118 @@ function onViewDeadLinks() {
 function onToggleAutoDeadCheck() {
   if (dl.autoCheckEnabled.value) dl.stopAutoCheck()
   else dl.startAutoCheck()
+}
+
+// ── 公开分享管理 ──
+interface PublicShareItem {
+  type: 'group' | 'category'
+  id: string
+  shareId?: string
+  title: string
+  icon?: string
+  color?: string
+  url: string
+}
+
+const userCategoryShares = ref<Array<{ id: string; category_id: string }>>([])
+const loadingCategoryShares = ref(false)
+
+async function loadUserCategoryShares() {
+  if (!auth.isLoggedIn || !navigator.onLine) {
+    userCategoryShares.value = []
+    return
+  }
+  loadingCategoryShares.value = true
+  try {
+    userCategoryShares.value = await fetchUserCategoryShares()
+  } catch {
+    userCategoryShares.value = []
+  } finally {
+    loadingCategoryShares.value = false
+  }
+}
+
+watch(() => uiStore.panels.settings, (open) => {
+  if (open) loadUserCategoryShares()
+})
+
+watch(() => auth.isLoggedIn, (logged) => {
+  if (logged && uiStore.panels.settings) {
+    loadUserCategoryShares()
+  }
+})
+
+if (uiStore.panels.settings) {
+  loadUserCategoryShares()
+}
+
+const publicGroupItems = computed<PublicShareItem[]>(() => {
+  return dataStore.siblingGroups
+    .filter(g => g.isPublic && !g.deletedAt)
+    .map(g => ({
+      type: 'group' as const,
+      id: g.id,
+      title: g.name || t('cards.unnamedGroup'),
+      icon: g.icon,
+      url: `${SHARE_BASE}/${g.id}`,
+    }))
+})
+
+const publicCategoryItems = computed<PublicShareItem[]>(() => {
+  return userCategoryShares.value.map(c => {
+    const cat = dataStore.categoryMap[c.category_id]
+    return {
+      type: 'category' as const,
+      id: c.category_id,
+      shareId: c.id,
+      title: cat?.name || c.id,
+      icon: cat?.icon,
+      color: cat?.color,
+      url: `${SHARE_BASE}/${CATEGORY_SHARE_PATH}/${c.id}`,
+    }
+  })
+})
+
+const allPublicShares = computed<PublicShareItem[]>(() => [
+  ...publicGroupItems.value,
+  ...publicCategoryItems.value,
+])
+
+function onCopyShare(url: string) {
+  copyToClipboard(url, t('msg.shareLinkLabel'))
+}
+
+async function onStopShareItem(item: PublicShareItem) {
+  const ok = await showConfirm(t('modal.share.stopConfirm'))
+  if (!ok) return
+  if (item.type === 'group') {
+    const success = await stopShareGroup(item.id)
+    if (success) {
+      toast(t('modal.share.stopped'), true)
+    } else {
+      toast(t('common.failed'), false)
+    }
+  } else {
+    const success = await stopShareCategory(item.id)
+    if (success) {
+      toast(t('modal.share.stopped'), true)
+      await loadUserCategoryShares()
+    } else {
+      toast(t('common.failed'), false)
+    }
+  }
+}
+
+async function onStopAllShares() {
+  const ok = await showConfirm(t('settings.stopAllSharesConfirm'))
+  if (!ok) return
+  const success = await stopAllUserShares()
+  if (success) {
+    toast(t('settings.allSharesStopped'), true)
+    await loadUserCategoryShares()
+  } else {
+    toast(t('common.failed'), false)
+  }
 }
 
 // ── 反馈（A4-007：状态进 overlays.feedback，支持 Esc / popstate）──

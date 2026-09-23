@@ -12,7 +12,7 @@
  * 环境变量（同 /s/[gid].ts）：
  *   SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN
  */
-import { renderShareCategoryPage, renderNotFoundPage, renderUnavailablePage, type ShareLocale, type PublicGroup, type PublicBookmark } from "../../_lib/share-render.js"
+import { renderShareCategoryPage, renderNotFoundPage, renderUnavailablePage, type ShareLocale, type PublicGroup, type PublicBookmark, type CatLayout } from "../../_lib/share-render.js"
 import { getAppAssets, type AppAssetsEnv } from "../../_lib/app-assets.js"
 // 函数内边缘缓存（Cache API）：与 s/[gid].ts 同口径，设计见 _lib/share-cache.ts
 import {
@@ -56,6 +56,8 @@ export async function onRequestGet(context: ShareContext): Promise<Response> {
 
   const url = new URL(context.request.url)
   const locale = resolveLocale(url, context.request.headers.get("accept-language") || "")
+  const rawLayout = url.searchParams.get("layout")
+  const layout: CatLayout = rawLayout === "list" || rawLayout === "mini-grid" ? rawLayout : "grid"
 
   // 边缘新鲜命中：直接返回，不打 Supabase RPC
   const cacheKey = shareCacheKey(url.origin, url.pathname, url.search)
@@ -132,7 +134,7 @@ export async function onRequestGet(context: ShareContext): Promise<Response> {
     shareUrl,
     appOrigin,
     locale,
-    "grid",
+    layout,
     await getAppAssets(context.env, context.request.url),
   )
   // 双写边缘缓存：主键 5 分钟新鲜 + 24h 故障兜底副本

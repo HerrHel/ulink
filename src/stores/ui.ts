@@ -65,6 +65,7 @@ interface ModalState {
   vaultSetup: boolean
   vaultUnlock: boolean
   setupGuide: boolean
+  share: boolean
 }
 
 interface PanelState {
@@ -130,6 +131,7 @@ export interface UIState {
    * 触发脏标记+updatedAt+同步队列，已迁移至此（存量数据在 restoreUIState 一次性读入）。
    */
   expandedIds: string[]
+  shareModalTarget: { type: 'group' | 'category'; id: string } | null
 
   // 分组状态
   modals: ModalState
@@ -175,6 +177,7 @@ export const useUIStore = defineStore('ui', {
       vaultSetup: false,
       vaultUnlock: false,
       setupGuide: false,
+      share: false,
     },
     panels: {
       settings: false,
@@ -202,6 +205,7 @@ export const useUIStore = defineStore('ui', {
     _preferredLayoutMode: null,
     _mobileLayoutMode: 'list',
     expandedIds: [],
+    shareModalTarget: null,
   }),
 
   actions: {
@@ -424,6 +428,16 @@ export const useUIStore = defineStore('ui', {
       this.themeMode = tm === 'auto' ? 'auto' : 'manual'
       const ts = safeGetItem(K_THEME_STYLE)
       if (ts === 'comfortable' || ts === 'premium') this.themeStyle = ts
+    },
+
+    openShareModal(type: 'group' | 'category', id: string) {
+      this.shareModalTarget = { type, id }
+      this.modals.share = true
+    },
+
+    closeShareModal() {
+      this.modals.share = false
+      this.shareModalTarget = null
     },
   },
 })
