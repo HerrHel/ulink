@@ -110,11 +110,12 @@ import {
   upsertPublicCategoryShare,
   getCategoryShareId,
   deletePublicCategoryShare,
-  CATEGORY_SHARE_PATH
+  CATEGORY_SHARE_PATH,
 } from '../../composables/domain/syncShare.js'
 import { copyToClipboard } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
+import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -235,6 +236,13 @@ async function onEnableShare() {
 
   operating.value = true
   try {
+    // 开启分享时后台触发一次增量同步推送到云端，防止云端数据库缺失组或书签
+    try {
+      void useCloudSync().fullSync().catch(() => {})
+    } catch {
+      /* 容错：同步异常不阻断分享操作 */
+    }
+
     if (isGroup.value) {
       const ok = await setGroupPublic(targetId.value, true)
       if (!ok) {

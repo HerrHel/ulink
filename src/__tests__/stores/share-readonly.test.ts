@@ -176,4 +176,91 @@ describe('分享只读态护栏', () => {
       expect(ds.categoryMap['late-c']).toBeDefined()
     })
   })
+
+  describe('SSR __INITIAL_SHARE_DATA__ 秒级水合与守卫护栏', () => {
+    it('SSR 预注入分类分享数据时：同步水合装载，loading 保持 false，跳过网络请求', async () => {
+      const { useShareStore } = await import('../../stores/share.js')
+      const share = useShareStore()
+
+      // 模拟 SSR 注入的 window.__INITIAL_SHARE_DATA__
+      ;(window as any).__INITIAL_SHARE_DATA__ = {
+        type: 'category',
+        id: 'cat_test_ssr',
+        data: {
+          category: { id: 'tools', name: '工具', icon: 'tool', color: '#d97706' },
+          groups: [{ id: 'g_ssr', name: 'SSR 组', categoryId: 'tools', bookmarkIds: ['b_ssr'] }],
+          bookmarks: [{ id: 'b_ssr', title: 'SSR 书签', url: 'https://example.com', categoryId: 'tools' }],
+        },
+      }
+
+      await share.enter('cat:cat_test_ssr')
+
+      expect(share.loading).toBe(false)
+      expect(share.error).toBe('')
+      expect(share.category?.id).toBe('tools')
+      expect(share.groups).toHaveLength(1)
+      expect(share.bookmarks).toHaveLength(1)
+      expect(ui.curCat).toBe('tools')
+      expect(ui.shareMode).toEqual({ kind: 'category', id: 'cat_test_ssr' })
+
+      // 验证影子数据已装载
+      expect(ds.categoryMap['tools'].name).toBe('工具')
+      expect(ds.groupMap['g_ssr'].name).toBe('SSR 组')
+      expect(ds.bookmarkMap['b_ssr'].title).toBe('SSR 书签')
+
+      // 清理
+      delete (window as any).__INITIAL_SHARE_DATA__
+      share.exit()
+    })
+
+    it('SSR 预注入组分享数据时：同步水合装载，loading 保持 false', async () => {
+      const { useShareStore } = await import('../../stores/share.js')
+      const share = useShareStore()
+
+      ;(window as any).__INITIAL_SHARE_DATA__ = {
+        type: 'group',
+        id: 'g_pub_ssr',
+        data: {
+          group: { id: 'g_pub_ssr', name: '公开组 SSR', bookmarkIds: ['b1'] },
+          bookmarks: [{ id: 'b1', title: '公开书签', url: 'https://pub.example.com' }],
+        },
+      }
+
+      await share.enter('g_pub_ssr')
+
+      expect(share.loading).toBe(false)
+      expect(share.group?.name).toBe('公开组 SSR')
+      expect(share.bookmarks).toHaveLength(1)
+      expect(ui.focusedGroupId).toBe('g_pub_ssr')
+      expect(ui.shareMode).toEqual({ kind: 'group', id: 'g_pub_ssr' })
+
+      delete (window as any).__INITIAL_SHARE_DATA__
+      share.exit()
+    })
+
+    it('enter 阶段不调用 _stripSharePath，不破坏分享 URL', async () => {
+      const { useShareStore } = await import('../../stores/share.js')
+      const share = useShareStore()
+      const replaceStateSpy = vi.spyOn(window.history, 'replaceState')
+
+      ;(window as any).__INITIAL_SHARE_DATA__ = {
+        type: 'group',
+        id: 'g_test_path',
+        data: {
+          group: { id: 'g_test_path', name: '路径保护测试' },
+          bookmarks: [],
+        },
+      }
+
+      await share.enter('g_test_path')
+
+      // enter 时不应将 URL replace 为 /app
+      const replaceCalls = replaceStateSpy.mock.calls
+      const stripCall = replaceCalls.find((args) => typeof args[2] === 'string' && args[2].includes('/app'))
+      expect(stripCall).toBeUndefined()
+
+      delete (window as any).__INITIAL_SHARE_DATA__
+      share.exit()
+    })
+  })
 })

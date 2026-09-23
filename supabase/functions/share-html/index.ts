@@ -507,6 +507,14 @@ function buildBody(
 
 /** 组装完整 HTML 文档。body 外包 #app（与 CF 版结构一致；Deno 保底版不注入 SPA bundle，
  *  无 bundle 即不 mount，页面仍为纯静态 SSR）。 */
+function serializeScriptData(data: unknown): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
 function renderSharePage(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -516,10 +524,15 @@ function renderSharePage(
 ): string {
   const head = buildHead(dict, group, bookmarks, shareUrl)
   const body = buildBody(dict, group, bookmarks, appOrigin, group.id)
+  const initDataScript = `<script id="__SHARE_DATA__">window.__INITIAL_SHARE_DATA__=${serializeScriptData({
+    type: 'group',
+    id: group.id,
+    data: { group, bookmarks },
+  })};</script>`
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}</head>`,
+    `<head>${head}${initDataScript}</head>`,
     `<style>${CSS}</style>`,
     `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,

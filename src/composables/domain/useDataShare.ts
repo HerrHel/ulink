@@ -56,6 +56,13 @@ export async function shareGroup(gid: string) {
   const sg = ds.groupMap[gid]
   if (!sg) { toast(t('msg.groupNotExist'), false); return }
 
+  // 开启公开分享前后台触发一次同步，把本地可能未同步的书签和组推送到云端
+  try {
+    void useCloudSync().fullSync().catch(() => {})
+  } catch {
+    /* 允许同步异常，不阻断分享操作 */
+  }
+
   // 尝试设置为公开
   if (!sg.isPublic) {
     const ok = await setGroupPublic(gid, true)
@@ -96,6 +103,13 @@ export async function shareCategory(catId: string) {
   const ds = useDataStore()
   const cat = ds.categoryMap[catId]
   if (!cat || cat.deletedAt) { toast(t('msg.categoryNotExist'), false); return }
+
+  // 开启公开分享前后台触发一次同步，把本地可能未同步的书签和分类推送到云端
+  try {
+    void useCloudSync().fullSync().catch(() => {})
+  } catch {
+    /* 允许同步异常，不阻断分享操作 */
+  }
 
   const shareId = await upsertPublicCategoryShare(catId)
   if (!shareId) {
