@@ -9,13 +9,31 @@ import { toast } from '../../lib/toast.js'
 import { copyToClipboard, isValidShareGroupId } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { useCloudSync } from './useCloudSync.js'
-import { setGroupPublic, fetchPublicGroup, upsertPublicCategoryShare, fetchPublicCategory, CATEGORY_SHARE_PATH, CATEGORY_SHARE_PREFIX, type PublicCategoryData } from './syncShare.js'
+import {
+  setGroupPublic, fetchPublicGroup,
+  upsertPublicCategoryShare, fetchPublicCategory,
+  getCategoryShareId, deletePublicCategoryShare,
+  fetchUserCategoryShares, deleteAllPublicCategoryShares, stopAllUserShares,
+  CATEGORY_SHARE_PATH, CATEGORY_SHARE_PREFIX,
+  type PublicCategoryData
+} from './syncShare.js'
 import { SHARE_BASE } from '../../config/urls.js'
 import { newId as genId } from '../../lib/newId.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 
-export { isValidShareGroupId, setGroupPublic, fetchPublicGroup, upsertPublicCategoryShare, fetchPublicCategory }
+export {
+  isValidShareGroupId,
+  setGroupPublic,
+  fetchPublicGroup,
+  upsertPublicCategoryShare,
+  fetchPublicCategory,
+  getCategoryShareId,
+  deletePublicCategoryShare,
+  fetchUserCategoryShares,
+  deleteAllPublicCategoryShares,
+  stopAllUserShares,
+}
 export type { PublicCategoryData }
 
 /**
@@ -54,6 +72,15 @@ export async function shareGroup(gid: string) {
   copyToClipboard(url, t('msg.shareLinkLabel'))
 }
 
+/** 停止组公开分享 */
+export async function stopShareGroup(gid: string): Promise<boolean> {
+  const ds = useDataStore()
+  const sg = ds.groupMap[gid]
+  if (!sg) return false
+  const ok = await setGroupPublic(gid, false)
+  return ok
+}
+
 // ── 分享分类（C4: 分享该分类及其全部书签与组，不含敏感内容，实时读库热更新）──
 
 /**
@@ -77,6 +104,11 @@ export async function shareCategory(catId: string) {
   }
   const url = `${SHARE_BASE}/${CATEGORY_SHARE_PATH}/${shareId}`
   copyToClipboard(url, t('msg.shareLinkLabel'))
+}
+
+/** 停止分类公开分享 */
+export async function stopShareCategory(catId: string): Promise<boolean> {
+  return await deletePublicCategoryShare(catId)
 }
 
 // ── 从 URL 导入分享数据（path 风格 /s/<id> 优先，hash #share/<id> 向后兼容）──

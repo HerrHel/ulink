@@ -116,6 +116,9 @@ export const useAppStore = defineStore('app', () => {
     lastFocusedEl: uiProp('lastFocusedEl'),
     lpFired: uiProp('lpFired'),
     _prevLayoutMode: uiProp('_prevLayoutMode'),
+    shareModalTarget: uiProp('shareModalTarget'),
+    openShareModal(type: 'group' | 'category', id: string) { ui().openShareModal(type, id) },
+    closeShareModal() { ui().closeShareModal() },
 
     // ── CRUD（委托 dataStore）──
     addBookmark(bm: Bookmark) { ds().addBookmark(bm) },

@@ -48,3 +48,23 @@
   position:relative;
   width:100%;
 }
+
+/* ==================== SHARE MODE SHOWCASE LAYOUT ==================== */
+.share-mode-layout{
+  background:radial-gradient(circle at 50% -20%,rgba(18,46,138,0.06) 0%,transparent 60%),var(--bg);
+}
+.share-mode-layout .panel-main{
+  justify-content:center;
+}
+.share-mode-layout .panel-main-inner{
+  max-width:1040px;
+  margin:0 auto;
+  width:100%;
+}
+.share-mode-layout .panel-content{
+  max-width:960px;
+  margin:0 auto;
+  width:100%;
+  padding:24px 20px 80px;
+  overflow-y:auto;
+}

@@ -20,7 +20,6 @@ import { ACTIONS, CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { visit, openBmModal, deleteBookmarkWithUndo, addSub } from '../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup, toggleGroupFocus } from '../composables/domain/useGroup.js'
-import { shareGroup, shareCategory } from '../composables/domain/useDataShare.js'
 import { exportCategory } from '../composables/domain/useDataIO.js'
 import { useSpaceMove } from '../composables/domain/useSpaceMove.js'
 import { toggleBatchMode } from '../composables/domain/useBatch.js'
@@ -249,7 +248,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     if (action === ACTIONS.SHARE_CATEGORY) {
       // 虚拟分类/私密空间无分享入口（菜单已按条件隐藏，此处防御）
       if (id !== CAT_ALL && id !== CAT_UNCATEGORIZED && ui.curSpace === 'main') {
-        void shareCategory(id)
+        ui.openShareModal('category', id)
       }
       return
     }
@@ -293,7 +292,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     if (action === ACTIONS.PIN) { dataStore.togglePin('group', id); debouncedSaveAppData() }
     if (action === ACTIONS.MOVE_TO_CAT) useActionSheetStore().showGroupCategoryPicker(id)
     if (action === ACTIONS.MOVE_TO_SPACE) void useSpaceMove().moveGroupsToVault([id])
-    if (action === ACTIONS.SHARE_GROUP) shareGroup(id)
+    if (action === ACTIONS.SHARE_GROUP) ui.openShareModal('group', id)
     if (action === ACTIONS.FOCUS) toggleGroupFocus(id)
     if (action === ACTIONS.HISTORY) {
       pushNavState()

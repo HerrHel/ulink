@@ -1,13 +1,16 @@
 <template>
   <header class="panel-header" @dblclick="onDblClick">
     <div class="header-left">
-      <button v-show="!ui.focusedGroupId" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" :title="t('shell.menu')" :aria-label="t('shell.menu')">
+      <button v-show="!ui.focusedGroupId && !shareMode" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" :title="t('shell.menu')" :aria-label="t('shell.menu')">
         <span aria-hidden="true" v-html="I.hamburger"></span>
       </button>
-      <!-- Share readonly mode：分享态优先于聚焦/常规，标题只读 + 只读 chip -->
+      <!-- Share readonly mode：专栏画卷顶栏，品牌 Logo + 只读 chip -->
       <template v-if="shareMode">
-        <span class="share-subject-title">{{ share.subjectName || t('shareView.defaultGroupName') }}</span>
-        <span class="share-readonly-chip" :title="t('share.readonlyTitle')">{{ t('share.readonly') }}</span>
+        <a class="share-brand" href="/" :title="t('common.appName')">
+          <BrandLogo :size="20" />
+          <span class="share-brand-title">{{ t('common.appName') }}</span>
+        </a>
+        <span class="share-badge" :title="t('share.readonlyTitle')">{{ t('share.readonly') }}</span>
       </template>
       <!-- Focus mode -->
       <template v-else-if="ui.focusedGroupId && focusedGroup">
@@ -50,7 +53,7 @@
         <button class="ft-sb-btn" @click="$emit('focus-edit-group')" :title="t('shell.editGroup')" :aria-label="t('shell.editGroup')">
           <span aria-hidden="true" v-html="I.edit"></span>
         </button>
-        <button class="ft-sb-btn" @click="$emit('focus-share-group')" :title="t('shell.shareGroup')" :aria-label="t('shell.shareGroup')">
+        <button class="ft-sb-btn" :class="{ 'ft-sb-btn-active': isFocusedGroupPublic }" @click="$emit('focus-share-group')" :title="isFocusedGroupPublic ? t('cards.isPublic') : t('shell.shareGroup')" :aria-label="t('shell.shareGroup')">
           <span aria-hidden="true" v-html="I.share"></span>
         </button>
       </template>
@@ -98,6 +101,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { useSyncStatusStore } from '../../stores/overlay.js'
 import { I } from '../../config/icons.js'
+import BrandLogo from '../ui/BrandLogo.vue'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useShareStore } from '../../stores/share.js'
@@ -146,6 +150,7 @@ watch(() => ui.searchQuery, (val) => {
 const focusedGroup = computed(() =>
   ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
 )
+const isFocusedGroupPublic = computed(() => Boolean(focusedGroup.value?.isPublic))
 /** 「未命名」同时兼容旧存量数据的中文占位值 */
 function isUnnamed(v: string): boolean {
   return v === '未命名' || v === 'Untitled'

@@ -12,5 +12,5 @@
 declare const __APP_VERSION__: string
 declare const __BUILD_TIME__: string
 
-export const APP_VERSION: string = __APP_VERSION__
-export const BUILD_TIME: string = __BUILD_TIME__
+export const APP_VERSION: string = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.1.0'
+export const BUILD_TIME: string = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : '2026-09-23T00:00:00.000Z'

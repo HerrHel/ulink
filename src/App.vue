@@ -2,18 +2,18 @@
 <!-- E2-001：Auth/Toast/Confirm 常驻在 MainLayout 父级。分享态不再是独立页面，
      而是主应用内的只读状态（见 stores/share.ts），与常规模式共用同一套覆盖层。 -->
 <ErrorBoundary name="MainLayout">
-<div class="lv-panel">
-  <AppNav />
+<div class="lv-panel" :class="{ 'share-mode-layout': !!uiStore.shareMode }">
+  <AppNav v-if="!uiStore.shareMode" />
   <input type="file" id="importFile" accept=".json,.html,.htm,.csv" style="display:none" @change="handlers.onImportFile">
-  <div class="resize-handle" id="resizeLeft"></div>
+  <div v-if="!uiStore.shareMode" class="resize-handle" id="resizeLeft"></div>
   <div class="panel-main">
     <div class="panel-main-inner">
       <AppHeader @toggle-rail="toggleRail" @exit-focus="handlers.onExitGroupFocus" @focus-title-change="handlers.onFocusTitleChange" @toggle-detail="toggleDetailPanel" @search="handlers.onSearch" @focus-edit-group="handlers.onFocusEditGroup" @focus-share-group="handlers.onFocusShareGroup" />
-      <div class="filter-bar-wrap">
+      <div v-if="!uiStore.shareMode" class="filter-bar-wrap">
         <FilterBar @exit-focus="handlers.onExitGroupFocus" @focus-add-bm="handlers.onFocusAddBm" @focus-edit-group="handlers.onFocusEditGroup" @focus-undo="handlers.onFocusUndo" @focus-redo="handlers.onFocusRedo" @toggle-attr-filter="handlers.onToggleAttrFilter" @add-bookmark="handlers.onAddBookmark" @add-group="handlers.onAddGroup" />
         <BatchBar @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       </div>
-      <BatchBottom @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
+      <BatchBottom v-if="!uiStore.shareMode" @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       <div class="flex-1" style="display:flex;overflow:hidden">
         <div class="panel-content" id="panelContent">
           <!-- 分享只读态：加载 / 出错时的占位（成功态由 CardGrid 按聚焦/分类渲染） -->
@@ -27,13 +27,24 @@
           </div>
           <ErrorBoundary name="CardGrid" v-else>
             <CardGrid />
+            <footer v-if="uiStore.shareMode" class="share-footer">
+              <div class="share-footer-inner">
+                <div class="share-footer-brand">
+                  <BrandLogo :size="20" />
+                  <span class="footer-name">{{ t('common.appName') }}</span>
+                </div>
+                <p class="share-footer-slogan">{{ isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault' }}</p>
+                <a class="share-footer-cta" href="/">{{ isZh ? '免费体验与链 ulink →' : 'Try ulink for free →' }}</a>
+                <span class="share-footer-copy">© {{ currentYear }} ulink</span>
+              </div>
+            </footer>
           </ErrorBoundary>
         </div>
       </div>
-      <BatchPopover />
+      <BatchPopover v-if="!uiStore.shareMode" />
     </div>
-    <div class="resize-handle" id="resizeRight"></div>
-    <DetailPanel />
+    <div v-if="!uiStore.shareMode" class="resize-handle" id="resizeRight"></div>
+    <DetailPanel v-if="!uiStore.shareMode" />
   </div>
 </div>
 
@@ -49,6 +60,9 @@
 </template>
 <template v-if="store.modals.groupEdit">
   <GroupEditModal />
+</template>
+<template v-if="store.modals.share">
+  <ShareModal />
 </template>
 <TrashPanel :open="store.panels.trash" @close="store.panels.trash = false" />
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
@@ -81,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, onMounted, watch } from 'vue'
+import { defineAsyncComponent, onMounted, watch, computed } from 'vue'
 import { useAppStore } from './stores/app.js'
 import { isMobile } from './utils.js'
 import { toggleDetailPanel, toggleRail, closeRail } from './composables/ui/useUI.js'
@@ -98,7 +112,8 @@ import { useDataStore } from './stores/data.js'
 import { useAuthStore } from './stores/auth.js'
 import { useShareStore } from './stores/share.js'
 import { toast } from './lib/toast.js'
-import { t } from './i18n/index.js'
+import { useI18n } from './i18n/index.js'
+import BrandLogo from './components/ui/BrandLogo.vue'
 import AppHeader from './components/shell/AppHeader.vue'
 import FilterBar from './components/shell/FilterBar.vue'
 import BatchBar from './components/shell/BatchBar.vue'
@@ -107,6 +122,10 @@ import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
 import DetailPanel from './components/shell/DetailPanel.vue'
+
+const { t, locale: curLocale } = useI18n()
+const isZh = computed(() => curLocale.value === 'zh-CN')
+const currentYear = new Date().getUTCFullYear()
 // PERF-5：非首屏 overlay / modal 全部 async，切断启动链
 const AddPopover = defineAsyncComponent(() => import('./components/overlays/AddPopover.vue'))
 const DeadLinksPopover = defineAsyncComponent(() => import('./components/overlays/DeadLinksPopover.vue'))
@@ -129,6 +148,7 @@ const BookmarkModal = defineAsyncComponent(() => import('./components/modals/Boo
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))
 const AttributeModal = defineAsyncComponent(() => import('./components/modals/AttributeModal.vue'))
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
+const ShareModal = defineAsyncComponent(() => import('./components/modals/ShareModal.vue'))
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
 const store = useAppStore()

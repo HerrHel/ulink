@@ -133,6 +133,23 @@ export const modalsZh = {
       importDesc: '从浏览器书签、Raindrop 或 CSV 文件导入',
       skip: '跳过，直接开始',
     }, // SetupGuide
+    share: {
+      ariaLabel: '分享管理',
+      titleGroup: '分享书签组',
+      titleCat: '分享分类',
+      publicStatusOn: '公开访问已开启',
+      publicStatusOff: '当前处于私密状态',
+      publicDescOn: '任何拥有此链接的人均可查看该组书签与笔记。',
+      publicDescOff: '开启后将生成唯一的公开只读链接，他人可在线浏览与转存。',
+      enableShare: '开启公开访问',
+      stopShare: '停止公开分享',
+      stopConfirm: '停止公开分享后，原链接将立即失效，其他人无法再通过此链接访问。确定停止吗？',
+      copyLink: '复制链接',
+      copied: '已复制',
+      preview: '在新标签页预览',
+      stopped: '已停止公开分享',
+      enabled: '已开启公开分享',
+    }, // ShareModal
   },
 } as const
 
@@ -273,5 +290,22 @@ export const modalsEn = {
       importDesc: 'Import from browser bookmarks, Raindrop, or CSV files',
       skip: 'Skip and get started',
     }, // SetupGuide
+    share: {
+      ariaLabel: 'Share Management',
+      titleGroup: 'Share Group',
+      titleCat: 'Share Category',
+      publicStatusOn: 'Public link active',
+      publicStatusOff: 'Currently private',
+      publicDescOn: 'Anyone with this link can view the bookmarks and notes in this group.',
+      publicDescOff: 'Enable to generate a public link for others to view and save.',
+      enableShare: 'Enable Public Access',
+      stopShare: 'Stop Sharing',
+      stopConfirm: 'Once stopped, this link will immediately stop working and become inaccessible. Are you sure?',
+      copyLink: 'Copy Link',
+      copied: 'Copied',
+      preview: 'Open Preview',
+      stopped: 'Public sharing disabled',
+      enabled: 'Public sharing enabled',
+    }, // ShareModal
   },
 } as const

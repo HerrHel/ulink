@@ -9,32 +9,41 @@
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
           <div class="card-titlewrap-text">
-            <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
+            <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
             <div class="card-domain group-domain"></div>
           </div>
         </div>
       </div>
-      <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list'}">
+      <div class="card-body" :class="{'grp-scroll-body':ui.layoutMode!=='list' && !isShareReadonly}">
         <div class="card-scroll-wrap">
           <div class="card-tags" v-if="tagNames.length">
             <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i">{{ tag }}</span>
           </div>
           <!-- 聚焦态始终挂编辑器（分享态下 GroupEditor 以 editable:false 只读渲染） -->
           <GroupEditor :groupId="group.id" />
-          <!-- 分享态兜底：笔记里没有内联书签卡片、但组确实有书签 → 列表展示，避免空白分享页 -->
-          <div v-if="isShareReadonly && fallbackEntries.length" class="share-fallback-list">
+          <!-- 分享态：展示组内收录的书签列表 -->
+          <div v-if="isShareReadonly && fallbackEntries.length" class="group-bookmarks-section">
+            <div class="section-header">
+              <h2 class="section-title">{{ t('share.bookmarksInGroup') }}</h2>
+              <span class="section-count">{{ fallbackEntries.length }}</span>
+            </div>
+            <div class="bm-grid">
             <a v-for="entry in fallbackEntries" :key="entry.b.id"
                :href="entry.safeUrl || '#'" :target="entry.safeUrl ? '_blank' : '_self'"
                :rel="entry.safeUrl ? 'noopener' : undefined"
-               :class="['share-fallback-item', { 'is-disabled': !entry.safeUrl }]"
+               :class="['bm', { 'is-disabled': !entry.safeUrl }]"
                @click="!entry.safeUrl ? $event.preventDefault() : null">
-              <span class="share-fallback-ic">
-                <span class="share-fallback-fb">{{ (displayText(entry.b.title) || entry.urlDomain || '?')[0].toUpperCase() }}</span>
+              <span class="bm-icon">
+                <span class="bm-fb">{{ (displayText(entry.b.title) || entry.urlDomain || '?')[0].toUpperCase() }}</span>
                 <img v-if="entry.icon" :src="entry.icon" alt="" referrerpolicy="no-referrer" loading="lazy" @error="markFbIconError" />
               </span>
-              <span class="share-fallback-title">{{ displayText(entry.b.title) || entry.urlDomain }}</span>
-              <span class="share-fallback-url">{{ entry.urlDomain }}</span>
+              <span class="bm-info">
+                <span class="bm-title">{{ displayText(entry.b.title) || entry.urlDomain }}</span>
+                <span class="bm-url">{{ entry.urlDomain }}</span>
+              </span>
+              <span class="bm-arrow" aria-hidden="true" v-html="I.external"></span>
             </a>
+            </div>
           </div>
         </div>
       </div>
@@ -78,7 +87,7 @@
       </div>
       <div class="card-titlewrap" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <div class="card-titlewrap-text">
-          <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span></div>
+          <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
           <div class="card-domain group-domain"></div>
         </div>
       </div>
@@ -186,13 +195,11 @@ const safeNotesHtml = computed(() => {
 })
 
 /**
- * 分享态兜底（决策：严格照搬聚焦态 + 仅笔记为空时兜底）：
- * 笔记正文里没有任何内联书签卡片、但组的 bookmarkIds 非空 → 把组内书签以只读
- * 列表渲染在笔记下方。否则分享者「只往组里塞书签、没拖进笔记」时分享页会是空白。
+ * 分享只读态书签列表：
+ * 把组内书签以只读网格渲染在笔记下方，确保分享出去的组内书签均清晰可见。
  */
-const notesHaveInlineCards = computed(() => /group-inline-card/.test(props.group.notes || ''))
 const fallbackBookmarks = computed(() => {
-  if (!isShareReadonly.value || notesHaveInlineCards.value) return []
+  if (!isShareReadonly.value) return []
   return (props.group.bookmarkIds || [])
     .map((id) => ds.bookmarkMap[id])
     .filter((b): b is Bookmark => !!b && !b.deletedAt)
@@ -206,6 +213,10 @@ function markFbIconError(e: Event) {
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 const isPinned = computed(() => !!props.group.pinnedAt)
+const isPublic = computed(() => !isShareReadonly.value && Boolean(props.group.isPublic))
+function onPublicBadgeClick() {
+  ui.openShareModal('group', props.group.id)
+}
 
 const previewText = computed(() => groupPreview(props.group))
 

@@ -137,3 +137,93 @@ export async function fetchPublicCategory(shareId: string): Promise<PublicCatego
     if (timer) clearTimeout(timer)
   }
 }
+
+/** 查询当前用户某分类的公开 share_id（未登录或未公开返回 null） */
+export async function getCategoryShareId(categoryId: string): Promise<string | null> {
+  const userId = _getUserId()
+  if (!userId || !categoryId) return null
+  try {
+    const { data, error } = await supabase
+      .from('public_category_shares')
+      .select('id')
+      .eq('category_id', categoryId)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error || !data) return null
+    return (data as { id: string }).id || null
+  } catch (err) {
+    console.warn('[share] getCategoryShareId error:', err)
+    return null
+  }
+}
+
+/** 取消分类公开分享：从 public_category_shares 表中删除当前用户的对应记录 */
+export async function deletePublicCategoryShare(categoryId: string): Promise<boolean> {
+  const userId = _getUserId()
+  if (!userId || !categoryId) return false
+  try {
+    const { error } = await supabase
+      .from('public_category_shares')
+      .delete()
+      .eq('category_id', categoryId)
+      .eq('user_id', userId)
+    if (error) {
+      console.warn('[share] deletePublicCategoryShare failed:', error)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('[share] deletePublicCategoryShare error:', err)
+    return false
+  }
+}
+
+/** 拉取当前登录用户所有公开分享的分类记录 */
+export async function fetchUserCategoryShares(): Promise<Array<{ id: string; category_id: string }>> {
+  const userId = _getUserId()
+  if (!userId) return []
+  try {
+    const { data, error } = await supabase
+      .from('public_category_shares')
+      .select('id, category_id')
+      .eq('user_id', userId)
+    if (error || !data) return []
+    return data as Array<{ id: string; category_id: string }>
+  } catch (err) {
+    console.warn('[share] fetchUserCategoryShares error:', err)
+    return []
+  }
+}
+
+/** 删除当前登录用户名下的所有分类分享记录 */
+export async function deleteAllPublicCategoryShares(): Promise<boolean> {
+  const userId = _getUserId()
+  if (!userId) return false
+  try {
+    const { error } = await supabase
+      .from('public_category_shares')
+      .delete()
+      .eq('user_id', userId)
+    if (error) {
+      console.warn('[share] deleteAllPublicCategoryShares failed:', error)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('[share] deleteAllPublicCategoryShares error:', err)
+    return false
+  }
+}
+
+/** 一键停止当前用户所有公开分享（包括所有公开组与公开分类） */
+export async function stopAllUserShares(): Promise<boolean> {
+  const ds = useDataStore()
+  // 1. 关闭所有公开组
+  const publicGroups = ds.siblingGroups.filter(g => g.isPublic && !g.deletedAt)
+  for (const g of publicGroups) {
+    await setGroupPublic(g.id, false)
+  }
+  // 2. 清空所有公开分类
+  await deleteAllPublicCategoryShares()
+  return true
+}

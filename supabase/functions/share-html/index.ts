@@ -41,11 +41,11 @@ const T = {
     defaultGroupName: "分享组",
     notFoundTitle: "分享不存在 - 与链",
     notFoundHeading: "该分享不存在",
-    notFoundBody: "链接可能已失效，或分享者取消了公开",
+    notFoundBody: "私有链接可能已失效，或分享者已停止分享",
     backHome: "返回与链首页",
     logoText: "与链",
-    headSub: "公开分享",
-    desc: "{n} 个链接 · 由与链公开分享",
+    headSub: "私有链接分享",
+    desc: "{n} 个链接 · 凭专属私有链接访问",
     empty: "这个分享组还没有书签",
     count: "{n} 个链接",
     updatedAt: "更新于 {d}",
@@ -61,12 +61,12 @@ const T = {
     defaultGroupName: "Shared group",
     notFoundTitle: "Share not found - ulink",
     notFoundHeading: "This share no longer exists",
-    notFoundBody: "The link may have expired, or the owner stopped sharing it publicly",
+    notFoundBody: "The link may have expired, or the owner stopped sharing it",
     backHome: "Back to ulink",
     logoText: "ulink",
-    headSub: "Public share",
-    desc: "{n} links · publicly shared via ulink",
-    desc_one: "{n} link · publicly shared via ulink",
+    headSub: "Private share",
+    desc: "{n} links · shared via private link",
+    desc_one: "{n} link · shared via private link",
     empty: "This shared group has no bookmarks yet",
     count: "{n} links",
     count_one: "{n} link",
@@ -407,40 +407,51 @@ function notesHtml(dict: (typeof T)["zh-CN"], group: PublicGroup, bmMap?: NotesB
   return { html: `<div class="focus-notes">${cleaned}</div>`, toc }
 }
 
-/** 主应用外壳（方案 B 骨架近似）：左导航占位 + 顶部条（只读 chip + CTA）+ 内容区。
- * 与 CF 版 functions/_lib/share-render.ts 的 buildAppShell 保持同步。 */
+/** 专栏画卷外壳：吸顶毛玻璃顶栏 + 居中自适应专栏容器 + 品牌传播尾部。
+ * 去除原后台侧边栏，以内容为绝对主角。与 CF 版 functions/_lib/share-render.ts 保持同步。 */
 function buildAppShell(
   dict: (typeof T)["zh-CN"],
   appOrigin: string,
   opts: { hdrMeta: string; ctaUrl: string; inner: string },
 ): string {
   const year = new Date().getUTCFullYear()
+  const isZh = dict.lang === 'zh-CN'
+  const slogan = isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault'
+  const ctaFoot = isZh ? '免费体验与链 ulink →' : 'Try ulink for free →'
   return [
-    `<div class="app">`,
-    `<aside class="rail">`,
-    `<a class="rail-logo" href="${esc(appOrigin)}/">${LOGO_SVG}<span>${esc(dict.logoText)}</span></a>`,
-    `<nav class="rail-nav">`,
-    `<span class="rail-skel"></span><span class="rail-skel"></span><span class="rail-skel"></span>`,
-    `</nav>`,
-    `</aside>`,
-    `<div class="panel">`,
-    `<header class="panel-hdr">`,
-    `<span class="hdr-chip">${esc(dict.headSub)}</span>`,
-    `<div class="hdr-right">${opts.hdrMeta}<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a></div>`,
-    `</header>`,
-    `<div class="panel-body">${opts.inner}</div>`,
-    `<footer class="foot">`,
-    `<span class="foot-brand">${esc(dict.footerBrand)}</span>`,
-    `<span class="foot-slogan">${esc(dict.footerSlogan)}</span>`,
-    `<span class="foot-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
-    `</footer>`,
+    `<div class="share-app">`,
+    `<header class="share-bar">`,
+    `<div class="share-bar-wrap">`,
+    `<a class="share-brand" href="${esc(appOrigin)}/" title="${esc(dict.backHome)}">`,
+    `<span class="share-logo">${LOGO_SVG}</span>`,
+    `<span class="share-brand-title">${esc(dict.logoText)}</span>`,
+    `</a>`,
+    `<span class="share-badge">${esc(dict.headSub)}</span>`,
+    `<div class="share-actions">`,
+    opts.hdrMeta,
+    `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a>`,
     `</div>`,
+    `</div>`,
+    `</header>`,
+    `<main class="share-container">`,
+    opts.inner,
+    `</main>`,
+    `<footer class="share-footer">`,
+    `<div class="share-footer-inner">`,
+    `<div class="share-footer-brand">`,
+    `<span class="footer-logo">${LOGO_SVG}</span>`,
+    `<span class="footer-name">${esc(dict.footerBrand)}</span>`,
+    `</div>`,
+    `<p class="share-footer-slogan">${slogan}</p>`,
+    `<a class="share-footer-cta" href="${esc(appOrigin)}/">${ctaFoot}</a>`,
+    `<span class="share-footer-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `</div>`,
+    `</footer>`,
     `</div>`,
   ].join("\n")
 }
 
-/** 构建 <body>（组分享）：主应用外壳 + 聚焦卡（组名 + 笔记）。组内书签不渲染独立列表
- *  （对齐新版：组分享 = 聚焦组形态，书签仅以内联卡片出现在笔记中）。与 CF 版同步。 */
+/** 构建 <body>（组分享）：Hero 卡片（大图标+标题+元信息）+ 笔记排版 + 收录书签完整卡片网格。与 CF 版同步。 */
 function buildBody(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -460,21 +471,37 @@ function buildBody(
   const notes = notesHtml(dict, group, bmMap)
   // CTA 跳 App 的 hash 路由（#share/<gid>），降级入口。
   const appUrl = `${appOrigin}/#share/${esc(gid)}`
+
+  const isZh = dict.lang === 'zh-CN'
+  const bmSectionTitle = isZh ? '收录的书签' : 'Bookmarks in this group'
+
+  const bookmarksHtml = count
+    ? [
+        `<section class="group-bookmarks-section">`,
+        `<div class="section-header">`,
+        `<h2 class="section-title">${bmSectionTitle}</h2>`,
+        `<span class="section-count">${count}</span>`,
+        `</div>`,
+        `<div class="bm-grid">`,
+        bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
+        `</div>`,
+        `</section>`,
+      ].join("\n")
+    : `<div class="empty">${esc(dict.empty)}</div>`
+
   const inner = [
-    `<div class="grp-layout">`,
-    `<div class="focus-card">`,
-    `<span class="focus-accent" aria-hidden="true"></span>`,
-    `<div class="focus-head">`,
-    `<span class="focus-icon">${groupIconMarkup(group, initial)}</span>`,
-    `<div class="focus-titlewrap">`,
-    `<h1 class="focus-name">${name}</h1>`,
-    `<div class="focus-meta">${countTag}${updatedTag}</div>`,
+    `<header class="group-hero">`,
+    `<span class="group-hero-accent" aria-hidden="true"></span>`,
+    `<span class="group-hero-icon">${groupIconMarkup(group, initial)}</span>`,
+    `<div class="group-hero-info">`,
+    `<h1 class="group-hero-title">${name}</h1>`,
+    `<div class="group-hero-meta">${countTag}${updatedTag}</div>`,
     `</div>`,
-    `</div>`,
-    notes.html,
-    `</div>`,
-    `</div>`,
-  ].join("\n")
+    `</header>`,
+    notes.html ? `<section class="group-notes-card">${notes.html}</section>` : '',
+    bookmarksHtml,
+  ].filter(Boolean).join("\n")
+
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
@@ -502,13 +529,12 @@ function renderSharePage(
 const CSS = `
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{background:radial-gradient(circle at 50% -20%,rgba(18,46,138,0.06) 0%,transparent 60%),#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;min-height:100vh}
 .page{max-width:1320px;margin:0 auto;padding:0 20px 56px}
 .head{display:flex;align-items:center;gap:12px;padding:20px 0;border-bottom:1px solid #E5DDD3;margin-bottom:26px}
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#2C2824;text-decoration:none;letter-spacing:-.3px}
 .logo svg{width:22px;height:22px;color:#122E8A;flex-shrink:0}
 .head-sub{font-size:12px;font-weight:600;color:#6A6660;background:#EDE4DA;padding:3px 12px;border-radius:999px;margin-left:auto;letter-spacing:.2px}
-/* ── 布局基础（v5.3 流内）：TOC / 主卡+列表整体居中；JS 动态计算悬挂两侧宽度、主卡永远居中 ── */
 .layout{display:flex;gap:24px;align-items:flex-start;justify-content:flex-start}
 .toc{
   width:200px;flex-shrink:0;position:sticky;top:24px;
@@ -592,7 +618,6 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .focus-notes li[data-type="taskItem"][data-checked="true"]::after{transform:rotate(-45deg) scale(1);opacity:1}
 .focus-notes li[data-type="taskItem"] p{margin:0;line-height:1.5}
 .focus-notes li[data-type="taskItem"][data-checked="true"]{text-decoration:line-through;color:#6A6660}
-/* ── 右侧书签列表（App 列表模式：等高独立圆角卡，垂直排列；JS 动态提升 fixed 悬挂右侧）── */
 .bm-list{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
 .bm{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 12px;border:1px solid #E5DDD3;border-radius:12px;background:#FDFBF9;box-shadow:0 1px 2px rgba(0,0,0,0.03);text-decoration:none;color:inherit;transition:border-color .2s ease,box-shadow .2s ease,transform .2s cubic-bezier(0.16,1,0.3,1)}
 .bm:hover{border-color:#122E8A;box-shadow:0 0 0 2px rgba(18,46,138,0.13),0 4px 14px rgba(0,0,0,0.06);transform:translateY(-1px)}
@@ -618,7 +643,6 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
 .nf-icon svg{width:30px;height:30px}
 .nf-title{font-size:22px;font-weight:800;color:#2C2824;letter-spacing:-.4px}
 .nf-body{font-size:14px;color:#6A6660;max-width:420px}
-/* 无 JS 时的兜底（JS 动态布局接管后覆盖）：中等视口隐藏 TOC、主卡+列表整体居中 */
 @media(max-width:1240px){
   .toc{display:none}
   .layout{justify-content:stretch}
@@ -639,27 +663,98 @@ body{background:#F5EFEA;color:#2C2824;font-family:system-ui,-apple-system,"Segoe
   .focus-icon{width:44px;height:44px;border-radius:11px}
   .bm{min-height:54px;padding:7px 10px;gap:10px}
 }
-/* ── 主应用外壳骨架（方案 B 骨架近似：SSR 首屏近似主 UI 布局，SPA 接管后由 Vue 重建）── */
-.app{display:flex;min-height:100vh;align-items:stretch}
-.rail{width:224px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;padding:16px 12px 20px;background:#F8F3ED;border-right:1px solid #EBE3D9;position:sticky;top:0;height:100vh}
-.rail-logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;color:#2C2824;text-decoration:none;padding:6px 10px;letter-spacing:-.3px}
-.rail-logo svg{width:20px;height:20px;color:#122E8A;flex-shrink:0}
-.rail-nav{display:flex;flex-direction:column;gap:5px;margin-top:14px}
-.rail-skel{height:34px;border-radius:10px;background:linear-gradient(90deg,#EDE4DA 25%,#F6F1EB 50%,#EDE4DA 75%);background-size:200% 100%;animation:railSkel 1.5s ease-in-out infinite}
-@keyframes railSkel{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.panel{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 26px 48px;max-width:1320px;margin:0 auto;width:100%}
-.panel-hdr{display:flex;align-items:center;gap:12px;padding:18px 0 14px;border-bottom:1px solid #E5DDD3;margin-bottom:22px}
-.hdr-chip{font-size:11px;font-weight:600;line-height:1;color:#122E8A;background:#EDE4DA;border:1px solid #E5DDD3;padding:5px 10px;border-radius:999px;white-space:nowrap;flex-shrink:0}
-.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.hdr-right .meta-tag{margin:0}
-.grp-layout{display:flex;align-items:flex-start;gap:22px}
-.grp-list{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
-@media(max-width:900px){
-  .rail{display:none}
-  .panel{padding:0 16px 40px}
-  .grp-layout{flex-direction:column}
-  .grp-list{width:100%}
-  .panel-hdr{flex-wrap:wrap}
+/* ── 专栏画卷外壳（方向 A：沉浸式专栏画卷）── */
+.share-app{display:flex;flex-direction:column;min-height:100vh}
+
+/* ── 悬浮毛玻璃顶栏 ── */
+.share-bar{
+  position:sticky;top:0;z-index:100;
+  background:rgba(245,239,234,0.85);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(229,221,211,0.8);
+}
+.share-bar-wrap{
+  max-width:1040px;margin:0 auto;padding:12px 24px;
+  display:flex;align-items:center;gap:12px;
+}
+.share-brand{
+  display:flex;align-items:center;gap:8px;text-decoration:none;
+  color:#2C2824;font-weight:700;font-size:15px;letter-spacing:-.3px;
+}
+.share-logo{width:22px;height:22px;color:#122E8A;display:flex;align-items:center}
+.share-logo svg{width:100%;height:100%}
+.share-badge{
+  font-size:11px;font-weight:600;color:#6A6660;background:#EDE4DA;
+  padding:3px 10px;border-radius:999px;border:1px solid #E5DDD3;
+  letter-spacing:.2px;white-space:nowrap;
+}
+.share-actions{margin-left:auto;display:flex;align-items:center;gap:12px}
+
+/* ── 居中主容器 ── */
+.share-container{
+  max-width:960px;width:100%;margin:0 auto;padding:28px 24px 64px;
+  flex:1;display:flex;flex-direction:column;gap:24px;
+}
+
+/* ── 组分享 Hero ── */
+.group-hero{
+  position:relative;background:#FDFBF9;border:1px solid #E5DDD3;
+  border-radius:20px;padding:24px 28px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.03),0 12px 36px rgba(0,0,0,0.04);
+  display:flex;align-items:center;gap:20px;overflow:hidden;
+}
+.group-hero-accent{
+  position:absolute;left:0;top:8px;bottom:8px;width:4px;
+  border-radius:0 3px 3px 0;background:linear-gradient(135deg,#122E8A,#1E40AF);
+}
+.group-hero-icon{
+  width:52px;height:52px;border-radius:14px;background:#EDE4DA;
+  border:1px solid #EFE8DF;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;color:#122E8A;overflow:hidden;position:relative;
+}
+.group-hero-icon img{width:32px;height:32px;object-fit:contain}
+.group-hero-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.group-hero-title{font-size:24px;font-weight:800;color:#2C2824;letter-spacing:-.5px;line-height:1.25}
+.group-hero-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+
+/* ── 组笔记卡片 ── */
+.group-notes-card{
+  background:#FDFBF9;border:1px solid #E5DDD3;border-radius:18px;
+  padding:22px 26px;box-shadow:0 2px 6px rgba(0,0,0,0.02);
+}
+
+/* ── 收录的书签区 ── */
+.group-bookmarks-section{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+.section-header{display:flex;align-items:center;gap:10px}
+.section-title{font-size:16px;font-weight:700;color:#2C2824;letter-spacing:-.2px}
+.section-count{
+  font-size:11px;font-weight:700;color:#122E8A;background:rgba(18,46,138,0.08);
+  border:1px solid rgba(18,46,138,0.15);padding:2px 8px;border-radius:999px;
+}
+.bm-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;
+}
+
+/* ── 尾部 Footer ── */
+.share-footer{margin-top:auto;border-top:1px solid #E5DDD3;padding:48px 24px 36px;text-align:center}
+.share-footer-inner{max-width:600px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:8px}
+.share-footer-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:#2C2824}
+.footer-logo{width:20px;height:20px;color:#122E8A;display:flex;align-items:center}
+.footer-logo svg{width:100%;height:100%}
+.share-footer-slogan{font-size:12.5px;color:#8A847C}
+.share-footer-cta{font-size:13px;font-weight:600;color:#122E8A;text-decoration:none;margin-top:2px;transition:opacity .15s ease}
+.share-footer-cta:hover{opacity:.8;text-decoration:underline}
+.share-footer-copy{font-size:11px;color:#B0A9A0;margin-top:4px}
+
+/* ── 移动端适配 ── */
+@media(max-width:640px){
+  .share-bar-wrap{padding:10px 16px}
+  .share-container{padding:20px 16px 40px}
+  .group-hero{padding:18px 16px;border-radius:16px;gap:14px}
+  .group-hero-icon{width:44px;height:44px;border-radius:12px}
+  .group-hero-title{font-size:20px}
+  .group-notes-card{padding:16px 18px;border-radius:16px}
+  .bm-grid{grid-template-columns:1fr}
 }
 `
 

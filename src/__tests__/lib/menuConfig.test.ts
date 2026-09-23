@@ -220,7 +220,8 @@ describe('menuConfig — dispatchMenuAction 转发', () => {
     dispatchMenuAction('group', ACTIONS.DELETE, 'g1')
     expect(mocks.deleteGroup).toHaveBeenCalledWith('g1')
     dispatchMenuAction('group', ACTIONS.SHARE_GROUP, 'g1')
-    expect(mocks.shareGroup).toHaveBeenCalledWith('g1')
+    expect(ui.modals.share).toBe(true)
+    expect(ui.shareModalTarget).toEqual({ type: 'group', id: 'g1' })
     dispatchMenuAction('group', ACTIONS.FOCUS, 'g1')
     expect(mocks.toggleGroupFocus).toHaveBeenCalledWith('g1')
     dispatchMenuAction('group', ACTIONS.DETAIL, 'g1')
@@ -232,17 +233,20 @@ describe('menuConfig — dispatchMenuAction 转发', () => {
     expect(mocks.openDetail).toHaveBeenCalledWith('b1')
   })
 
-  it('cat SHARE_CATEGORY → shareCategory(id)；EXPORT_CATEGORY → exportCategory(id)', () => {
+  it('cat SHARE_CATEGORY → openShareModal(category, id)；EXPORT_CATEGORY → exportCategory(id)', () => {
     dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, 'c-tools')
-    expect(mocks.shareCategory).toHaveBeenCalledWith('c-tools')
+    expect(ui.modals.share).toBe(true)
+    expect(ui.shareModalTarget).toEqual({ type: 'category', id: 'c-tools' })
     dispatchMenuAction('cat', ACTIONS.EXPORT_CATEGORY, 'c-tools')
     expect(mocks.exportCategory).toHaveBeenCalledWith('c-tools')
   })
 
   it('cat SHARE_CATEGORY：虚拟分类（全部/未分类）被守卫，不触发', () => {
+    ui.modals.share = false
+    ui.shareModalTarget = null
     dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, 'all')
     dispatchMenuAction('cat', ACTIONS.SHARE_CATEGORY, CAT_UNCATEGORIZED)
-    expect(mocks.shareCategory).not.toHaveBeenCalled()
+    expect(ui.modals.share).toBe(false)
     dispatchMenuAction('cat', ACTIONS.EXPORT_CATEGORY, 'all')
     expect(mocks.exportCategory).not.toHaveBeenCalled()
   })
@@ -337,7 +341,8 @@ describe('menuConfig — buildLongPressItems', () => {
     expect(del?.danger).toBe(true)
     // action 走 dispatch → shareCategory / exportCategory
     items.find(i => i.label === '分享分类')?.action()
-    expect(mocks.shareCategory).toHaveBeenCalledWith('c-tools')
+    expect(ui.modals.share).toBe(true)
+    expect(ui.shareModalTarget).toEqual({ type: 'category', id: 'c-tools' })
     items.find(i => i.label === '导出分类')?.action()
     expect(mocks.exportCategory).toHaveBeenCalledWith('c-tools')
   })

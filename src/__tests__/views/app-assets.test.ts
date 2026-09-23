@@ -40,7 +40,7 @@ const okRes = (body: string) => ({ ok: true, status: 200, text: async () => body
 const failRes = { ok: false, status: 404, text: async () => "nope" } as unknown as Response
 
 describe("getAppAssets — 主应用资源注入", () => {
-  it("ASSETS binding 可用时直读 index.html 并提取 bundle 标签", async () => {
+  it("ASSETS binding 可用时直读 app.html 并提取 bundle 标签", async () => {
     const { getAppAssets } = await loadModule()
     const assetsFetch = vi.fn().mockResolvedValue(okRes(INDEX_HTML))
     const env = { ASSETS: { fetch: assetsFetch }, APP_ORIGIN: "https://ulink.ren" }
@@ -56,6 +56,23 @@ describe("getAppAssets — 主应用资源注入", () => {
     expect(out).not.toContain("fonts.googleapis.com")
   })
 
+  it("ASSETS 优先读 /app.html，404 时回退 /index.html", async () => {
+    const { getAppAssets } = await loadModule()
+    const assetsFetch = vi.fn()
+      .mockResolvedValueOnce(failRes)
+      .mockResolvedValueOnce(okRes(INDEX_HTML))
+    const env = { ASSETS: { fetch: assetsFetch }, APP_ORIGIN: "https://ulink.ren" }
+
+    const out = await getAppAssets(env, "https://ulink.ren/s/g1")
+
+    expect(out).toContain("/assets/index-BBB.js")
+    expect(assetsFetch).toHaveBeenCalledTimes(2)
+    const call0 = assetsFetch.mock.calls[0][0] as Request
+    const call1 = assetsFetch.mock.calls[1][0] as Request
+    expect(call0.url).toBe("https://ulink.ren/app.html")
+    expect(call1.url).toBe("https://ulink.ren/index.html")
+  })
+
   it("ASSETS 传绝对路径（可被 new URL 解析）", async () => {
     const { getAppAssets } = await loadModule()
     const assetsFetch = vi.fn().mockResolvedValue(okRes(INDEX_HTML))
@@ -64,10 +81,10 @@ describe("getAppAssets — 主应用资源注入", () => {
     await getAppAssets(env, "https://ulink.ren/s/c/cat_1")
 
     const arg = assetsFetch.mock.calls[0][0] as Request
-    expect(arg.url).toBe("https://ulink.ren/index.html")
+    expect(arg.url).toBe("https://ulink.ren/app.html")
   })
 
-  it("成功结果正缓存：第二次调用不再读 index.html", async () => {
+  it("成功结果正缓存：第二次调用不再读静态资源", async () => {
     const { getAppAssets } = await loadModule()
     const assetsFetch = vi.fn().mockResolvedValue(okRes(INDEX_HTML))
     const env = { ASSETS: { fetch: assetsFetch }, APP_ORIGIN: "https://ulink.ren" }
@@ -84,7 +101,7 @@ describe("getAppAssets — 主应用资源注入", () => {
 
     const out = await getAppAssets({ APP_ORIGIN: "https://ulink.ren" }, "https://ulink.ren/s/g1")
 
-    expect(fetchMock).toHaveBeenCalledWith("https://ulink.ren/index.html")
+    expect(fetchMock).toHaveBeenCalledWith("https://ulink.ren/app.html")
     expect(out).toContain("/assets/index-BBB.js")
   })
 
@@ -101,7 +118,10 @@ describe("getAppAssets — 主应用资源注入", () => {
 
   it("失败不写负缓存：首次失败后第二次调用仍会重试", async () => {
     const { getAppAssets } = await loadModule()
-    const assetsFetch = vi.fn().mockResolvedValueOnce(failRes).mockResolvedValueOnce(okRes(INDEX_HTML))
+    const assetsFetch = vi.fn()
+      .mockResolvedValueOnce(failRes)
+      .mockResolvedValueOnce(failRes)
+      .mockResolvedValueOnce(okRes(INDEX_HTML))
     fetchMock.mockResolvedValue(failRes)
     const env = { ASSETS: { fetch: assetsFetch }, APP_ORIGIN: "https://ulink.ren" }
 
@@ -110,7 +130,7 @@ describe("getAppAssets — 主应用资源注入", () => {
 
     expect(first).toBe("")
     expect(second).toContain("/assets/index-BBB.js")
-    expect(assetsFetch).toHaveBeenCalledTimes(2)
+    expect(assetsFetch).toHaveBeenCalledTimes(3)
   })
 
   it("全部策略失败 → 返回空串并告警（页面降级为静态骨架）", async () => {
