@@ -8,7 +8,7 @@ import { searchBookmarkIds, searchGroupIds } from '../lib/search.js'
 import { _filterAttrs, _sortItems } from '../lib/dataQuery.js'
 import { _mergeShadow } from './dataShared.js'
 import type { DataState } from './dataShared.js'
-import { shadowVersion } from './shareShadow.js'
+import { shadowVersion, shadowData, shadowHasAny } from './shareShadow.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../types.js'
 
@@ -133,8 +133,10 @@ export const dataGetters = {
     }
     return map
   },
-  /** 预计算父→子书签映射（由 _syncMaps 维护，排除软删除） */
+  /** 预计算父→子书签映射（由 _syncMaps 维护，排除软删除；分享态叠加影子书签） */
   childrenMap(state: DataState): Record<string, Bookmark[]> {
+    void shadowVersion.value
+    let result: Record<string, Bookmark[]> = {}
     // 索引未构建或不同步时回退到手动计算
     if (Object.keys(state._childrenIdx).length === 0 && state.bookmarks.some(b => b.parentId)) {
       const map: Record<string, Bookmark[]> = {}
@@ -144,15 +146,35 @@ export const dataGetters = {
           map[b.parentId].push(b)
         }
       })
-      return map
+      result = map
+    } else {
+      // 按需将 ID 数组解析为 Bookmark 对象（_bmMap 权威，不再扫 bookmarks.find）
+      const bmMap = state._bmMap
+      for (const pid of Object.keys(state._childrenIdx)) {
+        result[pid] = state._childrenIdx[pid]
+          .map(id => bmMap[id])
+          .filter((b): b is Bookmark => !!b && !b.deletedAt)
+      }
     }
-    // 按需将 ID 数组解析为 Bookmark 对象（_bmMap 权威，不再扫 bookmarks.find）
-    const bmMap = state._bmMap
-    const result: Record<string, Bookmark[]> = {}
-    for (const pid of Object.keys(state._childrenIdx)) {
-      result[pid] = state._childrenIdx[pid]
-        .map(id => bmMap[id])
-        .filter((b): b is Bookmark => !!b && !b.deletedAt)
+
+    // 分享态：合并影子书签中的父子关系
+    let active = false
+    try {
+      active = !!useUIStore().shareMode
+    } catch {
+      active = false
+    }
+    if (active && shadowHasAny()) {
+      const shadowBms = Object.values(shadowData().bookmarks)
+      if (shadowBms.length) {
+        result = { ...result }
+        for (const b of shadowBms) {
+          const pid = b.parentId || (b as any).parent_id
+          if (pid && !b.deletedAt) {
+            result[pid] = result[pid] ? [...result[pid], b] : [b]
+          }
+        }
+      }
     }
     return result
   },

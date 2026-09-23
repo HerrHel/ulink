@@ -112,7 +112,7 @@
       </div>
     </div>
     <div class="card-foot">
-      <span class="card-stat">{{ tN('count.bookmarks', group.bookmarkIds?.length || 0) }}</span>
+      <span class="card-stat">{{ tN('count.bookmarks', group.bookmarkIds?.length ?? (group as any).bookmark_ids?.length ?? 0) }}</span>
       <span class="card-actions" v-if="!isShareReadonly">
         <button class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="editGrp" :title="t('cards.editGroup')" v-html="I.edit"></button>
@@ -200,7 +200,8 @@ const safeNotesHtml = computed(() => {
  */
 const fallbackBookmarks = computed(() => {
   if (!isShareReadonly.value) return []
-  return (props.group.bookmarkIds || [])
+  const ids = props.group.bookmarkIds || (props.group as any).bookmark_ids || []
+  return ids
     .map((id) => ds.bookmarkMap[id])
     .filter((b): b is Bookmark => !!b && !b.deletedAt)
 })
