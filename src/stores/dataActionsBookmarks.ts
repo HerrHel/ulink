@@ -9,13 +9,14 @@ import { _denyWrite, DGM_KEY } from './dataShared.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { Bookmark } from '../types.js'
 import { CAT_UNCATEGORIZED } from '../config/constants.js'
-import { APP_CANONICAL_BASE } from '../config/urls.js'
+import { APP_CANONICAL_BASE, EDGE_ADDON_URL } from '../config/urls.js'
 import { getLocale } from '../i18n/index.js'
 
 /** 官网落地页书签的固定 id：跨设备云同步去重的关键，勿改动已有用户的此 id */
 export const OFFICIAL_SITE_BM_ID = 'bm_ulink_home'
 export const OFFICIAL_SITE_LANDING_ID = 'bm_ulink_landing'
 export const OFFICIAL_SITE_APP_ID = 'bm_ulink_app'
+export const OFFICIAL_SITE_EDGE_EXT_ID = 'bm_ulink_edge_ext'
 /** 品牌链条图标（本地静态 /logo.svg，安全相对路径，杜绝 data: 协议被 safeIconUrl 拒拦） */
 export const OFFICIAL_SITE_ICON = '/logo.svg'
 
@@ -91,31 +92,33 @@ export const bookmarkActions = {
    */
   /**
    * 官网与主应用入口书签：
-   * 主书签「与链ulink」挂载两个子书签：
+   * 主书签「与链ulink」挂载三个子书签：
    *  1.「宣传页」指向 /?stay=1（落地页脚本据此豁免返客秒跳）；
-   *  2.「app页」指向 /app。
+   *  2.「app页」指向 /app；
+   *  3.「Edge扩展」指向 Edge 官方扩展商店详情页。
    *
    * 幂等与升级护栏：
    *  1. 用户彻底删除该书签后（lv_landing_bm_done 且全表无此 id）不复活；
    *  2. 存量老用户（已有 bm_ulink_home）自动迁移：更新旧名「与链官网」为「与链ulink」，
-   *     并幂等补齐缺失的「宣传页」和「app页」两个子书签；
-   *  3. 全新安装：直接写入主书签（默认展开）+ 两个子书签；
+   *     并幂等补齐缺失的「宣传页」、「app页」和「Edge扩展」子书签；
+   *  3. 全新安装：直接写入主书签（默认展开）+ 三个子书签；
    *  4. 分享只读态（_denyWrite）下不写入。
    */
-  ensureOfficialSiteBookmark(this: DataStoreThis) {
-    if (_denyWrite()) return
+  ensureOfficialSiteBookmark(this: DataStoreThis): boolean {
+    if (_denyWrite()) return false
     const isEn = getLocale() === 'en-US'
     const now = Date.now()
 
     const existingHome = this.bookmarks.find(b => b.id === OFFICIAL_SITE_BM_ID)
     // 护栏 1：用户曾经彻底删除了该书签，尊重删除，绝不强行复活
     if (!existingHome && safeGetItem('lv_landing_bm_done')) {
-      return
+      return false
     }
 
     // 护栏 2：存量平滑升级（已有主书签且未软删）
     if (existingHome) {
       safeSetItem('lv_landing_bm_done', '1')
+      let changed = false
       if (!existingHome.deletedAt) {
         const expectedTitle = isEn ? 'ulink' : '与链ulink'
         const updates: Partial<Bookmark> = {}
@@ -125,9 +128,6 @@ export const bookmarkActions = {
         }
         if (existingHome.icon !== OFFICIAL_SITE_ICON) {
           updates.icon = OFFICIAL_SITE_ICON
-        }
-        if (Object.keys(updates).length > 0) {
-          this.updateBookmark(OFFICIAL_SITE_BM_ID, updates)
         }
 
         // 补齐或升级子书签 1：宣传页
@@ -150,8 +150,10 @@ export const bookmarkActions = {
             createdAt: now,
             updatedAt: now,
           })
+          changed = true
         } else if (landingBm.icon !== OFFICIAL_SITE_ICON) {
           this.updateBookmark(OFFICIAL_SITE_LANDING_ID, { icon: OFFICIAL_SITE_ICON })
+          changed = true
         }
 
         // 补齐或升级子书签 2：app页
@@ -174,14 +176,49 @@ export const bookmarkActions = {
             createdAt: now,
             updatedAt: now,
           })
+          changed = true
         } else if (appBm.icon !== OFFICIAL_SITE_ICON) {
           this.updateBookmark(OFFICIAL_SITE_APP_ID, { icon: OFFICIAL_SITE_ICON })
+          changed = true
+        }
+
+        // 补齐或升级子书签 3：Edge扩展
+        const edgeExtBm = this.bookmarks.find(b => b.id === OFFICIAL_SITE_EDGE_EXT_ID)
+        if (!edgeExtBm) {
+          // 存量老用户：默认展开父书签，便于直观看到新补齐的「Edge扩展」
+          updates.isExpanded = true
+          this.addBookmark({
+            id: OFFICIAL_SITE_EDGE_EXT_ID,
+            title: isEn ? 'Edge Extension' : 'Edge扩展',
+            url: EDGE_ADDON_URL,
+            username: '',
+            password: '',
+            notes: isEn ? 'Microsoft Edge Add-ons Store' : '微软 Edge 官方扩展商店安装入口',
+            icon: OFFICIAL_SITE_ICON,
+            categoryId: existingHome.categoryId || CAT_UNCATEGORIZED,
+            parentId: OFFICIAL_SITE_BM_ID,
+            order: 2,
+            useCount: 0,
+            attributes: {},
+            isExpanded: false,
+            createdAt: now,
+            updatedAt: now,
+          })
+          changed = true
+        } else if (edgeExtBm.icon !== OFFICIAL_SITE_ICON || edgeExtBm.url !== EDGE_ADDON_URL) {
+          this.updateBookmark(OFFICIAL_SITE_EDGE_EXT_ID, { icon: OFFICIAL_SITE_ICON, url: EDGE_ADDON_URL })
+          changed = true
+        }
+
+        if (Object.keys(updates).length > 0) {
+          this.updateBookmark(OFFICIAL_SITE_BM_ID, updates)
+          changed = true
         }
       }
-      return
+      return changed
     }
 
-    // 全新安装：写入主书签 + 2 个子书签
+    // 全新安装：写入主书签 + 3 个子书签
     const sibs = this.bookmarks.filter(
       b => !b.parentId && (b.categoryId === CAT_UNCATEGORIZED || b.categoryId === '')
     )
@@ -241,7 +278,26 @@ export const bookmarkActions = {
       updatedAt: now,
     })
 
+    this.addBookmark({
+      id: OFFICIAL_SITE_EDGE_EXT_ID,
+      title: isEn ? 'Edge Extension' : 'Edge扩展',
+      url: EDGE_ADDON_URL,
+      username: '',
+      password: '',
+      notes: isEn ? 'Microsoft Edge Add-ons Store' : '微软 Edge 官方扩展商店安装入口',
+      icon: OFFICIAL_SITE_ICON,
+      categoryId: CAT_UNCATEGORIZED,
+      parentId: OFFICIAL_SITE_BM_ID,
+      order: 2,
+      useCount: 0,
+      attributes: {},
+      isExpanded: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+
     safeSetItem('lv_landing_bm_done', '1')
+    return true
   },
   updateBookmark(this: DataStoreThis, id: string, changes: Partial<Bookmark>) {
     if (_denyWrite()) return

@@ -39,3 +39,10 @@ export const SHARE_BASE = `${APP_CANONICAL_BASE.replace(/\/+$/, '')}/s`
  * 同域 SSR 上线后此函数保留作向后兼容兜底（旧链接仍可访问），不再用于新链接生成。
  */
 export const SHARE_FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/share-html`
+
+/**
+ * 微软 Edge 官方扩展商店详情页链接。
+ * 永久固定 ID：`epjlkfndeonlpjocdafoiaomdigopeeh`。
+ */
+export const EDGE_ADDON_URL = 'https://microsoftedge.microsoft.com/addons/detail/%E4%B8%8E%E9%93%BE/epjlkfndeonlpjocdafoiaomdigopeeh'
+

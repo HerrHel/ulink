@@ -43,6 +43,34 @@
     "message": "打开网页版",
     "description": "在网页中打开与链"
   },
+  "open_link": {
+    "message": "打开链接",
+    "description": "打开目标链接"
+  },
+  "tab_current": {
+    "message": "收藏当前页",
+    "description": "标签页：收藏当前网页"
+  },
+  "tab_library": {
+    "message": "书签库",
+    "description": "标签页：全部书签库"
+  },
+  "parent_bookmark": {
+    "message": "所属主站",
+    "description": "父书签标签"
+  },
+  "sub_bookmarks": {
+    "message": "子书签",
+    "description": "子书签标签"
+  },
+  "as_sub_bookmark": {
+    "message": "添加到主书签",
+    "description": "保存为子书签选项"
+  },
+  "top_level_bookmark": {
+    "message": "独立主书签",
+    "description": "独立顶级书签选项"
+  },
   "status_logged_out": {
     "message": "未登录",
     "description": "登录状态：未登录"
@@ -106,6 +134,42 @@
   "already_saved": {
     "message": "已收藏",
     "description": "详情面板徽标"
+  },
+  "already_saved_sub": {
+    "message": "已收藏 (子书签)",
+    "description": "详情面板徽标（子书签）"
+  },
+  "parent_notes": {
+    "message": "主站备注",
+    "description": "主站书签备注标签"
+  },
+  "page_notes": {
+    "message": "本页备注",
+    "description": "当前页面/子书签自身备注标签"
+  },
+  "current_page_tag": {
+    "message": "当前页",
+    "description": "子书签列表中当前所在页的标记"
+  },
+  "domain_matched_notice": {
+    "message": "当前页未收藏，已收藏所属主站",
+    "description": "同域主站已收藏提示"
+  },
+  "save_as_sub_btn": {
+    "message": "保存为该站子书签",
+    "description": "快捷保存为所属主站的子书签按钮"
+  },
+  "parent_password": {
+    "message": "主站密码",
+    "description": "所属主站密码标签"
+  },
+  "no_notes": {
+    "message": "暂无备注",
+    "description": "无备注提示"
+  },
+  "no_parent_notes": {
+    "message": "主站暂无备注",
+    "description": "主站无备注提示"
   },
   "notes": {
     "message": "备注",
@@ -422,5 +486,17 @@
   "sync_login_no_tab": {
     "message": "未检测到已登录的与链网页标签，请先在浏览器打开并登录 ulink.ren",
     "description": "无网页标签提示"
+  },
+  "encrypted_notes_locked": {
+    "message": "已加密备注（点击输入主密码解锁）",
+    "description": "已加密备注锁定提示"
+  },
+  "click_to_unlock": {
+    "message": "点击输入主密码解锁",
+    "description": "点击解锁提示"
+  },
+  "encrypted_bookmark": {
+    "message": "已加密书签",
+    "description": "已加密书签占位标题"
   }
 }

@@ -5,7 +5,7 @@
 import { onMounted, onUnmounted, watch } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
-import { flushSaveAppData } from '../stores/app.js'
+import { flushSaveAppData, debouncedSaveAppData } from '../stores/app.js'
 import { useMentionStore } from '../stores/overlay.js'
 import { detectShareRoute } from './domain/useDataShare.js'
 import { loadData, saveToLocalStorage as persistSaveToLocalStorage } from '../stores/persist.js'
@@ -86,7 +86,10 @@ export function useAppLifecycle() {
     } else {
       // 双入口配套：给库补官网落地页书签（幂等，见 dataActionsBookmarks.ensureOfficialSiteBookmark）。
       // 分享态跳过——访问 /s/* 是看别人的组，不该写自己的库（_denyWrite 亦兜底）。
-      ds.ensureOfficialSiteBookmark()
+      const changed = ds.ensureOfficialSiteBookmark()
+      if (changed) {
+        debouncedSaveAppData()
+      }
     }
 
     // D1: 首启分流引导

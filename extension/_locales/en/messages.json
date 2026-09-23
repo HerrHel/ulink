@@ -43,6 +43,34 @@
     "message": "Open Web App",
     "description": "Open ulink web app in new tab"
   },
+  "open_link": {
+    "message": "Open link",
+    "description": "Open target link"
+  },
+  "tab_current": {
+    "message": "Save Page",
+    "description": "Tab: save current page"
+  },
+  "tab_library": {
+    "message": "Bookmarks",
+    "description": "Tab: all bookmarks library"
+  },
+  "parent_bookmark": {
+    "message": "Parent Site",
+    "description": "Parent bookmark label"
+  },
+  "sub_bookmarks": {
+    "message": "Sub-bookmarks",
+    "description": "Sub-bookmarks label"
+  },
+  "as_sub_bookmark": {
+    "message": "Add to main site",
+    "description": "Save as sub-bookmark option"
+  },
+  "top_level_bookmark": {
+    "message": "Main Bookmark",
+    "description": "Top level bookmark option"
+  },
   "status_logged_out": {
     "message": "Not logged in",
     "description": "Auth status: logged out"
@@ -106,6 +134,42 @@
   "already_saved": {
     "message": "Saved",
     "description": "Detail panel badge"
+  },
+  "already_saved_sub": {
+    "message": "Saved (Sub-bookmark)",
+    "description": "Detail panel badge for sub-bookmark"
+  },
+  "parent_notes": {
+    "message": "Parent Site Notes",
+    "description": "Label for parent site notes"
+  },
+  "page_notes": {
+    "message": "Page Notes",
+    "description": "Label for current page notes"
+  },
+  "current_page_tag": {
+    "message": "Current",
+    "description": "Badge for current page in sub-bookmark list"
+  },
+  "domain_matched_notice": {
+    "message": "Page not saved, parent site is saved",
+    "description": "Notice when domain matches existing parent"
+  },
+  "save_as_sub_btn": {
+    "message": "Save as Sub-bookmark",
+    "description": "Button to save current page as sub-bookmark"
+  },
+  "parent_password": {
+    "message": "Parent Password",
+    "description": "Password label for parent site"
+  },
+  "no_notes": {
+    "message": "No notes",
+    "description": "No notes fallback"
+  },
+  "no_parent_notes": {
+    "message": "No parent site notes",
+    "description": "No parent notes fallback"
   },
   "notes": {
     "message": "Notes",
@@ -422,5 +486,17 @@
   "sync_login_no_tab": {
     "message": "No logged-in ulink tab detected. Please open and log in to ulink.ren first",
     "description": "No web tab hint"
+  },
+  "encrypted_notes_locked": {
+    "message": "Encrypted notes (click to unlock)",
+    "description": "Encrypted notes locked placeholder"
+  },
+  "click_to_unlock": {
+    "message": "Click to unlock with master password",
+    "description": "Click to unlock hint"
+  },
+  "encrypted_bookmark": {
+    "message": "Encrypted bookmark",
+    "description": "Encrypted bookmark fallback title"
   }
 }

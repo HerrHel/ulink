@@ -48,3 +48,48 @@ describe('extension/notes-update.js — notesUpdateOutcome 备注更新决策', 
     expect(out.writeLocal).toBe(true)
   })
 })
+
+describe('extension/notes-update.js — formatNotesForDisplay 备注净化与格式化', () => {
+  it('处理空串或无效值返回空串', () => {
+    expect(getApi().formatNotesForDisplay('')).toBe('')
+    expect(getApi().formatNotesForDisplay(null as any)).toBe('')
+    expect(getApi().formatNotesForDisplay(undefined as any)).toBe('')
+    expect(getApi().formatNotesForDisplay('   ')).toBe('')
+  })
+
+  it('保留纯文本多行与普通空白', () => {
+    const text = '第一行\n第二行\n第三行'
+    expect(getApi().formatNotesForDisplay(text)).toBe(text)
+  })
+
+  it('净化 TipTap/HTML 段落并转换为自然换行', () => {
+    const html = '<p>第一行笔记</p><p>第二行笔记</p>'
+    expect(getApi().formatNotesForDisplay(html)).toBe('第一行笔记\n第二行笔记')
+  })
+
+  it('净化 HTML 实体与行内标签', () => {
+    const html = '<p>A &amp; B &lt; C &gt; &quot;D&quot; &#39;E&#39;&nbsp;F</p><br><span>尾注</span>'
+    expect(getApi().formatNotesForDisplay(html)).toBe("A & B < C > \"D\" 'E' F\n\n尾注")
+  })
+
+
+  it('收敛超过两行的冗余连续空行', () => {
+    const text = '段落一\n\n\n\n\n段落二'
+    expect(getApi().formatNotesForDisplay(text)).toBe('段落一\n\n段落二')
+  })
+
+  it('三段密文字符串直接返回空串（防止展示 Base64 密文乱码）', () => {
+    const cipher = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24)
+    expect(getApi().isThreePartCipher(cipher)).toBe(true)
+    expect(getApi().formatNotesForDisplay(cipher)).toBe('')
+  })
+
+  it('普通三段文本（如域名或版本号）不受密文拦截', () => {
+    expect(getApi().isThreePartCipher('www.example.com')).toBe(false)
+    expect(getApi().formatNotesForDisplay('www.example.com')).toBe('www.example.com')
+    expect(getApi().isThreePartCipher('v1.2.3')).toBe(false)
+    expect(getApi().formatNotesForDisplay('v1.2.3')).toBe('v1.2.3')
+  })
+})
+
+

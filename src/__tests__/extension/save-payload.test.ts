@@ -71,9 +71,23 @@ describe('extension/save-payload.js — buildBookmarkPayload', () => {
     expect(payload.icon).toBe('https://news.ycombinator.com/favicon.ico')
     expect(payload.order).toBe(6)
     expect(payload.deleted_at).toBeNull()
+    expect(payload.parent_id).toBeNull()
     expect(payload.created_at_num).toBeGreaterThan(0)
     expect(payload.updated_at_num).toBe(payload.created_at_num)
   })
+
+  it('支持传入 parentId 构建子书签', () => {
+    const payload = getWindowApi().buildBookmarkPayload({
+      url: 'https://docs.github.com/en',
+      title: 'GitHub Docs',
+      parentId: 'bm_github_root',
+      userId: 'uuid-1234',
+    })
+
+    expect(payload.parent_id).toBe('bm_github_root')
+    expect(payload.title).toBe('GitHub Docs')
+  })
+
 
   it('缺省值兜底（分类默认为 uncategorized，标题默认为域名）', () => {
     const payload = getWindowApi().buildBookmarkPayload({
