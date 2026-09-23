@@ -42,6 +42,59 @@ type ForkPayload =
   | { kind: 'group'; group: SiblingGroup; bookmarks: Bookmark[] }
   | { kind: 'category'; data: PublicCategoryData }
 
+/**
+ * 规范化分享书签数据：兼容远端/SSR 的下划线字段与本地驼峰字段
+ */
+export function normalizeSharedBookmark(raw: any, fallbackCategoryId = ''): Bookmark {
+  if (!raw) return raw
+  return {
+    id: String(raw.id || ''),
+    title: raw.title || '',
+    url: raw.url || '',
+    username: raw.username || '',
+    password: raw.password || '',
+    notes: raw.notes || '',
+    icon: raw.icon || '',
+    categoryId: raw.categoryId || raw.category_id || fallbackCategoryId,
+    parentId: raw.parentId ?? raw.parent_id ?? null,
+    order: typeof raw.order === 'number' ? raw.order : 0,
+    useCount: raw.useCount ?? raw.use_count ?? 0,
+    attributes: raw.attributes || {},
+    isExpanded: Boolean(raw.isExpanded ?? raw.is_expanded),
+    createdAt: raw.createdAt ?? raw.created_at_num ?? raw.created_at ?? 0,
+    updatedAt: raw.updatedAt ?? raw.updated_at_num ?? raw.updated_at ?? 0,
+    pinnedAt: raw.pinnedAt ?? raw.pinned_at ?? undefined,
+    deletedAt: raw.deletedAt ?? (raw.deleted_at ? (typeof raw.deleted_at === 'number' ? raw.deleted_at : Date.parse(raw.deleted_at)) : undefined),
+  }
+}
+
+/**
+ * 规范化分享组数据：确保 bookmarkIds、isPublic、updatedAt 等关键字段规范化
+ */
+export function normalizeSharedGroup(raw: any): SiblingGroup {
+  if (!raw) return raw
+  return {
+    id: String(raw.id || ''),
+    name: raw.name || '',
+    categoryId: raw.categoryId || raw.category_id || '',
+    icon: raw.icon || '',
+    order: typeof raw.order === 'number' ? raw.order : 0,
+    isExpanded: Boolean(raw.isExpanded ?? raw.is_expanded),
+    attributes: raw.attributes || {},
+    bookmarkIds: Array.isArray(raw.bookmarkIds)
+      ? raw.bookmarkIds
+      : Array.isArray(raw.bookmark_ids)
+        ? raw.bookmark_ids
+        : [],
+    notes: raw.notes || '',
+    useCount: raw.useCount ?? raw.use_count ?? 0,
+    updatedAt: raw.updatedAt ?? raw.updated_at_num ?? raw.updated_at ?? 0,
+    isPublic: Boolean(raw.isPublic ?? raw.is_public),
+    pinnedAt: raw.pinnedAt ?? raw.pinned_at ?? undefined,
+    deletedAt: raw.deletedAt ?? (raw.deleted_at ? (typeof raw.deleted_at === 'number' ? raw.deleted_at : Date.parse(raw.deleted_at)) : undefined),
+  }
+}
+
 /** 每次进入递增；异步 fetch 回包时据此丢弃过期响应（快速切换分享链接） */
 let _enterSeq = 0
 
@@ -136,27 +189,35 @@ export const useShareStore = defineStore('share', () => {
     // 先上锁：后续任何 mutation 都被拒，避免 fetch 期间的中间态写进本地库
     ui.shareMode = { kind: catId ? 'category' : 'group', id: catId || route }
     ui.searchQuery = ''
+    if (catId) {
+      ui.focusedGroupId = null
+    }
 
     // ── SSR 预注入数据秒级水合（零网络等待，杜绝客户端直连 Supabase 延时与转圈卡死）──
     const winData = typeof window !== 'undefined' ? (window as unknown as { __INITIAL_SHARE_DATA__?: any }).__INITIAL_SHARE_DATA__ : null
     if (winData) {
       if (catId && winData.type === 'category' && winData.id === catId && winData.data?.category) {
         category.value = winData.data.category
-        groups.value = winData.data.groups || []
-        bookmarks.value = (winData.data.bookmarks || []).map((b: Bookmark) => ({ ...b, categoryId: winData.data.category.id }))
+        groups.value = (winData.data.groups || []).map(normalizeSharedGroup)
+        bookmarks.value = (winData.data.bookmarks || []).map((b: any) =>
+          normalizeSharedBookmark(b, winData.data.category.id),
+        )
         _fillShadow()
         ui.curCat = winData.data.category.id
+        ui.focusedGroupId = null
         _applyCategoryHead(winData.data)
         loading.value = false
         error.value = ''
         return
       }
       if (!catId && winData.type === 'group' && winData.id === route && winData.data?.group) {
-        group.value = winData.data.group
-        bookmarks.value = winData.data.bookmarks || []
+        group.value = normalizeSharedGroup(winData.data.group)
+        bookmarks.value = (winData.data.bookmarks || []).map((b: any) =>
+          normalizeSharedBookmark(b, group.value!.categoryId),
+        )
         _fillShadow()
         ui.focusedGroupId = winData.data.group.id
-        _applyGroupHead(winData.data.group, winData.data.bookmarks || [])
+        _applyGroupHead(group.value, bookmarks.value)
         loading.value = false
         error.value = ''
         return
@@ -174,11 +235,14 @@ export const useShareStore = defineStore('share', () => {
           return
         }
         category.value = data.category
-        groups.value = data.groups
+        groups.value = (data.groups || []).map(normalizeSharedGroup)
         // 书签的 categoryId 归一到影子分类，卡片上取分类名时才不会查到访问者自己的分类
-        bookmarks.value = data.bookmarks.map((b) => ({ ...b, categoryId: data.category.id }))
+        bookmarks.value = (data.bookmarks || []).map((b) =>
+          normalizeSharedBookmark(b, data.category.id),
+        )
         _fillShadow()
         ui.curCat = data.category.id
+        ui.focusedGroupId = null
         _applyCategoryHead(data)
       } else {
         const data = await fetchPublicGroup(route)
@@ -187,11 +251,13 @@ export const useShareStore = defineStore('share', () => {
           error.value = t('shareView.notFound')
           return
         }
-        group.value = data.group
-        bookmarks.value = data.bookmarks
+        group.value = normalizeSharedGroup(data.group)
+        bookmarks.value = (data.bookmarks || []).map((b) =>
+          normalizeSharedBookmark(b, group.value!.categoryId),
+        )
         _fillShadow()
-        ui.focusedGroupId = data.group.id
-        _applyGroupHead(data.group, data.bookmarks)
+        ui.focusedGroupId = group.value.id
+        _applyGroupHead(group.value, bookmarks.value)
       }
     } catch (e) {
       if (seq !== _enterSeq) return

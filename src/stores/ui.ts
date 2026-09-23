@@ -318,11 +318,25 @@ export const useUIStore = defineStore('ui', {
         const ds = useDataStore()
         // 审计 R37：curCat 不过滤已删除分类 id。若 localStorage 残留指向已删分类的 id（跨会话/同步/
         // 导入/异常写），filtered* 会返回空列表。用 categoryMap 校验：不存在或已软删则回退 CAT_ALL。
-        if (s.curCat) {
-          if (s.curCat === CAT_ALL || (ds.categoryMap[s.curCat] && !ds.categoryMap[s.curCat].deletedAt)) {
-            this.curCat = s.curCat
-          } else {
-            this.curCat = CAT_ALL
+        // 分享态保护：若当前处于分享只读态，严禁将本地上次会话的 curCat/focusedGroupId/searchQuery/attrs 覆盖进来，
+        // 否则会冲掉分享链接指定的分类或组，并触发 share.ts 侦听器调用 exit() 误退至本地空库
+        if (!this.shareMode) {
+          if (s.curCat) {
+            if (s.curCat === CAT_ALL || (ds.categoryMap[s.curCat] && !ds.categoryMap[s.curCat].deletedAt)) {
+              this.curCat = s.curCat
+            } else {
+              this.curCat = CAT_ALL
+            }
+          }
+          if (s.searchQuery) this.searchQuery = s.searchQuery
+          const attrMap = ds.attributeMap
+          const filterValidAttrs = (ids: string[]) =>
+            ids.filter((id: string) => !!attrMap[id] && !attrMap[id].deletedAt)
+          if (Array.isArray(s.activeAttrs)) this.activeAttrs = filterValidAttrs(s.activeAttrs.slice())
+          if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = filterValidAttrs(s.excludedAttrs.slice())
+          if (s.focusedGroupId) {
+            const fg = ds.groupMap[s.focusedGroupId]
+            if (fg) this.focusedGroupId = s.focusedGroupId
           }
         }
         if (s.sortMode) this.sortMode = s.sortMode
@@ -330,19 +344,6 @@ export const useUIStore = defineStore('ui', {
         if (typeof s.groupsOnTop === 'boolean') this.groupsOnTop = s.groupsOnTop
         if (s.layoutMode === 'list' || s.layoutMode === 'grid' || s.layoutMode === 'mini-grid') this.layoutMode = s.layoutMode
         if (typeof s.historyMax === 'number') this.historyMax = clampHistoryMax(s.historyMax)
-        if (s.searchQuery) this.searchQuery = s.searchQuery
-        // 审计 R15：activeAttrs/excludedAttrs 不过滤已删除属性 id（与 detailCards 同根因）。
-        // 若 UI_STATE_KEY 残留已删 attr id，_filterAttrs 后列表全空但 AttrChips 不显示 chip。
-        // 按 attributeMap + !deletedAt 过滤后赋值，与 detailCards 模式一致。
-        const attrMap = ds.attributeMap
-        const filterValidAttrs = (ids: string[]) =>
-          ids.filter((id: string) => !!attrMap[id] && !attrMap[id].deletedAt)
-        if (Array.isArray(s.activeAttrs)) this.activeAttrs = filterValidAttrs(s.activeAttrs.slice())
-        if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = filterValidAttrs(s.excludedAttrs.slice())
-        if (s.focusedGroupId) {
-          const fg = ds.groupMap[s.focusedGroupId]
-          if (fg) this.focusedGroupId = s.focusedGroupId
-        }
         if (Array.isArray(s.detailCards)) {
           const gMap = ds.groupMap
           const bMap = ds.bookmarkMap

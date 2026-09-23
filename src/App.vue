@@ -143,6 +143,7 @@ const ConfirmModal = defineAsyncComponent(() => import('./components/modals/Conf
 const ChoiceModal = defineAsyncComponent(() => import('./components/modals/ChoiceModal.vue'))
 const AuthModal = defineAsyncComponent(() => import('./components/modals/AuthModal.vue'))
 import { saveFromExtension } from './composables/domain/useBookmark.js'
+import { detectShareRoute, parseCategoryShareRoute } from './composables/domain/useDataShare.js'
 
 const BookmarkModal = defineAsyncComponent(() => import('./components/modals/BookmarkModal.vue'))
 const CategoryModal = defineAsyncComponent(() => import('./components/modals/CategoryModal.vue'))
@@ -205,9 +206,20 @@ const VaultSetupModal = defineAsyncComponent(() => import('./components/modals/V
 const VaultUnlockModal = defineAsyncComponent(() => import('./components/modals/VaultUnlockModal.vue'))
 const SetupGuide = defineAsyncComponent(() => import('./components/modals/SetupGuide.vue'))
 
-// 分享只读态（主应用内）：见 stores/share.ts。分享路由由 useAppLifecycle 检测后回调。
+// 分享只读态（主应用内）：见 stores/share.ts。
 const share = useShareStore()
-onShareRoute((gid: string) => { void share.enter(gid) })
+// 首屏在 setup 阶段同步探测并进入分享态，杜绝首屏渲染常规侧栏/过滤栏与闪烁「暂无书签」
+const initialShareRoute = detectShareRoute()
+if (initialShareRoute) {
+  void share.enter(initialShareRoute)
+}
+onShareRoute((gid: string) => {
+  const currentId = uiStore.shareMode?.id
+  const targetId = parseCategoryShareRoute(gid) || gid
+  if (currentId !== targetId) {
+    void share.enter(gid)
+  }
+})
 
 onMounted(async () => {
   // P1: E2E 改为按需引导 — 不再是「设过主密码就每次启动必解锁」。

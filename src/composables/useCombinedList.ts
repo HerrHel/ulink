@@ -7,7 +7,7 @@
 import { computed, type ComputedRef } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
-import { shadowData } from '../stores/shareShadow.js'
+import { shadowData, shadowVersion } from '../stores/shareShadow.js'
 import type { CardItem, Bookmark, SiblingGroup } from '../types.js'
 
 export type CombinedMode = 'focus' | 'custom' | 'normal' | 'share-category'
@@ -17,10 +17,11 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
   const ui = useUIStore()
 
   const mode = computed<CombinedMode>(() => {
-    // 聚焦优先：分类分享态下聚焦影子组同样走聚焦视图
-    if (ui.focusedGroupId) return 'focus'
+    // 聚焦优先：分类分享态下聚焦有效影子组同样走聚焦视图
+    if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) return 'focus'
     // 分类分享态：列表直接来自影子数据（filtered* 看不到影子内容）
     if (ui.shareMode?.kind === 'category') return 'share-category'
+    if (ui.focusedGroupId) return 'focus'
     if (ds._customCardOrder != null && ui.sortMode === 'order') return 'custom'
     return 'normal'
   })
@@ -32,10 +33,14 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
         return g ? [{ type: 'group' as const, data: g }] : []
       }
       case 'share-category': {
+        // 显式依赖 shadowVersion，确保 shadowData 更新时触发重算
+        void shadowVersion.value
         // 只读分类分享：影子组 + 影子顶层书签（shareShadow 由 share store 装载）
         const sh = shadowData()
         const groups = Object.values(sh.groups).filter((g) => !g.deletedAt)
-        const topLevel = Object.values(sh.bookmarks).filter((b) => !b.deletedAt && !b.parentId)
+        const topLevel = Object.values(sh.bookmarks).filter(
+          (b) => !b.deletedAt && !b.parentId && !(b as any).parent_id,
+        )
         const combined: CardItem[] = []
         for (const g of groups) combined.push({ type: 'group', data: g })
         for (const b of topLevel) combined.push({ type: 'bm', data: b })
