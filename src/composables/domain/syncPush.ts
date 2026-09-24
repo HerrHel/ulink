@@ -96,13 +96,36 @@ export function _mergeOps(ops: SyncOp[]): SyncOp[] {
     if (last.action === 'delete') {
       merged.push(last)
     } else {
-      // R30：保留历史最大 retries，避免新编辑（retries=0）覆盖旧失败 op 的重试计数，
-      // 导致死信阈值被绕过（持续编辑的坏 op 永不进死信，持续重试+错误态长期误导）。
-      // 用 for 循环而非 Math.max(...spread)：同 table:itemId 在极端长跑/自动测试场景
-      // 可能堆积超长 raw ops 数组，spread 到 apply 会爆调用栈（V8 ~6.5万~12.5万参数门槛）。
       let maxRetries = 0
-      for (const o of itemOps) { const r = o.retries || 0; if (r > maxRetries) maxRetries = r }
-      merged.push({ ...last, ts: itemOps[0].ts, retries: maxRetries })
+      let isNew = false
+      let mergedChangedFields: Set<string> | null = new Set()
+      let hasMetadata = false
+
+      for (const o of itemOps) { 
+        const r = o.retries || 0
+        if (r > maxRetries) maxRetries = r
+
+        if (o.data && ('_isNew' in o.data || '_changedFields' in o.data)) {
+          hasMetadata = true
+          if (o.data._isNew) isNew = true
+          
+          if (mergedChangedFields) {
+            if (o.data._changedFields === null || o.data._changedFields === undefined) {
+              mergedChangedFields = null
+            } else if (Array.isArray(o.data._changedFields)) {
+              for (const f of o.data._changedFields) mergedChangedFields.add(f)
+            }
+          }
+        }
+      }
+
+      const finalData = last.data ? { ...last.data } : null
+      if (finalData && hasMetadata) {
+        finalData._isNew = isNew
+        finalData._changedFields = mergedChangedFields ? Array.from(mergedChangedFields) : null
+      }
+
+      merged.push({ ...last, data: finalData, ts: itemOps[0].ts, retries: maxRetries })
     }
   }
   return merged.sort((a, b) => a.ts - b.ts)
