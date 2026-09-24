@@ -22,7 +22,7 @@ export type SyncPortResult<T = unknown> = {
 }
 
 export interface SyncRemotePort {
-  upsert(table: SyncTable, row: Record<string, unknown>): Promise<SyncPortResult>
+  upsert(table: SyncTable, row: Record<string, unknown> | Array<Record<string, unknown>>): Promise<SyncPortResult>
   update(
     table: SyncTable,
     id: string,
@@ -49,6 +49,41 @@ export interface SyncRemotePort {
   selectGraveyardIds(
     userId: string,
   ): Promise<SyncPortResult<Array<{ table_name: string; item_id: string }>>>
+}
+
+/**
+ * PostgREST 默认每页最多 1000 行限制；全量 ID 探测、软删查询与墓园对账必须分页遍历，
+ * 否则超过 1000 条后数据被静默截断，导致全量对账（reconcile）把本地未返回的存活/已删条目误判误删。
+ */
+async function fetchAllPages<T>(
+  queryFn: (from: number, to: number) => Promise<{
+    data: T[] | null
+    error: { message: string; code?: string } | null
+    hasRange?: boolean
+  }>,
+): Promise<SyncPortResult<T[]>> {
+  const PAGE_SIZE = 1000
+  let from = 0
+  const all: T[] = []
+  while (true) {
+    const res = await queryFn(from, from + PAGE_SIZE - 1)
+    if (res.error) {
+      return { data: null, error: { message: res.error.message, code: res.error.code } }
+    }
+    // 首页返回 null 时忠实透传 null（与旧契约中 data || null 一致）
+    if (res.data === null && from === 0) {
+      return { data: null, error: null }
+    }
+    if (!res.data || res.data.length === 0) {
+      break
+    }
+    all.push(...res.data)
+    if (res.data.length < PAGE_SIZE || !res.hasRange) {
+      break
+    }
+    from += PAGE_SIZE
+  }
+  return { data: all, error: null }
 }
 
 /** 默认 Supabase 实现 */
@@ -95,40 +130,68 @@ export function createSupabaseSyncPort(): SyncRemotePort {
       return { data: r.data, error: r.error ? { message: r.error.message, code: r.error.code } : null }
     },
     async selectSince(table, userId, since) {
-      const r = await supabase.from(table).select('*').eq('user_id', userId).gt('updated_at_num', since)
-      return {
-        data: (r.data as unknown[]) || null,
-        error: r.error ? { message: r.error.message, code: r.error.code } : null,
-      }
+      return fetchAllPages<unknown>(async (from, to) => {
+        let q: any = supabase.from(table).select('*').eq('user_id', userId).gt('updated_at_num', since)
+        if (typeof q.order === 'function') q = q.order('updated_at_num', { ascending: true }).order('id', { ascending: true })
+        const hasRange = typeof q.range === 'function'
+        if (hasRange) q = q.range(from, to)
+        const r = await q
+        return {
+          data: (r.data as unknown[]) || null,
+          error: r.error ? { message: r.error.message, code: r.error.code } : null,
+          hasRange,
+        }
+      })
     },
     async selectSoftDeleted(table, userId, since) {
-      const r = await supabase
-        .from(table)
-        .select('id, updated_at_num')
-        .eq('user_id', userId)
-        .not('deleted_at', 'is', null)
-        .gt('updated_at_num', since)
-      return {
-        data: (r.data as Array<{ id: string; updated_at_num?: number }>) || null,
-        error: r.error ? { message: r.error.message, code: r.error.code } : null,
-      }
+      return fetchAllPages<{ id: string; updated_at_num?: number }>(async (from, to) => {
+        let q: any = supabase
+          .from(table)
+          .select('id, updated_at_num')
+          .eq('user_id', userId)
+          .not('deleted_at', 'is', null)
+          .gt('updated_at_num', since)
+        if (typeof q.order === 'function') q = q.order('updated_at_num', { ascending: true }).order('id', { ascending: true })
+        const hasRange = typeof q.range === 'function'
+        if (hasRange) q = q.range(from, to)
+        const r = await q
+        return {
+          data: (r.data as Array<{ id: string; updated_at_num?: number }>) || null,
+          error: r.error ? { message: r.error.message, code: r.error.code } : null,
+          hasRange,
+        }
+      })
     },
     async selectAllIds(table, userId) {
-      const r = await supabase.from(table).select('id').eq('user_id', userId)
-      return {
-        data: (r.data as Array<{ id: string }>) || null,
-        error: r.error ? { message: r.error.message, code: r.error.code } : null,
-      }
+      return fetchAllPages<{ id: string }>(async (from, to) => {
+        let q: any = supabase.from(table).select('id').eq('user_id', userId)
+        if (typeof q.order === 'function') q = q.order('id', { ascending: true })
+        const hasRange = typeof q.range === 'function'
+        if (hasRange) q = q.range(from, to)
+        const r = await q
+        return {
+          data: (r.data as Array<{ id: string }>) || null,
+          error: r.error ? { message: r.error.message, code: r.error.code } : null,
+          hasRange,
+        }
+      })
     },
     async selectGraveyardIds(userId) {
-      const r = await supabase
-        .from('deleted_item_graveyard')
-        .select('table_name, item_id')
-        .eq('user_id', userId)
-      return {
-        data: (r.data as Array<{ table_name: string; item_id: string }>) || null,
-        error: r.error ? { message: r.error.message, code: r.error.code } : null,
-      }
+      return fetchAllPages<{ table_name: string; item_id: string }>(async (from, to) => {
+        let q: any = supabase
+          .from('deleted_item_graveyard')
+          .select('table_name, item_id')
+          .eq('user_id', userId)
+        if (typeof q.order === 'function') q = q.order('table_name', { ascending: true }).order('item_id', { ascending: true })
+        const hasRange = typeof q.range === 'function'
+        if (hasRange) q = q.range(from, to)
+        const r = await q
+        return {
+          data: (r.data as Array<{ table_name: string; item_id: string }>) || null,
+          error: r.error ? { message: r.error.message, code: r.error.code } : null,
+          hasRange,
+        }
+      })
     },
   }
 }
@@ -175,6 +238,14 @@ export function createMemorySyncPort(opts?: {
     updates,
     deletes,
     async upsert(table, row) {
+      if (Array.isArray(row)) {
+        for (const r of row) {
+          const err = opts?.upsertError?.(table, r) ?? null
+          if (!err) upserts.push({ table, row: r })
+          if (err) return { data: null, error: err }
+        }
+        return { data: null, error: null }
+      }
       const err = opts?.upsertError?.(table, row) ?? null
       if (!err) upserts.push({ table, row })
       return { data: null, error: err }

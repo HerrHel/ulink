@@ -42,8 +42,27 @@ export type DecideRemoteApplyInput = {
   allowFullAbsentDelete?: boolean
 }
 
-function isRemoteNewer(remote: MergeEntity, local: MergeEntity): boolean {
-  return (remote.updatedAt || 0) > (local.updatedAt || 0)
+/** 允许的客户端最大未来时钟偏差：2 分钟（120,000ms） */
+export const MAX_FUTURE_CLOCK_SKEW_MS = 120_000
+
+/**
+ * 规整远端时间戳，防御客户端时钟未来超前（clock skew）：
+ * 1. 缺失或非法时间戳归 0；
+ * 2. 超过本地系统时钟阈值（now + MAX_FUTURE_CLOCK_SKEW_MS）的未来时间戳，截断到当前时间 now，
+ *    防止恶意或配置错误的时钟将条目冻结在未来，导致后续正常编辑无法覆盖。
+ */
+export function sanitizeRemoteTimestamp(remoteUpdatedAt?: number, now = Date.now()): number {
+  if (!remoteUpdatedAt || !Number.isFinite(remoteUpdatedAt) || remoteUpdatedAt <= 0) return 0
+  if (remoteUpdatedAt > now + MAX_FUTURE_CLOCK_SKEW_MS) {
+    return now
+  }
+  return remoteUpdatedAt
+}
+
+export function isRemoteNewer(remote: MergeEntity, local: MergeEntity, now = Date.now()): boolean {
+  const rTime = sanitizeRemoteTimestamp(remote.updatedAt, now)
+  const lTime = local.updatedAt || 0
+  return rTime > lTime
 }
 
 /**
