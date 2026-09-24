@@ -63,6 +63,7 @@ const T = {
     tocTitle: '目录',
     footerBrand: '与链 · ulink',
     footerSlogan: '收藏 · 整理 · 分享',
+    themeToggle: '切换深浅色主题',
   },
   'en-US': {
     lang: 'en-US',
@@ -109,6 +110,7 @@ const T = {
     tocTitle: 'Contents',
     footerBrand: 'ulink',
     footerSlogan: 'Collect · Organize · Share',
+    themeToggle: 'Toggle light/dark theme',
   },
 } as const
 
@@ -446,6 +448,15 @@ const LIST_SVG =
 const MINIGRID_SVG =
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.25" cy="5.25" r="1.8"/><circle cx="12" cy="5.25" r="1.8"/><circle cx="18.75" cy="5.25" r="1.8"/><circle cx="5.25" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.75" cy="12" r="1.8"/><circle cx="5.25" cy="18.75" r="1.8"/><circle cx="12" cy="18.75" r="1.8"/><circle cx="18.75" cy="18.75" r="1.8"/></svg>`
 
+/** 浅色/深色主题切换图标（与 src/config/icons.ts 同款）。 */
+const SUN_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
+const MOON_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
+
+/** 首屏主题防闪烁脚本（FOUC Guard）：在任何样式与 DOM 渲染前立即注入 data-theme 与 color-scheme。 */
+const THEME_SCRIPT = `<script>(function(){try{var t=localStorage.getItem("lv_theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}})();</script>`
+
 /**
  * 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名，无 notes，行高统一）。
  * 标题为空时回退展示域名。纯静态 <a>，无需 JS。
@@ -547,6 +558,10 @@ function buildAppShell(
     `<span class="share-badge">${esc(dict.headSub)}</span>`,
     `<div class="share-actions">`,
     opts.hdrMeta,
+    `<button class="share-theme-btn" id="themeToggle" type="button" aria-label="${esc(dict.themeToggle)}" title="${esc(dict.themeToggle)}">` +
+      `<span class="theme-icon-sun">${SUN_SVG}</span>` +
+      `<span class="theme-icon-moon">${MOON_SVG}</span>` +
+    `</button>`,
     `<a class="cta" href="${esc(opts.ctaUrl)}">${esc(dict.cta)}</a>`,
     `</div>`,
     `</div>`,
@@ -679,7 +694,7 @@ export function renderSharePage(
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}${initDataScript}${appAssets}</head>`,
+    `<head>${THEME_SCRIPT}${head}${initDataScript}${appAssets}</head>`,
     `<style>${CSS}</style>`,
     `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
@@ -1038,7 +1053,7 @@ export function renderShareCategoryPage(
   return [
     `<!DOCTYPE html>`,
     `<html lang="${dict.lang}">`,
-    `<head>${head}${initDataScript}${appAssets}</head>`,
+    `<head>${THEME_SCRIPT}${head}${initDataScript}${appAssets}</head>`,
     `<style>${CSS}</style>`,
     `<body><div id="app">${body}</div><script>${FALLBACK_JS}</script></body>`,
     `</html>`,
@@ -1053,6 +1068,7 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
     `<!DOCTYPE html>`,
     `<html lang="${d.lang}">`,
     `<head>`,
+    THEME_SCRIPT,
     `<meta charset="utf-8">`,
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
     `<title>${esc(d.notFoundTitle)}</title>`,
@@ -1087,6 +1103,7 @@ export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
     `<!DOCTYPE html>`,
     `<html lang="${d.lang}">`,
     `<head>`,
+    THEME_SCRIPT,
     `<meta charset="utf-8">`,
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
     `<title>${esc(d.unavailableTitle)}</title>`,
@@ -1116,26 +1133,26 @@ export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}})()`
+const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}})()`
 
 const CSS = `
 /* ==================== DESIGN TOKENS (对齐主站 tokens.css) ==================== */
-:root {
+:root, [data-theme="light"] {
   color-scheme: light;
-  --bg: #F8F6F2;
-  --bg-alt: #EFEBE4;
-  --surface: #FFFFFF;
-  --surface-hover: #FDFBF8;
-  --surface-active: #F4EFEA;
-  --border: #E8E2D8;
-  --border-light: #F0EBE3;
-  --border-hover: #D5CEBF;
-  --text: #262320;
-  --text-secondary: #58534C;
-  --text-muted: #7A746B;
+  --bg: #F5EFEA;
+  --bg-alt: #EDE4DA;
+  --surface: #FDFBF9;
+  --surface-hover: #F7F2EC;
+  --surface-active: #EFE8DF;
+  --border: #E5DDD3;
+  --border-light: #EFE8DF;
+  --border-hover: #D5CBBE;
+  --text: #2C2824;
+  --text-secondary: #5E5852;
+  --text-muted: #6A6660;
   --accent: #122E8A;
-  --accent-light: rgba(18, 46, 138, 0.06);
-  --accent-glow: rgba(18, 46, 138, 0.12);
+  --accent-light: rgba(18, 46, 138, 0.07);
+  --accent-glow: rgba(18, 46, 138, 0.13);
   --accent-grad: linear-gradient(135deg, #122E8A 0%, #1E40AF 100%);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
@@ -1152,25 +1169,51 @@ const CSS = `
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --bar-bg: rgba(248, 246, 242, 0.85);
+  --bar-bg: rgba(245, 239, 234, 0.85);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1A1A1D;
+  --bg-alt: #202025;
+  --surface: #25252B;
+  --surface-hover: #2E2E35;
+  --surface-active: #383842;
+  --border: #2F2F36;
+  --border-light: #28282F;
+  --border-hover: #3D3D46;
+  --text: #EEE9E2;
+  --text-secondary: #B5AFA6;
+  --text-muted: #9B968E;
+  --accent: #F04A8A;
+  --accent-light: rgba(240, 74, 138, 0.1);
+  --accent-glow: rgba(240, 74, 138, 0.18);
+  --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.15);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --bar-bg: rgba(26, 26, 29, 0.85);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #141416;
-    --bg-alt: #1E1E23;
-    --surface: #1E1E24;
-    --surface-hover: #26262D;
-    --surface-active: #2F2F37;
-    --border: #2B2B33;
-    --border-light: #24242B;
-    --border-hover: #3D3D48;
-    --text: #F0ECE4;
+    --bg: #1A1A1D;
+    --bg-alt: #202025;
+    --surface: #25252B;
+    --surface-hover: #2E2E35;
+    --surface-active: #383842;
+    --border: #2F2F36;
+    --border-light: #28282F;
+    --border-hover: #3D3D46;
+    --text: #EEE9E2;
     --text-secondary: #B5AFA6;
-    --text-muted: #8E8980;
+    --text-muted: #9B968E;
     --accent: #F04A8A;
-    --accent-light: rgba(240, 74, 138, 0.08);
+    --accent-light: rgba(240, 74, 138, 0.1);
     --accent-glow: rgba(240, 74, 138, 0.18);
     --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -1179,7 +1222,7 @@ const CSS = `
     --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.15);
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
     --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
-    --bar-bg: rgba(20, 20, 22, 0.85);
+    --bar-bg: rgba(26, 26, 29, 0.85);
   }
 }
 
@@ -1196,10 +1239,24 @@ body {
   min-height: 100vh;
 }
 
+body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcard, .share-footer, .share-theme-btn {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+}
+
 .share-app {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+}
+
+/* LOGO 颜色响应主题切换 */
+.s-b { stroke: #122E8A; transition: stroke 0.25s ease; }
+.s-g { stroke: #10B981; transition: stroke 0.25s ease; }
+[data-theme="dark"] .s-b { stroke: #4F6BFF !important; }
+[data-theme="dark"] .s-g { stroke: #34D399 !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .s-b { stroke: #4F6BFF !important; }
+  :root:not([data-theme="light"]) .s-g { stroke: #34D399 !important; }
 }
 
 /* ==================== 顶栏 (对齐主站 AppHeader) ==================== */
@@ -1214,7 +1271,6 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-light);
-  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 .share-bar-wrap {
   max-width: 1040px;
@@ -1266,7 +1322,48 @@ body {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+.share-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-base);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.share-theme-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+.share-theme-btn:active {
+  transform: translateY(0);
+}
+.share-theme-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.theme-icon-sun { display: none }
+.theme-icon-moon { display: flex; align-items: center; justify-content: center }
+
+[data-theme="dark"] .theme-icon-sun { display: flex; align-items: center; justify-content: center }
+[data-theme="dark"] .theme-icon-moon { display: none }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-icon-sun { display: flex; align-items: center; justify-content: center }
+  :root:not([data-theme="light"]) .theme-icon-moon { display: none }
 }
 .cta {
   display: inline-flex;

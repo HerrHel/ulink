@@ -113,4 +113,18 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(assets).not.toContain('preconnect')
     expect(assets).not.toContain('favicon')
   })
+  it('含深浅色主题切换按钮与首屏防闪烁脚本', () => {
+    // 组页
+    expect(zh).toContain('id="themeToggle"')
+    expect(zh).toContain('class="share-theme-btn"')
+    expect(zh).toContain('lv_theme')
+    expect(zh).toContain('data-theme')
+    expect(en).toContain('Toggle light/dark theme')
+    // 分类页
+    expect(catHtml).toContain('id="themeToggle"')
+    expect(catHtml).toContain('lv_theme')
+    // CSS 包含 light / dark 选择器
+    expect(zh).toContain('[data-theme="light"]')
+    expect(zh).toContain('[data-theme="dark"]')
+  })
 })
