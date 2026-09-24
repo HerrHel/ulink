@@ -6,7 +6,7 @@
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { decideRemoteApply } from './syncMergeCore.js'
+import { decideRemoteApply, sanitizeRemoteTimestamp } from './syncMergeCore.js'
 import { _isPendingSync } from './syncPending.js'
 import { cloneDeep } from '../../lib/clone.js'
 import type { EntityType } from '../../types.js'
@@ -167,8 +167,20 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         if (lItem) {
           const l = lItem as Record<string, unknown>
           const r = rItem as Record<string, unknown>
+          const prevBookmarkIds = Array.isArray(l.bookmarkIds) ? (l.bookmarkIds as string[]).slice() : []
           for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
           delete (l as { deletedAt?: unknown }).deletedAt
+          // 时钟偏差保护：规整远端时间戳，且确保本地 updatedAt 不倒退
+          const safeRemoteUpdatedAt = sanitizeRemoteTimestamp(r.updatedAt as number | undefined)
+          l.updatedAt = Math.max(Number(l.updatedAt || 0), safeRemoteUpdatedAt)
+          // 组书签联合合并：保留本地存活但远端缺失的书签 ID，防止并发加书签时相互覆盖丢失
+          if (type === 'group' && Array.isArray(r.bookmarkIds)) {
+            const rIds = new Set(r.bookmarkIds as string[])
+            const localExtra = prevBookmarkIds.filter(bid => !rIds.has(bid) && ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt)
+            if (localExtra.length > 0) {
+              l.bookmarkIds = [...(r.bookmarkIds as string[]), ...localExtra]
+            }
+          }
           onWrite?.()
         }
         break
@@ -176,7 +188,19 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         if (lItem) {
           const l = lItem as Record<string, unknown>
           const r = rItem as Record<string, unknown>
+          const prevBookmarkIds = Array.isArray(l.bookmarkIds) ? (l.bookmarkIds as string[]).slice() : []
           for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
+          // 时钟偏差保护：规整远端时间戳，且确保本地 updatedAt 不倒退
+          const safeRemoteUpdatedAt = sanitizeRemoteTimestamp(r.updatedAt as number | undefined)
+          l.updatedAt = Math.max(Number(l.updatedAt || 0), safeRemoteUpdatedAt)
+          // 组书签联合合并：保留本地存活但远端缺失的书签 ID，防止并发加书签时相互覆盖丢失
+          if (type === 'group' && Array.isArray(r.bookmarkIds)) {
+            const rIds = new Set(r.bookmarkIds as string[])
+            const localExtra = prevBookmarkIds.filter(bid => !rIds.has(bid) && ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt)
+            if (localExtra.length > 0) {
+              l.bookmarkIds = [...(r.bookmarkIds as string[]), ...localExtra]
+            }
+          }
           onWrite?.()
         }
         break

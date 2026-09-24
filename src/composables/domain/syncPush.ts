@@ -31,6 +31,9 @@ export const MAX_PUSH_RETRIES = 3
  */
 export const PUSH_CONCURRENCY = 8
 
+/** 批量推送单批最大行数（同一张表且全量 upsert 的条目打包批量发送，显著减少网络 RTT 与并发压力） */
+export const UPSERT_BATCH_SIZE = 5
+
 /**
  * 锁定态判定所用的敏感字段表,复用 useE2E 的 ENCRYPT_FIELDS 单一来源,
  * 通过 tableToEntityType 把表名映射到 EntityType 查表。避免两份硬编码漂移
@@ -222,9 +225,9 @@ export async function pushFromQueue(): Promise<boolean> {
     }
     _saveHistory(userId, historyItems).catch(() => {})
 
-    // 收集的是「任务工厂」而非已启动的 Promise：直接 push 已 await 的 Promise 会
-    // 让整批请求同时发出（首次全量上传 = 数百并发 → 限流），必须延迟到分块时才启动。
-    const taskFactories: Array<() => Promise<{ op: SyncOp; result: SyncPortResult }>> = []
+    // 收集的是「任务工厂」而非已启动的 Promise：每个工厂返回一组 op 结果。
+    // 同一张表且是全量 upsert 的条目打包成批（最高 UPSERT_BATCH_SIZE 行），减少并发与 HTTP 往返。
+    const taskFactories: Array<() => Promise<Array<{ op: SyncOp; result: SyncPortResult }>>> = []
     const succeededIds: number[] = []
     // encFailedOps 保留对应 merged op 引用：retry 决策需用 merged.retries（即 _mergeOps 算的
     // maxRetries），而非末条 raw.retries（与 _mergeOps 不对称会致死信计数漂移，见 cleanup 段）。
@@ -232,11 +235,46 @@ export async function pushFromQueue(): Promise<boolean> {
     const e2e = useE2E()
     const port = getSyncRemotePort()
 
+    let pendingUpsertBatch: Array<{ op: SyncOp; row: Record<string, unknown> }> = []
+
+    const flushUpsertBatch = () => {
+      if (!pendingUpsertBatch.length) return
+      const batch = pendingUpsertBatch
+      pendingUpsertBatch = []
+      if (batch.length === 1) {
+        const item = batch[0]
+        taskFactories.push(() => port.upsert(item.op.table, item.row)
+          .then(r => [{ op: item.op, result: r }])
+          .catch(e => [{ op: item.op, result: { data: null, error: { message: String(e?.message || e) } } }]))
+      } else {
+        taskFactories.push(async () => {
+          const table = batch[0].op.table
+          const rows = batch.map(b => b.row)
+          const batchRes = await port.upsert(table, rows).catch(e => ({
+            data: null,
+            error: { message: String(e?.message || e) },
+          }))
+          if (!batchRes.error) {
+            return batch.map(b => ({ op: b.op, result: batchRes }))
+          }
+          // 批量失败时降级逐条重试，隔离错误单项，避免一损俱损
+          return Promise.all(
+            batch.map(b =>
+              port.upsert(b.op.table, b.row)
+                .then(r => ({ op: b.op, result: r }))
+                .catch(e => ({ op: b.op, result: { data: null, error: { message: String(e?.message || e) } } }))
+            )
+          )
+        })
+      }
+    }
+
     for (const op of ops) {
       if (op.action === 'delete') {
+        flushUpsertBatch()
         taskFactories.push(() => port.delete(op.table, op.itemId, userId)
-          .then(r => ({ op, result: r }))
-          .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })))
+          .then(r => [{ op, result: r }])
+          .catch(e => [{ op, result: { data: null, error: { message: String(e?.message || e) } } }]))
         continue
       }
       if (!op.data) continue
@@ -266,10 +304,15 @@ export async function pushFromQueue(): Promise<boolean> {
       }
 
       if (isNew || !changedFields) {
-        taskFactories.push(() => port.upsert(op.table, row)
-          .then(r => ({ op, result: r }))
-          .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })))
+        if (pendingUpsertBatch.length > 0 && pendingUpsertBatch[0].op.table !== op.table) {
+          flushUpsertBatch()
+        }
+        pendingUpsertBatch.push({ op, row })
+        if (pendingUpsertBatch.length >= UPSERT_BATCH_SIZE) {
+          flushUpsertBatch()
+        }
       } else {
+        flushUpsertBatch()
         const partial: Record<string, unknown> = { id: op.itemId, user_id: userId, updated_at_num: row.updated_at_num }
         for (const f of changedFields) {
           const snakeKey = camelToSnake(f)
@@ -279,10 +322,11 @@ export async function pushFromQueue(): Promise<boolean> {
         }
         const { id, ...updateData } = partial
         taskFactories.push(() => port.update(op.table, id as string, userId, updateData)
-          .then(r => ({ op, result: r }))
-          .catch(e => ({ op, result: { data: null, error: { message: String(e?.message || e) } } })))
+          .then(r => [{ op, result: r }])
+          .catch(e => [{ op, result: { data: null, error: { message: String(e?.message || e) } } }]))
       }
     }
+    flushUpsertBatch()
 
     // 同 table:itemId 的全部 raw op（多值）——merge 把多条 raw 合并为 1 条 merged op
     // （_mergeOps: data=last, retries=max），cleanup 必须把同 key 的全部 raw 一并处理：
@@ -304,7 +348,9 @@ export async function pushFromQueue(): Promise<boolean> {
     for (let i = 0; i < taskFactories.length; i += PUSH_CONCURRENCY) {
       const chunk = taskFactories.slice(i, i + PUSH_CONCURRENCY)
       const chunkResults = await Promise.all(chunk.map(f => f()))
-      for (const r of chunkResults) results.push(r)
+      for (const list of chunkResults) {
+        for (const r of list) results.push(r)
+      }
     }
     const tasks = results
 

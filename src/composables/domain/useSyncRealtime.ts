@@ -10,9 +10,9 @@ import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { FROM_REMOTE, type RemoteRow, type AnyRemoteRow } from './useSyncMapping.js'
 import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
-import { _deleteWithoutEcho } from './syncLocalMerge.js'
+import { _deleteWithoutEcho, _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
-import { decideRemoteApply } from './syncMergeCore.js'
+import { decideRemoteApply, sanitizeRemoteTimestamp } from './syncMergeCore.js'
 import { EditorManager } from '../../lib/editor.js'
 import { cloneDeep } from '../../lib/clone.js'
 import { withLock } from '../../lib/withLock.js'
@@ -57,22 +57,23 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
     const id = oldRow?.id
     // G1-001：与 _mergeIntoLocal 对齐——dirty 或 in-flight pending 的本地项不因远端 DELETE 静默抹掉
     if (!id || ds._dirtyIds.has(id) || _isPendingSync(id)) return
-    // 使用 dataStore 软删除动作（而非直接 splice），确保：
-    // - 数据进入回收站可恢复
-    // - 组引用关系正确清理
-    // 然后清除 dirty 标记，避免下次同步把已删除数据重新 upsert 回 Supabase。
-    //
-    // 回声防护（H19 修复）：deleteBookmark/deleteGroup/deleteCategory/deleteAttribute 会产生
-    // 衍生关联行 dirty（deleteBookmark 把所属 groups 从 bookmarkIds 剔除并 _markDirty(g.id)，
-    // deleteCategory 把该分类下所有 bookmark/group 的 categoryId 改 UNCATEGORIZED 并 _markDirty +
-    // _trackChange，deleteAttribute 遍历所有项删 attributes key 同样 _markDirty + _trackChange）。
-    // 远端 DELETE 引发的本机衍生清理不该被当作本地改动回推远端——否则这些波及行被 partial/full
-    // upsert 推回远端造成回声流量 + updated_at_num 污染面。
-    // 旧实现：bookmark 分支重写了一份 dirtyBefore/changedBefore 快照+反向清理，group/category/
-    // attribute 分支直接调 delete* 未做回声清理，与 bookmark 语义不一致且漏改即级联回声。
-    // 现统一调已 export 的 _deleteWithoutEcho（delete* 前快照 dirty/changed，删后清衍生新增项 +
-    // 被删 id 自身），四种类型回声防护口径一致。
-    _deleteWithoutEcho(ds, type, id)
+
+    const localLookup: Record<EntityType, () => { deletedAt?: number } | null> = {
+      bookmark: () => ds.bookmarkMap[id] ?? null,
+      group: () => ds.groupMap[id] ?? null,
+      category: () => ds.categoryMap[id] ?? null,
+      attribute: () => ds.attributeMap[id] ?? null,
+    }
+    const localItem = localLookup[type]?.()
+
+    if (localItem && !localItem.deletedAt) {
+      // 存活项防误删安全网：若远端发生物理 DELETE 但本地仍是存活状态，先软删进回收站供恢复
+      _deleteWithoutEcho(ds, type, id)
+    } else {
+      // 已在回收站（或本地未收录）：远端执行了彻底删除/清空回收站，本地同步彻底物理抹除
+      _permanentDeleteWithoutEcho(ds, type, id)
+    }
+    debouncedSaveAppData()
     return
   }
 
@@ -146,11 +147,11 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
       upsert: (m) => {
         if (ds.bookmarkMap[m.id]) {
           const oldParentId = ds.bookmarkMap[m.id]?.parentId
-          const remoteUpdatedAt = m.updatedAt
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.updateBookmark(m.id, m)
           // 恢复远端 updatedAt，避免被 Date.now() 覆盖（updateBookmark 已同步 _bmMap 引用）
           const bm = ds.bookmarkMap[m.id]
-          if (bm) bm.updatedAt = remoteUpdatedAt
+          if (bm && remoteUpdatedAt) bm.updatedAt = remoteUpdatedAt
           // parentId 变更时更新 _childrenIdx
           if (oldParentId !== m.parentId) {
             if (oldParentId) {
@@ -172,11 +173,22 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
     group: {
       upsert: (m) => {
         if (ds.groupMap[m.id]) {
-          const remoteUpdatedAt = m.updatedAt
-          ds.updateGroup(m.id, m)
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
+          const localGrp = ds.groupMap[m.id]
+          let mergedBookmarkIds = m.bookmarkIds || []
+          if (localGrp && Array.isArray(localGrp.bookmarkIds) && Array.isArray(m.bookmarkIds)) {
+            const rIds = new Set(m.bookmarkIds)
+            const localExtra = localGrp.bookmarkIds.filter(
+              bid => !rIds.has(bid) && ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt,
+            )
+            if (localExtra.length > 0) {
+              mergedBookmarkIds = [...m.bookmarkIds, ...localExtra]
+            }
+          }
+          ds.updateGroup(m.id, { ...m, bookmarkIds: mergedBookmarkIds })
           // 恢复远端 updatedAt（updateGroup 已同步 _grpMap 引用）
           const g = ds.groupMap[m.id]
-          if (g) g.updatedAt = remoteUpdatedAt
+          if (g && remoteUpdatedAt) g.updatedAt = remoteUpdatedAt
           // H16 + G1-003：远端 notes 写入编辑器时用 silentSetContent，抑制 onUpdate→
           // updateGroup→_markDirty，避免 setContent 把刚合并的远端内容重新标脏并回推。
           if (typeof m.notes === 'string' && m.notes !== '') {
@@ -201,11 +213,11 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
     category: {
       upsert: (m) => {
         if (ds.categoryMap[m.id]) {
-          const remoteUpdatedAt = m.updatedAt
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.updateCategory(m.id, m)
           // 恢复远端 updatedAt，避免被 Date.now() 覆盖（updateCategory 已同步 _catMap）
           const cat = ds.categoryMap[m.id]
-          if (cat) cat.updatedAt = remoteUpdatedAt
+          if (cat && remoteUpdatedAt) cat.updatedAt = remoteUpdatedAt
         } else {
           ds.addCategory(m)
         }
@@ -218,11 +230,11 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
     attribute: {
       upsert: (m) => {
         if (ds.attributeMap[m.id]) {
-          const remoteUpdatedAt = m.updatedAt
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.updateAttribute(m.id, m)
           // 恢复远端 updatedAt（updateAttribute 已同步 _attrMap）
           const attr = ds.attributeMap[m.id]
-          if (attr) attr.updatedAt = remoteUpdatedAt
+          if (attr && remoteUpdatedAt) attr.updatedAt = remoteUpdatedAt
         } else {
           ds.addAttribute(m)
         }
