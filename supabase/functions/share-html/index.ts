@@ -548,27 +548,27 @@ const CSS = `
 /* ==================== DESIGN TOKENS (对齐主站 tokens.css) ==================== */
 :root {
   color-scheme: light;
-  --bg: #F5EFEA;
-  --bg-alt: #EDE4DA;
-  --surface: #FDFBF9;
-  --surface-hover: #F7F2EC;
-  --surface-active: #EFE8DF;
-  --border: #E5DDD3;
-  --border-light: #EFE8DF;
-  --border-hover: #D5CBBE;
-  --text: #2C2824;
-  --text-secondary: #5E5852;
-  --text-muted: #6A6660;
+  --bg: #F8F6F2;
+  --bg-alt: #EFEBE4;
+  --surface: #FFFFFF;
+  --surface-hover: #FDFBF8;
+  --surface-active: #F4EFEA;
+  --border: #E8E2D8;
+  --border-light: #F0EBE3;
+  --border-hover: #D5CEBF;
+  --text: #262320;
+  --text-secondary: #58534C;
+  --text-muted: #7A746B;
   --accent: #122E8A;
-  --accent-light: rgba(18, 46, 138, 0.07);
-  --accent-glow: rgba(18, 46, 138, 0.13);
+  --accent-light: rgba(18, 46, 138, 0.06);
+  --accent-glow: rgba(18, 46, 138, 0.12);
   --accent-grad: linear-gradient(135deg, #122E8A 0%, #1E40AF 100%);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.02);
-  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.07), 0 4px 8px rgba(0, 0, 0, 0.03);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
-  --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.02);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.06), 0 4px 8px rgba(0, 0, 0, 0.02);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.03), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 8px 24px rgba(18, 46, 138, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
   --radius-sm: 6px;
   --radius-base: 8px;
   --radius-md: 10px;
@@ -578,25 +578,25 @@ const CSS = `
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --bar-bg: rgba(245, 239, 234, 0.85);
+  --bar-bg: rgba(248, 246, 242, 0.85);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --bg: #1A1A1D;
-    --bg-alt: #202025;
-    --surface: #25252B;
-    --surface-hover: #2E2E35;
-    --surface-active: #383842;
-    --border: #2F2F36;
-    --border-light: #28282F;
-    --border-hover: #3D3D46;
-    --text: #EEE9E2;
+    --bg: #141416;
+    --bg-alt: #1E1E23;
+    --surface: #1E1E24;
+    --surface-hover: #26262D;
+    --surface-active: #2F2F37;
+    --border: #2B2B33;
+    --border-light: #24242B;
+    --border-hover: #3D3D48;
+    --text: #F0ECE4;
     --text-secondary: #B5AFA6;
-    --text-muted: #9B968E;
+    --text-muted: #8E8980;
     --accent: #F04A8A;
-    --accent-light: rgba(240, 74, 138, 0.1);
+    --accent-light: rgba(240, 74, 138, 0.08);
     --accent-glow: rgba(240, 74, 138, 0.18);
     --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -604,8 +604,8 @@ const CSS = `
     --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.15);
     --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.15);
     --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
-    --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.38), 0 2px 6px rgba(0, 0, 0, 0.2);
-    --bar-bg: rgba(26, 26, 29, 0.85);
+    --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+    --bar-bg: rgba(20, 20, 22, 0.85);
   }
 }
 
@@ -730,7 +730,67 @@ body {
   gap: 24px;
 }
 
-/* ==================== 组聚焦 HERO 卡片 ==================== */
+/* ==================== 图标与首字母通用绝对居中（解决首字母与图标并排Bug） ==================== */
+.bm-icon, .group-hero-icon, .cat-hero-icon, .gcard-icon, .bmcard-icon, .bmcard-child-ic {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-alt);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.bm-fb, .hero-fb, .bmcard-fb, .bmc-fb {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  line-height: 1;
+  background: var(--bg-alt);
+  z-index: 1;
+  user-select: none;
+}
+.bm-icon img, .group-hero-icon img, .cat-hero-icon img, .gcard-icon img, .bmcard-icon img, .bmcard-child-ic img {
+  position: relative;
+  z-index: 2;
+  object-fit: contain;
+  display: block;
+}
+/* 图片正常渲染时，纯兄弟选择器隐藏后面的首字母（无需 :has()，100% 浏览器兼容） */
+.bm-icon img ~ .bm-fb,
+.group-hero-icon img ~ .hero-fb,
+.cat-hero-icon img ~ .hero-fb,
+.gcard-icon img ~ .hero-fb,
+.bmcard-icon img ~ .bmcard-fb,
+.bmcard-child-ic img ~ .bmc-fb {
+  display: none !important;
+}
+/* 图片加载失败时隐藏图片，显示首字母 */
+img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-err {
+  display: none !important;
+}
+.bm-icon img.img-err ~ .bm-fb,
+.bm-icon img.bm-img-err ~ .bm-fb,
+.group-hero-icon img.img-err ~ .hero-fb,
+.group-hero-icon img.hero-img-err ~ .hero-fb,
+.cat-hero-icon img.img-err ~ .hero-fb,
+.cat-hero-icon img.hero-img-err ~ .hero-fb,
+.gcard-icon img.img-err ~ .hero-fb,
+.gcard-icon img.hero-img-err ~ .hero-fb,
+.bmcard-icon img.img-err ~ .bmcard-fb,
+.bmcard-icon img.bmcard-img-err ~ .bmcard-fb,
+.bmcard-child-ic img.img-err ~ .bmc-fb,
+.bmcard-child-ic img.bmc-img-err ~ .bmc-fb {
+  display: flex !important;
+}
+
+/* ==================== 组分享 HERO 卡片 ==================== */
 .group-hero {
   position: relative;
   background: var(--surface);
@@ -747,8 +807,8 @@ body {
 .group-hero-accent {
   position: absolute;
   left: 0;
-  top: 10px;
-  bottom: 10px;
+  top: 8px;
+  bottom: 8px;
   width: 4px;
   border-radius: 0 3px 3px 0;
   background: var(--accent-grad);
@@ -757,33 +817,13 @@ body {
   width: 52px;
   height: 52px;
   border-radius: var(--radius-lg);
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  overflow: hidden;
-  position: relative;
 }
 .group-hero-icon img {
   width: 32px;
   height: 32px;
-  object-fit: contain;
 }
-.group-hero-icon img.hero-img-err, .group-hero-icon img.img-err { display: none }
-.group-hero-icon:has(img:not(.hero-img-err):not(.img-err)) .hero-fb { display: none }
-.hero-fb {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+.group-hero-icon .hero-fb {
   font-size: 20px;
-  font-weight: 700;
-  color: var(--accent);
-  text-transform: uppercase;
-  line-height: 1;
 }
 .group-hero-info {
   flex: 1;
@@ -794,10 +834,10 @@ body {
 }
 .group-hero-title {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 750;
   color: var(--text);
   letter-spacing: -0.4px;
-  line-height: 1.3;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 .group-hero-meta {
@@ -809,23 +849,23 @@ body {
 .meta-tag {
   display: inline-flex;
   align-items: center;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   background: var(--bg-alt);
-  border: 1px solid var(--border);
-  padding: 3px 10px;
+  border: 1px solid var(--border-light);
+  padding: 3px 11px;
   border-radius: var(--radius-full);
   white-space: nowrap;
 }
 
-/* ==================== 组富文本笔记卡片 ==================== */
+/* ==================== 组笔记卡片 (对齐 editor.css) ==================== */
 .group-notes-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: 24px 28px;
-  box-shadow: var(--shadow-card);
+  padding: 26px 30px;
+  box-shadow: var(--shadow-sm);
 }
 .focus-notes {
   font-size: 14px;
@@ -833,29 +873,28 @@ body {
   color: var(--text);
   word-break: break-word;
 }
-.focus-notes p { margin: 0.3em 0 }
+.focus-notes p { margin: 0.4em 0 }
 .focus-notes p:first-child { margin-top: 0 }
 .focus-notes p:last-child { margin-bottom: 0 }
 .focus-notes strong, .focus-notes b { font-weight: 700 }
 .focus-notes mark { background-color: var(--accent-light); color: inherit; padding: 1px 4px; border-radius: 3px }
 .focus-notes h1 {
-  font-size: 1.35rem;
+  font-size: 1.45rem;
   font-weight: 700;
-  margin: 0.7em 0 0.35em;
-  border-left: 3px solid var(--accent);
-  padding-left: 10px;
+  margin: 0.7em 0 0.4em;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 .focus-notes h2 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  margin: 0.5em 0 0.3em;
+  font-size: 1.22rem;
+  font-weight: 650;
+  margin: 0.6em 0 0.35em;
   color: var(--text);
 }
 .focus-notes h3 {
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   font-weight: 600;
-  margin: 0.4em 0 0.2em;
+  margin: 0.5em 0 0.3em;
   color: var(--text);
 }
 .focus-notes ul, .focus-notes ol {
@@ -864,56 +903,62 @@ body {
 }
 .focus-notes ol { list-style: decimal }
 .focus-notes ul { list-style: disc }
-.focus-notes li { margin: 0.18em 0 }
+.focus-notes li { margin: 0.2em 0 }
 .focus-notes blockquote {
   border-left: 3px solid var(--border);
-  padding-left: 12px;
+  padding: 4px 0 4px 14px;
   color: var(--text-secondary);
-  margin: 0.5em 0;
+  margin: 0.6em 0;
+  font-style: normal;
 }
 .focus-notes code {
   background: var(--bg-alt);
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-family: var(--font-mono);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 1.5px 5.5px;
   font-size: 0.88em;
+  font-family: var(--font-mono);
   color: var(--text);
 }
 .focus-notes pre {
   background: var(--bg-alt);
   border: 1px solid var(--border);
-  border-radius: var(--radius-base);
-  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
   overflow-x: auto;
-  margin: 0.5em 0;
+  margin: 0.6em 0;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 .focus-notes a {
   color: var(--accent);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 3px;
+  transition: opacity 0.15s ease;
 }
+.focus-notes a:hover { opacity: 0.8 }
 .focus-notes img {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius-md);
+  margin: 0.4em 0;
 }
 .focus-notes hr {
   border: none;
-  border-top: 1px solid var(--border);
-  margin: 0.8em 0;
+  border-top: 1px solid var(--border-light);
+  margin: 1.2em 0;
 }
 
-/* 内联书签卡片 (对齐主站 group-inline-card) */
+/* 笔记内联书签卡 (group-inline-card) */
 .focus-notes a.group-inline-card,
 .focus-notes span.group-inline-card,
 .focus-notes .group-ref-card {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px 3px 8px;
-  margin: 0 4px;
+  padding: 2px 10px 2px 7px;
+  margin: 0 3px;
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
   background: var(--surface);
@@ -924,28 +969,24 @@ body {
   color: var(--text);
   text-decoration: none;
   box-shadow: var(--shadow-xs);
-  transition: all 0.2s var(--ease-out);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s var(--ease-out);
 }
 .focus-notes a.group-inline-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow), var(--shadow-sm);
+  box-shadow: 0 0 0 2px var(--accent-glow);
   transform: translateY(-1px);
 }
 .focus-notes .group-inline-card img,
-.focus-notes .group-inline-card svg,
 .focus-notes .group-ref-card img,
 .focus-notes .group-ref-card svg {
-  width: 16px;
-  height: 16px;
-  max-width: 16px;
-  max-height: 16px;
-  border-radius: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
   display: block;
   flex-shrink: 0;
 }
 .focus-notes .gic-name {
   color: var(--text);
-  min-width: 0;
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -955,33 +996,24 @@ body {
   color: var(--text-muted);
   font-size: 11px;
   font-family: var(--font-mono);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .focus-notes .gic-count {
-  color: var(--accent);
+  color: var(--text-muted);
   font-size: 11px;
-  font-weight: 600;
 }
 .focus-notes .gic-btn, .focus-notes .gic-remove { display: none }
-.focus-notes .group-ref-card {
-  background: var(--accent-light);
-  border-color: var(--accent);
-}
 
-/* 待办任务清单 (taskList & taskItem) */
+/* 笔记任务清单 (taskList) */
 .focus-notes ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0;
-  margin: 0.4em 0;
+  margin: 0.5em 0;
 }
 .focus-notes li[data-type="taskItem"] {
   list-style: none;
   position: relative;
-  padding-left: 26px;
-  margin: 3px 0;
+  padding-left: 28px;
+  margin: 4px 0;
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
@@ -990,28 +1022,28 @@ body {
   content: "";
   position: absolute;
   left: 2px;
-  top: 2px;
+  top: 4px;
   width: 16px;
   height: 16px;
   box-sizing: border-box;
   border: 1.5px solid var(--border-hover);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .focus-notes li[data-type="taskItem"]::after {
   content: "";
   position: absolute;
-  left: 5px;
-  top: 1px;
-  width: 10px;
+  left: 6px;
+  top: 3px;
+  width: 9px;
   height: 5px;
   box-sizing: border-box;
   border-left: 2px solid #fff;
   border-bottom: 2px solid #fff;
   transform: rotate(-45deg) scale(0);
   opacity: 0;
-  transition: transform 0.15s var(--ease-out), opacity 0.15s ease;
+  transition: transform 0.12s ease, opacity 0.12s ease;
 }
 .focus-notes li[data-type="taskItem"][data-checked="true"]::before {
   background: var(--accent);
@@ -1021,18 +1053,18 @@ body {
   transform: rotate(-45deg) scale(1);
   opacity: 1;
 }
-.focus-notes li[data-type="taskItem"] p { margin: 0; line-height: 1.5 }
+.focus-notes li[data-type="taskItem"] p { margin: 0; line-height: 1.6 }
 .focus-notes li[data-type="taskItem"][data-checked="true"] {
   text-decoration: line-through;
   color: var(--text-muted);
 }
 
-/* ==================== 收录书签网格 (对齐主站 CardGrid) ==================== */
+/* ==================== 收录书签网格 (组分享) ==================== */
 .group-bookmarks-section {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 .section-header {
   display: flex;
@@ -1060,69 +1092,43 @@ body {
   gap: 12px;
 }
 
-/* 书签卡片本体 (对齐主站 .card) */
+/* 单条书签行 (组内卡片) */
 .bm {
-  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 8px;
-  padding: 14px 16px;
-  min-height: 72px;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
+  padding: 14px 16px;
   box-shadow: var(--shadow-card);
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.25s var(--ease-out);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--ease-out);
+  position: relative;
   overflow: hidden;
 }
 .bm:hover {
   border-color: var(--border-hover);
   box-shadow: var(--shadow-card-hover);
-  transform: translateY(-3px);
+  transform: translateY(-2px);
 }
-.bm:active {
-  transform: translateY(0);
-}
+.bm:active { transform: translateY(0) }
 .bm-main {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   width: 100%;
 }
 .bm-icon {
   width: 38px;
   height: 38px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  position: relative;
 }
 .bm-icon img {
   width: 24px;
   height: 24px;
-  object-fit: contain;
 }
-.bm-icon img.bm-img-err, .bm-icon img.img-err { display: none }
-.bm-icon:has(img:not(.bm-img-err):not(.img-err)) .bm-fb { display: none }
 .bm-fb {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-  text-transform: uppercase;
-  line-height: 1;
+  font-size: 14px;
 }
 .bm-info {
   flex: 1;
@@ -1158,7 +1164,9 @@ body {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text-secondary);
-  margin-top: 2px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-light);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1167,8 +1175,8 @@ body {
 .bm-arrow {
   flex-shrink: 0;
   color: var(--text-muted);
-  opacity: 0;
-  transform: translate(-3px, 3px);
+  opacity: 0.4;
+  transform: translate(-2px, 2px);
   transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
   margin-left: auto;
   align-self: center;
@@ -1179,8 +1187,6 @@ body {
   transform: translate(0, 0);
   color: var(--accent);
 }
-
-/* 组内子书签树 */
 .bm.is-child {
   margin-left: 16px;
   position: relative;
@@ -1205,46 +1211,36 @@ body {
   border-radius: var(--radius-lg);
 }
 
-/* ==================== 分类分享页 (对齐主站 Category View) ==================== */
+/* ==================== 分类分享 HERO (杜绝杂色黄色，统一品牌深蓝质感) ==================== */
 .cat-hero {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 22px 26px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
+  padding: 24px 28px;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 20px;
   overflow: hidden;
 }
 .cat-hero-accent {
   position: absolute;
   left: 0;
-  top: 10px;
-  bottom: 10px;
+  top: 8px;
+  bottom: 8px;
   width: 4px;
   border-radius: 0 3px 3px 0;
-  background: var(--cat, var(--accent));
-  opacity: 0.9;
+  background: var(--accent-grad);
 }
 .cat-hero-icon {
-  width: 54px;
-  height: 54px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
+  width: 52px;
+  height: 52px;
   border-radius: var(--radius-lg);
-  overflow: hidden;
-  position: relative;
-  color: var(--cat, var(--accent));
+  color: var(--accent);
 }
 .cat-hero-icon img { width: 32px; height: 32px; object-fit: contain }
-.cat-hero-icon img.hero-img-err { display: none }
-.cat-hero-icon:has(img:not(.hero-img-err)) .hero-fb { display: none }
+.cat-hero-icon .hero-fb { font-size: 20px }
 .cat-hero-text {
   flex: 1;
   min-width: 0;
@@ -1254,7 +1250,7 @@ body {
 }
 .cat-hero-name {
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 750;
   color: var(--text);
   letter-spacing: -0.4px;
   line-height: 1.25;
@@ -1264,6 +1260,15 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+}
+.cat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+  flex-shrink: 0;
+  margin-right: 6px;
 }
 .cat-hero-actions {
   display: flex;
@@ -1271,35 +1276,39 @@ body {
   gap: 8px;
   flex-shrink: 0;
 }
+
+/* 布局切换器 (三布局按钮) */
 .cat-layout-switch {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   padding: 3px;
   background: var(--bg-alt);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
 }
 .cat-layout-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   text-decoration: none;
-  transition: background 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .cat-layout-btn:hover { color: var(--text) }
 .cat-layout-btn.active {
   background: var(--surface);
   color: var(--accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-xs);
 }
-.cat-layout-btn svg { width: 15px; height: 15px; display: block }
+.cat-layout-btn svg { width: 16px; height: 16px; display: block }
 @media (max-width: 768px) { .cat-layout-btn.hide-mobile { display: none } }
 
+/* ==================== 分类卡片网格 (默认宫格态) ==================== */
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1328,12 +1337,12 @@ body {
   content: "";
   position: absolute;
   left: 0;
-  top: 6px;
-  bottom: 6px;
+  top: 8px;
+  bottom: 8px;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: var(--cat, var(--accent));
-  opacity: 0.6;
+  background: var(--accent-grad);
+  opacity: 0.7;
   transition: opacity 0.2s ease;
 }
 .gcard:hover::before { opacity: 1 }
@@ -1350,19 +1359,9 @@ body {
 .gcard-icon {
   width: 38px;
   height: 38px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  position: relative;
 }
-.gcard-icon img { width: 28px; height: 28px; object-fit: contain }
-.gcard-icon img.hero-img-err, .gcard-icon img.img-err { display: none }
-.gcard-icon:has(img:not(.hero-img-err):not(.img-err)) .hero-fb { display: none }
+.gcard-icon img { width: 26px; height: 26px; object-fit: contain }
+.gcard-icon .hero-fb { font-size: 15px }
 .gcard-title {
   flex: 1;
   min-width: 0;
@@ -1380,7 +1379,7 @@ body {
   font-weight: 600;
   color: var(--text-muted);
   background: var(--bg-alt);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   padding: 2px 9px;
   border-radius: var(--radius-full);
   white-space: nowrap;
@@ -1399,7 +1398,6 @@ body {
   padding: 0 2px;
   font-size: 13px;
   line-height: 1.7;
-  color: var(--text-secondary);
   -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
   mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
 }
@@ -1420,7 +1418,7 @@ body {
 }
 .gcard:has(.gcard-toggle:checked) .gcard-chev {
   transform: rotate(180deg);
-  color: var(--cat, var(--accent));
+  color: var(--accent);
 }
 .gcard:has(.gcard-toggle:checked) .focus-notes {
   overflow: visible;
@@ -1451,19 +1449,9 @@ body {
 .bmcard-icon {
   width: 38px;
   height: 38px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  position: relative;
 }
 .bmcard-icon img { width: 22px; height: 22px; object-fit: contain }
-.bmcard-icon img.hero-img-err, .bmcard-icon img.img-err { display: none }
-.bmcard-icon:has(img:not(.hero-img-err):not(.img-err)) .hero-fb { display: none }
+.bmcard-icon .bmcard-fb { font-size: 14px }
 .bmcard-title {
   font-size: 14px;
   font-weight: 600;
@@ -1474,7 +1462,7 @@ body {
   white-space: nowrap;
   transition: color 0.15s ease;
 }
-.bmcard:hover .bmcard-title { color: var(--cat, var(--accent)) }
+.bmcard:hover .bmcard-title { color: var(--accent) }
 .bmcard-url {
   display: block;
   font-size: 11.5px;
@@ -1500,15 +1488,218 @@ body {
   right: 12px;
   bottom: 12px;
   color: var(--text-muted);
-  opacity: 0;
+  opacity: 0.4;
   transform: translate(-2px, 2px);
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
 }
 .bmcard-arrow svg { width: 15px; height: 15px; display: block }
 .bmcard:hover .bmcard-arrow {
   opacity: 1;
   transform: translate(0, 0);
-  color: var(--cat, var(--accent));
+  color: var(--accent);
+}
+
+/* 子书签展开与渲染 */
+.bmcard-toggle-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
+.bmcard-toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border-light);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.bmcard-toggle-label svg { width: 12px; height: 12px; transition: transform 0.2s ease }
+.bmcard-toggle-input:checked + .bmcard-toggle-label svg { transform: rotate(180deg) }
+.bmcard-children { display: none; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--bg-alt); border-top: 1px dashed var(--border) }
+.bmcard-toggle-input:checked ~ .bmcard-children { display: flex }
+.bmcard-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: inherit;
+  font-size: 12.5px;
+  transition: background 0.15s ease;
+}
+.bmcard-child:hover { background: var(--surface) }
+.bmcard-child-ic { width: 22px; height: 22px }
+.bmcard-child-ic img { width: 14px; height: 14px }
+.bmcard-child-ic .bmc-fb { font-size: 10px }
+.bmcard-child-text { flex: 1; min-width: 0 }
+.bmcard-child-title { font-weight: 500; color: var(--text) }
+.bmcard-child-url { font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono); margin-left: 6px }
+.bmcard-badge {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: var(--bg-alt);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+/* ==================== 布局切换：列表视图 (List View) ==================== */
+.cat-grid.list-view {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+.cat-grid.list-view .gcard,
+.cat-grid.list-view .bmcard {
+  height: auto !important;
+  min-height: 56px !important;
+  max-height: none !important;
+  border-radius: var(--radius-md) !important;
+  padding: 10px 16px !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.cat-grid.list-view .gcard:hover,
+.cat-grid.list-view .bmcard:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: var(--shadow-card-hover) !important;
+}
+.cat-grid.list-view .bmcard-main {
+  padding: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+.cat-grid.list-view .bmcard-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+.cat-grid.list-view .bmcard-icon {
+  width: 34px !important;
+  height: 34px !important;
+}
+.cat-grid.list-view .bmcard-icon img {
+  width: 20px !important;
+  height: 20px !important;
+}
+.cat-grid.list-view .bmcard-title {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+.cat-grid.list-view .bmcard-url {
+  font-size: 11.5px !important;
+  font-family: var(--font-mono) !important;
+  color: var(--text-muted) !important;
+  margin-left: 8px !important;
+}
+.cat-grid.list-view .bmcard-notes {
+  display: none !important;
+}
+.cat-grid.list-view .bmcard-arrow {
+  position: static !important;
+  opacity: 0.6 !important;
+  transform: none !important;
+  margin-left: auto !important;
+  align-self: center !important;
+}
+.cat-grid.list-view .bmcard:hover .bmcard-arrow {
+  opacity: 1 !important;
+  color: var(--accent) !important;
+  transform: translateX(2px) !important;
+}
+.cat-grid.list-view .gcard {
+  display: flex !important;
+  flex-direction: column !important;
+}
+.cat-grid.list-view .gcard-head {
+  margin-bottom: 0 !important;
+  width: 100% !important;
+}
+.cat-grid.list-view .gcard-icon {
+  width: 34px !important;
+  height: 34px !important;
+}
+.cat-grid.list-view .gcard-icon img {
+  width: 20px !important;
+  height: 20px !important;
+}
+.cat-grid.list-view .gcard .focus-notes {
+  display: none !important;
+}
+.cat-grid.list-view .gcard:has(.gcard-toggle:checked) .focus-notes {
+  display: block !important;
+  margin-top: 10px !important;
+  padding-top: 10px !important;
+  border-top: 1px dashed var(--border) !important;
+}
+
+/* ==================== 布局切换：小宫格视图 (Mini-Grid View) ==================== */
+.cat-grid.mini-grid-view {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+  gap: 8px !important;
+}
+.cat-grid.mini-grid-view .gcard,
+.cat-grid.mini-grid-view .bmcard {
+  height: 64px !important;
+  min-height: 64px !important;
+  max-height: 64px !important;
+  padding: 8px 12px !important;
+  border-radius: var(--radius-md) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.cat-grid.mini-grid-view .bmcard-main {
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px !important;
+}
+.cat-grid.mini-grid-view .bmcard-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+.cat-grid.mini-grid-view .bmcard-icon,
+.cat-grid.mini-grid-view .gcard-icon {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: var(--radius-sm) !important;
+  flex-shrink: 0 !important;
+}
+.cat-grid.mini-grid-view .bmcard-icon img,
+.cat-grid.mini-grid-view .gcard-icon img {
+  width: 18px !important;
+  height: 18px !important;
+}
+.cat-grid.mini-grid-view .bmcard-title,
+.cat-grid.mini-grid-view .gcard-title {
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+  font-weight: 600 !important;
+  flex: 1 !important;
+}
+.cat-grid.mini-grid-view .bmcard-url {
+  display: none !important;
+}
+.cat-grid.mini-grid-view .bmcard-notes,
+.cat-grid.mini-grid-view .bmcard-arrow,
+.cat-grid.mini-grid-view .focus-notes,
+.cat-grid.mini-grid-view .gcard-count {
+  display: none !important;
 }
 
 /* ==================== 尾部 FOOTER ==================== */
