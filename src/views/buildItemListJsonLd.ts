@@ -1,4 +1,4 @@
-import { fixUrl } from '../utils.js'
+import { fixUrl, extractGroupTitle } from '../utils.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
 /**
@@ -43,7 +43,7 @@ export function buildItemListJsonLd(
   return {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: g.name || '分享组',
+    name: extractGroupTitle(g.name, g.notes) || '未命名组',
     description: desc,
     url: shareUrl,
     numberOfItems: bms.length,

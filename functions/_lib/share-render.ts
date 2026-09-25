@@ -28,7 +28,7 @@ const T = {
     lang: 'zh-CN',
     ogLocale: 'zh_CN',
     siteName: 'ulink',
-    defaultGroupName: '分享组',
+    defaultGroupName: '未命名组',
     defaultCategoryName: '分享分类',
     notFoundTitle: '分享不存在 - 与链',
     notFoundHeading: '该分享不存在',
@@ -74,7 +74,7 @@ const T = {
     lang: 'en-US',
     ogLocale: 'en_US',
     siteName: 'ulink',
-    defaultGroupName: 'Shared group',
+    defaultGroupName: 'Untitled group',
     defaultCategoryName: 'Shared category',
     notFoundTitle: 'Share not found - ulink',
     notFoundHeading: 'This share no longer exists',
@@ -417,6 +417,52 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
 
 // ── 渲染 ──
 
+interface ResolvedGroupTitle {
+  name: string
+  promotedH1: boolean
+}
+
+/**
+ * 智能解析公开组的展示标题与首行 H1 提拔状态：
+ * 1. 显式组名（明文非密文且非空白）最高优先；
+ * 2. 若无显式组名，尝试从 notes（HTML）中提取：
+ *    - 开头首个 <h1> 标签（允许前面有空行/空段落/注释），提取纯文本并标记 promotedH1 为 true；
+ *    - 若无开头的 <h1>，查找首个 heading (h1/h2/h3) 或首行纯文本（截取前 40 字符），promotedH1 为 false；
+ * 3. 若均无内容，回退到 dict.defaultGroupName（'未命名组' / 'Untitled group'）。
+ */
+function resolveGroupTitle(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  group: PublicGroup,
+): ResolvedGroupTitle {
+  const explicit = deCipherText(dict, group.name).trim()
+  if (explicit && explicit !== dict.cipherPlaceholder) {
+    return { name: explicit, promotedH1: false }
+  }
+
+  const rawNotes = typeof group.notes === "string" ? group.notes.trim() : ""
+  if (rawNotes && !isCipherText(rawNotes)) {
+    const leadH1 = rawNotes.match(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>([\s\S]*?)<\/h1>/i)
+    if (leadH1) {
+      const txt = stripTags(leadH1[1]).trim()
+      if (txt) return { name: txt, promotedH1: true }
+    }
+
+    const anyH = rawNotes.match(/<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1>/i)
+    if (anyH) {
+      const txt = stripTags(anyH[2]).trim()
+      if (txt) return { name: txt.slice(0, 50), promotedH1: false }
+    }
+
+    const plain = stripTags(rawNotes).trim()
+    if (plain) {
+      const firstLine = plain.split(/\r?\n/)[0].trim()
+      if (firstLine) return { name: firstLine.slice(0, 40), promotedH1: false }
+    }
+  }
+
+  return { name: dict.defaultGroupName, promotedH1: false }
+}
+
 /** 构建 <head>：title / description / og:* / twitter:* / canonical。 */
 function buildHead(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
@@ -425,7 +471,8 @@ function buildHead(
   shareUrl: string,
   ogImage: string,
 ): string {
-  const title = `${group.name || dict.defaultGroupName} - ${dict.siteName}`
+  const titleInfo = resolveGroupTitle(dict, group)
+  const title = `${titleInfo.name} - ${dict.siteName}`
   const desc = descriptionOf(dict, group, bookmarks.length)
   const escTitle = esc(title)
   const escDesc = esc(desc)
@@ -571,10 +618,19 @@ interface NotesResult {
 }
 
 /** 组 notes 富文本渲染：白名单清洗 + 内联书签转链接 + 标题提取（TOC 锚点）。空则返回空。 */
-function notesHtml(dict: typeof T['zh-CN'] | typeof T['en-US'], group: PublicGroup, bmMap?: NotesBmMap): NotesResult {
-  const raw = (group.notes || "").trim()
+function notesHtml(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  group: PublicGroup,
+  bmMap?: NotesBmMap,
+  skipLeadingH1?: boolean,
+): NotesResult {
+  let raw = (group.notes || "").trim()
   // E2E 历史密文笔记：整体是 salt.iv.data 三段串，无 key 不可解 → 不渲染（调用方回退「暂无笔记」）
   if (!raw || isCipherText(raw)) return { html: "", toc: "" }
+  if (skipLeadingH1) {
+    raw = raw.replace(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>[\s\S]*?<\/h1>/i, "").trim()
+    if (!raw) return { html: "", toc: "" }
+  }
   let cleaned = sanitizeNotesHtml(raw, bmMap).trim()
   if (!cleaned) return { html: "", toc: "" }
   // 提取 h1/h2/h3 标题并注入锚点 id（toc-N），文档级滚动定位（纯锚点 + scroll-behavior:smooth）
@@ -652,8 +708,8 @@ function buildBody(
   bookmarks: PublicBookmark[],
   appOrigin: string,
 ): string {
-  const name = esc(deCipherText(dict, group.name) || dict.defaultGroupName)
-  const initial = esc((group.name || "?").trim().charAt(0) || "?").toUpperCase()
+  const titleInfo = resolveGroupTitle(dict, group)
+  const name = esc(titleInfo.name)
   const count = bookmarks.length
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, 'count', count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
@@ -663,7 +719,7 @@ function buildBody(
   for (const b of bookmarks) {
     bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === 'string' ? b.icon : '' }
   }
-  const notes = notesHtml(dict, group, bmMap)
+  const notes = notesHtml(dict, group, bmMap, titleInfo.promotedH1)
   // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存
   const appUrl = `${appOrigin}/app#share/${esc(group.id)}`
 
@@ -892,9 +948,10 @@ function buildGroupCard(
   bmMap: NotesBmMap,
 ): string {
   const g = entry.group
-  const name = esc(deCipherText(dict, g.name).trim() || "?")
-  const initial = esc(((g.name || "?").trim().charAt(0) || "?").toUpperCase())
-  const notes = notesHtml(dict, g, bmMap).html
+  const titleInfo = resolveGroupTitle(dict, g)
+  const name = esc(titleInfo.name)
+  const initial = esc(((titleInfo.name || "?").trim().charAt(0) || "?").toUpperCase())
+  const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
   const body = notes || `<div class="focus-notes gcard-nonotes">${esc(dict.catNoNotes)}</div>`
   const n = entry.items.length
   const itemsHtml = n

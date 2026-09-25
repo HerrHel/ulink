@@ -1,7 +1,7 @@
 /** 中文语言包 fragment：分享视图 + 应用外壳。由 src/locales/zh.ts 顶层 spread 合并。 */
 export const shareAppZh = {
   shareView: {
-    defaultGroupName: '分享组',
+    defaultGroupName: '未命名组',
     forking: '复制中…',
     forkToMyLibrary: '复制到我的库',
     loginThenCopy: '登录后复制',
@@ -47,7 +47,7 @@ export const shareAppZh = {
 /** English fragment：与 zh 键完全同构；复数用 key_one/key_other 平级追加。 */
 export const shareAppEn = {
   shareView: {
-    defaultGroupName: 'Shared group',
+    defaultGroupName: 'Untitled group',
     forking: 'Copying…',
     forkToMyLibrary: 'Copy to my library',
     loginThenCopy: 'Sign in to copy',

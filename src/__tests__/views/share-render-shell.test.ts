@@ -171,4 +171,47 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(bmsOnlyHtml).not.toContain('class="group-notes-section"')
     expect(bmsOnlyHtml).not.toContain('class="canvas-divider"')
   })
+
+  it('智能组名解析与首行 H1 正文去重', () => {
+    // 场景 1：用户未显式设置组名（name 为空），但 notes 开头写了 <h1>123</h1>
+    const untitledWithH1 = {
+      id: 'grp-h1-test',
+      name: '',
+      icon: '',
+      color: '',
+      notes: '<h1>123</h1><p>待办事项与正文</p>',
+      updated_at_num: 1756620000000,
+    }
+    const htmlH1 = renderSharePage(untitledWithH1 as never, bms as never, 'https://ulink.ren/s/grp-h1-test', 'https://ulink.ren', 'zh-CN')
+
+    // 1. Hero 大标题和 <title> 必须为 123，绝不能出现「分享组」或「未命名组」
+    expect(htmlH1).toContain('<h1 class="group-hero-title">123</h1>')
+    expect(htmlH1).toContain('<title>123 - ulink</title>')
+    expect(htmlH1).not.toContain('分享组')
+    expect(htmlH1).not.toContain('未命名组')
+
+    // 2. 正文笔记中已被提拔的开头 <h1>123</h1> 必须被消费，不能在正文中出现重复的大标题 123
+    expect(htmlH1).toContain('<p>待办事项与正文</p>')
+    expect(htmlH1).not.toContain('<div class="focus-notes"><h1')
+    expect(htmlH1).toContain('<div class="group-notes-content"><div class="focus-notes"><p>待办事项与正文</p></div></div>')
+
+    // 场景 2：用户显式设置了组名「前端工具集」，notes 开头保留 <h1>收藏</h1>
+    expect(zh).toContain('<h1 class="group-hero-title">前端工具集</h1>')
+    expect(zh).toContain('<title>前端工具集 - ulink</title>')
+    // 显式组名时，正文中的 <h1>收藏</h1> 必须原样完整保留（带 toc id）
+    expect(zh).toContain('>收藏</h1>')
+
+    // 场景 3：无组名且 notes 纯空，回退为「未命名组」（英文「Untitled group」），绝无「分享组」
+    const pureEmptyGroup = { id: 'grp-empty', name: '', icon: '', color: '', notes: '' }
+    const emptyZh = renderSharePage(pureEmptyGroup as never, bms as never, 'https://ulink.ren/s/grp-empty', 'https://ulink.ren', 'zh-CN')
+    const emptyEn = renderSharePage(pureEmptyGroup as never, bms as never, 'https://ulink.ren/s/grp-empty', 'https://ulink.ren', 'en-US')
+
+    expect(emptyZh).toContain('<h1 class="group-hero-title">未命名组</h1>')
+    expect(emptyZh).toContain('<title>未命名组 - ulink</title>')
+    expect(emptyZh).not.toContain('分享组')
+
+    expect(emptyEn).toContain('<h1 class="group-hero-title">Untitled group</h1>')
+    expect(emptyEn).toContain('<title>Untitled group - ulink</title>')
+    expect(emptyEn).not.toContain('Shared group')
+  })
 })

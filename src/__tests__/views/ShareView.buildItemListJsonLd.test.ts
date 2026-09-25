@@ -125,11 +125,13 @@ describe('buildItemListJsonLd — ShareView _applyShareHead JSON-LD itemListElem
       expect(ld['@type']).toBe('ItemList')
     })
 
-    it('name===g.name 原值 / g.name 空时兜底 "分享组"', () => {
+    it('name===g.name 原值 / g.name 空时兜底 "未命名组"（或提取 notes 标题）', () => {
       const withName = buildItemListJsonLd(mkGroup('我的组'), [mkBook('https://a.com', 't', 'b1')], 'https://h.co/s/g1')
       expect(withName.name).toBe('我的组')
       const emptyName = buildItemListJsonLd(mkGroup(''), [mkBook('https://a.com', 't', 'b1')], 'https://h.co/s/g1')
-      expect(emptyName.name).toBe('分享组')
+      expect(emptyName.name).toBe('未命名组')
+      const withH1 = buildItemListJsonLd(mkGroup('', '<h1>123</h1>'), [mkBook('https://a.com', 't', 'b1')], 'https://h.co/s/g1')
+      expect(withH1.name).toBe('123')
     })
 
     it('url===shareUrl 入参透传（外层 location 副作用入参化绕开）', () => {
