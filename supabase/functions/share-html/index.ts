@@ -51,6 +51,11 @@ const T = {
     updatedAt: "更新于 {d}",
     cta: "保存至我的库",
     tocTitle: "目录",
+    bookmarksTitle: "收录的书签",
+    searchBookmarks: "搜索书签...",
+    jumpToNotes: "导读笔记",
+    jumpToBookmarks: "收录书签",
+    noBookmarksMatch: "未找到匹配的书签",
     footerBrand: "与链 · ulink",
     footerSlogan: "收藏 · 整理 · 分享",
     themeToggle: "切换深浅色主题",
@@ -74,6 +79,11 @@ const T = {
     updatedAt: "Updated {d}",
     cta: "Save to my library",
     tocTitle: "Contents",
+    bookmarksTitle: "Bookmarks in this group",
+    searchBookmarks: "Search bookmarks...",
+    jumpToNotes: "Notes",
+    jumpToBookmarks: "Bookmarks",
+    noBookmarksMatch: "No matching bookmarks found",
     footerBrand: "ulink",
     footerSlogan: "Collect · Organize · Share",
     themeToggle: "Toggle light/dark theme",
@@ -383,6 +393,18 @@ const SUN_SVG =
 const MOON_SVG =
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
 
+/** 侧栏书签小图标 */
+const BOOKMARK_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`
+
+/** 侧栏搜索小图标 */
+const SEARCH_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`
+
+/** 目录小图标 */
+const TOC_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`
+
 /** 首屏主题防闪烁脚本（FOUC Guard）：在任何样式与 DOM 渲染前立即注入 data-theme 与 color-scheme。 */
 const THEME_SCRIPT = `<script>(function(){try{var t=localStorage.getItem("lv_theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}})();</script>`
 
@@ -397,8 +419,9 @@ function buildBookmarkItem(b: PublicBookmark): string {
   const ch = title.charAt(0).toUpperCase()
   const rawNotes = typeof b.notes === 'string' ? b.notes.trim() : ''
   const notes = rawNotes ? stripTags(rawNotes).slice(0, 120) : ''
+  const searchStr = esc((title + ' ' + dm).toLowerCase())
   return [
-    `<a class="bm" href="${href}"${target}${rel}>`,
+    `<a class="bm" href="${href}"${target}${rel} data-search="${searchStr}">`,
     `<div class="bm-main">`,
     `<span class="bm-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bm")}</span>`,
     `<div class="bm-info">`,
@@ -497,7 +520,7 @@ function buildAppShell(
   ].join("\n")
 }
 
-/** 构建 <body>（组分享）：Hero 卡片（大图标+标题+元信息）+ 笔记排版 + 收录书签完整卡片网格。与 CF 版同步。 */
+/** 构建 <body>（组分享）：方案 A 专栏式一体化画卷（统一 Canvas 卡片 + 桌面端笔记与吸顶书签双栏联动）。与 CF 版同步。 */
 function buildBody(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -520,24 +543,78 @@ function buildBody(
   // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存。
   const appUrl = `${appOrigin}/app#share/${esc(gid)}`
 
-  const isZh = dict.lang === 'zh-CN'
-  const bmSectionTitle = isZh ? '收录的书签' : 'Bookmarks in this group'
+  const hasNotes = Boolean(notes.html)
+  const hasBookmarks = count > 0
+  const hasBoth = hasNotes && hasBookmarks
 
-  const bookmarksHtml = count
-    ? [
-        `<section class="group-bookmarks-section">`,
-        `<div class="section-header">`,
-        `<h2 class="section-title">${bmSectionTitle}</h2>`,
-        `<span class="section-count">${count}</span>`,
-        `</div>`,
-        `<div class="bm-grid">`,
-        bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
-        `</div>`,
-        `</section>`,
-      ].join("\n")
-    : `<div class="empty">${esc(dict.empty)}</div>`
+  let contentHtml = ''
+  if (hasBoth) {
+    contentHtml = [
+      `<div class="group-split-view">`,
+      `<main class="group-main-col" id="section-notes">`,
+      `<div class="group-notes-content">${notes.html}</div>`,
+      `</main>`,
+      `<aside class="group-side-col">`,
+      `<div class="group-sticky-side">`,
+      `<section class="group-bookmarks-section" id="section-bookmarks">`,
+      `<div class="section-header">`,
+      `<div class="section-title-wrap">`,
+      `<span class="section-title-icon">${BOOKMARK_SVG}</span>`,
+      `<h2 class="section-title">${esc(dict.bookmarksTitle)}</h2>`,
+      `</div>`,
+      `<span class="section-count">${count}</span>`,
+      `</div>`,
+      count >= 3
+        ? `<div class="bm-search-wrap"><input type="search" class="bm-search-input" id="bmSearchInput" placeholder="${esc(dict.searchBookmarks)}" autocomplete="off" aria-label="${esc(dict.searchBookmarks)}" /><span class="bm-search-icon">${SEARCH_SVG}</span></div>`
+        : '',
+      `<div class="bm-grid" id="bmList">`,
+      bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
+      `</div>`,
+      `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
+      `</section>`,
+      notes.toc
+        ? `<section class="side-toc-card"><div class="section-header"><div class="section-title-wrap"><span class="section-title-icon">${TOC_SVG}</span><h3 class="section-title">${esc(dict.tocTitle)}</h3></div></div>${notes.toc}</section>`
+        : '',
+      `</div>`,
+      `</aside>`,
+      `</div>`,
+    ].filter(Boolean).join("\n")
+  } else if (hasBookmarks) {
+    contentHtml = [
+      `<section class="group-bookmarks-section" id="section-bookmarks">`,
+      `<div class="section-header">`,
+      `<div class="section-title-wrap">`,
+      `<span class="section-title-icon">${BOOKMARK_SVG}</span>`,
+      `<h2 class="section-title">${esc(dict.bookmarksTitle)}</h2>`,
+      `</div>`,
+      `<span class="section-count">${count}</span>`,
+      count >= 4
+        ? `<div class="bm-search-wrap full-search"><input type="search" class="bm-search-input" id="bmSearchInput" placeholder="${esc(dict.searchBookmarks)}" autocomplete="off" aria-label="${esc(dict.searchBookmarks)}" /><span class="bm-search-icon">${SEARCH_SVG}</span></div>`
+        : '',
+      `</div>`,
+      `<div class="bm-grid" id="bmList">`,
+      bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
+      `</div>`,
+      `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
+      `</section>`,
+    ].filter(Boolean).join("\n")
+  } else if (hasNotes) {
+    contentHtml = [
+      `<div class="group-main-col is-full-notes" id="section-notes">`,
+      `<div class="group-notes-content">${notes.html}</div>`,
+      `<div class="empty">${esc(dict.empty)}</div>`,
+      `</div>`,
+    ].join("\n")
+  } else {
+    contentHtml = `<div class="empty">${esc(dict.empty)}</div>`
+  }
+
+  const quickNav = hasBoth
+    ? `<nav class="group-quick-nav" aria-label="Quick navigation"><a class="quick-nav-pill" href="#section-notes">${esc(dict.jumpToNotes)}</a><a class="quick-nav-pill" href="#section-bookmarks">${esc(dict.jumpToBookmarks)} <span class="pill-count">${count}</span></a></nav>`
+    : ''
 
   const inner = [
+    `<article class="group-canvas">`,
     `<header class="group-hero">`,
     `<span class="group-hero-accent" aria-hidden="true"></span>`,
     `<span class="group-hero-icon">${groupIconMarkup(group, initial)}</span>`,
@@ -545,9 +622,10 @@ function buildBody(
     `<h1 class="group-hero-title">${name}</h1>`,
     `<div class="group-hero-meta">${countTag}${updatedTag}</div>`,
     `</div>`,
+    quickNav,
     `</header>`,
-    notes.html ? `<section class="group-notes-card">${notes.html}</section>` : '',
-    bookmarksHtml,
+    `<div class="group-canvas-body">${contentHtml}</div>`,
+    `</article>`,
   ].filter(Boolean).join("\n")
 
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
@@ -725,7 +803,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   border-bottom: 1px solid var(--border-light);
 }
 .share-bar-wrap {
-  max-width: 1040px;
+  max-width: 1080px;
   width: 100%;
   margin: 0 auto;
   padding: 0 24px;
@@ -844,7 +922,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 
 /* ==================== 主内容容器 ==================== */
 .share-container {
-  max-width: 960px;
+  max-width: 1080px;
   width: 100%;
   margin: 0 auto;
   padding: 32px 24px 72px;
@@ -914,53 +992,68 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   display: flex !important;
 }
 
-/* ==================== 组分享 HERO 卡片 ==================== */
-.group-hero {
+/* ==================== 方案 A：专栏式一体化画卷 (Group Canvas) ==================== */
+.group-canvas {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: 24px 28px;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* 一体化 Header */
+.group-canvas .group-hero {
+  position: relative;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 28px 32px 24px;
+  box-shadow: none;
   display: flex;
   align-items: center;
   gap: 20px;
+  flex-wrap: wrap;
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .group-hero-accent {
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
+  top: 14px;
+  bottom: 14px;
   width: 4px;
   border-radius: 0 3px 3px 0;
   background: var(--accent-grad);
 }
 .group-hero-icon {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
 }
 .group-hero-icon img {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
 }
 .group-hero-icon .hero-fb {
-  font-size: 20px;
+  font-size: 22px;
 }
 .group-hero-info {
   flex: 1;
-  min-width: 0;
+  min-width: 220px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .group-hero-title {
-  font-size: 24px;
-  font-weight: 750;
+  font-size: 26px;
+  font-weight: 800;
   color: var(--text);
-  letter-spacing: -0.4px;
+  letter-spacing: -0.5px;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -983,13 +1076,100 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   white-space: nowrap;
 }
 
-/* ==================== 组笔记卡片 (对齐 editor.css) ==================== */
-.group-notes-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 26px 30px;
-  box-shadow: var(--shadow-sm);
+/* 快捷导航药丸（移动端/窄屏） */
+.group-quick-nav {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding-top: 12px;
+  margin-top: 2px;
+  border-top: 1px dashed var(--border-light);
+}
+.quick-nav-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: var(--radius-full);
+  background: var(--bg-alt);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+.quick-nav-pill:hover {
+  background: var(--surface-hover);
+  color: var(--accent);
+  border-color: var(--border-hover);
+}
+.quick-nav-pill .pill-count {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* 一体化画卷主体 */
+.group-canvas-body {
+  padding: 32px 32px 36px;
+}
+
+/* 双栏联动排版 (Split View) */
+.group-split-view {
+  display: flex;
+  align-items: flex-start;
+  gap: 36px;
+  width: 100%;
+}
+.group-main-col {
+  flex: 1;
+  min-width: 0;
+}
+.group-main-col.is-full-notes {
+  max-width: 820px;
+  margin: 0 auto;
+}
+.group-notes-content {
+  width: 100%;
+}
+
+/* 侧边栏 (Sticky Column) */
+.group-side-col {
+  width: 320px;
+  flex-shrink: 0;
+}
+.group-sticky-side {
+  position: sticky;
+  top: 74px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.group-sticky-side::-webkit-scrollbar {
+  width: 5px;
+}
+.group-sticky-side::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+/* 侧栏卡片 */
+.group-sticky-side .group-bookmarks-section, .side-toc-card {
+  background: var(--bg-alt);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 16px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .focus-notes {
   font-size: 14px;
@@ -1196,28 +1376,192 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   display: flex;
   flex-direction: column;
   gap: 14px;
-  margin-top: 8px;
 }
 .section-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
 }
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.section-title-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.section-title-icon svg { width: 100%; height: 100% }
 .section-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.2px;
 }
 .section-count {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--accent);
   background: var(--accent-light);
   border: 1px solid var(--accent-glow);
-  padding: 2px 9px;
+  padding: 1.5px 8px;
   border-radius: var(--radius-full);
 }
+
+/* 搜索框 */
+.bm-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.bm-search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 30px 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+}
+.bm-search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+.bm-search-input::placeholder {
+  color: var(--text-muted);
+}
+.bm-search-icon {
+  position: absolute;
+  right: 9px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bm-search-icon svg { width: 100%; height: 100% }
+
+/* 侧边书签列表形态 */
+.group-sticky-side .bm-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+.group-sticky-side .bm-grid .bm {
+  padding: 9px 12px;
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-xs);
+  background: var(--surface);
+  border-color: var(--border-light);
+}
+.group-sticky-side .bm-grid .bm:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+}
+.group-sticky-side .bm-grid .bm-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+.group-sticky-side .bm-grid .bm-icon img {
+  width: 20px;
+  height: 20px;
+}
+.group-sticky-side .bm-grid .bm-fb {
+  font-size: 12px;
+}
+.group-sticky-side .bm-grid .bm-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.group-sticky-side .bm-grid .bm-url {
+  font-size: 11px;
+}
+.group-sticky-side .bm-grid .bm-notes {
+  font-size: 11.5px;
+  line-height: 1.4;
+  margin-top: 5px;
+  padding-top: 4px;
+  -webkit-line-clamp: 1;
+}
+
+/* 侧边 TOC 导航 */
+.side-toc-card .toc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.side-toc-card .toc-title { display: none }
+.side-toc-card .toc-item {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border-left: 2px solid transparent;
+  transition: all 0.15s ease;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-toc-card .toc-item:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+.side-toc-card .toc-item.active {
+  color: var(--accent);
+  background: var(--surface);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+.side-toc-card .toc-l2 { padding-left: 18px }
+.side-toc-card .toc-l3 { padding-left: 28px }
+
+/* 全宽书签区 (无笔记时的卡片内部网格) */
+.group-canvas-body > .group-bookmarks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.full-bookmarks-card .section-header {
+  margin-bottom: 2px;
+}
+.full-search {
+  max-width: 260px;
+  margin-left: auto;
+}
+.bm-empty-search {
+  text-align: center;
+  padding: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
 .bm-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1920,14 +2264,45 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   max-width: 420px;
 }
 
-/* ==================== 移动端适配 ==================== */
+/* ==================== 响应式适配 ==================== */
+@media (max-width: 960px) {
+  .group-canvas .group-hero {
+    padding: 22px 24px 18px;
+  }
+  .group-canvas-body {
+    padding: 24px 24px 32px;
+  }
+  .group-split-view {
+    flex-direction: column;
+    gap: 28px;
+  }
+  .group-side-col {
+    width: 100%;
+  }
+  .group-sticky-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+  .group-sticky-side .bm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    max-height: none;
+    overflow-y: visible;
+  }
+  .group-quick-nav {
+    display: flex;
+  }
+}
+
 @media (max-width: 640px) {
   .share-bar-wrap { padding: 0 16px }
-  .share-container { padding: 20px 16px 40px; gap: 18px }
-  .group-hero { padding: 18px 16px; border-radius: var(--radius-lg); gap: 14px }
-  .group-hero-icon { width: 44px; height: 44px; border-radius: var(--radius-md) }
+  .share-container { padding: 16px 12px 48px; gap: 18px }
+  .group-canvas { border-radius: var(--radius-lg); }
+  .group-canvas .group-hero { padding: 18px 16px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; gap: 14px }
+  .group-hero-icon { width: 46px; height: 46px; border-radius: var(--radius-md) }
   .group-hero-title { font-size: 20px }
-  .group-notes-card { padding: 18px 18px; border-radius: var(--radius-lg) }
+  .group-canvas-body { padding: 18px 16px 24px }
   .bm-grid { grid-template-columns: 1fr }
 }
 `
@@ -1937,7 +2312,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
  *  2) taskItem 未完成项可点击勾选（纯前端视觉）：点击切换 data-checked
  *  3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  *  4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位 */
-const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err');e.classList.add('bm-img-err');e.classList.add('hero-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}})()`
+const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err');e.classList.add('bm-img-err');e.classList.add('hero-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('#bmList .bm');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}})()`
 
 // ── 入口 ──
 
