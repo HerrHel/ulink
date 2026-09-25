@@ -552,6 +552,18 @@ function groupIconMarkup(group: Record<string, unknown>, letter: string): string
   return iconMarkup(imgSrc, letter, "hero")
 }
 
+/**
+ * 组/分类头部自定义图标：仅当存在明确的 http(s) URL 时渲染图标徽标，
+ * 无自定义图片时完全不渲染（方案 1：极简大标题顶格，杜绝占位方块、问号或单字冗余）。
+ */
+function heroCustomIconMarkup(entity: Record<string, unknown>, prefix: "group" | "cat"): string {
+  const icon = typeof entity.icon === "string" ? entity.icon.trim() : ""
+  if (/^https?:\/\//i.test(icon)) {
+    return `<span class="${prefix}-hero-icon"><img src="${esc(icon)}" alt="" /></span>`
+  }
+  return ""
+}
+
 /** notes 渲染结果：html（清洗后的富文本）+ toc（左侧标题导航，无数标题为空串）。 */
 interface NotesResult {
   html: string
@@ -698,10 +710,12 @@ function buildBody(
     sections.push(`<div class="empty">${esc(dict.empty)}</div>`)
   }
 
+  const heroIcon = heroCustomIconMarkup(group, "group")
+
   const inner = [
     `<article class="group-canvas">`,
     `<header class="group-hero">`,
-    `<span class="group-hero-icon">${groupIconMarkup(group, initial)}</span>`,
+    heroIcon,
     `<div class="group-hero-info">`,
     `<h1 class="group-hero-title">${name}</h1>`,
     `<div class="group-hero-meta">${countTag}${updatedTag}</div>`,
@@ -1051,10 +1065,10 @@ function buildCategoryBody(
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
+  const heroIcon = heroCustomIconMarkup(category, "cat")
   const inner = [
     `<section class="cat-hero"${accentStyle}>`,
-    `<span class="cat-hero-accent" aria-hidden="true"></span>`,
-    `<span class="cat-hero-icon">${groupIconMarkup(category, initial)}</span>`,
+    heroIcon,
     `<div class="cat-hero-text">`,
     `<h1 class="cat-hero-name">${name}</h1>`,
     `<div class="cat-hero-meta">${tags}</div>`,
@@ -1064,7 +1078,7 @@ function buildCategoryBody(
     `</div>`,
     `</section>`,
     grid,
-  ].join("\n")
+  ].filter(Boolean).join("\n")
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
