@@ -145,23 +145,29 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(html).toContain("background-position: center")
     expect(html).toContain("background-size: 11px 11px")
   })
-  it('方案 A 一体化画卷与双栏联动特性', () => {
-    // 存在笔记与书签时渲染一体化画卷 + 双栏 Split View
+  it('方案 B 策展级单体画卷特性', () => {
+    // 存在笔记与书签时渲染一体化画卷（上文下签流式排版，无生硬分栏与多余套娃）
     expect(zh).toContain('class="group-canvas"')
-    expect(zh).toContain('class="group-split-view"')
-    expect(zh).toContain('class="group-main-col"')
-    expect(zh).toContain('class="group-side-col"')
-    expect(zh).toContain('class="group-sticky-side"')
-    expect(zh).toContain('id="bmSearchInput"')
+    expect(zh).toContain('class="group-notes-section"')
+    expect(zh).toContain('class="group-bookmarks-section"')
+    expect(zh).toContain('class="canvas-divider"')
+    expect(zh).toContain('class="bm-grid"')
     expect(zh).toContain('data-search=')
-    expect(zh).toContain('class="group-quick-nav"')
-    expect(zh).toContain('class="side-toc-card"')
 
-    // 仅有书签时的卡片结构
+    // 彻底移除旧版与方案 A 繁冗元素
+    expect(zh).not.toContain('class="group-split-view"')
+    expect(zh).not.toContain('class="group-sticky-side"')
+    expect(zh).not.toContain('class="group-hero-accent"')
+    expect(zh).not.toContain('class="group-quick-nav"')
+    expect(zh).not.toContain('class="side-toc-card"')
+
+    // 仅有书签时的画卷结构：直接呈现书签区，无笔记与多余分割线
     const bmsOnlyGroup = { ...group, notes: '' }
     const bmsOnlyHtml = renderSharePage(bmsOnlyGroup as never, bms as never, 'https://ulink.ren/s/grp-demo-001', 'https://ulink.ren', 'zh-CN')
     expect(bmsOnlyHtml).toContain('class="group-canvas"')
-    expect(bmsOnlyHtml).not.toContain('class="group-split-view"')
+    expect(bmsOnlyHtml).toContain('class="group-bookmarks-section"')
     expect(bmsOnlyHtml).toContain('class="bm-grid"')
+    expect(bmsOnlyHtml).not.toContain('class="group-notes-section"')
+    expect(bmsOnlyHtml).not.toContain('class="canvas-divider"')
   })
 })

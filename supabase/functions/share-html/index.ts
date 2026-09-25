@@ -520,7 +520,7 @@ function buildAppShell(
   ].join("\n")
 }
 
-/** 构建 <body>（组分享）：方案 A 专栏式一体化画卷（统一 Canvas 卡片 + 桌面端笔记与吸顶书签双栏联动）。与 CF 版同步。 */
+/** 构建 <body>（组分享）：方案 B 策展级单体画卷（自上而下自然流式，上文下签，主角归位）。与 CF 版同步。 */
 function buildBody(
   dict: (typeof T)["zh-CN"],
   group: PublicGroup,
@@ -545,86 +545,59 @@ function buildBody(
 
   const hasNotes = Boolean(notes.html)
   const hasBookmarks = count > 0
-  const hasBoth = hasNotes && hasBookmarks
 
-  let contentHtml = ''
-  if (hasBoth) {
-    contentHtml = [
-      `<div class="group-split-view">`,
-      `<main class="group-main-col" id="section-notes">`,
+  const sections: string[] = []
+
+  if (hasNotes) {
+    sections.push(
+      `<section class="group-notes-section" id="section-notes">`,
       `<div class="group-notes-content">${notes.html}</div>`,
-      `</main>`,
-      `<aside class="group-side-col">`,
-      `<div class="group-sticky-side">`,
-      `<section class="group-bookmarks-section" id="section-bookmarks">`,
-      `<div class="section-header">`,
-      `<div class="section-title-wrap">`,
-      `<span class="section-title-icon">${BOOKMARK_SVG}</span>`,
-      `<h2 class="section-title">${esc(dict.bookmarksTitle)}</h2>`,
-      `</div>`,
-      `<span class="section-count">${count}</span>`,
-      `</div>`,
-      count >= 3
-        ? `<div class="bm-search-wrap"><input type="search" class="bm-search-input" id="bmSearchInput" placeholder="${esc(dict.searchBookmarks)}" autocomplete="off" aria-label="${esc(dict.searchBookmarks)}" /><span class="bm-search-icon">${SEARCH_SVG}</span></div>`
-        : '',
-      `<div class="bm-grid" id="bmList">`,
-      bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
-      `</div>`,
-      `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
       `</section>`,
-      notes.toc
-        ? `<section class="side-toc-card"><div class="section-header"><div class="section-title-wrap"><span class="section-title-icon">${TOC_SVG}</span><h3 class="section-title">${esc(dict.tocTitle)}</h3></div></div>${notes.toc}</section>`
-        : '',
-      `</div>`,
-      `</aside>`,
-      `</div>`,
-    ].filter(Boolean).join("\n")
-  } else if (hasBookmarks) {
-    contentHtml = [
-      `<section class="group-bookmarks-section" id="section-bookmarks">`,
-      `<div class="section-header">`,
-      `<div class="section-title-wrap">`,
-      `<span class="section-title-icon">${BOOKMARK_SVG}</span>`,
-      `<h2 class="section-title">${esc(dict.bookmarksTitle)}</h2>`,
-      `</div>`,
-      `<span class="section-count">${count}</span>`,
-      count >= 4
-        ? `<div class="bm-search-wrap full-search"><input type="search" class="bm-search-input" id="bmSearchInput" placeholder="${esc(dict.searchBookmarks)}" autocomplete="off" aria-label="${esc(dict.searchBookmarks)}" /><span class="bm-search-icon">${SEARCH_SVG}</span></div>`
-        : '',
-      `</div>`,
-      `<div class="bm-grid" id="bmList">`,
-      bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
-      `</div>`,
-      `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
-      `</section>`,
-    ].filter(Boolean).join("\n")
-  } else if (hasNotes) {
-    contentHtml = [
-      `<div class="group-main-col is-full-notes" id="section-notes">`,
-      `<div class="group-notes-content">${notes.html}</div>`,
-      `<div class="empty">${esc(dict.empty)}</div>`,
-      `</div>`,
-    ].join("\n")
-  } else {
-    contentHtml = `<div class="empty">${esc(dict.empty)}</div>`
+    )
   }
 
-  const quickNav = hasBoth
-    ? `<nav class="group-quick-nav" aria-label="Quick navigation"><a class="quick-nav-pill" href="#section-notes">${esc(dict.jumpToNotes)}</a><a class="quick-nav-pill" href="#section-bookmarks">${esc(dict.jumpToBookmarks)} <span class="pill-count">${count}</span></a></nav>`
-    : ''
+  if (hasNotes && hasBookmarks) {
+    sections.push(`<div class="canvas-divider" aria-hidden="true"></div>`)
+  }
+
+  if (hasBookmarks) {
+    const searchBar = count >= 6
+      ? `<div class="bm-search-wrap"><input type="search" class="bm-search-input" id="bmSearchInput" placeholder="${esc(dict.searchBookmarks)}" autocomplete="off" aria-label="${esc(dict.searchBookmarks)}" /><span class="bm-search-icon">${SEARCH_SVG}</span></div>`
+      : ''
+    sections.push(
+      `<section class="group-bookmarks-section" id="section-bookmarks">`,
+      `<div class="section-header">`,
+      `<div class="section-title-wrap">`,
+      `<span class="section-title-icon">${BOOKMARK_SVG}</span>`,
+      `<h2 class="section-title">${esc(dict.bookmarksTitle)}</h2>`,
+      `<span class="section-count">${count}</span>`,
+      `</div>`,
+      searchBar,
+      `</div>`,
+      `<div class="bm-grid" id="bmList">`,
+      bookmarks.map((b) => buildBookmarkItem(b)).join("\n"),
+      `</div>`,
+      `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
+      `</section>`,
+    )
+  }
+
+  if (!hasNotes && !hasBookmarks) {
+    sections.push(`<div class="empty">${esc(dict.empty)}</div>`)
+  }
 
   const inner = [
     `<article class="group-canvas">`,
     `<header class="group-hero">`,
-    `<span class="group-hero-accent" aria-hidden="true"></span>`,
     `<span class="group-hero-icon">${groupIconMarkup(group, initial)}</span>`,
     `<div class="group-hero-info">`,
     `<h1 class="group-hero-title">${name}</h1>`,
     `<div class="group-hero-meta">${countTag}${updatedTag}</div>`,
     `</div>`,
-    quickNav,
     `</header>`,
-    `<div class="group-canvas-body">${contentHtml}</div>`,
+    `<div class="group-canvas-body">`,
+    sections.join("\n"),
+    `</div>`,
     `</article>`,
   ].filter(Boolean).join("\n")
 
@@ -803,7 +776,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   border-bottom: 1px solid var(--border-light);
 }
 .share-bar-wrap {
-  max-width: 1080px;
+  max-width: 960px;
   width: 100%;
   margin: 0 auto;
   padding: 0 24px;
@@ -922,7 +895,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 
 /* ==================== 主内容容器 ==================== */
 .share-container {
-  max-width: 1080px;
+  max-width: 960px;
   width: 100%;
   margin: 0 auto;
   padding: 32px 24px 72px;
@@ -992,7 +965,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   display: flex !important;
 }
 
-/* ==================== 方案 A：专栏式一体化画卷 (Group Canvas) ==================== */
+/* ==================== 方案 B：策展级单体画卷 (Group Canvas) ==================== */
 .group-canvas {
   position: relative;
   background: var(--surface);
@@ -1001,7 +974,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
@@ -1011,29 +984,22 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--border-light);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  padding: 28px 32px 24px;
-  box-shadow: none;
+  padding: 32px 36px 26px;
   display: flex;
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
-  overflow: hidden;
-}
-.group-hero-accent {
-  position: absolute;
-  left: 0;
-  top: 14px;
-  bottom: 14px;
-  width: 4px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent-grad);
 }
 .group-hero-icon {
   width: 56px;
   height: 56px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 .group-hero-icon img {
   width: 36px;
@@ -1041,6 +1007,16 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 .group-hero-icon .hero-fb {
   font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--bg-alt);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
 }
 .group-hero-info {
   flex: 1;
@@ -1076,100 +1052,28 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   white-space: nowrap;
 }
 
-/* 快捷导航药丸（移动端/窄屏） */
-.group-quick-nav {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding-top: 12px;
-  margin-top: 2px;
-  border-top: 1px dashed var(--border-light);
-}
-.quick-nav-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 13px;
-  border-radius: var(--radius-full);
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.15s ease;
-}
-.quick-nav-pill:hover {
-  background: var(--surface-hover);
-  color: var(--accent);
-  border-color: var(--border-hover);
-}
-.quick-nav-pill .pill-count {
-  font-size: 11px;
-  color: var(--accent);
-  font-weight: 700;
-}
-
 /* 一体化画卷主体 */
 .group-canvas-body {
-  padding: 32px 32px 36px;
+  padding: 32px 36px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
-/* 双栏联动排版 (Split View) */
-.group-split-view {
-  display: flex;
-  align-items: flex-start;
-  gap: 36px;
+/* 导读笔记区 */
+.group-notes-section {
   width: 100%;
-}
-.group-main-col {
-  flex: 1;
-  min-width: 0;
-}
-.group-main-col.is-full-notes {
-  max-width: 820px;
-  margin: 0 auto;
 }
 .group-notes-content {
   width: 100%;
 }
 
-/* 侧边栏 (Sticky Column) */
-.group-side-col {
-  width: 320px;
-  flex-shrink: 0;
-}
-.group-sticky-side {
-  position: sticky;
-  top: 74px;
-  max-height: calc(100vh - 96px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
-}
-.group-sticky-side::-webkit-scrollbar {
-  width: 5px;
-}
-.group-sticky-side::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 999px;
-}
-
-/* 侧栏卡片 */
-.group-sticky-side .group-bookmarks-section, .side-toc-card {
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: 16px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* 导读与书签之间的轻柔分隔线 */
+.canvas-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border-light);
+  margin: 0;
 }
 .focus-notes {
   font-size: 14px;
@@ -1375,23 +1279,24 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .group-bookmarks-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+  width: 100%;
 }
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .section-title-wrap {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-width: 0;
+  gap: 8px;
 }
 .section-title-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: var(--accent);
   display: flex;
   align-items: center;
@@ -1400,7 +1305,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 .section-title-icon svg { width: 100%; height: 100% }
 .section-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.2px;
@@ -1420,13 +1325,15 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   position: relative;
   display: flex;
   align-items: center;
+  max-width: 240px;
   width: 100%;
+  margin-left: auto;
 }
 .bm-search-input {
   width: 100%;
   height: 32px;
   padding: 0 30px 0 10px;
-  background: var(--surface);
+  background: var(--bg-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   font-size: 12.5px;
@@ -1455,109 +1362,12 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 .bm-search-icon svg { width: 100%; height: 100% }
 
-/* 侧边书签列表形态 */
-.group-sticky-side .bm-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 400px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 2px;
-  scrollbar-width: thin;
-}
-.group-sticky-side .bm-grid .bm {
-  padding: 9px 12px;
-  border-radius: var(--radius-base);
-  box-shadow: var(--shadow-xs);
-  background: var(--surface);
-  border-color: var(--border-light);
-}
-.group-sticky-side .bm-grid .bm:hover {
-  border-color: var(--border-hover);
-  background: var(--surface-hover);
-  transform: translateY(-1px);
-}
-.group-sticky-side .bm-grid .bm-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-}
-.group-sticky-side .bm-grid .bm-icon img {
-  width: 20px;
-  height: 20px;
-}
-.group-sticky-side .bm-grid .bm-fb {
-  font-size: 12px;
-}
-.group-sticky-side .bm-grid .bm-title {
-  font-size: 13px;
-  font-weight: 600;
-}
-.group-sticky-side .bm-grid .bm-url {
-  font-size: 11px;
-}
-.group-sticky-side .bm-grid .bm-notes {
-  font-size: 11.5px;
-  line-height: 1.4;
-  margin-top: 5px;
-  padding-top: 4px;
-  -webkit-line-clamp: 1;
-}
-
-/* 侧边 TOC 导航 */
-.side-toc-card .toc {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.side-toc-card .toc-title { display: none }
-.side-toc-card .toc-item {
-  display: block;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--text-muted);
-  text-decoration: none;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border-left: 2px solid transparent;
-  transition: all 0.15s ease;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.side-toc-card .toc-item:hover {
-  color: var(--text);
-  background: var(--surface);
-}
-.side-toc-card .toc-item.active {
-  color: var(--accent);
-  background: var(--surface);
-  border-left-color: var(--accent);
-  font-weight: 600;
-}
-.side-toc-card .toc-l2 { padding-left: 18px }
-.side-toc-card .toc-l3 { padding-left: 28px }
-
-/* 全宽书签区 (无笔记时的卡片内部网格) */
-.group-canvas-body > .group-bookmarks-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.full-bookmarks-card .section-header {
-  margin-bottom: 2px;
-}
-.full-search {
-  max-width: 260px;
-  margin-left: auto;
-}
 .bm-empty-search {
   text-align: center;
   padding: 24px;
   font-size: 13px;
   color: var(--text-muted);
-  background: var(--surface);
+  background: var(--bg-alt);
   border: 1px dashed var(--border);
   border-radius: var(--radius-md);
 }
@@ -1565,7 +1375,8 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .bm-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: 14px;
+  width: 100%;
 }
 
 /* 单条书签行 (组内卡片) */
@@ -2265,44 +2076,28 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 
 /* ==================== 响应式适配 ==================== */
-@media (max-width: 960px) {
+@media (max-width: 768px) {
+  .share-container {
+    padding: 20px 16px 56px;
+  }
   .group-canvas .group-hero {
-    padding: 22px 24px 18px;
+    padding: 24px 22px 20px;
+    gap: 16px;
   }
   .group-canvas-body {
-    padding: 24px 24px 32px;
-  }
-  .group-split-view {
-    flex-direction: column;
-    gap: 28px;
-  }
-  .group-side-col {
-    width: 100%;
-  }
-  .group-sticky-side {
-    position: static;
-    max-height: none;
-    overflow-y: visible;
-  }
-  .group-sticky-side .bm-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    max-height: none;
-    overflow-y: visible;
-  }
-  .group-quick-nav {
-    display: flex;
+    padding: 24px 22px 32px;
+    gap: 26px;
   }
 }
 
 @media (max-width: 640px) {
   .share-bar-wrap { padding: 0 16px }
-  .share-container { padding: 16px 12px 48px; gap: 18px }
+  .share-container { padding: 14px 10px 48px; }
   .group-canvas { border-radius: var(--radius-lg); }
-  .group-canvas .group-hero { padding: 18px 16px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; gap: 14px }
-  .group-hero-icon { width: 46px; height: 46px; border-radius: var(--radius-md) }
-  .group-hero-title { font-size: 20px }
-  .group-canvas-body { padding: 18px 16px 24px }
+  .group-canvas .group-hero { padding: 18px 16px; gap: 14px }
+  .group-hero-icon { width: 48px; height: 48px; border-radius: var(--radius-md) }
+  .group-hero-title { font-size: 21px }
+  .group-canvas-body { padding: 18px 16px 24px; gap: 20px }
   .bm-grid { grid-template-columns: 1fr }
 }
 `
