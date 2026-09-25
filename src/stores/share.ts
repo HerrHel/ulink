@@ -36,6 +36,7 @@ import { deriveShareUrl } from '../views/deriveShareUrl.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
 import { toast } from '../lib/toast.js'
 import { t, tN } from '../i18n/index.js'
+import { extractGroupTitle } from '../utils.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 type ForkPayload =
@@ -115,7 +116,7 @@ export const useShareStore = defineStore('share', () => {
   const isCategory = computed(() => ui.shareMode?.kind === 'category')
   /** 分享主体名（组名 / 分类名），供 header 只读标题渲染 */
   const subjectName = computed(() =>
-    (isCategory.value ? category.value?.name : group.value?.name) || '',
+    (isCategory.value ? category.value?.name : (extractGroupTitle(group.value?.name, group.value?.notes) || t('shareView.defaultGroupName'))) || '',
   )
   /** 分享主体 id（组 id / 影子分类 id） */
   const subjectId = computed(() =>
@@ -365,7 +366,8 @@ export const useShareStore = defineStore('share', () => {
 
 function _applyGroupHead(g: SiblingGroup, bms: Bookmark[]) {
   const shareUrl = deriveShareUrl(location.pathname, location.origin, g.id)
-  const title = t('shareView.pageTitle', { name: g.name || t('shareView.defaultGroupName') })
+  const groupTitle = extractGroupTitle(g.name, g.notes) || t('shareView.defaultGroupName')
+  const title = t('shareView.pageTitle', { name: groupTitle })
   const notesPlain = g.notes ? g.notes.replace(/<[^>]+>/g, '').trim() : ''
   const desc = (notesPlain && notesPlain.slice(0, 120)) || tN('shareView.shareDesc', bms.length)
   setTitle(title)

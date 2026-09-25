@@ -38,7 +38,7 @@ const T = {
     lang: "zh-CN",
     ogLocale: "zh_CN",
     siteName: "ulink",
-    defaultGroupName: "分享组",
+    defaultGroupName: "未命名组",
     notFoundTitle: "分享不存在 - 与链",
     notFoundHeading: "该分享不存在",
     notFoundBody: "私有链接可能已失效，或分享者已停止分享",
@@ -64,7 +64,7 @@ const T = {
     lang: "en-US",
     ogLocale: "en_US",
     siteName: "ulink",
-    defaultGroupName: "Shared group",
+    defaultGroupName: "Untitled group",
     notFoundTitle: "Share not found - ulink",
     notFoundHeading: "This share no longer exists",
     notFoundBody: "The link may have expired, or the owner stopped sharing it",
@@ -337,6 +337,44 @@ function descriptionOf(dict: (typeof T)["zh-CN"], group: PublicGroup, n: number)
   return (plain && plain.slice(0, 120)) || fill(pick(dict, "desc", n), { n })
 }
 
+interface ResolvedGroupTitle {
+  name: string
+  promotedH1: boolean
+}
+
+function resolveGroupTitle(
+  dict: (typeof T)["zh-CN"],
+  group: PublicGroup,
+): ResolvedGroupTitle {
+  const explicit = (group.name || "").trim()
+  if (explicit) {
+    return { name: explicit, promotedH1: false }
+  }
+
+  const rawNotes = typeof group.notes === "string" ? group.notes.trim() : ""
+  if (rawNotes) {
+    const leadH1 = rawNotes.match(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>([\s\S]*?)<\/h1>/i)
+    if (leadH1) {
+      const txt = stripTags(leadH1[1]).trim()
+      if (txt) return { name: txt, promotedH1: true }
+    }
+
+    const anyH = rawNotes.match(/<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1>/i)
+    if (anyH) {
+      const txt = stripTags(anyH[2]).trim()
+      if (txt) return { name: txt.slice(0, 50), promotedH1: false }
+    }
+
+    const plain = stripTags(rawNotes).trim()
+    if (plain) {
+      const firstLine = plain.split(/\r?\n/)[0].trim()
+      if (firstLine) return { name: firstLine.slice(0, 40), promotedH1: false }
+    }
+  }
+
+  return { name: dict.defaultGroupName, promotedH1: false }
+}
+
 /** 构建 <head>：title / description / og:* / twitter:* / canonical。 */
 function buildHead(
   dict: (typeof T)["zh-CN"],
@@ -344,7 +382,8 @@ function buildHead(
   bookmarks: PublicBookmark[],
   shareUrl: string,
 ): string {
-  const title = `${group.name || dict.defaultGroupName} - ${dict.siteName}`
+  const titleInfo = resolveGroupTitle(dict, group)
+  const title = `${titleInfo.name} - ${dict.siteName}`
   const desc = descriptionOf(dict, group, bookmarks.length)
   const escTitle = esc(title)
   const escDesc = esc(desc)
@@ -461,9 +500,18 @@ interface NotesResult {
 }
 
 /** 组 notes 富文本渲染：白名单清洗 + 内联书签转链接 + 标题提取（TOC 锚点）。空则返回空。 */
-function notesHtml(dict: (typeof T)["zh-CN"], group: PublicGroup, bmMap?: NotesBmMap): NotesResult {
-  const raw = (group.notes || "").trim()
+function notesHtml(
+  dict: (typeof T)["zh-CN"],
+  group: PublicGroup,
+  bmMap?: NotesBmMap,
+  skipLeadingH1?: boolean,
+): NotesResult {
+  let raw = (group.notes || "").trim()
   if (!raw) return { html: "", toc: "" }
+  if (skipLeadingH1) {
+    raw = raw.replace(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>[\s\S]*?<\/h1>/i, "").trim()
+    if (!raw) return { html: "", toc: "" }
+  }
   let cleaned = sanitizeNotesHtml(raw, bmMap).trim()
   if (!cleaned) return { html: "", toc: "" }
   // 提取 h1/h2/h3 标题并注入锚点 id（toc-N），文档级滚动定位（纯锚点 + scroll-behavior:smooth）
@@ -540,8 +588,8 @@ function buildBody(
   appOrigin: string,
   gid: string,
 ): string {
-  const name = esc(group.name || dict.defaultGroupName)
-  const initial = esc((group.name || "?").trim().charAt(0) || "?").toUpperCase()
+  const titleInfo = resolveGroupTitle(dict, group)
+  const name = esc(titleInfo.name)
   const count = bookmarks.length
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, "count", count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
@@ -551,7 +599,7 @@ function buildBody(
   for (const b of bookmarks) {
     bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === 'string' ? b.icon : '' }
   }
-  const notes = notesHtml(dict, group, bmMap)
+  const notes = notesHtml(dict, group, bmMap, titleInfo.promotedH1)
   // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存。
   const appUrl = `${appOrigin}/app#share/${esc(gid)}`
 

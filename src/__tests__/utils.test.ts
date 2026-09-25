@@ -1,8 +1,31 @@
 import { describe, it, expect, vi } from 'vitest'
-import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText } from '../utils.js'
+import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle } from '../utils.js'
 import { safeAtob } from '../crypto.js'
 
 describe('utils', () => {
+  describe('extractGroupTitle', () => {
+    it('显式组名优先返回', () => {
+      expect(extractGroupTitle('我的知识库', '<h1>其他标题</h1>')).toBe('我的知识库')
+      expect(extractGroupTitle('前端日常', '')).toBe('前端日常')
+    })
+
+    it('组名为空时从 notes 首个 h1 提取标题', () => {
+      expect(extractGroupTitle('', '<h1>123</h1><p>正文内容</p>')).toBe('123')
+      expect(extractGroupTitle(null, '<p><br></p><h1>重要清单</h1>')).toBe('重要清单')
+    })
+
+    it('无开头 h1 时提取首个其他 heading 或首行文本', () => {
+      expect(extractGroupTitle('', '<h2>备忘事项</h2><p>第一条</p>')).toBe('备忘事项')
+      expect(extractGroupTitle('', '<p>直接输入的第一行内容\n第二行</p>')).toBe('直接输入的第一行内容')
+    })
+
+    it('notes 为空或纯密文时返回空串', () => {
+      expect(extractGroupTitle('', '')).toBe('')
+      expect(extractGroupTitle(null, null)).toBe('')
+      expect(extractGroupTitle('', 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24))).toBe('')
+    })
+  })
+
   describe('esc', () => {
     it('should escape HTML entities', () => {
       expect(esc('<script>alert("xss")</script>')).toBe('&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;')

@@ -63,6 +63,43 @@ export function displayText(value: string | null | undefined): string {
   return typeof value === 'string' && isThreePartCipher(value) ? '' : (value ?? '')
 }
 
+/**
+ * 从组名和笔记内容智能推导组标题：
+ * 1. 显式组名（非密文且非空白）最高优先；
+ * 2. 否则从 notes HTML 中尝试提取开头的 <h1>、首个 heading (h1/h2/h3) 或首行纯文本；
+ * 3. 否则返回空串（由调用方回退至多语言"未命名组"）。
+ */
+export function extractGroupTitle(name?: string | null, notes?: string | null): string {
+  const plainName = (displayText(name) || '').trim()
+  if (plainName) return plainName
+
+  const rawNotes = (notes || '').trim()
+  if (!rawNotes || isThreePartCipher(rawNotes)) return ''
+
+  // 1. 开头首个 h1 优先
+  const leadH1 = rawNotes.match(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>([\s\S]*?)<\/h1>/i)
+  if (leadH1) {
+    const txt = leadH1[1].replace(/<[^>]+>/g, '').trim()
+    if (txt) return txt
+  }
+
+  // 2. 任意首个 heading (h1/h2/h3)
+  const anyH = rawNotes.match(/<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1>/i)
+  if (anyH) {
+    const txt = anyH[2].replace(/<[^>]+>/g, '').trim()
+    if (txt) return txt.slice(0, 50)
+  }
+
+  // 3. 首行纯文本
+  const plain = rawNotes.replace(/<[^>]+>/g, '').trim()
+  if (plain) {
+    const firstLine = plain.split(/\r?\n/)[0].trim()
+    if (firstLine) return firstLine.slice(0, 40)
+  }
+
+  return ''
+}
+
 export function favicon(url: string, customIcon?: string): string {
   const safe = safeIconUrl(customIcon)
   if (safe) return safe

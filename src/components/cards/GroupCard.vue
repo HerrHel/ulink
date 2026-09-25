@@ -9,7 +9,7 @@
         </div>
         <div class="card-titlewrap" @dblclick.stop="onDblClick">
           <div class="card-titlewrap-text">
-            <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
+            <div class="card-name" :data-group-name="group.id">{{ groupDisplayName }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
             <div class="card-domain group-domain"></div>
           </div>
         </div>
@@ -72,7 +72,7 @@
     </div>
   </div>
   <div v-else :ref="setCardEl" class="card group-card" :class="{ 'group-expanded': isExpanded, 'batch-mode': ui.batchMode }"
-       role="listitem" :aria-label="group.name || t('cards.unnamedGroup')"
+       role="listitem" :aria-label="groupDisplayName"
        :data-group-id="group.id" :draggable="!ui.isMobile"
        :tabindex="listKeyboardNav ? 0 : undefined"
        @click="onCardClick" @keydown="onCardKeydown">
@@ -87,7 +87,7 @@
       </div>
       <div class="card-titlewrap" :title="t('cards.focusGroup')" @click.stop="onFocusClick">
         <div class="card-titlewrap-text">
-          <div class="card-name" :data-group-name="group.id">{{ displayText(group.name) || t('cards.unnamedGroup') }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
+          <div class="card-name" :data-group-name="group.id">{{ groupDisplayName }}<span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span><span v-if="isPublic" class="public-badge" :title="t('cards.isPublic')" @click.stop="onPublicBadgeClick" v-html="I.share"></span></div>
           <div class="card-domain group-domain"></div>
         </div>
       </div>
@@ -132,7 +132,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount, defineAsyncComponent } from 'vue'
-import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML, displayText } from '../../utils.js'
+import { getTagNames, stripEntranceAnim, sanitizeReadonlyHTML, displayText, extractGroupTitle } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
 // PERF-1/5：异步分包 TipTap 编辑器，折叠态不加载
 const GroupEditor = defineAsyncComponent(() => import('../editor/GroupEditor.vue'))
@@ -211,6 +211,10 @@ function markFbIconError(e: Event) {
   const el = e.target as HTMLElement | null
   el?.classList?.add('img-error')
 }
+
+const groupDisplayName = computed(() => {
+  return displayText(props.group.name) || extractGroupTitle('', props.group.notes) || t('cards.unnamedGroup')
+})
 
 const tagNames = computed(() => getTagNames(props.group, ds.customAttributes))
 const isPinned = computed(() => !!props.group.pinnedAt)
