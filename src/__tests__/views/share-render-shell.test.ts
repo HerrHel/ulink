@@ -154,12 +154,13 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).toContain('class="bm-grid"')
     expect(zh).toContain('data-search=')
 
-    // 彻底移除旧版与方案 A 繁冗元素
+    // 彻底移除旧版与方案 A 繁冗元素与无用头像方块
     expect(zh).not.toContain('class="group-split-view"')
     expect(zh).not.toContain('class="group-sticky-side"')
     expect(zh).not.toContain('class="group-hero-accent"')
     expect(zh).not.toContain('class="group-quick-nav"')
     expect(zh).not.toContain('class="side-toc-card"')
+    expect(zh).not.toContain('class="group-hero-icon"')
 
     // 仅有书签时的画卷结构：直接呈现书签区，无笔记与多余分割线
     const bmsOnlyGroup = { ...group, notes: '' }
