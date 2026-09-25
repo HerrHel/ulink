@@ -259,8 +259,14 @@ const NOTES_ATTRS = new Set(['class', 'href', 'target', 'rel', 'src', 'alt', 'st
  *  gic-btn（详）/gic-remove 保留 class 由 CSS display:none 隐藏（剥 class 会导致「详」字裸奔） */
 const NOTES_CLASSES = new Set(['group-inline-card', 'group-ref-card', 'gic-name', 'gic-domain', 'gic-count', 'gic-btn', 'gic-remove', 'is-deleted'])
 
-/** 书签 id → url 映射（用于把内联书签 data-bm-id 转成可跳转 <a>）。 */
-export interface NotesBmMap { [id: string]: { url?: string } }
+/** 书签 id → url/title/icon 映射（用于把内联书签 data-bm-id 转成可跳转 <a> 与补全图标）。 */
+export interface NotesBmMap {
+  [id: string]: {
+    url?: string
+    title?: string
+    icon?: string
+  }
+}
 
 /**
  * 颜色值校验（白名单，杜绝 CSS 注入）：仅放行 hex / rgb() / rgba() / hsl() / hsla()
@@ -317,6 +323,7 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
   }
   // 内联书签包裹深度：>0 表示当前在 .group-inline-card 内部（内部嵌套 gic-name 等 span）
   let icDepth = 0
+  let curCardBmId: string | null = null
   return out
     .replace(/<[^>]*>/g, (raw) => {
       const m = raw.match(/^<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)/)
@@ -327,6 +334,7 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
         // 内联书签内部：嵌套 span 的闭标签 → </span>；最外层闭标签 → </a>
         if (tag === 'span' && icDepth > 0) {
           icDepth--
+          if (icDepth === 0) curCardBmId = null
           return icDepth === 0 ? '</a>' : '</span>'
         }
         return NOTES_TAGS.has(tag) ? `</${tag}>` : ""
@@ -341,7 +349,8 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
         if (!NOTES_ATTRS.has(name) && !name.startsWith("data-")) continue
         const unq = am[2].replace(/^["']|["']$/g, "")
         if (name === "href" || name === "src") {
-          if (!/^https?:\/\//i.test(unq)) continue // 协议白名单
+          // 协议白名单：放行 http://、https:// 与站内绝对路径 /xxx（禁止 // 协议相对跨域与 javascript: 等危险协议）
+          if (!/^(https?:\/\/|\/(?!\/))/i.test(unq)) continue
         }
         if (name === "class") {
           const cls = unq.split(/\s+/).filter((c) => NOTES_CLASSES.has(c)).join(" ")
@@ -364,6 +373,7 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
         const isInlineCard = cls.split(/\s+/).includes('group-inline-card')
         if (isInlineCard) {
           icDepth++
+          curCardBmId = bmId || null
           const url = bmId && bmMap?.[bmId]?.url ? fixUrl(bmMap[bmId].url as string) : ""
           if (url) {
             attrs.push(`href="${esc(url)}"`, 'target="_blank"', 'rel="noopener nofollow"')
@@ -374,6 +384,22 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
         // inline-card 内部的嵌套 span（gic-name/gic-domain/gic-count/gic-note-icon）也要计数，
         // 否则其 </span> 会提前输出为 </a>，导致 gic-domain 等跑到卡片外
         if (icDepth > 0) icDepth++
+      }
+      // 内联卡片内的 img：若 src 缺失或被过滤，从 bmMap 补齐；并附加 onerror 错误降级隐藏类
+      if (tag === 'img' && icDepth > 0) {
+        let hasSrc = attrs.some((a) => a.startsWith('src='))
+        if (!hasSrc && curCardBmId && bmMap?.[curCardBmId]) {
+          const info = bmMap[curCardBmId]
+          const rawIcon = typeof info.icon === 'string' ? info.icon.trim() : ''
+          const fallbackSrc = rawIcon ? (fixUrl(rawIcon) || (/^\/(?!\/)/.test(rawIcon) ? rawIcon : "")) : (info.url ? faviconOf(info.url) : "")
+          if (fallbackSrc) {
+            attrs.push(`src="${esc(fallbackSrc)}"`)
+            hasSrc = true
+          }
+        }
+        if (hasSrc) {
+          attrs.push('data-fb', `onerror="this.classList.add('img-err')"` )
+        }
       }
       return attrs.length ? `<${tag} ${attrs.join(" ")}>` : `<${tag}>`
     })
@@ -597,9 +623,11 @@ function buildBody(
   const countTag = `<span class="meta-tag">${esc(fill(pick(dict, 'count', count), { n: count }))}</span>`
   const updated = fmtDate(typeof group.updated_at_num === "number" ? group.updated_at_num : 0)
   const updatedTag = updated ? `<span class="meta-tag">${esc(fill(dict.updatedAt, { d: updated }))}</span>` : ""
-  // data-bm-id → 书签 URL 映射（内联书签转可点击 <a>）
+  // data-bm-id → 书签信息映射（内联书签转可点击 <a> 与补全图标）
   const bmMap: NotesBmMap = {}
-  for (const b of bookmarks) bmMap[b.id] = { url: b.url }
+  for (const b of bookmarks) {
+    bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === 'string' ? b.icon : '' }
+  }
   const notes = notesHtml(dict, group, bmMap)
   // CTA 跳 App 的 hash 路由（/app#share/<gid>），直达应用主体完成保存
   const appUrl = `${appOrigin}/app#share/${esc(group.id)}`
@@ -941,10 +969,12 @@ function buildCategoryBody(
   const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
   const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
-  // data-bm-id → 书签 URL 映射（组 notes 内联书签转可点击 <a>）
+  // data-bm-id → 书签信息映射（组 notes 内联书签转可点击 <a> 与补全图标）
   const bmMap: NotesBmMap = {}
   for (const b of bookmarks || []) {
-    if (b && b.id) bmMap[b.id] = { url: b.url }
+    if (b && b.id) {
+      bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === 'string' ? b.icon : '' }
+    }
   }
   // 计数口径：与网格里实际渲染的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
   const count =
@@ -1655,6 +1685,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   border-radius: 3px;
   display: block;
   flex-shrink: 0;
+  object-fit: contain;
+}
+.focus-notes .group-inline-card img.img-err,
+.focus-notes .group-ref-card img.img-err {
+  display: none !important;
 }
 .focus-notes .gic-name {
   color: var(--text);
@@ -1700,28 +1735,31 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   border: 1.5px solid var(--border-hover);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .focus-notes li[data-type="taskItem"]::after {
   content: "";
   position: absolute;
-  left: 6px;
-  top: 3px;
-  width: 9px;
-  height: 5px;
+  left: 2px;
+  top: 4px;
+  width: 16px;
+  height: 16px;
   box-sizing: border-box;
-  border-left: 2px solid #fff;
-  border-bottom: 2px solid #fff;
-  transform: rotate(-45deg) scale(0);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5L6.5 11.5L12.5 4.5'/%3E%3C/svg%3E");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 11px 11px;
+  transform: scale(0);
   opacity: 0;
-  transition: transform 0.12s ease, opacity 0.12s ease;
+  transition: transform 0.15s var(--ease-out), opacity 0.15s ease;
+  pointer-events: none;
 }
 .focus-notes li[data-type="taskItem"][data-checked="true"]::before {
   background: var(--accent);
   border-color: var(--accent);
 }
 .focus-notes li[data-type="taskItem"][data-checked="true"]::after {
-  transform: rotate(-45deg) scale(1);
+  transform: scale(1);
   opacity: 1;
 }
 .focus-notes li[data-type="taskItem"] p { margin: 0; line-height: 1.6 }

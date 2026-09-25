@@ -127,4 +127,22 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).toContain('[data-theme="light"]')
     expect(zh).toContain('[data-theme="dark"]')
   })
+  it('内联书签卡片放行站内图标路径并挂载防错降级，任务清单对勾采用中心对齐矢量 SVG', () => {
+    const groupWithInline = {
+      id: 'grp-demo-inline',
+      name: '测试组',
+      icon: '',
+      color: '',
+      notes: '<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p><span class="group-inline-card" data-bm-id="b1"><img src="/logo.svg" alt=""><span class="gic-name">Vite</span><span class="gic-domain">vite.dev</span></span></p></li></ul>',
+      updated_at_num: 1756620000000,
+    }
+    const html = renderSharePage(groupWithInline as never, bms as never, 'https://ulink.ren/s/grp-demo-inline', 'https://ulink.ren', 'zh-CN')
+    // 验证 /logo.svg 未被粗暴拦截，保留作为 src
+    expect(html).toContain('src="/logo.svg"')
+    expect(html).toContain('data-fb')
+    expect(html).toContain('img-err')
+    // 验证 taskItem 对勾采用中心对齐的矢量 SVG
+    expect(html).toContain("background-position: center")
+    expect(html).toContain("background-size: 11px 11px")
+  })
 })
