@@ -214,4 +214,86 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(emptyEn).toContain('<title>Untitled group - ulink</title>')
     expect(emptyEn).not.toContain('Shared group')
   })
+
+  it('方案 1 分类专刊画卷：Hero微光 + 章节式导读 + 快捷跳转 + 精选归拢', () => {
+    const cat = { id: 'cat-fe', name: '前端开发全景', icon: '', color: '#3b82f6' }
+    const groups = [
+      { id: 'g1', name: '核心框架', bookmark_ids: ['b1', 'b2'], notes: '<p>主流前端单页架构</p>' },
+      { id: 'g2', name: '构建工具', bookmark_ids: ['b3'], notes: '' },
+    ]
+    const bmsList = [
+      { id: 'b1', title: 'React', url: 'https://react.dev/', icon: '', notes: 'UI 库', parent_id: null, category_id: 'cat-fe' },
+      { id: 'b2', title: 'Vue.js', url: 'https://vuejs.org/', icon: '', notes: '渐进式框架', parent_id: null, category_id: 'cat-fe' },
+      { id: 'b3', title: 'Vite', url: 'https://vite.dev/', icon: '', notes: '下一代前端工具', parent_id: null, category_id: 'cat-fe' },
+      { id: 'b4', title: 'Tailwind CSS', url: 'https://tailwindcss.com/', icon: '', notes: '原子化样式', parent_id: null, category_id: 'cat-fe' },
+      { id: 'b5', title: 'Tailwind UI', url: 'https://tailwindui.com/', icon: '', notes: '官方组件库', parent_id: 'b4', category_id: 'cat-fe' },
+    ]
+
+    const editorialZh = renderShareCategoryPage(
+      cat as never,
+      groups as never,
+      bmsList as never,
+      'cat-fe',
+      'https://ulink.ren/s/c/cat-fe',
+      'https://ulink.ren',
+      'zh-CN',
+    )
+    const editorialEn = renderShareCategoryPage(
+      cat as never,
+      groups as never,
+      bmsList as never,
+      'cat-fe',
+      'https://ulink.ren/s/c/cat-fe',
+      'https://ulink.ren',
+      'en-US',
+    )
+
+    // 1. Hero 沉浸式刊头与分类微光
+    expect(editorialZh).toContain('class="cat-hero"')
+    expect(editorialZh).toContain('style="--cat: #3b82f6"')
+    expect(editorialZh).toContain('class="cat-hero-glow"')
+    expect(editorialZh).toContain('前端开发全景')
+    expect(editorialZh).toContain('分类精选专刊')
+    expect(editorialEn).toContain('Curated directory')
+    expect(editorialZh).not.toContain('class="cat-hero-icon"') // 无 http 图标时不出现空图标占位
+
+    // 2. 统计与布局切换器
+    expect(editorialZh).toContain('class="cat-layout-switch"')
+    expect(editorialZh).toContain('5 个书签')
+    expect(editorialZh).toContain('2 个组')
+    expect(editorialEn).toContain('5 bookmarks')
+    expect(editorialEn).toContain('2 groups')
+
+    // 3. 搜索框与章节快捷跳转索引 (Tabs)
+    expect(editorialZh).toContain('id="bmSearchInput"')
+    expect(editorialZh).toContain('class="cat-tabs-nav"')
+    expect(editorialZh).toContain('href="#cat-sec-0"')
+    expect(editorialZh).toContain('href="#cat-sec-1"')
+    expect(editorialZh).toContain('href="#cat-sec-curated"')
+    expect(editorialZh).toContain('目录索引:')
+    expect(editorialEn).toContain('Contents:')
+
+    // 4. 章节流式排版 (Chapters)
+    expect(editorialZh).toContain('class="cat-chapter"')
+    expect(editorialZh).toContain('id="cat-sec-0"')
+    expect(editorialZh).toContain('01')
+    expect(editorialZh).toContain('核心框架')
+    expect(editorialZh).toContain('导读笔记')
+    expect(editorialZh).toContain('主流前端单页架构')
+    expect(editorialEn).toContain('Editorial notes')
+
+    // 5. 第二章无笔记时优雅降级（无导读框）
+    expect(editorialZh).toContain('id="cat-sec-1"')
+    expect(editorialZh).toContain('02')
+    expect(editorialZh).toContain('构建工具')
+
+    // 6. 散落精选资源章节 (Curated Loose Bookmarks)
+    expect(editorialZh).toContain('id="cat-sec-curated"')
+    expect(editorialZh).toContain('独立精选资源')
+    expect(editorialEn).toContain('Curated links')
+    expect(editorialZh).toContain('Tailwind CSS')
+    expect(editorialZh).toContain('Tailwind UI')
+    expect(editorialZh).toContain('1 个子书签')
+    expect(editorialEn).toContain('1 sub-items')
+  })
 })

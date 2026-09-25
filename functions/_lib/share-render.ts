@@ -55,6 +55,10 @@ const T = {
     catChildren: '{n} 个子书签',
     catHide: '收起',
     cipherPlaceholder: '（内容已加密）',
+    catSpecialFeature: '分类精选专刊',
+    catEditorialNotes: '导读笔记',
+    catChapterIndex: '目录索引',
+    catCuratedBookmarks: '独立精选资源',
     gridView: '宫格视图',
     listView: '列表视图',
     miniGridView: '小宫格视图',
@@ -107,6 +111,10 @@ const T = {
     catChildren: '{n} sub-items',
     catHide: 'Collapse',
     cipherPlaceholder: '(encrypted content)',
+    catSpecialFeature: 'Curated directory',
+    catEditorialNotes: 'Editorial notes',
+    catChapterIndex: 'Contents',
+    catCuratedBookmarks: 'Curated links',
     gridView: 'Grid view',
     listView: 'List view',
     miniGridView: 'Mini grid view',
@@ -549,6 +557,10 @@ const SEARCH_SVG =
 const TOC_SVG =
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`
 
+/** 章节导读小图标 */
+const NOTES_TAG_SVG =
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`
+
 /** 首屏主题防闪烁脚本（FOUC Guard）：在任何样式与 DOM 渲染前立即注入 data-theme 与 color-scheme。 */
 const THEME_SCRIPT = `<script>(function(){try{var t=localStorage.getItem("lv_theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}})();</script>`
 
@@ -937,40 +949,76 @@ function splitCategoryItems(groups: PublicGroup[], bookmarks: PublicBookmark[]):
 }
 
 /**
- * 分类分享·组卡片（对齐 App GroupCard 宫格态）：图标 + 组名 + 书签计数 + 笔记富文本；
- * 点卡片用 hidden checkbox + label 展开组内书签列表（无 JS 可用，:has() 控制跨列展开）。
- * notes 走与组分享一致的 sanitize + 内联书签转链接。
+ * 方案 1：章节式立体专刊·主题分卷（Chapter Section）
+ * 每一组作为专刊的一个独立章节展开：章节序号 + 组名 + 书签计数 + 编者导读富文本 + 组内书签网格。
+ * 彻底消除 232px 盒子截断与网格跨行暴挤现象。
  */
-function buildGroupCard(
+function buildChapterSection(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   entry: { group: PublicGroup; items: PublicBookmark[] },
   idx: number,
   bmMap: NotesBmMap,
+  layoutCls: string,
 ): string {
   const g = entry.group
   const titleInfo = resolveGroupTitle(dict, g)
   const name = esc(titleInfo.name)
-  const initial = esc(((titleInfo.name || "?").trim().charAt(0) || "?").toUpperCase())
-  const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
-  const body = notes || `<div class="focus-notes gcard-nonotes">${esc(dict.catNoNotes)}</div>`
+  const notesRes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
   const n = entry.items.length
   const itemsHtml = n
-    ? entry.items.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
-    : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
-  const toggleId = `gcat-${idx}`
+    ? entry.items.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n")
+    : `<div class="chapter-empty">${esc(dict.catGroupEmpty)}</div>`
+  const secId = `cat-sec-${idx}`
+
   return [
-    `<article class="gcard">`,
-    `<input type="checkbox" class="gcard-toggle" id="${toggleId}" aria-label="${esc(dict.catExpand)}">`,
-    `<label class="gcard-head" for="${toggleId}" title="${esc(dict.catExpand)}">`,
-    `<span class="gcard-icon">${groupIconMarkup(g, initial)}</span>`,
-    `<span class="gcard-title">${name}</span>`,
-    `<span class="gcard-count">${esc(fill(pick(dict, 'catBookmarks', n), { n }))}</span>`,
-    `<span class="gcard-chev">${CHEVRON_SVG}</span>`,
-    `</label>`,
-    body,
-    `<div class="gcard-items">${itemsHtml}</div>`,
-    `</article>`,
-  ].join("")
+    `<section class="cat-chapter" id="${secId}" data-chapter-index="${idx}">`,
+    `  <div class="chapter-header">`,
+    `    <div class="chapter-title-group">`,
+    `      <span class="chapter-num">${String(idx + 1).padStart(2, "0")}</span>`,
+    `      <h2 class="chapter-title">${name}</h2>`,
+    `    </div>`,
+    `    <span class="chapter-count">${esc(fill(pick(dict, "catBookmarks", n), { n }))}</span>`,
+    `  </div>`,
+    notesRes
+      ? [
+          `  <div class="chapter-notes-box">`,
+          `    <div class="chapter-notes-tag">`,
+          `      ${NOTES_TAG_SVG}`,
+          `      <span>${esc(dict.catEditorialNotes)}</span>`,
+          `    </div>`,
+          `    <div class="focus-notes chapter-notes-body">${notesRes}</div>`,
+          `  </div>`,
+        ].join("\n")
+      : "",
+    `  <div class="cat-grid${layoutCls}">`,
+    `    ${itemsHtml}`,
+    `  </div>`,
+    `</section>`,
+  ].filter(Boolean).join("\n")
+}
+
+/** 散落精选资源章节（若存在独立于组的书签与子书签） */
+function buildCuratedSection(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  loose: CategoryLooseCard[],
+  layoutCls: string,
+): string {
+  const count = loose.reduce((s, c) => s + 1 + c.children.length, 0)
+  const cardsHtml = loose.map((c) => buildLooseBookmarkCard(dict, c)).join("\n")
+  return [
+    `<section class="cat-chapter cat-chapter-curated" id="cat-sec-curated">`,
+    `  <div class="chapter-header">`,
+    `    <div class="chapter-title-group">`,
+    `      <span class="chapter-num chapter-num-curated">📌</span>`,
+    `      <h2 class="chapter-title">${esc(dict.catCuratedBookmarks)}</h2>`,
+    `    </div>`,
+    `    <span class="chapter-count">${esc(fill(pick(dict, "catBookmarks", count), { n: count }))}</span>`,
+    `  </div>`,
+    `  <div class="cat-grid${layoutCls}">`,
+    `    ${cardsHtml}`,
+    `  </div>`,
+    `</section>`,
+  ].join("\n")
 }
 
 /** 子书签行（挂在散落父卡内，depth 决定缩进量）：图标 + 标题 + 域名 + 笔记，属性全保留。 */
@@ -1002,8 +1050,8 @@ function buildLooseChildItem(
 }
 
 /**
- * 分类分享·散落书签卡（对齐 App BookmarkCard 宫格态）：图标 + 标题 + 域名 + 笔记（2 行截断）。
- * 卡片下挂子书签区：父卡与子项都是链接，故外层用 article（HTML 不允许 <a> 嵌套 <a>）。
+ * 分类分享·散落书签卡（对齐 App BookmarkCard 宫格态）：图标 + 标题 + 域名 + 笔记。
+ * 卡片下挂子书签区：父卡与子项都是链接，外层用 article（HTML 不允许 <a> 嵌套 <a>）。
  */
 function buildLooseBookmarkCard(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
@@ -1020,8 +1068,7 @@ function buildLooseBookmarkCard(
   const ch = title.charAt(0).toUpperCase()
   const notes = deCipherText(dict, b.notes).trim()
   const isChild = !!(typeof b.parent_id === "string" && b.parent_id.trim())
-  // 有子项：卡片底部「N 个子书签」展开条（hidden checkbox + label + :has()，
-  // 无 JS 也可展开，与组卡同款；展开时跨行显示子项 → 折叠态所有卡等高 232px 与主站一致）
+  const searchStr = esc((title + ' ' + dm).toLowerCase())
   const children = card.children.length
     ? [
         `<input type="checkbox" class="bmcard-toggle-input" id="bmc-${esc(String(b.id))}">`,
@@ -1033,12 +1080,11 @@ function buildLooseBookmarkCard(
       ].join("")
     : ""
   return [
-    `<article class="bmcard${children ? " has-children" : ""}">`,
+    `<article class="bmcard${children ? " has-children" : ""}" data-search="${searchStr}">`,
     `<a class="bmcard-main" href="${href}"${target}${rel}>`,
     `<span class="bmcard-head">`,
     `<span class="bmcard-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bmcard")}</span>`,
     `<span class="bmcard-title">${esc(title)}</span>`,
-    // 孤儿子书签：父在组内或不在本分类，标出来说明层级来源
     isChild ? `<span class="bmcard-badge">${esc(dict.subBookmark)}</span>` : "",
     `</span>`,
     dm ? `<span class="bmcard-url">${esc(dm)}</span>` : `<span class="bmcard-url">&nbsp;</span>`,
@@ -1050,7 +1096,6 @@ function buildLooseBookmarkCard(
   ].join("")
 }
 
-/** 分类分享 <body>：分类 Hero（分类色 accent）+ 卡片网格（组卡在前 + 散落书签卡）。 */
 /** 分类页布局（对齐主站 uiStore.layoutMode；移动端 CSS 隐藏宫格入口，只留列表/小宫格） */
 export type CatLayout = 'grid' | 'list' | 'mini-grid'
 
@@ -1077,7 +1122,7 @@ function buildLayoutSwitch(
   ].join("")
 }
 
-/** 构建 <body>（分类分享）：主应用外壳 + 分类头（真实分类名/计数）+ 卡片网格（组卡在前 + 散落书签卡）。 */
+/** 构建 <body>（方案 1 章节式立体专刊）：外壳 + 沉浸式刊头（微光/搜索/Tabs）+ 主题章节流（导读+书签网格）。 */
 function buildCategoryBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   category: PublicCategory,
@@ -1089,7 +1134,6 @@ function buildCategoryBody(
   layout: CatLayout = 'grid',
 ): string {
   const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
-  const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
   // data-bm-id → 书签信息映射（组 notes 内联书签转可点击 <a> 与补全图标）
   const bmMap: NotesBmMap = {}
@@ -1098,7 +1142,7 @@ function buildCategoryBody(
       bmMap[b.id] = { url: b.url, title: b.title, icon: typeof b.icon === 'string' ? b.icon : '' }
     }
   }
-  // 计数口径：与网格里实际渲染的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
+  // 计数口径：与实际收录的书签数一致（组内 + 散落顶层 + 散落子书签，全部计入）
   const count =
     groupCards.reduce((s, e) => s + e.items.length, 0) +
     loose.reduce((s, c) => s + 1 + c.children.length, 0)
@@ -1109,33 +1153,101 @@ function buildCategoryBody(
       ? `<span class="meta-tag">${esc(fill(pick(dict, 'catGroups', groupCount), { m: groupCount }))}</span>`
       : "",
   ].join("")
-  const cards = [
-    ...groupCards.map((e, i) => buildGroupCard(dict, e, i, bmMap)),
-    ...loose.map((c) => buildLooseBookmarkCard(dict, c)),
-  ]
+
   const layoutCls = layout !== 'grid' ? ` ${layout}-view` : ''
-  const grid = cards.length
-    ? `<div class="cat-grid${layoutCls}">${cards.join("\n")}</div>`
-    : `<div class="empty">${esc(dict.emptyCategory)}</div>`
+
+  // 导航锚点 Tabs（仅当章节数 >= 2 或有组+散落书签时展示）
+  const showTabs = groupCount >= 2 || (groupCount >= 1 && loose.length > 0)
+  const tabsList: string[] = []
+
+  if (showTabs) {
+    groupCards.forEach((entry, i) => {
+      const gTitle = resolveGroupTitle(dict, entry.group).name
+      const n = entry.items.length
+      tabsList.push(
+        `<a href="#cat-sec-${i}" class="cat-tab"><span>${esc(gTitle)}</span><span class="cat-tab-count">${n}</span></a>`
+      )
+    })
+    if (loose.length > 0) {
+      const looseCount = loose.reduce((s, c) => s + 1 + c.children.length, 0)
+      tabsList.push(
+        `<a href="#cat-sec-curated" class="cat-tab"><span>${esc(dict.catCuratedBookmarks)}</span><span class="cat-tab-count">${looseCount}</span></a>`
+      )
+    }
+  }
+
+  // 章节 HTML 列表
+  const chaptersHtml: string[] = []
+  groupCards.forEach((entry, i) => {
+    chaptersHtml.push(buildChapterSection(dict, entry, i, bmMap, layoutCls))
+  })
+
+  if (loose.length > 0) {
+    if (groupCount > 0) {
+      chaptersHtml.push(buildCuratedSection(dict, loose, layoutCls))
+    } else {
+      // 无任何组，直接渲染散落书签网格
+      chaptersHtml.push(
+        `<div class="cat-grid${layoutCls}">${loose.map((c) => buildLooseBookmarkCard(dict, c)).join("\n")}</div>`
+      )
+    }
+  }
+
+  // 搜索条 (总书签 >= 4 条时展示)
+  const searchBar = count >= 4 ? [
+    `<div class="cat-search-bar">`,
+    `  <span class="cat-search-ic" aria-hidden="true">${SEARCH_SVG}</span>`,
+    `  <input id="bmSearchInput" class="cat-search-input" type="search" placeholder="${esc(dict.searchBookmarks)}" autocomplete="off" spellcheck="false" aria-label="${esc(dict.searchBookmarks)}">`,
+    `</div>`,
+  ].join("\n") : ""
+
+  // 快速跳转索引胶囊
+  const jumpTabsNav = showTabs && tabsList.length ? [
+    `<nav class="cat-tabs-nav" aria-label="${esc(dict.tocTitle)}">`,
+    `  <span class="cat-tabs-label">${esc(dict.catChapterIndex)}:</span>`,
+    `  <div class="cat-tabs-scroll">`,
+    `    ${tabsList.join("\n")}`,
+    `  </div>`,
+    `</nav>`,
+  ].join("\n") : ""
+
+  const emptySearch = `<div id="bmEmptySearch" class="bm-empty-search" style="display:none">${esc(dict.noBookmarksMatch)}</div>`
+  const emptyView = `<div class="empty">${esc(dict.emptyCategory)}</div>`
+
+  const bodyContent = chaptersHtml.length
+    ? `<div class="cat-sections">${chaptersHtml.join("\n")}${emptySearch}</div>`
+    : emptyView
+
   // CTA 跳 App 的 hash 路由（/app#share/c/<share_id>），直达应用主体完成保存
   const appUrl = `${appOrigin}/app#share/c/${esc(shareId)}`
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
   const heroIcon = heroCustomIconMarkup(category, "cat")
+
   const inner = [
     `<section class="cat-hero"${accentStyle}>`,
-    heroIcon,
-    `<div class="cat-hero-text">`,
-    `<h1 class="cat-hero-name">${name}</h1>`,
-    `<div class="cat-hero-meta">${tags}</div>`,
-    `</div>`,
-    `<div class="cat-hero-actions">`,
-    buildLayoutSwitch(dict, shareUrl, layout),
-    `</div>`,
+    `  <div class="cat-hero-glow" aria-hidden="true"></div>`,
+    `  <div class="cat-hero-main">`,
+    `    ${heroIcon}`,
+    `    <div class="cat-hero-text">`,
+    `      <div class="cat-hero-badge">`,
+    `        <span class="cat-badge-dot" aria-hidden="true"></span>`,
+    `        <span class="cat-badge-text">${esc(dict.catSpecialFeature)}</span>`,
+    `      </div>`,
+    `      <h1 class="cat-hero-name">${name}</h1>`,
+    `      <div class="cat-hero-meta">${tags}</div>`,
+    `    </div>`,
+    `    <div class="cat-hero-actions">`,
+    `      ${buildLayoutSwitch(dict, shareUrl, layout)}`,
+    `    </div>`,
+    `  </div>`,
+    searchBar,
+    jumpTabsNav,
     `</section>`,
-    grid,
+    bodyContent,
   ].filter(Boolean).join("\n")
+
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
 
@@ -1285,7 +1397,7 @@ export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('#bmList .bm');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}})()`
+const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('.bm, .bmcard');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var chs=document.querySelectorAll('.cat-chapter');for(var c=0;c<chs.length;c++){var vis=chs[c].querySelectorAll('.bm:not([style*="display: none"]), .bmcard:not([style*="display: none"])');chs[c].style.display=(!q||vis.length>0)?'':'none'}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cgs=document.querySelectorAll('.cat-grid');for(var g=0;g<cgs.length;g++){cgs[g].classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cgs[g].classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}})()`
 
 const CSS = `
 /* ==================== DESIGN TOKENS (对齐主站 tokens.css) ==================== */
@@ -1391,7 +1503,7 @@ body {
   min-height: 100vh;
 }
 
-body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcard, .share-footer, .share-theme-btn {
+body, .share-bar, .group-hero, .cat-hero, .cat-chapter, .group-notes-card, .bm, .bmcard, .share-footer, .share-theme-btn {
   transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
@@ -2146,27 +2258,61 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   border-radius: var(--radius-lg);
 }
 
-/* ==================== 分类分享 HERO (杜绝杂色黄色，统一品牌深蓝质感) ==================== */
+/* ==================== 分类分享 HERO (立体专刊刊头 + Ambient Glow) ==================== */
 .cat-hero {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: 24px 28px;
+  padding: 28px 32px;
   box-shadow: var(--shadow-sm);
   display: flex;
-  align-items: center;
-  gap: 20px;
+  flex-direction: column;
+  gap: 16px;
   overflow: hidden;
 }
-.cat-hero-accent {
+.cat-hero-glow {
   position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 4px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent-grad);
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 800px;
+  height: 180px;
+  background: radial-gradient(ellipse at 50% 0%, var(--cat, var(--accent)) 0%, transparent 70%);
+  opacity: 0.12;
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(28px);
+}
+[data-theme="dark"] .cat-hero-glow { opacity: 0.22; }
+.cat-hero-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.cat-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--cat, var(--accent));
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  border: 1px solid var(--border-light);
+}
+.cat-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--cat, var(--accent));
 }
 .cat-hero-icon {
   width: 52px;
@@ -2181,15 +2327,16 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .cat-hero-name {
-  font-size: 24px;
-  font-weight: 750;
+  font-size: 26px;
+  font-weight: 800;
   color: var(--text);
   letter-spacing: -0.4px;
   line-height: 1.25;
   overflow-wrap: anywhere;
+  margin: 0 0 6px;
 }
 .cat-hero-meta {
   display: flex;
@@ -2197,19 +2344,108 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   gap: 8px;
   align-items: center;
 }
-.cat-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--radius-full);
-  display: inline-block;
-  flex-shrink: 0;
-  margin-right: 6px;
-}
 .cat-hero-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* 搜索条 */
+.cat-search-bar {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+  max-width: 440px;
+  width: 100%;
+}
+.cat-search-ic {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--text-dim);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cat-search-ic svg { width: 100%; height: 100%; display: block }
+.cat-search-input {
+  width: 100%;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 0 14px 0 36px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.cat-search-input:focus {
+  border-color: var(--cat, var(--accent));
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* 章节快速导航胶囊 (Jump Tabs) */
+.cat-tabs-nav {
+  position: relative;
+  z-index: 1;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cat-tabs-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cat-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.cat-tabs-scroll::-webkit-scrollbar { display: none }
+.cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.cat-tab:hover {
+  background: var(--accent-soft);
+  border-color: var(--cat, var(--accent));
+  color: var(--cat, var(--accent));
+  transform: translateY(-1px);
+}
+.cat-tab-count {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: var(--bg-alt);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
 }
 
 /* 布局切换器 (三布局按钮) */
@@ -2243,73 +2479,67 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .cat-layout-btn svg { width: 16px; height: 16px; display: block }
 @media (max-width: 768px) { .cat-layout-btn.hide-mobile { display: none } }
 
-/* ==================== 分类卡片网格 (默认宫格态) ==================== */
-.cat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-  align-items: start;
-}
-.gcard, .bmcard {
-  position: relative;
-  height: 232px;
+/* ==================== 专刊章节流 (Chapter Sections) ==================== */
+.cat-sections {
   display: flex;
   flex-direction: column;
+  gap: 28px;
+}
+.cat-chapter {
+  scroll-margin-top: 72px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
+  padding: 24px 28px;
   box-shadow: var(--shadow-card);
-  overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.25s var(--ease-out);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.gcard:hover, .bmcard:hover {
+.cat-chapter:hover {
   border-color: var(--border-hover);
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-3px);
 }
-.gcard { padding: 16px 16px 10px }
-.gcard::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent-grad);
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
+.chapter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light);
 }
-.gcard:hover::before { opacity: 1 }
-.gcard-toggle { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
-.gcard-head {
+.chapter-title-group {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.gcard-icon {
-  width: 38px;
-  height: 38px;
-}
-.gcard-icon img { width: 26px; height: 26px; object-fit: contain }
-.gcard-icon .hero-fb { font-size: 15px }
-.gcard-title {
-  flex: 1;
   min-width: 0;
+}
+.chapter-num {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--cat, var(--accent));
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.chapter-num-curated {
+  background: var(--bg-alt);
   font-size: 14px;
-  font-weight: 600;
-  line-height: 18px;
+}
+.chapter-title {
+  font-size: 17px;
+  font-weight: 700;
   color: var(--text);
+  margin: 0;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.gcard-count {
-  flex-shrink: 0;
+.chapter-count {
   font-size: 11.5px;
   font-weight: 600;
   color: var(--text-muted);
@@ -2318,65 +2548,71 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   padding: 2px 9px;
   border-radius: var(--radius-full);
   white-space: nowrap;
-}
-.gcard-chev {
   flex-shrink: 0;
-  color: var(--text-muted);
-  transition: transform 0.2s ease, color 0.2s ease;
 }
-.gcard-chev svg { width: 14px; height: 14px; display: block }
-.gcard .focus-notes {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0 2px;
-  font-size: 13px;
+.chapter-notes-box {
+  margin-bottom: 18px;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+.chapter-notes-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--cat, var(--accent));
+  margin-bottom: 8px;
+}
+.chapter-notes-tag svg { width: 14px; height: 14px; display: block }
+.chapter-notes-body {
+  font-size: 13.5px;
   line-height: 1.7;
-  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
-}
-.gcard-nonotes { color: var(--text-muted); font-size: 12.5px }
-.gcard-items { display: none }
-.gcard-empty {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 18px 0;
-  background: var(--bg-alt);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-}
-.gcard:has(.gcard-toggle:checked) {
-  grid-column: 1 / -1;
-  height: auto;
-}
-.gcard:has(.gcard-toggle:checked) .gcard-chev {
-  transform: rotate(180deg);
-  color: var(--accent);
-}
-.gcard:has(.gcard-toggle:checked) .focus-notes {
+  color: var(--text);
   overflow: visible;
-  -webkit-mask-image: none;
-  mask-image: none;
 }
-.gcard:has(.gcard-toggle:checked) .gcard-items {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border);
+.chapter-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* ==================== 分类卡片网格 ==================== */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 
 /* 散落书签卡 (bmcard) */
-.bmcard { padding: 0; text-decoration: none; color: inherit }
-.bmcard.has-children { height: auto }
+.bmcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--ease-out);
+  padding: 14px 16px;
+}
+.bmcard:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
 .bmcard-main {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 10px;
+  gap: 4px;
   text-decoration: none;
   color: inherit;
 }
@@ -2395,6 +2631,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
   transition: color 0.15s ease;
 }
 .bmcard:hover .bmcard-title { color: var(--accent) }
@@ -2420,8 +2657,8 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 .bmcard-arrow {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: 0;
+  top: 6px;
   color: var(--text-muted);
   opacity: 0.4;
   transform: translate(-2px, 2px);
@@ -2486,7 +2723,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   flex-direction: column !important;
   gap: 8px !important;
 }
-.cat-grid.list-view .gcard,
+.cat-grid.list-view .bm,
 .cat-grid.list-view .bmcard {
   height: auto !important;
   min-height: 56px !important;
@@ -2494,12 +2731,16 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   border-radius: var(--radius-md) !important;
   padding: 10px 16px !important;
   box-shadow: var(--shadow-card) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
 }
-.cat-grid.list-view .gcard:hover,
+.cat-grid.list-view .bm:hover,
 .cat-grid.list-view .bmcard:hover {
   transform: translateY(-1px) !important;
   box-shadow: var(--shadow-card-hover) !important;
 }
+.cat-grid.list-view .bm-main,
 .cat-grid.list-view .bmcard-main {
   padding: 0 !important;
   width: 100% !important;
@@ -2508,34 +2749,42 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   align-items: center !important;
   gap: 12px !important;
 }
+.cat-grid.list-view .bm-info,
 .cat-grid.list-view .bmcard-head {
   display: flex !important;
+  flex-direction: row !important;
   align-items: center !important;
   gap: 12px !important;
   flex: 1 !important;
   min-width: 0 !important;
 }
+.cat-grid.list-view .bm-icon,
 .cat-grid.list-view .bmcard-icon {
   width: 34px !important;
   height: 34px !important;
 }
+.cat-grid.list-view .bm-icon img,
 .cat-grid.list-view .bmcard-icon img {
   width: 20px !important;
   height: 20px !important;
 }
+.cat-grid.list-view .bm-title,
 .cat-grid.list-view .bmcard-title {
   font-size: 14px !important;
   font-weight: 600 !important;
 }
+.cat-grid.list-view .bm-url,
 .cat-grid.list-view .bmcard-url {
   font-size: 11.5px !important;
   font-family: var(--font-mono) !important;
   color: var(--text-muted) !important;
   margin-left: 8px !important;
 }
+.cat-grid.list-view .bm-notes,
 .cat-grid.list-view .bmcard-notes {
   display: none !important;
 }
+.cat-grid.list-view .bm-arrow,
 .cat-grid.list-view .bmcard-arrow {
   position: static !important;
   opacity: 0.6 !important;
@@ -2543,35 +2792,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   margin-left: auto !important;
   align-self: center !important;
 }
+.cat-grid.list-view .bm:hover .bm-arrow,
 .cat-grid.list-view .bmcard:hover .bmcard-arrow {
   opacity: 1 !important;
   color: var(--accent) !important;
   transform: translateX(2px) !important;
-}
-.cat-grid.list-view .gcard {
-  display: flex !important;
-  flex-direction: column !important;
-}
-.cat-grid.list-view .gcard-head {
-  margin-bottom: 0 !important;
-  width: 100% !important;
-}
-.cat-grid.list-view .gcard-icon {
-  width: 34px !important;
-  height: 34px !important;
-}
-.cat-grid.list-view .gcard-icon img {
-  width: 20px !important;
-  height: 20px !important;
-}
-.cat-grid.list-view .gcard .focus-notes {
-  display: none !important;
-}
-.cat-grid.list-view .gcard:has(.gcard-toggle:checked) .focus-notes {
-  display: block !important;
-  margin-top: 10px !important;
-  padding-top: 10px !important;
-  border-top: 1px dashed var(--border) !important;
 }
 
 /* ==================== 布局切换：小宫格视图 (Mini-Grid View) ==================== */
@@ -2580,11 +2805,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
   gap: 8px !important;
 }
-.cat-grid.mini-grid-view .gcard,
+.cat-grid.mini-grid-view .bm,
 .cat-grid.mini-grid-view .bmcard {
-  height: 64px !important;
-  min-height: 64px !important;
-  max-height: 64px !important;
+  height: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
   padding: 8px 12px !important;
   border-radius: var(--radius-md) !important;
   display: flex !important;
@@ -2592,6 +2817,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   align-items: center !important;
   box-shadow: var(--shadow-card) !important;
 }
+.cat-grid.mini-grid-view .bm-main,
 .cat-grid.mini-grid-view .bmcard-main {
   padding: 0 !important;
   width: 100% !important;
@@ -2601,39 +2827,42 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   align-items: center !important;
   gap: 10px !important;
 }
+.cat-grid.mini-grid-view .bm-info,
 .cat-grid.mini-grid-view .bmcard-head {
   display: flex !important;
+  flex-direction: row !important;
   align-items: center !important;
   gap: 10px !important;
   flex: 1 !important;
   min-width: 0 !important;
 }
-.cat-grid.mini-grid-view .bmcard-icon,
-.cat-grid.mini-grid-view .gcard-icon {
+.cat-grid.mini-grid-view .bm-icon,
+.cat-grid.mini-grid-view .bmcard-icon {
   width: 28px !important;
   height: 28px !important;
   border-radius: var(--radius-sm) !important;
   flex-shrink: 0 !important;
 }
-.cat-grid.mini-grid-view .bmcard-icon img,
-.cat-grid.mini-grid-view .gcard-icon img {
+.cat-grid.mini-grid-view .bm-icon img,
+.cat-grid.mini-grid-view .bmcard-icon img {
   width: 18px !important;
   height: 18px !important;
 }
-.cat-grid.mini-grid-view .bmcard-title,
-.cat-grid.mini-grid-view .gcard-title {
+.cat-grid.mini-grid-view .bm-title,
+.cat-grid.mini-grid-view .bmcard-title {
   font-size: 13px !important;
   line-height: 1.3 !important;
   font-weight: 600 !important;
   flex: 1 !important;
 }
+.cat-grid.mini-grid-view .bm-url,
 .cat-grid.mini-grid-view .bmcard-url {
   display: none !important;
 }
+.cat-grid.mini-grid-view .bm-notes,
 .cat-grid.mini-grid-view .bmcard-notes,
-.cat-grid.mini-grid-view .bmcard-arrow,
-.cat-grid.mini-grid-view .focus-notes,
-.cat-grid.mini-grid-view .gcard-count {
+.cat-grid.mini-grid-view .bm-arrow,
+.cat-grid.mini-grid-view .bmcard-arrow {
   display: none !important;
 }
 
@@ -2746,6 +2975,6 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   .group-hero-icon { width: 48px; height: 48px; border-radius: var(--radius-md) }
   .group-hero-title { font-size: 21px }
   .group-canvas-body { padding: 18px 16px 24px; gap: 20px }
-  .bm-grid { grid-template-columns: 1fr }
+  .bm-grid, .cat-grid { grid-template-columns: 1fr }
 }
 `
