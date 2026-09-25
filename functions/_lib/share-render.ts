@@ -55,10 +55,16 @@ const T = {
     catChildren: '{n} 个子书签',
     catHide: '收起',
     cipherPlaceholder: '（内容已加密）',
-    catSpecialFeature: '分类精选专刊',
-    catEditorialNotes: '导读笔记',
+    catSpecialFeature: '合辑展厅 · 策展专题库',
+    catEditorialNotes: '编者手记与导读',
     catChapterIndex: '目录索引',
-    catCuratedBookmarks: '独立精选资源',
+    catCuratedBookmarks: '独立精选与速查资源',
+    catQuickLinksSub: '未归入特定专题的高频站点',
+    catExplore: '探索专题画卷',
+    catCollectionsCount: '{m} 个精选专题',
+    catBookmarksInCollection: '本专题收录的书签',
+    catDrawerMeta: '原位画卷深度精读',
+    catNoExcerpt: '精选专题合辑，点击探索完整收录与手记',
     gridView: '宫格视图',
     listView: '列表视图',
     miniGridView: '小宫格视图',
@@ -111,10 +117,17 @@ const T = {
     catChildren: '{n} sub-items',
     catHide: 'Collapse',
     cipherPlaceholder: '(encrypted content)',
-    catSpecialFeature: 'Curated directory',
+    catSpecialFeature: 'Curated Gallery Hub',
     catEditorialNotes: 'Editorial notes',
     catChapterIndex: 'Contents',
-    catCuratedBookmarks: 'Curated links',
+    catCuratedBookmarks: 'Curated links and resources',
+    catQuickLinksSub: 'Standalone bookmarked resources',
+    catExplore: 'Explore collection',
+    catCollectionsCount: '{m} curated collections',
+    catCollectionsCount_one: '{m} curated collection',
+    catBookmarksInCollection: 'Bookmarks in this collection',
+    catDrawerMeta: 'In-place collection reader',
+    catNoExcerpt: 'Curated collection. Click to explore links and notes',
     gridView: 'Grid view',
     listView: 'List view',
     miniGridView: 'Mini grid view',
@@ -948,71 +961,147 @@ function splitCategoryItems(groups: PublicGroup[], bookmarks: PublicBookmark[]):
   return { groupCards, loose }
 }
 
-/**
- * 方案 1：章节式立体专刊·主题分卷（Chapter Section）
- * 每一组作为专刊的一个独立章节展开：章节序号 + 组名 + 书签计数 + 编者导读富文本 + 组内书签网格。
- * 彻底消除 232px 盒子截断与网格跨行暴挤现象。
- */
-function buildChapterSection(
+/** Favicon 叠放堆栈（方案 2 合辑封面专属）：展示前 3 个站点的图标微倾斜叠放 + 剩余数量徽标 */
+function buildFaviconStack(items: PublicBookmark[]): string {
+  const maxIcons = 3
+  const preview = items.slice(0, maxIcons)
+  const remainder = items.length - maxIcons
+  const icons = preview.map((b) => {
+    const safe = isCipherText(b.url) ? "" : fixUrl(b.url)
+    const title = b.title ? String(b.title).trim() : ""
+    const ch = title.charAt(0).toUpperCase() || "?"
+    const fav = safe ? faviconOf(safe) : ""
+    return `<span class="stack-icon">${iconMarkup(fav, ch, "stack")}</span>`
+  }).join("")
+  const rem = remainder > 0 ? `<span class="stack-icon stack-remainder">+${remainder}</span>` : ""
+  return `<div class="favicon-stack">${icons}${rem}</div>`
+}
+
+/** 方案 2：合辑展厅画廊·专题专辑封面卡（Album Card） */
+function buildAlbumCard(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   entry: { group: PublicGroup; items: PublicBookmark[] },
   idx: number,
-  bmMap: NotesBmMap,
-  layoutCls: string,
 ): string {
   const g = entry.group
   const titleInfo = resolveGroupTitle(dict, g)
   const name = esc(titleInfo.name)
-  const notesRes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
   const n = entry.items.length
+  const countText = esc(fill(pick(dict, "catBookmarks", n), { n }))
+  const seriesNum = `COLLECTION · ${String(idx + 1).padStart(2, "0")}`
+
+  // 提取 notes 纯文本摘要（前 110 字符，金句斜体呈现）
+  const rawNotes = (g.notes || "").trim()
+  let excerpt = ""
+  if (rawNotes && !isCipherText(rawNotes)) {
+    const plain = stripTags(rawNotes)
+    if (plain) {
+      excerpt = plain.slice(0, 110)
+    }
+  }
+  const excerptHtml = excerpt
+    ? `<p class="album-excerpt">“${esc(excerpt)}”</p>`
+    : `<p class="album-excerpt album-excerpt-empty">${esc(dict.catNoExcerpt)}</p>`
+
+  const faviconsHtml = buildFaviconStack(entry.items)
+  const searchStr = esc((titleInfo.name + ' ' + excerpt + ' ' + entry.items.map(b => (b.title || '') + ' ' + (b.url || '')).join(' ')).toLowerCase())
+
+  return [
+    `<a href="#album-drawer-${idx}" class="album-card" data-search="${searchStr}">`,
+    `  <div class="album-card-top">`,
+    `    <span class="album-series-badge">${seriesNum}</span>`,
+    `    <span class="album-count-badge">${countText}</span>`,
+    `  </div>`,
+    `  <h3 class="album-title">${name}</h3>`,
+    `  ${excerptHtml}`,
+    `  <div class="album-card-bottom">`,
+    `    ${faviconsHtml}`,
+    `    <span class="album-action-btn">`,
+    `      <span>${esc(dict.catExplore)}</span>`,
+    `      <span class="album-arrow" aria-hidden="true">${ARROW_SVG}</span>`,
+    `    </span>`,
+    `  </div>`,
+    `</a>`,
+  ].join("\n")
+}
+
+/** 方案 2：合辑展厅画廊·沉浸式单体画卷抽屉（Drawer，利用纯 CSS :target 零 JS 优雅展开） */
+function buildAlbumDrawer(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  entry: { group: PublicGroup; items: PublicBookmark[] },
+  idx: number,
+  bmMap: NotesBmMap,
+  appUrl: string,
+): string {
+  const g = entry.group
+  const titleInfo = resolveGroupTitle(dict, g)
+  const name = esc(titleInfo.name)
+  const n = entry.items.length
+  const countText = esc(fill(pick(dict, "catBookmarks", n), { n }))
+  const seriesNum = `COLLECTION · ${String(idx + 1).padStart(2, "0")}`
+  const notesRes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
   const itemsHtml = n
     ? entry.items.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n")
     : `<div class="chapter-empty">${esc(dict.catGroupEmpty)}</div>`
-  const secId = `cat-sec-${idx}`
+
+  const notesBlock = notesRes
+    ? [
+        `<div class="gallery-drawer-notes">`,
+        `  <div class="gallery-notes-tag">${NOTES_TAG_SVG}<span>${esc(dict.catEditorialNotes)}</span></div>`,
+        `  <div class="focus-notes">${notesRes}</div>`,
+        `</div>`,
+      ].join("\n")
+    : ""
 
   return [
-    `<section class="cat-chapter" id="${secId}" data-chapter-index="${idx}">`,
-    `  <div class="chapter-header">`,
-    `    <div class="chapter-title-group">`,
-    `      <span class="chapter-num">${String(idx + 1).padStart(2, "0")}</span>`,
-    `      <h2 class="chapter-title">${name}</h2>`,
+    `<div id="album-drawer-${idx}" class="gallery-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title-${idx}">`,
+    `  <a href="#close" class="gallery-drawer-backdrop" aria-label="${esc(dict.catHide)}" tabindex="-1"></a>`,
+    `  <div class="gallery-drawer-panel">`,
+    `    <div class="gallery-drawer-header">`,
+    `      <span class="gallery-drawer-badge">${seriesNum}</span>`,
+    `      <a href="#close" class="gallery-drawer-close" aria-label="${esc(dict.catHide)}">✕</a>`,
     `    </div>`,
-    `    <span class="chapter-count">${esc(fill(pick(dict, "catBookmarks", n), { n }))}</span>`,
+    `    <div class="gallery-drawer-body">`,
+    `      <div class="gallery-drawer-title-group">`,
+    `        <h2 id="drawer-title-${idx}" class="gallery-drawer-title">${name}</h2>`,
+    `        <div class="gallery-drawer-meta">`,
+    `          <span>${countText}</span>`,
+    `          <span>·</span>`,
+    `          <span>${esc(dict.catDrawerMeta)}</span>`,
+    `        </div>`,
+    `      </div>`,
+    `      ${notesBlock}`,
+    `      <div class="gallery-drawer-bookmarks">`,
+    `        <div class="gallery-drawer-bm-head">${esc(dict.catBookmarksInCollection)}</div>`,
+    `        <div class="gallery-bm-list">${itemsHtml}</div>`,
+    `      </div>`,
+    `    </div>`,
+    `    <div class="gallery-drawer-footer">`,
+    `      <span class="gallery-footer-brand">${esc(dict.footerBrand)}</span>`,
+    `      <a href="${esc(appUrl)}" class="gallery-save-btn">${esc(dict.cta)}</a>`,
+    `    </div>`,
     `  </div>`,
-    notesRes
-      ? [
-          `  <div class="chapter-notes-box">`,
-          `    <div class="chapter-notes-tag">`,
-          `      ${NOTES_TAG_SVG}`,
-          `      <span>${esc(dict.catEditorialNotes)}</span>`,
-          `    </div>`,
-          `    <div class="focus-notes chapter-notes-body">${notesRes}</div>`,
-          `  </div>`,
-        ].join("\n")
-      : "",
-    `  <div class="cat-grid${layoutCls}">`,
-    `    ${itemsHtml}`,
-    `  </div>`,
-    `</section>`,
-  ].filter(Boolean).join("\n")
+    `</div>`,
+  ].join("\n")
 }
 
-/** 散落精选资源章节（若存在独立于组的书签与子书签） */
-function buildCuratedSection(
+/** 散落精选书签区（Quick Links） */
+function buildQuickLinksSection(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   loose: CategoryLooseCard[],
   layoutCls: string,
 ): string {
   const count = loose.reduce((s, c) => s + 1 + c.children.length, 0)
+  const countText = esc(fill(pick(dict, "catBookmarks", count), { n: count }))
   const cardsHtml = loose.map((c) => buildLooseBookmarkCard(dict, c)).join("\n")
   return [
-    `<section class="cat-chapter cat-chapter-curated" id="cat-sec-curated">`,
-    `  <div class="chapter-header">`,
-    `    <div class="chapter-title-group">`,
-    `      <span class="chapter-num chapter-num-curated">📌</span>`,
-    `      <h2 class="chapter-title">${esc(dict.catCuratedBookmarks)}</h2>`,
+    `<section class="cat-quick-links-section" id="cat-sec-curated">`,
+    `  <div class="cat-quick-links-header">`,
+    `    <div class="cat-quick-links-title-group">`,
+    `      <h2 class="cat-quick-links-title"><span>📌</span><span>${esc(dict.catCuratedBookmarks)}</span></h2>`,
+    `      <span class="cat-quick-links-sub">${esc(dict.catQuickLinksSub)}</span>`,
     `    </div>`,
-    `    <span class="chapter-count">${esc(fill(pick(dict, "catBookmarks", count), { n: count }))}</span>`,
+    `    <span class="chapter-count">${countText}</span>`,
     `  </div>`,
     `  <div class="cat-grid${layoutCls}">`,
     `    ${cardsHtml}`,
@@ -1147,50 +1236,34 @@ function buildCategoryBody(
     groupCards.reduce((s, e) => s + e.items.length, 0) +
     loose.reduce((s, c) => s + 1 + c.children.length, 0)
   const groupCount = groupCards.length
+  // 标签元数据：精选专题数 + 收录站点数
   const tags = [
-    `<span class="meta-tag">${esc(fill(pick(dict, 'catBookmarks', count), { n: count }))}</span>`,
     groupCount
-      ? `<span class="meta-tag">${esc(fill(pick(dict, 'catGroups', groupCount), { m: groupCount }))}</span>`
+      ? `<span class="meta-tag">${esc(fill(pick(dict, 'catCollectionsCount', groupCount), { m: groupCount }))}</span>`
       : "",
-  ].join("")
+    `<span class="meta-tag">${esc(fill(pick(dict, 'catBookmarks', count), { n: count }))}</span>`,
+  ].filter(Boolean).join("")
 
   const layoutCls = layout !== 'grid' ? ` ${layout}-view` : ''
 
-  // 导航锚点 Tabs（仅当章节数 >= 2 或有组+散落书签时展示）
-  const showTabs = groupCount >= 2 || (groupCount >= 1 && loose.length > 0)
-  const tabsList: string[] = []
+  // CTA 跳 App 的 hash 路由（/app#share/c/<share_id>），直达应用主体完成保存
+  const appUrl = `${appOrigin}/app#share/c/${esc(shareId)}`
+  const emptySearch = `<div id="bmEmptySearch" class="bm-empty-search" style="display:none">${esc(dict.noBookmarksMatch)}</div>`
+  const emptyView = `<div class="empty">${esc(dict.emptyCategory)}</div>`
 
-  if (showTabs) {
-    groupCards.forEach((entry, i) => {
-      const gTitle = resolveGroupTitle(dict, entry.group).name
-      const n = entry.items.length
-      tabsList.push(
-        `<a href="#cat-sec-${i}" class="cat-tab"><span>${esc(gTitle)}</span><span class="cat-tab-count">${n}</span></a>`
-      )
-    })
-    if (loose.length > 0) {
-      const looseCount = loose.reduce((s, c) => s + 1 + c.children.length, 0)
-      tabsList.push(
-        `<a href="#cat-sec-curated" class="cat-tab"><span>${esc(dict.catCuratedBookmarks)}</span><span class="cat-tab-count">${looseCount}</span></a>`
-      )
-    }
-  }
-
-  // 章节 HTML 列表
-  const chaptersHtml: string[] = []
-  groupCards.forEach((entry, i) => {
-    chaptersHtml.push(buildChapterSection(dict, entry, i, bmMap, layoutCls))
-  })
-
-  if (loose.length > 0) {
-    if (groupCount > 0) {
-      chaptersHtml.push(buildCuratedSection(dict, loose, layoutCls))
-    } else {
-      // 无任何组，直接渲染散落书签网格
-      chaptersHtml.push(
-        `<div class="cat-grid${layoutCls}">${loose.map((c) => buildLooseBookmarkCard(dict, c)).join("\n")}</div>`
-      )
-    }
+  let bodyContent = ""
+  if (groupCount > 0) {
+    const albumsGridHtml = `<div class="gallery-albums-grid">${groupCards.map((e, i) => buildAlbumCard(dict, e, i)).join("\n")}</div>`
+    const quickLinksHtml = loose.length > 0 ? buildQuickLinksSection(dict, loose, layoutCls) : ""
+    const drawersHtml = `<div class="gallery-drawers-container">${groupCards.map((e, i) => buildAlbumDrawer(dict, e, i, bmMap, appUrl)).join("\n")}</div>`
+    bodyContent = [albumsGridHtml, quickLinksHtml, emptySearch, drawersHtml].filter(Boolean).join("\n")
+  } else if (loose.length > 0) {
+    bodyContent = [
+      `<div class="cat-grid${layoutCls}">${loose.map((c) => buildLooseBookmarkCard(dict, c)).join("\n")}</div>`,
+      emptySearch,
+    ].join("\n")
+  } else {
+    bodyContent = emptyView
   }
 
   // 搜索条 (总书签 >= 4 条时展示)
@@ -1201,25 +1274,6 @@ function buildCategoryBody(
     `</div>`,
   ].join("\n") : ""
 
-  // 快速跳转索引胶囊
-  const jumpTabsNav = showTabs && tabsList.length ? [
-    `<nav class="cat-tabs-nav" aria-label="${esc(dict.tocTitle)}">`,
-    `  <span class="cat-tabs-label">${esc(dict.catChapterIndex)}:</span>`,
-    `  <div class="cat-tabs-scroll">`,
-    `    ${tabsList.join("\n")}`,
-    `  </div>`,
-    `</nav>`,
-  ].join("\n") : ""
-
-  const emptySearch = `<div id="bmEmptySearch" class="bm-empty-search" style="display:none">${esc(dict.noBookmarksMatch)}</div>`
-  const emptyView = `<div class="empty">${esc(dict.emptyCategory)}</div>`
-
-  const bodyContent = chaptersHtml.length
-    ? `<div class="cat-sections">${chaptersHtml.join("\n")}${emptySearch}</div>`
-    : emptyView
-
-  // CTA 跳 App 的 hash 路由（/app#share/c/<share_id>），直达应用主体完成保存
-  const appUrl = `${appOrigin}/app#share/c/${esc(shareId)}`
   // 分类色：白名单校验后作 CSS 变量注入（非法值回落默认 accent，杜绝 CSS 注入）
   const catColor = typeof category.color === "string" ? safeColorValue(category.color.trim()) : ""
   const accentStyle = catColor ? ` style="--cat: ${esc(catColor)}"` : ""
@@ -1243,7 +1297,6 @@ function buildCategoryBody(
     `    </div>`,
     `  </div>`,
     searchBar,
-    jumpTabsNav,
     `</section>`,
     bodyContent,
   ].filter(Boolean).join("\n")
@@ -1397,7 +1450,7 @@ export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('.bm, .bmcard');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var chs=document.querySelectorAll('.cat-chapter');for(var c=0;c<chs.length;c++){var vis=chs[c].querySelectorAll('.bm:not([style*="display: none"]), .bmcard:not([style*="display: none"])');chs[c].style.display=(!q||vis.length>0)?'':'none'}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cgs=document.querySelectorAll('.cat-grid');for(var g=0;g<cgs.length;g++){cgs[g].classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cgs[g].classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}})()`
+const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err','stack-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('.bm, .bmcard');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var albums=document.querySelectorAll('.album-card');for(var c=0;c<albums.length;c++){var asc=albums[c].getAttribute('data-search')||'';var am=!q||asc.indexOf(q)!==-1;albums[c].style.display=am?'':'none';if(am)f++}var ql=document.getElementById('cat-sec-curated');if(ql){var qlbms=ql.querySelectorAll('.bmcard:not([style*="display: none"])');ql.style.display=(!q||qlbms.length>0)?'':'none'}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cgs=document.querySelectorAll('.cat-grid');for(var g=0;g<cgs.length;g++){cgs[g].classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cgs[g].classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}window.addEventListener('keydown',function(e){if(e.key==='Escape'&&window.location.hash&&window.location.hash.indexOf('album-drawer-')!==-1){if(window.history&&window.history.replaceState){window.history.replaceState(null,'',window.location.pathname+window.location.search)}else{window.location.hash='close'}}});})()`
 
 const CSS = `
 /* ==================== DESIGN TOKENS (对齐主站 tokens.css) ==================== */
@@ -2479,99 +2532,337 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .cat-layout-btn svg { width: 16px; height: 16px; display: block }
 @media (max-width: 768px) { .cat-layout-btn.hide-mobile { display: none } }
 
-/* ==================== 专刊章节流 (Chapter Sections) ==================== */
-.cat-sections {
+/* ==================== 方案 2：合辑展厅画廊 (Curated Gallery Hub) ==================== */
+.gallery-albums-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+  margin-bottom: 32px;
+}
+
+.album-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  justify-content: space-between;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+  overflow: hidden;
 }
-.cat-chapter {
-  scroll-margin-top: 72px;
+.album-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--cat, var(--accent));
+  box-shadow: var(--shadow-card-hover), 0 10px 24px -6px rgba(0, 0, 0, 0.08);
+}
+.album-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.album-series-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--cat, var(--accent));
+}
+.album-count-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-alt);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-light);
+}
+.album-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+  line-height: 1.35;
+  transition: color 0.15s ease;
+}
+.album-card:hover .album-title {
+  color: var(--cat, var(--accent));
+}
+.album-excerpt {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0 0 16px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.album-excerpt-empty {
+  color: var(--text-muted);
+  font-style: normal;
+}
+.album-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+  gap: 12px;
+}
+.favicon-stack {
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+}
+.stack-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--surface);
+  background: var(--bg-alt);
+  margin-left: -7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.stack-icon img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.stack-remainder {
+  background: var(--border-light);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.album-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cat, var(--accent));
+  white-space: nowrap;
+}
+.album-arrow {
+  display: inline-flex;
+  transition: transform 0.2s ease;
+}
+.album-arrow svg { width: 14px; height: 14px }
+.album-card:hover .album-arrow {
+  transform: translateX(3px);
+}
+
+/* ==================== 沉浸式单体画卷抽屉 (Drawer via CSS :target) ==================== */
+.gallery-drawer {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+.gallery-drawer:target {
+  display: flex;
+  animation: drawerFadeIn 0.2s ease forwards;
+}
+@keyframes drawerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.gallery-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: default;
+}
+.gallery-drawer-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 640px;
+  background: var(--surface);
+  box-shadow: -10px 0 35px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  animation: drawerSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes drawerSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.gallery-drawer-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+}
+.gallery-drawer-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cat, var(--accent));
+  letter-spacing: 0.05em;
+}
+.gallery-drawer-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 15px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.gallery-drawer-close:hover {
+  background: var(--bg-alt);
+  color: var(--text);
+}
+.gallery-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.gallery-drawer-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gallery-drawer-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.3;
+}
+.gallery-drawer-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gallery-drawer-notes {
+  padding: 18px 20px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+}
+.gallery-notes-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cat, var(--accent));
+  margin-bottom: 8px;
+}
+.gallery-notes-tag svg {
+  width: 14px;
+  height: 14px;
+}
+.gallery-drawer-bookmarks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gallery-drawer-bm-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.gallery-bm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gallery-drawer-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-alt);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gallery-footer-brand {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.gallery-save-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--cat, var(--accent));
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+.gallery-save-btn:hover {
+  opacity: 0.92;
+}
+
+/* ==================== 散落精选书签区 (Curated Quick Links) ==================== */
+.cat-quick-links-section {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   padding: 24px 28px;
   box-shadow: var(--shadow-card);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.cat-chapter:hover {
-  border-color: var(--border-hover);
-}
-.chapter-header {
+.cat-quick-links-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-light);
 }
-.chapter-title-group {
+.cat-quick-links-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cat-quick-links-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.chapter-num {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  background: var(--accent-soft);
-  color: var(--cat, var(--accent));
-  font-size: 12px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.chapter-num-curated {
-  background: var(--bg-alt);
-  font-size: 14px;
-}
-.chapter-title {
-  font-size: 17px;
+  gap: 8px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text);
   margin: 0;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.chapter-count {
-  font-size: 11.5px;
-  font-weight: 600;
+.cat-quick-links-sub {
+  font-size: 12px;
   color: var(--text-muted);
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  padding: 2px 9px;
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.chapter-notes-box {
-  margin-bottom: 18px;
-  padding: 16px;
-  background: var(--bg);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-}
-.chapter-notes-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--cat, var(--accent));
-  margin-bottom: 8px;
-}
-.chapter-notes-tag svg { width: 14px; height: 14px; display: block }
-.chapter-notes-body {
-  font-size: 13.5px;
-  line-height: 1.7;
-  color: var(--text);
-  overflow: visible;
 }
 .chapter-empty {
   padding: 24px;
@@ -2975,6 +3266,8 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   .group-hero-icon { width: 48px; height: 48px; border-radius: var(--radius-md) }
   .group-hero-title { font-size: 21px }
   .group-canvas-body { padding: 18px 16px 24px; gap: 20px }
-  .bm-grid, .cat-grid { grid-template-columns: 1fr }
+  .bm-grid, .cat-grid, .gallery-albums-grid { grid-template-columns: 1fr }
+  .gallery-drawer-panel { max-width: 100% }
+  .cat-quick-links-section { padding: 18px 16px }
 }
 `
