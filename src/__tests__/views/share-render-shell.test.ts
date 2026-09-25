@@ -145,4 +145,23 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(html).toContain("background-position: center")
     expect(html).toContain("background-size: 11px 11px")
   })
+  it('方案 A 一体化画卷与双栏联动特性', () => {
+    // 存在笔记与书签时渲染一体化画卷 + 双栏 Split View
+    expect(zh).toContain('class="group-canvas"')
+    expect(zh).toContain('class="group-split-view"')
+    expect(zh).toContain('class="group-main-col"')
+    expect(zh).toContain('class="group-side-col"')
+    expect(zh).toContain('class="group-sticky-side"')
+    expect(zh).toContain('id="bmSearchInput"')
+    expect(zh).toContain('data-search=')
+    expect(zh).toContain('class="group-quick-nav"')
+    expect(zh).toContain('class="side-toc-card"')
+
+    // 仅有书签时的卡片结构
+    const bmsOnlyGroup = { ...group, notes: '' }
+    const bmsOnlyHtml = renderSharePage(bmsOnlyGroup as never, bms as never, 'https://ulink.ren/s/grp-demo-001', 'https://ulink.ren', 'zh-CN')
+    expect(bmsOnlyHtml).toContain('class="group-canvas"')
+    expect(bmsOnlyHtml).not.toContain('class="group-split-view"')
+    expect(bmsOnlyHtml).toContain('class="bm-grid"')
+  })
 })
