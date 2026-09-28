@@ -462,6 +462,7 @@
   border-radius:var(--radius-md);
   background:var(--surface);
   box-shadow:var(--shadow-xs);
+  cursor:pointer;
   transition:border-color 0.2s,box-shadow 0.2s,transform 0.2s;
 }
 .sub-sites .group-inline-card img,
@@ -607,6 +608,19 @@
   border-color:var(--accent);
   box-shadow:0 0 0 2px var(--accent-glow),0 4px 14px rgba(0,0,0,0.06);
   transform:translateY(-1px);
+}
+.bm.is-child{
+  margin-left:16px;
+  position:relative;
+}
+.bm.is-child::before{
+  content:"";
+  position:absolute;
+  left:-10px;
+  top:50%;
+  width:8px;
+  height:1px;
+  background:var(--border-hover, rgba(0,0,0,0.2));
 }
 .bm-icon{
   width:40px;

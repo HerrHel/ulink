@@ -31,7 +31,7 @@
             <a v-for="entry in fallbackEntries" :key="entry.b.id"
                :href="entry.safeUrl || '#'" :target="entry.safeUrl ? '_blank' : '_self'"
                :rel="entry.safeUrl ? 'noopener' : undefined"
-               :class="['bm', { 'is-disabled': !entry.safeUrl }]"
+               :class="['bm', { 'is-disabled': !entry.safeUrl, 'is-child': entry.isChild }]"
                @click="!entry.safeUrl ? $event.preventDefault() : null">
               <span class="bm-icon">
                 <span class="bm-fb">{{ (displayText(entry.b.title) || entry.urlDomain || '?')[0].toUpperCase() }}</span>
@@ -201,9 +201,29 @@ const safeNotesHtml = computed(() => {
 const fallbackBookmarks = computed(() => {
   if (!isShareReadonly.value) return []
   const ids = props.group.bookmarkIds || (props.group as any).bookmark_ids || []
-  return ids
-    .map((id) => ds.bookmarkMap[id])
-    .filter((b): b is Bookmark => !!b && !b.deletedAt)
+  const result: Bookmark[] = []
+  const visited = new Set<string>()
+
+  const collectKids = (pid: string) => {
+    const kids = ds.childrenMap[pid] || []
+    for (const kid of kids) {
+      if (kid && !kid.deletedAt && !visited.has(kid.id)) {
+        visited.add(kid.id)
+        result.push(kid)
+        collectKids(kid.id)
+      }
+    }
+  }
+
+  for (const id of ids) {
+    const bm = ds.bookmarkMap[id]
+    if (bm && !bm.deletedAt && !visited.has(bm.id)) {
+      visited.add(bm.id)
+      result.push(bm)
+      collectKids(bm.id)
+    }
+  }
+  return result
 })
 /** 预计算安全 URL / 域名 / favicon（与分享页同口径，跨用户 url/icon 不可信） */
 const fallbackEntries = computed(() => buildShareEntries(fallbackBookmarks.value))

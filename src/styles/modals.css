@@ -310,27 +310,7 @@
   gap: 12px;
   padding: 4px 0 8px;
 }
-.share-target-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md, 8px);
-  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--accent, #3B82F6);
-}
-.share-target-icon img {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  object-fit: contain;
-}
-.share-target-icon svg {
-  width: 20px;
-  height: 20px;
-}
+
 .share-target-info {
   flex: 1;
   min-width: 0;
