@@ -4,13 +4,23 @@
       <button v-show="!ui.focusedGroupId && !shareMode" class="hamburger-btn" id="hamburgerBtn" @click="$emit('toggle-rail')" :title="t('shell.menu')" :aria-label="t('shell.menu')">
         <span aria-hidden="true" v-html="I.hamburger"></span>
       </button>
-      <!-- Share readonly mode：专栏画卷顶栏，品牌 Logo + 只读 chip -->
-      <template v-if="shareMode">
+      <!-- Share readonly mode & focus mode -->
+      <template v-if="shareMode && ui.focusedGroupId && focusedGroup">
+        <span class="panel-title-group-icon" @click="$emit('exit-focus')" :title="t('shell.back')">
+          <span aria-hidden="true" v-html="I.back"></span>
+        </span>
+        <span class="panel-breadcrumb">{{ displayName }}</span>
+        <span class="panel-count">{{ tN('count.bookmarks', focusBookmarkCount) }}</span>
+      </template>
+      <!-- Share readonly mode: category / group view -->
+      <template v-else-if="shareMode">
         <a class="share-brand" href="/" :title="t('common.appName')">
           <BrandLogo :size="20" />
           <span class="share-brand-title">{{ t('common.appName') }}</span>
         </a>
         <span class="share-badge" :title="t('share.readonlyTitle')">{{ t('share.readonly') }}</span>
+        <span class="panel-breadcrumb header-share-title" style="margin-left: 8px">{{ panelTitle }}</span>
+        <span class="panel-count">{{ panelCountText }}</span>
       </template>
       <!-- Focus mode -->
       <template v-else-if="ui.focusedGroupId && focusedGroup">
@@ -39,8 +49,22 @@
       <SearchSuggest />
     </div>
     <div class="header-right">
-      <!-- Share readonly mode：右上角写类按钮整体换成「保存至我的库」 -->
+      <!-- Share readonly mode：右上角写类按钮整体换成「保存至我的库」+ 布局切换与主题切换 -->
       <template v-if="shareMode">
+        <div v-if="isCategoryShare && !ui.focusedGroupId" class="layout-toggle cat-share-layouts">
+          <button class="lt-btn" :class="{ active: ui.layoutMode === 'grid' }" @click="ui.layoutMode = 'grid'" :title="t('filter.layoutGrid')" :aria-label="t('filter.layoutGrid')">
+            <span aria-hidden="true" v-html="I.layoutGrid"></span>
+          </button>
+          <button class="lt-btn" :class="{ active: ui.layoutMode === 'list' }" @click="ui.layoutMode = 'list'" :title="t('filter.layoutList')" :aria-label="t('filter.layoutList')">
+            <span aria-hidden="true" v-html="I.layoutList"></span>
+          </button>
+          <button class="lt-btn" :class="{ active: ui.layoutMode === 'mini-grid' }" @click="ui.layoutMode = 'mini-grid'" :title="t('filter.layoutMiniGrid')" :aria-label="t('filter.layoutMiniGrid')">
+            <span aria-hidden="true" v-html="I.layoutMiniGrid"></span>
+          </button>
+        </div>
+        <button class="lt-btn share-theme-btn" @click="ui.toggleTheme($event)" :title="t('nav.toggleThemeLabel')" :aria-label="t('nav.toggleThemeLabel')">
+          <span aria-hidden="true" v-html="ui.themeColor === 'dark' ? I.sun : I.moon"></span>
+        </button>
         <button class="btn btn-primary btn-sm share-save-btn" @click="onShareFork" :disabled="share.forking">
           {{ forkLabel }}
         </button>
@@ -121,6 +145,7 @@ const syncPopover = useSyncStatusStore()
 // 分享只读态：标题 + 只读 chip + 「保存至我的库」
 const share = useShareStore()
 const shareMode = computed(() => ui.shareMode)
+const isCategoryShare = computed(() => share.isCategory)
 const forkLabel = computed(() => {
   if (share.forking) return t('share.saving')
   return auth.isLoggedIn ? t('share.saveToLibrary') : t('share.loginThenSave')
@@ -160,12 +185,20 @@ const displayName = computed(() =>
     ? focusedGroup.value.name
     : t('common.unnamed')
 )
-const panelTitle = computed(() =>
-  (dataStore.categoryMap[ui.curCat] || {}).name || t('shell.allBookmarks')
-)
-const panelCountText = computed(() =>
-  tN('count.items', dataStore.filteredBookmarks.filter(b => !b.parentId).length + dataStore.filteredGroups.length)
-)
+const panelTitle = computed(() => {
+  if (shareMode.value?.kind === 'category' && share.category) {
+    return share.category.name || t('shell.allBookmarks')
+  }
+  return (dataStore.categoryMap[ui.curCat] || {}).name || t('shell.allBookmarks')
+})
+const panelCountText = computed(() => {
+  if (shareMode.value?.kind === 'category') {
+    const bCount = share.bookmarks.length
+    const gCount = share.groups.length
+    return `${tN('count.bookmarks', bCount)} · ${tN('count.groups', gCount)}`
+  }
+  return tN('count.items', dataStore.filteredBookmarks.filter(b => !b.parentId).length + dataStore.filteredGroups.length)
+})
 const focusBookmarkCount = computed(() => {
   const g = ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
   return g ? (g.bookmarkIds?.length || 0) : 0
