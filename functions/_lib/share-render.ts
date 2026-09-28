@@ -508,7 +508,8 @@ function iconMarkup(imgSrc: string, letter: string, cls: string): string {
   const img = imgSrc
     ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.classList.add('img-err', '${cls}-img-err')">`
     : ""
-  return `${img}<span class="${cls}-fb">${esc(letter)}</span>`
+  const fbCls = cls === "card-logo" ? "card-logo-fallback card-logo-fb" : `${cls}-fb`
+  return `${img}<span class="${fbCls}">${esc(letter)}</span>`
 }
 
 /** 品牌链接图标（与 App 端 ShareView logo 同一枚 SVG）。 */
@@ -542,6 +543,8 @@ const LIST_SVG =
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 6L21 6.00078M8 12L21 12.0008M8 18L21 18.0007M3 6.5H4V5.5H3V6.5ZM3 12.5H4V11.5H3V12.5ZM3 18.5H4V17.5H3V18.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 const MINIGRID_SVG =
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.25" cy="5.25" r="1.8"/><circle cx="12" cy="5.25" r="1.8"/><circle cx="18.75" cy="5.25" r="1.8"/><circle cx="5.25" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.75" cy="12" r="1.8"/><circle cx="5.25" cy="18.75" r="1.8"/><circle cx="12" cy="18.75" r="1.8"/><circle cx="18.75" cy="18.75" r="1.8"/></svg>`
+const NOTE_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.6602 10.44L20.6802 14.62C19.8402 18.23 18.1802 19.69 15.0602 19.39C14.5602 19.35 14.0202 19.26 13.4402 19.12L11.7602 18.72C7.59018 17.73 6.30018 15.67 7.28018 11.49L8.26018 7.30001C8.46018 6.45001 8.70018 5.71001 9.00018 5.10001C10.1702 2.68001 12.1602 2.03001 15.5002 2.82001L17.1702 3.21001C21.3602 4.19001 22.6402 6.26001 21.6602 10.44Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path opacity="0.4" d="M15.0603 19.3901C14.4403 19.8101 13.6603 20.1601 12.7103 20.4701L11.1303 20.9901C7.16034 22.2701 5.07034 21.2001 3.78034 17.2301L2.50034 13.2801C1.22034 9.3101 2.28034 7.2101 6.25034 5.9301L7.83034 5.4101C8.24034 5.2801 8.63034 5.1701 9.00034 5.1001C8.70034 5.7101 8.46034 6.4501 8.26034 7.3001L7.28034 11.4901C6.30034 15.6701 7.59034 17.7301 11.7603 18.7201L13.4403 19.1201C14.0203 19.2601 14.5603 19.3501 15.0603 19.3901Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 
 /** 浅色/深色主题切换图标（与 src/config/icons.ts 同款）。 */
 const SUN_SVG =
@@ -608,7 +611,10 @@ function buildBookmarkItem(
 function groupIconMarkup(group: Record<string, unknown>, letter: string): string {
   const icon = typeof group.icon === "string" ? group.icon.trim() : ""
   const imgSrc = /^https?:\/\//i.test(icon) ? icon : ""
-  return iconMarkup(imgSrc, letter, "hero")
+  if (imgSrc) {
+    return iconMarkup(imgSrc, letter, "hero")
+  }
+  return NOTE_SVG
 }
 
 /**
@@ -1663,7 +1669,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 }
 
 /* ==================== 图标与首字母通用绝对居中（解决首字母与图标并排Bug） ==================== */
-.bm-icon, .group-hero-icon, .cat-hero-icon, .gcard-icon, .bmcard-icon, .bmcard-child-ic {
+.bm-icon, .group-hero-icon, .cat-hero-icon, .gcard-icon, .bmcard-icon, .bmcard-child-ic, .card-logo, .gic-ic {
   position: relative;
   overflow: hidden;
   display: flex;
@@ -1674,7 +1680,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   border-radius: var(--radius-md);
   flex-shrink: 0;
 }
-.bm-fb, .hero-fb, .bmcard-fb, .bmc-fb {
+.bm-fb, .hero-fb, .bmcard-fb, .bmc-fb, .card-logo-fb, .card-logo-fallback, .gic-ic-fb {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1688,7 +1694,10 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   z-index: 1;
   user-select: none;
 }
-.bm-icon img, .group-hero-icon img, .cat-hero-icon img, .gcard-icon img, .bmcard-icon img, .bmcard-child-ic img {
+.gic-ic-fb {
+  font-size: 10px;
+}
+.bm-icon img, .group-hero-icon img, .cat-hero-icon img, .gcard-icon img, .bmcard-icon img, .bmcard-child-ic img, .card-logo img, .gic-ic img {
   position: relative;
   z-index: 2;
   object-fit: contain;
@@ -1700,11 +1709,23 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 .cat-hero-icon img ~ .hero-fb,
 .gcard-icon img ~ .hero-fb,
 .bmcard-icon img ~ .bmcard-fb,
-.bmcard-child-ic img ~ .bmc-fb {
+.bmcard-child-ic img ~ .bmc-fb,
+.card-logo img ~ .card-logo-fallback,
+.card-logo img ~ .card-logo-fb,
+.card-logo img ~ .hero-fb,
+.gic-ic img ~ .gic-ic-fb {
+  display: none !important;
+}
+/* 现代浏览器 :has() 双重保险：只要含有未出错的 img，首字母绝对不显示 */
+.card-logo:has(img:not(.img-err):not(.card-logo-img-err)) .card-logo-fallback,
+.card-logo:has(img:not(.img-err):not(.card-logo-img-err)) .card-logo-fb,
+.card-logo:has(img:not(.img-err):not(.card-logo-img-err)) .hero-fb,
+.gic-ic:has(img:not(.img-err):not(.gic-ic-img-err)) .gic-ic-fb,
+.bm-icon:has(img:not(.img-err):not(.bm-img-err)) .bm-fb {
   display: none !important;
 }
 /* 图片加载失败时隐藏图片，显示首字母 */
-img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-err {
+img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-err, img.card-logo-img-err, img.gic-ic-img-err {
   display: none !important;
 }
 .bm-icon img.img-err ~ .bm-fb,
@@ -1718,7 +1739,15 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .bmcard-icon img.img-err ~ .bmcard-fb,
 .bmcard-icon img.bmcard-img-err ~ .bmcard-fb,
 .bmcard-child-ic img.img-err ~ .bmc-fb,
-.bmcard-child-ic img.bmc-img-err ~ .bmc-fb {
+.bmcard-child-ic img.bmc-img-err ~ .bmc-fb,
+.card-logo img.img-err ~ .card-logo-fallback,
+.card-logo img.card-logo-img-err ~ .card-logo-fallback,
+.card-logo img.img-err ~ .card-logo-fb,
+.card-logo img.card-logo-img-err ~ .card-logo-fb,
+.card-logo img.img-err ~ .hero-fb,
+.card-logo img.hero-img-err ~ .hero-fb,
+.gic-ic img.img-err ~ .gic-ic-fb,
+.gic-ic img.gic-ic-img-err ~ .gic-ic-fb {
   display: flex !important;
 }
 
@@ -2471,6 +2500,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   height: 28px;
   object-fit: contain;
 }
+.card-logo svg {
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+}
 .card-logo-fallback, .hero-fb {
   display: flex;
   align-items: center;
@@ -2481,6 +2515,23 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   font-weight: 700;
   color: var(--accent);
   text-transform: uppercase;
+}
+.gic-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+.gic-ic img {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  object-fit: contain;
 }
 .card:hover .card-logo {
   border-color: var(--accent);
@@ -2657,12 +2708,22 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   flex-direction: column !important;
   gap: 8px !important;
   grid-template-columns: none !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+.card-grid.list-view .card-list-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  width: 100% !important;
 }
 .card-grid.list-view .card,
 .card-grid.list-view .group-card {
+  width: 100% !important;
+  box-sizing: border-box !important;
   height: 82px !important;
   min-height: 0 !important;
-  padding: 8px 14px !important;
+  padding: 8px 16px !important;
   flex-direction: column !important;
   justify-content: center !important;
   border-radius: var(--radius-lg) !important;
@@ -2678,6 +2739,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   align-items: center !important;
   gap: 8px !important;
   background: transparent !important;
+  width: 100% !important;
 }
 .card-grid.list-view .card-toprow,
 .card-grid.list-view .group-card-head {
@@ -2687,18 +2749,34 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   margin: 0 !important;
   flex: 1 !important;
   min-width: 0 !important;
+  width: 100% !important;
 }
-.card-grid.list-view .card-logo { width: 36px !important; height: 36px !important; }
+.card-grid.list-view .card-logo { width: 36px !important; height: 36px !important; flex-shrink: 0 !important; }
 .card-grid.list-view .card-logo img { width: 22px !important; height: 22px !important; }
-.card-grid.list-view .card-titlewrap { height: 36px !important; }
+.card-grid.list-view .card-logo svg { width: 20px !important; height: 20px !important; }
+.card-grid.list-view .card-titlewrap { height: 36px !important; flex: 1 !important; min-width: 0 !important; }
 .card-grid.list-view .card-name { font-size: 0.88rem !important; }
 .card-grid.list-view .card-domain { font-size: 0.75rem !important; margin-left: 6px !important; }
-.card-grid.list-view .card-body { display: none !important; }
+.card-grid.list-view .card-body {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}
+.card-grid.list-view .card-body .focus-notes,
+.card-grid.list-view .card-body .sub-sites {
+  display: none !important;
+}
 .card-grid.list-view .card-foot {
-  padding-top: 0 !important;
+  position: absolute !important;
+  top: 10px !important;
+  right: 14px !important;
+  padding: 0 !important;
   border-top: none !important;
   background: transparent !important;
-  margin-left: auto !important;
+  margin: 0 !important;
+  z-index: 3 !important;
 }
 .card-grid.list-view .card-preview {
   display: block !important;
@@ -2707,8 +2785,9 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-  max-width: 80% !important;
+  max-width: 85% !important;
   margin-top: 2px !important;
+  line-height: 1.4 !important;
 }
 
 /* ==================== 布局模式：小宫格视图 (Mini-Grid View) ==================== */

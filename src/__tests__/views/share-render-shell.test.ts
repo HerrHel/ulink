@@ -215,4 +215,22 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(emptyEn).toContain('<title>Untitled group - ulink</title>')
     expect(emptyEn).not.toContain('Shared group')
   })
+
+  it('分类页图标与首字母共存时首字母被隐藏，防首字母跟随 bug', () => {
+    // 存在 favicon 时生成 card-logo-fallback
+    expect(catHtml).toContain('class="card-logo-fallback card-logo-fb"')
+    // CSS 规则双保险隐藏首字母
+    expect(catHtml).toContain('.card-logo img ~ .card-logo-fallback')
+    expect(catHtml).toContain('.card-logo:has(img:not(.img-err):not(.card-logo-img-err)) .card-logo-fallback')
+    expect(catHtml).toContain('display: none !important')
+  })
+
+  it('列表模式卡片填满整行（width 100% + align-items stretch）', () => {
+    expect(catHtml).toContain('.card-grid.list-view')
+    expect(catHtml).toContain('align-items: stretch !important')
+    expect(catHtml).toContain('.card-grid.list-view .card-list-inner')
+    expect(catHtml).toContain('.card-grid.list-view .card,')
+    expect(catHtml).toContain('width: 100% !important')
+    expect(catHtml).toContain('box-sizing: border-box !important')
+  })
 })
