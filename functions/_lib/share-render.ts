@@ -519,6 +519,18 @@ const LOGO_SVG =
 const ARROW_SVG =
   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12L12 4"/><path d="M5.5 4H12v6.5"/></svg>`
 
+/** 卡片外链提示小图标（App BookmarkCard 同款）。 */
+const EXTERNAL_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`
+
+/** 返回箭头（组聚焦返回分类，App I.back 同款）。 */
+const BACK_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>`
+
+/** 卡片点击量统计图标（App I.click 同款）。 */
+const CLICK_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>`
+
 /** 组卡展开箭头（收起态朝下，展开态旋转 180°）。 */
 const CHEVRON_SVG =
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`
@@ -937,9 +949,14 @@ function splitCategoryItems(groups: PublicGroup[], bookmarks: PublicBookmark[]):
 }
 
 /**
- * 分类分享·组卡片（对齐 App GroupCard 宫格态）：图标 + 组名 + 书签计数 + 笔记富文本；
- * 点卡片用 hidden checkbox + label 展开组内书签列表（无 JS 可用，:has() 控制跨列展开）。
- * notes 走与组分享一致的 sanitize + 内联书签转链接。
+ * 分类分享·组卡片（100% 对齐主站 App GroupCard 宫格态结构与类名）：
+ * - .card.group-card 外层
+ * - .group-card-accent 左侧装饰条
+ * - .group-card-head 头部（38px 图标 + titlewrap）
+ * - .card-body.grp-scroll-body 笔记预览（带淡出遮罩）
+ * - .card-preview 文本摘要（列表/小宫格显示）
+ * - .card-foot 底部书签计数
+ * - .card-focus-overlay 纯 CSS 点击进入 #focus-<gid> 聚焦态（无 JS 亦可无缝聚焦）
  */
 function buildGroupCard(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
@@ -954,22 +971,91 @@ function buildGroupCard(
   const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
   const body = notes || `<div class="focus-notes gcard-nonotes">${esc(dict.catNoNotes)}</div>`
   const n = entry.items.length
+  const preview = stripTags(notes || dict.catNoNotes).slice(0, 100)
+  const gid = esc(String(g.id))
+
+  return [
+    `<article class="card group-card" data-group-id="${gid}">`,
+    `<a class="card-focus-overlay" href="#focus-${gid}" title="${name}" aria-label="${name}"></a>`,
+    `<div class="group-card-accent"></div>`,
+    `<div class="group-card-head">`,
+    `<div class="card-logo group-card-icon">${groupIconMarkup(g, initial)}</div>`,
+    `<div class="card-titlewrap">`,
+    `<div class="card-titlewrap-text">`,
+    `<div class="card-name">${name}</div>`,
+    `<div class="card-domain group-domain"></div>`,
+    `</div>`,
+    `</div>`,
+    `</div>`,
+    `<div class="card-body grp-scroll-body">`,
+    `<div class="card-scroll-wrap">`,
+    `<div class="group-body group-body-readonly">${body}</div>`,
+    `</div>`,
+    `</div>`,
+    `<div class="card-preview">${esc(preview)}</div>`,
+    `<div class="card-foot">`,
+    `<span class="card-stat">${esc(fill(pick(dict, 'catBookmarks', n), { n }))}</span>`,
+    `</div>`,
+    `</article>`,
+  ].join("")
+}
+
+/**
+ * 分类分享·组聚焦画卷（100% 对齐主站 App 组聚焦态 Focus Mode）：
+ * - 纯 CSS :target 触发显示（#focus-<gid>）
+ * - 顶部返回条（← 返回「分类名」）
+ * - 聚焦大卡片（.card.group-card.group-card-focus）
+ * - 完整笔记正文 + 组内收录书签网格（.group-bookmarks-section + .bm-grid）
+ */
+function buildGroupFocusPanel(
+  dict: typeof T['zh-CN'] | typeof T['en-US'],
+  entry: { group: PublicGroup; items: PublicBookmark[] },
+  bmMap: NotesBmMap,
+  catName: string,
+): string {
+  const g = entry.group
+  const titleInfo = resolveGroupTitle(dict, g)
+  const name = esc(titleInfo.name)
+  const initial = esc(((titleInfo.name || "?").trim().charAt(0) || "?").toUpperCase())
+  const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
+  const n = entry.items.length
   const itemsHtml = n
     ? entry.items.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
     : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
-  const toggleId = `gcat-${idx}`
+  const gid = esc(String(g.id))
+
   return [
-    `<article class="gcard">`,
-    `<input type="checkbox" class="gcard-toggle" id="${toggleId}" aria-label="${esc(dict.catExpand)}">`,
-    `<label class="gcard-head" for="${toggleId}" title="${esc(dict.catExpand)}">`,
-    `<span class="gcard-icon">${groupIconMarkup(g, initial)}</span>`,
-    `<span class="gcard-title">${name}</span>`,
-    `<span class="gcard-count">${esc(fill(pick(dict, 'catBookmarks', n), { n }))}</span>`,
-    `<span class="gcard-chev">${CHEVRON_SVG}</span>`,
-    `</label>`,
-    body,
-    `<div class="gcard-items">${itemsHtml}</div>`,
+    `<div class="group-focus-panel" id="focus-${gid}">`,
+    `<div class="focus-bar">`,
+    `<a href="#" class="exit-focus-btn" title="${catName}">${BACK_SVG} <span>${catName}</span></a>`,
+    `<span class="focus-bar-title">${name}</span>`,
+    `<span class="panel-count">${esc(fill(pick(dict, 'catBookmarks', n), { n }))}</span>`,
+    `</div>`,
+    `<article class="card group-card group-card-focus" data-group-id="${gid}">`,
+    `<div class="group-card-accent"></div>`,
+    `<div class="group-card-head">`,
+    `<div class="card-logo group-card-icon">${groupIconMarkup(g, initial)}</div>`,
+    `<div class="card-titlewrap">`,
+    `<div class="card-titlewrap-text">`,
+    `<div class="card-name">${name}</div>`,
+    `<div class="card-domain group-domain"></div>`,
+    `</div>`,
+    `</div>`,
+    `</div>`,
+    `<div class="card-body grp-scroll-body">`,
+    `<div class="card-scroll-wrap">`,
+    notes ? `<div class="group-body group-body-readonly">${notes}</div>` : '',
+    `<div class="group-bookmarks-section">`,
+    `<div class="section-header">`,
+    `<h2 class="section-title">${esc(dict.bookmarksTitle)}</h2>`,
+    `<span class="section-count">${n}</span>`,
+    `</div>`,
+    `<div class="bm-grid">${itemsHtml}</div>`,
+    `</div>`,
+    `</div>`,
+    `</div>`,
     `</article>`,
+    `</div>`,
   ].join("")
 }
 
@@ -1002,8 +1088,12 @@ function buildLooseChildItem(
 }
 
 /**
- * 分类分享·散落书签卡（对齐 App BookmarkCard 宫格态）：图标 + 标题 + 域名 + 笔记（2 行截断）。
- * 卡片下挂子书签区：父卡与子项都是链接，故外层用 article（HTML 不允许 <a> 嵌套 <a>）。
+ * 分类分享·散落书签卡（100% 对齐主站 App BookmarkCard 宫格态结构与类名）：
+ * - .card.bookmark-card 外层
+ * - .card-topline > .card-toprow（38px 图标 + 标题 + 域名 + 外链提示）
+ * - .card-body（2 行备注截断 + 子站点网格）
+ * - .card-foot（点击统计）
+ * - .card-link-overlay 整体可点击直达目标外链
  */
 function buildLooseBookmarkCard(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
@@ -1018,39 +1108,54 @@ function buildLooseBookmarkCard(
   const dm = safe ? domainOf(safe) : ""
   const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const notes = deCipherText(dict, b.notes).trim()
-  const isChild = !!(typeof b.parent_id === "string" && b.parent_id.trim())
-  // 有子项：卡片底部「N 个子书签」展开条（hidden checkbox + label + :has()，
-  // 无 JS 也可展开，与组卡同款；展开时跨行显示子项 → 折叠态所有卡等高 232px 与主站一致）
-  const children = card.children.length
-    ? [
-        `<input type="checkbox" class="bmcard-toggle-input" id="bmc-${esc(String(b.id))}">`,
-        `<label class="bmcard-toggle-label" for="bmc-${esc(String(b.id))}">`,
-        `<span>${fill(pick(dict, "catChildren", card.children.length), { n: card.children.length })}</span>`,
-        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`,
-        `</label>`,
-        `<div class="bmcard-children">${card.children.map((c) => buildLooseChildItem(dict, c)).join("")}</div>`,
-      ].join("")
+  const rawNotes = deCipherText(dict, b.notes).trim()
+  const notes = rawNotes ? stripTags(rawNotes).slice(0, 140) : ""
+  const clicks = typeof b.useCount === 'number' ? b.useCount : (typeof (b as any).use_count === 'number' ? (b as any).use_count : 0)
+  const clickText = dict.lang === 'zh-CN' ? `${clicks} 次点击` : (clicks === 1 ? '1 click' : `${clicks} clicks`)
+
+  const subSites = card.children.length
+    ? `<div class="sub-sites">${card.children.map((c) => {
+        const cb = c.bookmark
+        const cUrlSafe = isCipherText(cb.url) ? "" : fixUrl(cb.url)
+        const cHref = cUrlSafe ? esc(cUrlSafe) : "#"
+        const cDm = cUrlSafe ? domainOf(cUrlSafe) : ""
+        const cTitle = deCipherText(dict, cb.title).trim() || cDm || "?"
+        const cCh = cTitle.charAt(0).toUpperCase()
+        return `<a class="group-inline-card" href="${cHref}"${cUrlSafe ? ' target="_blank" rel="noopener nofollow"' : ''} title="${esc(cTitle)}">` +
+          `<span class="gic-ic">${iconMarkup(cUrlSafe ? faviconOf(cUrlSafe) : "", cCh, "gic-ic")}</span>` +
+          `<span class="gic-name">${esc(cTitle)}</span>` +
+          `</a>`
+      }).join("")}</div>`
     : ""
+
   return [
-    `<article class="bmcard${children ? " has-children" : ""}">`,
-    `<a class="bmcard-main" href="${href}"${target}${rel}>`,
-    `<span class="bmcard-head">`,
-    `<span class="bmcard-icon">${iconMarkup(safe ? faviconOf(safe) : "", ch, "bmcard")}</span>`,
-    `<span class="bmcard-title">${esc(title)}</span>`,
-    // 孤儿子书签：父在组内或不在本分类，标出来说明层级来源
-    isChild ? `<span class="bmcard-badge">${esc(dict.subBookmark)}</span>` : "",
-    `</span>`,
-    dm ? `<span class="bmcard-url">${esc(dm)}</span>` : `<span class="bmcard-url">&nbsp;</span>`,
-    notes ? `<p class="bmcard-notes">${esc(notes)}</p>` : "",
-    `<span class="bmcard-arrow" aria-hidden="true">${ARROW_SVG}</span>`,
-    `</a>`,
-    children,
+    `<article class="card bookmark-card" data-id="${esc(String(b.id))}">`,
+    `<a class="card-link-overlay" href="${href}"${target}${rel} aria-label="${esc(title)}"></a>`,
+    `<div class="card-topline">`,
+    `<div class="card-toprow">`,
+    `<div class="card-logo">${iconMarkup(safe ? faviconOf(safe) : "", ch, "card-logo")}</div>`,
+    `<div class="card-titlewrap">`,
+    `<div class="card-titlewrap-text">`,
+    `<div class="card-name">${esc(title)}</div>`,
+    `<div class="card-domain">${esc(dm)}</div>`,
+    `</div>`,
+    `<span class="card-open-hint" aria-hidden="true">${EXTERNAL_SVG}</span>`,
+    `</div>`,
+    `</div>`,
+    `<div class="card-domain mini-domain">${esc(dm)}</div>`,
+    `</div>`,
+    `<div class="card-body">`,
+    notes ? `<div class="card-notes">${esc(notes)}</div>` : "",
+    subSites,
+    `<div class="card-preview">${esc(notes || dm || title)}</div>`,
+    `</div>`,
+    `<div class="card-foot">`,
+    `<span class="card-stat">${CLICK_SVG} ${clickText}</span>`,
+    `</div>`,
     `</article>`,
   ].join("")
 }
 
-/** 分类分享 <body>：分类 Hero（分类色 accent）+ 卡片网格（组卡在前 + 散落书签卡）。 */
 /** 分类页布局（对齐主站 uiStore.layoutMode；移动端 CSS 隐藏宫格入口，只留列表/小宫格） */
 export type CatLayout = 'grid' | 'list' | 'mini-grid'
 
@@ -1077,7 +1182,7 @@ function buildLayoutSwitch(
   ].join("")
 }
 
-/** 构建 <body>（分类分享）：主应用外壳 + 分类头（真实分类名/计数）+ 卡片网格（组卡在前 + 散落书签卡）。 */
+/** 构建 <body>（分类分享）：主应用外壳 + 分类头（真实分类名/计数）+ 卡片网格（组卡在前 + 散落书签卡）+ 组聚焦画卷。 */
 function buildCategoryBody(
   dict: typeof T['zh-CN'] | typeof T['en-US'],
   category: PublicCategory,
@@ -1089,7 +1194,6 @@ function buildCategoryBody(
   layout: CatLayout = 'grid',
 ): string {
   const name = esc(deCipherText(dict, category.name) || dict.defaultCategoryName)
-  const initial = esc(((category.name || "?").trim().charAt(0) || "?").toUpperCase())
   const { groupCards, loose } = splitCategoryItems(groups, bookmarks)
   // data-bm-id → 书签信息映射（组 notes 内联书签转可点击 <a> 与补全图标）
   const bmMap: NotesBmMap = {}
@@ -1113,9 +1217,11 @@ function buildCategoryBody(
     ...groupCards.map((e, i) => buildGroupCard(dict, e, i, bmMap)),
     ...loose.map((c) => buildLooseBookmarkCard(dict, c)),
   ]
-  const layoutCls = layout !== 'grid' ? ` ${layout}-view` : ''
+  const focusPanels = groupCards.map((e) => buildGroupFocusPanel(dict, e, bmMap, name))
+
+  const layoutCls = layout !== 'grid' ? ` ${layout}-view` : ' grid-view'
   const grid = cards.length
-    ? `<div class="cat-grid${layoutCls}">${cards.join("\n")}</div>`
+    ? `<div class="cat-grid card-grid${layoutCls}" id="cardGrid"><div class="card-list-inner">${cards.join("\n")}</div></div>`
     : `<div class="empty">${esc(dict.emptyCategory)}</div>`
   // CTA 跳 App 的 hash 路由（/app#share/c/<share_id>），直达应用主体完成保存
   const appUrl = `${appOrigin}/app#share/c/${esc(shareId)}`
@@ -1125,16 +1231,19 @@ function buildCategoryBody(
   const heroIcon = heroCustomIconMarkup(category, "cat")
   const inner = [
     `<section class="cat-hero"${accentStyle}>`,
+    `<div class="cat-hero-left">`,
     heroIcon,
     `<div class="cat-hero-text">`,
     `<h1 class="cat-hero-name">${name}</h1>`,
     `<div class="cat-hero-meta">${tags}</div>`,
+    `</div>`,
     `</div>`,
     `<div class="cat-hero-actions">`,
     buildLayoutSwitch(dict, shareUrl, layout),
     `</div>`,
     `</section>`,
     grid,
+    ...focusPanels,
   ].filter(Boolean).join("\n")
   return buildAppShell(dict, appOrigin, { hdrMeta: "", ctaUrl: appUrl, inner })
 }
@@ -1285,7 +1394,7 @@ export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('#bmList .bm');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}})()`
+const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err','card-logo-img-err','gic-ic-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('#bmList .bm');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}function syncFocusHash(){var h=window.location.hash||'';var isF=h.indexOf('#focus-')===0;var cg=document.getElementById('cardGrid');var ch=document.querySelector('.cat-hero');if(cg){cg.style.display=isF?'none':''}if(ch){ch.style.display=isF?'none':''}}window.addEventListener('hashchange',syncFocusHash);syncFocusHash();})()`
 
 const CSS = `
 /* ==================== DESIGN TOKENS (对齐主站 tokens.css) ==================== */
@@ -2146,55 +2255,70 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   border-radius: var(--radius-lg);
 }
 
-/* ==================== 分类分享 HERO (杜绝杂色黄色，统一品牌深蓝质感) ==================== */
+/* ==================== 分类分享 HERO (紧凑对齐主站顶栏与 FilterBar 尺度) ==================== */
 .cat-hero {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 24px 28px;
-  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-lg);
+  padding: 12px 18px;
+  box-shadow: var(--shadow-xs);
   display: flex;
   align-items: center;
-  gap: 20px;
-  overflow: hidden;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.cat-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 .cat-hero-accent {
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 4px;
-  border-radius: 0 3px 3px 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
   background: var(--accent-grad);
 }
 .cat-hero-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: var(--radius-lg);
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
   color: var(--accent);
+  background: var(--bg-alt);
+  border: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
-.cat-hero-icon img { width: 32px; height: 32px; object-fit: contain }
-.cat-hero-icon .hero-fb { font-size: 20px }
+.cat-hero-icon img { width: 24px; height: 24px; object-fit: contain }
+.cat-hero-icon .hero-fb { font-size: 16px }
 .cat-hero-text {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .cat-hero-name {
-  font-size: 24px;
-  font-weight: 750;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.4px;
-  line-height: 1.25;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .cat-hero-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 .cat-dot {
@@ -2212,7 +2336,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   flex-shrink: 0;
 }
 
-/* 布局切换器 (三布局按钮) */
+/* 布局切换器 (三布局按钮，对齐主站 FilterBar) */
 .cat-layout-switch {
   display: inline-flex;
   align-items: center;
@@ -2243,398 +2367,523 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .cat-layout-btn svg { width: 16px; height: 16px; display: block }
 @media (max-width: 768px) { .cat-layout-btn.hide-mobile { display: none } }
 
-/* ==================== 分类卡片网格 (默认宫格态) ==================== */
-.cat-grid {
+/* ==================== CARD GRID (对齐主站 cards.css / layout.css) ==================== */
+.card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
   align-items: start;
 }
-.gcard, .bmcard {
+.card-grid .card-list-inner {
+  display: contents;
+}
+
+/* 卡片基类 */
+.card {
   position: relative;
-  height: 232px;
-  display: flex;
-  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+  padding: 16px 16px 10px;
+  cursor: pointer;
+  transition: box-shadow 0.3s var(--ease-out), border-color 0.2s ease, transform 0.3s var(--ease-out);
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.25s var(--ease-out);
+  height: 232px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-card);
 }
-.gcard:hover, .bmcard:hover {
+.card:hover {
   border-color: var(--border-hover);
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-3px);
 }
-.gcard { padding: 16px 16px 10px }
-.gcard::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent-grad);
-  opacity: 0.7;
-  transition: opacity 0.2s ease;
-}
-.gcard:hover::before { opacity: 1 }
-.gcard-toggle { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
-.gcard-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-}
-.gcard-icon {
-  width: 38px;
-  height: 38px;
-}
-.gcard-icon img { width: 26px; height: 26px; object-fit: contain }
-.gcard-icon .hero-fb { font-size: 15px }
-.gcard-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 18px;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gcard-count {
-  flex-shrink: 0;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-alt);
-  border: 1px solid var(--border-light);
-  padding: 2px 9px;
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-}
-.gcard-chev {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  transition: transform 0.2s ease, color 0.2s ease;
-}
-.gcard-chev svg { width: 14px; height: 14px; display: block }
-.gcard .focus-notes {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0 2px;
-  font-size: 13px;
-  line-height: 1.7;
-  -webkit-mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 76%, transparent 100%);
-}
-.gcard-nonotes { color: var(--text-muted); font-size: 12.5px }
-.gcard-items { display: none }
-.gcard-empty {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  text-align: center;
-  padding: 18px 0;
-  background: var(--bg-alt);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-}
-.gcard:has(.gcard-toggle:checked) {
-  grid-column: 1 / -1;
-  height: auto;
-}
-.gcard:has(.gcard-toggle:checked) .gcard-chev {
-  transform: rotate(180deg);
-  color: var(--accent);
-}
-.gcard:has(.gcard-toggle:checked) .focus-notes {
-  overflow: visible;
-  -webkit-mask-image: none;
-  mask-image: none;
-}
-.gcard:has(.gcard-toggle:checked) .gcard-items {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border);
+.card:active {
+  transform: translateY(0) scale(0.995);
+  transition-duration: 0.08s;
 }
 
-/* 散落书签卡 (bmcard) */
-.bmcard { padding: 0; text-decoration: none; color: inherit }
-.bmcard.has-children { height: auto }
-.bmcard-main {
+/* 点击热区覆盖层：卡片整体点击直达外链或聚焦 */
+.card-link-overlay, .card-focus-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  text-decoration: none;
+  border-radius: var(--radius-lg);
+}
+
+/* 组卡片左边缘光晕竖条 */
+.group-card {
   position: relative;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  padding: 16px 16px 10px;
+  height: 232px;
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 10px;
-  text-decoration: none;
-  color: inherit;
+  overflow: hidden;
 }
-.bmcard-head { display: flex; align-items: center; gap: 10px }
-.bmcard-icon {
+.group-card-accent {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  background: var(--accent-grad);
+  opacity: 0.5;
+  border-radius: 0 2px 2px 0;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease;
+}
+.group-card:hover .group-card-accent {
+  opacity: 0.8;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* 卡片顶行 */
+.card-topline {
+  flex-shrink: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+.card-toprow, .group-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+.card-logo {
+  flex-shrink: 0;
   width: 38px;
   height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-alt);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s ease, transform 0.25s var(--ease-out), box-shadow 0.2s ease;
 }
-.bmcard-icon img { width: 22px; height: 22px; object-fit: contain }
-.bmcard-icon .bmcard-fb { font-size: 14px }
-.bmcard-title {
-  font-size: 14px;
+.card-logo img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.card-logo-fallback, .hero-fb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.card:hover .card-logo {
+  border-color: var(--accent);
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.card-titlewrap {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  overflow: hidden;
+  padding: 0 4px;
+  margin: 0 -4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+.card-titlewrap-text {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+.card-name {
   font-weight: 600;
+  font-size: 0.9rem;
   line-height: 18px;
-  color: var(--text);
+  height: 20px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text);
   transition: color 0.15s ease;
 }
-.bmcard:hover .bmcard-title { color: var(--accent) }
-.bmcard-url {
-  display: block;
-  font-size: 11.5px;
-  line-height: 18px;
-  color: var(--text-muted);
+.card:hover .card-name {
+  color: var(--accent);
+}
+.card-domain {
   font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 18px;
+  height: 18px;
+  margin: 0;
 }
-.bmcard-notes {
-  margin-top: 4px;
+.group-domain { display: none }
+.mini-domain { display: none }
+.card-open-hint {
+  flex-shrink: 0;
+  display: none;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+  opacity: 0.85;
+}
+.card-open-hint svg { width: 14px; height: 14px; display: block }
+.card:hover .card-open-hint { display: block }
+
+/* 卡片正文与内容区 */
+.card-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+.grp-scroll-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.card-scroll-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+.card-notes {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 8px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.group-body {
+  overflow: visible;
+  padding: 4px 0 0;
   font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
+  color: var(--text);
+  word-break: break-word;
 }
-.bmcard-arrow {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  color: var(--text-muted);
-  opacity: 0.4;
-  transform: translate(-2px, 2px);
-  transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+.card-grid:not(.list-view) .grp-scroll-body .group-body {
+  -webkit-mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
 }
-.bmcard-arrow svg { width: 15px; height: 15px; display: block }
-.bmcard:hover .bmcard-arrow {
-  opacity: 1;
-  transform: translate(0, 0);
-  color: var(--accent);
-}
+.card-preview { display: none }
 
-/* 子书签展开与渲染 */
-.bmcard-toggle-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none }
-.bmcard-toggle-label {
+/* 散落书签子站点网格 */
+.sub-sites {
+  position: relative;
+  z-index: 4;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 4px;
+}
+.sub-sites .group-inline-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 14px;
-  background: var(--bg-alt);
-  border-top: 1px solid var(--border-light);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-decoration: none;
+  color: inherit;
+  font-size: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.bmcard-toggle-label svg { width: 12px; height: 12px; transition: transform 0.2s ease }
-.bmcard-toggle-input:checked + .bmcard-toggle-label svg { transform: rotate(180deg) }
-.bmcard-children { display: none; flex-direction: column; gap: 4px; padding: 8px 12px; background: var(--bg-alt); border-top: 1px dashed var(--border) }
-.bmcard-toggle-input:checked ~ .bmcard-children { display: flex }
-.bmcard-child {
+.sub-sites .group-inline-card:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+}
+.sub-sites .group-inline-card img { width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0 }
+.sub-sites .group-inline-card .gic-ic { display: flex; align-items: center; }
+.sub-sites .group-inline-card .gic-name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;
+}
+
+/* 卡片底部 */
+.card-foot {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  text-decoration: none;
-  color: inherit;
-  font-size: 12.5px;
-  transition: background 0.15s ease;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-light);
+  background: var(--surface);
+  transition: border-color 0.2s ease;
 }
-.bmcard-child:hover { background: var(--surface) }
-.bmcard-child-ic { width: 22px; height: 22px }
-.bmcard-child-ic img { width: 14px; height: 14px }
-.bmcard-child-ic .bmc-fb { font-size: 10px }
-.bmcard-child-text { flex: 1; min-width: 0 }
-.bmcard-child-title { font-weight: 500; color: var(--text) }
-.bmcard-child-url { font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono); margin-left: 6px }
-.bmcard-badge {
-  font-size: 10.5px;
+.card:hover .card-foot { border-color: var(--border-hover); }
+.card-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
   color: var(--text-muted);
-  background: var(--bg-alt);
-  padding: 1px 6px;
-  border-radius: var(--radius-full);
+  cursor: default;
 }
+.card-stat svg { width: 12px; height: 12px }
 
-/* ==================== 布局切换：列表视图 (List View) ==================== */
-.cat-grid.list-view {
+/* ==================== 布局模式：列表视图 (List View) ==================== */
+.card-grid.list-view {
   display: flex !important;
   flex-direction: column !important;
   gap: 8px !important;
+  grid-template-columns: none !important;
 }
-.cat-grid.list-view .gcard,
-.cat-grid.list-view .bmcard {
-  height: auto !important;
-  min-height: 56px !important;
-  max-height: none !important;
-  border-radius: var(--radius-md) !important;
-  padding: 10px 16px !important;
+.card-grid.list-view .card,
+.card-grid.list-view .group-card {
+  height: 82px !important;
+  min-height: 0 !important;
+  padding: 8px 14px !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  border-radius: var(--radius-lg) !important;
   box-shadow: var(--shadow-card) !important;
 }
-.cat-grid.list-view .gcard:hover,
-.cat-grid.list-view .bmcard:hover {
+.card-grid.list-view .card:hover,
+.card-grid.list-view .group-card:hover {
   transform: translateY(-1px) !important;
   box-shadow: var(--shadow-card-hover) !important;
 }
-.cat-grid.list-view .bmcard-main {
-  padding: 0 !important;
-  width: 100% !important;
+.card-grid.list-view .card-topline {
   display: flex !important;
-  flex-direction: row !important;
   align-items: center !important;
-  gap: 12px !important;
+  gap: 8px !important;
+  background: transparent !important;
 }
-.cat-grid.list-view .bmcard-head {
+.card-grid.list-view .card-toprow,
+.card-grid.list-view .group-card-head {
   display: flex !important;
   align-items: center !important;
-  gap: 12px !important;
+  gap: 10px !important;
+  margin: 0 !important;
   flex: 1 !important;
   min-width: 0 !important;
 }
-.cat-grid.list-view .bmcard-icon {
-  width: 34px !important;
-  height: 34px !important;
-}
-.cat-grid.list-view .bmcard-icon img {
-  width: 20px !important;
-  height: 20px !important;
-}
-.cat-grid.list-view .bmcard-title {
-  font-size: 14px !important;
-  font-weight: 600 !important;
-}
-.cat-grid.list-view .bmcard-url {
-  font-size: 11.5px !important;
-  font-family: var(--font-mono) !important;
-  color: var(--text-muted) !important;
-  margin-left: 8px !important;
-}
-.cat-grid.list-view .bmcard-notes {
-  display: none !important;
-}
-.cat-grid.list-view .bmcard-arrow {
-  position: static !important;
-  opacity: 0.6 !important;
-  transform: none !important;
+.card-grid.list-view .card-logo { width: 36px !important; height: 36px !important; }
+.card-grid.list-view .card-logo img { width: 22px !important; height: 22px !important; }
+.card-grid.list-view .card-titlewrap { height: 36px !important; }
+.card-grid.list-view .card-name { font-size: 0.88rem !important; }
+.card-grid.list-view .card-domain { font-size: 0.75rem !important; margin-left: 6px !important; }
+.card-grid.list-view .card-body { display: none !important; }
+.card-grid.list-view .card-foot {
+  padding-top: 0 !important;
+  border-top: none !important;
+  background: transparent !important;
   margin-left: auto !important;
-  align-self: center !important;
 }
-.cat-grid.list-view .bmcard:hover .bmcard-arrow {
-  opacity: 1 !important;
-  color: var(--accent) !important;
-  transform: translateX(2px) !important;
-}
-.cat-grid.list-view .gcard {
-  display: flex !important;
-  flex-direction: column !important;
-}
-.cat-grid.list-view .gcard-head {
-  margin-bottom: 0 !important;
-  width: 100% !important;
-}
-.cat-grid.list-view .gcard-icon {
-  width: 34px !important;
-  height: 34px !important;
-}
-.cat-grid.list-view .gcard-icon img {
-  width: 20px !important;
-  height: 20px !important;
-}
-.cat-grid.list-view .gcard .focus-notes {
-  display: none !important;
-}
-.cat-grid.list-view .gcard:has(.gcard-toggle:checked) .focus-notes {
+.card-grid.list-view .card-preview {
   display: block !important;
-  margin-top: 10px !important;
-  padding-top: 10px !important;
-  border-top: 1px dashed var(--border) !important;
+  font-size: 0.82rem !important;
+  color: var(--text-muted) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 80% !important;
+  margin-top: 2px !important;
 }
 
-/* ==================== 布局切换：小宫格视图 (Mini-Grid View) ==================== */
-.cat-grid.mini-grid-view {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
-  gap: 8px !important;
+/* ==================== 布局模式：小宫格视图 (Mini-Grid View) ==================== */
+.card-grid.mini-grid-view {
+  display: block !important;
+  column-gap: 10px !important;
+  column-fill: balance !important;
+  column-width: clamp(140px, 11vw, 200px) !important;
 }
-.cat-grid.mini-grid-view .gcard,
-.cat-grid.mini-grid-view .bmcard {
-  height: 64px !important;
-  min-height: 64px !important;
-  max-height: 64px !important;
-  padding: 8px 12px !important;
+.card-grid.mini-grid-view .card,
+.card-grid.mini-grid-view .group-card {
+  break-inside: avoid !important;
+  -webkit-column-break-inside: avoid !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  margin: 0 0 10px !important;
+  padding: 8px 10px !important;
   border-radius: var(--radius-md) !important;
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
   box-shadow: var(--shadow-card) !important;
 }
-.cat-grid.mini-grid-view .bmcard-main {
+.card-grid.mini-grid-view .card-toprow,
+.card-grid.mini-grid-view .group-card-head {
+  gap: 6px !important;
+  align-items: center !important;
+  margin-bottom: 2px !important;
+}
+.card-grid.mini-grid-view .card-logo { width: 20px !important; height: 20px !important; border-radius: var(--radius-sm) !important; }
+.card-grid.mini-grid-view .card-logo img { width: 16px !important; height: 16px !important; }
+.card-grid.mini-grid-view .card-logo-fallback,
+.card-grid.mini-grid-view .hero-fb { font-size: 0.7rem !important; width: 16px !important; height: 16px !important; }
+.card-grid.mini-grid-view .card-titlewrap { height: 20px !important; }
+.card-grid.mini-grid-view .card-name { font-size: 13px !important; height: 20px !important; line-height: 20px !important; }
+.card-grid.mini-grid-view .card-titlewrap .card-domain { display: none !important; }
+.card-grid.mini-grid-view .mini-domain {
+  display: block !important;
+  font-size: 10px !important;
+  opacity: 0.6 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  margin-top: 2px !important;
+  font-family: var(--font-mono) !important;
+}
+.card-grid.mini-grid-view .card-body {
+  display: block !important;
   padding: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
+  margin-top: 4px !important;
+}
+.card-grid.mini-grid-view .card-notes,
+.card-grid.mini-grid-view .group-body,
+.card-grid.mini-grid-view .sub-sites { display: none !important; }
+.card-grid.mini-grid-view .card-preview {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 4 !important;
+  line-clamp: 4 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  font-size: 11.5px !important;
+  line-height: 1.4 !important;
+  color: var(--text-muted) !important;
+}
+.card-grid.mini-grid-view .card-foot {
+  padding: 4px 0 0 !important;
+  margin-top: 4px !important;
+  border-top: 1px solid var(--border-light) !important;
+}
+.card-grid.mini-grid-view .card-stat { font-size: 10.5px !important; opacity: 0.8 !important; }
+
+/* ==================== 组聚焦模式 (Focus Mode，100% 对齐主站) ==================== */
+.group-focus-panel {
+  display: none;
+}
+.group-focus-panel:target {
   display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: 10px !important;
+  flex-direction: column;
+  gap: 14px;
+  animation: cardIn 0.28s var(--ease-out);
 }
-.cat-grid.mini-grid-view .bmcard-head {
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  flex: 1 !important;
-  min-width: 0 !important;
-}
-.cat-grid.mini-grid-view .bmcard-icon,
-.cat-grid.mini-grid-view .gcard-icon {
-  width: 28px !important;
-  height: 28px !important;
-  border-radius: var(--radius-sm) !important;
-  flex-shrink: 0 !important;
-}
-.cat-grid.mini-grid-view .bmcard-icon img,
-.cat-grid.mini-grid-view .gcard-icon img {
-  width: 18px !important;
-  height: 18px !important;
-}
-.cat-grid.mini-grid-view .bmcard-title,
-.cat-grid.mini-grid-view .gcard-title {
-  font-size: 13px !important;
-  line-height: 1.3 !important;
-  font-weight: 600 !important;
-  flex: 1 !important;
-}
-.cat-grid.mini-grid-view .bmcard-url {
+body:has(.group-focus-panel:target) .cat-hero {
   display: none !important;
 }
-.cat-grid.mini-grid-view .bmcard-notes,
-.cat-grid.mini-grid-view .bmcard-arrow,
-.cat-grid.mini-grid-view .focus-notes,
-.cat-grid.mini-grid-view .gcard-count {
+body:has(.group-focus-panel:target) #cardGrid {
   display: none !important;
+}
+
+.focus-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 6px;
+}
+.exit-focus-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-xs);
+}
+.exit-focus-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.exit-focus-btn svg { width: 14px; height: 14px; }
+.focus-bar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.focus-bar .panel-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.group-card-focus {
+  height: auto !important;
+  min-height: 200px !important;
+  padding: 20px 24px 24px !important;
+  cursor: default !important;
+  box-shadow: 0 0 0 2px var(--accent-glow), var(--shadow-card-hover) !important;
+  border-color: var(--accent) !important;
+}
+.group-card-focus .group-card-accent {
+  opacity: 1 !important;
+}
+.group-card-focus .card-titlewrap {
+  cursor: default !important;
+}
+.group-card-focus .card-titlewrap:hover {
+  background: transparent !important;
+}
+.group-card-focus .card-titlewrap:hover .card-name {
+  color: var(--text) !important;
+}
+.group-card-focus .card-scroll-wrap {
+  overflow: visible !important;
+}
+.group-card-focus .group-body {
+  font-size: 14px !important;
+  line-height: 1.7 !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+.group-bookmarks-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-light);
+}
+.group-bookmarks-section .section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.group-bookmarks-section .section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.group-bookmarks-section .section-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-alt);
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
 }
 
 /* ==================== 尾部 FOOTER ==================== */

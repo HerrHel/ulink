@@ -70,7 +70,8 @@ describe('S6/S7 SSR 外壳骨架', () => {
   it('分类页含外壳 + 真实卡片网格', () => {
     expect(catHtml).toContain('class="share-app"')
     expect(catHtml).toContain('class="cat-hero"')
-    expect(catHtml).toContain('class="cat-grid"')
+    expect(catHtml).toContain('cat-grid')
+    expect(catHtml).toContain('card-grid')
     expect(catHtml).toContain('Figma')
     expect(catHtml).toContain('unDraw')
     expect(catHtml).not.toContain('class="page"')

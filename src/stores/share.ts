@@ -205,7 +205,9 @@ export const useShareStore = defineStore('share', () => {
         )
         _fillShadow()
         ui.curCat = winData.data.category.id
-        ui.focusedGroupId = null
+        const focusMatch = typeof window !== 'undefined' ? window.location.hash.match(/^#focus-([a-zA-Z0-9_-]+)$/) : null
+        const initialFocusId = focusMatch ? focusMatch[1] : null
+        ui.focusedGroupId = initialFocusId && groups.value.some(g => g.id === initialFocusId) ? initialFocusId : null
         _applyCategoryHead(winData.data)
         loading.value = false
         error.value = ''
@@ -243,7 +245,9 @@ export const useShareStore = defineStore('share', () => {
         )
         _fillShadow()
         ui.curCat = data.category.id
-        ui.focusedGroupId = null
+        const focusMatch = typeof window !== 'undefined' ? window.location.hash.match(/^#focus-([a-zA-Z0-9_-]+)$/) : null
+        const initialFocusId = focusMatch ? focusMatch[1] : null
+        ui.focusedGroupId = initialFocusId && groups.value.some(g => g.id === initialFocusId) ? initialFocusId : null
         _applyCategoryHead(data)
       } else {
         const data = await fetchPublicGroup(route)
@@ -328,6 +332,17 @@ export const useShareStore = defineStore('share', () => {
     (v) => {
       if (loading.value) return
       if (ui.shareMode?.kind === 'group' && group.value && v !== group.value.id) exit()
+      if (ui.shareMode?.kind === 'category' && typeof window !== 'undefined') {
+        if (v) {
+          if (window.location.hash !== `#focus-${v}`) {
+            history.replaceState(null, '', `${window.location.pathname}${window.location.search}#focus-${v}`)
+          }
+        } else {
+          if (window.location.hash.startsWith('#focus-')) {
+            history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+          }
+        }
+      }
     },
   )
 
