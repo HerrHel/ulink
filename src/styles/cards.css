@@ -2,6 +2,12 @@
 .card-grid.list-view{
   display:flex;flex-direction:column;gap:8px;
   grid-template-columns:none;
+  align-items:stretch;
+  width:100%;
+}
+.card-grid.list-view .card-list-inner{
+  display:flex;flex-direction:column;gap:8px;
+  width:100%;
 }
 
 /* ---- List entrance animation ---- */
@@ -14,6 +20,8 @@
 /* ---- List: all cards become vertical columns ---- */
 .list-view .card,
 .list-view .group-card{
+  width:100%;
+  box-sizing:border-box;
   height:auto;min-height:56px;
   padding:8px 12px;
   flex-direction:column;align-items:stretch;
