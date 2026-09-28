@@ -564,6 +564,41 @@ const TOC_SVG =
 /** 首屏主题防闪烁脚本（FOUC Guard）：在任何样式与 DOM 渲染前立即注入 data-theme 与 color-scheme。 */
 const THEME_SCRIPT = `<script>(function(){try{var t=localStorage.getItem("lv_theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}})();</script>`
 
+/** 树状深度优先重排：顶层书签先行，子书签紧随各自父书签下方（DFS） */
+function orderBookmarksHierarchically(bms: PublicBookmark[]): PublicBookmark[] {
+  const byId = new Map<string, PublicBookmark>()
+  for (const b of bms || []) {
+    if (b && b.id) byId.set(String(b.id), b)
+  }
+  const kidsOf = new Map<string, PublicBookmark[]>()
+  const topBms: PublicBookmark[] = []
+  for (const b of bms || []) {
+    const pid = typeof b.parent_id === 'string' ? b.parent_id.trim() : ''
+    if (pid && byId.has(pid)) {
+      const list = kidsOf.get(pid) || []
+      list.push(b)
+      kidsOf.set(pid, list)
+    } else {
+      topBms.push(b)
+    }
+  }
+  const ordered: PublicBookmark[] = []
+  const visited = new Set<string>()
+  const collect = (bm: PublicBookmark) => {
+    const id = String(bm.id)
+    if (visited.has(id)) return
+    visited.add(id)
+    ordered.push(bm)
+    for (const kid of kidsOf.get(id) || []) {
+      collect(kid)
+    }
+  }
+  for (const tb of topBms) {
+    collect(tb)
+  }
+  return ordered
+}
+
 /**
  * 书签列表项（App 列表模式排版）：等高行（icon + 标题 + 域名，无 notes，行高统一）。
  * 标题为空时回退展示域名。纯静态 <a>，无需 JS。
@@ -770,7 +805,7 @@ function buildBody(
       searchBar,
       `</div>`,
       `<div class="bm-grid" id="bmList">`,
-      bookmarks.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n"),
+      orderBookmarksHierarchically(bookmarks).map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("\n"),
       `</div>`,
       `<div class="bm-empty-search" id="bmEmptySearch" style="display:none">${esc(dict.noBookmarksMatch)}</div>`,
       `</section>`,
@@ -1021,9 +1056,9 @@ function buildGroupFocusPanel(
   const name = esc(titleInfo.name)
   const initial = esc(((titleInfo.name || "?").trim().charAt(0) || "?").toUpperCase())
   const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
-  const n = entry.items.length
+  const orderedItems = orderBookmarksHierarchically(entry.items)
   const itemsHtml = n
-    ? entry.items.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
+    ? orderedItems.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
     : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
   const gid = esc(String(g.id))
 
@@ -2595,12 +2630,17 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 /* 卡片正文与内容区 */
 .card-body {
   position: relative;
-  z-index: 1;
+  z-index: 3;
+  pointer-events: none;
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
   scrollbar-width: thin;
+}
+.card-body a,
+.card-body .sub-sites {
+  pointer-events: auto;
 }
 .grp-scroll-body {
   display: flex;
@@ -2660,6 +2700,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   text-decoration: none;
   color: inherit;
   font-size: 12px;
+  cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .sub-sites .group-inline-card:hover {
@@ -2759,6 +2800,20 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .card-grid.list-view .card-body .focus-notes,
 .card-grid.list-view .card-body .sub-sites {
   display: none !important;
+}
+.card-grid.list-view .card:has(.sub-sites) {
+  height: auto !important;
+  min-height: 82px !important;
+  padding: 10px 16px !important;
+}
+.card-grid.list-view .card:has(.sub-sites) .card-body {
+  overflow: visible !important;
+}
+.card-grid.list-view .card:has(.sub-sites) .card-body .sub-sites {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  margin-top: 6px !important;
+  padding-top: 6px !important;
 }
 .card-grid.list-view .card-foot {
   position: absolute !important;

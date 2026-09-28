@@ -66,7 +66,7 @@
           <BrandLogo v-if="isOfficialSubBrand(sub)" :size="16" />
           <img v-else :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
           <span class="gic-name">{{ displayText(sub.title) }}</span>
-          <span class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
+          <span v-if="!isShareReadonly" class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
         </span>
       </div>
       <div class="card-preview" v-if="previewText">{{ previewText }}</div>
@@ -79,7 +79,7 @@
         <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && !uiStore.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && (!uiStore.isMobile || isShareReadonly)" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
     <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>

@@ -357,9 +357,11 @@ export async function saveBm() {
 
 export function addSub(parentId: string) {
   useUIStore().saveToGroup = null
+  const ds = useDataStore()
+  const parent = parentId ? ds.bookmarkMap[parentId] : null
   openBmModal()
   bmForm.parentId = parentId
-  bmForm.categoryId = ''
+  bmForm.categoryId = parent?.categoryId || ''
   bmForm.username = ''
   bmForm.password = ''
   bmForm.icon = ''

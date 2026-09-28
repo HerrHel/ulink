@@ -17,6 +17,8 @@ import type { Bookmark } from '../types.js'
 export interface ShareEntry {
   /** 原书签对象（模板仍直接读 b.title / b.notes / b.id 等） */
   b: Bookmark
+  /** 是否为子书签（有 parentId，渲染时体现层级缩进与连接线） */
+  isChild?: boolean
   /** fixUrl(b.url)：协议白名单后的安全 URL，dangerous scheme → '' */
   safeUrl: string
   /** domain(b.url)：去 www. 的展示域名；非法 url catch 返原串 */
@@ -26,18 +28,19 @@ export interface ShareEntry {
 }
 
 /**
- * 把书签到预渲染条目：对每条 bookmark 预计算 safeUrl / urlDomain / icon。
+ * 把书签到预渲染条目：对每条 bookmark 预计算 safeUrl / urlDomain / icon / isChild。
  * 纯函数：输入 bookmarks 数组 → 输出 ShareEntry 数组，无响应式 / DOM / store 副作用。
  *
  * M15：E2E 历史密文 URL（salt.iv.data 三段）按无效处理 —— 分享侧无 key 不可解，
  * 不派生可跳转链接、不派生图标，否则密文会被 fixUrl 当相对路径拼出乱码地址。
  */
-export function buildShareEntries(bookmarks: Bookmark[]): ShareEntry[] {
+export function buildShareEntries(bookmarks: Bookmark[], childIds?: Set<string>): ShareEntry[] {
   return bookmarks.map(b => {
     const cipherUrl = isThreePartCipher(b.url)
     const safeUrl = cipherUrl ? '' : fixUrl(b.url)
     return {
       b,
+      isChild: childIds ? childIds.has(b.id) : !!(b.parentId || (b as any).parent_id),
       safeUrl,
       urlDomain: cipherUrl ? '' : domain(b.url),
       icon: safeUrl ? favicon(safeUrl) : '',

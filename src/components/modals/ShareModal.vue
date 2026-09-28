@@ -9,10 +9,6 @@
       <div class="modal-body">
         <!-- 目标信息卡片 -->
         <div class="share-target-preview">
-          <div class="share-target-icon">
-            <img v-if="targetIcon" :src="targetIcon" alt="" />
-            <span v-else v-html="defaultIconSvg" class="display-contents"></span>
-          </div>
           <div class="share-target-info">
             <div class="share-target-name">{{ targetName }}</div>
             <div class="share-target-meta">{{ targetMetaText }}</div>
@@ -146,16 +142,7 @@ const targetName = computed(() => {
   return categoryItem.value?.name || t('modal.category.name')
 })
 
-const targetIcon = computed(() => {
-  if (isGroup.value) {
-    return groupItem.value?.icon || ''
-  }
-  return categoryItem.value?.icon || ''
-})
 
-const defaultIconSvg = computed(() => {
-  return isGroup.value ? I.note : I.folder
-})
 
 const targetMetaText = computed(() => {
   if (isGroup.value) {
