@@ -528,9 +528,6 @@ const EXTERNAL_SVG =
 const BACK_SVG =
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>`
 
-/** 卡片点击量统计图标（App I.click 同款）。 */
-const CLICK_SVG =
-  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5"/></svg>`
 
 /** 组卡展开箭头（收起态朝下，展开态旋转 180°）。 */
 const CHEVRON_SVG =
@@ -1116,8 +1113,6 @@ function buildLooseBookmarkCard(
   const ch = title.charAt(0).toUpperCase()
   const rawNotes = deCipherText(dict, b.notes).trim()
   const notes = rawNotes ? stripTags(rawNotes).slice(0, 140) : ""
-  const clicks = typeof b.useCount === 'number' ? b.useCount : (typeof (b as any).use_count === 'number' ? (b as any).use_count : 0)
-  const clickText = dict.lang === 'zh-CN' ? `${clicks} 次点击` : (clicks === 1 ? '1 click' : `${clicks} clicks`)
 
   const subSites = card.children.length
     ? `<div class="sub-sites">${card.children.map((c) => {
@@ -1154,9 +1149,6 @@ function buildLooseBookmarkCard(
     notes ? `<div class="card-notes">${esc(notes)}</div>` : "",
     subSites,
     `<div class="card-preview">${esc(notes || dm || title)}</div>`,
-    `</div>`,
-    `<div class="card-foot">`,
-    `<span class="card-stat">${CLICK_SVG} ${clickText}</span>`,
     `</div>`,
     `</article>`,
   ].join("")

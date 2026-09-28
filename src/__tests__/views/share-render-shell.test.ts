@@ -233,4 +233,10 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(catHtml).toContain('width: 100% !important')
     expect(catHtml).toContain('box-sizing: border-box !important')
   })
+
+  it('分享只读态单书签卡片不展示累计点击次数（纯净轻量）', () => {
+    expect(catHtml).not.toContain('次点击')
+    expect(catHtml).not.toContain('clicks')
+    expect(catHtml).not.toContain('1 click')
+  })
 })
