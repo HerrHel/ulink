@@ -112,6 +112,7 @@ import { copyToClipboard } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -210,6 +211,36 @@ async function onCopyLink() {
   }, 2000)
 }
 
+function collectAllGroupBookmarks(groupId: string): string[] {
+  const g = dataStore.groupMap[groupId]
+  if (!g) return []
+  const bmIds = new Set<string>()
+  for (const bid of g.bookmarkIds || []) {
+    const subs = collectDescendantIds((pid) => dataStore.childrenMap[pid], bid)
+    for (const sid of subs) bmIds.add(sid)
+  }
+  return Array.from(bmIds)
+}
+
+function collectAllCategoryBookmarks(categoryId: string): { groupIds: string[]; bookmarkIds: string[] } {
+  const groups = dataStore.siblingGroups.filter(g => g.categoryId === categoryId && !g.deletedAt)
+  const groupIds = groups.map(g => g.id)
+  const bmIds = new Set<string>()
+  for (const b of dataStore.bookmarks) {
+    if (b.categoryId === categoryId && !b.deletedAt) {
+      const subs = collectDescendantIds((pid) => dataStore.childrenMap[pid], b.id)
+      for (const sid of subs) bmIds.add(sid)
+    }
+  }
+  for (const g of groups) {
+    for (const bid of g.bookmarkIds || []) {
+      const subs = collectDescendantIds((pid) => dataStore.childrenMap[pid], bid)
+      for (const sid of subs) bmIds.add(sid)
+    }
+  }
+  return { groupIds, bookmarkIds: Array.from(bmIds) }
+}
+
 async function onEnableShare() {
   if (operating.value) return
   if (!authStore.isLoggedIn) {
@@ -223,11 +254,51 @@ async function onEnableShare() {
 
   operating.value = true
   try {
-    // 开启分享时后台触发一次增量同步推送到云端，防止云端数据库缺失组或书签
+    const now = Date.now()
+    if (isGroup.value) {
+      const g = groupItem.value
+      if (g) {
+        dataStore._markDirty(g.id)
+        g.updatedAt = Math.max(Number(g.updatedAt || 0), now)
+        const bmIds = collectAllGroupBookmarks(g.id)
+        for (const bid of bmIds) {
+          const b = dataStore.bookmarkMap[bid]
+          if (b) {
+            dataStore._markDirty(bid)
+            b.updatedAt = Math.max(Number(b.updatedAt || 0), now)
+            if (g.categoryId && (!b.categoryId || b.categoryId !== g.categoryId)) {
+              b.categoryId = g.categoryId
+            }
+          }
+        }
+      }
+    } else if (targetId.value) {
+      dataStore._markDirty(targetId.value)
+      const { groupIds, bookmarkIds } = collectAllCategoryBookmarks(targetId.value)
+      for (const gid of groupIds) {
+        const g = dataStore.groupMap[gid]
+        if (g) {
+          dataStore._markDirty(gid)
+          g.updatedAt = Math.max(Number(g.updatedAt || 0), now)
+        }
+      }
+      for (const bid of bookmarkIds) {
+        const b = dataStore.bookmarkMap[bid]
+        if (b) {
+          dataStore._markDirty(bid)
+          b.updatedAt = Math.max(Number(b.updatedAt || 0), now)
+          if (!b.categoryId) {
+            b.categoryId = targetId.value
+          }
+        }
+      }
+    }
+
+    // 开启分享时同步将全部实体（含所有子书签与最新解密明文）即刻推送到云端
     try {
-      void useCloudSync().fullSync().catch(() => {})
-    } catch {
-      /* 容错：同步异常不阻断分享操作 */
+      void useCloudSync().syncImmediate().catch(() => {})
+    } catch (syncErr) {
+      console.warn('[share] pre-share sync error:', syncErr)
     }
 
     if (isGroup.value) {

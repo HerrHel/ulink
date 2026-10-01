@@ -1057,6 +1057,7 @@ function buildGroupFocusPanel(
   const initial = esc(((titleInfo.name || "?").trim().charAt(0) || "?").toUpperCase())
   const notes = notesHtml(dict, g, bmMap, titleInfo.promotedH1).html
   const orderedItems = orderBookmarksHierarchically(entry.items)
+  const n = orderedItems.length
   const itemsHtml = n
     ? orderedItems.map((b) => buildBookmarkItem(dict, b, !!b.parent_id)).join("")
     : `<div class="gcard-empty">${esc(dict.catGroupEmpty)}</div>`
