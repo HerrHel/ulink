@@ -185,7 +185,16 @@ BEGIN
     FROM bookmarks b
     WHERE b.user_id = v_uid
       AND b.deleted_at IS NULL
-      AND b.category_id = v_cat_id
+      AND (
+        b.category_id = v_cat_id
+        OR EXISTS (
+          SELECT 1 FROM sibling_groups sg
+          WHERE sg.user_id = v_uid
+            AND sg.deleted_at IS NULL
+            AND sg.category_id = v_cat_id
+            AND sg.bookmark_ids @> to_jsonb(ARRAY[b.id])
+        )
+      )
     UNION
     SELECT child.*
     FROM bookmarks child

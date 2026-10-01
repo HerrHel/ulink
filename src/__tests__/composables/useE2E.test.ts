@@ -121,6 +121,8 @@ describe('useE2E.decryptStoreItems 解锁后补解密', () => {
     // decryptStoreItems 对 title/url 走 legacy 解密，旧密文被还原
     expect(ds.bookmarkMap['b3'].title).toBe('旧密文标题')
     expect(ds.bookmarkMap['b3'].url).toBe('https://old.example')
+    // 关键断言：已标脏，保证推送到云端覆盖旧密文为明文
+    expect(ds._dirtyIds.has('b3')).toBe(true)
   }, 15000)
 
   it('未登录也工作（canary 仅本地 localStorage，不经 Supabase）', async () => {

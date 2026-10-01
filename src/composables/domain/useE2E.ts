@@ -446,7 +446,7 @@ export function useE2E() {
     if (!key) return
     const ds = useDataStore()
     let changed = false
-    const tryField = async (obj: Record<string, unknown>, f: string) => {
+    const tryField = async (type: EntityType, obj: Record<string, unknown>, f: string) => {
       const v = obj[f]
       if (typeof v !== 'string' || !v) return
       // L15：粗筛走 isThreePartCipher；L17：实体内字段并行、跨实体并行
@@ -455,7 +455,16 @@ export function useE2E() {
       // 解不开（decryptField 对三段但 GCM 认证失败 / 错 key 返 ''）时保留原密文，绝不置空：
       // 置空会让 UI 显示空白，且后续 saveAppData/push 把空值回写云端覆盖明文，永久丢失。
       // UI 乱码由渲染层兜底；此处以数据安全为优先。
-      if (decrypted !== '' && decrypted !== v) { obj[f] = decrypted; changed = true }
+      if (decrypted !== '' && decrypted !== v) {
+        obj[f] = decrypted
+        changed = true
+        // 关键：历史遗留字段（title/url/notes/name）从密文解回明文后，标脏并更新时间戳，
+        // 确保随下一次 push 将明文推上云端覆盖旧密文，避免云端长期驻留密文导致公开分享显示「（内容已加密）」
+        if (LEGACY_DECRYPT_FIELDS[type].includes(f) && typeof obj.id === 'string') {
+          ds._markDirty(obj.id)
+          obj.updatedAt = Math.max(Number(obj.updatedAt || 0), Date.now())
+        }
+      }
     }
     const fieldsOf = (t: EntityType) => new Set<string>([...ENCRYPT_FIELDS[t], ...LEGACY_DECRYPT_FIELDS[t]])
     const bmFields = fieldsOf('bookmark')
@@ -465,19 +474,19 @@ export function useE2E() {
     await Promise.all([
       ...ds.bookmarks.map(b => {
         const o = b as unknown as Record<string, unknown>
-        return Promise.all([...bmFields].map(f => tryField(o, f)))
+        return Promise.all([...bmFields].map(f => tryField('bookmark', o, f)))
       }),
       ...ds.siblingGroups.map(g => {
         const o = g as unknown as Record<string, unknown>
-        return Promise.all([...grpFields].map(f => tryField(o, f)))
+        return Promise.all([...grpFields].map(f => tryField('group', o, f)))
       }),
       ...ds.categories.map(c => {
         const o = c as unknown as Record<string, unknown>
-        return Promise.all([...catFields].map(f => tryField(o, f)))
+        return Promise.all([...catFields].map(f => tryField('category', o, f)))
       }),
       ...ds.customAttributes.map(a => {
         const o = a as unknown as Record<string, unknown>
-        return Promise.all([...attrFields].map(f => tryField(o, f)))
+        return Promise.all([...attrFields].map(f => tryField('attribute', o, f)))
       }),
     ])
     if (changed) ds._bumpSearchVersion()
