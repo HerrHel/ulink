@@ -168,10 +168,16 @@ function isCipherText(s: unknown): boolean {
   return B64_SEG_RE.test(salt) && B64_SEG_RE.test(iv) && B64_SEG_RE.test(data)
 }
 
-/** 分享页文本降级：E2E 历史密文 → 占位提示（对齐 App 未解锁时 UI 显空不显乱码的语义）。 */
+/** 分享页文本降级：E2E 历史密文 → 占位提示（用于标题/组名等不可或缺的字段）。 */
 function deCipherText(dict: typeof T['zh-CN'] | typeof T['en-US'], v: unknown): string {
   const s = typeof v === "string" ? v : ""
   return isCipherText(s) ? dict.cipherPlaceholder : s
+}
+
+/** 备注字段降级：密文直接隐去不展示（对齐 App 端 displayText 语义），杜绝公开卡片展示刺眼的「（内容已加密）」。 */
+function safeNotes(v: unknown): string {
+  const s = typeof v === "string" ? v : ""
+  return isCipherText(s) ? "" : s
 }
 
 /** 协议白名单：仅放行 http/https，其余可导航 scheme（javascript:/data:/vbscript: 等）返空串。 */
@@ -617,7 +623,7 @@ function buildBookmarkItem(
   const dm = safe ? domainOf(safe) : ""
   const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const rawNotes = typeof b.notes === 'string' ? deCipherText(dict, b.notes).trim() : ''
+  const rawNotes = typeof b.notes === 'string' ? safeNotes(b.notes).trim() : ''
   const notes = rawNotes ? stripTags(rawNotes).slice(0, 120) : ''
   const searchStr = esc((title + ' ' + dm).toLowerCase())
   return [
@@ -1112,7 +1118,7 @@ function buildLooseChildItem(
   const dm = safe ? domainOf(safe) : ""
   const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const notes = deCipherText(dict, b.notes).trim()
+  const notes = safeNotes(b.notes).trim()
   const pad = 10 + (child.depth - 1) * 14
   return [
     `<a class="bmcard-child" style="padding-left:${pad}px" href="${href}"${target}${rel}>`,
@@ -1147,7 +1153,7 @@ function buildLooseBookmarkCard(
   const dm = safe ? domainOf(safe) : ""
   const title = deCipherText(dict, b.title).trim() || dm || "?"
   const ch = title.charAt(0).toUpperCase()
-  const rawNotes = deCipherText(dict, b.notes).trim()
+  const rawNotes = safeNotes(b.notes).trim()
   const notes = rawNotes ? stripTags(rawNotes).slice(0, 140) : ""
 
   const subSites = card.children.length
