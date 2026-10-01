@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       # 官方镜像自带 pgTAP；本地栈不连远程库，无需任何 secrets（CI 无 SUPABASE_* 也可跑）
