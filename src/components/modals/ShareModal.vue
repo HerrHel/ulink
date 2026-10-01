@@ -202,15 +202,6 @@ function onClose() {
   uiStore.closeShareModal()
 }
 
-async function onCopyLink() {
-  if (!shareUrl.value) return
-  copyToClipboard(shareUrl.value, t('msg.shareLinkLabel'))
-  copied.value = true
-  setTimeout(() => {
-    copied.value = false
-  }, 2000)
-}
-
 function collectAllGroupBookmarks(groupId: string): string[] {
   const g = dataStore.groupMap[groupId]
   if (!g) return []
@@ -241,6 +232,67 @@ function collectAllCategoryBookmarks(categoryId: string): { groupIds: string[]; 
   return { groupIds, bookmarkIds: Array.from(bmIds) }
 }
 
+function syncSharedEntities() {
+  const now = Date.now()
+  if (isGroup.value) {
+    const g = groupItem.value
+    if (g) {
+      dataStore._markDirty(g.id)
+      g.updatedAt = Math.max(Number(g.updatedAt || 0), now)
+      const bmIds = collectAllGroupBookmarks(g.id)
+      for (const bid of bmIds) {
+        const b = dataStore.bookmarkMap[bid]
+        if (b) {
+          dataStore._markDirty(bid)
+          b.updatedAt = Math.max(Number(b.updatedAt || 0), now)
+          if (g.categoryId && (!b.categoryId || b.categoryId !== g.categoryId)) {
+            b.categoryId = g.categoryId
+          }
+        }
+      }
+    }
+  } else if (targetId.value) {
+    dataStore._markDirty(targetId.value)
+    const { groupIds, bookmarkIds } = collectAllCategoryBookmarks(targetId.value)
+    for (const gid of groupIds) {
+      const g = dataStore.groupMap[gid]
+      if (g) {
+        dataStore._markDirty(gid)
+        g.updatedAt = Math.max(Number(g.updatedAt || 0), now)
+      }
+    }
+    for (const bid of bookmarkIds) {
+      const b = dataStore.bookmarkMap[bid]
+      if (b) {
+        dataStore._markDirty(bid)
+        b.updatedAt = Math.max(Number(b.updatedAt || 0), now)
+        if (!b.categoryId) {
+          b.categoryId = targetId.value
+        }
+      }
+    }
+  }
+
+  // 同步将全部实体（含所有子书签与最新解密明文）即刻推送到云端
+  try {
+    void useCloudSync().syncImmediate().catch(() => {})
+  } catch (syncErr) {
+    console.warn('[share] pre-share sync error:', syncErr)
+  }
+}
+
+async function onCopyLink() {
+  if (!shareUrl.value) return
+  copyToClipboard(shareUrl.value, t('msg.shareLinkLabel'))
+  copied.value = true
+  setTimeout(() => {
+    copied.value = false
+  }, 2000)
+  if (authStore.isLoggedIn) {
+    syncSharedEntities()
+  }
+}
+
 async function onEnableShare() {
   if (operating.value) return
   if (!authStore.isLoggedIn) {
@@ -254,52 +306,7 @@ async function onEnableShare() {
 
   operating.value = true
   try {
-    const now = Date.now()
-    if (isGroup.value) {
-      const g = groupItem.value
-      if (g) {
-        dataStore._markDirty(g.id)
-        g.updatedAt = Math.max(Number(g.updatedAt || 0), now)
-        const bmIds = collectAllGroupBookmarks(g.id)
-        for (const bid of bmIds) {
-          const b = dataStore.bookmarkMap[bid]
-          if (b) {
-            dataStore._markDirty(bid)
-            b.updatedAt = Math.max(Number(b.updatedAt || 0), now)
-            if (g.categoryId && (!b.categoryId || b.categoryId !== g.categoryId)) {
-              b.categoryId = g.categoryId
-            }
-          }
-        }
-      }
-    } else if (targetId.value) {
-      dataStore._markDirty(targetId.value)
-      const { groupIds, bookmarkIds } = collectAllCategoryBookmarks(targetId.value)
-      for (const gid of groupIds) {
-        const g = dataStore.groupMap[gid]
-        if (g) {
-          dataStore._markDirty(gid)
-          g.updatedAt = Math.max(Number(g.updatedAt || 0), now)
-        }
-      }
-      for (const bid of bookmarkIds) {
-        const b = dataStore.bookmarkMap[bid]
-        if (b) {
-          dataStore._markDirty(bid)
-          b.updatedAt = Math.max(Number(b.updatedAt || 0), now)
-          if (!b.categoryId) {
-            b.categoryId = targetId.value
-          }
-        }
-      }
-    }
-
-    // 开启分享时同步将全部实体（含所有子书签与最新解密明文）即刻推送到云端
-    try {
-      void useCloudSync().syncImmediate().catch(() => {})
-    } catch (syncErr) {
-      console.warn('[share] pre-share sync error:', syncErr)
-    }
+    syncSharedEntities()
 
     if (isGroup.value) {
       const ok = await setGroupPublic(targetId.value, true)
