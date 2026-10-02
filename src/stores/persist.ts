@@ -87,7 +87,8 @@ export async function saveData(data: AppData, space: Space = 'main'): Promise<bo
   try {
     localStorage.setItem(lsKey, raw)
   } catch {
-    // localStorage 满时静默忽略，IDB 已有完整数据
+    // localStorage 满时静默清空缓存，防止回退时读到极度陈旧的脏数据
+    try { localStorage.removeItem(lsKey) } catch { /* ignore */ }
   }
 
   return true
@@ -132,12 +133,6 @@ export async function saveToIDB(data: AppData, space: Space = 'main'): Promise<b
 export async function loadData(space: Space = 'main'): Promise<AppData> {
   const idbData = await loadFromIDB(space)
   if (idbData) {
-    // IDB 加载成功，尝试保持 localStorage 一致（静默）
-    // R23：原 saveToLocalStorage 会 _stamp 递增 _writeSeq 导致每次 load 序号虚高，未来若比对 _writeSeq 会误判。
-    // 直接写入 IDB 原始数据（已含 _writeSeq/_schemaVersion/_dataVersion），不递增计数器。
-    try {
-      localStorage.setItem(_keyOf(space, 'ls'), JSON.stringify(idbData))
-    } catch { /* ignore */ }
     return idbData
   }
 
@@ -233,7 +228,8 @@ export function getStorageInfo(data: AppData): StorageInfo {
   try {
     const bytes = new Blob([JSON.stringify(data)]).size
     const sizeKB = bytes / 1024
-    const percent = Math.min(100, Math.round(bytes / 5242880 * 100))
+    // IndexedDB usually provides hundreds of MBs. Assuming a soft limit of 500MB (524288000 bytes) instead of 5MB.
+    const percent = Math.min(100, Math.round(bytes / 524288000 * 100))
     return {
       size: sizeKB, percent,
       label: sizeKB < 1024

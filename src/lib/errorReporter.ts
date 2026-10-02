@@ -62,19 +62,18 @@ function _throttleKey(message: string): boolean {
   // 修审计：实现与文件头注释/test 编排声明的「LRU 100 上限」intent 对齐，附带修过期槽位
   // 永不主动回收的泄漏（满前 Map 只增不减）。
   if (_throttled.size >= MAX_THROTTLED_KEYS) {
-    let oldestKey: string | undefined
-    let oldestTs = Infinity
     for (const [k, ts] of _throttled) {
       if (now - ts >= THROTTLE_MS) {
         _throttled.delete(k)
-      } else if (ts < oldestTs) {
-        oldestKey = k
-        oldestTs = ts
       }
     }
-    // 清完过期仍超上限（即所有现存条目均在 5s 窗口内），删最旧一项腾槽给当前 message
-    if (_throttled.size >= MAX_THROTTLED_KEYS && oldestKey) {
-      _throttled.delete(oldestKey)
+    if (_throttled.size >= MAX_THROTTLED_KEYS) {
+      // 一次性淘汰一半的旧记录，避免风暴期间每次插入都触发 O(N) 遍历
+      const entries = Array.from(_throttled.entries()).sort((a, b) => a[1] - b[1])
+      const toDelete = entries.slice(0, Math.ceil(MAX_THROTTLED_KEYS / 2))
+      for (const [k] of toDelete) {
+        _throttled.delete(k)
+      }
     }
   }
   _throttled.set(message, now)
@@ -120,11 +119,19 @@ export function reportError(payload: ErrorPayload): void {
   // settle 时仍挂事件循环 8s，无人 clearTimeout 致每次成功上报泄漏一个 timer 句柄。
   // 在 invokeP settle 后清理 timer，保留超时兜底语义同时消除孤儿 timer。
   let timer: ReturnType<typeof setTimeout> | undefined
+  const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null
   const invokeP = Promise.resolve(
-    supabase.functions.invoke('report-error', { body }),
+    supabase.functions.invoke('report-error', { 
+      body,
+      // @ts-ignore
+      signal: abortController?.signal
+    }),
   )
   const timeoutP = new Promise<{ error: { message: string } }>((resolve) => {
-    timer = setTimeout(() => resolve({ error: { message: 'timeout' } }), INSERT_TIMEOUT_MS)
+    timer = setTimeout(() => {
+      if (abortController) abortController.abort()
+      resolve({ error: { message: 'timeout' } })
+    }, INSERT_TIMEOUT_MS)
   })
   invokeP.finally(() => {
     if (timer) clearTimeout(timer)

@@ -10,7 +10,6 @@ import { useUIStore } from './ui.js'
 import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
 import * as persist from './persist.js'
-import { AppDataSchema } from '../schemas.js'
 import { toast } from '../lib/toast.js'
 import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
@@ -29,11 +28,18 @@ export function _fingerprint(data: AppData): string {
   const cats = data.categories || []
   const attrs = data.customAttributes || []
   let maxUp = 0
-  for (const b of bms) if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
-  for (const g of grps) if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
+  let useCounts = 0
+  for (const b of bms) {
+    if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
+    useCounts += b.useCount || 0
+  }
+  for (const g of grps) {
+    if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
+    useCounts += g.useCount || 0
+  }
   for (const c of cats) if ((c.updatedAt || 0) > maxUp) maxUp = c.updatedAt || 0
   for (const a of attrs) if ((a.updatedAt || 0) > maxUp) maxUp = a.updatedAt || 0
-  return `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+  return `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${useCounts}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
 }
 
 export const useAppStore = defineStore('app', () => {
@@ -169,18 +175,12 @@ export const useAppStore = defineStore('app', () => {
       const fp = _fingerprint(data)
       const space = ui().curSpace
       if (fp && fp === _lastSavedFp[space]) return Promise.resolve(true)
-      // 运行时验证数据完整性，阻止损坏数据写入存储
-      const parsed = AppDataSchema.safeParse(data)
-      if (!parsed.success) {
-        console.error('[store] 数据验证失败，跳过存储:', parsed.error.issues)
-        return Promise.resolve(false)
-      }
       d._storageInfoDirty = true
       d._saveCount++
       // IDB 权威写入（含 localStorage 尽力缓存）；按当前数据空间选存储键——
       // 主页 linkvault_v2 / 私密空间 linkvault_vault_v1，物理隔离。
       // E1-003：返回 Promise 供 flush 可 await；toast 仍链式处理。
-      const p = persist.saveData(parsed.data, space).then(ok => {
+      const p = persist.saveData(data, space).then(ok => {
         if (ok) {
           _lastSavedFp[space] = fp
           // H11：写入恢复成功即清旗标，让「恢复→再失败」能重新提示

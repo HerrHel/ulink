@@ -158,7 +158,9 @@ export async function decrypt(ciphertext: string, key: CryptoKey): Promise<strin
     )
     return _fromBuffer(decrypted)
   } catch {
-    return ciphertext
+    // 降级失败时不能原样返回损坏的密文，否则会在明文渲染并可能被重加密覆盖。
+    // 返回特殊标记（或空串），这样展示侧和同步侧能被隔离，不引发二次污染。
+    return ''
   }
 }
 

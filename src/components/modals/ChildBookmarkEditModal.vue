@@ -56,7 +56,7 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
 import { fixUrl, domain, displayText } from '../../utils.js'
-import { safeDecodePassword, encrypt, decrypt, isThreePartCipher } from '../../crypto.js'
+import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import type { EncryptedPassword } from '../../types.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { toast } from '../../lib/toast.js'
@@ -130,8 +130,7 @@ async function loadFromStore() {
     if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
       try {
         const ep = pw as EncryptedPassword
-        const raw = ep.salt + '.' + ep.iv + '.' + ep.data
-        form.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
+        form.password = await decryptPasswordWithKey(ep, e2eStore.cryptoKey as CryptoKey)
         if (localGen !== _loadGen) return // await 后 gen 失效则不写错表单
       } catch { if (localGen !== _loadGen) return; form.password = '' }
     } else if (e2eStore.isE2EEnabled) {
@@ -144,8 +143,7 @@ async function loadFromStore() {
       if (unlocked && e2eStore.cryptoKey) {
         try {
           const ep = pw as EncryptedPassword
-          const raw = ep.salt + '.' + ep.iv + '.' + ep.data
-          form.password = await decrypt(raw, e2eStore.cryptoKey as CryptoKey)
+          form.password = await decryptPasswordWithKey(ep, e2eStore.cryptoKey as CryptoKey)
           if (localGen !== _loadGen) return // 二次 await 后再判一次 gen
         } catch { if (localGen !== _loadGen) return; form.password = '' }
       } else { form.password = '' }

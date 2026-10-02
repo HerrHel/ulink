@@ -49,9 +49,9 @@ const backoffFor = (openCount: number): number =>
  */
 export function classifySyncError(message: string): SyncErrorKind {
   const m = String(message || '')
-  if (/离线|offline|failed to fetch|networkerror|network error/i.test(m)) return 'network'
+  if (/401|403|jwt|unauthorized|forbidden|row-level|rls|permission|authenticated|offline token/i.test(m)) return 'auth'
   if (/429|402|407|413|507|quota|rate.?limit|too many requests|exceed|payment|空间已满|容量/i.test(m)) return 'quota'
-  if (/401|403|jwt|unauthorized|forbidden|row-level|rls|permission|authenticated/i.test(m)) return 'auth'
+  if (/离线|offline|failed to fetch|networkerror|network error/i.test(m)) return 'network'
   return 'server'
 }
 
