@@ -6,12 +6,9 @@
         <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
       </div>
       <div class="modal-body auth-body">
-        <!-- 品牌 Logo / 邮箱图标装饰 -->
+        <!-- 邮箱图标装饰 -->
         <div class="auth-icon-wrap">
-          <div v-if="step === 'email'" class="auth-logo-badge">
-            <BrandLogo :size="32" />
-          </div>
-          <span v-else class="auth-icon" v-html="I.mail"></span>
+          <span class="auth-icon" v-html="I.mail"></span>
         </div>
 
         <!-- Step 1: 输入邮箱 -->
@@ -121,7 +118,6 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
-import BrandLogo from '../ui/BrandLogo.vue'
 
 const TURNSTILE_SITE_KEY = import.meta.env.MODE === 'test' ? '' : String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '')
 const turnstileToken = ref('')
@@ -317,19 +313,12 @@ onBeforeUnmount(() => {
 
 /* ── 图标装饰 ── */
 .auth-icon-wrap{margin-bottom:16px}
-.auth-logo-badge{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:52px;height:52px;border-radius:15px;
-  background:var(--bg-surface);
-  border:1px solid var(--border);
-  box-shadow:var(--shadow-sm);
-}
 .auth-icon{
   display:inline-flex;align-items:center;justify-content:center;
-  width:52px;height:52px;border-radius:15px;
+  width:48px;height:48px;border-radius:14px;
   background:var(--accent-light);color:var(--accent);
 }
-.auth-icon svg{width:26px;height:26px}
+.auth-icon svg{width:24px;height:24px}
 
 /* ── 提示文字 ── */
 .auth-hint{
