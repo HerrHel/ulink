@@ -13,6 +13,7 @@ vi.mock('../../lib/supabase.js', () => {
     supabase: {
       auth: {
         signInWithOtp: vi.fn(async () => ({ data: {}, error: null })),
+        signInWithOAuth: vi.fn(async () => ({ data: {}, error: null })),
         verifyOtp: vi.fn(async () => ({ data: {}, error: null })),
         signOut: vi.fn(async () => ({ error: null })),
         updateUser: vi.fn(async ({ data }) => ({ data: { user: { id: 'u1', user_metadata: data } }, error: null })),
@@ -411,6 +412,41 @@ describe('auth 限流纯函数护栏 — lockDurationFor / _isRateLimitError', (
       expect(auth.customAvatar).toBe('')
       expect(localStorage.getItem('lv_user_nickname')).toBeNull()
       expect(localStorage.getItem('lv_user_avatar')).toBeNull()
+    })
+  })
+
+  describe('signInWithOAuth 与验证码人机验证参数', () => {
+    it('sendOtp 携带 captchaToken 时正确传入 supabase options', async () => {
+      const auth = useAuthStore()
+      ;(supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null })
+      const ok = await auth.sendOtp('test@example.com', 'cf-turnstile-token-123')
+      expect(ok).toBe(true)
+      expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        options: { captchaToken: 'cf-turnstile-token-123' },
+      })
+    })
+
+    it('signInWithOAuth 成功调用 supabase 对应 provider', async () => {
+      const auth = useAuthStore()
+      ;(supabase.auth.signInWithOAuth as any).mockResolvedValue({ data: { url: 'https://auth.provider.com' }, error: null })
+      const ok = await auth.signInWithOAuth('github')
+      expect(ok).toBe(true)
+      expect(auth.authError).toBeNull()
+      expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'github',
+          options: expect.objectContaining({ redirectTo: expect.stringContaining('/app') }),
+        })
+      )
+    })
+
+    it('signInWithOAuth 失败时写入 authError 并返回 false', async () => {
+      const auth = useAuthStore()
+      ;(supabase.auth.signInWithOAuth as any).mockResolvedValue({ data: null, error: { message: 'OAuth provider error' } })
+      const ok = await auth.signInWithOAuth('google')
+      expect(ok).toBe(false)
+      expect(auth.authError).toBe('OAuth provider error')
     })
   })
 })

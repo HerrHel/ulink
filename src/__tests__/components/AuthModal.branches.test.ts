@@ -17,6 +17,7 @@ const initialSyncMock = vi.hoisted(() => vi.fn())
 const sendCooldownRemainingMock = vi.hoisted(() => vi.fn())
 const verifyLockRemainingMock = vi.hoisted(() => vi.fn())
 const resetVerifyStateMock = vi.hoisted(() => vi.fn())
+const signInWithOAuthMock = vi.hoisted(() => vi.fn())
 
 function mkAuthState() {
   return reactive({
@@ -33,6 +34,7 @@ vi.mock('../../composables/domain/useAuth.js', () => ({
     get authError() { return authState.authError },
     set authError(v: string | null) { authState.authError = v },
     sendOtp: sendOtpMock,
+    signInWithOAuth: signInWithOAuthMock,
     verifyOtp: verifyOtpMock,
     sendCooldownRemaining: sendCooldownRemainingMock,
     verifyLockRemaining: verifyLockRemainingMock,
@@ -45,7 +47,7 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
 vi.mock('../../composables/domain/useE2E.js', () => ({
   useE2E: () => ({ checkE2EStatus: checkE2EStatusMock, isE2EEnabled: { value: false } }),
 }))
-vi.mock('../../config/icons.js', () => ({ I: { close: '<svg/>', mail: '<svg/>', alert: '<svg/>', listCheck: '<svg/>' } }))
+vi.mock('../../config/icons.js', () => ({ I: { close: '<svg/>', mail: '<svg/>', alert: '<svg/>', listCheck: '<svg/>', github: '<svg/>', google: '<svg/>' } }))
 
 import AuthModal from '../../components/modals/AuthModal.vue'
 
@@ -58,6 +60,7 @@ beforeEach(() => {
   sendCooldownRemainingMock.mockReset()
   verifyLockRemainingMock.mockReset()
   resetVerifyStateMock.mockReset()
+  signInWithOAuthMock.mockReset()
   // 默认无冷却无锁定
   sendCooldownRemainingMock.mockReturnValue(0)
   verifyLockRemainingMock.mockReturnValue(0)
@@ -346,6 +349,46 @@ describe('AuthModal 分支契约', () => {
       await fillCode(wrapper, '123456')
       const verifyBtn = wrapper.findAll('button').find(b => b.text().trim() === '登录')
       expect(verifyBtn?.attributes('disabled')).toBeUndefined()
+    })
+  })
+
+  describe('第三方 OAuth 登录快捷方式', () => {
+    it('点击 GitHub 登录按钮调用 auth.signInWithOAuth("github")', async () => {
+      const wrapper = mount(AuthModal)
+      await openModal(wrapper)
+      signInWithOAuthMock.mockResolvedValue(true)
+
+      const btn = wrapper.find('#authGithubBtn')
+      expect(btn.exists()).toBe(true)
+      await btn.trigger('click')
+      await flushPromises()
+
+      expect(signInWithOAuthMock).toHaveBeenCalledWith('github')
+    })
+
+    it('点击 Google 登录按钮调用 auth.signInWithOAuth("google")', async () => {
+      const wrapper = mount(AuthModal)
+      await openModal(wrapper)
+      signInWithOAuthMock.mockResolvedValue(true)
+
+      const btn = wrapper.find('#authGoogleBtn')
+      expect(btn.exists()).toBe(true)
+      await btn.trigger('click')
+      await flushPromises()
+
+      expect(signInWithOAuthMock).toHaveBeenCalledWith('google')
+    })
+
+    it('OAuth 失败时设置 authError 提示', async () => {
+      const wrapper = mount(AuthModal)
+      await openModal(wrapper)
+      signInWithOAuthMock.mockResolvedValue(false)
+
+      const btn = wrapper.find('#authGithubBtn')
+      await btn.trigger('click')
+      await flushPromises()
+
+      expect(authState.authError).toBeTruthy()
     })
   })
 })
