@@ -79,14 +79,20 @@
   position:relative;
   display:inline-flex;align-items:center;justify-content:center;
   padding:4px 8px;
-  border-radius:0;border:none;
+  border-radius:var(--radius-sm);border:none;
   background:transparent;
   cursor:pointer;
   color:var(--text-muted);
-  transition:var(--transition-fast);
+  transition:transform 0.15s ease,background-color 0.15s ease,color 0.15s ease;
 }
+.layout-toggle .lt-btn{border-radius:0}
 .lt-btn>span{display:contents}
 .lt-btn svg{width:15px;height:15px}
+@media (hover: hover) and (pointer: fine) {
+.lt-btn:hover{color:var(--text);background:var(--surface-hover)}
+}
+.lt-btn:active{transform:scale(0.92);transition-duration:0.05s}
+.lt-btn.active{color:var(--accent);background:var(--accent-light)}
 .header-login-btn{
   display:inline-flex;align-items:center;gap:6px;
   padding:4px 10px;
@@ -95,14 +101,17 @@
   border:1px solid var(--border-light);
   border-radius:var(--radius-md);
   background:var(--surface);
-  transition:all 0.15s ease;
+  transition:transform 0.15s ease,border-color 0.15s ease,color 0.15s ease,background-color 0.15s ease;
   flex-shrink:0;
 }
+@media (hover: hover) and (pointer: fine) {
 .header-login-btn:hover{
   border-color:var(--accent);
   color:var(--accent);
   background:var(--accent-light);
 }
+}
+.header-login-btn:active{transform:scale(0.96);transition-duration:0.05s}
 .header-login-btn .icon-sm svg{
   width:14px;height:14px;
 }
@@ -119,7 +128,10 @@
 .header-sync-btn::before{
   content:'';position:absolute;inset:-13px;border-radius:50%;
 }
+@media (hover: hover) and (pointer: fine) {
 .header-sync-btn:hover{transform:scale(1.15)}
+}
+.header-sync-btn:active{transform:scale(0.88);transition-duration:0.05s}
 .header-sync-btn.dot-ok{background:var(--emerald,#22c55e)}
 .header-sync-btn.dot-pending{background:var(--amber,#f59e0b)}
 .header-sync-btn.dot-syncing{
@@ -187,7 +199,7 @@
   border-radius:var(--radius-md);
   font-size:0.84rem;color:var(--text);
   outline:none;
-  transition:all 0.25s var(--ease-out);
+  transition:border-color 0.2s var(--ease-out),box-shadow 0.2s var(--ease-out),background-color 0.2s var(--ease-out);
 }
 .search-input::placeholder{color:var(--text-muted);transition:color 0.2s ease}
 .search-input:focus{
@@ -214,11 +226,14 @@
   display:flex;align-items:center;gap:10px;
   width:100%;padding:9px 12px;
   font-size:0.82rem;color:var(--text-secondary);
-  cursor:pointer;transition:all 0.1s ease;
+  cursor:pointer;
+  transition:background-color 0.12s ease,color 0.12s ease;
 }
-.search-suggest-item:hover,.search-suggest-item.active{
-  background:var(--surface-hover);color:var(--text);
+@media (hover: hover) and (pointer: fine) {
+.search-suggest-item:hover{background:var(--surface-hover);color:var(--text)}
 }
+.search-suggest-item.active{background:var(--surface-hover);color:var(--text)}
+.search-suggest-item:active{background:var(--surface-active);transition-duration:0.05s}
 .search-suggest-item img{width:18px;height:18px;border-radius:2px;flex-shrink:0}
 .search-suggest-item .ss-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent)}
 .search-suggest-item .ss-icon svg{width:16px;height:16px}
@@ -246,30 +261,37 @@
   box-shadow:0 2px 8px var(--accent-glow);
   border:1px solid rgba(255,255,255,0.1);
 }
-.btn-primary:hover{
+@media (hover: hover) and (pointer: fine) {
+.btn-primary:not(:disabled):hover{
   box-shadow:0 4px 16px var(--accent-glow);
   transform:translateY(-1px);
+}
 }
 .btn-primary:disabled{
   opacity:0.35;cursor:not-allowed;box-shadow:none;
   transform:none;
 }
 .btn-primary:active{
-  transform:translateY(0);
+  transform:scale(0.97);
   box-shadow:0 1px 4px var(--accent-glow);
-  transition-duration:0.06s;
+  transition-duration:0.05s;
 }
 .btn-secondary{
   background:var(--surface);color:var(--text-secondary);
   border:1px solid var(--border);
   box-shadow:var(--shadow-xs);
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-secondary:hover{background:var(--surface-hover);border-color:var(--border-hover);color:var(--text);box-shadow:var(--shadow-sm)}
-.btn-secondary:active{background:var(--surface-active);transition-duration:0.06s}
+}
+.btn-secondary:active{transform:scale(0.97);background:var(--surface-active);transition-duration:0.05s}
 .btn-ghost{
   color:var(--text-muted);
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-ghost:hover{color:var(--text);background:var(--surface-hover)}
+}
+.btn-ghost:active{transform:scale(0.95);background:var(--surface-active);transition-duration:0.05s}
 .btn-sm{padding:5px 12px;font-size:0.76rem;border-radius:var(--radius-sm)}
 .btn-xs{
   width:28px;height:28px;padding:0;
@@ -277,11 +299,16 @@
   border-radius:var(--radius-sm);color:var(--text-muted);
   transition:var(--transition-normal);
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-xs:hover{color:var(--text);background:var(--surface-hover);transform:scale(1.05)}
-.btn-xs:active{transform:scale(0.95);transition-duration:0.06s}
+}
+.btn-xs:active{transform:scale(0.92);transition-duration:0.05s}
 .btn-xs svg{width:14px;height:14px}
 .btn-danger{color:var(--accent)}
+@media (hover: hover) and (pointer: fine) {
 .btn-danger:hover{background:var(--accent-light)}
+}
+.btn-danger:active{transform:scale(0.95);transition-duration:0.05s}
 
 /* Group head undo/redo buttons */
 .group-head-actions{
@@ -294,7 +321,7 @@
   border-radius:var(--radius-sm);border:none;background:transparent;
   color:var(--accent);opacity:1;
   pointer-events:auto;cursor:pointer;
-  transition:all 0.2s ease;
+  transition:transform 0.15s ease,background-color 0.15s ease,opacity 0.15s ease;
 }
 .btn-undo-group svg,.btn-redo-group svg{width:15px;height:15px}
 .btn-undo-group>span,.btn-redo-group>span{display:contents}
@@ -302,8 +329,13 @@
   color:var(--text-muted);opacity:0.25;
   pointer-events:none;cursor:default;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-undo-group:not(.disabled):hover,.btn-redo-group:not(.disabled):hover{
   background:var(--accent-light);
+}
+}
+.btn-undo-group:not(.disabled):active,.btn-redo-group:not(.disabled):active{
+  transform:scale(0.88);transition-duration:0.05s;
 }
 
 /* ==================== SHARE MODE HEADER ==================== */

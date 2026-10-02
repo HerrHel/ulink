@@ -451,8 +451,9 @@
 }
 .card-logo img{
   width:28px;height:28px;
-  object-fit:contain;
+  object-fit:contain;opacity:0;transition:opacity 0.2s var(--ease-out);
 }
+.card-logo img.img-loaded{opacity:1}
 .card-logo svg{width:36px;height:36px}
 .card-logo .brand-logo-icon{width:28px;height:28px}
 .card-logo-fallback{
@@ -463,7 +464,7 @@
   color:var(--accent);
   text-transform:uppercase;
 }
-.card-logo:has(img:not(.img-error)) .card-logo-fallback{display:none}
+.card-logo:has(img.img-loaded) .card-logo-fallback{display:none}
 .card-logo img.img-error{display:none}
 .card-icon{
   flex-shrink:0;
@@ -656,7 +657,7 @@
   border-radius:var(--radius-xl);
   letter-spacing:0.02em;
   cursor:pointer;
-  transition:all 0.2s ease;
+  transition:transform 0.18s var(--ease-out),background-color 0.15s ease,color 0.15s ease,border-color 0.15s ease,box-shadow 0.15s ease;
   border:1px solid transparent;
   white-space:nowrap;flex-shrink:0;
 }
@@ -670,6 +671,7 @@
 }
 }
 .tag-custom{background:var(--card-badge-bg);color:var(--text-secondary);border-color:var(--border-light)}
+.card-tag:active{transform:scale(0.93);transition-duration:0.05s}
 
 /* Card account toggle */
 .card-acct-toggle{
@@ -684,7 +686,8 @@
 .card-acct-toggle svg{width:11px;height:11px;transition:transform 0.2s ease}
 .card-acct-toggle.open svg{transform:rotate(90deg)}
 .card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--surface-hover);border-radius:var(--radius-base);font-size:0.8rem}
-.card-acct-body.show{display:block}
+.card-acct-body.show{display:block;animation:acctSlideIn 0.2s var(--ease-out)}
+@keyframes acctSlideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .acct-row{display:flex;align-items:center;gap:6px;padding:3px 0}
 .acct-row .acct-label{color:var(--text-muted);font-size:0.78rem;width:30px;flex-shrink:0}
 .acct-row .acct-val{color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
@@ -694,7 +697,8 @@
   transition:var(--transition-fast);
   -webkit-tap-highlight-color:transparent;
 }
-.acct-show-pw:hover,.acct-show-pw:active{color:var(--text);background:var(--surface-hover)}
+.acct-show-pw:hover{color:var(--text);background:var(--surface-hover)}
+.acct-show-pw:active{color:var(--text);background:var(--surface-hover);transform:scale(0.88);transition-duration:0.05s}
 .acct-show-pw svg{width:15px;height:15px}
 /* Detail panel: constrain account/password section width */
 .detail-card-wrap .card-acct-body{
@@ -704,12 +708,14 @@
   width:28px;height:28px;padding:0;
   display:inline-flex;align-items:center;justify-content:center;
   border-radius:var(--radius-sm);color:var(--text-muted);flex-shrink:0;
-  cursor:pointer;transition:var(--transition-fast);
+  cursor:pointer;transition:transform 0.15s var(--ease-spring),color 0.15s ease,background-color 0.15s ease;
   border:none;background:transparent;
   margin-left:auto;
 }
 .acct-copy-btn:hover{color:var(--accent);background:var(--accent-light)}
-.acct-copy-btn svg{width:11px;height:11px}
+.acct-copy-btn:active{transform:scale(0.86);transition-duration:0.05s}
+.acct-copy-btn.copied{color:var(--emerald);background:var(--emerald-light);transform:scale(1.08)}
+.acct-copy-btn svg{width:11px;height:11px;transition:transform 0.15s ease}
 
 /* Card footer */
 .card-foot{

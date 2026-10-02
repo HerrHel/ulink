@@ -13,7 +13,7 @@
         <div class="card-logo" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <BrandLogo v-if="isOfficialBrand" :size="28" />
           <template v-else>
-            <img v-if="iconSrc" :src="iconSrc" alt="" loading="lazy" decoding="async" @error="onImgError">
+            <img v-if="iconSrc" :src="iconSrc" alt="" loading="lazy" decoding="async" :class="{ 'img-loaded': imgLoaded }" @load="imgLoaded = true" @error="onImgError">
             <span class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
           </template>
         </div>
@@ -55,12 +55,12 @@
         <div class="card-acct-body" :class="{ show: acctOpen || isExpanded }">
           <div class="acct-row" v-if="displayText(bookmark.username)">
             <span class="acct-label">{{ t('cards.account') }}</span><span class="acct-val">{{ displayText(bookmark.username) }}</span>
-            <button class="acct-copy-btn" @click.stop="copyUser" :title="t('common.copy')" v-html="I.copy"></button>
+            <button class="acct-copy-btn" :class="{ copied: userCopied }" @click.stop="copyUser" :title="t('common.copy')" v-html="userCopied ? I.check : I.copy"></button>
           </div>
           <div class="acct-row" v-if="bookmark.password">
             <span class="acct-label">{{ t('cards.password') }}</span><span class="acct-val">{{ isVisible(bookmark.id) ? decodedPw : '••••••' }}</span>
             <button class="acct-show-pw" @click.stop="onTogglePw" :title="isVisible(bookmark.id) ? t('cards.hidePassword') : t('cards.showPassword')" :aria-label="isVisible(bookmark.id) ? t('cards.hidePassword') : t('cards.showPassword')" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
-            <button class="acct-copy-btn" @click.stop="copyPw" :title="t('common.copy')" v-html="I.copy"></button>
+            <button class="acct-copy-btn" :class="{ copied: pwCopied }" @click.stop="copyPw" :title="t('common.copy')" v-html="pwCopied ? I.check : I.copy"></button>
           </div>
         </div>
       </template>
@@ -141,6 +141,9 @@ const cardEl = ref(null)
 // useCardOverflow 副作用：给 .card-body 加 .card-overflow 类驱动淡出遮罩，返回值此处不消费
 useCardOverflow(cardEl)
 const acctOpen = ref(props.defaultAcctOpen)
+const imgLoaded = ref(false)
+const userCopied = ref(false)
+const pwCopied = ref(false)
 const decodedPw = ref('')
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 const e2eStore = useE2EStore()
@@ -257,6 +260,8 @@ function copyUser() {
   // E2E 密文（未解锁/解不开）复制无意义，提示解锁而非把空/密文写进剪贴板
   if (v && !displayText(v)) { toast(t('cards.encryptedFieldLocked'), false); return }
   copyToClipboard(v, t('cards.account'))
+  userCopied.value = true
+  setTimeout(() => { userCopied.value = false }, 1200)
 }
 // 未解锁时 password 为 EncryptedPassword 对象、decryptPasswordWithKey 解不开返 ''；
 // 旧实现照常 copyToClipboard('') → utils toast「密码 已复制」误导用户以为复制成功，
@@ -269,6 +274,8 @@ function copyPw() {
   }
   if (!decodedPw.value) { toast(t('cards.passwordLockedNoCopy'), false); return }
   copyToClipboard(decodedPw.value, t('cards.password'))
+  pwCopied.value = true
+  setTimeout(() => { pwCopied.value = false }, 1200)
 }
 
 function onTogglePw() {

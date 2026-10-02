@@ -390,5 +390,16 @@ describe('AuthModal 分支契约', () => {
 
       expect(authState.authError).toBeTruthy()
     })
+
+    it('step="email" 时渲染 BrandLogo 徽章，step="code" 时渲染邮箱图标', async () => {
+      const wrapper = mount(AuthModal)
+      await openModal(wrapper)
+      expect(wrapper.find('.auth-logo-badge').exists()).toBe(true)
+      expect(wrapper.find('.auth-icon').exists()).toBe(false)
+
+      await reachCodeStep(wrapper)
+      expect(wrapper.find('.auth-logo-badge').exists()).toBe(false)
+      expect(wrapper.find('.auth-icon').exists()).toBe(true)
+    })
   })
 })

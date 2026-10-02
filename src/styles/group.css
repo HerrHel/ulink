@@ -115,13 +115,15 @@
   border-radius:var(--radius-md);color:var(--text-muted);
   background:transparent;border:none;
   cursor:pointer;
-  transition:all 0.15s var(--ease-out);
+  transition:transform 0.12s var(--ease-out),color 0.12s ease,background-color 0.12s ease;
 }
+@media (hover: hover) and (pointer: fine) {
 .ft-btn:hover{color:var(--text);background:var(--surface-hover)}
+.ft-btn-danger:hover{color:var(--rose);background:var(--rose-light)}
+}
 .ft-btn:active{transform:scale(0.95);transition-duration:0.06s}
 .ft-btn>span{display:contents}
 .ft-btn svg{width:15px;height:15px}
-.ft-btn-danger:hover{color:var(--rose);background:var(--rose-light)}
 .ft-btn.disabled{opacity:0.25;pointer-events:none}
 .ft-btn.active{color:var(--accent);background:var(--accent-light)}
 .ft-color-btn.active{color:var(--ft-color,var(--accent));background:var(--accent-light);position:relative}
@@ -217,9 +219,11 @@
   border-radius:var(--radius-md);color:var(--text-muted);
   background:transparent;border:1px solid var(--border);
   cursor:pointer;flex-shrink:0;
-  transition:all 0.15s var(--ease-out);
+  transition:transform 0.15s var(--ease-out),color 0.15s ease,border-color 0.15s ease,background-color 0.15s ease;
 }
+@media (hover: hover) and (pointer: fine) {
 .ft-btn-back:hover{color:var(--accent);border-color:var(--accent);background:var(--accent-light);transform:translateX(-1px)}
+}
 .ft-btn-back:active{transform:scale(0.95);transition-duration:0.06s}
 .ft-btn-back svg{width:15px;height:15px}
 /* Stat pill */
@@ -233,7 +237,9 @@
 }
 /* Accent action button */
 .ft-btn-accent{color:var(--accent)}
+@media (hover: hover) and (pointer: fine) {
 .ft-btn-accent:hover{background:var(--accent-light)}
+}
 
 .btn-back-focus{
   display:inline-flex;align-items:center;gap:6px;

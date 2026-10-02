@@ -30,14 +30,16 @@
   font-size:0.82rem;font-weight:500;
   color:var(--text-muted);cursor:pointer;
   border-bottom:2px solid transparent;
-  transition:all 0.15s ease;
+  transition:color 0.15s ease,border-bottom-color 0.15s ease;
   -webkit-tap-highlight-color:transparent;
 }
 .popover-tab.active{
   color:var(--accent);
   border-bottom-color:var(--accent);
 }
+@media (hover: hover) and (pointer: fine) {
 .popover-tab:hover{color:var(--text)}
+}
 
 .popover-search-row{
   display:flex;align-items:center;gap:8px;
@@ -54,9 +56,12 @@
   width:100%;padding:8px 12px;
   font-size:0.82rem;color:var(--text-secondary);
   border-radius:var(--radius-md);cursor:pointer;
-  transition:all 0.12s ease;
+  transition:background-color 0.12s ease,color 0.12s ease;
 }
+@media (hover: hover) and (pointer: fine) {
 .popover-result:hover{background:var(--surface-hover);color:var(--text)}
+}
+.popover-result:active{background:var(--surface-active);transition-duration:0.05s}
 .popover-result img,.popover-result .pr-img{width:18px;height:18px;border-radius:2px;flex-shrink:0}
 .popover-result .pr-icon-fallback{width:18px;height:18px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--accent)}
 .popover-result .pr-icon-fallback svg{width:16px;height:16px}
@@ -197,9 +202,12 @@
   width:100%;padding:7px 10px;
   font-size:0.82rem;color:var(--text-secondary);
   border-radius:var(--radius-sm);cursor:pointer;
-  transition:all 0.12s ease;
+  transition:background-color 0.12s ease,color 0.12s ease;
 }
-.mention-item:hover,.mention-item.active{color:var(--text);background:var(--surface-hover)}
+@media (hover: hover) and (pointer: fine) {
+.mention-item:hover{color:var(--text);background:var(--surface-hover)}
+}
+.mention-item.active{color:var(--text);background:var(--surface-hover)}
 .mention-item img{width:18px;height:18px;border-radius:2px}
 .mention-item .mi-name{font-weight:600;color:var(--text)}
 .mention-item .mi-url{font-size:0.7rem;color:var(--text-muted);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
@@ -240,9 +248,12 @@
   width:100%;padding:8px 10px;
   font-size:0.82rem;color:var(--text-secondary);
   border-radius:var(--radius-md);cursor:pointer;
-  transition:all 0.12s ease;
+  transition:background-color 0.12s ease,color 0.12s ease;
 }
+@media (hover: hover) and (pointer: fine) {
 .bm-item:hover{background:var(--surface-hover);color:var(--text)}
+}
+.bm-item:active{background:var(--surface-active);transition-duration:0.05s}
 .bm-item .bmi-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
 /* ==================== COMMAND PALETTE ==================== */
@@ -321,7 +332,7 @@
 }
 .up-popover-leave-to .user-popover-card{
   opacity:0;transform:translateY(6px) scale(0.98);
-  transition:all 0.12s ease;
+  transition:transform 0.12s ease,opacity 0.12s ease;
 }
 
 .up-hero{
