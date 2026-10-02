@@ -13,6 +13,7 @@ task_plan.md
 *.png
 !extension/icons/icon*.png
 !public/share-cover.png
+!public/logo.png
 *.svg
 !public/favicon.svg
 !public/logo.svg

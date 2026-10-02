@@ -36,7 +36,7 @@
   flex:1;padding:6px 10px;
   background:var(--bg-alt);border:1px solid var(--border);
   border-radius:var(--radius-base);font-size:0.78rem;color:var(--text);
-  outline:none;transition:all 0.18s ease;
+  outline:none;transition:border-color 0.18s ease;
 }
 .attr-search-input:focus{border-color:var(--accent)}
 .attr-search-input::placeholder{color:var(--text-muted)}
@@ -47,12 +47,13 @@
   color:var(--accent);background:var(--accent-light);
   cursor:pointer;position:relative;overflow:hidden;
   border:1px solid transparent;
-  transition:all 0.2s var(--ease-out);
+  transition:transform 0.18s var(--ease-out),background-color 0.15s ease,color 0.15s ease,box-shadow 0.15s ease,border-color 0.15s ease;
 }
 .attr-search-add svg{
   width:16px;height:16px;
-  transition:transform 0.3s var(--ease-out);
+  transition:transform 0.25s var(--ease-out);
 }
+@media (hover: hover) and (pointer: fine) {
 .attr-search-add:hover{
   background:var(--accent);color:var(--text-on-accent);
   border-color:var(--accent);
@@ -62,16 +63,20 @@
 .attr-search-add:hover svg{
   transform:rotate(90deg);
 }
+}
 .attr-search-add:active{
   transform:scale(0.93);
+  transition-duration:0.05s;
 }
 .attr-drop-item{
   padding:8px 10px;font-size:0.8rem;font-weight:500;
   color:var(--text-secondary);border-radius:var(--radius-base);
-  cursor:pointer;transition:all 0.12s ease;
+  cursor:pointer;transition:background-color 0.12s ease,color 0.12s ease;
   display:flex;align-items:center;gap:8px;
 }
+@media (hover: hover) and (pointer: fine) {
 .attr-drop-item:hover{background:var(--surface-hover);color:var(--text)}
+}
 .attr-drop-item.active{background:var(--accent-light);color:var(--accent);font-weight:600}
 .attr-drop-item.excluded{background:rgba(190,18,60,0.04)}
 [data-theme="dark"] .attr-drop-item.excluded{background:rgba(245,158,11,0.06)}
@@ -98,15 +103,19 @@
   font-size:0.74rem;font-weight:600;
   background:var(--accent-light);color:var(--accent);
   cursor:pointer;white-space:nowrap;
-  transition:all 0.18s ease;
+  transition:transform 0.15s var(--ease-out),background-color 0.15s ease,color 0.15s ease;
 }
+.attr-chip:active{transform:scale(0.94);transition-duration:0.05s}
 .attr-chip::before{
   content:'';position:absolute;left:7px;top:50%;transform:translateY(-50%);
   width:5px;height:5px;border-radius:50%;
   background:var(--accent);flex-shrink:0;z-index:var(--z-base);
+  transition:background-color 0.15s ease;
 }
+@media (hover: hover) and (pointer: fine) {
 .attr-chip:hover{background:var(--accent);color:var(--text-on-accent)}
 .attr-chip:hover::before{background:var(--text-on-accent)}
+}
 .attr-chip .attr-chip-x{font-size:0.85rem;line-height:1}
 
 .attr-chip-excluded{
@@ -118,9 +127,11 @@
   text-decoration-thickness:2px;
   text-decoration-color:var(--amber);
 }
+@media (hover: hover) and (pointer: fine) {
 .attr-chip-excluded:hover{background:var(--amber);color:var(--color-white)}
 .attr-chip-excluded:hover .attr-chip-txt{text-decoration-color:var(--color-white)}
 .attr-chip-excluded:hover::before{background:var(--color-white)}
+}
 
 /* Beautify attr filter button */
 #btnAttrFilter{
@@ -129,15 +140,21 @@
   font-weight:600;
   letter-spacing:0.02em;
   border:1.5px solid var(--border-hover);
-  transition:all 0.25s var(--ease-out);
+  transition:transform 0.2s var(--ease-out),border-color 0.2s ease,box-shadow 0.2s ease,color 0.2s ease;
   background:var(--surface);
   display:inline-flex;align-items:center;
 }
+@media (hover: hover) and (pointer: fine) {
 #btnAttrFilter:hover{
   border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-glow);
   color:var(--accent);
   transform:translateY(-1px);
+}
+}
+#btnAttrFilter:active{
+  transform:scale(0.95);
+  transition-duration:0.05s;
 }
 
 /* Focus mode toolbar (used by FilterBar.vue) */
@@ -155,11 +172,13 @@
   font-size:0.75rem;font-weight:600;
   cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
-  transition:all 0.12s ease;
+  transition:transform 0.12s ease,background-color 0.12s ease,color 0.12s ease;
   white-space:nowrap;
 }
 .focus-tools .ft-sb-btn svg{width:16px;height:16px}
+@media (hover: hover) and (pointer: fine) {
 .focus-tools .ft-sb-btn:hover{background:var(--surface-hover);color:var(--text)}
+}
 .focus-tools .ft-sb-btn:active{transform:scale(0.92);transition-duration:0.05s}
 .focus-tools .ft-sb-btn.disabled{opacity:0.3;cursor:default;pointer-events:none}
 .focus-tools .ft-color-wrap{position:relative;display:inline-flex}

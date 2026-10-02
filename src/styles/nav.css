@@ -44,7 +44,10 @@
   white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;
 }
+@media (hover: hover) and (pointer: fine) {
 .rail-item:hover{color:var(--text);background:var(--surface-hover);transform:translateX(3px)}
+}
+.rail-item:active{transform:scale(0.98);transition-duration:0.05s}
 .rail-item.active{
   color:var(--accent);background:var(--accent-light);font-weight:600;
   transform:translateX(0);
@@ -87,14 +90,17 @@
   border-radius:var(--radius-md);
   color:var(--text-muted);
   cursor:pointer;flex-shrink:0;
-  transition:all 0.15s ease;
+  transition:transform 0.15s ease,color 0.15s ease,background-color 0.15s ease;
   padding:0;
   line-height:1;
 }
+@media (hover: hover) and (pointer: fine) {
 .rail-action-icon-btn:hover{
   background:var(--surface-hover);
   color:var(--text);
 }
+}
+.rail-action-icon-btn:active{transform:scale(0.9);transition-duration:0.05s}
 .rail-action-icon-btn svg{
   width:18px;height:18px;
   display:block;
@@ -116,22 +122,27 @@
   padding:4px 8px;
   border-radius:var(--radius-md);
   cursor:pointer;
-  transition:background-color 0.15s ease, border-color 0.15s ease;
+  transition:transform 0.15s ease,background-color 0.15s ease,border-color 0.15s ease;
   flex-shrink:0;
   margin-top:2px;
   user-select:none;
   outline:none;
 }
+@media (hover: hover) and (pointer: fine) {
 .rail-user:hover{background:var(--surface-hover)}
+}
+.rail-user:active{transform:scale(0.98);transition-duration:0.05s}
 .rail-user:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 .rail-user.unlogged{
   border:1px dashed var(--border);
   background:var(--bg-alt);
 }
+@media (hover: hover) and (pointer: fine) {
 .rail-user.unlogged:hover{
   border-color:var(--accent);
   background:var(--accent-light);
+}
 }
 
 .rail-user-avatar{
