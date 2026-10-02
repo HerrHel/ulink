@@ -1,6 +1,6 @@
 /* ==================== MODAL ==================== */
 .modal-mask{
-  position:fixed;inset:0;z-index:6000;
+  position:fixed;inset:0;z-index:var(--z-modal);
   display:flex;align-items:center;justify-content:center;
   padding:20px;
   background:var(--overlay);
@@ -80,8 +80,8 @@
   user-select:none;
 }
 .code-box--cursor{
-  border-color:var(--primary);
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 30%,transparent);
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 30%,transparent);
 }
 .pw-wrap{position:relative}
 /* 隐藏 Edge/Chromium 密码框原生 reveal 小眼睛（与 .pw-toggle 自绘小眼睛叠加会出现两个眼睛）。
@@ -222,7 +222,7 @@
 .e2e-info p{margin-bottom:8px}
 .e2e-warn{background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.3);border-radius:var(--radius-sm);padding:12px}
 .e2e-error{color:var(--danger,#ef4444);font-size:0.82rem;padding:8px;background:rgba(239,68,68,0.06);border-radius:var(--radius-sm)}
-.e2e-link{font-size:0.78rem;color:var(--accent,var(--primary,#3b82f6));cursor:pointer;text-align:center;padding:2px 0;margin-top:4px}
+.e2e-link{font-size:0.78rem;color:var(--accent,#3b82f6);cursor:pointer;text-align:center;padding:2px 0;margin-top:4px}
 .e2e-link:hover{text-decoration:underline}
 .e2e-success{text-align:center;padding:24px 0}
 /* SVG 无显式 width/height 时按替换元素默认渲染（约 300px 宽），必须显式定尺寸 */
@@ -241,7 +241,7 @@
 .pw-input-wrap input::-ms-reveal,
 .pw-input-wrap input::-ms-clear{display:none}
 .pw-input-wrap input::-webkit-credentials-auto-fill-button{display:none}
-.pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px}
+.pw-input-wrap .pw-toggle{position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px}
 .pw-input{padding-right:36px}
 
 /* ── icon input row ── */

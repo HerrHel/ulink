@@ -41,12 +41,14 @@
 }
 
 /* ---- List hover: consistent with grid view ---- */
+@media (hover: hover) and (pointer: fine) {
 .list-view .card:hover,
 .list-view .group-card:hover{
   transform:translateY(-1px);
   border-color:var(--border-hover);
   box-shadow:var(--shadow-card-hover);
   background:var(--surface);
+}
 }
 
 /* ---- List active press ---- */
@@ -262,7 +264,7 @@
   animation:listExpandIn 0.3s var(--ease-out);
 }
 @keyframes listExpandIn{
-  0%{box-shadow:0 0 0 0px var(--accent-glow),var(--shadow-card);transform:scale(1)}
+  0%{box-shadow:0 0 0 0 var(--accent-glow),var(--shadow-card);transform:scale(1)}
   50%{transform:scale(1.005)}
   100%{box-shadow:0 0 0 2px var(--accent-glow),var(--shadow-card-hover);transform:scale(1)}
 }
@@ -385,10 +387,12 @@
   0%{opacity:0;transform:translateY(12px) scale(0.97)}
   100%{opacity:1;transform:translateY(0) scale(1)}
 }
+@media (hover: hover) and (pointer: fine) {
 .card:hover{
   border-color:var(--border-hover);
   box-shadow:var(--shadow-card-hover);
   transform:translateY(-3px);
+}
 }
 .card:active{
   transform:translateY(0) scale(0.995);
@@ -437,11 +441,13 @@
   overflow:hidden;position:relative;
   transition:border-color 0.2s ease,transform 0.25s var(--ease-spring),box-shadow 0.2s ease;
 }
+@media (hover: hover) and (pointer: fine) {
 .card-logo:hover{
   border-color:var(--accent);
   transform:scale(1.1);
   box-shadow:0 2px 8px var(--accent-glow);
   z-index:2;
+}
 }
 .card-logo img{
   width:28px;height:28px;
@@ -503,11 +509,15 @@
   opacity:0.85;
 }
 .card-open-hint svg{width:14px;height:14px;display:block}
+@media (hover: hover) and (pointer: fine) {
 .card-titlewrap:hover{
   background:var(--accent-light);
 }
+}
+@media (hover: hover) and (pointer: fine) {
 .card-titlewrap:hover .card-name{
   color:var(--accent);
+}
 }
 /* 列表/宫格：悬停标题区显示外链提示，强化「此处打开」 */
 .list-view .card-titlewrap:hover .card-open-hint,
@@ -532,8 +542,8 @@
 }
 /* Search highlight in cards */
 .card-hl{
-  background:var(--accent-glow,rgba(59,130,246,.15));
-  color:var(--accent,#3B82F6);
+  background:var(--accent-glow);
+  color:var(--accent);
   border-radius:2px;padding:0 1px;
 }
 /* Dead link / GFW blocked / 未确认 badge 共享基样式 */
@@ -583,7 +593,7 @@
   display:inline-flex;
   align-items:center;
   margin-left:4px;
-  color:var(--accent,#3B82F6);
+  color:var(--accent);
 }
 .pinned-badge svg{
   width:14px;height:14px;
@@ -593,7 +603,7 @@
   display:inline-flex;
   align-items:center;
   margin-left:4px;
-  color:var(--accent,#3B82F6);
+  color:var(--accent);
   cursor:pointer;
   opacity:0.85;
   transition:opacity 0.15s, transform 0.15s;
@@ -650,12 +660,14 @@
   border:1px solid transparent;
   white-space:nowrap;flex-shrink:0;
 }
+@media (hover: hover) and (pointer: fine) {
 .card-tag:hover{
   transform:translateY(-2px);
   background:var(--accent-light);
   color:var(--accent);
   border-color:var(--accent);
   box-shadow:0 2px 6px var(--accent-glow);
+}
 }
 .tag-custom{background:var(--card-badge-bg);color:var(--text-secondary);border-color:var(--border-light)}
 
@@ -811,7 +823,7 @@
   margin:0;
   text-overflow:ellipsis;
 }
-.mini-grid-view .card-name{font-size:13px;font-weight:600}
+.mini-grid-view .card-name{font-size:13px;font-weight:600;height:20px;line-height:20px}
 .mini-grid-view .card-domain{font-size:10px;opacity:.6}
 .mini-grid-view .card-logo{width:20px;height:20px}
 .mini-grid-view .card-logo img{width:20px;height:20px}
@@ -822,7 +834,7 @@
 .mini-grid-view .card-titlewrap{height:20px;padding:0;margin:0}
 .mini-grid-view .card-titlewrap-text{height:20px}
 .mini-grid-view .card-open-hint{display:none !important}
-.mini-grid-view .card-name{height:20px;line-height:20px}
+/* mini-grid-view card-name height merged above */
 /* 小宫格隐藏 titlewrap 内的原网址 */
 .mini-grid-view .card-titlewrap .card-domain{display:none}
 /* 第二行小字网址 */

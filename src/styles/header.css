@@ -144,7 +144,7 @@
   position:absolute;top:-6px;right:-6px;
   min-width:14px;height:14px;padding:0 3px;
   border-radius:7px;
-  background:var(--rose,#ef4444);color:#fff;
+  background:var(--rose,#ef4444);color:var(--text-on-accent);
   font-size:9px;font-weight:600;line-height:14px;
   text-align:center;
 }
@@ -198,7 +198,7 @@
 .search-input:focus::placeholder{color:var(--text-muted);opacity:0.6}
 
 .search-suggest{
-  position:absolute;top:100%;left:0;right:0;z-index:500;
+  position:absolute;top:100%;left:0;right:0;z-index:var(--z-dropdown);
   margin-top:6px;
   background:var(--surface);
   border:1px solid var(--border);
@@ -242,7 +242,7 @@
 .btn>span{display:contents}
 .btn svg{width:15px;height:15px}
 .btn-primary{
-  background:var(--accent-grad);color:#fff;
+  background:var(--accent-grad);color:var(--text-on-accent);
   box-shadow:0 2px 8px var(--accent-glow);
   border:1px solid rgba(255,255,255,0.1);
 }

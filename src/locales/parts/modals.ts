@@ -82,6 +82,11 @@ export const modalsZh = {
       login: '登录',
       cooldownError: '验证码已发送，请 {n} 秒后再试',
       lockError: '验证失败次数过多，请 {n} 秒后重试或重新获取验证码',
+      orOAuth: '或使用第三方账号快捷登录',
+      github: 'GitHub 登录',
+      google: 'Google 登录',
+      turnstileRequired: '请先完成人机安全验证',
+      oauthFailed: '第三方登录失败，请重试',
     }, // AuthModal
     confirm: {
       ariaLabel: '确认操作',
@@ -237,6 +242,11 @@ export const modalsEn = {
       login: 'Sign in',
       cooldownError: 'Code sent — try again in {n} seconds',
       lockError: 'Too many failed attempts — try again in {n} seconds or request a new code',
+      orOAuth: 'Or continue with',
+      github: 'GitHub',
+      google: 'Google',
+      turnstileRequired: 'Please complete the security check first',
+      oauthFailed: 'Sign in failed, please try again',
     }, // AuthModal
     confirm: {
       ariaLabel: 'Confirm action',

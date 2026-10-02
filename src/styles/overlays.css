@@ -1,6 +1,6 @@
 /* ==================== ADD-TO-GROUP POPOVER ==================== */
 .popover-mask{
-  position:fixed;inset:0;z-index:2500;
+  position:fixed;inset:0;z-index:var(--z-sheet);
   background:transparent;
   transition:background 0.25s ease;
 }
@@ -95,7 +95,7 @@
 .as-overlay{
   position:fixed;inset:0;
   background:rgba(0,0,0,0);
-  z-index:2999;
+  z-index:calc(var(--z-popover) - 1);
   pointer-events:none;
   transition:background 0.25s ease;
 }
@@ -105,7 +105,7 @@
 }
 .action-sheet{
   position:fixed;bottom:0;left:0;right:0;
-  z-index:3000;
+  z-index:var(--z-popover);
   padding:8px 10px calc(8px + env(safe-area-inset-bottom));
   background:var(--surface);
   border-radius:var(--radius-xl) var(--radius-xl) 0 0;
@@ -148,7 +148,7 @@
 
 /* ==================== CONTEXT MENU ==================== */
 .ctx-menu{
-  position:fixed;z-index:3000;
+  position:fixed;z-index:var(--z-popover);
   min-width:180px;
   background:var(--surface);
   border:1px solid var(--border);
@@ -175,12 +175,12 @@
 .ctx-item:hover{color:var(--text);background-color:var(--surface-hover)}
 .ctx-item.active{color:var(--accent);background:var(--accent-light);font-weight:600}
 .ctx-danger{color:var(--danger)}
-.ctx-danger:hover{color:#fff;background-color:var(--danger)}
+.ctx-danger:hover{color:var(--color-white);background-color:var(--danger)}
 .ctx-divider{height:1px;background:var(--border-light);margin:6px 10px;transition:background-color 0.3s ease}
 
 /* ==================== @ MENTION DROPDOWN ==================== */
 .mention-drop{
-  position:fixed;z-index:3001;
+  position:fixed;z-index:calc(var(--z-popover) + 1);
   min-width:200px;max-width:300px;max-height:200px;
   overflow:visible;
   background:var(--surface);
@@ -223,7 +223,7 @@
 
 /* ==================== BATCH MOVE POPOVER ==================== */
 .bm-popover{
-  position:fixed;z-index:3001;
+  position:fixed;z-index:calc(var(--z-popover) + 1);
   width:280px;max-height:340px;
   background:var(--surface);
   border:1px solid var(--border);
@@ -247,7 +247,7 @@
 
 /* ==================== COMMAND PALETTE ==================== */
 .cmd-mask{
-  position:fixed;inset:0;z-index:3000;
+  position:fixed;inset:0;z-index:var(--z-popover);
   background:rgba(0,0,0,0.4);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
   display:flex;align-items:flex-start;justify-content:center;padding-top:min(20vh,160px);
   opacity:0;pointer-events:none;transition:opacity 0.15s ease;
@@ -301,7 +301,7 @@
 
 /* ==================== USER POPOVER ==================== */
 .user-popover-mask{
-  position:fixed;inset:0;z-index:2500;
+  position:fixed;inset:0;z-index:var(--z-sheet);
   background:transparent;
 }
 .user-popover-card{

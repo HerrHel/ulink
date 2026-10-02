@@ -12,7 +12,7 @@
 .overlay{
   display:none;position:fixed;inset:0;
   background:rgba(0,0,0,0.35);
-  z-index:1500;
+  z-index:var(--z-overlay);
 }
 
 @media(max-width:768px){
@@ -150,7 +150,6 @@
   }
   #focusBack::-webkit-scrollbar{display:none}
   .ft-format-group{flex-shrink:0}
-  .ft-section-actions{flex-shrink:0}
   .ft-div{margin:0 4px;height:18px}
   .ft-sep{margin:0 3px;height:14px}
   .ft-stat-pill{font-size:0.68rem;padding:2px 6px}
@@ -249,7 +248,7 @@
 .is-mobile .icon-rail{
   /* B1-004：动态视口高度，回退 100vh */
   position:fixed;left:0;top:0;height:100vh;height:100dvh;width:260px;
-  z-index:2000;
+  z-index:calc(var(--z-drawer) + 200);
   transform:translateX(-100%);
   transition:transform 0.3s var(--ease-out);
   border-right:1px solid var(--border);
@@ -265,7 +264,7 @@
   border-radius:var(--radius-xl) var(--radius-xl) 0 0;
   transform:translateY(100%);
   transition:transform 0.3s var(--ease-out);
-  z-index:1800;
+  z-index:var(--z-drawer);
   box-shadow:0 -4px 24px rgba(0,0,0,0.15);
 }
 .is-mobile .detail-panel.open{transform:translateY(0);width:100%}

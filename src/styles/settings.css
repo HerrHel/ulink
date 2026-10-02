@@ -1,6 +1,6 @@
 /* ==================== SETTINGS DRAWER ==================== */
 .settings-drawer-wrap{
-  position:fixed;inset:0;z-index:5000;
+  position:fixed;inset:0;z-index:var(--z-settings);
   display:flex;
   background:var(--overlay);
   animation:maskIn 0.2s ease;
