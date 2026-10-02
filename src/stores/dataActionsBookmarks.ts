@@ -222,7 +222,14 @@ export const bookmarkActions = {
     const sibs = this.bookmarks.filter(
       b => !b.parentId && (b.categoryId === CAT_UNCATEGORIZED || b.categoryId === '')
     )
-    const order = sibs.length ? Math.min(...sibs.map(b => b.order)) - 1 : 0
+    let minOrder = 0
+    if (sibs.length > 0) {
+      minOrder = sibs[0].order
+      for (let i = 1; i < sibs.length; i++) {
+        if (sibs[i].order < minOrder) minOrder = sibs[i].order
+      }
+    }
+    const order = sibs.length > 0 ? minOrder - 1 : 0
 
     this.addBookmark({
       id: OFFICIAL_SITE_BM_ID,
