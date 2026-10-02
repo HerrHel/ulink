@@ -58,8 +58,25 @@ if (import.meta.env.DEV) {
 
 // D3-001：PWA autoUpdate 仅 SW skipWaiting 不够——客户端必须 register 并在新 SW 激活后整页刷新，
 // 否则旧标签懒加载异步 chunk 会 404（hash 已变）。
+// Vite 专门提供 vite:preloadError 监听器应对动态 import 报错
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (event) => {
+    console.warn('Vite preload error, reloading...', event)
+    window.location.reload()
+  })
+}
+
 if (import.meta.env.PROD) {
-  import('virtual:pwa-register').then(({ registerSW }) => {
+  // 解决遗留问题：老用户缓存在 herrhel.github.io 下的旧 SW 会因资源被重定向到新域名而引发更新失败死循环
+  if (window.location.hostname === 'herrhel.github.io') {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const reg of regs) reg.unregister()
+        window.location.href = 'https://ulink.ren' + window.location.pathname + window.location.search + window.location.hash
+      })
+    }
+  } else {
+    import('virtual:pwa-register').then(({ registerSW }) => {
     registerSW({
       immediate: true,
       onNeedRefresh() { /* autoUpdate 自动处理 skipWaiting */ },
@@ -82,4 +99,5 @@ if (import.meta.env.PROD) {
       window.location.reload()
     })
   }).catch(() => { /* virtual:pwa-register 在非 PWA 构建中可能不可用 */ })
+  }
 }
