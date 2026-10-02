@@ -119,6 +119,42 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
 
+const TURNSTILE_SITE_KEY = import.meta.env.MODE === 'test' ? '' : String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '')
+const turnstileToken = ref('')
+const oauthLoading = ref<'github' | 'google' | null>(null)
+
+type TurnstileApi = {
+  render: (el: HTMLElement, opts: Record<string, unknown>) => void
+  reset: (el?: HTMLElement) => void
+}
+function turnstileApi(): TurnstileApi | undefined {
+  return (window as unknown as { turnstile?: TurnstileApi }).turnstile
+}
+function renderTurnstile(): void {
+  const api = turnstileApi()
+  const el = document.getElementById('auth-turnstile')
+  if (!api || !el) return
+  api.render(el, {
+    sitekey: TURNSTILE_SITE_KEY,
+    theme: 'auto',
+    callback: (token: string) => { turnstileToken.value = token },
+    'expired-callback': () => { turnstileToken.value = '' },
+    'error-callback': () => { turnstileToken.value = '' },
+  })
+}
+function ensureTurnstile(): void {
+  if (!TURNSTILE_SITE_KEY) return
+  if (turnstileApi()) { renderTurnstile(); return }
+  if (document.getElementById('lv-turnstile-script')) return
+  const s = document.createElement('script')
+  s.id = 'lv-turnstile-script'
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+  s.async = true
+  s.defer = true
+  s.onload = renderTurnstile
+  document.head.appendChild(s)
+}
+
 const auth = useAuth()
 const sync = useCloudSync()
 const e2e = useE2E()
@@ -147,13 +183,22 @@ watch(() => auth.authModalOpen, (open) => {
     sending.value = false
     verifying.value = false
     verified.value = false
+    oauthLoading.value = null
+    turnstileToken.value = ''
     auth.authError = null
-    nextTick(() => inputRef.value?.focus())
-  } else if (syncTimer.value !== null) {
-    // 弹窗关闭（含手动 X / 遮罩 / 取消 / Esc 任一路径，均会置 authModalOpen=false）时
-    // 取消 pending 的成功回调 timer，防 800ms 后仍触发 checkE2EStatus + initialSync。
-    clearTimeout(syncTimer.value)
-    syncTimer.value = null
+    nextTick(() => {
+      inputRef.value?.focus()
+      ensureTurnstile()
+    })
+  } else {
+    turnstileToken.value = ''
+    turnstileApi()?.reset()
+    if (syncTimer.value !== null) {
+      // 弹窗关闭（含手动 X / 遮罩 / 取消 / Esc 任一路径，均会置 authModalOpen=false）时
+      // 取消 pending 的成功回调 timer，防 800ms 后仍触发 checkE2EStatus + initialSync。
+      clearTimeout(syncTimer.value)
+      syncTimer.value = null
+    }
   }
 })
 
@@ -165,13 +210,37 @@ async function onSendCode() {
     auth.authError = t('modal.auth.cooldownError', { n: remain })
     return
   }
+  if (TURNSTILE_SITE_KEY && !turnstileToken.value) {
+    auth.authError = t('modal.auth.turnstileRequired')
+    return
+  }
   sending.value = true
   auth.authError = null
-  const ok = await auth.sendOtp(e)
+  const ok = turnstileToken.value
+    ? await auth.sendOtp(e, turnstileToken.value)
+    : await auth.sendOtp(e)
   sending.value = false
   if (ok) {
     step.value = 'code'
     nextTick(() => codeInputRef.value?.focus())
+  } else {
+    turnstileToken.value = ''
+    turnstileApi()?.reset()
+  }
+}
+
+async function onOAuth(provider: 'github' | 'google') {
+  auth.authError = null
+  oauthLoading.value = provider
+  try {
+    const ok = await auth.signInWithOAuth(provider)
+    if (!ok && !auth.authError) {
+      auth.authError = t('modal.auth.oauthFailed')
+    }
+  } catch (err: unknown) {
+    auth.authError = err instanceof Error ? err.message : String(err)
+  } finally {
+    oauthLoading.value = null
   }
 }
 
@@ -210,7 +279,11 @@ function onBack() {
   code.value = ''
   auth.authError = null
   auth.resetVerifyState(emailTrim.value)
-  nextTick(() => inputRef.value?.focus())
+  turnstileToken.value = ''
+  nextTick(() => {
+    inputRef.value?.focus()
+    ensureTurnstile()
+  })
 }
 
 function focusCodeInput() {
@@ -219,6 +292,8 @@ function focusCodeInput() {
 
 function onClose() {
   auth.authModalOpen = false
+  turnstileToken.value = ''
+  turnstileApi()?.reset()
 }
 
 // 兜底：组件真卸载（如 SPA 路由切走 AuthModal 父组件）时清 timer，
@@ -228,6 +303,8 @@ onBeforeUnmount(() => {
     clearTimeout(syncTimer.value)
     syncTimer.value = null
   }
+  turnstileToken.value = ''
+  turnstileApi()?.reset()
 })
 </script>
 
@@ -261,6 +338,78 @@ onBeforeUnmount(() => {
 .auth-input{
   text-align:center;font-size:0.95rem;
   padding:11px 16px;
+}
+
+/* ── 人机验证 ── */
+.auth-turnstile{
+  margin:10px auto;
+  display:flex;
+  justify-content:center;
+  min-height:65px;
+}
+
+/* ── 第三方快捷登录 ── */
+.auth-divider{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin:18px 0 12px;
+}
+.auth-divider-line{
+  flex:1;
+  height:1px;
+  background:var(--border);
+}
+.auth-divider-text{
+  font-size:0.75rem;
+  color:var(--text-muted);
+  white-space:nowrap;
+}
+
+.auth-oauth-group{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.auth-oauth-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  padding:8px 12px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--bg-surface);
+  color:var(--text);
+  font-size:0.82rem;
+  font-weight:500;
+  cursor:pointer;
+  transition:background var(--trans-fast),border-color var(--trans-fast);
+  user-select:none;
+}
+.auth-oauth-btn:hover:not(:disabled){
+  background:var(--bg-hover);
+  border-color:var(--accent);
+}
+.auth-oauth-btn:disabled{
+  opacity:0.6;
+  cursor:not-allowed;
+}
+.auth-oauth-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:16px;
+  height:16px;
+  flex-shrink:0;
+}
+.auth-oauth-icon :deep(svg){
+  width:16px;
+  height:16px;
+}
+.auth-oauth-label{
+  white-space:nowrap;
 }
 
 /* ── 消息状态 ── */

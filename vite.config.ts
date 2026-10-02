@@ -32,7 +32,8 @@ const securityHeaders: Record<string, string> = {
   // 风险可控。生产部署（GitHub Pages 不带 CSP 头）不受影响。
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' https://challenges.cloudflare.com",
+    "frame-src 'self' https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
@@ -55,7 +56,8 @@ function headersPlugin(): Plugin {
         // Dev 环境下放宽 script-src 以支持 HMR
         const devCSP = [
           "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+          "frame-src 'self' https://challenges.cloudflare.com",
           // HMR 断线重连的 blob Worker 心跳（waitForSuccessfulPing）必须放行 blob:
           "worker-src 'self' blob:",
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
