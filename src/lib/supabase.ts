@@ -41,6 +41,7 @@ function createNullClient(): SupabaseClient {
           getUser: () => Promise.resolve(emptyUser),
           getSession: () => Promise.resolve(emptySession),
           signInWithOtp: () => Promise.resolve(emptyAuth),
+          signInWithOAuth: () => Promise.resolve(emptyAuth),
           verifyOtp: () => Promise.resolve(emptyAuth),
           signOut: () => Promise.resolve(emptyAuth),
           onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),

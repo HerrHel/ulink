@@ -62,13 +62,13 @@
   white-space:nowrap;
 }
 #btnBatchHeader.active{
-  background:var(--accent);color:#fff;
+  background:var(--accent);color:var(--text-on-accent);
   box-shadow:0 2px 8px var(--accent-glow);
 }
 /* === Batch bottom: frosted glass toolbar === */
 .batch-bottom{
   position:absolute;bottom:0;left:0;right:0;
-  z-index:100;
+  z-index:var(--z-bar);
   clip-path:inset(100% 0 0 0);
   opacity:0;
   pointer-events:none;
@@ -133,7 +133,7 @@
 }
 .batch-btn-delete{
   background:var(--rose);
-  color:#fff;
+  color:var(--color-white);
   box-shadow:0 2px 8px var(--rose-light),inset 0 1px 0 rgba(255,255,255,0.15);
 }
 .batch-btn-delete:hover{
@@ -154,7 +154,7 @@
   background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius-lg);
   box-shadow:var(--shadow-card);
-  z-index:200;overflow:hidden;
+  z-index:var(--z-header);overflow:hidden;
   transition:opacity 0.18s var(--ease-out),transform 0.18s var(--ease-out);
   pointer-events:none;
 }
@@ -193,7 +193,7 @@
   width:32px;height:32px;
   display:flex;align-items:center;justify-content:center;
   border:none;border-radius:var(--radius-sm);
-  background:var(--accent);color:#fff;
+  background:var(--accent);color:var(--text-on-accent);
   font-size:1.1rem;cursor:pointer;
   flex-shrink:0;
 }

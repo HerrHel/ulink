@@ -24,6 +24,40 @@
               @keydown.enter="onSendCode" ref="inputRef" autocomplete="email"
             />
           </div>
+
+          <div v-if="TURNSTILE_SITE_KEY" id="auth-turnstile" class="auth-turnstile"></div>
+
+          <!-- 第三方登录快捷方式 -->
+          <div class="auth-divider">
+            <span class="auth-divider-line"></span>
+            <span class="auth-divider-text">{{ t('modal.auth.orOAuth') }}</span>
+            <span class="auth-divider-line"></span>
+          </div>
+
+          <div class="auth-oauth-group">
+            <button
+              type="button"
+              class="auth-oauth-btn auth-oauth-btn--github"
+              id="authGithubBtn"
+              @click="onOAuth('github')"
+              :disabled="oauthLoading !== null"
+              :title="t('modal.auth.github')"
+            >
+              <span class="auth-oauth-icon" v-html="I.github"></span>
+              <span class="auth-oauth-label">{{ t('modal.auth.github') }}</span>
+            </button>
+            <button
+              type="button"
+              class="auth-oauth-btn auth-oauth-btn--google"
+              id="authGoogleBtn"
+              @click="onOAuth('google')"
+              :disabled="oauthLoading !== null"
+              :title="t('modal.auth.google')"
+            >
+              <span class="auth-oauth-icon" v-html="I.google"></span>
+              <span class="auth-oauth-label">{{ t('modal.auth.google') }}</span>
+            </button>
+          </div>
         </template>
 
         <!-- Step 2: 输入验证码 -->
@@ -64,7 +98,7 @@
         <span class="flex-1"></span>
         <button class="btn btn-secondary" @click="onClose">{{ t('common.cancel') }}</button>
         <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode"
-          :disabled="!emailTrim || sending || cooldownSec > 0">
+          :disabled="!emailTrim || sending || cooldownSec > 0 || (!!TURNSTILE_SITE_KEY && !turnstileToken)">
           {{ sending ? t('modal.auth.sending')
             : (cooldownSec > 0 ? t('modal.auth.resendCountdownFull', { n: cooldownSec }) : t('modal.auth.sendCode')) }}
         </button>

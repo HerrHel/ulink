@@ -5,7 +5,7 @@
   background:var(--rail-bg);
   border-right:1px solid var(--rail-border);
   padding:12px 0;
-  z-index:20;
+  z-index:var(--z-nav);
   transition:background-color 0.3s ease,border-color 0.3s ease;
   overflow-y:auto;
 }
@@ -164,10 +164,10 @@
   width:8px;height:8px;
   border-radius:50%;
   border:2px solid var(--rail-bg);
-  background:var(--emerald, #22c55e);
+  background:var(--emerald);
 }
-.rail-user-dot.dot-warn{background:var(--warn, #f59e0b)}
-.rail-user-dot.dot-danger{background:var(--danger, #ef4444)}
+.rail-user-dot.dot-warn{background:var(--amber)}
+.rail-user-dot.dot-danger{background:var(--danger)}
 .rail-user-dot.dot-syncing{animation:pulseDot 1.5s infinite}
 
 .rail-user-meta{

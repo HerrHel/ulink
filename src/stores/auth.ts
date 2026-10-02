@@ -243,7 +243,7 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
-  async function sendOtp(email: string): Promise<boolean> {
+  async function sendOtp(email: string, captchaToken?: string): Promise<boolean> {
     authError.value = null
     _ensureTicker()
     // S12：发送冷却判定（发请求前）
@@ -252,7 +252,8 @@ export const useAuthStore = defineStore('auth', () => {
       authError.value = `验证码已发送，请 ${remain} 秒后再试`
       return false
     }
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    const options = captchaToken ? { captchaToken } : undefined
+    const { error } = await supabase.auth.signInWithOtp({ email, options })
     if (error) {
       // 审计 R31：仅「限流类」error 登记本地冷却——避免短时重复触发平台限流。
       // 非限流类（网络错误/邮箱格式错误/signup_disabled 等）不施冷却，让用户立即重试。
@@ -323,11 +324,31 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
+  async function signInWithOAuth(provider: 'github' | 'google'): Promise<boolean> {
+    authError.value = null
+    const redirectOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const redirectTo = `${redirectOrigin}/app`
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+      },
+    })
+    if (error) {
+      authError.value = error.message
+      return false
+    }
+    if (data?.url && typeof window !== 'undefined') {
+      window.location.href = data.url
+    }
+    return true
+  }
+
   return {
     user, session, loading, authError, authModalOpen,
     isLoggedIn, userEmail,
     customNickname, customAvatar, displayName, avatar, updateProfile,
-    init, sendOtp, verifyOtp, signOut, resetVerifyState,
+    init, sendOtp, signInWithOAuth, verifyOtp, signOut, resetVerifyState,
     sendCooldownRemaining, verifyLockRemaining, cooldownTick,
   }
 })

@@ -35,7 +35,7 @@
   100%{transform:scale(1.04);opacity:0.92}
 }
 .cat-drag-float{
-  position:fixed;z-index:10000;
+  position:fixed;z-index:var(--z-drag);
   pointer-events:none;
   display:flex;align-items:center;gap:8px;
   padding:8px 10px;
@@ -124,7 +124,7 @@
   background:var(--accent);
   border-radius:1px;
   pointer-events:none;
-  z-index:10001;
+  z-index:calc(var(--z-drag) + 1);
   opacity:0;
   transform:translateX(-1px);
   transition:opacity 0.12s;
@@ -140,9 +140,9 @@
 }
 .drag-hint{
   position:fixed;padding:4px 10px;border-radius:var(--radius-sm);
-  background:var(--accent);color:#fff;font-size:0.72rem;
+  background:var(--accent);color:var(--text-on-accent);font-size:0.72rem;
   font-weight:500;white-space:nowrap;pointer-events:none;
-  z-index:10002;line-height:1.4;
+  z-index:calc(var(--z-drag) + 2);line-height:1.4;
   box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
 

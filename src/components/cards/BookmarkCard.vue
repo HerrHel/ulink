@@ -6,13 +6,16 @@
        @click="onCardClick" @keydown="onCardKeydown">
      <input v-if="uiStore.batchMode" type="checkbox" class="batch-chk"
             :id="'batchChk_' + bookmark.id" :checked="isSelected"
+            :aria-label="bookmark.title"
             @change.stop @click.stop="toggleSelect">
     <div class="card-topline">
       <div class="card-toprow">
         <div class="card-logo" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <BrandLogo v-if="isOfficialBrand" :size="28" />
-          <img v-else-if="iconSrc" :src="iconSrc" alt="" @error="onImgError">
-          <span v-else class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
+          <template v-else>
+            <img v-if="iconSrc" :src="iconSrc" alt="" loading="lazy" decoding="async" @error="onImgError">
+            <span class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
+          </template>
         </div>
         <div class="card-titlewrap" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <div class="card-titlewrap-text">
