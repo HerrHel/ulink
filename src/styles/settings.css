@@ -805,5 +805,46 @@
   margin:0 8px;
 }
 
-
-
+/* ==================== DARK THEME MICRO-OPTICS ==================== */
+/* 适配深色模式（效率深色与舒适深色）：去污浊暖棕阴影，赋予精密凹槽、物理倒角微光与紧致接触阴影 */
+[data-theme="dark"] .sp-seg{
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.45), inset 0 0 1px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .sp-seg-btn.active{
+  border-color:rgba(255,255,255,0.1);
+  box-shadow:0 1px 3px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.08) inset;
+}
+[data-theme="dark"] .sp-switch{
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.55), inset 0 0 1px rgba(0,0,0,0.35);
+}
+[data-theme="dark"] .sp-switch::after{
+  box-shadow:0 1px 3px rgba(0,0,0,0.45), 0 0 1px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .sp-action{
+  box-shadow:0 1px 2px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.07) inset;
+}
+[data-theme="dark"] .sp-action:active{
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.5);
+}
+[data-theme="dark"] .sp-user-card,
+[data-theme="dark"] .sp-e2e-card{
+  box-shadow:0 1px 3px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.07) inset;
+}
+[data-theme="dark"] .sp-e2e-card:hover{
+  box-shadow:0 2px 8px -2px var(--accent-glow), 0 1px 0 rgba(255,255,255,0.09) inset;
+}
+[data-theme="dark"] .sp-user-avatar{
+  box-shadow:inset 0 1px 2px rgba(0,0,0,0.4);
+}
+[data-theme="dark"] .sp-storage-track{
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.45), inset 0 0 1px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .sp-shares-list{
+  box-shadow:inset 0 1px 3px rgba(0,0,0,0.45);
+}
+[data-theme="dark"] .sp-share-item{
+  box-shadow:0 1px 2px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.05) inset;
+}
+[data-theme="dark"] .sp-share-item:hover{
+  box-shadow:0 2px 5px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.07) inset;
+}
