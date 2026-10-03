@@ -1529,7 +1529,32 @@ const CSS = `
 
 /* ==================== BASE ==================== */
 * { box-sizing: border-box; margin: 0; padding: 0 }
-html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hover) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
 body {
   background: radial-gradient(circle at 50% -20%, var(--accent-light) 0%, transparent 60%), var(--bg);
   color: var(--text);
