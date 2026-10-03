@@ -3,12 +3,15 @@
 .group-card{
   position:relative;
   border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-card);
   background:var(--surface);
   cursor:default;
   padding:16px 16px 10px;
   height:232px;
   display:flex;flex-direction:column;
   overflow:hidden;
+  transition:box-shadow 0.3s var(--ease-out),border-color 0.2s ease,transform 0.3s var(--ease-out);
 }
 /* card-body: flex:1 fills remaining space in grid view; flex:1 1 0 in list view */
 .group-card-accent{
@@ -19,7 +22,10 @@
   border-radius:0 2px 2px 0;
   transition:opacity 0.2s ease,box-shadow 0.2s ease;
 }
+@media (hover: hover) and (pointer: fine) {
+.group-card:hover{border-color:var(--border-hover);box-shadow:var(--shadow-card-hover)}
 .group-card:hover .group-card-accent{opacity:0.8;box-shadow:0 0 8px var(--accent-glow)}
+}
 .group-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
 /* PERF-1：折叠态笔记预览（sanitizeHTML），不挂 TipTap。
    不截断 max-height——交给 .card-scroll-wrap 的 overflow-y:auto 滚动翻阅，

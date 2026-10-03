@@ -531,7 +531,7 @@
 
 /* Card name — shared base for all views */
 .card-name{
-  font-weight:600;font-size:0.9rem;line-height:18px;height:20px;
+  font-weight:600;font-size:0.9rem;line-height:18px;height:20px;letter-spacing:-0.01em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 /* List view: smaller font, constrained width */
@@ -621,7 +621,7 @@
   font-family:var(--font-mono);
   font-size:0.72rem;color:var(--text-muted);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  line-height:18px;height:18px;margin:0;
+  line-height:18px;height:18px;margin:0;letter-spacing:0.02em;
 }
 /* List view: slightly larger font */
 .list-view .card-domain{

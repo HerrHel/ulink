@@ -15,8 +15,8 @@
   box-shadow:var(--shadow-lg);
   animation:toastIn 0.4s var(--ease-out);
   display:flex;align-items:center;gap:8px;
-  -webkit-backdrop-filter:blur(8px);
-  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(16px) saturate(180%);
+  backdrop-filter:blur(16px) saturate(180%);
 }
 .toast svg{width:15px;height:15px;flex-shrink:0}
 .toast.ok{color:var(--green);border-color:var(--green-light)}
@@ -37,7 +37,7 @@
   font-size:0.88rem;font-weight:500;letter-spacing:0.01em;
   opacity:0;transition:opacity 0.4s var(--ease-out),transform 0.4s var(--ease-out);
   pointer-events:auto;white-space:nowrap;
-  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);
 }
 [data-theme="dark"] .undo-toast{
   background:linear-gradient(135deg,rgba(60,70,90,0.97),rgba(45,55,75,0.98));
