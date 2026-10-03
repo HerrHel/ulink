@@ -3,15 +3,15 @@
 /* B1-001：默认允许选中文本；拖拽/批量态再禁用（见 drag.css / batch.css） */
 html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden;height:100%;-webkit-touch-callout:default;-webkit-user-select:text;user-select:text}
 body{
-  font-family:'Satoshi',system-ui,-apple-system,sans-serif;
+  font-family:var(--font-sans);
   background:var(--bg);
   color:var(--text);
   line-height:1.5;
+  letter-spacing:-0.006em;
   transition:background-color 0.3s ease,color 0.3s ease;
   overflow:hidden;
   height:100%;
   touch-action:manipulation;
-  font-feature-settings:"cv02","cv03","cv04","cv11";
 }
 button{font:inherit;cursor:pointer;border:none;background:none;color:inherit;-webkit-user-select:none;user-select:none}
 input,textarea,select{font:inherit;color:inherit;-webkit-user-select:text;user-select:text;caret-color:var(--accent)}
