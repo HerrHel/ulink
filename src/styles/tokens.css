@@ -43,9 +43,9 @@
   --radius-base:8px;
   --radius-md:10px;
   --radius-lg:14px;
-  --radius-xl:18px;
-  --font-display:'Clash Display',system-ui,sans-serif;
-  --font-mono:'JetBrains Mono',monospace;
+  --font-sans:'Satoshi',-apple-system,BlinkMacSystemFont,'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --font-display:'Clash Display','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono','Cascadia Code','Consolas',monospace;
   --danger:#dc2626;
   --accent-dark:#0e2270;
   --ease-out:cubic-bezier(0.16,1,0.3,1);
