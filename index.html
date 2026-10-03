@@ -17,19 +17,19 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ulink">
 <meta property="og:title" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta property="og:description" content="免注册即用的个人书签管理器：深度整理、多端同步、端到端加密、专属私有链接定向分享。">
+<meta property="og:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，凭据端到端加密，专属私有链接定向分享。">
 <meta property="og:url" content="https://ulink.ren/">
 <meta property="og:image" content="https://ulink.ren/share-cover.png">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:locale:alternate" content="en_US">
 <!-- QQ / 微信爬虫识别标签（Microdata / itemprop） -->
 <meta itemprop="name" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta itemprop="description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，密码端到端加密，支持专属私有链接定向分享。">
+<meta itemprop="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，密码端到端加密，支持专属私有链接定向分享。">
 <meta itemprop="image" content="https://ulink.ren/share-cover.png">
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta name="twitter:description" content="免注册即用的个人书签管理器：深度整理、多端同步、端到端加密、专属私有链接定向分享。">
+<meta name="twitter:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，凭据端到端加密，专属私有链接定向分享。">
 <meta name="twitter:image" content="https://ulink.ren/share-cover.png">
 <!-- 应用级结构化数据（/ 是 SEO 主场） -->
 <script type="application/ld+json" data-lv-jsonld="app">
@@ -43,7 +43,7 @@
   "url": "https://ulink.ren/",
   "inLanguage": "zh-CN",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
-  "featureList": "子书签与分组, 自定义属性标签, 多端云同步, 端到端加密, 专属私有链接分享, 浏览器扩展快捷保存, 拼音模糊搜索, 离线 PWA"
+  "featureList": "子书签与分组, 自定义属性标签, 多端云同步, 账号密码端到端加密, 专属私有链接分享, 浏览器扩展快捷保存, 拼音模糊搜索, 离线 PWA"
 }
 </script>
 
@@ -175,13 +175,17 @@ button{font:inherit;cursor:pointer}
 .hero-pill .pill-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-green-bright);
   box-shadow:0 0 8px rgba(16,185,129,.7);flex-shrink:0;animation:pill-pulse 2.2s ease-in-out infinite}
 @keyframes pill-pulse{0%,100%{opacity:.65;transform:scale(.92)} 50%{opacity:1;transform:scale(1.2)}}
-.hero-pill .pill-tag{background:var(--brand);color:#fff;font-size:.66rem;font-weight:800;padding:2px 7px;border-radius:999px;letter-spacing:.04em}
+.hero-pill .pill-tag{background:var(--brand);color:#fff;font-size:.66rem;font-weight:800;padding:2px 7px;border-radius:999px;letter-spacing:.04em;white-space:nowrap;flex-shrink:0}
 .hero-copy h1{
   font-family:var(--font-display);font-weight:600;
   font-size:clamp(2.3rem,5.4vw,3.9rem);
   line-height:1.22;letter-spacing:.015em;margin-bottom:20px;
 }
-.hero-copy h1 em{font-style:normal;color:var(--brand)}
+.hero-copy h1 em{font-style:normal;color:var(--brand);display:block}
+/* 英文标题更长，单独收一档字号：实测 hero 文字列宽 514px，
+   'Save, organize & share,' 在 42px 时单行 498px、43px 已到 510px 濒临溢出，
+  故上限压到 40px（余量 8%，兼顾客体回退字体更宽的情况），保证 em/span 各占一行不折行 */
+html[lang="en-US"] .hero-copy h1{font-size:clamp(1.7rem,3.4vw,2.5rem)}
 .hero-sub{color:var(--ink-2);font-size:clamp(1rem,1.5vw,1.13rem);max-width:34em;margin-bottom:30px;line-height:1.75}
 .hero-ctas{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
 .hero-note{margin-top:18px;font-size:.86rem;color:var(--ink-3);letter-spacing:.02em}
@@ -455,14 +459,14 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <div class="hero-pill reveal"><span class="pill-dot" aria-hidden="true"></span><span class="pill-tag">OFFICIAL</span> <span data-i18n="hero.pill">离线优先架构 · 端到端零知识加密 · 专属私有链接分享</span></div>
+        <div class="hero-pill reveal"><span class="pill-dot" aria-hidden="true"></span><span class="pill-tag" data-i18n="hero.pillTag">免注册</span> <span data-i18n="hero.pill">离线优先架构 · 凭据端到端加密 · 专属私有链接分享</span></div>
         <h1><em data-i18n="hero.title1">随时随地，</em><span data-i18n="hero.title2">收藏、整理、分享</span></h1>
-        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是新一代专业级书签与知识沉淀管理系统。支持子书签树状嵌套与多维属性切片，提供端到端物理加密与毫秒级增量多端同频，凭专属私有链接即可安全定向分享与一键保存。</p>
+        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是一款本地优先的个人书签管理工具：支持子书签多级嵌套与分组富文本笔记，账号与密码于本机完成加密后上传，多端登录同一账号即可同步，数据亦可随时完整导出。</p>
         <div class="hero-ctas">
           <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
           <a class="btn btn-ghost" href="#why" data-i18n="hero.explore">探索特性</a>
         </div>
-        <p class="hero-note" data-i18n="hero.note">开箱即用 · 本地权威存储 · 端到端零知识加密 · 专属私有链接分享</p>
+        <p class="hero-note" data-i18n="hero.note">开箱即用 · 本地权威存储 · 凭据端到端加密 · 专属私有链接分享</p>
       </div>
       <div class="hero-visual" aria-hidden="true">
         <canvas id="constellation"></canvas>
@@ -480,24 +484,24 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <div class="split">
         <div class="copy reveal">
           <h3 data-i18n="manage.title">深度管理：连接链与链与人</h3>
-          <p class="lead" data-i18n="manage.sub">“与链”亦是“与人”（ulink.ren）。打破传统收藏夹扁平膨胀的结构限制，在链接与链接、知识与人之间建立清晰的拓扑层级，让每一次收藏都沉淀为结构化数字资产。</p>
+          <p class="lead" data-i18n="manage.sub">“与链”亦是“与人”（ulink.ren）。突破传统收藏夹扁平膨胀的结构限制，在链接与链接、知识与人之间建立清晰的层级结构，让每一次收藏都沉淀为可复用的知识资产。</p>
           <div class="cap-row">
             <div class="cap-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 10v4M12 10v4M16 10v4"/></svg>
             </div>
-            <div><b data-i18n="m1.t">子书签树状嵌套</b><span data-i18n="m1.d">解构深层网络。单个主站点收纳多级子级入口，官方文档、管理控制台与代码仓库井然归于一处。</span></div>
+            <div><b data-i18n="m1.t">子书签树状嵌套</b><span data-i18n="m1.d">单个主站点可收纳多级子级入口，官方文档、管理控制台与代码仓库均可归于同一处。</span></div>
           </div>
           <div class="cap-row">
             <div class="cap-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M9 13h6"/></svg>
             </div>
-            <div><b data-i18n="m2.t">多维分类与富文本组</b><span data-i18n="m2.d">侧栏分类划分业务边界，纵向全功能笔记本沉淀知识脉络，支持 @ 智能引用卡片与全屏沉浸编辑。</span></div>
+            <div><b data-i18n="m2.t">多维分类与富文本组</b><span data-i18n="m2.d">侧栏分类划分业务边界；分组内置富文本笔记，支持 @ 引用书签卡片与全屏沉浸编辑。</span></div>
           </div>
           <div class="cap-row">
             <div class="cap-icon green">
               <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7V4h9.6l7.4 7.4a2 2 0 0 1 0 2z"/><circle cx="7.5" cy="7.5" r="1"/></svg>
             </div>
-            <div><b data-i18n="m3.t">自定义属性标签</b><span data-i18n="m3.d">灵活定义业务维度属性标签，支持布尔组合过滤与多维交集切片，海量资源毫秒级精准定位。</span></div>
+            <div><b data-i18n="m3.t">自定义属性标签</b><span data-i18n="m3.d">可按业务维度自定义属性标签，支持布尔组合过滤与多维筛选，大量收藏亦可快速定位。</span></div>
           </div>
         </div>
         <div class="visual reveal d1" aria-hidden="true">
@@ -519,9 +523,9 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       </div>
       <div class="copy reveal d1">
         <div class="eyebrow" data-i18n="sync.eyebrow">Sync & Privacy</div>
-        <h3 data-i18n="sync.title">多端实时同频，凭据端到端零知识加密</h3>
-        <p class="lead" data-i18n="sync.d1">摆脱单一浏览器生态绑定与数据丢失风险。全端设备毫秒级增量同步，具备强鲁棒性的冲突自动仲裁机制与版本历史回溯能力。</p>
-        <p data-i18n="sync.d2">账户密码与敏感凭据在客户端基于 PBKDF2 派生密钥与 AES-256-GCM 工业级算法物理加密后出端。服务端全程零知识盲存，本地数据拥有最高权威。</p>
+        <h3 data-i18n="sync.title">多端实时同频，凭据端到端加密</h3>
+        <p class="lead" data-i18n="sync.d1">摆脱单一浏览器生态绑定与数据丢失风险。全端设备增量同步，冲突可择一保留，历史版本随时回溯。</p>
+        <p data-i18n="sync.d2">账号与密码于本机完成加密后上传：密钥由主密码经 PBKDF2 派生，以 AES-256-GCM 封装，密钥不出设备，服务端无法解密。标题、网址、笔记等内容为明文存储——加密范围如实说明，不作夸大。</p>
       </div>
     </div>
   </section>
@@ -532,7 +536,7 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <div class="sect-head reveal">
         <div class="eyebrow" data-i18n="looks.eyebrow">Design System</div>
         <h2 data-i18n="looks.title">简洁、精致：精于方寸</h2>
-        <p data-i18n="looks.sub">配备效率与舒适双调色体系，支持明暗外观自由切换；提供宫格、列表与紧凑小宫格三种布局视图，满足不同场景下的专业阅读需求。</p>
+        <p data-i18n="looks.sub">配备效率与舒适双调色体系，支持明暗外观自由切换；提供宫格、列表与紧凑小宫格三种布局视图，适配不同屏幕尺寸与使用场景。</p>
       </div>
       <div class="demo-controls reveal" id="demo-controls">
         <div class="seg" role="group" data-i18n-aria="theme.aria" aria-label="主题风格">
@@ -570,7 +574,7 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="demo-label" data-i18n="view.mini">小宫格</div>
         </div>
       </div>
-      <p class="demo-note reveal" data-i18n="looks.note">视觉主题与视图偏好按设备本地独立持久化，登录云端后全局自动漫游。</p>
+      <p class="demo-note reveal" data-i18n="looks.note">视觉主题与视图偏好按设备本地独立持久化，登录后随账号自动同步。</p>
     </div>
   </section>
 
@@ -580,8 +584,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <div class="copy reveal">
         <div class="eyebrow" data-i18n="create.eyebrow">Private Share</div>
         <h3 data-i18n="create.title">专属私有链接，安全定向分享</h3>
-        <p class="lead" data-i18n="create.d1">不设公共广场、不被搜索引擎收录，仅凭特定链接定向访问。无论是发送给好友、同事，还是跨设备传递给自己的其他终端，对方在浏览器中免登录即可直接查阅，更支持一键私密保存副本。</p>
-        <p data-i18n="create.d2">每个书签组都自带私密富文本笔记——在分享书签的同时，可附带你的专属备忘、操作指引、高亮心得或待办清单，并支持用 @ 符号在正文中直接嵌入书签卡片。网址与笔记合二为一，让每一次私密交付都清晰条理。</p>
+        <p class="lead" data-i18n="create.d1">不设公共广场，亦不被搜索引擎收录，仅凭专属链接定向访问。无论发送给好友、同事，还是同步至自己的其他设备，对方在浏览器中免登录即可查阅，并支持一键保存副本。</p>
+        <p data-i18n="create.d2">每个分组均可附带富文本笔记，用于记录背景说明、操作步骤、重点标注或待办清单，并支持以 @ 在正文中直接嵌入书签卡片。网址与说明合并呈现，降低接收方的理解成本。</p>
       </div>
       <div class="visual reveal d1" aria-hidden="true">
         <div class="share-visual">
@@ -603,27 +607,27 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="extra-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
           </div>
-          <b data-i18n="x1.t">扩展一键捕获</b><span><span data-i18n="x1.d">浏览器扩展里按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，当前页面与选中文本即刻入库归档。</span></span></article>
+          <b data-i18n="x1.t">扩展一键捕获</b><span><span data-i18n="x1.d">浏览器扩展中按 </span><code>Ctrl+Shift+S</code><span data-i18n="x1.d2">，当前页面与选中文本即可一并归档。</span></span></article>
         <article class="extra reveal d1">
           <div class="extra-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
           </div>
-          <b data-i18n="x2.t">离线优先架构，桌面级 PWA</b><span data-i18n="x2.d">基于 IndexedDB 权威存储构建，支持安装至桌面与手机主屏，离线断网环境下各项功能完整可用。</span></article>
+          <b data-i18n="x2.t">离线优先架构，桌面级 PWA</b><span data-i18n="x2.d">数据基于浏览器 IndexedDB 存储，断网环境下亦可正常使用；支持安装至桌面与手机主屏。</span></article>
         <article class="extra green reveal d2">
           <div class="extra-icon green">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
           </div>
-          <b data-i18n="x5.t">自由拖拽，随心而动</b><span data-i18n="x5.d">支持卡片自由拖拽排序、拖入侧栏归类与拖入笔记引用；移动端搭载纯原生 60fps 跟手阻尼引擎。</span></article>
+          <b data-i18n="x5.t">自由拖拽，随心而动</b><span data-i18n="x5.d">卡片支持自由拖拽排序、拖入侧栏归类与拖入笔记引用；移动端采用原生手势跟手处理。</span></article>
         <article class="extra reveal d3">
           <div class="extra-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
           </div>
-          <b data-i18n="x3.t">拼音全拼与模糊智能检索</b><span data-i18n="x3.d">内置拼音分词与 Fuse.js 模糊匹配引擎，键入简拼首字母「js」即可秒出「键盘快捷键」，无惧全名遗忘。</span></article>
+          <b data-i18n="x3.t">拼音全拼与模糊智能检索</b><span data-i18n="x3.d">内置拼音首字母与模糊匹配检索，输入「js」即可命中「键盘快捷键」，无需记忆完整名称。</span></article>
         <article class="extra green reveal d4">
           <div class="extra-icon green">
             <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/></svg>
           </div>
-          <b data-i18n="x4.t">安全回收站与多级撤销栈</b><span data-i18n="x4.d">误删误改支持操作级即时 Undo/Redo 栈式回退，软删除数据沉入安全回收站，每一次整理都安心无忧。</span></article>
+          <b data-i18n="x4.t">安全回收站与多级撤销栈</b><span data-i18n="x4.d">每一步操作均可撤销与重做，删除内容先进入回收站，不会立即丢失。</span></article>
       </div>
     </div>
   </section>
@@ -638,15 +642,15 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <div class="faq-list reveal">
         <details>
           <summary data-i18n="q2">我的数据存放在哪里？</summary>
-          <p data-i18n="a2">数据默认以绝对权威形式持久化于本地设备浏览器（IndexedDB）存储层，绝不主动外传。开启云同步后，数据增量同步至专属加密库——密码凭据在出端前经 AES-256-GCM 物理加密，云端绝对零知识。</p>
+          <p data-i18n="a2">数据默认仅存储于本机浏览器（IndexedDB），不会主动上传。开启云同步后，变更增量同步至你的账号：账号与密码于本机加密后上传，标题、网址、笔记为明文存储；笔记内嵌图片写入公开存储桶，持有链接者均可访问，请勿放置敏感图片。如需完整备份，可随时导出全量 JSON。</p>
         </details>
         <details>
           <summary data-i18n="q3">换设备或换浏览器怎么办？</summary>
-          <p data-i18n="a3">登录同一账号即可毫秒级自动增量同步；亦可随时将全量结构化数据导出为标准化 JSON 备份文档，在任意终端离线导入还原。</p>
+          <p data-i18n="a3">登录同一账号即可自动增量同步；亦可随时将全量数据导出为标准 JSON 备份，在任意终端离线导入还原。</p>
         </details>
         <details>
           <summary data-i18n="q4">与浏览器自带书签有什么根本不同？</summary>
-          <p data-i18n="a4">摆脱单一操作系统与浏览器厂商生态捆绑；原生支持多级子书签树状嵌套、富文本知识笔记、拼音即时搜索、私有链接安全分享以及扩展一秒归档。</p>
+          <p data-i18n="a4">浏览器收藏夹受限于单一浏览器与设备，且无法附加说明与笔记。与链支持多级子书签嵌套、分组富文本笔记、拼音即时搜索与专属链接分享。</p>
         </details>
       </div>
     </div>
@@ -656,7 +660,7 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="cta-band">
     <div class="wrap reveal">
       <h2 data-i18n="cta.title">现在，把收藏连成链</h2>
-      <p data-i18n="cta.sub">免注册即开即用 · 自由导入已有书签 · 开启结构化知识管理新范式</p>
+      <p data-i18n="cta.sub">免注册即开即用 · 支持导入已有书签 · 数据可随时完整导出</p>
       <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
     </div>
   </section>
