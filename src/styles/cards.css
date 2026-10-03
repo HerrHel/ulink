@@ -685,7 +685,7 @@
 .card-acct-toggle>span{display:contents}
 .card-acct-toggle svg{width:11px;height:11px;transition:transform 0.2s ease}
 .card-acct-toggle.open svg{transform:rotate(90deg)}
-.card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--surface-hover);border-radius:var(--radius-base);font-size:0.8rem}
+.card-acct-body{display:none;margin-bottom:8px;padding:8px 10px;background:var(--surface-hover);border:1px solid var(--border-light);box-shadow:inset 0 1px 2px rgba(0,0,0,0.035);border-radius:var(--radius-base);font-size:0.8rem}
 .card-acct-body.show{display:block;animation:acctSlideIn 0.2s var(--ease-out)}
 @keyframes acctSlideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .acct-row{display:flex;align-items:center;gap:6px;padding:3px 0}
