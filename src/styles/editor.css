@@ -214,6 +214,8 @@
   transition:transform .2s var(--ease-out),opacity .18s var(--ease-out);
   box-shadow:var(--shadow-md);
   -webkit-overflow-scrolling:touch;
+  -webkit-mask-image:linear-gradient(to right,black calc(100% - 24px),transparent 100%);
+  mask-image:linear-gradient(to right,black calc(100% - 24px),transparent 100%);
 }
 .mfb::-webkit-scrollbar{display:none}
 .mfb.visible{transform:translateY(0);opacity:1;pointer-events:auto}

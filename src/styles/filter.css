@@ -17,8 +17,13 @@
 #filterTools{flex-wrap:nowrap;min-width:0;order:1}
 #addWrap{order:3}
 #btnBatchHeader{order:4;flex-shrink:0}
-/* Attribute filter */
-#attrChips{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
+#attrChips{
+  display:flex;align-items:center;gap:6px;min-width:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-ms-overflow-style:none;
+  -webkit-mask-image:linear-gradient(to right,black calc(100% - 16px),transparent 100%);
+  mask-image:linear-gradient(to right,black calc(100% - 16px),transparent 100%);
+}
+#attrChips::-webkit-scrollbar{display:none}
 .attr-dropdown{
   position:absolute;top:100%;left:0;z-index:var(--z-dropdown);
   min-width:200px;max-height:300px;overflow-y:auto;
