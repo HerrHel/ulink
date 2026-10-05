@@ -25,6 +25,11 @@ declare module '*functions/_lib/share-render.js' {
     appAssets?: string,
   ): string
   export function renderNotFoundPage(locale?: ShareLocale): string
+  export function stripTags(html: string): string
+  export function resolveGroupTitle(
+    dict: any,
+    group: any,
+  ): { name: string; promotedH1: boolean }
 }
 
 // 同上：functions/_lib/app-assets.js 的静态补齐（Cloudflare Pages Functions 共享模块）。
