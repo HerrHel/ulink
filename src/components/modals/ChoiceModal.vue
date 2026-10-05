@@ -57,7 +57,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   margin-bottom: 16px;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .choice-options {
@@ -76,18 +76,18 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 }
 
 .choice-option:hover {
-  background: var(--bg-hover);
+  background: var(--surface-hover);
   border-color: var(--border-hover);
 }
 
 .choice-option:focus {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 .choice-option-label {
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--text);
 }
 
 .choice-option-desc {

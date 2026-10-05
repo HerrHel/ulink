@@ -13,7 +13,7 @@
         </button>
         <button v-if="showVaultOption" class="bmp-item bmp-item-vault"
                 @click="onMoveToVault">
-          <span class="bmp-item-icon" style="color: var(--vault-color, #9b59b6)">
+          <span class="bmp-item-icon" style="color: var(--vault-color)">
             <span v-html="I.lock"></span>
           </span>
           <span>{{ t('vault.privateSpace') }}</span>

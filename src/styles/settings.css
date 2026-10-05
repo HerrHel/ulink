@@ -420,7 +420,7 @@
   cursor:pointer;text-decoration:underline;
   transition:var(--transition-fast);
 }
-.sp-link-btn:hover{color:var(--accent-hover, #6366f1)}
+.sp-link-btn:hover{color:var(--accent-dark)}
 .sp-profile-actions{
   display:flex;align-items:center;gap:8px;
   margin-top:4px;
@@ -503,13 +503,13 @@
   display:flex;align-items:center;justify-content:space-between;
   padding:5px 0;
 }
-.sh-label{font-size:0.8rem;color:var(--text,#1a1a1a)}
+.sh-label{font-size:0.8rem;color:var(--text)}
 .sh-keys{display:flex;gap:3px}
 .sh-keys kbd{
   font-size:0.68rem;padding:2px 6px;min-width:20px;text-align:center;
-  color:var(--text,#1a1a1a);
-  background:var(--surface-secondary,#f3f4f6);
-  border:1px solid var(--border,#e5e7eb);
+  color:var(--text-secondary);
+  background:var(--surface-alt);
+  border:1px solid var(--border);
   border-bottom-width:2px;border-radius:4px;
   font-family:inherit;font-weight:500;
 }

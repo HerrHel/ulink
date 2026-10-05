@@ -358,7 +358,7 @@ function deleteSelected() {
   transition:var(--transition-normal);
 }
 .popover-result:hover{
-  background:var(--hover);
+  background:var(--surface-hover);
 }
 .popover-result img{
   width:28px;height:28px;border-radius:6px;
