@@ -380,16 +380,16 @@ onBeforeUnmount(() => {
   padding:8px 12px;
   border-radius:var(--radius-sm);
   border:1px solid var(--border);
-  background:var(--bg-surface);
+  background:var(--surface);
   color:var(--text);
   font-size:0.82rem;
   font-weight:500;
   cursor:pointer;
-  transition:background var(--trans-fast),border-color var(--trans-fast);
+  transition:background 0.15s ease,border-color 0.15s ease;
   user-select:none;
 }
 .auth-oauth-btn:hover:not(:disabled){
-  background:var(--bg-hover);
+  background:var(--surface-hover);
   border-color:var(--accent);
 }
 .auth-oauth-btn:disabled{

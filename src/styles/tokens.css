@@ -8,6 +8,7 @@
   --surface:#FDFBF9;
   --surface-hover:#F7F2EC;
   --surface-active:#EFE8DF;
+  --surface-alt:#F7F2EC;
   --border:#E5DDD3;
   --border-light:#EFE8DF;
   --border-hover:#D5CBBE;
@@ -43,11 +44,14 @@
   --radius-base:8px;
   --radius-md:10px;
   --radius-lg:14px;
+  --radius-xl:18px;
+  --radius-full:9999px;
   --font-sans:'Satoshi',-apple-system,BlinkMacSystemFont,'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
   --font-display:'Clash Display','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
   --font-mono:'JetBrains Mono','SF Mono','Cascadia Code','Consolas',monospace;
   --danger:#dc2626;
   --accent-dark:#0e2270;
+  --vault-color:#7c3aed;
   --ease-out:cubic-bezier(0.16,1,0.3,1);
   --transition-fast:all 0.15s ease;
   --transition-normal:all 0.2s var(--ease-out);
@@ -74,6 +78,17 @@
   --text-on-accent:#ffffff;
   --emerald:#10b981;
   --emerald-light:rgba(16,185,129,0.1);
+  /* 兼容与防护别名（保障旧组件与手写样式回退） */
+  --radius:var(--radius-base);
+  --text-primary:var(--text);
+  --accent-soft:var(--accent-light);
+  --accent-hover:var(--accent-dark);
+  --surface-secondary:var(--surface-alt);
+  --bg-surface:var(--surface);
+  --bg-hover:var(--surface-hover);
+  --hover:var(--surface-hover);
+  --primary:var(--accent);
+  --trans-fast:0.15s ease;
 }
 [data-theme="dark"]{
   /* B1-003：与浅色块对应，原生控件/滚动条随暗色主题渲染 */
@@ -83,6 +98,7 @@
   --surface:#25252B;
   --surface-hover:#2E2E35;
   --surface-active:#383842;
+  --surface-alt:#2B2B33;
   --border:#2F2F36;
   --border-light:#28282F;
   --border-hover:#3D3D46;
@@ -116,6 +132,7 @@
   --card-badge-bg:rgba(255,255,255,0.05);
   --danger:#ef4444;
   --accent-dark:#b82d63;
+  --vault-color:#a78bfa;
   --text-on-accent:#ffffff;
   --emerald:#14b8a6;
   --emerald-light:rgba(20,184,166,0.1);
@@ -128,6 +145,7 @@
   --surface:#F9FBF6;
   --surface-hover:#EDF2E6;
   --surface-active:#E0E8D6;
+  --surface-alt:#EDF2E6;
   --border:#D2DAC8;
   --border-light:#DDE4D4;
   --border-hover:#B8C4AC;
@@ -135,6 +153,8 @@
   --text-secondary:#4A5A46;
   --text-muted:#667362;
   --accent:#2C9678;
+  --accent-dark:#1f7059;
+  --vault-color:#7c3aed;
   --brand-logo-blue:#122E8A;
   --brand-logo-green:#10B981;
   --brand-logo-text:#2C9678;
@@ -155,6 +175,7 @@
   --surface:#363D50;
   --surface-hover:#3E4658;
   --surface-active:#464F62;
+  --surface-alt:#3E4658;
   --border:#444C5E;
   --border-light:#3A4152;
   --border-hover:#525B70;
@@ -163,6 +184,8 @@
   /* B1-002：舒适暗色 muted 相对 surface/#363D50 ≥4.5 */
   --text-muted:#B0B692;
   --accent:#E2E7BF;
+  --accent-dark:#c2c79f;
+  --vault-color:#a78bfa;
   --accent-light:rgba(226,231,191,0.1);
   --accent-glow:rgba(226,231,191,0.18);
   --accent-grad:linear-gradient(135deg,#E2E7BF 0%,#C8CE9A 100%);
