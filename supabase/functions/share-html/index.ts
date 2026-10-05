@@ -38,7 +38,7 @@ const T = {
     lang: "zh-CN",
     ogLocale: "zh_CN",
     siteName: "ulink",
-    defaultGroupName: "未命名组",
+    defaultGroupName: "未命名",
     notFoundTitle: "分享不存在 - 与链",
     notFoundHeading: "该分享不存在",
     notFoundBody: "私有链接可能已失效，或分享者已停止分享",
@@ -64,7 +64,7 @@ const T = {
     lang: "en-US",
     ogLocale: "en_US",
     siteName: "ulink",
-    defaultGroupName: "Untitled group",
+    defaultGroupName: "Untitled",
     notFoundTitle: "Share not found - ulink",
     notFoundHeading: "This share no longer exists",
     notFoundBody: "The link may have expired, or the owner stopped sharing it",
@@ -162,8 +162,9 @@ function fmtDate(ts: number): string {
 const NOTES_BLOCKLIST = ["script", "style", "iframe", "object", "embed", "svg", "math", "noscript", "template"]
 
 /** 剥离 HTML 标签得纯文本（组 notes 是 TipTap HTML，用于 SEO 描述等纯文本场景）。
- *  先删危险容器块（script/style 等连同内容），再剥标签——防 <script>alert(1)</script>
- *  剥标签后剩 alert(1) 文本泄漏进 meta description（内容污染，非 XSS）。 */
+ *  先删危险容器块（script/style/svg 等连同内容），再剥标签——防脚本与富媒体内容泄漏进描述；
+ *  剥离内联书签卡片/引用组卡片的噪音结构（gic-btn/gic-domain/gic-remove/gic-count/gic-edit-btn），
+ *  确保不泄漏域名、"详"字等操作按钮，并在块级元素处保留换行、卡片容器周围保留空格。 */
 function stripTags(html: string): string {
   let out = (html || "").replace(/<!--[\s\S]*?-->/g, "")
   for (const t of NOTES_BLOCKLIST) {
@@ -171,7 +172,37 @@ function stripTags(html: string): string {
       .replace(new RegExp(`<\\s*${t}[\\s\\S]*?<\\s*/\\s*${t}\\s*>`, "gi"), "")
       .replace(new RegExp(`<\\s*/?\\s*${t}[\\s\\S]*?>`, "gi"), "")
   }
-  return out.replace(/<[^>]+>/g, "").trim()
+  // 剥离内联卡片噪音子节点整块（含其内容）：.gic-domain、.gic-btn、.gic-remove、.gic-count、.gic-edit-btn
+  out = out.replace(
+    /<([a-zA-Z0-9]+)\b[^>]*\bclass=(?:"[^"]*\b(?:gic-btn|gic-remove|gic-domain|gic-count|gic-edit-btn)\b[^"]*"|'[^']*\b(?:gic-btn|gic-remove|gic-domain|gic-count|gic-edit-btn)\b[^']*'|[^\s>]*\b(?:gic-btn|gic-remove|gic-domain|gic-count|gic-edit-btn)\b[^\s>]*)[^>]*>[\s\S]*?<\/\1>/gi,
+    ""
+  )
+  // 内联卡片容器前后补空格隔离，避免与相邻文字或紧贴的卡片粘连
+  out = out.replace(
+    /<\s*(?:\/?\s*(?:span|a))\b[^>]*\bclass=(?:"[^"]*\bgroup-inline-card\b[^"]*"|'[^']*\bgroup-inline-card\b[^']*')[^>]*>/gi,
+    " "
+  )
+  // 块级标签转换行为 \n
+  out = out.replace(
+    /<\s*(?:\/\s*(?:p|div|h[1-6]|li|blockquote|tr|table|section|article|header|footer|pre)|br\s*\/?>)\s*>/gi,
+    "\n"
+  )
+  // 剥除所有剩余 HTML 标签（行内标签不插入额外空格）
+  out = out.replace(/<[^>]+>/g, "")
+  // 还原常见 HTML 实体
+  out = out
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+  // 规范化空格与空白行，以换行符连接各非空行
+  return out
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[^\S\r\n]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
 }
 
 // ── 富文本 notes 白名单清洗（语义对齐 App sanitizeReadonlyHTML，零依赖纯函数）──
@@ -351,27 +382,6 @@ function resolveGroupTitle(
     return { name: explicit, promotedH1: false }
   }
 
-  const rawNotes = typeof group.notes === "string" ? group.notes.trim() : ""
-  if (rawNotes) {
-    const leadH1 = rawNotes.match(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>([\s\S]*?)<\/h1>/i)
-    if (leadH1) {
-      const txt = stripTags(leadH1[1]).trim()
-      if (txt) return { name: txt, promotedH1: true }
-    }
-
-    const anyH = rawNotes.match(/<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1>/i)
-    if (anyH) {
-      const txt = stripTags(anyH[2]).trim()
-      if (txt) return { name: txt.slice(0, 50), promotedH1: false }
-    }
-
-    const plain = stripTags(rawNotes).trim()
-    if (plain) {
-      const firstLine = plain.split(/\r?\n/)[0].trim()
-      if (firstLine) return { name: firstLine.slice(0, 40), promotedH1: false }
-    }
-  }
-
   return { name: dict.defaultGroupName, promotedH1: false }
 }
 
@@ -418,9 +428,9 @@ function iconMarkup(imgSrc: string, letter: string, cls: string): string {
   return `<span class="${cls}-fb">${esc(letter)}</span>${img}`
 }
 
-/** 品牌链接图标（与 App 端 ShareView logo 同一枚 SVG）。 */
+/** 品牌链接图标（与 App 端 ShareView logo 同一枚 SVG，CSS 变量响应深浅色过渡）。 */
 const LOGO_SVG =
-  `<svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><style>.s-b{stroke:#122E8A}.s-g{stroke:#10B981}@media(prefers-color-scheme:dark){.s-b{stroke:#4F6BFF}.s-g{stroke:#34D399}}</style><defs><mask id="s-mb"><rect width="240" height="240" fill="white"/><line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round"/></mask><mask id="s-mg"><rect width="240" height="240" fill="white"/><line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round"/></mask></defs><path class="s-b" d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#s-mb)"/><path class="s-g" d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#s-mg)"/></svg>`
+  `<svg viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><mask id="s-mb"><rect width="240" height="240" fill="white"/><line x1="173" y1="144" x2="211" y2="144" stroke="black" stroke-width="38" stroke-linecap="round"/></mask><mask id="s-mg"><rect width="240" height="240" fill="white"/><line x1="29" y1="96" x2="67" y2="96" stroke="black" stroke-width="38" stroke-linecap="round"/></mask></defs><path class="brand-logo-blue s-b" d="M 24 96 L 120 96 C 176 96 192 104 192 144 C 192 184 176 192 120 192 L 48 192" stroke="var(--brand-logo-blue, #122E8A)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#s-mb)"/><path class="brand-logo-green s-g" d="M 216 144 L 120 144 C 64 144 48 136 48 96 C 48 56 64 48 120 48 L 192 48" stroke="var(--brand-logo-green, #10B981)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" mask="url(#s-mg)"/></svg>`
 
 /** 外链箭头（书签行 hover 时滑入）。 */
 const ARROW_SVG =
@@ -518,7 +528,7 @@ function notesHtml(
   let n = 0
   const headings: { level: number; text: string }[] = []
   cleaned = cleaned.replace(/<h([1-3])([^>]*)>([\s\S]*?)<\/h\1>/g, (all, level, attrs, inner) => {
-    const text = inner.replace(/<[^>]+>/g, "").trim()
+    const text = stripTags(inner).trim()
     if (!text) return all
     const id = `toc-${n++}`
     headings.push({ level: Number(level), text })
@@ -716,25 +726,31 @@ const CSS = `
   --text-secondary: #5E5852;
   --text-muted: #6A6660;
   --accent: #122E8A;
+  --brand-logo-blue: #122E8A;
+  --brand-logo-green: #10B981;
+  --brand-logo-text: #122E8A;
   --accent-light: rgba(18, 46, 138, 0.07);
-  --accent-glow: rgba(18, 46, 138, 0.13);
+  --accent-glow: rgba(18, 46, 138, 0.15);
   --accent-grad: linear-gradient(135deg, #122E8A 0%, #1E40AF 100%);
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.02);
-  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.06), 0 4px 8px rgba(0, 0, 0, 0.02);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.03), 0 0 0 1px rgba(0, 0, 0, 0.03);
-  --shadow-card-hover: 0 8px 24px rgba(18, 46, 138, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
+  --shadow-xs: 0 1px 2px rgba(44, 40, 36, 0.03);
+  --shadow-sm: 0 1px 3px rgba(44, 40, 36, 0.04), 0 1px 2px rgba(44, 40, 36, 0.02);
+  --shadow-md: 0 4px 16px -2px rgba(44, 40, 36, 0.05), 0 2px 4px rgba(44, 40, 36, 0.02);
+  --shadow-lg: 0 12px 32px -4px rgba(44, 40, 36, 0.07), 0 4px 12px rgba(44, 40, 36, 0.025);
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.8) inset, 0 1px 3px rgba(44, 40, 36, 0.04), 0 0 0 1px var(--border-light);
+  --shadow-card-hover: 0 1px 0 0 rgba(255, 255, 255, 0.9) inset, 0 8px 24px -4px rgba(44, 40, 36, 0.08), 0 2px 6px rgba(44, 40, 36, 0.03);
   --radius-sm: 6px;
   --radius-base: 8px;
   --radius-md: 10px;
   --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-xl: 20px;
   --radius-full: 999px;
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: 'Satoshi', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Clash Display', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --bar-bg: rgba(245, 239, 234, 0.85);
+  --bar-bg: rgba(245, 239, 234, 0.82);
+  --bar-border: rgba(229, 221, 211, 0.75);
+  --bar-shadow: 0 1px 2px rgba(44, 40, 36, 0.02), 0 4px 16px -4px rgba(44, 40, 36, 0.03);
 }
 
 [data-theme="dark"] {
@@ -751,16 +767,21 @@ const CSS = `
   --text-secondary: #B5AFA6;
   --text-muted: #9B968E;
   --accent: #F04A8A;
+  --brand-logo-blue: #F04A8A;
+  --brand-logo-green: #E2E7BF;
+  --brand-logo-text: #F04A8A;
   --accent-light: rgba(240, 74, 138, 0.1);
-  --accent-glow: rgba(240, 74, 138, 0.18);
+  --accent-glow: rgba(240, 74, 138, 0.22);
   --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.15);
-  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.15);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
-  --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
-  --bar-bg: rgba(26, 26, 29, 0.85);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 1px 0 0 rgba(255, 255, 255, 0.13) inset, 0 0 0 1px rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --bar-bg: rgba(26, 26, 29, 0.82);
+  --bar-border: rgba(255, 255, 255, 0.08);
+  --bar-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -4px rgba(0, 0, 0, 0.4);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -778,16 +799,21 @@ const CSS = `
     --text-secondary: #B5AFA6;
     --text-muted: #9B968E;
     --accent: #F04A8A;
+    --brand-logo-blue: #F04A8A;
+    --brand-logo-green: #E2E7BF;
+    --brand-logo-text: #F04A8A;
     --accent-light: rgba(240, 74, 138, 0.1);
-    --accent-glow: rgba(240, 74, 138, 0.18);
+    --accent-glow: rgba(240, 74, 138, 0.22);
     --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
-    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
-    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.15);
-    --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.35), 0 4px 8px rgba(0, 0, 0, 0.15);
-    --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04);
-    --shadow-card-hover: 0 8px 28px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
-    --bar-bg: rgba(26, 26, 29, 0.85);
+    --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
+    --shadow-lg: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-card-hover: 0 1px 0 0 rgba(255, 255, 255, 0.13) inset, 0 0 0 1px rgba(255, 255, 255, 0.1), 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.25);
+    --bar-bg: rgba(26, 26, 29, 0.82);
+    --bar-border: rgba(255, 255, 255, 0.08);
+    --bar-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -4px rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -820,7 +846,7 @@ html {
   background-clip: content-box;
 }
 body {
-  background: radial-gradient(circle at 50% -20%, var(--accent-light) 0%, transparent 60%), var(--bg);
+  background: radial-gradient(1000px 500px at 50% -80px, var(--accent-light) 0%, transparent 80%), var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
   line-height: 1.6;
@@ -839,28 +865,35 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   min-height: 100vh;
 }
 
-/* LOGO 颜色响应主题切换 */
-.s-b { stroke: #122E8A; transition: stroke 0.25s ease; }
-.s-g { stroke: #10B981; transition: stroke 0.25s ease; }
-[data-theme="dark"] .s-b { stroke: #4F6BFF !important; }
-[data-theme="dark"] .s-g { stroke: #34D399 !important; }
+/* LOGO 颜色响应主题切换 (与主站 BrandLogo 同款规范，暗色为粉/绿撞色) */
+.brand-logo-blue, .s-b {
+  stroke: var(--brand-logo-blue, #122E8A) !important;
+  transition: stroke 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.brand-logo-green, .s-g {
+  stroke: var(--brand-logo-green, #10B981) !important;
+  transition: stroke 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-theme="dark"] .brand-logo-blue, [data-theme="dark"] .s-b { stroke: #F04A8A !important; }
+[data-theme="dark"] .brand-logo-green, [data-theme="dark"] .s-g { stroke: #E2E7BF !important; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .s-b { stroke: #4F6BFF !important; }
-  :root:not([data-theme="light"]) .s-g { stroke: #34D399 !important; }
+  :root:not([data-theme="light"]) .brand-logo-blue, :root:not([data-theme="light"]) .s-b { stroke: #F04A8A !important; }
+  :root:not([data-theme="light"]) .brand-logo-green, :root:not([data-theme="light"]) .s-g { stroke: #E2E7BF !important; }
 }
 
-/* ==================== 顶栏 (对齐主站 AppHeader) ==================== */
+/* ==================== 顶栏 (对齐主站 AppHeader 极微雕质感) ==================== */
 .share-bar {
   position: sticky;
   top: 0;
   z-index: 100;
-  height: 54px;
+  height: 56px;
   display: flex;
   align-items: center;
   background: var(--bar-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-light);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-bottom: 1px solid var(--bar-border);
+  box-shadow: var(--bar-shadow);
 }
 .share-bar-wrap {
   max-width: 960px;
@@ -880,9 +913,12 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   font-weight: 700;
   font-size: 16px;
   letter-spacing: -0.3px;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.2s var(--ease-out);
 }
-.share-brand:hover { opacity: 0.85 }
+.share-brand:hover {
+  opacity: 0.9;
+  transform: translateY(-0.5px);
+}
 .share-logo {
   width: 24px;
   height: 24px;
@@ -896,6 +932,11 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
+  letter-spacing: -0.2px;
+  transition: color 0.25s ease;
+}
+.share-brand:hover .share-brand-title {
+  color: var(--brand-logo-text, var(--accent));
 }
 .share-badge {
   font-size: 11px;
@@ -905,8 +946,12 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   padding: 3px 10px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
   letter-spacing: 0.2px;
   white-space: nowrap;
+}
+[data-theme="dark"] .share-badge {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 .share-actions {
   margin-left: auto;
@@ -918,24 +963,27 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-base);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-secondary);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, var(--shadow-xs);
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+[data-theme="dark"] .share-theme-btn {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, var(--shadow-xs);
 }
 .share-theme-btn:hover {
   background: var(--surface-hover);
   color: var(--text);
   border-color: var(--border-hover);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-sm);
 }
 .share-theme-btn:active {
   transform: translateY(0);
@@ -955,29 +1003,30 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   :root:not([data-theme="light"]) .theme-icon-sun { display: flex; align-items: center; justify-content: center }
   :root:not([data-theme="light"]) .theme-icon-moon { display: none }
 }
-}
 .cta {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 7px 18px;
-  border-radius: var(--radius-base);
+  border-radius: var(--radius-full);
   background: var(--accent-grad);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: -0.1px;
   text-decoration: none;
-  box-shadow: 0 2px 8px var(--accent-glow);
-  transition: box-shadow 0.2s ease, transform 0.2s var(--ease-out);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 3px 10px var(--accent-glow);
+  transition: box-shadow 0.2s ease, transform 0.2s var(--ease-out), filter 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
 }
 .cta:hover {
-  box-shadow: 0 4px 16px var(--accent-glow);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 6px 18px var(--accent-glow);
   transform: translateY(-1px);
+  filter: brightness(1.04);
 }
 .cta:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 /* ==================== 主内容容器 ==================== */
@@ -1058,11 +1107,19 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-md);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+[data-theme="dark"] .group-canvas {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 0 0 1px rgba(255, 255, 255, 0.04), var(--shadow-lg);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .group-canvas {
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 0 0 1px rgba(255, 255, 255, 0.04), var(--shadow-lg);
+  }
 }
 
 /* 一体化 Header */
@@ -1071,7 +1128,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--border-light);
-  padding: 32px 36px 26px;
+  padding: 34px 40px 28px;
   display: flex;
   align-items: center;
   gap: 20px;
@@ -1081,12 +1138,15 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   width: 56px;
   height: 56px;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.8) inset, var(--shadow-xs);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+}
+[data-theme="dark"] .group-hero-icon {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, var(--shadow-xs);
 }
 .group-hero-icon img {
   width: 36px;
@@ -1113,10 +1173,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   gap: 8px;
 }
 .group-hero-title {
-  font-size: 26px;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
   color: var(--text);
-  letter-spacing: -0.5px;
+  letter-spacing: -0.02em;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -1134,14 +1195,18 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   color: var(--text-muted);
   background: var(--bg-alt);
   border: 1px solid var(--border-light);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
   padding: 3px 11px;
   border-radius: var(--radius-full);
   white-space: nowrap;
 }
+[data-theme="dark"] .meta-tag {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
 
 /* 一体化画卷主体 */
 .group-canvas-body {
-  padding: 32px 36px 40px;
+  padding: 36px 40px 44px;
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -1159,7 +1224,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 .canvas-divider {
   width: 100%;
   height: 1px;
-  background: var(--border-light);
+  background: linear-gradient(90deg, transparent 0%, var(--border-light) 15%, var(--border-light) 85%, transparent 100%);
   margin: 0;
 }
 .focus-notes {
@@ -1392,6 +1457,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 .section-title-icon svg { width: 100%; height: 100% }
 .section-title {
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
@@ -1423,6 +1489,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   background: var(--bg-alt);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) inset;
   font-size: 12.5px;
   color: var(--text);
   outline: none;
@@ -1431,7 +1498,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
 }
 .bm-search-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 .bm-search-input::placeholder {
   color: var(--text-muted);
@@ -1474,17 +1541,34 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 14px 16px;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.8) inset, var(--shadow-card);
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--ease-out);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s var(--ease-out), background-color 0.2s ease;
   position: relative;
   overflow: hidden;
 }
+[data-theme="dark"] .bm {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.07) inset, 0 0 0 1px rgba(255, 255, 255, 0.04), var(--shadow-card);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bm {
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.07) inset, 0 0 0 1px rgba(255, 255, 255, 0.04), var(--shadow-card);
+  }
+}
 .bm:hover {
+  background: var(--surface-hover);
   border-color: var(--border-hover);
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.9) inset, var(--shadow-card-hover);
   transform: translateY(-2px);
+}
+[data-theme="dark"] .bm:hover {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset, 0 0 0 1px rgba(255, 255, 255, 0.08), var(--shadow-card-hover);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bm:hover {
+    box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset, 0 0 0 1px rgba(255, 255, 255, 0.08), var(--shadow-card-hover);
+  }
 }
 .bm:active { transform: translateY(0) }
 .bm-main {

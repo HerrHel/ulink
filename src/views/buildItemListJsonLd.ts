@@ -1,4 +1,4 @@
-import { fixUrl, extractGroupTitle } from '../utils.js'
+import { fixUrl, extractGroupTitle, stripTags } from '../utils.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
 /**
@@ -37,13 +37,13 @@ export function buildItemListJsonLd(
   }>
 } {
   // 去标签纯文本 + 120 截断 + 兜底文案（与 _applyShareHead 外层 desc 计算同形，行为等价）
-  const notesPlain = g.notes ? g.notes.replace(/<[^>]+>/g, '').trim() : ''
+  const notesPlain = g.notes ? stripTags(g.notes).replace(/\s+/g, ' ').trim() : ''
   const desc = (notesPlain && notesPlain.slice(0, 120)) || `${bms.length} 个链接 · 由 LinkVault 公开分享`
 
   return {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
-    name: extractGroupTitle(g.name, g.notes) || '未命名组',
+    name: extractGroupTitle(g.name, g.notes) || '未命名',
     description: desc,
     url: shareUrl,
     numberOfItems: bms.length,

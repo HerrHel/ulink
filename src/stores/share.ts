@@ -36,7 +36,7 @@ import { deriveShareUrl } from '../views/deriveShareUrl.js'
 import { APP_CANONICAL_BASE } from '../config/urls.js'
 import { toast } from '../lib/toast.js'
 import { t, tN } from '../i18n/index.js'
-import { extractGroupTitle } from '../utils.js'
+import { extractGroupTitle, stripTags } from '../utils.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 type ForkPayload =
@@ -383,7 +383,7 @@ function _applyGroupHead(g: SiblingGroup, bms: Bookmark[]) {
   const shareUrl = deriveShareUrl(location.pathname, location.origin, g.id)
   const groupTitle = extractGroupTitle(g.name, g.notes) || t('shareView.defaultGroupName')
   const title = t('shareView.pageTitle', { name: groupTitle })
-  const notesPlain = g.notes ? g.notes.replace(/<[^>]+>/g, '').trim() : ''
+  const notesPlain = g.notes ? stripTags(g.notes).replace(/\s+/g, ' ').trim() : ''
   const desc = (notesPlain && notesPlain.slice(0, 120)) || tN('shareView.shareDesc', bms.length)
   setTitle(title)
   setMetaByAttr('name', 'description', desc)

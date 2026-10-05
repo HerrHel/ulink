@@ -1,7 +1,7 @@
 // S6/S7 SSR 外壳回归护栏：类名锚定 + 双语 + CTA 路径 + SPA 自动接管（bundle 注入 / #app 挂载点）
 // + 组页无独立书签列表（对齐新版"组分享 = 聚焦组形态"）+ 分类页卡片网格
 import { describe, it, expect } from 'vitest'
-import { renderSharePage, renderShareCategoryPage, renderNotFoundPage, extractAppAssets } from '../../functions/_lib/share-render.js'
+import { renderSharePage, renderShareCategoryPage, renderNotFoundPage, extractAppAssets, resolveGroupTitle, stripTags } from '../../functions/_lib/share-render.js'
 
 const group = {
   id: 'grp-demo-001',
@@ -124,9 +124,23 @@ describe('S6/S7 SSR 外壳骨架', () => {
     // 分类页
     expect(catHtml).toContain('id="themeToggle"')
     expect(catHtml).toContain('lv_theme')
-    // CSS 包含 light / dark 选择器
+    // CSS 包含 light / dark 选择器与品牌 Logo 双色响应
     expect(zh).toContain('[data-theme="light"]')
     expect(zh).toContain('[data-theme="dark"]')
+    expect(zh).toContain('--brand-logo-blue: #122E8A')
+    expect(zh).toContain('--brand-logo-green: #10B981')
+    expect(zh).toContain('--brand-logo-blue: #F04A8A')
+    expect(zh).toContain('--brand-logo-green: #E2E7BF')
+    // Logo SVG 采用 CSS 变量与统一 class 驱动，无硬编码死锁内联 style
+    expect(zh).toContain('class="brand-logo-blue s-b"')
+    expect(zh).toContain('class="brand-logo-green s-g"')
+    expect(zh).toContain('stroke="var(--brand-logo-blue')
+    expect(zh).toContain('stroke="var(--brand-logo-green')
+    expect(zh).not.toContain('<style>.s-b{stroke:#122E8A}')
+    // 质感排版：加载顶级字体与 display 字体栈
+    expect(zh).toContain('/fonts/fonts.css')
+    expect(zh).toContain("'Clash Display'")
+    expect(zh).toContain("'Satoshi'")
   })
   it('内联书签卡片放行站内图标路径并挂载防错降级，任务清单对勾采用中心对齐矢量 SVG', () => {
     const groupWithInline = {
@@ -173,8 +187,8 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(bmsOnlyHtml).not.toContain('class="canvas-divider"')
   })
 
-  it('智能组名解析与首行 H1 正文去重', () => {
-    // 场景 1：用户未显式设置组名（name 为空），但 notes 开头写了 <h1>123</h1>
+  it('未设置组名时直接回退「未命名」（英文「Untitled」），不从笔记提取内容', () => {
+    // 场景 1：用户未显式设置组名（name 为空），notes 开头写了 <h1>123</h1>
     const untitledWithH1 = {
       id: 'grp-h1-test',
       name: '',
@@ -185,34 +199,26 @@ describe('S6/S7 SSR 外壳骨架', () => {
     }
     const htmlH1 = renderSharePage(untitledWithH1 as never, bms as never, 'https://ulink.ren/s/grp-h1-test', 'https://ulink.ren', 'zh-CN')
 
-    // 1. Hero 大标题和 <title> 必须为 123，绝不能出现「分享组」或「未命名组」
-    expect(htmlH1).toContain('<h1 class="group-hero-title">123</h1>')
-    expect(htmlH1).toContain('<title>123 - ulink</title>')
+    // 大标题和 <title> 直接为「未命名」，绝不从 notes 提取
+    expect(htmlH1).toContain('<h1 class="group-hero-title">未命名</h1>')
+    expect(htmlH1).toContain('<title>未命名 - ulink</title>')
     expect(htmlH1).not.toContain('分享组')
-    expect(htmlH1).not.toContain('未命名组')
 
-    // 2. 正文笔记中已被提拔的开头 <h1>123</h1> 必须被消费，不能在正文中出现重复的大标题 123
-    expect(htmlH1).toContain('<p>待办事项与正文</p>')
-    expect(htmlH1).not.toContain('<div class="focus-notes"><h1')
-    expect(htmlH1).toContain('<div class="group-notes-content"><div class="focus-notes"><p>待办事项与正文</p></div></div>')
-
-    // 场景 2：用户显式设置了组名「前端工具集」，notes 开头保留 <h1>收藏</h1>
+    // 场景 2：用户显式设置了组名「前端工具集」
     expect(zh).toContain('<h1 class="group-hero-title">前端工具集</h1>')
     expect(zh).toContain('<title>前端工具集 - ulink</title>')
-    // 显式组名时，正文中的 <h1>收藏</h1> 必须原样完整保留（带 toc id）
-    expect(zh).toContain('>收藏</h1>')
 
-    // 场景 3：无组名且 notes 纯空，回退为「未命名组」（英文「Untitled group」），绝无「分享组」
+    // 场景 3：无组名且 notes 纯空，回退为「未命名」（英文「Untitled」）
     const pureEmptyGroup = { id: 'grp-empty', name: '', icon: '', color: '', notes: '' }
     const emptyZh = renderSharePage(pureEmptyGroup as never, bms as never, 'https://ulink.ren/s/grp-empty', 'https://ulink.ren', 'zh-CN')
     const emptyEn = renderSharePage(pureEmptyGroup as never, bms as never, 'https://ulink.ren/s/grp-empty', 'https://ulink.ren', 'en-US')
 
-    expect(emptyZh).toContain('<h1 class="group-hero-title">未命名组</h1>')
-    expect(emptyZh).toContain('<title>未命名组 - ulink</title>')
+    expect(emptyZh).toContain('<h1 class="group-hero-title">未命名</h1>')
+    expect(emptyZh).toContain('<title>未命名 - ulink</title>')
     expect(emptyZh).not.toContain('分享组')
 
-    expect(emptyEn).toContain('<h1 class="group-hero-title">Untitled group</h1>')
-    expect(emptyEn).toContain('<title>Untitled group - ulink</title>')
+    expect(emptyEn).toContain('<h1 class="group-hero-title">Untitled</h1>')
+    expect(emptyEn).toContain('<title>Untitled - ulink</title>')
     expect(emptyEn).not.toContain('Shared group')
   })
 
@@ -238,5 +244,39 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(catHtml).not.toContain('次点击')
     expect(catHtml).not.toContain('clicks')
     expect(catHtml).not.toContain('1 click')
+  })
+
+  it('未命名组第一行为内联书签卡片时，页面标题与 H1 直接显示「未命名」，绝不泄漏卡片噪音', () => {
+    const inlineCardNotes =
+      '<p><span class="group-inline-card" contenteditable="false" data-bm-id="b1" draggable="false">' +
+      '<img src="https://favicon.splitbee.io/?url=vite.dev" alt="">' +
+      '<span class="gic-name">Vite 官方文档</span>' +
+      '<span class="gic-domain">vite.dev</span>' +
+      '<span class="gic-btn">详</span>' +
+      '</span></p>' +
+      '<p>这是第二行正文说明</p>'
+
+    const cardGroup = {
+      id: 'grp-card-demo',
+      name: '',
+      icon: '',
+      color: '',
+      notes: inlineCardNotes,
+      updated_at_num: 1756620000000,
+    }
+
+    const htmlZh = renderSharePage(cardGroup as never, bms as never, 'https://ulink.ren/s/grp-card-demo', 'https://ulink.ren', 'zh-CN')
+
+    // 页面标题与 hero 标题中必须直接为「未命名」，绝不带卡片任何文字，绝不带域名和「详」
+    expect(htmlZh).toContain('<h1 class="group-hero-title">未命名</h1>')
+    expect(htmlZh).toContain('<title>未命名 - ulink</title>')
+    expect(htmlZh).not.toContain('Vite 官方文档vite.dev详')
+
+    // 验证底层纯函数 stripTags 与 resolveGroupTitle
+    expect(stripTags(inlineCardNotes)).toBe('Vite 官方文档\n这是第二行正文说明')
+    expect(resolveGroupTitle({ defaultGroupName: '未命名', cipherPlaceholder: '' } as any, cardGroup as any)).toEqual({
+      name: '未命名',
+      promotedH1: false,
+    })
   })
 })

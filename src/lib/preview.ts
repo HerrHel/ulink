@@ -25,7 +25,7 @@ function htmlToText(html: string): string {
   if (isThreePartCipher(html)) return ''
   if (!_htmlToTextEl) _htmlToTextEl = document.createElement('div')
   _htmlToTextEl.innerHTML = sanitizeHTML(html)
-  _htmlToTextEl.querySelectorAll('.gic-btn, .gic-remove, .gic-domain').forEach(el => el.remove())
+  _htmlToTextEl.querySelectorAll('.gic-btn, .gic-remove, .gic-domain, .gic-count, .gic-edit-btn').forEach(el => el.remove())
   return (_htmlToTextEl.textContent || '').replace(/\s+/g, ' ').trim()
 }
 

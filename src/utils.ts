@@ -63,41 +63,63 @@ export function displayText(value: string | null | undefined): string {
   return typeof value === 'string' && isThreePartCipher(value) ? '' : (value ?? '')
 }
 
+/** 带内容的危险容器：整块剥离（含其文本） */
+const NOTES_BLOCKLIST = ['script', 'style', 'iframe', 'object', 'embed', 'svg', 'math', 'noscript', 'template']
+
 /**
- * 从组名和笔记内容智能推导组标题：
- * 1. 显式组名（非密文且非空白）最高优先；
- * 2. 否则从 notes HTML 中尝试提取开头的 <h1>、首个 heading (h1/h2/h3) 或首行纯文本；
- * 3. 否则返回空串（由调用方回退至多语言"未命名组"）。
+ * 剥离 HTML 标签得纯文本：
+ * 专为组 notes 与富文本设计，剔除危险容器（script/style/svg 等），
+ * 智能清理内联书签卡片/引用组卡片的噪音结构（.gic-domain/.gic-btn/.gic-remove/.gic-count/.gic-edit-btn），
+ * 避免泄漏域名、"详"字等操作按钮，并在块级元素处保留段落换行、卡片容器周围保留空格。
  */
-export function extractGroupTitle(name?: string | null, notes?: string | null): string {
+export function stripTags(html: string): string {
+  let out = (html || '').replace(/<!--[\s\S]*?-->/g, '')
+  for (const t of NOTES_BLOCKLIST) {
+    out = out
+      .replace(new RegExp(`<\\s*${t}[\\s\\S]*?<\\s*/\\s*${t}\\s*>`, 'gi'), '')
+      .replace(new RegExp(`<\\s*/?\\s*${t}[\\s\\S]*?>`, 'gi'), '')
+  }
+  // 剥离内联卡片噪音子节点整块（含其内容）：.gic-domain、.gic-btn、.gic-remove、.gic-count、.gic-edit-btn
+  out = out.replace(
+    /<([a-zA-Z0-9]+)\b[^>]*\bclass=(?:"[^"]*\b(?:gic-btn|gic-remove|gic-domain|gic-count|gic-edit-btn)\b[^"]*"|'[^']*\b(?:gic-btn|gic-remove|gic-domain|gic-count|gic-edit-btn)\b[^']*'|[^\s>]*\b(?:gic-btn|gic-remove|gic-domain|gic-count|gic-edit-btn)\b[^\s>]*)[^>]*>[\s\S]*?<\/\1>/gi,
+    ''
+  )
+  // 内联卡片容器前后补空格隔离，避免与相邻文字或紧贴的卡片粘连
+  out = out.replace(
+    /<\s*(?:\/?\s*(?:span|a))\b[^>]*\bclass=(?:"[^"]*\bgroup-inline-card\b[^"]*"|'[^']*\bgroup-inline-card\b[^']*')[^>]*>/gi,
+    ' '
+  )
+  // 块级标签转换行为 \n
+  out = out.replace(
+    /<\s*(?:\/\s*(?:p|div|h[1-6]|li|blockquote|tr|table|section|article|header|footer|pre)|br\s*\/?>)\s*>/gi,
+    '\n'
+  )
+  // 剥除所有剩余 HTML 标签（行内标签不插入额外空格）
+  out = out.replace(/<[^>]+>/g, '')
+  // 还原常见 HTML 实体
+  out = out
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&#x27;/g, "'")
+  // 规范化空格与空白行，以换行符连接各非空行
+  return out
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[^\S\r\n]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+/**
+ * 从组名推导组标题：
+ * 显式组名（非密文且非空白）最高优先；
+ * 未设置组名时返回空串（由调用方回退至多语言"未命名"）。
+ */
+export function extractGroupTitle(name?: string | null, _notes?: string | null): string {
   const plainName = (displayText(name) || '').trim()
-  if (plainName) return plainName
-
-  const rawNotes = (notes || '').trim()
-  if (!rawNotes || isThreePartCipher(rawNotes)) return ''
-
-  // 1. 开头首个 h1 优先
-  const leadH1 = rawNotes.match(/^(?:\s*|<!--[\s\S]*?-->|<p>\s*(?:<br\s*\/?>)?\s*<\/p>)*<h1\b[^>]*>([\s\S]*?)<\/h1>/i)
-  if (leadH1) {
-    const txt = leadH1[1].replace(/<[^>]+>/g, '').trim()
-    if (txt) return txt
-  }
-
-  // 2. 任意首个 heading (h1/h2/h3)
-  const anyH = rawNotes.match(/<(h[1-3])\b[^>]*>([\s\S]*?)<\/\1>/i)
-  if (anyH) {
-    const txt = anyH[2].replace(/<[^>]+>/g, '').trim()
-    if (txt) return txt.slice(0, 50)
-  }
-
-  // 3. 首行纯文本
-  const plain = rawNotes.replace(/<[^>]+>/g, '').trim()
-  if (plain) {
-    const firstLine = plain.split(/\r?\n/)[0].trim()
-    if (firstLine) return firstLine.slice(0, 40)
-  }
-
-  return ''
+  return plainName
 }
 
 export function favicon(url: string, customIcon?: string): string {

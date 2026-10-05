@@ -1,28 +1,89 @@
 import { describe, it, expect, vi } from 'vitest'
-import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle } from '../utils.js'
+import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle, stripTags } from '../utils.js'
 import { safeAtob } from '../crypto.js'
 
 describe('utils', () => {
-  describe('extractGroupTitle', () => {
+  describe('stripTags & extractGroupTitle', () => {
     it('显式组名优先返回', () => {
       expect(extractGroupTitle('我的知识库', '<h1>其他标题</h1>')).toBe('我的知识库')
       expect(extractGroupTitle('前端日常', '')).toBe('前端日常')
     })
 
-    it('组名为空时从 notes 首个 h1 提取标题', () => {
-      expect(extractGroupTitle('', '<h1>123</h1><p>正文内容</p>')).toBe('123')
-      expect(extractGroupTitle(null, '<p><br></p><h1>重要清单</h1>')).toBe('重要清单')
-    })
-
-    it('无开头 h1 时提取首个其他 heading 或首行文本', () => {
-      expect(extractGroupTitle('', '<h2>备忘事项</h2><p>第一条</p>')).toBe('备忘事项')
-      expect(extractGroupTitle('', '<p>直接输入的第一行内容\n第二行</p>')).toBe('直接输入的第一行内容')
-    })
-
-    it('notes 为空或纯密文时返回空串', () => {
+    it('组名为空时直接返回空串（由调用方直接显示未命名），不从 notes 提取首行内容', () => {
+      expect(extractGroupTitle('', '<h1>123</h1><p>正文内容</p>')).toBe('')
+      expect(extractGroupTitle(null, '<p><br></p><h1>重要清单</h1>')).toBe('')
+      expect(extractGroupTitle('', '<h2>备忘事项</h2><p>第一条</p>')).toBe('')
+      expect(extractGroupTitle('', '<p>直接输入的第一行内容\n第二行</p>')).toBe('')
       expect(extractGroupTitle('', '')).toBe('')
       expect(extractGroupTitle(null, null)).toBe('')
       expect(extractGroupTitle('', 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24))).toBe('')
+    })
+
+    it('stripTags：单书签卡片剥除网址/域名和"详"字按钮，仅保留卡片名称', () => {
+      const inlineCard =
+        '<p><span class="group-inline-card" contenteditable="false" data-bm-id="bm_1" draggable="false">' +
+        '<img src="https://favicon.splitbee.io/?url=github.com" alt="">' +
+        '<span class="gic-name">GitHub</span>' +
+        '<span class="gic-domain">github.com</span>' +
+        '<span class="gic-btn">详</span>' +
+        '</span></p>'
+      expect(stripTags(inlineCard)).toBe('GitHub')
+    })
+
+    it('stripTags：书签卡片且带后续正文时，卡片名称与正文自然拼接且无噪音', () => {
+      const inlineCardWithText =
+        '<p><span class="group-inline-card" contenteditable="false" data-bm-id="bm_1">' +
+        '<span class="gic-name">GitHub</span>' +
+        '<span class="gic-domain">github.com</span>' +
+        '<span class="gic-btn">详</span>' +
+        '</span> 常用开源代码库</p>'
+      expect(stripTags(inlineCardWithText)).toBe('GitHub 常用开源代码库')
+    })
+
+    it('stripTags：引用组卡片剥除书签计数和"详"按钮，仅提取组名', () => {
+      const refCard =
+        '<p><span class="group-inline-card group-ref-card" contenteditable="false" data-bm-id="ref:sg_tips" draggable="true">' +
+        '<span style="width:16px"><svg viewBox="0 0 24 24"><path d="M1 1"/></svg></span>' +
+        '<span class="gic-name">使用技巧</span>' +
+        '<span class="gic-count">2个书签</span>' +
+        '<span class="gic-btn">详</span>' +
+        '</span></p>'
+      expect(stripTags(refCard)).toBe('使用技巧')
+    })
+
+    it('stripTags：两段内容正确换行分隔', () => {
+      const twoParagraphs =
+        '<p><span class="group-inline-card" contenteditable="false" data-bm-id="bm_1">' +
+        '<span class="gic-name">Vue 3</span>' +
+        '<span class="gic-domain">vuejs.org</span>' +
+        '<span class="gic-btn">详</span>' +
+        '</span></p>' +
+        '<p>渐进式 JavaScript 框架官方文档说明</p>'
+      expect(stripTags(twoParagraphs)).toBe('Vue 3\n渐进式 JavaScript 框架官方文档说明')
+    })
+
+    it('stripTags：前置空段落后出现书签卡片，能正确跳过空行', () => {
+      const withLeadingEmpty =
+        '<p><br></p>' +
+        '<p></p>' +
+        '<p><span class="group-inline-card">' +
+        '<span class="gic-name">React</span>' +
+        '<span class="gic-domain">react.dev</span>' +
+        '<span class="gic-btn">详</span>' +
+        '</span></p>'
+      expect(stripTags(withLeadingEmpty)).toBe('React')
+    })
+
+    it('stripTags：包含编辑态编辑/删除按钮和英文"i"按钮时，一并彻底剥除', () => {
+      const editCard =
+        '<p><span class="group-inline-card">' +
+        '<span class="gic-name">Tailwind CSS</span>' +
+        '<span class="gic-domain">tailwindcss.com</span>' +
+        '<span class="gic-edit-btn">编</span>' +
+        '<span class="gic-remove">删</span>' +
+        '<span class="gic-btn">i</span>' +
+        '</span></p>'
+      expect(stripTags(editCard)).toBe('Tailwind CSS')
     })
   })
 
