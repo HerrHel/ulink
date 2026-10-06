@@ -102,7 +102,11 @@ export function decideRemoteApply(input: DecideRemoteApplyInput): MergeDecision 
     return { action: 'skip' }
   }
 
-  if (!remoteNewer) return { action: 'skip' }
+  if (!remoteNewer) {
+    const rTime = sanitizeRemoteTimestamp(remoteItem.updatedAt, Date.now())
+    const lTime = localItem.updatedAt || 0
+    if (rTime === lTime) return { action: 'skip' }
+  }
 
   // RE-3：远端软删本地存活 → 走 delete* 副作用，禁止 Object.assign 跳过
   if (remoteItem.deletedAt && !localItem.deletedAt) {

@@ -270,6 +270,7 @@ export function useMobileDragReorder<T>(
   // ── 拖拽事件 ──
   function onPointerDown(e: PointerEvent) {
     if (!enabled.value) return
+    if (e.button !== 0) return // Only allow left-click/primary touch
 
     let item: HTMLElement | null = null
     if (handleSelector) {
