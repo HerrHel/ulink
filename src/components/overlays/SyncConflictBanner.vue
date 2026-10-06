@@ -58,7 +58,7 @@ function itemName(c: SyncConflict): string {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
   z-index: 7200; width: min(460px, calc(100vw - 32px)); /* 2026-08-10：抬到模态框(6000)之上，与 undo-toast 同层 */
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-base); box-shadow: var(--shadow-xl);
+  border-radius: 0; box-shadow: var(--shadow-xl);
   overflow: hidden; font-size: 13px;
 }
 .conflict-banner-head {
@@ -81,7 +81,7 @@ function itemName(c: SyncConflict): string {
 .conflict-item:last-child { border-bottom: none; }
 .conflict-item-info { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .conflict-type-badge {
-  font-size: 11px; padding: 2px 6px; border-radius: var(--radius-xs);
+  font-size: 11px; padding: 2px 6px; border-radius: 0;
   background: var(--accent-light); color: var(--accent);
   white-space: nowrap; flex-shrink: 0;
 }
