@@ -16,7 +16,8 @@ const DOMAIN_KEYWORDS: Record<string, string[]> = {
   '购物': ['amazon.com', 'amazon.cn', 'taobao.com', 'jd.com', 'pinduoduo.com', 'ebay.com', 'walmart.com', 'target.com', 'suning.com'],
   '工具': ['notion.so', 'trello.com', 'asana.com', 'slack.com', 'zoom.us', 'docs.google.com', 'airtable.com', 'miro.com', 'excalidraw.com', 'whimsical.com', 'grammarly.com', 'deepl.com', 'translate.google.com', 'ilovepdf.com'],
   '文档': ['docs.', 'wiki.', 'readthedocs.io', 'gitbook.io', 'confluence.', 'atlassian.com'],
-  'AI': ['openai.com', 'chat.openai.com', 'claude.ai', 'anthropic.com', 'huggingface.co', 'midjourney.com', 'stability.ai', 'bard.google.com', 'gemini.google.com', 'poe.com', 'perplexity.ai'],
+  'AI': ['openai.com', 'chat.openai.com', 'chatgpt.com', 'claude.ai', 'anthropic.com', 'doubao.com', 'workbuddy.ai', 'huggingface.co', 'midjourney.com', 'stability.ai', 'bard.google.com', 'gemini.google.com', 'poe.com', 'perplexity.ai', 'deepseek.com'],
+  '邮箱': ['mail.qq.com', 'mail.163.com', 'mail.google.com', 'gmail.com', 'outlook.com', 'mail.126.com'],
 }
 
 // ── 标题关键词 → 分类映射 ──
@@ -30,7 +31,8 @@ const TITLE_KEYWORDS: Record<string, string[]> = {
   '新闻': ['新闻', 'news', '资讯', '头条', '日报', 'daily', '周报', 'weekly'],
   '购物': ['购物', 'shopping', '商城', '商店', 'store', '优惠', '折扣', 'coupon'],
   '工具': ['工具', 'tool', '效率', 'productivity', '笔记', 'note', 'todo', '待办', '日程', 'calendar', '协作', 'collaborate', 'pdf'],
-  'AI': ['ai', '人工智能', '机器学习', 'machine learning', '深度学习', 'deep learning', '大模型', 'llm', 'chatgpt', 'gpt', 'transformer', 'diffusion', 'stable diffusion', 'midjourney'],
+  'AI': ['ai', '人工智能', '机器学习', 'machine learning', '深度学习', 'deep learning', '大模型', 'llm', 'chatgpt', 'gpt', 'claude', 'gemini', '豆包', 'workbuddy', 'deepseek', 'transformer', 'diffusion', 'stable diffusion', 'midjourney'],
+  '邮箱': ['邮箱', 'mail', 'email', 'gmail', '163邮', '网易邮', 'qq邮', '收件箱'],
   '学习': ['教程', 'tutorial', '课程', 'course', '学习', 'learn', '入门', '指南', 'guide', 'book', '书', '电子书'],
   '游戏': ['游戏', 'game', 'steam', 'epic', 'playstation', 'xbox', 'nintendo', 'switch'],
 }
