@@ -94,7 +94,7 @@ export const DEFAULTS: AppData = {
   siblingGroups: [
     {
       id: 'sg_welcome',
-      name: '💡 上手指南',
+      name: '上手指南',
       categoryId: 'uncategorized',
       icon: '',
       order: 0,
@@ -194,7 +194,7 @@ export function buildSeedDefaults(locale?: Locale): AppData {
     siblingGroups: [
       {
         id: 'sg_welcome',
-        name: isEn ? '💡 Getting Started' : '💡 上手指南',
+        name: isEn ? 'Getting Started' : '上手指南',
         categoryId: 'uncategorized',
         icon: '',
         order: 0,

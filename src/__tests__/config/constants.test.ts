@@ -144,7 +144,7 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     expect(DEFAULTS.siblingGroups.length).toBe(1)
     const welcome = DEFAULTS.siblingGroups[0]
     expect(welcome.id).toBe('sg_welcome')
-    expect(welcome.name).toBe('💡 上手指南')
+    expect(welcome.name).toBe('上手指南')
     expect(welcome.notes).toBe(WELCOME_NOTES)
     expect(welcome.bookmarkIds).toEqual(['b1', 'b6'])
   })
