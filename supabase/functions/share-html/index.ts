@@ -491,14 +491,21 @@ function groupIconMarkup(group: PublicGroup, letter: string): string {
   return iconMarkup(imgSrc, letter, "hero")
 }
 
+/** 笔记默认图标（与 App 端 I.note 同款）。 */
+const NOTE_SVG =
+  `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21.6602 10.44L20.6802 14.62C19.8402 18.23 18.1802 19.69 15.0602 19.39C14.5602 19.35 14.0202 19.26 13.4402 19.12L11.7602 18.72C7.59018 17.73 6.30018 15.67 7.28018 11.49L8.26018 7.30001C8.46018 6.45001 8.70018 5.71001 9.00018 5.10001C10.1702 2.68001 12.1602 2.03001 15.5002 2.82001L17.1702 3.21001C21.3602 4.19001 22.6402 6.26001 21.6602 10.44Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path opacity="0.4" d="M15.0603 19.3901C14.4403 19.8101 13.6603 20.1601 12.7103 20.4701L11.1303 20.9901C7.16034 22.2701 5.07034 21.2001 3.78034 17.2301L2.50034 13.2801C1.22034 9.3101 2.28034 7.2101 6.25034 5.9301L7.83034 5.4101C8.24034 5.2801 8.63034 5.1701 9.00034 5.1001C8.70034 5.7101 8.46034 6.4501 8.26034 7.3001L7.28034 11.4901C6.30034 15.6701 7.59034 17.7301 11.7603 18.7201L13.4403 19.1201C14.0203 19.2601 14.5603 19.3501 15.0603 19.3901Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+
 /**
- * 组/分类头部自定义图标：仅当存在明确的 http(s) URL 时渲染图标徽标，
- * 无自定义图片时完全不渲染（方案 1：极简大标题顶格，杜绝占位方块、问号或单字冗余）。
+ * 组/分类头部图标：若设置了自定义图标（http(s) 或安全相对路径），显示设置的图标；
+ * 组若未设置自定义图标，则显示初始的 SVG 图像（NOTE_SVG）。
  */
 function heroCustomIconMarkup(entity: Record<string, unknown>, prefix: "group" | "cat"): string {
   const icon = typeof entity.icon === "string" ? entity.icon.trim() : ""
-  if (/^https?:\/\//i.test(icon)) {
-    return `<span class="${prefix}-hero-icon"><img src="${esc(icon)}" alt="" /></span>`
+  if (/^https?:\/\//i.test(icon) || /^\/(?!\/)/.test(icon)) {
+    return `<span class="${prefix}-hero-icon"><img src="${esc(icon)}" alt="" data-fb="1" /><span class="hero-fb" aria-hidden="true">${prefix === "group" ? NOTE_SVG : ""}</span></span>`
+  }
+  if (prefix === "group") {
+    return `<span class="${prefix}-hero-icon">${NOTE_SVG}</span>`
   }
   return ""
 }
@@ -1152,6 +1159,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   width: 36px;
   height: 36px;
 }
+.group-hero-icon svg {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+}
 .group-hero-icon .hero-fb {
   font-size: 22px;
   font-weight: 700;
@@ -1164,6 +1176,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   justify-content: center;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
+}
+.group-hero-icon .hero-fb svg {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
 }
 .group-hero-info {
   flex: 1;
@@ -2267,6 +2284,7 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   .group-canvas { border-radius: var(--radius-lg); }
   .group-canvas .group-hero { padding: 18px 16px; gap: 14px }
   .group-hero-icon { width: 48px; height: 48px; border-radius: var(--radius-md) }
+  .group-hero-icon svg { width: 28px; height: 28px; }
   .group-hero-title { font-size: 21px }
   .group-canvas-body { padding: 18px 16px 24px; gap: 20px }
   .bm-grid { grid-template-columns: 1fr }

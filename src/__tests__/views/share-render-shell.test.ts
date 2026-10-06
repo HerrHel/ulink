@@ -169,13 +169,14 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).toContain('class="bm-grid"')
     expect(zh).toContain('data-search=')
 
-    // 彻底移除旧版与方案 A 繁冗元素与无用头像方块
+    // 彻底移除旧版与方案 A 繁冗分栏与多余套娃
     expect(zh).not.toContain('class="group-split-view"')
     expect(zh).not.toContain('class="group-sticky-side"')
     expect(zh).not.toContain('class="group-hero-accent"')
     expect(zh).not.toContain('class="group-quick-nav"')
     expect(zh).not.toContain('class="side-toc-card"')
-    expect(zh).not.toContain('class="group-hero-icon"')
+    // 未设置自定义图标时展示默认 SVG 图标
+    expect(zh).toContain('class="group-hero-icon"')
 
     // 仅有书签时的画卷结构：直接呈现书签区，无笔记与多余分割线
     const bmsOnlyGroup = { ...group, notes: '' }
@@ -185,6 +186,19 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(bmsOnlyHtml).toContain('class="bm-grid"')
     expect(bmsOnlyHtml).not.toContain('class="group-notes-section"')
     expect(bmsOnlyHtml).not.toContain('class="canvas-divider"')
+  })
+
+  it('分享组图标：未设置自定义图标显示初始 SVG，设置了显示设置的图标', () => {
+    // 1. 未设置自定义图标（group.icon 为空）→ 渲染 group-hero-icon 且内部包含 NOTE_SVG
+    expect(zh).toContain('class="group-hero-icon"')
+    expect(zh).toContain('<svg aria-hidden="true" viewBox="0 0 24 24"')
+
+    // 2. 设置了自定义图标（group.icon 为 http(s) URL）→ 渲染 img 标签
+    const customIconGroup = { ...group, icon: 'https://example.com/custom.png' }
+    const customHtml = renderSharePage(customIconGroup as never, bms as never, 'https://ulink.ren/s/grp-demo-001', 'https://ulink.ren', 'zh-CN')
+    expect(customHtml).toContain('class="group-hero-icon"')
+    expect(customHtml).toContain('<img src="https://example.com/custom.png"')
+    expect(customHtml).toContain('data-fb="1"')
   })
 
   it('未设置组名时直接回退「未命名」（英文「Untitled」），不从笔记提取内容', () => {

@@ -555,6 +555,10 @@
   height:32px;
   object-fit:contain;
 }
+.share-mode-layout .group-card-icon svg{
+  width:32px;
+  height:32px;
+}
 .share-mode-layout .focus-view .group-card-focus .card-name{
   font-size:24px;
   font-weight:800;
