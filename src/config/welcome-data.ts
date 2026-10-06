@@ -55,7 +55,8 @@ const WELCOME_ZH =
   + _inlineCard('b2', 'mail.qq.com', 'QQ邮箱', '详') + ' '
   + _inlineCard('b3', 'www.deepseek.com', 'DeepSeek', '详') + ' '
   + _inlineCard('b4', 'www.douyin.com', '抖音', '详') + ' '
-  + _inlineCard('b5', 'store.steampowered.com', 'Steam', '详')
+  + _inlineCard('b5', 'store.steampowered.com', 'Steam', '详') + ' '
+  + _inlineCard('b6', 'www.ilovepdf.com', 'I Love PDF', '详')
 
 /** en-US 欢迎笔记（结构对齐中文版，品牌 ulink） */
 const WELCOME_EN =
@@ -92,7 +93,8 @@ const WELCOME_EN =
   + _inlineCard('b2', 'mail.qq.com', 'QQ Mail', 'i') + ' '
   + _inlineCard('b3', 'www.deepseek.com', 'DeepSeek', 'i') + ' '
   + _inlineCard('b4', 'www.douyin.com', 'Douyin', 'i') + ' '
-  + _inlineCard('b5', 'store.steampowered.com', 'Steam', 'i')
+  + _inlineCard('b5', 'store.steampowered.com', 'Steam', 'i') + ' '
+  + _inlineCard('b6', 'www.ilovepdf.com', 'I Love PDF', 'i')
 
 /** zh-CN 使用指南（保留原内容） */
 const TIPS_ZH =
