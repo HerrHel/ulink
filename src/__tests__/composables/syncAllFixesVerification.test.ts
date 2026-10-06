@@ -247,7 +247,7 @@ describe('同步系统 5 大缺陷与批量优化综合契约测试', () => {
       expect(isRemoteNewer(futureRemote, local, now)).toBe(false)
     })
 
-    it('_mergeIntoLocal assign 时确保本地 updatedAt 不倒退', () => {
+    it('_mergeIntoLocal assign 时允许本地 updatedAt 回退以修正 split brain', () => {
       const ds = useDataStore()
       const localBm = makeBm({
         id: 'bm-clock',
@@ -265,7 +265,7 @@ describe('同步系统 5 大缺陷与批量优化综合契约测试', () => {
 
       _mergeIntoLocal(ds.bookmarks, [remoteBm], 'bookmark')
 
-      expect(ds.bookmarks[0].updatedAt).toBe(5000)
+      expect(ds.bookmarks[0].updatedAt).toBe(3000)
     })
   })
 

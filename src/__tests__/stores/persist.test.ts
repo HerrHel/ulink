@@ -310,26 +310,26 @@ describe('persist', () => {
       expect(info.label.endsWith(' KB')).toBe(false)
     })
 
-    it('D1-59: percent === round(bytes/5242880*100)，5MB 限额百分比公式直锁', () => {
+    it('D1-59: percent === round(bytes/(500 * 1024 * 1024)*100)，5MB 限额百分比公式直锁', () => {
       const data: AppData = {
         bookmarks: [], siblingGroups: [], categories: [], customAttributes: [],
       }
       const bytes = new Blob([JSON.stringify(data)]).size
-      const expectedPercent = Math.min(100, Math.round(bytes / 5242880 * 100))
+      const expectedPercent = Math.min(100, Math.round(bytes / (500 * 1024 * 1024) * 100))
       const info = persist.getStorageInfo(data)
       expect(info.percent).toBe(expectedPercent)
     })
 
     it('D1-59: percent Math.min(100,...) 封顶——超大数据集 percent 不超 100', () => {
-      // 构造 > 5MB（5242880 字节）数据集：6MB notes 使 bytes 远超限额
-      const hugeNotes = 'y'.repeat(6_300_000)
+      // 构造 > 5MB（(500 * 1024 * 1024) 字节）数据集：6MB notes 使 bytes 远超限额
+      const hugeNotes = 'y'.repeat(550_000_000)
       const data: AppData = {
         bookmarks: [{ id: 'b1', title: 't', url: 'u', username: '', password: '', notes: hugeNotes, icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
         siblingGroups: [], categories: [], customAttributes: [],
       }
       const bytes = new Blob([JSON.stringify(data)]).size
-      expect(bytes).toBeGreaterThan(5_242_880) // 前置断言确保真超 5MB
-      const rawPercent = Math.round(bytes / 5242880 * 100)
+      expect(bytes).toBeGreaterThan((500 * 1024 * 1024)) // 前置断言确保真超 5MB
+      const rawPercent = Math.round(bytes / (500 * 1024 * 1024) * 100)
       expect(rawPercent).toBeGreaterThan(100) // 前置断言：未封顶前确实 >100
       const info = persist.getStorageInfo(data)
       expect(info.percent).toBe(100) // Math.min 封顶到 100

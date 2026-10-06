@@ -54,7 +54,13 @@
           </button>
         <div class="card-acct-body" :class="{ show: acctOpen || isExpanded }">
           <div class="acct-row" v-if="displayText(bookmark.username)">
-            <span class="acct-label">{{ t('cards.account') }}</span><span class="acct-val">{{ displayText(bookmark.username) }}</span>
+            <span class="acct-label">{{ t('cards.account') }}</span>
+            <span class="acct-val">
+              <template v-if="e2eStore.isE2EEnabled && !e2eStore.isUnlocked">
+                <span class="e2e-locked-inline" :title="t('cards.encryptedFieldLocked')">***</span>
+              </template>
+              <template v-else>{{ displayText(bookmark.username) }}</template>
+            </span>
             <button class="acct-copy-btn" :class="{ copied: userCopied }" @click.stop="copyUser" :title="t('common.copy')" v-html="userCopied ? I.check : I.copy"></button>
           </div>
           <div class="acct-row" v-if="bookmark.password">
@@ -257,6 +263,7 @@ function filterByTagName(name: string) {
 }
 function copyUser() {
   const v = props.bookmark.username || ''
+  if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) { toast(t('cards.encryptedFieldLocked'), false); return }
   // E2E 密文（未解锁/解不开）复制无意义，提示解锁而非把空/密文写进剪贴板
   if (v && !displayText(v)) { toast(t('cards.encryptedFieldLocked'), false); return }
   copyToClipboard(v, t('cards.account'))

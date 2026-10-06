@@ -170,9 +170,9 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           const prevBookmarkIds = Array.isArray(l.bookmarkIds) ? (l.bookmarkIds as string[]).slice() : []
           for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
           delete (l as { deletedAt?: unknown }).deletedAt
-          // 时钟偏差保护：规整远端时间戳，且确保本地 updatedAt 不倒退
+          // 时钟偏差保护：规整远端时间戳，允许回退以修正 split brain
           const safeRemoteUpdatedAt = sanitizeRemoteTimestamp(r.updatedAt as number | undefined)
-          l.updatedAt = Math.max(Number(l.updatedAt || 0), safeRemoteUpdatedAt)
+          if (safeRemoteUpdatedAt > 0) l.updatedAt = safeRemoteUpdatedAt
           // 组书签联合合并：保留本地存活但远端缺失的书签 ID，防止并发加书签时相互覆盖丢失
           if (type === 'group' && Array.isArray(r.bookmarkIds)) {
             const rIds = new Set(r.bookmarkIds as string[])
@@ -190,9 +190,9 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           const r = rItem as Record<string, unknown>
           const prevBookmarkIds = Array.isArray(l.bookmarkIds) ? (l.bookmarkIds as string[]).slice() : []
           for (const k of Object.keys(r)) if (!NON_SYNC_FIELDS.has(k)) l[k] = r[k]
-          // 时钟偏差保护：规整远端时间戳，且确保本地 updatedAt 不倒退
+          // 时钟偏差保护：规整远端时间戳，允许回退以修正 split brain
           const safeRemoteUpdatedAt = sanitizeRemoteTimestamp(r.updatedAt as number | undefined)
-          l.updatedAt = Math.max(Number(l.updatedAt || 0), safeRemoteUpdatedAt)
+          if (safeRemoteUpdatedAt > 0) l.updatedAt = safeRemoteUpdatedAt
           // 组书签联合合并：保留本地存活但远端缺失的书签 ID，防止并发加书签时相互覆盖丢失
           if (type === 'group' && Array.isArray(r.bookmarkIds)) {
             const rIds = new Set(r.bookmarkIds as string[])
