@@ -58,7 +58,7 @@ function itemName(c: SyncConflict): string {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
   z-index: 7200; width: min(460px, calc(100vw - 32px)); /* 2026-08-10：抬到模态框(6000)之上，与 undo-toast 同层 */
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: 0; box-shadow: var(--shadow-xl);
+  border-radius: var(--radius-base); box-shadow: var(--shadow-xl);
   overflow: hidden; font-size: 13px;
 }
 .conflict-banner-head {
