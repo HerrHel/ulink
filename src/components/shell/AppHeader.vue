@@ -52,7 +52,7 @@
       <!-- Share readonly mode：右上角写类按钮整体换成「保存至我的库」+ 布局切换与主题切换 -->
       <template v-if="shareMode">
         <div v-if="isCategoryShare && !ui.focusedGroupId" class="layout-toggle cat-share-layouts">
-          <button class="lt-btn" :class="{ active: ui.layoutMode === 'grid' }" @click="ui.layoutMode = 'grid'" :title="t('filter.layoutGrid')" :aria-label="t('filter.layoutGrid')">
+          <button v-if="!ui.isMobile" class="lt-btn" :class="{ active: ui.layoutMode === 'grid' }" @click="ui.layoutMode = 'grid'" :title="t('filter.layoutGrid')" :aria-label="t('filter.layoutGrid')">
             <span aria-hidden="true" v-html="I.layoutGrid"></span>
           </button>
           <button class="lt-btn" :class="{ active: ui.layoutMode === 'list' }" @click="ui.layoutMode = 'list'" :title="t('filter.layoutList')" :aria-label="t('filter.layoutList')">

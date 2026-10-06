@@ -240,6 +240,14 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(catHtml).toContain('box-sizing: border-box !important')
   })
 
+  it('移动端默认列表布局防闪烁规则与内联脚本守卫', () => {
+    expect(catHtml).toContain('share-mobile-list')
+    expect(catHtml).toContain('.share-mobile-list .cat-grid:not(.mini-grid-view)')
+    expect(catHtml).toContain('.share-mobile-list .cat-layout-btn[data-layout="grid"]')
+    expect(catHtml).toContain('.share-mobile-list .cat-layout-btn[data-layout="list"]')
+    expect(catHtml).toContain('display: none !important')
+  })
+
   it('分享只读态单书签卡片不展示累计点击次数（纯净轻量）', () => {
     expect(catHtml).not.toContain('次点击')
     expect(catHtml).not.toContain('clicks')
