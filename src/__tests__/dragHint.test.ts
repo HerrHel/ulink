@@ -22,14 +22,14 @@ describe('getDragHintText', () => {
   it('group-body：书签→内联卡片；组→组引用；自身组空', () => {
     const body = el('div', 'group-body', { 'data-gid': 'g1' })
     expect(getDragHintText(body, bm)).toBe('嵌入为内联卡片')
-    expect(getDragHintText(body, groupOther)).toBe('嵌入为组引用')
+    expect(getDragHintText(body, groupOther)).toBe('嵌入为笔记引用')
     expect(getDragHintText(body, group)).toBe('')
   })
 
   it('group-card-head：组交换 / 书签排序到组', () => {
     const head = el('div', 'group-card-head')
-    expect(getDragHintText(head, group)).toBe('交换组位置')
-    expect(getDragHintText(head, bm)).toBe('将书签排序到此组')
+    expect(getDragHintText(head, group)).toBe('交换笔记位置')
+    expect(getDragHintText(head, bm)).toBe('将书签排序到此笔记')
   })
 
   it('审计 R24：type:detail 拖到 group-body / group-card-head / group-card 均不提示组操作（drop 端拒绝）', () => {
@@ -64,8 +64,8 @@ describe('getDragHintText', () => {
 
   it('group-card：移动书签 / 嵌入组 / 自身空', () => {
     const card = el('div', 'group-card', { 'data-group-id': 'g1' })
-    expect(getDragHintText(card, bm)).toBe('移动书签到组')
-    expect(getDragHintText(card, groupOther)).toBe('嵌入为组引用')
+    expect(getDragHintText(card, bm)).toBe('移动书签到笔记')
+    expect(getDragHintText(card, groupOther)).toBe('嵌入为笔记引用')
     expect(getDragHintText(card, group)).toBe('')
     expect(getDragHintText(card, { type: 'cat', id: 'c1' })).toBe('')
   })
@@ -73,7 +73,7 @@ describe('getDragHintText', () => {
   it('普通 card：有 srcGid→移出组；否则交换排序', () => {
     const card = el('div', 'card')
     expect(getDragHintText(card, bm)).toBe('交换排序')
-    expect(getDragHintText(card, bmInGroup)).toBe('移出组')
+    expect(getDragHintText(card, bmInGroup)).toBe('移出笔记')
   })
 
   it('cardGrid 空白 + srcGid → 移出组', () => {
@@ -81,7 +81,7 @@ describe('getDragHintText', () => {
     const blank = el('div')
     grid.appendChild(blank)
     document.body.appendChild(grid)
-    expect(getDragHintText(blank, bmInGroup)).toBe('移出组')
+    expect(getDragHintText(blank, bmInGroup)).toBe('移出笔记')
     expect(getDragHintText(blank, bm)).toBe('')
     grid.remove()
   })

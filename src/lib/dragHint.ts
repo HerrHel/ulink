@@ -29,10 +29,10 @@ export function getDragHintText(
   if (target.classList.contains('group-body')) {
     const gid = (target as HTMLElement).dataset.gid
     if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
-    return payload.type === 'group' ? '嵌入为组引用' : '嵌入为内联卡片'
+    return payload.type === 'group' ? '嵌入为笔记引用' : '嵌入为内联卡片'
   }
   if (target.classList.contains('group-card-head')) {
-    return payload.type === 'group' ? '交换组位置' : '将书签排序到此组'
+    return payload.type === 'group' ? '交换笔记位置' : '将书签排序到此笔记'
   }
   if (target.classList.contains('detail-card-wrap')) return '移到此位置'
   if (target.closest('#detailPanel')) return '加入详情面板'
@@ -40,14 +40,14 @@ export function getDragHintText(
   if (target.classList.contains('group-card')) {
     const gid = (target as HTMLElement).dataset.groupId
     if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
-    if (payload.type === 'bm') return '移动书签到组'
-    if (payload.type === 'group') return '嵌入为组引用'
+    if (payload.type === 'bm') return '移动书签到笔记'
+    if (payload.type === 'group') return '嵌入为笔记引用'
     return ''
   }
   if (target.classList.contains('card') && !target.classList.contains('group-card')) {
-    return payload.srcGid ? '移出组' : '交换排序'
+    return payload.srcGid ? '移出笔记' : '交换排序'
   }
-  // 拖到空白区域：仅当源卡片在组内时提示移出组
-  if (payload.srcGid && target.closest('#cardGrid')) return '移出组'
+  // 拖到空白区域：仅当源卡片在组内时提示移出笔记
+  if (payload.srcGid && target.closest('#cardGrid')) return '移出笔记'
   return ''
 }

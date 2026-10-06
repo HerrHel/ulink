@@ -11,8 +11,8 @@ describe('typeLabel — 同步冲突徽章文案', () => {
     expect(typeLabel('bookmark')).toBe('书签')
   })
 
-  it('group → 组', () => {
-    expect(typeLabel('group')).toBe('组')
+  it('group → 笔记', () => {
+    expect(typeLabel('group')).toBe('笔记')
   })
 
   it('category → 分类', () => {
@@ -52,7 +52,7 @@ describe('typeLabel — 同步冲突徽章文案', () => {
   it('纯函数无副作用：相同入参多次调用结果一致', () => {
     expect(typeLabel('bookmark')).toBe('书签')
     expect(typeLabel('bookmark')).toBe('书签')
-    expect(typeLabel('group')).toBe('组')
+    expect(typeLabel('group')).toBe('笔记')
   })
 
   it('返回恒为 string 类型（防未来误改返 undefined/对象）', () => {
@@ -63,7 +63,7 @@ describe('typeLabel — 同步冲突徽章文案', () => {
   it('map 仅含四键，无多余键漂移（防未来误加 type 映射破坏联合类型穷尽性）', () => {
     // 四联合类型全命中各自的中文标签，无任一 type 落到另一 type 的标签
     expect(typeLabel('bookmark')).toBe('书签')
-    expect(typeLabel('group')).toBe('组')
+    expect(typeLabel('group')).toBe('笔记')
     expect(typeLabel('category')).toBe('分类')
     expect(typeLabel('attribute')).toBe('属性')
   })

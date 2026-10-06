@@ -266,8 +266,8 @@ describe('MentionDropdown 渲染分支', () => {
     expect(items[0].find('img').attributes('src')).toBe('https://icon.png')
     // 无 icon → note-icon span
     expect(items[1].find('.note-icon').exists()).toBe(true)
-    // 无 name → 「未命名组」
-    expect(items[1].find('.mi-name').text()).toContain('未命名组')
+    // 无 name → 「未命名笔记」
+    expect(items[1].find('.mi-name').text()).toContain('未命名笔记')
     // 0 个书签文案
     expect(items[1].find('.mi-url').text()).toContain('0 个书签')
     w.unmount()

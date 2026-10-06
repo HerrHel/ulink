@@ -156,11 +156,11 @@ describe('addToGroupDirect (useGroup.ts:136)', () => {
     expect(inlineCardHTML).not.toHaveBeenCalled()
   })
 
-  it('书签已在组内（indexOf !== -1）→ toast("书签已在组内", false) + return 早退，无 updateGroup/insertContent/saveAppData', () => {
+  it('书签已在组内（indexOf !== -1）→ toast("书签已在笔记内", false) + return 早退，无 updateGroup/insertContent/saveAppData', () => {
     mockData.groupMap = { g1: makeGroup({ bookmarkIds: ['b1'] }) }
     mockData.bookmarkMap = { b1: makeBookmark() }
     addToGroupDirect('b1', 'g1')
-    expect(toast).toHaveBeenCalledWith('书签已在组内', false)
+    expect(toast).toHaveBeenCalledWith('书签已在笔记内', false)
     expect(mockData.updateGroup).not.toHaveBeenCalled()
     expect(EditorManager.get).not.toHaveBeenCalled()
     expect(inlineCardHTML).not.toHaveBeenCalled()
@@ -174,7 +174,7 @@ describe('addToGroupDirect (useGroup.ts:136)', () => {
     expect(mockData.updateGroup).not.toHaveBeenCalled()
     expect(EditorManager.get).not.toHaveBeenCalled()
     expect(inlineCardHTML).not.toHaveBeenCalled()
-    expect(toast).not.toHaveBeenCalledWith('已添加到组')
+    expect(toast).not.toHaveBeenCalledWith('已添加到笔记')
     expect(saveAppData).not.toHaveBeenCalled()
     // 关键隐特性直锁：!bm 守卫在 indexOf 通过之后 → indexOf!==-1 但 bm 缺失仍早退；
     // 若未来误删 !bm 守卫，undefined 会传给 inlineCardHTML(bm=undefined) 渲染成 bmid=空 inline card 注入组，无测试告警
@@ -189,7 +189,7 @@ describe('addToGroupDirect (useGroup.ts:136)', () => {
     })
   })
 
-  it('ed truthy → ed.chain().insertContent(inlineCardHTML(bm)).run() 链式三调 + saveGroupBody + saveAppData + toast("已添加到组")', () => {
+  it('ed truthy → ed.chain().insertContent(inlineCardHTML(bm)).run() 链式三调 + saveGroupBody + saveAppData + toast("已添加到笔记")', () => {
     const { chain, chainInsertContent, run } = makeEditorChain()
     ;(EditorManager.get as any).mockReturnValue({ chain })
     mockData.groupMap = { g1: makeGroup({ bookmarkIds: [] }) }
@@ -203,10 +203,10 @@ describe('addToGroupDirect (useGroup.ts:136)', () => {
     expect(inlineCardHTML).toHaveBeenCalledWith(mockData.bookmarkMap.b1)
     expect(run).toHaveBeenCalledTimes(1) // run() 末尾触发
     expect(saveAppData).toHaveBeenCalledTimes(1)
-    expect(toast).toHaveBeenCalledWith('已添加到组')
+    expect(toast).toHaveBeenCalledWith('已添加到笔记')
   })
 
-  it('ed falsy（无编辑器实例）→ inlineCardHTML 不被调用（inlineCardHTML 仅 ed truthy 分支求值）+ updateGroup 仅追加点一次 + saveAppData + toast("已添加到组")', () => {
+  it('ed falsy（无编辑器实例）→ inlineCardHTML 不被调用（inlineCardHTML 仅 ed truthy 分支求值）+ updateGroup 仅追加点一次 + saveAppData + toast("已添加到笔记")', () => {
     ;(EditorManager.get as any).mockReturnValue(null)
     mockData.groupMap = { g1: makeGroup({ bookmarkIds: [] }) }
     mockData.bookmarkMap = { b1: makeBookmark() }
@@ -218,7 +218,7 @@ describe('addToGroupDirect (useGroup.ts:136)', () => {
     expect(mockData.updateGroup).toHaveBeenCalledTimes(1)
     expect(mockData.updateGroup).toHaveBeenCalledWith('g1', { bookmarkIds: ['b1'] })
     expect(saveAppData).toHaveBeenCalledTimes(1)
-    expect(toast).toHaveBeenCalledWith('已添加到组')
+    expect(toast).toHaveBeenCalledWith('已添加到笔记')
   })
 
   it('saveGroupBody 串联静默：getContentHTML→null 时 saveGroupBody 跑（sg 命中）但 updateGroup 不带 notes 二次污染', () => {

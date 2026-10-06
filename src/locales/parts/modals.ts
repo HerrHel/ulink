@@ -3,7 +3,7 @@ export const modalsZh = {
   modal: {
     bookmark: {
       ariaLabel: '书签编辑',
-      addToGroupNew: '新建书签并添加到组',
+      addToGroupNew: '新建书签并添加到笔记',
       addChildBm: '添加子书签',
       editChildBm: '编辑子书签',
       deleteChildBm: '删除子书签',
@@ -39,7 +39,7 @@ export const modalsZh = {
       updated: '子书签已更新',
     }, // ChildBookmarkEditModal
     groupEdit: {
-      name: '组名称',
+      name: '笔记名称',
       iconPreview: '图标预览',
       memberBookmarks: '内含书签',
       remove: '移除',
@@ -61,7 +61,7 @@ export const modalsZh = {
       ariaLabel: '属性管理',
       manage: '管理属性',
       name: '属性名称',
-      confirmDelete: '确认删除属性「{name}」？已打标的书签/组将暂时去掉该标记；从回收站恢复属性时可还原关联。',
+      confirmDelete: '确认删除属性「{name}」？已打标的书签/笔记将暂时去掉该标记；从回收站恢复属性时可还原关联。',
       deleted: '属性已删除',
     }, // AttributeModal
     auth: {
@@ -114,7 +114,7 @@ export const modalsZh = {
       empty: '回收站为空',
       emptyTrash: '清空回收站',
       bmCount: '书签 ({n})',
-      groupCount: '组 ({n})',
+      groupCount: '笔记 ({n})',
       catCount: '分类 ({n})',
       attrCount: '属性 ({n})',
       selectItem: '选中 {name}',
@@ -133,18 +133,18 @@ export const modalsZh = {
       welcome: '欢迎使用与链',
       tagline: '全能型书签管理工具，高效整理你的网络资源',
       freshStart: '全新开始',
-      freshStartDesc: '从一个示例组开始，探索功能后再整理自己的书签',
+      freshStartDesc: '从一个示例笔记开始，探索功能后再整理自己的书签',
       importTitle: '从其他工具导入',
       importDesc: '从浏览器书签、Raindrop 或 CSV 文件导入',
       skip: '跳过，直接开始',
     }, // SetupGuide
     share: {
       ariaLabel: '分享管理',
-      titleGroup: '分享书签组',
+      titleGroup: '分享笔记',
       titleCat: '分享分类',
       publicStatusOn: '公开访问已开启',
       publicStatusOff: '当前处于私密状态',
-      publicDescOn: '任何拥有此链接的人均可查看该组书签与笔记。',
+      publicDescOn: '任何拥有此链接的人均可查看该笔记与收录书签。',
       publicDescOff: '开启后将生成唯一的公开只读链接，他人可在线浏览与转存。',
       enableShare: '开启公开访问',
       stopShare: '停止公开分享',
@@ -163,7 +163,7 @@ export const modalsEn = {
   modal: {
     bookmark: {
       ariaLabel: 'Edit bookmark',
-      addToGroupNew: 'New bookmark and add to group',
+      addToGroupNew: 'New bookmark and add to note',
       addChildBm: 'Add sub-bookmark',
       editChildBm: 'Edit sub-bookmark',
       deleteChildBm: 'Delete sub-bookmark',
@@ -199,7 +199,7 @@ export const modalsEn = {
       updated: 'Sub-bookmark updated',
     }, // ChildBookmarkEditModal
     groupEdit: {
-      name: 'Group name',
+      name: 'Note name',
       iconPreview: 'Icon preview',
       memberBookmarks: 'Bookmarks inside',
       remove: 'Remove',
@@ -221,7 +221,7 @@ export const modalsEn = {
       ariaLabel: 'Manage attributes',
       manage: 'Manage attributes',
       name: 'Attribute name',
-      confirmDelete: 'Delete attribute "{name}"? Tagged bookmarks/groups will temporarily lose this tag; restoring the attribute from trash will restore the links.',
+      confirmDelete: 'Delete attribute "{name}"? Tagged bookmarks/notes will temporarily lose this tag; restoring the attribute from trash will restore the links.',
       deleted: 'Attribute deleted',
     }, // AttributeModal
     auth: {
@@ -274,7 +274,7 @@ export const modalsEn = {
       empty: 'Trash is empty',
       emptyTrash: 'Empty trash',
       bmCount: 'Bookmarks ({n})',
-      groupCount: 'Groups ({n})',
+      groupCount: 'Notes ({n})',
       catCount: 'Categories ({n})',
       attrCount: 'Attributes ({n})',
       selectItem: 'Select {name}',
@@ -295,18 +295,18 @@ export const modalsEn = {
       welcome: 'Welcome to ulink',
       tagline: 'An all-in-one bookmark manager to organize your web resources efficiently',
       freshStart: 'Start fresh',
-      freshStartDesc: 'Start with a sample group, explore the features, then organize your own bookmarks',
+      freshStartDesc: 'Start with a sample note, explore the features, then organize your own bookmarks',
       importTitle: 'Import from other tools',
       importDesc: 'Import from browser bookmarks, Raindrop, or CSV files',
       skip: 'Skip and get started',
     }, // SetupGuide
     share: {
       ariaLabel: 'Share Management',
-      titleGroup: 'Share Group',
+      titleGroup: 'Share Note',
       titleCat: 'Share Category',
       publicStatusOn: 'Public link active',
       publicStatusOff: 'Currently private',
-      publicDescOn: 'Anyone with this link can view the bookmarks and notes in this group.',
+      publicDescOn: 'Anyone with this link can view the bookmarks and notes in this note.',
       publicDescOff: 'Enable to generate a public link for others to view and save.',
       enableShare: 'Enable Public Access',
       stopShare: 'Stop Sharing',

@@ -182,7 +182,7 @@ describe('removeBmFromGroup', () => {
     mockData.groupMap['g1'] = makeGroup({ bookmarkIds: ['bm-a'] })
     removeBmFromGroup('bm-a', 'g1')
     expect(vi.mocked(toastWithUndo)).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(toastWithUndo).mock.calls[0][0]).toBe('已从组移除')
+    expect(vi.mocked(toastWithUndo).mock.calls[0][0]).toBe('已从笔记移除')
     expect(typeof vi.mocked(toastWithUndo).mock.calls[0][1]).toBe('function')
   })
 
