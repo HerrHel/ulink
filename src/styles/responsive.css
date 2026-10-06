@@ -111,7 +111,7 @@
   /* === Settings panel: bottom sheet on mobile === */
   .settings-drawer{
     margin-left:0;width:100%;max-width:none;
-    border-left:none;border-radius:0;
+    border-left:none;border-radius:var(--radius-base) var(--radius-base) 0 0;
     box-shadow:0 -4px 24px rgba(0,0,0,0.15);
     max-height:85vh;
   }
@@ -261,7 +261,7 @@
 .is-mobile .detail-panel{
   position:fixed;bottom:0;left:0;right:0;top:auto;
   max-height:80vh;width:100%;
-  border-radius:0;
+  border-radius:var(--radius-base) var(--radius-base) 0 0;
   transform:translateY(100%);
   transition:transform 0.3s var(--ease-out);
   z-index:var(--z-drawer);

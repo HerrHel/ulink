@@ -29,6 +29,7 @@
   padding:16px 20px;
   border-bottom:1px solid var(--border-light);
   flex-shrink:0;background:var(--surface);z-index:10;
+  border-radius:inherit inherit 0 0;
 }
 .modal-head h2{font-family:var(--font-display);font-size:1.05rem;font-weight:600;flex:1;letter-spacing:-0.01em}
 .modal-close{
@@ -50,6 +51,7 @@
   display:flex;justify-content:flex-end;gap:8px;
   padding:12px 20px;border-top:1px solid var(--border-light);
   flex-shrink:0;background:var(--surface);
+  border-radius:0 0 inherit inherit;
 }
 .modal-foot .btn:disabled{opacity:0.45;cursor:not-allowed}
 
@@ -144,8 +146,8 @@
 .cat-drag-handle{display:flex;align-items:center;color:var(--text-muted);opacity:0.4;flex-shrink:0;cursor:grab;touch-action:none}
 .cat-drag-handle svg{width:16px;height:16px}
 .cat-no-drag{cursor:default;opacity:0.6}
-.cat-placeholder{background:var(--accent-light);border:2px dashed var(--accent);border-radius:0;opacity:0.5}
-.cat-dragging{opacity:0.9;box-shadow:var(--shadow-lg);background:var(--surface);border-radius:0;border:1px solid var(--border);touch-action:none}
+.cat-placeholder{background:var(--accent-light);border:2px dashed var(--accent);border-radius:var(--radius-base);opacity:0.5}
+.cat-dragging{opacity:0.9;box-shadow:var(--shadow-lg);background:var(--surface);border-radius:var(--radius-base);border:1px solid var(--border);touch-action:none}
 
 /* ── ConfirmModal ── */
 .confirm-foot{justify-content:space-between}

@@ -206,6 +206,21 @@ describe('UIStore 补覆盖率 — restoreUIState 分支守门', () => {
     expect(store.layoutMode).toBe('list')
   })
 
+  it('移动端 + 无存储状态（首次访问/清缓存）：restoreUIState 守门确保降级为 _mobileLayoutMode', () => {
+    store.isMobile = true
+    store.layoutMode = 'grid'
+    ;(localStorageMock.getItem as any).mockReturnValue(null)
+    store.restoreUIState()
+    expect(store.layoutMode).toBe('list')
+  })
+
+  it('setMobile(true) 幂等早退时的一致性守门：若当前残留 grid，强制修正为 _mobileLayoutMode', () => {
+    store.isMobile = true
+    store.layoutMode = 'grid'
+    store.setMobile(true)
+    expect(store.layoutMode).toBe('list')
+  })
+
   it('curCat：CAT_ALL 直接还原（不过 categoryMap 校验走 all 分支）', () => {
     ;(localStorageMock.getItem as any).mockReturnValue(JSON.stringify({ curCat: CAT_ALL }))
     store.restoreUIState()

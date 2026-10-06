@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
@@ -27,6 +27,16 @@ describe('UIStore', () => {
       expect(store.panels.detail).toBe(false)
       expect(store.panels.rail).toBe(false)
       expect(store.expandedIds).toEqual([])
+    })
+
+    it('移动端首屏初始值直接为 list 模式，电脑端直接为 grid 模式（无缝零闪烁体验）', async () => {
+      const utils = await import('../../utils.js')
+      const spy = vi.spyOn(utils, 'isMobile').mockReturnValue(true)
+      setActivePinia(createPinia())
+      const mobileStore = useUIStore()
+      expect(mobileStore.isMobile).toBe(true)
+      expect(mobileStore.layoutMode).toBe('list')
+      spy.mockRestore()
     })
   })
 

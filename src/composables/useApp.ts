@@ -25,6 +25,9 @@ export function useApp() {
   if (typeof document !== 'undefined') {
     document.documentElement.classList.toggle('is-mobile', ui.isMobile)
   }
+  if (ui.isMobile && ui.layoutMode === 'grid') {
+    ui.layoutMode = ui._mobileLayoutMode
+  }
 
   // ── 1. 注册全局交互 composables ──
   useScrollHeader(); useResize(); useKeyboard(); useDragDrop()

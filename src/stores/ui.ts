@@ -140,73 +140,77 @@ export interface UIState {
 }
 
 export const useUIStore = defineStore('ui', {
-  state: (): UIState => ({
-    curCat: CAT_ALL,
-    isMobile: isMobile(),
-    sortMode: 'order',
-    sortDir: 'desc',
-    groupsOnTop: true,
-    layoutMode: 'grid',
-    searchQuery: '',
-    focusedGroupId: null,
-    shareMode: null,
-    batchMode: false,
-    batchSelected: [],
-    activeAttrs: [],
-    excludedAttrs: [],
-    detailCards: [],
-    editingId: null,
-    curSpace: 'main' as Space,
-    e2eUnlockInitialMode: 'unlock' as E2EUnlockInitialMode,
-    // D1-004：默认 manual，与 theme.ts 缺省 lv_themeMode 一致
-    themeMode: 'manual',
-    themeColor: getActiveTheme(),
-    themeStyle: 'premium',
-    historyItemId: '',
-    historyItemType: 'bookmark',
-    historyMax: 10,
-    modals: {
-      bookmark: false,
-      category: false,
-      attribute: false,
-      groupEdit: false,
-      e2eSetup: false,
-      e2eUnlock: false,
-      e2eCanaryConflict: false,
-      e2eCanaryConflictUpgraded: false,
-      vaultSetup: false,
-      vaultUnlock: false,
-      setupGuide: false,
-      share: false,
-    },
-    panels: {
-      settings: false,
-      detail: false,
-      trash: false,
-      history: false,
-      rail: false,
-      shortcutHelp: false,
-    },
-    overlays: {
-      addDropdown: false,
-      addPopover: false,
-      deadLinks: false,
-      feedback: false,
-    },
-    addToGid: null,
-    _addPopoverTrigger: null,
-    saveToGroup: null,
-    ctxGid: null,
-    ctxCard: null,
-    editingGeId: null,
-    lastFocusedEl: null,
-    lpFired: false,
-    _prevLayoutMode: null,
-    _preferredLayoutMode: null,
-    _mobileLayoutMode: 'list',
-    expandedIds: [],
-    shareModalTarget: null,
-  }),
+  state: (): UIState => {
+    const mobile = isMobile()
+    return {
+      curCat: CAT_ALL,
+      isMobile: mobile,
+      sortMode: 'order',
+      sortDir: 'desc',
+      groupsOnTop: true,
+      // 电脑端默认宫格模式（grid），手机移动端直接列表模式（list），实现首屏零闪烁无缝体验
+      layoutMode: mobile ? 'list' : 'grid',
+      searchQuery: '',
+      focusedGroupId: null,
+      shareMode: null,
+      batchMode: false,
+      batchSelected: [],
+      activeAttrs: [],
+      excludedAttrs: [],
+      detailCards: [],
+      editingId: null,
+      curSpace: 'main' as Space,
+      e2eUnlockInitialMode: 'unlock' as E2EUnlockInitialMode,
+      // D1-004：默认 manual，与 theme.ts 缺省 lv_themeMode 一致
+      themeMode: 'manual',
+      themeColor: getActiveTheme(),
+      themeStyle: 'premium',
+      historyItemId: '',
+      historyItemType: 'bookmark',
+      historyMax: 10,
+      modals: {
+        bookmark: false,
+        category: false,
+        attribute: false,
+        groupEdit: false,
+        e2eSetup: false,
+        e2eUnlock: false,
+        e2eCanaryConflict: false,
+        e2eCanaryConflictUpgraded: false,
+        vaultSetup: false,
+        vaultUnlock: false,
+        setupGuide: false,
+        share: false,
+      },
+      panels: {
+        settings: false,
+        detail: false,
+        trash: false,
+        history: false,
+        rail: false,
+        shortcutHelp: false,
+      },
+      overlays: {
+        addDropdown: false,
+        addPopover: false,
+        deadLinks: false,
+        feedback: false,
+      },
+      addToGid: null,
+      _addPopoverTrigger: null,
+      saveToGroup: null,
+      ctxGid: null,
+      ctxCard: null,
+      editingGeId: null,
+      lastFocusedEl: null,
+      lpFired: false,
+      _prevLayoutMode: null,
+      _preferredLayoutMode: null,
+      _mobileLayoutMode: 'list',
+      expandedIds: [],
+      shareModalTarget: null,
+    }
+  },
 
   actions: {
     /** 全选批量模式下的所有项 */
@@ -240,7 +244,13 @@ export const useUIStore = defineStore('ui', {
     },
 
     setMobile(value: boolean) {
-      if (this.isMobile === value) return
+      if (this.isMobile === value) {
+        // 同值早退前做一致性守护：若处于移动端且当前为 grid，必须确保降级
+        if (value && this.layoutMode === 'grid') {
+          this.layoutMode = this._mobileLayoutMode
+        }
+        return
+      }
       this.isMobile = value
       // 同步 <html> class，供 CSS 区分真移动端 vs 窄窗口 PC
       if (typeof document !== 'undefined') {
@@ -314,7 +324,12 @@ export const useUIStore = defineStore('ui', {
           _customCardOrder?: Array<{ t: 'g' | 'b'; id: string }>
           docScrollTop?: number
         } | null>(safeGetItem(UI_STATE_KEY), null)
-        if (!s) return
+        if (!s) {
+          if (this.isMobile && this.layoutMode === 'grid') {
+            this.layoutMode = this._mobileLayoutMode
+          }
+          return
+        }
         const ds = useDataStore()
         // 审计 R37：curCat 不过滤已删除分类 id。若 localStorage 残留指向已删分类的 id（跨会话/同步/
         // 导入/异常写），filtered* 会返回空列表。用 categoryMap 校验：不存在或已软删则回退 CAT_ALL。
