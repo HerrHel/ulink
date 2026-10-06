@@ -672,13 +672,16 @@ function groupIconMarkup(group: Record<string, unknown>, letter: string): string
 }
 
 /**
- * 组/分类头部自定义图标：仅当存在明确的 http(s) URL 时渲染图标徽标，
- * 无自定义图片时完全不渲染（方案 1：极简大标题顶格，杜绝占位方块、问号或单字冗余）。
+ * 组/分类头部图标：若设置了自定义图标（http(s) 或安全相对路径），显示设置的图标；
+ * 组若未设置自定义图标，则显示初始的 SVG 图像（NOTE_SVG）。
  */
 function heroCustomIconMarkup(entity: Record<string, unknown>, prefix: "group" | "cat"): string {
   const icon = typeof entity.icon === "string" ? entity.icon.trim() : ""
-  if (/^https?:\/\//i.test(icon)) {
-    return `<span class="${prefix}-hero-icon"><img src="${esc(icon)}" alt="" /></span>`
+  if (/^https?:\/\//i.test(icon) || /^\/(?!\/)/.test(icon)) {
+    return `<span class="${prefix}-hero-icon"><img src="${esc(icon)}" alt="" data-fb="1" /><span class="hero-fb" aria-hidden="true">${prefix === "group" ? NOTE_SVG : ""}</span></span>`
+  }
+  if (prefix === "group") {
+    return `<span class="${prefix}-hero-icon">${NOTE_SVG}</span>`
   }
   return ""
 }
@@ -1920,6 +1923,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   width: 36px;
   height: 36px;
 }
+.group-hero-icon svg {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+}
 .group-hero-icon .hero-fb {
   font-size: 22px;
   font-weight: 700;
@@ -1932,6 +1940,11 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   justify-content: center;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
+}
+.group-hero-icon .hero-fb svg {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
 }
 .group-hero-info {
   flex: 1;
@@ -3416,6 +3429,7 @@ body:has(.group-focus-panel:target) #cardGrid {
   .group-canvas { border-radius: var(--radius-lg); }
   .group-canvas .group-hero { padding: 18px 16px; gap: 14px }
   .group-hero-icon { width: 48px; height: 48px; border-radius: var(--radius-md) }
+  .group-hero-icon svg { width: 28px; height: 28px; }
   .group-hero-title { font-size: 21px }
   .group-canvas-body { padding: 18px 16px 24px; gap: 20px }
   .bm-grid { grid-template-columns: 1fr }
