@@ -75,7 +75,14 @@ export const DEFAULTS: AppData = {
     { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000, updatedAt: Date.now() - 20000000 },
     { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: '短视频平台', icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 345600000, updatedAt: Date.now() - 345600000 },
     { id: 'b5', title: 'Steam', url: 'https://store.steampowered.com', username: '', password: '', notes: '游戏平台', icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 100000, updatedAt: Date.now() - 100000 },
-    { id: 'b6', title: 'I Love PDF', url: 'https://www.ilovepdf.com/', username: '', password: '', notes: '在线PDF工具', icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 }
+    { id: 'b6', title: 'I Love PDF', url: 'https://www.ilovepdf.com/', username: '', password: '', notes: '在线PDF工具', icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b7', title: '163邮箱', url: 'https://mail.163.com/', username: '@163.com', password: '', notes: '网易邮箱', icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b8', title: 'Gmail', url: 'https://mail.google.com/', username: '@gmail.com', password: '', notes: '谷歌邮箱', icon: '', categoryId: 'email', parentId: null, order: 7, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b9', title: '豆包', url: 'https://www.doubao.com/', username: '', password: '', notes: '字节跳动 AI 助手', icon: '', categoryId: 'ai', parentId: null, order: 8, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b10', title: 'WorkBuddy', url: 'https://www.workbuddy.ai/', username: '', password: '', notes: 'AI 智能体工作台', icon: '', categoryId: 'ai', parentId: null, order: 9, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b11', title: 'ChatGPT', url: 'https://chatgpt.com/', username: '', password: '', notes: 'OpenAI 对话助手', icon: '', categoryId: 'ai', parentId: null, order: 10, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b12', title: 'Claude', url: 'https://claude.ai/', username: '', password: '', notes: 'Anthropic AI 助手', icon: '', categoryId: 'ai', parentId: null, order: 11, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 },
+    { id: 'b13', title: 'Gemini', url: 'https://gemini.google.com/', username: '', password: '', notes: 'Google AI 助手', icon: '', categoryId: 'ai', parentId: null, order: 12, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 }
   ],
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
@@ -102,9 +109,35 @@ export function buildSeedDefaults(locale?: Locale): AppData {
   const isEn = loc === 'en-US'
   // 属性/分类/书签/组的内容：英文 vs 中文 差异只在 name/notes/notes 文案。
   const catName = (id: string): string => t(`cat.${id}` as never) as unknown as string
-  const seedNotes = isEn
-    ? { b1: 'Code hosting platform', b3: 'API key:', b4: 'Short video platform', b5: 'Gaming platform', b6: 'Online PDF tools' }
-    : { b1: '代码托管平台', b3: 'API key:', b4: '短视频平台', b5: '游戏平台', b6: '在线PDF工具' }
+  const seedNotes: Record<string, string> = isEn
+    ? {
+        b1: 'Code hosting platform',
+        b3: 'API key:',
+        b4: 'Short video platform',
+        b5: 'Gaming platform',
+        b6: 'Online PDF tools',
+        b7: 'NetEase Mail',
+        b8: 'Google Mail',
+        b9: 'ByteDance AI assistant',
+        b10: 'AI agent workspace',
+        b11: 'OpenAI conversational assistant',
+        b12: 'Anthropic AI assistant',
+        b13: 'Google AI assistant',
+      }
+    : {
+        b1: '代码托管平台',
+        b3: 'API key:',
+        b4: '短视频平台',
+        b5: '游戏平台',
+        b6: '在线PDF工具',
+        b7: '网易邮箱',
+        b8: '谷歌邮箱',
+        b9: '字节跳动 AI 助手',
+        b10: 'AI 智能体工作台',
+        b11: 'OpenAI 对话助手',
+        b12: 'Anthropic AI 助手',
+        b13: 'Google AI 助手',
+      }
   const attrName = (id: string, zh: string, en: string): string => isEn ? en : zh
   const bmTitle = (id: string, zh: string, en: string): string => isEn ? en : zh
 
@@ -129,6 +162,13 @@ export function buildSeedDefaults(locale?: Locale): AppData {
       { id: 'b4', title: bmTitle('b4', '抖音', 'Douyin'), url: 'https://www.douyin.com', username: '', password: '', notes: seedNotes.b4, icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 345600000, updatedAt: now - 345600000 },
       { id: 'b5', title: bmTitle('b5', 'Steam', 'Steam'), url: 'https://store.steampowered.com', username: '', password: '', notes: seedNotes.b5, icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 100000, updatedAt: now - 100000 },
       { id: 'b6', title: bmTitle('b6', 'I Love PDF', 'I Love PDF'), url: 'https://www.ilovepdf.com/', username: '', password: '', notes: seedNotes.b6, icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b7', title: bmTitle('b7', '163邮箱', '163 Mail'), url: 'https://mail.163.com/', username: '@163.com', password: '', notes: seedNotes.b7, icon: '', categoryId: 'email', parentId: null, order: 6, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b8', title: bmTitle('b8', 'Gmail', 'Gmail'), url: 'https://mail.google.com/', username: '@gmail.com', password: '', notes: seedNotes.b8, icon: '', categoryId: 'email', parentId: null, order: 7, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b9', title: bmTitle('b9', '豆包', 'Doubao'), url: 'https://www.doubao.com/', username: '', password: '', notes: seedNotes.b9, icon: '', categoryId: 'ai', parentId: null, order: 8, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b10', title: bmTitle('b10', 'WorkBuddy', 'WorkBuddy'), url: 'https://www.workbuddy.ai/', username: '', password: '', notes: seedNotes.b10, icon: '', categoryId: 'ai', parentId: null, order: 9, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b11', title: bmTitle('b11', 'ChatGPT', 'ChatGPT'), url: 'https://chatgpt.com/', username: '', password: '', notes: seedNotes.b11, icon: '', categoryId: 'ai', parentId: null, order: 10, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b12', title: bmTitle('b12', 'Claude', 'Claude'), url: 'https://claude.ai/', username: '', password: '', notes: seedNotes.b12, icon: '', categoryId: 'ai', parentId: null, order: 11, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
+      { id: 'b13', title: bmTitle('b13', 'Gemini', 'Gemini'), url: 'https://gemini.google.com/', username: '', password: '', notes: seedNotes.b13, icon: '', categoryId: 'ai', parentId: null, order: 12, useCount: 0, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
     ],
     customAttributes: [
       { id: 'requires-login', name: attrName('requires-login', '需要登录', 'Requires login'), type: 'boolean' },
