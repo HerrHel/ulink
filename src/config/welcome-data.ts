@@ -22,37 +22,37 @@ const _inlineCard = (
 
 /** zh-CN 欢迎笔记（精简新手上手引导） */
 const WELCOME_ZH =
-  '<h1>💡 欢迎使用 与链</h1>'
-  + '<p>与链不仅是你的书签夹，还是一个兼具<strong>富文本排版</strong>与<strong>链接收纳</strong>的灵感笔记工作台。</p>'
-  + '<h2>✨ 核心玩法</h2>'
+  '<h1>欢迎使用 与链</h1>'
+  + '<p>与链不仅是书签收藏夹，还可以将<strong>富文本笔记</strong>与<strong>书签链接</strong>融合整理。</p>'
+  + '<h2>快速上手</h2>'
   + '<ul data-type="taskList">'
-  + '<li data-type="taskItem" data-checked="true">浏览卡片与左侧分类导航</li>'
-  + '<li data-type="taskItem" data-checked="false">点击笔记右上角笔记图标进入全屏编辑模式，体验富文本工具栏</li>'
-  + '<li data-type="taskItem" data-checked="false">在编辑器正文中输入 <span style="color: #A855F7">@</span> 快速搜索并插入书签卡片</li>'
-  + '<li data-type="taskItem" data-checked="false">尝试将外部书签卡片<span style="color: #F97316">拖拽</span>到此笔记卡片中收纳</li>'
+  + '<li data-type="taskItem" data-checked="true">浏览下方书签卡片与左侧分类</li>'
+  + '<li data-type="taskItem" data-checked="false">可直接在卡片内编辑正文，点击卡片标题或左侧图标可聚焦笔记并使用格式工具栏</li>'
+  + '<li data-type="taskItem" data-checked="false">在正文中输入 <span style="color: #A855F7">@</span> 搜索并内嵌书签卡片</li>'
+  + '<li data-type="taskItem" data-checked="false">将外部书签卡片<span style="color: #F97316">拖拽</span>进笔记即可快速收纳</li>'
   + '</ul>'
-  + '<h2>📌 内嵌书签示例</h2>'
-  + '<p>书签卡片在笔记正文中可自由拖拽排版，点击右侧按钮直接访问：</p>'
+  + '<h2>内嵌书签示例</h2>'
+  + '<p>笔记正文中的书签卡片可拖拽排版，点击右侧按钮查看详情或直接打开：</p>'
   + _inlineCard('b1', 'github.com', 'GitHub', '详') + ' '
   + _inlineCard('b6', 'www.ilovepdf.com', 'I Love PDF', '详')
-  + '<p><br><span style="color: #6B7280; font-size: 0.9em">💡 提示：本笔记为上手引导示例，你可以随时编辑或直接删除它。</span></p>'
+  + '<p><br><span style="color: #6B7280; font-size: 0.9em">提示：本笔记为上手引导，可随时编辑或删除。</span></p>'
 
 /** en-US 欢迎笔记（精简新手上手引导，结构对齐中文版） */
 const WELCOME_EN =
-  '<h1>💡 Welcome to ulink</h1>'
-  + '<p>ulink is not just a bookmark tray, but an inspiring workspace combining <strong>rich-text notes</strong> and <strong>link curation</strong>.</p>'
-  + '<h2>✨ Core Highlights</h2>'
+  '<h1>Welcome to ulink</h1>'
+  + '<p>ulink is both a bookmark manager and a workspace combining <strong>rich-text notes</strong> with <strong>link curation</strong>.</p>'
+  + '<h2>Getting Started</h2>'
   + '<ul data-type="taskList">'
-  + '<li data-type="taskItem" data-checked="true">Explore sample bookmarks and left sidebar categories</li>'
-  + '<li data-type="taskItem" data-checked="false">Click the note icon on the card to enter full-screen editing mode</li>'
-  + '<li data-type="taskItem" data-checked="false">Type <span style="color: #A855F7">@</span> inside the editor to search and embed bookmarks</li>'
-  + '<li data-type="taskItem" data-checked="false">Try <span style="color: #F97316">dragging</span> external bookmark cards into this note to curate</li>'
+  + '<li data-type="taskItem" data-checked="true">Browse bookmark cards and left sidebar categories</li>'
+  + '<li data-type="taskItem" data-checked="false">Edit text directly in the card, or click the title to focus and use format tools</li>'
+  + '<li data-type="taskItem" data-checked="false">Type <span style="color: #A855F7">@</span> in the editor to search and embed bookmarks</li>'
+  + '<li data-type="taskItem" data-checked="false">Drag external bookmark cards into this note to organize them</li>'
   + '</ul>'
-  + '<h2>📌 Embedded Bookmarks</h2>'
-  + '<p>Bookmarks can be embedded into notes, dragged to reorder, or clicked to visit:</p>'
+  + '<h2>Embedded Bookmarks</h2>'
+  + '<p>Bookmarks embedded in notes can be dragged to reorder or clicked to visit:</p>'
   + _inlineCard('b1', 'github.com', 'GitHub', 'i') + ' '
   + _inlineCard('b6', 'www.ilovepdf.com', 'I Love PDF', 'i')
-  + '<p><br><span style="color: #6B7280; font-size: 0.9em">💡 Tip: This note is an onboarding guide. Feel free to edit or delete it anytime.</span></p>'
+  + '<p><br><span style="color: #6B7280; font-size: 0.9em">Tip: This note is an onboarding guide. Feel free to edit or delete it anytime.</span></p>'
 
 /** zh-CN 使用指南（保留原内容） */
 const TIPS_ZH =
@@ -61,7 +61,7 @@ const TIPS_ZH =
   + '<p><strong>组</strong>是与链的核心组织单元，相当于一个<u>富文本笔记本</u> + <u>书签收纳夹</u>的结合体。</p>'
   + '<h3>组编辑器</h3>'
   + '<ul>'
-  + '<li><strong>聚焦</strong> — 点击组图标的笔记按钮进入<u>全屏编辑模式</u>，侧边栏显示格式工具栏</li>'
+  + '<li><strong>聚焦</strong> — 点击卡片标题或左侧图标进入<u>全屏聚焦模式</u>，侧边栏显示格式工具栏</li>'
   + '<li><strong>富文本</strong> — 支持<span style="color: #3B82F6">H1/H2/H3 标题</span>、<strong>加粗</strong>、<u>下划线</u>、<span style="color: #EAB308">9 种文字颜色</span>、有序/无序/待办列表</li>'
   + '<li><strong>输入 @</strong> — 在编辑器中输入 <span style="color: #A855F7">@</span> 触发书签搜索弹窗，快速插入内联卡片</li>'
   + '<li><strong>输入 #</strong> — 输入 <span style="color: #A855F7">#</span> 可搜索并插入<u>其他组引用</u>，构建层级知识网络</li>'
