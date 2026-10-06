@@ -267,7 +267,7 @@
 .cmd-palette{
   width:520px;max-width:90vw;max-height:420px;
   background:var(--surface);border:1px solid var(--border);
-  border-radius:0;box-shadow:var(--shadow-xl);
+  border-radius:var(--radius-base);box-shadow:var(--shadow-xl);
   display:flex;flex-direction:column;overflow:hidden;
   animation:dropdownIn 0.15s var(--ease-out);
 }

@@ -14,7 +14,7 @@
   width:100%;max-width:500px;max-height:85vh;
   background:var(--surface);
   border:1px solid var(--border);
-  border-radius:0;
+  border-radius:var(--radius-base);
   box-shadow:0 1px 0 0 rgba(255,255,255,0.12) inset,var(--shadow-xl);
   /* 外层裁剪圆角，滚动放到 .modal-body，避免滚动条画出圆角 */
   overflow:hidden;

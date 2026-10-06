@@ -158,7 +158,7 @@
   .modal{
     position:fixed;bottom:0;left:0;right:0;top:auto;
     max-height:90vh;width:100%;
-    border-radius:0;
+    border-radius:var(--radius-base) var(--radius-base) 0 0;
     margin:0;
     animation:slideUp 0.28s var(--ease-out);
     overflow-y:auto;
