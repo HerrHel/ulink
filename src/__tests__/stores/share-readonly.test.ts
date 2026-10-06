@@ -262,5 +262,41 @@ describe('分享只读态护栏', () => {
       delete (window as any).__INITIAL_SHARE_DATA__
       share.exit()
     })
+
+    it('分享态布局自适应：移动端进入直接为 list，桌面端进入直接为 grid，退出还原用户主库布局', async () => {
+      const { useShareStore } = await import('../../stores/share.js')
+      const share = useShareStore()
+
+      ;(window as any).__INITIAL_SHARE_DATA__ = {
+        type: 'group',
+        id: 'g_layout_adapt',
+        data: {
+          group: { id: 'g_layout_adapt', name: '自适应组' },
+          bookmarks: [],
+        },
+      }
+
+      // 场景 1：移动端进入分享，原布局为 grid，自动转为 list
+      ui.isMobile = true
+      ui.layoutMode = 'grid'
+      await share.enter('g_layout_adapt')
+      expect(ui.layoutMode).toBe('list')
+
+      // 退出分享，恢复主库原 layoutMode ('grid')
+      share.exit()
+      expect(ui.layoutMode).toBe('grid')
+
+      // 场景 2：桌面端进入分享，默认转为 grid
+      ui.isMobile = false
+      ui.layoutMode = 'list'
+      await share.enter('g_layout_adapt')
+      expect(ui.layoutMode).toBe('grid')
+
+      // 退出分享，恢复主库原 layoutMode ('list')
+      share.exit()
+      expect(ui.layoutMode).toBe('list')
+
+      delete (window as any).__INITIAL_SHARE_DATA__
+    })
   })
 })

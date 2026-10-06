@@ -18,7 +18,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { useUIStore } from './ui.js'
+import { useUIStore, type LayoutMode } from './ui.js'
 import { shadowClear, shadowSet, type ShadowData } from './shareShadow.js'
 import { useAuth } from '../composables/domain/useAuth.js'
 import {
@@ -111,7 +111,7 @@ export const useShareStore = defineStore('share', () => {
   const bookmarks = ref<Bookmark[]>([])
 
   /** 进入分享态前的视图状态，退出时还原（不让用户自己的视图被分享态带偏） */
-  const uiSnapshot = ref<{ curCat: string; focusedGroupId: string | null; searchQuery: string } | null>(null)
+  const uiSnapshot = ref<{ curCat: string; focusedGroupId: string | null; searchQuery: string; layoutMode?: LayoutMode } | null>(null)
 
   const isCategory = computed(() => ui.shareMode?.kind === 'category')
   /** 分享主体名（组名 / 分类名），供 header 只读标题渲染 */
@@ -168,6 +168,7 @@ export const useShareStore = defineStore('share', () => {
       ui.searchQuery = snap.searchQuery
       ui.focusedGroupId = snap.focusedGroupId
       ui.curCat = snap.curCat
+      if (snap.layoutMode) ui.layoutMode = snap.layoutMode
     }
     uiSnapshot.value = null
     cleanupInjectedHead()
@@ -186,12 +187,23 @@ export const useShareStore = defineStore('share', () => {
       curCat: ui.curCat,
       focusedGroupId: ui.focusedGroupId,
       searchQuery: ui.searchQuery,
+      layoutMode: ui.layoutMode,
     }
     // 先上锁：后续任何 mutation 都被拒，避免 fetch 期间的中间态写进本地库
     ui.shareMode = { kind: catId ? 'category' : 'group', id: catId || route }
     ui.searchQuery = ''
     if (catId) {
       ui.focusedGroupId = null
+    }
+
+    // 分享态设备自适应：若 URL 带 ?layout= 则优先尊重；否则电脑端直接宫格模式，移动端直接列表模式（无缝零闪烁）
+    const urlLayout = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('layout') : null
+    if (urlLayout === 'list' || urlLayout === 'mini-grid' || (urlLayout === 'grid' && !ui.isMobile)) {
+      ui.layoutMode = urlLayout as LayoutMode
+    } else if (ui.isMobile) {
+      ui.layoutMode = 'list'
+    } else {
+      ui.layoutMode = 'grid'
     }
 
     // ── SSR 预注入数据秒级水合（零网络等待，杜绝客户端直连 Supabase 延时与转圈卡死）──

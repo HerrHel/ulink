@@ -583,8 +583,8 @@ const SEARCH_SVG =
 const TOC_SVG =
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`
 
-/** 首屏主题防闪烁脚本（FOUC Guard）：在任何样式与 DOM 渲染前立即注入 data-theme 与 color-scheme。 */
-const THEME_SCRIPT = `<script>(function(){try{var t=localStorage.getItem("lv_theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}})();</script>`
+/** 首屏主题防闪烁与移动端列表布局即时自适应脚本（FOUC Guard）：在任何样式与 DOM 渲染前立即注入 data-theme 与 color-scheme，并在移动端且未显式指定 layout 时注入 share-mobile-list */
+const THEME_SCRIPT = `<script>(function(){try{var t=localStorage.getItem("lv_theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);document.documentElement.style.colorScheme=t;}}catch(e){}try{var p=new URLSearchParams(window.location.search);if(!p.has("layout")){var m=window.matchMedia&&window.matchMedia("(max-width: 768px)").matches;if(m){document.documentElement.classList.add("share-mobile-list");}}}catch(e){}})();</script>`
 
 /** 树状深度优先重排：顶层书签先行，子书签紧随各自父书签下方（DFS） */
 function orderBookmarksHierarchically(bms: PublicBookmark[]): PublicBookmark[] {
@@ -1453,7 +1453,7 @@ export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
  * 3) TOC scrollspy：滚动时给当前可见标题对应的导航项加 .active（高亮）
  * 4) 内容不足以滚动（滚动距离 < 120px）时隐藏 TOC——没法"快速定位"，避免空导航占位
  */
-const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err','card-logo-img-err','gic-ic-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('#bmList .bm');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}function syncFocusHash(){var h=window.location.hash||'';var isF=h.indexOf('#focus-')===0;var cg=document.getElementById('cardGrid');var ch=document.querySelector('.cat-hero');if(cg){cg.style.display=isF?'none':''}if(ch){ch.style.display=isF?'none':''}}window.addEventListener('hashchange',syncFocusHash);syncFocusHash();})()`
+const FALLBACK_JS = `(function(){var tb=document.getElementById('themeToggle');if(tb){tb.addEventListener('click',function(){var cur=document.documentElement.getAttribute('data-theme');if(!cur){cur=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}var next=cur==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',next);document.documentElement.style.colorScheme=next;try{localStorage.setItem('lv_theme',next)}catch(e){}})}var a=document.querySelectorAll('img[data-fb]');function err(e){e.classList.add('img-err','bm-img-err','hero-img-err','bmcard-img-err','bmc-img-err','card-logo-img-err','gic-ic-img-err')}for(var i=0;i<a.length;i++){(function(im){im.addEventListener('error',function(){err(im)});if(im.complete&&im.naturalWidth===0){err(im)}})(a[i])}var t=document.querySelectorAll('li[data-type="taskItem"]');for(var j=0;j<t.length;j++){(function(li){li.style.cursor='pointer';li.addEventListener('click',function(){li.setAttribute('data-checked',li.getAttribute('data-checked')==='true'?'false':'true')})})(t[j])}var l=document.querySelectorAll('.toc-item');if(l.length){var s=[];for(var k=0;k<l.length;k++){var el=document.getElementById(l[k].getAttribute('href').slice(1));if(el)s.push(el)}if(s.length){function onScroll(){var idx=0;for(var m=0;m<s.length;m++){if(s[m].getBoundingClientRect().top>=0){idx=m;break}}if(window.scrollY>=document.documentElement.scrollHeight-window.innerHeight-4){idx=s.length-1}for(var q=0;q<l.length;q++){l[q].classList.toggle('active',q===idx)}}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onScroll,{passive:true});onScroll()}}var si=document.getElementById('bmSearchInput');if(si){si.addEventListener('input',function(){var q=si.value.trim().toLowerCase();var bms=document.querySelectorAll('#bmList .bm');var f=0;for(var n=0;n<bms.length;n++){var sc=bms[n].getAttribute('data-search')||'';var m=!q||sc.indexOf(q)!==-1;bms[n].style.display=m?'':'none';if(m)f++}var em=document.getElementById('bmEmptySearch');if(em){em.style.display=(f===0&&q)?'block':'none'}})}var lb=document.querySelectorAll('.cat-layout-btn');if(lb.length){if(!new URLSearchParams(window.location.search).has('layout')){var isM=window.matchMedia&&window.matchMedia('(max-width: 768px)').matches;if(isM){for(var u=0;u<lb.length;u++){if(lb[u].getAttribute('data-layout')==='list'){lb[u].classList.add('active')}else if(lb[u].getAttribute('data-layout')==='grid'){lb[u].classList.remove('active')}}}}for(var p=0;p<lb.length;p++){(function(b){b.addEventListener('click',function(e){e.preventDefault();document.documentElement.classList.remove('share-mobile-list');var ly=b.getAttribute('data-layout')||'grid';var hf=b.getAttribute('href');for(var u=0;u<lb.length;u++){lb[u].classList.remove('active')}b.classList.add('active');var cg=document.querySelector('.cat-grid');if(cg){cg.classList.remove('list-view','mini-grid-view');if(ly!=='grid'){cg.classList.add(ly+'-view')}}if(window.history&&window.history.replaceState&&hf){window.history.replaceState(null,'',hf)}})})(lb[p])}}function syncFocusHash(){var h=window.location.hash||'';var isF=h.indexOf('#focus-')===0;var cg=document.getElementById('cardGrid');var ch=document.querySelector('.cat-hero');if(cg){cg.style.display=isF?'none':''}if(ch){ch.style.display=isF?'none':''}}window.addEventListener('hashchange',syncFocusHash);syncFocusHash();})()`
 
 const CSS = `
 /* ==================== DESIGN TOKENS (对齐主站 tokens.css) ==================== */
@@ -3013,6 +3013,120 @@ img.img-err, img.bm-img-err, img.hero-img-err, img.bmcard-img-err, img.bmc-img-e
   max-width: 85% !important;
   margin-top: 2px !important;
   line-height: 1.4 !important;
+}
+
+/* ==================== 移动端默认列表视图 (防首屏宫格闪烁) ==================== */
+.share-mobile-list .cat-grid:not(.mini-grid-view) {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  grid-template-columns: none !important;
+  align-items: stretch !important;
+  width: 100% !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-list-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  width: 100% !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card,
+.share-mobile-list .cat-grid:not(.mini-grid-view) .group-card {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  height: 82px !important;
+  min-height: 0 !important;
+  padding: 8px 16px !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card:hover,
+.share-mobile-list .cat-grid:not(.mini-grid-view) .group-card:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: var(--shadow-card-hover) !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-topline {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: transparent !important;
+  width: 100% !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-toprow,
+.share-mobile-list .cat-grid:not(.mini-grid-view) .group-card-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin: 0 !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-logo { width: 36px !important; height: 36px !important; flex-shrink: 0 !important; }
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-logo img { width: 22px !important; height: 22px !important; }
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-logo svg { width: 20px !important; height: 20px !important; }
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-titlewrap { height: 36px !important; flex: 1 !important; min-width: 0 !important; }
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-name { font-size: 0.88rem !important; }
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-domain { font-size: 0.75rem !important; margin-left: 6px !important; }
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-body {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  width: 100% !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-body .focus-notes,
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-body .sub-sites {
+  display: none !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card:has(.sub-sites) {
+  height: auto !important;
+  min-height: 82px !important;
+  padding: 10px 16px !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card:has(.sub-sites) .card-body {
+  overflow: visible !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card:has(.sub-sites) .card-body .sub-sites {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  margin-top: 6px !important;
+  padding-top: 6px !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-foot {
+  position: absolute !important;
+  top: 10px !important;
+  right: 14px !important;
+  padding: 0 !important;
+  border-top: none !important;
+  background: transparent !important;
+  margin: 0 !important;
+  z-index: 3 !important;
+}
+.share-mobile-list .cat-grid:not(.mini-grid-view) .card-preview {
+  display: block !important;
+  font-size: 0.82rem !important;
+  color: var(--text-muted) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  max-width: 85% !important;
+  margin-top: 2px !important;
+  line-height: 1.4 !important;
+}
+.share-mobile-list .cat-layout-btn.hide-mobile,
+.share-mobile-list .cat-layout-btn[data-layout="grid"] {
+  display: none !important;
+}
+.share-mobile-list .cat-layout-btn[data-layout="list"] {
+  background: var(--surface) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, var(--shadow-xs) !important;
+}
+[data-theme="dark"] .share-mobile-list .cat-layout-btn[data-layout="list"] {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, var(--shadow-xs) !important;
 }
 
 /* ==================== 布局模式：小宫格视图 (Mini-Grid View) ==================== */

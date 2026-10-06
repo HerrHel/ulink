@@ -47,6 +47,14 @@ function resolveLocale(url: URL, acceptLanguage: string): ShareLocale {
   return "en-US"
 }
 
+/** 检测是否为移动端请求（用于无显式 layout 参数时的智能自适应：手机默认为 list，电脑默认为 grid） */
+function isMobileRequest(request: Request): boolean {
+  const chMobile = request.headers.get("sec-ch-ua-mobile")
+  if (chMobile === "?1") return true
+  const ua = (request.headers.get("user-agent") || "").toLowerCase()
+  return /android|iphone|ipad|ipod|mobile|windows phone/i.test(ua)
+}
+
 export async function onRequestGet(context: ShareContext): Promise<Response> {
   const sid = String(context.params.sid || "").trim()
   if (!isValidShareId(sid)) {
@@ -56,10 +64,13 @@ export async function onRequestGet(context: ShareContext): Promise<Response> {
   const url = new URL(context.request.url)
   const locale = resolveLocale(url, context.request.headers.get("accept-language") || "")
   const rawLayout = url.searchParams.get("layout")
-  const layout: CatLayout = rawLayout === "list" || rawLayout === "mini-grid" ? rawLayout : "grid"
+  const isMobile = isMobileRequest(context.request)
+  const defaultLayout: CatLayout = isMobile ? "list" : "grid"
+  const layout: CatLayout = rawLayout === "list" || rawLayout === "mini-grid" || rawLayout === "grid" ? rawLayout : defaultLayout
 
-  // 边缘新鲜命中：直接返回，不打 Supabase RPC
-  const cacheKey = shareCacheKey(url.origin, url.pathname, url.search)
+  // 边缘新鲜命中：直接返回，不打 Supabase RPC（无显式 layout 时隔离设备类型，避免手机命中桌面缓存）
+  const cacheSearch = rawLayout ? url.search : (url.search ? `${url.search}&_dev=${isMobile ? 'm' : 'd'}` : `?_dev=${isMobile ? 'm' : 'd'}`)
+  const cacheKey = shareCacheKey(url.origin, url.pathname, cacheSearch)
   const hit = await matchShareCache(cacheKey)
   if (hit) {
     const res = new Response(hit.body, hit)
