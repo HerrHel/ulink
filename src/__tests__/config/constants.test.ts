@@ -30,6 +30,7 @@ import {
   MAX_UNDO_BYTES,
   ACTIONS,
   DEFAULTS,
+  WELCOME_NOTES,
 } from '../../config/constants.js'
 
 describe('config/constants.ts — 应用层常量快照护栏（精简版）', () => {
@@ -139,13 +140,12 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     for (const a of attrs) expect(a.type).toBe('boolean')
   })
 
-  // 2026-08-22：初始示例组（欢迎使用/使用技巧）已按用户要求移除——种子数据干净起点。
-  // 原「DEFAULTS.siblingGroups 2 项(sg_welcome/sg_tips)」与「组默认 notes 引用同一性」护栏
-  // 随约束删除；新护栏锁 siblingGroups 为空 + 无默认示例组 id 复活。
-  it('DEFAULTS.siblingGroups 为空（初始示例组已移除，防默认组复活）', () => {
-    expect(DEFAULTS.siblingGroups).toEqual([])
-    const ids = DEFAULTS.siblingGroups.map((g) => g.id)
-    expect(ids).not.toContain('sg_welcome')
-    expect(ids).not.toContain('sg_tips')
+  it('DEFAULTS.siblingGroups 1 项（包含上手指南引导笔记 sg_welcome）', () => {
+    expect(DEFAULTS.siblingGroups.length).toBe(1)
+    const welcome = DEFAULTS.siblingGroups[0]
+    expect(welcome.id).toBe('sg_welcome')
+    expect(welcome.name).toBe('💡 上手指南')
+    expect(welcome.notes).toBe(WELCOME_NOTES)
+    expect(welcome.bookmarkIds).toEqual(['b1', 'b6'])
   })
 })

@@ -211,11 +211,11 @@ describe('detectShareRoute 纯路由解析', () => {
 })
 
 describe('shareGroup 分享编排契约', () => {
-  it('sg 不存在 → toast("组不存在") + return（不 copy 不碰 setGroupPublic）', async () => {
+  it('sg 不存在 → toast("笔记不存在") + return（不 copy 不碰 setGroupPublic）', async () => {
     const { shareGroup } = await import('../../composables/domain/useDataShare.js')
     await shareGroup('g-missing')
 
-    expect(_toast.toastSpy).toHaveBeenCalledWith('组不存在', false)
+    expect(_toast.toastSpy).toHaveBeenCalledWith('笔记不存在', false)
     expect(_copy.copyToClipboardSpy).not.toHaveBeenCalled()
   })
 

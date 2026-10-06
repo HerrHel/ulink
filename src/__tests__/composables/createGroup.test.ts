@@ -201,12 +201,12 @@ describe('createGroup — 新建组的三路 categoryId 解析 + order 公式 + 
     expect(added.order).toBe(9)
   })
 
-  it('⑨副作用链：调 ds.addGroup(新组对象) + saveAppData + toast("组已创建") 各一次', () => {
+  it('⑨副作用链：调 ds.addGroup(新组对象) + saveAppData + toast("笔记已创建") 各一次', () => {
     const id = createGroup()
     expect(mockData.addGroup).toHaveBeenCalledTimes(1)
     expect(saveAppData).toHaveBeenCalledTimes(1)
     expect(toast).toHaveBeenCalledTimes(1)
-    expect(toast).toHaveBeenCalledWith('组已创建')
+    expect(toast).toHaveBeenCalledWith('笔记已创建')
     // addGroup 入参是一个完整 SiblingGroup 对象
     const added = mockData.addGroup.mock.calls[0][0]
     expect(added).toEqual(expect.objectContaining({

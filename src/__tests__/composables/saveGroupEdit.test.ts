@@ -285,12 +285,12 @@ describe('saveGroupEdit — 保存组编辑：双早退守卫 + 7 字段固化�
     expect(mockData.updateGroup).toHaveBeenCalledTimes(1)
   })
 
-  it('L. toast("组已更新") 收尾：保存成功后弹一次中文 toast', () => {
+  it('L. toast("笔记已更新") 收尾：保存成功后弹一次中文 toast', () => {
     const sg = makeGroup({ id: 'g1' })
     mockData.groupMap = { g1: sg }
     saveGroupEdit()
     expect(toast).toHaveBeenCalledTimes(1)
-    expect((toast as any).mock.calls[0][0]).toBe('组已更新')
+    expect((toast as any).mock.calls[0][0]).toBe('笔记已更新')
   })
 
   // ===== lastFocusedEl 焦点恢复链（saveGroupEdit → closeGroupEdit({discard:false}) → lastFocusedEl.focus()）=====

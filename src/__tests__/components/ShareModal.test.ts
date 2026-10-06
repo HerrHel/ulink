@@ -64,7 +64,7 @@ describe('ShareModal.vue — 分享管理弹窗', () => {
     })
 
     // 验证标题与组信息
-    expect(wrapper.find('.modal-head h2').text()).toContain('分享书签组')
+    expect(wrapper.find('.modal-head h2').text()).toContain('分享笔记')
     expect(wrapper.find('.share-target-name').text()).toBe('测试公开组')
     expect(wrapper.find('.share-target-meta').text()).toContain('2')
 

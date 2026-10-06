@@ -127,10 +127,10 @@ describe('menuConfig — 规则结构', () => {
     expect(t(gc?.label ?? '')).toBe('查看详情')
   })
 
-  it('group 右键含 SHARE_GROUP/HISTORY 且 DELETE 标记删除组', () => {
+  it('group 右键含 SHARE_GROUP/HISTORY 且 DELETE 标记删除笔记', () => {
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.SHARE_GROUP)).toBe(true)
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.HISTORY)).toBe(true)
-    expect(t(MENU_RULES.group.find(e => e.action === ACTIONS.DELETE)?.label ?? '')).toBe('删除组')
+    expect(t(MENU_RULES.group.find(e => e.action === ACTIONS.DELETE)?.label ?? '')).toBe('删除笔记')
   })
 
   it('长按 card 子集含 EXPAND（条件项）+ COPY_URL，无 HISTORY/MULTI_SELECT', () => {
@@ -145,7 +145,7 @@ describe('menuConfig — 规则结构', () => {
     expect(MENU_RULES.card.some(e => e.action === ACTIONS.ADD_SUB)).toBe(true)
     expect(MENU_RULES.group.some(e => e.action === ACTIONS.ADD_TO_GROUP)).toBe(true)
     expect(t(MENU_ITEMS[ACTIONS.ADD_SUB].label!)).toBe('添加子网站')
-    expect(t(MENU_ITEMS[ACTIONS.ADD_TO_GROUP].label!)).toBe('添加书签或组')
+    expect(t(MENU_ITEMS[ACTIONS.ADD_TO_GROUP].label!)).toBe('添加书签或笔记')
   })
 
   it('cat 右键含 分享分类/导出分类 且文案正确', () => {
@@ -311,15 +311,15 @@ describe('menuConfig — buildLongPressItems', () => {
     expect(mocks.moveBookmarksToVault).toHaveBeenCalledWith(['b1'])
   })
 
-  it('组长按：含 聚焦编辑/分享组/删除组，EXPAND 依笔记条件', () => {
+  it('组长按：含 聚焦编辑/分享笔记/删除笔记，EXPAND 依笔记条件', () => {
     ui.layoutMode = 'list'
     const items = buildLongPressItems('group', 'g1')
     const labels = items.map(i => i.label)
     expect(labels).toContain('聚焦编辑')
-    expect(labels).toContain('分享组')
-    expect(labels).toContain('删除组')
+    expect(labels).toContain('分享笔记')
+    expect(labels).toContain('删除笔记')
     expect(labels[0]).toBe('展开')
-    const del = items.find(i => i.label === '删除组')
+    const del = items.find(i => i.label === '删除笔记')
     expect(del?.danger).toBe(true)
   })
 

@@ -1,5 +1,7 @@
 import type { AppData } from '../types.js'
 import { t, getLocale, type Locale } from '../i18n/index.js'
+export { WELCOME_NOTES, getWelcomeNotes } from './welcome-data.js'
+import { WELCOME_NOTES, getWelcomeNotes } from './welcome-data.js'
 
 export const STORAGE_KEY = 'linkvault_v2'
 /** 私密空间独立数据集的本地存储键（localStorage 同名字符串；IDB key 见 persist.ts） */
@@ -87,10 +89,24 @@ export const DEFAULTS: AppData = {
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
     { id: 'ai', name: 'Ai', type: 'boolean' },
-    { id: 'is-group', name: '组', type: 'boolean' }
+    { id: 'is-group', name: '笔记', type: 'boolean' }
   ],
-  // 2026-08-22：初始示例组（欢迎使用 / 使用技巧）已按用户要求移除——新装/重置得到干净起点。
-  siblingGroups: [],
+  siblingGroups: [
+    {
+      id: 'sg_welcome',
+      name: '💡 上手指南',
+      categoryId: 'uncategorized',
+      icon: '',
+      order: 0,
+      isExpanded: false,
+      attributes: { 'is-group': true },
+      bookmarkIds: ['b1', 'b6'],
+      notes: WELCOME_NOTES,
+      updatedAt: 1704067200000,
+      useCount: 0,
+      isPublic: false,
+    },
+  ],
   _schemaVersion: 2,
   _dataVersion: 2, // 兼容旧读者；迁移门控以 _schemaVersion 为准
 }
@@ -173,10 +189,24 @@ export function buildSeedDefaults(locale?: Locale): AppData {
     customAttributes: [
       { id: 'requires-login', name: attrName('requires-login', '需要登录', 'Requires login'), type: 'boolean' },
       { id: 'ai', name: attrName('ai', 'Ai', 'AI'), type: 'boolean' },
-      { id: 'is-group', name: attrName('is-group', '组', 'Group'), type: 'boolean' },
+      { id: 'is-group', name: attrName('is-group', '笔记', 'Note'), type: 'boolean' },
     ],
-    // 2026-08-22：初始示例组已移除，新装/重置无欢迎组/使用技巧组。
-    siblingGroups: [],
+    siblingGroups: [
+      {
+        id: 'sg_welcome',
+        name: isEn ? '💡 Getting Started' : '💡 上手指南',
+        categoryId: 'uncategorized',
+        icon: '',
+        order: 0,
+        isExpanded: false,
+        attributes: { 'is-group': true },
+        bookmarkIds: ['b1', 'b6'],
+        notes: getWelcomeNotes(loc),
+        updatedAt: now,
+        useCount: 0,
+        isPublic: false,
+      },
+    ],
     _schemaVersion: 2,
     _dataVersion: 2,
   }

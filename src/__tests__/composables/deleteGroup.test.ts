@@ -151,7 +151,7 @@ describe('deleteGroup (composable)', () => {
 
     expect(showConfirm).toHaveBeenCalledTimes(1)
     // showConfirm 入参含组名
-    expect(showConfirm).toHaveBeenCalledWith('确认删除组「组A」？')
+    expect(showConfirm).toHaveBeenCalledWith('确认删除笔记「组A」？')
     expect(mockData.deleteGroup).not.toHaveBeenCalled()
   })
 
@@ -162,7 +162,7 @@ describe('deleteGroup (composable)', () => {
     await deleteGroup('g1', false)
 
     expect(showConfirm).toHaveBeenCalledTimes(1)
-    expect(showConfirm).toHaveBeenCalledWith('确认删除组「组A」？')
+    expect(showConfirm).toHaveBeenCalledWith('确认删除笔记「组A」？')
     expect(mockData.deleteGroup).toHaveBeenCalledTimes(1)
     expect(mockData.deleteGroup).toHaveBeenCalledWith('g1')
     expect(saveAppData).toHaveBeenCalledTimes(1)
@@ -203,18 +203,18 @@ describe('deleteGroup (composable)', () => {
     expect(mockUI.focusedGroupId).toBeNull()
   })
 
-  // ⑦ toastWithUndo：第一参 '已删除组' 文案 + 第二参 undo 回调 fn 注册，
-  //    手动触发 undo 回调证其编排（ds.restoreGroup + debouncedSaveAppData + toast('组已恢复')）
-  it('⑦a toastWithUndo 文案「已删除组」且捕获 undo 回调', async () => {
+  // ⑦ toastWithUndo：第一参 '已删除笔记' 文案 + 第二参 undo 回调 fn 注册，
+  //    手动触发 undo 回调证其编排（ds.restoreGroup + debouncedSaveAppData + toast('笔记已恢复')）
+  it('⑦a toastWithUndo 文案「已删除笔记」且捕获 undo 回调', async () => {
     mockData.groupMap = { g1: makeGroup() }
     await deleteGroup('g1', true)
 
     expect(toastWithUndo).toHaveBeenCalledTimes(1)
-    expect((toastWithUndo as any).mock.calls[0][0]).toBe('已删除组')
+    expect((toastWithUndo as any).mock.calls[0][0]).toBe('已删除笔记')
     expect(typeof capturedUndo).toBe('function')
   })
 
-  it('⑦b undo 回调触发：restoreGroup + debouncedSaveAppData + toast「组已恢复」', async () => {
+  it('⑦b undo 回调触发：restoreGroup + debouncedSaveAppData + toast「笔记已恢复」', async () => {
     mockData.groupMap = { g1: makeGroup() }
     await deleteGroup('g1', true)
     expect(capturedUndo).not.toBeNull()
@@ -224,7 +224,7 @@ describe('deleteGroup (composable)', () => {
     expect(mockData.restoreGroup).toHaveBeenCalledWith('g1')
     expect(debouncedSaveAppData).toHaveBeenCalledTimes(1)
     expect(toast).toHaveBeenCalledTimes(1)
-    expect(toast).toHaveBeenCalledWith('组已恢复')
+    expect(toast).toHaveBeenCalledWith('笔记已恢复')
   })
 
   it('⑦c undo 回调 restoreGroup 入参恒为 dGid（闭包绑定删除时的 gid 非后续变量）', async () => {
@@ -239,7 +239,7 @@ describe('deleteGroup (composable)', () => {
     mockData.groupMap = { g1: makeGroup({ name: '' }) }
     showConfirmReturn = true
     await deleteGroup('g1', false)
-    expect(showConfirm).toHaveBeenCalledWith('确认删除组「未命名」？')
+    expect(showConfirm).toHaveBeenCalledWith('确认删除笔记「未命名」？')
     // 确认后仍正常删除
     expect(mockData.deleteGroup).toHaveBeenCalledTimes(1)
   })
@@ -248,14 +248,14 @@ describe('deleteGroup (composable)', () => {
     mockData.groupMap = { g1: makeGroup({ name: undefined }) }
     showConfirmReturn = true
     await deleteGroup('g1', false)
-    expect(showConfirm).toHaveBeenCalledWith('确认删除组「未命名」？')
+    expect(showConfirm).toHaveBeenCalledWith('确认删除笔记「未命名」？')
   })
 
   it('⑧c sg.name 有值 → 确认弹窗用真实组名非兜底', async () => {
     mockData.groupMap = { g1: makeGroup({ name: '开发工具' }) }
     showConfirmReturn = true
     await deleteGroup('g1', false)
-    expect(showConfirm).toHaveBeenCalledWith('确认删除组「开发工具」？')
+    expect(showConfirm).toHaveBeenCalledWith('确认删除笔记「开发工具」？')
   })
 
   // ⑨ doDelete 完整副作用集：skipConfirm=true 路径 doDelete 调用后 (deleteGroup+saveAppData+toastWithUndo+聚焦清理) 全发生一次

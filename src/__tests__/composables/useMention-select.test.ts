@@ -306,7 +306,7 @@ describe('useMention.selectGroupRef 编排护栏', () => {
     expect(saveGroupBodyMock).toHaveBeenCalledWith('g1')
     expect(saveAppDataMock).toHaveBeenCalledTimes(1)
     expect(toastMock).toHaveBeenCalledTimes(1)
-    expect(toastMock).toHaveBeenCalledWith('已添加组引用')
+    expect(toastMock).toHaveBeenCalledWith('已添加笔记引用')
     expect(mentionStore.active).toBe(false)
   })
 
