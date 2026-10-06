@@ -144,8 +144,8 @@
 .cat-drag-handle{display:flex;align-items:center;color:var(--text-muted);opacity:0.4;flex-shrink:0;cursor:grab;touch-action:none}
 .cat-drag-handle svg{width:16px;height:16px}
 .cat-no-drag{cursor:default;opacity:0.6}
-.cat-placeholder{background:var(--accent-light);border:2px dashed var(--accent);border-radius:var(--radius-base);opacity:0.5}
-.cat-dragging{opacity:0.9;box-shadow:var(--shadow-lg);background:var(--surface);border-radius:var(--radius-base);border:1px solid var(--border);touch-action:none}
+.cat-placeholder{background:var(--accent-light);border:2px dashed var(--accent);border-radius:0;opacity:0.5}
+.cat-dragging{opacity:0.9;box-shadow:var(--shadow-lg);background:var(--surface);border-radius:0;border:1px solid var(--border);touch-action:none}
 
 /* ── ConfirmModal ── */
 .confirm-foot{justify-content:space-between}
