@@ -74,7 +74,8 @@ export const DEFAULTS: AppData = {
     { id: 'sb1', title: '开始对话', url: 'https://chat.deepseek.com/', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 0, useCount: 3, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 30000000, updatedAt: Date.now() - 30000000 },
     { id: 'sb2', title: 'API开发平台', url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: Date.now() - 20000000, updatedAt: Date.now() - 20000000 },
     { id: 'b4', title: '抖音', url: 'https://www.douyin.com', username: '', password: '', notes: '短视频平台', icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 345600000, updatedAt: Date.now() - 345600000 },
-    { id: 'b5', title: 'Steam', url: 'https://store.steampowered.com', username: '', password: '', notes: '游戏平台', icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 100000, updatedAt: Date.now() - 100000 }
+    { id: 'b5', title: 'Steam', url: 'https://store.steampowered.com', username: '', password: '', notes: '游戏平台', icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: Date.now() - 100000, updatedAt: Date.now() - 100000 },
+    { id: 'b6', title: 'I Love PDF', url: 'https://www.ilovepdf.com/', username: '', password: '', notes: '在线PDF工具', icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: Date.now() - 50000, updatedAt: Date.now() - 50000 }
   ],
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
@@ -102,8 +103,8 @@ export function buildSeedDefaults(locale?: Locale): AppData {
   // 属性/分类/书签/组的内容：英文 vs 中文 差异只在 name/notes/notes 文案。
   const catName = (id: string): string => t(`cat.${id}` as never) as unknown as string
   const seedNotes = isEn
-    ? { b1: 'Code hosting platform', b3: 'API key:', b4: 'Short video platform', b5: 'Gaming platform' }
-    : { b1: '代码托管平台', b3: 'API key:', b4: '短视频平台', b5: '游戏平台' }
+    ? { b1: 'Code hosting platform', b3: 'API key:', b4: 'Short video platform', b5: 'Gaming platform', b6: 'Online PDF tools' }
+    : { b1: '代码托管平台', b3: 'API key:', b4: '短视频平台', b5: '游戏平台', b6: '在线PDF工具' }
   const attrName = (id: string, zh: string, en: string): string => isEn ? en : zh
   const bmTitle = (id: string, zh: string, en: string): string => isEn ? en : zh
 
@@ -127,6 +128,7 @@ export function buildSeedDefaults(locale?: Locale): AppData {
       { id: 'sb2', title: bmTitle('sb2', 'API开发平台', 'API platform'), url: 'https://platform.deepseek.com/usage', username: '', password: '', notes: '', icon: '', categoryId: 'ai', parentId: 'b3', order: 1, useCount: 2, attributes: { 'ai': true }, isExpanded: false, createdAt: now - 20000000, updatedAt: now - 20000000 },
       { id: 'b4', title: bmTitle('b4', '抖音', 'Douyin'), url: 'https://www.douyin.com', username: '', password: '', notes: seedNotes.b4, icon: '', categoryId: 'social', parentId: null, order: 3, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 345600000, updatedAt: now - 345600000 },
       { id: 'b5', title: bmTitle('b5', 'Steam', 'Steam'), url: 'https://store.steampowered.com', username: '', password: '', notes: seedNotes.b5, icon: '', categoryId: 'game', parentId: null, order: 4, useCount: 0, attributes: { 'requires-login': true }, isExpanded: false, createdAt: now - 100000, updatedAt: now - 100000 },
+      { id: 'b6', title: bmTitle('b6', 'I Love PDF', 'I Love PDF'), url: 'https://www.ilovepdf.com/', username: '', password: '', notes: seedNotes.b6, icon: '', categoryId: 'tools', parentId: null, order: 5, useCount: 0, attributes: {}, isExpanded: false, createdAt: now - 50000, updatedAt: now - 50000 },
     ],
     customAttributes: [
       { id: 'requires-login', name: attrName('requires-login', '需要登录', 'Requires login'), type: 'boolean' },

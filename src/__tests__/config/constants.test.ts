@@ -108,14 +108,14 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     }
   })
 
-  it('DEFAULTS.bookmarks 7 项 id 唯一 + 父子结构(parentId=null 顶层, sb1/sb2→b3) + categoryId 无悬空', () => {
+  it('DEFAULTS.bookmarks 8 项 id 唯一 + 父子结构(parentId=null 顶层, sb1/sb2→b3) + categoryId 无悬空', () => {
     const bms = DEFAULTS.bookmarks
-    expect(bms.length).toBe(7)
+    expect(bms.length).toBe(8)
     const ids = bms.map((b) => b.id)
     expect(new Set(ids).size).toBe(ids.length)
     const top = bms.filter((b) => b.parentId === null).map((b) => b.id).sort()
     const sub = bms.filter((b) => b.parentId !== null)
-    expect(top).toEqual(['b1', 'b2', 'b3', 'b4', 'b5'])
+    expect(top).toEqual(['b1', 'b2', 'b3', 'b4', 'b5', 'b6'])
     expect(sub.map((b) => b.parentId)).toEqual(['b3', 'b3'])
     expect(sub.map((b) => b.id).sort()).toEqual(['sb1', 'sb2'])
     const catIds = new Set(DEFAULTS.categories.map((c) => c.id))
