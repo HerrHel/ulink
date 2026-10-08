@@ -247,6 +247,7 @@ watch(
         currentTab.value = 'ai'
       }
       nextTick(() => {
+        adjustTextareaHeight()
         if (currentTab.value === 'ai') {
           aiTextareaRef.value?.focus()
         }
@@ -290,8 +291,24 @@ function handleKeyDown(e: KeyboardEvent) {
 function adjustTextareaHeight() {
   const el = aiTextareaRef.value
   if (!el) return
+  if (!aiQuery.value) {
+    el.style.height = '24px'
+    el.style.lineHeight = '24px'
+    el.style.overflowY = 'hidden'
+    return
+  }
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  const scrollH = el.scrollHeight
+  if (scrollH <= 26) {
+    el.style.height = '24px'
+    el.style.lineHeight = '24px'
+    el.style.overflowY = 'hidden'
+  } else {
+    const nextH = Math.min(scrollH, 110)
+    el.style.height = nextH + 'px'
+    el.style.lineHeight = '1.45'
+    el.style.overflowY = scrollH > 110 ? 'auto' : 'hidden'
+  }
 }
 
 /** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
@@ -430,6 +447,7 @@ function _resetSwipe() {
 }
 
 onMounted(() => {
+  nextTick(() => adjustTextareaHeight())
   const el = detailPanelRef.value
   if (el) {
     el.addEventListener('touchstart', onSwipeStart, { passive: true })
@@ -771,8 +789,8 @@ function closeDetail(rawId: string) {
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
   background: var(--bg, #fdfbf9);
-  padding: 6px 7px 6px 10px;
-  transition: all 0.16s ease;
+  padding: 5px 6px 5px 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   min-width: 0;
   box-sizing: border-box;
 }
@@ -781,31 +799,50 @@ function closeDetail(rawId: string) {
   border-color: var(--border-hover, #d5cbbe);
 }
 
+.chat-input-wrapper:focus-within,
 .chat-input-wrapper.focused {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 2px var(--accent-light, rgba(18, 46, 138, 0.08));
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .chat-textarea {
   flex: 1;
   min-width: 0;
+  height: 24px;
+  min-height: 24px;
+  max-height: 110px;
   border: none !important;
   background: transparent !important;
   padding: 0 !important;
+  margin: 0 !important;
   font-family: var(--font-sans);
   font-size: 12.5px;
-  line-height: 1.45;
+  line-height: 24px;
   color: var(--text);
   resize: none;
-  outline: none;
-  max-height: 110px;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  overflow-y: hidden;
+  overflow-x: hidden;
   box-sizing: border-box;
+}
+
+.chat-textarea:focus,
+.chat-textarea:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .chat-textarea::placeholder {
   color: var(--text-muted);
-  opacity: 0.85;
+  opacity: 0.8;
+  user-select: none;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .chat-send-btn {
