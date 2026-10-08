@@ -27,16 +27,74 @@
           <span class="chat-tab-badge">{{ entries.length }}</span>
         </button>
       </div>
-      <div v-else class="chat-top-title">
-        <span>{{ t('ai.sidebarTitle') }}</span>
+      <div v-else class="chat-top-title-wrap">
+        <button
+          class="chat-session-dropdown-btn"
+          @click.stop="isSessionMenuOpen = !isSessionMenuOpen"
+          :title="isZh ? '切换历史会话' : 'Switch sessions'"
+        >
+          <span class="chat-current-title">{{ currentSessionTitle }}</span>
+          <svg
+            class="dropdown-chevron"
+            :class="{ open: isSessionMenuOpen }"
+            viewBox="0 0 16 16"
+            width="10"
+            height="10"
+            fill="currentColor"
+          >
+            <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <!-- 会话历史下拉浮层 (方案 A) -->
+        <div v-if="isSessionMenuOpen" class="session-dropdown-popover" @click.stop>
+          <div class="session-popover-header">
+            <button class="session-new-btn" @click="handleCreateSession">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+                <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
+              </svg>
+              <span>{{ isZh ? '新建会话' : 'New Session' }}</span>
+            </button>
+          </div>
+          <div class="session-list-scroll">
+            <div
+              v-for="s in sessions"
+              :key="s.id"
+              class="session-item"
+              :class="{ active: s.id === currentSessionId }"
+              @click="switchSession(s.id)"
+            >
+              <span class="session-item-dot"></span>
+              <div class="session-item-meta">
+                <span class="session-item-title">{{ s.title }}</span>
+                <span class="session-item-time">{{ formatTimeAgo(s.updatedAt) }}</span>
+              </div>
+              <button
+                class="session-item-del"
+                @click.stop="handleDeleteSession(s.id)"
+                :title="t('common.delete')"
+              >
+                &times;
+              </button>
+            </div>
+            <div v-if="sessions.length === 0" class="session-empty">
+              {{ isZh ? '暂无历史会话' : 'No history sessions' }}
+            </div>
+          </div>
+          <div v-if="sessions.length > 1" class="session-popover-foot">
+            <button class="session-clear-all-btn" @click="handleClearAllSessions">
+              {{ isZh ? '清空全部历史' : 'Clear All Sessions' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="chat-top-actions">
         <button
-          v-if="currentTab === 'ai' && chatTurns.length > 0"
+          v-if="currentTab === 'ai'"
           class="chat-btn-icon"
-          @click="startNewChat"
-          :title="t('ai.sidebarClear')"
+          @click="handleCreateSession"
+          :title="isZh ? '新建会话' : 'New Session'"
         >
           <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
             <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
@@ -146,8 +204,24 @@
       </template>
     </div>
 
-    <!-- 底部常驻：单一精致对话框（无厚重双层边框） -->
+    <!-- 底部常驻：单一精致对话框（集成斜杠联想与停止生成） -->
     <div class="chat-input-dock">
+      <!-- 斜杠指令快捷补全浮动条 -->
+      <div v-if="showSlashSuggest && filteredSlashCommands.length" class="slash-suggest-dock">
+        <div
+          v-for="(item, idx) in filteredSlashCommands"
+          :key="item.cmd"
+          class="slash-suggest-item"
+          :class="{ active: idx === activeSlashIndex }"
+          @click="applySlashCommand(item.cmd)"
+          @mouseenter="activeSlashIndex = idx"
+        >
+          <span class="slash-cmd-tag">{{ item.cmd }}</span>
+          <span class="slash-cmd-title">{{ item.title }}</span>
+          <span class="slash-cmd-desc">{{ item.desc }}</span>
+        </div>
+      </div>
+
       <div class="chat-input-wrapper" :class="{ focused: isInputFocused }">
         <textarea
           ref="aiTextareaRef"
@@ -160,10 +234,20 @@
           @keydown="handleKeyDown"
           @input="adjustTextareaHeight"
         ></textarea>
+        <!-- 停止生成 / 发送按钮平滑切换 -->
         <button
+          v-if="aiLoading"
+          class="chat-send-btn stop active"
+          @click="handleStopGenerating"
+          :title="isZh ? '停止生成' : 'Stop generating'"
+        >
+          <span class="stop-square"></span>
+        </button>
+        <button
+          v-else
           class="chat-send-btn"
-          :class="{ active: !!aiQuery.trim() && !aiLoading }"
-          :disabled="aiLoading || !aiQuery.trim()"
+          :class="{ active: !!aiQuery.trim() }"
+          :disabled="!aiQuery.trim()"
           @click="handleAiSubmit"
           :title="t('ai.searchAction') + ' (Enter)'"
         >
@@ -193,21 +277,23 @@ import {
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import {
+  loadSessions,
+  createNewSession,
+  updateSession,
+  deleteSessionById,
+  clearAllSessions,
+  getCurrentSessionId,
+  setCurrentSessionId,
+  type AiChatSession,
+  type ChatTurn,
+} from '../../lib/ai/chatSessions.js'
 import { buildDetailCards } from './buildDetailCards.js'
 import type { DetailEntry } from './buildDetailCards.js'
-import type { AiSearchPreference, AiCandidateBookmark } from '../../types/ai.js'
+import type { AiSearchPreference } from '../../types/ai.js'
 
 const { t, locale } = useI18n()
 const isZh = computed(() => locale.value.startsWith('zh'))
-
-interface ChatTurn {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  candidates?: AiCandidateBookmark[]
-  loading?: boolean
-  timestamp: number
-}
 
 const ui = useUIStore()
 const ds = useDataStore()
@@ -229,7 +315,142 @@ const isInputFocused = ref(false)
 // 默认采用最佳偏好（完全免费 + 国内直连），无需用户在界面手动配置
 const preferences = ref<AiSearchPreference[]>(['free', 'no_proxy'])
 
+// ── 多会话管理 (方案 A) ──
+const sessions = ref<AiChatSession[]>(loadSessions())
+const currentSessionId = ref<string>(getCurrentSessionId() || '')
+const isSessionMenuOpen = ref(false)
 const chatTurns = ref<ChatTurn[]>([])
+
+// 初始化当前会话
+if (!currentSessionId.value || !sessions.value.some((s) => s.id === currentSessionId.value)) {
+  if (sessions.value.length > 0) {
+    currentSessionId.value = sessions.value[0].id
+    setCurrentSessionId(sessions.value[0].id)
+    chatTurns.value = [...sessions.value[0].turns]
+  } else {
+    const fresh = createNewSession()
+    currentSessionId.value = fresh.id
+    sessions.value = [fresh]
+    chatTurns.value = []
+  }
+} else {
+  const cur = sessions.value.find((s) => s.id === currentSessionId.value)
+  if (cur) chatTurns.value = [...cur.turns]
+}
+
+const currentSessionTitle = computed(() => {
+  const s = sessions.value.find((x) => x.id === currentSessionId.value)
+  if (!s || s.title === '新会话') return isZh.value ? 'AI 助手' : 'AI Assistant'
+  return s.title
+})
+
+function formatTimeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  if (diff < 60000) return isZh.value ? '刚刚' : 'just now'
+  if (diff < 3600000) return isZh.value ? `${Math.floor(diff / 60000)}分钟前` : `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return isZh.value ? `${Math.floor(diff / 3600000)}小时前` : `${Math.floor(diff / 3600000)}h ago`
+  return new Date(timestamp).toLocaleDateString(isZh.value ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric' })
+}
+
+function handleCreateSession() {
+  const fresh = createNewSession()
+  currentSessionId.value = fresh.id
+  sessions.value = loadSessions()
+  chatTurns.value = []
+  aiQuery.value = ''
+  isSessionMenuOpen.value = false
+  adjustTextareaHeight()
+  nextTick(() => aiTextareaRef.value?.focus())
+}
+
+function switchSession(id: string) {
+  const target = sessions.value.find((s) => s.id === id)
+  if (!target) return
+  currentSessionId.value = id
+  setCurrentSessionId(id)
+  chatTurns.value = [...target.turns]
+  isSessionMenuOpen.value = false
+  scrollToBottom()
+  nextTick(() => aiTextareaRef.value?.focus())
+}
+
+function handleDeleteSession(id: string) {
+  sessions.value = deleteSessionById(id)
+  if (currentSessionId.value === id) {
+    if (sessions.value.length > 0) {
+      switchSession(sessions.value[0].id)
+    } else {
+      handleCreateSession()
+    }
+  }
+}
+
+function handleClearAllSessions() {
+  clearAllSessions()
+  sessions.value = []
+  handleCreateSession()
+}
+
+// ── 斜杠指令快捷联想 ──
+const SLASH_COMMANDS = [
+  { cmd: '/help', title: '帮助指令', desc: '查看全部站内操控命令' },
+  { cmd: '/theme', title: '切换主题', desc: '深色 / 浅色 / 自动' },
+  { cmd: '/view', title: '切换视图', desc: '宫格 / 列表 / 紧凑' },
+  { cmd: '/cat', title: '分类管理', desc: '新建分类或查看列表' },
+  { cmd: '/trash', title: '回收站', desc: '打开或清空回收站' },
+  { cmd: '/dedup', title: '查重巡检', desc: '查找站内重复书签' },
+  { cmd: '/deadlink', title: '死链检测', desc: '检测失效与死链网站' },
+  { cmd: '/export', title: '备份数据', desc: '导出全量 JSON 数据' },
+  { cmd: '/stats', title: '全库统计', desc: '活跃书签与运行报表' },
+  { cmd: '/clean', title: '孤儿自检', desc: '修复失效引用与关联' },
+  { cmd: '/clear', title: '清空会话', desc: '开启新的空白对话' },
+]
+
+const activeSlashIndex = ref(0)
+const showSlashSuggest = computed(() => {
+  const q = aiQuery.value.trim()
+  return q.startsWith('/') && !q.includes(' ')
+})
+
+const filteredSlashCommands = computed(() => {
+  const q = aiQuery.value.trim().toLowerCase()
+  return SLASH_COMMANDS.filter((c) => c.cmd.startsWith(q))
+})
+
+watch(filteredSlashCommands, () => {
+  activeSlashIndex.value = 0
+})
+
+function applySlashCommand(cmd: string) {
+  aiQuery.value = cmd + ' '
+  adjustTextareaHeight()
+  nextTick(() => aiTextareaRef.value?.focus())
+}
+
+// ── 终端式命令历史回溯 (↑ / ↓) ──
+const inputHistory = ref<string[]>([])
+let historyCursor = -1
+let tempInput = ''
+
+// ── 停止生成 ──
+let currentAbortController: AbortController | null = null
+
+function handleStopGenerating() {
+  if (currentAbortController) {
+    currentAbortController.abort()
+    currentAbortController = null
+  }
+  aiLoading.value = false
+  const last = chatTurns.value[chatTurns.value.length - 1]
+  if (last && last.role === 'assistant' && last.loading) {
+    last.loading = false
+    if (!last.content) {
+      last.content = isZh.value ? '已中断生成。' : 'Generation stopped.'
+    }
+  }
+  scrollToBottom()
+  sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+}
 
 const panelStyle = computed(() => {
   const styles: Record<string, string> = {}
@@ -253,7 +474,7 @@ watch(
         }
       })
     }
-  }
+  },
 )
 
 function scrollToBottom() {
@@ -265,10 +486,7 @@ function scrollToBottom() {
 }
 
 function startNewChat() {
-  chatTurns.value = []
-  aiQuery.value = ''
-  adjustTextareaHeight()
-  nextTick(() => aiTextareaRef.value?.focus())
+  handleCreateSession()
 }
 
 function quickFill(text: string) {
@@ -282,6 +500,69 @@ function closeEntirePanel() {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  // 斜杠补全菜单的上下键与回车优先
+  if (showSlashSuggest.value && filteredSlashCommands.value.length) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      activeSlashIndex.value =
+        (activeSlashIndex.value - 1 + filteredSlashCommands.value.length) %
+        filteredSlashCommands.value.length
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      activeSlashIndex.value =
+        (activeSlashIndex.value + 1) % filteredSlashCommands.value.length
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      const chosen = filteredSlashCommands.value[activeSlashIndex.value]
+      if (chosen) applySlashCommand(chosen.cmd)
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      aiQuery.value = ''
+      adjustTextareaHeight()
+      return
+    }
+  }
+
+  // 终端式命令历史回溯 (ArrowUp / ArrowDown)
+  if (e.key === 'ArrowUp') {
+    const el = aiTextareaRef.value
+    if (el && (el.selectionStart === 0 || !aiQuery.value.includes('\n'))) {
+      if (inputHistory.value.length > 0 && historyCursor > 0) {
+        e.preventDefault()
+        if (historyCursor === inputHistory.value.length) {
+          tempInput = aiQuery.value
+        }
+        historyCursor--
+        aiQuery.value = inputHistory.value[historyCursor]
+        nextTick(() => adjustTextareaHeight())
+        return
+      }
+    }
+  } else if (e.key === 'ArrowDown') {
+    const el = aiTextareaRef.value
+    if (el && (el.selectionEnd === aiQuery.value.length || !aiQuery.value.includes('\n'))) {
+      if (historyCursor < inputHistory.value.length - 1) {
+        e.preventDefault()
+        historyCursor++
+        aiQuery.value = inputHistory.value[historyCursor]
+        nextTick(() => adjustTextareaHeight())
+        return
+      } else if (historyCursor === inputHistory.value.length - 1) {
+        e.preventDefault()
+        historyCursor = inputHistory.value.length
+        aiQuery.value = tempInput
+        nextTick(() => adjustTextareaHeight())
+        return
+      }
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleAiSubmit()
@@ -346,6 +627,8 @@ async function handleAiSubmit() {
   scrollToBottom()
 
   try {
+    currentAbortController = new AbortController()
+
     // 优先尝试站内指令/In-App Agent CLI 调度
     const siteCmd = await dispatchSiteCommand(raw, { ds, ui })
     if (siteCmd.handled) {
@@ -359,6 +642,7 @@ async function handleAiSubmit() {
 
     if (isVideo) {
       const res = await extractBookmarksFromVideo(raw, ds.categories, ds.customAttributes)
+      if (currentAbortController?.signal.aborted) return
       assistantTurn.loading = false
       assistantTurn.candidates = res.bookmarks
       assistantTurn.content = res.videoTitle
@@ -366,22 +650,36 @@ async function handleAiSubmit() {
         : t('ai.foundCount', { n: res.bookmarks.length })
     } else if (isUrl) {
       const res = await findSimilarWebsites(raw, preferences.value, ds.categories, ds.customAttributes)
+      if (currentAbortController?.signal.aborted) return
       assistantTurn.loading = false
       assistantTurn.candidates = res
       assistantTurn.content = t('ai.foundCount', { n: res.length })
     } else {
       const res = await searchWebsitesByIntent(raw, preferences.value, ds.categories, ds.customAttributes)
+      if (currentAbortController?.signal.aborted) return
       assistantTurn.loading = false
       assistantTurn.candidates = res
       assistantTurn.content = t('ai.foundCount', { n: res.length })
     }
   } catch (err: unknown) {
+    if (currentAbortController?.signal.aborted) return
     assistantTurn.loading = false
     assistantTurn.content = isZh.value ? '检索失败，请稍后重试。' : 'Failed to search, please try again.'
     console.error('[ulink AI] search error:', err)
   } finally {
     aiLoading.value = false
     scrollToBottom()
+
+    // 记录输入历史
+    if (raw && !inputHistory.value.includes(raw)) {
+      inputHistory.value.push(raw)
+      if (inputHistory.value.length > 30) inputHistory.value.shift()
+    }
+    historyCursor = inputHistory.value.length
+
+    // 持久化当前会话
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    currentAbortController = null
   }
 }
 
@@ -446,8 +744,16 @@ function _resetSwipe() {
   _swipeStartY = 0
 }
 
+function onDocumentClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (isSessionMenuOpen.value && !target.closest('.chat-top-title-wrap')) {
+    isSessionMenuOpen.value = false
+  }
+}
+
 onMounted(() => {
   nextTick(() => adjustTextareaHeight())
+  document.addEventListener('click', onDocumentClick)
   const el = detailPanelRef.value
   if (el) {
     el.addEventListener('touchstart', onSwipeStart, { passive: true })
@@ -457,6 +763,7 @@ onMounted(() => {
   }
 })
 onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
   const el = detailPanelRef.value
   if (el) {
     el.removeEventListener('touchstart', onSwipeStart)
@@ -500,6 +807,198 @@ function closeDetail(rawId: string) {
   flex-shrink: 0;
   min-width: 0;
   user-select: none;
+}
+
+.chat-top-title-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.chat-session-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.12s ease;
+  max-width: 170px;
+}
+
+.chat-session-dropdown-btn:hover {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
+.chat-current-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.18s ease;
+}
+
+.dropdown-chevron.open {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+
+/* 会话下拉浮层 (方案 A) */
+.session-dropdown-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 230px;
+  max-width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base, 8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  z-index: 100;
+  overflow: hidden;
+  animation: sessionPopIn 0.15s ease-out;
+}
+
+@keyframes sessionPopIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.session-popover-header {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.session-new-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs, 4px);
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.session-new-btn:hover {
+  background: var(--accent-light, rgba(18, 46, 138, 0.06));
+}
+
+.session-list-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  position: relative;
+}
+
+.session-item:hover,
+.session-item.active {
+  background: var(--surface-hover);
+}
+
+.session-item-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.session-item.active .session-item-dot {
+  background: var(--accent);
+}
+
+.session-item-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.session-item-del {
+  display: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.session-item:hover .session-item-del {
+  display: block;
+}
+
+.session-item-del:hover {
+  color: var(--rose, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.session-empty {
+  padding: 16px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.session-popover-foot {
+  padding: 4px 8px;
+  border-top: 1px solid var(--border-light);
+  text-align: center;
+}
+
+.session-clear-all-btn {
+  background: transparent;
+  border: none;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 3px;
+}
+
+.session-clear-all-btn:hover {
+  color: var(--rose, #ef4444);
 }
 
 .chat-top-title {
@@ -775,12 +1274,73 @@ function closeDetail(rawId: string) {
 
 /* 底部仅留一个对话输入框：无重叠多层边框 */
 .chat-input-dock {
+  position: relative;
   flex-shrink: 0;
   padding: 8px 10px 10px;
   background: var(--surface);
   border-top: 1px solid var(--border-light, #efe8df);
   min-width: 0 !important;
   box-sizing: border-box;
+}
+
+/* 斜杠指令补全浮层 */
+.slash-suggest-dock {
+  position: absolute;
+  bottom: calc(100% - 2px);
+  left: 10px;
+  right: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base, 8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  max-height: 190px;
+  overflow-y: auto;
+  padding: 4px;
+  z-index: 50;
+  animation: slashPop 0.14s ease-out;
+}
+
+@keyframes slashPop {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.slash-suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs, 4px);
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.slash-suggest-item:hover,
+.slash-suggest-item.active {
+  background: var(--surface-hover);
+}
+
+.slash-cmd-tag {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 62px;
+}
+
+.slash-cmd-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  min-width: 58px;
+}
+
+.slash-cmd-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-input-wrapper {
@@ -875,5 +1435,19 @@ function closeDetail(rawId: string) {
 .chat-send-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+
+/* 停止生成方块按钮 */
+.chat-send-btn.stop {
+  background: var(--accent);
+  color: #fff;
+}
+
+.stop-square {
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border-radius: 1.5px;
+  display: block;
 }
 </style>
