@@ -13,6 +13,7 @@ import { modalsEn } from './parts/modals.js'
 import { editorOverlayEn } from './parts/editorOverlay.js'
 import { shareAppEn } from './parts/shareApp.js'
 import { programmaticEn } from './parts/programmatic.js'
+import { aiEn } from './parts/aiPro.js'
 
 export const en = {
   app: {
@@ -136,6 +137,8 @@ export const en = {
     url: 'URL',
     confirmMoveCategory: 'Move category "{name}" and all its bookmarks/notes into the private space?',
     renameAttrPrompt: 'Rename attribute',
+    aiSimilar: 'Find Similar Sites',
+    aiEnrich: 'Smart Enrich Info',
   },
   errors: {
     crashTitle: 'Something went wrong',
@@ -439,4 +442,5 @@ export const en = {
   ...editorOverlayEn,
   ...shareAppEn,
   ...programmaticEn,
+  ...aiEn,
 } as const
