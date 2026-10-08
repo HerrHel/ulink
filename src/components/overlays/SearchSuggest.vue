@@ -9,6 +9,7 @@
         <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
         <img v-else :src="favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url || '')">
         <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
+        <span v-if="item._semanticReason" class="ss-semantic-tag" :title="item._semanticReason">{{ item._semanticReason }}</span>
         <span class="ss-url">{{ item._isGroup ? tN('count.bookmarks', item.bookmarkIds?.length || 0) : domain(item.url || '') }}</span>
       </div>
     </template>
@@ -54,6 +55,8 @@ const results = computed<SearchResultItem[]>(() => {
     // 旧调用不传 version（默认 -1）→ 每个键击重建 Fuse。基准用全量 bookmarks/siblingGroups
     //（稳定引用，CRUD 才变），软删/分类过滤推到下方结果层。与 data.ts filteredBookmarks 共享同一份缓存。
     dataStore._searchVersion,
+    false,
+    ui.semanticSearchEnabled,
   ).filter(r => {
     if (r._isGroup) return !dataStore.groupMap[r.id]?.deletedAt
     return !dataStore.bookmarkMap[r.id]?.deletedAt

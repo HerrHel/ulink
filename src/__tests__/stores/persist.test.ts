@@ -321,8 +321,9 @@ describe('persist', () => {
     })
 
     it('D1-59: percent Math.min(100,...) 封顶——超大数据集 percent 不超 100', () => {
-      // 构造 > 5MB（(500 * 1024 * 1024) 字节）数据集：6MB notes 使 bytes 远超限额
-      const hugeNotes = 'y'.repeat(550_000_000)
+      // 构造 > 500MB（524288000 字节）数据集：每个中文字符占 3 字节 UTF-8，
+      // 180M 字符 = 540MB 字节，既能测试 >500MB 超限封顶，又不会触碰 V8 512MB 单串长度限制
+      const hugeNotes = '中'.repeat(180_000_000)
       const data: AppData = {
         bookmarks: [{ id: 'b1', title: 't', url: 'u', username: '', password: '', notes: hugeNotes, icon: '', categoryId: 'all', parentId: null, order: 0, useCount: 0, attributes: {}, isExpanded: false, createdAt: 1, updatedAt: 1 }],
         siblingGroups: [], categories: [], customAttributes: [],

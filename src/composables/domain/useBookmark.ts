@@ -12,6 +12,7 @@ import { newBookmarkId } from '../../lib/newId.js'
 import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
+import { getSmartPrefill } from '../../lib/ai/smartPrefill.js'
 import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
@@ -393,11 +394,28 @@ export function autoFetchFromUrl() {
   bmForm._fetchTimer = setTimeout(() => {
     const url = fixUrl(raw)
     const dm = domain(url)
+    const ds = useDataStore()
+    const ui = useUIStore()
+
+    // 智能预填（仅当本地智能开关开启时，精选站点知识库、路径语义化提取、同域名偏好继承、中英文地道匹配）
+    const prefill = ui.semanticSearchEnabled
+      ? getSmartPrefill(url, ds.bookmarks, ds.categories, ds.customAttributes)
+      : { title: '', notes: '', categoryId: null, suggestedAttrIds: [], suggestedUsername: '' }
 
     // 标题：仅在为空时自动填充
     if (!bmForm.title.trim()) {
-      bmForm.title = dm.replace(/^www\./, '').split('.')[0]
-        .charAt(0).toUpperCase() + dm.replace(/^www\./, '').split('.')[0].slice(1)
+      bmForm.title = prefill.title || (dm.replace(/^www\./, '').split('.')[0]
+        .charAt(0).toUpperCase() + dm.replace(/^www\./, '').split('.')[0].slice(1))
+    }
+
+    // 简介与备注：仅在为空时自动填入精炼描述
+    if (!bmForm.notes.trim() && prefill.notes) {
+      bmForm.notes = prefill.notes
+    }
+
+    // 常用账号继承：仅在新建且账号为空时自动填入同域名历史账号
+    if (!bmForm.isEdit && !bmForm.username.trim() && prefill.suggestedUsername) {
+      bmForm.username = prefill.suggestedUsername
     }
 
     // 图标：仅在为空时自动填充
@@ -413,14 +431,15 @@ export function autoFetchFromUrl() {
 
     // AI 分类 + 属性建议（仅新建模式）
     if (!bmForm.isEdit && !bmForm.aiApplied) {
-      const ds = useDataStore()
-      const catId = suggestCategory(url, bmForm.title, ds.categories)
+      const ruleCatId = suggestCategory(url, bmForm.title, ds.categories)
+      const catId = prefill.categoryId || ruleCatId
       if (catId && !bmForm.categoryId) {
         bmForm.aiSuggestCatId = catId
       }
       const attrIds = suggestAttributes(url, bmForm.title, ds.customAttributes)
-      if (attrIds.length) {
-        bmForm.aiSuggestAttrIds = attrIds.filter(id => !bmForm.attributes[id])
+      const mergedAttrs = [...new Set([...attrIds, ...prefill.suggestedAttrIds])]
+      if (mergedAttrs.length) {
+        bmForm.aiSuggestAttrIds = mergedAttrs.filter(id => !bmForm.attributes[id])
       }
     }
   }, 500)

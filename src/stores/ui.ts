@@ -101,6 +101,8 @@ export interface UIState {
   activeAttrs: string[]
   excludedAttrs: string[]
   detailCards: string[]
+  /** 本地端侧自然语言语义检索与智能预填服务开关（默认开启） */
+  semanticSearchEnabled: boolean
   editingId: string | null
   /** 当前数据空间：main = 主页公共数据集；vault = 私密空间独立数据集 */
   curSpace: Space
@@ -158,6 +160,7 @@ export const useUIStore = defineStore('ui', {
       activeAttrs: [],
       excludedAttrs: [],
       detailCards: [],
+      semanticSearchEnabled: true,
       editingId: null,
       curSpace: 'main' as Space,
       e2eUnlockInitialMode: 'unlock' as E2EUnlockInitialMode,
@@ -285,6 +288,7 @@ export const useUIStore = defineStore('ui', {
           activeAttrs: this.activeAttrs.slice(),
           excludedAttrs: this.excludedAttrs.slice(),
           detailCards: this.detailCards.slice(),
+          semanticSearchEnabled: this.semanticSearchEnabled,
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
           sortDir: this.sortDir || 'desc',
@@ -318,6 +322,7 @@ export const useUIStore = defineStore('ui', {
           excludedAttrs?: string[]
           focusedGroupId?: string
           detailCards?: string[]
+          semanticSearchEnabled?: boolean
           expandedIds?: string[]
           _preferredLayoutMode?: LayoutMode
           _mobileLayoutMode?: LayoutMode
@@ -372,6 +377,9 @@ export const useUIStore = defineStore('ui', {
             const b = bMap[entry]
             return !!b && !b.deletedAt
           })
+        }
+        if (typeof s.semanticSearchEnabled === 'boolean') {
+          this.semanticSearchEnabled = s.semanticSearchEnabled
         }
         // expandedIds 同 detailCards 模式过滤已删/软删项，避免渲染已删卡片的展开态
         if (Array.isArray(s.expandedIds)) {

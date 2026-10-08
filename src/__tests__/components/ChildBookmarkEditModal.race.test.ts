@@ -33,6 +33,7 @@ const decryptMock = vi.hoisted(() => vi.fn())
 const safeDecodePasswordMock = vi.hoisted(() => vi.fn())
 vi.mock('../../crypto.js', () => ({
   decrypt: decryptMock,
+  decryptPasswordWithKey: (stored: any, key: any) => decryptMock(typeof stored === 'object' && stored ? `${stored.salt}.${stored.iv}.${stored.data}` : stored, key),
   safeDecodePassword: safeDecodePasswordMock,
   encrypt: vi.fn(),
   isThreePartCipher: (s: unknown) => typeof s === 'string' && s.split('.').length === 3,
