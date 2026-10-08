@@ -76,4 +76,19 @@ describe('chatSessions — AI 侧边栏多会话与历史管理', () => {
     expect(extractSessionTitle('/help')).toBe('help')
     expect(extractSessionTitle('   一个非常非常非常非常非常非常非常非常非常长的标题需求')).toContain('…')
   })
+
+  it('支持备份会话重新插入还原 (撤销删除场景)', () => {
+    const s = createNewSession('待恢复会话')
+    deleteSessionById(s.id)
+    expect(loadSessions().length).toBe(0)
+
+    const all = loadSessions()
+    all.unshift(s)
+    saveSessions(all)
+    setCurrentSessionId(s.id)
+
+    expect(loadSessions().length).toBe(1)
+    expect(loadSessions()[0].title).toBe('待恢复会话')
+    expect(getCurrentSessionId()).toBe(s.id)
+  })
 })
