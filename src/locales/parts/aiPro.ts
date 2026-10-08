@@ -57,7 +57,7 @@ export const aiZh = {
     enrichSuccessToast: '已成功更新书签信息',
     // 侧边栏 AI 专属 (与链原生风格)
     sidebarTitle: 'AI 助手',
-    sidebarInputPlaceholder: '输入需求、平替网址或视频链接 (Enter 发送)...',
+    sidebarInputPlaceholder: '输入需求、搜站或 /help...',
     sidebarClear: '清空会话',
     sidebarWelcomeTitle: '与链 AI',
     sidebarWelcomeDesc: '输入需求甄选网站、挖掘替代方案，或从安利视频中解析提取工具。',
@@ -128,7 +128,7 @@ export const aiEn = {
     enrichSuccessToast: 'Bookmark metadata updated successfully',
     // Sidebar AI (ulink Native Style)
     sidebarTitle: 'AI Assistant',
-    sidebarInputPlaceholder: 'Search sites, find alternatives or paste links...',
+    sidebarInputPlaceholder: 'Search, prompt or /help...',
     sidebarClear: 'Clear Chat',
     sidebarWelcomeTitle: 'ulink AI',
     sidebarWelcomeDesc: 'Discover websites, explore alternatives, or extract tools from video.',
