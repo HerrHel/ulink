@@ -15,6 +15,21 @@ export const K_AI_CUR_SESSION = 'lv_ai_cur_session_v1'
 const MAX_SESSIONS = 20
 const MAX_TURNS_PER_SESSION = 30
 
+export interface ChatTurnStep {
+  text: string
+  done?: boolean
+}
+
+export interface ChatActionCard {
+  type: 'dedup' | 'trash' | 'move' | 'clean' | 'custom'
+  title: string
+  desc?: string
+  buttonText: string
+  actionName: string
+  completed?: boolean
+  payload?: Record<string, unknown>
+}
+
 export interface ChatTurn {
   id: string
   role: 'user' | 'assistant'
@@ -22,6 +37,9 @@ export interface ChatTurn {
   candidates?: AiCandidateBookmark[]
   loading?: boolean
   timestamp: number
+  steps?: ChatTurnStep[]
+  actionCard?: ChatActionCard
+  _traceOpen?: boolean
 }
 
 export interface AiChatSession {

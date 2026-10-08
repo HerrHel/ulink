@@ -122,6 +122,7 @@
       <!-- 对话模式 -->
       <template v-if="currentTab === 'ai'">
         <!-- 初始空态：淡雅、温和、轻量的文字引导 -->
+        <!-- 初始空态：淡雅、温和、轻量的文字引导 -->
         <div v-if="chatTurns.length === 0" class="chat-empty-state">
           <div class="chat-empty-inner">
             <span class="chat-empty-sparkle">✦</span>
@@ -130,11 +131,10 @@
               {{ isZh ? '输入需求发现网站，或输入 /help 与自然语言直接操控本站。' : 'Describe your needs, or type /help to control the app.' }}
             </p>
             <div class="chat-quick-hints">
-              <button class="hint-text-btn" @click="quickFill('/help')">{{ isZh ? '/help 站内指令' : '/help Commands' }}</button>
-              <span class="hint-dot">·</span>
-              <button class="hint-text-btn" @click="quickFill(t('ai.promptWhiteboard'))">{{ t('ai.promptWhiteboard') }}</button>
-              <span class="hint-dot">·</span>
-              <button class="hint-text-btn" @click="quickFill(t('ai.promptGallery'))">{{ t('ai.promptGallery') }}</button>
+              <template v-for="(hint, hIdx) in dynamicQuickHints" :key="hint.query">
+                <button class="hint-text-btn" @click="quickFill(hint.query)">{{ hint.label }}</button>
+                <span v-if="hIdx < dynamicQuickHints.length - 1" class="hint-dot">·</span>
+              </template>
             </div>
           </div>
         </div>
@@ -164,6 +164,25 @@
 
               <!-- 回复内容与候选卡片 -->
               <div v-else class="chat-reply-body">
+                <!-- 工具执行轨迹折叠条 (Tool Execution Trace) -->
+                <div v-if="turn.steps?.length" class="chat-trace-wrap">
+                  <button
+                    class="chat-trace-toggle-btn"
+                    @click="turn._traceOpen = !turn._traceOpen"
+                    :title="turn._traceOpen ? '收起步骤' : '展开步骤'"
+                  >
+                    <span class="trace-tag">✦ 工具调用</span>
+                    <span class="trace-summary">{{ turn.steps[turn.steps.length - 1]?.text }}</span>
+                    <span class="trace-arrow">{{ turn._traceOpen ? '▴' : '▾' }}</span>
+                  </button>
+                  <div v-if="turn._traceOpen" class="chat-trace-dropdown">
+                    <div v-for="(step, sIdx) in turn.steps" :key="sIdx" class="chat-trace-step-item">
+                      <span class="trace-step-icon">✓</span>
+                      <span class="trace-step-text">{{ step.text }}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div v-if="turn.content" class="chat-reply-line">
                   <span class="reply-summary">{{ turn.content }}</span>
                   <button
@@ -173,6 +192,27 @@
                   >
                     {{ t('ai.addAllDirect') }}
                   </button>
+                </div>
+
+                <!-- 交互行动卡片 (Actionable Artifact / Generative UI) -->
+                <div v-if="turn.actionCard" class="chat-action-card">
+                  <div class="action-card-header">
+                    <span class="action-card-badge">行动建议</span>
+                    <span class="action-card-title">{{ turn.actionCard.title }}</span>
+                  </div>
+                  <div v-if="turn.actionCard.desc" class="action-card-desc">
+                    {{ turn.actionCard.desc }}
+                  </div>
+                  <div class="action-card-footer">
+                    <button
+                      v-if="!turn.actionCard.completed"
+                      class="action-card-btn"
+                      @click="handleActionCardClick(turn.actionCard, turn)"
+                    >
+                      {{ turn.actionCard.buttonText }}
+                    </button>
+                    <span v-else class="action-card-done">✓ 已完成</span>
+                  </div>
                 </div>
 
                 <div v-if="turn.candidates?.length" class="chat-cards-stream">
@@ -283,7 +323,8 @@ import {
   findSimilarWebsites,
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
-import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import { dispatchSiteCommand, mergeDuplicateBookmarks } from '../../lib/ai/siteCommander.js'
+import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import {
   loadSessions,
   createNewSession,
@@ -294,6 +335,7 @@ import {
   setCurrentSessionId,
   type AiChatSession,
   type ChatTurn,
+  type ChatActionCard,
 } from '../../lib/ai/chatSessions.js'
 import { buildDetailCards } from './buildDetailCards.js'
 import type { DetailEntry } from './buildDetailCards.js'
@@ -470,9 +512,86 @@ const SLASH_COMMANDS = [
   { cmd: '/deadlink', title: '死链检测', desc: '检测失效与死链网站' },
   { cmd: '/export', title: '备份数据', desc: '导出全量 JSON 数据' },
   { cmd: '/stats', title: '全库统计', desc: '活跃书签与运行报表' },
+  { cmd: '/undo', title: '撤销操作', desc: '回退上一步站内修改' },
   { cmd: '/clean', title: '孤儿自检', desc: '修复失效引用与关联' },
   { cmd: '/clear', title: '清空会话', desc: '开启新的空白对话' },
 ]
+
+interface QuickHint {
+  label: string
+  query: string
+}
+
+const dynamicQuickHints = computed<QuickHint[]>(() => {
+  const hints: QuickHint[] = []
+
+  const uncatCount = ds.bookmarks.filter(
+    (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId && !b.id.startsWith('bm_ulink_'),
+  ).length
+  if (uncatCount > 0) {
+    hints.push({
+      label: isZh.value ? `未分类 (${uncatCount})` : `Uncategorized (${uncatCount})`,
+      query: '/cat list',
+    })
+  }
+
+  const trashCount =
+    ds.bookmarks.filter((b) => b.deletedAt).length +
+    ds.siblingGroups.filter((g) => g.deletedAt).length +
+    ds.categories.filter((c: any) => c.deletedAt).length
+  if (trashCount > 0) {
+    hints.push({
+      label: isZh.value ? `回收站 (${trashCount})` : `Trash (${trashCount})`,
+      query: '/trash',
+    })
+  }
+
+  hints.push({
+    label: isZh.value ? '/dedup 查重' : '/dedup',
+    query: '/dedup',
+  })
+  hints.push({
+    label: isZh.value ? '/stats 统计' : '/stats',
+    query: '/stats',
+  })
+  hints.push({
+    label: isZh.value ? '/help 指令' : '/help',
+    query: '/help',
+  })
+
+  return hints.slice(0, 4)
+})
+
+async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
+  if (card.actionName === 'merge_dedup') {
+    const res = mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
+    card.completed = true
+    toast(res.message, true)
+    chatTurns.value.push({
+      id: 'turn-' + Date.now() + '-assistant',
+      role: 'assistant',
+      content: res.message,
+      steps: [{ text: `合并了 ${res.mergedCount} 个重复副本`, done: true }],
+      timestamp: Date.now(),
+    })
+    scrollToBottom()
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+  } else if (card.actionName === 'trash_clear') {
+    const res = await dispatchSiteCommand('/trash clear', { ds, ui, app: (ui as any).app })
+    if (res.success !== false) {
+      card.completed = true
+    }
+    chatTurns.value.push({
+      id: 'turn-' + Date.now() + '-assistant',
+      role: 'assistant',
+      content: res.reply,
+      steps: res.steps,
+      timestamp: Date.now(),
+    })
+    scrollToBottom()
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+  }
+}
 
 const activeSlashIndex = ref(0)
 const showSlashSuggest = computed(() => {
@@ -698,10 +817,12 @@ async function handleAiSubmit() {
     currentAbortController = new AbortController()
 
     // 优先尝试站内指令/In-App Agent CLI 调度
-    const siteCmd = await dispatchSiteCommand(raw, { ds, ui })
+    const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app })
     if (siteCmd.handled) {
       assistantTurn.loading = false
       assistantTurn.content = siteCmd.reply
+      assistantTurn.steps = siteCmd.steps
+      assistantTurn.actionCard = siteCmd.actionCard
       return
     }
 
@@ -1350,6 +1471,147 @@ function closeDetail(rawId: string) {
   flex-direction: column;
   gap: 8px;
   margin-top: 2px;
+}
+
+/* 工具调用轨迹 (Tool Execution Trace) */
+.chat-trace-wrap {
+  margin-bottom: 2px;
+}
+
+.chat-trace-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.03));
+  border: 1px solid var(--border-light, #e5e0dc);
+  border-radius: var(--radius-xs, 4px);
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--text-muted, #7c7772);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.chat-trace-toggle-btn:hover {
+  background: var(--surface, #ffffff);
+  border-color: var(--border, #d1ccc7);
+  color: var(--text, #2c2724);
+}
+
+.trace-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent, #122e8a);
+  letter-spacing: -0.2px;
+}
+
+.trace-summary {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-arrow {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.chat-trace-dropdown {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.02));
+  border-radius: var(--radius-xs, 4px);
+  border-left: 2px solid var(--accent, #122e8a);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.chat-trace-step-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #7c7772);
+}
+
+.trace-step-icon {
+  font-size: 10px;
+  font-weight: bold;
+  color: var(--accent, #122e8a);
+}
+
+.trace-step-text {
+  flex: 1;
+}
+
+/* 交互行动卡片 (Actionable Artifact / Generative UI) */
+.chat-action-card {
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e5e0dc);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.action-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.action-card-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--accent-light, rgba(18, 46, 138, 0.08));
+  color: var(--accent, #122e8a);
+}
+
+.action-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text, #2c2724);
+}
+
+.action-card-desc {
+  font-size: 11.5px;
+  color: var(--text-muted, #7c7772);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+.action-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.action-card-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--accent, #122e8a);
+  background: var(--accent, #122e8a);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.action-card-btn:hover {
+  opacity: 0.9;
+  box-shadow: 0 2px 6px rgba(18, 46, 138, 0.2);
+}
+
+.action-card-done {
+  font-size: 11px;
+  color: var(--accent, #122e8a);
+  font-weight: 500;
 }
 
 /* 底部仅留一个对话输入框：无重叠多层边框 */
