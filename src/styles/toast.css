@@ -1,19 +1,18 @@
 /* ==================== TOAST ==================== */
 .toasts{
-  /* 2026-08-10：z-index 4000 → 7000——模态框（BookmarkModal 编辑弹窗等）z-index 6000，
-     旧值低于模态框，编辑弹窗内触发的 toast（如「该书签含加密字段，请先解锁主密码后再编辑」）
-     被弹窗挡住看不见。7000 高于全部常规 UI（modal 6000 / settings 5000 / overlays 3001），
-     仍低于拖拽临时层（drag.css 10000+），不影响拖拽排序体验。 */
-  position:fixed;bottom:20px;right:20px;z-index:var(--z-toast);
-  display:flex;flex-direction:column-reverse;gap:6px;
+  /* 顶部居中定位：远离右下角输入框与发送按钮，无论侧边栏是否展开均不产生任何阻挡 */
+  position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:var(--z-toast);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  pointer-events:none;
 }
 .toast{
-  padding:10px 16px;border-radius:var(--radius-md);
+  pointer-events:auto;
+  padding:9px 16px;border-radius:var(--radius-md);
   font-size:0.82rem;font-weight:600;
   background:var(--surface);color:var(--text);
   border:1px solid var(--border);
   box-shadow:var(--shadow-lg);
-  animation:toastIn 0.4s var(--ease-out);
+  animation:toastIn 0.3s var(--ease-out);
   display:flex;align-items:center;gap:8px;
   -webkit-backdrop-filter:blur(16px) saturate(180%);
   backdrop-filter:blur(16px) saturate(180%);
@@ -21,7 +20,7 @@
 .toast svg{width:15px;height:15px;flex-shrink:0}
 .toast.ok{color:var(--green);border-color:var(--green-light)}
 .toast.err{color:var(--rose);border-color:var(--rose-light)}
-@keyframes toastIn{from{opacity:0;transform:translateX(40px) scale(0.95)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes toastIn{from{opacity:0;transform:translateY(-14px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
 
 /* ---- Undo toast (top bar) ---- */
 .undo-toast{

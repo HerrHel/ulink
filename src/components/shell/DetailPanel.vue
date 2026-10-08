@@ -155,10 +155,14 @@
               <div class="chat-msg-actions user-actions">
                 <button
                   class="chat-msg-act-btn"
-                  @click="copyMessage(turn.content)"
-                  :title="isZh ? '复制内容' : 'Copy'"
+                  :class="{ 'is-copied': copiedActionKey === `user-${turn.id}` }"
+                  @click="copyMessage(turn.content, `user-${turn.id}`)"
+                  :title="copiedActionKey === `user-${turn.id}` ? (isZh ? '已复制' : 'Copied') : (isZh ? '复制内容' : 'Copy')"
                 >
-                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg v-if="copiedActionKey === `user-${turn.id}`" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
                   </svg>
@@ -212,10 +216,14 @@
                   <div class="chat-reply-actions">
                     <button
                       class="chat-msg-act-btn"
-                      @click="copyMessage(turn.content)"
-                      :title="isZh ? '复制回答' : 'Copy'"
+                      :class="{ 'is-copied': copiedActionKey === `asst-${turn.id}` }"
+                      @click="copyMessage(turn.content, `asst-${turn.id}`)"
+                      :title="copiedActionKey === `asst-${turn.id}` ? (isZh ? '已复制' : 'Copied') : (isZh ? '复制回答' : 'Copy')"
                     >
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <svg v-if="copiedActionKey === `asst-${turn.id}`" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
                         <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
                       </svg>
@@ -629,10 +637,21 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
   }
 }
 
-async function copyMessage(text: string) {
+const copiedActionKey = ref<string | null>(null)
+let _copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyMessage(text: string, actionKey?: string) {
   try {
     await navigator.clipboard.writeText(text)
-    toast(isZh.value ? '已复制到剪贴板' : 'Copied to clipboard', true)
+    if (actionKey) {
+      copiedActionKey.value = actionKey
+      if (_copiedTimer) clearTimeout(_copiedTimer)
+      _copiedTimer = setTimeout(() => {
+        if (copiedActionKey.value === actionKey) {
+          copiedActionKey.value = null
+        }
+      }, 1500)
+    }
   } catch {
     toast(isZh.value ? '复制失败' : 'Copy failed', false)
   }
@@ -654,9 +673,8 @@ function revokeUserMessage(turn: ChatTurn) {
   // 3. 持久化当前会话
   sessions.value = updateSession(currentSessionId.value, chatTurns.value)
 
-  // 4. 聚焦输入框便于修改重发
+  // 4. 聚焦输入框便于修改重发（视觉状态已清晰直达，无需全局弹窗阻断）
   nextTick(() => aiTextareaRef.value?.focus())
-  toast(isZh.value ? '已撤回消息，内容已填回输入框' : 'Message recalled and refilled', true)
 }
 
 const activeSlashIndex = ref(0)
@@ -1509,6 +1527,14 @@ function closeDetail(rawId: string) {
 .chat-msg-act-btn:hover {
   color: var(--accent);
   background: var(--surface-hover);
+}
+
+.chat-msg-act-btn.is-copied {
+  color: var(--green, #2e7d32);
+}
+
+.chat-msg-act-btn.is-copied:hover {
+  color: var(--green, #2e7d32);
 }
 
 .chat-reply-actions {
