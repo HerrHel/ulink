@@ -49,7 +49,12 @@
         <!-- 会话历史下拉浮层 (方案 A) -->
         <div v-if="isSessionMenuOpen" class="session-dropdown-popover" @click.stop>
           <div class="session-popover-header">
-            <button class="session-new-btn" @click="handleCreateSession">
+            <button
+              class="session-new-btn"
+              :class="{ 'is-disabled': isCurrentSessionEmpty }"
+              :disabled="isCurrentSessionEmpty"
+              @click="handleCreateSession"
+            >
               <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
                 <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
               </svg>
@@ -93,8 +98,10 @@
         <button
           v-if="currentTab === 'ai'"
           class="chat-btn-icon"
+          :class="{ 'is-disabled': isCurrentSessionEmpty }"
+          :disabled="isCurrentSessionEmpty"
           @click="handleCreateSession"
-          :title="isZh ? '新建会话' : 'New Session'"
+          :title="isCurrentSessionEmpty ? (isZh ? '当前已是新会话' : 'Already in a new session') : (isZh ? '新建会话' : 'New Session')"
         >
           <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
             <path d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2z"/>
@@ -267,7 +274,7 @@ import { useDataStore } from '../../stores/data.js'
 import { isMobile, domain, fixUrl } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useI18n } from '../../i18n/index.js'
-import { toast } from '../../lib/toast.js'
+import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import BookmarkCard from '../cards/BookmarkCard.vue'
 import GroupCard from '../cards/GroupCard.vue'
 import AiCandidateCard from '../cards/AiCandidateCard.vue'
@@ -321,6 +328,8 @@ const currentSessionId = ref<string>(getCurrentSessionId() || '')
 const isSessionMenuOpen = ref(false)
 const chatTurns = ref<ChatTurn[]>([])
 
+const isCurrentSessionEmpty = computed(() => chatTurns.value.length === 0)
+
 // 初始化当前会话
 if (!currentSessionId.value || !sessions.value.some((s) => s.id === currentSessionId.value)) {
   if (sessions.value.length > 0) {
@@ -338,6 +347,17 @@ if (!currentSessionId.value || !sessions.value.some((s) => s.id === currentSessi
   if (cur) chatTurns.value = [...cur.turns]
 }
 
+// 自动清理历史中非当前会话的无内容空会话，保持会话列表整洁
+if (sessions.value.length > 1) {
+  const cleaned = sessions.value.filter(
+    (s) => s.id === currentSessionId.value || s.turns.length > 0,
+  )
+  if (cleaned.length !== sessions.value.length) {
+    saveSessions(cleaned)
+    sessions.value = cleaned
+  }
+}
+
 const currentSessionTitle = computed(() => {
   const s = sessions.value.find((x) => x.id === currentSessionId.value)
   if (!s || s.title === '新会话') return isZh.value ? 'AI 助手' : 'AI Assistant'
@@ -353,6 +373,12 @@ function formatTimeAgo(timestamp: number): string {
 }
 
 function handleCreateSession() {
+  // 若当前已经是新会话且已有空会话存在，不再重复创建新会话
+  if (isCurrentSessionEmpty.value && sessions.value.length > 0) {
+    isSessionMenuOpen.value = false
+    nextTick(() => aiTextareaRef.value?.focus())
+    return
+  }
   const fresh = createNewSession()
   currentSessionId.value = fresh.id
   sessions.value = loadSessions()
@@ -364,6 +390,15 @@ function handleCreateSession() {
 }
 
 function switchSession(id: string) {
+  if (id === currentSessionId.value) {
+    isSessionMenuOpen.value = false
+    return
+  }
+  // 若离开当前会话时，当前会话未产生任何问答，自动清理此空会话，防止残留无用草稿
+  if (chatTurns.value.length === 0 && currentSessionId.value) {
+    deleteSessionById(currentSessionId.value)
+    sessions.value = loadSessions()
+  }
   const target = sessions.value.find((s) => s.id === id)
   if (!target) return
   currentSessionId.value = id
@@ -374,7 +409,20 @@ function switchSession(id: string) {
   nextTick(() => aiTextareaRef.value?.focus())
 }
 
-function handleDeleteSession(id: string) {
+async function handleDeleteSession(id: string) {
+  const target = sessions.value.find((s) => s.id === id)
+  if (!target) return
+  const title = target.title || (isZh.value ? '此会话' : 'this session')
+  isSessionMenuOpen.value = false
+  const ok = await showConfirm(
+    isZh.value ? `确认删除历史会话「${title}」？` : `Delete session "${title}"?`,
+  )
+  if (!ok) return
+
+  const backupSession: AiChatSession = {
+    ...target,
+    turns: target.turns.map((t) => ({ ...t })),
+  }
   sessions.value = deleteSessionById(id)
   if (currentSessionId.value === id) {
     if (sessions.value.length > 0) {
@@ -383,12 +431,32 @@ function handleDeleteSession(id: string) {
       handleCreateSession()
     }
   }
+
+  toastWithUndo(
+    isZh.value ? `已删除会话「${title}」` : `Deleted session "${title}"`,
+    () => {
+      const all = loadSessions()
+      all.unshift(backupSession)
+      saveSessions(all)
+      sessions.value = loadSessions()
+      switchSession(backupSession.id)
+    },
+  )
 }
 
-function handleClearAllSessions() {
+async function handleClearAllSessions() {
+  isSessionMenuOpen.value = false
+  const ok = await showConfirm(
+    isZh.value
+      ? '确定要清空全部 AI 历史会话吗？此操作无法撤销。'
+      : 'Clear all AI session history? This cannot be undone.',
+  )
+  if (!ok) return
+
   clearAllSessions()
   sessions.value = []
   handleCreateSession()
+  toast(isZh.value ? '已清空历史会话' : 'All sessions cleared', true)
 }
 
 // ── 斜杠指令快捷联想 ──
@@ -895,8 +963,14 @@ function closeDetail(rawId: string) {
   transition: background 0.12s ease;
 }
 
-.session-new-btn:hover {
+.session-new-btn:hover:not(:disabled) {
   background: var(--accent-light, rgba(18, 46, 138, 0.06));
+}
+
+.session-new-btn:disabled,
+.session-new-btn.is-disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .session-list-scroll {
@@ -1070,9 +1144,15 @@ function closeDetail(rawId: string) {
   transition: all 0.12s ease;
 }
 
-.chat-btn-icon:hover {
+.chat-btn-icon:hover:not(:disabled) {
   background: var(--surface-hover);
   color: var(--text);
+}
+
+.chat-btn-icon:disabled,
+.chat-btn-icon.is-disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* 滚动内容区 */
