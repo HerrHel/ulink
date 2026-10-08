@@ -769,7 +769,8 @@ function closeDetail(rawId: string) {
 .chat-cards-stream {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 /* 底部仅留一个对话输入框：无重叠多层边框 */
