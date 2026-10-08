@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { dispatchSiteCommand } from '../lib/ai/siteCommander.js'
+import { dispatchSiteCommand, mergeDuplicateBookmarks } from '../lib/ai/siteCommander.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 // Mock 外部导出模块与 utils
@@ -269,5 +269,77 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
       const res = await dispatchSiteCommand(q, { ds: mockDs, ui: mockUi, app: mockApp })
       expect(res.handled).toBe(false)
     }
+  })
+
+  // ── 13. 对话式撤销 (/undo, 撤销刚才的操作) ──
+  it('支持 /undo 与对话式撤销回退', async () => {
+    // 先执行一次可撤销的批量归类
+    await dispatchSiteCommand('把所有未分类移到 前端开发', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    // 执行撤销
+    const resUndo = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resUndo.handled).toBe(true)
+    expect(resUndo.action).toBe('undo')
+    expect(resUndo.reply).toContain('已撤销批量移动')
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b2', { categoryId: 'uncategorized' })
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b3', { categoryId: undefined })
+
+    // 再次撤销时无操作可撤销
+    const resUndoEmpty = await dispatchSiteCommand('撤销', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resUndoEmpty.handled).toBe(true)
+    expect(resUndoEmpty.reply).toContain('没有可撤销的站内操作')
+  })
+
+  // ── 14. 上下文感知：批量多选直接移动 ──
+  it('感知 batchMode 勾选的书签并批量移动', async () => {
+    mockUi.batchMode = true
+    mockUi.batchSelected = ['b1']
+    const resBatchMove = await dispatchSiteCommand('把选中的书签移动到 设计资源', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resBatchMove.handled).toBe(true)
+    expect(resBatchMove.action).toBe('batch_move')
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b1', { categoryId: 'c2' })
+    expect(mockUi.batchMode).toBe(false)
+    expect(mockUi.batchSelected).toEqual([])
+    expect(resBatchMove.reply).toContain('移入「设计资源」分类')
+  })
+
+  // ── 15. 上下文感知：当前分类查询 ──
+  it('感知当前分类并汇报状态', async () => {
+    mockUi.curCat = 'c1'
+    const resCat = await dispatchSiteCommand('当前在看什么分类', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resCat.handled).toBe(true)
+    expect(resCat.action).toBe('current_cat')
+    expect(resCat.reply).toContain('前端开发')
+  })
+
+  // ── 16. mergeDuplicateBookmarks 查重合并与撤销 ──
+  it('mergeDuplicateBookmarks 成功合并重复副本并可撤销', () => {
+    mockDs.deleteBookmark = vi.fn()
+    mockDs.restoreBookmark = vi.fn()
+    mockDs.bookmarks.push({ id: 'b_dup', title: 'Vue Dup', url: 'https://vuejs.org/' })
+
+    const res = mergeDuplicateBookmarks({ ds: mockDs, ui: mockUi, app: mockApp })
+    expect(res.mergedCount).toBe(1)
+    expect(mockDs.deleteBookmark).toHaveBeenCalledWith('b_dup')
   })
 })
