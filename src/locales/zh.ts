@@ -16,6 +16,7 @@ import { modalsZh } from './parts/modals.js'
 import { editorOverlayZh } from './parts/editorOverlay.js'
 import { shareAppZh } from './parts/shareApp.js'
 import { programmaticZh } from './parts/programmatic.js'
+import { aiZh } from './parts/aiPro.js'
 
 export const zh = {
   app: {
@@ -138,6 +139,8 @@ export const zh = {
     url: '网址',
     confirmMoveCategory: '确认将分类「{name}」及其全部书签/笔记移入私密空间？',
     renameAttrPrompt: '重命名属性',
+    aiSimilar: '找相似平替',
+    aiEnrich: '智能补齐信息',
   },
   errors: {
     crashTitle: '出错了',
@@ -430,6 +433,7 @@ export const zh = {
   ...editorOverlayZh,
   ...shareAppZh,
   ...programmaticZh,
+  ...aiZh,
 } as const
 
 export type ZhDict = typeof zh

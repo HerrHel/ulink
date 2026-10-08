@@ -66,6 +66,8 @@ interface ModalState {
   vaultUnlock: boolean
   setupGuide: boolean
   share: boolean
+  aiFinder: boolean
+  aiEnrich: boolean
 }
 
 interface PanelState {
@@ -134,6 +136,11 @@ export interface UIState {
    */
   expandedIds: string[]
   shareModalTarget: { type: 'group' | 'category'; id: string } | null
+  aiFinderInitialTab: 'intent' | 'similar' | 'video'
+  aiFinderInitialQuery: string
+  aiFinderInitialTargetUrl: string
+  aiFinderInitialTargetTitle: string
+  aiEnrichTargetBmId: string | null
 
   // 分组状态
   modals: ModalState
@@ -184,6 +191,8 @@ export const useUIStore = defineStore('ui', {
         vaultUnlock: false,
         setupGuide: false,
         share: false,
+        aiFinder: false,
+        aiEnrich: false,
       },
       panels: {
         settings: false,
@@ -212,10 +221,29 @@ export const useUIStore = defineStore('ui', {
       _mobileLayoutMode: 'list',
       expandedIds: [],
       shareModalTarget: null,
+      aiFinderInitialTab: 'intent',
+      aiFinderInitialQuery: '',
+      aiFinderInitialTargetUrl: '',
+      aiFinderInitialTargetTitle: '',
+      aiEnrichTargetBmId: null,
     }
   },
 
   actions: {
+    /** 打开 AI 探宝/寻站/平替中心 */
+    openAiFinder(tab: 'intent' | 'similar' | 'video' = 'intent', query = '', targetUrl = '', targetTitle = '') {
+      this.aiFinderInitialTab = tab
+      this.aiFinderInitialQuery = query
+      this.aiFinderInitialTargetUrl = targetUrl
+      this.aiFinderInitialTargetTitle = targetTitle
+      this.modals.aiFinder = true
+    },
+
+    /** 打开存量书签主动补齐对比窗 */
+    openAiEnrich(bmId: string) {
+      this.aiEnrichTargetBmId = bmId
+      this.modals.aiEnrich = true
+    },
     /** 全选批量模式下的所有项 */
     selectAllBatch() {
       const ds = useDataStore()

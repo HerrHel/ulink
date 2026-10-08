@@ -411,6 +411,7 @@ export interface SearchResultItem {
   _highlights: Record<string, HighlightSegment[]>
   _divider?: string
   _semanticReason?: string
+  _isAiAction?: boolean
 }
 
 export function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {

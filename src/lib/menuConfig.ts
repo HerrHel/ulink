@@ -57,6 +57,8 @@ export const MENU_ITEMS: Record<string, { label: string; danger?: boolean }> = {
   [ACTIONS.ADD_TO_GROUP]: { label: 'ctx.addToGroup' },
   [ACTIONS.SHARE_CATEGORY]: { label: 'ctx.shareCategory' },
   [ACTIONS.EXPORT_CATEGORY]: { label: 'ctx.exportCategory' },
+  [ACTIONS.AI_SIMILAR]: { label: 'ctx.aiSimilar' },
+  [ACTIONS.AI_ENRICH]: { label: 'ctx.aiEnrich' },
 }
 
 /** 右键菜单规则（PC） */
@@ -64,6 +66,8 @@ export const MENU_RULES: Record<string, MenuEntry[]> = {
   card: [
     { action: ACTIONS.COPY_URL },
     { action: ACTIONS.ADD_SUB },
+    { action: ACTIONS.AI_SIMILAR },
+    { action: ACTIONS.AI_ENRICH },
     { action: ACTIONS.EDIT },
     { action: ACTIONS.HISTORY },
     { action: ACTIONS.PIN },
@@ -120,6 +124,8 @@ export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
     { action: ACTIONS.PIN },
     { action: ACTIONS.COPY_URL },
     { action: ACTIONS.ADD_SUB },
+    { action: ACTIONS.AI_SIMILAR },
+    { action: ACTIONS.AI_ENRICH },
     { action: ACTIONS.DETAIL },
     { action: ACTIONS.EDIT },
     { action: ACTIONS.MOVE_TO_CAT },
@@ -216,6 +222,15 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     }
     if (action === ACTIONS.ADD_SUB) {
       if (canAddSub(id)) addSub(id)
+      return
+    }
+    if (action === ACTIONS.AI_SIMILAR) {
+      const bm = dataStore.bookmarkMap[id]
+      if (bm) ui.openAiFinder('similar', '', bm.url, bm.title)
+      return
+    }
+    if (action === ACTIONS.AI_ENRICH) {
+      ui.openAiEnrich(id)
       return
     }
     if (action === ACTIONS.DETAIL) openDetail(id)
