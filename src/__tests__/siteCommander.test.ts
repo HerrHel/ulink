@@ -7,6 +7,12 @@ vi.mock('../composables/domain/useDataIO.js', () => ({
   exportData: vi.fn(),
 }))
 
+vi.mock('../lib/toast.js', () => ({
+  showConfirm: vi.fn(() => Promise.resolve(true)),
+  toast: vi.fn(),
+  toastWithUndo: vi.fn(),
+}))
+
 vi.mock('../utils.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../utils.js')>()
   return {
@@ -157,13 +163,23 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resClearEmpty.handled).toBe(true)
     expect(resClearEmpty.reply).toContain('回收站当前为空')
 
-    // 回收站有软删除数据时
+    // 回收站有软删除数据时：用户点击确认
     mockDs.bookmarks.push({ id: 'b_del', title: 'Deleted', url: 'https://x.com', deletedAt: Date.now() })
     const resClearFull = await dispatchSiteCommand('清空回收站', { ds: mockDs, ui: mockUi, app: mockApp })
     expect(resClearFull.handled).toBe(true)
     expect(mockDs.emptyTrash).toHaveBeenCalled()
     expect(mockApp.save).toHaveBeenCalled()
     expect(resClearFull.reply).toContain('已彻底清空回收站')
+
+    // 用户点击取消：危险操作被拦截，不执行 emptyTrash
+    const { showConfirm } = await import('../lib/toast.js')
+    vi.mocked(showConfirm).mockResolvedValueOnce(false)
+    mockDs.emptyTrash.mockClear()
+    const resCancel = await dispatchSiteCommand('/trash clear', { ds: mockDs, ui: mockUi, app: mockApp })
+    expect(resCancel.handled).toBe(true)
+    expect(resCancel.success).toBe(false)
+    expect(mockDs.emptyTrash).not.toHaveBeenCalled()
+    expect(resCancel.reply).toContain('已取消清空回收站')
   })
 
   // ── 6. 查重 ──

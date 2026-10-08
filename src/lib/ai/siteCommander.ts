@@ -14,6 +14,7 @@ import { addNewCategory } from '../../utils.js'
 import { exportData } from '../../composables/domain/useDataIO.js'
 import { findDuplicateCandidates, isOfficialBookmark } from './localClustering.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { showConfirm } from '../toast.js'
 import type { Category } from '../../types.js'
 
 export interface SiteCommandResult {
@@ -249,6 +250,20 @@ export async function dispatchSiteCommand(
     if (total === 0) {
       return { handled: true, action: 'trash_clear', reply: '回收站当前为空，无需清理 ✨' }
     }
+
+    // Agent 危险操作人机确认 (Human-in-the-Loop)
+    const confirmed = await showConfirm(
+      `⚠️ 危险操作确认：即将彻底清空回收站，永久删除 ${total} 项数据（书签: ${bms}，笔记组: ${grps}，分类: ${cats}）。\n此操作不可撤销，是否确认执行？`,
+    )
+    if (!confirmed) {
+      return {
+        handled: true,
+        action: 'trash_clear',
+        success: false,
+        reply: '已取消清空回收站，所有数据均安全保留 🛡️',
+      }
+    }
+
     ds.emptyTrash()
     app.save()
     return {
@@ -389,6 +404,20 @@ export async function dispatchSiteCommand(
         action: 'move_uncategorized',
         success: true,
         reply: `当前没有待整理的未分类书签 📂`,
+      }
+    }
+
+    if (uncatBms.length > 5) {
+      const confirmed = await showConfirm(
+        `即将把 ${uncatBms.length} 个未分类书签批量移动至「${targetCat.name}」分类，是否继续？`,
+      )
+      if (!confirmed) {
+        return {
+          handled: true,
+          action: 'move_uncategorized',
+          success: false,
+          reply: '已取消批量归类操作。',
+        }
       }
     }
 
