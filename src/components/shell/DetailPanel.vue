@@ -1,46 +1,40 @@
 <template>
   <div
     ref="detailPanelRef"
-    class="detail-panel ulink-detail-panel"
+    class="detail-panel ulink-simple-chat"
     :class="{ open: isOpen, swiping: isSwiping }"
     :style="panelStyle"
     id="detailPanel"
   >
     <div class="detail-drag-handle" id="detailDragHandle"></div>
 
-    <!-- 顶部功能栏：融入与链原生风格 -->
-    <div class="ulink-panel-header">
-      <!-- 左侧：多模式 Tab 或 单一简洁标题 -->
-      <div v-if="entries.length" class="ulink-header-tabs">
+    <!-- 顶部标题栏：极简清爽 -->
+    <div class="chat-top-bar">
+      <div v-if="entries.length" class="chat-top-tabs">
         <button
-          class="ulink-tab-btn"
+          class="chat-top-tab"
           :class="{ active: currentTab === 'ai' }"
           @click="currentTab = 'ai'"
         >
-          <span>{{ t('ai.tabInsight') }}</span>
+          <span>{{ t('ai.sidebarTitle') }}</span>
         </button>
         <button
-          class="ulink-tab-btn"
+          class="chat-top-tab"
           :class="{ active: currentTab === 'cards' }"
           @click="currentTab = 'cards'"
         >
           <span>{{ t('ai.tabCards') }}</span>
-          <span class="ulink-tab-count">{{ entries.length }}</span>
+          <span class="chat-tab-badge">{{ entries.length }}</span>
         </button>
       </div>
-      <div v-else class="ulink-panel-title">
-        <svg class="ulink-title-glyph" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="9"/>
-          <path d="M12 3v18M3 12h18"/>
-        </svg>
+      <div v-else class="chat-top-title">
         <span>{{ t('ai.sidebarTitle') }}</span>
       </div>
 
-      <!-- 右侧：简洁快捷操作 -->
-      <div class="ulink-header-actions">
+      <div class="chat-top-actions">
         <button
-          v-if="currentTab === 'ai'"
-          class="btn-icon-subtle"
+          v-if="currentTab === 'ai' && chatTurns.length > 0"
+          class="chat-btn-icon"
           @click="startNewChat"
           :title="t('ai.sidebarClear')"
         >
@@ -49,7 +43,7 @@
           </svg>
         </button>
         <button
-          class="btn-icon-subtle close-btn"
+          class="chat-btn-icon"
           @click="closeEntirePanel"
           :title="t('common.close')"
         >
@@ -58,74 +52,52 @@
       </div>
     </div>
 
-    <!-- 中间滚动内容流 -->
-    <div class="detail-inner ulink-content-scroll" id="detailInner" ref="chatScrollRef">
-      <!-- 模式 1: AI 助手流 -->
+    <!-- 中间区域：对话流 / 暂存卡片 -->
+    <div class="detail-inner chat-scroll-body" id="detailInner" ref="chatScrollRef">
+      <!-- 对话模式 -->
       <template v-if="currentTab === 'ai'">
-        <!-- 空态：与链风格简洁引导 -->
-        <div v-if="chatTurns.length === 0" class="ulink-ai-welcome">
-          <div class="welcome-branding">
-            <div class="welcome-logo-badge">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-              </svg>
-            </div>
-            <h3 class="welcome-title">{{ t('ai.sidebarWelcomeTitle') }}</h3>
-            <p class="welcome-desc">{{ t('ai.sidebarWelcomeDesc') }}</p>
-          </div>
-
-          <div class="quick-prompts-block">
-            <div class="prompts-heading">{{ t('ai.searchAction') }}</div>
-            <div class="prompts-grid">
-              <button
-                v-for="p in QUICK_PROMPTS"
-                :key="p.key"
-                class="prompt-capsule"
-                @click="quickSearch(t(p.key))"
-              >
-                <span class="capsule-arrow">&rsaquo;</span>
-                <span class="capsule-text">{{ t(p.key) }}</span>
-              </button>
-            </div>
-          </div>
+        <!-- 初始空态：只留极其简洁的一句话引导 -->
+        <div v-if="chatTurns.length === 0" class="chat-empty-state">
+          <p class="chat-empty-text">
+            {{ isZh ? '输入需求甄选网站、输入网址找平替，或直接粘贴视频链接。' : 'Ask for sites, find alternatives, or paste video links.' }}
+          </p>
         </div>
 
-        <!-- 历史交互流 -->
-        <div v-else class="ulink-turns-flow">
+        <!-- 对话流 -->
+        <div v-else class="chat-flow-list">
           <div
             v-for="turn in chatTurns"
             :key="turn.id"
-            class="flow-turn"
+            class="chat-turn-item"
             :class="`turn-${turn.role}`"
           >
             <!-- 用户消息 -->
-            <div v-if="turn.role === 'user'" class="user-turn-box">
-              <div class="user-text">{{ turn.content }}</div>
+            <div v-if="turn.role === 'user'" class="chat-user-bubble">
+              {{ turn.content }}
             </div>
 
             <!-- 助手回复 -->
-            <div v-else class="assistant-turn-box">
+            <div v-else class="chat-assistant-wrap">
               <!-- 思考状态 -->
-              <div v-if="turn.loading" class="thinking-state">
-                <div class="thinking-line"></div>
-                <span class="thinking-label">{{ t('ai.searching') }}</span>
+              <div v-if="turn.loading" class="chat-thinking">
+                <div class="chat-thinking-bar"></div>
+                <span>{{ t('ai.searching') }}</span>
               </div>
 
               <!-- 回复内容与候选卡片 -->
-              <div v-else class="reply-content">
-                <div v-if="turn.content" class="reply-header-row">
-                  <span class="summary-text">{{ turn.content }}</span>
+              <div v-else class="chat-reply-body">
+                <div v-if="turn.content" class="chat-reply-line">
+                  <span>{{ turn.content }}</span>
                   <button
                     v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
-                    class="btn-link-action"
+                    class="chat-action-link"
                     @click="addAllInTurn(turn)"
                   >
                     {{ t('ai.addAllDirect') }}
                   </button>
                 </div>
 
-                <div v-if="turn.candidates?.length" class="candidates-column">
+                <div v-if="turn.candidates?.length" class="chat-cards-stream">
                   <AiCandidateCard
                     v-for="item in turn.candidates"
                     :key="item.url"
@@ -138,7 +110,7 @@
         </div>
       </template>
 
-      <!-- 模式 2: 暂存卡片展架 (原有功能 100% 兼容) -->
+      <!-- 暂存卡片模式 (100% 保持原有兼容) -->
       <template v-else>
         <template v-if="entries.length">
           <div class="card-grid grid-view detail-grid">
@@ -161,22 +133,13 @@
       </template>
     </div>
 
-    <!-- 底部常驻输入底座：简洁明了与链风 -->
-    <div class="ulink-bottom-dock">
-      <!-- 关联上下文指示条 -->
-      <div v-if="activeContext" class="context-pill-wrap">
-        <span class="context-label"># {{ isZh ? '参考' : 'context' }}:</span>
-        <span class="context-title" :title="activeContext.url">{{ activeContext.title }}</span>
-        <button class="context-close" @click="dismissContext" title="Remove context">&times;</button>
-        <button class="context-action" @click="searchSimilarForContext">{{ isZh ? '挖掘平替 →' : 'Alternatives →' }}</button>
-      </div>
-
-      <!-- 核心输入卡片容器 -->
-      <div class="ulink-input-card" :class="{ focused: isInputFocused }">
+    <!-- 底部常驻：纯粹干净的一个对话框 -->
+    <div class="chat-input-dock">
+      <div class="chat-input-wrapper" :class="{ focused: isInputFocused }">
         <textarea
           ref="aiTextareaRef"
           v-model="aiQuery"
-          class="ulink-card-textarea"
+          class="chat-textarea"
           :placeholder="t('ai.sidebarInputPlaceholder')"
           rows="1"
           @focus="isInputFocused = true"
@@ -184,35 +147,17 @@
           @keydown="handleKeyDown"
           @input="adjustTextareaHeight"
         ></textarea>
-
-        <!-- 工具栏：偏好标签 + 发送按钮 -->
-        <div class="ulink-card-toolbar">
-          <div class="preference-tags-group">
-            <button
-              v-for="pref in PREF_OPTIONS"
-              :key="pref.id"
-              type="button"
-              class="pref-chip"
-              :class="{ active: preferences.includes(pref.id) }"
-              @click="togglePreference(pref.id)"
-              :title="t(pref.hintKey)"
-            >
-              {{ t(pref.labelKey) }}
-            </button>
-          </div>
-
-          <button
-            class="ulink-send-btn"
-            :class="{ active: !!aiQuery.trim() && !aiLoading }"
-            :disabled="aiLoading || !aiQuery.trim()"
-            @click="handleAiSubmit"
-            :title="t('ai.searchAction') + ' (Enter)'"
-          >
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
-              <path d="M8 2.5l4.5 4.5h-3v6.5h-3V7h-3L8 2.5z"/>
-            </svg>
-          </button>
-        </div>
+        <button
+          class="chat-send-btn"
+          :class="{ active: !!aiQuery.trim() && !aiLoading }"
+          :disabled="aiLoading || !aiQuery.trim()"
+          @click="handleAiSubmit"
+          :title="t('ai.searchAction') + ' (Enter)'"
+        >
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+            <path d="M8 2.5l4.5 4.5h-3v6.5h-3V7h-3L8 2.5z"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
@@ -262,63 +207,16 @@ const entries = computed<DetailEntry[]>(() =>
   buildDetailCards(ui.detailCards, ds.groupMap, ds.bookmarkMap, domain),
 )
 
-// 当前上下文书签
-const dismissedContextId = ref<string | null>(null)
-const activeContext = computed(() => {
-  if (!entries.value.length) return null
-  const first = entries.value[0]
-  if (first.rawId === dismissedContextId.value) return null
-  const data = first.data
-  return {
-    id: first.rawId,
-    title: data.title || data.name || '',
-    url: data.url || '',
-  }
-})
-
-function dismissContext() {
-  if (activeContext.value) {
-    dismissedContextId.value = activeContext.value.id
-  }
-}
-
-// Tab 状态
 const currentTab = ref<'ai' | 'cards'>('ai')
 
-// 输入状态
 const aiQuery = ref('')
 const aiLoading = ref(false)
 const isInputFocused = ref(false)
+// 默认采用最佳偏好（完全免费 + 国内直连），无需用户在界面手动配置
 const preferences = ref<AiSearchPreference[]>(['free', 'no_proxy'])
 
-const PREF_OPTIONS: Array<{ id: AiSearchPreference; labelKey: string; hintKey: string }> = [
-  { id: 'free', labelKey: 'ai.prefFree', hintKey: 'ai.prefFreeHint' },
-  { id: 'no_proxy', labelKey: 'ai.prefNoProxy', hintKey: 'ai.prefNoProxyHint' },
-  { id: 'lightweight', labelKey: 'ai.prefLightweight', hintKey: 'ai.prefLightweightHint' },
-  { id: 'open_source', labelKey: 'ai.prefOpenSource', hintKey: 'ai.prefOpenSourceHint' },
-  { id: 'professional', labelKey: 'ai.prefProfessional', hintKey: 'ai.prefProfessionalHint' },
-]
-
-function togglePreference(id: AiSearchPreference) {
-  const idx = preferences.value.indexOf(id)
-  if (idx > -1) {
-    preferences.value.splice(idx, 1)
-  } else {
-    preferences.value.push(id)
-  }
-}
-
-// 对话流历史
 const chatTurns = ref<ChatTurn[]>([])
 
-const QUICK_PROMPTS = [
-  { key: 'ai.promptPrototype' },
-  { key: 'ai.promptGallery' },
-  { key: 'ai.promptWhiteboard' },
-  { key: 'ai.promptOpenNotes' },
-]
-
-// 面板内联样式绑定
 const panelStyle = computed(() => {
   const styles: Record<string, string> = {}
   if (translateY.value) {
@@ -327,7 +225,6 @@ const panelStyle = computed(() => {
   return Object.keys(styles).length ? styles : undefined
 })
 
-// 打开面板时自动聚焦
 watch(
   () => isOpen.value,
   (open) => {
@@ -355,7 +252,6 @@ function scrollToBottom() {
 function startNewChat() {
   chatTurns.value = []
   aiQuery.value = ''
-  dismissedContextId.value = null
   adjustTextareaHeight()
   nextTick(() => aiTextareaRef.value?.focus())
 }
@@ -363,17 +259,6 @@ function startNewChat() {
 function closeEntirePanel() {
   ui.panels.detail = false
   ui.detailCards.splice(0)
-}
-
-function quickSearch(prompt: string) {
-  aiQuery.value = prompt
-  handleAiSubmit()
-}
-
-function searchSimilarForContext() {
-  if (!activeContext.value?.url) return
-  aiQuery.value = activeContext.value.url
-  handleAiSubmit()
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -387,10 +272,10 @@ function adjustTextareaHeight() {
   const el = aiTextareaRef.value
   if (!el) return
   el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 100) + 'px'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
 
-/** 核心提交分流 */
+/** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
 async function handleAiSubmit() {
   const raw = aiQuery.value.trim()
   if (!raw || aiLoading.value) return
@@ -448,7 +333,7 @@ async function handleAiSubmit() {
     }
   } catch (err: unknown) {
     assistantTurn.loading = false
-    assistantTurn.content = isZh ? '检索失败，请稍后重试。' : 'Failed to search, please try again.'
+    assistantTurn.content = isZh.value ? '检索失败，请稍后重试。' : 'Failed to search, please try again.'
     console.error('[ulink AI] search error:', err)
   } finally {
     aiLoading.value = false
@@ -546,7 +431,7 @@ function closeDetail(rawId: string) {
 </script>
 
 <style scoped>
-.ulink-detail-panel {
+.ulink-simple-chat {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -558,8 +443,8 @@ function closeDetail(rawId: string) {
   box-sizing: border-box;
 }
 
-/* 顶部功能栏 */
-.ulink-panel-header {
+/* 顶栏 */
+.chat-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -572,33 +457,25 @@ function closeDetail(rawId: string) {
   user-select: none;
 }
 
-.ulink-panel-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+.chat-top-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
 }
 
-.ulink-title-glyph {
-  color: var(--accent);
-}
-
-/* 顶部模式切换选项卡 */
-.ulink-header-tabs {
+.chat-top-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   height: 100%;
 }
 
-.ulink-tab-btn {
+.chat-top-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 8px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -609,32 +486,31 @@ function closeDetail(rawId: string) {
   transition: all 0.15s ease;
 }
 
-.ulink-tab-btn:hover {
+.chat-top-tab:hover {
   color: var(--text);
 }
 
-.ulink-tab-btn.active {
+.chat-top-tab.active {
   color: var(--accent);
   font-weight: 600;
   border-bottom-color: var(--accent);
 }
 
-.ulink-tab-count {
-  font-size: 11px;
+.chat-tab-badge {
+  font-size: 10.5px;
   padding: 0 4px;
   border-radius: 9999px;
   background: var(--accent-light);
   color: var(--accent);
 }
 
-/* 顶栏图标操作 */
-.ulink-header-actions {
+.chat-top-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
-.btn-icon-subtle {
+.chat-btn-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -648,18 +524,13 @@ function closeDetail(rawId: string) {
   transition: all 0.15s ease;
 }
 
-.btn-icon-subtle:hover {
+.chat-btn-icon:hover {
   background: var(--surface-hover);
   color: var(--text);
 }
 
-.btn-icon-subtle.close-btn {
-  font-size: 17px;
-  line-height: 1;
-}
-
-/* 中间内容滚动流 */
-.ulink-content-scroll {
+/* 滚动区 */
+.chat-scroll-body {
   flex: 1;
   overflow-y: auto;
   padding: 14px 12px;
@@ -667,137 +538,68 @@ function closeDetail(rawId: string) {
   box-sizing: border-box;
 }
 
-/* 空态欢迎区 */
-.ulink-ai-welcome {
+/* 初始空态 */
+.chat-empty-state {
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding: 10px 4px;
-}
-
-.welcome-branding {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.welcome-logo-badge {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-base, 8px);
-  background: var(--accent-light);
-  color: var(--accent);
-  margin-bottom: 2px;
+  padding: 30px 16px;
+  text-align: center;
 }
 
-.welcome-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  margin: 0;
-}
-
-.welcome-desc {
+.chat-empty-text {
   font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.5;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 240px;
   margin: 0;
-}
-
-/* 快捷建议 */
-.quick-prompts-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.prompts-heading {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.prompts-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.prompt-capsule {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--surface);
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.prompt-capsule:hover {
-  background: var(--surface-hover);
-  border-color: var(--accent);
-  color: var(--accent);
-  transform: translateX(2px);
-}
-
-.capsule-arrow {
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1;
 }
 
 /* 对话流 */
-.ulink-turns-flow {
+.chat-flow-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
-.flow-turn {
+.chat-turn-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
-.user-turn-box {
+.chat-user-bubble {
   align-self: flex-end;
-  max-width: 90%;
-  padding: 8px 12px;
+  max-width: 88%;
+  padding: 7px 11px;
   background: var(--surface-hover);
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
   border-bottom-right-radius: 2px;
   font-size: 12.5px;
   color: var(--text);
-  line-height: 1.45;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
-.assistant-turn-box {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-/* 思考进度 */
-.thinking-state {
+.chat-assistant-wrap {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 0;
+  width: 100%;
 }
 
-.thinking-line {
+.chat-thinking {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.chat-thinking-bar {
   height: 2px;
   width: 100%;
   background: var(--border);
@@ -806,7 +608,7 @@ function closeDetail(rawId: string) {
   border-radius: 1px;
 }
 
-.thinking-line::after {
+.chat-thinking-bar::after {
   content: '';
   position: absolute;
   top: 0;
@@ -814,29 +616,29 @@ function closeDetail(rawId: string) {
   width: 35%;
   height: 100%;
   background: var(--accent);
-  animation: ulink-scan 1.2s ease-in-out infinite;
+  animation: chat-scan 1.2s ease-in-out infinite;
 }
 
-@keyframes ulink-scan {
+@keyframes chat-scan {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(350%); }
 }
 
-.thinking-label {
-  font-size: 11px;
-  color: var(--text-muted);
+.chat-reply-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.reply-header-row {
+.chat-reply-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 11.5px;
   color: var(--text-muted);
-  padding: 0 2px;
 }
 
-.btn-link-action {
+.chat-action-link {
   border: none;
   background: transparent;
   color: var(--accent);
@@ -845,18 +647,18 @@ function closeDetail(rawId: string) {
   cursor: pointer;
   padding: 0;
 }
-.btn-link-action:hover {
+.chat-action-link:hover {
   text-decoration: underline;
 }
 
-.candidates-column {
+.chat-cards-stream {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-/* 底部常驻输入底座 */
-.ulink-bottom-dock {
+/* 底部仅留一个对话输入框 */
+.chat-input-dock {
   flex-shrink: 0;
   padding: 8px 10px 10px;
   background: var(--surface);
@@ -865,145 +667,45 @@ function closeDetail(rawId: string) {
   box-sizing: border-box;
 }
 
-/* 上下文引用条 */
-.context-pill-wrap {
+.chat-input-wrapper {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
-  margin-bottom: 6px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--surface-hover);
-  font-size: 11px;
-  min-width: 0;
-}
-
-.context-label {
-  color: var(--text-muted);
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.context-title {
-  color: var(--text);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex: 1;
-}
-
-.context-close {
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-.context-close:hover {
-  color: var(--text);
-}
-
-.context-action {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 10.5px;
-  font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.context-action:hover {
-  text-decoration: underline;
-}
-
-/* 与链风格输入卡片 */
-.ulink-input-card {
-  display: flex;
-  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
   background: var(--surface);
+  padding: 6px 8px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   min-width: 0;
   box-sizing: border-box;
 }
 
-.ulink-input-card.focused {
+.chat-input-wrapper.focused {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow, rgba(18, 46, 138, 0.15));
 }
 
-.ulink-card-textarea {
-  width: 100%;
+.chat-textarea {
+  flex: 1;
+  min-width: 0;
   border: none !important;
   background: transparent !important;
-  padding: 8px 10px 4px !important;
+  padding: 0 !important;
   font-family: var(--font-sans);
   font-size: 12.5px;
   line-height: 1.45;
   color: var(--text);
   resize: none;
   outline: none;
-  max-height: 100px;
-  min-width: 0;
+  max-height: 120px;
   box-sizing: border-box;
 }
 
-.ulink-card-textarea::placeholder {
+.chat-textarea::placeholder {
   color: var(--text-muted);
 }
 
-/* 卡片工具栏 */
-.ulink-card-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 6px;
-  border-top: 1px solid var(--border-light, #eee);
-  min-width: 0;
-}
-
-.preference-tags-group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.pref-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 6px;
-  font-size: 10.5px;
-  color: var(--text-muted);
-  border: 1px solid transparent;
-  background: var(--surface-hover);
-  border-radius: var(--radius-xs, 4px);
-  cursor: pointer;
-  transition: all 0.12s ease;
-  white-space: nowrap;
-}
-
-.pref-chip:hover {
-  color: var(--text);
-  border-color: var(--border);
-}
-
-.pref-chip.active {
-  border-color: var(--accent);
-  background: var(--accent-light);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-/* 发送按钮 */
-.ulink-send-btn {
+.chat-send-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1016,16 +718,15 @@ function closeDetail(rawId: string) {
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
-  margin-left: 4px;
 }
 
-.ulink-send-btn.active {
+.chat-send-btn.active {
   background: var(--accent);
   color: #fff;
 }
 
-.ulink-send-btn:disabled {
-  opacity: 0.4;
+.chat-send-btn:disabled {
+  opacity: 0.35;
   cursor: not-allowed;
 }
 </style>
