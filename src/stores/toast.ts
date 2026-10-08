@@ -62,7 +62,7 @@ export const useToastStore = defineStore('toast', () => {
 
     setTimeout(() => {
       item.opacity = '0'
-      item.transform = 'translateX(30px)'
+      item.transform = 'translateY(-12px)'
       item.transition = 'all 0.25s ease-in'
     }, TOAST_FADE_MS)
 
