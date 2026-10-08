@@ -9,7 +9,7 @@
       @click="togglePref(pref.id)"
       :title="t(pref.hintKey)"
     >
-      <span class="ai-pref-emoji">{{ pref.emoji }}</span>
+      <span class="ai-pref-dot"></span>
       <span class="ai-pref-label">{{ t(pref.labelKey) }}</span>
     </button>
   </div>
@@ -29,17 +29,16 @@ const emit = defineEmits<{
 
 interface PrefItem {
   id: AiSearchPreference
-  emoji: string
   labelKey: string
   hintKey: string
 }
 
 const PRESET_PREFERENCES: PrefItem[] = [
-  { id: 'free', emoji: '🏷️', labelKey: 'ai.prefFree', hintKey: 'ai.prefFreeHint' },
-  { id: 'no_proxy', emoji: '🇨🇳', labelKey: 'ai.prefNoProxy', hintKey: 'ai.prefNoProxyHint' },
-  { id: 'lightweight', emoji: '🪶', labelKey: 'ai.prefLightweight', hintKey: 'ai.prefLightweightHint' },
-  { id: 'open_source', emoji: '⚡', labelKey: 'ai.prefOpenSource', hintKey: 'ai.prefOpenSourceHint' },
-  { id: 'professional', emoji: '💼', labelKey: 'ai.prefProfessional', hintKey: 'ai.prefProfessionalHint' },
+  { id: 'free', labelKey: 'ai.prefFree', hintKey: 'ai.prefFreeHint' },
+  { id: 'no_proxy', labelKey: 'ai.prefNoProxy', hintKey: 'ai.prefNoProxyHint' },
+  { id: 'lightweight', labelKey: 'ai.prefLightweight', hintKey: 'ai.prefLightweightHint' },
+  { id: 'open_source', labelKey: 'ai.prefOpenSource', hintKey: 'ai.prefOpenSourceHint' },
+  { id: 'professional', labelKey: 'ai.prefProfessional', hintKey: 'ai.prefProfessionalHint' },
 ]
 
 function isSelected(id: AiSearchPreference): boolean {
@@ -62,26 +61,26 @@ function togglePref(id: AiSearchPreference) {
 .ai-pref-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0;
+  gap: 4px;
+  margin: 4px 0;
 }
 .ai-pref-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: var(--radius-full, 9999px);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs, 4px);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-secondary);
-  font-size: 0.73rem;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: all 0.15s ease;
   user-select: none;
 }
 .ai-pref-chip:hover {
-  border-color: var(--accent);
+  border-color: var(--border-hover, #bbb);
   color: var(--text);
   background: var(--surface-hover);
 }
@@ -91,8 +90,14 @@ function togglePref(id: AiSearchPreference) {
   color: var(--accent);
   font-weight: 600;
 }
-.ai-pref-emoji {
-  font-size: 0.8rem;
-  line-height: 1;
+.ai-pref-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+.ai-pref-chip.active .ai-pref-dot {
+  opacity: 1;
 }
 </style>

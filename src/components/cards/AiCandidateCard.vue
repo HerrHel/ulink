@@ -50,8 +50,8 @@
     <!-- 备注说明与核心亮点 -->
     <div class="card-body">
       <div v-if="candidate.highlight" class="ai-highlight-bar">
-        <span class="ai-sparkle-dot"></span>
-        <span>{{ candidate.highlight }}</span>
+        <span class="ai-highlight-label">HIGHLIGHT</span>
+        <span class="ai-highlight-text">{{ candidate.highlight }}</span>
       </div>
       <div class="card-notes" v-if="candidate.notes">
         {{ candidate.notes }}
@@ -149,19 +149,26 @@ function saveToVault() {
 <style scoped>
 .ai-candidate-card {
   position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 4px) !important;
   background: var(--surface);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  box-shadow: none !important;
 }
 .ai-candidate-card:hover {
   border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--surface-hover);
 }
 .ai-candidate-card.is-added {
   border-color: var(--border-light);
-  opacity: 0.85;
+  opacity: 0.8;
   background: var(--surface-hover);
+}
+.card-domain {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-muted);
 }
 .ai-card-action {
   margin-left: auto;
@@ -171,69 +178,88 @@ function saveToVault() {
 }
 .ai-save-btn {
   font-weight: 600;
+  font-size: 11px;
+  padding: 2px 8px;
+  height: 22px;
+  border-radius: var(--radius-xs, 4px);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 .ai-save-btn svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 .ai-saved-btn {
   font-weight: 600;
-  color: var(--accent);
+  font-size: 11px;
+  padding: 2px 8px;
+  height: 22px;
+  border-radius: var(--radius-xs, 4px);
+  color: var(--green, #10b981);
   cursor: default;
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
 .ai-saved-btn svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 .ai-card-tag {
-  font-size: 0.68rem;
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-light);
-  color: var(--accent);
-  font-weight: 600;
-  white-space: nowrap;
-}
-.ai-tags-row {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.ai-cat-tag {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 2px;
   background: var(--surface-hover);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ai-tags-row {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
+.ai-cat-tag {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .ai-cat-tag svg {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
 }
 .ai-highlight-bar {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.73rem;
-  color: var(--accent);
-  font-weight: 600;
+  font-size: 11px;
   margin-bottom: 4px;
   line-height: 1.4;
 }
-.ai-sparkle-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
+.ai-highlight-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  padding: 1px 4px;
+  border: 1px solid var(--accent-light, rgba(18, 46, 138, 0.2));
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+}
+.ai-highlight-text {
+  color: var(--text);
+  font-size: 11.5px;
 }
 </style>
