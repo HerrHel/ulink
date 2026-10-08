@@ -147,9 +147,28 @@
             class="chat-turn-item"
             :class="`turn-${turn.role}`"
           >
-            <!-- 用户消息：轻量无边框气泡 -->
-            <div v-if="turn.role === 'user'" class="chat-user-bubble">
-              {{ turn.content }}
+            <!-- 用户消息：轻量气泡与微操作栏（复制 / 撤回） -->
+            <div v-if="turn.role === 'user'" class="chat-user-wrap">
+              <div class="chat-user-bubble">
+                {{ turn.content }}
+              </div>
+              <div class="chat-msg-actions user-actions">
+                <button
+                  class="chat-msg-act-btn"
+                  @click="copyMessage(turn.content)"
+                  :title="isZh ? '复制内容' : 'Copy'"
+                >
+                  {{ isZh ? '复制' : 'Copy' }}
+                </button>
+                <span class="act-sep">·</span>
+                <button
+                  class="chat-msg-act-btn"
+                  @click="revokeUserMessage(turn)"
+                  :title="isZh ? '撤回并重新编辑' : 'Revoke and edit'"
+                >
+                  {{ isZh ? '撤回' : 'Revoke' }}
+                </button>
+              </div>
             </div>
 
             <!-- 助手回复 -->
@@ -185,13 +204,22 @@
 
                 <div v-if="turn.content" class="chat-reply-line">
                   <span class="reply-summary">{{ turn.content }}</span>
-                  <button
-                    v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
-                    class="chat-action-link"
-                    @click="addAllInTurn(turn)"
-                  >
-                    {{ t('ai.addAllDirect') }}
-                  </button>
+                  <div class="chat-reply-actions">
+                    <button
+                      class="chat-msg-act-btn"
+                      @click="copyMessage(turn.content)"
+                      :title="isZh ? '复制回答' : 'Copy'"
+                    >
+                      {{ isZh ? '复制' : 'Copy' }}
+                    </button>
+                    <button
+                      v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
+                      class="chat-action-link"
+                      @click="addAllInTurn(turn)"
+                    >
+                      {{ t('ai.addAllDirect') }}
+                    </button>
+                  </div>
                 </div>
 
                 <!-- 交互行动卡片 (Actionable Artifact / Generative UI) -->
@@ -591,6 +619,36 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
     scrollToBottom()
     sessions.value = updateSession(currentSessionId.value, chatTurns.value)
   }
+}
+
+async function copyMessage(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast(isZh.value ? '已复制到剪贴板' : 'Copied to clipboard', true)
+  } catch {
+    toast(isZh.value ? '复制失败' : 'Copy failed', false)
+  }
+}
+
+function revokeUserMessage(turn: ChatTurn) {
+  const idx = chatTurns.value.findIndex((t) => t.id === turn.id)
+  if (idx === -1) return
+
+  // 1. 将原输入内容填回输入框
+  aiQuery.value = turn.content
+  adjustTextareaHeight()
+
+  // 2. 从对话流中移除该条消息及其伴随的助手回复
+  const nextTurn = chatTurns.value[idx + 1]
+  const removeCount = nextTurn && nextTurn.role === 'assistant' ? 2 : 1
+  chatTurns.value.splice(idx, removeCount)
+
+  // 3. 持久化当前会话
+  sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+
+  // 4. 聚焦输入框便于修改重发
+  nextTick(() => aiTextareaRef.value?.focus())
+  toast(isZh.value ? '已撤回消息，内容已填回输入框' : 'Message recalled and refilled', true)
 }
 
 const activeSlashIndex = ref(0)
@@ -1380,10 +1438,17 @@ function closeDetail(rawId: string) {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 用户气泡：做减法，去掉重边框，温和微色块 */
-.chat-user-bubble {
+/* 用户气泡与微操作区 */
+.chat-user-wrap {
   align-self: flex-end;
   max-width: 86%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.chat-user-bubble {
   padding: 7px 11px;
   background: var(--surface-active, #efe8df);
   border-radius: 12px 12px 2px 12px;
@@ -1391,6 +1456,57 @@ function closeDetail(rawId: string) {
   color: var(--text);
   line-height: 1.45;
   word-break: break-word;
+}
+
+.chat-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-user-wrap:hover .chat-msg-actions,
+.chat-user-wrap:focus-within .chat-msg-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .chat-msg-actions {
+    opacity: 0.7;
+  }
+}
+
+.chat-msg-act-btn {
+  border: none;
+  background: transparent;
+  padding: 1px 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 2px;
+  line-height: 1.2;
+  transition: all 0.12s ease;
+}
+
+.chat-msg-act-btn:hover {
+  color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.act-sep {
+  font-size: 9px;
+  color: var(--border, #d1ccc7);
+  user-select: none;
+}
+
+.chat-reply-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .chat-assistant-wrap {
