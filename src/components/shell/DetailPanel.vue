@@ -158,15 +158,20 @@
                   @click="copyMessage(turn.content)"
                   :title="isZh ? '复制内容' : 'Copy'"
                 >
-                  {{ isZh ? '复制' : 'Copy' }}
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
                 </button>
-                <span class="act-sep">·</span>
                 <button
                   class="chat-msg-act-btn"
                   @click="revokeUserMessage(turn)"
                   :title="isZh ? '撤回并重新编辑' : 'Revoke and edit'"
                 >
-                  {{ isZh ? '撤回' : 'Revoke' }}
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 14 4 9 9 4"/>
+                    <path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                  </svg>
                 </button>
               </div>
             </div>
@@ -210,7 +215,10 @@
                       @click="copyMessage(turn.content)"
                       :title="isZh ? '复制回答' : 'Copy'"
                     >
-                      {{ isZh ? '复制' : 'Copy' }}
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
                     </button>
                     <button
                       v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
@@ -1479,26 +1487,28 @@ function closeDetail(rawId: string) {
 }
 
 .chat-msg-act-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: none;
   background: transparent;
-  padding: 1px 4px;
-  font-size: 10px;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 2px;
-  line-height: 1.2;
+  border-radius: var(--radius-xs, 4px);
   transition: all 0.12s ease;
+}
+
+.chat-msg-act-btn svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .chat-msg-act-btn:hover {
   color: var(--accent);
   background: var(--surface-hover);
-}
-
-.act-sep {
-  font-size: 9px;
-  color: var(--border, #d1ccc7);
-  user-select: none;
 }
 
 .chat-reply-actions {
