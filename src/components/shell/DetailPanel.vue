@@ -60,16 +60,16 @@
         <div v-if="chatTurns.length === 0" class="chat-empty-state">
           <div class="chat-empty-inner">
             <span class="chat-empty-sparkle">✦</span>
-            <p class="chat-empty-lead">{{ isZh ? '你想发现什么网站？' : 'What website are you looking for?' }}</p>
+            <p class="chat-empty-lead">{{ isZh ? '你想发现什么，或操控本站？' : 'Discover sites or control the app' }}</p>
             <p class="chat-empty-sub">
-              {{ isZh ? '直接输入需求甄选、输入网址找平替，或粘贴视频链接。' : 'Describe your needs, find alternatives, or paste video links.' }}
+              {{ isZh ? '输入需求发现网站，或输入 /help 与自然语言直接操控本站。' : 'Describe your needs, or type /help to control the app.' }}
             </p>
             <div class="chat-quick-hints">
+              <button class="hint-text-btn" @click="quickFill('/help')">{{ isZh ? '/help 站内指令' : '/help Commands' }}</button>
+              <span class="hint-dot">·</span>
               <button class="hint-text-btn" @click="quickFill(t('ai.promptWhiteboard'))">{{ t('ai.promptWhiteboard') }}</button>
               <span class="hint-dot">·</span>
               <button class="hint-text-btn" @click="quickFill(t('ai.promptGallery'))">{{ t('ai.promptGallery') }}</button>
-              <span class="hint-dot">·</span>
-              <button class="hint-text-btn" @click="quickFill(t('ai.promptOpenNotes'))">{{ t('ai.promptOpenNotes') }}</button>
             </div>
           </div>
         </div>
@@ -192,6 +192,7 @@ import {
   findSimilarWebsites,
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
+import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
 import { buildDetailCards } from './buildDetailCards.js'
 import type { DetailEntry } from './buildDetailCards.js'
 import type { AiSearchPreference, AiCandidateBookmark } from '../../types/ai.js'
@@ -328,6 +329,14 @@ async function handleAiSubmit() {
   scrollToBottom()
 
   try {
+    // 优先尝试站内指令/In-App Agent CLI 调度
+    const siteCmd = await dispatchSiteCommand(raw, { ds, ui })
+    if (siteCmd.handled) {
+      assistantTurn.loading = false
+      assistantTurn.content = siteCmd.reply
+      return
+    }
+
     const isVideo = /bilibili\.com|b23\.tv|douyin\.com|tiktok\.com|xiaohongshu\.com|xhslink\.com/.test(raw)
     const isUrl = /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(raw)
 
@@ -711,7 +720,7 @@ function closeDetail(rawId: string) {
 
 .chat-reply-line {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   font-size: 11.5px;
   color: var(--text-muted);
@@ -720,6 +729,9 @@ function closeDetail(rawId: string) {
 
 .reply-summary {
   font-weight: 500;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .chat-action-link {
