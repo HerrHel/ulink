@@ -1,60 +1,88 @@
 <template>
   <div class="card ai-candidate-card" :class="{ 'is-added': isItemAdded }">
+    <!-- 顶部行：Logo + 标题 + 域名 + 悬停外链提示 -->
     <div class="card-topline">
       <div class="card-toprow">
-        <div class="card-logo" :title="candidate.title" @click.stop="openUrl">
-          <img :src="faviconSrc" alt="" loading="lazy" decoding="async" @error="onFaviconError">
-          <span v-if="imgFailed" class="card-logo-fallback">{{ candidate.title.charAt(0) || '?' }}</span>
+        <div class="card-logo" :title="t('cards.openLink')" @click.stop="openUrl">
+          <img
+            :src="faviconSrc"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            :class="{ 'img-loaded': imgLoaded }"
+            @load="imgLoaded = true"
+            @error="onFaviconError"
+          >
+          <span v-if="imgFailed || !imgLoaded" class="card-logo-fallback">
+            {{ candidate.title.charAt(0) || '?' }}
+          </span>
         </div>
-        <div class="card-titlewrap" @click.stop="openUrl">
+        <div class="card-titlewrap" :title="t('cards.openLink')" @click.stop="openUrl">
           <div class="card-titlewrap-text">
             <div class="card-name">
               <span>{{ candidate.title }}</span>
-              <span v-if="candidate.tag" class="ai-card-tag">{{ candidate.tag }}</span>
+              <span v-if="candidate.tag" class="card-tag tag-custom ai-tag-pill">{{ candidate.tag }}</span>
             </div>
             <div class="card-domain">{{ domainStr }}</div>
           </div>
-          <span class="card-open-hint" aria-hidden="true" v-html="I.external" :title="t('cards.openLink')"></span>
-        </div>
-        <!-- 核心交互：一键零摩擦秒存按钮 -->
-        <div class="ai-card-action">
-          <button
-            v-if="!isItemAdded"
-            class="btn btn-primary btn-xs ai-save-btn"
-            :title="t('ai.quickAddTooltip')"
-            @click.stop="saveToVault"
-          >
-            <span aria-hidden="true" v-html="I.plus"></span>
-            <span>{{ t('ai.quickAdd') }}</span>
-          </button>
-          <button
-            v-else
-            class="btn btn-ghost btn-xs ai-saved-btn"
-            disabled
-          >
-            <span aria-hidden="true" v-html="I.check"></span>
-            <span>{{ t('ai.saved') }}</span>
-          </button>
+          <span class="card-open-hint" aria-hidden="true" v-html="I.external"></span>
         </div>
       </div>
-      <!-- 预匹配的分类与属性胶囊（零手动配置） -->
-      <div class="card-tags ai-tags-row">
-        <span v-if="categoryName" class="card-tag ai-cat-tag">
+    </div>
+
+    <!-- 卡片主体：标签胶囊 + 亮点条 + 备注说明 -->
+    <div class="card-body">
+      <!-- 预匹配的分类与属性标签 -->
+      <div class="card-tags" v-if="categoryName || tagNames.length">
+        <span v-if="categoryName" class="card-tag tag-custom ai-cat-pill">
           <span aria-hidden="true" v-html="I.folder"></span>
           {{ categoryName }}
         </span>
         <span v-for="tag in tagNames" :key="tag" class="card-tag tag-custom">{{ tag }}</span>
       </div>
-    </div>
 
-    <!-- 备注说明与核心亮点 -->
-    <div class="card-body">
+      <!-- AI 提炼的核心亮点 -->
       <div v-if="candidate.highlight" class="ai-highlight-bar">
         <span class="ai-highlight-label">HIGHLIGHT</span>
         <span class="ai-highlight-text">{{ candidate.highlight }}</span>
       </div>
+
+      <!-- 网站详细功能备注 -->
       <div class="card-notes" v-if="candidate.notes">
         {{ candidate.notes }}
+      </div>
+    </div>
+
+    <!-- 底部操作栏：对齐主站宫格卡片的 card-foot 规格 -->
+    <div class="card-foot">
+      <div class="card-stat">
+        <span v-if="isItemAdded" class="ai-stat-saved">
+          <span aria-hidden="true" v-html="I.check"></span>
+          {{ t('ai.saved') }}
+        </span>
+        <span v-else class="ai-stat-source">
+          <span class="ai-sparkle">✦</span>
+          <span>AI 甄选</span>
+        </span>
+      </div>
+      <div class="card-actions">
+        <button
+          v-if="!isItemAdded"
+          class="ai-action-btn ai-btn-add"
+          :title="t('ai.quickAddTooltip')"
+          @click.stop="saveToVault"
+        >
+          <span aria-hidden="true" v-html="I.plus"></span>
+          <span>{{ t('ai.quickAdd') }}</span>
+        </button>
+        <button
+          v-else
+          class="ai-action-btn ai-btn-saved"
+          disabled
+        >
+          <span aria-hidden="true" v-html="I.check"></span>
+          <span>{{ t('ai.saved') }}</span>
+        </button>
       </div>
     </div>
   </div>
@@ -81,6 +109,7 @@ const emit = defineEmits<{
 
 const ds = useDataStore()
 const imgFailed = ref(false)
+const imgLoaded = ref(false)
 const isLocalAdded = ref(false)
 const isItemAdded = computed(() => isLocalAdded.value || !!props.candidate.isAdded)
 
@@ -110,7 +139,7 @@ const tagNames = computed(() => {
 })
 
 /**
- * 零摩擦秒级入库：直接调用 dataStore，无需再次弹窗确认
+ * 零摩擦秒级入库：直接调用 dataStore 并落盘
  */
 function saveToVault() {
   if (isItemAdded.value) return
@@ -147,119 +176,383 @@ function saveToVault() {
 </script>
 
 <style scoped>
+/* 候选卡片：100% 继承主站大宫格卡片骨架与美学标准 */
 .ai-candidate-card {
   position: relative;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs, 4px) !important;
   background: var(--surface);
-  margin-bottom: 8px;
-  box-shadow: none !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 12px) !important;
+  box-shadow: var(--shadow-card) !important;
+  padding: 13px 14px 10px;
+  cursor: default;
+  height: auto;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: box-shadow 0.25s var(--ease-out), border-color 0.2s ease, transform 0.25s var(--ease-out), background-color 0.2s ease;
+  margin: 0;
 }
-.ai-candidate-card:hover {
-  border-color: var(--accent);
-  background: var(--surface-hover);
+
+@media (hover: hover) and (pointer: fine) {
+  .ai-candidate-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-card-hover) !important;
+    transform: translateY(-2px);
+  }
 }
+
 .ai-candidate-card.is-added {
   border-color: var(--border-light);
-  opacity: 0.8;
-  background: var(--surface-hover);
+  background: var(--surface);
 }
+
+/* 顶部信息行 */
+.card-topline {
+  flex-shrink: 0;
+  z-index: 2;
+  background: transparent;
+}
+
+.card-toprow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* 主站统一规范的 Logo 容器 */
+.card-logo {
+  flex-shrink: 0;
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-alt);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.2s ease, transform 0.25s var(--ease-spring), box-shadow 0.2s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-logo:hover {
+    border-color: var(--accent);
+    transform: scale(1.08);
+    box-shadow: 0 2px 8px var(--accent-glow);
+    z-index: 2;
+  }
+}
+
+.card-logo img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.card-logo img.img-loaded {
+  opacity: 1;
+}
+
+.card-logo-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  user-select: none;
+}
+
+/* 标题区：整行自由舒展，不被右侧生硬按钮挤压 */
+.card-titlewrap {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0 4px;
+  margin: 0 -4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--radius-sm, 6px);
+  transition: background 0.15s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-titlewrap:hover {
+    background: var(--accent-light, rgba(18, 46, 138, 0.05));
+  }
+  .card-titlewrap:hover .card-name {
+    color: var(--accent);
+  }
+  .card-titlewrap:hover .card-open-hint {
+    display: block;
+  }
+}
+
+.card-titlewrap-text {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.card-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 18px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .card-domain {
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: 0.72rem;
   color: var(--text-muted);
-}
-.ai-card-action {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-.ai-save-btn {
-  font-weight: 600;
-  font-size: 11px;
-  padding: 2px 8px;
-  height: 22px;
-  border-radius: var(--radius-xs, 4px);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.ai-save-btn svg {
-  width: 12px;
-  height: 12px;
-}
-.ai-saved-btn {
-  font-weight: 600;
-  font-size: 11px;
-  padding: 2px 8px;
-  height: 22px;
-  border-radius: var(--radius-xs, 4px);
-  color: var(--green, #10b981);
-  cursor: default;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.ai-saved-btn svg {
-  width: 12px;
-  height: 12px;
-}
-.ai-card-tag {
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 2px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 16px;
+  letter-spacing: 0.02em;
 }
-.ai-tags-row {
-  margin-top: 5px;
+
+.card-open-hint {
+  flex-shrink: 0;
+  display: none;
+  width: 14px;
+  height: 14px;
+  color: var(--accent);
+  opacity: 0.85;
+}
+
+.card-open-hint svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+/* 卡片主体 */
+.card-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+/* 标签行 */
+.card-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
+  align-items: center;
+  overflow: hidden;
 }
-.ai-cat-tag {
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 2px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-weight: 500;
+
+.card-tag {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  padding: 1.5px 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
 }
-.ai-cat-tag svg {
-  width: 10px;
-  height: 10px;
+
+.tag-custom {
+  background: var(--card-badge-bg, rgba(44, 40, 36, 0.05));
+  color: var(--text-secondary);
+  border-color: var(--border-light);
 }
+
+.ai-cat-pill {
+  font-family: var(--font-sans);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.ai-cat-pill svg {
+  width: 11px;
+  height: 11px;
+}
+
+.ai-tag-pill {
+  font-size: 0.68rem;
+  padding: 0.5px 5px;
+}
+
+/* AI 提炼特色（HIGHLIGHT 亮点胶囊条） */
 .ai-highlight-bar {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  margin-bottom: 4px;
-  line-height: 1.4;
+  gap: 5px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: var(--radius-xs, 4px);
+  padding: 2.5px 6px;
+  line-height: 1.35;
 }
+
 .ai-highlight-label {
   font-family: var(--font-mono, monospace);
-  font-size: 9px;
+  font-size: 8.5px;
   font-weight: 700;
   color: var(--accent);
-  padding: 1px 4px;
-  border: 1px solid var(--accent-light, rgba(18, 46, 138, 0.2));
-  border-radius: 2px;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
+
 .ai-highlight-text {
+  font-size: 11px;
   color: var(--text);
-  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 网站备注 */
+.card-notes {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 底部操作栏：完美契合主站宫格卡片的底栏质感 */
+.card-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 7px;
+  border-top: 1px solid var(--border-light);
+  background: transparent;
+  transition: border-color 0.2s ease;
+}
+
+.ai-candidate-card:hover .card-foot {
+  border-color: var(--border-hover);
+}
+
+.card-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.ai-stat-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.ai-sparkle {
+  color: var(--accent);
+  font-size: 9px;
+}
+
+.ai-stat-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--green, #10b981);
+  font-weight: 600;
+}
+
+.ai-stat-saved svg {
+  width: 12px;
+  height: 12px;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  height: 22px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  border: none;
+}
+
+.ai-btn-add {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(18, 46, 138, 0.16);
+}
+
+.ai-btn-add:hover {
+  background: var(--accent-dark, #0e2270);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(18, 46, 138, 0.24);
+}
+
+.ai-btn-add:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.ai-btn-add svg {
+  width: 11px;
+  height: 11px;
+}
+
+.ai-btn-saved {
+  background: color-mix(in srgb, var(--green, #10b981) 12%, transparent);
+  color: var(--green, #10b981);
+  border: 1px solid color-mix(in srgb, var(--green, #10b981) 25%, transparent);
+  cursor: default;
+}
+
+.ai-btn-saved svg {
+  width: 11px;
+  height: 11px;
 }
 </style>
