@@ -1,45 +1,46 @@
 <template>
   <div
     ref="detailPanelRef"
-    class="detail-panel vscode-sidebar-theme"
+    class="detail-panel ulink-detail-panel"
     :class="{ open: isOpen, swiping: isSwiping }"
-    :style="translateY ? { transform: `translateY(${translateY}px)` } : undefined"
+    :style="panelStyle"
     id="detailPanel"
   >
     <div class="detail-drag-handle" id="detailDragHandle"></div>
 
-    <!-- 顶部 VSCode 标题栏 -->
-    <div class="vscode-top-bar">
-      <!-- 左侧：Tabs 或 Title -->
-      <div v-if="entries.length" class="vscode-tabs">
+    <!-- 顶部功能栏：融入与链原生风格 -->
+    <div class="ulink-panel-header">
+      <!-- 左侧：多模式 Tab 或 单一简洁标题 -->
+      <div v-if="entries.length" class="ulink-header-tabs">
         <button
-          class="vscode-tab-btn"
+          class="ulink-tab-btn"
           :class="{ active: currentTab === 'ai' }"
           @click="currentTab = 'ai'"
         >
-          <span>CHAT</span>
+          <span>{{ t('ai.tabInsight') }}</span>
         </button>
         <button
-          class="vscode-tab-btn"
+          class="ulink-tab-btn"
           :class="{ active: currentTab === 'cards' }"
           @click="currentTab = 'cards'"
         >
-          <span>CARDS</span>
-          <span class="vscode-tab-counter">({{ entries.length }})</span>
+          <span>{{ t('ai.tabCards') }}</span>
+          <span class="ulink-tab-count">{{ entries.length }}</span>
         </button>
       </div>
-      <div v-else class="vscode-panel-title">
-        <svg class="vscode-copilot-svg" viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
-          <path d="M14.5 3H1.5C.67 3 0 3.67 0 4.5v7c0 .83.67 1.5 1.5 1.5h13c.83 0 1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-.5 8.5H2v-6h12v6zM4 6.5l2 1.5-2 1.5v-1H3v-1h1v-1zm4 2h4v1H8v-1z"/>
+      <div v-else class="ulink-panel-title">
+        <svg class="ulink-title-glyph" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v18M3 12h18"/>
         </svg>
-        <span class="vscode-title-label">COPILOT</span>
+        <span>{{ t('ai.sidebarTitle') }}</span>
       </div>
 
-      <!-- 右侧：VSCode 动作图标按钮组 -->
-      <div class="vscode-top-actions">
+      <!-- 右侧：简洁快捷操作 -->
+      <div class="ulink-header-actions">
         <button
           v-if="currentTab === 'ai'"
-          class="vscode-icon-btn"
+          class="btn-icon-subtle"
           @click="startNewChat"
           :title="t('ai.sidebarClear')"
         >
@@ -48,98 +49,83 @@
           </svg>
         </button>
         <button
-          class="vscode-icon-btn"
+          class="btn-icon-subtle close-btn"
           @click="closeEntirePanel"
           :title="t('common.close')"
         >
-          <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
-            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z"/>
-          </svg>
+          &times;
         </button>
       </div>
     </div>
 
-    <!-- 中间滚动流 -->
-    <div class="detail-inner vscode-chat-inner" id="detailInner" ref="chatScrollRef">
-      <!-- 模式 1: AI Copilot 对话流 -->
+    <!-- 中间滚动内容流 -->
+    <div class="detail-inner ulink-content-scroll" id="detailInner" ref="chatScrollRef">
+      <!-- 模式 1: AI 助手流 -->
       <template v-if="currentTab === 'ai'">
-        <!-- 空态：极简 IDE 欢迎与命令提示 -->
-        <div v-if="chatTurns.length === 0" class="vscode-welcome-view">
-          <div class="vscode-welcome-header">
-            <svg class="vscode-brand-glyph" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="3" y="3" width="18" height="18" rx="3"/>
-              <path d="M8 10l3 2-3 2M13 14h3"/>
-            </svg>
-            <div class="vscode-brand-name">ulink Copilot</div>
-            <div class="vscode-brand-desc">{{ t('ai.sidebarWelcomeDesc') }}</div>
+        <!-- 空态：与链风格简洁引导 -->
+        <div v-if="chatTurns.length === 0" class="ulink-ai-welcome">
+          <div class="welcome-branding">
+            <div class="welcome-logo-badge">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+            </div>
+            <h3 class="welcome-title">{{ t('ai.sidebarWelcomeTitle') }}</h3>
+            <p class="welcome-desc">{{ t('ai.sidebarWelcomeDesc') }}</p>
           </div>
 
-          <div class="vscode-prompts-section">
-            <div class="vscode-prompts-title">QUICK PROMPTS</div>
-            <div class="vscode-prompts-list">
+          <div class="quick-prompts-block">
+            <div class="prompts-heading">{{ t('ai.searchAction') }}</div>
+            <div class="prompts-grid">
               <button
                 v-for="p in QUICK_PROMPTS"
                 :key="p.key"
-                class="vscode-prompt-row"
+                class="prompt-capsule"
                 @click="quickSearch(t(p.key))"
               >
-                <span class="prompt-prefix">&gt;</span>
-                <span class="prompt-cmd">{{ p.cmd }}</span>
-                <span class="prompt-query">{{ t(p.key) }}</span>
+                <span class="capsule-arrow">&rsaquo;</span>
+                <span class="capsule-text">{{ t(p.key) }}</span>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- 对话流列表 (Chat Conversation Stream) -->
-        <div v-else class="vscode-chat-stream">
+        <!-- 历史交互流 -->
+        <div v-else class="ulink-turns-flow">
           <div
             v-for="turn in chatTurns"
             :key="turn.id"
-            class="vscode-chat-turn"
+            class="flow-turn"
             :class="`turn-${turn.role}`"
           >
-            <!-- User Turn -->
-            <div v-if="turn.role === 'user'" class="vscode-user-msg">
-              <div class="vscode-msg-header">
-                <span class="msg-prompt-symbol">&gt;</span>
-                <span class="msg-author">You</span>
-              </div>
-              <div class="vscode-msg-body user-body">
-                {{ turn.content }}
-              </div>
+            <!-- 用户消息 -->
+            <div v-if="turn.role === 'user'" class="user-turn-box">
+              <div class="user-text">{{ turn.content }}</div>
             </div>
 
-            <!-- Assistant Turn -->
-            <div v-else class="vscode-assistant-msg">
-              <div class="vscode-msg-header">
-                <svg class="assistant-glyph" viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
-                  <path d="M14.5 3H1.5C.67 3 0 3.67 0 4.5v7c0 .83.67 1.5 1.5 1.5h13c.83 0 1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-.5 8.5H2v-6h12v6zM4 6.5l2 1.5-2 1.5v-1H3v-1h1v-1zm4 2h4v1H8v-1z"/>
-                </svg>
-                <span class="msg-author">Copilot</span>
+            <!-- 助手回复 -->
+            <div v-else class="assistant-turn-box">
+              <!-- 思考状态 -->
+              <div v-if="turn.loading" class="thinking-state">
+                <div class="thinking-line"></div>
+                <span class="thinking-label">{{ t('ai.searching') }}</span>
               </div>
 
-              <!-- 思考指示器 (VSCode Scanning Bar & Indicator) -->
-              <div v-if="turn.loading" class="vscode-thinking-wrap">
-                <div class="vscode-progress-line"></div>
-                <div class="vscode-thinking-text">Thinking...</div>
-              </div>
-
-              <!-- 结果内容 -->
-              <div v-else class="vscode-msg-body assistant-body">
-                <div v-if="turn.content" class="vscode-reply-text">
-                  <span>{{ turn.content }}</span>
+              <!-- 回复内容与候选卡片 -->
+              <div v-else class="reply-content">
+                <div v-if="turn.content" class="reply-header-row">
+                  <span class="summary-text">{{ turn.content }}</span>
                   <button
                     v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
-                    class="vscode-link-btn"
+                    class="btn-link-action"
                     @click="addAllInTurn(turn)"
                   >
                     {{ t('ai.addAllDirect') }}
                   </button>
                 </div>
 
-                <!-- 候选卡片列表 -->
-                <div v-if="turn.candidates?.length" class="vscode-cards-list">
+                <div v-if="turn.candidates?.length" class="candidates-column">
                   <AiCandidateCard
                     v-for="item in turn.candidates"
                     :key="item.url"
@@ -152,7 +138,7 @@
         </div>
       </template>
 
-      <!-- 模式 2: 暂存卡片展架 (兼容原有) -->
+      <!-- 模式 2: 暂存卡片展架 (原有功能 100% 兼容) -->
       <template v-else>
         <template v-if="entries.length">
           <div class="card-grid grid-view detail-grid">
@@ -175,23 +161,22 @@
       </template>
     </div>
 
-    <!-- 底部 VSCode Chat 输入卡片部件 -->
-    <div class="vscode-bottom-dock">
-      <!-- 上下文引用胶囊 (# Context reference) -->
-      <div v-if="activeContext" class="vscode-context-ref">
-        <span class="context-hash">#</span>
-        <span class="context-label">context:</span>
-        <span class="context-name" :title="activeContext.url">{{ activeContext.title }}</span>
-        <button class="context-dismiss" @click="dismissContext" title="Dismiss context">&times;</button>
-        <button class="context-quick-action" @click="searchSimilarForContext">寻找平替 →</button>
+    <!-- 底部常驻输入底座：简洁明了与链风 -->
+    <div class="ulink-bottom-dock">
+      <!-- 关联上下文指示条 -->
+      <div v-if="activeContext" class="context-pill-wrap">
+        <span class="context-label"># {{ isZh ? '参考' : 'context' }}:</span>
+        <span class="context-title" :title="activeContext.url">{{ activeContext.title }}</span>
+        <button class="context-close" @click="dismissContext" title="Remove context">&times;</button>
+        <button class="context-action" @click="searchSimilarForContext">{{ isZh ? '挖掘平替 →' : 'Alternatives →' }}</button>
       </div>
 
-      <!-- VSCode 经典多行聊天输入卡片 -->
-      <div class="vscode-input-box" :class="{ focused: isInputFocused }">
+      <!-- 核心输入卡片容器 -->
+      <div class="ulink-input-card" :class="{ focused: isInputFocused }">
         <textarea
           ref="aiTextareaRef"
           v-model="aiQuery"
-          class="vscode-textarea"
+          class="ulink-card-textarea"
           :placeholder="t('ai.sidebarInputPlaceholder')"
           rows="1"
           @focus="isInputFocused = true"
@@ -200,14 +185,14 @@
           @input="adjustTextareaHeight"
         ></textarea>
 
-        <!-- 工具栏：偏好标签微调 + 发送按钮 -->
-        <div class="vscode-input-toolbar">
-          <div class="vscode-pref-badges">
+        <!-- 工具栏：偏好标签 + 发送按钮 -->
+        <div class="ulink-card-toolbar">
+          <div class="preference-tags-group">
             <button
               v-for="pref in PREF_OPTIONS"
               :key="pref.id"
               type="button"
-              class="vscode-pref-badge"
+              class="pref-chip"
               :class="{ active: preferences.includes(pref.id) }"
               @click="togglePreference(pref.id)"
               :title="t(pref.hintKey)"
@@ -217,11 +202,11 @@
           </div>
 
           <button
-            class="vscode-send-btn"
+            class="ulink-send-btn"
             :class="{ active: !!aiQuery.trim() && !aiLoading }"
             :disabled="aiLoading || !aiQuery.trim()"
             @click="handleAiSubmit"
-            title="Send (Enter)"
+            :title="t('ai.searchAction') + ' (Enter)'"
           >
             <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
               <path d="M8 2.5l4.5 4.5h-3v6.5h-3V7h-3L8 2.5z"/>
@@ -239,7 +224,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { isMobile, domain, fixUrl } from '../../utils.js'
 import { I } from '../../config/icons.js'
-import { t } from '../../i18n/index.js'
+import { useI18n } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
 import BookmarkCard from '../cards/BookmarkCard.vue'
 import GroupCard from '../cards/GroupCard.vue'
@@ -252,6 +237,9 @@ import {
 import { buildDetailCards } from './buildDetailCards.js'
 import type { DetailEntry } from './buildDetailCards.js'
 import type { AiSearchPreference, AiCandidateBookmark } from '../../types/ai.js'
+
+const { t, locale } = useI18n()
+const isZh = computed(() => locale.value.startsWith('zh'))
 
 interface ChatTurn {
   id: string
@@ -274,7 +262,7 @@ const entries = computed<DetailEntry[]>(() =>
   buildDetailCards(ui.detailCards, ds.groupMap, ds.bookmarkMap, domain),
 )
 
-// 当前上下文书签（例如主视图选中的卡片）
+// 当前上下文书签
 const dismissedContextId = ref<string | null>(null)
 const activeContext = computed(() => {
   if (!entries.value.length) return null
@@ -294,10 +282,10 @@ function dismissContext() {
   }
 }
 
-// Tab 状态：有暂存卡片时可切换
+// Tab 状态
 const currentTab = ref<'ai' | 'cards'>('ai')
 
-// 输入状态与偏好
+// 输入状态
 const aiQuery = ref('')
 const aiLoading = ref(false)
 const isInputFocused = ref(false)
@@ -320,15 +308,24 @@ function togglePreference(id: AiSearchPreference) {
   }
 }
 
-// 对话记录
+// 对话流历史
 const chatTurns = ref<ChatTurn[]>([])
 
 const QUICK_PROMPTS = [
-  { key: 'ai.promptPrototype', cmd: '/find' },
-  { key: 'ai.promptGallery', cmd: '/find' },
-  { key: 'ai.promptWhiteboard', cmd: '/find' },
-  { key: 'ai.promptOpenNotes', cmd: '/find' },
+  { key: 'ai.promptPrototype' },
+  { key: 'ai.promptGallery' },
+  { key: 'ai.promptWhiteboard' },
+  { key: 'ai.promptOpenNotes' },
 ]
+
+// 面板内联样式绑定
+const panelStyle = computed(() => {
+  const styles: Record<string, string> = {}
+  if (translateY.value) {
+    styles.transform = `translateY(${translateY.value}px)`
+  }
+  return Object.keys(styles).length ? styles : undefined
+})
 
 // 打开面板时自动聚焦
 watch(
@@ -398,7 +395,6 @@ async function handleAiSubmit() {
   const raw = aiQuery.value.trim()
   if (!raw || aiLoading.value) return
 
-  // 斜杠命令支持
   if (raw === '/clear') {
     startNewChat()
     return
@@ -410,7 +406,6 @@ async function handleAiSubmit() {
   adjustTextareaHeight()
 
   const turnId = 'turn-' + Date.now()
-  // 添加用户消息
   chatTurns.value.push({
     id: turnId + '-user',
     role: 'user',
@@ -418,7 +413,6 @@ async function handleAiSubmit() {
     timestamp: Date.now(),
   })
 
-  // 添加助手加载占位
   const assistantTurn: ChatTurn = {
     id: turnId + '-assistant',
     role: 'assistant',
@@ -439,7 +433,7 @@ async function handleAiSubmit() {
       assistantTurn.loading = false
       assistantTurn.candidates = res.bookmarks
       assistantTurn.content = res.videoTitle
-        ? `${res.videoTitle} (提炼出 ${res.bookmarks.length} 个工具)`
+        ? `${res.videoTitle} (${t('ai.foundCount', { n: res.bookmarks.length })})`
         : t('ai.foundCount', { n: res.bookmarks.length })
     } else if (isUrl) {
       const res = await findSimilarWebsites(raw, preferences.value, ds.categories, ds.customAttributes)
@@ -454,8 +448,8 @@ async function handleAiSubmit() {
     }
   } catch (err: unknown) {
     assistantTurn.loading = false
-    assistantTurn.content = '检索失败，请稍后重试。'
-    console.error('[Copilot] search error:', err)
+    assistantTurn.content = isZh ? '检索失败，请稍后重试。' : 'Failed to search, please try again.'
+    console.error('[ulink AI] search error:', err)
   } finally {
     aiLoading.value = false
     scrollToBottom()
@@ -552,282 +546,258 @@ function closeDetail(rawId: string) {
 </script>
 
 <style scoped>
-.vscode-sidebar-theme {
+.ulink-detail-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   position: relative;
   background: var(--surface);
+  color: var(--text);
   font-family: var(--font-sans);
+  min-width: 0 !important;
+  box-sizing: border-box;
 }
 
-/* VSCode 顶栏 */
-.vscode-top-bar {
+/* 顶部功能栏 */
+.ulink-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 35px;
-  padding: 0 8px 0 12px;
+  height: 38px;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
+  min-width: 0;
   user-select: none;
 }
 
-.vscode-panel-title {
+.ulink-panel-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--text-secondary);
-}
-
-.vscode-copilot-svg {
-  color: var(--accent);
-}
-
-.vscode-title-label {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
 }
 
-/* VSCode 经典标签页 (Tabs) */
-.vscode-tabs {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  gap: 2px;
+.ulink-title-glyph {
+  color: var(--accent);
 }
 
-.vscode-tab-btn {
+/* 顶部模式切换选项卡 */
+.ulink-header-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.ulink-tab-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   height: 100%;
   padding: 0 10px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: all 0.15s ease;
 }
 
-.vscode-tab-btn:hover {
+.ulink-tab-btn:hover {
   color: var(--text);
 }
 
-.vscode-tab-btn.active {
-  color: var(--text);
+.ulink-tab-btn.active {
+  color: var(--accent);
+  font-weight: 600;
   border-bottom-color: var(--accent);
 }
 
-.vscode-tab-counter {
-  font-size: 10px;
-  opacity: 0.7;
+.ulink-tab-count {
+  font-size: 11px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--accent-light);
+  color: var(--accent);
 }
 
-/* 顶栏图标操作按钮 */
-.vscode-top-actions {
+/* 顶栏图标操作 */
+.ulink-header-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
-.vscode-icon-btn {
+.btn-icon-subtle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: var(--radius-xs, 4px);
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
-.vscode-icon-btn:hover {
+.btn-icon-subtle:hover {
   background: var(--surface-hover);
   color: var(--text);
 }
 
-/* 滚动内容区 */
-.vscode-chat-inner {
+.btn-icon-subtle.close-btn {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* 中间内容滚动流 */
+.ulink-content-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 14px 12px;
+  min-width: 0 !important;
+  box-sizing: border-box;
 }
 
 /* 空态欢迎区 */
-.vscode-welcome-view {
-  padding: 16px 4px;
+.ulink-ai-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 10px 4px;
 }
 
-.vscode-welcome-header {
-  margin-bottom: 24px;
+.welcome-branding {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.vscode-brand-glyph {
+.welcome-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-base, 8px);
+  background: var(--accent-light);
   color: var(--accent);
-  margin-bottom: 8px;
+  margin-bottom: 2px;
 }
 
-.vscode-brand-name {
+.welcome-title {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: 4px;
+  margin: 0;
 }
 
-.vscode-brand-desc {
-  font-size: 11.5px;
-  color: var(--text-muted);
+.welcome-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
   line-height: 1.5;
+  margin: 0;
 }
 
-.vscode-prompts-section {
+/* 快捷建议 */
+.quick-prompts-block {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.vscode-prompts-title {
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  font-weight: 700;
+.prompts-heading {
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-muted);
+  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.vscode-prompts-list {
+.prompts-grid {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
-.vscode-prompt-row {
+.prompt-capsule {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xs, 4px);
+  border-radius: var(--radius-sm, 6px);
   background: var(--surface);
-  color: var(--text);
+  color: var(--text-secondary);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
-.vscode-prompt-row:hover {
+.prompt-capsule:hover {
   background: var(--surface-hover);
   border-color: var(--accent);
-}
-
-.prompt-prefix {
-  font-family: var(--font-mono, monospace);
   color: var(--accent);
-  font-weight: 700;
+  transform: translateX(2px);
 }
 
-.prompt-cmd {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
+.capsule-arrow {
   color: var(--text-muted);
-}
-
-.prompt-query {
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
 }
 
 /* 对话流 */
-.vscode-chat-stream {
+.ulink-turns-flow {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
-.vscode-chat-turn {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.vscode-msg-header {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  letter-spacing: 0.5px;
-}
-
-.msg-prompt-symbol {
-  color: var(--accent);
-}
-
-.assistant-glyph {
-  color: var(--accent);
-}
-
-.vscode-msg-body.user-body {
-  padding: 8px 10px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs, 4px);
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--text);
-}
-
-.vscode-msg-body.assistant-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.vscode-reply-text {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11.5px;
-  color: var(--text-muted);
-}
-
-.vscode-link-btn {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-.vscode-link-btn:hover {
-  text-decoration: underline;
-}
-
-/* 思考进度条 */
-.vscode-thinking-wrap {
+.flow-turn {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 0;
 }
 
-.vscode-progress-line {
+.user-turn-box {
+  align-self: flex-end;
+  max-width: 90%;
+  padding: 8px 12px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base, 8px);
+  border-bottom-right-radius: 2px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.assistant-turn-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* 思考进度 */
+.thinking-state {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.thinking-line {
   height: 2px;
   width: 100%;
   background: var(--border);
@@ -836,199 +806,225 @@ function closeDetail(rawId: string) {
   border-radius: 1px;
 }
 
-.vscode-progress-line::after {
+.thinking-line::after {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 40%;
+  width: 35%;
   height: 100%;
   background: var(--accent);
-  animation: vscode-scan 1.2s ease-in-out infinite;
+  animation: ulink-scan 1.2s ease-in-out infinite;
 }
 
-@keyframes vscode-scan {
+@keyframes ulink-scan {
   0% { transform: translateX(-100%); }
-  100% { transform: translateX(300%); }
+  100% { transform: translateX(350%); }
 }
 
-.vscode-thinking-text {
-  font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
+.thinking-label {
+  font-size: 11px;
   color: var(--text-muted);
 }
 
-.vscode-cards-list {
+.reply-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+.btn-link-action {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.btn-link-action:hover {
+  text-decoration: underline;
+}
+
+.candidates-column {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-/* 底部 Dock 输入区域 */
-.vscode-bottom-dock {
+/* 底部常驻输入底座 */
+.ulink-bottom-dock {
   flex-shrink: 0;
   padding: 8px 10px 10px;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  min-width: 0 !important;
+  box-sizing: border-box;
 }
 
 /* 上下文引用条 */
-.vscode-context-ref {
+.context-pill-wrap {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 6px;
-  padding: 3px 6px;
+  padding: 3px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xs, 4px);
+  border-radius: var(--radius-sm, 6px);
   background: var(--surface-hover);
   font-size: 11px;
-}
-
-.context-hash {
-  font-family: var(--font-mono, monospace);
-  color: var(--accent);
-  font-weight: 700;
+  min-width: 0;
 }
 
 .context-label {
-  font-family: var(--font-mono, monospace);
   color: var(--text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
-.context-name {
+.context-title {
   color: var(--text);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 130px;
+  min-width: 0;
+  flex: 1;
 }
 
-.context-dismiss {
+.context-close {
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
+  flex-shrink: 0;
 }
-.context-dismiss:hover {
+.context-close:hover {
   color: var(--text);
 }
 
-.context-quick-action {
-  margin-left: auto;
+.context-action {
   border: none;
   background: transparent;
   color: var(--accent);
   font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
 }
-.context-quick-action:hover {
+.context-action:hover {
   text-decoration: underline;
 }
 
-/* VSCode 输入框容器 */
-.vscode-input-box {
+/* 与链风格输入卡片 */
+.ulink-input-card {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xs, 4px);
-  background: var(--bg, #fdfbf9);
+  border-radius: var(--radius-base, 8px);
+  background: var(--surface);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-.vscode-input-box.focused {
+.ulink-input-card.focused {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow, rgba(18, 46, 138, 0.15));
 }
 
-.vscode-textarea {
+.ulink-card-textarea {
   width: 100%;
   border: none !important;
   background: transparent !important;
-  padding: 6px 8px !important;
+  padding: 8px 10px 4px !important;
   font-family: var(--font-sans);
   font-size: 12.5px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--text);
   resize: none;
   outline: none;
-  max-height: 120px;
+  max-height: 100px;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-.vscode-textarea::placeholder {
+.ulink-card-textarea::placeholder {
   color: var(--text-muted);
-  opacity: 0.8;
 }
 
-/* 工具栏 */
-.vscode-input-toolbar {
+/* 卡片工具栏 */
+.ulink-card-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 4px 6px;
-  border-top: 1px solid var(--border-light, #f0f0f0);
+  border-top: 1px solid var(--border-light, #eee);
+  min-width: 0;
 }
 
-.vscode-pref-badges {
+.preference-tags-group {
   display: flex;
   align-items: center;
-  gap: 3px;
-  overflow-x: auto;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.vscode-pref-badge {
+.pref-chip {
   display: inline-flex;
   align-items: center;
-  padding: 1px 5px;
-  font-size: 10px;
-  font-family: var(--font-mono, monospace);
+  padding: 2px 6px;
+  font-size: 10.5px;
   color: var(--text-muted);
   border: 1px solid transparent;
-  background: transparent;
-  border-radius: 2px;
+  background: var(--surface-hover);
+  border-radius: var(--radius-xs, 4px);
   cursor: pointer;
   transition: all 0.12s ease;
   white-space: nowrap;
 }
 
-.vscode-pref-badge:hover {
-  background: var(--surface-hover);
+.pref-chip:hover {
   color: var(--text);
+  border-color: var(--border);
 }
 
-.vscode-pref-badge.active {
+.pref-chip.active {
   border-color: var(--accent);
   background: var(--accent-light);
   color: var(--accent);
   font-weight: 600;
 }
 
-/* 发送箭头按钮 */
-.vscode-send-btn {
+/* 发送按钮 */
+.ulink-send-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: none;
-  background: transparent;
+  background: var(--surface-hover);
   color: var(--text-muted);
-  border-radius: var(--radius-xs, 4px);
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
-.vscode-send-btn.active {
+.ulink-send-btn.active {
   background: var(--accent);
   color: #fff;
 }
 
-.vscode-send-btn:disabled {
+.ulink-send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
