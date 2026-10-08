@@ -317,6 +317,7 @@
 
 
   let currentTab = null
+  let currentTabMeta = null
   let allBookmarks = []
   let allCategories = []
   let selectedCategory = 'all'
@@ -898,6 +899,7 @@
         return
       }
       currentTab = tab
+      currentTabMeta = null
       const hasUrl = !!(tab.url && String(tab.url).trim())
       pageTitle.textContent = tab.title || (hasUrl ? chrome.i18n.getMessage('untitled') : chrome.i18n.getMessage('url_unavailable'))
       pageUrl.textContent = hasUrl ? domain(tab.url) : chrome.i18n.getMessage('click_to_refresh_and_save')
@@ -911,6 +913,48 @@
       setTabUrlHint(!hasUrl)
       if (hasUrl) checkCurrentPageMatch(tab.url)
       else hideBookmarkDetail()
+
+      if (quickNotesInput && !quickNotesInput.dataset.userEdited) {
+        quickNotesInput.value = ''
+      }
+
+      // ── 现场提取元数据（方案二：OpenGraph、SEO 描述与关键词智能预填）──
+      function applyMetadata(meta) {
+        if (!meta) return
+        currentTabMeta = meta
+        if (meta.title && meta.title.trim()) {
+          pageTitle.textContent = meta.title.trim()
+        }
+        var descCandidate = meta.selection || meta.description || ''
+        if (descCandidate && quickNotesInput && !quickNotesInput.dataset.userEdited) {
+          quickNotesInput.value = descCandidate
+        }
+        if (saveCategorySelect && (!saveCategorySelect.value || saveCategorySelect.value === 'uncategorized')) {
+          var matchedCatId = window.LinkVaultMetaExtract
+            ? window.LinkVaultMetaExtract.matchCategoryByKeywords(meta, allCategories)
+            : null
+          if (matchedCatId) {
+            saveCategorySelect.value = matchedCatId
+          }
+        }
+      }
+
+      if (tab.description !== undefined || tab.keywords !== undefined) {
+        applyMetadata(tab)
+      } else if (tab.id && hasUrl && isSafeHttpUrl(tab.url) && chrome.scripting && chrome.scripting.executeScript) {
+        var tabIdSnapshot = tab.id
+        var metaExtractFunc = window.LinkVaultMetaExtract ? window.LinkVaultMetaExtract.extractPageMetadataInTab : null
+        if (metaExtractFunc) {
+          chrome.scripting.executeScript({
+            target: { tabId: tabIdSnapshot },
+            func: metaExtractFunc,
+          }).then(function (results) {
+            if (currentTab && currentTab.id === tabIdSnapshot && results && results[0] && results[0].result) {
+              applyMetadata(results[0].result)
+            }
+          }).catch(function () {})
+        }
+      }
     }
 
     if (chrome.tabs && chrome.tabs.query) {
@@ -1541,6 +1585,11 @@
       }
     })
   }
+  if (quickNotesInput) {
+    quickNotesInput.addEventListener('input', function () {
+      quickNotesInput.dataset.userEdited = '1'
+    })
+  }
 
   async function saveCurrentPageDirectly() {
     if (!loggedIn || !userId) {
@@ -1571,17 +1620,19 @@
 
     var selectedCat = (saveCategorySelect && saveCategorySelect.value) || 'uncategorized'
     var selectedParent = (saveParentSelect && saveParentSelect.value) || null
-    var notesVal = (quickNotesInput && quickNotesInput.value.trim()) || ''
+    var finalTitle = (currentTabMeta && currentTabMeta.title && currentTabMeta.title.trim()) || currentTab.title
+    var notesVal = (quickNotesInput && quickNotesInput.value.trim()) || (currentTabMeta && (currentTabMeta.selection || currentTabMeta.description)) || ''
+    var favIcon = (currentTabMeta && currentTabMeta.icon) || currentTab.favIconUrl
 
     var payload
     try {
       payload = savePayloadApi.buildBookmarkPayload({
         url: currentTab.url,
-        title: currentTab.title,
+        title: finalTitle,
         categoryId: selectedCat,
         parentId: selectedParent,
         notes: notesVal,
-        favIconUrl: currentTab.favIconUrl,
+        favIconUrl: favIcon,
         userId: userId,
         existingBookmarks: allBookmarks,
       })
@@ -1607,7 +1658,10 @@
 
     var savedBm = res.data || payload
     allBookmarks.unshift(savedBm)
-    if (quickNotesInput) quickNotesInput.value = ''
+    if (quickNotesInput) {
+      quickNotesInput.value = ''
+      delete quickNotesInput.dataset.userEdited
+    }
     if (quickNotesWrap) quickNotesWrap.classList.add('hidden')
     if (saveParentRow) saveParentRow.classList.add('hidden')
 

@@ -215,6 +215,22 @@
                 <span class="sp-switch"></span>
               </div>
             </div>
+            <!-- 检索与填充 -->
+            <div class="sp-section" data-testid="lv-search-fill-section">
+              <span class="sp-section-title">{{ t('settings.searchAndFill') }}</span>
+              <div
+                class="sp-toggle-row"
+                :class="{ active: uiStore.semanticSearchEnabled }"
+                @click="onToggleSemanticSearch"
+                data-testid="lv-semantic-search-toggle"
+              >
+                <span class="sp-toggle-label">
+                  {{ t('settings.semanticSearch') }}
+                  <span class="sp-toggle-sub">{{ t('settings.semanticSearchHint') }}</span>
+                </span>
+                <span class="sp-switch"></span>
+              </div>
+            </div>
             <!-- 维护 -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.maintenance') }}</span>
@@ -613,6 +629,12 @@ function onSetSortMode(mode: SortMode) {
 function onToggleGroupsOnTop() {
   uiStore.groupsOnTop = !uiStore.groupsOnTop
   uiStore.saveUIState()
+}
+
+function onToggleSemanticSearch() {
+  uiStore.semanticSearchEnabled = !uiStore.semanticSearchEnabled
+  uiStore.saveUIState()
+  toast(uiStore.semanticSearchEnabled ? t('settings.semanticSearchOnToast') : t('settings.semanticSearchOffToast'), true)
 }
 
 function onHistoryMaxChange() {

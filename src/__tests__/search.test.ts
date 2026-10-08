@@ -195,6 +195,15 @@ describe('searchWithHighlights', () => {
     expect(results).toEqual([])
   })
 
+  it('融合自然语言语义意图搜索：无字面强匹配时根据意图召回并携带 _semanticReason', () => {
+    // '前端开发' 命中 Vue.js（概念集群：前端开发与状态管理）
+    const results = searchWithHighlights(SAMPLE_BOOKMARKS, SAMPLE_GROUPS, '前端开发', BOOKMARK_MAP, EMPTY_ATTRS)
+    expect(results.length).toBeGreaterThan(0)
+    const vueItem = results.find(r => r.id === 'b3')
+    expect(vueItem).toBeDefined()
+    expect(vueItem?._semanticReason).toBeDefined()
+  })
+
   // LOCK-FIX 回归：锁定态密文条目不进索引 → 建议项不渲染密文 title（不会乱码）。
   it('LOCK-FIX: 密文 title 书签不被命中，建议项 title 不含密文', () => {
     const cipher = `${'A'.repeat(44)}.${'B'.repeat(16)}.${'C'.repeat(24)}`
@@ -317,3 +326,20 @@ describe('clearSearchCache', () => {
     expect(() => clearSearchCache()).not.toThrow()
   })
 })
+
+describe('enableSemantic 语义融合控制', () => {
+  it('当 enableSemantic=false 时不注入语义意图匹配项', () => {
+    const testBm: any = {
+      id: 'bm_diagram',
+      title: 'draw.io',
+      url: 'https://app.diagrams.net',
+      notes: '',
+    }
+    // “流程图”不直接匹配 draw.io 标题与 url，但命中语义意图知识库
+    const withSemantic = searchBookmarkIds([testBm], '流程图', EMPTY_ATTRS, -1, false, true)
+    const withoutSemantic = searchBookmarkIds([testBm], '流程图', EMPTY_ATTRS, -1, false, false)
+    expect(withSemantic?.has('bm_diagram')).toBe(true)
+    expect(withoutSemantic?.has('bm_diagram') ?? false).toBe(false)
+  })
+})
+

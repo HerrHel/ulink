@@ -6,6 +6,7 @@
  */
 import type { Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 import { isThreePartCipher } from '../crypto.js'
+import { searchSemanticBookmarks } from './ai/semanticSearch.js'
 
 /**
  * E2E 锁定态遗留密文不进搜索索引 / 不参与匹配：encryptItem 加密整字段 → 整串三段
@@ -328,15 +329,31 @@ export function searchBookmarkIds(
   customAttributes: CustomAttribute[],
   version = -1,
   forceRebuild = false,
+  enableSemantic = true,
 ): Set<string> | null {
-  if (!query.trim()) return null
+  const q = query.trim()
+  if (!q) return null
   // 显式 forceRebuild 或版本不匹配时重建
   const needsRebuild = forceRebuild || (!!_bmFuse && version !== _bmVersion)
+  let matchedIds: Set<string>
   if (!_ensureBookmarkBase(bookmarks, customAttributes, version, needsRebuild) || !_bmFuse) {
-    return _fallbackBmIds(bookmarks, query, customAttributes)
+    matchedIds = _fallbackBmIds(bookmarks, q, customAttributes)
+  } else {
+    const results = _bmFuse.search(q)
+    matchedIds = new Set(results.map(r => r.item.id))
   }
-  const results = _bmFuse.search(query.trim())
-  return new Set(results.map(r => r.item.id))
+
+  // 融合自然语言语义意图搜索结果（如“找做流程图的”、“AI生图”等）
+  if (enableSemantic && q.length >= 2) {
+    const semanticMatches = searchSemanticBookmarks(q, bookmarks)
+    for (const sm of semanticMatches) {
+      if (!sm.isGroup && sm.score >= 40) {
+        matchedIds.add(sm.id)
+      }
+    }
+  }
+
+  return matchedIds
 }
 
 /**
@@ -354,15 +371,31 @@ export function searchGroupIds(
   customAttributes: CustomAttribute[],
   version = -1,
   forceRebuild = false,
+  enableSemantic = true,
 ): Set<string> | null {
-  if (!query.trim()) return null
+  const q = query.trim()
+  if (!q) return null
   // 显式 forceRebuild 或版本不匹配时重建
   const needsRebuild = forceRebuild || (!!_grpFuse && version !== _grpVersion)
+  let matchedIds: Set<string>
   if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuild) || !_grpFuse) {
-    return _fallbackGrpIds(groups, query, bookmarkMap)
+    matchedIds = _fallbackGrpIds(groups, q, bookmarkMap)
+  } else {
+    const results = _grpFuse.search(q)
+    matchedIds = new Set(results.map(r => r.item.id))
   }
-  const results = _grpFuse.search(query.trim())
-  return new Set(results.map(r => r.item.id))
+
+  // 融合自然语言语义意图搜索匹配的组
+  if (enableSemantic && q.length >= 2) {
+    const semanticMatches = searchSemanticBookmarks(q, [], groups)
+    for (const sm of semanticMatches) {
+      if (sm.isGroup && sm.score >= 40) {
+        matchedIds.add(sm.id)
+      }
+    }
+  }
+
+  return matchedIds
 }
 
 // ── 带高亮信息的搜索（供 SearchSuggest 使用）──
@@ -377,6 +410,7 @@ export interface SearchResultItem {
   _displayTitle?: string
   _highlights: Record<string, HighlightSegment[]>
   _divider?: string
+  _semanticReason?: string
 }
 
 export function _buildHighlightSegments(text: string, indices: ReadonlyArray<readonly [number, number]>): HighlightSegment[] {
@@ -427,58 +461,89 @@ export function searchWithHighlights(
   customAttributes: CustomAttribute[],
   maxResults: number = 8,
   version = -1,
+  forceRebuild = false,
+  enableSemantic = true,
 ): SearchResultItem[] {
   if (!query.trim()) return []
   const q = query.trim()
+
+  let bookmarkResults: SearchResultItem[] = []
+  let groupResults: SearchResultItem[] = []
 
   // 版本匹配则直接搜索；版本不匹配（CRUD 后）强制重建
   const needsRebuildBm = !!_bmFuse && version !== _bmVersion
   if (!_ensureBookmarkBase(bookmarks, customAttributes, version, needsRebuildBm) || !_bmFuse) {
     // 降级：无高亮
     const bmIds = _fallbackBmIds(bookmarks, q, customAttributes)
-    const bookmarkResults: SearchResultItem[] = bookmarks.filter(b => bmIds.has(b.id)).slice(0, maxResults).map(b => ({
+    bookmarkResults = bookmarks.filter(b => bmIds.has(b.id)).slice(0, maxResults).map(b => ({
       id: b.id, title: _plain(b.title || ''), url: _plain(b.url || ''), _highlights: {},
     }))
-    // M10 修复：旧实现降级时仅处理书签并 return，从不调用组降级，导致 fuse.js/pinyin-pro
-    // 分包加载失败时搜索建议和命令面板完全无法搜到任何组（与正常路径行为不一致）。
-    // 同条件下 _ensureGroupBase 也会失败，但模块内已有现成的 _fallbackGrpIds（用 includes 搜组）。
-    // 降级时调用 _fallbackGrpIds 构建组结果项与书签降级结果合并返回，保持降级与正常路径一致。
     const grpIds = _fallbackGrpIds(groups, q, bookmarkMap)
-    const groupResults: SearchResultItem[] = groups.filter(g => grpIds.has(g.id)).slice(0, GROUP_SUGGEST_LIMIT).map(g => ({
+    groupResults = groups.filter(g => grpIds.has(g.id)).slice(0, GROUP_SUGGEST_LIMIT).map(g => ({
       id: g.id, name: _plain(g.name || ''), _isGroup: true,
       _displayTitle: _plain(g.name || '') || '未命名组',
       bookmarkIds: g.bookmarkIds,
       _highlights: {},
     }))
-    if (!groupResults.length) return bookmarkResults.slice(0, maxResults)
-    if (!bookmarkResults.length) return groupResults.slice(0, maxResults)
-    return [...groupResults, ...bookmarkResults].slice(0, maxResults + GROUP_SUGGEST_LIMIT)
+  } else {
+    const bmResults = _bmFuse.search(q, { limit: maxResults })
+    bookmarkResults = bmResults.map(r => ({
+      id: r.item.id,
+      title: (r.item as BookmarkSearchItem).title,
+      url: (r.item as BookmarkSearchItem).url,
+      _highlights: _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP),
+    }))
+
+    const needsRebuildGrp = !!_grpFuse && version !== _grpVersion
+    if (_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuildGrp) && _grpFuse) {
+      const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
+      groupResults = grpResults.map(r => ({
+        id: r.item.id,
+        name: (r.item as GroupSearchItem).name,
+        _isGroup: true,
+        _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
+        bookmarkIds: (r.item as GroupSearchItem).bookmarkIds,
+        _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
+      }))
+    }
   }
-  const bmResults = _bmFuse.search(q, { limit: maxResults })
 
-  const bookmarkResults: SearchResultItem[] = bmResults.map(r => ({
-    id: r.item.id,
-    title: (r.item as BookmarkSearchItem).title,
-    url: (r.item as BookmarkSearchItem).url,
-    _highlights: _extractHighlights(r as unknown as FuseResult, BM_KEY_MAP),
-  }))
+  // 融合自然语言语义意图搜索结果（当字数 >= 2 时）
+  if (enableSemantic && q.length >= 2) {
+    const semanticMatches = searchSemanticBookmarks(q, bookmarks, groups)
+    const existingBmIds = new Set(bookmarkResults.map(r => r.id))
+    const existingGrpIds = new Set(groupResults.map(r => r.id))
 
-  const needsRebuildGrp = !!_grpFuse && version !== _grpVersion
-  if (!_ensureGroupBase(groups, bookmarkMap, customAttributes, version, needsRebuildGrp) || !_grpFuse) {
-    return bookmarkResults.slice(0, maxResults)
+    for (const sm of semanticMatches) {
+      if (sm.score < 40) continue
+      if (sm.isGroup) {
+        if (!existingGrpIds.has(sm.id) && groupResults.length < GROUP_SUGGEST_LIMIT + 2) {
+          const g = groups.find(item => item.id === sm.id)
+          groupResults.push({
+            id: sm.id,
+            name: _plain(sm.title),
+            _isGroup: true,
+            _displayTitle: _plain(sm.title) || '未命名组',
+            bookmarkIds: g?.bookmarkIds,
+            _highlights: {},
+            _semanticReason: sm.reason,
+          })
+          existingGrpIds.add(sm.id)
+        }
+      } else {
+        if (!existingBmIds.has(sm.id) && bookmarkResults.length < maxResults + 4) {
+          bookmarkResults.push({
+            id: sm.id,
+            title: _plain(sm.title),
+            url: _plain(sm.url),
+            _highlights: {},
+            _semanticReason: sm.reason,
+          })
+          existingBmIds.add(sm.id)
+        }
+      }
+    }
   }
-  const grpResults = _grpFuse.search(q, { limit: GROUP_SUGGEST_LIMIT })
-
-  // D2-2：bookmarkIds 已折进 GroupSearchItem（见 _buildGroupSearchItems），热路径不再每键击 new Map。
-  // Fuse 命中的 r.item 即同 version 缓存的组项，O(1) 直接取 bookmarkIds。
-  const groupResults: SearchResultItem[] = grpResults.map(r => ({
-    id: r.item.id,
-    name: (r.item as GroupSearchItem).name,
-    _isGroup: true,
-    _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
-    bookmarkIds: (r.item as GroupSearchItem).bookmarkIds,
-    _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
-  }))
 
   if (!groupResults.length) return bookmarkResults.slice(0, maxResults)
   if (!bookmarkResults.length) return groupResults.slice(0, maxResults)

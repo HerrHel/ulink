@@ -24,6 +24,7 @@ describe('UIStore', () => {
       expect(store.activeAttrs).toEqual([])
       expect(store.excludedAttrs).toEqual([])
       expect(store.detailCards).toEqual([])
+      expect(store.semanticSearchEnabled).toBe(true)
       expect(store.panels.detail).toBe(false)
       expect(store.panels.rail).toBe(false)
       expect(store.expandedIds).toEqual([])
@@ -277,14 +278,18 @@ describe('UIStore', () => {
       expect(store.panels.detail).toBe(false) // detail 不由 detailOpen 持久化驱动
     })
 
-    it('应该只恢复 grid/list layoutMode', () => {
+    it('应该正确保存并恢复 semanticSearchEnabled 开关', () => {
+      store.semanticSearchEnabled = false
+      store.saveUIState()
+      const saved = JSON.parse((localStorage.setItem as any).mock.calls.slice(-1)[0][1])
+      expect(saved.semanticSearchEnabled).toBe(false)
+
       ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
-        layoutMode: 'invalid',
+        semanticSearchEnabled: false,
       }))
-      
+      store.semanticSearchEnabled = true
       store.restoreUIState()
-      
-      expect(store.layoutMode).toBe('grid') // 保持默认值
+      expect(store.semanticSearchEnabled).toBe(false)
     })
   })
 

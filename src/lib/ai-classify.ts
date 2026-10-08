@@ -55,7 +55,7 @@ export function titleHasKeyword(titleLower: string, kw: string): boolean {
 // ── 属性关键词映射 ──
 const ATTR_KEYWORDS: Record<string, { domains: string[]; titles: string[] }> = {
   '常用': {
-    domains: ['github.com', 'google.com', 'stackoverflow.com', 'youtube.com', 'chat.openai.com', 'claude.ai'],
+    domains: ['github.com', 'google.com', 'stackoverflow.com', 'youtube.com', 'chat.openai.com', 'chatgpt.com', 'claude.ai'],
     titles: ['常用', '每日', 'daily', '必读'],
   },
   '工作': {

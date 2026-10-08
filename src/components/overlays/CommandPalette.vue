@@ -89,6 +89,8 @@ const searchResults = computed<SearchResultItem[]>(() => {
     // 传 _searchVersion 复用 Fuse 基准（旧调用漏传 → 每键击重建）。
     // 全量基准 + 软删过滤推到结果层，与 data.ts / SearchSuggest 共享缓存。
     ds._searchVersion,
+    false,
+    ui.semanticSearchEnabled,
   ).filter(r => {
     if (r._isGroup) return !ds.groupMap[r.id]?.deletedAt
     return !ds.bookmarkMap[r.id]?.deletedAt

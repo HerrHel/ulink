@@ -6,10 +6,49 @@ if (typeof globalThis.chrome === 'undefined' && typeof globalThis.browser !== 'u
 }
 
 import { decideOpenPwa } from './pwa-open.js'
+import { extractPageMetadataInTab } from './meta-extract.js'
 
 const PWA_URL = 'https://ulink.ren'
 // H10：仅按 PWA / 本地 dev 域名匹配已开标签，无需 tabs 权限遍历全部标签 URL
 const PWA_TAB_URL_PATTERNS = [PWA_URL + '/*', 'http://localhost:5173/*', 'https://localhost:5173/*']
+
+// ── 统一网页元数据抓取（方案二：现场提取 OpenGraph、SEO 描述与划词）──
+async function extractTabMeta(tab) {
+  if (!tab || !tab.id || !tab.url || (!tab.url.startsWith('http://') && !tab.url.startsWith('https://'))) {
+    return {
+      title: (tab && tab.title) || '',
+      description: '',
+      keywords: '',
+      selection: '',
+      icon: (tab && tab.favIconUrl) || '',
+    }
+  }
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: extractPageMetadataInTab,
+    })
+    if (results && results[0] && results[0].result) {
+      const r = results[0].result
+      return {
+        title: r.title || tab.title || '',
+        description: r.description || '',
+        keywords: r.keywords || '',
+        selection: r.selection || '',
+        icon: r.icon || tab.favIconUrl || '',
+      }
+    }
+  } catch (_) {
+    // 受限或不可注入页面静默降级为标签属性
+  }
+  return {
+    title: tab.title || '',
+    description: '',
+    keywords: '',
+    selection: '',
+    icon: tab.favIconUrl || '',
+  }
+}
 
 // ── 初始化：创建右键菜单（每次 worker 启动时执行，以防重启后丢失）──
 chrome.contextMenus.removeAll(function () {
@@ -33,30 +72,32 @@ chrome.runtime.onInstalled.addListener(function () {
 })
 
 // ── 右键菜单 ──
-chrome.contextMenus.onClicked.addListener(function (info, tab) {
+chrome.contextMenus.onClicked.addListener(async function (info, tab) {
   if (info.menuItemId === 'save-to-linkvault') {
-    openPwaWithUrl(info.linkUrl || tab.url, tab.title)
+    const meta = await extractTabMeta(tab)
+    const finalTitle = meta.title || tab.title
+    const finalNotes = meta.selection || meta.description || ''
+    openPwaWithUrl(info.linkUrl || tab.url, finalTitle, finalNotes)
   } else if (info.menuItemId === 'save-selection-to-linkvault') {
-    chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => window.getSelection()?.toString() || '',
-    }).then(function (results) {
-      const selectedText = (results && results[0] && results[0].result) || ''
-      openPwaWithUrl(info.pageUrl || tab.url, tab.title, selectedText)
-    }).catch(function () {
-      openPwaWithUrl(info.pageUrl || tab.url, tab.title)
-    })
+    const meta = await extractTabMeta(tab)
+    const selection = meta.selection || info.selectionText || ''
+    const finalTitle = meta.title || tab.title
+    openPwaWithUrl(info.pageUrl || tab.url, finalTitle, selection)
   }
 })
 
 // ── 快捷键 Ctrl+Shift+S ──
 // activeTab 在命令/用户手势触发时瞬态授权当前标签，无需持久 tabs 权限
-chrome.commands.onCommand.addListener(function (command) {
+chrome.commands.onCommand.addListener(async function (command) {
   if (command === 'save-to-linkvault') {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
-      var tab = tabs[0]
-      if (tab) openPwaWithUrl(tab.url, tab.title)
-    })
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+    const tab = tabs && tabs[0]
+    if (tab) {
+      const meta = await extractTabMeta(tab)
+      const finalTitle = meta.title || tab.title
+      const finalNotes = meta.selection || meta.description || ''
+      openPwaWithUrl(tab.url, finalTitle, finalNotes)
+    }
   }
 })
 
@@ -85,9 +126,19 @@ function openPwaWithUrl(url, title, notes) {
 // ── 消息路由：side panel ↔ PWA ──
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'GET_CURRENT_TAB') {
-    chrome.tabs.query({ active: true, currentWindow: true }).then(function (tabs) {
-      const tab = tabs[0]
-      sendResponse(tab ? { url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl } : null)
+    chrome.tabs.query({ active: true, currentWindow: true }).then(async function (tabs) {
+      const tab = tabs && tabs[0]
+      if (!tab) { sendResponse(null); return }
+      const meta = await extractTabMeta(tab)
+      sendResponse({
+        id: tab.id,
+        url: tab.url,
+        title: meta.title || tab.title,
+        description: meta.description,
+        keywords: meta.keywords,
+        selection: meta.selection,
+        favIconUrl: meta.icon || tab.favIconUrl,
+      })
     })
     return true
   }
