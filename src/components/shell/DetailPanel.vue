@@ -8,7 +8,7 @@
   >
     <div class="detail-drag-handle" id="detailDragHandle"></div>
 
-    <!-- 顶部标题栏：极简清爽 -->
+    <!-- 顶部标题栏：温润细腻 -->
     <div class="chat-top-bar">
       <div v-if="entries.length" class="chat-top-tabs">
         <button
@@ -56,11 +56,22 @@
     <div class="detail-inner chat-scroll-body" id="detailInner" ref="chatScrollRef">
       <!-- 对话模式 -->
       <template v-if="currentTab === 'ai'">
-        <!-- 初始空态：只留极其简洁的一句话引导 -->
+        <!-- 初始空态：淡雅、温和、轻量的文字引导 -->
         <div v-if="chatTurns.length === 0" class="chat-empty-state">
-          <p class="chat-empty-text">
-            {{ isZh ? '输入需求甄选网站、输入网址找平替，或直接粘贴视频链接。' : 'Ask for sites, find alternatives, or paste video links.' }}
-          </p>
+          <div class="chat-empty-inner">
+            <span class="chat-empty-sparkle">✦</span>
+            <p class="chat-empty-lead">{{ isZh ? '你想发现什么网站？' : 'What website are you looking for?' }}</p>
+            <p class="chat-empty-sub">
+              {{ isZh ? '直接输入需求甄选、输入网址找平替，或粘贴视频链接。' : 'Describe your needs, find alternatives, or paste video links.' }}
+            </p>
+            <div class="chat-quick-hints">
+              <button class="hint-text-btn" @click="quickFill(t('ai.promptWhiteboard'))">{{ t('ai.promptWhiteboard') }}</button>
+              <span class="hint-dot">·</span>
+              <button class="hint-text-btn" @click="quickFill(t('ai.promptGallery'))">{{ t('ai.promptGallery') }}</button>
+              <span class="hint-dot">·</span>
+              <button class="hint-text-btn" @click="quickFill(t('ai.promptOpenNotes'))">{{ t('ai.promptOpenNotes') }}</button>
+            </div>
+          </div>
         </div>
 
         <!-- 对话流 -->
@@ -71,23 +82,25 @@
             class="chat-turn-item"
             :class="`turn-${turn.role}`"
           >
-            <!-- 用户消息 -->
+            <!-- 用户消息：轻量无边框气泡 -->
             <div v-if="turn.role === 'user'" class="chat-user-bubble">
               {{ turn.content }}
             </div>
 
             <!-- 助手回复 -->
             <div v-else class="chat-assistant-wrap">
-              <!-- 思考状态 -->
-              <div v-if="turn.loading" class="chat-thinking">
-                <div class="chat-thinking-bar"></div>
-                <span>{{ t('ai.searching') }}</span>
+              <!-- 思考状态：灵动的极简三点呼吸动效 -->
+              <div v-if="turn.loading" class="chat-thinking-pulse">
+                <span class="thinking-dot dot-1"></span>
+                <span class="thinking-dot dot-2"></span>
+                <span class="thinking-dot dot-3"></span>
+                <span class="thinking-label">{{ t('ai.searching') }}</span>
               </div>
 
               <!-- 回复内容与候选卡片 -->
               <div v-else class="chat-reply-body">
                 <div v-if="turn.content" class="chat-reply-line">
-                  <span>{{ turn.content }}</span>
+                  <span class="reply-summary">{{ turn.content }}</span>
                   <button
                     v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
                     class="chat-action-link"
@@ -133,7 +146,7 @@
       </template>
     </div>
 
-    <!-- 底部常驻：纯粹干净的一个对话框 -->
+    <!-- 底部常驻：单一精致对话框（无厚重双层边框） -->
     <div class="chat-input-dock">
       <div class="chat-input-wrapper" :class="{ focused: isInputFocused }">
         <textarea
@@ -254,6 +267,11 @@ function startNewChat() {
   aiQuery.value = ''
   adjustTextareaHeight()
   nextTick(() => aiTextareaRef.value?.focus())
+}
+
+function quickFill(text: string) {
+  aiQuery.value = text
+  handleAiSubmit()
 }
 
 function closeEntirePanel() {
@@ -443,14 +461,14 @@ function closeDetail(rawId: string) {
   box-sizing: border-box;
 }
 
-/* 顶栏 */
+/* 顶栏：轻量温润 */
 .chat-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 38px;
   padding: 0 10px 0 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light, #efe8df);
   background: var(--surface);
   flex-shrink: 0;
   min-width: 0;
@@ -461,12 +479,13 @@ function closeDetail(rawId: string) {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  letter-spacing: -0.2px;
 }
 
 .chat-top-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   height: 100%;
 }
 
@@ -475,7 +494,7 @@ function closeDetail(rawId: string) {
   align-items: center;
   gap: 4px;
   height: 100%;
-  padding: 0 8px;
+  padding: 0 6px;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -497,8 +516,9 @@ function closeDetail(rawId: string) {
 }
 
 .chat-tab-badge {
-  font-size: 10.5px;
-  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 5px;
   border-radius: 9999px;
   background: var(--accent-light);
   color: var(--accent);
@@ -514,14 +534,14 @@ function closeDetail(rawId: string) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-xs, 4px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
 }
 
 .chat-btn-icon:hover {
@@ -529,57 +549,120 @@ function closeDetail(rawId: string) {
   color: var(--text);
 }
 
-/* 滚动区 */
+/* 滚动内容区 */
 .chat-scroll-body {
   flex: 1;
   overflow-y: auto;
   padding: 14px 12px;
   min-width: 0 !important;
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-light) transparent;
+}
+.chat-scroll-body::-webkit-scrollbar {
+  width: 4px;
+}
+.chat-scroll-body::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 9999px;
 }
 
-/* 初始空态 */
+/* 空态：轻微点缀，不做多余视觉堆砌 */
 .chat-empty-state {
   height: 100%;
+  min-height: 220px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 30px 16px;
+  padding: 24px 16px;
   text-align: center;
 }
 
-.chat-empty-text {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.6;
+.chat-empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   max-width: 240px;
-  margin: 0;
+}
+
+.chat-empty-sparkle {
+  color: var(--accent);
+  font-size: 16px;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.chat-empty-lead {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 6px 0;
+}
+
+.chat-empty-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+.chat-quick-hints {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.hint-text-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-xs, 4px);
+  transition: all 0.12s ease;
+}
+.hint-text-btn:hover {
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.hint-dot {
+  color: var(--border);
+  font-size: 10px;
 }
 
 /* 对话流 */
 .chat-flow-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .chat-turn-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  animation: chat-fade-in 0.15s ease-out;
 }
 
+@keyframes chat-fade-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 用户气泡：做减法，去掉重边框，温和微色块 */
 .chat-user-bubble {
   align-self: flex-end;
-  max-width: 88%;
+  max-width: 86%;
   padding: 7px 11px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-base, 8px);
-  border-bottom-right-radius: 2px;
+  background: var(--surface-active, #efe8df);
+  border-radius: 12px 12px 2px 12px;
   font-size: 12.5px;
   color: var(--text);
-  line-height: 1.4;
+  line-height: 1.45;
   word-break: break-word;
 }
 
@@ -590,38 +673,34 @@ function closeDetail(rawId: string) {
   width: 100%;
 }
 
-.chat-thinking {
+/* 思考状态：极简微动效三点 */
+.chat-thinking-pulse {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 6px 0;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 2px;
+}
+
+.thinking-dot {
+  width: 4.5px;
+  height: 4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: dot-pulse 1.2s infinite ease-in-out;
+}
+.dot-1 { animation-delay: 0s; }
+.dot-2 { animation-delay: 0.2s; }
+.dot-3 { animation-delay: 0.4s; }
+
+@keyframes dot-pulse {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.85); }
+  40% { opacity: 1; transform: scale(1.15); }
+}
+
+.thinking-label {
   font-size: 11px;
   color: var(--text-muted);
-}
-
-.chat-thinking-bar {
-  height: 2px;
-  width: 100%;
-  background: var(--border);
-  position: relative;
-  overflow: hidden;
-  border-radius: 1px;
-}
-
-.chat-thinking-bar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 35%;
-  height: 100%;
-  background: var(--accent);
-  animation: chat-scan 1.2s ease-in-out infinite;
-}
-
-@keyframes chat-scan {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
+  margin-left: 4px;
 }
 
 .chat-reply-body {
@@ -636,6 +715,11 @@ function closeDetail(rawId: string) {
   justify-content: space-between;
   font-size: 11.5px;
   color: var(--text-muted);
+  padding: 0 1px;
+}
+
+.reply-summary {
+  font-weight: 500;
 }
 
 .chat-action-link {
@@ -646,6 +730,7 @@ function closeDetail(rawId: string) {
   font-weight: 600;
   cursor: pointer;
   padding: 0;
+  transition: opacity 0.12s ease;
 }
 .chat-action-link:hover {
   text-decoration: underline;
@@ -657,12 +742,12 @@ function closeDetail(rawId: string) {
   gap: 6px;
 }
 
-/* 底部仅留一个对话输入框 */
+/* 底部仅留一个对话输入框：无重叠多层边框 */
 .chat-input-dock {
   flex-shrink: 0;
   padding: 8px 10px 10px;
   background: var(--surface);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-light, #efe8df);
   min-width: 0 !important;
   box-sizing: border-box;
 }
@@ -673,16 +758,21 @@ function closeDetail(rawId: string) {
   gap: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
-  background: var(--surface);
-  padding: 6px 8px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--bg, #fdfbf9);
+  padding: 6px 7px 6px 10px;
+  transition: all 0.16s ease;
   min-width: 0;
   box-sizing: border-box;
 }
 
+.chat-input-wrapper:hover {
+  border-color: var(--border-hover, #d5cbbe);
+}
+
 .chat-input-wrapper.focused {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-glow, rgba(18, 46, 138, 0.15));
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent-light, rgba(18, 46, 138, 0.08));
 }
 
 .chat-textarea {
@@ -697,12 +787,13 @@ function closeDetail(rawId: string) {
   color: var(--text);
   resize: none;
   outline: none;
-  max-height: 120px;
+  max-height: 110px;
   box-sizing: border-box;
 }
 
 .chat-textarea::placeholder {
   color: var(--text-muted);
+  opacity: 0.85;
 }
 
 .chat-send-btn {
@@ -716,17 +807,23 @@ function closeDetail(rawId: string) {
   color: var(--text-muted);
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
 }
 
 .chat-send-btn.active {
   background: var(--accent);
   color: #fff;
+  transform: scale(1.02);
+}
+
+.chat-send-btn.active:hover {
+  background: var(--accent-dark, #0e2270);
+  transform: scale(1.06);
 }
 
 .chat-send-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 </style>
