@@ -848,3 +848,36 @@
 [data-theme="dark"] .sp-share-item:hover{
   box-shadow:0 2px 5px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.07) inset;
 }
+
+/* AI 助手配置 */
+.sp-ai-config-box {
+  margin: 6px 12px 10px;
+  padding: 8px 10px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.sp-ai-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.sp-ai-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.sp-ai-input:focus {
+  border-color: var(--accent);
+}

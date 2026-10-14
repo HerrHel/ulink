@@ -231,6 +231,32 @@
                 <span class="sp-switch"></span>
               </div>
             </div>
+
+            <!-- AI 助手（小米 MiMo 大模型） -->
+            <div class="sp-section">
+              <span class="sp-section-title">{{ isZh ? 'AI 助手与大模型' : 'AI Assistant & LLM' }}</span>
+              <div
+                class="sp-toggle-row"
+                :class="{ active: mimoEnabled }"
+                @click="onToggleMiMo"
+              >
+                <span class="sp-toggle-label">
+                  {{ isZh ? '启用小米 MiMo 大模型' : 'Enable Xiaomi MiMo' }}
+                  <span class="sp-toggle-sub">{{ isZh ? '当前模型：mimo-v2.6-flash（全模态超长上下文极速推理）' : 'Model: mimo-v2.6-flash (Fast multimodal)' }}</span>
+                </span>
+                <span class="sp-switch"></span>
+              </div>
+              <div v-if="mimoEnabled" class="sp-ai-config-box">
+                <label class="sp-ai-label">{{ isZh ? '自定义 API Key（留空则默认使用内置 Key）' : 'Custom API Key (Optional)' }}</label>
+                <input
+                  v-model="customMiMoKey"
+                  type="password"
+                  class="sp-ai-input"
+                  :placeholder="isZh ? 'sk-...' : 'sk-...'"
+                  @blur="onSaveCustomMiMoKey"
+                />
+              </div>
+            </div>
             <!-- 维护 -->
             <div class="sp-section">
               <span class="sp-section-title">{{ t('settings.maintenance') }}</span>
@@ -488,9 +514,39 @@ import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
+import { getMiMoConfig, saveMiMoConfig } from '../../lib/ai/mimoClient.js'
 
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
 const { locale, setLocale } = useI18n()
+const isZh = computed(() => locale.value.startsWith('zh'))
+
+// 小米 MiMo 大模型设置
+const initialMiMo = getMiMoConfig()
+const mimoEnabled = ref(initialMiMo.enabled)
+let savedApiKey = ''
+try {
+  const raw = localStorage.getItem('ulink_mimo_config')
+  if (raw) savedApiKey = JSON.parse(raw).apiKey || ''
+} catch {
+  // ignore
+}
+const customMiMoKey = ref(savedApiKey)
+
+function onToggleMiMo() {
+  mimoEnabled.value = !mimoEnabled.value
+  saveMiMoConfig({
+    enabled: mimoEnabled.value,
+    apiKey: customMiMoKey.value.trim() || undefined,
+  })
+}
+
+function onSaveCustomMiMoKey() {
+  saveMiMoConfig({
+    enabled: mimoEnabled.value,
+    apiKey: customMiMoKey.value.trim() || undefined,
+  })
+  toast(isZh.value ? '已保存 AI 密钥配置' : 'AI key saved', true)
+}
 
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
