@@ -169,6 +169,70 @@ describe('DetailPanel — AI 交互体验升维 (Action Card & Context Hints & T
     wrapper.unmount()
   })
 
+  it('工作台行动卡片：支持候选多选框微操勾选与全选/反选交互', async () => {
+    const ui = useUIStore()
+    ui.panels.detail = true
+
+    const wrapper = mount(DetailPanel)
+    await nextTick()
+
+    const vm = wrapper.vm as any
+    vm.chatTurns = [
+      {
+        id: 'turn-asst-curation',
+        role: 'assistant',
+        content: '推荐 3 款工具：',
+        timestamp: Date.now(),
+        actionCard: {
+          type: 'custom',
+          title: '一键装配「设计工作台」',
+          buttonText: '一键装配',
+          actionName: 'create_topic_workspace',
+          payload: {
+            topic: '设计工作台',
+            candidates: [
+              { title: 'Figma', url: 'https://figma.com' },
+              { title: 'Penpot', url: 'https://penpot.app' },
+              { title: 'Sketch', url: 'https://sketch.com' },
+            ],
+          },
+        },
+      },
+    ]
+    await nextTick()
+
+    // 验证多选微操区域已渲染
+    const curationArea = wrapper.find('.action-card-curation')
+    expect(curationArea.exists()).toBe(true)
+
+    // 默认全选 3 项
+    const checkboxes = wrapper.findAll('.action-candidate-checkbox')
+    expect(checkboxes.length).toBe(3)
+    expect(vm.getSelectedCandidateCount(vm.chatTurns[0].actionCard)).toBe(3)
+
+    // 取消勾选第 2 项 (Penpot)
+    await checkboxes[1].trigger('change')
+    await nextTick()
+    expect(vm.isCandidateSelected(vm.chatTurns[0].actionCard, 'https://penpot.app')).toBe(false)
+    expect(vm.getSelectedCandidateCount(vm.chatTurns[0].actionCard)).toBe(2)
+
+    // 点击“全不选 / 全选”切换按钮
+    const toggleBtn = wrapper.find('.action-card-curation-toggle')
+    expect(toggleBtn.exists()).toBe(true)
+
+    // 当前未全选，点击触发全选
+    await toggleBtn.trigger('click')
+    await nextTick()
+    expect(vm.getSelectedCandidateCount(vm.chatTurns[0].actionCard)).toBe(3)
+
+    // 再次点击触发全不选
+    await toggleBtn.trigger('click')
+    await nextTick()
+    expect(vm.getSelectedCandidateCount(vm.chatTurns[0].actionCard)).toBe(0)
+
+    wrapper.unmount()
+  })
+
   it('斜杠指令在输入框按 Tab 键自动补全', async () => {
     const ui = useUIStore()
     ui.panels.detail = true

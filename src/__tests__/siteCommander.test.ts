@@ -4,6 +4,7 @@ import {
   applyInboxZeroClustering,
   createTopicWorkspace,
   healDeadlink,
+  clearUndoStack,
 } from '../lib/ai/siteCommander.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
@@ -37,6 +38,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    clearUndoStack()
 
     mockDs = {
       bookmarks: [
@@ -78,6 +80,10 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
         const idx = mockDs.siblingGroups.findIndex((g: any) => g.id === id)
         if (idx >= 0) mockDs.siblingGroups.splice(idx, 1)
         delete mockDs.groupMap[id]
+      }),
+      deleteCategory: vi.fn((id: string) => {
+        const idx = mockDs.categories.findIndex((c: any) => c.id === id)
+        if (idx >= 0) mockDs.categories.splice(idx, 1)
       }),
       updateBookmark: vi.fn((id: string, changes: any) => {
         const bm = mockDs.bookmarkMap[id]
@@ -582,5 +588,87 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
         }),
       }),
     )
+  })
+
+  it('多级事务撤销栈：支持连续 /undo 多步回退并反馈剩余步数', async () => {
+    // 动作 1：创建分类 A
+    await dispatchSiteCommand('/cat add 音乐推荐', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    // 动作 2：创建分类 B
+    await dispatchSiteCommand('/cat add 播客精选', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    // 第一次撤销（回退动作 2：播客精选）
+    const undo1 = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(undo1.handled).toBe(true)
+    expect(undo1.reply).toContain('播客精选')
+    expect(undo1.reply).toContain('还可撤销 1 步操作')
+
+    // 第二次撤销（回退动作 1：音乐推荐）
+    const undo2 = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(undo2.handled).toBe(true)
+    expect(undo2.reply).toContain('音乐推荐')
+    expect(undo2.reply).not.toContain('还可撤销')
+
+    // 第三次撤销：空栈
+    const undo3 = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(undo3.reply).toContain('当前没有可撤销的站内操作')
+  })
+
+  it('双语自然语言：英文日常指令正常调度', async () => {
+    // switch to dark mode
+    const resTheme = await dispatchSiteCommand('switch to dark mode', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resTheme.handled).toBe(true)
+    expect(mockUi.setThemeColor).toHaveBeenCalledWith('dark')
+
+    // switch to list view
+    const resView = await dispatchSiteCommand('switch to list view', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resView.handled).toBe(true)
+    expect(mockUi.layoutMode).toBe('list')
+
+    // health check
+    const resHealth = await dispatchSiteCommand('health check', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resHealth.handled).toBe(true)
+    expect(resHealth.action).toBe('health')
+
+    // inbox zero
+    const resInbox = await dispatchSiteCommand('inbox zero', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resInbox.handled).toBe(true)
+    expect(resInbox.action).toBe('inbox_zero')
   })
 })
