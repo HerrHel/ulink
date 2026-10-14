@@ -124,4 +124,35 @@ describe('chatSessions — AI 侧边栏多会话与历史管理', () => {
     expect(loaded[0].turns[1].actionCard?.resultGid).toBe('sg_123')
     expect(loaded[0].turns[1].actionCard?.resultCatId).toBe('cat_design')
   })
+
+  it('ChatActionCard 支持 selectedCandidateUrls 暂存与持久化', () => {
+    const s = createNewSession('微操测试')
+    updateSession(s.id, [
+      {
+        id: 'turn-1',
+        role: 'user',
+        content: '/pack UI设计',
+        timestamp: Date.now(),
+      },
+      {
+        id: 'turn-2',
+        role: 'assistant',
+        content: '已甄选工具',
+        timestamp: Date.now(),
+        actionCard: {
+          type: 'custom',
+          title: '一键创建',
+          buttonText: '立即创建',
+          actionName: 'create_topic_workspace',
+          selectedCandidateUrls: ['https://figma.com', 'https://penpot.app'],
+        },
+      },
+    ])
+
+    const loaded = loadSessions()
+    expect(loaded[0].turns[1].actionCard?.selectedCandidateUrls).toEqual([
+      'https://figma.com',
+      'https://penpot.app',
+    ])
+  })
 })

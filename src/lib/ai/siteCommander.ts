@@ -49,17 +49,50 @@ export interface SiteCommanderContext {
 export interface UndoableAction {
   type: string
   description: string
+  timestamp?: number
   revert: () => Promise<string> | string
 }
 
+const MAX_UNDO_STACK_DEPTH = 15
+const undoTransactionStack: UndoableAction[] = []
+
 let lastUndoableAction: UndoableAction | null = null
 
+export function pushUndoAction(action: UndoableAction): void {
+  action.timestamp = action.timestamp || Date.now()
+  undoTransactionStack.push(action)
+  if (undoTransactionStack.length > MAX_UNDO_STACK_DEPTH) {
+    undoTransactionStack.shift()
+  }
+  lastUndoableAction = action
+}
+
+export function popUndoAction(): UndoableAction | null {
+  const action = undoTransactionStack.pop() || null
+  lastUndoableAction = undoTransactionStack.length > 0 ? undoTransactionStack[undoTransactionStack.length - 1] : null
+  return action
+}
+
+export function getUndoStackDepth(): number {
+  return undoTransactionStack.length
+}
+
+export function clearUndoStack(): void {
+  undoTransactionStack.length = 0
+  lastUndoableAction = null
+}
+
 export function getLastUndoableAction(): UndoableAction | null {
-  return lastUndoableAction
+  return lastUndoableAction || (undoTransactionStack.length > 0 ? undoTransactionStack[undoTransactionStack.length - 1] : null)
 }
 
 export function setLastUndoableAction(action: UndoableAction | null): void {
-  lastUndoableAction = action
+  if (action) {
+    pushUndoAction(action)
+  } else {
+    lastUndoableAction = null
+    undoTransactionStack.pop()
+  }
 }
 
 /**
@@ -89,7 +122,7 @@ export function mergeDuplicateBookmarks(
 
   if (mergedCount > 0) {
     app.save()
-    lastUndoableAction = {
+    pushUndoAction({
       type: 'merge_dedup',
       description: `合并 ${mergedCount} 个重复书签`,
       revert: () => {
@@ -99,7 +132,7 @@ export function mergeDuplicateBookmarks(
         app.save()
         return `已撤销查重合并，${deletedIds.length} 个书签副本已从回收站还原。`
       },
-    }
+    })
   }
 
   return {
@@ -149,7 +182,7 @@ export function applyInboxZeroClustering(
 
   if (movedCount > 0) {
     app.save()
-    lastUndoableAction = {
+    pushUndoAction({
       type: 'inbox_zero',
       description: `智能归拢 ${movedCount} 个未分类书签`,
       revert: () => {
@@ -159,7 +192,7 @@ export function applyInboxZeroClustering(
         app.save()
         return `已撤销智能归类，${revertMap.length} 个书签已还原原分类。`
       },
-    }
+    })
   }
 
   return {
@@ -295,7 +328,7 @@ export async function createTopicWorkspace(
   ui.focusedGroupId = group.id
 
   // 6. 注册撤销环路 (UndoableAction)
-  lastUndoableAction = {
+  pushUndoAction({
     type: 'topic_workspace',
     description: `创建主题工作台「${group.name}」`,
     revert: () => {
@@ -313,7 +346,7 @@ export async function createTopicWorkspace(
       app.save?.()
       return `已撤销创建主题工作台「${group.name}」，新建笔记组与 ${createdBmIds.length} 个书签已清理。`
     },
-  }
+  })
 
   return {
     success: true,
@@ -371,7 +404,7 @@ export function healDeadlink(
   })
   app.save?.()
 
-  lastUndoableAction = {
+  pushUndoAction({
     type: 'heal_deadlink',
     description: `平替自愈书签「${prev.title}」->「${replacement.title}」`,
     revert: () => {
@@ -385,7 +418,7 @@ export function healDeadlink(
       app.save?.()
       return `已撤销平替自愈，书签「${prev.title}」已还原为原链接。`
     },
-  }
+  })
 
   return {
     success: true,
@@ -524,7 +557,8 @@ export async function dispatchSiteCommand(
   if (
     /^(?:请?帮?我?)?(?:切换到?|开启|转成?|换成?|设为)?\s*(?:深色|暗黑|暗色|夜间|黑暗|黑夜)(?:模式|主题)?$/i.test(
       query,
-    )
+    ) ||
+    /^(?:switch\s+to\s+)?(?:dark\s+mode|dark\s+theme)$/i.test(query.trim())
   ) {
     ui.setThemeColor('dark')
     return {
@@ -538,7 +572,8 @@ export async function dispatchSiteCommand(
   if (
     /^(?:请?帮?我?)?(?:切换到?|开启|转成?|换成?|设为)?\s*(?:浅色|白天|明亮|日间|白色)(?:模式|主题)?$/i.test(
       query,
-    )
+    ) ||
+    /^(?:switch\s+to\s+)?(?:light\s+mode|light\s+theme)$/i.test(query.trim())
   ) {
     ui.setThemeColor('light')
     return {
@@ -552,7 +587,8 @@ export async function dispatchSiteCommand(
   if (
     /^(?:请?帮?我?)?(?:切换到?|开启)?\s*(?:跟随系统|自动主题|系统主题|自动模式)(?:模式|主题)?$/i.test(
       query,
-    )
+    ) ||
+    /^(?:switch\s+to\s+)?(?:system\s+theme|auto\s+theme|auto\s+mode)$/i.test(query.trim())
   ) {
     if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
     return {
@@ -563,7 +599,10 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (/^(?:请?帮?我?)?(?:切换主题|换个主题|反转主题)$/i.test(query)) {
+  if (
+    /^(?:请?帮?我?)?(?:切换主题|换个主题|反转主题)$/i.test(query) ||
+    /^(?:toggle\s+theme|change\s+theme|switch\s+theme)$/i.test(query.trim())
+  ) {
     ui.toggleTheme()
     const current = ui.themeColor === 'dark' ? '深色' : '浅色'
     return {
@@ -591,7 +630,8 @@ export async function dispatchSiteCommand(
   }
 
   if (
-    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:列表视图|列表模式|清单视图)$/i.test(query)
+    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:列表视图|列表模式|清单视图)$/i.test(query) ||
+    /^(?:switch\s+to\s+)?(?:list\s+view|list\s+mode)$/i.test(query.trim())
   ) {
     ui.layoutMode = 'list'
     ui.saveUIState?.()
@@ -604,7 +644,8 @@ export async function dispatchSiteCommand(
   }
 
   if (
-    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:网格视图|宫格视图|网格模式|大宫格)$/i.test(query)
+    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:网格视图|宫格视图|网格模式|大宫格)$/i.test(query) ||
+    /^(?:switch\s+to\s+)?(?:grid\s+view|grid\s+mode)$/i.test(query.trim())
   ) {
     ui.layoutMode = 'grid'
     ui.saveUIState?.()
@@ -617,7 +658,8 @@ export async function dispatchSiteCommand(
   }
 
   if (
-    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:紧凑视图|紧凑模式|小宫格|迷你宫格)$/i.test(query)
+    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:紧凑视图|紧凑模式|小宫格|迷你宫格)$/i.test(query) ||
+    /^(?:switch\s+to\s+)?(?:compact\s+view|compact\s+mode)$/i.test(query.trim())
   ) {
     ui.layoutMode = 'mini-grid'
     ui.saveUIState?.()
@@ -671,7 +713,7 @@ export async function dispatchSiteCommand(
     }
     const created = addNewCategory(trimmed, app)
     if (created) {
-      lastUndoableAction = {
+      pushUndoAction({
         type: 'category_add',
         description: `新建分类「${trimmed}」`,
         revert: () => {
@@ -679,7 +721,7 @@ export async function dispatchSiteCommand(
           app.save()
           return `已撤销新建分类「${trimmed}」。`
         },
-      }
+      })
       return {
         handled: true,
         action: 'category_add',
@@ -697,7 +739,8 @@ export async function dispatchSiteCommand(
   // ── 5. 回收站管理 (/trash, 清空回收站, 打开回收站) ──
   if (
     /^\/trash\s+(?:clear|empty)$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:清空|清掉|清理|倒空|倒掉)(?:回收站|垃圾桶)$/i.test(query)
+    /^(?:请?帮?我?)?(?:清空|清掉|清理|倒空|倒掉)(?:回收站|垃圾桶)$/i.test(query) ||
+    /^(?:empty\s+trash|clear\s+trash)$/i.test(query.trim())
   ) {
     const bms = ds.bookmarks.filter((b) => b.deletedAt).length
     const grps = ds.siblingGroups.filter((g) => g.deletedAt).length
@@ -768,7 +811,8 @@ export async function dispatchSiteCommand(
   // ── 6. 查重巡检 (/dedup, 查找重复书签) ──
   if (
     /^\/dedup(?:\s+find)?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:查重|查找重复书签|检查重复|有哪些重复书签|重复书签|重复链接)$/i.test(query)
+    /^(?:请?帮?我?)?(?:查重|查找重复书签|检查重复|有哪些重复书签|重复书签|重复链接)$/i.test(query) ||
+    /^(?:find\s+duplicates|check\s+duplicates|dedup|find\s+dups)$/i.test(query.trim())
   ) {
     const dups = findDuplicateCandidates(ds.bookmarks)
     if (!dups || dups.length === 0) {
@@ -997,7 +1041,8 @@ export async function dispatchSiteCommand(
   // ── 9. 全库统计 (/stats, 书签统计) ──
   if (
     /^\/stats$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:书签统计|数据统计|库状态|书签总数|有多少书签)$/i.test(query)
+    /^(?:请?帮?我?)?(?:书签统计|数据统计|库状态|书签总数|有多少书签)$/i.test(query) ||
+    /^(?:vault\s+stats|bookmark\s+stats|statistics)$/i.test(query.trim())
   ) {
     const topBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && !b.parentId).length
     const subBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && b.parentId).length
@@ -1037,7 +1082,8 @@ export async function dispatchSiteCommand(
     /^\/health$/i.test(query) ||
     /^(?:请?帮?我?)?(?:资产体检|健康体检|全库体检|资产健康度|体检报告|健康诊断|书签体检|全面体检)$/i.test(
       query,
-    )
+    ) ||
+    /^(?:health\s+check|vault\s+audit|audit\s+vault|check\s+health)$/i.test(query.trim())
   ) {
     const groupedIds = new Set<string>()
     for (const g of ds.siblingGroups || []) {
@@ -1149,7 +1195,8 @@ export async function dispatchSiteCommand(
     /^\/inbox(?:\s+(?:zero|clean|organize))?$/i.test(query) ||
     /^(?:请?帮?我?)?(?:收件箱清零|智能归类|整理未分类|归拢未分类|未分类整理|清空未分类|归类书签)$/i.test(
       query,
-    )
+    ) ||
+    /^(?:inbox\s+zero|clean\s+inbox|organize\s+inbox)$/i.test(query.trim())
   ) {
     const groupedIds = new Set<string>()
     for (const g of ds.siblingGroups || []) {
@@ -1242,7 +1289,7 @@ export async function dispatchSiteCommand(
       ui.batchMode = false
       ui.batchSelected = []
 
-      lastUndoableAction = {
+      pushUndoAction({
         type: 'batch_move',
         description: `将 ${movedCount} 个选中的书签移入「${targetCat.name}」`,
         revert: () => {
@@ -1252,7 +1299,7 @@ export async function dispatchSiteCommand(
           app.save()
           return `已撤销批量移动，${previousMap.length} 个书签已还原原分类。`
         },
-      }
+      })
 
       return {
         handled: true,
@@ -1332,7 +1379,7 @@ export async function dispatchSiteCommand(
     }
     app.save()
 
-    lastUndoableAction = {
+    pushUndoAction({
       type: 'move_uncategorized',
       description: `将 ${uncatBms.length} 个未分类书签移入「${targetCat.name}」`,
       revert: () => {
@@ -1342,7 +1389,7 @@ export async function dispatchSiteCommand(
         app.save()
         return `已撤销批量移动，${previousMap.length} 个书签已还原原分类。`
       },
-    }
+    })
 
     return {
       handled: true,
@@ -1385,15 +1432,17 @@ export async function dispatchSiteCommand(
       query,
     )
   ) {
-    if (lastUndoableAction) {
-      const msg = await lastUndoableAction.revert()
-      lastUndoableAction = null
+    const actionToRevert = popUndoAction()
+    if (actionToRevert) {
+      const msg = await actionToRevert.revert()
+      const remaining = getUndoStackDepth()
+      const suffix = remaining > 0 ? ` (还可撤销 ${remaining} 步操作)` : ''
       return {
         handled: true,
         action: 'undo',
         success: true,
-        steps: [{ text: '回退上一步站内修改', done: true }],
-        reply: msg,
+        steps: [{ text: `回退事务「${actionToRevert.description}」`, done: true }],
+        reply: `${msg}${suffix}`,
       }
     }
 

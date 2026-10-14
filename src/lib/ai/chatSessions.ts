@@ -30,6 +30,7 @@ export interface ChatActionCard {
   completed?: boolean
   resultGid?: string
   resultCatId?: string
+  selectedCandidateUrls?: string[]
   payload?: Record<string, unknown>
 }
 

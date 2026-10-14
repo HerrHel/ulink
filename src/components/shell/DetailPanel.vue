@@ -357,12 +357,52 @@
                   <div v-if="turn.actionCard.desc" class="action-card-desc">
                     {{ turn.actionCard.desc }}
                   </div>
+
+                  <!-- 候选微操过滤：多选框列表 (Micro-Curation Checkboxes) -->
+                  <div
+                    v-if="turn.actionCard.actionName === 'create_topic_workspace' && getCardCandidateList(turn.actionCard).length > 0 && !turn.actionCard.completed"
+                    class="action-card-curation"
+                  >
+                    <div class="action-card-curation-head">
+                      <span class="action-card-curation-count">
+                        {{ t('ai.selectedCount', { n: getSelectedCandidateCount(turn.actionCard) }) }}
+                      </span>
+                      <button
+                        type="button"
+                        class="action-card-curation-toggle"
+                        @click="toggleSelectAllCandidates(turn.actionCard)"
+                      >
+                        {{ isAllCandidatesSelected(turn.actionCard) ? t('ai.unselectAll') : t('ai.selectAll') }}
+                      </button>
+                    </div>
+                    <div class="action-card-candidate-list">
+                      <label
+                        v-for="c in getCardCandidateList(turn.actionCard)"
+                        :key="c.url"
+                        class="action-candidate-item"
+                        :class="{ 'is-checked': isCandidateSelected(turn.actionCard, c.url) }"
+                      >
+                        <input
+                          type="checkbox"
+                          class="action-candidate-checkbox"
+                          :checked="isCandidateSelected(turn.actionCard, c.url)"
+                          :disabled="turn.actionCard.executing"
+                          @change="toggleCandidateSelection(turn.actionCard, c.url)"
+                        />
+                        <div class="action-candidate-info">
+                          <span class="action-candidate-name">{{ c.title }}</span>
+                          <span class="action-candidate-domain">{{ formatDomain(c.url) }}</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
                   <div class="action-card-footer">
                     <button
                       v-if="!turn.actionCard.completed"
                       class="action-card-btn"
                       :class="{ 'is-executing': turn.actionCard.executing }"
-                      :disabled="turn.actionCard.executing"
+                      :disabled="turn.actionCard.executing || (turn.actionCard.actionName === 'create_topic_workspace' && getCardCandidateList(turn.actionCard).length > 0 && getSelectedCandidateCount(turn.actionCard) === 0)"
                       @click="handleActionCardClick(turn.actionCard, turn)"
                     >
                       <svg
@@ -822,8 +862,77 @@ function navigateToActionTarget(card: ChatActionCard) {
   }
 }
 
+function getCardCandidateList(card: ChatActionCard): any[] {
+  const payload = card.payload as any
+  if (Array.isArray(payload?.candidates)) {
+    return payload.candidates
+  }
+  return []
+}
+
+function initCardCandidateSelection(card: ChatActionCard) {
+  if (!card.selectedCandidateUrls) {
+    const list = getCardCandidateList(card)
+    card.selectedCandidateUrls = list.map((c) => c.url).filter(Boolean)
+  }
+}
+
+function isCandidateSelected(card: ChatActionCard, url: string): boolean {
+  initCardCandidateSelection(card)
+  return card.selectedCandidateUrls?.includes(url) ?? true
+}
+
+function getSelectedCandidateCount(card: ChatActionCard): number {
+  initCardCandidateSelection(card)
+  return card.selectedCandidateUrls?.length ?? 0
+}
+
+function isAllCandidatesSelected(card: ChatActionCard): boolean {
+  const all = getCardCandidateList(card)
+  if (all.length === 0) return false
+  return getSelectedCandidateCount(card) === all.length
+}
+
+function toggleCandidateSelection(card: ChatActionCard, url: string) {
+  if (card.completed || card.executing) return
+  initCardCandidateSelection(card)
+  const current = card.selectedCandidateUrls || []
+  if (current.includes(url)) {
+    card.selectedCandidateUrls = current.filter((u) => u !== url)
+  } else {
+    card.selectedCandidateUrls = [...current, url]
+  }
+}
+
+function toggleSelectAllCandidates(card: ChatActionCard) {
+  if (card.completed || card.executing) return
+  const all = getCardCandidateList(card)
+  if (isAllCandidatesSelected(card)) {
+    card.selectedCandidateUrls = []
+  } else {
+    card.selectedCandidateUrls = all.map((c) => c.url).filter(Boolean)
+  }
+}
+
+function formatDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url.slice(0, 20)
+  }
+}
+
 async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
   if (card.completed || card.executing) return
+  const candidatesInCard = getCardCandidateList(card)
+  if (
+    card.actionName === 'create_topic_workspace' &&
+    candidatesInCard.length > 0 &&
+    getSelectedCandidateCount(card) === 0
+  ) {
+    toast(t('ai.noCandidatesSelected'), false)
+    return
+  }
   card.executing = true
   try {
     if (card.actionName === 'merge_dedup') {
@@ -884,9 +993,14 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
         candidates?: any[]
         targetCatId?: string
       }
+      const rawCandidates = payload.candidates || []
+      initCardCandidateSelection(card)
+      const selectedUrls = new Set(card.selectedCandidateUrls || [])
+      const finalCandidates = rawCandidates.filter((c: any) => selectedUrls.has(c.url))
+
       const res = await createTopicWorkspace(
         payload.topic || '精选工作台',
-        payload.candidates,
+        finalCandidates,
         payload.targetCatId,
         { ds, ui, app: (ui as any).app },
       )
@@ -2523,6 +2637,104 @@ function closeDetail(rawId: string) {
   color: var(--text-muted);
   line-height: 1.4;
   margin-bottom: 6px;
+}
+
+/* 候选微操过滤列表 */
+.action-card-curation {
+  margin: 6px 0 8px 0;
+  padding: 6px 8px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs, 4px);
+}
+
+.action-card-curation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.action-card-curation-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.action-card-curation-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.action-card-curation-toggle:hover {
+  color: var(--text);
+}
+
+.action-card-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.action-candidate-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  user-select: none;
+}
+
+.action-candidate-item:hover {
+  background: var(--surface);
+}
+
+.action-candidate-item.is-checked {
+  background: color-mix(in srgb, var(--surface) 80%, var(--accent-light) 20%);
+}
+
+.action-candidate-checkbox {
+  appearance: auto;
+  accent-color: var(--accent);
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.action-candidate-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.action-candidate-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-candidate-domain {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .action-card-footer {
