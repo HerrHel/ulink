@@ -34,7 +34,10 @@ export function candidateToBookmark(
     icon: icon || c.icon || '',
     categoryId: c.categoryId || CAT_UNCATEGORIZED,
     parentId: null,
-    order: ds.nextBookmarkOrder(),
+    order:
+      typeof ds?.nextBookmarkOrder === 'function'
+        ? ds.nextBookmarkOrder()
+        : (ds?.bookmarks?.reduce((m: number, b: any) => (b.order > m ? b.order : m), 0) ?? 0) + 1,
     useCount: 0,
     attributes,
     isExpanded: false,

@@ -475,6 +475,8 @@ import {
   dispatchSiteCommand,
   mergeDuplicateBookmarks,
   applyInboxZeroClustering,
+  createTopicWorkspace,
+  healDeadlink,
 } from '../../lib/ai/siteCommander.js'
 import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -661,6 +663,7 @@ const SLASH_COMMANDS = [
   { cmd: '/help', titleKey: 'ai.slashHelpTitle', descKey: 'ai.slashHelpDesc' },
   { cmd: '/health', titleKey: 'ai.slashHealthTitle', descKey: 'ai.slashHealthDesc' },
   { cmd: '/inbox', titleKey: 'ai.slashInboxTitle', descKey: 'ai.slashInboxDesc' },
+  { cmd: '/pack', titleKey: 'ai.slashPackTitle', descKey: 'ai.slashPackDesc' },
   { cmd: '/theme', titleKey: 'ai.slashThemeTitle', descKey: 'ai.slashThemeDesc' },
   { cmd: '/view', titleKey: 'ai.slashViewTitle', descKey: 'ai.slashViewDesc' },
   { cmd: '/cat', titleKey: 'ai.slashCatTitle', descKey: 'ai.slashCatDesc' },
@@ -777,6 +780,59 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
     })
     scrollToBottom()
     sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+  } else if (card.actionName === 'create_topic_workspace') {
+    const payload = (card.payload || {}) as {
+      topic?: string
+      candidates?: any[]
+      targetCatId?: string
+    }
+    const res = await createTopicWorkspace(
+      payload.topic || '精选工作台',
+      payload.candidates,
+      payload.targetCatId,
+      { ds, ui, app: (ui as any).app },
+    )
+    card.completed = true
+    toast(res.message, true)
+    chatTurns.value.push({
+      id: 'turn-' + Date.now() + '-assistant',
+      role: 'assistant',
+      content: res.message,
+      steps: [
+        { text: `甄选并存入 ${res.totalBookmarks} 个工具`, done: true },
+        { text: `创建笔记组「${res.group.name}」`, done: true },
+        { text: '切换至工作台聚焦视图', done: true },
+      ],
+      timestamp: Date.now(),
+    })
+    scrollToBottom()
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+  } else if (card.actionName === 'heal_deadlink') {
+    const payload = (card.payload || {}) as {
+      deadBmId?: string
+      replacement?: any
+    }
+    if (payload.deadBmId && payload.replacement) {
+      const res = healDeadlink(payload.deadBmId, payload.replacement, {
+        ds,
+        ui,
+        app: (ui as any).app,
+      })
+      card.completed = true
+      toast(res.message, true)
+      chatTurns.value.push({
+        id: 'turn-' + Date.now() + '-assistant',
+        role: 'assistant',
+        content: res.message,
+        steps: [
+          { text: '核验失效死链', done: true },
+          { text: `替换为现役平替「${payload.replacement.title}」`, done: true },
+        ],
+        timestamp: Date.now(),
+      })
+      scrollToBottom()
+      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    }
   }
 }
 
@@ -878,6 +934,22 @@ const filteredSlashCommands = computed(() => {
 watch(filteredSlashCommands, () => {
   activeSlashIndex.value = 0
 })
+
+watch(
+  () => ui.aiAssistantInitialQuery,
+  (val) => {
+    if (val) {
+      currentTab.value = 'ai'
+      aiQuery.value = val
+      ui.aiAssistantInitialQuery = ''
+      adjustTextareaHeight()
+      nextTick(() => {
+        handleAiSubmit()
+      })
+    }
+  },
+  { immediate: true },
+)
 
 function applySlashCommand(cmd: string) {
   aiQuery.value = cmd + ' '
@@ -1216,6 +1288,29 @@ async function handleAiSubmit() {
         assistantTurn.loading = false
         assistantTurn.candidates = res
         assistantTurn.content = formatFoundCount(res.length)
+      }
+    }
+
+    // 智能挂载行动卡片：当单轮甄选到 3 个及以上候选站点且未挂载卡片时，出具一键装配工作台卡片
+    if (assistantTurn.candidates && assistantTurn.candidates.length >= 3 && !assistantTurn.actionCard) {
+      const topicRaw =
+        raw
+          .replace(/^(?:请?帮?我?)?(?:推荐|找|搜|整理|搭建|介绍|有哪些|看下)?\s*/i, '')
+          .replace(/[?？!！。]+$/, '')
+          .trim()
+          .slice(0, 16) || '精选工具'
+      const cleanTopic =
+        topicRaw.endsWith('工作台') || topicRaw.endsWith('工具箱') ? topicRaw : `${topicRaw} 工作台`
+      assistantTurn.actionCard = {
+        type: 'custom',
+        actionName: 'create_topic_workspace',
+        title: `一键装配「${cleanTopic}」`,
+        desc: `将甄选的 ${assistantTurn.candidates.length} 个工具一键存入并建构专属笔记工作台`,
+        buttonText: '一键装配工作台',
+        payload: {
+          topic: cleanTopic,
+          candidates: assistantTurn.candidates,
+        },
       }
     }
   } catch (err: unknown) {

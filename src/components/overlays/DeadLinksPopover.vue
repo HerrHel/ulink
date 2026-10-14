@@ -55,9 +55,32 @@
           <span v-if="tab === 'dead'" class="pr-badge dead">{{ t('cards.deadLink') }}</span>
           <span v-else-if="tab === 'blocked'" class="pr-badge blocked">{{ t('cards.gfwBlocked') }}</span>
           <span v-else class="pr-badge unconfirmed">{{ t('cards.unconfirmed') }}</span>
-          <button v-if="!selectMode" class="pr-delete" @click.stop="onDelete(b.id)" :title="t('common.delete')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
+          <div v-if="!selectMode" class="pr-item-actions">
+            <a
+              class="pr-act-btn"
+              :href="'https://web.archive.org/web/*/' + encodeURIComponent(b.url)"
+              target="_blank"
+              rel="noopener noreferrer"
+              :title="t('deadlinks.wayback')"
+              @click.stop
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </a>
+            <button
+              class="pr-act-btn"
+              :title="t('deadlinks.findAlternative')"
+              @click.stop="onFindAlternative(b)"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+            </button>
+            <button class="pr-delete" @click.stop="onDelete(b.id)" :title="t('common.delete')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -151,6 +174,11 @@ function onSelect(bmId: string) {
 
 function onDelete(bmId: string) {
   deleteBookmarkWithUndo(bmId)
+}
+
+function onFindAlternative(b: { id: string; title: string; url: string }) {
+  close()
+  store.openAiAssistant(`为失效死链「${b.title}」（${b.url}）寻找平替并自愈`)
 }
 
 function enterSelectMode() {
@@ -319,6 +347,27 @@ function deleteSelected() {
   background:var(--accent);
 }
 .pr-checkbox svg{width:12px;height:12px;color:#fff}
+.pr-item-actions{
+  display:flex;align-items:center;gap:2px;
+  flex-shrink:0;
+}
+.pr-act-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:28px;height:28px;
+  border:1px solid transparent;
+  border-radius:var(--radius-md);
+  background:transparent;
+  color:var(--text-muted);
+  cursor:pointer;
+  text-decoration:none;
+  transition:var(--transition-normal);
+}
+.pr-act-btn svg{width:14px;height:14px}
+.pr-act-btn:hover{
+  border-color:var(--accent);
+  color:var(--accent);
+  background:var(--accent-light);
+}
 .pr-delete{
   display:flex;align-items:center;justify-content:center;
   width:28px;height:28px;
