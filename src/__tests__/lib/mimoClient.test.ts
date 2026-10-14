@@ -52,6 +52,31 @@ describe('mimoClient', () => {
       expect(prompt).toContain('/dedup')
       expect(prompt).toContain('ulink-card')
     })
+
+    it('动态情境切片：正确将当前聚焦笔记组、所处分类与多选书签注入系统提示词', () => {
+      const prompt = buildUlinkSystemPrompt({
+        categories: dummyCats,
+        customAttributes: dummyAttrs,
+        isZh: true,
+        contextSlice: {
+          currentCategoryName: '设计灵感',
+          focusedGroupName: 'UI组件库',
+          focusedGroupBookmarks: [
+            { title: 'Ant Design', url: 'https://ant.design' },
+            { title: 'Tailwind CSS', url: 'https://tailwindcss.com' },
+          ],
+          selectedBookmarks: [
+            { title: 'Figma', url: 'https://figma.com' },
+          ],
+        },
+      })
+
+      expect(prompt).toContain('当前所处分类视图：「设计灵感」')
+      expect(prompt).toContain('当前正处于笔记组工作台：「UI组件库」')
+      expect(prompt).toContain('Ant Design (https://ant.design)')
+      expect(prompt).toContain('Tailwind CSS (https://tailwindcss.com)')
+      expect(prompt).toContain('当前用户多选勾选的书签 (1个)：[Figma]')
+    })
   })
 
   describe('parseMiMoReply', () => {
