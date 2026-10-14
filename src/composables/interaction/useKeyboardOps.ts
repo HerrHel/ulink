@@ -8,9 +8,8 @@ import { performUndo, performRedo } from '../domain/useUndo.js'
 import { EditorManager } from '../../lib/editor.js'
 import { closeBmModal, openBmModal } from '../domain/useBookmark.js'
 import { closeGroupEdit, exitGroupFocus, closeAddBmPopover } from '../domain/useGroup.js'
-import { closeCatModal, closeAttrModal } from '../ui/useUI.js'
+import { closeCatModal, closeAttrModal, hideSettingsMenu, hideAddDropdown, toggleDetailPanel } from '../ui/useUI.js'
 import { toggleBatchMode, selectAllBatch, batchDelete } from '../domain/useBatch.js'
-import { hideSettingsMenu, hideAddDropdown } from '../ui/useUI.js'
 import { useToastStore } from '../../stores/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useAttrDropdownStore } from '../../stores/attrDropdown.js'
@@ -141,6 +140,12 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+    // Ctrl+J / Cmd+J: 切换右侧 AI 助手抽屉
+    if (e.key.toLowerCase() === 'j') {
+      e.preventDefault()
+      toggleDetailPanel()
+      return
+    }
     // Ctrl+N 新建书签——表单输入框/TipTap 编辑器聚焦时不拦截，否则会弹起新建书签弹窗
     // 打断当前编辑并丢失未保存内容（搜索框/BookmarkModal 表单/组 notes 编辑器均受影响）。
     // 对照同文件 Ctrl+Z/Y 的守卫（line 84-86），并补 isContentEditable 覆盖 TipTap。

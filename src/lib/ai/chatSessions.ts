@@ -26,7 +26,10 @@ export interface ChatActionCard {
   desc?: string
   buttonText: string
   actionName: string
+  executing?: boolean
   completed?: boolean
+  resultGid?: string
+  resultCatId?: string
   payload?: Record<string, unknown>
 }
 
