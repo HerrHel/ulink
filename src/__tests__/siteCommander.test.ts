@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { dispatchSiteCommand, mergeDuplicateBookmarks } from '../lib/ai/siteCommander.js'
+import {
+  dispatchSiteCommand,
+  mergeDuplicateBookmarks,
+  applyInboxZeroClustering,
+} from '../lib/ai/siteCommander.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 // Mock 外部导出模块与 utils
@@ -341,5 +344,54 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     const res = mergeDuplicateBookmarks({ ds: mockDs, ui: mockUi, app: mockApp })
     expect(res.mergedCount).toBe(1)
     expect(mockDs.deleteBookmark).toHaveBeenCalledWith('b_dup')
+  })
+
+  // ── 17. /health 全库资产体检 ──
+  it('/health 生成健康指数与诊断建议行动卡片', async () => {
+    const res = await dispatchSiteCommand('/health', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('health')
+    expect(res.reply).toContain('综合健康指数')
+    expect(res.reply).toContain('待整理未分类')
+    expect(res.actionCard).toBeDefined()
+    expect(res.actionCard?.actionName).toBe('inbox_zero')
+  })
+
+  // ── 18. /inbox 智能归拢未分类预案 ──
+  it('/inbox 识别待整理未分类书签并出具归类方案', async () => {
+    const res = await dispatchSiteCommand('/inbox', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('inbox_zero')
+    expect(res.reply).toContain('智能归拢分析完成')
+    expect(res.actionCard?.actionName).toBe('apply_inbox_zero')
+  })
+
+  // ── 19. applyInboxZeroClustering 执行归拢与撤销 ──
+  it('applyInboxZeroClustering 执行批量归类并登记可撤销记录', async () => {
+    const res = applyInboxZeroClustering({
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.movedCount).toBeGreaterThan(0)
+    expect(mockDs.updateBookmark).toHaveBeenCalled()
+    expect(mockApp.save).toHaveBeenCalled()
+
+    // 撤销测试
+    const resUndo = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resUndo.handled).toBe(true)
+    expect(resUndo.reply).toContain('已撤销智能归类')
   })
 })

@@ -471,7 +471,11 @@ import {
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
 import { askMiMoStream, getMiMoConfig } from '../../lib/ai/mimoClient.js'
-import { dispatchSiteCommand, mergeDuplicateBookmarks } from '../../lib/ai/siteCommander.js'
+import {
+  dispatchSiteCommand,
+  mergeDuplicateBookmarks,
+  applyInboxZeroClustering,
+} from '../../lib/ai/siteCommander.js'
 import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { saveAppData } from '../../stores/app.js'
@@ -655,6 +659,8 @@ async function handleClearAllSessions() {
 // ── 斜杠指令快捷联想（文案走 i18n，与语言包 slash* 键一一对应）──
 const SLASH_COMMANDS = [
   { cmd: '/help', titleKey: 'ai.slashHelpTitle', descKey: 'ai.slashHelpDesc' },
+  { cmd: '/health', titleKey: 'ai.slashHealthTitle', descKey: 'ai.slashHealthDesc' },
+  { cmd: '/inbox', titleKey: 'ai.slashInboxTitle', descKey: 'ai.slashInboxDesc' },
   { cmd: '/theme', titleKey: 'ai.slashThemeTitle', descKey: 'ai.slashThemeDesc' },
   { cmd: '/view', titleKey: 'ai.slashViewTitle', descKey: 'ai.slashViewDesc' },
   { cmd: '/cat', titleKey: 'ai.slashCatTitle', descKey: 'ai.slashCatDesc' },
@@ -682,7 +688,12 @@ const dynamicQuickHints = computed<QuickHint[]>(() => {
   if (uncatCount > 0) {
     hints.push({
       label: isZh.value ? `未分类 (${uncatCount})` : `Uncategorized (${uncatCount})`,
-      query: '/cat list',
+      query: '/inbox',
+    })
+  } else {
+    hints.push({
+      label: isZh.value ? '/health 体检' : '/health',
+      query: '/health',
     })
   }
 
@@ -737,6 +748,31 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
       role: 'assistant',
       content: res.reply,
       steps: res.steps,
+      timestamp: Date.now(),
+    })
+    scrollToBottom()
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+  } else if (card.actionName === 'inbox_zero') {
+    const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+    chatTurns.value.push({
+      id: 'turn-' + Date.now() + '-assistant',
+      role: 'assistant',
+      content: res.reply,
+      steps: res.steps,
+      actionCard: res.actionCard,
+      timestamp: Date.now(),
+    })
+    scrollToBottom()
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+  } else if (card.actionName === 'apply_inbox_zero') {
+    const res = applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+    card.completed = true
+    toast(res.message, true)
+    chatTurns.value.push({
+      id: 'turn-' + Date.now() + '-assistant',
+      role: 'assistant',
+      content: res.message,
+      steps: [{ text: `成功归类 ${res.movedCount} 个书签`, done: true }],
       timestamp: Date.now(),
     })
     scrollToBottom()

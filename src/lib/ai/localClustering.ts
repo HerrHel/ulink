@@ -143,9 +143,26 @@ export function clusterUncategorizedBookmarks(
       }
     }
 
-    // 次选：基于现有分类名称匹配
+    // 次选：基于现有分类名称或标准分类别名匹配
     if (!bestCatId) {
       bestCatId = suggestCategory(b.url, b.title, activeCategories)
+      if (!bestCatId) {
+        // 尝试为复合分类名（如「前端开发」、「设计资源」）派生基础词参与推荐
+        const syntheticCategories = activeCategories.flatMap((cat) => {
+          const syn: Category[] = [{ ...cat }]
+          if (cat.name.includes('开发')) syn.push({ ...cat, name: '开发' })
+          if (cat.name.includes('设计')) syn.push({ ...cat, name: '设计' })
+          if (cat.name.includes('工具')) syn.push({ ...cat, name: '工具' })
+          if (cat.name.includes('AI') || cat.name.toLowerCase().includes('ai')) syn.push({ ...cat, name: 'AI' })
+          if (cat.name.includes('视频') || cat.name.includes('影音')) syn.push({ ...cat, name: '视频' })
+          if (cat.name.includes('学习') || cat.name.includes('教程')) syn.push({ ...cat, name: '学习' })
+          return syn
+        })
+        const matchedSynthId = suggestCategory(b.url, b.title, syntheticCategories)
+        if (matchedSynthId) {
+          bestCatId = matchedSynthId
+        }
+      }
       if (!bestCatId) {
         const textLower = `${b.title || ''} ${b.url || ''}`.toLowerCase()
         for (const cat of activeCategories) {
