@@ -157,13 +157,36 @@ export function parseTurnContentSegments(
     lastIndex = cardBlockRegex.lastIndex
   }
 
-  // 3. 取最后一个代码块之后的文本
-  const remainingText = content.substring(lastIndex).trim()
-  if (remainingText) {
+  // 3. 取最后一个代码块之后的文本（兼容流式生成中的未闭合卡片块）
+  const remainingText = content.substring(lastIndex)
+  const unclosedIdx = remainingText.indexOf('```')
+  if (unclosedIdx !== -1) {
+    const afterTicks = remainingText.substring(unclosedIdx)
+    // 若命中未闭合的 ```ulink-card 或正在流式打出 ```u...，隐藏半截 JSON 避免闪烁暴露
+    if (afterTicks.startsWith('```ulink-card') || '```ulink-card'.startsWith(afterTicks)) {
+      const beforeUnclosed = remainingText.substring(0, unclosedIdx).trim()
+      if (beforeUnclosed) {
+        segments.push({
+          type: 'text',
+          rawText: beforeUnclosed,
+          html: formatLightMarkdown(beforeUnclosed),
+        })
+      }
+    } else {
+      const trimmed = remainingText.trim()
+      if (trimmed) {
+        segments.push({
+          type: 'text',
+          rawText: trimmed,
+          html: formatLightMarkdown(trimmed),
+        })
+      }
+    }
+  } else if (remainingText.trim()) {
     segments.push({
       type: 'text',
-      rawText: remainingText,
-      html: formatLightMarkdown(remainingText),
+      rawText: remainingText.trim(),
+      html: formatLightMarkdown(remainingText.trim()),
     })
   }
 

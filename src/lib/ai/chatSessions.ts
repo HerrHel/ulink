@@ -40,6 +40,10 @@ export interface ChatTurn {
   steps?: ChatTurnStep[]
   actionCard?: ChatActionCard
   _traceOpen?: boolean
+  reasoning?: string
+  reasoningTimeMs?: number
+  isThinking?: boolean
+  _thinkingOpen?: boolean
 }
 
 export interface AiChatSession {
@@ -83,6 +87,7 @@ export function saveSessions(sessions: AiChatSession[]): void {
       turns: (s.turns || []).slice(-MAX_TURNS_PER_SESSION).map((t) => ({
         ...t,
         loading: false, // 存盘时 loading 必须置 false
+        isThinking: false, // 存盘时 isThinking 置 false
       })),
     }))
     safeSetItem(K_AI_SESSIONS, JSON.stringify(trimmed))

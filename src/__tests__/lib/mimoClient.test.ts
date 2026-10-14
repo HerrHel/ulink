@@ -4,6 +4,7 @@ import {
   parseMiMoReply,
   getMiMoConfig,
   saveMiMoConfig,
+  askMiMoStream,
   DEFAULT_MIMO_MODEL,
   DEFAULT_MIMO_BASE_URL,
 } from '../../lib/ai/mimoClient.js'
@@ -121,6 +122,62 @@ describe('mimoClient', () => {
       const conf = getMiMoConfig()
       expect(conf.apiKey).toBe('sk-custom-test-key')
       expect(conf.model).toBe('mimo-custom')
+    })
+  })
+
+  describe('askMiMoStream', () => {
+    it('正确解析 SSE 流并分别触发 onReasoningDelta 与 onContentDelta', async () => {
+      const sseChunks = [
+        'data: {"choices":[{"delta":{"reasoning_content":"思考步骤1"}}]}\n\n',
+        'data: {"choices":[{"delta":{"reasoning_content":"思考步骤2"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"这是正式"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"回答。"}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]
+
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of sseChunks) {
+            controller.enqueue(new TextEncoder().encode(chunk))
+          }
+          controller.close()
+        },
+      })
+
+      const origFetch = globalThis.fetch
+      globalThis.fetch = async () =>
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+
+      try {
+        const reasoningDeltas: string[] = []
+        const contentDeltas: string[] = []
+
+        const res = await askMiMoStream(
+          '测试问题',
+          {
+            categories: dummyCats,
+            customAttributes: dummyAttrs,
+          },
+          {
+            onReasoningDelta(delta) {
+              reasoningDeltas.push(delta)
+            },
+            onContentDelta(delta) {
+              contentDeltas.push(delta)
+            },
+          }
+        )
+
+        expect(reasoningDeltas).toEqual(['思考步骤1', '思考步骤2'])
+        expect(contentDeltas).toEqual(['这是正式', '回答。'])
+        expect(res.reasoning).toBe('思考步骤1思考步骤2')
+        expect(res.reply).toBe('这是正式回答。')
+      } finally {
+        globalThis.fetch = origFetch
+      }
     })
   })
 })

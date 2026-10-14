@@ -201,16 +201,67 @@
 
             <!-- 助手回复 -->
             <div v-else class="chat-assistant-wrap">
-              <!-- 思考状态：灵动的极简三点呼吸动效 -->
-              <div v-if="turn.loading" class="chat-thinking-pulse">
+              <!-- 初始思考等待：当尚无任何思考和内容流出时，展示三点呼吸动效 -->
+              <div v-if="turn.loading && !turn.reasoning && !turn.content" class="chat-thinking-pulse">
                 <span class="thinking-dot dot-1"></span>
                 <span class="thinking-dot dot-2"></span>
                 <span class="thinking-dot dot-3"></span>
                 <span class="thinking-label">{{ loadingText }}</span>
               </div>
 
-              <!-- 回复内容与候选卡片 -->
+              <!-- 回复内容、思考过程与候选卡片 -->
               <div v-else class="chat-reply-body">
+                <!-- 深度思考过程折叠条 (Thinking Process) -->
+                <div v-if="turn.reasoning" class="chat-thinking-box" :class="{ 'is-thinking': turn.isThinking }">
+                  <button
+                    class="chat-thinking-header"
+                    @click="turn._thinkingOpen = !turn._thinkingOpen"
+                    :title="turn._thinkingOpen ? t('ai.thinkingCollapse') : t('ai.thinkingExpand')"
+                    :aria-expanded="!!turn._thinkingOpen"
+                  >
+                    <div class="thinking-header-left">
+                      <!-- 动态 Sparkle 图标：思考中旋转，完成后静止 -->
+                      <svg
+                        class="thinking-icon"
+                        :class="{ 'is-spinning': turn.isThinking }"
+                        viewBox="0 0 24 24"
+                        width="12"
+                        height="12"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path v-if="turn.isThinking" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                        <path v-else d="m12 3 1.912 5.885a2 2 0 0 0 1.272 1.272L21 12l-5.816 1.843a2 2 0 0 0-1.272 1.272L12 21l-1.912-5.885a2 2 0 0 0-1.272-1.272L3 12l5.816-1.843a2 2 0 0 0 1.272-1.272L12 3z" />
+                      </svg>
+                      <span class="thinking-header-title">
+                        <template v-if="turn.isThinking">
+                          {{ t('ai.thinkingActive') }}
+                        </template>
+                        <template v-else-if="turn.reasoningTimeMs">
+                          {{ t('ai.thinkingTime', { sec: formatReasoningSec(turn.reasoningTimeMs) }) }}
+                        </template>
+                        <template v-else>
+                          {{ t('ai.thinkingComplete') }}
+                        </template>
+                      </span>
+                    </div>
+
+                    <span class="thinking-arrow" :class="{ open: turn._thinkingOpen }">
+                      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </span>
+                  </button>
+
+                  <div v-if="turn._thinkingOpen" class="chat-thinking-body">
+                    <div class="chat-thinking-text">{{ turn.reasoning }}<span v-if="turn.isThinking" class="thinking-stream-cursor" aria-hidden="true"></span></div>
+                  </div>
+                </div>
+
                 <!-- 工具执行轨迹折叠条 (Tool Execution Trace) -->
                 <div v-if="turn.steps?.length" class="chat-trace-wrap">
                   <button
@@ -264,8 +315,14 @@
                       <div
                         v-if="seg.type === 'text'"
                         class="chat-flow-text"
-                        v-html="seg.html"
-                      />
+                      >
+                        <span v-html="seg.html"></span>
+                        <span
+                          v-if="turn.loading && !turn.isThinking && sIdx === getTurnSegments(turn).length - 1"
+                          class="chat-typing-cursor"
+                          aria-hidden="true"
+                        ></span>
+                      </div>
                       <div
                         v-else-if="seg.type === 'card'"
                         class="chat-flow-card-row"
@@ -276,7 +333,7 @@
                   </div>
 
                   <!-- 消息尾部：当含有未存入的候选卡片时，在底部收敛呈现一键全部存入 -->
-                  <div v-if="hasUnaddedInTurn(turn)" class="chat-flow-footer-actions">
+                  <div v-if="hasUnaddedInTurn(turn) && !turn.loading" class="chat-flow-footer-actions">
                     <button class="chat-batch-add-btn" @click="addAllInTurn(turn)">
                       <span class="batch-add-icon" aria-hidden="true" v-html="I.plus"></span>
                       <span>{{ t('ai.addAllDirect') }}</span>
@@ -413,7 +470,7 @@ import {
   findSimilarWebsites,
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
-import { askMiMo, getMiMoConfig } from '../../lib/ai/mimoClient.js'
+import { askMiMoStream, getMiMoConfig } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand, mergeDuplicateBookmarks } from '../../lib/ai/siteCommander.js'
 import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -687,6 +744,12 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
   }
 }
 
+function formatReasoningSec(ms?: number): string {
+  if (!ms || ms <= 0) return '1'
+  const sec = (ms / 1000).toFixed(1)
+  return sec.endsWith('.0') ? sec.slice(0, -2) : sec
+}
+
 function getCleanCopyText(content?: string): string {
   if (!content) return ''
   return content.replace(/```ulink-card\s*([\s\S]*?)```/gi, '').trim()
@@ -811,7 +874,8 @@ function abortInFlight() {
   const last = chatTurns.value[chatTurns.value.length - 1]
   if (last && last.role === 'assistant' && last.loading) {
     last.loading = false
-    if (!last.content) {
+    last.isThinking = false
+    if (!last.content && !last.reasoning) {
       last.content = t('ai.stopped')
     }
   }
@@ -1002,6 +1066,10 @@ async function handleAiSubmit() {
     id: turnId + '-assistant',
     role: 'assistant',
     content: '',
+    reasoning: '',
+    reasoningTimeMs: 0,
+    isThinking: false,
+    _thinkingOpen: true,
     loading: true,
     candidates: [],
     timestamp: Date.now(),
@@ -1051,20 +1119,54 @@ async function handleAiSubmit() {
             .filter((t) => !t.loading && t.content && t.id !== assistantTurn.id)
             .map((t) => ({ role: t.role as 'user' | 'assistant', content: t.content }))
 
-          const mimoRes = await askMiMo(raw, {
-            categories: ds.categories,
-            customAttributes: ds.customAttributes,
-            isZh: isZh.value,
-            signal: controller.signal,
-            history,
-          })
+          let thinkingStartTime = 0
+
+          const mimoRes = await askMiMoStream(
+            raw,
+            {
+              categories: ds.categories,
+              customAttributes: ds.customAttributes,
+              isZh: isZh.value,
+              signal: controller.signal,
+              history,
+            },
+            {
+              onReasoningDelta(_delta, accumulatedReasoning) {
+                if (controller.signal.aborted) return
+                if (!thinkingStartTime) {
+                  thinkingStartTime = Date.now()
+                  assistantTurn.isThinking = true
+                  assistantTurn._thinkingOpen = true
+                }
+                assistantTurn.reasoning = accumulatedReasoning
+                scrollToBottom()
+              },
+              onContentDelta(_delta, accumulatedContent) {
+                if (controller.signal.aborted) return
+                if (assistantTurn.isThinking) {
+                  assistantTurn.isThinking = false
+                  assistantTurn.reasoningTimeMs = Date.now() - (thinkingStartTime || Date.now())
+                  // 正式回答开始流出时，默认折叠思考过程，让出核心视线（用户可随时点击展开）
+                  assistantTurn._thinkingOpen = false
+                }
+                assistantTurn.content = accumulatedContent
+                scrollToBottom()
+              },
+            }
+          )
 
           if (controller.signal.aborted) return
           assistantTurn.loading = false
+          assistantTurn.isThinking = false
+          if (thinkingStartTime && !assistantTurn.reasoningTimeMs) {
+            assistantTurn.reasoningTimeMs = Date.now() - thinkingStartTime
+          }
           assistantTurn.content = mimoRes.reply
+          assistantTurn.reasoning = mimoRes.reasoning || assistantTurn.reasoning
           assistantTurn.candidates = mimoRes.candidates
           assistantTurn.steps = [{ text: `小米 ${mimoRes.model} 推理完成`, done: true }]
           mimoSuccess = true
+          persistCurrentSession()
         } catch (mimoErr: unknown) {
           if (controller.signal.aborted) return
           console.warn('[ulink AI] MiMo API call failed, falling back to local dataset:', mimoErr)
@@ -1737,6 +1839,128 @@ function closeDetail(rawId: string) {
   font-size: 11px;
   color: var(--text-muted);
   margin-left: 4px;
+}
+
+/* 深度思考流 (Reasoning Stream) */
+.chat-thinking-box {
+  margin-bottom: 6px;
+  background: var(--surface-hover, #fbf9f6);
+  border: 1px solid var(--border-light, #ebe6e0);
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.chat-thinking-box.is-thinking {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-light, #ebe6e0));
+  background: color-mix(in srgb, var(--accent) 2.5%, var(--surface-hover, #fbf9f6));
+}
+
+.chat-thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.12s ease;
+}
+
+.chat-thinking-header:hover {
+  color: var(--text);
+}
+
+.thinking-header-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.thinking-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.thinking-icon.is-spinning {
+  animation: thinking-spin 1.8s linear infinite;
+}
+
+@keyframes thinking-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.thinking-header-title {
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+.thinking-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: transform 0.18s ease;
+}
+
+.thinking-arrow.open {
+  transform: rotate(180deg);
+}
+
+.chat-thinking-body {
+  padding: 6px 10px 8px 12px;
+  border-top: 1px solid var(--border-light, #ebe6e0);
+  border-left: 2px solid var(--accent-light, #dce4f7);
+  background: var(--surface);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.chat-thinking-text {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 思考中的流式闪烁光标 */
+.thinking-stream-cursor {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  animation: cursor-pulse 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes cursor-pulse {
+  from { opacity: 0.2; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+/* 正文流式打字机竖线光标 */
+.chat-typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 12px;
+  margin-left: 2px;
+  vertical-align: -1px;
+  background-color: var(--accent);
+  border-radius: 1px;
+  animation: typing-blink 0.8s infinite;
+}
+
+@keyframes typing-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .chat-reply-body {

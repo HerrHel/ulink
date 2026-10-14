@@ -92,6 +92,21 @@ describe('chatStreamParser', () => {
       expect(allCandidates).toHaveLength(0)
     })
 
+    it('流式生成中，当卡片处于未闭合阶段时隐藏半截 JSON 避免闪烁暴露', () => {
+      const streamingContent = `为你推荐手绘白板工具：
+
+\`\`\`ulink-card
+{"title":"Excalidraw","url":"https://excalidraw`
+      const { segments, allCandidates } = parseTurnContentSegments(streamingContent, dummyCats, dummyAttrs)
+
+      // 仅渲染卡片出现前的段落，未闭合的 JSON 块被安全隐藏
+      expect(segments).toHaveLength(1)
+      expect(segments[0].type).toBe('text')
+      expect((segments[0] as any).rawText).toContain('为你推荐手绘白板工具：')
+      expect((segments[0] as any).html).not.toContain('Excalidraw')
+      expect(allCandidates).toHaveLength(0)
+    })
+
     it('处理空字符串输入', () => {
       const { segments, allCandidates } = parseTurnContentSegments('', dummyCats, dummyAttrs)
       expect(segments).toHaveLength(0)
