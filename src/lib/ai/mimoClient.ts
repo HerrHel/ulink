@@ -168,10 +168,15 @@ export function parseMiMoReply(
   return { cleanText, candidates }
 }
 
+export interface MiMoStreamCallbacks {
+  onReasoningDelta?: (delta: string, accumulatedReasoning: string) => void
+  onContentDelta?: (delta: string, accumulatedContent: string) => void
+}
+
 /**
- * 向小米 MiMo 发起专家级对话请求
+ * 向小米 MiMo 发起专家级流式对话请求（支持 SSE 深度思考流动与打字机正文）
  */
-export async function askMiMo(
+export async function askMiMoStream(
   userQuery: string,
   context: {
     categories: Category[]
@@ -179,9 +184,11 @@ export async function askMiMo(
     isZh?: boolean
     signal?: AbortSignal
     history?: Array<{ role: 'user' | 'assistant'; content: string }>
-  }
+  },
+  callbacks?: MiMoStreamCallbacks
 ): Promise<{
   reply: string
+  reasoning: string
   cleanText: string
   candidates: AiCandidateBookmark[]
   rawText: string
@@ -230,6 +237,7 @@ export async function askMiMo(
       model: config.model,
       messages,
       temperature: 0.3,
+      stream: true,
     }),
     signal: context.signal,
   })
@@ -239,16 +247,163 @@ export async function askMiMo(
     throw new Error(`MiMo API request failed (${response.status}): ${errText || response.statusText}`)
   }
 
-  const data = await response.json()
-  const rawText: string = data.choices?.[0]?.message?.content || ''
+  let accumulatedReasoning = ''
+  let accumulatedContent = ''
+  let inThinkTag = false
 
-  const { cleanText, candidates } = parseMiMoReply(rawText, context.categories, context.customAttributes)
+  function handleContentChunk(chunk: string) {
+    if (!chunk) return
+    // 兼容可能通过 <think> 标签输出思考的模型/代理
+    if (!inThinkTag && chunk.includes('<think>')) {
+      const parts = chunk.split('<think>')
+      if (parts[0]) {
+        accumulatedContent += parts[0]
+        callbacks?.onContentDelta?.(parts[0], accumulatedContent)
+      }
+      inThinkTag = true
+      const rest = parts.slice(1).join('<think>')
+      handleThinkChunk(rest)
+      return
+    }
+    if (inThinkTag) {
+      handleThinkChunk(chunk)
+      return
+    }
+    accumulatedContent += chunk
+    callbacks?.onContentDelta?.(chunk, accumulatedContent)
+  }
+
+  function handleThinkChunk(chunk: string) {
+    if (chunk.includes('</think>')) {
+      const parts = chunk.split('</think>')
+      if (parts[0]) {
+        accumulatedReasoning += parts[0]
+        callbacks?.onReasoningDelta?.(parts[0], accumulatedReasoning)
+      }
+      inThinkTag = false
+      const after = parts.slice(1).join('</think>')
+      if (after) {
+        accumulatedContent += after
+        callbacks?.onContentDelta?.(after, accumulatedContent)
+      }
+      return
+    }
+    accumulatedReasoning += chunk
+    callbacks?.onReasoningDelta?.(chunk, accumulatedReasoning)
+  }
+
+  // 环境兜底：若 response.body 缺失（如简易测试 mock），回退至 json
+  if (!response.body) {
+    const data = await response.json().catch(() => ({}))
+    const raw: string = data.choices?.[0]?.message?.content || ''
+    const reasoning: string = data.choices?.[0]?.message?.reasoning_content || ''
+    if (reasoning) {
+      accumulatedReasoning = reasoning
+      callbacks?.onReasoningDelta?.(reasoning, reasoning)
+    }
+    if (raw) {
+      handleContentChunk(raw)
+    }
+  } else {
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (!trimmed || !trimmed.startsWith('data:')) continue
+          const dataStr = trimmed.slice(5).trim()
+          if (dataStr === '[DONE]') continue
+
+          try {
+            const json = JSON.parse(dataStr)
+            const delta = json.choices?.[0]?.delta
+            if (!delta) continue
+
+            // 1. 小米 MiMo 原生 delta.reasoning_content 思考流
+            if (delta.reasoning_content) {
+              accumulatedReasoning += delta.reasoning_content
+              callbacks?.onReasoningDelta?.(delta.reasoning_content, accumulatedReasoning)
+            }
+
+            // 2. 正式回答流 (支持 <think> 标签容错)
+            if (delta.content) {
+              handleContentChunk(delta.content)
+            }
+          } catch {
+            // 忽略碎片非 JSON 块
+          }
+        }
+      }
+
+      // 消费缓冲区末尾遗留的一行
+      if (buffer.trim().startsWith('data:')) {
+        const dataStr = buffer.trim().slice(5).trim()
+        if (dataStr && dataStr !== '[DONE]') {
+          try {
+            const json = JSON.parse(dataStr)
+            const delta = json.choices?.[0]?.delta
+            if (delta?.reasoning_content) {
+              accumulatedReasoning += delta.reasoning_content
+              callbacks?.onReasoningDelta?.(delta.reasoning_content, accumulatedReasoning)
+            }
+            if (delta?.content) {
+              handleContentChunk(delta.content)
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
+  const { cleanText, candidates } = parseMiMoReply(
+    accumulatedContent,
+    context.categories,
+    context.customAttributes
+  )
 
   return {
-    reply: rawText,
-    cleanText: cleanText || rawText,
+    reply: accumulatedContent,
+    reasoning: accumulatedReasoning,
+    cleanText: cleanText || accumulatedContent,
     candidates,
-    rawText,
+    rawText: accumulatedContent,
     model: config.model,
   }
+}
+
+/**
+ * 向小米 MiMo 发起专家级对话请求（完整等待返回）
+ */
+export async function askMiMo(
+  userQuery: string,
+  context: {
+    categories: Category[]
+    customAttributes: CustomAttribute[]
+    isZh?: boolean
+    signal?: AbortSignal
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>
+  }
+): Promise<{
+  reply: string
+  reasoning: string
+  cleanText: string
+  candidates: AiCandidateBookmark[]
+  rawText: string
+  model: string
+}> {
+  return askMiMoStream(userQuery, context)
 }
