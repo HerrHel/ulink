@@ -100,6 +100,10 @@ export const aiZh = {
     // 斜杠指令联想（与 SLASH_COMMANDS 一一对应）
     slashHelpTitle: '帮助',
     slashHelpDesc: '查看全部可用指令',
+    slashHealthTitle: '资产体检',
+    slashHealthDesc: '全库健康度体检与优化建议',
+    slashInboxTitle: '收件箱清零',
+    slashInboxDesc: '未分类书签智能归类',
     slashThemeTitle: '切换主题',
     slashThemeDesc: '深色 / 浅色 / 自动',
     slashViewTitle: '切换视图',
@@ -226,6 +230,10 @@ export const aiEn = {
     // Slash command suggestions (mirrors SLASH_COMMANDS)
     slashHelpTitle: 'Help',
     slashHelpDesc: 'View all available commands',
+    slashHealthTitle: 'Health check',
+    slashHealthDesc: 'Vault hygiene audit & suggestions',
+    slashInboxTitle: 'Inbox Zero',
+    slashInboxDesc: 'Smart uncategorized triage',
     slashThemeTitle: 'Theme',
     slashThemeDesc: 'Dark / light / auto',
     slashViewTitle: 'View',

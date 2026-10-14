@@ -15,7 +15,12 @@ import { useAppStore } from '../../stores/app.js'
 import { useToastStore } from '../../stores/toast.js'
 import { addNewCategory } from '../../utils.js'
 import { exportData } from '../../composables/domain/useDataIO.js'
-import { findDuplicateCandidates, isOfficialBookmark } from './localClustering.js'
+import {
+  findDuplicateCandidates,
+  isOfficialBookmark,
+  calculateVaultHealth,
+  clusterUncategorizedBookmarks,
+} from './localClustering.js'
 import { CAT_UNCATEGORIZED, CAT_ALL } from '../../config/constants.js'
 import { showConfirm } from '../toast.js'
 import type { Category } from '../../types.js'
@@ -100,6 +105,66 @@ export function mergeDuplicateBookmarks(
 }
 
 /**
+ * 执行「收件箱清零」：将待整理书签批量移动至推荐的对应分类中
+ */
+export function applyInboxZeroClustering(
+  context?: SiteCommanderContext,
+): { movedCount: number; message: string } {
+  const ds = context?.ds ?? useDataStore()
+  const app = context?.app ?? useAppStore()
+
+  const groupedIds = new Set<string>()
+  for (const g of ds.siblingGroups || []) {
+    if (!g.deletedAt && g.bookmarkIds?.length) {
+      for (const id of g.bookmarkIds) groupedIds.add(id)
+    }
+  }
+
+  const clusters = clusterUncategorizedBookmarks(ds.bookmarks, ds.categories, groupedIds)
+  const assignableClusters = clusters.filter(
+    (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
+  )
+
+  if (assignableClusters.length === 0) {
+    return { movedCount: 0, message: '未找到可明确归类的未分类书签。' }
+  }
+
+  let movedCount = 0
+  const revertMap: Array<{ id: string; prevCatId?: string }> = []
+
+  for (const cluster of assignableClusters) {
+    const targetCatId = cluster.suggestedCategoryId!
+    for (const bm of cluster.bookmarks) {
+      if (bm && bm.id && !bm.deletedAt) {
+        revertMap.push({ id: bm.id, prevCatId: bm.categoryId })
+        ds.updateBookmark(bm.id, { categoryId: targetCatId })
+        movedCount++
+      }
+    }
+  }
+
+  if (movedCount > 0) {
+    app.save()
+    lastUndoableAction = {
+      type: 'inbox_zero',
+      description: `智能归拢 ${movedCount} 个未分类书签`,
+      revert: () => {
+        for (const item of revertMap) {
+          ds.updateBookmark(item.id, { categoryId: item.prevCatId })
+        }
+        app.save()
+        return `已撤销智能归类，${revertMap.length} 个书签已还原原分类。`
+      },
+    }
+  }
+
+  return {
+    movedCount,
+    message: `已将 ${movedCount} 个未分类书签智能归入对应分类，可在下方撤销。`,
+  }
+}
+
+/**
  * 调度站内命令与意图
  */
 export async function dispatchSiteCommand(
@@ -129,6 +194,12 @@ export async function dispatchSiteCommand(
       steps: [{ text: '获取支持的站内指令集', done: true }],
       reply: [
         '与链 站内操控指令 (In-App Agent)',
+        '',
+        '- 资产体检：',
+        '  /health 或“资产体检”',
+        '',
+        '- 收件箱清零：',
+        '  /inbox 或“智能归类”、“整理未分类”',
         '',
         '- 主题模式：',
         '  /theme dark | light | auto',
@@ -577,6 +648,178 @@ export async function dispatchSiteCommand(
       action: 'stats',
       steps: [{ text: '统计全库活跃书签与分类体系', done: true }],
       reply,
+    }
+  }
+
+  // ── 9.1 全库资产体检中心 (/health, 资产体检) ──
+  if (
+    /^\/health$/i.test(query) ||
+    /^(?:请?帮?我?)?(?:资产体检|健康体检|全库体检|资产健康度|体检报告|健康诊断|书签体检|全面体检)$/i.test(
+      query,
+    )
+  ) {
+    const groupedIds = new Set<string>()
+    for (const g of ds.siblingGroups || []) {
+      if (!g.deletedAt && g.bookmarkIds?.length) {
+        for (const id of g.bookmarkIds) groupedIds.add(id)
+      }
+    }
+
+    const healthStats = calculateVaultHealth(
+      ds.bookmarks,
+      ds.categories,
+      groupedIds,
+      ds.siblingGroups,
+    )
+
+    const activeBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && !isOfficialBookmark(b))
+    const totalCount = activeBookmarks.length
+
+    const tagCoveredCount = activeBookmarks.filter(
+      (b) => b.attributes && Object.keys(b.attributes).length > 0,
+    ).length
+    const tagCoverage = totalCount > 0 ? Math.round((tagCoveredCount / totalCount) * 100) : 100
+
+    const trashTotal =
+      ds.bookmarks.filter((b) => b.deletedAt).length +
+      ds.siblingGroups.filter((g) => g.deletedAt).length +
+      ds.categories.filter((c: Category) => c.deletedAt).length
+
+    // 计算综合健康指数 (0 ~ 100)
+    let score = 100
+    if (totalCount > 0) {
+      score -= Math.min(30, healthStats.uncategorizedCount * 3)
+      score -= Math.min(25, healthStats.duplicateCount * 5)
+      if (tagCoverage < 50) score -= 15
+      else if (tagCoverage < 75) score -= 5
+      if (trashTotal > 15) score -= 10
+      score = Math.max(10, Math.min(100, score))
+    }
+
+    const level =
+      score >= 90
+        ? '极佳（极客级整洁）'
+        : score >= 75
+          ? '良好（轻度待归拢）'
+          : score >= 60
+            ? '中等（建议全面治理）'
+            : '较乱（亟待整理清零）'
+
+    const reply = [
+      '与链 全库资产健康体检诊断报告',
+      '',
+      `综合健康指数：${score} 分 · ${level}`,
+      '',
+      '诊断明细指标：',
+      `- 活跃书签总数：${totalCount} 个`,
+      `- 待整理未分类：${healthStats.uncategorizedCount} 个 ${healthStats.uncategorizedCount > 0 ? '(建议归类)' : '(已清零)'}`,
+      `- 重复冗余副本：${healthStats.duplicateCount} 个 ${healthStats.duplicateCount > 0 ? '(可一键合并)' : '(无重复)'}`,
+      `- 标签体系覆盖：${tagCoverage}% ${tagCoverage < 60 ? '(建议打标)' : '(良好)'}`,
+      `- 回收站暂存项：${trashTotal} 项 ${trashTotal > 10 ? '(建议清空)' : ''}`,
+      '',
+      healthStats.uncategorizedCount > 0
+        ? '管家建议：点击下方行动卡片，开启「收件箱清零」将未分类项一键归入对应分类。'
+        : healthStats.duplicateCount > 0
+          ? '管家建议：点击下方行动卡片，一键安全合并所有重复书签副本。'
+          : '管家评价：书签资产处于极佳状态，无需额外整理！',
+    ].join('\n')
+
+    let actionCard: ChatActionCard | undefined
+    if (healthStats.uncategorizedCount > 0) {
+      actionCard = {
+        type: 'custom',
+        actionName: 'inbox_zero',
+        title: `一键智能归类 ${healthStats.uncategorizedCount} 个未分类书签`,
+        desc: '资产管家已基于历史偏好与特征分析出最佳归类方案',
+        buttonText: '智能归类',
+      }
+    } else if (healthStats.duplicateCount > 0) {
+      actionCard = {
+        type: 'dedup',
+        actionName: 'merge_dedup',
+        title: `一键合并 ${healthStats.duplicateCount} 个重复副本`,
+        desc: '安全移入回收站并保留最佳书签版本',
+        buttonText: '合并重复项',
+      }
+    } else if (trashTotal > 0) {
+      actionCard = {
+        type: 'trash',
+        actionName: 'trash_clear',
+        title: `清空回收站 (${trashTotal} 项)`,
+        desc: '释放存储空间并清空回收站已删除数据',
+        buttonText: '清空回收站',
+      }
+    }
+
+    return {
+      handled: true,
+      action: 'health',
+      steps: [
+        { text: '全库扫描未分类、重复与标签覆盖率', done: true },
+        { text: '生成综合健康度评分与治理建议', done: true },
+      ],
+      reply,
+      actionCard,
+    }
+  }
+
+  // ── 9.2 收件箱清零与智能归拢 (/inbox, 智能归类) ──
+  if (
+    /^\/inbox(?:\s+(?:zero|clean|organize))?$/i.test(query) ||
+    /^(?:请?帮?我?)?(?:收件箱清零|智能归类|整理未分类|归拢未分类|未分类整理|清空未分类|归类书签)$/i.test(
+      query,
+    )
+  ) {
+    const groupedIds = new Set<string>()
+    for (const g of ds.siblingGroups || []) {
+      if (!g.deletedAt && g.bookmarkIds?.length) {
+        for (const id of g.bookmarkIds) groupedIds.add(id)
+      }
+    }
+
+    const clusters = clusterUncategorizedBookmarks(ds.bookmarks, ds.categories, groupedIds)
+    const assignableClusters = clusters.filter(
+      (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
+    )
+
+    const totalToMove = assignableClusters.reduce((acc, c) => acc + c.bookmarks.length, 0)
+
+    if (totalToMove === 0) {
+      return {
+        handled: true,
+        action: 'inbox_zero',
+        steps: [{ text: '扫描未分类书签', done: true }],
+        reply: '太棒了！当前书签库已实现「收件箱清零（Inbox Zero）」，所有书签均已妥善归类。',
+      }
+    }
+
+    const lines: string[] = [
+      '智能归拢分析完成，已为您生成以下归类预案：',
+      '',
+    ]
+    for (const c of assignableClusters) {
+      const titles = c.bookmarks.slice(0, 3).map((b) => b.title || b.url).join('、')
+      const more = c.bookmarks.length > 3 ? ` 等 ${c.bookmarks.length} 个` : ` (${c.bookmarks.length} 个)`
+      lines.push(`- 归入「${c.suggestedCategoryName}」：${titles}${more}`)
+    }
+    lines.push('')
+    lines.push('点击下方行动卡片批准执行，即可一键批量归拢（随时支持 /undo 撤销）。')
+
+    return {
+      handled: true,
+      action: 'inbox_zero',
+      steps: [
+        { text: `检测到 ${totalToMove} 个待归类书签`, done: true },
+        { text: '根据历史偏好与域名聚类分析完成', done: true },
+      ],
+      reply: lines.join('\n'),
+      actionCard: {
+        type: 'custom',
+        actionName: 'apply_inbox_zero',
+        title: `批准归类 ${totalToMove} 个未分类书签`,
+        desc: '将上述书签批量移入对应的目标分类并落盘',
+        buttonText: '执行智能归拢',
+      },
     }
   }
 
