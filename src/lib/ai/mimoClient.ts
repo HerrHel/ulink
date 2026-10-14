@@ -11,12 +11,13 @@
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { getSmartPrefill } from './smartPrefill.js'
+import { ULINK_AGENT_TOOLS } from './tools.js'
 
 export const MIMO_STORAGE_KEY = 'ulink_mimo_config'
 
 export const DEFAULT_MIMO_BASE_URL = 'https://api.xiaomimimo.com/v1'
 export const DEFAULT_MIMO_MODEL = 'mimo-v2.6-flash'
-export const DEFAULT_MIMO_API_KEY = 'sk-c6k9kqaojtukbjvbdijusj8i8lch04sl6umrueruhz6yig7h'
+export const DEFAULT_MIMO_API_KEY = ''
 
 export interface MiMoUserConfig {
   apiKey?: string
@@ -171,10 +172,17 @@ export function parseMiMoReply(
 export interface MiMoStreamCallbacks {
   onReasoningDelta?: (delta: string, accumulatedReasoning: string) => void
   onContentDelta?: (delta: string, accumulatedContent: string) => void
+  onToolCall?: (toolCall: AgentToolCall) => void
+}
+
+export interface AgentToolCall {
+  id: string
+  name: string
+  arguments: Record<string, any>
 }
 
 /**
- * 向小米 MiMo 发起专家级流式对话请求（支持 SSE 深度思考流动与打字机正文）
+ * 向小米 MiMo 发起专家级流式对话请求（支持 SSE 深度思考流动、打字机正文与 Function Calling）
  */
 export async function askMiMoStream(
   userQuery: string,
@@ -184,6 +192,7 @@ export async function askMiMoStream(
     isZh?: boolean
     signal?: AbortSignal
     history?: Array<{ role: 'user' | 'assistant'; content: string }>
+    enableTools?: boolean
   },
   callbacks?: MiMoStreamCallbacks
 ): Promise<{
@@ -193,6 +202,7 @@ export async function askMiMoStream(
   candidates: AiCandidateBookmark[]
   rawText: string
   model: string
+  toolCalls?: AgentToolCall[]
 }> {
   const config = getMiMoConfig()
   if (!config.apiKey) {
@@ -227,18 +237,25 @@ export async function askMiMoStream(
     content: userQuery,
   })
 
+  const requestBody: Record<string, any> = {
+    model: config.model,
+    messages,
+    temperature: 0.3,
+    stream: true,
+  }
+
+  if (context.enableTools !== false) {
+    requestBody.tools = ULINK_AGENT_TOOLS
+    requestBody.tool_choice = 'auto'
+  }
+
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: 0.3,
-      stream: true,
-    }),
+    body: JSON.stringify(requestBody),
     signal: context.signal,
   })
 
@@ -250,6 +267,7 @@ export async function askMiMoStream(
   let accumulatedReasoning = ''
   let accumulatedContent = ''
   let inThinkTag = false
+  const toolCallsMap: Record<number, { id: string; name: string; argumentsStr: string }> = {}
 
   function handleContentChunk(chunk: string) {
     if (!chunk) return
@@ -339,6 +357,24 @@ export async function askMiMoStream(
             if (delta.content) {
               handleContentChunk(delta.content)
             }
+
+            // 3. Tool Calling / Function Calling 流式增量
+            if (delta.tool_calls && Array.isArray(delta.tool_calls)) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0
+                if (!toolCallsMap[idx]) {
+                  toolCallsMap[idx] = {
+                    id: tc.id || `call_${Date.now()}_${idx}`,
+                    name: tc.function?.name || '',
+                    argumentsStr: tc.function?.arguments || '',
+                  }
+                } else {
+                  if (tc.id) toolCallsMap[idx].id = tc.id
+                  if (tc.function?.name) toolCallsMap[idx].name += tc.function.name
+                  if (tc.function?.arguments) toolCallsMap[idx].argumentsStr += tc.function.arguments
+                }
+              }
+            }
           } catch {
             // 忽略碎片非 JSON 块
           }
@@ -359,6 +395,22 @@ export async function askMiMoStream(
             if (delta?.content) {
               handleContentChunk(delta.content)
             }
+            if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0
+                if (!toolCallsMap[idx]) {
+                  toolCallsMap[idx] = {
+                    id: tc.id || `call_${Date.now()}_${idx}`,
+                    name: tc.function?.name || '',
+                    argumentsStr: tc.function?.arguments || '',
+                  }
+                } else {
+                  if (tc.id) toolCallsMap[idx].id = tc.id
+                  if (tc.function?.name) toolCallsMap[idx].name += tc.function.name
+                  if (tc.function?.arguments) toolCallsMap[idx].argumentsStr += tc.function.arguments
+                }
+              }
+            }
           } catch {
             // ignore
           }
@@ -366,6 +418,28 @@ export async function askMiMoStream(
       }
     } finally {
       reader.releaseLock()
+    }
+  }
+
+  // 解析并构建完整的 toolCalls
+  const parsedToolCalls: AgentToolCall[] = []
+  for (const item of Object.values(toolCallsMap)) {
+    if (item.name) {
+      let argsObj: Record<string, any> = {}
+      try {
+        if (item.argumentsStr) {
+          argsObj = JSON.parse(item.argumentsStr)
+        }
+      } catch {
+        // 容错降级
+      }
+      const call = {
+        id: item.id,
+        name: item.name,
+        arguments: argsObj,
+      }
+      parsedToolCalls.push(call)
+      callbacks?.onToolCall?.(call)
     }
   }
 
@@ -382,6 +456,7 @@ export async function askMiMoStream(
     candidates,
     rawText: accumulatedContent,
     model: config.model,
+    toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,
   }
 }
 

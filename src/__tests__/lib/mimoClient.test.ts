@@ -179,5 +179,56 @@ describe('mimoClient', () => {
         globalThis.fetch = origFetch
       }
     })
+
+    it('正确解析 SSE 中的 delta.tool_calls 并结构化返回', async () => {
+      saveMiMoConfig({ apiKey: 'sk-test-tool-call' })
+
+      const sseChunks = [
+        'data: {"choices":[{"delta":{"content":"正在为你体检资产"}}]}\n\n',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_audit_1","function":{"name":"audit_vault","arguments":""}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]}}]}\n\n',
+        'data: [DONE]\n\n',
+      ]
+
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of sseChunks) {
+            controller.enqueue(new TextEncoder().encode(chunk))
+          }
+          controller.close()
+        },
+      })
+
+      const origFetch = globalThis.fetch
+      globalThis.fetch = async () =>
+        new Response(stream, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+
+      try {
+        const toolCallsReceived: any[] = []
+        const res = await askMiMoStream(
+          '体检一下我的书签',
+          {
+            categories: dummyCats,
+            customAttributes: dummyAttrs,
+          },
+          {
+            onToolCall(tc) {
+              toolCallsReceived.push(tc)
+            },
+          }
+        )
+
+        expect(res.toolCalls).toBeDefined()
+        expect(res.toolCalls?.length).toBe(1)
+        expect(res.toolCalls?.[0].name).toBe('audit_vault')
+        expect(res.toolCalls?.[0].id).toBe('call_audit_1')
+        expect(toolCallsReceived.length).toBe(1)
+      } finally {
+        globalThis.fetch = origFetch
+      }
+    })
   })
 })
