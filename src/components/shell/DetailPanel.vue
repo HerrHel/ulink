@@ -342,7 +342,14 @@
                 </div>
 
                 <!-- 交互行动卡片 (Actionable Artifact / Generative UI) -->
-                <div v-if="turn.actionCard" class="chat-action-card">
+                <div
+                  v-if="turn.actionCard"
+                  class="chat-action-card"
+                  :class="{
+                    'is-completed': turn.actionCard.completed,
+                    'is-executing': turn.actionCard.executing,
+                  }"
+                >
                   <div class="action-card-header">
                     <span class="action-card-badge">{{ t('ai.actionSuggest') }}</span>
                     <span class="action-card-title">{{ turn.actionCard.title }}</span>
@@ -354,16 +361,46 @@
                     <button
                       v-if="!turn.actionCard.completed"
                       class="action-card-btn"
+                      :class="{ 'is-executing': turn.actionCard.executing }"
+                      :disabled="turn.actionCard.executing"
                       @click="handleActionCardClick(turn.actionCard, turn)"
                     >
-                      {{ turn.actionCard.buttonText }}
-                    </button>
-                    <span v-else class="action-card-done">
-                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="20 6 9 17 4 12" />
+                      <svg
+                        v-if="turn.actionCard.executing"
+                        class="action-card-spinner"
+                        viewBox="0 0 24 24"
+                        width="11"
+                        height="11"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                       </svg>
-                      {{ t('ai.actionDone') }}
-                    </span>
+                      <span>{{ turn.actionCard.executing ? t('ai.executing') : turn.actionCard.buttonText }}</span>
+                    </button>
+                    <div v-else class="action-card-done-wrap">
+                      <span class="action-card-done">
+                        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                        {{ t('ai.actionDone') }}
+                      </span>
+                      <button
+                        v-if="getActionCardNavTarget(turn.actionCard)"
+                        class="action-card-nav-btn"
+                        @click="navigateToActionTarget(turn.actionCard)"
+                        :title="t('ai.goToWorkspace')"
+                      >
+                        <span>{{ t('ai.goToWorkspace') }}</span>
+                        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -479,7 +516,7 @@ import {
   healDeadlink,
 } from '../../lib/ai/siteCommander.js'
 import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
-import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { saveAppData } from '../../stores/app.js'
 import {
   loadSessions,
@@ -685,6 +722,31 @@ interface QuickHint {
 const dynamicQuickHints = computed<QuickHint[]>(() => {
   const hints: QuickHint[] = []
 
+  // 1. 情境感知：若当前聚焦在某个笔记组（工作台）
+  if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) {
+    const group = ds.groupMap[ui.focusedGroupId]
+    const gName = group.name.length > 8 ? group.name.slice(0, 8) + '…' : group.name
+    hints.push({
+      label: isZh.value ? `📦 扩展「${gName}」工具` : `📦 Tools for ${gName}`,
+      query: `/pack ${group.name}`,
+    })
+    hints.push({
+      label: isZh.value ? '🔍 查重清理' : '/dedup',
+      query: '/dedup',
+    })
+  } else if (ui.curCat && ui.curCat !== CAT_ALL && ui.curCat !== CAT_UNCATEGORIZED) {
+    // 2. 情境感知：若当前选定了特定分类
+    const cat = ds.categories.find((c: any) => !c.deletedAt && c.id === ui.curCat)
+    if (cat?.name) {
+      const cName = cat.name.length > 8 ? cat.name.slice(0, 8) + '…' : cat.name
+      hints.push({
+        label: isZh.value ? `📁 探索「${cName}」精选` : `📁 ${cName} tools`,
+        query: `/pack ${cat.name}`,
+      })
+    }
+  }
+
+  // 3. 收件箱未分类检测
   const uncatCount = ds.bookmarks.filter(
     (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId && !b.id.startsWith('bm_ulink_'),
   ).length
@@ -693,146 +755,193 @@ const dynamicQuickHints = computed<QuickHint[]>(() => {
       label: isZh.value ? `未分类 (${uncatCount})` : `Uncategorized (${uncatCount})`,
       query: '/inbox',
     })
-  } else {
+  } else if (hints.length === 0) {
     hints.push({
       label: isZh.value ? '/health 体检' : '/health',
       query: '/health',
     })
   }
 
+  // 4. 回收站堆积感知
   const trashCount =
     ds.bookmarks.filter((b) => b.deletedAt).length +
     ds.siblingGroups.filter((g) => g.deletedAt).length +
     ds.categories.filter((c: any) => c.deletedAt).length
-  if (trashCount > 0) {
+  if (trashCount > 0 && hints.length < 4) {
     hints.push({
       label: isZh.value ? `回收站 (${trashCount})` : `Trash (${trashCount})`,
       query: '/trash',
     })
   }
 
-  hints.push({
-    label: isZh.value ? '/dedup 查重' : '/dedup',
-    query: '/dedup',
-  })
-  hints.push({
-    label: isZh.value ? '/stats 统计' : '/stats',
-    query: '/stats',
-  })
-  hints.push({
-    label: isZh.value ? '/help 指令' : '/help',
-    query: '/help',
-  })
+  if (hints.length < 4) {
+    hints.push({
+      label: isZh.value ? '/dedup 查重' : '/dedup',
+      query: '/dedup',
+    })
+  }
+  if (hints.length < 4) {
+    hints.push({
+      label: isZh.value ? '/stats 统计' : '/stats',
+      query: '/stats',
+    })
+  }
+  if (hints.length < 4) {
+    hints.push({
+      label: isZh.value ? '/help 指令' : '/help',
+      query: '/help',
+    })
+  }
 
   return hints.slice(0, 4)
 })
 
+function getActionCardNavTarget(card: ChatActionCard): string | null {
+  if (card.resultGid && ds.groupMap[card.resultGid]) {
+    return card.resultGid
+  }
+  const payloadGid = (card.payload as any)?.createdGid
+  if (payloadGid && ds.groupMap[payloadGid]) {
+    return payloadGid
+  }
+  return null
+}
+
+function navigateToActionTarget(card: ChatActionCard) {
+  const gid = getActionCardNavTarget(card)
+  if (!gid) return
+  const group = ds.groupMap[gid]
+  if (group) {
+    if (group.categoryId) {
+      ui.curCat = group.categoryId
+    }
+    ui.focusedGroupId = group.id
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      ui.panels.detail = false
+    }
+  }
+}
+
 async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
-  if (card.actionName === 'merge_dedup') {
-    const res = mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
-    card.completed = true
-    toast(res.message, true)
-    chatTurns.value.push({
-      id: 'turn-' + Date.now() + '-assistant',
-      role: 'assistant',
-      content: res.message,
-      steps: [{ text: `合并了 ${res.mergedCount} 个重复副本`, done: true }],
-      timestamp: Date.now(),
-    })
-    scrollToBottom()
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  } else if (card.actionName === 'trash_clear') {
-    const res = await dispatchSiteCommand('/trash clear', { ds, ui, app: (ui as any).app })
-    if (res.success !== false) {
-      card.completed = true
-    }
-    chatTurns.value.push({
-      id: 'turn-' + Date.now() + '-assistant',
-      role: 'assistant',
-      content: res.reply,
-      steps: res.steps,
-      timestamp: Date.now(),
-    })
-    scrollToBottom()
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  } else if (card.actionName === 'inbox_zero') {
-    const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
-    chatTurns.value.push({
-      id: 'turn-' + Date.now() + '-assistant',
-      role: 'assistant',
-      content: res.reply,
-      steps: res.steps,
-      actionCard: res.actionCard,
-      timestamp: Date.now(),
-    })
-    scrollToBottom()
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  } else if (card.actionName === 'apply_inbox_zero') {
-    const res = applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
-    card.completed = true
-    toast(res.message, true)
-    chatTurns.value.push({
-      id: 'turn-' + Date.now() + '-assistant',
-      role: 'assistant',
-      content: res.message,
-      steps: [{ text: `成功归类 ${res.movedCount} 个书签`, done: true }],
-      timestamp: Date.now(),
-    })
-    scrollToBottom()
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  } else if (card.actionName === 'create_topic_workspace') {
-    const payload = (card.payload || {}) as {
-      topic?: string
-      candidates?: any[]
-      targetCatId?: string
-    }
-    const res = await createTopicWorkspace(
-      payload.topic || '精选工作台',
-      payload.candidates,
-      payload.targetCatId,
-      { ds, ui, app: (ui as any).app },
-    )
-    card.completed = true
-    toast(res.message, true)
-    chatTurns.value.push({
-      id: 'turn-' + Date.now() + '-assistant',
-      role: 'assistant',
-      content: res.message,
-      steps: [
-        { text: `甄选并存入 ${res.totalBookmarks} 个工具`, done: true },
-        { text: `创建笔记组「${res.group.name}」`, done: true },
-        { text: '切换至工作台聚焦视图', done: true },
-      ],
-      timestamp: Date.now(),
-    })
-    scrollToBottom()
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  } else if (card.actionName === 'heal_deadlink') {
-    const payload = (card.payload || {}) as {
-      deadBmId?: string
-      replacement?: any
-    }
-    if (payload.deadBmId && payload.replacement) {
-      const res = healDeadlink(payload.deadBmId, payload.replacement, {
-        ds,
-        ui,
-        app: (ui as any).app,
-      })
+  if (card.completed || card.executing) return
+  card.executing = true
+  try {
+    if (card.actionName === 'merge_dedup') {
+      const res = mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
       card.completed = true
       toast(res.message, true)
       chatTurns.value.push({
         id: 'turn-' + Date.now() + '-assistant',
         role: 'assistant',
         content: res.message,
+        steps: [{ text: `合并了 ${res.mergedCount} 个重复副本`, done: true }],
+        timestamp: Date.now(),
+      })
+      scrollToBottom()
+      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    } else if (card.actionName === 'trash_clear') {
+      const res = await dispatchSiteCommand('/trash clear', { ds, ui, app: (ui as any).app })
+      if (res.success !== false) {
+        card.completed = true
+      }
+      chatTurns.value.push({
+        id: 'turn-' + Date.now() + '-assistant',
+        role: 'assistant',
+        content: res.reply,
+        steps: res.steps,
+        timestamp: Date.now(),
+      })
+      scrollToBottom()
+      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    } else if (card.actionName === 'inbox_zero') {
+      const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+      chatTurns.value.push({
+        id: 'turn-' + Date.now() + '-assistant',
+        role: 'assistant',
+        content: res.reply,
+        steps: res.steps,
+        actionCard: res.actionCard,
+        timestamp: Date.now(),
+      })
+      scrollToBottom()
+      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    } else if (card.actionName === 'apply_inbox_zero') {
+      const res = applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+      card.completed = true
+      toast(res.message, true)
+      chatTurns.value.push({
+        id: 'turn-' + Date.now() + '-assistant',
+        role: 'assistant',
+        content: res.message,
+        steps: [{ text: `成功归类 ${res.movedCount} 个书签`, done: true }],
+        timestamp: Date.now(),
+      })
+      scrollToBottom()
+      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    } else if (card.actionName === 'create_topic_workspace') {
+      const payload = (card.payload || {}) as {
+        topic?: string
+        candidates?: any[]
+        targetCatId?: string
+      }
+      const res = await createTopicWorkspace(
+        payload.topic || '精选工作台',
+        payload.candidates,
+        payload.targetCatId,
+        { ds, ui, app: (ui as any).app },
+      )
+      card.completed = true
+      if (res.group?.id) {
+        card.resultGid = res.group.id
+        card.resultCatId = res.group.categoryId
+      }
+      toast(res.message, true)
+      chatTurns.value.push({
+        id: 'turn-' + Date.now() + '-assistant',
+        role: 'assistant',
+        content: res.message,
         steps: [
-          { text: '核验失效死链', done: true },
-          { text: `替换为现役平替「${payload.replacement.title}」`, done: true },
+          { text: `甄选并存入 ${res.totalBookmarks} 个工具`, done: true },
+          { text: `创建笔记组「${res.group.name}」`, done: true },
+          { text: '切换至工作台聚焦视图', done: true },
         ],
         timestamp: Date.now(),
       })
       scrollToBottom()
       sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    } else if (card.actionName === 'heal_deadlink') {
+      const payload = (card.payload || {}) as {
+        deadBmId?: string
+        replacement?: any
+      }
+      if (payload.deadBmId && payload.replacement) {
+        const res = healDeadlink(payload.deadBmId, payload.replacement, {
+          ds,
+          ui,
+          app: (ui as any).app,
+        })
+        card.completed = true
+        toast(res.message, true)
+        chatTurns.value.push({
+          id: 'turn-' + Date.now() + '-assistant',
+          role: 'assistant',
+          content: res.message,
+          steps: [
+            { text: '核验失效死链', done: true },
+            { text: `替换为现役平替「${payload.replacement.title}」`, done: true },
+          ],
+          timestamp: Date.now(),
+        })
+        scrollToBottom()
+        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+      }
     }
+  } catch (err: any) {
+    console.error('handleActionCardClick error:', err)
+    toast(err?.message || '执行失败，请稍后重试', false)
+  } finally {
+    card.executing = false
+    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
   }
 }
 
@@ -1073,6 +1182,17 @@ function handleKeyDown(e: KeyboardEvent) {
       e.preventDefault()
       const chosen = filteredSlashCommands.value[activeSlashIndex.value]
       if (chosen) applySlashCommand(chosen.cmd)
+      return
+    }
+  }
+
+  // 若用户按了 Tab，当前输入了斜杠前缀但尚未有空格
+  if (e.key === 'Tab' && aiQuery.value.startsWith('/') && !aiQuery.value.includes(' ')) {
+    const prefix = aiQuery.value.trim().toLowerCase()
+    const match = SLASH_COMMANDS.find((c) => c.cmd.toLowerCase().startsWith(prefix))
+    if (match) {
+      e.preventDefault()
+      applySlashCommand(match.cmd)
       return
     }
   }
@@ -2317,6 +2437,16 @@ function closeDetail(rawId: string) {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 6px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+}
+
+.chat-action-card.is-completed {
+  background: color-mix(in srgb, var(--surface) 92%, var(--accent-light) 8%);
+  border-color: color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
+}
+
+.chat-action-card.is-executing {
+  opacity: 0.9;
 }
 
 .action-card-header {
@@ -2353,9 +2483,13 @@ function closeDetail(rawId: string) {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .action-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 500;
@@ -2367,9 +2501,26 @@ function closeDetail(rawId: string) {
   transition: all 0.12s ease;
 }
 
-.action-card-btn:hover {
+.action-card-btn:hover:not(:disabled) {
   opacity: 0.9;
   box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.action-card-btn.is-executing,
+.action-card-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.action-card-spinner {
+  animation: thinking-spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+.action-card-done-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .action-card-done {
@@ -2379,6 +2530,26 @@ function closeDetail(rawId: string) {
   font-size: 11px;
   color: var(--accent);
   font-weight: 500;
+}
+
+.action-card-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-card-nav-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
 }
 
 /* 底部仅留一个对话输入框：无重叠多层边框 */

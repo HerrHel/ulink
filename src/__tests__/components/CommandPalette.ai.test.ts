@@ -53,4 +53,22 @@ describe('CommandPalette — AI 智能中枢与斜杠指令流转 (Omnibox Integ
     expect(ui.openAiAssistant).toHaveBeenCalledWith('帮我找原型设计工具')
     wrapper.unmount()
   })
+
+  it('键入斜杠前缀时支持 Tab 键自动补全指令', async () => {
+    const wrapper = mount(CommandPalette)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
+    await nextTick()
+
+    const input = wrapper.find('input.cmd-input')
+    await input.setValue('/in')
+    await nextTick()
+
+    // 触发 Tab 按键
+    await input.trigger('keydown', { key: 'Tab' })
+    await nextTick()
+
+    // 自动补全为 /inbox 
+    expect((input.element as HTMLInputElement).value).toBe('/inbox ')
+    wrapper.unmount()
+  })
 })

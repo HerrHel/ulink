@@ -230,6 +230,22 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     activeIdx.value = activeIdx.value > 0 ? activeIdx.value - 1 : total - 1
+  } else if (e.key === 'Tab') {
+    const item = filtered.value[activeIdx.value]
+    if (item) {
+      e.preventDefault()
+      if (item.id.startsWith('ai-cmd:')) {
+        const cmd = item.id.slice('ai-cmd:'.length)
+        query.value = cmd + ' '
+      } else if (query.value.startsWith('/')) {
+        const match = item.label.match(/^(\/[a-zA-Z0-9_-]+)/)
+        if (match) {
+          query.value = match[1] + ' '
+        }
+      } else {
+        query.value = item.label
+      }
+    }
   } else if (e.key === 'Enter') {
     e.preventDefault()
     const item = filtered.value[activeIdx.value]

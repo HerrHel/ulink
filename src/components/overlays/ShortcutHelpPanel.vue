@@ -45,6 +45,7 @@ const groups: ShortcutGroup[] = [
     title: 'shortcut.groupGlobal',
     items: [
       { desc: 'shortcut.cmdPanel', keys: ['Ctrl', 'K'] },
+      { desc: 'shortcut.aiSidebar', keys: ['Ctrl', 'J'] },
       { desc: 'filter.newBookmark', keys: ['Ctrl', 'N'] },
       { desc: 'shortcut.panelShortcut', keys: ['Ctrl', '/'] },
       { desc: 'shortcut.esc', keys: ['Esc'] },

@@ -33,11 +33,19 @@ const { closeBmModalMock, openBmModalMock } = vi.hoisted(() => ({
   openBmModalMock: vi.fn(),
 }))
 vi.mock('../../composables/domain/useBookmark.js', () => ({ closeBmModal: closeBmModalMock, openBmModal: openBmModalMock }))
-const { closeCatModalMock, closeAttrModalMock } = vi.hoisted(() => ({
+const { closeCatModalMock, closeAttrModalMock, toggleDetailPanelMock } = vi.hoisted(() => ({
   closeCatModalMock: vi.fn(),
   closeAttrModalMock: vi.fn(),
+  toggleDetailPanelMock: vi.fn(),
 }))
-vi.mock('../../composables/ui/useUI.js', () => ({ closeCatModal: closeCatModalMock, closeAttrModal: closeAttrModalMock, hideSettingsMenu: vi.fn(), closeAddBmPopover: vi.fn(), hideAddDropdown: vi.fn() }))
+vi.mock('../../composables/ui/useUI.js', () => ({
+  closeCatModal: closeCatModalMock,
+  closeAttrModal: closeAttrModalMock,
+  hideSettingsMenu: vi.fn(),
+  closeAddBmPopover: vi.fn(),
+  hideAddDropdown: vi.fn(),
+  toggleDetailPanel: toggleDetailPanelMock,
+}))
 
 // batchDelete 被 mock 成 spy，可在批量模式键盘分支测试中断言是否被调用
 const { batchDeleteMock } = vi.hoisted(() => ({ batchDeleteMock: vi.fn() }))
@@ -1217,6 +1225,33 @@ describe('r9 #12 _onGlobalKeydown：batchMode Ctrl+A 全选 + 批量模式开关
   // 注：Delete/Backspace 批量删除分支已有现 useKeyboardOps batch describe 覆盖（inField 守卫 + batchDelete spy），
   // 本 chunk 不重复，仅补此前 0 直测的 Ctrl+A 全选分支。源码 Ctrl+A 无 inField 守卫是既有设计（批量页无输入控件场景）。
 })
+
+describe('useKeyboardOps — Ctrl+J / Cmd+J 唤起/收起 AI 助手抽屉', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('按 Ctrl+J 时阻止默认行为并触发 toggleDetailPanel', () => {
+    const e = makeKey('j', { ctrlKey: true, code: 'KeyJ' })
+    _onGlobalKeydown(e)
+    expect(e.preventDefault).toHaveBeenCalledTimes(1)
+    expect(toggleDetailPanelMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('按 Cmd+J (Mac metaKey) 时同样触发 toggleDetailPanel', () => {
+    const e = makeKey('j', { metaKey: true, code: 'KeyJ' })
+    _onGlobalKeydown(e)
+    expect(e.preventDefault).toHaveBeenCalledTimes(1)
+    expect(toggleDetailPanelMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('若同时按住 Shift 或 Alt (如 Shift+Ctrl+J) 不触发', () => {
+    const e = makeKey('j', { ctrlKey: true, shiftKey: true, code: 'KeyJ' })
+    _onGlobalKeydown(e)
+    expect(toggleDetailPanelMock).not.toHaveBeenCalled()
+  })
+})
+
 
 
 

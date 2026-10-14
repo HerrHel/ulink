@@ -91,4 +91,37 @@ describe('chatSessions — AI 侧边栏多会话与历史管理', () => {
     expect(loadSessions()[0].title).toBe('待恢复会话')
     expect(getCurrentSessionId()).toBe(s.id)
   })
+
+  it('ChatActionCard 支持 executing、completed 与 resultGid 状态保存与还原', () => {
+    const s = createNewSession('行动卡测试')
+    updateSession(s.id, [
+      {
+        id: 'turn-1',
+        role: 'user',
+        content: '/pack UI设计',
+        timestamp: Date.now(),
+      },
+      {
+        id: 'turn-2',
+        role: 'assistant',
+        content: '已甄选工具',
+        timestamp: Date.now(),
+        actionCard: {
+          type: 'custom',
+          title: '一键创建「UI设计 工作台」',
+          buttonText: '立即创建',
+          actionName: 'create_topic_workspace',
+          executing: false,
+          completed: true,
+          resultGid: 'sg_123',
+          resultCatId: 'cat_design',
+        },
+      },
+    ])
+
+    const loaded = loadSessions()
+    expect(loaded[0].turns[1].actionCard?.completed).toBe(true)
+    expect(loaded[0].turns[1].actionCard?.resultGid).toBe('sg_123')
+    expect(loaded[0].turns[1].actionCard?.resultCatId).toBe('cat_design')
+  })
 })
