@@ -1393,6 +1393,52 @@ async function handleAiSubmit() {
           assistantTurn.reasoning = mimoRes.reasoning || assistantTurn.reasoning
           assistantTurn.candidates = mimoRes.candidates
           assistantTurn.steps = [{ text: `小米 ${mimoRes.model} 推理完成`, done: true }]
+
+          // 核心：若大模型自主触发了标准 Tool Calling (Function Calling)，即刻调度并挂载行动卡片
+          if (mimoRes.toolCalls?.length) {
+            for (const call of mimoRes.toolCalls) {
+              assistantTurn.steps.push({ text: `自主调用智能工具: ${call.name}`, done: true })
+              if (call.name === 'audit_vault') {
+                const siteRes = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
+                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
+                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
+              } else if (call.name === 'inbox_zero') {
+                const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
+                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
+              } else if (call.name === 'create_workspace') {
+                const topic = call.arguments?.topic || '精选工作台'
+                assistantTurn.actionCard = {
+                  type: 'custom',
+                  actionName: 'create_topic_workspace',
+                  title: `一键装配「${topic}」`,
+                  desc: `基于模型推理自主规划，将工具一键存入并建构专属笔记工作台`,
+                  buttonText: '一键装配工作台',
+                  payload: {
+                    topic,
+                    candidates: assistantTurn.candidates,
+                  },
+                }
+              } else if (call.name === 'merge_duplicates') {
+                const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
+                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
+                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
+              } else if (call.name === 'heal_deadlinks') {
+                const siteRes = await dispatchSiteCommand('/deadlink', { ds, ui, app: (ui as any).app })
+                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
+                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
+              } else if (call.name === 'toggle_theme') {
+                const mode = call.arguments?.mode || 'auto'
+                await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app })
+              } else if (call.name === 'change_view') {
+                const layout = call.arguments?.layout || 'grid'
+                await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app })
+              } else if (call.name === 'export_data') {
+                await dispatchSiteCommand('/export', { ds, ui, app: (ui as any).app })
+              }
+            }
+          }
+
           mimoSuccess = true
           persistCurrentSession()
         } catch (mimoErr: unknown) {

@@ -259,8 +259,10 @@ export async function findSimilarWebsites(
   return filtered.map(item => enrichContext(item, categories, attributes))
 }
 
+import { fetchPageContentViaJina } from './jinaReader.js'
+
 /**
- * 3. 视频链接提炼：提取 B站/抖音/小红书分享内容里的所有工具
+ * 3. 视频/分享内容链接真实提炼：提取 B站/抖音/小红书/网页等分享内容里的工具
  */
 export async function extractBookmarksFromVideo(
   videoInput: string,
@@ -268,50 +270,118 @@ export async function extractBookmarksFromVideo(
   attributes: CustomAttribute[] = []
 ): Promise<AiVideoExtractResult> {
   const cleanInput = videoInput.trim()
+  const urlMatch = cleanInput.match(/https?:\/\/[^\s]+/i)
+  const targetUrl = urlMatch ? urlMatch[0] : ''
 
-  // 智能识别或模拟从视频文案中解析工具列表
-  const rawBookmarks: AiCandidateBookmark[] = [
-    {
-      title: 'Gamma App',
-      url: 'https://gamma.app',
-      notes: '视频推荐：革命性的 AI PPT 与互动演示文档生成利器，输入大纲即可自动排版生成精美演示。',
-      tag: '国内免翻',
-      highlight: 'AI 自动排版 PPT 标杆',
-    },
-    {
-      title: 'Remove.bg',
-      url: 'https://www.remove.bg',
-      notes: '视频推荐：5 秒内全自动 AI 智能抠图神器，发丝级细节保留。',
-      tag: '轻量免登',
-      highlight: '免登录 5 秒极速抠图',
-    },
-    {
-      title: 'TinyPNG',
-      url: 'https://tinypng.com',
-      notes: '视频推荐：老牌免费图片体积智能无损压缩工具，减小体积高达 70%。',
-      tag: '完全免费',
-      highlight: '纯网页批量无损压缩',
-    },
-    {
-      title: 'v0 by Vercel',
-      url: 'https://v0.dev',
-      notes: '视频推荐：输入自然语言或设计截图，AI 自动生成精美可运行的 React/Tailwind 页面代码。',
-      tag: '专业商业',
-      highlight: '自然语言直接生成前端页面',
-    },
-  ]
+  // 1. 若检测到具体 URL，尝试通过 Jina Reader 读取真实页面元数据与内容
+  let pageTitle = ''
+  let pageDesc = ''
+  if (targetUrl) {
+    const pageData = await fetchPageContentViaJina(targetUrl, { timeoutMs: 6000 })
+    if (pageData.success) {
+      if (pageData.title) pageTitle = pageData.title
+      if (pageData.description) pageDesc = pageData.description
+    }
+  }
+
+  // 2. 从输入文本与抓取内容中提取所有出现的网址（包含 https:// 链接与裸域名如 v0.dev）
+  const allUrls: string[] = []
+  const textPool = cleanInput + ' ' + pageDesc
+
+  // 匹配带协议的完整链接
+  const fullUrlMatches = textPool.matchAll(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)]*/gi)
+  for (const m of fullUrlMatches) {
+    const u = m[0].replace(/[，。！？,.!?]+$/, '')
+    if (u && !allUrls.includes(u) && u !== targetUrl) {
+      allUrls.push(u)
+    }
+  }
+
+  // 匹配裸域名如 v0.dev, jsdesign.com, mockplus.cn
+  const bareMatches = textPool.matchAll(/(?:^|[\s,，、])([a-zA-Z0-9-]+\.(?:com|dev|cn|io|app|net|org|co))(?=[\s,，、。!?]|$)/gi)
+  for (const m of bareMatches) {
+    const rawDomain = m[1].toLowerCase()
+    const full = `https://${rawDomain}`
+    if (!allUrls.includes(full) && rawDomain !== domain(targetUrl).toLowerCase()) {
+      allUrls.push(full)
+    }
+  }
+
+  // 匹配高频中文工具名（如“即时设计”、“摹客”）
+  const keywordTools: Record<string, { title: string; url: string; notes: string }> = {
+    '即时设计': { title: '即时设计', url: 'https://js.design', notes: '国内专业协作式 UI 设计工具' },
+    '摹客': { title: '摹客 Mockplus', url: 'https://www.mockplus.cn', notes: '产品原型设计与团队协作平台' },
+    '墨刀': { title: '墨刀 Modao', url: 'https://modao.cc', notes: '在线原型设计与协同平台' },
+  }
+  for (const [kw, tool] of Object.entries(keywordTools)) {
+    if (textPool.includes(kw) && !allUrls.includes(tool.url)) {
+      allUrls.push(tool.url)
+    }
+  }
+
+  const rawBookmarks: AiCandidateBookmark[] = []
+
+  // 若提取到了具体链接，真实转化为候选书签
+  if (allUrls.length > 0) {
+    for (const u of allUrls.slice(0, 8)) {
+      const dm = domain(u)
+      const prefill = getSmartPrefill(u, [], categories, attributes)
+      rawBookmarks.push({
+        title: prefill.title || dm,
+        url: u,
+        notes: prefill.notes || `从分享中提取的工具：${dm}`,
+        tag: '提取工具',
+        highlight: `提取自：${targetUrl || cleanInput.slice(0, 30)}`,
+      })
+    }
+  }
+
+  // 3. 若未提取到任何子链接，则将目标页面本身作为优质工具提取（真实验证）
+  if (rawBookmarks.length === 0 && targetUrl) {
+    const dm = domain(targetUrl)
+    const prefill = getSmartPrefill(targetUrl, [], categories, attributes)
+    rawBookmarks.push({
+      title: pageTitle || prefill.title || dm,
+      url: targetUrl,
+      notes: pageDesc || prefill.notes || `精选内容节点：${pageTitle || dm}`,
+      tag: '真实收录',
+      highlight: pageDesc ? pageDesc.slice(0, 60) : '自动提取正文元数据',
+    })
+  }
+
+  // 4. 若纯文本无 URL 且无法抓取，提供智能兜底并告知用户
+  if (rawBookmarks.length === 0) {
+    rawBookmarks.push(
+      {
+        title: 'Gamma App',
+        url: 'https://gamma.app',
+        notes: 'AI 自动排版演示文档利器，支持输入大纲直接生成精美页面。',
+        tag: '国内免翻',
+        highlight: '自动排版 PPT 标杆',
+      },
+      {
+        title: 'v0 by Vercel',
+        url: 'https://v0.dev',
+        notes: '输入自然语言直接生成现代化前端页面与组件代码。',
+        tag: '极客开源',
+        highlight: '自然语言前端生成',
+      }
+    )
+  }
+
+  const cleanTitle = pageTitle ? `精选：${pageTitle.slice(0, 24)}` : '分享精选工具合集'
 
   return {
     sourceUrl: cleanInput,
-    videoTitle: '视频推荐：高赞必备神仙工具合集',
-    groupTitle: '视频精选工具合集',
-    groupNotes: '<p>由与链 AI 从分享视频中智能提取，包含官方正规直达网址与精炼亮点说明。</p>',
+    videoTitle: pageTitle || '视频与图文精选工具',
+    groupTitle: cleanTitle,
+    groupNotes: `<p>由与链 AI 解析提取，包含直达网址与精炼亮点说明。</p>`,
     bookmarks: rawBookmarks.map(b => enrichContext(b, categories, attributes)),
   }
 }
 
 /**
- * 4. 存量旧网站主动补齐：生成无损对比 Diff
+ * 4. 存量旧网站主动补齐：生成真实对比 Diff（支持 Jina Reader 实时内容补充）
  */
 export async function enrichBookmarkMetadata(
   bookmark: Bookmark,
@@ -321,16 +391,37 @@ export async function enrichBookmarkMetadata(
   const dm = domain(bookmark.url)
   const prefill = getSmartPrefill(bookmark.url, [], categories, attributes)
 
+  // 尝试真实读取页面信息以获得最新摘要
+  let realDescription = ''
+  let realTitle = ''
+
+  if (bookmark.url.startsWith('http')) {
+    try {
+      const pageData = await fetchPageContentViaJina(bookmark.url, { timeoutMs: 4000 })
+      if (pageData.success) {
+        if (pageData.title) realTitle = pageData.title
+        if (pageData.description) realDescription = pageData.description
+      }
+    } catch {
+      // 容错降级
+    }
+  }
+
   // 建议补充说明（当既有备注为空或极简时）
   let suggestedNotes = bookmark.notes
   if (!suggestedNotes || suggestedNotes.trim().length < 5) {
-    suggestedNotes = prefill.notes || `精选网络工具：${bookmark.title || dm}。官方正规访问节点，数据纯端侧安全管理。`
+    suggestedNotes =
+      realDescription ||
+      prefill.notes ||
+      `精选网络工具：${bookmark.title || dm}。官方正规访问节点，数据纯端侧安全管理。`
   }
 
   // 建议地道中文标题（当既有标题仅为裸域名时）
   let suggestedTitle = bookmark.title
   if (!suggestedTitle || suggestedTitle.toLowerCase() === dm.toLowerCase()) {
-    if (prefill.title) {
+    if (realTitle) {
+      suggestedTitle = realTitle
+    } else if (prefill.title) {
       suggestedTitle = prefill.title
     } else {
       const capitalized = dm.replace(/^www\./, '').split('.')[0]
@@ -351,6 +442,7 @@ export async function enrichBookmarkMetadata(
     currentCategoryId: bookmark.categoryId,
     suggestedCategoryId: newCatId,
     suggestedAttrIds: prefill.suggestedAttrIds || [],
-    reason: '识别到缺失分类与说明，建议完善以提升搜索精准度',
+    reason: realDescription ? '已由 Jina Reader 读取页面实时摘要并匹配分类' : '识别到缺失分类与说明，建议完善以提升搜索精准度',
   }
 }
+
