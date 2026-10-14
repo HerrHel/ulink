@@ -111,59 +111,51 @@ Core principles:
    - /theme [dark|light|auto]: 切换深色/浅色主题。
    - /export [json|html]: 导出备份。
    - /help: 查看本站全量功能与快捷键。
-6. 结构化卡片协议：
-   当用户在寻找网站、推荐工具、挖掘替代品时，在回复正文后，必须附带以下格式的 JSON 数组（供与链前端一键秒存入库）：
+6. 结构化随文内嵌卡片规范（图文混排排版标准）：
+   当你推荐某个具体网站或工具时，必须采用「随文嵌入」模式：直接在介绍该工具的段落上方嵌入紧凑卡片标记，随后紧跟客观分析（核心亮点、适用人群、使用技巧）：
 \`\`\`ulink-card
-[
-  {
-    "title": "网站名称",
-    "url": "https://example.com",
-    "notes": "一句话客观描述功能亮点与适用人群",
-    "suggestedCategory": "优先精准匹配用户已有的分类名",
-    "tags": ["开源", "免费"]
-  }
-]
-\`\`\``
+{"title":"工具名称","url":"https://example.com","suggestedCategory":"精准匹配用户分类","tags":["免费","开源"],"notes":"一句话功能简介"}
+\`\`\`
+- 为什么选它：...
+- 适用人群：...
+
+如果推荐多个工具，依次在各自段落前随文内嵌卡片，切忌将卡片孤立堆在全文末尾，确保阅读流图文交融。`
 }
 
 /**
- * 从模型回复中剥离 ```ulink-card 结构化 JSON 并解析为与链候选卡片
+ * 从模型回复中解析候选卡片（向前兼容整块与随文嵌入格式）
  */
 export function parseMiMoReply(
   replyText: string,
   categories: Category[] = [],
   attributes: CustomAttribute[] = []
 ): { cleanText: string; candidates: AiCandidateBookmark[] } {
-  const cardRegex = /```ulink-card\s*([\s\S]*?)```/i
-  const match = replyText.match(cardRegex)
-
+  const cardRegex = /```ulink-card\s*([\s\S]*?)```/gi
   const candidates: AiCandidateBookmark[] = []
-  let cleanText = replyText
 
-  if (match) {
-    // 移除原始 JSON 块，保持对话流界面的纯粹雅致
-    cleanText = replyText.replace(cardRegex, '').trim()
-
+  let match: RegExpExecArray | null
+  while ((match = cardRegex.exec(replyText)) !== null) {
     const rawJson = match[1]?.trim()
     if (rawJson) {
       try {
         const parsed = JSON.parse(rawJson)
-        if (Array.isArray(parsed)) {
-          for (const item of parsed) {
-            if (item && item.title && item.url) {
-              const prefill = getSmartPrefill(item.url, [], categories, attributes)
-              const matchedCat = categories.find(c => c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized')
+        const items = Array.isArray(parsed) ? parsed : [parsed]
+        for (const item of items) {
+          if (item && item.title && item.url) {
+            const prefill = getSmartPrefill(item.url, [], categories, attributes)
+            const matchedCat = categories.find(
+              c => c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
+            )
 
-              candidates.push({
-                title: String(item.title).trim(),
-                url: String(item.url).trim(),
-                notes: item.notes ? String(item.notes).trim() : (prefill.notes || ''),
-                categoryId: matchedCat?.id || prefill.categoryId || undefined,
-                suggestedAttrIds: prefill.suggestedAttrIds?.length ? prefill.suggestedAttrIds : undefined,
-                tag: item.tags?.[0] || (item.notes?.includes('开源') ? '开源免费' : '智能推荐'),
-                highlight: item.notes || item.title,
-              })
-            }
+            candidates.push({
+              title: String(item.title).trim(),
+              url: String(item.url).trim(),
+              notes: item.notes ? String(item.notes).trim() : (prefill.notes || ''),
+              categoryId: matchedCat?.id || prefill.categoryId || undefined,
+              suggestedAttrIds: prefill.suggestedAttrIds?.length ? prefill.suggestedAttrIds : undefined,
+              tag: item.tags?.[0] || (item.notes?.includes('开源') ? '开源免费' : '智能推荐'),
+              highlight: item.notes || item.title,
+            })
           }
         }
       } catch (err) {
@@ -172,6 +164,7 @@ export function parseMiMoReply(
     }
   }
 
+  const cleanText = replyText.replace(cardRegex, '').trim()
   return { cleanText, candidates }
 }
 
@@ -189,6 +182,7 @@ export async function askMiMo(
   }
 ): Promise<{
   reply: string
+  cleanText: string
   candidates: AiCandidateBookmark[]
   rawText: string
   model: string
@@ -251,7 +245,8 @@ export async function askMiMo(
   const { cleanText, candidates } = parseMiMoReply(rawText, context.categories, context.customAttributes)
 
   return {
-    reply: cleanText || rawText,
+    reply: rawText,
+    cleanText: cleanText || rawText,
     candidates,
     rawText,
     model: config.model,

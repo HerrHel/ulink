@@ -239,13 +239,13 @@
                   </div>
                 </div>
 
-                <div v-if="turn.content" class="chat-reply-line">
-                  <span class="reply-summary">{{ turn.content }}</span>
-                  <div class="chat-reply-actions">
+                <!-- 核心回复流：正文与随文嵌入卡片图文交融 -->
+                <div v-if="turn.content || turn.candidates?.length" class="chat-reply-flow-wrap">
+                  <div class="chat-flow-header">
                     <button
                       class="chat-msg-act-btn"
                       :class="{ 'is-copied': copiedActionKey === `asst-${turn.id}` }"
-                      @click="copyMessage(turn.content, `asst-${turn.id}`)"
+                      @click="copyMessage(getCleanCopyText(turn.content), `asst-${turn.id}`)"
                       :title="copiedActionKey === `asst-${turn.id}` ? t('ai.copied') : t('ai.copyReply')"
                       :aria-label="copiedActionKey === `asst-${turn.id}` ? t('ai.copied') : t('ai.copyReply')"
                     >
@@ -257,12 +257,29 @@
                         <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
                       </svg>
                     </button>
-                    <button
-                      v-if="turn.candidates?.length && hasUnaddedInTurn(turn)"
-                      class="chat-action-link"
-                      @click="addAllInTurn(turn)"
-                    >
-                      {{ t('ai.addAllDirect') }}
+                  </div>
+
+                  <div class="chat-flow-content">
+                    <template v-for="(seg, sIdx) in getTurnSegments(turn)" :key="sIdx">
+                      <div
+                        v-if="seg.type === 'text'"
+                        class="chat-flow-text"
+                        v-html="seg.html"
+                      />
+                      <div
+                        v-else-if="seg.type === 'card'"
+                        class="chat-flow-card-row"
+                      >
+                        <AiInlineCard :candidate="seg.candidate" />
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- 消息尾部：当含有未存入的候选卡片时，在底部收敛呈现一键全部存入 -->
+                  <div v-if="hasUnaddedInTurn(turn)" class="chat-flow-footer-actions">
+                    <button class="chat-batch-add-btn" @click="addAllInTurn(turn)">
+                      <span class="batch-add-icon" aria-hidden="true" v-html="I.plus"></span>
+                      <span>{{ t('ai.addAllDirect') }}</span>
                     </button>
                   </div>
                 </div>
@@ -291,14 +308,6 @@
                       {{ t('ai.actionDone') }}
                     </span>
                   </div>
-                </div>
-
-                <div v-if="turn.candidates?.length" class="chat-cards-stream">
-                  <AiCandidateCard
-                    v-for="item in turn.candidates"
-                    :key="item.url"
-                    :candidate="item"
-                  />
                 </div>
               </div>
             </div>
@@ -397,7 +406,8 @@ import { useI18n } from '../../i18n/index.js'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import BookmarkCard from '../cards/BookmarkCard.vue'
 import GroupCard from '../cards/GroupCard.vue'
-import AiCandidateCard from '../cards/AiCandidateCard.vue'
+import AiInlineCard from '../cards/AiInlineCard.vue'
+import { parseTurnContentSegments, type ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
 import {
   searchWebsitesByIntent,
   findSimilarWebsites,
@@ -675,6 +685,40 @@ async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
     scrollToBottom()
     sessions.value = updateSession(currentSessionId.value, chatTurns.value)
   }
+}
+
+function getCleanCopyText(content?: string): string {
+  if (!content) return ''
+  return content.replace(/```ulink-card\s*([\s\S]*?)```/gi, '').trim()
+}
+
+function getTurnSegments(turn: ChatTurn): ChatContentSegment[] {
+  if (!turn.content && (!turn.candidates || turn.candidates.length === 0)) {
+    return []
+  }
+
+  const { segments, allCandidates } = parseTurnContentSegments(
+    turn.content || '',
+    ds.categories,
+    ds.customAttributes
+  )
+
+  // 同步随文卡片到 turn.candidates（保证持久化与一键全部存入）
+  if (allCandidates.length && (!turn.candidates || turn.candidates.length === 0)) {
+    turn.candidates = allCandidates
+  }
+
+  // 兜底兼容：若正文没有内嵌卡片语法（例如本地静态搜索），将 candidates 转换为内嵌卡片追加在末尾
+  if (allCandidates.length === 0 && turn.candidates?.length) {
+    for (const c of turn.candidates) {
+      segments.push({
+        type: 'card',
+        candidate: c,
+      })
+    }
+  }
+
+  return segments
 }
 
 const copiedActionKey = ref<string | null>(null)
@@ -1701,41 +1745,127 @@ function closeDetail(rawId: string) {
   gap: 6px;
 }
 
-.chat-reply-line {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+/* 核心回复流：正文与随文嵌入卡片图文交融 */
+.chat-reply-flow-wrap {
+  position: relative;
   font-size: 13px;
   color: var(--text);
   padding: 0 1px;
 }
 
-.reply-summary {
-  font-weight: 500;
-  white-space: pre-wrap;
+.chat-flow-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-assistant-wrap:hover .chat-flow-header,
+.chat-assistant-wrap:focus-within .chat-flow-header {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .chat-flow-header {
+    opacity: 0.7;
+  }
+}
+
+.chat-flow-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   word-break: break-word;
+  line-height: 1.55;
+}
+
+.chat-flow-text {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.chat-flow-text :deep(.chat-flow-heading) {
+  margin: 8px 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.chat-flow-text :deep(.chat-flow-para) {
+  margin: 3px 0 5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.chat-flow-text :deep(strong) {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chat-flow-text :deep(.chat-flow-code) {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
+.chat-flow-text :deep(.chat-flow-list) {
+  margin: 3px 0 6px 14px;
+  padding: 0;
   line-height: 1.5;
 }
 
-.chat-action-link {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  transition: opacity 0.12s ease;
-}
-.chat-action-link:hover {
-  text-decoration: underline;
+.chat-flow-text :deep(.chat-flow-list li) {
+  margin-bottom: 2px;
 }
 
-.chat-cards-stream {
+.chat-flow-text :deep(.chat-flow-link) {
+  color: var(--accent);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.chat-flow-card-row {
+  margin: 4px 0 6px;
+}
+
+.chat-flow-footer-actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 2px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-light, #e8e3df);
+}
+
+.chat-batch-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light, rgba(18, 46, 138, 0.08));
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs, 4px);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.chat-batch-add-btn:hover {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.batch-add-icon :deep(svg) {
+  width: 11px;
+  height: 11px;
 }
 
 /* 工具调用轨迹 (Tool Execution Trace) */

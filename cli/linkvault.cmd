@@ -1,2 +1,2 @@
 @echo off
-node D:\dev\lv\cli\dist\index.js %*
+node D:\Projects\ulink\cli\dist\index.js %*

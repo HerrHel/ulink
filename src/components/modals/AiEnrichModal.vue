@@ -218,7 +218,7 @@ function onApplyDiff() {
   }
 
   ds.updateBookmark(targetBookmark.value.id, updates)
-  toast(t('ai.enrichAppliedSuccess'), true)
+  toast(t('ai.enrichSuccessToast'), true)
   close()
 }
 </script>

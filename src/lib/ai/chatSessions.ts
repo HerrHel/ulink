@@ -57,14 +57,19 @@ export function extractSessionTitle(query: string): string {
   return clean.length > 16 ? clean.slice(0, 16) + '…' : clean
 }
 
-/** 从本地存储加载所有会话 */
+/** 从本地存储加载所有会话（元素级校验：坏数据/半截 JSON 不进会话列表） */
 export function loadSessions(): AiChatSession[] {
   try {
     const raw = safeGetItem(K_AI_SESSIONS)
     if (!raw) return []
     const list = JSON.parse(raw)
     if (!Array.isArray(list)) return []
-    return list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    return list
+      .filter(
+        (s): s is AiChatSession =>
+          !!s && typeof s === 'object' && typeof s.id === 'string' && Array.isArray(s.turns),
+      )
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
   } catch {
     return []
   }

@@ -165,8 +165,13 @@ import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
+import { gid } from '../../utils.js'
+import { CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../../config/constants.js'
+import { saveAppData } from '../../stores/app.js'
+import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
 import AiPreferenceChips from '../ui/AiPreferenceChips.vue'
 import AiCandidateCard from '../cards/AiCandidateCard.vue'
+import type { SiblingGroup } from '../../types.js'
 import type { AiSearchPreference, AiCandidateBookmark, AiVideoExtractResult } from '../../types/ai.js'
 import {
   searchWebsitesByIntent,
@@ -275,21 +280,12 @@ function addAllCandidates() {
   let count = 0
   for (const c of candidates.value) {
     if (!c.isAdded) {
-      const attrObj: Record<string, boolean> = {}
-      if (c.suggestedAttrIds?.length) {
-        for (const aid of c.suggestedAttrIds) attrObj[aid] = true
-      }
-      ds.addBookmark({
-        title: c.title,
-        url: c.url,
-        notes: c.notes,
-        categoryId: c.categoryId || 'all',
-        attributes: attrObj,
-      })
+      ds.addBookmark(candidateToBookmark(ds, c))
       c.isAdded = true
       count++
     }
   }
+  if (count) saveAppData()
   toast(t('ai.addedBatchSuccess', { n: count }), true)
 }
 
@@ -299,29 +295,32 @@ function createGroupFromResults() {
 
   const addedIds: string[] = []
   for (const c of candidates.value) {
-    const attrObj: Record<string, boolean> = {}
-    if (c.suggestedAttrIds?.length) {
-      for (const aid of c.suggestedAttrIds) attrObj[aid] = true
-    }
-    const newBm = ds.addBookmark({
-      title: c.title,
-      url: c.url,
-      notes: c.notes,
-      categoryId: c.categoryId || 'all',
-      attributes: attrObj,
-    })
+    const bm = candidateToBookmark(ds, c)
+    ds.addBookmark(bm)
     c.isAdded = true
-    addedIds.push(newBm.id)
+    addedIds.push(bm.id)
   }
 
-  const newGroup = ds.createGroup({
+  // 与 useGroup.createGroup 同范式：完整 SiblingGroup + addGroup（order 取现存最大 +1 排最前）
+  const maxBmOrder = ds.bookmarks.reduce((m, b) => (b.parentId ? m : b.order > m ? b.order : m), -1)
+  const maxGrpOrder = ds.siblingGroups.reduce((m, g) => (g.order > m ? g.order : m), -1)
+  const group: SiblingGroup = {
+    id: 'sg_' + gid(),
     name: videoResult.value.groupTitle || '视频提取工具合集',
+    categoryId: CAT_UNCATEGORIZED,
+    icon: '',
+    order: Math.max(maxBmOrder, maxGrpOrder) + 1,
+    isExpanded: false,
+    attributes: { [ATTR_IS_GROUP]: true },
     bookmarkIds: addedIds,
     notes: videoResult.value.groupNotes || '',
-    categoryId: 'all',
-  })
+    updatedAt: Date.now(),
+    useCount: 0,
+  }
+  ds.addGroup(group)
+  saveAppData()
 
-  toast(t('ai.packedGroupSuccess', { name: newGroup.name }), true)
+  toast(t('ai.packedGroupSuccess', { name: group.name }), true)
 }
 </script>
 

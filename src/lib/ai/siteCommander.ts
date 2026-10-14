@@ -146,16 +146,16 @@ export async function dispatchSiteCommand(
         '  /trash clear 或 /trash',
         '  （亦可说：“清空回收站”、“打开回收站”）',
         '',
-        '- 查重巡检：',
+        '- 查找重复：',
         '  /dedup 或“查找重复书签”',
         '',
         '- 死链检测：',
         '  /deadlink 或“检查死链”',
         '',
-        '- 数据备份：',
+        '- 导出备份：',
         '  /export 或“导出数据”、“备份书签”',
         '',
-        '- 全库统计：',
+        '- 数据统计：',
         '  /stats 或“书签统计”',
         '',
         '- 批量归类：',
@@ -165,7 +165,7 @@ export async function dispatchSiteCommand(
         '- 撤销操作：',
         '  /undo 或“撤销刚才的操作”',
         '',
-        '- 孤儿自检：',
+        '- 清理数据：',
         '  /clean 或“清理孤立数据”',
         '',
         '- 设置面板：',
@@ -392,7 +392,7 @@ export async function dispatchSiteCommand(
   // ── 5. 回收站管理 (/trash, 清空回收站, 打开回收站) ──
   if (
     /^\/trash\s+(?:clear|empty)$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:清空|清掉|清理|倒空|倒掉)回收站|垃圾桶$/i.test(query)
+    /^(?:请?帮?我?)?(?:清空|清掉|清理|倒空|倒掉)(?:回收站|垃圾桶)$/i.test(query)
   ) {
     const bms = ds.bookmarks.filter((b) => b.deletedAt).length
     const grps = ds.siblingGroups.filter((g) => g.deletedAt).length

@@ -86,7 +86,16 @@ export function restoreNavState(prev: NavState) {
       }
       return false
     },
-    () => { if (!prev.detailPanelOpen && ui.panels.detail) { ui.panels.detail = false; return true } return false },
+    () => {
+      // detail 面板开合是 OR 语义（panels.detail || detailCards），关闭必须两者同清，
+      // 否则后退只置 panels.detail=false 而 detailCards 残留 → 面板关不掉
+      if (!prev.detailPanelOpen && (ui.panels.detail || (ui.detailCards?.length ?? 0) > 0)) {
+        ui.panels.detail = false
+        ui.detailCards?.splice(0)
+        return true
+      }
+      return false
+    },
     // 旧实现曾有「prev.detail 开且当前关 → 重开」反向分支，与其他层只关不重开不一致，已删。
     () => { if (prev.settings !== true && ui.panels.settings) { ui.panels.settings = false; return true } return false },
     () => { if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return true } return false },
@@ -205,6 +214,11 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     if (ui.overlays.deadLinks) ui.overlays.deadLinks = false
     if (ui.panels.history) ui.panels.history = false
     if (ui.panels.rail) ui.panels.rail = false
+    // detail 面板（AI 窗口/暂存卡）：OR 语义两态同清，防 detailCards 残留把面板留在半开态
+    if (ui.panels.detail || (ui.detailCards?.length ?? 0) > 0) {
+      ui.panels.detail = false
+      ui.detailCards?.splice(0)
+    }
     if (useAttrDropdownStore().open) useAttrDropdownStore().close()
     if (useBatchMoveStore().open) useBatchMoveStore().hide()
     if (useMfbStore().open) useMfbStore().hide()
