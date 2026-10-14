@@ -275,4 +275,22 @@ describe('DeadLinksPopover.setup 私有编排护栏', () => {
     expect(w.element.querySelector('.pr-badge.unconfirmed')).not.toBeNull()
     w.unmount()
   })
+
+  it('展示 Wayback Machine 历史镜像链接与 AI 平替自愈入口', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'd-heal', title: '失效站点', url: 'https://dead-site.com', attributes: { 'dead-link': true } })
+    const { w, store } = await mountComp()
+    const waybackLink = w.element.querySelector('a.pr-act-btn') as HTMLAnchorElement
+    expect(waybackLink).not.toBeNull()
+    expect(waybackLink.href).toContain('web.archive.org/web/*/')
+    expect(waybackLink.href).toContain('dead-site.com')
+
+    const aiBtn = w.findAll('button.pr-act-btn')[0]
+    expect(aiBtn).toBeDefined()
+    vi.spyOn(store, 'openAiAssistant')
+    await aiBtn.trigger('click')
+    expect(store.openAiAssistant).toHaveBeenCalledWith(expect.stringContaining('失效死链「失效站点」'))
+    expect(store.overlays.deadLinks).toBe(false)
+    w.unmount()
+  })
 })
