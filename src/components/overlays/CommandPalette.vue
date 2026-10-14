@@ -51,7 +51,7 @@ interface CommandItem {
   hint?: string
   shortcut?: string
   action: () => void
-  section: 'command' | 'group' | 'bookmark'
+  section: 'ai' | 'command' | 'group' | 'bookmark'
 }
 
 const visible = ref(false)
@@ -98,38 +98,94 @@ const searchResults = computed<SearchResultItem[]>(() => {
 })
 
 const filtered = computed<CommandItem[]>(() => {
-  const q = query.value.trim().toLowerCase()
-  if (!q) return commands.value
-  const matchedCmds = commands.value.filter(c => c.label.toLowerCase().includes(q))
+  const rawQ = query.value.trim()
+  const q = rawQ.toLowerCase()
+  if (!rawQ) return commands.value
+
+  const aiItems: CommandItem[] = []
+  if (q.startsWith('/')) {
+    const slashList = [
+      { cmd: '/health', label: t('ai.slashHealthTitle'), desc: t('ai.slashHealthDesc') },
+      { cmd: '/inbox', label: t('ai.slashInboxTitle'), desc: t('ai.slashInboxDesc') },
+      { cmd: '/pack', label: t('ai.slashPackTitle'), desc: t('ai.slashPackDesc') },
+      { cmd: '/deadlink', label: t('ai.slashDeadlinkTitle'), desc: t('ai.slashDeadlinkDesc') },
+      { cmd: '/dedup', label: t('ai.slashDedupTitle'), desc: t('ai.slashDedupDesc') },
+      { cmd: '/theme', label: t('ai.slashThemeTitle'), desc: t('ai.slashThemeDesc') },
+      { cmd: '/view', label: t('ai.slashViewTitle'), desc: t('ai.slashViewDesc') },
+      { cmd: '/stats', label: t('ai.slashStatsTitle'), desc: t('ai.slashStatsDesc') },
+      { cmd: '/undo', label: t('ai.slashUndoTitle'), desc: t('ai.slashUndoDesc') },
+      { cmd: '/help', label: t('ai.slashHelpTitle'), desc: t('ai.slashHelpDesc') },
+    ]
+    const matchedSlash = slashList.filter(
+      (s) => s.cmd.includes(q.split(' ')[0]) || q.startsWith(s.cmd),
+    )
+    for (const s of matchedSlash) {
+      aiItems.push({
+        id: 'ai-cmd:' + s.cmd,
+        label: s.cmd + ' — ' + s.label,
+        icon: I['ai-icon'] || I.search,
+        hint: s.desc,
+        section: 'ai',
+        action() {
+          close()
+          ui.openAiAssistant(rawQ.length > s.cmd.length ? rawQ : s.cmd)
+        },
+      })
+    }
+  }
+
+  aiItems.push({
+    id: 'ai:ask',
+    label: t('ai.searchSuggestPrompt', { q: rawQ }),
+    icon: I['ai-icon'] || I.search,
+    hint: t('ai.sidebarTitle'),
+    section: 'ai',
+    action() {
+      close()
+      ui.openAiAssistant(rawQ)
+    },
+  })
+
+  const matchedCmds = commands.value.filter((c) => c.label.toLowerCase().includes(q))
   const matchedGroups: CommandItem[] = searchResults.value
-    .filter(r => r._isGroup)
-    .map(r => ({
+    .filter((r) => r._isGroup)
+    .map((r) => ({
       id: 'g:' + r.id,
       label: r.name || r._displayTitle || t('cards.unnamedGroup'),
       icon: I.note,
       hint: tN('count.bookmarks', r.bookmarkIds?.length || 0),
       section: 'group' as const,
-      action() { close(); toggleGroupFocus(r.id) },
+      action() {
+        close()
+        toggleGroupFocus(r.id)
+      },
     }))
   const matchedBms: CommandItem[] = searchResults.value
-    .filter(r => !r._isGroup)
-    .map(r => ({
+    .filter((r) => !r._isGroup)
+    .map((r) => ({
       id: 'b:' + r.id,
       label: r.title || '',
       icon: I.chevron,
       hint: extractHostname(r.url),
       section: 'bookmark' as const,
-      action() { const bm = ds.bookmarkMap[r.id]; if (bm) { close(); openBookmark(bm) } },
+      action() {
+        const bm = ds.bookmarkMap[r.id]
+        if (bm) {
+          close()
+          openBookmark(bm)
+        }
+      },
     }))
-  return [...matchedCmds, ...matchedGroups, ...matchedBms]
+  return [...aiItems, ...matchedCmds, ...matchedGroups, ...matchedBms]
 })
 
 const grouped = computed(() => {
   const sections: { label: string; items: CommandItem[] }[] = []
-  const bySection: Record<string, CommandItem[]> = { command: [], group: [], bookmark: [] }
+  const bySection: Record<string, CommandItem[]> = { ai: [], command: [], group: [], bookmark: [] }
   for (const item of filtered.value) {
     bySection[item.section]?.push(item)
   }
+  if (bySection.ai?.length) sections.push({ label: t('ai.sidebarTitle'), items: bySection.ai })
   if (bySection.command.length) sections.push({ label: t('cmd.sectionCommands'), items: bySection.command })
   if (bySection.group.length) sections.push({ label: t('group.group'), items: bySection.group })
   if (bySection.bookmark.length) sections.push({ label: t('search.bookmarks'), items: bySection.bookmark })
