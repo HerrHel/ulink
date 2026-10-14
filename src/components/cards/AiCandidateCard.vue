@@ -43,7 +43,7 @@
 
       <!-- AI 提炼的核心亮点 -->
       <div v-if="candidate.highlight" class="ai-highlight-bar">
-        <span class="ai-highlight-label">HIGHLIGHT</span>
+        <span class="ai-highlight-label">{{ t('ai.highlightLabel') }}</span>
         <span class="ai-highlight-text">{{ candidate.highlight }}</span>
       </div>
 
@@ -61,8 +61,10 @@
           {{ t('ai.saved') }}
         </span>
         <span v-else class="ai-stat-source">
-          <span class="ai-sparkle">✦</span>
-          <span>AI 甄选</span>
+          <svg class="ai-sparkle" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8" />
+          </svg>
+          <span>{{ t('ai.curated') }}</span>
         </span>
       </div>
       <div class="card-actions">
@@ -97,6 +99,9 @@ import { toast } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
+import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
+import { saveAppData } from '../../stores/app.js'
+import { addToGroupDirect } from '../../composables/domain/useGroup.js'
 
 const props = defineProps<{
   candidate: AiCandidateBookmark
@@ -139,39 +144,28 @@ const tagNames = computed(() => {
 })
 
 /**
- * 零摩擦秒级入库：直接调用 dataStore 并落盘
+ * 零摩擦秒级入库：候选 → 完整 Bookmark 走统一构造器，落盘持久化
  */
 function saveToVault() {
   if (isItemAdded.value) return
 
-  const attrObj: Record<string, boolean> = {}
-  if (props.candidate.suggestedAttrIds?.length) {
-    for (const aid of props.candidate.suggestedAttrIds) {
-      attrObj[aid] = true
-    }
-  }
+  const newBm = candidateToBookmark(ds, props.candidate, faviconSrc.value)
+  ds.addBookmark(newBm)
 
-  const finalCatId = props.candidate.categoryId || CAT_UNCATEGORIZED
-
-  const newBm = ds.addBookmark({
-    title: props.candidate.title,
-    url: fixUrl(props.candidate.url),
-    notes: props.candidate.notes,
-    categoryId: finalCatId,
-    attributes: attrObj,
-    icon: faviconSrc.value,
-  })
-
-  // 如果是在组上下文中提取，则直接归入目标组
+  // 组上下文中提取：走 useGroup 标准入组链路（去重 + 编辑器同步 + 落盘）
   if (props.targetGroupId) {
-    ds.addBookmarkToGroup(newBm.id, props.targetGroupId)
+    addToGroupDirect(newBm.id, props.targetGroupId)
+  } else {
+    saveAppData()
   }
 
   isLocalAdded.value = true
   emit('added', { ...props.candidate, isAdded: true })
 
-  const catHint = categoryName.value ? ` -> 「${categoryName.value}」` : ''
-  toast(t('ai.saveSuccessToast', { title: props.candidate.title }) + catHint, true)
+  const msg = categoryName.value
+    ? t('ai.saveSuccessToastInCat', { title: props.candidate.title, cat: categoryName.value })
+    : t('ai.saveSuccessToast', { title: props.candidate.title })
+  toast(msg, true)
 }
 </script>
 
@@ -181,8 +175,8 @@ function saveToVault() {
   position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 12px) !important;
-  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-card);
   padding: 13px 14px 10px;
   cursor: default;
   height: auto;
@@ -198,7 +192,7 @@ function saveToVault() {
 @media (hover: hover) and (pointer: fine) {
   .ai-candidate-card:hover {
     border-color: var(--border-hover);
-    box-shadow: var(--shadow-card-hover) !important;
+    box-shadow: var(--shadow-card-hover);
     transform: translateY(-2px);
   }
 }
@@ -294,7 +288,7 @@ function saveToVault() {
 
 @media (hover: hover) and (pointer: fine) {
   .card-titlewrap:hover {
-    background: var(--accent-light, rgba(18, 46, 138, 0.05));
+    background: var(--accent-light);
   }
   .card-titlewrap:hover .card-name {
     color: var(--accent);
@@ -426,7 +420,7 @@ function saveToVault() {
 
 .ai-highlight-label {
   font-family: var(--font-mono, monospace);
-  font-size: 8.5px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.5px;
@@ -486,15 +480,15 @@ function saveToVault() {
 }
 
 .ai-sparkle {
+  display: block;
   color: var(--accent);
-  font-size: 9px;
 }
 
 .ai-stat-saved {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: var(--green, #10b981);
+  color: var(--green);
   font-weight: 600;
 }
 
@@ -526,13 +520,13 @@ function saveToVault() {
 .ai-btn-add {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 1px 3px rgba(18, 46, 138, 0.16);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .ai-btn-add:hover {
-  background: var(--accent-dark, #0e2270);
+  background: var(--accent-dark);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(18, 46, 138, 0.24);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .ai-btn-add:active {
@@ -545,9 +539,9 @@ function saveToVault() {
 }
 
 .ai-btn-saved {
-  background: color-mix(in srgb, var(--green, #10b981) 12%, transparent);
-  color: var(--green, #10b981);
-  border: 1px solid color-mix(in srgb, var(--green, #10b981) 25%, transparent);
+  background: var(--green-light);
+  color: var(--green);
+  border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
   cursor: default;
 }
 
