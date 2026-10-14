@@ -61,13 +61,21 @@ export function saveMiMoConfig(config: MiMoUserConfig): void {
   }
 }
 
+export interface DynamicContextSlice {
+  currentCategoryName?: string
+  focusedGroupName?: string
+  focusedGroupBookmarks?: Array<{ title: string; url: string }>
+  selectedBookmarks?: Array<{ title: string; url: string }>
+}
+
 /**
- * 组装「与链专家」系统提示词（动态注入实时分类与标签上下文）
+ * 组装「与链专家」系统提示词（动态注入分类、标签与当前实时工作台切片）
  */
 export function buildUlinkSystemPrompt(options: {
   categories: Category[]
   customAttributes: CustomAttribute[]
   isZh?: boolean
+  contextSlice?: DynamicContextSlice
 }): string {
   const isZh = options.isZh !== false
   const catNames = options.categories
@@ -77,6 +85,23 @@ export function buildUlinkSystemPrompt(options: {
 
   const attrNames = options.customAttributes.map(a => a.name).join('、')
 
+  const slice = options.contextSlice || {}
+  const activeFocus = slice.focusedGroupName
+    ? `Focused Workspace: "${slice.focusedGroupName}" with tools: [${slice.focusedGroupBookmarks?.map(b => `${b.title} (${b.url})`).join(', ') || 'None'}]`
+    : ''
+  const activeCat = slice.currentCategoryName ? `Current Category View: "${slice.currentCategoryName}"` : ''
+  const activeSelected = slice.selectedBookmarks?.length
+    ? `Selected Bookmarks (${slice.selectedBookmarks.length}): [${slice.selectedBookmarks.map(b => b.title || b.url).join(', ')}]`
+    : ''
+
+  const activeFocusZh = slice.focusedGroupName
+    ? `当前正处于笔记组工作台：「${slice.focusedGroupName}」，组内工具：[${slice.focusedGroupBookmarks?.map(b => `${b.title} (${b.url})`).join('、') || '暂无'}]`
+    : ''
+  const activeCatZh = slice.currentCategoryName ? `当前所处分类视图：「${slice.currentCategoryName}」` : ''
+  const activeSelectedZh = slice.selectedBookmarks?.length
+    ? `当前用户多选勾选的书签 (${slice.selectedBookmarks.length}个)：[${slice.selectedBookmarks.map(b => b.title || b.url).join('、')}]`
+    : ''
+
   if (!isZh) {
     return `You are the exclusive AI Navigator & Bookmark Asset Curator built into "ULink" (与链).
 Core principles:
@@ -84,8 +109,8 @@ Core principles:
 2. Value: Favor open-source, direct connection without proxy, local-first privacy, clean, functional software tools.
 3. User's Live Categories: [${catNames || 'None'}]
 4. User's Live Attributes/Tags: [${attrNames || 'None'}]
-5. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help.
-6. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in \`\`\`ulink-card:
+${activeCat ? `5. ${activeCat}\n` : ''}${activeFocus ? `6. ${activeFocus}\n` : ''}${activeSelected ? `7. ${activeSelected}\n` : ''}8. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help.
+9. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in \`\`\`ulink-card:
 \`\`\`ulink-card
 [
   {
@@ -105,14 +130,14 @@ Core principles:
 2. 价值取向：推崇开源、国内免翻直连、数据本地优先、无套路的纯粹极客利器。
 3. 用户当前书签分类: [${catNames || '暂无分类'}]
 4. 用户当前标签属性: [${attrNames || '暂无标签'}]
-5. 站内快捷指令体系（必要时可引导用户输入体验）：
+${activeCatZh ? `5. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `6. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `7. 用户多选目标: ${activeSelectedZh}\n` : ''}8. 站内快捷指令体系（必要时可引导用户输入体验）：
    - /dedup: 扫描全库重复书签并支持一键安全合并。
    - /stats: 检查分类占比、死链率及资产健康度。
    - /trash: 打开回收站管理与清空。
    - /theme [dark|light|auto]: 切换深色/浅色主题。
    - /export [json|html]: 导出备份。
    - /help: 查看本站全量功能与快捷键。
-6. 结构化随文内嵌卡片规范（图文混排排版标准）：
+9. 结构化随文内嵌卡片规范（图文混排排版标准）：
    当你推荐某个具体网站或工具时，必须采用「随文嵌入」模式：直接在介绍该工具的段落上方嵌入紧凑卡片标记，随后紧跟客观分析（核心亮点、适用人群、使用技巧）：
 \`\`\`ulink-card
 {"title":"工具名称","url":"https://example.com","suggestedCategory":"精准匹配用户分类","tags":["免费","开源"],"notes":"一句话功能简介"}
@@ -193,6 +218,7 @@ export async function askMiMoStream(
     signal?: AbortSignal
     history?: Array<{ role: 'user' | 'assistant'; content: string }>
     enableTools?: boolean
+    contextSlice?: DynamicContextSlice
   },
   callbacks?: MiMoStreamCallbacks
 ): Promise<{
@@ -213,6 +239,7 @@ export async function askMiMoStream(
     categories: context.categories,
     customAttributes: context.customAttributes,
     isZh: context.isZh,
+    contextSlice: context.contextSlice,
   })
 
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [

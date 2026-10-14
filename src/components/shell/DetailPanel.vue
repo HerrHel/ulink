@@ -156,8 +156,14 @@
           </div>
         </div>
 
-        <!-- 对话流 -->
-        <div v-else class="chat-flow-list">
+        <!-- 对话流 (具备无障碍 live region 广播标准) -->
+        <div
+          class="chat-flow-list"
+          role="log"
+          aria-live="polite"
+          aria-atomic="false"
+          aria-label="AI 对话记录"
+        >
           <div
             v-for="turn in chatTurns"
             :key="turn.id"
@@ -1463,6 +1469,34 @@ async function handleAiSubmit() {
 
           let thinkingStartTime = 0
 
+          // 动态构建情境切片 (Dynamic Context Slice)
+          let focusedGroupName: string | undefined
+          let focusedGroupBookmarks: Array<{ title: string; url: string }> | undefined
+          if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) {
+            const grp = ds.groupMap[ui.focusedGroupId]
+            focusedGroupName = grp.name
+            focusedGroupBookmarks = (grp.bookmarkIds || [])
+              .map((id: string) => ds.bookmarkMap[id])
+              .filter((b: any) => b && !b.deletedAt)
+              .slice(0, 10)
+              .map((b: any) => ({ title: b.title, url: b.url }))
+          }
+
+          let currentCategoryName: string | undefined
+          if (ui.curCat && ui.curCat !== 'all' && ui.curCat !== 'uncategorized') {
+            const cat = ds.categories.find((c: any) => c.id === ui.curCat && !c.deletedAt)
+            if (cat) currentCategoryName = cat.name
+          }
+
+          let selectedBookmarks: Array<{ title: string; url: string }> | undefined
+          if (ui.batchMode && ui.batchSelected?.length) {
+            selectedBookmarks = ui.batchSelected
+              .map((id: string) => ds.bookmarkMap[id])
+              .filter((b: any) => b && !b.deletedAt)
+              .slice(0, 8)
+              .map((b: any) => ({ title: b.title, url: b.url }))
+          }
+
           const mimoRes = await askMiMoStream(
             raw,
             {
@@ -1471,6 +1505,12 @@ async function handleAiSubmit() {
               isZh: isZh.value,
               signal: controller.signal,
               history,
+              contextSlice: {
+                currentCategoryName,
+                focusedGroupName,
+                focusedGroupBookmarks,
+                selectedBookmarks,
+              },
             },
             {
               onReasoningDelta(_delta, accumulatedReasoning) {
@@ -2466,7 +2506,10 @@ function closeDetail(rawId: string) {
 }
 
 .chat-flow-card-row {
-  margin: 4px 0 6px;
+  margin: 6px 0 8px;
+  min-height: 48px;
+  contain: layout;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .chat-flow-footer-actions {
