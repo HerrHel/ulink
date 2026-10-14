@@ -292,6 +292,8 @@ export const en = {
     deletedToast: '{n} bookmarks deleted',
     deletedToast_one: '{n} bookmark deleted',
     restored: 'Restored',
+    wayback: 'View snapshot on Wayback Machine',
+    findAlternative: 'Find alternative & heal with AI',
   },
   conflict: {
     title: 'Sync conflicts ({n})',

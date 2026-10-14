@@ -13,7 +13,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import { useToastStore } from '../../stores/toast.js'
-import { addNewCategory } from '../../utils.js'
+import { addNewCategory, gid, esc, favicon } from '../../utils.js'
 import { exportData } from '../../composables/domain/useDataIO.js'
 import {
   findDuplicateCandidates,
@@ -21,9 +21,13 @@ import {
   calculateVaultHealth,
   clusterUncategorizedBookmarks,
 } from './localClustering.js'
-import { CAT_UNCATEGORIZED, CAT_ALL } from '../../config/constants.js'
+import { CAT_UNCATEGORIZED, CAT_ALL, ATTR_IS_GROUP } from '../../config/constants.js'
 import { showConfirm } from '../toast.js'
-import type { Category } from '../../types.js'
+import { candidateToBookmark } from './candidateSave.js'
+import { inlineCardHTML } from '../../composables/useInlineCard.js'
+import { searchWebsitesByIntent, findSimilarWebsites } from './cloudAiClient.js'
+import type { Bookmark, Category, SiblingGroup } from '../../types.js'
+import type { AiCandidateBookmark } from '../../types/ai.js'
 import type { ChatTurnStep, ChatActionCard } from './chatSessions.js'
 
 export interface SiteCommandResult {
@@ -164,6 +168,233 @@ export function applyInboxZeroClustering(
   }
 }
 
+export interface CreateTopicWorkspaceResult {
+  success: boolean
+  group: SiblingGroup
+  createdBmIds: string[]
+  totalBookmarks: number
+  message: string
+}
+
+/**
+ * 创建主题工作台：一键建组、自动存入候选书签、生成带内嵌卡片的笔记并聚焦
+ */
+export async function createTopicWorkspace(
+  topicName: string,
+  candidates?: AiCandidateBookmark[],
+  targetCatId?: string,
+  context?: SiteCommanderContext,
+): Promise<CreateTopicWorkspaceResult> {
+  const ds = context?.ds ?? useDataStore()
+  const ui = context?.ui ?? useUIStore()
+  const app = context?.app ?? useAppStore()
+
+  // 1. 确定归属分类
+  let finalCatId = targetCatId
+  if (!finalCatId || !ds.categories.some((c: Category) => !c.deletedAt && c.id === finalCatId)) {
+    if (ui.curCat && ui.curCat !== CAT_ALL) {
+      finalCatId = ui.curCat
+    } else {
+      const matchCat = ds.categories.find(
+        (c: Category) =>
+          !c.deletedAt &&
+          (topicName.toLowerCase().includes(c.name.toLowerCase()) ||
+            c.name.toLowerCase().includes(topicName.toLowerCase())),
+      )
+      finalCatId = matchCat ? matchCat.id : CAT_UNCATEGORIZED
+    }
+  }
+
+  // 2. 准备候选工具
+  let items = candidates
+  if (!items || items.length === 0) {
+    items = await searchWebsitesByIntent(topicName, [], ds.categories, ds.customAttributes)
+  }
+  if (!items || items.length === 0) {
+    items = [
+      {
+        title: topicName,
+        url: 'https://github.com',
+        notes: `围绕「${topicName}」构建的主题工作台精选。`,
+      },
+    ]
+  }
+
+  // 3. 将候选书签存入（若同 URL 已存在则复用已有书签，避免重复添加副本）
+  const allBookmarkIds: string[] = []
+  const savedBookmarks: Bookmark[] = []
+  const createdBmIds: string[] = []
+
+  for (const c of items) {
+    const existing = ds.bookmarks.find(
+      (b: Bookmark) => !b.deletedAt && b.url.toLowerCase() === c.url.toLowerCase(),
+    )
+    if (existing) {
+      allBookmarkIds.push(existing.id)
+      savedBookmarks.push(existing)
+    } else {
+      const bm = candidateToBookmark(ds, { ...c, categoryId: finalCatId })
+      if (typeof ds.addBookmark === 'function') {
+        ds.addBookmark(bm)
+      } else {
+        ds.bookmarks.push(bm)
+        if (ds.bookmarkMap) ds.bookmarkMap[bm.id] = bm
+      }
+      createdBmIds.push(bm.id)
+      allBookmarkIds.push(bm.id)
+      savedBookmarks.push(bm)
+    }
+  }
+
+  // 4. 构建 SiblingGroup
+  const maxBmOrder = ds.bookmarks.reduce(
+    (m: number, b: Bookmark) => (b.parentId ? m : b.order > m ? b.order : m),
+    -1,
+  )
+  const maxGrpOrder = (ds.siblingGroups || []).reduce(
+    (m: number, g: SiblingGroup) => (g.order > m ? g.order : m),
+    -1,
+  )
+  const order = Math.max(maxBmOrder, maxGrpOrder) + 1
+
+  const cleanName =
+    topicName.endsWith('工作台') || topicName.endsWith('工具箱')
+      ? topicName
+      : `${topicName} 工作台`
+
+  let initialNotes = `<p><strong>${esc(cleanName)}</strong> 专属主题导航与精选工具：</p><p>`
+  for (const b of savedBookmarks) {
+    initialNotes += inlineCardHTML(b) + ' '
+  }
+  initialNotes += '</p>'
+
+  const group: SiblingGroup = {
+    id: 'sg_' + gid(),
+    name: cleanName,
+    categoryId: finalCatId,
+    icon: '',
+    order,
+    isExpanded: false,
+    attributes: { [ATTR_IS_GROUP]: true },
+    bookmarkIds: allBookmarkIds,
+    notes: initialNotes,
+    updatedAt: Date.now(),
+    useCount: 0,
+  }
+
+  if (typeof ds.addGroup === 'function') {
+    ds.addGroup(group)
+  } else {
+    ds.siblingGroups.push(group)
+    if (ds.groupMap) ds.groupMap[group.id] = group
+  }
+  app.save?.()
+
+  // 5. 视图平滑联动：切换至目标分类，并进入该组聚焦模式
+  ui.curCat = finalCatId
+  ui.focusedGroupId = group.id
+
+  // 6. 注册撤销环路 (UndoableAction)
+  lastUndoableAction = {
+    type: 'topic_workspace',
+    description: `创建主题工作台「${group.name}」`,
+    revert: () => {
+      if (typeof ds.deleteGroup === 'function') {
+        ds.deleteGroup(group.id)
+      }
+      for (const bid of createdBmIds) {
+        if (typeof ds.deleteBookmark === 'function') {
+          ds.deleteBookmark(bid)
+        }
+      }
+      if (ui.focusedGroupId === group.id) {
+        ui.focusedGroupId = null
+      }
+      app.save?.()
+      return `已撤销创建主题工作台「${group.name}」，新建笔记组与 ${createdBmIds.length} 个书签已清理。`
+    },
+  }
+
+  return {
+    success: true,
+    group,
+    createdBmIds,
+    totalBookmarks: allBookmarkIds.length,
+    message: `已为您成功装配「${group.name}」主题工作台（共收纳 ${allBookmarkIds.length} 个工具），并已切换至该工作台。可在下方随时撤销。`,
+  }
+}
+
+export interface HealDeadlinkResult {
+  success: boolean
+  message: string
+  deadBookmark?: Bookmark
+  replacement?: AiCandidateBookmark
+}
+
+/**
+ * 平替自愈死链：将失效书签的链接、标题、备注替换为现役平替，解除 dead-link 标记并支持撤销
+ */
+export function healDeadlink(
+  deadBmId: string,
+  replacement: AiCandidateBookmark,
+  context?: SiteCommanderContext,
+): HealDeadlinkResult {
+  const ds = context?.ds ?? useDataStore()
+  const app = context?.app ?? useAppStore()
+
+  const bm =
+    (ds.bookmarkMap && ds.bookmarkMap[deadBmId]) ||
+    ds.bookmarks.find((b: Bookmark) => b.id === deadBmId)
+
+  if (!bm || bm.deletedAt) {
+    return { success: false, message: '未找到指定失效书签或已被删除。' }
+  }
+
+  const prev = {
+    title: bm.title,
+    url: bm.url,
+    icon: bm.icon,
+    notes: bm.notes,
+    attributes: { ...(bm.attributes || {}) },
+  }
+
+  const newAttributes = { ...(bm.attributes || {}) }
+  delete newAttributes['dead-link']
+  newAttributes['dead-link-healed'] = true
+
+  ds.updateBookmark(deadBmId, {
+    title: replacement.title || bm.title,
+    url: replacement.url,
+    icon: replacement.icon || favicon(replacement.url),
+    notes: replacement.notes || bm.notes,
+    attributes: newAttributes,
+  })
+  app.save?.()
+
+  lastUndoableAction = {
+    type: 'heal_deadlink',
+    description: `平替自愈书签「${prev.title}」->「${replacement.title}」`,
+    revert: () => {
+      ds.updateBookmark(deadBmId, {
+        title: prev.title,
+        url: prev.url,
+        icon: prev.icon,
+        notes: prev.notes,
+        attributes: prev.attributes,
+      })
+      app.save?.()
+      return `已撤销平替自愈，书签「${prev.title}」已还原为原链接。`
+    },
+  }
+
+  return {
+    success: true,
+    deadBookmark: bm,
+    replacement,
+    message: `已成功将失效书签「${prev.title}」自愈替换为现役平替「${replacement.title}」(${replacement.url})。可在下方随时撤销。`,
+  }
+}
+
 /**
  * 调度站内命令与意图
  */
@@ -201,6 +432,9 @@ export async function dispatchSiteCommand(
         '- 收件箱清零：',
         '  /inbox 或“智能归类”、“整理未分类”',
         '',
+        '- 主题工作台：',
+        '  /pack <主题名> 或“帮我搭建一套 前端开发 工作台”',
+        '',
         '- 主题模式：',
         '  /theme dark | light | auto',
         '  （亦可说：“切换深色模式”、“切浅色”）',
@@ -220,8 +454,8 @@ export async function dispatchSiteCommand(
         '- 查找重复：',
         '  /dedup 或“查找重复书签”',
         '',
-        '- 死链检测：',
-        '  /deadlink 或“检查死链”',
+        '- 死链检测与自愈：',
+        '  /deadlink 或“检查死链”、“死链自愈”',
         '',
         '- 导出备份：',
         '  /export 或“导出数据”、“备份书签”',
@@ -582,17 +816,164 @@ export async function dispatchSiteCommand(
     }
   }
 
-  // ── 7. 死链检测 (/deadlink, 检查死链) ──
+  // ── 6.5 主题工作台生成 (/pack <主题名>, 帮我搭建XX工作台) ──
+  const packSlashMatch = query.match(/^\/pack(?:\s+(.+))?$/i)
+  const packNlMatch = query.match(
+    /^(?:请?帮?我?)?(?:搭建|整理|创建|生成|建一个|建立)(?:一套|个)?(.+?)(?:工作台|工具链|工具箱|聚合组|合集)$/i,
+  )
+  if (packSlashMatch || packNlMatch) {
+    const rawTopic = packSlashMatch
+      ? packSlashMatch[1]?.trim()
+      : packNlMatch
+        ? packNlMatch[1]?.trim()
+        : ''
+    if (!rawTopic) {
+      return {
+        handled: true,
+        action: 'pack_workspace',
+        steps: [{ text: '提示主题工作台指令用法', done: true }],
+        reply: [
+          '主题工作台一键生成器 (Topic Workspace Builder)',
+          '',
+          '用法：/pack <主题名称>',
+          '示例：',
+          '- /pack 前端开发',
+          '- /pack 设计灵感',
+          '- 亦可直接对我说：“帮我搭建一套独立开发工作台”',
+          '',
+          'AI 将为您甄选全套核心工具，并出具一键装配行动卡片，自动建组并写入内嵌卡片导航笔记。',
+        ].join('\n'),
+      }
+    }
+
+    const topicName = rawTopic
+    const candidates = await searchWebsitesByIntent(topicName, [], ds.categories, ds.customAttributes)
+    const previewList = candidates.slice(0, 5)
+
+    const lines = [
+      `已为您规划「${topicName}」主题工作台，甄选到以下 ${candidates.length} 个核心工具：`,
+      '',
+    ]
+    for (let i = 0; i < previewList.length; i++) {
+      const c = previewList[i]
+      lines.push(`${i + 1}. ${c.title} — ${c.notes || c.url}`)
+    }
+    if (candidates.length > 5) {
+      lines.push(`...其余 ${candidates.length - 5} 个已省略。`)
+    }
+    lines.push('')
+    lines.push(
+      '点击下方行动卡片批准执行，即可一键自动入库、创建笔记组并挂载内嵌卡片进入工作台（随时支持 /undo 撤销）。',
+    )
+
+    const cleanTopic =
+      topicName.endsWith('工作台') || topicName.endsWith('工具箱')
+        ? topicName
+        : `${topicName} 工作台`
+
+    return {
+      handled: true,
+      action: 'pack_workspace',
+      steps: [
+        { text: `全网甄选「${topicName}」核心工具 (${candidates.length} 个)`, done: true },
+        { text: '生成主题工作台装配方案与交互卡片', done: true },
+      ],
+      reply: lines.join('\n'),
+      actionCard: {
+        type: 'custom',
+        actionName: 'create_topic_workspace',
+        title: `一键装配「${cleanTopic}」`,
+        desc: `包含 ${candidates.length} 个精选工具，自动建组并生成导航笔记`,
+        buttonText: '一键装配工作台',
+        payload: {
+          topic: cleanTopic,
+          candidates,
+        },
+      },
+    }
+  }
+
+  // ── 7. 死链检测与自愈 (/deadlink, 检查死链, 死链自愈) ──
   if (
-    /^\/deadlinks?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:检查死链|死链检测|死链巡检|检测失效链接|检测死链)$/i.test(query)
+    /^\/deadlinks?(?:\s+(?:heal|check|fix))?$/i.test(query) ||
+    /^(?:请?帮?我?)?(?:检查死链|死链检测|死链巡检|检测失效链接|检测死链|修复死链|死链自愈)$/i.test(
+      query,
+    )
   ) {
-    ui.overlays.deadLinks = true
+    const deadBookmarks = ds.bookmarks.filter(
+      (b: Bookmark) =>
+        !b.deletedAt && b.attributes?.['dead-link'] && !b.attributes?.['dead-link-ignored'],
+    )
+
+    if (deadBookmarks.length === 0) {
+      ui.overlays.deadLinks = true
+      return {
+        handled: true,
+        action: 'deadlinks',
+        steps: [{ text: '扫描书签库失效链接', done: true }],
+        reply: '当前暂未检测到确认失效的死链。已为您打开死链巡检面板，您可在此启动全面在线探测。',
+      }
+    }
+
+    const firstDead = deadBookmarks[0]
+    const alts = await findSimilarWebsites(
+      firstDead.url,
+      firstDead.title,
+      [],
+      ds.categories,
+      ds.customAttributes,
+    )
+    const bestAlt = alts[0]
+
+    const lines = [
+      `死链巡检报告：发现 ${deadBookmarks.length} 个失效死链：`,
+      '',
+    ]
+    for (let i = 0; i < Math.min(3, deadBookmarks.length); i++) {
+      const b = deadBookmarks[i]
+      const wbUrl = `https://web.archive.org/web/*/${encodeURIComponent(b.url)}`
+      lines.push(`${i + 1}. ${b.title || '无标题'} (${b.url})`)
+      lines.push(`   历史快照: [查看 Wayback Machine 镜像](${wbUrl})`)
+    }
+    if (deadBookmarks.length > 3) {
+      lines.push(`...其余 ${deadBookmarks.length - 3} 个已省略。`)
+    }
+
+    if (bestAlt) {
+      lines.push('')
+      lines.push(`针对首个死链「${firstDead.title}」，AI 已检索到最佳现役平替：`)
+      lines.push(`- 推荐平替：${bestAlt.title} (${bestAlt.url})`)
+      lines.push(`- 亮点说明：${bestAlt.notes || bestAlt.highlight || '功能高度一致的现役平替'}`)
+      lines.push('')
+      lines.push(
+        '点击下方行动卡片，即可一键将该死链无缝替换为现役平替（组与历史关联完整保留，随时支持 /undo 撤销）。',
+      )
+    }
+
+    let actionCard: ChatActionCard | undefined
+    if (bestAlt) {
+      actionCard = {
+        type: 'custom',
+        actionName: 'heal_deadlink',
+        title: `一键平替自愈：${firstDead.title} -> ${bestAlt.title}`,
+        desc: `用现役平替「${bestAlt.title}」一键替换失效链接，保留组与历史关联`,
+        buttonText: '一键平替替换',
+        payload: {
+          deadBmId: firstDead.id,
+          replacement: bestAlt,
+        },
+      }
+    }
+
     return {
       handled: true,
       action: 'deadlinks',
-      steps: [{ text: '打开死链检测巡检面板', done: true }],
-      reply: '已打开死链检测面板，正在检测书签存活状态。',
+      steps: [
+        { text: `检测到 ${deadBookmarks.length} 个失效书签`, done: true },
+        { text: `为「${firstDead.title}」检索现役平替`, done: true },
+      ],
+      reply: lines.join('\n'),
+      actionCard,
     }
   }
 

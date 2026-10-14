@@ -2,6 +2,8 @@ import {
   dispatchSiteCommand,
   mergeDuplicateBookmarks,
   applyInboxZeroClustering,
+  createTopicWorkspace,
+  healDeadlink,
 } from '../lib/ai/siteCommander.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
@@ -51,13 +53,43 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
       ] as SiblingGroup[],
       bookmarkMap: {
         b1: { id: 'b1', title: 'Vue', url: 'https://vuejs.org', categoryId: 'c1' },
+        b2: { id: 'b2', title: 'React', url: 'https://react.dev', categoryId: 'uncategorized' },
+        b3: { id: 'b3', title: 'Vite', url: 'https://vitejs.dev' },
       },
-      updateBookmark: vi.fn(),
+      groupMap: {
+        g1: { id: 'g1', name: '学习组', bookmarkIds: ['b1'] },
+      },
+      customAttributes: [],
+      nextBookmarkOrder: vi.fn(() => 10),
+      addBookmark: vi.fn((bm: any) => {
+        mockDs.bookmarks.push(bm)
+        mockDs.bookmarkMap[bm.id] = bm
+      }),
+      deleteBookmark: vi.fn((id: string) => {
+        const idx = mockDs.bookmarks.findIndex((b: any) => b.id === id)
+        if (idx >= 0) mockDs.bookmarks.splice(idx, 1)
+        delete mockDs.bookmarkMap[id]
+      }),
+      addGroup: vi.fn((g: any) => {
+        mockDs.siblingGroups.push(g)
+        mockDs.groupMap[g.id] = g
+      }),
+      deleteGroup: vi.fn((id: string) => {
+        const idx = mockDs.siblingGroups.findIndex((g: any) => g.id === id)
+        if (idx >= 0) mockDs.siblingGroups.splice(idx, 1)
+        delete mockDs.groupMap[id]
+      }),
+      updateBookmark: vi.fn((id: string, changes: any) => {
+        const bm = mockDs.bookmarkMap[id]
+        if (bm) Object.assign(bm, changes)
+      }),
       updateGroup: vi.fn(),
       emptyTrash: vi.fn(),
     }
 
     mockUi = {
+      curCat: 'all',
+      focusedGroupId: null,
       layoutMode: 'grid',
       themeMode: 'manual',
       themeColor: 'light',
@@ -393,5 +425,162 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(resUndo.handled).toBe(true)
     expect(resUndo.reply).toContain('已撤销智能归类')
+  })
+
+  // ── 20. /pack 指令用法提示 ──
+  it('/pack 无参数时返回主题工作台指令用法提示', async () => {
+    const res = await dispatchSiteCommand('/pack', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('pack_workspace')
+    expect(res.reply).toContain('主题工作台一键生成器')
+    expect(res.reply).toContain('/pack <主题名称>')
+  })
+
+  // ── 21. /pack <主题名> 与自然语言建工作台意图 ──
+  it('/pack <主题名> 与自然语言意图返回候选工具清单与工作台装配行动卡片', async () => {
+    const resSlash = await dispatchSiteCommand('/pack 前端开发', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resSlash.handled).toBe(true)
+    expect(resSlash.action).toBe('pack_workspace')
+    expect(resSlash.reply).toContain('已为您规划「前端开发」主题工作台')
+    expect(resSlash.actionCard).toBeDefined()
+    expect(resSlash.actionCard?.actionName).toBe('create_topic_workspace')
+    expect(resSlash.actionCard?.payload?.topic).toBe('前端开发 工作台')
+
+    const resNl = await dispatchSiteCommand('帮我搭建一套独立开发者工具箱', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resNl.handled).toBe(true)
+    expect(resNl.action).toBe('pack_workspace')
+    expect(resNl.actionCard?.actionName).toBe('create_topic_workspace')
+    expect(resNl.actionCard?.payload?.topic).toContain('独立开发者')
+  })
+
+  // ── 22. createTopicWorkspace 建组、存入书签、生成内嵌笔记与撤销 ──
+  it('createTopicWorkspace 正确建组、存入书签、聚焦视图并支持 /undo 撤销', async () => {
+    const candidates = [
+      { title: 'Zeabur', url: 'https://zeabur.com', notes: '极速部署平台' },
+      { title: 'Excalidraw', url: 'https://excalidraw.com', notes: '在线白板' },
+    ]
+
+    const res = await createTopicWorkspace('全栈开发', candidates, 'c1', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    expect(res.success).toBe(true)
+    expect(res.totalBookmarks).toBe(2)
+    expect(mockDs.addBookmark).toHaveBeenCalledTimes(2)
+    expect(mockDs.addGroup).toHaveBeenCalledTimes(1)
+    expect(mockApp.save).toHaveBeenCalled()
+    expect(mockUi.curCat).toBe('c1')
+    expect(mockUi.focusedGroupId).toBe(res.group.id)
+    expect(res.group.notes).toContain('group-inline-card')
+
+    // 测试 /undo 撤销创建工作台
+    const resUndo = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resUndo.handled).toBe(true)
+    expect(resUndo.reply).toContain('已撤销创建主题工作台')
+    expect(mockDs.deleteGroup).toHaveBeenCalledWith(res.group.id)
+    expect(mockUi.focusedGroupId).toBeNull()
+  })
+
+  // ── 23. /deadlink 包含失效链接时出具 Wayback 历史镜像与平替行动卡片 ──
+  it('/deadlink 发现死链时输出 Wayback 历史快照链接与平替推荐 ActionCard', async () => {
+    // 制造一个死链书签
+    mockDs.bookmarks.push({
+      id: 'b-dead',
+      title: '旧版 Figma',
+      url: 'https://figma.com/old-dead-page',
+      categoryId: 'c2',
+      attributes: { 'dead-link': true },
+    } as unknown as Bookmark)
+    mockDs.bookmarkMap['b-dead'] = mockDs.bookmarks[mockDs.bookmarks.length - 1]
+
+    const res = await dispatchSiteCommand('/deadlink', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('deadlinks')
+    expect(res.reply).toContain('死链巡检报告')
+    expect(res.reply).toContain('web.archive.org/web/*/')
+    expect(res.actionCard).toBeDefined()
+    expect(res.actionCard?.actionName).toBe('heal_deadlink')
+    expect(res.actionCard?.payload?.deadBmId).toBe('b-dead')
+  })
+
+  // ── 24. healDeadlink 自愈失效书签并支持撤销 ──
+  it('healDeadlink 将失效书签无缝替换为现役平替并支持 /undo 还原', async () => {
+    mockDs.bookmarks.push({
+      id: 'b-dead-2',
+      title: '失效白板',
+      url: 'https://dead-board.org',
+      icon: '',
+      notes: '旧白板',
+      attributes: { 'dead-link': true },
+    } as unknown as Bookmark)
+    const deadBm = mockDs.bookmarks[mockDs.bookmarks.length - 1]
+    mockDs.bookmarkMap['b-dead-2'] = deadBm
+
+    const replacement = {
+      title: 'Excalidraw',
+      url: 'https://excalidraw.com',
+      notes: '开源白板平替',
+    }
+
+    const res = healDeadlink('b-dead-2', replacement, {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    expect(res.success).toBe(true)
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith(
+      'b-dead-2',
+      expect.objectContaining({
+        title: 'Excalidraw',
+        url: 'https://excalidraw.com',
+        attributes: expect.objectContaining({
+          'dead-link-healed': true,
+        }),
+      }),
+    )
+    expect(deadBm.attributes['dead-link']).toBeUndefined()
+
+    // 撤销自愈
+    const resUndo = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resUndo.handled).toBe(true)
+    expect(resUndo.reply).toContain('已撤销平替自愈')
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith(
+      'b-dead-2',
+      expect.objectContaining({
+        title: '失效白板',
+        url: 'https://dead-board.org',
+        attributes: expect.objectContaining({
+          'dead-link': true,
+        }),
+      }),
+    )
   })
 })

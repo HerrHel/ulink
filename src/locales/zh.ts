@@ -286,6 +286,8 @@ export const zh = {
     confirmDelete: '确认删除 {n} 个书签？',
     deletedToast: '已删除 {n} 个书签',
     restored: '已恢复',
+    wayback: '在 Wayback Machine 查看历史快照',
+    findAlternative: 'AI 寻找平替自愈',
   },
   conflict: {
     title: '同步冲突 ({n})',

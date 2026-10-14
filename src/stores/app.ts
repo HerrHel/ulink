@@ -125,6 +125,7 @@ export const useAppStore = defineStore('app', () => {
     shareModalTarget: uiProp('shareModalTarget'),
     openShareModal(type: 'group' | 'category', id: string) { ui().openShareModal(type, id) },
     closeShareModal() { ui().closeShareModal() },
+    openAiAssistant(query = '') { ui().openAiAssistant(query) },
 
     // ── CRUD（委托 dataStore）──
     addBookmark(bm: Bookmark) { ds().addBookmark(bm) },

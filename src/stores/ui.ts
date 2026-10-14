@@ -141,6 +141,7 @@ export interface UIState {
   aiFinderInitialTargetUrl: string
   aiFinderInitialTargetTitle: string
   aiEnrichTargetBmId: string | null
+  aiAssistantInitialQuery: string
 
   // 分组状态
   modals: ModalState
@@ -226,10 +227,19 @@ export const useUIStore = defineStore('ui', {
       aiFinderInitialTargetUrl: '',
       aiFinderInitialTargetTitle: '',
       aiEnrichTargetBmId: null,
+      aiAssistantInitialQuery: '',
     }
   },
 
   actions: {
+    /** 打开侧边栏 AI 助手并可选预填执行指令 */
+    openAiAssistant(query = '') {
+      this.panels.detail = true
+      if (query) {
+        this.aiAssistantInitialQuery = query
+      }
+    },
+
     /** 打开 AI 探宝/寻站/平替中心 */
     openAiFinder(tab: 'intent' | 'similar' | 'video' = 'intent', query = '', targetUrl = '', targetTitle = '') {
       this.aiFinderInitialTab = tab
