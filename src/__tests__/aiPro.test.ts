@@ -52,11 +52,23 @@ describe('AI Pro Matrix & Smart Candidate Ingestion', () => {
     )
 
     expect(results.length).toBeGreaterThan(0)
-    expect(results.some(r => r.title === 'Claude' || r.title === 'DeepSeek' || r.url.includes('alternativeto'))).toBe(true)
+    expect(results.some(r => r.title === 'Claude' || r.title === 'DeepSeek')).toBe(true)
     for (const r of results) {
       expect(r.url).toBeDefined()
       expect(r.notes).toBeDefined()
     }
+  })
+
+  it('2b. 查找类似网站：无真实平替数据时诚实返回空，不拼猜假 URL', async () => {
+    const results = await findSimilarWebsites(
+      'https://totally-unknown-site-xyz.example',
+      '未知站点',
+      [],
+      testCategories,
+      testAttributes
+    )
+
+    expect(results).toEqual([])
   })
 
   it('3. 视频工具收割：能从视频分享文本中解析多个工具并打包', async () => {

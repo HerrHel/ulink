@@ -543,43 +543,15 @@ import { useDataStore } from '../../stores/data.js'
 import { isMobile, domain } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useI18n } from '../../i18n/index.js'
-import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
+import { toast } from '../../lib/toast.js'
 import BookmarkCard from '../cards/BookmarkCard.vue'
 import GroupCard from '../cards/GroupCard.vue'
 import AiInlineCard from '../cards/AiInlineCard.vue'
 import { parseTurnContentSegments, type ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
-import {
-  searchWebsitesByIntent,
-  findSimilarWebsites,
-  extractBookmarksFromVideo,
-} from '../../lib/ai/cloudAiClient.js'
-import { askMiMoStream, getMiMoConfig } from '../../lib/ai/mimoClient.js'
-import {
-  dispatchSiteCommand,
-  mergeDuplicateBookmarks,
-  applyInboxZeroClustering,
-  createTopicWorkspace,
-  healDeadlink,
-} from '../../lib/ai/siteCommander.js'
-import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
-import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { saveAppData } from '../../stores/app.js'
-import {
-  loadSessions,
-  saveSessions,
-  createNewSession,
-  updateSession,
-  deleteSessionById,
-  clearAllSessions,
-  getCurrentSessionId,
-  setCurrentSessionId,
-  type AiChatSession,
-  type ChatTurn,
-  type ChatActionCard,
-} from '../../lib/ai/chatSessions.js'
+import type { ChatTurn } from '../../lib/ai/chatSessions.js'
+import { useAiChat } from '../../composables/domain/useAiChat.js'
 import { buildDetailCards } from './buildDetailCards.js'
 import type { DetailEntry } from './buildDetailCards.js'
-import type { AiSearchPreference } from '../../types/ai.js'
 
 const { t, locale } = useI18n()
 const isZh = computed(() => locale.value.startsWith('zh'))
@@ -598,55 +570,55 @@ const entries = computed<DetailEntry[]>(() =>
 
 const currentTab = ref<'ai' | 'cards'>('ai')
 
-const aiQuery = ref('')
-const aiLoading = ref(false)
 const isInputFocused = ref(false)
-// 加载态提示按分流切换：思考中 → 甄选/分析/提炼中
-const loadingTextKey = ref('ai.thinking')
-const loadingText = computed(() => t(loadingTextKey.value))
-// 默认采用最佳偏好（完全免费 + 国内直连），无需用户在界面手动配置
-const preferences = ref<AiSearchPreference[]>(['free', 'no_proxy'])
-
-// ── 多会话管理 (方案 A) ──
-const sessions = ref<AiChatSession[]>(loadSessions())
-const currentSessionId = ref<string>(getCurrentSessionId() || '')
 const isSessionMenuOpen = ref(false)
-const chatTurns = ref<ChatTurn[]>([])
 
-const isCurrentSessionEmpty = computed(() => chatTurns.value.length === 0)
-
-// 初始化当前会话
-if (!currentSessionId.value || !sessions.value.some((s) => s.id === currentSessionId.value)) {
-  if (sessions.value.length > 0) {
-    currentSessionId.value = sessions.value[0].id
-    setCurrentSessionId(sessions.value[0].id)
-    chatTurns.value = [...sessions.value[0].turns]
-  } else {
-    const fresh = createNewSession()
-    currentSessionId.value = fresh.id
-    sessions.value = [fresh]
-    chatTurns.value = []
-  }
-} else {
-  const cur = sessions.value.find((s) => s.id === currentSessionId.value)
-  if (cur) chatTurns.value = [...cur.turns]
-}
-
-// 自动清理历史中非当前会话的无内容空会话，保持会话列表整洁
-if (sessions.value.length > 1) {
-  const cleaned = sessions.value.filter(
-    (s) => s.id === currentSessionId.value || s.turns.length > 0,
-  )
-  if (cleaned.length !== sessions.value.length) {
-    saveSessions(cleaned)
-    sessions.value = cleaned
-  }
-}
-
-const currentSessionTitle = computed(() => {
-  const s = sessions.value.find((x) => x.id === currentSessionId.value)
-  if (!s || s.title === '新会话') return t('ai.sessionDefaultTitle')
-  return s.title
+// ── AI 调度逻辑抽至 useAiChat（会话管理 / 提交调度 / 行动卡片 / 斜杠命令）；
+//    DOM 副作用（滚动到底、输入框聚焦/高度、会话菜单收起、切回对话 tab）由本组件回调注入 ──
+const {
+  sessions,
+  currentSessionId,
+  chatTurns,
+  isCurrentSessionEmpty,
+  currentSessionTitle,
+  handleCreateSession,
+  switchSession,
+  handleDeleteSession,
+  handleClearAllSessions,
+  aiQuery,
+  aiLoading,
+  loadingText,
+  handleAiSubmit,
+  handleActionCardClick,
+  hasUnaddedInTurn,
+  addAllInTurn,
+  revokeUserMessage,
+  handleStopGenerating,
+  getActionCardNavTarget,
+  navigateToActionTarget,
+  getCardCandidateList,
+  isCandidateSelected,
+  getSelectedCandidateCount,
+  isAllCandidatesSelected,
+  toggleCandidateSelection,
+  toggleSelectAllCandidates,
+  formatDomain,
+  SLASH_COMMANDS,
+  dynamicQuickHints,
+  applySlashCommand,
+  inputHistory,
+  historyCursor,
+  tempInput,
+} = useAiChat({
+  onTurnsChanged: () => scrollToBottom(),
+  onQueryChanged: () => adjustTextareaHeight(),
+  focusInput: () => nextTick(() => aiTextareaRef.value?.focus()),
+  closeSessionMenu: () => {
+    isSessionMenuOpen.value = false
+  },
+  showAiTab: () => {
+    currentTab.value = 'ai'
+  },
 })
 
 function formatTimeAgo(timestamp: number): string {
@@ -657,413 +629,11 @@ function formatTimeAgo(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString(isZh.value ? 'zh-CN' : 'en-US', { month: 'numeric', day: 'numeric' })
 }
 
-function handleCreateSession() {
-  // 若当前已经是新会话且已有空会话存在，不再重复创建新会话
-  if (isCurrentSessionEmpty.value && sessions.value.length > 0) {
-    isSessionMenuOpen.value = false
-    nextTick(() => aiTextareaRef.value?.focus())
-    return
-  }
-  abortInFlight()
-  const fresh = createNewSession()
-  currentSessionId.value = fresh.id
-  sessions.value = loadSessions()
-  chatTurns.value = []
-  aiQuery.value = ''
-  isSessionMenuOpen.value = false
-  adjustTextareaHeight()
-  nextTick(() => aiTextareaRef.value?.focus())
-}
-
-function switchSession(id: string) {
-  if (id === currentSessionId.value) {
-    isSessionMenuOpen.value = false
-    return
-  }
-  // 离开前中止在途检索并持久化旧会话（含被停止的思考气泡），防悬挂气泡被带走/丢失
-  abortInFlight()
-  // 若离开当前会话时，当前会话未产生任何问答，自动清理此空会话，防止残留无用草稿
-  if (chatTurns.value.length === 0 && currentSessionId.value) {
-    deleteSessionById(currentSessionId.value)
-    sessions.value = loadSessions()
-  }
-  const target = sessions.value.find((s) => s.id === id)
-  if (!target) return
-  currentSessionId.value = id
-  setCurrentSessionId(id)
-  chatTurns.value = [...target.turns]
-  isSessionMenuOpen.value = false
-  scrollToBottom()
-  nextTick(() => aiTextareaRef.value?.focus())
-}
-
-async function handleDeleteSession(id: string) {
-  const target = sessions.value.find((s) => s.id === id)
-  if (!target) return
-  const title = target.title || t('ai.thisSession')
-  isSessionMenuOpen.value = false
-  const ok = await showConfirm(t('ai.deleteSessionConfirm', { title }))
-  if (!ok) return
-
-  const backupSession: AiChatSession = {
-    ...target,
-    turns: target.turns.map((turn) => ({ ...turn })),
-  }
-  sessions.value = deleteSessionById(id)
-  if (currentSessionId.value === id) {
-    if (sessions.value.length > 0) {
-      switchSession(sessions.value[0].id)
-    } else {
-      handleCreateSession()
-    }
-  }
-
-  toastWithUndo(
-    t('ai.sessionDeleted', { title }),
-    () => {
-      const all = loadSessions()
-      all.unshift(backupSession)
-      saveSessions(all)
-      sessions.value = loadSessions()
-      switchSession(backupSession.id)
-    },
-  )
-}
-
-async function handleClearAllSessions() {
-  isSessionMenuOpen.value = false
-  const ok = await showConfirm(t('ai.clearAllConfirm'))
-  if (!ok) return
-
-  clearAllSessions()
-  sessions.value = []
-  handleCreateSession()
-  toast(t('ai.clearedAllToast'), true)
-}
-
 // ── 斜杠指令快捷联想（文案走 i18n，与语言包 slash* 键一一对应）──
-const SLASH_COMMANDS = [
-  { cmd: '/help', titleKey: 'ai.slashHelpTitle', descKey: 'ai.slashHelpDesc' },
-  { cmd: '/health', titleKey: 'ai.slashHealthTitle', descKey: 'ai.slashHealthDesc' },
-  { cmd: '/inbox', titleKey: 'ai.slashInboxTitle', descKey: 'ai.slashInboxDesc' },
-  { cmd: '/pack', titleKey: 'ai.slashPackTitle', descKey: 'ai.slashPackDesc' },
-  { cmd: '/theme', titleKey: 'ai.slashThemeTitle', descKey: 'ai.slashThemeDesc' },
-  { cmd: '/view', titleKey: 'ai.slashViewTitle', descKey: 'ai.slashViewDesc' },
-  { cmd: '/cat', titleKey: 'ai.slashCatTitle', descKey: 'ai.slashCatDesc' },
-  { cmd: '/trash', titleKey: 'ai.slashTrashTitle', descKey: 'ai.slashTrashDesc' },
-  { cmd: '/dedup', titleKey: 'ai.slashDedupTitle', descKey: 'ai.slashDedupDesc' },
-  { cmd: '/deadlink', titleKey: 'ai.slashDeadlinkTitle', descKey: 'ai.slashDeadlinkDesc' },
-  { cmd: '/export', titleKey: 'ai.slashExportTitle', descKey: 'ai.slashExportDesc' },
-  { cmd: '/stats', titleKey: 'ai.slashStatsTitle', descKey: 'ai.slashStatsDesc' },
-  { cmd: '/undo', titleKey: 'ai.slashUndoTitle', descKey: 'ai.slashUndoDesc' },
-  { cmd: '/clean', titleKey: 'ai.slashCleanTitle', descKey: 'ai.slashCleanDesc' },
-  { cmd: '/clear', titleKey: 'ai.slashClearTitle', descKey: 'ai.slashClearDesc' },
-]
+// SLASH_COMMANDS 与 dynamicQuickHints 已随调度逻辑迁至 useAiChat
 
-interface QuickHint {
-  label: string
-  query: string
-}
-
-const dynamicQuickHints = computed<QuickHint[]>(() => {
-  const hints: QuickHint[] = []
-
-  // 1. 情境感知：若当前聚焦在某个笔记组（工作台）
-  if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) {
-    const group = ds.groupMap[ui.focusedGroupId]
-    const gName = group.name.length > 8 ? group.name.slice(0, 8) + '…' : group.name
-    hints.push({
-      label: isZh.value ? `📦 扩展「${gName}」工具` : `📦 Tools for ${gName}`,
-      query: `/pack ${group.name}`,
-    })
-    hints.push({
-      label: isZh.value ? '🔍 查重清理' : '/dedup',
-      query: '/dedup',
-    })
-  } else if (ui.curCat && ui.curCat !== CAT_ALL && ui.curCat !== CAT_UNCATEGORIZED) {
-    // 2. 情境感知：若当前选定了特定分类
-    const cat = ds.categories.find((c: any) => !c.deletedAt && c.id === ui.curCat)
-    if (cat?.name) {
-      const cName = cat.name.length > 8 ? cat.name.slice(0, 8) + '…' : cat.name
-      hints.push({
-        label: isZh.value ? `📁 探索「${cName}」精选` : `📁 ${cName} tools`,
-        query: `/pack ${cat.name}`,
-      })
-    }
-  }
-
-  // 3. 收件箱未分类检测
-  const uncatCount = ds.bookmarks.filter(
-    (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId && !b.id.startsWith('bm_ulink_'),
-  ).length
-  if (uncatCount > 0) {
-    hints.push({
-      label: isZh.value ? `未分类 (${uncatCount})` : `Uncategorized (${uncatCount})`,
-      query: '/inbox',
-    })
-  } else if (hints.length === 0) {
-    hints.push({
-      label: isZh.value ? '/health 体检' : '/health',
-      query: '/health',
-    })
-  }
-
-  // 4. 回收站堆积感知
-  const trashCount =
-    ds.bookmarks.filter((b) => b.deletedAt).length +
-    ds.siblingGroups.filter((g) => g.deletedAt).length +
-    ds.categories.filter((c: any) => c.deletedAt).length
-  if (trashCount > 0 && hints.length < 4) {
-    hints.push({
-      label: isZh.value ? `回收站 (${trashCount})` : `Trash (${trashCount})`,
-      query: '/trash',
-    })
-  }
-
-  if (hints.length < 4) {
-    hints.push({
-      label: isZh.value ? '/dedup 查重' : '/dedup',
-      query: '/dedup',
-    })
-  }
-  if (hints.length < 4) {
-    hints.push({
-      label: isZh.value ? '/stats 统计' : '/stats',
-      query: '/stats',
-    })
-  }
-  if (hints.length < 4) {
-    hints.push({
-      label: isZh.value ? '/help 指令' : '/help',
-      query: '/help',
-    })
-  }
-
-  return hints.slice(0, 4)
-})
-
-function getActionCardNavTarget(card: ChatActionCard): string | null {
-  if (card.resultGid && ds.groupMap[card.resultGid]) {
-    return card.resultGid
-  }
-  const payloadGid = (card.payload as any)?.createdGid
-  if (payloadGid && ds.groupMap[payloadGid]) {
-    return payloadGid
-  }
-  return null
-}
-
-function navigateToActionTarget(card: ChatActionCard) {
-  const gid = getActionCardNavTarget(card)
-  if (!gid) return
-  const group = ds.groupMap[gid]
-  if (group) {
-    if (group.categoryId) {
-      ui.curCat = group.categoryId
-    }
-    ui.focusedGroupId = group.id
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      ui.panels.detail = false
-    }
-  }
-}
-
-function getCardCandidateList(card: ChatActionCard): any[] {
-  const payload = card.payload as any
-  if (Array.isArray(payload?.candidates)) {
-    return payload.candidates
-  }
-  return []
-}
-
-function initCardCandidateSelection(card: ChatActionCard) {
-  if (!card.selectedCandidateUrls) {
-    const list = getCardCandidateList(card)
-    card.selectedCandidateUrls = list.map((c) => c.url).filter(Boolean)
-  }
-}
-
-function isCandidateSelected(card: ChatActionCard, url: string): boolean {
-  initCardCandidateSelection(card)
-  return card.selectedCandidateUrls?.includes(url) ?? true
-}
-
-function getSelectedCandidateCount(card: ChatActionCard): number {
-  initCardCandidateSelection(card)
-  return card.selectedCandidateUrls?.length ?? 0
-}
-
-function isAllCandidatesSelected(card: ChatActionCard): boolean {
-  const all = getCardCandidateList(card)
-  if (all.length === 0) return false
-  return getSelectedCandidateCount(card) === all.length
-}
-
-function toggleCandidateSelection(card: ChatActionCard, url: string) {
-  if (card.completed || card.executing) return
-  initCardCandidateSelection(card)
-  const current = card.selectedCandidateUrls || []
-  if (current.includes(url)) {
-    card.selectedCandidateUrls = current.filter((u) => u !== url)
-  } else {
-    card.selectedCandidateUrls = [...current, url]
-  }
-}
-
-function toggleSelectAllCandidates(card: ChatActionCard) {
-  if (card.completed || card.executing) return
-  const all = getCardCandidateList(card)
-  if (isAllCandidatesSelected(card)) {
-    card.selectedCandidateUrls = []
-  } else {
-    card.selectedCandidateUrls = all.map((c) => c.url).filter(Boolean)
-  }
-}
-
-function formatDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return url.slice(0, 20)
-  }
-}
-
-async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
-  if (card.completed || card.executing) return
-  const candidatesInCard = getCardCandidateList(card)
-  if (
-    card.actionName === 'create_topic_workspace' &&
-    candidatesInCard.length > 0 &&
-    getSelectedCandidateCount(card) === 0
-  ) {
-    toast(t('ai.noCandidatesSelected'), false)
-    return
-  }
-  card.executing = true
-  try {
-    if (card.actionName === 'merge_dedup') {
-      const res = mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
-      card.completed = true
-      toast(res.message, true)
-      chatTurns.value.push({
-        id: 'turn-' + Date.now() + '-assistant',
-        role: 'assistant',
-        content: res.message,
-        steps: [{ text: `合并了 ${res.mergedCount} 个重复副本`, done: true }],
-        timestamp: Date.now(),
-      })
-      scrollToBottom()
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-    } else if (card.actionName === 'trash_clear') {
-      const res = await dispatchSiteCommand('/trash clear', { ds, ui, app: (ui as any).app })
-      if (res.success !== false) {
-        card.completed = true
-      }
-      chatTurns.value.push({
-        id: 'turn-' + Date.now() + '-assistant',
-        role: 'assistant',
-        content: res.reply,
-        steps: res.steps,
-        timestamp: Date.now(),
-      })
-      scrollToBottom()
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-    } else if (card.actionName === 'inbox_zero') {
-      const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
-      chatTurns.value.push({
-        id: 'turn-' + Date.now() + '-assistant',
-        role: 'assistant',
-        content: res.reply,
-        steps: res.steps,
-        actionCard: res.actionCard,
-        timestamp: Date.now(),
-      })
-      scrollToBottom()
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-    } else if (card.actionName === 'apply_inbox_zero') {
-      const res = applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
-      card.completed = true
-      toast(res.message, true)
-      chatTurns.value.push({
-        id: 'turn-' + Date.now() + '-assistant',
-        role: 'assistant',
-        content: res.message,
-        steps: [{ text: `成功归类 ${res.movedCount} 个书签`, done: true }],
-        timestamp: Date.now(),
-      })
-      scrollToBottom()
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-    } else if (card.actionName === 'create_topic_workspace') {
-      const payload = (card.payload || {}) as {
-        topic?: string
-        candidates?: any[]
-        targetCatId?: string
-      }
-      const rawCandidates = payload.candidates || []
-      initCardCandidateSelection(card)
-      const selectedUrls = new Set(card.selectedCandidateUrls || [])
-      const finalCandidates = rawCandidates.filter((c: any) => selectedUrls.has(c.url))
-
-      const res = await createTopicWorkspace(
-        payload.topic || '精选工作台',
-        finalCandidates,
-        payload.targetCatId,
-        { ds, ui, app: (ui as any).app },
-      )
-      card.completed = true
-      if (res.group?.id) {
-        card.resultGid = res.group.id
-        card.resultCatId = res.group.categoryId
-      }
-      toast(res.message, true)
-      chatTurns.value.push({
-        id: 'turn-' + Date.now() + '-assistant',
-        role: 'assistant',
-        content: res.message,
-        steps: [
-          { text: `甄选并存入 ${res.totalBookmarks} 个工具`, done: true },
-          { text: `创建笔记组「${res.group.name}」`, done: true },
-          { text: '切换至工作台聚焦视图', done: true },
-        ],
-        timestamp: Date.now(),
-      })
-      scrollToBottom()
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-    } else if (card.actionName === 'heal_deadlink') {
-      const payload = (card.payload || {}) as {
-        deadBmId?: string
-        replacement?: any
-      }
-      if (payload.deadBmId && payload.replacement) {
-        const res = healDeadlink(payload.deadBmId, payload.replacement, {
-          ds,
-          ui,
-          app: (ui as any).app,
-        })
-        card.completed = true
-        toast(res.message, true)
-        chatTurns.value.push({
-          id: 'turn-' + Date.now() + '-assistant',
-          role: 'assistant',
-          content: res.message,
-          steps: [
-            { text: '核验失效死链', done: true },
-            { text: `替换为现役平替「${payload.replacement.title}」`, done: true },
-          ],
-          timestamp: Date.now(),
-        })
-        scrollToBottom()
-        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-      }
-    }
-  } catch (err: any) {
-    console.error('handleActionCardClick error:', err)
-    toast(err?.message || '执行失败，请稍后重试', false)
-  } finally {
-    card.executing = false
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  }
-}
+// 行动卡片辅助与执行（getActionCardNavTarget / navigateToActionTarget / 候选多选微操 /
+// handleActionCardClick）已随调度逻辑迁至 useAiChat
 
 function formatReasoningSec(ms?: number): string {
   if (!ms || ms <= 0) return '1'
@@ -1125,25 +695,7 @@ async function copyMessage(text: string, actionKey?: string) {
   }
 }
 
-function revokeUserMessage(turn: ChatTurn) {
-  const idx = chatTurns.value.findIndex((t) => t.id === turn.id)
-  if (idx === -1) return
-
-  // 1. 将原输入内容填回输入框
-  aiQuery.value = turn.content
-  adjustTextareaHeight()
-
-  // 2. 从对话流中移除该条消息及其伴随的助手回复
-  const nextTurn = chatTurns.value[idx + 1]
-  const removeCount = nextTurn && nextTurn.role === 'assistant' ? 2 : 1
-  chatTurns.value.splice(idx, removeCount)
-
-  // 3. 持久化当前会话
-  sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-
-  // 4. 聚焦输入框便于修改重发（视觉状态已清晰直达，无需全局弹窗阻断）
-  nextTick(() => aiTextareaRef.value?.focus())
-}
+// revokeUserMessage（撤回并回填输入框）已随调度逻辑迁至 useAiChat
 
 const activeSlashIndex = ref(0)
 const showSlashSuggest = computed(() => {
@@ -1180,49 +732,9 @@ watch(
   { immediate: true },
 )
 
-function applySlashCommand(cmd: string) {
-  aiQuery.value = cmd + ' '
-  adjustTextareaHeight()
-  nextTick(() => aiTextareaRef.value?.focus())
-}
+// applySlashCommand（斜杠补全）已随调度逻辑迁至 useAiChat
 
-// ── 终端式命令历史回溯 (↑ / ↓) ──
-const inputHistory = ref<string[]>([])
-let historyCursor = -1
-let tempInput = ''
-
-// ── 停止生成 ──
-let currentAbortController: AbortController | null = null
-
-/** 持久化当前会话；会话可能已被删除，守卫防 updateSession 重建已删会话 */
-function persistCurrentSession() {
-  if (currentSessionId.value && sessions.value.some((s) => s.id === currentSessionId.value)) {
-    sessions.value = updateSession(currentSessionId.value, chatTurns.value)
-  }
-}
-
-/** 中止在途检索并收尾：终止请求、收起思考气泡、持久化当前会话（停止按钮/切会话/新建会话共用） */
-function abortInFlight() {
-  if (currentAbortController) {
-    currentAbortController.abort()
-    currentAbortController = null
-  }
-  aiLoading.value = false
-  const last = chatTurns.value[chatTurns.value.length - 1]
-  if (last && last.role === 'assistant' && last.loading) {
-    last.loading = false
-    last.isThinking = false
-    if (!last.content && !last.reasoning) {
-      last.content = t('ai.stopped')
-    }
-  }
-  persistCurrentSession()
-}
-
-function handleStopGenerating() {
-  abortInFlight()
-  scrollToBottom()
-}
+// ── 终端式命令历史回溯 (↑ / ↓) 状态由 useAiChat 提供（inputHistory / historyCursor / tempInput）──
 
 const panelStyle = computed(() => {
   const styles: Record<string, string> = {}
@@ -1255,10 +767,6 @@ function scrollToBottom() {
       chatScrollRef.value.scrollTop = chatScrollRef.value.scrollHeight
     }
   })
-}
-
-function startNewChat() {
-  handleCreateSession()
 }
 
 function quickFill(text: string) {
@@ -1321,13 +829,13 @@ function handleKeyDown(e: KeyboardEvent) {
   if (e.key === 'ArrowUp') {
     const el = aiTextareaRef.value
     if (el && (el.selectionStart === 0 || !aiQuery.value.includes('\n'))) {
-      if (inputHistory.value.length > 0 && historyCursor > 0) {
+      if (inputHistory.value.length > 0 && historyCursor.value > 0) {
         e.preventDefault()
-        if (historyCursor === inputHistory.value.length) {
-          tempInput = aiQuery.value
+        if (historyCursor.value === inputHistory.value.length) {
+          tempInput.value = aiQuery.value
         }
-        historyCursor--
-        aiQuery.value = inputHistory.value[historyCursor]
+        historyCursor.value--
+        aiQuery.value = inputHistory.value[historyCursor.value]
         nextTick(() => adjustTextareaHeight())
         return
       }
@@ -1335,16 +843,16 @@ function handleKeyDown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowDown') {
     const el = aiTextareaRef.value
     if (el && (el.selectionEnd === aiQuery.value.length || !aiQuery.value.includes('\n'))) {
-      if (historyCursor < inputHistory.value.length - 1) {
+      if (historyCursor.value < inputHistory.value.length - 1) {
         e.preventDefault()
-        historyCursor++
-        aiQuery.value = inputHistory.value[historyCursor]
+        historyCursor.value++
+        aiQuery.value = inputHistory.value[historyCursor.value]
         nextTick(() => adjustTextareaHeight())
         return
-      } else if (historyCursor === inputHistory.value.length - 1) {
+      } else if (historyCursor.value === inputHistory.value.length - 1) {
         e.preventDefault()
-        historyCursor = inputHistory.value.length
-        aiQuery.value = tempInput
+        historyCursor.value = inputHistory.value.length
+        aiQuery.value = tempInput.value
         nextTick(() => adjustTextareaHeight())
         return
       }
@@ -1380,306 +888,6 @@ function adjustTextareaHeight() {
   }
 }
 
-/** 检索结果摘要：0 结果时改用空态引导文案，避免「甄选到 0 个」 */
-function formatFoundCount(n: number, videoTitle?: string): string {
-  if (n <= 0) return t('ai.emptyResultsHint')
-  return videoTitle ? `${videoTitle} (${t('ai.foundCount', { n })})` : t('ai.foundCount', { n })
-}
-
-/** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
-async function handleAiSubmit() {
-  const raw = aiQuery.value.trim()
-  if (!raw || aiLoading.value) return
-
-  if (raw === '/clear') {
-    startNewChat()
-    return
-  }
-
-  currentTab.value = 'ai'
-  aiLoading.value = true
-  loadingTextKey.value = 'ai.thinking'
-  aiQuery.value = ''
-  adjustTextareaHeight()
-
-  const turnId = 'turn-' + Date.now()
-  chatTurns.value.push({
-    id: turnId + '-user',
-    role: 'user',
-    content: raw,
-    timestamp: Date.now(),
-  })
-
-  const assistantTurn: ChatTurn = {
-    id: turnId + '-assistant',
-    role: 'assistant',
-    content: '',
-    reasoning: '',
-    reasoningTimeMs: 0,
-    isThinking: false,
-    _thinkingOpen: true,
-    loading: true,
-    candidates: [],
-    timestamp: Date.now(),
-  }
-  chatTurns.value.push(assistantTurn)
-  scrollToBottom()
-
-  // 捕获局部 controller 引用：handleStopGenerating 会把 currentAbortController 置 null，
-  // 在途代码必须读自己的 controller.signal，否则「停止生成」实际不生效
-  const controller = new AbortController()
-  currentAbortController = controller
-
-  try {
-    // 优先尝试站内指令/In-App Agent CLI 调度
-    const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app })
-    if (siteCmd.handled) {
-      assistantTurn.loading = false
-      assistantTurn.content = siteCmd.reply
-      assistantTurn.steps = siteCmd.steps
-      assistantTurn.actionCard = siteCmd.actionCard
-      return
-    }
-
-    const isVideo = /bilibili\.com|b23\.tv|douyin\.com|tiktok\.com|xiaohongshu\.com|xhslink\.com/.test(raw)
-    const isUrl = /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(raw)
-    loadingTextKey.value = isVideo ? 'ai.extracting' : isUrl ? 'ai.analyzing' : 'ai.searching'
-
-    if (isVideo) {
-      const res = await extractBookmarksFromVideo(raw, ds.categories, ds.customAttributes)
-      if (controller.signal.aborted) return
-      assistantTurn.loading = false
-      assistantTurn.candidates = res.bookmarks
-      assistantTurn.content = formatFoundCount(res.bookmarks.length, res.videoTitle)
-    } else if (isUrl) {
-      const res = await findSimilarWebsites(raw, domain(raw), preferences.value, ds.categories, ds.customAttributes)
-      if (controller.signal.aborted) return
-      assistantTurn.loading = false
-      assistantTurn.candidates = res
-      assistantTurn.content = formatFoundCount(res.length)
-    } else {
-      const mimoConf = getMiMoConfig()
-      let mimoSuccess = false
-
-      if (mimoConf.enabled && mimoConf.apiKey) {
-        try {
-          const history = chatTurns.value
-            .filter((t) => !t.loading && t.content && t.id !== assistantTurn.id)
-            .map((t) => ({ role: t.role as 'user' | 'assistant', content: t.content }))
-
-          let thinkingStartTime = 0
-
-          // 动态构建情境切片 (Dynamic Context Slice)
-          let focusedGroupName: string | undefined
-          let focusedGroupBookmarks: Array<{ title: string; url: string }> | undefined
-          if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) {
-            const grp = ds.groupMap[ui.focusedGroupId]
-            focusedGroupName = grp.name
-            focusedGroupBookmarks = (grp.bookmarkIds || [])
-              .map((id: string) => ds.bookmarkMap[id])
-              .filter((b: any) => b && !b.deletedAt)
-              .slice(0, 10)
-              .map((b: any) => ({ title: b.title, url: b.url }))
-          }
-
-          let currentCategoryName: string | undefined
-          if (ui.curCat && ui.curCat !== 'all' && ui.curCat !== 'uncategorized') {
-            const cat = ds.categories.find((c: any) => c.id === ui.curCat && !c.deletedAt)
-            if (cat) currentCategoryName = cat.name
-          }
-
-          let selectedBookmarks: Array<{ title: string; url: string }> | undefined
-          if (ui.batchMode && ui.batchSelected?.length) {
-            selectedBookmarks = ui.batchSelected
-              .map((id: string) => ds.bookmarkMap[id])
-              .filter((b: any) => b && !b.deletedAt)
-              .slice(0, 8)
-              .map((b: any) => ({ title: b.title, url: b.url }))
-          }
-
-          const mimoRes = await askMiMoStream(
-            raw,
-            {
-              categories: ds.categories,
-              customAttributes: ds.customAttributes,
-              isZh: isZh.value,
-              signal: controller.signal,
-              history,
-              contextSlice: {
-                currentCategoryName,
-                focusedGroupName,
-                focusedGroupBookmarks,
-                selectedBookmarks,
-              },
-            },
-            {
-              onReasoningDelta(_delta, accumulatedReasoning) {
-                if (controller.signal.aborted) return
-                if (!thinkingStartTime) {
-                  thinkingStartTime = Date.now()
-                  assistantTurn.isThinking = true
-                  assistantTurn._thinkingOpen = true
-                }
-                assistantTurn.reasoning = accumulatedReasoning
-                scrollToBottom()
-              },
-              onContentDelta(_delta, accumulatedContent) {
-                if (controller.signal.aborted) return
-                if (assistantTurn.isThinking) {
-                  assistantTurn.isThinking = false
-                  assistantTurn.reasoningTimeMs = Date.now() - (thinkingStartTime || Date.now())
-                  // 正式回答开始流出时，默认折叠思考过程，让出核心视线（用户可随时点击展开）
-                  assistantTurn._thinkingOpen = false
-                }
-                assistantTurn.content = accumulatedContent
-                scrollToBottom()
-              },
-            }
-          )
-
-          if (controller.signal.aborted) return
-          assistantTurn.loading = false
-          assistantTurn.isThinking = false
-          if (thinkingStartTime && !assistantTurn.reasoningTimeMs) {
-            assistantTurn.reasoningTimeMs = Date.now() - thinkingStartTime
-          }
-          assistantTurn.content = mimoRes.reply
-          assistantTurn.reasoning = mimoRes.reasoning || assistantTurn.reasoning
-          assistantTurn.candidates = mimoRes.candidates
-          assistantTurn.steps = [{ text: `小米 ${mimoRes.model} 推理完成`, done: true }]
-
-          // 核心：若大模型自主触发了标准 Tool Calling (Function Calling)，即刻调度并挂载行动卡片
-          if (mimoRes.toolCalls?.length) {
-            for (const call of mimoRes.toolCalls) {
-              assistantTurn.steps.push({ text: `自主调用智能工具: ${call.name}`, done: true })
-              if (call.name === 'audit_vault') {
-                const siteRes = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
-                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
-                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
-              } else if (call.name === 'inbox_zero') {
-                const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
-                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
-                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
-              } else if (call.name === 'create_workspace') {
-                const topic = call.arguments?.topic || '精选工作台'
-                assistantTurn.actionCard = {
-                  type: 'custom',
-                  actionName: 'create_topic_workspace',
-                  title: `一键装配「${topic}」`,
-                  desc: `基于模型推理自主规划，将工具一键存入并建构专属笔记工作台`,
-                  buttonText: '一键装配工作台',
-                  payload: {
-                    topic,
-                    candidates: assistantTurn.candidates,
-                  },
-                }
-              } else if (call.name === 'merge_duplicates') {
-                const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
-                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
-                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
-              } else if (call.name === 'heal_deadlinks') {
-                const siteRes = await dispatchSiteCommand('/deadlink', { ds, ui, app: (ui as any).app })
-                if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
-                if (!assistantTurn.content) assistantTurn.content = siteRes.reply
-              } else if (call.name === 'toggle_theme') {
-                const mode = call.arguments?.mode || 'auto'
-                await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app })
-              } else if (call.name === 'change_view') {
-                const layout = call.arguments?.layout || 'grid'
-                await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app })
-              } else if (call.name === 'export_data') {
-                await dispatchSiteCommand('/export', { ds, ui, app: (ui as any).app })
-              }
-            }
-          }
-
-          mimoSuccess = true
-          persistCurrentSession()
-        } catch (mimoErr: unknown) {
-          if (controller.signal.aborted) return
-          console.warn('[ulink AI] MiMo API call failed, falling back to local dataset:', mimoErr)
-        }
-      }
-
-      // 若未开启 MiMo 或 MiMo 请求异常，优雅回退至本地离线知识库
-      if (!mimoSuccess) {
-        const res = await searchWebsitesByIntent(raw, preferences.value, ds.categories, ds.customAttributes)
-        if (controller.signal.aborted) return
-        assistantTurn.loading = false
-        assistantTurn.candidates = res
-        assistantTurn.content = formatFoundCount(res.length)
-      }
-    }
-
-    // 智能挂载行动卡片：当单轮甄选到 3 个及以上候选站点且未挂载卡片时，出具一键装配工作台卡片
-    if (assistantTurn.candidates && assistantTurn.candidates.length >= 3 && !assistantTurn.actionCard) {
-      const topicRaw =
-        raw
-          .replace(/^(?:请?帮?我?)?(?:推荐|找|搜|整理|搭建|介绍|有哪些|看下)?\s*/i, '')
-          .replace(/[?？!！。]+$/, '')
-          .trim()
-          .slice(0, 16) || '精选工具'
-      const cleanTopic =
-        topicRaw.endsWith('工作台') || topicRaw.endsWith('工具箱') ? topicRaw : `${topicRaw} 工作台`
-      assistantTurn.actionCard = {
-        type: 'custom',
-        actionName: 'create_topic_workspace',
-        title: `一键装配「${cleanTopic}」`,
-        desc: `将甄选的 ${assistantTurn.candidates.length} 个工具一键存入并建构专属笔记工作台`,
-        buttonText: '一键装配工作台',
-        payload: {
-          topic: cleanTopic,
-          candidates: assistantTurn.candidates,
-        },
-      }
-    }
-  } catch (err: unknown) {
-    if (controller.signal.aborted) return
-    assistantTurn.loading = false
-    assistantTurn.content = t('ai.searchFailed')
-    console.error('[ulink AI] search error:', err)
-  } finally {
-    // 兜底收尾：任何路径遗留的思考气泡（如 abort 竞态）一律置为已停止，防悬挂
-    if (assistantTurn.loading) {
-      assistantTurn.loading = false
-      if (!assistantTurn.content) assistantTurn.content = t('ai.stopped')
-    }
-
-    // 记录输入历史
-    if (raw && !inputHistory.value.includes(raw)) {
-      inputHistory.value.push(raw)
-      if (inputHistory.value.length > 30) inputHistory.value.shift()
-    }
-    historyCursor = inputHistory.value.length
-
-    // 仅当本次请求仍持有控制器时才收尾共享状态；
-    // 若已被停止/切会话接管（abortInFlight 已收尾持久化），不得覆盖其状态
-    if (currentAbortController === controller) {
-      aiLoading.value = false
-      currentAbortController = null
-      persistCurrentSession()
-      scrollToBottom()
-    }
-  }
-}
-
-function hasUnaddedInTurn(turn: ChatTurn): boolean {
-  return !!turn.candidates?.some(c => !c.isAdded)
-}
-
-function addAllInTurn(turn: ChatTurn) {
-  if (!turn.candidates) return
-  let count = 0
-  for (const c of turn.candidates) {
-    if (!c.isAdded) {
-      ds.addBookmark(candidateToBookmark(ds, c))
-      c.isAdded = true
-      count++
-    }
-  }
-  if (count) saveAppData()
-  toast(t('ai.addedBatchSuccess', { n: count }), true)
-}
 
 /* 移动端下滑关闭手势 */
 const isSwiping = ref(false)

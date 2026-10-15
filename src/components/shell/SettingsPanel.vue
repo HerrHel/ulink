@@ -247,14 +247,24 @@
                 <span class="sp-switch"></span>
               </div>
               <div v-if="mimoEnabled" class="sp-ai-config-box">
-                <label class="sp-ai-label">{{ isZh ? '自定义 API Key（留空则默认使用内置 Key）' : 'Custom API Key (Optional)' }}</label>
+                <label class="sp-ai-label">{{ isZh ? '自定义 API Key（留空即走官方安全通道，无需密钥）' : 'Custom API Key (leave empty to use the official channel)' }}</label>
                 <input
                   v-model="customMiMoKey"
                   type="password"
                   class="sp-ai-input"
-                  :placeholder="isZh ? 'sk-...' : 'sk-...'"
+                  :placeholder="isZh ? '官方通道无需填写' : 'Leave empty for official channel'"
                   @blur="onSaveCustomMiMoKey"
                 />
+                <p class="sp-ai-hint">
+                  {{ isZh
+                    ? '密钥仅保存在本浏览器 localStorage，绝不会写入代码或上传。自填 Key 后将由浏览器直连模型服务；留空则经与链服务端安全转发。'
+                    : 'The key is stored only in this browser\'s localStorage, never bundled or uploaded. With a key, your browser calls the model service directly; without one, requests go through the ULink secure relay.' }}
+                </p>
+                <p class="sp-ai-hint">
+                  {{ isZh
+                    ? '隐私说明：你的提问与相关书签数据（标题/网址）会发送给模型服务以生成回答；解析网页链接时目标 URL 会发送给第三方 r.jina.ai 服务。'
+                    : 'Privacy: your questions and related bookmark data (titles/URLs) are sent to the model service to generate answers; when parsing web links, the target URL is sent to the third-party r.jina.ai service.' }}
+                </p>
               </div>
             </div>
             <!-- 维护 -->

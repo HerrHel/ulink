@@ -8,6 +8,8 @@
 import type { Bookmark, SiblingGroup } from '../../types.js'
 import { domain } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
+import type { ConceptCluster } from './knowledge.js'
+import { CONCEPT_ONTOLOGY } from './knowledge.js'
 
 function _plain(v?: string): string {
   if (!v) return ''
@@ -26,97 +28,6 @@ export interface SemanticMatch {
   matchedConcept: string
   reason: string
 }
-
-interface ConceptCluster {
-  name: string
-  keywords: string[]
-  relatedTerms: string[]
-  domains: string[]
-}
-
-/**
- * 语义概念网络拓扑
- */
-const CONCEPT_ONTOLOGY: ConceptCluster[] = [
-  {
-    name: '流程图与架构白板',
-    keywords: ['流程图', '架构图', '白板', '思维导图', '拓扑图', '关系图', 'uml', '时序图', '画图', '制图', '草图'],
-    relatedTerms: ['flowchart', 'diagram', 'whiteboard', 'mindmap', 'draw', 'sketch', 'graph'],
-    domains: ['excalidraw.com', 'tldraw.com', 'processon.com', 'draw.io', 'diagrams.net', 'eraser.io', 'gitmind.cn', 'xmind.app'],
-  },
-  {
-    name: 'AI 图像与创意生成',
-    keywords: ['ai生图', 'ai绘图', '文生图', '图生图', '绘画模型', '图像生成', '画画', '插画生成', 'lora'],
-    relatedTerms: ['midjourney', 'stable diffusion', 'diffusion', 'civitai', 'dalle', 'flux', 'comfyu', 'leonardo', 'liblib', 'image generation'],
-    domains: ['midjourney.com', 'civitai.com', 'stability.ai', 'leonardo.ai', 'liblib.art'],
-  },
-  {
-    name: 'AI 语言模型与对话',
-    keywords: ['ai对话', '大模型', '语言模型', '智能助手', '问答机器人', '提示词', 'ai搜索', '长文本分析'],
-    relatedTerms: ['chatgpt', 'claude', 'deepseek', 'gemini', 'kimi', 'perplexity', 'doubao', 'openai', 'anthropic', 'ollama', 'llm'],
-    domains: ['chatgpt.com', 'claude.ai', 'deepseek.com', 'perplexity.ai', 'gemini.google.com', 'kimi.moonshot.cn', 'doubao.com'],
-  },
-  {
-    name: 'AI 辅助编程',
-    keywords: ['ai编程', '编程ai', '代码生成', 'ai补全', 'ai写代码', '写代码', '自动代码', '代码编辑器', '编程助手'],
-    relatedTerms: ['cursor', 'copilot', 'v0', 'bolt', 'windsurf', 'cline', 'code generation'],
-    domains: ['cursor.com', 'v0.dev', 'github.com/features/copilot', 'bolt.new'],
-  },
-  {
-    name: '前端开发与状态管理',
-    keywords: ['前端', '组件库', '状态管理', '界面开发', '打包构建', '单页应用'],
-    relatedTerms: ['vue', 'react', 'pinia', 'redux', 'zustand', 'vite', 'tailwind', 'nextjs', 'nuxt', 'svelte', 'typescript', 'css'],
-    domains: ['vuejs.org', 'react.dev', 'pinia.vuejs.org', 'tailwindcss.com', 'vite.dev', 'nextjs.org'],
-  },
-  {
-    name: '后端、接口与数据库',
-    keywords: ['后端', '接口', '数据库', '微服务', '服务端', 'orm', '缓存', 'api调试'],
-    relatedTerms: ['api', 'postman', 'hoppscotch', 'apifox', 'supabase', 'prisma', 'docker', 'postgresql', 'mysql', 'redis', 'node', 'python', 'golang'],
-    domains: ['supabase.com', 'postman.com', 'hoppscotch.io', 'apifox.com', 'docker.com'],
-  },
-  {
-    name: 'UI/UX 界面原型设计',
-    keywords: ['ui设计', '交互原型', '切图', '设计系统', '设计规范', '高保真原型', '配色', '图标库', '矢量图'],
-    relatedTerms: ['figma', 'sketch', 'framer', 'mastergo', 'jsdesign', 'penpot', 'iconify', 'coolors', 'dribbble', 'behance', 'mobbin', 'design'],
-    domains: ['figma.com', 'framer.com', 'mastergo.com', 'iconify.design', 'coolors.co', 'dribbble.com', 'behance.net', 'mobbin.com'],
-  },
-  {
-    name: '笔记、文档与知识管理',
-    keywords: ['笔记', '知识库', '双链笔记', '个人维基', '写作', '文档', '备忘', '闪念', '卡片盒'],
-    relatedTerms: ['notion', 'obsidian', 'logseq', 'wolai', '语雀', '飞书', 'flomo', 'craft', 'flowus', 'markdown', 'wiki', 'notes'],
-    domains: ['notion.so', 'obsidian.md', 'feishu.cn', 'yuque.com', 'flomoapp.com', 'craft.do'],
-  },
-  {
-    name: '流媒体与视频娱乐',
-    keywords: ['看视频', '看剧', '影视', '视频教程', '弹幕', '录屏', '剪辑', '追剧'],
-    relatedTerms: ['bilibili', 'youtube', 'netflix', 'b站', '油管', 'capcut', '剪映', 'video'],
-    domains: ['bilibili.com', 'youtube.com', 'netflix.com'],
-  },
-  {
-    name: '音乐、音频与播客',
-    keywords: ['听歌', '音乐', '播客', '音效', '背景音', '白噪音', '电台'],
-    relatedTerms: ['music', 'podcast', 'audio', 'spotify', '网易云', 'qq音乐', '喜马拉雅', 'sound'],
-    domains: ['spotify.com', 'music.163.com', 'y.qq.com', 'xiaoyuzhoufm.com'],
-  },
-  {
-    name: '开发者社区与技术论坛',
-    keywords: ['技术论坛', '开发者社区', '极客讨论', '问答', '博客', '技术分享'],
-    relatedTerms: ['v2ex', 'zhihu', 'juejin', 'stackoverflow', 'reddit', 'github', '掘金', '知乎', 'community'],
-    domains: ['v2ex.com', 'zhihu.com', 'juejin.cn', 'stackoverflow.com', 'reddit.com'],
-  },
-  {
-    name: '部署、运维与云服务',
-    keywords: ['部署', '云服务器', '域名解析', '反向代理', '边缘计算', '免备案建站', '自动化流水线'],
-    relatedTerms: ['vercel', 'cloudflare', 'netlify', 'railway', 'aliyun', 'aws', 'docker', 'devops', 'hosting'],
-    domains: ['vercel.com', 'cloudflare.com', 'netlify.com', 'railway.app'],
-  },
-  {
-    name: '实用工具箱与在线转换',
-    keywords: ['工具箱', '格式转换', '计算器', '压缩', '正则', 'base64', 'json格式化', 'pdf工具', '时间戳'],
-    relatedTerms: ['tool', 'utility', 'converter', 'regex', 'json', 'pdf', 'calculator'],
-    domains: ['tool.lu', 'caniuse.com', 'json.cn', 'transform.tools'],
-  },
-]
 
 /**
  * 过滤自然语言提问中的停用词与助词

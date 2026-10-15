@@ -34,6 +34,20 @@ export interface ChatActionCard {
   payload?: Record<string, unknown>
 }
 
+/** 模型发起的工具调用（随 assistant 轮持久化，供多轮历史回传） */
+export interface ChatToolCall {
+  id: string
+  name: string
+  arguments?: Record<string, unknown>
+}
+
+/** 工具真实执行结果（随 assistant 轮持久化，多轮对话不再失忆） */
+export interface ChatToolResult {
+  toolCallId: string
+  name: string
+  resultText: string
+}
+
 export interface ChatTurn {
   id: string
   role: 'user' | 'assistant'
@@ -48,6 +62,12 @@ export interface ChatTurn {
   reasoningTimeMs?: number
   isThinking?: boolean
   _thinkingOpen?: boolean
+  /** 本轮模型自主发起的工具调用 */
+  toolCalls?: ChatToolCall[]
+  /** 工具执行的真实结果（含展示用 resultText 与回传用 toolResultText） */
+  toolResults?: ChatToolResult[]
+  /** 工具调用前模型的首轮文本（多轮回传时还原 assistant→tool→assistant 协议链用） */
+  preToolContent?: string
 }
 
 export interface AiChatSession {

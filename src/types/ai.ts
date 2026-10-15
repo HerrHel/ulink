@@ -21,6 +21,7 @@ export interface AiCandidateBookmark {
   icon?: string
   tag?: string          // 业务胶囊，如“开源平替”、“国内直连”、“免登即用”
   highlight?: string    // 核心亮点一句话说明
+  generic?: boolean     // 通用发现入口（非个性化结果），UI 摘要不得称「甄选」
   isAdded?: boolean     // 前端运行时状态：是否已被一键存入站内
 }
 

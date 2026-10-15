@@ -19,11 +19,11 @@ vi.mock('../../lib/ai/siteCommander.js', () => ({
     newBookmarksCount: 2,
     message: '创建成功',
   }),
-  mergeDuplicateBookmarks: vi.fn().mockReturnValue({
+  mergeDuplicateBookmarks: vi.fn().mockResolvedValue({
     mergedCount: 1,
     message: '已合并',
   }),
-  healDeadlink: vi.fn().mockReturnValue({
+  healDeadlink: vi.fn().mockResolvedValue({
     message: '已修复',
   }),
   dispatchSiteCommand: vi.fn().mockResolvedValue({
@@ -31,7 +31,7 @@ vi.mock('../../lib/ai/siteCommander.js', () => ({
     reply: '已清空回收站',
     steps: [{ text: '完成', done: true }],
   }),
-  applyInboxZeroClustering: vi.fn().mockReturnValue({
+  applyInboxZeroClustering: vi.fn().mockResolvedValue({
     movedCount: 2,
     message: '已归类',
   }),
