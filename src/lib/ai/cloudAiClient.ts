@@ -13,25 +13,34 @@ import { getSimilarExternalWebsites } from './similarWebsites.js'
 
 /**
  * 根据偏好过滤与重排候选集
+ * 注意：均为软过滤/软排序——关键词命中即调整，不做强保证；open_source 不排除闭源项，仅前置开源项。
  */
 function filterByPreferences(candidates: AiCandidateBookmark[], prefs: AiSearchPreference[]): AiCandidateBookmark[] {
   if (!prefs.length) return candidates
 
-  return candidates.filter(c => {
+  const filtered = candidates.filter(c => {
     const text = (c.tag + ' ' + c.highlight + ' ' + c.notes + ' ' + c.url).toLowerCase()
     for (const p of prefs) {
       if (p === 'free' && (text.includes('收费') || text.includes('订阅') || text.includes('需付费'))) {
         return false
       }
-      if (p === 'no_proxy' && (text.includes('需翻墙') || text.includes('需要网络代理') || c.url.includes('.gov'))) {
+      // 软过滤：仅按显式文本线索剔除，不做域名后缀臆断
+      if (p === 'no_proxy' && (text.includes('需翻墙') || text.includes('需要网络代理'))) {
         return false
-      }
-      if (p === 'open_source' && !text.includes('开源') && !c.url.includes('github.com')) {
-        // 软性过滤，如果明确要求开源则尽量偏向开源
       }
     }
     return true
   })
+
+  if (prefs.includes('open_source')) {
+    const isOpenSource = (c: AiCandidateBookmark) => {
+      const text = (c.tag + ' ' + c.highlight + ' ' + c.notes + ' ' + c.url).toLowerCase()
+      return text.includes('开源') || c.url.includes('github.com')
+    }
+    filtered.sort((a, b) => Number(isOpenSource(b)) - Number(isOpenSource(a)))
+  }
+
+  return filtered
 }
 
 /**
@@ -186,22 +195,24 @@ export async function searchWebsitesByIntent(
     }
   }
 
-  // 若无强匹配，提取通用兜底推荐
+  // 若无强匹配，提供通用发现入口（如实标注：非个性化结果）
   if (!results.length) {
     results = [
       {
         title: 'GitHub Explore',
         url: 'https://github.com/explore',
-        notes: `全球最大的开源项目探索与技术精选平台，寻找与「${query}」相关的开源利器。`,
+        notes: `通用发现入口（非个性化结果）：可在此搜索与「${query}」相关的开源项目。`,
         tag: '极客开源',
-        highlight: '开源项目策源地',
+        highlight: '通用发现入口（非个性化结果）',
+        generic: true,
       },
       {
         title: 'Product Hunt',
         url: 'https://www.producthunt.com',
-        notes: '全球最新科技产品与创新工具首发策源地，第一时间发掘类似利器。',
+        notes: '通用发现入口（非个性化结果）：全球新产品社区，可自行搜索类似工具。',
         tag: '专业商业',
-        highlight: '全球新奇工具首发社区',
+        highlight: '通用发现入口（非个性化结果）',
+        generic: true,
       },
     ]
   }
@@ -221,8 +232,6 @@ export async function findSimilarWebsites(
   categories: Category[] = [],
   attributes: CustomAttribute[] = []
 ): Promise<AiCandidateBookmark[]> {
-  const dm = domain(targetUrl).toLowerCase()
-
   // 查预置的高频同类映射库
   const similarItems = getSimilarExternalWebsites(targetUrl)
   let candidates: AiCandidateBookmark[] = []
@@ -236,23 +245,8 @@ export async function findSimilarWebsites(
       highlight: item.description,
     }))
   } else {
-    // 启发式泛化推导
-    candidates = [
-      {
-        title: `${targetTitle || '目标'} - 类似方案`,
-        url: `https://alternativeto.net/software/${dm.split('.')[0]}/`,
-        notes: `AlternativeTo 上针对 ${targetTitle || dm} 的社区高赞同类工具聚合。`,
-        tag: '轻量平替',
-        highlight: '全球众包同类工具榜单',
-      },
-      {
-        title: 'Product Hunt 发现',
-        url: 'https://www.producthunt.com',
-        notes: '全球极客新品与同类工具发现平台，汇聚高赞初创产品。',
-        tag: '专业商业',
-        highlight: '全球科技新品发掘',
-      },
-    ]
+    // 无真实平替数据：诚实返回空，不拼猜 alternativeto.net 路径冒充候选
+    candidates = []
   }
 
   const filtered = filterByPreferences(candidates, preferences)

@@ -14,6 +14,7 @@ import { editorOverlayEn } from './parts/editorOverlay.js'
 import { shareAppEn } from './parts/shareApp.js'
 import { programmaticEn } from './parts/programmatic.js'
 import { aiEn } from './parts/aiPro.js'
+import { aiCmdEn } from './parts/aiCommander.js'
 
 export const en = {
   app: {
@@ -445,4 +446,5 @@ export const en = {
   ...shareAppEn,
   ...programmaticEn,
   ...aiEn,
+  ...aiCmdEn,
 } as const

@@ -26,6 +26,7 @@ import { showConfirm } from '../toast.js'
 import { candidateToBookmark } from './candidateSave.js'
 import { inlineCardHTML } from '../../composables/useInlineCard.js'
 import { searchWebsitesByIntent, findSimilarWebsites } from './cloudAiClient.js'
+import { t } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import type { ChatTurnStep, ChatActionCard } from './chatSessions.js'
@@ -96,16 +97,24 @@ export function setLastUndoableAction(action: UndoableAction | null): void {
 }
 
 /**
- * 查重并一键合并所有重复项
+ * 查重并一键合并所有重复项（函数级 HITL：合并前强制二次确认，不依赖 UI 层）
  */
-export function mergeDuplicateBookmarks(
+export async function mergeDuplicateBookmarks(
   context?: SiteCommanderContext,
-): { mergedCount: number; message: string } {
+): Promise<{ mergedCount: number; message: string }> {
   const ds = context?.ds ?? useDataStore()
   const app = context?.app ?? useAppStore()
   const dups = findDuplicateCandidates(ds.bookmarks)
   if (!dups || dups.length === 0) {
-    return { mergedCount: 0, message: '未发现可合并的重复书签。' }
+    return { mergedCount: 0, message: t('aiCmd.mergeNone') }
+  }
+
+  const totalDupCount = dups.reduce((n, c) => n + c.duplicates.filter((d) => !d.deletedAt).length, 0)
+  const confirmed = await showConfirm(
+    t('aiCmd.mergeConfirm', { groups: dups.length, count: totalDupCount }),
+  )
+  if (!confirmed) {
+    return { mergedCount: 0, message: t('aiCmd.mergeCancelled') }
   }
 
   let mergedCount = 0
@@ -124,29 +133,30 @@ export function mergeDuplicateBookmarks(
     app.save()
     pushUndoAction({
       type: 'merge_dedup',
-      description: `合并 ${mergedCount} 个重复书签`,
+      description: t('aiCmd.undoMergeDesc', { n: mergedCount }),
       revert: () => {
         for (const id of deletedIds) {
           ds.restoreBookmark(id)
         }
         app.save()
-        return `已撤销查重合并，${deletedIds.length} 个书签副本已从回收站还原。`
+        return t('aiCmd.undoMergeRevert', { n: deletedIds.length })
       },
     })
   }
 
   return {
     mergedCount,
-    message: `已合并 ${mergedCount} 个重复书签副本，数据已移入回收站。`,
+    message: t('aiCmd.mergeDone', { n: mergedCount }),
   }
 }
 
 /**
  * 执行「收件箱清零」：将待整理书签批量移动至推荐的对应分类中
+ * 危险操作：函数级强制用户确认（HITL），拒绝则不做任何修改
  */
-export function applyInboxZeroClustering(
+export async function applyInboxZeroClustering(
   context?: SiteCommanderContext,
-): { movedCount: number; message: string } {
+): Promise<{ movedCount: number; message: string }> {
   const ds = context?.ds ?? useDataStore()
   const app = context?.app ?? useAppStore()
 
@@ -163,7 +173,17 @@ export function applyInboxZeroClustering(
   )
 
   if (assignableClusters.length === 0) {
-    return { movedCount: 0, message: '未找到可明确归类的未分类书签。' }
+    return { movedCount: 0, message: t('aiCmd.inboxNone') }
+  }
+
+  // 函数级 HITL：批量改写分类属危险操作，必须显式确认（不依赖调用方自律）
+  const totalMoveCount = assignableClusters.reduce(
+    (n, c) => n + c.bookmarks.filter((b) => b && !b.deletedAt).length,
+    0,
+  )
+  const confirmed = await showConfirm(t('aiCmd.inboxConfirm', { count: totalMoveCount }))
+  if (!confirmed) {
+    return { movedCount: 0, message: t('aiCmd.inboxCancelled') }
   }
 
   let movedCount = 0
@@ -184,26 +204,26 @@ export function applyInboxZeroClustering(
     app.save()
     pushUndoAction({
       type: 'inbox_zero',
-      description: `智能归拢 ${movedCount} 个未分类书签`,
+      description: t('aiCmd.undoInboxDesc', { n: movedCount }),
       revert: () => {
         for (const item of revertMap) {
           ds.updateBookmark(item.id, { categoryId: item.prevCatId })
         }
         app.save()
-        return `已撤销智能归类，${revertMap.length} 个书签已还原原分类。`
+        return t('aiCmd.undoInboxRevert', { n: revertMap.length })
       },
     })
   }
 
   return {
     movedCount,
-    message: `已将 ${movedCount} 个未分类书签智能归入对应分类，可在下方撤销。`,
+    message: t('aiCmd.inboxDone', { n: movedCount }),
   }
 }
 
 export interface CreateTopicWorkspaceResult {
   success: boolean
-  group: SiblingGroup
+  group: SiblingGroup | null
   createdBmIds: string[]
   totalBookmarks: number
   message: string
@@ -244,13 +264,14 @@ export async function createTopicWorkspace(
     items = await searchWebsitesByIntent(topicName, [], ds.categories, ds.customAttributes)
   }
   if (!items || items.length === 0) {
-    items = [
-      {
-        title: topicName,
-        url: 'https://github.com',
-        notes: `围绕「${topicName}」构建的主题工作台精选。`,
-      },
-    ]
+    // 诚实返回空结果：不伪造 github.com 占位书签冒充个性化推荐
+    return {
+      success: false,
+      group: null,
+      createdBmIds: [],
+      totalBookmarks: 0,
+      message: t('aiCmd.wsNoCandidates', { name: topicName }),
+    }
   }
 
   // 3. 将候选书签存入（若同 URL 已存在则复用已有书签，避免重复添加副本）
@@ -267,12 +288,7 @@ export async function createTopicWorkspace(
       savedBookmarks.push(existing)
     } else {
       const bm = candidateToBookmark(ds, { ...c, categoryId: finalCatId })
-      if (typeof ds.addBookmark === 'function') {
-        ds.addBookmark(bm)
-      } else {
-        ds.bookmarks.push(bm)
-        if (ds.bookmarkMap) ds.bookmarkMap[bm.id] = bm
-      }
+      ds.addBookmark(bm)
       createdBmIds.push(bm.id)
       allBookmarkIds.push(bm.id)
       savedBookmarks.push(bm)
@@ -295,7 +311,7 @@ export async function createTopicWorkspace(
       ? topicName
       : `${topicName} 工作台`
 
-  let initialNotes = `<p><strong>${esc(cleanName)}</strong> 专属主题导航与精选工具：</p><p>`
+  let initialNotes = `<p>${t('aiCmd.wsNotesIntro', { name: esc(cleanName) })}</p><p>`
   for (const b of savedBookmarks) {
     initialNotes += inlineCardHTML(b) + ' '
   }
@@ -315,12 +331,7 @@ export async function createTopicWorkspace(
     useCount: 0,
   }
 
-  if (typeof ds.addGroup === 'function') {
-    ds.addGroup(group)
-  } else {
-    ds.siblingGroups.push(group)
-    if (ds.groupMap) ds.groupMap[group.id] = group
-  }
+  ds.addGroup(group)
   app.save?.()
 
   // 5. 视图平滑联动：切换至目标分类，并进入该组聚焦模式
@@ -330,21 +341,17 @@ export async function createTopicWorkspace(
   // 6. 注册撤销环路 (UndoableAction)
   pushUndoAction({
     type: 'topic_workspace',
-    description: `创建主题工作台「${group.name}」`,
+    description: t('aiCmd.undoWsDesc', { name: group.name }),
     revert: () => {
-      if (typeof ds.deleteGroup === 'function') {
-        ds.deleteGroup(group.id)
-      }
+      ds.deleteGroup(group.id)
       for (const bid of createdBmIds) {
-        if (typeof ds.deleteBookmark === 'function') {
-          ds.deleteBookmark(bid)
-        }
+        ds.deleteBookmark(bid)
       }
       if (ui.focusedGroupId === group.id) {
         ui.focusedGroupId = null
       }
       app.save?.()
-      return `已撤销创建主题工作台「${group.name}」，新建笔记组与 ${createdBmIds.length} 个书签已清理。`
+      return t('aiCmd.undoWsRevert', { name: group.name, n: createdBmIds.length })
     },
   })
 
@@ -353,7 +360,7 @@ export async function createTopicWorkspace(
     group,
     createdBmIds,
     totalBookmarks: allBookmarkIds.length,
-    message: `已为您成功装配「${group.name}」主题工作台（共收纳 ${allBookmarkIds.length} 个工具），并已切换至该工作台。可在下方随时撤销。`,
+    message: t('aiCmd.wsDone', { name: group.name, n: allBookmarkIds.length }),
   }
 }
 
@@ -365,13 +372,14 @@ export interface HealDeadlinkResult {
 }
 
 /**
- * 平替自愈死链：将失效书签的链接、标题、备注替换为现役平替，解除 dead-link 标记并支持撤销
+ * 平替自愈死链：将失效书签的链接、标题、备注替换为现役平替，解除 dead-link 标记并支持撤销。
+ * 函数级 HITL：改写书签 URL/标题/备注前强制二次确认（不信 UI 层）。
  */
-export function healDeadlink(
+export async function healDeadlink(
   deadBmId: string,
   replacement: AiCandidateBookmark,
   context?: SiteCommanderContext,
-): HealDeadlinkResult {
+): Promise<HealDeadlinkResult> {
   const ds = context?.ds ?? useDataStore()
   const app = context?.app ?? useAppStore()
 
@@ -380,7 +388,14 @@ export function healDeadlink(
     ds.bookmarks.find((b: Bookmark) => b.id === deadBmId)
 
   if (!bm || bm.deletedAt) {
-    return { success: false, message: '未找到指定失效书签或已被删除。' }
+    return { success: false, message: t('aiCmd.healNotFound') }
+  }
+
+  const confirmed = await showConfirm(
+    t('aiCmd.healConfirm', { title: bm.title, alt: replacement.title || replacement.url }),
+  )
+  if (!confirmed) {
+    return { success: false, message: t('aiCmd.healCancelled') }
   }
 
   const prev = {
@@ -406,7 +421,7 @@ export function healDeadlink(
 
   pushUndoAction({
     type: 'heal_deadlink',
-    description: `平替自愈书签「${prev.title}」->「${replacement.title}」`,
+    description: t('aiCmd.undoHealDesc', { from: prev.title, to: replacement.title }),
     revert: () => {
       ds.updateBookmark(deadBmId, {
         title: prev.title,
@@ -416,7 +431,7 @@ export function healDeadlink(
         attributes: prev.attributes,
       })
       app.save?.()
-      return `已撤销平替自愈，书签「${prev.title}」已还原为原链接。`
+      return t('aiCmd.undoHealRevert', { title: prev.title })
     },
   })
 
@@ -424,7 +439,7 @@ export function healDeadlink(
     success: true,
     deadBookmark: bm,
     replacement,
-    message: `已成功将失效书签「${prev.title}」自愈替换为现役平替「${replacement.title}」(${replacement.url})。可在下方随时撤销。`,
+    message: t('aiCmd.healDone', { title: prev.title, alt: replacement.title, url: replacement.url }),
   }
 }
 
@@ -455,61 +470,61 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'help',
       success: true,
-      steps: [{ text: '获取支持的站内指令集', done: true }],
+      steps: [{ text: t('aiCmd.helpStep'), done: true }],
       reply: [
-        '与链 站内操控指令 (In-App Agent)',
+        t('aiCmd.helpTitle'),
         '',
-        '- 资产体检：',
-        '  /health 或“资产体检”',
+        t('aiCmd.helpHealth'),
+        t('aiCmd.helpHealthUsage'),
         '',
-        '- 收件箱清零：',
-        '  /inbox 或“智能归类”、“整理未分类”',
+        t('aiCmd.helpInbox'),
+        t('aiCmd.helpInboxUsage'),
         '',
-        '- 主题工作台：',
-        '  /pack <主题名> 或“帮我搭建一套 前端开发 工作台”',
+        t('aiCmd.helpPack'),
+        t('aiCmd.helpPackUsage'),
         '',
-        '- 主题模式：',
-        '  /theme dark | light | auto',
-        '  （亦可说：“切换深色模式”、“切浅色”）',
+        t('aiCmd.helpTheme'),
+        t('aiCmd.helpThemeUsage'),
+        t('aiCmd.helpThemeHint'),
         '',
-        '- 视图布局：',
-        '  /view grid | list | compact',
-        '  （亦可说：“切换列表视图”、“网格视图”）',
+        t('aiCmd.helpView'),
+        t('aiCmd.helpViewUsage'),
+        t('aiCmd.helpViewHint'),
         '',
-        '- 分类管理：',
-        '  /cat <名称> 或 /cat list',
-        '  （亦可说：“新建分类 影音”、“查看分类”）',
+        t('aiCmd.helpCat'),
+        t('aiCmd.helpCatUsage'),
+        t('aiCmd.helpCatHint'),
         '',
-        '- 回收站：',
-        '  /trash clear 或 /trash',
-        '  （亦可说：“清空回收站”、“打开回收站”）',
+        t('aiCmd.helpTrash'),
+        t('aiCmd.helpTrashUsage'),
+        t('aiCmd.helpTrashHint'),
         '',
-        '- 查找重复：',
-        '  /dedup 或“查找重复书签”',
+        t('aiCmd.helpDedup'),
+        t('aiCmd.helpDedupUsage'),
         '',
-        '- 死链检测与自愈：',
-        '  /deadlink 或“检查死链”、“死链自愈”',
+        t('aiCmd.helpDeadlink'),
+        t('aiCmd.helpDeadlinkUsage'),
         '',
-        '- 导出备份：',
-        '  /export 或“导出数据”、“备份书签”',
+        t('aiCmd.helpExport'),
+        t('aiCmd.helpExportUsage'),
         '',
-        '- 数据统计：',
-        '  /stats 或“书签统计”',
+        t('aiCmd.helpStats'),
+        t('aiCmd.helpStatsUsage'),
         '',
-        '- 批量归类：',
-        '  /move uncategorized <分类名>',
-        '  （亦可说：“把未分类移动到 工作”）',
+        t('aiCmd.helpMove'),
+        t('aiCmd.helpMoveUsage'),
+        t('aiCmd.helpMoveHint'),
         '',
-        '- 撤销操作：',
-        '  /undo 或“撤销刚才的操作”',
+        t('aiCmd.helpUndo'),
+        t('aiCmd.helpUndoUsage'),
         '',
-        '- 清理数据：',
-        '  /clean 或“清理孤立数据”',
+        t('aiCmd.helpClean'),
+        t('aiCmd.helpCleanUsage'),
         '',
-        '- 设置面板：',
-        '  /settings 或“打开设置”',
+        t('aiCmd.helpSettings'),
+        t('aiCmd.helpSettingsUsage'),
         '',
-        '提示：输入网址或自然语言需求时，将自动为您检索全网发现与平替。',
+        t('aiCmd.helpTip'),
       ].join('\n'),
     }
   }
@@ -523,33 +538,33 @@ export async function dispatchSiteCommand(
       return {
         handled: true,
         action: 'theme',
-        steps: [{ text: '切换至深色模式', done: true }],
-        reply: '已切换至深色模式。',
+        steps: [{ text: t('aiCmd.stepToDark'), done: true }],
+        reply: t('aiCmd.themeDarkDone'),
       }
     } else if (mode === 'light') {
       ui.setThemeColor('light')
       return {
         handled: true,
         action: 'theme',
-        steps: [{ text: '切换至浅色模式', done: true }],
-        reply: '已切换至浅色模式。',
+        steps: [{ text: t('aiCmd.stepToLight'), done: true }],
+        reply: t('aiCmd.themeLightDone'),
       }
     } else if (mode === 'auto') {
       if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
       return {
         handled: true,
         action: 'theme',
-        steps: [{ text: '开启跟随系统主题', done: true }],
-        reply: '已开启跟随系统主题。',
+        steps: [{ text: t('aiCmd.stepAutoTheme'), done: true }],
+        reply: t('aiCmd.themeAutoDone'),
       }
     } else {
       ui.toggleTheme()
-      const current = ui.themeColor === 'dark' ? '深色' : '浅色'
+      const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
       return {
         handled: true,
         action: 'theme',
-        steps: [{ text: '反转主题模式', done: true }],
-        reply: `已切换主题（当前为 ${current}）。`,
+        steps: [{ text: t('aiCmd.stepToggleTheme'), done: true }],
+        reply: t('aiCmd.themeToggled', { mode: current }),
       }
     }
   }
@@ -564,8 +579,8 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'theme',
-      steps: [{ text: '切换至深色模式', done: true }],
-      reply: '已切换至深色模式。',
+      steps: [{ text: t('aiCmd.stepToDark'), done: true }],
+      reply: t('aiCmd.themeDarkDone'),
     }
   }
 
@@ -579,8 +594,8 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'theme',
-      steps: [{ text: '切换至浅色模式', done: true }],
-      reply: '已切换至浅色模式。',
+      steps: [{ text: t('aiCmd.stepToLight'), done: true }],
+      reply: t('aiCmd.themeLightDone'),
     }
   }
 
@@ -594,8 +609,8 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'theme',
-      steps: [{ text: '开启跟随系统主题', done: true }],
-      reply: '已开启跟随系统主题。',
+      steps: [{ text: t('aiCmd.stepAutoTheme'), done: true }],
+      reply: t('aiCmd.themeAutoDone'),
     }
   }
 
@@ -604,12 +619,12 @@ export async function dispatchSiteCommand(
     /^(?:toggle\s+theme|change\s+theme|switch\s+theme)$/i.test(query.trim())
   ) {
     ui.toggleTheme()
-    const current = ui.themeColor === 'dark' ? '深色' : '浅色'
+    const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
     return {
       handled: true,
       action: 'theme',
-      steps: [{ text: '反转主题模式', done: true }],
-      reply: `已切换主题（当前为 ${current}）。`,
+      steps: [{ text: t('aiCmd.stepToggleTheme'), done: true }],
+      reply: t('aiCmd.themeToggled', { mode: current }),
     }
   }
 
@@ -620,12 +635,16 @@ export async function dispatchSiteCommand(
     const targetMode = rawMode === 'compact' ? 'mini-grid' : (rawMode as 'grid' | 'list' | 'mini-grid')
     ui.layoutMode = targetMode
     ui.saveUIState?.()
-    const nameMap = { grid: '宫格视图', list: '列表视图', 'mini-grid': '紧凑视图' }
+    const nameMap: Record<'grid' | 'list' | 'mini-grid', string> = {
+      grid: t('aiCmd.viewNameGrid'),
+      list: t('aiCmd.viewNameList'),
+      'mini-grid': t('aiCmd.viewNameCompact'),
+    }
     return {
       handled: true,
       action: 'view',
-      steps: [{ text: `切换至${nameMap[targetMode]}`, done: true }],
-      reply: `已切换至${nameMap[targetMode]}。`,
+      steps: [{ text: t('aiCmd.stepToView', { name: nameMap[targetMode] }), done: true }],
+      reply: t('aiCmd.viewDone', { name: nameMap[targetMode] }),
     }
   }
 
@@ -638,8 +657,8 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'view',
-      steps: [{ text: '切换至列表视图', done: true }],
-      reply: '已切换至列表视图。',
+      steps: [{ text: t('aiCmd.stepToView', { name: t('aiCmd.viewNameList') }), done: true }],
+      reply: t('aiCmd.viewDone', { name: t('aiCmd.viewNameList') }),
     }
   }
 
@@ -652,8 +671,8 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'view',
-      steps: [{ text: '切换至宫格视图', done: true }],
-      reply: '已切换至宫格视图。',
+      steps: [{ text: t('aiCmd.stepToView', { name: t('aiCmd.viewNameGrid') }), done: true }],
+      reply: t('aiCmd.viewDone', { name: t('aiCmd.viewNameGrid') }),
     }
   }
 
@@ -666,27 +685,27 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'view',
-      steps: [{ text: '切换至紧凑视图', done: true }],
-      reply: '已切换至紧凑视图。',
+      steps: [{ text: t('aiCmd.stepToView', { name: t('aiCmd.viewNameCompact') }), done: true }],
+      reply: t('aiCmd.viewDone', { name: t('aiCmd.viewNameCompact') }),
     }
   }
 
   // ── 4. 分类管理 (/cat, 新建分类) ──
   if (/^\/cat\s+list$/i.test(query) || /^(?:分类列表|查看分类|所有分类)$/i.test(query)) {
     const activeCats = ds.categories.filter((c: Category) => !c.deletedAt)
-    const lines = ['当前全部分类：', '']
+    const lines = [t('aiCmd.catListHeader'), '']
     for (const cat of activeCats) {
       const count = ds.bookmarks.filter((b) => !b.deletedAt && b.categoryId === cat.id).length
-      lines.push(`- ${cat.name} (${count} 个书签)`)
+      lines.push(t('aiCmd.catListLine', { name: cat.name, n: count }))
     }
     const uncatCount = ds.bookmarks.filter(
       (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId,
     ).length
-    lines.push(`- 未分类 (${uncatCount} 个书签)`)
+    lines.push(t('aiCmd.catListLine', { name: t('aiCmd.catListUncategorized'), n: uncatCount }))
     return {
       handled: true,
       action: 'category_list',
-      steps: [{ text: '读取全库分类列表', done: true }],
+      steps: [{ text: t('aiCmd.stepReadCats'), done: true }],
       reply: lines.join('\n'),
     }
   }
@@ -697,7 +716,7 @@ export async function dispatchSiteCommand(
   if (catName) {
     const trimmed = catName.trim()
     if (!trimmed) {
-      return { handled: true, action: 'category_add', success: false, reply: '分类名称不能为空。' }
+      return { handled: true, action: 'category_add', success: false, reply: t('aiCmd.catNameEmpty') }
     }
     const exists = ds.categories.some(
       (c: Category) => !c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase(),
@@ -707,19 +726,19 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'category_add',
         success: false,
-        steps: [{ text: `检查分类「${trimmed}」是否已存在`, done: true }],
-        reply: `分类「${trimmed}」已存在，无需重复创建。`,
+        steps: [{ text: t('aiCmd.stepCheckCatExists', { name: trimmed }), done: true }],
+        reply: t('aiCmd.catExists', { name: trimmed }),
       }
     }
     const created = addNewCategory(trimmed, app)
     if (created) {
       pushUndoAction({
         type: 'category_add',
-        description: `新建分类「${trimmed}」`,
+        description: t('aiCmd.undoCatDesc', { name: trimmed }),
         revert: () => {
           ds.deleteCategory(created.id)
           app.save()
-          return `已撤销新建分类「${trimmed}」。`
+          return t('aiCmd.undoCatRevert', { name: trimmed })
         },
       })
       return {
@@ -727,13 +746,13 @@ export async function dispatchSiteCommand(
         action: 'category_add',
         success: true,
         steps: [
-          { text: '校验分类名称', done: true },
-          { text: `创建分类「${trimmed}」`, done: true },
+          { text: t('aiCmd.stepValidateCat'), done: true },
+          { text: t('aiCmd.stepCreateCat', { name: trimmed }), done: true },
         ],
-        reply: `分类「${trimmed}」创建成功。`,
+        reply: t('aiCmd.catCreated', { name: trimmed }),
       }
     }
-    return { handled: true, action: 'category_add', success: false, reply: '创建分类失败。' }
+    return { handled: true, action: 'category_add', success: false, reply: t('aiCmd.catCreateFailed') }
   }
 
   // ── 5. 回收站管理 (/trash, 清空回收站, 打开回收站) ──
@@ -750,22 +769,22 @@ export async function dispatchSiteCommand(
       return {
         handled: true,
         action: 'trash_clear',
-        steps: [{ text: '检查回收站状态', done: true }],
-        reply: '回收站当前为空，无需清理。',
+        steps: [{ text: t('aiCmd.stepCheckTrash'), done: true }],
+        reply: t('aiCmd.trashEmpty'),
       }
     }
 
     // Agent 危险操作人机确认 (Human-in-the-Loop)
     const confirmed = await showConfirm(
-      `危险操作确认：即将彻底清空回收站，永久删除 ${total} 项数据（书签: ${bms}，笔记组: ${grps}，分类: ${cats}）。\n此操作不可撤销，是否确认执行？`,
+      t('aiCmd.trashClearConfirm', { total, bm: bms, grp: grps, cat: cats }),
     )
     if (!confirmed) {
       return {
         handled: true,
         action: 'trash_clear',
         success: false,
-        steps: [{ text: '用户取消清空回收站', done: true }],
-        reply: '已取消清空回收站，所有数据均安全保留。',
+        steps: [{ text: t('aiCmd.stepUserCancelTrash'), done: true }],
+        reply: t('aiCmd.trashClearCancelled'),
       }
     }
 
@@ -775,11 +794,11 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'trash_clear',
       steps: [
-        { text: `核验待清理数据 (${total} 项)`, done: true },
-        { text: '通过人机安全确认', done: true },
-        { text: '彻底清空回收站', done: true },
+        { text: t('aiCmd.stepVerifyTrash', { n: total }), done: true },
+        { text: t('aiCmd.stepHitlPassed'), done: true },
+        { text: t('aiCmd.stepDoEmptyTrash'), done: true },
       ],
-      reply: `已彻底清空回收站，共永久清理 ${total} 项数据（书签: ${bms}，笔记组: ${grps}，分类: ${cats}）。`,
+      reply: t('aiCmd.trashCleared', { total, bm: bms, grp: grps, cat: cats }),
     }
   }
 
@@ -793,18 +812,18 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'trash_open',
-      steps: [{ text: '打开回收站面板', done: true }],
+      steps: [{ text: t('aiCmd.stepOpenTrash'), done: true }],
       actionCard:
         total > 0
           ? {
               type: 'trash',
-              title: '清空回收站',
-              desc: `当前积压 ${total} 项待清理数据（书签: ${bms}，组: ${grps}）`,
-              buttonText: '彻底清空',
+              title: t('aiCmd.trashCardTitle'),
+              desc: t('aiCmd.trashCardDesc', { total, bm: bms, grp: grps }),
+              buttonText: t('aiCmd.trashCardButton'),
               actionName: 'trash_clear',
             }
           : undefined,
-      reply: total > 0 ? `已为您打开回收站面板（当前共有 ${total} 项待清理）。` : '已为您打开回收站面板（当前为空）。',
+      reply: total > 0 ? t('aiCmd.trashOpened', { n: total }) : t('aiCmd.trashOpenedEmpty'),
     }
   }
 
@@ -820,40 +839,45 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'dedup',
         steps: [
-          { text: '扫描书签库全部链接', done: true },
-          { text: '比对未发现重复项', done: true },
+          { text: t('aiCmd.stepScanUrls'), done: true },
+          { text: t('aiCmd.stepNoDupFound'), done: true },
         ],
-        reply: '书签库整洁，未发现重复链接。',
+        reply: t('aiCmd.dedupClean'),
       }
     }
     const dupCount = dups.reduce((acc, d) => acc + d.duplicates.length, 0)
     const lines = [
-      `查重检测：发现 ${dups.length} 组重复链接（共 ${dupCount} 个多余副本）：`,
+      t('aiCmd.dedupReport', { groups: dups.length, count: dupCount }),
       '',
     ]
     const previewItems = dups.slice(0, 5)
     for (let i = 0; i < previewItems.length; i++) {
       const d = previewItems[i]
-      lines.push(`${i + 1}. ${d.primary.title || '无标题'}`)
-      lines.push(`   主链接: ${d.normalizedUrl}`)
-      lines.push(`   重复副本: ${d.duplicates.length} 个（${d.duplicates.map((dup) => dup.title || '无标题').join(', ')}）`)
+      lines.push(`${i + 1}. ${d.primary.title || t('aiCmd.untitled')}`)
+      lines.push(t('aiCmd.dedupMainUrl', { url: d.normalizedUrl }))
+      lines.push(
+        t('aiCmd.dedupCopies', {
+          n: d.duplicates.length,
+          titles: d.duplicates.map((dup) => dup.title || t('aiCmd.untitled')).join(', '),
+        }),
+      )
     }
     if (dups.length > 5) {
-      lines.push(`...其余 ${dups.length - 5} 组已省略。`)
+      lines.push(t('aiCmd.dedupMore', { n: dups.length - 5 }))
     }
 
     return {
       handled: true,
       action: 'dedup',
       steps: [
-        { text: '扫描书签库全部链接', done: true },
-        { text: `比对发现 ${dups.length} 组重复`, done: true },
+        { text: t('aiCmd.stepScanUrls'), done: true },
+        { text: t('aiCmd.stepDupFound', { n: dups.length }), done: true },
       ],
       actionCard: {
         type: 'dedup',
-        title: '合并重复书签',
-        desc: `检测到 ${dups.length} 组重复链接，共 ${dupCount} 个多余副本`,
-        buttonText: '一键合并重复项',
+        title: t('aiCmd.dedupCardTitle'),
+        desc: t('aiCmd.dedupCardDesc', { groups: dups.length, count: dupCount }),
+        buttonText: t('aiCmd.dedupCardButton'),
         actionName: 'merge_dedup',
       },
       reply: lines.join('\n'),
@@ -875,17 +899,17 @@ export async function dispatchSiteCommand(
       return {
         handled: true,
         action: 'pack_workspace',
-        steps: [{ text: '提示主题工作台指令用法', done: true }],
+        steps: [{ text: t('aiCmd.stepPackHint'), done: true }],
         reply: [
-          '主题工作台一键生成器 (Topic Workspace Builder)',
+          t('aiCmd.packHelpTitle'),
           '',
-          '用法：/pack <主题名称>',
-          '示例：',
-          '- /pack 前端开发',
-          '- /pack 设计灵感',
-          '- 亦可直接对我说：“帮我搭建一套独立开发工作台”',
+          t('aiCmd.packHelpUsage'),
+          t('aiCmd.packHelpExamplesLabel'),
+          t('aiCmd.packHelpExample1'),
+          t('aiCmd.packHelpExample2'),
+          t('aiCmd.packHelpExample3'),
           '',
-          'AI 将为您甄选全套核心工具，并出具一键装配行动卡片，自动建组并写入内嵌卡片导航笔记。',
+          t('aiCmd.packHelpDesc'),
         ].join('\n'),
       }
     }
@@ -895,20 +919,18 @@ export async function dispatchSiteCommand(
     const previewList = candidates.slice(0, 5)
 
     const lines = [
-      `已为您规划「${topicName}」主题工作台，甄选到以下 ${candidates.length} 个核心工具：`,
+      t('aiCmd.packPlan', { topic: topicName, n: candidates.length }),
       '',
     ]
     for (let i = 0; i < previewList.length; i++) {
       const c = previewList[i]
-      lines.push(`${i + 1}. ${c.title} — ${c.notes || c.url}`)
+      lines.push(t('aiCmd.packItem', { i: i + 1, title: c.title, desc: c.notes || c.url }))
     }
     if (candidates.length > 5) {
-      lines.push(`...其余 ${candidates.length - 5} 个已省略。`)
+      lines.push(t('aiCmd.packMore', { n: candidates.length - 5 }))
     }
     lines.push('')
-    lines.push(
-      '点击下方行动卡片批准执行，即可一键自动入库、创建笔记组并挂载内嵌卡片进入工作台（随时支持 /undo 撤销）。',
-    )
+    lines.push(t('aiCmd.packCta'))
 
     const cleanTopic =
       topicName.endsWith('工作台') || topicName.endsWith('工具箱')
@@ -919,16 +941,16 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'pack_workspace',
       steps: [
-        { text: `全网甄选「${topicName}」核心工具 (${candidates.length} 个)`, done: true },
-        { text: '生成主题工作台装配方案与交互卡片', done: true },
+        { text: t('aiCmd.stepPackSelect', { topic: topicName, n: candidates.length }), done: true },
+        { text: t('aiCmd.stepPackPlan'), done: true },
       ],
       reply: lines.join('\n'),
       actionCard: {
         type: 'custom',
         actionName: 'create_topic_workspace',
-        title: `一键装配「${cleanTopic}」`,
-        desc: `包含 ${candidates.length} 个精选工具，自动建组并生成导航笔记`,
-        buttonText: '一键装配工作台',
+        title: t('aiCmd.packCardTitle', { name: cleanTopic }),
+        desc: t('aiCmd.packCardDesc', { n: candidates.length }),
+        buttonText: t('aiCmd.packCardButton'),
         payload: {
           topic: cleanTopic,
           candidates,
@@ -954,8 +976,8 @@ export async function dispatchSiteCommand(
       return {
         handled: true,
         action: 'deadlinks',
-        steps: [{ text: '扫描书签库失效链接', done: true }],
-        reply: '当前暂未检测到确认失效的死链。已为您打开死链巡检面板，您可在此启动全面在线探测。',
+        steps: [{ text: t('aiCmd.stepScanDeadlinks'), done: true }],
+        reply: t('aiCmd.deadNone'),
       }
     }
 
@@ -970,28 +992,30 @@ export async function dispatchSiteCommand(
     const bestAlt = alts[0]
 
     const lines = [
-      `死链巡检报告：发现 ${deadBookmarks.length} 个失效死链：`,
+      t('aiCmd.deadReport', { n: deadBookmarks.length }),
       '',
     ]
     for (let i = 0; i < Math.min(3, deadBookmarks.length); i++) {
       const b = deadBookmarks[i]
       const wbUrl = `https://web.archive.org/web/*/${encodeURIComponent(b.url)}`
-      lines.push(`${i + 1}. ${b.title || '无标题'} (${b.url})`)
-      lines.push(`   历史快照: [查看 Wayback Machine 镜像](${wbUrl})`)
+      lines.push(t('aiCmd.deadItem', { i: i + 1, title: b.title || t('aiCmd.untitled'), url: b.url }))
+      lines.push(t('aiCmd.deadSnapshot', { url: wbUrl }))
     }
     if (deadBookmarks.length > 3) {
-      lines.push(`...其余 ${deadBookmarks.length - 3} 个已省略。`)
+      lines.push(t('aiCmd.deadMore', { n: deadBookmarks.length - 3 }))
     }
 
     if (bestAlt) {
       lines.push('')
-      lines.push(`针对首个死链「${firstDead.title}」，AI 已检索到最佳现役平替：`)
-      lines.push(`- 推荐平替：${bestAlt.title} (${bestAlt.url})`)
-      lines.push(`- 亮点说明：${bestAlt.notes || bestAlt.highlight || '功能高度一致的现役平替'}`)
-      lines.push('')
+      lines.push(t('aiCmd.deadAltIntro', { title: firstDead.title }))
+      lines.push(t('aiCmd.deadAltRec', { title: bestAlt.title, url: bestAlt.url }))
       lines.push(
-        '点击下方行动卡片，即可一键将该死链无缝替换为现役平替（组与历史关联完整保留，随时支持 /undo 撤销）。',
+        t('aiCmd.deadAltHighlight', {
+          desc: bestAlt.notes || bestAlt.highlight || t('aiCmd.deadAltDefaultHighlight'),
+        }),
       )
+      lines.push('')
+      lines.push(t('aiCmd.deadCta'))
     }
 
     let actionCard: ChatActionCard | undefined
@@ -999,9 +1023,9 @@ export async function dispatchSiteCommand(
       actionCard = {
         type: 'custom',
         actionName: 'heal_deadlink',
-        title: `一键平替自愈：${firstDead.title} -> ${bestAlt.title}`,
-        desc: `用现役平替「${bestAlt.title}」一键替换失效链接，保留组与历史关联`,
-        buttonText: '一键平替替换',
+        title: t('aiCmd.healCardTitle', { from: firstDead.title, to: bestAlt.title }),
+        desc: t('aiCmd.healCardDesc', { alt: bestAlt.title }),
+        buttonText: t('aiCmd.healCardButton'),
         payload: {
           deadBmId: firstDead.id,
           replacement: bestAlt,
@@ -1013,8 +1037,8 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'deadlinks',
       steps: [
-        { text: `检测到 ${deadBookmarks.length} 个失效书签`, done: true },
-        { text: `为「${firstDead.title}」检索现役平替`, done: true },
+        { text: t('aiCmd.stepDeadFound', { n: deadBookmarks.length }), done: true },
+        { text: t('aiCmd.stepDeadSearchAlt', { title: firstDead.title }), done: true },
       ],
       reply: lines.join('\n'),
       actionCard,
@@ -1031,10 +1055,10 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'export',
       steps: [
-        { text: '生成全量数据快照', done: true },
-        { text: '触发浏览器下载', done: true },
+        { text: t('aiCmd.stepExportSnapshot'), done: true },
+        { text: t('aiCmd.stepExportDownload'), done: true },
       ],
-      reply: '已生成全量 JSON 数据备份并触发下载，请留意浏览器下载提示。',
+      reply: t('aiCmd.exportDone'),
     }
   }
 
@@ -1057,22 +1081,23 @@ export async function dispatchSiteCommand(
       ds.categories.filter((c: Category) => c.deletedAt).length
 
     const reply = [
-      '与链 书签库运行状态报表：',
+      t('aiCmd.statsTitle'),
       '',
-      `- 活跃顶层书签：${topBookmarks} 个`,
-      `- 子书签（附属）：${subBookmarks} 个`,
-      `- 活跃笔记组：${groups} 组`,
-      `- 分类体系：${cats} 个分类`,
-      `- 待整理未分类：${uncat} 个`,
-      `- 回收站待清理：${trashTotal} 项`,
+      t('aiCmd.statsTop', { n: topBookmarks }),
+      t('aiCmd.statsSub', { n: subBookmarks }),
+      t('aiCmd.statsGroups', { n: groups }),
+      t('aiCmd.statsCats', { n: cats }),
+      t('aiCmd.statsUncat', { n: uncat }),
+      t('aiCmd.statsTrash', { n: trashTotal }),
       '',
-      '整洁度评分：' + (uncat === 0 && trashTotal === 0 ? '优（无待处理项）' : '良好'),
+      t('aiCmd.statsTidiness') +
+        (uncat === 0 && trashTotal === 0 ? t('aiCmd.statsTidinessGood') : t('aiCmd.statsTidinessFair')),
     ].join('\n')
 
     return {
       handled: true,
       action: 'stats',
-      steps: [{ text: '统计全库活跃书签与分类体系', done: true }],
+      steps: [{ text: t('aiCmd.stepStats'), done: true }],
       reply,
     }
   }
@@ -1125,30 +1150,42 @@ export async function dispatchSiteCommand(
 
     const level =
       score >= 90
-        ? '极佳（极客级整洁）'
+        ? t('aiCmd.levelExcellent')
         : score >= 75
-          ? '良好（轻度待归拢）'
+          ? t('aiCmd.levelGood')
           : score >= 60
-            ? '中等（建议全面治理）'
-            : '较乱（亟待整理清零）'
+            ? t('aiCmd.levelFair')
+            : t('aiCmd.levelPoor')
 
     const reply = [
-      '与链 全库资产健康体检诊断报告',
+      t('aiCmd.healthTitle'),
       '',
-      `综合健康指数：${score} 分 · ${level}`,
+      t('aiCmd.healthScore', { score, level }),
       '',
-      '诊断明细指标：',
-      `- 活跃书签总数：${totalCount} 个`,
-      `- 待整理未分类：${healthStats.uncategorizedCount} 个 ${healthStats.uncategorizedCount > 0 ? '(建议归类)' : '(已清零)'}`,
-      `- 重复冗余副本：${healthStats.duplicateCount} 个 ${healthStats.duplicateCount > 0 ? '(可一键合并)' : '(无重复)'}`,
-      `- 标签体系覆盖：${tagCoverage}% ${tagCoverage < 60 ? '(建议打标)' : '(良好)'}`,
-      `- 回收站暂存项：${trashTotal} 项 ${trashTotal > 10 ? '(建议清空)' : ''}`,
+      t('aiCmd.healthDetail'),
+      t('aiCmd.healthTotal', { n: totalCount }),
+      t('aiCmd.healthUncat', {
+        n: healthStats.uncategorizedCount,
+        hint: healthStats.uncategorizedCount > 0 ? t('aiCmd.healthUncatHint') : t('aiCmd.healthUncatOk'),
+      }),
+      t('aiCmd.healthDup', {
+        n: healthStats.duplicateCount,
+        hint: healthStats.duplicateCount > 0 ? t('aiCmd.healthDupHint') : t('aiCmd.healthDupOk'),
+      }),
+      t('aiCmd.healthTagCoverage', {
+        pct: tagCoverage,
+        hint: tagCoverage < 60 ? t('aiCmd.healthTagHint') : t('aiCmd.healthTagOk'),
+      }),
+      t('aiCmd.healthTrash', {
+        n: trashTotal,
+        hint: trashTotal > 10 ? t('aiCmd.healthTrashHint') : '',
+      }),
       '',
       healthStats.uncategorizedCount > 0
-        ? '管家建议：点击下方行动卡片，开启「收件箱清零」将未分类项一键归入对应分类。'
+        ? t('aiCmd.healthAdviceInbox')
         : healthStats.duplicateCount > 0
-          ? '管家建议：点击下方行动卡片，一键安全合并所有重复书签副本。'
-          : '管家评价：书签资产处于极佳状态，无需额外整理！',
+          ? t('aiCmd.healthAdviceDedup')
+          : t('aiCmd.healthPraise'),
     ].join('\n')
 
     let actionCard: ChatActionCard | undefined
@@ -1156,25 +1193,25 @@ export async function dispatchSiteCommand(
       actionCard = {
         type: 'custom',
         actionName: 'inbox_zero',
-        title: `一键智能归类 ${healthStats.uncategorizedCount} 个未分类书签`,
-        desc: '资产管家已基于历史偏好与特征分析出最佳归类方案',
-        buttonText: '智能归类',
+        title: t('aiCmd.healthInboxCardTitle', { n: healthStats.uncategorizedCount }),
+        desc: t('aiCmd.healthInboxCardDesc'),
+        buttonText: t('aiCmd.healthInboxCardButton'),
       }
     } else if (healthStats.duplicateCount > 0) {
       actionCard = {
         type: 'dedup',
         actionName: 'merge_dedup',
-        title: `一键合并 ${healthStats.duplicateCount} 个重复副本`,
-        desc: '安全移入回收站并保留最佳书签版本',
-        buttonText: '合并重复项',
+        title: t('aiCmd.healthDedupCardTitle', { n: healthStats.duplicateCount }),
+        desc: t('aiCmd.healthDedupCardDesc'),
+        buttonText: t('aiCmd.healthDedupCardButton'),
       }
     } else if (trashTotal > 0) {
       actionCard = {
         type: 'trash',
         actionName: 'trash_clear',
-        title: `清空回收站 (${trashTotal} 项)`,
-        desc: '释放存储空间并清空回收站已删除数据',
-        buttonText: '清空回收站',
+        title: t('aiCmd.healthTrashCardTitle', { n: trashTotal }),
+        desc: t('aiCmd.healthTrashCardDesc'),
+        buttonText: t('aiCmd.healthTrashCardButton'),
       }
     }
 
@@ -1182,8 +1219,8 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'health',
       steps: [
-        { text: '全库扫描未分类、重复与标签覆盖率', done: true },
-        { text: '生成综合健康度评分与治理建议', done: true },
+        { text: t('aiCmd.stepHealthScan'), done: true },
+        { text: t('aiCmd.stepHealthScore'), done: true },
       ],
       reply,
       actionCard,
@@ -1216,37 +1253,40 @@ export async function dispatchSiteCommand(
       return {
         handled: true,
         action: 'inbox_zero',
-        steps: [{ text: '扫描未分类书签', done: true }],
-        reply: '太棒了！当前书签库已实现「收件箱清零（Inbox Zero）」，所有书签均已妥善归类。',
+        steps: [{ text: t('aiCmd.stepScanUncat'), done: true }],
+        reply: t('aiCmd.inboxZeroDone'),
       }
     }
 
     const lines: string[] = [
-      '智能归拢分析完成，已为您生成以下归类预案：',
+      t('aiCmd.inboxPlanHeader'),
       '',
     ]
     for (const c of assignableClusters) {
-      const titles = c.bookmarks.slice(0, 3).map((b) => b.title || b.url).join('、')
-      const more = c.bookmarks.length > 3 ? ` 等 ${c.bookmarks.length} 个` : ` (${c.bookmarks.length} 个)`
-      lines.push(`- 归入「${c.suggestedCategoryName}」：${titles}${more}`)
+      const titles = c.bookmarks.slice(0, 3).map((b) => b.title || b.url).join(t('msg.listSeparator'))
+      const more =
+        c.bookmarks.length > 3
+          ? t('aiCmd.inboxPlanMore', { n: c.bookmarks.length })
+          : t('aiCmd.inboxPlanCount', { n: c.bookmarks.length })
+      lines.push(t('aiCmd.inboxPlanLine', { cat: c.suggestedCategoryName, titles, more }))
     }
     lines.push('')
-    lines.push('点击下方行动卡片批准执行，即可一键批量归拢（随时支持 /undo 撤销）。')
+    lines.push(t('aiCmd.inboxCta'))
 
     return {
       handled: true,
       action: 'inbox_zero',
       steps: [
-        { text: `检测到 ${totalToMove} 个待归类书签`, done: true },
-        { text: '根据历史偏好与域名聚类分析完成', done: true },
+        { text: t('aiCmd.stepInboxDetected', { n: totalToMove }), done: true },
+        { text: t('aiCmd.stepInboxClustered'), done: true },
       ],
       reply: lines.join('\n'),
       actionCard: {
         type: 'custom',
         actionName: 'apply_inbox_zero',
-        title: `批准归类 ${totalToMove} 个未分类书签`,
-        desc: '将上述书签批量移入对应的目标分类并落盘',
-        buttonText: '执行智能归拢',
+        title: t('aiCmd.inboxCardTitle', { n: totalToMove }),
+        desc: t('aiCmd.inboxCardDesc'),
+        buttonText: t('aiCmd.inboxCardButton'),
       },
     }
   }
@@ -1267,7 +1307,7 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'batch_move',
         success: false,
-        reply: `未找到目标分类「${targetName}」。请先输入「/cat ${targetName}」创建该分类。`,
+        reply: t('aiCmd.batchMoveCatNotFound', { name: targetName }),
       }
     }
 
@@ -1291,13 +1331,13 @@ export async function dispatchSiteCommand(
 
       pushUndoAction({
         type: 'batch_move',
-        description: `将 ${movedCount} 个选中的书签移入「${targetCat.name}」`,
+        description: t('aiCmd.undoBatchMoveDesc', { n: movedCount, cat: targetCat.name }),
         revert: () => {
           for (const item of previousMap) {
             ds.updateBookmark(item.id, { categoryId: item.prevCatId })
           }
           app.save()
-          return `已撤销批量移动，${previousMap.length} 个书签已还原原分类。`
+          return t('aiCmd.undoMoveRevert', { n: previousMap.length })
         },
       })
 
@@ -1306,10 +1346,10 @@ export async function dispatchSiteCommand(
         action: 'batch_move',
         success: true,
         steps: [
-          { text: `感知到 ${movedCount} 个勾选书签`, done: true },
-          { text: `批量移入「${targetCat.name}」分类`, done: true },
+          { text: t('aiCmd.stepBatchDetected', { n: movedCount }), done: true },
+          { text: t('aiCmd.stepBatchMove', { cat: targetCat.name }), done: true },
         ],
-        reply: `已成功将选中的 ${movedCount} 个书签移入「${targetCat.name}」分类。`,
+        reply: t('aiCmd.batchMoveDone', { n: movedCount, cat: targetCat.name }),
       }
     }
   }
@@ -1336,7 +1376,7 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'move_uncategorized',
         success: false,
-        reply: `未找到分类「${targetCategoryRaw}」。您可以先输入「/cat ${targetCategoryRaw}」创建该分类。`,
+        reply: t('aiCmd.moveCatNotFound', { name: targetCategoryRaw }),
       }
     }
 
@@ -1353,22 +1393,22 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'move_uncategorized',
         success: true,
-        reply: `当前没有待整理的未分类书签。`,
+        reply: t('aiCmd.moveNone'),
       }
     }
 
     // 若未分类数量较大（例如 > 5 个），进行二次确认保护
     if (uncatBms.length > 5) {
       const confirmed = await showConfirm(
-        `即将把 ${uncatBms.length} 个未分类书签批量移动至「${targetCat.name}」分类，是否继续？`,
+        t('aiCmd.moveConfirm', { n: uncatBms.length, cat: targetCat.name }),
       )
       if (!confirmed) {
         return {
           handled: true,
           action: 'move_uncategorized',
           success: false,
-          steps: [{ text: '用户取消批量归类', done: true }],
-          reply: '已取消批量归类操作。',
+          steps: [{ text: t('aiCmd.stepUserCancelMove'), done: true }],
+          reply: t('aiCmd.moveCancelled'),
         }
       }
     }
@@ -1381,13 +1421,13 @@ export async function dispatchSiteCommand(
 
     pushUndoAction({
       type: 'move_uncategorized',
-      description: `将 ${uncatBms.length} 个未分类书签移入「${targetCat.name}」`,
+      description: t('aiCmd.undoMoveUncatDesc', { n: uncatBms.length, cat: targetCat.name }),
       revert: () => {
         for (const item of previousMap) {
           ds.updateBookmark(item.id, { categoryId: item.prevCatId })
         }
         app.save()
-        return `已撤销批量移动，${previousMap.length} 个书签已还原原分类。`
+        return t('aiCmd.undoMoveRevert', { n: previousMap.length })
       },
     })
 
@@ -1396,10 +1436,10 @@ export async function dispatchSiteCommand(
       action: 'move_uncategorized',
       success: true,
       steps: [
-        { text: `筛选未分类书签 (${uncatBms.length} 个)`, done: true },
-        { text: `批量移入「${targetCat.name}」`, done: true },
+        { text: t('aiCmd.stepFilterUncat', { n: uncatBms.length }), done: true },
+        { text: t('aiCmd.stepMoveUncat', { cat: targetCat.name }), done: true },
       ],
-      reply: `已成功将 ${uncatBms.length} 个未分类书签移入「${targetCat.name}」分类。`,
+      reply: t('aiCmd.moveDone', { n: uncatBms.length, cat: targetCat.name }),
     }
   }
 
@@ -1407,21 +1447,21 @@ export async function dispatchSiteCommand(
   if (/^(?:当前在看什么分类|当前分类|当前分类有多少书签|所在分类)$/i.test(query)) {
     if (ui.curCat && ui.curCat !== CAT_ALL) {
       const cat = ds.categories.find((c: Category) => c.id === ui.curCat)
-      const catName = cat ? cat.name : (ui.curCat === CAT_UNCATEGORIZED ? '未分类' : ui.curCat)
+      const catName = cat ? cat.name : (ui.curCat === CAT_UNCATEGORIZED ? t('aiCmd.catListUncategorized') : ui.curCat)
       const count = ds.bookmarks.filter((b) => !b.deletedAt && b.categoryId === ui.curCat).length
       return {
         handled: true,
         action: 'current_cat',
-        steps: [{ text: '读取当前视图上下文', done: true }],
-        reply: `当前正处于「${catName}」分类视图，该分类下共有 ${count} 个活跃书签。`,
+        steps: [{ text: t('aiCmd.stepReadContext'), done: true }],
+        reply: t('aiCmd.currentCat', { name: catName, n: count }),
       }
     }
     const totalCount = ds.bookmarks.filter((b) => !b.deletedAt && !b.parentId).length
     return {
       handled: true,
       action: 'current_cat',
-      steps: [{ text: '读取全库视图上下文', done: true }],
-      reply: `当前正处于「全部分类」主视图，共有 ${totalCount} 个顶层书签。`,
+      steps: [{ text: t('aiCmd.stepReadGlobalContext'), done: true }],
+      reply: t('aiCmd.currentAll', { n: totalCount }),
     }
   }
 
@@ -1436,12 +1476,12 @@ export async function dispatchSiteCommand(
     if (actionToRevert) {
       const msg = await actionToRevert.revert()
       const remaining = getUndoStackDepth()
-      const suffix = remaining > 0 ? ` (还可撤销 ${remaining} 步操作)` : ''
+      const suffix = remaining > 0 ? t('aiCmd.undoRemaining', { n: remaining }) : ''
       return {
         handled: true,
         action: 'undo',
         success: true,
-        steps: [{ text: `回退事务「${actionToRevert.description}」`, done: true }],
+        steps: [{ text: t('aiCmd.stepRevertAction', { desc: actionToRevert.description }), done: true }],
         reply: `${msg}${suffix}`,
       }
     }
@@ -1456,8 +1496,8 @@ export async function dispatchSiteCommand(
           handled: true,
           action: 'undo',
           success: true,
-          steps: [{ text: '调用全局撤销动作', done: true }],
-          reply: `已成功撤销操作（${msg}）。`,
+          steps: [{ text: t('aiCmd.stepGlobalUndo'), done: true }],
+          reply: t('aiCmd.undoGlobalDone', { msg }),
         }
       }
     } catch {
@@ -1468,7 +1508,7 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'undo',
       success: false,
-      reply: '当前没有可撤销的站内操作。',
+      reply: t('aiCmd.undoNone'),
     }
   }
 
@@ -1506,18 +1546,18 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'clean_orphans',
         steps: [
-          { text: '巡检笔记组引用关系', done: true },
-          { text: '修复孤立数据引用', done: true },
+          { text: t('aiCmd.stepAuditGroupRefs'), done: true },
+          { text: t('aiCmd.stepFixOrphans'), done: true },
         ],
-        reply: `数据自检修复完成：修复了 ${fixedGroupRefs} 个笔记组无效引用，修正了 ${fixedParentRefs} 个孤立子书签父级关联。`,
+        reply: t('aiCmd.cleanFixed', { grp: fixedGroupRefs, par: fixedParentRefs }),
       }
     }
 
     return {
       handled: true,
       action: 'clean_orphans',
-      steps: [{ text: '数据一致性自检通过', done: true }],
-      reply: '数据自检完成：所有笔记组与书签关联完整无误，无需修复。',
+      steps: [{ text: t('aiCmd.stepConsistencyOk'), done: true }],
+      reply: t('aiCmd.cleanOk'),
     }
   }
 
@@ -1530,8 +1570,8 @@ export async function dispatchSiteCommand(
     return {
       handled: true,
       action: 'settings',
-      steps: [{ text: '打开系统设置面板', done: true }],
-      reply: '已为您打开设置面板。',
+      steps: [{ text: t('aiCmd.stepOpenSettings'), done: true }],
+      reply: t('aiCmd.settingsOpened'),
     }
   }
 

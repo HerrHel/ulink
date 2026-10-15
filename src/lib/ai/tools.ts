@@ -49,7 +49,7 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'inbox_zero',
-      description: '执行收件箱清零分析：扫描未分类书签（Inbox），基于历史域名与分类相似度进行智能聚类，生成一键归类建议卡片。',
+      description: '执行收件箱清零分析：扫描未分类书签（Inbox），基于历史域名与分类相似度进行智能聚类，生成一键归类建议卡片（应用归类前需用户确认）。',
       parameters: {
         type: 'object',
         properties: {},
@@ -60,7 +60,7 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_workspace',
-      description: '根据主题装配专属工作台（笔记组 SiblingGroup），将推荐的候选书签批量存入并生成包含随文内嵌卡片的精美笔记。',
+      description: '根据主题规划专属工作台（笔记组 SiblingGroup）并生成装配卡片；实际创建笔记组与批量存入书签需用户点击卡片确认后执行（可撤销）。',
       parameters: {
         type: 'object',
         properties: {
@@ -81,7 +81,7 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'merge_duplicates',
-      description: '扫描全库重复书签（相同或等价 URL），保留最新或信息最完备的实例，一键清理冗余重复副本。',
+      description: '扫描全库重复书签（相同或等价 URL），生成待用户确认的合并卡片；合并不会自动执行，需用户点击确认后才移入回收站（可撤销）。',
       parameters: {
         type: 'object',
         properties: {},
@@ -92,7 +92,7 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'heal_deadlinks',
-      description: '死链自愈中枢：检查库中被标记为失效死链的书签，通过 Wayback Machine 历史快照或挖掘现役活跃平替方案进行修复。',
+      description: '死链自愈中枢：针对已标记失效的书签，生成候选平替方案卡片；替换 URL/标题/备注前需用户确认，且操作可撤销。',
       parameters: {
         type: 'object',
         properties: {},

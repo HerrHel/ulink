@@ -374,14 +374,26 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
   })
 
   // ── 16. mergeDuplicateBookmarks 查重合并与撤销 ──
-  it('mergeDuplicateBookmarks 成功合并重复副本并可撤销', () => {
+  it('mergeDuplicateBookmarks 成功合并重复副本并可撤销', async () => {
     mockDs.deleteBookmark = vi.fn()
     mockDs.restoreBookmark = vi.fn()
     mockDs.bookmarks.push({ id: 'b_dup', title: 'Vue Dup', url: 'https://vuejs.org/' })
 
-    const res = mergeDuplicateBookmarks({ ds: mockDs, ui: mockUi, app: mockApp })
+    const res = await mergeDuplicateBookmarks({ ds: mockDs, ui: mockUi, app: mockApp })
     expect(res.mergedCount).toBe(1)
     expect(mockDs.deleteBookmark).toHaveBeenCalledWith('b_dup')
+  })
+
+  it('mergeDuplicateBookmarks HITL：用户拒绝确认时不合并任何书签', async () => {
+    const { showConfirm } = await import('../lib/toast.js')
+    ;(showConfirm as any).mockResolvedValueOnce(false)
+    mockDs.deleteBookmark = vi.fn()
+    mockDs.bookmarks.push({ id: 'b_dup', title: 'Vue Dup', url: 'https://vuejs.org/' })
+
+    const res = await mergeDuplicateBookmarks({ ds: mockDs, ui: mockUi, app: mockApp })
+    expect(res.mergedCount).toBe(0)
+    expect(res.message).toContain('已取消')
+    expect(mockDs.deleteBookmark).not.toHaveBeenCalled()
   })
 
   // ── 17. /health 全库资产体检 ──
@@ -414,7 +426,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
 
   // ── 19. applyInboxZeroClustering 执行归拢与撤销 ──
   it('applyInboxZeroClustering 执行批量归类并登记可撤销记录', async () => {
-    const res = applyInboxZeroClustering({
+    const res = await applyInboxZeroClustering({
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
@@ -431,6 +443,23 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(resUndo.handled).toBe(true)
     expect(resUndo.reply).toContain('已撤销智能归类')
+  })
+
+  it('applyInboxZeroClustering HITL：用户拒绝确认时不移动任何书签', async () => {
+    const { showConfirm } = await import('../lib/toast.js')
+    vi.mocked(showConfirm).mockResolvedValueOnce(false)
+    mockDs.updateBookmark = vi.fn()
+    ;(mockApp.save as any).mockClear()
+
+    const res = await applyInboxZeroClustering({
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.movedCount).toBe(0)
+    expect(res.message).toContain('已取消')
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+    expect(mockApp.save).not.toHaveBeenCalled()
   })
 
   // ── 20. /pack 指令用法提示 ──
@@ -485,13 +514,14 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
 
     expect(res.success).toBe(true)
+    expect(res.group).not.toBeNull()
     expect(res.totalBookmarks).toBe(2)
     expect(mockDs.addBookmark).toHaveBeenCalledTimes(2)
     expect(mockDs.addGroup).toHaveBeenCalledTimes(1)
     expect(mockApp.save).toHaveBeenCalled()
     expect(mockUi.curCat).toBe('c1')
-    expect(mockUi.focusedGroupId).toBe(res.group.id)
-    expect(res.group.notes).toContain('group-inline-card')
+    expect(mockUi.focusedGroupId).toBe(res.group!.id)
+    expect(res.group!.notes).toContain('group-inline-card')
 
     // 测试 /undo 撤销创建工作台
     const resUndo = await dispatchSiteCommand('/undo', {
@@ -501,7 +531,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(resUndo.handled).toBe(true)
     expect(resUndo.reply).toContain('已撤销创建主题工作台')
-    expect(mockDs.deleteGroup).toHaveBeenCalledWith(res.group.id)
+    expect(mockDs.deleteGroup).toHaveBeenCalledWith(res.group!.id)
     expect(mockUi.focusedGroupId).toBeNull()
   })
 
@@ -551,7 +581,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
       notes: '开源白板平替',
     }
 
-    const res = healDeadlink('b-dead-2', replacement, {
+    const res = await healDeadlink('b-dead-2', replacement, {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
