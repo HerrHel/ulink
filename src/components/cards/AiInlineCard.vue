@@ -117,25 +117,26 @@ function saveToVault() {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 10px;
+  padding: 7px 11px;
   margin: 6px 0;
-  background: var(--surface, #ffffff);
-  border: 1px solid var(--border-light, #e8e3df);
+  background: var(--surface);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-sm, 6px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
 }
 
 .ai-inline-card:hover {
-  border-color: var(--border, #d1ccc7);
-  background: var(--surface-hover, rgba(0, 0, 0, 0.015));
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+  border-color: var(--border);
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(44, 40, 36, 0.04);
 }
 
 .ai-inline-card.is-added {
-  border-color: rgba(46, 125, 50, 0.25);
-  background: rgba(46, 125, 50, 0.02);
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border-light));
+  background: color-mix(in srgb, var(--green) 4%, var(--surface));
 }
 
 .inline-card-left {
@@ -155,7 +156,8 @@ function saveToVault() {
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  background: var(--surface-hover, #f5f2ed);
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
   overflow: hidden;
 }
 
@@ -168,7 +170,7 @@ function saveToVault() {
 .inline-logo-fallback {
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted, #7c7772);
+  color: var(--text-muted);
 }
 
 .inline-card-info {
@@ -189,33 +191,34 @@ function saveToVault() {
 .inline-title {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text, #2c2724);
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: -0.1px;
+  letter-spacing: -0.15px;
+  transition: color 0.12s ease;
 }
 
 .inline-card-left:hover .inline-title {
-  color: var(--accent, #122e8a);
+  color: var(--accent);
 }
 
 .inline-pill {
   font-size: 9.5px;
-  padding: 0 4px;
+  padding: 0 5px;
   border-radius: 3px;
   white-space: nowrap;
   line-height: 1.4;
 }
 
 .inline-pill-tag {
-  background: var(--surface-active, rgba(0, 0, 0, 0.05));
-  color: var(--text-muted, #7c7772);
+  background: var(--surface-active);
+  color: var(--text-muted);
 }
 
 .inline-pill-cat {
-  background: var(--accent-light, rgba(18, 46, 138, 0.08));
-  color: var(--accent, #122e8a);
+  background: var(--accent-light);
+  color: var(--accent);
   font-weight: 500;
 }
 
@@ -227,7 +230,7 @@ function saveToVault() {
 
 .inline-domain {
   font-size: 10.5px;
-  color: var(--text-secondary, #a8a29e);
+  color: var(--text-secondary);
   font-family: var(--font-mono, monospace);
   white-space: nowrap;
   overflow: hidden;
@@ -259,21 +262,27 @@ function saveToVault() {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   font-size: 11px;
   font-weight: 600;
-  border: 1px solid var(--border, #d1ccc7);
-  background: var(--surface, #ffffff);
-  color: var(--text, #2c2724);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   border-radius: var(--radius-xs, 4px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .inline-save-btn:hover {
-  border-color: var(--accent, #122e8a);
-  color: var(--accent, #122e8a);
-  background: var(--accent-light, rgba(18, 46, 138, 0.05));
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+  transform: translateY(-0.5px);
+}
+
+.inline-save-btn:active {
+  transform: translateY(0) scale(0.96);
 }
 
 .inline-btn-icon :deep(svg) {
@@ -287,9 +296,10 @@ function saveToVault() {
   gap: 3px;
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--green, #2e7d32);
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(46, 125, 50, 0.08);
+  color: var(--green);
+  padding: 2px 7px;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--green-light);
+  border: 1px solid color-mix(in srgb, var(--green) 20%, transparent);
 }
 </style>
