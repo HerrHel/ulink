@@ -987,7 +987,12 @@ function closeDetail(rawId: string) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  position: relative;
+  /* 根节点禁止写 position：本元素同时是 .detail-panel，其定位归全局布局管
+     （.is-mobile .detail-panel 的 position:fixed 底部抽屉）。scoped 规则与全局
+     规则 specificity 打平、出厂顺序更靠后，一旦写 position 就会覆写 fixed：
+     抽屉变回流内元素后 translateY(100%) 关不掉，且 width:100%+flex-shrink:0
+     会把主内容区挤到 0 宽（移动端整页空白）。内部浮层各自有相对定位锚点
+     （.chat-top-title-wrap/.chat-reply-flow-wrap/.chat-input-dock），根节点无需做包含块。 */
   background: var(--surface);
   color: var(--text);
   font-family: var(--font-sans);
