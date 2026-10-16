@@ -3,6 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { preloadSearchLibs } from '../../lib/search.js'
+import { __testStorage } from '../../stores/storage.js'
 
 beforeAll(async () => {
   await preloadSearchLibs()
@@ -385,6 +386,15 @@ describe('DataStore', () => {
 
   // 私密空间独立数据集：switchSpace 主页⇄vault 切换
   describe('switchSpace — 独立数据集切换', () => {
+    // 隔离持久层：fake-indexeddb 与 localStorage 均跨用例共享，前序用例的 switchSpace
+    // 会经 saveData 把空数据集落进 IDB 主页键——「localStorage 兜底」用例（vault→main）
+    // 的 loadFromIDB IDB 优先路径会命中该空集，永远轮不到 localStorage，致断言 [] 丢 bm1。
+    // 每用例前清 IDB + localStorage，还原「目标空间无 IDB 数据」的初始态。
+    beforeEach(async () => {
+      await __testStorage.clearAll()
+      localStorage.clear()
+    })
+
     it('切到 vault：当前四数组落主页 key、清 dirty/同步队列、载入 vault 空四数组', async () => {
       // 主页数据
       store.addCategory({ id: 'catHome', name: '主页分类', icon: '', color: '', order: 1 } as any)
