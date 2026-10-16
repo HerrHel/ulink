@@ -158,6 +158,20 @@ export interface LocalHistoryVersion {
 
 export const localHistoryKey = (itemId: string): string => 'lv_hist:' + itemId
 
+/**
+ * 测试专用：清空持久层（data 表 + syncOps 队列）。
+ * fake-indexeddb 模块级共享、跨用例不清库；switchSpace 等用例依赖「目标空间无
+ * IDB 数据」的初始态，前序用例 saveData 落下的数据会让 loadFromIDB 优先命中，
+ * 永远轮不到 localStorage 兜底路径（data.test.ts 的 vault→main 用例即此因挂）。
+ * 用例间显式清库保证隔离。与 __testHistDebounce/__testPendingSync 同惯例。
+ */
+export const __testStorage = {
+  async clearAll(): Promise<void> {
+    try { await db.data.clear() } catch { /* ignore */ }
+    try { await db.syncOps.clear() } catch { /* ignore */ }
+  },
+}
+
 export function fetchLocalHistory(itemId: string): LocalHistoryVersion[] {
   const arr = safeJsonParse<LocalHistoryVersion[] | null>(safeGetItem(localHistoryKey(itemId)), null)
   return Array.isArray(arr) ? arr : []
