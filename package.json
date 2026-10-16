@@ -31,6 +31,7 @@
     "autoprefixer": "^10.6.1",
     "eslint": "^10.8.0",
     "eslint-plugin-vue": "^10.9.2",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
     "playwright": "^1.61.1",
     "postcss": "^8.5.28",
