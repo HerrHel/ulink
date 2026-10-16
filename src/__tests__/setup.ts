@@ -1,3 +1,7 @@
+// jsdom 无 IndexedDB，Dexie 打开库即抛 MissingAPIError，产生大量未处理拒绝噪音。
+// fake-indexeddb/auto 注入内存版 indexedDB（须先于任何 Dexie 使用加载），
+// 让直接走真实 storage.js 的测试拿到可持久的假库，不再报错。
+import 'fake-indexeddb/auto'
 import { setActivePinia, createPinia } from 'pinia'
 import { vi, beforeEach } from 'vitest'
 import { __resetSyncCircuit } from '../composables/domain/syncCircuit.js'
