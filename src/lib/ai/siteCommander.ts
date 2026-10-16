@@ -26,7 +26,7 @@ import { showConfirm } from '../toast.js'
 import { candidateToBookmark } from './candidateSave.js'
 import { inlineCardHTML } from '../../composables/useInlineCard.js'
 import { searchWebsitesByIntent, findSimilarWebsites } from './cloudAiClient.js'
-import { t } from '../../i18n/index.js'
+import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import type { ChatTurnStep, ChatActionCard } from './chatSessions.js'
@@ -111,7 +111,7 @@ export async function mergeDuplicateBookmarks(
 
   const totalDupCount = dups.reduce((n, c) => n + c.duplicates.filter((d) => !d.deletedAt).length, 0)
   const confirmed = await showConfirm(
-    t('aiCmd.mergeConfirm', { groups: dups.length, count: totalDupCount }),
+    tN('aiCmd.mergeConfirm', totalDupCount, { groups: dups.length, count: totalDupCount }),
   )
   if (!confirmed) {
     return { mergedCount: 0, message: t('aiCmd.mergeCancelled') }
@@ -133,20 +133,20 @@ export async function mergeDuplicateBookmarks(
     app.save()
     pushUndoAction({
       type: 'merge_dedup',
-      description: t('aiCmd.undoMergeDesc', { n: mergedCount }),
+      description: tN('aiCmd.undoMergeDesc', mergedCount),
       revert: () => {
         for (const id of deletedIds) {
           ds.restoreBookmark(id)
         }
         app.save()
-        return t('aiCmd.undoMergeRevert', { n: deletedIds.length })
+        return tN('aiCmd.undoMergeRevert', deletedIds.length)
       },
     })
   }
 
   return {
     mergedCount,
-    message: t('aiCmd.mergeDone', { n: mergedCount }),
+    message: tN('aiCmd.mergeDone', mergedCount),
   }
 }
 
@@ -181,7 +181,7 @@ export async function applyInboxZeroClustering(
     (n, c) => n + c.bookmarks.filter((b) => b && !b.deletedAt).length,
     0,
   )
-  const confirmed = await showConfirm(t('aiCmd.inboxConfirm', { count: totalMoveCount }))
+  const confirmed = await showConfirm(tN('aiCmd.inboxConfirm', totalMoveCount, { count: totalMoveCount }))
   if (!confirmed) {
     return { movedCount: 0, message: t('aiCmd.inboxCancelled') }
   }
@@ -204,20 +204,20 @@ export async function applyInboxZeroClustering(
     app.save()
     pushUndoAction({
       type: 'inbox_zero',
-      description: t('aiCmd.undoInboxDesc', { n: movedCount }),
+      description: tN('aiCmd.undoInboxDesc', movedCount),
       revert: () => {
         for (const item of revertMap) {
           ds.updateBookmark(item.id, { categoryId: item.prevCatId })
         }
         app.save()
-        return t('aiCmd.undoInboxRevert', { n: revertMap.length })
+        return tN('aiCmd.undoInboxRevert', revertMap.length)
       },
     })
   }
 
   return {
     movedCount,
-    message: t('aiCmd.inboxDone', { n: movedCount }),
+    message: tN('aiCmd.inboxDone', movedCount),
   }
 }
 
@@ -351,7 +351,7 @@ export async function createTopicWorkspace(
         ui.focusedGroupId = null
       }
       app.save?.()
-      return t('aiCmd.undoWsRevert', { name: group.name, n: createdBmIds.length })
+      return tN('aiCmd.undoWsRevert', createdBmIds.length, { name: group.name })
     },
   })
 
@@ -360,7 +360,7 @@ export async function createTopicWorkspace(
     group,
     createdBmIds,
     totalBookmarks: allBookmarkIds.length,
-    message: t('aiCmd.wsDone', { name: group.name, n: allBookmarkIds.length }),
+    message: tN('aiCmd.wsDone', allBookmarkIds.length, { name: group.name }),
   }
 }
 
@@ -696,12 +696,12 @@ export async function dispatchSiteCommand(
     const lines = [t('aiCmd.catListHeader'), '']
     for (const cat of activeCats) {
       const count = ds.bookmarks.filter((b) => !b.deletedAt && b.categoryId === cat.id).length
-      lines.push(t('aiCmd.catListLine', { name: cat.name, n: count }))
+      lines.push(tN('aiCmd.catListLine', count, { name: cat.name }))
     }
     const uncatCount = ds.bookmarks.filter(
       (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId,
     ).length
-    lines.push(t('aiCmd.catListLine', { name: t('aiCmd.catListUncategorized'), n: uncatCount }))
+    lines.push(tN('aiCmd.catListLine', uncatCount, { name: t('aiCmd.catListUncategorized') }))
     return {
       handled: true,
       action: 'category_list',
@@ -776,7 +776,7 @@ export async function dispatchSiteCommand(
 
     // Agent 危险操作人机确认 (Human-in-the-Loop)
     const confirmed = await showConfirm(
-      t('aiCmd.trashClearConfirm', { total, bm: bms, grp: grps, cat: cats }),
+      tN('aiCmd.trashClearConfirm', total, { total, bm: bms, grp: grps, cat: cats }),
     )
     if (!confirmed) {
       return {
@@ -794,11 +794,11 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'trash_clear',
       steps: [
-        { text: t('aiCmd.stepVerifyTrash', { n: total }), done: true },
+        { text: tN('aiCmd.stepVerifyTrash', total), done: true },
         { text: t('aiCmd.stepHitlPassed'), done: true },
         { text: t('aiCmd.stepDoEmptyTrash'), done: true },
       ],
-      reply: t('aiCmd.trashCleared', { total, bm: bms, grp: grps, cat: cats }),
+      reply: tN('aiCmd.trashCleared', total, { total, bm: bms, grp: grps, cat: cats }),
     }
   }
 
@@ -818,12 +818,12 @@ export async function dispatchSiteCommand(
           ? {
               type: 'trash',
               title: t('aiCmd.trashCardTitle'),
-              desc: t('aiCmd.trashCardDesc', { total, bm: bms, grp: grps }),
+              desc: tN('aiCmd.trashCardDesc', total, { total, bm: bms, grp: grps }),
               buttonText: t('aiCmd.trashCardButton'),
               actionName: 'trash_clear',
             }
           : undefined,
-      reply: total > 0 ? t('aiCmd.trashOpened', { n: total }) : t('aiCmd.trashOpenedEmpty'),
+      reply: total > 0 ? tN('aiCmd.trashOpened', total) : t('aiCmd.trashOpenedEmpty'),
     }
   }
 
@@ -847,7 +847,7 @@ export async function dispatchSiteCommand(
     }
     const dupCount = dups.reduce((acc, d) => acc + d.duplicates.length, 0)
     const lines = [
-      t('aiCmd.dedupReport', { groups: dups.length, count: dupCount }),
+      tN('aiCmd.dedupReport', dupCount, { groups: dups.length, count: dupCount }),
       '',
     ]
     const previewItems = dups.slice(0, 5)
@@ -856,14 +856,13 @@ export async function dispatchSiteCommand(
       lines.push(`${i + 1}. ${d.primary.title || t('aiCmd.untitled')}`)
       lines.push(t('aiCmd.dedupMainUrl', { url: d.normalizedUrl }))
       lines.push(
-        t('aiCmd.dedupCopies', {
-          n: d.duplicates.length,
+        tN('aiCmd.dedupCopies', d.duplicates.length, {
           titles: d.duplicates.map((dup) => dup.title || t('aiCmd.untitled')).join(', '),
         }),
       )
     }
     if (dups.length > 5) {
-      lines.push(t('aiCmd.dedupMore', { n: dups.length - 5 }))
+      lines.push(tN('aiCmd.dedupMore', dups.length - 5))
     }
 
     return {
@@ -871,12 +870,12 @@ export async function dispatchSiteCommand(
       action: 'dedup',
       steps: [
         { text: t('aiCmd.stepScanUrls'), done: true },
-        { text: t('aiCmd.stepDupFound', { n: dups.length }), done: true },
+        { text: tN('aiCmd.stepDupFound', dups.length), done: true },
       ],
       actionCard: {
         type: 'dedup',
         title: t('aiCmd.dedupCardTitle'),
-        desc: t('aiCmd.dedupCardDesc', { groups: dups.length, count: dupCount }),
+        desc: tN('aiCmd.dedupCardDesc', dupCount, { groups: dups.length, count: dupCount }),
         buttonText: t('aiCmd.dedupCardButton'),
         actionName: 'merge_dedup',
       },
@@ -919,7 +918,7 @@ export async function dispatchSiteCommand(
     const previewList = candidates.slice(0, 5)
 
     const lines = [
-      t('aiCmd.packPlan', { topic: topicName, n: candidates.length }),
+      tN('aiCmd.packPlan', candidates.length, { topic: topicName }),
       '',
     ]
     for (let i = 0; i < previewList.length; i++) {
@@ -927,7 +926,7 @@ export async function dispatchSiteCommand(
       lines.push(t('aiCmd.packItem', { i: i + 1, title: c.title, desc: c.notes || c.url }))
     }
     if (candidates.length > 5) {
-      lines.push(t('aiCmd.packMore', { n: candidates.length - 5 }))
+      lines.push(tN('aiCmd.packMore', candidates.length - 5))
     }
     lines.push('')
     lines.push(t('aiCmd.packCta'))
@@ -941,7 +940,7 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'pack_workspace',
       steps: [
-        { text: t('aiCmd.stepPackSelect', { topic: topicName, n: candidates.length }), done: true },
+        { text: tN('aiCmd.stepPackSelect', candidates.length, { topic: topicName }), done: true },
         { text: t('aiCmd.stepPackPlan'), done: true },
       ],
       reply: lines.join('\n'),
@@ -949,7 +948,7 @@ export async function dispatchSiteCommand(
         type: 'custom',
         actionName: 'create_topic_workspace',
         title: t('aiCmd.packCardTitle', { name: cleanTopic }),
-        desc: t('aiCmd.packCardDesc', { n: candidates.length }),
+        desc: tN('aiCmd.packCardDesc', candidates.length),
         buttonText: t('aiCmd.packCardButton'),
         payload: {
           topic: cleanTopic,
@@ -992,7 +991,7 @@ export async function dispatchSiteCommand(
     const bestAlt = alts[0]
 
     const lines = [
-      t('aiCmd.deadReport', { n: deadBookmarks.length }),
+      tN('aiCmd.deadReport', deadBookmarks.length),
       '',
     ]
     for (let i = 0; i < Math.min(3, deadBookmarks.length); i++) {
@@ -1002,7 +1001,7 @@ export async function dispatchSiteCommand(
       lines.push(t('aiCmd.deadSnapshot', { url: wbUrl }))
     }
     if (deadBookmarks.length > 3) {
-      lines.push(t('aiCmd.deadMore', { n: deadBookmarks.length - 3 }))
+      lines.push(tN('aiCmd.deadMore', deadBookmarks.length - 3))
     }
 
     if (bestAlt) {
@@ -1037,7 +1036,7 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'deadlinks',
       steps: [
-        { text: t('aiCmd.stepDeadFound', { n: deadBookmarks.length }), done: true },
+        { text: tN('aiCmd.stepDeadFound', deadBookmarks.length), done: true },
         { text: t('aiCmd.stepDeadSearchAlt', { title: firstDead.title }), done: true },
       ],
       reply: lines.join('\n'),
@@ -1193,7 +1192,7 @@ export async function dispatchSiteCommand(
       actionCard = {
         type: 'custom',
         actionName: 'inbox_zero',
-        title: t('aiCmd.healthInboxCardTitle', { n: healthStats.uncategorizedCount }),
+        title: tN('aiCmd.healthInboxCardTitle', healthStats.uncategorizedCount),
         desc: t('aiCmd.healthInboxCardDesc'),
         buttonText: t('aiCmd.healthInboxCardButton'),
       }
@@ -1201,7 +1200,7 @@ export async function dispatchSiteCommand(
       actionCard = {
         type: 'dedup',
         actionName: 'merge_dedup',
-        title: t('aiCmd.healthDedupCardTitle', { n: healthStats.duplicateCount }),
+        title: tN('aiCmd.healthDedupCardTitle', healthStats.duplicateCount),
         desc: t('aiCmd.healthDedupCardDesc'),
         buttonText: t('aiCmd.healthDedupCardButton'),
       }
@@ -1209,7 +1208,7 @@ export async function dispatchSiteCommand(
       actionCard = {
         type: 'trash',
         actionName: 'trash_clear',
-        title: t('aiCmd.healthTrashCardTitle', { n: trashTotal }),
+        title: tN('aiCmd.healthTrashCardTitle', trashTotal),
         desc: t('aiCmd.healthTrashCardDesc'),
         buttonText: t('aiCmd.healthTrashCardButton'),
       }
@@ -1267,7 +1266,7 @@ export async function dispatchSiteCommand(
       const more =
         c.bookmarks.length > 3
           ? t('aiCmd.inboxPlanMore', { n: c.bookmarks.length })
-          : t('aiCmd.inboxPlanCount', { n: c.bookmarks.length })
+          : tN('aiCmd.inboxPlanCount', c.bookmarks.length)
       lines.push(t('aiCmd.inboxPlanLine', { cat: c.suggestedCategoryName, titles, more }))
     }
     lines.push('')
@@ -1277,14 +1276,14 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'inbox_zero',
       steps: [
-        { text: t('aiCmd.stepInboxDetected', { n: totalToMove }), done: true },
+        { text: tN('aiCmd.stepInboxDetected', totalToMove), done: true },
         { text: t('aiCmd.stepInboxClustered'), done: true },
       ],
       reply: lines.join('\n'),
       actionCard: {
         type: 'custom',
         actionName: 'apply_inbox_zero',
-        title: t('aiCmd.inboxCardTitle', { n: totalToMove }),
+        title: tN('aiCmd.inboxCardTitle', totalToMove),
         desc: t('aiCmd.inboxCardDesc'),
         buttonText: t('aiCmd.inboxCardButton'),
       },
@@ -1331,13 +1330,13 @@ export async function dispatchSiteCommand(
 
       pushUndoAction({
         type: 'batch_move',
-        description: t('aiCmd.undoBatchMoveDesc', { n: movedCount, cat: targetCat.name }),
+        description: tN('aiCmd.undoBatchMoveDesc', movedCount, { cat: targetCat.name }),
         revert: () => {
           for (const item of previousMap) {
             ds.updateBookmark(item.id, { categoryId: item.prevCatId })
           }
           app.save()
-          return t('aiCmd.undoMoveRevert', { n: previousMap.length })
+          return tN('aiCmd.undoMoveRevert', previousMap.length)
         },
       })
 
@@ -1346,10 +1345,10 @@ export async function dispatchSiteCommand(
         action: 'batch_move',
         success: true,
         steps: [
-          { text: t('aiCmd.stepBatchDetected', { n: movedCount }), done: true },
+          { text: tN('aiCmd.stepBatchDetected', movedCount), done: true },
           { text: t('aiCmd.stepBatchMove', { cat: targetCat.name }), done: true },
         ],
-        reply: t('aiCmd.batchMoveDone', { n: movedCount, cat: targetCat.name }),
+        reply: tN('aiCmd.batchMoveDone', movedCount, { cat: targetCat.name }),
       }
     }
   }
@@ -1400,7 +1399,7 @@ export async function dispatchSiteCommand(
     // 若未分类数量较大（例如 > 5 个），进行二次确认保护
     if (uncatBms.length > 5) {
       const confirmed = await showConfirm(
-        t('aiCmd.moveConfirm', { n: uncatBms.length, cat: targetCat.name }),
+        tN('aiCmd.moveConfirm', uncatBms.length, { cat: targetCat.name }),
       )
       if (!confirmed) {
         return {
@@ -1421,13 +1420,13 @@ export async function dispatchSiteCommand(
 
     pushUndoAction({
       type: 'move_uncategorized',
-      description: t('aiCmd.undoMoveUncatDesc', { n: uncatBms.length, cat: targetCat.name }),
+      description: tN('aiCmd.undoMoveUncatDesc', uncatBms.length, { cat: targetCat.name }),
       revert: () => {
         for (const item of previousMap) {
           ds.updateBookmark(item.id, { categoryId: item.prevCatId })
         }
         app.save()
-        return t('aiCmd.undoMoveRevert', { n: previousMap.length })
+        return tN('aiCmd.undoMoveRevert', previousMap.length)
       },
     })
 
@@ -1436,10 +1435,10 @@ export async function dispatchSiteCommand(
       action: 'move_uncategorized',
       success: true,
       steps: [
-        { text: t('aiCmd.stepFilterUncat', { n: uncatBms.length }), done: true },
+        { text: tN('aiCmd.stepFilterUncat', uncatBms.length), done: true },
         { text: t('aiCmd.stepMoveUncat', { cat: targetCat.name }), done: true },
       ],
-      reply: t('aiCmd.moveDone', { n: uncatBms.length, cat: targetCat.name }),
+      reply: tN('aiCmd.moveDone', uncatBms.length, { cat: targetCat.name }),
     }
   }
 
@@ -1453,7 +1452,7 @@ export async function dispatchSiteCommand(
         handled: true,
         action: 'current_cat',
         steps: [{ text: t('aiCmd.stepReadContext'), done: true }],
-        reply: t('aiCmd.currentCat', { name: catName, n: count }),
+        reply: tN('aiCmd.currentCat', count, { name: catName }),
       }
     }
     const totalCount = ds.bookmarks.filter((b) => !b.deletedAt && !b.parentId).length
@@ -1461,7 +1460,7 @@ export async function dispatchSiteCommand(
       handled: true,
       action: 'current_cat',
       steps: [{ text: t('aiCmd.stepReadGlobalContext'), done: true }],
-      reply: t('aiCmd.currentAll', { n: totalCount }),
+      reply: tN('aiCmd.currentAll', totalCount),
     }
   }
 
@@ -1476,7 +1475,7 @@ export async function dispatchSiteCommand(
     if (actionToRevert) {
       const msg = await actionToRevert.revert()
       const remaining = getUndoStackDepth()
-      const suffix = remaining > 0 ? t('aiCmd.undoRemaining', { n: remaining }) : ''
+      const suffix = remaining > 0 ? tN('aiCmd.undoRemaining', remaining) : ''
       return {
         handled: true,
         action: 'undo',
