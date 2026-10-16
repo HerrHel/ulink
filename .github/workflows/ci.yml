@@ -1,7 +1,10 @@
 name: CI
 on:
+  # main 必须进门禁：此前 branches-ignore: ["main"] 让直推 main 完全跳过检查
+  # （185b4499/c6db8f68 两提交即零 CI 保护直入 main）。main 是实际集成分支，
+  # 直推无 PR 保护时本工作流是唯一防线，故全分支触发。
   push:
-    branches-ignore: ["main"]
+    branches: ["**"]
   pull_request:
     branches: ["**"]
 jobs:
