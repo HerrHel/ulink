@@ -1,0 +1,11 @@
+-- 038: 补 033 漏掉的 EXECUTE 收权——prune_link_check_history()
+--
+-- 033 创建触发器函数 prune_link_check_history() 时漏了 REVOKE EXECUTE FROM
+-- PUBLIC：CREATE FUNCTION 默认授 PUBLIC EXECUTE，遗留 proacl = {=X/postgres}，
+-- 匿名可经 PostgREST /rest/v1/rpc/prune_link_check_history 直接试探调用。
+-- 本项目其余 public 函数均已收权（032 REVOKE 五函数、025/034/036 各自收口），
+-- 033 是唯一漏网；assertions.sql A14（public 函数无 PUBLIC EXECUTE）即由此挂。
+--
+-- 按 032 模式收权：触发器触发不需要 EXECUTE 权限（触发链不走 EXECUTE 检查），
+-- 影响面仅是「匿名/认证用户不能再直接 RPC 调用」——该函数本就只应由触发器调用。
+REVOKE ALL ON FUNCTION public.prune_link_check_history() FROM PUBLIC;
