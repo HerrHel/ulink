@@ -797,7 +797,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             assistantTurn.content = mimoRes.reply
             assistantTurn.reasoning = mimoRes.reasoning || assistantTurn.reasoning
             assistantTurn.candidates = mimoRes.candidates
-            assistantTurn.steps = [{ text: `小米 ${mimoRes.model} 推理完成`, done: true }]
+            assistantTurn.steps = []
 
             // 核心：若大模型自主触发了标准 Tool Calling (Function Calling)，即刻调度并挂载行动卡片
             if (mimoRes.toolCalls?.length) {
