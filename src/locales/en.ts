@@ -187,7 +187,7 @@ export const en = {
     shareGroup: 'Share note',
     settings: 'Settings',
     syncStatus: 'Sync status',
-    detailPanel: 'Detail panel',
+    detailPanel: 'AI Assistant',
     allBookmarks: 'All bookmarks',
     focusCount: '{n} bookmarks',
     countItems: '{n}',
@@ -214,6 +214,13 @@ export const en = {
   detail: {
     panel: 'Detail panel',
     dragHint: 'Drag bookmarks here to preview',
+  },
+  staging: {
+    shelf: 'Staging shelf',
+    title: 'Staged',
+    openAll: 'Open all',
+    clearAll: 'Clear',
+    dragHint: 'Drag bookmarks here to stage',
   },
   batch: {
     selected: '{n} selected',

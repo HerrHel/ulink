@@ -20,23 +20,17 @@ export function showActionSheet(items: { label: string; action: () => void; dang
 export function toggleRail() { const ui = useUIStore(); ui.panels.rail = !ui.panels.rail }
 export function closeRail() { useUIStore().panels.rail = false }
 
-// ── Detail Panel ──
+// ── Detail Panel (AI 侧边栏与暂存搁架完全解耦) ──
 export function toggleDetailPanel() {
   const ui = useUIStore()
   if (!ui.panels.detail) pushNavState()
-  if (ui.panels.detail || ui.detailCards.length > 0) {
-    ui.panels.detail = false
-    ui.detailCards.splice(0)
-  } else {
-    ui.panels.detail = true
-  }
+  ui.panels.detail = !ui.panels.detail
 }
 
 export function openDetail(bmId: string) {
   if (!bmId) return
   const ui = useUIStore()
   if (ui.detailCards.indexOf(bmId) === -1) ui.detailCards.push(bmId)
-  ui.panels.detail = true
 }
 
 // ── Card Tags (scroll + overflow) ──
