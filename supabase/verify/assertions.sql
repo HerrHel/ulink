@@ -1,9 +1,9 @@
--- supabase/tests/assertions.sql
+-- supabase/verify/assertions.sql
 -- 后端关键不变量自包含断言（零依赖，无需 pgTAP 扩展）
 --
 -- 用途：无 Docker 环境的验证（本机 / 远程库直接跑）。
---   supabase db query -f supabase/tests/assertions.sql --linked
--- 或：psql "$DATABASE_URL" -f supabase/tests/assertions.sql
+--   supabase db query -f supabase/verify/assertions.sql --linked
+-- 或：psql "$DATABASE_URL" -f supabase/verify/assertions.sql
 --
 -- 事务内执行（BEGIN…ROLLBACK），只读断言，不污染任何数据。
 -- 全部通过 → RAISE NOTICE 'ALL N ASSERTIONS PASSED'；
