@@ -9,8 +9,8 @@
 --   5. storage.objects 无匿名策略（防 storage 列举泄露）
 --   6. error_logs 写入熔断存在（防无限写入）
 --   7. SECURITY DEFINER RPC 存在且固定 search_path（防 search_path 注入）
---   8. 032 删除防线：复活守卫触发器 + 墓园表不可变 + 行为级拦截（旧快照复活 /
---      墓园存活重插被拦；正规恢复 / 墓碑重插放行）
+--   8. 032 删除防线：复活守卫触发器 + 墓园表不可变 + 行为级拦截（旧快照复活被拦、
+--      正规恢复放行；墓园条目任何 INSERT 一律拦——含墓碑态，035 收紧）
 --   9. 033/034 容量防护：link_check_history 剪枝触发器（每书签留 5 条）+
 --      consume_rate_limit 配额函数（放行至配额、超额拒绝）
 --
@@ -255,13 +255,15 @@ SELECT is(
   '墓园条目无法以存活态重新 INSERT'
 );
 
--- 18f. 墓园条目以墓碑态重新 INSERT → 放行（跨端删除状态再传播）
+-- 18f. 墓园条目以墓碑态重新 INSERT → 同样拦截（035 收紧）
+-- 032 原语义放行墓碑态重插；035 事故修复后收紧——他端软删快照回流会污染已清空
+-- 回收站的端。「删除已终结」由墓园本身承担，无需回流墓碑行。
 INSERT INTO bookmarks (id, user_id, title, updated_at_num, deleted_at)
 VALUES ('pgtap-guard-bm', '11111111-1111-1111-1111-111111111111', 'x', 3000, NOW());
 SELECT is(
-  (SELECT deleted_at IS NOT NULL FROM bookmarks WHERE id = 'pgtap-guard-bm'),
-  true,
-  '墓碑态重插放行（删除状态可跨端再传播）'
+  (SELECT count(*) FROM bookmarks WHERE id = 'pgtap-guard-bm'),
+  0::bigint,
+  '墓园条目墓碑态重插同样被拦（035：软删快照不回流污染回收站）'
 );
 
 -- ── 19. link_check_history 剪枝触发器存在（033）──
