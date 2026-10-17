@@ -18,7 +18,7 @@
 --   supabase start && supabase db reset && supabase db test
 --   （CI 见 .github/workflows/ci.yml 的 supabase-db-test job）
 --
--- 无 Docker 环境的替代：supabase/tests/assertions.sql（零依赖，可对远程库直跑；
+-- 无 Docker 环境的替代：supabase/verify/assertions.sql（零依赖，可对远程库直跑；
 -- 行为级断言因需写 auth.users 夹具仅在本文件覆盖）
 
 BEGIN;
@@ -32,7 +32,7 @@ SELECT is(
      JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relkind = 'r'
       AND NOT c.relforcerowsecurity),
-  0,
+  0::bigint,
   'public 全部用户表开启 FORCE ROW LEVEL SECURITY'
 );
 
@@ -45,16 +45,19 @@ SELECT is(
     WHERE i.indisprimary
       AND c.relname IN ('bookmarks','categories','sibling_groups','custom_attributes')
       AND i.indnkeyatts = 2),
-  4,
+  4::bigint,
   '4 张同步表主键为复合主键 (user_id, id)'
 );
 
 -- ── 3. 匿名直读 sibling_groups 被拒（SEC-02 核心不变量）──
 -- 028 撤策略 + 031 撤 anon GRANT：匿名 SELECT 在 GRANT 层即抛 42501。
+-- 注意 throws_ok 三参形式是 (sql, errcode, errmsg)——第 3 参是期望错误消息，
+-- 误当描述写会被拿去对比实际消息而必挂；跳过消息对比用 4 参传 NULL errmsg。
 SET ROLE anon;
 SELECT throws_ok(
   $$SELECT count(*) FROM sibling_groups$$,
   '42501',
+  NULL,
   '匿名无法直读 sibling_groups（031 GRANT 层拒绝）'
 );
 RESET ROLE;
@@ -64,6 +67,7 @@ SET ROLE anon;
 SELECT throws_ok(
   $$SELECT count(*) FROM bookmarks$$,
   '42501',
+  NULL,
   '匿名无法直读 bookmarks（031 GRANT 层拒绝）'
 );
 RESET ROLE;
@@ -73,6 +77,7 @@ SET ROLE anon;
 SELECT throws_ok(
   $$SELECT count(*) FROM public_category_shares$$,
   '42501',
+  NULL,
   '匿名无法直读 public_category_shares（031 GRANT 层拒绝）'
 );
 RESET ROLE;
@@ -83,7 +88,7 @@ SELECT is(
   (SELECT count(*) FROM pg_policy p
      JOIN pg_class c ON c.oid = p.polrelid
     WHERE p.polcmd = 'w' AND p.polwithcheck IS NULL),
-  0,
+  0::bigint,
   '全部 UPDATE 策略带 WITH CHECK'
 );
 
@@ -92,7 +97,7 @@ SELECT is(
   (SELECT count(*) FROM pg_policy p
      JOIN pg_class c ON c.oid = p.polrelid
     WHERE c.relname = 'objects' AND p.polroles::text LIKE '%anon%'),
-  0,
+  0::bigint,
   'storage.objects 无匿名策略'
 );
 
@@ -108,7 +113,7 @@ SELECT is(
     WHERE n.nspname = 'public'
       AND p.proname IN ('get_public_group','get_public_category')
       AND p.prosecdef),
-  2,
+  2::bigint,
   'get_public_group / get_public_category 均为 SECURITY DEFINER'
 );
 
@@ -120,7 +125,7 @@ SELECT is(
      JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.prosecdef
       AND (p.proconfig IS NULL OR NOT p.proconfig::text LIKE '%search_path%')),
-  0,
+  0::bigint,
   '全部 SECURITY DEFINER 函数固定 search_path'
 );
 
@@ -130,7 +135,7 @@ SELECT is(
 SELECT is(
   (SELECT count(*) FROM pg_policies
     WHERE schemaname = 'public' AND roles = '{public}'),
-  0,
+  0::bigint,
   'public 表无任何 TO PUBLIC 策略（029+030）'
 );
 
@@ -138,7 +143,7 @@ SELECT is(
 SELECT is(
   (SELECT count(*) FROM information_schema.role_table_grants
     WHERE grantee = 'anon' AND table_schema = 'public'),
-  0,
+  0::bigint,
   'anon 对 public 表零 GRANT（031）'
 );
 
@@ -147,7 +152,7 @@ SELECT is(
   (SELECT count(*) FROM information_schema.role_table_grants
     WHERE grantee = 'authenticated' AND table_schema = 'public'
       AND privilege_type IN ('TRUNCATE', 'TRIGGER', 'REFERENCES')),
-  0,
+  0::bigint,
   'authenticated 无 TRUNCATE/TRIGGER/REFERENCES（031）'
 );
 
@@ -157,7 +162,7 @@ SELECT is(
      JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.prokind = 'f'
       AND p.proacl::text LIKE '{=X/%'),
-  0,
+  0::bigint,
   'public 函数无 PUBLIC EXECUTE（031）'
 );
 
@@ -170,7 +175,7 @@ SELECT is(
     WHERE n.nspname = 'public' AND NOT t.tgisinternal
       AND t.tgname = 'trg_' || c.relname || '_resurrect_guard'
       AND c.relname IN ('bookmarks','sibling_groups','categories','custom_attributes')),
-  4,
+  4::bigint,
   '4 张同步表存在复活守卫触发器（032）'
 );
 
@@ -182,7 +187,7 @@ SELECT is(
     WHERE n.nspname = 'public' AND NOT t.tgisinternal
       AND t.tgname = 'trg_' || c.relname || '_graveyard'
       AND c.relname IN ('bookmarks','sibling_groups','categories','custom_attributes')),
-  4,
+  4::bigint,
   '4 张同步表存在物理删除墓园记录触发器（032）'
 );
 
@@ -194,7 +199,7 @@ SELECT is(
      JOIN pg_namespace n ON n.oid = c.relnamespace
     WHERE n.nspname = 'public' AND c.relname = 'deleted_item_graveyard'
       AND p.polcmd IN ('u','d')),
-  0,
+  0::bigint,
   'deleted_item_graveyard 无 UPDATE/DELETE 策略（墓园不可变）'
 );
 
@@ -237,7 +242,7 @@ DELETE FROM bookmarks WHERE id = 'pgtap-guard-bm';
 SELECT is(
   (SELECT count(*) FROM deleted_item_graveyard
     WHERE item_id = 'pgtap-guard-bm' AND table_name = 'bookmarks'),
-  1,
+  1::bigint,
   '物理 DELETE 写入墓园（彻底删除在其他端不可被补推复活）'
 );
 
@@ -246,7 +251,7 @@ INSERT INTO bookmarks (id, user_id, title, updated_at_num)
 VALUES ('pgtap-guard-bm', '11111111-1111-1111-1111-111111111111', 'x', 3000);
 SELECT is(
   (SELECT count(*) FROM bookmarks WHERE id = 'pgtap-guard-bm'),
-  0,
+  0::bigint,
   '墓园条目无法以存活态重新 INSERT'
 );
 
@@ -265,7 +270,7 @@ SELECT is(
      JOIN pg_class c ON c.oid = t.tgrelid
     WHERE NOT t.tgisinternal AND c.relname = 'link_check_history'
       AND t.tgname = 'trg_prune_link_check_history'),
-  1,
+  1::bigint,
   'link_check_history 存在自动剪枝触发器（033）'
 );
 
@@ -276,7 +281,7 @@ SELECT '11111111-1111-1111-1111-111111111111', 'pgtap-prune-bm', 'https://prune-
 FROM generate_series(1, 7) AS g;
 SELECT is(
   (SELECT count(*) FROM link_check_history WHERE bookmark_id = 'pgtap-prune-bm'),
-  5,
+  5::bigint,
   'link_check_history 连插 7 条后自动剪枝到 5 条（033）'
 );
 
