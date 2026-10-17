@@ -55,7 +55,7 @@ export function getMiMoConfig(): { apiKey: string; baseUrl: string; model: strin
   const apiKey = stored.apiKey?.trim() || ''
   const baseUrl = (stored.baseUrl?.trim() || DEFAULT_MIMO_BASE_URL).replace(/\/+$/, '')
   const model = (stored.model?.trim()) || DEFAULT_MIMO_MODEL
-  const enabled = stored.enabled !== false
+  const enabled = true
 
   return { apiKey, baseUrl, model, enabled }
 }
