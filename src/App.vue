@@ -42,6 +42,7 @@
         </div>
       </div>
       <BatchPopover v-if="!uiStore.shareMode" />
+      <StagingDock v-if="!uiStore.shareMode" />
     </div>
     <div v-if="!uiStore.shareMode" class="resize-handle" id="resizeRight"></div>
     <DetailPanel v-if="!uiStore.shareMode" />
@@ -90,7 +91,7 @@
 <UserPopover />
 </ErrorBoundary>
 
-<div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false; store.detailCards.splice(0)"></div>
+<div class="dp-overlay" id="dpOverlay" :class="{ show: store.panels.detail && isMobile() }" @click="store.panels.detail = false"></div>
 <div class="overlay" id="railOverlay" :class="{ show: store.panels.rail }" @click="closeRail"></div>
 </ErrorBoundary>
 <!-- 全局覆盖层：分享态与主布局共用 -->
@@ -128,6 +129,7 @@ import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
 import DetailPanel from './components/shell/DetailPanel.vue'
+import StagingDock from './components/shell/StagingDock.vue'
 
 const { t, locale: curLocale } = useI18n()
 const isZh = computed(() => curLocale.value === 'zh-CN')

@@ -177,7 +177,7 @@ function _updateDragHint(e: DragEvent, target: Element | null) {
 }
 
 function _onDragOver(e: DragEvent) {
-  const target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #cardGrid');
+  const target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #cardGrid, #stagingDock');
   _updateDragHint(e, target)
   if (target && target.classList.contains('group-card') && _currentDragPayload && _currentDragPayload.type === 'bm' && _currentDragPayload.srcGid === (target as HTMLElement).dataset.groupId) {
     e.preventDefault();
@@ -238,7 +238,7 @@ function _onDrop(e: DragEvent) {
   if (gCard) { handleGroupCardDrop(e, gCard, p); return; }
   const dCard = target?.classList.contains('detail-card-wrap') ? target : target?.closest('.detail-card-wrap');
   if (dCard) { handleDetailCardDrop(e, dCard, p); return; }
-  if (target?.id === 'detailPanel' || target?.closest('#detailPanel')) { handleDetailPanelDrop(e, p); return; }
+  if (target?.id === 'detailPanel' || target?.closest('#detailPanel') || target?.id === 'stagingDock' || target?.closest('#stagingDock')) { handleDetailPanelDrop(e, p); return; }
   if (target?.id === 'cardGrid' || target?.closest('#cardGrid')) { handleGridDrop(e, p); return; }
   const rItem = target?.classList.contains('rail-item') ? target : target?.closest('.rail-item');
   if (rItem) {

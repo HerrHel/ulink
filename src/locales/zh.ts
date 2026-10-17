@@ -189,7 +189,7 @@ export const zh = {
     shareGroup: '分享笔记',
     settings: '设置',
     syncStatus: '同步状态',
-    detailPanel: '右侧辅助栏',
+    detailPanel: 'AI 助手',
     allBookmarks: '全部书签',
     focusCount: '{n} 个书签',
     countItems: '{n} 个',
@@ -212,6 +212,13 @@ export const zh = {
   detail: {
     panel: '辅助栏',
     dragHint: '拖拽书签到此处查看',
+  },
+  staging: {
+    shelf: '暂存搁架',
+    title: '暂存',
+    openAll: '全部打开',
+    clearAll: '清空',
+    dragHint: '拖拽书签到此处暂存',
   },
   batch: {
     selected: '已选 {n} 项',

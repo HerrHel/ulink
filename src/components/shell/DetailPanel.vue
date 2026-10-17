@@ -88,27 +88,8 @@
         </div>
       </div>
 
-      <div v-if="entries.length" class="chat-top-tabs">
-        <button
-          class="chat-top-tab"
-          :class="{ active: currentTab === 'ai' }"
-          @click="currentTab = 'ai'"
-        >
-          <span>{{ t('ai.sidebarTitle') }}</span>
-        </button>
-        <button
-          class="chat-top-tab"
-          :class="{ active: currentTab === 'cards' }"
-          @click="currentTab = 'cards'"
-        >
-          <span>{{ t('ai.tabCards') }}</span>
-          <span class="chat-tab-badge">{{ entries.length }}</span>
-        </button>
-      </div>
-
       <div class="chat-top-actions">
         <button
-          v-if="currentTab === 'ai'"
           class="chat-btn-icon"
           :class="{ 'is-disabled': isCurrentSessionEmpty }"
           :disabled="isCurrentSessionEmpty"
@@ -135,10 +116,8 @@
       </div>
     </div>
 
-    <!-- 中间区域：对话流 / 暂存卡片 -->
+    <!-- 中间区域：对话流 -->
     <div class="detail-inner chat-scroll-body" id="detailInner" ref="chatScrollRef">
-      <!-- 对话模式 -->
-      <template v-if="currentTab === 'ai'">
         <!-- 初始空态：淡雅、温和、轻量的文字引导 -->
         <div v-if="chatTurns.length === 0" class="chat-empty-state">
           <div class="chat-empty-inner">
@@ -462,29 +441,6 @@
             </div>
           </div>
         </div>
-      </template>
-
-      <!-- 暂存卡片模式 (100% 保持原有兼容) -->
-      <template v-else>
-        <template v-if="entries.length">
-          <div class="card-grid grid-view detail-grid">
-            <div class="card-list-inner">
-              <template v-for="entry in entries" :key="entry.rawId">
-                <div class="detail-card-wrap" :data-bm-id="entry.rawId" :data-didx="entry.realIdx">
-                  <button class="detail-close" @click.stop="closeDetail(entry.rawId)" :title="t('common.close')">&times;</button>
-                  <GroupCard v-if="entry.isGroup" :group="entry.data" detail-mode />
-                  <BookmarkCard v-else :bookmark="entry.data" :default-acct-open="true" />
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
-        <div v-else class="empty empty-compact">
-          <div class="empty-icon" v-html="bookmarkIcon"></div>
-          <h3>{{ t('detail.panel') }}</h3>
-          <p>{{ t('detail.dragHint') }}</p>
-        </div>
-      </template>
     </div>
 
     <!-- 底部常驻：单一精致对话框（集成斜杠联想与停止生成） -->
@@ -549,18 +505,13 @@
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
-import { isMobile, domain } from '../../utils.js'
-import { I } from '../../config/icons.js'
+import { isMobile } from '../../utils.js'
 import { useI18n } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
-import BookmarkCard from '../cards/BookmarkCard.vue'
-import GroupCard from '../cards/GroupCard.vue'
 import AiInlineCard from '../cards/AiInlineCard.vue'
 import { parseTurnContentSegments, type ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
 import type { ChatTurn } from '../../lib/ai/chatSessions.js'
 import { useAiChat } from '../../composables/domain/useAiChat.js'
-import { buildDetailCards } from './buildDetailCards.js'
-import type { DetailEntry } from './buildDetailCards.js'
 
 const { t, locale } = useI18n()
 const isZh = computed(() => locale.value.startsWith('zh'))
@@ -571,19 +522,13 @@ const detailPanelRef = ref<HTMLElement | null>(null)
 const aiTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const chatScrollRef = ref<HTMLElement | null>(null)
 
-const isOpen = computed(() => ui.panels.detail || ui.detailCards.length > 0)
-
-const entries = computed<DetailEntry[]>(() =>
-  buildDetailCards(ui.detailCards, ds.groupMap, ds.bookmarkMap, domain),
-)
-
-const currentTab = ref<'ai' | 'cards'>('ai')
+const isOpen = computed(() => ui.panels.detail)
 
 const isInputFocused = ref(false)
 const isSessionMenuOpen = ref(false)
 
 // ── AI 调度逻辑抽至 useAiChat（会话管理 / 提交调度 / 行动卡片 / 斜杠命令）；
-//    DOM 副作用（滚动到底、输入框聚焦/高度、会话菜单收起、切回对话 tab）由本组件回调注入 ──
+//    DOM 副作用（滚动到底、输入框聚焦/高度、会话菜单收起）由本组件回调注入 ──
 const {
   sessions,
   currentSessionId,
@@ -624,9 +569,6 @@ const {
   focusInput: () => nextTick(() => aiTextareaRef.value?.focus()),
   closeSessionMenu: () => {
     isSessionMenuOpen.value = false
-  },
-  showAiTab: () => {
-    currentTab.value = 'ai'
   },
 })
 
@@ -729,7 +671,6 @@ watch(
   () => ui.aiAssistantInitialQuery,
   (val) => {
     if (val) {
-      currentTab.value = 'ai'
       aiQuery.value = val
       ui.aiAssistantInitialQuery = ''
       adjustTextareaHeight()
@@ -757,14 +698,9 @@ watch(
   () => isOpen.value,
   (open) => {
     if (open) {
-      if (!entries.value.length) {
-        currentTab.value = 'ai'
-      }
       nextTick(() => {
         adjustTextareaHeight()
-        if (currentTab.value === 'ai') {
-          aiTextareaRef.value?.focus()
-        }
+        aiTextareaRef.value?.focus()
       })
     }
   },
@@ -795,7 +731,6 @@ function quickFill(text: string) {
 
 function closeEntirePanel() {
   ui.panels.detail = false
-  ui.detailCards.splice(0)
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -930,7 +865,7 @@ function onSwipeEnd() {
   if (!isSwiping.value) { _swipeStartY = 0; return }
   const panel = detailPanelRef.value
   const panelHeight = panel ? panel.offsetHeight : 300
-  if (translateY.value > panelHeight * 0.3) { ui.panels.detail = false; ui.detailCards.splice(0) }
+  if (translateY.value > panelHeight * 0.3) { ui.panels.detail = false }
   _resetSwipe()
 }
 function onSwipeCancel() {
@@ -970,16 +905,6 @@ onUnmounted(() => {
     el.removeEventListener('touchcancel', onSwipeCancel)
   }
 })
-
-const bookmarkIcon = I.emptyBookmark
-
-function closeDetail(rawId: string) {
-  const idx = ui.detailCards.indexOf(rawId)
-  if (idx > -1) ui.detailCards.splice(idx, 1)
-  // 只移除单张暂存卡，绝不触碰 panels.detail——否则删最后一张卡会把整个面板连带关掉。
-  // 面板开合由 isOpen = panels.detail || detailCards 决定；暂存清空后回到 AI tab。
-  if (!ui.detailCards.length && currentTab.value === 'cards') currentTab.value = 'ai'
-}
 </script>
 
 <style scoped>
@@ -1226,49 +1151,6 @@ function closeDetail(rawId: string) {
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.2px;
-}
-
-.chat-top-tabs {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.chat-top-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 10px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border-radius: 9999px;
-  transition: all 0.15s ease;
-}
-
-.chat-top-tab:hover {
-  color: var(--text);
-  background: var(--surface-hover);
-}
-
-.chat-top-tab.active {
-  color: var(--accent);
-  font-weight: 600;
-  background: var(--accent-light);
-}
-
-.chat-tab-badge {
-  font-size: 10px;
-  font-weight: 600;
-  padding: 0 5px;
-  border-radius: 9999px;
-  background: var(--accent-light);
-  color: var(--accent);
 }
 
 .chat-top-actions {
