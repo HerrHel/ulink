@@ -83,7 +83,7 @@ export interface UseAiChatOptions {
 export function useAiChat(options: UseAiChatOptions = {}) {
   const { onTurnsChanged, onQueryChanged, focusInput, closeSessionMenu, showAiTab } = options
 
-  const { t, locale } = useI18n()
+  const { t, tN, locale } = useI18n()
   const isZh = computed(() => locale.value.startsWith('zh'))
 
   const ui = useUIStore()
@@ -503,7 +503,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
           content: res.message,
-          steps: [{ text: t('ai.inboxStepDone', { n: res.movedCount }), done: true }],
+          steps: [{ text: tN('ai.inboxStepDone', res.movedCount, { n: res.movedCount }), done: true }],
           timestamp: Date.now(),
         })
         onTurnsChanged?.()
@@ -537,7 +537,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
           content: res.message,
           steps: res.group
             ? [
-                { text: t('ai.wsStepStore', { n: res.totalBookmarks }), done: true },
+                { text: tN('ai.wsStepStore', res.totalBookmarks, { n: res.totalBookmarks }), done: true },
                 { text: t('ai.wsStepCreateGroup', { name: res.group.name }), done: true },
                 { text: t('ai.wsStepFocus'), done: true },
               ]
@@ -821,14 +821,14 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                     type: 'custom',
                     actionName: 'create_topic_workspace',
                     title: t('ai.wsCardTitle', { name: topic }),
-                    desc: t('ai.wsCardDesc', { n: (assistantTurn.candidates || []).length }),
+                    desc: tN('ai.wsCardDesc', (assistantTurn.candidates || []).length, { n: (assistantTurn.candidates || []).length }),
                     buttonText: t('ai.wsCardButton'),
                     payload: {
                       topic,
                       candidates: assistantTurn.candidates,
                     },
                   }
-                  resultText = t('ai.toolResultWorkspaceCard', { topic, n: (assistantTurn.candidates || []).length })
+                  resultText = tN('ai.toolResultWorkspaceCard', (assistantTurn.candidates || []).length, { topic, n: (assistantTurn.candidates || []).length })
                 } else if (call.name === 'merge_duplicates') {
                   const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
                   if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
@@ -958,7 +958,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
           type: 'custom',
           actionName: 'create_topic_workspace',
           title: t('ai.wsCardTitle', { name: cleanTopic }),
-          desc: t('ai.wsCardDesc', { n: assistantTurn.candidates.length }),
+          desc: tN('ai.wsCardDesc', assistantTurn.candidates.length, { n: assistantTurn.candidates.length }),
           buttonText: t('ai.wsCardButton'),
           payload: {
             topic: cleanTopic,
