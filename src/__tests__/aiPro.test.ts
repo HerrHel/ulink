@@ -9,6 +9,17 @@ import {
 import { useUIStore } from '../stores/ui.js'
 import type { Bookmark, Category, CustomAttribute } from '../types.js'
 
+// 测试不联网：Jina Reader 一律按抓取失败降级，验证纯本地提取路径
+vi.mock('../lib/ai/jinaReader.js', () => ({
+  fetchPageContentViaJina: vi.fn(async () => ({ success: false, url: '', error: 'test 不联网' })),
+}))
+
+// 测试不联网：服务端 extract-video 链路与文字源总结一并桩掉，走纯输入文本提取
+vi.mock('../lib/ai/videoExtract.js', () => ({
+  fetchVideoExtractServer: vi.fn(async () => null),
+  generateVideoSummary: vi.fn(async () => null),
+}))
+
 describe('AI Pro Matrix & Smart Candidate Ingestion', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

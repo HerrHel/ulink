@@ -45,4 +45,6 @@ export interface AiVideoExtractResult {
   groupTitle: string
   groupNotes: string
   bookmarks: AiCandidateBookmark[]
+  /** 文字源总结速览（简介/字幕/评论区 → 大模型），无可用 AI 通道或失败时缺省 */
+  summary?: string
 }

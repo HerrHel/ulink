@@ -141,4 +141,38 @@ describe('semanticSearch — 本地自然语言意图与语义检索引擎', () 
     const results = searchSemanticBookmarks('流程图', [deletedBm], [])
     expect(results.find(r => r.id === 'bm-deleted')).toBeUndefined()
   })
+
+  // ── 生活类概念簇：模糊场景词召回 ──
+  it('生活场景：输入“看番的”能凭站名俗称召回 omofun（忘记网站名也能搜到）', () => {
+    const omofun = makeBm({
+      id: 'bm-omofun',
+      title: 'OmoFun',
+      url: 'https://www.omofun.me/',
+      notes: '在线看番站点',
+    })
+    const results = searchSemanticBookmarks('看番的', [omofun], [])
+    const hit = results.find(r => r.id === 'bm-omofun')
+    expect(hit).toBeDefined()
+    expect(hit?.matchedConcept).toBe('动漫与番剧')
+  })
+
+  it('生活场景：输入“转格式”能召回在线转换站点', () => {
+    const cloudConvert = makeBm({
+      id: 'bm-cloudconvert',
+      title: 'CloudConvert',
+      url: 'https://cloudconvert.com',
+    })
+    const results = searchSemanticBookmarks('转格式', [cloudConvert], [])
+    expect(results.some(r => r.id === 'bm-cloudconvert')).toBe(true)
+  })
+
+  it('生活场景：输入“找资源”能召回网盘资源站', () => {
+    const alipan = makeBm({
+      id: 'bm-alipan',
+      title: '阿里云盘',
+      url: 'https://www.alipan.com',
+    })
+    const results = searchSemanticBookmarks('找资源', [alipan], [])
+    expect(results.some(r => r.id === 'bm-alipan')).toBe(true)
+  })
 })

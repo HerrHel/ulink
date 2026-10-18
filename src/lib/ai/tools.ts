@@ -49,7 +49,7 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'inbox_zero',
-      description: '执行收件箱清零分析：扫描未分类书签（Inbox），基于历史域名与分类相似度进行智能聚类，生成一键归类建议卡片（应用归类前需用户确认）。',
+      description: '执行收件箱清零分析：扫描未分类书签（Inbox），基于历史域名与分类相似度进行智能聚类，识别同站子页并归入其主页面下（建立子链接从属关系），生成一键归类建议卡片（应用归类与嵌套前需用户确认，可撤销）。',
       parameters: {
         type: 'object',
         properties: {},

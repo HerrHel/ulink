@@ -462,6 +462,31 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(mockApp.save).not.toHaveBeenCalled()
   })
 
+  it('applyInboxZeroClustering 识别同站子页并建立 parentId 嵌套（子页跟随父级分类，可撤销）', async () => {
+    const parent = { id: 'p1', title: 'OmoFun', url: 'https://omofun.com', categoryId: 'c1' } as Bookmark
+    const child = {
+      id: 's1',
+      title: 'OmoFun 某番',
+      url: 'https://omofun.com/v/123',
+      categoryId: 'uncategorized',
+    } as Bookmark
+    mockDs.bookmarks.push(parent, child)
+    mockDs.bookmarkMap.p1 = parent
+    mockDs.bookmarkMap.s1 = child
+
+    const res = await applyInboxZeroClustering({ ds: mockDs, ui: mockUi, app: mockApp })
+    expect(res.nestedCount).toBe(1)
+    expect(mockDs.bookmarkMap.s1.parentId).toBe('p1')
+    // 子书签归属父卡片：分类跟随父级
+    expect(mockDs.bookmarkMap.s1.categoryId).toBe('c1')
+
+    // 撤销还原嵌套与分类
+    const resUndo = await dispatchSiteCommand('/undo', { ds: mockDs, ui: mockUi, app: mockApp })
+    expect(resUndo.handled).toBe(true)
+    expect(mockDs.bookmarkMap.s1.parentId).toBeUndefined()
+    expect(mockDs.bookmarkMap.s1.categoryId).toBe('uncategorized')
+  })
+
   // ── 20. /pack 指令用法提示 ──
   it('/pack 无参数时返回主题工作台指令用法提示', async () => {
     const res = await dispatchSiteCommand('/pack', {

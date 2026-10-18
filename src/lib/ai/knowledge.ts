@@ -722,6 +722,36 @@ export const CONCEPT_ONTOLOGY: ConceptCluster[] = [
     relatedTerms: ['tool', 'utility', 'converter', 'regex', 'json', 'pdf', 'calculator'],
     domains: ['tool.lu', 'caniuse.com', 'json.cn', 'transform.tools'],
   },
+  {
+    name: '动漫与番剧',
+    keywords: ['看番', '追番', '番剧', '新番', '动漫', '动画', '漫画', '二次元', '字幕组', '国漫', '日本动漫', '在线看番'],
+    relatedTerms: ['anime', 'omofun', 'dongman', '樱花动漫', '风车动漫', 'agefans', 'mikanani', 'nyaa', '番組'],
+    domains: ['omofun.com', 'omofun.tv', 'omofun.org', 'mikanani.me', 'nyaa.si'],
+  },
+  {
+    name: '影视追剧与观影',
+    keywords: ['看电影', '看剧', '追剧', '电视剧', '美剧', '韩剧', '日剧', '纪录片', '影院', '在线观影', '高清电影', '免费看电影'],
+    relatedTerms: ['movie', 'tvshow', 'drama', '人人影视', '低端影视', 'libvio', '在线影院', '影视'],
+    domains: ['netflix.com', 'iqiyi.com', 'youku.com', 'v.qq.com', 'douban.com'],
+  },
+  {
+    name: '资源下载与网盘搜索',
+    keywords: ['找资源', '资源搜索', '下载资源', '磁力', '磁力链接', 'ed2k', '网盘', '网盘搜索', '软件下载', '免费资源', '破解', '绿色软件'],
+    relatedTerms: ['download', 'torrent', 'magnet', '百度网盘', '夸克网盘', '阿里云盘', '资源站', 'downloadly'],
+    domains: ['alipan.com', 'pan.baidu.com', 'pan.quark.cn', '115.com'],
+  },
+  {
+    name: '格式转换与文件处理',
+    keywords: ['转格式', '格式转换', '压缩文件', '文件压缩', 'pdf转换', '图片压缩', '视频转换', '音频转换', '去水印', '在线转换', '转pdf'],
+    relatedTerms: ['convert', 'converter', 'compress', 'zip', '格式工厂', 'ilovepdf', 'tinypng', 'cloudconvert', 'convertio', 'smallpdf'],
+    domains: ['ilovepdf.com', 'cloudconvert.com', 'convertio.co', 'tinypng.com', 'smallpdf.com'],
+  },
+  {
+    name: '设计素材与灵感库',
+    keywords: ['素材', '设计素材', '免费素材', '图片素材', '视频素材', '音效素材', '灵感', '配色灵感', '免版权'],
+    relatedTerms: ['unsplash', 'pexels', 'pixabay', 'iconfont', '花瓣', '站酷', 'zcool', 'freepik', 'storyset', 'stock'],
+    domains: ['unsplash.com', 'pexels.com', 'pixabay.com', 'iconfont.cn', 'zcool.com.cn', 'huaban.com', 'freepik.com'],
+  },
 ]
 
 // ── 竞品图谱（similarWebsites）──

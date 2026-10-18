@@ -140,6 +140,11 @@
             </div>
           </div>
 
+          <div v-if="currentTab === 'video' && videoResult?.summary" class="ai-video-summary">
+            <span class="ai-video-summary-label">{{ t('ai.videoSummaryLabel') }}</span>
+            <p class="ai-video-summary-text">{{ videoResult.summary }}</p>
+          </div>
+
           <div class="ai-cards-stream">
             <AiCandidateCard
               v-for="item in candidates"
@@ -327,6 +332,28 @@ function createGroupFromResults() {
 <style scoped>
 .ai-finder-modal {
   max-width: 680px;
+}
+.ai-video-summary {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+}
+.ai-video-summary-label {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.ai-video-summary-text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
 }
 .ai-title-badge {
   font-size: 0.65rem;

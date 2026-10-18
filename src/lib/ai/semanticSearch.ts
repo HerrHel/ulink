@@ -120,7 +120,9 @@ export function searchSemanticBookmarks(
 
       const hitTerm = cluster.relatedTerms.find(term => bmTitle.includes(term) || bmHost.includes(term))
       if (hitTerm) {
-        clusterScore += 30
+        // 相关词是站点别名/俗称（如 omofun），单点命中即须越过 35 召回线，
+        // 否则模糊搜索（「看番的」找 omofun）会被阈值吞掉
+        clusterScore += 40
         reasons.push(`匹配术语「${hitTerm}」`)
       }
 
