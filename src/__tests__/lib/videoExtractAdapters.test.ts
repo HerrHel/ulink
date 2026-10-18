@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validateInputUrl,
   detectPlatform,
+  isShortLinkHost,
   parseBilibiliVideoId,
   parseYouTubeVideoId,
   parseBilibiliView,
@@ -41,8 +42,19 @@ describe('extract-video 平台适配器纯逻辑', () => {
     expect(parseBilibiliVideoId(new URL('https://www.bilibili.com/video/BV1xx411c7mD'))).toEqual({ bvid: 'BV1xx411c7mD' })
     expect(parseBilibiliVideoId(new URL('https://bilibili.com/video/av170001'))).toEqual({ aid: '170001' })
     expect(parseBilibiliVideoId(new URL('https://space.bilibili.com/12345'))).toBeNull()
-    // b23.tv 短链无法离线解析 → 走 generic 降级
+    // b23.tv 短链本函数不解析（由 index.ts resolveShortLink 先做重定向解析）
     expect(parseBilibiliVideoId(new URL('https://b23.tv/abcdef'))).toBeNull()
+  })
+
+  it('isShortLinkHost：已知分享短链域识别（驱动服务端重定向解析）', () => {
+    expect(isShortLinkHost('b23.tv')).toBe(true)
+    expect(isShortLinkHost('www.b23.tv')).toBe(true)
+    expect(isShortLinkHost('xhslink.com')).toBe(true)
+    expect(isShortLinkHost('v.douyin.com')).toBe(true)
+    expect(isShortLinkHost('vm.tiktok.com')).toBe(true)
+    expect(isShortLinkHost('bilibili.com')).toBe(false)
+    expect(isShortLinkHost('evil-b23.tv.example.com')).toBe(false)
+    expect(isShortLinkHost('example.com')).toBe(false)
   })
 
   it('parseYouTubeVideoId：watch/youtu.be/shorts/embed 各形态解析', () => {
