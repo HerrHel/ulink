@@ -141,7 +141,7 @@
           </div>
 
           <div v-if="currentTab === 'video' && videoResult?.summary" class="ai-video-summary">
-            <span class="ai-video-summary-label">{{ t('ai.videoSummaryLabel') }}</span>
+            <span class="ai-video-summary-label">{{ videoResult.question ? t('ai.videoAnswerLabel') : t('ai.videoSummaryLabel') }}</span>
             <p class="ai-video-summary-text">{{ videoResult.summary }}</p>
           </div>
 
