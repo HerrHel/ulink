@@ -82,6 +82,26 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     expect(inputHits.map(h => h.url)).toContain('https://space.bilibili.com/123')
   })
 
+  it('URL 紧贴中文截止：链接后的中文叙述不得被吞进地址（真实用户场景）', () => {
+    // 用户原文：「…-哔哩哔哩】 https://b23.tv/fuBzhYU总结视频内出现的网站」
+    const hits = extractDeepLinksFromText(
+      '【10月最新Claude防封号最安全的！-哔哩哔哩】 https://b23.tv/fuBzhYU总结视频内出现的网站',
+      { defaultSource: '输入文本' }
+    )
+    expect(hits.map(h => h.url)).toEqual(['https://b23.tv/fuBzhYU'])
+
+    // Markdown 锚链接与完整 URL 同样截止，尾随中英标点清理
+    const mdHits = extractDeepLinksFromText(
+      '[工具](https://js.design推荐) 还有 https://excalidraw.com，以及上v0.dev生成页面',
+      { defaultSource: '正文' }
+    )
+    expect(mdHits.map(h => h.url)).toEqual([
+      'https://js.design',
+      'https://excalidraw.com',
+      'https://v0.dev',
+    ])
+  })
+
   // ── 集成：extractBookmarksFromVideo（mock Jina 抓取正文）──
 
   it('深度提取：简介/字幕/评论区链接全部提取，来源标注进 highlight，噪声被过滤', async () => {
@@ -209,6 +229,28 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
 
     expect(mockFetch).toHaveBeenCalled()
     expect(res.bookmarks.map(b => b.url)).toContain('https://excalidraw.com')
+  })
+
+  it('targetUrl 截断：URL 后紧贴的中文不吞进抓取地址（防 404 根因）', async () => {
+    mockServerExtract.mockResolvedValue({
+      source: 'bilibili',
+      url: 'https://b23.tv/fuBzhYU',
+      title: 'Claude 防封号教程',
+      description: '教程里提到的网站',
+      subtitles: '',
+      comments: [],
+      degraded: false,
+    })
+
+    // 用户真实输入：URL 与中文指令无空格紧贴
+    await extractBookmarksFromVideo(
+      '【10月最新Claude防封号最安全的！-哔哩哔哩】 https://b23.tv/fuBzhYU总结视频内出现的网站',
+      testCategories,
+      testAttributes
+    )
+
+    // 抓取请求必须是干净的短链，而非吞了中文的 percent-encoded 脏地址
+    expect(mockServerExtract.mock.calls[0][0]).toBe('https://b23.tv/fuBzhYU')
   })
 
   it('文字源总结：有抓取内容时生成 summary，失败/无内容时缺省不伪造', async () => {

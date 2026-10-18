@@ -314,20 +314,22 @@ export function extractDeepLinksFromText(
     }
 
     // Markdown 锚链接 [文本](url)：锚文本可直接当候选标题
+    // URL 段用 ASCII 白名单：URL 后紧贴的中文是叙述文字，不得吞进地址（否则 404）
     let workLine = line
-    workLine = workLine.replace(/\[([^\]]{1,80})\]\((https?:\/\/[^)\s]+)\)/g, (_m, anchor: string, u: string) => {
+    workLine = workLine.replace(/\[([^\]]{1,80})\]\((https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)\)/g, (_m, anchor: string, u: string) => {
       hits.push({ url: u, source: currentSource, anchor: anchor.trim() })
       return ` ${u} `
     })
 
-    // 带协议的完整链接
-    for (const m of workLine.matchAll(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)\]'"<>]*/gi)) {
+    // 带协议的完整链接（同上：遇 CJK 等非 ASCII 截止，再清尾随标点）
+    for (const m of workLine.matchAll(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]*/gi)) {
       const u = m[0].replace(/[，。！？,.!?:;；]+$/, '')
       if (u) hits.push({ url: u, source: currentSource })
     }
 
     // 裸域名如 v0.dev, jsdesign.com, mockplus.cn
-    for (const m of workLine.matchAll(/(?:^|[\s,，、])([a-zA-Z0-9-]+\.(?:com|dev|cn|io|app|net|org|co))(?=[\s,，、。!?]|$)/gi)) {
+    // 左右界均含 CJK/全角字符：中文叙述常无空格紧贴域名（「上v0.dev生成页面」），仍应识别
+    for (const m of workLine.matchAll(/(?:^|[\s,，、\u3000-\u303f\u4e00-\u9fff\uff00-\uffef])([a-zA-Z0-9-]+\.(?:com|dev|cn|io|app|net|org|co))(?=[\s,，、。!?\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]|$)/gi)) {
       hits.push({ url: `https://${m[1].toLowerCase()}`, source: currentSource })
     }
   }
@@ -354,8 +356,11 @@ export async function extractBookmarksFromVideo(
   attributes: CustomAttribute[] = []
 ): Promise<AiVideoExtractResult> {
   const cleanInput = videoInput.trim()
-  const urlMatch = cleanInput.match(/https?:\/\/[^\s]+/i)
-  const targetUrl = urlMatch ? urlMatch[0] : ''
+  // URL 本体用 RFC 3986 白名单字符（排除空白/引号/括号与 CJK 等非 ASCII）：
+  // 粘贴文本常把 URL 与中文紧贴（如「https://b23.tv/xxx总结视频里的网站」），
+  // 按空白贪婪匹配会把中文吞进地址导致 404，遇非 ASCII 应截止
+  const urlMatch = cleanInput.match(/https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+/i)
+  const targetUrl = urlMatch ? urlMatch[0].replace(/[，。！？,.!?:;；]+$/, '') : ''
 
   // 1. 内容获取：优先服务端 extract-video Edge Function（海外节点转发抓取，平台适配器
   //    结构化返回简介/字幕/评论区，每段独立标注来源）；失败/未登录降级本地 Jina 直连
