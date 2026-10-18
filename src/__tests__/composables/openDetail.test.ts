@@ -126,4 +126,30 @@ describe('openDetail — 暂存搁架卡位增量去重 push + 空 bmId 早退�
 
     expect(ui.detailCards).toEqual(['b1', 'b2', 'b3'])
   })
+
+  it('I：移动端环境（ui.isMobile = true）：openDetail(bmId) 自动呼出 QuickLook 抽屉（不污染 detailCards）', () => {
+    const ui = useUIStore()
+    ui.isMobile = true
+    ui.detailCards = []
+    ui.modals.quickLook = false
+
+    openDetail('b1')
+
+    expect(ui.modals.quickLook).toBe(true)
+    expect(ui.quickLookBmId).toBe('b1')
+    expect(ui.detailCards).toHaveLength(0)
+  })
+
+  it('J：移动端环境组卡片（ui.isMobile = true && bmId 以 group: 开头）：呼出 QuickLook 抽屉（像书签一样展示组卡片速览）', () => {
+    const ui = useUIStore()
+    ui.isMobile = true
+    ui.detailCards = []
+    ui.modals.quickLook = false
+
+    openDetail('group:g1')
+
+    expect(ui.modals.quickLook).toBe(true)
+    expect(ui.quickLookBmId).toBe('group:g1')
+    expect(ui.detailCards).toHaveLength(0)
+  })
 })

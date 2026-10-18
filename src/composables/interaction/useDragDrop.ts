@@ -18,7 +18,7 @@ import { getDragHintText } from '../../lib/dragHint.js'
 import type { DragHintPayload } from '../../lib/dragHint.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 import { _samePinStatus, _swapAndMarkDirty } from '../../lib/dragSwap.js'
-export { _samePinStatus, _swapAndMarkDirty }
+export { _samePinStatus, _swapAndMarkDirty, _onDragStart, _onDragOver, _onDrop, _onDragEnd }
 
 type DragPayload = DragHintPayload
 
@@ -115,6 +115,10 @@ function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage
   e.dataTransfer!.effectAllowed = 'move'
   if (addDragImage) setDragImage(e)
   el.classList.add('dragging')
+  if (payload.type !== 'detail' && payload.srcGid !== DRAG_SRC_DETAIL) {
+    document.body.classList.add('is-dragging-card')
+    try { useUIStore().isDraggingCard = true } catch (_) { /* store 未就绪 */ }
+  }
 }
 
 function _onDragStart(e: DragEvent) {
@@ -132,7 +136,13 @@ function _onDragStart(e: DragEvent) {
   const dCard = (e.target as HTMLElement).closest('.detail-card-wrap[data-didx]');
   if (dCard) {
     _detailDragIdx = parseInt((dCard as HTMLElement).dataset.didx!);
-    _initDrag(e, dCard, { type: 'detail', id: (dCard as HTMLElement).dataset.bmId!, srcGid: DRAG_SRC_DETAIL });
+    const rawId = (dCard as HTMLElement).dataset.bmId!;
+    const isGroup = rawId.startsWith('group:');
+    _initDrag(e, dCard, {
+      type: isGroup ? 'group' : 'bm',
+      id: rawId,
+      srcGid: DRAG_SRC_DETAIL,
+    });
     return;
   }
   const bmCard = (e.target as HTMLElement).closest('.card[data-id]:not(.group-card)');
@@ -177,7 +187,10 @@ function _updateDragHint(e: DragEvent, target: Element | null) {
 }
 
 function _onDragOver(e: DragEvent) {
-  const target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #cardGrid, #stagingDock');
+  let target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #cardGrid, #stagingDock, #edgeStagingSidebar, .edge-staging-drop-zone');
+  if (!target && _currentDragPayload?.srcGid === DRAG_SRC_DETAIL) {
+    target = (e.target as HTMLElement).closest('#panelContent, .panel-main-inner, .panel-main');
+  }
   _updateDragHint(e, target)
   if (target && target.classList.contains('group-card') && _currentDragPayload && _currentDragPayload.type === 'bm' && _currentDragPayload.srcGid === (target as HTMLElement).dataset.groupId) {
     e.preventDefault();
@@ -221,38 +234,85 @@ function _onDragOver(e: DragEvent) {
 
 function _onDrop(e: DragEvent) {
   // 复用 dragover 期间缓存的目标元素，避免重复 closest() 落点计算（P1）
-  const target = _dragOverEl
-  if (target) { target.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
+  const target = _dragOverEl || (e.target as HTMLElement);
+  if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
   _hideDragCursor();
   _hideDragHint();
   const p = dragPayload(e);
   if (!p) return;
 
-  const gBody = target?.classList.contains('group-body') ? target : target?.closest('.group-body');
+  const insideStaging = (target as HTMLElement)?.closest?.(
+    '#detailPanel, #edgeStagingSidebar, .edge-staging-drop-zone, #stagingDock'
+  );
+
+  // 1. 暂存区内互相落点（暂存区内重排）
+  const dCard = target?.classList.contains('detail-card-wrap') ? target : target?.closest?.('.detail-card-wrap');
+  if (dCard && insideStaging && (p.srcGid === DRAG_SRC_DETAIL || p.type === 'detail')) {
+    handleDetailCardDrop(e, dCard, p);
+    return;
+  }
+
+  // 2. 如果源于暂存且落在暂存区底板上，不作任何操作（保留在暂存区）
+  if ((p.srcGid === DRAG_SRC_DETAIL || p.type === 'detail') && insideStaging) {
+    return;
+  }
+
+  // 3. 落入笔记正文（嵌入为内联卡片 / 笔记引用）
+  const gBody = target?.classList.contains('group-body') ? target : target?.closest?.('.group-body');
   if (gBody) { handleBodyDrop(e, gBody, p); return; }
-  const gHead = target?.classList.contains('group-card-head') ? target : target?.closest('.group-card-head');
+
+  // 4. 落入笔记头部（交换笔记位置 / 将书签排序到此笔记）
+  const gHead = target?.classList.contains('group-card-head') ? target : target?.closest?.('.group-card-head');
   if (gHead) { handleGroupHeadDrop(e, gHead, p); return; }
-  const bmCard = target?.classList.contains('card') && !target.classList.contains('group-card') ? target : target?.closest('.card:not(.group-card)');
-  if (bmCard) { handleBmCardDrop(e, bmCard, p); return; }
-  const gCard = target?.classList.contains('group-card') ? target : target?.closest('.group-card');
+
+  // 5. 落入笔记卡片（移入笔记）
+  const gCard = target?.classList.contains('group-card') ? target : target?.closest?.('.group-card');
   if (gCard) { handleGroupCardDrop(e, gCard, p); return; }
-  const dCard = target?.classList.contains('detail-card-wrap') ? target : target?.closest('.detail-card-wrap');
-  if (dCard) { handleDetailCardDrop(e, dCard, p); return; }
-  if (target?.id === 'detailPanel' || target?.closest('#detailPanel') || target?.id === 'stagingDock' || target?.closest('#stagingDock')) { handleDetailPanelDrop(e, p); return; }
-  if (target?.id === 'cardGrid' || target?.closest('#cardGrid')) { handleGridDrop(e, p); return; }
-  const rItem = target?.classList.contains('rail-item') ? target : target?.closest('.rail-item');
+
+  // 6. 落入普通书签卡片（交换位置）
+  const bmCard = target?.classList.contains('card') ? target : target?.closest?.('.card');
+  if (bmCard) { handleBmCardDrop(e, bmCard, p); return; }
+
+  // 7. 落入分类侧栏项（移入分类）
+  const rItem = target?.classList.contains('rail-item') ? target : target?.closest?.('.rail-item');
   if (rItem) {
     if (p.type === 'bm') {
       handleBmToCatDrop(e, rItem, p);
+    } else if (p.type === 'group') {
+      handleGroupToCatDrop(e, rItem, p);
     } else if (p.type === 'cat') {
       handleRailDrop(e, rItem);
     }
+    return;
+  }
+
+  // 8. 拖入暂存区（外部卡片拖入暂存区）
+  if (insideStaging) {
+    handleDetailPanelDrop(e, p);
+    return;
+  }
+
+  // 9. 落在主网格或空白区域（拖出暂存区 / 拖出笔记）
+  if (
+    target?.id === 'cardGrid' ||
+    target?.closest?.('#cardGrid') ||
+    target?.id === 'panelContent' ||
+    target?.closest?.('#panelContent') ||
+    target?.classList.contains('panel-main-inner') ||
+    target?.closest?.('.panel-main-inner') ||
+    target?.classList.contains('panel-main') ||
+    target?.closest?.('.panel-main') ||
+    (p.srcGid === DRAG_SRC_DETAIL && !insideStaging)
+  ) {
+    handleGridDrop(e, p);
     return;
   }
 }
 
 function clearDragState() {
   document.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
+  document.body.classList.remove('is-dragging-card');
+  try { useUIStore().isDraggingCard = false } catch (_) { /* store 未就绪 */ }
   if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
   _catDragId = null; _detailDragIdx = null; _currentDragPayload = null; _lastInsertPos = null;
   _hideDragCursor(); _hideDragHint();
@@ -269,6 +329,10 @@ function handleBodyDrop(e: DragEvent, body: Element, p: DragPayload) {
   if (p.type === 'group') {
     const refGid = p.id.slice(6);
     if (refGid === gid) return;
+    if (p.srcGid === DRAG_SRC_DETAIL) {
+      const idx = ui.detailCards.indexOf(p.id);
+      if (idx >= 0) ui.detailCards.splice(idx, 1);
+    }
     addGroupRefToGroup(refGid, gid, e.clientX, e.clientY);
     return;
   }
@@ -318,7 +382,16 @@ function handleGroupHeadDrop(e: DragEvent, head: Element, p: DragPayload) {
     if (srcGid === gid) return;
     const a = _findGroup(srcGid)
     const b = _findGroup(gid)
-    if (a && b) { if (_swapAndMarkDirty(a, b)) { debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]'); } }
+    if (a && b) {
+      if (p.srcGid === DRAG_SRC_DETAIL) {
+        const di = useUIStore().detailCards.indexOf(p.id);
+        if (di >= 0) useUIStore().detailCards.splice(di, 1);
+      }
+      if (_swapAndMarkDirty(a, b)) {
+        debouncedSaveAppData();
+        swapCardsDOM('.group-card[data-group-id="' + a.id + '"]', '.group-card[data-group-id="' + b.id + '"]');
+      }
+    }
   } else if (p.type === 'bm') {
     const bm = _findBm(p.id)
     const sg = _findGroup(gid)
@@ -351,24 +424,45 @@ function handleBmCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   if (p.type === 'group') {
     const sg = _findGroup(p.id.slice(6))
     const bm = _findBm(tid!)
-    if (sg && bm && !bm.parentId) { if (_swapAndMarkDirty(sg, bm)) { debouncedSaveAppData(); swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)'); } }
+    if (sg && bm && !bm.parentId) {
+      if (p.srcGid === DRAG_SRC_DETAIL) {
+        const di = useUIStore().detailCards.indexOf(p.id);
+        if (di >= 0) useUIStore().detailCards.splice(di, 1);
+      }
+      if (_swapAndMarkDirty(sg, bm)) {
+        debouncedSaveAppData();
+        swapCardsDOM('.group-card[data-group-id="' + sg.id + '"]', '.card[data-id="' + bm.id + '"]:not(.group-card)');
+      }
+    }
     return;
   }
 
-  // 审计 R2/R7：fd9cd3a3 让详情面板内卡 dragstart 优先产 type:'detail'，让详情面板内重排
-  // 走 handleDetailCardDrop 安区生效。但 drop 端 handleBmCardDrop 此前全未改——type:'detail'
-  // 的详情书签卡拖到主网格普通书签卡时，p.type 非 'group' 跳过上面分支落到下方 bookmark 互换，
-  // _findBm(p.id) 取到真实 bookmarkId 且 parentId 均 null → _swapAndMarkDirty 改 store.bookmark
-  // 全局 order + debouncedSaveAppData 触发云同步，背反 fd9cd3a3 宣称的 drop 端 type:'detail'
-  // 安区。此处与 handleBodyDrop:308 对齐：只接 type:'bm'，type:'detail'（及其它非 bm 类型）
-  // 直接 return 不改全局 order。
   if (p.type !== 'bm') return;
 
   const a = _findBm(p.id)
   const b = _findBm(tid!)
   if (a && b) {
-    if (a.parentId === b.parentId) { if (_swapAndMarkDirty(a, b)) { debouncedSaveAppData(); swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)'); } }
-    else toast(t('msg.onlySameLevelReorder'), false);
+    if (a.parentId === b.parentId) {
+      if (p.srcGid === DRAG_SRC_DETAIL) {
+        const di = useUIStore().detailCards.indexOf(p.id);
+        if (di >= 0) useUIStore().detailCards.splice(di, 1);
+      }
+      if (_swapAndMarkDirty(a, b)) {
+        debouncedSaveAppData();
+        swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)');
+      }
+    } else if (p.srcGid === DRAG_SRC_DETAIL && a.parentId && !b.parentId) {
+      const ds = useDataStore();
+      ds.updateBookmark(a.id, { parentId: null });
+      const di = useUIStore().detailCards.indexOf(p.id);
+      if (di >= 0) useUIStore().detailCards.splice(di, 1);
+      if (_swapAndMarkDirty(a, b)) {
+        debouncedSaveAppData();
+        swapCardsDOM('.card[data-id="' + a.id + '"]:not(.group-card)', '.card[data-id="' + b.id + '"]:not(.group-card)');
+      }
+    } else {
+      toast(t('msg.onlySameLevelReorder'), false);
+    }
   }
 }
 
@@ -381,6 +475,10 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   if (p.type === 'group') {
     const srcGid = p.id.slice(6);
     if (srcGid === gid) return;
+    if (p.srcGid === DRAG_SRC_DETAIL) {
+      const di = useUIStore().detailCards.indexOf(p.id);
+      if (di >= 0) useUIStore().detailCards.splice(di, 1);
+    }
     addGroupRefToGroup(srcGid, gid, e.clientX, e.clientY);
     return;
   }
@@ -391,6 +489,10 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
       const refGid = p.id.slice(4);
       if (refGid !== gid) {
         if (p.srcGid && p.srcGid !== DRAG_SRC_DETAIL) removeFromSrcGroup(p.srcGid, p.id);
+        if (p.srcGid === DRAG_SRC_DETAIL) {
+          const di = useUIStore().detailCards.indexOf(p.id);
+          if (di >= 0) useUIStore().detailCards.splice(di, 1);
+        }
         addGroupRefToGroup(refGid, gid, e.clientX, e.clientY);
       }
       return;
@@ -400,7 +502,7 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
       removeFromSrcGroup(p.srcGid, p.id);
     }
     if (p.srcGid === DRAG_SRC_DETAIL) {
-      const ui = useUIStore()
+      const ui = useUIStore();
       const di = ui.detailCards.indexOf(p.id);
       if (di >= 0) ui.detailCards.splice(di, 1);
     }
@@ -412,7 +514,7 @@ function handleGroupCardDrop(e: DragEvent, card: Element, p: DragPayload) {
 function handleDetailCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   e.preventDefault(); e.stopPropagation();
   card.classList.remove('detail-drag-over');
-  if (p.type !== 'detail') return;
+  if (p.type !== 'detail' && p.srcGid !== DRAG_SRC_DETAIL) return;
   const ui = useUIStore();
   const toIdx = parseInt((card as HTMLElement).dataset.didx!);
   if (_detailDragIdx == null || _detailDragIdx === toIdx) return;
@@ -427,7 +529,6 @@ function handleDetailPanelDrop(e: DragEvent, p: DragPayload) {
   const ui = useUIStore();
   if (p.type === 'group') {
     if (ui.detailCards.indexOf(p.id) === -1) ui.detailCards.push(p.id);
-    ui.panels.detail = true;
   } else {
     if (p.srcGid) { removeFromSrcGroup(p.srcGid, p.id); debouncedSaveAppData(); }
     openDetail(p.id);
@@ -436,12 +537,15 @@ function handleDetailPanelDrop(e: DragEvent, p: DragPayload) {
 
 function handleGridDrop(e: DragEvent, p: DragPayload) {
   e.preventDefault();
-  if (!p || p.type === 'group') return;
+  if (!p) return;
   const ui = useUIStore();
   if (p.srcGid === DRAG_SRC_DETAIL) {
     const di = ui.detailCards.indexOf(p.id);
-    if (di >= 0) ui.detailCards.splice(di, 1);
-  } else if (p.srcGid && removeFromSrcGroup(p.srcGid, p.id)) {
+    if (di >= 0) {
+      ui.detailCards.splice(di, 1);
+      toast(t('staging.removedFromShelf'));
+    }
+  } else if (p.type !== 'group' && p.srcGid && removeFromSrcGroup(p.srcGid, p.id)) {
     debouncedSaveAppData(); toast(t('msg.movedOutOfGroup'));
   }
 }
@@ -474,8 +578,32 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   const bm = _findBm(p.id);
   if (!bm) return;
   const newCatId = targetCatId === CAT_UNCATEGORIZED ? CAT_UNCATEGORIZED : targetCatId;
+  if (p.srcGid === DRAG_SRC_DETAIL) {
+    const di = useUIStore().detailCards.indexOf(p.id);
+    if (di >= 0) useUIStore().detailCards.splice(di, 1);
+  }
   if (bm.categoryId === newCatId) return;
   ds.updateBookmark(bm.id, { categoryId: newCatId });
+  debouncedSaveAppData();
+  toast(t('msg.movedToCategory', { name: ds.categoryMap[newCatId]?.name || newCatId }));
+}
+
+function handleGroupToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
+  e.preventDefault();
+  item.classList.remove('rail-drag-over');
+  const targetCatId = (item as HTMLElement).dataset.catId;
+  if (!targetCatId || targetCatId === CAT_ALL) return;
+  const ds = useDataStore();
+  const gid = p.id.startsWith('group:') ? p.id.slice(6) : p.id;
+  const group = ds.groupMap[gid];
+  if (!group) return;
+  const newCatId = targetCatId === CAT_UNCATEGORIZED ? CAT_UNCATEGORIZED : targetCatId;
+  if (p.srcGid === DRAG_SRC_DETAIL) {
+    const di = useUIStore().detailCards.indexOf(p.id);
+    if (di >= 0) useUIStore().detailCards.splice(di, 1);
+  }
+  if (group.categoryId === newCatId) return;
+  ds.updateGroup(gid, { categoryId: newCatId });
   debouncedSaveAppData();
   toast(t('msg.movedToCategory', { name: ds.categoryMap[newCatId]?.name || newCatId }));
 }

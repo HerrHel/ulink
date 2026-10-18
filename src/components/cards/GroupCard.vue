@@ -105,7 +105,7 @@
           <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
         </div>
         <!-- 辅助栏 / 分享只读态：只读 HTML（分享态不挂可编辑 TipTap，避免写本地库） -->
-        <div v-if="detailMode || (isShareReadonly && hasBody)" class="group-body group-body-readonly" v-html="safeNotesHtml"></div>
+        <div v-if="detailMode || (isShareReadonly && hasBody)" class="group-body group-body-readonly" :class="{ 'can-edit': detailMode && !isShareReadonly }" :title="detailMode && !isShareReadonly ? t('cards.focusGroup') : undefined" @click.stop="onReadonlyClick" v-html="safeNotesHtml"></div>
         <!-- grid 折叠态 / list 展开态挂 TipTap；mini-grid 用纯文本摘要 -->
         <GroupEditor v-else-if="showEditor" :groupId="group.id" />
         <div class="card-preview" v-else-if="previewText">{{ previewText }}</div>
@@ -310,8 +310,13 @@ function filterByTagName(name: string) {
   const attr = ds.attributeByName[name]
   if (attr) toggleAttrFilter(attr.id)
 }
-function openMenu() { openDetail('group:' + props.group.id) }
 function toggleExpand() { ui.toggleExpanded(props.group.id) }
+function openMenu() { openDetail('group:' + props.group.id) }
+function onReadonlyClick() {
+  if (props.detailMode && !isShareReadonly.value) {
+    toggleFocus()
+  }
+}
 function onFocusClick() {
   if (ui.batchMode) { toggleSelect(); return }
   toggleFocus()

@@ -68,6 +68,7 @@ interface ModalState {
   share: boolean
   aiFinder: boolean
   aiEnrich: boolean
+  quickLook: boolean
 }
 
 interface PanelState {
@@ -142,6 +143,9 @@ export interface UIState {
   aiFinderInitialTargetTitle: string
   aiEnrichTargetBmId: string | null
   aiAssistantInitialQuery: string
+  quickLookBmId: string | null
+  quickLookHistory: string[]
+  isDraggingCard: boolean
 
   // 分组状态
   modals: ModalState
@@ -194,6 +198,7 @@ export const useUIStore = defineStore('ui', {
         share: false,
         aiFinder: false,
         aiEnrich: false,
+        quickLook: false,
       },
       panels: {
         settings: false,
@@ -228,10 +233,41 @@ export const useUIStore = defineStore('ui', {
       aiFinderInitialTargetTitle: '',
       aiEnrichTargetBmId: null,
       aiAssistantInitialQuery: '',
+      quickLookBmId: null,
+      quickLookHistory: [] as string[],
+      isDraggingCard: false,
     }
   },
 
   actions: {
+    /** 打开书签/子书签速览浮层（QuickLook），如果在已打开状态下查看新卡片（如子书签），自动记录历史以便层级返回 */
+    openQuickLook(bmId: string) {
+      if (!bmId) return
+      if (this.modals.quickLook && this.quickLookBmId && this.quickLookBmId !== bmId) {
+        if (!this.quickLookHistory) this.quickLookHistory = []
+        this.quickLookHistory.push(this.quickLookBmId)
+      }
+      this.quickLookBmId = bmId
+      this.modals.quickLook = true
+    },
+
+    /** 从子书签/多级速览返回上一级卡片 */
+    goBackQuickLook(): boolean {
+      if (this.quickLookHistory && this.quickLookHistory.length > 0) {
+        const prevId = this.quickLookHistory.pop()!
+        this.quickLookBmId = prevId
+        return true
+      }
+      return false
+    },
+
+    /** 关闭书签速览浮层并清空历史栈 */
+    closeQuickLook() {
+      this.modals.quickLook = false
+      this.quickLookBmId = null
+      this.quickLookHistory = []
+    },
+
     /** 打开侧边栏 AI 助手并可选预填执行指令 */
     openAiAssistant(query = '') {
       this.panels.detail = true

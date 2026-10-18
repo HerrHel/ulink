@@ -42,7 +42,7 @@
         </div>
       </div>
       <BatchPopover v-if="!uiStore.shareMode" />
-      <StagingDock v-if="!uiStore.shareMode" />
+      <EdgeStagingSidebar v-if="!uiStore.shareMode" />
     </div>
     <div v-if="!uiStore.shareMode" class="resize-handle" id="resizeRight"></div>
     <DetailPanel v-if="!uiStore.shareMode" />
@@ -129,7 +129,7 @@ import CardGrid from './components/cards/CardGrid.vue'
 import AppNav from './components/shell/AppNav.vue'
 import ErrorBoundary from './components/ui/ErrorBoundary.vue'
 import DetailPanel from './components/shell/DetailPanel.vue'
-import StagingDock from './components/shell/StagingDock.vue'
+import EdgeStagingSidebar from './components/shell/EdgeStagingSidebar.vue'
 
 const { t, locale: curLocale } = useI18n()
 const isZh = computed(() => curLocale.value === 'zh-CN')

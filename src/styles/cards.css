@@ -214,11 +214,18 @@
   }
   .list-view .list-expand-btn:active{transform:scale(0.95);transition-duration:0.06s}
 }
-/* 移动端隐藏展开/收起键，改用「⋯」详情按钮 */
+/* 移动端统一隐藏列表展开键，全量改用统一的「⋯」唤出自底向上的速览抽屉 */
 @media(max-width:768px){
   .list-view .list-expand-btn{display:none}
 }
 /* ── 列表模式「⋯」详情按钮（仅移动端，桌面端用 hover card-foot）── */
+.card-menu-btn{
+  display:none;
+}
+.card-menu-btn svg{
+  width:18px;
+  height:18px;
+}
 .list-view .card-menu-btn{
   display:none;
   position:absolute;top:50%;right:6px;
@@ -230,12 +237,22 @@
   cursor:pointer;touch-action:manipulation;
   transition:background 0.15s ease,color 0.15s ease;
 }
-.list-view .card-menu-btn:active{transform:translateY(-50%) scale(0.92);transition-duration:0.06s}
+.list-view .card-menu-btn:active{
+  transform:translateY(-50%) scale(0.92);
+  background:var(--surface-hover);
+  color:var(--text);
+  transition-duration:0.06s;
+}
 /* 辅助栏复用大宫格渲染卡片时，不显示列表专属的「⋯」按钮（避免无尺寸约束的 SVG 撑大） */
 .grid-view .card-menu-btn{display:none}
 .list-view .card-menu-btn svg{width:18px;height:18px}
 @media(max-width:768px){
-  .list-view .card-menu-btn{display:flex}
+  .list-view .card-menu-btn{
+    display:flex;
+    width:40px;
+    height:40px;
+    right:4px;
+  }
 }
 .list-view .card:has(.batch-chk) .list-expand-btn,
 .list-view .card:has(.batch-chk) .card-menu-btn{display:none}
