@@ -117,26 +117,46 @@ function saveToVault() {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 7px 11px;
+  padding: 8px 12px;
   margin: 6px 0;
   background: var(--surface);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm, 6px);
-  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base, 8px);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.25s var(--ease-out), border-color 0.2s ease, transform 0.25s var(--ease-out), background-color 0.2s ease;
   user-select: none;
 }
 
 .ai-inline-card:hover {
-  border-color: var(--border);
-  background: var(--surface-hover);
+  border-color: var(--border-hover);
+  background: var(--surface);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(44, 40, 36, 0.04);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.ai-inline-card:active {
+  transform: translateY(0) scale(0.99);
+  background: var(--surface-active);
 }
 
 .ai-inline-card.is-added {
-  border-color: color-mix(in srgb, var(--green) 35%, var(--border-light));
+  border-color: color-mix(in srgb, var(--green) 35%, var(--border));
   background: color-mix(in srgb, var(--green) 4%, var(--surface));
+}
+
+:global([data-theme="dark"]) .ai-inline-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+              0 0 0 1px rgba(255, 255, 255, 0.06),
+              0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+:global([data-theme="dark"]) .ai-inline-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.13) inset,
+              0 0 0 1px rgba(255, 255, 255, 0.1),
+              0 6px 18px -2px rgba(0, 0, 0, 0.45);
 }
 
 .inline-card-left {
@@ -149,16 +169,21 @@ function saveToVault() {
 }
 
 .inline-card-logo {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 5px);
   background: var(--surface-hover);
-  border: 1px solid var(--border-light);
+  border: 1px solid var(--border);
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+}
+
+:global([data-theme="dark"]) .inline-card-logo {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
 }
 
 .inline-card-logo img {
@@ -270,7 +295,7 @@ function saveToVault() {
   color: var(--text);
   border-radius: var(--radius-xs, 4px);
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+  box-shadow: var(--shadow-xs);
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -279,6 +304,20 @@ function saveToVault() {
   color: var(--accent);
   background: var(--accent-light);
   transform: translateY(-0.5px);
+  box-shadow: 0 2px 6px var(--accent-glow);
+}
+
+:global([data-theme="dark"]) .inline-save-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+:global([data-theme="dark"]) .inline-save-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-hover);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 .inline-save-btn:active {

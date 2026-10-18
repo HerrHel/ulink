@@ -37,6 +37,12 @@ export type Space = 'main' | 'vault'
 /** E2EUnlockModal 初始模式透传槽（非 modal flag，仅用于打开时指定初始 mode） */
 export type E2EUnlockInitialMode = 'unlock' | 'reset' | 'changePw'
 
+/** 拖拽附加到 AI 对话框的卡片/笔记引用 */
+export interface AiAttachedCardRef {
+  type: 'bm' | 'group'
+  id: string
+}
+
 /**
  * 主应用内「分享只读态」。非空 = 正在看他人公开分享的内容：
  * - kind 'group'    → 组分享，主应用呈聚焦组形态（大组卡 + 只读笔记）
@@ -146,6 +152,8 @@ export interface UIState {
   quickLookBmId: string | null
   quickLookHistory: string[]
   isDraggingCard: boolean
+  /** 拖拽附加到 AI 对话框的卡片列表 */
+  aiAttachedCards: AiAttachedCardRef[]
 
   // 分组状态
   modals: ModalState
@@ -236,10 +244,34 @@ export const useUIStore = defineStore('ui', {
       quickLookBmId: null,
       quickLookHistory: [] as string[],
       isDraggingCard: false,
+      aiAttachedCards: [] as AiAttachedCardRef[],
     }
   },
 
   actions: {
+    /** 附加卡片/笔记到 AI 对话上下文（如拖拽投掷），自动呼起侧边栏 */
+    attachCardToAi(type: 'bm' | 'group', id: string) {
+      this.panels.detail = true
+      const rawId = id.replace(/^group:/, '')
+      if (!this.aiAttachedCards.some((c) => c.type === type && c.id === rawId)) {
+        this.aiAttachedCards.push({ type, id: rawId })
+      }
+    },
+
+    /** 从 AI 对话上下文中移除指定卡片 */
+    removeAiAttachedCard(id: string) {
+      const rawId = id.replace(/^group:/, '')
+      const idx = this.aiAttachedCards.findIndex((c) => c.id === rawId)
+      if (idx > -1) {
+        this.aiAttachedCards.splice(idx, 1)
+      }
+    },
+
+    /** 清空 AI 对话关联的所有卡片 */
+    clearAiAttachedCards() {
+      this.aiAttachedCards.splice(0)
+    },
+
     /** 打开书签/子书签速览浮层（QuickLook），如果在已打开状态下查看新卡片（如子书签），自动记录历史以便层级返回 */
     openQuickLook(bmId: string) {
       if (!bmId) return

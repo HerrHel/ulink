@@ -48,10 +48,21 @@ export interface ChatToolResult {
   resultText: string
 }
 
+export interface AttachedCardMeta {
+  type: 'bm' | 'group'
+  id: string
+  title: string
+  url?: string
+}
+
 export interface ChatTurn {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** 拖拽关联的卡片/笔记附件元数据（持久化于历史会话） */
+  attachedCards?: AttachedCardMeta[]
+  /** 包含完整注入附件数据的后台提示词（供多轮对话历史精准回溯） */
+  promptContent?: string
   candidates?: AiCandidateBookmark[]
   loading?: boolean
   timestamp: number

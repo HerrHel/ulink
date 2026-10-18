@@ -45,6 +45,12 @@ import {
   type ChatActionCard,
 } from '../../lib/ai/chatSessions.js'
 import type { AiSearchPreference } from '../../types/ai.js'
+import {
+  resolveCardContext,
+  formatAttachedCardsForPrompt,
+  getDefaultAttachedPrompt,
+  type ResolvedCardContext,
+} from '../../lib/ai/cardReader.js'
 
 /** 行动卡片 payload 内的候选条目（与原 DetailPanel 内联 any 形态一致） */
 interface ActionCardCandidate {
@@ -614,7 +620,30 @@ export function useAiChat(options: UseAiChatOptions = {}) {
 
   /** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
   async function handleAiSubmit() {
-    const raw = aiQuery.value.trim()
+    // 1. 抓取并解析用户拖入附加的卡片与笔记
+    const attachedRefs = [...ui.aiAttachedCards]
+    const resolvedCards: ResolvedCardContext[] = attachedRefs
+      .map((ref) =>
+        resolveCardContext(ref.type, ref.id, {
+          bookmarkMap: ds.bookmarkMap,
+          groupMap: ds.groupMap,
+          categories: ds.categories,
+          customAttributes: ds.customAttributes,
+        }),
+      )
+      .filter((c): c is ResolvedCardContext => c !== null)
+
+    // 清空输入框附带槽位（卡片已装载进本轮问答，持久化至该 userTurn）
+    if (ui.aiAttachedCards.length > 0) {
+      ui.clearAiAttachedCards()
+    }
+
+    let raw = aiQuery.value.trim()
+    // 若用户未输入自定义文字，但拖入了卡片，自动生成贴合卡片意图的高质量缺省提问
+    if (!raw && resolvedCards.length > 0) {
+      raw = getDefaultAttachedPrompt(resolvedCards, isZh.value)
+    }
+
     if (!raw || aiLoading.value) return
 
     if (raw === '/clear') {
@@ -628,11 +657,23 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     aiQuery.value = ''
     onQueryChanged?.()
 
+    // 构建发给模型的完整提示词（内嵌详细卡片与笔记深度结构化数据）
+    const promptWithCards = resolvedCards.length > 0
+      ? `${formatAttachedCardsForPrompt(resolvedCards, isZh.value)}\n用户具体问题：${raw}`
+      : raw
+
     const turnId = 'turn-' + Date.now()
     chatTurns.value.push({
       id: turnId + '-user',
       role: 'user',
       content: raw,
+      promptContent: promptWithCards,
+      attachedCards: resolvedCards.map((c) => ({
+        type: c.type,
+        id: c.id,
+        title: c.title,
+        url: c.url,
+      })),
       timestamp: Date.now(),
     })
 
@@ -677,6 +718,10 @@ export function useAiChat(options: UseAiChatOptions = {}) {
         assistantTurn.loading = false
         assistantTurn.candidates = res.bookmarks
         assistantTurn.content = formatFoundCount(res.bookmarks.length, res.videoTitle, res.bookmarks)
+        // 文字源总结速览（简介/字幕/评论区提炼），无则缺省
+        if (res.summary) {
+          assistantTurn.content += `\n\n${t('ai.videoSummaryLabel')}\n${res.summary}`
+        }
       } else if (isUrl) {
         const res = await findSimilarWebsites(raw, domain(raw), preferences.value, ds.categories, ds.customAttributes)
         if (controller.signal.aborted) return
@@ -693,7 +738,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             for (const t of chatTurns.value) {
               if (t.loading || t.id === assistantTurn.id) continue
               if (t.role === 'user') {
-                if (t.content) history.push({ role: 'user', content: t.content })
+                if (t.content) history.push({ role: 'user', content: t.promptContent || t.content })
                 continue
               }
               // assistant 轮：无工具链则直接回传文本；有工具链则还原
@@ -749,7 +794,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             }
 
             const mimoRes = await askMiMoStream(
-              raw,
+              promptWithCards,
               {
                 categories: ds.categories,
                 customAttributes: ds.customAttributes,
@@ -761,6 +806,11 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                   focusedGroupName,
                   focusedGroupBookmarks,
                   selectedBookmarks,
+                  attachedCards: resolvedCards.map((c) => ({
+                    type: c.type,
+                    title: c.title,
+                    url: c.url,
+                  })),
                 },
               },
               {
@@ -799,11 +849,8 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             assistantTurn.candidates = mimoRes.candidates
             assistantTurn.steps = []
 
-            // 核心：若大模型自主触发了标准 Tool Calling (Function Calling)，即刻调度并挂载行动卡片
-            if (mimoRes.toolCalls?.length) {
-              const toolResults: Array<{ id: string; name: string; resultText: string }> = []
-              for (const call of mimoRes.toolCalls) {
-                assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
+            // Agent 工具执行器：首轮与续轮工具链共用同一分发（单一分发点，防多轮复刻同类分支）
+            async function runAgentToolCall(call: { name: string; arguments?: Record<string, any> }): Promise<string> {
                 let resultText = ''
                 if (call.name === 'audit_vault') {
                   const siteRes = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
@@ -853,7 +900,15 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                 } else {
                   resultText = t('ai.toolResultUnknown', { name: call.name })
                 }
-                toolResults.push({ id: call.id, name: call.name, resultText })
+              return resultText
+            }
+
+            // 核心：若大模型自主触发了标准 Tool Calling (Function Calling)，即刻调度并挂载行动卡片
+            if (mimoRes.toolCalls?.length) {
+              const toolResults: Array<{ id: string; name: string; resultText: string }> = []
+              for (const call of mimoRes.toolCalls) {
+                assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
+                toolResults.push({ id: call.id, name: call.name, resultText: await runAgentToolCall(call) })
               }
 
               // 持久化到会话轮次：多轮对话还原 assistant→tool→assistant 协议链用
@@ -870,30 +925,39 @@ export function useAiChat(options: UseAiChatOptions = {}) {
               }))
               sessions.value = updateSession(currentSessionId.value, chatTurns.value)
 
-              // 真 Agent 循环：tool 结果以 role:'tool' 回传模型，发起续轮让它基于真实结果作答
-              if (toolResults.length > 0 && !controller.signal.aborted) {
-                const followUpHistory: MiMoChatMessage[] = [
-                  ...history,
-                  { role: 'user', content: raw },
-                  {
-                    role: 'assistant',
-                    content: mimoRes.reply || '',
-                    tool_calls: mimoRes.toolCalls.map((c) => ({
-                      id: c.id,
-                      type: 'function' as const,
-                      function: {
-                        name: c.name,
-                        arguments: JSON.stringify(c.arguments || {}),
-                      },
-                    })),
-                  },
-                  ...toolResults.map((r) => ({
-                    role: 'tool' as const,
+              // 真 Agent 多步循环：tool 结果以 role:'tool' 回传后继续放开 Tool Calling，
+              // 模型可自主串联多步工具链（如体检 → 收件箱清零 → 建工作台），直至收束结论或达到轮次上限
+              const MAX_AGENT_ROUNDS = 4
+              const roundHistory: MiMoChatMessage[] = [
+                ...history,
+                { role: 'user', content: raw },
+              ]
+              let pendingCalls = mimoRes.toolCalls
+              let pendingResults = toolResults
+              let pendingReply = mimoRes.reply || ''
+              let followUpDone = false
+
+              for (let round = 0; round < MAX_AGENT_ROUNDS && !controller.signal.aborted; round++) {
+                // 本轮协议链：assistant(tool_calls) → tool(逐条结果)
+                roundHistory.push({
+                  role: 'assistant',
+                  content: pendingReply,
+                  tool_calls: pendingCalls.map((c) => ({
+                    id: c.id,
+                    type: 'function' as const,
+                    function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) },
+                  })),
+                })
+                for (const r of pendingResults) {
+                  roundHistory.push({
+                    role: 'tool',
                     tool_call_id: r.id,
                     content: sanitizeToolResult(r.resultText),
-                  })),
-                ]
+                  })
+                }
 
+                // 最后一轮强制收束为纯文本结论，保证必有最终答复
+                const isLastRound = round === MAX_AGENT_ROUNDS - 1
                 try {
                   const followUpRes = await askMiMoStream(
                     '',
@@ -902,8 +966,8 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                       customAttributes: ds.customAttributes,
                       isZh: isZh.value,
                       signal: controller.signal,
-                      history: followUpHistory,
-                      enableTools: false,
+                      history: roundHistory,
+                      enableTools: !isLastRound,
                     },
                     {
                       onContentDelta(_delta, accumulatedContent) {
@@ -914,16 +978,37 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                     },
                   )
                   if (controller.signal.aborted) return
+                  followUpDone = true
                   if (followUpRes.reply.trim()) {
                     assistantTurn.content = followUpRes.reply
                     assistantTurn.candidates = followUpRes.candidates?.length ? followUpRes.candidates : assistantTurn.candidates
                   }
-                  assistantTurn.steps.push({ text: t('ai.toolFollowUpStep'), done: true })
+
+                  // 模型不再请求工具：多步链收束
+                  if (!followUpRes.toolCalls?.length) break
+
+                  // 模型继续请求工具：执行后下一轮以 role:'tool' 回传，形成完整多步链
+                  pendingCalls = followUpRes.toolCalls
+                  pendingReply = followUpRes.reply || ''
+                  pendingResults = []
+                  for (const call of followUpRes.toolCalls) {
+                    assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
+                    const resultText = await runAgentToolCall(call)
+                    pendingResults.push({ id: call.id, name: call.name, resultText })
+                    // 多轮工具链累积持久化：多轮对话回放 assistant→tool 协议链不失忆
+                    if (assistantTurn.toolCalls && assistantTurn.toolResults) {
+                      assistantTurn.toolCalls.push({ id: call.id, name: call.name, arguments: call.arguments })
+                      assistantTurn.toolResults.push({ toolCallId: call.id, name: call.name, resultText })
+                    }
+                  }
+                  sessions.value = updateSession(currentSessionId.value, chatTurns.value)
                 } catch (followUpErr: unknown) {
-                  // 续轮失败不覆盖第一轮已执行的真实结果，仅记录
+                  // 续轮失败不覆盖前面已执行的真实结果，仅记录并收束
                   console.warn('[ulink AI] tool result follow-up failed:', followUpErr)
+                  break
                 }
               }
+              if (followUpDone) assistantTurn.steps.push({ text: t('ai.toolFollowUpStep'), done: true })
             }
 
             mimoSuccess = true

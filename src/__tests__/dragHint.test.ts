@@ -47,7 +47,7 @@ describe('getDragHintText', () => {
     const child = el('div')
     panel.appendChild(child)
     document.body.appendChild(panel)
-    expect(getDragHintText(child, detail)).toBe('加入详情面板')
+    expect(getDragHintText(child, detail)).toBe('由 AI 读取此卡片')
     panel.remove()
   })
 
@@ -57,7 +57,7 @@ describe('getDragHintText', () => {
     const child = el('div')
     panel.appendChild(child)
     document.body.appendChild(panel)
-    expect(getDragHintText(child, bm)).toBe('加入详情面板')
+    expect(getDragHintText(child, bm)).toBe('由 AI 读取书签')
     panel.remove()
     expect(getDragHintText(el('div', 'rail-item'), bm)).toBe('移动到分类')
   })

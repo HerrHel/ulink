@@ -252,4 +252,73 @@ describe('DetailPanel — AI 交互体验升维 (Action Card & Context Hints & T
     expect(vm.aiQuery).toBe('/deadlink ')
     wrapper.unmount()
   })
+
+  it('拖入卡片与笔记：输入框上方展示附件胶囊，支持移除与就地回车提问', async () => {
+    const ui = useUIStore()
+    const ds = useDataStore()
+    ui.panels.detail = true
+
+    ds.bookmarks.push({
+      id: 'bm_github',
+      title: 'GitHub 开源社区',
+      url: 'https://github.com',
+      order: 1,
+    } as any)
+    ds.siblingGroups.push({
+      id: 'sg_notes',
+      name: '架构复盘笔记',
+      notes: '<p>笔记正文</p>',
+      bookmarkIds: [],
+      order: 1,
+      categoryId: '',
+      icon: '',
+      isExpanded: false,
+      attributes: {},
+      updatedAt: Date.now(),
+      useCount: 0,
+    })
+
+    // 模拟拖入关联书签与笔记
+    ui.attachCardToAi('bm', 'bm_github')
+    ui.attachCardToAi('group', 'sg_notes')
+
+    const wrapper = mount(DetailPanel)
+    await nextTick()
+
+    // 验证附件栏已渲染
+    const bar = wrapper.find('.chat-attached-cards-bar')
+    expect(bar.exists()).toBe(true)
+
+    const chips = wrapper.findAll('.chat-attached-chip')
+    expect(chips.length).toBe(2)
+    expect(chips[0].text()).toContain('GitHub 开源社区')
+    expect(chips[1].text()).toContain('架构复盘笔记')
+
+    // 点击移除其中一个
+    const removeBtns = wrapper.findAll('.chip-remove-btn')
+    await removeBtns[0].trigger('click')
+    await nextTick()
+    expect(ui.aiAttachedCards).toEqual([{ type: 'group', id: 'sg_notes' }])
+
+    // 输入框未键入文字时，发送按钮依然可用
+    const sendBtn = wrapper.find('.chat-send-btn')
+    expect(sendBtn.attributes('disabled')).toBeUndefined()
+
+    // 回车发送：自动带出默认分析提问并清空输入框胶囊栏
+    await wrapper.find('.chat-textarea').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    const vm = wrapper.vm as any
+    // 对话流中生成 user turn 并且带上了 attachedCards 元数据
+    const userTurn = vm.chatTurns.find((t: any) => t.role === 'user')
+    expect(userTurn).toBeDefined()
+    expect(userTurn.attachedCards.length).toBe(1)
+    expect(userTurn.attachedCards[0].title).toBe('架构复盘笔记')
+    expect(userTurn.content).toContain('架构复盘笔记')
+
+    // 输入框附带槽位已清空
+    expect(ui.aiAttachedCards.length).toBe(0)
+
+    wrapper.unmount()
+  })
 })

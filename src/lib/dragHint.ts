@@ -31,7 +31,11 @@ export function getDragHintText(
     if (payload.srcGid === '__detail__' || payload.type === 'detail') return ''
     return '加入暂存'
   }
-  if (target.closest('#detailPanel')) return '加入详情面板'
+  if (target.closest('#detailPanel, #btnToggleDetail')) {
+    if (payload.type === 'group') return '由 AI 读取笔记'
+    if (payload.type === 'bm') return '由 AI 读取书签'
+    return '由 AI 读取此卡片'
+  }
   if (target.classList.contains('rail-item')) return '移动到分类'
   if (target.classList.contains('group-card')) {
     if (payload.type === 'detail') return ''

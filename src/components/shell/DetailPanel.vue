@@ -2,9 +2,12 @@
   <div
     ref="detailPanelRef"
     class="detail-panel ulink-simple-chat"
-    :class="{ open: isOpen, swiping: isSwiping }"
+    :class="{ open: isOpen, swiping: isSwiping, 'chat-drop-active': isDragOverPanel }"
     :style="panelStyle"
     id="detailPanel"
+    @dragover.prevent="onPanelDragOver"
+    @dragleave="onPanelDragLeave"
+    @drop.prevent="onPanelDrop"
   >
     <div class="detail-drag-handle" id="detailDragHandle"></div>
 
@@ -103,7 +106,7 @@
           </svg>
         </button>
         <button
-          class="chat-btn-icon"
+          class="chat-btn-icon close-btn"
           @click="closeEntirePanel"
           :title="t('common.close')"
           :aria-label="t('common.close')"
@@ -161,7 +164,18 @@
             <!-- 用户消息：轻量气泡与微操作栏（复制 / 撤回） -->
             <div v-if="turn.role === 'user'" class="chat-user-wrap">
               <div class="chat-user-bubble">
-                {{ turn.content }}
+                <div v-if="turn.attachedCards && turn.attachedCards.length > 0" class="chat-user-attachments">
+                  <span
+                    v-for="c in turn.attachedCards"
+                    :key="c.id"
+                    class="user-attachment-pill"
+                    :class="`pill-${c.type}`"
+                  >
+                    <span class="pill-badge">{{ c.type === 'group' ? t('cards.note') : t('cards.bookmark') }}</span>
+                    <span class="pill-text">{{ c.title }}</span>
+                  </span>
+                </div>
+                <div class="chat-user-text">{{ turn.content }}</div>
               </div>
               <div class="chat-msg-actions user-actions">
                 <button
@@ -443,8 +457,41 @@
         </div>
     </div>
 
-    <!-- 底部常驻：单一精致对话框（集成斜杠联想与停止生成） -->
+    <!-- 底部常驻：单一精致对话框（集成斜杠联想、卡片附件与停止生成） -->
     <div class="chat-input-dock">
+      <!-- 拖拽附加的卡片与笔记胶囊条 -->
+      <div v-if="attachedCardsList.length > 0" class="chat-attached-cards-bar">
+        <div
+          v-for="card in attachedCardsList"
+          :key="card.id"
+          class="chat-attached-chip"
+          :class="`chip-${card.type}`"
+          :title="card.url || card.title"
+        >
+          <span class="chip-type-badge">{{ card.type === 'group' ? t('cards.note') : t('cards.bookmark') }}</span>
+          <span class="chip-title">{{ card.title }}</span>
+          <button
+            type="button"
+            class="chip-remove-btn"
+            @click.stop="ui.removeAiAttachedCard(card.id)"
+            :title="t('common.delete')"
+            :aria-label="t('common.delete')"
+          >
+            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+        <button
+          v-if="attachedCardsList.length > 1"
+          type="button"
+          class="chip-clear-all"
+          @click="ui.clearAiAttachedCards()"
+        >
+          {{ t('common.clear') }}
+        </button>
+      </div>
+
       <!-- 斜杠指令快捷补全浮动条 -->
       <div v-if="showSlashSuggest && filteredSlashCommands.length" class="slash-suggest-dock">
         <div
@@ -466,7 +513,7 @@
           ref="aiTextareaRef"
           v-model="aiQuery"
           class="chat-textarea"
-          :placeholder="t('ai.sidebarInputPlaceholder')"
+          :placeholder="attachedCardsList.length > 0 ? t('ai.attachedInputPlaceholder') : t('ai.sidebarInputPlaceholder')"
           rows="1"
           @focus="isInputFocused = true"
           @blur="isInputFocused = false"
@@ -486,8 +533,8 @@
         <button
           v-else
           class="chat-send-btn"
-          :class="{ active: !!aiQuery.trim() }"
-          :disabled="!aiQuery.trim()"
+          :class="{ active: !!aiQuery.trim() || attachedCardsList.length > 0 }"
+          :disabled="!aiQuery.trim() && attachedCardsList.length === 0"
           @click="handleAiSubmit"
           :title="t('ai.searchAction') + ' (Enter)'"
           :aria-label="t('ai.searchAction')"
@@ -526,6 +573,57 @@ const isOpen = computed(() => ui.panels.detail)
 
 const isInputFocused = ref(false)
 const isSessionMenuOpen = ref(false)
+const isDragOverPanel = ref(false)
+
+function onPanelDragOver() {
+  if (ui.isDraggingCard) {
+    isDragOverPanel.value = true
+  }
+}
+
+function onPanelDragLeave(e: DragEvent) {
+  const rect = detailPanelRef.value?.getBoundingClientRect()
+  if (rect) {
+    if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
+      isDragOverPanel.value = false
+    }
+  }
+}
+
+function onPanelDrop() {
+  isDragOverPanel.value = false
+}
+
+watch(
+  () => ui.isDraggingCard,
+  (dragging) => {
+    if (!dragging) {
+      isDragOverPanel.value = false
+    }
+  },
+)
+
+const attachedCardsList = computed(() => {
+  return ui.aiAttachedCards.map((ref) => {
+    if (ref.type === 'group') {
+      const g = ds.groupMap[ref.id]
+      return {
+        type: 'group' as const,
+        id: ref.id,
+        title: g?.name || t('cards.note'),
+        url: '',
+      }
+    } else {
+      const b = ds.bookmarkMap[ref.id]
+      return {
+        type: 'bm' as const,
+        id: ref.id,
+        title: b?.title || b?.url || t('cards.bookmark'),
+        url: b?.url || '',
+      }
+    }
+  })
+})
 
 // ── AI 调度逻辑抽至 useAiChat（会话管理 / 提交调度 / 行动卡片 / 斜杠命令）；
 //    DOM 副作用（滚动到底、输入框聚焦/高度、会话菜单收起）由本组件回调注入 ──
@@ -923,21 +1021,35 @@ onUnmounted(() => {
   font-family: var(--font-sans);
   min-width: 0 !important;
   box-sizing: border-box;
+  border-left: 1px solid var(--border);
+  box-shadow: -4px 0 16px -2px rgba(44, 40, 36, 0.04), inset 1px 0 0 0 var(--border-light);
 }
 
-/* 顶栏：轻量温润 */
+/* 深色模式下强化与主站卡片高度统一的高光切边与深邃阴影，彻底消除融底与发糊感 */
+:global([data-theme="dark"]) .detail-panel {
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 28px -4px rgba(0, 0, 0, 0.5), inset 1px 0 0 0 rgba(255, 255, 255, 0.08);
+}
+
+/* 顶栏：轻量温润，质感与 CornerInspectorCard / 主站卡片 Header 严格对齐 */
 .chat-top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   height: 38px;
-  padding: 0 10px 0 14px;
+  padding: 0 10px 0 12px;
   border-bottom: 1px solid var(--border-light);
   background: var(--surface);
   flex-shrink: 0;
   min-width: 0;
   user-select: none;
+}
+
+:global([data-theme="dark"]) .chat-top-bar {
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset;
 }
 
 .chat-top-title-wrap {
@@ -948,25 +1060,40 @@ onUnmounted(() => {
   min-width: 0;
 }
 
+/* 会话切换胶囊：主站精工卡片徽标质感，兼具微动效与手感反馈 */
 .chat-session-dropdown-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: none;
+  gap: 6px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
   cursor: pointer;
-  padding: 3px 6px;
+  padding: 3px 9px;
   border-radius: var(--radius-sm, 6px);
   color: var(--text);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  transition: all 0.12s ease;
-  max-width: 170px;
+  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 175px;
 }
 
 .chat-session-dropdown-btn:hover {
-  background: var(--surface-hover);
+  background: var(--surface-active);
+  border-color: var(--border);
   color: var(--accent);
+  transform: translateY(-0.5px);
+}
+
+:global([data-theme="dark"]) .chat-session-dropdown-btn {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+:global([data-theme="dark"]) .chat-session-dropdown-btn:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-active);
 }
 
 .chat-current-title {
@@ -986,20 +1113,27 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
-/* 会话下拉浮层 (方案 A) */
+/* 会话下拉浮层：与主站 Popover / Card 质感完全对齐 */
 .session-dropdown-popover {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 5px);
   left: 0;
   width: 230px;
   max-width: 260px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-lg);
   z-index: 100;
   overflow: hidden;
   animation: sessionPopIn 0.15s ease-out;
+}
+
+:global([data-theme="dark"]) .session-dropdown-popover {
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
+              0 0 0 1px var(--border-hover),
+              var(--shadow-xl);
 }
 
 @keyframes sessionPopIn {
@@ -1163,19 +1297,38 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  border-radius: var(--radius-xs, 4px);
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   transition: all 0.12s ease;
 }
 
 .chat-btn-icon:hover:not(:disabled) {
   background: var(--surface-hover);
+  border-color: var(--border-light);
   color: var(--text);
+}
+
+.chat-btn-icon.close-btn:hover:not(:disabled) {
+  background: var(--rose-light, #fee2e2);
+  border-color: transparent;
+  color: var(--rose, #e11d48);
+}
+
+:global([data-theme="dark"]) .chat-btn-icon:hover:not(:disabled) {
+  border-color: var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+:global([data-theme="dark"]) .chat-btn-icon.close-btn:hover:not(:disabled) {
+  background: var(--rose-light, rgba(244, 63, 94, 0.15));
+  border-color: transparent;
+  color: var(--rose, #f43f5e);
+  box-shadow: none;
 }
 
 .chat-btn-icon:disabled,
@@ -1256,11 +1409,12 @@ onUnmounted(() => {
   display: none;
 }
 
+/* 提示胶囊：与主站卡片 Tag 质感一致，拥有立体悬浮微光感 */
 .hint-text-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border-light);
+  gap: 5px;
+  border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-secondary);
   font-size: 11px;
@@ -1268,7 +1422,7 @@ onUnmounted(() => {
   padding: 4px 10px;
   cursor: pointer;
   border-radius: 9999px;
-  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+  box-shadow: var(--shadow-xs);
   transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   letter-spacing: -0.1px;
   line-height: 1.3;
@@ -1276,7 +1430,7 @@ onUnmounted(() => {
 
 .hint-pill-icon {
   color: var(--accent);
-  opacity: 0.7;
+  opacity: 0.75;
   flex-shrink: 0;
   transition: transform 0.14s ease, opacity 0.14s ease;
 }
@@ -1284,9 +1438,9 @@ onUnmounted(() => {
 .hint-text-btn:hover {
   color: var(--accent);
   background: var(--surface-hover);
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-light));
+  border-color: var(--accent);
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(44, 40, 36, 0.04);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 .hint-text-btn:hover .hint-pill-icon {
@@ -1296,6 +1450,19 @@ onUnmounted(() => {
 
 .hint-text-btn:active {
   transform: translateY(0) scale(0.97);
+}
+
+:global([data-theme="dark"]) .hint-text-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+:global([data-theme="dark"]) .hint-text-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-hover);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 /* 对话流 */
@@ -1323,7 +1490,7 @@ onUnmounted(() => {
   }
 }
 
-/* 用户气泡与微操作区 */
+/* 用户气泡与微操作区：主站卡片式质感 */
 .chat-user-wrap {
   align-self: flex-end;
   max-width: 86%;
@@ -1335,15 +1502,22 @@ onUnmounted(() => {
 
 .chat-user-bubble {
   padding: 8px 12px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border-light);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
   border-radius: 14px 14px 3px 14px;
   font-size: 13px;
   color: var(--text);
   line-height: 1.55;
   word-break: break-word;
   letter-spacing: -0.01em;
-  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.03);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+:global([data-theme="dark"]) .chat-user-bubble {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 .chat-msg-actions {
@@ -1444,22 +1618,37 @@ onUnmounted(() => {
   margin-left: 4px;
 }
 
-/* 深度思考流 (Reasoning Stream) - 纸质缩进手记质感 */
+/* 深度思考流 (Reasoning Stream) - 纸质缩进手记质感，与主站便签块保持一致 */
 .chat-thinking-box {
   margin-bottom: 6px;
-  background: color-mix(in srgb, var(--surface) 92%, var(--surface-active) 8%);
+  background: color-mix(in srgb, var(--surface) 94%, var(--surface-active) 6%);
   border: 1px solid var(--border-light);
   border-left: 2.5px solid var(--border);
   border-radius: var(--radius-sm, 6px);
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chat-thinking-box.is-thinking {
   border-left-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 3%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 25%, var(--border-light));
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-light));
   box-shadow: inset 0 1px 2px rgba(44, 40, 36, 0.02);
+}
+
+:global([data-theme="dark"]) .chat-thinking-box {
+  background: color-mix(in srgb, var(--surface) 95%, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border);
+  border-left: 2.5px solid var(--border-hover);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+:global([data-theme="dark"]) .chat-thinking-box.is-thinking {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset, 0 0 0 1px var(--accent-glow);
 }
 
 .chat-thinking-header {
@@ -1646,6 +1835,12 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
+:global([data-theme="dark"]) .chat-flow-text :deep(.chat-flow-code) {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset;
+}
+
 .chat-flow-text :deep(.chat-flow-list) {
   margin: 4px 0 8px 16px;
   padding: 0;
@@ -1802,20 +1997,37 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 交互行动卡片 (Actionable Artifact / Generative UI) - 优雅质感工坊 */
+/* 交互行动卡片 (Actionable Artifact / Generative UI) - 优雅质感工坊，采用主站卡片级材质 */
 .chat-action-card {
   margin-top: 6px;
   padding: 10px 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
-  box-shadow: 0 1px 3px rgba(44, 40, 36, 0.03), 0 4px 12px rgba(44, 40, 36, 0.02);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.25s var(--ease-out), border-color 0.2s ease, transform 0.25s var(--ease-out), background-color 0.2s ease;
 }
 
 .chat-action-card:hover {
-  box-shadow: 0 2px 6px rgba(44, 40, 36, 0.05), 0 8px 20px rgba(44, 40, 36, 0.03);
+  box-shadow: var(--shadow-card-hover);
   border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+:global([data-theme="dark"]) .chat-action-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.08) inset,
+              0 0 0 1px rgba(255, 255, 255, 0.06),
+              0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+:global([data-theme="dark"]) .chat-action-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.13) inset,
+              0 0 0 1px rgba(255, 255, 255, 0.1),
+              0 8px 24px -4px rgba(0, 0, 0, 0.5),
+              0 2px 6px rgba(0, 0, 0, 0.25);
 }
 
 .chat-action-card.is-completed {
@@ -2043,7 +2255,7 @@ onUnmounted(() => {
   transform: translateY(0) scale(0.97);
 }
 
-/* 底部仅留一个对话输入框：浮动工作室 Dock */
+/* 底部仅留一个对话输入框：浮动工作室 Dock，主站卡片级材质底座 */
 .chat-input-dock {
   position: relative;
   flex-shrink: 0;
@@ -2053,6 +2265,12 @@ onUnmounted(() => {
   box-shadow: 0 -4px 16px -2px rgba(44, 40, 36, 0.03);
   min-width: 0 !important;
   box-sizing: border-box;
+}
+
+:global([data-theme="dark"]) .chat-input-dock {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 20px -2px rgba(0, 0, 0, 0.45), 0 1px 0 0 rgba(255, 255, 255, 0.05) inset;
 }
 
 /* 斜杠指令补全浮层 */
@@ -2070,6 +2288,13 @@ onUnmounted(() => {
   padding: 4px;
   z-index: 50;
   animation: slashPop 0.14s ease-out;
+}
+
+:global([data-theme="dark"]) .slash-suggest-dock {
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
+              0 0 0 1px var(--border-hover),
+              var(--shadow-xl);
 }
 
 @keyframes slashPop {
@@ -2128,10 +2353,10 @@ onUnmounted(() => {
   align-items: flex-end;
   gap: 6px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-base, 8px);
+  border-radius: var(--radius-md, 10px);
   background: var(--bg);
   padding: 6px 8px 6px 12px;
-  box-shadow: inset 0 1px 2px rgba(44, 40, 36, 0.02);
+  box-shadow: inset 0 1px 2px rgba(44, 40, 36, 0.03);
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 0;
   box-sizing: border-box;
@@ -2146,6 +2371,23 @@ onUnmounted(() => {
   border-color: var(--accent);
   background: var(--surface);
   box-shadow: 0 0 0 2px var(--accent-light), 0 2px 8px -2px rgba(44, 40, 36, 0.06);
+}
+
+:global([data-theme="dark"]) .chat-input-wrapper {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+:global([data-theme="dark"]) .chat-input-wrapper:hover {
+  border-color: var(--border-hover);
+}
+
+:global([data-theme="dark"]) .chat-input-wrapper:focus-within,
+:global([data-theme="dark"]) .chat-input-wrapper.focused {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .chat-textarea {
@@ -2205,13 +2447,13 @@ onUnmounted(() => {
 .chat-send-btn.active {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: 0 2px 6px var(--accent-glow);
 }
 
 .chat-send-btn.active:hover {
   background: var(--brand-logo-blue, var(--accent));
-  transform: scale(1.05);
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 40%, transparent);
+  transform: scale(1.04);
+  box-shadow: 0 3px 10px var(--accent-glow);
 }
 
 .chat-send-btn:active {
@@ -2223,10 +2465,15 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+:global([data-theme="dark"]) .chat-send-btn.active {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset, 0 2px 8px var(--accent-glow);
+}
+
 /* 停止生成方块按钮 */
 .chat-send-btn.stop {
   background: var(--accent);
   color: #fff;
+  box-shadow: 0 2px 6px var(--accent-glow);
 }
 
 .stop-square {
@@ -2235,5 +2482,187 @@ onUnmounted(() => {
   background: #fff;
   border-radius: 1.5px;
   display: block;
+}
+
+/* 拖拽卡片投掷到 AI 对话框活跃态：与主站拖拽光晕一致 */
+.detail-panel.chat-drop-active {
+  outline: 2px dashed var(--accent);
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--accent) 3%, var(--surface)) !important;
+  box-shadow: inset 0 0 0 3px var(--accent-light) !important;
+}
+
+:global([data-theme="dark"]) .detail-panel.chat-drop-active {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface)) !important;
+  box-shadow: inset 0 0 0 3px var(--accent-glow) !important;
+}
+
+.detail-panel.chat-drop-active .chat-input-wrapper {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+/* 关联卡片/附件胶囊栏：主站精致 Chip 质感 */
+.chat-attached-cards-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  animation: attachSlideIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes attachSlideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chat-attached-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 11.5px;
+  color: var(--text);
+  max-width: 220px;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.14s ease;
+}
+
+.chat-attached-chip:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  transform: translateY(-0.5px);
+}
+
+:global([data-theme="dark"]) .chat-attached-chip {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+:global([data-theme="dark"]) .chat-attached-chip:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.chat-attached-chip .chip-type-badge {
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.chat-attached-chip.chip-group .chip-type-badge {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.chat-attached-chip .chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-attached-chip .chip-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+
+.chat-attached-chip .chip-remove-btn:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.chat-attached-cards-bar .chip-clear-all {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-attached-cards-bar .chip-clear-all:hover {
+  color: var(--accent);
+}
+
+/* 用户气泡内关联卡片标签：主站微胶囊质感 */
+.chat-user-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+.user-attachment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1.5px 6px;
+  border-radius: var(--radius-xs, 4px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text);
+  max-width: 100%;
+  box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
+}
+
+:global([data-theme="dark"]) .user-attachment-pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+.user-attachment-pill .pill-badge {
+  font-size: 9.5px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+}
+
+.user-attachment-pill.pill-group .pill-badge {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.user-attachment-pill .pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+/* 移动端底部抽屉深度模式质感强化：与 CornerInspectorCard 完全统一 */
+:global([data-theme="dark"]) .is-mobile .detail-panel {
+  border-top: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset, 0 -12px 36px rgba(0, 0, 0, 0.6);
 }
 </style>

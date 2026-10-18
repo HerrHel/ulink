@@ -18,7 +18,7 @@ import { getDragHintText } from '../../lib/dragHint.js'
 import type { DragHintPayload } from '../../lib/dragHint.js'
 import type { Bookmark, SiblingGroup } from '../../types.js'
 import { _samePinStatus, _swapAndMarkDirty } from '../../lib/dragSwap.js'
-export { _samePinStatus, _swapAndMarkDirty, _onDragStart, _onDragOver, _onDrop, _onDragEnd }
+export { _samePinStatus, _swapAndMarkDirty, _onDragStart, _onDragOver, _onDrop, _onDragEnd, handleAiChatDrop }
 
 type DragPayload = DragHintPayload
 
@@ -187,7 +187,7 @@ function _updateDragHint(e: DragEvent, target: Element | null) {
 }
 
 function _onDragOver(e: DragEvent) {
-  let target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #cardGrid, #stagingDock, #edgeStagingSidebar, .edge-staging-drop-zone');
+  let target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #btnToggleDetail, #cardGrid, #stagingDock, #edgeStagingSidebar, .edge-staging-drop-zone');
   if (!target && _currentDragPayload?.srcGid === DRAG_SRC_DETAIL) {
     target = (e.target as HTMLElement).closest('#panelContent, .panel-main-inner, .panel-main');
   }
@@ -211,11 +211,11 @@ function _onDragOver(e: DragEvent) {
     }
   }
   if (target !== _dragOverEl) {
-    if (_dragOverEl) _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over');
+    if (_dragOverEl) _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active');
     _dragOverEl = target;
     if (target) {
       e.preventDefault();
-      const cls = target.classList.contains('detail-card-wrap') ? 'detail-drag-over' : target.classList.contains('rail-item') ? 'rail-drag-over' : 'drag-over';
+      const cls = target.closest('#detailPanel') ? 'chat-drop-active' : target.classList.contains('detail-card-wrap') ? 'detail-drag-over' : target.classList.contains('rail-item') ? 'rail-drag-over' : 'drag-over';
       target.classList.add(cls);
     }
   } else if (target) {
@@ -241,8 +241,15 @@ function _onDrop(e: DragEvent) {
   const p = dragPayload(e);
   if (!p) return;
 
+  // 0. 落入 AI 助手对话框或顶栏 AI 按钮（由 AI 读取此卡片/笔记）
+  const aiTarget = (target as HTMLElement)?.closest?.('#detailPanel, #btnToggleDetail');
+  if (aiTarget) {
+    handleAiChatDrop(e, p);
+    return;
+  }
+
   const insideStaging = (target as HTMLElement)?.closest?.(
-    '#detailPanel, #edgeStagingSidebar, .edge-staging-drop-zone, #stagingDock'
+    '#edgeStagingSidebar, .edge-staging-drop-zone, #stagingDock'
   );
 
   // 1. 暂存区内互相落点（暂存区内重排）
@@ -311,9 +318,10 @@ function _onDrop(e: DragEvent) {
 
 function clearDragState() {
   document.querySelectorAll('.dragging').forEach(function (el) { el.classList.remove('dragging'); });
+  document.querySelectorAll('.chat-drop-active').forEach(function (el) { el.classList.remove('chat-drop-active'); });
   document.body.classList.remove('is-dragging-card');
   try { useUIStore().isDraggingCard = false } catch (_) { /* store 未就绪 */ }
-  if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
+  if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active'); _dragOverEl = null; }
   _catDragId = null; _detailDragIdx = null; _currentDragPayload = null; _lastInsertPos = null;
   _hideDragCursor(); _hideDragHint();
 }
@@ -521,6 +529,31 @@ function handleDetailCardDrop(e: DragEvent, card: Element, p: DragPayload) {
   const tmp = ui.detailCards[_detailDragIdx];
   ui.detailCards[_detailDragIdx] = ui.detailCards[toIdx];
   ui.detailCards[toIdx] = tmp;
+}
+
+function handleAiChatDrop(e: DragEvent, p: DragPayload) {
+  e.preventDefault();
+  if (!p) return;
+  const ui = useUIStore();
+  const ds = useDataStore();
+
+  let cardType: 'bm' | 'group' = 'bm';
+  let rawId = p.id;
+  if (p.type === 'group' || rawId.startsWith('group:')) {
+    cardType = 'group';
+    rawId = rawId.replace(/^group:/, '');
+  }
+
+  ui.attachCardToAi(cardType, rawId);
+
+  let title = '';
+  if (cardType === 'group') {
+    title = ds.groupMap[rawId]?.name || '';
+  } else {
+    title = ds.bookmarkMap[rawId]?.title || '';
+  }
+  const label = title || (cardType === 'group' ? t('cards.note') : t('cards.bookmark'));
+  toast(t('ai.cardAttached', { title: label }), true);
 }
 
 function handleDetailPanelDrop(e: DragEvent, p: DragPayload) {

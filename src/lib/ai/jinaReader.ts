@@ -20,7 +20,7 @@ export interface JinaReadResult {
 
 export async function fetchPageContentViaJina(
   targetUrl: string,
-  options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  options: { signal?: AbortSignal; timeoutMs?: number; maxChars?: number } = {}
 ): Promise<JinaReadResult> {
   const cleanUrl = targetUrl.trim()
   if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
@@ -84,7 +84,8 @@ export async function fetchPageContentViaJina(
       url: cleanUrl,
       title,
       description,
-      markdown: text.slice(0, 8000), // 限制上下文长度，防 context 溢出
+      // 限制上下文长度，防 context 溢出；视频深度提取场景可调大 maxChars 以覆盖字幕/评论区
+      markdown: text.slice(0, options.maxChars ?? 8000),
     }
   } catch (err: any) {
     clearTimeout(timeoutId)

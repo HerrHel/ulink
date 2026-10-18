@@ -254,9 +254,99 @@ export async function findSimilarWebsites(
 }
 
 import { fetchPageContentViaJina } from './jinaReader.js'
+import { fetchVideoExtractServer, generateVideoSummary } from './videoExtract.js'
+
+/** 视频/分享内容深挖链接的来源分区（用于标注链接出处） */
+export type DeepLinkSource = '输入文本' | '简介' | '字幕' | '评论区' | '正文' | '文本提及'
+
+export interface DeepLinkHit {
+  url: string
+  source: DeepLinkSource
+  anchor?: string
+}
+
+// 分区标题关键词：按行识别简介/字幕/评论区等正文分区
+const SECTION_HEADING_PATTERNS: Array<{ re: RegExp; source: DeepLinkSource }> = [
+  { re: /简介|介绍|描述|description|about/i, source: '简介' },
+  { re: /字幕|文稿|台词|transcript|subtitle/i, source: '字幕' },
+  { re: /评论|留言|comment/i, source: '评论区' },
+]
+
+// 噪声资源链接（图片/音视频/压缩包/可执行文件/样式脚本），不是可收藏的网站
+const ASSET_URL_RE = /\.(png|jpe?g|gif|webp|svg|ico|bmp|mp4|mp3|wav|avi|mov|mkv|flv|zip|rar|7z|tar|gz|dmg|exe|apk|msi|woff2?|ttf|otf|css|js)([?#]|$)/i
+
+/** 站内自链噪声判定（含子域，如 space.bilibili.com 对 bilibili.com） */
+function isSameSiteUrl(url: string, host: string): boolean {
+  if (!host) return false
+  try {
+    const h = new URL(url).hostname.replace(/^www\./i, '').toLowerCase()
+    return h === host || h.endsWith('.' + host) || host.endsWith('.' + h)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 从一段文本深挖链接（Markdown 锚链接、完整 URL、裸域名），并按行标注来源分区。
+ * 纯函数无副作用，供视频/分享内容的简介、字幕、评论区链接提取复用。
+ */
+export function extractDeepLinksFromText(
+  text: string,
+  options: { defaultSource: DeepLinkSource; targetHost?: string; dropSameSite?: boolean }
+): DeepLinkHit[] {
+  const hits: DeepLinkHit[] = []
+  if (!text) return hits
+
+  let currentSource = options.defaultSource
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    // 标题行（# 标题 / **加粗** / 短行含关键词）切换当前分区
+    const isHeadingLike = /^#{1,6}\s+/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line) || line.length < 40
+    if (isHeadingLike) {
+      for (const p of SECTION_HEADING_PATTERNS) {
+        if (p.re.test(line)) {
+          currentSource = p.source
+          break
+        }
+      }
+    }
+
+    // Markdown 锚链接 [文本](url)：锚文本可直接当候选标题
+    let workLine = line
+    workLine = workLine.replace(/\[([^\]]{1,80})\]\((https?:\/\/[^)\s]+)\)/g, (_m, anchor: string, u: string) => {
+      hits.push({ url: u, source: currentSource, anchor: anchor.trim() })
+      return ` ${u} `
+    })
+
+    // 带协议的完整链接
+    for (const m of workLine.matchAll(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)\]'"<>]*/gi)) {
+      const u = m[0].replace(/[，。！？,.!?:;；]+$/, '')
+      if (u) hits.push({ url: u, source: currentSource })
+    }
+
+    // 裸域名如 v0.dev, jsdesign.com, mockplus.cn
+    for (const m of workLine.matchAll(/(?:^|[\s,，、])([a-zA-Z0-9-]+\.(?:com|dev|cn|io|app|net|org|co))(?=[\s,，、。!?]|$)/gi)) {
+      hits.push({ url: `https://${m[1].toLowerCase()}`, source: currentSource })
+    }
+  }
+
+  // 噪声过滤 + 去重（保留首个命中，Markdown 锚链接排最前因此锚文本得以保留）
+  const seen = new Set<string>()
+  return hits.filter(h => {
+    if (ASSET_URL_RE.test(h.url)) return false
+    if (options.dropSameSite && isSameSiteUrl(h.url, options.targetHost || '')) return false
+    const key = h.url.toLowerCase().replace(/\/+$/, '')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
 /**
  * 3. 视频/分享内容链接真实提炼：提取 B站/抖音/小红书/网页等分享内容里的工具
+ * 深度抓取页面正文，简介/字幕/评论区里出现的链接一并提取（以页面公开可读内容为准，抓不到不伪造）。
  */
 export async function extractBookmarksFromVideo(
   videoInput: string,
@@ -267,65 +357,90 @@ export async function extractBookmarksFromVideo(
   const urlMatch = cleanInput.match(/https?:\/\/[^\s]+/i)
   const targetUrl = urlMatch ? urlMatch[0] : ''
 
-  // 1. 若检测到具体 URL，尝试通过 Jina Reader 读取真实页面元数据与内容
+  // 1. 内容获取：优先服务端 extract-video Edge Function（海外节点转发抓取，平台适配器
+  //    结构化返回简介/字幕/评论区，每段独立标注来源）；失败/未登录降级本地 Jina 直连
+  //    （国内网络可能不可用，抓不到不伪造）
   let pageTitle = ''
   let pageDesc = ''
+  const contentParts: Array<{ text: string; source: DeepLinkSource }> = []
+  let fallbackBody = ''
   if (targetUrl) {
-    const pageData = await fetchPageContentViaJina(targetUrl, { timeoutMs: 6000 })
-    if (pageData.success) {
-      if (pageData.title) pageTitle = pageData.title
-      if (pageData.description) pageDesc = pageData.description
+    let server: Awaited<ReturnType<typeof fetchVideoExtractServer>> = null
+    try {
+      server = await fetchVideoExtractServer(targetUrl)
+    } catch {
+      server = null
+    }
+
+    if (server) {
+      pageTitle = server.title
+      pageDesc = server.description
+      if (server.description.trim()) contentParts.push({ text: server.description, source: '简介' })
+      if (server.subtitles.trim()) contentParts.push({ text: server.subtitles, source: '字幕' })
+      if (server.comments.length) contentParts.push({ text: server.comments.join('\n'), source: '评论区' })
+      if (server.markdown) contentParts.push({ text: server.markdown, source: '正文' })
+    } else {
+      const pageData = await fetchPageContentViaJina(targetUrl, { timeoutMs: 8000, maxChars: 30000 })
+      if (pageData.success) {
+        if (pageData.title) pageTitle = pageData.title
+        if (pageData.description) pageDesc = pageData.description
+        if (pageData.markdown) fallbackBody = pageData.markdown
+      }
     }
   }
 
-  // 2. 从输入文本与抓取内容中提取所有出现的网址（包含 https:// 链接与裸域名如 v0.dev）
-  const allUrls: string[] = []
-  const textPool = cleanInput + ' ' + pageDesc
+  // 2. 从输入文本与抓取内容深挖链接：输入文本保留用户意图（不过滤同站），
+  //    抓取内容过滤站内自链与资源噪声（导航/头像/封面图等不是推荐网站）
+  const targetHost = targetUrl ? domain(targetUrl).toLowerCase() : ''
+  const rawHits = [
+    ...extractDeepLinksFromText(cleanInput, { defaultSource: '输入文本', targetHost, dropSameSite: false }),
+    ...contentParts.flatMap(p =>
+      extractDeepLinksFromText(p.text, { defaultSource: p.source, targetHost, dropSameSite: true })
+    ),
+    ...extractDeepLinksFromText(fallbackBody, { defaultSource: '正文', targetHost, dropSameSite: true }),
+  ]
 
-  // 匹配带协议的完整链接
-  const fullUrlMatches = textPool.matchAll(/https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}[^\s)]*/gi)
-  for (const m of fullUrlMatches) {
-    const u = m[0].replace(/[，。！？,.!?]+$/, '')
-    if (u && !allUrls.includes(u) && u !== targetUrl) {
-      allUrls.push(u)
-    }
+  // 去重并排除目标页自身
+  const norm = (u: string) => u.toLowerCase().replace(/\/+$/, '')
+  const deepHits: DeepLinkHit[] = []
+  const seenUrls = new Set<string>(targetUrl ? [norm(targetUrl)] : [])
+  for (const h of rawHits) {
+    const key = norm(h.url)
+    if (seenUrls.has(key)) continue
+    seenUrls.add(key)
+    deepHits.push(h)
   }
 
-  // 匹配裸域名如 v0.dev, jsdesign.com, mockplus.cn
-  const bareMatches = textPool.matchAll(/(?:^|[\s,，、])([a-zA-Z0-9-]+\.(?:com|dev|cn|io|app|net|org|co))(?=[\s,，、。!?]|$)/gi)
-  for (const m of bareMatches) {
-    const rawDomain = m[1].toLowerCase()
-    const full = `https://${rawDomain}`
-    if (!allUrls.includes(full) && rawDomain !== domain(targetUrl).toLowerCase()) {
-      allUrls.push(full)
-    }
-  }
-
-  // 匹配高频中文工具名（如“即时设计”、“摹客”）
+  // 匹配高频中文工具名（如“即时设计”、“摹客”）：输入文本与抓取内容都算池子
+  const pageBody = [...contentParts.map(p => p.text), fallbackBody].filter(Boolean).join('\n')
+  const textPool = cleanInput + ' ' + pageBody
   const keywordTools: Record<string, { title: string; url: string; notes: string }> = {
     '即时设计': { title: '即时设计', url: 'https://js.design', notes: '国内专业协作式 UI 设计工具' },
     '摹客': { title: '摹客 Mockplus', url: 'https://www.mockplus.cn', notes: '产品原型设计与团队协作平台' },
     '墨刀': { title: '墨刀 Modao', url: 'https://modao.cc', notes: '在线原型设计与协同平台' },
   }
   for (const [kw, tool] of Object.entries(keywordTools)) {
-    if (textPool.includes(kw) && !allUrls.includes(tool.url)) {
-      allUrls.push(tool.url)
+    if (textPool.includes(kw) && !seenUrls.has(norm(tool.url))) {
+      seenUrls.add(norm(tool.url))
+      deepHits.push({ url: tool.url, source: '文本提及', anchor: kw })
     }
   }
 
   const rawBookmarks: AiCandidateBookmark[] = []
 
   // 若提取到了具体链接，真实转化为候选书签
-  if (allUrls.length > 0) {
-    for (const u of allUrls.slice(0, 8)) {
-      const dm = domain(u)
-      const prefill = getSmartPrefill(u, [], categories, attributes)
+  if (deepHits.length > 0) {
+    for (const hit of deepHits.slice(0, 8)) {
+      const dm = domain(hit.url)
+      const prefill = getSmartPrefill(hit.url, [], categories, attributes)
+      // 精选站点标题置信度高直接用；否则优先用锚文本（博主原话比机器兜底标题更准）
+      const title = prefill.confidence === 'high' ? prefill.title : (hit.anchor || prefill.title || dm)
       rawBookmarks.push({
-        title: prefill.title || dm,
-        url: u,
-        notes: prefill.notes || `从分享中提取的工具：${dm}`,
+        title,
+        url: hit.url,
+        notes: prefill.notes || hit.anchor || `从分享内容提取的工具：${dm}`,
         tag: '提取工具',
-        highlight: `提取自：${targetUrl || cleanInput.slice(0, 30)}`,
+        highlight: `提取自${hit.source}${targetUrl ? `｜${domain(targetUrl)}` : ''}`,
       })
     }
   }
@@ -365,12 +480,24 @@ export async function extractBookmarksFromVideo(
 
   const cleanTitle = pageTitle ? `精选：${pageTitle.slice(0, 24)}` : '分享精选工具合集'
 
+  // 5. 文字源总结速览（简介/字幕/评论区文本 → 大模型，注入前已消毒截断）：
+  //    无可用 AI 通道或失败则缺省，不阻塞链接提取
+  let summary: string | undefined
+  if (pageBody.trim()) {
+    try {
+      summary = (await generateVideoSummary(pageBody)) || undefined
+    } catch {
+      summary = undefined
+    }
+  }
+
   return {
     sourceUrl: cleanInput,
     videoTitle: pageTitle || '视频与图文精选工具',
     groupTitle: cleanTitle,
-    groupNotes: `<p>由与链 AI 解析提取，包含直达网址与精炼亮点说明。</p>`,
+    groupNotes: `<p>由与链 AI 深度解析分享内容提取（含简介/字幕/评论区出现的链接），包含直达网址与精炼亮点说明。</p>`,
     bookmarks: rawBookmarks.map(b => enrichContext(b, categories, attributes)),
+    summary,
   }
 }
 

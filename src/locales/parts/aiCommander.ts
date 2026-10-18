@@ -21,6 +21,10 @@ export const aiCmdZh = {
     undoInboxDesc: '智能归拢 {n} 个未分类书签',
     undoInboxRevert: '已撤销智能归类，{n} 个书签已还原原分类。',
     inboxDone: '已将 {n} 个未分类书签智能归入对应分类，可在下方撤销。',
+    inboxNestConfirm:
+      '危险操作确认：即将把 {count} 个同站子页归入其主页面下（建立子链接从属关系）。操作可在撤销栈中回退，是否继续？',
+    inboxNestDone: '已将 {n} 个同站子页归入其主页面下。',
+    undoInboxNestRevert: '已撤销子页嵌套，{n} 个子页已退出其主页面。',
 
     // ── 主题工作台（createTopicWorkspace）──
     wsNoCandidates:
@@ -245,6 +249,8 @@ export const aiCmdZh = {
     inboxCta: '点击下方行动卡片批准执行，即可一键批量归拢（随时支持 /undo 撤销）。',
     stepInboxDetected: '检测到 {n} 个待归类书签',
     stepInboxClustered: '根据历史偏好与域名聚类分析完成',
+    stepInboxNested: '识别同站子页，建立子链接从属关系',
+    inboxNestPlanLine: '- {n} 个同站子页将归入其主页面下（子链接从属关系）',
     inboxCardTitle: '批准归类 {n} 个未分类书签',
     inboxCardDesc: '将上述书签批量移入对应的目标分类并落盘',
     inboxCardButton: '执行智能归拢',
@@ -323,6 +329,14 @@ export const aiCmdEn = {
     undoInboxRevert_one: 'Smart sorting undone: {n} bookmark restored to its original category.',
     inboxDone: 'Smart-sorted {n} uncategorized bookmarks into matching categories. You can undo below.',
     inboxDone_one: 'Smart-sorted {n} uncategorized bookmark into its matching category. You can undo below.',
+    inboxNestConfirm:
+      'Danger confirmation: about to nest {count} same-site sub-pages under their main pages (establishing parent-child links). This can be reverted from the undo stack. Continue?',
+    inboxNestConfirm_one:
+      'Danger confirmation: about to nest {count} same-site sub-page under its main page (establishing a parent-child link). This can be reverted from the undo stack. Continue?',
+    inboxNestDone: 'Nested {n} same-site sub-pages under their main pages.',
+    inboxNestDone_one: 'Nested {n} same-site sub-page under its main page.',
+    undoInboxNestRevert: 'Sub-page nesting undone: {n} sub-pages detached from their main pages.',
+    undoInboxNestRevert_one: 'Sub-page nesting undone: {n} sub-page detached from its main page.',
 
     // ── Topic workspace (createTopicWorkspace) ──
     wsNoCandidates:
@@ -578,6 +592,9 @@ export const aiCmdEn = {
     stepInboxDetected: 'Detected {n} bookmarks pending sorting',
     stepInboxDetected_one: 'Detected {n} bookmark pending sorting',
     stepInboxClustered: 'Analysis complete based on history preferences and domain clustering',
+    stepInboxNested: 'Detected same-site sub-pages and built parent-child links',
+    inboxNestPlanLine: '- {n} same-site sub-pages will be nested under their main pages (parent-child links)',
+    inboxNestPlanLine_one: '- {n} same-site sub-page will be nested under its main page (parent-child link)',
     inboxCardTitle: 'Approve sorting of {n} uncategorized bookmarks',
     inboxCardTitle_one: 'Approve sorting of {n} uncategorized bookmark',
     inboxCardDesc: 'Batch-move the above bookmarks into their target categories and persist',
