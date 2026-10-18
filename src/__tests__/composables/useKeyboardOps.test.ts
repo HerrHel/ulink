@@ -14,7 +14,7 @@ const mockUI: any = {
   focusedGroupId: null,
   panels: { settings: false, detail: false, trash: false, history: false, rail: false, shortcutHelp: false },
   overlays: { addDropdown: false, addPopover: false, deadLinks: false, feedback: false },
-  modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false },
+  modals: { bookmark: false, category: false, attribute: false, groupEdit: false, e2eSetup: false, e2eUnlock: false, setupGuide: false, quickLook: false },
 }
 vi.mock('../../stores/ui.js', () => ({ useUIStore: () => mockUI }))
 
@@ -33,14 +33,16 @@ const { closeBmModalMock, openBmModalMock } = vi.hoisted(() => ({
   openBmModalMock: vi.fn(),
 }))
 vi.mock('../../composables/domain/useBookmark.js', () => ({ closeBmModal: closeBmModalMock, openBmModal: openBmModalMock }))
-const { closeCatModalMock, closeAttrModalMock, toggleDetailPanelMock } = vi.hoisted(() => ({
+const { closeCatModalMock, closeAttrModalMock, closeQuickLookMock, toggleDetailPanelMock } = vi.hoisted(() => ({
   closeCatModalMock: vi.fn(),
   closeAttrModalMock: vi.fn(),
+  closeQuickLookMock: vi.fn(),
   toggleDetailPanelMock: vi.fn(),
 }))
 vi.mock('../../composables/ui/useUI.js', () => ({
   closeCatModal: closeCatModalMock,
   closeAttrModal: closeAttrModalMock,
+  closeQuickLook: closeQuickLookMock,
   hideSettingsMenu: vi.fn(),
   closeAddBmPopover: vi.fn(),
   hideAddDropdown: vi.fn(),
@@ -302,12 +304,12 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
       curCat: 'work', focusedGroupId: 'g1',
       detailPanelOpen: false, bm: false, groupEdit: false, cat: false, attr: false,
       settings: false, trash: false, deadLinks: false, shortcutHelp: false,
-      history: false, feedback: false,
+      history: false, feedback: false, quickLook: false,
     })
   })
 
-  it('全开态 → 14 字段逐字段真实映射 modal/panel/overlay 三组', () => {
-    mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false, setupGuide: false }
+  it('全开态 → 15 字段逐字段真实映射 modal/panel/overlay 三组', () => {
+    mockUI.modals = { bookmark: true, category: true, attribute: true, groupEdit: true, e2eSetup: false, e2eUnlock: false, setupGuide: false, quickLook: true }
     mockUI.panels = { settings: true, detail: true, trash: true, history: true, rail: false, shortcutHelp: true }
     mockUI.overlays = { addDropdown: false, addPopover: false, deadLinks: true, feedback: true }
     mockUI.curCat = 'cat-a'
@@ -317,6 +319,7 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
     expect(s.groupEdit).toBe(true)     // modals.groupEdit
     expect(s.cat).toBe(true)            // modals.category → cat
     expect(s.attr).toBe(true)          // modals.attribute → attr
+    expect(s.quickLook).toBe(true)     // modals.quickLook → quickLook
     expect(s.detailPanelOpen).toBe(true)// panels.detail → detailPanelOpen
     expect(s.settings).toBe(true)
     expect(s.trash).toBe(true)
@@ -327,7 +330,7 @@ describe('d1-95 captureNavState 14 字段完整快照契约 + 可选链防御 + 
     expect(s.curCat).toBe('cat-a')
     expect(s.focusedGroupId).toBe('g2')
     // 非 NavState 字段（rail/addDropdown 等）不该泄漏进快照
-    expect(Object.keys(s).sort()).toEqual(['attr','bm','cat','curCat','deadLinks','detailPanelOpen','feedback','focusedGroupId','groupEdit','history','settings','shortcutHelp','trash'])
+    expect(Object.keys(s).sort()).toEqual(['attr','bm','cat','curCat','deadLinks','detailPanelOpen','feedback','focusedGroupId','groupEdit','history','quickLook','settings','shortcutHelp','trash'])
   })
 
   it('可选链 ?: 防御：panels/modals/overlays 缺失不抛返 false（防 partial mock / store 迁移期 TypeError）', () => {
@@ -472,7 +475,7 @@ describe('d1-115 pushNavState 委托 history.pushState 入参契约（A2-011 导
     expect(arg).toMatchObject({ curCat: 'dev', focusedGroupId: 'gA', settings: true, detailPanelOpen: false })
     // 入参含完整 NavState 键集（与 captureNavState 同结构，非 partial）
     expect(Object.keys(arg).sort()).toEqual(
-      ['attr','bm','cat','curCat','deadLinks','detailPanelOpen','feedback','focusedGroupId','groupEdit','history','settings','shortcutHelp','trash']
+      ['attr','bm','cat','curCat','deadLinks','detailPanelOpen','feedback','focusedGroupId','groupEdit','history','quickLook','settings','shortcutHelp','trash']
     )
   })
 

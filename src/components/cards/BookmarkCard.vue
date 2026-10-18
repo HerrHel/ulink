@@ -78,7 +78,7 @@
           <span v-if="!isShareReadonly" class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
         </span>
       </div>
-      <div class="card-preview" v-if="previewText">{{ previewText }}</div>
+      <div class="card-preview" v-if="!detailMode && previewText">{{ previewText }}</div>
     </div>
     <div class="card-foot" v-if="!isShareReadonly">
       <span class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
@@ -88,8 +88,8 @@
         <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" v-html="I.trash"></button>
       </span>
     </div>
-    <button v-if="hasExpandableContent && uiStore.layoutMode === 'list' && (!uiStore.isMobile || isShareReadonly)" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
+    <button v-if="!detailMode && hasExpandableContent && uiStore.layoutMode === 'list' && (!uiStore.isMobile || isShareReadonly)" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
+    <button v-if="!detailMode && uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>
@@ -104,7 +104,7 @@ import { usePasswordVisibility } from '../../composables/ui/usePasswordVisibilit
 import { useCardOverflow } from '../../composables/ui/useCardOverflow.js'
 import { openBmModal, deleteBookmarkWithUndo, addSub, openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
-import { openDetail } from '../../composables/ui/useUI.js'
+import { openDetail, openQuickLook } from '../../composables/ui/useUI.js'
 import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -137,6 +137,8 @@ const props = defineProps({
   bookmark: { type: Object as () => Bookmark, required: true },
   // 辅助栏场景下账户信息默认展开（大宫格/列表仍默认折叠）
   defaultAcctOpen: { type: Boolean, default: false },
+  // 详情/抽屉模式（CornerInspector 等场景）：隐藏列表专用的展开收起、⋯更多菜单与纯文本摘要，避免双重 notes 渲染与未受限尺寸图标撑破
+  detailMode: { type: Boolean, default: false },
 })
 const dataStore = useDataStore()
 const uiStore = useUIStore()
@@ -224,7 +226,7 @@ function onOpenClick() {
 function edit() { openBmModal(props.bookmark.id) }
 function del() { deleteBookmarkWithUndo(props.bookmark.id) }
 function doAddSub() { addSub(props.bookmark.id) }
-function doOpenDetail(bmId: string) { openDetail(bmId) }
+function doOpenDetail(bmId: string) { openQuickLook(bmId) }
 function visitSub(sub: Bookmark) { openBookmark(sub) }
 function openMenu() { openDetail(props.bookmark.id) }
 function toggleSelect() { const id = props.bookmark.id; const sel = uiStore.batchSelected; const idx = sel.indexOf(id); if (idx > -1) sel.splice(idx, 1); else sel.push(id) }

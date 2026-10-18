@@ -16,28 +16,25 @@ export function getDragHintText(
   payload: DragHintPayload | null,
 ): string {
   if (!payload) return ''
-  // 审计 R24：type:'detail' 的详情卡只能重排（detail-card-wrap）或加入面板（#detailPanel）
-  // 或拖到面板外摘除（cardGrid），不应误提示可嵌入组——drop 端 handleBodyDrop:308 /
-  // handleGroupCardDrop / handleGroupHeadDrop 对 type:'detail' 均拒或 no-op，故 group 相关
-  // 落点对 detail 返回空串，消除视觉安区泄漏（画了插入光标/提示组操作但松手无反应）。
-  if (payload.type === 'detail' &&
-      (target.classList.contains('group-body') ||
-       target.classList.contains('group-card-head') ||
-       target.classList.contains('group-card'))) {
-    return ''
-  }
   if (target.classList.contains('group-body')) {
+    if (payload.type === 'detail') return ''
     const gid = (target as HTMLElement).dataset.gid
     if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
     return payload.type === 'group' ? '嵌入为笔记引用' : '嵌入为内联卡片'
   }
   if (target.classList.contains('group-card-head')) {
+    if (payload.type === 'detail') return ''
     return payload.type === 'group' ? '交换笔记位置' : '将书签排序到此笔记'
   }
   if (target.classList.contains('detail-card-wrap')) return '移到此位置'
+  if (target.closest('#edgeStagingSidebar, .edge-staging-drop-zone, #stagingDock')) {
+    if (payload.srcGid === '__detail__' || payload.type === 'detail') return ''
+    return '加入暂存'
+  }
   if (target.closest('#detailPanel')) return '加入详情面板'
   if (target.classList.contains('rail-item')) return '移动到分类'
   if (target.classList.contains('group-card')) {
+    if (payload.type === 'detail') return ''
     const gid = (target as HTMLElement).dataset.groupId
     if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
     if (payload.type === 'bm') return '移动书签到笔记'
@@ -45,9 +42,11 @@ export function getDragHintText(
     return ''
   }
   if (target.classList.contains('card') && !target.classList.contains('group-card')) {
-    return payload.srcGid ? '移出笔记' : '交换排序'
+    return (payload.srcGid && payload.srcGid !== '__detail__') ? '移出笔记' : '交换排序'
   }
+  if (payload.srcGid === '__detail__' && target.closest('#cardGrid, #panelContent, .panel-main-inner, .panel-main')) return '移出暂存'
+  if (payload.type === 'detail' && target.closest('#cardGrid, #panelContent, .panel-main-inner, .panel-main')) return '移出暂存'
   // 拖到空白区域：仅当源卡片在组内时提示移出笔记
-  if (payload.srcGid && target.closest('#cardGrid')) return '移出笔记'
+  if (payload.srcGid && payload.srcGid !== '__detail__' && target.closest('#cardGrid')) return '移出笔记'
   return ''
 }

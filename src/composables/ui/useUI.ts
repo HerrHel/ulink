@@ -30,7 +30,28 @@ export function toggleDetailPanel() {
 export function openDetail(bmId: string) {
   if (!bmId) return
   const ui = useUIStore()
+  // 移动端无右侧暂存侧边栏：书签与笔记均呼起自底向上的速览详情抽屉
+  if (ui.isMobile) {
+    openQuickLook(bmId)
+    return
+  }
   if (ui.detailCards.indexOf(bmId) === -1) ui.detailCards.push(bmId)
+}
+
+// ── QuickLook 速览卡片浮层 ──
+export function openQuickLook(bmId: string) {
+  if (!bmId) return
+  const ui = useUIStore()
+  pushNavState()
+  ui.openQuickLook(bmId)
+}
+
+export function goBackQuickLook(): boolean {
+  return useUIStore().goBackQuickLook()
+}
+
+export function closeQuickLook() {
+  useUIStore().closeQuickLook()
 }
 
 // ── Card Tags (scroll + overflow) ──

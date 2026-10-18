@@ -8,7 +8,7 @@ import { performUndo, performRedo } from '../domain/useUndo.js'
 import { EditorManager } from '../../lib/editor.js'
 import { closeBmModal, openBmModal } from '../domain/useBookmark.js'
 import { closeGroupEdit, exitGroupFocus, closeAddBmPopover } from '../domain/useGroup.js'
-import { closeCatModal, closeAttrModal, hideSettingsMenu, hideAddDropdown, toggleDetailPanel } from '../ui/useUI.js'
+import { closeCatModal, closeAttrModal, closeQuickLook, hideSettingsMenu, hideAddDropdown, toggleDetailPanel } from '../ui/useUI.js'
 import { toggleBatchMode, selectAllBatch, batchDelete } from '../domain/useBatch.js'
 import { useToastStore } from '../../stores/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
@@ -28,6 +28,7 @@ interface NavState {
   groupEdit: boolean
   cat: boolean
   attr: boolean
+  quickLook?: boolean
   // 面板类叠加层：与 modal 一样支持「打开前 push、后退关」语义。
   // 原实现不含这些 → 打开 settings/trash/deadLinks/shortcutHelp/history 时未 push，
   // 用户后退无法关面板（只能点关闭按钮/Esc）。
@@ -58,6 +59,7 @@ export function captureNavState(): NavState {
     shortcutHelp: ui.panels?.shortcutHelp || false,
     history: ui.panels?.history || false,
     feedback: ui.overlays?.feedback || false,
+    quickLook: ui.modals?.quickLook || false,
   }
 }
 
@@ -71,8 +73,20 @@ export function restoreNavState(prev: NavState) {
   const ui = useUIStore()
   // pushNavState 在「打开前」调用并 snapshot「未开」态，popstate 时比对
   // 「prev.X=false 且当前已开」→ 关闭。modal 与面板叠加层用同一模式。
-  // 顺序即优先级：先关 modal，再 focus/detail，再 panel/overlay，最后 curCat。
   const closers: Array<() => boolean> = [
+    () => {
+      if (ui.modals.quickLook) {
+        if (ui.quickLookHistory && ui.quickLookHistory.length > 0) {
+          ui.goBackQuickLook()
+          return true
+        }
+        if (prev.quickLook !== true) {
+          closeQuickLook()
+          return true
+        }
+      }
+      return false
+    },
     () => { if (prev.bm !== true && ui.modals.bookmark) { closeBmModal(); return true } return false },
     () => { if (prev.groupEdit !== true && ui.modals.groupEdit) { closeGroupEdit(); return true } return false },
     () => { if (prev.cat !== true && ui.modals.category) { closeCatModal(); return true } return false },
@@ -182,6 +196,10 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     // 优先层：命中即 return（独占关闭）。顺序即优先级。
     const priority: Array<() => boolean> = [
+      () => {
+        if (!ui.modals.quickLook) return false
+        closeQuickLook(); return true
+      },
       () => { // A3-004
         const as = useActionSheetStore()
         if (!as.visible) return false
@@ -213,7 +231,7 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
       if (tryClose()) return
     }
     // 兜底层：一次 Esc 清扫其余 modal / menu / panel（无 return，全部尝试）
-    closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
+    closeQuickLook(); closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
     useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
     if (ui.panels.trash) ui.panels.trash = false
     if (ui.overlays.deadLinks) ui.overlays.deadLinks = false

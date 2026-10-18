@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
     addSub: vi.fn(),
     openBookmark: vi.fn(),
     openDetail: vi.fn(),
+    openQuickLook: vi.fn(),
     toggleAttrFilter: vi.fn(),
     bookmarkPreview: vi.fn(),
     handleListCardKeydown: vi.fn(),
@@ -83,6 +84,7 @@ vi.mock('../../composables/domain/useBookmark.js', () => ({
 }))
 vi.mock('../../composables/ui/useUI.js', () => ({
   openDetail: mocks.openDetail,
+  openQuickLook: mocks.openQuickLook,
 }))
 vi.mock('../../composables/domain/useAttrFilter.js', () => ({
   toggleAttrFilter: mocks.toggleAttrFilter,
@@ -549,10 +551,10 @@ describe('BookmarkCard — 转发函数契约', () => {
     expect(mocks.addSub).toHaveBeenCalledWith('b1')
   })
 
-  it('doOpenDetail(bmId) → openDetail(bmId)', async () => {
+  it('doOpenDetail(bmId) → openQuickLook(bmId)', async () => {
     const w = mountCard()
     await w.vm.doOpenDetail('sub1')
-    expect(mocks.openDetail).toHaveBeenCalledWith('sub1')
+    expect(mocks.openQuickLook).toHaveBeenCalledWith('sub1')
   })
 
   it('visitSub(sub) → openBookmark(sub)', async () => {

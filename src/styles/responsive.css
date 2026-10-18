@@ -101,7 +101,10 @@
   }
 
   /* === Content area === */
-  .panel-content{padding:10px 12px 80px}
+  .panel-content{
+    padding:10px 14px 80px;
+    scrollbar-gutter:auto;
+  }
   #btnBatchHeader{display:inline-flex}
   .filter-row.focus-active #btnBatchHeader{display:none}
   .form-row{grid-template-columns:1fr}
@@ -128,7 +131,7 @@
   .filter-row{
     flex-wrap:nowrap;
     height:auto;min-height:auto;max-height:none;
-    padding:6px 12px;
+    padding:6px 14px;
     gap:8px;
   }
   .filter-row #filterTools{flex:1 1 0;min-width:0;order:1}
@@ -204,7 +207,7 @@
 }
 @media(max-width:480px){
   .panel-header{padding:0 10px;height:auto;gap:6px 8px}
-  .panel-content{padding:8px 10px 80px}
+  .panel-content{padding:8px 10px 80px;scrollbar-gutter:auto}
   .filter-row{height:auto;min-height:auto;max-height:none;padding:4px 10px;gap:4px}
 }
 
