@@ -40,7 +40,8 @@ export function formatLightMarkdown(raw: string): string {
   text = text.replace(/`([^`]+)`/g, '<code class="chat-flow-code">$1</code>')
 
   // 5. 链接识别与清理：若有单独成行的加粗网址 **https://...**，已转为 strong，可点化
-  text = text.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="chat-flow-link">$1</a>')
+  //    URL 段用 ASCII 白名单：URL 后紧贴的中文是叙述文字，吞进 href 会 404
+  text = text.replace(/(https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="chat-flow-link">$1</a>')
 
   // 6. 无序列表行 (- item / * item)
   const lines = text.split('\n')
