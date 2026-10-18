@@ -1773,11 +1773,12 @@ onUnmounted(() => {
   padding: 0 1px;
 }
 
+/* 回复操作行：随内容流布局（右对齐、自占一行），
+   绝对定位浮层会盖住正文首行文字（复制按钮与内容重叠），故不浮层 */
 .chat-flow-header {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1px;
   opacity: 0;
   transition: opacity 0.15s ease;
 }

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   validateInputUrl,
   detectPlatform,
+  isShortLinkHost,
   parseBilibiliVideoId,
   parseYouTubeVideoId,
   parseBilibiliView,
@@ -43,8 +44,38 @@ const RATE_LIMIT_PER_MIN = parseInt(Deno.env.get('EXTRACT_VIDEO_RATE_LIMIT_PER_M
 const UPSTREAM_TIMEOUT_MS = parseInt(Deno.env.get('EXTRACT_VIDEO_TIMEOUT_MS') || '12000', 10)
 /** 通用降级抓取（Jina）读取上限：覆盖简介/字幕/评论区文本 */
 const GENERIC_MAX_CHARS = 30000
+/** 短链解析最大重定向跳数 */
+const MAX_SHORT_LINK_HOPS = 5
 
 const BROWSER_UA = 'Mozilla/5.0 (compatible; ulink-extract/1.0; +https://ulink.ren)'
+
+/**
+ * 短链解析：对已知分享短链域（b23.tv 等）逐跳跟随重定向到 canonical 视频页 URL，
+ * 之后才能命中 B站/YouTube 平适配器拿简介/字幕/评论（否则只会 generic 抓跳板页，答非所问）。
+ * 每跳 Location 重新走 validateInputUrl 校验（短链可被任意人构造，重定向指向内网即
+ * fail-closed 中止解析，返回上一跳合法 URL）；非短链域原样返回；网络失败保持原 URL
+ * 不劣于修复前行为（落 generic 降级）。
+ */
+async function resolveShortLink(parsed: URL, signal: AbortSignal): Promise<URL> {
+  if (!isShortLinkHost(parsed.hostname)) return parsed
+  let current = parsed
+  for (let hop = 0; hop < MAX_SHORT_LINK_HOPS; hop++) {
+    try {
+      const res = await fetch(current.href, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: { 'User-Agent': BROWSER_UA },
+        signal: AbortSignal.any([signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
+      })
+      const loc = res.headers.get('Location')
+      if (![301, 302, 303, 307, 308].includes(res.status) || !loc) break
+      current = validateInputUrl(new URL(loc, current.href).href)
+    } catch {
+      break
+    }
+  }
+  return current
+}
 
 /** 带超时的 GET JSON；失败返回 null（不抛，降级路径自行兜底） */
 async function fetchJson(url: string, signal: AbortSignal): Promise<unknown | null> {
@@ -143,12 +174,15 @@ serve(async (req) => {
       )
     }
 
-    const platform = detectPlatform(parsed)
     const signal = upstreamAbort.signal
+    // 短链（b23.tv 等）先解析到 canonical 视频页再识别平台：
+    // 不解析则 b23.tv 命中不了 BV 号，只能 generic 抓跳板页（答非所问根因）
+    const resolved = await resolveShortLink(parsed, signal)
+    const platform = detectPlatform(resolved)
 
     // ── B站适配器：view API（简介/字幕列表）+ 热评 + CC 字幕 ──
     if (platform === 'bilibili') {
-      const ids = parseBilibiliVideoId(parsed)!
+      const ids = parseBilibiliVideoId(resolved)!
       const viewQuery = ids.bvid ? `bvid=${ids.bvid}` : `aid=${ids.aid}`
       const view = parseBilibiliView(
         await fetchJson(`https://api.bilibili.com/x/web-interface/view?${viewQuery}`, signal)
@@ -166,7 +200,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             source: 'bilibili',
-            url: rawUrl,
+            url: resolved.href,
             title: view.title,
             description: view.desc,
             subtitles,
@@ -181,7 +215,7 @@ serve(async (req) => {
 
     // ── YouTube 适配器：Data API v3（需 key，未配置则降级）──
     if (platform === 'youtube' && YOUTUBE_API_KEY) {
-      const vid = parseYouTubeVideoId(parsed)!
+      const vid = parseYouTubeVideoId(resolved)!
       const key = encodeURIComponent(YOUTUBE_API_KEY)
       const [videoJson, commentsJson] = await Promise.all([
         fetchJson(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${vid}&key=${key}`, signal),
@@ -192,7 +226,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({
             source: 'youtube',
-            url: rawUrl,
+            url: resolved.href,
             title: video.title,
             description: video.description,
             subtitles: '', // YouTube 字幕无免鉴权 API，不伪造；空串 = 本次未取到
@@ -205,8 +239,9 @@ serve(async (req) => {
     }
 
     // ── 通用降级：服务端 r.jina.ai 抓取（长尾平台 / 平台 API 风控 / 无 YouTube key）──
+    // 用解析后的 canonical URL 抓取（短链跳板页不含正文）
     try {
-      const res = await fetch(`https://r.jina.ai/${rawUrl}`, {
+      const res = await fetch(`https://r.jina.ai/${resolved.href}`, {
         headers: { 'Accept': 'text/markdown, text/plain, */*', 'X-No-Cache': 'true' },
         signal: AbortSignal.any([signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
       })
@@ -218,7 +253,7 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({
               source: 'generic',
-              url: rawUrl,
+              url: resolved.href,
               title: titleMatch ? titleMatch[1].trim() : '',
               description: descMatch ? descMatch[1].trim() : '',
               subtitles: '',

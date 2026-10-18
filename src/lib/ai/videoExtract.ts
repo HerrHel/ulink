@@ -73,16 +73,19 @@ export async function fetchVideoExtractServer(
 
 /** 注入提示词的内容截断上限：总结只需要概要，不做全量内容外送 */
 const SUMMARY_MAX_INPUT_CHARS = 6000
+/** 用户问题注入提示词前的截断上限：问题只需短句，超长按噪声处理 */
+const SUMMARY_MAX_QUESTION_CHARS = 200
 /** 内容太短没有总结价值的下限 */
 const SUMMARY_MIN_INPUT_CHARS = 40
 
 /**
  * 文字源总结：对简介/字幕/评论区文本生成一段速览（仅基于给定文本，不编造）。
+ * 携带 question（用户随链接提出的实际问题）时改为「回答用户问题」模式，避免答非所问；
  * 无可用 AI 通道（未登录且无 BYOK）或请求失败时返回 null，调用方跳过总结。
  */
 export async function generateVideoSummary(
   contentText: string,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; question?: string } = {}
 ): Promise<string | null> {
   const trimmed = (contentText || '').trim()
   if (trimmed.length < SUMMARY_MIN_INPUT_CHARS) return null
@@ -93,9 +96,17 @@ export async function generateVideoSummary(
 
   const isZh = getLocale().startsWith('zh')
   const safeText = sanitizeForPrompt(trimmed, SUMMARY_MAX_INPUT_CHARS)
-  const prompt = isZh
-    ? `以下是一段视频/图文分享内容的公开文本（简介、字幕、评论等）。请用中文提炼其中推荐的网站/工具与核心要点，不超过 120 字，只基于给定内容，不要编造：\n\n${safeText}`
-    : `Below is public text from a video or post (description, subtitles, comments). Summarize the websites/tools mentioned and key points in English, under 80 words, using only the given content:\n\n${safeText}`
+  // 用户问题同样消毒截断后注入（防超长噪声与提示词注入面扩大）
+  const safeQuestion = (options.question || '').trim()
+    ? sanitizeForPrompt(options.question!.trim(), SUMMARY_MAX_QUESTION_CHARS)
+    : ''
+  const prompt = safeQuestion
+    ? (isZh
+        ? `用户提问：${safeQuestion}\n以下是一段视频/图文分享内容的公开文本（简介、字幕、评论等）。请只基于给定内容回答用户提问，回答中列出内容里出现的网站/工具（附网址），不超过 150 字，不要编造；若给定内容里没有能回答该提问的信息，如实说明：\n\n${safeText}`
+        : `User question: ${safeQuestion}\nBelow is public text from a video or post (description, subtitles, comments). Answer the user's question using only this content, listing the websites/tools it mentions (with URLs), under 100 words. If the content lacks information to answer, say so honestly:\n\n${safeText}`)
+    : (isZh
+        ? `以下是一段视频/图文分享内容的公开文本（简介、字幕、评论等）。请用中文提炼其中推荐的网站/工具与核心要点，不超过 120 字，只基于给定内容，不要编造：\n\n${safeText}`
+        : `Below is public text from a video or post (description, subtitles, comments). Summarize the websites/tools mentioned and key points in English, under 80 words, using only the given content:\n\n${safeText}`)
 
   try {
     const res = await askMiMo(prompt, {

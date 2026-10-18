@@ -362,6 +362,14 @@ export async function extractBookmarksFromVideo(
   const urlMatch = cleanInput.match(/https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+/i)
   const targetUrl = urlMatch ? urlMatch[0].replace(/[，。！？,.!?:;；]+$/, '') : ''
 
+  // 用户随链接提出的具体问题（如「总结视频内出现的网站」）：剥掉 URL 与【标题】块后的剩余文字。
+  // 透传给总结提示词做「回答用户问题」模式，避免回复固定套路与提问脱节（答非所问）
+  const questionText = cleanInput
+    .replace(/https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+/gi, ' ')
+    .replace(/【[^】]*】/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
   // 1. 内容获取：优先服务端 extract-video Edge Function（海外节点转发抓取，平台适配器
   //    结构化返回简介/字幕/评论区，每段独立标注来源）；失败/未登录降级本地 Jina 直连
   //    （国内网络可能不可用，抓不到不伪造）
@@ -486,11 +494,11 @@ export async function extractBookmarksFromVideo(
   const cleanTitle = pageTitle ? `精选：${pageTitle.slice(0, 24)}` : '分享精选工具合集'
 
   // 5. 文字源总结速览（简介/字幕/评论区文本 → 大模型，注入前已消毒截断）：
-  //    无可用 AI 通道或失败则缺省，不阻塞链接提取
+  //    带用户问题走「回答提问」模式；无可用 AI 通道或失败则缺省，不阻塞链接提取
   let summary: string | undefined
   if (pageBody.trim()) {
     try {
-      summary = (await generateVideoSummary(pageBody)) || undefined
+      summary = (await generateVideoSummary(pageBody, { question: questionText || undefined })) || undefined
     } catch {
       summary = undefined
     }
@@ -503,6 +511,7 @@ export async function extractBookmarksFromVideo(
     groupNotes: `<p>由与链 AI 深度解析分享内容提取（含简介/字幕/评论区出现的链接），包含直达网址与精炼亮点说明。</p>`,
     bookmarks: rawBookmarks.map(b => enrichContext(b, categories, attributes)),
     summary,
+    question: questionText || undefined,
   }
 }
 

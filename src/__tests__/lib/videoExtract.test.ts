@@ -111,7 +111,33 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
     expect(await generateVideoSummary('短')).toBeNull()
     expect(mockAskMiMo).not.toHaveBeenCalled()
 
+    // 内容需越过 40 字最小阈值，确保真正走到 LLM 调用再失败（否则本用例是假绿）
+    const longEnough = '这里是一段足够长的视频简介公开文本，包含简介与评论的摘要内容，用于触发总结生成流程。'
     mockAskMiMo.mockRejectedValue(new Error('AI 服务未配置'))
-    expect(await generateVideoSummary('这里是一段足够长的视频简介文本，用于触发总结生成流程。')).toBeNull()
+    expect(await generateVideoSummary(longEnough)).toBeNull()
+    expect(mockAskMiMo).toHaveBeenCalledTimes(1)
+  })
+
+  it('question 模式：用户问题进提示词做「回答提问」，问题同样截断防注入面扩大', async () => {
+    mockAskMiMo.mockResolvedValue({
+      reply: '', reasoning: '', cleanText: '视频里出现的网站有 js.design 等。', candidates: [], rawText: '', model: 'm',
+    })
+
+    const content = '这里是一段足够长的视频简介公开文本，包含简介与评论的摘要内容，用于触发总结生成流程。'
+    const res = await generateVideoSummary(content, { question: '总结视频内出现的网站' })
+
+    expect(res).toBe('视频里出现的网站有 js.design 等。')
+    const prompt = mockAskMiMo.mock.calls[0][0] as string
+    expect(prompt).toContain('用户提问：总结视频内出现的网站')
+    expect(prompt).toContain('回答用户提问')
+
+    // 超长问题截断：不整体进提示词
+    mockAskMiMo.mockClear()
+    mockAskMiMo.mockResolvedValue({
+      reply: '', reasoning: '', cleanText: 'ok', candidates: [], rawText: '', model: 'm',
+    })
+    await generateVideoSummary(content, { question: '问'.repeat(1000) })
+    const prompt2 = mockAskMiMo.mock.calls[0][0] as string
+    expect(prompt2).not.toContain('问'.repeat(300))
   })
 })

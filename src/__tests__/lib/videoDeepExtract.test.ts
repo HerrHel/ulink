@@ -276,4 +276,44 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     )
     expect(withoutSummary.summary).toBeUndefined()
   })
+
+  it('用户问题透传：URL 与【标题】块剥离后的提问进总结（回答提问模式，防答非所问）', async () => {
+    mockSummary.mockResolvedValue('视频中出现的网站有 https://js.design 等。')
+    mockServerExtract.mockResolvedValue({
+      source: 'bilibili',
+      url: 'https://www.bilibili.com/video/BV1xx411c7mD',
+      title: 'Claude 防封号教程',
+      description: '教程里提到的网站与工具',
+      subtitles: '',
+      comments: [],
+      degraded: false,
+    })
+
+    const res = await extractBookmarksFromVideo(
+      '【10月最新Claude防封号最安全的！注册+订阅充值教程！新手看完直接上手！-哔哩哔哩】 https://b23.tv/fuBzhYU总结视频内出现的网站',
+      testCategories,
+      testAttributes
+    )
+
+    expect(res.question).toBe('总结视频内出现的网站')
+    expect(mockSummary.mock.calls[0][1]).toMatchObject({ question: '总结视频内出现的网站' })
+    expect(res.summary).toBe('视频中出现的网站有 https://js.design 等。')
+  })
+
+  it('无附加问题：总结缺省 question（通用速览模式）', async () => {
+    mockSummary.mockResolvedValue('速览。')
+    mockServerExtract.mockResolvedValue({
+      source: 'bilibili',
+      url: 'https://www.bilibili.com/video/BV1xx411c7mD',
+      title: '工具分享',
+      description: '推荐好用的工具集合',
+      subtitles: '',
+      comments: [],
+      degraded: false,
+    })
+
+    const res = await extractBookmarksFromVideo('https://b23.tv/fuBzhYU', testCategories, testAttributes)
+    expect(res.question).toBeUndefined()
+    expect(mockSummary.mock.calls[0][1]).toMatchObject({ question: undefined })
+  })
 })

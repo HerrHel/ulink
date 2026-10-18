@@ -79,7 +79,21 @@ export function validateInputUrl(raw: string): URL {
 
 // ── 平台识别 ──
 
-/** B站视频 ID：BV 号或 av 号（仅 /video/ 路径；b23.tv 短链无法离线解析，走 generic） */
+/** 已知视频分享短链域：需先跟随重定向解析到 canonical 视频页，才能命中平台适配器；
+ *  不解析直接抓只会拿到跳板页（generic 降级的答非所问根因） */
+const SHORT_LINK_HOSTS = new Set([
+  'b23.tv', 'bili2233.cn',
+  'v.douyin.com', 'vm.tiktok.com', 'vt.tiktok.com',
+  'xhslink.com',
+])
+
+/** 是否为已知分享短链域（index.ts 据此做重定向解析，纯函数可测） */
+export function isShortLinkHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^www\./, '')
+  return SHORT_LINK_HOSTS.has(host)
+}
+
+/** B站视频 ID：BV 号或 av 号（仅 /video/ 路径；b23.tv 等短链先经 resolveShortLink 解析后再进本函数） */
 export function parseBilibiliVideoId(u: URL): { bvid?: string; aid?: string } | null {
   const host = u.hostname.toLowerCase().replace(/^www\./, '')
   if (host !== 'bilibili.com' && !host.endsWith('.bilibili.com')) return null

@@ -47,4 +47,6 @@ export interface AiVideoExtractResult {
   bookmarks: AiCandidateBookmark[]
   /** 文字源总结速览（简介/字幕/评论区 → 大模型），无可用 AI 通道或失败时缺省 */
   summary?: string
+  /** 用户随链接提出的具体问题（剥掉 URL 与标题块后），有值时 summary 为「回答提问」模式 */
+  question?: string
 }
