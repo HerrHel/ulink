@@ -2933,7 +2933,9 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--surface) 92%, transparent) !important;
 }
 
-:global(:has(.detail-panel.floating-hud.open)) #resizeRight {
+/* 注意：:global() 必须包裹完整选择器；写成 :global(:has(...)) #resizeRight 会被 scoped 编译截断成 :has(...){display:none}，
+   使 body/#app 等全部祖先节点被隐藏（曾导致 e2e 设置按钮不可见的回归） */
+:global(:has(.detail-panel.floating-hud.open) #resizeRight) {
   display: none !important;
 }
 
