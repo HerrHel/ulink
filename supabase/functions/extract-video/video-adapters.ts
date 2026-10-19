@@ -9,6 +9,8 @@
  * 不做语音识别(ASR)、画面 OCR 或视频画面理解。
  */
 
+import { isPrivateHost, isTargetDnsSafeSyncResults } from '../check-link/ssrf-guard.ts'
+
 /** 可识别的视频平台；generic = 非 B站/YouTube 的任意页面（走服务端 Jina 通用抓取） */
 export type VideoPlatform = 'bilibili' | 'youtube' | 'generic'
 
@@ -75,6 +77,36 @@ export function validateInputUrl(raw: string): URL {
     throw new Error('不允许访问内网地址')
   }
   return parsed
+}
+
+// ── DNS 重绑定校验（fail-closed）──
+// validateInputUrl 只拦字面 IP：指向内网的域名（解析到 127./10./169.254. 等）
+// 能绕过字面拦截，短链重定向逐跳 fetch 会形成盲 SSRF 面，故每跳 fetch 前须 DNS 校验。
+// 私有段判定真源复用 check-link/ssrf-guard.ts（唯一真源）。
+
+/** DNS resolver 接口：注入以解耦 Deno API（同 ssrf-guard.DnsResolver 口径），便于单测 */
+export interface DnsResolver {
+  resolve(hostname: string, type: 'A' | 'AAAA'): Promise<string[]>
+}
+
+/**
+ * DNS 重绑定校验：非 IP 字面量 hostname 解析 A/AAAA，任一私有记录、解析失败
+ * 或无记录一律判不安全（fail-closed，绝不「校验失败仍 fetch」）。
+ * IP 字面量无需解析：私有段已由 isPrivateHost 全量覆盖，公网字面量即最终地址。
+ */
+export async function isUrlDnsSafe(parsed: URL, resolver: DnsResolver): Promise<boolean> {
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (isPrivateHost(host)) return false
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':')) return true
+  try {
+    const records = [
+      ...(await resolver.resolve(host, 'A')),
+      ...(await resolver.resolve(host, 'AAAA')),
+    ]
+    return isTargetDnsSafeSyncResults(host, records)
+  } catch {
+    return false
+  }
 }
 
 // ── 平台识别 ──

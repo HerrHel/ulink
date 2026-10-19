@@ -311,7 +311,7 @@ function createGroupFromResults() {
   const maxGrpOrder = ds.siblingGroups.reduce((m, g) => (g.order > m ? g.order : m), -1)
   const group: SiblingGroup = {
     id: 'sg_' + gid(),
-    name: videoResult.value.groupTitle || '视频提取工具合集',
+    name: videoResult.value.groupTitle || t('ai.videoGroupDefaultName'),
     categoryId: CAT_UNCATEGORIZED,
     icon: '',
     order: Math.max(maxBmOrder, maxGrpOrder) + 1,

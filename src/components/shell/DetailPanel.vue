@@ -64,7 +64,7 @@
             >
               <span class="session-item-dot"></span>
               <div class="session-item-meta">
-                <span class="session-item-title">{{ s.title }}</span>
+                <span class="session-item-title">{{ sessionItemTitle(s) }}</span>
                 <span class="session-item-time">{{ formatTimeAgo(s.updatedAt) }}</span>
               </div>
               <button
@@ -557,8 +557,9 @@ import { I } from '../../config/icons.js'
 import { useI18n } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
-import { parseTurnContentSegments, type ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
-import type { ChatTurn } from '../../lib/ai/chatSessions.js'
+import { parseTurnContentSegments, mergeParsedCandidates, type ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
+import type { ChatTurn, AiChatSession } from '../../lib/ai/chatSessions.js'
+import { isDefaultSessionTitle } from '../../lib/ai/chatSessions.js'
 import { useAiChat } from '../../composables/domain/useAiChat.js'
 
 const { t, locale } = useI18n()
@@ -696,6 +697,11 @@ function getCleanCopyText(content?: string): string {
   return content.replace(/```ulink-card\s*([\s\S]*?)```/gi, '').trim()
 }
 
+/** 会话列表标题：未命名（含存量旧默认标题）回退到 i18n 默认标题 */
+function sessionItemTitle(s: AiChatSession): string {
+  return isDefaultSessionTitle(s.title) ? t('ai.sessionDefaultTitle') : s.title
+}
+
 function getTurnSegments(turn: ChatTurn): ChatContentSegment[] {
   if (!turn.content && (!turn.candidates || turn.candidates.length === 0)) {
     return []
@@ -707,9 +713,10 @@ function getTurnSegments(turn: ChatTurn): ChatContentSegment[] {
     ds.customAttributes
   )
 
-  // 同步随文卡片到 turn.candidates（保证持久化与一键全部存入）
-  if (allCandidates.length && (!turn.candidates || turn.candidates.length === 0)) {
-    turn.candidates = allCandidates
+  // 同步随文卡片到 turn.candidates（流式期间持续全量合并去重，保证持久化与一键全部存入不漏卡）
+  if (allCandidates.length) {
+    const merged = mergeParsedCandidates(turn.candidates, allCandidates)
+    if (merged !== turn.candidates) turn.candidates = merged
   }
 
   // 兜底兼容：若正文没有内嵌卡片语法（例如本地静态搜索），将 candidates 转换为内嵌卡片追加在末尾
@@ -741,7 +748,7 @@ async function copyMessage(text: string, actionKey?: string) {
       }, 1500)
     }
   } catch {
-    toast(isZh.value ? '复制失败' : 'Copy failed', false)
+    toast(t('ai.copyFailed'), false)
   }
 }
 

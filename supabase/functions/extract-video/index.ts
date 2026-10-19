@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   validateInputUrl,
+  isUrlDnsSafe,
   detectPlatform,
   isShortLinkHost,
   parseBilibiliVideoId,
@@ -49,17 +50,25 @@ const MAX_SHORT_LINK_HOPS = 5
 
 const BROWSER_UA = 'Mozilla/5.0 (compatible; ulink-extract/1.0; +https://ulink.ren)'
 
+/** Deno DNS resolver 注入（isUrlDnsSafe 可测性：纯逻辑侧不直接依赖 Deno API） */
+const denoDnsResolver = {
+  resolve: (hostname: string, type: 'A' | 'AAAA') => Deno.resolveDns(hostname, type),
+}
+
 /**
  * 短链解析：对已知分享短链域（b23.tv 等）逐跳跟随重定向到 canonical 视频页 URL，
  * 之后才能命中 B站/YouTube 平适配器拿简介/字幕/评论（否则只会 generic 抓跳板页，答非所问）。
  * 每跳 Location 重新走 validateInputUrl 校验（短链可被任意人构造，重定向指向内网即
- * fail-closed 中止解析，返回上一跳合法 URL）；非短链域原样返回；网络失败保持原 URL
+ * fail-closed 中止解析，返回上一跳合法 URL）；fetch 前再做 DNS 重绑定校验
+ * （isUrlDnsSafe，解析到内网/解析失败一律中止）；非短链域原样返回；网络失败保持原 URL
  * 不劣于修复前行为（落 generic 降级）。
  */
 async function resolveShortLink(parsed: URL, signal: AbortSignal): Promise<URL> {
   if (!isShortLinkHost(parsed.hostname)) return parsed
   let current = parsed
   for (let hop = 0; hop < MAX_SHORT_LINK_HOPS; hop++) {
+    // DNS 重绑定校验 fail-closed：目标解析到内网或解析失败即中止，返回上一跳已确认安全 URL
+    if (!(await isUrlDnsSafe(current, denoDnsResolver))) break
     try {
       const res = await fetch(current.href, {
         method: 'GET',

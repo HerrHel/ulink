@@ -12,6 +12,7 @@
 
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
+import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { ULINK_AGENT_TOOLS } from './tools.js'
 import { supabase, isSupabaseConfigured } from '../supabase.js'
@@ -259,7 +260,7 @@ export function parseMiMoReply(
               notes: item.notes ? String(item.notes).trim() : fallbackNotes,
               categoryId: matchedCat?.id || prefill.categoryId || undefined,
               suggestedAttrIds: prefill.suggestedAttrIds?.length ? prefill.suggestedAttrIds : undefined,
-              tag: item.tags?.[0] || (item.notes?.includes('开源') ? '开源免费' : '智能推荐'),
+              tag: item.tags?.[0] || (item.notes?.includes('开源') ? t('ai.tagOpenFree') : t('ai.tagSmartRec')),
               highlight: item.notes || item.title,
             })
           }
@@ -284,6 +285,8 @@ export interface AgentToolCall {
   id: string
   name: string
   arguments: Record<string, any>
+  /** 参数 JSON 解析失败标记：携带此标记的调用不得执行（防空参数误执行副作用），应回错误结果给模型 */
+  argsParseFailed?: boolean
 }
 
 /** 对话消息（含 tool 回传，支持真 Agent 循环） */
@@ -343,7 +346,7 @@ export async function askMiMoStream(
 }> {
   const config = getMiMoConfig()
   if (!config.enabled) {
-    throw new Error('AI 功能已在设置中关闭')
+    throw new Error(t('ai.errDisabled'))
   }
 
   const systemPrompt = buildUlinkSystemPrompt({
@@ -412,12 +415,12 @@ export async function askMiMoStream(
   let response: Response
   if (!config.apiKey) {
     if (!isSupabaseConfigured) {
-      throw new Error('AI 服务未配置：请登录后使用官方通道，或在设置中自填 API Key')
+      throw new Error(t('ai.errNotConfigured'))
     }
     const { data: sessionData } = await supabase.auth.getSession()
     const token = sessionData?.session?.access_token
     if (!token) {
-      throw new Error('官方 AI 通道需要登录后使用（或在设置中自填 API Key）')
+      throw new Error(t('ai.errNeedLogin'))
     }
     const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
     response = await fetch(`${fnBase}/functions/v1/mimo-chat`, {
@@ -577,17 +580,21 @@ export async function askMiMoStream(
   for (const item of Object.values(toolCallsMap)) {
     if (item.name) {
       let argsObj: Record<string, any> = {}
+      let argsParseFailed = false
       try {
         if (item.argumentsStr) {
           argsObj = JSON.parse(item.argumentsStr)
         }
       } catch {
-        // 容错降级
+        // 参数损坏：标记为解析失败，不得静默置 {} 照常执行（防空参数误触发副作用），
+        // 由执行侧如实回错误结果给模型
+        argsParseFailed = true
       }
-      const call = {
+      const call: AgentToolCall = {
         id: item.id,
         name: item.name,
         arguments: argsObj,
+        ...(argsParseFailed ? { argsParseFailed: true } : {}),
       }
       parsedToolCalls.push(call)
       callbacks?.onToolCall?.(call)

@@ -9,6 +9,8 @@
  * 4. 无法抓取（如内网或需要登录的平台）时诚实返回错误与清晰指引。
  */
 
+import { t } from '../../i18n/index.js'
+
 export interface JinaReadResult {
   success: boolean
   url: string
@@ -27,7 +29,7 @@ export async function fetchPageContentViaJina(
     return {
       success: false,
       url: cleanUrl,
-      error: '无效的目标网址，必须以 http:// 或 https:// 开头',
+      error: t('ai.jinaInvalidUrl'),
     }
   }
 
@@ -56,7 +58,7 @@ export async function fetchPageContentViaJina(
       return {
         success: false,
         url: cleanUrl,
-        error: `读取失败 (HTTP ${res.status}): ${res.statusText}`,
+        error: t('ai.jinaReadFailed', { status: res.status, statusText: res.statusText }),
       }
     }
 
@@ -65,7 +67,7 @@ export async function fetchPageContentViaJina(
       return {
         success: false,
         url: cleanUrl,
-        error: '目标页面返回空内容或不可公开抓取',
+        error: t('ai.jinaEmpty'),
       }
     }
 
@@ -93,13 +95,13 @@ export async function fetchPageContentViaJina(
       return {
         success: false,
         url: cleanUrl,
-        error: '页面读取超时或已被用户取消',
+        error: t('ai.jinaTimeout'),
       }
     }
     return {
       success: false,
       url: cleanUrl,
-      error: `网络或跨域读取异常: ${err?.message || '未知错误'}`,
+      error: t('ai.jinaNetError', { msg: err?.message || 'Unknown error' }),
     }
   }
 }

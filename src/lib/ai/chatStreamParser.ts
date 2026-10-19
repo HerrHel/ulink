@@ -11,6 +11,7 @@
 import DOMPurify from 'dompurify'
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
+import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 
 export type ChatContentSegment =
@@ -88,6 +89,31 @@ export function formatLightMarkdown(raw: string): string {
 }
 
 /**
+ * 将流式解析出的随文卡片增量合并进既有 candidates（去重保序）。
+ * 流式期间每次解析都是对「已到达内容」的全量解析，需持续合并而非只取首批，
+ * 否则后到的卡片不进 turn.candidates（一键全部存入/持久化会漏卡）。
+ * 去重键为 url|title；既有条目优先保留（保住 isAdded 等用户操作状态）。
+ * 无新增时原样返回既有数组（调用方据此跳过赋值，避免渲染期反复改写状态）。
+ */
+export function mergeParsedCandidates(
+  existing: AiCandidateBookmark[] | undefined,
+  parsed: AiCandidateBookmark[]
+): AiCandidateBookmark[] | undefined {
+  if (!parsed.length) return existing
+  const base = existing || []
+  const seen = new Set(base.map((c) => `${c.url}|${c.title}`))
+  const merged = [...base]
+  for (const c of parsed) {
+    const key = `${c.url}|${c.title}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      merged.push(c)
+    }
+  }
+  return merged.length === base.length ? existing : merged
+}
+
+/**
  * 将整段文本按照 ```ulink-card ... ``` 切割为有序段落与卡片
  */
 export function parseTurnContentSegments(
@@ -139,7 +165,7 @@ export function parseTurnContentSegments(
               notes: item.notes ? String(item.notes).trim() : (prefill.notes || ''),
               categoryId: matchedCat?.id || prefill.categoryId || undefined,
               suggestedAttrIds: prefill.suggestedAttrIds?.length ? prefill.suggestedAttrIds : undefined,
-              tag: item.tags?.[0] || (item.notes?.includes('开源') ? '开源免费' : '智能推荐'),
+              tag: item.tags?.[0] || (item.notes?.includes('开源') ? t('ai.tagOpenFree') : t('ai.tagSmartRec')),
               highlight: item.notes || item.title,
             }
 

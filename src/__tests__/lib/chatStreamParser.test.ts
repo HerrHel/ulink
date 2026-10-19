@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   formatLightMarkdown,
   parseTurnContentSegments,
+  mergeParsedCandidates,
 } from '../../lib/ai/chatStreamParser.js'
 import type { Category, CustomAttribute } from '../../types.js'
+import type { AiCandidateBookmark } from '../../types/ai.js'
 
 describe('chatStreamParser', () => {
   const dummyCats: Category[] = [
@@ -111,6 +113,59 @@ describe('chatStreamParser', () => {
       const { segments, allCandidates } = parseTurnContentSegments('', dummyCats, dummyAttrs)
       expect(segments).toHaveLength(0)
       expect(allCandidates).toHaveLength(0)
+    })
+  })
+
+  describe('mergeParsedCandidates', () => {
+    const cand = (title: string, extra: Partial<AiCandidateBookmark> = {}): AiCandidateBookmark => ({
+      title,
+      url: `https://${title.toLowerCase()}.com`,
+      notes: '',
+      ...extra,
+    })
+
+    it('流式期间新到卡片持续合并进 turn.candidates（不只保留首批）', () => {
+      const card1 = `\`\`\`ulink-card\n{"title":"Ezgif","url":"https://ezgif.com"}\n\`\`\``
+      const card2 = `\`\`\`ulink-card\n{"title":"AConvert","url":"https://aconvert.com"}\n\`\`\``
+
+      // 首批：仅第一张卡解析完成
+      const first = parseTurnContentSegments(`推荐一：\n${card1}`, dummyCats, dummyAttrs)
+      let candidates = mergeParsedCandidates(undefined, first.allCandidates)
+      expect(candidates).toHaveLength(1)
+
+      // 第二批：流式内容增长，两张卡都完整（全量重解析）
+      const second = parseTurnContentSegments(`推荐一：\n${card1}\n推荐二：\n${card2}`, dummyCats, dummyAttrs)
+      candidates = mergeParsedCandidates(candidates, second.allCandidates)
+
+      // 后到的卡必须合入，不得因「已有首批」被丢弃
+      expect(candidates).toHaveLength(2)
+      expect(candidates?.map((c) => c.title)).toEqual(['Ezgif', 'AConvert'])
+    })
+
+    it('按 url|title 去重，重复解析不产生重复条目', () => {
+      const parsed = [cand('a'), cand('b'), cand('a')]
+      const merged = mergeParsedCandidates([cand('b')], parsed)
+      expect(merged?.map((c) => c.title)).toEqual(['b', 'a'])
+    })
+
+    it('既有条目优先保留，不重置 isAdded 等用户操作状态', () => {
+      const existing = [cand('a', { isAdded: true, notes: '已存入前的备注' })]
+      const merged = mergeParsedCandidates(existing, [cand('a', { isAdded: false, notes: '重解析的备注' }), cand('b')])
+      expect(merged?.[0].isAdded).toBe(true)
+      expect(merged?.[0].notes).toBe('已存入前的备注')
+      expect(merged).toHaveLength(2)
+    })
+
+    it('无新增时返回原数组引用（渲染期不反复改写状态）', () => {
+      const existing = [cand('a')]
+      expect(mergeParsedCandidates(existing, [cand('a')])).toBe(existing)
+      expect(mergeParsedCandidates(existing, [])).toBe(existing)
+    })
+
+    it('既有为空时以解析结果为准', () => {
+      const parsed = [cand('a')]
+      expect(mergeParsedCandidates(undefined, parsed)).toEqual(parsed)
+      expect(mergeParsedCandidates([], parsed)).toEqual(parsed)
     })
   })
 })

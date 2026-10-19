@@ -316,4 +316,15 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     expect(res.question).toBeUndefined()
     expect(mockSummary.mock.calls[0][1]).toMatchObject({ question: undefined })
   })
+
+  it('无可提取内容时诚实返回空，不硬编码候选冒充提取产物', async () => {
+    // 无 URL、无链接、无中文工具名提及：真实结果就是空
+    const res = await extractBookmarksFromVideo('这个视频很好看，推荐大家去看看', testCategories, testAttributes)
+
+    expect(res.bookmarks).toEqual([])
+    // 不得出现硬编码兜底站点（Gamma/v0 等）冒充提取产物
+    const urls = res.bookmarks.map(b => b.url)
+    expect(urls).not.toContain('https://gamma.app')
+    expect(urls).not.toContain('https://v0.dev')
+  })
 })

@@ -8,27 +8,38 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('../../stores/ui.js', () => ({
-  useUIStore: () => ({
-    aiAttachedCards: [],
-    clearAiAttachedCards: vi.fn(),
+// 稳定共享 mock 状态（vi.hoisted）：附件槽位需跨调用保留并可断言 clearAiAttachedCards 行为
+const mockState = vi.hoisted(() => {
+  const state = {
+    aiAttachedCards: [] as Array<{ type: 'bm' | 'group'; id: string }>,
+    clearAiAttachedCards: vi.fn(() => {
+      state.aiAttachedCards.length = 0
+    }),
     curCat: 'all',
     focusedGroupId: null,
     batchMode: false,
     batchSelected: [],
-  }),
-}))
+    bookmarks: [] as unknown[],
+    siblingGroups: [] as unknown[],
+    categories: [] as unknown[],
+    customAttributes: [] as unknown[],
+    groupMap: {} as Record<string, unknown>,
+    bookmarkMap: {
+      bm1: {
+        id: 'bm1',
+        title: '测试书签',
+        url: 'https://example.com',
+        notes: '',
+        categoryId: 'c1',
+        attributes: {},
+      },
+    } as Record<string, unknown>,
+  }
+  return state
+})
 
-vi.mock('../../stores/data.js', () => ({
-  useDataStore: () => ({
-    bookmarks: [],
-    siblingGroups: [],
-    categories: [],
-    customAttributes: [],
-    groupMap: {},
-    bookmarkMap: {},
-  }),
-}))
+vi.mock('../../stores/ui.js', () => ({ useUIStore: () => mockState }))
+vi.mock('../../stores/data.js', () => ({ useDataStore: () => mockState }))
 
 vi.mock('../../stores/app.js', () => ({ saveAppData: vi.fn() }))
 
@@ -64,6 +75,7 @@ vi.mock('../../lib/ai/siteCommander.js', () => ({
 import { useAiChat } from '../../composables/domain/useAiChat.js'
 import { askMiMoStream } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import { searchWebsitesByIntent } from '../../lib/ai/cloudAiClient.js'
 
 const streamMock = vi.mocked(askMiMoStream)
 
@@ -71,6 +83,7 @@ interface FakeToolCall {
   id: string
   name: string
   arguments: Record<string, unknown>
+  argsParseFailed?: boolean
 }
 
 function aiRes(reply: string, toolCalls?: FakeToolCall[]) {
@@ -88,6 +101,8 @@ function aiRes(reply: string, toolCalls?: FakeToolCall[]) {
 describe('useAiChat — 真 Agent 多步工具链循环', () => {
   beforeEach(() => {
     streamMock.mockReset()
+    mockState.aiAttachedCards.length = 0
+    mockState.clearAiAttachedCards.mockClear()
   })
 
   it('续轮放开 Tool Calling：模型可串联多步工具链，结果逐轮 role:tool 回传且累积持久化', async () => {
@@ -141,5 +156,156 @@ describe('useAiChat — 真 Agent 多步工具链循环', () => {
     expect(assistantTurn?.content).toBe('工具结果:/inbox')
     expect(assistantTurn?.toolResults?.[0]?.resultText).toBe('工具结果:/inbox')
     expect(assistantTurn?.toolCalls?.[0]?.name).toBe('inbox_zero')
+  })
+
+  it('本轮 user 消息不双份注入：首轮 history 不含本轮内容，续轮恰出现一次', async () => {
+    streamMock
+      .mockResolvedValueOnce(aiRes('收到', [{ id: 'c1', name: 'toggle_theme', arguments: { mode: 'dark' } }]))
+      .mockResolvedValueOnce(aiRes('完成'))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '切换深色主题'
+    await ai.handleAiSubmit()
+
+    // 首轮：query 单独作为 user 消息发出，history 不得重复携带本轮内容
+    const [firstQuery, firstCtx] = streamMock.mock.calls[0]
+    expect(firstQuery).toBe('切换深色主题')
+    expect((firstCtx.history || []).some((m) => m.role === 'user' && m.content === '切换深色主题')).toBe(false)
+
+    // 续轮：roundHistory 补回本轮内容，全序列恰出现一次（不重复注入）
+    const round2Ctx = streamMock.mock.calls[1][1]
+    const userMsgs = (round2Ctx.history || []).filter((m) => m.role === 'user' && m.content === '切换深色主题')
+    expect(userMsgs.length).toBe(1)
+  })
+
+  it('停止生成后不再执行后续工具副作用（已执行的照常持久化）', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    cmdMock.mockReset()
+    streamMock.mockResolvedValueOnce(
+      aiRes('先体检再切主题', [
+        { id: 'c1', name: 'audit_vault', arguments: {} },
+        { id: 'c2', name: 'toggle_theme', arguments: { mode: 'dark' } },
+      ]),
+    )
+
+    const ai = useAiChat()
+    // 第一个工具执行时用户按下「停止生成」（自然语言查询放行给大模型，仅工具指令触发停止）
+    cmdMock.mockImplementation(async (cmd: string) => {
+      if (cmd === '/health') {
+        ai.handleStopGenerating()
+        return { handled: true, reply: '体检结果' }
+      }
+      return { handled: false, reply: '' }
+    })
+
+    ai.aiQuery.value = '体检并切换主题'
+    await ai.handleAiSubmit()
+
+    // 第二个工具不得再执行
+    expect(cmdMock.mock.calls.some(([cmd]) => cmd.includes('/theme'))).toBe(false)
+    // 已执行的第一个工具真实结果照常持久化，未执行的调用不得混入协议链
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(assistantTurn?.toolCalls?.map((c) => c.name)).toEqual(['audit_vault'])
+    expect(assistantTurn?.toolResults?.map((r) => r.toolCallId)).toEqual(['c1'])
+  })
+
+  it('站内命令返回后若已停止生成，不把命令结果写入回复', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    cmdMock.mockReset()
+    streamMock.mockResolvedValueOnce(aiRes('不应走到大模型'))
+
+    const ai = useAiChat()
+    cmdMock.mockImplementation(async () => {
+      // 模拟命令执行途中用户停止生成
+      ai.handleStopGenerating()
+      return { handled: true, reply: '停止后不应出现的命令回复' }
+    })
+
+    ai.aiQuery.value = '帮我看看库健康度'
+    await ai.handleAiSubmit()
+
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(assistantTurn?.content).not.toBe('停止后不应出现的命令回复')
+  })
+
+  it('工具执行异常如实回传错误结果，不被本地甄选兜底改写', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    const searchMock = vi.mocked(searchWebsitesByIntent)
+    cmdMock.mockReset()
+    searchMock.mockClear()
+    streamMock
+      .mockResolvedValueOnce(aiRes('执行体检', [{ id: 'c1', name: 'audit_vault', arguments: {} }]))
+      .mockResolvedValueOnce(aiRes('体检工具执行出错，未能确认完成。'))
+
+    const ai = useAiChat()
+    // 工具执行抛异常（副作用可能已发生，绝不能被改写成「本地甄选」结果）
+    cmdMock.mockImplementation(async (cmd: string) => {
+      if (cmd === '/health') throw new Error('tool side effect exploded')
+      return { handled: false, reply: '' }
+    })
+
+    ai.aiQuery.value = '帮我体检一下'
+    await ai.handleAiSubmit()
+
+    // 不落本地兜底：searchWebsitesByIntent 不得被调用
+    expect(searchMock).not.toHaveBeenCalled()
+    // 工具结果如实标注执行出错
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(assistantTurn?.toolResults?.[0]?.resultText).toMatch(/执行出错|failed/i)
+    // 最终回复是基于真实工具结果的续轮结论，而非本地甄选文案
+    expect(assistantTurn?.content).toBe('体检工具执行出错，未能确认完成。')
+  })
+
+  it('工具参数解析失败不执行副作用，如实回错误结果给模型', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    cmdMock.mockReset()
+    cmdMock.mockImplementation(async () => ({ handled: false, reply: '' }))
+    streamMock
+      .mockResolvedValueOnce(
+        aiRes('调用工具', [{ id: 'c1', name: 'audit_vault', arguments: {}, argsParseFailed: true }]),
+      )
+      .mockResolvedValueOnce(aiRes('参数损坏未能执行'))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '帮我体检'
+    await ai.handleAiSubmit()
+
+    // 参数解析失败的调用不得执行任何副作用
+    expect(cmdMock.mock.calls.some(([cmd]) => cmd === '/health')).toBe(false)
+    // 如实回错误结果（role:'tool'），不静默置 {} 照常执行
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(assistantTurn?.toolResults?.[0]?.resultText).toMatch(/参数解析失败|could not be parsed/i)
+  })
+
+  it('生成中带附件按 Enter：附件槽位不丢、不新增对话轮（守卫前置）', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    cmdMock.mockReset()
+    cmdMock.mockImplementation(async () => ({ handled: false, reply: '' }))
+
+    // 挂起第一次 askMiMoStream，模拟生成中
+    let resolveFirst!: (v: Awaited<ReturnType<typeof askMiMoStream>>) => void
+    streamMock.mockReturnValueOnce(
+      new Promise<Awaited<ReturnType<typeof askMiMoStream>>>((r) => { resolveFirst = r }),
+    )
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '先看看这个'
+    const p1 = ai.handleAiSubmit()
+    // 等首问走到挂起的 askMiMoStream
+    await new Promise((r) => setTimeout(r, 0))
+    expect(streamMock).toHaveBeenCalledTimes(1)
+
+    // 生成中拖入附件并按 Enter
+    mockState.aiAttachedCards.push({ type: 'bm', id: 'bm1' })
+    ai.aiQuery.value = '再分析一下这张卡'
+    await ai.handleAiSubmit()
+
+    // 守卫前置：附件槽位保持不动，且不新增 user 轮
+    expect(mockState.clearAiAttachedCards).not.toHaveBeenCalled()
+    expect(mockState.aiAttachedCards.length).toBe(1)
+    expect(ai.chatTurns.value.filter((t) => t.role === 'user').length).toBe(1)
+
+    resolveFirst(aiRes('完成'))
+    await p1
   })
 })

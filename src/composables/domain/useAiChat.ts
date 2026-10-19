@@ -40,6 +40,7 @@ import {
   clearAllSessions,
   getCurrentSessionId,
   setCurrentSessionId,
+  isDefaultSessionTitle,
   type AiChatSession,
   type ChatTurn,
   type ChatActionCard,
@@ -141,7 +142,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
 
   const currentSessionTitle = computed(() => {
     const s = sessions.value.find((x) => x.id === currentSessionId.value)
-    if (!s || s.title === '新会话') return t('ai.sessionDefaultTitle')
+    if (!s || isDefaultSessionTitle(s.title)) return t('ai.sessionDefaultTitle')
     return s.title
   })
 
@@ -470,7 +471,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
           content: res.message,
-          steps: [{ text: `合并了 ${res.mergedCount} 个重复副本`, done: true }],
+          steps: [{ text: t('ai.mergeStep', { n: res.mergedCount }), done: true }],
           timestamp: Date.now(),
         })
         onTurnsChanged?.()
@@ -570,8 +571,8 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             role: 'assistant',
             content: res.message,
             steps: [
-              { text: '核验失效死链', done: true },
-              { text: `替换为现役平替「${payload.replacement.title}」`, done: true },
+              { text: t('ai.deadlinkVerifyStep'), done: true },
+              { text: t('ai.deadlinkReplaceStep', { title: payload.replacement.title }), done: true },
             ],
             timestamp: Date.now(),
           })
@@ -581,7 +582,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
       }
     } catch (err: any) {
       console.error('handleActionCardClick error:', err)
-      toast(err?.message || '执行失败，请稍后重试', false)
+      toast(err?.message || t('ai.actionFailed'), false)
     } finally {
       card.executing = false
       sessions.value = updateSession(currentSessionId.value, chatTurns.value)
@@ -633,18 +634,20 @@ export function useAiChat(options: UseAiChatOptions = {}) {
       )
       .filter((c): c is ResolvedCardContext => c !== null)
 
-    // 清空输入框附带槽位（卡片已装载进本轮问答，持久化至该 userTurn）
-    if (ui.aiAttachedCards.length > 0) {
-      ui.clearAiAttachedCards()
-    }
-
     let raw = aiQuery.value.trim()
     // 若用户未输入自定义文字，但拖入了卡片，自动生成贴合卡片意图的高质量缺省提问
     if (!raw && resolvedCards.length > 0) {
       raw = getDefaultAttachedPrompt(resolvedCards, isZh.value)
     }
 
+    // 守卫前置：生成中/空输入不提交，且附件槽位保持不动
+    // （此前清空在守卫之前，生成中带附件按 Enter 会把附件丢掉）
     if (!raw || aiLoading.value) return
+
+    // 清空输入框附带槽位（卡片已装载进本轮问答，持久化至该 userTurn）
+    if (ui.aiAttachedCards.length > 0) {
+      ui.clearAiAttachedCards()
+    }
 
     if (raw === '/clear') {
       handleCreateSession()
@@ -698,8 +701,9 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     currentAbortController = controller
 
     try {
-      // 优先尝试站内指令/In-App Agent CLI 调度
-      const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app })
+      // 优先尝试站内指令/In-App Agent CLI 调度（传 abort 信号：停止生成后不再执行命令副作用）
+      const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      if (controller.signal.aborted) return
       if (siteCmd.handled) {
         assistantTurn.loading = false
         assistantTurn.content = siteCmd.reply
@@ -738,6 +742,9 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             const history: MiMoChatMessage[] = []
             for (const t of chatTurns.value) {
               if (t.loading || t.id === assistantTurn.id) continue
+              // 本轮 user 轮不进 history：其内容会以 promptWithCards 作为 query 再发一次，
+              // 否则同一条消息双份注入（浪费上下文预算且放大注入面）
+              if (t.id === turnId + '-user') continue
               if (t.role === 'user') {
                 if (t.content) history.push({ role: 'user', content: t.promptContent || t.content })
                 continue
@@ -840,6 +847,9 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             )
 
             if (controller.signal.aborted) return
+            // MiMo 响应已成功落地：此后（工具链/持久化）异常不得再落入本地兜底改写结果，
+            // 否则会把已发生副作用的工具链掩盖成「本地甄选」结果
+            mimoSuccess = true
             assistantTurn.loading = false
             assistantTurn.isThinking = false
             if (thinkingStartTime && !assistantTurn.reasoningTimeMs) {
@@ -851,15 +861,17 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             assistantTurn.steps = []
 
             // Agent 工具执行器：首轮与续轮工具链共用同一分发（单一分发点，防多轮复刻同类分支）
-            async function runAgentToolCall(call: { name: string; arguments?: Record<string, any> }): Promise<string> {
+            async function runAgentToolCall(call: { name: string; arguments?: Record<string, any>; argsParseFailed?: boolean }): Promise<string> {
+                // 参数 JSON 解析失败：不执行任何副作用，如实回错误结果给模型（role:'tool'）
+                if (call.argsParseFailed) return t('ai.toolResultArgsInvalid', { name: call.name })
                 let resultText = ''
                 if (call.name === 'audit_vault') {
-                  const siteRes = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app, signal: controller.signal })
                   if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
                   if (!assistantTurn.content) assistantTurn.content = siteRes.reply
                   resultText = siteRes.reply
                 } else if (call.name === 'inbox_zero') {
-                  const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app, signal: controller.signal })
                   if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
                   if (!assistantTurn.content) assistantTurn.content = siteRes.reply
                   resultText = siteRes.reply
@@ -878,25 +890,25 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                   }
                   resultText = tN('ai.toolResultWorkspaceCard', (assistantTurn.candidates || []).length, { topic, n: (assistantTurn.candidates || []).length })
                 } else if (call.name === 'merge_duplicates') {
-                  const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app, signal: controller.signal })
                   if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
                   if (!assistantTurn.content) assistantTurn.content = siteRes.reply
                   resultText = siteRes.reply
                 } else if (call.name === 'heal_deadlinks') {
-                  const siteRes = await dispatchSiteCommand('/deadlink', { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand('/deadlink', { ds, ui, app: (ui as any).app, signal: controller.signal })
                   if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
                   if (!assistantTurn.content) assistantTurn.content = siteRes.reply
                   resultText = siteRes.reply
                 } else if (call.name === 'toggle_theme') {
                   const mode = call.arguments?.mode || 'auto'
-                  const siteRes = await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
                   resultText = siteRes.reply || t('ai.toolResultTheme', { mode })
                 } else if (call.name === 'change_view') {
                   const layout = call.arguments?.layout || 'grid'
-                  const siteRes = await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
                   resultText = siteRes.reply || t('ai.toolResultView', { layout })
                 } else if (call.name === 'export_data') {
-                  const siteRes = await dispatchSiteCommand('/export', { ds, ui, app: (ui as any).app })
+                  const siteRes = await dispatchSiteCommand('/export', { ds, ui, app: (ui as any).app, signal: controller.signal })
                   resultText = siteRes.reply || t('ai.toolResultExport')
                 } else {
                   resultText = t('ai.toolResultUnknown', { name: call.name })
@@ -908,13 +920,26 @@ export function useAiChat(options: UseAiChatOptions = {}) {
             if (mimoRes.toolCalls?.length) {
               const toolResults: Array<{ id: string; name: string; resultText: string }> = []
               for (const call of mimoRes.toolCalls) {
+                // 「停止生成」后不再执行后续工具副作用（已执行的照常持久化）
+                if (controller.signal.aborted) break
                 assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
-                toolResults.push({ id: call.id, name: call.name, resultText: await runAgentToolCall(call) })
+                // 单工具异常如实回传错误结果（role:'tool'），不冒充成功、不落入本地兜底改写
+                let resultText: string
+                try {
+                  resultText = await runAgentToolCall(call)
+                } catch (toolErr) {
+                  console.warn('[ulink AI] tool execution failed:', toolErr)
+                  resultText = t('ai.toolResultError', { name: call.name })
+                  assistantTurn.steps.push({ text: resultText, done: false })
+                }
+                toolResults.push({ id: call.id, name: call.name, resultText })
               }
 
-              // 持久化到会话轮次：多轮对话还原 assistant→tool→assistant 协议链用
+              // 持久化到会话轮次：多轮对话还原 assistant→tool→assistant 协议链用。
+              // 仅持久化真实执行过的调用，中止后未执行的不得混入协议链（否则 tool_calls 与 tool 结果数量不匹配）
+              const executedCalls = mimoRes.toolCalls.slice(0, toolResults.length)
               assistantTurn.preToolContent = mimoRes.reply || ''
-              assistantTurn.toolCalls = mimoRes.toolCalls.map((c) => ({
+              assistantTurn.toolCalls = executedCalls.map((c) => ({
                 id: c.id,
                 name: c.name,
                 arguments: c.arguments,
@@ -926,12 +951,19 @@ export function useAiChat(options: UseAiChatOptions = {}) {
               }))
               sessions.value = updateSession(currentSessionId.value, chatTurns.value)
 
+              // 已中止：不再续轮，但已执行工具的真实结果已持久化
+              if (controller.signal.aborted) {
+                assistantTurn.loading = false
+                return
+              }
+
               // 真 Agent 多步循环：tool 结果以 role:'tool' 回传后继续放开 Tool Calling，
               // 模型可自主串联多步工具链（如体检 → 收件箱清零 → 建工作台），直至收束结论或达到轮次上限
               const MAX_AGENT_ROUNDS = 4
+              // history 已跳过本轮 user 轮，这里补回一次（与首轮请求同内容，含附件上下文）
               const roundHistory: MiMoChatMessage[] = [
                 ...history,
-                { role: 'user', content: raw },
+                { role: 'user', content: promptWithCards },
               ]
               let pendingCalls = mimoRes.toolCalls
               let pendingResults = toolResults
@@ -994,7 +1026,15 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                   pendingResults = []
                   for (const call of followUpRes.toolCalls) {
                     assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
-                    const resultText = await runAgentToolCall(call)
+                    // 同上：工具异常如实回传错误结果，不冒充成功
+                    let resultText: string
+                    try {
+                      resultText = await runAgentToolCall(call)
+                    } catch (toolErr) {
+                      console.warn('[ulink AI] tool execution failed:', toolErr)
+                      resultText = t('ai.toolResultError', { name: call.name })
+                      assistantTurn.steps.push({ text: resultText, done: false })
+                    }
                     pendingResults.push({ id: call.id, name: call.name, resultText })
                     // 多轮工具链累积持久化：多轮对话回放 assistant→tool 协议链不失忆
                     if (assistantTurn.toolCalls && assistantTurn.toolResults) {
@@ -1012,10 +1052,16 @@ export function useAiChat(options: UseAiChatOptions = {}) {
               if (followUpDone) assistantTurn.steps.push({ text: t('ai.toolFollowUpStep'), done: true })
             }
 
-            mimoSuccess = true
             persistCurrentSession()
           } catch (mimoErr: unknown) {
             if (controller.signal.aborted) return
+            // 仅 MiMo 请求本身失败才回退本地知识库；工具链异常已在上游如实回传，不落兜底
+            if (mimoSuccess) {
+              console.warn('[ulink AI] post-response processing failed:', mimoErr)
+              assistantTurn.loading = false
+              if (!assistantTurn.content) assistantTurn.content = t('ai.searchFailed')
+              return
+            }
             console.warn('[ulink AI] MiMo API call failed, falling back to local dataset:', mimoErr)
           }
         }

@@ -38,7 +38,8 @@ describe('chatSessions — AI 侧边栏多会话与历史管理', () => {
 
   it('updateSession 自动提取首句为标题', () => {
     const s = createNewSession()
-    expect(s.title).toBe('新会话')
+    // 默认标题留空（展示侧走 i18n 默认标题），不再是硬编码中文
+    expect(s.title).toBe('')
 
     updateSession(s.id, [
       { id: '1', role: 'user', content: '推荐几个好用的思维导图工具', timestamp: Date.now() },

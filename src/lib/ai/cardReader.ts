@@ -1,4 +1,30 @@
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
+import { t } from '../../i18n/index.js'
+import { sanitizeForPrompt } from './mimoClient.js'
+
+/** 附件注入提示词的字段级限长（防单字段撑爆消息、防隐私全量外送） */
+const MAX_ATTACH_TITLE = 80
+const MAX_ATTACH_URL = 150
+const MAX_ATTACH_DESC = 300
+const MAX_ATTACH_NOTES = 1200
+const MAX_ATTACH_TAG = 20
+const MAX_ATTACH_TAGS = 10
+const MAX_ATTACH_CHILDREN = 10
+const MAX_ATTACH_CHILD_TITLE = 60
+const MAX_ATTACH_CHILD_URL = 100
+const MAX_ATTACH_CHILD_DESC = 80
+/** 附件上下文块总量帽：mimo-guard 单条消息上限 4000 字（超限 413），需给用户提问留余量 */
+const MAX_ATTACH_TOTAL = 2800
+/** 附件卡片数量上限 */
+const MAX_ATTACH_CARDS = 8
+
+/**
+ * 附件字段消毒：强消毒（去控制字符/反引号/折叠空白/截断）+ 折叠连续双引号
+ * （防字段内容伪装成 """ 块定界符逃逸），供提示词注入使用。
+ */
+function safe(text: string | undefined, maxLen: number): string {
+  return sanitizeForPrompt(text ?? '', maxLen).replace(/"{2,}/g, "'")
+}
 
 export interface ResolvedCardContext {
   type: 'bm' | 'group'
@@ -62,7 +88,7 @@ export function resolveCardContext(
     return {
       type: 'bm',
       id: bm.id,
-      title: bm.title || bm.url || '未命名书签',
+      title: bm.title || bm.url || t('ai.unnamedBookmark'),
       url: bm.url,
       desc: bm.notes || '',
       categoryName: cat?.name,
@@ -84,7 +110,7 @@ export function resolveCardContext(
     return {
       type: 'group',
       id: group.id,
-      title: group.name || '未命名笔记',
+      title: group.name || t('ai.unnamedNote'),
       categoryName: cat?.name,
       tags,
       notes: bodyText,
@@ -106,36 +132,62 @@ export function formatAttachedCardsForPrompt(
     : '[User Attached Cards & Notes for Reference (Please read thoroughly and ground your answer on them)]'
 
   const formatted = cards
+    .slice(0, MAX_ATTACH_CARDS)
     .map((c, i) => {
+      const tags = (c.tags || []).slice(0, MAX_ATTACH_TAGS)
+      const tagsRest = (c.tags?.length || 0) - tags.length
+      const tagLine = tags.length
+        ? `- 标签：${tags.map(t => safe(t, MAX_ATTACH_TAG)).join('、')}${tagsRest > 0 ? `（还有 ${tagsRest} 个未列出）` : ''}`
+        : ''
+      const catLine = c.categoryName ? `- 分类：${safe(c.categoryName, MAX_ATTACH_TAG)}` : ''
       if (c.type === 'bm') {
         const parts = [
-          `[附件 ${i + 1}] 🔖 书签卡片：${c.title}`,
-          `- 网址：${c.url || '(无网址)'}`,
-          c.categoryName ? `- 分类：${c.categoryName}` : '',
-          c.desc ? `- 描述：${c.desc}` : '',
-          c.tags && c.tags.length ? `- 标签：${c.tags.join('、')}` : '',
-          c.notes ? `- 附注内容：\n"""\n${c.notes}\n"""` : '',
+          `[附件 ${i + 1}] 🔖 书签卡片：${safe(c.title, MAX_ATTACH_TITLE)}`,
+          `- 网址：${safe(c.url, MAX_ATTACH_URL) || '(无网址)'}`,
+          catLine,
+          c.desc ? `- 描述：${safe(c.desc, MAX_ATTACH_DESC)}` : '',
+          tagLine,
+          c.notes ? `- 附注内容：\n"""\n${safe(c.notes, MAX_ATTACH_NOTES)}\n"""` : '',
         ].filter(Boolean)
         return parts.join('\n')
       } else {
-        const bmList = c.childBookmarks && c.childBookmarks.length
-          ? c.childBookmarks
-              .map((b) => `  * ${b.title} (${b.url})${b.desc ? ` - ${b.desc}` : ''}`)
-              .join('\n')
+        const children = c.childBookmarks || []
+        const shown = children.slice(0, MAX_ATTACH_CHILDREN)
+        const bmList = children.length
+          ? shown
+              .map((b) => `  * ${safe(b.title, MAX_ATTACH_CHILD_TITLE)} (${safe(b.url, MAX_ATTACH_CHILD_URL)})${b.desc ? ` - ${safe(b.desc, MAX_ATTACH_CHILD_DESC)}` : ''}`)
+              .join('\n') +
+            (children.length > shown.length ? `\n  （还有 ${children.length - shown.length} 个组内书签未列出）` : '')
           : '  (暂无组内书签)'
         const parts = [
-          `[附件 ${i + 1}] 📝 笔记卡片：${c.title}`,
-          c.categoryName ? `- 分类：${c.categoryName}` : '',
-          c.tags && c.tags.length ? `- 标签：${c.tags.join('、')}` : '',
-          `- 笔记正文内容：\n"""\n${c.notes || '(笔记正文为空)'}\n"""`,
-          `- 笔记内包含的书签（共 ${c.childBookmarks?.length || 0} 个）：\n${bmList}`,
+          `[附件 ${i + 1}] 📝 笔记卡片：${safe(c.title, MAX_ATTACH_TITLE)}`,
+          catLine,
+          tagLine,
+          `- 笔记正文内容：\n"""\n${safe(c.notes, MAX_ATTACH_NOTES) || '(笔记正文为空)'}\n"""`,
+          `- 笔记内包含的书签（共 ${children.length} 个）：\n${bmList}`,
         ].filter(Boolean)
         return parts.join('\n')
       }
     })
-    .join('\n\n')
 
-  return `${header}\n${formatted}\n`
+  // 总量帽：逐卡累加，超预算即截断并标注省略（防 413 / 隐私全量外送）
+  const kept: string[] = []
+  let used = header.length + 1
+  for (let i = 0; i < formatted.length; i++) {
+    const remaining = MAX_ATTACH_TOTAL - used - 2
+    if (remaining <= 0) break
+    const block = formatted[i]
+    if (block.length > remaining) {
+      kept.push(`${block.slice(0, remaining)}\n…（该附件内容过长已截断）`)
+      break
+    }
+    kept.push(block)
+    used += block.length + 2
+  }
+  const omitted = cards.length - kept.length
+  const tail = omitted > 0 ? `\n…（其余 ${omitted} 张附件因长度限制省略）` : ''
+
+  return `${header}\n${kept.join('\n\n')}${tail}\n`
 }
 
 /**
@@ -148,14 +200,15 @@ export function getDefaultAttachedPrompt(
   if (!cards.length) return ''
   if (cards.length === 1) {
     const card = cards[0]
+    const title = safe(card.title, MAX_ATTACH_TITLE)
     if (card.type === 'group') {
       return isZh
-        ? `请详细阅读并分析这篇笔记「${card.title}」的内容，总结其核心观点与要点。`
-        : `Please read and analyze the note "${card.title}" and summarize its core takeaways.`
+        ? `请详细阅读并分析这篇笔记「${title}」的内容，总结其核心观点与要点。`
+        : `Please read and analyze the note "${title}" and summarize its core takeaways.`
     } else {
       return isZh
-        ? `请阅读并分析此书签「${card.title}」的内容与用途，概述其核心功能。`
-        : `Please read and analyze the bookmark "${card.title}" and outline its core features and use cases.`
+        ? `请阅读并分析此书签「${title}」的内容与用途，概述其核心功能。`
+        : `Please read and analyze the bookmark "${title}" and outline its core features and use cases.`
     }
   } else {
     return isZh

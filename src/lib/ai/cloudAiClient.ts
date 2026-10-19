@@ -8,6 +8,7 @@
 import type { Category, CustomAttribute, Bookmark } from '../../types.js'
 import type { AiSearchPreference, AiCandidateBookmark, AiEnrichDiff, AiVideoExtractResult } from '../../types/ai.js'
 import { domain } from '../../utils.js'
+import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { getSimilarExternalWebsites } from './similarWebsites.js'
 
@@ -241,7 +242,7 @@ export async function findSimilarWebsites(
       title: item.title,
       url: item.url,
       notes: item.description,
-      tag: item.tags.some(t => t.includes('开源')) ? '极客开源' : item.tags.some(t => t.includes('国内')) ? '国内免翻' : '轻量平替',
+      tag: item.tags.some(tg => tg.includes('开源')) ? t('ai.tagGeekOpen') : item.tags.some(tg => tg.includes('国内')) ? t('ai.tagNoProxy') : t('ai.tagLightAlt'),
       highlight: item.description,
     }))
   } else {
@@ -258,6 +259,20 @@ import { fetchVideoExtractServer, generateVideoSummary } from './videoExtract.js
 
 /** 视频/分享内容深挖链接的来源分区（用于标注链接出处） */
 export type DeepLinkSource = '输入文本' | '简介' | '字幕' | '评论区' | '正文' | '文本提及'
+
+/** 来源分区的本地化标签（分区枚举值本身是内部标识，用户可见文案走 i18n） */
+const SRC_LABEL_KEYS: Record<DeepLinkSource, string> = {
+  '输入文本': 'ai.srcInput',
+  '简介': 'ai.srcIntro',
+  '字幕': 'ai.srcSubtitle',
+  '评论区': 'ai.srcComments',
+  '正文': 'ai.srcBody',
+  '文本提及': 'ai.srcMention',
+}
+
+function linkSourceLabel(source: DeepLinkSource): string {
+  return t(SRC_LABEL_KEYS[source] || 'ai.srcMention')
+}
 
 export interface DeepLinkHit {
   url: string
@@ -451,9 +466,11 @@ export async function extractBookmarksFromVideo(
       rawBookmarks.push({
         title,
         url: hit.url,
-        notes: prefill.notes || hit.anchor || `从分享内容提取的工具：${dm}`,
-        tag: '提取工具',
-        highlight: `提取自${hit.source}${targetUrl ? `｜${domain(targetUrl)}` : ''}`,
+        notes: prefill.notes || hit.anchor || t('ai.extractedToolNotes', { dm }),
+        tag: t('ai.tagExtractTool'),
+        highlight: targetUrl
+          ? t('ai.extractHighlight', { source: linkSourceLabel(hit.source), site: domain(targetUrl) })
+          : t('ai.extractHighlightNoSite', { source: linkSourceLabel(hit.source) }),
       })
     }
   }
@@ -465,33 +482,16 @@ export async function extractBookmarksFromVideo(
     rawBookmarks.push({
       title: pageTitle || prefill.title || dm,
       url: targetUrl,
-      notes: pageDesc || prefill.notes || `精选内容节点：${pageTitle || dm}`,
-      tag: '真实收录',
-      highlight: pageDesc ? pageDesc.slice(0, 60) : '自动提取正文元数据',
+      notes: pageDesc || prefill.notes || t('ai.contentNodeNotes', { title: pageTitle || dm }),
+      tag: t('ai.tagRealRecord'),
+      highlight: pageDesc ? pageDesc.slice(0, 60) : t('ai.autoExtractMeta'),
     })
   }
 
-  // 4. 若纯文本无 URL 且无法抓取，提供智能兜底并告知用户
-  if (rawBookmarks.length === 0) {
-    rawBookmarks.push(
-      {
-        title: 'Gamma App',
-        url: 'https://gamma.app',
-        notes: 'AI 自动排版演示文档利器，支持输入大纲直接生成精美页面。',
-        tag: '国内免翻',
-        highlight: '自动排版 PPT 标杆',
-      },
-      {
-        title: 'v0 by Vercel',
-        url: 'https://v0.dev',
-        notes: '输入自然语言直接生成现代化前端页面与组件代码。',
-        tag: '极客开源',
-        highlight: '自然语言前端生成',
-      }
-    )
-  }
+  // 4. 若纯文本无 URL 且无法抓取：诚实返回空，不硬编码候选冒充提取产物
+  //    （调用方 formatFoundCount(0) 会走 emptyResultsHint 空态提示）
 
-  const cleanTitle = pageTitle ? `精选：${pageTitle.slice(0, 24)}` : '分享精选工具合集'
+  const cleanTitle = pageTitle ? t('ai.shareGroupTitlePrefix', { title: pageTitle.slice(0, 24) }) : t('ai.shareGroupTitleDefault')
 
   // 5. 文字源总结速览（简介/字幕/评论区文本 → 大模型，注入前已消毒截断）：
   //    带用户问题走「回答提问」模式；无可用 AI 通道或失败则缺省，不阻塞链接提取
@@ -506,9 +506,9 @@ export async function extractBookmarksFromVideo(
 
   return {
     sourceUrl: cleanInput,
-    videoTitle: pageTitle || '视频与图文精选工具',
+    videoTitle: pageTitle || t('ai.videoFallbackTitle'),
     groupTitle: cleanTitle,
-    groupNotes: `<p>由与链 AI 深度解析分享内容提取（含简介/字幕/评论区出现的链接），包含直达网址与精炼亮点说明。</p>`,
+    groupNotes: t('ai.videoGroupNotes'),
     bookmarks: rawBookmarks.map(b => enrichContext(b, categories, attributes)),
     summary,
     question: questionText || undefined,

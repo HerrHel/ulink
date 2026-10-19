@@ -89,10 +89,18 @@ export interface AiChatSession {
   updatedAt: number
 }
 
-/** 提取前 16 个字符作为会话标题 */
+/**
+ * 会话是否仍为「未命名」空标题：空串为当前语义（标题文案由展示侧走 i18n），
+ * '新会话' 为存量数据中的旧默认标题，仅作兼容识别，不作为新标题写入。
+ */
+export function isDefaultSessionTitle(title: string | undefined | null): boolean {
+  return !title || title === '新会话'
+}
+
+/** 提取前 16 个字符作为会话标题（无可用文本时留空，展示侧回退到 i18n 默认标题） */
 export function extractSessionTitle(query: string): string {
   const clean = query.trim().replace(/^[\/\s]+/, '')
-  if (!clean) return '新会话'
+  if (!clean) return ''
   return clean.length > 16 ? clean.slice(0, 16) + '…' : clean
 }
 
@@ -146,7 +154,7 @@ export function createNewSession(initialTitle?: string): AiChatSession {
   const now = Date.now()
   const session: AiChatSession = {
     id: 'session-' + now + '-' + Math.random().toString(36).slice(2, 6),
-    title: initialTitle || '新会话',
+    title: initialTitle || '',
     turns: [],
     createdAt: now,
     updatedAt: now,
@@ -170,7 +178,7 @@ export function updateSession(
 
   if (idx > -1) {
     const cur = all[idx]
-    const title = customTitle || (cur.title === '新会话' && turns.length > 0 ? extractSessionTitle(turns[0].content) : cur.title)
+    const title = customTitle || (isDefaultSessionTitle(cur.title) && turns.length > 0 ? extractSessionTitle(turns[0].content) : cur.title)
     all[idx] = {
       ...cur,
       title,
@@ -178,7 +186,7 @@ export function updateSession(
       updatedAt: now,
     }
   } else {
-    const title = customTitle || (turns.length > 0 ? extractSessionTitle(turns[0].content) : '新会话')
+    const title = customTitle || (turns.length > 0 ? extractSessionTitle(turns[0].content) : '')
     all.unshift({
       id: sessionId,
       title,

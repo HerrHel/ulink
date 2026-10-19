@@ -47,6 +47,8 @@ export interface SiteCommanderContext {
   ds?: ReturnType<typeof useDataStore>
   ui?: ReturnType<typeof useUIStore>
   app?: ReturnType<typeof useAppStore>
+  /** 中止信号：「停止生成」后不再执行命令副作用（确认弹窗/网络等待之后的写操作） */
+  signal?: AbortSignal
 }
 
 export interface UndoableAction {
@@ -115,6 +117,7 @@ export async function mergeDuplicateBookmarks(
   const confirmed = await showConfirm(
     tN('aiCmd.mergeConfirm', totalDupCount, { groups: dups.length, count: totalDupCount }),
   )
+  if (context?.signal?.aborted) return { mergedCount: 0, message: '' }
   if (!confirmed) {
     return { mergedCount: 0, message: t('aiCmd.mergeCancelled') }
   }
@@ -203,6 +206,7 @@ export async function applyInboxZeroClustering(
     confirmLines.push(tN('aiCmd.inboxNestConfirm', relations.length, { count: relations.length }))
   }
   const confirmed = await showConfirm(confirmLines.join('\n'))
+  if (context?.signal?.aborted) return { movedCount: 0, nestedCount: 0, message: '' }
   if (!confirmed) {
     return { movedCount: 0, nestedCount: 0, message: t('aiCmd.inboxCancelled') }
   }
@@ -298,6 +302,9 @@ export async function createTopicWorkspace(
   let items = candidates
   if (!items || items.length === 0) {
     items = await searchWebsitesByIntent(topicName, [], ds.categories, ds.customAttributes)
+    if (context?.signal?.aborted) {
+      return { success: false, group: null, createdBmIds: [], totalBookmarks: 0, message: '' }
+    }
   }
   if (!items || items.length === 0) {
     // 诚实返回空结果：不伪造 github.com 占位书签冒充个性化推荐
@@ -430,6 +437,7 @@ export async function healDeadlink(
   const confirmed = await showConfirm(
     t('aiCmd.healConfirm', { title: bm.title, alt: replacement.title || replacement.url }),
   )
+  if (context?.signal?.aborted) return { success: false, message: '' }
   if (!confirmed) {
     return { success: false, message: t('aiCmd.healCancelled') }
   }
@@ -814,6 +822,9 @@ export async function dispatchSiteCommand(
     const confirmed = await showConfirm(
       tN('aiCmd.trashClearConfirm', total, { total, bm: bms, grp: grps, cat: cats }),
     )
+    if (context?.signal?.aborted) {
+      return { handled: true, action: 'trash_clear', success: false, reply: '' }
+    }
     if (!confirmed) {
       return {
         handled: true,
@@ -1456,6 +1467,9 @@ export async function dispatchSiteCommand(
       const confirmed = await showConfirm(
         tN('aiCmd.moveConfirm', uncatBms.length, { cat: targetCat.name }),
       )
+      if (context?.signal?.aborted) {
+        return { handled: true, action: 'move_uncategorized', success: false, reply: '' }
+      }
       if (!confirmed) {
         return {
           handled: true,
@@ -1526,6 +1540,10 @@ export async function dispatchSiteCommand(
       query,
     )
   ) {
+    // 「停止生成」后不再执行撤销副作用（popUndoAction 会改状态，必须前置校验）
+    if (context?.signal?.aborted) {
+      return { handled: true, action: 'undo', success: false, reply: '' }
+    }
     const actionToRevert = popUndoAction()
     if (actionToRevert) {
       const msg = await actionToRevert.revert()

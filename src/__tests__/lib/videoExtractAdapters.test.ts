@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   validateInputUrl,
+  isUrlDnsSafe,
+  type DnsResolver,
   detectPlatform,
   isShortLinkHost,
   parseBilibiliVideoId,
@@ -34,6 +36,47 @@ describe('extract-video 平台适配器纯逻辑', () => {
     expect(() => validateInputUrl('http://192.168.1.1/x')).toThrow(/内网/)
     expect(() => validateInputUrl('http://169.254.169.254/latest/meta-data')).toThrow(/内网/)
     expect(() => validateInputUrl('http://[::1]/x')).toThrow(/内网/)
+  })
+
+  // ── DNS 重绑定校验（fail-closed）──
+
+  it('isUrlDnsSafe：域名解析到公网 IP 判安全', async () => {
+    const resolver: DnsResolver = {
+      resolve: async (_h, type) => (type === 'A' ? ['93.184.216.34'] : ['2606:2800:220:1:248:1893:25c8:1946']),
+    }
+    expect(await isUrlDnsSafe(new URL('https://example.com/watch'), resolver)).toBe(true)
+  })
+
+  it('isUrlDnsSafe：解析到内网 IP（10./127./169.254 等）判不安全', async () => {
+    for (const ip of ['10.0.0.5', '127.0.0.1', '169.254.169.254', '192.168.1.1']) {
+      const resolver: DnsResolver = { resolve: async () => [ip] }
+      expect(await isUrlDnsSafe(new URL('https://evil.example.com/x'), resolver)).toBe(false)
+    }
+  })
+
+  it('isUrlDnsSafe：resolver 抛错/无记录一律判不安全（fail-closed）', async () => {
+    const throwing: DnsResolver = {
+      resolve: async () => { throw new Error('dns failure') },
+    }
+    expect(await isUrlDnsSafe(new URL('https://nx.example.com/x'), throwing)).toBe(false)
+    const empty: DnsResolver = { resolve: async () => [] }
+    expect(await isUrlDnsSafe(new URL('https://no-record.example.com/x'), empty)).toBe(false)
+  })
+
+  it('isUrlDnsSafe：公网 IP 字面量直接放行且不触发 DNS 解析', async () => {
+    let calls = 0
+    const resolver: DnsResolver = {
+      resolve: async () => { calls++; return ['127.0.0.1'] },
+    }
+    expect(await isUrlDnsSafe(new URL('http://93.184.216.34/x'), resolver)).toBe(true)
+    expect(calls).toBe(0)
+  })
+
+  it('isUrlDnsSafe：内网 IP 字面量与 [::1] 一律判不安全', async () => {
+    const resolver: DnsResolver = { resolve: async () => ['93.184.216.34'] }
+    expect(await isUrlDnsSafe(new URL('http://127.0.0.1/x'), resolver)).toBe(false)
+    expect(await isUrlDnsSafe(new URL('http://[::1]/x'), resolver)).toBe(false)
+    expect(await isUrlDnsSafe(new URL('http://169.254.169.254/latest/meta-data'), resolver)).toBe(false)
   })
 
   // ── 平台识别 ──
