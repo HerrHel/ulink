@@ -7,9 +7,12 @@
  * 2. 行动卡片（Agent 工具调用）点击 → 落库：
  *    第 1 轮响应 content（含候选卡）+ tool_calls(create_workspace) → 行动卡片渲染且候选默认全选
  *    → 点执行 → createTopicWorkspace 建书签+组 → 完成态 + 续轮结论 + 落库
+ * 3. 视频分流链路：b23 短链 + 用户提问 → extract-video Edge Function 提炼（URL 不吞中文、
+ *    问题透传总结提示词）→ 来源分区候选卡 + 「AI 回答」总结
+ * 4. 网址分流链路：普通网址 → 本地平替知识库挖掘（不进 MiMo / 视频链路）
  *
  * 查询语句刻意避开 siteCommander 的站内指令/意图正则（新建分类/搭建XX工作台/移动到…等），
- * 确保走 MiMo 自然语言链路。
+ * 确保走 MiMo 自然语言链路。分流用例均断言 mock 被调用/未被调用，确认真实经过目标分支（防假绿）。
  */
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { installSupabaseMock } from './helpers/supabaseMock'
@@ -188,5 +191,128 @@ test.describe('AI 对话全链路（mock SSE）', () => {
     // createTopicWorkspace 真实建书签落库（两个候选 URL 均写入）
     await expectPersisted(page, 'excalidraw.com')
     await expectPersisted(page, 'tldraw.com')
+  })
+})
+
+test.describe('AI 提问分流路由（mock）', () => {
+  test('视频分流：b23 短链 → extract-video 提炼 + 用户问题透传总结', async ({ page }) => {
+    test.setTimeout(60000)
+    await installSupabaseMock(page)
+
+    // extract-video Edge Function mock：记录请求体，返回结构化文字源（简介/字幕/评论区）
+    const extractCalls: Array<Record<string, unknown>> = []
+    await page.route('**/functions/v1/extract-video', async (route: Route) => {
+      extractCalls.push(route.request().postDataJSON() || {})
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+        },
+        body: JSON.stringify({
+          source: 'bilibili',
+          url: 'https://www.bilibili.com/video/BV1mock',
+          title: '设计师必备效率工具分享',
+          description:
+            '本期推荐的工具：\n[Excalidraw](https://excalidraw.com) 开源手绘白板\n还有 tldraw https://www.tldraw.com',
+          subtitles: '字幕里提到 https://penpot.app 是开源的设计工具',
+          comments: ['评论区补充：即时设计 https://js.design 很好用'],
+          degraded: false,
+        }),
+      })
+    })
+
+    // mimo-chat mock：总结链路走 askMiMo（同 SSE 端点），记录请求体断言问题透传
+    const mimoBodies: string[] = []
+    await page.route('**/functions/v1/mimo-chat', async (route: Route) => {
+      mimoBodies.push(route.request().postData() || '')
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+        },
+        body: sse([deltaContent('本视频推荐了 Excalidraw 与 tldraw 等设计工具。')]),
+      })
+    })
+
+    await page.goto('/app')
+    await openAiPanel(page)
+
+    await page
+      .locator('.chat-textarea')
+      .fill('https://b23.tv/abc123 帮我总结这个视频里推荐了哪些网站')
+    await page.locator('.chat-send-btn').click()
+
+    // 防假绿：extract-video 必须真实被调用一次，且 URL 提取遇中文截止（不得吞进问题文字）
+    await expect
+      .poll(() => extractCalls.length, { timeout: 15000 })
+      .toBeGreaterThanOrEqual(1)
+    expect(extractCalls[0]).toEqual({ url: 'https://b23.tv/abc123' })
+
+    // 防假绿：总结提示词真实携带用户问题（答非所问回归锁）与抓取到的文字源内容
+    await expect
+      .poll(() => mimoBodies.length, { timeout: 15000 })
+      .toBeGreaterThanOrEqual(1)
+    expect(mimoBodies[0]).toContain('用户提问：帮我总结这个视频里推荐了哪些网站')
+    expect(mimoBodies[0]).toContain('Excalidraw')
+
+    // 候选卡：简介 2 个 + 字幕 1 个 + 评论区 1 个（站内自链与资源噪声已过滤）
+    const cards = page.locator('.ai-inline-card')
+    await expect(cards).toHaveCount(4, { timeout: 10000 })
+    await expect(cards.nth(0)).toContainText('Excalidraw')
+    await expect(cards.nth(1)).toContainText('tldraw')
+
+    // 携带问题 →「AI 回答」模式标签 + 总结正文渲染
+    const turnText = page.locator('.chat-flow-text')
+    await expect(turnText.first()).toContainText('AI 回答', { timeout: 5000 })
+    await expect(turnText.first()).toContainText('本视频推荐了 Excalidraw 与 tldraw 等设计工具')
+  })
+
+  test('网址分流：平替挖掘走本地知识库，不进 MiMo / 视频链路', async ({ page }) => {
+    test.setTimeout(60000)
+    await installSupabaseMock(page)
+
+    // 两个旁路 mock 均带计数：断言分流未误入其它链路（防假绿）
+    let extractCalls = 0
+    let mimoCalls = 0
+    await page.route('**/functions/v1/extract-video', async (route: Route) => {
+      extractCalls++
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+    })
+    await page.route('**/functions/v1/mimo-chat', async (route: Route) => {
+      mimoCalls++
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+        },
+        body: sse([deltaContent('误入自然语言链路的错误响应')]),
+      })
+    })
+
+    await page.goto('/app')
+    await openAiPanel(page)
+
+    await page.locator('.chat-textarea').fill('https://www.figma.com/design/mock')
+    await page.locator('.chat-send-btn').click()
+
+    // 本地平替知识库真实命中 figma.com → Penpot / Framer / MasterGo 3 张候选卡
+    const cards = page.locator('.ai-inline-card')
+    await expect(cards).toHaveCount(3, { timeout: 10000 })
+    await expect(cards.nth(0)).toContainText('Penpot')
+    await expect(cards.nth(1)).toContainText('Framer')
+    await expect(cards.nth(2)).toContainText('MasterGo')
+    await expect(page.locator('.chat-flow-text').first()).toContainText('为你找到 3 个匹配站点', {
+      timeout: 5000,
+    })
+
+    // 分流断言：视频链路与 MiMo 自然语言链路均未被触达
+    expect(extractCalls).toBe(0)
+    expect(mimoCalls).toBe(0)
   })
 })
