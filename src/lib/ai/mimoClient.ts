@@ -78,8 +78,14 @@ const MAX_HISTORY_CHARS = 100000
  * 不同于 sanitizeForPrompt——那是给不可信用户数据用的强消毒。
  */
 export function sanitizeToolResult(text: string, maxLen = MAX_TOOL_RESULT_LEN): string {
+  // 换行是控制字符清洗的例外：先以纯 ASCII 哨兵占位避开 _CTRL_RE，清洗后还原为 \n，
+  // 保证多行结果的列表/段落结构不被打平（结构信息对模型判断执行结果至关重要）
+  const NL_SENTINEL = '##LV_NEWLINE##'
   return String(text ?? '')
+    .replace(/\r\n/g, NL_SENTINEL)
+    .replace(/[\r\n]/g, NL_SENTINEL)
     .replace(_CTRL_RE, ' ')
+    .split(NL_SENTINEL).join('\n')
     .slice(0, maxLen)
 }
 
