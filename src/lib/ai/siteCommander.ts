@@ -7,13 +7,17 @@
  * 4. 增强安全性与可逆性：危险操作强制二次确认 (HITL)，支持对话式撤销 (/undo)；
  * 5. 上下文感知：感知当前浏览分类与多选状态；
  * 6. 严守克制美学：杜绝浮夸 emoji，采用纯净、温润的文字与符号排版。
+ *
+ * 拆分说明（只拆分、不改行为）：undo 事务栈在 siteUndoStack.ts，命令执行在 siteActions.ts，
+ * HITL 确认与行动卡片构造在 siteHitl.ts，意图解析（正则/参数提取）在 siteIntents.ts；
+ * 本文件保留 dispatchSiteCommand 编排（15 个意图块顺序与短路语义不变）并 re-export 原公开符号。
  */
 
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import { useToastStore } from '../../stores/toast.js'
-import { addNewCategory, gid, esc, favicon } from '../../utils.js'
+import { addNewCategory } from '../../utils.js'
 import { exportData } from '../../composables/domain/useDataIO.js'
 import {
   findDuplicateCandidates,
@@ -23,15 +27,74 @@ import {
   clusterUncategorizedBookmarks,
   detectParentChildRelations,
 } from './localClustering.js'
-import { CAT_UNCATEGORIZED, CAT_ALL, ATTR_IS_GROUP } from '../../config/constants.js'
-import { showConfirm } from '../toast.js'
-import { candidateToBookmark } from './candidateSave.js'
-import { inlineCardHTML } from '../../composables/useInlineCard.js'
+import { CAT_UNCATEGORIZED, CAT_ALL } from '../../config/constants.js'
+import {
+  askConfirm,
+  buildTrashClearConfirmMessage,
+  buildMoveConfirmMessage,
+  buildTrashActionCard,
+  buildDedupActionCard,
+  buildPackActionCard,
+  buildHealDeadlinkCard,
+  buildHealthInboxCard,
+  buildHealthDedupCard,
+  buildHealthTrashCard,
+  buildInboxZeroActionCard,
+} from './siteHitl.js'
 import { searchWebsitesByIntent, findSimilarWebsites } from './cloudAiClient.js'
+import {
+  pushUndoAction,
+  popUndoAction,
+  getUndoStackDepth,
+} from './siteUndoStack.js'
+import {
+  parseHelpIntent,
+  parseThemeIntent,
+  parseViewIntent,
+  parseCatIntent,
+  parseTrashIntent,
+  parseDedupIntent,
+  parsePackIntent,
+  parseDeadlinkIntent,
+  parseExportIntent,
+  parseStatsIntent,
+  parseHealthIntent,
+  parseInboxIntent,
+  parseBatchMoveIntent,
+  parseMoveIntent,
+  parseCurrentCatIntent,
+  parseUndoIntent,
+  parseCleanIntent,
+  parseSettingsIntent,
+} from './siteIntents.js'
 import { t, tN } from '../../i18n/index.js'
-import type { Bookmark, Category, SiblingGroup } from '../../types.js'
-import type { AiCandidateBookmark } from '../../types/ai.js'
+import type { Bookmark, Category } from '../../types.js'
 import type { ChatTurnStep, ChatActionCard } from './chatSessions.js'
+import type { SiteCommanderContext } from './siteActions.js'
+
+// ── re-export：撤销事务栈（单例在 siteUndoStack.ts） ──
+export {
+  pushUndoAction,
+  popUndoAction,
+  getUndoStackDepth,
+  clearUndoStack,
+  getLastUndoableAction,
+  setLastUndoableAction,
+} from './siteUndoStack.js'
+export type { UndoableAction } from './siteUndoStack.js'
+
+// ── re-export：命令执行层（siteActions.ts） ──
+export {
+  mergeDuplicateBookmarks,
+  applyInboxZeroClustering,
+  createTopicWorkspace,
+  healDeadlink,
+} from './siteActions.js'
+export type {
+  SiteCommanderContext,
+  CreateTopicWorkspaceResult,
+  HealDeadlinkResult,
+} from './siteActions.js'
 
 export interface SiteCommandResult {
   handled: boolean
@@ -41,450 +104,6 @@ export interface SiteCommandResult {
   details?: Record<string, unknown>
   steps?: ChatTurnStep[]
   actionCard?: ChatActionCard
-}
-
-export interface SiteCommanderContext {
-  ds?: ReturnType<typeof useDataStore>
-  ui?: ReturnType<typeof useUIStore>
-  app?: ReturnType<typeof useAppStore>
-  /** 中止信号：「停止生成」后不再执行命令副作用（确认弹窗/网络等待之后的写操作） */
-  signal?: AbortSignal
-}
-
-export interface UndoableAction {
-  type: string
-  description: string
-  timestamp?: number
-  revert: () => Promise<string> | string
-}
-
-const MAX_UNDO_STACK_DEPTH = 15
-const undoTransactionStack: UndoableAction[] = []
-
-let lastUndoableAction: UndoableAction | null = null
-
-export function pushUndoAction(action: UndoableAction): void {
-  action.timestamp = action.timestamp || Date.now()
-  undoTransactionStack.push(action)
-  if (undoTransactionStack.length > MAX_UNDO_STACK_DEPTH) {
-    undoTransactionStack.shift()
-  }
-  lastUndoableAction = action
-}
-
-export function popUndoAction(): UndoableAction | null {
-  const action = undoTransactionStack.pop() || null
-  lastUndoableAction = undoTransactionStack.length > 0 ? undoTransactionStack[undoTransactionStack.length - 1] : null
-  return action
-}
-
-export function getUndoStackDepth(): number {
-  return undoTransactionStack.length
-}
-
-export function clearUndoStack(): void {
-  undoTransactionStack.length = 0
-  lastUndoableAction = null
-}
-
-export function getLastUndoableAction(): UndoableAction | null {
-  return lastUndoableAction || (undoTransactionStack.length > 0 ? undoTransactionStack[undoTransactionStack.length - 1] : null)
-}
-
-export function setLastUndoableAction(action: UndoableAction | null): void {
-  if (action) {
-    pushUndoAction(action)
-  } else {
-    lastUndoableAction = null
-    undoTransactionStack.pop()
-  }
-}
-
-/**
- * 查重并一键合并所有重复项（函数级 HITL：合并前强制二次确认，不依赖 UI 层）
- */
-export async function mergeDuplicateBookmarks(
-  context?: SiteCommanderContext,
-): Promise<{ mergedCount: number; message: string }> {
-  const ds = context?.ds ?? useDataStore()
-  const app = context?.app ?? useAppStore()
-  const dups = findDuplicateCandidates(ds.bookmarks)
-  if (!dups || dups.length === 0) {
-    return { mergedCount: 0, message: t('aiCmd.mergeNone') }
-  }
-
-  const totalDupCount = dups.reduce((n, c) => n + c.duplicates.filter((d) => !d.deletedAt).length, 0)
-  const confirmed = await showConfirm(
-    tN('aiCmd.mergeConfirm', totalDupCount, { groups: dups.length, count: totalDupCount }),
-  )
-  if (context?.signal?.aborted) return { mergedCount: 0, message: '' }
-  if (!confirmed) {
-    return { mergedCount: 0, message: t('aiCmd.mergeCancelled') }
-  }
-
-  let mergedCount = 0
-  const deletedIds: string[] = []
-  for (const cluster of dups) {
-    for (const dup of cluster.duplicates) {
-      if (dup.id && !dup.deletedAt) {
-        ds.deleteBookmark(dup.id)
-        deletedIds.push(dup.id)
-        mergedCount++
-      }
-    }
-  }
-
-  if (mergedCount > 0) {
-    app.save()
-    pushUndoAction({
-      type: 'merge_dedup',
-      description: tN('aiCmd.undoMergeDesc', mergedCount),
-      revert: () => {
-        for (const id of deletedIds) {
-          ds.restoreBookmark(id)
-        }
-        app.save()
-        return tN('aiCmd.undoMergeRevert', deletedIds.length)
-      },
-    })
-  }
-
-  return {
-    mergedCount,
-    message: tN('aiCmd.mergeDone', mergedCount),
-  }
-}
-
-/**
- * 执行「收件箱清零」：识别同站子页建立 parentId 嵌套，并将待整理书签批量移动至推荐分类
- * 危险操作：函数级强制用户确认（HITL），拒绝则不做任何修改
- */
-export async function applyInboxZeroClustering(
-  context?: SiteCommanderContext,
-): Promise<{ movedCount: number; nestedCount: number; message: string }> {
-  const ds = context?.ds ?? useDataStore()
-  const app = context?.app ?? useAppStore()
-
-  const groupedIds = new Set<string>()
-  for (const g of ds.siblingGroups || []) {
-    if (!g.deletedAt && g.bookmarkIds?.length) {
-      for (const id of g.bookmarkIds) groupedIds.add(id)
-    }
-  }
-
-  // 1. 同站子页从属关系：待整理顶层书签中识别「同一站点下的子页」，归入其主页面下
-  const uncatIds = new Set(
-    ds.bookmarks.filter((b) => isUncategorized(b, groupedIds)).map((b) => b.id),
-  )
-  const relations = detectParentChildRelations(ds.bookmarks).filter((r) => uncatIds.has(r.childId))
-  const nestedChildIds = new Set(relations.map((r) => r.childId))
-
-  // 2. 聚类归类：已识别为子页的书签不再参与分类聚类，分类跟随父卡片归属
-  const clusters = clusterUncategorizedBookmarks(
-    ds.bookmarks.filter((b) => !nestedChildIds.has(b.id)),
-    ds.categories,
-    groupedIds,
-  )
-  const assignableClusters = clusters.filter(
-    (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
-  )
-
-  const totalMoveCount = assignableClusters.reduce(
-    (n, c) => n + c.bookmarks.filter((b) => b && !b.deletedAt).length,
-    0,
-  )
-  if (totalMoveCount === 0 && relations.length === 0) {
-    return { movedCount: 0, nestedCount: 0, message: t('aiCmd.inboxNone') }
-  }
-
-  // 函数级 HITL：批量改写分类与父子从属均属危险操作，必须显式确认（不依赖调用方自律）
-  const confirmLines: string[] = []
-  if (totalMoveCount > 0) {
-    confirmLines.push(tN('aiCmd.inboxConfirm', totalMoveCount, { count: totalMoveCount }))
-  }
-  if (relations.length > 0) {
-    confirmLines.push(tN('aiCmd.inboxNestConfirm', relations.length, { count: relations.length }))
-  }
-  const confirmed = await showConfirm(confirmLines.join('\n'))
-  if (context?.signal?.aborted) return { movedCount: 0, nestedCount: 0, message: '' }
-  if (!confirmed) {
-    return { movedCount: 0, nestedCount: 0, message: t('aiCmd.inboxCancelled') }
-  }
-
-  let movedCount = 0
-  let nestedCount = 0
-  const revertMap: Array<{ id: string; prevCatId?: string; prevParentId?: string | null }> = []
-
-  for (const cluster of assignableClusters) {
-    const targetCatId = cluster.suggestedCategoryId!
-    for (const bm of cluster.bookmarks) {
-      if (bm && bm.id && !bm.deletedAt) {
-        revertMap.push({ id: bm.id, prevCatId: bm.categoryId, prevParentId: bm.parentId })
-        ds.updateBookmark(bm.id, { categoryId: targetCatId })
-        movedCount++
-      }
-    }
-  }
-
-  // 3. 建立同站子页嵌套：子页归入主页面下并同步父级分类（子书签归属父卡片）
-  for (const rel of relations) {
-    const parent = ds.bookmarkMap[rel.parentId]
-    const child = ds.bookmarkMap[rel.childId]
-    if (!parent || parent.deletedAt || !child || child.deletedAt) continue
-    revertMap.push({ id: rel.childId, prevCatId: child.categoryId, prevParentId: child.parentId })
-    const parentCatId =
-      parent.categoryId && parent.categoryId !== CAT_UNCATEGORIZED ? parent.categoryId : child.categoryId
-    ds.updateBookmark(rel.childId, { parentId: rel.parentId, categoryId: parentCatId })
-    nestedCount++
-  }
-
-  if (movedCount > 0 || nestedCount > 0) {
-    app.save()
-    pushUndoAction({
-      type: 'inbox_zero',
-      description: tN('aiCmd.undoInboxDesc', movedCount + nestedCount),
-      revert: () => {
-        for (const item of revertMap) {
-          ds.updateBookmark(item.id, { categoryId: item.prevCatId, parentId: item.prevParentId })
-        }
-        app.save()
-        const parts = [tN('aiCmd.undoInboxRevert', revertMap.length)]
-        if (nestedCount > 0) parts.push(tN('aiCmd.undoInboxNestRevert', nestedCount))
-        return parts.join(' ')
-      },
-    })
-  }
-
-  const parts: string[] = []
-  if (movedCount > 0) parts.push(tN('aiCmd.inboxDone', movedCount))
-  if (nestedCount > 0) parts.push(tN('aiCmd.inboxNestDone', nestedCount))
-  return { movedCount, nestedCount, message: parts.join(' ') }
-}
-
-export interface CreateTopicWorkspaceResult {
-  success: boolean
-  group: SiblingGroup | null
-  createdBmIds: string[]
-  totalBookmarks: number
-  message: string
-}
-
-/**
- * 创建主题工作台：一键建组、自动存入候选书签、生成带内嵌卡片的笔记并聚焦
- */
-export async function createTopicWorkspace(
-  topicName: string,
-  candidates?: AiCandidateBookmark[],
-  targetCatId?: string,
-  context?: SiteCommanderContext,
-): Promise<CreateTopicWorkspaceResult> {
-  const ds = context?.ds ?? useDataStore()
-  const ui = context?.ui ?? useUIStore()
-  const app = context?.app ?? useAppStore()
-
-  // 1. 确定归属分类
-  let finalCatId = targetCatId
-  if (!finalCatId || !ds.categories.some((c: Category) => !c.deletedAt && c.id === finalCatId)) {
-    if (ui.curCat && ui.curCat !== CAT_ALL) {
-      finalCatId = ui.curCat
-    } else {
-      const matchCat = ds.categories.find(
-        (c: Category) =>
-          !c.deletedAt &&
-          (topicName.toLowerCase().includes(c.name.toLowerCase()) ||
-            c.name.toLowerCase().includes(topicName.toLowerCase())),
-      )
-      finalCatId = matchCat ? matchCat.id : CAT_UNCATEGORIZED
-    }
-  }
-
-  // 2. 准备候选工具
-  let items = candidates
-  if (!items || items.length === 0) {
-    items = await searchWebsitesByIntent(topicName, [], ds.categories, ds.customAttributes)
-    if (context?.signal?.aborted) {
-      return { success: false, group: null, createdBmIds: [], totalBookmarks: 0, message: '' }
-    }
-  }
-  if (!items || items.length === 0) {
-    // 诚实返回空结果：不伪造 github.com 占位书签冒充个性化推荐
-    return {
-      success: false,
-      group: null,
-      createdBmIds: [],
-      totalBookmarks: 0,
-      message: t('aiCmd.wsNoCandidates', { name: topicName }),
-    }
-  }
-
-  // 3. 将候选书签存入（若同 URL 已存在则复用已有书签，避免重复添加副本）
-  const allBookmarkIds: string[] = []
-  const savedBookmarks: Bookmark[] = []
-  const createdBmIds: string[] = []
-
-  for (const c of items) {
-    const existing = ds.bookmarks.find(
-      (b: Bookmark) => !b.deletedAt && b.url.toLowerCase() === c.url.toLowerCase(),
-    )
-    if (existing) {
-      allBookmarkIds.push(existing.id)
-      savedBookmarks.push(existing)
-    } else {
-      const bm = candidateToBookmark(ds, { ...c, categoryId: finalCatId })
-      ds.addBookmark(bm)
-      createdBmIds.push(bm.id)
-      allBookmarkIds.push(bm.id)
-      savedBookmarks.push(bm)
-    }
-  }
-
-  // 4. 构建 SiblingGroup
-  const maxBmOrder = ds.bookmarks.reduce(
-    (m: number, b: Bookmark) => (b.parentId ? m : b.order > m ? b.order : m),
-    -1,
-  )
-  const maxGrpOrder = (ds.siblingGroups || []).reduce(
-    (m: number, g: SiblingGroup) => (g.order > m ? g.order : m),
-    -1,
-  )
-  const order = Math.max(maxBmOrder, maxGrpOrder) + 1
-
-  const cleanName =
-    topicName.endsWith('工作台') || topicName.endsWith('工具箱')
-      ? topicName
-      : `${topicName} 工作台`
-
-  let initialNotes = `<p>${t('aiCmd.wsNotesIntro', { name: esc(cleanName) })}</p><p>`
-  for (const b of savedBookmarks) {
-    initialNotes += inlineCardHTML(b) + ' '
-  }
-  initialNotes += '</p>'
-
-  const group: SiblingGroup = {
-    id: 'sg_' + gid(),
-    name: cleanName,
-    categoryId: finalCatId,
-    icon: '',
-    order,
-    isExpanded: false,
-    attributes: { [ATTR_IS_GROUP]: true },
-    bookmarkIds: allBookmarkIds,
-    notes: initialNotes,
-    updatedAt: Date.now(),
-    useCount: 0,
-  }
-
-  ds.addGroup(group)
-  app.save?.()
-
-  // 5. 视图平滑联动：切换至目标分类，并进入该组聚焦模式
-  ui.curCat = finalCatId
-  ui.focusedGroupId = group.id
-
-  // 6. 注册撤销环路 (UndoableAction)
-  pushUndoAction({
-    type: 'topic_workspace',
-    description: t('aiCmd.undoWsDesc', { name: group.name }),
-    revert: () => {
-      ds.deleteGroup(group.id)
-      for (const bid of createdBmIds) {
-        ds.deleteBookmark(bid)
-      }
-      if (ui.focusedGroupId === group.id) {
-        ui.focusedGroupId = null
-      }
-      app.save?.()
-      return tN('aiCmd.undoWsRevert', createdBmIds.length, { name: group.name })
-    },
-  })
-
-  return {
-    success: true,
-    group,
-    createdBmIds,
-    totalBookmarks: allBookmarkIds.length,
-    message: tN('aiCmd.wsDone', allBookmarkIds.length, { name: group.name }),
-  }
-}
-
-export interface HealDeadlinkResult {
-  success: boolean
-  message: string
-  deadBookmark?: Bookmark
-  replacement?: AiCandidateBookmark
-}
-
-/**
- * 平替自愈死链：将失效书签的链接、标题、备注替换为现役平替，解除 dead-link 标记并支持撤销。
- * 函数级 HITL：改写书签 URL/标题/备注前强制二次确认（不信 UI 层）。
- */
-export async function healDeadlink(
-  deadBmId: string,
-  replacement: AiCandidateBookmark,
-  context?: SiteCommanderContext,
-): Promise<HealDeadlinkResult> {
-  const ds = context?.ds ?? useDataStore()
-  const app = context?.app ?? useAppStore()
-
-  const bm =
-    (ds.bookmarkMap && ds.bookmarkMap[deadBmId]) ||
-    ds.bookmarks.find((b: Bookmark) => b.id === deadBmId)
-
-  if (!bm || bm.deletedAt) {
-    return { success: false, message: t('aiCmd.healNotFound') }
-  }
-
-  const confirmed = await showConfirm(
-    t('aiCmd.healConfirm', { title: bm.title, alt: replacement.title || replacement.url }),
-  )
-  if (context?.signal?.aborted) return { success: false, message: '' }
-  if (!confirmed) {
-    return { success: false, message: t('aiCmd.healCancelled') }
-  }
-
-  const prev = {
-    title: bm.title,
-    url: bm.url,
-    icon: bm.icon,
-    notes: bm.notes,
-    attributes: { ...(bm.attributes || {}) },
-  }
-
-  const newAttributes = { ...(bm.attributes || {}) }
-  delete newAttributes['dead-link']
-  newAttributes['dead-link-healed'] = true
-
-  ds.updateBookmark(deadBmId, {
-    title: replacement.title || bm.title,
-    url: replacement.url,
-    icon: replacement.icon || favicon(replacement.url),
-    notes: replacement.notes || bm.notes,
-    attributes: newAttributes,
-  })
-  app.save?.()
-
-  pushUndoAction({
-    type: 'heal_deadlink',
-    description: t('aiCmd.undoHealDesc', { from: prev.title, to: replacement.title }),
-    revert: () => {
-      ds.updateBookmark(deadBmId, {
-        title: prev.title,
-        url: prev.url,
-        icon: prev.icon,
-        notes: prev.notes,
-        attributes: prev.attributes,
-      })
-      app.save?.()
-      return t('aiCmd.undoHealRevert', { title: prev.title })
-    },
-  })
-
-  return {
-    success: true,
-    deadBookmark: bm,
-    replacement,
-    message: t('aiCmd.healDone', { title: prev.title, alt: replacement.title, url: replacement.url }),
-  }
 }
 
 /**
@@ -504,12 +123,7 @@ export async function dispatchSiteCommand(
   const app = context?.app ?? useAppStore()
 
   // ── 1. 帮助说明 (/help, /?, 帮助) ──
-  if (
-    /^\/(?:help|\?)$/i.test(query) ||
-    /^(?:help|\/\?|\/help|帮助|指南|使用指南|你能做什么|怎么用|有哪些命令|指令列表|命令列表|站内指令|支持哪些操作)$/i.test(
-      query,
-    )
-  ) {
+  if (parseHelpIntent(query)) {
     return {
       handled: true,
       action: 'help',
@@ -574,9 +188,9 @@ export async function dispatchSiteCommand(
   }
 
   // ── 2. 主题外观 (/theme, 切换深色/浅色) ──
-  const themeSlashMatch = query.match(/^\/theme(?:\s+(dark|light|auto))?$/i)
-  if (themeSlashMatch) {
-    const mode = themeSlashMatch[1]?.toLowerCase()
+  const themeIntent = parseThemeIntent(query)
+  if (themeIntent?.kind === 'slash') {
+    const mode = themeIntent.mode
     if (mode === 'dark') {
       ui.setThemeColor('dark')
       return {
@@ -613,12 +227,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换到?|开启|转成?|换成?|设为)?\s*(?:深色|暗黑|暗色|夜间|黑暗|黑夜)(?:模式|主题)?$/i.test(
-      query,
-    ) ||
-    /^(?:switch\s+to\s+)?(?:dark\s+mode|dark\s+theme)$/i.test(query.trim())
-  ) {
+  if (themeIntent?.kind === 'nl-dark') {
     ui.setThemeColor('dark')
     return {
       handled: true,
@@ -628,12 +237,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换到?|开启|转成?|换成?|设为)?\s*(?:浅色|白天|明亮|日间|白色)(?:模式|主题)?$/i.test(
-      query,
-    ) ||
-    /^(?:switch\s+to\s+)?(?:light\s+mode|light\s+theme)$/i.test(query.trim())
-  ) {
+  if (themeIntent?.kind === 'nl-light') {
     ui.setThemeColor('light')
     return {
       handled: true,
@@ -643,12 +247,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换到?|开启)?\s*(?:跟随系统|自动主题|系统主题|自动模式)(?:模式|主题)?$/i.test(
-      query,
-    ) ||
-    /^(?:switch\s+to\s+)?(?:system\s+theme|auto\s+theme|auto\s+mode)$/i.test(query.trim())
-  ) {
+  if (themeIntent?.kind === 'nl-auto') {
     if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
     return {
       handled: true,
@@ -658,10 +257,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换主题|换个主题|反转主题)$/i.test(query) ||
-    /^(?:toggle\s+theme|change\s+theme|switch\s+theme)$/i.test(query.trim())
-  ) {
+  if (themeIntent?.kind === 'nl-toggle') {
     ui.toggleTheme()
     const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
     return {
@@ -673,9 +269,9 @@ export async function dispatchSiteCommand(
   }
 
   // ── 3. 布局视图 (/view, 切换列表/网格/紧凑) ──
-  const viewSlashMatch = query.match(/^\/view(?:\s+(grid|list|compact|mini-grid))?$/i)
-  if (viewSlashMatch) {
-    const rawMode = viewSlashMatch[1]?.toLowerCase() || 'grid'
+  const viewIntent = parseViewIntent(query)
+  if (viewIntent?.kind === 'slash') {
+    const rawMode = viewIntent.mode || 'grid'
     const targetMode = rawMode === 'compact' ? 'mini-grid' : (rawMode as 'grid' | 'list' | 'mini-grid')
     ui.layoutMode = targetMode
     ui.saveUIState?.()
@@ -692,10 +288,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:列表视图|列表模式|清单视图)$/i.test(query) ||
-    /^(?:switch\s+to\s+)?(?:list\s+view|list\s+mode)$/i.test(query.trim())
-  ) {
+  if (viewIntent?.kind === 'list') {
     ui.layoutMode = 'list'
     ui.saveUIState?.()
     return {
@@ -706,10 +299,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:网格视图|宫格视图|网格模式|大宫格)$/i.test(query) ||
-    /^(?:switch\s+to\s+)?(?:grid\s+view|grid\s+mode)$/i.test(query.trim())
-  ) {
+  if (viewIntent?.kind === 'grid') {
     ui.layoutMode = 'grid'
     ui.saveUIState?.()
     return {
@@ -720,10 +310,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (
-    /^(?:请?帮?我?)?(?:切换到?|换成?|设为)?\s*(?:紧凑视图|紧凑模式|小宫格|迷你宫格)$/i.test(query) ||
-    /^(?:switch\s+to\s+)?(?:compact\s+view|compact\s+mode)$/i.test(query.trim())
-  ) {
+  if (viewIntent?.kind === 'compact') {
     ui.layoutMode = 'mini-grid'
     ui.saveUIState?.()
     return {
@@ -735,7 +322,8 @@ export async function dispatchSiteCommand(
   }
 
   // ── 4. 分类管理 (/cat, 新建分类) ──
-  if (/^\/cat\s+list$/i.test(query) || /^(?:分类列表|查看分类|所有分类)$/i.test(query)) {
+  const catIntent = parseCatIntent(query)
+  if (catIntent?.kind === 'list') {
     const activeCats = ds.categories.filter((c: Category) => !c.deletedAt)
     const lines = [t('aiCmd.catListHeader'), '']
     for (const cat of activeCats) {
@@ -754,9 +342,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  const catSlashMatch = query.match(/^\/cat(?:\s+add)?\s+(.+)$/i)
-  const catNlMatch = query.match(/^(?:请?帮?我?)?(?:新建|创建|添加|增加)分类\s*[:：]?\s*(.+)$/i)
-  const catName = catSlashMatch ? catSlashMatch[1]?.trim() : catNlMatch ? catNlMatch[1]?.trim() : null
+  const catName = catIntent?.kind === 'add' ? catIntent.name : null
   if (catName) {
     const trimmed = catName.trim()
     if (!trimmed) {
@@ -800,11 +386,8 @@ export async function dispatchSiteCommand(
   }
 
   // ── 5. 回收站管理 (/trash, 清空回收站, 打开回收站) ──
-  if (
-    /^\/trash\s+(?:clear|empty)$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:清空|清掉|清理|倒空|倒掉)(?:回收站|垃圾桶)$/i.test(query) ||
-    /^(?:empty\s+trash|clear\s+trash)$/i.test(query.trim())
-  ) {
+  const trashIntent = parseTrashIntent(query)
+  if (trashIntent === 'clear') {
     const bms = ds.bookmarks.filter((b) => b.deletedAt).length
     const grps = ds.siblingGroups.filter((g) => g.deletedAt).length
     const cats = ds.categories.filter((c: Category) => c.deletedAt).length
@@ -819,9 +402,7 @@ export async function dispatchSiteCommand(
     }
 
     // Agent 危险操作人机确认 (Human-in-the-Loop)
-    const confirmed = await showConfirm(
-      tN('aiCmd.trashClearConfirm', total, { total, bm: bms, grp: grps, cat: cats }),
-    )
+    const confirmed = await askConfirm(buildTrashClearConfirmMessage(total, bms, grps, cats))
     if (context?.signal?.aborted) {
       return { handled: true, action: 'trash_clear', success: false, reply: '' }
     }
@@ -849,7 +430,7 @@ export async function dispatchSiteCommand(
     }
   }
 
-  if (/^\/trash$/i.test(query) || /^(?:请?帮?我?)?(?:打开|查看|进入)?回收站$/i.test(query)) {
+  if (trashIntent === 'open') {
     ui.panels.trash = true
     const bms = ds.bookmarks.filter((b) => b.deletedAt).length
     const grps = ds.siblingGroups.filter((g) => g.deletedAt).length
@@ -862,24 +443,14 @@ export async function dispatchSiteCommand(
       steps: [{ text: t('aiCmd.stepOpenTrash'), done: true }],
       actionCard:
         total > 0
-          ? {
-              type: 'trash',
-              title: t('aiCmd.trashCardTitle'),
-              desc: tN('aiCmd.trashCardDesc', total, { total, bm: bms, grp: grps }),
-              buttonText: t('aiCmd.trashCardButton'),
-              actionName: 'trash_clear',
-            }
+          ? buildTrashActionCard({ total, bm: bms, grp: grps })
           : undefined,
       reply: total > 0 ? tN('aiCmd.trashOpened', total) : t('aiCmd.trashOpenedEmpty'),
     }
   }
 
   // ── 6. 查重巡检 (/dedup, 查找重复书签) ──
-  if (
-    /^\/dedup(?:\s+find)?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:查重|查找重复书签|检查重复|有哪些重复书签|重复书签|重复链接)$/i.test(query) ||
-    /^(?:find\s+duplicates|check\s+duplicates|dedup|find\s+dups)$/i.test(query.trim())
-  ) {
+  if (parseDedupIntent(query)) {
     const dups = findDuplicateCandidates(ds.bookmarks)
     if (!dups || dups.length === 0) {
       return {
@@ -919,28 +490,15 @@ export async function dispatchSiteCommand(
         { text: t('aiCmd.stepScanUrls'), done: true },
         { text: tN('aiCmd.stepDupFound', dups.length), done: true },
       ],
-      actionCard: {
-        type: 'dedup',
-        title: t('aiCmd.dedupCardTitle'),
-        desc: tN('aiCmd.dedupCardDesc', dupCount, { groups: dups.length, count: dupCount }),
-        buttonText: t('aiCmd.dedupCardButton'),
-        actionName: 'merge_dedup',
-      },
+      actionCard: buildDedupActionCard({ dupCount, groups: dups.length }),
       reply: lines.join('\n'),
     }
   }
 
   // ── 6.5 主题工作台生成 (/pack <主题名>, 帮我搭建XX工作台) ──
-  const packSlashMatch = query.match(/^\/pack(?:\s+(.+))?$/i)
-  const packNlMatch = query.match(
-    /^(?:请?帮?我?)?(?:搭建|整理|创建|生成|建一个|建立)(?:一套|个)?(.+?)(?:工作台|工具链|工具箱|聚合组|合集)$/i,
-  )
-  if (packSlashMatch || packNlMatch) {
-    const rawTopic = packSlashMatch
-      ? packSlashMatch[1]?.trim()
-      : packNlMatch
-        ? packNlMatch[1]?.trim()
-        : ''
+  const packIntent = parsePackIntent(query)
+  if (packIntent) {
+    const rawTopic = packIntent.rawTopic
     if (!rawTopic) {
       return {
         handled: true,
@@ -991,27 +549,12 @@ export async function dispatchSiteCommand(
         { text: t('aiCmd.stepPackPlan'), done: true },
       ],
       reply: lines.join('\n'),
-      actionCard: {
-        type: 'custom',
-        actionName: 'create_topic_workspace',
-        title: t('aiCmd.packCardTitle', { name: cleanTopic }),
-        desc: tN('aiCmd.packCardDesc', candidates.length),
-        buttonText: t('aiCmd.packCardButton'),
-        payload: {
-          topic: cleanTopic,
-          candidates,
-        },
-      },
+      actionCard: buildPackActionCard({ cleanTopic, candidates }),
     }
   }
 
   // ── 7. 死链检测与自愈 (/deadlink, 检查死链, 死链自愈) ──
-  if (
-    /^\/deadlinks?(?:\s+(?:heal|check|fix))?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:检查死链|死链检测|死链巡检|检测失效链接|检测死链|修复死链|死链自愈)$/i.test(
-      query,
-    )
-  ) {
+  if (parseDeadlinkIntent(query)) {
     const deadBookmarks = ds.bookmarks.filter(
       (b: Bookmark) =>
         !b.deletedAt && b.attributes?.['dead-link'] && !b.attributes?.['dead-link-ignored'],
@@ -1066,17 +609,12 @@ export async function dispatchSiteCommand(
 
     let actionCard: ChatActionCard | undefined
     if (bestAlt) {
-      actionCard = {
-        type: 'custom',
-        actionName: 'heal_deadlink',
-        title: t('aiCmd.healCardTitle', { from: firstDead.title, to: bestAlt.title }),
-        desc: t('aiCmd.healCardDesc', { alt: bestAlt.title }),
-        buttonText: t('aiCmd.healCardButton'),
-        payload: {
-          deadBmId: firstDead.id,
-          replacement: bestAlt,
-        },
-      }
+      actionCard = buildHealDeadlinkCard({
+        deadBmId: firstDead.id,
+        fromTitle: firstDead.title,
+        toTitle: bestAlt.title,
+        replacement: bestAlt,
+      })
     }
 
     return {
@@ -1092,10 +630,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 8. 数据导出备份 (/export, 导出数据) ──
-  if (
-    /^\/export(?:\s+data)?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:导出数据|备份书签|导出备份|全量备份|下载备份)$/i.test(query)
-  ) {
+  if (parseExportIntent(query)) {
     exportData()
     return {
       handled: true,
@@ -1109,11 +644,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 9. 全库统计 (/stats, 书签统计) ──
-  if (
-    /^\/stats$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:书签统计|数据统计|库状态|书签总数|有多少书签)$/i.test(query) ||
-    /^(?:vault\s+stats|bookmark\s+stats|statistics)$/i.test(query.trim())
-  ) {
+  if (parseStatsIntent(query)) {
     const topBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && !b.parentId).length
     const subBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && b.parentId).length
     const groups = ds.siblingGroups.filter((g) => !g.deletedAt).length
@@ -1149,13 +680,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 9.1 全库资产体检中心 (/health, 资产体检) ──
-  if (
-    /^\/health$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:资产体检|健康体检|全库体检|资产健康度|体检报告|健康诊断|书签体检|全面体检)$/i.test(
-      query,
-    ) ||
-    /^(?:health\s+check|vault\s+audit|audit\s+vault|check\s+health)$/i.test(query.trim())
-  ) {
+  if (parseHealthIntent(query)) {
     const groupedIds = new Set<string>()
     for (const g of ds.siblingGroups || []) {
       if (!g.deletedAt && g.bookmarkIds?.length) {
@@ -1236,29 +761,11 @@ export async function dispatchSiteCommand(
 
     let actionCard: ChatActionCard | undefined
     if (healthStats.uncategorizedCount > 0) {
-      actionCard = {
-        type: 'custom',
-        actionName: 'inbox_zero',
-        title: tN('aiCmd.healthInboxCardTitle', healthStats.uncategorizedCount),
-        desc: t('aiCmd.healthInboxCardDesc'),
-        buttonText: t('aiCmd.healthInboxCardButton'),
-      }
+      actionCard = buildHealthInboxCard(healthStats.uncategorizedCount)
     } else if (healthStats.duplicateCount > 0) {
-      actionCard = {
-        type: 'dedup',
-        actionName: 'merge_dedup',
-        title: tN('aiCmd.healthDedupCardTitle', healthStats.duplicateCount),
-        desc: t('aiCmd.healthDedupCardDesc'),
-        buttonText: t('aiCmd.healthDedupCardButton'),
-      }
+      actionCard = buildHealthDedupCard(healthStats.duplicateCount)
     } else if (trashTotal > 0) {
-      actionCard = {
-        type: 'trash',
-        actionName: 'trash_clear',
-        title: tN('aiCmd.healthTrashCardTitle', trashTotal),
-        desc: t('aiCmd.healthTrashCardDesc'),
-        buttonText: t('aiCmd.healthTrashCardButton'),
-      }
+      actionCard = buildHealthTrashCard(trashTotal)
     }
 
     return {
@@ -1274,13 +781,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 9.2 收件箱清零与智能归拢 (/inbox, 智能归类) ──
-  if (
-    /^\/inbox(?:\s+(?:zero|clean|organize))?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:收件箱清零|智能归类|整理未分类|归拢未分类|未分类整理|清空未分类|归类书签)$/i.test(
-      query,
-    ) ||
-    /^(?:inbox\s+zero|clean\s+inbox|organize\s+inbox)$/i.test(query.trim())
-  ) {
+  if (parseInboxIntent(query)) {
     const groupedIds = new Set<string>()
     for (const g of ds.siblingGroups || []) {
       if (!g.deletedAt && g.bookmarkIds?.length) {
@@ -1346,22 +847,14 @@ export async function dispatchSiteCommand(
       action: 'inbox_zero',
       steps: inboxSteps,
       reply: lines.join('\n'),
-      actionCard: {
-        type: 'custom',
-        actionName: 'apply_inbox_zero',
-        title: tN('aiCmd.inboxCardTitle', totalToMove + relations.length),
-        desc: t('aiCmd.inboxCardDesc'),
-        buttonText: t('aiCmd.inboxCardButton'),
-      },
+      actionCard: buildInboxZeroActionCard(totalToMove + relations.length),
     }
   }
 
   // ── 10. 上下文感知：批量移动选中的书签 ──
-  const batchMoveMatch = query.match(
-    /^(?:把|将)?(?:选中的|这些)?(?:书签)?(?:全部)?(?:移动到?|移到|放到|归入|归到)\s*[:：]?\s*(.+)$/i,
-  )
-  if (batchMoveMatch && ui.batchMode && ui.batchSelected && ui.batchSelected.length > 0) {
-    const targetName = batchMoveMatch[1].trim().replace(/^到\s*/, '')
+  const batchMoveIntent = parseBatchMoveIntent(query)
+  if (batchMoveIntent && ui.batchMode && ui.batchSelected && ui.batchSelected.length > 0) {
+    const targetName = batchMoveIntent.targetName
     const targetCat = ds.categories.find(
       (c: Category) =>
         !c.deletedAt &&
@@ -1420,15 +913,8 @@ export async function dispatchSiteCommand(
   }
 
   // ── 11. 批量整理未分类 (/move uncategorized <分类名>, 把未分类移动到 [分类名]) ──
-  const moveSlashMatch = query.match(/^\/move\s+uncategorized\s+(.+)$/i)
-  const moveNlMatch = query.match(
-    /^(?:把|将)?(?:所有)?未分类(?:书签)?(?:全部)?(?:移动到?|移到|放到|归入|归到)\s*[:：]?\s*(.+)$/i,
-  )
-  const targetCategoryRaw = moveSlashMatch
-    ? moveSlashMatch[1]?.trim().replace(/^到\s*/, '')
-    : moveNlMatch
-      ? moveNlMatch[1]?.trim().replace(/^到\s*/, '')
-      : null
+  const moveIntent = parseMoveIntent(query)
+  const targetCategoryRaw = moveIntent ? moveIntent.targetCategoryRaw : null
 
   if (targetCategoryRaw) {
     const targetCat = ds.categories.find(
@@ -1464,8 +950,8 @@ export async function dispatchSiteCommand(
 
     // 若未分类数量较大（例如 > 5 个），进行二次确认保护
     if (uncatBms.length > 5) {
-      const confirmed = await showConfirm(
-        tN('aiCmd.moveConfirm', uncatBms.length, { cat: targetCat.name }),
+      const confirmed = await askConfirm(
+        buildMoveConfirmMessage(uncatBms.length, targetCat.name),
       )
       if (context?.signal?.aborted) {
         return { handled: true, action: 'move_uncategorized', success: false, reply: '' }
@@ -1512,7 +998,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 12. 上下文感知：当前分类查询 ──
-  if (/^(?:当前在看什么分类|当前分类|当前分类有多少书签|所在分类)$/i.test(query)) {
+  if (parseCurrentCatIntent(query)) {
     if (ui.curCat && ui.curCat !== CAT_ALL) {
       const cat = ds.categories.find((c: Category) => c.id === ui.curCat)
       const catName = cat ? cat.name : (ui.curCat === CAT_UNCATEGORIZED ? t('aiCmd.catListUncategorized') : ui.curCat)
@@ -1534,12 +1020,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 13. 对话式撤销 (/undo, 撤销操作, 恢复原样) ──
-  if (
-    /^\/(?:undo|revert)$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:撤销|撤销操作|撤销刚才的操作|撤销上一步|恢复原样|回退|回退上一步|undo)$/i.test(
-      query,
-    )
-  ) {
+  if (parseUndoIntent(query)) {
     // 「停止生成」后不再执行撤销副作用（popUndoAction 会改状态，必须前置校验）
     if (context?.signal?.aborted) {
       return { handled: true, action: 'undo', success: false, reply: '' }
@@ -1585,10 +1066,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 14. 孤儿与无效引用自检清理 (/clean, 清理孤立数据) ──
-  if (
-    /^\/clean(?:\s+orphans)?$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:清理孤立数据|清理孤儿|数据自检|自检清理)$/i.test(query)
-  ) {
+  if (parseCleanIntent(query)) {
     let fixedGroupRefs = 0
     let fixedParentRefs = 0
 
@@ -1634,10 +1112,7 @@ export async function dispatchSiteCommand(
   }
 
   // ── 15. 打开设置面板 (/settings, 打开设置) ──
-  if (
-    /^\/settings$/i.test(query) ||
-    /^(?:请?帮?我?)?(?:打开设置|查看设置|设置面板|进入设置)$/i.test(query)
-  ) {
+  if (parseSettingsIntent(query)) {
     ui.panels.settings = true
     return {
       handled: true,
