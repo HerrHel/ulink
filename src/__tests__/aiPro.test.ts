@@ -6,6 +6,7 @@ import {
   extractBookmarksFromVideo,
   enrichBookmarkMetadata,
 } from '../lib/ai/cloudAiClient.js'
+import { setLocale } from '../i18n/index.js'
 import { useUIStore } from '../stores/ui.js'
 import type { Bookmark, Category, CustomAttribute } from '../types.js'
 
@@ -137,5 +138,85 @@ describe('AI Pro Matrix & Smart Candidate Ingestion', () => {
     ui.openAiEnrich('bm-old-1')
     expect(ui.modals.aiEnrich).toBe(true)
     expect(ui.aiEnrichTargetBmId).toBe('bm-old-1')
+  })
+
+  it('6. 静态知识库文案 i18n：zh/en 下 notes/tag/highlight 均随语言切换且不残留硬编码中文', async () => {
+    // zh-CN（测试 setup 默认）：文案与语言包一致
+    setLocale('zh-CN')
+    const zhResults = await searchWebsitesByIntent('画图 白板', [], testCategories, testAttributes)
+    expect(zhResults.length).toBeGreaterThan(0)
+    expect(zhResults[0].notes).toContain('白板')
+    expect(zhResults[0].tag).toBe('开源免费')
+
+    // en-US：同一条目出英文文案，无中文残留
+    setLocale('en-US')
+    try {
+      const enResults = await searchWebsitesByIntent('画图 白板', [], testCategories, testAttributes)
+      expect(enResults.length).toBe(zhResults.length)
+      expect(enResults[0].title).toBe(zhResults[0].title)
+      expect(enResults[0].notes).toMatch(/whiteboard/i)
+      expect(enResults[0].notes).not.toMatch(/[一-鿿]/)
+      expect(enResults[0].highlight).not.toMatch(/[一-鿿]/)
+      expect(enResults[0].tag).toBe('Open Source & Free')
+
+      // 通用发现入口（无强匹配）也走 i18n，且 {query} 占位符正常插值
+      const enGeneric = await searchWebsitesByIntent('xyzzy-no-match', [], testCategories, testAttributes)
+      expect(enGeneric.length).toBe(2)
+      expect(enGeneric[0].generic).toBe(true)
+      expect(enGeneric[0].notes).toContain('xyzzy-no-match')
+      expect(enGeneric[0].notes).not.toMatch(/[一-鿿]/)
+    } finally {
+      setLocale('zh-CN')
+    }
+  })
+
+  it('7. 补齐建议文案 i18n：en-US 下 fallback notes 与 reason 不含硬编码中文', async () => {
+    // 用无 smartPrefill 预置数据的站点，确保走 enrichFallbackNotes 兜底路径
+    const oldBookmark: Bookmark = {
+      id: 'bm-i18n-1',
+      title: 'unknown-tool.example',
+      url: 'https://unknown-tool.example',
+      icon: '',
+      username: '',
+      password: '',
+      notes: '',
+      categoryId: 'uncategorized',
+      parentId: null,
+      order: 1,
+      useCount: 0,
+      attributes: {},
+      isExpanded: false,
+      createdAt: 100,
+      updatedAt: 100,
+    }
+
+    setLocale('en-US')
+    try {
+      const diff = await enrichBookmarkMetadata(oldBookmark, testCategories, testAttributes)
+      expect(diff.suggestedNotes.length).toBeGreaterThan(0)
+      expect(diff.suggestedNotes).not.toMatch(/[一-鿿]/)
+      expect(diff.reason).not.toMatch(/[一-鿿]/)
+    } finally {
+      setLocale('zh-CN')
+    }
+  })
+
+  it('8. 类似网站描述 i18n：zh/en 下 notes/highlight 随语言切换且 en 无中文残留', async () => {
+    setLocale('zh-CN')
+    const zhResults = await findSimilarWebsites('https://chatgpt.com', 'ChatGPT', [], testCategories, testAttributes)
+    expect(zhResults.length).toBeGreaterThan(0)
+    expect(zhResults[0].notes).toMatch(/[一-鿿]/)
+
+    setLocale('en-US')
+    try {
+      const enResults = await findSimilarWebsites('https://chatgpt.com', 'ChatGPT', [], testCategories, testAttributes)
+      expect(enResults.length).toBe(zhResults.length)
+      expect(enResults[0].title).toBe(zhResults[0].title)
+      expect(enResults[0].notes).not.toMatch(/[一-鿿]/)
+      expect(enResults[0].highlight).not.toMatch(/[一-鿿]/)
+      expect(enResults[0].notes.length).toBeGreaterThan(0)
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 })

@@ -108,6 +108,7 @@ export const en = {
     ul: 'Bullet list',
     taskList: 'Task list',
     insertImage: 'Insert image',
+    aiAsk: 'Ask AI (Discuss/Summarize/Polish)',
   },
   ctx: {
     menu: 'Actions',
@@ -141,6 +142,7 @@ export const en = {
     renameAttrPrompt: 'Rename attribute',
     aiSimilar: 'Find Similar Sites',
     aiEnrich: 'Smart Enrich Info',
+    aiChat: 'Ask AI',
   },
   errors: {
     crashTitle: 'Something went wrong',

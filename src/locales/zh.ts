@@ -110,6 +110,7 @@ export const zh = {
     ul: '无序列表',
     taskList: '待办清单',
     insertImage: '插入图片',
+    aiAsk: '询问 AI (探讨/总结/润色)',
   },
   ctx: {
     menu: '操作菜单',
@@ -143,6 +144,7 @@ export const zh = {
     renameAttrPrompt: '重命名属性',
     aiSimilar: '找相似平替',
     aiEnrich: '智能补齐信息',
+    aiChat: '询问 AI',
   },
   errors: {
     crashTitle: '出错了',

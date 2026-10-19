@@ -10,6 +10,7 @@
  */
 
 import { t } from '../../i18n/index.js'
+import { isPrivateUrl, sanitizeUrlForExternalService } from './urlGuard.js'
 
 export interface JinaReadResult {
   success: boolean
@@ -33,6 +34,14 @@ export async function fetchPageContentViaJina(
     }
   }
 
+  if (isPrivateUrl(cleanUrl)) {
+    return {
+      success: false,
+      url: cleanUrl,
+      error: t('ai.jinaPrivateHostBlocked'),
+    }
+  }
+
   const timeoutMs = options.timeoutMs ?? 10000
   const timeoutController = new AbortController()
   const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs)
@@ -42,7 +51,8 @@ export async function fetchPageContentViaJina(
     : timeoutController.signal
 
   try {
-    const endpoint = `https://r.jina.ai/${cleanUrl}`
+    const safeUrl = sanitizeUrlForExternalService(cleanUrl)
+    const endpoint = `https://r.jina.ai/${safeUrl}`
     const res = await fetch(endpoint, {
       method: 'GET',
       headers: {

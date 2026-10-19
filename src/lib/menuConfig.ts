@@ -59,12 +59,14 @@ export const MENU_ITEMS: Record<string, { label: string; danger?: boolean }> = {
   [ACTIONS.EXPORT_CATEGORY]: { label: 'ctx.exportCategory' },
   [ACTIONS.AI_SIMILAR]: { label: 'ctx.aiSimilar' },
   [ACTIONS.AI_ENRICH]: { label: 'ctx.aiEnrich' },
+  [ACTIONS.AI_CHAT]: { label: 'ctx.aiChat' },
 }
 
 /** 右键菜单规则（PC） */
 export const MENU_RULES: Record<string, MenuEntry[]> = {
   card: [
     { action: ACTIONS.COPY_URL },
+    { action: ACTIONS.AI_CHAT },
     { action: ACTIONS.ADD_SUB },
     { action: ACTIONS.AI_SIMILAR },
     { action: ACTIONS.AI_ENRICH },
@@ -95,6 +97,7 @@ export const MENU_RULES: Record<string, MenuEntry[]> = {
   ],
   group: [
     { action: ACTIONS.DETAIL },
+    { action: ACTIONS.AI_CHAT },
     { action: ACTIONS.EDIT, label: 'ctx.editGroupName' },
     { action: ACTIONS.ADD_TO_GROUP },
     { action: ACTIONS.HISTORY },
@@ -121,6 +124,7 @@ export const MENU_RULES: Record<string, MenuEntry[]> = {
 export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
   card: [
     { action: ACTIONS.EXPAND },
+    { action: ACTIONS.AI_CHAT },
     { action: ACTIONS.PIN },
     { action: ACTIONS.COPY_URL },
     { action: ACTIONS.ADD_SUB },
@@ -134,6 +138,7 @@ export const LONGPRESS_RULES: Record<string, MenuEntry[]> = {
   ],
   group: [
     { action: ACTIONS.EXPAND },
+    { action: ACTIONS.AI_CHAT },
     { action: ACTIONS.PIN },
     { action: ACTIONS.DETAIL },
     { action: ACTIONS.FOCUS },
@@ -220,6 +225,11 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
       if (bm && bm.url) copyToClipboard(bm.url, t('ctx.url'))
       return
     }
+    if (action === ACTIONS.AI_CHAT) {
+      ui.attachCardToAi('bm', id)
+      ui.openAiAssistant()
+      return
+    }
     if (action === ACTIONS.ADD_SUB) {
       if (canAddSub(id)) addSub(id)
       return
@@ -296,6 +306,11 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
   }
   if (type === 'group') {
     if (action === ACTIONS.DETAIL) openDetail('group:' + id)
+    if (action === ACTIONS.AI_CHAT) {
+      ui.attachCardToAi('group', id)
+      ui.openAiAssistant()
+      return
+    }
     if (action === ACTIONS.EDIT) editGroup(id)
     if (action === ACTIONS.ADD_TO_GROUP) {
       // 打开「添加书签或组」Popover（无 trigger 位置时 AddPopover 用默认居中定位）

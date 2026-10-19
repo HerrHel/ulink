@@ -25,6 +25,11 @@
       </template>
       <span class="ft-sep"></span>
       <button class="ft-btn" :title="t('editor.insertImage')" @click="pickImage" v-html="icons.image"></button>
+      <button class="ft-btn ft-ai-btn" :title="t('editor.aiAsk')" @click="askAiAboutSelection">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3 1.912 5.885a2 2 0 0 0 1.272 1.272L21 12l-5.816 1.843a2 2 0 0 0-1.272 1.272L12 21l-1.912-5.885a2 2 0 0 0-1.272-1.272L3 12l5.816-1.843a2 2 0 0 0 1.272-1.272L12 3z" />
+        </svg>
+      </button>
     </div>
   </template>
   <div v-else class="format-toolbar" ref="toolbarRef" @mousedown.prevent>
@@ -50,6 +55,12 @@
     </div>
     <div class="ft-sb-sep"></div>
     <button class="ft-btn ft-sb-btn" :title="t('editor.insertImage')" @click="pickImage" v-html="icons.image"></button>
+    <div class="ft-sb-sep"></div>
+    <button class="ft-btn ft-sb-btn ft-ai-btn" :title="t('editor.aiAsk')" @click="askAiAboutSelection">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m12 3 1.912 5.885a2 2 0 0 0 1.272 1.272L21 12l-5.816 1.843a2 2 0 0 0-1.272 1.272L12 21l-1.912-5.885a2 2 0 0 0-1.272-1.272L3 12l5.816-1.843a2 2 0 0 0 1.272-1.272L12 3z" />
+      </svg>
+    </button>
   </div>
   <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
 </template>
@@ -113,6 +124,31 @@ function onPickImage(e: Event) {
   const gid = store.focusedGroupId
   if (gid && files.length) void uploadAndInsertImages(gid, files)
   input.value = '' // 允许重复选择同一文件
+}
+
+function askAiAboutSelection() {
+  const focusGid = store.focusedGroupId || (document.activeElement as HTMLElement)?.closest?.('.group-body')?.getAttribute('data-gid') || undefined
+  if (focusGid) {
+    ui.attachCardToAi('group', focusGid)
+  }
+
+  const ed = getEditor()
+  let selectedText = ''
+  if (ed && ed.state && ed.state.selection) {
+    const { from, to } = ed.state.selection
+    if (from < to) {
+      selectedText = ed.state.doc.textBetween(from, to, ' ').trim()
+    }
+  }
+
+  if (selectedText) {
+    const prompt = selectedText.length > 80
+      ? `关于「${selectedText.slice(0, 80)}…」：`
+      : `关于「${selectedText}」：`
+    ui.openAiAssistant(prompt)
+  } else {
+    ui.openAiAssistant()
+  }
 }
 
 function toggleMfbPalette() {

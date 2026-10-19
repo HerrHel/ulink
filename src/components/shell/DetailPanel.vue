@@ -2,7 +2,7 @@
   <div
     ref="detailPanelRef"
     class="detail-panel ulink-simple-chat"
-    :class="{ open: isOpen, swiping: isSwiping, 'chat-drop-active': isDragOverPanel }"
+    :class="{ open: isOpen, swiping: isSwiping, 'chat-drop-active': isDragOverPanel, 'floating-hud': isFloatingHud && !isMobileDevice }"
     :style="panelStyle"
     id="detailPanel"
     @dragover.prevent="onPanelDragOver"
@@ -103,6 +103,24 @@
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M5 12h14" />
             <path d="M12 5v14" />
+          </svg>
+        </button>
+        <button
+          v-if="!isMobileDevice"
+          class="chat-btn-icon float-hud-btn"
+          :class="{ 'is-active': isFloatingHud }"
+          @click="toggleFloatingHud"
+          :title="isFloatingHud ? t('ai.dockPanel') : t('ai.floatPanel')"
+          :aria-label="isFloatingHud ? t('ai.dockPanel') : t('ai.floatPanel')"
+        >
+          <svg v-if="!isFloatingHud" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 3h6v6" />
+            <path d="M10 14L21 3" />
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M15 3v18" />
           </svg>
         </button>
         <button
@@ -347,6 +365,64 @@
                       <span>{{ t('ai.addAllDirect') }}</span>
                     </button>
                   </div>
+
+                  <!-- 知识沉淀与反向写回操作条 (Bi-directional Knowledge Write-Back & Card Locating) -->
+                  <div v-if="!turn.loading && turn.content" class="chat-writeback-toolbar">
+                    <!-- 若当轮包含关联笔记，展示追加到原笔记与替换原笔记 -->
+                    <template v-if="getAttachedNotes(turn).length > 0">
+                      <button
+                        v-for="note in getAttachedNotes(turn)"
+                        :key="'append-' + note.id"
+                        class="writeback-btn writeback-append"
+                        :title="t('ai.writebackAppend') + ': ' + note.title"
+                        @click="handleAppendToNote(note.id, turn.content)"
+                      >
+                        <span class="writeback-btn-icon" aria-hidden="true">📥</span>
+                        <span>{{ t('ai.writebackAppend') }}</span>
+                      </button>
+                      <button
+                        v-for="note in getAttachedNotes(turn)"
+                        :key="'replace-' + note.id"
+                        class="writeback-btn writeback-replace"
+                        :title="t('ai.writebackReplace') + ': ' + note.title"
+                        @click="handleReplaceNote(note.id, turn.content)"
+                      >
+                        <span class="writeback-btn-icon" aria-hidden="true">🔄</span>
+                        <span>{{ t('ai.writebackReplace') }}</span>
+                      </button>
+                    </template>
+
+                    <!-- 始终提供存为新笔记 -->
+                    <button
+                      class="writeback-btn writeback-new"
+                      :title="t('ai.writebackNew')"
+                      @click="handleSaveAsNewNote(turn.content)"
+                    >
+                      <span class="writeback-btn-icon" aria-hidden="true">📝</span>
+                      <span>{{ t('ai.writebackNew') }}</span>
+                    </button>
+
+                    <!-- 当轮有关联卡片或笔记时，提供在主网格高亮定位 -->
+                    <button
+                      v-for="card in getTurnAttachedCards(turn)"
+                      :key="'locate-' + card.id"
+                      class="writeback-btn writeback-locate"
+                      :title="t('ai.locateInVault') + ': ' + card.title"
+                      @click="handleLocateCard(card.id, card.type === 'group' ? 'group' : 'bookmark')"
+                    >
+                      <span class="writeback-btn-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <circle cx="12" cy="12" r="3" />
+                          <line x1="12" y1="2" x2="12" y2="5" />
+                          <line x1="12" y1="19" x2="12" y2="22" />
+                          <line x1="2" y1="12" x2="5" y2="12" />
+                          <line x1="19" y1="12" x2="22" y2="12" />
+                        </svg>
+                      </span>
+                      <span>{{ card.type === 'group' ? t('ai.locateAttachedNote') : t('ai.locateAttachedCard') }}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <!-- 交互行动卡片 (Actionable Artifact / Generative UI) -->
@@ -559,8 +635,14 @@ import { toast } from '../../lib/toast.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
 import { parseTurnContentSegments, mergeParsedCandidates, type ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
 import type { ChatTurn, AiChatSession } from '../../lib/ai/chatSessions.js'
-import { isDefaultSessionTitle } from '../../lib/ai/chatSessions.js'
+import { isDefaultSessionTitle, type AttachedCardMeta } from '../../lib/ai/chatSessions.js'
 import { useAiChat } from '../../composables/domain/useAiChat.js'
+import { locateAndHighlightCard } from '../../lib/ai/cardLocator.js'
+import {
+  appendAiContentToGroup,
+  replaceAiContentToGroup,
+  createNoteFromAiContent,
+} from '../../lib/ai/noteWriteback.js'
 
 const { t, locale } = useI18n()
 const isZh = computed(() => locale.value.startsWith('zh'))
@@ -576,6 +658,24 @@ const isOpen = computed(() => ui.panels.detail)
 const isInputFocused = ref(false)
 const isSessionMenuOpen = ref(false)
 const isDragOverPanel = ref(false)
+
+const isMobileDevice = computed(() => isMobile())
+const isFloatingHud = ref<boolean>(() => {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('ulink_ai_floating_hud') === 'true'
+  } catch {
+    return false
+  }
+})
+
+function toggleFloatingHud() {
+  isFloatingHud.value = !isFloatingHud.value
+  try {
+    localStorage.setItem('ulink_ai_floating_hud', String(isFloatingHud.value))
+  } catch {
+    // 忽略持久化异常
+  }
+}
 
 function onPanelDragOver() {
   if (ui.isDraggingCard) {
@@ -700,6 +800,43 @@ function getCleanCopyText(content?: string): string {
 /** 会话列表标题：未命名（含存量旧默认标题）回退到 i18n 默认标题 */
 function sessionItemTitle(s: AiChatSession): string {
   return isDefaultSessionTitle(s.title) ? t('ai.sessionDefaultTitle') : s.title
+}
+
+function getTurnAttachedCards(turn: ChatTurn): AttachedCardMeta[] {
+  if (turn.attachedCards && turn.attachedCards.length > 0) {
+    return turn.attachedCards
+  }
+  const idx = chatTurns.value.findIndex((t) => t.id === turn.id)
+  if (idx > 0) {
+    const prevTurn = chatTurns.value[idx - 1]
+    if (prevTurn?.role === 'user' && prevTurn.attachedCards?.length) {
+      return prevTurn.attachedCards
+    }
+  }
+  return []
+}
+
+function getAttachedNotes(turn: ChatTurn): AttachedCardMeta[] {
+  return getTurnAttachedCards(turn).filter((c) => c.type === 'group')
+}
+
+function handleAppendToNote(noteId: string, content: string) {
+  appendAiContentToGroup(noteId, content)
+}
+
+function handleReplaceNote(noteId: string, content: string) {
+  replaceAiContentToGroup(noteId, content)
+}
+
+function handleSaveAsNewNote(content: string) {
+  const res = createNoteFromAiContent({ aiText: content })
+  if (res.success && res.groupId) {
+    locateAndHighlightCard({ id: res.groupId, type: 'group' })
+  }
+}
+
+function handleLocateCard(id: string, type: 'bookmark' | 'group') {
+  locateAndHighlightCard({ id, type, collapseDetailOnMobile: true })
 }
 
 function getTurnSegments(turn: ChatTurn): ChatContentSegment[] {
@@ -1918,6 +2055,90 @@ onUnmounted(() => {
   height: 11px;
 }
 
+/* 知识沉淀与双向卡片定位操作条 (Knowledge Write-back & Deep Locating Toolbar) */
+.chat-writeback-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.writeback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-xs);
+  line-height: 1.4;
+}
+
+.writeback-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+  background: var(--surface-hover);
+  transform: translateY(-0.5px);
+}
+
+.writeback-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.writeback-append:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.writeback-replace:hover {
+  border-color: var(--amber, #f59e0b);
+  color: var(--amber, #f59e0b);
+  background: var(--amber-light, rgba(245, 158, 11, 0.1));
+}
+
+.writeback-new:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-light);
+}
+
+.writeback-locate:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+.writeback-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+}
+
+.writeback-btn-icon :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
+
+:global([data-theme="dark"]) .writeback-btn {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+:global([data-theme="dark"]) .writeback-btn:hover {
+  background: var(--surface-hover);
+}
+
 /* 工具调用轨迹 (Tool Execution Trace) */
 .chat-trace-wrap {
   margin-bottom: 2px;
@@ -2673,5 +2894,57 @@ onUnmounted(() => {
 :global([data-theme="dark"]) .is-mobile .detail-panel {
   border-top: 1px solid var(--border);
   box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.12) inset, 0 -12px 36px rgba(0, 0, 0, 0.6);
+}
+
+/* 桌面端浮动窗口 (Floating PiP HUD) 模式：脱离流布局，主网格完整延展，支持多任务无压浏览 */
+.detail-panel.floating-hud {
+  position: fixed !important;
+  right: 20px !important;
+  bottom: 20px !important;
+  top: auto !important;
+  width: 420px !important;
+  max-width: calc(100vw - 40px) !important;
+  height: 640px !important;
+  max-height: calc(100vh - 40px) !important;
+  border-radius: var(--radius-lg, 12px) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.28), 0 0 0 1px var(--border) !important;
+  z-index: var(--z-modal, 1000) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  background: var(--surface) !important;
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.detail-panel.floating-hud:not(.open) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: scale(0.96) translateY(12px) !important;
+}
+
+.detail-panel.floating-hud.open {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transform: scale(1) translateY(0) !important;
+}
+
+:global([data-theme="dark"]) .detail-panel.floating-hud {
+  box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+  background: color-mix(in srgb, var(--surface) 92%, transparent) !important;
+}
+
+:global(:has(.detail-panel.floating-hud.open)) #resizeRight {
+  display: none !important;
+}
+
+.chat-btn-icon.float-hud-btn.is-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+:global([data-theme="dark"]) .chat-btn-icon.float-hud-btn.is-active {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
 </style>

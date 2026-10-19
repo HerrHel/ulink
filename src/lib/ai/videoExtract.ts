@@ -9,7 +9,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../supabase.js'
-import { askMiMo, getMiMoConfig, sanitizeForPrompt } from './mimoClient.js'
+import { askMiMo, sanitizeForPrompt } from './mimoClient.js'
 import { getLocale } from '../../i18n/index.js'
 
 /** extract-video Edge Function 返回的统一内容结构 */
@@ -90,9 +90,8 @@ export async function generateVideoSummary(
   const trimmed = (contentText || '').trim()
   if (trimmed.length < SUMMARY_MIN_INPUT_CHARS) return null
 
-  // 无可用通道时直接跳过，不做注定失败的请求
-  const conf = getMiMoConfig()
-  if (!conf.apiKey && !isSupabaseConfigured) return null
+  // 官方统一通道：未配置 Supabase 服务端时直接跳过，不做注定失败的请求
+  if (!isSupabaseConfigured) return null
 
   const isZh = getLocale().startsWith('zh')
   const safeText = sanitizeForPrompt(trimmed, SUMMARY_MAX_INPUT_CHARS)

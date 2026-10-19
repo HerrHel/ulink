@@ -68,6 +68,12 @@
       <button class="ft-sb-btn" :class="{ active: fmt.task }" :title="t('editor.taskList')" @click="fmtToggle('task')" v-html="I.taskList"></button>
       <div class="ft-sb-sep"></div>
       <button class="ft-sb-btn" :title="t('editor.insertImage')" @click="pickImage" v-html="I.image"></button>
+      <div class="ft-sb-sep"></div>
+      <button class="ft-sb-btn ft-ai-btn" :title="t('editor.aiAsk')" @click="askAiAboutGroup">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3 1.912 5.885a2 2 0 0 0 1.272 1.272L21 12l-5.816 1.843a2 2 0 0 0-1.272 1.272L12 21l-1.912-5.885a2 2 0 0 0-1.272-1.272L3 12l5.816-1.843a2 2 0 0 0 1.272-1.272L12 3z" />
+        </svg>
+      </button>
       <input ref="fileInputRef" type="file" accept="image/*" multiple hidden @change="onPickImage" />
     </div>
   </div>
@@ -276,6 +282,26 @@ function onPickImage(e: Event) {
   const files = Array.from(input.files || [])
   if (files.length) void uploadAndInsertImages(props.group.id, files)
   input.value = '' // 允许重复选择同一文件
+}
+
+function askAiAboutGroup() {
+  ui.attachCardToAi('group', props.group.id)
+  const ed = EditorManager.get(props.group.id)
+  let selectedText = ''
+  if (ed && ed.state && ed.state.selection) {
+    const { from, to } = ed.state.selection
+    if (from < to) {
+      selectedText = ed.state.doc.textBetween(from, to, ' ').trim()
+    }
+  }
+  if (selectedText) {
+    const prompt = selectedText.length > 80
+      ? `关于「${selectedText.slice(0, 80)}…」：`
+      : `关于「${selectedText}」：`
+    ui.openAiAssistant(prompt)
+  } else {
+    ui.openAiAssistant()
+  }
 }
 
 let _selHandler: (() => void) | null = null

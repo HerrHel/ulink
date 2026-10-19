@@ -52,6 +52,7 @@ import {
   getDefaultAttachedPrompt,
   type ResolvedCardContext,
 } from '../../lib/ai/cardReader.js'
+import { vaultRAG } from '../../lib/ai/localRAG.js'
 
 /** 行动卡片 payload 内的候选条目（与原 DetailPanel 内联 any 形态一致） */
 interface ActionCardCandidate {
@@ -666,17 +667,19 @@ export function useAiChat(options: UseAiChatOptions = {}) {
       : raw
 
     const turnId = 'turn-' + Date.now()
+    const currentAttachedCards = resolvedCards.map((c) => ({
+      type: c.type,
+      id: c.id,
+      title: c.title,
+      url: c.url,
+    }))
+
     chatTurns.value.push({
       id: turnId + '-user',
       role: 'user',
       content: raw,
       promptContent: promptWithCards,
-      attachedCards: resolvedCards.map((c) => ({
-        type: c.type,
-        id: c.id,
-        title: c.title,
-        url: c.url,
-      })),
+      attachedCards: currentAttachedCards,
       timestamp: Date.now(),
     })
 
@@ -690,6 +693,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
       _thinkingOpen: true,
       loading: true,
       candidates: [],
+      attachedCards: currentAttachedCards,
       timestamp: Date.now(),
     }
     chatTurns.value.push(assistantTurn)
@@ -801,6 +805,18 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                 .map((b: any) => ({ title: b.title, url: b.url }))
             }
 
+            // 端侧轻量混合 RAG：从全库毫秒级检索与本轮用户意图最高相关的书签与笔记片段
+            let retrievedVaultKnowledge: string | undefined
+            try {
+              vaultRAG.buildIndex(ds.bookmarks, ds.siblingGroups, ds.categories, ds.customAttributes)
+              const ragChunks = vaultRAG.queryRelevantContext(raw)
+              if (ragChunks.length > 0) {
+                retrievedVaultKnowledge = vaultRAG.formatChunksForPrompt(ragChunks, 2200)
+              }
+            } catch (ragErr) {
+              console.warn('[ulink AI] localRAG index/query failed:', ragErr)
+            }
+
             const mimoRes = await askMiMoStream(
               promptWithCards,
               {
@@ -814,6 +830,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
                   focusedGroupName,
                   focusedGroupBookmarks,
                   selectedBookmarks,
+                  retrievedVaultKnowledge,
                   attachedCards: resolvedCards.map((c) => ({
                     type: c.type,
                     title: c.title,

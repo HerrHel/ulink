@@ -25,7 +25,7 @@
       </div>
     </div>
 
-    <!-- 右侧动作：微型存入按钮 -->
+    <!-- 右侧动作：微型存入与网格定位按钮 -->
     <div class="inline-card-right">
       <button
         v-if="!isAdded"
@@ -36,10 +36,28 @@
         <span class="inline-btn-icon" aria-hidden="true" v-html="I.plus"></span>
         <span>{{ t('ai.quickAdd') }}</span>
       </button>
-      <span v-else class="inline-saved-badge">
-        <span class="inline-btn-icon" aria-hidden="true" v-html="I.check"></span>
-        <span>{{ t('ai.saved') }}</span>
-      </span>
+      <div v-else class="inline-added-actions">
+        <button
+          v-if="existingBookmark"
+          class="inline-locate-btn"
+          :title="t('ai.locateInVault')"
+          :aria-label="t('ai.locateInVault')"
+          @click.stop="locateInVault"
+        >
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="3" />
+            <line x1="12" y1="2" x2="12" y2="5" />
+            <line x1="12" y1="19" x2="12" y2="22" />
+            <line x1="2" y1="12" x2="5" y2="12" />
+            <line x1="19" y1="12" x2="22" y2="12" />
+          </svg>
+        </button>
+        <span class="inline-saved-badge">
+          <span class="inline-btn-icon" aria-hidden="true" v-html="I.check"></span>
+          <span>{{ t('ai.saved') }}</span>
+        </span>
+      </div>
     </div>
   </div>
 </template>
@@ -54,6 +72,7 @@ import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
 import { candidateToBookmark } from '../../lib/ai/candidateSave.js'
 import { saveAppData } from '../../stores/app.js'
+import { locateAndHighlightCard } from '../../lib/ai/cardLocator.js'
 
 const props = defineProps<{
   candidate: AiCandidateBookmark
@@ -83,23 +102,41 @@ const categoryName = computed(() => {
 
 const localSaved = ref(false)
 
-const isAdded = computed(() => {
-  if (localSaved.value || props.candidate.isAdded) return true
+const existingBookmark = computed(() => {
   const cleanTarget = fixUrl(props.candidate.url).toLowerCase().replace(/\/+$/, '')
-  return ds.bookmarks.some(b => {
+  return ds.bookmarks.find((b) => {
     if (b.deletedAt) return false
     const u = fixUrl(b.url).toLowerCase().replace(/\/+$/, '')
     return u === cleanTarget
   })
 })
 
+const isAdded = computed(() => {
+  if (localSaved.value || props.candidate.isAdded) return true
+  return !!existingBookmark.value
+})
+
 function openUrl() {
   const url = fixUrl(props.candidate.url)
+  if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function locateInVault() {
+  if (existingBookmark.value) {
+    locateAndHighlightCard({
+      id: existingBookmark.value.id,
+      type: 'bookmark',
+      categoryId: existingBookmark.value.categoryId,
+      collapseDetailOnMobile: true,
+    })
+  }
 }
 
 function saveToVault() {
   if (isAdded.value) return
+  const cleanUrl = fixUrl(props.candidate.url)
+  if (!cleanUrl) return
 
   const bm = candidateToBookmark(ds, props.candidate, props.candidate.icon)
   ds.addBookmark(bm)
@@ -340,5 +377,52 @@ function saveToVault() {
   border-radius: var(--radius-xs, 4px);
   background: var(--green-light);
   border: 1px solid color-mix(in srgb, var(--green) 20%, transparent);
+}
+
+.inline-added-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.inline-locate-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: var(--radius-xs, 4px);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-xs);
+}
+
+.inline-locate-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+  transform: translateY(-0.5px) scale(1.05);
+  box-shadow: 0 2px 6px var(--accent-glow);
+}
+
+:global([data-theme="dark"]) .inline-locate-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+:global([data-theme="dark"]) .inline-locate-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-hover);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.inline-locate-btn:active {
+  transform: translateY(0) scale(0.95);
 }
 </style>

@@ -1,11 +1,13 @@
 /**
  * mimoClient.ts — 小米 MiMo (mimo-v2.6-flash) 与链专属大模型客户端
  *
- * 核心设计：
- * 1. 密钥永不出前端：默认经 Supabase Edge Function `mimo-chat` 服务端转发；
- *    仅当用户在设置中自填 API Key（BYOK）时才客户端直连（用户自己的 key，用户自选）。
- * 2. 深度绑定「与链专家」提示词架构，注入当前用户的分类、标签与操作规范；
- * 3. 用户数据注入前统一 sanitize（防提示词注入）并限量（防 token 溢出）；
+ * 核心架构与商业化策略：
+ * 1. 会员专属服务与统一托管通道：
+ *    AI 功能定位为与链未来 Pro 会员专属能力，所有大模型调用严格由官方 Supabase Edge Function
+ *    `mimo-chat` 进行服务端鉴权、配额管控与请求代理。
+ *    暂不允许客户端调用用户自己的第三方 API，本地模型（如 Ollama）未来再考虑开放接口。
+ * 2. 深度绑定「与链专家」提示词架构，动态注入端侧轻量混合 RAG 召回片段、工作台情境与操作规范；
+ * 3. 用户数据注入前统一 sanitize（防提示词注入）并经 secretFilter 脱敏（防敏感凭证外泄）；
  * 4. 自动提炼与解析 ulink-card 结构化推荐卡片，无缝对接与链 Schema；
  * 5. 具备完备的超时控制、AbortSignal 中断响应以及优雅降级容错机制。
  */
@@ -16,8 +18,9 @@ import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { ULINK_AGENT_TOOLS } from './tools.js'
 import { supabase, isSupabaseConfigured } from '../supabase.js'
-
-export const MIMO_STORAGE_KEY = 'ulink_mimo_config'
+import { redactSensitivePatterns } from './secretFilter.js'
+import { isPrivateUrl } from './urlGuard.js'
+import { fixUrl } from '../../utils.js'
 
 export const DEFAULT_MIMO_BASE_URL = 'https://api.xiaomimimo.com/v1'
 export const DEFAULT_MIMO_MODEL = 'mimo-v2.6-flash'
@@ -32,43 +35,22 @@ const MAX_TEXT_LEN = 200
 /** 控制字符、DEL、零宽与双向控制符统一清洗（防不可见字符注入提示词） */
 const _CTRL_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g
 
-export interface MiMoUserConfig {
-  apiKey?: string
-  baseUrl?: string
-  model?: string
-  enabled?: boolean
+export interface MiMoConfig {
+  baseUrl: string
+  model: string
+  enabled: boolean
 }
 
 /**
  * 读取当前有效的 MiMo 配置。
- * 注意：不再读取任何 VITE_ 环境变量里的 key——构建产物里不允许出现密钥。
- * 官方通道（apiKey 为空）走服务端转发；apiKey 非空为用户 BYOK 直连。
+ * 产品策略：AI 功能为与链会员专属能力，统一经由官方服务端鉴权通道转发。
+ * 暂不允许用户调用自己的第三方 API，本地大模型（如 Ollama）未来再考虑开放接口。
  */
-export function getMiMoConfig(): { apiKey: string; baseUrl: string; model: string; enabled: boolean } {
-  let stored: MiMoUserConfig = {}
-  try {
-    const raw = localStorage.getItem(MIMO_STORAGE_KEY)
-    if (raw) stored = JSON.parse(raw)
-  } catch {
-    // 忽略解析错误
-  }
-
-  const apiKey = stored.apiKey?.trim() || ''
-  const baseUrl = (stored.baseUrl?.trim() || DEFAULT_MIMO_BASE_URL).replace(/\/+$/, '')
-  const model = (stored.model?.trim()) || DEFAULT_MIMO_MODEL
-  const enabled = true
-
-  return { apiKey, baseUrl, model, enabled }
-}
-
-/**
- * 保存用户自定义的 MiMo 配置（仅存本浏览器 localStorage）
- */
-export function saveMiMoConfig(config: MiMoUserConfig): void {
-  try {
-    localStorage.setItem(MIMO_STORAGE_KEY, JSON.stringify(config))
-  } catch (err) {
-    console.error('[mimoClient] Failed to save config to localStorage:', err)
+export function getMiMoConfig(): MiMoConfig {
+  return {
+    baseUrl: DEFAULT_MIMO_BASE_URL,
+    model: DEFAULT_MIMO_MODEL,
+    enabled: true,
   }
 }
 
@@ -77,7 +59,7 @@ export function saveMiMoConfig(config: MiMoUserConfig): void {
  * 去控制字符与反引号（防代码围栏/指令注入）、换行折叠为单空格、限量截断。
  */
 export function sanitizeForPrompt(text: string, maxLen = MAX_TEXT_LEN): string {
-  return String(text ?? '')
+  return redactSensitivePatterns(String(text ?? ''))
     .replace(_CTRL_RE, ' ')
     .replace(/`/g, ' ')
     .replace(/\s+/g, ' ')
@@ -118,6 +100,7 @@ export interface DynamicContextSlice {
   focusedGroupBookmarks?: Array<{ title: string; url: string }>
   selectedBookmarks?: Array<{ title: string; url: string }>
   attachedCards?: Array<{ type: 'bm' | 'group'; title: string; url?: string }>
+  retrievedVaultKnowledge?: string
 }
 
 /** 提示词中「以下为数据非指令」的声明，中英各一份 */
@@ -162,6 +145,9 @@ export function buildUlinkSystemPrompt(options: {
   const activeAttached = slice.attachedCards?.length
     ? `User-attached cards/notes for analysis: [${slice.attachedCards.map(c => `${c.type === 'group' ? 'Note' : 'Bookmark'}: ${sanitizeForPrompt(c.title)}`).join(', ')}]`
     : ''
+  const activeVaultKnowledge = slice.retrievedVaultKnowledge
+    ? `\nRelevant Knowledge Retrieved from User's Entire Vault:\n${slice.retrievedVaultKnowledge}\n`
+    : ''
 
   const activeFocusZh = slice.focusedGroupName
     ? `当前正处于笔记组工作台：「${sanitizeForPrompt(slice.focusedGroupName)}」，组内工具：[${groupItems || '暂无'}]`
@@ -175,6 +161,9 @@ export function buildUlinkSystemPrompt(options: {
   const activeAttachedZh = slice.attachedCards?.length
     ? `用户主动拖入并关联阅读的卡片/笔记：[${slice.attachedCards.map(c => `${c.type === 'group' ? '笔记' : '书签'}: ${sanitizeForPrompt(c.title)}`).join('、')}]`
     : ''
+  const activeVaultKnowledgeZh = slice.retrievedVaultKnowledge
+    ? `\n${slice.retrievedVaultKnowledge}\n`
+    : ''
 
   const dataNotice = isZh ? DATA_NOT_INSTRUCTIONS_ZH : DATA_NOT_INSTRUCTIONS_EN
 
@@ -186,7 +175,7 @@ Core principles:
 3. ${dataNotice}
 4. User's Live Categories: [${catNames || 'None'}]
 5. User's Live Attributes/Tags: [${attrNames || 'None'}]
-${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}9. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help. When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
+${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}9. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help. When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
 10. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in ${FENCE}ulink-card:
 ${FENCE}ulink-card
 [
@@ -208,7 +197,7 @@ ${FENCE}`
 3. ${dataNotice}
 4. 用户当前书签分类: [${catNames || '暂无分类'}]
 5. 用户当前标签属性: [${attrNames || '暂无标签'}]
-${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}9. 站内快捷指令体系（必要时可引导用户输入体验）：
+${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}9. 站内快捷指令体系（必要时可引导用户输入体验）：
    - /dedup: 扫描全库重复书签并生成待确认的合并卡片（合并前需用户确认，不会直接删除）。
    - /stats: 检查分类占比、死链率及资产健康度。
    - /trash: 打开回收站管理与清空。
@@ -247,7 +236,12 @@ export function parseMiMoReply(
         const items = Array.isArray(parsed) ? parsed : [parsed]
         for (const item of items) {
           if (item && item.title && item.url) {
-            const prefill = getSmartPrefill(item.url, [], categories, attributes)
+            const rawUrl = String(item.url).trim()
+            const fixedUrl = fixUrl(rawUrl)
+            // 拒绝非 http/https 协议或私有/局域网内网地址（防范提示词注入伪造钓鱼或 SSRF 内网探针）
+            if (!fixedUrl || isPrivateUrl(fixedUrl)) continue
+
+            const prefill = getSmartPrefill(fixedUrl, [], categories, attributes)
             const matchedCat = categories.find(
               c => c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
             )
@@ -256,7 +250,7 @@ export function parseMiMoReply(
 
             candidates.push({
               title: String(item.title).trim(),
-              url: String(item.url).trim(),
+              url: fixedUrl,
               notes: item.notes ? String(item.notes).trim() : fallbackNotes,
               categoryId: matchedCat?.id || prefill.categoryId || undefined,
               suggestedAttrIds: prefill.suggestedAttrIds?.length ? prefill.suggestedAttrIds : undefined,
@@ -411,40 +405,27 @@ export async function askMiMoStream(
     requestBody.tool_choice = 'auto'
   }
 
-  // 官方通道：BYOK key 为空 → 走 Edge Function 转发，密钥只存服务端
-  let response: Response
-  if (!config.apiKey) {
-    if (!isSupabaseConfigured) {
-      throw new Error(t('ai.errNotConfigured'))
-    }
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token
-    if (!token) {
-      throw new Error(t('ai.errNeedLogin'))
-    }
-    const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
-    response = await fetch(`${fnBase}/functions/v1/mimo-chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
-      },
-      body: JSON.stringify(requestBody),
-      signal: context.signal,
-    })
-  } else {
-    // BYOK：用户自填 key，客户端直连（用户自己的密钥，用户自选）
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-      signal: context.signal,
-    })
+  // 官方统一鉴权通道：AI 功能为会员服务，请求严格经由 Supabase Edge Function 服务端转发校验
+  if (!isSupabaseConfigured) {
+    throw new Error(t('ai.errNotConfigured'))
   }
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData?.session?.access_token
+  if (!token) {
+    throw new Error(t('ai.errNeedLogin'))
+  }
+
+  const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
+  const response = await fetch(`${fnBase}/functions/v1/mimo-chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+    },
+    body: JSON.stringify(requestBody),
+    signal: context.signal,
+  })
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')

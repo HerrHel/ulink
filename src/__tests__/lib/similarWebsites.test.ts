@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { getSimilarExternalWebsites } from '../../lib/ai/similarWebsites.js'
+import { CATEGORY_FALLBACK_SIMILAR, DOMAIN_SIMILAR_MAP } from '../../lib/ai/knowledge.js'
 
 describe('similarWebsites — 外部类似网站推荐引擎', () => {
   it('精确域名命中：chatgpt.com 推荐 Claude、DeepSeek、Perplexity 等', () => {
@@ -33,5 +34,18 @@ describe('similarWebsites — 外部类似网站推荐引擎', () => {
   it('空或非法输入返回空数组', () => {
     expect(getSimilarExternalWebsites('')).toEqual([])
     expect(getSimilarExternalWebsites('invalid-url-xyz-123')).toEqual([])
+  })
+
+  it('双语数据护栏：全部条目 descriptionZh/descriptionEn 非空且 en 描述无中文残留', () => {
+    const allItems = [
+      ...Object.values(DOMAIN_SIMILAR_MAP).flat(),
+      ...Object.values(CATEGORY_FALLBACK_SIMILAR).flat(),
+    ]
+    expect(allItems.length).toBeGreaterThan(0)
+    for (const item of allItems) {
+      expect(item.descriptionZh.length).toBeGreaterThan(0)
+      expect(item.descriptionEn.length).toBeGreaterThan(0)
+      expect(item.descriptionEn).not.toMatch(/[一-鿿]/)
+    }
   })
 })

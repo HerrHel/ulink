@@ -13,6 +13,8 @@ import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
+import { isPrivateUrl } from './urlGuard.js'
+import { fixUrl } from '../../utils.js'
 
 export type ChatContentSegment =
   | { type: 'text'; html: string; rawText: string }
@@ -154,14 +156,19 @@ export function parseTurnContentSegments(
         const items = Array.isArray(parsed) ? parsed : [parsed]
         for (const item of items) {
           if (item && item.title && item.url) {
-            const prefill = getSmartPrefill(item.url, [], categories, attributes)
+            const rawUrl = String(item.url).trim()
+            const fixedUrl = fixUrl(rawUrl)
+            // 拒绝非 http/https 协议或私有/局域网内网地址
+            if (!fixedUrl || isPrivateUrl(fixedUrl)) continue
+
+            const prefill = getSmartPrefill(fixedUrl, [], categories, attributes)
             const matchedCat = categories.find(
               c => c.name === item.suggestedCategory && c.id !== 'all' && c.id !== 'uncategorized'
             )
 
             const candidate: AiCandidateBookmark = {
               title: String(item.title).trim(),
-              url: String(item.url).trim(),
+              url: fixedUrl,
               notes: item.notes ? String(item.notes).trim() : (prefill.notes || ''),
               categoryId: matchedCat?.id || prefill.categoryId || undefined,
               suggestedAttrIds: prefill.suggestedAttrIds?.length ? prefill.suggestedAttrIds : undefined,

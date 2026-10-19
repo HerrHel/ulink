@@ -3,7 +3,6 @@ import {
   buildUlinkSystemPrompt,
   parseMiMoReply,
   getMiMoConfig,
-  saveMiMoConfig,
   askMiMoStream,
   sanitizeForPrompt,
   DEFAULT_MIMO_MODEL,
@@ -139,32 +138,11 @@ describe('mimoClient', () => {
     })
   })
 
-  describe('getMiMoConfig & saveMiMoConfig', () => {
-    it('默认无密钥（走服务端转发官方通道），模型与基址为内置默认值', () => {
+  describe('getMiMoConfig', () => {
+    it('AI 为会员专属服务，统一经官方服务端转发，配置为内置默认值', () => {
       const conf = getMiMoConfig()
       expect(conf.model).toBe(DEFAULT_MIMO_MODEL)
       expect(conf.baseUrl).toBe(DEFAULT_MIMO_BASE_URL)
-      // 密钥永不出前端：默认必须为空（不存在任何 VITE_ 环境变量密钥通路）
-      expect(conf.apiKey).toBe('')
-      expect(conf.enabled).toBe(true)
-    })
-
-    it('保存自定义配置后优先读取 LocalStorage（BYOK）', () => {
-      saveMiMoConfig({
-        apiKey: 'sk-custom-test-key',
-        model: 'mimo-custom',
-      })
-
-      const conf = getMiMoConfig()
-      expect(conf.apiKey).toBe('sk-custom-test-key')
-      expect(conf.model).toBe('mimo-custom')
-    })
-
-    it('配置损坏时优雅降级为默认值，不抛错', () => {
-      localStorage.setItem('ulink_mimo_config', '{ not valid json')
-      const conf = getMiMoConfig()
-      expect(conf.apiKey).toBe('')
-      expect(conf.model).toBe(DEFAULT_MIMO_MODEL)
       expect(conf.enabled).toBe(true)
     })
   })
@@ -186,7 +164,7 @@ describe('mimoClient', () => {
     })
   })
 
-  describe('通道分流：BYOK 直连 vs 官方服务端转发', () => {
+  describe('统一官方会员通道转发', () => {
     const sseDone = ['data: [DONE]' + String.fromCharCode(10) + String.fromCharCode(10)]
     const mkStream = () =>
       new ReadableStream({
@@ -196,28 +174,7 @@ describe('mimoClient', () => {
         },
       })
 
-    it('BYOK：带 key 时直连 baseUrl，用 x-goog-api-key 类头或 Authorization Bearer 发送自己的 key', async () => {
-      saveMiMoConfig({ apiKey: 'sk-byok-123', baseUrl: 'https://api.example.com/v1' })
-      const calls: Array<{ url: string; init: RequestInit }> = []
-      const origFetch = globalThis.fetch
-      globalThis.fetch = async (url: any, init: any) => {
-        calls.push({ url: String(url), init })
-        return new Response(mkStream(), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
-      }
-      try {
-        await askMiMoStream('hi', { categories: dummyCats, customAttributes: dummyAttrs })
-        expect(calls.length).toBe(1)
-        expect(calls[0].url).toContain('https://api.example.com/v1/chat/completions')
-        expect(calls[0].url).not.toContain('/functions/v1/mimo-chat')
-        const headers = calls[0].init.headers as Record<string, string>
-        expect(JSON.stringify(headers)).toContain('sk-byok-123')
-      } finally {
-        globalThis.fetch = origFetch
-      }
-    })
-
-    it('官方通道：无 key 时走 Edge Function 转发，不携带任何模型密钥', async () => {
-      saveMiMoConfig({ apiKey: '' })
+    it('所有 AI 请求严格经由 Edge Function mimo-chat 转发，携带用户会话凭证且不外传第三方 API Key', async () => {
       const calls: Array<{ url: string; init: RequestInit }> = []
       const origFetch = globalThis.fetch
       globalThis.fetch = async (url: any, init: any) => {
@@ -228,6 +185,8 @@ describe('mimoClient', () => {
         await askMiMoStream('hi', { categories: dummyCats, customAttributes: dummyAttrs })
         expect(calls.length).toBe(1)
         expect(calls[0].url).toContain('/functions/v1/mimo-chat')
+        const headers = calls[0].init.headers as Record<string, string>
+        expect(headers.Authorization).toBe('Bearer sb-test-token')
         expect(JSON.stringify(calls[0].init)).not.toContain('sk-')
       } finally {
         globalThis.fetch = origFetch
@@ -237,8 +196,6 @@ describe('mimoClient', () => {
 
   describe('askMiMoStream', () => {
     it('正确解析 SSE 流并分别触发 onReasoningDelta 与 onContentDelta', async () => {
-      // BYOK 直连路径（免登录）；官方通道需 Supabase 会话，不在单测范围
-      saveMiMoConfig({ apiKey: 'sk-test-sse' })
 
       const sseChunks = [
         'data: {"choices":[{"delta":{"reasoning_content":"思考步骤1"}}]}' + String.fromCharCode(10) + String.fromCharCode(10),
@@ -294,8 +251,6 @@ describe('mimoClient', () => {
     })
 
     it('正确解析 SSE 中的 delta.tool_calls 并结构化返回', async () => {
-      saveMiMoConfig({ apiKey: 'sk-test-tool-call' })
-
       const sseChunks = [
         'data: {"choices":[{"delta":{"content":"正在为你体检资产"}}]}' + String.fromCharCode(10) + String.fromCharCode(10),
         'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_audit_1","function":{"name":"audit_vault","arguments":""}}]}}]}' + String.fromCharCode(10) + String.fromCharCode(10),

@@ -8,13 +8,14 @@
 import type { Category, CustomAttribute, Bookmark } from '../../types.js'
 import type { AiSearchPreference, AiCandidateBookmark, AiEnrichDiff, AiVideoExtractResult } from '../../types/ai.js'
 import { domain } from '../../utils.js'
-import { t } from '../../i18n/index.js'
+import { t, getLocale } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { getSimilarExternalWebsites } from './similarWebsites.js'
 
 /**
  * 根据偏好过滤与重排候选集
  * 注意：均为软过滤/软排序——关键词命中即调整，不做强保证；open_source 不排除闭源项，仅前置开源项。
+ * 文案已 i18n，标记词按中英双语匹配（zh/en 语言包文案均可能出现在 tag/highlight/notes）。
  */
 function filterByPreferences(candidates: AiCandidateBookmark[], prefs: AiSearchPreference[]): AiCandidateBookmark[] {
   if (!prefs.length) return candidates
@@ -22,11 +23,11 @@ function filterByPreferences(candidates: AiCandidateBookmark[], prefs: AiSearchP
   const filtered = candidates.filter(c => {
     const text = (c.tag + ' ' + c.highlight + ' ' + c.notes + ' ' + c.url).toLowerCase()
     for (const p of prefs) {
-      if (p === 'free' && (text.includes('收费') || text.includes('订阅') || text.includes('需付费'))) {
+      if (p === 'free' && (text.includes('收费') || text.includes('订阅') || text.includes('需付费') || text.includes('paid') || text.includes('subscription'))) {
         return false
       }
       // 软过滤：仅按显式文本线索剔除，不做域名后缀臆断
-      if (p === 'no_proxy' && (text.includes('需翻墙') || text.includes('需要网络代理'))) {
+      if (p === 'no_proxy' && (text.includes('需翻墙') || text.includes('需要网络代理') || text.includes('vpn') || text.includes('proxy'))) {
         return false
       }
     }
@@ -36,7 +37,7 @@ function filterByPreferences(candidates: AiCandidateBookmark[], prefs: AiSearchP
   if (prefs.includes('open_source')) {
     const isOpenSource = (c: AiCandidateBookmark) => {
       const text = (c.tag + ' ' + c.highlight + ' ' + c.notes + ' ' + c.url).toLowerCase()
-      return text.includes('开源') || c.url.includes('github.com')
+      return text.includes('开源') || text.includes('open source') || c.url.includes('github.com')
     }
     filtered.sort((a, b) => Number(isOpenSource(b)) - Number(isOpenSource(a)))
   }
@@ -73,7 +74,7 @@ export async function searchWebsitesByIntent(
   const q = query.trim().toLowerCase()
   if (!q) return []
 
-  // 基础精选知识库拓扑（本地启发式 + 云端大模型直连）
+  // 基础精选知识库拓扑（本地启发式 + 云端大模型直连）；条目文案走 i18n（dbXxx 键）
   const database: Array<{ keywords: string[]; items: AiCandidateBookmark[] }> = [
     {
       keywords: ['流程图', '白板', '画图', '架构图', '思维导图', 'flowchart', 'diagram', 'board'],
@@ -81,30 +82,30 @@ export async function searchWebsitesByIntent(
         {
           title: 'Excalidraw',
           url: 'https://excalidraw.com',
-          notes: '开源手绘风虚拟白板，支持多人实时协作与无限画布，数据可存本地。',
-          tag: '开源免费',
-          highlight: '纯网页免登录、手绘风格、完全开源',
+          notes: t('ai.dbExcalidrawNotes'),
+          tag: t('ai.tagOpenFree'),
+          highlight: t('ai.dbExcalidrawHighlight'),
         },
         {
           title: 'draw.io',
           url: 'https://app.diagrams.net',
-          notes: '功能强大的免费在线流程图与架构绘图平台，支持导出多种格式与云盘同步。',
-          tag: '国内免翻',
-          highlight: '专业架构图首选、无限制免费',
+          notes: t('ai.dbDrawioNotes'),
+          tag: t('ai.tagNoProxy'),
+          highlight: t('ai.dbDrawioHighlight'),
         },
         {
           title: 'tldraw',
           url: 'https://www.tldraw.com',
-          notes: '极简轻量级手绘白板，秒开即画，极具极客审美。',
-          tag: '轻量免登',
-          highlight: '极致轻巧、免注册开箱即用',
+          notes: t('ai.dbTldrawNotes'),
+          tag: t('ai.tagLightFree'),
+          highlight: t('ai.dbTldrawHighlight'),
         },
         {
           title: 'ProcessOn',
           url: 'https://www.processon.com',
-          notes: '国内领先的专业在线作图工具，支持思维导图、流程图、组织架构图等丰富模板。',
-          tag: '专业商业',
-          highlight: '国内直连极速、海量中文模板',
+          notes: t('ai.dbProcessonNotes'),
+          tag: t('ai.tagProBiz'),
+          highlight: t('ai.dbProcessonHighlight'),
         },
       ],
     },
@@ -114,23 +115,23 @@ export async function searchWebsitesByIntent(
         {
           title: 'Photopea',
           url: 'https://www.photopea.com',
-          notes: '免安装的纯网页版 Photoshop，完美支持 PSD、AI、XD 文件，图层蒙版俱全。',
-          tag: '轻量免登',
-          highlight: '网页版 PS、完全免费开箱即用',
+          notes: t('ai.dbPhotopeaNotes'),
+          tag: t('ai.tagLightFree'),
+          highlight: t('ai.dbPhotopeaHighlight'),
         },
         {
           title: 'TinyPNG',
           url: 'https://tinypng.com',
-          notes: '老牌高保真智能图片压缩工具，大幅减少 WebP/PNG/JPEG 文件体积。',
-          tag: '国内免翻',
-          highlight: '无需登录、批量智能无损压缩',
+          notes: t('ai.dbTinypngNotes'),
+          tag: t('ai.tagNoProxy'),
+          highlight: t('ai.dbTinypngHighlight'),
         },
         {
           title: 'Penpot',
           url: 'https://penpot.app',
-          notes: '首款基于 Web 标准的开源设计与原型工具，Figma 的最佳开源自建替代品。',
-          tag: '极客开源',
-          highlight: '开源自建、支持标准 SVG 格式',
+          notes: t('ai.dbPenpotNotes'),
+          tag: t('ai.tagGeekOpen'),
+          highlight: t('ai.dbPenpotHighlight'),
         },
       ],
     },
@@ -140,23 +141,23 @@ export async function searchWebsitesByIntent(
         {
           title: 'DeepSeek',
           url: 'https://chat.deepseek.com',
-          notes: '深度求索自研开源大模型，逻辑推理与代码生成能力极其出众。',
-          tag: '国内免翻',
-          highlight: '推理标杆、国内直连免费可用',
+          notes: t('ai.dbDeepseekNotes'),
+          tag: t('ai.tagNoProxy'),
+          highlight: t('ai.dbDeepseekHighlight'),
         },
         {
           title: 'Kimi',
           url: 'https://kimi.moonshot.cn',
-          notes: '支持超长上下文文本解析的 AI 助手，擅长长文速读与跨文件资料汇总。',
-          tag: '国内免翻',
-          highlight: '长文速读利器、中文对话极佳',
+          notes: t('ai.dbKimiNotes'),
+          tag: t('ai.tagNoProxy'),
+          highlight: t('ai.dbKimiHighlight'),
         },
         {
           title: 'Claude',
           url: 'https://claude.ai',
-          notes: 'Anthropic 旗下的旗舰级大语言模型，文笔优雅，代码架构与 Artifact 交互一流。',
-          tag: '专业商业',
-          highlight: '编程与长文写作标杆',
+          notes: t('ai.dbClaudeNotes'),
+          tag: t('ai.tagProBiz'),
+          highlight: t('ai.dbClaudeHighlight'),
         },
       ],
     },
@@ -166,23 +167,23 @@ export async function searchWebsitesByIntent(
         {
           title: 'Zeabur',
           url: 'https://zeabur.com',
-          notes: '专为全栈与独立开发者打造的服务部署平台，支持一键部署各种开源应用与数据库。',
-          tag: '国内免翻',
-          highlight: '国内直连极佳、容器化一键部署',
+          notes: t('ai.dbZeaburNotes'),
+          tag: t('ai.tagNoProxy'),
+          highlight: t('ai.dbZeaburHighlight'),
         },
         {
           title: 'Cloudflare Pages',
           url: 'https://pages.cloudflare.com',
-          notes: 'Cloudflare 提供的快速前端与全栈部署服务，全球 CDN 节点与无限带宽。',
-          tag: '完全免费',
-          highlight: '全球 CDN 加速、免费额度充沛',
+          notes: t('ai.dbCfpagesNotes'),
+          tag: t('ai.tagFullyFree'),
+          highlight: t('ai.dbCfpagesHighlight'),
         },
         {
           title: 'Vercel',
           url: 'https://vercel.com',
-          notes: 'Next.js 官方打造的前端现代化托管与 Serverless 平台，开发者体验极佳。',
-          tag: '专业商业',
-          highlight: '前端部署黄金标准、CI/CD 自动化',
+          notes: t('ai.dbVercelNotes'),
+          tag: t('ai.tagProBiz'),
+          highlight: t('ai.dbVercelHighlight'),
         },
       ],
     },
@@ -202,17 +203,17 @@ export async function searchWebsitesByIntent(
       {
         title: 'GitHub Explore',
         url: 'https://github.com/explore',
-        notes: `通用发现入口（非个性化结果）：可在此搜索与「${query}」相关的开源项目。`,
-        tag: '极客开源',
-        highlight: '通用发现入口（非个性化结果）',
+        notes: t('ai.genericGithubNotes', { query }),
+        tag: t('ai.tagGeekOpen'),
+        highlight: t('ai.genericEntryHighlight'),
         generic: true,
       },
       {
         title: 'Product Hunt',
         url: 'https://www.producthunt.com',
-        notes: '通用发现入口（非个性化结果）：全球新产品社区，可自行搜索类似工具。',
-        tag: '专业商业',
-        highlight: '通用发现入口（非个性化结果）',
+        notes: t('ai.genericProductHuntNotes'),
+        tag: t('ai.tagProBiz'),
+        highlight: t('ai.genericEntryHighlight'),
         generic: true,
       },
     ]
@@ -238,13 +239,17 @@ export async function findSimilarWebsites(
   let candidates: AiCandidateBookmark[] = []
 
   if (similarItems.length) {
-    candidates = similarItems.map(item => ({
-      title: item.title,
-      url: item.url,
-      notes: item.description,
-      tag: item.tags.some(tg => tg.includes('开源')) ? t('ai.tagGeekOpen') : item.tags.some(tg => tg.includes('国内')) ? t('ai.tagNoProxy') : t('ai.tagLightAlt'),
-      highlight: item.description,
-    }))
+    const isZh = getLocale().toLowerCase().startsWith('zh')
+    candidates = similarItems.map(item => {
+      const desc = isZh ? item.descriptionZh : item.descriptionEn
+      return {
+        title: item.title,
+        url: item.url,
+        notes: desc,
+        tag: item.tags.some(tg => tg.includes('开源')) ? t('ai.tagGeekOpen') : item.tags.some(tg => tg.includes('国内')) ? t('ai.tagNoProxy') : t('ai.tagLightAlt'),
+        highlight: desc,
+      }
+    })
   } else {
     // 无真实平替数据：诚实返回空，不拼猜 alternativeto.net 路径冒充候选
     candidates = []
@@ -443,9 +448,9 @@ export async function extractBookmarksFromVideo(
   const pageBody = [...contentParts.map(p => p.text), fallbackBody].filter(Boolean).join('\n')
   const textPool = cleanInput + ' ' + pageBody
   const keywordTools: Record<string, { title: string; url: string; notes: string }> = {
-    '即时设计': { title: '即时设计', url: 'https://js.design', notes: '国内专业协作式 UI 设计工具' },
-    '摹客': { title: '摹客 Mockplus', url: 'https://www.mockplus.cn', notes: '产品原型设计与团队协作平台' },
-    '墨刀': { title: '墨刀 Modao', url: 'https://modao.cc', notes: '在线原型设计与协同平台' },
+    '即时设计': { title: '即时设计', url: 'https://js.design', notes: t('ai.toolJsdesignNotes') },
+    '摹客': { title: '摹客 Mockplus', url: 'https://www.mockplus.cn', notes: t('ai.toolMockplusNotes') },
+    '墨刀': { title: '墨刀 Modao', url: 'https://modao.cc', notes: t('ai.toolModaoNotes') },
   }
   for (const [kw, tool] of Object.entries(keywordTools)) {
     if (textPool.includes(kw) && !seenUrls.has(norm(tool.url))) {
@@ -548,7 +553,7 @@ export async function enrichBookmarkMetadata(
     suggestedNotes =
       realDescription ||
       prefill.notes ||
-      `精选网络工具：${bookmark.title || dm}。官方正规访问节点，数据纯端侧安全管理。`
+      t('ai.enrichFallbackNotes', { title: bookmark.title || dm })
   }
 
   // 建议地道中文标题（当既有标题仅为裸域名时）
@@ -577,7 +582,7 @@ export async function enrichBookmarkMetadata(
     currentCategoryId: bookmark.categoryId,
     suggestedCategoryId: newCatId,
     suggestedAttrIds: prefill.suggestedAttrIds || [],
-    reason: realDescription ? '已由 Jina Reader 读取页面实时摘要并匹配分类' : '识别到缺失分类与说明，建议完善以提升搜索精准度',
+    reason: realDescription ? t('ai.enrichReasonRealtime') : t('ai.enrichReasonSuggest'),
   }
 }
 

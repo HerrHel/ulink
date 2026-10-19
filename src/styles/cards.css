@@ -897,3 +897,29 @@
 .mini-grid-view .grp-scroll-body{display:block;overflow:visible}
 .mini-grid-view .grp-scroll-body .card-scroll-wrap{overflow:visible}
 
+/* AI 引用与反向写回触发的卡片定位脉冲呼吸光晕 */
+@keyframes cardLocatePulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent), var(--shadow-card-hover);
+    transform: scale(1);
+  }
+  25% {
+    box-shadow: 0 0 0 4px var(--accent-glow), 0 0 0 2px var(--accent), var(--shadow-card-hover);
+    transform: scale(1.02);
+  }
+  65% {
+    box-shadow: 0 0 0 4px var(--accent-glow), 0 0 0 2px var(--accent), var(--shadow-card-hover);
+    transform: scale(1.01);
+  }
+  100% {
+    box-shadow: var(--shadow-card);
+    transform: scale(1);
+  }
+}
+
+.card-locate-pulse {
+  animation: cardLocatePulse 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  z-index: 10 !important;
+  position: relative !important;
+}
+
