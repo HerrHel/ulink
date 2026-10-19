@@ -634,6 +634,7 @@ import { useI18n } from '../../i18n/index.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
 import { useAiChat } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
+import { useChatPanelDom } from '../../composables/ui/useChatPanelDom.js'
 import { locateAndHighlightCard } from '../../lib/ai/cardLocator.js'
 import {
   appendAiContentToGroup,
@@ -653,7 +654,6 @@ const isOpen = computed(() => ui.panels.detail)
 
 const isInputFocused = ref(false)
 const isSessionMenuOpen = ref(false)
-const isDragOverPanel = ref(false)
 
 const isMobileDevice = computed(() => isMobile())
 const isFloatingHud = ref<boolean>(() => {
@@ -672,34 +672,6 @@ function toggleFloatingHud() {
     // 忽略持久化异常
   }
 }
-
-function onPanelDragOver() {
-  if (ui.isDraggingCard) {
-    isDragOverPanel.value = true
-  }
-}
-
-function onPanelDragLeave(e: DragEvent) {
-  const rect = detailPanelRef.value?.getBoundingClientRect()
-  if (rect) {
-    if (e.clientX <= rect.left || e.clientX >= rect.right || e.clientY <= rect.top || e.clientY >= rect.bottom) {
-      isDragOverPanel.value = false
-    }
-  }
-}
-
-function onPanelDrop() {
-  isDragOverPanel.value = false
-}
-
-watch(
-  () => ui.isDraggingCard,
-  (dragging) => {
-    if (!dragging) {
-      isDragOverPanel.value = false
-    }
-  },
-)
 
 const attachedCardsList = computed(() => {
   return ui.aiAttachedCards.map((ref) => {
@@ -721,6 +693,24 @@ const attachedCardsList = computed(() => {
       }
     }
   })
+})
+
+// ── 面板 DOM 行为（拖拽悬停 / 滚动到底 / 输入框自适应高度 / 下滑关闭手势）抽至 useChatPanelDom；
+//    getQuery 惰性读取 useAiChat 的 aiQuery（延迟到其初始化后） ──
+const {
+  isDragOverPanel,
+  onPanelDragOver,
+  onPanelDragLeave,
+  onPanelDrop,
+  scrollToBottom,
+  adjustTextareaHeight,
+  isSwiping,
+  panelStyle,
+} = useChatPanelDom({
+  panelRef: detailPanelRef,
+  textareaRef: aiTextareaRef,
+  scrollRef: chatScrollRef,
+  getQuery: () => aiQuery.value,
 })
 
 // ── AI 调度逻辑抽至 useAiChat（会话管理 / 提交调度 / 行动卡片 / 斜杠命令）；
@@ -846,14 +836,6 @@ watch(
 
 // ── 终端式命令历史回溯 (↑ / ↓) 状态由 useAiChat 提供（inputHistory / historyCursor / tempInput）──
 
-const panelStyle = computed(() => {
-  const styles: Record<string, string> = {}
-  if (translateY.value) {
-    styles.transform = `translateY(${translateY.value}px)`
-  }
-  return Object.keys(styles).length ? styles : undefined
-})
-
 watch(
   () => isOpen.value,
   (open) => {
@@ -865,24 +847,6 @@ watch(
     }
   },
 )
-
-function scrollToBottom(smooth = false) {
-  nextTick(() => {
-    if (!chatScrollRef.value) return
-    const el = chatScrollRef.value
-    if (typeof el.scrollTo === 'function' && smooth) {
-      try {
-        el.scrollTo({
-          top: el.scrollHeight,
-          behavior: 'smooth',
-        })
-      } catch {
-        // fallback to direct assignment
-      }
-    }
-    el.scrollTop = el.scrollHeight
-  })
-}
 
 function quickFill(text: string) {
   aiQuery.value = text
@@ -979,64 +943,6 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 }
 
-function adjustTextareaHeight() {
-  const el = aiTextareaRef.value
-  if (!el) return
-  if (!aiQuery.value) {
-    el.style.height = '24px'
-    el.style.lineHeight = '24px'
-    el.style.overflowY = 'hidden'
-    return
-  }
-  el.style.height = 'auto'
-  const scrollH = el.scrollHeight
-  if (scrollH <= 26) {
-    el.style.height = '24px'
-    el.style.lineHeight = '24px'
-    el.style.overflowY = 'hidden'
-  } else {
-    const nextH = Math.min(scrollH, 110)
-    el.style.height = nextH + 'px'
-    el.style.lineHeight = '1.45'
-    el.style.overflowY = scrollH > 110 ? 'auto' : 'hidden'
-  }
-}
-
-
-/* 移动端下滑关闭手势 */
-const isSwiping = ref(false)
-const translateY = ref(0)
-let _swipeStartY = 0
-function onSwipeStart(e: TouchEvent) {
-  if (!isMobile() || !ui.panels.detail) return
-  if (!(e.target as HTMLElement).closest('.detail-drag-handle')) return
-  _swipeStartY = e.touches[0].clientY
-}
-function onSwipeMove(e: TouchEvent) {
-  if (!_swipeStartY) return
-  const dy = e.touches[0].clientY - _swipeStartY
-  if (dy > 0) {
-    e.preventDefault()
-    isSwiping.value = true
-    translateY.value = dy
-  }
-}
-function onSwipeEnd() {
-  if (!isSwiping.value) { _swipeStartY = 0; return }
-  const panel = detailPanelRef.value
-  const panelHeight = panel ? panel.offsetHeight : 300
-  if (translateY.value > panelHeight * 0.3) { ui.panels.detail = false }
-  _resetSwipe()
-}
-function onSwipeCancel() {
-  if (isSwiping.value || _swipeStartY) _resetSwipe()
-}
-function _resetSwipe() {
-  translateY.value = 0
-  isSwiping.value = false
-  _swipeStartY = 0
-}
-
 function onDocumentClick(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (isSessionMenuOpen.value && !target.closest('.chat-top-title-wrap')) {
@@ -1045,25 +951,10 @@ function onDocumentClick(e: MouseEvent) {
 }
 
 onMounted(() => {
-  nextTick(() => adjustTextareaHeight())
   document.addEventListener('click', onDocumentClick)
-  const el = detailPanelRef.value
-  if (el) {
-    el.addEventListener('touchstart', onSwipeStart, { passive: true })
-    el.addEventListener('touchmove', onSwipeMove, { passive: false })
-    el.addEventListener('touchend', onSwipeEnd)
-    el.addEventListener('touchcancel', onSwipeCancel)
-  }
 })
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick)
-  const el = detailPanelRef.value
-  if (el) {
-    el.removeEventListener('touchstart', onSwipeStart)
-    el.removeEventListener('touchmove', onSwipeMove)
-    el.removeEventListener('touchend', onSwipeEnd)
-    el.removeEventListener('touchcancel', onSwipeCancel)
-  }
 })
 </script>
 
