@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:ai-eval": "vitest run --config vitest.ai-eval.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:prod": "playwright test",
     "coverage": "vitest run --coverage",
