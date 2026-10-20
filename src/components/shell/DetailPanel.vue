@@ -641,6 +641,7 @@ import {
   replaceAiContentToGroup,
   createNoteFromAiContent,
 } from '../../lib/ai/noteWriteback.js'
+import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
 
 const { t } = useI18n()
 
@@ -798,23 +799,23 @@ function handleLocateCard(id: string, type: 'bookmark' | 'group') {
 
 // revokeUserMessage（撤回并回填输入框）已随调度逻辑迁至 useAiChat
 
-const activeSlashIndex = ref(0)
-const showSlashSuggest = computed(() => {
-  const q = aiQuery.value.trim()
-  return q.startsWith('/') && !q.includes(' ')
-})
-
-const filteredSlashCommands = computed(() => {
-  const q = aiQuery.value.trim().toLowerCase()
-  return SLASH_COMMANDS.filter((c) => c.cmd.startsWith(q)).map((c) => ({
-    cmd: c.cmd,
-    title: t(c.titleKey),
-    desc: t(c.descKey),
-  }))
-})
-
-watch(filteredSlashCommands, () => {
-  activeSlashIndex.value = 0
+// ── 输入框交互（斜杠联想 / 键盘调度 / ↑↓ 历史回溯 / quickFill）抽至 useChatInputInteraction ──
+const {
+  activeSlashIndex,
+  showSlashSuggest,
+  filteredSlashCommands,
+  quickFill,
+  handleKeyDown,
+} = useChatInputInteraction({
+  aiQuery,
+  textareaRef: aiTextareaRef,
+  slashCommands: SLASH_COMMANDS,
+  applySlashCommand,
+  submit: handleAiSubmit,
+  adjustTextareaHeight,
+  inputHistory,
+  historyCursor,
+  tempInput,
 })
 
 watch(
@@ -848,99 +849,8 @@ watch(
   },
 )
 
-function quickFill(text: string) {
-  aiQuery.value = text
-  handleAiSubmit()
-}
-
 function closeEntirePanel() {
   ui.panels.detail = false
-}
-
-function handleKeyDown(e: KeyboardEvent) {
-  // IME 组合中的按键（选词/确认）交还输入法，防 Enter 误提交、方向键误翻历史
-  if (e.isComposing) return
-  // Esc：有输入内容/补全菜单时先清空输入（拦截不上抛，防全局清扫连带关掉面板）；
-  // 空输入时放行给全局 Esc（关闭整个面板）
-  if (e.key === 'Escape' && (showSlashSuggest.value || aiQuery.value)) {
-    e.preventDefault()
-    e.stopPropagation()
-    aiQuery.value = ''
-    adjustTextareaHeight()
-    return
-  }
-  // 斜杠补全菜单的上下键与回车优先
-  if (showSlashSuggest.value && filteredSlashCommands.value.length) {
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      activeSlashIndex.value =
-        (activeSlashIndex.value - 1 + filteredSlashCommands.value.length) %
-        filteredSlashCommands.value.length
-      return
-    }
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      activeSlashIndex.value =
-        (activeSlashIndex.value + 1) % filteredSlashCommands.value.length
-      return
-    }
-    if (e.key === 'Enter' || e.key === 'Tab') {
-      e.preventDefault()
-      const chosen = filteredSlashCommands.value[activeSlashIndex.value]
-      if (chosen) applySlashCommand(chosen.cmd)
-      return
-    }
-  }
-
-  // 若用户按了 Tab，当前输入了斜杠前缀但尚未有空格
-  if (e.key === 'Tab' && aiQuery.value.startsWith('/') && !aiQuery.value.includes(' ')) {
-    const prefix = aiQuery.value.trim().toLowerCase()
-    const match = SLASH_COMMANDS.find((c) => c.cmd.toLowerCase().startsWith(prefix))
-    if (match) {
-      e.preventDefault()
-      applySlashCommand(match.cmd)
-      return
-    }
-  }
-
-  // 终端式命令历史回溯 (ArrowUp / ArrowDown)
-  if (e.key === 'ArrowUp') {
-    const el = aiTextareaRef.value
-    if (el && (el.selectionStart === 0 || !aiQuery.value.includes('\n'))) {
-      if (inputHistory.value.length > 0 && historyCursor.value > 0) {
-        e.preventDefault()
-        if (historyCursor.value === inputHistory.value.length) {
-          tempInput.value = aiQuery.value
-        }
-        historyCursor.value--
-        aiQuery.value = inputHistory.value[historyCursor.value]
-        nextTick(() => adjustTextareaHeight())
-        return
-      }
-    }
-  } else if (e.key === 'ArrowDown') {
-    const el = aiTextareaRef.value
-    if (el && (el.selectionEnd === aiQuery.value.length || !aiQuery.value.includes('\n'))) {
-      if (historyCursor.value < inputHistory.value.length - 1) {
-        e.preventDefault()
-        historyCursor.value++
-        aiQuery.value = inputHistory.value[historyCursor.value]
-        nextTick(() => adjustTextareaHeight())
-        return
-      } else if (historyCursor.value === inputHistory.value.length - 1) {
-        e.preventDefault()
-        historyCursor.value = inputHistory.value.length
-        aiQuery.value = tempInput.value
-        nextTick(() => adjustTextareaHeight())
-        return
-      }
-    }
-  }
-
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    handleAiSubmit()
-  }
 }
 
 function onDocumentClick(e: MouseEvent) {
