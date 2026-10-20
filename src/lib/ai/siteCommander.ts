@@ -11,8 +11,8 @@
  * 拆分说明（只拆分、不改行为）：undo 事务栈在 siteUndoStack.ts，命令执行在 siteActions.ts，
  * HITL 确认与行动卡片构造在 siteHitl.ts，意图解析（正则/参数提取）在 siteIntents.ts；
  * siteCommands/ 目录的指令块拆分进行中（已外迁 1.帮助 / 2.主题 / 3.视图 / 4.分类 / 5.回收站 /
- * 6.查重 / 6.5.工作台 / 7.死链 / 15.设置面板九块，其余 9 块暂留本文件），
- * SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；
+ * 6.查重 / 6.5.工作台 / 7.死链 / 8.导出 / 9.统计 / 9.1.体检 / 9.2.收件箱 / 15.设置面板十三块，
+ * 其余 5 块暂留本文件），SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；
  * 本文件保留 dispatchSiteCommand 编排（意图块顺序与短路语义不变）并 re-export 原公开符号。
  */
 
@@ -20,22 +20,11 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import { useToastStore } from '../../stores/toast.js'
-import { exportData } from '../../composables/domain/useDataIO.js'
-import {
-  isOfficialBookmark,
-  isUncategorized,
-  calculateVaultHealth,
-  clusterUncategorizedBookmarks,
-  detectParentChildRelations,
-} from './localClustering.js'
+import { isOfficialBookmark } from './localClustering.js'
 import { CAT_UNCATEGORIZED, CAT_ALL } from '../../config/constants.js'
 import {
   askConfirm,
   buildMoveConfirmMessage,
-  buildHealthInboxCard,
-  buildHealthDedupCard,
-  buildHealthTrashCard,
-  buildInboxZeroActionCard,
 } from './siteHitl.js'
 import {
   pushUndoAction,
@@ -43,10 +32,6 @@ import {
   getUndoStackDepth,
 } from './siteUndoStack.js'
 import {
-  parseExportIntent,
-  parseStatsIntent,
-  parseHealthIntent,
-  parseInboxIntent,
   parseBatchMoveIntent,
   parseMoveIntent,
   parseCurrentCatIntent,
@@ -61,11 +46,14 @@ import { trashBlock } from './siteCommands/trash.js'
 import { dedupBlock } from './siteCommands/dedup.js'
 import { packBlock } from './siteCommands/pack.js'
 import { deadlinkBlock } from './siteCommands/deadlink.js'
+import { exportBlock } from './siteCommands/export.js'
+import { statsBlock } from './siteCommands/stats.js'
+import { healthBlock } from './siteCommands/health.js'
+import { inboxBlock } from './siteCommands/inbox.js'
 import { settingsBlock } from './siteCommands/settings.js'
 import type { SiteCommandResult } from './siteCommands/types.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Category } from '../../types.js'
-import type { ChatActionCard } from './chatSessions.js'
 import type { SiteCommanderContext } from './siteActions.js'
 
 // ── re-export：撤销事务栈（单例在 siteUndoStack.ts） ──
@@ -144,226 +132,20 @@ export async function dispatchSiteCommand(
   if (deadlinkResult !== null) return deadlinkResult
 
   // ── 8. 数据导出备份 (/export, 导出数据) ──
-  if (parseExportIntent(query)) {
-    exportData()
-    return {
-      handled: true,
-      action: 'export',
-      steps: [
-        { text: t('aiCmd.stepExportSnapshot'), done: true },
-        { text: t('aiCmd.stepExportDownload'), done: true },
-      ],
-      reply: t('aiCmd.exportDone'),
-    }
-  }
+  const exportResult = await exportBlock({ query, ds, ui, app })
+  if (exportResult !== null) return exportResult
 
   // ── 9. 全库统计 (/stats, 书签统计) ──
-  if (parseStatsIntent(query)) {
-    const topBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && !b.parentId).length
-    const subBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && b.parentId).length
-    const groups = ds.siblingGroups.filter((g) => !g.deletedAt).length
-    const cats = ds.categories.filter((c: Category) => !c.deletedAt).length
-    const uncat = ds.bookmarks.filter(
-      (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId,
-    ).length
-    const trashTotal =
-      ds.bookmarks.filter((b) => b.deletedAt).length +
-      ds.siblingGroups.filter((g) => g.deletedAt).length +
-      ds.categories.filter((c: Category) => c.deletedAt).length
-
-    const reply = [
-      t('aiCmd.statsTitle'),
-      '',
-      t('aiCmd.statsTop', { n: topBookmarks }),
-      t('aiCmd.statsSub', { n: subBookmarks }),
-      t('aiCmd.statsGroups', { n: groups }),
-      t('aiCmd.statsCats', { n: cats }),
-      t('aiCmd.statsUncat', { n: uncat }),
-      t('aiCmd.statsTrash', { n: trashTotal }),
-      '',
-      t('aiCmd.statsTidiness') +
-        (uncat === 0 && trashTotal === 0 ? t('aiCmd.statsTidinessGood') : t('aiCmd.statsTidinessFair')),
-    ].join('\n')
-
-    return {
-      handled: true,
-      action: 'stats',
-      steps: [{ text: t('aiCmd.stepStats'), done: true }],
-      reply,
-    }
-  }
+  const statsResult = await statsBlock({ query, ds, ui, app })
+  if (statsResult !== null) return statsResult
 
   // ── 9.1 全库资产体检中心 (/health, 资产体检) ──
-  if (parseHealthIntent(query)) {
-    const groupedIds = new Set<string>()
-    for (const g of ds.siblingGroups || []) {
-      if (!g.deletedAt && g.bookmarkIds?.length) {
-        for (const id of g.bookmarkIds) groupedIds.add(id)
-      }
-    }
-
-    const healthStats = calculateVaultHealth(
-      ds.bookmarks,
-      ds.categories,
-      groupedIds,
-      ds.siblingGroups,
-    )
-
-    const activeBookmarks = ds.bookmarks.filter((b) => !b.deletedAt && !isOfficialBookmark(b))
-    const totalCount = activeBookmarks.length
-
-    const tagCoveredCount = activeBookmarks.filter(
-      (b) => b.attributes && Object.keys(b.attributes).length > 0,
-    ).length
-    const tagCoverage = totalCount > 0 ? Math.round((tagCoveredCount / totalCount) * 100) : 100
-
-    const trashTotal =
-      ds.bookmarks.filter((b) => b.deletedAt).length +
-      ds.siblingGroups.filter((g) => g.deletedAt).length +
-      ds.categories.filter((c: Category) => c.deletedAt).length
-
-    // 计算综合健康指数 (0 ~ 100)
-    let score = 100
-    if (totalCount > 0) {
-      score -= Math.min(30, healthStats.uncategorizedCount * 3)
-      score -= Math.min(25, healthStats.duplicateCount * 5)
-      if (tagCoverage < 50) score -= 15
-      else if (tagCoverage < 75) score -= 5
-      if (trashTotal > 15) score -= 10
-      score = Math.max(10, Math.min(100, score))
-    }
-
-    const level =
-      score >= 90
-        ? t('aiCmd.levelExcellent')
-        : score >= 75
-          ? t('aiCmd.levelGood')
-          : score >= 60
-            ? t('aiCmd.levelFair')
-            : t('aiCmd.levelPoor')
-
-    const reply = [
-      t('aiCmd.healthTitle'),
-      '',
-      t('aiCmd.healthScore', { score, level }),
-      '',
-      t('aiCmd.healthDetail'),
-      t('aiCmd.healthTotal', { n: totalCount }),
-      t('aiCmd.healthUncat', {
-        n: healthStats.uncategorizedCount,
-        hint: healthStats.uncategorizedCount > 0 ? t('aiCmd.healthUncatHint') : t('aiCmd.healthUncatOk'),
-      }),
-      t('aiCmd.healthDup', {
-        n: healthStats.duplicateCount,
-        hint: healthStats.duplicateCount > 0 ? t('aiCmd.healthDupHint') : t('aiCmd.healthDupOk'),
-      }),
-      t('aiCmd.healthTagCoverage', {
-        pct: tagCoverage,
-        hint: tagCoverage < 60 ? t('aiCmd.healthTagHint') : t('aiCmd.healthTagOk'),
-      }),
-      t('aiCmd.healthTrash', {
-        n: trashTotal,
-        hint: trashTotal > 10 ? t('aiCmd.healthTrashHint') : '',
-      }),
-      '',
-      healthStats.uncategorizedCount > 0
-        ? t('aiCmd.healthAdviceInbox')
-        : healthStats.duplicateCount > 0
-          ? t('aiCmd.healthAdviceDedup')
-          : t('aiCmd.healthPraise'),
-    ].join('\n')
-
-    let actionCard: ChatActionCard | undefined
-    if (healthStats.uncategorizedCount > 0) {
-      actionCard = buildHealthInboxCard(healthStats.uncategorizedCount)
-    } else if (healthStats.duplicateCount > 0) {
-      actionCard = buildHealthDedupCard(healthStats.duplicateCount)
-    } else if (trashTotal > 0) {
-      actionCard = buildHealthTrashCard(trashTotal)
-    }
-
-    return {
-      handled: true,
-      action: 'health',
-      steps: [
-        { text: t('aiCmd.stepHealthScan'), done: true },
-        { text: t('aiCmd.stepHealthScore'), done: true },
-      ],
-      reply,
-      actionCard,
-    }
-  }
+  const healthResult = await healthBlock({ query, ds, ui, app })
+  if (healthResult !== null) return healthResult
 
   // ── 9.2 收件箱清零与智能归拢 (/inbox, 智能归类) ──
-  if (parseInboxIntent(query)) {
-    const groupedIds = new Set<string>()
-    for (const g of ds.siblingGroups || []) {
-      if (!g.deletedAt && g.bookmarkIds?.length) {
-        for (const id of g.bookmarkIds) groupedIds.add(id)
-      }
-    }
-
-    // 同站子页从属关系：识别「同一站点下的子页」，归入其主页面下
-    const uncatIds = new Set(
-      ds.bookmarks.filter((b) => isUncategorized(b, groupedIds)).map((b) => b.id),
-    )
-    const relations = detectParentChildRelations(ds.bookmarks).filter((r) => uncatIds.has(r.childId))
-    const nestedChildIds = new Set(relations.map((r) => r.childId))
-
-    const clusters = clusterUncategorizedBookmarks(
-      ds.bookmarks.filter((b) => !nestedChildIds.has(b.id)),
-      ds.categories,
-      groupedIds,
-    )
-    const assignableClusters = clusters.filter(
-      (c) => c.suggestedCategoryId && c.suggestedCategoryId !== CAT_UNCATEGORIZED && c.id !== 'cluster_unassigned',
-    )
-
-    const totalToMove = assignableClusters.reduce((acc, c) => acc + c.bookmarks.length, 0)
-
-    if (totalToMove === 0 && relations.length === 0) {
-      return {
-        handled: true,
-        action: 'inbox_zero',
-        steps: [{ text: t('aiCmd.stepScanUncat'), done: true }],
-        reply: t('aiCmd.inboxZeroDone'),
-      }
-    }
-
-    const lines: string[] = [
-      t('aiCmd.inboxPlanHeader'),
-      '',
-    ]
-    for (const c of assignableClusters) {
-      const titles = c.bookmarks.slice(0, 3).map((b) => b.title || b.url).join(t('msg.listSeparator'))
-      const more =
-        c.bookmarks.length > 3
-          ? t('aiCmd.inboxPlanMore', { n: c.bookmarks.length })
-          : tN('aiCmd.inboxPlanCount', c.bookmarks.length)
-      lines.push(t('aiCmd.inboxPlanLine', { cat: c.suggestedCategoryName, titles, more }))
-    }
-    if (relations.length > 0) {
-      lines.push(tN('aiCmd.inboxNestPlanLine', relations.length))
-    }
-    lines.push('')
-    lines.push(t('aiCmd.inboxCta'))
-
-    const inboxSteps = [
-      { text: tN('aiCmd.stepInboxDetected', totalToMove + relations.length), done: true },
-      { text: t('aiCmd.stepInboxClustered'), done: true },
-    ]
-    if (relations.length > 0) {
-      inboxSteps.push({ text: t('aiCmd.stepInboxNested'), done: true })
-    }
-
-    return {
-      handled: true,
-      action: 'inbox_zero',
-      steps: inboxSteps,
-      reply: lines.join('\n'),
-      actionCard: buildInboxZeroActionCard(totalToMove + relations.length),
-    }
-  }
+  const inboxResult = await inboxBlock({ query, ds, ui, app })
+  if (inboxResult !== null) return inboxResult
 
   // ── 10. 上下文感知：批量移动选中的书签 ──
   const batchMoveIntent = parseBatchMoveIntent(query)
