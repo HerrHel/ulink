@@ -24,6 +24,8 @@ export interface AiSendSummary {
   attachedCardsCount: number
   /** 全库知识检索注入字符数（0 = 未注入） */
   vaultKnowledgeChars: number
+  /** 个人记忆实际注入条数（0 = 未注入） */
+  profileEntries: number
   /** 历史上下文实际注入条数（经最近轮次 + 字符预算裁剪后） */
   historyTurnsIncluded: number
   /** 本轮用户提问（含附件展开）字符数 */
@@ -46,6 +48,8 @@ export interface AiSendSummaryInput {
   history: MiMoChatMessage[]
   /** 本轮实际发送的用户消息（含附件展开） */
   userPrompt: string
+  /** 注入系统提示词的个人记忆小节（aiProfile.buildProfilePrompt 产物，与请求同源） */
+  profilePrompt?: string
 }
 
 /** 汇总本次发送给 AI 的数据摘要（与实际请求同口径组装） */
@@ -55,6 +59,7 @@ export function buildSendSummary(input: AiSendSummaryInput): AiSendSummary {
     categories: input.categories,
     customAttributes: input.customAttributes,
     contextSlice: slice,
+    profilePrompt: input.profilePrompt,
   })
   const historySlice = selectHistorySlice(input.history || [])
   const historyChars = historySlice.reduce((n, m) => n + (m.content || '').length, 0)
@@ -81,6 +86,8 @@ export function buildSendSummary(input: AiSendSummaryInput): AiSendSummary {
       : undefined,
     attachedCardsCount: slice.attachedCards?.length || 0,
     vaultKnowledgeChars,
+    // 如实统计实际注入的个人记忆条数（与请求同源的 profilePrompt 逐行计数）
+    profileEntries: (input.profilePrompt || '').split('\n').filter((l) => l.startsWith('- ')).length,
     historyTurnsIncluded: historySlice.length,
     userPromptChars,
     systemPromptChars,

@@ -18,6 +18,7 @@ function makeSummary(overrides: Partial<AiSendSummary> = {}): AiSendSummary {
     selected: { shown: 1, total: 5 },
     attachedCardsCount: 1,
     vaultKnowledgeChars: 320,
+    profileEntries: 2,
     historyTurnsIncluded: 4,
     userPromptChars: 80,
     systemPromptChars: 1200,
@@ -82,6 +83,7 @@ describe('ChatStream — 发送前透明摘要条', () => {
     )
     expect(bodyText).toContain(t('ai.sendSummaryCards', { n: 1 }))
     expect(bodyText).toContain(t('ai.sendSummaryRagOn', { chars: 320 }))
+    expect(bodyText).toContain(t('ai.sendSummaryMemory', { n: 2 }))
     expect(bodyText).toContain(t('ai.sendSummaryHistory', { n: 4 }))
     expect(bodyText).toContain(
       t('ai.sendSummaryChars', { prompt: 80, system: 1200, total: 2600 }),
@@ -118,5 +120,20 @@ describe('ChatStream — 发送前透明摘要条', () => {
       { id: 'turn-1-user', role: 'user', content: 'hi', timestamp: Date.now() },
     ])
     expect(wrapper.find('.send-summary-toggle').exists()).toBe(false)
+  })
+
+  it('旧持久化摘要缺 profileEntries 字段时不渲染个人记忆行', async () => {
+    const legacy: Partial<AiSendSummary> = makeSummary()
+    delete legacy.profileEntries
+    const turn: ChatTurn = {
+      id: 'turn-1-user',
+      role: 'user',
+      content: 'hi',
+      timestamp: Date.now(),
+      sendSummary: legacy as AiSendSummary,
+    }
+    const wrapper = mountStream([turn])
+    await wrapper.get('.send-summary-toggle').trigger('click')
+    expect(wrapper.get('.send-summary-body').text()).not.toContain(t('ai.sendSummaryMemory', { n: 0 }))
   })
 })

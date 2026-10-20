@@ -515,6 +515,10 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
       ? t('ai.sendSummaryRagOn', { chars: summary.vaultKnowledgeChars })
       : t('ai.sendSummaryRagOff'),
   )
+  // 个人记忆注入条数（旧持久化摘要无此字段时如实缺省不显示）
+  if (typeof summary.profileEntries === 'number') {
+    lines.push(t('ai.sendSummaryMemory', { n: summary.profileEntries }))
+  }
   lines.push(t('ai.sendSummaryHistory', { n: summary.historyTurnsIncluded }))
   lines.push(
     t('ai.sendSummaryChars', {

@@ -24,6 +24,8 @@ import {
   type ResolvedCardContext,
 } from '../../lib/ai/cardReader.js'
 import { vaultRAG } from '../../lib/ai/localRAG.js'
+import { expandQueryTerms } from '../../lib/ai/queryExpand.js'
+import { remember, buildProfilePrompt } from '../../lib/ai/aiProfile.js'
 import { buildSendSummary } from '../../lib/ai/sendSummary.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot } from './useAiChatSessions.js'
@@ -128,6 +130,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       handleCreateSession()
       return
     }
+
+    // 个人记忆学习：显式「记住…」与隐式偏好句式（仅学习用户原始输入，不含附件拼接）
+    remember(raw)
 
     showAiTab?.()
     aiLoading.value = true
@@ -301,7 +306,25 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             let retrievedVaultKnowledge: string | undefined
             try {
               vaultRAG.buildIndex(ds.bookmarks, ds.siblingGroups, ds.categories, ds.customAttributes)
-              const ragChunks = vaultRAG.queryRelevantContext(raw)
+              let ragChunks = vaultRAG.queryRelevantContext(raw)
+              // 模糊查询的召回增强：本地召回薄弱（<3 条）时，让模型仅基于用户 query 生成
+              // 概念扩展词并入检索词重查（书签库数据不出去，仅 query 经官方通道外发）。
+              // expandQueryTerms 内部 fail-open，失败返回 [] 不阻塞主流程
+              if (ragChunks.length < 3 && !controller.signal.aborted) {
+                const terms = await expandQueryTerms(raw, { signal: controller.signal, isZh: isZh.value })
+                if (terms.length > 0 && !controller.signal.aborted) {
+                  const expanded = vaultRAG.queryRelevantContext(`${raw} ${terms.join(' ')}`)
+                  // 本地已召回优先，扩展结果去重补足至 10 条
+                  const seen = new Set(ragChunks.map((c) => c.id))
+                  for (const c of expanded) {
+                    if (ragChunks.length >= 10) break
+                    if (!seen.has(c.id)) {
+                      seen.add(c.id)
+                      ragChunks.push(c)
+                    }
+                  }
+                }
+              }
               if (ragChunks.length > 0) {
                 retrievedVaultKnowledge = vaultRAG.formatChunksForPrompt(ragChunks, 2200)
               }
@@ -323,6 +346,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               })),
             }
 
+            // 个人记忆小节（只读参考非指令）：显式记忆与长期偏好，约 500 tokens 截断
+            const profilePrompt = buildProfilePrompt(550, isZh.value)
+
             // 发送前透明摘要：如实记录本次实际发给 AI 的数据构成（条数/字段/截断情况），
             // 挂在用户气泡下可展开查看（隐私透明）。历史裁剪与系统提示词口径均与请求一致。
             const userTurn = chatTurns.value.find((tt) => tt.id === turnId + '-user')
@@ -335,6 +361,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 selectedTotal,
                 history,
                 userPrompt: promptWithCards,
+                profilePrompt,
               })
             }
 
@@ -347,6 +374,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 signal: controller.signal,
                 history,
                 contextSlice,
+                profilePrompt,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {

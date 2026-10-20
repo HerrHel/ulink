@@ -71,9 +71,59 @@
               {{ t('ai.noHistory') }}
             </div>
           </div>
-          <div v-if="sessions.length > 1" class="session-popover-foot">
-            <button class="session-clear-all-btn" @click="emit('clearAllSessions')">
+          <div class="session-popover-foot">
+            <button class="session-memory-btn" @click.stop="openMemory">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.3C6.2 13.5 5 11.4 5 9a7 7 0 0 1 7-7z" />
+                <path d="M9 21h6" />
+              </svg>
+              <span>{{ t('ai.memoryManage') }} ({{ memoryCount }})</span>
+            </button>
+            <button v-if="sessions.length > 1" class="session-clear-all-btn" @click="emit('clearAllSessions')">
               {{ t('ai.clearAllHistory') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 个人记忆管理浮层（自包含：列表 / 单删 / 清空，数据仅存本地） -->
+        <div v-if="memoryOpen" class="memory-popover" @click.stop>
+          <div class="memory-popover-header">
+            <span class="memory-popover-title">{{ t('ai.memoryTitle') }}</span>
+            <button class="memory-close-btn" @click="memoryOpen = false" :title="t('common.close')" :aria-label="t('common.close')">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="memory-list-scroll">
+            <div v-for="e in memoryEntries" :key="e.id" class="memory-item">
+              <span class="memory-badge" :class="e.kind">
+                {{ e.kind === 'explicit' ? t('ai.memoryExplicit') : t('ai.memoryImplicit') }}
+              </span>
+              <div class="memory-item-meta">
+                <span class="memory-item-text">{{ e.text }}</span>
+                <span class="memory-item-time">{{ formatTimeAgo(e.updatedAt) }}</span>
+              </div>
+              <button
+                class="memory-item-del"
+                @click="removeMemory(e.id)"
+                :title="t('common.delete')"
+                :aria-label="t('common.delete')"
+              >
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+            <div v-if="memoryEntries.length === 0" class="session-empty">
+              {{ t('ai.memoryEmpty') }}
+            </div>
+          </div>
+          <div v-if="memoryEntries.length > 0" class="memory-popover-foot">
+            <button class="session-clear-all-btn" @click="clearAllMemory">
+              {{ t('ai.memoryClearAll') }}
             </button>
           </div>
         </div>
@@ -129,6 +179,9 @@
 <script setup lang="ts">
 import type { AiChatSession } from '../../lib/ai/chatSessions.js'
 import { useI18n } from '../../i18n/index.js'
+import { ref, watch, onBeforeUnmount } from 'vue'
+import { listProfileEntries, removeProfileEntry, clearProfile, type AiProfileEntry } from '../../lib/ai/aiProfile.js'
+import { toast, showConfirm } from '../../lib/toast.js'
 
 defineOptions({ name: 'ChatTopBar' })
 
@@ -155,6 +208,51 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/* ===== 个人记忆管理（自包含浮层：仅本地数据，可逐条删除与清空） ===== */
+const memoryOpen = ref(false)
+const memoryEntries = ref<AiProfileEntry[]>([])
+const memoryCount = ref(0)
+
+function refreshMemory() {
+  memoryEntries.value = listProfileEntries()
+  memoryCount.value = memoryEntries.value.length
+}
+
+// 会话菜单展开时刷新计数（记忆可能在对话中新增）
+watch(menuOpen, (v) => {
+  if (v) refreshMemory()
+})
+
+function openMemory() {
+  refreshMemory()
+  menuOpen.value = false
+  memoryOpen.value = true
+}
+
+async function removeMemory(id: string) {
+  removeProfileEntry(id)
+  refreshMemory()
+  toast(t('ai.memoryDeleted'), true)
+}
+
+async function clearAllMemory() {
+  const ok = await showConfirm(t('ai.memoryClearConfirm'))
+  if (!ok) return
+  clearProfile()
+  refreshMemory()
+  toast(t('ai.memoryCleared'), true)
+}
+
+// 点击浮层外部关闭（浮层自身 @click.stop 阻止冒泡）
+function onDocClick() {
+  memoryOpen.value = false
+}
+watch(memoryOpen, (v) => {
+  if (v) document.addEventListener('click', onDocClick)
+  else document.removeEventListener('click', onDocClick)
+})
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <style scoped>
@@ -465,5 +563,170 @@ const { t } = useI18n()
 :global([data-theme="dark"]) .chat-btn-icon.float-hud-btn.is-active {
   background: color-mix(in srgb, var(--accent) 15%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+/* ===== 个人记忆入口与浮层（与会话下拉浮层同质感） ===== */
+.session-popover-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.session-memory-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 3px;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.session-memory-btn:hover {
+  color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.memory-popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 260px;
+  max-width: 300px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base, 8px);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+  animation: sessionPopIn 0.15s ease-out;
+}
+
+:global([data-theme="dark"]) .memory-popover {
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
+              0 0 0 1px var(--border-hover),
+              var(--shadow-xl);
+}
+
+.memory-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.memory-popover-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.memory-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: var(--radius-xs, 4px);
+}
+
+.memory-close-btn:hover {
+  color: var(--rose);
+  background: var(--rose-light);
+}
+
+.memory-list-scroll {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.memory-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 10px;
+  position: relative;
+}
+
+.memory-item:hover {
+  background: var(--surface-hover);
+}
+
+.memory-badge {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  line-height: 1.5;
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border-light);
+  color: var(--text-muted);
+  background: var(--surface-hover);
+}
+
+.memory-badge.explicit {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.memory-item-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.memory-item-text {
+  font-size: 11.5px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.memory-item-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.memory-item-del {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: var(--radius-xs, 4px);
+  flex-shrink: 0;
+}
+
+.memory-item:hover .memory-item-del {
+  display: inline-flex;
+}
+
+.memory-item-del:hover {
+  color: var(--rose);
+  background: var(--rose-light);
+}
+
+.memory-popover-foot {
+  padding: 4px 8px;
+  border-top: 1px solid var(--border-light);
+  text-align: center;
 }
 </style>
