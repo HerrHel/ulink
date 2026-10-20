@@ -83,7 +83,8 @@ function mergeToolCallDelta(
 
 /**
  * 向小米 MiMo 发起专家级流式对话请求（支持 SSE 深度思考流动、打字机正文与 Function Calling）。
- * 无 BYOK key 时经 Edge Function `mimo-chat` 服务端转发（密钥不出后端）；有则客户端直连。
+ * 统一经 Edge Function `mimo-chat` 服务端转发（API 密钥仅存于 Supabase Function secrets，
+ * 不出后端、不入前端），需登录态；无客户端直连通道，也无 BYOK。
  * userQuery 传空字符串表示 Agent 循环续轮（history 中已含 assistant.tool_calls 与 tool 结果）。
  */
 export async function askMiMoStream(
