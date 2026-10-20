@@ -283,13 +283,6 @@ watch(
   box-shadow: -8px 0 28px -4px rgba(0, 0, 0, 0.5), inset 1px 0 0 0 rgba(255, 255, 255, 0.08);
 }
 
-.chat-top-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.2px;
-}
-
 /* 滚动内容区 */
 .chat-scroll-body {
   flex: 1;
@@ -307,14 +300,6 @@ watch(
 .chat-scroll-body::-webkit-scrollbar-thumb {
   background: var(--border-light);
   border-radius: 9999px;
-}
-
-.chat-reply-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin-left: 8px;
 }
 
 /* 拖拽卡片投掷到 AI 对话框活跃态：与主站拖拽光晕一致 */
