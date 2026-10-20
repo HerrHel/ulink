@@ -9,7 +9,9 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  // 文件级并行（fullyParallel 保持 false：同文件内用例仍串行，避免文件内状态链断裂）。
+  // workers=1 时 37 用例完全串行 ~2min；3 是速度与稳定性的平衡点（机器 CPU 供给有限）。
+  workers: 3,
   reporter: [['html', { outputFolder: 'playwright-report' }]],
   use: {
     baseURL: 'http://localhost:5173',
