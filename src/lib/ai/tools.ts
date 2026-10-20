@@ -10,7 +10,7 @@
  * 5. heal_deadlinks: 检测死链并推荐/替换为可用平替
  * 6. toggle_theme: 切换系统主题（深色/浅色/自动）
  * 7. change_view: 切换界面布局视图（宫格/列表/紧凑）
- * 8. export_data: 导出全量书签数据
+ * 8. export_data: 导出全量书签数据（HITL 二次确认后执行）
  */
 
 export interface AgentToolParamProperty {
@@ -139,7 +139,7 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'export_data',
-      description: '导出用户全量书签、笔记与分类数据备份。',
+      description: '导出用户全量书签、笔记与分类数据备份（执行前会请求用户二次确认，用户拒绝则不导出）。',
       parameters: {
         type: 'object',
         properties: {},

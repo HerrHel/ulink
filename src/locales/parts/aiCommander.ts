@@ -189,6 +189,9 @@ export const aiCmdZh = {
     // ── 数据导出 ──
     stepExportSnapshot: '生成全量数据快照',
     stepExportDownload: '触发浏览器下载',
+    exportConfirm: '即将导出全量书签、笔记与分类数据备份文件（含敏感字段），是否继续？',
+    stepUserCancelExport: '用户取消数据导出',
+    exportCancelled: '已取消数据导出。',
     exportDone: '已生成全量 JSON 数据备份并触发下载，请留意浏览器下载提示。',
 
     // ── 全库统计 ──
@@ -527,6 +530,9 @@ export const aiCmdEn = {
     // ── Data export ──
     stepExportSnapshot: 'Generate a full data snapshot',
     stepExportDownload: 'Trigger browser download',
+    exportConfirm: 'About to export a full backup of all bookmarks, notes and categories (including sensitive fields). Continue?',
+    stepUserCancelExport: 'User cancelled the data export',
+    exportCancelled: 'Data export cancelled.',
     exportDone: 'Full JSON backup generated and download triggered — please check your browser download prompt.',
 
     // ── Vault stats ──

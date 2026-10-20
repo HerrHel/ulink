@@ -249,6 +249,21 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(exportData).toHaveBeenCalled()
   })
 
+  // ── 7.x 导出 HITL：模型自主触发也必须经用户二次确认 ──
+  it('/export 经 HITL 二次确认：拒绝时不触发导出并如实反馈取消', async () => {
+    const { showConfirm } = await import('../lib/toast.js')
+    vi.mocked(showConfirm).mockClear()
+    vi.mocked(showConfirm).mockResolvedValueOnce(false)
+    const { exportData } = await import('../composables/domain/useDataIO.js')
+    vi.mocked(exportData).mockClear()
+
+    const res = await dispatchSiteCommand('/export', { ds: mockDs, ui: mockUi, app: mockApp })
+    expect(showConfirm).toHaveBeenCalledTimes(1)
+    expect(res.handled).toBe(true)
+    expect(exportData).not.toHaveBeenCalled()
+    expect(res.reply).toContain('已取消')
+  })
+
   // ── 8. 统计报表 ──
   it('支持 /stats 全库统计', async () => {
     const resStats = await dispatchSiteCommand('/stats', { ds: mockDs, ui: mockUi, app: mockApp })
