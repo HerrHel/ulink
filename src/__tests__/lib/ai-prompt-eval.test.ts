@@ -158,6 +158,14 @@ describe('AI 提示词评测集（二）— 注入前消毒', () => {
     expect(out).toBe('第一行\n第二行 hidden')
     expect(sanitizeToolResult('x'.repeat(5000), 4000)).toHaveLength(4000)
   })
+
+  it('工具结果同样过凭证脱敏：结果常含书签 URL/标题，外送前与 contextSlice 同口径', () => {
+    const out = sanitizeToolResult('找到 2 个站点\n- https://x.com?key=sk-abcdefghij1234567890\n- 正常站点')
+    expect(out).not.toContain('sk-abcdefghij1234567890')
+    expect(out).toContain('[REDACTED')
+    // 脱敏不得破坏多行结构
+    expect(out.split('\n').length).toBe(3)
+  })
 })
 
 describe('AI 提示词评测集（二）— 视频提取问题透传（防答非所问）', () => {

@@ -35,14 +35,16 @@ export function sanitizeForPrompt(text: string, maxLen = MAX_TEXT_LEN): string {
 
 /**
  * 工具执行结果的「半可信」消毒：结果由应用自身生成，保留换行/列表/围栏等结构
- * （不破坏可读性），只去控制字符（防用户数据里的不可见字符混入协议）并限长截断。
+ * （不破坏可读性），去控制字符（防用户数据里的不可见字符混入协议）、敏感信息脱敏
+ * （工具结果常含书签标题/URL 等库数据，外送前与 contextSlice 同口径过 secretFilter）
+ * 并限长截断。
  * 不同于 sanitizeForPrompt——那是给不可信用户数据用的强消毒。
  */
 export function sanitizeToolResult(text: string, maxLen = MAX_TOOL_RESULT_LEN): string {
   // 换行是控制字符清洗的例外：先以纯 ASCII 哨兵占位避开 _CTRL_RE，清洗后还原为 \n，
   // 保证多行结果的列表/段落结构不被打平（结构信息对模型判断执行结果至关重要）
   const NL_SENTINEL = '##LV_NEWLINE##'
-  return String(text ?? '')
+  return redactSensitivePatterns(String(text ?? ''))
     .replace(/\r\n/g, NL_SENTINEL)
     .replace(/[\r\n]/g, NL_SENTINEL)
     .replace(_CTRL_RE, ' ')

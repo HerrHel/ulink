@@ -219,13 +219,17 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         if (mimoConf.enabled) {
           try {
             const history: MiMoChatMessage[] = []
+            // 回放文本统一限长：转发层单条消息上限 4000 字（mimo-guard 超限 413 整轮拒绝），
+            // 多轮回放的 user promptContent / assistant 结论不设限会逐轮膨胀直至整轮失败
+            const REPLAY_MSG_MAX_LEN = 4000
+            const replayText = (s: string) => (s || '').slice(0, REPLAY_MSG_MAX_LEN)
             for (const t of chatTurns.value) {
               if (t.loading || t.id === assistantTurn.id) continue
               // 本轮 user 轮不进 history：其内容会以 promptWithCards 作为 query 再发一次，
               // 否则同一条消息双份注入（浪费上下文预算且放大注入面）
               if (t.id === turnId + '-user') continue
               if (t.role === 'user') {
-                if (t.content) history.push({ role: 'user', content: t.promptContent || t.content })
+                if (t.content) history.push({ role: 'user', content: replayText(t.promptContent || t.content) })
                 continue
               }
               // assistant 轮：无工具链则直接回传文本；有工具链则还原
@@ -234,7 +238,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               if (t.toolCalls?.length && t.toolResults?.length) {
                 history.push({
                   role: 'assistant',
-                  content: t.preToolContent || '',
+                  content: replayText(t.preToolContent || ''),
                   tool_calls: t.toolCalls.map((c) => ({
                     id: c.id,
                     type: 'function' as const,
@@ -242,11 +246,13 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                   })),
                 })
                 for (const r of t.toolResults) {
-                  history.push({ role: 'tool', tool_call_id: r.toolCallId, content: r.resultText })
+                  // 回放同样过 sanitizeToolResult：持久化的历史可能来自修复前的版本，
+                  // 脱敏/限长在发送前统一兜底（与当轮回传同口径）
+                  history.push({ role: 'tool', tool_call_id: r.toolCallId, content: sanitizeToolResult(r.resultText) })
                 }
-                if (t.content) history.push({ role: 'assistant', content: t.content })
+                if (t.content) history.push({ role: 'assistant', content: replayText(t.content) })
               } else if (t.content) {
-                history.push({ role: 'assistant', content: t.content })
+                history.push({ role: 'assistant', content: replayText(t.content) })
               }
             }
 
