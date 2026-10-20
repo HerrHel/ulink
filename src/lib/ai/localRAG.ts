@@ -427,8 +427,11 @@ export class VaultKnowledgeEngine {
       const typeLabel = chunk.sourceType === 'bookmark' ? '书签' : '笔记'
       const cleanTitle = redactSensitivePatterns(chunk.title)
       const cleanUrl = chunk.url ? ` (${redactSensitivePatterns(chunk.url)})` : ''
-      const tagPart = chunk.tags.length ? ` [标签: ${chunk.tags.join('/')}]` : ''
-      const catPart = chunk.category ? ` [分类: ${chunk.category}]` : ''
+      // 分类名/标签同样是用户数据，外送前与 title/url/content 同口径脱敏截断
+      const tagPart = chunk.tags.length
+        ? ` [标签: ${chunk.tags.map((tag) => redactSensitivePatterns(tag).slice(0, 20)).join('/')}]`
+        : ''
+      const catPart = chunk.category ? ` [分类: ${redactSensitivePatterns(chunk.category).slice(0, 40)}]` : ''
 
       const cleanContent = redactSensitivePatterns(chunk.content.replace(/\s+/g, ' ').slice(0, 150))
       const entry = `• [${typeLabel}] ${cleanTitle}${cleanUrl}${catPart}${tagPart}\n  内容: ${cleanContent}`

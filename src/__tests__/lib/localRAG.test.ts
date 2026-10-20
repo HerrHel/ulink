@@ -183,6 +183,23 @@ describe('localRAG.ts — 端侧混合 RAG 引擎单元测试', () => {
       expect(formatted).toContain('[REDACTED]')
     })
 
+    it('分类名与标签同样脱敏截断（不得绕过 secretFilter 直出）', () => {
+      const chunk = {
+        sourceType: 'bookmark',
+        title: '正常标题',
+        url: 'https://ok.example.com',
+        content: '正常内容',
+        category: '分类 api_key: sk-abcdefghij1234567890',
+        tags: ['Bearer abcdefghijklmnop123456', '正常标签'],
+      } as any
+      const formatted = engine.formatChunksForPrompt([chunk], 1000)
+
+      expect(formatted).not.toContain('sk-abcdefghij1234567890')
+      expect(formatted).not.toContain('abcdefghijklmnop123456')
+      expect(formatted).toContain('[REDACTED')
+      expect(formatted).toContain('正常标签')
+    })
+
     it('空查询或未命中时优雅返回空数组', () => {
       expect(engine.queryRelevantContext('')).toEqual([])
       expect(engine.queryRelevantContext('   ')).toEqual([])
