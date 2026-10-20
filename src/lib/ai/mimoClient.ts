@@ -22,6 +22,7 @@ export {
   DEFAULT_MIMO_MODEL,
   getMiMoConfig,
   askMiMoStream,
+  askMiMoRaw,
   askMiMo,
 } from './mimoStream.js'
 export type { MiMoConfig, MiMoStreamCallbacks, AgentToolCall, MiMoChatMessage } from './mimoStream.js'

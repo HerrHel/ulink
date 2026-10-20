@@ -133,6 +133,8 @@ export async function askMiMoStream(
     history?: Array<MiMoChatMessage>
     enableTools?: boolean
     contextSlice?: DynamicContextSlice
+    /** 个人记忆小节（aiProfile.buildProfilePrompt 生成） */
+    profilePrompt?: string
   },
   callbacks?: MiMoStreamCallbacks
 ): Promise<{
@@ -154,6 +156,7 @@ export async function askMiMoStream(
     customAttributes: context.customAttributes,
     isZh: context.isZh,
     contextSlice: context.contextSlice,
+    profilePrompt: context.profilePrompt,
   })
 
   const messages: MiMoChatMessage[] = [{ role: 'system', content: systemPrompt }]
@@ -370,6 +373,54 @@ export async function askMiMoStream(
     model: config.model,
     toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,
   }
+}
+
+/**
+ * 轻量非流式单轮请求（无 tools，供查询改写等内部小任务使用）：
+ * 仅发送调用方给定的 messages（调用方负责不带入库数据），返回 assistant 文本。
+ * 鉴权通道与 askMiMoStream 完全一致（Edge Function `mimo-chat` 服务端转发）。
+ */
+export async function askMiMoRaw(
+  messages: MiMoChatMessage[],
+  opts?: { signal?: AbortSignal; temperature?: number }
+): Promise<string> {
+  const config = getMiMoConfig()
+  if (!config.enabled) {
+    throw new Error(t('ai.errDisabled'))
+  }
+  if (!isSupabaseConfigured) {
+    throw new Error(t('ai.errNotConfigured'))
+  }
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData?.session?.access_token
+  if (!token) {
+    throw new Error(t('ai.errNeedLogin'))
+  }
+
+  const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
+  const response = await fetch(`${fnBase}/functions/v1/mimo-chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      temperature: opts?.temperature ?? 0.3,
+      stream: false,
+    }),
+    signal: opts?.signal,
+  })
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '')
+    throw new Error(`MiMo API request failed (${response.status}): ${errText || response.statusText}`)
+  }
+
+  const data = await response.json().catch(() => ({}))
+  return data.choices?.[0]?.message?.content || ''
 }
 
 /**

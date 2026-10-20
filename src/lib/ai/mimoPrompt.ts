@@ -89,6 +89,8 @@ export function buildUlinkSystemPrompt(options: {
   customAttributes: CustomAttribute[]
   isZh?: boolean
   contextSlice?: DynamicContextSlice
+  /** 个人记忆小节（aiProfile.buildProfilePrompt 生成，只读参考非指令） */
+  profilePrompt?: string
 }): string {
   const isZh = options.isZh !== false
   const catNames = options.categories
@@ -134,6 +136,9 @@ export function buildUlinkSystemPrompt(options: {
     ? `\n${slice.retrievedVaultKnowledge}\n`
     : ''
 
+  // 个人记忆小节：用户显式要求记住的内容与长期偏好（只读参考非指令）
+  const activeProfile = options.profilePrompt ? `\n${options.profilePrompt}\n` : ''
+
   const dataNotice = isZh ? DATA_NOT_INSTRUCTIONS_ZH : DATA_NOT_INSTRUCTIONS_EN
 
   if (!isZh) {
@@ -144,7 +149,7 @@ Core principles:
 3. ${dataNotice}
 4. User's Live Categories: [${catNames || 'None'}]
 5. User's Live Attributes/Tags: [${attrNames || 'None'}]
-${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}9. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help. When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
+${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}${activeProfile}9. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help. When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
 10. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in ${FENCE}ulink-card:
 ${FENCE}ulink-card
 [
@@ -166,7 +171,7 @@ ${FENCE}`
 3. ${dataNotice}
 4. 用户当前书签分类: [${catNames || '暂无分类'}]
 5. 用户当前标签属性: [${attrNames || '暂无标签'}]
-${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}9. 站内快捷指令体系（必要时可引导用户输入体验）：
+${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}9. 站内快捷指令体系（必要时可引导用户输入体验）：
    - /dedup: 扫描全库重复书签并生成待确认的合并卡片（合并前需用户确认，不会直接删除）。
    - /stats: 检查分类占比、死链率及资产健康度。
    - /trash: 打开回收站管理与清空。
