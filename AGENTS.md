@@ -164,6 +164,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 ## 运维与安全
 
 - **CSP**：`public/_headers`（生产）和 `vite.config.ts`（dev）。生产 script-src `'self'`（无 unsafe-inline），connect-src 有意放宽 `'self' https: wss://*.supabase.co`（死链 checkDirect 直连任意 URL 所需，勿私自收紧，见 vite.config.ts SEC-05 注释）；仅 dev 放宽 script-src 支持 HMR
+- **页面/视频读取第三方转发（jina-proxy，2026-10-20 起无前端直连例外）**：AI 页面/视频读取的**降级链路**（`src/lib/ai/jinaReader.ts`）在 extract-video Edge Function 失败时经 `supabase/functions/jina-proxy/` 服务端转发至 `r.jina.ai` 读取（国内网络降级），前端零直连第三方抓取服务。jina-proxy 防护对齐 extract-video/check-link 口径：鉴权（verify_jwt + getUser）+ 每用户限流（034 `consume_rate_limit`，fail-closed）+ SSRF 校验（复用 `check-link/ssrf-guard.ts` 与 `extract-video/video-adapters.ts` 真源，含 DNS fail-closed）+ CORS fail-closed + 上游超时 + 读取长度上限；目标 URL 仍会发送给第三方 r.jina.ai，前端每次触发以 toast 向用户披露。禁止前端直连外部抓取服务，也禁止移除该 toast 披露。
 - **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）；每用户限流（迁移 034 `consume_rate_limit` 计数器 + `private.rate_limit_counters`，默认 1200 次/分，`CHECK_LINK_RATE_LIMIT_PER_MIN` 可覆盖）；history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT 允许）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签

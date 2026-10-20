@@ -428,3 +428,6 @@ verify_jwt = true
 
 [functions.extract-video]
 verify_jwt = true
+
+[functions.jina-proxy]
+verify_jwt = true
