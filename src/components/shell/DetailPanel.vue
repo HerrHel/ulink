@@ -625,76 +625,39 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
-import { useDataStore } from '../../stores/data.js'
-import { isMobile } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { useI18n } from '../../i18n/index.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
 import { useAiChat } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatPanelDom } from '../../composables/ui/useChatPanelDom.js'
-import { locateAndHighlightCard } from '../../lib/ai/cardLocator.js'
-import {
-  appendAiContentToGroup,
-  replaceAiContentToGroup,
-  createNoteFromAiContent,
-} from '../../lib/ai/noteWriteback.js'
+import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
 
 const { t } = useI18n()
 
 const ui = useUIStore()
-const ds = useDataStore()
 const detailPanelRef = ref<HTMLElement | null>(null)
 const aiTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const chatScrollRef = ref<HTMLElement | null>(null)
 
-const isOpen = computed(() => ui.panels.detail)
-
-const isInputFocused = ref(false)
-const isSessionMenuOpen = ref(false)
-
-const isMobileDevice = computed(() => isMobile())
-const isFloatingHud = ref<boolean>(() => {
-  try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem('ulink_ai_floating_hud') === 'true'
-  } catch {
-    return false
-  }
-})
-
-function toggleFloatingHud() {
-  isFloatingHud.value = !isFloatingHud.value
-  try {
-    localStorage.setItem('ulink_ai_floating_hud', String(isFloatingHud.value))
-  } catch {
-    // 忽略持久化异常
-  }
-}
-
-const attachedCardsList = computed(() => {
-  return ui.aiAttachedCards.map((ref) => {
-    if (ref.type === 'group') {
-      const g = ds.groupMap[ref.id]
-      return {
-        type: 'group' as const,
-        id: ref.id,
-        title: g?.name || t('cards.note'),
-        url: '',
-      }
-    } else {
-      const b = ds.bookmarkMap[ref.id]
-      return {
-        type: 'bm' as const,
-        id: ref.id,
-        title: b?.title || b?.url || t('cards.bookmark'),
-        url: b?.url || '',
-      }
-    }
-  })
-})
+// ── 面板壳层（开合 / 聚焦态 / 会话菜单+外部点击 / 浮动 HUD / 附件列表 / note 写回）抽至 useChatPanelShell ──
+const {
+  isOpen,
+  isInputFocused,
+  isSessionMenuOpen,
+  isMobileDevice,
+  isFloatingHud,
+  toggleFloatingHud,
+  attachedCardsList,
+  handleAppendToNote,
+  handleReplaceNote,
+  handleSaveAsNewNote,
+  handleLocateCard,
+  closeEntirePanel,
+} = useChatPanelShell()
 
 // ── 面板 DOM 行为（拖拽悬停 / 滚动到底 / 输入框自适应高度 / 下滑关闭手势）抽至 useChatPanelDom；
 //    getQuery 惰性读取 useAiChat 的 aiQuery（延迟到其初始化后） ──
@@ -778,25 +741,6 @@ const {
 // 行动卡片辅助与执行（getActionCardNavTarget / navigateToActionTarget / 候选多选微操 /
 // handleActionCardClick）已随调度逻辑迁至 useAiChat
 
-function handleAppendToNote(noteId: string, content: string) {
-  appendAiContentToGroup(noteId, content)
-}
-
-function handleReplaceNote(noteId: string, content: string) {
-  replaceAiContentToGroup(noteId, content)
-}
-
-function handleSaveAsNewNote(content: string) {
-  const res = createNoteFromAiContent({ aiText: content })
-  if (res.success && res.groupId) {
-    locateAndHighlightCard({ id: res.groupId, type: 'group' })
-  }
-}
-
-function handleLocateCard(id: string, type: 'bookmark' | 'group') {
-  locateAndHighlightCard({ id, type, collapseDetailOnMobile: true })
-}
-
 // revokeUserMessage（撤回并回填输入框）已随调度逻辑迁至 useAiChat
 
 // ── 输入框交互（斜杠联想 / 键盘调度 / ↑↓ 历史回溯 / quickFill）抽至 useChatInputInteraction ──
@@ -848,24 +792,6 @@ watch(
     }
   },
 )
-
-function closeEntirePanel() {
-  ui.panels.detail = false
-}
-
-function onDocumentClick(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  if (isSessionMenuOpen.value && !target.closest('.chat-top-title-wrap')) {
-    isSessionMenuOpen.value = false
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
-})
-onUnmounted(() => {
-  document.removeEventListener('click', onDocumentClick)
-})
 </script>
 
 <style scoped>
