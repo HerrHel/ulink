@@ -130,6 +130,31 @@ export function formatAttachedCardsForPrompt(
   const header = isZh
     ? '【用户在对话中拖入并关联的卡片/笔记附件（请深度阅读并基于这些内容回答）】'
     : '[User Attached Cards & Notes for Reference (Please read thoroughly and ground your answer on them)]'
+  // 附件块标签双语：zh 保持历史格式（模型提示锚点），en 走英文标签（文案禁单语硬编码）
+  const L = {
+    bmHead: (n: number, title: string) =>
+      isZh ? `[附件 ${n}] 🔖 书签卡片：${title}` : `[Attachment ${n}] 🔖 Bookmark: ${title}`,
+    noteHead: (n: number, title: string) =>
+      isZh ? `[附件 ${n}] 📝 笔记卡片：${title}` : `[Attachment ${n}] 📝 Note: ${title}`,
+    url: isZh ? '- 网址：' : '- URL: ',
+    urlEmpty: isZh ? '(无网址)' : '(no URL)',
+    cat: isZh ? '- 分类：' : '- Category: ',
+    desc: isZh ? '- 描述：' : '- Description: ',
+    tags: isZh ? '- 标签：' : '- Tags: ',
+    tagSep: isZh ? '、' : ', ',
+    tagsRest: (n: number) => (isZh ? `（还有 ${n} 个未列出）` : ` (and ${n} more not listed)`),
+    notes: isZh ? '- 附注内容：' : '- Notes: ',
+    noteBody: isZh ? '- 笔记正文内容：' : '- Note body: ',
+    noteBodyEmpty: isZh ? '(笔记正文为空)' : '(empty note body)',
+    noteChildren: (n: number) =>
+      isZh ? `- 笔记内包含的书签（共 ${n} 个）：` : `- Bookmarks in this note (${n} total): `,
+    childrenRest: (n: number) =>
+      isZh ? `\n  （还有 ${n} 个组内书签未列出）` : `\n  (and ${n} more bookmarks not listed)`,
+    noChildren: isZh ? '  (暂无组内书签)' : '  (no bookmarks in this note)',
+    truncated: isZh ? '…（该附件内容过长已截断）' : '… (attachment truncated due to length)',
+    omitted: (n: number) =>
+      isZh ? `\n…（其余 ${n} 张附件因长度限制省略）` : `\n… (${n} more attachments omitted due to length limit)`,
+  }
 
   const formatted = cards
     .slice(0, MAX_ATTACH_CARDS)
@@ -137,17 +162,17 @@ export function formatAttachedCardsForPrompt(
       const tags = (c.tags || []).slice(0, MAX_ATTACH_TAGS)
       const tagsRest = (c.tags?.length || 0) - tags.length
       const tagLine = tags.length
-        ? `- 标签：${tags.map(t => safe(t, MAX_ATTACH_TAG)).join('、')}${tagsRest > 0 ? `（还有 ${tagsRest} 个未列出）` : ''}`
+        ? `${L.tags}${tags.map((tag) => safe(tag, MAX_ATTACH_TAG)).join(L.tagSep)}${tagsRest > 0 ? L.tagsRest(tagsRest) : ''}`
         : ''
-      const catLine = c.categoryName ? `- 分类：${safe(c.categoryName, MAX_ATTACH_TAG)}` : ''
+      const catLine = c.categoryName ? `${L.cat}${safe(c.categoryName, MAX_ATTACH_TAG)}` : ''
       if (c.type === 'bm') {
         const parts = [
-          `[附件 ${i + 1}] 🔖 书签卡片：${safe(c.title, MAX_ATTACH_TITLE)}`,
-          `- 网址：${safe(c.url, MAX_ATTACH_URL) || '(无网址)'}`,
+          L.bmHead(i + 1, safe(c.title, MAX_ATTACH_TITLE)),
+          `${L.url}${safe(c.url, MAX_ATTACH_URL) || L.urlEmpty}`,
           catLine,
-          c.desc ? `- 描述：${safe(c.desc, MAX_ATTACH_DESC)}` : '',
+          c.desc ? `${L.desc}${safe(c.desc, MAX_ATTACH_DESC)}` : '',
           tagLine,
-          c.notes ? `- 附注内容：\n"""\n${safe(c.notes, MAX_ATTACH_NOTES)}\n"""` : '',
+          c.notes ? `${L.notes}\n"""\n${safe(c.notes, MAX_ATTACH_NOTES)}\n"""` : '',
         ].filter(Boolean)
         return parts.join('\n')
       } else {
@@ -157,14 +182,14 @@ export function formatAttachedCardsForPrompt(
           ? shown
               .map((b) => `  * ${safe(b.title, MAX_ATTACH_CHILD_TITLE)} (${safe(b.url, MAX_ATTACH_CHILD_URL)})${b.desc ? ` - ${safe(b.desc, MAX_ATTACH_CHILD_DESC)}` : ''}`)
               .join('\n') +
-            (children.length > shown.length ? `\n  （还有 ${children.length - shown.length} 个组内书签未列出）` : '')
-          : '  (暂无组内书签)'
+            (children.length > shown.length ? L.childrenRest(children.length - shown.length) : '')
+          : L.noChildren
         const parts = [
-          `[附件 ${i + 1}] 📝 笔记卡片：${safe(c.title, MAX_ATTACH_TITLE)}`,
+          L.noteHead(i + 1, safe(c.title, MAX_ATTACH_TITLE)),
           catLine,
           tagLine,
-          `- 笔记正文内容：\n"""\n${safe(c.notes, MAX_ATTACH_NOTES) || '(笔记正文为空)'}\n"""`,
-          `- 笔记内包含的书签（共 ${children.length} 个）：\n${bmList}`,
+          `${L.noteBody}\n"""\n${safe(c.notes, MAX_ATTACH_NOTES) || L.noteBodyEmpty}\n"""`,
+          `${L.noteChildren(children.length)}\n${bmList}`,
         ].filter(Boolean)
         return parts.join('\n')
       }
@@ -178,14 +203,14 @@ export function formatAttachedCardsForPrompt(
     if (remaining <= 0) break
     const block = formatted[i]
     if (block.length > remaining) {
-      kept.push(`${block.slice(0, remaining)}\n…（该附件内容过长已截断）`)
+      kept.push(`${block.slice(0, remaining)}\n${L.truncated}`)
       break
     }
     kept.push(block)
     used += block.length + 2
   }
   const omitted = cards.length - kept.length
-  const tail = omitted > 0 ? `\n…（其余 ${omitted} 张附件因长度限制省略）` : ''
+  const tail = omitted > 0 ? L.omitted(omitted) : ''
 
   return `${header}\n${kept.join('\n\n')}${tail}\n`
 }

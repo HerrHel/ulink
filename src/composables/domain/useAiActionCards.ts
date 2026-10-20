@@ -207,7 +207,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
         const finalCandidates = rawCandidates.filter((c: any) => selectedUrls.has(c.url))
 
         const res = await createTopicWorkspace(
-          payload.topic || '精选工作台',
+          payload.topic || t('ai.wsTopicDefault'),
           finalCandidates,
           payload.targetCatId,
           { ds, ui, app: (ui as any).app },

@@ -81,6 +81,7 @@ vi.mock('../../lib/ai/siteCommander.js', () => ({
 }))
 
 import { useAiChat } from '../../composables/domain/useAiChat.js'
+import { setLocale } from '../../i18n/index.js'
 import { askMiMoStream } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
 import {
@@ -210,6 +211,21 @@ describe('AI 提示词评测集（一）— 提问透传与情境注入', () => 
     expect(query).toContain('https://example.com')
     // 本轮 user 内容不重复出现在 history（双份注入回归锁）
     expect((ctx.history || []).some((m) => m.content.includes('帮我分析这个书签的价值'))).toBe(false)
+  })
+
+  it('附件提问前缀双语：en 语言下走英文「User question:」标签（i18n 硬编码回归锁）', async () => {
+    setLocale('en-US')
+    try {
+      mockState.aiAttachedCards.push({ type: 'bm', id: 'bm1' })
+      await submit('analyze this bookmark')
+
+      expect(streamMock).toHaveBeenCalledTimes(1)
+      const [query] = streamMock.mock.calls[0]
+      expect(query).toContain('User question: analyze this bookmark')
+      expect(query).not.toContain('用户具体问题')
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 
   it('仅拖卡片无文字：自动生成贴合卡片的缺省提问，不得空提交', async () => {

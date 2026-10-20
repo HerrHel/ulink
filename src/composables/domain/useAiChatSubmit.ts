@@ -15,6 +15,7 @@ import {
 } from '../../lib/ai/cloudAiClient.js'
 import { askMiMoStream, getMiMoConfig, sanitizeToolResult, type MiMoChatMessage } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import { normalizeWorkspaceTopic } from '../../lib/ai/siteActions.js'
 import { updateSession, type AiChatSession, type ChatTurn } from '../../lib/ai/chatSessions.js'
 import {
   resolveCardContext,
@@ -135,7 +136,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
     // 构建发给模型的完整提示词（内嵌详细卡片与笔记深度结构化数据）
     const promptWithCards = resolvedCards.length > 0
-      ? `${formatAttachedCardsForPrompt(resolvedCards, isZh.value)}\n用户具体问题：${raw}`
+      ? `${formatAttachedCardsForPrompt(resolvedCards, isZh.value)}\n${t('ai.userQuestionLabel')}${raw}`
       : raw
 
     const turnId = 'turn-' + Date.now()
@@ -528,9 +529,8 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             .replace(/^(?:请?帮?我?)?(?:推荐|找|搜|整理|搭建|介绍|有哪些|看下)?\s*/i, '')
             .replace(/[?？!！。]+$/, '')
             .trim()
-            .slice(0, 16) || '精选工具'
-        const cleanTopic =
-          topicRaw.endsWith('工作台') || topicRaw.endsWith('工具箱') ? topicRaw : `${topicRaw} 工作台`
+            .slice(0, 16) || t('ai.wsTopicFallback')
+        const cleanTopic = normalizeWorkspaceTopic(topicRaw)
         assistantTurn.actionCard = {
           type: 'custom',
           actionName: 'create_topic_workspace',

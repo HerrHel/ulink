@@ -230,4 +230,37 @@ describe('cardReader — 卡片解析与 AI 读取上下文构建', () => {
     // 卡名被截断到 80 字以内（提问模板其余部分为固定文案）
     expect(out.length).toBeLessThan(200)
   })
+
+  it('10. formatAttachedCardsForPrompt：isZh=false 时附件标签全量走英文，不得混入中文标签', () => {
+    const cards: ResolvedCardContext[] = [
+      {
+        type: 'bm',
+        id: 'bm_en',
+        title: 'MDN Web Docs',
+        url: 'https://developer.mozilla.org',
+        categoryName: 'Docs',
+        desc: 'Reference',
+        tags: ['official', 'free'],
+        notes: 'handy',
+      },
+      {
+        type: 'group',
+        id: 'sg_en',
+        title: 'Notes',
+        childBookmarks: [{ title: 'Vite', url: 'https://vite.dev', desc: 'bundler' }],
+      },
+    ]
+
+    const out = formatAttachedCardsForPrompt(cards, false)
+    expect(out).toContain('[Attachment 1] 🔖 Bookmark: MDN Web Docs')
+    expect(out).toContain('- URL: https://developer.mozilla.org')
+    expect(out).toContain('- Category: Docs')
+    expect(out).toContain('- Tags: official, free')
+    expect(out).toContain('- Notes: ')
+    expect(out).toContain('[Attachment 2] 📝 Note: Notes')
+    expect(out).toContain('- Note body: ')
+    expect(out).toContain('- Bookmarks in this note (1 total): ')
+    // 英文模式下不得出现任何中文（附件数据本身为英文，输出应全英文）
+    expect(out).not.toMatch(/[一-鿿]/)
+  })
 })

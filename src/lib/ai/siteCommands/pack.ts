@@ -8,6 +8,7 @@
 import { parsePackIntent } from '../siteIntents.js'
 import { searchWebsitesByIntent } from '../cloudAiClient.js'
 import { buildPackActionCard } from '../siteHitl.js'
+import { normalizeWorkspaceTopic } from '../siteActions.js'
 import { t, tN } from '../../../i18n/index.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
@@ -57,10 +58,7 @@ export const packBlock: SiteCommandBlock = async (
     lines.push('')
     lines.push(t('aiCmd.packCta'))
 
-    const cleanTopic =
-      topicName.endsWith('工作台') || topicName.endsWith('工具箱')
-        ? topicName
-        : `${topicName} 工作台`
+    const cleanTopic = normalizeWorkspaceTopic(topicName)
 
     return {
       handled: true,

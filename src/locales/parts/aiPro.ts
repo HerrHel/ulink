@@ -182,6 +182,13 @@ export const aiZh = {
     wsCardDesc: '将选中的 {n} 个工具一键存入并建构专属笔记工作台',
     wsCardTitle: '一键装配「{name}」',
     wsCardButton: '一键装配工作台',
+    // 主题命名（生成的组名/卡片主题等用户可见数据）
+    wsTopicDefault: '精选工作台',
+    wsTopicFallback: '精选工具',
+    wsTopicSuffix: '工作台',
+    wsTopicSuffixAlt: '工具箱',
+    // 提示词侧：附件卡内容后追加的用户提问前缀
+    userQuestionLabel: '用户具体问题：',
     foundCountGeneric: '为你找到 {n} 个匹配站点',
     foundCountFallback: '未找到个性化匹配，以下为 {n} 个通用发现入口（非个性化结果）。',
     selectAll: '全选',
@@ -447,6 +454,13 @@ export const aiEn = {
     wsCardDesc_one: 'Store the selected {n} tool and build a dedicated note workspace',
     wsCardTitle: 'Assemble "{name}"',
     wsCardButton: 'Assemble workspace',
+    // 主题命名（生成的组名/卡片主题等用户可见数据）
+    wsTopicDefault: 'Featured Workspace',
+    wsTopicFallback: 'Featured Tools',
+    wsTopicSuffix: 'Workspace',
+    wsTopicSuffixAlt: 'Toolbox',
+    // 提示词侧：附件卡内容后追加的用户提问前缀
+    userQuestionLabel: 'User question: ',
     foundCountGeneric: 'Found {n} matching sites for you',
     foundCountFallback: 'No personalized matches found. Below are {n} generic discovery entry points (not personalized).',
     selectAll: 'Select all',

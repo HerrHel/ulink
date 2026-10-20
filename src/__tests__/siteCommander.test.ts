@@ -6,6 +6,7 @@ import {
   healDeadlink,
   clearUndoStack,
 } from '../lib/ai/siteCommander.js'
+import { setLocale } from '../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../types.js'
 
 // Mock 外部导出模块与 utils
@@ -523,6 +524,29 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resNl.action).toBe('pack_workspace')
     expect(resNl.actionCard?.actionName).toBe('create_topic_workspace')
     expect(resNl.actionCard?.payload?.topic).toContain('独立开发者')
+  })
+
+  // ── 21.x 工作台名称后缀双语（i18n 硬编码回归锁）──
+  it('/pack 工作台名称后缀跟随语言且不重复追加（en：Workspace）', async () => {
+    setLocale('en-US')
+    try {
+      const resEn = await dispatchSiteCommand('/pack frontend', {
+        ds: mockDs,
+        ui: mockUi,
+        app: mockApp,
+      })
+      expect(resEn.actionCard?.payload?.topic).toBe('frontend Workspace')
+
+      // 已带后缀则原样返回，不得追加第二段后缀
+      const resDup = await dispatchSiteCommand('/pack frontend Workspace', {
+        ds: mockDs,
+        ui: mockUi,
+        app: mockApp,
+      })
+      expect(resDup.actionCard?.payload?.topic).toBe('frontend Workspace')
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 
   // ── 22. createTopicWorkspace 建组、存入书签、生成内嵌笔记与撤销 ──

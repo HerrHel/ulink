@@ -41,7 +41,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
     } else if (call.name === 'create_workspace') {
-      const topic = call.arguments?.topic || '精选工作台'
+      const topic = call.arguments?.topic || t('ai.wsTopicDefault')
       assistantTurn.actionCard = {
         type: 'custom',
         actionName: 'create_topic_workspace',

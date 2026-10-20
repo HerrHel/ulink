@@ -194,6 +194,20 @@ export async function applyInboxZeroClustering(
   return { movedCount, nestedCount, message: parts.join(' ') }
 }
 
+/** 主题工作台名称后缀识别 token（含英文变体，仅用于避免重复追加，不作输出文案） */
+const WS_TOPIC_SUFFIX_TOKENS = ['工作台', '工具箱', 'Workspace', 'Toolbox']
+
+/**
+ * 规范化主题工作台名称：已带「工作台/工具箱」等后缀（含英文变体）则原样返回，
+ * 否则按当前语言追加本地化后缀（zh：「前端开发 工作台」/ en：「Frontend Workspace」）。
+ */
+export function normalizeWorkspaceTopic(topicName: string): string {
+  const name = topicName || ''
+  const lower = name.toLowerCase()
+  const hasSuffix = WS_TOPIC_SUFFIX_TOKENS.some((s) => lower.endsWith(s.toLowerCase()))
+  return hasSuffix ? name : `${name} ${t('ai.wsTopicSuffix')}`
+}
+
 export interface CreateTopicWorkspaceResult {
   success: boolean
   group: SiblingGroup | null
@@ -282,10 +296,7 @@ export async function createTopicWorkspace(
   )
   const order = Math.max(maxBmOrder, maxGrpOrder) + 1
 
-  const cleanName =
-    topicName.endsWith('工作台') || topicName.endsWith('工具箱')
-      ? topicName
-      : `${topicName} 工作台`
+  const cleanName = normalizeWorkspaceTopic(topicName)
 
   let initialNotes = `<p>${t('aiCmd.wsNotesIntro', { name: esc(cleanName) })}</p><p>`
   for (const b of savedBookmarks) {
