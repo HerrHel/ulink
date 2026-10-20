@@ -91,10 +91,14 @@ if (import.meta.env.PROD) {
       },
     })
 
-    // 新 SW 激活接管后强制整页刷新，确保所有 chunk 同代（hash 一致）
+    // 新 SW 激活接管后强制整页刷新，确保所有 chunk 同代（hash 一致）。
+    // 但首装激活（clients.claim）同样会触发 controllerchange——首装不存在旧 chunk
+    // 不同代问题，强刷反而打断用户当前操作（曾把 e2e 打出 flaky）。
+    // 故仅当「页面已受旧 SW 控制」被替换时才刷，首装跳过。
     let refreshing = false
+    const hadController = !!navigator.serviceWorker.controller
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return
+      if (refreshing || !hadController) return
       refreshing = true
       window.location.reload()
     })
