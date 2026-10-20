@@ -139,7 +139,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       ? `${formatAttachedCardsForPrompt(resolvedCards, isZh.value)}\n${t('ai.userQuestionLabel')}${raw}`
       : raw
 
-    const turnId = 'turn-' + Date.now()
+    // 随机后缀保证唯一：纯 Date.now() 在同毫秒连发时会产生重复 id，
+    // 使历史防双份注入的 id 跳过与逐轮查找全部错位
+    const turnId = 'turn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
     const currentAttachedCards = resolvedCards.map((c) => ({
       type: c.type,
       id: c.id,
