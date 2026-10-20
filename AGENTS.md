@@ -24,6 +24,8 @@ npm run coverage    # 单元测试覆盖率
 运行单个测试文件：`npx vitest run src/__tests__/utils.test.ts`
 Playwright 单个文件：`npx playwright test e2e/app.spec.ts`
 
+**测试按需跑**：日常改动跑定向测试（改动文件对应的单测、相关 spec）即可；全量 `npm run test`（约 4700 测）与全量 e2e 仅在门禁场景跑（提交前自检、CI）。全量 vitest 固定 8 并发（`vitest.config.ts` maxWorkers）、e2e 文件级并行 3 worker；怀疑生产构建（PurgeCSS/minify）回归时用 `npm run test:e2e:prod`——dev server 无法复现该类问题，必须对生产产物测。e2e 首跑单条失败先多轮复跑判定 flake 再定性，勿直接当代码缺陷。
+
 ## ESLint
 
 `eslint.config.js`（Flat Config，v10）。TypeScript 解析器，作用于 `src/**/*.{js,ts}`。`no-undef` 由 TS 接管故关闭。主要 error 规则：`no-eval`、`no-implied-eval`、`no-caller`、`no-redeclare`、`no-dupe-keys`、`no-duplicate-case`。warn 规则：`no-unused-vars`（`_` 前缀豁免，args 忽略）、`no-constant-condition`、`no-debugger`、`no-empty`、`no-unreachable`、`eqeqeq`（smart 模式）。
