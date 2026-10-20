@@ -71,8 +71,11 @@ export async function fetchVideoExtractServer(
   }
 }
 
-/** 注入提示词的内容截断上限：总结只需要概要，不做全量内容外送 */
-const SUMMARY_MAX_INPUT_CHARS = 6000
+/** 注入提示词的内容截断上限：总结只需要概要，不做全量内容外送。
+ *  上限须与转发层单条消息上限对齐（mimo-guard MAX_MESSAGE_CHARS_DEFAULT = 4000）：
+ *  模板文案（~120）+ 问题（≤200）+ 内容（≤3500）合计不超限，否则超长视频的总结
+ *  会被 guard 413 整条拒绝、静默失效。 */
+const SUMMARY_MAX_INPUT_CHARS = 3500
 /** 用户问题注入提示词前的截断上限：问题只需短句，超长按噪声处理 */
 const SUMMARY_MAX_QUESTION_CHARS = 200
 /** 内容太短没有总结价值的下限 */

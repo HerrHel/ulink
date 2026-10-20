@@ -102,9 +102,10 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
     expect(res).toBe('本期推荐 5 款设计工具。')
     expect(mockAskMiMo).toHaveBeenCalledTimes(1)
     const prompt = mockAskMiMo.mock.calls[0][0] as string
-    // 截断上限 6000：全文 20000 字符绝不整体进提示词
-    expect(prompt.length).toBeLessThan(7000)
-    expect(prompt).not.toContain('x'.repeat(7000))
+    // 组装后的完整提示词必须低于转发层单条消息上限（mimo-guard MAX_MESSAGE_CHARS_DEFAULT = 4000），
+    // 否则超长视频总结会被 guard 413 整条拒绝、静默失效（防回归：旧上限 6000 会使本断言失败）
+    expect(prompt.length).toBeLessThan(4000)
+    expect(prompt).not.toContain('x'.repeat(4000))
   })
 
   it('内容过短不发起请求；LLM 失败返回 null 不抛错', async () => {
