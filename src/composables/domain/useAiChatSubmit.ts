@@ -29,7 +29,7 @@ import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
 import type { AiSearchPreference } from '../../types/ai.js'
-import type { Ref, ComputedRef } from 'vue'
+import { reactive, type Ref, type ComputedRef } from 'vue'
 
 /** 本层依赖的共享状态与回调（由 useAiChat Facade 注入） */
 export interface AiChatSubmitContext {
@@ -155,7 +155,10 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       timestamp: Date.now(),
     })
 
-    const assistantTurn: ChatTurn = {
+    // 必须以 reactive 代理创建：push 进 chatTurns 后闭包持有的若是原始对象，后续流式写入
+    // content/loading 属性会绕过 proxy、不触发依赖更新（子组件拆分后无「同组件搭车重渲染」
+    // 兜底，流式内容将永不渲染）。经代理写入才能驱动 ChatStream 更新。
+    const assistantTurn = reactive({
       id: turnId + '-assistant',
       role: 'assistant',
       content: '',
@@ -167,7 +170,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       candidates: [],
       attachedCards: currentAttachedCards,
       timestamp: Date.now(),
-    }
+    }) as ChatTurn
     chatTurns.value.push(assistantTurn)
     onTurnsChanged?.()
 
