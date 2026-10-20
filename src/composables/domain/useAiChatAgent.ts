@@ -65,16 +65,32 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
     } else if (call.name === 'toggle_theme') {
-      const mode = call.arguments?.mode || 'auto'
-      const siteRes = await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
-      resultText = siteRes.reply || t('ai.toolResultTheme', { mode })
+      // 必填参数缺失/非法不静默兜底：如实回「未执行」，不伪报切换成功（约束：结果如实）
+      const mode = call.arguments?.mode
+      if (typeof mode !== 'string' || !mode.trim()) {
+        resultText = t('ai.toolResultArgsRejected', { name: call.name })
+      } else {
+        const siteRes = await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
+        // 命令未命中（如非法枚举值）时 dispatch 返回 handled:false，同样不得伪报成功
+        resultText = siteRes.handled && siteRes.reply
+          ? siteRes.reply
+          : t('ai.toolResultNotExecuted', { name: call.name })
+      }
     } else if (call.name === 'change_view') {
-      const layout = call.arguments?.layout || 'grid'
-      const siteRes = await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
-      resultText = siteRes.reply || t('ai.toolResultView', { layout })
+      const layout = call.arguments?.layout
+      if (typeof layout !== 'string' || !layout.trim()) {
+        resultText = t('ai.toolResultArgsRejected', { name: call.name })
+      } else {
+        const siteRes = await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
+        resultText = siteRes.handled && siteRes.reply
+          ? siteRes.reply
+          : t('ai.toolResultNotExecuted', { name: call.name })
+      }
     } else if (call.name === 'export_data') {
       const siteRes = await dispatchSiteCommand('/export', { ds, ui, app: (ui as any).app, signal: controller.signal })
-      resultText = siteRes.reply || t('ai.toolResultExport')
+      resultText = siteRes.handled && siteRes.reply
+        ? siteRes.reply
+        : t('ai.toolResultNotExecuted', { name: call.name })
     } else {
       resultText = t('ai.toolResultUnknown', { name: call.name })
     }

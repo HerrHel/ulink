@@ -277,6 +277,44 @@ describe('useAiChat — 真 Agent 多步工具链循环', () => {
     expect(assistantTurn?.toolResults?.[0]?.resultText).toMatch(/参数解析失败|could not be parsed/i)
   })
 
+  it('工具必填参数缺失不静默兜底默认值，如实回「未执行」', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    cmdMock.mockReset()
+    cmdMock.mockImplementation(async () => ({ handled: false, reply: '' }))
+    streamMock
+      .mockResolvedValueOnce(aiRes('切换主题', [{ id: 'c1', name: 'toggle_theme', arguments: {} }]))
+      .mockResolvedValueOnce(aiRes('缺少参数未能执行'))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '切换主题'
+    await ai.handleAiSubmit()
+
+    // 缺 mode（schema 标注 required）不得静默按 auto 执行
+    expect(cmdMock.mock.calls.some(([cmd]) => cmd.startsWith('/theme'))).toBe(false)
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(assistantTurn?.toolResults?.[0]?.resultText).toMatch(/参数无效或缺失|invalid or missing/i)
+    expect(assistantTurn?.toolResults?.[0]?.resultText).not.toMatch(/已切换|switched to/i)
+  })
+
+  it('命令未命中（非法枚举值）不伪报成功，如实回「未执行」', async () => {
+    const cmdMock = vi.mocked(dispatchSiteCommand)
+    cmdMock.mockReset()
+    // 非法枚举：/theme banana 意图不匹配，dispatch 返回 handled:false
+    cmdMock.mockImplementation(async () => ({ handled: false, reply: '' }))
+    streamMock
+      .mockResolvedValueOnce(aiRes('切换主题', [{ id: 'c1', name: 'toggle_theme', arguments: { mode: 'banana' } }]))
+      .mockResolvedValueOnce(aiRes('参数不合法未能执行'))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '切换主题'
+    await ai.handleAiSubmit()
+
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    // 不得伪报「主题已切换为 banana」
+    expect(assistantTurn?.toolResults?.[0]?.resultText).not.toMatch(/已切换|switched to/i)
+    expect(assistantTurn?.toolResults?.[0]?.resultText).toMatch(/未执行|not executed/i)
+  })
+
   it('生成中带附件按 Enter：附件槽位不丢、不新增对话轮（守卫前置）', async () => {
     const cmdMock = vi.mocked(dispatchSiteCommand)
     cmdMock.mockReset()
