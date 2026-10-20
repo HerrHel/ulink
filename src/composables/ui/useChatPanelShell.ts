@@ -5,7 +5,7 @@
  * 浮动/停靠 HUD 状态与持久化、附件槽位列表组装、note 写回与卡片定位入口、整面板关闭。
  * 纯状态 + 行为，不依赖 useAiChat 的产出；打开联动（高度自适应/聚焦/自动提交）作为接线留在 DetailPanel。
  */
-import { computed, ref, onMounted, onUnmounted, type Ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { isMobile } from '../../utils.js'
 import { useI18n } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -28,16 +28,18 @@ export function useChatPanelShell() {
   const isSessionMenuOpen = ref(false)
 
   const isMobileDevice = computed(() => isMobile())
-  // 存量写法原样搬运：初始化器函数被直接当作 ref 的值存入（函数未执行，
-  // 故初始恒真、localStorage 读取逻辑从未生效）。为保持拆分行为零变化先不动，
-  // 该 bug 由后续独立 fix 提交修复（执行初始化器）。
-  const isFloatingHud = ref(() => {
-    try {
-      return typeof localStorage !== 'undefined' && localStorage.getItem('ulink_ai_floating_hud') === 'true'
-    } catch {
-      return false
-    }
-  }) as unknown as Ref<boolean>
+  // 初始化器立即执行：挂载时读 localStorage 恢复上次的浮动/停靠偏好
+  // （修复存量 bug：原写法把初始化函数本身当作 ref 的值存入而未执行，
+  //   localStorage 恢复从未生效、初始恒真）
+  const isFloatingHud = ref(
+    (() => {
+      try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('ulink_ai_floating_hud') === 'true'
+      } catch {
+        return false
+      }
+    })()
+  )
 
   function toggleFloatingHud() {
     isFloatingHud.value = !isFloatingHud.value

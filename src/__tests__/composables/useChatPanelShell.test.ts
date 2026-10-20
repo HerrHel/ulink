@@ -4,7 +4,8 @@
  * 会话菜单「点击外部关闭」（含 .chat-top-title-wrap 内豁免与卸载后监听清理）、
  * closeEntirePanel、attachedCardsList 命中与标题回退、toggleFloatingHud 翻转与持久化、
  * note 写回三入口与卡片定位（断言 mock 被调用防假绿）。
- * toggle 断言采用「翻转」通用写法：isFloatingHud 存量 bug 修复前后均成立。
+ * isFloatingHud：初始化读 localStorage 断言锁定 fix（原写法未执行初始化器、恒真），
+ * toggle 断言采用「翻转」通用写法兼容修复前后。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { defineComponent, h } from 'vue'
@@ -163,6 +164,17 @@ describe('useChatPanelShell attachedCardsList', () => {
 })
 
 describe('useChatPanelShell toggleFloatingHud', () => {
+  it('初始化读取 localStorage：\'true\' → 初始 true；\'false\'/空 → 初始 false（锁 fix）', () => {
+    localStorage.setItem('ulink_ai_floating_hud', 'true')
+    expect(mountShell().api.isFloatingHud.value).toBe(true)
+
+    localStorage.setItem('ulink_ai_floating_hud', 'false')
+    expect(mountShell().api.isFloatingHud.value).toBe(false)
+
+    localStorage.clear()
+    expect(mountShell().api.isFloatingHud.value).toBe(false)
+  })
+
   it('翻转状态并持久化到 localStorage（修复前后通用断言）', () => {
     const { api } = mountShell()
     const before = !!api.isFloatingHud.value
