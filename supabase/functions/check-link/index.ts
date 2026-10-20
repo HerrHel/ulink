@@ -170,15 +170,22 @@ serve(async (req) => {
     }
 
     // 每用户限流（034 consume_rate_limit：独立计数器，绕开 033 剪枝对 history 计数的干扰）。
-    // RPC 失败 fail-open：鉴权 + SSRF + history 剪枝仍兜底，限流器故障不放大可用性损失。
+    // RPC 失败 fail-closed：本 Function 会代用户发起出站请求，fail-open 会被滥用成
+    // 无上限的外呼放大器（全库死链扫描 × 失效限流），宁可暂时不可用也不无限放行
+    // （与 mimo-chat 等转发层同一口径）。
     const { data: rlAllowed, error: rlError } = await supabase.rpc('consume_rate_limit', {
       p_key: `check-link:${user.id}`,
       p_limit: RATE_LIMIT_PER_MIN,
       p_window_secs: 60,
     })
     if (rlError) {
-      console.error('[check-link] rate limit rpc failed (fail-open):', rlError)
-    } else if (rlAllowed === false) {
+      console.error('[check-link] rate limit rpc failed (fail-closed):', rlError)
+      return new Response(
+        JSON.stringify({ error: 'Service temporarily unavailable' }),
+        { status: 503, headers: { ...cors, 'Content-Type': 'application/json' } }
+      )
+    }
+    if (rlAllowed === false) {
       return new Response(
         JSON.stringify({ error: 'Rate limit exceeded' }),
         { status: 429, headers: { ...cors, 'Content-Type': 'application/json', 'Retry-After': '60' } }
