@@ -55,6 +55,29 @@
                 </div>
                 <div class="chat-user-text">{{ turn.content }}</div>
               </div>
+              <!-- 发送前透明摘要：本次实际发给 AI 的数据构成（条数/字段/截断情况），可展开（隐私透明） -->
+              <div v-if="turn.sendSummary" class="chat-send-summary">
+                <button
+                  type="button"
+                  class="send-summary-toggle"
+                  :aria-expanded="!!openSummaries[turn.id]"
+                  @click="openSummaries[turn.id] = !openSummaries[turn.id]"
+                >
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  </svg>
+                  <span>{{ t('ai.sendSummaryTitle') }}</span>
+                  <span class="send-summary-arrow" :class="{ open: !!openSummaries[turn.id] }">
+                    <svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </span>
+                </button>
+                <div v-if="openSummaries[turn.id]" class="send-summary-body">
+                  <div v-for="(line, lIdx) in getSendSummaryLines(turn.sendSummary)" :key="lIdx" class="send-summary-line">{{ line }}</div>
+                  <div class="send-summary-note">{{ t('ai.sendSummaryNote') }}</div>
+                </div>
+              </div>
               <div class="chat-msg-actions user-actions">
                 <button
                   class="chat-msg-act-btn"
@@ -398,6 +421,8 @@
 // 数据、展示函数与动作逻辑全部留在父组件 DetailPanel（vm 绑定测试依赖），本组件只做渲染与事件上抛
 import type { ChatTurn, ChatActionCard, AttachedCardMeta } from '../../lib/ai/chatSessions.js'
 import type { ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
+import type { AiSendSummary } from '../../lib/ai/sendSummary.js'
+import { reactive } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
@@ -460,6 +485,46 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// 发送摘要展开态：组件内部纯 UI 状态（不影响 vm 绑定的展示函数与动作事件）
+const openSummaries = reactive<Record<string, boolean>>({})
+
+/** 发送摘要展示行（i18n 渲染，按实际注入字段动态拼装；截断情况如实标注） */
+function getSendSummaryLines(summary: AiSendSummary): string[] {
+  const lines: string[] = []
+  lines.push(t('ai.sendSummaryTaxonomy', { cats: summary.categoriesCount, attrs: summary.attributesCount }))
+  if (summary.focusedGroup) {
+    const trunc = summary.focusedGroup.shown < summary.focusedGroup.total ? t('ai.sendSummaryTruncated') : ''
+    lines.push(
+      t('ai.sendSummaryWorkspace', {
+        name: summary.focusedGroup.name,
+        shown: summary.focusedGroup.shown,
+        total: summary.focusedGroup.total,
+      }) + trunc,
+    )
+  }
+  if (summary.selected) {
+    const trunc = summary.selected.shown < summary.selected.total ? t('ai.sendSummaryTruncated') : ''
+    lines.push(
+      t('ai.sendSummarySelected', { shown: summary.selected.shown, total: summary.selected.total }) + trunc,
+    )
+  }
+  lines.push(t('ai.sendSummaryCards', { n: summary.attachedCardsCount }))
+  lines.push(
+    summary.vaultKnowledgeChars > 0
+      ? t('ai.sendSummaryRagOn', { chars: summary.vaultKnowledgeChars })
+      : t('ai.sendSummaryRagOff'),
+  )
+  lines.push(t('ai.sendSummaryHistory', { n: summary.historyTurnsIncluded }))
+  lines.push(
+    t('ai.sendSummaryChars', {
+      prompt: summary.userPromptChars,
+      system: summary.systemPromptChars,
+      total: summary.estimatedTotalChars,
+    }),
+  )
+  return lines
+}
 </script>
 <style scoped>
 /* 空态：淡雅、温和、纸质极客感引导 */
@@ -1486,5 +1551,80 @@ const { t } = useI18n()
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 160px;
+}
+
+/* 发送前透明摘要：随内容流布局的隐私披露条（不遮挡正文，右对齐贴合气泡） */
+.chat-send-summary {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.send-summary-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 9999px;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  line-height: 1.4;
+}
+
+.send-summary-toggle:hover {
+  color: var(--accent);
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.send-summary-arrow {
+  display: inline-flex;
+  align-items: center;
+  transition: transform 0.16s ease;
+}
+
+.send-summary-arrow.open {
+  transform: rotate(180deg);
+}
+
+.send-summary-body {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-left: 2.5px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+:global([data-theme="dark"]) .send-summary-body {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.send-summary-line {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.send-summary-note {
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--border-light);
+  font-size: 10px;
+  color: var(--text-muted);
 }
 </style>

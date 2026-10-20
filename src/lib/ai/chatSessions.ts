@@ -9,6 +9,7 @@
 
 import { safeGetItem, safeSetItem } from '../storageSafe.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
+import type { AiSendSummary } from './sendSummary.js'
 
 export const K_AI_SESSIONS = 'lv_ai_sessions_v1'
 export const K_AI_CUR_SESSION = 'lv_ai_cur_session_v1'
@@ -63,6 +64,8 @@ export interface ChatTurn {
   attachedCards?: AttachedCardMeta[]
   /** 包含完整注入附件数据的后台提示词（供多轮对话历史精准回溯） */
   promptContent?: string
+  /** 发送前透明摘要：本次实际发给 AI 的数据构成（可展开查看，隐私透明） */
+  sendSummary?: AiSendSummary
   candidates?: AiCandidateBookmark[]
   loading?: boolean
   timestamp: number

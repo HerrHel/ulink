@@ -60,6 +60,42 @@ export interface MiMoChatMessage {
   tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
 }
 
+/**
+ * 历史上下文裁剪（唯一真源）：最近 4 轮为基线，tool 链（user → assistant.tool_calls → tool）
+ * 必须整体连续不被切散，再叠加总量字符预算（新消息优先保留）。
+ * 发送摘要（发送前透明披露）与实际请求共用本函数，保证「披露的即所发」。
+ */
+export function selectHistorySlice(history: MiMoChatMessage[]): MiMoChatMessage[] {
+  if (!history?.length) return []
+  let start = Math.max(0, history.length - 4)
+  // 若切片边界会截断 tool 链（user → assistant.tool_calls → tool 结果必须连续完整），
+  // 向前扩展起点到链的开头，保证回传消息合法
+  if (history.slice(start).some((h) => h.role === 'tool')) {
+    while (start > 0 && history[start - 1].role !== 'user') {
+      start--
+    }
+  }
+  // 总量字符预算：用户长粘贴不得撑爆上下文——从最新往旧累计，超预算即丢弃更旧的
+  // 起点前推；tool 链起点保持在 user 消息边界，不切散协议链
+  let budget = MAX_HISTORY_CHARS
+  let end = history.length
+  for (let i = history.length - 1; i >= start; i--) {
+    const size = (history[i].content || '').length + 1
+    if (budget - size < 0 && i < end - 1) {
+      start = i + 1
+      // 若新起点落在 tool 链中间，回退到链头
+      if (history[start]?.role === 'tool') {
+        while (start > 0 && history[start - 1].role !== 'user') {
+          start--
+        }
+      }
+      break
+    }
+    budget -= size
+  }
+  return history.slice(start, end).filter((h) => h.content || h.tool_calls?.length || h.role === 'tool')
+}
+
 /** SSE 流中 tool_calls 增量的聚合（唯一真源，普通流与缓冲尾行共用） */
 function mergeToolCallDelta(
   toolCallsMap: Record<number, { id: string; name: string; argumentsStr: string }>,
@@ -122,41 +158,8 @@ export async function askMiMoStream(
 
   const messages: MiMoChatMessage[] = [{ role: 'system', content: systemPrompt }]
 
-  // 加入最近几轮历史上下文（最多取最近 4 轮，保持焦点集中）
-  if (context.history?.length) {
-    const history = context.history
-    let start = Math.max(0, history.length - 4)
-    // 若切片边界会截断 tool 链（user → assistant.tool_calls → tool 结果必须连续完整），
-    // 向前扩展起点到链的开头，保证回传消息合法
-    if (history.slice(start).some((h) => h.role === 'tool')) {
-      while (start > 0 && history[start - 1].role !== 'user') {
-        start--
-      }
-    }
-    // 总量字符预算：用户长粘贴不得撑爆上下文——从最新往旧累计，超预算即丢弃更旧的
-    // 起点前推；tool 链起点保持在 user 消息边界，不切散协议链
-    let budget = MAX_HISTORY_CHARS
-    let end = history.length
-    for (let i = history.length - 1; i >= start; i--) {
-      const size = (history[i].content || '').length + 1
-      if (budget - size < 0 && i < end - 1) {
-        start = i + 1
-        // 若新起点落在 tool 链中间，回退到链头
-        if (history[start]?.role === 'tool') {
-          while (start > 0 && history[start - 1].role !== 'user') {
-            start--
-          }
-        }
-        break
-      }
-      budget -= size
-    }
-    for (const h of history.slice(start, end)) {
-      if (h.content || h.tool_calls?.length || h.role === 'tool') {
-        messages.push(h)
-      }
-    }
-  }
+  // 加入最近几轮历史上下文（裁剪规则见 selectHistorySlice，与发送摘要共用同一真源）
+  messages.push(...selectHistorySlice(context.history || []))
 
   // userQuery 为空表示 Agent 循环续轮（历史已含 tool 结果，无需新用户消息）
   if (userQuery) {

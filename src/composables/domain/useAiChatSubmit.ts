@@ -24,6 +24,7 @@ import {
   type ResolvedCardContext,
 } from '../../lib/ai/cardReader.js'
 import { vaultRAG } from '../../lib/ai/localRAG.js'
+import { buildSendSummary } from '../../lib/ai/sendSummary.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
@@ -140,7 +141,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       : raw
 
     // 随机后缀保证唯一：纯 Date.now() 在同毫秒连发时会产生重复 id，
-    // 使历史防双份注入的 id 跳过与逐轮查找全部错位
+    // 使历史防双份注入的 id 跳过与发送摘要挂载全部错位
     const turnId = 'turn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
     const currentAttachedCards = resolvedCards.map((c) => ({
       type: c.type,
@@ -264,12 +265,16 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             // 动态构建情境切片 (Dynamic Context Slice)
             let focusedGroupName: string | undefined
             let focusedGroupBookmarks: Array<{ title: string; url: string }> | undefined
+            let focusedGroupTotal: number | undefined
             if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) {
               const grp = ds.groupMap[ui.focusedGroupId]
               focusedGroupName = grp.name
-              focusedGroupBookmarks = (grp.bookmarkIds || [])
+              const validGroupItems = (grp.bookmarkIds || [])
                 .map((id: string) => ds.bookmarkMap[id])
                 .filter((b: any) => b && !b.deletedAt)
+              // 截断前总数进发送摘要：披露「注入 N/总数 M」的真实截断情况
+              focusedGroupTotal = validGroupItems.length
+              focusedGroupBookmarks = validGroupItems
                 .slice(0, 10)
                 .map((b: any) => ({ title: b.title, url: b.url }))
             }
@@ -281,10 +286,13 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             }
 
             let selectedBookmarks: Array<{ title: string; url: string }> | undefined
+            let selectedTotal: number | undefined
             if (ui.batchMode && ui.batchSelected?.length) {
-              selectedBookmarks = ui.batchSelected
+              const validSelectedItems = ui.batchSelected
                 .map((id: string) => ds.bookmarkMap[id])
                 .filter((b: any) => b && !b.deletedAt)
+              selectedTotal = validSelectedItems.length
+              selectedBookmarks = validSelectedItems
                 .slice(0, 8)
                 .map((b: any) => ({ title: b.title, url: b.url }))
             }
@@ -301,6 +309,35 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               console.warn('[ulink AI] localRAG index/query failed:', ragErr)
             }
 
+            // 动态情境切片：请求与发送摘要共用同一对象，保证「披露的即所发」
+            const contextSlice = {
+              currentCategoryName,
+              focusedGroupName,
+              focusedGroupBookmarks,
+              selectedBookmarks,
+              retrievedVaultKnowledge,
+              attachedCards: resolvedCards.map((c) => ({
+                type: c.type,
+                title: c.title,
+                url: c.url,
+              })),
+            }
+
+            // 发送前透明摘要：如实记录本次实际发给 AI 的数据构成（条数/字段/截断情况），
+            // 挂在用户气泡下可展开查看（隐私透明）。历史裁剪与系统提示词口径均与请求一致。
+            const userTurn = chatTurns.value.find((tt) => tt.id === turnId + '-user')
+            if (userTurn) {
+              userTurn.sendSummary = buildSendSummary({
+                categories: ds.categories,
+                customAttributes: ds.customAttributes,
+                contextSlice,
+                focusedGroupTotal,
+                selectedTotal,
+                history,
+                userPrompt: promptWithCards,
+              })
+            }
+
             const mimoRes = await askMiMoStream(
               promptWithCards,
               {
@@ -309,18 +346,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 isZh: isZh.value,
                 signal: controller.signal,
                 history,
-                contextSlice: {
-                  currentCategoryName,
-                  focusedGroupName,
-                  focusedGroupBookmarks,
-                  selectedBookmarks,
-                  retrievedVaultKnowledge,
-                  attachedCards: resolvedCards.map((c) => ({
-                    type: c.type,
-                    title: c.title,
-                    url: c.url,
-                  })),
-                },
+                contextSlice,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {
