@@ -10,7 +10,9 @@
  *
  * 拆分说明（只拆分、不改行为）：undo 事务栈在 siteUndoStack.ts，命令执行在 siteActions.ts，
  * HITL 确认与行动卡片构造在 siteHitl.ts，意图解析（正则/参数提取）在 siteIntents.ts；
- * 本文件保留 dispatchSiteCommand 编排（15 个意图块顺序与短路语义不变）并 re-export 原公开符号。
+ * siteCommands/ 目录的指令块拆分进行中（本步已外迁 1.帮助 / 2.主题 / 3.视图 / 15.设置面板四块，
+ * 其余 14 块暂留本文件），SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；
+ * 本文件保留 dispatchSiteCommand 编排（意图块顺序与短路语义不变）并 re-export 原公开符号。
  */
 
 import { useDataStore } from '../../stores/data.js'
@@ -48,9 +50,6 @@ import {
   getUndoStackDepth,
 } from './siteUndoStack.js'
 import {
-  parseHelpIntent,
-  parseThemeIntent,
-  parseViewIntent,
   parseCatIntent,
   parseTrashIntent,
   parseDedupIntent,
@@ -65,11 +64,15 @@ import {
   parseCurrentCatIntent,
   parseUndoIntent,
   parseCleanIntent,
-  parseSettingsIntent,
 } from './siteIntents.js'
+import { helpBlock } from './siteCommands/help.js'
+import { themeBlock } from './siteCommands/theme.js'
+import { viewBlock } from './siteCommands/view.js'
+import { settingsBlock } from './siteCommands/settings.js'
+import type { SiteCommandResult } from './siteCommands/types.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category } from '../../types.js'
-import type { ChatTurnStep, ChatActionCard } from './chatSessions.js'
+import type { ChatActionCard } from './chatSessions.js'
 import type { SiteCommanderContext } from './siteActions.js'
 
 // ── re-export：撤销事务栈（单例在 siteUndoStack.ts） ──
@@ -96,15 +99,8 @@ export type {
   HealDeadlinkResult,
 } from './siteActions.js'
 
-export interface SiteCommandResult {
-  handled: boolean
-  reply: string
-  action?: string
-  success?: boolean
-  details?: Record<string, unknown>
-  steps?: ChatTurnStep[]
-  actionCard?: ChatActionCard
-}
+// ── re-export：命令结果类型（定义在 siteCommands/types.ts） ──
+export type { SiteCommandResult } from './siteCommands/types.js'
 
 /**
  * 调度站内命令与意图
@@ -123,203 +119,16 @@ export async function dispatchSiteCommand(
   const app = context?.app ?? useAppStore()
 
   // ── 1. 帮助说明 (/help, /?, 帮助) ──
-  if (parseHelpIntent(query)) {
-    return {
-      handled: true,
-      action: 'help',
-      success: true,
-      steps: [{ text: t('aiCmd.helpStep'), done: true }],
-      reply: [
-        t('aiCmd.helpTitle'),
-        '',
-        t('aiCmd.helpHealth'),
-        t('aiCmd.helpHealthUsage'),
-        '',
-        t('aiCmd.helpInbox'),
-        t('aiCmd.helpInboxUsage'),
-        '',
-        t('aiCmd.helpPack'),
-        t('aiCmd.helpPackUsage'),
-        '',
-        t('aiCmd.helpTheme'),
-        t('aiCmd.helpThemeUsage'),
-        t('aiCmd.helpThemeHint'),
-        '',
-        t('aiCmd.helpView'),
-        t('aiCmd.helpViewUsage'),
-        t('aiCmd.helpViewHint'),
-        '',
-        t('aiCmd.helpCat'),
-        t('aiCmd.helpCatUsage'),
-        t('aiCmd.helpCatHint'),
-        '',
-        t('aiCmd.helpTrash'),
-        t('aiCmd.helpTrashUsage'),
-        t('aiCmd.helpTrashHint'),
-        '',
-        t('aiCmd.helpDedup'),
-        t('aiCmd.helpDedupUsage'),
-        '',
-        t('aiCmd.helpDeadlink'),
-        t('aiCmd.helpDeadlinkUsage'),
-        '',
-        t('aiCmd.helpExport'),
-        t('aiCmd.helpExportUsage'),
-        '',
-        t('aiCmd.helpStats'),
-        t('aiCmd.helpStatsUsage'),
-        '',
-        t('aiCmd.helpMove'),
-        t('aiCmd.helpMoveUsage'),
-        t('aiCmd.helpMoveHint'),
-        '',
-        t('aiCmd.helpUndo'),
-        t('aiCmd.helpUndoUsage'),
-        '',
-        t('aiCmd.helpClean'),
-        t('aiCmd.helpCleanUsage'),
-        '',
-        t('aiCmd.helpSettings'),
-        t('aiCmd.helpSettingsUsage'),
-        '',
-        t('aiCmd.helpTip'),
-      ].join('\n'),
-    }
-  }
+  const helpResult = await helpBlock({ query, ds, ui, app })
+  if (helpResult !== null) return helpResult
 
   // ── 2. 主题外观 (/theme, 切换深色/浅色) ──
-  const themeIntent = parseThemeIntent(query)
-  if (themeIntent?.kind === 'slash') {
-    const mode = themeIntent.mode
-    if (mode === 'dark') {
-      ui.setThemeColor('dark')
-      return {
-        handled: true,
-        action: 'theme',
-        steps: [{ text: t('aiCmd.stepToDark'), done: true }],
-        reply: t('aiCmd.themeDarkDone'),
-      }
-    } else if (mode === 'light') {
-      ui.setThemeColor('light')
-      return {
-        handled: true,
-        action: 'theme',
-        steps: [{ text: t('aiCmd.stepToLight'), done: true }],
-        reply: t('aiCmd.themeLightDone'),
-      }
-    } else if (mode === 'auto') {
-      if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
-      return {
-        handled: true,
-        action: 'theme',
-        steps: [{ text: t('aiCmd.stepAutoTheme'), done: true }],
-        reply: t('aiCmd.themeAutoDone'),
-      }
-    } else {
-      ui.toggleTheme()
-      const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
-      return {
-        handled: true,
-        action: 'theme',
-        steps: [{ text: t('aiCmd.stepToggleTheme'), done: true }],
-        reply: t('aiCmd.themeToggled', { mode: current }),
-      }
-    }
-  }
-
-  if (themeIntent?.kind === 'nl-dark') {
-    ui.setThemeColor('dark')
-    return {
-      handled: true,
-      action: 'theme',
-      steps: [{ text: t('aiCmd.stepToDark'), done: true }],
-      reply: t('aiCmd.themeDarkDone'),
-    }
-  }
-
-  if (themeIntent?.kind === 'nl-light') {
-    ui.setThemeColor('light')
-    return {
-      handled: true,
-      action: 'theme',
-      steps: [{ text: t('aiCmd.stepToLight'), done: true }],
-      reply: t('aiCmd.themeLightDone'),
-    }
-  }
-
-  if (themeIntent?.kind === 'nl-auto') {
-    if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
-    return {
-      handled: true,
-      action: 'theme',
-      steps: [{ text: t('aiCmd.stepAutoTheme'), done: true }],
-      reply: t('aiCmd.themeAutoDone'),
-    }
-  }
-
-  if (themeIntent?.kind === 'nl-toggle') {
-    ui.toggleTheme()
-    const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
-    return {
-      handled: true,
-      action: 'theme',
-      steps: [{ text: t('aiCmd.stepToggleTheme'), done: true }],
-      reply: t('aiCmd.themeToggled', { mode: current }),
-    }
-  }
+  const themeResult = await themeBlock({ query, ds, ui, app })
+  if (themeResult !== null) return themeResult
 
   // ── 3. 布局视图 (/view, 切换列表/网格/紧凑) ──
-  const viewIntent = parseViewIntent(query)
-  if (viewIntent?.kind === 'slash') {
-    const rawMode = viewIntent.mode || 'grid'
-    const targetMode = rawMode === 'compact' ? 'mini-grid' : (rawMode as 'grid' | 'list' | 'mini-grid')
-    ui.layoutMode = targetMode
-    ui.saveUIState?.()
-    const nameMap: Record<'grid' | 'list' | 'mini-grid', string> = {
-      grid: t('aiCmd.viewNameGrid'),
-      list: t('aiCmd.viewNameList'),
-      'mini-grid': t('aiCmd.viewNameCompact'),
-    }
-    return {
-      handled: true,
-      action: 'view',
-      steps: [{ text: t('aiCmd.stepToView', { name: nameMap[targetMode] }), done: true }],
-      reply: t('aiCmd.viewDone', { name: nameMap[targetMode] }),
-    }
-  }
-
-  if (viewIntent?.kind === 'list') {
-    ui.layoutMode = 'list'
-    ui.saveUIState?.()
-    return {
-      handled: true,
-      action: 'view',
-      steps: [{ text: t('aiCmd.stepToView', { name: t('aiCmd.viewNameList') }), done: true }],
-      reply: t('aiCmd.viewDone', { name: t('aiCmd.viewNameList') }),
-    }
-  }
-
-  if (viewIntent?.kind === 'grid') {
-    ui.layoutMode = 'grid'
-    ui.saveUIState?.()
-    return {
-      handled: true,
-      action: 'view',
-      steps: [{ text: t('aiCmd.stepToView', { name: t('aiCmd.viewNameGrid') }), done: true }],
-      reply: t('aiCmd.viewDone', { name: t('aiCmd.viewNameGrid') }),
-    }
-  }
-
-  if (viewIntent?.kind === 'compact') {
-    ui.layoutMode = 'mini-grid'
-    ui.saveUIState?.()
-    return {
-      handled: true,
-      action: 'view',
-      steps: [{ text: t('aiCmd.stepToView', { name: t('aiCmd.viewNameCompact') }), done: true }],
-      reply: t('aiCmd.viewDone', { name: t('aiCmd.viewNameCompact') }),
-    }
-  }
+  const viewResult = await viewBlock({ query, ds, ui, app })
+  if (viewResult !== null) return viewResult
 
   // ── 4. 分类管理 (/cat, 新建分类) ──
   const catIntent = parseCatIntent(query)
@@ -1112,15 +921,8 @@ export async function dispatchSiteCommand(
   }
 
   // ── 15. 打开设置面板 (/settings, 打开设置) ──
-  if (parseSettingsIntent(query)) {
-    ui.panels.settings = true
-    return {
-      handled: true,
-      action: 'settings',
-      steps: [{ text: t('aiCmd.stepOpenSettings'), done: true }],
-      reply: t('aiCmd.settingsOpened'),
-    }
-  }
+  const settingsResult = await settingsBlock({ query, ds, ui, app })
+  if (settingsResult !== null) return settingsResult
 
   return { handled: false, reply: '' }
 }
