@@ -27,6 +27,8 @@ export interface SiteCommandBlockCtx {
   ds: ReturnType<typeof useDataStore>
   ui: ReturnType<typeof useUIStore>
   app: ReturnType<typeof useAppStore>
+  /** 中止信号（来自 dispatchSiteCommand 的 SiteCommanderContext）：HITL 确认后校验「停止生成」 */
+  signal?: AbortSignal
 }
 
 /** 返回 null 表示未命中该块，继续下一块；返回 SiteCommandResult 即短路 */

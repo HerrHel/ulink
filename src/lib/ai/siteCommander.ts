@@ -10,8 +10,9 @@
  *
  * 拆分说明（只拆分、不改行为）：undo 事务栈在 siteUndoStack.ts，命令执行在 siteActions.ts，
  * HITL 确认与行动卡片构造在 siteHitl.ts，意图解析（正则/参数提取）在 siteIntents.ts；
- * siteCommands/ 目录的指令块拆分进行中（本步已外迁 1.帮助 / 2.主题 / 3.视图 / 15.设置面板四块，
- * 其余 14 块暂留本文件），SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；
+ * siteCommands/ 目录的指令块拆分进行中（已外迁 1.帮助 / 2.主题 / 3.视图 / 4.分类 / 5.回收站 /
+ * 6.查重 / 6.5.工作台 / 7.死链 / 15.设置面板九块，其余 9 块暂留本文件），
+ * SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；
  * 本文件保留 dispatchSiteCommand 编排（意图块顺序与短路语义不变）并 re-export 原公开符号。
  */
 
@@ -19,10 +20,8 @@ import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
 import { useToastStore } from '../../stores/toast.js'
-import { addNewCategory } from '../../utils.js'
 import { exportData } from '../../composables/domain/useDataIO.js'
 import {
-  findDuplicateCandidates,
   isOfficialBookmark,
   isUncategorized,
   calculateVaultHealth,
@@ -32,29 +31,18 @@ import {
 import { CAT_UNCATEGORIZED, CAT_ALL } from '../../config/constants.js'
 import {
   askConfirm,
-  buildTrashClearConfirmMessage,
   buildMoveConfirmMessage,
-  buildTrashActionCard,
-  buildDedupActionCard,
-  buildPackActionCard,
-  buildHealDeadlinkCard,
   buildHealthInboxCard,
   buildHealthDedupCard,
   buildHealthTrashCard,
   buildInboxZeroActionCard,
 } from './siteHitl.js'
-import { searchWebsitesByIntent, findSimilarWebsites } from './cloudAiClient.js'
 import {
   pushUndoAction,
   popUndoAction,
   getUndoStackDepth,
 } from './siteUndoStack.js'
 import {
-  parseCatIntent,
-  parseTrashIntent,
-  parseDedupIntent,
-  parsePackIntent,
-  parseDeadlinkIntent,
   parseExportIntent,
   parseStatsIntent,
   parseHealthIntent,
@@ -68,10 +56,15 @@ import {
 import { helpBlock } from './siteCommands/help.js'
 import { themeBlock } from './siteCommands/theme.js'
 import { viewBlock } from './siteCommands/view.js'
+import { catBlock } from './siteCommands/cat.js'
+import { trashBlock } from './siteCommands/trash.js'
+import { dedupBlock } from './siteCommands/dedup.js'
+import { packBlock } from './siteCommands/pack.js'
+import { deadlinkBlock } from './siteCommands/deadlink.js'
 import { settingsBlock } from './siteCommands/settings.js'
 import type { SiteCommandResult } from './siteCommands/types.js'
 import { t, tN } from '../../i18n/index.js'
-import type { Bookmark, Category } from '../../types.js'
+import type { Category } from '../../types.js'
 import type { ChatActionCard } from './chatSessions.js'
 import type { SiteCommanderContext } from './siteActions.js'
 
@@ -131,312 +124,24 @@ export async function dispatchSiteCommand(
   if (viewResult !== null) return viewResult
 
   // ── 4. 分类管理 (/cat, 新建分类) ──
-  const catIntent = parseCatIntent(query)
-  if (catIntent?.kind === 'list') {
-    const activeCats = ds.categories.filter((c: Category) => !c.deletedAt)
-    const lines = [t('aiCmd.catListHeader'), '']
-    for (const cat of activeCats) {
-      const count = ds.bookmarks.filter((b) => !b.deletedAt && b.categoryId === cat.id).length
-      lines.push(tN('aiCmd.catListLine', count, { name: cat.name }))
-    }
-    const uncatCount = ds.bookmarks.filter(
-      (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId,
-    ).length
-    lines.push(tN('aiCmd.catListLine', uncatCount, { name: t('aiCmd.catListUncategorized') }))
-    return {
-      handled: true,
-      action: 'category_list',
-      steps: [{ text: t('aiCmd.stepReadCats'), done: true }],
-      reply: lines.join('\n'),
-    }
-  }
-
-  const catName = catIntent?.kind === 'add' ? catIntent.name : null
-  if (catName) {
-    const trimmed = catName.trim()
-    if (!trimmed) {
-      return { handled: true, action: 'category_add', success: false, reply: t('aiCmd.catNameEmpty') }
-    }
-    const exists = ds.categories.some(
-      (c: Category) => !c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase(),
-    )
-    if (exists) {
-      return {
-        handled: true,
-        action: 'category_add',
-        success: false,
-        steps: [{ text: t('aiCmd.stepCheckCatExists', { name: trimmed }), done: true }],
-        reply: t('aiCmd.catExists', { name: trimmed }),
-      }
-    }
-    const created = addNewCategory(trimmed, app)
-    if (created) {
-      pushUndoAction({
-        type: 'category_add',
-        description: t('aiCmd.undoCatDesc', { name: trimmed }),
-        revert: () => {
-          ds.deleteCategory(created.id)
-          app.save()
-          return t('aiCmd.undoCatRevert', { name: trimmed })
-        },
-      })
-      return {
-        handled: true,
-        action: 'category_add',
-        success: true,
-        steps: [
-          { text: t('aiCmd.stepValidateCat'), done: true },
-          { text: t('aiCmd.stepCreateCat', { name: trimmed }), done: true },
-        ],
-        reply: t('aiCmd.catCreated', { name: trimmed }),
-      }
-    }
-    return { handled: true, action: 'category_add', success: false, reply: t('aiCmd.catCreateFailed') }
-  }
+  const catResult = await catBlock({ query, ds, ui, app })
+  if (catResult !== null) return catResult
 
   // ── 5. 回收站管理 (/trash, 清空回收站, 打开回收站) ──
-  const trashIntent = parseTrashIntent(query)
-  if (trashIntent === 'clear') {
-    const bms = ds.bookmarks.filter((b) => b.deletedAt).length
-    const grps = ds.siblingGroups.filter((g) => g.deletedAt).length
-    const cats = ds.categories.filter((c: Category) => c.deletedAt).length
-    const total = bms + grps + cats
-    if (total === 0) {
-      return {
-        handled: true,
-        action: 'trash_clear',
-        steps: [{ text: t('aiCmd.stepCheckTrash'), done: true }],
-        reply: t('aiCmd.trashEmpty'),
-      }
-    }
-
-    // Agent 危险操作人机确认 (Human-in-the-Loop)
-    const confirmed = await askConfirm(buildTrashClearConfirmMessage(total, bms, grps, cats))
-    if (context?.signal?.aborted) {
-      return { handled: true, action: 'trash_clear', success: false, reply: '' }
-    }
-    if (!confirmed) {
-      return {
-        handled: true,
-        action: 'trash_clear',
-        success: false,
-        steps: [{ text: t('aiCmd.stepUserCancelTrash'), done: true }],
-        reply: t('aiCmd.trashClearCancelled'),
-      }
-    }
-
-    ds.emptyTrash()
-    app.save()
-    return {
-      handled: true,
-      action: 'trash_clear',
-      steps: [
-        { text: tN('aiCmd.stepVerifyTrash', total), done: true },
-        { text: t('aiCmd.stepHitlPassed'), done: true },
-        { text: t('aiCmd.stepDoEmptyTrash'), done: true },
-      ],
-      reply: tN('aiCmd.trashCleared', total, { total, bm: bms, grp: grps, cat: cats }),
-    }
-  }
-
-  if (trashIntent === 'open') {
-    ui.panels.trash = true
-    const bms = ds.bookmarks.filter((b) => b.deletedAt).length
-    const grps = ds.siblingGroups.filter((g) => g.deletedAt).length
-    const cats = ds.categories.filter((c: Category) => c.deletedAt).length
-    const total = bms + grps + cats
-
-    return {
-      handled: true,
-      action: 'trash_open',
-      steps: [{ text: t('aiCmd.stepOpenTrash'), done: true }],
-      actionCard:
-        total > 0
-          ? buildTrashActionCard({ total, bm: bms, grp: grps })
-          : undefined,
-      reply: total > 0 ? tN('aiCmd.trashOpened', total) : t('aiCmd.trashOpenedEmpty'),
-    }
-  }
+  const trashResult = await trashBlock({ query, ds, ui, app, signal: context?.signal })
+  if (trashResult !== null) return trashResult
 
   // ── 6. 查重巡检 (/dedup, 查找重复书签) ──
-  if (parseDedupIntent(query)) {
-    const dups = findDuplicateCandidates(ds.bookmarks)
-    if (!dups || dups.length === 0) {
-      return {
-        handled: true,
-        action: 'dedup',
-        steps: [
-          { text: t('aiCmd.stepScanUrls'), done: true },
-          { text: t('aiCmd.stepNoDupFound'), done: true },
-        ],
-        reply: t('aiCmd.dedupClean'),
-      }
-    }
-    const dupCount = dups.reduce((acc, d) => acc + d.duplicates.length, 0)
-    const lines = [
-      tN('aiCmd.dedupReport', dupCount, { groups: dups.length, count: dupCount }),
-      '',
-    ]
-    const previewItems = dups.slice(0, 5)
-    for (let i = 0; i < previewItems.length; i++) {
-      const d = previewItems[i]
-      lines.push(`${i + 1}. ${d.primary.title || t('aiCmd.untitled')}`)
-      lines.push(t('aiCmd.dedupMainUrl', { url: d.normalizedUrl }))
-      lines.push(
-        tN('aiCmd.dedupCopies', d.duplicates.length, {
-          titles: d.duplicates.map((dup) => dup.title || t('aiCmd.untitled')).join(', '),
-        }),
-      )
-    }
-    if (dups.length > 5) {
-      lines.push(tN('aiCmd.dedupMore', dups.length - 5))
-    }
-
-    return {
-      handled: true,
-      action: 'dedup',
-      steps: [
-        { text: t('aiCmd.stepScanUrls'), done: true },
-        { text: tN('aiCmd.stepDupFound', dups.length), done: true },
-      ],
-      actionCard: buildDedupActionCard({ dupCount, groups: dups.length }),
-      reply: lines.join('\n'),
-    }
-  }
+  const dedupResult = await dedupBlock({ query, ds, ui, app })
+  if (dedupResult !== null) return dedupResult
 
   // ── 6.5 主题工作台生成 (/pack <主题名>, 帮我搭建XX工作台) ──
-  const packIntent = parsePackIntent(query)
-  if (packIntent) {
-    const rawTopic = packIntent.rawTopic
-    if (!rawTopic) {
-      return {
-        handled: true,
-        action: 'pack_workspace',
-        steps: [{ text: t('aiCmd.stepPackHint'), done: true }],
-        reply: [
-          t('aiCmd.packHelpTitle'),
-          '',
-          t('aiCmd.packHelpUsage'),
-          t('aiCmd.packHelpExamplesLabel'),
-          t('aiCmd.packHelpExample1'),
-          t('aiCmd.packHelpExample2'),
-          t('aiCmd.packHelpExample3'),
-          '',
-          t('aiCmd.packHelpDesc'),
-        ].join('\n'),
-      }
-    }
-
-    const topicName = rawTopic
-    const candidates = await searchWebsitesByIntent(topicName, [], ds.categories, ds.customAttributes)
-    const previewList = candidates.slice(0, 5)
-
-    const lines = [
-      tN('aiCmd.packPlan', candidates.length, { topic: topicName }),
-      '',
-    ]
-    for (let i = 0; i < previewList.length; i++) {
-      const c = previewList[i]
-      lines.push(t('aiCmd.packItem', { i: i + 1, title: c.title, desc: c.notes || c.url }))
-    }
-    if (candidates.length > 5) {
-      lines.push(tN('aiCmd.packMore', candidates.length - 5))
-    }
-    lines.push('')
-    lines.push(t('aiCmd.packCta'))
-
-    const cleanTopic =
-      topicName.endsWith('工作台') || topicName.endsWith('工具箱')
-        ? topicName
-        : `${topicName} 工作台`
-
-    return {
-      handled: true,
-      action: 'pack_workspace',
-      steps: [
-        { text: tN('aiCmd.stepPackSelect', candidates.length, { topic: topicName }), done: true },
-        { text: t('aiCmd.stepPackPlan'), done: true },
-      ],
-      reply: lines.join('\n'),
-      actionCard: buildPackActionCard({ cleanTopic, candidates }),
-    }
-  }
+  const packResult = await packBlock({ query, ds, ui, app })
+  if (packResult !== null) return packResult
 
   // ── 7. 死链检测与自愈 (/deadlink, 检查死链, 死链自愈) ──
-  if (parseDeadlinkIntent(query)) {
-    const deadBookmarks = ds.bookmarks.filter(
-      (b: Bookmark) =>
-        !b.deletedAt && b.attributes?.['dead-link'] && !b.attributes?.['dead-link-ignored'],
-    )
-
-    if (deadBookmarks.length === 0) {
-      ui.overlays.deadLinks = true
-      return {
-        handled: true,
-        action: 'deadlinks',
-        steps: [{ text: t('aiCmd.stepScanDeadlinks'), done: true }],
-        reply: t('aiCmd.deadNone'),
-      }
-    }
-
-    const firstDead = deadBookmarks[0]
-    const alts = await findSimilarWebsites(
-      firstDead.url,
-      firstDead.title,
-      [],
-      ds.categories,
-      ds.customAttributes,
-    )
-    const bestAlt = alts[0]
-
-    const lines = [
-      tN('aiCmd.deadReport', deadBookmarks.length),
-      '',
-    ]
-    for (let i = 0; i < Math.min(3, deadBookmarks.length); i++) {
-      const b = deadBookmarks[i]
-      const wbUrl = `https://web.archive.org/web/*/${encodeURIComponent(b.url)}`
-      lines.push(t('aiCmd.deadItem', { i: i + 1, title: b.title || t('aiCmd.untitled'), url: b.url }))
-      lines.push(t('aiCmd.deadSnapshot', { url: wbUrl }))
-    }
-    if (deadBookmarks.length > 3) {
-      lines.push(tN('aiCmd.deadMore', deadBookmarks.length - 3))
-    }
-
-    if (bestAlt) {
-      lines.push('')
-      lines.push(t('aiCmd.deadAltIntro', { title: firstDead.title }))
-      lines.push(t('aiCmd.deadAltRec', { title: bestAlt.title, url: bestAlt.url }))
-      lines.push(
-        t('aiCmd.deadAltHighlight', {
-          desc: bestAlt.notes || bestAlt.highlight || t('aiCmd.deadAltDefaultHighlight'),
-        }),
-      )
-      lines.push('')
-      lines.push(t('aiCmd.deadCta'))
-    }
-
-    let actionCard: ChatActionCard | undefined
-    if (bestAlt) {
-      actionCard = buildHealDeadlinkCard({
-        deadBmId: firstDead.id,
-        fromTitle: firstDead.title,
-        toTitle: bestAlt.title,
-        replacement: bestAlt,
-      })
-    }
-
-    return {
-      handled: true,
-      action: 'deadlinks',
-      steps: [
-        { text: tN('aiCmd.stepDeadFound', deadBookmarks.length), done: true },
-        { text: t('aiCmd.stepDeadSearchAlt', { title: firstDead.title }), done: true },
-      ],
-      reply: lines.join('\n'),
-      actionCard,
-    }
-  }
+  const deadlinkResult = await deadlinkBlock({ query, ds, ui, app })
+  if (deadlinkResult !== null) return deadlinkResult
 
   // ── 8. 数据导出备份 (/export, 导出数据) ──
   if (parseExportIntent(query)) {
