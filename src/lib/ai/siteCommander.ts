@@ -8,36 +8,18 @@
  * 5. 上下文感知：感知当前浏览分类与多选状态；
  * 6. 严守克制美学：杜绝浮夸 emoji，采用纯净、温润的文字与符号排版。
  *
- * 拆分说明（只拆分、不改行为）：undo 事务栈在 siteUndoStack.ts，命令执行在 siteActions.ts，
- * HITL 确认与行动卡片构造在 siteHitl.ts，意图解析（正则/参数提取）在 siteIntents.ts；
- * siteCommands/ 目录的指令块拆分进行中（已外迁 1.帮助 / 2.主题 / 3.视图 / 4.分类 / 5.回收站 /
- * 6.查重 / 6.5.工作台 / 7.死链 / 8.导出 / 9.统计 / 9.1.体检 / 9.2.收件箱 / 15.设置面板十三块，
- * 其余 5 块暂留本文件），SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；
- * 本文件保留 dispatchSiteCommand 编排（意图块顺序与短路语义不变）并 re-export 原公开符号。
+ * 拆分说明（只拆分、不改行为，拆分已完成）：undo 事务栈在 siteUndoStack.ts，命令执行在
+ * siteActions.ts，HITL 确认与行动卡片构造在 siteHitl.ts，意图解析（正则/参数提取）在
+ * siteIntents.ts；18 个编号意图块的处理器在 siteCommands/ 目录（与意图编号一一对应，统一
+ * SiteCommandBlock 契约：返回 null = 未命中继续 fall-through，返回 SiteCommandResult 即短路），
+ * SiteCommandResult 定义移至 siteCommands/types.ts 并在此 re-export；本文件保留
+ * dispatchSiteCommand 纯编排（构造 ctx → 按序短路调用全部 block → 尾部 fallback，
+ * 意图块顺序与短路语义不变）并 re-export 原公开符号。
  */
 
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
-import { useToastStore } from '../../stores/toast.js'
-import { isOfficialBookmark } from './localClustering.js'
-import { CAT_UNCATEGORIZED, CAT_ALL } from '../../config/constants.js'
-import {
-  askConfirm,
-  buildMoveConfirmMessage,
-} from './siteHitl.js'
-import {
-  pushUndoAction,
-  popUndoAction,
-  getUndoStackDepth,
-} from './siteUndoStack.js'
-import {
-  parseBatchMoveIntent,
-  parseMoveIntent,
-  parseCurrentCatIntent,
-  parseUndoIntent,
-  parseCleanIntent,
-} from './siteIntents.js'
 import { helpBlock } from './siteCommands/help.js'
 import { themeBlock } from './siteCommands/theme.js'
 import { viewBlock } from './siteCommands/view.js'
@@ -50,10 +32,13 @@ import { exportBlock } from './siteCommands/export.js'
 import { statsBlock } from './siteCommands/stats.js'
 import { healthBlock } from './siteCommands/health.js'
 import { inboxBlock } from './siteCommands/inbox.js'
+import { batchMoveBlock } from './siteCommands/batchMove.js'
+import { moveBlock } from './siteCommands/move.js'
+import { currentCatBlock } from './siteCommands/currentCat.js'
+import { undoBlock } from './siteCommands/undo.js'
+import { cleanBlock } from './siteCommands/clean.js'
 import { settingsBlock } from './siteCommands/settings.js'
 import type { SiteCommandResult } from './siteCommands/types.js'
-import { t, tN } from '../../i18n/index.js'
-import type { Category } from '../../types.js'
 import type { SiteCommanderContext } from './siteActions.js'
 
 // ── re-export：撤销事务栈（单例在 siteUndoStack.ts） ──
@@ -148,264 +133,24 @@ export async function dispatchSiteCommand(
   if (inboxResult !== null) return inboxResult
 
   // ── 10. 上下文感知：批量移动选中的书签 ──
-  const batchMoveIntent = parseBatchMoveIntent(query)
-  if (batchMoveIntent && ui.batchMode && ui.batchSelected && ui.batchSelected.length > 0) {
-    const targetName = batchMoveIntent.targetName
-    const targetCat = ds.categories.find(
-      (c: Category) =>
-        !c.deletedAt &&
-        (c.name === targetName || c.name.toLowerCase() === targetName.toLowerCase()),
-    )
-    if (!targetCat) {
-      return {
-        handled: true,
-        action: 'batch_move',
-        success: false,
-        reply: t('aiCmd.batchMoveCatNotFound', { name: targetName }),
-      }
-    }
-
-    const selectedIds = [...ui.batchSelected]
-    const previousMap: Array<{ id: string; prevCatId?: string }> = []
-    let movedCount = 0
-
-    for (const id of selectedIds) {
-      const bm = ds.bookmarkMap[id]
-      if (bm && !bm.deletedAt) {
-        previousMap.push({ id, prevCatId: bm.categoryId })
-        ds.updateBookmark(id, { categoryId: targetCat.id })
-        movedCount++
-      }
-    }
-
-    if (movedCount > 0) {
-      app.save()
-      ui.batchMode = false
-      ui.batchSelected = []
-
-      pushUndoAction({
-        type: 'batch_move',
-        description: tN('aiCmd.undoBatchMoveDesc', movedCount, { cat: targetCat.name }),
-        revert: () => {
-          for (const item of previousMap) {
-            ds.updateBookmark(item.id, { categoryId: item.prevCatId })
-          }
-          app.save()
-          return tN('aiCmd.undoMoveRevert', previousMap.length)
-        },
-      })
-
-      return {
-        handled: true,
-        action: 'batch_move',
-        success: true,
-        steps: [
-          { text: tN('aiCmd.stepBatchDetected', movedCount), done: true },
-          { text: t('aiCmd.stepBatchMove', { cat: targetCat.name }), done: true },
-        ],
-        reply: tN('aiCmd.batchMoveDone', movedCount, { cat: targetCat.name }),
-      }
-    }
-  }
+  const batchMoveResult = await batchMoveBlock({ query, ds, ui, app })
+  if (batchMoveResult !== null) return batchMoveResult
 
   // ── 11. 批量整理未分类 (/move uncategorized <分类名>, 把未分类移动到 [分类名]) ──
-  const moveIntent = parseMoveIntent(query)
-  const targetCategoryRaw = moveIntent ? moveIntent.targetCategoryRaw : null
-
-  if (targetCategoryRaw) {
-    const targetCat = ds.categories.find(
-      (c: Category) =>
-        !c.deletedAt &&
-        (c.name === targetCategoryRaw || c.name.toLowerCase() === targetCategoryRaw.toLowerCase()),
-    )
-    if (!targetCat) {
-      return {
-        handled: true,
-        action: 'move_uncategorized',
-        success: false,
-        reply: t('aiCmd.moveCatNotFound', { name: targetCategoryRaw }),
-      }
-    }
-
-    const uncatBms = ds.bookmarks.filter(
-      (b) =>
-        !b.deletedAt &&
-        (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) &&
-        !b.parentId &&
-        !isOfficialBookmark(b),
-    )
-
-    if (uncatBms.length === 0) {
-      return {
-        handled: true,
-        action: 'move_uncategorized',
-        success: true,
-        reply: t('aiCmd.moveNone'),
-      }
-    }
-
-    // 若未分类数量较大（例如 > 5 个），进行二次确认保护
-    if (uncatBms.length > 5) {
-      const confirmed = await askConfirm(
-        buildMoveConfirmMessage(uncatBms.length, targetCat.name),
-      )
-      if (context?.signal?.aborted) {
-        return { handled: true, action: 'move_uncategorized', success: false, reply: '' }
-      }
-      if (!confirmed) {
-        return {
-          handled: true,
-          action: 'move_uncategorized',
-          success: false,
-          steps: [{ text: t('aiCmd.stepUserCancelMove'), done: true }],
-          reply: t('aiCmd.moveCancelled'),
-        }
-      }
-    }
-
-    const previousMap = uncatBms.map((b) => ({ id: b.id, prevCatId: b.categoryId }))
-    for (const b of uncatBms) {
-      ds.updateBookmark(b.id, { categoryId: targetCat.id })
-    }
-    app.save()
-
-    pushUndoAction({
-      type: 'move_uncategorized',
-      description: tN('aiCmd.undoMoveUncatDesc', uncatBms.length, { cat: targetCat.name }),
-      revert: () => {
-        for (const item of previousMap) {
-          ds.updateBookmark(item.id, { categoryId: item.prevCatId })
-        }
-        app.save()
-        return tN('aiCmd.undoMoveRevert', previousMap.length)
-      },
-    })
-
-    return {
-      handled: true,
-      action: 'move_uncategorized',
-      success: true,
-      steps: [
-        { text: tN('aiCmd.stepFilterUncat', uncatBms.length), done: true },
-        { text: t('aiCmd.stepMoveUncat', { cat: targetCat.name }), done: true },
-      ],
-      reply: tN('aiCmd.moveDone', uncatBms.length, { cat: targetCat.name }),
-    }
-  }
+  const moveResult = await moveBlock({ query, ds, ui, app, signal: context?.signal })
+  if (moveResult !== null) return moveResult
 
   // ── 12. 上下文感知：当前分类查询 ──
-  if (parseCurrentCatIntent(query)) {
-    if (ui.curCat && ui.curCat !== CAT_ALL) {
-      const cat = ds.categories.find((c: Category) => c.id === ui.curCat)
-      const catName = cat ? cat.name : (ui.curCat === CAT_UNCATEGORIZED ? t('aiCmd.catListUncategorized') : ui.curCat)
-      const count = ds.bookmarks.filter((b) => !b.deletedAt && b.categoryId === ui.curCat).length
-      return {
-        handled: true,
-        action: 'current_cat',
-        steps: [{ text: t('aiCmd.stepReadContext'), done: true }],
-        reply: tN('aiCmd.currentCat', count, { name: catName }),
-      }
-    }
-    const totalCount = ds.bookmarks.filter((b) => !b.deletedAt && !b.parentId).length
-    return {
-      handled: true,
-      action: 'current_cat',
-      steps: [{ text: t('aiCmd.stepReadGlobalContext'), done: true }],
-      reply: tN('aiCmd.currentAll', totalCount),
-    }
-  }
+  const currentCatResult = await currentCatBlock({ query, ds, ui, app })
+  if (currentCatResult !== null) return currentCatResult
 
   // ── 13. 对话式撤销 (/undo, 撤销操作, 恢复原样) ──
-  if (parseUndoIntent(query)) {
-    // 「停止生成」后不再执行撤销副作用（popUndoAction 会改状态，必须前置校验）
-    if (context?.signal?.aborted) {
-      return { handled: true, action: 'undo', success: false, reply: '' }
-    }
-    const actionToRevert = popUndoAction()
-    if (actionToRevert) {
-      const msg = await actionToRevert.revert()
-      const remaining = getUndoStackDepth()
-      const suffix = remaining > 0 ? tN('aiCmd.undoRemaining', remaining) : ''
-      return {
-        handled: true,
-        action: 'undo',
-        success: true,
-        steps: [{ text: t('aiCmd.stepRevertAction', { desc: actionToRevert.description }), done: true }],
-        reply: `${msg}${suffix}`,
-      }
-    }
-
-    try {
-      const toastStore = useToastStore()
-      if (toastStore.undoToast) {
-        const msg = toastStore.undoToast.msg
-        toastStore.undoToast.undoFn()
-        toastStore.dismissUndo()
-        return {
-          handled: true,
-          action: 'undo',
-          success: true,
-          steps: [{ text: t('aiCmd.stepGlobalUndo'), done: true }],
-          reply: t('aiCmd.undoGlobalDone', { msg }),
-        }
-      }
-    } catch {
-      // Pinia 未初始化
-    }
-
-    return {
-      handled: true,
-      action: 'undo',
-      success: false,
-      reply: t('aiCmd.undoNone'),
-    }
-  }
+  const undoResult = await undoBlock({ query, ds, ui, app, signal: context?.signal })
+  if (undoResult !== null) return undoResult
 
   // ── 14. 孤儿与无效引用自检清理 (/clean, 清理孤立数据) ──
-  if (parseCleanIntent(query)) {
-    let fixedGroupRefs = 0
-    let fixedParentRefs = 0
-
-    // 检查组内的失效 bookmarkIds
-    for (const grp of ds.siblingGroups) {
-      if (!grp.bookmarkIds || grp.bookmarkIds.length === 0) continue
-      const validIds = grp.bookmarkIds.filter(
-        (id: string) => !!ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt,
-      )
-      if (validIds.length !== grp.bookmarkIds.length) {
-        fixedGroupRefs += grp.bookmarkIds.length - validIds.length
-        ds.updateGroup(grp.id, { bookmarkIds: validIds })
-      }
-    }
-
-    // 检查书签中的失效 parentId
-    for (const bm of ds.bookmarks) {
-      if (bm.parentId && (!ds.bookmarkMap[bm.parentId] || ds.bookmarkMap[bm.parentId].deletedAt)) {
-        fixedParentRefs++
-        ds.updateBookmark(bm.id, { parentId: undefined })
-      }
-    }
-
-    if (fixedGroupRefs > 0 || fixedParentRefs > 0) {
-      app.save()
-      return {
-        handled: true,
-        action: 'clean_orphans',
-        steps: [
-          { text: t('aiCmd.stepAuditGroupRefs'), done: true },
-          { text: t('aiCmd.stepFixOrphans'), done: true },
-        ],
-        reply: t('aiCmd.cleanFixed', { grp: fixedGroupRefs, par: fixedParentRefs }),
-      }
-    }
-
-    return {
-      handled: true,
-      action: 'clean_orphans',
-      steps: [{ text: t('aiCmd.stepConsistencyOk'), done: true }],
-      reply: t('aiCmd.cleanOk'),
-    }
-  }
+  const cleanResult = await cleanBlock({ query, ds, ui, app })
+  if (cleanResult !== null) return cleanResult
 
   // ── 15. 打开设置面板 (/settings, 打开设置) ──
   const settingsResult = await settingsBlock({ query, ds, ui, app })
