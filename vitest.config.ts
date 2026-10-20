@@ -29,6 +29,12 @@ export default defineConfig({
     // 4s 级用例（useVault resetVaultWithRecoveryKey / forkPublicGroup 等）偶发超时红，
     // 且 stash 对照实验证明与改动无关（基线同样抖）。放宽到 30s 消除该类调度抖动。
     testTimeout: 30000,
+    // 全量套件固定 8 并发：32 核机器默认并发（~16 worker）曾触发「worker 启动超时」
+    // 环境 flake，此前靠 CLI 临时降 maxWorkers=2 绕开但全量拖慢到 ~6min。
+    // 同子集控制变量实测（2026-10-20）：8 worker 34.8s vs 2 worker 72.8s（2.1x），
+    // threads/forks 同速；8 并发下每文件固定开销摊薄膨胀 ~1.9x 但总吞吐净赚。
+    // 机器纯 CPU 供给约 3-4 核是天花板，改动此值需全量复跑两轮验证 flake 不复现。
+    maxWorkers: 8,
     // .claude/worktrees/** 兜底排除：长跑 worktree 残留目录（含 node_modules）曾被 vitest 误扫
     // 出 4994 测 4 fail（board-locks 第十轮 A2 段血泪），排除后残留不再污染基线
     // .workbuddy/** 兜底排除：该目录存的是会话备份（含 .vue/.test.ts 副本），
