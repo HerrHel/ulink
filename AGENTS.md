@@ -16,7 +16,8 @@ npm run lint        # ESLint 检查 src/
 npm run typecheck   # TypeScript 类型检查
 npm run test        # 运行所有单元测试（vitest run）
 npm run test:watch  # 监听模式运行单元测试
-npm run test:e2e    # Playwright E2E 测试（e2e/，自动起 dev server）
+npm run test:e2e    # Playwright E2E 测试（e2e/，自动起 dev server，端口 5173）
+npm run test:e2e:prod # E2E 测试（生产构建模式：build+preview 起 5174，覆盖 PurgeCSS/minify 等仅生产构建生效的回归）
 npm run coverage    # 单元测试覆盖率
 ```
 

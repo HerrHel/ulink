@@ -8,6 +8,10 @@
 import { test, expect } from '@playwright/test'
 import { installSupabaseMock, injectConflictViaTestHook, L1_EMAIL } from './helpers/supabaseMock'
 
+// 生产构建模式（test:e2e:prod）：__LV_E2E__ 注入钩子仅 DEV 挂载（src/main.ts，生产构建 tree-shake），
+// 无生产注入通道，prod 模式下依赖该钩子的用例如实跳过，由默认 dev 模式覆盖。
+const isProd = !!process.env.LV_E2E_PROD || process.env.npm_lifecycle_event === 'test:e2e:prod'
+
 // 锁定 zh-CN：CI 浏览器默认 en-US，i18n 会渲染英文导致「同步冲突」等中文断言失配
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -52,6 +56,7 @@ test.describe('L1 同步 mock', () => {
   })
 
   test('冲突横幅 UI（testid + 操作按钮）', async ({ page }) => {
+    test.skip(isProd, '依赖 DEV-only __LV_E2E__ 注入钩子（生产构建不含），由默认 dev 模式覆盖')
     await installSupabaseMock(page)
 
     await page.goto('/app')

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:prod": "playwright test",
     "coverage": "vitest run --coverage",
     "ext:bundle-supabase": "npx esbuild@latest --bundle --format=iife --global-name=supabase --outfile=extension/lib/supabase.js @supabase/supabase-js",
     "ext:pack": "node scripts/pack-extension.js",
