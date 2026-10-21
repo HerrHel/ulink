@@ -5,7 +5,7 @@ import { popUndoAction, clearUndoStack } from '../../lib/ai/siteUndoStack.js'
 import { createAiAgentToolRunner } from '../../composables/domain/useAiChatAgent.js'
 import { useAiActionCards } from '../../composables/domain/useAiActionCards.js'
 import { ref } from 'vue'
-import type { Bookmark, Category, CustomAttribute } from '../../types.js'
+import type { Bookmark, CustomAttribute } from '../../types.js'
 
 vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),

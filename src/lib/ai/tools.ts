@@ -12,6 +12,11 @@
  * 7. change_view: 切换界面布局视图（宫格/列表/紧凑）
  * 8. export_data: 导出全量书签数据（HITL 二次确认后执行）
  * 9. batch_tag_bookmarks: 批量为指定书签写入标签属性（闭环落地）
+ * 10. manage_categories: 全能分类管理（创建/重命名/删除/恢复/外观）
+ * 11. manage_tags: 全能标签属性管理（创建/重命名/删除/恢复）
+ * 12. manage_bookmarks: 全能书签治理（增删改查/移动/父子嵌套/置顶）
+ * 13. manage_workspaces: 全能工作台装配（创建/命名/笔记/增删成员）
+ * 14. manage_settings: 系统偏好与界面导航（主题/排版/跳转/清空回收站）
  */
 
 export interface AgentToolParamProperty {
@@ -300,6 +305,230 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
           },
         },
         required: ['items'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_categories',
+      description: '全能分类管理：支持创建新分类、重命名分类、删除分类（移入回收站）、恢复分类、修改分类颜色或图标。',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description: '欲执行的分类操作动作',
+            enum: ['create', 'rename', 'delete', 'restore', 'update_color', 'update_icon'],
+          },
+          name: {
+            type: 'string',
+            description: '目标分类名称或欲创建的分类名称',
+          },
+          newName: {
+            type: 'string',
+            description: '重命名时的新分类名称',
+          },
+          categoryId: {
+            type: 'string',
+            description: '目标分类ID（若已知）',
+          },
+          color: {
+            type: 'string',
+            description: '分类主题色，如十六进制颜色 #122E8A',
+          },
+          icon: {
+            type: 'string',
+            description: '分类图标名称',
+          },
+          reason: {
+            type: 'string',
+            description: '执行该操作的原因或方案说明',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_tags',
+      description: '全能标签与属性管理：支持新建标签属性、重命名标签、删除标签、恢复标签。',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description: '欲执行的标签操作动作',
+            enum: ['create', 'rename', 'delete', 'restore'],
+          },
+          name: {
+            type: 'string',
+            description: '标签名称或新建标签的名称',
+          },
+          newName: {
+            type: 'string',
+            description: '重命名时的新标签名',
+          },
+          tagId: {
+            type: 'string',
+            description: '标签ID（若已知）',
+          },
+          reason: {
+            type: 'string',
+            description: '操作原因或方案说明',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_bookmarks',
+      description: '全能书签治理：支持添加新书签（包含从URL与标题新增）、更新书签资料（标题/URL/备注/图标/标签）、移动至目标分类、建立父子嵌套挂靠、解除父子嵌套为独立顶级书签、置顶/取消置顶、移入回收站、从回收站恢复。',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description: '欲执行的书签操作动作',
+            enum: ['add', 'update', 'move', 'delete', 'restore', 'set_parent', 'remove_parent', 'toggle_pin'],
+          },
+          target: {
+            type: 'string',
+            description: '欲操作的目标书签名称、网址或ID',
+          },
+          url: {
+            type: 'string',
+            description: '添加或更新时的完整网址（必须以 http:// 或 https:// 开头）',
+          },
+          title: {
+            type: 'string',
+            description: '添加或更新时的书签标题',
+          },
+          notes: {
+            type: 'string',
+            description: '书签备注或客观分析总结',
+          },
+          icon: {
+            type: 'string',
+            description: '书签图标 URL（可选）',
+          },
+          targetCategory: {
+            type: 'string',
+            description: '欲归属或移动至的目标分类名称',
+          },
+          targetParent: {
+            type: 'string',
+            description: '欲挂靠的父书签名称/网址/ID（用于同站子页面嵌套）',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '欲附加或更新的标签属性列表，例如 ["工具", "开源"]',
+          },
+          reason: {
+            type: 'string',
+            description: '操作原因说明',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_workspaces',
+      description: '全能工作台/笔记组装配：支持围绕特定主题新建工作台（SiblingGroup）、重命名工作台、编辑富文本笔记、向工作台添加工具书签、移出工具书签、删除工作台（移入回收站）、从回收站恢复工作台。',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description: '欲执行的工作台操作动作',
+            enum: ['create', 'rename', 'delete', 'restore', 'add_bookmarks', 'remove_bookmarks', 'update_notes'],
+          },
+          name: {
+            type: 'string',
+            description: '工作台/笔记组名称',
+          },
+          newName: {
+            type: 'string',
+            description: '重命名后的新工作台名称',
+          },
+          workspaceId: {
+            type: 'string',
+            description: '工作台ID（若已知）',
+          },
+          notes: {
+            type: 'string',
+            description: '工作台内的笔记正文（支持纯文本或 Markdown 格式）',
+          },
+          targetCategory: {
+            type: 'string',
+            description: '工作台所属目标分类名称',
+          },
+          bookmarkQueries: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '欲加入或移除的书签名称/网址/ID列表',
+          },
+          reason: {
+            type: 'string',
+            description: '操作原因说明',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_settings',
+      description: '全能偏好设置与界面导航调度：支持切换深浅主题外观、切换视图布局（宫格/列表/紧凑）、导航跳转至特定分类或工作台、展开回收站或设置面板、彻底清空回收站、导出全库备份。',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            description: '欲执行的设置或导航动作',
+            enum: ['toggle_theme', 'change_view', 'navigate', 'empty_trash', 'export_data'],
+          },
+          themeMode: {
+            type: 'string',
+            description: '目标主题模式',
+            enum: ['dark', 'light', 'auto'],
+          },
+          viewLayout: {
+            type: 'string',
+            description: '目标视图排版布局',
+            enum: ['grid', 'list', 'compact'],
+          },
+          navigateTarget: {
+            type: 'string',
+            description: '导航目标类型',
+            enum: ['category', 'workspace', 'trash', 'settings'],
+          },
+          targetName: {
+            type: 'string',
+            description: '欲跳转的目标分类名或工作台名',
+          },
+          exportFormat: {
+            type: 'string',
+            description: '导出格式',
+            enum: ['json', 'html'],
+          },
+          reason: {
+            type: 'string',
+            description: '操作原因说明',
+          },
+        },
+        required: ['action'],
       },
     },
   },

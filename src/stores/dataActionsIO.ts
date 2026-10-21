@@ -18,6 +18,7 @@ export const ioActions = {
     const d = persist.loadFromLocalStorage()
     this.bookmarks = d.bookmarks; this.siblingGroups = d.siblingGroups
     this.categories = d.categories; this.customAttributes = d.customAttributes
+    this.ensureGroupAttribute()
     this._syncMaps()
     this._normalizeCategoryOrders()
     this._restoreDeletedGroupMemberships()
@@ -30,6 +31,7 @@ export const ioActions = {
       runMigrations(idbData, idbData)
       this.bookmarks = idbData.bookmarks; this.siblingGroups = idbData.siblingGroups
       this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
+      this.ensureGroupAttribute()
       this._syncMaps()
       this._normalizeCategoryOrders()
       this._restoreDeletedGroupMemberships()
@@ -57,6 +59,7 @@ export const ioActions = {
     this.bookmarks = result.bookmarks
     this.customAttributes = result.customAttributes
     this.siblingGroups = result.siblingGroups
+    this.ensureGroupAttribute()
     this._syncMaps()
     this._normalizeCategoryOrders()
     // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。

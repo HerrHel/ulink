@@ -5,6 +5,13 @@
  * 入参显式携带 assistantTurn 与 controller（等同原闭包捕获的同名变量），行为与拆分前逐字一致。
  */
 import { dispatchSiteCommand, batchTagBookmarks } from '../../lib/ai/siteCommander.js'
+import {
+  executeManageCategories,
+  executeManageTags,
+  executeManageBookmarks,
+  executeManageWorkspaces,
+  executeManageSettings,
+} from '../../lib/ai/universalAgent.js'
 import { createTaskDagPlan } from '../../lib/ai/taskPlanner.js'
 import { createDedupDraftDiff } from '../../lib/ai/draftDiff.js'
 import { findDuplicateCandidates } from '../../lib/ai/localClustering.js'
@@ -179,6 +186,63 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         } else {
           resultText = res.message || '未匹配到可打标的书签。'
         }
+      }
+    } else if (call.name === 'manage_categories') {
+      const res = await executeManageCategories((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      resultText = res.message
+      if (res.success) {
+        if (!assistantTurn.steps) assistantTurn.steps = []
+        assistantTurn.steps.push({ text: res.message, done: true })
+      }
+    } else if (call.name === 'manage_tags') {
+      const res = await executeManageTags((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      resultText = res.message
+      if (res.success) {
+        if (!assistantTurn.steps) assistantTurn.steps = []
+        assistantTurn.steps.push({ text: res.message, done: true })
+      }
+    } else if (call.name === 'manage_bookmarks') {
+      const res = await executeManageBookmarks((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      resultText = res.message
+      if (res.success) {
+        if (!assistantTurn.steps) assistantTurn.steps = []
+        assistantTurn.steps.push({ text: res.message, done: true })
+        if (res.data?.id) {
+          assistantTurn.actionCard = {
+            type: 'custom',
+            actionName: 'manage_bookmarks',
+            title: `书签「${res.data.title}」`,
+            desc: res.data.url,
+            buttonText: '已完成操作',
+            completed: true,
+            payload: call.arguments,
+          }
+        }
+      }
+    } else if (call.name === 'manage_workspaces') {
+      const res = await executeManageWorkspaces((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      resultText = res.message
+      if (res.success) {
+        if (!assistantTurn.steps) assistantTurn.steps = []
+        assistantTurn.steps.push({ text: res.message, done: true })
+        if (res.data?.id) {
+          assistantTurn.actionCard = {
+            type: 'custom',
+            actionName: 'create_topic_workspace',
+            title: `工作台「${res.data.name}」`,
+            desc: `包含 ${res.data.bookmarkIds?.length || 0} 个书签工具`,
+            buttonText: '聚焦查看',
+            completed: true,
+            resultGid: res.data.id,
+          }
+        }
+      }
+    } else if (call.name === 'manage_settings') {
+      const res = await executeManageSettings((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      resultText = res.message
+      if (res.success) {
+        if (!assistantTurn.steps) assistantTurn.steps = []
+        assistantTurn.steps.push({ text: res.message, done: true })
       }
     } else {
       resultText = t('ai.toolResultUnknown', { name: call.name })

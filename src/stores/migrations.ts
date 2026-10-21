@@ -82,11 +82,29 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   result.customAttributes = deduped
   if (attrs.length !== deduped.length) needsPersist = true
 
+  // 确保内置「笔记」属性在存在时非旧名「组」，且未软删
+  const legacyGroupAttr = result.customAttributes.find(a => a.id === ATTR_IS_GROUP && a.name === '组')
+  if (legacyGroupAttr) {
+    legacyGroupAttr.name = '笔记'
+    needsPersist = true
+  }
+  const deletedGroupAttr = result.customAttributes.find(a => a.id === ATTR_IS_GROUP && a.deletedAt)
+  if (deletedGroupAttr) {
+    delete deletedGroupAttr.deletedAt
+    needsPersist = true
+  }
+
   // 3. 分类迁移
   result.bookmarks.forEach(b => { if (b.categoryId === CAT_ALL) b.categoryId = CAT_UNCATEGORIZED })
   result.siblingGroups.forEach(g => {
     if (g.categoryId === CAT_ALL) g.categoryId = CAT_UNCATEGORIZED
-    if (!g.attributes) g.attributes = { [ATTR_IS_GROUP]: true }
+    if (!g.attributes) {
+      g.attributes = { [ATTR_IS_GROUP]: true }
+      needsPersist = true
+    } else if (!g.attributes[ATTR_IS_GROUP]) {
+      g.attributes[ATTR_IS_GROUP] = true
+      needsPersist = true
+    }
   })
   // D2-003：补齐分类 icon/color，避免旧盘缺字段在 schema 严格期整库回退
   result.categories.forEach(c => {

@@ -5,19 +5,39 @@
 import { cleanupGroupImagesOnDelete } from '../lib/imageStorage.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite } from './dataShared.js'
+import { ATTR_IS_GROUP } from '../config/constants.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { SiblingGroup } from '../types.js'
 
 export const groupActions = {
-  addGroup(this: DataStoreThis, g: SiblingGroup) { if (_denyWrite()) return; this.siblingGroups = [...this.siblingGroups, g]; this._grpMap[g.id] = g; this._markDirty(g.id); this._newIds.add(g.id); this._searchIndexDirty = true },
+  addGroup(this: DataStoreThis, g: SiblingGroup) {
+    if (_denyWrite()) return
+    const attributes = { ...g.attributes, [ATTR_IS_GROUP]: true }
+    const group = { ...g, attributes }
+    this.siblingGroups = [...this.siblingGroups, group]
+    this._grpMap[group.id] = group
+    this._markDirty(group.id)
+    this._newIds.add(group.id)
+    this._searchIndexDirty = true
+  },
   updateGroup(this: DataStoreThis, id: string, changes: Partial<SiblingGroup>) {
     if (_denyWrite()) return
     const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
     if (idx >= 0) {
       this._saveLocalHistory(id, { ...this.siblingGroups[idx] })
-      for (const key of Object.keys(changes)) this._trackChange(id, key)
-      this.siblingGroups[idx] = { ...this.siblingGroups[idx], ...changes, updatedAt: Date.now() }
-      this._grpMap[id] = this.siblingGroups[idx]
+      const appliedChanges = { ...changes }
+      if (appliedChanges.attributes) {
+        appliedChanges.attributes = { ...appliedChanges.attributes, [ATTR_IS_GROUP]: true }
+      }
+      for (const key of Object.keys(appliedChanges)) this._trackChange(id, key)
+      const updated = { ...this.siblingGroups[idx], ...appliedChanges, updatedAt: Date.now() }
+      if (!updated.attributes) {
+        updated.attributes = { [ATTR_IS_GROUP]: true }
+      } else {
+        updated.attributes[ATTR_IS_GROUP] = true
+      }
+      this.siblingGroups[idx] = updated
+      this._grpMap[id] = updated
       this._markDirty(id)
       this._searchIndexDirty = true
     }

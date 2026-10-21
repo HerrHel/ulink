@@ -8,6 +8,7 @@ import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { localHistoryKey } from './storage.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite, _histDebounceTimers, _histDebounceData, _HISTORY_DEBOUNCE_MS } from './dataShared.js'
+import { ATTR_IS_GROUP } from '../config/constants.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { TableName } from '../types.js'
 
@@ -118,6 +119,7 @@ export const coreActions = {
 
   /** 内部辅助：永久删除项 */
   _permanentDelete(this: DataStoreThis, key: TableName, id: string) {
+    if (key === 'custom_attributes' && id === ATTR_IS_GROUP) return
     const handlers: Record<TableName, () => void> = {
       bookmarks: () => { this.bookmarks = this.bookmarks.filter(b => b.id !== id) },
       sibling_groups: () => { this.siblingGroups = this.siblingGroups.filter(g => g.id !== id) },

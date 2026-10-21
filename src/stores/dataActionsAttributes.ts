@@ -6,6 +6,8 @@
 import { useUIStore } from './ui.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite } from './dataShared.js'
+import { ATTR_IS_GROUP } from '../config/constants.js'
+import { getLocale } from '../i18n/index.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { CustomAttribute } from '../types.js'
 
@@ -31,6 +33,7 @@ export const attributeActions = {
   },
   renameAttribute(this: DataStoreThis, id: string, name: string) {
     if (_denyWrite()) return
+    if (id === ATTR_IS_GROUP) return
     const idx = _indexOfById(this.customAttributes, this._attrMap, id)
     if (idx >= 0) {
       this._trackChange(id, 'name')
@@ -41,6 +44,7 @@ export const attributeActions = {
   },
   deleteAttribute(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
+    if (id === ATTR_IS_GROUP) return
     const aIdx = _indexOfById(this.customAttributes, this._attrMap, id)
     if (aIdx >= 0) {
       this.customAttributes[aIdx] = { ...this.customAttributes[aIdx], deletedAt: Date.now(), updatedAt: Date.now() }
@@ -192,9 +196,60 @@ export const attributeActions = {
 
   permanentDeleteAttribute(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
+    if (id === ATTR_IS_GROUP) return
     this._permanentDelete('custom_attributes', id)
     delete this._attrMap[id]
     this._deletedAttrMemberships.delete(id)
     this._searchIndexDirty = true
+  },
+
+  ensureGroupAttribute(this: DataStoreThis): boolean {
+    if (_denyWrite()) return false
+    const isEn = getLocale() === 'en-US'
+    let changed = false
+    const existing = this.customAttributes.find(a => a.id === ATTR_IS_GROUP)
+    if (!existing) {
+      const attr: CustomAttribute = {
+        id: ATTR_IS_GROUP,
+        name: isEn ? 'Note' : '笔记',
+        type: 'boolean'
+      }
+      this.customAttributes = [...this.customAttributes, attr]
+      this._attrMap[ATTR_IS_GROUP] = attr
+      this._markDirty(ATTR_IS_GROUP)
+      changed = true
+    } else {
+      if (existing.deletedAt) {
+        delete existing.deletedAt
+        existing.updatedAt = Date.now()
+        this._markDirty(ATTR_IS_GROUP)
+        changed = true
+      }
+      if (existing.name === '组') {
+        existing.name = isEn ? 'Note' : '笔记'
+        existing.updatedAt = Date.now()
+        this._markDirty(ATTR_IS_GROUP)
+        changed = true
+      }
+    }
+
+    for (let i = 0; i < this.siblingGroups.length; i++) {
+      const g = this.siblingGroups[i]
+      if (!g.attributes) {
+        this.siblingGroups[i] = { ...g, attributes: { [ATTR_IS_GROUP]: true } }
+        this._grpMap[g.id] = this.siblingGroups[i]
+        this._markDirty(g.id)
+        changed = true
+      } else if (!g.attributes[ATTR_IS_GROUP]) {
+        this.siblingGroups[i] = { ...g, attributes: { ...g.attributes, [ATTR_IS_GROUP]: true } }
+        this._grpMap[g.id] = this.siblingGroups[i]
+        this._markDirty(g.id)
+        changed = true
+      }
+    }
+    if (changed) {
+      this._searchIndexDirty = true
+    }
+    return changed
   },
 }

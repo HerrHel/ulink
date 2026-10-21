@@ -264,6 +264,7 @@ export interface DataStoreThis {
   _restoreAttrMemberships(entityId: string, kind: 'bookmark' | 'group'): void
   _dropAttrMemberships(entityId: string): void
   permanentDeleteAttribute(id: string): void
+  ensureGroupAttribute(): boolean
   // io
   loadFromStorage(): void
   tryLoadFromIDB(): Promise<boolean>

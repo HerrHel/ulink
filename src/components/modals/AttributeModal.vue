@@ -15,8 +15,10 @@
             </template>
             <template v-else>
               <span class="flex-1">{{ attr.name }}</span>
-              <button class="btn-xs icon-xs" @click="startRename(attr)" :title="t('common.edit')" v-html="I.edit"></button>
-              <button class="btn-xs btn-danger icon-xs" @click="onDelete(attr.id)" :title="t('common.delete')" v-html="I.trash"></button>
+              <template v-if="attr.id !== ATTR_IS_GROUP">
+                <button class="btn-xs icon-xs" @click="startRename(attr)" :title="t('common.edit')" v-html="I.edit"></button>
+                <button class="btn-xs btn-danger icon-xs" @click="onDelete(attr.id)" :title="t('common.delete')" v-html="I.trash"></button>
+              </template>
             </template>
           </div>
         </div>
@@ -32,6 +34,7 @@ import { gid } from '../../utils.js'
 import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { toast, toastWithUndo } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
+import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
@@ -67,6 +70,7 @@ function onAddAttr() {
 }
 
 function onDelete(id: string) {
+  if (id === ATTR_IS_GROUP) return
   const attr = store.attributeMap[id]
   if (!attr) return
   store.deleteAttribute(id)

@@ -148,6 +148,7 @@ export const useAppStore = defineStore('app', () => {
     permanentDeleteGroup(id: string) { ds().permanentDeleteGroup(id) },
     permanentDeleteCategory(id: string) { ds().permanentDeleteCategory(id) },
     permanentDeleteAttribute(id: string) { ds().permanentDeleteAttribute(id) },
+    ensureGroupAttribute() { return ds().ensureGroupAttribute() },
     emptyTrash() { ds().emptyTrash() },
     importFromData(data: Partial<AppData>) {
       ds().importFromData(data)
