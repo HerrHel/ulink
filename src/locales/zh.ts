@@ -145,7 +145,6 @@ export const zh = {
     url: '网址',
     confirmMoveCategory: '确认将分类「{name}」及其全部书签/笔记移入私密空间？',
     renameAttrPrompt: '重命名属性',
-    aiSimilar: '找相似平替',
     aiEnrich: '智能补齐信息',
     aiChat: '询问 AI',
   },

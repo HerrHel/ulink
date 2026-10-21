@@ -56,8 +56,6 @@ export const ACTIONS: Record<string, string> = {
   SHARE_CATEGORY: 'shareCategory',
   /** 导出分类（分类菜单项：导出该分类及其全部书签与组） */
   EXPORT_CATEGORY: 'exportCategory',
-  /** 寻找类似网站与平替 */
-  AI_SIMILAR: 'aiSimilar',
   /** 智能补齐与润色信息 */
   AI_ENRICH: 'aiEnrich',
   /** 询问 AI / 探讨此卡片或笔记 */

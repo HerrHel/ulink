@@ -104,7 +104,7 @@ function select(item: SearchResultItem) {
   const q = ui.searchQuery
   ui.searchQuery = ''
   if (item._isAiAction) {
-    ui.openAiFinder('intent', q)
+    ui.openAiAssistant(q)
     return
   }
   if (item._isGroup) {

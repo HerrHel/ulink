@@ -143,7 +143,6 @@ export const en = {
     url: 'URL',
     confirmMoveCategory: 'Move category "{name}" and all its bookmarks/notes into the private space?',
     renameAttrPrompt: 'Rename attribute',
-    aiSimilar: 'Find Similar Sites',
     aiEnrich: 'Smart Enrich Info',
     aiChat: 'Ask AI',
   },
