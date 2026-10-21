@@ -810,5 +810,51 @@ describe('EdgeStagingSidebar — 右侧智能边缘侧边栏交互与渲染测�
     wrapper.unmount()
     localStorage.clear()
   })
+
+  it('21. 收起状态持久化：收起后写入 localStorage，刷新重新挂载保持收起态不自动展开', async () => {
+    const ui = useUIStore()
+    const ds = useDataStore()
+
+    const bm: Bookmark = { id: 'bm_1', title: 'BM 1', url: 'https://a.com' } as Bookmark
+    ds.bookmarks = [bm]
+    ui.detailCards = ['bm_1']
+
+    const wrapper1 = mount(EdgeStagingSidebar)
+    await flushPromises()
+
+    // 初始展开
+    expect(wrapper1.find('.edge-staging-dock-panel').exists()).toBe(true)
+    expect(wrapper1.find('.edge-staging-handle').exists()).toBe(false)
+
+    // 点击收起按钮
+    await wrapper1.find('.dock-collapse-btn').trigger('click')
+    await flushPromises()
+
+    // 验证状态已持久化到 localStorage
+    expect(localStorage.getItem('ulink_staging_collapsed')).toBe('1')
+    expect(wrapper1.find('.edge-staging-handle').exists()).toBe(true)
+
+    wrapper1.unmount()
+
+    // 模拟刷新页面（重新 mount 组件）
+    const wrapper2 = mount(EdgeStagingSidebar)
+    await flushPromises()
+
+    // 验证刷新后依然保持收起状态，不自动展开
+    expect(wrapper2.find('.edge-staging-dock-panel').exists()).toBe(false)
+    expect(wrapper2.find('.edge-staging-handle').exists()).toBe(true)
+
+    // 点击手柄展开
+    await wrapper2.find('.edge-staging-handle').trigger('click')
+    await flushPromises()
+
+    // 验证展开后状态更新为 0
+    expect(localStorage.getItem('ulink_staging_collapsed')).toBe('0')
+    expect(wrapper2.find('.edge-staging-dock-panel').exists()).toBe(true)
+    expect(wrapper2.find('.edge-staging-handle').exists()).toBe(false)
+
+    wrapper2.unmount()
+    localStorage.clear()
+  })
 })
 

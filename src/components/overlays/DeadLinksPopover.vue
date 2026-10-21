@@ -173,7 +173,7 @@ function onSelect(bmId: string) {
 }
 
 function onDelete(bmId: string) {
-  deleteBookmarkWithUndo(bmId)
+  deleteBookmarkWithUndo(bmId, true)
 }
 
 function onFindAlternative(b: { id: string; title: string; url: string }) {

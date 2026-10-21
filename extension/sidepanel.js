@@ -868,17 +868,42 @@
 
   // ── 删除 ──
   async function deleteBookmark(id, title) {
-    var ok = await confirmDeleteDialog(title)
-    if (!ok) return
-    const result = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
-    if (result.error) { toast(chrome.i18n.getMessage('delete_failed') + result.error.message); return }
-    toast(chrome.i18n.getMessage('deleted'), 2500)
+    var target = allBookmarks.find(function (b) { return b.id === id })
+    var backupBm = target ? Object.assign({}, target) : null
+
+    // 乐观立即移除并收起详情面板
     allBookmarks = allBookmarks.filter(function (b) { return b.id !== id })
     if (currentMatchedBookmark && currentMatchedBookmark.id === id) {
       currentMatchedBookmark = null
       hideBookmarkDetail()
     }
     applyFilterAndRender()
+
+    var result = await sb.from('bookmarks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId)
+    if (result.error) {
+      toast(chrome.i18n.getMessage('delete_failed') + result.error.message)
+      if (backupBm) {
+        allBookmarks.push(backupBm)
+        applyFilterAndRender()
+      }
+      return
+    }
+
+    toast(chrome.i18n.getMessage('deleted'), 4000, {
+      label: chrome.i18n.getMessage('undo') || '撤销',
+      onClick: async function () {
+        var undoRes = await sb.from('bookmarks').update({ deleted_at: null }).eq('id', id).eq('user_id', userId)
+        if (undoRes.error) {
+          toast(chrome.i18n.getMessage('unknown_error'))
+          return
+        }
+        if (backupBm) {
+          allBookmarks.push(backupBm)
+          applyFilterAndRender()
+        }
+        toast(chrome.i18n.getMessage('undone') || '已撤销', 2000)
+      }
+    })
   }
 
   // ── 当前标签页 ──

@@ -30,7 +30,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { gid } from '../../utils.js'
 import { attrSlug } from '../../composables/domain/attrSlug.js'
-import { toast, showConfirm } from '../../lib/toast.js'
+import { toast, toastWithUndo } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
@@ -66,14 +66,14 @@ function onAddAttr() {
   toast(t('attr.addedToast'))
 }
 
-async function onDelete(id: string) {
-  // A2-002：删除前确认；软删定义时会快照实体 attributes，恢复时可回写
+function onDelete(id: string) {
   const attr = store.attributeMap[id]
-  const name = attr?.name || id
-  const ok = await showConfirm(t('modal.attribute.confirmDelete', { name }))
-  if (!ok) return
+  if (!attr) return
   store.deleteAttribute(id)
   store.save()
-  toast(t('modal.attribute.deleted'))
+  toastWithUndo(t('modal.attribute.deleted'), () => {
+    store.restoreAttribute(id)
+    store.save()
+  })
 }
 </script>

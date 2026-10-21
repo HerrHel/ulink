@@ -184,7 +184,7 @@ function onEditChild(childId: string) {
 }
 
 function onDeleteChild(childId: string) {
-  deleteBookmarkWithUndo(childId)
+  deleteBookmarkWithUndo(childId, true)
 }
 
 function onPreviewIconUrl() { previewIconUrl() }

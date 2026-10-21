@@ -252,11 +252,27 @@ const ds = useDataStore()
 
 const imgErrors = ref<Record<string, boolean>>({})
 
-// 常驻设计：默认展开，只有用户点击 [›] 时才手动收起
+// 边缘手柄与展开面板垂直位置与收起状态（持久化记忆）
+const HANDLE_STORAGE_KEY = 'ulink_staging_handle_top'
+const COLLAPSED_STORAGE_KEY = 'ulink_staging_collapsed'
+
+// 常驻设计：默认展开，只有用户点击 [›] 时才手动收起；若用户收起过则持久化记忆
 const isCollapsed = ref(false)
 
-// 边缘手柄与展开面板垂直位置（持久化记忆）
-const HANDLE_STORAGE_KEY = 'ulink_staging_handle_top'
+try {
+  const savedCollapsed = typeof localStorage !== 'undefined' ? localStorage.getItem(COLLAPSED_STORAGE_KEY) : null
+  if (savedCollapsed === '1' || savedCollapsed === 'true') {
+    isCollapsed.value = true
+  }
+} catch {
+  // SSR or private mode safety
+}
+
+function saveCollapsedState(val: boolean) {
+  try {
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, val ? '1' : '0')
+  } catch {}
+}
 const CONTAINER_TOP = 98 // 紧贴顶栏 FilterBar（高 96px）下方，无缝贴合属性栏
 const MIN_HANDLE_TOP = 6 // 最小安全顶部距离，仅 6px 间隙即可紧邻属性栏
 const DEFAULT_HANDLE_TOP = 24 // 默认位置舒适靠近上方属性栏
@@ -306,6 +322,7 @@ const currentAnchor = computed<'top' | 'bottom'>(() => resolveAnchorMode(handleT
 // 展开暂存栏：智能锁定展开方向（从顶展开 vs 从底展开）
 function expandShelf() {
   isCollapsed.value = false
+  saveCollapsedState(false)
   if (entries.value.length === 0) {
     userExpandedEmpty.value = true
   }
@@ -314,6 +331,7 @@ function expandShelf() {
 // 收起暂存栏：收起为手柄，并联动关闭左侧详情飞窗
 function collapseShelf() {
   isCollapsed.value = true
+  saveCollapsedState(true)
   userExpandedEmpty.value = false
   if (ui.modals.quickLook) {
     ui.closeQuickLook()
@@ -822,7 +840,7 @@ function clearAll() {
 /* 2. Manual Collapsed Handle (精致小巧悬浮胶囊，不贴边，有内容常驻，支持上下拖拽微调) */
 .edge-staging-handle {
   position: absolute;
-  right: 7px;
+  right: 10px;
   z-index: 1;
   display: flex;
   flex-direction: column;
@@ -851,7 +869,7 @@ function clearAll() {
   top: -8px;
   bottom: -8px;
   left: -12px;
-  right: -7px;
+  right: -5px;
   pointer-events: auto;
 }
 
@@ -1380,18 +1398,17 @@ function clearAll() {
 }
 
 .handle-slide-enter-active {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
-  transition-delay: 0.06s;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
 }
 
 .handle-slide-leave-active {
-  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.16s ease;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
 }
 
 .handle-slide-enter-from,
 .handle-slide-leave-to {
   opacity: 0;
-  transform: translateX(calc(100% + 24px));
+  transform: scale(0.85);
 }
 
 @media (max-width: 768px) {
