@@ -100,4 +100,54 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
     expect(wrapper.find('th').text()).toBe('书签')
     expect(wrapper.find('td').text()).toBe('抖音')
   })
+
+  it('深度思考生成中，若内容超出容器高度自动滚动吸底；用户主动上滑后暂停吸底', async () => {
+    const turn: ChatTurn = {
+      id: 'turn-thinking-1',
+      role: 'assistant',
+      content: '',
+      reasoning: '正在思考第1步...',
+      isThinking: true,
+      _thinkingOpen: true,
+      loading: true,
+      timestamp: Date.now(),
+    }
+    const wrapper = mountStream([turn])
+    const bodyEl = wrapper.find('.chat-thinking-body').element as HTMLElement
+    expect(bodyEl).toBeDefined()
+
+    // 模拟容器产生滚动条
+    Object.defineProperty(bodyEl, 'scrollHeight', { value: 600, configurable: true })
+    Object.defineProperty(bodyEl, 'clientHeight', { value: 240, configurable: true })
+
+    // reasoning 内容持续增长
+    turn.reasoning = '正在思考第1步...\n正在深入分析第2步...\n正在整理第3步...'
+    await wrapper.setProps({ chatTurns: [{ ...turn }] })
+
+    // 验证自动吸底
+    expect(bodyEl.scrollTop).toBe(600)
+
+    // 模拟用户手动往上滚动（距离底部 > 40px）
+    bodyEl.scrollTop = 100
+    await wrapper.find('.chat-thinking-body').trigger('scroll')
+
+    // reasoning 再次更新
+    Object.defineProperty(bodyEl, 'scrollHeight', { value: 800, configurable: true })
+    turn.reasoning += '\n用户正在回看，此时新生成的第4步...'
+    await wrapper.setProps({ chatTurns: [{ ...turn }] })
+
+    // 验证用户向上翻看期间不会被强行拽到底部
+    expect(bodyEl.scrollTop).toBe(100)
+
+    // 模拟用户滚回底部（距离底部 <= 40px）
+    bodyEl.scrollTop = 580 // 800 - 580 - 240 = -20 <= 40
+    await wrapper.find('.chat-thinking-body').trigger('scroll')
+
+    // 再次流式生成，应恢复自动滚到底部
+    Object.defineProperty(bodyEl, 'scrollHeight', { value: 1000, configurable: true })
+    turn.reasoning += '\n重新恢复吸底第5步...'
+    await wrapper.setProps({ chatTurns: [{ ...turn }] })
+
+    expect(bodyEl.scrollTop).toBe(1000)
+  })
 })

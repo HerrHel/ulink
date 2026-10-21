@@ -166,7 +166,12 @@
                     </span>
                   </button>
 
-                  <div v-if="turn._thinkingOpen" class="chat-thinking-body">
+                  <div
+                    v-if="turn._thinkingOpen"
+                    :ref="(el) => setThinkingBodyRef(turn.id, el as HTMLElement | null)"
+                    class="chat-thinking-body"
+                    @scroll="handleThinkingScroll(turn.id, $event)"
+                  >
                     <div class="chat-thinking-text">{{ turn.reasoning }}<span v-if="turn.isThinking" class="thinking-stream-cursor" aria-hidden="true"></span></div>
                   </div>
                 </div>
@@ -456,7 +461,7 @@
 import type { ChatTurn, ChatActionCard, AttachedCardMeta } from '../../lib/ai/chatSessions.js'
 import type { ChatContentSegment } from '../../lib/ai/chatStreamParser.js'
 import type { AiSendSummary } from '../../lib/ai/sendSummary.js'
-import { reactive } from 'vue'
+import { reactive, onUpdated, watch, nextTick } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
@@ -541,6 +546,63 @@ function canShowSuggestedReplies(turn: ChatTurn, tIdx: number): boolean {
   }
   return true
 }
+
+// ── 深度思考体滚动跟随 (Reasoning Auto-scroll) ──
+const thinkingBodyEls = new Map<string, HTMLElement>()
+const userScrolledUpMap = new Map<string, boolean>()
+
+function setThinkingBodyRef(turnId: string, el: HTMLElement | null) {
+  if (el) {
+    thinkingBodyEls.set(turnId, el)
+    const turn = props.chatTurns.find((t) => t.id === turnId)
+    if (turn?.isThinking && !userScrolledUpMap.get(turnId) && el.scrollHeight > el.clientHeight) {
+      el.scrollTop = el.scrollHeight
+    }
+  } else {
+    thinkingBodyEls.delete(turnId)
+    userScrolledUpMap.delete(turnId)
+  }
+}
+
+function handleThinkingScroll(turnId: string, event: Event) {
+  const el = event.target as HTMLElement
+  if (!el) return
+  // 计算距离底部的像素差
+  const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  // 若用户主动往上滑动超过 40px，暂停吸底，方便用户翻看前文
+  if (distanceToBottom > 40) {
+    userScrolledUpMap.set(turnId, true)
+  } else {
+    // 重新滑回底部区域，恢复自动滚动跟随
+    userScrolledUpMap.set(turnId, false)
+  }
+}
+
+function scrollThinkingBodyToBottom() {
+  for (const turn of props.chatTurns) {
+    if (!turn._thinkingOpen || !turn.isThinking) continue
+    const el = thinkingBodyEls.get(turn.id)
+    if (!el) continue
+    if (userScrolledUpMap.get(turn.id)) continue
+    if (el.scrollHeight > el.clientHeight) {
+      el.scrollTop = el.scrollHeight
+    }
+  }
+}
+
+onUpdated(() => {
+  scrollThinkingBodyToBottom()
+})
+
+watch(
+  () => props.chatTurns.map((t) => `${t.id}:${t.isThinking}:${t.reasoning?.length || 0}:${t._thinkingOpen}`),
+  () => {
+    nextTick(() => {
+      scrollThinkingBodyToBottom()
+    })
+  },
+  { flush: 'post' }
+)
 
 // 发送摘要展开态：组件内部纯 UI 状态（不影响 vm 绑定的展示函数与动作事件）
 const openSummaries = reactive<Record<string, boolean>>({})
@@ -936,6 +998,9 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   background: var(--surface);
   max-height: 240px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
 }
 
 .chat-thinking-text {
