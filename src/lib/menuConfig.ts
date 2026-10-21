@@ -25,6 +25,7 @@ import { useSpaceMove } from '../composables/domain/useSpaceMove.js'
 import { toggleBatchMode } from '../composables/domain/useBatch.js'
 import { pushNavState } from '../composables/interaction/useKeyboardOps.js'
 import { debouncedSaveAppData } from '../stores/app.js'
+import { showConfirm } from './toast.js'
 import { t } from '../i18n/index.js'
 
 export interface MenuEntry {
@@ -246,7 +247,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     if (action === ACTIONS.DETAIL) openDetail(id)
     if (action === ACTIONS.VISIT) visit(null, id)
     if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
+    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id, true)
     if (action === ACTIONS.HISTORY) {
       pushNavState()
       ui.historyItemId = id
@@ -265,7 +266,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
   if (type === 'sub') {
     if (action === ACTIONS.VISIT) openDetail(id)
     if (action === ACTIONS.EDIT) openBmModal(id)
-    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id)
+    if (action === ACTIONS.DELETE) deleteBookmarkWithUndo(id, true)
     return
   }
   if (type === 'cat') {
@@ -283,8 +284,10 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     }
     if (action === ACTIONS.MOVE_TO_SPACE) {
       const cat = dataStore.categoryMap[id]
-      if (cat && window.confirm(t('ctx.confirmMoveCategory', { name: cat.name }))) {
-        void useSpaceMove().moveCategoryToVault(id)
+      if (cat) {
+        void showConfirm(t('ctx.confirmMoveCategory', { name: cat.name })).then((ok) => {
+          if (ok) void useSpaceMove().moveCategoryToVault(id)
+        })
       }
     }
     if (action === ACTIONS.DELETE) deleteCategory(id)

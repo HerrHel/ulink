@@ -105,6 +105,7 @@ export const programmaticZh = {
     movedTo: '已移动到 {name}',
     renamed: '已重命名',
     orderUpdated: '排序已更新',
+    groupsOnTopNotice: '已开启笔记置顶',
   },
 } as const
 
@@ -229,5 +230,6 @@ export const programmaticEn = {
     movedTo: 'Moved to {name}',
     renamed: 'Renamed',
     orderUpdated: 'Order updated',
+    groupsOnTopNotice: 'Notes on top is enabled',
   },
 } as const

@@ -180,7 +180,7 @@ describe('menuConfig — dispatchMenuAction 转发', () => {
     dispatchMenuAction('card', ACTIONS.EDIT, 'b1')
     expect(mocks.openBmModal).toHaveBeenCalledWith('b1')
     dispatchMenuAction('card', ACTIONS.DELETE, 'b1')
-    expect(mocks.deleteBookmarkWithUndo).toHaveBeenCalledWith('b1')
+    expect(mocks.deleteBookmarkWithUndo).toHaveBeenCalledWith('b1', true)
     dispatchMenuAction('card', ACTIONS.PIN, 'b1')
     expect(ds.bookmarks[0].pinnedAt).toBeTruthy()
     dispatchMenuAction('card', ACTIONS.MOVE_TO_CAT, 'b1')

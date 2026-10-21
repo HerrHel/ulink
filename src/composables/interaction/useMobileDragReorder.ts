@@ -24,6 +24,22 @@ const MAX_SCROLL_SPEED = 12 // 最大滚动速度 px/frame
  * 上移：(toIdx, fromIndex] 各 order++，moved 取区间首邻项的原 order。
  * 保证移动后区间内 order 唯一且相对序正确（连续或带间隙均可）。
  */
+/**
+ * 检查在开启「笔记置顶」时，排序后的项序列中是否存在跨越笔记与书签的倒置（即书签排在笔记之前 / 笔记排在书签之后）。
+ * 只要出现至少一个 group 位于某个 bm 之后，即说明用户试图跨类排序，但在 groupsOnTop 下受置顶规则限制无法真正生效。
+ */
+export function hasGroupsOnTopCross(items: Array<{ type?: string }>): boolean {
+  let seenBm = false
+  for (const item of items) {
+    if (item.type === 'bm') {
+      seenBm = true
+    } else if (item.type === 'group' && seenBm) {
+      return true
+    }
+  }
+  return false
+}
+
 export function applyIntervalOrder(
   allItems: Array<{ data: { id: string; order: number } }>,
   fromIndex: number,
@@ -431,7 +447,13 @@ export function useMobileDragReorder<T>(
         if (uiStore.sortMode !== 'order') uiStore.sortMode = 'order'
         uiStore.saveUIState()
         saveAppData()
-        toast(t('msg.orderUpdated'))
+        // 笔记与书签混排且开启笔记置顶时：若拖拽跨越了笔记与书签（如笔记拖到书签后、书签拖到笔记前），
+        // 受 groupsOnTop 影响视图上笔记始终置顶、实际未按拖动位置排序，显示红色置顶提示；纯同类排序仍提示排序已更新。
+        if (uiStore.groupsOnTop && hasGroupsOnTopCross(allItems)) {
+          toast(t('msg.groupsOnTopNotice'), false)
+        } else {
+          toast(t('msg.orderUpdated'))
+        }
       }
     }
   }
