@@ -22,7 +22,7 @@ export interface ChatTurnStep {
 }
 
 export interface ChatActionCard {
-  type: 'dedup' | 'trash' | 'move' | 'clean' | 'custom'
+  type: 'dedup' | 'trash' | 'move' | 'clean' | 'custom' | 'draft_diff' | 'dag_plan'
   title: string
   desc?: string
   buttonText: string

@@ -5,6 +5,10 @@
  * 入参显式携带 assistantTurn 与 controller（等同原闭包捕获的同名变量），行为与拆分前逐字一致。
  */
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import { createTaskDagPlan } from '../../lib/ai/taskPlanner.js'
+import { createDedupDraftDiff } from '../../lib/ai/draftDiff.js'
+import { findDuplicateCandidates } from '../../lib/ai/localClustering.js'
+import { buildDagPlanActionCard, buildDraftDiffActionCard } from '../../lib/ai/siteHitl.js'
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
@@ -91,6 +95,36 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       resultText = siteRes.handled && siteRes.reply
         ? siteRes.reply
         : t('ai.toolResultNotExecuted', { name: call.name })
+    } else if (call.name === 'plan_task_dag') {
+      const title = call.arguments?.title || t('ai.planDefaultTitle')
+      const description = call.arguments?.description || ''
+      const rawSteps = Array.isArray(call.arguments?.steps) ? call.arguments.steps : []
+      const plan = createTaskDagPlan({
+        title,
+        description,
+        steps: rawSteps.map((s: any, idx: number) => ({
+          id: s.id || `step_${idx + 1}`,
+          title: s.title || `步骤 ${idx + 1}`,
+          desc: s.desc,
+          actionName: s.actionName,
+          actionArgs: s.actionArgs,
+          dependsOn: Array.isArray(s.dependsOn) ? s.dependsOn : [],
+        })),
+      })
+      assistantTurn.actionCard = buildDagPlanActionCard(plan)
+      resultText = t('ai.toolResultDagPlanCreated', { title, count: plan.steps.length })
+    } else if (call.name === 'preview_draft_diff') {
+      const target = call.arguments?.target || 'inbox'
+      if (target === 'dedup') {
+        const dups = findDuplicateCandidates(ds.bookmarks)
+        const diffPayload = createDedupDraftDiff({ duplicates: dups })
+        assistantTurn.actionCard = buildDraftDiffActionCard(diffPayload)
+        resultText = t('ai.toolResultDedupDiffCreated', { count: diffPayload.stats.total })
+      } else {
+        const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app, signal: controller.signal })
+        if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
+        resultText = siteRes.reply
+      }
     } else {
       resultText = t('ai.toolResultUnknown', { name: call.name })
     }

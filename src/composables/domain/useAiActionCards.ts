@@ -2,9 +2,11 @@
  * useAiActionCards.ts — 行动卡片（Action Card）回写执行（自 useAiChat.ts 纯搬运拆出）
  * 职责：
  * 1. 行动卡片执行（handleActionCardClick 全部分支：查重合并/回收站清空/收件箱清零/
- *    应用聚类/装配工作台/死链治愈）；
+ *    应用聚类/装配工作台/死链治愈/虚拟演练草稿应用/任务规划流水线执行）；
  * 2. 候选多选微操（初始化/勾选/全选/计数）；
- * 3. 卡片导航（getActionCardNavTarget / navigateToActionTarget）与域名格式化。
+ * 3. 虚拟演练草稿微操（单项切换/全选切换）；
+ * 4. 任务规划流水线调度（单步触发/全量流式调度）；
+ * 5. 卡片导航（getActionCardNavTarget / navigateToActionTarget）与域名格式化。
  * 共享状态由 useAiChat Facade 显式注入，行为与拆分前逐字一致。
  */
 import { toast } from '../../lib/toast.js'
@@ -16,6 +18,8 @@ import {
   healDeadlink,
 } from '../../lib/ai/siteCommander.js'
 import { updateSession, type AiChatSession, type ChatTurn, type ChatActionCard } from '../../lib/ai/chatSessions.js'
+import { applyDraftDiff, type DraftDiffPayload } from '../../lib/ai/draftDiff.js'
+import { executeDagStep, executeAllDagSteps, type TaskDagPlan } from '../../lib/ai/taskPlanner.js'
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
@@ -130,6 +134,64 @@ export function useAiActionCards(context: AiActionCardsContext) {
     }
   }
 
+  // ── 虚拟演练草稿层辅助 ──
+  function getDiffPayload(card: ChatActionCard): DraftDiffPayload | null {
+    return ((card.payload as any)?.diffPayload as DraftDiffPayload) || null
+  }
+
+  function toggleDiffItemSelection(card: ChatActionCard, itemId: string) {
+    if (card.completed || card.executing) return
+    const diff = getDiffPayload(card)
+    if (!diff) return
+    const item = diff.items.find((i) => i.id === itemId)
+    if (item) {
+      item.selected = !item.selected
+    }
+  }
+
+  function toggleSelectAllDiffItems(card: ChatActionCard) {
+    if (card.completed || card.executing) return
+    const diff = getDiffPayload(card)
+    if (!diff || diff.items.length === 0) return
+    const allSelected = diff.items.every((i) => i.selected)
+    for (const item of diff.items) {
+      item.selected = !allSelected
+    }
+  }
+
+  // ── 任务规划流水线辅助 ──
+  function getDagPlan(card: ChatActionCard): TaskDagPlan | null {
+    return ((card.payload as any)?.plan as TaskDagPlan) || null
+  }
+
+  async function runSingleDagStep(card: ChatActionCard, stepId: string) {
+    const plan = getDagPlan(card)
+    if (!plan || card.completed || card.executing) return
+    card.executing = true
+    try {
+      await executeDagStep(plan, stepId, async (step) => {
+        if (step.actionName === 'audit_vault') {
+          const res = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
+          return { success: true, output: res.reply }
+        } else if (step.actionName === 'inbox_zero') {
+          const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+          return { success: true, output: res.reply }
+        } else if (step.actionName === 'merge_duplicates') {
+          const res = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
+          return { success: true, output: res.reply }
+        }
+        return { success: true, output: t('ai.dagStepSuccess') }
+      })
+      if (plan.status === 'completed') {
+        card.completed = true
+      }
+    } finally {
+      card.executing = false
+      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+      onTurnsChanged?.()
+    }
+  }
+
   async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
     if (card.completed || card.executing) return
     const candidatesInCard = getCardCandidateList(card)
@@ -143,7 +205,44 @@ export function useAiActionCards(context: AiActionCardsContext) {
     }
     card.executing = true
     try {
-      if (card.actionName === 'merge_dedup') {
+      if (card.type === 'draft_diff' || card.actionName === 'apply_inbox_zero_diff' || card.actionName === 'apply_dedup_diff') {
+        const payload = getDiffPayload(card)
+        if (payload) {
+          const res = await applyDraftDiff(payload, { ds, app: (ui as any).app })
+          card.completed = true
+          toast(res.message, true)
+          chatTurns.value.push({
+            id: 'turn-' + Date.now() + '-assistant',
+            role: 'assistant',
+            content: res.message,
+            steps: [{ text: res.message, done: true }],
+            timestamp: Date.now(),
+          })
+          onTurnsChanged?.()
+          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        }
+      } else if (card.type === 'dag_plan' || card.actionName === 'execute_dag_plan') {
+        const plan = getDagPlan(card)
+        if (plan) {
+          await executeAllDagSteps(plan, async (step) => {
+            if (step.actionName === 'audit_vault') {
+              const res = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
+              return { success: true, output: res.reply }
+            } else if (step.actionName === 'inbox_zero') {
+              const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+              return { success: true, output: res.reply }
+            } else if (step.actionName === 'merge_duplicates') {
+              const res = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
+              return { success: true, output: res.reply }
+            }
+            return { success: true, output: t('ai.dagStepSuccess') }
+          })
+          card.completed = plan.status === 'completed'
+          toast(t('ai.dagPlanCompleted'), true)
+          onTurnsChanged?.()
+          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        }
+      } else if (card.actionName === 'merge_dedup') {
         const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
         card.completed = true
         toast(res.message, true)
@@ -281,5 +380,10 @@ export function useAiActionCards(context: AiActionCardsContext) {
     toggleCandidateSelection,
     toggleSelectAllCandidates,
     formatDomain,
+    getDiffPayload,
+    toggleDiffItemSelection,
+    toggleSelectAllDiffItems,
+    getDagPlan,
+    runSingleDagStep,
   }
 }

@@ -26,6 +26,8 @@ export interface AiSendSummary {
   vaultKnowledgeChars: number
   /** 个人记忆实际注入条数（0 = 未注入） */
   profileEntries: number
+  /** 是否注入隐式心智模型画像 */
+  hasMentalModel?: boolean
   /** 历史上下文实际注入条数（经最近轮次 + 字符预算裁剪后） */
   historyTurnsIncluded: number
   /** 本轮用户提问（含附件展开）字符数 */
@@ -88,6 +90,7 @@ export function buildSendSummary(input: AiSendSummaryInput): AiSendSummary {
     vaultKnowledgeChars,
     // 如实统计实际注入的个人记忆条数（与请求同源的 profilePrompt 逐行计数）
     profileEntries: (input.profilePrompt || '').split('\n').filter((l) => l.startsWith('- ')).length,
+    hasMentalModel: !!slice.mentalModelPrompt,
     historyTurnsIncluded: historySlice.length,
     userPromptChars,
     systemPromptChars,

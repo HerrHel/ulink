@@ -130,6 +130,76 @@
       </div>
 
       <div class="chat-top-actions">
+        <!-- 💡 环境智能洞察入口（静默微光徽章 + 下拉抽屉） -->
+        <div class="ambient-pill-wrap">
+          <button
+            class="chat-btn-icon ambient-badge-btn"
+            :class="{ 'has-badge': activeAmbientInsights.length > 0, 'is-active': ambientOpen }"
+            @click.stop="toggleAmbient"
+            :title="t('ai.ambientBadge')"
+            :aria-label="t('ai.ambientBadge')"
+          >
+            <span class="ambient-btn-icon">💡</span>
+            <span v-if="activeAmbientInsights.length > 0" class="ambient-badge-count">
+              {{ activeAmbientInsights.length }}
+            </span>
+          </button>
+
+          <!-- 环境洞察抽屉浮层 -->
+          <div v-if="ambientOpen" class="ambient-popover" @click.stop>
+            <div class="ambient-popover-header">
+              <div class="ambient-header-left">
+                <span class="ambient-header-title">💡 {{ t('ai.ambientBadge') }}</span>
+                <span v-if="activeAmbientInsights.length > 0" class="ambient-header-pill">
+                  {{ activeAmbientInsights.length }}
+                </span>
+              </div>
+              <button class="memory-close-btn" @click="ambientOpen = false" :title="t('common.close')" :aria-label="t('common.close')">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div class="ambient-list-scroll">
+              <div
+                v-for="item in activeAmbientInsights"
+                :key="item.id"
+                class="ambient-card"
+                :class="item.category"
+              >
+                <div class="ambient-card-top">
+                  <span class="ambient-tag" :class="item.category">
+                    {{ item.category === 'serendipity' ? '✨ 偶遇' : '⚡ 治理' }}
+                  </span>
+                  <span class="ambient-card-title">{{ item.title }}</span>
+                </div>
+                <div class="ambient-card-desc">{{ item.description }}</div>
+                <div class="ambient-card-actions">
+                  <button
+                    v-if="item.actionCommand"
+                    class="ambient-act-btn primary"
+                    @click="applyAmbientItem(item)"
+                  >
+                    {{ t('ai.ambientActionExecute') }}
+                  </button>
+                  <button
+                    class="ambient-act-btn dismiss"
+                    @click="dismissAmbientItem(item.id)"
+                  >
+                    {{ t('ai.ambientActionDismiss') }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="activeAmbientInsights.length === 0" class="session-empty">
+                {{ t('ai.ambientEmpty') }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button
           class="chat-btn-icon"
           :class="{ 'is-disabled': isCurrentSessionEmpty }"
@@ -179,7 +249,9 @@
 <script setup lang="ts">
 import type { AiChatSession } from '../../lib/ai/chatSessions.js'
 import { useI18n } from '../../i18n/index.js'
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { activeAmbientInsights, ambientHub, type AmbientInsightItem } from '../../lib/ai/ambientInsights.js'
+import { useDataStore } from '../../stores/data.js'
 import { listProfileEntries, removeProfileEntry, clearProfile, type AiProfileEntry } from '../../lib/ai/aiProfile.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 
@@ -205,6 +277,7 @@ const emit = defineEmits<{
   switchSession: [id: string]
   toggleFloatHud: []
   close: []
+  applyCommand: [cmd: string]
 }>()
 
 const { t } = useI18n()
@@ -221,7 +294,10 @@ function refreshMemory() {
 
 // 会话菜单展开时刷新计数（记忆可能在对话中新增）
 watch(menuOpen, (v) => {
-  if (v) refreshMemory()
+  if (v) {
+    refreshMemory()
+    ambientOpen.value = false
+  }
 })
 
 function openMemory() {
@@ -244,12 +320,52 @@ async function clearAllMemory() {
   toast(t('ai.memoryCleared'), true)
 }
 
+/* ===== 环境智能洞察 (Ambient Grooming & Serendipity) ===== */
+const ambientOpen = ref(false)
+const dataStore = useDataStore()
+
+function triggerAmbientScan() {
+  ambientHub.refreshGroomingScan({
+    bookmarks: dataStore.bookmarks || [],
+    groups: dataStore.siblingGroups || [],
+    categories: dataStore.categories || [],
+  })
+}
+
+onMounted(() => {
+  triggerAmbientScan()
+})
+
+function toggleAmbient() {
+  if (!ambientOpen.value) {
+    triggerAmbientScan()
+    memoryOpen.value = false
+    menuOpen.value = false
+    ambientOpen.value = true
+  } else {
+    ambientOpen.value = false
+  }
+}
+
+function applyAmbientItem(item: AmbientInsightItem) {
+  if (item.actionCommand) {
+    emit('applyCommand', item.actionCommand)
+    ambientHub.dismissInsight(item.id)
+    ambientOpen.value = false
+  }
+}
+
+function dismissAmbientItem(id: string) {
+  ambientHub.dismissInsight(id)
+}
+
 // 点击浮层外部关闭（浮层自身 @click.stop 阻止冒泡）
 function onDocClick() {
   memoryOpen.value = false
+  ambientOpen.value = false
 }
-watch(memoryOpen, (v) => {
-  if (v) document.addEventListener('click', onDocClick)
+watch([memoryOpen, ambientOpen], ([mem, amb]) => {
+  if (mem || amb) document.addEventListener('click', onDocClick)
   else document.removeEventListener('click', onDocClick)
 })
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
@@ -728,5 +844,210 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   padding: 4px 8px;
   border-top: 1px solid var(--border-light);
   text-align: center;
+}
+
+/* ── 环境智能胶囊与抽屉 ── */
+.ambient-pill-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ambient-badge-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ambient-badge-btn.has-badge {
+  color: var(--accent);
+}
+
+.ambient-btn-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ambient-badge-count {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  animation: ambientPulse 2.5s infinite;
+}
+
+@keyframes ambientPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.85; }
+}
+
+.ambient-popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  width: 290px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base, 8px);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+  animation: sessionPopIn 0.15s ease-out;
+}
+
+:global([data-theme="dark"]) .ambient-popover {
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
+              0 0 0 1px var(--border-hover),
+              var(--shadow-xl);
+}
+
+.ambient-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.ambient-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ambient-header-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ambient-header-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: var(--accent-light, rgba(59, 130, 246, 0.12));
+  color: var(--accent);
+}
+
+.ambient-list-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ambient-card {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+  background: var(--surface-hover);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.ambient-card.serendipity {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.ambient-card-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.ambient-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.ambient-tag.serendipity {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.ambient-tag.grooming {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+:global([data-theme="dark"]) .ambient-tag.serendipity {
+  color: #fbbf24;
+}
+
+:global([data-theme="dark"]) .ambient-tag.grooming {
+  color: #60a5fa;
+}
+
+.ambient-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.ambient-card-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.ambient-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.ambient-act-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+}
+
+.ambient-act-btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.ambient-act-btn.primary:hover {
+  opacity: 0.9;
+}
+
+.ambient-act-btn.dismiss {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.ambient-act-btn.dismiss:hover {
+  background: var(--surface-active);
+  color: var(--text);
 }
 </style>

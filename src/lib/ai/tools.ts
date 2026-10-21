@@ -15,9 +15,15 @@
 
 export interface AgentToolParamProperty {
   type: string
-  description: string
+  description?: string
   enum?: string[]
-  items?: { type: string }
+  items?: {
+    type: string
+    description?: string
+    properties?: Record<string, AgentToolParamProperty>
+    required?: string[]
+    items?: { type: string }
+  }
 }
 
 export interface AgentToolDefinition {
@@ -143,6 +149,60 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
       parameters: {
         type: 'object',
         properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'plan_task_dag',
+      description: '针对复杂或多步骤的知识治理需求，生成透明的执行规划图（Task DAG Plan），将任务拆解为具有依赖关系的步骤流（如扫描/聚类 -> 差异草稿 -> 批量归档 -> 总结验证）。',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: '任务规划计划名称，例如“全库知识资产深度整理流水线”',
+          },
+          description: {
+            type: 'string',
+            description: '任务目标与执行意图简述',
+          },
+          steps: {
+            type: 'array',
+            description: '规划的步骤列表',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: '步骤唯一ID，如 step_scan, step_diff' },
+                title: { type: 'string', description: '步骤标题' },
+                desc: { type: 'string', description: '步骤说明' },
+                actionName: { type: 'string', description: '系统指令或工具名，如 audit_vault, inbox_zero, merge_duplicates, create_workspace' },
+                actionArgs: { type: 'object', description: '操作参数' },
+                dependsOn: { type: 'array', items: { type: 'string' }, description: '前置依赖的步骤ID列表' },
+              },
+            },
+          },
+        },
+        required: ['title', 'steps'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'preview_draft_diff',
+      description: '在对知识库书签进行重组、移动、合并等批量操作前，生成可视化虚拟演练草稿层 (Draft Diff Sandbox)，供用户审查具体变更并勾选确认。',
+      parameters: {
+        type: 'object',
+        properties: {
+          target: {
+            type: 'string',
+            description: '演练草稿目标类型',
+            enum: ['inbox', 'dedup'],
+          },
+        },
+        required: ['target'],
       },
     },
   },

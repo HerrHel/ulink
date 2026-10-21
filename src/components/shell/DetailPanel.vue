@@ -26,6 +26,7 @@
       @clear-all-sessions="handleClearAllSessions"
       @switch-session="switchSession"
       @toggle-float-hud="toggleFloatingHud"
+      @apply-command="handleApplyAmbientCommand"
       @close="closeEntirePanel"
     />
 
@@ -63,6 +64,9 @@
       @toggle-candidate-selection="toggleCandidateSelection"
       @handle-action-card-click="handleActionCardClick"
       @navigate-to-action-target="navigateToActionTarget"
+      @toggle-diff-item-selection="toggleDiffItemSelection"
+      @toggle-select-all-diff-items="toggleSelectAllDiffItems"
+      @run-single-dag-step="runSingleDagStep"
     />
 
     </div>
@@ -88,6 +92,8 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, computed } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
+import { useDataStore } from '../../stores/data.js'
+import { ambientHub } from '../../lib/ai/ambientInsights.js'
 import ChatInputDock from '../chat/ChatInputDock.vue'
 import ChatStream from '../chat/ChatStream.vue'
 import ChatTopBar from '../chat/ChatTopBar.vue'
@@ -98,6 +104,32 @@ import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
 
 const ui = useUIStore()
+const dataStore = useDataStore()
+
+function handleApplyAmbientCommand(cmd: string) {
+  aiQuery.value = cmd
+  adjustTextareaHeight()
+  nextTick(() => {
+    handleAiSubmit()
+  })
+}
+
+watch(
+  () => ui.aiAttachedCards,
+  (cards) => {
+    if (cards && cards.length > 0) {
+      const first = cards[0]
+      if (first.type === 'bookmark') {
+        const b = dataStore.bookmarkMap?.[first.id] || dataStore.bookmarks.find((x) => x.id === first.id)
+        if (b) {
+          ambientHub.triggerSerendipityCheck(b, dataStore.bookmarks)
+        }
+      }
+    }
+  },
+  { deep: true },
+)
+
 const detailPanelRef = ref<HTMLElement | null>(null)
 const aiTextareaRef = ref<HTMLTextAreaElement | null>(null)
 // 模板表达式会自动解包 ref，包一层 computed 以 ref 对象本体传给 ChatInputDock（子组件与父侧共享同一 ref，
@@ -169,6 +201,9 @@ const {
   toggleCandidateSelection,
   toggleSelectAllCandidates,
   formatDomain,
+  toggleDiffItemSelection,
+  toggleSelectAllDiffItems,
+  runSingleDagStep,
   SLASH_COMMANDS,
   dynamicQuickHints,
   applySlashCommand,

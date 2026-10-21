@@ -26,6 +26,7 @@ import {
 import { vaultRAG } from '../../lib/ai/localRAG.js'
 import { expandQueryTerms } from '../../lib/ai/queryExpand.js'
 import { remember, buildProfilePrompt } from '../../lib/ai/aiProfile.js'
+import { buildUserMentalModel, formatMentalModelPrompt } from '../../lib/ai/mentalModel.js'
 import { buildSendSummary } from '../../lib/ai/sendSummary.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot } from './useAiChatSessions.js'
@@ -333,12 +334,29 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             }
 
             // 动态情境切片：请求与发送摘要共用同一对象，保证「披露的即所发」
+            // 端侧隐式心智模型合成（领域专注度、价值取向与审美画像）
+            let mentalModelPrompt: string | undefined
+            try {
+              const mentalModel = buildUserMentalModel({
+                bookmarks: ds.bookmarks,
+                groups: ds.siblingGroups,
+                categories: ds.categories,
+                customAttributes: ds.customAttributes,
+                activeGroupId: ui.focusedGroupId || undefined,
+              })
+              mentalModelPrompt = formatMentalModelPrompt(mentalModel, 260, isZh.value)
+            } catch (mmErr) {
+              console.warn('[ulink AI] mentalModel synthesis failed:', mmErr)
+            }
+
+            // 动态情境切片：请求与发送摘要共用同一对象，保证「披露的即所发」
             const contextSlice = {
               currentCategoryName,
               focusedGroupName,
               focusedGroupBookmarks,
               selectedBookmarks,
               retrievedVaultKnowledge,
+              mentalModelPrompt,
               attachedCards: resolvedCards.map((c) => ({
                 type: c.type,
                 title: c.title,

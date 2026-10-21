@@ -3,7 +3,7 @@
  * 职责：
  * 1. 统一收敛所有危险操作的 showConfirm 二次确认入口（Human-in-the-Loop）；
  * 2. 统一收敛所有 ChatActionCard 行动卡片构造（查重合并卡 / 回收站卡 / 主题工作台卡 /
- *    死链修复卡 / 体检卡 / 收件箱应用卡等），文案参数由调用方注入；
+ *    死链修复卡 / 体检卡 / 收件箱应用卡 / 虚拟演练草稿卡 / 任务规划流水线卡等），文案参数由调用方注入；
  * 3. 纯构造 + 确认封装，不含任何命令执行副作用。
  * 行为与拆分前逐字一致，UI 文案与 i18n key 禁止改动。
  */
@@ -12,6 +12,8 @@ import { showConfirm } from '../toast.js'
 import { t, tN } from '../../i18n/index.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import type { ChatActionCard } from './chatSessions.js'
+import type { DraftDiffPayload } from './draftDiff.js'
+import type { TaskDagPlan } from './taskPlanner.js'
 
 /**
  * 危险操作统一二次确认入口（包装 showConfirm，供命令执行层与调度层依赖调用）
@@ -153,13 +155,42 @@ export function buildHealthTrashCard(trashCount: number): ChatActionCard {
   }
 }
 
-/** 收件箱清零应用卡（应用聚类方案） */
-export function buildInboxZeroActionCard(totalCount: number): ChatActionCard {
+/** 收件箱清零应用卡（应用聚类方案，可附加草稿） */
+export function buildInboxZeroActionCard(totalCount: number, diffPayload?: DraftDiffPayload): ChatActionCard {
+  if (diffPayload) {
+    const card = buildDraftDiffActionCard(diffPayload)
+    card.actionName = 'apply_inbox_zero'
+    return card
+  }
   return {
     type: 'custom',
     actionName: 'apply_inbox_zero',
     title: tN('aiCmd.inboxCardTitle', totalCount),
     desc: t('aiCmd.inboxCardDesc'),
     buttonText: t('aiCmd.inboxCardButton'),
+  }
+}
+
+/** 虚拟演练草稿行动卡片 */
+export function buildDraftDiffActionCard(diffPayload: DraftDiffPayload): ChatActionCard {
+  return {
+    type: 'draft_diff',
+    actionName: diffPayload.actionName,
+    title: diffPayload.title,
+    desc: diffPayload.summary,
+    buttonText: t('ai.draftDiffApplyButton'),
+    payload: { diffPayload },
+  }
+}
+
+/** 任务规划流水线行动卡片 */
+export function buildDagPlanActionCard(plan: TaskDagPlan): ChatActionCard {
+  return {
+    type: 'dag_plan',
+    actionName: 'execute_dag_plan',
+    title: plan.title,
+    desc: plan.description,
+    buttonText: t('ai.dagPlanExecuteButton'),
+    payload: { plan },
   }
 }

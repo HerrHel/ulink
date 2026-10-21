@@ -12,6 +12,7 @@ import {
   clusterUncategorizedBookmarks,
 } from '../localClustering.js'
 import { buildInboxZeroActionCard } from '../siteHitl.js'
+import { createInboxZeroDraftDiff } from '../draftDiff.js'
 import { CAT_UNCATEGORIZED } from '../../../config/constants.js'
 import { t, tN } from '../../../i18n/index.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
@@ -83,12 +84,19 @@ export const inboxBlock: SiteCommandBlock = (
       inboxSteps.push({ text: t('aiCmd.stepInboxNested'), done: true })
     }
 
+    const diffPayload = createInboxZeroDraftDiff({
+      assignableClusters,
+      relations,
+      bookmarkMap: ds.bookmarkMap || {},
+      categoryMap: ds.categoryMap || {},
+    })
+
     return {
       handled: true,
       action: 'inbox_zero',
       steps: inboxSteps,
       reply: lines.join('\n'),
-      actionCard: buildInboxZeroActionCard(totalToMove + relations.length),
+      actionCard: buildInboxZeroActionCard(totalToMove + relations.length, diffPayload),
     }
   }
   return null

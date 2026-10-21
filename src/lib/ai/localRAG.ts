@@ -26,6 +26,7 @@ import { domain } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { CONCEPT_ONTOLOGY, type ConceptCluster } from './knowledge.js'
 import { redactSensitivePatterns } from './secretFilter.js'
+import { evolvingGraph } from './evolvingGraph.js'
 
 export interface KnowledgeChunk {
   id: string
@@ -280,6 +281,13 @@ export class VaultKnowledgeEngine {
 
     this.avgDocLength = this.chunks.length > 0 ? totalLength / this.chunks.length : 1
     this.isIndexed = true
+
+    // 4. 端侧自进化知识图谱拓扑学习与共现挖掘
+    try {
+      evolvingGraph.mineFromKnowledge(bookmarks, groups, categories, customAttributes)
+    } catch (graphErr) {
+      console.warn('[ulink localRAG] evolvingGraph mine failed:', graphErr)
+    }
   }
 
   /**
@@ -325,7 +333,10 @@ export class VaultKnowledgeEngine {
     const queryTokens = tokenizeText(raw)
     if (queryTokens.length === 0) return []
 
-    // 1. 概念集群语义探测
+    // 1.1 动态自进化图谱游走：探测用户的个性化概念邻居
+    const graphNeighbors = evolvingGraph.getRelatedNeighbors(queryTokens, 6)
+
+    // 1.2 静态概念集群语义探测
     const matchedClusters: ConceptCluster[] = []
     const qLower = raw.toLowerCase()
     const qNormalized = qLower.replace(/\s+/g, '')
@@ -360,6 +371,19 @@ export class VaultKnowledgeEngine {
       if (queryTokens.some(qt => titleLower.includes(qt))) {
         score += 3.0
         reasons.push('标题精准匹配')
+      }
+
+      // 动态自进化概念图谱关联提权
+      if (graphNeighbors.length > 0) {
+        const titleLower = chunk.title.toLowerCase()
+        const contentLower = chunk.content.toLowerCase()
+        for (const gn of graphNeighbors) {
+          const gnLower = gn.name.toLowerCase()
+          if (titleLower.includes(gnLower) || contentLower.includes(gnLower)) {
+            score += Math.min(3.0, gn.weight * 1.5)
+            reasons.push(`动态图谱关联「${gn.name}」`)
+          }
+        }
       }
 
       // 概念图谱意图提权

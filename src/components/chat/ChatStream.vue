@@ -309,8 +309,21 @@
                 </div>
 
                 <!-- 交互行动卡片 (Actionable Artifact / Generative UI) -->
+                <ChatDraftDiff
+                  v-if="turn.actionCard && turn.actionCard.type === 'draft_diff'"
+                  :card="turn.actionCard"
+                  @toggle-item-selection="(id) => emit('toggleDiffItemSelection', turn.actionCard!, id)"
+                  @toggle-select-all="() => emit('toggleSelectAllDiffItems', turn.actionCard!)"
+                  @apply-diff="() => emit('handleActionCardClick', turn.actionCard!, turn)"
+                />
+                <ChatDagPlan
+                  v-else-if="turn.actionCard && turn.actionCard.type === 'dag_plan'"
+                  :card="turn.actionCard"
+                  @execute-all="() => emit('handleActionCardClick', turn.actionCard!, turn)"
+                  @execute-step="(stepId) => emit('runSingleDagStep', turn.actionCard!, stepId)"
+                />
                 <div
-                  v-if="turn.actionCard"
+                  v-else-if="turn.actionCard"
                   class="chat-action-card"
                   :class="{
                     'is-completed': turn.actionCard.completed,
@@ -426,6 +439,8 @@ import { reactive } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
+import ChatDraftDiff from './ChatDraftDiff.vue'
+import ChatDagPlan from './ChatDagPlan.vue'
 
 defineOptions({ name: 'ChatStream' })
 
@@ -482,6 +497,9 @@ const emit = defineEmits<{
   toggleCandidateSelection: [card: ChatActionCard, url: string]
   handleActionCardClick: [card: ChatActionCard, turn: ChatTurn]
   navigateToActionTarget: [card: ChatActionCard]
+  toggleDiffItemSelection: [card: ChatActionCard, itemId: string]
+  toggleSelectAllDiffItems: [card: ChatActionCard]
+  runSingleDagStep: [card: ChatActionCard, stepId: string]
 }>()
 
 const { t } = useI18n()

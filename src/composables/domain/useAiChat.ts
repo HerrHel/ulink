@@ -4,7 +4,7 @@
  * 1. 多会话状态与管理 → useAiChatSessions.ts（创建/切换/删除/清空/持久化/中止）；
  * 2. 核心提交调度 → useAiChatSubmit.ts（视频/网址/自然语言分流、MiMo Tool Calling 循环、
  *    role:'tool' 续轮、history 还原工具链、本地知识库兜底），工具分发 → useAiChatAgent.ts；
- * 3. 行动卡片（Action Card）执行与候选多选微操 → useAiActionCards.ts；
+ * 3. 行动卡片（Action Card）执行与候选多选微操、草稿层、DAG流水线 → useAiActionCards.ts；
  * 4. 本 Facade 保留：AI 请求状态、斜杠指令快捷联想、空态情境提示、撤回/批量收录、
  *    终端式命令历史状态，并组装各层对外返回统一 API。
  * 仅含数据与调度，不碰任何 DOM：滚动到底、输入框聚焦/高度、会话菜单收起、切回对话 tab
@@ -208,6 +208,11 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     toggleCandidateSelection,
     toggleSelectAllCandidates,
     formatDomain,
+    getDiffPayload,
+    toggleDiffItemSelection,
+    toggleSelectAllDiffItems,
+    getDagPlan,
+    runSingleDagStep,
   } = useAiActionCards({
     ds,
     ui,
@@ -325,6 +330,12 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     toggleCandidateSelection,
     toggleSelectAllCandidates,
     formatDomain,
+    // 虚拟演练草稿与任务规划
+    getDiffPayload,
+    toggleDiffItemSelection,
+    toggleSelectAllDiffItems,
+    getDagPlan,
+    runSingleDagStep,
     // 斜杠命令
     SLASH_COMMANDS,
     dynamicQuickHints,
