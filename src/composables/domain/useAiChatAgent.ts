@@ -4,7 +4,7 @@
  * 职责：模型 Tool Calling 的单一分发点，首轮与续轮工具链共用同一分发（防多轮复刻同类分支）。
  * 入参显式携带 assistantTurn 与 controller（等同原闭包捕获的同名变量），行为与拆分前逐字一致。
  */
-import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
+import { dispatchSiteCommand, batchTagBookmarks } from '../../lib/ai/siteCommander.js'
 import { createTaskDagPlan } from '../../lib/ai/taskPlanner.js'
 import { createDedupDraftDiff } from '../../lib/ai/draftDiff.js'
 import { findDuplicateCandidates } from '../../lib/ai/localClustering.js'
@@ -155,6 +155,29 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
           }
         } catch (fetchErr: any) {
           resultText = `抓取网页异常：${fetchErr?.message || '网络连接或服务异常'}`
+        }
+      }
+    } else if (call.name === 'batch_tag_bookmarks') {
+      const items = Array.isArray(call.arguments?.items) ? call.arguments.items : []
+      if (items.length === 0) {
+        resultText = '未提供待打标书签列表，未执行打标。'
+      } else {
+        const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app, signal: controller.signal })
+        if (res.success && res.taggedCount > 0) {
+          resultText = `${res.message}\n已打标明细：\n${res.details.map((d) => `• ${d.title}: [${d.tags.join(', ')}]`).join('\n')}`
+          if (!assistantTurn.steps) assistantTurn.steps = []
+          assistantTurn.steps.push({ text: `已完成 ${res.taggedCount} 个书签的标签写入`, done: true })
+          assistantTurn.actionCard = {
+            type: 'custom',
+            actionName: 'batch_tag_bookmarks',
+            title: `批量标签写入（${res.taggedCount} 个书签）`,
+            desc: res.details.slice(0, 5).map((d) => `${d.title} → ${d.tags.join('、')}`).join('；') + (res.details.length > 5 ? ` 等共 ${res.taggedCount} 项` : ''),
+            buttonText: '已完成打标',
+            completed: true,
+            payload: { items },
+          }
+        } else {
+          resultText = res.message || '未匹配到可打标的书签。'
         }
       }
     } else {

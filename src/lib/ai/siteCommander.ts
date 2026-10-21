@@ -60,11 +60,13 @@ export {
   applyInboxZeroClustering,
   createTopicWorkspace,
   healDeadlink,
+  batchTagBookmarks,
 } from './siteActions.js'
 export type {
   SiteCommanderContext,
   CreateTopicWorkspaceResult,
   HealDeadlinkResult,
+  BatchTagBookmarksResult,
 } from './siteActions.js'
 
 // ── re-export：命令结果类型（定义在 siteCommands/types.ts） ──

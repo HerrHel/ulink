@@ -11,6 +11,7 @@
  * 6. toggle_theme: 切换系统主题（深色/浅色/自动）
  * 7. change_view: 切换界面布局视图（宫格/列表/紧凑）
  * 8. export_data: 导出全量书签数据（HITL 二次确认后执行）
+ * 9. batch_tag_bookmarks: 批量为指定书签写入标签属性（闭环落地）
  */
 
 export interface AgentToolParamProperty {
@@ -263,6 +264,42 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
           },
         },
         required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'batch_tag_bookmarks',
+      description: '为用户书签库中的指定书签批量写入/应用标签属性。当用户确认标签建议方案或明确要求给书签打标签时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: '待打标签的书签列表',
+            items: {
+              type: 'object',
+              description: '单个书签与其所推荐的标签集合',
+              properties: {
+                bookmarkId: { type: 'string', description: '书签唯一ID（若已知）' },
+                url: { type: 'string', description: '书签URL（用于精准定位书签）' },
+                title: { type: 'string', description: '书签标题（辅助定位）' },
+                tags: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: '欲应用的标签名称列表，例如 ["工具", "设计"]',
+                },
+              },
+              required: ['tags'],
+            },
+          },
+          reason: {
+            type: 'string',
+            description: '执行批量打标的具体原因或方案说明',
+          },
+        },
+        required: ['items'],
       },
     },
   },

@@ -204,7 +204,11 @@ export class VaultKnowledgeEngine {
         sourceId: b.id,
         title,
         url,
-        content: notes ? `简介/笔记: ${notes}` : `域名: ${host}`,
+        content: (() => {
+          const parentBm = b.parentId ? bookmarks.find((p) => p.id === b.parentId && !p.deletedAt) : null
+          const hierarchy = parentBm ? `从属父站点: ${_plain(parentBm.title)}; ` : ''
+          return `${hierarchy}${notes ? `简介/笔记: ${notes}` : `域名: ${host}`}`
+        })(),
         tags,
         category: catName,
       })

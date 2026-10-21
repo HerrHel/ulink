@@ -33,7 +33,8 @@ export function buildUserMentalModel(params: {
   activeGroupId?: string
 }): UserMentalModel {
   const { bookmarks, groups, categories, customAttributes, activeGroupId } = params
-  const validBookmarks = bookmarks.filter((b) => !b.deletedAt)
+  // 严格区分顶级书签与子书签：仅以独立顶级书签统计领域专注度，杜绝同站多子账号歪曲领域权重
+  const validBookmarks = bookmarks.filter((b) => !b.deletedAt && !b.parentId)
 
   // 1. 分类专注度统计
   const catCountMap = new Map<string, number>()

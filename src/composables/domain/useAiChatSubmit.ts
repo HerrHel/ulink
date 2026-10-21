@@ -380,14 +380,54 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               console.warn('[ulink AI] mentalModel synthesis failed:', mmErr)
             }
 
-            // 动态感知：若用户意图涉及标签补全，抓取库内未打标签的书签明细注入情境切片
-            let untaggedBookmarks: Array<{ title: string; url: string; category?: string }> | undefined
-            if (/(?:补打|打标|打标签|未打标|标签|补齐标签)/i.test(raw)) {
+            // 动态感知：若用户意图涉及标签补全或书签扫描，抓取库内未打标签的书签明细注入情境切片
+            // 严格区分顶级独立书签与从属子书签，避免子书签占满截断配额或造成全盲
+            let untaggedBookmarks: Array<{ id: string; title: string; url: string; category?: string }> | undefined
+            let untaggedStats: {
+              totalCount: number
+              topLevelCount: number
+              subCount: number
+              subGroupSummary?: string
+            } | undefined
+            if (/(?:补打|打标|打标签|未打标|标签|补齐标签|扫描书签|盘点书签|分析书签|书签扫描)/i.test(raw)) {
               const catMap = new Map(ds.categories.map((c) => [c.id, c.name]))
-              untaggedBookmarks = ds.bookmarks
-                .filter((b) => !b.deletedAt && (!b.attributes || Object.keys(b.attributes).length === 0) && !b.id.startsWith('bm_ulink_'))
-                .slice(0, 10)
+              const allUntagged = ds.bookmarks.filter(
+                (b) => !b.deletedAt && (!b.attributes || Object.keys(b.attributes).length === 0) && !b.id.startsWith('bm_ulink_')
+              )
+
+              // 严格区分顶级书签（独立站点）与子书签（从属子账号/子页面）
+              const topLevelUntagged = allUntagged.filter((b) => !b.parentId)
+              const subUntagged = allUntagged.filter((b) => !!b.parentId)
+
+              // 聚合子书签从属关系：按 parentId 统计归拢，绝不与独立顶级书签大杂烩平铺
+              const subByParent = new Map<string, Array<{ id: string; title: string; url: string }>>()
+              for (const sub of subUntagged) {
+                if (sub.parentId) {
+                  const list = subByParent.get(sub.parentId) || []
+                  list.push({ id: sub.id, title: sub.title || '无标题', url: sub.url })
+                  subByParent.set(sub.parentId, list)
+                }
+              }
+
+              const subSummaries: string[] = []
+              for (const [parentId, subList] of subByParent.entries()) {
+                const parentBm = ds.bookmarkMap[parentId] || ds.bookmarks.find((b) => b.id === parentId)
+                const parentName = parentBm?.title || '未知父站点'
+                subSummaries.push(`父站点「${parentName}」下挂 ${subList.length} 个子页面/子账号`)
+              }
+
+              untaggedStats = {
+                totalCount: allUntagged.length,
+                topLevelCount: topLevelUntagged.length,
+                subCount: subUntagged.length,
+                subGroupSummary: subSummaries.length > 0 ? subSummaries.slice(0, 5).join('；') + (subSummaries.length > 5 ? ` 等共 ${subSummaries.length} 个父站点` : '') : undefined,
+              }
+
+              // 仅提取顶级独立书签供 AI 重点分析与打标，确保配额全部分配给独立站点
+              untaggedBookmarks = topLevelUntagged
+                .slice(0, 15)
                 .map((b) => ({
+                  id: b.id,
                   title: b.title || '无标题',
                   url: b.url,
                   category: b.categoryId ? catMap.get(b.categoryId) : undefined,
@@ -410,6 +450,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               focusedGroupBookmarks,
               selectedBookmarks,
               untaggedBookmarks,
+              untaggedStats,
               trashedBookmarks,
               retrievedVaultKnowledge,
               mentalModelPrompt,

@@ -70,7 +70,13 @@ export interface DynamicContextSlice {
   focusedGroupBookmarks?: Array<{ title: string; url: string }>
   selectedBookmarks?: Array<{ title: string; url: string }>
   attachedCards?: Array<{ type: 'bm' | 'group'; title: string; url?: string }>
-  untaggedBookmarks?: Array<{ title: string; url: string; category?: string }>
+  untaggedBookmarks?: Array<{ id?: string; title: string; url: string; category?: string }>
+  untaggedStats?: {
+    totalCount: number
+    topLevelCount: number
+    subCount: number
+    subGroupSummary?: string
+  }
   trashedBookmarks?: Array<{ title: string; url: string }>
   retrievedVaultKnowledge?: string
   mentalModelPrompt?: string
@@ -120,6 +126,21 @@ export function buildUlinkSystemPrompt(options: {
   const activeAttached = slice.attachedCards?.length
     ? `User-attached cards/notes for analysis: [${slice.attachedCards.map(c => `${c.type === 'group' ? 'Note' : 'Bookmark'}: ${sanitizeForPrompt(c.title)}`).join(', ')}]`
     : ''
+  const activeUntagged = slice.untaggedBookmarks?.length
+    ? (() => {
+        const stats = slice.untaggedStats
+        const countDesc = stats
+          ? `Total untagged in vault: ${stats.totalCount} (${stats.topLevelCount} top-level independent sites, ${stats.subCount} child bookmarks; showing first ${slice.untaggedBookmarks.length} top-level)`
+          : `Showing ${slice.untaggedBookmarks.length} untagged bookmarks`
+        const listStr = slice.untaggedBookmarks
+          .map(b => `${sanitizeForPrompt(b.title)} (${domain(sanitizeForPrompt(b.url))})`)
+          .join(', ')
+        const subDesc = stats?.subGroupSummary
+          ? `\n   - Child bookmarks (nested under parent sites, separated from top-level): ${stats.subGroupSummary}`
+          : ''
+        return `Untagged Vault Bookmarks (${countDesc}):\n   - Top-level sites: [${listStr}]${subDesc}`
+      })()
+    : ''
   const activeVaultKnowledge = slice.retrievedVaultKnowledge
     ? `\nRelevant Knowledge Retrieved from User's Entire Vault:\n${slice.retrievedVaultKnowledge}\n`
     : ''
@@ -137,7 +158,19 @@ export function buildUlinkSystemPrompt(options: {
     ? `用户主动拖入并关联阅读的卡片/笔记：[${slice.attachedCards.map(c => `${c.type === 'group' ? '笔记' : '书签'}: ${sanitizeForPrompt(c.title)}`).join('、')}]`
     : ''
   const activeUntaggedZh = slice.untaggedBookmarks?.length
-    ? `用户书签库中尚未打标的书签 (共${slice.untaggedBookmarks.length}个)：[${slice.untaggedBookmarks.map(b => `${sanitizeForPrompt(b.title)} (${domain(sanitizeForPrompt(b.url))}${b.category ? ` · ${sanitizeForPrompt(b.category)}` : ''})`).join('、')}]`
+    ? (() => {
+        const stats = slice.untaggedStats
+        const countDesc = stats
+          ? `全库共有 ${stats.totalCount} 个未打标书签（其中顶级独立书签 ${stats.topLevelCount} 个，子书签 ${stats.subCount} 个；本次展示前 ${slice.untaggedBookmarks.length} 个顶级独立书签）`
+          : `共展示 ${slice.untaggedBookmarks.length} 个未打标书签`
+        const listStr = slice.untaggedBookmarks
+          .map(b => `${sanitizeForPrompt(b.title)} (${domain(sanitizeForPrompt(b.url))}${b.category ? ` · ${sanitizeForPrompt(b.category)}` : ''})`)
+          .join('、')
+        const subDesc = stats?.subGroupSummary
+          ? `\n   - 【从属子书签概况（挂载于父站点下，不与顶级站点混杂）】：${stats.subGroupSummary}`
+          : ''
+        return `用户书签库未打标资产扫描（${countDesc}）：\n   - 【待打标顶级独立站点】：[${listStr}]${subDesc}`
+      })()
     : ''
   const activeTrashedZh = slice.trashedBookmarks?.length
     ? `当前回收站已暂存的书签 (共${slice.trashedBookmarks.length}个)：[${slice.trashedBookmarks.map(b => `${sanitizeForPrompt(b.title)} (${domain(sanitizeForPrompt(b.url))})`).join('、')}]`
@@ -161,14 +194,15 @@ Core principles:
 3. ${dataNotice}
 4. User's Live Categories: [${catNames || 'None'}]
 5. User's Live Attributes/Tags: [${attrNames || 'None'}]
-${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}9. Ambiguous Intent Guidance & Proactive Plan Framing:
+${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeUntagged ? `8.2. ${activeUntagged}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}9. Ambiguous Intent Guidance & Proactive Plan Framing:
    - When the user's request is broad or ambiguous (e.g., "my bookmarks are messy, help me organize", "find me some useful tools for side-projects", "plan a workflow for my design resources"):
      - Never respond with generic blank questions or error messages.
      - Proactively propose 2 to 3 concrete, structured options (Option A, Option B, Option C) tailored to their actual categories and bookmarks.
      - ALWAYS include an open-ended Choice for user's custom thoughts (e.g., "Option 4: Have your own preference? Tell me freely...").
      - Invite multi-turn dialogue to fine-tune the plan before taking action.
 10. Tool Calling Guardrails:
-    - Tool calling is strictly restricted to explicit user operational intentions (e.g., "clean duplicates", "triage inbox", "audit vault", "deep read webpage").
+    - Tool calling is strictly restricted to explicit user operational intentions (e.g., "clean duplicates", "triage inbox", "audit vault", "deep read webpage", "batch tag bookmarks").
+    - When user confirms a bookmark tagging plan (e.g., "Yes, execute this", "好的，就按这条执行"), invoke the batch_tag_bookmarks tool to write tags in bulk.
     - When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
 11. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in ${FENCE}ulink-card:
 ${FENCE}ulink-card
@@ -203,7 +237,7 @@ ${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ?
 10. 工具准入与真实性准则：
     - 遵循「无明确操作意图不调工具」原则：当用户在提问中包含明确的操作动词（如“帮我清理重复”、“整理未分类”、“体检”、或要求抓取阅读网页正文时），才调用对应运维与抓取工具。
     - 特别约束：执行全库资产体检 (audit_vault) 后，体检本身即为最终操作，严禁在后续答复中擅自调用其他修改类工具；必须将体检评分与现状结构化汇报给用户，并提出下一步建议选项供用户决策。
-    - 当用户询问未打标书签或要求补打标签时：直接基于上下文中的待补齐标签书签明细与现有标签属性 [${attrNames}]，逐条给出最匹配的标签建议与推荐理由，并给出预判快捷按钮供用户确认。
+    - 当用户询问未打标书签或要求补打标签时：严格区分顶级独立站点与从属子书签（子书签不可与顶级网站大杂烩混谈），直接基于上下文中的待打标顶级独立站点明细与现有标签属性 [${attrNames}]，逐条给出最匹配的标签建议与推荐理由，并给出预判快捷按钮供用户确认。若用户确认执行标签方案（如说“好的，就按这条执行”、“好的，按方案执行”、“执行”），务必调用 batch_tag_bookmarks 工具执行批量打标。
     - 绝不在意图模糊或证据不足时抢跑执行工具；工具执行后你会收到真实执行结果，回答必须以真实结果为依据，严禁在未见结果时宣称操作已完成。
 11. 结构化随文内嵌卡片规范（图文混排排版标准）：
     当你推荐某个具体网站或工具时，必须采用「随文嵌入」模式：直接在介绍该工具的段落上方嵌入紧凑卡片标记，随后紧跟客观分析（核心亮点、适用人群、使用技巧）：

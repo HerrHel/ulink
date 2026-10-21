@@ -18,6 +18,7 @@ import {
   isUncategorized,
   clusterUncategorizedBookmarks,
   detectParentChildRelations,
+  normalizeUrlForDedup,
 } from './localClustering.js'
 import { CAT_UNCATEGORIZED, CAT_ALL, ATTR_IS_GROUP } from '../../config/constants.js'
 import { candidateToBookmark } from './candidateSave.js'
@@ -30,6 +31,8 @@ import {
   buildHealConfirmMessage,
 } from './siteHitl.js'
 import { pushUndoAction } from './siteUndoStack.js'
+import { toastWithUndo } from '../toast.js'
+import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
@@ -491,5 +494,132 @@ export async function healDeadlink(
     deadBookmark: bm,
     replacement,
     message: t('aiCmd.healDone', { title: prev.title, alt: replacement.title, url: replacement.url }),
+  }
+}
+
+export interface BatchTagBookmarksResult {
+  success: boolean
+  taggedCount: number
+  message: string
+  details: Array<{ title: string; url: string; tags: string[] }>
+}
+
+/**
+ * 批量为指定书签打标签/更新标签属性（落地闭环：带 Undo 事务与轻提示）
+ */
+export async function batchTagBookmarks(
+  items: Array<{ bookmarkId?: string; url?: string; title?: string; tags: string[] }>,
+  context?: SiteCommanderContext,
+): Promise<BatchTagBookmarksResult> {
+  const ds = context?.ds ?? useDataStore()
+  const app = context?.app ?? useAppStore()
+
+  if (!items || !items.length) {
+    return { success: false, taggedCount: 0, message: '未提供待打标书签列表', details: [] }
+  }
+
+  const activeBookmarks = ds.bookmarks.filter((b) => !b.deletedAt)
+  const origAttrsMap = new Map<string, Record<string, boolean>>()
+  const details: Array<{ title: string; url: string; tags: string[] }> = []
+
+  // 1. 现有属性名 → 属性 id 快速映射
+  const attrNameMap = new Map<string, string>()
+  for (const a of ds.customAttributes) {
+    if (a && !a.deletedAt && a.name) {
+      attrNameMap.set(a.name.toLowerCase().trim(), a.id)
+    }
+  }
+
+  for (const item of items) {
+    if (context?.signal?.aborted) break
+    const validTags = (item.tags || []).map((t) => String(t).trim()).filter(Boolean)
+    if (validTags.length === 0) continue
+
+    // 精准定位目标书签
+    let target = item.bookmarkId ? activeBookmarks.find((b) => b.id === item.bookmarkId) : undefined
+    if (!target && item.url) {
+      const cleanUrl = item.url.trim()
+      target = activeBookmarks.find((b) => b.url === cleanUrl)
+      if (!target) {
+        const norm = normalizeUrlForDedup(cleanUrl)
+        target = activeBookmarks.find((b) => normalizeUrlForDedup(b.url) === norm)
+      }
+    }
+    if (!target && item.title) {
+      const cleanTitle = item.title.trim().toLowerCase()
+      target = activeBookmarks.find((b) => b.title?.trim().toLowerCase() === cleanTitle)
+    }
+
+    if (!target) continue
+
+    // 记录原始属性用于撤销
+    if (!origAttrsMap.has(target.id)) {
+      origAttrsMap.set(target.id, { ...(target.attributes || {}) })
+    }
+
+    const nextAttrs: Record<string, boolean> = { ...(target.attributes || {}) }
+    const appliedTags: string[] = []
+
+    for (const tag of validTags) {
+      const tagLower = tag.toLowerCase()
+      let attrId = attrNameMap.get(tagLower)
+      if (!attrId) {
+        // 创建新属性
+        attrId = attrSlug(tag) || gid()
+        if (ds.attributeMap[attrId]) {
+          attrId = `attr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+        }
+        ds.addAttribute({
+          id: attrId,
+          name: tag,
+          type: 'boolean',
+        })
+        attrNameMap.set(tagLower, attrId)
+      }
+      nextAttrs[attrId] = true
+      appliedTags.push(tag)
+    }
+
+    ds.updateBookmark(target.id, { attributes: nextAttrs })
+    details.push({
+      title: target.title || '无标题',
+      url: target.url,
+      tags: appliedTags,
+    })
+  }
+
+  const taggedCount = details.length
+  if (taggedCount === 0) {
+    return { success: false, taggedCount: 0, message: '未能匹配到库内有效书签', details: [] }
+  }
+
+  app.save?.()
+
+  // 登记撤销事务
+  pushUndoAction({
+    type: 'batch_tag_bookmarks',
+    description: `批量为 ${taggedCount} 个书签打标签`,
+    revert: () => {
+      for (const [bmId, prevAttrs] of origAttrsMap.entries()) {
+        ds.updateBookmark(bmId, { attributes: prevAttrs })
+      }
+      app.save?.()
+      return `已撤销 ${taggedCount} 个书签的标签变更。`
+    },
+  })
+
+  // 触发带撤销的轻提示
+  toastWithUndo(`已为 ${taggedCount} 个书签应用标签`, () => {
+    for (const [bmId, prevAttrs] of origAttrsMap.entries()) {
+      ds.updateBookmark(bmId, { attributes: prevAttrs })
+    }
+    app.save?.()
+  })
+
+  return {
+    success: true,
+    taggedCount,
+    message: `已成功为 ${taggedCount} 个书签写入标签。`,
+    details,
   }
 }

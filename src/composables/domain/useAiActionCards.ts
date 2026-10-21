@@ -16,6 +16,7 @@ import {
   applyInboxZeroClustering,
   createTopicWorkspace,
   healDeadlink,
+  batchTagBookmarks,
 } from '../../lib/ai/siteCommander.js'
 import { updateSession, type AiChatSession, type ChatTurn, type ChatActionCard } from '../../lib/ai/chatSessions.js'
 import { applyDraftDiff, type DraftDiffPayload } from '../../lib/ai/draftDiff.js'
@@ -181,6 +182,10 @@ export function useAiActionCards(context: AiActionCardsContext) {
           const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
           const ok = res.mergedCount > 0 || !res.message.includes('取消')
           return { success: ok, output: res.message }
+        } else if (step.actionName === 'batch_tag_bookmarks') {
+          const items = Array.isArray((step.actionArgs as any)?.items) ? (step.actionArgs as any).items : []
+          const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app })
+          return { success: res.success, output: res.message }
         }
         return { success: true, output: t('ai.dagStepSuccess') }
       })
@@ -238,6 +243,10 @@ export function useAiActionCards(context: AiActionCardsContext) {
               const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
               const ok = res.mergedCount > 0 || !res.message.includes('取消')
               return { success: ok, output: res.message }
+            } else if (step.actionName === 'batch_tag_bookmarks') {
+              const items = Array.isArray((step.actionArgs as any)?.items) ? (step.actionArgs as any).items : []
+              const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app })
+              return { success: res.success, output: res.message }
             }
             return { success: true, output: t('ai.dagStepSuccess') }
           })
@@ -378,6 +387,28 @@ export function useAiActionCards(context: AiActionCardsContext) {
             sessions.value = updateSession(currentSessionId.value, chatTurns.value)
           } else {
             if (res.message) toast(res.message, false)
+          }
+        }
+      } else if (card.actionName === 'batch_tag_bookmarks') {
+        const payload = (card.payload || {}) as {
+          items?: Array<{ bookmarkId?: string; url?: string; title?: string; tags: string[] }>
+        }
+        const items = payload.items || []
+        if (items.length > 0) {
+          const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app })
+          if (res.success && res.taggedCount > 0) {
+            card.completed = true
+            chatTurns.value.push({
+              id: 'turn-' + Date.now() + '-assistant',
+              role: 'assistant',
+              content: res.message,
+              steps: [{ text: `已成功为 ${res.taggedCount} 个书签写入标签`, done: true }],
+              timestamp: Date.now(),
+            })
+            onTurnsChanged?.()
+            sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          } else {
+            toast(res.message || t('ai.actionFailed'), false)
           }
         }
       }
