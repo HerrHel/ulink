@@ -327,4 +327,78 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     expect(urls).not.toContain('https://gamma.app')
     expect(urls).not.toContain('https://v0.dev')
   })
-})
+
+  // ── 治本架构升级测试：域族穿透、导航过滤、404熔断与语义仲裁 ──
+
+  it('短链宿主域族穿透：b23.tv 输入下，正文中的 bilibili.com 及其子域（live/game/show等）均被判定为站内自链过滤', () => {
+    const markdown = [
+      '## 简介',
+      '推荐工具 [Excalidraw](https://excalidraw.com)',
+      'B站直播 https://live.bilibili.com/123456',
+      '游戏中心 https://game.bilibili.com/plat',
+      '主站 https://bilibili.com',
+    ].join('\n')
+
+    const hits = extractDeepLinksFromText(markdown, {
+      defaultSource: '正文',
+      targetHost: 'b23.tv',
+      dropSameSite: true,
+    })
+
+    const urls = hits.map(h => h.url)
+    expect(urls).toContain('https://excalidraw.com')
+    expect(urls).not.toContain('https://live.bilibili.com/123456')
+    expect(urls).not.toContain('https://game.bilibili.com/plat')
+    expect(urls).not.toContain('https://bilibili.com')
+  })
+
+  it('导航与底栏政策噪音过滤：[首页]、[关于我们]、备案链接等全站公共噪音不入选', () => {
+    const markdown = [
+      '[首页](https://external-service.org/home)',
+      '[关于我们](https://external-service.org/about)',
+      '[用户协议](https://external-service.org/terms)',
+      '[工信部备案](https://beian.miit.gov.cn)',
+      '[真正工具 Supabase](https://supabase.com)',
+    ].join('\n')
+
+    const hits = extractDeepLinksFromText(markdown, { defaultSource: '正文' })
+    const urls = hits.map(h => h.url)
+    expect(urls).toEqual(['https://supabase.com'])
+  })
+
+  it('失效页面与软404熔断：当页面标题或正文提示“视频去哪了呢”/“视频不见了”，不提取任何书签候选，且不收录404页自身', async () => {
+    mockFetch.mockResolvedValue({
+      success: true,
+      url: 'https://www.bilibili.com/video/BV1dead',
+      title: '视频去哪了呢？ _哔哩哔哩_bilibili',
+      description: '',
+      markdown: [
+        '# 视频去哪了呢？',
+        '非常抱歉，视频不见了',
+        '[首页](https://bilibili.com)',
+        '[直播](https://live.bilibili.com)',
+        '[游戏中心](https://game.bilibili.com)',
+      ].join('\n'),
+    })
+
+    const res = await extractBookmarksFromVideo('https://b23.tv/fuBzhYU', testCategories, testAttributes)
+    expect(res.bookmarks).toEqual([])
+  })
+
+  it('模型语义仲裁（脑手合一）：当模型总结明确说明未出现其他网站/工具时，候选书签强制置空', async () => {
+    mockSummary.mockResolvedValue('给定内容中视频已失效（页面提示“视频不见了”），未出现其他网站或工具，因此无法总结。')
+    mockFetch.mockResolvedValue({
+      success: true,
+      url: 'https://example.com/some-page',
+      title: '某种模糊页面',
+      description: '描述文本',
+      markdown: [
+        '这里有个外部链接 [某些文档](https://random-docs.io)',
+      ].join('\n'),
+    })
+
+    const res = await extractBookmarksFromVideo('https://example.com/some-page', testCategories, testAttributes)
+    expect(res.bookmarks).toEqual([])
+    expect(res.summary).toContain('未出现其他网站或工具')
+  })
+});

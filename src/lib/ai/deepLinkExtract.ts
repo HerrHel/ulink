@@ -24,12 +24,66 @@ const SECTION_HEADING_PATTERNS: Array<{ re: RegExp; source: DeepLinkSource }> = 
 // 噪声资源链接（图片/音视频/压缩包/可执行文件/样式脚本），不是可收藏的网站
 const ASSET_URL_RE = /\.(png|jpe?g|gif|webp|svg|ico|bmp|mp4|mp3|wav|avi|mov|mkv|flv|zip|rar|7z|tar|gz|dmg|exe|apk|msi|woff2?|ttf|otf|css|js)([?#]|$)/i
 
-/** 站内自链噪声判定（含子域，如 space.bilibili.com 对 bilibili.com） */
-function isSameSiteUrl(url: string, host: string): boolean {
-  if (!host) return false
+// 平台通用导航底栏/免责条款/全站频道噪声关键词
+const NAV_OR_BOILERPLATE_ANCHOR_RE =
+  /^(?:首页|主页|番剧|直播|游戏中心|会员购|漫画|赛事|客户端|下载|关于我们|联系我们|加入我们|友情链接|合作伙伴|隐私政策|服务协议|用户协议|版权声明|免责声明|法律声明|侵权申诉|营业执照|增值电信业务|公网安备|备案|Home|About(?:\s+Us)?|Privacy(?:\s+Policy)?|Terms(?:\s+of\s+Service)?|Contact(?:\s+Us)?|Careers|Help|Sign\s+in|Log\s+in|Register|Download(?:\s+App)?)$/i
+
+// 备案与通用应用商店域名
+const BOILERPLATE_HOST_RE = /(?:beian\.gov\.cn|miit\.gov\.cn|apple\.com\/(?:app-store|ios)|play\.google\.com)$/i
+
+/** 常见平台分享短链 ⟷ 主站主域族映射 */
+export const SHORT_CANONICAL_FAMILY: Record<string, string[]> = {
+  'b23.tv': ['bilibili.com', 'b23.tv', 'hdslb.com'],
+  'bilibili.com': ['bilibili.com', 'b23.tv', 'hdslb.com'],
+  'v.douyin.com': ['douyin.com', 'v.douyin.com', 'iesdouyin.com'],
+  'douyin.com': ['douyin.com', 'v.douyin.com', 'iesdouyin.com'],
+  'xhslink.com': ['xiaohongshu.com', 'xhslink.com'],
+  'xiaohongshu.com': ['xiaohongshu.com', 'xhslink.com'],
+  't.co': ['x.com', 'twitter.com', 't.co'],
+  'twitter.com': ['x.com', 'twitter.com', 't.co'],
+  'x.com': ['x.com', 'twitter.com', 't.co'],
+  'youtu.be': ['youtube.com', 'youtu.be'],
+  'youtube.com': ['youtube.com', 'youtu.be'],
+  'vm.tiktok.com': ['tiktok.com', 'vm.tiktok.com'],
+  'tiktok.com': ['tiktok.com', 'vm.tiktok.com'],
+}
+
+/** 获取一组 host 对应的全平台主站域族集合 */
+export function getCanonicalHostFamily(hosts: Array<string | undefined | null>): Set<string> {
+  const result = new Set<string>()
+  for (const raw of hosts) {
+    if (!raw) continue
+    const h = raw.toLowerCase().replace(/^www\./, '').replace(/:\d+$/, '')
+    result.add(h)
+    const family = SHORT_CANONICAL_FAMILY[h]
+    if (family) {
+      for (const f of family) result.add(f)
+    }
+  }
+  return result
+}
+
+/** 站内自链噪声判定（含短链族群与子域，如 space.bilibili.com / live.bilibili.com 对 b23.tv/bilibili.com） */
+export function isSameSiteUrl(url: string, hostOrFamily?: string | string[] | Set<string>): boolean {
+  if (!hostOrFamily) return false
+  const hostSet: Set<string> =
+    hostOrFamily instanceof Set
+      ? hostOrFamily
+      : Array.isArray(hostOrFamily)
+        ? getCanonicalHostFamily(hostOrFamily)
+        : getCanonicalHostFamily([hostOrFamily])
+
+  if (hostSet.size === 0) return false
+
   try {
     const h = new URL(url).hostname.replace(/^www\./i, '').toLowerCase()
-    return h === host || h.endsWith('.' + host) || host.endsWith('.' + h)
+    for (const target of hostSet) {
+      if (!target) continue
+      if (h === target || h.endsWith('.' + target) || target.endsWith('.' + h)) {
+        return true
+      }
+    }
+    return false
   } catch {
     return false
   }
@@ -41,7 +95,11 @@ function isSameSiteUrl(url: string, host: string): boolean {
  */
 export function extractDeepLinksFromText(
   text: string,
-  options: { defaultSource: DeepLinkSource; targetHost?: string; dropSameSite?: boolean }
+  options: {
+    defaultSource: DeepLinkSource
+    targetHost?: string | string[] | Set<string>
+    dropSameSite?: boolean
+  }
 ): DeepLinkHit[] {
   const hits: DeepLinkHit[] = []
   if (!text) return hits
@@ -67,7 +125,7 @@ export function extractDeepLinksFromText(
     let workLine = line
     workLine = workLine.replace(/\[([^\]]{1,80})\]\((https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)\)/g, (_m, anchor: string, u: string) => {
       hits.push({ url: u, source: currentSource, anchor: anchor.trim() })
-      return ` ${u} `
+      return ' '
     })
 
     // 带协议的完整链接（同上：遇 CJK 等非 ASCII 截止，再清尾随标点）
@@ -85,9 +143,17 @@ export function extractDeepLinksFromText(
 
   // 噪声过滤 + 去重（保留首个命中，Markdown 锚链接排最前因此锚文本得以保留）
   const seen = new Set<string>()
+  const hostFamily = options.targetHost
+    ? options.targetHost instanceof Set
+      ? options.targetHost
+      : getCanonicalHostFamily(Array.isArray(options.targetHost) ? options.targetHost : [options.targetHost])
+    : undefined
+
   return hits.filter(h => {
     if (ASSET_URL_RE.test(h.url)) return false
-    if (options.dropSameSite && isSameSiteUrl(h.url, options.targetHost || '')) return false
+    if (BOILERPLATE_HOST_RE.test(h.url)) return false
+    if (h.anchor && NAV_OR_BOILERPLATE_ANCHOR_RE.test(h.anchor.trim())) return false
+    if (options.dropSameSite && hostFamily && isSameSiteUrl(h.url, hostFamily)) return false
     const key = h.url.toLowerCase().replace(/\/+$/, '')
     if (seen.has(key)) return false
     seen.add(key)
