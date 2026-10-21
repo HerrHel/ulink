@@ -31,61 +31,133 @@
     >
       <!-- 拖拽附加的卡片、笔记与多模态附件胶囊条（内置于输入容器顶部） -->
       <div v-if="hasAttachments" class="chat-attached-cards-bar">
-        <!-- 卡片胶囊 -->
+        <!-- 1. 书签与笔记资产卡片（等高 52px 结构化微卡片） -->
         <div
           v-for="card in attachedCardsList"
           :key="card.id"
-          class="chat-attached-chip"
-          :class="`chip-${card.type}`"
-          :title="card.url || card.title"
+          class="chat-attached-chip attach-card-item attach-card-pill"
+          :class="`pill-${card.type}`"
         >
-          <span class="chip-type-badge">{{ card.type === 'group' ? t('cards.note') : t('cards.bookmark') }}</span>
-          <span class="chip-title">{{ card.title }}</span>
+          <!-- 书签类型 -->
+          <template v-if="card.type === 'bm'">
+            <div class="card-icon-box bm-icon-box">
+              <img v-if="getBookmarkIcon(card.id)" :src="getBookmarkIcon(card.id)" class="bm-favicon" alt="" />
+              <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div class="card-text-col">
+              <span class="card-main-title">{{ card.title }}</span>
+              <span class="card-sub-info">{{ getBookmarkDomain(card.id) || t('cards.bookmark') }}</span>
+            </div>
+            <div class="attach-tooltip">{{ card.title }}<template v-if="card.url"> ({{ card.url }})</template></div>
+          </template>
+
+          <!-- 笔记类型 -->
+          <template v-else>
+            <div class="card-icon-box note-icon-box">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.66 10.44L20.68 14.62C19.84 18.23 18.18 19.69 15.06 19.39C14.56 19.35 14.02 19.26 13.44 19.12L11.76 18.72C7.59 17.73 6.3 15.67 7.28 11.49L8.26 7.3C8.46 6.45 8.7 5.71 9 5.1C10.17 2.68 12.16 2.03 15.5 2.82L17.17 3.21C21.36 4.19 22.64 6.26 21.66 10.44Z"/>
+                <path d="M7.83 5.41L6.25 5.93C2.28 7.21 1.22 9.31 2.5 13.28L3.78 17.23C5.07 21.2 7.16 22.27 11.13 20.99L12.71 20.47" opacity="0.5"/>
+              </svg>
+            </div>
+            <div class="card-text-col">
+              <span class="card-main-title">{{ card.title }}</span>
+              <span class="card-sub-info">{{ getNoteMeta(card.id) }}</span>
+            </div>
+            <div class="attach-tooltip">{{ card.title }} ({{ t('cards.note') }})</div>
+          </template>
+
+          <!-- 移除按钮（右上角圆底 ×） -->
           <button
             type="button"
-            class="chip-remove-btn"
+            class="chip-remove-btn attach-close-btn"
             @click.stop="ui.removeAiAttachedCard(card.id)"
             :title="t('common.delete')"
             :aria-label="t('common.delete')"
           >
-            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M4 4l8 8M12 4l-8 8" />
+            <svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
             </svg>
           </button>
         </div>
 
-        <!-- 附件文件（图片、视频、文档）胶囊 -->
-        <div
-          v-for="file in attachedFilesList"
-          :key="file.id"
-          class="chat-attached-chip chip-file"
-          :class="`chip-file-${file.type}`"
-          :title="`${file.name} (${file.sizeFormatted})`"
-        >
-          <img v-if="file.type === 'image' && file.dataUrl" :src="file.dataUrl" :alt="file.name" class="chip-img-preview" />
-          <span v-else class="chip-type-badge file-badge">
-            {{ file.type === 'image' ? '🖼️' : file.type === 'video' ? '🎥' : '📄' }}
-          </span>
-          <span class="chip-title">{{ file.name }}</span>
-          <span class="chip-filesize">{{ file.sizeFormatted }}</span>
-          <button
-            type="button"
-            class="chip-remove-btn"
-            @click.stop="ui.removeAiAttachedFile(file.id)"
-            :title="t('common.delete')"
-            :aria-label="t('common.delete')"
+        <!-- 2. 图片缩略图卡片（完全还原用户参考截图：方块缩略图 + 悬停深色气泡文件名） -->
+        <template v-for="file in attachedFilesList" :key="file.id">
+          <!-- 图片展示为方块缩略图，悬停在上方显示文件名 -->
+          <div
+            v-if="file.type === 'image'"
+            class="chat-attached-chip attach-card-item attach-card-thumb"
           >
-            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
-          </button>
-        </div>
+            <img v-if="file.dataUrl" :src="file.dataUrl" :alt="file.name" class="thumb-img" />
+            <div v-else class="thumb-fallback">🖼️</div>
+            <!-- 悬停上方展示文件名（与参考截图一致） -->
+            <div class="attach-tooltip">{{ file.name }}</div>
+            <!-- 右上角关闭按钮（与参考截图一致） -->
+            <button
+              type="button"
+              class="chip-remove-btn attach-close-btn thumb-close-btn"
+              @click.stop="ui.removeAiAttachedFile(file.id)"
+              :title="t('common.delete')"
+              :aria-label="t('common.delete')"
+            >
+              <svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
+              </svg>
+            </button>
+          </div>
 
+          <!-- 3. 文件/视频/代码/PDF 文档卡片（等高 52px 结构化微卡片） -->
+          <div
+            v-else
+            class="chat-attached-chip attach-card-item attach-card-pill pill-file"
+            :class="`pill-file-${getFileCategory(file)}`"
+          >
+            <div class="card-icon-box" :class="`file-icon-${getFileCategory(file)}`">
+              <!-- PDF -->
+              <svg v-if="getFileCategory(file) === 'pdf'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+              <!-- 视频 -->
+              <svg v-else-if="getFileCategory(file) === 'video'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+              <!-- 代码 -->
+              <svg v-else-if="getFileCategory(file) === 'code'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+              </svg>
+              <!-- 通用文档 -->
+              <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+              </svg>
+            </div>
+            <div class="card-text-col">
+              <span class="card-main-title">{{ file.name }}</span>
+              <span class="card-sub-info">{{ file.sizeFormatted }}</span>
+            </div>
+            <div class="attach-tooltip">{{ file.name }} ({{ file.sizeFormatted }})</div>
+            <!-- 移除按钮 -->
+            <button
+              type="button"
+              class="chip-remove-btn attach-close-btn"
+              @click.stop="ui.removeAiAttachedFile(file.id)"
+              :title="t('common.delete')"
+              :aria-label="t('common.delete')"
+            >
+              <svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
+              </svg>
+            </button>
+          </div>
+        </template>
+
+        <!-- 清空全部按钮 -->
         <button
           v-if="attachedCardsList.length + attachedFilesList.length > 1"
           type="button"
           class="chip-clear-all"
           @click="clearAllAttachments"
+          :title="t('common.clear')"
         >
           {{ t('common.clear') }}
         </button>
@@ -173,7 +245,8 @@
 import { ref, computed, type Ref } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
-import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
+import { useDataStore } from '../../stores/data.js'
+import { processFileForAi, type AttachedMediaFile } from '../../lib/ai/attachmentHelper.js'
 import { toast } from '../../lib/toast.js'
 
 defineOptions({ name: 'ChatInputDock' })
@@ -205,9 +278,48 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const ui = useUIStore()
+const ds = useDataStore()
 
 const attachedFilesList = computed(() => ui.aiAttachedFiles)
 const hasAttachments = computed(() => props.attachedCardsList.length > 0 || attachedFilesList.value.length > 0)
+
+function getBookmarkIcon(id: string): string | undefined {
+  return ds.bookmarkMap[id]?.icon
+}
+
+function getBookmarkDomain(id: string): string {
+  const b = ds.bookmarkMap[id]
+  if (!b?.url) return b?.categoryId ? (ds.categoryMap[b.categoryId]?.name || '') : ''
+  try {
+    const host = new URL(b.url).hostname.replace(/^www\./, '')
+    const cat = b?.categoryId ? ds.categoryMap[b.categoryId]?.name : ''
+    return cat ? `${host} • ${cat}` : host
+  } catch {
+    return ''
+  }
+}
+
+function getNoteMeta(id: string): string {
+  const g = ds.groupMap[id]
+  if (!g) return t('cards.note')
+  const count = g.bookmarkIds?.length || 0
+  const cat = g.categoryId ? ds.categoryMap[g.categoryId]?.name : ''
+  const parts: string[] = [t('cards.note')]
+  if (count > 0) parts.push(`${count} 项`)
+  if (cat && cat !== 'all' && cat !== 'uncategorized') parts.push(cat)
+  return parts.join(' • ')
+}
+
+function getFileCategory(file: AttachedMediaFile): 'image' | 'video' | 'pdf' | 'code' | 'doc' {
+  if (file.type === 'image') return 'image'
+  if (file.type === 'video') return 'video'
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  if (ext === 'pdf' || file.mimeType.includes('pdf')) return 'pdf'
+  if (['js', 'ts', 'jsx', 'tsx', 'vue', 'json', 'py', 'java', 'c', 'cpp', 'rs', 'go', 'html', 'css', 'scss', 'sql', 'sh', 'md'].includes(ext)) {
+    return 'code'
+  }
+  return 'doc'
+}
 
 function clearAllAttachments() {
   ui.clearAiAttachedCards()
@@ -625,11 +737,14 @@ function bindTa(el: unknown) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 6px;
-  padding-bottom: 5px;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-top: 4px;
+  padding-bottom: 8px;
   border-bottom: 1px dashed var(--border-light);
   animation: attachSlideIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: visible;
+  position: relative;
 }
 
 @keyframes attachSlideIn {
@@ -637,116 +752,259 @@ function bindTa(el: unknown) {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.chat-attached-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2.5px 7px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm, 6px);
-  font-size: 11px;
-  color: var(--text);
-  max-width: 220px;
-  box-shadow: var(--shadow-xs);
-  transition: all 0.14s ease;
-}
-
-.chat-attached-chip:hover {
-  border-color: var(--border-hover);
-  background: var(--surface-hover);
-  transform: translateY(-0.5px);
-}
-
-:global([data-theme="dark"]) .chat-attached-chip {
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-:global([data-theme="dark"]) .chat-attached-chip:hover {
-  border-color: var(--border-hover);
-  background: var(--surface-hover);
-}
-
-.chat-attached-chip .chip-type-badge {
-  font-size: 9.5px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--surface-hover);
-  border: 1px solid var(--border-light);
-  color: var(--text-muted);
-  font-weight: 500;
+/* 附件通用项容器 */
+.attach-card-item {
+  position: relative;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
   flex-shrink: 0;
 }
 
-.chat-attached-chip.chip-group .chip-type-badge {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+/* 1. 图片缩略图卡片（贴合用户截图：圆角方块缩略图 + 悬停深色气泡文件名） */
+.attach-card-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
 }
 
-.chat-attached-chip .chip-title {
+.attach-card-thumb:hover {
+  border-color: var(--border-hover);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+:global([data-theme="dark"]) .attach-card-thumb {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.attach-card-thumb .thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 9px;
+  display: block;
+}
+
+.attach-card-thumb .thumb-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+/* 2. 结构化卡片（书签、笔记、文档、视频、代码） */
+.attach-card-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  padding: 6px 26px 6px 8px; /* 右侧 26px 预留给关闭按钮 */
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  gap: 8px;
+  max-width: 200px;
+  cursor: default;
+}
+
+.attach-card-pill:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+:global([data-theme="dark"]) .attach-card-pill {
+  background: #18181b;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+:global([data-theme="dark"]) .attach-card-pill:hover {
+  background: #202024;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* 图标容器框 */
+.card-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bm-icon-box {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-hover));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.bm-favicon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.note-icon-box {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+}
+
+.file-icon-pdf {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+.file-icon-video {
+  background: rgba(168, 85, 247, 0.12);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.22);
+}
+
+.file-icon-code {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+}
+
+.file-icon-doc {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+}
+
+/* 文字双行排版 */
+.card-text-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.35;
+}
+
+.card-main-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
 }
 
-.chip-img-preview {
-  width: 15px;
-  height: 15px;
-  border-radius: 3px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.chip-filesize {
-  font-size: 9.5px;
-  color: var(--text-muted);
-  opacity: 0.85;
-  margin-left: -2px;
-  flex-shrink: 0;
-}
-
-.chip-file .file-badge {
+.card-sub-info {
   font-size: 10.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
 }
 
-.chat-attached-chip .chip-remove-btn {
+/* 右上角关闭删除圆按钮（贴合截图中的右上角圆黑底 ×） */
+.attach-close-btn {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  border: 1.5px solid var(--surface);
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
   cursor: pointer;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition: all 0.12s ease;
+  transition: all 0.14s ease;
+  z-index: 20;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.chat-attached-chip .chip-remove-btn:hover {
-  background: var(--border);
-  color: var(--text);
+.attach-close-btn:hover {
+  background: rgba(220, 38, 38, 0.95);
+  transform: scale(1.12);
 }
 
+:global([data-theme="dark"]) .attach-close-btn {
+  background: rgba(30, 30, 35, 0.85);
+  border-color: #242428;
+  color: #f4f4f5;
+}
+
+:global([data-theme="dark"]) .attach-close-btn:hover {
+  background: rgba(239, 68, 68, 0.95);
+}
+
+/* 浮动提示 Tooltip（贴合截图中的上方深色浮现气泡） */
+.attach-tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #18181b;
+  color: #f4f4f5;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 60;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.attach-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #18181b;
+}
+
+.attach-card-item:hover .attach-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 清空全部按钮 */
 .chat-attached-cards-bar .chip-clear-all {
-  font-size: 10px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  background: none;
-  border: none;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
   cursor: pointer;
-  padding: 2px 4px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .chat-attached-cards-bar .chip-clear-all:hover {
-  color: var(--accent);
+  color: var(--danger, #ef4444);
+  border-color: var(--danger, #ef4444);
 }
 </style>
