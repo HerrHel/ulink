@@ -121,34 +121,64 @@ export function useAiChat(options: UseAiChatOptions = {}) {
   const dynamicQuickHints = computed<QuickHint[]>(() => {
     const hints: QuickHint[] = []
 
-    // 1. 收件箱未分类检测
+    // 1. 情境感知：若当前聚焦在某个笔记组（工作台）
+    if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) {
+      const group = ds.groupMap[ui.focusedGroupId]
+      const gName = group.name.length > 8 ? group.name.slice(0, 8) + '…' : group.name
+      hints.push({
+        label: isZh.value ? `📦 扩展「${gName}」工具` : `📦 Tools for ${gName}`,
+        query: isZh.value ? `帮我找找适合「${group.name}」的优质工具网站` : `Recommend tools for ${group.name}`,
+      })
+      hints.push({
+        label: isZh.value ? '🔍 查重清理' : '🔍 Deduplicate',
+        query: isZh.value ? '检查库内是否有重复书签并清理' : 'Check for duplicate bookmarks in my vault',
+      })
+    } else if (ui.curCat && ui.curCat !== CAT_ALL && ui.curCat !== CAT_UNCATEGORIZED) {
+      // 2. 情境感知：若当前选定了特定分类
+      const cat = ds.categories.find((c: any) => !c.deletedAt && c.id === ui.curCat)
+      if (cat?.name) {
+        const cName = cat.name.length > 8 ? cat.name.slice(0, 8) + '…' : cat.name
+        hints.push({
+          label: isZh.value ? `📁 探索「${cName}」精选` : `📁 ${cName} tools`,
+          query: isZh.value ? `帮我找找「${cat.name}」分类下的优质网站` : `Recommend websites for ${cat.name}`,
+        })
+      }
+    }
+
+    // 3. 收件箱未分类检测
     const uncatCount = ds.bookmarks.filter(
       (b) => !b.deletedAt && (!b.categoryId || b.categoryId === CAT_UNCATEGORIZED) && !b.parentId && !b.id.startsWith('bm_ulink_'),
     ).length
-    if (uncatCount > 0) {
+    if (uncatCount > 0 && hints.length < 4) {
       hints.push({
         label: isZh.value ? `🧹 整理未分类 (${uncatCount})` : `🧹 Triage Inbox (${uncatCount})`,
         query: isZh.value ? '帮我整理一下未分类书签' : 'Please triage my uncategorized bookmarks',
       })
     }
 
-    // 2. 查重合并
-    hints.push({
-      label: isZh.value ? '🔍 查重合并' : '🔍 Deduplicate',
-      query: isZh.value ? '检查库内是否有重复书签并清理' : 'Check for duplicate bookmarks in my vault',
-    })
+    // 4. 查重合并
+    if (hints.length < 4) {
+      hints.push({
+        label: isZh.value ? '🔍 查重合并' : '🔍 Deduplicate',
+        query: isZh.value ? '检查库内是否有重复书签并清理' : 'Check for duplicate bookmarks in my vault',
+      })
+    }
 
-    // 3. 发现好站
-    hints.push({
-      label: isZh.value ? '🌐 发现好站' : '🌐 Discover Sites',
-      query: isZh.value ? '推荐几个好用的效率工具网站' : 'Recommend some useful productivity websites',
-    })
+    // 5. 发现好站
+    if (hints.length < 4) {
+      hints.push({
+        label: isZh.value ? '🌐 发现好站' : '🌐 Discover Sites',
+        query: isZh.value ? '推荐几个好用的效率工具网站' : 'Recommend some useful productivity websites',
+      })
+    }
 
-    // 4. 书签库体检
-    hints.push({
-      label: isZh.value ? '🩺 资产体检' : '🩺 Vault Health',
-      query: isZh.value ? '帮我给书签库做一次健康体检' : 'Audit my bookmark vault health',
-    })
+    // 6. 书签库体检
+    if (hints.length < 4) {
+      hints.push({
+        label: isZh.value ? '🩺 资产体检' : '🩺 Vault Health',
+        query: isZh.value ? '帮我给书签库做一次健康体检' : 'Audit my bookmark vault health',
+      })
+    }
 
     return hints.slice(0, 4)
   })

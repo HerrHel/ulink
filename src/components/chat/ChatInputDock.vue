@@ -95,7 +95,7 @@ const props = defineProps<{
 
 const query = defineModel<string>('query', { required: true })
 const focused = defineModel<boolean>('focused', { required: true })
-const activeIndex = defineModel<number>('activeIndex', { required: true })
+const _activeIndex = defineModel<number>('activeIndex', { required: true })
 
 const emit = defineEmits<{
   applySlash: [cmd: string]
