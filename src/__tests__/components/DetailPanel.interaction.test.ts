@@ -14,6 +14,7 @@ vi.mock('../../lib/toast.js', () => ({
 
 vi.mock('../../lib/ai/siteCommander.js', () => ({
   createTopicWorkspace: vi.fn().mockResolvedValue({
+    success: true,
     group: { id: 'sg_target_1', name: 'UI设计 工作台', categoryId: 'cat_design' },
     totalBookmarks: 3,
     newBookmarksCount: 2,

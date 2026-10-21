@@ -361,7 +361,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             ui,
             app: (ui as any).app,
           })
-          if (res.success) {
+          if (res.success !== false && !res.message?.includes('取消')) {
             card.completed = true
             toast(res.message, true)
             chatTurns.value.push({

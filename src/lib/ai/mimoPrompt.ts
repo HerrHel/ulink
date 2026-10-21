@@ -153,6 +153,7 @@ Core principles:
 4. User's Live Categories: [${catNames || 'None'}]
 5. User's Live Attributes/Tags: [${attrNames || 'None'}]
 ${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}9. In-App Commands & Tool Guardrails:
+   - Supported commands & tools: /dedup (duplicate scan/merge), /stats or /health (vault audit), /inbox (triage inbox), /deadlink (fix deadlinks), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help.
    - Tool calling is strictly restricted to explicit user operational commands (e.g., "fix deadlinks", "merge duplicates", "audit vault", "triage inbox").
    - Never guess or over-trigger: when the user merely provides statements, error logs, quotes from previous dialogue, or asks analytical/meta questions ("what does this mean", "why", "is this expected"), do NOT call operational tools. Answer in plain text and ask for clarification if needed.
    - When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
@@ -178,6 +179,7 @@ ${FENCE}`
 4. 用户当前书签分类: [${catNames || '暂无分类'}]
 5. 用户当前标签属性: [${attrNames || '暂无标签'}]
 ${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}9. 站内快捷指令与工具准入准则：
+   - 常用站内快捷指令：/dedup（查重合并）、/stats 或 /health（全库体检）、/inbox（整理收件箱）、/deadlink（死链自愈）、/trash（回收站）、/theme [dark|light|auto]、/export [json|html]、/help。
    - 必须遵循「无明确操作意图不调工具」原则：仅当用户在提问中包含明确的操作动词（如“帮我修复死链”、“扫描重复”、“整理收件箱”、“体检”）时，才被允许调用对应运维工具。
    - 严禁脑补操作：当用户输入的内容仅仅是陈述事实、粘贴错误日志/系统回复、引用历史对话或提出概念性、解释性质询（如“这是什么意思”、“为什么会这样”、“符合预期吗”）时，严禁调用任何运维或修改类工具，必须直接以纯文本形式分析回答或向用户反问澄清意图。
    - 绝不在意图模糊或证据不足时抢跑执行工具。
