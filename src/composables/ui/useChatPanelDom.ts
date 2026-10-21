@@ -88,27 +88,27 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
     })
   }
 
-  // ── 输入框自适应高度 ──
+  // ── 输入框自适应高度（舒适大输入框） ──
   function adjustTextareaHeight() {
     const el = textareaRef.value
     if (!el) return
     if (!getQuery()) {
-      el.style.height = '24px'
-      el.style.lineHeight = '24px'
+      el.style.height = '44px'
+      el.style.lineHeight = '1.5'
       el.style.overflowY = 'hidden'
       return
     }
     el.style.height = 'auto'
     const scrollH = el.scrollHeight
-    if (scrollH <= 26) {
-      el.style.height = '24px'
-      el.style.lineHeight = '24px'
+    if (scrollH <= 46) {
+      el.style.height = '44px'
+      el.style.lineHeight = '1.5'
       el.style.overflowY = 'hidden'
     } else {
-      const nextH = Math.min(scrollH, 110)
+      const nextH = Math.min(scrollH, 160)
       el.style.height = nextH + 'px'
-      el.style.lineHeight = '1.45'
-      el.style.overflowY = scrollH > 110 ? 'auto' : 'hidden'
+      el.style.lineHeight = '1.5'
+      el.style.overflowY = scrollH > 160 ? 'auto' : 'hidden'
     }
   }
 

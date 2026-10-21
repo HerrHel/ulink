@@ -1,14 +1,36 @@
 <template>
-    <!-- 底部常驻：单一精致对话框（集成斜杠联想、卡片附件、多模态文件附件与停止生成） -->
+  <!-- 底部常驻：单一精致对话框（集成斜杠联想、卡片附件、多模态文件附件与停止生成） -->
+  <div
+    class="chat-input-dock"
+    @dragover.prevent="onDockDragOver"
+    @dragleave.prevent="onDockDragLeave"
+    @drop.prevent="onDockDrop"
+    :class="{ 'dock-drag-over': isDockDragOver }"
+  >
+    <!-- 斜杠指令补全浮层（保留在输入框上方定位） -->
+    <div v-if="showSlash && slashItems.length > 0" class="slash-suggest-dock" role="listbox">
+      <div
+        v-for="(item, idx) in slashItems"
+        :key="item.cmd"
+        class="slash-suggest-item"
+        :class="{ active: idx === _activeIndex }"
+        role="option"
+        :aria-selected="idx === _activeIndex"
+        @mousedown.prevent="emit('applySlash', item.cmd)"
+      >
+        <span class="slash-cmd-tag">{{ item.cmd }}</span>
+        <span class="slash-cmd-title">{{ item.title }}</span>
+        <span class="slash-cmd-desc">{{ item.desc }}</span>
+      </div>
+    </div>
+
+    <!-- 统一精致输入卡片容器：顶部输入区 + 底部工具栏 -->
     <div
-      class="chat-input-dock"
-      @dragover.prevent="onDockDragOver"
-      @dragleave.prevent="onDockDragLeave"
-      @drop.prevent="onDockDrop"
-      :class="{ 'dock-drag-over': isDockDragOver }"
+      class="chat-input-wrapper"
+      :class="{ focused: focused, 'drag-active': isDockDragOver }"
     >
-      <!-- 拖拽附加的卡片、笔记与多模态附件胶囊条 -->
-      <div v-if="attachedCardsList.length > 0 || attachedFilesList.length > 0" class="chat-attached-cards-bar">
+      <!-- 拖拽附加的卡片、笔记与多模态附件胶囊条（内置于输入容器顶部） -->
+      <div v-if="hasAttachments" class="chat-attached-cards-bar">
         <!-- 卡片胶囊 -->
         <div
           v-for="card in attachedCardsList"
@@ -69,65 +91,82 @@
         </button>
       </div>
 
-      <div class="chat-input-wrapper" :class="{ focused: focused, 'drag-active': isDockDragOver }">
-        <!-- 附件选择按钮（图片、文件、视频） -->
-        <button
-          type="button"
-          class="chat-attach-btn"
-          :title="t('ai.attachFile')"
-          :aria-label="t('ai.attachFile')"
-          @click="triggerFileInput"
-        >
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-          </svg>
-        </button>
-        <input
-          ref="fileInputRef"
-          type="file"
-          multiple
-          accept="image/*,video/*,text/*,.pdf,.doc,.docx,.md,.json,.csv,.txt"
-          style="display: none;"
-          @change="handleFileInputChange"
-        />
-
+      <!-- 上半部分：纯文本多行输入区 -->
+      <div class="chat-input-main">
         <textarea
           :ref="bindTa"
           v-model="query"
           class="chat-textarea"
           :placeholder="hasAttachments ? t('ai.attachedInputPlaceholder') : t('ai.sidebarInputPlaceholder')"
-          rows="1"
+          rows="2"
           @focus="focused = true"
           @blur="focused = false"
           @keydown="emit('taKeydown', $event)"
           @paste="handlePaste"
           @input="emit('adjustHeight')"
         ></textarea>
-        <!-- 停止生成 / 发送按钮平滑切换 -->
-        <button
-          v-if="aiLoading"
-          class="chat-send-btn stop active"
-          @click="emit('stop')"
-          :title="t('ai.stopGenerating')"
-          :aria-label="t('ai.stopGenerating')"
-        >
-          <span class="stop-square"></span>
-        </button>
-        <button
-          v-else
-          class="chat-send-btn"
-          :class="{ active: !!query.trim() || hasAttachments }"
-          :disabled="!query.trim() && !hasAttachments"
-          @click="emit('submit')"
-          :title="t('ai.searchAction') + ' (Enter)'"
-          :aria-label="t('ai.searchAction')"
-        >
-          <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
-            <path d="M8 2.5l4.5 4.5h-3v6.5h-3V7h-3L8 2.5z"/>
-          </svg>
-        </button>
+      </div>
+
+      <!-- 下半部分：工具与发送按钮工具栏 -->
+      <div class="chat-input-toolbar">
+        <div class="toolbar-left">
+          <!-- 附件选择按钮（+ 按钮，与截图一致） -->
+          <button
+            type="button"
+            class="chat-tool-btn chat-attach-btn"
+            :title="t('ai.attachFile')"
+            :aria-label="t('ai.attachFile')"
+            @click="triggerFileInput"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          <input
+            ref="fileInputRef"
+            type="file"
+            multiple
+            accept="image/*,video/*,text/*,.pdf,.doc,.docx,.md,.json,.csv,.txt"
+            style="display: none;"
+            @change="handleFileInputChange"
+          />
+
+          <!-- 智能管家状态徽标（与截图中的左下角模型标签完全一致） -->
+          <div class="toolbar-model-pill" title="与链全能资产管家 Agent">
+            <span class="model-pill-dot"></span>
+            <span class="model-pill-text">ULink Agent</span>
+          </div>
+        </div>
+
+        <div class="toolbar-right">
+          <!-- 停止生成 / 发送按钮（圆形操作大按钮，与截图完全一致） -->
+          <button
+            v-if="aiLoading"
+            class="chat-send-btn stop active"
+            @click="emit('stop')"
+            :title="t('ai.stopGenerating')"
+            :aria-label="t('ai.stopGenerating')"
+          >
+            <span class="stop-square"></span>
+          </button>
+          <button
+            v-else
+            class="chat-send-btn round-send-btn"
+            :class="{ active: !!query.trim() || hasAttachments }"
+            :disabled="!query.trim() && !hasAttachments"
+            @click="emit('submit')"
+            :title="t('ai.searchAction') + ' (Enter)'"
+            :aria-label="t('ai.searchAction')"
+          >
+            <!-- 贴合截图的清晰箭头图标 -->
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -272,11 +311,11 @@ function bindTa(el: unknown) {
 </script>
 
 <style scoped>
-/* 底部仅留一个对话输入框：浮动工作室 Dock，主站卡片级材质底座 */
+/* 底部精致常驻 Dock */
 .chat-input-dock {
   position: relative;
   flex-shrink: 0;
-  padding: 10px 12px 12px;
+  padding: 8px 12px 12px;
   background: var(--surface);
   border-top: 1px solid var(--border-light);
   box-shadow: 0 -4px 16px -2px rgba(44, 40, 36, 0.03);
@@ -365,18 +404,25 @@ function bindTa(el: unknown) {
   text-align: right;
 }
 
+/* 统一输入容器：舒适大高框设计，上下两段式（上输入，下工具） */
 .chat-input-wrapper {
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
+  flex-direction: column;
+  min-height: 84px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md, 10px);
+  border-radius: 14px;
   background: var(--bg);
-  padding: 6px 8px 6px 12px;
+  padding: 9px 12px 7px 12px;
   box-shadow: inset 0 1px 2px rgba(44, 40, 36, 0.03);
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 0;
   box-sizing: border-box;
+}
+
+:global([data-theme="dark"]) .chat-input-wrapper {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 0 0 rgba(255, 255, 255, 0.05);
 }
 
 .chat-input-wrapper:hover {
@@ -390,16 +436,6 @@ function bindTa(el: unknown) {
   box-shadow: 0 0 0 2px var(--accent-light), 0 2px 8px -2px rgba(44, 40, 36, 0.06);
 }
 
-:global([data-theme="dark"]) .chat-input-wrapper {
-  background: var(--bg-alt);
-  border: 1px solid var(--border);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 0 0 rgba(255, 255, 255, 0.05);
-}
-
-:global([data-theme="dark"]) .chat-input-wrapper:hover {
-  border-color: var(--border-hover);
-}
-
 :global([data-theme="dark"]) .chat-input-wrapper:focus-within,
 :global([data-theme="dark"]) .chat-input-wrapper.focused {
   border-color: var(--accent);
@@ -407,19 +443,32 @@ function bindTa(el: unknown) {
   box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
-.chat-textarea {
+.dock-drag-over,
+.chat-input-wrapper.drag-active {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-light) !important;
+  background: var(--surface) !important;
+}
+
+/* 主输入区域 */
+.chat-input-main {
+  width: 100%;
   flex: 1;
-  min-width: 0;
-  height: 24px;
-  min-height: 24px;
-  max-height: 120px;
+  display: flex;
+}
+
+.chat-textarea {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  max-height: 160px;
   border: none !important;
   background: transparent !important;
   padding: 0 !important;
   margin: 0 !important;
   font-family: var(--font-sans);
-  font-size: 12.5px;
-  line-height: 24px;
+  font-size: 13.5px;
+  line-height: 1.5;
   color: var(--text);
   resize: none;
   outline: none !important;
@@ -439,38 +488,114 @@ function bindTa(el: unknown) {
 
 .chat-textarea::placeholder {
   color: var(--text-muted);
-  opacity: 0.8;
+  opacity: 0.75;
   user-select: none;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
 }
 
-.chat-send-btn {
+/* 底部操作与工具栏 */
+.chat-input-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 4px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 工具按钮（+ 附件添加等） */
+.chat-tool-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 26px;
   height: 26px;
   border: none;
-  background: var(--surface-hover);
+  background: transparent;
   color: var(--text-muted);
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
+  padding: 0;
+}
+
+.chat-tool-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+  transform: scale(1.08);
+}
+
+.chat-tool-btn:active {
+  transform: scale(0.95);
+}
+
+/* 智能管家微标签 (截图左下角模型标签) */
+.toolbar-model-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2.5px 8px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: default;
+  user-select: none;
+  transition: all 0.12s ease;
+}
+
+.toolbar-model-pill .model-pill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+:global([data-theme="dark"]) .toolbar-model-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 圆形发送与停止操作按钮 (截图右下角高亮圆按钮) */
+.chat-send-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--surface-hover);
+  color: var(--text-muted);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  padding: 0;
 }
 
 .chat-send-btn.active {
-  background: var(--accent);
+  background: #2563eb;
   color: #fff;
-  box-shadow: 0 2px 6px var(--accent-glow);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
 
 .chat-send-btn.active:hover {
-  background: var(--brand-logo-blue, var(--accent));
-  transform: scale(1.04);
-  box-shadow: 0 3px 10px var(--accent-glow);
+  background: #1d4ed8;
+  transform: scale(1.08);
+  box-shadow: 0 3px 12px rgba(37, 99, 235, 0.45);
 }
 
 .chat-send-btn:active {
@@ -478,19 +603,14 @@ function bindTa(el: unknown) {
 }
 
 .chat-send-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
-:global([data-theme="dark"]) .chat-send-btn.active {
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset, 0 2px 8px var(--accent-glow);
-}
-
-/* 停止生成方块按钮 */
 .chat-send-btn.stop {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 2px 6px var(--accent-glow);
+  box-shadow: 0 2px 8px var(--accent-glow);
 }
 
 .stop-square {
@@ -501,13 +621,15 @@ function bindTa(el: unknown) {
   display: block;
 }
 
-/* 关联卡片/附件胶囊栏：主站精致 Chip 质感 */
+/* 关联卡片/附件胶囊栏：置于输入框顶部 */
 .chat-attached-cards-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed var(--border-light);
   animation: attachSlideIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -520,11 +642,11 @@ function bindTa(el: unknown) {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px;
+  padding: 2.5px 7px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 6px);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text);
   max-width: 220px;
   box-shadow: var(--shadow-xs);
@@ -573,6 +695,26 @@ function bindTa(el: unknown) {
   min-width: 0;
 }
 
+.chip-img-preview {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.chip-filesize {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  opacity: 0.85;
+  margin-left: -2px;
+  flex-shrink: 0;
+}
+
+.chip-file .file-badge {
+  font-size: 10.5px;
+}
+
 .chat-attached-chip .chip-remove-btn {
   display: inline-flex;
   align-items: center;
@@ -595,7 +737,7 @@ function bindTa(el: unknown) {
 }
 
 .chat-attached-cards-bar .chip-clear-all {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--text-muted);
   background: none;
   border: none;
@@ -607,59 +749,5 @@ function bindTa(el: unknown) {
 
 .chat-attached-cards-bar .chip-clear-all:hover {
   color: var(--accent);
-}
-
-/* 附件选择与拖拽多模态卡片样式 */
-.chat-attach-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: var(--radius-sm, 6px);
-  cursor: pointer;
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-  flex-shrink: 0;
-  padding: 0;
-}
-
-.chat-attach-btn:hover {
-  background: var(--surface-hover);
-  color: var(--accent);
-  transform: scale(1.06);
-}
-
-.chat-attach-btn:active {
-  transform: scale(0.95);
-}
-
-.dock-drag-over,
-.chat-input-wrapper.drag-active {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px var(--accent-light) !important;
-  background: var(--surface) !important;
-}
-
-.chip-img-preview {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.chip-filesize {
-  font-size: 10px;
-  color: var(--text-muted);
-  opacity: 0.85;
-  margin-left: -2px;
-  flex-shrink: 0;
-}
-
-.chip-file .file-badge {
-  font-size: 11px;
 }
 </style>

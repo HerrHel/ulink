@@ -77,22 +77,22 @@ beforeEach(() => {
 })
 
 describe('useChatPanelDom 输入框自适应高度', () => {
-  it('空输入固定 24px 且隐藏滚动条', async () => {
+  it('空输入固定 44px 且隐藏滚动条', async () => {
     const h1 = makeHarness()
     h1.api.adjustTextareaHeight()
     await nextTick()
-    expect(h1.textarea.style.height).toBe('24px')
+    expect(h1.textarea.style.height).toBe('44px')
     expect(h1.textarea.style.overflowY).toBe('hidden')
     h1.wrapper.unmount()
   })
 
-  it('有内容按 scrollHeight 截断到 110px，超出后允许滚动', async () => {
+  it('有内容按 scrollHeight 截断到 160px，超出后允许滚动', async () => {
     const h1 = makeHarness()
     h1.query.value = '一些问题'
     Object.defineProperty(h1.textarea, 'scrollHeight', { value: 200, configurable: true })
     h1.api.adjustTextareaHeight()
     await nextTick()
-    expect(h1.textarea.style.height).toBe('110px')
+    expect(h1.textarea.style.height).toBe('160px')
     expect(h1.textarea.style.overflowY).toBe('auto')
     h1.wrapper.unmount()
   })

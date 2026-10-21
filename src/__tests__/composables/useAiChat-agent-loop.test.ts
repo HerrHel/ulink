@@ -15,6 +15,10 @@ const mockState = vi.hoisted(() => {
     clearAiAttachedCards: vi.fn(() => {
       state.aiAttachedCards.length = 0
     }),
+    aiAttachedFiles: [] as unknown[],
+    clearAiAttachedFiles: vi.fn(() => {
+      state.aiAttachedFiles.length = 0
+    }),
     curCat: 'all',
     focusedGroupId: null,
     batchMode: false,

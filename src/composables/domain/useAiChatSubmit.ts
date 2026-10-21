@@ -101,8 +101,8 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
   /** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
   async function handleAiSubmit() {
     // 1. 抓取并解析用户拖入附加的卡片与笔记、添加或粘贴的附件文件
-    const attachedRefs = [...ui.aiAttachedCards]
-    const attachedFiles = [...ui.aiAttachedFiles]
+    const attachedRefs = [...(ui.aiAttachedCards || [])]
+    const attachedFiles = [...(ui.aiAttachedFiles || [])]
     const resolvedCards: ResolvedCardContext[] = attachedRefs
       .map((ref) =>
         resolveCardContext(ref.type, ref.id, {
@@ -129,11 +129,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     if (!raw || aiLoading.value) return
 
     // 清空输入框附带槽位（卡片与附件已装载进本轮问答，持久化至该 userTurn）
-    if (ui.aiAttachedCards.length > 0) {
-      ui.clearAiAttachedCards()
+    if (ui.aiAttachedCards?.length) {
+      ui.clearAiAttachedCards?.()
     }
-    if (ui.aiAttachedFiles.length > 0) {
-      ui.clearAiAttachedFiles()
+    if (ui.aiAttachedFiles?.length) {
+      ui.clearAiAttachedFiles?.()
     }
 
     if (raw === '/clear') {
