@@ -251,9 +251,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         if (mimoConf.enabled) {
           try {
             const history: MiMoChatMessage[] = []
-            // 回放文本统一限长：转发层单条消息上限 4000 字（mimo-guard 超限 413 整轮拒绝），
+            // 回放文本统一限长：留出充足余量低于 mimo-guard 4000 字符硬性单条上限，
             // 多轮回放的 user promptContent / assistant 结论不设限会逐轮膨胀直至整轮失败
-            const REPLAY_MSG_MAX_LEN = 4000
+            const REPLAY_MSG_MAX_LEN = 3500
             const replayText = (s: string) => (s || '').slice(0, REPLAY_MSG_MAX_LEN)
             for (const t of chatTurns.value) {
               if (t.loading || t.id === assistantTurn.id) continue
@@ -272,15 +272,18 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                   role: 'assistant',
                   content: replayText(t.preToolContent || ''),
                   tool_calls: t.toolCalls.map((c) => ({
-                    id: c.id,
+                    id: c.id || `call_${Date.now()}`,
                     type: 'function' as const,
-                    function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) },
+                    function: {
+                      name: c.name,
+                      arguments: typeof c.arguments === 'string' ? c.arguments : JSON.stringify(c.arguments || {}),
+                    },
                   })),
                 })
                 for (const r of t.toolResults) {
                   // 回放同样过 sanitizeToolResult：持久化的历史可能来自修复前的版本，
                   // 脱敏/限长在发送前统一兜底（与当轮回传同口径）
-                  history.push({ role: 'tool', tool_call_id: r.toolCallId, content: sanitizeToolResult(r.resultText) })
+                  history.push({ role: 'tool', tool_call_id: r.toolCallId || (r as any).id, content: sanitizeToolResult(r.resultText) })
                 }
                 if (t.content) history.push({ role: 'assistant', content: replayText(t.content) })
               } else if (t.content) {
@@ -371,12 +374,37 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               console.warn('[ulink AI] mentalModel synthesis failed:', mmErr)
             }
 
+            // 动态感知：若用户意图涉及标签补全，抓取库内未打标签的书签明细注入情境切片
+            let untaggedBookmarks: Array<{ title: string; url: string; category?: string }> | undefined
+            if (/(?:补打|打标|打标签|未打标|标签|补齐标签)/i.test(raw)) {
+              const catMap = new Map(ds.categories.map((c) => [c.id, c.name]))
+              untaggedBookmarks = ds.bookmarks
+                .filter((b) => !b.deletedAt && (!b.attributes || Object.keys(b.attributes).length === 0) && !b.id.startsWith('bm_ulink_'))
+                .slice(0, 10)
+                .map((b) => ({
+                  title: b.title || '无标题',
+                  url: b.url,
+                  category: b.categoryId ? catMap.get(b.categoryId) : undefined,
+                }))
+            }
+
+            // 动态感知：若用户提问涉及回收站，提取回收站暂存项明细注入情境切片
+            let trashedBookmarks: Array<{ title: string; url: string }> | undefined
+            if (/(?:回收站|垃圾桶)/i.test(raw)) {
+              trashedBookmarks = ds.bookmarks
+                .filter((b) => b.deletedAt)
+                .slice(0, 10)
+                .map((b) => ({ title: b.title || '无标题', url: b.url }))
+            }
+
             // 动态情境切片：请求与发送摘要共用同一对象，保证「披露的即所发」
             const contextSlice = {
               currentCategoryName,
               focusedGroupName,
               focusedGroupBookmarks,
               selectedBookmarks,
+              untaggedBookmarks,
+              trashedBookmarks,
               retrievedVaultKnowledge,
               mentalModelPrompt,
               attachedCards: resolvedCards.map((c) => ({
@@ -467,6 +495,8 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
             // 核心：若大模型自主触发了标准 Tool Calling (Function Calling)，即刻调度并挂载行动卡片
             if (mimoRes.toolCalls?.length) {
+              // 工具调用流已触发：清空首轮预发言草稿，避免在后续续轮流式输出时发生突兀覆盖闪烁
+              assistantTurn.content = ''
               const toolResults: Array<{ id: string; name: string; resultText: string }> = []
               for (const call of mimoRes.toolCalls) {
                 // 「停止生成」后不再执行后续工具副作用（已执行的照常持久化）
@@ -562,8 +592,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                   if (controller.signal.aborted) return
                   followUpDone = true
                   if (followUpRes.reply.trim()) {
-                    assistantTurn.content = followUpRes.reply
+                    assistantTurn.content = followUpRes.cleanText || followUpRes.reply
                     assistantTurn.candidates = followUpRes.candidates?.length ? followUpRes.candidates : assistantTurn.candidates
+                  }
+                  if (followUpRes.suggestedReplies?.length) {
+                    assistantTurn.suggestedReplies = followUpRes.suggestedReplies
                   }
 
                   // 模型不再请求工具：多步链收束

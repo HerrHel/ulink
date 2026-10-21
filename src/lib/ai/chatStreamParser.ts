@@ -26,8 +26,13 @@ export type ChatContentSegment =
 export function formatLightMarkdown(raw: string): string {
   if (!raw) return ''
 
-  // 1. 转义基础 HTML 实体防注入
+  // 0. 剔除 HTML 注释（如 <!-- suggestions: [...] -->），未闭合的流式注释也即刻遮盖
   let text = raw
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!--[\s\S]*$/g, '')
+
+  // 1. 转义基础 HTML 实体防注入
+  text = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

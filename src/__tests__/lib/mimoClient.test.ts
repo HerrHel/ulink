@@ -136,6 +136,19 @@ describe('mimoClient', () => {
       expect(cleanText).toBe('推荐：')
       expect(candidates).toHaveLength(0)
     })
+
+    it('正确解析末尾 suggestions 注释块并提取建议回复，正文中彻底剔除注释', () => {
+      const reply = '体检完成，请选择下一步：\n<!-- suggestions: ["先给未打标的书签补标签", "看看回收站那2项是什么", "导出一份 JSON 备份"] -->'
+      const { cleanText, suggestedReplies } = parseMiMoReply(reply, dummyCats, dummyAttrs)
+
+      expect(cleanText).toBe('体检完成，请选择下一步：')
+      expect(cleanText).not.toContain('suggestions:')
+      expect(suggestedReplies).toEqual([
+        '先给未打标的书签补标签',
+        '看看回收站那2项是什么',
+        '导出一份 JSON 备份',
+      ])
+    })
   })
 
   describe('getMiMoConfig', () => {

@@ -177,10 +177,10 @@ export async function askMiMoStream(
     stream: true,
   }
 
-  if (context.enableTools !== false) {
-    requestBody.tools = ULINK_AGENT_TOOLS
-    requestBody.tool_choice = 'auto'
-  }
+  // 统一传入 tools 定义，多轮对话历史含 assistant.tool_calls 或 role:'tool' 时上游不会因缺少 tools 报错 400
+  // 当本轮不需要模型触发新工具时，通过 tool_choice: 'none' 优雅放行问答并禁止新工具调用
+  requestBody.tools = ULINK_AGENT_TOOLS
+  requestBody.tool_choice = context.enableTools === false ? 'none' : 'auto'
 
   // 官方统一鉴权通道：AI 功能为会员服务，请求严格经由 Supabase Edge Function 服务端转发校验
   if (!isSupabaseConfigured) {

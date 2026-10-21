@@ -6,6 +6,7 @@
 
 import type { Category, CustomAttribute } from '../../types.js'
 import { redactSensitivePatterns } from './secretFilter.js'
+import { domain } from '../../utils.js'
 
 /** contextSlice 注入上限：防大组/多选把整库倒进 prompt */
 const MAX_SLICE_ITEMS = 30
@@ -17,8 +18,8 @@ const MAX_TEXT_LEN = 200
 /** 控制字符、DEL、零宽与双向控制符统一清洗（防不可见字符注入提示词） */
 const _CTRL_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g
 
-/** 单条工具执行结果回传上限（结果是我们自己生成的可信输出，允许较长） */
-const MAX_TOOL_RESULT_LEN = 4000
+/** 单条工具执行结果回传上限（留出足够余量低于 mimo-guard 4000 字符硬性单条上限） */
+const MAX_TOOL_RESULT_LEN = 3500
 
 /**
  * 用户数据注入提示词前的统一消毒：
@@ -69,6 +70,8 @@ export interface DynamicContextSlice {
   focusedGroupBookmarks?: Array<{ title: string; url: string }>
   selectedBookmarks?: Array<{ title: string; url: string }>
   attachedCards?: Array<{ type: 'bm' | 'group'; title: string; url?: string }>
+  untaggedBookmarks?: Array<{ title: string; url: string; category?: string }>
+  trashedBookmarks?: Array<{ title: string; url: string }>
   retrievedVaultKnowledge?: string
   mentalModelPrompt?: string
 }
@@ -133,6 +136,12 @@ export function buildUlinkSystemPrompt(options: {
   const activeAttachedZh = slice.attachedCards?.length
     ? `用户主动拖入并关联阅读的卡片/笔记：[${slice.attachedCards.map(c => `${c.type === 'group' ? '笔记' : '书签'}: ${sanitizeForPrompt(c.title)}`).join('、')}]`
     : ''
+  const activeUntaggedZh = slice.untaggedBookmarks?.length
+    ? `用户书签库中尚未打标的书签 (共${slice.untaggedBookmarks.length}个)：[${slice.untaggedBookmarks.map(b => `${sanitizeForPrompt(b.title)} (${domain(sanitizeForPrompt(b.url))}${b.category ? ` · ${sanitizeForPrompt(b.category)}` : ''})`).join('、')}]`
+    : ''
+  const activeTrashedZh = slice.trashedBookmarks?.length
+    ? `当前回收站已暂存的书签 (共${slice.trashedBookmarks.length}个)：[${slice.trashedBookmarks.map(b => `${sanitizeForPrompt(b.title)} (${domain(sanitizeForPrompt(b.url))})`).join('、')}]`
+    : ''
   const activeVaultKnowledgeZh = slice.retrievedVaultKnowledge
     ? `\n${slice.retrievedVaultKnowledge}\n`
     : ''
@@ -185,7 +194,7 @@ ${FENCE}
 3. ${dataNotice}
 4. 用户当前书签分类: [${catNames || '暂无分类'}]
 5. 用户当前标签属性: [${attrNames || '暂无标签'}]
-${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}9. 模糊诉求的主动引导与多轮微调机制：
+${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeUntaggedZh ? `8.2. ${activeUntaggedZh}\n` : ''}${activeTrashedZh ? `8.3. ${activeTrashedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}9. 模糊诉求的主动引导与多轮微调机制：
    - 当用户提出的要求较为宽泛或模糊时（例如：“我的书签太乱了帮我整理下”、“我想找点搞副业能用的网站”、“帮我规划个设计分类”等）：
      ① 处处为用户着想，主动拆解痛点，切忌冷冰冰地反问空话或报错推卸责任；
      ② 结合用户当前实际书签库特征，主动端出 2~3 个具体、结构化的可选方案（例如：方案 A、方案 B、方案 C）；
@@ -193,6 +202,8 @@ ${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ?
      ④ 引导多轮微调：“您可以直接告诉我选方案几，或者在某个方案基础上告诉我如何微调，我随时为您修改补全并执行”。
 10. 工具准入与真实性准则：
     - 遵循「无明确操作意图不调工具」原则：当用户在提问中包含明确的操作动词（如“帮我清理重复”、“整理未分类”、“体检”、或要求抓取阅读网页正文时），才调用对应运维与抓取工具。
+    - 特别约束：执行全库资产体检 (audit_vault) 后，体检本身即为最终操作，严禁在后续答复中擅自调用其他修改类工具；必须将体检评分与现状结构化汇报给用户，并提出下一步建议选项供用户决策。
+    - 当用户询问未打标书签或要求补打标签时：直接基于上下文中的待补齐标签书签明细与现有标签属性 [${attrNames}]，逐条给出最匹配的标签建议与推荐理由，并给出预判快捷按钮供用户确认。
     - 绝不在意图模糊或证据不足时抢跑执行工具；工具执行后你会收到真实执行结果，回答必须以真实结果为依据，严禁在未见结果时宣称操作已完成。
 11. 结构化随文内嵌卡片规范（图文混排排版标准）：
     当你推荐某个具体网站或工具时，必须采用「随文嵌入」模式：直接在介绍该工具的段落上方嵌入紧凑卡片标记，随后紧跟客观分析（核心亮点、适用人群、使用技巧）：

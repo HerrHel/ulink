@@ -77,6 +77,6 @@ export function parseMiMoReply(
     }
   }
 
-  const cleanText = replyText.replace(cardRegex, '').replace(suggestRegex, '').trim()
+  const cleanText = replyText.replace(cardRegex, '').replace(/<!--[\s\S]*?-->/g, '').trim()
   return { cleanText, candidates, suggestedReplies }
 }

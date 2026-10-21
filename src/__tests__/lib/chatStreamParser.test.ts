@@ -45,6 +45,23 @@ describe('chatStreamParser', () => {
       expect(html).toContain('Hello')
       expect(html).toContain('World')
     })
+
+    it('有效剔除 HTML suggestions 注释块与未闭合的流式注释，绝不作为可见文本溢出到界面', () => {
+      const md = '您想先从哪一项开始？\n\n<!-- suggestions: ["先给未打标的书签补标签", "看看回收站那2项是什么", "导出一份 JSON 备份"] -->'
+      const html = formatLightMarkdown(md)
+
+      expect(html).toContain('您想先从哪一项开始？')
+      expect(html).not.toContain('suggestions:')
+      expect(html).not.toContain('&lt;!--')
+      expect(html).not.toContain('先给未打标的书签补标签')
+
+      // 测试未闭合的流式注释块即刻被遮盖，不产生闪烁
+      const streamingMd = '正在思考\n<!-- suggestions: ["好的，执'
+      const streamingHtml = formatLightMarkdown(streamingMd)
+      expect(streamingHtml).toContain('正在思考')
+      expect(streamingHtml).not.toContain('suggestions:')
+      expect(streamingHtml).not.toContain('&lt;!--')
+    })
   })
 
   describe('parseTurnContentSegments', () => {
