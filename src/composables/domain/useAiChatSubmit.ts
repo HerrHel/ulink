@@ -9,7 +9,6 @@
  */
 import { domain } from '../../utils.js'
 import {
-  searchWebsitesByIntent,
   findSimilarWebsites,
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
@@ -136,6 +135,13 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     // 个人记忆学习：显式「记住…」与隐式偏好句式（仅学习用户原始输入，不含附件拼接）
     remember(raw)
 
+    // 用户发起了新一轮输入：收起历史轮次所有预判胶囊
+    for (const t of chatTurns.value) {
+      if (t.suggestedReplies?.length) {
+        t.suggestedReplies = []
+      }
+    }
+
     showAiTab?.()
     aiLoading.value = true
     loadingTextKey.value = 'ai.thinking'
@@ -207,7 +213,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
       const isVideo = /bilibili\.com|b23\.tv|douyin\.com|tiktok\.com|xiaohongshu\.com|xhslink\.com/.test(raw)
       const isUrl = /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(raw)
-      loadingTextKey.value = isVideo ? 'ai.extracting' : isUrl ? 'ai.analyzing' : 'ai.searching'
+      loadingTextKey.value = isVideo ? 'ai.extracting' : isUrl ? 'ai.analyzing' : 'ai.thinking'
 
       if (isVideo) {
         const res = await extractBookmarksFromVideo(raw, ds.categories, ds.customAttributes)
@@ -637,24 +643,34 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             persistCurrentSession()
           } catch (mimoErr: unknown) {
             if (controller.signal.aborted) return
-            // 仅 MiMo 请求本身失败才回退本地知识库；工具链异常已在上游如实回传，不落兜底
+            // 仅 MiMo 请求本身失败才处理；工具链异常已在上游如实回传，不落兜底
             if (mimoSuccess) {
               console.warn('[ulink AI] post-response processing failed:', mimoErr)
               assistantTurn.loading = false
               if (!assistantTurn.content) assistantTurn.content = t('ai.searchFailed')
               return
             }
-            console.warn('[ulink AI] MiMo API call failed, falling back to local dataset:', mimoErr)
+            console.warn('[ulink AI] MiMo API call failed:', mimoErr)
+            assistantTurn.loading = false
+            assistantTurn.candidates = []
+            if (!assistantTurn.content) {
+              const errMsg = mimoErr instanceof Error ? mimoErr.message : ''
+              assistantTurn.content = errMsg ? `${t('ai.searchFailed')} (${errMsg})` : t('ai.searchFailed')
+            }
           }
+        } else {
+          assistantTurn.loading = false
+          assistantTurn.candidates = []
+          assistantTurn.content = t('ai.searchFailed')
         }
 
-        // 若未开启 MiMo 或 MiMo 请求异常，优雅回退至本地离线知识库
+        // 彻底废除保底假回复：AI 请求失败如实报错，绝不伪装成离线甄选搜索
         if (!mimoSuccess) {
-          const res = await searchWebsitesByIntent(raw, preferences.value, ds.categories, ds.customAttributes)
-          if (controller.signal.aborted) return
           assistantTurn.loading = false
-          assistantTurn.candidates = res
-          assistantTurn.content = formatFoundCount(res.length, undefined, res)
+          assistantTurn.candidates = []
+          if (!assistantTurn.content) {
+            assistantTurn.content = t('ai.searchFailed')
+          }
         }
       }
 
@@ -680,8 +696,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         }
       }
 
-      // 智能附带预判快捷按钮：若尚未挂载预判选项，根据产物类型自动提供极简决策胶囊
-      if (!assistantTurn.suggestedReplies?.length) {
+      // 智能附带预判快捷按钮：若尚未挂载预判选项，根据产物类型自动提供极简决策胶囊（报错轮次不展示假预判）
+      const isErrorReply = !assistantTurn.content || assistantTurn.content.startsWith(t('ai.searchFailed'))
+      if (!assistantTurn.suggestedReplies?.length && !isErrorReply) {
         if (assistantTurn.actionCard) {
           assistantTurn.suggestedReplies = ['✨ 好的，执行', '🔄 换个方案', '✏️ 我想调整一下']
         } else if (assistantTurn.candidates && assistantTurn.candidates.length > 0) {

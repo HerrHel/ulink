@@ -346,4 +346,45 @@ describe('useAiChat — 真 Agent 多步工具链循环', () => {
     resolveFirst(aiRes('完成'))
     await p1
   })
+
+  it('首轮 MiMo API 异常如实报错，绝不调用 searchWebsitesByIntent 伪装成保底搜索且不推荐存笔记', async () => {
+    const searchMock = vi.mocked(searchWebsitesByIntent)
+    searchMock.mockClear()
+    streamMock.mockReset()
+    streamMock.mockRejectedValueOnce(new Error('Rate limit exceeded'))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '帮我找几个好用的工具'
+    await ai.handleAiSubmit()
+
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(searchMock).not.toHaveBeenCalled()
+    expect(assistantTurn?.candidates).toEqual([])
+    expect(assistantTurn?.content).toMatch(/搜索失败|Rate limit/i)
+    expect(assistantTurn?.suggestedReplies).toBeUndefined()
+  })
+
+  it('用户输入新提问时，历史轮次残留的 suggestedReplies 被自动清空', async () => {
+    streamMock.mockReset()
+    streamMock
+      .mockResolvedValueOnce(aiRes('第一轮回答'))
+      .mockResolvedValueOnce(aiRes('第二轮回答'))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '第一个问题'
+    await ai.handleAiSubmit()
+
+    const turns = ai.chatTurns.value
+    expect(turns.length).toBe(2)
+    const turn1 = turns[1]
+    expect(turn1.role).toBe('assistant')
+    expect(turn1.suggestedReplies?.length).toBeGreaterThan(0)
+
+    // 用户自己输入新问题并提交
+    ai.aiQuery.value = '第二个问题'
+    await ai.handleAiSubmit()
+
+    // 历史第一轮助手的 suggestedReplies 已被清空
+    expect(turn1.suggestedReplies).toEqual([])
+  })
 })

@@ -278,6 +278,8 @@ watch(
 // applySlashCommand（斜杠补全）已随调度逻辑迁至 useAiChat
 
 function handleApplySuggestedReply(reply: string, turn: ChatTurn) {
+  // 清理当前轮及历史预判小按钮，防止重复点击
+  turn.suggestedReplies = []
   // 1. 若是执行/确认类预判，且当轮有待执行的行动卡片，直接一键执行
   if ((reply.includes('执行') || reply.includes('确认')) && turn.actionCard && !turn.actionCard.completed) {
     handleActionCardClick(turn.actionCard, turn)

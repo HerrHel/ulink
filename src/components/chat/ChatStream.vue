@@ -34,7 +34,7 @@
           aria-label="AI 对话记录"
         >
           <div
-            v-for="turn in chatTurns"
+            v-for="(turn, tIdx) in chatTurns"
             :key="turn.id"
             class="chat-turn-item"
             :class="`turn-${turn.role}`"
@@ -265,7 +265,7 @@
                         :title="t('ai.writebackNew')"
                         @click="emit('handleSaveAsNewNote', turn.content)"
                       >
-                        <span class="writeback-btn-icon" aria-hidden="true">📝</span>
+                        <span class="writeback-btn-icon" aria-hidden="true" v-html="I.note"></span>
                         <span>{{ t('ai.writebackNew') }}</span>
                       </button>
 
@@ -430,7 +430,7 @@
 
                 <!-- 预判快捷小按钮 (Smart Quick-Action / Follow-up Pills) -->
                 <div
-                  v-if="turn.suggestedReplies && turn.suggestedReplies.length > 0 && !turn.loading"
+                  v-if="canShowSuggestedReplies(turn, tIdx)"
                   class="chat-suggested-replies"
                 >
                   <button
@@ -478,7 +478,7 @@ interface ActionCardCandidate {
   [key: string]: unknown
 }
 
-defineProps<{
+const props = defineProps<{
   /** 对话轮次列表（只读渲染；思考/轨迹折叠态翻转经 toggle* 事件上抛） */
   chatTurns: ChatTurn[]
   /** 空态快捷提示项 */
@@ -525,6 +525,22 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/**
+ * 判定当前轮次的预判快捷小按钮是否应展示：
+ * 1. 本轮包含 suggestedReplies 且不处于 loading 态；
+ * 2. 且本轮之后尚未有任何后续用户提问或更新的助手回复（若用户已输入新消息，历史预判立即隐去）。
+ */
+function canShowSuggestedReplies(turn: ChatTurn, tIdx: number): boolean {
+  if (!turn.suggestedReplies || turn.suggestedReplies.length === 0 || turn.loading) return false
+  for (let i = tIdx + 1; i < props.chatTurns.length; i++) {
+    const nextTurn = props.chatTurns[i]
+    if (nextTurn.role === 'user' || nextTurn.role === 'assistant') {
+      return false
+    }
+  }
+  return true
+}
 
 // 发送摘要展开态：组件内部纯 UI 状态（不影响 vm 绑定的展示函数与动作事件）
 const openSummaries = reactive<Record<string, boolean>>({})
