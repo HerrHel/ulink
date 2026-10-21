@@ -63,26 +63,29 @@ export function runAmbientGroomingScan(params: {
   }
 
   // 2. 超大分类臃肿与拆分扫描 (Category Drift)
-  const catCountMap = new Map<string, Bookmark[]>()
+  // 严格对齐侧边栏 cardCounts 口径：只统计未软删且未嵌套的顶层书签卡片 (!b.parentId) 以及顶层组卡片
+  const catCountMap = new Map<string, number>()
   for (const b of validBookmarks) {
-    if (b.categoryId && b.categoryId !== CAT_ALL && b.categoryId !== CAT_UNCATEGORIZED) {
-      if (!catCountMap.has(b.categoryId)) {
-        catCountMap.set(b.categoryId, [])
-      }
-      catCountMap.get(b.categoryId)!.push(b)
+    if (!b.parentId && b.categoryId && b.categoryId !== CAT_ALL && b.categoryId !== CAT_UNCATEGORIZED) {
+      catCountMap.set(b.categoryId, (catCountMap.get(b.categoryId) || 0) + 1)
+    }
+  }
+  for (const g of groups) {
+    if (!g.deletedAt && g.categoryId && g.categoryId !== CAT_ALL && g.categoryId !== CAT_UNCATEGORIZED) {
+      catCountMap.set(g.categoryId, (catCountMap.get(g.categoryId) || 0) + 1)
     }
   }
 
-  for (const [catId, bms] of catCountMap.entries()) {
-    if (bms.length >= 25) {
+  for (const [catId, totalCount] of catCountMap.entries()) {
+    if (totalCount >= 25) {
       const cat = categories.find((c) => c.id === catId && !c.deletedAt)
       if (cat) {
         insights.push({
           id: `groom-drift-${catId}`,
           type: 'drift',
-          title: t('ai.ambientDriftTitle', { name: cat.name, count: bms.length }),
+          title: t('ai.ambientDriftTitle', { name: cat.name, count: totalCount }),
           description: t('ai.ambientDriftDesc', { name: cat.name }),
-          count: bms.length,
+          count: totalCount,
           targetCategoryId: catId,
           suggestedActionCommand: `/pack ${cat.name}`,
           suggestedActionName: 'create_workspace',
@@ -92,8 +95,9 @@ export function runAmbientGroomingScan(params: {
     }
   }
 
-  // 3. 纯 URL / 模糊未命名书签扫描
+  // 3. 纯 URL / 模糊未命名书签扫描（排除子书签）
   const vagueBms = validBookmarks.filter((b) => {
+    if (b.parentId) return false
     const title = (b.title || '').trim()
     return !title || /^https?:\/\//i.test(title) || title === '未命名书签' || title === 'Untitled'
   })

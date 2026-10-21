@@ -86,8 +86,9 @@ export function buildDedupActionCard(params: { dupCount: number; groups: number 
 export function buildPackActionCard(params: {
   cleanTopic: string
   candidates: AiCandidateBookmark[]
+  targetCatId?: string
 }): ChatActionCard {
-  const { cleanTopic, candidates } = params
+  const { cleanTopic, candidates, targetCatId } = params
   return {
     type: 'custom',
     actionName: 'create_topic_workspace',
@@ -97,6 +98,7 @@ export function buildPackActionCard(params: {
     payload: {
       topic: cleanTopic,
       candidates,
+      targetCatId,
     },
   }
 }

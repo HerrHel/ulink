@@ -93,6 +93,71 @@ describe('ambientGrooming', () => {
     expect(driftInsight?.suggestedActionCommand).toContain('/pack Machine Learning')
   })
 
+  it('does NOT trigger drift when a category has < 25 top-level cards, even with 100+ sub-bookmarks', () => {
+    const categories: Category[] = [
+      mockCategory({ id: 'cat_entertainment', name: '娱乐' }),
+    ]
+    // 10 顶层卡片
+    const topBookmarks: Bookmark[] = Array.from({ length: 10 }, (_, i) =>
+      mockBookmark({
+        id: `bm_top_${i}`,
+        title: `娱乐卡片 ${i}`,
+        url: `https://ent.example.com/${i}`,
+        categoryId: 'cat_entertainment',
+        parentId: null,
+      }),
+    )
+    // 104 个从属于第一张卡片的子书签
+    const subBookmarks: Bookmark[] = Array.from({ length: 104 }, (_, i) =>
+      mockBookmark({
+        id: `bm_sub_${i}`,
+        title: `子书签 ${i}`,
+        url: `https://ent.example.com/sub/${i}`,
+        categoryId: 'cat_entertainment',
+        parentId: 'bm_top_0',
+      }),
+    )
+
+    const insights = runAmbientGroomingScan({
+      bookmarks: [...topBookmarks, ...subBookmarks],
+      groups: [],
+      categories,
+    })
+    const driftInsight = insights.find((i) => i.type === 'drift')
+
+    // 严苛红线：子书签不参与分类卡片计数，总计 10 < 25，绝不误触发分类臃肿拆分！
+    expect(driftInsight).toBeUndefined()
+  })
+
+  it('counts top-level sibling groups in category drift total', () => {
+    const categories: Category[] = [
+      mockCategory({ id: 'cat_hybrid', name: '综合' }),
+    ]
+    // 20 顶层书签 + 5 个组 = 25
+    const bookmarks: Bookmark[] = Array.from({ length: 20 }, (_, i) =>
+      mockBookmark({
+        id: `bm_hyb_${i}`,
+        title: `书签 ${i}`,
+        url: `https://example.com/${i}`,
+        categoryId: 'cat_hybrid',
+      }),
+    )
+    const groups: SiblingGroup[] = Array.from({ length: 5 }, (_, i) => ({
+      id: `grp_${i}`,
+      name: `组 ${i}`,
+      categoryId: 'cat_hybrid',
+      bookmarkIds: [],
+      createdAt: 1000,
+      updatedAt: 1000,
+    } as unknown as SiblingGroup))
+
+    const insights = runAmbientGroomingScan({ bookmarks, groups, categories })
+    const driftInsight = insights.find((i) => i.type === 'drift')
+
+    expect(driftInsight).toBeDefined()
+    expect(driftInsight?.count).toBe(25)
+  })
+
   it('triggers vague bookmarks insight when >= 3 untitled or raw url cards exist', () => {
     const bookmarks: Bookmark[] = [
       mockBookmark({

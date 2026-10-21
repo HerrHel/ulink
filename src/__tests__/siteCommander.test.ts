@@ -541,6 +541,25 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resNl.actionCard?.payload?.topic).toContain('独立开发者')
   })
 
+  it('/pack 优先从库内已有分类提取真实书签装配工作台，杜绝盲目推荐无关外部书签', async () => {
+    // mockDs 中已有分类「前端开发」(c1)，且其下有真实书签 b1 (Vue, https://vuejs.org)
+    const res = await dispatchSiteCommand('/pack 前端开发', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    expect(res.handled).toBe(true)
+    expect(res.reply).toContain('从「前端开发」分类现有收藏中甄选')
+    const candidates = ((res.actionCard?.payload as any)?.candidates || []) as any[]
+    expect(candidates.length).toBeGreaterThan(0)
+    // 核心断言：首要候选必须是用户本地库已有的 Vue 书签，而不是 GitHub Explore 或其他外部占位！
+    expect(candidates[0].title).toBe('Vue')
+    expect(candidates[0].url).toBe('https://vuejs.org')
+    expect(candidates[0].tag).toBe('前端开发')
+    expect(candidates[0].categoryId).toBe('c1')
+  })
+
   // ── 21.x 工作台名称后缀双语（i18n 硬编码回归锁）──
   it('/pack 工作台名称后缀跟随语言且不重复追加（en：Workspace）', async () => {
     setLocale('en-US')

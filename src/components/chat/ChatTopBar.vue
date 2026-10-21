@@ -146,60 +146,6 @@
               {{ activeAmbientInsights.length }}
             </span>
           </button>
-
-          <!-- 环境洞察抽屉浮层 -->
-          <div v-if="ambientOpen" class="ambient-popover" @click.stop>
-            <div class="ambient-popover-header">
-              <div class="ambient-header-left">
-                <span class="ambient-header-title">💡 {{ t('ai.ambientBadge') }}</span>
-                <span v-if="activeAmbientInsights.length > 0" class="ambient-header-pill">
-                  {{ activeAmbientInsights.length }}
-                </span>
-              </div>
-              <button class="memory-close-btn" @click="ambientOpen = false" :title="t('common.close')" :aria-label="t('common.close')">
-                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="ambient-list-scroll">
-              <div
-                v-for="item in activeAmbientInsights"
-                :key="item.id"
-                class="ambient-card"
-                :class="item.category"
-              >
-                <div class="ambient-card-top">
-                  <span class="ambient-tag" :class="item.category">
-                    {{ item.category === 'serendipity' ? '✨ 偶遇' : '⚡ 治理' }}
-                  </span>
-                  <span class="ambient-card-title">{{ item.title }}</span>
-                </div>
-                <div class="ambient-card-desc">{{ item.description }}</div>
-                <div class="ambient-card-actions">
-                  <button
-                    v-if="item.actionCommand"
-                    class="ambient-act-btn primary"
-                    @click="applyAmbientItem(item)"
-                  >
-                    {{ t('ai.ambientActionExecute') }}
-                  </button>
-                  <button
-                    class="ambient-act-btn dismiss"
-                    @click="dismissAmbientItem(item.id)"
-                  >
-                    {{ t('ai.ambientActionDismiss') }}
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="activeAmbientInsights.length === 0" class="session-empty">
-                {{ t('ai.ambientEmpty') }}
-              </div>
-            </div>
-          </div>
         </div>
 
         <button
@@ -244,6 +190,60 @@
             <path d="m6 6 12 12" />
           </svg>
         </button>
+
+        <!-- 环境洞察抽屉浮层：直接挂载在 chat-top-actions 内部，右对齐操作区，防止左侧超出面板被截断 -->
+        <div v-if="ambientOpen" class="ambient-popover" @click.stop>
+          <div class="ambient-popover-header">
+            <div class="ambient-header-left">
+              <span class="ambient-header-title">💡 {{ t('ai.ambientBadge') }}</span>
+              <span v-if="activeAmbientInsights.length > 0" class="ambient-header-pill">
+                {{ activeAmbientInsights.length }}
+              </span>
+            </div>
+            <button class="memory-close-btn" @click="ambientOpen = false" :title="t('common.close')" :aria-label="t('common.close')">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="ambient-list-scroll">
+            <div
+              v-for="item in activeAmbientInsights"
+              :key="item.id"
+              class="ambient-card"
+              :class="item.category"
+            >
+              <div class="ambient-card-top">
+                <span class="ambient-tag" :class="item.category">
+                  {{ item.category === 'serendipity' ? '✨ 偶遇' : '⚡ 治理' }}
+                </span>
+                <span class="ambient-card-title">{{ item.title }}</span>
+              </div>
+              <div class="ambient-card-desc">{{ item.description }}</div>
+              <div class="ambient-card-actions">
+                <button
+                  v-if="item.actionCommand"
+                  class="ambient-act-btn primary"
+                  @click="applyAmbientItem(item)"
+                >
+                  {{ t('ai.ambientActionExecute') }}
+                </button>
+                <button
+                  class="ambient-act-btn dismiss"
+                  @click="dismissAmbientItem(item.id)"
+                >
+                  {{ t('ai.ambientActionDismiss') }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="activeAmbientInsights.length === 0" class="session-empty">
+              {{ t('ai.ambientEmpty') }}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 </template>
@@ -337,6 +337,13 @@ function triggerAmbientScan() {
 onMounted(() => {
   triggerAmbientScan()
 })
+
+watch(
+  () => [dataStore.bookmarks.length, dataStore.siblingGroups.length, dataStore.categories.length],
+  () => {
+    triggerAmbientScan()
+  },
+)
 
 function toggleAmbient() {
   if (!ambientOpen.value) {
@@ -644,6 +651,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 }
 
 .chat-top-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -920,7 +928,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   top: calc(100% + 5px);
   right: 0;
   width: 290px;
-  max-width: 320px;
+  max-width: calc(100vw - 24px);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
