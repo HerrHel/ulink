@@ -77,11 +77,11 @@ beforeEach(() => {
 })
 
 describe('useChatPanelDom 输入框自适应高度', () => {
-  it('空输入固定 44px 且隐藏滚动条', async () => {
+  it('空输入固定 24px 且隐藏滚动条', async () => {
     const h1 = makeHarness()
     h1.api.adjustTextareaHeight()
     await nextTick()
-    expect(h1.textarea.style.height).toBe('44px')
+    expect(h1.textarea.style.height).toBe('24px')
     expect(h1.textarea.style.overflowY).toBe('hidden')
     h1.wrapper.unmount()
   })

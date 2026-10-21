@@ -98,7 +98,7 @@
           v-model="query"
           class="chat-textarea"
           :placeholder="hasAttachments ? t('ai.attachedInputPlaceholder') : t('ai.sidebarInputPlaceholder')"
-          rows="2"
+          rows="1"
           @focus="focused = true"
           @blur="focused = false"
           @keydown="emit('taKeydown', $event)"
@@ -404,15 +404,14 @@ function bindTa(el: unknown) {
   text-align: right;
 }
 
-/* 统一输入容器：舒适大高框设计，上下两段式（上输入，下工具） */
+/* 统一输入容器：舒适两段式设计（上纯文本输入，下工具栏） */
 .chat-input-wrapper {
   display: flex;
   flex-direction: column;
-  min-height: 84px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--bg);
-  padding: 9px 12px 7px 12px;
+  padding: 8px 10px 8px 12px;
   box-shadow: inset 0 1px 2px rgba(44, 40, 36, 0.03);
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 0;
@@ -459,8 +458,8 @@ function bindTa(el: unknown) {
 
 .chat-textarea {
   width: 100%;
-  height: 44px;
-  min-height: 44px;
+  height: 24px;
+  min-height: 24px;
   max-height: 160px;
   border: none !important;
   background: transparent !important;
@@ -468,7 +467,7 @@ function bindTa(el: unknown) {
   margin: 0 !important;
   font-family: var(--font-sans);
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 24px;
   color: var(--text);
   resize: none;
   outline: none !important;
@@ -498,7 +497,7 @@ function bindTa(el: unknown) {
   align-items: center;
   justify-content: space-between;
   margin-top: 6px;
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .toolbar-left {

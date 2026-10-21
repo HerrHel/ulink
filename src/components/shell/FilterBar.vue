@@ -40,13 +40,6 @@
       <div class="add-dropdown ctx-menu" v-show="store.overlays.addDropdown">
         <button class="ctx-item" @click.stop="$emit('add-bookmark')">{{ t('filter.newBookmark') }}</button>
         <button class="ctx-item" @click.stop="$emit('add-group')">{{ t('filter.newGroup') }}</button>
-        <div class="ctx-divider"></div>
-        <button class="ctx-item" @click.stop="onAiFinder('intent')">
-          <span style="margin-right: 6px;">✨</span>{{ t('ai.finderTitle') }}
-        </button>
-        <button class="ctx-item" @click.stop="onAiFinder('video')">
-          <span style="margin-right: 6px;">🎬</span>{{ t('ai.videoExtractTitle') }}
-        </button>
       </div>
     </span>
     <button v-show="!store.focusedGroupId" class="btn btn-secondary btn-sm" id="btnBatchHeader" :class="{ active: store.batchMode }" @click.stop="toggleBatch" :title="t('filter.batchManage')">
@@ -58,7 +51,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { useUIStore } from '../../stores/ui.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { I } from '../../config/icons.js'
 import AttrChips from './AttrChips.vue'
@@ -68,7 +60,6 @@ import { useShareStore } from '../../stores/share.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
-const ui = useUIStore()
 const undo = useUndoStore()
 const share = useShareStore()
 const shareMode = computed(() => store.shareMode)
@@ -79,10 +70,6 @@ const focusCanRedo = computed(() => !!store.focusedGroupId && !!undo.canRedo(sto
 
 const toggleBatch = toggleBatchMode
 function onAddClick() { store.overlays.addDropdown = !store.overlays.addDropdown }
-function onAiFinder(tab: 'intent' | 'similar' | 'video') {
-  store.overlays.addDropdown = false
-  ui.openAiFinder(tab)
-}
 function onExitShare() { share.exit() }
 </script>
 
