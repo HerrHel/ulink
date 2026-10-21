@@ -43,30 +43,32 @@
             </button>
           </div>
           <div class="session-list-scroll">
-            <div
-              v-for="s in sessions"
-              :key="s.id"
-              class="session-item"
-              :class="{ active: s.id === currentSessionId }"
-              @click="emit('switchSession', s.id)"
-            >
-              <span class="session-item-dot"></span>
-              <div class="session-item-meta">
-                <span class="session-item-title">{{ sessionItemTitle(s) }}</span>
-                <span class="session-item-time">{{ formatTimeAgo(s.updatedAt) }}</span>
-              </div>
-              <button
-                class="session-item-del"
-                @click.stop="emit('deleteSession', s.id)"
-                :title="t('common.delete')"
-                :aria-label="t('common.delete')"
+            <TransitionGroup name="session-item-fade" tag="div">
+              <div
+                v-for="s in sessions"
+                :key="s.id"
+                class="session-item"
+                :class="{ active: s.id === currentSessionId }"
+                @click="emit('switchSession', s.id)"
               >
-                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              </button>
-            </div>
+                <span class="session-item-dot"></span>
+                <div class="session-item-meta">
+                  <span class="session-item-title">{{ sessionItemTitle(s) }}</span>
+                  <span class="session-item-time">{{ formatTimeAgo(s.updatedAt) }}</span>
+                </div>
+                <button
+                  class="session-item-del"
+                  @click.stop="emit('deleteSession', s.id)"
+                  :title="t('common.delete')"
+                  :aria-label="t('common.delete')"
+                >
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
+            </TransitionGroup>
             <div v-if="sessions.length === 0" class="session-empty">
               {{ t('ai.noHistory') }}
             </div>
@@ -591,6 +593,27 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .session-item-del:hover {
   color: var(--rose);
   background: var(--rose-light);
+}
+
+.session-item-fade-leave-active {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.session-item-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin: 0;
+}
+
+@media (hover: none) {
+  .session-item-del {
+    display: inline-flex;
+    opacity: 0.7;
+  }
 }
 
 .session-empty {

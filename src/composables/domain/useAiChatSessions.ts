@@ -165,10 +165,8 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     const target = sessions.value.find((s) => s.id === id)
     if (!target) return
     const title = target.title || t('ai.thisSession')
-    closeSessionMenu?.()
-    const ok = await showConfirm(t('ai.deleteSessionConfirm', { title }))
-    if (!ok) return
 
+    // 体验升级（消灭全屏阻断大弹窗）：即时移除 + 保持菜单开启（支持连点清理）+ Toast 撤销
     const backupSession: AiChatSession = {
       ...target,
       turns: target.turns.map((turn) => ({ ...turn })),
