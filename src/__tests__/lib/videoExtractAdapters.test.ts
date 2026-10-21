@@ -10,6 +10,7 @@ import {
   parseBilibiliView,
   parseBilibiliComments,
   parseBilibiliSubtitleDoc,
+  parseBilibiliAiConclusion,
   parseYouTubeVideo,
   parseYouTubeComments,
 } from '../../../supabase/functions/extract-video/video-adapters.js'
@@ -117,13 +118,14 @@ describe('extract-video 平台适配器纯逻辑', () => {
 
   // ── B站响应解析 ──
 
-  it('parseBilibiliView：标题/简介/aid/字幕 URL（协议相对 URL 补 https）', () => {
+  it('parseBilibiliView：标题/简介/aid/cid/字幕 URL（协议相对 URL 补 https）', () => {
     const json = {
       code: 0,
       data: {
         title: '5 个设计神器分享',
         desc: '本期介绍 5 个超好用的设计工具',
         aid: 170001,
+        cid: 28991122,
         subtitle: {
           subtitles: [
             { subtitle_url: '//aisubtitle.hdslb.com/bfs/ai_subtitle/prod/xxx.json' },
@@ -136,6 +138,7 @@ describe('extract-video 平台适配器纯逻辑', () => {
       title: '5 个设计神器分享',
       desc: '本期介绍 5 个超好用的设计工具',
       aid: 170001,
+      cid: 28991122,
       subtitleUrls: [
         'https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/xxx.json',
         'https://aisubtitle.hdslb.com/bfs/ai_subtitle/prod/yyy.json',
@@ -143,6 +146,49 @@ describe('extract-video 平台适配器纯逻辑', () => {
     })
     expect(parseBilibiliView({ code: -404, data: null })).toBeNull()
     expect(parseBilibiliView(null)).toBeNull()
+  })
+
+  it('parseBilibiliAiConclusion：提取官方 ASR 语音核心速览与时间戳分段大纲', () => {
+    const json = {
+      code: 0,
+      data: {
+        code: 0,
+        model_result: {
+          result_type: 1,
+          summary: '本视频分享了 3 款超实用的在线设计与图表工具：Excalidraw、即时设计与 v0.dev。',
+          outline: [
+            {
+              title: '工具 1：手绘白板 Excalidraw',
+              part_outline: [
+                { timestamp: 15, content: '介绍 Excalidraw 的核心功能与在线免登录特性' },
+                { timestamp: 78, content: '演示如何导出 SVG 与协作' },
+              ],
+            },
+            {
+              title: '工具 2：前端代码生成 v0.dev',
+              part_outline: [
+                { timestamp: 145, content: '演示通过自然语言提示词生成页面' },
+              ],
+            },
+          ],
+        },
+      },
+    }
+
+    const text = parseBilibiliAiConclusion(json)
+    expect(text).toContain('【视频语音核心速览】')
+    expect(text).toContain('Excalidraw、即时设计与 v0.dev')
+    expect(text).toContain('【内容分段大纲】')
+    expect(text).toContain('### 工具 1：手绘白板 Excalidraw')
+    expect(text).toContain('- [00:15] 介绍 Excalidraw 的核心功能与在线免登录特性')
+    expect(text).toContain('- [01:18] 演示如何导出 SVG 与协作')
+    expect(text).toContain('- [02:25] 演示通过自然语言提示词生成页面')
+
+    // 异常/空数据防崩兜底
+    expect(parseBilibiliAiConclusion(null)).toBe('')
+    expect(parseBilibiliAiConclusion({})).toBe('')
+    expect(parseBilibiliAiConclusion({ data: {} })).toBe('')
+    expect(parseBilibiliAiConclusion({ data: { model_result: {} } })).toBe('')
   })
 
   it('parseBilibiliComments：提取热评文本，过滤空串', () => {

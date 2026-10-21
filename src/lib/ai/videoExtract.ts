@@ -104,11 +104,11 @@ export async function generateVideoSummary(
     : ''
   const prompt = safeQuestion
     ? (isZh
-        ? `用户提问：${safeQuestion}\n以下是一段视频/图文分享内容的公开文本（简介、字幕、评论等）。请只基于给定内容回答用户提问，回答中列出内容里出现的网站/工具（附网址），不超过 150 字，不要编造；若给定内容里没有能回答该提问的信息，如实说明：\n\n${safeText}`
-        : `User question: ${safeQuestion}\nBelow is public text from a video or post (description, subtitles, comments). Answer the user's question using only this content, listing the websites/tools it mentions (with URLs), under 100 words. If the content lacks information to answer, say so honestly:\n\n${safeText}`)
+        ? `用户提问：${safeQuestion}\n以下是一段视频/图文分享内容的公开文本（简介、字幕、语音转写/AI小结、评论等）。请只基于给定内容回答用户提问，回答中列出内容里出现的网站/工具（附网址），不超过 150 字，不要编造；若给定内容里没有能回答该提问的信息，如实说明：\n\n${safeText}`
+        : `User question: ${safeQuestion}\nBelow is public text from a video or post (description, subtitles, ASR transcript/AI summary, comments). Answer the user's question using only this content, listing the websites/tools it mentions (with URLs), under 100 words. If the content lacks information to answer, say so honestly:\n\n${safeText}`)
     : (isZh
-        ? `以下是一段视频/图文分享内容的公开文本（简介、字幕、评论等）。请用中文提炼其中推荐的网站/工具与核心要点，不超过 120 字，只基于给定内容，不要编造：\n\n${safeText}`
-        : `Below is public text from a video or post (description, subtitles, comments). Summarize the websites/tools mentioned and key points in English, under 80 words, using only the given content:\n\n${safeText}`)
+        ? `以下是一段视频/图文分享内容的公开文本（简介、字幕、语音转写/AI小结、评论等）。请用中文提炼其中推荐的网站/工具与核心要点，不超过 120 字，只基于给定内容，不要编造：\n\n${safeText}`
+        : `Below is public text from a video or post (description, subtitles, ASR transcript/AI summary, comments). Summarize the websites/tools mentioned and key points in English, under 80 words, using only the given content:\n\n${safeText}`)
 
   try {
     const res = await askMiMo(prompt, {

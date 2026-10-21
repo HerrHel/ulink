@@ -10,6 +10,7 @@ import {
   parseBilibiliView,
   parseBilibiliComments,
   parseBilibiliSubtitleDoc,
+  parseBilibiliAiConclusion,
   parseYouTubeVideo,
   parseYouTubeComments,
 } from './video-adapters.ts'
@@ -189,7 +190,7 @@ serve(async (req) => {
     const resolved = await resolveShortLink(parsed, signal)
     const platform = detectPlatform(resolved)
 
-    // ── B站适配器：view API（简介/字幕列表）+ 热评 + CC 字幕 ──
+    // ── B站适配器：view API（简介/字幕列表）+ 热评 + CC 字幕 + 官方 AI 语音小结大纲 ──
     if (platform === 'bilibili') {
       const ids = parseBilibiliVideoId(resolved)!
       const viewQuery = ids.bvid ? `bvid=${ids.bvid}` : `aid=${ids.aid}`
@@ -197,15 +198,28 @@ serve(async (req) => {
         await fetchJson(`https://api.bilibili.com/x/web-interface/view?${viewQuery}`, signal)
       )
       if (view) {
-        // 热评按 aid 查（与 view 并行依赖，串行一步）；字幕文档最多取 2 份（优先 CC 官方）
-        const [commentsJson, ...subtitleDocs] = await Promise.all([
+        // 热评按 aid 查；字幕文档最多取 2 份；同时拉取 B站官方 ASR 语音小结与分段大纲（弥补无 CC 字幕或纯口播视频）
+        const conclusionQuery = view.cid
+          ? (ids.bvid ? `bvid=${ids.bvid}&cid=${view.cid}` : `aid=${view.aid}&cid=${view.cid}`)
+          : null
+
+        const [commentsJson, conclusionJson, ...subtitleDocs] = await Promise.all([
           fetchJson(`https://api.bilibili.com/x/v2/reply?type=1&oid=${view.aid}&sort=1&ps=20&pn=1`, signal),
+          conclusionQuery
+            ? fetchJson(`https://api.bilibili.com/x/web-interface/view/conclusion/get?${conclusionQuery}`, signal)
+            : Promise.resolve(null),
           ...view.subtitleUrls.slice(0, 2).map(u => fetchText(u, signal)),
         ])
-        const subtitles = subtitleDocs
+
+        const ccSubtitles = subtitleDocs
           .map(d => (d ? parseBilibiliSubtitleDoc(d) : ''))
           .filter(Boolean)
           .join('\n')
+        const aiConclusion = parseBilibiliAiConclusion(conclusionJson)
+
+        // 优先 CC 字幕与 AI 语音总结结合（无 CC 字幕时由 AI 总结全量托底）
+        const subtitles = [ccSubtitles, aiConclusion].filter(Boolean).join('\n\n')
+
         return new Response(
           JSON.stringify({
             source: 'bilibili',

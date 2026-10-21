@@ -17,7 +17,7 @@ export interface DeepLinkHit {
 // 分区标题关键词：按行识别简介/字幕/评论区等正文分区
 const SECTION_HEADING_PATTERNS: Array<{ re: RegExp; source: DeepLinkSource }> = [
   { re: /简介|介绍|描述|description|about/i, source: '简介' },
-  { re: /字幕|文稿|台词|transcript|subtitle/i, source: '字幕' },
+  { re: /字幕|文稿|台词|transcript|subtitle|速览|大纲|小结|语音/i, source: '字幕' },
   { re: /评论|留言|comment/i, source: '评论区' },
 ]
 

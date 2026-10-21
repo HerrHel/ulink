@@ -212,6 +212,39 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     expect(res.videoTitle).toBe('5 个设计神器分享')
   })
 
+  it('B站官方 AI 语音小结与分段大纲托底：UP主无 CC 字幕时仍能精准提取口播工具', async () => {
+    mockServerExtract.mockResolvedValue({
+      source: 'bilibili',
+      url: 'https://www.bilibili.com/video/BV1xx411c7mD',
+      title: '程序员神仙生产力网站盘点',
+      description: '本期全是我私藏的宝藏网站',
+      subtitles: [
+        '【视频语音核心速览】',
+        '本期分享了手绘白板工具 https://excalidraw.com 和代码高亮工具 https://ray.so',
+        '【内容分段大纲】',
+        '### 01 白板工具',
+        '- [00:15] 演示用 https://excalidraw.com 绘制架构图',
+        '### 02 代码片段',
+        '- [01:20] 演示用 https://ray.so 生成漂亮的代码卡片',
+      ].join('\n'),
+      comments: [],
+      degraded: false,
+    })
+
+    const res = await extractBookmarksFromVideo(
+      'https://www.bilibili.com/video/BV1xx411c7mD',
+      testCategories,
+      testAttributes
+    )
+
+    const urls = res.bookmarks.map(b => b.url)
+    expect(urls).toContain('https://excalidraw.com')
+    expect(urls).toContain('https://ray.so')
+
+    const excalidraw = res.bookmarks.find(b => b.url === 'https://excalidraw.com')
+    expect(excalidraw?.highlight).toContain('提取自字幕')
+  })
+
   it('服务端链路异常降级：fetchVideoExtractServer 抛错不崩溃，回退本地 Jina 抓取', async () => {
     mockServerExtract.mockRejectedValue(new Error('network down'))
     mockFetch.mockResolvedValue({

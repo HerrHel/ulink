@@ -161,16 +161,22 @@ export interface BilibiliViewInfo {
   title: string
   desc: string
   aid: number
+  cid: number
   subtitleUrls: string[]
 }
 
-/** api.bilibili.com/x/web-interface/view 响应 → 标题/简介/aid/字幕 URL 列表 */
+/** api.bilibili.com/x/web-interface/view 响应 → 标题/简介/aid/cid/字幕 URL 列表 */
 export function parseBilibiliView(json: unknown): BilibiliViewInfo | null {
   const data = (json as { code?: number; data?: Record<string, unknown> } | null)?.data
   if (!data || typeof data !== 'object') return null
   const title = typeof data.title === 'string' ? data.title : ''
   const desc = typeof data.desc === 'string' ? data.desc : ''
   const aid = typeof data.aid === 'number' ? data.aid : 0
+  const cid = typeof data.cid === 'number'
+    ? data.cid
+    : (Array.isArray(data.pages) && typeof (data.pages[0] as { cid?: unknown })?.cid === 'number'
+      ? (data.pages[0] as { cid: number }).cid
+      : 0)
   const subtitleUrls: string[] = []
   const subtitle = data.subtitle as { subtitles?: unknown[] } | undefined
   if (Array.isArray(subtitle?.subtitles)) {
@@ -183,7 +189,57 @@ export function parseBilibiliView(json: unknown): BilibiliViewInfo | null {
     }
   }
   if (!title && !desc && !aid) return null
-  return { title, desc, aid, subtitleUrls }
+  return { title, desc, aid, cid, subtitleUrls }
+}
+
+/**
+ * B站官方 AI 视频小结 / 视频结论接口 (x/web-interface/view/conclusion/get) 响应解析
+ * 提取由平台 ASR 语音识别与模型总结生成的核心速览 (summary) 与按时间戳分段大纲 (outline)，
+ * 彻底弥补 UP 主未上传 CC 字幕或纯口播视频的文字源缺失。
+ */
+export function parseBilibiliAiConclusion(json: unknown): string {
+  const data = (json as {
+    code?: number
+    data?: {
+      model_result?: {
+        summary?: string
+        outline?: Array<{
+          title?: string
+          part_outline?: Array<{ timestamp?: number; content?: string }>
+        }>
+      }
+    }
+  } | null)?.data
+
+  const model = data?.model_result
+  if (!model || typeof model !== 'object') return ''
+
+  const lines: string[] = []
+  if (typeof model.summary === 'string' && model.summary.trim()) {
+    lines.push(`【视频语音核心速览】\n${model.summary.trim()}`)
+  }
+
+  if (Array.isArray(model.outline) && model.outline.length > 0) {
+    lines.push('【内容分段大纲】')
+    for (const sec of model.outline) {
+      if (sec?.title && typeof sec.title === 'string' && sec.title.trim()) {
+        lines.push(`### ${sec.title.trim()}`)
+      }
+      if (Array.isArray(sec?.part_outline)) {
+        for (const p of sec.part_outline) {
+          const timeSec = typeof p?.timestamp === 'number' ? p.timestamp : 0
+          const min = Math.floor(timeSec / 60)
+          const s = timeSec % 60
+          const timeStr = `${String(min).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+          if (p?.content && typeof p.content === 'string' && p.content.trim()) {
+            lines.push(`- [${timeStr}] ${p.content.trim()}`)
+          }
+        }
+      }
+    }
+  }
+
+  return lines.join('\n')
 }
 
 /** api.bilibili.com/x/v2/reply 响应 → 热评文本列表（过滤空串） */
