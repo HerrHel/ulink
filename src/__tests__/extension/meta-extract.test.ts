@@ -92,6 +92,28 @@ describe('extension/meta-extract.js — 页面元数据现场提取器', () => {
     expect(matchCategoryByKeywords(metaGpt, categories)).toBe('cat-ai')
   })
 
+  it('提取视频播放器现场感知与时间戳链接（含正在播放的字幕与进度）', () => {
+    const doc = document.implementation.createHTMLDocument('B站视频教程')
+    const video = doc.createElement('video')
+    Object.defineProperty(video, 'currentTime', { value: 135 }) // 02:15
+    doc.body.appendChild(video)
+
+    const subtitleEl = doc.createElement('div')
+    subtitleEl.className = 'bpx-player-subtitle-panel-text'
+    subtitleEl.textContent = '推荐使用 Excalidraw 快速画白板'
+    doc.body.appendChild(subtitleEl)
+
+    const fakeWin = {
+      location: { href: 'https://www.bilibili.com/video/BV1xx411c7mD' },
+      getSelection: () => null,
+    } as any
+
+    const meta = extractPageMetadataFromDoc(doc, fakeWin)
+    expect(meta.videoTime).toBe('02:15')
+    expect(meta.currentSubtitle).toBe('推荐使用 Excalidraw 快速画白板')
+    expect(meta.videoTimestampUrl).toBe('https://www.bilibili.com/video/BV1xx411c7mD?t=135')
+  })
+
   it('空输入与空文档安全防御', () => {
     expect(extractPageMetadataFromDoc(null, null)).toEqual({
       title: '',
@@ -99,6 +121,9 @@ describe('extension/meta-extract.js — 页面元数据现场提取器', () => {
       keywords: '',
       selection: '',
       icon: '',
+      videoTime: '',
+      videoTimestampUrl: '',
+      currentSubtitle: '',
     })
     expect(matchCategoryByKeywords(null, [])).toBeNull()
   })

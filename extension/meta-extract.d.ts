@@ -6,6 +6,9 @@ export interface PageMetadata {
   keywords: string
   selection: string
   icon: string
+  videoTime?: string
+  videoTimestampUrl?: string
+  currentSubtitle?: string
 }
 
 export function extractPageMetadataFromDoc(

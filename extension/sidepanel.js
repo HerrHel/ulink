@@ -950,7 +950,8 @@
         if (meta.title && meta.title.trim()) {
           pageTitle.textContent = meta.title.trim()
         }
-        var descCandidate = meta.selection || meta.description || ''
+        var videoNote = (meta.currentSubtitle && meta.videoTime) ? ('【' + meta.videoTime + '】' + meta.currentSubtitle) : ''
+        var descCandidate = meta.selection || videoNote || meta.description || ''
         if (descCandidate && quickNotesInput && !quickNotesInput.dataset.userEdited) {
           quickNotesInput.value = descCandidate
         }

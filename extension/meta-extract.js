@@ -6,7 +6,16 @@
  */
 export function extractPageMetadataFromDoc(doc, win) {
   if (!doc) {
-    return { title: '', description: '', keywords: '', selection: '', icon: '' }
+    return {
+      title: '',
+      description: '',
+      keywords: '',
+      selection: '',
+      icon: '',
+      videoTime: '',
+      videoTimestampUrl: '',
+      currentSubtitle: '',
+    }
   }
 
   function getMeta(sel) {
@@ -55,12 +64,50 @@ export function extractPageMetadataFromDoc(doc, win) {
     }
   } catch (_) {}
 
+  // 6. 视频播放器现场感知（播放进度锚点与正在显示的字幕内容）
+  var videoTime = ''
+  var videoTimestampUrl = ''
+  var currentSubtitle = ''
+  try {
+    var video = doc.querySelector('video')
+    if (video && typeof video.currentTime === 'number' && video.currentTime > 3) {
+      var curSec = Math.floor(video.currentTime)
+      var m = Math.floor(curSec / 60)
+      var s = curSec % 60
+      videoTime = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s)
+
+      var subEl = doc.querySelector(
+        '.bpx-player-subtitle-panel-text, .bili-subtitle-item, .ytp-caption-segment, .caption-window'
+      )
+      if (subEl && subEl.textContent) {
+        currentSubtitle = subEl.textContent.trim()
+      }
+
+      var pageUrl = (win && win.location ? win.location.href : '') || ''
+      if (pageUrl) {
+        try {
+          var u = new URL(pageUrl)
+          if (u.hostname.indexOf('bilibili.com') !== -1) {
+            u.searchParams.set('t', String(curSec))
+            videoTimestampUrl = u.href
+          } else if (u.hostname.indexOf('youtube.com') !== -1 || u.hostname.indexOf('youtu.be') !== -1) {
+            u.searchParams.set('t', curSec + 's')
+            videoTimestampUrl = u.href
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
   return {
     title: title,
     description: description,
     keywords: keywords,
     selection: selection,
     icon: icon,
+    videoTime: videoTime,
+    videoTimestampUrl: videoTimestampUrl,
+    currentSubtitle: currentSubtitle,
   }
 }
 
@@ -108,12 +155,50 @@ export function extractPageMetadataInTab() {
     }
   } catch (_) {}
 
+  // 视频播放器现场感知（播放进度锚点与正在显示的字幕内容）
+  var videoTime = ''
+  var videoTimestampUrl = ''
+  var currentSubtitle = ''
+  try {
+    var video = document.querySelector('video')
+    if (video && typeof video.currentTime === 'number' && video.currentTime > 3) {
+      var curSec = Math.floor(video.currentTime)
+      var m = Math.floor(curSec / 60)
+      var s = curSec % 60
+      videoTime = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s)
+
+      var subEl = document.querySelector(
+        '.bpx-player-subtitle-panel-text, .bili-subtitle-item, .ytp-caption-segment, .caption-window'
+      )
+      if (subEl && subEl.textContent) {
+        currentSubtitle = subEl.textContent.trim()
+      }
+
+      var pageUrl = (window.location ? window.location.href : '') || ''
+      if (pageUrl) {
+        try {
+          var u = new URL(pageUrl)
+          if (u.hostname.indexOf('bilibili.com') !== -1) {
+            u.searchParams.set('t', String(curSec))
+            videoTimestampUrl = u.href
+          } else if (u.hostname.indexOf('youtube.com') !== -1 || u.hostname.indexOf('youtu.be') !== -1) {
+            u.searchParams.set('t', curSec + 's')
+            videoTimestampUrl = u.href
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
   return {
     title: title,
     description: description,
     keywords: keywords,
     selection: selection,
     icon: icon,
+    videoTime: videoTime,
+    videoTimestampUrl: videoTimestampUrl,
+    currentSubtitle: currentSubtitle,
   }
 }
 
