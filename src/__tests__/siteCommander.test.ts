@@ -784,4 +784,47 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resInbox.handled).toBe(true)
     expect(resInbox.action).toBe('inbox_zero')
   })
+
+  // ── 30. 管家式大白话：把指定书签移到指定分类 ──
+  it('管家式大白话：支持用户直接说“把 XX 移到 YY 分类”，并支持 /undo 撤销', async () => {
+    // 初始 b1 (Vue) 在分类 c1 (前端开发)
+    expect(mockDs.bookmarks.find((b: any) => b.id === 'b1')?.categoryId).toBe('c1')
+
+    const res = await dispatchSiteCommand('把 Vue 移到 设计资源 分类', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('move_bookmark')
+    expect(res.reply).toContain('已为您将 「Vue」 移动至「设计资源」分类')
+    expect(res.suggestedReplies).toContain('撤销这次移动')
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b1', { categoryId: 'c2' })
+    expect(mockDs.bookmarkMap.b1.categoryId).toBe('c2')
+
+    // 测试撤销
+    const resUndo = await dispatchSiteCommand('/undo', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resUndo.handled).toBe(true)
+    expect(mockDs.bookmarkMap.b1.categoryId).toBe('c1')
+  })
+
+  // ── 31. 管家式大白话：找类似网站与平替 ──
+  it('管家式大白话：支持用户直接说“找类似 XX 的网站”并附带预判小按钮', async () => {
+    const res = await dispatchSiteCommand('找类似 Excalidraw 的网站', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('find_similar')
+    expect(res.reply).toContain('类似「Excalidraw」的平替与精选同类工具')
+    expect(res.suggestedReplies).toContain('📥 全部一键加入收藏')
+    expect(res.suggestedReplies).toContain('🇨🇳 只要国内免翻直连的')
+  })
 })

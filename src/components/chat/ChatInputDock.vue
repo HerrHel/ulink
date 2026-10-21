@@ -34,22 +34,6 @@
         </button>
       </div>
 
-      <!-- 斜杠指令快捷补全浮动条 -->
-      <div v-if="showSlash && slashItems.length" class="slash-suggest-dock">
-        <div
-          v-for="(item, idx) in slashItems"
-          :key="item.cmd"
-          class="slash-suggest-item"
-          :class="{ active: idx === activeIndex }"
-          @click="emit('applySlash', item.cmd)"
-          @mouseenter="activeIndex = idx"
-        >
-          <span class="slash-cmd-tag">{{ item.cmd }}</span>
-          <span class="slash-cmd-title">{{ item.title }}</span>
-          <span class="slash-cmd-desc">{{ item.desc }}</span>
-        </div>
-      </div>
-
       <div class="chat-input-wrapper" :class="{ focused: focused }">
         <textarea
           :ref="bindTa"

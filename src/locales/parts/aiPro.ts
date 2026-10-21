@@ -60,7 +60,7 @@ export const aiZh = {
     enrichSuccessToast: '已成功更新书签信息',
     // ── 侧边栏 AI 窗口（与链原生风格）──
     sidebarTitle: 'AI 助手',
-    sidebarInputPlaceholder: '输入需求、搜站或 /help…',
+    sidebarInputPlaceholder: '有什么想找的、想整理的，直接告诉我…',
     attachedInputPlaceholder: '关于关联的卡片你想了解什么？可直接按回车发送…',
     cardAttached: '已关联卡片「{title}」到 AI 对话',
     dragToReadCard: '拖入由 AI 读取卡片',
@@ -408,7 +408,7 @@ export const aiEn = {
     enrichSuccessToast: 'Bookmark metadata updated successfully',
     // Sidebar AI window (ulink Native Style)
     sidebarTitle: 'AI Assistant',
-    sidebarInputPlaceholder: 'Search, prompt or /help…',
+    sidebarInputPlaceholder: 'Ask me to find, organize, or analyze anything…',
     attachedInputPlaceholder: 'Ask anything about attached cards, or press Enter to send…',
     cardAttached: 'Attached "{title}" to AI chat',
     dragToReadCard: 'Drag to read card with AI',

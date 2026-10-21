@@ -38,6 +38,8 @@ import { currentCatBlock } from './siteCommands/currentCat.js'
 import { undoBlock } from './siteCommands/undo.js'
 import { cleanBlock } from './siteCommands/clean.js'
 import { settingsBlock } from './siteCommands/settings.js'
+import { parseSimilarSiteIntent } from './siteIntents.js'
+import { findSimilarWebsites } from './cloudAiClient.js'
 import type { SiteCommandResult } from './siteCommands/types.js'
 import type { SiteCommanderContext } from './siteActions.js'
 
@@ -155,6 +157,37 @@ export async function dispatchSiteCommand(
   // ── 15. 打开设置面板 (/settings, 打开设置) ──
   const settingsResult = await settingsBlock({ query, ds, ui, app })
   if (settingsResult !== null) return settingsResult
+
+  // ── 16. 找类似网站与平替挖掘（大白话零门槛直达）──
+  const similarIntent = parseSimilarSiteIntent(query)
+  if (similarIntent) {
+    const target = similarIntent.target
+    const existingBm = ds.bookmarks.find(
+      (b) =>
+        !b.deletedAt &&
+        (b.title.toLowerCase().includes(target.toLowerCase()) ||
+          b.url.toLowerCase().includes(target.toLowerCase())),
+    )
+    const targetUrl = existingBm?.url || target
+    const candidates = await findSimilarWebsites(targetUrl, target, [], ds.categories, ds.customAttributes)
+    if (candidates.length > 0) {
+      const lines = [
+        `为您甄选到以下 ${candidates.length} 个类似「${target}」的平替与精选同类工具：`,
+        '',
+      ]
+      candidates.forEach((c, idx) => {
+        lines.push(`${idx + 1}. **${c.title}** (${c.url}) — ${c.notes || c.highlight || ''}`)
+      })
+      return {
+        handled: true,
+        action: 'find_similar',
+        success: true,
+        reply: lines.join('\n'),
+        steps: [{ text: `甄选「${target}」同类与平替工具`, done: true }],
+        suggestedReplies: ['📥 全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '💡 还有其他同类吗？'],
+      }
+    }
+  }
 
   return { handled: false, reply: '' }
 }

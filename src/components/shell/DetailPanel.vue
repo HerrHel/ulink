@@ -67,6 +67,7 @@
       @toggle-diff-item-selection="toggleDiffItemSelection"
       @toggle-select-all-diff-items="toggleSelectAllDiffItems"
       @run-single-dag-step="runSingleDagStep"
+      @apply-suggested-reply="handleApplySuggestedReply"
     />
 
     </div>
@@ -275,6 +276,30 @@ watch(
 )
 
 // applySlashCommand（斜杠补全）已随调度逻辑迁至 useAiChat
+
+function handleApplySuggestedReply(reply: string, turn: ChatTurn) {
+  // 1. 若是执行/确认类预判，且当轮有待执行的行动卡片，直接一键执行
+  if ((reply.includes('执行') || reply.includes('确认')) && turn.actionCard && !turn.actionCard.completed) {
+    handleActionCardClick(turn.actionCard, turn)
+    return
+  }
+  // 2. 若是一键收藏全部，直接批量存入
+  if (reply.includes('全部一键加入收藏') || reply.includes('加入收藏')) {
+    addAllInTurn(turn)
+    return
+  }
+  // 3. 若是存为新笔记
+  if (reply.includes('存为卡片笔记') && turn.content) {
+    handleSaveAsNewNote(turn.content)
+    return
+  }
+  // 4. 清洗前缀装饰符号后，直接作为新的一轮问答提交
+  const cleanText = reply.replace(/^[\p{Emoji}\p{Symbol}\s]+/u, '').trim() || reply
+  aiQuery.value = cleanText
+  nextTick(() => {
+    handleAiSubmit()
+  })
+}
 
 // ── 终端式命令历史回溯 (↑ / ↓) 状态由 useAiChat 提供（inputHistory / historyCursor / tempInput）──
 

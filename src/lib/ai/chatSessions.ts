@@ -82,6 +82,8 @@ export interface ChatTurn {
   toolResults?: ChatToolResult[]
   /** 工具调用前模型的首轮文本（多轮回传时还原 assistant→tool→assistant 协议链用） */
   preToolContent?: string
+  /** 预判用户下一步最可能说的快捷小按钮 (Smart Quick-Action / Follow-up Pills) */
+  suggestedReplies?: string[]
 }
 
 export interface AiChatSession {

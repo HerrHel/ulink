@@ -427,6 +427,23 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- 预判快捷小按钮 (Smart Quick-Action / Follow-up Pills) -->
+                <div
+                  v-if="turn.suggestedReplies && turn.suggestedReplies.length > 0 && !turn.loading"
+                  class="chat-suggested-replies"
+                >
+                  <button
+                    v-for="(reply, rIdx) in turn.suggestedReplies"
+                    :key="rIdx"
+                    type="button"
+                    class="suggested-reply-pill"
+                    :class="{ 'is-primary': rIdx === 0 && (reply.includes('执行') || reply.includes('确认') || reply.includes('加入收藏')) }"
+                    @click="emit('applySuggestedReply', reply, turn)"
+                  >
+                    {{ reply }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -504,6 +521,7 @@ const emit = defineEmits<{
   toggleDiffItemSelection: [card: ChatActionCard, itemId: string]
   toggleSelectAllDiffItems: [card: ChatActionCard]
   runSingleDagStep: [card: ChatActionCard, stepId: string]
+  applySuggestedReply: [reply: string, turn: ChatTurn]
 }>()
 
 const { t } = useI18n()
@@ -1673,5 +1691,58 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   border-top: 1px dashed var(--border-light);
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* ── 管家预判快捷小按钮 (Smart Quick-Action / Follow-up Pills) ── */
+.chat-suggested-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 6px;
+}
+
+.suggested-reply-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-secondary, var(--text));
+  background: var(--surface-hover);
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.suggested-reply-pill:hover {
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.suggested-reply-pill:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.suggested-reply-pill.is-primary {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.suggested-reply-pill.is-primary:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 </style>

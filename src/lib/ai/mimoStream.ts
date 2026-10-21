@@ -142,6 +142,7 @@ export async function askMiMoStream(
   reasoning: string
   cleanText: string
   candidates: AiCandidateBookmark[]
+  suggestedReplies?: string[]
   rawText: string
   model: string
   toolCalls?: AgentToolCall[]
@@ -358,7 +359,7 @@ export async function askMiMoStream(
     }
   }
 
-  const { cleanText, candidates } = parseMiMoReply(
+  const { cleanText, candidates, suggestedReplies } = parseMiMoReply(
     accumulatedContent,
     context.categories,
     context.customAttributes
@@ -369,6 +370,7 @@ export async function askMiMoStream(
     reasoning: accumulatedReasoning,
     cleanText: cleanText || accumulatedContent,
     candidates,
+    suggestedReplies,
     rawText: accumulatedContent,
     model: config.model,
     toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,

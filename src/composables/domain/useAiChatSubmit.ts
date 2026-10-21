@@ -199,6 +199,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         assistantTurn.content = siteCmd.reply
         assistantTurn.steps = siteCmd.steps
         assistantTurn.actionCard = siteCmd.actionCard
+        if (siteCmd.actionCard) {
+          assistantTurn.suggestedReplies = ['✨ 好的，执行', '🔄 换个方案', '✏️ 我想调整一下']
+        }
         return
       }
 
@@ -220,12 +223,16 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               ? `**${res.videoTitle}**\n\n`
               : ''
           assistantTurn.content = `${titlePrefix}${res.summary}`
+          assistantTurn.suggestedReplies = ['📝 存为卡片笔记', '🔍 帮我找类似工具']
         } else {
           assistantTurn.content = formatFoundCount(res.bookmarks.length, res.videoTitle, res.bookmarks)
           // 文字源总结（简介/字幕/评论区提炼）：带用户问题时为「回答提问」模式，标签随之切换，无则缺省
           if (res.summary) {
             const summaryLabel = res.question ? t('ai.videoAnswerLabel') : t('ai.videoSummaryLabel')
             assistantTurn.content += `\n\n**${summaryLabel}**\n${res.summary}`
+          }
+          if (res.bookmarks.length > 0) {
+            assistantTurn.suggestedReplies = ['📥 全部一键加入收藏', '💡 还有其他同类吗？']
           }
         }
       } else if (isUrl) {
@@ -234,6 +241,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         assistantTurn.loading = false
         assistantTurn.candidates = res
         assistantTurn.content = formatFoundCount(res.length, undefined, res)
+        if (res.length > 0) {
+          assistantTurn.suggestedReplies = ['📥 全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '💡 还有其他同类吗？']
+        }
       } else {
         const mimoConf = getMiMoConfig()
         let mimoSuccess = false
@@ -444,9 +454,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             if (thinkingStartTime && !assistantTurn.reasoningTimeMs) {
               assistantTurn.reasoningTimeMs = Date.now() - thinkingStartTime
             }
-            assistantTurn.content = mimoRes.reply
+            assistantTurn.content = mimoRes.cleanText || mimoRes.reply
             assistantTurn.reasoning = mimoRes.reasoning || assistantTurn.reasoning
             assistantTurn.candidates = mimoRes.candidates
+            if (mimoRes.suggestedReplies?.length) {
+              assistantTurn.suggestedReplies = mimoRes.suggestedReplies
+            }
             assistantTurn.steps = []
 
             // Agent 工具执行器：首轮与续轮工具链共用同一分发（单一分发点，防多轮复刻同类分支）
@@ -631,6 +644,17 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             topic: cleanTopic,
             candidates: assistantTurn.candidates,
           },
+        }
+      }
+
+      // 智能附带预判快捷按钮：若尚未挂载预判选项，根据产物类型自动提供极简决策胶囊
+      if (!assistantTurn.suggestedReplies?.length) {
+        if (assistantTurn.actionCard) {
+          assistantTurn.suggestedReplies = ['✨ 好的，执行', '🔄 换个方案', '✏️ 我想调整一下']
+        } else if (assistantTurn.candidates && assistantTurn.candidates.length > 0) {
+          assistantTurn.suggestedReplies = ['📥 全部一键加入收藏', '🇨🇳 只要国内免翻直连的', '💡 还有其他同类吗？']
+        } else if (assistantTurn.content && !assistantTurn.loading) {
+          assistantTurn.suggestedReplies = ['📝 存为卡片笔记', '🔍 帮我找类似工具']
         }
       }
     } catch (err: unknown) {

@@ -19,6 +19,7 @@ export interface SiteCommandResult {
   details?: Record<string, unknown>
   steps?: ChatTurnStep[]
   actionCard?: ChatActionCard
+  suggestedReplies?: string[]
 }
 
 /** 指令块处理器上下文（由 dispatchSiteCommand 组装注入） */

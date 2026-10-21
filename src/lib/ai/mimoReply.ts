@@ -20,9 +20,24 @@ export function parseMiMoReply(
   replyText: string,
   categories: Category[] = [],
   attributes: CustomAttribute[] = []
-): { cleanText: string; candidates: AiCandidateBookmark[] } {
+): { cleanText: string; candidates: AiCandidateBookmark[]; suggestedReplies?: string[] } {
   const cardRegex = new RegExp(FENCE + 'ulink-card\\s*([\\s\\S]*?)' + FENCE, 'gi')
   const candidates: AiCandidateBookmark[] = []
+
+  // 提取预判回复小按钮：<!-- suggestions: ["选项1", "选项2"] -->
+  const suggestRegex = /<!--\s*suggestions:\s*(\[[\s\S]*?\])\s*-->/i
+  let suggestedReplies: string[] | undefined
+  const suggestMatch = replyText.match(suggestRegex)
+  if (suggestMatch && suggestMatch[1]) {
+    try {
+      const parsed = JSON.parse(suggestMatch[1])
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        suggestedReplies = parsed.map(s => String(s).trim()).filter(Boolean)
+      }
+    } catch (e) {
+      console.warn('[mimoReply] Failed to parse suggestions comment:', e)
+    }
+  }
 
   let match: RegExpExecArray | null
   while ((match = cardRegex.exec(replyText)) !== null) {
@@ -62,6 +77,6 @@ export function parseMiMoReply(
     }
   }
 
-  const cleanText = replyText.replace(cardRegex, '').trim()
-  return { cleanText, candidates }
+  const cleanText = replyText.replace(cardRegex, '').replace(suggestRegex, '').trim()
+  return { cleanText, candidates, suggestedReplies }
 }

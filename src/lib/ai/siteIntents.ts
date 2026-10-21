@@ -241,6 +241,26 @@ export function parseMoveIntent(query: string): { targetCategoryRaw: string | un
   return { targetCategoryRaw: targetCategoryRaw ?? undefined }
 }
 
+// ── 11.2 具体书签定向移动：把 [XX] 移动到 [YY] (分类) ──
+export interface SpecificMoveIntent {
+  itemQuery: string
+  targetCategoryName: string
+}
+
+export function parseSpecificMoveIntent(query: string): SpecificMoveIntent | null {
+  if (/^(?:把|将)?(?:所有)?未分类/i.test(query) || /^(?:把|将)?(?:选中的|这些)/i.test(query)) {
+    return null
+  }
+  const match = query.match(
+    /^(?:请?帮?我?)?(?:把|将)\s*(.+?)\s*(?:移动到?|移到|放到|归入|归到)\s*(.+?)(?:\s*分类)?$/i,
+  )
+  if (!match) return null
+  const itemQuery = match[1].trim()
+  const targetCategoryName = match[2].trim().replace(/^到\s*/, '').replace(/分类$/, '').trim()
+  if (!itemQuery || !targetCategoryName) return null
+  return { itemQuery, targetCategoryName }
+}
+
 // ── 12. 上下文感知：当前分类查询 ──
 export function parseCurrentCatIntent(query: string): boolean {
   return /^(?:当前在看什么分类|当前分类|当前分类有多少书签|所在分类)$/i.test(query)
@@ -270,4 +290,15 @@ export function parseSettingsIntent(query: string): boolean {
     /^\/settings$/i.test(query) ||
     /^(?:请?帮?我?)?(?:打开设置|查看设置|设置面板|进入设置)$/i.test(query)
   )
+}
+
+// ── 16. 类似网站与平替查询意图 ──
+export function parseSimilarSiteIntent(query: string): { target: string } | null {
+  const match = query.match(
+    /^(?:请?帮?我?)?(?:有(?:没有|无)|找|推荐)?(?:几个|一些)?(?:类似|像|平替|替代)\s*([a-zA-Z0-9\u4e00-\u9fa5\.-]+)\s*(?:一样)?(?:的)?(?:工具|网站|软件|应用|产品|平替)?\s*[?？]?$/i,
+  )
+  if (!match) return null
+  const target = match[1].trim()
+  if (!target || target === '这' || target === '这个') return null
+  return { target }
 }
