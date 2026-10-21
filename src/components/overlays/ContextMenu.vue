@@ -1,5 +1,5 @@
 <template>
-  <div class="ctx-menu" id="ctxMenu" v-show="ctx.open" role="menu" :aria-label="t('ctx.menu')"
+  <div class="ctx-menu" id="ctxMenu" v-show="ctx.open && visibleItems.length > 0" role="menu" :aria-label="t('ctx.menu')"
        :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
     <template v-for="item in visibleItems" :key="item.action">
       <div v-if="item.divider" class="ctx-divider" role="separator"></div>
@@ -16,7 +16,7 @@ import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
-import { ACTIONS } from '../../config/constants.js'
+import { ACTIONS, ATTR_IS_GROUP } from '../../config/constants.js'
 import { MENU_RULES, MENU_ITEMS, dispatchMenuAction, canAddSub } from '../../lib/menuConfig.js'
 import { t } from '../../i18n/index.js'
 
@@ -32,7 +32,7 @@ const pos = ref({ x: 0, y: 0 })
 // open true→true 不触发 → pos 保持第一次坐标，菜单偏位、可能误点错菜单项。改为监听 [open,x,y]：
 // open=false 时 menu 不可见读不到尺寸故仍 return；open=true 且 x/y 变化时同 tick 重算 clamp。
 watch(() => [ctx.open, ctx.x, ctx.y], async ([open]) => {
-  if (!open) return
+  if (!open || !visibleItems.value.length) return
   // 先按原始 clientX/Y 摆位（菜单可见后才能测尺寸）
   pos.value = { x: ctx.x, y: ctx.y }
   await nextTick()
@@ -61,6 +61,7 @@ const visibleItems = computed(() => {
       && (ctx.id === 'all' || ctx.id === 'uncategorized')) continue
     // 添加子网站仅顶层书签（子书签无此能力）
     if (entry.action === ACTIONS.ADD_SUB && !canAddSub(ctx.id)) continue
+    if (ctx.type === 'attr' && ctx.id === ATTR_IS_GROUP) continue
     let text = t(entry.label || MENU_ITEMS[entry.action]?.label || entry.action)
     // 动态标签：置顶/取消置顶
     if (entry.action === ACTIONS.PIN) {

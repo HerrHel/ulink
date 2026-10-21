@@ -32,6 +32,7 @@ export const zh = {
     unnamed: '未命名',
     confirm: '确定',
     cancel: '取消',
+    clear: '清空',
     save: '保存',
     saving: '保存中…',
     delete: '删除',
@@ -65,6 +66,8 @@ export const zh = {
     networkOffline: '网络已断开，请检查网络连接',
   },
   cards: {
+    bookmark: '书签',
+    note: '笔记',
     emptyTitle: '暂无书签',
     emptyHint: '点击 + 按钮开始收藏',
     virtualSwitchToast: '条目较多，已切换为列表视图',
@@ -271,6 +274,8 @@ export const zh = {
     existsToast: '属性已存在',
     deleteAttribute: '删除属性',
     confirmDelete: '删除属性「{name}」？',
+    system: '内置',
+    systemDesc: '系统内置属性，所有笔记自带且不可修改或删除',
   },
   sync: {
     retrySync: '重试同步',

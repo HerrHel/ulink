@@ -14,7 +14,11 @@
               <button class="btn btn-primary btn-sm" @click="confirmRename" :title="t('modal.category.confirmRename')" v-html="I.listCheck"></button>
             </template>
             <template v-else>
-              <span class="flex-1">{{ attr.name }}</span>
+              <div class="flex-1 flex-center gap-2">
+                <span v-if="attr.id === ATTR_IS_GROUP" class="attr-icon-system" aria-hidden="true" v-html="I.note"></span>
+                <span>{{ attr.name }}</span>
+                <span v-if="attr.id === ATTR_IS_GROUP" class="attr-system-badge" :title="t('attr.systemDesc')">{{ t('attr.system') }}</span>
+              </div>
               <template v-if="attr.id !== ATTR_IS_GROUP">
                 <button class="btn-xs icon-xs" @click="startRename(attr)" :title="t('common.edit')" v-html="I.edit"></button>
                 <button class="btn-xs btn-danger icon-xs" @click="onDelete(attr.id)" :title="t('common.delete')" v-html="I.trash"></button>

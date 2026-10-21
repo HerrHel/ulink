@@ -79,6 +79,16 @@
   cursor:pointer;transition:background-color 0.12s ease,color 0.12s ease;
   display:flex;align-items:center;gap:8px;
 }
+.attr-drop-item.is-system-attr .attr-icon-system{
+  display:inline-flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;
+}
+.attr-drop-item.is-system-attr .attr-icon-system svg{width:13px;height:13px}
+.attr-system-tag{
+  display:inline-flex;align-items:center;padding:1px 5px;
+  font-size:0.68rem;font-weight:600;line-height:1.2;
+  border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);
+  margin-left:auto;letter-spacing:0.02em;
+}
 @media (hover: hover) and (pointer: fine) {
 .attr-drop-item:hover{background:var(--surface-hover);color:var(--text)}
 }

@@ -23,6 +23,7 @@ import {
   getDefaultAttachedPrompt,
   type ResolvedCardContext,
 } from '../../lib/ai/cardReader.js'
+import { formatAttachedFilesForPrompt } from '../../lib/ai/attachmentHelper.js'
 import { vaultRAG } from '../../lib/ai/localRAG.js'
 import { expandQueryTerms } from '../../lib/ai/queryExpand.js'
 import { remember, buildProfilePrompt } from '../../lib/ai/aiProfile.js'
@@ -99,8 +100,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
   /** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
   async function handleAiSubmit() {
-    // 1. 抓取并解析用户拖入附加的卡片与笔记
+    // 1. 抓取并解析用户拖入附加的卡片与笔记、添加或粘贴的附件文件
     const attachedRefs = [...ui.aiAttachedCards]
+    const attachedFiles = [...ui.aiAttachedFiles]
     const resolvedCards: ResolvedCardContext[] = attachedRefs
       .map((ref) =>
         resolveCardContext(ref.type, ref.id, {
@@ -113,18 +115,25 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       .filter((c): c is ResolvedCardContext => c !== null)
 
     let raw = aiQuery.value.trim()
-    // 若用户未输入自定义文字，但拖入了卡片，自动生成贴合卡片意图的高质量缺省提问
-    if (!raw && resolvedCards.length > 0) {
-      raw = getDefaultAttachedPrompt(resolvedCards, isZh.value)
+    // 若用户未输入自定义文字，但添加了卡片或附件文件，自动生成贴合意图的高质量缺省提问
+    if (!raw) {
+      if (resolvedCards.length > 0) {
+        raw = getDefaultAttachedPrompt(resolvedCards, isZh.value)
+      } else if (attachedFiles.length > 0) {
+        raw = t('ai.defaultFilePrompt')
+      }
     }
 
     // 守卫前置：生成中/空输入不提交，且附件槽位保持不动
     // （此前清空在守卫之前，生成中带附件按 Enter 会把附件丢掉）
     if (!raw || aiLoading.value) return
 
-    // 清空输入框附带槽位（卡片已装载进本轮问答，持久化至该 userTurn）
+    // 清空输入框附带槽位（卡片与附件已装载进本轮问答，持久化至该 userTurn）
     if (ui.aiAttachedCards.length > 0) {
       ui.clearAiAttachedCards()
+    }
+    if (ui.aiAttachedFiles.length > 0) {
+      ui.clearAiAttachedFiles()
     }
 
     if (raw === '/clear') {
@@ -148,10 +157,14 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     aiQuery.value = ''
     onQueryChanged?.()
 
-    // 构建发给模型的完整提示词（内嵌详细卡片与笔记深度结构化数据）
-    const promptWithCards = resolvedCards.length > 0
-      ? `${formatAttachedCardsForPrompt(resolvedCards, isZh.value)}\n${t('ai.userQuestionLabel')}${raw}`
-      : raw
+    // 构建发给模型的完整提示词（内嵌详细卡片与多模态附件材料）
+    const cardSection = resolvedCards.length > 0 ? formatAttachedCardsForPrompt(resolvedCards, isZh.value) : ''
+    const fileSection = attachedFiles.length > 0 ? formatAttachedFilesForPrompt(attachedFiles, isZh.value) : ''
+    let promptWithCards = raw
+    if (cardSection || fileSection) {
+      const mergedSections = [cardSection, fileSection].filter(Boolean).join('\n')
+      promptWithCards = `${mergedSections}\n${t('ai.userQuestionLabel')}${raw}`
+    }
 
     // 随机后缀保证唯一：纯 Date.now() 在同毫秒连发时会产生重复 id，
     // 使历史防双份注入的 id 跳过与发送摘要挂载全部错位
@@ -169,6 +182,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       content: raw,
       promptContent: promptWithCards,
       attachedCards: currentAttachedCards,
+      attachedFiles,
       timestamp: Date.now(),
     })
 
@@ -186,6 +200,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       loading: true,
       candidates: [],
       attachedCards: currentAttachedCards,
+      attachedFiles,
       timestamp: Date.now(),
     }) as ChatTurn
     chatTurns.value.push(assistantTurn)

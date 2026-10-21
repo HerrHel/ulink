@@ -9,6 +9,7 @@ import { useDataStore } from './data.js'
 import { isMobile } from '../utils.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { clampHistoryMax } from '../lib/historyMax.js'
+import type { AttachedMediaFile } from '../lib/ai/attachmentHelper.js'
 import {
   K_THEME_MODE,
   K_THEME_STYLE,
@@ -154,6 +155,8 @@ export interface UIState {
   isDraggingCard: boolean
   /** 拖拽附加到 AI 对话框的卡片列表 */
   aiAttachedCards: AiAttachedCardRef[]
+  /** 添加或粘贴附加到 AI 对话框的文件/图片/视频列表 */
+  aiAttachedFiles: AttachedMediaFile[]
 
   // 分组状态
   modals: ModalState
@@ -245,6 +248,7 @@ export const useUIStore = defineStore('ui', {
       quickLookHistory: [] as string[],
       isDraggingCard: false,
       aiAttachedCards: [] as AiAttachedCardRef[],
+      aiAttachedFiles: [] as AttachedMediaFile[],
     }
   },
 
@@ -270,6 +274,27 @@ export const useUIStore = defineStore('ui', {
     /** 清空 AI 对话关联的所有卡片 */
     clearAiAttachedCards() {
       this.aiAttachedCards.splice(0)
+    },
+
+    /** 添加文件/图片/视频到 AI 对话框附件槽位，自动展开侧边栏 */
+    attachFileToAi(file: AttachedMediaFile) {
+      this.panels.detail = true
+      if (!this.aiAttachedFiles.some((f) => f.id === file.id)) {
+        this.aiAttachedFiles.push(file)
+      }
+    },
+
+    /** 从 AI 对话框中移除指定附件文件 */
+    removeAiAttachedFile(id: string) {
+      const idx = this.aiAttachedFiles.findIndex((f) => f.id === id)
+      if (idx > -1) {
+        this.aiAttachedFiles.splice(idx, 1)
+      }
+    },
+
+    /** 清空 AI 对话关联的所有附件文件 */
+    clearAiAttachedFiles() {
+      this.aiAttachedFiles.splice(0)
     },
 
     /** 打开书签/子书签速览浮层（QuickLook），如果在已打开状态下查看新卡片（如子书签），自动记录历史以便层级返回 */

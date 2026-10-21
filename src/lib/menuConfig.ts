@@ -16,7 +16,7 @@ import { useUIStore } from '../stores/ui.js'
 import { useAppStore } from '../stores/app.js'
 import { useActionSheetStore } from '../stores/actionSheet.js'
 import { copyToClipboard } from '../utils.js'
-import { ACTIONS, CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
+import { ACTIONS, CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../config/constants.js'
 import { visit, openBmModal, deleteBookmarkWithUndo, addSub } from '../composables/domain/useBookmark.js'
 import { openDetail, deleteCategory, deleteAttribute, openCatModal } from '../composables/ui/useUI.js'
 import { editGroup, deleteGroup, removeBmFromGroup, createGroup, toggleGroupFocus } from '../composables/domain/useGroup.js'
@@ -294,6 +294,7 @@ export function dispatchMenuAction(type: string, action: string, id: string) {
     return
   }
   if (type === 'attr') {
+    if (id === ATTR_IS_GROUP) return
     if (action === ACTIONS.RENAME_ATTR) {
       const attr = useAppStore().attributeMap[id]
       if (attr) {

@@ -17,9 +17,9 @@
         <div class="form-group">
           <label class="form-label">{{ t('modal.bookmark.attributes') }}</label>
           <div class="check-group">
-            <label v-for="a in selectableAttrs" :key="a.id" class="check-chip" :class="{ 'is-system-attr': a.id === ATTR_IS_GROUP }">
+            <label v-for="a in selectableAttrs" :key="a.id" class="check-chip" :class="{ 'is-system-attr': a.id === ATTR_IS_GROUP }" :title="a.id === ATTR_IS_GROUP ? t('attr.systemDesc') : undefined">
               <input type="checkbox" :checked="a.id === ATTR_IS_GROUP || !!geForm.attrs[a.id]" :disabled="a.id === ATTR_IS_GROUP" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
-              {{ a.name }}
+              <span v-if="a.id === ATTR_IS_GROUP" class="check-chip-system-icon" aria-hidden="true" v-html="I.note"></span>{{ a.name }}<span v-if="a.id === ATTR_IS_GROUP" class="check-chip-system-tag">{{ t('attr.system') }}</span>
             </label>
           </div>
         </div>

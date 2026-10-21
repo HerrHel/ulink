@@ -10,6 +10,9 @@
 import { safeGetItem, safeSetItem } from '../storageSafe.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import type { AiSendSummary } from './sendSummary.js'
+import type { AttachedMediaFile } from './attachmentHelper.js'
+
+export type { AttachedMediaFile }
 
 export const K_AI_SESSIONS = 'lv_ai_sessions_v1'
 export const K_AI_CUR_SESSION = 'lv_ai_cur_session_v1'
@@ -62,6 +65,8 @@ export interface ChatTurn {
   content: string
   /** 拖拽关联的卡片/笔记附件元数据（持久化于历史会话） */
   attachedCards?: AttachedCardMeta[]
+  /** 附加的文件/图片/视频列表 */
+  attachedFiles?: AttachedMediaFile[]
   /** 包含完整注入附件数据的后台提示词（供多轮对话历史精准回溯） */
   promptContent?: string
   /** 发送前透明摘要：本次实际发给 AI 的数据构成（可展开查看，隐私透明） */

@@ -98,13 +98,7 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   result.bookmarks.forEach(b => { if (b.categoryId === CAT_ALL) b.categoryId = CAT_UNCATEGORIZED })
   result.siblingGroups.forEach(g => {
     if (g.categoryId === CAT_ALL) g.categoryId = CAT_UNCATEGORIZED
-    if (!g.attributes) {
-      g.attributes = { [ATTR_IS_GROUP]: true }
-      needsPersist = true
-    } else if (!g.attributes[ATTR_IS_GROUP]) {
-      g.attributes[ATTR_IS_GROUP] = true
-      needsPersist = true
-    }
+    if (!g.attributes) g.attributes = { [ATTR_IS_GROUP]: true }
   })
   // D2-003：补齐分类 icon/color，避免旧盘缺字段在 schema 严格期整库回退
   result.categories.forEach(c => {

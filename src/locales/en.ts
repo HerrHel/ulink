@@ -29,6 +29,7 @@ export const en = {
     unnamed: 'Untitled',
     confirm: 'Confirm',
     cancel: 'Cancel',
+    clear: 'Clear',
     save: 'Save',
     saving: 'Saving…',
     delete: 'Delete',
@@ -62,6 +63,8 @@ export const en = {
     networkOffline: 'Network offline, please check your connection',
   },
   cards: {
+    bookmark: 'Bookmark',
+    note: 'Note',
     emptyTitle: 'No bookmarks yet',
     emptyHint: 'Click the + button to start collecting',
     virtualSwitchToast: 'Too many items — switched to list view',
@@ -274,6 +277,8 @@ export const en = {
     existsToast: 'Attribute already exists',
     deleteAttribute: 'Delete attribute',
     confirmDelete: 'Delete attribute "{name}"?',
+    system: 'Built-in',
+    systemDesc: 'Built-in system attribute; all notes have this attribute and it cannot be modified or deleted',
   },
   sync: {
     retrySync: 'Retry sync',

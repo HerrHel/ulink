@@ -1,8 +1,15 @@
 <template>
-    <!-- 底部常驻：单一精致对话框（集成斜杠联想、卡片附件与停止生成） -->
-    <div class="chat-input-dock">
-      <!-- 拖拽附加的卡片与笔记胶囊条 -->
-      <div v-if="attachedCardsList.length > 0" class="chat-attached-cards-bar">
+    <!-- 底部常驻：单一精致对话框（集成斜杠联想、卡片附件、多模态文件附件与停止生成） -->
+    <div
+      class="chat-input-dock"
+      @dragover.prevent="onDockDragOver"
+      @dragleave.prevent="onDockDragLeave"
+      @drop.prevent="onDockDrop"
+      :class="{ 'dock-drag-over': isDockDragOver }"
+    >
+      <!-- 拖拽附加的卡片、笔记与多模态附件胶囊条 -->
+      <div v-if="attachedCardsList.length > 0 || attachedFilesList.length > 0" class="chat-attached-cards-bar">
+        <!-- 卡片胶囊 -->
         <div
           v-for="card in attachedCardsList"
           :key="card.id"
@@ -24,26 +31,76 @@
             </svg>
           </button>
         </div>
+
+        <!-- 附件文件（图片、视频、文档）胶囊 -->
+        <div
+          v-for="file in attachedFilesList"
+          :key="file.id"
+          class="chat-attached-chip chip-file"
+          :class="`chip-file-${file.type}`"
+          :title="`${file.name} (${file.sizeFormatted})`"
+        >
+          <img v-if="file.type === 'image' && file.dataUrl" :src="file.dataUrl" :alt="file.name" class="chip-img-preview" />
+          <span v-else class="chip-type-badge file-badge">
+            {{ file.type === 'image' ? '🖼️' : file.type === 'video' ? '🎥' : '📄' }}
+          </span>
+          <span class="chip-title">{{ file.name }}</span>
+          <span class="chip-filesize">{{ file.sizeFormatted }}</span>
+          <button
+            type="button"
+            class="chip-remove-btn"
+            @click.stop="ui.removeAiAttachedFile(file.id)"
+            :title="t('common.delete')"
+            :aria-label="t('common.delete')"
+          >
+            <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+
         <button
-          v-if="attachedCardsList.length > 1"
+          v-if="attachedCardsList.length + attachedFilesList.length > 1"
           type="button"
           class="chip-clear-all"
-          @click="ui.clearAiAttachedCards()"
+          @click="clearAllAttachments"
         >
           {{ t('common.clear') }}
         </button>
       </div>
 
-      <div class="chat-input-wrapper" :class="{ focused: focused }">
+      <div class="chat-input-wrapper" :class="{ focused: focused, 'drag-active': isDockDragOver }">
+        <!-- 附件选择按钮（图片、文件、视频） -->
+        <button
+          type="button"
+          class="chat-attach-btn"
+          :title="t('ai.attachFile')"
+          :aria-label="t('ai.attachFile')"
+          @click="triggerFileInput"
+        >
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+          </svg>
+        </button>
+        <input
+          ref="fileInputRef"
+          type="file"
+          multiple
+          accept="image/*,video/*,text/*,.pdf,.doc,.docx,.md,.json,.csv,.txt"
+          style="display: none;"
+          @change="handleFileInputChange"
+        />
+
         <textarea
           :ref="bindTa"
           v-model="query"
           class="chat-textarea"
-          :placeholder="attachedCardsList.length > 0 ? t('ai.attachedInputPlaceholder') : t('ai.sidebarInputPlaceholder')"
+          :placeholder="hasAttachments ? t('ai.attachedInputPlaceholder') : t('ai.sidebarInputPlaceholder')"
           rows="1"
           @focus="focused = true"
           @blur="focused = false"
           @keydown="emit('taKeydown', $event)"
+          @paste="handlePaste"
           @input="emit('adjustHeight')"
         ></textarea>
         <!-- 停止生成 / 发送按钮平滑切换 -->
@@ -59,8 +116,8 @@
         <button
           v-else
           class="chat-send-btn"
-          :class="{ active: !!query.trim() || attachedCardsList.length > 0 }"
-          :disabled="!query.trim() && attachedCardsList.length === 0"
+          :class="{ active: !!query.trim() || hasAttachments }"
+          :disabled="!query.trim() && !hasAttachments"
           @click="emit('submit')"
           :title="t('ai.searchAction') + ' (Enter)'"
           :aria-label="t('ai.searchAction')"
@@ -74,9 +131,11 @@
 </template>
 
 <script setup lang="ts">
-import type { Ref } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
+import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
+import { toast } from '../../lib/toast.js'
 
 defineOptions({ name: 'ChatInputDock' })
 
@@ -107,6 +166,102 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const ui = useUIStore()
+
+const attachedFilesList = computed(() => ui.aiAttachedFiles)
+const hasAttachments = computed(() => props.attachedCardsList.length > 0 || attachedFilesList.value.length > 0)
+
+function clearAllAttachments() {
+  ui.clearAiAttachedCards()
+  ui.clearAiAttachedFiles()
+}
+
+// ── 文件选择与附件上传 ──
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+async function handleFiles(files: FileList | File[]) {
+  if (!files || files.length === 0) return
+  let addedCount = 0
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i]
+    if (f.size > 50 * 1024 * 1024) {
+      toast(t('ai.fileTooLarge'))
+      continue
+    }
+    const processed = await processFileForAi(f)
+    ui.attachFileToAi(processed)
+    addedCount++
+  }
+  if (addedCount > 0) {
+    if (addedCount === 1) {
+      toast(t('ai.fileAttachedToast', { name: files[0].name }))
+    } else {
+      toast(t('ai.attachedFilesCount', { n: addedCount }))
+    }
+  }
+}
+
+async function handleFileInputChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  if (input.files) {
+    await handleFiles(input.files)
+  }
+  input.value = ''
+}
+
+// ── 剪贴板直接粘贴图片或文件 ──
+async function handlePaste(e: ClipboardEvent) {
+  const clipboardData = e.clipboardData
+  if (!clipboardData) return
+
+  const files: File[] = []
+  if (clipboardData.files && clipboardData.files.length > 0) {
+    for (let i = 0; i < clipboardData.files.length; i++) {
+      files.push(clipboardData.files[i])
+    }
+  } else if (clipboardData.items && clipboardData.items.length > 0) {
+    for (let i = 0; i < clipboardData.items.length; i++) {
+      const item = clipboardData.items[i]
+      if (item.kind === 'file') {
+        const f = item.getAsFile()
+        if (f) files.push(f)
+      }
+    }
+  }
+
+  if (files.length > 0) {
+    const hasText = !!clipboardData.getData('text/plain')
+    // 如果纯粘贴文件或图片，阻止默认在输入框中产生 [object File] 等异常占位
+    if (!hasText) {
+      e.preventDefault()
+    }
+    await handleFiles(files)
+  }
+}
+
+// ── 拖拽文件到输入区域释放 ──
+const isDockDragOver = ref(false)
+
+function onDockDragOver(e: DragEvent) {
+  if (e.dataTransfer?.types?.includes('Files')) {
+    isDockDragOver.value = true
+  }
+}
+
+function onDockDragLeave() {
+  isDockDragOver.value = false
+}
+
+async function onDockDrop(e: DragEvent) {
+  isDockDragOver.value = false
+  const files = e.dataTransfer?.files
+  if (files && files.length > 0) {
+    await handleFiles(files)
+  }
+}
 
 /** 函数 ref：把 textarea 元素写回父组件共享的 ref（useChatPanelDom / useChatInputInteraction 依赖它） */
 function bindTa(el: unknown) {
@@ -452,5 +607,59 @@ function bindTa(el: unknown) {
 
 .chat-attached-cards-bar .chip-clear-all:hover {
   color: var(--accent);
+}
+
+/* 附件选择与拖拽多模态卡片样式 */
+.chat-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.chat-attach-btn:hover {
+  background: var(--surface-hover);
+  color: var(--accent);
+  transform: scale(1.06);
+}
+
+.chat-attach-btn:active {
+  transform: scale(0.95);
+}
+
+.dock-drag-over,
+.chat-input-wrapper.drag-active {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-light) !important;
+  background: var(--surface) !important;
+}
+
+.chip-img-preview {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.chip-filesize {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.85;
+  margin-left: -2px;
+  flex-shrink: 0;
+}
+
+.chip-file .file-badge {
+  font-size: 11px;
 }
 </style>

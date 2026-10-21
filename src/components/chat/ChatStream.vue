@@ -53,6 +53,21 @@
                     <span class="pill-text">{{ c.title }}</span>
                   </span>
                 </div>
+                <!-- 附加的文件、图片与视频 -->
+                <div v-if="turn.attachedFiles && turn.attachedFiles.length > 0" class="chat-user-attachments chat-user-files">
+                  <span
+                    v-for="f in turn.attachedFiles"
+                    :key="f.id"
+                    class="user-attachment-pill user-file-pill"
+                    :class="`pill-file-${f.type}`"
+                    :title="`${f.name} (${f.sizeFormatted})`"
+                  >
+                    <img v-if="f.type === 'image' && f.dataUrl" :src="f.dataUrl" :alt="f.name" class="user-file-thumb" />
+                    <span v-else class="pill-badge file-badge">{{ f.type === 'image' ? '🖼️' : f.type === 'video' ? '🎥' : '📄' }}</span>
+                    <span class="pill-text">{{ f.name }}</span>
+                    <span class="pill-filesize">{{ f.sizeFormatted }}</span>
+                  </span>
+                </div>
                 <div class="chat-user-text">{{ turn.content }}</div>
               </div>
               <!-- 发送前透明摘要：本次实际发给 AI 的数据构成（条数/字段/截断情况），可展开（隐私透明） -->
@@ -1772,6 +1787,22 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 160px;
+}
+
+.user-file-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.pill-filesize {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  opacity: 0.8;
+  margin-left: -2px;
+  flex-shrink: 0;
 }
 
 /* 发送前透明摘要：随内容流布局的隐私披露条（不遮挡正文，右对齐贴合气泡） */

@@ -10,13 +10,13 @@
         {{ t('attr.noMatch') }}
       </div>
       <div v-for="a in filteredAttrs" :key="a.id"
-           class="attr-drop-item" :class="{ active: isActive(a.id), excluded: isExcluded(a.id) }"
+           class="attr-drop-item" :class="{ active: isActive(a.id), excluded: isExcluded(a.id), 'is-system-attr': a.id === ATTR_IS_GROUP }"
            @contextmenu.prevent="onItemContext(a.id, $event)"
            @touchstart.passive="onTouchStart(a.id, $event)"
            @touchend="onTouchEnd"
            @touchmove.passive="onTouchMove">
-        <span class="attr-drop-main" @click="onToggleFilter(a.id)" :title="t('attr.include')">
-          <span class="attr-dot"></span>{{ a.name }}
+        <span class="attr-drop-main" @click="onToggleFilter(a.id)" :title="a.id === ATTR_IS_GROUP ? t('attr.systemDesc') : t('attr.include')">
+          <span class="attr-dot"></span><span v-if="a.id === ATTR_IS_GROUP" class="attr-icon-system" aria-hidden="true" v-html="I.note"></span><span>{{ a.name }}</span><span v-if="a.id === ATTR_IS_GROUP" class="attr-system-tag">{{ t('attr.system') }}</span>
         </span>
         <button class="attr-drop-exclude" :class="{ on: isExcluded(a.id) }"
                 @click="onToggleExclude(a.id)"
@@ -34,6 +34,7 @@ import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { toggleAttrFilter, toggleAttrExclude, addAttrQuick } from '../../composables/domain/useAttrFilter.js'
 import { I } from '../../config/icons.js'
+import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
@@ -94,6 +95,7 @@ let _longPressFired = false
 let _touchStartId: string | null = null
 
 function onItemContext(attrId: string, e: MouseEvent) {
+  if (attrId === ATTR_IS_GROUP) return
   e.preventDefault()
   if (!isMobile()) {
     useContextMenuStore().show(e, 'attr', attrId)
@@ -103,6 +105,7 @@ function onItemContext(attrId: string, e: MouseEvent) {
 }
 
 function onTouchStart(attrId: string, e: TouchEvent) {
+  if (attrId === ATTR_IS_GROUP) return
   _longPressFired = false
   _touchStartId = attrId
   _longPressTimer = setTimeout(() => {
@@ -123,6 +126,7 @@ function onTouchMove() {
 }
 
 function showAttrActions(attrId: string) {
+  if (attrId === ATTR_IS_GROUP) return
   const attr = store.attributeMap[attrId]
   if (!attr) return
   useActionSheetStore().showActions([
@@ -132,6 +136,7 @@ function showAttrActions(attrId: string) {
 }
 
 function onRenameAttr(attrId: string) {
+  if (attrId === ATTR_IS_GROUP) return
   const attr = store.attributeMap[attrId]
   if (!attr) return
   const input = window.prompt(t('ctx.renameAttrPrompt'), attr.name)
@@ -143,6 +148,7 @@ function onRenameAttr(attrId: string) {
 }
 
 async function onDeleteAttr(attrId: string) {
+  if (attrId === ATTR_IS_GROUP) return
   const attr = store.attributeMap[attrId]
   if (!attr) return
   const ok = await showConfirm(t('attr.confirmDelete', { name: attr.name }))

@@ -8,6 +8,9 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { isMobile } from '../../utils.js'
+import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
+import { toast } from '../../lib/toast.js'
+import { t } from '../../i18n/index.js'
 
 export interface ChatPanelDomDeps {
   panelRef: Ref<HTMLElement | null>
@@ -24,8 +27,8 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
   // ── 拖拽卡片悬停高亮 ──
   const isDragOverPanel = ref(false)
 
-  function onPanelDragOver() {
-    if (ui.isDraggingCard) {
+  function onPanelDragOver(e?: DragEvent) {
+    if (ui.isDraggingCard || e?.dataTransfer?.types?.includes('Files')) {
       isDragOverPanel.value = true
     }
   }
@@ -39,8 +42,22 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
     }
   }
 
-  function onPanelDrop() {
+  async function onPanelDrop(e?: DragEvent) {
     isDragOverPanel.value = false
+    if (e && e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const files = e.dataTransfer.files
+      let added = 0
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i]
+        if (f.size > 50 * 1024 * 1024) continue
+        const processed = await processFileForAi(f)
+        ui.attachFileToAi(processed)
+        added++
+      }
+      if (added > 0) {
+        toast(t('ai.fileAttachedToast', { name: files[0].name }))
+      }
+    }
   }
 
   watch(
