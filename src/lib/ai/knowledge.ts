@@ -754,6 +754,24 @@ export const CONCEPT_ONTOLOGY: ConceptCluster[] = [
     relatedTerms: ['unsplash', 'pexels', 'pixabay', 'iconfont', '花瓣', '站酷', 'zcool', 'freepik', 'storyset', 'stock'],
     domains: ['unsplash.com', 'pexels.com', 'pixabay.com', 'iconfont.cn', 'zcool.com.cn', 'huaban.com', 'freepik.com'],
   },
+  {
+    name: '微前端与大前端架构',
+    keywords: ['微前端', '应用架构', '单体拆分', '模块联邦', '子应用', '沙箱隔离', 'monorepo', '代码仓库管理'],
+    relatedTerms: ['qiankun', 'wujie', 'single-spa', 'micro-app', 'module federation', 'turborepo', 'pnpm', 'nx', 'lerna'],
+    domains: ['qiankun.umijs.org', 'wujie-micro.github.io', 'turbo.build', 'pnpm.io'],
+  },
+  {
+    name: '安全渗透与逆向调试',
+    keywords: ['安全', '抓包', '接口抓包', '网络调试', '渗透测试', '漏洞排查', '逆向分析', '加密解密'],
+    relatedTerms: ['wireshark', 'fiddler', 'charles', 'burpsuite', 'mitmproxy', 'whistle', 'security', 'crypto'],
+    domains: ['wireshark.org', 'portswigger.net', 'mitmproxy.org', 'wproxy.org'],
+  },
+  {
+    name: '桌面效率与启动利器',
+    keywords: ['效率工具', '启动器', '全局搜索', '剪贴板增强', '快捷键', '自动化脚本', '桌面利器'],
+    relatedTerms: ['raycast', 'alfred', 'utools', 'wox', 'keyboard maestro', 'shortcuts', 'productivity'],
+    domains: ['raycast.com', 'alfredapp.com', 'u.tools'],
+  },
 ]
 
 // ── 竞品图谱（similarWebsites）──

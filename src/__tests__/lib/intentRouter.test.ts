@@ -12,6 +12,10 @@ describe('intentRouter.ts — 意图准入路由器与工具防抢跑门禁', ()
     expect(resolveUserInteractionIntent('我要规划一下全库治理流水线')).toBe('OPERATIONAL')
     expect(resolveUserInteractionIntent('帮我切换深色模式')).toBe('OPERATIONAL')
     expect(resolveUserInteractionIntent('导出我的书签数据')).toBe('OPERATIONAL')
+    expect(resolveUserInteractionIntent('检查书签库并做个健康体检')).toBe('OPERATIONAL')
+    expect(resolveUserInteractionIntent('看看库里有哪些重复书签')).toBe('OPERATIONAL')
+    expect(resolveUserInteractionIntent('排查一下有没有失效链接')).toBe('OPERATIONAL')
+    expect(resolveUserInteractionIntent('读一下这个网站并总结内容：https://example.com/doc')).toBe('OPERATIONAL')
   })
 
   it('质询、元对话与长引用文本识别为 CONVERSATIONAL，严格阻断工具', () => {

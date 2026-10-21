@@ -245,4 +245,25 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'read_webpage',
+      description: '抓取并阅读指定公开网址的真实正文 Markdown 内容与元数据（标题、描述、文章正文）。当用户提供了公开网址希望了解或总结内容、或对特定网站进行深度分析时调用。严禁读取私有/内网 IP 地址。',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: '待抓取阅读的完整公开网址（必须以 http:// 或 https:// 开头）',
+          },
+          reason: {
+            type: 'string',
+            description: '抓取该网页正文的具体分析诉求说明',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
 ]

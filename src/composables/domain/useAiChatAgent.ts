@@ -9,6 +9,7 @@ import { createTaskDagPlan } from '../../lib/ai/taskPlanner.js'
 import { createDedupDraftDiff } from '../../lib/ai/draftDiff.js'
 import { findDuplicateCandidates } from '../../lib/ai/localClustering.js'
 import { buildDagPlanActionCard, buildDraftDiffActionCard } from '../../lib/ai/siteHitl.js'
+import { fetchPageContentViaJina } from '../../lib/ai/jinaReader.js'
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
@@ -136,6 +137,25 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app, signal: controller.signal })
         if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
         resultText = siteRes.reply
+      }
+    } else if (call.name === 'read_webpage') {
+      const url = call.arguments?.url
+      if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) {
+        resultText = '读取失败：未提供有效公开网址（必须以 http:// 或 https:// 开头）。'
+      } else {
+        const targetUrl = url.trim()
+        if (!assistantTurn.steps) assistantTurn.steps = []
+        assistantTurn.steps.push({ text: `正在读取网页正文：${targetUrl}`, done: true })
+        try {
+          const pageData = await fetchPageContentViaJina(targetUrl, { signal: controller.signal, timeoutMs: 9000, maxChars: 25000 })
+          if (!pageData.success || !pageData.markdown) {
+            resultText = `读取网页失败：${pageData.error || '未能成功获取该网页正文内容'}`
+          } else {
+            resultText = `网页标题：「${pageData.title || '无标题'}」\n\n正文摘要提取：\n${pageData.markdown.slice(0, 3200)}`
+          }
+        } catch (fetchErr: any) {
+          resultText = `抓取网页异常：${fetchErr?.message || '网络连接或服务异常'}`
+        }
       }
     } else {
       resultText = t('ai.toolResultUnknown', { name: call.name })
