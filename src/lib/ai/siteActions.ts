@@ -64,13 +64,70 @@ export async function mergeDuplicateBookmarks(
 
   let mergedCount = 0
   const deletedIds: string[] = []
+  const revertPrimaryMap = new Map<string, { notes?: string; attributes?: Record<string, any>; useCount?: number }>()
+  const revertGroupMap = new Map<string, string[]>()
+
   for (const cluster of dups) {
+    const primary = ds.bookmarkMap[cluster.primary.id] || cluster.primary
+    if (!primary || primary.deletedAt) continue
+
+    let primaryUpdated = false
+    const origPrimaryNotes = primary.notes
+    const origPrimaryAttrs = { ...(primary.attributes || {}) }
+    const origPrimaryUseCount = primary.useCount
+
+    let newNotes = primary.notes || ''
+    const newAttrs = { ...(primary.attributes || {}) }
+    let addUseCount = 0
+
     for (const dup of cluster.duplicates) {
       if (dup.id && !dup.deletedAt) {
+        // 1. 元数据智能汇聚：将副本中独特的备注与标签汇入主书签
+        if (dup.notes && !newNotes.includes(dup.notes)) {
+          newNotes = newNotes ? `${newNotes}\n${dup.notes}` : dup.notes
+          primaryUpdated = true
+        }
+        if (dup.attributes) {
+          for (const [k, v] of Object.entries(dup.attributes)) {
+            if (newAttrs[k] === undefined) {
+              newAttrs[k] = v
+              primaryUpdated = true
+            }
+          }
+        }
+        if (dup.useCount && dup.useCount > 0) {
+          addUseCount += dup.useCount
+        }
+
+        // 2. 避免制造笔记孤立引用：若副本存在于某个笔记组，自动将组内引用切换至主书签
+        for (const grp of ds.siblingGroups || []) {
+          if (!grp.deletedAt && grp.bookmarkIds?.includes(dup.id)) {
+            if (!revertGroupMap.has(grp.id)) {
+              revertGroupMap.set(grp.id, [...grp.bookmarkIds])
+            }
+            const updatedIds = grp.bookmarkIds.map((id) => (id === dup.id ? primary.id : id))
+            const uniqueIds = Array.from(new Set(updatedIds))
+            ds.updateGroup(grp.id, { bookmarkIds: uniqueIds })
+          }
+        }
+
         ds.deleteBookmark(dup.id)
         deletedIds.push(dup.id)
         mergedCount++
       }
+    }
+
+    if (primaryUpdated || addUseCount > 0) {
+      revertPrimaryMap.set(primary.id, {
+        notes: origPrimaryNotes,
+        attributes: origPrimaryAttrs,
+        useCount: origPrimaryUseCount,
+      })
+      ds.updateBookmark(primary.id, {
+        notes: newNotes,
+        attributes: newAttrs,
+        useCount: (primary.useCount || 0) + addUseCount,
+      })
     }
   }
 
@@ -82,6 +139,12 @@ export async function mergeDuplicateBookmarks(
       revert: () => {
         for (const id of deletedIds) {
           ds.restoreBookmark(id)
+        }
+        for (const [pid, orig] of revertPrimaryMap.entries()) {
+          ds.updateBookmark(pid, orig)
+        }
+        for (const [gid, origIds] of revertGroupMap.entries()) {
+          ds.updateGroup(gid, { bookmarkIds: origIds })
         }
         app.save()
         return tN('aiCmd.undoMergeRevert', deletedIds.length)

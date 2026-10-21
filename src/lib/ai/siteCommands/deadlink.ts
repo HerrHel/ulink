@@ -36,10 +36,21 @@ export const deadlinkBlock: SiteCommandBlock = async (
       }
     }
 
-    const firstDead = deadBookmarks[0]
+    let targetDead = deadBookmarks[0]
+    const targetQuery = query.replace(/^\/deadlinks?|^\/?(?:检查死链|死链自愈)/i, '').trim()
+    if (targetQuery && targetQuery !== 'all') {
+      const matched = deadBookmarks.find(
+        (b) =>
+          b.id === targetQuery ||
+          b.title?.toLowerCase().includes(targetQuery.toLowerCase()) ||
+          b.url?.toLowerCase().includes(targetQuery.toLowerCase()),
+      )
+      if (matched) targetDead = matched
+    }
+
     const alts = await findSimilarWebsites(
-      firstDead.url,
-      firstDead.title,
+      targetDead.url,
+      targetDead.title,
       [],
       ds.categories,
       ds.customAttributes,
@@ -53,7 +64,8 @@ export const deadlinkBlock: SiteCommandBlock = async (
     for (let i = 0; i < Math.min(3, deadBookmarks.length); i++) {
       const b = deadBookmarks[i]
       const wbUrl = `https://web.archive.org/web/*/${encodeURIComponent(b.url)}`
-      lines.push(t('aiCmd.deadItem', { i: i + 1, title: b.title || t('aiCmd.untitled'), url: b.url }))
+      const isCurTarget = b.id === targetDead.id ? ' [当前平替候选]' : ''
+      lines.push(t('aiCmd.deadItem', { i: i + 1, title: (b.title || t('aiCmd.untitled')) + isCurTarget, url: b.url }))
       lines.push(t('aiCmd.deadSnapshot', { url: wbUrl }))
     }
     if (deadBookmarks.length > 3) {
@@ -62,7 +74,7 @@ export const deadlinkBlock: SiteCommandBlock = async (
 
     if (bestAlt) {
       lines.push('')
-      lines.push(t('aiCmd.deadAltIntro', { title: firstDead.title }))
+      lines.push(t('aiCmd.deadAltIntro', { title: targetDead.title }))
       lines.push(t('aiCmd.deadAltRec', { title: bestAlt.title, url: bestAlt.url }))
       lines.push(
         t('aiCmd.deadAltHighlight', {
@@ -76,8 +88,8 @@ export const deadlinkBlock: SiteCommandBlock = async (
     let actionCard: ChatActionCard | undefined
     if (bestAlt) {
       actionCard = buildHealDeadlinkCard({
-        deadBmId: firstDead.id,
-        fromTitle: firstDead.title,
+        deadBmId: targetDead.id,
+        fromTitle: targetDead.title,
         toTitle: bestAlt.title,
         replacement: bestAlt,
       })
@@ -88,7 +100,7 @@ export const deadlinkBlock: SiteCommandBlock = async (
       action: 'deadlinks',
       steps: [
         { text: tN('aiCmd.stepDeadFound', deadBookmarks.length), done: true },
-        { text: t('aiCmd.stepDeadSearchAlt', { title: firstDead.title }), done: true },
+        { text: t('aiCmd.stepDeadSearchAlt', { title: targetDead.title }), done: true },
       ],
       reply: lines.join('\n'),
       actionCard,

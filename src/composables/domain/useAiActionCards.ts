@@ -174,11 +174,13 @@ export function useAiActionCards(context: AiActionCardsContext) {
           const res = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
           return { success: true, output: res.reply }
         } else if (step.actionName === 'inbox_zero') {
-          const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
-          return { success: true, output: res.reply }
+          const res = await applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+          const ok = (res.movedCount > 0 || res.nestedCount > 0) || !res.message.includes('取消')
+          return { success: ok, output: res.message }
         } else if (step.actionName === 'merge_duplicates') {
-          const res = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
-          return { success: true, output: res.reply }
+          const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
+          const ok = res.mergedCount > 0 || !res.message.includes('取消')
+          return { success: ok, output: res.message }
         }
         return { success: true, output: t('ai.dagStepSuccess') }
       })
@@ -229,32 +231,44 @@ export function useAiActionCards(context: AiActionCardsContext) {
               const res = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
               return { success: true, output: res.reply }
             } else if (step.actionName === 'inbox_zero') {
-              const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
-              return { success: true, output: res.reply }
+              const res = await applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+              const ok = (res.movedCount > 0 || res.nestedCount > 0) || !res.message.includes('取消')
+              return { success: ok, output: res.message }
             } else if (step.actionName === 'merge_duplicates') {
-              const res = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app })
-              return { success: true, output: res.reply }
+              const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
+              const ok = res.mergedCount > 0 || !res.message.includes('取消')
+              return { success: ok, output: res.message }
             }
             return { success: true, output: t('ai.dagStepSuccess') }
           })
           card.completed = plan.status === 'completed'
-          toast(t('ai.dagPlanCompleted'), true)
+          if (plan.status === 'completed') {
+            toast(t('ai.dagPlanCompleted'), true)
+          } else if (plan.status === 'paused') {
+            toast(t('ai.dagPlanPaused') || '任务暂停', false)
+          } else {
+            toast(t('ai.actionFailed'), false)
+          }
           onTurnsChanged?.()
           sessions.value = updateSession(currentSessionId.value, chatTurns.value)
         }
       } else if (card.actionName === 'merge_dedup') {
         const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
-        card.completed = true
-        toast(res.message, true)
-        chatTurns.value.push({
-          id: 'turn-' + Date.now() + '-assistant',
-          role: 'assistant',
-          content: res.message,
-          steps: [{ text: t('ai.mergeStep', { n: res.mergedCount }), done: true }],
-          timestamp: Date.now(),
-        })
-        onTurnsChanged?.()
-        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        if (res.mergedCount > 0) {
+          card.completed = true
+          toast(res.message, true)
+          chatTurns.value.push({
+            id: 'turn-' + Date.now() + '-assistant',
+            role: 'assistant',
+            content: res.message,
+            steps: [{ text: t('ai.mergeStep', { n: res.mergedCount }), done: true }],
+            timestamp: Date.now(),
+          })
+          onTurnsChanged?.()
+          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        } else {
+          if (res.message) toast(res.message, false)
+        }
       } else if (card.actionName === 'trash_clear') {
         const res = await dispatchSiteCommand('/trash clear', { ds, ui, app: (ui as any).app })
         if (res.success !== false) {
@@ -311,27 +325,31 @@ export function useAiActionCards(context: AiActionCardsContext) {
           payload.targetCatId,
           { ds, ui, app: (ui as any).app },
         )
-        card.completed = true
-        if (res.group?.id) {
-          card.resultGid = res.group.id
-          card.resultCatId = res.group.categoryId
+        if (res.success) {
+          card.completed = true
+          if (res.group?.id) {
+            card.resultGid = res.group.id
+            card.resultCatId = res.group.categoryId
+          }
+          toast(res.message, true)
+          chatTurns.value.push({
+            id: 'turn-' + Date.now() + '-assistant',
+            role: 'assistant',
+            content: res.message,
+            steps: res.group
+              ? [
+                  { text: tN('ai.wsStepStore', res.totalBookmarks, { n: res.totalBookmarks }), done: true },
+                  { text: t('ai.wsStepCreateGroup', { name: res.group.name }), done: true },
+                  { text: t('ai.wsStepFocus'), done: true },
+                ]
+              : [],
+            timestamp: Date.now(),
+          })
+          onTurnsChanged?.()
+          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        } else {
+          if (res.message) toast(res.message, false)
         }
-        toast(res.message, true)
-        chatTurns.value.push({
-          id: 'turn-' + Date.now() + '-assistant',
-          role: 'assistant',
-          content: res.message,
-          steps: res.group
-            ? [
-                { text: tN('ai.wsStepStore', res.totalBookmarks, { n: res.totalBookmarks }), done: true },
-                { text: t('ai.wsStepCreateGroup', { name: res.group.name }), done: true },
-                { text: t('ai.wsStepFocus'), done: true },
-              ]
-            : [],
-          timestamp: Date.now(),
-        })
-        onTurnsChanged?.()
-        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
       } else if (card.actionName === 'heal_deadlink') {
         const payload = (card.payload || {}) as {
           deadBmId?: string
@@ -343,20 +361,24 @@ export function useAiActionCards(context: AiActionCardsContext) {
             ui,
             app: (ui as any).app,
           })
-          card.completed = true
-          toast(res.message, true)
-          chatTurns.value.push({
-            id: 'turn-' + Date.now() + '-assistant',
-            role: 'assistant',
-            content: res.message,
-            steps: [
-              { text: t('ai.deadlinkVerifyStep'), done: true },
-              { text: t('ai.deadlinkReplaceStep', { title: payload.replacement.title }), done: true },
-            ],
-            timestamp: Date.now(),
-          })
-          onTurnsChanged?.()
-          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          if (res.success) {
+            card.completed = true
+            toast(res.message, true)
+            chatTurns.value.push({
+              id: 'turn-' + Date.now() + '-assistant',
+              role: 'assistant',
+              content: res.message,
+              steps: [
+                { text: t('ai.deadlinkVerifyStep'), done: true },
+                { text: t('ai.deadlinkReplaceStep', { title: payload.replacement.title }), done: true },
+              ],
+              timestamp: Date.now(),
+            })
+            onTurnsChanged?.()
+            sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          } else {
+            if (res.message) toast(res.message, false)
+          }
         }
       }
     } catch (err: any) {

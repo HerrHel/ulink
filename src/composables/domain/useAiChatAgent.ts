@@ -74,7 +74,8 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
           return resultText
         }
       }
-      const siteRes = await dispatchSiteCommand('/deadlink', { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const targetParam = target && target !== 'all' ? ` ${target}` : ''
+      const siteRes = await dispatchSiteCommand(`/deadlink${targetParam}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
       if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
@@ -101,7 +102,8 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
           : t('ai.toolResultNotExecuted', { name: call.name })
       }
     } else if (call.name === 'export_data') {
-      const siteRes = await dispatchSiteCommand('/export', { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const format = call.arguments?.format === 'html' ? 'html' : 'json'
+      const siteRes = await dispatchSiteCommand(`/export ${format}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
       resultText = siteRes.handled && siteRes.reply
         ? siteRes.reply
         : t('ai.toolResultNotExecuted', { name: call.name })

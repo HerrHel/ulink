@@ -7,7 +7,7 @@
 
 import { parseExportIntent } from '../siteIntents.js'
 import { askConfirm } from '../siteHitl.js'
-import { exportData } from '../../../composables/domain/useDataIO.js'
+import { exportData, exportHTML } from '../../../composables/domain/useDataIO.js'
 import { t } from '../../../i18n/index.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
@@ -30,7 +30,12 @@ export const exportBlock: SiteCommandBlock = async (
         reply: t('aiCmd.exportCancelled'),
       }
     }
-    exportData()
+    const isHtml = /html/i.test(query)
+    if (isHtml) {
+      exportHTML()
+    } else {
+      exportData()
+    }
     return {
       handled: true,
       action: 'export',
