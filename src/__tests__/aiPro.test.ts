@@ -125,15 +125,9 @@ describe('AI Pro Matrix & Smart Candidate Ingestion', () => {
     expect(oldBookmark.notes).toBe('')
   })
 
-  it('5. UI Store 寻站与补齐弹窗 Actions 正常驱动状态', () => {
+  it('5. UI Store 补齐弹窗 Actions 正常驱动状态', () => {
     const ui = useUIStore()
-    expect(ui.modals.aiFinder).toBe(false)
     expect(ui.modals.aiEnrich).toBe(false)
-
-    ui.openAiFinder('similar', '', 'https://figma.com', 'Figma')
-    expect(ui.modals.aiFinder).toBe(true)
-    expect(ui.aiFinderInitialTab).toBe('similar')
-    expect(ui.aiFinderInitialTargetUrl).toBe('https://figma.com')
 
     ui.openAiEnrich('bm-old-1')
     expect(ui.modals.aiEnrich).toBe(true)

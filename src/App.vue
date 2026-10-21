@@ -65,9 +65,6 @@
 <template v-if="store.modals.share">
   <ShareModal />
 </template>
-<template v-if="store.modals.aiFinder">
-  <AiFinderModal />
-</template>
 <template v-if="store.modals.aiEnrich">
   <AiEnrichModal />
 </template>
@@ -158,7 +155,6 @@ const CategoryModal = defineAsyncComponent(() => import('./components/modals/Cat
 const AttributeModal = defineAsyncComponent(() => import('./components/modals/AttributeModal.vue'))
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
 const ShareModal = defineAsyncComponent(() => import('./components/modals/ShareModal.vue'))
-const AiFinderModal = defineAsyncComponent(() => import('./components/modals/AiFinderModal.vue'))
 const AiEnrichModal = defineAsyncComponent(() => import('./components/modals/AiEnrichModal.vue'))
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))

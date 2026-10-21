@@ -130,39 +130,39 @@ describe('useResize 节流 rAF 回调与 clamp 边界', () => {
     expect(localStorage.getItem('lv_railWidth')).toBe('120')
   })
 
-  it('右栏 dir<0 clamp min=200：超出封底 200 不低于 200 + 不带 .open 只写 --detail-width', async () => {
+  it('右栏 dir<0 clamp min=320：超出封底 320 不低于 320 + 不带 .open 只写 --detail-width', async () => {
     buildDom()
     mount(mkComp())
     const rightHandle = document.getElementById('resizeRight')!
     const detail = document.getElementById('detailPanel') as HTMLElement
-    stubRect(detail, 320)
-    // 右栏 dir=-1：delta=(lastClientX-startX)*-1，mousedown clientX=500 startW=320
-    // mousemove clientX=900 → delta=(900-500)*-1=-400, w=max(200, 320-400)=200
+    stubRect(detail, 400)
+    // 右栏 dir=-1：delta=(lastClientX-startX)*-1，mousedown clientX=500 startW=400
+    // mousemove clientX=900 → delta=(900-500)*-1=-400, w=max(320, 400-400)=320
     dispatch(rightHandle, 'mousedown', 500)
     dispatch(document, 'mousemove', 900)
     flushRaf()
     // 不带 .open class → 只写 --detail-width 不写 width
-    expect(detail.style.getPropertyValue('--detail-width')).toBe('200px')
+    expect(detail.style.getPropertyValue('--detail-width')).toBe('320px')
     expect(detail.style.width).toBe('')
     dispatch(document, 'mouseup', 900)
     flushRaf()
-    expect(localStorage.getItem('lv_detailWidth')).toBe('200')
+    expect(localStorage.getItem('lv_detailWidth')).toBe('320')
   })
 
-  it('右栏 dir<0 clamp max=600：超出封顶 600 不超 600', async () => {
+  it('右栏 dir<0 clamp max=800：超出封顶 800 不超 800', async () => {
     buildDom()
     mount(mkComp())
     const rightHandle = document.getElementById('resizeRight')!
     const detail = document.getElementById('detailPanel') as HTMLElement
-    stubRect(detail, 320)
-    // mousedown clientX=500 startW=320，mousemove clientX=100 → delta=(100-500)*-1=400, w=min(600, 720)=600
+    stubRect(detail, 400)
+    // mousedown clientX=500 startW=400，mousemove clientX=-100 → delta=(-100-500)*-1=600, w=min(800, 400+600)=800
     dispatch(rightHandle, 'mousedown', 500)
-    dispatch(document, 'mousemove', 100)
+    dispatch(document, 'mousemove', -100)
     flushRaf()
-    expect(detail.style.getPropertyValue('--detail-width')).toBe('600px')
-    dispatch(document, 'mouseup', 100)
+    expect(detail.style.getPropertyValue('--detail-width')).toBe('800px')
+    dispatch(document, 'mouseup', -100)
     flushRaf()
-    expect(localStorage.getItem('lv_detailWidth')).toBe('600')
+    expect(localStorage.getItem('lv_detailWidth')).toBe('800')
   })
 
   it('右栏 .open class 联动：带 open 时 applyDelta 同时写 --detail-width 与 width（line 59 分支）', async () => {
@@ -170,15 +170,15 @@ describe('useResize 节流 rAF 回调与 clamp 边界', () => {
     mount(mkComp())
     const rightHandle = document.getElementById('resizeRight')!
     const detail = document.getElementById('detailPanel') as HTMLElement
-    stubRect(detail, 320)
+    stubRect(detail, 400)
     detail.classList.add('open')
-    // mousedown clientX=500 startW=320，mousemove clientX=200 → delta=300, w=min(600, 620)=600
+    // mousedown clientX=500 startW=400，mousemove clientX=200 → delta=300, w=min(800, 700)=700
     dispatch(rightHandle, 'mousedown', 500)
     dispatch(document, 'mousemove', 200)
     flushRaf()
     // .open 命中 → 既写 --detail-width 又写 width
-    expect(detail.style.getPropertyValue('--detail-width')).toBe('600px')
-    expect(detail.style.width).toBe('600px')
+    expect(detail.style.getPropertyValue('--detail-width')).toBe('700px')
+    expect(detail.style.width).toBe('700px')
     dispatch(document, 'mouseup', 200)
     flushRaf()
   })

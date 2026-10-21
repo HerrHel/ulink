@@ -1,7 +1,7 @@
 /**
  * candidateSave.ts — AI 候选网站入库的统一构造器
  * 背景：dataStore.addBookmark 要求完整 Bookmark（含 id/order/时间戳等必备字段）且返回 void，
- * AiCandidateCard / DetailPanel / AiFinderModal 曾各自传残缺对象导致入库链路损坏。
+ * DetailPanel / AiInlineCard 曾各自传残缺对象导致入库链路损坏。
  * 这里统一补齐字段，调用方只需 ds.addBookmark(bm) + saveAppData()。
  */
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'

@@ -240,7 +240,6 @@ describe('Universal Agent Operations & Undo Stack (universalAgent.ts)', () => {
         vaultUnlock: false,
         setupGuide: false,
         share: false,
-        aiFinder: false,
         aiEnrich: false,
         quickLook: false,
       },

@@ -100,21 +100,20 @@ describe('useResize rAF-flush 持久化', () => {
     const rightHandle = document.getElementById('resizeRight')!
     const detail = document.getElementById('detailPanel') as HTMLElement
     Object.defineProperty(detail, 'getBoundingClientRect', {
-      value: () => ({ width: 320, left: 0, right: 320, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }),
+      value: () => ({ width: 400, left: 0, right: 400, top: 0, bottom: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }),
       configurable: true,
     })
 
     // 右栏 dir=-1：startX - clientX
-    // mousedown clientX=500，startW=320
-    // mousemove clientX=200 → delta=(200-500)*-1=300 → w=min(600, 320+300)=600
-    // 旧代码 onUp 读 --detail-width（rAF 未跑）= 初始 '320px' → 存 320
-    // 修复后 flush applyDelta → --detail-width=600px → 存 600
+    // mousedown clientX=500，startW=400
+    // mousemove clientX=200 → delta=(200-500)*-1=300 → w=min(800, 400+300)=700
+    // 修复后 flush applyDelta → --detail-width=700px → 存 700
     dispatch(rightHandle, 'mousedown', 500)
     dispatch(document, 'mousemove', 200)
     dispatch(document, 'mouseup', 200)
     flushRaf()
 
-    expect(localStorage.getItem('lv_detailWidth')).toBe('600')
+    expect(localStorage.getItem('lv_detailWidth')).toBe('700')
   })
 
   it('mousedown 后未移动直接 mouseup → width 未变，不持久化非法值', async () => {

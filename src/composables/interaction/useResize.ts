@@ -18,6 +18,10 @@ export function parseWidthPx(raw: string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+export const DETAIL_WIDTH_DEFAULT = 400
+export const DETAIL_WIDTH_MIN = 320
+export const DETAIL_WIDTH_MAX = 800
+
 export function useResize() {
   onMounted(() => {
     const leftHandle = document.getElementById('resizeLeft')
@@ -30,7 +34,17 @@ export function useResize() {
     const savedLeft = safeGetItem('lv_railWidth')
     const savedRight = safeGetItem('lv_detailWidth')
     if (savedLeft) leftPanel.style.width = savedLeft + 'px'
-    if (savedRight) rightPanel.style.setProperty('--detail-width', savedRight + 'px')
+    if (savedRight) {
+      const parsedRight = parseWidthPx(savedRight)
+      if (parsedRight == null || parsedRight <= 320) {
+        rightPanel.style.setProperty('--detail-width', `${DETAIL_WIDTH_DEFAULT}px`)
+      } else {
+        const clamped = Math.max(DETAIL_WIDTH_MIN, Math.min(parsedRight, DETAIL_WIDTH_MAX))
+        rightPanel.style.setProperty('--detail-width', `${clamped}px`)
+      }
+    } else {
+      rightPanel.style.setProperty('--detail-width', `${DETAIL_WIDTH_DEFAULT}px`)
+    }
 
     let raf: number | null = null
     let handle: HTMLElement | null = null
@@ -49,8 +63,8 @@ export function useResize() {
     function applyDelta() {
       if (!panel || dir == null) return
       const delta = (lastClientX - startX) * dir
-      const min = dir > 0 ? 120 : 200
-      const max = dir > 0 ? 500 : 600
+      const min = dir > 0 ? 120 : DETAIL_WIDTH_MIN
+      const max = dir > 0 ? 500 : DETAIL_WIDTH_MAX
       const w = Math.max(min, Math.min(startW + delta, max))
       if (panel === leftPanel) {
         panel.style.width = w + 'px'

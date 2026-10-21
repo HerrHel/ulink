@@ -73,7 +73,6 @@ interface ModalState {
   vaultUnlock: boolean
   setupGuide: boolean
   share: boolean
-  aiFinder: boolean
   aiEnrich: boolean
   quickLook: boolean
 }
@@ -144,10 +143,6 @@ export interface UIState {
    */
   expandedIds: string[]
   shareModalTarget: { type: 'group' | 'category'; id: string } | null
-  aiFinderInitialTab: 'intent' | 'similar' | 'video'
-  aiFinderInitialQuery: string
-  aiFinderInitialTargetUrl: string
-  aiFinderInitialTargetTitle: string
   aiEnrichTargetBmId: string | null
   aiAssistantInitialQuery: string
   quickLookBmId: string | null
@@ -207,7 +202,6 @@ export const useUIStore = defineStore('ui', {
         vaultUnlock: false,
         setupGuide: false,
         share: false,
-        aiFinder: false,
         aiEnrich: false,
         quickLook: false,
       },
@@ -238,10 +232,6 @@ export const useUIStore = defineStore('ui', {
       _mobileLayoutMode: 'list',
       expandedIds: [],
       shareModalTarget: null,
-      aiFinderInitialTab: 'intent',
-      aiFinderInitialQuery: '',
-      aiFinderInitialTargetUrl: '',
-      aiFinderInitialTargetTitle: '',
       aiEnrichTargetBmId: null,
       aiAssistantInitialQuery: '',
       quickLookBmId: null,
@@ -331,15 +321,6 @@ export const useUIStore = defineStore('ui', {
       if (query) {
         this.aiAssistantInitialQuery = query
       }
-    },
-
-    /** 打开 AI 探宝/寻站/平替中心 */
-    openAiFinder(tab: 'intent' | 'similar' | 'video' = 'intent', query = '', targetUrl = '', targetTitle = '') {
-      this.aiFinderInitialTab = tab
-      this.aiFinderInitialQuery = query
-      this.aiFinderInitialTargetUrl = targetUrl
-      this.aiFinderInitialTargetTitle = targetTitle
-      this.modals.aiFinder = true
     },
 
     /** 打开存量书签主动补齐对比窗 */
