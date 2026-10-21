@@ -212,7 +212,6 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         assistantTurn.loading = false
         assistantTurn.candidates = res.bookmarks
         if (res.bookmarks.length === 0 && res.summary) {
-          const summaryLabel = res.question ? t('ai.videoAnswerLabel') : t('ai.videoSummaryLabel')
           const titlePrefix =
             res.videoTitle &&
             !res.videoTitle.includes('404') &&
@@ -220,13 +219,13 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             !res.videoTitle.includes('视频不见了')
               ? `**${res.videoTitle}**\n\n`
               : ''
-          assistantTurn.content = `${titlePrefix}${summaryLabel}\n${res.summary}`
+          assistantTurn.content = `${titlePrefix}${res.summary}`
         } else {
           assistantTurn.content = formatFoundCount(res.bookmarks.length, res.videoTitle, res.bookmarks)
           // 文字源总结（简介/字幕/评论区提炼）：带用户问题时为「回答提问」模式，标签随之切换，无则缺省
           if (res.summary) {
             const summaryLabel = res.question ? t('ai.videoAnswerLabel') : t('ai.videoSummaryLabel')
-            assistantTurn.content += `\n\n${summaryLabel}\n${res.summary}`
+            assistantTurn.content += `\n\n**${summaryLabel}**\n${res.summary}`
           }
         }
       } else if (isUrl) {

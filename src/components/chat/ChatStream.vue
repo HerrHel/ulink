@@ -201,24 +201,6 @@
 
                 <!-- 核心回复流：正文与随文嵌入卡片图文交融 -->
                 <div v-if="turn.content || turn.candidates?.length" class="chat-reply-flow-wrap">
-                  <div class="chat-flow-header">
-                    <button
-                      class="chat-msg-act-btn"
-                      :class="{ 'is-copied': copiedActionKey === `asst-${turn.id}` }"
-                      @click="emit('copyMessage', getCleanCopyText(turn.content), `asst-${turn.id}`)"
-                      :title="copiedActionKey === `asst-${turn.id}` ? t('ai.copied') : t('ai.copyReply')"
-                      :aria-label="copiedActionKey === `asst-${turn.id}` ? t('ai.copied') : t('ai.copyReply')"
-                    >
-                      <svg v-if="copiedActionKey === `asst-${turn.id}`" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      <svg v-else viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                      </svg>
-                    </button>
-                  </div>
-
                   <div class="chat-flow-content">
                     <template v-for="(seg, sIdx) in getTurnSegments(turn)" :key="sIdx">
                       <div
@@ -249,62 +231,84 @@
                     </button>
                   </div>
 
-                  <!-- 知识沉淀与反向写回操作条 (Bi-directional Knowledge Write-Back & Card Locating) -->
-                  <div v-if="!turn.loading && turn.content" class="chat-writeback-toolbar">
-                    <!-- 若当轮包含关联笔记，展示追加到原笔记与替换原笔记 -->
-                    <template v-if="getAttachedNotes(turn).length > 0">
-                      <button
-                        v-for="note in getAttachedNotes(turn)"
-                        :key="'append-' + note.id"
-                        class="writeback-btn writeback-append"
-                        :title="t('ai.writebackAppend') + ': ' + note.title"
-                        @click="emit('handleAppendToNote', note.id, turn.content)"
-                      >
-                        <span class="writeback-btn-icon" aria-hidden="true">📥</span>
-                        <span>{{ t('ai.writebackAppend') }}</span>
-                      </button>
-                      <button
-                        v-for="note in getAttachedNotes(turn)"
-                        :key="'replace-' + note.id"
-                        class="writeback-btn writeback-replace"
-                        :title="t('ai.writebackReplace') + ': ' + note.title"
-                        @click="emit('handleReplaceNote', note.id, turn.content)"
-                      >
-                        <span class="writeback-btn-icon" aria-hidden="true">🔄</span>
-                        <span>{{ t('ai.writebackReplace') }}</span>
-                      </button>
-                    </template>
+                  <!-- 消息尾部操作行（正文后）：知识沉淀（存为笔记/定位）与消息操作（复制等） -->
+                  <div v-if="!turn.loading && (turn.content || turn.candidates?.length)" class="chat-reply-footer">
+                    <div class="chat-writeback-toolbar">
+                      <!-- 若当轮包含关联笔记，展示追加到原笔记与替换原笔记 -->
+                      <template v-if="getAttachedNotes(turn).length > 0 && turn.content">
+                        <button
+                          v-for="note in getAttachedNotes(turn)"
+                          :key="'append-' + note.id"
+                          class="writeback-btn writeback-append"
+                          :title="t('ai.writebackAppend') + ': ' + note.title"
+                          @click="emit('handleAppendToNote', note.id, turn.content)"
+                        >
+                          <span class="writeback-btn-icon" aria-hidden="true">📥</span>
+                          <span>{{ t('ai.writebackAppend') }}</span>
+                        </button>
+                        <button
+                          v-for="note in getAttachedNotes(turn)"
+                          :key="'replace-' + note.id"
+                          class="writeback-btn writeback-replace"
+                          :title="t('ai.writebackReplace') + ': ' + note.title"
+                          @click="emit('handleReplaceNote', note.id, turn.content)"
+                        >
+                          <span class="writeback-btn-icon" aria-hidden="true">🔄</span>
+                          <span>{{ t('ai.writebackReplace') }}</span>
+                        </button>
+                      </template>
 
-                    <!-- 始终提供存为新笔记 -->
-                    <button
-                      class="writeback-btn writeback-new"
-                      :title="t('ai.writebackNew')"
-                      @click="emit('handleSaveAsNewNote', turn.content)"
-                    >
-                      <span class="writeback-btn-icon" aria-hidden="true">📝</span>
-                      <span>{{ t('ai.writebackNew') }}</span>
-                    </button>
+                      <!-- 始终提供存为新笔记（当有正文时） -->
+                      <button
+                        v-if="turn.content"
+                        class="writeback-btn writeback-new"
+                        :title="t('ai.writebackNew')"
+                        @click="emit('handleSaveAsNewNote', turn.content)"
+                      >
+                        <span class="writeback-btn-icon" aria-hidden="true">📝</span>
+                        <span>{{ t('ai.writebackNew') }}</span>
+                      </button>
 
-                    <!-- 当轮有关联卡片或笔记时，提供在主网格高亮定位 -->
-                    <button
-                      v-for="card in getTurnAttachedCards(turn)"
-                      :key="'locate-' + card.id"
-                      class="writeback-btn writeback-locate"
-                      :title="t('ai.locateInVault') + ': ' + card.title"
-                      @click="emit('handleLocateCard', card.id, card.type === 'group' ? 'group' : 'bookmark')"
-                    >
-                      <span class="writeback-btn-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <circle cx="12" cy="12" r="3" />
-                          <line x1="12" y1="2" x2="12" y2="5" />
-                          <line x1="12" y1="19" x2="12" y2="22" />
-                          <line x1="2" y1="12" x2="5" y2="12" />
-                          <line x1="19" y1="12" x2="22" y2="12" />
+                      <!-- 当轮有关联卡片或笔记时，提供在主网格高亮定位 -->
+                      <button
+                        v-for="card in getTurnAttachedCards(turn)"
+                        :key="'locate-' + card.id"
+                        class="writeback-btn writeback-locate"
+                        :title="t('ai.locateInVault') + ': ' + card.title"
+                        @click="emit('handleLocateCard', card.id, card.type === 'group' ? 'group' : 'bookmark')"
+                      >
+                        <span class="writeback-btn-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <circle cx="12" cy="12" r="3" />
+                            <line x1="12" y1="2" x2="12" y2="5" />
+                            <line x1="12" y1="19" x2="12" y2="22" />
+                            <line x1="2" y1="12" x2="5" y2="12" />
+                            <line x1="19" y1="12" x2="22" y2="12" />
+                          </svg>
+                        </span>
+                        <span>{{ card.type === 'group' ? t('ai.locateAttachedNote') : t('ai.locateAttachedCard') }}</span>
+                      </button>
+                    </div>
+
+                    <!-- 助手消息操作区（复制等微操作，放置于正文后避免与用户消息混淆） -->
+                    <div v-if="turn.content" class="chat-msg-actions asst-actions">
+                      <button
+                        class="chat-msg-act-btn"
+                        :class="{ 'is-copied': copiedActionKey === `asst-${turn.id}` }"
+                        @click="emit('copyMessage', getCleanCopyText(turn.content), `asst-${turn.id}`)"
+                        :title="copiedActionKey === `asst-${turn.id}` ? t('ai.copied') : t('ai.copyReply')"
+                        :aria-label="copiedActionKey === `asst-${turn.id}` ? t('ai.copied') : t('ai.copyReply')"
+                      >
+                        <svg v-if="copiedActionKey === `asst-${turn.id}`" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
                         </svg>
-                      </span>
-                      <span>{{ card.type === 'group' ? t('ai.locateAttachedNote') : t('ai.locateAttachedCard') }}</span>
-                    </button>
+                        <svg v-else viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -957,24 +961,45 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   padding: 0 1px;
 }
 
-/* 回复操作行：随内容流布局（右对齐、自占一行），
-   绝对定位浮层会盖住正文首行文字（复制按钮与内容重叠），故不浮层 */
-.chat-flow-header {
+/* 回复尾部操作区（正文后）：整合知识沉淀条与消息微操作，避免与用户消息操作混淆 */
+.chat-reply-footer {
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 1px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
 }
 
-.chat-assistant-wrap:hover .chat-flow-header,
-.chat-assistant-wrap:focus-within .chat-flow-header {
+.chat-reply-footer .chat-writeback-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.chat-reply-footer .asst-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.chat-assistant-wrap:hover .asst-actions,
+.chat-assistant-wrap:focus-within .asst-actions {
   opacity: 1;
 }
 
 @media (hover: none) {
-  .chat-flow-header {
-    opacity: 0.7;
+  .chat-reply-footer .asst-actions {
+    opacity: 0.75;
   }
 }
 
