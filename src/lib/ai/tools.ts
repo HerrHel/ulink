@@ -44,10 +44,16 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'audit_vault',
-      description: '对用户的书签资产全库进行健康体检，输出健康评分、重复项、未分类项、标签覆盖度与垃圾项统计，并提供体检行动建议卡片。',
+      description: '对用户的书签资产全库进行健康体检，输出健康评分、重复项、未分类项、标签覆盖度与垃圾项统计，并提供体检行动建议卡片。仅在用户有明确全库体检诉求时调用。',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          reason: {
+            type: 'string',
+            description: '触发全库体检的具体用户诉求说明',
+          },
+        },
+        required: ['reason'],
       },
     },
   },
@@ -55,10 +61,16 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'inbox_zero',
-      description: '执行收件箱清零分析：扫描未分类书签（Inbox），基于历史域名与分类相似度进行智能聚类，识别同站子页并归入其主页面下（建立子链接从属关系），生成一键归类建议卡片（应用归类与嵌套前需用户确认，可撤销）。',
+      description: '执行收件箱清零分析：扫描未分类书签（Inbox），基于历史域名与分类相似度进行智能聚类，识别同站子页并归入其主页面下（建立子链接从属关系），生成一键归类建议卡片（应用归类与嵌套前需用户确认，可撤销）。仅在用户明确要求整理未分类或收件箱时调用。',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          reason: {
+            type: 'string',
+            description: '触发收件箱清零整理的具体用户诉求说明',
+          },
+        },
+        required: ['reason'],
       },
     },
   },
@@ -87,10 +99,16 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'merge_duplicates',
-      description: '扫描全库重复书签（相同或等价 URL），生成待用户确认的合并卡片；合并不会自动执行，需用户点击确认后才移入回收站（可撤销）。',
+      description: '扫描全库重复书签（相同或等价 URL），生成待用户确认的合并卡片；合并不会自动执行，需用户点击确认后才移入回收站（可撤销）。仅在用户明确要求查重/合并时调用。',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          reason: {
+            type: 'string',
+            description: '触发查重合并的具体用户诉求说明',
+          },
+        },
+        required: ['reason'],
       },
     },
   },
@@ -98,10 +116,20 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'heal_deadlinks',
-      description: '死链自愈中枢：针对已标记失效的书签，生成候选平替方案卡片；替换 URL/标题/备注前需用户确认，且操作可撤销。',
+      description: '死链自愈中枢：针对用户书签库中已标记失效的书签，生成候选平替方案卡片；替换 URL/标题/备注前需用户确认，且操作可撤销。严禁在用户未明确要求自愈死链时擅自调用。',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          target: {
+            type: 'string',
+            description: '欲处理的具体失效书签标题、URL 或 ID；若为全库扫描自愈则填 "all"',
+          },
+          reason: {
+            type: 'string',
+            description: '触发死链自愈的具体用户诉求说明（必须基于用户明确的操作指令）',
+          },
+        },
+        required: ['reason'],
       },
     },
   },
@@ -145,10 +173,21 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'export_data',
-      description: '导出用户全量书签、笔记与分类数据备份（执行前会请求用户二次确认，用户拒绝则不导出）。',
+      description: '导出用户全量书签、笔记与分类数据备份（执行前会请求用户二次确认，用户拒绝则不导出）。仅在用户明确要求备份或导出时调用。',
       parameters: {
         type: 'object',
-        properties: {},
+        properties: {
+          format: {
+            type: 'string',
+            description: '导出格式，可选 json 或 html',
+            enum: ['json', 'html'],
+          },
+          reason: {
+            type: 'string',
+            description: '触发数据导出的具体用户诉求说明',
+          },
+        },
+        required: ['reason'],
       },
     },
   },

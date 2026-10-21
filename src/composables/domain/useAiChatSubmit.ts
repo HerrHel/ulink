@@ -14,6 +14,7 @@ import {
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
 import { askMiMoStream, getMiMoConfig, sanitizeToolResult, type MiMoChatMessage } from '../../lib/ai/mimoClient.js'
+import { resolveUserInteractionIntent } from '../../lib/ai/intentRouter.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
 import { normalizeWorkspaceTopic } from '../../lib/ai/siteActions.js'
 import { updateSession, type AiChatSession, type ChatTurn } from '../../lib/ai/chatSessions.js'
@@ -395,9 +396,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               })
             }
 
+            const userIntent = resolveUserInteractionIntent(promptWithCards)
+            const enableToolsForPrompt = userIntent === 'OPERATIONAL'
+
             const mimoRes = await askMiMoStream(
               promptWithCards,
-              {
+              { 
                 categories: ds.categories,
                 customAttributes: ds.customAttributes,
                 isZh: isZh.value,
@@ -405,6 +409,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 history,
                 contextSlice,
                 profilePrompt,
+                enableTools: enableToolsForPrompt,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {

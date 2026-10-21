@@ -64,6 +64,16 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
     } else if (call.name === 'heal_deadlinks') {
+      const target = call.arguments?.target
+      if (target && target !== 'all') {
+        const found = ds.bookmarks.some(
+          (b) => !b.deletedAt && (b.id === target || b.title?.includes(target) || b.url?.includes(target))
+        )
+        if (!found) {
+          resultText = `书签库中未找到与「${target}」相关的有效书签，未执行死链替换。`
+          return resultText
+        }
+      }
       const siteRes = await dispatchSiteCommand('/deadlink', { ds, ui, app: (ui as any).app, signal: controller.signal })
       if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply

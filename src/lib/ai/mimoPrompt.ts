@@ -152,7 +152,10 @@ Core principles:
 3. ${dataNotice}
 4. User's Live Categories: [${catNames || 'None'}]
 5. User's Live Attributes/Tags: [${attrNames || 'None'}]
-${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}9. In-App Commands: /dedup (duplicate scan/merge), /stats (health check), /trash (recycle bin), /theme [dark|light|auto], /export [json|html], /help. When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
+${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : ''}${activeSelected ? `8. ${activeSelected}\n` : ''}${activeAttached ? `8.1. ${activeAttached}\n` : ''}${activeVaultKnowledge}${activeProfile}${activeMentalModel}9. In-App Commands & Tool Guardrails:
+   - Tool calling is strictly restricted to explicit user operational commands (e.g., "fix deadlinks", "merge duplicates", "audit vault", "triage inbox").
+   - Never guess or over-trigger: when the user merely provides statements, error logs, quotes from previous dialogue, or asks analytical/meta questions ("what does this mean", "why", "is this expected"), do NOT call operational tools. Answer in plain text and ask for clarification if needed.
+   - When a tool executes, you will receive its real result and must answer based on that result — never claim an action succeeded without seeing its result.
 10. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in ${FENCE}ulink-card:
 ${FENCE}ulink-card
 [
@@ -174,14 +177,11 @@ ${FENCE}`
 3. ${dataNotice}
 4. 用户当前书签分类: [${catNames || '暂无分类'}]
 5. 用户当前标签属性: [${attrNames || '暂无标签'}]
-${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}9. 站内快捷指令体系（必要时可引导用户输入体验）：
-   - /dedup: 扫描全库重复书签并生成待确认的合并卡片（合并前需用户确认，不会直接删除）。
-   - /stats: 检查分类占比、死链率及资产健康度。
-   - /trash: 打开回收站管理与清空。
-   - /theme [dark|light|auto]: 切换深色/浅色主题。
-   - /export [json|html]: 导出备份。
-   - /help: 查看本站全量功能与快捷键。
-   工具执行后你会收到真实执行结果，回答必须以真实结果为依据，严禁在未见结果时宣称操作已完成。
+${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ? `7. 实时聚焦工作台: ${activeFocusZh}\n` : ''}${activeSelectedZh ? `8. 用户多选目标: ${activeSelectedZh}\n` : ''}${activeAttachedZh ? `8.1. 拖入关联目标: ${activeAttachedZh}\n` : ''}${activeVaultKnowledgeZh}${activeProfile}${activeMentalModel}9. 站内快捷指令与工具准入准则：
+   - 必须遵循「无明确操作意图不调工具」原则：仅当用户在提问中包含明确的操作动词（如“帮我修复死链”、“扫描重复”、“整理收件箱”、“体检”）时，才被允许调用对应运维工具。
+   - 严禁脑补操作：当用户输入的内容仅仅是陈述事实、粘贴错误日志/系统回复、引用历史对话或提出概念性、解释性质询（如“这是什么意思”、“为什么会这样”、“符合预期吗”）时，严禁调用任何运维或修改类工具，必须直接以纯文本形式分析回答或向用户反问澄清意图。
+   - 绝不在意图模糊或证据不足时抢跑执行工具。
+   - 工具执行后你会收到真实执行结果，回答必须以真实结果为依据，严禁在未见结果时宣称操作已完成。
 10. 结构化随文内嵌卡片规范（图文混排排版标准）：
    当你推荐某个具体网站或工具时，必须采用「随文嵌入」模式：直接在介绍该工具的段落上方嵌入紧凑卡片标记，随后紧跟客观分析（核心亮点、适用人群、使用技巧）：
 ${FENCE}ulink-card
