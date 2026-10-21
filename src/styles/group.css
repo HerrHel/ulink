@@ -327,6 +327,48 @@
 }
 .group-inline-card .gic-remove:hover{color:var(--accent)}
 
+/* 笔记内的表格展示 */
+.group-body .chat-flow-table-wrap,
+.group-tiptap .chat-flow-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 6px 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.group-body .chat-flow-table,
+.group-tiptap .chat-flow-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.group-body .chat-flow-th,
+.group-tiptap .chat-flow-th {
+  padding: 5px 8px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border-light);
+}
+.group-body .chat-flow-td,
+.group-tiptap .chat-flow-td {
+  padding: 5px 8px;
+  color: var(--text);
+  border-top: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+}
+.group-body .chat-flow-th:last-child,
+.group-body .chat-flow-td:last-child,
+.group-tiptap .chat-flow-th:last-child,
+.group-tiptap .chat-flow-td:last-child {
+  border-right: none;
+}
+
 .group-ref-card{
   background:var(--accent-light);
   border-color:var(--accent);

@@ -21,6 +21,45 @@ export type ChatContentSegment =
   | { type: 'card'; candidate: AiCandidateBookmark }
 
 /**
+ * 解析表格行并按竖线拆分单元格（支持 \| 转义）
+ */
+function splitTableRow(line: string): string[] {
+  const trimmed = line.trim()
+  if (!trimmed.includes('|')) return []
+  let raw = trimmed
+  if (raw.startsWith('|')) raw = raw.slice(1)
+  if (raw.endsWith('|')) raw = raw.slice(0, -1)
+  const cells: string[] = []
+  let current = ''
+  let escaped = false
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (ch === '\\' && !escaped) {
+      escaped = true
+      current += ch
+      continue
+    }
+    if (ch === '|' && !escaped) {
+      cells.push(current.trim().replace(/\\\|/g, '|'))
+      current = ''
+    } else {
+      current += ch
+    }
+    escaped = false
+  }
+  cells.push(current.trim().replace(/\\\|/g, '|'))
+  return cells
+}
+
+/**
+ * 判断是否为表格的表头对齐分隔行 (如 |---|:---:|---:|)
+ */
+function isTableDelimiter(cells: string[]): boolean {
+  if (cells.length === 0) return false
+  return cells.every(c => /^\s*:?-{1,}:?\s*$/.test(c))
+}
+
+/**
  * 极简、安全的轻量 Markdown 格式化（消除 ## 与 **，带来原生杂志级纸质排版）
  */
 export function formatLightMarkdown(raw: string): string {
@@ -47,51 +86,185 @@ export function formatLightMarkdown(raw: string): string {
   // 4. 行内代码 (`code`)
   text = text.replace(/`([^`]+)`/g, '<code class="chat-flow-code">$1</code>')
 
-  // 5. 链接识别与清理：若有单独成行的加粗网址 **https://...**，已转为 strong，可点化
-  //    URL 段用 ASCII 白名单：URL 后紧贴的中文是叙述文字，吞进 href 会 404
-  text = text.replace(/(https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="chat-flow-link">$1</a>')
+  // 5. 链接识别与清理：先识别 Markdown 链接 [text](url)，再识别单独成行的原始网址
+  text = text.replace(
+    /\[([^\]]+)\]\((https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="chat-flow-link">$1</a>',
+  )
+  text = text.replace(
+    /(https?:\/\/[a-zA-Z0-9\-._~:/?#\[\]@!$&*+,;=%]+)/g,
+    (match, url, offset, fullStr) => {
+      // 若该 URL 已在 href="..." 中，不重复包裹
+      const before = fullStr.slice(Math.max(0, offset - 10), offset)
+      if (/href=["']$/.test(before)) return match
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="chat-flow-link">${url}</a>`
+    },
+  )
 
-  // 6. 无序列表行 (- item / * item)
+  // 6. 按行解析块级元素（标题、表格、列表、普通段落）
   const lines = text.split('\n')
-  const formattedLines: string[] = []
-  let inList = false
+  const blocks: string[] = []
+  let textBuffer: string[] = []
 
-  for (const line of lines) {
-    const listMatch = line.match(/^(\s*)[*-]\s+(.+)$/)
-    if (listMatch) {
-      if (!inList) {
-        formattedLines.push('<ul class="chat-flow-list">')
-        inList = true
+  const flushTextBuffer = () => {
+    if (textBuffer.length > 0) {
+      const p = textBuffer.join('<br>')
+      if (p.trim()) {
+        blocks.push(`<p class="chat-flow-para">${p}</p>`)
       }
-      formattedLines.push(`<li>${listMatch[2]}</li>`)
-    } else {
-      if (inList) {
-        formattedLines.push('</ul>')
-        inList = false
-      }
-      formattedLines.push(line)
+      textBuffer = []
     }
   }
-  if (inList) {
-    formattedLines.push('</ul>')
+
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmedLine = line.trim()
+
+    // 空行：冲刷段落
+    if (!trimmedLine) {
+      flushTextBuffer()
+      i++
+      continue
+    }
+
+    // 标题语法：作为独立块级元素
+    if (/^<h[34]\b/.test(trimmedLine)) {
+      flushTextBuffer()
+      blocks.push(trimmedLine)
+      i++
+      continue
+    }
+
+    // 检查是否为表格起始：当前行包含竖线，且下一行为表头分隔行 (如 |---|---|)
+    if (i + 1 < lines.length) {
+      const headerCells = splitTableRow(line)
+      const nextCells = splitTableRow(lines[i + 1])
+      if (
+        headerCells.length >= 2 &&
+        isTableDelimiter(nextCells) &&
+        Math.abs(headerCells.length - nextCells.length) <= 1
+      ) {
+        flushTextBuffer()
+
+        // 解析列对齐方式
+        const alignments = nextCells.map(c => {
+          const trimmed = c.trim()
+          if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center'
+          if (trimmed.endsWith(':')) return 'right'
+          if (trimmed.startsWith(':')) return 'left'
+          return ''
+        })
+
+        const colCount = Math.max(headerCells.length, nextCells.length)
+        const theadThs = headerCells.map((cell, cIdx) => {
+          const align = alignments[cIdx] || ''
+          const styleAttr = align ? ` style="text-align: ${align}"` : ''
+          const alignClass = align ? ` align-${align}` : ''
+          return `<th class="chat-flow-th${alignClass}"${styleAttr}>${cell}</th>`
+        })
+        const theadHtml = `<thead><tr>${theadThs.join('')}</tr></thead>`
+
+        // 收集后续数据行
+        i += 2
+        const tbodyRows: string[] = []
+        while (i < lines.length) {
+          const dataLine = lines[i]
+          const trimmedData = dataLine.trim()
+          // 遇到空行、标题、列表项或不含竖线的行，表格结束
+          if (
+            !trimmedData ||
+            !trimmedData.includes('|') ||
+            /^<h[34]\b/.test(trimmedData) ||
+            /^[*-]\s/.test(trimmedData) ||
+            /^\d+\.\s/.test(trimmedData)
+          ) {
+            break
+          }
+          const rowCells = splitTableRow(dataLine)
+          if (rowCells.length === 0 || isTableDelimiter(rowCells)) {
+            break
+          }
+          const tds: string[] = []
+          for (let cIdx = 0; cIdx < colCount; cIdx++) {
+            const cell = rowCells[cIdx] !== undefined ? rowCells[cIdx] : ''
+            const align = alignments[cIdx] || ''
+            const styleAttr = align ? ` style="text-align: ${align}"` : ''
+            const alignClass = align ? ` align-${align}` : ''
+            tds.push(`<td class="chat-flow-td${alignClass}"${styleAttr}>${cell}</td>`)
+          }
+          tbodyRows.push(`<tr>${tds.join('')}</tr>`)
+          i++
+        }
+
+        const tbodyHtml = `<tbody>${tbodyRows.join('')}</tbody>`
+        const tableHtml = `<div class="chat-flow-table-wrap"><table class="chat-flow-table">${theadHtml}${tbodyHtml}</table></div>`
+        blocks.push(tableHtml)
+        continue
+      }
+    }
+
+    // 无序列表行 (- item / * item)
+    const listMatch = line.match(/^(\s*)[*-]\s+(.+)$/)
+    if (listMatch) {
+      flushTextBuffer()
+      const listItems: string[] = []
+      while (i < lines.length) {
+        const itemMatch = lines[i].match(/^(\s*)[*-]\s+(.+)$/)
+        if (!itemMatch) break
+        listItems.push(`<li>${itemMatch[2]}</li>`)
+        i++
+      }
+      blocks.push(`<ul class="chat-flow-list">${listItems.join('')}</ul>`)
+      continue
+    }
+
+    // 有序列表行 (1. item)
+    const olMatch = line.match(/^(\s*)\d+\.\s+(.+)$/)
+    if (olMatch) {
+      flushTextBuffer()
+      const listItems: string[] = []
+      while (i < lines.length) {
+        const itemMatch = lines[i].match(/^(\s*)\d+\.\s+(.+)$/)
+        if (!itemMatch) break
+        listItems.push(`<li>${itemMatch[2]}</li>`)
+        i++
+      }
+      blocks.push(`<ol class="chat-flow-list chat-flow-ol">${listItems.join('')}</ol>`)
+      continue
+    }
+
+    // 普通文本行：加入当前段落缓冲区
+    textBuffer.push(line)
+    i++
   }
 
-  // 7. 段落换行（双换行分段，单换行保留 break）
-  let finalHtml = formattedLines.join('\n')
-  // 将非标签包裹的单纯换行换为 <br>
-  finalHtml = finalHtml
-    .split(/\n{2,}/)
-    .map(para => {
-      const p = para.trim()
-      if (!p) return ''
-      if (p.startsWith('<h') || p.startsWith('<ul') || p.startsWith('<li')) return p
-      return `<p class="chat-flow-para">${p.replace(/\n/g, '<br>')}</p>`
-    })
-    .join('')
+  flushTextBuffer()
+  const finalHtml = blocks.join('')
 
   return DOMPurify.sanitize(finalHtml, {
-    ALLOWED_TAGS: ['p', 'strong', 'em', 'h3', 'h4', 'ul', 'li', 'code', 'br', 'a', 'span'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+    ALLOWED_TAGS: [
+      'p',
+      'strong',
+      'em',
+      'h3',
+      'h4',
+      'ul',
+      'ol',
+      'li',
+      'code',
+      'br',
+      'a',
+      'span',
+      'div',
+      'table',
+      'thead',
+      'tbody',
+      'tr',
+      'th',
+      'td',
+    ],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'style', 'align'],
   })
 }
 

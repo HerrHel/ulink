@@ -62,6 +62,69 @@ describe('chatStreamParser', () => {
       expect(streamingHtml).not.toContain('suggestions:')
       expect(streamingHtml).not.toContain('&lt;!--')
     })
+
+    it('正确解析基础 Markdown 表格并输出带有 .chat-flow-table-wrap 的标准 HTML 表格', () => {
+      const md = `| 书签 | 建议标签 | 理由 |
+|---|---|---|
+| 抖音 (douyin.com) | 需要登录 | 不登录基本无法正常浏览推荐流 |`
+      const html = formatLightMarkdown(md)
+
+      expect(html).toContain('<div class="chat-flow-table-wrap">')
+      expect(html).toContain('<table class="chat-flow-table">')
+      expect(html).toContain('<th class="chat-flow-th">书签</th>')
+      expect(html).toContain('<th class="chat-flow-th">建议标签</th>')
+      expect(html).toContain('<th class="chat-flow-th">理由</th>')
+      expect(html).toContain('<td class="chat-flow-td">抖音 (douyin.com)</td>')
+      expect(html).toContain('<td class="chat-flow-td">需要登录</td>')
+      expect(html).toContain('<td class="chat-flow-td">不登录基本无法正常浏览推荐流</td>')
+      // 不应包含原始竖线语法
+      expect(html).not.toContain('|---|---|---|')
+    })
+
+    it('支持多表格与普通文本/小标题混排，完美还原用户书签补打标签场景', () => {
+      const md = `已为您梳理出待补打标签的书签：
+
+一、国内平台（1个）
+
+| 书签 | 建议标签 | 理由 |
+|---|---|---|
+| 抖音 (douyin.com) | 需要登录 | 不登录基本无法正常浏览推荐流 |
+
+二、baraag.net 上的 9 个账号
+
+这 9 条都是 baraag.net 上的个人主页。建议如下：
+
+| 方案 | 标签打法 | 特点 |
+|---|---|---|
+| 方案 A（最小改动） | 9 条统一打「需要登录」 | 不新增标签 |
+| 方案 B（推荐） | 9 条统一打新标签「baraag」 | **语义精准** |`
+
+      const html = formatLightMarkdown(md)
+
+      // 验证存在两个表格
+      const tableMatches = html.match(/<table class="chat-flow-table">/g)
+      expect(tableMatches?.length).toBe(2)
+
+      // 验证普通文本与加粗格式正常包裹
+      expect(html).toContain('<p class="chat-flow-para">一、国内平台（1个）</p>')
+      expect(html).toContain('<p class="chat-flow-para">二、baraag.net 上的 9 个账号</p>')
+      expect(html).toContain('<strong>语义精准</strong>')
+      expect(html).not.toContain('|---|---|---|')
+    })
+
+    it('支持表格列对齐属性 (居左/居中/居右) 与转义竖线', () => {
+      const md = `| 左对齐 | 居中 | 右对齐 |
+| :--- | :---: | ---: |
+| A | B \\| C | 100 |`
+
+      const html = formatLightMarkdown(md)
+
+      expect(html).toContain('<th class="chat-flow-th align-left" style="text-align: left">左对齐</th>')
+      expect(html).toContain('<th class="chat-flow-th align-center" style="text-align: center">居中</th>')
+      expect(html).toContain('<th class="chat-flow-th align-right" style="text-align: right">右对齐</th>')
+      expect(html).toContain('<td class="chat-flow-td align-center" style="text-align: center">B | C</td>')
+      expect(html).toContain('<td class="chat-flow-td align-right" style="text-align: right">100</td>')
+    })
   })
 
   describe('parseTurnContentSegments', () => {

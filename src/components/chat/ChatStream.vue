@@ -1108,6 +1108,81 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   opacity: 0.8;
 }
 
+/* 对话流内 Markdown 表格 (自适应横向滚动、细边框与杂志级排版) */
+.chat-flow-text :deep(.chat-flow-table-wrap) {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 10px 0 12px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chat-flow-text :deep(.chat-flow-table) {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.chat-flow-text :deep(.chat-flow-table thead) {
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+}
+
+.chat-flow-text :deep(.chat-flow-th) {
+  padding: 8px 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  border-right: 1px solid var(--border-light);
+}
+
+.chat-flow-text :deep(.chat-flow-th:last-child) {
+  border-right: none;
+}
+
+.chat-flow-text :deep(.chat-flow-td) {
+  padding: 8px 12px;
+  color: var(--text);
+  border-top: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+  word-break: break-word;
+}
+
+.chat-flow-text :deep(.chat-flow-td:last-child) {
+  border-right: none;
+}
+
+.chat-flow-text :deep(.chat-flow-table tbody tr:first-child .chat-flow-td) {
+  border-top: none;
+}
+
+.chat-flow-text :deep(.chat-flow-table tbody tr:nth-child(even)) {
+  background: rgba(0, 0, 0, 0.018);
+}
+
+:global([data-theme="dark"]) .chat-flow-text :deep(.chat-flow-table tbody tr:nth-child(even)) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.chat-flow-text :deep(.chat-flow-th.align-center),
+.chat-flow-text :deep(.chat-flow-td.align-center) {
+  text-align: center;
+}
+
+.chat-flow-text :deep(.chat-flow-th.align-right),
+.chat-flow-text :deep(.chat-flow-td.align-right) {
+  text-align: right;
+}
+
 .chat-flow-card-row {
   margin: 6px 0 8px;
   min-height: 48px;

@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import ChatStream from '../../components/chat/ChatStream.vue'
 import { setLocale } from '../../i18n/index.js'
 import type { ChatTurn } from '../../lib/ai/chatSessions.js'
+import { parseTurnContentSegments } from '../../lib/ai/chatStreamParser.js'
 
 function mountStream(turns: ChatTurn[]) {
   return mount(ChatStream, {
@@ -38,6 +39,7 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
       role: 'assistant',
       content: '这是总结内容',
       loading: false,
+      timestamp: Date.now(),
     }
     const wrapper = mountStream([turn])
     const newNoteBtn = wrapper.find('.writeback-new')
@@ -48,8 +50,8 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
 
   it('预判按钮仅在最新且无后续用户回复的助手轮次渲染，用户输入后隐藏', () => {
     const turns: ChatTurn[] = [
-      { id: 'u1', role: 'user', content: '第一问' },
-      { id: 'a1', role: 'assistant', content: '第一答', suggestedReplies: ['✨ 好的，执行', '🔄 换个方案'] },
+      { id: 'u1', role: 'user', content: '第一问', timestamp: 1000 },
+      { id: 'a1', role: 'assistant', content: '第一答', suggestedReplies: ['✨ 好的，执行', '🔄 换个方案'], timestamp: 2000 },
     ]
     const wrapper = mountStream(turns)
     const pillsBefore = wrapper.findAll('.suggested-reply-pill')
@@ -57,9 +59,45 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
     expect(pillsBefore[0].text()).toBe('✨ 好的，执行')
 
     // 随后用户输入并提交了新消息 u2
-    turns.push({ id: 'u2', role: 'user', content: '第二问' })
+    turns.push({ id: 'u2', role: 'user', content: '第二问', timestamp: 3000 })
     const wrapperAfter = mountStream(turns)
     // a1 下方的预判按钮不再展示
     expect(wrapperAfter.findAll('.suggested-reply-pill').length).toBe(0)
+  })
+
+  it('正确渲染包含 Markdown 表格的助手回复内容', () => {
+    const md = `| 书签 | 建议标签 |\n|---|---|\n| 抖音 | 需要登录 |`
+    const { segments } = parseTurnContentSegments(md, [], [])
+    const turn: ChatTurn = {
+      id: 'turn-asst-table',
+      role: 'assistant',
+      content: md,
+      loading: false,
+      timestamp: Date.now(),
+    }
+    const wrapper = mount(ChatStream, {
+      props: {
+        chatTurns: [turn],
+        dynamicQuickHints: [],
+        copiedActionKey: null,
+        loadingText: '思考中…',
+        formatReasoningSec: () => '',
+        getCleanCopyText: (s?: string) => s || '',
+        getTurnSegments: () => segments,
+        getTurnAttachedCards: () => [],
+        getAttachedNotes: () => [],
+        hasUnaddedInTurn: () => false,
+        getCardCandidateList: () => [],
+        getSelectedCandidateCount: () => 0,
+        isAllCandidatesSelected: () => false,
+        isCandidateSelected: () => false,
+        formatDomain: () => '',
+        getActionCardNavTarget: () => null,
+      },
+    })
+    expect(wrapper.find('.chat-flow-table-wrap').exists()).toBe(true)
+    expect(wrapper.find('.chat-flow-table').exists()).toBe(true)
+    expect(wrapper.find('th').text()).toBe('书签')
+    expect(wrapper.find('td').text()).toBe('抖音')
   })
 })
