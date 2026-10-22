@@ -9,7 +9,7 @@
  * - syncShare — 公开分享（re-export 保兼容）
  * - useSyncRealtime / Conflict / History / Mapping
  */
-import { computed, toRef } from 'vue'
+import { computed, ref, toRef } from 'vue'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
@@ -26,6 +26,7 @@ import {
   subscribeRealtime, unsubscribeRealtime,
 } from './useSyncRealtime.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
+import { getAuthDriver } from '../../lib/authDriver.js'
 import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
 import { _clearAllPendingSync } from './syncPending.js'
@@ -44,17 +45,29 @@ export { setGroupPublic, fetchPublicGroup } from './syncShare.js'
 
 let _initialized = false
 let _syncTimer: ReturnType<typeof setTimeout> | null = null
+/** 身份认领只试一次（模块级，跨 initialSync 复用同一会话） */
+let _claimTried = false
+/**
+ * 最近一次认领结果。刻意放模块级而不是 composable 内部：initialSync 有模块级
+ * `_initialized` 幂等守卫，只有**第一个**实例真正跑同步；若 lastClaim 是每实例
+ * 一个 ref，后创建的实例（例如登录弹窗里的那个）读到的永远是 null，提示就永远不弹。
+ */
+const _lastClaim = ref<{ count: number; moved: Record<string, number> } | null>(null)
 
 // 测试钩子：initialSync 的 _initialized 是模块级幂等守卫（首次拉取+回推后置 true，
 // 之后切账号/重登需 resetSyncState 配合重置它）。单测编排需逐用例从干净态起步，
 // 导出此无副作用钩子复位守卫（与 __testPendingSync/setSyncRemotePort 同属测试注入面）。
 export function __resetInitialSync(): void {
   _initialized = false
+  _claimTried = false
+  _lastClaim.value = null
 }
 
 export function useCloudSync() {
   const _auth = useAuth()
   const isLoggedIn = computed(() => _auth.isLoggedIn)
+  /** 最近一次身份认领的结果（模块级共享，理由见 _lastClaim 注释） */
+  const lastClaim = _lastClaim
   const syncStore = useSyncStore()
 
   const syncLabel = computed(() => {
@@ -306,6 +319,26 @@ export function useCloudSync() {
     _initialized = true
 
     await withLock('linkvault-sync', async () => {
+      // CloudBase 专属：老用户首次登录时，把历史数据从 Supabase 时代的 uuid 认领到
+      // 当前 CloudBase sub。**必须早于任何按 user_id 的读写**——否则 RLS 会把还没
+      // 改写的行全部过滤掉，用户看到空书架，随后对账还会把本地数据当「云端已删」。
+      if (!_claimTried) {
+        _claimTried = true
+        try {
+          const r = await getAuthDriver().claimLegacyIdentity()
+          if (r.error) {
+            console.warn('[sync] claim legacy identity failed:', r.error)
+          } else if (r.claimed) {
+            const moved = r.moved || {}
+            const total = Object.values(moved).reduce((a, b) => a + b, 0)
+            lastClaim.value = { count: total, moved }
+            console.info('[sync] legacy identity claimed:', moved)
+          }
+        } catch (e) {
+          console.warn('[sync] claim legacy identity error:', e)
+        }
+      }
+
       const userId = _getUserId()
       if (!userId) return
 
@@ -414,6 +447,7 @@ export function useCloudSync() {
     pendingLockedCount: toRef(syncStore, 'pendingLockedCount'),
     realtimeStatus: toRef(syncStore, 'realtimeStatus'),
     syncLabel,
+    lastClaim,
 
     pushToCloud: pushFromQueue, pullFromCloud: pullChanges, fullSync,
     debouncedSync, syncImmediate, initialSync, resetSyncState, resyncAllToCloud,

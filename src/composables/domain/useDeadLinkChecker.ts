@@ -2,6 +2,7 @@ import { ref, reactive, computed } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
+import { isCloudBaseBackend, invokeCbFunction } from '../../lib/cloudbase.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { NETWORK_PROBE_URLS } from '../../config/urls.js'
 import type { Bookmark } from '../../types.js'
@@ -242,10 +243,14 @@ function persistBaselineCache(): void {
 
 async function callEdgeFunction(url: string, bookmarkId?: string): Promise<EdgeEvidence> {
   try {
-    const { data, error } = await supabase.functions.invoke('check-link', {
-      body: { url, bookmark_id: bookmarkId }
-    })
-    if (error) throw error
+    const { data, error } = isCloudBaseBackend()
+      ? await invokeCbFunction('check-link', { url, bookmark_id: bookmarkId })
+      : await supabase.functions.invoke('check-link', {
+          body: { url, bookmark_id: bookmarkId },
+        })
+    // 安全拒绝（ssrf_reject / redirect_denied）服务端回 400，但 body 里带 evidence，
+    // 所以「有 error 但也有 data」时继续解析，不要直接抛。
+    if (error && !data) throw error
     if (!data || typeof data !== 'object') return { fetch_outcome: null, http_status: 0 }
     const fo = data.fetch_outcome
     return {

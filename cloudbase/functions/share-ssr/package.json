@@ -1,0 +1,9 @@
+{
+  "name": "ulink-share-ssr",
+  "version": "1.0.0",
+  "description": "公开分享页 /s/* 同域 SSR，CloudBase HTTP 云函数",
+  "main": "index.js",
+  "private": true,
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "@cloudbase/node-sdk": "^3.10.0" }
+}

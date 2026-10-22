@@ -53,7 +53,7 @@ const EMPTY_DB = (): MockDb => ({
 })
 
 function tableFromUrl(url: string): MockTable | null {
-  const m = url.match(/\/rest\/v1\/(bookmarks|sibling_groups|categories|custom_attributes)/)
+  const m = url.match(/\/(?:rest\/v1|\/rdb\/rest)\/(bookmarks|sibling_groups|categories|custom_attributes)/)
   return (m?.[1] as MockTable) || null
 }
 
@@ -98,7 +98,10 @@ export async function installSupabaseMock(
   }
 
   // ── Auth ──
-  await page.route('**/auth/v1/**', async (route) => {
+  const isCbAuth = (u: URL) => u.hostname.includes('tcloudbasegateway') && new RegExp('^\/v1\/(user|token|signin|signout|verification|signup|reset|check)').test(u.pathname)
+  await page.route('**/auth/v1/**', async (route) => { return handleAuth(route) })
+  await page.route(isCbAuth, async (route) => { return handleAuth(route) })
+  async function handleAuth(route: Route) {
     stats.authHits++
     const req = route.request()
     if (req.method() === 'OPTIONS') {
@@ -122,10 +125,16 @@ export async function installSupabaseMock(
     }
     // signOut 等
     return json(route, {})
-  })
+  }
 
   // ── REST ──
   await page.route('**/rest/v1/**', async (route) => {
+    return handleRest(route)
+  })
+  await page.route('**/rdb/rest/**', async (route) => {
+    return handleRest(route)
+  })
+  async function handleRest(route: Route) {
     const req = route.request()
     if (req.method() === 'OPTIONS') {
       return route.fulfill({
@@ -200,7 +209,7 @@ export async function installSupabaseMock(
     }
 
     return json(route, null)
-  })
+  }
 
   // Realtime：直接放行失败即可（不强制 mock）；阻止连真机
   await page.route('**/realtime/v1/**', (route) => route.abort())

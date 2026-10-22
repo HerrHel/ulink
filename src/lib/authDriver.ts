@@ -1,0 +1,316 @@
+/**
+ * authDriver — 登录驱动层
+ *
+ * 目的：让 `stores/auth.ts` 不再直接依赖 `supabase.auth.*`，改由驱动提供统一接口。
+ * 默认仍是 Supabase（`VITE_BACKEND` 未设置），设成 `cloudbase` 才切到 CloudBase 身份认证。
+ *
+ * 为什么需要这一层：两边最大的差异是 **`verifyOtp` 的形态**。
+ *  - Supabase：`auth.verifyOtp({ email, token, type: 'email' })`，独立调用，自带全部参数。
+ *  - CloudBase：`signInWithOtp` 返回的 `data` 上挂一个闭包 `data.verifyOtp({ token })`，
+ *    messageId 已绑在闭包里；直接调独立的 `auth.verifyOtp({ token })` 会报 `messageId is required`。
+ * 所以驱动内部要**按邮箱暂存** sendOtp 拿到的那个闭包，verifyOtp 时再取出来用。
+ *
+ * 约束：Supabase 分支的调用形状必须与改造前逐字一致——`src/__tests__` 里十余个用例
+ * 断言了这些调用的参数，任何改动都会连带破测。
+ */
+import type { Session, User } from '@supabase/supabase-js'
+import { supabase } from './supabase.js'
+import { getCbAuth, getCbDb, isCloudBaseBackend } from './cloudbase.js'
+
+export interface AuthErrorLike {
+  message: string
+  code?: string
+}
+
+export interface AuthDriver {
+  /** 读取当前会话；未登录时 session 为 null */
+  getSession(): Promise<{ session: Session | null; error: AuthErrorLike | null }>
+  /** 订阅登录态变化；只回传 session，订阅/退订细节留在驱动内 */
+  onAuthStateChange(cb: (session: Session | null) => void): void
+  /** 更新用户元数据（昵称/头像） */
+  updateUserMeta(data: Record<string, unknown>): Promise<{ user: User | null; error: AuthErrorLike | null }>
+  /** 发送邮箱验证码 */
+  sendOtp(email: string, captchaToken?: string): Promise<{ error: AuthErrorLike | null }>
+  /** 校验邮箱验证码 */
+  verifyOtp(email: string, token: string): Promise<{ error: AuthErrorLike | null }>
+  /** 邮箱 + 密码登录 */
+  signInWithPassword(email: string, password: string): Promise<{ error: AuthErrorLike | null }>
+  /** 发送找回/设置密码的验证码（老用户首次设密码也走这条） */
+  sendPasswordReset(email: string): Promise<{ error: AuthErrorLike | null }>
+  /** 用验证码 + 新密码完成密码设置 */
+  confirmPasswordReset(email: string, code: string, newPassword: string): Promise<{ error: AuthErrorLike | null }>
+  /** 退出登录 */
+  signOut(): Promise<{ error: AuthErrorLike | null }>
+  /** 第三方登录：返回需要跳转的 URL（拿不到 URL 的驱动自行跳转并返回空） */
+  signInWithOAuth(provider: string, redirectTo: string): Promise<{ error: AuthErrorLike | null; url?: string }>
+  /**
+   * 认领老身份：把历史数据从 Supabase 时代的 uuid 迁到当前 CloudBase sub。
+   * 只在 CloudBase 后端有意义；Supabase 分支直接返回 not_applicable。
+   */
+  claimLegacyIdentity(): Promise<{
+    claimed: boolean
+    reason?: string
+    moved?: Record<string, number>
+    error: AuthErrorLike | null
+  }>
+}
+
+// ── Supabase 驱动：与改造前完全一致的调用形状 ──
+
+export function createSupabaseAuthDriver(): AuthDriver {
+  return {
+    async getSession() {
+      const { data, error } = await supabase.auth.getSession()
+      return { session: data.session, error: error ?? null }
+    },
+
+    onAuthStateChange(cb) {
+      supabase.auth.onAuthStateChange((_event, s) => cb(s))
+    },
+
+    async updateUserMeta(data) {
+      const { data: updated, error } = await supabase.auth.updateUser({ data })
+      return { user: updated?.user ?? null, error: error ?? null }
+    },
+
+    async sendOtp(email, captchaToken) {
+      const options = captchaToken ? { captchaToken } : undefined
+      const { error } = await supabase.auth.signInWithOtp({ email, options })
+      return { error: error ?? null }
+    },
+
+    async verifyOtp(email, token) {
+      const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+      return { error: error ?? null }
+    },
+
+    async signInWithPassword(email, password) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      return { error: error ?? null }
+    },
+
+    async sendPasswordReset(email) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      return { error: error ?? null }
+    },
+
+    async confirmPasswordReset(email, code, newPassword) {
+      // Supabase 走「验证码换 session」再改密，等价于 recovery 类型校验
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'recovery',
+      })
+      if (verifyError) return { error: verifyError }
+      const { error } = await supabase.auth.updateUser({ password: newPassword })
+      return { error: error ?? null }
+    },
+
+    async signOut() {
+      const { error } = await supabase.auth.signOut()
+      return { error: error ?? null }
+    },
+
+    async signInWithOAuth(provider, redirectTo) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        // provider 由调用方限定为 'github' | 'google'
+        provider: provider as 'github' | 'google',
+        options: { redirectTo },
+      })
+      return { error: error ?? null, url: data?.url ?? undefined }
+    },
+
+    async claimLegacyIdentity() {
+      // Supabase 侧没有身份映射这回事，属于预期内的无操作
+      return { claimed: false, reason: 'not_applicable', error: null }
+    },
+  }
+}
+
+// ── CloudBase 驱动 ──
+
+/** CloudBase auth 里本项目用到的方法（只声明表面，避免依赖 SDK 内部类型） */
+interface CbAuthLike {
+  getSession?: () => Promise<{ data?: { session?: unknown; user?: unknown } | null; error?: AuthErrorLike | null }>
+  onAuthStateChange?: (cb: (event: string, session: unknown) => void) => unknown
+  updateUser?: (arg: { data?: Record<string, unknown>; password?: string }) => Promise<{
+    data?: { user?: unknown } | null
+    error?: AuthErrorLike | null
+  }>
+  signInWithPassword?: (arg: { email: string; password: string }) => Promise<{
+    data?: unknown
+    error?: AuthErrorLike | null
+  }>
+  resetPasswordForEmail?: (email: string) => Promise<{
+    data?: {
+      /** 闭包：拿到用户输入的验证码后调它改密 */
+      updateUser?: (arg: { nonce: string; password: string }) => Promise<{ error?: AuthErrorLike | null }>
+    } | null
+    error?: AuthErrorLike | null
+  }>
+  signInWithOtp?: (arg: Record<string, unknown>) => Promise<{
+    data?: { verifyOtp?: (arg: { token: string }) => Promise<{ error?: AuthErrorLike | null }> } | null
+    error?: AuthErrorLike | null
+  }>
+  signOut?: () => Promise<{ error?: AuthErrorLike | null }>
+  signInWithOAuth?: (arg: Record<string, unknown>) => Promise<{
+    data?: { url?: string } | null
+    error?: AuthErrorLike | null
+  }>
+}
+
+/**
+ * CloudBase 的 session/user 形状与 supabase 接近但字段不全（没有 user_metadata 等）。
+ * 这里补一个空的 user_metadata，让上层 `displayName` 等逻辑不因缺字段而崩。
+ * 双重断言集中在驱动边界内，不向上层扩散。
+ */
+function mapSession(raw: unknown): Session | null {
+  if (!raw || typeof raw !== 'object') return null
+  const s = raw as { user?: Record<string, unknown> | null }
+  if (!s.user) return null
+  return {
+    ...(raw as Record<string, unknown>),
+    user: { ...s.user, user_metadata: s.user.user_metadata ?? {} },
+  } as unknown as Session
+}
+
+/** 可注入的 CloudBase auth 表面，便于单测；不传则用真实客户端 */
+export function createCloudBaseAuthDriver(
+  injected?: CbAuthLike,
+  injectedDb?: { rpc: <T>(name: string) => Promise<{ data: T | null; error: AuthErrorLike | null }> },
+): AuthDriver {
+  // 按邮箱暂存 sendOtp 返回的 verifyOtp 闭包（messageId 绑在里面）
+  const pending = new Map<string, (arg: { token: string }) => Promise<{ error?: AuthErrorLike | null }>>()
+  // 按邮箱暂存 resetPasswordForEmail 返回的改密闭包（nonce = 邮件验证码）
+  const resetPending = new Map<
+    string,
+    (arg: { nonce: string; password: string }) => Promise<{ error?: AuthErrorLike | null }>
+  >()
+
+  const auth = () => injected ?? (getCbAuth() as CbAuthLike | null)
+
+  return {
+    async getSession() {
+      const a = auth()
+      if (!a?.getSession) return { session: null, error: { message: 'CloudBase 未配置' } }
+      const { data, error } = await a.getSession()
+      return { session: mapSession(data?.session ?? data?.user ?? null), error: error ?? null }
+    },
+
+    onAuthStateChange(cb) {
+      auth()?.onAuthStateChange?.((_event, session) => cb(mapSession(session)))
+    },
+
+    async updateUserMeta(data) {
+      const a = auth()
+      if (!a?.updateUser) return { user: null, error: { message: 'CloudBase 未配置' } }
+      const { data: updated, error } = await a.updateUser({ data })
+      const u = updated?.user as Record<string, unknown> | undefined
+      return {
+        user: u ? ({ ...u, user_metadata: u.user_metadata ?? {} } as unknown as User) : null,
+        error: error ?? null,
+      }
+    },
+
+    async sendOtp(email, captchaToken) {
+      const a = auth()
+      if (!a?.signInWithOtp) return { error: { message: 'CloudBase 未配置' } }
+      const arg: Record<string, unknown> = { email }
+      if (captchaToken) arg.options = { captchaToken }
+      const { data, error } = await a.signInWithOtp(arg)
+      if (!error && typeof data?.verifyOtp === 'function') {
+        pending.set(email, data.verifyOtp)
+      }
+      return { error: error ?? null }
+    },
+
+    async verifyOtp(email, token) {
+      const fn = pending.get(email)
+      if (!fn) {
+        // 没有闭包说明没有发起过 sendOtp（或页面刷新丢了内存态）——提示重新获取，而不是报 messageId 缺失
+        return { error: { message: '验证码已失效，请重新获取' } }
+      }
+      const { error } = await fn({ token })
+      if (!error) pending.delete(email)
+      return { error: error ?? null }
+    },
+
+    async signOut() {
+      const a = auth()
+      if (!a?.signOut) return { error: null }
+      pending.clear()
+      resetPending.clear()
+      const { error } = await a.signOut()
+      return { error: error ?? null }
+    },
+
+    async signInWithPassword(email, password) {
+      const a = auth()
+      if (!a?.signInWithPassword) return { error: { message: 'CloudBase 未配置' } }
+      const { error } = await a.signInWithPassword({ email, password })
+      return { error: error ?? null }
+    },
+
+    async sendPasswordReset(email) {
+      const a = auth()
+      if (!a?.resetPasswordForEmail) return { error: { message: 'CloudBase 未配置' } }
+      const { data, error } = await a.resetPasswordForEmail(email)
+      // CloudBase 把「改密」做成了返回 data 上的闭包（与 signInWithOtp/verifyOtp 同款），
+      // 必须存起来等用户输完验证码再用
+      if (!error && typeof data?.updateUser === 'function') {
+        resetPending.set(email, data.updateUser)
+      }
+      return { error: error ?? null }
+    },
+
+    async confirmPasswordReset(email, code, newPassword) {
+      const fn = resetPending.get(email)
+      if (!fn) return { error: { message: '验证码已失效，请重新获取' } }
+      // 闭包参数是 { nonce, password }——nonce 就是邮件里的验证码
+      const { error } = await fn({ nonce: code, password: newPassword })
+      if (!error) resetPending.delete(email)
+      return { error: error ?? null }
+    },
+
+    async signInWithOAuth(provider, redirectTo) {
+      const a = auth()
+      if (!a?.signInWithOAuth) return { error: { message: 'CloudBase 暂不支持该第三方登录' } }
+      const { data, error } = await a.signInWithOAuth({ provider, options: { redirectTo } })
+      return { error: error ?? null, url: data?.url ?? undefined }
+    },
+
+    async claimLegacyIdentity() {
+      const db = injectedDb ?? getCbDb()
+      const r = await db.rpc<{
+        claimed?: boolean
+        reason?: string
+        moved?: Record<string, number>
+      }>('claim_legacy_identity')
+      if (r.error) return { claimed: false, error: r.error }
+      const payload = (r.data || {}) as { claimed?: boolean; reason?: string; moved?: Record<string, number> }
+      return {
+        claimed: Boolean(payload.claimed),
+        reason: payload.reason,
+        moved: payload.moved,
+        error: null,
+      }
+    },
+  }
+}
+
+// ── 选择 ──
+
+let _driver: AuthDriver | null = null
+
+/** 按后端开关惰性创建：VITE_BACKEND=cloudbase 走 CloudBase，否则 Supabase */
+export function getAuthDriver(): AuthDriver {
+  if (!_driver) {
+    _driver = isCloudBaseBackend() ? createCloudBaseAuthDriver() : createSupabaseAuthDriver()
+  }
+  return _driver
+}
+
+/** 测试专用：清空惰性单例 / 注入自定义驱动 */
+export function __setAuthDriverForTest(driver: AuthDriver | null): void {
+  _driver = driver
+}

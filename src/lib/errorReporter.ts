@@ -15,6 +15,7 @@
  * 函数据此解析真实 user_id（客户端传入的一律忽略，防伪造）。
  */
 import { supabase } from './supabase.js'
+import { isCloudBaseBackend, invokeCbFunction } from './cloudbase.js'
 
 /** 节流 Map：最近 N 毫秒内已上报的错误消息 */
 const _throttled = new Map<string, number>()
@@ -105,6 +106,7 @@ export function reportError(payload: ErrorPayload): void {
 
   // user_id 不在此组装：supabase.functions.invoke 自动携带登录态
   // Authorization，report-error 函数据此解析真实 user_id（防伪造）。
+  // CloudBase 侧 v1 不解析 user_id（见函数头注释），仅靠 ip_hash 定位。
   const href = typeof window !== 'undefined' ? window.location.href : ''
   const body = {
     message: rawMsg.slice(0, 1000),
@@ -121,11 +123,14 @@ export function reportError(payload: ErrorPayload): void {
   let timer: ReturnType<typeof setTimeout> | undefined
   const abortController = typeof AbortController !== 'undefined' ? new AbortController() : null
   const invokeP = Promise.resolve(
-    supabase.functions.invoke('report-error', { 
-      body,
-      // @ts-ignore
-      signal: abortController?.signal
-    }),
+    isCloudBaseBackend()
+      ? // CloudBase：走 HTTP 云函数，返回形状与 supabase.functions.invoke 对齐
+        invokeCbFunction('report-error', body, abortController?.signal)
+      : supabase.functions.invoke('report-error', {
+          body,
+          // @ts-ignore
+          signal: abortController?.signal,
+        }),
   )
   const timeoutP = new Promise<{ error: { message: string } }>((resolve) => {
     timer = setTimeout(() => {

@@ -92,6 +92,47 @@
                     </div>
                   </div>
 
+                  <!-- 账号密码：老用户从「验证码登录」迁到「密码登录」的入口 -->
+                  <div v-if="!editingPassword" class="sp-logout-wrap">
+                    <button class="up-menu-item sp-logout-btn" id="spSetPasswordBtn" @click.stop="startSetPassword">
+                      <div class="up-item-left">
+                        <span class="up-item-icon" aria-hidden="true" v-html="I.password"></span>
+                        <span class="up-item-title">{{ t('settings.setPassword') }}</span>
+                      </div>
+                    </button>
+                  </div>
+                  <div v-else class="sp-pw-edit">
+                    <p class="sp-hint sp-pw-tip">{{ t('settings.passwordCodeSentTo', { email: auth.userEmail }) }}</p>
+                    <div class="sp-pw-field">
+                      <input
+                        type="text" class="form-input" id="spPasswordCodeInput"
+                        v-model="pwCode" inputmode="numeric" maxlength="6"
+                        :placeholder="t('settings.passwordCode')"
+                        autocomplete="one-time-code"
+                      />
+                    </div>
+                    <div class="sp-pw-field">
+                      <input
+                        type="password" class="form-input" id="spNewPasswordInput"
+                        v-model="newPassword" :placeholder="t('settings.passwordPlaceholder')"
+                        autocomplete="new-password"
+                        @keydown.enter="onSavePassword"
+                      />
+                    </div>
+                    <div class="sp-pw-actions">
+                      <button class="btn btn-ghost btn-sm" id="spSendPwCodeBtn"
+                        :disabled="pwSending || pwCooldown > 0" @click="onSendPasswordCode">
+                        {{ pwCooldown > 0 ? t('modal.auth.resendCountdown', { n: pwCooldown })
+                          : (pwSending ? t('modal.auth.sending') : t('settings.sendPasswordCode')) }}
+                      </button>
+                      <button class="btn btn-primary btn-sm" :disabled="pwSaving" @click="onSavePassword">
+                        {{ pwSaving ? t('common.saving') : t('common.save') }}
+                      </button>
+                      <button class="btn btn-ghost btn-sm" @click="cancelSetPassword">{{ t('common.cancel') }}</button>
+                    </div>
+                    <p v-if="pwMsg" class="sp-hint sp-pw-msg">{{ pwMsg }}</p>
+                  </div>
+
                   <div class="sp-logout-wrap">
                     <button class="up-menu-item up-danger-item sp-logout-btn" @click.stop="onLogout">
                       <div class="up-item-left">
@@ -479,6 +520,7 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
+import { isCloudBaseBackend, invokeCbFunction, getCbFnBase } from '../../lib/cloudbase.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
@@ -679,6 +721,53 @@ async function onOpenLogin() {
 async function onLogout() {
   const ok = await auth.signOut()
   if (ok) await sync.resetSyncState()
+}
+
+// ── 设置/修改密码（验证码 + 新密码两步） ──
+const editingPassword = ref(false)
+const newPassword = ref('')
+const pwCode = ref('')
+const pwSaving = ref(false)
+const pwSending = ref(false)
+const pwMsg = ref('')
+const pwCooldown = computed(() => auth.sendCooldownRemaining(auth.userEmail))
+
+function startSetPassword() {
+  editingPassword.value = true
+  newPassword.value = ''
+  pwCode.value = ''
+  pwMsg.value = ''
+}
+
+function cancelSetPassword() {
+  editingPassword.value = false
+  newPassword.value = ''
+  pwCode.value = ''
+  pwMsg.value = ''
+}
+
+async function onSendPasswordCode() {
+  if (pwSending.value || !auth.userEmail) return
+  pwSending.value = true
+  pwMsg.value = ''
+  const ok = await auth.sendPasswordReset(auth.userEmail)
+  pwSending.value = false
+  pwMsg.value = ok ? t('settings.passwordCodeSent') : auth.authError || t('settings.passwordSaveFailed')
+}
+
+async function onSavePassword() {
+  if (pwSaving.value) return
+  pwSaving.value = true
+  pwMsg.value = ''
+  const ok = await auth.confirmSetPassword(auth.userEmail, pwCode.value, newPassword.value)
+  pwSaving.value = false
+  if (ok) {
+    cancelSetPassword()
+    toast(t('settings.passwordSaved'))
+  } else {
+    // store 会把具体原因（长度/字符类型/验证码错误/平台错误）写进 authError
+    pwMsg.value = auth.authError || t('settings.passwordSaveFailed')
+  }
 }
 
 function onCheckDeadLinks() {
@@ -930,24 +1019,39 @@ function openFeedbackMail() {
 
 async function submitFeedback() {
   if (!canSendFeedback.value) return
-  if (!FEEDBACK_ENDPOINT || !FEEDBACK_ANON_KEY) { toast(t('settings.feedbackFailed'), false); return }
+  const payload = {
+    message: feedbackText.value.trim(),
+    contact: feedbackContact.value.trim(),
+    locale: locale.value,
+    appVersion: APP_VERSION,
+    turnstileToken: turnstileToken.value,
+    website: feedbackHoneypot.value,
+  }
   feedbackSending.value = true
   try {
-    const res = await fetch(FEEDBACK_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: FEEDBACK_ANON_KEY },
-      body: JSON.stringify({
-        message: feedbackText.value.trim(),
-        contact: feedbackContact.value.trim(),
-        locale: locale.value,
-        appVersion: APP_VERSION,
-        turnstileToken: turnstileToken.value,
-        website: feedbackHoneypot.value,
-      }),
-    })
-    const data = (await res.json().catch(() => ({}))) as { error?: string }
-    if (!res.ok) {
-      toast(t(FEEDBACK_ERROR_KEYS[data.error || ''] || 'settings.feedbackFailed'), false)
+    let ok = false
+    let errCode = ''
+    if (isCloudBaseBackend()) {
+      if (!getCbFnBase()) { toast(t('settings.feedbackFailed'), false); return }
+      // 服务端成功回 {ok:true}（honeypot 也回 ok——对机器人保持静默）；失败回 {error:'...'}。
+      // 非 2xx 时 invokeCbFunction 仍读 body，所以错误码在 data.error 里。
+      const r = await invokeCbFunction('send-feedback', payload)
+      const d = (r.data || {}) as { error?: string; ok?: boolean }
+      ok = !r.error || d.ok === true
+      errCode = d.error || ''
+    } else {
+      if (!FEEDBACK_ENDPOINT || !FEEDBACK_ANON_KEY) { toast(t('settings.feedbackFailed'), false); return }
+      const res = await fetch(FEEDBACK_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: FEEDBACK_ANON_KEY },
+        body: JSON.stringify(payload),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      ok = res.ok
+      errCode = data.error || ''
+    }
+    if (!ok) {
+      toast(t(FEEDBACK_ERROR_KEYS[errCode] || 'settings.feedbackFailed'), false)
       return
     }
     toast(t('settings.feedbackSent'), true)

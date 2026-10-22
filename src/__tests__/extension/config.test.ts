@@ -66,26 +66,27 @@ describe('extension/config.js — LinkVaultExtConfig 常量快照护栏', () => 
     })
   })
 
-  describe('SUPABASE_URL — 扩展端连后端唯一 URL 承载', () => {
-    it('是 https:// 协议（防误改 http 致 mixed-content 失败）', () => {
-      expect(getCfg().SUPABASE_URL).toMatch(/^https:\/\//)
+  describe('SUPABASE_URL — 扩展端后端标识承载（2026-10-22 起＝CloudBase envId，shim 约定）', () => {
+    it('是 CloudBase envId 形态（<name>-<id>，无协议/无斜杠，防误填 URL）', () => {
+      const v = getCfg().SUPABASE_URL as string
+      expect(v).toMatch(/^[a-z][a-z0-9]*-[a-z0-9]+$/)
+      expect(v).not.toMatch(/[:/]/)
     })
 
-    it('以 .supabase.co 结尾（Supabase 标准 PaaS 域）', () => {
-      expect(getCfg().SUPABASE_URL).toMatch(/\.supabase\.co$/)
+    it('与生产环境 id 前缀一致（防误改连错环境）', () => {
+      expect(getCfg().SUPABASE_URL).toBe('ulink-d1g5srvjo54b1886a')
     })
 
-    it('是合法 URL 可被 new URL 解析（防拼错成无效 URL）', () => {
-      const url = getCfg().SUPABASE_URL as string
-      expect(() => new URL(url)).not.toThrow()
-      expect(new URL(url).protocol).toBe('https:')
+    it('shim 的 createClient 以此为 envId 初始化（约定锁）', () => {
+      // 值必须非空字符串（undefined/null 占位会让 shim init({env:''}) 静默连错）
+      expect(typeof getCfg().SUPABASE_URL).toBe('string')
+      expect((getCfg().SUPABASE_URL as string).length).toBeGreaterThan(8)
     })
 
-    it('URL 内含项目 ref 段（<project-ref>.supabase.co 非空）', () => {
-      const host = new URL(getCfg().SUPABASE_URL as string).hostname
-      const ref = host.slice(0, -('.supabase.co'.length))
-      expect(ref.length).toBeGreaterThanOrEqual(8)
-      expect(/^[a-z0-9]+$/i.test(ref)).toBe(true)
+    it('无 URL 痕迹（历史形态残留检测：出现 :// 或 .supabase.co 即回退旧配置）', () => {
+      const v = getCfg().SUPABASE_URL as string
+      expect(v.includes('://')).toBe(false)
+      expect(v.includes('supabase.co')).toBe(false)
     })
   })
 
@@ -109,14 +110,14 @@ describe('extension/config.js — LinkVaultExtConfig 常量快照护栏', () => 
       expect(vals.some((v) => typeof v === 'string' && /service_role/i.test(v))).toBe(false)
     })
 
-    it('header.alg === HS256（与 Supabase 签发一致）', () => {
+    it('header.alg 是已知签名算法（CloudBase 腾讯签发 RS256；原 Supabase 为 HS256）', () => {
       const header = JSON.parse(decodeJwtPart(getKey().split('.')[0]))
-      expect(header.alg).toBe('HS256')
+      expect(['RS256', 'HS256']).toContain(header.alg)
     })
 
-    it('header.typ === JWT', () => {
+    it('header.typ 缺省或为 JWT（CloudBase 签发不带 typ；带则须正确）', () => {
       const header = JSON.parse(decodeJwtPart(getKey().split('.')[0]))
-      expect(header.typ).toBe('JWT')
+      expect(header.typ === undefined || header.typ === 'JWT').toBe(true)
     })
 
     it('payload.iat 是 finite number（签发时间戳）', () => {

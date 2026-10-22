@@ -18,7 +18,7 @@
 import { computed } from 'vue'
 import { useAuth } from './useAuth.js'
 import { useVaultStore } from '../../stores/vault.js'
-import { supabase } from '../../lib/supabase.js'
+import { dbFrom } from '../../lib/dbApi.js'
 import { deriveKey, generateCanary, verifyCanary, PBKDF2_ITERATIONS, PBKDF2_DEFAULT_ITERATIONS } from '../../crypto.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { useVaultBiometric } from './useVaultBiometric.js'
@@ -72,7 +72,7 @@ function _getCanaryData(): Promise<Record<string, unknown> | null> {
     if (!auth || !auth.user) return Promise.resolve(null)
     const userId = auth.user?.id
     if (!userId) return Promise.resolve(null)
-    return Promise.resolve(supabase.from('user_security')
+    return Promise.resolve(dbFrom('user_security')
       .select('vault_canary')
       .eq('user_id', userId)
       .maybeSingle())
@@ -88,7 +88,7 @@ function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> 
   const auth = useAuth()
   const userId = auth.user?.id
   if (!userId) return Promise.resolve(true)
-  return Promise.resolve(supabase.from('user_security').upsert({
+  return Promise.resolve(dbFrom('user_security').upsert({
     user_id: userId,
     vault_canary: canaryData,
   }, { onConflict: 'user_id' })).then(r => !r.error).catch(() => false)

@@ -3,6 +3,7 @@
  * 依赖：通过 onPullChanges 回调与主同步模块解耦
  */
 import { supabase } from '../../lib/supabase.js'
+import { isCloudBaseBackend } from '../../lib/cloudbase.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
@@ -19,6 +20,9 @@ import { withLock } from '../../lib/withLock.js'
 import type { EntityType, Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 
 let _channel: ReturnType<typeof supabase.channel> | null = null
+/** CloudBase 轮询句柄与间隔：PG 无 postgres_changes，降级为定时拉取 */
+let _pollTimer: ReturnType<typeof setInterval> | null = null
+const POLL_INTERVAL_MS = 60_000
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let _reconnectAttempts = 0
 // 连接代际：每次 subscribeRealtime 自增。旧 channel 异步 removeChannel 期间
@@ -326,6 +330,19 @@ export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
   const userId = _getUserId()
   if (!userId || _channel) return
 
+  // CloudBase 降级（PG 无 postgres_changes）：定时触发 pullChanges 做轮询同步。
+  // 合并走 syncMergeCore 既有幂等路径；无回调时只置状态不建定时器。
+  if (isCloudBaseBackend()) {
+    if (_pollTimer) return
+    syncStore.setRealtimeStatus('connected')
+    if (onPullChanges) {
+      _pollTimer = setInterval(() => {
+        withLock('linkvault-sync', onPullChanges).catch(() => {})
+      }, POLL_INTERVAL_MS)
+    }
+    return
+  }
+
   _gen += 1
   const myGen = _gen
 
@@ -362,6 +379,7 @@ export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
 }
 
 export function unsubscribeRealtime() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null }
   _reconnectAttempts = 0
   useSyncStore().setRealtimeStatus('disconnected')

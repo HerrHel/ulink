@@ -9,6 +9,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../supabase.js'
+import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { askMiMo, sanitizeForPrompt } from './mimoClient.js'
 import { getLocale } from '../../i18n/index.js'
 
@@ -34,20 +35,30 @@ export async function fetchVideoExtractServer(
   targetUrl: string,
   options: { signal?: AbortSignal } = {}
 ): Promise<VideoExtractServerResult | null> {
-  if (!targetUrl || !isSupabaseConfigured) return null
+  if (!targetUrl) return null
+  const cbMode = isCloudBaseBackend()
+  if (!cbMode && !isSupabaseConfigured) return null
 
   try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token
-    if (!token) return null
+    // CloudBase 云函数 v1 不验签（IP 哈希限流），无需会话 token
+    let authHeaders: Record<string, string> = {}
+    if (!cbMode) {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) return null
+      authHeaders = {
+        Authorization: `Bearer ${token}`,
+        apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+      }
+    }
 
-    const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
-    const res = await fetch(`${fnBase}/functions/v1/extract-video`, {
+    const endpoint = edgeFnUrl('extract-video')
+    if (!endpoint) return null
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+        ...authHeaders,
       },
       body: JSON.stringify({ url: targetUrl }),
       signal: options.signal,

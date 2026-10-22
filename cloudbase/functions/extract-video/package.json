@@ -1,0 +1,13 @@
+{
+  "name": "ulink-extract-video",
+  "version": "1.0.0",
+  "description": "ulink extract-video CloudBase HTTP 云函数",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

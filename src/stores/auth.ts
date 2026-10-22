@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { supabase } from '../lib/supabase.js'
+import { getAuthDriver } from '../lib/authDriver.js'
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../lib/storageSafe.js'
 import type { User, Session } from '@supabase/supabase-js'
 
@@ -189,13 +189,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function init() {
     loading.value = true
-    const { data } = await supabase.auth.getSession()
-    session.value = data.session
-    user.value = data.session?.user ?? null
+    const driver = getAuthDriver()
+    const { session: initial } = await driver.getSession()
+    session.value = initial
+    user.value = initial?.user ?? null
     _syncFromMetadata(user.value)
     loading.value = false
 
-    supabase.auth.onAuthStateChange((_event, s) => {
+    driver.onAuthStateChange((s) => {
       session.value = s
       user.value = s?.user ?? null
       _syncFromMetadata(user.value)
@@ -228,13 +229,11 @@ export const useAuthStore = defineStore('auth', () => {
         if (data.nickname !== undefined) updates.display_name = data.nickname.trim()
         if (data.avatar !== undefined) updates.avatar = data.avatar.trim()
 
-        const { data: updatedData, error } = await supabase.auth.updateUser({
-          data: updates
-        })
+        const { user: updatedUser, error } = await getAuthDriver().updateUserMeta(updates)
         if (error) {
           console.warn('[auth] updateUser metadata failed:', error)
-        } else if (updatedData.user) {
-          user.value = updatedData.user
+        } else if (updatedUser) {
+          user.value = updatedUser
         }
       } catch (err) {
         console.warn('[auth] updateUser metadata error:', err)
@@ -252,8 +251,7 @@ export const useAuthStore = defineStore('auth', () => {
       authError.value = `验证码已发送，请 ${remain} 秒后再试`
       return false
     }
-    const options = captchaToken ? { captchaToken } : undefined
-    const { error } = await supabase.auth.signInWithOtp({ email, options })
+    const { error } = await getAuthDriver().sendOtp(email, captchaToken)
     if (error) {
       // 审计 R31：仅「限流类」error 登记本地冷却——避免短时重复触发平台限流。
       // 非限流类（网络错误/邮箱格式错误/signup_disabled 等）不施冷却，让用户立即重试。
@@ -282,7 +280,7 @@ export const useAuthStore = defineStore('auth', () => {
       authError.value = `验证失败次数过多，请 ${lockRemain} 秒后重试或重新获取验证码`
       return false
     }
-    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+    const { error } = await getAuthDriver().verifyOtp(email, token)
     if (error) {
       const rec = _rec(email)
       rec.fails += 1
@@ -310,9 +308,101 @@ export const useAuthStore = defineStore('auth', () => {
     limits.value.delete(email)
   }
 
+  /** 密码强度：CloudBase 要求 8~32 位且同时含字母与数字（平台侧同规则，这里先拦一道） */
+  function _validatePassword(pw: string): string | null {
+    if (pw.length < 8 || pw.length > 32) return '密码长度需在 8~32 位之间'
+    if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return '密码需同时包含字母与数字'
+    return null
+  }
+
+  /**
+   * 邮箱 + 密码登录。
+   *
+   * 老用户（历史上全是验证码注册）没有密码，此时后端会返回凭据错误——无法从 error 里
+   * 可靠区分「密码错」和「还没设过密码」，所以统一给出「先去验证码登录、登录后设密码」的引导语。
+   * 失败计数与锁定复用验证码那套（同一账号的凭据尝试共享配额）。
+   */
+  async function signInWithPassword(email: string, password: string): Promise<boolean> {
+    authError.value = null
+    _ensureTicker()
+    const lockRemain = verifyLockRemaining(email)
+    if (lockRemain > 0) {
+      authError.value = `尝试次数过多，请 ${lockRemain} 秒后重试`
+      return false
+    }
+    const { error } = await getAuthDriver().signInWithPassword(email, password)
+    if (error) {
+      const rec = _rec(email)
+      rec.fails += 1
+      if (rec.fails >= FAILS_PER_LOCK) {
+        rec.locks += 1
+        const { lockMs, label } = lockDurationFor(rec.locks - 1)
+        rec.lockUntil = Date.now() + lockMs
+        rec.fails = 0
+        authError.value = `尝试次数过多，已锁定 ${label}`
+      } else {
+        authError.value = '邮箱或密码不正确。若这是你第一次用密码登录，请先用验证码登录，再在设置里设置密码。'
+      }
+      _ensureTicker()
+      return false
+    }
+    limits.value.delete(email)
+    return true
+  }
+
+  /**
+   * 用「邮箱验证码 + 新密码」完成密码设置（老用户从验证码迁到密码的唯一路径）。
+   *
+   * CloudBase 的 `updateUser` 明确拒绝 password 参数，必须走 resetPasswordForEmail
+   * 的验证码流程；Supabase 侧则是 verifyOtp(recovery) + updateUser，由驱动屏蔽差异。
+   */
+  async function confirmSetPassword(email: string, code: string, password: string): Promise<boolean> {
+    authError.value = null
+    const invalid = _validatePassword(password)
+    if (invalid) {
+      authError.value = invalid
+      return false
+    }
+    if (!code.trim()) {
+      authError.value = '请输入邮箱验证码'
+      return false
+    }
+    const { error } = await getAuthDriver().confirmPasswordReset(email, code.trim(), password)
+    if (error) {
+      authError.value = error.message
+      return false
+    }
+    return true
+  }
+
+  /** 发送找回密码邮件 */
+  async function sendPasswordReset(email: string): Promise<boolean> {
+    authError.value = null
+    _ensureTicker()
+    const remain = sendCooldownRemaining(email)
+    if (remain > 0) {
+      authError.value = `请 ${remain} 秒后再试`
+      return false
+    }
+    const { error } = await getAuthDriver().sendPasswordReset(email)
+    if (error) {
+      if (_isRateLimitError(error)) {
+        const rec = _rec(email)
+        rec.sendUntil = Date.now() + SEND_COOLDOWN_MS
+        _ensureTicker()
+      }
+      authError.value = error.message
+      return false
+    }
+    const rec = _rec(email)
+    rec.sendUntil = Date.now() + SEND_COOLDOWN_MS
+    _ensureTicker()
+    return true
+  }
+
   async function signOut(): Promise<boolean> {
     authError.value = null
-    const { error } = await supabase.auth.signOut()
+    const { error } = await getAuthDriver().signOut()
     if (error) {
       authError.value = error.message
       return false
@@ -328,18 +418,13 @@ export const useAuthStore = defineStore('auth', () => {
     authError.value = null
     const redirectOrigin = typeof window !== 'undefined' ? window.location.origin : ''
     const redirectTo = `${redirectOrigin}/app`
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo,
-      },
-    })
+    const { error, url } = await getAuthDriver().signInWithOAuth(provider, redirectTo)
     if (error) {
       authError.value = error.message
       return false
     }
-    if (data?.url && typeof window !== 'undefined') {
-      window.location.href = data.url
+    if (url && typeof window !== 'undefined') {
+      window.location.href = url
     }
     return true
   }
@@ -349,6 +434,7 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn, userEmail,
     customNickname, customAvatar, displayName, avatar, updateProfile,
     init, sendOtp, signInWithOAuth, verifyOtp, signOut, resetVerifyState,
+    signInWithPassword, confirmSetPassword, sendPasswordReset,
     sendCooldownRemaining, verifyLockRemaining, cooldownTick,
   }
 })

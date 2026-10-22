@@ -76,7 +76,7 @@ function cardBlock(): string {
 /** 拦截 mimo-chat Edge Function，返回给定 SSE 流 */
 async function mockMimoSse(page: Page, handler: (reqCount: number) => string) {
   let count = 0
-  await page.route('**/functions/v1/mimo-chat', async (route: Route) => {
+  await page.route((u) => /\/(functions\/v1\/)?mimo-chat$/.test(u.pathname), async (route: Route) => {
     count++
     await route.fulfill({
       status: 200,
@@ -201,7 +201,7 @@ test.describe('AI 提问分流路由（mock）', () => {
 
     // extract-video Edge Function mock：记录请求体，返回结构化文字源（简介/字幕/评论区）
     const extractCalls: Array<Record<string, unknown>> = []
-    await page.route('**/functions/v1/extract-video', async (route: Route) => {
+    await page.route((u) => /\/(functions\/v1\/)?extract-video$/.test(u.pathname), async (route: Route) => {
       extractCalls.push(route.request().postDataJSON() || {})
       await route.fulfill({
         status: 200,
@@ -225,7 +225,7 @@ test.describe('AI 提问分流路由（mock）', () => {
 
     // mimo-chat mock：总结链路走 askMiMo（同 SSE 端点），记录请求体断言问题透传
     const mimoBodies: string[] = []
-    await page.route('**/functions/v1/mimo-chat', async (route: Route) => {
+    await page.route((u) => /\/(functions\/v1\/)?mimo-chat$/.test(u.pathname), async (route: Route) => {
       mimoBodies.push(route.request().postData() || '')
       await route.fulfill({
         status: 200,
@@ -278,11 +278,11 @@ test.describe('AI 提问分流路由（mock）', () => {
     // 两个旁路 mock 均带计数：断言分流未误入其它链路（防假绿）
     let extractCalls = 0
     let mimoCalls = 0
-    await page.route('**/functions/v1/extract-video', async (route: Route) => {
+    await page.route((u) => /\/(functions\/v1\/)?extract-video$/.test(u.pathname), async (route: Route) => {
       extractCalls++
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
     })
-    await page.route('**/functions/v1/mimo-chat', async (route: Route) => {
+    await page.route((u) => /\/(functions\/v1\/)?mimo-chat$/.test(u.pathname), async (route: Route) => {
       mimoCalls++
       await route.fulfill({
         status: 200,

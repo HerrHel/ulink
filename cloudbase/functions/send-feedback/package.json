@@ -1,0 +1,13 @@
+{
+  "name": "ulink-send-feedback",
+  "version": "1.0.0",
+  "description": "反馈表单落库 + 企业邮 SMTP 投递，CloudBase HTTP 云函数",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

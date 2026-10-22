@@ -2,7 +2,7 @@
  * useSyncHistory — 版本历史管理（本地 + 云端合并）
  * C2：本地用户也支持历史版本，本地用 IndexedDB 留底，云端登录用户合并去重。
  */
-import { supabase } from '../../lib/supabase.js'
+import { dbFrom } from '../../lib/dbApi.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
@@ -31,7 +31,7 @@ export async function _saveHistory(userId: string, items: Array<{ id: string; ty
   try {
     for (let i = 0; i < items.length; i += HISTORY_INSERT_CHUNK) {
       const chunk = items.slice(i, i + HISTORY_INSERT_CHUNK)
-      const { error } = await supabase.from('data_history').insert(
+      const { error } = await dbFrom('data_history').insert(
         chunk.map(c => ({ user_id: userId, item_id: c.id, item_type: c.type, data: c.data })),
       )
       // 单块失败不阻断后续块：历史是尽力而为的旁路写入，主同步链路不受其影响
@@ -60,7 +60,7 @@ export async function fetchHistory(itemId: string): Promise<HistoryVersion[]> {
   const userId = _getUserId()
   let remote: HistoryVersion[] = []
   if (userId) {
-    const { data } = await supabase.from('data_history')
+    const { data } = await dbFrom('data_history')
       .select('id, data, created_at').eq('user_id', userId).eq('item_id', itemId)
       .order('created_at', { ascending: false }).limit(max)
     remote = (data as HistoryVersion[]) || []
@@ -105,7 +105,7 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
   if (!histData) {
     const userId = _getUserId()
     if (!userId) return false
-    const { data, error } = await supabase.from('data_history')
+    const { data, error } = await dbFrom('data_history')
       .select('data').eq('id', historyId).eq('user_id', userId).single()
     if (error || !data) { console.warn('[history] fetch version failed:', error); return false }
     histData = data.data as Record<string, unknown>

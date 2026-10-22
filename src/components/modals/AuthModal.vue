@@ -13,51 +13,81 @@
 
         <!-- Step 1: 输入邮箱 -->
         <template v-if="step === 'email'">
+          <!-- 登录方式切换：验证码 / 密码 -->
+          <div class="auth-tabs" role="tablist">
+            <button
+              type="button" role="tab" id="authTabOtp" class="auth-tab"
+              :class="{ 'auth-tab--active': mode === 'otp' }"
+              :aria-selected="mode === 'otp'"
+              @click="setMode('otp')"
+            >{{ t('modal.auth.tabOtp') }}</button>
+            <button
+              type="button" role="tab" id="authTabPassword" class="auth-tab"
+              :class="{ 'auth-tab--active': mode === 'password' }"
+              :aria-selected="mode === 'password'"
+              @click="setMode('password')"
+            >{{ t('modal.auth.tabPassword') }}</button>
+          </div>
+
           <p class="auth-hint">
-            {{ t('modal.auth.emailHint') }}
+            {{ mode === 'otp' ? t('modal.auth.emailHint') : t('modal.auth.passwordHint') }}
           </p>
-          <p class="auth-hint-sub">{{ t('modal.auth.noPasswordHint') }}</p>
+          <p v-if="mode === 'otp'" class="auth-hint-sub">{{ t('modal.auth.noPasswordHint') }}</p>
           <div class="form-group">
             <input
               type="email" class="form-input auth-input" id="authEmailInput"
               v-model="email" placeholder="your@email.com"
-              @keydown.enter="onSendCode" ref="inputRef" autocomplete="email"
+              @keydown.enter="onEmailEnter" ref="inputRef" autocomplete="email"
             />
           </div>
 
-          <div v-if="TURNSTILE_SITE_KEY" id="auth-turnstile" class="auth-turnstile"></div>
+          <template v-if="mode === 'password'">
+            <div class="form-group">
+              <input
+                type="password" class="form-input auth-input" id="authPasswordInput"
+                v-model="password" :placeholder="t('modal.auth.passwordPlaceholder')"
+                autocomplete="current-password"
+                @keydown.enter="onPasswordLogin"
+              />
+            </div>
+            <p class="auth-guide">{{ t('modal.auth.noPasswordGuide') }}</p>
+          </template>
 
-          <!-- 第三方登录快捷方式 -->
-          <div class="auth-divider">
-            <span class="auth-divider-line"></span>
-            <span class="auth-divider-text">{{ t('modal.auth.orOAuth') }}</span>
-            <span class="auth-divider-line"></span>
-          </div>
+          <template v-else>
+            <div v-if="TURNSTILE_SITE_KEY" id="auth-turnstile" class="auth-turnstile"></div>
 
-          <div class="auth-oauth-group">
-            <button
-              type="button"
-              class="auth-oauth-btn auth-oauth-btn--github"
-              id="authGithubBtn"
-              @click="onOAuth('github')"
-              :disabled="oauthLoading !== null"
-              :title="t('modal.auth.github')"
-            >
-              <span class="auth-oauth-icon" v-html="I.github"></span>
-              <span class="auth-oauth-label">{{ t('modal.auth.github') }}</span>
-            </button>
-            <button
-              type="button"
-              class="auth-oauth-btn auth-oauth-btn--google"
-              id="authGoogleBtn"
-              @click="onOAuth('google')"
-              :disabled="oauthLoading !== null"
-              :title="t('modal.auth.google')"
-            >
-              <span class="auth-oauth-icon" v-html="I.google"></span>
-              <span class="auth-oauth-label">{{ t('modal.auth.google') }}</span>
-            </button>
-          </div>
+            <!-- 第三方登录快捷方式 -->
+            <div class="auth-divider">
+              <span class="auth-divider-line"></span>
+              <span class="auth-divider-text">{{ t('modal.auth.orOAuth') }}</span>
+              <span class="auth-divider-line"></span>
+            </div>
+
+            <div class="auth-oauth-group">
+              <button
+                type="button"
+                class="auth-oauth-btn auth-oauth-btn--github"
+                id="authGithubBtn"
+                @click="onOAuth('github')"
+                :disabled="oauthLoading !== null"
+                :title="t('modal.auth.github')"
+              >
+                <span class="auth-oauth-icon" v-html="I.github"></span>
+                <span class="auth-oauth-label">{{ t('modal.auth.github') }}</span>
+              </button>
+              <button
+                type="button"
+                class="auth-oauth-btn auth-oauth-btn--google"
+                id="authGoogleBtn"
+                @click="onOAuth('google')"
+                :disabled="oauthLoading !== null"
+                :title="t('modal.auth.google')"
+              >
+                <span class="auth-oauth-icon" v-html="I.google"></span>
+                <span class="auth-oauth-label">{{ t('modal.auth.google') }}</span>
+              </button>
+            </div>
+          </template>
         </template>
 
         <!-- Step 2: 输入验证码 -->
@@ -97,10 +127,15 @@
         </button>
         <span class="flex-1"></span>
         <button class="btn btn-secondary" @click="onClose">{{ t('common.cancel') }}</button>
-        <button v-if="step === 'email'" class="btn btn-primary" @click="onSendCode"
+        <button v-if="step === 'email' && mode === 'otp'" class="btn btn-primary" @click="onSendCode"
           :disabled="!emailTrim || sending || cooldownSec > 0 || (!!TURNSTILE_SITE_KEY && !turnstileToken)">
           {{ sending ? t('modal.auth.sending')
             : (cooldownSec > 0 ? t('modal.auth.resendCountdownFull', { n: cooldownSec }) : t('modal.auth.sendCode')) }}
+        </button>
+        <button v-if="step === 'email' && mode === 'password'" id="authPasswordLoginBtn"
+          class="btn btn-primary" @click="onPasswordLogin"
+          :disabled="!emailTrim || !password || pwBusy || lockSec > 0">
+          {{ pwBusy ? t('modal.auth.loggingIn') : t('modal.auth.login') }}
         </button>
         <button v-if="step === 'code'" class="btn btn-primary" @click="onVerify"
           :disabled="code.length < 6 || verifying || lockSec > 0">
@@ -118,6 +153,7 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
+import { toast } from '../../lib/toast.js'
 
 const TURNSTILE_SITE_KEY = import.meta.env.MODE === 'test' ? '' : String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '')
 const turnstileToken = ref('')
@@ -161,6 +197,10 @@ const e2e = useE2E()
 const email = ref('')
 const code = ref('')
 const step = ref<'email' | 'code'>('email')
+/** 邮箱步骤下的登录方式：验证码 / 密码 */
+const mode = ref<'otp' | 'password'>('otp')
+const password = ref('')
+const pwBusy = ref(false)
 const sending = ref(false)
 const verifying = ref(false)
 const verified = ref(false)
@@ -180,6 +220,9 @@ watch(() => auth.authModalOpen, (open) => {
     email.value = ''
     code.value = ''
     step.value = 'email'
+    mode.value = 'otp'
+    password.value = ''
+    pwBusy.value = false
     sending.value = false
     verifying.value = false
     verified.value = false
@@ -257,21 +300,63 @@ async function onVerify() {
   const ok = await auth.verifyOtp(emailTrim.value, c)
   verifying.value = false
   if (ok) {
-    verified.value = true
-    // 防御：若上次成功回调 timer 仍在 pending（用户在 800ms 内重复点登录）先清掉，
-    // 否则旧 id 被新 setTimeout 覆盖后无法 clearTimeout，旧回调仍会跑一次。
-    if (syncTimer.value !== null) clearTimeout(syncTimer.value)
-    syncTimer.value = window.setTimeout(async () => {
-      syncTimer.value = null
-      auth.authModalOpen = false
-      // 登录后刷新 E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
-      // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录后
-      // isE2EEnabled 停留 false → 编辑加密书签解锁成功仍提示设置主密码，且新建密码会
-      // 误走 base64 而非 E2E 加密。
-      await e2e.checkE2EStatus()
-      sync.initialSync()
-    }, 800)
+    schedulePostLogin()
   }
+}
+
+/** 登录成功后的统一收尾：显示成功态，800ms 后关弹窗并刷新 E2E 状态 + 触发首同步 */
+function schedulePostLogin() {
+  verified.value = true
+  // 防御：若上次成功回调 timer 仍在 pending（用户在 800ms 内重复点登录）先清掉，
+  // 否则旧 id 被新 setTimeout 覆盖后无法 clearTimeout，旧回调仍会跑一次。
+  if (syncTimer.value !== null) clearTimeout(syncTimer.value)
+  syncTimer.value = window.setTimeout(async () => {
+    syncTimer.value = null
+    auth.authModalOpen = false
+    // 登录后刷新 E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
+    // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录后
+    // isE2EEnabled 停留 false → 编辑加密书签解锁成功仍提示设置主密码，且新建密码会
+    // 误走 base64 而非 E2E 加密。
+    await e2e.checkE2EStatus()
+    await sync.initialSync()
+    // CloudBase 迁移：老用户首次登录会认领历史数据，认领到东西时给个明确反馈，
+    // 否则用户只会看到书架「突然有了东西」而不知道发生了什么。
+    // 用可选链：部分单测会 mock 一个精简版 useCloudSync，未必带 lastClaim。
+    const claim = sync.lastClaim?.value ?? null
+    if (claim && claim.count > 0) {
+      toast(t('settings.legacyDataRestored', { n: claim.count }))
+    }
+  }, 800)
+}
+
+/** 切换登录方式：清掉上一次的错误与重置成功态，避免串味 */
+function setMode(m: 'otp' | 'password') {
+  if (mode.value === m) return
+  mode.value = m
+  auth.authError = null
+  password.value = ''
+  nextTick(() => inputRef.value?.focus())
+}
+
+function onEmailEnter() {
+  if (mode.value === 'otp') onSendCode()
+  else onPasswordLogin()
+}
+
+async function onPasswordLogin() {
+  const e = emailTrim.value
+  const pw = password.value
+  if (!e || !pw || pwBusy.value) return
+  const lockRemain = lockSec.value
+  if (lockRemain > 0) {
+    auth.authError = t('modal.auth.lockError', { n: lockRemain })
+    return
+  }
+  pwBusy.value = true
+  auth.authError = null
+  const ok = await auth.signInWithPassword(e, pw)
+  pwBusy.value = false
+  if (ok) schedulePostLogin()
 }
 
 function onBack() {
@@ -328,6 +413,27 @@ onBeforeUnmount(() => {
 .auth-hint-sub{
   font-size:0.76rem;color:var(--text-muted);
   margin:0 0 16px;line-height:1.5;
+}
+
+/* ── 登录方式切换 ── */
+.auth-tabs{
+  display:flex;gap:4px;padding:4px;margin:0 0 16px;
+  background:var(--bg-soft,#f5f1ec);border-radius:12px;
+}
+.auth-tab{
+  flex:1;padding:8px 12px;border:0;border-radius:9px;
+  background:transparent;color:var(--text-muted);
+  font-size:0.82rem;font-weight:600;cursor:pointer;
+  transition:background .16s ease,color .16s ease;
+}
+.auth-tab:hover{color:var(--text)}
+.auth-tab--active{
+  background:var(--bg-card,#fff);color:var(--text);
+  box-shadow:0 1px 3px rgba(0,0,0,.08);
+}
+.auth-guide{
+  font-size:0.74rem;color:var(--text-muted);
+  margin:0 0 10px;line-height:1.55;text-align:left;
 }
 .auth-email-display{
   font-size:0.92rem;font-weight:600;color:var(--accent);

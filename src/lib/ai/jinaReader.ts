@@ -13,6 +13,7 @@
 import { t } from '../../i18n/index.js'
 import { toast } from '../toast.js'
 import { supabase, isSupabaseConfigured } from '../supabase.js'
+import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { isPrivateUrl, sanitizeUrlForExternalService } from './urlGuard.js'
 
 export interface JinaReadResult {
@@ -46,21 +47,38 @@ export async function fetchPageContentViaJina(
   }
 
   // 服务端转发需登录态：未配置/未登录时如实报错，绝不回退成前端直连第三方
-  if (!isSupabaseConfigured) {
-    return {
-      success: false,
-      url: cleanUrl,
-      error: t('ai.jinaUnavailable'),
+  //（CloudBase 云函数 v1 不验签、走 IP 哈希限流，无需会话 token）
+  const cbMode = isCloudBaseBackend()
+  let authHeaders: Record<string, string> = {}
+  if (!cbMode) {
+    if (!isSupabaseConfigured) {
+      return {
+        success: false,
+        url: cleanUrl,
+        error: t('ai.jinaUnavailable'),
+      }
+    }
+    let token = ''
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      token = sessionData?.session?.access_token || ''
+    } catch {
+      token = ''
+    }
+    if (!token) {
+      return {
+        success: false,
+        url: cleanUrl,
+        error: t('ai.jinaUnavailable'),
+      }
+    }
+    authHeaders = {
+      Authorization: `Bearer ${token}`,
+      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
     }
   }
-  let token = ''
-  try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    token = sessionData?.session?.access_token || ''
-  } catch {
-    token = ''
-  }
-  if (!token) {
+  const endpoint = edgeFnUrl('jina-proxy')
+  if (!endpoint) {
     return {
       success: false,
       url: cleanUrl,
@@ -80,14 +98,12 @@ export async function fetchPageContentViaJina(
     const safeUrl = sanitizeUrlForExternalService(cleanUrl)
     // 用户可见隐私披露：本次请求会把目标 URL 经服务端发送给第三方 r.jina.ai（每次触发均提示，不做静默外送）
     toast(t('ai.jinaThirdPartyNotice'))
-    // 前端只调自家 jina-proxy Edge Function（服务端转发 r.jina.ai），零直连第三方
-    const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
-    const res = await fetch(`${fnBase}/functions/v1/jina-proxy`, {
+    // 前端只调自家 jina-proxy 云函数（服务端转发 r.jina.ai），零直连第三方
+    const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+        ...authHeaders,
       },
       body: JSON.stringify({ url: safeUrl }),
       signal: combinedSignal,

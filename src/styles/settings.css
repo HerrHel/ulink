@@ -359,6 +359,26 @@
   padding:4px 6px 0;
   border-top:1px solid var(--border-light);
 }
+
+/* ── 设置/修改密码 ── */
+.sp-pw-edit{
+  margin:8px -12px 0;
+  padding:10px 6px 4px;
+  border-top:1px solid var(--border-light);
+}
+.sp-pw-edit .form-input{
+  width:100%;
+  font-size:0.82rem;
+  padding:7px 10px;
+}
+.sp-pw-actions{
+  display:flex;
+  gap:8px;
+  margin-top:8px;
+}
+.sp-pw-msg{
+  margin:6px 0 0;
+}
 .sp-logout-btn{
   width:100%;
   border-radius:var(--radius-md);

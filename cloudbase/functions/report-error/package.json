@@ -1,0 +1,13 @@
+{
+  "name": "ulink-report-error",
+  "version": "1.0.0",
+  "description": "客户端运行时错误上报（error_logs 唯一写入口），CloudBase HTTP 云函数",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

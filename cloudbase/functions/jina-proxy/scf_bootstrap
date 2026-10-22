@@ -1,0 +1,3 @@
+#!/bin/bash
+# SCF Web Server 启动脚本：必须让 HTTP 服务监听 9000（SCF 网关固定转发到该端口）
+node index.js

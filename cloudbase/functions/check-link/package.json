@@ -1,0 +1,13 @@
+{
+  "name": "ulink-check-link",
+  "version": "1.0.0",
+  "description": "死链检测（SSRF 三层防护 + HEAD→GET 降级），CloudBase HTTP 云函数",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

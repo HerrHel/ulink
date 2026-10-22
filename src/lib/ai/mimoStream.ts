@@ -10,6 +10,7 @@ import type { AiCandidateBookmark } from '../../types/ai.js'
 import { t } from '../../i18n/index.js'
 import { ULINK_AGENT_TOOLS } from './tools.js'
 import { supabase, isSupabaseConfigured } from '../supabase.js'
+import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { buildUlinkSystemPrompt, type DynamicContextSlice } from './mimoPrompt.js'
 import { parseMiMoReply } from './mimoReply.js'
 
@@ -183,22 +184,32 @@ export async function askMiMoStream(
   requestBody.tool_choice = context.enableTools === false ? 'none' : 'auto'
 
   // 官方统一鉴权通道：AI 功能为会员服务，请求严格经由 Supabase Edge Function 服务端转发校验
-  if (!isSupabaseConfigured) {
+  // CloudBase 云函数 v1 不验签、走 IP 哈希限流，无需会话 token
+  const cbMode = isCloudBaseBackend()
+  let authHeaders: Record<string, string> = {}
+  if (!cbMode) {
+    if (!isSupabaseConfigured) {
+      throw new Error(t('ai.errNotConfigured'))
+    }
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
+    if (!token) {
+      throw new Error(t('ai.errNeedLogin'))
+    }
+    authHeaders = {
+      Authorization: `Bearer ${token}`,
+      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+    }
+  }
+  const endpoint = edgeFnUrl('mimo-chat')
+  if (!endpoint) {
     throw new Error(t('ai.errNotConfigured'))
   }
-  const { data: sessionData } = await supabase.auth.getSession()
-  const token = sessionData?.session?.access_token
-  if (!token) {
-    throw new Error(t('ai.errNeedLogin'))
-  }
-
-  const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
-  const response = await fetch(`${fnBase}/functions/v1/mimo-chat`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+      ...authHeaders,
     },
     body: JSON.stringify(requestBody),
     signal: context.signal,
@@ -390,22 +401,32 @@ export async function askMiMoRaw(
   if (!config.enabled) {
     throw new Error(t('ai.errDisabled'))
   }
-  if (!isSupabaseConfigured) {
+  // CloudBase 云函数 v1 不验签、走 IP 哈希限流，无需会话 token
+  const cbMode = isCloudBaseBackend()
+  let authHeaders: Record<string, string> = {}
+  if (!cbMode) {
+    if (!isSupabaseConfigured) {
+      throw new Error(t('ai.errNotConfigured'))
+    }
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
+    if (!token) {
+      throw new Error(t('ai.errNeedLogin'))
+    }
+    authHeaders = {
+      Authorization: `Bearer ${token}`,
+      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+    }
+  }
+  const endpoint = edgeFnUrl('mimo-chat')
+  if (!endpoint) {
     throw new Error(t('ai.errNotConfigured'))
   }
-  const { data: sessionData } = await supabase.auth.getSession()
-  const token = sessionData?.session?.access_token
-  if (!token) {
-    throw new Error(t('ai.errNeedLogin'))
-  }
-
-  const fnBase = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || '').replace(/\/+$/, '')
-  const response = await fetch(`${fnBase}/functions/v1/mimo-chat`, {
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
+      ...authHeaders,
     },
     body: JSON.stringify({
       model: config.model,

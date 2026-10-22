@@ -35,3 +35,6 @@ dist_deploy/
 verify_*.html
 .workbuddy/
 /outputs/
+
+# Supabase 导出的业务数据（含用户内容，绝不入库）
+cloudbase/data-export/

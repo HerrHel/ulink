@@ -4,7 +4,7 @@
  * setGroupPublic / fetchPublicGroup / upsertPublicCategoryShare / fetchPublicCategory
  * 不经 SyncRemotePort，直接 supabase。
  */
-import { supabase } from '../../lib/supabase.js'
+import { dbFrom, dbRpc } from '../../lib/dbApi.js'
 import { useDataStore } from '../../stores/data.js'
 import { saveAppData } from '../../stores/app.js'
 import { SHARE_RPC_TIMEOUT_MS } from '../../config/constants.js'
@@ -24,7 +24,7 @@ export async function setGroupPublic(gid: string, isPublic: boolean): Promise<bo
   if (!g) return false
   ds.updateGroup(gid, { isPublic })
   saveAppData()
-  const { error } = await supabase.from('sibling_groups')
+  const { error } = await dbFrom('sibling_groups')
     .update({ is_public: isPublic }).eq('id', gid).eq('user_id', userId)
   if (error) { console.warn('[share] setGroupPublic failed:', error); return false }
   return true
@@ -44,7 +44,7 @@ export async function fetchPublicGroup(
   try {
     const result = await Promise.race([
       (async () => {
-        const { data, error } = await supabase.rpc('get_public_group', { p_gid: gid })
+        const { data, error } = await dbRpc('get_public_group', { p_gid: gid })
         if (error || data == null) {
           if (error) console.warn('[share] get_public_group failed:', error)
           return null
@@ -89,7 +89,7 @@ export const CATEGORY_SHARE_PATH = 'c'
 export async function upsertPublicCategoryShare(categoryId: string): Promise<string | null> {
   const userId = _getUserId()
   if (!userId || !categoryId) return null
-  const { data, error } = await supabase.rpc('upsert_public_category_share', { p_category_id: categoryId })
+  const { data, error } = await dbRpc('upsert_public_category_share', { p_category_id: categoryId })
   if (error) { console.warn('[share] upsert_public_category_share failed:', error); return null }
   return (typeof data === 'string' && data) ? data : null
 }
@@ -104,7 +104,7 @@ export async function fetchPublicCategory(shareId: string): Promise<PublicCatego
   try {
     const result = await Promise.race([
       (async () => {
-        const { data, error } = await supabase.rpc('get_public_category', { p_share_id: shareId })
+        const { data, error } = await dbRpc('get_public_category', { p_share_id: shareId })
         if (error || data == null) {
           if (error) console.warn('[share] get_public_category failed:', error)
           return null
@@ -143,8 +143,7 @@ export async function getCategoryShareId(categoryId: string): Promise<string | n
   const userId = _getUserId()
   if (!userId || !categoryId) return null
   try {
-    const { data, error } = await supabase
-      .from('public_category_shares')
+    const { data, error } = await dbFrom('public_category_shares')
       .select('id')
       .eq('category_id', categoryId)
       .eq('user_id', userId)
@@ -162,8 +161,7 @@ export async function deletePublicCategoryShare(categoryId: string): Promise<boo
   const userId = _getUserId()
   if (!userId || !categoryId) return false
   try {
-    const { error } = await supabase
-      .from('public_category_shares')
+    const { error } = await dbFrom('public_category_shares')
       .delete()
       .eq('category_id', categoryId)
       .eq('user_id', userId)
@@ -183,8 +181,7 @@ export async function fetchUserCategoryShares(): Promise<Array<{ id: string; cat
   const userId = _getUserId()
   if (!userId) return []
   try {
-    const { data, error } = await supabase
-      .from('public_category_shares')
+    const { data, error } = await dbFrom('public_category_shares')
       .select('id, category_id')
       .eq('user_id', userId)
     if (error || !data) return []
@@ -200,8 +197,7 @@ export async function deleteAllPublicCategoryShares(): Promise<boolean> {
   const userId = _getUserId()
   if (!userId) return false
   try {
-    const { error } = await supabase
-      .from('public_category_shares')
+    const { error } = await dbFrom('public_category_shares')
       .delete()
       .eq('user_id', userId)
     if (error) {
