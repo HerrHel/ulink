@@ -21,6 +21,7 @@
 const http = require('http')
 const crypto = require('crypto')
 const { SmtpSession, buildMime, withTimeout } = require('./smtp.js')
+const { issuePowChallenge, verifyPowSolution } = require('./pow.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
@@ -38,6 +39,14 @@ const FEEDBACK_FROM = process.env.FEEDBACK_FROM || SMTP_USER
  * 未配置 → 跳过（仅 honeypot + 限流）。
  */
 const REQUIRE_CAPTCHA = /^(1|true)$/i.test(process.env.REQUIRE_CAPTCHA || '')
+/**
+ * PoW 无感验证开关（默认开）：提交须携带 pow 解答（客户端后台静默解题）。
+ * 有效 PoW 直接放行（跳过图形验证码）；缺失/无效/重放 → 回落 captcha_required
+ * （图形验证码兜底）。REQUIRE_CAPTCHA 同关时，无有效 PoW 回 pow_required 并附新挑战。
+ */
+const REQUIRE_POW = !/^(0|false)$/i.test(process.env.REQUIRE_POW || '')
+/** PoW 挑战 HMAC 签名密钥（防客户端伪造/降难度）；未配置视为未启用（fail-closed 到 captcha） */
+const POW_SECRET = process.env.POW_SECRET || ''
 /** IP 哈希盐：独立于 report-error / check-link，防跨接口关联 */
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-feedback'
 const APP_ORIGIN = (process.env.APP_ORIGIN || 'https://ulink.ren').replace(/\/+$/, '')
@@ -52,7 +61,7 @@ const SMTP_TIMEOUT_MS = 20_000
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
 function sendJson(res, status, body) {
@@ -135,6 +144,15 @@ const server = http.createServer(async (req, res) => {
     res.end()
     return
   }
+  // GET = 签发 PoW 挑战（前端开弹窗时预取、后台静默解题，用户零感知）
+  if (req.method === 'GET') {
+    if (!POW_SECRET) {
+      sendJson(res, 503, { error: 'pow_unavailable' })
+      return
+    }
+    sendJson(res, 200, { ok: true, pow: issuePowChallenge(POW_SECRET) })
+    return
+  }
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'method_not_allowed' })
     return
@@ -182,12 +200,35 @@ const server = http.createServer(async (req, res) => {
 
   const db = getDb()
 
+  // ── PoW 无感验证（主闸）：有效解答直接放行，用户全程无感 ──
+  // 校验＝HMAC 签名（timing-safe）+ 未过期 + 难度达标；jti 一次性消费
+  // （consume_rate_limit 单次窗口）防重放。缺失/无效/重放 → 回落图形验证码。
+  let powSatisfied = false
+  if (REQUIRE_POW && POW_SECRET) {
+    const powSol = payload.pow
+    if (powSol && verifyPowSolution(POW_SECRET, powSol)) {
+      const claim = await db.rpc('consume_rate_limit', {
+        p_key: 'fb-pow:' + String(powSol.jti),
+        p_limit: 1,
+        p_window_secs: 600,
+      })
+      // fail-closed：只认显式 true（consume_rate_limit 拒绝时 data 是 {}）
+      if (!claim.error && claim.data === true) powSatisfied = true
+    }
+    if (!powSatisfied && !REQUIRE_CAPTCHA) {
+      // 无图形验证码兜底时附新挑战（前端自动重解重交一次）
+      sendJson(res, 400, { error: 'pow_required', pow: issuePowChallenge(POW_SECRET) })
+      return
+    }
+  }
+
   // 人机验证（CloudBase auth captcha，按需挑战）：无 token → captcha_required
   // （前端拉起图形验证码、verifyCaptchaData 拿 captcha_token 后重交）；
   // 有 token → **一次性消费**（consume_rate_limit 单次窗口防重放），重复/失败
   // 一律回 captcha_required 要求重新验证（fail-closed）。
+  // PoW 已满足时跳过——图形验证只是 PoW 失败/缺失时的兜底。
   const captchaToken = String(payload.captcha_token ?? '').trim()
-  if (REQUIRE_CAPTCHA) {
+  if (REQUIRE_CAPTCHA && !powSatisfied) {
     if (!captchaToken) {
       sendJson(res, 400, { error: 'captcha_required' })
       return

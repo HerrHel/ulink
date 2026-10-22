@@ -546,6 +546,7 @@ import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { isCloudBaseBackend, invokeCbFunction, getCbFnBase, getCbAuth } from '../../lib/cloudbase.js'
+import { solvePow } from '../../lib/pow.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
@@ -976,6 +977,56 @@ let captchaChallengeToken = ''
 /** verifyCaptchaData 通过后的 captcha_token（提交携带） */
 let captchaVerifiedToken = ''
 
+/**
+ * PoW 无感验证（客户端后台解题，用户零感知）。
+ * 流程：开弹窗即预取挑战并后台解题（~200ms）→ 提交携带解答 → 服务端验签+难度，
+ * jti 一次性消费。**有效 PoW 直接放行**（跳过图形验证码）；缺失/失效才回落
+ * captcha_required 图形验证码兜底。
+ */
+type PowChallenge = { challenge: string; difficulty: number; exp: number; jti: string; signature: string }
+type PowSolution = PowChallenge & { nonce: string }
+let powStash: PowSolution | null = null
+
+async function fetchPowChallenge(): Promise<PowChallenge | null> {
+  try {
+    const base = getCbFnBase()
+    if (!base) return null
+    const res = await fetch(`${base}/send-feedback`, { method: 'GET' })
+    const d = (await res.json().catch(() => ({}))) as { pow?: PowChallenge }
+    return d?.pow?.challenge ? d.pow : null
+  } catch {
+    return null
+  }
+}
+
+async function solvePowChallenge(ch: PowChallenge): Promise<PowSolution | null> {
+  const nonce = await solvePow(ch.challenge, ch.difficulty)
+  return nonce ? { ...ch, nonce } : null
+}
+
+/** 取一份 PoW 解答；stash 用后即清（jti 一次性，服务端防重放） */
+async function ensurePowSolution(): Promise<PowSolution | null> {
+  if (!isCloudBaseBackend()) return null
+  if (powStash) {
+    const s = powStash
+    powStash = null
+    return s
+  }
+  const ch = await fetchPowChallenge()
+  return ch ? solvePowChallenge(ch) : null
+}
+
+/** 后台预解题（开弹窗时调用，提交时零等待）；失败静默——提交时现解或回落图形验证 */
+async function primePow(): Promise<void> {
+  try {
+    const ch = await fetchPowChallenge()
+    if (!ch) return
+    powStash = await solvePowChallenge(ch)
+  } catch {
+    /* 预解失败静默 */
+  }
+}
+
 /** 正文最小长度（与 Edge Function 的 MIN_MESSAGE 保持一致）。 */
 const MIN_FEEDBACK = 5
 
@@ -1004,6 +1055,8 @@ function onFeedback() {
   captchaVerifiedToken = ''
   uiStore.overlays.feedback = true
   uiStore.panels.settings = false
+  // 后台预解 PoW：用户打字期间解题完成，提交时零等待、零感知
+  void primePow()
 }
 
 // ── 图形人机验证（CloudBase auth captcha）──
@@ -1093,25 +1146,37 @@ function openFeedbackMail() {
 
 async function submitFeedback() {
   if (!canSendFeedback.value) return
-  const payload = {
-    message: feedbackText.value.trim(),
-    contact: feedbackContact.value.trim(),
-    locale: locale.value,
-    appVersion: APP_VERSION,
-    captcha_token: captchaVerifiedToken,
-    website: feedbackHoneypot.value,
-  }
   feedbackSending.value = true
   try {
+    // PoW 无感解答（预解过则零等待）；有效 PoW 服务端直接放行
+    const pow = isCloudBaseBackend() ? await ensurePowSolution() : null
+    const payload: Record<string, unknown> = {
+      message: feedbackText.value.trim(),
+      contact: feedbackContact.value.trim(),
+      locale: locale.value,
+      appVersion: APP_VERSION,
+      captcha_token: captchaVerifiedToken,
+      website: feedbackHoneypot.value,
+    }
+    if (pow) payload.pow = pow
     let ok = false
     let errCode = ''
     if (isCloudBaseBackend()) {
       if (!getCbFnBase()) { toast(t('settings.feedbackFailed'), false); return }
       // 服务端成功回 {ok:true}（honeypot 也回 ok——对机器人保持静默）；失败回 {error:'...'}。
       // 非 2xx 时 invokeCbFunction 仍读 body，所以错误码在 data.error 里。
-      const r = await invokeCbFunction('send-feedback', payload)
-      const d = (r.data || {}) as { error?: string; ok?: boolean }
-      // 按需人机验证：服务端要求时弹图形验证码，验证后带 captcha_token 重交
+      let r = await invokeCbFunction('send-feedback', payload)
+      let d = (r.data || {}) as { error?: string; ok?: boolean; pow?: PowChallenge }
+      // PoW 失效（过期/重放）且服务端附新挑战 → 自动重解重交一次（仍无感）
+      if (d.error === 'pow_required' && d.pow) {
+        const retried = await solvePowChallenge(d.pow)
+        if (retried) {
+          payload.pow = retried
+          r = await invokeCbFunction('send-feedback', payload)
+          d = (r.data || {}) as { error?: string; ok?: boolean; pow?: PowChallenge }
+        }
+      }
+      // 图形人机验证兜底（PoW 失败/缺失时）：弹验证码，验证后带 captcha_token 重交
       if (d.error === 'captcha_required' && !captcha.visible) {
         feedbackSending.value = false
         await startCaptcha()
@@ -1137,8 +1202,6 @@ async function submitFeedback() {
     toast(t('settings.feedbackSent'), true)
     feedbackText.value = ''
     feedbackContact.value = ''
-    turnstileToken.value = ''
-    turnstileApi()?.reset()
     uiStore.overlays.feedback = false
   } catch {
     toast(t('settings.feedbackFailed'), false)

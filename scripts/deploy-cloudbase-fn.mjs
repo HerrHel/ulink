@@ -122,10 +122,11 @@ const FN_EXTRA_ENV = {
       IP_HASH_SALT: readEnvLocal('FEEDBACK_IP_HASH_SALT') || 'ulink-feedback',
       // 人机验证（CloudBase auth captcha）默认开启：前端按需挑战 + token 一次性消费
       REQUIRE_CAPTCHA: readEnvLocal('REQUIRE_CAPTCHA') || 'true',
+      // PoW 无感验证（主闸）默认开启：有效 PoW 直接放行，失败回落图形验证码
+      REQUIRE_POW: readEnvLocal('REQUIRE_POW') || 'true',
+      POW_SECRET: readEnvLocal('POW_SECRET') || '',
     }
     if (smtpPass) out.SMTP_PASS = smtpPass
-    const turnstile = readEnvLocal('TURNSTILE_SECRET')
-    if (turnstile) out.TURNSTILE_SECRET = turnstile
     return out
   },
   'jina-proxy': () => {
