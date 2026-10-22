@@ -484,7 +484,32 @@
             />
             <!-- honeypot：真人看不到也填不到，机器人填了就在服务端被静默丢弃 -->
             <input class="sp-feedback-hp" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" v-model="feedbackHoneypot" />
-            <div v-if="TURNSTILE_SITE_KEY" id="lv-turnstile" class="sp-feedback-turnstile"></div>
+            <!-- 图形人机验证（CloudBase auth captcha，按需挑战：服务端回 captcha_required 才出现） -->
+            <div v-if="captcha.visible" class="sp-feedback-captcha">
+              <div class="sp-feedback-captcha-label">{{ t('settings.captchaPrompt') }}</div>
+              <div class="sp-feedback-captcha-row">
+                <img
+                  v-if="captcha.imageData"
+                  :src="captcha.imageData"
+                  class="sp-feedback-captcha-img"
+                  :alt="t('settings.captchaPrompt')"
+                  @click="refreshCaptcha"
+                />
+                <input
+                  id="lv-feedback-captcha"
+                  v-model="captcha.input"
+                  class="form-input sp-feedback-captcha-input"
+                  type="text"
+                  maxlength="8"
+                  autocomplete="off"
+                  :placeholder="t('settings.captchaPlaceholder')"
+                  @keyup.enter="submitCaptchaAndRetry"
+                />
+              </div>
+              <button type="button" class="sp-feedback-link" :disabled="captcha.busy" @click="refreshCaptcha">
+                {{ t('settings.captchaRefresh') }}
+              </button>
+            </div>
             <div class="sp-feedback-meta">
               <!-- 按钮被禁用时必须给出原因：只显示计数的话，用户不知道还差几个字 -->
               <span :class="{ 'sp-feedback-short': feedbackTooShort }">
@@ -497,7 +522,7 @@
           </div>
           <div class="modal-foot confirm-foot">
             <button class="btn btn-secondary" @click="copyFeedbackEmail">{{ t('settings.copyEmail') }}</button>
-            <button class="btn btn-primary" :disabled="!canSendFeedback" @click="submitFeedback">
+            <button class="btn btn-primary" :disabled="!canSendFeedback" @click="captcha.visible ? submitCaptchaAndRetry() : submitFeedback()">
               {{ feedbackSending ? t('settings.feedbackSending') : t('settings.feedbackSend') }}
             </button>
           </div>
@@ -520,7 +545,7 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
-import { isCloudBaseBackend, invokeCbFunction, getCbFnBase } from '../../lib/cloudbase.js'
+import { isCloudBaseBackend, invokeCbFunction, getCbFnBase, getCbAuth } from '../../lib/cloudbase.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
@@ -921,12 +946,6 @@ const FEEDBACK_EMAIL = 'support@ulink.ren'
 /** 反馈接口 = Supabase Edge Function（--no-verify-jwt，凭 anon key 调用）。 */
 const FEEDBACK_ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/send-feedback`
 const FEEDBACK_ANON_KEY = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '')
-/**
- * Turnstile 站点密钥。未配置则跳过人机校验，仅靠 honeypot + 服务端限流；
- * 配置后需同步放开 CSP：script-src 加 https://challenges.cloudflare.com、
- * frame-src 加 https://challenges.cloudflare.com。
- */
-const TURNSTILE_SITE_KEY = String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '')
 
 /** 服务端错误码 → 提示文案键（未列出的错误统一走 feedbackFailed）。 */
 const FEEDBACK_ERROR_KEYS: Record<string, string> = {
@@ -939,7 +958,23 @@ const feedbackText = ref('')
 const feedbackContact = ref('')
 const feedbackHoneypot = ref('')
 const feedbackSending = ref(false)
-const turnstileToken = ref('')
+
+/**
+ * 图形人机验证（CloudBase auth captcha，按需挑战）。
+ * 流程：首次提交放行 → 服务端回 captcha_required → 弹验证码 →
+ * verifyCaptchaData 通过拿 captcha_token → 带 token 重交。
+ * token 由网关签发（opaque + expires_in），服务端做一次性消费防重放。
+ */
+const captcha = reactive({
+  visible: false,
+  imageData: '',
+  input: '',
+  busy: false,
+})
+/** createCaptchaData 的 token（verifyCaptchaData 入参） */
+let captchaChallengeToken = ''
+/** verifyCaptchaData 通过后的 captcha_token（提交携带） */
+let captchaVerifiedToken = ''
 
 /** 正文最小长度（与 Edge Function 的 MIN_MESSAGE 保持一致）。 */
 const MIN_FEEDBACK = 5
@@ -948,7 +983,7 @@ const canSendFeedback = computed(
   () =>
     feedbackText.value.trim().length >= MIN_FEEDBACK &&
     !feedbackSending.value &&
-    (!TURNSTILE_SITE_KEY || !!turnstileToken.value),
+    (!captcha.visible || captcha.input.trim().length > 0),
 )
 
 /** 已输入但未达最小长度——此时按钮是禁用的，必须让用户知道原因。 */
@@ -962,43 +997,82 @@ function onFeedback() {
   feedbackText.value = ''
   feedbackContact.value = ''
   feedbackHoneypot.value = ''
-  turnstileToken.value = ''
+  captcha.visible = false
+  captcha.imageData = ''
+  captcha.input = ''
+  captchaChallengeToken = ''
+  captchaVerifiedToken = ''
   uiStore.overlays.feedback = true
   uiStore.panels.settings = false
-  nextTick(ensureTurnstile)
 }
 
-// ── Turnstile（按需加载，未配置站点密钥时完全不拉脚本）──
-type TurnstileApi = {
-  render: (el: HTMLElement, opts: Record<string, unknown>) => void
-  reset: (el?: HTMLElement) => void
+// ── 图形人机验证（CloudBase auth captcha）──
+type CbAuthCaptcha = {
+  createCaptchaData: (p: { state?: string }) => Promise<{ data?: string; token?: string }>
+  verifyCaptchaData: (p: { token: string; key: string }) => Promise<{ data?: { captcha_token?: string }; captcha_token?: string }>
 }
-function turnstileApi(): TurnstileApi | undefined {
-  return (window as unknown as { turnstile?: TurnstileApi }).turnstile
+
+/** 拉起图形验证码（服务端 captcha_required 或主动挑战） */
+async function startCaptcha(): Promise<void> {
+  try {
+    const auth = getCbAuth() as CbAuthCaptcha | null
+    if (!auth?.createCaptchaData) throw new Error('captcha unavailable')
+    const r = await auth.createCaptchaData({ state: 'feedback' })
+    if (!r?.data || !r?.token) throw new Error('captcha empty')
+    captchaChallengeToken = r.token
+    captcha.imageData = r.data
+    captcha.input = ''
+    captcha.visible = true
+    nextTick(() => document.getElementById('lv-feedback-captcha')?.focus())
+  } catch {
+    toast(t('settings.feedbackFailed'), false)
+  }
 }
-function renderTurnstile(): void {
-  const api = turnstileApi()
-  const el = document.getElementById('lv-turnstile')
-  if (!api || !el) return
-  api.render(el, {
-    sitekey: TURNSTILE_SITE_KEY,
-    theme: 'auto',
-    callback: (token: string) => { turnstileToken.value = token },
-    'expired-callback': () => { turnstileToken.value = '' },
-    'error-callback': () => { turnstileToken.value = '' },
-  })
+
+/** 刷新验证码图（看不清换一张） */
+async function refreshCaptcha(): Promise<void> {
+  if (captcha.busy) return
+  captcha.busy = true
+  try {
+    const auth = getCbAuth() as CbAuthCaptcha | null
+    if (!auth?.createCaptchaData) throw new Error('captcha unavailable')
+    const r = await auth.createCaptchaData({ state: 'feedback' })
+    if (!r?.data || !r?.token) throw new Error('captcha empty')
+    captchaChallengeToken = r.token
+    captcha.imageData = r.data
+    captcha.input = ''
+  } catch {
+    toast(t('settings.captchaWrong'), false)
+  } finally {
+    captcha.busy = false
+  }
 }
-function ensureTurnstile(): void {
-  if (!TURNSTILE_SITE_KEY) return
-  if (turnstileApi()) { renderTurnstile(); return }
-  if (document.getElementById('lv-turnstile-script')) return
-  const s = document.createElement('script')
-  s.id = 'lv-turnstile-script'
-  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-  s.async = true
-  s.defer = true
-  s.onload = renderTurnstile
-  document.head.appendChild(s)
+
+/** 验证图形码 → 拿 captcha_token → 带 token 重交反馈 */
+async function submitCaptchaAndRetry(): Promise<void> {
+  if (!canSendFeedback.value || captcha.busy) return
+  const key = captcha.input.trim()
+  if (!key) return
+  captcha.busy = true
+  feedbackSending.value = true
+  try {
+    const auth = getCbAuth() as CbAuthCaptcha | null
+    if (!auth?.verifyCaptchaData) throw new Error('captcha unavailable')
+    const res = await auth.verifyCaptchaData({ token: captchaChallengeToken, key })
+    const verified = res?.data?.captcha_token || res?.captcha_token
+    if (!verified) throw new Error('verify failed')
+    captchaVerifiedToken = verified
+    captcha.visible = false
+    await submitFeedback()
+  } catch {
+    toast(t('settings.captchaWrong'), false)
+    captcha.input = ''
+    captcha.busy = false
+    await refreshCaptcha()
+  } finally {
+    captcha.busy = false
+    feedbackSending.value = false
+  }
 }
 
 async function copyFeedbackEmail() {
@@ -1024,7 +1098,7 @@ async function submitFeedback() {
     contact: feedbackContact.value.trim(),
     locale: locale.value,
     appVersion: APP_VERSION,
-    turnstileToken: turnstileToken.value,
+    captcha_token: captchaVerifiedToken,
     website: feedbackHoneypot.value,
   }
   feedbackSending.value = true
@@ -1037,6 +1111,12 @@ async function submitFeedback() {
       // 非 2xx 时 invokeCbFunction 仍读 body，所以错误码在 data.error 里。
       const r = await invokeCbFunction('send-feedback', payload)
       const d = (r.data || {}) as { error?: string; ok?: boolean }
+      // 按需人机验证：服务端要求时弹图形验证码，验证后带 captcha_token 重交
+      if (d.error === 'captcha_required' && !captcha.visible) {
+        feedbackSending.value = false
+        await startCaptcha()
+        return
+      }
       ok = !r.error || d.ok === true
       errCode = d.error || ''
     } else {

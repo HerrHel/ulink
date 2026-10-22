@@ -118,7 +118,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 503, { error: 'Service temporarily unavailable' }, cors)
       return
     }
-    if (rl.data === false) {
+    if (rl.data !== true) {
       sendJson(res, 429, { error: 'Rate limit exceeded' }, { ...cors, 'Retry-After': '60' })
       return
     }

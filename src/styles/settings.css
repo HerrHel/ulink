@@ -564,7 +564,11 @@
 .sp-feedback-contact{margin-top:0}
 /* honeypot：移出视口而非 display:none —— 后者可能被机器人直接跳过 */
 .sp-feedback-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
-.sp-feedback-turnstile{margin-top:10px}
+.sp-feedback-captcha{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.sp-feedback-captcha-label{font-size:12px;opacity:.85}
+.sp-feedback-captcha-row{display:flex;gap:8px;align-items:center}
+.sp-feedback-captcha-img{height:40px;border-radius:6px;border:1px solid var(--lv-border,#d9d9d9);cursor:pointer;background:#fff}
+.sp-feedback-captcha-input{flex:1;min-width:0;max-width:180px;height:36px}
 .sp-feedback-meta{
   margin-top:8px;display:flex;align-items:center;justify-content:space-between;
   gap:8px;font-size:0.7rem;color:var(--text-muted);

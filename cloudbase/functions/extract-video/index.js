@@ -180,7 +180,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 503, { error: '提取服务暂时不可用，请稍后再试' }, cors)
       return
     }
-    if (rl.data === false) {
+    if (rl.data !== true) {
       sendJson(res, 429, { error: 'Rate limit exceeded' }, { ...cors, 'Retry-After': '60' })
       return
     }

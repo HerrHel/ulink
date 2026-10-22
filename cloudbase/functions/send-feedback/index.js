@@ -31,7 +31,13 @@ const SMTP_PASS = process.env.SMTP_PASS || ''
 const FEEDBACK_TO = process.env.FEEDBACK_TO || 'support@ulink.ren'
 /** 发件人：多数 SMTP 要求与登录账号一致，故默认取 SMTP_USER */
 const FEEDBACK_FROM = process.env.FEEDBACK_FROM || SMTP_USER
-const TURNSTILE_SECRET = process.env.TURNSTILE_SECRET || ''
+/**
+ * 人机验证开关（CloudBase auth captcha，按需挑战）：
+ * '1'/'true' → 未带有效 captcha_token 的提交回 400 {error:'captcha_required'}，
+ * 前端拉起图形验证码后带 token 重交；token 一次性消费（防重放）。
+ * 未配置 → 跳过（仅 honeypot + 限流）。
+ */
+const REQUIRE_CAPTCHA = /^(1|true)$/i.test(process.env.REQUIRE_CAPTCHA || '')
 /** IP 哈希盐：独立于 report-error / check-link，防跨接口关联 */
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-feedback'
 const APP_ORIGIN = (process.env.APP_ORIGIN || 'https://ulink.ren').replace(/\/+$/, '')
@@ -89,21 +95,6 @@ function clientIp(req) {
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(s, 'utf8').digest('hex')
-}
-
-async function verifyTurnstile(token, ip) {
-  if (!token) return false
-  try {
-    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ secret: TURNSTILE_SECRET, response: token, remoteip: ip }),
-    })
-    const data = await res.json().catch(() => ({}))
-    return data.success === true
-  } catch (e) {
-    return false
-  }
 }
 
 function looksLikeEmail(s) {
@@ -166,7 +157,6 @@ const server = http.createServer(async (req, res) => {
   const contact = String(payload.contact ?? '').trim()
   const locale = String(payload.locale ?? '').slice(0, 20)
   const appVersion = String(payload.appVersion ?? '').slice(0, 40)
-  const turnstileToken = String(payload.turnstileToken ?? '').trim()
   // honeypot：正常用户看不到这个字段，填了即为机器人
   const honeypot = String(payload.website ?? '').trim()
 
@@ -190,12 +180,28 @@ const server = http.createServer(async (req, res) => {
   const ip = clientIp(req)
   const ipHash = sha256Hex(ip + '|' + IP_HASH_SALT)
 
-  if (TURNSTILE_SECRET && !(await verifyTurnstile(turnstileToken, ip))) {
-    sendJson(res, 400, { error: 'captcha_failed' })
-    return
-  }
-
   const db = getDb()
+
+  // 人机验证（CloudBase auth captcha，按需挑战）：无 token → captcha_required
+  // （前端拉起图形验证码、verifyCaptchaData 拿 captcha_token 后重交）；
+  // 有 token → **一次性消费**（consume_rate_limit 单次窗口防重放），重复/失败
+  // 一律回 captcha_required 要求重新验证（fail-closed）。
+  const captchaToken = String(payload.captcha_token ?? '').trim()
+  if (REQUIRE_CAPTCHA) {
+    if (!captchaToken) {
+      sendJson(res, 400, { error: 'captcha_required' })
+      return
+    }
+    const claim = await db.rpc('consume_rate_limit', {
+      p_key: 'fb-captcha:' + sha256Hex(captchaToken),
+      p_limit: 1,
+      p_window_secs: 1800,
+    })
+    if (claim.error || claim.data !== true) {
+      sendJson(res, 400, { error: 'captcha_required' })
+      return
+    }
+  }
 
   // 限流：同 IP 1 小时内提交数（DB 计数跨实例一致；查询失败 fail-closed）
   try {

@@ -120,6 +120,8 @@ const FN_EXTRA_ENV = {
       FEEDBACK_TO: readEnvLocal('FEEDBACK_TO') || 'support@ulink.ren',
       APP_ORIGIN: 'https://ulink.ren',
       IP_HASH_SALT: readEnvLocal('FEEDBACK_IP_HASH_SALT') || 'ulink-feedback',
+      // 人机验证（CloudBase auth captcha）默认开启：前端按需挑战 + token 一次性消费
+      REQUIRE_CAPTCHA: readEnvLocal('REQUIRE_CAPTCHA') || 'true',
     }
     if (smtpPass) out.SMTP_PASS = smtpPass
     const turnstile = readEnvLocal('TURNSTILE_SECRET')
