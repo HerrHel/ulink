@@ -16,6 +16,14 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 > - 客户端双后端入口：`src/lib/dbApi.ts`（`dbFrom`/`dbRpc`）；`VITE_BACKEND` 在 `vitest.config.ts` 钉死为空
 > - 网络策略：公开读只能走 SECURITY DEFINER RPC；`consume_rate_limit` 拒绝时返回 `{}`，判定必须 `data !== true`
 > - 完整操作手册与坑：`docs/CLOUDBASE_MIGRATION.md`；备案：`docs/ICP_FILING_PREP.md`
+>
+> **CLI 速查（任何 agent 可直接使用，无需重新登录）**
+> - 二进制：`~/.workbuddy/binaries/node/cli-connector-packages/tcb`（bash 脚本 → `bash <path> ...`）
+> - 登录态：**机器级共享** `~/.config/.cloudbase/auth.json`——某个 agent 登录后全体可用；报 `No valid identity` 时跑 `tcb login`，把输出的设备码链接交给用户点授权
+> - 自检：`bash <tcb> env list`（应见 `ulink-d1g5srvjo54b1886a`）
+> - 查库：`bash <tcb> db execute -e ulink-d1g5srvjo54b1886a --json --sql "SELECT ..."`（SQL ≤10KB/批）
+> - 函数/路由：`bash <tcb> fn list`、`bash <tcb> routes list --json`
+> - 部署（cwd 必须为仓库根）：`node scripts/deploy-cloudbase-fn.mjs <fn> [--env-only]`
 
 ## 常用命令
 
