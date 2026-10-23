@@ -4,7 +4,18 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## 项目概述
 
-与链（ulink，原 LinkVault）— 单页书签管理器（PWA），Vue 3 + Pinia + TipTap 编辑器，Vite 构建，TypeScript。数据持久化于 localStorage + IndexedDB（Dexie），可选 Supabase 云端同步。**双语文案**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板；首页静态 SEO 默认中文（应用内可在中文 / English 间切换，文档/首装/重置数据均跟随当前语言）。
+与链（ulink，原 LinkVault）— 单页书签管理器（PWA），Vue 3 + Pinia + TipTap 编辑器，Vite 构建，TypeScript。数据持久化于 localStorage + IndexedDB（Dexie），云端同步/认证走**腾讯云开发 CloudBase**。**双语文案**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板；首页静态 SEO 默认中文（应用内可在中文 / English 间切换，文档/首装/重置数据均跟随当前语言）。
+
+> ## ⚠️ 后端现状（2026-10-22 起，务必先读）
+>
+> **生产已全量切换 CloudBase**（`.env.production` 的 `VITE_BACKEND=cloudbase`），Supabase 仅作历史迁移来源，**不要再往 `supabase/` 目录加功能**。
+>
+> - 环境 `ulink-d1g5srvjo54b1886a`（ap-shanghai，个人版），PG `postgres-2m9745ae`
+> - 7 个 HTTP 云函数：`report-error / check-link / send-feedback / extract-video / jina-proxy / mimo-chat / share-ssr`，代码在 `cloudbase/functions/<name>/`
+> - 部署：`node scripts/deploy-cloudbase-fn.mjs <fn>`（`--env-only` 只换环境变量）；派生资产 `node scripts/build-fn-assets.mjs`
+> - 客户端双后端入口：`src/lib/dbApi.ts`（`dbFrom`/`dbRpc`）；`VITE_BACKEND` 在 `vitest.config.ts` 钉死为空
+> - 网络策略：公开读只能走 SECURITY DEFINER RPC；`consume_rate_limit` 拒绝时返回 `{}`，判定必须 `data !== true`
+> - 完整操作手册与坑：`docs/CLOUDBASE_MIGRATION.md`；备案：`docs/ICP_FILING_PREP.md`
 
 ## 常用命令
 
@@ -42,7 +53,7 @@ Store 按"数据 / UI / 覆盖层 / 同步 / 安全"分多块，`app.ts` 为 Fac
 - **`stores/undo.ts`** — 每组独立的 undo/redo 栈
 - **`stores/app.ts`** — Facade，组合 data/ui/undo 三个 Store，对外暴露统一接口；新代码也可直接用具体 Store
 - **覆盖层 Store**：`toast.ts`（Toast/Confirm/Undo）、`contextMenu.ts`、`actionSheet.ts`、`attrDropdown.ts`、`overlay.ts`（batchMove/mfb/mention 等开关）
-- **`stores/auth.ts`** — Supabase 认证状态（user/session/OTP）
+- **`stores/auth.ts`** — 认证状态（user/session/OTP）；驱动由 `src/lib/authDriver.ts` 按后端分流（CloudBase / 历史 Supabase）
 - **`stores/e2e.ts`** — E2E 加密开关与解锁状态
 - **`stores/vault.ts`** — 主密码/生物识别安全状态（与 E2E 加密协作）
 - **`stores/sync.ts`** — 云端同步状态（status/lastSyncAt/conflicts/realtime subscription）
@@ -109,7 +120,7 @@ composables 按职责分三组：
 - `components/overlays/` — ContextMenu、ActionSheet、BatchPopover、SearchSuggest、ToastContainer、MentionDropdown、AddPopover、AttrDropdown、CommandPalette、DeadLinksPopover、SyncConflictBanner
 - `components/shell/` — AppHeader、AppNav、FilterBar、BatchBar、BatchBottom、DetailPanel、SettingsPanel、AttrChips
 - 分享功能（原 `components/share/` 空占位目录已移除）：公开分享与 Fork 的实现位于 `views/ShareView.vue`（分享页 SPA UI，兼容兜底）+ `composables/domain/useDataShare.ts`（分享/Fork 逻辑 + 链接生成）+ `composables/domain/syncShare.ts`（云端公开读写）；后端公开读见 supabase migrations 005/010/012/013/014/015/018 与 `get_public_group` RPC。
-- **分享页 SSR（解决 OG 预览/SEO）——终态同域**：分享链接为 `https://ulink.ren/s/<gid>`（`SHARE_BASE`，`src/config/urls.ts`），由 Cloudflare Pages Function `functions/s/[gid].ts` 服务端渲染（`functions/_routes.json` 仅 `/s/*` 走函数，`public/_redirects` 兜 SPA fallback）；渲染核为可移植纯函数 `functions/_lib/share-render.ts`（零运行时依赖，支持 `ShareLocale = 'zh-CN' | 'en-US'`，按 `?lang=` 或 Accept-Language 头选择语言）。**边缘缓存走函数内 Cache API**（`functions/_lib/share-cache.ts`：成功页 5 分钟新鲜 + 24h 故障兜底副本，`x-share-cache: MISS/HIT/STALE` 可观测）——CF Pages 会把 Function 响应的 Cache-Control 覆写为 max-age=0，响应头方案无效，必须用显式缓存通道。上游故障渲染 503（无兜底副本时）而非误导性 404。历史方案 `supabase/functions/share-html/index.ts`（Deno Edge Function）保留作旧链接兜底，其渲染部分与 `share-render.ts` 保持同步（同样的 T 字典）。数据复用 `get_public_group` RPC；og:image 用静态品牌图 `public/share-cover.png`（Pillow 生成，中英双品牌 + 域名）。部署：`npm run pages:deploy`（wrangler，项目 ulink，env：SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN）。
+- **分享页 SSR（解决 OG 预览/SEO）——终态同域**：分享链接为 `https://ulink.ren/s/<gid>`（`SHARE_BASE`，`src/config/urls.ts`）。**生产由 CloudBase `share-ssr` 云函数服务**（`cloudbase/functions/share-ssr/`：网关 `path=/s` + `enablePathTransmission` 前缀透传，函数内分流 `/s/<gid>` 与 `/s/c/<sid>`；渲染核 `share-render.ts` 原样 `--bundle` 派生；实例内存缓存 300s + 24h 兜底）。CF Pages 版（`functions/s/[gid].ts`，边缘 Cache API 5min+24h，`x-share-cache: MISS/HIT/STALE`）**仍保留但已非生产路径**，备案切解析后退役。历史 Deno 版 `supabase/functions/share-html/index.ts` 仅作旧链接兜底，其 T 字典须与 `share-render.ts` 保持同步。数据走 `get_public_group` RPC；og:image 用静态品牌图 `public/share-cover.png`。
 - `components/ui/` — E2ELockOverlay（主密码锁定覆盖层）、ErrorBoundary
 
 ### src/config/
@@ -131,7 +142,7 @@ composables 按职责分三组：
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
 - **安全头**：自定义 headersPlugin 注入 CSP、X-Content-Type-Options 等
 - **SPA 404 回退**：spa404Plugin 已移除（2026-08-23），GitHub Pages 已停用；现由 Cloudflare Pages 原生 SPA 支持，未知路径回退 `/`（落地页）
-- **部署**：Cloudflare Pages（`npm run pages:deploy`，wrangler 项目 ulink）
+- **前端部署**：Cloudflare Pages（`npm run pages:deploy`，wrangler 项目 ulink）；**后端云函数**用 `node scripts/deploy-cloudbase-fn.mjs <fn>`。⚠️ 备案通过后 `ulink.ren` 将切 CloudBase（届时静态产物需同步部署到 CloudBase 静态托管）
 
 ### CLI
 
@@ -139,7 +150,7 @@ composables 按职责分三组：
 
 ### 浏览器扩展
 
-`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc 等多浏览器；通过 `npm run ext:pack` 打包），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏（side_panel / sidebar_action）沉浸式操作。**双语文案**：扩展使用标准 WebExtensions i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` 为 `npm run ext:bundle-supabase` 生成的 bundle（不提交）。
+`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc 等多浏览器；通过 `npm run ext:pack` 打包），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏（side_panel / sidebar_action）沉浸式操作。**双语文案**：扩展使用标准 WebExtensions i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` **现为 CloudBase shim**（`window.supabase.createClient(envId, publishableKey)` → `{ from: rdb().from, auth }`，`verifyOtp` 闭包适配），配套 `lib/cloudbase-sdk.js`（@cloudbase/js-sdk IIFE bundle）；`npm run ext:bundle-supabase` 的 supabase-js 生成物已废弃。
 
 ### 样式
 
@@ -168,8 +179,8 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 ## 运维与安全
 
 - **CSP**：`public/_headers`（生产）和 `vite.config.ts`（dev）。生产 script-src `'self'`（无 unsafe-inline），connect-src 有意放宽 `'self' https: wss://*.supabase.co`（死链 checkDirect 直连任意 URL 所需，勿私自收紧，见 vite.config.ts SEC-05 注释）；仅 dev 放宽 script-src 支持 HMR
-- **页面/视频读取第三方转发（jina-proxy，2026-10-20 起无前端直连例外）**：AI 页面/视频读取的**降级链路**（`src/lib/ai/jinaReader.ts`）在 extract-video Edge Function 失败时经 `supabase/functions/jina-proxy/` 服务端转发至 `r.jina.ai` 读取（国内网络降级），前端零直连第三方抓取服务。jina-proxy 防护对齐 extract-video/check-link 口径：鉴权（verify_jwt + getUser）+ 每用户限流（034 `consume_rate_limit`，fail-closed）+ SSRF 校验（复用 `check-link/ssrf-guard.ts` 与 `extract-video/video-adapters.ts` 真源，含 DNS fail-closed）+ CORS fail-closed + 上游超时 + 读取长度上限；目标 URL 仍会发送给第三方 r.jina.ai，前端每次触发以 toast 向用户披露。禁止前端直连外部抓取服务，也禁止移除该 toast 披露。
-- **Edge Function**（`supabase/functions/check-link/`）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）；每用户限流（迁移 034 `consume_rate_limit` 计数器 + `private.rate_limit_counters`，默认 1200 次/分，`CHECK_LINK_RATE_LIMIT_PER_MIN` 可覆盖）；history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
-- **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → Supabase `error_logs` 表（5s 节流，匿名 INSERT 允许）
+- **页面/视频读取第三方转发（jina-proxy，2026-10-20 起无前端直连例外）**：AI 页面/视频读取的**降级链路**（`src/lib/ai/jinaReader.ts`）在 extract-video Edge Function 失败时经 `cloudbase/functions/jina-proxy/` 服务端转发（原 `supabase/functions/jina-proxy/` 已迁移）至 `r.jina.ai` 读取（国内网络降级），前端零直连第三方抓取服务。jina-proxy 防护对齐 extract-video/check-link 口径：鉴权（verify_jwt + getUser）+ 每用户限流（034 `consume_rate_limit`，fail-closed）+ SSRF 校验（复用 `check-link/ssrf-guard.ts` 与 `extract-video/video-adapters.ts` 真源，含 DNS fail-closed）+ CORS fail-closed + 上游超时 + 读取长度上限；目标 URL 仍会发送给第三方 r.jina.ai，前端每次触发以 toast 向用户披露。禁止前端直连外部抓取服务，也禁止移除该 toast 披露。
+- **云函数 check-link**（生产 `cloudbase/functions/check-link/`，原 `supabase/functions/check-link/` 已迁移）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）；每用户限流（迁移 034 `consume_rate_limit` 计数器 + `private.rate_limit_counters`，默认 1200 次/分，`CHECK_LINK_RATE_LIMIT_PER_MIN` 可覆盖）；history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
+- **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → CloudBase `error_logs` 表（生产经 `report-error` 云函数写入，5s 节流）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
 - **CI/CD**：`.github/workflows/` — 部署（lint+test+build+deploy）、CI（PR 触发 lint+test）、Dependabot 周检

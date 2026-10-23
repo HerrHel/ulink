@@ -2,7 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-与链（ulink，原 LinkVault）— 单页书签管理器（PWA）。Vue 3 + Pinia + TipTap 编辑器，Vite + TypeScript，localStorage + IndexedDB（Dexie）持久化，可选 Supabase 云端同步。**双语**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板（设置→语言）；源码注释沿用中文。
+与链（ulink，原 LinkVault）— 单页书签管理器（PWA）。Vue 3 + Pinia + TipTap 编辑器，Vite + TypeScript，localStorage + IndexedDB（Dexie）持久化，云端同步/认证走**腾讯云开发 CloudBase**。**双语**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板（设置→语言）；源码注释沿用中文。
+
+> ⚠️ **后端现状（2026-10-22 起）**：生产已全量切换 CloudBase（`VITE_BACKEND=cloudbase` 在 `.env.production`），Supabase 仅为历史迁移来源，**勿在 `supabase/` 目录加功能**。云函数在 `cloudbase/functions/<name>/`，部署 `node scripts/deploy-cloudbase-fn.mjs <fn>`。完整说明见 `AGENTS.md` 顶部「后端现状」区块与 `docs/CLOUDBASE_MIGRATION.md`。
 
 > 本文档为精简版，完整架构与模块清单见根目录 `AGENTS.md`（两者需同步维护）。
 
