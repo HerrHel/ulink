@@ -30,18 +30,6 @@ export interface SiteCommandBlockCtx {
   app: ReturnType<typeof useAppStore>
   /** 中止信号（来自 dispatchSiteCommand 的 SiteCommanderContext）：HITL 确认后校验「停止生成」 */
   signal?: AbortSignal
-  /**
-   * 本轮对话附加的卡片引用（与 stores/ui.ts 的 AiAttachedCardRef 同构）。
-   * 注意：提交时 ui.aiAttachedCards 已被清空，故必须由调用方显式透传，
-   * 供「把此书签/这张移到 XX」这类指代性指令解析真实主体。
-   */
-  attachedCards?: AttachedCardRef[]
-}
-
-/** 附加卡片引用（type 与 cardReader 的 ResolvedCardContext 保持一致） */
-export interface AttachedCardRef {
-  type: 'bm' | 'group'
-  id: string
 }
 
 /** 返回 null 表示未命中该块，继续下一块；返回 SiteCommandResult 即短路 */

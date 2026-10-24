@@ -1,9 +1,15 @@
 /**
  * siteIntents.ts — 站内指令意图解析层（自 dispatchSiteCommand 纯搬运拆出）
- * 职责：
+ *
+ * 职责边界（2026-10-24 收窄）：
  * 1. 仅做「正则匹配 + 参数提取」，不做任何副作用（不碰 Store / UI / 网络）；
- * 2. 正则逐字节原样搬运，匹配语义与拆分前严格一致（单测与 e2e 依赖精确语义）；
- * 3. 每个解析函数与调度层一个意图块一一对应，匹配顺序即调度层短路顺序。
+ * 2. **只管封闭集合**：零参数意图（切主题 / 清回收站 / 查重 / 体检…）与显式 /slash 指令。
+ *    带参数的自然语言一律交大模型——意图是封闭集合（可穷举），参数是开放集合（无法穷举），
+ *    拿正则做后者只能猜边界，猜错就是灾难：「把 X 移到 Y」家族累计 6 处误判，
+ *    「新建分类 Z」曾真的建出名叫「来放工作用的东西」的分类。
+ * 3. 唯二例外：parseBatchMoveIntent（依赖 UI 勾选状态，模型看不见这份信息）、
+ *    parseSimilarSiteIntent（LLM 侧没有 find-similar 工具，删掉是功能损失）。
+ * 4. 每个解析函数与调度层一个意图块一一对应，匹配顺序即调度层短路顺序。
  */
 
 // ── 1. 帮助说明 (/help, /?, 帮助) ──
@@ -113,15 +119,11 @@ export function parseCatIntent(query: string): CatIntent | null {
   }
 
   const catSlashMatch = query.match(/^\/cat(?:\s+add)?\s+(.+)$/i)
-  const catNlMatch = query.match(/^(?:请?帮?我?)?(?:新建|创建|添加|增加)分类\s*[:：]?\s*(.+)$/i)
-  const catName = catSlashMatch ? catSlashMatch[1]?.trim() : catNlMatch ? catNlMatch[1]?.trim() : null
+  // 只认显式 /cat 指令。自然语言的「新建分类 XX」交大模型：
+  // 「帮我创建分类来放工作用的东西」需要理解意图，不是抠个名字就够（曾真的建出
+  // 一个叫「来放工作用的东西」的分类）。用户打了斜杠 = 明确指定，直接信任。
+  const catName = catSlashMatch ? catSlashMatch[1]?.trim() : null
   if (catName === null) {
-    return null
-  }
-  // 自然语言分支必须像分类名，否则交回大模型 —— 否则「帮我创建分类来放工作用的东西」
-  // 会真的建出一个叫「来放工作用的东西」的分类（写副作用，比查不到更糟）。
-  // 显式 /cat 指令是用户明确指定，原样信任。
-  if (!catSlashMatch && !looksLikeCategoryName(catName)) {
     return null
   }
   return { kind: 'add', name: catName }
@@ -153,26 +155,16 @@ export function parseDedupIntent(query: string): boolean {
   )
 }
 
-// ── 6.5 主题工作台生成 (/pack <主题名>, 帮我搭建XX工作台) ──
+// ── 6.5 主题工作台生成 (/pack <主题名>) ──
 export function parsePackIntent(query: string): { rawTopic: string | undefined } | null {
+  // 只认显式 /pack 指令。自然语言的「帮我搭建 XX 工作台」交大模型：
+  // 「搭建一个前端学习工作台」用正则抠出来的主题会带量词（「一个前端学习」），
+  // 拿它去云端检索只会得到偏题的结果。
   const packSlashMatch = query.match(/^\/pack(?:\s+(.+))?$/i)
-  const packNlMatch = query.match(
-    /^(?:请?帮?我?)?(?:搭建|整理|创建|生成|建一个|建立)(?:一套|个)?(.+?)(?:工作台|工具链|工具箱|聚合组|合集)$/i,
-  )
-  if (!packSlashMatch && !packNlMatch) {
+  if (!packSlashMatch) {
     return null
   }
-  const rawTopic = packSlashMatch
-    ? packSlashMatch[1]?.trim()
-    : packNlMatch
-      ? packNlMatch[1]?.trim()
-      : ''
-  // 自然语言分支的主题必须像主题名（量词前缀、整句口语都不算），
-  // 否则交回大模型 —— 否则会拿「一个前端学习」「一下桌面」去云端检索并生成工作台计划。
-  if (!packSlashMatch && rawTopic && !looksLikeTopicName(rawTopic)) {
-    return null
-  }
-  return { rawTopic }
+  return { rawTopic: packSlashMatch[1]?.trim() }
 }
 
 // ── 7. 死链检测与自愈 (/deadlink, 检查死链, 死链自愈) ──
@@ -238,41 +230,21 @@ export function parseBatchMoveIntent(query: string): { targetName: string } | nu
   return { targetName }
 }
 
-// ── 11. 批量整理未分类 (/move uncategorized <分类名>, 把未分类移动到 [分类名]) ──
+// ── 11. 批量整理未分类 (/move uncategorized <分类名>) ──
 export function parseMoveIntent(query: string): { targetCategoryRaw: string | undefined } | null {
+  // 只认显式 /move uncategorized <名称>。自然语言的「把所有未分类移到 X」
+  // 交大模型（它能把「移到合适的分类」这种需要判断的请求做对）。
   const moveSlashMatch = query.match(/^\/move\s+uncategorized\s+(.+)$/i)
-  const moveNlMatch = query.match(
-    /^(?:把|将)?(?:所有)?未分类(?:书签)?(?:全部)?(?:移动到?|移到|放到|归入|归到)\s*[:：]?\s*(.+)$/i,
-  )
-  if (!moveSlashMatch && !moveNlMatch) {
+  if (!moveSlashMatch) {
     return null
   }
-  const targetCategoryRaw = moveSlashMatch
-    ? moveSlashMatch[1]?.trim().replace(/^到\s*/, '')
-    : moveNlMatch
-      ? moveNlMatch[1]?.trim().replace(/^到\s*/, '')
-      : null
-  // 自然语言分支：目标不像分类名（「把所有未分类移到合适的分类去」）→ 交回大模型；
-  // 显式 /move uncategorized <名称> 信任用户输入（仍由块内查库判定存在性）。
-  if (!moveSlashMatch && targetCategoryRaw && !looksLikeCategoryName(targetCategoryRaw)) {
-    return null
-  }
-  return { targetCategoryRaw: targetCategoryRaw ?? undefined }
+  return { targetCategoryRaw: moveSlashMatch[1]?.trim().replace(/^到\s*/, '') }
 }
 
-// ── 11.2 具体书签定向移动：把 [XX] 移动到 [YY] (分类) ──
-export interface SpecificMoveIntent {
-  itemQuery: string
-  targetCategoryName: string
-}
-
-/**
- * 指代性主体（此书签 / 这张 / 它 / 当前…）。
- * 这类主体的真实指向只能由「本轮附加卡片」或大模型上下文解析，
- * 若当作实体名去库里 includes() 匹配，必然落空并产出误导性文案。
- */
-const PRONOUN_SUBJECT_RE =
-  /^(?:此|这|那|该|本|它|它们|当前|刚才|上面|前面|上述|选中|这些|那些|这个|这张|这条)(?:个|张|条|本|款)?(?:书签|卡片|链接|网站|网页|项目|条目|收藏)?$/
+// ── 共享：分类名形似度判定 ──
+// 带参数的自然语言指令已整体交回大模型（见文件头「职责边界」），本判定当前只剩
+// 「把这些书签移到 X」（parseBatchMoveIntent）一处使用——它依赖 UI 勾选状态，
+// 是大模型看不见的信息优势，故保留。
 
 /** 分类名不该出现的标点 / 连词 / 模糊限定词：出现即说明用户在描述「做什么」，而非「分类叫什么」 */
 const CATEGORY_STOPWORD_RE =
@@ -280,12 +252,6 @@ const CATEGORY_STOPWORD_RE =
 
 /** 分类名长度上限（按码点计）：超过基本是一句口语而不是名称 */
 const CATEGORY_NAME_MAX_LEN = 12
-
-/** 主题名长度上限：工作台/合集主题允许比分类名更长（如「AI 绘画工作流」） */
-const TOPIC_NAME_MAX_LEN = 20
-
-/** 主题名残留的量词/指示词前缀（「搭建一个 XX 工作台」里的「一个」不该进主题名） */
-const TOPIC_LEADING_FILLER_RE = /^(?:一下|一个|一套|一些|几个|这个|那个|这件|那件|个)/
 
 /** 泛化/指代性目标（「像这样的工具」里的「这样」不是实体名） */
 const GENERIC_TARGET_RE = /^(?:这样|这种|那样|那种|这些|那些|这个|那个|此|它|它们|类似|同类|其他|别的|什么|啥|一样)/
@@ -300,10 +266,8 @@ const CLAUSE_LEADING_RE =
 /**
  * 判断一段文本是否「像分类名」。
  *
- * 确定性指令只在文本确实像名称时才接管；否则一律返回 false 交给大模型做语义理解。
  * 原则：宁可漏判（走 LLM，最差也只是多问一句），也不许错判
- * （把整句口语当分类名查库/建分类，用户会收到「未找到名称包含『合适的分类去…』的分类」
- *   或凭空多出一个叫「来放工作用的东西」的分类）。
+ * （把整句口语当分类名查库，用户会收到「未找到名称包含『合适的分类去…』的分类」）。
  */
 export function looksLikeCategoryName(raw: string): boolean {
   const name = raw.trim()
@@ -315,78 +279,6 @@ export function looksLikeCategoryName(raw: string): boolean {
   // 句末语气/趋向词：「…分类去」「…吧」不是名称
   if (/[的吧呢啊哦呀去]$/.test(name)) return false
   return true
-}
-
-/**
- * 判断一段文本是否「像主题名」（工作台 / 工具链 / 合集）。
- *
- * 与 looksLikeCategoryName 同源，但长度上限更宽、且额外拒绝量词前缀
- * ——「帮我搭建一个前端学习工作台」捕获到的是「一个前端学习」，量词必须剥掉。
- */
-export function looksLikeTopicName(raw: string): boolean {
-  const name = raw.trim()
-  if (!name) return false
-  if ([...name].length > TOPIC_NAME_MAX_LEN) return false
-  if (CATEGORY_STOPWORD_RE.test(name)) return false
-  if (TOPIC_LEADING_FILLER_RE.test(name)) return false
-  if (/[的吧呢啊哦呀去]$/.test(name)) return false
-  return true
-}
-
-export function parseSpecificMoveIntent(query: string): SpecificMoveIntent | null {
-  if (/^(?:把|将)?(?:所有)?未分类/i.test(query) || /^(?:把|将)?(?:选中的|这些)/i.test(query)) {
-    return null
-  }
-  const parts = extractMoveParts(query)
-  if (!parts) return null
-  // 守卫一：指代主体 → 转交 11.3 / 大模型（见 parsePronounMoveIntent）
-  if (PRONOUN_SUBJECT_RE.test(parts.subject)) return null
-  // 守卫二：目标不像分类名（整句口语、复合意图）→ 交给大模型
-  if (!looksLikeCategoryName(parts.targetCategoryName)) return null
-  return { itemQuery: parts.subject, targetCategoryName: parts.targetCategoryName }
-}
-
-/** 「把 X 移到 Y」的结构拆分结果（两种意图共用同一正则，保证语义一致） */
-interface MoveParts {
-  subject: string
-  targetCategoryName: string
-}
-
-const MOVE_PATTERN =
-  /^(?:请?帮?我?)?(?:把|将)\s*(.+?)\s*(?:移动到?|移到|放到|归入|归到)\s*(.+?)(?:\s*分类)?$/i
-
-function extractMoveParts(query: string): MoveParts | null {
-  const match = query.match(MOVE_PATTERN)
-  if (!match) return null
-  const subject = match[1].trim()
-  const targetCategoryName = match[2]
-    .trim()
-    .replace(/^到\s*/, '')
-    .replace(/分类$/, '')
-    .trim()
-  if (!subject || !targetCategoryName) return null
-  return { subject, targetCategoryName }
-}
-
-// ── 11.3 指代性定向移动：把 [此书签/这张/它] 移到 [YY 分类] ──
-export interface PronounMoveIntent {
-  targetCategoryName: string
-}
-
-/**
- * 指代性定向移动意图。
- *
- * 仅解析「目标分类」——主体（此书签 / 这张 / 它）的真实指向只能来自本轮附加卡片，
- * 由 move 指令块结合 ctx.attachedCards 解析。目标不像分类名时返回 null，
- * 让模糊整理请求（「移到合适的分类去」）落回大模型。
- */
-export function parsePronounMoveIntent(query: string): PronounMoveIntent | null {
-  if (/^(?:把|将)?(?:所有)?未分类/i.test(query)) return null
-  const parts = extractMoveParts(query)
-  if (!parts) return null
-  if (!PRONOUN_SUBJECT_RE.test(parts.subject)) return null
-  if (!looksLikeCategoryName(parts.targetCategoryName)) return null
-  return { targetCategoryName: parts.targetCategoryName }
 }
 
 // ── 12. 上下文感知：当前分类查询 ──

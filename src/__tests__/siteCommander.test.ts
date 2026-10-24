@@ -188,8 +188,8 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resAdd.success).toBe(true)
     expect(resAdd.reply).toContain('分类「工具库」创建成功')
 
-    // 重名新建
-    const resDup = await dispatchSiteCommand('新建分类: 前端开发', { ds: mockDs, ui: mockUi, app: mockApp })
+    // 重名新建（自然语言说法已交大模型，此处走显式指令）
+    const resDup = await dispatchSiteCommand('/cat 前端开发', { ds: mockDs, ui: mockUi, app: mockApp })
     expect(resDup.handled).toBe(true)
     expect(resDup.reply).toContain('已存在')
   })
@@ -283,8 +283,8 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resNotFound.handled).toBe(true)
     expect(resNotFound.reply).toContain('未找到分类')
 
-    // 成功移入
-    const resMove = await dispatchSiteCommand('把所有未分类移到 前端开发', {
+    // 成功移入（自然语言「把所有未分类移到 X」已交大模型，此处走显式指令）
+    const resMove = await dispatchSiteCommand('/move uncategorized 前端开发', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
@@ -331,7 +331,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
   // ── 13. 对话式撤销 (/undo, 撤销刚才的操作) ──
   it('支持 /undo 与对话式撤销回退', async () => {
     // 先执行一次可撤销的批量归类
-    await dispatchSiteCommand('把所有未分类移到 前端开发', {
+    await dispatchSiteCommand('/move uncategorized 前端开发', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
@@ -517,7 +517,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
   })
 
   // ── 21. /pack <主题名> 与自然语言建工作台意图 ──
-  it('/pack <主题名> 与自然语言意图返回候选工具清单与工作台装配行动卡片', async () => {
+  it('/pack <主题名> 返回候选工具清单与工作台装配行动卡片', async () => {
     const resSlash = await dispatchSiteCommand('/pack 前端开发', {
       ds: mockDs,
       ui: mockUi,
@@ -530,15 +530,23 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resSlash.actionCard?.actionName).toBe('create_topic_workspace')
     expect(resSlash.actionCard?.payload?.topic).toBe('前端开发 工作台')
 
+    // 自然语言的「帮我搭建 XX 工作台」已交大模型；同等能力经显式指令仍可用
     const resNl = await dispatchSiteCommand('帮我搭建一套独立开发者工具箱', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
     })
-    expect(resNl.handled).toBe(true)
-    expect(resNl.action).toBe('pack_workspace')
-    expect(resNl.actionCard?.actionName).toBe('create_topic_workspace')
-    expect(resNl.actionCard?.payload?.topic).toContain('独立开发者')
+    expect(resNl.handled).toBe(false)
+
+    const resSlash2 = await dispatchSiteCommand('/pack 独立开发者工具箱', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(resSlash2.handled).toBe(true)
+    expect(resSlash2.action).toBe('pack_workspace')
+    expect(resSlash2.actionCard?.actionName).toBe('create_topic_workspace')
+    expect(resSlash2.actionCard?.payload?.topic).toContain('独立开发者')
   })
 
   it('/pack 优先从库内已有分类提取真实书签装配工作台，杜绝盲目推荐无关外部书签', async () => {
@@ -785,8 +793,8 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(resInbox.action).toBe('inbox_zero')
   })
 
-  // ── 30. 管家式大白话：把指定书签移到指定分类 ──
-  it('管家式大白话：支持用户直接说“把 XX 移到 YY 分类”，并支持 /undo 撤销', async () => {
+  // ── 30. 自然语言定向移动整体交还大模型 ──
+  it('「把 XX 移到 YY」不再由正则接管（LLM 侧有 manage_bookmarks.move）', async () => {
     // 初始 b1 (Vue) 在分类 c1 (前端开发)
     expect(mockDs.bookmarks.find((b: any) => b.id === 'b1')?.categoryId).toBe('c1')
 
@@ -796,20 +804,8 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
       app: mockApp,
     })
 
-    expect(res.handled).toBe(true)
-    expect(res.action).toBe('move_bookmark')
-    expect(res.reply).toContain('已为您将 「Vue」 移动至「设计资源」分类')
-    expect(res.suggestedReplies).toContain('撤销这次移动')
-    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b1', { categoryId: 'c2' })
-    expect(mockDs.bookmarkMap.b1.categoryId).toBe('c2')
-
-    // 测试撤销
-    const resUndo = await dispatchSiteCommand('/undo', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-    })
-    expect(resUndo.handled).toBe(true)
+    expect(res.handled).toBe(false)
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
     expect(mockDs.bookmarkMap.b1.categoryId).toBe('c1')
   })
 
@@ -851,73 +847,52 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(mockDs.updateBookmark).not.toHaveBeenCalled()
   })
 
-  it('目标像分类名但库里没有时，仍给出明确纠错提示（保留原有确定性反馈）', async () => {
+  it('目标像分类名但库里没有（真打错字）也交回大模型，不自行下结论', async () => {
     const res = await dispatchSiteCommand('把 Vue 移到 云服', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
     })
-    expect(res.handled).toBe(true)
-    expect(res.action).toBe('move_bookmark')
-    expect(res.reply).toContain('未找到名称包含「云服」的分类')
-  })
-
-  // ── 33. 指代性定向移动（附加卡片解析真实主体，11.3）──
-  it('「将此书签移到 XX」结合本轮附加卡片直接移动，并可撤销', async () => {
-    const res = await dispatchSiteCommand('将此书签移到 设计资源', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-      attachedCards: [{ type: 'bm', id: 'b1' }],
-    })
-
-    expect(res.handled).toBe(true)
-    expect(res.action).toBe('move_bookmark')
-    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b1', { categoryId: 'c2' })
-    expect(res.reply).toContain('已为您将 「Vue」 移动至「设计资源」分类')
-
-    const resUndo = await dispatchSiteCommand('/undo', { ds: mockDs, ui: mockUi, app: mockApp })
-    expect(resUndo.handled).toBe(true)
-    expect(mockDs.bookmarkMap.b1.categoryId).toBe('c1')
-  })
-
-  it('无附加卡片时同一句话不猜主体，交回大模型', async () => {
-    const res = await dispatchSiteCommand('将此书签移到 设计资源', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-    })
     expect(res.handled).toBe(false)
     expect(mockDs.updateBookmark).not.toHaveBeenCalled()
   })
 
-  it('附加多张卡片视为歧义，交回大模型而不是全量移动', async () => {
-    const res = await dispatchSiteCommand('将此书签移到 设计资源', {
+  // ── 33. 显式指令是本地引擎的唯一入口 ──
+  it('显式 /cat、/pack 指令仍由确定性引擎执行', async () => {
+    const resCat = await dispatchSiteCommand('/cat 测试分类', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
-      attachedCards: [
-        { type: 'bm', id: 'b1' },
-        { type: 'bm', id: 'b2' },
-      ],
     })
-    expect(res.handled).toBe(false)
-    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
-  })
+    expect(resCat.handled).toBe(true)
+    expect(resCat.action).toBe('category_add')
 
-  it('指代 + 目标分类不存在时交回大模型（不硬报错）', async () => {
-    const res = await dispatchSiteCommand('将此书签移到 云服', {
+    const resPack = await dispatchSiteCommand('/pack 设计资源', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
-      attachedCards: [{ type: 'bm', id: 'b1' }],
     })
-    expect(res.handled).toBe(false)
-    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+    expect(resPack.handled).toBe(true)
+    expect(resPack.action).toBe('pack_workspace')
   })
 
-  it('定向移动的文案全部走 i18n（不泄露裸 key）', async () => {
-    const res = await dispatchSiteCommand('把 Vue 移到 设计资源 分类', {
+  it('对应的自然语言说法一律交回大模型', async () => {
+    const queries = [
+      '帮我创建分类来放工作用的东西',
+      '新建分类：设计资源',
+      '帮我搭建一套前端学习工作台',
+      '帮我搭建一个前端学习工作台',
+      '把所有未分类移到 前端开发',
+      '将此书签移到 设计资源',
+    ]
+    for (const q of queries) {
+      const res = await dispatchSiteCommand(q, { ds: mockDs, ui: mockUi, app: mockApp })
+      expect(res.handled, `应交给大模型：${q}`).toBe(false)
+    }
+  })
+
+  it('显式指令的文案不走裸 key', async () => {
+    const res = await dispatchSiteCommand('/move uncategorized 前端开发', {
       ds: mockDs,
       ui: mockUi,
       app: mockApp,
@@ -931,18 +906,7 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     }
   })
 
-  // ── 34. 同类缺陷全量护栏：参数提取类指令不得把整句口语当名称 ──
-  it('模糊创建分类请求不会真的建出「来放工作用的东西」这种分类', async () => {
-    const before = mockDs.categories.length
-    const res = await dispatchSiteCommand('帮我创建分类来放工作用的东西', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-    })
-    expect(res.handled).toBe(false)
-    expect(mockDs.categories.length).toBe(before)
-  })
-
+  // ── 34. 唯一保留的参数提取：批量移动（依赖 UI 勾选状态，模型看不见）──
   it('批量模式下模糊目标不误报「未找到目标分类」，交回大模型', async () => {
     mockUi.batchMode = true
     mockUi.batchSelected = ['b1']
@@ -953,34 +917,5 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     })
     expect(res.handled).toBe(false)
     expect(mockDs.updateBookmark).not.toHaveBeenCalled()
-  })
-
-  it('带量词的工作台搭建请求不拿「一个前端学习」去检索，交回大模型', async () => {
-    const res = await dispatchSiteCommand('帮我搭建一个前端学习工作台', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-    })
-    expect(res.handled).toBe(false)
-  })
-
-  it('正常工作台搭建仍由确定性指令接管', async () => {
-    const res = await dispatchSiteCommand('帮我搭建一套前端学习工作台', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-    })
-    expect(res.handled).toBe(true)
-    expect(res.action).toBe('pack_workspace')
-  })
-
-  it('正常的分类创建仍由确定性指令接管', async () => {
-    const res = await dispatchSiteCommand('新建分类：设计资源', {
-      ds: mockDs,
-      ui: mockUi,
-      app: mockApp,
-    })
-    expect(res.handled).toBe(true)
-    expect(res.action).toBe('category_add')
   })
 })

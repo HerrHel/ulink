@@ -36,7 +36,6 @@ import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
-import type { AttachedCardRef } from './siteCommands/types.js'
 
 export interface SiteCommanderContext {
   ds?: ReturnType<typeof useDataStore>
@@ -44,8 +43,6 @@ export interface SiteCommanderContext {
   app?: ReturnType<typeof useAppStore>
   /** 中止信号：「停止生成」后不再执行命令副作用（确认弹窗/网络等待之后的写操作） */
   signal?: AbortSignal
-  /** 本轮对话附加的卡片引用（提交时 ui.aiAttachedCards 已清空，须由调用方透传） */
-  attachedCards?: AttachedCardRef[]
 }
 
 /**

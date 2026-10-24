@@ -281,24 +281,6 @@ export const aiCmdZh = {
     stepMoveUncat: '批量移入「{cat}」',
     moveDone: '已成功将 {n} 个未分类书签移入「{cat}」分类。',
 
-    // ── 定向移动书签（把 XX 移到 YY 分类）──
-    moveBmCatNotFound: '未找到名称包含「{name}」的分类，请核对分类名称。',
-    moveBmNoBookmark: '在您的书签库中暂未找到与「{q}」相关的书签。',
-    moveBmTitleItem: '「{title}」',
-    moveBmTitleSep: '、',
-    moveBmMore: ' 等共 {n} 个书签',
-    undoMoveBmDesc: '移动 {n} 个书签至「{cat}」',
-    undoMoveBmRevert: '已撤销移动，恢复原分类',
-    stepMoveBmFound: '检索到 {n} 个匹配书签',
-    stepMoveBmTarget: '移动至「{cat}」分类',
-    moveBmDone: '已为您将 {titles}{more} 移动至「{cat}」分类。（随时可说“撤销”恢复）',
-    suggestCreateCat: '帮我创建该分类',
-    suggestListCats: '查看现有分类列表',
-    suggestSimilarTools: '帮我找类似工具',
-    suggestSearchVault: '搜索全库书签',
-    suggestUndoMove: '撤销这次移动',
-    suggestContinueOrganize: '继续整理其他书签',
-
     // ── 当前分类查询 ──
     stepReadContext: '读取当前视图上下文',
     currentCat: '当前正处于「{name}」分类视图，该分类下共有 {n} 个活跃书签。',
@@ -662,26 +644,6 @@ export const aiCmdEn = {
     stepMoveUncat: 'Batch-move into "{cat}"',
     moveDone: 'Successfully moved {n} uncategorized bookmarks into category "{cat}".',
     moveDone_one: 'Successfully moved {n} uncategorized bookmark into category "{cat}".',
-
-    // ── Move a specific bookmark (move XX to YY) ──
-    moveBmCatNotFound: 'No category whose name contains "{name}" was found. Please check the category name.',
-    moveBmNoBookmark: 'No bookmark related to "{q}" was found in your vault.',
-    moveBmTitleItem: '"{title}"',
-    moveBmTitleSep: ', ',
-    moveBmMore: ' ({n} in total)',
-    undoMoveBmDesc: 'Move {n} bookmarks to "{cat}"',
-    undoMoveBmDesc_one: 'Move {n} bookmark to "{cat}"',
-    undoMoveBmRevert: 'Move undone, original category restored',
-    stepMoveBmFound: 'Found {n} matching bookmarks',
-    stepMoveBmFound_one: 'Found {n} matching bookmark',
-    stepMoveBmTarget: 'Move to category "{cat}"',
-    moveBmDone: 'Moved {titles}{more} to category "{cat}". (Say "undo" anytime to revert.)',
-    suggestCreateCat: 'Create this category',
-    suggestListCats: 'List existing categories',
-    suggestSimilarTools: 'Find similar tools',
-    suggestSearchVault: 'Search all bookmarks',
-    suggestUndoMove: 'Undo this move',
-    suggestContinueOrganize: 'Keep organizing',
 
     // ── Current category query ──
     stepReadContext: 'Read current view context',

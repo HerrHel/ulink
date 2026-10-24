@@ -1,52 +1,27 @@
 /**
- * siteIntents — 参数提取类指令的「名称形似度」护栏（全量审计）
+ * siteIntents — 仅存的两处「参数提取类指令」护栏
  *
  * 背景：`parseSpecificMoveIntent` 曾把「将此书签移到合适的分类去，并补上合适标签」
- * 整句后半段当成分类名。审计发现同一类缺陷另有 4 处，本文件逐一锁死：
+ * 整句后半段当成分类名。审计后确认根因不是某个正则写错，而是**拿正则做开放集合的
+ * 参数提取**：意图是封闭集合（可穷举），参数是开放集合（无法穷举）。
+ * 因此带参数的自然语言指令已整体交还大模型（见 siteCommander.test.ts 里
+ * 「对应的自然语言说法一律交回大模型」），只保留两处有独特理由的：
  *
- * | 解析器                 | 误判后果                                   |
- * |------------------------|--------------------------------------------|
- * | parseCatIntent         | **真的建出**名叫「来放工作用的东西」的分类   |
- * | parseBatchMoveIntent   | 批量模式下报「未找到目标分类『合适的分类去…』」|
- * | parseMoveIntent        | 报「未找到分类『合适的分类去』」             |
- * | parsePackIntent        | 拿「一个前端学习」去云端检索并生成工作台计划 |
- * | parseSimilarSiteIntent | 拿「这样的工具」当关键词搜平替               |
+ * - parseBatchMoveIntent：依赖 UI 勾选状态（ui.batchMode / batchSelected），
+ *   这是大模型看不见的信息，正则才有优势；
+ * - parseSimilarSiteIntent：LLM 侧没有对应工具（tools.ts 只有 read_webpage，
+ *   没有 find-similar），删掉是实打实的功能损失。
  *
- * 统一原则：自然语言分支的捕获物必须通过形似度判定；显式 /slash 指令信任用户输入。
+ * 这两处仍需形似度护栏兜底——没护栏时它们分别会报「未找到目标分类『合适的分类去…』」
+ * 和拿「这样的工具」当关键词搜平替。
  */
 import {
-  parseCatIntent,
-  parsePackIntent,
   parseBatchMoveIntent,
-  parseMoveIntent,
   parseSimilarSiteIntent,
-  looksLikeTopicName,
+  looksLikeCategoryName,
 } from '../../lib/ai/siteIntents.js'
 
-describe('parseCatIntent — 不把整句口语当分类名（写副作用）', () => {
-  it('模糊创建请求交回大模型，避免凭空建出奇怪分类', () => {
-    expect(parseCatIntent('帮我创建分类来放工作用的东西')).toBeNull()
-    expect(parseCatIntent('创建分类用于整理工作书签并同步')).toBeNull()
-  })
-
-  it('明确的分类名仍正常创建', () => {
-    expect(parseCatIntent('新建分类：设计资源')).toEqual({ kind: 'add', name: '设计资源' })
-    expect(parseCatIntent('创建分类 读书笔记')).toEqual({ kind: 'add', name: '读书笔记' })
-  })
-
-  it('显式 /cat 指令不受守卫影响（用户明确指定即信任）', () => {
-    expect(parseCatIntent('/cat 一个很长的分类名字超过十二个字')).toEqual({
-      kind: 'add',
-      name: '一个很长的分类名字超过十二个字',
-    })
-  })
-
-  it('分类列表意图不受影响', () => {
-    expect(parseCatIntent('分类列表')).toEqual({ kind: 'list' })
-  })
-})
-
-describe('parseBatchMoveIntent — 目标必须是分类名', () => {
+describe('parseBatchMoveIntent — 目标必须是分类名（依赖 UI 勾选状态，保留）', () => {
   it('整句口语目标交回大模型', () => {
     expect(parseBatchMoveIntent('把这些书签移到合适的分类去，并补上合适标签')).toBeNull()
   })
@@ -57,36 +32,7 @@ describe('parseBatchMoveIntent — 目标必须是分类名', () => {
   })
 })
 
-describe('parseMoveIntent — 未分类批量整理的目标必须是分类名', () => {
-  it('口语目标交回大模型', () => {
-    expect(parseMoveIntent('把所有未分类移到合适的分类去')).toBeNull()
-  })
-
-  it('真实分类名 / 显式指令均正常', () => {
-    expect(parseMoveIntent('把所有未分类移到 前端开发')).toEqual({ targetCategoryRaw: '前端开发' })
-    expect(parseMoveIntent('/move uncategorized 某个很长的分类名字测试')).toEqual({
-      targetCategoryRaw: '某个很长的分类名字测试',
-    })
-  })
-})
-
-describe('parsePackIntent — 主题名需剥离量词与口语', () => {
-  it('量词前缀 / 口语残留交回大模型', () => {
-    expect(parsePackIntent('帮我搭建一个前端学习工作台')).toBeNull()
-    expect(parsePackIntent('整理一下桌面工作台')).toBeNull()
-  })
-
-  it('正常主题保留', () => {
-    expect(parsePackIntent('帮我搭建一套前端学习工作台')).toEqual({ rawTopic: '前端学习' })
-    expect(parsePackIntent('/pack 设计资源')).toEqual({ rawTopic: '设计资源' })
-  })
-
-  it('无主题的 /pack 仍返回 undefined 走用法提示', () => {
-    expect(parsePackIntent('/pack')).toEqual({ rawTopic: undefined })
-  })
-})
-
-describe('parseSimilarSiteIntent — 泛化/指代目标不是实体名', () => {
+describe('parseSimilarSiteIntent — 泛化/指代目标不是实体名（LLM 无对应工具，保留）', () => {
   it('指代性目标交回大模型', () => {
     expect(parseSimilarSiteIntent('像这样的工具')).toBeNull()
     expect(parseSimilarSiteIntent('找一些这种网站')).toBeNull()
@@ -98,16 +44,35 @@ describe('parseSimilarSiteIntent — 泛化/指代目标不是实体名', () => 
   })
 })
 
-describe('looksLikeTopicName — 主题名形似度', () => {
-  it('接受真实主题', () => {
-    for (const name of ['前端学习', 'AI 绘画工作流', '设计资源']) {
-      expect(looksLikeTopicName(name)).toBe(true)
+describe('looksLikeCategoryName — 分类名形似度', () => {
+  it('接受真实分类名', () => {
+    for (const name of ['设计资源', '前端开发', '云服务', 'AI 工具', 'DevOps', '读书笔记']) {
+      expect(looksLikeCategoryName(name)).toBe(true)
     }
   })
 
-  it('拒绝量词前缀、口语与超长文本', () => {
-    for (const name of ['一个前端学习', '一下桌面', '整理一下所有的工作台主题吧', '']) {
-      expect(looksLikeTopicName(name)).toBe(false)
+  it('拒绝整句口语（标点 / 连词 / 模糊限定词 / 目的小句）', () => {
+    for (const name of [
+      '合适的分类去，并补上合适标签',
+      '合适的地方',
+      '相关的分类',
+      '设计资源，并补上标签',
+      '前端开发 然后打标签',
+      '随便哪个分类',
+      '来放工作用的东西',
+      '用于整理工作书签',
+    ]) {
+      expect(looksLikeCategoryName(name)).toBe(false)
     }
+  })
+
+  it('拒绝超长文本、空串与句末语气词', () => {
+    expect(looksLikeCategoryName('这是一个明显超过长度上限的分类名称')).toBe(false)
+    expect(looksLikeCategoryName('   ')).toBe(false)
+    expect(looksLikeCategoryName('设计资源吧')).toBe(false)
+  })
+
+  it('不误伤「去中心化」这类以动词字开头的真实名称', () => {
+    expect(looksLikeCategoryName('去中心化资源')).toBe(true)
   })
 })

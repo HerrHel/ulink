@@ -213,15 +213,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
     try {
       // 优先尝试站内指令/In-App Agent CLI 调度（传 abort 信号：停止生成后不再执行命令副作用）
-      // attachedCards：槽位在上方已清空，这里透传本轮解析出的卡片引用，
-      // 供「把此书签/这张移到 XX」这类指代性指令解析真实主体（11.3）
-      const siteCmd = await dispatchSiteCommand(raw, {
-        ds,
-        ui,
-        app: (ui as any).app,
-        signal: controller.signal,
-        attachedCards: resolvedCards.map((c) => ({ type: c.type, id: c.id })),
-      })
+      const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app, signal: controller.signal })
       if (controller.signal.aborted) return
       if (siteCmd.handled) {
         assistantTurn.loading = false

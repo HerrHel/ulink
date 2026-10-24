@@ -1,27 +1,24 @@
 /**
  * siteCommands/move.ts — 指令块 11：批量整理未分类 (/move uncategorized <分类名>)
- * 自 siteCommander.ts dispatchSiteCommand 纯搬运拆出，块内逻辑与返回语义逐字一致。
+ * 自 siteCommander.ts dispatchSiteCommand 纯搬运拆出。
  * 出口路径：targetCategoryRaw 真值后，分类不存在 → 返回失败；无未分类 → 返回空结果；
  * 数量 > 5 经 HITL 二次确认（确认后经 ctx.signal 校验「停止生成」，取消/中止均返回）；
  * 确认通过 → 批量移动、撤销入栈后返回成功。intent 未命中或 targetCategoryRaw 为空 →
  * 返回 null 继续 fall-through（该 fall-through 路径无任何副作用）。
  *
- * 11.2 定向移动的额外出口：目标分类名「不像名称」（整句口语 / 复合意图）→ 返回 null
- * 交回大模型语义理解，避免把「合适的分类去」当分类名查库后武断报错。
+ * 只认显式 /move uncategorized 指令。此前还接管「把 XX 移到 YY」「把这些书签移到 YY」
+ * 「把此书签移到 YY」三类自然语言，因参数（书签名/分类名）是开放集合、正则只能猜边界，
+ * 累计 6 处误判，已整体交回大模型（LLM 侧有 manage_bookmarks 的 move 动作）。
+ * 唯一保留的「把这些书签移到 YY」在 batchMove.ts —— 它依赖 UI 勾选状态，是模型看不见的信息。
  */
 
-import {
-  parseMoveIntent,
-  parseSpecificMoveIntent,
-  parsePronounMoveIntent,
-  looksLikeCategoryName,
-} from '../siteIntents.js'
+import { parseMoveIntent } from '../siteIntents.js'
 import { askConfirm, buildMoveConfirmMessage } from '../siteHitl.js'
 import { isOfficialBookmark } from '../localClustering.js'
 import { CAT_UNCATEGORIZED } from '../../../config/constants.js'
 import { pushUndoAction } from '../siteUndoStack.js'
 import { t, tN } from '../../../i18n/index.js'
-import type { Bookmark, Category } from '../../../types.js'
+import type { Category } from '../../../types.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
 // ── 11. 批量整理未分类 (/move uncategorized <分类名>, 把未分类移动到 [分类名]) ──
@@ -115,134 +112,5 @@ export const moveBlock: SiteCommandBlock = async (
     }
   }
 
-  // 11.2 具体书签定向移动：把 [XX] 移动到 [YY] (分类)
-  const specMove = parseSpecificMoveIntent(query)
-  if (specMove) {
-    const { itemQuery, targetCategoryName } = specMove
-    // 1. 查找目标分类（支持严格匹配与模糊包含）
-    const targetCat = findCategoryByName(ds.categories, targetCategoryName)
-    if (!targetCat) {
-      // 防御（双保险）：解析器已挡掉不像分类名的目标，这里再判一次。
-      // 「像名称但库里没有」→ 明确提示打错字（对用户最有用的反馈）；
-      // 「根本不像名称」→ 不武断下结论，fall through 让大模型接管语义理解。
-      if (!looksLikeCategoryName(targetCategoryName)) return null
-      return {
-        handled: true,
-        action: 'move_bookmark',
-        success: false,
-        reply: t('aiCmd.moveBmCatNotFound', { name: targetCategoryName }),
-        suggestedReplies: [t('aiCmd.suggestCreateCat'), t('aiCmd.suggestListCats')],
-      }
-    }
-
-    // 2. 查找匹配的书签（按标题、URL 与备注精准匹配未删除且未嵌套项）
-    const qLower = itemQuery.toLowerCase()
-    const matchedBms = ds.bookmarks.filter(
-      (b: Bookmark) =>
-        !b.deletedAt &&
-        !b.parentId &&
-        (b.title.toLowerCase().includes(qLower) ||
-          b.url.toLowerCase().includes(qLower) ||
-          (b.notes && b.notes.toLowerCase().includes(qLower))),
-    )
-    if (matchedBms.length === 0) {
-      return {
-        handled: true,
-        action: 'move_bookmark',
-        success: false,
-        reply: t('aiCmd.moveBmNoBookmark', { q: itemQuery }),
-        suggestedReplies: [t('aiCmd.suggestSimilarTools'), t('aiCmd.suggestSearchVault')],
-      }
-    }
-
-    applyMoveToCategory(matchedBms, targetCat, ds, app)
-    return buildMoveSuccessResult(matchedBms, targetCat)
-  }
-
-  // 11.3 指代性定向移动：「把此书签 / 这张 / 它 移到 [YY 分类]」
-  // 主体的真实指向只能来自本轮附加卡片（提交时槽位已清空，由 dispatch 透传）。
-  // 卡片数量不为 1（含歧义）或目标分类不存在时 fall through，交大模型处理。
-  const pronounMove = parsePronounMoveIntent(query)
-  if (pronounMove) {
-    const attachedBmIds = [
-      ...new Set(
-        (ctx.attachedCards ?? []).filter((c) => c.type === 'bm').map((c) => c.id),
-      ),
-    ]
-    if (attachedBmIds.length === 1) {
-      const targetCat = findCategoryByName(ds.categories, pronounMove.targetCategoryName)
-      const targetBm = ds.bookmarkMap[attachedBmIds[0]!]
-      if (targetCat && targetBm && !targetBm.deletedAt) {
-        applyMoveToCategory([targetBm], targetCat, ds, app)
-        return buildMoveSuccessResult([targetBm], targetCat)
-      }
-    }
-  }
-
   return null
-}
-
-/** 按名称查分类（严格匹配优先于模糊包含，均忽略大小写与首尾空白）。 */
-function findCategoryByName(
-  categories: Category[],
-  name: string,
-): Category | undefined {
-  const target = name.trim().toLowerCase()
-  if (!target) return undefined
-  const norm = (c: Category) => (c.deletedAt ? null : c.name.trim().toLowerCase())
-  return (
-    categories.find((c) => norm(c) === target) ??
-    categories.find((c) => !!norm(c)?.includes(target))
-  )
-}
-
-/** 执行「把若干书签移入某分类」：改字段 + save + 登记撤销事务。 */
-function applyMoveToCategory(
-  bms: Bookmark[],
-  cat: Category,
-  ds: SiteCommandBlockCtx['ds'],
-  app: SiteCommandBlockCtx['app'],
-): void {
-  const previousMap = bms.map((b) => ({ id: b.id, prevCatId: b.categoryId }))
-  for (const b of bms) {
-    ds.updateBookmark(b.id, { categoryId: cat.id })
-  }
-  app.save()
-
-  pushUndoAction({
-    type: 'move_bookmark',
-    description: tN('aiCmd.undoMoveBmDesc', bms.length, { cat: cat.name }),
-    revert: () => {
-      for (const item of previousMap) {
-        ds.updateBookmark(item.id, { categoryId: item.prevCatId })
-      }
-      app.save()
-      return t('aiCmd.undoMoveBmRevert')
-    },
-  })
-}
-
-/** 定向移动成功结果（11.2 与 11.3 共用，保证两种入口的反馈逐字一致）。 */
-function buildMoveSuccessResult(bms: Bookmark[], cat: Category): SiteCommandResult {
-  const titleSep = t('aiCmd.moveBmTitleSep')
-  const titleList = bms
-    .slice(0, 3)
-    .map((b) => t('aiCmd.moveBmTitleItem', { title: b.title }))
-    .join(titleSep)
-  const moreText = bms.length > 3 ? t('aiCmd.moveBmMore', { n: bms.length }) : ''
-  return {
-    handled: true,
-    action: 'move_bookmark',
-    success: true,
-    steps: [
-      { text: tN('aiCmd.stepMoveBmFound', bms.length), done: true },
-      { text: t('aiCmd.stepMoveBmTarget', { cat: cat.name }), done: true },
-    ],
-    reply: t('aiCmd.moveBmDone', {
-      titles: titleList,
-      more: moreText,
-      cat: cat.name,
-    }),
-    suggestedReplies: [t('aiCmd.suggestUndoMove'), t('aiCmd.suggestContinueOrganize')],
-  }
 }

@@ -141,14 +141,7 @@ export async function dispatchSiteCommand(
   if (batchMoveResult !== null) return batchMoveResult
 
   // ── 11. 批量整理未分类 (/move uncategorized <分类名>, 把未分类移动到 [分类名]) ──
-  const moveResult = await moveBlock({
-    query,
-    ds,
-    ui,
-    app,
-    signal: context?.signal,
-    attachedCards: context?.attachedCards,
-  })
+  const moveResult = await moveBlock({ query, ds, ui, app, signal: context?.signal })
   if (moveResult !== null) return moveResult
 
   // ── 12. 上下文感知：当前分类查询 ──
