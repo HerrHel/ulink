@@ -208,6 +208,8 @@ export const aiZh = {
     stopGenerating: '停止生成',
     stopped: '已中断生成。',
     searchFailed: '检索失败，请稍后重试。',
+    emptyReply: 'AI 这次没有返回内容，请重试或换个说法。',
+    emptyReplyAfterTools: '操作已执行，但 AI 没有生成说明文字；可展开上方步骤查看详情，或说「撤销」回退。',
     newSession: '新建会话',
     alreadyNewSession: '当前已是新会话',
     switchSession: '切换历史会话',
@@ -541,6 +543,9 @@ export const aiEn = {
     stopGenerating: 'Stop generating',
     stopped: 'Generation stopped.',
     searchFailed: 'Search failed. Please try again.',
+    emptyReply: 'The AI returned no content this time. Please retry or rephrase.',
+    emptyReplyAfterTools:
+      'The actions were applied but the AI produced no summary. Expand the steps above for details, or say "undo" to revert.',
     newSession: 'New session',
     alreadyNewSession: 'Already in a new session',
     switchSession: 'Switch sessions',

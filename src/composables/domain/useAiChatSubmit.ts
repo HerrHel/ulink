@@ -13,7 +13,6 @@ import {
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
 import { askMiMoStream, getMiMoConfig, sanitizeToolResult, type MiMoChatMessage } from '../../lib/ai/mimoClient.js'
-import { resolveUserInteractionIntent } from '../../lib/ai/intentRouter.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
 import { normalizeWorkspaceTopic } from '../../lib/ai/siteActions.js'
 import { updateSession, type AiChatSession, type ChatTurn } from '../../lib/ai/chatSessions.js'
@@ -495,9 +494,16 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               })
             }
 
-            const userIntent = resolveUserInteractionIntent(promptWithCards)
-            const enableToolsForPrompt = userIntent === 'OPERATIONAL'
-
+            // 首轮不再按关键词阉割工具。
+            // 旧实现用 resolveUserInteractionIntent 判「像不像操作请求」，不像就
+            // tool_choice:'none'。实测该判据把「把这本书签移到合适的分类」「清理未分类
+            // 书签」统统判成闲聊，于是模型看得见 tools 定义却被告知不许调用，在
+            // reasoning 里反复琢磨 manage_bookmarks 的参数格式，18 秒后输出空正文
+            // （截图现象：只有思考、没有回复）。
+            // 是否调工具交还模型判断：多调一次工具最坏是可撤销的副作用，
+            // 而「想做事却不能做」的结果是空白回复，用户完全无解。
+            // enableTools 仅保留给两个确定场景：续轮最后一轮强制收束（mimoStream 侧）
+            // 与视频提取不需要工具（videoExtract）。
             const mimoRes = await askMiMoStream(
               promptWithCards,
               { 
@@ -508,7 +514,6 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 history,
                 contextSlice,
                 profilePrompt,
-                enableTools: enableToolsForPrompt,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {
@@ -551,6 +556,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               assistantTurn.suggestedReplies = mimoRes.suggestedReplies
             }
             assistantTurn.steps = []
+
+            // 兜底 A：模型只输出思考、不给正文（长 reasoning 后收束失败）时不得留白。
+            // 静默空白会让用户以为卡死——这是本轮「光思考不回复」体验的直接来源之一。
+            if (!mimoRes.toolCalls?.length && !assistantTurn.content.trim()) {
+              assistantTurn.content = t('ai.emptyReply')
+            }
 
             // Agent 工具执行器：首轮与续轮工具链共用同一分发（单一分发点，防多轮复刻同类分支）
             const runAgentToolCall = createAiAgentToolRunner({ ds, ui, t, tN })
@@ -694,6 +705,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 }
               }
               if (followUpDone) assistantTurn.steps.push({ text: t('ai.toolFollowUpStep'), done: true })
+              // 兜底 B：工具确实执行了（有真实副作用），但模型没能给出总结时也不能留白，
+              // 否则用户既看不到结果说明、也不知道刚才改了什么。提示里给出撤销入口。
+              if (!assistantTurn.content.trim()) {
+                assistantTurn.content = t('ai.emptyReplyAfterTools')
+              }
             }
 
             persistCurrentSession()

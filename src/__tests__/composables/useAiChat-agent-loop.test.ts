@@ -391,4 +391,50 @@ describe('useAiChat — 真 Agent 多步工具链循环', () => {
     // 历史第一轮助手的 suggestedReplies 已被清空
     expect(turn1.suggestedReplies).toEqual([])
   })
+
+  // ── 回归：既不能「想做事却不许调工具」，也不能「想完不给正文」 ──
+
+  it('操作类请求不再被意图关键词阉割工具（首轮 enableTools 不置 false）', async () => {
+    streamMock.mockReset()
+    streamMock.mockResolvedValueOnce(aiRes('好的'))
+
+    const ai = useAiChat()
+    // 旧实现里 intentRouter 把这句判成 CONVERSATIONAL → tool_choice:'none'，
+    // 模型看得见 tools 却被告知不许调用，reasoning 里反复琢磨参数后输出空正文。
+    ai.aiQuery.value = '把这本书签移到合适的分类，并打上标签'
+    await ai.handleAiSubmit()
+
+    const firstCtx = streamMock.mock.calls[0][1]
+    expect(firstCtx.enableTools).not.toBe(false)
+  })
+
+  it('模型只输出思考、不给正文时给出可行动提示，不留空白', async () => {
+    streamMock.mockReset()
+    streamMock.mockResolvedValueOnce(aiRes(''))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '将此书签移到合适的分类去，并补上合适标签'
+    await ai.handleAiSubmit()
+
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    expect(assistantTurn?.content.trim()).not.toBe('')
+    expect(assistantTurn?.content).toContain('没有返回内容')
+    expect(assistantTurn?.loading).toBe(false)
+  })
+
+  it('工具已执行但模型没给总结时，提示操作已执行并可撤销', async () => {
+    streamMock.mockReset()
+    streamMock
+      .mockResolvedValueOnce(aiRes('', [{ id: 'c1', name: 'toggle_theme', arguments: { mode: 'dark' } }]))
+      .mockResolvedValueOnce(aiRes(''))
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '切换深色主题'
+    await ai.handleAiSubmit()
+
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    // 正文被清空后不得留白：必须告诉用户「做了，但没总结」
+    expect(assistantTurn?.content).toContain('操作已执行')
+    expect(assistantTurn?.toolCalls?.map((c) => c.name)).toEqual(['toggle_theme'])
+  })
 })
