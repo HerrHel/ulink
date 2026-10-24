@@ -29,7 +29,17 @@ export default defineConfig({
     // 一旦写进 .env.local 就会被 vitest 一起读进来，导致单测默认走 CloudBase 驱动、
     // 与既有的 supabase mock 全部对不上（实测 16 个用例瞬间转红）。
     // 默认空 = 走 Supabase 分支；要测 CloudBase 分支的用例直接 createCloudBaseAuthDriver 注入。
-    env: { VITE_BACKEND: '' },
+    //
+    // Supabase 假凭证同理必须钉死：`edgeFnUrl()` 读 VITE_SUPABASE_URL 拼 functions/v1/<fn>，
+    // 本地 .env 有真值、CI 无 .env → 本地拼得出 endpoint、CI 返回 '' 抛「服务未就绪」，
+    // 导致 mimoClient / jinaReader / videoExtract 三处集成断言「只在本地绿」。
+    // 给假值而非留空，是为了与本地长期语义（isSupabaseConfigured === true）保持一致；
+    // 测试全部 mock 网络，不会真的连这个域名。
+    env: {
+      VITE_BACKEND: '',
+      VITE_SUPABASE_URL: 'https://test.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+    },
     // 默认 5s 对真实 PBKDF2（600K 迭代）× 多次派生的重测试过紧：低核/高负载机器上
     // 4s 级用例（useVault resetVaultWithRecoveryKey / forkPublicGroup 等）偶发超时红，
     // 且 stash 对照实验证明与改动无关（基线同样抖）。放宽到 30s 消除该类调度抖动。
