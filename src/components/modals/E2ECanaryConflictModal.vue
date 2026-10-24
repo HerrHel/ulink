@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" data-testid="lv-e2e-canary-conflict-modal" role="dialog" aria-modal="true" :aria-label="t('e2e.canaryAriaLabel')" :class="{ open }" @click.self="close">
+  <div class="modal-mask" data-testid="lv-e2e-canary-conflict-modal" role="dialog" aria-modal="true" :aria-label="t('e2e.canaryAriaLabel')" :class="{ open }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.alert" class="sp-icon"></span> {{ isUpgraded ? t('e2e.followTitle') : t('e2e.conflictTitle') }}</span>
@@ -72,6 +72,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { useUIStore } from '../../stores/ui.js'
 import { toast } from '../../lib/toast.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -142,4 +143,9 @@ async function onAdopt() {
     busy.value = false
   }
 }
+
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+// 裸 @click.self 的坑：在弹窗内按下、滑到遮罩上松开时，click 事件的 target 是两者的
+// 共同祖先（遮罩），.self 判定照样通过 -> 误关闭，正在填的内容全丢。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 </script>

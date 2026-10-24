@@ -431,13 +431,26 @@ describe('E2EUnlockModal onCancel', () => {
     w.unmount()
   })
 
-  it('遮罩 @click.self="onCancel" → emit(close)', async () => {
+  it('点遮罩空白处（按下与松开都在遮罩上）→ emit(close)', async () => {
     const w = mountComp('unlock', true)
     await flush()
-    // 点遮罩自身（非内部 modal）应触发 onCancel → close
-    await w.find('.modal-mask').trigger('click')
+    // 统一走 useMaskClose：mousedown 记录起点，click 且起点在遮罩上才关闭
+    const mask = w.find('.modal-mask')
+    await mask.trigger('mousedown')
+    await mask.trigger('click')
     await nextTick()
     expect(w.emitted('close')).toBeTruthy()
+    w.unmount()
+  })
+
+  it('在弹窗内按下、滑到遮罩上松开 → 不关闭（防误关）', async () => {
+    const w = mountComp('unlock', true)
+    await flush()
+    const mask = w.find('.modal-mask')
+    await w.find('.modal').trigger('mousedown')
+    await mask.trigger('click')
+    await nextTick()
+    expect(w.emitted('close')).toBeFalsy()
     w.unmount()
   })
 })

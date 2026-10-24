@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('ctx.history')" :class="{ open }" @click.self="emit('close')">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('ctx.history')" :class="{ open }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-md">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.history" class="sp-icon"></span>{{ t('ctx.history') }}</span>
@@ -76,6 +76,7 @@ import { diffVersions, type DiffField } from '../../lib/diffVersions.js'
 import { getPreview } from './getPreview.js'
 import { formatTime } from './formatTime.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 interface HistoryVersion {
   id: number
@@ -183,4 +184,9 @@ async function onRestoreDiff() {
     restoring.value = false
   }
 }
+
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+// 裸 @click.self 的坑：在弹窗内按下、滑到遮罩上松开时，click 事件的 target 是两者的
+// 共同祖先（遮罩），.self 判定照样通过 -> 误关闭，正在填的内容全丢。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(() => emit('close'))
 </script>

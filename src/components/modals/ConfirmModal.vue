@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.confirm.ariaLabel')" :class="{ open: store.confirmOpen }" @click.self="store.resolveConfirm(false)">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.confirm.ariaLabel')" :class="{ open: store.confirmOpen }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-sm">
       <div class="modal-body modal-body-center">
         <div class="confirm-msg">{{ store.confirmMessage }}</div>
@@ -16,6 +16,7 @@
 import { watch, onUnmounted, nextTick } from 'vue'
 import { useToastStore } from '../../stores/toast.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const store = useToastStore()
 
@@ -39,4 +40,9 @@ watch(() => store.confirmOpen, (open) => {
 })
 
 onUnmounted(() => document.removeEventListener('keydown', onKeydown))
+
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+// 裸 @click.self 的坑：在弹窗内按下、滑到遮罩上松开时，click 事件的 target 是两者的
+// 共同祖先（遮罩），.self 判定照样通过 -> 误关闭，正在填的内容全丢。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(() => store.resolveConfirm(false))
 </script>

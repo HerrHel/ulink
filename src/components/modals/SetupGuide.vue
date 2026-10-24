@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.setupGuide.welcome')" :class="{ open: ui.modals.setupGuide }" @click.self="finish">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.setupGuide.welcome')" :class="{ open: ui.modals.setupGuide }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-sm" @click.stop>
       <div class="modal-head">
         <span class="modal-title">{{ t('modal.setupGuide.welcome') }}</span>
@@ -40,6 +40,7 @@ import { I } from '../../config/icons.js'
 import BrandLogo from '../ui/BrandLogo.vue'
 import { safeSetItem } from '../../lib/storageSafe.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const ui = useUIStore()
 const SETUP_DONE_KEY = 'lv_setup_done'
@@ -60,6 +61,11 @@ function onImport() {
   const el = document.getElementById('importFile') as HTMLInputElement | null
   if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() }
 }
+
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+// 裸 @click.self 的坑：在弹窗内按下、滑到遮罩上松开时，click 事件的 target 是两者的
+// 共同祖先（遮罩），.self 判定照样通过 -> 误关闭，正在填的内容全丢。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(finish)
 </script>
 
 <style scoped>

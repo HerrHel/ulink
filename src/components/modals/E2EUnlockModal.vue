@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('e2e.unlockData')" :class="{ open }" @click.self="onCancel">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('e2e.unlockData')" :class="{ open }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-sm">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? t('e2e.resetMasterPassword') : mode === 'changePw' ? t('settings.changeMasterPassword') : t('e2e.unlockData') }}</span>
@@ -121,6 +121,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { showConfirm } from '../../lib/toast.js'
 import { recoveryKeyEmptyError, newPasswordLengthError, newPasswordMismatchError, oldPasswordEmptyError } from './validatePwResetInput.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const props = defineProps<{ open: boolean; initialMode?: 'unlock' | 'reset' | 'changePw' }>()
 const emit = defineEmits<{ close: []; unlocked: [] }>()
@@ -317,4 +318,9 @@ async function onBiometricUnlock() {
     error.value = t('e2e.biometricUnlockFailed')
   }
 }
+
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+// 裸 @click.self 的坑：在弹窗内按下、滑到遮罩上松开时，click 事件的 target 是两者的
+// 共同祖先（遮罩），.self 判定照样通过 -> 误关闭，正在填的内容全丢。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onCancel)
 </script>
