@@ -220,6 +220,7 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
         return true
       },
       () => { if (!ui.modals.e2eSetup) return false; ui.modals.e2eSetup = false; return true },
+      () => { if (!ui.modals.setPassword) return false; ui.modals.setPassword = false; return true },
       () => { if (!ui.modals.setupGuide) return false; ui.modals.setupGuide = false; return true },
       () => { // A4-007
         if (!ui.overlays.feedback) return false

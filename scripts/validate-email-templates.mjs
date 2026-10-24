@@ -59,6 +59,19 @@ for (const file of files) {
     problems.push('残留 Supabase 模板变量（{{ .Token }} / {{ .SiteURL }} 等）')
   }
 
+  // 注释闭合符后跟了字符 → 会被当成正文原样渲染（真实事故：`-->;` 让邮件开头多出一个「；」）
+  // 先剥掉注释，再看「第一个标签之前」有没有游离文字，避免把注释内部的 `-->` 误判。
+  const stripped = html.replace(/<!--[\s\S]*?-->/g, '')
+  const leadingText = /^[^<]+/.exec(stripped.trimStart())
+  if (leadingText && leadingText[0].trim()) {
+    problems.push(`正文开头有游离字符「${leadingText[0].trim().slice(0, 8)}」，通常是注释 \`-->\` 后多打的字符`)
+  }
+  // style 块之后、下一个标签之前同理：那段文字会直接渲染在邮件最上面
+  const afterStyle = /<\/style>([^<]*)/i.exec(stripped)
+  if (afterStyle && afterStyle[1].trim()) {
+    problems.push(`</style> 之后有游离字符「${afterStyle[1].trim().slice(0, 8)}」`)
+  }
+
   const sizeKb = (Buffer.byteLength(html, 'utf8') / 1024).toFixed(1)
 
   if (problems.length) {

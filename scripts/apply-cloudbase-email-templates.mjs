@@ -10,6 +10,8 @@
  *   node scripts/apply-cloudbase-email-templates.mjs --status      # 只看当前 provider 状态
  *   node scripts/apply-cloudbase-email-templates.mjs --dry-run     # 打印将要提交的载荷
  *   node scripts/apply-cloudbase-email-templates.mjs               # 真正写入
+ *   node scripts/apply-cloudbase-email-templates.mjs --subject-with-code
+ *                                                                   # 试探主题是否支持 {{.VerificationCode}} 变量
  *
  * 底层 API：TCB `ModifyProvider`
  *   { EnvId, Id, On, EmailConfig: { On, SmtpConfig?, TemplateConfig } }
@@ -98,11 +100,16 @@ if (statusOnly) {
     console.log(`  - ${p.Id} (${p.ProviderType}) On=${p.On}`)
     if (p.ProviderType === 'EMAIL') {
       const reg = ec.TemplateConfig?.RegisterSignIn || {}
+      const dflt = ec.TemplateConfig?.DefaultTpl || {}
       console.log(
         `      代发=${ec.On}  发件地址=${smtp.SenderAddress || '(空)'}  主机=${smtp.ServerHost || '(空)'}:${smtp.ServerPort || 0}  加密=${smtp.SecurityMode || '(空)'}`,
       )
       console.log(
-        `      模板 zh=${(reg.ZhCN || '').length} en=${(reg.EnUS || '').length}  主题="${reg.SubjectZhCN || '(空)'}"  发件人="${reg.SenderNameZhCN || '(空)'}"`,
+        `      模板 RegisterSignIn zh=${(reg.ZhCN || '').length} en=${(reg.EnUS || '').length}  主题="${reg.SubjectZhCN || '(空)'}"  发件人="${reg.SenderNameZhCN || '(空)'}"`,
+      )
+      console.log(
+        `      模板 DefaultTpl      zh=${(dflt.ZhCN || '').length} en=${(dflt.EnUS || '').length}` +
+          (dflt.ZhCN ? '' : '  ← 空！重置密码/其他用途的信会退回平台通用模板'),
       )
     }
   }
@@ -117,10 +124,22 @@ const reg = {
   EnUS: en,
   // 实测 GetProviders 会回显这四个字段 —— 主题与发件人显示名是可配的。
   // 注意：社区 issue #1559 里工程师回复「不可配」是当时的结论，字段现在已存在。
+  // ⚠️ 但「回显 ≠ 生效」：发信引擎是否采用这两个字段尚未实证。见 docs §13.1。
   SubjectZhCN: '与链 ulink 验证码',
   SubjectEnUS: 'Your ulink verification code',
   SenderNameZhCN: '与链 ulink',
   SenderNameEnUS: 'ulink',
+}
+
+// --subject-with-code：试探「主题里放变量」是否会被引擎替换。
+// 这是让验证码出现在系统通知栏最直接的做法（通知栏一定显示主题），但
+// CloudBase 文档没写主题支持变量，必须先发一封看是替换成 6 位数字、
+// 还是原样打印 {{.VerificationCode}}。原样打印说明不支持，重跑一次不带
+// 该参数即可回退。
+const subjectWithCode = args.includes('--subject-with-code')
+if (subjectWithCode) {
+  reg.SubjectZhCN = '{{.VerificationCode}} 是你的与链验证码'
+  reg.SubjectEnUS = '{{.VerificationCode}} is your ulink code'
 }
 
 // ── 发信方式：平台代发（默认）/ 自有 SMTP / 直接沿用 Supabase 的 SMTP ──
@@ -190,7 +209,8 @@ const smtpSecure =
   supabaseMail?.secure || process.env.CLOUDBASE_SMTP_SECURE || readEnvLocal('CLOUDBASE_SMTP_SECURE') || 'SSL'
 
 // 主题与发件人显示名：沿用 Supabase 的文案（只有中文主题，英文用等价翻译）
-if (supabaseMail?.subject) {
+// --subject-with-code 是显式实验开关，优先级高于沿用 Supabase 的存档文案。
+if (supabaseMail?.subject && !subjectWithCode) {
   reg.SubjectZhCN = supabaseMail.subject
   reg.SubjectEnUS = 'Your ulink verification code'
 }
@@ -200,6 +220,16 @@ if (supabaseMail?.senderName) {
 }
 
 const useSmtp = Boolean(smtpSender && smtpUser && smtpPass)
+
+// 防呆：线上跑的是自有 SMTP（noreply@ulink.ren）。如果这次没解析到 SMTP 凭据，
+// 直接提交就会把 provider 悄悄改回平台代发（发件地址变成 cloudbase_noreply@tencent.com），
+// 用户会突然收到一个陌生发件人 —— 这种「静默默认值」必须挡住。
+if (!useSmtp && !dryRun && !args.includes('--allow-relay')) {
+  console.error('✖ 没有解析到 SMTP 凭据：本次提交会把发件方式改成「平台代发」，发件地址变为 cloudbase_noreply@tencent.com。')
+  console.error('  想保留 noreply@ulink.ren，请加 --from-supabase（沿用 Supabase 存档的 host/user/发件地址，密码取 .env.local），')
+  console.error('  或在 .env.local 补齐 CLOUDBASE_SMTP_SENDER / _USER / _HOST；确实要用平台代发再加 --allow-relay。')
+  process.exit(1)
+}
 
 const smtpConfig = useSmtp
   ? {
@@ -221,7 +251,15 @@ const enablePayload = {
     : // On='TRUE' → 平台代发，发件地址固定 cloudbase_noreply@tencent.com
       { On: 'TRUE' },
 }
-const templatePayload = { Id: providerId, EmailConfig: { TemplateConfig: { RegisterSignIn: reg } } }
+// ⚠️ 必须同时写 DefaultTpl：CloudBase 只有两个邮件模板槽位，
+//   RegisterSignIn 只覆盖「注册/验证码登录」，而 resetPasswordForEmail（设置/重设密码）
+//   等其它用途全部落到 DefaultTpl。只配前者，用户收到的重置密码邮件就是平台通用模板，
+//   品牌卡片样式和隐藏摘要（通知栏可见验证码）全部失效。
+const defTpl = { ZhCN: zh, EnUS: en }
+const templatePayload = {
+  Id: providerId,
+  EmailConfig: { TemplateConfig: { RegisterSignIn: reg, DefaultTpl: defTpl } },
+}
 
 console.log(`provider: ${providerId}  模板: zh ${zh.length} / en ${en.length} 字符`)
 console.log(
@@ -252,7 +290,10 @@ if (dryRun) {
       {
         Id: providerId,
         EmailConfig: {
-          TemplateConfig: { RegisterSignIn: { ...reg, ZhCN: `<${zh.length} chars>`, EnUS: `<${en.length} chars>` } },
+          TemplateConfig: {
+            RegisterSignIn: { ...reg, ZhCN: `<${zh.length} chars>`, EnUS: `<${en.length} chars>` },
+            DefaultTpl: { ZhCN: `<${zh.length} chars>`, EnUS: `<${en.length} chars>` },
+          },
         },
       },
       null,
@@ -279,15 +320,18 @@ const after = await app.env.getProviders()
 const target = (after?.Data || after?.data?.Data || []).find((p) => p.Id === providerId)
 const ec = target?.EmailConfig || {}
 const rsi = ec.TemplateConfig?.RegisterSignIn
+const dtp = ec.TemplateConfig?.DefaultTpl
 console.log(
   `复核: ${providerId} → provider.On=${target?.On ?? '?'}  代发=${ec.On ?? '?'}  发件地址=${ec.SmtpConfig?.SenderAddress ?? '?'}  主机=${ec.SmtpConfig?.ServerHost || '(空)'}`,
 )
 console.log(
-  `      模板 ZhCN=${rsi?.ZhCN?.length ?? 0} / EnUS=${rsi?.EnUS?.length ?? 0}  主题="${rsi?.SubjectZhCN || '(空)'}"  发件人="${rsi?.SenderNameZhCN || '(空)'}"`,
+  `      RegisterSignIn ZhCN=${rsi?.ZhCN?.length ?? 0} / EnUS=${rsi?.EnUS?.length ?? 0}  主题="${rsi?.SubjectZhCN || '(空)'}"  发件人="${rsi?.SenderNameZhCN || '(空)'}"`,
 )
+console.log(`      DefaultTpl      ZhCN=${dtp?.ZhCN?.length ?? 0} / EnUS=${dtp?.EnUS?.length ?? 0}`)
 const senderOk = useSmtp ? ec.SmtpConfig?.SenderAddress === smtpSender : Boolean(ec.SmtpConfig?.SenderAddress)
-const ok = rsi?.ZhCN?.length > 1000 && rsi?.EnUS?.length > 1000 && target?.On === 'TRUE' && senderOk
+const tmplOk = [rsi, dtp].every((t) => t?.ZhCN?.length > 1000 && t?.EnUS?.length > 1000)
+const ok = tmplOk && target?.On === 'TRUE' && senderOk
 if (!ok) {
-  console.error('✖ 复核未通过：开关 / 模板 / 发件地址未按预期落库，请检查上面的输出。')
+  console.error('✖ 复核未通过：开关 / 模板（RegisterSignIn + DefaultTpl 两份）/ 发件地址未按预期落库，请检查上面的输出。')
   process.exitCode = 1
 }

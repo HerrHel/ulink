@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.auth.ariaLabel')" :class="{ open: auth.authModalOpen }" @click.self="onClose">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('modal.auth.ariaLabel')" :class="{ open: auth.authModalOpen }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-md">
       <div class="modal-head">
         <h2>{{ step === 'email' ? t('settings.loginRegister') : t('modal.auth.enterCode') }}</h2>
@@ -13,8 +13,11 @@
 
         <!-- Step 1: 输入邮箱 -->
         <template v-if="step === 'email'">
-          <!-- 登录方式切换：验证码 / 密码 -->
-          <div class="auth-tabs" role="tablist">
+          <!-- 登录方式切换：下划线标签（无填充轨道块，天然适配明暗双主题） -->
+          <div
+            class="auth-tabs" role="tablist"
+            :style="{ '--tab-x': mode === 'password' ? '100%' : '0%' }"
+          >
             <button
               type="button" role="tab" id="authTabOtp" class="auth-tab"
               :class="{ 'auth-tab--active': mode === 'otp' }"
@@ -32,7 +35,9 @@
           <p class="auth-hint">
             {{ mode === 'otp' ? t('modal.auth.emailHint') : t('modal.auth.passwordHint') }}
           </p>
-          <p v-if="mode === 'otp'" class="auth-hint-sub">{{ t('modal.auth.noPasswordHint') }}</p>
+          <p class="auth-hint-sub">
+            {{ mode === 'otp' ? t('modal.auth.noPasswordHint') : t('modal.auth.noPasswordGuide') }}
+          </p>
           <div class="form-group">
             <input
               type="email" class="form-input auth-input" id="authEmailInput"
@@ -41,56 +46,57 @@
             />
           </div>
 
-          <template v-if="mode === 'password'">
-            <div class="form-group">
-              <input
-                type="password" class="form-input auth-input" id="authPasswordInput"
-                v-model="password" :placeholder="t('modal.auth.passwordPlaceholder')"
-                autocomplete="current-password"
-                @keydown.enter="onPasswordLogin"
-              />
+          <!-- 密码字段：用 0fr→1fr 的网格行高过渡展开，让「多一个输入框」
+               成为一次有意的形变，而不是切 tab 时凭空多出一块把下面全顶下去 -->
+          <div class="auth-pw-slot" :class="{ 'auth-pw-slot--open': mode === 'password' }">
+            <div class="auth-pw-slot-inner">
+              <div class="form-group">
+                <input
+                  type="password" class="form-input auth-input" id="authPasswordInput"
+                  v-model="password" :placeholder="t('modal.auth.passwordPlaceholder')"
+                  autocomplete="current-password"
+                  @keydown.enter="onPasswordLogin"
+                />
+              </div>
             </div>
-            <p class="auth-guide">{{ t('modal.auth.noPasswordGuide') }}</p>
-          </template>
+          </div>
 
-          <template v-else>
-            <div v-if="TURNSTILE_SITE_KEY" id="auth-turnstile" class="auth-turnstile"></div>
+          <!-- 第三方登录是一条与「邮箱内用验证码还是密码」无关的独立通道：
+               它必须待在 tab 面板之外，否则切到密码登录时整块消失，
+               底部会凭空少一截，看起来像漏渲染而不是有意设计。 -->
+          <div class="auth-divider">
+            <span class="auth-divider-line"></span>
+            <span class="auth-divider-text">{{ t('modal.auth.orOAuth') }}</span>
+            <span class="auth-divider-line"></span>
+          </div>
 
-            <!-- 第三方登录快捷方式 -->
-            <div class="auth-divider">
-              <span class="auth-divider-line"></span>
-              <span class="auth-divider-text">{{ t('modal.auth.orOAuth') }}</span>
-              <span class="auth-divider-line"></span>
-            </div>
-
-            <div class="auth-oauth-group">
-              <button
-                type="button"
-                class="auth-oauth-btn auth-oauth-btn--github"
-                id="authGithubBtn"
-                @click="onOAuth('github')"
-                :disabled="oauthLoading !== null"
-                :title="t('modal.auth.github')"
-              >
-                <span class="auth-oauth-icon" v-html="I.github"></span>
-                <span class="auth-oauth-label">{{ t('modal.auth.github') }}</span>
-              </button>
-              <button
-                type="button"
-                class="auth-oauth-btn auth-oauth-btn--google"
-                id="authGoogleBtn"
-                @click="onOAuth('google')"
-                :disabled="oauthLoading !== null"
-                :title="t('modal.auth.google')"
-              >
-                <span class="auth-oauth-icon" v-html="I.google"></span>
-                <span class="auth-oauth-label">{{ t('modal.auth.google') }}</span>
-              </button>
-            </div>
-          </template>
+          <div class="auth-oauth-group">
+            <button
+              type="button"
+              class="auth-oauth-btn auth-oauth-btn--github"
+              id="authGithubBtn"
+              @click="onOAuth('github')"
+              :disabled="oauthLoading !== null"
+              :title="t('modal.auth.github')"
+            >
+              <span class="auth-oauth-icon" v-html="I.github"></span>
+              <span class="auth-oauth-label">{{ t('modal.auth.github') }}</span>
+            </button>
+            <button
+              type="button"
+              class="auth-oauth-btn auth-oauth-btn--google"
+              id="authGoogleBtn"
+              @click="onOAuth('google')"
+              :disabled="oauthLoading !== null"
+              :title="t('modal.auth.google')"
+            >
+              <span class="auth-oauth-icon" v-html="I.google"></span>
+              <span class="auth-oauth-label">{{ t('modal.auth.google') }}</span>
+            </button>
+          </div>
         </template>
 
-        <!-- Step 2: 输入验证码 -->
+        <!-- Step 2: 输入验证�?-->
         <template v-if="step === 'code'">
           <p class="auth-hint">
             {{ t('modal.auth.codeSentTo') }}
@@ -128,7 +134,7 @@
         <span class="flex-1"></span>
         <button class="btn btn-secondary" @click="onClose">{{ t('common.cancel') }}</button>
         <button v-if="step === 'email' && mode === 'otp'" class="btn btn-primary" @click="onSendCode"
-          :disabled="!emailTrim || sending || cooldownSec > 0 || (!!TURNSTILE_SITE_KEY && !turnstileToken)">
+          :disabled="!emailTrim || sending || cooldownSec > 0">
           {{ sending ? t('modal.auth.sending')
             : (cooldownSec > 0 ? t('modal.auth.resendCountdownFull', { n: cooldownSec }) : t('modal.auth.sendCode')) }}
         </button>
@@ -154,42 +160,9 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
-const TURNSTILE_SITE_KEY = import.meta.env.MODE === 'test' ? '' : String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '')
-const turnstileToken = ref('')
 const oauthLoading = ref<'github' | 'google' | null>(null)
-
-type TurnstileApi = {
-  render: (el: HTMLElement, opts: Record<string, unknown>) => void
-  reset: (el?: HTMLElement) => void
-}
-function turnstileApi(): TurnstileApi | undefined {
-  return (window as unknown as { turnstile?: TurnstileApi }).turnstile
-}
-function renderTurnstile(): void {
-  const api = turnstileApi()
-  const el = document.getElementById('auth-turnstile')
-  if (!api || !el) return
-  api.render(el, {
-    sitekey: TURNSTILE_SITE_KEY,
-    theme: 'auto',
-    callback: (token: string) => { turnstileToken.value = token },
-    'expired-callback': () => { turnstileToken.value = '' },
-    'error-callback': () => { turnstileToken.value = '' },
-  })
-}
-function ensureTurnstile(): void {
-  if (!TURNSTILE_SITE_KEY) return
-  if (turnstileApi()) { renderTurnstile(); return }
-  if (document.getElementById('lv-turnstile-script')) return
-  const s = document.createElement('script')
-  s.id = 'lv-turnstile-script'
-  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
-  s.async = true
-  s.defer = true
-  s.onload = renderTurnstile
-  document.head.appendChild(s)
-}
 
 const auth = useAuth()
 const sync = useCloudSync()
@@ -206,9 +179,9 @@ const verifying = ref(false)
 const verified = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const codeInputRef = ref<HTMLInputElement | null>(null)
-// onVerify 成功后延迟关闭弹窗的 timer。需在弹窗提前关闭（手动 X / 遮罩 / 取消 / Esc）
-// 时清掉，否则 800ms 到点回调仍会跑 checkE2EStatus + initialSync —— 用户已明确取消登录流程
-// 后系统不应再自作主张触发全量云端同步。
+// onVerify 成功后延迟关闭弹窗的 timer。需在弹窗提前关闭（手动 X / 遮罩 / 取消 / Esc�?
+// 时清掉，否则 800ms 到点回调仍会�?checkE2EStatus + initialSync —�?用户已明确取消登录流�?
+// 后系统不应再自作主张触发全量云端同步�?
 const syncTimer = ref<number | null>(null)
 
 const emailTrim = computed(() => email.value.trim())
@@ -227,18 +200,14 @@ watch(() => auth.authModalOpen, (open) => {
     verifying.value = false
     verified.value = false
     oauthLoading.value = null
-    turnstileToken.value = ''
     auth.authError = null
     nextTick(() => {
       inputRef.value?.focus()
-      ensureTurnstile()
     })
   } else {
-    turnstileToken.value = ''
-    turnstileApi()?.reset()
     if (syncTimer.value !== null) {
       // 弹窗关闭（含手动 X / 遮罩 / 取消 / Esc 任一路径，均会置 authModalOpen=false）时
-      // 取消 pending 的成功回调 timer，防 800ms 后仍触发 checkE2EStatus + initialSync。
+      // 取消 pending 的成功回�?timer，防 800ms 后仍触发 checkE2EStatus + initialSync�?
       clearTimeout(syncTimer.value)
       syncTimer.value = null
     }
@@ -253,22 +222,13 @@ async function onSendCode() {
     auth.authError = t('modal.auth.cooldownError', { n: remain })
     return
   }
-  if (TURNSTILE_SITE_KEY && !turnstileToken.value) {
-    auth.authError = t('modal.auth.turnstileRequired')
-    return
-  }
   sending.value = true
   auth.authError = null
-  const ok = turnstileToken.value
-    ? await auth.sendOtp(e, turnstileToken.value)
-    : await auth.sendOtp(e)
+  const ok = await auth.sendOtp(e)
   sending.value = false
   if (ok) {
     step.value = 'code'
     nextTick(() => codeInputRef.value?.focus())
-  } else {
-    turnstileToken.value = ''
-    turnstileApi()?.reset()
   }
 }
 
@@ -304,24 +264,24 @@ async function onVerify() {
   }
 }
 
-/** 登录成功后的统一收尾：显示成功态，800ms 后关弹窗并刷新 E2E 状态 + 触发首同步 */
+/** 登录成功后的统一收尾：显示成功态，800ms 后关弹窗并刷�?E2E 状�?+ 触发首同�?*/
 function schedulePostLogin() {
   verified.value = true
-  // 防御：若上次成功回调 timer 仍在 pending（用户在 800ms 内重复点登录）先清掉，
-  // 否则旧 id 被新 setTimeout 覆盖后无法 clearTimeout，旧回调仍会跑一次。
+  // 防御：若上次成功回调 timer 仍在 pending（用户在 800ms 内重复点登录）先清掉�?
+  // 否则�?id 被新 setTimeout 覆盖后无�?clearTimeout，旧回调仍会跑一次�?
   if (syncTimer.value !== null) clearTimeout(syncTimer.value)
   syncTimer.value = window.setTimeout(async () => {
     syncTimer.value = null
     auth.authModalOpen = false
-    // 登录后刷新 E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
-    // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录后
-    // isE2EEnabled 停留 false → 编辑加密书签解锁成功仍提示设置主密码，且新建密码会
-    // 误走 base64 而非 E2E 加密。
+    // 登录后刷�?E2E 状态：checkE2EStatus 在未登录时只能判本地 canary（判不到云端），
+    // 登录后才能读云端 master_canary。不刷新则「本地无 canary、云端有」的账户登录�?
+    // isE2EEnabled 停留 false �?编辑加密书签解锁成功仍提示设置主密码，且新建密码�?
+    // 误走 base64 而非 E2E 加密�?
     await e2e.checkE2EStatus()
     await sync.initialSync()
     // CloudBase 迁移：老用户首次登录会认领历史数据，认领到东西时给个明确反馈，
-    // 否则用户只会看到书架「突然有了东西」而不知道发生了什么。
-    // 用可选链：部分单测会 mock 一个精简版 useCloudSync，未必带 lastClaim。
+    // 否则用户只会看到书架「突然有了东西」而不知道发生了什么�?
+    // 用可选链：部分单测会 mock 一个精简�?useCloudSync，未必带 lastClaim�?
     const claim = sync.lastClaim?.value ?? null
     if (claim && claim.count > 0) {
       toast(t('settings.legacyDataRestored', { n: claim.count }))
@@ -364,10 +324,8 @@ function onBack() {
   code.value = ''
   auth.authError = null
   auth.resetVerifyState(emailTrim.value)
-  turnstileToken.value = ''
   nextTick(() => {
     inputRef.value?.focus()
-    ensureTurnstile()
   })
 }
 
@@ -377,20 +335,21 @@ function focusCodeInput() {
 
 function onClose() {
   auth.authModalOpen = false
-  turnstileToken.value = ''
-  turnstileApi()?.reset()
 }
 
-// 兜底：组件真卸载（如 SPA 路由切走 AuthModal 父组件）时清 timer，
-// 防 timer 回调访问已卸载组件作用域内的 store 引用。
+// 兜底：组件真卸载（如 SPA 路由切走 AuthModal 父组件）时清 timer�?
+// �?timer 回调访问已卸载组件作用域内的 store 引用�?
 onBeforeUnmount(() => {
   if (syncTimer.value !== null) {
     clearTimeout(syncTimer.value)
     syncTimer.value = null
   }
-  turnstileToken.value = ''
-  turnstileApi()?.reset()
 })
+
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+// 裸 @click.self 的坑：在弹窗内按下、滑到遮罩上松开时，click 事件的 target 是两者的
+// 共同祖先（遮罩），.self 判定照样通过 -> 误关闭，正在填的内容全丢。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 </script>
 
 <style scoped>
@@ -415,46 +374,85 @@ onBeforeUnmount(() => {
   margin:0 0 16px;line-height:1.5;
 }
 
-/* ── 登录方式切换 ── */
+/* ── 登录方式切换：下划线标签 ──
+   参考 GitHub / Stripe / Linear 的 tab 排版：不用填充色块轨道，只用
+   共享基线 + 强调色滑块表达选中。这样在明暗两套主题下都不会出现
+   「暗色页面里一块浅色板」的割裂感，也不需要为每个主题单独调色。 */
 .auth-tabs{
-  display:flex;gap:4px;padding:4px;margin:0 0 16px;
-  background:var(--bg-soft,#f5f1ec);border-radius:12px;
+  position:relative;display:flex;margin:0 0 16px;
+  border-bottom:1px solid var(--border-light);
+  --tab-x:0%;
+}
+/* 滑块：外框恒定半个轨道用于 100% 平移，内框用 padding+background-clip
+   收窄成一条比标签略窄的强调线，避免横贯半个弹窗显得笨重。 */
+.auth-tabs::after{
+  content:'';position:absolute;left:0;bottom:-1px;
+  width:50%;height:2px;box-sizing:border-box;
+  padding:0 20px;
+  background:var(--accent);
+  background-clip:content-box;
+  transform:translateX(var(--tab-x));
+  transition:transform .26s var(--ease-out);
+  pointer-events:none;
+}
+@media (prefers-reduced-motion:reduce){
+  .auth-tabs::after{transition:none}
 }
 .auth-tab{
-  flex:1;padding:8px 12px;border:0;border-radius:9px;
-  background:transparent;color:var(--text-muted);
-  font-size:0.82rem;font-weight:600;cursor:pointer;
-  transition:background .16s ease,color .16s ease;
+  flex:1;min-width:0;
+  appearance:none;border:0;margin:0;
+  padding:9px 8px 10px;
+  background:transparent;
+  color:var(--text-muted);
+  font-family:inherit;font-size:0.83rem;font-weight:500;
+  letter-spacing:0.01em;
+  cursor:pointer;
+  border-radius:var(--radius-sm) var(--radius-sm) 0 0;
+  transition:color .16s ease,background-color .16s ease;
+  -webkit-tap-highlight-color:transparent;
 }
-.auth-tab:hover{color:var(--text)}
-.auth-tab--active{
-  background:var(--bg-card,#fff);color:var(--text);
-  box-shadow:0 1px 3px rgba(0,0,0,.08);
+@media (hover:hover) and (pointer:fine){
+  .auth-tab:hover{color:var(--text);background:var(--surface-hover)}
+  .auth-tab--active:hover{background:transparent}
 }
-.auth-guide{
-  font-size:0.74rem;color:var(--text-muted);
-  margin:0 0 10px;line-height:1.55;text-align:left;
-}
+.auth-tab:active{color:var(--text)}
+.auth-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;border-radius:var(--radius-sm)}
+/* 选中态用「字色 + 字重 + 滑块」三重信号，不依赖低对比的底色差异 */
+.auth-tab--active{color:var(--text);font-weight:600}
 .auth-email-display{
   font-size:0.92rem;font-weight:600;color:var(--accent);
   margin:0 0 4px;word-break:break-all;
 }
 
-/* ── 输入框 ── */
+/* ── 输入�?── */
 .auth-input{
   text-align:center;font-size:0.95rem;
   padding:11px 16px;
 }
 
-/* ── 人机验证 ── */
-.auth-turnstile{
-  margin:10px auto;
-  display:flex;
-  justify-content:center;
-  min-height:65px;
+/* 密码字段折叠槽：展开/收起都走 grid-template-rows 过渡，弹窗高度随之
+   连续变化，切换 tab 时不会出现「下面整块跳一下」。
+   visibility 负责把收起状态的输入框移出 Tab 键序列（height:0 仍可聚焦）。 */
+.auth-pw-slot{
+  display:grid;grid-template-rows:0fr;
+  visibility:hidden;
+  transition:grid-template-rows .24s var(--ease-out),visibility 0s .24s;
+}
+.auth-pw-slot--open{
+  grid-template-rows:1fr;
+  visibility:visible;
+  transition:grid-template-rows .24s var(--ease-out),visibility 0s 0s;
+}
+.auth-pw-slot-inner{
+  min-height:0;overflow:hidden;
+  opacity:0;transition:opacity .18s ease;
+}
+.auth-pw-slot--open .auth-pw-slot-inner{opacity:1}
+@media (prefers-reduced-motion:reduce){
+  .auth-pw-slot,.auth-pw-slot--open{transition:none}
 }
 
-/* ── 第三方快捷登录 ── */
+/* ── 第三方快捷登�?── */
 .auth-divider{
   display:flex;
   align-items:center;
@@ -518,7 +516,7 @@ onBeforeUnmount(() => {
   white-space:nowrap;
 }
 
-/* ── 消息状态 ── */
+/* ── 消息状�?── */
 .auth-error,.auth-success{
   display:flex;align-items:center;justify-content:center;gap:6px;
   font-size:0.8rem;margin-top:8px;padding:8px 12px;
@@ -533,3 +531,4 @@ onBeforeUnmount(() => {
 }
 .auth-success-icon svg{width:16px;height:16px}
 </style>
+

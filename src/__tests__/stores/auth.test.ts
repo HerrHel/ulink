@@ -368,6 +368,21 @@ describe('auth 限流纯函数护栏 — lockDurationFor / _isRateLimitError', (
       expect(auth.displayName).toBe('爱丽丝')
     })
 
+    it('也能读 CloudBase 的字段名（nickName / avatarUrl）：重登后不再退回默认', async () => {
+      const auth = useAuthStore()
+      auth.user = {
+        id: 'u1',
+        email: 'alice@example.com',
+        user_metadata: { nickName: '爱丽丝', avatarUrl: '🦊' },
+      } as any
+      expect(auth.displayName).toBe('爱丽丝')
+      expect(auth.avatar).toBe('🦊')
+
+      // 顶层字段（SDK 的 IUserInfo.name / displayName）同样认
+      auth.user = { id: 'u1', email: 'alice@example.com', name: '爱丽丝', user_metadata: {} } as any
+      expect(auth.displayName).toBe('爱丽丝')
+    })
+
     it('设置自定义昵称后，displayName 优先使用自定义昵称', async () => {
       const auth = useAuthStore()
       auth.user = {
@@ -419,11 +434,11 @@ describe('auth 限流纯函数护栏 — lockDurationFor / _isRateLimitError', (
     it('sendOtp 携带 captchaToken 时正确传入 supabase options', async () => {
       const auth = useAuthStore()
       ;(supabase.auth.signInWithOtp as any).mockResolvedValue({ data: {}, error: null })
-      const ok = await auth.sendOtp('test@example.com', 'cf-turnstile-token-123')
+      const ok = await auth.sendOtp('test@example.com', 'captcha-token-123')
       expect(ok).toBe(true)
       expect(supabase.auth.signInWithOtp).toHaveBeenCalledWith({
         email: 'test@example.com',
-        options: { captchaToken: 'cf-turnstile-token-123' },
+        options: { captchaToken: 'captcha-token-123' },
       })
     })
 

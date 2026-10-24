@@ -51,7 +51,10 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
 
     // Close dropdowns when clicking outside
     if (!(e.target as HTMLElement).closest('.attr-filter-wrap')) useAttrDropdownStore().close()
-    if (!(e.target as HTMLElement).closest('.settings-wrap')) hideSettingsMenu()
+    // 弹窗（.modal-mask / role=dialog）盖在设置面板之上时，点弹窗内部不算「点在外面」——
+    // 否则面板会被悄悄收起、弹窗还留着，观感像面板自己被点没了（设置→设置登录密码 就踩过）。
+    const inDialog = (e.target as HTMLElement).closest('.modal-mask, [role="dialog"]')
+    if (!inDialog && !(e.target as HTMLElement).closest('.settings-wrap')) hideSettingsMenu()
     if (!(e.target as HTMLElement).closest('.add-wrap')) hideAddDropdown()
     if (!(e.target as HTMLElement).closest('#mentionDrop, .group-body')) useMentionStore().hide()
 

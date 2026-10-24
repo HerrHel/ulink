@@ -1,4 +1,4 @@
-/**
+﻿/**
  * useDragDrop — 拖放交互
  * 管理卡片拖拽排序、拖入组、拖到详情面板等交互。
  * 从 drag.js 完整迁入。
@@ -192,6 +192,27 @@ function _onDragOver(e: DragEvent) {
     target = (e.target as HTMLElement).closest('#panelContent, .panel-main-inner, .panel-main');
   }
   _updateDragHint(e, target)
+  // 分类拖拽：仅 rail-item 是有效落点，其余目标不高亮、不 preventDefault，避免错误视觉反馈
+  if (_currentDragPayload?.type === 'cat') {
+    if (target && target.classList.contains('rail-item')) {
+      // Bug C：拖到自身 rail-item 不高亮（drop 端会 no-op）
+      const selfCat = (target as HTMLElement).dataset.catId
+      if (selfCat && selfCat === _catDragId) {
+        if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active'); _dragOverEl = null }
+      } else {
+        e.preventDefault()
+        if (target !== _dragOverEl) {
+          if (_dragOverEl) _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active')
+          _dragOverEl = target
+          target.classList.add('rail-drag-over')
+        }
+      }
+    } else {
+      if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active'); _dragOverEl = null }
+    }
+    _hideDragCursor()
+    return
+  }
   if (target && target.classList.contains('group-card') && _currentDragPayload && _currentDragPayload.type === 'bm' && _currentDragPayload.srcGid === (target as HTMLElement).dataset.groupId) {
     e.preventDefault();
     const gBody = target.querySelector('.group-body');
@@ -199,13 +220,15 @@ function _onDragOver(e: DragEvent) {
     else _hideDragCursor();
     return;
   }
-  // 禁止拖拽组到自身
+  // 禁止拖拽组到自身（group-body / group-card / group-card-head 均不高亮，与 drop 端的 srcGid===gid 守卫对齐）
   if (target && _currentDragPayload && _currentDragPayload.type === 'group') {
     const srcGid = _currentDragPayload.id.slice(6)
     const tgtGid = target.classList.contains('group-body') ? (target as HTMLElement).dataset.gid
       : target.classList.contains('group-card') ? (target as HTMLElement).dataset.groupId
+      : target.classList.contains('group-card-head') ? (target.closest('.group-card') as HTMLElement)?.dataset.groupId
       : null
     if (tgtGid && srcGid === tgtGid) {
+      if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active'); _dragOverEl = null }
       _hideDragCursor()
       return
     }

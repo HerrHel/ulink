@@ -75,6 +75,8 @@ interface ModalState {
   share: boolean
   aiEnrich: boolean
   quickLook: boolean
+  /** 设置/重设登录密码（邮箱验证码 + 新密码），从设置面板唤起 */
+  setPassword: boolean
 }
 
 interface PanelState {
@@ -204,6 +206,7 @@ export const useUIStore = defineStore('ui', {
         share: false,
         aiEnrich: false,
         quickLook: false,
+        setPassword: false,
       },
       panels: {
         settings: false,

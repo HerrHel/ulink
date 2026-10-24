@@ -8,6 +8,42 @@ export const K_CUSTOM_NICKNAME = 'lv_user_nickname'
 export const K_CUSTOM_AVATAR = 'lv_user_avatar'
 
 /**
+ * 读取用户资料时要同时认 Supabase 与 CloudBase 两套字段名。
+ *
+ * Supabase 时期资料写在 `user_metadata.display_name` / `user_metadata.avatar`；
+ * CloudBase 的用户模型用的是 `nickname` / `avatarUrl`（SDK 的 user_metadata 里是
+ * 驼峰 `nickName` / `avatarUrl`，顶层还有 `name` / `displayName`）。
+ * 只认 Supabase 那套的后果：换设备或退出重登后（登出会清掉本地昵称缓存）读不到
+ * 云端资料，名字退回邮箱前缀、头像退回默认。
+ */
+type LooseUser = Record<string, unknown> & { user_metadata?: Record<string, unknown> | null }
+
+function _pickStr(src: Record<string, unknown> | null | undefined, keys: readonly string[]): string {
+  if (!src) return ''
+  for (const k of keys) {
+    const v = src[k]
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return ''
+}
+
+/** 云端昵称：metadata 多套键名 → 用户顶层字段 */
+export function _metaDisplayName(u: User | null): string {
+  if (!u) return ''
+  const loose = u as unknown as LooseUser
+  return _pickStr(loose.user_metadata, ['display_name', 'nickname', 'nickName', 'name'])
+    || _pickStr(loose, ['displayName', 'name'])
+}
+
+/** 云端头像：metadata 多套键名 → 用户顶层字段 */
+export function _metaAvatar(u: User | null): string {
+  if (!u) return ''
+  const loose = u as unknown as LooseUser
+  return _pickStr(loose.user_metadata, ['avatar', 'avatarUrl', 'avatar_url', 'picture'])
+    || _pickStr(loose, ['avatarUrl', 'avatar_url'])
+}
+
+/**
  * S12：OTP 客户端前置限流。
  *
  * 后端 Supabase Auth 有平台级速率限制，但客户端无前置防护时：
@@ -101,16 +137,11 @@ export const useAuthStore = defineStore('auth', () => {
   const customNickname = ref<string>(safeGetItem(K_CUSTOM_NICKNAME) || '')
   const customAvatar = ref<string>(safeGetItem(K_CUSTOM_AVATAR) || '')
 
-  /** 显示昵称：自定义昵称 > Supabase metadata > 邮箱前缀 > '' */
+  /** 显示昵称：自定义昵称 > 云端资料（Supabase / CloudBase 两套字段名） > 邮箱前缀 > '' */
   const displayName = computed(() => {
     if (customNickname.value.trim()) return customNickname.value.trim()
-    const meta = user.value?.user_metadata
-    if (meta?.display_name && typeof meta.display_name === 'string' && meta.display_name.trim()) {
-      return meta.display_name.trim()
-    }
-    if (meta?.nickname && typeof meta.nickname === 'string' && meta.nickname.trim()) {
-      return meta.nickname.trim()
-    }
+    const metaName = _metaDisplayName(user.value)
+    if (metaName) return metaName
     const email = userEmail.value
     if (email) {
       const prefix = email.split('@')[0]
@@ -119,26 +150,24 @@ export const useAuthStore = defineStore('auth', () => {
     return ''
   })
 
-  /** 显示头像 Emoji/标识：自定义头像 > Supabase metadata > '' */
+  /** 显示头像 Emoji/标识：自定义头像 > 云端资料（Supabase / CloudBase 两套字段名） > '' */
   const avatar = computed(() => {
     if (customAvatar.value.trim()) return customAvatar.value.trim()
-    const meta = user.value?.user_metadata
-    if (meta?.avatar && typeof meta.avatar === 'string' && meta.avatar.trim()) {
-      return meta.avatar.trim()
-    }
-    return ''
+    return _metaAvatar(user.value)
   })
 
+  /** 登录/会话恢复时把云端资料落到本地缓存，避免下次登出后彻底丢失 */
   function _syncFromMetadata(u: User | null) {
     if (!u) return
-    const meta = u.user_metadata
-    if (meta?.display_name && !customNickname.value) {
-      customNickname.value = meta.display_name
-      safeSetItem(K_CUSTOM_NICKNAME, meta.display_name)
+    const name = _metaDisplayName(u)
+    if (name && !customNickname.value) {
+      customNickname.value = name
+      safeSetItem(K_CUSTOM_NICKNAME, name)
     }
-    if (meta?.avatar && !customAvatar.value) {
-      customAvatar.value = meta.avatar
-      safeSetItem(K_CUSTOM_AVATAR, meta.avatar)
+    const av = _metaAvatar(u)
+    if (av && !customAvatar.value) {
+      customAvatar.value = av
+      safeSetItem(K_CUSTOM_AVATAR, av)
     }
   }
 

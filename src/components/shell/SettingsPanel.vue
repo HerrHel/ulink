@@ -92,45 +92,16 @@
                     </div>
                   </div>
 
-                  <!-- 账号密码：老用户从「验证码登录」迁到「密码登录」的入口 -->
-                  <div v-if="!editingPassword" class="sp-logout-wrap">
-                    <button class="up-menu-item sp-logout-btn" id="spSetPasswordBtn" @click.stop="startSetPassword">
+                  <!-- 账号密码：老用户从「验证码登录」迁到「密码登录」的入口。
+                       表单本身放在 SetPasswordModal 弹窗里 —— 这里只有 ~330px 宽，
+                       验证码 + 发送按钮 + 密码规则挤在面板内联展开时很局促。 -->
+                  <div class="sp-logout-wrap">
+                    <button class="up-menu-item sp-logout-btn" id="spSetPasswordBtn" @click.stop="onOpenSetPassword">
                       <div class="up-item-left">
                         <span class="up-item-icon" aria-hidden="true" v-html="I.password"></span>
                         <span class="up-item-title">{{ t('settings.setPassword') }}</span>
                       </div>
                     </button>
-                  </div>
-                  <div v-else class="sp-pw-edit">
-                    <p class="sp-hint sp-pw-tip">{{ t('settings.passwordCodeSentTo', { email: auth.userEmail }) }}</p>
-                    <div class="sp-pw-field">
-                      <input
-                        type="text" class="form-input" id="spPasswordCodeInput"
-                        v-model="pwCode" inputmode="numeric" maxlength="6"
-                        :placeholder="t('settings.passwordCode')"
-                        autocomplete="one-time-code"
-                      />
-                    </div>
-                    <div class="sp-pw-field">
-                      <input
-                        type="password" class="form-input" id="spNewPasswordInput"
-                        v-model="newPassword" :placeholder="t('settings.passwordPlaceholder')"
-                        autocomplete="new-password"
-                        @keydown.enter="onSavePassword"
-                      />
-                    </div>
-                    <div class="sp-pw-actions">
-                      <button class="btn btn-ghost btn-sm" id="spSendPwCodeBtn"
-                        :disabled="pwSending || pwCooldown > 0" @click="onSendPasswordCode">
-                        {{ pwCooldown > 0 ? t('modal.auth.resendCountdown', { n: pwCooldown })
-                          : (pwSending ? t('modal.auth.sending') : t('settings.sendPasswordCode')) }}
-                      </button>
-                      <button class="btn btn-primary btn-sm" :disabled="pwSaving" @click="onSavePassword">
-                        {{ pwSaving ? t('common.saving') : t('common.save') }}
-                      </button>
-                      <button class="btn btn-ghost btn-sm" @click="cancelSetPassword">{{ t('common.cancel') }}</button>
-                    </div>
-                    <p v-if="pwMsg" class="sp-hint sp-pw-msg">{{ pwMsg }}</p>
                   </div>
 
                   <div class="sp-logout-wrap">
@@ -749,51 +720,11 @@ async function onLogout() {
   if (ok) await sync.resetSyncState()
 }
 
-// ── 设置/修改密码（验证码 + 新密码两步） ──
-const editingPassword = ref(false)
-const newPassword = ref('')
-const pwCode = ref('')
-const pwSaving = ref(false)
-const pwSending = ref(false)
-const pwMsg = ref('')
-const pwCooldown = computed(() => auth.sendCooldownRemaining(auth.userEmail))
-
-function startSetPassword() {
-  editingPassword.value = true
-  newPassword.value = ''
-  pwCode.value = ''
-  pwMsg.value = ''
-}
-
-function cancelSetPassword() {
-  editingPassword.value = false
-  newPassword.value = ''
-  pwCode.value = ''
-  pwMsg.value = ''
-}
-
-async function onSendPasswordCode() {
-  if (pwSending.value || !auth.userEmail) return
-  pwSending.value = true
-  pwMsg.value = ''
-  const ok = await auth.sendPasswordReset(auth.userEmail)
-  pwSending.value = false
-  pwMsg.value = ok ? t('settings.passwordCodeSent') : auth.authError || t('settings.passwordSaveFailed')
-}
-
-async function onSavePassword() {
-  if (pwSaving.value) return
-  pwSaving.value = true
-  pwMsg.value = ''
-  const ok = await auth.confirmSetPassword(auth.userEmail, pwCode.value, newPassword.value)
-  pwSaving.value = false
-  if (ok) {
-    cancelSetPassword()
-    toast(t('settings.passwordSaved'))
-  } else {
-    // store 会把具体原因（长度/字符类型/验证码错误/平台错误）写进 authError
-    pwMsg.value = auth.authError || t('settings.passwordSaveFailed')
-  }
+// ── 设置/修改密码：表单在 SetPasswordModal 里，面板只负责唤起 ──
+// 与 onOpenE2ESetup / onOpenE2EUnlock 一致：开弹窗就先收起面板，避免两层遮罩叠加。
+function onOpenSetPassword() {
+  uiStore.modals.setPassword = true
+  uiStore.panels.settings = false
 }
 
 function onCheckDeadLinks() {

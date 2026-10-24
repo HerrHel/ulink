@@ -93,7 +93,6 @@ export const modalsZh = {
       orOAuth: '或使用第三方账号快捷登录',
       github: 'GitHub 登录',
       google: 'Google 登录',
-      turnstileRequired: '请先完成人机安全验证',
       oauthFailed: '第三方登录失败，请重试',
     }, // AuthModal
     confirm: {
@@ -286,7 +285,6 @@ export const modalsEn = {
       orOAuth: 'Or continue with',
       github: 'GitHub',
       google: 'Google',
-      turnstileRequired: 'Please complete the security check first',
       oauthFailed: 'Sign in failed, please try again',
     }, // AuthModal
     confirm: {

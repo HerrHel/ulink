@@ -9,6 +9,10 @@
   --surface-hover:#F7F2EC;
   --surface-active:#EFE8DF;
   --surface-alt:#F7F2EC;
+  /* 卡片级底色：比 --surface 再抬一级，用于聊天气泡内的卡片等浮起内容。
+     历史上多个组件写了 var(--bg-card,#fff)，但该变量从未定义过，
+     暗色主题下就硬编码成了白底 —— 这里补齐，避免浅色回退值在暗色下漏出。 */
+  --bg-card:#FFFFFF;
   --border:#E5DDD3;
   --border-light:#EFE8DF;
   --border-hover:#D5CBBE;
@@ -100,6 +104,8 @@
   --surface-hover:#2E2E35;
   --surface-active:#383842;
   --surface-alt:#2B2B33;
+  /* 卡片级底色：暗色下「更亮 = 更靠前」，替代不可见的投影 */
+  --bg-card:#33333C;
   --border:#2F2F36;
   --border-light:#28282F;
   --border-hover:#3D3D46;
@@ -147,6 +153,7 @@
   --surface-hover:#EDF2E6;
   --surface-active:#E0E8D6;
   --surface-alt:#EDF2E6;
+  --bg-card:#FFFFFF;
   --border:#D2DAC8;
   --border-light:#DDE4D4;
   --border-hover:#B8C4AC;
@@ -177,6 +184,7 @@
   --surface-hover:#3E4658;
   --surface-active:#464F62;
   --surface-alt:#3E4658;
+  --bg-card:#464F62;
   --border:#444C5E;
   --border-light:#3A4152;
   --border-hover:#525B70;

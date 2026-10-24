@@ -302,12 +302,24 @@ describe('AuthModal 分支契约', () => {
       expect(authState.authModalOpen).toBe(false)
     })
 
-    it('点遮罩（@click.self）→ authModalOpen=false', async () => {
+    it('点遮罩空白处（按下与松开都在遮罩上）→ authModalOpen=false', async () => {
       const wrapper = mount(AuthModal)
       await openModal(wrapper)
-      // .modal-mask 的 @click.self → onClose
-      await wrapper.find('.modal-mask').trigger('click')
+      // 统一走 useMaskClose：mousedown 记录起点，click 且起点在遮罩上才关闭
+      const mask = wrapper.find('.modal-mask')
+      await mask.trigger('mousedown')
+      await mask.trigger('click')
       expect(authState.authModalOpen).toBe(false)
+    })
+
+    it('在弹窗内按下、滑到遮罩上松开 → 不关闭（防误关丢输入）', async () => {
+      const wrapper = mount(AuthModal)
+      await openModal(wrapper)
+      const mask = wrapper.find('.modal-mask')
+      // mousedown 落在 .modal 内部，click 冒泡到遮罩：不算「点击外部」
+      await wrapper.find('.modal').trigger('mousedown')
+      await mask.trigger('click')
+      expect(authState.authModalOpen).toBe(true)
     })
 
     it('点「取消」按钮 → authModalOpen=false', async () => {

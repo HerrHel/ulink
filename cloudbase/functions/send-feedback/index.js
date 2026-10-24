@@ -2,7 +2,7 @@
  * send-feedback — 应用内反馈表单 → 企业邮箱（CloudBase HTTP 云函数）
  *
  * 从 supabase/functions/send-feedback/index.ts 迁移而来。业务逻辑**原样搬**：
- * honeypot 静默吞、Turnstile 可选人机、IP 哈希 DB 计数限流（1h/5）、落库优先
+ * honeypot 静默吞、PoW 无感人机、IP 哈希 DB 计数限流（1h/5）、落库优先
  * （SMTP 失败不影响内容归档）、零依赖 SMTP 六步会话（见 smtp.js）。
  *
  * 迁移差异（刻意为之）：

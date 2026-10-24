@@ -199,8 +199,21 @@ describe('CloudBase auth driver — 会话形状', () => {
 
     const r = await d.updateUserMeta({ display_name: 'Herr' })
     expect(r.user?.user_metadata).toEqual({})
+    // CloudBase 的 updateUser 收**扁平**字段且键名是 nickname / avatar_url；
+    // 照 Supabase 的 `{ data: { display_name } }` 透传会被平台忽略（资料写不进云端，
+    // 重登后名字头像退回默认）。
     expect(f.calls.find((c) => c.method === 'updateUser')?.args).toEqual({
-      data: { display_name: 'Herr' },
+      nickname: 'Herr',
+    })
+  })
+
+  it('updateUserMeta 把头像映射成 avatar_url', async () => {
+    const f = makeFakeAuth()
+    const d = createCloudBaseAuthDriver(f.auth)
+
+    await d.updateUserMeta({ avatar: '🚀' })
+    expect(f.calls.find((c) => c.method === 'updateUser')?.args).toEqual({
+      avatar_url: '🚀',
     })
   })
 

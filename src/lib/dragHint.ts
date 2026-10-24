@@ -1,4 +1,4 @@
-/**
+﻿/**
  * dragHint — 拖拽落点语义文案（纯函数，可单测）
  *
  * 从 useDragDrop 抽出：只读 payload + target 类名/属性，不触 DOM 写。
@@ -16,6 +16,16 @@ export function getDragHintText(
   payload: DragHintPayload | null,
 ): string {
   if (!payload) return ''
+  // 分类拖拽只能落在其他 rail-item 上（handleRailDrop），其余落点无意义，不显示错误提示
+  if (payload.type === 'cat') {
+    if (target.classList.contains('rail-item')) {
+      // Bug C：拖到自身 rail-item → drop 端 if (_catDragId === targetId) return，无操作
+      const selfId = (target as HTMLElement).dataset.catId
+      if (selfId && selfId === payload.id) return ''
+      return '调整分类顺序'
+    }
+    return ''
+  }
   if (target.classList.contains('group-body')) {
     if (payload.type === 'detail') return ''
     const gid = (target as HTMLElement).dataset.gid
@@ -24,7 +34,13 @@ export function getDragHintText(
   }
   if (target.classList.contains('group-card-head')) {
     if (payload.type === 'detail') return ''
-    return payload.type === 'group' ? '交换笔记位置' : '将书签排序到此笔记'
+    // Bug A：组拖到自身头部 → drop 端 if (srcGid === gid) return，不应显示提示
+    if (payload.type === 'group') {
+      const headGid = (target.closest('.group-card') as HTMLElement)?.dataset.groupId
+      if (payload.id.slice(6) === headGid) return ''
+      return '交换笔记位置'
+    }
+    return '将书签排序到此笔记'
   }
   if (target.classList.contains('detail-card-wrap')) return '移到此位置'
   if (target.closest('#edgeStagingSidebar, .edge-staging-drop-zone, #stagingDock')) {
@@ -41,7 +57,11 @@ export function getDragHintText(
     if (payload.type === 'detail') return ''
     const gid = (target as HTMLElement).dataset.groupId
     if (payload.type === 'group' && payload.id.slice(6) === gid) return ''
-    if (payload.type === 'bm') return '移动书签到笔记'
+    // Bug B：书签从所在笔记拖回该笔记卡片整体 → drop 端 if (p.srcGid === gid) return，不应显示提示
+    if (payload.type === 'bm') {
+      if (payload.srcGid === gid) return ''
+      return '移动书签到笔记'
+    }
     if (payload.type === 'group') return '嵌入为笔记引用'
     return ''
   }

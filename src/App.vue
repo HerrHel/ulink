@@ -71,6 +71,7 @@
 <TrashPanel :open="store.panels.trash" @close="store.panels.trash = false" />
 <HistoryPanel :open="store.panels.history" :item-id="store.historyItemId" :item-type="store.historyItemType" @close="store.panels.history = false" />
 <E2ESetupModal :open="store.modals.e2eSetup" @close="store.modals.e2eSetup = false" />
+<SetPasswordModal :open="store.modals.setPassword" @close="store.modals.setPassword = false" />
 <E2EUnlockModal :open="store.modals.e2eUnlock" :initial-mode="store.e2eUnlockInitialMode" @close="onE2EClose" @unlocked="onE2EUnlocked" />
 <E2ECanaryConflictModal :open="store.modals.e2eCanaryConflict" @close="store.modals.e2eCanaryConflict = false" />
 <VaultSetupModal :open="store.modals.vaultSetup" @close="store.modals.vaultSetup = false" />
@@ -199,6 +200,8 @@ function failPendingUnlock(reason: string) {
 }
 
 const E2ESetupModal = defineAsyncComponent(() => import('./components/modals/E2ESetupModal.vue'))
+// 设置/重设登录密码：设置面板入口唤起（邮箱验证码 + 新密码）
+const SetPasswordModal = defineAsyncComponent(() => import('./components/modals/SetPasswordModal.vue'))
 const E2ECanaryConflictModal = defineAsyncComponent(() => import('./components/modals/E2ECanaryConflictModal.vue'))
 // E1-004：chunk 加载失败时 drain pendingUnlock，避免 await 永挂
 const E2EUnlockModal = defineAsyncComponent({

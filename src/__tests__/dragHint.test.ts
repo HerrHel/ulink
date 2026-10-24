@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+﻿import { describe, it, expect } from 'vitest'
 import { getDragHintText, type DragHintPayload } from '../lib/dragHint.js'
 
 function el(tag: string, className = '', attrs: Record<string, string> = {}): HTMLElement {
@@ -88,5 +88,34 @@ describe('getDragHintText', () => {
 
   it('无关目标返回空串', () => {
     expect(getDragHintText(el('div', 'random'), bm)).toBe('')
+  })
+  it('Bug A：group 拖到自身 group-card-head 返回空串', () => {
+    const gc = el('div', 'group-card', { 'data-group-id': 'g1' })
+    const head = el('div', 'group-card-head')
+    gc.appendChild(head)
+    document.body.appendChild(gc)
+    // 自身组头部：无提示
+    expect(getDragHintText(head, group)).toBe('')
+    // 其他组头部：正常提示
+    expect(getDragHintText(head, groupOther)).toBe('交换笔记位置')
+    gc.remove()
+  })
+
+  it('Bug B：bm 从 g1 拖到 g1 自身 group-card 返回空串', () => {
+    const card = el('div', 'group-card', { 'data-group-id': 'g1' })
+    // 书签从 g1 拖回 g1：无提示
+    expect(getDragHintText(card, bmInGroup)).toBe('')
+    // 书签从其他地方拖入 g1：正常提示
+    expect(getDragHintText(card, bm)).toBe('移动书签到笔记')
+  })
+
+  it('Bug C：cat 拖到自身 rail-item 返回空串', () => {
+    const item = el('div', 'rail-item', { 'data-cat-id': 'c1' })
+    const cat: DragHintPayload = { type: 'cat', id: 'c1' }
+    const catOther: DragHintPayload = { type: 'cat', id: 'c2' }
+    // 自身：无提示
+    expect(getDragHintText(item, cat)).toBe('')
+    // 其他分类：正常提示
+    expect(getDragHintText(item, catOther)).toBe('调整分类顺序')
   })
 })

@@ -132,8 +132,11 @@ export function createSupabaseAuthDriver(): AuthDriver {
 /** CloudBase auth 里本项目用到的方法（只声明表面，避免依赖 SDK 内部类型） */
 interface CbAuthLike {
   getSession?: () => Promise<{ data?: { session?: unknown; user?: unknown } | null; error?: AuthErrorLike | null }>
+  /** 取当前用户完整资料（登录返回的 session.user 可能只有最小字段） */
+  getUser?: () => Promise<{ data?: { user?: unknown } | null; error?: AuthErrorLike | null }>
   onAuthStateChange?: (cb: (event: string, session: unknown) => void) => unknown
-  updateUser?: (arg: { data?: Record<string, unknown>; password?: string }) => Promise<{
+  /** CloudBase 收扁平字段（nickname / avatar_url…），不是 Supabase 的 { data } 包装 */
+  updateUser?: (arg: Record<string, unknown>) => Promise<{
     data?: { user?: unknown } | null
     error?: AuthErrorLike | null
   }>
@@ -174,6 +177,22 @@ function mapSession(raw: unknown): Session | null {
   } as unknown as Session
 }
 
+/**
+ * user 里是否已带昵称/头像（Supabase 与 CloudBase 两套字段名都算）。
+ * 登录返回的 user 可能只有最小字段，缺资料时上层会退回「邮箱前缀 + 默认头像」。
+ */
+function _hasProfileFields(u: unknown): boolean {
+  if (!u || typeof u !== 'object') return false
+  const rec = u as Record<string, unknown>
+  const meta = (rec.user_metadata && typeof rec.user_metadata === 'object' ? rec.user_metadata : {}) as Record<string, unknown>
+  const hit = (o: Record<string, unknown>, keys: string[]) =>
+    keys.some((k) => typeof o[k] === 'string' && (o[k] as string).trim())
+  return (
+    hit(meta, ['display_name', 'nickname', 'nickName', 'name', 'avatar', 'avatarUrl', 'avatar_url', 'picture']) ||
+    hit(rec, ['displayName', 'name', 'avatarUrl', 'avatar_url'])
+  )
+}
+
 /** 可注入的 CloudBase auth 表面，便于单测；不传则用真实客户端 */
 export function createCloudBaseAuthDriver(
   injected?: CbAuthLike,
@@ -198,13 +217,46 @@ export function createCloudBaseAuthDriver(
     },
 
     onAuthStateChange(cb) {
-      auth()?.onAuthStateChange?.((_event, session) => cb(mapSession(session)))
+      auth()?.onAuthStateChange?.((event, session) => {
+        const mapped = mapSession(session)
+        // 先同步交付，保持「回调即事件」的原有契约
+        cb(mapped)
+        // 刚登录时 session 里的 user 可能只带最小字段（没有昵称/头像）：再补一次
+        // getUser() 把完整资料捞回来，否则上层 displayName 会退回邮箱前缀、头像退回默认，
+        // 看起来像「登录到了别人的默认账号」。取不到就不做事，不影响登录。
+        if (event !== 'SIGNED_IN' || !mapped?.user || _hasProfileFields(mapped.user)) return
+        const a = auth()
+        Promise.resolve(a?.getUser?.())
+          .then((res) => {
+            const full = res?.data?.user
+            if (!full) return
+            const withProfile = mapSession({ user: full })
+            if (withProfile?.user) cb(withProfile)
+          })
+          .catch(() => { /* 补全失败保持首帧结果 */ })
+      })
     },
 
     async updateUserMeta(data) {
       const a = auth()
       if (!a?.updateUser) return { user: null, error: { message: 'CloudBase 未配置' } }
-      const { data: updated, error } = await a.updateUser({ data })
+      // CloudBase 的用户资料字段是 nickname / avatar_url（Supabase 时期叫 display_name / avatar），
+      // 且 updateUser 收的是**扁平对象**而非 `{ data }` 包装（见 SDK 的 UpdateUserReq = UserAttributes）。
+      // 照 Supabase 的键名透传会被平台忽略：资料根本写不进云端，退出重登或换设备后
+      // （登出会清掉本地昵称/头像缓存）就退回「邮箱前缀 + 默认头像」。
+      const req: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(data)) {
+        if (k === 'display_name') req.nickname = v
+        else if (k === 'avatar') req.avatar_url = v
+        else req[k] = v
+      }
+      let { data: updated, error } = await a.updateUser(req)
+      // 本项目的「头像」是 emoji 而不是 URL。若平台对 avatar_url 做格式校验而拒掉，
+      // 退一步只写昵称——总比整次保存失败、名字也丢了强。
+      if (error && 'avatar_url' in req) {
+        delete req.avatar_url
+        ;({ data: updated, error } = await a.updateUser(req))
+      }
       const u = updated?.user as Record<string, unknown> | undefined
       return {
         user: u ? ({ ...u, user_metadata: u.user_metadata ?? {} } as unknown as User) : null,

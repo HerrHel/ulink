@@ -1,0 +1,117 @@
+<!--
+  ulink · email verification template (English)
+  For CloudBase EmailTemplateConfig.RegisterSignIn.EnUS
+
+  NOTE: the platform treats this as an HTML fragment, not a full document:
+     - style block and table layout are allowed (dark-mode media query works)
+     - meta tags are rejected (tested: "template contains forbidden pattern")
+     - no doctype / html / head / title / body needed; the platform wraps it
+  NOTE: nothing may follow the comment terminator. It used to be followed by a
+        stray semicolon, which was rendered as the first character of the mail
+        and also swallowed the inbox preview snippet.
+  NOTE: the platform owns the subject line, so the snippet shown in inbox lists
+        and OS notifications comes from the FIRST text in this body. A hidden
+        preheader at the very top carries the code, invisible to the reader.
+-->
+<style>
+  @media (prefers-color-scheme: dark) {
+    .email-bg { background-color: #12100E !important; }
+    .card-wrap { background-color: #1C1917 !important; box-shadow: 0 4px 24px rgba(0,0,0,0.4) !important; border: 1px solid #2E2924 !important; }
+    .logo-badge { background-color: #26211C !important; border-color: #38312A !important; }
+    .title-text { color: #F5EFEA !important; }
+    .sub-text { color: #A8A29A !important; }
+    .email-highlight { color: #F5EFEA !important; }
+    .code-box-td { background-color: #24201C !important; border-color: #443B33 !important; }
+    .code-text { color: #60A5FA !important; }
+    .hint-text { color: #857F76 !important; }
+    .divider-line { border-top-color: #2E2924 !important; }
+    .footer-text { color: #736C63 !important; }
+    .footer-link { color: #60A5FA !important; }
+  }
+</style>
+
+<!-- Hidden preheader: first text node in the body. Invisible to the reader, but
+     inbox lists and OS notifications use it as the snippet, so the code leads.
+     - display:none !important — Gmail web / Yahoo override the rule without it
+     - mso-hide:all — keeps Outlook's Word renderer away
+     - background colour + 1px — stays unobtrusive if styles drop on forward
+     - trailing &#847; — pads the snippet so body text does not creep in -->
+<div aria-hidden="true" style="display:none !important;mso-hide:all;max-height:0;max-width:0;overflow:hidden;font-size:1px;line-height:1px;color:#F5EFEA;opacity:0">
+  Your ulink verification code is {{.VerificationCode}}. Valid for {{.ExpireMinutes}} minutes. Do not share it.&#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; &#847; 
+</div>
+
+<table width="100%" cellpadding="0" cellspacing="0" class="email-bg" style="background:#F5EFEA;padding:40px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',system-ui,sans-serif;-webkit-font-smoothing:antialiased">
+  <tr>
+    <td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" class="card-wrap" style="max-width:460px;background:#FDFBF9;border-radius:20px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.03)">
+
+        <!-- Header / Logo -->
+        <tr>
+          <td style="padding:40px 40px 0;text-align:center">
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto">
+              <tr>
+                <td align="center" valign="middle" class="logo-badge" style="background:#F5EFEA;width:56px;height:56px;border-radius:16px;text-align:center;vertical-align:middle;border:1px solid #EFE8DF;line-height:0;font-size:0;padding:0;box-shadow:0 2px 8px rgba(0,0,0,0.03)">
+                  <a href="https://ulink.ren" target="_blank" style="text-decoration:none;display:inline-block;line-height:0;font-size:0;vertical-align:middle">
+                    <img src="https://ulink.ren/logo.png" width="40" height="40" alt="ulink" style="display:block;margin:0 auto;border:0;line-height:0" />
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Title -->
+        <tr>
+          <td class="title-text" style="padding:18px 40px 6px;font-size:21px;font-weight:700;color:#2C2824;text-align:center;letter-spacing:-0.02em">
+            Your ulink verification code
+          </td>
+        </tr>
+
+        <!-- Subtitle -->
+        <tr>
+          <td class="sub-text" style="padding:0 40px 24px;font-size:14px;color:#6A6660;text-align:center;line-height:1.6">
+            Signing in as <strong class="email-highlight" style="color:#2C2824;font-weight:600">{{.Email}}</strong>
+          </td>
+        </tr>
+
+        <!-- Code box -->
+        <tr>
+          <td style="padding:0 40px 24px;text-align:center">
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto">
+              <tr>
+                <td align="center" valign="middle" class="code-box-td code-text" style="background:#F8F3ED;border:1.5px dashed #D5CBBE;border-radius:14px;padding:16px 28px 16px 38px;font-size:32px;font-weight:700;font-family:'JetBrains Mono','SF Mono',Consolas,Menlo,monospace;color:#122E8A;letter-spacing:10px;text-align:center">
+                  {{.VerificationCode}}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Hint -->
+        <tr>
+          <td class="hint-text" style="padding:0 40px 28px;font-size:13px;color:#8F8A82;text-align:center;line-height:1.6">
+            This code expires in {{.ExpireMinutes}} minutes. Never share it with anyone.<br>If you didn't request it, you can safely ignore this email.
+          </td>
+        </tr>
+
+        <!-- Divider -->
+        <tr>
+          <td style="padding:0 40px">
+            <table width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td class="divider-line" style="border-top:1px solid #EFE8DF;line-height:0;font-size:0">&nbsp;</td>
+            </tr></table>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td class="footer-text" style="padding:20px 40px 32px;font-size:12px;color:#A8A29A;text-align:center;line-height:1.6">
+            ulink (与链) · a single-page bookmark manager<br>
+            <a href="https://ulink.ren" target="_blank" class="footer-link" style="color:#122E8A;text-decoration:none;font-weight:500">ulink.ren</a>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
