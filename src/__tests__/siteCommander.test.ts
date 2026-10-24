@@ -930,4 +930,57 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
       expect(step.text).not.toMatch(/aiCmd\./)
     }
   })
+
+  // ── 34. 同类缺陷全量护栏：参数提取类指令不得把整句口语当名称 ──
+  it('模糊创建分类请求不会真的建出「来放工作用的东西」这种分类', async () => {
+    const before = mockDs.categories.length
+    const res = await dispatchSiteCommand('帮我创建分类来放工作用的东西', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(false)
+    expect(mockDs.categories.length).toBe(before)
+  })
+
+  it('批量模式下模糊目标不误报「未找到目标分类」，交回大模型', async () => {
+    mockUi.batchMode = true
+    mockUi.batchSelected = ['b1']
+    const res = await dispatchSiteCommand('把这些书签移到合适的分类去，并补上合适标签', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(false)
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+
+  it('带量词的工作台搭建请求不拿「一个前端学习」去检索，交回大模型', async () => {
+    const res = await dispatchSiteCommand('帮我搭建一个前端学习工作台', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(false)
+  })
+
+  it('正常工作台搭建仍由确定性指令接管', async () => {
+    const res = await dispatchSiteCommand('帮我搭建一套前端学习工作台', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('pack_workspace')
+  })
+
+  it('正常的分类创建仍由确定性指令接管', async () => {
+    const res = await dispatchSiteCommand('新建分类：设计资源', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('category_add')
+  })
 })

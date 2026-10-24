@@ -118,6 +118,12 @@ export function parseCatIntent(query: string): CatIntent | null {
   if (catName === null) {
     return null
   }
+  // 自然语言分支必须像分类名，否则交回大模型 —— 否则「帮我创建分类来放工作用的东西」
+  // 会真的建出一个叫「来放工作用的东西」的分类（写副作用，比查不到更糟）。
+  // 显式 /cat 指令是用户明确指定，原样信任。
+  if (!catSlashMatch && !looksLikeCategoryName(catName)) {
+    return null
+  }
   return { kind: 'add', name: catName }
 }
 
@@ -161,6 +167,11 @@ export function parsePackIntent(query: string): { rawTopic: string | undefined }
     : packNlMatch
       ? packNlMatch[1]?.trim()
       : ''
+  // 自然语言分支的主题必须像主题名（量词前缀、整句口语都不算），
+  // 否则交回大模型 —— 否则会拿「一个前端学习」「一下桌面」去云端检索并生成工作台计划。
+  if (!packSlashMatch && rawTopic && !looksLikeTopicName(rawTopic)) {
+    return null
+  }
   return { rawTopic }
 }
 
@@ -221,7 +232,10 @@ export function parseBatchMoveIntent(query: string): { targetName: string } | nu
   if (!batchMoveMatch) {
     return null
   }
-  return { targetName: batchMoveMatch[1].trim().replace(/^到\s*/, '') }
+  const targetName = batchMoveMatch[1]!.trim().replace(/^到\s*/, '')
+  // 目标不像分类名（「移到合适的分类去，并补上合适标签」）→ 交回大模型
+  if (!looksLikeCategoryName(targetName)) return null
+  return { targetName }
 }
 
 // ── 11. 批量整理未分类 (/move uncategorized <分类名>, 把未分类移动到 [分类名]) ──
@@ -238,6 +252,11 @@ export function parseMoveIntent(query: string): { targetCategoryRaw: string | un
     : moveNlMatch
       ? moveNlMatch[1]?.trim().replace(/^到\s*/, '')
       : null
+  // 自然语言分支：目标不像分类名（「把所有未分类移到合适的分类去」）→ 交回大模型；
+  // 显式 /move uncategorized <名称> 信任用户输入（仍由块内查库判定存在性）。
+  if (!moveSlashMatch && targetCategoryRaw && !looksLikeCategoryName(targetCategoryRaw)) {
+    return null
+  }
   return { targetCategoryRaw: targetCategoryRaw ?? undefined }
 }
 
@@ -262,19 +281,54 @@ const CATEGORY_STOPWORD_RE =
 /** 分类名长度上限（按码点计）：超过基本是一句口语而不是名称 */
 const CATEGORY_NAME_MAX_LEN = 12
 
+/** 主题名长度上限：工作台/合集主题允许比分类名更长（如「AI 绘画工作流」） */
+const TOPIC_NAME_MAX_LEN = 20
+
+/** 主题名残留的量词/指示词前缀（「搭建一个 XX 工作台」里的「一个」不该进主题名） */
+const TOPIC_LEADING_FILLER_RE = /^(?:一下|一个|一套|一些|几个|这个|那个|这件|那件|个)/
+
+/** 泛化/指代性目标（「像这样的工具」里的「这样」不是实体名） */
+const GENERIC_TARGET_RE = /^(?:这样|这种|那样|那种|这些|那些|这个|那个|此|它|它们|类似|同类|其他|别的|什么|啥|一样)/
+
+/**
+ * 目的小句起始词：「创建分类来放工作用的东西」捕获到的「来放工作用的东西」是补语而非名称。
+ * 刻意只匹配「来/去 + 具体动作词」，避免误伤「去中心化资源」这类真实分类名。
+ */
+const CLAUSE_LEADING_RE =
+  /^(?:来(?:放|存|整理|管理|收集|保存|记录|做|处理|装|区分)|去(?:放|存|整理|管理|收集|保存|记录|做|处理|装)|用于|用来|方便|以便|然后把|并(?:把|将|且)|让我|让你|专门用)/
+
 /**
  * 判断一段文本是否「像分类名」。
  *
  * 确定性指令只在文本确实像名称时才接管；否则一律返回 false 交给大模型做语义理解。
  * 原则：宁可漏判（走 LLM，最差也只是多问一句），也不许错判
- * （把整句口语当分类名查库，用户会收到「未找到名称包含『合适的分类去…』的分类」）。
+ * （把整句口语当分类名查库/建分类，用户会收到「未找到名称包含『合适的分类去…』的分类」
+ *   或凭空多出一个叫「来放工作用的东西」的分类）。
  */
 export function looksLikeCategoryName(raw: string): boolean {
   const name = raw.trim()
   if (!name) return false
   if ([...name].length > CATEGORY_NAME_MAX_LEN) return false
   if (CATEGORY_STOPWORD_RE.test(name)) return false
+  // 目的小句（「来放工作用的东西」「用于整理书签」）不是名称
+  if (CLAUSE_LEADING_RE.test(name)) return false
   // 句末语气/趋向词：「…分类去」「…吧」不是名称
+  if (/[的吧呢啊哦呀去]$/.test(name)) return false
+  return true
+}
+
+/**
+ * 判断一段文本是否「像主题名」（工作台 / 工具链 / 合集）。
+ *
+ * 与 looksLikeCategoryName 同源，但长度上限更宽、且额外拒绝量词前缀
+ * ——「帮我搭建一个前端学习工作台」捕获到的是「一个前端学习」，量词必须剥掉。
+ */
+export function looksLikeTopicName(raw: string): boolean {
+  const name = raw.trim()
+  if (!name) return false
+  if ([...name].length > TOPIC_NAME_MAX_LEN) return false
+  if (CATEGORY_STOPWORD_RE.test(name)) return false
+  if (TOPIC_LEADING_FILLER_RE.test(name)) return false
   if (/[的吧呢啊哦呀去]$/.test(name)) return false
   return true
 }
@@ -374,5 +428,7 @@ export function parseSimilarSiteIntent(query: string): { target: string } | null
   if (!match) return null
   const target = match[1].trim()
   if (!target || target === '这' || target === '这个') return null
+  // 泛化/指代性目标（「像这样的工具」→ 捕获到「这样的工具」）不是实体名，交回大模型
+  if (GENERIC_TARGET_RE.test(target)) return null
   return { target }
 }
