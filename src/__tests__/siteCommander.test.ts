@@ -827,4 +827,38 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(res.suggestedReplies).toContain('📥 全部一键加入收藏')
     expect(res.suggestedReplies).toContain('🇨🇳 只要国内免翻直连的')
   })
+
+  // ── 32. 回归：模糊整理请求不得被「把 X 移到 Y」正则误吞 ──
+  it('模糊整理请求（指代主体 + 口语目标）不接管，交回大模型', async () => {
+    const res = await dispatchSiteCommand('将此书签移到合适的分类去，并补上合适标签', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    // 关键：不得产出「未找到名称包含《…》的分类」这类误导文案，也不得有副作用
+    expect(res.handled).toBe(false)
+    expect(res.reply).toBe('')
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+
+  it('复合意图（移动 + 打标签）同样交回大模型', async () => {
+    const res = await dispatchSiteCommand('把 Vue 移到 设计资源，并补上标签', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(false)
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+
+  it('目标像分类名但库里没有时，仍给出明确纠错提示（保留原有确定性反馈）', async () => {
+    const res = await dispatchSiteCommand('把 Vue 移到 云服', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('move_bookmark')
+    expect(res.reply).toContain('未找到名称包含「云服」的分类')
+  })
 })

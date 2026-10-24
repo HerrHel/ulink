@@ -247,6 +247,38 @@ export interface SpecificMoveIntent {
   targetCategoryName: string
 }
 
+/**
+ * 指代性主体（此书签 / 这张 / 它 / 当前…）。
+ * 这类主体的真实指向只能由「本轮附加卡片」或大模型上下文解析，
+ * 若当作实体名去库里 includes() 匹配，必然落空并产出误导性文案。
+ */
+const PRONOUN_SUBJECT_RE =
+  /^(?:此|这|那|该|本|它|它们|当前|刚才|上面|前面|上述|选中|这些|那些|这个|这张|这条)(?:个|张|条|本|款)?(?:书签|卡片|链接|网站|网页|项目|条目|收藏)?$/
+
+/** 分类名不该出现的标点 / 连词 / 模糊限定词：出现即说明用户在描述「做什么」，而非「分类叫什么」 */
+const CATEGORY_STOPWORD_RE =
+  /[，,、。；;：:！!？?\n]|并|然后|同时|以及|还有|接着|顺便|最后|合适|适当|相应|正确|相关|对应|匹配|任意|某个|某些|随便|之类|等等/
+
+/** 分类名长度上限（按码点计）：超过基本是一句口语而不是名称 */
+const CATEGORY_NAME_MAX_LEN = 12
+
+/**
+ * 判断一段文本是否「像分类名」。
+ *
+ * 确定性指令只在文本确实像名称时才接管；否则一律返回 false 交给大模型做语义理解。
+ * 原则：宁可漏判（走 LLM，最差也只是多问一句），也不许错判
+ * （把整句口语当分类名查库，用户会收到「未找到名称包含『合适的分类去…』的分类」）。
+ */
+export function looksLikeCategoryName(raw: string): boolean {
+  const name = raw.trim()
+  if (!name) return false
+  if ([...name].length > CATEGORY_NAME_MAX_LEN) return false
+  if (CATEGORY_STOPWORD_RE.test(name)) return false
+  // 句末语气/趋向词：「…分类去」「…吧」不是名称
+  if (/[的吧呢啊哦呀去]$/.test(name)) return false
+  return true
+}
+
 export function parseSpecificMoveIntent(query: string): SpecificMoveIntent | null {
   if (/^(?:把|将)?(?:所有)?未分类/i.test(query) || /^(?:把|将)?(?:选中的|这些)/i.test(query)) {
     return null
@@ -258,6 +290,10 @@ export function parseSpecificMoveIntent(query: string): SpecificMoveIntent | nul
   const itemQuery = match[1].trim()
   const targetCategoryName = match[2].trim().replace(/^到\s*/, '').replace(/分类$/, '').trim()
   if (!itemQuery || !targetCategoryName) return null
+  // 守卫一：指代主体 → 交给附加卡片上下文 / 大模型
+  if (PRONOUN_SUBJECT_RE.test(itemQuery)) return null
+  // 守卫二：目标不像分类名（整句口语、复合意图）→ 交给大模型
+  if (!looksLikeCategoryName(targetCategoryName)) return null
   return { itemQuery, targetCategoryName }
 }
 

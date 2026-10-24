@@ -5,9 +5,12 @@
  * 数量 > 5 经 HITL 二次确认（确认后经 ctx.signal 校验「停止生成」，取消/中止均返回）；
  * 确认通过 → 批量移动、撤销入栈后返回成功。intent 未命中或 targetCategoryRaw 为空 →
  * 返回 null 继续 fall-through（该 fall-through 路径无任何副作用）。
+ *
+ * 11.2 定向移动的额外出口：目标分类名「不像名称」（整句口语 / 复合意图）→ 返回 null
+ * 交回大模型语义理解，避免把「合适的分类去」当分类名查库后武断报错。
  */
 
-import { parseMoveIntent, parseSpecificMoveIntent } from '../siteIntents.js'
+import { parseMoveIntent, parseSpecificMoveIntent, looksLikeCategoryName } from '../siteIntents.js'
 import { askConfirm, buildMoveConfirmMessage } from '../siteHitl.js'
 import { isOfficialBookmark } from '../localClustering.js'
 import { CAT_UNCATEGORIZED } from '../../../config/constants.js'
@@ -119,6 +122,10 @@ export const moveBlock: SiteCommandBlock = async (
           c.name.trim().toLowerCase().includes(targetCategoryName.toLowerCase())),
     )
     if (!targetCat) {
+      // 防御（双保险）：解析器已挡掉不像分类名的目标，这里再判一次。
+      // 「像名称但库里没有」→ 明确提示打错字（对用户最有用的反馈）；
+      // 「根本不像名称」→ 不武断下结论，fall through 让大模型接管语义理解。
+      if (!looksLikeCategoryName(targetCategoryName)) return null
       return {
         handled: true,
         action: 'move_bookmark',
