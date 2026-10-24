@@ -861,4 +861,73 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(res.action).toBe('move_bookmark')
     expect(res.reply).toContain('未找到名称包含「云服」的分类')
   })
+
+  // ── 33. 指代性定向移动（附加卡片解析真实主体，11.3）──
+  it('「将此书签移到 XX」结合本轮附加卡片直接移动，并可撤销', async () => {
+    const res = await dispatchSiteCommand('将此书签移到 设计资源', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+      attachedCards: [{ type: 'bm', id: 'b1' }],
+    })
+
+    expect(res.handled).toBe(true)
+    expect(res.action).toBe('move_bookmark')
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith('b1', { categoryId: 'c2' })
+    expect(res.reply).toContain('已为您将 「Vue」 移动至「设计资源」分类')
+
+    const resUndo = await dispatchSiteCommand('/undo', { ds: mockDs, ui: mockUi, app: mockApp })
+    expect(resUndo.handled).toBe(true)
+    expect(mockDs.bookmarkMap.b1.categoryId).toBe('c1')
+  })
+
+  it('无附加卡片时同一句话不猜主体，交回大模型', async () => {
+    const res = await dispatchSiteCommand('将此书签移到 设计资源', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.handled).toBe(false)
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+
+  it('附加多张卡片视为歧义，交回大模型而不是全量移动', async () => {
+    const res = await dispatchSiteCommand('将此书签移到 设计资源', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+      attachedCards: [
+        { type: 'bm', id: 'b1' },
+        { type: 'bm', id: 'b2' },
+      ],
+    })
+    expect(res.handled).toBe(false)
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+
+  it('指代 + 目标分类不存在时交回大模型（不硬报错）', async () => {
+    const res = await dispatchSiteCommand('将此书签移到 云服', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+      attachedCards: [{ type: 'bm', id: 'b1' }],
+    })
+    expect(res.handled).toBe(false)
+    expect(mockDs.updateBookmark).not.toHaveBeenCalled()
+  })
+
+  it('定向移动的文案全部走 i18n（不泄露裸 key）', async () => {
+    const res = await dispatchSiteCommand('把 Vue 移到 设计资源 分类', {
+      ds: mockDs,
+      ui: mockUi,
+      app: mockApp,
+    })
+    expect(res.reply).not.toMatch(/aiCmd\./)
+    for (const text of res.suggestedReplies ?? []) {
+      expect(text).not.toMatch(/^aiCmd\./)
+    }
+    for (const step of res.steps ?? []) {
+      expect(step.text).not.toMatch(/aiCmd\./)
+    }
+  })
 })

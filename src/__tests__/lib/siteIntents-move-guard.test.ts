@@ -8,7 +8,11 @@
  * 本文件锁死两条守卫：主体是指代词、或目标不像分类名时，一律返回 null 交回 LLM；
  * 同时覆盖真实分类名不被误伤（宁可漏判，不许错判）。
  */
-import { parseSpecificMoveIntent, looksLikeCategoryName } from '../../lib/ai/siteIntents.js'
+import {
+  parseSpecificMoveIntent,
+  parsePronounMoveIntent,
+  looksLikeCategoryName,
+} from '../../lib/ai/siteIntents.js'
 
 describe('looksLikeCategoryName — 分类名形似度判定', () => {
   it('接受真实分类名', () => {
@@ -80,5 +84,33 @@ describe('parseSpecificMoveIntent — 误判护栏', () => {
   it('既有守卫不受影响：未分类批量整理 / 选中的书签', () => {
     expect(parseSpecificMoveIntent('把所有未分类移到前端开发')).toBeNull()
     expect(parseSpecificMoveIntent('把选中的书签移动到设计资源')).toBeNull()
+  })
+})
+
+describe('parsePronounMoveIntent — 指代主体 + 明确分类名', () => {
+  it('识别指代主体，只解析目标分类（主体交给附加卡片）', () => {
+    expect(parsePronounMoveIntent('将此书签移到 设计资源')).toEqual({
+      targetCategoryName: '设计资源',
+    })
+    expect(parsePronounMoveIntent('把这张放到云服务')).toEqual({
+      targetCategoryName: '云服务',
+    })
+    expect(parsePronounMoveIntent('把它移动到 前端开发 分类')).toEqual({
+      targetCategoryName: '前端开发',
+    })
+  })
+
+  it('目标仍是模糊口语 → null，落回大模型', () => {
+    expect(parsePronounMoveIntent('将此书签移到合适的分类去，并补上合适标签')).toBeNull()
+  })
+
+  it('主体是显式名称 → null（应由 parseSpecificMoveIntent 处理）', () => {
+    expect(parsePronounMoveIntent('把 Vue 移到 设计资源')).toBeNull()
+    expect(parsePronounMoveIntent('将腾讯云移到云服务')).toBeNull()
+  })
+
+  it('非移动句 → null', () => {
+    expect(parsePronounMoveIntent('这个书签挺好的')).toBeNull()
+    expect(parsePronounMoveIntent('/inbox')).toBeNull()
   })
 })

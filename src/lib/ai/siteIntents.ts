@@ -283,18 +283,56 @@ export function parseSpecificMoveIntent(query: string): SpecificMoveIntent | nul
   if (/^(?:把|将)?(?:所有)?未分类/i.test(query) || /^(?:把|将)?(?:选中的|这些)/i.test(query)) {
     return null
   }
-  const match = query.match(
-    /^(?:请?帮?我?)?(?:把|将)\s*(.+?)\s*(?:移动到?|移到|放到|归入|归到)\s*(.+?)(?:\s*分类)?$/i,
-  )
-  if (!match) return null
-  const itemQuery = match[1].trim()
-  const targetCategoryName = match[2].trim().replace(/^到\s*/, '').replace(/分类$/, '').trim()
-  if (!itemQuery || !targetCategoryName) return null
-  // 守卫一：指代主体 → 交给附加卡片上下文 / 大模型
-  if (PRONOUN_SUBJECT_RE.test(itemQuery)) return null
+  const parts = extractMoveParts(query)
+  if (!parts) return null
+  // 守卫一：指代主体 → 转交 11.3 / 大模型（见 parsePronounMoveIntent）
+  if (PRONOUN_SUBJECT_RE.test(parts.subject)) return null
   // 守卫二：目标不像分类名（整句口语、复合意图）→ 交给大模型
-  if (!looksLikeCategoryName(targetCategoryName)) return null
-  return { itemQuery, targetCategoryName }
+  if (!looksLikeCategoryName(parts.targetCategoryName)) return null
+  return { itemQuery: parts.subject, targetCategoryName: parts.targetCategoryName }
+}
+
+/** 「把 X 移到 Y」的结构拆分结果（两种意图共用同一正则，保证语义一致） */
+interface MoveParts {
+  subject: string
+  targetCategoryName: string
+}
+
+const MOVE_PATTERN =
+  /^(?:请?帮?我?)?(?:把|将)\s*(.+?)\s*(?:移动到?|移到|放到|归入|归到)\s*(.+?)(?:\s*分类)?$/i
+
+function extractMoveParts(query: string): MoveParts | null {
+  const match = query.match(MOVE_PATTERN)
+  if (!match) return null
+  const subject = match[1].trim()
+  const targetCategoryName = match[2]
+    .trim()
+    .replace(/^到\s*/, '')
+    .replace(/分类$/, '')
+    .trim()
+  if (!subject || !targetCategoryName) return null
+  return { subject, targetCategoryName }
+}
+
+// ── 11.3 指代性定向移动：把 [此书签/这张/它] 移到 [YY 分类] ──
+export interface PronounMoveIntent {
+  targetCategoryName: string
+}
+
+/**
+ * 指代性定向移动意图。
+ *
+ * 仅解析「目标分类」——主体（此书签 / 这张 / 它）的真实指向只能来自本轮附加卡片，
+ * 由 move 指令块结合 ctx.attachedCards 解析。目标不像分类名时返回 null，
+ * 让模糊整理请求（「移到合适的分类去」）落回大模型。
+ */
+export function parsePronounMoveIntent(query: string): PronounMoveIntent | null {
+  if (/^(?:把|将)?(?:所有)?未分类/i.test(query)) return null
+  const parts = extractMoveParts(query)
+  if (!parts) return null
+  if (!PRONOUN_SUBJECT_RE.test(parts.subject)) return null
+  if (!looksLikeCategoryName(parts.targetCategoryName)) return null
+  return { targetCategoryName: parts.targetCategoryName }
 }
 
 // ── 12. 上下文感知：当前分类查询 ──
