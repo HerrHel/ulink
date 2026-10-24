@@ -105,9 +105,16 @@ const FN_EXTRA_ENV = {
   'report-error': () => ({
     IP_HASH_SALT: readEnvLocal('IP_HASH_SALT') || 'ulink-report-error',
   }),
-  'check-link': () => ({
-    IP_HASH_SALT: readEnvLocal('CHECK_LINK_IP_HASH_SALT') || 'ulink-check-link',
-  }),
+  'check-link': () => {
+    const out = {
+      IP_HASH_SALT: readEnvLocal('CHECK_LINK_IP_HASH_SALT') || 'ulink-check-link',
+    }
+    // ⚠️ 必须注入：isOriginAllowed 的判据是 `allowed.length > 0 && includes(origin)`，
+    // 缺失该变量会解析成空数组 → 所有带 Origin 的请求一律 403（死链检测曾长期不可用）
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
+    return out
+  },
   'send-feedback': () => {
     // SMTP 密码优先 .env.local 的 CLOUDBASE_SMTP_PASS（16 位企业邮客户端专用密码）；
     // Supabase 旧存档那份 64 位会 535。未配置时函数降级「只落库不发信」。

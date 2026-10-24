@@ -36,13 +36,36 @@ node scripts/deploy-cloudbase-fn.mjs share-admin
 node scripts/deploy-cloudbase-fn.mjs account
 ```
 
-`maintenance` 是**事件型**函数（定时触发器），不走上面的 HTTP 脚本：
+`maintenance` 是**事件型**函数（定时触发器），不走上面的 HTTP 脚本（它没有 `--httpFn` 路由）：
 
 ```bash
+# ① 写临时 cloudbaserc.json（含环境变量），随函数一起提交
 cd cloudbase/functions/maintenance
-bash <tcb> fn deploy maintenance --runtime Nodejs20.19 --yes
-bash <tcb> fn trigger create maintenance --cron "0 3 * * *" --name daily-cleanup
+cat > cloudbaserc.json <<'EOF'
+{"envId":"ulink-d1g5srvjo54b1886a","functions":[{"name":"maintenance","timeout":60,
+"runtime":"Nodejs20.19","installDependency":true,
+"envVariables":{"CLOUDBASE_ENV_ID":"ulink-d1g5srvjo54b1886a","CLOUDBASE_APIKEY":"<APIKEY>",
+"ERROR_LOG_KEEP_DAYS":"365","TRASH_KEEP_DAYS":"0"}}]}
+EOF
+
+# ② 部署（--dir . 必给：tcb 默认在 cwd 下找 functions/<name>，找不到会报
+#    "Directory for function [maintenance] not found"）
+printf '\n' | MSYS_NO_PATHCONV=1 bash <tcb> fn deploy maintenance --dir . --runtime Nodejs20.19 --force --yes
+
+# ③ 注入/更新环境变量（会交互询问 Override / Merge，管道里喂回车选默认 Override）
+printf '\n' | MSYS_NO_PATHCONV=1 bash <tcb> config update fn maintenance
+
+# ④ 建定时触发器（cron 是 **7 位**：秒 分 时 日 月 周；UTC 03:00 = 北京 11:00）
+printf '\n' | MSYS_NO_PATHCONV=1 bash <tcb> fn trigger create maintenance \
+  -e ulink-d1g5srvjo54b1886a --trigger-name daily-cleanup --cron "0 0 3 * * * *"
+
+# ⑤ 删掉含密钥的临时文件，绝不落仓库
+rm -f cloudbaserc.json
 ```
+
+> 校验：`bash <tcb> fn detail maintenance -e <envId>` 的 `Triggers` 行应显示
+> `daily-cleanup：{"cron":"0 0 3 * * * *"}`。
+> ⚠️ Windows Git Bash 下 `tcb` 需 `MSYS_NO_PATHCONV=1`，否则参数里的路径/表达式会被改写。
 
 ## 3. 环境变量
 
