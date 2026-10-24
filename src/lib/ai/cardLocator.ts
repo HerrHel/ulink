@@ -31,6 +31,13 @@ export interface LocateCardResult {
 }
 
 /**
+ * 每个卡片元素上一轮的脉冲收尾清理器。
+ * 连续点击同一张卡（或 AI 连续引用同一卡）时，先撤销上一轮监听与定时器，
+ * 否则 animationend 监听会越积越多，收尾时重复移除 class 造成跳变。
+ */
+const pulseCleanup = new WeakMap<HTMLElement, () => void>()
+
+/**
  * 在主工作区网格中定位并高亮指定书签或笔记
  */
 export async function locateAndHighlightCard(
@@ -150,6 +157,9 @@ export async function locateAndHighlightCard(
   }
 
   // 8. 触发呼吸微光高亮脉冲动画
+  // 先撤销上一轮（同元素重复定位）的收尾监听，再重置动画。
+  // remove → 强制回流 → add 在同一个同步任务内完成，浏览器不会绘制中间态，不会闪。
+  pulseCleanup.get(el)?.()
   el.classList.remove('card-locate-pulse')
   // 强制回流以重置 CSS animation
   void el.offsetWidth
@@ -165,9 +175,17 @@ export async function locateAndHighlightCard(
   }
 
   const duration = options.pulseDurationMs ?? 2000
-  setTimeout(() => {
-    el?.classList.remove('card-locate-pulse')
-  }, duration)
+
+  // 收尾只需移除 class：光晕由 box-shadow 的 transition 平滑回落（见 cards.css 注释）。
+  // 不监听 animationend —— 脉冲已不占用 animation 属性，这样 .card 的入场动画
+  // cardIn 不会在收尾时整段重播（那才是「高亮消失时闪一下」的根因）。
+  const targetEl = el
+  const clearPulse = () => {
+    targetEl.classList.remove('card-locate-pulse')
+  }
+  const timer = setTimeout(clearPulse, duration)
+  // 同元素重复定位时撤销上一轮定时器，避免两次收尾打架
+  pulseCleanup.set(targetEl, () => clearTimeout(timer))
 
   return { success: true, targetId: rawId, targetType, el }
 }

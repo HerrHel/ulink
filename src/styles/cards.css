@@ -897,28 +897,23 @@
 .mini-grid-view .grp-scroll-body{display:block;overflow:visible}
 .mini-grid-view .grp-scroll-body .card-scroll-wrap{overflow:visible}
 
-/* AI 引用与反向写回触发的卡片定位脉冲呼吸光晕 */
-@keyframes cardLocatePulse {
-  0% {
-    box-shadow: 0 0 0 0 var(--accent), var(--shadow-card-hover);
-    transform: scale(1);
-  }
-  25% {
-    box-shadow: 0 0 0 4px var(--accent-glow), 0 0 0 2px var(--accent), var(--shadow-card-hover);
-    transform: scale(1.02);
-  }
-  65% {
-    box-shadow: 0 0 0 4px var(--accent-glow), 0 0 0 2px var(--accent), var(--shadow-card-hover);
-    transform: scale(1.01);
-  }
-  100% {
-    box-shadow: var(--shadow-card);
-    transform: scale(1);
-  }
-}
-
+/* AI 引用与反向写回触发的卡片定位光晕
+ *
+ * 为什么不用 @keyframes 做脉冲：
+ * .card 自带 `animation: cardIn 0.32s var(--ease-out) backwards`
+ * （0%: opacity 0 + translateY(12px) + scale(0.97)）。`animation` 是简写属性，
+ * 脉冲一旦也用它声明，就会整体覆盖 cardIn；而移除 class 后 cardIn 恢复，
+ * 浏览器会把入场动画整段重播一遍 —— 实测卡片 top 跳 5.15px、height 抖 0.67px、
+ * opacity 从 0 重新淡入。这才是「高亮消失时闪一下」的真正来源，
+ * hover 态竞态只是次要因素。
+ *
+ * 所以光晕改由 .card 自身的 `transition: box-shadow 0.3s` 驱动：
+ * 加 class 平滑亮起，移除 class 平滑回落，全程不碰 animation / transform，
+ * 与入场动画、hover 抬升、active 缩放假动完全隔离。
+ */
 .card-locate-pulse {
-  animation: cardLocatePulse 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  box-shadow: 0 0 0 4px var(--accent-glow), 0 0 0 2px var(--accent), var(--shadow-card) !important;
+  /* z-index 是必要的：光晕外扩会被相邻卡片压住；position 与 .card 基础一致 */
   z-index: 10 !important;
   position: relative !important;
 }
