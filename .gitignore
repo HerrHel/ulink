@@ -35,6 +35,17 @@ dist_deploy/
 verify_*.html
 .workbuddy/
 /outputs/
+# 本地截图/预览产物（与 /outputs/ 区分大小写拼写，历史遗留目录名）
+/output/
+
+# 各 AI 工具的工作目录（skills / plans / documents 缓存，不进仓库）
+.agents/
+.trae/
+.zcode/
+
+# 临时排查产物（curl/接口调试输出）
+.cb-f*.json
+.cb-f*.err
 
 # Supabase 导出的业务数据（含用户内容，绝不入库）
 cloudbase/data-export/
