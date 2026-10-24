@@ -51,13 +51,6 @@ export async function publicImageUrl(path: string): Promise<string> {
   return res?.data?.publicUrl || ''
 }
 
-function genName(ext: string): string {
-  const rnd = typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID().slice(0, 8)
-    : Math.random().toString(36).slice(2, 10)
-  return `${Date.now().toString(36)}-${rnd}.${ext}`
-}
-
 /** 上传图片对象，返回 public URL；失败返回 null */
 export async function uploadGroupImage(
   userId: string,

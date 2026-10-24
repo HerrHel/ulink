@@ -44,13 +44,16 @@ export default defineConfig({
     // 出 4994 测 4 fail（board-locks 第十轮 A2 段血泪），排除后残留不再污染基线
     // .workbuddy/** 兜底排除：该目录存的是会话备份（含 .vue/.test.ts 副本），
     // 曾被 vitest 误扫成 259 文件中的第 3 个失败项，污染基线
-    exclude: ['e2e/**', 'node_modules/**', 'cli/node_modules/**', '.claude/worktrees/**', '.workbuddy/**'],
+    // **/node_modules/** 递归排除：根级 node_modules 之外，cloudbase/functions/<fn>/node_modules
+    // 是各云函数自带的依赖目录（构建期 --bundle 用，CI 不安装），其中 core-js-pure 自带
+    // 名为 es.regexp.test.js 的源文件，会被当成测试文件扫出「7 个 suite 失败」——
+    // 本地基线因此长期红、而 CI 绿，两边结论对不上。用 ** 一次覆盖所有层级。
+    exclude: ['e2e/**', '**/node_modules/**', '.claude/worktrees/**', '.workbuddy/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       exclude: [
-        'node_modules/',
-        'cli/node_modules/',
+        '**/node_modules/',
         'src/__tests__/',
         '**/*.test.js',
         'e2e/',
