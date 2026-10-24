@@ -184,15 +184,16 @@ export async function askMiMoStream(
   requestBody.tool_choice = context.enableTools === false ? 'none' : 'auto'
 
   // 官方统一鉴权通道：AI 功能为会员服务，请求严格经由 Supabase Edge Function 服务端转发校验
-  // CloudBase 云函数 v1 不验签、走 IP 哈希限流，无需会话 token
+    // 会话令牌：CloudBase 模式同样携带 —— 服务端据此按 uid 计量与限流（收费的前提）；
+  // 未登录 / 令牌缺失时服务端回退 IP 哈希限流，功能不受影响。
   const cbMode = isCloudBaseBackend()
   let authHeaders: Record<string, string> = {}
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData?.session?.access_token
   if (!cbMode) {
     if (!isSupabaseConfigured) {
       throw new Error(t('ai.errNotConfigured'))
     }
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token
     if (!token) {
       throw new Error(t('ai.errNeedLogin'))
     }
@@ -200,6 +201,8 @@ export async function askMiMoStream(
       Authorization: `Bearer ${token}`,
       apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
     }
+  } else if (token) {
+    authHeaders = { Authorization: `Bearer ${token}` }
   }
   const endpoint = edgeFnUrl('mimo-chat')
   if (!endpoint) {
@@ -401,15 +404,16 @@ export async function askMiMoRaw(
   if (!config.enabled) {
     throw new Error(t('ai.errDisabled'))
   }
-  // CloudBase 云函数 v1 不验签、走 IP 哈希限流，无需会话 token
+    // 会话令牌：CloudBase 模式同样携带 —— 服务端据此按 uid 计量与限流（收费的前提）；
+  // 未登录 / 令牌缺失时服务端回退 IP 哈希限流，功能不受影响。
   const cbMode = isCloudBaseBackend()
   let authHeaders: Record<string, string> = {}
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData?.session?.access_token
   if (!cbMode) {
     if (!isSupabaseConfigured) {
       throw new Error(t('ai.errNotConfigured'))
     }
-    const { data: sessionData } = await supabase.auth.getSession()
-    const token = sessionData?.session?.access_token
     if (!token) {
       throw new Error(t('ai.errNeedLogin'))
     }
@@ -417,6 +421,8 @@ export async function askMiMoRaw(
       Authorization: `Bearer ${token}`,
       apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || '',
     }
+  } else if (token) {
+    authHeaders = { Authorization: `Bearer ${token}` }
   }
   const endpoint = edgeFnUrl('mimo-chat')
   if (!endpoint) {

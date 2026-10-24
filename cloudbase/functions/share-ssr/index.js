@@ -18,23 +18,90 @@
  */
 
 const http = require('http')
+const crypto = require('crypto')
 const {
   renderSharePage,
   renderShareCategoryPage,
   renderNotFoundPage,
   renderUnavailablePage,
+  renderPasswordGate,
 } = require('./share-render.js')
 const { getFresh, getStale, putShare } = require('./mem-cache.js')
+const {
+  verifyPassword,
+  makeTicket,
+  checkTicket,
+  ticketCookieName,
+  parseCookies,
+  buildTicketCookie,
+  validatePasswordInput,
+} = require('./share-lock.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 const APP_ORIGIN = (process.env.APP_ORIGIN || 'https://ulink.ren').replace(/\/+$/, '')
+/** 票据签名密钥：缺失时带密码的分享一律 503 —— 绝不降级为「无密码放行」 */
+const SHARE_LOCK_SECRET = process.env.SHARE_LOCK_SECRET || ''
+/** 密码尝试限流用的 IP 盐（与其它函数同款，每函数独立） */
+const IP_HASH_SALT = process.env.IP_HASH_SALT || ''
+/** 密码尝试：10 次 / 10 分钟 / (gid, IP) */
+const PASS_TRY_LIMIT = 10
+const PASS_TRY_WINDOW_SEC = 600
+
+function clientIp(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '')
+  const first = xff.split(',')[0] || ''
+  return first.trim() || req.headers['x-real-ip'] || req.headers['cf-connecting-ip'] || 'unknown'
+}
+
+function sha256Hex(s) {
+  return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex')
+}
+
+/** 读取表单体（只取 password 字段，硬上限 4KB 防滥用） */
+function readPasswordForm(req, limit = 4096) {
+  return new Promise((resolve) => {
+    let size = 0
+    const chunks = []
+    let done = false
+    const finish = (v) => {
+      if (done) return
+      done = true
+      resolve(v)
+    }
+    req.on('data', (c) => {
+      size += c.length
+      if (size > limit) {
+        finish('')
+        req.destroy()
+        return
+      }
+      chunks.push(c)
+    })
+    req.on('end', () => {
+      const ct = String(req.headers['content-type'] || '')
+      if (!ct.includes('application/x-www-form-urlencoded')) {
+        finish('')
+        return
+      }
+      try {
+        const p = new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
+        finish(p.get('password') || '')
+      } catch {
+        finish('')
+      }
+    })
+    req.on('error', () => finish(''))
+  })
+}
 
 function sendHtml(res, status, html, extraHeaders) {
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': Buffer.byteLength(html),
     'x-share-render': 'v2',
+    // 私有分享禁止收录（与 <meta name="robots"> 双保险，覆盖不解析 HTML 的爬虫）
+    'X-Robots-Tag': 'noindex, nofollow',
     ...extraHeaders,
   })
   res.end(html)
@@ -80,7 +147,9 @@ function getDb() {
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
+  // POST 仅用于提交访问密码（组分享）；分类分享与其它方法一律拒绝
+  const isPost = req.method === 'POST'
+  if (!isPost && req.method !== 'GET' && req.method !== 'HEAD') {
     sendText(res, 405, 'method not allowed')
     return
   }
@@ -102,6 +171,103 @@ const server = http.createServer(async (req, res) => {
 
   const locale = resolveLocale(url, req.headers['accept-language'] || '')
 
+  // ── 访问密码前置判定（组分享）──────────────────────────────────────
+  // 必须先问「这组有没有设密码」，再决定要不要读缓存 / 取内容。
+  // 反过来的话，「刚加上密码」的组会继续吐上一次缓存的完整内容，密码形同虚设。
+  const db = getDb()
+  let hasPassword = false
+  let passwordHash = null
+
+  if (!isCategory) {
+    let sec
+    try {
+      const r = await db.rpc('get_share_secret', { p_gid: id })
+      if (r.error) {
+        console.error('[share-ssr] get_share_secret failed:', r.error)
+        sendText(res, 503, 'temporarily unavailable', { 'cache-control': 'no-store' })
+        return
+      }
+      sec = r.data
+    } catch (e) {
+      console.error('[share-ssr] get_share_secret threw:', e)
+      sendText(res, 503, 'temporarily unavailable', { 'cache-control': 'no-store' })
+      return
+    }
+
+    // null = 不存在 / 未公开 / 已删除（与「存在但无密码」严格区分）
+    if (!sec) {
+      sendHtml(res, 404, renderNotFoundPage(locale), { 'x-share-cache': 'MISS' })
+      return
+    }
+    hasPassword = sec.has_password === true
+    passwordHash = sec.password_hash || null
+
+    if (isPost) {
+      const backTo = url.pathname
+      // 没设密码：POST 无意义，直接回去
+      if (!hasPassword) {
+        res.writeHead(302, { Location: backTo, 'Cache-Control': 'no-store' })
+        res.end()
+        return
+      }
+      if (!SHARE_LOCK_SECRET) {
+        sendText(res, 503, 'share password not configured', { 'cache-control': 'no-store' })
+        return
+      }
+
+      // 爆破防护：(gid, IP) 维度，10 次 / 10 分钟
+      const ipHash = sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)
+      try {
+        const rl = await db.rpc('consume_rate_limit', {
+          p_key: `share-pass:${id}:${ipHash}`,
+          p_limit: PASS_TRY_LIMIT,
+          p_window_secs: PASS_TRY_WINDOW_SEC,
+        })
+        if (rl.error) {
+          console.error('[share-ssr] pass rate limit failed (fail-closed):', rl.error)
+          sendText(res, 503, 'temporarily unavailable', { 'cache-control': 'no-store' })
+          return
+        }
+        // 本仓已知坑：拒绝时 data 可能是 {} 而非 false —— 必须显式判 true
+        if (rl.data !== true) {
+          sendHtml(res, 429, renderPasswordGate(locale, { error: true }), {
+            'cache-control': 'no-store',
+            'Retry-After': String(PASS_TRY_WINDOW_SEC),
+          })
+          return
+        }
+      } catch (e) {
+        console.error('[share-ssr] pass rate limit threw:', e)
+        sendText(res, 503, 'temporarily unavailable', { 'cache-control': 'no-store' })
+        return
+      }
+
+      const pw = await readPasswordForm(req)
+      const policy = validatePasswordInput(pw)
+      const passed = policy.ok && verifyPassword(pw, passwordHash)
+      if (!passed) {
+        sendHtml(res, 401, renderPasswordGate(locale, { error: true }), {
+          'cache-control': 'no-store',
+        })
+        return
+      }
+
+      const ticket = makeTicket(id, SHARE_LOCK_SECRET)
+      res.writeHead(302, {
+        Location: backTo,
+        'Set-Cookie': buildTicketCookie(id, ticket),
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+      })
+      res.end()
+      return
+    }
+  } else if (isPost) {
+    // 分类分享暂不支持访问密码
+    sendText(res, 405, 'method not allowed', { Allow: 'GET, HEAD' })
+    return
+  }
+
   // 分类分享的 layout 自适应（与 s/c/[sid].ts 同口径；无显式 layout 时按设备类型隔离缓存键）
   let cacheSearch = url.search
   let layout = null
@@ -122,14 +288,39 @@ const server = http.createServer(async (req, res) => {
   }
 
   const cacheKey = `${url.pathname}${cacheSearch}`
-  const hit = getFresh(cacheKey)
-  if (hit) {
-    sendHtml(res, 200, hit, { 'x-share-cache': 'HIT' })
-    return
+
+  // 有密码的组：先验票据。
+  // 未通过 → 只吐密码门（可缓存，但与内容缓存键分离）；
+  // 通过   → 跳过内容缓存（不读也不写），否则内容会被缓存给后续未验密的人。
+  let passOk = false
+  if (hasPassword) {
+    if (!SHARE_LOCK_SECRET) {
+      sendText(res, 503, 'share password not configured', { 'cache-control': 'no-store' })
+      return
+    }
+    const cookies = parseCookies(req.headers.cookie)
+    passOk = checkTicket(cookies[ticketCookieName(id)], id, SHARE_LOCK_SECRET)
+    if (!passOk) {
+      const gateKey = `${cacheKey}|gate`
+      const gateHit = getFresh(gateKey)
+      if (gateHit) {
+        sendHtml(res, 200, gateHit, { 'x-share-cache': 'HIT' })
+        return
+      }
+      const gateHtml = renderPasswordGate(locale)
+      putShare(gateKey, gateHtml)
+      sendHtml(res, 200, gateHtml, { 'x-share-cache': 'MISS' })
+      return
+    }
+  } else {
+    const hit = getFresh(cacheKey)
+    if (hit) {
+      sendHtml(res, 200, hit, { 'x-share-cache': 'HIT' })
+      return
+    }
   }
 
   // 数据：公开读走 SECURITY DEFINER RPC（列级隔离，已排除 username/password/user_id）
-  const db = getDb()
   let data = null
   let upstreamFailed = false
   try {
@@ -183,8 +374,18 @@ const server = http.createServer(async (req, res) => {
     html = renderSharePage(data.group, data.bookmarks || [], shareUrl, APP_ORIGIN, locale)
   }
 
-  putShare(cacheKey, html)
-  sendHtml(res, 200, html, { 'x-share-cache': 'MISS' })
+  if (!hasPassword) {
+    putShare(cacheKey, html)
+  }
+  // 已验密的页面属于「凭票据可见」，不允许任何中间层缓存
+  sendHtml(
+    res,
+    200,
+    html,
+    hasPassword
+      ? { 'x-share-cache': 'BYPASS', 'cache-control': 'private, no-store' }
+      : { 'x-share-cache': 'MISS' },
+  )
 })
 
 const PORT = Number(process.env.PORT) || 9000

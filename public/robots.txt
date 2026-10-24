@@ -1,8 +1,11 @@
 User-agent: *
 Allow: /
 
-# 站点由 Cloudflare Pages 托管：/ 是宣传落地页（SEO 主场），/app 是应用主体
-# （noindex），/s/<gid> 走 Pages Function SSR 且需登录态之外的公开组才有内容，
-# 不主动 allow，依赖站外自然链接被发现。
+# / 是宣传落地页（SEO 主场），/app 是应用主体（noindex）。
+#
+# /s/<gid> 与 /s/c/<sid> 是私有分享链接：由 SSR 直接输出
+#   <meta name="robots" content="noindex, nofollow">  以及  X-Robots-Tag 响应头。
+# 因此这里刻意**不写** Disallow: /s/ —— 爬虫被 Disallow 后就读不到 noindex，
+# 已收录的旧页面反而永远删不掉。禁止收录靠 noindex，不靠 robots.txt。
 
 Sitemap: https://ulink.ren/sitemap.xml

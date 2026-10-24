@@ -414,6 +414,42 @@
                 <span class="sp-row-label">{{ t('settings.buildTime') }}</span>
                 <span class="sp-sync-status" data-testid="lv-build-time">{{ buildTimeText }}</span>
               </div>
+
+              <!-- AI 服务商清单：《隐私政策》3.3 的接收方告知入口 -->
+              <button type="button" class="sp-row sp-row-btn" data-testid="lv-ai-providers-toggle" @click.stop="showAiProviders = !showAiProviders">
+                <span class="sp-row-label">{{ t('settings.aiProviders') }}</span>
+                <span class="sp-row-value">
+                  <span class="sp-sync-status">{{ showAiProviders ? '' : aiProvidersSummary }}</span>
+                  <span class="sp-caret" :class="{ open: showAiProviders }" aria-hidden="true">›</span>
+                </span>
+              </button>
+              <div v-if="showAiProviders" class="sp-sub-panel" data-testid="lv-ai-providers">
+                <p class="sp-sub-hint">{{ t('settings.aiProvidersHint') }}</p>
+                <div v-for="p in aiProviders" :key="p.id" class="sp-provider">
+                  <div class="sp-provider-name">{{ p.name }}</div>
+                  <div class="sp-provider-meta">{{ p.product }}</div>
+                  <div class="sp-provider-meta">{{ p.filing }}</div>
+                  <a class="sp-provider-link" :href="p.website" target="_blank" rel="noopener noreferrer">{{ p.website }}</a>
+                </div>
+                <div class="sp-provider-updated">{{ t('settings.aiProvidersUpdated', { d: aiProvidersUpdatedAt }) }}</div>
+              </div>
+
+              <div class="sp-divider"></div>
+
+              <!-- 法律协议：协议/隐私/退款政策的正文入口 -->
+              <button type="button" class="sp-row sp-row-btn" data-testid="lv-legal-toggle" @click.stop="showLegal = !showLegal">
+                <span class="sp-row-label">{{ t('settings.legalDocs') }}</span>
+                <span class="sp-row-value">
+                  <span class="sp-sync-status">{{ showLegal ? '' : t('settings.legalDocsView') }}</span>
+                  <span class="sp-caret" :class="{ open: showLegal }" aria-hidden="true">›</span>
+                </span>
+              </button>
+              <div v-if="showLegal" class="sp-sub-panel" data-testid="lv-legal-docs">
+                <a v-for="d in legalDocs" :key="d.key" class="sp-legal-link" :href="d.path" target="_blank" rel="noopener noreferrer">
+                  {{ t(d.labelKey) }}
+                </a>
+              </div>
+
               <button class="sp-action" @click.stop="onFeedback">{{ t('settings.feedback') }}</button>
             </div>
             <!-- Danger -->
@@ -421,6 +457,17 @@
               <span class="sp-section-title">{{ t('settings.danger') }}</span>
               <button class="sp-danger-btn" @click.stop="onResetData">
                 <span aria-hidden="true" v-html="I.trash"></span>{{ t('settings.resetData') }}
+              </button>
+              <!-- 账号注销：PIPL 第 47 条删除权的自助实现 -->
+              <button
+                v-if="auth.isLoggedIn"
+                type="button"
+                class="sp-danger-btn sp-danger-btn-outline"
+                data-testid="lv-delete-account"
+                :disabled="deletingAccount"
+                @click.stop="onDeleteAccount"
+              >
+                {{ deletingAccount ? t('settings.deleteAccountDoing') : t('settings.deleteAccount') }}
               </button>
             </div>
           </div>
@@ -526,6 +573,8 @@ import { stopShareGroup, stopShareCategory, stopAllUserShares, fetchUserCategory
 import { SHARE_BASE } from '../../config/urls.js'
 import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
+import { AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT, LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
+import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
 
@@ -561,6 +610,40 @@ const userDisplay = computed(() => {
 
 const isEditingProfile = ref(false)
 const savingProfile = ref(false)
+
+// AI 服务商清单 / 法律协议（可展开区块）
+const showAiProviders = ref(false)
+const showLegal = ref(false)
+const aiProviders = AI_PROVIDERS
+const aiProvidersUpdatedAt = AI_PROVIDERS_UPDATED_AT
+const legalDocs = LEGAL_DOC_LINKS
+const aiProvidersSummary = computed(() =>
+  AI_PROVIDERS.length > 1
+    ? t('settings.aiProvidersCount', { n: AI_PROVIDERS.length })
+    : AI_PROVIDERS[0]?.name || '',
+)
+
+// 账号注销
+const deletingAccount = ref(false)
+
+async function onDeleteAccount() {
+  if (deletingAccount.value) return
+  const ok = await showConfirm(t('settings.deleteAccountConfirm'))
+  if (!ok) return
+  deletingAccount.value = true
+  try {
+    const r = await purgeAccount()
+    if (r.ok) {
+      toast(t('settings.deleteAccountDone'))
+      // 重新加载，确保内存里的 store 也被清空
+      setTimeout(() => location.reload(), 1200)
+    } else {
+      toast(t('settings.deleteAccountFailed'), false)
+    }
+  } finally {
+    deletingAccount.value = false
+  }
+}
 const profileForm = reactive({
   nickname: '',
   avatar: '',

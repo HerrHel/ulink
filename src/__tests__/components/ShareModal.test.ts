@@ -53,7 +53,7 @@ describe('ShareModal.vue — 分享管理弹窗', () => {
     vi.restoreAllMocks()
   })
 
-  it('展示未公开的组信息及开启公开访问', async () => {
+  it('展示未公开的组信息及开启链接分享', async () => {
     ui.openShareModal('group', 'g-test-1')
 
     const setGroupPublicSpy = vi.spyOn(syncShare, 'setGroupPublic').mockResolvedValue(true)
@@ -70,16 +70,16 @@ describe('ShareModal.vue — 分享管理弹窗', () => {
 
     // 当前未公开
     expect(wrapper.find('.share-toggle-title').text()).toContain('当前处于私密状态')
-    expect(wrapper.find('.share-disabled-section .btn-primary').text()).toContain('开启公开访问')
+    expect(wrapper.find('.share-disabled-section .btn-primary').text()).toContain('开启链接分享')
 
-    // 点击开启公开访问
+    // 点击开启链接分享
     await wrapper.find('.share-disabled-section .btn-primary').trigger('click')
 
     expect(setGroupPublicSpy).toHaveBeenCalledWith('g-test-1', true)
     expect(copySpy).toHaveBeenCalled()
   })
 
-  it('处于公开状态的组：展示链接，支持复制与停止公开分享', async () => {
+  it('处于分享状态的组：展示链接，支持复制与停止分享', async () => {
     // 设为公开组
     ds.groupMap['g-test-1'].isPublic = true
     ui.openShareModal('group', 'g-test-1')
@@ -93,7 +93,7 @@ describe('ShareModal.vue — 分享管理弹窗', () => {
     })
 
     // 处于公开状态
-    expect(wrapper.find('.share-toggle-title').text()).toContain('公开访问已开启')
+    expect(wrapper.find('.share-toggle-title').text()).toContain('链接分享已开启')
     const input = wrapper.find<HTMLInputElement>('.share-link-input')
     expect(input.exists()).toBe(true)
     expect(input.element.value).toContain('g-test-1')
@@ -125,7 +125,7 @@ describe('ShareModal.vue — 分享管理弹窗', () => {
 
     expect(getCatShareSpy).toHaveBeenCalledWith('c-test-1')
     expect(wrapper.find('.share-target-name').text()).toBe('开发工具')
-    expect(wrapper.find('.share-toggle-title').text()).toContain('公开访问已开启')
+    expect(wrapper.find('.share-toggle-title').text()).toContain('链接分享已开启')
     expect(wrapper.find<HTMLInputElement>('.share-link-input').element.value).toContain('share-cat-123')
 
     // 停止分类分享

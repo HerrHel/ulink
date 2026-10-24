@@ -69,6 +69,14 @@ const T = {
     footerBrand: '与链 · ulink',
     footerSlogan: '收藏 · 整理 · 分享',
     themeToggle: '切换深浅色主题',
+    // ── 访问密码门 ──
+    passTitle: '需要访问密码 - 与链',
+    passHeading: '此分享已加密',
+    passBody: '请输入分享者提供的访问密码',
+    passLabel: '访问密码',
+    passPlaceholder: '访问密码',
+    passSubmit: '查看内容',
+    passError: '密码不正确，请重试',
   },
   'en-US': {
     lang: 'en-US',
@@ -121,6 +129,14 @@ const T = {
     footerBrand: 'ulink',
     footerSlogan: 'Collect · Organize · Share',
     themeToggle: 'Toggle light/dark theme',
+    // ── password gate ──
+    passTitle: 'Password required - ulink',
+    passHeading: 'This share is protected',
+    passBody: 'Enter the access password provided by the owner',
+    passLabel: 'Access password',
+    passPlaceholder: 'Access password',
+    passSubmit: 'View content',
+    passError: 'Incorrect password, please try again',
   },
 } as const
 
@@ -503,6 +519,10 @@ function buildHead(
     `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">`,
     `<title>${escTitle}</title>`,
     `<meta name="description" content="${escDesc}">`,
+    // 私有分享：显式禁止收录。分享是"知道链接才能访问"的私有通道，
+    // 不应进入搜索引擎索引（定性依据见 docs/BILLING_DESIGN.md §8.5）。
+    // 注意不要配合 robots.txt Disallow —— 爬虫读不到 noindex 反而删不掉已收录页。
+    `<meta name="robots" content="noindex, nofollow">`,
     `<link rel="canonical" href="${escUrl}">`,
     FONT_LINKS,
     // Open Graph
@@ -1325,6 +1345,10 @@ function buildCategoryHead(
     `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">`,
     `<title>${escTitle}</title>`,
     `<meta name="description" content="${escDesc}">`,
+    // 私有分享：显式禁止收录。分享是"知道链接才能访问"的私有通道，
+    // 不应进入搜索引擎索引（定性依据见 docs/BILLING_DESIGN.md §8.5）。
+    // 注意不要配合 robots.txt Disallow —— 爬虫读不到 noindex 反而删不掉已收录页。
+    `<meta name="robots" content="noindex, nofollow">`,
     `<link rel="canonical" href="${escUrl}">`,
     FONT_LINKS,
     // Open Graph
@@ -1418,6 +1442,69 @@ export function renderNotFoundPage(locale: ShareLocale = 'zh-CN'): string {
  * 「暂时不可用，分享本身没失效」。调用方必须配 no-store（或不缓存），让恢复后
  * 的下一次请求立即拿到真数据，而不是把故障页缓存进边缘。
  */
+/** 密码门页面追加样式（复用主 CSS 的设计令牌，不引外部依赖） */
+const PASS_CSS = `
+.pw-icon{display:flex;justify-content:center;margin-bottom:16px}
+.pw-form{display:flex;flex-direction:column;gap:10px;margin-top:20px;width:100%;max-width:280px;margin-left:auto;margin-right:auto}
+.pw-input{width:100%;box-sizing:border-box;padding:11px 14px;font:inherit;font-size:15px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;outline:none;transition:border-color .15s}
+.pw-input:focus{border-color:var(--accent)}
+.pw-submit{padding:11px 14px;font:inherit;font-size:14px;font-weight:500;color:#fff;background:var(--accent);border:0;border-radius:10px;cursor:pointer;transition:opacity .15s}
+.pw-submit:hover{opacity:.9}
+.pw-error{margin:0;font-size:13px;color:#C0392B;text-align:center}
+`
+
+/** 锁图标（用 currentColor 之外的 accent，暗色下同样可读） */
+const LOCK_SVG = `<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.3" fill="var(--accent)" stroke="none"/></svg>`
+
+/**
+ * 访问密码门。
+ *
+ * 安全约束（改动时务必保持）：
+ * - **绝不含任何分享内容**：本页只输出表单，内容由云函数在验密通过后才去 RPC 取；
+ * - 强制 `noindex, nofollow`：密码门不该进索引；
+ * - 表单不写 action，提交到当前 URL（避免被构造成外部地址）；
+ * - required + minlength 仅作 UX 提示，真正的长度与强度校验在服务端。
+ */
+export function renderPasswordGate(
+  locale: ShareLocale = 'zh-CN',
+  opts: { error?: boolean } = {},
+): string {
+  const d = T[locale]
+  const origin = 'https://ulink.ren'
+  return [
+    `<!DOCTYPE html>`,
+    `<html lang="${d.lang}">`,
+    `<head>`,
+    THEME_SCRIPT,
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
+    `<meta name="robots" content="noindex, nofollow">`,
+    `<title>${esc(d.passTitle)}</title>`,
+    FONT_LINKS,
+    `</head>`,
+    `<style>${CSS}${PASS_CSS}</style>`,
+    `<body>`,
+    buildAppShell(d, origin, {
+      hdrMeta: "",
+      ctaUrl: `${origin}/`,
+      inner: [
+        `<div class="nf">`,
+        `<div class="pw-icon">${LOCK_SVG}</div>`,
+        `<h1 class="nf-title">${esc(d.passHeading)}</h1>`,
+        `<p class="nf-body">${esc(d.passBody)}</p>`,
+        `<form class="pw-form" method="POST" autocomplete="off">`,
+        `<input class="pw-input" type="password" name="password" placeholder="${esc(d.passPlaceholder)}" aria-label="${esc(d.passLabel)}" required minlength="4" maxlength="128" autocomplete="current-password" autofocus>`,
+        `<button class="pw-submit" type="submit">${esc(d.passSubmit)}</button>`,
+        opts.error ? `<p class="pw-error" role="alert">${esc(d.passError)}</p>` : '',
+        `</form>`,
+        `</div>`,
+      ].join("\n"),
+    }),
+    `</body>`,
+    `</html>`,
+  ].join("\n")
+}
+
 export function renderUnavailablePage(locale: ShareLocale = 'zh-CN'): string {
   const d = T[locale]
   const origin = 'https://ulink.ren'

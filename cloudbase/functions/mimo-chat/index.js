@@ -15,8 +15,9 @@
 
 const http = require('http')
 const crypto = require('crypto')
-const { Readable } = require('stream')
+const { Readable, Transform } = require('stream')
 const { validateChatBody, isOriginAllowed, buildCorsHeaders } = require('./mimo-guard.js')
+const { verifyCbToken } = require('./cb-auth.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
@@ -29,6 +30,32 @@ const RATE_LIMIT_PER_MIN = parseInt(process.env.MIMO_CHAT_RATE_LIMIT_PER_MIN || 
 /** 上游首响应超时（ms）；流式输出可超过此值，仅约束等待首字节 */
 const UPSTREAM_TIMEOUT_MS = parseInt(process.env.MIMO_CHAT_TIMEOUT_MS || '60000', 10)
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-mimo-chat'
+/**
+ * 计费模式：
+ *   shadow  —— 只记录用量、不做任何额度判断（默认，绝不影响用户体验）
+ *   enforce —— 预留：按 resolve_entitlement 的额度拦截（待影子计量拿到真实分布后再开启）
+ */
+const BILLING_MODE = (process.env.BILLING_MODE || 'shadow').toLowerCase()
+
+/** 按 Asia/Shanghai 分桶（UTC+8 偏移后取 YYYY-MM），跨时区用户口径一致 */
+function shanghaiPeriod(now) {
+  return new Date((now || Date.now()) + 8 * 3600 * 1000).toISOString().slice(0, 7)
+}
+
+/** 影子计量：只写账本，任何失败都不影响主流程 */
+async function recordUsage(db, uid, metric, amount, ref) {
+  try {
+    await db.rpc('record_usage', {
+      p_uid: uid,
+      p_metric: metric,
+      p_amount: amount,
+      p_ref: ref,
+      p_period: shanghaiPeriod(),
+    })
+  } catch (e) {
+    console.error('[mimo-chat] record_usage failed:', e)
+  }
+}
 
 function sendJson(res, status, body, extraHeaders) {
   const payload = JSON.stringify(body)
@@ -107,11 +134,16 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    // 用户身份：能验签就按 uid 计量；验不到（未登录 / 老客户端）回退 IP 限流，不阻断使用
+    const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID }).catch(() => null)
+    const uid = auth && auth.ok ? auth.uid : null
+
     // 限流 fail-closed：转发计费通道宁可暂时不可用，也不无限放行
     const ipHash = sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)
     const db = getDb()
     const rl = await db.rpc('consume_rate_limit', {
-      p_key: 'mimo-chat:ip:' + ipHash,
+      // 已登录按用户限流（跨设备统一口径，也是未来计费的主体键）
+      p_key: uid ? 'mimo-chat:uid:' + uid : 'mimo-chat:ip:' + ipHash,
       p_limit: RATE_LIMIT_PER_MIN,
       p_window_secs: 60,
     })
@@ -165,6 +197,26 @@ const server = http.createServer(async (req, res) => {
       'Content-Type': upstream.headers.get('Content-Type') || 'text/event-stream',
       'Cache-Control': 'no-cache',
     })
+
+    // 影子计量：统计输出字节数（token 的近似值），**只记录不拦截**
+    if (uid) {
+      let outBytes = 0
+      const counter = new Transform({
+        transform(chunk, _enc, cb) {
+          outBytes += chunk.length
+          cb(null, chunk)
+        },
+      })
+      const inChars = JSON.stringify(guard.value.messages || []).length
+      const ref = 'chat-' + Date.now().toString(36) + '-' + crypto.randomBytes(6).toString('hex')
+      res.on('finish', () => {
+        void recordUsage(db, uid, 'ai.requests', 1, ref)
+        void recordUsage(db, uid, 'ai.chars', inChars + outBytes, ref)
+      })
+      Readable.fromWeb(upstream.body).pipe(counter).pipe(res)
+      return
+    }
+
     Readable.fromWeb(upstream.body).pipe(res)
   } catch (error) {
     console.error('[mimo-chat] internal error:', error)

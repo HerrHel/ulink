@@ -1,0 +1,13 @@
+{
+  "name": "ulink-maintenance",
+  "version": "1.0.0",
+  "description": "ulink 定时维护（错误日志/回收站清理）",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

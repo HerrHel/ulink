@@ -164,9 +164,33 @@ const FN_EXTRA_ENV = {
     if (yt) out.YOUTUBE_API_KEY = yt
     return out
   },
-  'share-ssr': () => ({
-    APP_ORIGIN: readEnvLocal('APP_ORIGIN') || 'https://ulink.ren',
-  }),
+  'share-ssr': () => {
+    const out = {
+      APP_ORIGIN: readEnvLocal('APP_ORIGIN') || 'https://ulink.ren',
+    }
+    // 访问密码票据签名密钥：缺失时「带密码的分享」会 503（fail-closed，不降级放行）
+    const lockSecret = readEnvLocal('SHARE_LOCK_SECRET')
+    if (lockSecret) out.SHARE_LOCK_SECRET = lockSecret
+    // 密码尝试限流用的 IP 盐（每函数独立）
+    out.IP_HASH_SALT = readEnvLocal('SHARE_SSR_IP_HASH_SALT') || 'ulink-share-ssr'
+    return out
+  },
+  'share-admin': () => {
+    const out = {
+      IP_HASH_SALT: readEnvLocal('SHARE_ADMIN_IP_HASH_SALT') || 'ulink-share-admin',
+    }
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
+    return out
+  },
+  'account': () => {
+    const out = {
+      IP_HASH_SALT: readEnvLocal('ACCOUNT_IP_HASH_SALT') || 'ulink-account',
+    }
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
+    return out
+  },
 }
 if (apiKey) {
   const rcPath = resolve(FN_DIR, 'cloudbaserc.json')

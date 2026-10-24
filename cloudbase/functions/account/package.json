@@ -1,0 +1,13 @@
+{
+  "name": "ulink-account",
+  "version": "1.0.0",
+  "description": "ulink 账号注销与数据清除（CloudBase HTTP 云函数）",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}

@@ -23,6 +23,7 @@ var share_render_exports = {};
 __export(share_render_exports, {
   extractAppAssets: () => extractAppAssets,
   renderNotFoundPage: () => renderNotFoundPage,
+  renderPasswordGate: () => renderPasswordGate,
   renderShareCategoryPage: () => renderShareCategoryPage,
   renderSharePage: () => renderSharePage,
   renderUnavailablePage: () => renderUnavailablePage,
@@ -76,7 +77,15 @@ var T = {
     noBookmarksMatch: "\u672A\u627E\u5230\u5339\u914D\u7684\u4E66\u7B7E",
     footerBrand: "\u4E0E\u94FE \xB7 ulink",
     footerSlogan: "\u6536\u85CF \xB7 \u6574\u7406 \xB7 \u5206\u4EAB",
-    themeToggle: "\u5207\u6362\u6DF1\u6D45\u8272\u4E3B\u9898"
+    themeToggle: "\u5207\u6362\u6DF1\u6D45\u8272\u4E3B\u9898",
+    // ── 访问密码门 ──
+    passTitle: "\u9700\u8981\u8BBF\u95EE\u5BC6\u7801 - \u4E0E\u94FE",
+    passHeading: "\u6B64\u5206\u4EAB\u5DF2\u52A0\u5BC6",
+    passBody: "\u8BF7\u8F93\u5165\u5206\u4EAB\u8005\u63D0\u4F9B\u7684\u8BBF\u95EE\u5BC6\u7801",
+    passLabel: "\u8BBF\u95EE\u5BC6\u7801",
+    passPlaceholder: "\u8BBF\u95EE\u5BC6\u7801",
+    passSubmit: "\u67E5\u770B\u5185\u5BB9",
+    passError: "\u5BC6\u7801\u4E0D\u6B63\u786E\uFF0C\u8BF7\u91CD\u8BD5"
   },
   "en-US": {
     lang: "en-US",
@@ -128,7 +137,15 @@ var T = {
     noBookmarksMatch: "No matching bookmarks found",
     footerBrand: "ulink",
     footerSlogan: "Collect \xB7 Organize \xB7 Share",
-    themeToggle: "Toggle light/dark theme"
+    themeToggle: "Toggle light/dark theme",
+    // ── password gate ──
+    passTitle: "Password required - ulink",
+    passHeading: "This share is protected",
+    passBody: "Enter the access password provided by the owner",
+    passLabel: "Access password",
+    passPlaceholder: "Access password",
+    passSubmit: "View content",
+    passError: "Incorrect password, please try again"
   }
 };
 var FAVICON_PROVIDER_URL = "https://api.xinac.net/icon/?url=";
@@ -375,6 +392,10 @@ function buildHead(dict, group, bookmarks, shareUrl, ogImage) {
     `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">`,
     `<title>${escTitle}</title>`,
     `<meta name="description" content="${escDesc}">`,
+    // 私有分享：显式禁止收录。分享是"知道链接才能访问"的私有通道，
+    // 不应进入搜索引擎索引（定性依据见 docs/BILLING_DESIGN.md §8.5）。
+    // 注意不要配合 robots.txt Disallow —— 爬虫读不到 noindex 反而删不掉已收录页。
+    `<meta name="robots" content="noindex, nofollow">`,
     `<link rel="canonical" href="${escUrl}">`,
     FONT_LINKS,
     // Open Graph
@@ -887,6 +908,10 @@ function buildCategoryHead(dict, category, count, groupCount, shareUrl, ogImage)
     `<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">`,
     `<title>${escTitle}</title>`,
     `<meta name="description" content="${escDesc}">`,
+    // 私有分享：显式禁止收录。分享是"知道链接才能访问"的私有通道，
+    // 不应进入搜索引擎索引（定性依据见 docs/BILLING_DESIGN.md §8.5）。
+    // 注意不要配合 robots.txt Disallow —— 爬虫读不到 noindex 反而删不掉已收录页。
+    `<meta name="robots" content="noindex, nofollow">`,
     `<link rel="canonical" href="${escUrl}">`,
     FONT_LINKS,
     // Open Graph
@@ -948,6 +973,52 @@ function renderNotFoundPage(locale = "zh-CN") {
         `<span class="nf-icon">${LOGO_SVG}</span>`,
         `<h1 class="nf-title">${esc(d.notFoundHeading)}</h1>`,
         `<p class="nf-body">${esc(d.notFoundBody)}</p>`,
+        `</div>`
+      ].join("\n")
+    }),
+    `</body>`,
+    `</html>`
+  ].join("\n");
+}
+var PASS_CSS = `
+.pw-icon{display:flex;justify-content:center;margin-bottom:16px}
+.pw-form{display:flex;flex-direction:column;gap:10px;margin-top:20px;width:100%;max-width:280px;margin-left:auto;margin-right:auto}
+.pw-input{width:100%;box-sizing:border-box;padding:11px 14px;font:inherit;font-size:15px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;outline:none;transition:border-color .15s}
+.pw-input:focus{border-color:var(--accent)}
+.pw-submit{padding:11px 14px;font:inherit;font-size:14px;font-weight:500;color:#fff;background:var(--accent);border:0;border-radius:10px;cursor:pointer;transition:opacity .15s}
+.pw-submit:hover{opacity:.9}
+.pw-error{margin:0;font-size:13px;color:#C0392B;text-align:center}
+`;
+var LOCK_SVG = `<svg viewBox="0 0 24 24" width="46" height="46" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15" r="1.3" fill="var(--accent)" stroke="none"/></svg>`;
+function renderPasswordGate(locale = "zh-CN", opts = {}) {
+  const d = T[locale];
+  const origin = "https://ulink.ren";
+  return [
+    `<!DOCTYPE html>`,
+    `<html lang="${d.lang}">`,
+    `<head>`,
+    THEME_SCRIPT,
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
+    `<meta name="robots" content="noindex, nofollow">`,
+    `<title>${esc(d.passTitle)}</title>`,
+    FONT_LINKS,
+    `</head>`,
+    `<style>${CSS}${PASS_CSS}</style>`,
+    `<body>`,
+    buildAppShell(d, origin, {
+      hdrMeta: "",
+      ctaUrl: `${origin}/`,
+      inner: [
+        `<div class="nf">`,
+        `<div class="pw-icon">${LOCK_SVG}</div>`,
+        `<h1 class="nf-title">${esc(d.passHeading)}</h1>`,
+        `<p class="nf-body">${esc(d.passBody)}</p>`,
+        `<form class="pw-form" method="POST" autocomplete="off">`,
+        `<input class="pw-input" type="password" name="password" placeholder="${esc(d.passPlaceholder)}" aria-label="${esc(d.passLabel)}" required minlength="4" maxlength="128" autocomplete="current-password" autofocus>`,
+        `<button class="pw-submit" type="submit">${esc(d.passSubmit)}</button>`,
+        opts.error ? `<p class="pw-error" role="alert">${esc(d.passError)}</p>` : "",
+        `</form>`,
         `</div>`
       ].join("\n")
     }),
@@ -2967,6 +3038,7 @@ body:has(.group-focus-panel:target) #cardGrid {
 0 && (module.exports = {
   extractAppAssets,
   renderNotFoundPage,
+  renderPasswordGate,
   renderShareCategoryPage,
   renderSharePage,
   renderUnavailablePage,

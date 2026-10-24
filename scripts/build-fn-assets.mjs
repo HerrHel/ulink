@@ -41,10 +41,34 @@ const JOBS = [
     from: 'supabase/functions/mimo-chat/mimo-guard.ts',
     to: 'cloudbase/functions/mimo-chat/mimo-guard.js',
   },
+  // CloudBase 令牌校验（云函数侧换 uid）——真源一份，派生到每个需要鉴权的函数
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/mimo-chat/cb-auth.js',
+  },
   // 分享 SSR 渲染核（3400+ 行零依赖纯函数，bundle 自包含）
   {
     from: 'functions/_lib/share-render.ts',
     to: 'cloudbase/functions/share-ssr/share-render.js',
+  },
+  // 分享访问密码：哈希 / 票据签名（云函数侧验密用）
+  {
+    from: 'supabase/functions/_shared/share-lock.ts',
+    to: 'cloudbase/functions/share-ssr/share-lock.js',
+  },
+  // share-admin（设置密码）复用同一套鉴权与哈希实现
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/share-admin/cb-auth.js',
+  },
+  {
+    from: 'supabase/functions/_shared/share-lock.ts',
+    to: 'cloudbase/functions/share-admin/share-lock.js',
+  },
+  // account（注销）复用同一套鉴权实现
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/account/cb-auth.js',
   },
 ]
 

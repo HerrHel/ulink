@@ -75,6 +75,46 @@
                 {{ t('modal.share.stopShare') }}
               </button>
             </div>
+
+            <!-- 访问密码（仅组分享；分类分享暂不支持） -->
+            <div v-if="isGroup" class="share-password-section">
+              <div class="share-password-head">
+                <span class="share-password-title">{{ t('modal.share.passwordTitle') }}</span>
+                <span class="share-password-state" :class="{ on: hasPassword }">
+                  {{ hasPassword ? t('modal.share.passwordOn') : t('modal.share.passwordOff') }}
+                </span>
+              </div>
+
+              <div v-if="!pwOpen" class="share-password-actions">
+                <button class="btn btn-ghost btn-sm" :disabled="pwBusy" @click="openPwEditor">
+                  {{ hasPassword ? t('modal.share.passwordChange') : t('modal.share.passwordSet') }}
+                </button>
+                <button v-if="hasPassword" class="btn btn-danger-ghost btn-sm" :disabled="pwBusy" @click="onClearPassword">
+                  {{ t('modal.share.passwordClear') }}
+                </button>
+              </div>
+
+              <div v-else class="share-password-editor">
+                <input
+                  ref="pwInputEl"
+                  class="form-input share-password-input"
+                  type="password"
+                  v-model="pwInput"
+                  :placeholder="t('modal.share.passwordPlaceholder')"
+                  autocomplete="new-password"
+                  :maxlength="128"
+                  @keyup.enter="onSavePassword"
+                />
+                <div class="share-password-editor-actions">
+                  <button class="btn btn-primary btn-sm" :disabled="pwBusy" @click="onSavePassword">
+                    {{ t('modal.share.passwordSave') }}
+                  </button>
+                  <button class="btn btn-secondary btn-sm" :disabled="pwBusy" @click="pwOpen = false">
+                    {{ t('common.cancel') }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- 关闭状态下的大按钮提示 -->
@@ -94,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -114,6 +154,11 @@ import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import { t } from '../../i18n/index.js'
+import {
+  setSharePassword,
+  getSharePasswordState,
+  isSharePasswordAcceptable,
+} from '../../composables/domain/useSharePassword.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
@@ -124,6 +169,13 @@ const loading = ref(false)
 const operating = ref(false)
 const copied = ref(false)
 const categoryShareId = ref<string | null>(null)
+
+// 访问密码（仅组分享）
+const hasPassword = ref(false)
+const pwOpen = ref(false)
+const pwInput = ref('')
+const pwBusy = ref(false)
+const pwInputEl = ref<HTMLInputElement | null>(null)
 
 const target = computed(() => uiStore.shareModalTarget)
 const isGroup = computed(() => target.value?.type === 'group')
@@ -160,6 +212,70 @@ const isPublic = computed(() => {
   }
   return Boolean(categoryShareId.value)
 })
+
+/** 查询当前分享是否已设密码（只回布尔，服务端从不返回摘要） */
+async function refreshPasswordState() {
+  if (!isGroup.value || !isPublic.value || !targetId.value) {
+    hasPassword.value = false
+    return
+  }
+  const r = await getSharePasswordState(targetId.value)
+  if (r.ok) hasPassword.value = Boolean(r.hasPassword)
+}
+
+// 切换目标 / 关闭分享时重置密码 UI，并重新拉一次状态
+watch(
+  [isPublic, isGroup, targetId],
+  () => {
+    pwOpen.value = false
+    pwInput.value = ''
+    void refreshPasswordState()
+  },
+  { immediate: true },
+)
+
+function openPwEditor() {
+  pwOpen.value = true
+  pwInput.value = ''
+  void nextTick(() => pwInputEl.value?.focus())
+}
+
+async function onSavePassword() {
+  const pw = pwInput.value
+  if (!isSharePasswordAcceptable(pw)) {
+    toast(t('modal.share.passwordTooShort'), false)
+    return
+  }
+  pwBusy.value = true
+  try {
+    const r = await setSharePassword(targetId.value, pw)
+    if (r.ok) {
+      hasPassword.value = Boolean(r.hasPassword)
+      pwOpen.value = false
+      pwInput.value = ''
+      toast(t('modal.share.passwordSaved'))
+    } else {
+      toast(t('modal.share.passwordFailed'), false)
+    }
+  } finally {
+    pwBusy.value = false
+  }
+}
+
+async function onClearPassword() {
+  pwBusy.value = true
+  try {
+    const r = await setSharePassword(targetId.value, null)
+    if (r.ok) {
+      hasPassword.value = false
+      toast(t('modal.share.passwordCleared'))
+    } else {
+      toast(t('modal.share.passwordFailed'), false)
+    }
+  } finally {
+    pwBusy.value = false
+  }
+}
 
 const shareUrl = computed(() => {
   if (isGroup.value) {

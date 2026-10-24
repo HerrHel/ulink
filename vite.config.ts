@@ -3,6 +3,8 @@ import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
 import { PurgeCSS } from 'purgecss';
 import { fileURLToPath } from 'node:url';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
 import pkg from './package.json';
 
 /** 以本配置文件为基准解析项目内路径（ESM 无 __dirname） */
@@ -211,6 +213,65 @@ function mpaAliasPlugin(): Plugin {
   };
 }
 
+/**
+ * 法律文档供给：把 docs/legal/*.md 作为静态资源发布到 /legal/*.md
+ *
+ * 为什么需要：协议、隐私政策、退款政策必须能被用户**直接访问到完整正文**
+ * （登录/注册页的入口通常只放链接，监管核查时要求可打开阅读）。
+ * 单一真源仍在 docs/legal/，本插件只做供给，不复制维护。
+ */
+function legalDocsPlugin(): Plugin {
+  const dir = here('./docs/legal');
+  const read = (name: string) => {
+    const file = resolve(dir, name);
+    // 目录穿越防护：只允许 docs/legal 下的 .md
+    if (!file.startsWith(dir) || !name.endsWith('.md')) return null;
+    try {
+      return readFileSync(file, 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const list = () => {
+    try {
+      return readdirSync(dir).filter((f) => f.endsWith('.md'));
+    } catch {
+      return [] as string[];
+    }
+  };
+  return {
+    name: 'ulink-legal-docs',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const m = /^\/legal\/([\w.-]+\.md)$/.exec((req.url || '').split('?')[0] || '');
+        if (!m) return next();
+        const body = read(m[1]);
+        if (body === null) return next();
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.end(body);
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const m = /^\/legal\/([\w.-]+\.md)$/.exec((req.url || '').split('?')[0] || '');
+        if (!m) return next();
+        const body = read(m[1]);
+        if (body === null) return next();
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        res.end(body);
+      });
+    },
+    generateBundle() {
+      for (const f of list()) {
+        const body = read(f);
+        if (body === null) continue;
+        this.emitFile({ type: 'asset', fileName: `legal/${f}`, source: body });
+      }
+    },
+  };
+}
+
 export default defineConfig({
   define: {
     // 构建时注入版本信息：__BUILD_TIME__ 每次部署必变，设置面板显示以确认线上是否为最新构建
@@ -218,6 +279,7 @@ export default defineConfig({
     __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
   },
   plugins: [
+    legalDocsPlugin(),
     vue(),
     VitePWA({
       registerType: 'autoUpdate',

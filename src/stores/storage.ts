@@ -148,6 +148,36 @@ export async function clearAllSyncOps(): Promise<void> {
   }
 }
 
+/**
+ * 清空本机全部持久化数据（账号注销用）
+ *
+ * 注销流程：云端数据由 account 云函数清除后，本机也必须清干净，
+ * 否则下次登录同一账号会把旧数据重新拉回，用户以为"没删掉"。
+ * 同时清理 localStorage 中的 lv_* 键（历史版本、偏好、UI 状态等）。
+ */
+export async function clearAllLocalData(): Promise<void> {
+  try {
+    await db.data.clear()
+  } catch (e) {
+    console.warn('[IDB] clearAllLocalData (data) error:', e)
+  }
+  try {
+    await db.syncOps.clear()
+  } catch (e) {
+    console.warn('[IDB] clearAllLocalData (syncOps) error:', e)
+  }
+  try {
+    const doomed: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('lv_')) doomed.push(k)
+    }
+    for (const k of doomed) localStorage.removeItem(k)
+  } catch (e) {
+    console.warn('[IDB] clearAllLocalData (localStorage) error:', e)
+  }
+}
+
 // ── 本地版本历史（C2：下放给本地用户，存储于 localStorage）──
 
 export interface LocalHistoryVersion {

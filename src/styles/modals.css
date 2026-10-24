@@ -508,6 +508,54 @@
   width: 14px;
   height: 14px;
 }
+
+/* ── 分享访问密码 ── */
+.share-password-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border, #E5DDD3);
+}
+.share-password-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.share-password-title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text, #2C2824);
+}
+.share-password-state {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-active, #EFE8DF);
+  color: var(--text-muted, #666);
+}
+.share-password-state.on {
+  background: rgba(16, 185, 129, 0.14);
+  color: #0F6E56;
+}
+.share-password-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.share-password-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-password-input {
+  font-size: 0.85rem;
+}
+.share-password-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .btn-danger-ghost {
   background: transparent;
   color: var(--danger, #ef4444);

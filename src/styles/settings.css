@@ -74,6 +74,88 @@
   height:1px;background:var(--border-light);
   margin:6px 12px;
 }
+/* 可展开行（AI 服务商 / 法律协议） */
+.sp-row-btn{
+  width:100%;
+  background:none;
+  border:0;
+  text-align:left;
+  font:inherit;
+  color:inherit;
+  cursor:pointer;
+  justify-content:space-between;
+}
+.sp-row-btn:hover{
+  background:var(--surface-hover,rgba(0,0,0,0.03));
+}
+.sp-row-value{
+  display:inline-flex;align-items:center;gap:6px;
+  min-width:0;
+}
+.sp-caret{
+  display:inline-block;
+  font-size:0.9rem;
+  line-height:1;
+  color:var(--text-muted,#6A6660);
+  transform:rotate(90deg);
+  transition:transform .15s ease;
+}
+.sp-caret.open{
+  transform:rotate(-90deg);
+}
+.sp-sub-panel{
+  padding:2px 12px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.sp-sub-hint{
+  margin:0;
+  font-size:0.72rem;
+  line-height:1.6;
+  color:var(--text-muted,#6A6660);
+}
+.sp-provider{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:8px 10px;
+  border:1px solid var(--border-light);
+  border-radius:8px;
+  background:var(--surface,transparent);
+}
+.sp-provider-name{
+  font-size:0.8rem;
+  font-weight:700;
+  color:var(--text);
+}
+.sp-provider-meta{
+  font-size:0.72rem;
+  line-height:1.5;
+  color:var(--text-secondary);
+}
+.sp-provider-link{
+  font-size:0.72rem;
+  color:var(--accent,#3B82F6);
+  text-decoration:none;
+  word-break:break-all;
+}
+.sp-provider-link:hover{
+  text-decoration:underline;
+}
+.sp-provider-updated{
+  font-size:0.7rem;
+  color:var(--text-muted,#6A6660);
+}
+.sp-legal-link{
+  font-size:0.78rem;
+  color:var(--accent,#3B82F6);
+  text-decoration:none;
+  padding:3px 0;
+}
+.sp-legal-link:hover{
+  text-decoration:underline;
+}
 /* Segmented control（卡片槽位内凹微雕） */
 .sp-seg{
   display:flex;gap:3px;
@@ -236,6 +318,18 @@
 }
 .sp-danger-btn>span{display:contents}
 .sp-danger-btn svg{width:14px;height:14px;flex-shrink:0}
+.sp-danger-btn:disabled{opacity:.6;cursor:not-allowed}
+/* 账号注销：次级危险操作，与「重置本机数据」区分 */
+.sp-danger-btn-outline{
+  border-color:var(--border-hover,rgba(0,0,0,.12));
+  color:var(--text-muted);
+  margin-top:2px;
+}
+.sp-danger-btn-outline:hover{
+  color:var(--rose);
+  background:var(--rose-light);
+  border-color:var(--rose);
+}
 .sp-danger-btn:hover{
   color:var(--rose);
   background:var(--rose-light);
