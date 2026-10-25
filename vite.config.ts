@@ -234,7 +234,9 @@ function legalDocsPlugin(): Plugin {
   };
   const list = () => {
     try {
-      return readdirSync(dir).filter((f) => f.endsWith('.md'));
+      // PENDING.md 是内部待办清单（含统一社会信用代码、未填占位、功能缺口），
+      // 属于内部管理文件，**不对外发布**。
+      return readdirSync(dir).filter((f) => f.endsWith('.md') && f !== 'PENDING.md');
     } catch {
       return [] as string[];
     }
