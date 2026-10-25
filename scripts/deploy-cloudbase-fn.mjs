@@ -207,14 +207,41 @@ const FN_EXTRA_ENV = {
     return out
   },
 }
+/**
+ * 各函数的超时与内存配置
+ *
+ * timeout：过短会**直接杀掉**正在进行的请求。原先全局硬编码 20s，
+ *   而 AI 流式回答经常超过 20s → 用户看到回答被截断（且代码里的
+ *   MIMO_CHAT_TIMEOUT_MS 默认 60s 与之矛盾）。
+ *
+ * memorySize：直接决定资源点消耗。计费公式
+ *   资源点 = 0.11108 点/GBs，其中 1 GBs = 1GB 内存运行 1 秒
+ *   → 内存减半，资源点也减半。mimo-chat 只是流式转发（不缓冲整个响应），
+ *     128MB 足够。
+ */
+const FN_PROFILE = {
+  'mimo-chat': { timeout: 90, memorySize: 128 },
+  'check-link': { timeout: 40, memorySize: 256 },
+  'extract-video': { timeout: 60, memorySize: 256 },
+  'jina-proxy': { timeout: 40, memorySize: 256 },
+  'share-ssr': { timeout: 20, memorySize: 256 },
+  'share-admin': { timeout: 20, memorySize: 256 },
+  'account': { timeout: 30, memorySize: 256 },
+  'redeem': { timeout: 20, memorySize: 256 },
+  'maintenance': { timeout: 60, memorySize: 256 },
+}
+const DEFAULT_PROFILE = { timeout: 20, memorySize: 256 }
+
 if (apiKey) {
   const rcPath = resolve(FN_DIR, 'cloudbaserc.json')
+  const profile = { ...DEFAULT_PROFILE, ...(FN_PROFILE[fnName] || {}) }
   const rc = {
     envId,
     functions: [
       {
         name: fnName,
-        timeout: 20,
+        timeout: profile.timeout,
+        memorySize: profile.memorySize,
         runtime: 'Nodejs20.19',
         installDependency: true,
         envVariables: {
