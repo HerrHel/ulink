@@ -198,6 +198,14 @@ const FN_EXTRA_ENV = {
     if (origins) out.ALLOWED_ORIGINS = origins
     return out
   },
+  'redeem': () => {
+    const out = {
+      IP_HASH_SALT: readEnvLocal('REDEEM_IP_HASH_SALT') || 'ulink-redeem',
+    }
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
+    return out
+  },
 }
 if (apiKey) {
   const rcPath = resolve(FN_DIR, 'cloudbaserc.json')

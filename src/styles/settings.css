@@ -156,6 +156,24 @@
 .sp-legal-link:hover{
   text-decoration:underline;
 }
+/* 兑换码输入行 */
+.sp-redeem-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px 0;
+}
+.sp-redeem-input{
+  flex:1;
+  min-width:0;
+  font-size:0.82rem;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+}
+.sp-redeem-input::placeholder{
+  letter-spacing:normal;
+  text-transform:none;
+}
 /* Segmented control（卡片槽位内凹微雕） */
 .sp-seg{
   display:flex;gap:3px;

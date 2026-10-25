@@ -70,6 +70,11 @@ const JOBS = [
     from: 'supabase/functions/_shared/cb-auth.ts',
     to: 'cloudbase/functions/account/cb-auth.js',
   },
+  // redeem（兑换码核销）同样需要验签
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/redeem/cb-auth.js',
+  },
 ]
 
 const HEADER = '// 本文件由 scripts/build-fn-assets.mjs 从 %FROM% 生成，请勿手改\n'

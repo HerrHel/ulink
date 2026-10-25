@@ -452,6 +452,38 @@
 
               <button class="sp-action" @click.stop="onFeedback">{{ t('settings.feedback') }}</button>
             </div>
+            <!-- 会员与权益 -->
+            <div class="sp-section">
+              <span class="sp-section-title">{{ t('settings.membership') }}</span>
+              <div class="sp-row">
+                <span class="sp-row-label">{{ t('settings.currentPlan') }}</span>
+                <span class="sp-sync-status" data-testid="lv-entitlement-plan">{{ entitlementLabel }}</span>
+              </div>
+              <div v-if="entitlement.isPaid && entitlement.expiresAt" class="sp-row">
+                <span class="sp-row-label">{{ t('settings.expiresAt') }}</span>
+                <span class="sp-sync-status" data-testid="lv-entitlement-expiry">{{ entitlement.expiresAt }}</span>
+              </div>
+              <div class="sp-redeem-row">
+                <input
+                  class="form-input sp-redeem-input"
+                  type="text"
+                  v-model="redeemInput"
+                  :placeholder="t('settings.redeemPlaceholder')"
+                  maxlength="16"
+                  autocomplete="off"
+                  spellcheck="false"
+                  @keyup.enter="onRedeem"
+                />
+                <button
+                  class="btn btn-primary btn-sm"
+                  data-testid="lv-redeem-btn"
+                  :disabled="redeeming || !redeemInput.trim()"
+                  @click.stop="onRedeem"
+                >
+                  {{ redeeming ? t('settings.redeeming') : t('settings.redeem') }}
+                </button>
+              </div>
+            </div>
             <!-- Danger -->
             <div class="sp-section sp-danger">
               <span class="sp-section-title">{{ t('settings.danger') }}</span>
@@ -575,6 +607,12 @@ import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
 import { AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT, LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
+import {
+  fetchMyEntitlement,
+  redeemCode,
+  type MyEntitlement,
+  type RedeemError,
+} from '../../composables/domain/useRedeem.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
 
@@ -623,8 +661,83 @@ const aiProvidersSummary = computed(() =>
     : AI_PROVIDERS[0]?.name || '',
 )
 
+watch(
+  () => auth.isLoggedIn,
+  () => {
+    void refreshEntitlement()
+  },
+  { immediate: true },
+)
+
 // 账号注销
 const deletingAccount = ref(false)
+
+// 会员权益与兑换码
+const entitlement = ref<MyEntitlement>({
+  planId: 'free',
+  status: 'active',
+  expiresAt: null,
+  features: {},
+  isPaid: false,
+})
+const redeemInput = ref('')
+const redeeming = ref(false)
+
+const entitlementLabel = computed(() => {
+  if (!entitlement.value.isPaid) return t('settings.freePlan')
+  const map: Record<string, string> = {
+    plus_monthly: t('settings.planPlusMonthly'),
+    plus_yearly: t('settings.planPlusYearly'),
+  }
+  return map[entitlement.value.planId] || entitlement.value.planId
+})
+
+async function refreshEntitlement() {
+  if (!auth.isLoggedIn) {
+    entitlement.value = { planId: 'free', status: 'active', expiresAt: null, features: {}, isPaid: false }
+    return
+  }
+  entitlement.value = await fetchMyEntitlement()
+}
+
+function redeemErrKey(e?: RedeemError): string {
+  switch (e) {
+    case 'not_found':
+      return 'settings.redeemErrNotFound'
+    case 'already_used':
+      return 'settings.redeemErrUsed'
+    case 'plan_inactive':
+      return 'settings.redeemErrInactive'
+    case 'unauthorized':
+      return 'settings.redeemErrAuth'
+    case 'rate_limited':
+      return 'settings.redeemErrRate'
+    default:
+      return 'settings.redeemErrNetwork'
+  }
+}
+
+async function onRedeem() {
+  const code = redeemInput.value.trim()
+  if (!code || redeeming.value) return
+  if (!auth.isLoggedIn) {
+    toast(t('settings.redeemErrAuth'), false)
+    return
+  }
+  redeeming.value = true
+  try {
+    const r = await redeemCode(code)
+    if (r.ok) {
+      toast(t('settings.redeemSuccess', { plan: r.planName || '', date: r.expiresAt || '' }))
+      redeemInput.value = ''
+      await refreshEntitlement()
+    } else {
+      toast(t(redeemErrKey(r.error)), false)
+    }
+  } finally {
+    redeeming.value = false
+  }
+}
 
 async function onDeleteAccount() {
   if (deletingAccount.value) return
