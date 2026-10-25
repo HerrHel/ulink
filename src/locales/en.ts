@@ -470,6 +470,8 @@ export const en = {
     redeemErrAuth: 'Please sign in before redeeming',
     redeemErrRate: 'Too many attempts, please try again later',
     redeemErrNetwork: 'Redeem failed, please try again',
+    autoDeadCheckNeedsPlus: 'Weekly auto-check is a Plus feature (request volume scales with your bookmark count)',
+    plusTag: 'Plus',
     feedback: 'Feedback / Suggestions',
     feedbackHint: 'Send feedback or suggestions via email',
     feedbackSubject: 'ulink Feedback & Suggestions',

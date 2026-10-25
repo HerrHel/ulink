@@ -263,8 +263,11 @@
                   <span>{{ t('settings.view') }}</span>
                 </button>
               </div>
-              <div class="sp-toggle-row" :class="{ active: dlAutoEnabled }" @click="onToggleAutoDeadCheck">
-                <span class="sp-toggle-label">{{ t('settings.autoDeadCheckWeekly') }}</span>
+              <div class="sp-toggle-row" :class="{ active: dlAutoEnabled, locked: !dlAutoAllowed }" @click="onToggleAutoDeadCheck">
+                <span class="sp-toggle-label">
+                  {{ t('settings.autoDeadCheckWeekly') }}
+                  <span v-if="!dlAutoAllowed" class="sp-plus-tag">{{ t('settings.plusTag') }}</span>
+                </span>
                 <span class="sp-switch"></span>
               </div>
             </div>
@@ -661,14 +664,6 @@ const aiProvidersSummary = computed(() =>
     : AI_PROVIDERS[0]?.name || '',
 )
 
-watch(
-  () => auth.isLoggedIn,
-  () => {
-    void refreshEntitlement()
-  },
-  { immediate: true },
-)
-
 // 账号注销
 const deletingAccount = ref(false)
 
@@ -695,9 +690,12 @@ const entitlementLabel = computed(() => {
 async function refreshEntitlement() {
   if (!auth.isLoggedIn) {
     entitlement.value = { planId: 'free', status: 'active', expiresAt: null, features: {}, isPaid: false }
+    await dl.refreshAutoCheckAllowed(entitlement.value)
     return
   }
   entitlement.value = await fetchMyEntitlement()
+  // 权益变化会影响「自动全量检测」是否可用（Plus 专属）
+  await dl.refreshAutoCheckAllowed(entitlement.value)
 }
 
 function redeemErrKey(e?: RedeemError): string {
@@ -738,6 +736,16 @@ async function onRedeem() {
     redeeming.value = false
   }
 }
+
+// 权益随登录态刷新（必须声明在 entitlement / refreshEntitlement 之后：
+// immediate 回调会同步执行，否则会撞上暂时性死区）
+watch(
+  () => auth.isLoggedIn,
+  () => {
+    void refreshEntitlement()
+  },
+  { immediate: true },
+)
 
 async function onDeleteAccount() {
   if (deletingAccount.value) return
@@ -818,6 +826,7 @@ const dlProgress = computed(() => dl.progress.value)
 const deadCount = computed(() => dl.deadCount.value)
 const blockedCount = computed(() => dl.blockedCount.value)
 const dlAutoEnabled = computed(() => dl.autoCheckEnabled.value)
+const dlAutoAllowed = computed(() => dl.autoCheckAllowed.value)
 
 const sortModes: { id: SortMode; labelKey: string }[] = [
   { id: 'order', labelKey: 'settings.sortCustom' },
@@ -952,9 +961,18 @@ function onViewDeadLinks() {
   uiStore.panels.settings = false
 }
 
-function onToggleAutoDeadCheck() {
-  if (dl.autoCheckEnabled.value) dl.stopAutoCheck()
-  else dl.startAutoCheck()
+async function onToggleAutoDeadCheck() {
+  if (dl.autoCheckEnabled.value) {
+    dl.stopAutoCheck()
+    return
+  }
+  // 自动全量检测是成本最高的路径（请求数与书签数成正比），需 Plus 权益
+  const allowed = await dl.refreshAutoCheckAllowed()
+  if (!allowed) {
+    toast(t('settings.autoDeadCheckNeedsPlus'), false)
+    return
+  }
+  dl.startAutoCheck()
 }
 
 // ── 公开分享管理 ──

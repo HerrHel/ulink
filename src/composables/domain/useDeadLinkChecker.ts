@@ -4,6 +4,7 @@ import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
 import { isCloudBaseBackend, invokeCbFunction } from '../../lib/cloudbase.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
+import { fetchMyEntitlement, type MyEntitlement } from './useRedeem.js'
 import { NETWORK_PROBE_URLS } from '../../config/urls.js'
 import type { Bookmark } from '../../types.js'
 
@@ -557,7 +558,28 @@ export function useDeadLinkChecker() {
   const AUTO_CHECK_ENABLED_KEY = 'lv_autoDeadCheckEnabled'
 
   const autoCheckEnabled = ref(!!safeGetItem(AUTO_CHECK_ENABLED_KEY))
+  /**
+   * 「每周自动全量检测」是成本最高的路径：请求数与书签数成正比（1000 个书签 = 1000 次外呼），
+   * 因此设为 Plus 专属（features 里的 `linkcheck.auto`）。手动检查不受此限。
+   */
+  const autoCheckAllowed = ref(false)
   let _autoCheckTimer: ReturnType<typeof setInterval> | null = null
+
+  /** 权益变化时刷新「是否允许自动全量检测」；已开着但失去权限则立即停掉 */
+  async function refreshAutoCheckAllowed(ent?: MyEntitlement): Promise<boolean> {
+    if (ent) {
+      autoCheckAllowed.value = Number(ent.features['linkcheck.auto'] || 0) > 0
+    } else {
+      try {
+        const e = await fetchMyEntitlement()
+        autoCheckAllowed.value = Number(e.features['linkcheck.auto'] || 0) > 0
+      } catch {
+        autoCheckAllowed.value = false
+      }
+    }
+    if (!autoCheckAllowed.value && autoCheckEnabled.value) stopAutoCheck()
+    return autoCheckAllowed.value
+  }
 
   function _persistAutoCheck(v: boolean) {
     if (v) safeSetItem(AUTO_CHECK_ENABLED_KEY, '1')
@@ -565,6 +587,8 @@ export function useDeadLinkChecker() {
   }
 
   function startAutoCheck() {
+    // 无权益时拒绝启动（调用方负责提示）
+    if (!autoCheckAllowed.value) return false
     autoCheckEnabled.value = true
     _persistAutoCheck(true)
     // 检查是否已到检测时间
@@ -584,6 +608,8 @@ export function useDeadLinkChecker() {
         safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
       }
     }, 6 * 60 * 60 * 1000)
+
+    return true
   }
 
   function stopAutoCheck() {
@@ -608,7 +634,7 @@ export function useDeadLinkChecker() {
     checkUrl, checkAll, checkOne, abort,
     getResult, isDead, isBlocked, isUnconfirmed, deadCount, blockedCount, inconclusiveCount,
     toastDeadCount, toastBlockedCount,
-    autoCheckEnabled, startAutoCheck, stopAutoCheck,
+    autoCheckEnabled, autoCheckAllowed, refreshAutoCheckAllowed, startAutoCheck, stopAutoCheck,
     _resetDeadLinkCache,
   }
 }

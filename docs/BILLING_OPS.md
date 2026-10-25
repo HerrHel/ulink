@@ -93,33 +93,65 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 - `BILLING_MODE=shadow`：只往 `usage_ledger` 写 `ai.requests` / `ai.chars`，**不拦截任何请求**
 - 用户体验完全不变；目标是拿到真实用量分布
 
-### 阶段 2：校准免费额度
+### 阶段 2：额度怎么定（多数情况下**不需要**等数据）
+
+#### 先看真实成本
+
+MiMo-V2.6-Flash 国内价（元 / 百万 tokens）：
+
+| | 缓存命中 | 未命中 | 输出 |
+|---|---|---|---|
+| 输入 | 0.02 | 1.00 | — |
+| 输出 | — | — | 2.00 |
+
+按常见拆分（输入 80%、输出 20%）测算单用户月成本：
+
+| 额度 | 满额成本 | 备注 |
+|---|---|---|
+| 20,000 token/月（当前 free） | **¥0.02** | 基本等于免费 |
+| 200,000 token/月（当前 plus） | **¥0.24** | 单用户月成本不到 3 毛 |
+| 2,000,000 token/月 | ¥2.4 | 重度用户 |
+
+#### 结论：token 成本低到不需要用统计数据校准
+
+关键认知：**额度是上限，不是承诺的消耗**。用户没用满，你一分钱不花。
+
+- 额度调高 → 成本**不会**涨（除非有人用满），只是"撞墙"变少
+- 额度调低 → 成本也**不会**涨（封顶了），只是更容易让人撞墙
+- 真正的成本风险只有一个：**少数人用满上限**
+
+所以额度应按「我能承受的 × 预期薅羊毛人数」倒推，而不是按"典型用户用量"。当前 free 的 20,000 token 完全够用（成本 ¥0.02），**不必等任何数据**。
+
+#### 那什么时候才真的需要校准数据？
+
+当收费点选错的时候。成本结构如下：
+
+| 收费点 | 有无真实成本 | 是否需要数据校准 |
+|---|---|---|
+| AI token 额度 | 几乎没有（¥0.02~0.24/月） | ❌ 不需要 |
+| 对象存储 | 有（5GB ≈ ¥0.5/月） | ❌ 成本可预测 |
+| 死链检测 `linkcheck` | 有（每次外呼） | ✅ 需要（频次差异极大） |
+| 视频/网页解析 `video.extract` | 有（每次外呼） | ✅ 需要 |
+
+**这才是关键**：收费点要放在**有真实外部成本**的项上。把「AI token 额度」当卖点会出现「收 ¥12 却只花了 ¥0.24」的观感问题——用户会觉得自己被宰了。
+
+当前套餐设计已经符合这个逻辑：`free` 不含 `linkcheck` / `video.extract`，`plus` 才含（50 次/天、10 次/天）。**保持这个结构**。
+
+#### 将来真要用数据校准时，注意小样本的偏差来源
+
+1. 早期用户是「最主动的一批」→ P95 偏高，这是**保守方向**（安全）
+2. 你自己是作者兼重度用户（会为了测试用满所有功能）→ **你的 P95 ≈ 未来重度用户的 P95**，是有价值的样本，不是噪声
+3. 真正需要担心的不是「用户少」，而是「用户结构还没稳定」（来的都是技术圈尝鲜者）
+
+所以启动期的正确做法：**先用成本倒推设一个宽裕值，等有 20+ 真实用户、且发现分布跨度过大时再调**。调额度只需：
 
 ```sql
--- 近 30 天每日 AI 用量分布（按 Asia/Shanghai 分桶）
-SELECT
-  period,
-  count(DISTINCT user_id)                                   AS users,
-  count(*) FILTER (WHERE metric = 'ai.requests')            AS requests,
-  round(avg(chars))                                          AS avg_chars,
-  percentile_cont(0.5)  WITHIN GROUP (ORDER BY chars)        AS p50,
-  percentile_cont(0.95) WITHIN GROUP (ORDER BY chars)        AS p95,
-  max(chars)                                                 AS max_chars
-FROM (
-  SELECT user_id, period, metric,
-         sum(amount) FILTER (WHERE metric = 'ai.chars') AS chars
-  FROM public.usage_ledger
-  WHERE period >= to_char(now() at time zone 'Asia/Shanghai' - interval '30 days', 'YYYY-MM')
-  GROUP BY user_id, period, metric
-) t
-GROUP BY period
-ORDER BY period;
+UPDATE public.plans SET features = features || '{"linkcheck.daily": 30}'::jsonb WHERE id = 'plus_monthly';
 ```
 
-**校准原则**：免费额度取 p50 的 2~3 倍（让绝大多数用户不被打扰），付费额度取 p95 的 1.5~2 倍（覆盖重度用户）。
-`ai.chars` 与 token 的换算比例需实测校准（中文约 1.5 字符/token，英文约 4 字符/token，混合取 2.5）。
+无需改代码、无需发版。
 
-改额度只需 `UPDATE public.plans SET features = ... WHERE id = 'free';`，**无需改代码**。
+> 补充：当前影子计量记的是 `ai.chars`（字符数），token 是估算值（中文约 1~1.5 字符/token，英文约 4 字符/token，混合保守取 2）。若将来需要精确 token，可在请求里加 `stream_options: { include_usage: true }` 并从 SSE 尾部解析 `usage` —— 但由于成本本就极低，暂不值得动核心流式转发逻辑。
 
 ### 阶段 3：开启额度拦截（enforce）
 

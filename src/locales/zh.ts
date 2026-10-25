@@ -461,6 +461,8 @@ export const zh = {
     redeemErrAuth: '请先登录后再兑换',
     redeemErrRate: '尝试过于频繁，请稍后再试',
     redeemErrNetwork: '兑换失败，请重试',
+    autoDeadCheckNeedsPlus: '每周自动检测是 Plus 专属功能（请求量与书签数成正比）',
+    plusTag: 'Plus',
     feedback: '反馈 / 建议',
     feedbackHint: '通过邮箱向我们反馈或建议',
     feedbackSubject: '与链（ulink）反馈与建议',

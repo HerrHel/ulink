@@ -487,7 +487,8 @@ describe('autoCheck 定时检测契约', () => {
   it('startAutoCheck：持久化 enabled=true（写 lv_autoDeadCheckEnabled）', () => {
     // 锁：startAutoCheck 写 enabled 持久键，autoCheckEnabled ref=true
     localStorageMock.clear()
-    const { startAutoCheck, autoCheckEnabled } = useDeadLinkChecker()
+    const { startAutoCheck, autoCheckEnabled , autoCheckAllowed} = useDeadLinkChecker()
+    autoCheckAllowed.value = true // 具备 Plus 权益（linkcheck.auto）才允许启动
     startAutoCheck()
     expect(autoCheckEnabled.value).toBe(true)
     expect(localStorageMock.getItem('lv_autoDeadCheckEnabled')).toBe('1')
@@ -495,9 +496,22 @@ describe('autoCheck 定时检测契约', () => {
 
   it('stopAutoCheck：持久化 disabled + 清 timer（不写 enabled key）', () => {
     // 锁：stopAutoCheck 清 enabled 持久键（移除），autoCheckEnabled ref=false
-    const { startAutoCheck, stopAutoCheck, autoCheckEnabled } = useDeadLinkChecker()
+    const { startAutoCheck, stopAutoCheck, autoCheckEnabled , autoCheckAllowed} = useDeadLinkChecker()
+    autoCheckAllowed.value = true // 具备 Plus 权益（linkcheck.auto）才允许启动
     startAutoCheck()
     stopAutoCheck()
+    expect(autoCheckEnabled.value).toBe(false)
+    expect(localStorageMock.getItem('lv_autoDeadCheckEnabled')).toBeNull()
+  })
+
+  it('无 Plus 权益时 startAutoCheck 拒绝启动（不写 enabled 持久键）', () => {
+    // 锁：自动全量检测是成本最高的路径（请求数与书签数成正比），
+    //     无 linkcheck.auto 权益时必须拒绝启动，避免免费用户持续产生外呼成本
+    localStorageMock.clear()
+    const { startAutoCheck, autoCheckEnabled, autoCheckAllowed } = useDeadLinkChecker()
+    expect(autoCheckAllowed.value).toBe(false)
+    const started = startAutoCheck()
+    expect(started).toBe(false)
     expect(autoCheckEnabled.value).toBe(false)
     expect(localStorageMock.getItem('lv_autoDeadCheckEnabled')).toBeNull()
   })
@@ -515,7 +529,8 @@ describe('autoCheck 定时检测契约', () => {
     invokeMock.mockResolvedValue(edge('ok', 200))
     const eightDaysAgo = Date.now() - 8 * 7 * 24 * 60 * 60 * 1000
     localStorageMock.setItem('lv_autoDeadCheck', String(eightDaysAgo))
-    const { startAutoCheck, checking } = useDeadLinkChecker()
+    const { startAutoCheck, checking , autoCheckAllowed} = useDeadLinkChecker()
+    autoCheckAllowed.value = true // 具备 Plus 权益（linkcheck.auto）才允许启动
     startAutoCheck()
     await new Promise(r => setTimeout(r, 50))
     expect(invokeMock).toHaveBeenCalled()
@@ -532,7 +547,8 @@ describe('autoCheck 定时检测契约', () => {
     invokeMock.mockResolvedValue(edge('ok', 200))
     const oneDayAgo = Date.now() - 1 * 24 * 60 * 60 * 1000
     localStorageMock.setItem('lv_autoDeadCheck', String(oneDayAgo))
-    const { startAutoCheck } = useDeadLinkChecker()
+    const { startAutoCheck , autoCheckAllowed} = useDeadLinkChecker()
+    autoCheckAllowed.value = true // 具备 Plus 权益（linkcheck.auto）才允许启动
     startAutoCheck()
     expect(invokeMock).not.toHaveBeenCalled()
     expect(parseInt(localStorageMock.getItem('lv_autoDeadCheck') || '0', 10)).toBe(oneDayAgo)

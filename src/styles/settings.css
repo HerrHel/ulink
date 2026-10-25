@@ -157,6 +157,18 @@
   text-decoration:underline;
 }
 /* 兑换码输入行 */
+.sp-plus-tag{
+  display:inline-block;
+  margin-left:6px;
+  padding:0 6px;
+  border-radius:999px;
+  font-size:0.62rem;
+  font-weight:600;
+  color:var(--accent,#3B82F6);
+  background:rgba(59,130,246,.12);
+  vertical-align:middle;
+}
+.sp-toggle-row.locked{opacity:.72}
 .sp-redeem-row{
   display:flex;
   align-items:center;
