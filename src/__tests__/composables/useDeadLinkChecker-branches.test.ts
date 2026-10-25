@@ -483,6 +483,34 @@ describe('computed 计数契约', () => {
   })
 })
 
+describe('checkAll 规模上限契约', () => {
+  it('传 maxCount 时按上限截断，且如实记录被跳过的数量', async () => {
+    // 锁：自动全量扫描的成本与书签数成正比，必须封顶；
+    //     截断不能静默——要能在 UI 上如实告知"另有 N 个未检查"
+    const ds = useDataStore()
+    seedBm(ds, { id: 'a', url: 'https://a.example' })
+    seedBm(ds, { id: 'b', url: 'https://b.example' })
+    seedBm(ds, { id: 'c', url: 'https://c.example' })
+    invokeMock.mockResolvedValue(edge('ok', 200))
+    const { checkAll, progress } = useDeadLinkChecker()
+    await checkAll(5, 0, 2)
+    expect(progress.value.total).toBe(2)
+    expect(progress.value.truncated).toBe(1)
+  })
+
+  it('不传 maxCount 时不截断（手动检查不受限）', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'a', url: 'https://a.example' })
+    seedBm(ds, { id: 'b', url: 'https://b.example' })
+    seedBm(ds, { id: 'c', url: 'https://c.example' })
+    invokeMock.mockResolvedValue(edge('ok', 200))
+    const { checkAll, progress } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    expect(progress.value.total).toBe(3)
+    expect(progress.value.truncated).toBe(0)
+  })
+})
+
 describe('autoCheck 定时检测契约', () => {
   it('startAutoCheck：持久化 enabled=true（写 lv_autoDeadCheckEnabled）', () => {
     // 锁：startAutoCheck 写 enabled 持久键，autoCheckEnabled ref=true

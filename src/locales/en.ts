@@ -472,6 +472,7 @@ export const en = {
     redeemErrNetwork: 'Redeem failed, please try again',
     autoDeadCheckNeedsPlus: 'Weekly auto-check is a Plus feature (request volume scales with your bookmark count)',
     plusTag: 'Plus',
+    dlScanLimited: '({n} more exceeded the per-run limit and were not checked)',
     feedback: 'Feedback / Suggestions',
     feedbackHint: 'Send feedback or suggestions via email',
     feedbackSubject: 'ulink Feedback & Suggestions',

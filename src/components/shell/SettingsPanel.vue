@@ -257,6 +257,10 @@
                 <div v-if="dlChecking && dlProgress.total > 0" class="sp-check-progress">
                   <div class="sp-check-progress-bar" :style="{ width: (dlProgress.done / dlProgress.total * 100) + '%' }"></div>
                   <span class="sp-check-progress-text">{{ dlProgress.done }}/{{ dlProgress.total }}</span>
+                  <!-- 自动扫描有规模上限，超出部分本次不检查（如实告知，不静默截断） -->
+                  <span v-if="dlProgress.truncated > 0" class="sp-check-progress-text">
+                    {{ t('settings.dlScanLimited', { n: dlProgress.truncated }) }}
+                  </span>
                 </div>
                 <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
                   <span aria-hidden="true" v-html="I.link"></span>

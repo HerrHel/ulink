@@ -463,6 +463,7 @@ export const zh = {
     redeemErrNetwork: '兑换失败，请重试',
     autoDeadCheckNeedsPlus: '每周自动检测是 Plus 专属功能（请求量与书签数成正比）',
     plusTag: 'Plus',
+    dlScanLimited: '（另有 {n} 个超出单次上限未检查）',
     feedback: '反馈 / 建议',
     feedbackHint: '通过邮箱向我们反馈或建议',
     feedbackSubject: '与链（ulink）反馈与建议',

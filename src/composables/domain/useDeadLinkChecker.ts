@@ -52,7 +52,7 @@ function loadBaselineCache(): BaselineCache | null {
 
 const results = reactive<Record<string, CheckResult>>({})
 const checking = ref(false)
-const progress = ref({ done: 0, total: 0 })
+const progress = ref({ done: 0, total: 0, truncated: 0 })
 const lastFullCheckAt = ref(0)
 
 // ── 死链检测历史记录（持久化到 localStorage，便于趋势分析）──
@@ -285,17 +285,22 @@ export function useDeadLinkChecker() {
     return decide(edgeResult, direct, gradeLocalNetwork(baselineMs), url)
   }
 
-  async function checkAll(batchSize = 5, intervalMs = 200): Promise<void> {
+  async function checkAll(batchSize = 5, intervalMs = 200, maxCount = 0): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
     // RE-11：排除软删与 ignored，避免污染回收站项
-    const bookmarks = ds.bookmarks.filter(
+    const all = ds.bookmarks.filter(
       b => !b.deletedAt && b.url && b.url.startsWith('http') && !b.attributes?.['dead-link-ignored']
     )
+    // 规模上限：自动全量扫描的成本与书签数**成正比**（每个书签一次服务端外呼），
+    // 超大书签库会让单次自动检测吃掉整个资源点套餐。
+    // 手动检查不受此限（用户主动触发、有界），只有无人值守的自动扫描需要封顶。
+    const truncated = maxCount > 0 && all.length > maxCount ? all.length - maxCount : 0
+    const bookmarks = truncated > 0 ? all.slice(0, maxCount) : all
     if (bookmarks.length === 0) return
 
     checking.value = true
-    progress.value = { done: 0, total: bookmarks.length }
+    progress.value = { done: 0, total: bookmarks.length, truncated }
     _abort = new AbortController()
 
     Object.keys(results).forEach(k => delete results[k])
@@ -563,16 +568,25 @@ export function useDeadLinkChecker() {
    * 因此设为 Plus 专属（features 里的 `linkcheck.auto`）。手动检查不受此限。
    */
   const autoCheckAllowed = ref(false)
+  /**
+   * 自动扫描的单次规模上限（来自权益 features['linkcheck.auto.max']，默认 500）。
+   * 成本与书签数成正比，不封顶则超大书签库会吃掉整个资源点套餐。
+   */
+  const autoScanLimit = ref(500)
   let _autoCheckTimer: ReturnType<typeof setInterval> | null = null
 
   /** 权益变化时刷新「是否允许自动全量检测」；已开着但失去权限则立即停掉 */
   async function refreshAutoCheckAllowed(ent?: MyEntitlement): Promise<boolean> {
     if (ent) {
       autoCheckAllowed.value = Number(ent.features['linkcheck.auto'] || 0) > 0
+      const limit = Number(ent.features['linkcheck.auto.max'] || 0)
+      if (limit > 0) autoScanLimit.value = limit
     } else {
       try {
         const e = await fetchMyEntitlement()
         autoCheckAllowed.value = Number(e.features['linkcheck.auto'] || 0) > 0
+        const limit = Number(e.features['linkcheck.auto.max'] || 0)
+        if (limit > 0) autoScanLimit.value = limit
       } catch {
         autoCheckAllowed.value = false
       }
@@ -594,7 +608,7 @@ export function useDeadLinkChecker() {
     // 检查是否已到检测时间
     const last = parseInt(safeGetItem(AUTO_CHECK_KEY) || '0', 10)
     if (Date.now() - last > AUTO_INTERVAL_MS && !checking.value) {
-      checkAll(5, 200)
+      checkAll(5, 200, autoScanLimit.value)
       // DLC-4：只在检测实际运行时更新时间戳。旧实现无条件更新——跳过本次检测时
       // 仍刷时间戳，导致「启动即检测」意图被破坏（需再等 7 天才触发）。
       safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
@@ -604,7 +618,7 @@ export function useDeadLinkChecker() {
     _autoCheckTimer = setInterval(() => {
       const last2 = parseInt(safeGetItem(AUTO_CHECK_KEY) || '0', 10)
       if (Date.now() - last2 > AUTO_INTERVAL_MS && !checking.value) {
-        checkAll(5, 200)
+        checkAll(5, 200, autoScanLimit.value)
         safeSetItem(AUTO_CHECK_KEY, String(Date.now()))
       }
     }, 6 * 60 * 60 * 1000)
