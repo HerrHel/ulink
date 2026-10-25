@@ -242,25 +242,31 @@ function persistBaselineCache(): void {
 
 
 
-async function callEdgeFunction(url: string, bookmarkId?: string): Promise<EdgeEvidence> {
+async function callEdgeFunction(url: string, bookmarkId?: string, retry429 = true): Promise<EdgeEvidence> {
   try {
-    const { data, error } = isCloudBaseBackend()
+    const res = isCloudBaseBackend()
       ? await invokeCbFunction('check-link', { url, bookmark_id: bookmarkId })
       : await supabase.functions.invoke('check-link', {
           body: { url, bookmark_id: bookmarkId },
         })
+    // 遇到限流 429 时，退避 800ms 后自动重试 1 次，避免批量扫描瞬时打爆导致大面积未确认
+    if (res.error?.code === '429' && retry429) {
+      await new Promise(r => setTimeout(r, 800))
+      return callEdgeFunction(url, bookmarkId, false)
+    }
+    const { data, error } = res
     // 安全拒绝（ssrf_reject / redirect_denied）服务端回 400，但 body 里带 evidence，
     // 所以「有 error 但也有 data」时继续解析，不要直接抛。
     if (error && !data) throw error
     if (!data || typeof data !== 'object') return { fetch_outcome: null, http_status: 0 }
-    const fo = data.fetch_outcome
+    const fo = (data as Record<string, unknown>).fetch_outcome
     return {
       fetch_outcome:
         typeof fo === 'string' &&
-        ['ok', 'timeout', 'connect_error', 'ssrf_reject', 'redirect_denied'].includes(fo)
+        ['ok', 'timeout', 'connect_error', 'ssrf_reject', 'redirect_denied', 'dns_not_found', 'gfw_blocked'].includes(fo)
           ? (fo as EdgeEvidence['fetch_outcome'])
           : null,
-      http_status: Number(data.http_status) || 0,
+      http_status: Number((data as Record<string, unknown>).http_status) || 0,
     }
   } catch {
     return { fetch_outcome: null, http_status: 0 }

@@ -40,7 +40,7 @@ const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean)
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.CHECK_LINK_TIMEOUT_MS || '10000', 10)
 /** 每 IP 限流（次/分钟）。原版是每用户 1200/min；v1 无用户身份，收紧到 120/min/IP */
-const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '120', 10)
+const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '1200', 10)
 const MAX_REDIRECTS = 5
 
 /** IP 哈希盐：独立于 report-error / send-feedback，防跨接口关联 */
@@ -102,26 +102,41 @@ function sha256Hex(s) {
  * DNS 校验：解析 hostname 的 A/AAAA，任一记录落入私有段即拒。
  * 与 Deno 版语义一致：解析失败 / 0 条记录 / 命中私网 → 一律拒绝（fail-closed）。
  */
-async function _dnsLookupSafe(hostname) {
-  if (hostname === 'localhost') return false
+/**
+ * DNS 解析与安全判定：区分「解析到内网（SSRF 攻击）」与「域名无解析记录（NXDOMAIN，死链）」。
+ */
+async function _dnsCheck(hostname) {
+  if (hostname === 'localhost') return { safe: false, reason: 'private_host' }
   try {
     const [records, records6] = await Promise.all([
       dns.resolve4(hostname).catch(() => []),
       dns.resolve6(hostname).catch(() => []),
     ])
     const all = [...records, ...records6]
-    if (all.length === 0) return false
-    return isTargetDnsSafeSyncResults(hostname, all)
+    if (all.length === 0) {
+      // 域名在公网无任何 A/AAAA 记录（NXDOMAIN）：明确属于死链，不是内网 SSRF 攻击
+      return { safe: false, reason: 'dns_not_found' }
+    }
+    const safe = isTargetDnsSafeSyncResults(hostname, all)
+    if (!safe) return { safe: false, reason: 'private_dns' }
+    return { safe: true, records: all }
   } catch {
-    return false
+    return { safe: false, reason: 'dns_not_found' }
   }
 }
 
-/** 完整 URL 校验：形状 + DNS 重绑定。违规抛 Error */
+/** 完整 URL 校验：形状 + DNS 重绑定。抛特定错误 */
 async function _validateUrl(raw) {
   const parsed = validateUrlShape(raw)
-  const dnsSafe = await _dnsLookupSafe(parsed.hostname)
-  if (!dnsSafe) throw new SsrfRejectError('private_dns', '目标 DNS 解析到内网地址')
+  const check = await _dnsCheck(parsed.hostname)
+  if (!check.safe) {
+    if (check.reason === 'dns_not_found') {
+      const err = new Error('域名无 DNS 解析记录')
+      err.code = 'DNS_NOT_FOUND'
+      throw err
+    }
+    throw new SsrfRejectError('private_dns', '目标 DNS 解析到内网地址')
+  }
   return parsed
 }
 
@@ -224,6 +239,23 @@ const server = http.createServer(async (req, res) => {
     try {
       parsedUrl = await _validateUrl(url || '')
     } catch (e) {
+      if (e.code === 'DNS_NOT_FOUND') {
+        const responseTime = Date.now() - startTime
+        const details = { response_time: responseTime, error: '域名无 DNS 解析记录' }
+        try {
+          await db.from('link_check_history').insert({
+            user_id: null,
+            bookmark_id: bookmark_id || '',
+            url: String(url || ''),
+            fetch_outcome: 'dns_not_found',
+            http_status: 0,
+            response_time: responseTime,
+            details,
+          })
+        } catch {}
+        sendJson(res, 200, { fetch_outcome: 'dns_not_found', http_status: 0, details }, cors)
+        return
+      }
       sendJson(res, 400, { error: e.message || 'Invalid URL' }, cors)
       return
     }
@@ -255,6 +287,7 @@ const server = http.createServer(async (req, res) => {
       details = { response_time: Date.now() - startTime, final_url: result.finalUrl.href }
     } catch (error) {
       const responseTime = Date.now() - startTime
+      const isReset = error?.code === 'ECONNRESET' || String(error?.message).includes('ECONNRESET') || String(error?.message).includes('socket hang up')
       if (isAbortError(error)) {
         fetch_outcome = 'timeout'
         details = { response_time: responseTime, error: '请求超时或被中断' }
@@ -264,6 +297,10 @@ const server = http.createServer(async (req, res) => {
       } else if (isPrivateReject(error)) {
         fetch_outcome = 'ssrf_reject'
         details = { response_time: responseTime, error: '目标地址被安全策略拒绝' }
+      } else if (isReset) {
+        // 连接被对端/防火墙重置阻断（典型的 GFW 阻断标志）
+        fetch_outcome = 'gfw_blocked'
+        details = { response_time: responseTime, error: '连接被重置或阻断' }
       } else {
         fetch_outcome = 'connect_error'
         // S11：不回传原始 error.message，避免泄露内部主机/路径

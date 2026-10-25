@@ -119,7 +119,7 @@ const blockedList = computed(() =>
   dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['gfw-blocked'] && !b.attributes?.['dead-link-ignored'])
 )
 
-/** 未确认列表：本次检测 inconclusive 的项（in-session，不读 attributes） */
+/** 未确认列表：本次检测 inconclusive 的项（排除已在死链/被墙 Tab 中的项，保持互斥） */
 const unconfirmedList = computed(() => {
   const r = deadLinkChecker.results
   const out: { id: string; title: string; url: string }[] = []
@@ -127,6 +127,8 @@ const unconfirmedList = computed(() => {
     if (r[id].verdict !== 'inconclusive') continue
     const bm = dataStore.bookmarkMap[id]
     if (!bm || bm.deletedAt) continue
+    // 若已有明确的死链或被墙标记，归属相应 Tab，不放入未确认列表
+    if (bm.attributes?.['dead-link'] || bm.attributes?.['gfw-blocked'] || bm.attributes?.['dead-link-ignored']) continue
     out.push({ id: bm.id, title: bm.title, url: bm.url })
   }
   return out

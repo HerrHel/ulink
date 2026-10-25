@@ -15,6 +15,8 @@ export type DeadLinkReason =
   | 'connect_err'     // Edge 连接失败
   | 'ssrf'            // Edge 安全拒绝（ssrf_reject / redirect_denied）
   | 'no_edge'         // Edge 调用失败，无远端视角
+  | 'dns_not_found'   // DNS 权威查询无记录（NXDOMAIN，真死链）
+  | 'gfw_blocked'     // 命中被墙/受限特征（RST/受限大站）
 
 export interface CheckResult {
   alive: boolean          // verdict === 'alive'
@@ -31,7 +33,15 @@ export type LocalNetwork = 'online' | 'degraded' | 'offline'
 
 /** Edge evidence：fetch_outcome 决策依据；http_status 仅在 fetch_outcome==='ok' 有效。 */
 export type EdgeEvidence = {
-  fetch_outcome: 'ok' | 'timeout' | 'connect_error' | 'ssrf_reject' | 'redirect_denied' | null
+  fetch_outcome:
+    | 'ok'
+    | 'timeout'
+    | 'connect_error'
+    | 'ssrf_reject'
+    | 'redirect_denied'
+    | 'dns_not_found'
+    | 'gfw_blocked'
+    | null
   http_status: number
 }
 
@@ -41,6 +51,26 @@ const HTTP_DEAD = new Set([404, 410])
 
 const LOCAL_ONLINE_MS = 2000
 export const BASELINE_OFFLINE_MS = 4000
+
+/** 常见海外公认受限服务域名后缀（在境内机房及国内直连均被阻断/丢包） */
+const GFW_KNOWN_HOST_SUFFIXES = [
+  'google.com', 'google.com.hk', 'google.co.jp', 'google.co.uk',
+  'youtube.com', 'youtu.be',
+  'twitter.com', 'x.com', 't.co',
+  'facebook.com', 'instagram.com',
+  'wikipedia.org', 'wikimedia.org',
+  'medium.com', 'reddit.com',
+  't.me', 'telegram.org',
+  'pinterest.com', 'quora.com',
+  'bloomberg.com', 'nytimes.com',
+  'github.io', 'gist.github.com',
+]
+
+export function isKnownGfwHost(hostname: string): boolean {
+  if (!hostname) return false
+  const h = hostname.toLowerCase().split(':')[0]
+  return GFW_KNOWN_HOST_SUFFIXES.some(suffix => h === suffix || h.endsWith('.' + suffix))
+}
 
 /** 客户端内部 HTTP 分类（偏宁可 unknown 也不误杀）。
  *  仅在 fetch_outcome==='ok' 有响应时调用；不写库。 */
@@ -84,9 +114,10 @@ export function gradeLocalNetwork(baselineMs: number): LocalNetwork {
 /**
  * 单一决策表：融合 Edge evidence + 本机直连 + 本机网络健康 → LinkVerdict。
  * - HTTP 分类只在 Edge 侧拿到响应（fetch_outcome==='ok'）时发生。
- * - GFW 只在「本机网络不 offline + Edge 远端 alive + 本机直连不可达」时产出。
+ * - GFW 只在「本机网络不 offline + Edge 远端 alive + 本机直连不可达」或捕获到受限特征时产出。
  * - 本机 offline 时一切映射 inconclusive，绝不落 dead/gfw（重构 #4）。
  * - Edge dead + 本机可达 → inconclusive(head_mismatch)，不再用 0.45 弱存活（重构 #6）。
+ * - 明确 DNS NXDOMAIN → dead(dns_not_found)，不再当 SSRF 拒成 inconclusive。
  */
 export function decide(
   edge: EdgeEvidence,
@@ -101,11 +132,21 @@ export function decide(
     return makeCheckResult({ verdict: 'inconclusive', reason: 'offline' })
   }
 
+  let isGfwHost = false
+  try {
+    const u = new URL(url)
+    isGfwHost = isKnownGfwHost(u.hostname)
+  } catch {
+    /* ignore invalid url */
+  }
+
   // Edge 调用失败：无远端视角，仅凭本机直连
   if (edge.fetch_outcome === null) {
     return direct.reachable
       ? makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'no_edge' })
-      : makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' })
+      : (isGfwHost
+          ? makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
+          : makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' }))
   }
 
   switch (edge.fetch_outcome) {
@@ -126,12 +167,25 @@ export function decide(
         ? makeCheckResult({ verdict: 'alive', status: edge.http_status, finalUrl: url, reason: 'edge_unknown' })
         : makeCheckResult({ verdict: 'inconclusive', reason: 'edge_unknown' })
     }
+    case 'dns_not_found':
+      // 权威 DNS 查无记录（NXDOMAIN）：100% 确认死链
+      return makeCheckResult({ verdict: 'dead', reason: 'dns_not_found' })
+    case 'gfw_blocked':
+      // 云端捕获阻断或受限特征
+      return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
     case 'connect_error':
-      // Edge 连接失败：本机可达说明 Edge 侧网络受限 → 不定；本机也不可达 → dead
+      // Edge 连接失败：若为知名境外受限站点，在境内环境下判定为被墙而非误杀死链
+      if (isGfwHost && !direct.reachable) {
+        return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
+      }
       return direct.reachable
         ? makeCheckResult({ verdict: 'inconclusive', reason: 'connect_err' })
         : makeCheckResult({ verdict: 'dead', reason: 'connect_err' })
     case 'timeout':
+      // Edge 超时：若为境外受限站点，静默丢包直接判定为被墙；普通站点判定为 inconclusive
+      if (isGfwHost && !direct.reachable) {
+        return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
+      }
       return makeCheckResult({ verdict: 'inconclusive', reason: 'timeout' })
     case 'ssrf_reject':
     case 'redirect_denied':

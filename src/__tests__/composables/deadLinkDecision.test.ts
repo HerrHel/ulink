@@ -310,4 +310,39 @@ describe('decide 决策矩阵护栏', () => {
     const r = decide({ fetch_outcome: 'ok', http_status: 200 }, { reachable: false }, 'degraded', url)
     expect(r.verdict).toBe('gfw')
   })
+
+  it('edge dns_not_found → dead（dns_not_found，权威 DNS 无解析记录）', () => {
+    const r = decide({ fetch_outcome: 'dns_not_found', http_status: 0 }, { reachable: false }, 'online', url)
+    expect(r.verdict).toBe('dead')
+    expect(r.reason).toBe('dns_not_found')
+    expect(r.persist).toBe(true)
+  })
+
+  it('edge gfw_blocked → gfw（gfw_blocked，云端捕获阻断特征）', () => {
+    const r = decide({ fetch_outcome: 'gfw_blocked', http_status: 0 }, { reachable: false }, 'online', url)
+    expect(r.verdict).toBe('gfw')
+    expect(r.reason).toBe('gfw_blocked')
+    expect(r.persist).toBe(true)
+  })
+
+  it('受限域名在 connect_error + 本机不可达时精确判 gfw 而非误杀死链', () => {
+    const gfwUrl = 'https://www.google.com/search?q=test'
+    const r = decide({ fetch_outcome: 'connect_error', http_status: 0 }, { reachable: false }, 'online', gfwUrl)
+    expect(r.verdict).toBe('gfw')
+    expect(r.reason).toBe('gfw_blocked')
+  })
+
+  it('受限域名在 timeout + 本机不可达时精确判 gfw 而非无脑未确认', () => {
+    const gfwUrl = 'https://twitter.com/home'
+    const r = decide({ fetch_outcome: 'timeout', http_status: 0 }, { reachable: false }, 'online', gfwUrl)
+    expect(r.verdict).toBe('gfw')
+    expect(r.reason).toBe('gfw_blocked')
+  })
+
+  it('受限域名在无 edge 且本机不可达时判 gfw 而非 inconclusive', () => {
+    const gfwUrl = 'https://wikipedia.org'
+    const r = decide({ fetch_outcome: null, http_status: 0 }, { reachable: false }, 'online', gfwUrl)
+    expect(r.verdict).toBe('gfw')
+    expect(r.reason).toBe('gfw_blocked')
+  })
 })
