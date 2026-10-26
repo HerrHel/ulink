@@ -169,99 +169,232 @@ export function gradeLocalNetwork(baselineMs: number): LocalNetwork {
  * - Edge dead + 本机可达 → inconclusive(head_mismatch)，不再用 0.45 弱存活（重构 #6）。
  * - 明确 DNS NXDOMAIN → dead(dns_not_found)，不再当 SSRF 拒成 inconclusive。
  */
+/** 判定上下文：所有信号先算好，规则只做条件判断——避免重复计算，也避免「某条分支漏判断某个条件」 */
+interface DecisionContext {
+  url: string
+  edge: EdgeEvidence
+  /** 仅在 edge.fetch_outcome === 'ok' 时有意义 */
+  http: 'alive' | 'dead' | 'unknown'
+  localReachable: boolean
+  localNetwork: LocalNetwork
+  /** 命中 GFW 已知受限名单 */
+  isGfwHost: boolean
+  /** 是否墙内（名单只在墙内有意义，见 decide 的 restrictedNetwork 说明） */
+  restrictedNetwork: boolean
+}
+
+interface DecisionRule {
+  /** 规则标识：命中后可知是哪条规则得出的结论，便于定位与单测 */
+  id: string
+  when: (c: DecisionContext) => boolean
+  then: (c: DecisionContext) => CheckResult
+}
+
+/**
+ * 死链判定规则表（**顺序即优先级**，自上而下第一条命中即返回）
+ *
+ * 之所以改成表驱动：原先是 20 多个嵌套 if/else 分支，加一个信号要改多处，
+ * 曾出现「`case 'ok'` 里忘了加 restrictedNetwork 判断」这类遗漏（墙外用户被误判被墙）。
+ * 表驱动后每条规则自带**完整条件**，加规则 = 加一项，不会漏改别处。
+ *
+ * 修改规则时的铁律：
+ *   1. 新规则的插入位置决定其优先级，务必显式想清楚要覆盖谁；
+ *   2. 每条规则的 when 必须写全前置条件（不要依赖「前面的规则已经排除了」）；
+ *   3. 删除/调整规则前先看 `deadLinkDecision.test.ts` 的决策矩阵护栏。
+ */
+const RULES: readonly DecisionRule[] = [
+  // ── ① 本机离线：远端结论都不可信，绝不落标 ──
+  {
+    id: 'local.offline',
+    when: (c) => c.localNetwork === 'offline',
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'offline' }),
+  },
+
+  // ── ② Edge 无响应：仅凭本机直连 ──
+  {
+    id: 'edge.none.reachable',
+    when: (c) => c.edge.fetch_outcome === null && c.localReachable,
+    then: (c) => makeCheckResult({ verdict: 'alive', finalUrl: c.url, reason: 'no_edge' }),
+  },
+  {
+    id: 'edge.none.gfw',
+    when: (c) =>
+      c.edge.fetch_outcome === null && !c.localReachable && c.isGfwHost && c.restrictedNetwork,
+    then: () => makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' }),
+  },
+  {
+    id: 'edge.none.unknown',
+    when: (c) => c.edge.fetch_outcome === null,
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' }),
+  },
+
+  // ── ③ Edge 有响应且状态码判活 ──
+  {
+    id: 'edge.ok.alive.reachable',
+    when: (c) => c.edge.fetch_outcome === 'ok' && c.http === 'alive' && c.localReachable,
+    then: (c) =>
+      makeCheckResult({ verdict: 'alive', status: c.edge.http_status || 200, finalUrl: c.url }),
+  },
+  {
+    id: 'edge.ok.alive.gfw',
+    // 服务端拿到 2xx/3xx 而本机不可达：墙内是「被墙」的典型特征
+    when: (c) => c.edge.fetch_outcome === 'ok' && c.http === 'alive' && !c.localReachable && c.restrictedNetwork,
+    then: (c) => makeCheckResult({ verdict: 'gfw', status: c.edge.http_status }),
+  },
+  {
+    id: 'edge.ok.alive.noLocal',
+    // 墙外却本机不可达 → 是本机网络/代理问题，服务端证据更强，判活
+    when: (c) => c.edge.fetch_outcome === 'ok' && c.http === 'alive' && !c.localReachable,
+    then: (c) =>
+      makeCheckResult({ verdict: 'alive', status: c.edge.http_status || 200, finalUrl: c.url }),
+  },
+
+  // ── ④ Edge 状态码判死 ──
+  {
+    id: 'edge.ok.dead.reachable',
+    // 服务端说死、本机却连得上 → 信号冲突，保守不定性
+    when: (c) => c.edge.fetch_outcome === 'ok' && c.http === 'dead' && c.localReachable,
+    then: (c) =>
+      makeCheckResult({ verdict: 'inconclusive', status: c.edge.http_status, reason: 'head_mismatch' }),
+  },
+  {
+    id: 'edge.ok.dead.confirmed',
+    when: (c) => c.edge.fetch_outcome === 'ok' && c.http === 'dead',
+    then: (c) => makeCheckResult({ verdict: 'dead', status: c.edge.http_status }),
+  },
+
+  // ── ⑤ Edge 状态码无法分类（偏宁可 unknown 也不误杀）──
+  {
+    id: 'edge.ok.unknown.reachable',
+    when: (c) => c.edge.fetch_outcome === 'ok' && c.localReachable,
+    then: (c) =>
+      makeCheckResult({
+        verdict: 'alive',
+        status: c.edge.http_status,
+        finalUrl: c.url,
+        reason: 'edge_unknown',
+      }),
+  },
+  {
+    id: 'edge.ok.unknown',
+    when: (c) => c.edge.fetch_outcome === 'ok',
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'edge_unknown' }),
+  },
+
+  // ── ⑥ 权威结论 ──
+  {
+    id: 'edge.dns_not_found',
+    // 权威 DNS 查无记录（NXDOMAIN）：确定性死链，不受本机可达性影响
+    when: (c) => c.edge.fetch_outcome === 'dns_not_found',
+    then: () => makeCheckResult({ verdict: 'dead', reason: 'dns_not_found' }),
+  },
+  {
+    id: 'edge.gfw_blocked',
+    // 云端捕获阻断或受限特征
+    when: (c) => c.edge.fetch_outcome === 'gfw_blocked',
+    then: () => makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' }),
+  },
+
+  // ── ⑦ 连接失败 ──
+  {
+    id: 'edge.connect_error.reachable',
+    // 服务端在上海，访问境外站必然连不上；用户自己打得开就是活的
+    when: (c) => c.edge.fetch_outcome === 'connect_error' && c.localReachable,
+    then: (c) => makeCheckResult({ verdict: 'alive', finalUrl: c.url, reason: 'connect_err' }),
+  },
+  {
+    id: 'edge.connect_error.gfw',
+    when: (c) => c.edge.fetch_outcome === 'connect_error' && c.isGfwHost && c.restrictedNetwork,
+    then: () => makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' }),
+  },
+  {
+    id: 'edge.connect_error.dead',
+    when: (c) => c.edge.fetch_outcome === 'connect_error',
+    then: () => makeCheckResult({ verdict: 'dead', reason: 'connect_err' }),
+  },
+
+  // ── ⑧ 超时 ──
+  {
+    id: 'edge.timeout.reachable',
+    // 本机可达 = 用户能打开，不该因为服务端超时就判「不确定」
+    when: (c) => c.edge.fetch_outcome === 'timeout' && c.localReachable,
+    then: (c) => makeCheckResult({ verdict: 'alive', finalUrl: c.url, reason: 'timeout' }),
+  },
+  {
+    id: 'edge.timeout.gfw',
+    when: (c) => c.edge.fetch_outcome === 'timeout' && c.isGfwHost && c.restrictedNetwork,
+    then: () => makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' }),
+  },
+  {
+    id: 'edge.timeout',
+    when: (c) => c.edge.fetch_outcome === 'timeout',
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'timeout' }),
+  },
+
+  // ── ⑨ 安全拒绝：与用户端死/墙无关 ──
+  {
+    id: 'edge.security_reject',
+    when: (c) => c.edge.fetch_outcome === 'ssrf_reject' || c.edge.fetch_outcome === 'redirect_denied',
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'ssrf' }),
+  },
+
+  // ── ⑩ 兜底：未知 outcome 一律不落标（防御性）──
+  {
+    id: 'fallback.unresolved',
+    when: () => true,
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' }),
+  },
+]
+
+/** 判定结果 + 命中的规则 id（便于追踪「这个结论是谁给出的」） */
+export function decideWithRule(
+  edge: EdgeEvidence,
+  direct: { reachable: boolean },
+  local: LocalNetwork,
+  url: string,
+  restrictedNetwork = true,
+): { result: CheckResult; ruleId: string } {
+  let isGfwHost = false
+  try {
+    isGfwHost = isKnownGfwHost(new URL(url).hostname)
+  } catch {
+    /* invalid url：按非受限站点处理 */
+  }
+
+  const ctx: DecisionContext = {
+    url,
+    edge,
+    http: edge.fetch_outcome === 'ok' ? classifyHttpStatus(edge.http_status) : 'unknown',
+    localReachable: direct.reachable,
+    localNetwork: local,
+    isGfwHost,
+    restrictedNetwork,
+  }
+
+  const rule = RULES.find((r) => r.when(ctx)) ?? RULES[RULES.length - 1]
+  return { result: rule.then(ctx), ruleId: rule.id }
+}
+
+/**
+ * 单一决策表：融合 Edge evidence + 本机直连 + 本机网络健康 → LinkVerdict。
+ *
+ * 规则与优先级见上面的 `RULES`。几条贯穿始终的原则：
+ * - 本机 offline 时一切映射 inconclusive，绝不落 dead/gfw。
+ * - `inconclusive` 不落标也不抹标（保留上次状态，避免抖动）。
+ * - 判断「被墙」必须同时满足：双端失败 + 命中名单 + **墙内网络**（`restrictedNetwork`）。
+ *
+ * @param restrictedNetwork 本机是否处于受限网络（中国大陆）。
+ *   名单 `GFW_KNOWN_HOST_SUFFIXES` 是**地域性先验知识**，只在墙内成立。
+ *   墙外用户（含开代理者）若本机探测因代理配置/CSP/抖动失败，
+ *   无条件套用名单会把他能打开的站点判成「被墙」。
+ *   由调用方探测「能否直连纯境外端点」决定：能直连 → false；连不上 → true（保守）。
+ */
 export function decide(
   edge: EdgeEvidence,
   direct: { reachable: boolean },
   local: LocalNetwork,
   url: string,
-  /**
-   * 本机是否处于「受限网络」（中国大陆）。
-   *
-   * 名单 `GFW_KNOWN_HOST_SUFFIXES` 是一条**地域性先验知识**——它只在墙内成立。
-   * 对墙外用户（含开代理的用户）来说，这份名单纯属错误先验：他把 google.com
-   * 加进收藏，若此刻本机探测因代理配置/CSP/抖动失败，就会被误判成「被墙」。
-   *
-   * 因此由调用方探测「能否直连纯境外端点」来决定是否启用名单：
-   * 能直连 → false（名单不适用）；连不上 → true（保守，沿用原行为）。
-   */
   restrictedNetwork = true,
 ): CheckResult {
-  const localHealthy = local !== 'offline'
-
-  // 本机离线：远端结论都不可信，绝不落标
-  if (!localHealthy) {
-    return makeCheckResult({ verdict: 'inconclusive', reason: 'offline' })
-  }
-
-  let isGfwHost = false
-  try {
-    const u = new URL(url)
-    isGfwHost = isKnownGfwHost(u.hostname)
-  } catch {
-    /* ignore invalid url */
-  }
-
-  // Edge 调用失败：无远端视角，仅凭本机直连
-  if (edge.fetch_outcome === null) {
-    return direct.reachable
-      ? makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'no_edge' })
-      : (isGfwHost && restrictedNetwork
-          ? makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
-          : makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' }))
-  }
-
-  switch (edge.fetch_outcome) {
-    case 'ok': {
-      const http = classifyHttpStatus(edge.http_status)
-      if (http === 'alive') {
-        return direct.reachable
-          ? makeCheckResult({ verdict: 'alive', status: edge.http_status || 200, finalUrl: url })
-          // 服务端拿到 200 而本机不可达：墙内是「被墙」的典型特征；
-          // 墙外则说明是本机网络/代理的问题——服务端证据更强，判活。
-          : (restrictedNetwork
-              ? makeCheckResult({ verdict: 'gfw', status: edge.http_status })
-              : makeCheckResult({ verdict: 'alive', status: edge.http_status || 200, finalUrl: url }))
-      }
-      if (http === 'dead') {
-        return direct.reachable
-          ? makeCheckResult({ verdict: 'inconclusive', status: edge.http_status, reason: 'head_mismatch' })
-          : makeCheckResult({ verdict: 'dead', status: edge.http_status })
-      }
-      // http === 'unknown'
-      return direct.reachable
-        ? makeCheckResult({ verdict: 'alive', status: edge.http_status, finalUrl: url, reason: 'edge_unknown' })
-        : makeCheckResult({ verdict: 'inconclusive', reason: 'edge_unknown' })
-    }
-    case 'dns_not_found':
-      // 权威 DNS 查无记录（NXDOMAIN）：100% 确认死链
-      return makeCheckResult({ verdict: 'dead', reason: 'dns_not_found' })
-    case 'gfw_blocked':
-      // 云端捕获阻断或受限特征
-      return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
-    case 'connect_error':
-      // 本机可达 = 用户实际能访问到（服务端在上海，访问境外站必然连不上）。
-      // 墙外用户与原「判 inconclusive」相比，这里给 alive 才不会平白制造噪音。
-      if (direct.reachable) {
-        return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'connect_err' })
-      }
-      // Edge 连不上 + 本机也连不上：境内环境下若是知名受限站点，判被墙而非误杀死链
-      if (isGfwHost && restrictedNetwork) {
-        return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
-      }
-      return makeCheckResult({ verdict: 'dead', reason: 'connect_err' })
-    case 'timeout':
-      // 本机可达 = 用户能打开，不该因为服务端超时就告诉他「不确定」
-      if (direct.reachable) {
-        return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'timeout' })
-      }
-      // Edge 超时 + 本机不可达：境内环境下若是境外受限站点，判被墙；普通站点判不确定
-      if (isGfwHost && restrictedNetwork) {
-        return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
-      }
-      return makeCheckResult({ verdict: 'inconclusive', reason: 'timeout' })
-    case 'ssrf_reject':
-    case 'redirect_denied':
-      // Edge 安全拒绝与用户端死/墙无关
-      return makeCheckResult({ verdict: 'inconclusive', reason: 'ssrf' })
-  }
+  return decideWithRule(edge, direct, local, url, restrictedNetwork).result
 }
