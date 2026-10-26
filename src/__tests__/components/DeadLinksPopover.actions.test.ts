@@ -261,18 +261,23 @@ describe('DeadLinksPopover.setup 私有编排护栏', () => {
     w.unmount()
   })
 
-  it('unconfirmedList:读 deadLinkChecker.results 中 verdict=inconclusive 的项（非 inconclusive 被排除）', async () => {
+  it('inconclusive 不出现在界面上（不占列表项、不出现「未确认」徽标/Tab）', async () => {
+    // 产品判断：把「未确定」展示给用户会降低对检测结果的信任。
+    // inconclusive 只作为内部状态存在——不落标、不抹标、不进列表、不显示任何徽标。
     const ds = useDataStore()
     seedBm(ds, { id: 'u-1', title: '未确认项', url: 'https://u1.com', attributes: {} })
     seedBm(ds, { id: 'a-1', title: '活着项', url: 'https://a1.com', attributes: {} })
+    seedBm(ds, { id: 'd-1', title: '死链项', url: 'https://d1.com', attributes: { 'dead-link': true } })
     dlResultsHolder.results = {
       'u-1': { verdict: 'inconclusive' },
       'a-1': { verdict: 'alive' },
     }
     const { w } = await mountComp()
+    // 只剩「死链」一条（inconclusive 与 alive 都不进任何列表）
     expect(w.element.querySelectorAll('.popover-result').length).toBe(1)
-    expect((w.element.querySelector('.pr-name') as HTMLElement)?.textContent).toContain('未确认项')
-    expect(w.element.querySelector('.pr-badge.unconfirmed')).not.toBeNull()
+    expect((w.element.querySelector('.pr-name') as HTMLElement)?.textContent).toContain('死链项')
+    expect(w.element.textContent).not.toContain('未确认')
+    expect(w.element.querySelector('.pr-badge.unconfirmed')).toBeNull()
     w.unmount()
   })
 

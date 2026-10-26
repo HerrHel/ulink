@@ -10,9 +10,6 @@
           <button v-if="blockedList.length" class="popover-tab" :class="{ active: tab === 'blocked' }" @click="switchTab('blocked')">
             {{ t('cards.gfwBlocked') }} <span class="tab-count tab-count-gfw">{{ blockedList.length }}</span>
           </button>
-          <button v-if="unconfirmedList.length" class="popover-tab" :class="{ active: tab === 'unconfirmed' }" @click="switchTab('unconfirmed')">
-            {{ t('cards.unconfirmed') }} <span class="tab-count">{{ unconfirmedList.length }}</span>
-          </button>
         </div>
         <div class="popover-actions">
           <button v-if="!selectMode" class="pop-action-btn" @click="enterSelectMode" :title="t('ctx.multiSelect')">
@@ -53,8 +50,7 @@
             <span class="pr-url">{{ domain(b.url) }}</span>
           </div>
           <span v-if="tab === 'dead'" class="pr-badge dead">{{ t('cards.deadLink') }}</span>
-          <span v-else-if="tab === 'blocked'" class="pr-badge blocked">{{ t('cards.gfwBlocked') }}</span>
-          <span v-else class="pr-badge unconfirmed">{{ t('cards.unconfirmed') }}</span>
+          <span v-else class="pr-badge blocked">{{ t('cards.gfwBlocked') }}</span>
           <div v-if="!selectMode" class="pr-item-actions">
             <a
               class="pr-act-btn"
@@ -103,7 +99,7 @@ const store = useAppStore()
 const dataStore = useDataStore()
 const deadLinkChecker = useDeadLinkChecker()
 const visible = ref(false)
-const tab = ref<'dead' | 'blocked' | 'unconfirmed'>('dead')
+const tab = ref<'dead' | 'blocked'>('dead')
 const selectMode = ref(false)
 const selectedIds = ref(new Set<string>())
 
@@ -119,29 +115,13 @@ const blockedList = computed(() =>
   dataStore.bookmarks.filter(b => !b.deletedAt && b.attributes?.['gfw-blocked'] && !b.attributes?.['dead-link-ignored'])
 )
 
-/** 未确认列表：本次检测 inconclusive 的项（排除已在死链/被墙 Tab 中的项，保持互斥） */
-const unconfirmedList = computed(() => {
-  const r = deadLinkChecker.results
-  const out: { id: string; title: string; url: string }[] = []
-  for (const id in r) {
-    if (r[id].verdict !== 'inconclusive') continue
-    const bm = dataStore.bookmarkMap[id]
-    if (!bm || bm.deletedAt) continue
-    // 若已有明确的死链或被墙标记，归属相应 Tab，不放入未确认列表
-    if (bm.attributes?.['dead-link'] || bm.attributes?.['gfw-blocked'] || bm.attributes?.['dead-link-ignored']) continue
-    out.push({ id: bm.id, title: bm.title, url: bm.url })
-  }
-  return out
-})
+// 「未确认（inconclusive）」只作为内部判定状态存在：
+// 不落标、不抹标、不进列表、不出现在界面上。
+// 让用户看到一条「未确定」比什么都不显示更伤信任——测不准就别说话。
+const currentList = computed(() => (tab.value === 'dead' ? deadList.value : blockedList.value))
 
-const currentList = computed(() =>
-  tab.value === 'dead' ? deadList.value : tab.value === 'blocked' ? blockedList.value : unconfirmedList.value
-)
-
-/** 空态文案的链接类型标签（失效/被墙/未确认） */
-const tabKindLabel = computed(() =>
-  tab.value === 'dead' ? t('cards.deadLink') : tab.value === 'blocked' ? t('cards.gfwBlocked') : t('cards.unconfirmed')
-)
+/** 空态文案的链接类型标签（失效/被墙） */
+const tabKindLabel = computed(() => (tab.value === 'dead' ? t('cards.deadLink') : t('cards.gfwBlocked')))
 
 const allSelected = computed(() =>
   currentList.value.length > 0 && currentList.value.every(b => selectedIds.value.has(b.id))
@@ -154,13 +134,12 @@ watch(() => store.overlays.deadLinks, (v) => {
     selectedIds.value = new Set()
     if (deadList.value.length) tab.value = 'dead'
     else if (blockedList.value.length) tab.value = 'blocked'
-    else if (unconfirmedList.value.length) tab.value = 'unconfirmed'
   } else {
     visible.value = false
   }
 })
 
-function switchTab(t: 'dead' | 'blocked' | 'unconfirmed') {
+function switchTab(t: 'dead' | 'blocked') {
   tab.value = t
   selectedIds.value = new Set()
 }

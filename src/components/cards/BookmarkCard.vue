@@ -24,7 +24,6 @@
               <template v-else>{{ displayText(bookmark.title) }}</template>
               <span v-if="linkStatus === 'dead'" class="dead-link-badge" :title="t('cards.deadLinkTitle')">{{ t('cards.deadLink') }}</span>
               <span v-else-if="linkStatus === 'gfw'" class="gfw-blocked-badge" :title="t('cards.gfwBlockedTitle')">{{ t('cards.gfwBlocked') }}</span>
-              <span v-else-if="linkStatus === 'unconfirmed'" class="unconfirmed-badge" :title="t('cards.unconfirmedTitle')">{{ t('cards.unconfirmed') }}</span>
               <span v-if="isPinned" class="pinned-badge" :title="t('cards.pinned')" v-html="I.pin"></span>
             </div>
             <div class="card-domain">
@@ -198,24 +197,23 @@ const hasExpandableContent = computed(() => !!(displayText(props.bookmark.userna
 const previewText = computed(() => bookmarkPreview(props.bookmark))
 const isExpanded = computed(() => uiStore.layoutMode === 'list' && uiStore.expandedIds.includes(props.bookmark.id) && !uiStore.batchMode)
 const isSelected = computed(() => (uiStore.batchSelected ?? []).includes(props.bookmark.id))
-const linkStatus = computed<'dead' | 'gfw' | 'unconfirmed' | 'normal'>(() => {
+const linkStatus = computed<'dead' | 'gfw' | 'normal'>(() => {
   const r = deadLinkChecker.getResult(props.bookmark.id)
   if (r) {
     if (r.verdict === 'dead') return 'dead'
     if (r.verdict === 'gfw') return 'gfw'
     if (r.verdict === 'alive') return 'normal'
-    // inconclusive 保持单真相源互斥：若原有 attributes 有持久化标，优先维持原标，绝不叠加未确认双标
+    // inconclusive 是内部状态，**不产出任何可见徽标**：
+    // 若有持久化的既有标就维持原标，否则等同于「没测出结果」——什么都不显示。
+    // 显示「未确认」会把检测的不确定性转嫁给用户，反而降低信任。
     if (props.bookmark.attributes?.['dead-link']) return 'dead'
     if (props.bookmark.attributes?.['gfw-blocked']) return 'gfw'
-    return 'unconfirmed'
+    return 'normal'
   }
   if (props.bookmark.attributes?.['dead-link']) return 'dead'
   if (props.bookmark.attributes?.['gfw-blocked']) return 'gfw'
   return 'normal'
 })
-const isDeadLink = computed(() => linkStatus.value === 'dead')
-const isGfwBlocked = computed(() => linkStatus.value === 'gfw')
-const isUnconfirmed = computed(() => linkStatus.value === 'unconfirmed')
 const isPinned = computed(() => !!props.bookmark.pinnedAt)
 const searchQuery = computed(() => (uiStore.searchQuery || '').trim())
 
