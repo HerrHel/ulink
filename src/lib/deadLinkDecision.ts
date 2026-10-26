@@ -52,18 +52,68 @@ const HTTP_DEAD = new Set([404, 410])
 const LOCAL_ONLINE_MS = 2000
 export const BASELINE_OFFLINE_MS = 4000
 
-/** 常见海外公认受限服务域名后缀（在境内机房及国内直连均被阻断/丢包） */
+/**
+ * 境内公认受限的海外站点后缀（用于把「被墙」与「真死链」区分开，避免误删用户数据）
+ *
+ * 数据来源：GreatFire top-site 测试 + vpnAlert 每日实测，2026-10 交叉核对。
+ *
+ * ⚠️ 筛选标准（别放宽，加错一个比漏一个危害大得多）：
+ *   1. **只收明确 blocked 的**。标为 intermittent（间歇性）的一律不收 —— 例如
+ *      github.com / gitlab.com / cloudflare.com / amazon.com / microsoft.com /
+ *      spotify.com / wordpress.com / openai.com 都是间歇性，混进来会把
+ *      正常站点偶发超时误判成「被墙」。
+ *   2. **不收「网站自己拒绝中国访客」的**（Claude、Netflix 等区域限制）——
+ *      它们会正常返回 403/451，已由 HTTP_SOFT_ALIVE 处理，不属于网络封锁。
+ *   3. 只收大众、长期、跨运营商（电信/联通/移动/CERNET）表现一致的站点。
+ *
+ * 判定语义：**仅当探测本身失败**（timeout / connect_error / 无远端视角）时才查本名单。
+ *   命中 → gfw（被墙，不算死链）；未命中 → inconclusive（不落标也不抹标）。
+ *   因此漏一个只是「判不出」，加错一个才会「误判」，务必宁缺毋滥。
+ */
 const GFW_KNOWN_HOST_SUFFIXES = [
+  // ── Google 全家桶（含 YouTube 及其媒体 CDN）──
   'google.com', 'google.com.hk', 'google.co.jp', 'google.co.uk',
-  'youtube.com', 'youtu.be',
-  'twitter.com', 'x.com', 't.co',
-  'facebook.com', 'instagram.com',
+  'googleapis.com', 'gstatic.com', 'googleusercontent.com', 'ggpht.com',
+  'youtube.com', 'youtu.be', 'ytimg.com', 'googlevideo.com',
+  // ── Meta ──
+  'facebook.com', 'fb.com', 'fb.me', 'fbcdn.net',
+  'instagram.com', 'cdninstagram.com',
+  'whatsapp.com', 'whatsapp.net', 'wa.me',
+  'messenger.com',
+  // ── X / Twitter ──
+  'twitter.com', 'x.com', 't.co', 'twimg.com',
+  // ── 通讯 ──
+  'telegram.org', 'telegram.me', 't.me',
+  'discord.com', 'discord.gg',
+  'signal.org',
+  'line.me', 'line-apps.com',
+  // ── 社交 / 内容 ──
+  'reddit.com', 'redd.it',
+  'pinterest.com', 'tumblr.com', 'quora.com', 'medium.com',
+  'vk.com', 'bsky.app',
+  'tiktok.com', 'tiktokv.com',
+  'flickr.com', 'imgur.com', 'snapchat.com',
+  // ── 视频 / 音频 ──
+  'twitch.tv', 'vimeo.com', 'dailymotion.com', 'soundcloud.com',
+  // ── 百科 / 存档 ──
   'wikipedia.org', 'wikimedia.org',
-  'medium.com', 'reddit.com',
-  't.me', 'telegram.org',
-  'pinterest.com', 'quora.com',
-  'bloomberg.com', 'nytimes.com',
-  'github.io', 'gist.github.com',
+  'archive.org',
+  // ── 新闻（仅确定封锁者）──
+  'nytimes.com', 'bloomberg.com',
+  'bbc.com', 'bbc.co.uk',
+  'reuters.com', 'wsj.com',
+  'washingtonpost.com', 'dw.com', 'aljazeera.com',
+  // ── 博客 / 发布 ──
+  'blogspot.com', 'wixsite.com', 'linktr.ee', 'issuu.com',
+  // ── 开发者 / 云（⚠️ github.com 本身可用，绝不能加；只收 Pages 与 Workers）──
+  'github.io', 'gist.github.com', 'workers.dev',
+  // ── AI（openai.com 为间歇性，只收 chatgpt.com）──
+  'chatgpt.com', 'copilot.microsoft.com',
+  // ── 其他常用 ──
+  'dropbox.com', 'box.com',
+  'etsy.com', 'tradingview.com', 'roku.com',
+  // ── 倡议 / 人权组织 ──
+  'change.org', 'amnesty.org', 'hrw.org', 'freedomhouse.org',
 ]
 
 export function isKnownGfwHost(hostname: string): boolean {
