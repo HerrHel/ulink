@@ -208,6 +208,52 @@ describe('measureNetworkBaseline 基线契约', () => {
   })
 })
 
+describe('历史软化集成契约', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const seedHistory = (id: string, verdict: string, ageMs: number) => {
+    localStorageMock.setItem(
+      'lv_deadLinkHistory',
+      JSON.stringify({ [id]: [{ verdict, checkedAt: Date.now() - ageMs, status: 200 }] }),
+    )
+  }
+
+  it('7 天内曾可达 + 本次判死 → 不落 dead 标（软化生效）', async () => {
+    // 锁：「昨天还好、今天突然死了」不该直接标死——大多只是临时故障
+    const ds = useDataStore()
+    seedBm(ds, { id: 'h-1', url: 'https://was-alive.example', attributes: {} })
+    seedHistory('h-1', 'alive', DAY)
+    stubProbeOkTargetFail()
+    invokeMock.mockResolvedValue(edge('connect_error'))
+    const { checkOne } = useDeadLinkChecker()
+    const r = await checkOne('h-1')
+    expect(r?.verdict).toBe('inconclusive')
+    expect(r?.reason).toBe('recent_alive')
+    expect(ds.bookmarkMap['h-1'].attributes?.['dead-link']).toBeFalsy()
+  })
+
+  it('历史上从未可达 + 本次判死 → 正常落 dead 标（真死链照常标记）', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'h-2', url: 'https://never-alive.example', attributes: {} })
+    stubProbeOkTargetFail()
+    invokeMock.mockResolvedValue(edge('connect_error'))
+    const { checkOne } = useDeadLinkChecker()
+    const r = await checkOne('h-2')
+    expect(r?.verdict).toBe('dead')
+    expect(ds.bookmarkMap['h-2'].attributes?.['dead-link']).toBe(true)
+  })
+
+  it('历史可达已超出 7 天窗口 → 不再软化', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'h-3', url: 'https://stale-alive.example', attributes: {} })
+    seedHistory('h-3', 'alive', 8 * DAY)
+    stubProbeOkTargetFail()
+    invokeMock.mockResolvedValue(edge('connect_error'))
+    const { checkOne } = useDeadLinkChecker()
+    const r = await checkOne('h-3')
+    expect(r?.verdict).toBe('dead')
+  })
+})
+
 describe('失败项延迟重试契约', () => {
   it('判死（timeout）的项会被重试一次（同一 URL 探测两次）', async () => {
     // 锁：单次探测会因瞬时抖动误杀，必须复核一次才能落标

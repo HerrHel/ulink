@@ -17,6 +17,7 @@ export type DeadLinkReason =
   | 'no_edge'         // Edge 调用失败，无远端视角
   | 'dns_not_found'   // DNS 权威查询无记录（NXDOMAIN，真死链）
   | 'gfw_blocked'     // 命中被墙/受限特征（RST/受限大站）
+  | 'recent_alive'    // 历史上曾可达，本次判死 → 软化（见 softenByHistory）
 
 export interface CheckResult {
   alive: boolean          // verdict === 'alive'
@@ -397,4 +398,34 @@ export function decide(
   restrictedNetwork = true,
 ): CheckResult {
   return decideWithRule(edge, direct, local, url, restrictedNetwork).result
+}
+
+/** 历史衰减窗口：该时间窗内曾判定过 alive，则本次「判死」只作参考、不落标 */
+export const STALE_ALIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * 用历史状态软化「死链」结论（横切关注点，独立于 A/B/C 规则表）
+ *
+ * 要解决的场景：**昨天还好、今天突然变成死链**。用户看到这个会第一反应怀疑检测本身，
+ * 比「什么都不显示」更伤信任；而实际上大多是临时故障（服务端重启、CDN 回源失败、
+ * DNS 短暂异常、站点临时下线维护）。
+ *
+ * 规则：`dead` + 7 天内曾 `alive` → 降级为 `inconclusive`（不落标、不抹标）。
+ *
+ * 刻意**不软化**的两类：
+ *   - `gfw`：被墙是明确的网络现象，已由「双端失败 + 名单 + 墙内网络」三重确认；
+ *   - `alive`：本来就是好消息，无需处理。
+ *
+ * 代价：真死链会延迟到超出窗口（最长 7 天）才被标记。这个延迟是可接受的——
+ *      用户点开链接就会自己发现，而误标会造成他直接删掉好数据。
+ */
+export function softenByHistory(result: CheckResult, recentlyAlive: boolean): CheckResult {
+  if (!recentlyAlive) return result
+  if (result.verdict !== 'dead') return result
+  return makeCheckResult({
+    verdict: 'inconclusive',
+    status: result.status,
+    finalUrl: result.finalUrl,
+    reason: 'recent_alive',
+  })
 }

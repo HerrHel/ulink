@@ -14,6 +14,8 @@ import {
   makeCheckResult,
   gradeLocalNetwork,
   decide,
+  softenByHistory,
+  STALE_ALIVE_WINDOW_MS,
   BASELINE_OFFLINE_MS,
   type CheckResult,
   type LinkVerdict,
@@ -101,6 +103,17 @@ function _appendDeadLinkHistory(bmId: string, result: CheckResult, persist = tru
 
 function _flushDeadLinkHistory(): void {
   if (_histCache) _saveDeadLinkHistory(_histCache)
+}
+
+/**
+ * 最近 STALE_ALIVE_WINDOW_MS（7 天）内是否曾判定可达。
+ * 用于软化「昨天还好好、今天突然判死」——这类结论最容易让用户怀疑检测本身。
+ */
+function _hasRecentAlive(bmId: string): boolean {
+  const checks = _getHistCache()[bmId]
+  if (!checks || checks.length === 0) return false
+  const cutoff = Date.now() - STALE_ALIVE_WINDOW_MS
+  return checks.some((c) => c.verdict === 'alive' && (c.checkedAt || 0) >= cutoff)
 }
 
 /** 删除某书签的检测历史（永久删除时调用） */
@@ -395,6 +408,10 @@ export function useDeadLinkChecker() {
       }
     }
 
+    // 历史软化：7 天内曾可达却本次判死 → 多半是临时故障，降级为「不落标」
+    if (bookmarkId && verdictResult.verdict === 'dead') {
+      return softenByHistory(verdictResult, _hasRecentAlive(bookmarkId))
+    }
     return verdictResult
   }
 
