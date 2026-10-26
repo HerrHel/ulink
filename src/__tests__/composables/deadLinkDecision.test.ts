@@ -271,9 +271,12 @@ describe('decide 决策矩阵护栏', () => {
     expect(r.reason).toBe('edge_unknown')
   })
 
-  it('edge connect_error + direct 可达 → inconclusive（connect_err，Edge 网络受限）', () => {
+  it('edge connect_error + direct 可达 → alive（本机打得开就是活的）', () => {
+    // 语义变更（2026-10-26）：原先判 inconclusive，与 edge.fetch_outcome===null 分支
+    // （本机可达 → alive）自相矛盾。服务端在上海，访问境外站必然连不上，
+    // 但墙外用户/开代理者自己打得开——告诉他「不确定」是纯噪音。
     const r = decide({ fetch_outcome: 'connect_error', http_status: 0 }, { reachable: true }, 'online', url)
-    expect(r.verdict).toBe('inconclusive')
+    expect(r.verdict).toBe('alive')
     expect(r.reason).toBe('connect_err')
   })
 
@@ -283,9 +286,13 @@ describe('decide 决策矩阵护栏', () => {
     expect(r.reason).toBe('connect_err')
   })
 
-  it('edge timeout → inconclusive（timeout，无视 direct）', () => {
-    expect(decide({ fetch_outcome: 'timeout', http_status: 0 }, { reachable: true }, 'online', url).verdict).toBe('inconclusive')
-    expect(decide({ fetch_outcome: 'timeout', http_status: 0 }, { reachable: false }, 'online', url).reason).toBe('timeout')
+  it('edge timeout → 本机可达则 alive，本机不可达才 inconclusive', () => {
+    // 语义变更（2026-10-26）：原「无视 direct」一律判不确定。
+    // 本机可达 = 用户能打开，不该因为服务端超时就判不确定（对墙外用户尤其重要）。
+    expect(decide({ fetch_outcome: 'timeout', http_status: 0 }, { reachable: true }, 'online', url).verdict).toBe('alive')
+    const r = decide({ fetch_outcome: 'timeout', http_status: 0 }, { reachable: false }, 'online', url)
+    expect(r.verdict).toBe('inconclusive')
+    expect(r.reason).toBe('timeout')
   })
 
   it('edge ssrf_reject → inconclusive（ssrf，安全拒绝与死/墙无关）', () => {

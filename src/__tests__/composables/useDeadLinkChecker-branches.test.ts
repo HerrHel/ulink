@@ -181,7 +181,9 @@ describe('measureNetworkBaseline 基线契约', () => {
     const afterFirst = fetchSpy.mock.calls.filter((c: unknown[]) =>
       /baidu|gstatic|cloudflare/.test(String(c[0]))
     ).length
-    expect(afterFirst).toBe(3)
+    // 3 个网络基线探针 + 1 次「地区判定」探测（gstatic，同样是境外端点）。
+    // 地区判定带 5 分钟缓存 + in-flight 合并，缓存命中后不会再发，不构成探针风暴。
+    expect(afterFirst).toBe(4)
     await checkUrl('https://second.example')
     const afterSecond = fetchSpy.mock.calls.filter((c: unknown[]) =>
       /baidu|gstatic|cloudflare/.test(String(c[0]))

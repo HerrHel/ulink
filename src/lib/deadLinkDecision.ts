@@ -174,6 +174,17 @@ export function decide(
   direct: { reachable: boolean },
   local: LocalNetwork,
   url: string,
+  /**
+   * 本机是否处于「受限网络」（中国大陆）。
+   *
+   * 名单 `GFW_KNOWN_HOST_SUFFIXES` 是一条**地域性先验知识**——它只在墙内成立。
+   * 对墙外用户（含开代理的用户）来说，这份名单纯属错误先验：他把 google.com
+   * 加进收藏，若此刻本机探测因代理配置/CSP/抖动失败，就会被误判成「被墙」。
+   *
+   * 因此由调用方探测「能否直连纯境外端点」来决定是否启用名单：
+   * 能直连 → false（名单不适用）；连不上 → true（保守，沿用原行为）。
+   */
+  restrictedNetwork = true,
 ): CheckResult {
   const localHealthy = local !== 'offline'
 
@@ -194,7 +205,7 @@ export function decide(
   if (edge.fetch_outcome === null) {
     return direct.reachable
       ? makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'no_edge' })
-      : (isGfwHost
+      : (isGfwHost && restrictedNetwork
           ? makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
           : makeCheckResult({ verdict: 'inconclusive', reason: 'no_edge' }))
   }
@@ -224,16 +235,23 @@ export function decide(
       // 云端捕获阻断或受限特征
       return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
     case 'connect_error':
-      // Edge 连接失败：若为知名境外受限站点，在境内环境下判定为被墙而非误杀死链
-      if (isGfwHost && !direct.reachable) {
+      // 本机可达 = 用户实际能访问到（服务端在上海，访问境外站必然连不上）。
+      // 墙外用户与原「判 inconclusive」相比，这里给 alive 才不会平白制造噪音。
+      if (direct.reachable) {
+        return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'connect_err' })
+      }
+      // Edge 连不上 + 本机也连不上：境内环境下若是知名受限站点，判被墙而非误杀死链
+      if (isGfwHost && restrictedNetwork) {
         return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
       }
-      return direct.reachable
-        ? makeCheckResult({ verdict: 'inconclusive', reason: 'connect_err' })
-        : makeCheckResult({ verdict: 'dead', reason: 'connect_err' })
+      return makeCheckResult({ verdict: 'dead', reason: 'connect_err' })
     case 'timeout':
-      // Edge 超时：若为境外受限站点，静默丢包直接判定为被墙；普通站点判定为 inconclusive
-      if (isGfwHost && !direct.reachable) {
+      // 本机可达 = 用户能打开，不该因为服务端超时就告诉他「不确定」
+      if (direct.reachable) {
+        return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'timeout' })
+      }
+      // Edge 超时 + 本机不可达：境内环境下若是境外受限站点，判被墙；普通站点判不确定
+      if (isGfwHost && restrictedNetwork) {
         return makeCheckResult({ verdict: 'gfw', reason: 'gfw_blocked' })
       }
       return makeCheckResult({ verdict: 'inconclusive', reason: 'timeout' })

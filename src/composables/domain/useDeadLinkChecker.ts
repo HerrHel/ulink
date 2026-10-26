@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase.js'
 import { isCloudBaseBackend, invokeCbFunction } from '../../lib/cloudbase.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { fetchMyEntitlement, type MyEntitlement } from './useRedeem.js'
-import { NETWORK_PROBE_URLS } from '../../config/urls.js'
+import { NETWORK_PROBE_URLS, OVERSEAS_PROBE_URL } from '../../config/urls.js'
 import type { Bookmark } from '../../types.js'
 
 
@@ -166,6 +166,53 @@ function fetchNoCorsWithTimeout(
 
 
 /**
+ * 纯境外探测点：Google 的静态资源域。境内直连必然失败（DNS 污染 + SNI 阻断），
+ * 墙外（含代理）可正常返回。
+ */
+const OVERSEAS_ONLY_PROBE = 'https://www.gstatic.com/generate_204'
+let _restrictedNetCache: { value: boolean; at: number } | null = null
+let _restrictedNetInflight: Promise<boolean> | null = null
+
+/**
+ * 判断本机是否处于「受限网络」（中国大陆）。
+ *
+ * 存在的意义：`GFW_KNOWN_HOST_SUFFIXES` 是**地域性先验**，只在墙内成立。
+ * 墙外用户把 google.com 收进书签，若此刻本机探测因代理配置/CSP/网络抖动失败，
+ * 会被误判成「被墙」。所以要显式确认自己在墙内，名单才启用。
+ *
+ * 探测失败一律按「受限」处理（保守）——这样最坏情况是退回原有行为，
+ * 不会因为探测不准而削弱墙内用户的判定能力。
+ */
+async function detectRestrictedNetwork(signal?: AbortSignal): Promise<boolean> {
+  const now = Date.now()
+  if (_restrictedNetCache && now - _restrictedNetCache.at < BASELINE_TTL_MS) {
+    return _restrictedNetCache.value
+  }
+  if (_restrictedNetInflight) return _restrictedNetInflight
+  _restrictedNetInflight = (async () => {
+    let reachable = false
+    try {
+      await fetchNoCorsWithTimeout(OVERSEAS_ONLY_PROBE, {
+        method: 'HEAD',
+        timeoutMs: BASELINE_PROBE_TIMEOUT_MS,
+        signal,
+      })
+      reachable = true
+    } catch {
+      reachable = false
+    }
+    const value = !reachable
+    _restrictedNetCache = { value, at: Date.now() }
+    return value
+  })()
+  try {
+    return await _restrictedNetInflight
+  } finally {
+    _restrictedNetInflight = null
+  }
+}
+
+/**
  * RE-10：no-cors 仅作「网络可达」弱信号，opaque 响应读不到 status，
  * 404/5xx 也会 ok=true。不得单独据此判存活。
  */
@@ -242,6 +289,34 @@ function persistBaselineCache(): void {
 
 
 
+/**
+ * 路线 A：向海外 Cloudflare Pages 边缘探活端点发送请求
+ * 仅在境内 CloudBase 判定 inconclusive 存疑时发起二次复核
+ */
+export async function probeOverseas(
+  url: string,
+): Promise<{ outcome: 'alive' | 'dead' | 'timeout' | 'error'; status: number }> {
+  try {
+    const probeEndpoint = OVERSEAS_PROBE_URL
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4500)
+    const res = await fetch(`${probeEndpoint}?url=${encodeURIComponent(url)}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (!res.ok) return { outcome: 'error', status: res.status }
+    const data = (await res.json()) as { outcome?: string; status?: number }
+    return {
+      outcome: (data.outcome as 'alive' | 'dead' | 'timeout' | 'error') || 'error',
+      status: Number(data.status) || 0,
+    }
+  } catch {
+    return { outcome: 'error', status: 0 }
+  }
+}
+
 async function callEdgeFunction(url: string, bookmarkId?: string, retry429 = true): Promise<EdgeEvidence> {
   try {
     const res = isCloudBaseBackend()
@@ -288,7 +363,34 @@ export function useDeadLinkChecker() {
       callEdgeFunction(url, bookmarkId),
     ])
 
-    return decide(edgeResult, direct, gradeLocalNetwork(baselineMs), url)
+    const localGrade = gradeLocalNetwork(baselineMs)
+    // 名单纯属地域性先验：墙外用户不启用（详见 deadLinkDecision.decide 的注释）
+    const restrictedNetwork = await detectRestrictedNetwork()
+    let verdictResult = decide(edgeResult, direct, localGrade, url, restrictedNetwork)
+
+    // ── 路线 A：海外轻量探针存疑复核（Second Opinion）──
+    // 当且仅当国内 CloudBase 上海机房判定为 inconclusive（未确认），且本机未全面离线时：
+    // 由海外 Cloudflare 边缘自由节点做一次复测，精准终结未确认：
+    // - 海外可达 (alive) + 国内不可达 = 100% 确认「被墙 (gfw)」！
+    // - 海外明确不可达 (dead) = 100% 确认「死链 (dead)」！
+    if (verdictResult.verdict === 'inconclusive' && localGrade !== 'offline') {
+      const overseas = await probeOverseas(url)
+      if (overseas.outcome === 'alive') {
+        verdictResult = makeCheckResult({
+          verdict: 'gfw',
+          status: overseas.status || 200,
+          reason: 'gfw_blocked',
+        })
+      } else if (overseas.outcome === 'dead') {
+        verdictResult = makeCheckResult({
+          verdict: 'dead',
+          status: overseas.status || 404,
+          reason: 'dns_not_found',
+        })
+      }
+    }
+
+    return verdictResult
   }
 
   async function checkAll(batchSize = 5, intervalMs = 200, maxCount = 0): Promise<void> {
@@ -642,6 +744,8 @@ export function useDeadLinkChecker() {
   function _resetDeadLinkCache() {
     _baselineCache = null
     _baselineInflight = null
+    _restrictedNetCache = null
+    _restrictedNetInflight = null
     _histCache = null
     _histCacheLoaded = false
     Object.keys(results).forEach(k => delete results[k])
