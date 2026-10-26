@@ -1,14 +1,44 @@
 /**
  * cloudCandidates.ts — AI 候选站点生成层（自 cloudAiClient.ts 拆出）
- * 职责：意图寻站（本地精选知识库启发式）与类似平替挖掘（预置同类映射库），
+ * 职责：意图寻站（大模型动态发散 + 本地精选知识库启发式兜底）与类似平替挖掘（大模型动态对比 + 预置同类映射库兜底），
  * 候选统一经偏好过滤与分类/属性上下文预匹配，生成对齐与链 Schema 的候选卡片。
  */
 
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiSearchPreference, AiCandidateBookmark } from '../../types/ai.js'
 import { t, getLocale } from '../../i18n/index.js'
+import { cfApiUrl } from '../../config/urls.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { getSimilarExternalWebsites } from './similarWebsites.js'
+
+/**
+ * 远程动态 AI 候选生成器：调用后端大模型动态发散，打破本地写死预设
+ */
+async function fetchDynamicCandidates(params: {
+  type: 'intent' | 'similar'
+  query?: string
+  targetUrl?: string
+  targetTitle?: string
+  signal?: AbortSignal
+}): Promise<AiCandidateBookmark[] | null> {
+  try {
+    const res = await fetch(cfApiUrl('/api/ai-candidates'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: params.signal || AbortSignal.timeout(16000),
+    })
+    if (res.ok) {
+      const data = (await res.json()) as { success?: boolean; items?: AiCandidateBookmark[] }
+      if (data && data.success && Array.isArray(data.items) && data.items.length > 0) {
+        return data.items
+      }
+    }
+  } catch {
+    // 容错降级至本地静态知识库
+  }
+  return null
+}
 
 /**
  * 根据偏好过滤与重排候选集
@@ -73,7 +103,14 @@ export async function searchWebsitesByIntent(
   const q = query.trim().toLowerCase()
   if (!q) return []
 
-  // 基础精选知识库拓扑（本地启发式 + 云端大模型直连）；条目文案走 i18n（dbXxx 键）
+  // 1. 优先调用大模型真智能动态挖掘意图候选
+  const dynamicItems = await fetchDynamicCandidates({ type: 'intent', query: q })
+  if (dynamicItems && dynamicItems.length > 0) {
+    const filtered = filterByPreferences(dynamicItems, preferences)
+    return filtered.map((item) => enrichContext(item, categories, attributes))
+  }
+
+  // 2. 离线/降级：基础精选知识库拓扑（本地启发式兜底）；条目文案走 i18n（dbXxx 键）
   const database: Array<{ keywords: string[]; items: AiCandidateBookmark[] }> = [
     {
       keywords: ['流程图', '白板', '画图', '架构图', '思维导图', 'flowchart', 'diagram', 'board'],
@@ -233,7 +270,18 @@ export async function findSimilarWebsites(
   categories: Category[] = [],
   attributes: CustomAttribute[] = []
 ): Promise<AiCandidateBookmark[]> {
-  // 查预置的高频同类映射库
+  // 1. 优先调用大模型真智能动态挖掘同类工具与竞品平替
+  const dynamicItems = await fetchDynamicCandidates({
+    type: 'similar',
+    targetUrl,
+    targetTitle,
+  })
+  if (dynamicItems && dynamicItems.length > 0) {
+    const filtered = filterByPreferences(dynamicItems, preferences)
+    return filtered.map((item) => enrichContext(item, categories, attributes))
+  }
+
+  // 2. 离线/未命中时降级查预置的高频同类映射库
   const similarItems = getSimilarExternalWebsites(targetUrl)
   let candidates: AiCandidateBookmark[] = []
 

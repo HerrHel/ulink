@@ -46,3 +46,36 @@ export const SHARE_FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL || ''}/f
  */
 export const EDGE_ADDON_URL = 'https://microsoftedge.microsoft.com/addons/detail/%E4%B8%8E%E9%93%BE/epjlkfndeonlpjocdafoiaomdigopeeh'
 
+/**
+ * 路线 A：海外轻量探活端点（Cloudflare Pages 边缘服务）。
+ * 用于国内（CloudBase 上海）探测无法定性（inconclusive）时，提供自由公网的客观第二视角。
+ */
+export const OVERSEAS_PROBE_URL =
+  (import.meta.env.VITE_OVERSEAS_PROBE_URL as string | undefined) || 'https://ulink.pages.dev/api/check-link'
+
+/**
+ * Cloudflare Pages Functions 基址（「出海跳板」）。
+ *
+ * 为什么必须用绝对地址：`/api/ai-candidates`、`/api/extract-metadata`、`/api/check-link`
+ * 这三条能力都要访问境外网络（网页抓取、海外探活），而 CloudBase 云函数在国内机房，
+ * 目标站点常不可达（`r.jina.ai` 即不通）——只有 Cloudflare 边缘能提供这个出口。
+ *
+ * 相对路径 `fetch('/api/...')` 会打到**当前站点域名**，而主站部署在 CloudBase 静态托管
+ * （没有 Functions）→ 实测全部 404，用户拿到的是本地兜底结果而非真模型输出。
+ * 详见 docs/AI_BACKEND_SPLIT.md。
+ */
+export const CF_FN_BASE =
+  ((import.meta.env.VITE_CF_FN_BASE as string | undefined) || 'https://ulink.pages.dev').replace(/\/+$/, '')
+
+/**
+ * 生成 CF Functions 端点地址。
+ *
+ * dev 环境保留相对路径 —— Vite 中间件已模拟这两个端点（vite.config.ts 里
+ * `/api/ai-candidates` 与 `/api/extract-metadata`），既保证离线可开发，
+ * 也避免开发时消耗生产侧配额。
+ */
+export function cfApiUrl(path: string): string {
+  if (import.meta.env.DEV) return path
+  return `${CF_FN_BASE}${path}`
+}
+
