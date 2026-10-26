@@ -420,24 +420,42 @@ export function useDeadLinkChecker() {
   // 一条链接测一次就定生死，会被瞬时抖动误杀：DNS 递归服务器抖动、连接被重置、
   // 服务端瞬时 5xx、网络短暂拥塞。这些与「站点已消失」完全不同，但单次探测分不开。
   //
-  // 实际会重试两类「判死」：
-  //   1. `connect_err` —— 服务端与本机都连不上，可能只是瞬时网络故障；
-  //   2. reason 为空的 dead —— Edge 拿到明确 4xx/5xx 死状态码且本机不可达，
-  //      期间可能有误配/瞬时故障（`!r.reason` 即命中）。
-  // 不重试：`dns_not_found`（权威 NXDOMAIN，重试不会改变）、
-  // `timeout`/`no_edge` 在非名单域名下本就是 inconclusive（不落标，无需复核）、
-  // `gfw`（由名单 + 双端失败共同确认）。
+  // 复核两类结果：
+  //   ① `dead` —— 排除假死（瞬时抖动被误判成站点消失）；
+  //   ② `inconclusive`（仅「没测通」类）—— **争取拿到确定结论**。
+  //      「未确定」对用户毫无价值（既不展示也无从处置），而超时/连接失败
+  //      往往只需再试一次就能变成明确的「活着」或「死了」。
   //
-  // 成本：仅对判死项重试，占比通常 5~15%，1000 书签全量约增加 ¥0.004。
+  // 不重试：`dns_not_found`（权威 NXDOMAIN，重试不会改变）、
+  // `gfw`（由名单 + 双端失败共同确认）、`offline`（本机离线，重试也没用）、
+  // `ssrf`（安全拒绝与站点死活无关）。
+  //
+  // 成本：仅对这两类重试，通常占总数 5~15%，1000 书签全量约增加 ¥0.004（重试上限另见 RETRY_MAX）。
   async function _retryTransientFailures(
     toCheck: Bookmark[],
     representativeMap: Map<string, { representative: Bookmark; others: Bookmark[] }>,
     intervalMs: number,
   ): Promise<number> {
-    const RETRYABLE: ReadonlySet<string> = new Set(['timeout', 'connect_err', 'no_edge'])
+    /** 「没测通」类原因：重试很可能给出确定结论 */
+    const RETRYABLE: ReadonlySet<string> = new Set([
+      'timeout',
+      'connect_err',
+      'no_edge',
+      'edge_unknown',
+      'recent_alive', // 首次判死但因历史被软化，值得再争取一次
+      'head_mismatch', // 两端信号冲突，复核可能收敛
+    ])
+    /** 与站点死活无关、重试无意义的原因 */
+    const NON_RETRYABLE: ReadonlySet<string> = new Set(['offline', 'ssrf'])
+
     const targets = toCheck.filter((bm) => {
       const r = results[bm.id]
-      if (!r || r.verdict !== 'dead') return false
+      if (!r) return false
+      if (r.verdict !== 'dead' && r.verdict !== 'inconclusive') return false
+      if (r.reason && NON_RETRYABLE.has(r.reason)) return false
+      // dead：reason 为空（Edge 明确死状态码）或属于可重试的网络类
+      if (r.verdict === 'dead') return !r.reason || RETRYABLE.has(r.reason)
+      // inconclusive：只复核「没测通」类
       return !r.reason || RETRYABLE.has(r.reason)
     })
     if (targets.length === 0) return 0
@@ -455,15 +473,23 @@ export function useDeadLinkChecker() {
           const res = settled[j]
           if (res.status !== 'fulfilled') continue
           const bm = batch[j]
-          // 两次都判死才算确认；只要重试结果不再是死链就覆盖（消除假死）
-          if (res.value.verdict !== 'dead') {
-            results[bm.id] = res.value
-            _appendDeadLinkHistory(bm.id, res.value, false)
+          const first = results[bm.id]
+          const next = res.value
+          // 采用规则（两条原则：尽量给确定结论；两次不一致时偏保守不误杀）
+          //   · 复核给出确定结论（alive / dead / gfw）→ 采用它；
+          //   · 首次判死、复核却不定 → 降级为不落标（宁可晚标，不可误杀）；
+          //   · 首两次都不定 → 保持不动。
+          const adopt =
+            next.verdict !== 'inconclusive' ||
+            (first !== undefined && first.verdict === 'dead')
+          if (adopt) {
+            results[bm.id] = next
+            _appendDeadLinkHistory(bm.id, next, false)
             const group = representativeMap.get(bm.id)
             if (group) {
               for (const other of group.others) {
-                results[other.id] = res.value
-                _appendDeadLinkHistory(other.id, res.value, false)
+                results[other.id] = next
+                _appendDeadLinkHistory(other.id, next, false)
               }
             }
           }

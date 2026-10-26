@@ -208,6 +208,41 @@ describe('measureNetworkBaseline 基线契约', () => {
   })
 })
 
+describe('重试扩展：为「未测通」争取确定结论', () => {
+  it('首次 inconclusive（超时）+ 复核可达 → 采用 alive（不留「未确定」）', async () => {
+    // 锁：inconclusive 对用户毫无价值，能争取到确定结论就必须争取
+    const ds = useDataStore()
+    seedBm(ds, { id: 'x-1', url: 'https://slow-but-alive.example', attributes: {} })
+    stubOverseasNetworkTargetFail() // 墙外：本机不可达 + 服务端可达时判活
+    invokeMock.mockResolvedValueOnce(edge('timeout')).mockResolvedValue(edge('ok', 200))
+    const { checkAll, results } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    expect(results['x-1'].verdict).toBe('alive')
+  }, 15000)
+
+  it('首次判死 + 复核不定 → 降级为不落标（宁可晚标也不误杀）', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'x-2', url: 'https://flaky-dead.example', attributes: {} })
+    stubProbeOkTargetFail()
+    invokeMock.mockResolvedValueOnce(edge('connect_error')).mockResolvedValue(edge('timeout'))
+    const { checkAll, results } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    expect(results['x-2'].verdict).toBe('inconclusive')
+    expect(ds.bookmarkMap['x-2'].attributes?.['dead-link']).toBeFalsy()
+  }, 15000)
+
+  it('本机离线导致的 inconclusive 不重试（重试没有意义）', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'x-3', url: 'https://offline.example' })
+    stubAllProbesFail()
+    invokeMock.mockResolvedValue({ data: null, error: null })
+    const { checkAll } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    // 离线时不落标，且不进入重试阶段（invoke 只被主循环调用一次）
+    expect(invokeMock.mock.calls.length).toBeLessThanOrEqual(1)
+  }, 15000)
+})
+
 describe('历史软化集成契约', () => {
   const DAY = 24 * 60 * 60 * 1000
   const seedHistory = (id: string, verdict: string, ageMs: number) => {
