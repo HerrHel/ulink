@@ -118,6 +118,11 @@ for (const [id, checks] of Object.entries(_history)) {
 
 let _abort: AbortController | null = null
 
+/** 失败重试：最多条数 / 等待窗口 / 并发 */
+const RETRY_MAX = 120
+const RETRY_DELAY_MS = 2000
+const RETRY_CONCURRENCY = 3
+
 // 网络基线缓存，5分钟内复用（比原来 30s 更长）；in-flight 合并避免 checkAll 冷启动探针风暴
 const BASELINE_PROBES = NETWORK_PROBE_URLS
 const BASELINE_TTL_MS = 5 * 60 * 1000 // 5 分钟，减少重复探测
@@ -393,6 +398,69 @@ export function useDeadLinkChecker() {
     return verdictResult
   }
 
+  // ── 失败项延迟重试 ──
+  //
+  // 一条链接测一次就定生死，会被瞬时抖动误杀：DNS 递归服务器抖动、连接被重置、
+  // 服务端瞬时 5xx、网络短暂拥塞。这些与「站点已消失」完全不同，但单次探测分不开。
+  //
+  // 实际会重试两类「判死」：
+  //   1. `connect_err` —— 服务端与本机都连不上，可能只是瞬时网络故障；
+  //   2. reason 为空的 dead —— Edge 拿到明确 4xx/5xx 死状态码且本机不可达，
+  //      期间可能有误配/瞬时故障（`!r.reason` 即命中）。
+  // 不重试：`dns_not_found`（权威 NXDOMAIN，重试不会改变）、
+  // `timeout`/`no_edge` 在非名单域名下本就是 inconclusive（不落标，无需复核）、
+  // `gfw`（由名单 + 双端失败共同确认）。
+  //
+  // 成本：仅对判死项重试，占比通常 5~15%，1000 书签全量约增加 ¥0.004。
+  async function _retryTransientFailures(
+    toCheck: Bookmark[],
+    representativeMap: Map<string, { representative: Bookmark; others: Bookmark[] }>,
+    intervalMs: number,
+  ): Promise<number> {
+    const RETRYABLE: ReadonlySet<string> = new Set(['timeout', 'connect_err', 'no_edge'])
+    const targets = toCheck.filter((bm) => {
+      const r = results[bm.id]
+      if (!r || r.verdict !== 'dead') return false
+      return !r.reason || RETRYABLE.has(r.reason)
+    })
+    if (targets.length === 0) return 0
+    // 上限保护：大面积死链（例如用户刚导入一批废站）时不能让重试把耗时翻倍
+    const capped = targets.slice(0, RETRY_MAX)
+
+    try {
+      // 稍等再测：给瞬时抖动留恢复窗口（2s 足够覆盖常见的 DNS/连接重试周期）
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
+      for (let i = 0; i < capped.length; i += RETRY_CONCURRENCY) {
+        if (_abort?.signal.aborted) break
+        const batch = capped.slice(i, i + RETRY_CONCURRENCY)
+        const settled = await Promise.allSettled(batch.map((bm) => checkUrl(bm.url, bm.id)))
+        for (let j = 0; j < batch.length; j++) {
+          const res = settled[j]
+          if (res.status !== 'fulfilled') continue
+          const bm = batch[j]
+          // 两次都判死才算确认；只要重试结果不再是死链就覆盖（消除假死）
+          if (res.value.verdict !== 'dead') {
+            results[bm.id] = res.value
+            _appendDeadLinkHistory(bm.id, res.value, false)
+            const group = representativeMap.get(bm.id)
+            if (group) {
+              for (const other of group.others) {
+                results[other.id] = res.value
+                _appendDeadLinkHistory(other.id, res.value, false)
+              }
+            }
+          }
+        }
+        if (i + RETRY_CONCURRENCY < capped.length) {
+          await new Promise((r) => setTimeout(r, intervalMs))
+        }
+      }
+    } catch {
+      // 重试阶段失败不影响已得到的结果（保守：保留首次结论）
+    }
+    return capped.length
+  }
+
   async function checkAll(batchSize = 5, intervalMs = 200, maxCount = 0): Promise<void> {
     if (checking.value) return
     const ds = useDataStore()
@@ -501,6 +569,9 @@ export function useDeadLinkChecker() {
         await new Promise(r => setTimeout(r, intervalMs))
       }
     }
+
+    // 失败项复核：把「瞬时抖动」与「真的没了」区分开
+    await _retryTransientFailures(toCheck, representativeMap, intervalMs)
 
     _flushDeadLinkHistory()
     checking.value = false

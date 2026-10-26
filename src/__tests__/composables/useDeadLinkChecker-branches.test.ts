@@ -71,10 +71,25 @@ function seedBm(ds: ReturnType<typeof useDataStore>, partial: Record<string, unk
 function stubProbeOkTargetOk() {
   vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 200 })))
 }
-/** 基线探针成功、目标书签 no-cors 失败（模拟 GFW / 本机不可达） */
+/**
+ * 模拟**墙内网络 + 目标不可达**（最典型的 GFW 场景）
+ *
+ * 注意不能笼统地让所有探针都成功：`gstatic.com` 本身就是被墙的境外端点，
+ * 而它同时被当作「地区判定」探针——若在 stub 里让它可达，会被判成「墙外」，
+ * 与「模拟墙内」的意图自相矛盾（实测会导致本该判 gfw 的用例变成 alive）。
+ */
 function stubProbeOkTargetFail() {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (/baidu|gstatic|cloudflare/.test(String(url))) return new Response(null, { status: 200 })
+    const u = String(url)
+    if (/baidu/.test(u)) return new Response(null, { status: 200 }) // 境内探针可达 → baseline online
+    throw new Error('network fail') // 境外端点 + 目标均不可达 → 墙内
+  }))
+}
+/** 模拟**墙外网络**（境外端点可达）但目标站点不可达 */
+function stubOverseasNetworkTargetFail() {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const u = String(url)
+    if (/baidu|gstatic|cloudflare/.test(u)) return new Response(null, { status: 200 })
     throw new Error('network fail')
   }))
 }
@@ -191,6 +206,47 @@ describe('measureNetworkBaseline 基线契约', () => {
     // 探针增量=0（缓存命中跳过 measureNetworkBaseline 的探针阶段）
     expect(afterSecond).toBe(afterFirst)
   })
+})
+
+describe('失败项延迟重试契约', () => {
+  it('判死（timeout）的项会被重试一次（同一 URL 探测两次）', async () => {
+    // 锁：单次探测会因瞬时抖动误杀，必须复核一次才能落标
+    const ds = useDataStore()
+    seedBm(ds, { id: 'r-1', url: 'https://retry.example' })
+    stubProbeOkTargetFail() // 墙内网络 + 目标不可达
+    // 用 connect_error：这是真正会判 dead 的路径（timeout 在非名单域名下判 inconclusive，
+    // 不落标也就不需要重试）
+    invokeMock.mockResolvedValue(edge('connect_error'))
+    const { checkAll } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    // 首次探测 + 重试探测（Edge 侧各一次 invoke）
+    expect(invokeMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+  }, 15000)
+
+  it('DNS 权威查无记录（dns_not_found）不重试——重试不会改变权威结论', async () => {
+    const ds = useDataStore()
+    seedBm(ds, { id: 'r-2', url: 'https://nxdomain.example' })
+    stubProbeOkTargetFail()
+    invokeMock.mockResolvedValue(edge('dns_not_found'))
+    const { checkAll } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    // 只探测一次，不进入重试阶段
+    expect(invokeMock).toHaveBeenCalledTimes(1)
+  }, 15000)
+
+  it('重试后不再判死则覆盖首次结论（消除假死）', async () => {
+    // 首次 timeout → 判死；重试返回正常 → 最终不应落 dead 标
+    const ds = useDataStore()
+    seedBm(ds, { id: 'r-3', url: 'https://flaky.example', attributes: {} })
+    stubProbeOkTargetFail()
+    invokeMock
+      .mockResolvedValueOnce(edge('connect_error'))
+      .mockResolvedValue(edge('ok', 200))
+    const { checkAll, results } = useDeadLinkChecker()
+    await checkAll(5, 0)
+    expect(results['r-3'].verdict).not.toBe('dead')
+    expect(ds.bookmarkMap['r-3'].attributes?.['dead-link']).toBeFalsy()
+  }, 15000)
 })
 
 describe('checkAll 边界与中断契约', () => {

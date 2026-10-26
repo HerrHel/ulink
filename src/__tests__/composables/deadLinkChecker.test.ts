@@ -54,7 +54,9 @@ function seedBm(ds: ReturnType<typeof useDataStore>, partial: Record<string, unk
 /** 基线探针成功、目标书签 no-cors 失败（模拟 GFW / 本机不可达） */
 function stubProbeOkTargetFail() {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (/baidu|gstatic|cloudflare/.test(String(url))) return new Response(null, { status: 200 })
+    // 只让「境内」探针成功：gstatic 本身是被墙的境外端点，同时被用作地区判定探针，
+    // 让它可达会被判成「墙外」，与本桩「模拟墙内」的意图矛盾。
+    if (/baidu/.test(String(url))) return new Response(null, { status: 200 })
     throw new Error('network fail')
   }))
 }
@@ -284,5 +286,53 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
 
     expect(progress.value.total).toBe(5)
     expect(progress.value.done).toBe(5)
+  })
+
+  describe('路线 A：海外探针（Second Opinion）复核契约', () => {
+    it('境内 timeout(inconclusive) + 海外探针 alive → 判定为 gfw', async () => {
+      invokeMock.mockResolvedValue(edge('timeout', 0))
+      // mock fetch: 目标直连不可达，探针返回 alive
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (String(url).includes('check-link')) {
+          return new Response(JSON.stringify({ outcome: 'alive', status: 200 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        if (/baidu|gstatic|cloudflare/.test(String(url))) {
+          return new Response(null, { status: 200 })
+        }
+        throw new Error('connect fail')
+      }))
+
+      const { checkUrl } = useDeadLinkChecker()
+      const r = await checkUrl('https://obscure-foreign-blog.xyz')
+      expect(r.verdict).toBe('gfw')
+      expect(r.reason).toBe('gfw_blocked')
+      expect(r.blocked).toBe(true)
+    })
+
+    it('境内 timeout(inconclusive) + 海外探针 dead → 判定为 dead', async () => {
+      invokeMock.mockResolvedValue(edge('timeout', 0))
+      // mock fetch: 目标直连不可达，探针返回 dead
+      vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+        if (String(url).includes('check-link')) {
+          return new Response(JSON.stringify({ outcome: 'dead', status: 404 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        }
+        if (/baidu|gstatic|cloudflare/.test(String(url))) {
+          return new Response(null, { status: 200 })
+        }
+        throw new Error('connect fail')
+      }))
+
+      const { checkUrl } = useDeadLinkChecker()
+      const r = await checkUrl('https://obscure-foreign-dead.xyz')
+      expect(r.verdict).toBe('dead')
+      expect(r.reason).toBe('dns_not_found')
+      expect(r.alive).toBe(false)
+    })
   })
 })

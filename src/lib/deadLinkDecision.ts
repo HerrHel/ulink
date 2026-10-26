@@ -216,7 +216,11 @@ export function decide(
       if (http === 'alive') {
         return direct.reachable
           ? makeCheckResult({ verdict: 'alive', status: edge.http_status || 200, finalUrl: url })
-          : makeCheckResult({ verdict: 'gfw', status: edge.http_status })
+          // 服务端拿到 200 而本机不可达：墙内是「被墙」的典型特征；
+          // 墙外则说明是本机网络/代理的问题——服务端证据更强，判活。
+          : (restrictedNetwork
+              ? makeCheckResult({ verdict: 'gfw', status: edge.http_status })
+              : makeCheckResult({ verdict: 'alive', status: edge.http_status || 200, finalUrl: url }))
       }
       if (http === 'dead') {
         return direct.reachable
