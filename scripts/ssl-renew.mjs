@@ -8,6 +8,7 @@
  * 用法：
  *   node scripts/ssl-renew.mjs            查状态（默认，纯只读）
  *   node scripts/ssl-renew.mjs --apply    剩余 <= 30 天时真的申请续期
+ *   node scripts/ssl-renew.mjs --domain www.ulink.ren --apply   为子域单独申请（免费证书不含泛域名）
  *
  * ⚠️ 关键：`ApplyCertificate` 传 `OldCertificateId` 会建立**续费关系**（腾讯云侧可托管）。
  *    但 CloudBase 域名绑定是否会自动切到新证书**尚未实测**（当前证书还剩 80+ 天，
@@ -27,7 +28,13 @@ import { join } from 'node:path'
 const HOST = 'ssl.tencentcloudapi.com'
 const SERVICE = 'ssl'
 const VERSION = '2019-12-05' // ← 注意：不是 2018-05-01，用错版本会全部 InvalidAction
-const DOMAIN = 'ulink.ren'
+const DEFAULT_DOMAIN = 'ulink.ren'
+/** 支持 --domain www.ulink.ren 查询/申请其它域名（免费证书不支持泛域名，子域需单独一张） */
+const domainArgIdx = process.argv.indexOf('--domain')
+const DOMAIN =
+  domainArgIdx > -1 && process.argv[domainArgIdx + 1]
+    ? String(process.argv[domainArgIdx + 1]).trim()
+    : DEFAULT_DOMAIN
 const RENEW_THRESHOLD_DAYS = 30
 
 const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex')
@@ -125,9 +132,34 @@ const certs = (listResp.Certificates || [])
   .filter((c) => String(c.Domain || '').includes(DOMAIN))
   .sort((a, b) => String(b.CertEndTime).localeCompare(String(a.CertEndTime)))
 
+const issue = process.argv.includes('--issue')
+
 if (certs.length === 0) {
-  console.error(`未找到 ${DOMAIN} 的证书`)
-  process.exit(2)
+  if (!issue) {
+    console.error(`未找到 ${DOMAIN} 的证书`)
+    console.error(`（首次申请请加 --issue；免费证书不支持泛域名，子域需单独一张）`)
+    process.exit(2)
+  }
+  console.log(`正在为 ${DOMAIN} 首次申请免费证书（DNS_AUTO 自动验证）…`)
+  const created = await call(
+    'ApplyCertificate',
+    {
+      DvAuthMethod: 'DNS_AUTO',
+      DomainName: DOMAIN,
+      PackageType: '83', // TrustAsia C1 DV Free
+      DeleteDnsAutoRecord: true,
+      Alias: `${DOMAIN}-auto`,
+    },
+    cred,
+  )
+  console.log(`\n✓ 已提交申请，证书 ID：${created.CertificateId}`)
+  console.log('  签发通常几分钟到 2 小时（DNS 自动验证）。')
+  console.log('')
+  console.log('  签发后需在 CloudBase 控制台把它关联到域名：')
+  console.log('    HTTP 网关 → 域名及路由 → 添加域名 → 填域名 → 证书关联选新证书')
+  console.log('')
+  console.log(`  查询进度：node scripts/ssl-renew.mjs --domain ${DOMAIN}`)
+  process.exit(0)
 }
 
 console.log(`\n${DOMAIN} 的证书（共 ${certs.length} 张）:`)
@@ -171,7 +203,7 @@ const renewResp = await call(
     PackageType: '83', // TrustAsia C1 DV Free
     OldCertificateId: current.CertificateId, // 建立续费关系
     DeleteDnsAutoRecord: true,
-    Alias: `${DOMAIN}-auto-renew`,
+    Alias: `${DOMAIN}-auto`,
   },
   cred,
 )
