@@ -101,8 +101,12 @@ jobs:
             echo "::warning::未配置 CLOUDBASE_APIKEY，跳过部署（门禁仍照常执行）"
             exit 0
           fi
+          # ⚠️ 必须用 -p 显式指定可执行文件：@cloudbase/cli 暴露了三个 bin
+          # （tcb / cloudbase / cloudbase-mcp），直接 `npx @cloudbase/cli` 会报
+          # "could not determine executable to run"。
+          CLI="npx --yes -p @cloudbase/cli tcb"
           # --cloudbase-api-key 支持非交互认证，无需设备码
-          npx --yes @cloudbase/cli login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
+          $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
           # --safe：发布前备份，上传或校验失败自动回滚
           # --verify：上传后校验远端文件与本地产物一致
-          npx --yes @cloudbase/cli hosting deploy ./dist -e "$ENV_ID" --safe --verify
+          $CLI hosting deploy ./dist -e "$ENV_ID" --safe --verify
