@@ -24,6 +24,8 @@ task_plan.md
 !/extension/lib/README.md
 !/supabase/functions/check-link/README.md
 !/supabase/functions/share-html/README.md
+# supabase/ 是历史归档目录，这份 README 说明其现状与「不要再往这里加功能」的约束
+!/supabase/README.md
 !docs/sync-e2e-governance.md
 # 法律与计费文档必须入库留痕：合规文本需要可追溯的版本历史，
 # 否则发布过的条款可能被无声改动，事后无法举证"当时约定的是什么"。

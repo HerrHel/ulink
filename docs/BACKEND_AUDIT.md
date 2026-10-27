@@ -1,5 +1,12 @@
 # Supabase 后端质量评估报告
 
+> ⚠️ **这是一份历史快照（审计于 2026-09-02），描述的是 Supabase 时代的后端，结论已随架构迁移过时。**
+> 生产后端已于 **2026-10-22** 全量切到腾讯云 CloudBase（迁移手册见 `docs/CLOUDBASE_MIGRATION.md`），
+> `supabase/` 目录现为历史归档（说明见 `supabase/README.md`）。
+> 本报告提到的 CI `supabase-db-test` 门禁已于 **2026-10-27** 移除 —— 它验证的是
+> 已不再被生产使用的 schema，对现网没有保护作用，却是每次 CI 里最慢的一环。
+> **正文按当时的事实原样保留，不做追改**；仅在此标注状态，避免后来者按旧结论排查。
+
 **审计日期**：2026-09-02
 **审计对象**：`supabase/migrations/001–031` + `supabase/functions/{check-link,share-html,send-feedback,report-error}`
 **审计方法**：代码静态审查 + 远程库（`yqouglfopbmujkqmjgpu`）系统表实测 + anon key 直打 PostgREST 黑盒验证
