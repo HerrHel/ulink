@@ -27,7 +27,7 @@ export interface JinaReadResult {
 
 export async function fetchPageContentViaJina(
   targetUrl: string,
-  options: { signal?: AbortSignal; timeoutMs?: number; maxChars?: number } = {}
+  options: { signal?: AbortSignal; timeoutMs?: number; maxChars?: number; silentNotice?: boolean } = {}
 ): Promise<JinaReadResult> {
   const cleanUrl = targetUrl.trim()
   if (!cleanUrl || !/^https?:\/\//i.test(cleanUrl)) {
@@ -97,7 +97,9 @@ export async function fetchPageContentViaJina(
   try {
     const safeUrl = sanitizeUrlForExternalService(cleanUrl)
     // 用户可见隐私披露：本次请求会把目标 URL 经服务端发送给第三方 r.jina.ai（每次触发均提示，不做静默外送）
-    toast(t('ai.jinaThirdPartyNotice'))
+    if (!options.silentNotice) {
+      toast(t('ai.jinaThirdPartyNotice'))
+    }
     // 前端只调自家 jina-proxy 云函数（服务端转发 r.jina.ai），零直连第三方
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -137,7 +139,21 @@ export async function fetchPageContentViaJina(
     if (titleMatch) title = titleMatch[1].trim()
 
     const descMatch = text.match(/^Description:\s*(.+)$/im)
-    if (descMatch) description = descMatch[1].trim()
+    if (descMatch) {
+      description = descMatch[1].trim()
+    } else {
+      const bodyClean = text
+        .replace(/^Title:\s*.*$/im, '')
+        .replace(/^URL Source:\s*.*$/im, '')
+        .replace(/^Markdown Content:\s*.*$/im, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/[#*`_~>-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (bodyClean.length > 10) {
+        description = bodyClean.slice(0, 160)
+      }
+    }
 
     return {
       success: true,
