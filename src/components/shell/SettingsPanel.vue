@@ -1,513 +1,802 @@
 <template>
   <Teleport to="body">
-    <Transition name="drawer">
-      <div v-if="uiStore.panels.settings" class="settings-drawer-wrap" @click.self="uiStore.panels.settings = false">
-        <div class="settings-drawer" data-testid="lv-settings-drawer" @click.stop>
-          <div class="settings-drawer-head">
-            <h2 class="settings-drawer-title">{{ t('settings.title') }}</h2>
-            <button class="sp-help-btn" @click.stop="onOpenShortcutHelp" :aria-label="t('settings.shortcutHelp')" :title="t('settings.shortcutHelp')">?</button>
-            <button class="modal-close" @click="uiStore.panels.settings = false" :aria-label="t('settings.closeSettings')">&times;</button>
+    <Transition name="modal">
+      <div
+        v-if="uiStore.panels.settings"
+        class="settings-modal-wrap settings-drawer-wrap"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="t('settings.title')"
+        @mousedown="onMaskMouseDown" @click="onMaskClick" @keydown.esc="uiStore.panels.settings = false"
+      >
+        <div class="settings-dialog settings-drawer" data-testid="lv-settings-drawer" @click.stop>
+          <!-- 弹窗顶栏 -->
+          <div class="settings-dialog-head settings-drawer-head">
+            <div class="settings-dialog-title-row">
+              <span class="settings-dialog-icon" aria-hidden="true" v-html="I.settings"></span>
+              <h2 class="settings-dialog-title settings-drawer-title">{{ t('settings.title') }}</h2>
+            </div>
+            <div class="settings-dialog-actions">
+              <button class="sp-help-btn" @click.stop="onOpenShortcutHelp" :aria-label="t('settings.shortcutHelp')" :title="t('settings.shortcutHelp')">?</button>
+              <button class="modal-close" @click="uiStore.panels.settings = false" :aria-label="t('settings.closeSettings')">&times;</button>
+            </div>
           </div>
-          <div class="settings-drawer-body">
-            <!-- 同步与安全（置顶，提升账户优先级） -->
-            <div class="sp-section sp-section-sync-hero">
-              <span class="sp-section-title">{{ t('settings.syncSecurity') }}</span>
-              <template v-if="auth.isLoggedIn">
-                <div class="sp-user-card">
-                  <div class="sp-user-main">
-                    <div class="sp-user-avatar">
-                      <span v-if="auth.avatar" class="sp-user-emoji">{{ auth.avatar }}</span>
-                      <span v-else class="sp-user-initial">{{ userInitial }}</span>
+
+          <!-- 弹窗主体：左侧分类导航 + 右侧设置内容 -->
+          <div class="settings-dialog-body settings-drawer-body">
+            <!-- 左侧导航选项卡（无 emoji） -->
+            <nav class="settings-nav" aria-label="Settings navigation">
+              <button
+                v-for="tab in tabs"
+                :key="tab.id"
+                type="button"
+                class="settings-nav-item"
+                :class="{ active: currentTab === tab.id }"
+                :data-testid="'settings-tab-' + tab.id"
+                @click="currentTab = tab.id"
+              >
+                <span class="nav-item-icon" aria-hidden="true" v-html="tab.icon"></span>
+                <span class="nav-item-label">{{ t(tab.labelKey) }}</span>
+                <span v-if="tab.badge" class="nav-item-badge">{{ tab.badge }}</span>
+              </button>
+            </nav>
+
+            <!-- 右侧设置内容主视窗 -->
+            <div class="settings-content-pane">
+              <!-- Tab 1: 账号与安全 -->
+              <div v-show="currentTab === 'account'" class="settings-tab-panel" data-testid="settings-panel-account">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabAccount') }}</h3>
+                  <p class="sp-tab-desc">管理您的云端账户、同步状态、数据安全加密与会员权益</p>
+                </div>
+
+                <!-- 账号与同步卡片 -->
+                <div class="sp-card">
+                  <div class="sp-card-head">{{ t('settings.syncSecurity') }}</div>
+                  <template v-if="auth.isLoggedIn">
+                    <div class="sp-card-row sp-user-main-row">
+                      <div class="sp-user-avatar">
+                        <span v-if="auth.avatar" class="sp-user-emoji">{{ auth.avatar }}</span>
+                        <span v-else class="sp-user-initial">{{ userInitial }}</span>
+                      </div>
+                      <div class="sp-user-details">
+                        <div class="sp-user-name-row">
+                          <span class="sp-user-name">{{ auth.displayName || userDisplay }}</span>
+                          <button class="btn btn-ghost btn-xs sp-edit-profile-btn" @click.stop="toggleProfileEditor">
+                            <span aria-hidden="true" v-html="I.edit"></span>
+                            {{ isEditingProfile ? t('userPopover.closeEdit') : t('userPopover.editProfile') }}
+                          </button>
+                        </div>
+                        <span class="sp-user-email">{{ auth.userEmail }}</span>
+                      </div>
                     </div>
-                    <div class="sp-user-info">
-                      <div class="sp-user-name-row">
-                        <span class="sp-user-name">{{ auth.displayName || userDisplay }}</span>
-                        <button class="up-edit-btn" @click.stop="toggleProfileEditor" :title="isEditingProfile ? t('userPopover.closeEdit') : t('userPopover.editProfile')">
-                          <span aria-hidden="true" v-html="I.edit"></span>
-                          <span>{{ isEditingProfile ? t('userPopover.closeEdit') : t('userPopover.editProfile') }}</span>
+
+                    <!-- 云端多端同步 -->
+                    <div class="sp-card-row sp-sync-card-row">
+                      <div class="sp-row-meta">
+                        <div class="sp-sync-title-row">
+                          <span class="sp-row-title">云端多端同步</span>
+                          <span class="sp-sync-status" data-testid="lv-sync-label" :class="syncState.level">
+                            <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
+                          </span>
+                        </div>
+                        <span class="sp-row-desc">{{ syncDetailDesc }}</span>
+                        <!-- 异常与错误明细提示 -->
+                        <div v-if="syncErrorMessage" class="sp-sync-error-banner" :class="{ 'is-quota': syncState.level === 'quota' }" data-testid="lv-sync-error-banner">
+                          <span class="sp-error-icon" aria-hidden="true" v-html="I.alert"></span>
+                          <div class="sp-error-text">
+                            <div class="sp-error-summary">{{ syncErrorSummary }}</div>
+                            <div v-if="syncErrorDetail" class="sp-error-detail">{{ syncErrorDetail }}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="sp-row-ctrl sp-sync-actions">
+                        <button
+                          v-if="sync.syncErrorKind.value === 'auth'"
+                          class="btn btn-primary btn-sm"
+                          data-testid="sp-reauth-btn"
+                          @click.stop="onOpenAuthModal"
+                        >
+                          <span aria-hidden="true" v-html="I.login"></span>
+                          重新登录
+                        </button>
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          data-testid="sp-retry-sync-btn"
+                          :disabled="isSyncing || isResyncing"
+                          @click.stop="onManualSync"
+                          :title="t('sync.retrySync')"
+                        >
+                          <span aria-hidden="true" v-html="I.refresh" :class="{ 'icon-spin': isSyncing }"></span>
+                          {{ isSyncing ? (t('sync.syncing') || '同步中…') : (canRetrySync ? t('sync.retrySync') : '立即同步') }}
+                        </button>
+                        <button
+                          v-if="syncState.level === 'conflict'"
+                          class="btn btn-ghost btn-sm"
+                          data-testid="sp-view-conflicts-btn"
+                          @click.stop="onViewConflicts"
+                        >
+                          <span aria-hidden="true" v-html="I.alert"></span>
+                          {{ t('sync.viewConflicts') }}
+                        </button>
+                        <button
+                          class="btn btn-ghost btn-sm"
+                          data-testid="sp-resync-all-btn"
+                          :disabled="isSyncing || isResyncing"
+                          @click.stop="onResyncAll"
+                          :title="t('sync.resyncAllHint')"
+                        >
+                          <span aria-hidden="true" v-html="I.cloud"></span>
+                          {{ isResyncing ? '重传中…' : t('sync.resyncAll') }}
                         </button>
                       </div>
-                      <span class="sp-user-email">{{ auth.userEmail }}</span>
-                      <div class="sp-sync-badge-row">
-                        <span class="sp-sync-status" data-testid="lv-sync-label" :class="syncState.level">
-                          <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
+                    </div>
+
+                    <!-- 个人资料编辑卡片 -->
+                    <div v-if="isEditingProfile" class="up-edit-box sp-profile-edit-box">
+                      <div class="up-field">
+                        <label class="up-label">{{ t('settings.nickname') }}</label>
+                        <input
+                          v-model="profileForm.nickname"
+                          type="text"
+                          maxlength="20"
+                          class="up-input"
+                          :placeholder="t('settings.nicknamePlaceholder')"
+                          @keydown.enter="onSaveProfile"
+                        />
+                      </div>
+                      <div class="up-field">
+                        <label class="up-label">{{ t('settings.avatar') }}</label>
+                        <div class="up-emoji-grid">
+                          <button
+                            v-for="emoji in PRESET_AVATAR_EMOJIS"
+                            :key="emoji"
+                            type="button"
+                            class="up-emoji-btn"
+                            :class="{ active: profileForm.avatar === emoji }"
+                            @click="profileForm.avatar = emoji"
+                          >
+                            {{ emoji }}
+                          </button>
+                        </div>
+                        <div class="up-reset-row">
+                          <button
+                            v-if="profileForm.avatar"
+                            type="button"
+                            class="up-link-btn"
+                            @click="profileForm.avatar = ''"
+                          >
+                            {{ t('settings.resetToDefaultAvatar') }}
+                          </button>
+                          <span v-else class="up-hint">{{ t('settings.defaultAvatarTip') }}</span>
+                        </div>
+                      </div>
+                      <div class="up-edit-actions">
+                        <button
+                          class="btn btn-primary btn-sm up-action-btn"
+                          :disabled="savingProfile"
+                          @click="onSaveProfile"
+                        >
+                          {{ savingProfile ? (t('common.saving') || '保存中…') : t('common.save') }}
+                        </button>
+                        <button
+                          class="btn btn-ghost btn-sm up-action-btn"
+                          @click="isEditingProfile = false"
+                        >
+                          {{ t('common.cancel') }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="sp-card-row">
+                      <div class="sp-row-meta">
+                        <span class="sp-row-title">{{ t('settings.setPassword') }}</span>
+                        <span class="sp-row-desc">设置或修改您的独立登录密码，方便在其他设备快捷登录</span>
+                      </div>
+                      <div class="sp-row-ctrl">
+                        <button class="btn btn-secondary btn-sm" id="spSetPasswordBtn" @click.stop="onOpenSetPassword">
+                          <span aria-hidden="true" v-html="I.password"></span>
+                          {{ t('settings.setPassword') }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="sp-card-row">
+                      <div class="sp-row-meta">
+                        <span class="sp-row-title">{{ t('userPopover.signOut') }}</span>
+                        <span class="sp-row-desc">退出当前设备的登录态，本地数据仍将安全保存在本机</span>
+                      </div>
+                      <div class="sp-row-ctrl">
+                        <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">
+                          <span aria-hidden="true" v-html="I.logout"></span>
+                          {{ t('userPopover.signOut') }}
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="sp-card-row">
+                      <div class="sp-row-meta">
+                        <span class="sp-row-title">账号登录与多端同步</span>
+                        <span class="sp-row-desc">{{ t('settings.loginHint') }}</span>
+                      </div>
+                      <div class="sp-row-ctrl">
+                        <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">{{ t('settings.loginRegister') }}</button>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- 端到端加密卡片 -->
+                <div class="sp-card">
+                  <div class="sp-card-head">{{ t('userPopover.e2eTitle') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <div class="sp-row-title-with-badge">
+                        <span class="sp-row-title">{{ t('userPopover.e2eTitle') }}</span>
+                        <span class="sp-sync-status" data-testid="lv-e2e-status" :class="e2eEnabled ? (e2eUnlocked ? 'ok' : 'pending') : 'error'">
+                          {{ e2eEnabled ? (e2eUnlocked ? t('settings.e2eUnlocked') : t('settings.e2eLocked')) : t('settings.e2eDisabled') }}
                         </span>
                       </div>
+                      <span class="sp-row-desc">{{ t('settings.e2eHint') }}<span v-if="!auth.isLoggedIn">（{{ t('settings.e2eHintLocalOnly') }}）</span></span>
                     </div>
-                  </div>
-
-                  <!-- 个人资料编辑卡片（展开态，与侧边栏气泡样式完全一致） -->
-                  <div v-if="isEditingProfile" class="up-edit-box sp-profile-edit-box">
-                    <div class="up-field">
-                      <label class="up-label">{{ t('settings.nickname') }}</label>
-                      <input
-                        v-model="profileForm.nickname"
-                        type="text"
-                        maxlength="20"
-                        class="up-input"
-                        :placeholder="t('settings.nicknamePlaceholder')"
-                        @keydown.enter="onSaveProfile"
-                      />
-                    </div>
-                    <div class="up-field">
-                      <label class="up-label">{{ t('settings.avatar') }}</label>
-                      <div class="up-emoji-grid">
-                        <button
-                          v-for="emoji in PRESET_AVATAR_EMOJIS"
-                          :key="emoji"
-                          type="button"
-                          class="up-emoji-btn"
-                          :class="{ active: profileForm.avatar === emoji }"
-                          @click="profileForm.avatar = emoji"
-                        >
-                          {{ emoji }}
-                        </button>
-                      </div>
-                      <div class="up-reset-row">
-                        <button
-                          v-if="profileForm.avatar"
-                          type="button"
-                          class="up-link-btn"
-                          @click="profileForm.avatar = ''"
-                        >
-                          {{ t('settings.resetToDefaultAvatar') }}
-                        </button>
-                        <span v-else class="up-hint">{{ t('settings.defaultAvatarTip') }}</span>
-                      </div>
-                    </div>
-                    <div class="up-edit-actions">
+                    <div class="sp-row-ctrl">
                       <button
-                        class="btn btn-primary btn-sm up-action-btn"
-                        :disabled="savingProfile"
-                        @click="onSaveProfile"
+                        v-if="!e2eEnabled"
+                        class="btn btn-primary btn-sm"
+                        data-testid="lv-e2e-setup-btn"
+                        @click.stop="onOpenE2ESetup"
                       >
-                        {{ savingProfile ? (t('common.saving') || '保存中…') : t('common.save') }}
+                        {{ t('userPopover.enableE2E') }}
                       </button>
                       <button
-                        class="btn btn-ghost btn-sm up-action-btn"
-                        @click="isEditingProfile = false"
+                        v-else-if="!e2eUnlocked"
+                        class="btn btn-primary btn-sm"
+                        data-testid="lv-e2e-unlock-btn"
+                        @click.stop="onOpenE2EUnlock"
                       >
-                        {{ t('common.cancel') }}
+                        {{ e2e.isBiometricEnrolled.value ? (t('settings.biometricUnlock') || '指纹解密') : t('userPopover.decrypt') }}
+                      </button>
+                      <button
+                        v-else
+                        class="btn btn-secondary btn-sm"
+                        data-testid="lv-e2e-lock-btn"
+                        @click.stop="onE2ELock"
+                      >
+                        {{ t('userPopover.lock') }}
                       </button>
                     </div>
                   </div>
-
-                  <!-- 账号密码：老用户从「验证码登录」迁到「密码登录」的入口。
-                       表单本身放在 SetPasswordModal 弹窗里 —— 这里只有 ~330px 宽，
-                       验证码 + 发送按钮 + 密码规则挤在面板内联展开时很局促。 -->
-                  <div class="sp-logout-wrap">
-                    <button class="up-menu-item sp-logout-btn" id="spSetPasswordBtn" @click.stop="onOpenSetPassword">
-                      <div class="up-item-left">
-                        <span class="up-item-icon" aria-hidden="true" v-html="I.password"></span>
-                        <span class="up-item-title">{{ t('settings.setPassword') }}</span>
-                      </div>
-                    </button>
-                  </div>
-
-                  <div class="sp-logout-wrap">
-                    <button class="up-menu-item up-danger-item sp-logout-btn" @click.stop="onLogout">
-                      <div class="up-item-left">
-                        <span class="up-item-icon" aria-hidden="true" v-html="I.logout"></span>
-                        <span class="up-item-title">{{ t('userPopover.signOut') }}</span>
-                      </div>
-                    </button>
+                  <div v-if="e2eEnabled && e2eUnlocked" class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">主密钥与生物识别安全</span>
+                      <span class="sp-row-desc">更换加密密码或管理指纹/面容无感解密</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-ghost btn-sm" data-testid="lv-e2e-changepw-btn" @click.stop="onOpenE2EChangePw">
+                        <span aria-hidden="true" v-html="I.edit"></span> {{ t('settings.changeMasterPassword') }}
+                      </button>
+                      <button v-if="e2e.isBiometricEnrolled.value" class="btn btn-ghost btn-sm text-danger" data-testid="lv-e2e-biometric-remove" @click.stop="onRemoveBiometric">
+                        {{ t('settings.removeBiometric') }}
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div v-if="syncState.level === 'error' && sync.syncError.value" class="sp-sync-error">{{ sync.syncError.value }}</div>
-              </template>
-              <template v-else>
-                <div class="sp-row">
-                  <span class="sp-hint">{{ t('settings.loginHint') }}</span>
-                </div>
-                <div class="sp-row">
-                  <button class="btn btn-primary btn-sm" @click.stop="onOpenLogin">{{ t('settings.loginRegister') }}</button>
-                </div>
-              </template>
-              <div class="sp-divider"></div>
-              <!-- 数据解密状态与控制卡片（对齐侧边栏气泡解密样式） -->
-              <div class="sp-e2e-card">
-                <div class="sp-e2e-left">
-                  <span class="sp-e2e-icon" aria-hidden="true" v-html="I.password"></span>
-                  <div class="sp-e2e-text">
-                    <div class="sp-e2e-title-row">
-                      <span class="sp-e2e-title">{{ t('userPopover.e2eTitle') }}</span>
-                      <span class="sp-sync-status" data-testid="lv-e2e-status" :class="e2eEnabled ? (e2eUnlocked ? 'ok' : 'pending') : 'error'">
-                        {{ e2eEnabled ? (e2eUnlocked ? t('settings.e2eUnlocked') : t('settings.e2eLocked')) : t('settings.e2eDisabled') }}
+
+                <!-- 会员与权益卡片 -->
+                <div class="sp-card">
+                  <div class="sp-card-head">{{ t('settings.membership') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.currentPlan') }}</span>
+                      <span class="sp-row-desc" v-if="entitlement.isPaid && entitlement.expiresAt">
+                        {{ t('settings.expiresAt') }}: {{ entitlement.expiresAt }}
                       </span>
+                      <span class="sp-row-desc" v-else>享受无限制书签归档、本地闪电检索与基础同步</span>
                     </div>
-                    <span class="sp-e2e-desc">{{ t('settings.e2eHint') }}<span v-if="!auth.isLoggedIn">（{{ t('settings.e2eHintLocalOnly') }}）</span></span>
+                    <div class="sp-row-ctrl">
+                      <span class="sp-sync-status" data-testid="lv-entitlement-plan">{{ entitlementLabel }}</span>
+                      <span v-if="entitlement.isPaid && entitlement.expiresAt" class="hidden" data-testid="lv-entitlement-expiry">{{ entitlement.expiresAt }}</span>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">激活兑换码</span>
+                      <span class="sp-row-desc">输入 16 位专属兑换码以升级至 Plus 会员权益</span>
+                    </div>
+                    <div class="sp-row-ctrl sp-redeem-ctrl">
+                      <input
+                        class="form-input sp-redeem-input"
+                        type="text"
+                        v-model="redeemInput"
+                        :placeholder="t('settings.redeemPlaceholder')"
+                        maxlength="16"
+                        autocomplete="off"
+                        spellcheck="false"
+                        @keyup.enter="onRedeem"
+                      />
+                      <button
+                        class="btn btn-primary btn-sm"
+                        data-testid="lv-redeem-btn"
+                        :disabled="redeeming || !redeemInput.trim()"
+                        @click.stop="onRedeem"
+                      >
+                        {{ redeeming ? t('settings.redeeming') : t('settings.redeem') }}
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div class="sp-e2e-right">
-                  <button
-                    v-if="!e2eEnabled"
-                    class="up-tag tag-disabled"
-                    data-testid="lv-e2e-setup-btn"
-                    @click.stop="onOpenE2ESetup"
-                  >
-                    {{ t('userPopover.enableE2E') }}
-                  </button>
-                  <button
-                    v-else-if="!e2eUnlocked"
-                    class="up-tag tag-locked"
-                    data-testid="lv-e2e-unlock-btn"
-                    @click.stop="onOpenE2EUnlock"
-                  >
-                    {{ e2e.isBiometricEnrolled.value ? (t('settings.biometricUnlock') || '指纹解密') : t('userPopover.decrypt') }}
-                  </button>
-                  <button
-                    v-else
-                    class="up-tag tag-unlocked"
-                    data-testid="lv-e2e-lock-btn"
-                    @click.stop="onE2ELock"
-                  >
-                    {{ t('userPopover.lock') }}
-                  </button>
+
+                <!-- 账号注销卡片 -->
+                <div v-if="auth.isLoggedIn" class="sp-card sp-danger-card">
+                  <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title text-danger">注销账号</span>
+                      <span class="sp-row-desc">根据《个人信息保护法》第47条行使删除权，永久抹除云端所有数据与关联关系</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button
+                        type="button"
+                        class="btn btn-danger btn-sm"
+                        data-testid="lv-delete-account"
+                        :disabled="deletingAccount"
+                        @click.stop="onDeleteAccount"
+                      >
+                        {{ deletingAccount ? t('settings.deleteAccountDoing') : t('settings.deleteAccount') }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <!-- 已解密状态下的附属操作：修改密码 / 移除指纹 -->
-              <div v-if="e2eEnabled && e2eUnlocked" class="sp-e2e-sub-actions">
-                <button class="btn btn-ghost btn-xs" data-testid="lv-e2e-changepw-btn" @click.stop="onOpenE2EChangePw">
-                  <span aria-hidden="true" v-html="I.edit"></span> {{ t('settings.changeMasterPassword') }}
-                </button>
-                <button v-if="e2e.isBiometricEnrolled.value" class="btn btn-ghost btn-xs" data-testid="lv-e2e-biometric-remove" @click.stop="onRemoveBiometric">
-                  {{ t('settings.removeBiometric') }}
-                </button>
-              </div>
-            </div>
-            <!-- Theme -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.theme') }}</span>
-              <div class="sp-row">
-                <div class="sp-seg">
-                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click="onSetThemeColor('light', $event)">
-                    <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
-                  </button>
-                  <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click="onSetThemeColor('dark', $event)">
-                    <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
-                  </button>
+              <!-- Tab 2: 外观与视图 -->
+              <div v-show="currentTab === 'appearance'" class="settings-tab-panel" data-testid="settings-panel-appearance">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabAppearance') }}</h3>
+                  <p class="sp-tab-desc">自定义界面色彩、卡片排布密度与书签排序模式</p>
                 </div>
-              </div>
-              <div class="sp-row">
-                <div class="sp-seg">
-                  <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click="onSetThemeStyle('premium')">{{ t('settings.themePremium') }}</button>
-                  <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click="onSetThemeStyle('comfortable')">{{ t('settings.themeComfortable') }}</button>
-                </div>
-              </div>
-              <div class="sp-toggle-row" :class="{ active: uiStore.themeMode === 'auto' }" @click="onToggleAutoTheme">
-                <span aria-hidden="true" v-html="I.sun" class="sp-icon auto-icon-sun"></span>
-                <span aria-hidden="true" v-html="I.moon" class="sp-icon auto-icon-moon"></span>
-                <span class="sp-toggle-label">{{ t('settings.followSystem') }}</span>
-                <span class="sp-switch"></span>
-              </div>
-            </div>
-            <!-- Layout -->
-            <div class="sp-section sp-section-layout">
-              <span class="sp-section-title">{{ t('settings.layout') }}</span>
-              <div class="sp-row">
-                <div class="sp-seg">
-                  <button v-if="!uiStore.isMobile" class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" :title="t('settings.gridView')"><span aria-hidden="true" v-html="I.grid"></span></button>
-                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" @click="onSetLayout('list')" :title="t('settings.listView')"><span aria-hidden="true" v-html="I.list"></span></button>
-                  <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'mini-grid' }" @click="onSetLayout('mini-grid')" :title="t('settings.miniGridView')"><span aria-hidden="true" v-html="I.miniGrid"></span></button>
-                </div>
-              </div>
-            </div>
-            <!-- Sort -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.sort') }}</span>
-              <div class="sp-row">
-                <div class="sp-seg sp-seg-wrap">
-                  <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn"
-                          :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ t(s.labelKey) }}</button>
-                </div>
-              </div>
-              <div class="sp-toggle-row" :class="{ active: uiStore.groupsOnTop }" @click="onToggleGroupsOnTop">
-                <span class="sp-toggle-label">{{ t('settings.groupsOnTop') }}</span>
-                <span class="sp-switch"></span>
-              </div>
-            </div>
-            <!-- 检索与填充 -->
-            <div class="sp-section" data-testid="lv-search-fill-section">
-              <span class="sp-section-title">{{ t('settings.searchAndFill') }}</span>
-              <div
-                class="sp-toggle-row"
-                :class="{ active: uiStore.semanticSearchEnabled }"
-                @click="onToggleSemanticSearch"
-                data-testid="lv-semantic-search-toggle"
-              >
-                <span class="sp-toggle-label">
-                  {{ t('settings.semanticSearch') }}
-                  <span class="sp-toggle-sub">{{ t('settings.semanticSearchHint') }}</span>
-                </span>
-                <span class="sp-switch"></span>
-              </div>
-            </div>
 
-            <!-- 维护 -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.maintenance') }}</span>
-              <div class="sp-actions">
-                <button class="sp-action" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
-                  <span aria-hidden="true" v-html="I.radar"></span>
-                  <span>{{ dlChecking ? t('settings.checking') : t('settings.checkDeadLinks') }}</span>
-                  <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
-                  <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
-                </button>
-                <div v-if="dlChecking && dlProgress.total > 0" class="sp-check-progress">
-                  <div class="sp-check-progress-bar" :style="{ width: (dlProgress.done / dlProgress.total * 100) + '%' }"></div>
-                  <span class="sp-check-progress-text">{{ dlProgress.done }}/{{ dlProgress.total }}</span>
-                  <!-- 自动扫描有规模上限，超出部分本次不检查（如实告知，不静默截断） -->
-                  <span v-if="dlProgress.truncated > 0" class="sp-check-progress-text">
-                    {{ t('settings.dlScanLimited', { n: dlProgress.truncated }) }}
-                  </span>
+                <div class="sp-card">
+                  <div class="sp-card-head">色彩与主题</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.theme') }}</span>
+                      <span class="sp-row-desc">选择浅色明亮或深色低对比护眼模式</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click.stop="onSetThemeColor('light', $event)">
+                          <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
+                        </button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click.stop="onSetThemeColor('dark', $event)">
+                          <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">设计风格</span>
+                      <span class="sp-row-desc">效率模式注重紧凑信息密度，舒适模式具有更柔和的留白</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click.stop="onSetThemeStyle('premium')">{{ t('settings.themePremium') }}</button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click.stop="onSetThemeStyle('comfortable')">{{ t('settings.themeComfortable') }}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click.stop="onToggleAutoTheme" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.followSystem') }}</span>
+                      <span class="sp-row-desc">根据操作系统的外观自动在深色与浅色之间切换</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.themeMode === 'auto' }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button v-if="deadCount + blockedCount > 0" class="sp-action sp-action-sm" @click.stop="onViewDeadLinks">
-                  <span aria-hidden="true" v-html="I.link"></span>
-                  <span>{{ t('settings.view') }}</span>
-                </button>
-              </div>
-              <div class="sp-toggle-row" :class="{ active: dlAutoEnabled, locked: !dlAutoAllowed }" @click="onToggleAutoDeadCheck">
-                <span class="sp-toggle-label">
-                  {{ t('settings.autoDeadCheckWeekly') }}
-                  <span v-if="!dlAutoAllowed" class="sp-plus-tag">{{ t('settings.plusTag') }}</span>
-                </span>
-                <span class="sp-switch"></span>
-              </div>
-            </div>
-            <!-- 公开分享管理 -->
-            <div class="sp-section sp-section-shares">
-              <div class="sp-section-head">
-                <span class="sp-section-title">
-                  {{ t('settings.shareManagement') }}
-                  <span v-if="allPublicShares.length > 0" class="sp-shares-count">({{ allPublicShares.length }})</span>
-                </span>
-                <button
-                  v-if="allPublicShares.length > 1"
-                  class="sp-shares-stop-all"
-                  :title="t('settings.stopAllShares')"
-                  @click.stop="onStopAllShares"
-                >
-                  {{ t('settings.stopAllShares') }}
-                </button>
-              </div>
-              <p class="sp-desc">{{ t('settings.publicSharesDesc') }}</p>
 
-              <div v-if="allPublicShares.length > 0" class="sp-shares-list">
-                <div
-                  v-for="item in allPublicShares"
-                  :key="item.type + ':' + item.id"
-                  class="sp-share-item"
-                >
-                  <div class="sp-share-info">
-                    <span
-                      class="sp-share-badge"
-                      :class="'sp-share-badge--' + item.type"
+                <div class="sp-card">
+                  <div class="sp-card-head">视图与排序</div>
+                  <div class="sp-card-row" v-if="!uiStore.isMobile">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.layout') }}</span>
+                      <span class="sp-row-desc">切换主视图书签卡片的大网格、紧凑列表或小宫格</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" :title="t('settings.gridView')"><span aria-hidden="true" v-html="I.grid"></span> {{ t('settings.gridView') }}</button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" @click="onSetLayout('list')" :title="t('settings.listView')"><span aria-hidden="true" v-html="I.list"></span> {{ t('settings.listView') }}</button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'mini-grid' }" @click="onSetLayout('mini-grid')" :title="t('settings.miniGridView')"><span aria-hidden="true" v-html="I.miniGrid"></span> {{ t('settings.miniGridView') }}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.sort') }}</span>
+                      <span class="sp-row-desc">选择卡片默认的排列次序</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg sp-seg-wrap">
+                        <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn" :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ t(s.labelKey) }}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click="onToggleGroupsOnTop" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.groupsOnTop') }}</span>
+                      <span class="sp-row-desc">总是将含有多书签的聚合笔记组卡片优先置顶于分类前列</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.groupsOnTop }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card" data-testid="lv-lang-switch">
+                  <div class="sp-card-head">{{ t('settings.language') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.language') }}</span>
+                      <span class="sp-row-desc">切换软件界面的操作语言 / Switch application interface language</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">简体中文</button>
+                        <button class="sp-seg-btn" :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">English</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 3: AI 与智能 -->
+              <div v-show="currentTab === 'ai'" class="settings-tab-panel" data-testid="settings-panel-ai">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabAi') }}</h3>
+                  <p class="sp-tab-desc">配置智能书签提炼、自然语言意图检索与大模型服务工作流</p>
+                </div>
+
+                <div class="sp-card" data-testid="lv-search-fill-section">
+                  <div class="sp-card-head">智能特性与工作流</div>
+                  <div class="sp-card-row" @click="onToggleAiRail" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.aiRail') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.aiRailHint') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl" data-testid="lv-ai-rail-toggle">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.aiRailEnabled }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click="onToggleSmartFill" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.smartFill') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.smartFillHint') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl" data-testid="lv-smart-fill-toggle">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.smartFillEnabled }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click="onToggleSemanticSearch" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.semanticSearch') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.semanticSearchHint') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl" data-testid="lv-semantic-search-toggle">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.semanticSearchEnabled }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">{{ t('settings.aiProviders') }}</div>
+                  <div class="sp-card-row" @click="showAiProviders = !showAiProviders" style="cursor: pointer;" data-testid="lv-ai-providers-toggle">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">服务商合规与算法透明度</span>
+                      <span class="sp-row-desc">{{ t('settings.aiProvidersHint') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <span class="sp-sync-status">{{ showAiProviders ? '' : aiProvidersSummary }}</span>
+                      <span class="sp-caret" :class="{ open: showAiProviders }" aria-hidden="true">›</span>
+                    </div>
+                  </div>
+                  <div v-if="showAiProviders" class="sp-providers-list" data-testid="lv-ai-providers">
+                    <div v-for="p in aiProviders" :key="p.id" class="sp-provider-item">
+                      <div class="sp-provider-top">
+                        <span class="sp-provider-name">{{ p.name }}</span>
+                        <span class="sp-provider-product">{{ p.product }}</span>
+                      </div>
+                      <div class="sp-provider-filing">{{ p.filing }}</div>
+                      <a class="sp-provider-link" :href="p.website" target="_blank" rel="noopener noreferrer">{{ p.website }}</a>
+                    </div>
+                    <div class="sp-providers-footer">{{ t('settings.aiProvidersUpdated', { d: aiProvidersUpdatedAt }) }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 4: 维护与分享 -->
+              <div v-show="currentTab === 'maintenance'" class="settings-tab-panel" data-testid="settings-panel-maintenance">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabMaintenance') }}</h3>
+                  <p class="sp-tab-desc">扫描书签库健康状态，集中管理所有对公分享的卡片与网页</p>
+                </div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">{{ t('settings.maintenance') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.checkDeadLinks') }}</span>
+                      <span class="sp-row-desc">扫描所有书签的可访问性，自动标记失效或超时地址</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-secondary btn-sm" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
+                        <span aria-hidden="true" v-html="I.radar"></span>
+                        <span>{{ dlChecking ? t('settings.checking') : t('settings.checkDeadLinks') }}</span>
+                        <span v-if="deadCount > 0" class="sp-badge">{{ deadCount }}</span>
+                        <span v-if="blockedCount > 0" class="sp-badge sp-badge-gfw">{{ blockedCount }}</span>
+                      </button>
+                      <button v-if="deadCount + blockedCount > 0" class="btn btn-ghost btn-sm" @click.stop="onViewDeadLinks">
+                        {{ t('settings.view') }}
+                      </button>
+                    </div>
+                  </div>
+                  <div v-if="dlChecking && dlProgress.total > 0" class="sp-progress-box">
+                    <div class="sp-progress-track">
+                      <div class="sp-progress-bar" :style="{ width: (dlProgress.done / dlProgress.total * 100) + '%' }"></div>
+                    </div>
+                    <span class="sp-progress-label">{{ dlProgress.done }}/{{ dlProgress.total }}</span>
+                    <span v-if="dlProgress.truncated > 0" class="sp-progress-extra">{{ t('settings.dlScanLimited', { n: dlProgress.truncated }) }}</span>
+                  </div>
+                  <div class="sp-card-row" @click="onToggleAutoDeadCheck" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">
+                        {{ t('settings.autoDeadCheckWeekly') }}
+                        <span v-if="!dlAutoAllowed" class="sp-plus-tag">{{ t('settings.plusTag') }}</span>
+                      </span>
+                      <span class="sp-row-desc">后台每周自动检测一次全库链接并汇总报告（Plus 专享）</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: dlAutoEnabled, locked: !dlAutoAllowed }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card sp-section-shares">
+                  <div class="sp-card-head sp-shares-header">
+                    <div class="sp-shares-head-title">
+                      <span>{{ t('settings.shareManagement') }}</span>
+                      <span v-if="allPublicShares.length > 0" class="sp-shares-count">({{ allPublicShares.length }})</span>
+                    </div>
+                    <button
+                      v-if="allPublicShares.length > 1"
+                      class="sp-shares-stop-all"
+                      :title="t('settings.stopAllShares')"
+                      @click.stop="onStopAllShares"
                     >
-                      {{ item.type === 'group' ? t('settings.shareTypeGroup') : t('settings.shareTypeCategory') }}
-                    </span>
-                    <span class="sp-share-title" :title="item.title">{{ item.title }}</span>
+                      {{ t('settings.stopAllShares') }}
+                    </button>
                   </div>
-                  <div class="sp-share-actions">
-                    <button
-                      type="button"
-                      class="sp-share-btn"
-                      :title="t('modal.share.copyLink')"
-                      :aria-label="t('modal.share.copyLink')"
-                      @click.stop="onCopyShare(item.url)"
-                      v-html="I.link"
-                    ></button>
-                    <a
-                      :href="item.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="sp-share-btn"
-                      :title="t('modal.share.preview')"
-                      :aria-label="t('modal.share.preview')"
-                      @click.stop
-                      v-html="I.external"
-                    ></a>
-                    <button
-                      type="button"
-                      class="sp-share-btn sp-share-btn--danger"
-                      :title="t('modal.share.stopShare')"
-                      :aria-label="t('modal.share.stopShare')"
-                      @click.stop="onStopShareItem(item)"
-                      v-html="I.close"
-                    ></button>
+                  <p class="sp-desc" style="padding: 10px 16px 4px;">{{ t('settings.publicSharesDesc') }}</p>
+                  <div v-if="allPublicShares.length > 0" class="sp-shares-list-wrap">
+                    <div v-for="item in allPublicShares" :key="item.type + ':' + item.id" class="sp-share-item">
+                      <div class="sp-share-info">
+                        <span class="sp-share-badge" :class="'sp-share-badge--' + item.type">
+                          {{ item.type === 'group' ? t('settings.shareTypeGroup') : t('settings.shareTypeCategory') }}
+                        </span>
+                        <span class="sp-share-title" :title="item.title">{{ item.title }}</span>
+                      </div>
+                      <div class="sp-share-actions">
+                        <button type="button" class="sp-share-btn" :title="t('modal.share.copyLink')" @click.stop="onCopyShare(item.url)" v-html="I.link"></button>
+                        <a :href="item.url" target="_blank" rel="noopener noreferrer" class="sp-share-btn" :title="t('modal.share.preview')" @click.stop v-html="I.external"></a>
+                        <button type="button" class="sp-share-btn sp-share-btn--danger" :title="t('modal.share.stopShare')" @click.stop="onStopShareItem(item)" v-html="I.close"></button>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="sp-shares-empty">
+                    {{ t('settings.noPublicShares') }}
                   </div>
                 </div>
               </div>
-              <div v-else class="sp-shares-empty">
-                {{ t('settings.noPublicShares') }}
-              </div>
-            </div>
-            <!-- 数据 -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.data') }}</span>
-              <!-- 存储占用指示条（从侧边栏移入，归位数据管理） -->
-              <div v-if="storageInfo" class="sp-storage-card">
-                <div class="sp-row">
-                  <span class="sp-row-label">{{ t('settings.storageOccupied') }}</span>
-                  <span class="sp-range-value">{{ storageInfo.label }} ({{ storageInfo.percent }}%)</span>
+
+              <!-- Tab 5: 数据与备份 -->
+              <div v-show="currentTab === 'data'" class="settings-tab-panel" data-testid="settings-panel-data">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabData') }}</h3>
+                  <p class="sp-tab-desc">查看存储容量配额、备份还原及外部书签数据导入导出</p>
                 </div>
-                <div class="sp-storage-track">
-                  <div class="sp-storage-bar" :style="{ width: storageInfo.percent + '%', background: storageBarColor }"></div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">存储配额与快照</div>
+                  <div v-if="storageInfo" class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.storageOccupied') }}</span>
+                      <span class="sp-row-desc">已使用 {{ storageInfo.label }}（约占可用配额 {{ storageInfo.percent }}%）</span>
+                    </div>
+                    <div class="sp-row-ctrl sp-storage-ctrl">
+                      <div class="sp-storage-track">
+                        <div class="sp-storage-bar" :style="{ width: storageInfo.percent + '%', background: storageBarColor }"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.trash') }}</span>
+                      <span class="sp-row-desc">已删除的书签与分组可在回收站内随时撤销还原</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-secondary btn-sm" @click.stop="onOpenTrash">
+                        <span aria-hidden="true" v-html="trashIcon"></span>
+                        {{ t('settings.trash') }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.historyMax') }}</span>
+                      <span class="sp-row-desc">每个书签保留的历史版本深度（当前: {{ uiStore.historyMax }} 条）</span>
+                    </div>
+                    <div class="sp-row-ctrl sp-range-ctrl">
+                      <input type="range" class="sp-range" min="5" max="30" step="1" v-model.number="uiStore.historyMax" @change="onHistoryMaxChange" />
+                      <span class="sp-range-hint">{{ uiStore.historyMax }}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div class="sp-actions">
-                <button class="sp-action" @click.stop="onOpenTrash"><span v-html="trashIcon"></span>{{ t('settings.trash') }}</button>
-              </div>
-              <div class="sp-actions sp-actions--split">
-                <button class="sp-action" @click.stop="onTriggerImport"><span aria-hidden="true" v-html="I.import"></span>{{ t('settings.import') }}</button>
-                <div class="sp-export-wrap" @click.stop>
-                  <button class="sp-action" @click="exportMenuOpen = !exportMenuOpen"><span aria-hidden="true" v-html="I.export"></span>{{ t('settings.export') }}</button>
-                  <div v-if="exportMenuOpen" class="sp-export-menu">
-                    <button class="sp-export-item" @click="onExport('json')">
-                      <span class="sp-export-name">{{ t('settings.exportJson') }}</span>
-                      <span class="sp-export-hint">{{ t('settings.exportJsonHint') }}</span>
-                    </button>
-                    <button class="sp-export-item" @click="onExport('html')">
-                      <span class="sp-export-name">{{ t('settings.exportHtml') }}</span>
-                      <span class="sp-export-hint">{{ t('settings.exportHtmlHint') }}</span>
-                    </button>
-                    <button class="sp-export-item" @click="onExport('csv')">
-                      <span class="sp-export-name">{{ t('settings.exportCsv') }}</span>
-                      <span class="sp-export-hint">{{ t('settings.exportCsvHint') }}</span>
-                    </button>
-                    <button class="sp-export-item" @click="onExport('raindrop')">
-                      <span class="sp-export-name">Raindrop.io</span>
-                      <span class="sp-export-hint">{{ t('settings.exportRaindropHint') }}</span>
-                    </button>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">备份与数据迁移</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.import') }}</span>
+                      <span class="sp-row-desc">从 Chrome、Edge 导出的 HTML 书签或 JSON 备份导入</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-secondary btn-sm" @click.stop="onTriggerImport">
+                        <span aria-hidden="true" v-html="I.import"></span>
+                        {{ t('settings.import') }}
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.export') }}</span>
+                      <span class="sp-row-desc">将书签完整导出为 JSON 快照、HTML 或 CSV 表格</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-export-dropdown" @click.stop>
+                        <button class="btn btn-secondary btn-sm" @click="exportMenuOpen = !exportMenuOpen">
+                          <span aria-hidden="true" v-html="I.export"></span>
+                          {{ t('settings.export') }}
+                          <span class="sp-caret" :class="{ open: exportMenuOpen }">›</span>
+                        </button>
+                        <div v-if="exportMenuOpen" class="sp-export-menu">
+                          <button class="sp-export-item" @click="onExport('json')">
+                            <span class="sp-export-name">{{ t('settings.exportJson') }}</span>
+                            <span class="sp-export-hint">{{ t('settings.exportJsonHint') }}</span>
+                          </button>
+                          <button class="sp-export-item" @click="onExport('html')">
+                            <span class="sp-export-name">{{ t('settings.exportHtml') }}</span>
+                            <span class="sp-export-hint">{{ t('settings.exportHtmlHint') }}</span>
+                          </button>
+                          <button class="sp-export-item" @click="onExport('csv')">
+                            <span class="sp-export-name">{{ t('settings.exportCsv') }}</span>
+                            <span class="sp-export-hint">{{ t('settings.exportCsvHint') }}</span>
+                          </button>
+                          <button class="sp-export-item" @click="onExport('raindrop')">
+                            <span class="sp-export-name">Raindrop.io</span>
+                            <span class="sp-export-hint">{{ t('settings.exportRaindropHint') }}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click="onToggleExportKeepSensitive" style="cursor: pointer;" data-testid="lv-export-sensitive-toggle">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.exportKeepSensitive') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.exportKeepSensitiveHint') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: exportKeepSensitive }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card sp-danger-card">
+                  <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title text-danger">{{ t('settings.resetData') }}</span>
+                      <span class="sp-row-desc">清空本地存储的所有书签、自定义分组与偏好设置，恢复初始化状态</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-danger btn-sm" @click.stop="onResetData">
+                        <span aria-hidden="true" v-html="I.trash"></span>
+                        {{ t('settings.resetData') }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="sp-divider"></div>
-              <div class="sp-toggle-row" :class="{ active: exportKeepSensitive }" @click="onToggleExportKeepSensitive" data-testid="lv-export-sensitive-toggle">
-                <span class="sp-toggle-label">
-                  {{ t('settings.exportKeepSensitive') }}
-                  <span class="sp-toggle-sub">{{ t('settings.exportKeepSensitiveHint') }}</span>
-                </span>
-                <span class="sp-switch"></span>
-              </div>
-              <div class="sp-divider"></div>
-              <div class="sp-row">
-                <span class="sp-row-label">{{ t('settings.historyMax') }}</span>
-                <span class="sp-range-value">{{ t('settings.historyMaxValue', { n: uiStore.historyMax }) }}</span>
-              </div>
-              <div class="sp-row">
-                <input type="range" class="sp-range" min="5" max="30" step="1"
-                       v-model.number="uiStore.historyMax" @change="onHistoryMaxChange">
-                <span class="sp-range-hint">5–30</span>
-              </div>
-            </div>
-            <!-- 关于 -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.about') }}</span>
-              <!-- 语言切换属低频偏好，收在「关于」区顶部，避免占据高频设置位 -->
-              <div class="sp-row" data-testid="lv-lang-switch">
-                <span class="sp-row-label">{{ t('settings.language') }}</span>
-                <div class="sp-seg">
-                  <button class="sp-seg-btn" :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">中文</button>
-                  <button class="sp-seg-btn" :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">English</button>
+
+              <!-- Tab 6: 关于与帮助 -->
+              <div v-show="currentTab === 'about'" class="settings-tab-panel" data-testid="settings-panel-about">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabAbout') }}</h3>
+                  <p class="sp-tab-desc">查看版本发布信息、快捷键速查及法律协议条款</p>
+                </div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">应用信息</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.version') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.buildTime') }}: {{ buildTimeText }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <span class="sp-badge sp-version-badge" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
+                      <span class="hidden" data-testid="lv-build-time">{{ buildTimeText }}</span>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.shortcutHelp') }}</span>
+                      <span class="sp-row-desc">查看全局快捷键表以获得最佳键盘操作体验</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-secondary btn-sm" @click.stop="onOpenShortcutHelp">
+                        <span>{{ t('settings.shortcutHelp') }}</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.feedback') }}</span>
+                      <span class="sp-row-desc">遇到使用问题或功能建议？直接向我们反馈</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button class="btn btn-primary btn-sm" @click.stop="onFeedback">{{ t('settings.feedback') }}</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">{{ t('settings.legalDocs') }}</div>
+                  <div class="sp-card-row" @click="showLegal = !showLegal" style="cursor: pointer;" data-testid="lv-legal-toggle">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.legalDocs') }}</span>
+                      <span class="sp-row-desc">查看用户使用协议、个人隐私保护政策与退款细则</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <span class="sp-sync-status">{{ showLegal ? '' : t('settings.legalDocsView') }}</span>
+                      <span class="sp-caret" :class="{ open: showLegal }" aria-hidden="true">›</span>
+                    </div>
+                  </div>
+                  <div v-if="showLegal" class="sp-legal-box" data-testid="lv-legal-docs">
+                    <a v-for="d in legalDocs" :key="d.key" class="sp-legal-link" :href="d.path" target="_blank" rel="noopener noreferrer">
+                      {{ t(d.labelKey) }}
+                    </a>
+                  </div>
+                  <!-- 备案信息：号为空则不渲染（见 src/config/site.ts 的说明） -->
+                  <div v-if="beianLinks.length" class="sp-beian" data-testid="lv-beian">
+                    <a v-for="b in beianLinks" :key="b.text" :href="b.href" target="_blank" rel="noopener noreferrer">{{ b.text }}</a>
+                  </div>
                 </div>
               </div>
-              <div class="sp-divider"></div>
-              <div class="sp-row">
-                <span class="sp-row-label">{{ t('settings.version') }}</span>
-                <span class="sp-sync-status" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
-              </div>
-              <div class="sp-row">
-                <span class="sp-row-label">{{ t('settings.buildTime') }}</span>
-                <span class="sp-sync-status" data-testid="lv-build-time">{{ buildTimeText }}</span>
-              </div>
-
-              <!-- AI 服务商清单：《隐私政策》3.3 的接收方告知入口 -->
-              <button type="button" class="sp-row sp-row-btn" data-testid="lv-ai-providers-toggle" @click.stop="showAiProviders = !showAiProviders">
-                <span class="sp-row-label">{{ t('settings.aiProviders') }}</span>
-                <span class="sp-row-value">
-                  <span class="sp-sync-status">{{ showAiProviders ? '' : aiProvidersSummary }}</span>
-                  <span class="sp-caret" :class="{ open: showAiProviders }" aria-hidden="true">›</span>
-                </span>
-              </button>
-              <div v-if="showAiProviders" class="sp-sub-panel" data-testid="lv-ai-providers">
-                <p class="sp-sub-hint">{{ t('settings.aiProvidersHint') }}</p>
-                <div v-for="p in aiProviders" :key="p.id" class="sp-provider">
-                  <div class="sp-provider-name">{{ p.name }}</div>
-                  <div class="sp-provider-meta">{{ p.product }}</div>
-                  <div class="sp-provider-meta">{{ p.filing }}</div>
-                  <a class="sp-provider-link" :href="p.website" target="_blank" rel="noopener noreferrer">{{ p.website }}</a>
-                </div>
-                <div class="sp-provider-updated">{{ t('settings.aiProvidersUpdated', { d: aiProvidersUpdatedAt }) }}</div>
-              </div>
-
-              <div class="sp-divider"></div>
-
-              <!-- 法律协议：协议/隐私/退款政策的正文入口 -->
-              <button type="button" class="sp-row sp-row-btn" data-testid="lv-legal-toggle" @click.stop="showLegal = !showLegal">
-                <span class="sp-row-label">{{ t('settings.legalDocs') }}</span>
-                <span class="sp-row-value">
-                  <span class="sp-sync-status">{{ showLegal ? '' : t('settings.legalDocsView') }}</span>
-                  <span class="sp-caret" :class="{ open: showLegal }" aria-hidden="true">›</span>
-                </span>
-              </button>
-              <div v-if="showLegal" class="sp-sub-panel" data-testid="lv-legal-docs">
-                <a v-for="d in legalDocs" :key="d.key" class="sp-legal-link" :href="d.path" target="_blank" rel="noopener noreferrer">
-                  {{ t(d.labelKey) }}
-                </a>
-              </div>
-
-              <button class="sp-action" @click.stop="onFeedback">{{ t('settings.feedback') }}</button>
-            </div>
-            <!-- 会员与权益 -->
-            <div class="sp-section">
-              <span class="sp-section-title">{{ t('settings.membership') }}</span>
-              <div class="sp-row">
-                <span class="sp-row-label">{{ t('settings.currentPlan') }}</span>
-                <span class="sp-sync-status" data-testid="lv-entitlement-plan">{{ entitlementLabel }}</span>
-              </div>
-              <div v-if="entitlement.isPaid && entitlement.expiresAt" class="sp-row">
-                <span class="sp-row-label">{{ t('settings.expiresAt') }}</span>
-                <span class="sp-sync-status" data-testid="lv-entitlement-expiry">{{ entitlement.expiresAt }}</span>
-              </div>
-              <div class="sp-redeem-row">
-                <input
-                  class="form-input sp-redeem-input"
-                  type="text"
-                  v-model="redeemInput"
-                  :placeholder="t('settings.redeemPlaceholder')"
-                  maxlength="16"
-                  autocomplete="off"
-                  spellcheck="false"
-                  @keyup.enter="onRedeem"
-                />
-                <button
-                  class="btn btn-primary btn-sm"
-                  data-testid="lv-redeem-btn"
-                  :disabled="redeeming || !redeemInput.trim()"
-                  @click.stop="onRedeem"
-                >
-                  {{ redeeming ? t('settings.redeeming') : t('settings.redeem') }}
-                </button>
-              </div>
-            </div>
-            <!-- Danger -->
-            <div class="sp-section sp-danger">
-              <span class="sp-section-title">{{ t('settings.danger') }}</span>
-              <button class="sp-danger-btn" @click.stop="onResetData">
-                <span aria-hidden="true" v-html="I.trash"></span>{{ t('settings.resetData') }}
-              </button>
-              <!-- 账号注销：PIPL 第 47 条删除权的自助实现 -->
-              <button
-                v-if="auth.isLoggedIn"
-                type="button"
-                class="sp-danger-btn sp-danger-btn-outline"
-                data-testid="lv-delete-account"
-                :disabled="deletingAccount"
-                @click.stop="onDeleteAccount"
-              >
-                {{ deletingAccount ? t('settings.deleteAccountDoing') : t('settings.deleteAccount') }}
-              </button>
             </div>
           </div>
         </div>
@@ -518,7 +807,7 @@
   <!-- 反馈 / 建议 弹窗：直接填写内容提交到企业邮箱（保留复制 / mailto 兜底） -->
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="uiStore.overlays.feedback" class="modal-mask open" role="dialog" aria-modal="true" :aria-label="t('settings.feedback')" @click.self="uiStore.overlays.feedback = false">
+      <div v-if="uiStore.overlays.feedback" class="modal-mask open" role="dialog" aria-modal="true" :aria-label="t('settings.feedback')" @mousedown="onFeedbackMaskMouseDown" @click="onFeedbackMaskClick">
         <div class="modal modal-sm">
           <div class="modal-body">
             <div class="confirm-msg">{{ t('settings.feedbackFormHint') }}</div>
@@ -591,6 +880,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, reactive, watch, onBeforeUnmount } from 'vue'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useUIStore, type ThemeStyle, type SortMode, type LayoutMode } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
@@ -614,6 +904,7 @@ import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
 import { AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT, LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
+import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
 import {
   fetchMyEntitlement,
   redeemCode,
@@ -632,6 +923,12 @@ function triggerImport() { const el = document.getElementById('importFile') as H
 function onOpenShortcutHelp() { pushNavState(); uiStore.panels.shortcutHelp = true; uiStore.panels.settings = false }
 
 const uiStore = useUIStore()
+const { onMaskMouseDown, onMaskClick } = useMaskClose(() => {
+  uiStore.panels.settings = false
+})
+const { onMaskMouseDown: onFeedbackMaskMouseDown, onMaskClick: onFeedbackMaskClick } = useMaskClose(() => {
+  uiStore.overlays.feedback = false
+})
 const dataStore = useDataStore()
 const appStore = useAppStore()
 
@@ -641,6 +938,111 @@ const storageInfo = computed(() => {
 const storageBarColor = computed(() => storageBarColorFor(storageInfo.value?.percent))
 const auth = useAuth()
 const sync = useCloudSync()
+const syncState = useSyncState()
+const dl = useDeadLinkChecker()
+const e2e = useE2E()
+
+const isResyncing = ref(false)
+const isManualSyncing = ref(false)
+const isSyncing = computed(() => syncState.value.level === 'syncing' || isManualSyncing.value)
+
+const canRetrySync = computed(() =>
+  syncState.value.level === 'error' ||
+  syncState.value.level === 'offline' ||
+  syncState.value.level === 'quota',
+)
+
+async function onManualSync() {
+  if (isSyncing.value || isResyncing.value) return
+  isManualSyncing.value = true
+  toast(t('sync.startSync'))
+  try {
+    const ok = await sync.fullSync()
+    if (ok) {
+      toast('同步完成', true)
+    } else {
+      toast(sync.syncError.value || '同步失败', false)
+    }
+  } catch (err) {
+    toast(err instanceof Error ? err.message : '同步失败', false)
+  } finally {
+    isManualSyncing.value = false
+  }
+}
+
+async function onResyncAll() {
+  if (isResyncing.value || isSyncing.value) return
+  isResyncing.value = true
+  toast(t('sync.startSync'))
+  try {
+    const ok = await sync.resyncAllToCloud()
+    toast(ok ? t('sync.resyncAllDone') : t('sync.resyncAllFailed'), ok)
+  } catch (err) {
+    toast(err instanceof Error ? err.message : t('sync.resyncAllFailed'), false)
+  } finally {
+    isResyncing.value = false
+  }
+}
+
+function onViewConflicts() {
+  sync.resetConflictBannerDismissed()
+  toast(t('sync.viewConflicts'))
+}
+
+function onOpenAuthModal() {
+  uiStore.panels.settings = false
+  auth.authModalOpen = true
+}
+
+const syncDetailDesc = computed(() => {
+  if (sync.lastSyncAt.value) {
+    const diff = Date.now() - sync.lastSyncAt.value
+    let timeStr = '刚刚'
+    if (diff >= 3600000) {
+      timeStr = Math.floor(diff / 3600000) + ' 小时前'
+    } else if (diff >= 60000) {
+      timeStr = Math.floor(diff / 60000) + ' 分钟前'
+    }
+    return '上次同步于 ' + timeStr + ' · 云端多端自动保持实时一致'
+  }
+  return '书签、分组与个性化设置自动实时加密同步至云端'
+})
+
+const syncErrorMessage = computed(() => {
+  if (syncState.value.level === 'quota') {
+    return '云端存储空间已满，你的数据已安全保存在本机，不受影响；空间恢复后点「强制全量重传」自动追平。'
+  }
+  if (sync.syncErrorKind.value === 'auth') {
+    return '账号登录状态已失效或凭证已过期，请重新登录以恢复多端同步。'
+  }
+  if (sync.syncErrorKind.value === 'network') {
+    return '网络连接失败或当前处于离线状态，恢复网络连接后将自动同步。'
+  }
+  if (syncState.value.level === 'error' && sync.syncError.value) {
+    return sync.syncError.value
+  }
+  return ''
+})
+
+const syncErrorSummary = computed(() => {
+  if (syncState.value.level === 'quota') return '云端存储空间已满'
+  if (sync.syncErrorKind.value === 'auth') return '登录凭证已失效'
+  if (sync.syncErrorKind.value === 'network') return '网络连接异常'
+  return '同步遇到问题'
+})
+
+const syncErrorDetail = computed(() => {
+  if (syncState.value.level === 'quota') {
+    return '本地数据完整且安全，可清理空间后点击「强制全量重传」恢复推送。'
+  }
+  if (sync.syncErrorKind.value === 'auth') {
+    return '凭证失效通常由于长时间未登录或在其他设备修改了密码，点击「重新登录」即可。'
+  }
+  if (sync.syncErrorKind.value === 'network') {
+    return '请检查当前网络连接或代理，网络恢复后系统会自动重新建立连接。'
+  }
+  return sync.syncError.value || '部分数据未能成功同步至云端，可尝试点击「重试同步」或「强制全量重传」。'
+})
 
 const userInitial = computed(() => {
   const name = auth.displayName || auth.userEmail
@@ -670,6 +1072,14 @@ const aiProvidersSummary = computed(() =>
 
 // 账号注销
 const deletingAccount = ref(false)
+
+/** 备案信息：ICP 号链接工信部，公安联网备案号链接公安平台；号为空则整块不渲染 */
+const beianLinks = computed(() => {
+  const out: { text: string; href: string }[] = []
+  if (ICP_NUMBER) out.push({ text: ICP_NUMBER, href: MIIT_URL })
+  if (MPS_NUMBER) out.push({ text: MPS_NUMBER, href: mpsQueryUrl() })
+  return out
+})
 
 // 会员权益与兑换码
 const entitlement = ref<MyEntitlement>({
@@ -800,8 +1210,7 @@ async function onSaveProfile() {
   }
 }
 
-const dl = useDeadLinkChecker()
-const e2e = useE2E()
+// dl and e2e initialized at top
 const e2eEnabled = computed(() => e2e.isE2EEnabled.value)
 const e2eUnlocked = computed(() => e2e.isUnlocked.value)
 
@@ -817,7 +1226,6 @@ function onOpenE2EChangePw() {
 
 const trashCount = computed(() => dataStore.trashCount)
 const trashIcon = computed(() => trashCount.value > 0 ? I.trashFull : I.trash)
-const syncState = useSyncState()
 // 构建时间本地化显示（__BUILD_TIME__ 为 UTC ISO 串 → 本地时区）；define 未注入时兜底
 const buildTimeText = computed(() => {
   if (!BUILD_TIME) return ''
@@ -880,10 +1288,25 @@ function onToggleGroupsOnTop() {
   uiStore.saveUIState()
 }
 
+function onToggleSmartFill() {
+  uiStore.smartFillEnabled = !uiStore.smartFillEnabled
+  uiStore.saveUIState()
+  toast(uiStore.smartFillEnabled ? t('settings.smartFillOnToast') : t('settings.smartFillOffToast'), true)
+}
+
 function onToggleSemanticSearch() {
   uiStore.semanticSearchEnabled = !uiStore.semanticSearchEnabled
   uiStore.saveUIState()
   toast(uiStore.semanticSearchEnabled ? t('settings.semanticSearchOnToast') : t('settings.semanticSearchOffToast'), true)
+}
+
+function onToggleAiRail() {
+  uiStore.aiRailEnabled = !uiStore.aiRailEnabled
+  if (!uiStore.aiRailEnabled && uiStore.activeView === 'ai') {
+    uiStore.activeView = 'bookmarks'
+  }
+  uiStore.saveUIState()
+  toast(uiStore.aiRailEnabled ? t('settings.aiRailOnToast') : t('settings.aiRailOffToast'), true)
 }
 
 function onHistoryMaxChange() {
@@ -1358,4 +1781,48 @@ async function submitFeedback() {
     feedbackSending.value = false
   }
 }
+
+
+
+export type SettingsTab = 'account' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
+
+const currentTab = ref<SettingsTab>('account')
+
+const tabs = computed(() => [
+  {
+    id: 'account' as SettingsTab,
+    labelKey: 'settings.tabAccount',
+    icon: I.user,
+    badge: syncState.value?.level === 'error' ? '!' : undefined,
+  },
+  {
+    id: 'appearance' as SettingsTab,
+    labelKey: 'settings.tabAppearance',
+    icon: I.sun,
+  },
+  {
+    id: 'ai' as SettingsTab,
+    labelKey: 'settings.tabAi',
+    icon: I.sparkles,
+  },
+  {
+    id: 'maintenance' as SettingsTab,
+    labelKey: 'settings.tabMaintenance',
+    icon: I.radar,
+    badge: (deadCount.value + blockedCount.value > 0)
+      ? String(deadCount.value + blockedCount.value)
+      : (allPublicShares.value.length > 0 ? String(allPublicShares.value.length) : undefined),
+  },
+  {
+    id: 'data' as SettingsTab,
+    labelKey: 'settings.tabData',
+    icon: I.database || I.import,
+  },
+  {
+    id: 'about' as SettingsTab,
+    labelKey: 'settings.tabAbout',
+    icon: I.info,
+  },
+])
+
 </script>

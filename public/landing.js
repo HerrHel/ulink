@@ -15,6 +15,47 @@
  *     顺序一致）即时替换 data-i18n 文案；切回中文整页还原（reload 到静态原文）；
  *  5. 页面增强 —— 滚动显现（.reveal）、视图演示卡填充、主题/深浅色演示切换。
  */
+
+/* ────────────────────────────────────────────────────────────
+ * 备案信息（合规要求，改动请与 src/config/site.ts 保持一致）
+ *
+ * · ICP 备案号：必须展示并链接工信部 <https://beian.miit.gov.cn/>
+ * · 公安联网备案号：ICP 备案通过后 30 日内向属地公安网安办理，
+ *   审核通过后由平台下发「备案号 + 网站标识码」，必须展示并链接公安平台
+ *
+ * ⚠️ 号为空即不渲染。绝不展示占位符——错误的备案号比不展示更容易被认定未履行义务。
+ * ──────────────────────────────────────────────────────────── */
+var ICP_NUMBER = ''  // 例：'鄂ICP备2026000000号-1'
+var MPS_NUMBER = ''  // 例：'鄂公网安备42011302000000号'
+var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查询链接）
+
+;(function renderBeian(){
+  try {
+    var host = document.getElementById('foot-beian')
+    if (!host) return
+    var parts = []
+    if (ICP_NUMBER) {
+      parts.push(
+        '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">' +
+          ICP_NUMBER +
+        '</a>'
+      )
+    }
+    if (MPS_NUMBER) {
+      var href = MPS_CODE
+        ? 'https://beian.mps.gov.cn/#/query/webSearch?code=' + encodeURIComponent(MPS_CODE)
+        : 'https://beian.mps.gov.cn/'
+      parts.push(
+        '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' +
+          MPS_NUMBER +
+        '</a>'
+      )
+    }
+    if (parts.length) host.innerHTML = parts.join('')
+  } catch (e) { /* 备案号渲染失败不影响落地页其它功能 */ }
+})();
+
+
 (function () {
   'use strict';
 

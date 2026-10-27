@@ -384,6 +384,11 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
 .foot-links a:hover,.foot-links button:hover{color:var(--brand)}
 .foot-links button{background:none;border:none;color:inherit;padding:0}
 .foot-sub{margin-top:14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.8rem}
+/* 备案信息（ICP / 公安联网备案）—— 号为空时不渲染，见 landing.js */
+.foot-beian{margin-top:10px;display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:.78rem;color:var(--ink-3)}
+.foot-beian a{color:inherit;text-decoration:none;opacity:.85}
+.foot-beian a:hover{color:var(--brand);opacity:1;text-decoration:underline}
+.foot-beian img{height:14px;vertical-align:-2px;margin-right:5px}
 
 /* ── 响应式 ── */
 @media (max-width:1040px){
@@ -698,6 +703,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <span data-i18n="foot.rights">© 2026 ulink.ren · 与链</span>
       <span data-i18n="foot.note">开箱即用 · 隐私自主掌控 · 云同步可选</span>
     </div>
+    <!-- 备案号由 landing.js 注入：ICP 号链接工信部，公安备案号链接公安平台；号为空则不渲染 -->
+    <div class="foot-beian" id="foot-beian"></div>
   </div>
 </footer>
 
