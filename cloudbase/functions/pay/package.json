@@ -1,0 +1,13 @@
+{
+  "name": "ulink-pay",
+  "version": "1.0.0",
+  "description": "ulink 支付（微信 Native / 支付宝当面付 + 回调发货，CloudBase HTTP 云函数）",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@cloudbase/node-sdk": "^3.10.0"
+  }
+}
