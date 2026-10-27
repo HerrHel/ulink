@@ -105,6 +105,19 @@ jobs:
           # （tcb / cloudbase / cloudbase-mcp），直接 `npx @cloudbase/cli` 会报
           # "could not determine executable to run"。
           CLI="npx --yes -p @cloudbase/cli tcb"
+
+          # ── 诊断（只输出长度与前缀，不泄露密钥本体）──
+          # 该 Key 是 JWT，固定以 eyJ 开头、全长 908 字符（本地实测）。
+          # 若长度/前缀不符，多半是复制不完整或混入了换行/不可见字符。
+          echo "::notice::API Key 长度=${#CLOUDBASE_APIKEY} 前缀=${CLOUDBASE_APIKEY:0:3}（预期 长度=908 前缀=eyJ）"
+          case "$CLOUDBASE_APIKEY" in
+            eyJ*) : ;;
+            *) echo "::error::API Key 前缀异常，应以 eyJ 开头（JWT）；请重新完整复制"; exit 1 ;;
+          esac
+          if [ "${#CLOUDBASE_APIKEY}" -lt 800 ]; then
+            echo "::error::API Key 长度不足（${#CLOUDBASE_APIKEY} < 800），复制不完整"; exit 1
+          fi
+
           # --cloudbase-api-key 支持非交互认证，无需设备码
           $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
           # --safe：发布前备份，上传或校验失败自动回滚
