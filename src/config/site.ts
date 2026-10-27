@@ -15,8 +15,8 @@
  *    （落地页是独立静态脚本，不共享 src/ 代码）。
  */
 
-/** ICP 备案号，例：'鄂ICP备2026000000号-1' */
-export const ICP_NUMBER = ''
+/** ICP 备案号（工信部） */
+export const ICP_NUMBER = '鄂ICP备2026061718号-1'
 
 /** 公安联网备案号，例：'鄂公网安备42011302000000号' */
 export const MPS_NUMBER = ''
