@@ -132,6 +132,28 @@ async function handleAuthed(req, res, action, body, cors) {
   const uid = auth.uid
   const db = getDb()
 
+  // 可购套餐列表：价格与周期**只从服务端 plans 表读**，前端不硬编码。
+  // 只返回付费且启用的套餐（免费档不走支付）。
+  if (action === 'plans') {
+    const q = await db.from('plans').where({ active: true }).order('price_cents', 'asc').get()
+    if (q.error) {
+      console.error('[pay] plans query failed:', q.error)
+      sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
+      return
+    }
+    const rows = (q.data || [])
+      .filter((r) => typeof r.price_cents === 'number' && r.price_cents > 0)
+      .map((r) => ({
+        planId: r.id,
+        name: r.name,
+        priceCents: r.price_cents,
+        currency: r.currency || 'CNY',
+        periodDays: r.period_days || 0,
+      }))
+    sendJson(res, 200, { ok: true, plans: rows }, cors)
+    return
+  }
+
   if (action === 'create') {
     // 限流 fail-closed
     const rl = await db.rpc('consume_rate_limit', {
@@ -432,7 +454,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
     const action = typeof body.action === 'string' ? body.action : ''
-    if (action !== 'create' && action !== 'status') {
+    if (action !== 'create' && action !== 'status' && action !== 'plans') {
       sendJson(res, 400, { error: 'unknown_action' }, cors)
       return
     }

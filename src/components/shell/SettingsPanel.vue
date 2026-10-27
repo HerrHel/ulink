@@ -299,6 +299,23 @@
                       <span v-if="entitlement.isPaid && entitlement.expiresAt" class="hidden" data-testid="lv-entitlement-expiry">{{ entitlement.expiresAt }}</span>
                     </div>
                   </div>
+                  <!-- 在线订阅入口：价格与套餐来自服务端 plans 表，前端不硬编码 -->
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('purchase.title') }}</span>
+                      <span class="sp-row-desc">{{ t('purchase.subtitle') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button
+                        type="button"
+                        class="sp-upgrade-btn"
+                        data-testid="lv-upgrade-btn"
+                        @click="showPurchase = true"
+                      >
+                        {{ entitlement.isPaid ? t('purchase.renew') : t('purchase.upgrade') }}
+                      </button>
+                    </div>
+                  </div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">激活兑换码</span>
@@ -876,6 +893,8 @@
       </div>
     </Transition>
   </Teleport>
+  <!-- 购买弹窗：挂在最外层，避免被 drawer 的 overflow 裁切 -->
+  <PurchaseModal :visible="showPurchase" @close="showPurchase = false" @paid="onPurchasePaid" />
 </template>
 
 <script setup lang="ts">
@@ -905,6 +924,7 @@ import { APP_VERSION, BUILD_TIME } from '../../version.js'
 import { AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT, LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
+import PurchaseModal from '../modals/PurchaseModal.vue'
 import {
   fetchMyEntitlement,
   redeemCode,
@@ -1091,6 +1111,18 @@ const entitlement = ref<MyEntitlement>({
 })
 const redeemInput = ref('')
 const redeeming = ref(false)
+
+/** 购买弹窗开关 */
+const showPurchase = ref(false)
+
+/** 支付成功后刷新权益（后端发货已幂等，这里只负责把最新权益拉回来） */
+async function onPurchasePaid() {
+  try {
+    entitlement.value = await fetchMyEntitlement()
+  } catch {
+    /* 刷新失败不影响支付结果本身，下次打开设置会重新拉 */
+  }
+}
 
 const entitlementLabel = computed(() => {
   if (!entitlement.value.isPaid) return t('settings.freePlan')

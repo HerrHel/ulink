@@ -18,6 +18,7 @@ import { shareAppZh } from './parts/shareApp.js'
 import { programmaticZh } from './parts/programmatic.js'
 import { aiZh } from './parts/aiPro.js'
 import { aiCmdZh } from './parts/aiCommander.js'
+import { purchaseZh } from './parts/purchase.js'
 
 export const zh = {
   app: {
@@ -527,6 +528,7 @@ export const zh = {
   ...programmaticZh,
   ...aiZh,
   ...aiCmdZh,
+  ...purchaseZh,
 } as const
 
 export type ZhDict = typeof zh

@@ -697,3 +697,25 @@
   color:var(--accent,#3B82F6);
   text-decoration:underline;
 }
+
+/* 升级/续费按钮（会员与权益卡片） */
+.sp-upgrade-btn{
+  min-height:36px;
+  padding:0 16px;
+  border:none;
+  border-radius:10px;
+  background:var(--accent,#2563eb);
+  color:#fff;
+  font:inherit;
+  font-weight:600;
+  white-space:nowrap;
+  cursor:pointer;
+  transition:filter .15s ease, transform .1s ease;
+}
+.sp-upgrade-btn:hover{filter:brightness(1.06)}
+.sp-upgrade-btn:active{transform:scale(.97)}
+
+@media (max-width:768px){
+  /* 移动端满足 44px 触控下限，并撑满该行 */
+  .sp-upgrade-btn{min-height:44px;width:100%}
+}

@@ -15,6 +15,7 @@ import { shareAppEn } from './parts/shareApp.js'
 import { programmaticEn } from './parts/programmatic.js'
 import { aiEn } from './parts/aiPro.js'
 import { aiCmdEn } from './parts/aiCommander.js'
+import { purchaseEn } from './parts/purchase.js'
 
 export const en = {
   app: {
@@ -536,4 +537,5 @@ export const en = {
   ...programmaticEn,
   ...aiEn,
   ...aiCmdEn,
+  ...purchaseEn,
 } as const
