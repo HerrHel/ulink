@@ -34,6 +34,12 @@ const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex')
 const hmac = (k, s) => createHmac('sha256', k).update(s, 'utf8').digest()
 
 function loadCredential() {
+  // CI 优先：GitHub Secrets 注入环境变量，不落盘
+  const envId = process.env.TENCENTCLOUD_SECRET_ID
+  const envKey = process.env.TENCENTCLOUD_SECRET_KEY
+  if (envId && envKey) return { secretId: envId, secretKey: envKey }
+
+  // 本地：读 tccli 配置文件
   const file = join(homedir(), '.tccli', 'default.credential')
   const raw = JSON.parse(readFileSync(file, 'utf8'))
   const secretId = raw.secretId || raw.SecretId

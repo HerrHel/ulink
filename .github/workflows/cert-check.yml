@@ -1,0 +1,140 @@
+name: cert-check
+
+# 证书到期监控。ulink.ren 用的是腾讯云免费 DV 证书，有效期 **90 天**（已从 12 个月缩短）。
+# 过期后全站弹「不安全」、微信支付回调也会失败，所以必须提前发现。
+#
+# 安全设计：
+#   · 定时任务**只检查 + 开 issue 提醒**，绝不自动申请 —— 免费证书每个主域每年有额度
+#     （超额报 MainDomainCertificateCountLimit），不该由机器人静默消耗。
+#   · 要真的申请，手动触发本 workflow 并勾选 apply。
+#   · 申请成功≠线上已换证书：证书是在 CloudBase 域名绑定里**手动关联**的
+#     （实测该证书 DeployRecordList 为空，不走 SSL 的部署机制），
+#     所以 issue 里会明确写出最后一步要人工去控制台切换。
+
+on:
+  schedule:
+    # 每周一 02:00 UTC = 10:00 北京时间
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: '真的申请续期（会消耗该主域当年的免费证书额度）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+
+      - name: 查询证书状态
+        id: cert
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+        run: |
+          set -o pipefail
+          node scripts/ssl-renew.mjs | tee /tmp/cert.txt
+          # 从输出里取「剩余 N 天」；取不到就当作异常，让 job 亮红
+          DAYS=$(grep -oE '剩余 [0-9]+ 天' /tmp/cert.txt | grep -oE '[0-9]+' | tail -1 || true)
+          if [ -z "$DAYS" ]; then
+            echo "::error::无法解析证书剩余天数，请检查脚本输出"
+            exit 1
+          fi
+          echo "days=$DAYS" >> "$GITHUB_OUTPUT"
+          echo "剩余天数：$DAYS"
+          if [ "$DAYS" -le 30 ]; then
+            echo "warn=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 手动触发且勾选 apply 时才真的申请
+      - name: 申请续期（仅手动触发 + 勾选 apply）
+        if: github.event_name == 'workflow_dispatch' && inputs.apply && steps.cert.outputs.days != ''
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+        run: |
+          echo "::notice::正在申请续期（DvAuthMethod=DNS_AUTO，签发后自动清理验证记录）"
+          node scripts/ssl-renew.mjs --apply | tee /tmp/renew.txt
+          NEW_ID=$(grep -oE '新证书 ID：[A-Za-z0-9]+' /tmp/renew.txt | tail -1 || true)
+          echo "::notice::${NEW_ID:-未解析到新证书 ID，请检查日志}"
+
+      # 剩余 <= 30 天：开一条 issue 提醒（已有未关闭的同类 issue 则不重复开）
+      - name: 到期提醒 issue
+        if: steps.cert.outputs.warn == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const days = '${{ steps.cert.outputs.days }}';
+            const label = 'cert';
+
+            // GitHub 不会自动创建 label，首次运行时先确保它存在（已存在会 422，忽略）
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+                color: 'd4c5f9',
+                description: 'SSL 证书到期提醒',
+              });
+            } catch (e) {
+              if (e.status !== 422) throw e;
+            }
+            const title = `证书 ${days} 天后到期，需要续期`;
+
+            const open = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+              per_page: 20,
+            });
+            if (open.data.length > 0) {
+              core.info(`已有未关闭的证书提醒：#${open.data[0].number}，跳过`);
+              return;
+            }
+
+            const body = [
+              `\`ulink.ren\` 的证书还剩 **${days} 天**（阈值 30 天）。`,
+              '',
+              '## 需要做的事',
+              '',
+              '1. **申请续期**（两种方式二选一）：',
+              '   - 本地跑：`node scripts/ssl-renew.mjs --apply`',
+              '   - 或手动触发本仓库的 [`cert-check`](../actions/workflows/cert-check.yml) workflow 并勾选 `apply`',
+              '2. **等签发**（DNS_AUTO 自动验证，通常几分钟到 2 小时）',
+              '3. **⚠️ 手动把 CloudBase 域名切到新证书**：',
+              '   CloudBase 控制台 → HTTP 网关 → 域名及路由 → `ulink.ren` → 编辑 → 证书关联 → 选新证书',
+              '',
+              '## 为什么第 3 步必须人工',
+              '',
+              '实测该证书的 `DeployRecordList` 为空、`RenewOrder` 也为空 ——',
+              '它是在 CloudBase 域名绑定里**手动关联**的，不走腾讯云 SSL 的「部署/托管」机制，',
+              '所以新证书签发后**不会自动**切到线上。在完成第 3 步之前，线上仍用旧证书。',
+              '',
+              '## 验证',
+              '',
+              '```bash',
+              'openssl s_client -connect ulink.ren:443 -servername ulink.ren </dev/null 2>/dev/null | openssl x509 -noout -dates',
+              '```',
+              '',
+              `> 由 \`cert-check\` workflow 自动创建（run #${context.runId}）。完成后请关闭本 issue。`,
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: [label],
+            });
+            core.info('已创建到期提醒 issue');
