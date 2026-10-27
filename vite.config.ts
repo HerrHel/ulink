@@ -12,7 +12,7 @@ import {
   renderLegalDocHtml,
   renderLegalIndexHtml,
   slugFromFileName,
-} from './src/lib/legal/renderLegalDoc';
+} from './src/lib/legal/renderLegalDoc.js';
 
 /** 以本配置文件为基准解析项目内路径（ESM 无 __dirname） */
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
