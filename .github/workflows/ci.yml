@@ -7,6 +7,8 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
+  # 手动触发：用于重新部署（如线上被旧版本覆盖）或单纯验证部署链路，无代码变更也能跑
+  workflow_dispatch:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
@@ -73,7 +75,8 @@ jobs:
   # 再手动传一次会把线上覆盖成旧版本。统一走本 job。
   deploy:
     needs: [lint-test, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # push 与手动触发都可发布，但都限定 main（PR 与其它分支绝不发布）
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-production
