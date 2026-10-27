@@ -831,7 +831,7 @@ function clearAll() {
 }
 
 .drop-hint-text {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   color: var(--accent);
   white-space: nowrap;
@@ -856,7 +856,7 @@ function clearAll() {
   cursor: grab;
   box-shadow: 0 3px 12px rgba(44, 40, 36, 0.18),
               0 1px 3px rgba(44, 40, 36, 0.08);
-  transition: width 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, background 0.18s ease;
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.2s ease;
   outline: none;
   pointer-events: auto;
   touch-action: none;
@@ -1007,7 +1007,7 @@ function clearAll() {
 }
 
 .dock-title-text {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.2px;
@@ -1062,7 +1062,7 @@ function clearAll() {
   border-radius: 5px;
   cursor: pointer;
   padding: 0;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .dock-collapse-btn:hover {
@@ -1105,7 +1105,7 @@ function clearAll() {
   border: 1.5px dashed var(--accent);
   border-radius: 8px;
   color: var(--accent);
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   font-weight: 600;
   cursor: pointer;
   box-sizing: border-box;
@@ -1118,7 +1118,7 @@ function clearAll() {
 }
 
 .slot-plus {
-  font-size: 14px;
+  font-size:var(--fs-base);
   font-weight: 700;
   line-height: 1;
 }
@@ -1142,13 +1142,13 @@ function clearAll() {
 }
 
 .dock-empty-slot .empty-text {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   color: var(--text);
 }
 
 .dock-empty-slot .empty-subtext {
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
 }
 
@@ -1250,7 +1250,7 @@ function clearAll() {
 }
 
 .group-tag {
-  font-size: 9.5px;
+  font-size:var(--fs-2xs);
   font-weight: 700;
   color: var(--accent);
   background: var(--accent-light);
@@ -1260,7 +1260,7 @@ function clearAll() {
 }
 
 .staged-title {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -1301,7 +1301,7 @@ function clearAll() {
   border-radius: 5px;
   cursor: pointer;
   padding: 0;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .staged-act-btn:hover {
@@ -1343,10 +1343,10 @@ function clearAll() {
   background: var(--surface);
   color: var(--text-muted);
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
@@ -1374,7 +1374,7 @@ function clearAll() {
 /* Transitions */
 .drop-zone-slide-enter-active,
 .drop-zone-slide-leave-active {
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
 }
 
 .drop-zone-slide-enter-from,
@@ -1388,7 +1388,7 @@ function clearAll() {
 }
 
 .dock-panel-slide-leave-active {
-  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
 }
 
 .dock-panel-slide-enter-from,
@@ -1398,7 +1398,7 @@ function clearAll() {
 }
 
 .handle-slide-enter-active {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
 }
 
 .handle-slide-leave-active {

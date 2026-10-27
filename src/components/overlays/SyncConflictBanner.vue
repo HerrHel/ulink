@@ -59,7 +59,7 @@ function itemName(c: SyncConflict): string {
   z-index: 7200; width: min(460px, calc(100vw - 32px)); /* 2026-08-10：抬到模态框(6000)之上，与 undo-toast 同层 */
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-base); box-shadow: var(--shadow-xl);
-  overflow: hidden; font-size: 13px;
+  overflow: hidden; font-size:var(--fs-sm);
 }
 .conflict-banner-head {
   display: flex; align-items: center; gap: 8px;
@@ -69,7 +69,7 @@ function itemName(c: SyncConflict): string {
 .conflict-icon { color: var(--amber); display: flex; flex-shrink: 0; }
 .conflict-icon :deep(svg) { width: 18px; height: 18px; }
 .conflict-title { font-weight: 600; color: var(--text); white-space: nowrap; }
-.conflict-subtitle { color: var(--text-secondary); opacity: .85; font-size: 12px; flex: 1; }
+.conflict-subtitle { color: var(--text-secondary); opacity: .85; font-size:var(--fs-xs); flex: 1; }
 .conflict-close { background: none; border: none; cursor: pointer; padding: 4px; color: var(--text-muted); display: flex; transition: color 0.15s ease; }
 .conflict-close:hover { color: var(--text); }
 .conflict-close :deep(svg) { width: 16px; height: 16px; }

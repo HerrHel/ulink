@@ -88,7 +88,7 @@ function reload() {
 }
 .error-boundary-fallback p {
   margin: 0 0 16px;
-  font-size: 13px;
+  font-size:var(--fs-sm);
   opacity: 0.7;
 }
 </style>

@@ -160,7 +160,7 @@ function saveToVault() {
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
   box-shadow: var(--shadow-card);
-  transition: box-shadow 0.25s var(--ease-out), border-color 0.2s ease, transform 0.25s var(--ease-out), background-color 0.2s ease;
+  transition: box-shadow 0.2s var(--ease-out), border-color 0.2s ease, transform 0.2s var(--ease-out), background-color 0.2s ease;
   user-select: none;
 }
 
@@ -251,14 +251,14 @@ function saveToVault() {
 }
 
 .inline-title {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.15px;
-  transition: color 0.12s ease;
+  transition: color 0.15s ease;
 }
 
 .inline-card-left:hover .inline-title {
@@ -266,7 +266,7 @@ function saveToVault() {
 }
 
 .inline-pill {
-  font-size: 9.5px;
+  font-size:var(--fs-2xs);
   padding: 0 5px;
   border-radius: 3px;
   white-space: nowrap;
@@ -291,7 +291,7 @@ function saveToVault() {
 }
 
 .inline-domain {
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-secondary);
   font-family: var(--font-mono, monospace);
   white-space: nowrap;
@@ -302,7 +302,7 @@ function saveToVault() {
 .inline-ext-icon {
   display: inline-flex;
   opacity: 0.5;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s ease;
 }
 
 .inline-ext-icon :deep(svg) {
@@ -370,7 +370,7 @@ function saveToVault() {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   font-weight: 600;
   color: var(--green);
   padding: 2px 7px;

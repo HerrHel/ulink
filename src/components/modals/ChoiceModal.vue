@@ -61,7 +61,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(() => store.resolveChoice(
 <style scoped>
 .choice-msg {
   margin-bottom: 16px;
-  font-size: 14px;
+  font-size:var(--fs-base);
   line-height: 1.5;
   color: var(--text);
 }
@@ -97,7 +97,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(() => store.resolveChoice(
 }
 
 .choice-option-desc {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   color: var(--text-secondary);
   margin-top: 4px;
 }

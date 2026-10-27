@@ -40,8 +40,8 @@
 .attr-search-input{
   flex:1;padding:6px 10px;
   background:var(--bg-alt);border:1px solid var(--border);
-  border-radius:var(--radius-base);font-size:0.78rem;color:var(--text);
-  outline:none;transition:border-color 0.18s ease;
+  border-radius:var(--radius-base);font-size:var(--fs-sm);color:var(--text);
+  outline:none;transition:border-color 0.2s ease;
 }
 .attr-search-input:focus{border-color:var(--accent)}
 .attr-search-input::placeholder{color:var(--text-muted)}
@@ -52,11 +52,11 @@
   color:var(--accent);background:var(--accent-light);
   cursor:pointer;position:relative;overflow:hidden;
   border:1px solid transparent;
-  transition:transform 0.18s var(--ease-out),background-color 0.15s ease,color 0.15s ease,box-shadow 0.15s ease,border-color 0.15s ease;
+  transition:transform 0.2s var(--ease-out),background-color 0.15s ease,color 0.15s ease,box-shadow 0.15s ease,border-color 0.15s ease;
 }
 .attr-search-add svg{
   width:16px;height:16px;
-  transition:transform 0.25s var(--ease-out);
+  transition:transform 0.2s var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
 .attr-search-add:hover{
@@ -74,9 +74,9 @@
   transition-duration:0.05s;
 }
 .attr-drop-item{
-  padding:8px 10px;font-size:0.8rem;font-weight:500;
+  padding:8px 10px;font-size:var(--fs-sm);font-weight:500;
   color:var(--text-secondary);border-radius:var(--radius-base);
-  cursor:pointer;transition:background-color 0.12s ease,color 0.12s ease;
+  cursor:pointer;transition:background-color 0.15s ease,color 0.15s ease;
   display:flex;align-items:center;gap:8px;
 }
 .attr-drop-item.is-system-attr .attr-icon-system{
@@ -85,7 +85,7 @@
 .attr-drop-item.is-system-attr .attr-icon-system svg{width:13px;height:13px}
 .attr-system-tag{
   display:inline-flex;align-items:center;padding:1px 5px;
-  font-size:0.68rem;font-weight:600;line-height:1.2;
+  font-size:var(--fs-2xs);font-weight:600;line-height:1.2;
   border-radius:var(--radius-sm);background:var(--accent-light);color:var(--accent);
   margin-left:auto;letter-spacing:0.02em;
 }
@@ -115,7 +115,7 @@
   display:inline-flex;align-items:center;gap:6px;
   padding:4px 12px 4px 18px;
   clip-path:polygon(10px 0,100% 0,100% 100%,10px 100%,0 50%);
-  font-size:0.74rem;font-weight:600;
+  font-size:var(--fs-xs);font-weight:600;
   background:var(--accent-light);color:var(--accent);
   cursor:pointer;white-space:nowrap;
   transition:transform 0.15s var(--ease-out),background-color 0.15s ease,color 0.15s ease;
@@ -131,7 +131,7 @@
 .attr-chip:hover{background:var(--accent);color:var(--text-on-accent)}
 .attr-chip:hover::before{background:var(--text-on-accent)}
 }
-.attr-chip .attr-chip-x{font-size:0.85rem;line-height:1}
+.attr-chip .attr-chip-x{font-size:var(--fs-sm);line-height:1}
 
 .attr-chip-excluded{
   background:var(--amber-light);color:var(--amber);
@@ -150,7 +150,7 @@
 
 /* Beautify attr filter button */
 #btnAttrFilter{
-  border-radius:20px;
+  border-radius:var(--radius-xl);
   padding:5px 14px;
   font-weight:600;
   letter-spacing:0.02em;
@@ -184,10 +184,10 @@
   border:none;border-radius:var(--radius-sm);
   background:transparent;
   color:var(--text-secondary);
-  font-size:0.75rem;font-weight:600;
+  font-size:var(--fs-xs);font-weight:600;
   cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
-  transition:transform 0.12s ease,background-color 0.12s ease,color 0.12s ease;
+  transition:transform 0.15s ease,background-color 0.15s ease,color 0.15s ease;
   white-space:nowrap;
 }
 .focus-tools .ft-sb-btn svg{width:16px;height:16px}

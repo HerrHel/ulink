@@ -47,7 +47,7 @@ svg{vertical-align:middle}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{
   background-color:var(--border-hover);
-  border-radius:999px;
+  border-radius:var(--radius-full);
   border:2px solid transparent;
   background-clip:padding-box;
 }

@@ -300,7 +300,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   padding: 3px 9px;
   border-radius: var(--radius-sm, 6px);
   color: var(--text);
-  font-size: 12.5px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
@@ -334,7 +334,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .dropdown-chevron {
   flex-shrink: 0;
   color: var(--text-muted);
-  transition: transform 0.18s ease;
+  transition: transform 0.2s ease;
 }
 
 .dropdown-chevron.open {
@@ -385,10 +385,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   border: none;
   background: transparent;
   color: var(--accent);
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease;
 }
 
 .session-new-btn:hover:not(:disabled) {
@@ -413,7 +413,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   gap: 8px;
   padding: 6px 10px;
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease;
   position: relative;
 }
 
@@ -442,7 +442,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 }
 
 .session-item-title {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -483,7 +483,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 }
 
 .session-item-fade-leave-active {
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
 
@@ -548,7 +548,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   color: var(--text-muted);
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .chat-btn-icon:hover:not(:disabled) {
@@ -611,7 +611,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   cursor: pointer;
   padding: 3px 6px;
   border-radius: 3px;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .session-memory-btn:hover {
@@ -649,7 +649,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 }
 
 .memory-popover-title {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   color: var(--text);
 }
@@ -693,7 +693,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 
 .memory-badge {
   flex-shrink: 0;
-  font-size: 9.5px;
+  font-size:var(--fs-2xs);
   line-height: 1.5;
   padding: 0 5px;
   border-radius: 3px;
@@ -717,7 +717,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 }
 
 .memory-item-text {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   color: var(--text);
   word-break: break-word;
 }

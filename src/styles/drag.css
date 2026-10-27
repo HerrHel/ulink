@@ -14,7 +14,7 @@
   background:var(--bg-alt);border-radius:var(--radius-base);
   border:1px solid var(--border-light);
 }
-.cat-item-name{flex:1;font-size:0.85rem}
+.cat-item-name{flex:1;font-size:var(--fs-sm)}
 .cat-grip{
   display:none;
   width:24px;height:24px;flex-shrink:0;
@@ -44,7 +44,7 @@
   box-shadow:0 12px 36px rgba(0,0,0,0.22),0 4px 12px rgba(0,0,0,0.12);
   opacity:0.92;transform:scale(1.04);
   animation:catDragPop 0.2s cubic-bezier(.34,1.56,.64,1) forwards;
-  font-size:0.85rem;
+  font-size:var(--fs-sm);
 }
 .cat-drag-float .cat-grip{display:none}
 .cat-drag-float .btn-xs{display:none}
@@ -127,7 +127,7 @@
   z-index:calc(var(--z-drag) + 1);
   opacity:0;
   transform:translateX(-1px);
-  transition:opacity 0.12s;
+  transition:opacity 0.15s;
   box-shadow:0 0 4px var(--accent-glow);
 }
 .drag-cursor.visible{
@@ -140,7 +140,7 @@
 }
 .drag-hint{
   position:fixed;padding:4px 10px;border-radius:var(--radius-sm);
-  background:var(--accent);color:var(--text-on-accent);font-size:0.72rem;
+  background:var(--accent);color:var(--text-on-accent);font-size:var(--fs-2xs);
   font-weight:500;white-space:nowrap;pointer-events:none;
   z-index:calc(var(--z-drag) + 2);line-height:1.4;
   box-shadow:0 2px 8px rgba(0,0,0,.18);

@@ -51,6 +51,18 @@
   --radius-lg:14px;
   --radius-xl:18px;
   --radius-full:9999px;
+  /* 字号阶梯（全站唯一取值来源，主题无关）。
+     micro 档例外：9/10/11/15px 配固定行高的微型徽章允许保留字面值。
+     ⚠️ 落地页 index.html 内联 :root 需同步 radius/shadow 值（无构建共享，手工对齐）。 */
+  --fs-2xs:0.72rem;
+  --fs-xs:0.75rem;
+  --fs-sm:0.82rem;
+  --fs-base:0.875rem;
+  --fs-md:0.95rem;
+  --fs-lg:1.1rem;
+  --fs-xl:1.3rem;
+  --fs-2xl:1.45rem;
+  --fs-3xl:2.1rem;
   --font-sans:'Satoshi',-apple-system,BlinkMacSystemFont,'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
   --font-display:'Clash Display','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
   --font-mono:'JetBrains Mono','SF Mono','Cascadia Code','Consolas',monospace;
@@ -81,8 +93,8 @@
   /* 语义化文本与状态颜色 */
   --color-white:#ffffff;
   --text-on-accent:#ffffff;
-  --emerald:#10b981;
-  --emerald-light:rgba(16,185,129,0.1);
+  --emerald:var(--green);
+  --emerald-light:var(--green-light);
   /* 兼容与防护别名（保障旧组件与手写样式回退） */
   --radius:var(--radius-base);
   --text-primary:var(--text);
@@ -113,13 +125,15 @@
   --text-secondary:#B5AFA6;
   /* B1-002：暗色 muted 相对 surface/#25252B ≥4.5 */
   --text-muted:#9B968E;
-  --accent:#F04A8A;
-  --brand-logo-blue:#F04A8A;
-  --brand-logo-green:#E2E7BF;
-  --brand-logo-text:#F04A8A;
-  --accent-light:rgba(230,57,124,0.1);
-  --accent-glow:rgba(230,57,124,0.18);
-  --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);
+  /* 品牌色恒定策略：主题只调明度，不改色相。暗色 accent 是浅色 #122E8A 同色相（~225°）的提亮版，
+     深浅主题下品牌观感一致；--text-on-accent 相应反转为深色以保对比度。 */
+  --accent:#7E9BF0;
+  --brand-logo-blue:#7E9BF0;
+  --brand-logo-green:#34D399;
+  --brand-logo-text:#7E9BF0;
+  --accent-light:rgba(126,155,240,0.12);
+  --accent-glow:rgba(126,155,240,0.2);
+  --accent-grad:linear-gradient(135deg,#7E9BF0 0%,#A3B7F5 100%);
   --green:#14b8a6;
   --green-light:rgba(20,184,166,0.1);
   --amber:#f59e0b;
@@ -138,11 +152,11 @@
   --overlay:rgba(0,0,0,0.6);
   --card-badge-bg:rgba(255,255,255,0.05);
   --danger:#ef4444;
-  --accent-dark:#b82d63;
+  --accent-dark:#5F7FE0;
   --vault-color:#a78bfa;
-  --text-on-accent:#ffffff;
-  --emerald:#14b8a6;
-  --emerald-light:rgba(20,184,166,0.1);
+  --text-on-accent:#131A38;
+  --emerald:var(--green);
+  --emerald-light:var(--green-light);
 }
 /* ---- Comfortable theme: light ---- */
 [data-theme-style="comfortable"][data-theme="light"],
@@ -173,8 +187,8 @@
   --rail-border:#D4DCC9;
   --card-badge-bg:#E0E8D6;
   --text-on-accent:#ffffff;
-  --emerald:#10b981;
-  --emerald-light:rgba(16,185,129,0.08);
+  --emerald:var(--green);
+  --emerald-light:var(--green-light);
 }
 /* ---- Comfortable theme: dark ---- */
 [data-theme-style="comfortable"][data-theme="dark"]{
@@ -192,15 +206,16 @@
   --text-secondary:#A8AD8A;
   /* B1-002：舒适暗色 muted 相对 surface/#363D50 ≥4.5 */
   --text-muted:#B0B692;
-  --accent:#E2E7BF;
-  --accent-dark:#c2c79f;
+  /* 品牌色恒定：舒适暗色 accent 为舒适浅色 #2C9678 同色相（~160°）提亮版 */
+  --accent:#5FCFA4;
+  --accent-dark:#46B98C;
   --vault-color:#a78bfa;
-  --accent-light:rgba(226,231,191,0.1);
-  --accent-glow:rgba(226,231,191,0.18);
-  --accent-grad:linear-gradient(135deg,#E2E7BF 0%,#C8CE9A 100%);
-  --brand-logo-blue:#F04A8A;
-  --brand-logo-green:#E2E7BF;
-  --brand-logo-text:#E2E7BF;
+  --accent-light:rgba(95,207,164,0.12);
+  --accent-glow:rgba(95,207,164,0.2);
+  --accent-grad:linear-gradient(135deg,#5FCFA4 0%,#8ADFC0 100%);
+  --brand-logo-blue:#7E9BF0;
+  --brand-logo-green:#34D399;
+  --brand-logo-text:#5FCFA4;
   --shadow-xs:0 1px 2px rgba(0,0,0,0.3);
   --shadow-sm:0 1px 3px rgba(0,0,0,0.35),0 1px 2px rgba(0,0,0,0.2);
   --shadow-md:0 4px 16px -2px rgba(0,0,0,0.45),0 2px 4px rgba(0,0,0,0.25);
@@ -211,8 +226,8 @@
   --rail-bg:#252B38;
   --rail-border:#3A4152;
   --card-badge-bg:rgba(226,231,191,0.08);
-  /* 舒适暗色下高亮底色为浅色 #E2E7BF，文字反色需为深色以保障无障碍对比度 */
+  /* 品牌色恒定：舒适暗色 accent 为浅色系同款（#5FCFA4），--text-on-accent 用深色保对比度 */
   --text-on-accent:#262E24;
-  --emerald:#14b8a6;
-  --emerald-light:rgba(20,184,166,0.1);
+  --emerald:var(--green);
+  --emerald-light:var(--green-light);
 }

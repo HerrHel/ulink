@@ -14,7 +14,7 @@
   display:flex;align-items:center;gap:8px;
   padding:6px 14px 2px;
   font-family:var(--font-display);
-  font-size:1.02rem;font-weight:600;
+  font-size:var(--fs-lg);font-weight:600;
   letter-spacing:-0.01em;
   flex-shrink:0;
 }
@@ -30,7 +30,7 @@
 }
 .rail-section-label{
   padding:10px 14px 4px;
-  font-size:0.65rem;font-weight:700;
+  font-size:var(--fs-2xs);font-weight:700;
   text-transform:uppercase;
   letter-spacing:0.06em;
   color:var(--text-muted);
@@ -47,7 +47,7 @@
   padding:0 10px;
   border-radius:var(--radius-md);
   color:var(--text-muted);
-  font-size:0.84rem;font-weight:500;
+  font-size:var(--fs-sm);font-weight:500;
   transition:var(--transition-normal);
   flex-shrink:0;
   white-space:nowrap;overflow:hidden;
@@ -70,7 +70,7 @@
 .rail-item svg{width:18px;height:18px;flex-shrink:0}
 .rail-item .rail-count{
   margin-left:auto;
-  font-size:0.7rem;font-weight:600;
+  font-size:var(--fs-2xs);font-weight:600;
   color:var(--text-muted);
   background:var(--bg-alt);
   padding:1px 7px;border-radius:var(--radius-base);
@@ -163,7 +163,7 @@
   background:var(--surface-hover);
   color:var(--text);
   font-weight:600;
-  font-size:0.8rem;
+  font-size:var(--fs-sm);
 }
 .rail-user.unlogged .rail-user-avatar{
   background:var(--surface);
@@ -196,13 +196,13 @@
   text-align:left;
 }
 .rail-user-title{
-  font-size:0.82rem;font-weight:600;
+  font-size:var(--fs-sm);font-weight:600;
   color:var(--text);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   line-height:1.2;
 }
 .rail-user-sub{
-  font-size:0.68rem;color:var(--text-muted);
+  font-size:var(--fs-2xs);color:var(--text-muted);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   line-height:1.2;
   margin-top:2px;

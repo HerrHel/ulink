@@ -299,12 +299,12 @@ onBeforeUnmount(() => {
 }
 .pur-title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size:var(--fs-lg);
   font-weight: 600;
 }
 .pur-sub {
   margin: 4px 0 0;
-  font-size: 0.78rem;
+  font-size:var(--fs-sm);
   color: var(--text-tertiary, #888);
 }
 .pur-close {
@@ -315,7 +315,7 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: none;
   color: inherit;
-  font-size: 1.4rem;
+  font-size:var(--fs-2xl);
   line-height: 1;
   cursor: pointer;
 }
@@ -327,7 +327,7 @@ onBeforeUnmount(() => {
 .pur-empty {
   padding: 24px 0;
   text-align: center;
-  font-size: 0.85rem;
+  font-size:var(--fs-sm);
   color: var(--text-tertiary, #888);
 }
 
@@ -355,18 +355,18 @@ onBeforeUnmount(() => {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .pur-plan.active {
-  border-color: var(--accent, #2563eb);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #2563eb) 14%, transparent);
+  border-color: var(--accent, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, var(--accent)) 14%, transparent);
 }
 .pur-plan-name {
   font-weight: 600;
 }
 .pur-plan-price b {
-  font-size: 1.05rem;
+  font-size:var(--fs-lg);
 }
 .pur-plan-price em {
   font-style: normal;
-  font-size: 0.75rem;
+  font-size:var(--fs-xs);
   color: var(--text-tertiary, #888);
   margin-left: 2px;
 }
@@ -388,21 +388,21 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .pur-channel.active {
-  border-color: var(--accent, #2563eb);
-  color: var(--accent, #2563eb);
+  border-color: var(--accent, var(--accent));
+  color: var(--accent, var(--accent));
   font-weight: 600;
 }
 
 .pur-note {
   margin: 0 0 12px;
-  font-size: 0.8rem;
+  font-size:var(--fs-sm);
   line-height: 1.5;
 }
 .pur-note-warn {
   color: #b45309;
 }
 .pur-note-error {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .pur-primary {
@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
   min-height: 46px;
   border: none;
   border-radius: 12px;
-  background: var(--accent, #2563eb);
+  background: var(--accent, var(--accent));
   color: #fff;
   font: inherit;
   font-weight: 600;
@@ -431,7 +431,7 @@ onBeforeUnmount(() => {
 .pur-amount span {
   display: block;
   margin-top: 2px;
-  font-size: 0.8rem;
+  font-size:var(--fs-sm);
   color: var(--text-tertiary, #888);
 }
 .pur-qr {
@@ -451,16 +451,16 @@ onBeforeUnmount(() => {
   object-fit: contain;
 }
 .pur-qr-loading {
-  font-size: 0.8rem;
+  font-size:var(--fs-sm);
   color: var(--text-tertiary, #888);
 }
 .pur-scan {
   margin: 0 0 6px;
-  font-size: 0.85rem;
+  font-size:var(--fs-sm);
 }
 .pur-countdown {
   margin: 0 0 16px;
-  font-size: 0.78rem;
+  font-size:var(--fs-sm);
   color: var(--text-tertiary, #888);
 }
 .pur-actions {
@@ -491,8 +491,8 @@ onBeforeUnmount(() => {
   height: 56px;
   margin: 8px auto 12px;
   border-radius: 50%;
-  background: color-mix(in srgb, #16a34a 14%, transparent);
-  color: #16a34a;
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  color: var(--green);
   font-size: 1.6rem;
   font-weight: 700;
 }
@@ -502,7 +502,7 @@ onBeforeUnmount(() => {
 }
 .pur-done p {
   margin: 0 0 18px;
-  font-size: 0.82rem;
+  font-size:var(--fs-sm);
   color: var(--text-tertiary, #888);
 }
 

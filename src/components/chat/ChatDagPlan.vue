@@ -171,13 +171,13 @@ function getStatusLabel(status: TaskStepStatus): string {
 
 .dag-title {
   margin: 0;
-  font-size: 13px;
+  font-size:var(--fs-sm);
   font-weight: 600;
   color: var(--text-primary, #1e293b);
 }
 
 .dag-desc {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   line-height: 1.5;
   color: var(--text-secondary, #64748b);
 }
@@ -204,7 +204,7 @@ function getStatusLabel(status: TaskStepStatus): string {
 
 .dag-progress-fill {
   height: 100%;
-  background: var(--accent-color, #2563eb);
+  background: var(--accent-color, var(--accent));
   transition: width 0.3s ease;
 }
 
@@ -248,7 +248,7 @@ function getStatusLabel(status: TaskStepStatus): string {
 
 .dag-step-node.is-running .dag-node-icon {
   background: rgba(37, 99, 235, 0.12);
-  color: #2563eb;
+  color: var(--accent);
 }
 
 .dag-step-node.is-failed .dag-node-icon {
@@ -287,7 +287,7 @@ function getStatusLabel(status: TaskStepStatus): string {
 }
 
 .dag-node-title {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   color: var(--text-primary, #1e293b);
 }
@@ -306,7 +306,7 @@ function getStatusLabel(status: TaskStepStatus): string {
 }
 .dag-status-pill.pill-running {
   background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
+  color: var(--accent);
 }
 .dag-status-pill.pill-failed {
   background: rgba(225, 29, 72, 0.1);
@@ -368,9 +368,9 @@ function getStatusLabel(status: TaskStepStatus): string {
   padding: 8px 14px;
   border-radius: 6px;
   border: none;
-  background: var(--accent-color, #2563eb);
+  background: var(--accent-color, var(--accent));
   color: #ffffff;
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -391,9 +391,9 @@ function getStatusLabel(status: TaskStepStatus): string {
 
 .dag-completed-notice {
   text-align: center;
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
-  color: #10b981;
+  color: var(--green);
   padding: 6px;
   background: rgba(16, 185, 129, 0.08);
   border-radius: 6px;

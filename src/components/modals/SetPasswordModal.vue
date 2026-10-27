@@ -217,18 +217,18 @@ async function onSave() {
 }
 .spm-hero-icon{
   display:inline-flex;align-items:center;justify-content:center;
-  width:48px;height:48px;border-radius:14px;
+  width:48px;height:48px;border-radius:var(--radius-lg);
   background:var(--accent-light);color:var(--accent);
 }
 .spm-hero-icon svg{width:24px;height:24px}
 .spm-hero-text{
-  margin:0;font-size:0.86rem;line-height:1.65;
+  margin:0;font-size:var(--fs-sm);line-height:1.65;
   color:var(--text-secondary);max-width:340px;
 }
 
 /* ── 第二步：已发送提示 ── */
 .spm-sent-to{
-  margin:0 0 16px;font-size:0.78rem;line-height:1.55;
+  margin:0 0 16px;font-size:var(--fs-sm);line-height:1.55;
   color:var(--text-muted);
 }
 .spm-email{color:var(--text);font-weight:600}
@@ -240,7 +240,7 @@ async function onSave() {
 
 .spm-rule{
   margin:6px 0 0;
-  font-size:0.72rem;line-height:1.5;
+  font-size:var(--fs-2xs);line-height:1.5;
   color:var(--text-muted);
 }
 
@@ -248,7 +248,7 @@ async function onSave() {
   display:flex;align-items:flex-start;gap:6px;
   margin:0;padding:8px 12px;
   border-radius:var(--radius-sm);
-  font-size:0.78rem;line-height:1.5;
+  font-size:var(--fs-sm);line-height:1.5;
 }
 .spm-msg--ok{color:var(--green);background:var(--green-light)}
 .spm-msg--err{color:var(--danger);background:var(--rose-light)}

@@ -80,7 +80,7 @@
       <div class="card-preview" v-if="!detailMode && previewText">{{ previewText }}</div>
     </div>
     <div class="card-foot" v-if="!isShareReadonly">
-      <span class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
+      <span v-if="(bookmark.useCount || 0) > 0" class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
       <span class="card-actions">
         <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="edit" :title="t('common.edit')" v-html="I.edit"></button>

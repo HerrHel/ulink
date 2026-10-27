@@ -75,7 +75,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(finish)
 .setup-brand{margin-bottom:24px}
 .setup-logo{
   display:inline-flex;align-items:center;justify-content:center;
-  width:56px;height:56px;border-radius:16px;
+  width:56px;height:56px;border-radius:var(--radius-xl);
   background:var(--surface);
   border:1px solid var(--border);
   box-shadow:var(--shadow-sm);
@@ -83,7 +83,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(finish)
 }
 .setup-logo svg{width:32px;height:32px}
 .setup-tagline{
-  font-size:0.82rem;color:var(--text-muted);
+  font-size:var(--fs-sm);color:var(--text-muted);
   margin:0;line-height:1.5;
 }
 
@@ -110,7 +110,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(finish)
 }
 
 .setup-card-icon{
-  width:32px;height:32px;border-radius:10px;
+  width:32px;height:32px;border-radius:var(--radius-md);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
 }
@@ -123,11 +123,11 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(finish)
 }
 
 .setup-card-title{
-  font-size:0.9rem;font-weight:600;color:var(--text);
+  font-size:var(--fs-base);font-weight:600;color:var(--text);
   font-family:var(--font-display);
 }
 .setup-card-desc{
-  font-size:0.76rem;color:var(--text-muted);
+  font-size:var(--fs-xs);color:var(--text-muted);
   line-height:1.5;
 }
 </style>

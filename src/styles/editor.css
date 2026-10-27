@@ -1,5 +1,5 @@
 /* ==================== TIPTAP EDITOR ==================== */
-.group-tiptap{min-height:40px;outline:none;font-size:0.875rem;line-height:1.65;color:var(--text)}
+.group-tiptap{min-height:40px;outline:none;font-size:var(--fs-base);line-height:1.65;color:var(--text)}
 .group-tiptap p{margin:0.2em 0}
 .group-tiptap p:first-child{margin-top:0}
 .group-tiptap p:last-child{margin-bottom:0}
@@ -15,8 +15,8 @@
 .group-tiptap span[style*="font-size"],.group-body span[style*="font-size"]{line-height:inherit}
 
 /* ---- 标题 ---- */
-.group-tiptap h1,.group-body h1{font-size:1.4rem;font-weight:600;margin:0.5em 0;border-left:3px solid var(--accent);padding-left:10px}
-.group-tiptap h2,.group-body h2{font-size:1.15rem;font-weight:600;margin:0.4em 0}
+.group-tiptap h1,.group-body h1{font-size:var(--fs-2xl);font-weight:600;margin:0.5em 0;border-left:3px solid var(--accent);padding-left:10px}
+.group-tiptap h2,.group-body h2{font-size:var(--fs-lg);font-weight:600;margin:0.4em 0}
 .group-tiptap h3,.group-body h3{font-size:1rem;font-weight:600;margin:0.3em 0}
 
 /* ---- 列表 ---- */
@@ -62,7 +62,7 @@
   border:1.5px solid var(--accent);
   border-radius:1px;
   opacity:0;
-  transition:opacity .15s,background .12s;
+  transition:opacity .15s,background 0.15s;
   z-index:2;
 }
 .group-tiptap [data-resize-container] [data-resize-handle]:hover{
@@ -120,7 +120,7 @@
 }
 .group-tiptap ul[data-type="taskList"] li label input[type="checkbox"]{
   width:16px;height:16px;accent-color:var(--accent);cursor:pointer;
-  border-radius:4px;border:1.5px solid var(--border);appearance:auto
+  border-radius:var(--radius-xs);border:1.5px solid var(--border);appearance:auto
 }
 .group-tiptap ul[data-type="taskList"] li[data-checked="true"] > div > p{
   text-decoration:line-through;color:var(--text-muted)
@@ -156,7 +156,7 @@
 .focus-view .group-card-focus .group-body{
   flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
   -webkit-mask-image:none;mask-image:none;
-  font-size:0.92rem;line-height:1.85;
+  font-size:var(--fs-md);line-height:1.85;
 }
 
 /* ==================== RICH TEXT TOOLBAR ==================== */
@@ -183,11 +183,11 @@
   border-radius:var(--radius-sm);
   background:var(--surface);
   color:var(--text-muted);
-  font-size:0.74rem;font-weight:600;
+  font-size:var(--fs-xs);font-weight:600;
   cursor:pointer;
   min-width:24px;height:24px;
   display:inline-flex;align-items:center;justify-content:center;
-  transition:transform 0.12s ease,background-color 0.12s ease,border-color 0.12s ease,color 0.12s ease;
+  transition:transform 0.15s ease,background-color 0.15s ease,border-color 0.15s ease,color 0.15s ease;
   white-space:nowrap;
 }
 .rt-btn svg{width:14px;height:14px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -211,7 +211,7 @@
   overflow-x:auto;scrollbar-width:none;
   transform:translateY(100%);opacity:0;
   pointer-events:none;
-  transition:transform .2s var(--ease-out),opacity .18s var(--ease-out);
+  transition:transform .2s var(--ease-out),opacity 0.2s var(--ease-out);
   box-shadow:var(--shadow-md);
   -webkit-overflow-scrolling:touch;
   -webkit-mask-image:linear-gradient(to right,black calc(100% - 24px),transparent 100%);
@@ -229,6 +229,6 @@
 .mfb-color-reset{
   flex-shrink:0;padding:0 8px;height:24px;
   background:transparent;border:1px solid var(--border-light);
-  border-radius:var(--radius-sm);color:var(--text-muted);font-size:.7rem;
+  border-radius:var(--radius-sm);color:var(--text-muted);font-size:var(--fs-2xs);
   cursor:pointer;
 }

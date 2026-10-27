@@ -17,10 +17,10 @@
 .pt-1{padding-top:4px}
 
 /* --- Typography --- */
-.text-sm{font-size:0.82rem}
-.text-xs{font-size:0.7rem}
+.text-sm{font-size:var(--fs-sm)}
+.text-xs{font-size:var(--fs-2xs)}
 .text-muted{color:var(--text-muted)}
-.text-muted-sm{font-size:0.82rem;color:var(--text-muted)}
+.text-muted-sm{font-size:var(--fs-sm);color:var(--text-muted)}
 .text-danger{color:var(--danger)}
 
 /* --- List Items (used in CategoryModal, AttributeModal, GroupEditModal) --- */
@@ -43,17 +43,17 @@
 
 /* --- Inline style replacements --- */
 .detail-entry-head{margin-bottom:6px;display:flex;align-items:center;gap:8px}
-.detail-entry-img{border-radius:4px;object-fit:contain;width:36px;height:36px}
+.detail-entry-img{border-radius:var(--radius-xs);object-fit:contain;width:36px;height:36px}
 .detail-actions{display:flex;gap:6px;align-items:center;margin-top:8px}
 .detail-use-count{margin-left:auto}
 .empty-compact{padding:40px 20px}
-.rail-storage-track{height:4px;background:var(--bg-alt);border-radius:2px;overflow:hidden}
+.rail-storage-track{height:4px;background:var(--bg-alt);border-radius:var(--radius-xs);overflow:hidden}
 .ge-bm-item{padding:6px 10px;margin-bottom:4px;background:var(--bg-alt);border-radius:var(--radius-base)}
 .text-ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.modal-hint{font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5}
-.form-error{color:var(--danger);font-size:0.82rem;margin-top:4px}
-.form-success{color:var(--accent);font-size:0.82rem;margin-top:4px}
-.confirm-msg{font-size:0.92rem;color:var(--text);line-height:1.6}
-.drop-empty{padding:12px;text-align:center;color:var(--text-muted);font-size:0.78rem}
+.modal-hint{font-size:var(--fs-sm);color:var(--text-muted);margin-bottom:12px;line-height:1.5}
+.form-error{color:var(--danger);font-size:var(--fs-sm);margin-top:4px}
+.form-success{color:var(--accent);font-size:var(--fs-sm);margin-top:4px}
+.confirm-msg{font-size:var(--fs-md);color:var(--text);line-height:1.6}
+.drop-empty{padding:12px;text-align:center;color:var(--text-muted);font-size:var(--fs-sm)}
 .popover-empty{justify-content:center;color:var(--text-muted);cursor:default}
 .form-input-sm{height:30px}

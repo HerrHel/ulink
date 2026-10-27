@@ -685,7 +685,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .chat-empty-sub {
-  font-size: 12.5px;
+  font-size:var(--fs-xs);
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0;
@@ -800,7 +800,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   background: var(--surface-alt);
   border: 1px solid var(--border);
   border-radius: 14px 14px 3px 14px;
-  font-size: 13px;
+  font-size:var(--fs-sm);
   color: var(--text);
   line-height: 1.55;
   word-break: break-word;
@@ -847,7 +847,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: var(--radius-xs, 4px);
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .chat-msg-act-btn svg {
@@ -892,7 +892,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 .dot-1 { animation-delay: 0s; }
 .dot-2 { animation-delay: 0.2s; }
-.dot-3 { animation-delay: 0.4s; }
+.dot-3 { animation-delay: 0.3s; }
 
 @keyframes dot-pulse {
   0%, 80%, 100% { opacity: 0.2; transform: scale(0.85); }
@@ -914,7 +914,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   border-radius: var(--radius-sm, 6px);
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(44, 40, 36, 0.02);
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .chat-thinking-box.is-thinking {
@@ -950,7 +950,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: color 0.12s ease;
+  transition: color 0.15s ease;
 }
 
 .chat-thinking-header:hover {
@@ -987,7 +987,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  transition: transform 0.18s ease;
+  transition: transform 0.2s ease;
 }
 
 .thinking-arrow.open {
@@ -1006,7 +1006,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .chat-thinking-text {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   line-height: 1.62;
   color: var(--text-muted);
   white-space: pre-wrap;
@@ -1057,7 +1057,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 /* 核心回复流：正文与随文嵌入卡片图文交融 */
 .chat-reply-flow-wrap {
   position: relative;
-  font-size: 13px;
+  font-size:var(--fs-sm);
   color: var(--text);
   padding: 0 1px;
 }
@@ -1113,14 +1113,14 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .chat-flow-text {
-  font-size: 13px;
+  font-size:var(--fs-sm);
   color: var(--text);
   letter-spacing: -0.01em;
 }
 
 .chat-flow-text :deep(.chat-flow-heading) {
   margin: 12px 0 5px;
-  font-size: 13.5px;
+  font-size:var(--fs-sm);
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.02em;
@@ -1139,7 +1139,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 
 .chat-flow-text :deep(.chat-flow-code) {
   font-family: var(--font-mono, monospace);
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   padding: 2px 5px;
   border-radius: var(--radius-xs, 4px);
   background: var(--surface-hover);
@@ -1168,7 +1168,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   text-decoration: underline;
   text-underline-offset: 3px;
   word-break: break-all;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s ease;
 }
 
 .chat-flow-text :deep(.chat-flow-link:hover) {
@@ -1193,7 +1193,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   width: 100%;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size:var(--fs-xs);
   line-height: 1.55;
   text-align: left;
 }
@@ -1342,8 +1342,8 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .writeback-replace:hover {
-  border-color: var(--amber, #f59e0b);
-  color: var(--amber, #f59e0b);
+  border-color: var(--amber, var(--amber));
+  color: var(--amber, var(--amber));
   background: var(--amber-light, rgba(245, 158, 11, 0.1));
 }
 
@@ -1476,7 +1476,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   border: 1px solid var(--border);
   border-radius: var(--radius-base, 8px);
   box-shadow: var(--shadow-card);
-  transition: box-shadow 0.25s var(--ease-out), border-color 0.2s ease, transform 0.25s var(--ease-out), background-color 0.2s ease;
+  transition: box-shadow 0.2s var(--ease-out), border-color 0.2s ease, transform 0.2s var(--ease-out), background-color 0.2s ease;
 }
 
 .chat-action-card:hover {
@@ -1529,14 +1529,14 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .action-card-title {
-  font-size: 12.5px;
+  font-size:var(--fs-xs);
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.15px;
 }
 
 .action-card-desc {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-secondary);
   line-height: 1.5;
   margin-bottom: 8px;
@@ -1559,7 +1559,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .action-card-curation-count {
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   font-weight: 600;
   color: var(--accent);
 }
@@ -1568,12 +1568,12 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   background: none;
   border: none;
   padding: 0;
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
-  transition: color 0.12s ease;
+  transition: color 0.15s ease;
 }
 
 .action-card-curation-toggle:hover {
@@ -1595,7 +1595,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   padding: 4px 6px;
   border-radius: var(--radius-xs, 4px);
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.15s ease;
   user-select: none;
 }
 
@@ -1634,7 +1634,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .action-candidate-domain {
-  font-size: 9.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -1653,7 +1653,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   font-weight: 600;
   border-radius: var(--radius-xs, 4px);
   border: 1px solid var(--accent);
@@ -1696,7 +1696,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   color: var(--accent);
   font-weight: 600;
 }
@@ -1757,7 +1757,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .user-attachment-pill .pill-badge {
-  font-size: 9.5px;
+  font-size:var(--fs-2xs);
   padding: 0 3px;
   border-radius: 3px;
   background: var(--surface-hover);
@@ -1785,7 +1785,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .pill-filesize {
-  font-size: 9.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
   opacity: 0.8;
   margin-left: -2px;
@@ -1813,7 +1813,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   color: var(--text-muted);
   cursor: pointer;
   border-radius: 9999px;
-  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
   line-height: 1.4;
 }
 
@@ -1853,7 +1853,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 
 .send-summary-line {
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-secondary);
   line-height: 1.5;
   word-break: break-word;
@@ -1882,7 +1882,7 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   gap: 4px;
   padding: 4px 10px;
   border-radius: 14px;
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   font-weight: 500;
   line-height: 1.3;
   color: var(--text-secondary, var(--text));

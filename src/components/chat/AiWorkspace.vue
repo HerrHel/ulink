@@ -839,7 +839,7 @@ watch(aiQuery, () => {
   );
   position: relative;
   overflow: hidden;
-  transition: background-color 0.25s ease;
+  transition: background-color 0.2s ease;
 }
 
 :root[data-theme="dark"] .ai-workspace {
@@ -905,7 +905,7 @@ watch(aiQuery, () => {
 }
 
 .ai-hero-headline {
-  font-size: 2.1rem;
+  font-size:var(--fs-3xl);
   font-weight: 500;
   letter-spacing: -0.025em;
   color: var(--text);
@@ -976,7 +976,7 @@ watch(aiQuery, () => {
   border-radius: 6px;
   background: var(--surface-hover);
   border: 1px solid var(--border-light);
-  font-size: 0.76rem;
+  font-size:var(--fs-xs);
   color: var(--text);
 }
 
@@ -1009,7 +1009,7 @@ watch(aiQuery, () => {
 .ai-attach-pill .pill-close {
   background: transparent;
   border: none;
-  font-size: 0.85rem;
+  font-size:var(--fs-sm);
   color: var(--text-muted);
   cursor: pointer;
   padding: 0 2px;
@@ -1065,7 +1065,7 @@ watch(aiQuery, () => {
   box-shadow: none !important;
   background: transparent !important;
   color: var(--text);
-  font-size: 0.96rem;
+  font-size:var(--fs-md);
   line-height: 24px;
   resize: none;
   font-family: inherit;
@@ -1096,7 +1096,7 @@ watch(aiQuery, () => {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: all 0.18s var(--ease-out);
+  transition: all 0.2s var(--ease-out);
 }
 
 .capsule-send-btn.active {
@@ -1120,7 +1120,7 @@ watch(aiQuery, () => {
 }
 
 .capsule-send-btn.stop {
-  background: var(--rose, #ef4444);
+  background: var(--rose, var(--danger));
   color: #fff;
 }
 
@@ -1148,7 +1148,7 @@ watch(aiQuery, () => {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.72rem;
+  font-size:var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -1180,7 +1180,7 @@ watch(aiQuery, () => {
   background: transparent;
   border: 1px solid var(--border-light);
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size:var(--fs-xs);
   cursor: pointer;
   transition: all 0.16s ease;
   max-width: 220px;
@@ -1221,7 +1221,7 @@ watch(aiQuery, () => {
 }
 
 .stream-title-text {
-  font-size: 0.85rem;
+  font-size:var(--fs-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -1231,7 +1231,7 @@ watch(aiQuery, () => {
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  font-size: 0.78rem;
+  font-size:var(--fs-sm);
   font-weight: 500;
   color: var(--text-muted);
   background: transparent;
@@ -1284,7 +1284,7 @@ watch(aiQuery, () => {
 }
 
 .shelf-count-tag {
-  font-size: 0.68rem;
+  font-size:var(--fs-2xs);
   background: var(--surface);
   color: var(--text-muted);
   padding: 1px 5px;
@@ -1302,7 +1302,7 @@ watch(aiQuery, () => {
   background: var(--surface-hover);
   border: 1px solid var(--border-light);
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size:var(--fs-xs);
   cursor: pointer;
   transition: all 0.15s ease;
   margin-left: 8px;
@@ -1359,13 +1359,13 @@ watch(aiQuery, () => {
 }
 
 .drawer-title {
-  font-size: 0.95rem;
+  font-size:var(--fs-md);
   font-weight: 600;
   color: var(--text);
 }
 
 .drawer-count-badge {
-  font-size: 0.72rem;
+  font-size:var(--fs-2xs);
   padding: 1px 7px;
   border-radius: var(--radius-full);
   background: var(--surface-hover);
@@ -1388,7 +1388,7 @@ watch(aiQuery, () => {
   background: var(--surface-hover);
   border: 1px solid var(--border-light);
   color: var(--text);
-  font-size: 0.78rem;
+  font-size:var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1403,7 +1403,7 @@ watch(aiQuery, () => {
 .drawer-close-btn {
   background: transparent;
   border: none;
-  font-size: 1.3rem;
+  font-size:var(--fs-xl);
   line-height: 1;
   color: var(--text-muted);
   cursor: pointer;
@@ -1437,7 +1437,7 @@ watch(aiQuery, () => {
   border: none;
   background: transparent;
   outline: none;
-  font-size: 0.85rem;
+  font-size:var(--fs-sm);
   color: var(--text);
 }
 
@@ -1468,7 +1468,7 @@ watch(aiQuery, () => {
 .history-drawer-empty {
   padding: 40px 10px;
   text-align: center;
-  font-size: 0.85rem;
+  font-size:var(--fs-sm);
   color: var(--text-muted);
 }
 
@@ -1517,7 +1517,7 @@ watch(aiQuery, () => {
 }
 
 .session-card-title {
-  font-size: 0.86rem;
+  font-size:var(--fs-sm);
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -1526,7 +1526,7 @@ watch(aiQuery, () => {
 }
 
 .session-card-meta {
-  font-size: 0.72rem;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
   display: flex;
   align-items: center;
@@ -1558,7 +1558,7 @@ watch(aiQuery, () => {
 
 .session-card-del-btn:hover {
   opacity: 1 !important;
-  color: var(--rose, #ef4444);
+  color: var(--rose, var(--danger));
   background: rgba(239, 68, 68, 0.1);
 }
 
@@ -1575,7 +1575,7 @@ watch(aiQuery, () => {
   gap: 5px;
   background: transparent;
   border: none;
-  font-size: 0.76rem;
+  font-size:var(--fs-xs);
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px 8px;
@@ -1584,13 +1584,13 @@ watch(aiQuery, () => {
 }
 
 .drawer-clear-all-btn:hover {
-  color: var(--rose, #ef4444);
+  color: var(--rose, var(--danger));
   background: rgba(239, 68, 68, 0.08);
 }
 
 .drawer-fade-enter-active,
 .drawer-fade-leave-active {
-  transition: opacity 0.22s ease;
+  transition: opacity 0.2s ease;
 }
 
 .drawer-fade-enter-active .ai-history-drawer,

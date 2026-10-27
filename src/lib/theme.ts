@@ -18,7 +18,7 @@ let _autoThemeHandler: ((e: MediaQueryListEvent) => void) | null = null
 
 // theme-color meta（移动端浏览器 UI 栏/状态栏）按主题映射，与 tokens.css 各主题 --accent 对齐
 const META_THEME_COLOR = 'theme-color'
-const THEME_COLOR: Record<string, string> = { light: '#122E8A', dark: '#F04A8A' }
+const THEME_COLOR: Record<string, string> = { light: '#122E8A', dark: '#7E9BF0' }
 
 /** 更新 <meta name="theme-color">：已有节点复用，缺则补建（幂等） */
 function applyThemeColor(theme: string): void {

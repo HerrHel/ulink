@@ -359,18 +359,18 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 .auth-icon-wrap{margin-bottom:16px}
 .auth-icon{
   display:inline-flex;align-items:center;justify-content:center;
-  width:48px;height:48px;border-radius:14px;
+  width:48px;height:48px;border-radius:var(--radius-lg);
   background:var(--accent-light);color:var(--accent);
 }
 .auth-icon svg{width:24px;height:24px}
 
 /* ── 提示文字 ── */
 .auth-hint{
-  font-size:0.88rem;color:var(--text);margin:0 0 4px;
+  font-size:var(--fs-base);color:var(--text);margin:0 0 4px;
   line-height:1.5;font-weight:500;
 }
 .auth-hint-sub{
-  font-size:0.76rem;color:var(--text-muted);
+  font-size:var(--fs-xs);color:var(--text-muted);
   margin:0 0 16px;line-height:1.5;
 }
 
@@ -404,7 +404,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
   padding:9px 8px 10px;
   background:transparent;
   color:var(--text-muted);
-  font-family:inherit;font-size:0.83rem;font-weight:500;
+  font-family:inherit;font-size:var(--fs-sm);font-weight:500;
   letter-spacing:0.01em;
   cursor:pointer;
   border-radius:var(--radius-sm) var(--radius-sm) 0 0;
@@ -420,13 +420,13 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 /* 选中态用「字色 + 字重 + 滑块」三重信号，不依赖低对比的底色差异 */
 .auth-tab--active{color:var(--text);font-weight:600}
 .auth-email-display{
-  font-size:0.92rem;font-weight:600;color:var(--accent);
+  font-size:var(--fs-md);font-weight:600;color:var(--accent);
   margin:0 0 4px;word-break:break-all;
 }
 
 /* ── 输入�?── */
 .auth-input{
-  text-align:center;font-size:0.95rem;
+  text-align:center;font-size:var(--fs-md);
   padding:11px 16px;
 }
 
@@ -445,7 +445,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 }
 .auth-pw-slot-inner{
   min-height:0;overflow:hidden;
-  opacity:0;transition:opacity .18s ease;
+  opacity:0;transition:opacity 0.2s ease;
 }
 .auth-pw-slot--open .auth-pw-slot-inner{opacity:1}
 @media (prefers-reduced-motion:reduce){
@@ -465,7 +465,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
   background:var(--border);
 }
 .auth-divider-text{
-  font-size:0.75rem;
+  font-size:var(--fs-xs);
   color:var(--text-muted);
   white-space:nowrap;
 }
@@ -486,7 +486,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
   border:1px solid var(--border);
   background:var(--surface);
   color:var(--text);
-  font-size:0.82rem;
+  font-size:var(--fs-sm);
   font-weight:500;
   cursor:pointer;
   transition:background 0.15s ease,border-color 0.15s ease;
@@ -519,7 +519,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 /* ── 消息状�?── */
 .auth-error,.auth-success{
   display:flex;align-items:center;justify-content:center;gap:6px;
-  font-size:0.8rem;margin-top:8px;padding:8px 12px;
+  font-size:var(--fs-sm);margin-top:8px;padding:8px 12px;
   border-radius:var(--radius-sm);
 }
 .auth-error{

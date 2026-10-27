@@ -274,7 +274,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
   max-width: 540px;
 }
 .ai-title-badge {
-  font-size: 0.65rem;
+  font-size:var(--fs-2xs);
   font-weight: 800;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
@@ -295,7 +295,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
   gap: 12px;
   padding: 36px 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size:var(--fs-sm);
 }
 .ai-diff-container {
   display: flex;
@@ -306,7 +306,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.75rem;
+  font-size:var(--fs-xs);
   color: var(--text-muted);
   background: var(--surface-hover);
   padding: 8px 12px;
@@ -337,13 +337,13 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
   cursor: pointer;
 }
 .ai-field-label {
-  font-size: 0.78rem;
+  font-size:var(--fs-sm);
   font-weight: 600;
   color: var(--text);
 }
 .ai-diff-content {
   padding: 10px 12px;
-  font-size: 0.78rem;
+  font-size:var(--fs-sm);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -361,7 +361,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 }
 .ai-label-muted {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size:var(--fs-2xs);
   flex-shrink: 0;
 }
 .ai-val-highlight {
@@ -372,7 +372,7 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
   background: var(--surface-hover);
   padding: 6px 10px;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  font-size:var(--fs-xs);
   color: var(--text);
   line-height: 1.5;
   width: 100%;

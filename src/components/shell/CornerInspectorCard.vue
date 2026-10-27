@@ -498,7 +498,7 @@ defineExpose({
   pointer-events: auto;
   user-select: none;
   will-change: top, bottom;
-  transition: right 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: right 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Compact Card Frame: 舒适比例，与主站卡片质感高度一致 */
@@ -567,7 +567,7 @@ defineExpose({
   cursor: pointer;
   flex-shrink: 0;
   margin-right: 3px;
-  transition: background 0.15s ease, transform 0.12s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .inspector-back-btn:hover,
@@ -591,7 +591,7 @@ defineExpose({
 }
 
 .inspector-back-btn .back-text {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   line-height: 1;
 }
 
@@ -630,7 +630,7 @@ defineExpose({
 }
 
 .inspector-parent-name {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -647,7 +647,7 @@ defineExpose({
 }
 
 .inspector-breadcrumb-current {
-  font-size: 11.5px;
+  font-size:var(--fs-2xs);
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -675,7 +675,7 @@ defineExpose({
   border-radius: 5px;
   cursor: pointer;
   padding: 0;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .inspector-action-btn:hover {
@@ -736,7 +736,7 @@ defineExpose({
 .inspector-slide-forward-leave-active,
 .inspector-slide-backward-enter-active,
 .inspector-slide-backward-leave-active {
-  transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.16s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .inspector-slide-forward-enter-from {
@@ -972,7 +972,7 @@ defineExpose({
 
 /* Transitions: 桌面端从右向左滑入吸附在暂存架左侧 */
 .corner-inspector-trans-enter-active {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.18s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
 }
 
 .corner-inspector-trans-leave-active {

@@ -75,5 +75,5 @@ function onExitShare() { share.exit() }
 
 <style scoped>
 .share-filter-left { display: flex; align-items: center; gap: 10px; }
-.share-filter-hint { font-size: 12px; color: var(--text-secondary, #888); }
+.share-filter-hint { font-size:var(--fs-xs); color: var(--text-secondary, #888); }
 </style>

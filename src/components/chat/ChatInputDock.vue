@@ -483,7 +483,7 @@ function bindTa(el: unknown) {
   padding: 5px 8px;
   border-radius: var(--radius-xs, 4px);
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.15s ease;
 }
 
 .slash-suggest-item:hover,
@@ -501,7 +501,7 @@ function bindTa(el: unknown) {
 }
 
 .slash-cmd-title {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   color: var(--text);
   flex-shrink: 0;
@@ -531,7 +531,7 @@ function bindTa(el: unknown) {
   background: var(--bg);
   padding: 8px 10px 8px 12px;
   box-shadow: inset 0 1px 2px rgba(44, 40, 36, 0.03);
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   min-width: 0;
   box-sizing: border-box;
 }
@@ -584,7 +584,7 @@ function bindTa(el: unknown) {
   padding: 0 !important;
   margin: 0 !important;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size:var(--fs-sm);
   line-height: 24px;
   color: var(--text);
   resize: none;
@@ -666,19 +666,19 @@ function bindTa(el: unknown) {
   background: var(--surface-hover);
   border: 1px solid var(--border-light);
   border-radius: 12px;
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   font-weight: 500;
   color: var(--text-muted);
   cursor: default;
   user-select: none;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .toolbar-model-pill .model-pill-dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #10b981;
+  background: var(--green);
 }
 
 :global([data-theme="dark"]) .toolbar-model-pill {
@@ -704,7 +704,7 @@ function bindTa(el: unknown) {
 }
 
 .chat-send-btn.active {
-  background: #2563eb;
+  background: var(--accent);
   color: #fff;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
 }
@@ -865,13 +865,13 @@ function bindTa(el: unknown) {
 
 .note-icon-box {
   background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  color: var(--amber);
   border: 1px solid rgba(245, 158, 11, 0.22);
 }
 
 .file-icon-pdf {
   background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  color: var(--danger);
   border: 1px solid rgba(239, 68, 68, 0.22);
 }
 
@@ -889,7 +889,7 @@ function bindTa(el: unknown) {
 
 .file-icon-doc {
   background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
+  color: var(--green);
   border: 1px solid rgba(16, 185, 129, 0.22);
 }
 
@@ -904,7 +904,7 @@ function bindTa(el: unknown) {
 }
 
 .card-main-title {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   color: var(--text);
   overflow: hidden;
@@ -913,7 +913,7 @@ function bindTa(el: unknown) {
 }
 
 .card-sub-info {
-  font-size: 10.5px;
+  font-size:var(--fs-2xs);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1010,7 +1010,7 @@ function bindTa(el: unknown) {
 }
 
 .chat-attached-cards-bar .chip-clear-all:hover {
-  color: var(--danger, #ef4444);
-  border-color: var(--danger, #ef4444);
+  color: var(--danger, var(--danger));
+  border-color: var(--danger, var(--danger));
 }
 </style>

@@ -24,7 +24,7 @@
     grid-template-columns:1fr auto;
     grid-template-rows:auto auto;
     gap:8px 10px;
-    transition:padding 0.25s var(--ease-out);
+    transition:padding 0.2s var(--ease-out);
   }
   .header-left{grid-row:1;grid-column:1;gap:6px}
   .header-right{grid-row:1;grid-column:2;gap:6px;align-items:center}
@@ -38,7 +38,7 @@
     padding-bottom:8px;
     transition:max-height 0.3s var(--ease-out),opacity 0.2s ease,margin 0.3s ease;
   }
-  .search-input{height:34px;font-size:0.82rem}
+  .search-input{height:34px;font-size:var(--fs-sm)}
 
   /* Search toggle button (hidden by default, shown when search collapsed) */
   .search-toggle-btn{
@@ -84,7 +84,7 @@
   }
   .scrolled-header .panel-breadcrumb{
     position:absolute;left:50%;transform:translateX(-50%);
-    font-size:0.82rem;font-weight:600;
+    font-size:var(--fs-sm);font-weight:600;
     color:var(--text);
     white-space:nowrap;pointer-events:none;
   }
@@ -155,7 +155,7 @@
   .ft-format-group{flex-shrink:0}
   .ft-div{margin:0 4px;height:18px}
   .ft-sep{margin:0 3px;height:14px}
-  .ft-stat-pill{font-size:0.68rem;padding:2px 6px}
+  .ft-stat-pill{font-size:var(--fs-2xs);padding:2px 6px}
 
   /* === Modals → bottom sheet === */
   .modal{
@@ -194,13 +194,13 @@
     -webkit-tap-highlight-color:transparent;
   }
   .focus-richtext-toolbar{gap:3px}
-  .rt-btn{min-width:26px;height:26px;font-size:0.72rem;padding:3px 4px}
+  .rt-btn{min-width:26px;height:26px;font-size:var(--fs-2xs);padding:3px 4px}
   .ft-format-group,.ft-format-group+.ft-sep{display:none}
   .ft-section-actions{flex:1 1 0;min-width:0}
   .ft-undo-end{flex-shrink:0}
   /* Batch bottom: tighter padding on mobile */
   .batch-bottom-inner{padding:10px 14px}
-  .batch-btn{padding:11px 14px;font-size:0.82rem}
+  .batch-btn{padding:11px 14px;font-size:var(--fs-sm)}
 
   /* === Action sheet: 列表区至少容纳一个卡片(232px)，最大不超 50vh 防溢出 === */
   .bmp-list{max-height:50vh;min-height:240px}
@@ -280,7 +280,7 @@
 }
 .is-mobile .detail-drag-handle::before{
   content:'';width:36px;height:4px;
-  border-radius:2px;
+  border-radius:var(--radius-xs);
   background:var(--border-hover);
   transition:background 0.15s ease,width 0.15s ease;
 }

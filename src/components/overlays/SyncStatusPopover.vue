@@ -115,7 +115,7 @@ onUnmounted(() => {
   width:240px;background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius-lg);box-shadow:var(--shadow-card);
   z-index:200;overflow:hidden;pointer-events:none;
-  transition:opacity .18s,transform .18s;
+  transition:opacity 0.2s,transform 0.2s;
 }
 .ssp-popover.visible{
   opacity:1;transform:translateY(0);pointer-events:auto;
@@ -127,15 +127,15 @@ onUnmounted(() => {
 .ssp-dot{
   width:8px;height:8px;border-radius:50%;flex-shrink:0;
 }
-.ssp-dot.dot-ok{background:var(--emerald,#22c55e)}
-.ssp-dot.dot-pending{background:var(--amber,#f59e0b)}
+.ssp-dot.dot-ok{background:var(--emerald)}
+.ssp-dot.dot-pending{background:var(--amber,var(--amber))}
 .ssp-dot.dot-syncing{background:var(--accent);animation:dot-pulse 1s ease-in-out infinite}
-.ssp-dot.dot-error{background:var(--rose,#ef4444)}
-.ssp-dot.dot-conflict{background:var(--rose,#ef4444);animation:dot-pulse 1s ease-in-out infinite}
+.ssp-dot.dot-error{background:var(--rose)}
+.ssp-dot.dot-conflict{background:var(--rose);animation:dot-pulse 1s ease-in-out infinite}
 .ssp-dot.dot-offline{background:var(--text-muted,#9ca3af)}
-.ssp-label{font-size:0.82rem;font-weight:500;color:var(--text)}
+.ssp-label{font-size:var(--fs-sm);font-weight:500;color:var(--text)}
 .ssp-error{
-  padding:8px 14px;font-size:0.72rem;color:var(--rose,#ef4444);
+  padding:8px 14px;font-size:var(--fs-2xs);color:var(--rose);
   background:rgba(239,68,68,.06);border-bottom:1px solid var(--border-light);
   word-break:break-all;
 }

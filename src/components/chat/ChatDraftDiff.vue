@@ -191,18 +191,18 @@ function formatDomain(url: string): string {
   padding: 2px 7px;
   border-radius: 4px;
   background: rgba(37, 99, 235, 0.08);
-  color: var(--accent-color, #2563eb);
+  color: var(--accent-color, var(--accent));
 }
 
 .diff-card-title {
   margin: 0;
-  font-size: 13px;
+  font-size:var(--fs-sm);
   font-weight: 600;
   color: var(--text-primary, #1e293b);
 }
 
 .diff-card-summary {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   line-height: 1.5;
   color: var(--text-secondary, #64748b);
 }
@@ -231,7 +231,7 @@ function formatDomain(url: string): string {
 }
 .diff-stat-chip.is-remove {
   background: rgba(225, 29, 72, 0.08);
-  color: #be123c;
+  color: var(--rose);
 }
 .diff-stat-chip.is-add {
   background: rgba(16, 185, 129, 0.08);
@@ -251,7 +251,7 @@ function formatDomain(url: string): string {
 .diff-toolbar-toggle {
   background: none;
   border: none;
-  color: var(--accent-color, #2563eb);
+  color: var(--accent-color, var(--accent));
   cursor: pointer;
   font-size: 11px;
   padding: 2px 4px;
@@ -319,7 +319,7 @@ function formatDomain(url: string): string {
 }
 .diff-item-row.is-remove .diff-type-indicator {
   background: rgba(225, 29, 72, 0.12);
-  color: #be123c;
+  color: var(--rose);
 }
 .diff-item-row.is-add .diff-type-indicator {
   background: rgba(16, 185, 129, 0.12);
@@ -341,7 +341,7 @@ function formatDomain(url: string): string {
 }
 
 .diff-item-name {
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   color: var(--text-primary, #1e293b);
   overflow: hidden;
@@ -376,7 +376,7 @@ function formatDomain(url: string): string {
 }
 
 .diff-crumb.after {
-  color: var(--accent-color, #2563eb);
+  color: var(--accent-color, var(--accent));
   font-weight: 500;
   border-color: rgba(37, 99, 235, 0.2);
 }
@@ -395,9 +395,9 @@ function formatDomain(url: string): string {
   padding: 8px 14px;
   border-radius: 6px;
   border: none;
-  background: var(--accent-color, #2563eb);
+  background: var(--accent-color, var(--accent));
   color: #ffffff;
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -418,9 +418,9 @@ function formatDomain(url: string): string {
 
 .diff-completed-notice {
   text-align: center;
-  font-size: 12px;
+  font-size:var(--fs-xs);
   font-weight: 500;
-  color: #10b981;
+  color: var(--green);
   padding: 6px;
   background: rgba(16, 185, 129, 0.08);
   border-radius: 6px;

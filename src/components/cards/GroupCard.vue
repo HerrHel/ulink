@@ -398,9 +398,9 @@ function onCardKeydown(e: KeyboardEvent) {
 .share-fallback-ic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .share-fallback-ic img.img-error { display: none; }
 .share-fallback-ic:has(img:not(.img-error)) .share-fallback-fb { display: none; }
-.share-fallback-fb { font-size: 12px; font-weight: 700; color: var(--accent, #3B82F6); text-transform: uppercase; }
+.share-fallback-fb { font-size:var(--fs-xs); font-weight: 700; color: var(--accent, #3B82F6); text-transform: uppercase; }
 .share-fallback-title {
-  flex: 1; min-width: 0; font-size: 13px; font-weight: 600;
+  flex: 1; min-width: 0; font-size:var(--fs-sm); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .share-fallback-url {

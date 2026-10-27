@@ -285,20 +285,20 @@ function deleteSelected() {
   display:flex;flex-direction:column;gap:2px;
 }
 .pr-name{
-  font-size:0.82rem;font-weight:600;
+  font-size:var(--fs-sm);font-weight:600;
   color:var(--text);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .pr-url{
-  font-size:0.68rem;color:var(--text-muted);
+  font-size:var(--fs-2xs);color:var(--text-muted);
   font-family:'JetBrains Mono',monospace;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .pr-badge{
   display:inline-flex;align-items:center;
   padding:0 6px;height:18px;
-  font-size:0.6rem;font-weight:700;
-  border-radius:4px;
+  font-size:var(--fs-2xs);font-weight:700;
+  border-radius:var(--radius-xs);
   flex-shrink:0;
 }
 .pr-badge.dead{
@@ -320,7 +320,7 @@ function deleteSelected() {
 .pr-checkbox{
   width:18px;height:18px;
   border:2px solid var(--border);
-  border-radius:4px;
+  border-radius:var(--radius-xs);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
   transition:var(--transition-normal);
@@ -374,14 +374,14 @@ function deleteSelected() {
 .tab-count{
   display:inline-flex;align-items:center;justify-content:center;
   min-width:16px;padding:2px 4px;
-  border-radius:8px;
-  background:var(--rose,#ef4444);color:#fff;
-  font-size:0.55rem;font-weight:700;
+  border-radius:var(--radius-base);
+  background:var(--rose);color:#fff;
+  font-size:var(--fs-2xs);font-weight:700;
   line-height:1;
   margin-left:4px;
 }
 .tab-count-gfw{
-  background:var(--amber,#f59e0b);
+  background:var(--amber,var(--amber));
 }
 .popover-result{
   display:flex;align-items:center;gap:10px;
@@ -393,13 +393,13 @@ function deleteSelected() {
   background:var(--surface-hover);
 }
 .popover-result img{
-  width:28px;height:28px;border-radius:6px;
+  width:28px;height:28px;border-radius:var(--radius-sm);
   object-fit:cover;flex-shrink:0;
 }
 .popover-empty{
   justify-content:center;
   color:var(--text-muted);
-  font-size:0.8rem;
+  font-size:var(--fs-sm);
   padding:20px;
   cursor:default;
 }

@@ -92,7 +92,7 @@ export const DEFAULTS: AppData = {
   ],
   customAttributes: [
     { id: 'requires-login', name: '需要登录', type: 'boolean' },
-    { id: 'ai', name: 'Ai', type: 'boolean' },
+    { id: 'ai', name: 'AI', type: 'boolean' },
     { id: 'is-group', name: '笔记', type: 'boolean' }
   ],
   siblingGroups: [
@@ -192,7 +192,7 @@ export function buildSeedDefaults(locale?: Locale): AppData {
     ],
     customAttributes: [
       { id: 'requires-login', name: attrName('requires-login', '需要登录', 'Requires login'), type: 'boolean' },
-      { id: 'ai', name: attrName('ai', 'Ai', 'AI'), type: 'boolean' },
+      { id: 'ai', name: attrName('ai', 'AI', 'AI'), type: 'boolean' },
       { id: 'is-group', name: attrName('is-group', '笔记', 'Note'), type: 'boolean' },
     ],
     siblingGroups: [
