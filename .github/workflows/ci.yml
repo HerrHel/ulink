@@ -40,9 +40,12 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      # 诊断：config 加载失败时先排查依赖是否真装上（vite.config 依赖 marked）
+      # 非阻塞诊断：vite.config 依赖 marked。注意 marked v18 的 exports 不导出
+      # package.json，`require('marked/package.json')` 会假性报缺失 —— 用动态 import 判断。
       - name: Verify build deps present
-        run: node -e "console.log('marked', require('marked/package.json').version)"
+        run: |
+          ls -d node_modules/marked 2>/dev/null || echo "::warning::node_modules/marked 目录不存在"
+          node -e "import('marked').then(()=>console.log('marked dynamic import OK')).catch(e=>console.log('marked import failed:', e.code))"
       # C1-002 / F2-002：Playwright 进入 PR 门禁
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -83,7 +86,9 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - name: Verify build deps present
-        run: node -e "console.log('marked', require('marked/package.json').version)"
+        run: |
+          ls -d node_modules/marked 2>/dev/null || echo "::warning::node_modules/marked 目录不存在"
+          node -e "import('marked').then(()=>console.log('marked dynamic import OK')).catch(e=>console.log('marked import failed:', e.code))"
       # 生产构建自动加载仓库内的 .env.production（含 VITE_BACKEND=cloudbase 等）
       - name: Build
         run: npm run build
