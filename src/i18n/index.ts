@@ -18,14 +18,33 @@ export const LOCALE_KEY = 'lv_locale'
 
 const ALLOWED: readonly Locale[] = ['zh-CN', 'en-US']
 
-function detect(): Locale {
+/**
+ * 推断初始语言。优先级：
+ *   1. localStorage 里用户手动选过的值（最高，用户意志优先）
+ *   2. 浏览器语言以 zh 开头 → 中文
+ *   3. **设备处于中国时区 → 中文**（浏览器语言兜底）
+ *      —— 国内常见「英文系统/英文浏览器 + 中文使用习惯」。若只看 navigator.language，
+ *      这类用户首次访问（无 localStorage）会看到满屏英文，且很难意识到能切换。
+ *      ulink 主体面向国内用户（已备案 / 微信支付），故时区优先于英文兜底。
+ *   4. 其余 → 英文
+ *
+ * 导出仅为可单测（`src/__tests__/i18n-detect.test.ts` 会伪造 navigator / Intl）。
+ */
+export function detect(): Locale {
   if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
     try {
       const saved = localStorage.getItem(LOCALE_KEY)
       if (saved === 'zh-CN' || saved === 'en-US') return saved
     } catch { /* storage 不可用时按浏览器语言 */ }
-    const lang = (navigator.language || 'zh-CN').toLowerCase()
+
+    const lang = (navigator.language || '').toLowerCase()
     if (lang.startsWith('zh')) return 'zh-CN'
+
+    // 浏览器语言不是中文，再给中国时区一次机会
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+      if (/^Asia\/(Shanghai|Chongqing|Harbin|Urumqi|Kashgar)$/.test(tz)) return 'zh-CN'
+    } catch { /* Intl 不可用时忽略，落到英文 */ }
   }
   return 'en-US'
 }

@@ -26,6 +26,7 @@
     "property-no-vendor-prefix": null,
     "value-keyword-case": null,
     "declaration-property-value-keyword-no-deprecated": null,
-    "property-no-deprecated": null
+    "property-no-deprecated": null,
+    "declaration-property-value-no-unknown": null
   }
 }
