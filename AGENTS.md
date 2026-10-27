@@ -117,6 +117,9 @@ composables 按职责分三组：
 - `stats.ts` — 本地匿名使用统计（localStorage 计数器），仅存不上传
 - `head.ts` — 客户端 `<head>` 动态注入（title/meta/OG/canonical/JSON-LD），幂等、可清理，用于 ShareView 等页面的 SEO 元数据覆盖
 - `recoveryKeyPDF.ts` — 纯 HTML+print 生成 Recovery Key PDF 下载
+- `legal/renderLegalDoc.ts` — **法律文档构建期渲染器**：把 `docs/legal/*.md`（协议/隐私/退款政策，唯一真源）渲染成自包含 HTML 页面（内联 CSS、零 JS）。只做「标题锚点 / 目录 / 表格包裹 / 段落语义归类」四类 DOM 增强，条款文字逐字保留；末尾「**发布前检查**」内部引用块会自动剥离，绝不外泄。改法律文本**只改 md**，不要改 `public/privacy.html`、`public/terms.html`（现已降级为跳转桩，正文以 `/legal/<slug>.html` 为准）
+
+> 法律文档产出路径（`vite.config.ts` 的 `legalDocsPlugin`）：`/legal/<slug>.html`（站内链接用）、`/legal/<slug>/`、`/legal/` 索引页；`/legal/<slug>.md` 保留原始 Markdown 供取证。站内链接常量在 `src/config/aiProviders.ts` 的 `LEGAL_DOC_LINKS`，落地页页脚在 `index.html`（键 `foot.terms` / `foot.privacy` / `foot.refund`，英文词典同步 `public/landing.js`）。
 
 工具函数模块：`newId.ts`（ID 生成）、`clone.ts`（深拷贝）、`storageSafe.ts`（安全存储访问）、`withLock.ts`（互斥锁）、`boundedCache.ts`（有界缓存）、`dataReady.ts`（数据就绪标志）、`collectSubIds.ts`（子书签 ID 收集）、`download.ts`（文件下载）、`dragHint.ts`（拖拽提示）、`historyMax.ts`（历史上限）、`preview.ts`（预览辅助）、`supabase.ts`（Supabase client 封装）
 
@@ -191,4 +194,11 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - **云函数 check-link**（生产 `cloudbase/functions/check-link/`，原 `supabase/functions/check-link/` 已迁移）：私有 IP 黑名单防 SSRF，超时/CORS 由 Supabase secrets 控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`）；每用户限流（迁移 034 `consume_rate_limit` 计数器 + `private.rate_limit_counters`，默认 1200 次/分，`CHECK_LINK_RATE_LIMIT_PER_MIN` 可覆盖）；history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → CloudBase `error_logs` 表（生产经 `report-error` 云函数写入，5s 节流）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
-- **CI/CD**：`.github/workflows/` — 部署（lint+test+build+deploy）、CI（PR 触发 lint+test）、Dependabot 周检
+- **CI/CD**：`.github/workflows/ci.yml`（**唯一** workflow）+ `dependabot.yml`（周检）。三个 job：
+  - `lint-test`：npm ci → lint → typecheck → 单测 → `npm audit --omit=dev --audit-level=high`（blocking）
+  - `e2e`：Playwright chromium
+  - `deploy`：`needs: [lint-test, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ `npm run build` → `tcb hosting deploy ./dist --safe --verify`（CloudBase 静态托管；`--safe` 发布前备份+失败回滚，`--verify` 上传后校验远端与本地一致）
+    - 认证：`tcb login --cloudbase-api-key`（非交互），密钥取 `secrets.CLOUDBASE_APIKEY`；**未配该 secret 时跳过部署并告警**，门禁照常执行
+    - 手动重部署：`gh workflow run ci.yml --ref main`
+    - ⚠️ **CI 部署与手动 `tcb hosting deploy` 互斥**（会互相覆盖），统一走 CI
+  - Supabase 时代的 `supabase-db-test` 门禁已于 2026-10-27 移除（验证的是已停用的 schema，对现网无保护作用）；`supabase/` 现为历史归档，说明见 `supabase/README.md`
