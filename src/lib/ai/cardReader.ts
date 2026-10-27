@@ -27,7 +27,7 @@ function safe(text: string | undefined, maxLen: number): string {
 }
 
 export interface ResolvedCardContext {
-  type: 'bm' | 'group'
+  type: 'bm' | 'group' | 'cat'
   id: string
   title: string
   url?: string
@@ -65,7 +65,7 @@ export function htmlToCleanText(html: string): string {
  * 将卡片 ID 解析为结构化上下文对象（包含书签元数据或笔记全文及组内书签）
  */
 export function resolveCardContext(
-  type: 'bm' | 'group',
+  type: 'bm' | 'group' | 'cat',
   id: string,
   stores: {
     bookmarkMap: Record<string, Bookmark>
@@ -78,7 +78,28 @@ export function resolveCardContext(
   const categories = stores.categories || []
   const customAttributes = stores.customAttributes || []
 
-  if (type === 'bm') {
+  if (type === 'cat') {
+    const cat = categories.find((c) => c.id === rawId && !c.deletedAt)
+    if (!cat) return null
+    const childBookmarks = Object.values(stores.bookmarkMap)
+      .filter((b) => b.categoryId === rawId && !b.deletedAt)
+      .slice(0, MAX_ATTACH_CHILDREN)
+      .map((b) => ({ title: b.title, url: b.url, desc: b.notes || '' }))
+    const childGroups = Object.values(stores.groupMap)
+      .filter((g) => g.categoryId === rawId && !g.deletedAt)
+      .slice(0, 5)
+      .map((g) => g.name || '')
+      .filter(Boolean)
+    const notesSummary = childGroups.length > 0 ? `包含笔记：${childGroups.join('、')}` : ''
+    return {
+      type: 'cat',
+      id: cat.id,
+      title: cat.name || t('nav.categories'),
+      categoryName: cat.name,
+      childBookmarks,
+      notes: notesSummary,
+    }
+  } else if (type === 'bm') {
     const bm = stores.bookmarkMap[rawId]
     if (!bm || bm.deletedAt) return null
     const cat = categories.find((c) => c.id === bm.categoryId && !c.deletedAt)
@@ -132,6 +153,10 @@ export function formatAttachedCardsForPrompt(
     : '[User Attached Cards & Notes for Reference (Please read thoroughly and ground your answer on them)]'
   // 附件块标签双语：zh 保持历史格式（模型提示锚点），en 走英文标签（文案禁单语硬编码）
   const L = {
+    catHead: (n: number, title: string) =>
+      isZh ? `[附件 ${n}] 📁 分类：${title}` : `[Attachment ${n}] 📁 Category: ${title}`,
+    catChildren: (n: number) =>
+      isZh ? `- 分类内包含的书签（共 ${n} 个）：` : `- Bookmarks in this category (${n} total): `,
     bmHead: (n: number, title: string) =>
       isZh ? `[附件 ${n}] 🔖 书签卡片：${title}` : `[Attachment ${n}] 🔖 Bookmark: ${title}`,
     noteHead: (n: number, title: string) =>
@@ -165,7 +190,22 @@ export function formatAttachedCardsForPrompt(
         ? `${L.tags}${tags.map((tag) => safe(tag, MAX_ATTACH_TAG)).join(L.tagSep)}${tagsRest > 0 ? L.tagsRest(tagsRest) : ''}`
         : ''
       const catLine = c.categoryName ? `${L.cat}${safe(c.categoryName, MAX_ATTACH_TAG)}` : ''
-      if (c.type === 'bm') {
+      if (c.type === 'cat') {
+        const children = c.childBookmarks || []
+        const shown = children.slice(0, MAX_ATTACH_CHILDREN)
+        const bmList = children.length
+          ? shown
+              .map((b) => `  * ${safe(b.title, MAX_ATTACH_CHILD_TITLE)}${b.url ? ` (${safe(b.url, MAX_ATTACH_CHILD_URL)})` : ''}${b.desc ? ` - ${safe(b.desc, MAX_ATTACH_CHILD_DESC)}` : ''}`)
+              .join('\n') +
+            (children.length > shown.length ? L.childrenRest(children.length - shown.length) : '')
+          : L.noChildren
+        const parts = [
+          L.catHead(i + 1, safe(c.title, MAX_ATTACH_TITLE)),
+          c.notes ? `${L.desc}${safe(c.notes, MAX_ATTACH_DESC)}` : '',
+          `${L.catChildren(children.length)}\n${bmList}`,
+        ].filter(Boolean)
+        return parts.join('\n')
+      } else if (c.type === 'bm') {
         const parts = [
           L.bmHead(i + 1, safe(c.title, MAX_ATTACH_TITLE)),
           `${L.url}${safe(c.url, MAX_ATTACH_URL) || L.urlEmpty}`,
@@ -226,7 +266,11 @@ export function getDefaultAttachedPrompt(
   if (cards.length === 1) {
     const card = cards[0]
     const title = safe(card.title, MAX_ATTACH_TITLE)
-    if (card.type === 'group') {
+    if (card.type === 'cat') {
+      return isZh
+        ? `请帮我分析和整理「${title}」分类下的内容，有什么归纳总结、优化建议或重复项？`
+        : `Please analyze the bookmarks in category "${title}" and provide a summary or organization suggestions.`
+    } else if (card.type === 'group') {
       return isZh
         ? `请详细阅读并分析这篇笔记「${title}」的内容，总结其核心观点与要点。`
         : `Please read and analyze the note "${title}" and summarize its core takeaways.`

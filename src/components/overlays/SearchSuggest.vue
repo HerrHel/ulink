@@ -6,7 +6,7 @@
       <div v-else-if="item._isAiAction" class="search-suggest-item ss-ai-action-item" :class="{ active: selectableIdxAt[idx] === activeIdx }"
            role="option" :aria-selected="selectableIdxAt[idx] === activeIdx"
            @click="select(item)" @mouseenter="activeIdx = selectableIdxAt[idx]">
-        <span class="ss-ai-sparkle">✨</span>
+        <span class="ss-ai-sparkle" v-html="I.sparkle"></span>
         <span class="ss-name ss-ai-text">{{ item.title }}</span>
         <span class="ss-url ss-ai-badge">{{ t('ai.intentSearch') }}</span>
       </div>
@@ -194,8 +194,19 @@ defineExpose({ hide, visible })
   background: var(--surface-hover, #f8f9fa);
 }
 .ss-ai-sparkle {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
+  color: var(--accent, #e65c00);
+}
+.ss-ai-sparkle :deep(svg),
+.ss-ai-sparkle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 .ss-ai-text {
   font-weight: 500;

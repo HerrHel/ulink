@@ -61,10 +61,21 @@ function supportsViewTransition(): boolean {
   }
 }
 
+let _activeTransition: { skipTransition?: () => void; finished?: Promise<void> } | null = null
+
 function applyThemeWithTransition(theme: string, _trigger?: ThemeTransitionTrigger): void {
   if (!supportsViewTransition()) {
     applyTheme(theme)
     return
+  }
+
+  if (_activeTransition && typeof _activeTransition.skipTransition === 'function') {
+    try {
+      _activeTransition.skipTransition()
+    } catch {
+      // 忽略跳过异常
+    }
+    _activeTransition = null
   }
 
   const docEl = document.documentElement
@@ -73,10 +84,19 @@ function applyThemeWithTransition(theme: string, _trigger?: ThemeTransitionTrigg
     const transition = document.startViewTransition!(() => {
       applyTheme(theme)
     })
-    transition.finished.finally(() => {
-      docEl.removeAttribute('data-theme-transition')
-    })
+    _activeTransition = transition
+    transition.finished
+      .finally(() => {
+        if (_activeTransition === transition) {
+          _activeTransition = null
+          docEl.removeAttribute('data-theme-transition')
+        }
+      })
+      .catch(() => {
+        // 捕获跳过过渡时的 AbortError，防全局 unhandledrejection
+      })
   } catch {
+    _activeTransition = null
     docEl.removeAttribute('data-theme-transition')
     applyTheme(theme)
   }

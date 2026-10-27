@@ -211,3 +211,23 @@
   color:var(--accent);
 }
 
+
+
+/* AI 工作台顶层专属入口（融入主导航规范，与 .rail-item 统一） */
+.rail-top-nav{
+  display:flex;flex-direction:column;gap:2px;
+  padding:4px 8px 2px;
+  flex-shrink:0;
+}
+.rail-item-ai{
+  cursor:pointer;
+  border:none;
+  background:transparent;
+}
+.rail-item-ai svg{
+  color:var(--accent);
+  transition:transform 0.2s cubic-bezier(0.16,1,0.3,1);
+}
+.rail-item-ai:hover svg{
+  transform:scale(1.12) rotate(6deg);
+}

@@ -52,6 +52,13 @@ export const DOMAIN_KEYWORDS: Record<string, string[]> = {
   '文档': ['docs.', 'wiki.', 'readthedocs.io', 'gitbook.io', 'confluence.', 'atlassian.com'],
   'AI': ['openai.com', 'chat.openai.com', 'chatgpt.com', 'claude.ai', 'anthropic.com', 'doubao.com', 'workbuddy.ai', 'huggingface.co', 'midjourney.com', 'stability.ai', 'bard.google.com', 'gemini.google.com', 'poe.com', 'perplexity.ai', 'deepseek.com'],
   '邮箱': ['mail.qq.com', 'mail.163.com', 'mail.google.com', 'gmail.com', 'outlook.com', 'mail.126.com'],
+  '金融': ['xueqiu.com', 'eastmoney.com', '10jqka.com.cn', 'futu5.com', 'tradingview.com', 'tiantianfund.com'],
+  '医疗': ['dxy.com', 'dxy.cn', 'haodf.com', 'guahao.com', '1yao.com'],
+  '法律': ['court.gov.cn', 'pkulaw.com', 'itslaw.com', 'flk.npc.gov.cn'],
+  '学术': ['cnki.net', 'arxiv.org', 'scholar.google.com', 'sciencedirect.com', 'wanfangdata.com.cn'],
+  '美食': ['xiachufang.com', 'douguo.com', 'meishij.net'],
+  '出行': ['ctrip.com', 'qunar.com', 'fliggy.com', 'mafengwo.cn', 'booking.com'],
+  '游戏': ['4399.com', '7k7k.com', 'steampowered.com', 'epicgames.com', 'playstation.com', 'xbox.com', 'nintendo.com', 'taptap.cn', 'taptap.io', 'gamersky.com'],
 }
 
 // ── 标题关键词 → 分类映射 ──
@@ -69,25 +76,79 @@ export const TITLE_KEYWORDS: Record<string, string[]> = {
   '邮箱': ['邮箱', 'mail', 'email', 'gmail', '163邮', '网易邮', 'qq邮', '收件箱'],
   '学习': ['教程', 'tutorial', '课程', 'course', '学习', 'learn', '入门', '指南', 'guide', 'book', '书', '电子书'],
   '游戏': ['游戏', 'game', 'steam', 'epic', 'playstation', 'xbox', 'nintendo', 'switch'],
+  '金融': ['股票', '理财', '基金', '证券', '行情', '大盘', 'k线', '财报', '投资', '金融', '美股', 'a股', '港股'],
+  '医疗': ['就医', '医疗', '问诊', '挂号', '药品', '体检', '健康', '医院', '病历', '养生', '用药'],
+  '法律': ['法律', '法条', '裁判', '判决', '合同', '政务', '法规', '民法典', '刑法', '劳动法', '律师'],
+  '学术': ['学术', '论文', '文献', '期刊', '研究', '知网', '科研', '学位论文', '查重'],
+  '美食': ['菜谱', '做饭', '美食', '烘焙', '下厨', '炒菜', '家常菜', '烹饪', '食材', '做菜'],
+  '出行': ['旅游', '出行', '攻略', '酒店', '机票', '火车票', '门票', '景点', '出游', '民宿'],
 }
 
 // ── 属性关键词映射 ──
 export const ATTR_KEYWORDS: Record<string, { domains: string[]; titles: string[] }> = {
   '常用': {
-    domains: ['github.com', 'google.com', 'stackoverflow.com', 'youtube.com', 'chat.openai.com', 'chatgpt.com', 'claude.ai'],
-    titles: ['常用', '每日', 'daily', '必读'],
+    domains: ['github.com', 'google.com', 'stackoverflow.com', 'youtube.com', 'chat.openai.com', 'chatgpt.com', 'claude.ai', 'baidu.com', 'bing.com'],
+    titles: ['常用', '每日', 'daily', '必读', '搜索'],
   },
   '工作': {
-    domains: ['slack.com', 'zoom.us', 'notion.so', 'trello.com', 'asana.com', 'jira.', 'confluence.', 'docs.google.com', 'airtable.com'],
-    titles: ['工作', 'work', '项目', 'project', '会议', 'meeting', '日报', '周报'],
+    domains: ['slack.com', 'zoom.us', 'notion.so', 'trello.com', 'asana.com', 'jira.', 'confluence.', 'docs.google.com', 'airtable.com', 'feishu.cn', 'dingtalk.com', 'wps.cn'],
+    titles: ['工作', 'work', '项目', 'project', '会议', 'meeting', '日报', '周报', '协同', '办公'],
   },
   '学习': {
-    domains: ['coursera.org', 'udemy.com', 'edx.org', 'khanacademy.org', 'freecodecamp.org', 'codecademy.com', 'leetcode.com', 'duolingo.com'],
-    titles: ['学习', 'learn', '教程', 'tutorial', '课程', 'course', '入门', '指南'],
+    domains: ['coursera.org', 'udemy.com', 'edx.org', 'khanacademy.org', 'freecodecamp.org', 'codecademy.com', 'leetcode.com', 'duolingo.com', 'chaoxing.com', 'zhihuishu.com', 'icourse163.org', 'cnki.net', 'xuetangx.com', 'yuketang.cn', 'ketangpai.com', 'tronclass.com.cn'],
+    titles: ['学习', 'learn', '教程', 'tutorial', '课程', 'course', '入门', '指南', '大学', '题库', '教学', '文献', '知网', '超星', '课堂派'],
   },
   '临时': {
     domains: ['pastebin.com', 'gist.github.com', 'hastebin.com', 'rentry.co'],
     titles: ['临时', 'temp', '草稿', 'draft', '测试', 'test'],
+  },
+  'ai': {
+    domains: ['openai.com', 'chatgpt.com', 'claude.ai', 'deepseek.com', 'kimi.ai', 'doubao.com', 'yiyan.baidu.com', 'tongyi.aliyun.com', 'midjourney.com', 'fastgpt.in', 'coze.cn', 'coze.com', 'huggingface.co', 'cursor.com', 'v0.dev'],
+    titles: ['ai', 'gpt', 'llm', '大模型', '智能体', '人工智能', '语言模型', '对话助手', '深度学习', '智能助手'],
+  },
+  'Ai': {
+    domains: ['openai.com', 'chatgpt.com', 'claude.ai', 'deepseek.com', 'kimi.ai', 'doubao.com', 'yiyan.baidu.com', 'tongyi.aliyun.com', 'midjourney.com', 'fastgpt.in', 'coze.cn', 'coze.com', 'huggingface.co', 'cursor.com', 'v0.dev'],
+    titles: ['ai', 'gpt', 'llm', '大模型', '智能体', '人工智能', '语言模型', '对话助手', '深度学习', '智能助手'],
+  },
+  '需要登录': {
+    domains: ['mail.', 'email.', 'login.', 'auth.', 'passport.', 'admin.', 'dashboard.', 'console.'],
+    titles: ['登录', '通行证', '控制台', '管理后台', '工作台', '个人中心', '邮箱', 'signin', 'login', 'dashboard'],
+  },
+  '开发': {
+    domains: ['github.com', 'gitlab.com', 'gitee.com', 'stackoverflow.com', 'npmjs.com', 'pypi.org', 'docker.com', 'v2ex.com', 'segmentfault.com', 'developer.mozilla.org', 'w3schools.com', 'juejin.cn', 'csdn.net'],
+    titles: ['开发', '开源', '代码', '编程', '前端', '后端', 'api', 'sdk', '框架', '架构', '算法', 'dev', 'git', '技术'],
+  },
+  '开源': {
+    domains: ['github.com', 'gitlab.com', 'gitee.com', 'apache.org', 'gnu.org'],
+    titles: ['开源', 'open source', 'repository', '仓库'],
+  },
+  '文档': {
+    domains: ['docs.', 'doc.', 'wiki.', 'developer.'],
+    titles: ['文档', '手册', '指南', '规范', 'wiki', 'documentation', 'guide', 'manual', 'handbook'],
+  },
+  '工具': {
+    domains: ['excalidraw.com', 'draw.io', 'caniuse.com', 'tinypng.com', 'json.cn', 'speedtest.net'],
+    titles: ['工具', '在线工具', '转换器', '生成器', '计算器', 'tool', 'utility'],
+  },
+  '设计': {
+    domains: ['figma.com', 'dribbble.com', 'behance.net', 'sketch.com', 'canva.com', 'unsplash.com', 'iconfont.cn'],
+    titles: ['设计', '素材', '图标', '插画', '灵感', '字体', '配色', 'ui', 'ux', 'design'],
+  },
+  '视频': {
+    domains: ['bilibili.com', 'youtube.com', 'douyin.com', 'kuaishou.com', 'tiktok.com', 'netflix.com'],
+    titles: ['视频', '动漫', '电影', '追剧', '影视', '直播', 'video'],
+  },
+  '阅读': {
+    domains: ['sspai.com', 'zhihu.com', 'medium.com', 'v2ex.com', 'juejin.cn'],
+    titles: ['阅读', '资讯', '博客', '专栏', '周刊', '文章', '新闻', 'blog', 'news'],
+  },
+  '游戏': {
+    domains: ['4399.com', '7k7k.com', 'steampowered.com', 'epicgames.com', 'taptap.cn', 'taptap.io', 'gamersky.com'],
+    titles: ['游戏', 'game', 'steam', '小游戏', '双人游戏', '单机', '手游', '电竞'],
+  },
+  '娱乐': {
+    domains: ['4399.com', '7k7k.com', 'bilibili.com', 'youtube.com', 'douyin.com', 'weibo.com', 'douban.com'],
+    titles: ['娱乐', '休闲', '小游戏', '追剧', '搞笑', '摸鱼'],
   },
 }
 
@@ -119,6 +180,80 @@ export const SECOND_LEVEL_DOMAINS = new Set([
  * 精选高频优质站点双语知识库
  */
 export const CURATED_SITES: Record<string, CuratedSiteInfo> = {
+  // ── 高校教育与学术文献 ──
+  'chaoxing.com': {
+    titleZh: '超星学习通',
+    titleEn: 'Chaoxing Learning',
+    notesZh: '国内领先的高校数字化课程教学、移动互动教学与学术文献资源服务平台。',
+    notesEn: 'Leading higher education digital course and mobile learning platform in China.',
+    categoryKeyword: '学习',
+    tags: ['学习', '教育'],
+  },
+  'zhihuishu.com': {
+    titleZh: '智慧树网',
+    titleEn: 'Zhihuishu',
+    notesZh: '全球大型学分课程运营服务平台，提供高校共享学分课与精品在线开放课程。',
+    notesEn: 'Higher education credit course platform offering online interactive college courses.',
+    categoryKeyword: '学习',
+    tags: ['学习', '课程'],
+  },
+  'icourse163.org': {
+    titleZh: '中国大学MOOC',
+    titleEn: 'iCourse163',
+    notesZh: '国家精品在线开放课程平台，汇聚国内众多双一流名校优质精品大学课程。',
+    notesEn: 'China university MOOC platform with certified courses from top institutions.',
+    categoryKeyword: '学习',
+    tags: ['学习', '大学'],
+  },
+  'xuetangx.com': {
+    titleZh: '学堂在线',
+    titleEn: 'XuetangX',
+    notesZh: '清华大学发起的精品中文慕课平台，汇集全球顶尖高校优质在线开放课程。',
+    notesEn: 'MOOC platform initiated by Tsinghua University offering global top college courses.',
+    categoryKeyword: '学习',
+    tags: ['学习', '课程'],
+  },
+  'cnki.net': {
+    titleZh: '中国知网 (CNKI)',
+    titleEn: 'CNKI',
+    notesZh: '国家知识基础设施工程，国内权威的学术期刊、学位论文与科研文献知识库。',
+    notesEn: 'National knowledge infrastructure and academic research paper portal in China.',
+    categoryKeyword: '学习',
+    tags: ['学术', '论文'],
+  },
+  'wanfangdata.com.cn': {
+    titleZh: '万方数据',
+    titleEn: 'Wanfang Data',
+    notesZh: '国内知名学术期刊、学位论文与科研科技文献数据库检索服务平台。',
+    notesEn: 'Comprehensive academic paper and scientific database retrieval service platform.',
+    categoryKeyword: '学习',
+    tags: ['学术', '论文'],
+  },
+  'cqvip.com': {
+    titleZh: '维普网',
+    titleEn: 'CQVIP',
+    notesZh: '国内知名中文科技期刊数据库与学术文献资源服务平台。',
+    notesEn: 'Chinese scientific journal database and academic resource platform.',
+    categoryKeyword: '学习',
+    tags: ['学术', '文献'],
+  },
+  'yuketang.cn': {
+    titleZh: '雨课堂',
+    titleEn: 'Yuketang',
+    notesZh: '清华大学与学堂在线联合研发的智慧教学工具，赋能混合式教学与课堂互动。',
+    notesEn: 'Smart teaching tool and classroom interaction platform developed by Tsinghua University.',
+    categoryKeyword: '学习',
+    tags: ['学习', '教育'],
+  },
+  'duifene.com': {
+    titleZh: '对分易',
+    titleEn: 'Duifene',
+    notesZh: '专注于高校课堂教学管理、过程性评价与移动教学互动的在线教育平台。',
+    notesEn: 'Online education and classroom management platform for higher education.',
+    categoryKeyword: '学习',
+    tags: ['学习', '教育'],
+  },
+
   // ── AI 对话与工具 ──
   'chatgpt.com': {
     titleZh: 'ChatGPT',
@@ -503,6 +638,24 @@ export const CURATED_SITES: Record<string, CuratedSiteInfo> = {
     tags: ['音乐'],
   },
 
+  // ── 游戏平台与数字娱乐 ──
+  '7k7k.com': {
+    titleZh: '7k7k 小游戏',
+    titleEn: '7k7k Games',
+    notesZh: '经典休闲小游戏与网页游戏在线游玩平台。',
+    notesEn: 'Online casual flash and HTML5 gaming platform.',
+    categoryKeyword: '游戏',
+    tags: ['游戏', '娱乐'],
+  },
+  'steampowered.com': {
+    titleZh: 'Steam 游戏平台',
+    titleEn: 'Steam',
+    notesZh: '全球知名的数字游戏发行与玩家社区平台。',
+    notesEn: 'Leading global digital game distribution platform and community.',
+    categoryKeyword: '游戏',
+    tags: ['游戏', '数字平台'],
+  },
+
   // ── 开发架构与云服务 ──
   'cloudflare.com': {
     titleZh: 'Cloudflare',
@@ -638,6 +791,14 @@ export const CATEGORY_SYNONYMS: Record<string, string[]> = {
   '资讯': ['资讯', '阅读', '文章', '博客', '新闻', '信息', 'news', 'read'],
   '娱乐': ['娱乐', '影音', '视频', '音乐', '生活', '休闲', 'media', 'video', 'music'],
   '生活': ['生活', '日常', '备忘', '购物', 'life'],
+  '金融': ['金融', '理财', '股票', '证券', '基金', '投资', 'finance', 'stock', 'invest'],
+  '医疗': ['医疗', '健康', '药品', '就医', '医药', '养生', 'health', 'medical'],
+  '法律': ['法律', '法条', '法务', '政务', '法规', '合规', 'law', 'legal'],
+  '学术': ['学术', '科研', '论文', '文献', '期刊', 'academic', 'paper', 'research'],
+  '美食': ['美食', '菜谱', '烹饪', '做饭', '烘焙', 'food', 'cooking', 'recipe'],
+  '出行': ['出行', '旅游', '交通', '机票', '酒店', '攻略', 'travel', 'trip'],
+  '教育': ['教育', '学习', '备考', '考试', '考公', '考研', 'study', 'education', 'exam'],
+  '游戏': ['游戏', '游戏平台', '小游戏', '单机游戏', '网络游戏', '手游', 'steam', 'game', 'games', 'gaming'],
 }
 
 // ── 概念本体（semanticSearch）──
@@ -771,6 +932,66 @@ export const CONCEPT_ONTOLOGY: ConceptCluster[] = [
     keywords: ['效率工具', '启动器', '全局搜索', '剪贴板增强', '快捷键', '自动化脚本', '桌面利器'],
     relatedTerms: ['raycast', 'alfred', 'utools', 'wox', 'keyboard maestro', 'shortcuts', 'productivity'],
     domains: ['raycast.com', 'alfredapp.com', 'u.tools'],
+  },
+  {
+    name: '金融理财与股票证券',
+    keywords: ['股票', '炒股', '理财', '基金', '证券', '行情', '大盘', 'k线', '财报', '投资', '量化', '外汇', '期货', '美股', '港股', 'a股', '买基金', '看行情'],
+    relatedTerms: ['finance', 'stock', 'invest', 'fund', 'trading', '雪球', '东方财富', '同花顺', '富途', '老虎证券', '天天基金', '富途牛牛'],
+    domains: ['xueqiu.com', 'eastmoney.com', '10jqka.com.cn', 'futu5.com', 'tradingview.com', 'tiantianfund.com'],
+  },
+  {
+    name: '医疗健康与医药问诊',
+    keywords: ['就医', '看病', '医疗', '问诊', '挂号', '药品', '药物说明书', '体检', '健康', '医院', '病历', '养生', '用药', '疾控', '营养', '健康管理'],
+    relatedTerms: ['health', 'medical', 'medicine', 'doctor', '丁香园', '丁香医生', '微医', '好大夫', '1药网', 'pubmed'],
+    domains: ['dxy.com', 'dxy.cn', 'haodf.com', 'guahao.com', '1yao.com', 'nih.gov'],
+  },
+  {
+    name: '法律法规与政务法条',
+    keywords: ['法律', '法条', '裁判文书', '判决书', '起诉', '合同模板', '政务', '公证', '民法典', '刑法', '劳动法', '维权', '律师', '法规检索', '案例检索'],
+    relatedTerms: ['law', 'legal', 'justice', 'court', '中国裁判文书网', '北大法宝', '无讼', '威科先行', '国家法律法规数据库'],
+    domains: ['court.gov.cn', 'pkulaw.com', 'itslaw.com', 'flk.npc.gov.cn'],
+  },
+  {
+    name: '学术科研与文献论文',
+    keywords: ['学术', '论文', '文献', '期刊', '研究', '知网', '开题报告', '科研', '论文检索', '引文', '学位论文', '查重', '学术搜索'],
+    relatedTerms: ['academic', 'paper', 'research', 'arxiv', 'cnki', 'google scholar', 'sciencedirect', 'springer', 'researchgate', 'scihub', '万方'],
+    domains: ['cnki.net', 'arxiv.org', 'scholar.google.com', 'sciencedirect.com', 'wanfangdata.com.cn', 'researchgate.net'],
+  },
+  {
+    name: '美食烹饪与家常菜谱',
+    keywords: ['菜谱', '做饭', '美食', '烘焙', '下厨', '炒菜', '家常菜', '烹饪', '食材', '做菜', '食谱', '下馆子', '怎么做菜'],
+    relatedTerms: ['recipe', 'cooking', 'food', '下厨房', '豆果美食', '美食杰', '日食记'],
+    domains: ['xiachufang.com', 'douguo.com', 'meishij.net'],
+  },
+  {
+    name: '旅游出行与交通住宿',
+    keywords: ['旅游', '出行', '攻略', '订酒店', '订机票', '火车票', '门票', '景点', '出游', '民宿', '签证', '行程规划', '旅行'],
+    relatedTerms: ['travel', 'trip', 'hotel', 'flight', '携程', '去哪儿', '飞猪', '马蜂窝', 'booking', 'airbnb', '高德地图', '百度地图'],
+    domains: ['ctrip.com', 'qunar.com', 'fliggy.com', 'mafengwo.cn', 'booking.com', 'amap.com'],
+  },
+  {
+    name: '求职招聘与职场发展',
+    keywords: ['找工作', '求职', '招聘', '简历', '面试', '面经', '离职', '跳槽', '内推', '猎头', '薪资', '社招', '校招', '职场'],
+    relatedTerms: ['job', 'career', 'resume', 'interview', 'boss直聘', '智联招聘', '前程无忧', '拉勾', '猎聘', '脉脉', 'linkedin'],
+    domains: ['zhipin.com', 'zhaopin.com', '51job.com', 'lagou.com', 'liepin.com', 'maimai.cn'],
+  },
+  {
+    name: '学习备考与升学考试',
+    keywords: ['备考', '考公', '考研', '刷题', '真题', '英语四六级', '雅思', '托福', '教师资格证', '网课', '升学', '公开课', '网考'],
+    relatedTerms: ['study', 'exam', 'test', '粉笔', '华图', '中公', '网易公开课', '中国大学mooc', 'coursera'],
+    domains: ['fenbi.com', 'huatu.com', 'icourse163.org', 'xuetangx.com'],
+  },
+  {
+    name: '房产租房与家居装修',
+    keywords: ['买房', '租房', '二手房', '新房', '装修', '家居', '房产', '户型', '房东', '找室友', '公积金贷款'],
+    relatedTerms: ['house', 'rent', 'real estate', '贝壳', '链家', '安居客', '自如', '好好住', '一兜糖'],
+    domains: ['ke.com', 'lianjia.com', 'anjuke.com', 'ziroom.com', 'haohaozhu.com'],
+  },
+  {
+    name: '汽车出行与用车养车',
+    keywords: ['买车', '汽车', '新能源车', '二手车', '车评', '油价', '违章查询', '保养', '试驾', '懂车', '电车'],
+    relatedTerms: ['car', 'auto', 'vehicle', '懂车帝', '汽车之家', '易车', '瓜子二手车'],
+    domains: ['dongchedi.com', 'autohome.com.cn', 'yiche.com', 'guazi.com'],
   },
 ]
 

@@ -53,7 +53,7 @@ export interface ChatToolResult {
 }
 
 export interface AttachedCardMeta {
-  type: 'bm' | 'group'
+  type: 'bm' | 'group' | 'cat'
   id: string
   title: string
   url?: string

@@ -169,12 +169,22 @@ interface CbAuthLike {
  */
 function mapSession(raw: unknown): Session | null {
   if (!raw || typeof raw !== 'object') return null
-  const s = raw as { user?: Record<string, unknown> | null }
-  if (!s.user) return null
-  return {
-    ...(raw as Record<string, unknown>),
-    user: { ...s.user, user_metadata: s.user.user_metadata ?? {} },
-  } as unknown as Session
+  const rec = raw as Record<string, unknown>
+  // 情况 1：raw 是标准 session 对象，内部含有 user 字段
+  if (rec.user && typeof rec.user === 'object') {
+    const u = rec.user as Record<string, unknown>
+    return {
+      ...rec,
+      user: { ...u, user_metadata: (u.user_metadata as Record<string, unknown>) ?? {} },
+    } as unknown as Session
+  }
+  // 情况 2：raw 直接是 user 对象（含有 id、sub 或 email）
+  if (rec.id || rec.sub || rec.email) {
+    return {
+      user: { ...rec, user_metadata: (rec.user_metadata as Record<string, unknown>) ?? {} },
+    } as unknown as Session
+  }
+  return null
 }
 
 /**
@@ -213,7 +223,17 @@ export function createCloudBaseAuthDriver(
       const a = auth()
       if (!a?.getSession) return { session: null, error: { message: 'CloudBase 未配置' } }
       const { data, error } = await a.getSession()
-      return { session: mapSession(data?.session ?? data?.user ?? null), error: error ?? null }
+      if (error) return { session: null, error }
+      if (!data) return { session: null, error: null }
+      if (data.session) {
+        const s = { ...(data.session as Record<string, unknown>) }
+        if (!s.user && data.user) s.user = data.user
+        return { session: mapSession(s), error: null }
+      }
+      if (data.user) {
+        return { session: mapSession(data.user), error: null }
+      }
+      return { session: null, error: null }
     },
 
     onAuthStateChange(cb) {

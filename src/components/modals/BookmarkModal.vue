@@ -7,12 +7,26 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label class="form-label" for="bmUrl">{{ t('ctx.url') }} *</label>
+          <div class="bm-url-header">
+            <label class="form-label" for="bmUrl">{{ t('ctx.url') }} *</label>
+            <button
+              v-if="canAiFetch"
+              type="button"
+              class="btn-ai-fetch"
+              :class="{ loading: bmForm.isAiFetching, success: bmForm.aiFetchedSuccess }"
+              :disabled="bmForm.isAiFetching"
+              @click="onTriggerAiFetch"
+              :title="t('modal.bookmark.aiFetchHint')"
+            >
+              <span class="ai-sparkle-icon" v-html="bmForm.aiFetchedSuccess ? I.check : I.sparkle"></span>
+              <span>{{ bmForm.isAiFetching ? t('modal.bookmark.aiFetching') : (bmForm.aiFetchedSuccess ? t('modal.bookmark.aiFetched') : t('modal.bookmark.aiFetchBtn')) }}</span>
+            </button>
+          </div>
           <input type="text" class="form-input" id="bmUrl" data-testid="lv-bm-url" v-model="bmForm.url" :placeholder="t('modal.bookmark.urlPlaceholder')" @input="onUrlInput" autocomplete="off">
         </div>
         <div class="form-group">
           <label class="form-label" for="bmTitle">{{ t('modal.bookmark.siteName') }}</label>
-          <input type="text" class="form-input" id="bmTitle" data-testid="lv-bm-title" v-model="bmForm.title" :placeholder="t('modal.bookmark.titlePlaceholder')" ref="titleRef">
+          <input type="text" class="form-input" id="bmTitle" data-testid="lv-bm-title" v-model="bmForm.title" :placeholder="t('modal.bookmark.titlePlaceholder')" @input="onTitleInput" ref="titleRef">
         </div>
         <div v-if="aiSuggestionText" class="ai-suggest-bar">
           <span class="ai-suggest-icon"></span>
@@ -26,6 +40,19 @@
             <E2ELockOverlay :disabled="!e2eFieldsOpen" :hint="e2eHintAccount" @hint-click="onE2EHintClick">
               <input type="text" class="form-input" id="bmUsername" v-model="bmForm.username" :placeholder="t('modal.bookmark.username')">
             </E2ELockOverlay>
+            <div v-if="bmForm.candidateUsernames && bmForm.candidateUsernames.length > 1" class="candidate-users-row">
+              <span class="cu-hint">{{ t('modal.bookmark.multiAccounts') }}:</span>
+              <button
+                v-for="uname in bmForm.candidateUsernames"
+                :key="uname"
+                type="button"
+                class="cu-chip"
+                :class="{ active: bmForm.username === uname }"
+                @click="bmForm.username = uname"
+              >
+                {{ uname }}
+              </button>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label" for="bmPassword">{{ t('cards.password') }}</label>
@@ -39,7 +66,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="bmNotes">{{ t('modal.bookmark.notes') }}</label>
-          <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" :placeholder="t('modal.bookmark.notesPlaceholder')"></textarea>
+          <textarea class="form-textarea" id="bmNotes" v-model="bmForm.notes" :placeholder="t('modal.bookmark.notesPlaceholder')" @input="onNotesInput"></textarea>
         </div>
         <div class="form-group">
           <label class="form-label" for="bmIcon">{{ t('modal.bookmark.customIcon') }}</label>
@@ -55,13 +82,13 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="bmCategoryId">{{ t('modal.bookmark.category') }}</label>
-            <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId">
+            <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId" @change="onCategoryChange">
               <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label" for="bmParentId">{{ t('modal.bookmark.parent') }}</label>
-            <select class="form-select" id="bmParentId" v-model="bmForm.parentId">
+            <select class="form-select" id="bmParentId" v-model="bmForm.parentId" @change="onParentChange">
               <option :value="null">{{ t('common.none') }}</option>
               <option v-for="b in parentOptions" :key="b.id" :value="b.id">{{ b.title }}</option>
             </select>
@@ -103,7 +130,7 @@
 <script setup lang="ts">
 import { computed, watch, nextTick, ref } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, applyAiCategory, applyAiAttributes, dismissAiSuggestions, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
+import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, triggerAiFetch, applyAiCategory, applyAiAttributes, dismissAiSuggestions, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
@@ -147,12 +174,13 @@ const childBookmarks = computed(() => {
 
 const aiSuggestionText = computed(() => {
   const parts: string[] = []
-  if (bmForm.aiSuggestCatId) {
+  if (bmForm.aiSuggestCatId && bmForm.categoryId !== bmForm.aiSuggestCatId) {
     const cat = store.categoryMap[bmForm.aiSuggestCatId]
     if (cat) parts.push(t('modal.bookmark.aiSuggestCat', { name: cat.name }))
   }
   if (bmForm.aiSuggestAttrIds.length) {
     const names = bmForm.aiSuggestAttrIds
+      .filter(id => !bmForm.attributes[id])
       .map(id => store.attributeMap[id]?.name)
       .filter(Boolean)
     if (names.length) parts.push(t('modal.bookmark.aiSuggestAttrs', { names: names.join(t('modal.bookmark.aiSuggestAttrSep')) }))
@@ -164,6 +192,7 @@ function toggleAttr(attrId: string, event: Event) {
   const target = event.target as HTMLInputElement
   if (target.checked) bmForm.attributes[attrId] = true
   else delete bmForm.attributes[attrId]
+  bmForm._userEditedAttrs = true
 }
 
 function onClose() { closeBmModal() }
@@ -189,7 +218,34 @@ function onDeleteChild(childId: string) {
 
 function onPreviewIconUrl() { previewIconUrl() }
 function onClearIcon() { clearIcon() }
+function onCategoryChange() {
+  bmForm._userEditedCategory = true
+}
+function onParentChange() {
+  bmForm._userEditedParent = true
+}
+function onTitleInput() {
+  if (bmForm.title.trim() !== (bmForm._autoTitle || '').trim()) {
+    bmForm._userEditedTitle = true
+  }
+  if (!bmForm.title.trim()) {
+    bmForm._userEditedTitle = false
+  }
+}
+function onNotesInput() {
+  if (bmForm.notes.trim() !== (bmForm._autoNotes || '').trim()) {
+    bmForm._userEditedNotes = true
+  }
+  if (!bmForm.notes.trim()) {
+    bmForm._userEditedNotes = false
+  }
+}
 function onUrlInput() { autoFetchFromUrl() }
+const canAiFetch = computed(() => {
+  const u = bmForm.url.trim()
+  return u.length >= 4 && (u.startsWith('http://') || u.startsWith('https://') || u.includes('.'))
+})
+function onTriggerAiFetch() { triggerAiFetch(undefined, true) }
 function useFaviconAsIcon() {
   bmForm.icon = bmForm.logoPreviewUrl
   bmForm.iconPreviewVisible = true

@@ -1,9 +1,106 @@
+import type { Bookmark } from '../types.js'
+
 /**
- * bookmarkDedup.ts — 书签 URL 去重纯函数（从 composables/domain/useBookmark.ts 抽取）
+ * bookmarkDedup.ts — 书签 URL 去重与父子层级关系判定纯函数（从 composables/domain/useBookmark.ts 抽取）
  *
- * 仅含 URL 后缀变体 / 完全重复判定，无副作用、无 store / Vue 依赖，
- * 便于单测直测与 useBookmark.ts 瘦身（TECH_DEBT A 类：去重/规范化抽纯函数）。
+ * 包含：
+ * 1. URL 后缀变体 / 完全重复判定
+ * 2. 智能识别最匹配的父级书签（子网站 / 子页面识别）
+ *
+ * 无副作用、无 store / Vue 依赖，便于单测直测。
  */
+
+/**
+ * 从现有书签列表中智能检测最匹配的父级书签（子网站 / 子页面识别）
+ *
+ * 识别规则：
+ * 1. 只有顶层书签（!b.parentId）且未软删除（!b.deletedAt）可作为父级候选
+ * 2. 排除指定 ID（如当前编辑书签自身，避免自挂为父）
+ * 3. 优先级 1（同主机名子路径）：如现有 https://github.com，新输入 https://github.com/vuejs/core；若有多个子路径，最长匹配前缀优先
+ * 4. 优先级 2（子域名归属）：如现有 https://docker.com，新输入 https://docs.docker.com 或 https://hub.docker.com
+ *
+ * @param newUrlInput 用户输入的新书签 URL
+ * @param bookmarks 现有全量书签列表
+ * @param excludeId 排除的书签 ID
+ */
+export function findBestParentBookmark(
+  newUrlInput: string,
+  bookmarks: Bookmark[],
+  excludeId?: string
+): Bookmark | null {
+  if (!newUrlInput || newUrlInput.trim().length < 4) return null
+  let newUrl: URL
+  try {
+    const raw = newUrlInput.trim()
+    newUrl = new URL(raw.startsWith('http') ? raw : 'https://' + raw)
+  } catch {
+    return null
+  }
+
+  const newHost = newUrl.hostname.toLowerCase()
+  const newPath = newUrl.pathname.replace(/\/+$/, '')
+  const newFull = newUrl.href
+
+  // 顶层、未删除且非自身候选
+  const candidates = bookmarks.filter(b => !b.parentId && !b.deletedAt && b.id !== excludeId)
+
+  let bestParent: Bookmark | null = null
+  let bestScore = 0
+
+  for (const b of candidates) {
+    if (!b.url) continue
+    let existUrl: URL
+    try {
+      const raw = b.url.trim()
+      existUrl = new URL(raw.startsWith('http') ? raw : 'https://' + raw)
+    } catch {
+      continue
+    }
+
+    const existHost = existUrl.hostname.toLowerCase()
+    const existPath = existUrl.pathname.replace(/\/+$/, '')
+
+    // 完全重复跳过（非父子关系）
+    if (existUrl.href === newFull || (existHost === newHost && existPath === newPath && !newUrl.search && !newUrl.hash)) {
+      continue
+    }
+
+    let score = 0
+
+    // 1. 同主机名下的子路径关系（最强关系）
+    if (existHost === newHost) {
+      if (!existPath || existPath === '') {
+        if (newPath && newPath !== '') {
+          score = 100
+        }
+      } else if (newPath.startsWith(existPath)) {
+        const nextChar = newPath.slice(existPath.length).charAt(0)
+        if (nextChar === '' || nextChar === '/') {
+          score = 150 + existPath.length
+        }
+      }
+    }
+
+    // 2. 子域名与主站/根域名关系（例如 docs.docker.com -> docker.com）
+    if (score === 0) {
+      const cleanExistHost = existHost.replace(/^www\./, '')
+      const cleanNewHost = newHost.replace(/^www\./, '')
+
+      if (cleanNewHost !== cleanExistHost && cleanNewHost.endsWith('.' + cleanExistHost)) {
+        if (!existPath || existPath === '') {
+          score = 80
+        }
+      }
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestParent = b
+    }
+  }
+
+  return bestParent
+}
 
 /**
  * 检测两个URL是否是后缀变体关系

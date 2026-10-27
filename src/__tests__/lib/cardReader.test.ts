@@ -263,4 +263,38 @@ describe('cardReader — 卡片解析与 AI 读取上下文构建', () => {
     // 英文模式下不得出现任何中文（附件数据本身为英文，输出应全英文）
     expect(out).not.toMatch(/[一-鿿]/)
   })
+
+  it('11. resolveCardContext 与 formatAttachedCardsForPrompt：支持解析与格式化分类附件', () => {
+    const bookmarkMap: Record<string, any> = {
+      bm_cat1: { id: 'bm_cat1', title: 'DeepSeek 官网', url: 'https://deepseek.com', categoryId: 'cat_ai', order: 1 },
+      bm_cat2: { id: 'bm_cat2', title: 'OpenAI 平台', url: 'https://openai.com', categoryId: 'cat_ai', order: 2 },
+    }
+    const groupMap: Record<string, any> = {
+      sg_ai1: { id: 'sg_ai1', name: '大模型调研笔记', categoryId: 'cat_ai', bookmarkIds: ['bm_cat1'], order: 1 },
+    }
+    const categories: any[] = [
+      { id: 'cat_ai', name: '人工智能' },
+    ]
+
+    const res = resolveCardContext('cat', 'cat_ai', {
+      bookmarkMap,
+      groupMap,
+      categories,
+      customAttributes: [],
+    })
+
+    expect(res).not.toBeNull()
+    expect(res?.type).toBe('cat')
+    expect(res?.title).toBe('人工智能')
+    expect(res?.childBookmarks?.length).toBe(2)
+    expect(res?.notes).toContain('包含笔记：大模型调研笔记')
+
+    const prompt = formatAttachedCardsForPrompt([res!], true)
+    expect(prompt).toContain('[附件 1] 📁 分类：人工智能')
+    expect(prompt).toContain('- 分类内包含的书签（共 2 个）：')
+    expect(prompt).toContain('DeepSeek 官网')
+
+    const defPrompt = getDefaultAttachedPrompt([res!], true)
+    expect(defPrompt).toContain('请帮我分析和整理「人工智能」分类下的内容')
+  })
 })

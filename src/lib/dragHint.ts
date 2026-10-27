@@ -16,7 +16,7 @@ export function getDragHintText(
   payload: DragHintPayload | null,
 ): string {
   if (!payload) return ''
-  // 分类拖拽只能落在其他 rail-item 上（handleRailDrop），其余落点无意义，不显示错误提示
+  // 分类拖拽：仅在其他 rail-item 上显示「调整分类顺序」，落入 AI 区域由输入框自身响应，不浮动干扰文字
   if (payload.type === 'cat') {
     if (target.classList.contains('rail-item')) {
       // Bug C：拖到自身 rail-item → drop 端 if (_catDragId === targetId) return，无操作
@@ -46,6 +46,9 @@ export function getDragHintText(
   if (target.closest('#edgeStagingSidebar, .edge-staging-drop-zone, #stagingDock')) {
     if (payload.srcGid === '__detail__' || payload.type === 'detail') return ''
     return '加入暂存'
+  }
+  if (target.closest('#aiWorkspace, .ai-workspace, .ai-capsule-input-container')) {
+    return ''
   }
   if (target.closest('#detailPanel, #btnToggleDetail')) {
     if (payload.type === 'group') return '由 AI 读取笔记'

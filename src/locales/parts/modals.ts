@@ -29,6 +29,14 @@ export const modalsZh = {
       aiSuggestAttrs: '建议标签「{names}」',
       aiSuggestSep: '，',
       aiSuggestAttrSep: '」「',
+      aiFetchBtn: '智能提取',
+      aiFetching: '提取中…',
+      aiFetched: '已智能提取',
+      aiFetchHint: '读取公网网页真实标题与描述，自动建议分类标签',
+      aiFetchSuccess: '已成功提取网页信息',
+      aiFetchFail: '未能获取网页信息，可直接手动填写',
+      smartFillDisabledHint: '智能提取与信息补齐已在设置中关闭',
+      multiAccounts: '历史账号',
     }, // BookmarkModal
     childBm: {
       needUrl: '请填写网址',
@@ -233,6 +241,14 @@ export const modalsEn = {
       aiSuggestAttrs: 'Suggested tags: {names}',
       aiSuggestSep: ', ',
       aiSuggestAttrSep: ', ',
+      aiFetchBtn: 'Smart Extract',
+      aiFetching: 'Extracting…',
+      aiFetched: 'Extracted',
+      aiFetchHint: 'Fetch real page title, description, and suggested tags',
+      aiFetchSuccess: 'Page info extracted successfully',
+      aiFetchFail: 'Failed to extract page info, you can enter manually',
+      smartFillDisabledHint: 'AI extraction & auto-completion is disabled in Settings',
+      multiAccounts: 'History Accounts',
     }, // BookmarkModal
     childBm: {
       needUrl: 'Please enter a URL',

@@ -74,7 +74,9 @@ export function useCloudSync() {
     if (syncStore.syncStatus === 'syncing') return '同步中...'
     if (syncStore.syncStatus === 'error') {
       // 配额触顶与泛失败分流：让用户第一眼看到「云端满了」而不是误以为本地同步坏了
-      return syncStore.syncErrorKind === 'quota' ? '云端空间已满' : '同步失败'
+      if (syncStore.syncErrorKind === 'quota') return '云端空间已满'
+      if (syncStore.syncErrorKind === 'auth') return '登录已过期'
+      return '同步失败'
     }
     const ds = useDataStore()
     const pending = ds._dirtyIds.size + ds._deletedIds.size + ds._newIds.size

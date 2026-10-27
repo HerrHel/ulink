@@ -69,7 +69,7 @@ export interface DynamicContextSlice {
   focusedGroupName?: string
   focusedGroupBookmarks?: Array<{ title: string; url: string }>
   selectedBookmarks?: Array<{ title: string; url: string }>
-  attachedCards?: Array<{ type: 'bm' | 'group'; title: string; url?: string }>
+  attachedCards?: Array<{ type: 'bm' | 'group' | 'cat'; title: string; url?: string }>
   untaggedBookmarks?: Array<{ id?: string; title: string; url: string; category?: string }>
   untaggedStats?: {
     totalCount: number
@@ -124,7 +124,7 @@ export function buildUlinkSystemPrompt(options: {
     ? `Selected Bookmarks (showing ${Math.min(slice.selectedBookmarks.length, MAX_SLICE_ITEMS)} of ${slice.selectedBookmarks.length}): [${selectedItems}]`
     : ''
   const activeAttached = slice.attachedCards?.length
-    ? `User-attached cards/notes for analysis: [${slice.attachedCards.map(c => `${c.type === 'group' ? 'Note' : 'Bookmark'}: ${sanitizeForPrompt(c.title)}`).join(', ')}]`
+    ? `User-attached cards/notes/categories for analysis: [${slice.attachedCards.map(c => `${c.type === 'cat' ? 'Category' : c.type === 'group' ? 'Note' : 'Bookmark'}: ${sanitizeForPrompt(c.title)}`).join(', ')}]`
     : ''
   const activeUntagged = slice.untaggedBookmarks?.length
     ? (() => {
@@ -155,7 +155,7 @@ export function buildUlinkSystemPrompt(options: {
     ? `当前用户多选勾选的书签 (共${slice.selectedBookmarks.length}个，列出${Math.min(slice.selectedBookmarks.length, MAX_SLICE_ITEMS)}个)：[${selectedItems}]`
     : ''
   const activeAttachedZh = slice.attachedCards?.length
-    ? `用户主动拖入并关联阅读的卡片/笔记：[${slice.attachedCards.map(c => `${c.type === 'group' ? '笔记' : '书签'}: ${sanitizeForPrompt(c.title)}`).join('、')}]`
+    ? `用户主动拖入并关联阅读的卡片/笔记/分类：[${slice.attachedCards.map(c => `${c.type === 'cat' ? '分类' : c.type === 'group' ? '笔记' : '书签'}: ${sanitizeForPrompt(c.title)}`).join('、')}]`
     : ''
   const activeUntaggedZh = slice.untaggedBookmarks?.length
     ? (() => {

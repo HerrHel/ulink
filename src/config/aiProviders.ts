@@ -40,9 +40,14 @@ export const AI_PROVIDERS: readonly AiProviderInfo[] = [
 /** 清单最后更新时间——展示在设置页，便于用户判断信息是否新鲜 */
 export const AI_PROVIDERS_UPDATED_AT = '2026-10-25'
 
-/** 隐私政策与用户协议中引用的《隐私政策》地址（产品内可直接访问） */
+/**
+ * 隐私政策与用户协议中引用的《隐私政策》地址（产品内可直接访问）
+ *
+ * 指向**渲染后的 HTML 页面**（`legalDocsPlugin` 在构建期由 docs/legal/*.md 生成）。
+ * 显式带 `.html` 后缀：不依赖静态托管的 pretty URL 规则，任何环境都能打开。
+ */
 export const LEGAL_DOC_LINKS = [
-  { key: 'terms', path: '/legal/terms-of-service.md', labelKey: 'settings.legalTerms' },
-  { key: 'privacy', path: '/legal/privacy-policy.md', labelKey: 'settings.legalPrivacy' },
-  { key: 'refund', path: '/legal/refund-policy.md', labelKey: 'settings.legalRefund' },
+  { key: 'terms', path: '/legal/terms-of-service.html', labelKey: 'settings.legalTerms' },
+  { key: 'privacy', path: '/legal/privacy-policy.html', labelKey: 'settings.legalPrivacy' },
+  { key: 'refund', path: '/legal/refund-policy.html', labelKey: 'settings.legalRefund' },
 ] as const

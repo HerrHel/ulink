@@ -62,6 +62,14 @@ img.img-error{display:none!important}
 .panel-title-group-icon img.img-error+.panel-title-group-icon-fallback{display:flex!important}
 
 /* ==================== VIEW TRANSITIONS (SOFT CROSS-DISSOLVE) ==================== */
+::view-transition,
+::view-transition-group(root),
+::view-transition-image-pair(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  pointer-events: none !important;
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: 0.45s;
@@ -82,7 +90,9 @@ img.img-error{display:none!important}
 
 [data-theme-transition] body,
 [data-theme-transition] .icon-rail,
-[data-theme-transition] .panel-header {
+[data-theme-transition] .panel-header,
+[data-theme-transition] .settings-modal-wrap,
+[data-theme-transition] .settings-dialog {
   transition: none !important;
 }
 

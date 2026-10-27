@@ -24,8 +24,15 @@ const mockData = {
   }),
   // R-RESURRECT：openBookmark 计数改走静默累加（不标脏/不刷 updatedAt），与 data store 同语义
   bumpBookmarkUseCount: vi.fn((id: string) => {
-    const bm = mockData.bookmarkMap[id]
-    if (bm && !bm.deletedAt) bm.useCount = (bm.useCount || 0) + 1
+    const visited = new Set<string>()
+    let curId: string | null = id
+    while (curId && !visited.has(curId)) {
+      visited.add(curId)
+      const bm: any = mockData.bookmarkMap[curId]
+      if (!bm || bm.deletedAt) break
+      bm.useCount = (bm.useCount || 0) + 1
+      curId = bm.parentId || null
+    }
   }),
   updateGroup: vi.fn((id: string, changes: any) => {
     const g = mockData.groupMap[id]
@@ -115,15 +122,19 @@ vi.mock('../../lib/toast.js', () => ({
 
 const mockToastWithUndo = { undoFn: null as (() => void) | null }
 
-vi.mock('../../utils.js', () => ({
-  favicon: vi.fn((url: string) => 'https://favicon.example.com/' + url),
-  domain: vi.fn((url: string) => url.replace(/https?:\/\//, '').split('/')[0]),
-  fixUrl: vi.fn((url: string) => url ? (url.startsWith('http') ? url : 'https://' + url) : ''),
-  isMobile: vi.fn(() => false),
-  autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
-  // 展示兜底：测试数据无密文，identity 语义（null/undefined → ''）
-  displayText: vi.fn((v: string | null | undefined) => v ?? ''),
-}))
+vi.mock('../../utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils.js')>()
+  return {
+    ...actual,
+    favicon: vi.fn((url: string) => 'https://favicon.example.com/' + url),
+    domain: vi.fn((url: string) => url.replace(/https?:\/\//, '').split('/')[0]),
+    fixUrl: vi.fn((url: string) => url ? (url.startsWith('http') ? url : 'https://' + url) : ''),
+    isMobile: vi.fn(() => false),
+    autoMigratePassword: vi.fn().mockResolvedValue('decrypted-password'),
+    // 展示兜底：测试数据无密文，identity 语义（null/undefined → ''）
+    displayText: vi.fn((v: string | null | undefined) => v ?? ''),
+  }
+})
 
 // d1-78：可控的 ai-classify mock —— autoFetchFromUrl 编排护栏要锁住守卫链/防抖/字段变换
 // 契约，而非 ai-classify 内部关键词命中（后者自有 ai-classify.test.ts）；用可注入返回值容器
@@ -177,7 +188,7 @@ const mockE2E = {
 }
 
 
-import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit, saveFromExtension } from '../../composables/domain/useBookmark.js'
+import { bmForm, openBmModal, closeBmModal, saveBm, addSub, deleteBookmarkWithUndo, previewLogo, applyAiCategory, applyAiAttributes, dismissAiSuggestions, autoFetchFromUrl, openBookmark, visit, saveFromExtension, triggerAiFetch } from '../../composables/domain/useBookmark.js'
 // d1-93：openBmModal 的 A2-011 opening push 编排需直断 pushNavState 被调。
 // pushNavState 已被上方 vi.mock('../interaction/useKeyboardOps.js') 桩成 vi.fn()，
 // 该工厂路径相对被测源 useBookmark.ts（src/composables/domain/）解析到 src/composables/interaction/，
@@ -207,6 +218,11 @@ function resetBmForm() {
     iconPreviewUrl: '', clearIconVisible: false,
     aiSuggestCatId: null, aiSuggestAttrIds: [],
     aiApplied: false, _fetchTimer: null,
+    _autoTitle: '', _autoNotes: '', _autoIcon: '',
+    _autoAttrIds: [], _autoCategoryId: '', _autoParentId: null,
+    _userEditedTitle: false, _userEditedNotes: false,
+    _userEditedAttrs: false, _userEditedCategory: false,
+    _userEditedParent: false,
   })
 }
 
@@ -1612,6 +1628,40 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       expect(bmForm.aiSuggestAttrIds).toEqual(['stale'])
     })
 
+    it('真智能属性预填：未手动编辑时自动勾选匹配属性，清空网址时顺畅撤销自动勾选', () => {
+      resetBmForm()
+      bmForm.url = 'https://github.com'
+      bmForm._userEditedAttrs = false
+      mockAi.suggestedAttrIds = ['attr_auto1', 'attr_auto2']
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+
+      expect(bmForm.attributes.attr_auto1).toBe(true)
+      expect(bmForm.attributes.attr_auto2).toBe(true)
+      expect(bmForm._autoAttrIds).toEqual(['attr_auto1', 'attr_auto2'])
+
+      // 清空网址：自动勾选的属性应被撤销
+      bmForm.url = ''
+      autoFetchFromUrl()
+      expect(bmForm.attributes.attr_auto1).toBeUndefined()
+      expect(bmForm.attributes.attr_auto2).toBeUndefined()
+      expect(bmForm._autoAttrIds).toEqual([])
+    })
+
+    it('真智能属性预填：用户手动点选属性后（_userEditedAttrs=true），不再被新网址覆盖', () => {
+      resetBmForm()
+      bmForm.url = 'https://site1.com'
+      bmForm.attributes = { manual_tag: true }
+      bmForm._userEditedAttrs = true
+      mockAi.suggestedAttrIds = ['attr_site1']
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+
+      // 用户手动指定的 manual_tag 保留，自动属性不强制重写
+      expect(bmForm.attributes.manual_tag).toBe(true)
+      expect(bmForm.attributes.attr_site1).toBeUndefined()
+    })
+
     it('再次输入先 clearTimeout 旧 timer：旧编排不再触发（new url 编排覆盖）', () => {
       bmForm.url = 'https://first.com'
       autoFetchFromUrl()
@@ -1720,6 +1770,84 @@ describe('AI 建议采纳/忽略（applyAiCategory/applyAiAttributes/dismissAiSu
       // （icon='' 走填充分支）语义，/7 ''与undefined等价的镜像不再单立。
       expect(mockSuggestCategory).not.toHaveBeenCalled()
       expect(mockSuggestAttributes).not.toHaveBeenCalled()
+    })
+
+    it('动态更换网址：前序自动预填的 title 和 notes 在网址直接替换后顺畅更新为新网址内容', () => {
+      // 步骤 1：输入第一个网址并触发自动填充
+      bmForm.url = 'https://site-a.com'
+      bmForm.title = ''
+      bmForm.notes = ''
+      bmForm._autoTitle = ''
+      bmForm._autoNotes = ''
+      bmForm._userEditedTitle = false
+      bmForm._userEditedNotes = false
+
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Site-a')
+      expect(bmForm._autoTitle).toBe('Site-a')
+
+      // 步骤 2：直接删掉或替换为第二个网址（未保存）
+      bmForm.url = 'https://site-b.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+
+      // 必须同步刷新为 Site-b，绝不残留 Site-a 的旧内容
+      expect(bmForm.title).toBe('Site-b')
+      expect(bmForm._autoTitle).toBe('Site-b')
+    })
+
+    it('清空网址时：自动生成的 title、notes 与 icon 同步清空', () => {
+      bmForm.url = 'https://site-a.com'
+      bmForm.title = ''
+      bmForm.notes = ''
+      bmForm._autoTitle = ''
+      bmForm._autoNotes = ''
+      bmForm._autoIcon = ''
+      bmForm._userEditedTitle = false
+      bmForm._userEditedNotes = false
+
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+      expect(bmForm.title).toBe('Site-a')
+
+      // 用户删掉网址
+      bmForm.url = ''
+      autoFetchFromUrl()
+
+      expect(bmForm.title).toBe('')
+      expect(bmForm.notes).toBe('')
+      expect(bmForm.icon).toBe('')
+    })
+
+    it('用户手动定制过 title 时更换网址：保留用户定制 title，但 notes 同步更新', () => {
+      bmForm.url = 'https://site-a.com'
+      bmForm.title = ''
+      bmForm.notes = ''
+      bmForm._autoTitle = ''
+      bmForm._autoNotes = ''
+      bmForm._userEditedTitle = false
+      bmForm._userEditedNotes = false
+
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+
+      // 用户手动改了标题
+      bmForm.title = '我的专属标题'
+      bmForm._userEditedTitle = true
+
+      // 更换网址
+      bmForm.url = 'https://site-b.com'
+      autoFetchFromUrl()
+      vi.advanceTimersByTime(500)
+
+      expect(bmForm.title).toBe('我的专属标题')
+    })
+
+    it('纯数字如 4399 正在打字输入时不触发预填，防 DWORD IPv4 误判', () => {
+      bmForm.url = '4399'
+      autoFetchFromUrl()
+      expect(bmForm._fetchTimer).toBeNull()
     })
   })
 })
@@ -2099,5 +2227,20 @@ describe('saveFromExtension 扩展端一键静默保存书签编排', () => {
     expect(res).toBe(false)
     expect(toast).toHaveBeenCalledWith('数据尚未就绪，请稍后重试', false)
     expect(toast).not.toHaveBeenCalledWith('无法保存该链接', false)
+  })
+
+  describe('smartFillEnabled 智能填充开关控制', () => {
+    it('当 smartFillEnabled 为 false 时，手动 triggerAiFetch 触发 toast 提示并早退', async () => {
+      const { toast } = await import('../../lib/toast.js')
+      const { useUIStore } = await import('../../stores/ui.js')
+      const ui = useUIStore()
+      ui.smartFillEnabled = false
+      bmForm.url = 'https://example.com'
+
+      await triggerAiFetch('https://example.com', true)
+
+      expect(toast).toHaveBeenCalledWith('智能提取与信息补齐已在设置中关闭', false)
+      expect(bmForm.isAiFetching).toBe(false)
+    })
   })
 })

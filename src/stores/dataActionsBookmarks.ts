@@ -355,9 +355,15 @@ export const bookmarkActions = {
    *  同步到云端。 */
   bumpBookmarkUseCount(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
-    const bm = this._bmMap[id]
-    if (!bm || bm.deletedAt) return
-    bm.useCount = (bm.useCount || 0) + 1
+    const visited = new Set<string>()
+    let curId: string | null = id
+    while (curId && !visited.has(curId)) {
+      visited.add(curId)
+      const bm: Bookmark | undefined = this._bmMap[curId]
+      if (!bm || bm.deletedAt) break
+      bm.useCount = (bm.useCount || 0) + 1
+      curId = bm.parentId || null
+    }
   },
   deleteBookmark(this: DataStoreThis, id: string) {
     if (_denyWrite()) return

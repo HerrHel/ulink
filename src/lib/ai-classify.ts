@@ -4,7 +4,7 @@
  * 后续可替换为 Transformers.js 本地模型。
  */
 import type { Category } from '../types.js'
-import { DOMAIN_KEYWORDS, TITLE_KEYWORDS, ATTR_KEYWORDS } from './ai/knowledge.js'
+import { DOMAIN_KEYWORDS, TITLE_KEYWORDS, ATTR_KEYWORDS, CATEGORY_SYNONYMS } from './ai/knowledge.js'
 
 /** 纯 ASCII 短词判定 + 词边界正则缓存：关键词是模块级常量，编译结果按 kw 复用免每次 new RegExp */
 const _ASCII_KW = /^[a-z0-9.+#-]{1,12}$/i
@@ -56,22 +56,36 @@ export function suggestCategory(
 
   if (scores.size === 0) return null
 
-  // 找得分最高的分类名。审计 #41：scores 的 key 是 DOMAIN_KEYWORDS/TITLE_KEYWORDS
-  // 常量分类名（如 'AI'），用户分类名可能与常量大小写不同（如 'ai'）。按 lowercase 做
-  // 大小写不敏感匹配：把 scores（常量驱动）按 lowercase 映射回用户 category，未映射到的忽略。
-  // 审计 #13：原 `score > bestScore`（严格大于）平局时让 Map 先入项胜出，偏向常量声明序
-  // 这种偶然顺序。改为按 categories 顺序遍历候选 + 平局 order 升序 → name 字典序兜底，
-  // 完全确定且不偏向常量声明顺序。
-  const scoresByLower = new Map<string, number>()
-  for (const [constName, s] of scores) scoresByLower.set(constName.toLowerCase(), s)
+  // 找得分最高的分类名。
+  // 支持：
+  // 1. 完全匹配（大小写不敏感，最高优先级，基础分×2）
+  // 2. 子串包含（如 "游戏平台" 包含 "游戏"，"前端开发" 包含 "开发"）
+  // 3. 概念同义词匹配（通过 CATEGORY_SYNONYMS 映射，如 "游戏平台" 命中 "游戏" 同义词）
+  // 决胜规则（审计 #13）：平局按 categories order 升序 → name 字典序兜底，完全确定。
   let bestName: string | null = null
   let bestScore = 0
   let bestOrder = 0
-  // 以 categories（用户排序）为主顺序遍历，保证平局定序符合用户意图；
-  // scores 可能含 c.name 大小写不匹配的 key，用 lowercase 反查兜底。
+
   for (const c of categories) {
-    const score = scoresByLower.get(c.name.toLowerCase())
-    if (score === undefined) continue
+    const cNameLower = c.name.trim().toLowerCase()
+    let score = 0
+
+    for (const [constName, s] of scores) {
+      const constLower = constName.toLowerCase()
+      if (cNameLower === constLower) {
+        score += s * 2
+      } else if (cNameLower.includes(constLower) || constLower.includes(cNameLower)) {
+        score += s
+      } else {
+        const syns = CATEGORY_SYNONYMS[constName] || []
+        if (syns.some(syn => cNameLower.includes(syn.toLowerCase()) || syn.toLowerCase().includes(cNameLower))) {
+          score += s
+        }
+      }
+    }
+
+    if (score === 0) continue
+
     if (
       bestName === null ||
       score > bestScore ||
@@ -82,6 +96,7 @@ export function suggestCategory(
       bestOrder = c.order
     }
   }
+
   if (bestName === null) return null
 
   return categories.find(c => c.name === bestName)?.id ?? null
@@ -102,11 +117,23 @@ export function suggestAttributes(
   const suggested: string[] = []
 
   for (const attr of customAttributes) {
-    const rules = ATTR_KEYWORDS[attr.name]
-    if (!rules) continue
-    const domainHit = rules.domains.some(d => urlLower.includes(d))
-    const titleHit = rules.titles.some(t => titleHasKeyword(titleLower, t))
-    if (domainHit || titleHit) suggested.push(attr.id)
+    const rules = ATTR_KEYWORDS[attr.name] || ATTR_KEYWORDS[attr.name.toLowerCase()]
+    if (rules) {
+      const domainHit = rules.domains.some(d => urlLower.includes(d))
+      const titleHit = rules.titles.some(t => titleHasKeyword(titleLower, t))
+      if (domainHit || titleHit) {
+        suggested.push(attr.id)
+        continue
+      }
+    }
+
+    // 动态匹配：若用户自定义属性名称长度>=2，且在网页标题或URL路径中明确出现，自适应智能命中
+    const attrNameLower = attr.name.trim().toLowerCase()
+    if (attrNameLower.length >= 2 && attrNameLower !== '自定义无关') {
+      if (titleHasKeyword(titleLower, attrNameLower) || urlLower.includes(attrNameLower)) {
+        suggested.push(attr.id)
+      }
+    }
   }
 
   return suggested

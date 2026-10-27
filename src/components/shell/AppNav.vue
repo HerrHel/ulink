@@ -4,6 +4,19 @@
       <BrandLogo :size="22" />
       <span class="rail-logo-text" :data-space="uiStore.curSpace">{{ isVault ? t('nav.vaultSpace') : t('nav.brand') }}</span>
     </div>
+    <!-- AI 工作台顶层专属入口（由设置项 aiRailEnabled 控制，可自由隐藏） -->
+    <div v-if="uiStore.aiRailEnabled && !shareMode" class="rail-top-nav">
+      <button
+        class="rail-item rail-item-ai"
+        :class="{ active: uiStore.activeView === 'ai' }"
+        data-testid="rail-item-ai"
+        @click="selectAiView"
+        :title="t('nav.aiChatDesc')"
+      >
+        <span aria-hidden="true" v-html="I.sparkles"></span>
+        {{ t('nav.aiChat') }}
+      </button>
+    </div>
     <div class="rail-section-label">{{ t('nav.categories') }}</div>
     <div class="rail-nav" id="railNav">
       <!-- Phase 2: Vue 模板渲染替代 innerHTML -->
@@ -11,9 +24,9 @@
         v-for="cat in categories"
         :key="cat.id"
         class="rail-item"
-        :class="{ active: curCat === cat.id }"
+        :class="{ active: uiStore.activeView === 'bookmarks' && curCat === cat.id }"
         :data-cat-id="cat.id"
-        :draggable="cat.id !== CAT_ALL && cat.id !== CAT_UNCATEGORIZED"
+        :draggable="cat.id !== CAT_ALL"
         @click="selectCat(cat.id)"
       >
         <span v-html="getCategoryIcon(cat.icon)"></span>
@@ -133,11 +146,17 @@ const userDisplay = computed(() => {
   return auth.userEmail.split('@')[0]
 })
 
+function selectAiView() {
+  if (uiStore.activeView === 'ai') {
+    uiStore.triggerAiNewChat()
+  } else {
+    uiStore.switchToAiView(false)
+  }
+}
+
 function selectCat(id: string) {
-  uiStore.curCat = id
+  uiStore.switchToBookmarksView(id)
   uiStore.focusedGroupId = null
-  // A4-006：移动端点分类后关 rail，避免遮罩残留
-  if (uiStore.isMobile) uiStore.panels.rail = false
 }
 
 /** 退出私密空间：锁保险柜并切回主页数据集 */

@@ -75,7 +75,7 @@ export function useChatInputInteraction(deps: ChatInputInteractionDeps) {
 
   function handleKeyDown(e: KeyboardEvent) {
     // IME 组合中的按键（选词/确认）交还输入法，防 Enter 误提交、方向键误翻历史
-    if (e.isComposing) return
+    if (e.isComposing || e.keyCode === 229) return
     // Esc：有输入内容/补全菜单时先清空输入（拦截不上抛，防全局清扫连带关掉面板）；
     // 空输入时放行给全局 Esc（关闭整个面板）
     if (e.key === 'Escape' && (showSlashSuggest.value || aiQuery.value)) {
@@ -153,8 +153,17 @@ export function useChatInputInteraction(deps: ChatInputInteractionDeps) {
       }
     }
 
-    if (e.key === 'Enter' && !e.shiftKey) {
+    const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.keyCode === 13
+    if (isEnter) {
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        // Shift+Enter 允许换行
+        return
+      }
       e.preventDefault()
+      const el = textareaRef.value
+      if (el && el.value && !aiQuery.value) {
+        aiQuery.value = el.value
+      }
       submit()
     }
   }

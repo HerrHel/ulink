@@ -40,6 +40,9 @@ export function useSyncState() {
       if (sync.syncErrorKind.value === 'quota') {
         return { level: 'quota', dotClass: 'dot-error', label: '云端空间已满', count: 0, showBadge: false }
       }
+      if (sync.syncErrorKind.value === 'auth') {
+        return { level: 'error', dotClass: 'dot-error', label: '登录已过期', count: 0, showBadge: false }
+      }
       return { level: 'error', dotClass: 'dot-error', label: '同步失败', count: 0, showBadge: false }
     }
     if (_isOffline(sync)) {

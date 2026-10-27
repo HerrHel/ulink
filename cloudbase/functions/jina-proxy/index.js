@@ -23,8 +23,10 @@ const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean)
 /** 每 IP 限流（次/分钟）。原版每用户 60；v1 无用户身份，按 IP 同口径 */
-const RATE_LIMIT_PER_MIN = parseInt(process.env.JINA_PROXY_RATE_LIMIT_PER_MIN || '60', 10)
-const UPSTREAM_TIMEOUT_MS = parseInt(process.env.JINA_PROXY_TIMEOUT_MS || '12000', 10)
+const rlVal = parseInt(process.env.JINA_PROXY_RATE_LIMIT_PER_MIN || '60', 10)
+const RATE_LIMIT_PER_MIN = Number.isFinite(rlVal) && rlVal > 0 ? rlVal : 60
+const toVal = parseInt(process.env.JINA_PROXY_TIMEOUT_MS || '12000', 10)
+const UPSTREAM_TIMEOUT_MS = Number.isFinite(toVal) && toVal > 0 ? toVal : 12000
 const READ_MAX_CHARS = 30000
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-jina-proxy'
 

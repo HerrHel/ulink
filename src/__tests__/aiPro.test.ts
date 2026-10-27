@@ -125,6 +125,29 @@ describe('AI Pro Matrix & Smart Candidate Ingestion', () => {
     expect(oldBookmark.notes).toBe('')
   })
 
+  it('4b. 存量书签补齐：已拥有的属性标签不重复建议', async () => {
+    const bookmarkWithAttr: Bookmark = {
+      id: 'bm-old-2',
+      title: 'excalidraw.com',
+      url: 'https://excalidraw.com',
+      icon: '',
+      username: '',
+      password: '',
+      notes: '',
+      categoryId: 'uncategorized',
+      parentId: null,
+      order: 1,
+      useCount: 0,
+      attributes: { 'attr-free': true }, // 已拥有开源免费属性
+      isExpanded: false,
+      createdAt: 1000,
+      updatedAt: 1000,
+    }
+
+    const diff = await enrichBookmarkMetadata(bookmarkWithAttr, testCategories, testAttributes)
+    expect(diff.suggestedAttrIds).not.toContain('attr-free')
+  })
+
   it('5. UI Store 补齐弹窗 Actions 正常驱动状态', () => {
     const ui = useUIStore()
     expect(ui.modals.aiEnrich).toBe(false)

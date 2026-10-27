@@ -9,43 +9,47 @@
   <div class="panel-main">
     <div class="panel-main-inner">
       <AppHeader @toggle-rail="toggleRail" @exit-focus="handlers.onExitGroupFocus" @focus-title-change="handlers.onFocusTitleChange" @toggle-detail="toggleDetailPanel" @search="handlers.onSearch" @focus-edit-group="handlers.onFocusEditGroup" @focus-share-group="handlers.onFocusShareGroup" />
-      <div v-if="!uiStore.shareMode" class="filter-bar-wrap">
+      <div v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" class="filter-bar-wrap">
         <FilterBar @exit-focus="handlers.onExitGroupFocus" @focus-add-bm="handlers.onFocusAddBm" @focus-edit-group="handlers.onFocusEditGroup" @focus-undo="handlers.onFocusUndo" @focus-redo="handlers.onFocusRedo" @toggle-attr-filter="handlers.onToggleAttrFilter" @add-bookmark="handlers.onAddBookmark" @add-group="handlers.onAddGroup" />
         <BatchBar @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       </div>
-      <BatchBottom v-if="!uiStore.shareMode" @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
+      <BatchBottom v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" @batch-move="handlers.onBatchMove" @batch-delete="handlers.onBatchDelete" />
       <div class="flex-1" style="display:flex;overflow:hidden">
-        <div class="panel-content" id="panelContent">
+        <div class="panel-content" id="panelContent" :style="uiStore.activeView === 'ai' ? 'padding: 0; display: flex; flex-direction: column;' : ''">
+          <!-- 沉浸式 AI 对话工作区 -->
+          <AiWorkspace v-if="uiStore.activeView === 'ai' && !uiStore.shareMode" />
           <!-- 分享只读态：加载 / 出错时的占位（成功态由 CardGrid 按聚焦/分类渲染） -->
-          <div v-if="share.loading" class="share-state">
-            <div class="share-spinner"></div>
-            <span>{{ t('share.loading') }}</span>
-          </div>
-          <div v-else-if="share.error" class="share-state share-state-error">
-            <p>{{ share.error }}</p>
-            <button class="btn btn-ghost btn-sm" @click="share.retry()">{{ t('common.retry') }}</button>
-          </div>
-          <ErrorBoundary name="CardGrid" v-else>
-            <CardGrid />
-            <footer v-if="uiStore.shareMode" class="share-footer">
-              <div class="share-footer-inner">
-                <div class="share-footer-brand">
-                  <BrandLogo :size="20" />
-                  <span class="footer-name">{{ t('common.appName') }}</span>
+          <template v-else>
+            <div v-if="share.loading" class="share-state">
+              <div class="share-spinner"></div>
+              <span>{{ t('share.loading') }}</span>
+            </div>
+            <div v-else-if="share.error" class="share-state share-state-error">
+              <p>{{ share.error }}</p>
+              <button class="btn btn-ghost btn-sm" @click="share.retry()">{{ t('common.retry') }}</button>
+            </div>
+            <ErrorBoundary name="CardGrid" v-else>
+              <CardGrid />
+              <footer v-if="uiStore.shareMode" class="share-footer">
+                <div class="share-footer-inner">
+                  <div class="share-footer-brand">
+                    <BrandLogo :size="20" />
+                    <span class="footer-name">{{ t('common.appName') }}</span>
+                  </div>
+                  <p class="share-footer-slogan">{{ isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault' }}</p>
+                  <a class="share-footer-cta" href="/">{{ isZh ? '免费体验与链 ulink →' : 'Try ulink for free →' }}</a>
+                  <span class="share-footer-copy">© {{ currentYear }} ulink</span>
                 </div>
-                <p class="share-footer-slogan">{{ isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault' }}</p>
-                <a class="share-footer-cta" href="/">{{ isZh ? '免费体验与链 ulink →' : 'Try ulink for free →' }}</a>
-                <span class="share-footer-copy">© {{ currentYear }} ulink</span>
-              </div>
-            </footer>
-          </ErrorBoundary>
+              </footer>
+            </ErrorBoundary>
+          </template>
         </div>
       </div>
       <BatchPopover v-if="!uiStore.shareMode" />
       <EdgeStagingSidebar v-if="!uiStore.shareMode" />
     </div>
-    <div v-if="!uiStore.shareMode" class="resize-handle" id="resizeRight"></div>
-    <DetailPanel v-if="!uiStore.shareMode" />
+    <div v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" class="resize-handle" id="resizeRight"></div>
+    <DetailPanel v-if="!uiStore.shareMode && uiStore.activeView !== 'ai'" />
   </div>
 </div>
 
@@ -133,6 +137,7 @@ const { t, locale: curLocale } = useI18n()
 const isZh = computed(() => curLocale.value === 'zh-CN')
 const currentYear = new Date().getUTCFullYear()
 // PERF-5：非首屏 overlay / modal 全部 async，切断启动链
+const AiWorkspace = defineAsyncComponent(() => import('./components/chat/AiWorkspace.vue'))
 const AddPopover = defineAsyncComponent(() => import('./components/overlays/AddPopover.vue'))
 const DeadLinksPopover = defineAsyncComponent(() => import('./components/overlays/DeadLinksPopover.vue'))
 const ToastContainer = defineAsyncComponent(() => import('./components/overlays/ToastContainer.vue'))

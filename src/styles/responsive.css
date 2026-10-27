@@ -219,6 +219,7 @@
   .icon-rail .rail-logo-text{display:none}
   .icon-rail .rail-logo{padding:4px 0 0;justify-content:center}
   .icon-rail .rail-action-row{flex-direction:column;gap:2px;width:100%}
+  .icon-rail .rail-top-nav .rail-item,
   .icon-rail .rail-nav .rail-item,
   .icon-rail .rail-bottom .rail-item,
   .icon-rail .rail-action-icon-btn,

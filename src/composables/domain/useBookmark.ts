@@ -13,12 +13,14 @@ import { pushNavState } from '../interaction/useKeyboardOps.js'
 import { previewIconUrl as previewIconUrlBase, clearIcon as clearIconBase } from '../ui/useIconPreview.js'
 import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { getSmartPrefill } from '../../lib/ai/smartPrefill.js'
+import { fetchUrlMetadataAsync } from '../../lib/ai/smartIntake.js'
+import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
 import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
 import { isDataHydrated } from '../../lib/dataReady.js'
-import { isUrlSuffixVariant, isExactDuplicate } from '../../lib/bookmarkDedup.js'
-export { isUrlSuffixVariant, isExactDuplicate }
+import { isUrlSuffixVariant, isExactDuplicate, findBestParentBookmark } from '../../lib/bookmarkDedup.js'
+export { isUrlSuffixVariant, isExactDuplicate, findBestParentBookmark }
 
 /**
  * 查找与指定URL重复或后缀变体的书签
@@ -83,6 +85,20 @@ interface BmFormState {
   aiSuggestAttrIds: string[]
   aiApplied: boolean
   _fetchTimer: ReturnType<typeof setTimeout> | null
+  isAiFetching: boolean
+  aiFetchedSuccess: boolean
+  candidateUsernames: string[]
+  _autoTitle: string
+  _autoNotes: string
+  _autoIcon: string
+  _autoAttrIds: string[]
+  _autoCategoryId: string
+  _autoParentId: string | null
+  _userEditedTitle: boolean
+  _userEditedNotes: boolean
+  _userEditedAttrs: boolean
+  _userEditedCategory: boolean
+  _userEditedParent: boolean
 }
 
 /**
@@ -114,6 +130,20 @@ export const bmForm = reactive<BmFormState>({
   aiSuggestAttrIds: [],
   aiApplied: false,
   _fetchTimer: null,
+  isAiFetching: false,
+  aiFetchedSuccess: false,
+  candidateUsernames: [],
+  _autoTitle: '',
+  _autoNotes: '',
+  _autoIcon: '',
+  _autoAttrIds: [],
+  _autoCategoryId: '',
+  _autoParentId: null,
+  _userEditedTitle: false,
+  _userEditedNotes: false,
+  _userEditedAttrs: false,
+  _userEditedCategory: false,
+  _userEditedParent: false,
 })
 
 export function openBookmark(bm: Bookmark) {
@@ -199,6 +229,20 @@ export async function openBmModal(editId?: string) {
     bmForm.aiSuggestAttrIds = []
     bmForm.aiApplied = false
     bmForm._fetchTimer = null
+    bmForm.isAiFetching = false
+    bmForm.aiFetchedSuccess = false
+    bmForm.candidateUsernames = []
+    bmForm._autoTitle = ''
+    bmForm._autoNotes = ''
+    bmForm._autoIcon = ''
+    bmForm._autoAttrIds = []
+    bmForm._autoCategoryId = ''
+    bmForm._autoParentId = null
+    bmForm._userEditedTitle = !!editId
+    bmForm._userEditedNotes = !!editId
+    bmForm._userEditedAttrs = !!editId
+    bmForm._userEditedCategory = !!editId
+    bmForm._userEditedParent = !!editId || !!bmForm.parentId
 
     ui.editingId = editId || null
     ui.lastFocusedEl = document.activeElement as HTMLElement
@@ -362,12 +406,19 @@ export function addSub(parentId: string) {
   const parent = parentId ? ds.bookmarkMap[parentId] : null
   openBmModal()
   bmForm.parentId = parentId
+  bmForm._userEditedParent = true
   bmForm.categoryId = parent?.categoryId || ''
+  bmForm._userEditedCategory = !!parent?.categoryId
   bmForm.username = ''
   bmForm.password = ''
   bmForm.icon = ''
   bmForm.clearIconVisible = false
   bmForm.iconPreviewVisible = false
+  bmForm._autoTitle = ''
+  bmForm._autoNotes = ''
+  bmForm._autoIcon = ''
+  bmForm._userEditedTitle = false
+  bmForm._userEditedNotes = false
 }
 
 export function previewLogo() {
@@ -389,7 +440,47 @@ export function previewLogo() {
 export function autoFetchFromUrl() {
   if (bmForm._fetchTimer) { clearTimeout(bmForm._fetchTimer); bmForm._fetchTimer = null }
   const raw = bmForm.url.trim()
-  if (!raw || raw.length < 4) return
+
+  // 1. 如果用户清空了网址或删减到无效长度（<4），且当前标题/备注是之前自动生成的，顺畅同步清空
+  if (!raw || raw.length < 4) {
+    if (!bmForm._userEditedTitle && (bmForm.title === bmForm._autoTitle || !bmForm._autoTitle)) {
+      bmForm.title = ''
+      bmForm._autoTitle = ''
+    }
+    if (!bmForm._userEditedNotes && (bmForm.notes === bmForm._autoNotes || !bmForm._autoNotes)) {
+      bmForm.notes = ''
+      bmForm._autoNotes = ''
+    }
+    if (bmForm.icon === bmForm._autoIcon) {
+      bmForm.icon = ''
+      bmForm._autoIcon = ''
+      bmForm.iconPreviewVisible = false
+    }
+    if (!bmForm._userEditedAttrs && bmForm._autoAttrIds && bmForm._autoAttrIds.length > 0) {
+      for (const aid of bmForm._autoAttrIds) {
+        delete bmForm.attributes[aid]
+      }
+      bmForm._autoAttrIds = []
+    }
+    if (!bmForm._userEditedCategory) {
+      const ui = useUIStore()
+      bmForm.categoryId = ui.curCat === CAT_ALL ? CAT_UNCATEGORIZED : ui.curCat
+      bmForm._autoCategoryId = ''
+    }
+    if (!bmForm._userEditedParent && bmForm.parentId === bmForm._autoParentId) {
+      bmForm.parentId = null
+      bmForm._autoParentId = null
+    }
+    bmForm.aiSuggestCatId = null
+    bmForm.aiSuggestAttrIds = []
+    bmForm.logoPreviewVisible = false
+    return
+  }
+
+  // 2. 纯数字（如 4399、8080）绝对不作为有效域名触发解析，防止被浏览器 DWORD 解析为 0.0.17.47
+  if (/^\d+$/.test(raw)) {
+    return
+  }
 
   bmForm._fetchTimer = setTimeout(() => {
     const url = fixUrl(raw)
@@ -397,30 +488,41 @@ export function autoFetchFromUrl() {
     const ds = useDataStore()
     const ui = useUIStore()
 
-    // 智能预填（仅当本地智能开关开启时，精选站点知识库、路径语义化提取、同域名偏好继承、中英文地道匹配）
-    const prefill = ui.semanticSearchEnabled
+    // 智能预填（仅当智能提取与填充开关开启时，精选站点知识库、路径语义化提取、同域名偏好继承、中英文地道匹配）
+    const prefill = ui.smartFillEnabled
       ? getSmartPrefill(url, ds.bookmarks, ds.categories, ds.customAttributes)
-      : { title: '', notes: '', categoryId: null, suggestedAttrIds: [], suggestedUsername: '' }
+      : { title: '', notes: '', categoryId: null, suggestedAttrIds: [], suggestedUsername: '', candidateUsernames: [], confidence: 'fallback' as const }
 
-    // 标题：仅在为空时自动填充
-    if (!bmForm.title.trim()) {
-      bmForm.title = prefill.title || (dm.replace(/^www\./, '').split('.')[0]
-        .charAt(0).toUpperCase() + dm.replace(/^www\./, '').split('.')[0].slice(1))
+    const candidateTitle = prefill.title || (dm.replace(/^www\./, '').split('.')[0]
+      .charAt(0).toUpperCase() + dm.replace(/^www\./, '').split('.')[0].slice(1))
+
+    // 标题：如果当前标题为空，或者当前标题是由上一次自动预填生成且用户未手动修改过，则顺畅替换为新网址标题
+    const canUpdateTitle = !bmForm.title.trim() || (!bmForm._userEditedTitle && bmForm.title === bmForm._autoTitle)
+    if (canUpdateTitle) {
+      bmForm.title = candidateTitle
+      bmForm._autoTitle = candidateTitle
     }
 
-    // 简介与备注：仅在为空时自动填入精炼描述
-    if (!bmForm.notes.trim() && prefill.notes) {
-      bmForm.notes = prefill.notes
+    // 简介与备注：如果当前备注为空，或者是由上一次自动预填生成且用户未手动修改过，则顺畅替换为新网址备注
+    const canUpdateNotes = !bmForm.notes.trim() || (!bmForm._userEditedNotes && bmForm.notes === bmForm._autoNotes)
+    if (canUpdateNotes) {
+      bmForm.notes = prefill.notes || ''
+      bmForm._autoNotes = prefill.notes || ''
+    }
+    if (prefill.confidence === 'high' && prefill.title && prefill.notes) {
+      bmForm.aiFetchedSuccess = true
     }
 
     // 常用账号继承：仅在新建且账号为空时自动填入同域名历史账号
+    bmForm.candidateUsernames = prefill.candidateUsernames || []
     if (!bmForm.isEdit && !bmForm.username.trim() && prefill.suggestedUsername) {
       bmForm.username = prefill.suggestedUsername
     }
 
-    // 图标：仅在为空时自动填充
-    if (!bmForm.icon) {
+    // 图标：如果未手动指定自定义图标，或与上一自动图标一致，则更新为新图标
+    if (!bmForm.icon || bmForm.icon === bmForm._autoIcon) {
       bmForm.icon = favicon(url)
+      bmForm._autoIcon = bmForm.icon
       bmForm.iconPreviewVisible = true
       bmForm.iconPreviewUrl = bmForm.icon
       bmForm.clearIconVisible = true
@@ -429,20 +531,158 @@ export function autoFetchFromUrl() {
     // Logo 预览
     previewLogo()
 
-    // AI 分类 + 属性建议（仅新建模式）
+    // 智能识别父级书签（新建模式且用户未手动指派父级）
+    if (!bmForm.isEdit && !bmForm._userEditedParent) {
+      const bestParent = findBestParentBookmark(url, ds.bookmarks, bmForm.id)
+      if (bestParent) {
+        bmForm.parentId = bestParent.id
+        bmForm._autoParentId = bestParent.id
+
+        // 子书签自动继承父书签的分类（用户未手动指派分类时）
+        if (!bmForm._userEditedCategory && (!bmForm.categoryId || bmForm.categoryId === CAT_UNCATEGORIZED || bmForm.categoryId === bmForm._autoCategoryId)) {
+          if (bestParent.categoryId && bestParent.categoryId !== CAT_UNCATEGORIZED) {
+            bmForm.categoryId = bestParent.categoryId
+            bmForm._autoCategoryId = bestParent.categoryId
+          }
+        }
+      } else if (bmForm.parentId === bmForm._autoParentId) {
+        bmForm.parentId = null
+        bmForm._autoParentId = null
+      }
+    }
+
+    // AI 分类 + 属性建议与真智能预填（仅新建模式）
     if (!bmForm.isEdit && !bmForm.aiApplied) {
       const ruleCatId = suggestCategory(url, bmForm.title, ds.categories)
       const catId = prefill.categoryId || ruleCatId
-      if (catId && !bmForm.categoryId) {
-        bmForm.aiSuggestCatId = catId
+      if (catId) {
+        // 智能选择分类：若当前未手动指派分类，且处于未分类或先前由AI预选的分类
+        const canAutoSelectCat = !bmForm._userEditedCategory && (
+          !bmForm.categoryId ||
+          bmForm.categoryId === CAT_UNCATEGORIZED ||
+          bmForm.categoryId === bmForm._autoCategoryId
+        )
+        if (canAutoSelectCat) {
+          bmForm.categoryId = catId
+          bmForm._autoCategoryId = catId
+          bmForm.aiSuggestCatId = catId
+        }
       }
       const attrIds = suggestAttributes(url, bmForm.title, ds.customAttributes)
       const mergedAttrs = [...new Set([...attrIds, ...prefill.suggestedAttrIds])]
       if (mergedAttrs.length) {
         bmForm.aiSuggestAttrIds = mergedAttrs.filter(id => !bmForm.attributes[id])
       }
+
+      // 属性标签真智能预填：用户未手动更改属性时，直接自动勾选匹配到的属性
+      if (!bmForm._userEditedAttrs) {
+        if (bmForm._autoAttrIds && bmForm._autoAttrIds.length > 0) {
+          for (const aid of bmForm._autoAttrIds) {
+            delete bmForm.attributes[aid]
+          }
+        }
+        const newAutoAttrs: string[] = []
+        for (const aid of mergedAttrs) {
+          bmForm.attributes[aid] = true
+          newAutoAttrs.push(aid)
+        }
+        bmForm._autoAttrIds = newAutoAttrs
+      }
+    }
+
+    // 自动异步发起 Layer 2 真实网页内容与元数据提取（无需用户手动点击）
+    if (ui.smartFillEnabled && !bmForm.isEdit) {
+      triggerAiFetch(url, false)
     }
   }, 500)
+}
+
+let _aiFetchSeq = 0
+export async function triggerAiFetch(targetUrl?: string, isManual = false) {
+  const raw = targetUrl || bmForm.url.trim()
+  if (!raw || raw.length < 4) return
+  const url = fixUrl(raw)
+  if (!url.startsWith('http') || isPrivateUrl(url)) {
+    if (isManual) toast(t('modal.bookmark.aiFetchFail'), false)
+    return
+  }
+
+  const ds = useDataStore()
+  const ui = useUIStore()
+  if (!ui.smartFillEnabled) {
+    if (isManual) toast(t('modal.bookmark.smartFillDisabledHint'), false)
+    return
+  }
+
+  const curSeq = ++_aiFetchSeq
+  bmForm.isAiFetching = true
+  bmForm.aiFetchedSuccess = false
+
+  try {
+    const res = await fetchUrlMetadataAsync(url, ds.categories, ds.customAttributes)
+    if (curSeq !== _aiFetchSeq || !bmForm.isOpen || fixUrl(bmForm.url.trim()) !== url) {
+      return
+    }
+
+    if (res.success) {
+      bmForm.aiFetchedSuccess = true
+      // 真实标题：仅在用户未手动修改过标题时平滑填入
+      if (res.title && (!bmForm._userEditedTitle || !bmForm.title.trim() || bmForm.title === bmForm._autoTitle)) {
+        bmForm.title = res.title
+        bmForm._autoTitle = res.title
+      }
+      // 真实简介：仅在用户未手动修改过备注时平滑填入真实网页 Description / 摘要
+      if (res.notes && (!bmForm._userEditedNotes || !bmForm.notes.trim() || bmForm.notes === bmForm._autoNotes)) {
+        bmForm.notes = res.notes
+        bmForm._autoNotes = res.notes
+      }
+
+      if (!bmForm.isEdit && !bmForm.aiApplied) {
+        if (res.categoryId) {
+          const canAutoSelectCat = !bmForm._userEditedCategory && (
+            !bmForm.categoryId ||
+            bmForm.categoryId === CAT_UNCATEGORIZED ||
+            bmForm.categoryId === bmForm._autoCategoryId
+          )
+          if (canAutoSelectCat) {
+            bmForm.categoryId = res.categoryId
+            bmForm._autoCategoryId = res.categoryId
+            bmForm.aiSuggestCatId = res.categoryId
+          }
+        }
+        if (res.suggestedAttrIds && res.suggestedAttrIds.length > 0) {
+          const merged = [...new Set([...bmForm.aiSuggestAttrIds, ...res.suggestedAttrIds])]
+          bmForm.aiSuggestAttrIds = merged.filter((id) => !bmForm.attributes[id])
+
+          // 属性标签真智能预填更新
+          if (!bmForm._userEditedAttrs) {
+            if (bmForm._autoAttrIds && bmForm._autoAttrIds.length > 0) {
+              for (const aid of bmForm._autoAttrIds) {
+                delete bmForm.attributes[aid]
+              }
+            }
+            const newAutoAttrs: string[] = []
+            for (const aid of merged) {
+              bmForm.attributes[aid] = true
+              newAutoAttrs.push(aid)
+            }
+            bmForm._autoAttrIds = newAutoAttrs
+          }
+        }
+      }
+      if (isManual) {
+        toast(t('modal.bookmark.aiFetchSuccess'), true)
+      }
+    } else if (isManual) {
+      toast(t('modal.bookmark.aiFetchFail'), false)
+    }
+  } catch {
+    if (isManual) toast(t('modal.bookmark.aiFetchFail'), false)
+  } finally {
+    if (curSeq === _aiFetchSeq) {
+      bmForm.isAiFetching = false
+    }
+  }
 }
 
 /** 应用 AI 建议的分类 */
@@ -450,6 +690,7 @@ export function applyAiCategory() {
   if (bmForm.aiSuggestCatId) {
     bmForm.categoryId = bmForm.aiSuggestCatId
     bmForm.aiSuggestCatId = null
+    bmForm._userEditedCategory = true
     bmForm.aiApplied = true
   }
 }

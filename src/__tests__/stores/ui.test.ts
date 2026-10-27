@@ -25,6 +25,7 @@ describe('UIStore', () => {
       expect(store.excludedAttrs).toEqual([])
       expect(store.detailCards).toEqual([])
       expect(store.semanticSearchEnabled).toBe(true)
+      expect(store.smartFillEnabled).toBe(true)
       expect(store.panels.detail).toBe(false)
       expect(store.panels.rail).toBe(false)
       expect(store.expandedIds).toEqual([])
@@ -290,6 +291,20 @@ describe('UIStore', () => {
       store.semanticSearchEnabled = true
       store.restoreUIState()
       expect(store.semanticSearchEnabled).toBe(false)
+    })
+
+    it('应该正确保存并恢复 smartFillEnabled 开关', () => {
+      store.smartFillEnabled = false
+      store.saveUIState()
+      const saved = JSON.parse((localStorage.setItem as any).mock.calls.slice(-1)[0][1])
+      expect(saved.smartFillEnabled).toBe(false)
+
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({
+        smartFillEnabled: false,
+      }))
+      store.smartFillEnabled = true
+      store.restoreUIState()
+      expect(store.smartFillEnabled).toBe(false)
     })
   })
 

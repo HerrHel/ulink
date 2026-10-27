@@ -84,6 +84,16 @@ describe('suggestCategory', () => {
     ]
     expect(suggestCategory('https://claude.ai/chat', '随便', mixedCats)).toBe('c-ai-mixed')
   })
+
+  it('智能概念同义词与子串自适应：4399.com 自动匹配「游戏平台」分类', () => {
+    const userCategories: Category[] = [
+      { id: 'cat-ai', name: 'AI', icon: '', color: '', order: 0 },
+      { id: 'cat-game', name: '游戏平台', icon: '', color: '', order: 1 },
+      { id: 'cat-dev', name: '开发工具', icon: '', color: '', order: 2 },
+    ]
+    const matched = suggestCategory('https://4399.com/', '小游戏,4399小游戏,小游戏大全', userCategories)
+    expect(matched).toBe('cat-game')
+  })
 })
 
 describe('suggestAttributes', () => {
@@ -92,6 +102,7 @@ describe('suggestAttributes', () => {
     { id: 'a-work', name: '工作' },
     { id: 'a-learn', name: '学习' },
     { id: 'a-temp', name: '临时' },
+    { id: 'a-game', name: '游戏' },
     { id: 'a-other', name: '自定义无关' },
   ]
 
@@ -109,5 +120,9 @@ describe('suggestAttributes', () => {
 
   it('未知属性名跳过', () => {
     expect(suggestAttributes('https://github.com', '', attrs)).not.toContain('a-other')
+  })
+
+  it('智能命中游戏属性标签', () => {
+    expect(suggestAttributes('https://4399.com/', '4399小游戏大全', attrs)).toContain('a-game')
   })
 })

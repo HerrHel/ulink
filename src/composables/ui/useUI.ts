@@ -23,6 +23,7 @@ export function closeRail() { useUIStore().panels.rail = false }
 // ── Detail Panel (AI 侧边栏与暂存搁架完全解耦) ──
 export function toggleDetailPanel() {
   const ui = useUIStore()
+  if (ui.activeView === 'ai') return
   if (!ui.panels.detail) pushNavState()
   ui.panels.detail = !ui.panels.detail
 }

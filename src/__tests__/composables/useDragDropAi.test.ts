@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { PAYLOAD_KEY } from '../../config/constants.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
-import { _onDragOver, _onDrop } from '../../composables/interaction/useDragDrop.js'
+import { _onDragStart, _onDragOver, _onDrop, _onDragEnd } from '../../composables/interaction/useDragDrop.js'
 import { getDragHintText } from '../../lib/dragHint.js'
 
 function createDragEvent(type: string, data: Record<string, string> = {}, target?: Element): DragEvent {
@@ -131,5 +131,84 @@ describe('useDragDropAi — 卡片与笔记拖拽投掷到 AI 对话框交互测
 
     ui.clearAiAttachedCards()
     expect(ui.aiAttachedCards).toEqual([])
+  })
+
+  it('7. 拖拽分类到 AI 工作台：支持从导航栏拖拽分类直接落入 #aiWorkspace', () => {
+    const ui = useUIStore()
+    const ds = useDataStore()
+
+    ds.categories.push({
+      id: 'cat_work',
+      name: '工作开发',
+      icon: 'folder',
+      color: '#4285f4',
+      order: 1,
+    })
+
+    const aiWorkspace = document.createElement('div')
+    aiWorkspace.id = 'aiWorkspace'
+    aiWorkspace.className = 'ai-workspace'
+    document.body.appendChild(aiWorkspace)
+
+    // 1. 悬停提示：AI 工作台不显示多余悬浮文字，保持极简呼吸感
+    const payload = { type: 'cat' as const, id: 'cat_work' }
+    expect(getDragHintText(aiWorkspace, payload)).toBe('')
+
+    // 2. 拖拽落入
+    const dropEvent = createDragEvent('drop', { [PAYLOAD_KEY]: JSON.stringify(payload) }, aiWorkspace)
+    _onDrop(dropEvent)
+
+    expect(ui.aiAttachedCards).toEqual([{ type: 'cat', id: 'cat_work' }])
+  })
+
+  it('8. 从暂存架拖拽卡片到 AI 工作台：支持将暂存区卡片拖入 #aiWorkspace，且保留在暂存区', () => {
+    const ui = useUIStore()
+    const ds = useDataStore()
+
+    ds.bookmarks.push({
+      id: 'bm_staged_1',
+      title: '暂存工具书签',
+      url: 'https://example.com/tool',
+      order: 1,
+    } as any)
+
+    ui.detailCards = ['bm_staged_1'] // 处于暂存架中
+
+    const aiWorkspace = document.createElement('div')
+    aiWorkspace.id = 'aiWorkspace'
+    aiWorkspace.className = 'ai-workspace'
+    document.body.appendChild(aiWorkspace)
+
+    // 来自暂存架的卡片带有 srcGid: '__detail__'
+    const payload = { type: 'bm' as const, id: 'bm_staged_1', srcGid: '__detail__' }
+    const dropEvent = createDragEvent('drop', { [PAYLOAD_KEY]: JSON.stringify(payload) }, aiWorkspace)
+    _onDrop(dropEvent)
+
+    // 成功关联至 AI
+    expect(ui.aiAttachedCards).toEqual([{ type: 'bm', id: 'bm_staged_1' }])
+    // 依然保留在暂存架中，未被意外移除
+    expect(ui.detailCards).toContain('bm_staged_1')
+  })
+
+  it('9. 拖拽分类不应激活暂存架：ui.isDraggingCard 保持 false，暂存侧边栏不自动弹出', () => {
+    const ui = useUIStore()
+    ui.isDraggingCard = false
+    document.body.classList.remove('is-dragging-card')
+
+    const rItem = document.createElement('button')
+    rItem.className = 'rail-item'
+    rItem.setAttribute('draggable', 'true')
+    rItem.dataset.catId = 'cat_work'
+    document.body.appendChild(rItem)
+
+    const dragStartEvent = createDragEvent('dragstart', {}, rItem)
+    _onDragStart(dragStartEvent)
+
+    // 分类不是卡片，isDraggingCard 必须保持 false，body 不带 is-dragging-card 类
+    expect(ui.isDraggingCard).toBe(false)
+    expect(document.body.classList.contains('is-dragging-card')).toBe(false)
+
+    rItem.remove()
+    _onDragEnd()
   })
 })

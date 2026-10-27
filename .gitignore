@@ -3,6 +3,7 @@ dist/
 dist_validate/
 # 临时构建验证目录（npx vite build --outDir dist_xxx 用）
 dist_v5/
+dist_check*/
 .tmp_trash/
 coverage/
 .claude/

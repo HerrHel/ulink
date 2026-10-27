@@ -149,6 +149,58 @@ export function fixUrl(u: string): string {
   if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:/i.test(trimmed)) return ''
   return 'https://' + trimmed
 }
+/**
+ * 判定输入字符串是否已构成一个可进行智能解析的完整网址候选。
+ * 避免用户在打字输入阶段（如刚刚输入 "4399" 或 "bili"）时被误判：
+ * 1. 绝对排除纯数字（如 "4399" 绝不能被当成 DWORD IPv4 32位整数 0.0.17.47 解析）；
+ * 2. 未带协议时，必须包含点号 "." 且顶级域至少 2 个字符（如 "4399.com"、"bilibili.cn"），或是 "localhost"；
+ * 3. 完整的 IPv4 地址必须是标准的四段以点分隔的有效数字（如 192.168.1.1）；
+ * 4. 带协议时，hostname 不能为纯数字，且需包含点号或为 localhost。
+ */
+export function isCompleteUrlCandidate(raw: string): boolean {
+  if (!raw) return false
+  const trimmed = raw.trim().toLowerCase()
+  if (trimmed.length < 3) return false
+
+  // 1. 纯数字（如 4399、8080）绝对不作为有效域名触发解析
+  if (/^\d+$/.test(trimmed)) return false
+
+  // 2. 带协议
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const u = new URL(trimmed)
+      const h = u.hostname
+      if (!h || /^\d+$/.test(h)) return false
+      if (h === 'localhost') return true
+      if (!h.includes('.')) return false
+      if (h.endsWith('.')) return false
+      const parts = h.split('.')
+      const tld = parts[parts.length - 1]
+      if (parts.length === 4 && parts.every(p => /^\d+$/.test(p) && Number(p) <= 255)) return true
+      return /^[a-z]{2,}$/i.test(tld)
+    } catch {
+      return false
+    }
+  }
+
+  // 3. 不带协议（如 4399.com、localhost:3000）
+  if (trimmed === 'localhost' || trimmed.startsWith('localhost:')) return true
+  if (!trimmed.includes('.')) return false
+  if (trimmed.endsWith('.')) return false
+
+  const hostPart = trimmed.split('/')[0].split(':')[0]
+  const parts = hostPart.split('.')
+  if (parts.length < 2) return false
+  if (parts.some(p => !p)) return false
+
+  // 标准 IPv4 四段地址
+  if (parts.length === 4 && parts.every(p => /^\d+$/.test(p) && Number(p) <= 255)) {
+    return true
+  }
+
+  const tld = parts[parts.length - 1]
+  return /^[a-z]{2,}$/i.test(tld)
+}
 
 // ── HTML / 文本 ──
 

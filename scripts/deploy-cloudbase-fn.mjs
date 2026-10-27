@@ -51,7 +51,10 @@ if (!envId) throw new Error('缺少 VITE_CLOUDBASE_ENV_ID')
 
 /** 在 tcb 工作目录跑命令；cwd 决定它在哪找 scf_bootstrap / cloudbaserc.json */
 function tcb(cwd, argv) {
-  return execFileSync('bash', [TCB_BIN, ...argv, '-e', envId], {
+  const directJs = resolve(homedir(), '.workbuddy/binaries/node/cli-connector-packages/node_modules/@cloudbase/cli/bin/tcb')
+  const executable = existsSync(directJs) ? process.execPath : 'bash'
+  const args = existsSync(directJs) ? [directJs, ...argv, '-e', envId] : [TCB_BIN, ...argv, '-e', envId]
+  return execFileSync(executable, args, {
     cwd,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
@@ -64,7 +67,7 @@ function tcb(cwd, argv) {
 
 // ── 0) 先生成由 TS 真源派生的 JS（ssrf-guard 等），保证与真源同步 ──
 try {
-  execFileSync('bash', ['-c', `"${process.execPath}" "${resolve('scripts/build-fn-assets.mjs')}"`], {
+  execFileSync(process.execPath, [resolve('scripts/build-fn-assets.mjs')], {
     encoding: 'utf8',
   })
   console.log('已生成派生资产（build-fn-assets.mjs）')
@@ -78,7 +81,7 @@ if (!envOnly) {
   try {
     // --force：函数已存在时覆盖更新（否则 tcb 直接拒绝）
     console.log(
-      tcb(FN_DIR, ['fn', 'deploy', fnName, '--force', '--httpFn', '--path', httpPath, '--runtime', 'Nodejs20.19', '--yes']),
+      tcb(FN_DIR, ['fn', 'deploy', fnName, '--force', '--httpFn', '--path', httpPath, '--runtime', 'Nodejs20.19', '--yes', '--deployMode', 'zip']),
     )
   } catch (e) {
     const out = String((e && e.stdout) || '') + String((e && e.stderr) || '')

@@ -10,6 +10,7 @@ import { domain } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
 import type { ConceptCluster } from './knowledge.js'
 import { CONCEPT_ONTOLOGY } from './knowledge.js'
+import { evolvingGraph } from './evolvingGraph.js'
 
 function _plain(v?: string): string {
   if (!v) return ''
@@ -35,7 +36,7 @@ export interface SemanticMatch {
 function cleanNaturalLanguageQuery(query: string): string {
   return query
     .toLowerCase()
-    .replace(/(我想找|请问有没有|有没有|有没有什么|找找|找一下|帮我找|相关的|推荐个|有哪些|哪个|做|看|关于|相关的工具|的工具|的网站|平台)/g, ' ')
+    .replace(/(我想找|请问有没有|有没有|有没有什么|找找|找一下|帮我找|求一个|推荐个|推荐|有哪些|哪个|做|看|关于|相关的工具|的工具|的网站|平台|适合小白的|好用的)/g, ' ')
     .trim()
 }
 
@@ -85,9 +86,13 @@ export function searchSemanticBookmarks(
     }
   }
 
+  // 2. 从端侧自进化图谱获取关联邻居实体（针对个性化/冷门自建领域）
+  const queryTokens = [query, cleaned].filter(Boolean).flatMap(q => q.split(/[\s\-_\/|·]+/).filter(w => w.length >= 2))
+  const graphNeighbors = evolvingGraph ? evolvingGraph.getRelatedNeighbors(queryTokens, 6) : []
+
   const results: SemanticMatch[] = []
 
-  // 2. 匹配书签
+  // 3. 匹配书签
   for (const b of activeBms) {
     const rawTitle = _plain(b.title)
     const rawNotes = _plain(b.notes)
@@ -133,7 +138,22 @@ export function searchSemanticBookmarks(
       }
     }
 
-    // B. 直搜文本相似度加成
+    // B. 自进化图谱拓扑关联提权 (Evolving Graph Boost)
+    if (graphNeighbors.length > 0) {
+      for (const neighbor of graphNeighbors) {
+        const nName = neighbor.name.toLowerCase()
+        if (nName.length >= 2 && (bmTitle.includes(nName) || bmNotes.includes(nName) || bmHost.includes(nName))) {
+          const graphBoost = Math.min(65, 40 + neighbor.weight * 5)
+          if (graphBoost > bestScore) {
+            bestScore = graphBoost
+            bestConcept = neighbor.name
+            bestReason = `知识图谱 · 智能关联「${neighbor.name}」`
+          }
+        }
+      }
+    }
+
+    // C. 直搜文本相似度加成
     const titleScore = textMatchScore(bmTitle, query) || (cleaned ? textMatchScore(bmTitle, cleaned) : 0)
     const notesScore = textMatchScore(bmNotes, query) || (cleaned ? textMatchScore(bmNotes, cleaned) : 0)
     const hostScore = textMatchScore(bmHost, query)
@@ -183,6 +203,20 @@ export function searchSemanticBookmarks(
         gConcept = cluster.name
         gReason = `笔记主题包含「${cluster.name}」`
         break
+      }
+    }
+
+    if (graphNeighbors.length > 0) {
+      for (const neighbor of graphNeighbors) {
+        const nName = neighbor.name.toLowerCase()
+        if (nName.length >= 2 && (gName.includes(nName) || gNotes.includes(nName))) {
+          const boost = Math.min(65, 45 + neighbor.weight * 5)
+          if (boost > gScore) {
+            gScore = boost
+            gConcept = neighbor.name
+            gReason = `知识图谱 · 笔记关联「${neighbor.name}」`
+          }
+        }
       }
     }
 

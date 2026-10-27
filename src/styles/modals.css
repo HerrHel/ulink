@@ -153,6 +153,40 @@
 .ai-suggest-text{flex:1;color:var(--text)}
 .ai-suggest-bar .btn-xs{padding:3px 10px;font-size:0.72rem}
 
+.bm-url-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.bm-url-header .form-label{margin-bottom:0}
+.btn-ai-fetch{
+  display:inline-flex;align-items:center;gap:4px;
+  background:var(--surface-alt);border:1px solid var(--accent-glow);
+  color:var(--accent);font-size:0.75rem;font-weight:500;
+  padding:2px 8px;border-radius:12px;cursor:pointer;
+  transition:all 0.2s ease;
+}
+.btn-ai-fetch:hover:not(:disabled){
+  background:var(--accent-light);transform:scale(1.02);
+}
+.btn-ai-fetch.loading{
+  opacity:0.7;cursor:wait;animation:ai-pulse 1.2s ease-in-out infinite;
+}
+.btn-ai-fetch.success{
+  border-color:var(--success, #10b981);color:var(--success, #10b981);
+}
+.ai-sparkle-icon{display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;line-height:1}
+.ai-sparkle-icon svg{width:12px;height:12px;display:block}
+
+.candidate-users-row{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px;
+  margin-top:6px;font-size:0.75rem;
+}
+.cu-hint{color:var(--text-muted)}
+.cu-chip{
+  background:var(--surface-alt);border:1px solid var(--border);
+  color:var(--text);font-size:0.72rem;padding:1px 7px;
+  border-radius:10px;cursor:pointer;transition:all 0.15s ease;
+}
+.cu-chip:hover{border-color:var(--accent);color:var(--accent)}
+.cu-chip.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
+
 /* ── CategoryModal ── */
 .cat-sort-list{max-height:50vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-gutter:stable}
 .cat-sort-list::-webkit-scrollbar{width:4px}

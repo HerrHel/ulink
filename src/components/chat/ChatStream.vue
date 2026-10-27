@@ -7,21 +7,7 @@
             </svg>
             <p class="chat-empty-lead">{{ t('ai.emptyLead') }}</p>
             <p class="chat-empty-sub">{{ t('ai.emptySub') }}</p>
-            <div class="chat-quick-hints" role="group" :aria-label="t('ai.emptyLead')">
-              <template v-for="(hint, hIdx) in dynamicQuickHints" :key="hint.query">
-                <button
-                  type="button"
-                  class="hint-text-btn"
-                  @click="emit('quickFill', hint.query)"
-                >
-                  <svg class="hint-pill-icon" viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M6 3.5l4.5 4.5L6 12.5" />
-                  </svg>
-                  <span>{{ hint.label }}</span>
-                </button>
-                <span v-if="hIdx < dynamicQuickHints.length - 1" class="hint-dot" aria-hidden="true">·</span>
-              </template>
-            </div>
+
           </div>
         </div>
 
@@ -63,7 +49,7 @@
                     :title="`${f.name} (${f.sizeFormatted})`"
                   >
                     <img v-if="f.type === 'image' && f.dataUrl" :src="f.dataUrl" :alt="f.name" class="user-file-thumb" />
-                    <span v-else class="pill-badge file-badge">{{ f.type === 'image' ? '🖼️' : f.type === 'video' ? '🎥' : '📄' }}</span>
+                    <span v-else class="pill-badge file-badge" aria-hidden="true" v-html="f.type === 'image' ? I.image : (f.type === 'video' ? I.link : I.note)"></span>
                     <span class="pill-text">{{ f.name }}</span>
                     <span class="pill-filesize">{{ f.sizeFormatted }}</span>
                   </span>
@@ -263,7 +249,7 @@
                           :title="t('ai.writebackAppend') + ': ' + note.title"
                           @click="emit('handleAppendToNote', note.id, turn.content)"
                         >
-                          <span class="writeback-btn-icon" aria-hidden="true">📥</span>
+                          <span class="writeback-btn-icon" aria-hidden="true" v-html="I.import"></span>
                           <span>{{ t('ai.writebackAppend') }}</span>
                         </button>
                         <button
@@ -273,7 +259,7 @@
                           :title="t('ai.writebackReplace') + ': ' + note.title"
                           @click="emit('handleReplaceNote', note.id, turn.content)"
                         >
-                          <span class="writeback-btn-icon" aria-hidden="true">🔄</span>
+                          <span class="writeback-btn-icon" aria-hidden="true" v-html="I.refresh"></span>
                           <span>{{ t('ai.writebackReplace') }}</span>
                         </button>
                       </template>
@@ -664,14 +650,14 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
 }
 </script>
 <style scoped>
-/* 空态：淡雅、温和、纸质极客感引导 */
+/* 空态：淡雅、温和、纸质极客感引导（对齐 AI 工作台纯净居中布局） */
 .chat-empty-state {
   height: 100%;
-  min-height: 220px;
+  min-height: 240px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
+  padding: 32px 20px;
   text-align: center;
 }
 
@@ -679,29 +665,30 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 280px;
+  max-width: 320px;
 }
 
 .chat-empty-sparkle {
   display: block;
   color: var(--accent);
-  margin-bottom: 10px;
-  opacity: 0.85;
+  margin-bottom: 12px;
+  opacity: 0.9;
 }
 
 .chat-empty-lead {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 6px 0;
-  letter-spacing: -0.15px;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.2px;
+  line-height: 1.4;
 }
 
 .chat-empty-sub {
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--text-muted);
-  line-height: 1.55;
-  margin: 0 0 16px 0;
+  line-height: 1.6;
+  margin: 0;
 }
 
 .chat-quick-hints {

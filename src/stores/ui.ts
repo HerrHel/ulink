@@ -38,9 +38,9 @@ export type Space = 'main' | 'vault'
 /** E2EUnlockModal 初始模式透传槽（非 modal flag，仅用于打开时指定初始 mode） */
 export type E2EUnlockInitialMode = 'unlock' | 'reset' | 'changePw'
 
-/** 拖拽附加到 AI 对话框的卡片/笔记引用 */
+/** 拖拽附加到 AI 对话框的卡片/笔记/分类引用 */
 export interface AiAttachedCardRef {
-  type: 'bm' | 'group'
+  type: 'bm' | 'group' | 'cat'
   id: string
 }
 
@@ -112,8 +112,16 @@ export interface UIState {
   activeAttrs: string[]
   excludedAttrs: string[]
   detailCards: string[]
-  /** 本地端侧自然语言语义检索与智能预填服务开关（默认开启） */
+  /** 本地端侧自然语言语义检索服务开关（默认开启） */
   semanticSearchEnabled: boolean
+  /** AI 智能提取与信息补齐服务开关（默认开启） */
+  smartFillEnabled: boolean
+  /** 左侧分类栏顶部 AI 对话入口开关（默认开启，设置中可关闭） */
+  aiRailEnabled: boolean
+  /** 主区域当前视图：bookmarks 书签列表 / ai 沉浸式对话工作区 */
+  activeView: 'bookmarks' | 'ai'
+  /** 触发开启新对话的时间戳信号（非持久化） */
+  aiNewChatTrigger: number
   editingId: string | null
   /** 当前数据空间：main = 主页公共数据集；vault = 私密空间独立数据集 */
   curSpace: Space
@@ -181,6 +189,10 @@ export const useUIStore = defineStore('ui', {
       excludedAttrs: [],
       detailCards: [],
       semanticSearchEnabled: true,
+      smartFillEnabled: true,
+      aiRailEnabled: true,
+      activeView: 'bookmarks',
+      aiNewChatTrigger: 0,
       editingId: null,
       curSpace: 'main' as Space,
       e2eUnlockInitialMode: 'unlock' as E2EUnlockInitialMode,
@@ -246,9 +258,11 @@ export const useUIStore = defineStore('ui', {
   },
 
   actions: {
-    /** 附加卡片/笔记到 AI 对话上下文（如拖拽投掷），自动呼起侧边栏 */
-    attachCardToAi(type: 'bm' | 'group', id: string) {
-      this.panels.detail = true
+    /** 附加卡片/笔记/分类到 AI 对话上下文（如拖拽投掷），自动呼起侧边栏 */
+    attachCardToAi(type: 'bm' | 'group' | 'cat', id: string) {
+      if (this.activeView !== 'ai') {
+        this.panels.detail = true
+      }
       const rawId = id.replace(/^group:/, '')
       if (!this.aiAttachedCards.some((c) => c.type === type && c.id === rawId)) {
         this.aiAttachedCards.push({ type, id: rawId })
@@ -271,7 +285,9 @@ export const useUIStore = defineStore('ui', {
 
     /** 添加文件/图片/视频到 AI 对话框附件槽位，自动展开侧边栏 */
     attachFileToAi(file: AttachedMediaFile) {
-      this.panels.detail = true
+      if (this.activeView !== 'ai') {
+        this.panels.detail = true
+      }
       if (!this.aiAttachedFiles.some((f) => f.id === file.id)) {
         this.aiAttachedFiles.push(file)
       }
@@ -324,6 +340,33 @@ export const useUIStore = defineStore('ui', {
       if (query) {
         this.aiAssistantInitialQuery = query
       }
+    },
+
+    /** 切换为主工作区沉浸式 AI 对话视图 */
+    switchToAiView(triggerNewChat = false) {
+      this.activeView = 'ai'
+      this.focusedGroupId = null
+      this.panels.detail = false
+      if (triggerNewChat) {
+        this.aiNewChatTrigger = Date.now()
+      }
+      if (this.isMobile) this.panels.rail = false
+    },
+
+    /** 显式开启 AI 新对话 */
+    triggerAiNewChat() {
+      this.activeView = 'ai'
+      this.focusedGroupId = null
+      this.panels.detail = false
+      this.aiNewChatTrigger = Date.now()
+      if (this.isMobile) this.panels.rail = false
+    },
+
+    /** 切换回传统书签分类列表视图 */
+    switchToBookmarksView(catId?: string) {
+      this.activeView = 'bookmarks'
+      if (catId) this.curCat = catId
+      if (this.isMobile) this.panels.rail = false
     },
 
     /** 打开存量书签主动补齐对比窗 */
@@ -404,6 +447,8 @@ export const useUIStore = defineStore('ui', {
           excludedAttrs: this.excludedAttrs.slice(),
           detailCards: this.detailCards.slice(),
           semanticSearchEnabled: this.semanticSearchEnabled,
+          smartFillEnabled: this.smartFillEnabled,
+          aiRailEnabled: this.aiRailEnabled,
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
           sortDir: this.sortDir || 'desc',
@@ -438,6 +483,8 @@ export const useUIStore = defineStore('ui', {
           focusedGroupId?: string
           detailCards?: string[]
           semanticSearchEnabled?: boolean
+          smartFillEnabled?: boolean
+          aiRailEnabled?: boolean
           expandedIds?: string[]
           _preferredLayoutMode?: LayoutMode
           _mobileLayoutMode?: LayoutMode
@@ -495,6 +542,12 @@ export const useUIStore = defineStore('ui', {
         }
         if (typeof s.semanticSearchEnabled === 'boolean') {
           this.semanticSearchEnabled = s.semanticSearchEnabled
+        }
+        if (typeof s.smartFillEnabled === 'boolean') {
+          this.smartFillEnabled = s.smartFillEnabled
+        }
+        if (typeof s.aiRailEnabled === 'boolean') {
+          this.aiRailEnabled = s.aiRailEnabled
         }
         // expandedIds 同 detailCards 模式过滤已删/软删项，避免渲染已删卡片的展开态
         if (Array.isArray(s.expandedIds)) {

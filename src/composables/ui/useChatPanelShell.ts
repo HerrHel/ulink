@@ -22,7 +22,7 @@ export function useChatPanelShell() {
   const ui = useUIStore()
   const ds = useDataStore()
 
-  const isOpen = computed(() => ui.panels.detail)
+  const isOpen = computed(() => ui.panels.detail && ui.activeView !== 'ai')
 
   const isInputFocused = ref(false)
   const isSessionMenuOpen = ref(false)
@@ -52,7 +52,15 @@ export function useChatPanelShell() {
 
   const attachedCardsList = computed(() => {
     return ui.aiAttachedCards.map((ref) => {
-      if (ref.type === 'group') {
+      if (ref.type === 'cat') {
+        const c = ds.categoryMap[ref.id]
+        return {
+          type: 'cat' as const,
+          id: ref.id,
+          title: c?.name || t('nav.categories'),
+          url: '',
+        }
+      } else if (ref.type === 'group') {
         const g = ds.groupMap[ref.id]
         return {
           type: 'group' as const,

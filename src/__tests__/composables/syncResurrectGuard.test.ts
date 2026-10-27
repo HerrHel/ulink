@@ -421,4 +421,45 @@ describe('bumpBookmarkUseCount 静默计数（R-RESURRECT 修复6）', () => {
     expect(ds.bookmarkMap['bm-del-uc']?.updatedAt).toBe(tombUpdatedAt)
     expect(ds._dirtyIds.size).toBe(0)
   })
+  it('子书签点击级联累加父级书签计数（且不标脏、不刷 updatedAt）', () => {
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'parent-bm', useCount: 10, updatedAt: 1000 }) as any)
+    ds.addBookmark(makeBm({ id: 'child-bm', parentId: 'parent-bm', useCount: 2, updatedAt: 2000 }) as any)
+    ds._dirtyIds.clear()
+    ds._changedFields.clear()
+
+    ds.bumpBookmarkUseCount('child-bm')
+
+    const child = ds.bookmarkMap['child-bm']
+    const parent = ds.bookmarkMap['parent-bm']
+    expect(child?.useCount).toBe(3)
+    expect(parent?.useCount).toBe(11)
+    expect(child?.updatedAt).toBe(2000)
+    expect(parent?.updatedAt).toBe(1000)
+    expect(ds._dirtyIds.has('child-bm')).toBe(false)
+    expect(ds._dirtyIds.has('parent-bm')).toBe(false)
+  })
+
+  it('父级软删时子书签依然累加自身，但不累加已删除的父级', () => {
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'parent-del', useCount: 5 }) as any)
+    ds.addBookmark(makeBm({ id: 'child-del', parentId: 'parent-del', useCount: 1 }) as any)
+    ds.deleteBookmark('parent-del')
+    ds._dirtyIds.clear()
+
+    ds.bumpBookmarkUseCount('child-del')
+
+    expect(ds.bookmarkMap['child-del']?.useCount).toBe(2)
+    expect(ds.bookmarkMap['parent-del']?.useCount).toBe(5)
+  })
+
+  it('异常循环引用 parentId 时防环终止，不会死循环', () => {
+    const ds = useDataStore()
+    ds.addBookmark(makeBm({ id: 'cycle-a', parentId: 'cycle-b', useCount: 1 }) as any)
+    ds.addBookmark(makeBm({ id: 'cycle-b', parentId: 'cycle-a', useCount: 2 }) as any)
+
+    expect(() => ds.bumpBookmarkUseCount('cycle-a')).not.toThrow()
+    expect(ds.bookmarkMap['cycle-a']?.useCount).toBe(2)
+    expect(ds.bookmarkMap['cycle-b']?.useCount).toBe(3)
+  })
 })

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useDragDrop — 拖放交互
  * 管理卡片拖拽排序、拖入组、拖到详情面板等交互。
  * 从 drag.js 完整迁入。
@@ -112,10 +112,10 @@ function _findGroup(id: string): SiblingGroup | undefined { return useDataStore(
 function _initDrag(e: DragEvent, el: Element, payload: DragPayload, addDragImage = true) {
   _currentDragPayload = payload
   e.dataTransfer!.setData(PAYLOAD_KEY, JSON.stringify(payload))
-  e.dataTransfer!.effectAllowed = 'move'
+  e.dataTransfer!.effectAllowed = 'all'
   if (addDragImage) setDragImage(e)
   el.classList.add('dragging')
-  if (payload.type !== 'detail' && payload.srcGid !== DRAG_SRC_DETAIL) {
+  if (payload.type !== 'detail' && payload.srcGid !== DRAG_SRC_DETAIL && payload.type !== 'cat') {
     document.body.classList.add('is-dragging-card')
     try { useUIStore().isDraggingCard = true } catch (_) { /* store 未就绪 */ }
   }
@@ -187,13 +187,24 @@ function _updateDragHint(e: DragEvent, target: Element | null) {
 }
 
 function _onDragOver(e: DragEvent) {
-  let target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #btnToggleDetail, #cardGrid, #stagingDock, #edgeStagingSidebar, .edge-staging-drop-zone');
+  let target = (e.target as HTMLElement).closest('.card, .group-body, .group-card-head, .detail-card-wrap, .rail-item, #detailPanel, #btnToggleDetail, #cardGrid, #stagingDock, #edgeStagingSidebar, .edge-staging-drop-zone, #aiWorkspace, .ai-workspace, .ai-capsule-input-container');
   if (!target && _currentDragPayload?.srcGid === DRAG_SRC_DETAIL) {
-    target = (e.target as HTMLElement).closest('#panelContent, .panel-main-inner, .panel-main');
+    target = (e.target as HTMLElement).closest('#panelContent, .panel-main-inner, .panel-main, #aiWorkspace, .ai-workspace');
   }
   _updateDragHint(e, target)
-  // 分类拖拽：仅 rail-item 是有效落点，其余目标不高亮、不 preventDefault，避免错误视觉反馈
+  // 分类拖拽：可落入 AI 工作台或 rail-item（重排）
   if (_currentDragPayload?.type === 'cat') {
+    const aiTarget = (target as HTMLElement)?.closest?.('#detailPanel, #btnToggleDetail, #aiWorkspace, .ai-workspace, .ai-capsule-input-container');
+    if (aiTarget) {
+      e.preventDefault();
+      if (aiTarget !== _dragOverEl) {
+        if (_dragOverEl) _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active');
+        _dragOverEl = aiTarget;
+        aiTarget.classList.add('chat-drop-active');
+      }
+      _hideDragCursor();
+      return;
+    }
     if (target && target.classList.contains('rail-item')) {
       // Bug C：拖到自身 rail-item 不高亮（drop 端会 no-op）
       const selfCat = (target as HTMLElement).dataset.catId
@@ -238,7 +249,7 @@ function _onDragOver(e: DragEvent) {
     _dragOverEl = target;
     if (target) {
       e.preventDefault();
-      const cls = target.closest('#detailPanel') ? 'chat-drop-active' : target.classList.contains('detail-card-wrap') ? 'detail-drag-over' : target.classList.contains('rail-item') ? 'rail-drag-over' : 'drag-over';
+      const cls = target.closest('#detailPanel, #aiWorkspace, .ai-workspace, .ai-capsule-input-container') ? 'chat-drop-active' : target.classList.contains('detail-card-wrap') ? 'detail-drag-over' : target.classList.contains('rail-item') ? 'rail-drag-over' : 'drag-over';
       target.classList.add(cls);
     }
   } else if (target) {
@@ -258,14 +269,16 @@ function _onDragOver(e: DragEvent) {
 function _onDrop(e: DragEvent) {
   // 复用 dragover 期间缓存的目标元素，避免重复 closest() 落点计算（P1）
   const target = _dragOverEl || (e.target as HTMLElement);
-  if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over'); _dragOverEl = null; }
+  if (_dragOverEl) { _dragOverEl.classList.remove('drag-over', 'detail-drag-over', 'rail-drag-over', 'chat-drop-active'); _dragOverEl = null; }
   _hideDragCursor();
   _hideDragHint();
   const p = dragPayload(e);
   if (!p) return;
 
-  // 0. 落入 AI 助手对话框或顶栏 AI 按钮（由 AI 读取此卡片/笔记）
-  const aiTarget = (target as HTMLElement)?.closest?.('#detailPanel, #btnToggleDetail');
+  // 0. 落入 AI 助手对话框、顶栏 AI 按钮或沉浸式 AI 工作台（由 AI 读取此卡片/笔记/分类）
+  const aiTarget = (target as HTMLElement)?.closest?.(
+    '#aiWorkspace, .ai-workspace, .ai-capsule-input-container, #detailPanel, #btnToggleDetail'
+  );
   if (aiTarget) {
     handleAiChatDrop(e, p);
     return;
@@ -560,9 +573,11 @@ function handleAiChatDrop(e: DragEvent, p: DragPayload) {
   const ui = useUIStore();
   const ds = useDataStore();
 
-  let cardType: 'bm' | 'group' = 'bm';
+  let cardType: 'bm' | 'group' | 'cat' = 'bm';
   let rawId = p.id;
-  if (p.type === 'group' || rawId.startsWith('group:')) {
+  if (p.type === 'cat') {
+    cardType = 'cat';
+  } else if (p.type === 'group' || rawId.startsWith('group:')) {
     cardType = 'group';
     rawId = rawId.replace(/^group:/, '');
   }
@@ -570,12 +585,14 @@ function handleAiChatDrop(e: DragEvent, p: DragPayload) {
   ui.attachCardToAi(cardType, rawId);
 
   let title = '';
-  if (cardType === 'group') {
+  if (cardType === 'cat') {
+    title = ds.categoryMap[rawId]?.name || '';
+  } else if (cardType === 'group') {
     title = ds.groupMap[rawId]?.name || '';
   } else {
     title = ds.bookmarkMap[rawId]?.title || '';
   }
-  const label = title || (cardType === 'group' ? t('cards.note') : t('cards.bookmark'));
+  const label = title || (cardType === 'cat' ? t('nav.categories') : cardType === 'group' ? t('cards.note') : t('cards.bookmark'));
   toast(t('ai.cardAttached', { title: label }), true);
 }
 
@@ -612,7 +629,7 @@ function handleRailDrop(e: DragEvent, item: Element) {
   if (!_catDragId) return;
   const ds = useDataStore();
   const targetId = (item as HTMLElement).dataset.catId;
-  if (!targetId || _catDragId === targetId || targetId === CAT_ALL || targetId === CAT_UNCATEGORIZED) return;
+  if (!targetId || _catDragId === targetId || targetId === CAT_ALL || targetId === CAT_UNCATEGORIZED || _catDragId === CAT_ALL || _catDragId === CAT_UNCATEGORIZED) return;
   const next = ds.categories.slice();
   const srcIdx = next.findIndex(function (c) { return c.id === _catDragId; });
   const tgtIdx = next.findIndex(function (c) { return c.id === targetId; });

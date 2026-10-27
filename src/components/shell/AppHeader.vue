@@ -40,7 +40,7 @@
         <span class="panel-count">{{ panelCountText }}</span>
       </template>
     </div>
-    <div v-show="!ui.focusedGroupId && !shareMode" class="search-wrapper header-search">
+    <div v-show="!ui.focusedGroupId && !shareMode && ui.activeView !== 'ai'" class="search-wrapper header-search">
       <div class="search-box">
         <span aria-hidden="true" v-html="I.search"></span>
         <input type="text" class="search-input" :aria-label="t('shell.search')" id="searchInput" data-testid="lv-search-input" v-model="localQuery"
@@ -110,7 +110,7 @@
         <SettingsPanel />
         <SyncStatusPopover v-if="auth.isLoggedIn" />
       </span>
-      <button v-show="!shareMode" class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" :title="t('shell.detailPanel')" :aria-label="t('shell.detailPanel')">
+      <button v-show="!shareMode && ui.activeView !== 'ai'" class="btn btn-ghost btn-sm" id="btnToggleDetail" @click="$emit('toggle-detail')" :title="t('shell.detailPanel')" :aria-label="t('shell.detailPanel')">
         <span aria-hidden="true" v-html="I.panel" class="icon-sm"></span>
       </button>
       </template>
@@ -186,12 +186,18 @@ const displayName = computed(() =>
     : t('common.unnamed')
 )
 const panelTitle = computed(() => {
+  if (ui.activeView === 'ai') {
+    return t('nav.aiChat')
+  }
   if (shareMode.value?.kind === 'category' && share.category) {
     return share.category.name || t('shell.allBookmarks')
   }
   return (dataStore.categoryMap[ui.curCat] || {}).name || t('shell.allBookmarks')
 })
 const panelCountText = computed(() => {
+  if (ui.activeView === 'ai') {
+    return ''
+  }
   if (shareMode.value?.kind === 'category') {
     const bCount = share.bookmarks.length
     const gCount = share.groups.length

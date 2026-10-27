@@ -175,4 +175,62 @@ describe('semanticSearch — 本地自然语言意图与语义检索引擎', () 
     const results = searchSemanticBookmarks('找资源', [alipan], [])
     expect(results.some(r => r.id === 'bm-alipan')).toBe(true)
   })
+
+  // ── 全行业通用概念簇测试（金融、医疗、法律、学术、美食）──
+  it('通用行业：金融理财场景（输入“看大盘走势”召回雪球/东方财富）', () => {
+    const xueqiu = makeBm({
+      id: 'bm-xueqiu',
+      title: '雪球',
+      url: 'https://xueqiu.com',
+      notes: '聪明的投资者都在这里',
+    })
+    const results = searchSemanticBookmarks('看大盘走势', [xueqiu], [])
+    expect(results.length).toBeGreaterThan(0)
+    expect(results.some(r => r.id === 'bm-xueqiu')).toBe(true)
+  })
+
+  it('通用行业：医疗健康场景（输入“就医挂号与药物说明书”召回丁香园）', () => {
+    const dxy = makeBm({
+      id: 'bm-dxy',
+      title: '丁香园',
+      url: 'https://www.dxy.cn',
+      notes: '专业医学讨论与临床指南',
+    })
+    const results = searchSemanticBookmarks('看病就医指南', [dxy], [])
+    expect(results.length).toBeGreaterThan(0)
+    expect(results.some(r => r.id === 'bm-dxy')).toBe(true)
+  })
+
+  it('通用行业：法律法条检索场景（输入“民法典法条案例”召回裁判文书网）', () => {
+    const court = makeBm({
+      id: 'bm-court',
+      title: '中国裁判文书网',
+      url: 'https://wenshu.court.gov.cn',
+    })
+    const results = searchSemanticBookmarks('法律法规检索', [court], [])
+    expect(results.length).toBeGreaterThan(0)
+    expect(results.some(r => r.id === 'bm-court')).toBe(true)
+  })
+
+  it('通用行业：学术文献场景（输入“找学术论文”召回知网）', () => {
+    const cnki = makeBm({
+      id: 'bm-cnki',
+      title: '中国知网',
+      url: 'https://www.cnki.net',
+    })
+    const results = searchSemanticBookmarks('找学术论文', [cnki], [])
+    expect(results.length).toBeGreaterThan(0)
+    expect(results.some(r => r.id === 'bm-cnki')).toBe(true)
+  })
+
+  it('通用行业：家常菜谱场景（输入“做菜的菜谱”召回下厨房）', () => {
+    const xiachufang = makeBm({
+      id: 'bm-xiachufang',
+      title: '下厨房',
+      url: 'https://www.xiachufang.com',
+    })
+    const results = searchSemanticBookmarks('做菜的菜谱', [xiachufang], [])
+    expect(results.length).toBeGreaterThan(0)
+    expect(results.some(r => r.id === 'bm-xiachufang')).toBe(true)
+  })
 })

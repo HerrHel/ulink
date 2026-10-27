@@ -42,6 +42,13 @@ describe('smartPrefill — 智能书签预填引擎', () => {
     expect(res.confidence).toBe('high')
   })
 
+  it('国民级核心大站预填：百度（baidu.com）0ms 秒级识别', () => {
+    const res = getSmartPrefill('https://baidu.com')
+    expect(res.title).toBe('百度')
+    expect(res.notes).toBe('')
+    expect(res.confidence).toBe('high')
+  })
+
   it('精选设计类工具预填：Excalidraw 匹配', () => {
     const res = getSmartPrefill('https://excalidraw.com')
     expect(res.title).toContain('Excalidraw')
@@ -144,11 +151,49 @@ describe('smartPrefill — 智能书签预填引擎', () => {
     expect(slugRes.title).toContain('How To Learn Modern Vue')
   })
 
-  it('冷门站点与兜底：精准品牌大写回退', () => {
+  it('中文路径与知乎微信等通用规则提炼', () => {
+    // 中文 URL 解码
+    const zhSlug = getSmartPrefill('https://myblog.com/posts/%E5%89%8D%E7%AB%AF%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E6%8C%87%E5%8D%97')
+    expect(zhSlug.title).toContain('前端性能优化指南')
+
+    // 知乎专栏
+    const zhihu = getSmartPrefill('https://zhuanlan.zhihu.com/p/999888')
+    expect(zhihu.title).toBe('知乎专栏深度文章')
+
+    // 微信公众号
+    const wx = getSmartPrefill('https://mp.weixin.qq.com/s/abcdef123')
+    expect(wx.title).toBe('微信公众平台文章')
+
+    // 下厨房
+    const xcf = getSmartPrefill('https://www.xiachufang.com/recipe/123456/')
+    expect(xcf.title).toBe('下厨房精选菜谱')
+  })
+
+  it('同域名多账号收集与高频优选：candidateUsernames 包含所有不重复账号', () => {
+    const multiUserBms: Bookmark[] = [
+      makeBm({ id: '1', title: 'A1', url: 'https://aws.amazon.com/console', username: 'work_admin' }),
+      makeBm({ id: '2', title: 'A2', url: 'https://aws.amazon.com/s3', username: 'work_admin' }),
+      makeBm({ id: '3', title: 'A3', url: 'https://aws.amazon.com/ec2', username: 'personal_dev' }),
+    ]
+    const res = getSmartPrefill('https://aws.amazon.com/rds', multiUserBms)
+    // 频次高的 work_admin 作为默认
+    expect(res.suggestedUsername).toBe('work_admin')
+    // candidateUsernames 包含二者
+    expect(res.candidateUsernames).toContain('work_admin')
+    expect(res.candidateUsernames).toContain('personal_dev')
+  })
+
+  it('冷门站点与通用兜底：算法推理标题与地道非空描述', () => {
     const res = getSmartPrefill('https://myawesomecoolsite.xyz/posts/abc')
-    expect(res.title).toBe('Myawesomecoolsite')
-    expect(res.notes).toBe('')
+    expect(res.title).toContain('专栏文章')
+    expect(res.notes).toContain('专栏文章')
     expect(res.confidence).toBe('medium')
+
+    // 纯根域名不输出机械公式化套话，留空待真实内容回填
+    const rootRes = getSmartPrefill('https://unknown-domain-test.net')
+    expect(rootRes.title).toContain('Unknown')
+    expect(rootRes.notes).toBe('')
+    expect(rootRes.confidence).toBe('medium')
   })
 
   it('非法输入或空 URL 安全回退', () => {
@@ -159,4 +204,45 @@ describe('smartPrefill — 智能书签预填引擎', () => {
     const res2 = getSmartPrefill('just-a-plain-string')
     expect(res2.title).toBeTruthy()
   })
+
+  it('数字域名与 IPv4 地址保护：4399.com 与 192.168.1.1 品牌精准提取', () => {
+    // 4399.com
+    const res4399 = getSmartPrefill('https://4399.com')
+    expect(res4399.title).toBe('4399小游戏')
+    expect(res4399.notes).toBe('')
+
+    // IPv4 保护：不将 192.168.1.1 的倒数第二段 1 误切片为品牌
+    const resIp = getSmartPrefill('http://192.168.1.1:8080/admin')
+    expect(resIp.title).toContain('192.168.1.1')
+    expect(resIp.title).not.toBe('1')
+  })
+
+  it('主流平台与未知站点非模板化丰富摘要：抖音、快手、少数派与 AI 词形识别', () => {
+    // 抖音 douyin.com
+    const douyinRes = getSmartPrefill('https://douyin.com')
+    expect(douyinRes.title).toBe('抖音')
+    expect(douyinRes.notes).toBe('')
+
+    // 快手 kuaishou.com
+    const ksRes = getSmartPrefill('https://kuaishou.com')
+    expect(ksRes.title).toBe('快手')
+    expect(ksRes.notes).toBe('')
+
+    // 少数派 sspai.com
+    const sspaiRes = getSmartPrefill('https://sspai.com')
+    expect(sspaiRes.title).toBe('少数派')
+    expect(sspaiRes.notes).toContain('数字生活方式')
+
+    // 未知 AI 域名词形意图自动推断
+    const aiRes = getSmartPrefill('https://fastgpt.in')
+    expect(aiRes.title).toBe('Fast Gpt')
+    expect(aiRes.notes).toBe('')
+  })
+  it('高校教育与学术平台预填：超星学习通（v8.chaoxing.com）精准识别与保底', () => {
+    const res = getSmartPrefill('https://v8.chaoxing.com/')
+    expect(res.title).toBe('超星学习通')
+    expect(res.notes).toContain('高校数字化课程教学')
+    expect(res.confidence).toBe('high')
+  })
+
 })

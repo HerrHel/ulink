@@ -17,15 +17,22 @@
       </div>
 
       <div class="modal-body ai-enrich-body">
-        <div v-if="loading" class="ai-enrich-loading">
+        <div v-if="!ui.smartFillEnabled" class="empty empty-compact">
+          <p>{{ t('ai.smartFillDisabledModal') }}</p>
+          <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 10px;" @click="enableSmartFill">
+            {{ t('ai.enableSmartFillNow') }}
+          </button>
+        </div>
+
+        <div v-else-if="loading" class="ai-enrich-loading">
           <div class="ai-spinner"></div>
           <span>{{ t('ai.enrichAnalyzing') }}</span>
         </div>
 
-        <div v-else-if="diff && targetBookmark" class="ai-diff-container">
+        <div v-else-if="diff && targetBookmark && hasAnyDiff" class="ai-diff-container">
           <div class="ai-diff-tip">
             <span aria-hidden="true" v-html="I.sparkle || I.plus"></span>
-            <span>{{ t('ai.enrichDiffTip') }}</span>
+            <span>{{ diff.reason || t('ai.enrichDiffTip') }}</span>
           </div>
 
           <!-- 1. 标题建议 -->
@@ -47,7 +54,7 @@
           </div>
 
           <!-- 2. 备注建议（补缺） -->
-          <div v-if="diff.suggestedNotes" class="ai-diff-card">
+          <div v-if="diff.suggestedNotes && diff.suggestedNotes !== diff.currentNotes" class="ai-diff-card">
             <label class="ai-diff-header">
               <input type="checkbox" v-model="applyNotes" class="ai-chk" />
               <span class="ai-field-label">{{ t('ai.fieldNotes') }}</span>
@@ -107,7 +114,7 @@
         <button class="btn btn-ghost btn-sm" @click="close">{{ t('common.cancel') }}</button>
         <button
           class="btn btn-primary btn-sm"
-          :disabled="loading || !hasSelection"
+          :disabled="loading || !hasSelection || !ui.smartFillEnabled"
           @click="onApplyDiff"
         >
           {{ t('ai.applyEnrich') }}
@@ -118,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
@@ -144,29 +151,52 @@ const targetBookmark = computed(() => {
   return ds.bookmarkMap[ui.aiEnrichTargetBmId] || null
 })
 
+async function fetchEnrich() {
+  if (!ui.modals.aiEnrich || !targetBookmark.value || !ui.smartFillEnabled) return
+  loading.value = true
+  diff.value = null
+  try {
+    const result = await enrichBookmarkMetadata(
+      targetBookmark.value,
+      ds.categories,
+      ds.customAttributes
+    )
+    diff.value = result
+    applyTitle.value = !!result.suggestedTitle
+    applyNotes.value = !!(result.suggestedNotes && result.suggestedNotes !== result.currentNotes)
+    applyCategory.value = !!result.suggestedCategoryId
+    applyAttributes.value = (result.suggestedAttrIds?.length || 0) > 0
+  } catch {
+    diff.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
+function enableSmartFill() {
+  ui.smartFillEnabled = true
+  ui.saveUIState()
+  toast(t('settings.smartFillOnToast'), true)
+  void fetchEnrich()
+}
+
+onMounted(() => {
+  if (ui.modals.aiEnrich && targetBookmark.value) {
+    void fetchEnrich()
+  }
+})
+
 watch(
-  () => ui.modals.aiEnrich,
-  async (open) => {
-    if (open && targetBookmark.value) {
-      loading.value = true
-      applyTitle.value = true
-      applyNotes.value = true
-      applyCategory.value = true
-      applyAttributes.value = true
-      try {
-        diff.value = await enrichBookmarkMetadata(
-          targetBookmark.value,
-          ds.categories,
-          ds.customAttributes
-        )
-      } finally {
-        loading.value = false
-      }
-    } else {
+  [() => ui.modals.aiEnrich, () => ui.aiEnrichTargetBmId],
+  ([open, bmId]) => {
+    if (open && bmId) {
+      void fetchEnrich()
+    } else if (!open) {
       diff.value = null
       loading.value = false
     }
-  }
+  },
+  { immediate: true }
 )
 
 const suggestedCategoryName = computed(() => {
@@ -181,11 +211,21 @@ const suggestedTagNames = computed(() => {
     .filter(Boolean) as string[]
 })
 
+const hasAnyDiff = computed(() => {
+  if (!diff.value) return false
+  return !!(
+    diff.value.suggestedTitle ||
+    (diff.value.suggestedNotes && diff.value.suggestedNotes !== diff.value.currentNotes) ||
+    diff.value.suggestedCategoryId ||
+    suggestedTagNames.value.length > 0
+  )
+})
+
 const hasSelection = computed(() => {
   if (!diff.value) return false
   return (
     (applyTitle.value && !!diff.value.suggestedTitle) ||
-    (applyNotes.value && !!diff.value.suggestedNotes) ||
+    (applyNotes.value && !!diff.value.suggestedNotes && diff.value.suggestedNotes !== diff.value.currentNotes) ||
     (applyCategory.value && !!diff.value.suggestedCategoryId) ||
     (applyAttributes.value && suggestedTagNames.value.length > 0)
   )
@@ -204,7 +244,7 @@ function onApplyDiff() {
   if (applyTitle.value && diff.value.suggestedTitle) {
     updates.title = diff.value.suggestedTitle
   }
-  if (applyNotes.value && diff.value.suggestedNotes) {
+  if (applyNotes.value && diff.value.suggestedNotes && diff.value.suggestedNotes !== diff.value.currentNotes) {
     updates.notes = diff.value.suggestedNotes
   }
   if (applyCategory.value && diff.value.suggestedCategoryId) {

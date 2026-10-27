@@ -44,9 +44,11 @@ describe('AI 服务商清单', () => {
 
   it('法律文档链接覆盖协议/隐私/退款三份', () => {
     const paths = LEGAL_DOC_LINKS.map((d) => d.path)
-    expect(paths).toContain('/legal/terms-of-service.md')
-    expect(paths).toContain('/legal/privacy-policy.md')
-    expect(paths).toContain('/legal/refund-policy.md')
+    // 指向渲染后的 HTML 页（裸 .md 用户不可读，见 renderLegalDoc.ts 说明）
+    expect(paths).toContain('/legal/terms-of-service.html')
+    expect(paths).toContain('/legal/privacy-policy.html')
+    expect(paths).toContain('/legal/refund-policy.html')
+    for (const p of paths) expect(p.endsWith('.md')).toBe(false)
   })
 })
 

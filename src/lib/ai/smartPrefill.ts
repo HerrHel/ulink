@@ -9,6 +9,8 @@ import type { Bookmark, Category, CustomAttribute } from '../../types.js'
 import { domain, fixUrl } from '../../utils.js'
 import { getLocale } from '../../i18n/index.js'
 import { CURATED_SITES, GENERIC_SUBDOMAINS, SECOND_LEVEL_DOMAINS, CATEGORY_SYNONYMS } from './knowledge.js'
+import { inferUrlSemantics } from './universalUrlInference.js'
+import { suggestAttributes } from '../ai-classify.js'
 
 export interface SmartPrefillResult {
   title: string
@@ -16,6 +18,7 @@ export interface SmartPrefillResult {
   categoryId?: string
   suggestedAttrIds: string[]
   suggestedUsername?: string
+  candidateUsernames?: string[]
   confidence: 'high' | 'medium' | 'fallback'
 }
 
@@ -26,6 +29,12 @@ export function extractBrandFromHostname(rawHost: string): { brand: string; sub:
   const host = rawHost.toLowerCase().trim().replace(/^www\./i, '')
   const parts = host.split('.')
   if (parts.length <= 1) {
+    return { brand: host, sub: '', rootDomain: host }
+  }
+
+  // IPv4 地址保护（如 192.168.1.1 或 0.0.17.47）：整体作为 host/brand，防止将倒数第二段数字切片为品牌
+  const isIpv4 = parts.length === 4 && parts.every(p => /^\d+$/.test(p) && Number(p) <= 255)
+  if (isIpv4) {
     return { brand: host, sub: '', rootDomain: host }
   }
 
@@ -46,18 +55,31 @@ export function extractBrandFromHostname(rawHost: string): { brand: string; sub:
   }
 
   // 过滤通用子域名
-  const meaningfulSub = subParts.find(s => !GENERIC_SUBDOMAINS.has(s)) || ''
+  const meaningfulSub = subParts.find(s => !GENERIC_SUBDOMAINS.has(s) && !/^v\d+$/i.test(s)) || ''
   return { brand: sld, sub: meaningfulSub, rootDomain }
 }
 
 /**
- * 解析文章或页面的语义 Slug
+ * 解析文章或页面的语义 Slug（支持中文 URL 解码与英文连字符）
  */
 function parseArticleSlug(pathname: string): string | null {
-  const clean = pathname.replace(/\/+$/, '')
+  let decoded = pathname
+  try {
+    decoded = decodeURIComponent(pathname)
+  } catch {
+    decoded = pathname
+  }
+  const clean = decoded.replace(/\/+$/, '')
   const parts = clean.split('/').filter(Boolean)
   if (!parts.length) return null
   const lastPart = parts[parts.length - 1]
+
+  // A. 中文语义 Slug 提炼（包含汉字且长度在 2~40 字符之间）
+  if (/[\u4e00-\u9fa5]/.test(lastPart) && lastPart.length >= 2 && lastPart.length <= 50) {
+    return lastPart.replace(/[-_]+/g, ' ').trim()
+  }
+
+  // B. 英文连字符 Slug 提炼
   if (/^[a-zA-Z0-9_\-]+$/.test(lastPart) && (lastPart.includes('-') || lastPart.includes('_')) && lastPart.length > 5) {
     const words = lastPart.split(/[-_]+/).filter(w => !/^\d+$/.test(w))
     if (words.length >= 2) {
@@ -68,7 +90,7 @@ function parseArticleSlug(pathname: string): string | null {
 }
 
 /**
- * 结构化解析 URL 路径生成语义化标题与描述（支持中英文）
+ * 结构化解析 URL 路径生成语义化标题与描述（支持中英文，全行业通用规则）
  */
 function parsePathSemantics(urlObj: URL, isZh: boolean): { title?: string; notes?: string } {
   const host = urlObj.hostname.replace(/^www\./i, '').toLowerCase()
@@ -153,7 +175,39 @@ function parsePathSemantics(urlObj: URL, isZh: boolean): { title?: string; notes
     }
   }
 
-  // 6. 文章 Slug 提炼
+  // 6. 知乎专栏与问答
+  if (host === 'zhihu.com' || host === 'zhuanlan.zhihu.com') {
+    if (path.startsWith('/p/')) {
+      return {
+        title: isZh ? '知乎专栏深度文章' : 'Zhihu Article',
+        notes: isZh ? '知乎创作者发表的专业见解与深度长文。' : 'Article and insight on Zhihu.',
+      }
+    }
+    if (path.startsWith('/question/')) {
+      return {
+        title: isZh ? '知乎问答讨论' : 'Zhihu Question & Answer',
+        notes: isZh ? '知乎社区专业问答与多角度观点分享。' : 'Q&A discussion on Zhihu community.',
+      }
+    }
+  }
+
+  // 7. 微信公众号图文
+  if (host === 'mp.weixin.qq.com' && path.startsWith('/s')) {
+    return {
+      title: isZh ? '微信公众平台文章' : 'WeChat Official Article',
+      notes: isZh ? '来自微信公众号的专题发布文章。' : 'Article published on WeChat Official Account.',
+    }
+  }
+
+  // 8. 下厨房菜谱
+  if (host === 'xiachufang.com' && path.startsWith('/recipe/')) {
+    return {
+      title: isZh ? '下厨房精选菜谱' : 'Xiachufang Recipe',
+      notes: isZh ? '下厨房家常美食做菜步骤与烹饪配方。' : 'Home cooking recipe on Xiachufang.',
+    }
+  }
+
+  // 9. 文章 Slug 提炼（中英文通用）
   const articleTitle = parseArticleSlug(urlObj.pathname)
   if (articleTitle) {
     const { brand } = extractBrandFromHostname(host)
@@ -199,7 +253,7 @@ export function getSmartPrefill(
   const isZh = effectiveLang.toLowerCase().startsWith('zh')
 
   const fullHost = urlObj.hostname.replace(/^www\./i, '').toLowerCase()
-  const { brand, rootDomain } = extractBrandFromHostname(fullHost)
+  const { rootDomain } = extractBrandFromHostname(fullHost)
 
   let matchedTitle = ''
   let matchedNotes = ''
@@ -228,18 +282,28 @@ export function getSmartPrefill(
     matchedNotes = pathSemantics.notes
   }
 
-  // 3. 兜底标题生成（去除子域噪音，精准品牌大写）
+  // 3. 全通用算法语义推理（面向全网任意未知站点，100% 保证标题、地道备注与分类一致性）
+  const inferred = inferUrlSemantics(url, categories, customAttributes, isZh)
   if (!matchedTitle) {
-    const firstPart = fullHost.split('.')[0]
-    const chosen = GENERIC_SUBDOMAINS.has(firstPart) ? brand : firstPart
-    const formatted = chosen.charAt(0).toUpperCase() + chosen.slice(1)
-    matchedTitle = formatted
-    confidence = 'medium'
+    matchedTitle = inferred.title
+    confidence = inferred.isSearchEngine ? 'high' : 'medium'
+  }
+  if (!matchedNotes) {
+    matchedNotes = inferred.notes
+  }
+  if (!matchedCatKeyword) {
+    matchedCatKeyword = inferred.categoryKeyword
+  }
+  if (inferred.suggestedAttrIds.length > 0) {
+    for (const aid of inferred.suggestedAttrIds) {
+      if (!tagList.includes(aid)) tagList.push(aid)
+    }
   }
 
   // 4. 同源继承：从用户已有的同域历史书签中继承分类、常用账号与标签偏好
   let inheritedCatId: string | undefined = undefined
   let inheritedUsername: string | undefined = undefined
+  const candidateUsernames: string[] = []
   const activeExistingBms = existingBookmarks.filter(b => !b.deletedAt && b.url)
   const sameDomainBms = activeExistingBms.filter(b => {
     const bHost = domain(b.url).toLowerCase().replace(/^www\./i, '')
@@ -247,14 +311,19 @@ export function getSmartPrefill(
   })
 
   if (sameDomainBms.length > 0) {
-    // 统计同域名下最常用的已有分类
+    // 统计同域名下最常用的已有分类与账号
     const catFrequency = new Map<string, number>()
+    const usernameFrequency = new Map<string, number>()
     for (const b of sameDomainBms) {
       if (b.categoryId && b.categoryId !== 'uncategorized' && b.categoryId !== 'all') {
         catFrequency.set(b.categoryId, (catFrequency.get(b.categoryId) || 0) + 1)
       }
-      if (!inheritedUsername && b.username) {
-        inheritedUsername = b.username
+      if (b.username && b.username.trim()) {
+        const u = b.username.trim()
+        usernameFrequency.set(u, (usernameFrequency.get(u) || 0) + 1)
+        if (!candidateUsernames.includes(u)) {
+          candidateUsernames.push(u)
+        }
       }
       if (b.attributes) {
         for (const [aid, val] of Object.entries(b.attributes)) {
@@ -267,6 +336,15 @@ export function getSmartPrefill(
       if (cnt > maxCnt) {
         maxCnt = cnt
         inheritedCatId = cid
+      }
+    }
+
+    // 优选高频账号
+    let maxUserCnt = 0
+    for (const [uname, ucnt] of usernameFrequency.entries()) {
+      if (ucnt > maxUserCnt) {
+        maxUserCnt = ucnt
+        inheritedUsername = uname
       }
     }
   }
@@ -298,6 +376,11 @@ export function getSmartPrefill(
         }
       }
     }
+
+    // C. 尝试通用算法推导的分类
+    if (!finalCatId && inferred.suggestedCategoryId) {
+      finalCatId = inferred.suggestedCategoryId
+    }
   }
 
   // 6. 属性标签匹配（严格从用户已有的属性中预选）
@@ -314,12 +397,21 @@ export function getSmartPrefill(
     }
   }
 
+  // 融合通用语义规则推断的属性
+  const ruleAttrs = suggestAttributes(url, `${matchedTitle} ${matchedNotes}`, activeAttrs)
+  for (const aid of ruleAttrs) {
+    if (!suggestedAttrIds.includes(aid)) {
+      suggestedAttrIds.push(aid)
+    }
+  }
+
   return {
     title: matchedTitle,
     notes: matchedNotes,
     categoryId: finalCatId,
     suggestedAttrIds,
     suggestedUsername: inheritedUsername,
+    candidateUsernames,
     confidence,
   }
 }

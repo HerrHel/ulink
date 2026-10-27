@@ -99,6 +99,8 @@ export function getLocale(): Locale {
   return locale.value
 }
 
+export const isZh = computed(() => locale.value === 'zh-CN')
+
 /** 组件内用法：const { t, tN, locale, setLocale } = useI18n()（t 在模板渲染期读取 ref，语言切换会触发重渲染）。 */
 export function useI18n() {
   return {
