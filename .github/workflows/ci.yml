@@ -114,8 +114,14 @@ jobs:
             eyJ*) : ;;
             *) echo "::error::API Key 前缀异常，应以 eyJ 开头（JWT）；请重新完整复制"; exit 1 ;;
           esac
-          if [ "${#CLOUDBASE_APIKEY}" -lt 800 ]; then
-            echo "::error::API Key 长度不足（${#CLOUDBASE_APIKEY} < 800），复制不完整"; exit 1
+          # 常见污染：带上了变量名、引号、换行/空白，或复制了整行输出
+          case "$CLOUDBASE_APIKEY" in
+            *CLOUDBASE_APIKEY*|*\ *|*\"*|*\'*)
+              echo "::error::API Key 含变量名/引号/空白，请只复制值本身"; exit 1 ;;
+          esac
+          if [ "${#CLOUDBASE_APIKEY}" -ne 908 ]; then
+            echo "::error::API Key 长度应为 908（JWT 全长），实际 ${#CLOUDBASE_APIKEY}；差值 ${#CLOUDBASE_APIKEY}-908，请重新完整复制"
+            exit 1
           fi
 
           # --cloudbase-api-key 支持非交互认证，无需设备码
