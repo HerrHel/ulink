@@ -6,7 +6,25 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import pkg from './package.json';
-import { marked } from 'marked';
+/**
+ * marked 延迟加载。
+ *
+ * **必须动态 import**：CI 上 Vite 8 用 rolldown 打包 vite.config.ts，
+ * 对 npm 包的静态 import 也可能解析失败（`[UNRESOLVED_IMPORT] Could not resolve 'marked'`
+ * → 被标为 external → 运行时 `ERR_MODULE_NOT_FOUND` → e2e 的 webServer 起不来 →
+ * deploy job 被 skipped）。动态 import 不参与 config 的静态打包，由 Node 在运行时解析。
+ */
+type MarkedLike = { parse: (src: string, opts?: Record<string, unknown>) => string | Promise<string> }
+let _markedLib: MarkedLike | null = null
+async function ensureMarked(): Promise<void> {
+  if (_markedLib) return
+  const mod = (await import('marked')) as unknown as { marked: MarkedLike }
+  _markedLib = mod.marked
+}
+function md(): MarkedLike {
+  if (!_markedLib) throw new Error('marked 未初始化：调用渲染前需先 await ensureMarked()')
+  return _markedLib
+}
 
 /** 以本配置文件为基准解析项目内路径（ESM 无 __dirname） */
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
@@ -430,7 +448,7 @@ function parseLegalDoc(markdown: string, slug: string): ParsedLegalDoc {
 
   // breaks: 法律文档里「运营主体／信用代码／邮箱」等多行信息靠单换行分行，
   // 默认（breaks:false）会被合并成一整段挤在一行。
-  const html = marked.parse(escapeRawHtml(autoLinkEmails(bodyMd)).trim(), { async: false, gfm: true, breaks: true }) as string
+  const html = md().parse(escapeRawHtml(autoLinkEmails(bodyMd)).trim(), { async: false, gfm: true, breaks: true }) as string
   const { html: anchored, toc } = buildTocAndAnchors(html)
   const bodyHtml = enhanceHtml(anchored)
 
@@ -892,13 +910,16 @@ function legalDocsPlugin(): Plugin {
 
   return {
     name: 'ulink-legal-docs',
-    configureServer(server) {
+    async configureServer(server) {
+      await ensureMarked();
       server.middlewares.use(middleware as never);
     },
-    configurePreviewServer(server) {
+    async configurePreviewServer(server) {
+      await ensureMarked();
       server.middlewares.use(middleware as never);
     },
-    generateBundle() {
+    async generateBundle() {
+      await ensureMarked();
       const docs = parseAll();
       for (const doc of docs) {
         const html = renderLegalDocHtml(doc);

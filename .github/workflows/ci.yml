@@ -40,6 +40,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      # 诊断：config 加载失败时先排查依赖是否真装上（vite.config 依赖 marked）
+      - name: Verify build deps present
+        run: node -e "console.log('marked', require('marked/package.json').version)"
       # C1-002 / F2-002：Playwright 进入 PR 门禁
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -79,6 +82,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - name: Verify build deps present
+        run: node -e "console.log('marked', require('marked/package.json').version)"
       # 生产构建自动加载仓库内的 .env.production（含 VITE_BACKEND=cloudbase 等）
       - name: Build
         run: npm run build
