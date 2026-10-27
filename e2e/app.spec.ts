@@ -48,10 +48,14 @@ test.describe('LinkVault 核心功能', () => {
     await page.getByTestId('lv-btn-settings').click()
     const settingsPanel = page.getByTestId('lv-settings-drawer')
     await expect(settingsPanel).toBeVisible({ timeout: 5000 })
-    // 版本信息（vite define 构建时注入）：设置面板应显示非空版本号，供测试确认线上为最新构建
+    // 设置面板已改为左侧导航分栏，各区块默认隐藏 —— 断言前必须切到对应 tab。
+    // 版本信息（vite define 构建时注入）：应显示非空版本号，供测试确认线上为最新构建
+    await page.getByTestId('settings-tab-about').click()
     const versionEl = page.getByTestId('lv-app-version')
-    await expect(versionEl).toBeVisible()
+    await expect(versionEl).toBeVisible({ timeout: 5000 })
     await expect(versionEl).not.toHaveText('')
+    // 布局切换按钮在「外观」tab 下
+    await page.getByTestId('settings-tab-appearance').click()
     const listBtn = page.locator('button[title*="列表"], .sp-seg-btn').filter({ hasText: /.*/ }).last()
     await expect(listBtn).toBeVisible()
     await listBtn.click()

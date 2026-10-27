@@ -97,7 +97,9 @@ import { t, tN } from '../../i18n/index.js'
 
 const store = useAppStore()
 const dataStore = useDataStore()
-const deadLinkChecker = useDeadLinkChecker()
+// 保留 hook 调用（初始化 results/历史缓存），当前组件不再直接读取其返回值 ——
+// 「未确认」Tab 已移除后此值无消费方，故以下划线前缀豁免 no-unused-vars。
+const _deadLinkChecker = useDeadLinkChecker()
 const visible = ref(false)
 const tab = ref<'dead' | 'blocked'>('dead')
 const selectMode = ref(false)
