@@ -1,0 +1,9 @@
+#!/bin/sh
+# pre-push：推之前跑快速门禁，拦住「本地过了但一推就红」的常见问题
+# （lint 未使用变量、类型错误）。完整门禁用 `npm run verify`。
+# 跳过：git push --no-verify
+set -e
+echo "[pre-push] 跑 lint + typecheck（约 40s，--no-verify 可跳过）…"
+npm run lint --silent
+npm run typecheck --silent
+echo "[pre-push] 通过。提醒：涉及 UI/布局改动时，请另外跑 npm run verify:e2e"

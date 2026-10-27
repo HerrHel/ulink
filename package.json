@@ -20,7 +20,13 @@
     "ext:pack": "node scripts/pack-extension.js",
     "email:sync": "node scripts/sync-email-template.cjs",
     "pages:dev": "npm run build && npx wrangler@latest pages dev dist --port 8788",
-    "pages:deploy": "npm run build && npx wrangler@latest pages deploy dist --project-name ulink"
+    "pages:deploy": "npm run build && npx wrangler@latest pages deploy dist --project-name ulink",
+    "verify": "npm run lint && npm run lint:style && npm run typecheck && npm run test",
+    "verify:fast": "npm run lint && npm run typecheck",
+    "verify:e2e": "npm run test:e2e",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "ssl:status": "node scripts/ssl-renew.mjs",
+    "dns:list": "node scripts/dnspod-records.mjs list ulink.ren"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^5.9.2",

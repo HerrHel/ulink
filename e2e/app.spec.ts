@@ -36,7 +36,10 @@ test.describe('LinkVault 核心功能', () => {
   test('分类导航工作', async ({ page }) => {
     await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
-    const navCat = page.locator('.nav-cat, .icon-rail button, .rail-btn').first()
+    // 只用分类导航区域内的按钮：宽泛的 '.icon-rail button' 会命中侧栏顶部的
+    // AI 工作台入口（rail-item-ai），点它切到 AI 视图后卡片网格本就该消失 ——
+    // 该用例的意图是「分类切换后列表仍在」，所以要限定在 #railNav 里选。
+    const navCat = page.locator('#railNav .rail-item').first()
     await expect(navCat).toBeVisible({ timeout: 5000 })
     await navCat.click()
     await expect(page.getByTestId('lv-card-grid')).toBeAttached()
