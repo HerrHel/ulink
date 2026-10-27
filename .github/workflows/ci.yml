@@ -61,3 +61,45 @@ jobs:
         run: supabase db reset
       - name: Run pgTAP tests
         run: supabase db test
+
+  # ── 部署：测试全绿才发布到 CloudBase 静态托管 ──
+  #
+  # 为什么不直接用 CloudBase 控制台的「Git 平台部署」：
+  #   它只执行 `npm run build`，**不跑任何测试** —— 等于绕过 lint/typecheck/
+  #   5000+ 单测/e2e/audit 全部门禁，任何一次 push 都能把有问题的代码送上生产。
+  #   这里用 needs 把两个门禁 job 作为前置，测试不过就绝不发布。
+  #
+  # 与手动 `tcb hosting deploy` 互斥：Git 部署每次 push 都会发布，
+  # 再手动传一次会把线上覆盖成旧版本。统一走本 job。
+  deploy:
+    needs: [lint-test, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      ENV_ID: ulink-d1g5srvjo54b1886a
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # 生产构建自动加载仓库内的 .env.production（含 VITE_BACKEND=cloudbase 等）
+      - name: Build
+        run: npm run build
+      - name: Deploy to CloudBase hosting
+        env:
+          CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
+        run: |
+          if [ -z "$CLOUDBASE_APIKEY" ]; then
+            echo "::warning::未配置 CLOUDBASE_APIKEY，跳过部署（门禁仍照常执行）"
+            exit 0
+          fi
+          # --cloudbase-api-key 支持非交互认证，无需设备码
+          npx --yes @cloudbase/cli login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
+          # --safe：发布前备份，上传或校验失败自动回滚
+          # --verify：上传后校验远端文件与本地产物一致
+          npx --yes @cloudbase/cli hosting deploy ./dist -e "$ENV_ID" --safe --verify
