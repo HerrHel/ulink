@@ -331,7 +331,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">激活兑换码</span>
-                      <span class="sp-row-desc">输入 16 位专属兑换码以升级至 Plus 会员权益</span>
+                      <span class="sp-row-desc">输入专属兑换码以升级至 PRO 会员权益</span>
                     </div>
                     <div class="sp-row-ctrl sp-redeem-ctrl">
                       <input
@@ -339,7 +339,7 @@
                         type="text"
                         v-model="redeemInput"
                         :placeholder="t('settings.redeemPlaceholder')"
-                        maxlength="16"
+                        maxlength="64"
                         autocomplete="off"
                         spellcheck="false"
                         @keyup.enter="onRedeem"
@@ -507,7 +507,10 @@
                   </div>
                   <div class="sp-card-row" @click="onToggleSmartFill" style="cursor: pointer;">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.smartFill') }}</span>
+                      <span class="sp-row-title">
+                      {{ t('settings.smartFill') }}
+                      <span class="sp-pro-tag">PRO</span>
+                    </span>
                       <span class="sp-row-desc">{{ t('settings.smartFillHint') }}</span>
                     </div>
                     <div class="sp-row-ctrl" data-testid="lv-smart-fill-toggle">
@@ -520,7 +523,7 @@
                     <div class="sp-row-meta">
                       <span class="sp-row-title">
                         {{ t('settings.semanticSearch') }}
-                        <span v-if="!isPro" class="sp-plus-tag">PRO</span>
+                        <span class="sp-pro-tag">PRO</span>
                       </span>
                       <span class="sp-row-desc">{{ t('settings.semanticSearchHint') }}</span>
                     </div>
@@ -595,9 +598,9 @@
                     <div class="sp-row-meta">
                       <span class="sp-row-title">
                         {{ t('settings.autoDeadCheckWeekly') }}
-                        <span v-if="!dlAutoAllowed" class="sp-plus-tag">{{ t('settings.plusTag') }}</span>
+                        <span class="sp-pro-tag">PRO</span>
                       </span>
-                      <span class="sp-row-desc">后台每周自动检测一次全库链接并汇总报告（Plus 专享）</span>
+                      <span class="sp-row-desc">{{ t('settings.autoDeadCheckWeeklyDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-toggle-pill" :class="{ active: dlAutoEnabled, locked: !dlAutoAllowed }">
@@ -1185,6 +1188,9 @@ function formatExpiry(iso: string): string {
 const entitlementLabel = computed(() => {
   if (!entitlement.value.isPaid) return t('settings.freePlan')
   const map: Record<string, string> = {
+    pro_monthly: t('settings.planPlusMonthly'),
+    pro_yearly: t('settings.planPlusYearly'),
+    pro_quarterly: 'PRO 季付',
     plus_monthly: t('settings.planPlusMonthly'),
     plus_yearly: t('settings.planPlusYearly'),
   }
@@ -1493,6 +1499,7 @@ async function onToggleAutoDeadCheck() {
   const allowed = await dl.refreshAutoCheckAllowed()
   if (!allowed) {
     toast(t('settings.autoDeadCheckNeedsPlus'), false)
+    showPurchase.value = true
     return
   }
   dl.startAutoCheck()
