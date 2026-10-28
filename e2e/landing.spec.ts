@@ -22,6 +22,25 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.describe('宣传落地页', () => {
+  test('定价区：展示免费与 PRO 三档价格及权益对比', async ({ page }) => {
+    await page.goto('/')
+    const pricing = page.locator('#pricing')
+    await expect(pricing).toBeVisible()
+    // 档位卡数量（免费 + 月付 + 季付 + 年付）
+    await expect(pricing.locator('.price-card')).toHaveCount(4)
+    // 关键价格与最划算徽章
+    await expect(pricing).toContainText('¥12')
+    await expect(pricing).toContainText('¥108')
+    await expect(pricing.locator('.price-badge')).toContainText('最划算')
+    // 权益对比表的关键差异行（免费 2 台设备 / 200MB vs PRO 3 台 / 5GB）
+    await expect(pricing.locator('.price-compare')).toContainText('同步设备数')
+    await expect(pricing.locator('.price-compare')).toContainText('5 GB')
+    // 退款政策链接可达（支付经营审核需要）
+    await expect(pricing.locator('a[href="/legal/refund-policy.html"]')).toBeVisible()
+  })
+
+
+
   test('新访客看到落地页与星链画布，不跳转', async ({ page }) => {
     await page.goto('/')
     // 干净环境下 landing.js 不应触发跳转

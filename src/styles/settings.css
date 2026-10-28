@@ -719,3 +719,20 @@
   /* 移动端满足 44px 触控下限，并撑满该行 */
   .sp-upgrade-btn{min-height:44px;width:100%}
 }
+
+/* 本月 AI 用量进度条 */
+.sp-quota-bar{
+  width:100%;max-width:180px;height:8px;
+  border-radius:999px;
+  background:var(--border-light,#eee);
+  overflow:hidden;
+}
+.sp-quota-fill{
+  height:100%;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--accent,#2563eb),color-mix(in srgb,var(--accent,#2563eb) 55%,#8b5cf6));
+  transition:width .3s ease;
+}
+.sp-quota-fill.warn{
+  background:linear-gradient(90deg,#f59e0b,#f97316);
+}

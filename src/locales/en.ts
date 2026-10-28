@@ -476,6 +476,8 @@ export const en = {
     deleteAccountFailed: 'Deletion failed. Please try again later, or email herr@ulink.ren if it persists.',
     membership: 'Membership',
     currentPlan: 'Current plan',
+    aiQuota: 'AI usage this month',
+    aiQuotaUsed: '{used} / {limit} tokens used',
     freePlan: 'Free',
     planPlusMonthly: 'Plus Monthly',
     planPlusYearly: 'Plus Yearly',

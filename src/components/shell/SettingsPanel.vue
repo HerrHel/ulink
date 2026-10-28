@@ -299,6 +299,18 @@
                       <span v-if="entitlement.isPaid && entitlement.expiresAt" class="hidden" data-testid="lv-entitlement-expiry">{{ entitlement.expiresAt }}</span>
                     </div>
                   </div>
+                  <!-- 本月 AI 用量进度条（enforce 拦截前用户可见的消耗） -->
+                  <div v-if="aiQuota && aiQuota.limit > 0" class="sp-card-row" data-testid="lv-ai-quota">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.aiQuota') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.aiQuotaUsed', { used: aiQuota.used, limit: aiQuota.limit }) }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-quota-bar" role="progressbar" :aria-valuenow="quotaPct" aria-valuemin="0" aria-valuemax="100">
+                        <div class="sp-quota-fill" :class="{ warn: quotaPct >= 80 }" :style="{ width: quotaPct + '%' }"></div>
+                      </div>
+                    </div>
+                  </div>
                   <!-- 在线订阅入口：价格与套餐来自服务端 plans 表，前端不硬编码 -->
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
@@ -927,6 +939,7 @@ import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site
 import PurchaseModal from '../modals/PurchaseModal.vue'
 import {
   fetchMyEntitlement,
+  dbRpc,
   redeemCode,
   type MyEntitlement,
   type RedeemError,
@@ -1104,6 +1117,7 @@ const beianLinks = computed(() => {
 // 会员权益与兑换码
 const entitlement = ref<MyEntitlement>({
   planId: 'free',
+  planName: 'free',
   status: 'active',
   expiresAt: null,
   features: {},
@@ -1112,6 +1126,32 @@ const entitlement = ref<MyEntitlement>({
 const redeemInput = ref('')
 const redeeming = ref(false)
 
+/** 本月 AI 用量（设置面板进度条；enforce 门控的数据源同一 RPC） */
+const aiQuota = ref<{ used: number; limit: number } | null>(null)
+const quotaPct = computed(() => {
+  const q = aiQuota.value
+  if (!q || q.limit <= 0) return 0
+  return Math.min(100, Math.round((q.used / q.limit) * 100))
+})
+async function loadAiQuota(): Promise<void> {
+  const uid = (auth as { user?: { id?: string } }).user?.id
+  if (!auth.isLoggedIn || !uid) {
+    aiQuota.value = null
+    return
+  }
+  try {
+    const { data, error } = await dbRpc('ai_quota_check', { p_uid: uid })
+    if (error || !data) return
+    const d = data as { used_tokens?: number; limit_tokens?: number }
+    aiQuota.value = {
+      used: Math.round(Number(d.used_tokens) || 0),
+      limit: Math.round(Number(d.limit_tokens) || 0),
+    }
+  } catch {
+    /* 静默：进度条只是信息展示，不影响主流程 */
+  }
+}
+
 /** 购买弹窗开关 */
 const showPurchase = ref(false)
 
@@ -1119,9 +1159,11 @@ const showPurchase = ref(false)
 async function onPurchasePaid() {
   try {
     entitlement.value = await fetchMyEntitlement()
+  void loadAiQuota()
   } catch {
     /* 刷新失败不影响支付结果本身，下次打开设置会重新拉 */
   }
+  void loadAiQuota()
 }
 
 /** 有效期格式化：ISO → 本地可读（例：2026/10/31 11:12） */

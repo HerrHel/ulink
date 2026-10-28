@@ -427,7 +427,37 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   .demo-kids{max-height:120px;opacity:1}
 }
 </style>
-<noscript><style>html[data-lv-boot] body{visibility:visible}</style></noscript>
+<noscript><style>html[data-lv-boot] body{visibility:visible}
+/* ── 定价区 ── */
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:36px}
+.price-card{position:relative;border:1px solid #E8E4DF;border-radius:16px;background:#fff;padding:22px 18px;display:flex;flex-direction:column;gap:8px;transition:transform .15s ease,box-shadow .15s ease}
+.price-card:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(18,46,138,.07)}
+.price-card.price-featured{border:1.5px solid var(--brand);box-shadow:0 10px 30px rgba(18,46,138,.12)}
+.price-badge{position:absolute;top:-10px;right:14px;padding:3px 10px;border-radius:999px;background:var(--brand);color:#fff;font-size:.66rem;font-weight:700;letter-spacing:.05em}
+.price-name{font-weight:600;font-size:.95rem}
+.price-amount{font-size:1.75rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.price-amount span{font-size:.75rem;font-weight:400;color:#888;margin-left:2px}
+.price-period{font-size:.72rem;color:#8A867F}
+.price-feats{list-style:none;margin:6px 0 0;padding:0;font-size:.8rem;line-height:1.95;flex:1;color:#4A4640}
+.price-feats li{padding-left:18px;position:relative}
+.price-feats li::before{content:'\2713';position:absolute;left:0;color:var(--brand);font-weight:700}
+.price-card .btn{margin-top:14px;width:100%;justify-content:center}
+
+.price-compare{border:1px solid #E8E4DF;border-radius:14px;background:#fff;overflow:hidden;font-size:.82rem}
+.price-compare-row{display:grid;grid-template-columns:1.5fr repeat(4,1fr);gap:4px;padding:10px 16px;align-items:center}
+.price-compare-row.head{background:#F7F5F1;font-weight:600}
+.price-compare-row:nth-child(odd):not(.head){background:#FCFBF9}
+.price-compare-row > span:not(:first-child){text-align:center;font-variant-numeric:tabular-nums}
+.price-compare-row > span:first-child{color:#6A655E}
+.price-note{margin-top:16px;text-align:center;font-size:.76rem;color:#8A867F;line-height:1.8}
+.price-note a{color:var(--brand);text-decoration:underline}
+
+@media(max-width:900px){
+  .price-grid{grid-template-columns:1fr;gap:14px}
+  .price-compare-row{grid-template-columns:1.3fr repeat(4,1fr);padding:9px 12px;font-size:.72rem}
+}
+
+</style></noscript>
 </head>
 <body>
 <!-- 微信/QQ 爬虫首图兜底（display:none，优先抓取该图作为分享缩略图，>= 300x300） -->
@@ -642,6 +672,103 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   </section>
 
   <!-- ═══ FAQ ═══ -->
+  <!-- ═══ 定价 ═══ -->
+  <section class="sect" id="pricing">
+    <div class="wrap">
+      <div class="sect-head reveal">
+        <div class="eyebrow" data-i18n="price.eyebrow">PRICING</div>
+        <h2 data-i18n="price.title">简单透明的价格</h2>
+        <p class="sect-sub" data-i18n="price.sub">免费版永久可用，PRO 解锁更大额度。无自动续费，按需续购。</p>
+      </div>
+
+      <div class="price-grid reveal">
+        <div class="price-card">
+          <div class="price-name" data-i18n="price.free">免费版</div>
+          <div class="price-amount">¥0<span data-i18n="price.forever">/ 永久</span></div>
+          <div class="price-period" data-i18n="price.freeSub">适合轻量收藏与检索</div>
+          <ul class="price-feats">
+            <li data-i18n="price.f1">无限书签与分类</li>
+            <li data-i18n="price.f2">2 台设备同步</li>
+            <li data-i18n="price.f3">200 MB 云端存储</li>
+            <li data-i18n="price.f4">每日 3 次死链检查</li>
+            <li data-i18n="price.f5">每月 5 万 AI tokens</li>
+            <li data-i18n="price.f6">每日 1 次视频解析</li>
+          </ul>
+          <a class="btn btn-ghost" href="/app" data-i18n="price.freeCta">免费开始</a>
+        </div>
+
+        <div class="price-card">
+          <div class="price-name" data-i18n="price.monthly">PRO 月付</div>
+          <div class="price-amount">¥12<span data-i18n="price.perMonth">/ 月</span></div>
+          <div class="price-period" data-i18n="price.days30">30 天 · 折合 ¥12/月</div>
+          <ul class="price-feats">
+            <li data-i18n="price.p1">PRO 全部权益</li>
+            <li data-i18n="price.p2">3 台设备同步</li>
+            <li data-i18n="price.p3">5 GB 云端存储</li>
+            <li data-i18n="price.p4">每日 50 次死链检查 + 自动巡检</li>
+            <li data-i18n="price.p5">每月 20 万 AI tokens</li>
+            <li data-i18n="price.p6">每日 10 次视频解析</li>
+          </ul>
+          <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
+        </div>
+
+        <div class="price-card">
+          <div class="price-name" data-i18n="price.quarterly">PRO 季付</div>
+          <div class="price-amount">¥32<span data-i18n="price.perQuarter">/ 季</span></div>
+          <div class="price-period" data-i18n="price.quarterUnit">90 天 · 折合 ¥10.7/月</div>
+          <ul class="price-feats">
+            <li data-i18n="price.p1">PRO 全部权益</li>
+            <li data-i18n="price.p2">3 台设备同步</li>
+            <li data-i18n="price.p3">5 GB 云端存储</li>
+            <li data-i18n="price.p4">每日 50 次死链检查 + 自动巡检</li>
+            <li data-i18n="price.p5">每月 20 万 AI tokens</li>
+            <li data-i18n="price.p6">每日 10 次视频解析</li>
+          </ul>
+          <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
+        </div>
+
+        <div class="price-card price-featured">
+          <span class="price-badge" data-i18n="price.best">最划算</span>
+          <div class="price-name" data-i18n="price.yearly">PRO 年付</div>
+          <div class="price-amount">¥108<span data-i18n="price.perYear">/ 年</span></div>
+          <div class="price-period" data-i18n="price.yearUnit">365 天 · 折合 ¥9/月</div>
+          <ul class="price-feats">
+            <li data-i18n="price.p1">PRO 全部权益</li>
+            <li data-i18n="price.p2">3 台设备同步</li>
+            <li data-i18n="price.p3">5 GB 云端存储</li>
+            <li data-i18n="price.p4">每日 50 次死链检查 + 自动巡检</li>
+            <li data-i18n="price.p5">每月 20 万 AI tokens</li>
+            <li data-i18n="price.p6">每日 10 次视频解析</li>
+          </ul>
+          <a class="btn btn-solid" href="/app" data-i18n="price.proCta">升级 PRO</a>
+        </div>
+      </div>
+
+      <div class="price-compare reveal">
+        <div class="price-compare-row head">
+          <span data-i18n="price.cmp.feature">权益</span>
+          <span data-i18n="price.free">免费版</span>
+          <span data-i18n="price.monthly">PRO 月付</span>
+          <span data-i18n="price.quarterly">PRO 季付</span>
+          <span data-i18n="price.yearly">PRO 年付</span>
+        </div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.devices">同步设备数</span><span>2</span><span>3</span><span>3</span><span>3</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.storage">云端存储</span><span>200 MB</span><span>5 GB</span><span>5 GB</span><span>5 GB</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.linkcheck">每日死链检查</span><span>3</span><span>50</span><span>50</span><span>50</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.patrol">自动死链巡检</span><span data-i18n="price.no">不支持</span><span data-i18n="price.yes">包含</span><span data-i18n="price.yes">包含</span><span data-i18n="price.yes">包含</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.ai">每月 AI tokens</span><span>5 万</span><span>20 万</span><span>20 万</span><span>20 万</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.video">每日视频解析</span><span>1</span><span>10</span><span>10</span><span>10</span></div>
+      </div>
+
+      <p class="price-note reveal">
+        <span data-i18n="price.note1">所有档位均无自动续费，到期按需续购。</span>
+        <span data-i18n="price.note2">支持</span>
+        <a href="/legal/refund-policy.html" data-i18n="price.refundLink">退款政策</a>
+        <span data-i18n="price.note3">。</span>
+      </p>
+    </div>
+  </section>
+
   <section class="sect" id="faq">
     <div class="wrap">
       <div class="sect-head reveal">

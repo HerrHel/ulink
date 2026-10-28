@@ -467,6 +467,8 @@ export const zh = {
     deleteAccountFailed: '注销失败，请稍后重试；若持续失败请联系 herr@ulink.ren',
     membership: '会员与权益',
     currentPlan: '当前方案',
+    aiQuota: '本月 AI 用量',
+    aiQuotaUsed: '已用 {used} / {limit} tokens',
     freePlan: '免费版',
     planPlusMonthly: 'Plus 月付',
     planPlusYearly: 'Plus 年付',
