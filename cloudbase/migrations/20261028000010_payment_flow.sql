@@ -386,7 +386,11 @@ $$;
 COMMENT ON FUNCTION public.get_payment_order(text, text) IS
   '按订单号+uid 查订单（SECURITY DEFINER 内部校验归属）。云函数 status action 用。';
 
-REVOKE ALL ON FUNCTION public.list_purchase_plans() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.get_payment_order(text, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.list_purchase_plans() TO service_role;
-GRANT EXECUTE ON FUNCTION public.get_payment_order(text, text) TO service_role;
+REVOKE ALL ON FUNCTION public.list_purchase_plans() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_payment_order(text, text) FROM PUBLIC;
+-- ⚠️ 必须 GRANT anon + authenticated：云函数 node-sdk 的 rdb 走 tcbopenapi 身份，
+-- 映射到的 DB 角色是 anon/authenticated 而非 service_role —— 只 GRANT service_role
+-- 会在云端收到 42501 permission denied（本地管理员身份直查是通的，掩盖了这点）。
+-- 安全性不依赖 EXECUTE 权限：两函数均 SECURITY DEFINER 且内部做归属/状态校验。
+GRANT EXECUTE ON FUNCTION public.list_purchase_plans() TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_payment_order(text, text) TO anon, authenticated, service_role;
