@@ -55,7 +55,9 @@ AS $$
 DECLARE
   v_plan   public.plans%ROWTYPE;
   v_order  public.orders%ROWTYPE;
-  v_id     text := gen_random_uuid()::text;
+  -- 微信 out_trade_no 限 6-32 位字母数字（连字符也超长），
+  -- 订单 id 直接用 32 位无连字符 UUID，保证「微信侧订单号 = 库内 id」回调对账一致
+  v_id     text := replace(gen_random_uuid()::text, '-', '');
 BEGIN
   IF p_uid IS NULL OR length(trim(p_uid)) = 0 THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'invalid_user');
