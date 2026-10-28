@@ -205,7 +205,8 @@ export function usePayment() {
 
     let delay = 2000
     let ticks = 0
-    const deadline = current.expiresAt ? new Date(current.expiresAt).getTime() : Date.now() + 30 * 60000
+    const parsedExp = current.expiresAt ? new Date(current.expiresAt).getTime() : NaN
+    const deadline = Number.isFinite(parsedExp) ? parsedExp : Date.now() + 30 * 60000
 
     const tick = async () => {
       pollTimer = null

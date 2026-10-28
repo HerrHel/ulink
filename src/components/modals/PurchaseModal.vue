@@ -215,7 +215,10 @@ async function submit() {
 
 function startCountdown(expiresAt: string) {
   stopCountdown()
-  const deadline = expiresAt ? new Date(expiresAt).getTime() : Date.now() + 30 * 60000
+  // expiresAt 可能因后端序列化差异解析出 NaN（PostgREST jsonb 的 timestamptz 文本格式
+  // 不保证浏览器可解析），此时按创建时长 30 分钟兜底，绝不让用户看到 NaN:NaN
+  const parsed = expiresAt ? new Date(expiresAt).getTime() : NaN
+  const deadline = Number.isFinite(parsed) ? parsed : Date.now() + 30 * 60000
   const tick = () => {
     const left = deadline - Date.now()
     if (left <= 0) {
