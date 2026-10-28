@@ -12,7 +12,7 @@
 
 import { ref, computed, readonly } from 'vue'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
-import { supabase } from '../../lib/supabase.js'
+import { getApiToken } from '../../lib/authDriver.js'
 
 export type PaymentChannel = 'wechat' | 'alipay'
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
@@ -64,12 +64,7 @@ function normalizeOrder(raw: RawOrder | undefined | null): PaymentOrder | null {
 }
 
 async function currentToken(): Promise<string> {
-  try {
-    const { data } = await supabase.auth.getSession()
-    return (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
-  } catch {
-    return ''
-  }
+  return getApiToken()
 }
 
 /** 把后端错误码/HTTP 状态收敛成前端可展示的枚举 */

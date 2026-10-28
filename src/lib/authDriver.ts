@@ -386,3 +386,24 @@ export function getAuthDriver(): AuthDriver {
 export function __setAuthDriverForTest(driver: AuthDriver | null): void {
   _driver = driver
 }
+
+/**
+ * 取 HTTP 直调用的 Bearer token（跨后端统一入口）。
+ *
+ * 为什么不能直接 `supabase.auth.getSession()`：CloudBase 后端下 supabase.ts 创建的是
+ * **真 Supabase 客户端**（VITE_SUPABASE_URL 仍配着，作遗留/迁移用途），其 storageKey
+ * `linkvault_auth` 里永远没有 session（用户全部走 CloudBase 登录）——
+ * usePayment/useRedeem 曾因此静默拿不到 token，「暂无可购买的套餐」的最终根因。
+ * 必须走 authDriver（CloudBase 分支读 js-sdk 登录态，session.accessToken）。
+ */
+export async function getApiToken(): Promise<string> {
+  try {
+    const driver = getAuthDriver()
+    const { session } = await driver.getSession()
+    if (!session) return ''
+    const rec = session as unknown as Record<string, unknown>
+    return String(rec.accessToken ?? rec.access_token ?? '')
+  } catch {
+    return ''
+  }
+}

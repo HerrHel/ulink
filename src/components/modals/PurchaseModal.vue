@@ -131,7 +131,7 @@ import { usePayment, type PaymentChannel } from '../../composables/domain/usePay
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
-import { supabase } from '../../lib/supabase.js'
+import { getApiToken } from '../../lib/authDriver.js'
 
 interface PlanRow {
   planId: string
@@ -180,13 +180,7 @@ async function loadPlans() {
   if (!isCloudBaseBackend()) return
   const endpoint = edgeFnUrl('pay')
   if (!endpoint) return
-  let token = ''
-  try {
-    const { data } = await supabase.auth.getSession()
-    token = (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
-  } catch {
-    token = ''
-  }
+  const token = await getApiToken()
   if (!token) return
 
   loadingPlans.value = true

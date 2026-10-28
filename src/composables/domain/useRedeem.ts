@@ -7,8 +7,8 @@
  * 核销走 `redeem` 云函数：摘要只在服务端计算与校验，且 RPC 内有原子防双兑。
  */
 import { dbRpc } from '../../lib/dbApi.js'
-import { supabase } from '../../lib/supabase.js'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
+import { getApiToken } from '../../lib/authDriver.js'
 
 export interface MyEntitlement {
   planId: string
@@ -68,13 +68,7 @@ export async function redeemCode(code: string): Promise<RedeemResult> {
   const endpoint = edgeFnUrl('redeem')
   if (!endpoint) return { ok: false, error: 'not_configured' }
 
-  let token = ''
-  try {
-    const { data } = await supabase.auth.getSession()
-    token = (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
-  } catch {
-    token = ''
-  }
+  const token = await getApiToken()
   if (!token) return { ok: false, error: 'unauthorized' }
 
   try {
