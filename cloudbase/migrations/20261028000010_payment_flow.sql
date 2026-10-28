@@ -211,7 +211,8 @@ BEGIN
   INSERT INTO public.entitlements
     (user_id, plan_id, status, source, started_at, expires_at, updated_at)
   VALUES
-    (v_order.user_id, v_plan.id, 'active', p_channel, now(),
+    -- source 固定 'order'（entitlements_source_check 的枚举；渠道明细在 orders.channel）
+    (v_order.user_id, v_plan.id, 'active', 'order', now(),
      now() + make_interval(days => v_plan.period_days), now())
   ON CONFLICT (user_id) DO UPDATE SET
     plan_id    = EXCLUDED.plan_id,
@@ -396,3 +397,39 @@ REVOKE ALL ON FUNCTION public.get_payment_order(text, text) FROM PUBLIC;
 -- 安全性不依赖 EXECUTE 权限：两函数均 SECURITY DEFINER 且内部做归属/状态校验。
 GRANT EXECUTE ON FUNCTION public.list_purchase_plans() TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_payment_order(text, text) TO anon, authenticated, service_role;
+
+-- ── 9. resolve_entitlement 补 plan_name（前端设置面板显示方案名而非内部 id）──
+CREATE OR REPLACE FUNCTION public.resolve_entitlement(p_uid text)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_e public.entitlements%ROWTYPE;
+  v_f jsonb;
+  v_name text;
+BEGIN
+  SELECT * INTO v_e FROM public.entitlements WHERE user_id = p_uid;
+  IF NOT FOUND THEN
+    SELECT features, name INTO v_f, v_name FROM public.plans WHERE id = 'free';
+    RETURN jsonb_build_object(
+      'plan_id', 'free', 'status', 'active', 'plan_name', coalesce(v_name, 'free'),
+      'features', coalesce(v_f, '{}'::jsonb)
+    );
+  END IF;
+
+  SELECT (p.features || coalesce(v_e.feature_overrides, '{}'::jsonb)), p.name INTO v_f, v_name
+    FROM public.plans p WHERE p.id = v_e.plan_id;
+
+  RETURN jsonb_build_object(
+    'plan_id',    v_e.plan_id,
+    'plan_name',  coalesce(v_name, v_e.plan_id),
+    'status',     CASE WHEN v_e.expires_at IS NOT NULL AND v_e.expires_at < now()
+                       THEN 'expired' ELSE v_e.status END,
+    'expires_at', v_e.expires_at,
+    'features',   coalesce(v_f, '{}'::jsonb)
+  );
+END;
+$$;

@@ -290,7 +290,7 @@
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.currentPlan') }}</span>
                       <span class="sp-row-desc" v-if="entitlement.isPaid && entitlement.expiresAt">
-                        {{ t('settings.expiresAt') }}: {{ entitlement.expiresAt }}
+                        {{ t('settings.expiresAt') }}: {{ formatExpiry(entitlement.expiresAt) }}
                       </span>
                       <span class="sp-row-desc" v-else>享受无限制书签归档、本地闪电检索与基础同步</span>
                     </div>
@@ -1124,13 +1124,24 @@ async function onPurchasePaid() {
   }
 }
 
+/** 有效期格式化：ISO → 本地可读（例：2026/10/31 11:12） */
+function formatExpiry(iso: string): string {
+  const t = new Date(iso).getTime()
+  if (!Number.isFinite(t)) return iso
+  return new Date(t).toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
 const entitlementLabel = computed(() => {
   if (!entitlement.value.isPaid) return t('settings.freePlan')
   const map: Record<string, string> = {
     plus_monthly: t('settings.planPlusMonthly'),
     plus_yearly: t('settings.planPlusYearly'),
   }
-  return map[entitlement.value.planId] || entitlement.value.planId
+  // 优先服务端 plan_name（测试档等非内置套餐也能显示名称），再退内置映射，最后退 planId
+  return map[entitlement.value.planId] || entitlement.value.planName || entitlement.value.planId
 })
 
 async function refreshEntitlement() {

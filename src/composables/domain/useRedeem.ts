@@ -12,6 +12,7 @@ import { getApiToken } from '../../lib/authDriver.js'
 
 export interface MyEntitlement {
   planId: string
+  planName: string
   status: string
   expiresAt: string | null
   features: Record<string, number>
@@ -20,6 +21,7 @@ export interface MyEntitlement {
 
 const FREE_PLAN: MyEntitlement = {
   planId: 'free',
+  planName: 'free',
   status: 'active',
   expiresAt: null,
   features: {},
@@ -33,6 +35,7 @@ export async function fetchMyEntitlement(): Promise<MyEntitlement> {
     if (error || !data) return FREE_PLAN
     const raw = data as {
       plan_id?: string
+      plan_name?: string
       status?: string
       expires_at?: string | null
       features?: Record<string, number>
@@ -40,6 +43,7 @@ export async function fetchMyEntitlement(): Promise<MyEntitlement> {
     const planId = raw.plan_id || 'free'
     return {
       planId,
+      planName: raw.plan_name || planId,
       status: raw.status || 'active',
       expiresAt: raw.expires_at || null,
       features: raw.features || {},
