@@ -209,6 +209,39 @@ const FN_EXTRA_ENV = {
     if (origins) out.ALLOWED_ORIGINS = origins
     return out
   },
+  // 支付：渠道密钥（缺失则函数自身 503 channel_not_configured，不部署假 key）
+  'pay': () => {
+    const out = {
+      // 限流 IP 盐：每函数独立（pay/index.js 的回落默认值同为 'ulink-pay'）
+      IP_HASH_SALT: readEnvLocal('PAY_IP_HASH_SALT') || 'ulink-pay',
+    }
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
+    // ⚠️ 多行 PEM 在 .env.local 里必须写成**字面量 \n**（真换行会被 readEnvLocal 的
+    // 单行正则截断成第一行），云函数里的 pem() 会把它还原成真换行。
+    const CHANNEL_ENV = {
+      // 微信支付（Native 扫码）
+      WXPAY_APPID: 'WXPAY_APPID',
+      WXPAY_MCHID: 'WXPAY_MCHID',
+      WXPAY_SERIAL_NO: 'WXPAY_SERIAL_NO',
+      WXPAY_PRIVATE_KEY: 'WXPAY_PRIVATE_KEY',
+      WXPAY_APIV3_KEY: 'WXPAY_APIV3_KEY',
+      WXPAY_PLATFORM_CERT: 'WXPAY_PLATFORM_CERT',
+      WXPAY_PUBLIC_KEY: 'WXPAY_PUBLIC_KEY',
+      WXPAY_NOTIFY_URL: 'WXPAY_NOTIFY_URL',
+      // 支付宝（当面付）
+      ALIPAY_APP_ID: 'ALIPAY_APP_ID',
+      ALIPAY_PRIVATE_KEY: 'ALIPAY_PRIVATE_KEY',
+      ALIPAY_PUBLIC_KEY: 'ALIPAY_PUBLIC_KEY',
+      ALIPAY_NOTIFY_URL: 'ALIPAY_NOTIFY_URL',
+      ALIPAY_GATEWAY: 'ALIPAY_GATEWAY',
+    }
+    for (const [k, envKey] of Object.entries(CHANNEL_ENV)) {
+      const v = readEnvLocal(envKey)
+      if (v) out[k] = v
+    }
+    return out
+  },
 }
 /**
  * 各函数的超时与内存配置
@@ -231,6 +264,9 @@ const FN_PROFILE = {
   'share-admin': { timeout: 20, memorySize: 256 },
   'account': { timeout: 30, memorySize: 256 },
   'redeem': { timeout: 20, memorySize: 256 },
+  // 支付：下单要同步调渠道 API（网络往返 + 验签），回调要解密 + 发货，
+  // 20s 偏紧；给 30s 留余量，内存不变（无流式）。
+  'pay': { timeout: 30, memorySize: 256 },
   'maintenance': { timeout: 60, memorySize: 256 },
 }
 const DEFAULT_PROFILE = { timeout: 20, memorySize: 256 }
