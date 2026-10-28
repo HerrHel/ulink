@@ -16,6 +16,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 > - 客户端双后端入口：`src/lib/dbApi.ts`（`dbFrom`/`dbRpc`）；`VITE_BACKEND` 在 `vitest.config.ts` 钉死为空
 > - 网络策略：公开读只能走 SECURITY DEFINER RPC；`consume_rate_limit` 拒绝时返回 `{}`，判定必须 `data !== true`
 > - 完整操作手册与坑：`docs/CLOUDBASE_MIGRATION.md`；备案：`docs/ICP_FILING_PREP.md`
+> - ⚠️ **改 UI 配色/排版/动效前必读 `docs/BRAND.md`**：四主题四色相（浅蓝/暗粉/绿/米白）是品牌签名而非漂移，accent 令牌有五处副本需逐字同步
 >
 > **CLI 速查（任何 agent 可直接使用，无需重新登录）**
 > - 二进制：`~/.workbuddy/binaries/node/cli-connector-packages/tcb`（bash 脚本 → `bash <path> ...`）
