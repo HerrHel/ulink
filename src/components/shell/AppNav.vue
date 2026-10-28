@@ -56,6 +56,14 @@
           <span class="icon-moon" aria-hidden="true" v-html="I.moon"></span>
         </button>
       </div>
+      <!-- 会员入口：免费→升级 CTA；PRO→徽章（未登录不显示） -->
+      <div v-if="auth.isLoggedIn" class="rail-member">
+        <button v-if="!memberIsPaid" class="rail-upgrade" data-testid="rail-upgrade" @click="showPurchase = true">
+          <span aria-hidden="true" v-html="I.sparkles"></span>
+          {{ t('purchase.upgrade') }}
+        </button>
+        <span v-else class="rail-pro-badge" data-testid="rail-pro-badge">PRO</span>
+      </div>
       <!-- 专属账户底座 -->
       <div
         ref="railUserRef"
@@ -87,9 +95,10 @@
       </div>
     </div>
   </nav>
+  <PurchaseModal :visible="showPurchase" :current-plan-id="memberPlanId" @close="showPurchase = false" @paid="void loadMember()" />
 </template>
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useUserPopoverStore } from '../../stores/overlay.js'
@@ -101,6 +110,8 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { t } from '../../i18n/index.js'
+import { fetchMyEntitlement } from '../../composables/domain/useRedeem.js'
+import PurchaseModal from '../modals/PurchaseModal.vue'
 
 const dataStore = useDataStore()
 const uiStore = useUIStore()
@@ -109,6 +120,31 @@ const vault = useVault()
 const auth = useAuth()
 const syncState = useSyncState()
 const railUserRef = ref<HTMLElement | null>(null)
+
+/** 会员入口：免费→升级 CTA；付费→PRO 徽章。登录态变化与支付成功后刷新 */
+const showPurchase = ref(false)
+const memberIsPaid = ref(false)
+const memberPlanId = ref('')
+async function loadMember(): Promise<void> {
+  try {
+    const e = await fetchMyEntitlement()
+    memberIsPaid.value = e.isPaid
+    memberPlanId.value = e.planId
+  } catch {
+    memberIsPaid.value = false
+  }
+}
+watch(
+  () => auth.isLoggedIn,
+  (v) => {
+    if (v) void loadMember()
+    else {
+      memberIsPaid.value = false
+      memberPlanId.value = ''
+    }
+  },
+  { immediate: true },
+)
 
 // 分享只读态：隐藏「管理分类」等写类入口（点分类/切走即退出分享，见 share store 的 watch）
 const shareMode = computed(() => uiStore.shareMode)

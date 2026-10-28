@@ -335,16 +335,18 @@ DECLARE
   v_row    public.plans%ROWTYPE;
   v_result jsonb := '[]'::jsonb;
 BEGIN
-  -- 只返回启用且付费的套餐；价格唯一起源仍是本表
+  -- 返回**全部**启用档位（含免费）：定价对比表需要免费列。
+  -- 前端自列：priceCents=0 为免费列，>0 为可购档（下单仍限付费档）。
   FOR v_row IN
-    SELECT * FROM public.plans WHERE active = true AND price_cents > 0 ORDER BY price_cents ASC
+    SELECT * FROM public.plans WHERE active = true ORDER BY price_cents ASC
   LOOP
     v_result := v_result || jsonb_build_object(
       'planId',     v_row.id,
       'name',       v_row.name,
       'priceCents', v_row.price_cents,
       'currency',   coalesce(v_row.currency, 'CNY'),
-      'periodDays', v_row.period_days
+      'periodDays', v_row.period_days,
+      'features',   v_row.features
     );
   END LOOP;
   RETURN v_result;

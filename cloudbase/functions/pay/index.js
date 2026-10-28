@@ -144,8 +144,9 @@ async function handleAuthed(req, res, action, body, cors) {
       sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
       return
     }
+    // 全部 active 档位（含免费）：定价对比表需要免费列；下单时服务端会再校验付费档
     const rows = (Array.isArray(r.data) ? r.data : []).filter(
-      (p) => typeof p.priceCents === 'number' && p.priceCents > 0,
+      (p) => typeof p.priceCents === 'number',
     )
     sendJson(res, 200, { ok: true, plans: rows }, cors)
     return

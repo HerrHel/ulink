@@ -231,3 +231,31 @@
 .rail-item-ai:hover svg{
   transform:scale(1.12) rotate(6deg);
 }
+
+/* ── 会员入口（免费→升级 CTA；PRO→徽章）── */
+.rail-member{padding:8px 10px 4px}
+.rail-upgrade{
+  width:100%;
+  min-height:34px;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:none;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent,#ec4899),color-mix(in srgb,var(--accent,#ec4899) 55%,#8b5cf6));
+  color:#fff;font:inherit;font-size:0.78rem;font-weight:700;letter-spacing:0.02em;
+  cursor:pointer;
+  box-shadow:0 3px 10px color-mix(in srgb,var(--accent,#ec4899) 28%,transparent);
+  transition:filter .15s ease,transform .1s ease;
+}
+.rail-upgrade:hover{filter:brightness(1.08)}
+.rail-upgrade:active{transform:scale(.97)}
+.rail-upgrade svg{width:14px;height:14px}
+.rail-pro-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:100%;min-height:26px;
+  border:1px solid color-mix(in srgb,var(--accent,#ec4899) 45%,transparent);
+  border-radius:8px;
+  background:color-mix(in srgb,var(--accent,#ec4899) 10%,transparent);
+  color:var(--accent,#ec4899);
+  font-size:0.68rem;font-weight:800;letter-spacing:0.14em;
+}
+/* 侧栏收起时不显示（图标位太窄放不下文字 CTA） */
+.icon-rail:not(.open) .rail-member{display:none}

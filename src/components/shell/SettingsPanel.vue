@@ -894,7 +894,7 @@
     </Transition>
   </Teleport>
   <!-- 购买弹窗：挂在最外层，避免被 drawer 的 overflow 裁切 -->
-  <PurchaseModal :visible="showPurchase" @close="showPurchase = false" @paid="onPurchasePaid" />
+  <PurchaseModal :visible="showPurchase" :current-plan-id="entitlement.planId" @close="showPurchase = false" @paid="onPurchasePaid" />
 </template>
 
 <script setup lang="ts">
