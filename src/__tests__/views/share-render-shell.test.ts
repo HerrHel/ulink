@@ -129,8 +129,8 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(zh).toContain('[data-theme="dark"]')
     expect(zh).toContain('--brand-logo-blue: #122E8A')
     expect(zh).toContain('--brand-logo-green: #10B981')
-    expect(zh).toContain('--brand-logo-blue: #7E9BF0')
-    expect(zh).toContain('--brand-logo-green: #34D399')
+    expect(zh).toContain('--brand-logo-blue: #F04A8A')
+    expect(zh).toContain('--brand-logo-green: #E2E7BF')
     // Logo SVG 采用 CSS 变量与统一 class 驱动，无硬编码死锁内联 style
     expect(zh).toContain('class="brand-logo-blue s-b"')
     expect(zh).toContain('class="brand-logo-green s-g"')

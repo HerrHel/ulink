@@ -1601,13 +1601,13 @@ const CSS = `
   --text: #EEE9E2;
   --text-secondary: #B5AFA6;
   --text-muted: #9B968E;
-  --accent: #7E9BF0;
-  --brand-logo-blue: #7E9BF0;
-  --brand-logo-green: #34D399;
-  --brand-logo-text: #7E9BF0;
-  --accent-light: rgba(126, 155, 240, 0.12);
-  --accent-glow: rgba(126, 155, 240, 0.2);
-  --accent-grad: linear-gradient(135deg, #7E9BF0 0%, #A3B7F5 100%);
+  --accent: #F04A8A;
+  --brand-logo-blue: #F04A8A;
+  --brand-logo-green: #E2E7BF;
+  --brand-logo-text: #F04A8A;
+  --accent-light: rgba(240, 74, 138, 0.1);
+  --accent-glow: rgba(240, 74, 138, 0.22);
+  --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
@@ -1633,13 +1633,13 @@ const CSS = `
     --text: #EEE9E2;
     --text-secondary: #B5AFA6;
     --text-muted: #9B968E;
-    --accent: #7E9BF0;
-    --brand-logo-blue: #7E9BF0;
-    --brand-logo-green: #34D399;
-    --brand-logo-text: #7E9BF0;
-    --accent-light: rgba(126, 155, 240, 0.12);
-    --accent-glow: rgba(126, 155, 240, 0.2);
-    --accent-grad: linear-gradient(135deg, #7E9BF0 0%, #A3B7F5 100%);
+    --accent: #F04A8A;
+    --brand-logo-blue: #F04A8A;
+    --brand-logo-green: #E2E7BF;
+    --brand-logo-text: #F04A8A;
+    --accent-light: rgba(240, 74, 138, 0.1);
+    --accent-glow: rgba(240, 74, 138, 0.22);
+    --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
     --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
@@ -1709,11 +1709,11 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   stroke: var(--brand-logo-green, #10B981) !important;
   transition: stroke 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-[data-theme="dark"] .brand-logo-blue, [data-theme="dark"] .s-b { stroke: #7E9BF0 !important; }
-[data-theme="dark"] .brand-logo-green, [data-theme="dark"] .s-g { stroke: #34D399 !important; }
+[data-theme="dark"] .brand-logo-blue, [data-theme="dark"] .s-b { stroke: #F04A8A !important; }
+[data-theme="dark"] .brand-logo-green, [data-theme="dark"] .s-g { stroke: #E2E7BF !important; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .brand-logo-blue, :root:not([data-theme="light"]) .s-b { stroke: #7E9BF0 !important; }
-  :root:not([data-theme="light"]) .brand-logo-green, :root:not([data-theme="light"]) .s-g { stroke: #34D399 !important; }
+  :root:not([data-theme="light"]) .brand-logo-blue, :root:not([data-theme="light"]) .s-b { stroke: #F04A8A !important; }
+  :root:not([data-theme="light"]) .brand-logo-green, :root:not([data-theme="light"]) .s-g { stroke: #E2E7BF !important; }
 }
 
 /* ==================== 顶栏 (对齐主站 AppHeader 极微雕质感) ==================== */

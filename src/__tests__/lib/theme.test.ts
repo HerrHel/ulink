@@ -100,7 +100,7 @@ describe('theme.ts 三件套护栏', () => {
     expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
   })
 
-  it('meta theme-color 随主题更新：浅色 #122E8A / 深色 #7E9BF0（缺 meta 时自动补建）', async () => {
+  it('meta theme-color 随主题更新：浅色 #122E8A / 深色 #F04A8A（缺 meta 时自动补建）', async () => {
     localStorageMock.setItem(K_THEME_MODE, 'manual')
     document.documentElement.setAttribute(A_THEME, 'dark')
     expect(themeColorMetaContent()).toBeNull() // jsdom 空文档，meta 尚不存在
@@ -108,7 +108,7 @@ describe('theme.ts 三件套护栏', () => {
     toggleTheme() // dark → light
     expect(themeColorMetaContent()).toBe('#122E8A')
     toggleTheme() // light → dark
-    expect(themeColorMetaContent()).toBe('#7E9BF0')
+    expect(themeColorMetaContent()).toBe('#F04A8A')
   })
 
   it('auto 跟随系统切深色时 meta theme-color 同步为深色 accent', async () => {
@@ -118,7 +118,7 @@ describe('theme.ts 三件套护栏', () => {
     expect(themeColorMetaContent()).toBe('#122E8A')
     ctx.emitChange(true) // 系统切 dark
     expect(document.documentElement.getAttribute(A_THEME)).toBe('dark')
-    expect(themeColorMetaContent()).toBe('#7E9BF0')
+    expect(themeColorMetaContent()).toBe('#F04A8A')
   })
 
   it('manual light → 翻 dark：当前 dark 否则翻 dark（light/null 都翻 dark）', async () => {

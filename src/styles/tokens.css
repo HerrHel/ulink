@@ -125,15 +125,15 @@
   --text-secondary:#B5AFA6;
   /* B1-002：暗色 muted 相对 surface/#25252B ≥4.5 */
   --text-muted:#9B968E;
-  /* 品牌色恒定策略：主题只调明度，不改色相。暗色 accent 是浅色 #122E8A 同色相（~225°）的提亮版，
-     深浅主题下品牌观感一致；--text-on-accent 相应反转为深色以保对比度。 */
-  --accent:#7E9BF0;
-  --brand-logo-blue:#7E9BF0;
-  --brand-logo-green:#34D399;
-  --brand-logo-text:#7E9BF0;
-  --accent-light:rgba(126,155,240,0.12);
-  --accent-glow:rgba(126,155,240,0.2);
-  --accent-grad:linear-gradient(135deg,#7E9BF0 0%,#A3B7F5 100%);
+  /* 暗色主题专属色相（品牌签名，刻意保留）：浅色海军蓝 / 暗色玫粉是站点的识别性撞色，
+     不遵循「品牌色恒定」策略——2026-10-28 曾短暂改为蓝色提亮版，经拍板恢复。 */
+  --accent:#F04A8A;
+  --brand-logo-blue:#F04A8A;
+  --brand-logo-green:#E2E7BF;
+  --brand-logo-text:#F04A8A;
+  --accent-light:rgba(230,57,124,0.1);
+  --accent-glow:rgba(230,57,124,0.18);
+  --accent-grad:linear-gradient(135deg,#E6397C 0%,#F43F5E 100%);
   --green:#14b8a6;
   --green-light:rgba(20,184,166,0.1);
   --amber:#f59e0b;
@@ -152,9 +152,9 @@
   --overlay:rgba(0,0,0,0.6);
   --card-badge-bg:rgba(255,255,255,0.05);
   --danger:#ef4444;
-  --accent-dark:#5F7FE0;
+  --accent-dark:#b82d63;
   --vault-color:#a78bfa;
-  --text-on-accent:#131A38;
+  --text-on-accent:#ffffff;
   --emerald:var(--green);
   --emerald-light:var(--green-light);
 }
@@ -206,16 +206,16 @@
   --text-secondary:#A8AD8A;
   /* B1-002：舒适暗色 muted 相对 surface/#363D50 ≥4.5 */
   --text-muted:#B0B692;
-  /* 品牌色恒定：舒适暗色 accent 为舒适浅色 #2C9678 同色相（~160°）提亮版 */
-  --accent:#5FCFA4;
-  --accent-dark:#46B98C;
+  /* 暗色主题专属色相（品牌签名）：舒适暗色以米白 #E2E7BF 为高亮主色，logo 蓝转玫粉 */
+  --accent:#E2E7BF;
+  --accent-dark:#c2c79f;
   --vault-color:#a78bfa;
-  --accent-light:rgba(95,207,164,0.12);
-  --accent-glow:rgba(95,207,164,0.2);
-  --accent-grad:linear-gradient(135deg,#5FCFA4 0%,#8ADFC0 100%);
-  --brand-logo-blue:#7E9BF0;
-  --brand-logo-green:#34D399;
-  --brand-logo-text:#5FCFA4;
+  --accent-light:rgba(226,231,191,0.1);
+  --accent-glow:rgba(226,231,191,0.18);
+  --accent-grad:linear-gradient(135deg,#E2E7BF 0%,#C8CE9A 100%);
+  --brand-logo-blue:#F04A8A;
+  --brand-logo-green:#E2E7BF;
+  --brand-logo-text:#E2E7BF;
   --shadow-xs:0 1px 2px rgba(0,0,0,0.3);
   --shadow-sm:0 1px 3px rgba(0,0,0,0.35),0 1px 2px rgba(0,0,0,0.2);
   --shadow-md:0 4px 16px -2px rgba(0,0,0,0.45),0 2px 4px rgba(0,0,0,0.25);
@@ -226,7 +226,7 @@
   --rail-bg:#252B38;
   --rail-border:#3A4152;
   --card-badge-bg:rgba(226,231,191,0.08);
-  /* 品牌色恒定：舒适暗色 accent 为浅色系同款（#5FCFA4），--text-on-accent 用深色保对比度 */
+  /* 舒适暗色 accent 为米白浅底，文字反色需为深色以保障无障碍对比度 */
   --text-on-accent:#262E24;
   --emerald:var(--green);
   --emerald-light:var(--green-light);
