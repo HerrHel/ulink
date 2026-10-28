@@ -15,6 +15,7 @@ import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { getSmartPrefill } from '../../lib/ai/smartPrefill.js'
 import { fetchUrlMetadataAsync } from '../../lib/ai/smartIntake.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
+import { useEntitlement } from './useEntitlement.js'
 import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
@@ -614,6 +615,16 @@ export async function triggerAiFetch(targetUrl?: string, isManual = false) {
     return
   }
 
+  const ent = useEntitlement()
+  const quota = ent.checkAiEnrichQuota()
+  if (!quota.allowed) {
+    if (isManual) {
+      toast(t('settings.aiEnrichDailyLimitReached', { used: quota.total, limit: quota.total }), false)
+      ui.openPurchase()
+    }
+    return
+  }
+
   const curSeq = ++_aiFetchSeq
   bmForm.isAiFetching = true
   bmForm.aiFetchedSuccess = false
@@ -625,6 +636,7 @@ export async function triggerAiFetch(targetUrl?: string, isManual = false) {
     }
 
     if (res.success) {
+      ent.consumeAiEnrichQuota()
       bmForm.aiFetchedSuccess = true
       // 真实标题：仅在用户未手动修改过标题时平滑填入
       if (res.title && (!bmForm._userEditedTitle || !bmForm.title.trim() || bmForm.title === bmForm._autoTitle)) {

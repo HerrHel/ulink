@@ -41,6 +41,7 @@ import { useAuth } from '../../composables/domain/useAuth.js'
 import { toast } from '../../lib/toast.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { extractHostname } from './extractHostname.js'
+import { isProUser } from '../../composables/domain/useEntitlement.js'
 import { t, tN } from '../../i18n/index.js'
 import type { SearchResultItem } from '../../lib/search.js'
 
@@ -90,7 +91,7 @@ const searchResults = computed<SearchResultItem[]>(() => {
     // 全量基准 + 软删过滤推到结果层，与 data.ts / SearchSuggest 共享缓存。
     ds._searchVersion,
     false,
-    ui.semanticSearchEnabled,
+    ui.semanticSearchEnabled && isProUser(),
   ).filter(r => {
     if (r._isGroup) return !ds.groupMap[r.id]?.deletedAt
     return !ds.bookmarkMap[r.id]?.deletedAt

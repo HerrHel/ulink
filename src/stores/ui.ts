@@ -77,6 +77,7 @@ interface ModalState {
   quickLook: boolean
   /** 设置/重设登录密码（邮箱验证码 + 新密码），从设置面板唤起 */
   setPassword: boolean
+  purchase: boolean
 }
 
 interface PanelState {
@@ -219,6 +220,7 @@ export const useUIStore = defineStore('ui', {
         aiEnrich: false,
         quickLook: false,
         setPassword: false,
+        purchase: false,
       },
       panels: {
         settings: false,
@@ -369,6 +371,10 @@ export const useUIStore = defineStore('ui', {
       if (this.isMobile) this.panels.rail = false
     },
 
+    /** 打开会员升级/续费弹窗 */
+    openPurchase() {
+      this.modals.purchase = true
+    },
     /** 打开存量书签主动补齐对比窗 */
     openAiEnrich(bmId: string) {
       this.aiEnrichTargetBmId = bmId

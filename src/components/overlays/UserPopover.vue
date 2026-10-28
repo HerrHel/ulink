@@ -140,6 +140,27 @@
 
             <div class="up-divider"></div>
 
+            <!-- 会员与订阅入口 -->
+            <button
+              class="up-menu-item up-upgrade-item"
+              :class="{ 'is-paid': memberIsPaid }"
+              data-testid="up-upgrade-btn"
+              @click="openPurchase"
+            >
+              <div class="up-item-left">
+                <span class="up-item-icon" aria-hidden="true" v-html="I.sparkles"></span>
+                <div class="up-item-text">
+                  <span class="up-item-title">{{ memberIsPaid ? t('userPopover.proMember') : t('userPopover.upgrade') }}</span>
+                  <span class="up-item-desc">{{ memberIsPaid ? (memberPlanName || t('userPopover.proDesc')) : t('userPopover.upgradeDesc') }}</span>
+                </div>
+              </div>
+              <span class="up-upgrade-badge" :class="{ 'badge-pro': memberIsPaid }">
+                {{ memberIsPaid ? 'PRO' : t('userPopover.upgrade') }}
+              </span>
+            </button>
+
+            <div class="up-divider"></div>
+
             <!-- 退出登录 -->
             <button class="up-menu-item up-danger-item" @click="onSignOut">
               <div class="up-item-left">
@@ -151,11 +172,21 @@
         </div>
       </div>
     </Transition>
+    <!-- 购买弹窗挂在 body -->
+    <PurchaseModal
+      :visible="showPurchase"
+      :current-plan-id="memberPlanId"
+      @close="showPurchase = false"
+      @paid="onPurchasePaid"
+    />
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, watch, onMounted, onUnmounted } from 'vue'
+import { fetchMyEntitlement } from '../../composables/domain/useRedeem.js'
+import { prefetchPurchasePlans } from '../../composables/domain/usePurchasePlans.js'
+import PurchaseModal from '../modals/PurchaseModal.vue'
 import { useUserPopoverStore } from '../../stores/overlay.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -173,6 +204,69 @@ const sync = useCloudSync()
 const syncState = useSyncState()
 const e2e = useE2E()
 const uiStore = useUIStore()
+
+const ENTITLEMENT_CACHE_KEY = 'ulink_entitlement_v1'
+
+function getInitialEntitlement(): { isPaid: boolean; planId: string; planName: string } {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(ENTITLEMENT_CACHE_KEY) : null
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return { isPaid: false, planId: '', planName: '' }
+}
+
+const initialEnt = getInitialEntitlement()
+const showPurchase = ref(false)
+const memberIsPaid = ref(initialEnt.isPaid)
+const memberPlanId = ref(initialEnt.planId)
+const memberPlanName = ref(initialEnt.planName)
+
+async function loadMember(): Promise<void> {
+  if (!auth.isLoggedIn) {
+    memberIsPaid.value = false
+    memberPlanId.value = ''
+    memberPlanName.value = ''
+    try {
+      localStorage.removeItem(ENTITLEMENT_CACHE_KEY)
+    } catch {}
+    return
+  }
+  try {
+    const e = await fetchMyEntitlement()
+    memberIsPaid.value = e.isPaid
+    memberPlanId.value = e.planId
+    memberPlanName.value = e.planName
+    try {
+      localStorage.setItem(ENTITLEMENT_CACHE_KEY, JSON.stringify({
+        isPaid: e.isPaid,
+        planId: e.planId,
+        planName: e.planName,
+      }))
+    } catch {}
+  } catch {
+    // 请求失败时保留缓存状态
+  }
+}
+
+watch(
+  () => store.open,
+  (open) => {
+    if (open && auth.isLoggedIn) {
+      void loadMember()
+      prefetchPurchasePlans()
+    }
+  },
+  { immediate: true },
+)
+
+function openPurchase() {
+  close()
+  showPurchase.value = true
+}
+
+async function onPurchasePaid() {
+  await loadMember()
+}
 
 const isSyncing = ref(false)
 const isEditing = ref(false)
@@ -307,6 +401,9 @@ function openSettings() {
 
 async function onSignOut() {
   close()
+  try {
+    localStorage.removeItem(ENTITLEMENT_CACHE_KEY)
+  } catch {}
   const ok = await auth.signOut()
   if (ok) {
     await sync.resetSyncState()

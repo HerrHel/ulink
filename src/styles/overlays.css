@@ -581,3 +581,23 @@
   color:var(--rose, var(--rose));
 }
 
+/* ── 会员与订阅入口（普通菜单项，克制不打扰） ── */
+.up-upgrade-item{
+  position:relative;
+}
+.up-upgrade-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:2px 6px;
+  border-radius:var(--radius-sm);
+  font-size:var(--fs-2xs);
+  font-weight:500;
+  background:var(--surface-hover);
+  color:var(--text-muted);
+  flex-shrink:0;
+}
+.up-upgrade-item.is-paid .up-upgrade-badge,
+.up-upgrade-badge.badge-pro{
+  background:var(--surface-hover);
+  color:var(--accent);
+  font-weight:600;
+}

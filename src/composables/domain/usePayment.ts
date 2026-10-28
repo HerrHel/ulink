@@ -124,6 +124,30 @@ export function usePayment() {
   /** 下单：返回订单（含二维码），失败返回 null 并设置 error */
   async function create(planId: string, channel: PaymentChannel): Promise<PaymentOrder | null> {
     error.value = null
+
+    // 允许带有 test_pay=1 参数时直接进入演示模式（方便无真实商户号时体验完整弹层与支付交互）
+    const isTestParam = typeof window !== 'undefined' && window.location.search.includes('test_pay=1')
+    if (isTestParam) {
+      creating.value = true
+      try {
+        await new Promise((r) => setTimeout(r, 300))
+        const now = Date.now()
+        const mockOrder: PaymentOrder = {
+          orderId: 'test_ord_' + now,
+          planId,
+          amountCents: 1200,
+          channel,
+          status: 'pending',
+          qrCode: 'https://ulink.ren/pay/test?channel=' + channel + '&t=' + now,
+          expiresAt: new Date(now + 30 * 60000).toISOString(),
+        }
+        order.value = mockOrder
+        return mockOrder
+      } finally {
+        creating.value = false
+      }
+    }
+
     if (!isCloudBaseBackend()) {
       error.value = 'not_configured'
       return null
@@ -141,11 +165,14 @@ export function usePayment() {
 
     creating.value = true
     try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 8000)
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: 'create', planId, channel }),
-      })
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer))
       const body = (await res.json().catch(() => ({}))) as RawOrder & { error?: string; ok?: boolean }
       if (!res.ok || body.ok !== true) {
         error.value = toPaymentError(body.error, res.status)

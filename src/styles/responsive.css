@@ -112,18 +112,25 @@
   .detail-inner{min-width:0}
 
   /* === Settings panel: bottom sheet on mobile === */
+  .settings-dialog,
   .settings-drawer{
     margin-left:0;width:100%;max-width:none;
-    border-left:none;border-radius:var(--radius-base) var(--radius-base) 0 0;
-    box-shadow:0 -4px 24px rgba(0,0,0,0.15);
-    max-height:85vh;
+    border-left:none;border-right:none;border-bottom:none;
+    border-radius:18px 18px 0 0;
+    box-shadow:0 -8px 32px rgba(0,0,0,0.2);
+    height:90vh;max-height:90vh;
   }
+  .settings-modal-wrap,
   .settings-drawer-wrap{
+    padding:0;
     align-items:flex-end;
   }
+  .modal-enter-from .settings-dialog,
+  .modal-leave-to .settings-dialog,
   .drawer-enter-from .settings-drawer,
   .drawer-leave-to .settings-drawer{
     transform:translateY(100%);
+    opacity:1;
   }
 
 

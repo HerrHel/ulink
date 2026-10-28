@@ -37,6 +37,7 @@ import { toggleGroupFocus } from '../../composables/domain/useGroup.js'
 import { searchWithHighlights } from '../../lib/search.js'
 import { I } from '../../config/icons.js'
 import { MAX_SUGGESTIONS } from '../../config/constants.js'
+import { isProUser } from '../../composables/domain/useEntitlement.js'
 import { t, tN } from '../../i18n/index.js'
 import type { SearchResultItem } from '../../lib/search.js'
 
@@ -64,7 +65,7 @@ const results = computed<SearchResultItem[]>(() => {
     //（稳定引用，CRUD 才变），软删/分类过滤推到下方结果层。与 data.ts filteredBookmarks 共享同一份缓存。
     dataStore._searchVersion,
     false,
-    ui.semanticSearchEnabled,
+    ui.semanticSearchEnabled && isProUser(),
   ).filter(r => {
     if (r._isGroup) return !dataStore.groupMap[r.id]?.deletedAt
     return !dataStore.bookmarkMap[r.id]?.deletedAt

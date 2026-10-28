@@ -3,6 +3,7 @@
  * `this: DataStoreThis` 显式标注供跨 getter 互引（如 trashCount → trashedBookmarks）。
  */
 import { CAT_ALL } from '../config/constants.js'
+import { isProUser } from '../composables/domain/useEntitlement.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds } from '../lib/search.js'
 import { _filterAttrs, _sortItems } from '../lib/dataQuery.js'
@@ -39,7 +40,7 @@ export const dataGetters = {
       // 但 Fuse 缓存不再因每次 filter 产生的新数组引用而重建。旧实现传 bm（每次新建）
       // → ref 永远 !== _bmBaseRef → 每个键击重建 Fuse + 与 SearchSuggest 互踩缓存基准。
       // 审计 R8：删去显式 forceRebuild=true，仅依赖 version 不匹配触发重建（CRUD 时 _searchIndexDirty=true 递增 version）。
-      const matchIds = searchBookmarkIds(state.bookmarks, q, state.customAttributes, state._searchVersion, false, ui.semanticSearchEnabled)
+      const matchIds = searchBookmarkIds(state.bookmarks, q, state.customAttributes, state._searchVersion, false, ui.semanticSearchEnabled && isProUser())
       if (matchIds) bm = bm.filter(b => matchIds.has(b.id))
     }
     bm = _filterAttrs(bm, ui)
@@ -60,7 +61,7 @@ export const dataGetters = {
       // 同 filteredBookmarks：在全量 siblingGroups 上搜复用 Fuse 缓存（见上注释），
       // 再用 groups.filter 限定当前分类。旧实现传每次新建的 groups 子集 → ref 永变 → 重建。
       // 审计 R8：删 forceRebuild=true，仅依赖 version 不匹配触发重建（CRUD 时 _searchIndexDirty=true 递增 version）。
-      const matchIds = searchGroupIds(state.siblingGroups, q, this.bookmarkMap, state.customAttributes, state._searchVersion, false, ui.semanticSearchEnabled)
+      const matchIds = searchGroupIds(state.siblingGroups, q, this.bookmarkMap, state.customAttributes, state._searchVersion, false, ui.semanticSearchEnabled && isProUser())
       if (matchIds) groups = groups.filter(g => matchIds.has(g.id))
     }
     groups = _filterAttrs(groups, ui)

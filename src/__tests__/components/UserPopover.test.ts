@@ -5,6 +5,19 @@ import { useUserPopoverStore } from '../../stores/overlay.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { useE2EStore } from '../../stores/e2e.js'
+// 模拟 fetchMyEntitlement
+const fetchMyEntitlementMock = vi.fn().mockResolvedValue({
+  planId: 'free',
+  planName: 'free',
+  status: 'active',
+  expiresAt: null,
+  features: {},
+  isPaid: false,
+})
+vi.mock('../../composables/domain/useRedeem.js', () => ({
+  fetchMyEntitlement: () => fetchMyEntitlementMock(),
+}))
+
 import UserPopover from '../../components/overlays/UserPopover.vue'
 
 // 模拟 toast
@@ -267,6 +280,73 @@ describe('UserPopover.vue', () => {
       nickname: 'Alice Cooper',
       avatar: emojiBtn.textContent?.trim(),
     })
+
+    wrapper.unmount()
+  })
+  it('renders upgrade entry and opens purchase modal on click', async () => {
+    fetchMyEntitlementMock.mockResolvedValueOnce({
+      planId: 'free',
+      planName: 'free',
+      status: 'active',
+      expiresAt: null,
+      features: {},
+      isPaid: false,
+    })
+
+    const popoverStore = useUserPopoverStore()
+    const authStore = useAuthStore()
+    authStore.user = { id: 'u1', email: 'alice@example.com' } as any
+
+    popoverStore.show()
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+    // 等待 loadMember 异步微任务完成
+    await new Promise(r => setTimeout(r, 10))
+    await nextTick()
+
+    const card = document.querySelector('.user-popover-card')
+    const upgradeBtn = card?.querySelector('[data-testid="up-upgrade-btn"]') as HTMLButtonElement
+    expect(upgradeBtn).not.toBeNull()
+    expect(upgradeBtn.textContent).toContain('升级套餐')
+    expect(upgradeBtn.textContent).toContain('解锁 AI 额度与无限同步')
+
+    // 点击升级项：关闭 popover 并打开 PurchaseModal
+    await upgradeBtn.click()
+    await nextTick()
+
+    expect(popoverStore.open).toBe(false)
+    const purchaseModal = document.querySelector('.pur-modal')
+    expect(purchaseModal).not.toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('renders PRO member badge when user is paid', async () => {
+    fetchMyEntitlementMock.mockResolvedValueOnce({
+      planId: 'pro_yearly',
+      planName: 'PRO 年付方案',
+      status: 'active',
+      expiresAt: null,
+      features: {},
+      isPaid: true,
+    })
+
+    const popoverStore = useUserPopoverStore()
+    const authStore = useAuthStore()
+    authStore.user = { id: 'u1', email: 'alice@example.com' } as any
+
+    popoverStore.show()
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+    await new Promise(r => setTimeout(r, 10))
+    await nextTick()
+
+    const card = document.querySelector('.user-popover-card')
+    const upgradeBtn = card?.querySelector('[data-testid="up-upgrade-btn"]') as HTMLButtonElement
+    expect(upgradeBtn).not.toBeNull()
+    expect(upgradeBtn.classList.contains('is-paid')).toBe(true)
+    expect(upgradeBtn.textContent).toContain('PRO 会员')
+    expect(upgradeBtn.textContent).toContain('PRO 年付方案')
 
     wrapper.unmount()
   })

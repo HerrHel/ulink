@@ -10,14 +10,29 @@
     <div class="modal modal-md ai-enrich-modal" @click.stop>
       <div class="modal-head">
         <div class="modal-title">
-          <span class="ai-title-badge">PRO</span>
+          <span class="ai-title-badge" :class="{ 'badge-pro': quota.isPro }">
+            {{ quota.isPro ? 'PRO' : t('settings.aiEnrichFreeTrialBadge', { remaining: quota.remaining, total: quota.total }) }}
+          </span>
           <span>{{ t('ai.enrichModalTitle') }}</span>
         </div>
         <button class="modal-close" @click="close" :title="t('common.close')" v-html="I.close"></button>
       </div>
 
       <div class="modal-body ai-enrich-body">
-        <div v-if="!ui.smartFillEnabled" class="empty empty-compact">
+        <div v-if="!quota.allowed" class="empty empty-compact ai-quota-exhausted-box">
+          <div class="ai-quota-badge">PRO 会员专享</div>
+          <p class="ai-quota-title" style="font-weight: 700; margin-bottom: 6px; font-size: var(--fs-md);">
+            {{ t('settings.aiEnrichExhaustedTitle') }}
+          </p>
+          <p class="ai-quota-desc" style="color: var(--text-secondary); font-size: var(--fs-sm); line-height: 1.5; max-width: 380px; margin: 0 auto;">
+            {{ t('settings.aiEnrichExhaustedDesc') }}
+          </p>
+          <button type="button" class="btn btn-primary btn-sm" style="margin-top: 14px;" @click="openUpgrade">
+            {{ t('settings.aiEnrichUpgradeNow') }}
+          </button>
+        </div>
+
+        <div v-else-if="!ui.smartFillEnabled" class="empty empty-compact">
           <p>{{ t('ai.smartFillDisabledModal') }}</p>
           <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 10px;" @click="enableSmartFill">
             {{ t('ai.enableSmartFillNow') }}
@@ -134,9 +149,12 @@ import { toast } from '../../lib/toast.js'
 import type { AiEnrichDiff } from '../../types/ai.js'
 import { enrichBookmarkMetadata } from '../../lib/ai/cloudAiClient.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
+const ent = useEntitlement()
+const quota = computed(() => ent.checkAiEnrichQuota())
 
 const loading = ref(false)
 const diff = ref<AiEnrichDiff | null>(null)
@@ -153,6 +171,7 @@ const targetBookmark = computed(() => {
 
 async function fetchEnrich() {
   if (!ui.modals.aiEnrich || !targetBookmark.value || !ui.smartFillEnabled) return
+  if (!quota.value.allowed) return
   loading.value = true
   diff.value = null
   try {
@@ -162,6 +181,7 @@ async function fetchEnrich() {
       ds.customAttributes
     )
     diff.value = result
+    ent.consumeAiEnrichQuota()
     applyTitle.value = !!result.suggestedTitle
     applyNotes.value = !!(result.suggestedNotes && result.suggestedNotes !== result.currentNotes)
     applyCategory.value = !!result.suggestedCategoryId
@@ -171,6 +191,11 @@ async function fetchEnrich() {
   } finally {
     loading.value = false
   }
+}
+
+function openUpgrade() {
+  close()
+  ui.openPurchase()
 }
 
 function enableSmartFill() {
@@ -394,5 +419,22 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+.ai-quota-exhausted-box {
+  padding: 32px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ai-quota-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  margin-bottom: 12px;
 }
 </style>

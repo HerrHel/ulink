@@ -75,7 +75,7 @@
                     <div class="sp-card-row sp-sync-card-row">
                       <div class="sp-row-meta">
                         <div class="sp-sync-title-row">
-                          <span class="sp-row-title">云端多端同步</span>
+                          <span class="sp-row-title">{{ t('settings.cloudMultiSync') }}</span>
                           <span class="sp-sync-status" data-testid="lv-sync-label" :class="syncState.level">
                             <span class="sp-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
                           </span>
@@ -98,17 +98,17 @@
                           @click.stop="onOpenAuthModal"
                         >
                           <span aria-hidden="true" v-html="I.login"></span>
-                          重新登录
+                          {{ t('sync.reauth') }}
                         </button>
                         <button
                           class="btn btn-secondary btn-sm"
                           data-testid="sp-retry-sync-btn"
                           :disabled="isSyncing || isResyncing"
                           @click.stop="onManualSync"
-                          :title="t('sync.retrySync')"
+                          :title="isSyncing ? t('sync.syncing') : (canRetrySync ? t('sync.retrySync') : t('sync.syncNow'))"
                         >
                           <span aria-hidden="true" v-html="I.refresh" :class="{ 'icon-spin': isSyncing }"></span>
-                          {{ isSyncing ? (t('sync.syncing') || '同步中…') : (canRetrySync ? t('sync.retrySync') : '立即同步') }}
+                          {{ isSyncing ? t('sync.syncing') : (canRetrySync ? t('sync.retrySync') : t('sync.syncNow')) }}
                         </button>
                         <button
                           v-if="syncState.level === 'conflict'"
@@ -127,7 +127,7 @@
                           :title="t('sync.resyncAllHint')"
                         >
                           <span aria-hidden="true" v-html="I.cloud"></span>
-                          {{ isResyncing ? '重传中…' : t('sync.resyncAll') }}
+                          {{ isResyncing ? t('sync.resyncing') : t('sync.resyncAll') }}
                         </button>
                       </div>
                     </div>
@@ -320,7 +320,7 @@
                     <div class="sp-row-ctrl">
                       <button
                         type="button"
-                        class="sp-upgrade-btn"
+                        class="btn btn-secondary btn-sm sp-upgrade-btn"
                         data-testid="lv-upgrade-btn"
                         @click="showPurchase = true"
                       >
@@ -518,11 +518,14 @@
                   </div>
                   <div class="sp-card-row" @click="onToggleSemanticSearch" style="cursor: pointer;">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.semanticSearch') }}</span>
+                      <span class="sp-row-title">
+                        {{ t('settings.semanticSearch') }}
+                        <span v-if="!isPro" class="sp-plus-tag">PRO</span>
+                      </span>
                       <span class="sp-row-desc">{{ t('settings.semanticSearchHint') }}</span>
                     </div>
                     <div class="sp-row-ctrl" data-testid="lv-semantic-search-toggle">
-                      <div class="sp-toggle-pill" :class="{ active: uiStore.semanticSearchEnabled }">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.semanticSearchEnabled && isPro }">
                         <span class="sp-switch"></span>
                       </div>
                     </div>
@@ -938,6 +941,7 @@ import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
 import PurchaseModal from '../modals/PurchaseModal.vue'
 import { dbRpc } from '../../lib/dbApi.js'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import {
   fetchMyEntitlement,
   redeemCode,
@@ -1115,6 +1119,8 @@ const beianLinks = computed(() => {
 })
 
 // 会员权益与兑换码
+const entService = useEntitlement()
+const isPro = entService.isPro
 const entitlement = ref<MyEntitlement>({
   planId: 'free',
   planName: 'free',
@@ -1380,6 +1386,11 @@ function onToggleSmartFill() {
 }
 
 function onToggleSemanticSearch() {
+  if (!isPro.value) {
+    toast(t('settings.semanticSearchNeedsPro'), false)
+    showPurchase.value = true
+    return
+  }
   uiStore.semanticSearchEnabled = !uiStore.semanticSearchEnabled
   uiStore.saveUIState()
   toast(uiStore.semanticSearchEnabled ? t('settings.semanticSearchOnToast') : t('settings.semanticSearchOffToast'), true)

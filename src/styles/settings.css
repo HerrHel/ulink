@@ -83,7 +83,7 @@
 /* ==================== LEFT SIDEBAR NAVIGATION ==================== */
 .settings-nav{
   width:210px;flex-shrink:0;
-  background:var(--bg-alt, rgba(0,0,0,0.02));
+  background:var(--surface-alt, rgba(0,0,0,0.02));
   border-right:1px solid var(--border-light);
   padding:14px 10px;
   display:flex;flex-direction:column;gap:4px;
@@ -106,7 +106,7 @@
   font-family:inherit;
 }
 .settings-nav-item:hover{
-  background:var(--surface-hover, rgba(0,0,0,0.04));
+  background:var(--surface-active, rgba(0,0,0,0.04));
   color:var(--text);
 }
 .settings-nav-item.active{
@@ -171,7 +171,7 @@
 }
 .sp-card-head{
   padding:10px 16px;
-  background:var(--bg-alt, rgba(0,0,0,0.02));
+  background:var(--surface-hover, rgba(0,0,0,0.02));
   border-bottom:1px solid var(--border-light);
   font-size:var(--fs-xs);font-weight:700;
   color:var(--text-secondary);
@@ -218,7 +218,7 @@
 /* Segmented control */
 .sp-seg{
   display:inline-flex;gap:3px;
-  background:var(--bg-alt);
+  background:var(--surface-hover);
   border-radius:var(--radius-md, 7px);
   padding:3px;
   border:1px solid var(--border-light);
@@ -402,7 +402,7 @@
 
 /* Profile Edit Box */
 .sp-profile-edit-box{
-  background:var(--bg-alt);
+  background:var(--surface-hover);
   border-top:1px solid var(--border-light);
   border-bottom:1px solid var(--border-light);
   padding:14px 16px;
@@ -432,7 +432,7 @@
   width:180px;
 }
 .sp-storage-track{
-  width:100%;height:8px;background:var(--bg-alt);border-radius:var(--radius-xs);overflow:hidden;border:1px solid var(--border-light);
+  width:100%;height:8px;background:var(--surface-hover);border-radius:var(--radius-xs);overflow:hidden;border:1px solid var(--border-light);
 }
 .sp-storage-bar{
   height:100%;border-radius:var(--radius-xs);transition:width 0.3s ease;
@@ -467,7 +467,7 @@
 /* Deadlinks Progress */
 .sp-progress-box{
   display:flex;align-items:center;gap:10px;padding:8px 16px;
-  background:var(--bg-alt);border-top:1px solid var(--border-light);
+  background:var(--surface-hover);border-top:1px solid var(--border-light);
 }
 .sp-progress-track{
   flex:1;height:6px;background:var(--border-light);border-radius:var(--radius-xs);overflow:hidden;
@@ -516,7 +516,7 @@
 
 /* AI Providers & Legal List */
 .sp-providers-list{
-  padding:10px 16px 14px;background:var(--bg-alt);border-top:1px solid var(--border-light);
+  padding:10px 16px 14px;background:var(--surface-hover);border-top:1px solid var(--border-light);
   display:flex;flex-direction:column;gap:8px;
 }
 .sp-provider-item{
@@ -532,7 +532,7 @@
 .sp-providers-footer{font-size:var(--fs-2xs);color:var(--text-muted);margin-top:2px}
 
 .sp-legal-box{
-  padding:10px 16px;background:var(--bg-alt);border-top:1px solid var(--border-light);
+  padding:10px 16px;background:var(--surface-hover);border-top:1px solid var(--border-light);
   display:flex;flex-direction:column;gap:6px;
 }
 .sp-legal-link{font-size:var(--fs-sm);color:var(--accent);text-decoration:none}
@@ -580,39 +580,76 @@
     overflow:hidden;
   }
 
-  /* ── 横向 tab 条 ── */
+  /* ── 移动端抽屉过渡与把手暗示 ── */
+  .modal-enter-from .settings-dialog,
+  .modal-leave-to .settings-dialog,
+  .drawer-enter-from .settings-drawer,
+  .drawer-leave-to .settings-drawer{
+    transform:translateY(100%);
+    opacity:1;
+  }
+  .settings-dialog,
+  .settings-drawer{
+    transform:translateY(0);
+    transition:transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .settings-dialog-head,
+  .settings-drawer-head{
+    position:relative;
+    padding-top:18px;
+    padding-bottom:12px;
+  }
+  /* 顶部抽屉拖拽条视觉暗示 */
+  .settings-dialog-head::before,
+  .settings-drawer-head::before{
+    content:'';
+    position:absolute;
+    top:7px;
+    left:50%;
+    transform:translateX(-50%);
+    width:36px;
+    height:4px;
+    border-radius:2px;
+    background:var(--border-hover, var(--border));
+  }
+
+  .sp-help-btn{
+    display:none !important;
+  }
+
+  /* ── 移动端移除横向滚动 Tab 栏，回归原生一滑到底 ── */
   .settings-nav{
-    width:100%;
-    flex-direction:row;
-    flex-shrink:0;
-    position:sticky;top:0;z-index:2;
-    border-right:none;
-    border-bottom:1px solid var(--border-light);
-    overflow-x:auto;overflow-y:hidden;
-    padding:10px 14px;
-    gap:8px;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
-    background:var(--surface);
-    /* 右侧渐隐：暗示 tab 可横向滚动（滚动条已隐藏，否则用户不知道后面还有） */
-    mask-image:linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%);
+    display:none !important;
   }
-  .settings-nav::-webkit-scrollbar{display:none}
-  .settings-nav-item{
-    width:auto;flex-shrink:0;white-space:nowrap;
-    /* 触控目标：垂直 44px（含 padding），文字仍在视觉中线 */
-    min-height:44px;
-    padding:0 14px;
-    display:inline-flex;align-items:center;gap:6px;
+
+  /* ── 所有设置分区自上而下顺畅连续排布 ── */
+  .settings-tab-panel{
+    display:flex !important;
+    max-width:100%;
+    animation:none;
+  }
+  .settings-tab-panel + .settings-tab-panel{
+    margin-top:28px;
+    padding-top:20px;
+    border-top:1px solid var(--border-light);
+  }
+
+  .sp-tab-header{
+    margin-bottom:12px;
+  }
+  .sp-tab-title{
     font-size:var(--fs-base);
-    border-radius:var(--radius-md);
+    font-weight:700;
+    color:var(--text);
+    margin:0 0 2px;
   }
-  /* 触感反馈：移动端没有 hover，用 active 给出即时反馈 */
-  .settings-nav-item:active{
-    transform:scale(.97);
-    background:var(--surface-2, rgba(0,0,0,.04));
+  .sp-tab-desc{
+    font-size:var(--fs-xs);
+    color:var(--text-muted);
+    margin:0 0 8px;
+    line-height:1.4;
   }
-  .settings-nav-item .nav-item-label{font-size:var(--fs-base)}
 
   /* ── 内容区 ── */
   .settings-content-pane{
@@ -676,8 +713,6 @@
 
 /* 极窄屏（iPhone SE / 小屏安卓）再收紧一档 */
 @media (max-width: 380px) {
-  .settings-nav{padding:8px 10px;gap:6px}
-  .settings-nav-item{padding:0 11px;font-size:var(--fs-sm)}
   .settings-content-pane{padding:12px 12px calc(28px + env(safe-area-inset-bottom, 0px))}
 }
 
@@ -698,26 +733,9 @@
   text-decoration:underline;
 }
 
-/* 升级/续费按钮（会员与权益卡片） */
+/* 升级/续费按钮（会员与权益卡片）—— 保持克制，标准次级按钮尺寸 */
 .sp-upgrade-btn{
-  min-height:36px;
-  padding:0 16px;
-  border:none;
-  border-radius:var(--radius-md);
-  background:var(--accent,var(--accent));
-  color:#fff;
-  font:inherit;
-  font-weight:600;
   white-space:nowrap;
-  cursor:pointer;
-  transition:filter .15s ease, transform 0.15s ease;
-}
-.sp-upgrade-btn:hover{filter:brightness(1.06)}
-.sp-upgrade-btn:active{transform:scale(.97)}
-
-@media (max-width:768px){
-  /* 移动端满足 44px 触控下限，并撑满该行 */
-  .sp-upgrade-btn{min-height:44px;width:100%}
 }
 
 /* 本月 AI 用量进度条 */
