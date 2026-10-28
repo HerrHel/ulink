@@ -220,7 +220,14 @@ export async function askMiMoStream(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new Error(`MiMo API request failed (${response.status}): ${errText || response.statusText}`)
+    // 云函数返回的中文业务文案（如额度超限）优先透出，比 JSON 原文可读
+    let friendly = ''
+    try {
+      friendly = (JSON.parse(errText) as { message?: string }).message || ''
+    } catch {
+      /* 非 JSON 保持原文 */
+    }
+    throw new Error(friendly || `MiMo API request failed (${response.status}): ${errText || response.statusText}`)
   }
 
   let accumulatedReasoning = ''
@@ -445,7 +452,14 @@ export async function askMiMoRaw(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
-    throw new Error(`MiMo API request failed (${response.status}): ${errText || response.statusText}`)
+    // 云函数返回的中文业务文案（如额度超限）优先透出，比 JSON 原文可读
+    let friendly = ''
+    try {
+      friendly = (JSON.parse(errText) as { message?: string }).message || ''
+    } catch {
+      /* 非 JSON 保持原文 */
+    }
+    throw new Error(friendly || `MiMo API request failed (${response.status}): ${errText || response.statusText}`)
   }
 
   const data = await response.json().catch(() => ({}))

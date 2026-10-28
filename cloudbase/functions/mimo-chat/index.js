@@ -45,11 +45,14 @@ function shanghaiPeriod(now) {
 /** 影子计量：只写账本，任何失败都不影响主流程 */
 async function recordUsage(db, uid, metric, amount, ref) {
   try {
+    // period 必传：北京时间当月 'YYYY-MM'。不传会被记成 'unknown'，按月额度查不到（已踩）
+    const period = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 7)
     await db.rpc('record_usage', {
       p_uid: uid,
       p_metric: metric,
       p_amount: amount,
       p_ref: ref,
+      p_period: period,
       p_period: shanghaiPeriod(),
     })
   } catch (e) {
@@ -171,6 +174,26 @@ const server = http.createServer(async (req, res) => {
     if (!guard.ok) {
       sendJson(res, guard.status, { error: guard.error }, cors)
       return
+    }
+
+    // ── 额度拦截（enforce）：本月 ai.tokens 超额拒绝 ──
+    // quota 查询失败 fail-open：配额系统故障时不误伤用户（宁可少拦，日志留痕）
+    if (BILLING_MODE === 'enforce' && uid) {
+      try {
+        const q = await db.rpc('ai_quota_check', { p_uid: uid })
+        if (q.error) {
+          console.error('[mimo-chat] ai_quota_check failed (fail-open):', q.error)
+        } else if (q.data?.exceeded === true) {
+          console.warn('[mimo-chat] quota exceeded for', uid, JSON.stringify(q.data))
+          sendJson(res, 429, {
+            error: 'quota_exceeded',
+            message: '本月 AI 额度已用完。升级 PRO 解锁 20 万 tokens/月（年付折合 ¥9/月）。',
+          }, cors)
+          return
+        }
+      } catch (e) {
+        console.error('[mimo-chat] quota check throw (fail-open):', e)
+      }
     }
 
     const upstream = await fetch(MIMO_BASE_URL + '/chat/completions', {

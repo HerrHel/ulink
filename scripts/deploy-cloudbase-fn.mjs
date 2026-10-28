@@ -154,6 +154,8 @@ const FN_EXTRA_ENV = {
   'mimo-chat': () => {
     const out = {
       IP_HASH_SALT: readEnvLocal('MIMO_CHAT_IP_HASH_SALT') || 'ulink-mimo-chat',
+      // 额度拦截开关：shadow=只计量；enforce=超额 429（.env.local 控制，部署时注入）
+      BILLING_MODE: readEnvLocal('BILLING_MODE') || 'shadow',
     }
     // MIMO_API_KEY 缺失时函数自身 503（不部署假 key）
     const key = readEnvLocal('MIMO_API_KEY')

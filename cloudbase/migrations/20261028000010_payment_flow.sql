@@ -435,3 +435,48 @@ BEGIN
   );
 END;
 $$;
+
+-- ── 10. AI 额度检查（enforce 的数据源）────────────────────────────
+-- 用量口径：usage_ledger 的 ai.chars（字符）/2 ≈ tokens（中文 1~1.5 字符/token，
+-- 英文 ~4，混合保守取 2 → 宁少勿多）。额度键：当前方案 features['ai.tokens.monthly']。
+CREATE OR REPLACE FUNCTION public.ai_quota_check(p_uid text)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_ent    jsonb;
+  v_limit  numeric;
+  v_used   numeric;
+BEGIN
+  v_ent := public.resolve_entitlement(p_uid);
+  v_limit := coalesce(
+    (v_ent->'features')->>'ai.tokens.monthly',
+    '50000'
+  )::numeric;
+
+  SELECT coalesce(sum(amount), 0) / 2 INTO v_used
+    FROM public.usage_ledger
+   WHERE user_id = p_uid
+     AND metric = 'ai.chars'
+     AND period = to_char(now() AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM');
+
+  RETURN jsonb_build_object(
+    'plan_id',      v_ent ->> 'plan_id',
+    'status',       v_ent ->> 'status',
+    'limit_tokens', v_limit,
+    'used_tokens',  v_used,
+    'remaining',    v_limit - v_used,
+    'exceeded',     v_used >= v_limit
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.ai_quota_check(text) FROM PUBLIC;
+-- 云函数 rdb 身份是 anon/authenticated（见批 8 的教训）
+GRANT EXECUTE ON FUNCTION public.ai_quota_check(text) TO anon, authenticated, service_role;
+
+COMMENT ON FUNCTION public.ai_quota_check(text) IS
+  'AI 月度额度检查 {limit_tokens,used_tokens,remaining,exceeded}。mimo-chat enforce 模式用。';
