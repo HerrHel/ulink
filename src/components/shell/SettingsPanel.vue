@@ -937,9 +937,9 @@ import { AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT, LEGAL_DOC_LINKS } from '../../co
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
 import PurchaseModal from '../modals/PurchaseModal.vue'
+import { dbRpc } from '../../lib/dbApi.js'
 import {
   fetchMyEntitlement,
-  dbRpc,
   redeemCode,
   type MyEntitlement,
   type RedeemError,
