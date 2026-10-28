@@ -13,6 +13,7 @@
  */
 import { describe, it, expect } from 'vitest'
 
+import { CURRENT_SCHEMA_VERSION } from '../../stores/migrations.js'
 import {
   STORAGE_KEY,
   STORAGE_KEY_VAULT,
@@ -82,13 +83,14 @@ describe('config/constants.ts — 应用层常量快照护栏（精简版）', (
     expect(ACTIONS.EDIT).toBe('edit')
   })
 
-  it('DEFAULTS 顶层 6 字段 + _schemaVersion/_dataVersion 双 2（迁移门控版本锚点）', () => {
+  it('DEFAULTS 顶层 6 字段 + _schemaVersion/_dataVersion 双值等于 CURRENT_SCHEMA_VERSION（迁移门控版本锚点）', () => {
     const keys = Object.keys(DEFAULTS).sort()
     expect(keys).toEqual(
       ['_dataVersion', '_schemaVersion', 'bookmarks', 'categories', 'customAttributes', 'siblingGroups'].sort()
     )
-    expect(DEFAULTS._schemaVersion).toBe(2)
-    expect(DEFAULTS._dataVersion).toBe(2)
+    // 引用 migrations 的 CURRENT 而非硬编码数字：升版本时只需改 migrations + DEFAULTS 两处，这里自动跟随
+    expect(DEFAULTS._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
+    expect(DEFAULTS._dataVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 
   it('DEFAULTS.categories 7 项 + id 全唯一含双内置 + order 互异 + 每项 5 字段', () => {
