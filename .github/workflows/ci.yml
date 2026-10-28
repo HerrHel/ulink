@@ -31,6 +31,15 @@ jobs:
       # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错
       - name: Dependency Audit
         run: npm audit --omit=dev --audit-level=high
+      # 生产构建进入门禁验证（提前捕获构建期错误），产物供 deploy 复用，避免重复构建
+      - name: Build
+        run: npm run build
+      - name: Upload build dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts
+          path: dist/
+          retention-days: 1
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -46,7 +55,13 @@ jobs:
         run: |
           ls -d node_modules/marked 2>/dev/null || echo "::warning::node_modules/marked 目录不存在"
           node -e "import('marked').then(()=>console.log('marked dynamic import OK')).catch(e=>console.log('marked import failed:', e.code))"
-      # C1-002 / F2-002：Playwright 进入 PR 门禁
+      # C1-002 / F2-002：Playwright 进入 PR 门禁；缓存 Chromium 运行时避免每次全量下载
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: E2E Tests
@@ -83,15 +98,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - name: Verify build deps present
-        run: |
-          ls -d node_modules/marked 2>/dev/null || echo "::warning::node_modules/marked 目录不存在"
-          node -e "import('marked').then(()=>console.log('marked dynamic import OK')).catch(e=>console.log('marked import failed:', e.code))"
-      # 生产构建自动加载仓库内的 .env.production（含 VITE_BACKEND=cloudbase 等）
-      - name: Build
-        run: npm run build
+      # 复用 lint-test 构建并经测试验证的产物，免去重复 npm ci 和 build
+      - name: Download build dist
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-artifacts
+          path: dist
       - name: Deploy to CloudBase hosting
         env:
           CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
@@ -125,6 +137,5 @@ jobs:
 
           # --cloudbase-api-key 支持非交互认证，无需设备码
           $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
-          # --safe：发布前备份，上传或校验失败自动回滚
-          # --verify：上传后校验远端文件与本地产物一致
-          $CLI hosting deploy ./dist -e "$ENV_ID" --safe --verify
+          # --safe：发布前备份，上传失败自动回滚（省去跨洋 --verify 哈希对比耗时）
+          $CLI hosting deploy ./dist -e "$ENV_ID" --safe

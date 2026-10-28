@@ -84,6 +84,16 @@ if (import.meta.env.PROD) {
       onRegisteredSW(_swUrl, registration) {
         if (!registration) return
 
+        // 视口激活、窗口获焦或网络恢复时主动检查新版本，避免停留在旧缓存
+        const checkUpdate = () => {
+          if (document.visibilityState === 'visible' && navigator.onLine) {
+            registration.update().catch(() => {})
+          }
+        }
+        window.addEventListener('focus', checkUpdate)
+        document.addEventListener('visibilitychange', checkUpdate)
+        window.addEventListener('online', checkUpdate)
+
         // 定期轮询检查新版本——浏览器默认最长 24h 才检查一次 SW 更新，
         // 这里改为 30 分钟主动调 update() 触发更新检测。
         const POLL_MS = Number(import.meta.env.VITE_SW_UPDATE_INTERVAL) || 30 * 60 * 1000

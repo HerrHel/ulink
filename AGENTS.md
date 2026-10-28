@@ -196,9 +196,9 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 - **错误追踪**：Vue errorHandler → `src/lib/errorReporter.ts` → CloudBase `error_logs` 表（生产经 `report-error` 云函数写入，5s 节流）
 - **公开分享**：RLS 策略允许匿名 SELECT `is_public = true` 的组及其书签
 - **CI/CD**：`.github/workflows/ci.yml`（**唯一** workflow）+ `dependabot.yml`（周检）。三个 job：
-  - `lint-test`：npm ci → lint → typecheck → 单测 → `npm audit --omit=dev --audit-level=high`（blocking）
-  - `e2e`：Playwright chromium
-  - `deploy`：`needs: [lint-test, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ `npm run build` → `tcb hosting deploy ./dist --safe --verify`（CloudBase 静态托管；`--safe` 发布前备份+失败回滚，`--verify` 上传后校验远端与本地一致）
+  - `lint-test`：npm ci → lint → typecheck → 单测 → `npm audit --omit=dev --audit-level=high`（blocking）→ `npm run build` 产物上传 artifact
+  - `e2e`：Playwright chromium（带 `~/.cache/ms-playwright` 缓存加速）
+  - `deploy`：`needs: [lint-test, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ 复用 `lint-test` 构建产物 → `tcb hosting deploy ./dist --safe`（CloudBase 静态托管；`--safe` 发布前备份+失败回滚，免 `--verify` 加速跨洋部署）
     - 认证：`tcb login --cloudbase-api-key`（非交互），密钥取 `secrets.CLOUDBASE_APIKEY`；**未配该 secret 时跳过部署并告警**，门禁照常执行
     - 手动重部署：`gh workflow run ci.yml --ref main`
     - ⚠️ **CI 部署与手动 `tcb hosting deploy` 互斥**（会互相覆盖），统一走 CI

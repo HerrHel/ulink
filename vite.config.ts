@@ -1423,12 +1423,12 @@ export default defineConfig({
         navigateFallback: undefined,
         runtimeCaching: [{
           // 导航（页面跳转/刷新）网络优先：网络返回新 HTML 并更新 pages-cache；
-          // 网络失败（离线）回退最近缓存的页面。3s 内网络无响应也回退缓存（慢网保护）。
+          // 网络失败（离线）回退最近缓存的页面。10s 内网络无响应也回退缓存（慢网保护）。
           urlPattern: ({ request }) => request.mode === 'navigate',
           handler: 'NetworkFirst',
           options: {
             cacheName: 'pages-cache',
-            networkTimeoutSeconds: 3,
+            networkTimeoutSeconds: 10,
             expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }
           }
         }, {
