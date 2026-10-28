@@ -135,21 +135,18 @@ async function handleAuthed(req, res, action, body, cors) {
   // 可购套餐列表：价格与周期**只从服务端 plans 表读**，前端不硬编码。
   // 只返回付费且启用的套餐（免费档不走支付）。
   if (action === 'plans') {
-    const q = await db.from('plans').where({ active: true }).order('price_cents', 'asc').get()
-    if (q.error) {
-      console.error('[pay] plans query failed:', q.error)
+    // ⚠️ 不要用 rdb.from(...).where(...)：node-sdk 的 rdb 是 PostgREST 客户端，
+    // 数据库角色对 plans/orders 无 SELECT 权限（42501），且没有 where/match 方法。
+    // 套餐读取走 SECURITY DEFINER 的 RPC（与 redeem 模式一致）。
+    const r = await db.rpc('list_purchase_plans')
+    if (r.error) {
+      console.error('[pay] list_purchase_plans failed:', r.error)
       sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
       return
     }
-    const rows = (q.data || [])
-      .filter((r) => typeof r.price_cents === 'number' && r.price_cents > 0)
-      .map((r) => ({
-        planId: r.id,
-        name: r.name,
-        priceCents: r.price_cents,
-        currency: r.currency || 'CNY',
-        periodDays: r.period_days || 0,
-      }))
+    const rows = (Array.isArray(r.data) ? r.data : []).filter(
+      (p) => typeof p.priceCents === 'number' && p.priceCents > 0,
+    )
     sendJson(res, 200, { ok: true, plans: rows }, cors)
     return
   }
@@ -265,20 +262,28 @@ async function handleAuthed(req, res, action, body, cors) {
       sendJson(res, 400, { error: 'invalid_params' }, cors)
       return
     }
-    const q = await db.from('orders').where({ id: orderId }).limit(1).get()
-    if (q.error) {
-      console.error('[pay] order query failed:', q.error)
+    const fetchOrder = async () => {
+      const r = await db.rpc('get_payment_order', { p_order_id: orderId, p_uid: uid })
+      if (r.error) {
+        console.error('[pay] get_payment_order failed:', r.error)
+        return { error: r.error }
+      }
+      return r.data || {}
+    }
+
+    const first = await fetchOrder()
+    if (first.error) {
       sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
       return
     }
-    const row = (q.data || [])[0]
-    // 不区分「不存在」与「不属于你」，避免成为订单号探测接口
-    if (!row || String(row.user_id) !== String(uid)) {
+    // RPC 内部归一化：不存在与「不属于你」都返回 order_not_found，避免订单号探测
+    if (first.ok !== true) {
       sendJson(res, 404, { error: 'order_not_found' }, cors)
       return
     }
+    const row = first.order
 
-    const expired = row.expires_at ? new Date(row.expires_at).getTime() < Date.now() : false
+    const expired = row.expiresAt ? new Date(row.expiresAt).getTime() < Date.now() : false
 
     // 主动查渠道（前端可选 sync=1，用于回调延迟时的兜底）
     const wantSync = body.sync === true
@@ -296,10 +301,9 @@ async function handleAuthed(req, res, action, body, cors) {
             p_paid_cents: remote.paidCents,
             p_raw: remote.raw || {},
           })
-          const again = await db.from('orders').where({ id: orderId }).limit(1).get()
-          const fresh = (again.data || [])[0]
-          if (fresh) {
-            sendJson(res, 200, { ok: true, order: shapeOrder(fresh) }, cors)
+          const again = await fetchOrder()
+          if (again.ok === true) {
+            sendJson(res, 200, { ok: true, order: again.order }, cors)
             return
           }
         } else if (remote.tradeState === 'CLOSED' || remote.tradeState === 'REVOKED') {
@@ -311,26 +315,11 @@ async function handleAuthed(req, res, action, body, cors) {
       }
     }
 
-    sendJson(res, 200, { ok: true, order: shapeOrder(row) }, cors)
+    sendJson(res, 200, { ok: true, order: row }, cors)
     return
   }
 
   sendJson(res, 400, { error: 'unknown_action' }, cors)
-}
-
-function shapeOrder(row) {
-  return {
-    orderId: row.id,
-    planId: row.plan_id,
-    amountCents: row.amount_cents,
-    currency: row.currency,
-    channel: row.channel,
-    status: row.status,
-    qrCode: row.pay_payload?.qrCode || null,
-    paidAt: row.paid_at || null,
-    expiresAt: row.expires_at || null,
-    createdAt: row.created_at || null,
-  }
 }
 
 /** 微信回调：务必返回 200 + {"code":"SUCCESS"}，否则微信会按 8 次梯度重推 */

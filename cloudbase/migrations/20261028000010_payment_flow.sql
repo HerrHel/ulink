@@ -316,3 +316,77 @@ GRANT EXECUTE ON FUNCTION public.attach_pay_payload(text, jsonb, text)          
 GRANT EXECUTE ON FUNCTION public.settle_paid_order(text, text, text, integer, jsonb) TO service_role;
 GRANT EXECUTE ON FUNCTION public.fail_payment_order(text, text)                 TO service_role;
 GRANT EXECUTE ON FUNCTION public.mark_order_refunded(text, integer, jsonb)      TO service_role;
+
+-- ── 8. 前端只读入口（PostgREST 角色 42501 的解法）──────────────────
+-- pay 云函数里曾用 rdb.from('plans').where(...) 直接查，但 rdb 是 PostgREST 客户端，
+-- 数据库角色对 plans/orders 无 SELECT 权限（42501 permission denied）。
+-- 与 redeem 模式对齐：SECURITY DEFINER 函数 + service_role 调用，不放宽 RLS。
+
+CREATE OR REPLACE FUNCTION public.list_purchase_plans()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row    public.plans%ROWTYPE;
+  v_result jsonb := '[]'::jsonb;
+BEGIN
+  -- 只返回启用且付费的套餐；价格唯一起源仍是本表
+  FOR v_row IN
+    SELECT * FROM public.plans WHERE active = true AND price_cents > 0 ORDER BY price_cents ASC
+  LOOP
+    v_result := v_result || jsonb_build_object(
+      'planId',     v_row.id,
+      'name',       v_row.name,
+      'priceCents', v_row.price_cents,
+      'currency',   coalesce(v_row.currency, 'CNY'),
+      'periodDays', v_row.period_days
+    );
+  END LOOP;
+  RETURN v_result;
+END;
+$$;
+
+COMMENT ON FUNCTION public.list_purchase_plans() IS
+  '可购套餐列表（SECURITY DEFINER）。前端 PurchaseModal 的数据源，价格不硬编码。';
+
+CREATE OR REPLACE FUNCTION public.get_payment_order(p_order_id text, p_uid text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_order public.orders%ROWTYPE;
+BEGIN
+  SELECT * INTO v_order FROM public.orders WHERE id = p_order_id;
+  -- 归一化：不存在与"不是你的"都返回 not_found，避免订单号探测
+  IF NOT FOUND OR v_order.user_id <> p_uid THEN
+    RETURN jsonb_build_object('ok', false, 'reason', 'order_not_found');
+  END IF;
+  RETURN jsonb_build_object(
+    'ok', true,
+    'order', jsonb_build_object(
+      'orderId',    v_order.id,
+      'planId',     v_order.plan_id,
+      'amountCents',v_order.amount_cents,
+      'currency',   v_order.currency,
+      'channel',    v_order.channel,
+      'status',     v_order.status,
+      'qrCode',     v_order.pay_payload ->> 'qrCode',
+      'paidAt',     v_order.paid_at,
+      'expiresAt',  v_order.expires_at,
+      'createdAt',  v_order.created_at
+    )
+  );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_payment_order(text, text) IS
+  '按订单号+uid 查订单（SECURITY DEFINER 内部校验归属）。云函数 status action 用。';
+
+REVOKE ALL ON FUNCTION public.list_purchase_plans() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.get_payment_order(text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.list_purchase_plans() TO service_role;
+GRANT EXECUTE ON FUNCTION public.get_payment_order(text, text) TO service_role;
