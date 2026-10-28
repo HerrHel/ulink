@@ -7,12 +7,14 @@ import { isCloudBaseBackend } from '../../lib/cloudbase.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
+import { enqueueSyncOps } from '../../stores/storage.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { FROM_REMOTE, type RemoteRow, type AnyRemoteRow } from './useSyncMapping.js'
 import { entityTypeToTable, SYNC_ENTITY_ORDER } from './syncMappingTables.js'
 import { _deleteWithoutEcho, _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
+import { _findContentDuplicate, _remoteTombstoneOps } from './syncDedup.js'
 import { decideRemoteApply, sanitizeRemoteTimestamp } from './syncMergeCore.js'
 import { EditorManager } from '../../lib/editor.js'
 import { cloneDeep } from '../../lib/clone.js'
@@ -125,6 +127,31 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
       syncStore.resetConflictBanner()
     }
     return
+  }
+
+  // 离线重复创建去重（同 URL 书签 / 同名同分类组）：远端 insert 撞上本地「未上云」
+  // 同键存活项时跳过插入，并把远端行以软删墓碑入队（其余设备收敛为一份）。
+  // 口径见 syncDedup.ts；realtime 无全量 ID 上下文，用 dirty/new/pending 快判
+  //（能收到同键 insert 的主场景是对端离线重建后补推，此时本机该项必然未上云仍脏）。
+  if (decision.action === 'insert' && (type === 'bookmark' || type === 'group')) {
+    const locals: Array<{ id: string; deletedAt?: number; url?: string; name?: string; categoryId?: string }> =
+      type === 'bookmark' ? ds.bookmarks : ds.siblingGroups
+    const dup = _findContentDuplicate(
+      type,
+      mapped as unknown as { id: string; url?: string; name?: string; categoryId?: string; deletedAt?: number },
+      locals,
+      l => ds._dirtyIds.has(l.id) || ds._newIds.has(l.id) || _isPendingSync(l.id),
+    )
+    if (dup) {
+      await enqueueSyncOps(_remoteTombstoneOps(
+        [{ remote: mapped as unknown as { id: string }, localId: dup.id }],
+        type, userId,
+      ))
+      console.info(
+        `[sync] realtime 去重：远端 ${entityTypeToTable[type]}#${row.id} 与本地未上云项 ${dup.id} 内容重复，跳过插入并将远端行墓碑入队`,
+      )
+      return
+    }
   }
 
   if (decision.action === 'soft-delete') {

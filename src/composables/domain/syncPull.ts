@@ -14,6 +14,7 @@ import { getSyncRemotePort } from './syncRemotePort.js'
 import { enqueueSyncOps, syncOpsCount, type SyncOp } from '../../stores/storage.js'
 import { _mergeIntoLocal, _deleteWithoutEcho, _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
 import { _isPendingSync } from './syncPending.js'
+import { _partitionRemoteDuplicates, _remoteTombstoneOps } from './syncDedup.js'
 import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
 
 /**
@@ -126,6 +127,53 @@ export async function pullChanges(full = false): Promise<boolean> {
     try { pendingOps = await syncOpsCount() } catch { pendingOps = 0 }
     const queueBackedUp = pendingOps > 0
 
+    // ── 离线重复创建的内容级去重（同 URL 书签 / 同名同分类组）──
+    // 场景：在线保存→已上云（行 X）；离线又保存一次（本地新 ID，行 Y）；登录后
+    // initialSync pull 把 X 当新项 insert、push 又把 Y 上云 → 云端/本地各留一份重复。
+    // 口径见 syncDedup.ts：候选重复必须以云端全量 ID 探测复核「本地项从未上云」才去重
+    // ——本地项已在云端时，远端同键 insert 是多端各存一份的合法重复，绝不能动。
+    // 探测失败 fail-closed：整类本轮不去重（宁留重复不误删）。
+    const dupTombstoneOps: Array<Omit<SyncOp, 'id' | 'retries'>> = []
+    const isUnsyncedLocal = (id: string) =>
+      ds._dirtyIds.has(id) || ds._newIds.has(id) || _isPendingSync(id)
+    // full 模式已有权威 remoteAllIds 直接复用；增量模式仅在发现候选时按表探测一次
+    const cloudIdsCache = new Map<EntityType, Set<string>>()
+    const getCloudIds = async (type: EntityType): Promise<Set<string> | null> => {
+      if (full && remoteAllIds) return remoteAllIds[type]
+      const cached = cloudIdsCache.get(type)
+      if (cached) return cached
+      const r = await port.selectAllIds(entityTypeToTable[type], userId)
+      if (r.error) return null
+      const ids = new Set((r.data || []).map(row => (row as { id: string }).id))
+      cloudIdsCache.set(type, ids)
+      return ids
+    }
+    for (const type of SYNC_ENTITY_ORDER) {
+      const { clean, candidates } = _partitionRemoteDuplicates(localByType[type], remotes[type], type)
+      if (!candidates.length) { remotes[type] = clean; continue }
+      const cloudIds = await getCloudIds(type)
+      // 探测失败或全部候选未确认：远端行原样保留（concat 回未确认候选）
+      const unconfirmed = candidates.filter(c => !cloudIds || cloudIds.has(c.localId))
+      const confirmed = candidates.filter(c => cloudIds && !cloudIds.has(c.localId))
+      if (!confirmed.length) {
+        remotes[type] = clean.concat(unconfirmed.map(c => c.remote))
+        if (!cloudIds) {
+          console.warn(`[sync] 去重探测 ${entityTypeToTable[type]} 失败，本轮跳过该类去重`)
+        }
+        continue
+      }
+      const confirmedRemoteIds = new Set(confirmed.map(c => c.remote.id))
+      remotes[type] = clean.concat(unconfirmed.map(c => c.remote).filter(r => !confirmedRemoteIds.has(r.id)))
+      for (const c of confirmed) {
+        dupTombstoneOps.push(..._remoteTombstoneOps([c], type, userId))
+        // 本地留存项若此刻不脏（如刷新后内存 dirty 丢失），标脏确保下一轮 push 一定上云
+        if (!isUnsyncedLocal(c.localId)) ds._markDirty(c.localId)
+        console.info(
+          `[sync] 去重：远端 ${entityTypeToTable[type]}#${c.remote.id} 与本地未上云项 ${c.localId} 内容重复，跳过插入并将远端行墓碑入队`,
+        )
+      }
+    }
+
     // 逐类判定是否允许对账删除（full-absent-delete + reconcileDelete 共用）
     const allowReconcile: Record<EntityType, boolean> = {
       category: true, bookmark: true, group: true, attribute: true,
@@ -181,6 +229,10 @@ export async function pullChanges(full = false): Promise<boolean> {
           : undefined,
       )
     }
+
+    // 去重产生的远端行墓碑入队：其余设备拉到后把各自副本软删进回收站，全设备收敛为一份。
+    // 本地数据本身未变（只是跳过了 insert），不计入 localChanged。
+    if (dupTombstoneOps.length) await enqueueSyncOps(dupTombstoneOps)
 
     const isLocalAlive: Record<EntityType, (id: string) => boolean> = {
       bookmark: (id) => !!ds.bookmarkMap[id] && !ds.bookmarkMap[id].deletedAt,
