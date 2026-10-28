@@ -11,7 +11,7 @@ import type { AppData, Bookmark, SiblingGroup, CustomAttribute } from '../types.
 
 // 当前 schema 迁移版本。增量更新此值以触发新迁移。
 // 注意：与 persist 的 _writeSeq（写入序号）无关；勿再用 _dataVersion 混用。
-export const CURRENT_SCHEMA_VERSION = 2
+export const CURRENT_SCHEMA_VERSION = 3
 
 interface MigrationResult extends AppData {
 }
@@ -136,6 +136,14 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   result.bookmarks.forEach(b => {
     if (!b.updatedAt) { b.updatedAt = b.createdAt || Date.now(); needsPersist = true }
   })
+
+  // 8. 内置 AI 属性改名「Ai」→「AI」（v3）：早期种子大小写不规范，卡片徽章显示为 typo。
+  //    幂等：仅当 id='ai' 且 name 恰为 'Ai' 时改写；用户自定义同 id 改过名的（如「AI 工具」）不受影响。
+  const aiAttr = result.customAttributes.find(a => a.id === 'ai')
+  if (aiAttr && aiAttr.name === 'Ai') {
+    aiAttr.name = 'AI'
+    needsPersist = true
+  }
 
   // 始终写入 schema 版本（与 writeSeq 分离）
   ;(result as { _schemaVersion?: number })._schemaVersion = CURRENT_SCHEMA_VERSION

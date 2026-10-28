@@ -145,7 +145,7 @@ describe('runMigrations', () => {
   })
 
   it('schema 已是当前版本时跳过迁移', () => {
-    const d = { _schemaVersion: 2 }
+    const d = { _schemaVersion: CURRENT_SCHEMA_VERSION }
     const result = makeResult({
       bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
       siblingGroups: [{
@@ -168,7 +168,7 @@ describe('runMigrations', () => {
     })
     const needsPersist = runMigrations(d as any, result)
     expect(needsPersist).toBe(true)
-    expect((result as any)._schemaVersion).toBe(2)
+    expect((result as any)._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 
   it('无版本字段时迁移后写入 _schemaVersion', () => {
@@ -178,7 +178,7 @@ describe('runMigrations', () => {
     })
     const needsPersist = runMigrations(d, result)
     expect(needsPersist).toBe(true)
-    expect((result as any)._schemaVersion).toBe(2)
+    expect((result as any)._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 
   it('审计 R40：DEFAULTS._schemaVersion 与 CURRENT_SCHEMA_VERSION 不漂移（防新装实例误走迁移分支）', () => {
@@ -246,7 +246,7 @@ describe('runMigrations', () => {
       // 二次：模拟磁盘已被首次迁移写入 _schemaVersion=CURRENT，且 lv_expandStates 早已被首跑删掉
       // 这里手动还原一个 lv_expandStates 假装"未删"，验证 from>=CURRENT 分支不会再删它
       localStorage.setItem('lv_expandStates', JSON.stringify({ ghostkey: true }))
-      const d2 = { _schemaVersion: 2 } as any
+      const d2 = { _schemaVersion: CURRENT_SCHEMA_VERSION } as any
       const r2 = makeResult({
         bookmarks: [{ id: 'b2', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
       })
@@ -255,6 +255,50 @@ describe('runMigrations', () => {
       expect(localStorage.getItem('lv_expandStates')).toBe(JSON.stringify({ ghostkey: true }))
       // 且 b2 不因遗留键被置 isExpanded
       expect(r2.bookmarks.find((b: any) => b.id === 'b2')!.isExpanded).toBeUndefined()
+    })
+  })
+
+  describe('步骤8：内置 AI 属性改名「Ai」→「AI」（v3）', () => {
+    it('旧盘 id=ai 且 name=Ai 时改写为 AI 并 needsPersist', () => {
+      const attrs = [
+        { id: 'ai', name: 'Ai', type: 'boolean' },
+        { id: 'is-group', name: '笔记', type: 'boolean' },
+      ]
+      // 迁移的去重步骤从原始 d.customAttributes 读取，夹具需同时放入 d 与 result
+      const d: any = { _schemaVersion: 2, customAttributes: attrs }
+      const result = makeResult({
+        customAttributes: attrs,
+        bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: { ai: true }, updatedAt: Date.now() }],
+      })
+      const needsPersist = runMigrations(d as any, result)
+      expect(needsPersist).toBe(true)
+      expect(result.customAttributes.find((a: any) => a.id === 'ai').name).toBe('AI')
+      // 其他属性不受影响
+      expect(result.customAttributes.find((a: any) => a.id === 'is-group').name).toBe('笔记')
+    })
+
+    it('幂等：已是 AI 不再触发（用户自定义改名如「AI 工具」不受影响）', () => {
+      const attrs = [{ id: 'ai', name: 'AI 工具', type: 'boolean' }]
+      const d: any = { _schemaVersion: 2, customAttributes: attrs }
+      const result = makeResult({
+        customAttributes: attrs,
+        bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
+      })
+      const needsPersist = runMigrations(d as any, result)
+      // needsPersist=true 来自版本回写，但属性名保持用户自定义
+      expect(needsPersist).toBe(true)
+      expect(result.customAttributes.find((a: any) => a.id === 'ai').name).toBe('AI 工具')
+    })
+
+    it('无 ai 属性的旧盘不新增、不出错', () => {
+      const attrs = [{ id: 'is-group', name: '笔记', type: 'boolean' }]
+      const d: any = { _schemaVersion: 2, customAttributes: attrs }
+      const result = makeResult({
+        customAttributes: attrs,
+        bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
+      })
+      runMigrations(d as any, result)
+      expect(result.customAttributes.find((a: any) => a.id === 'ai')).toBeUndefined()
     })
   })
 })
