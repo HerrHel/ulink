@@ -900,7 +900,7 @@
                       <span class="sp-row-desc">{{ t('settings.buildTime') }}: {{ buildTimeText }}</span>
                     </div>
                     <div class="sp-row-ctrl">
-                      <span class="sp-badge sp-version-badge" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
+                      <span class="sp-version-badge" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
                       <span class="hidden" data-testid="lv-build-time">{{ buildTimeText }}</span>
                     </div>
                   </div>
