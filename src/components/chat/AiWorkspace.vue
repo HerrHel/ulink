@@ -88,7 +88,7 @@
                   ref="aiTextareaRef"
                   v-model="aiQuery"
                   class="capsule-minimal-textarea ai-minimal-textarea"
-                  :placeholder="isDragOver ? (isZh ? '松开鼠标以添加引用…' : 'Drop to attach reference...') : (isZh ? '向与链提问，或拖拽卡片引用…' : 'Ask ulink anything, or drop cards to mention...')"
+                  :placeholder="isDragOver ? (isZh ? '松开鼠标以添加引用…' : 'Drop to attach reference...') : rotatingHeroPlaceholder"
                   rows="1"
                   @focus="isInputFocused = true"
                   @blur="isInputFocused = false"
@@ -418,6 +418,7 @@ import { useChatInputInteraction } from '../../composables/ui/useChatInputIntera
 import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
 import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
 import { toast } from '../../lib/toast.js'
+import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
 import { PAYLOAD_KEY } from '../../config/constants.js'
 
 const ui = useUIStore()
@@ -440,6 +441,12 @@ const {
   handleSaveAsNewNote,
   handleLocateCard,
 } = useChatPanelShell()
+
+const hasHeroInputContent = computed(() => Boolean(aiQuery.value && aiQuery.value.trim()))
+const { currentPlaceholder: rotatingHeroPlaceholder } = useRotatingPlaceholder({
+  isFocused: isInputFocused,
+  hasContent: hasHeroInputContent,
+})
 
 function scrollToBottom() {
   nextTick(() => {

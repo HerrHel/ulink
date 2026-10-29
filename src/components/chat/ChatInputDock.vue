@@ -175,7 +175,7 @@
           :ref="bindTa"
           v-model="query"
           class="chat-textarea"
-          :placeholder="hasAttachments ? t('ai.attachedInputPlaceholder') : t('ai.sidebarInputPlaceholder')"
+          :placeholder="hasAttachments ? t('ai.attachedInputPlaceholder') : rotatingPlaceholder"
           rows="1"
           @focus="focused = true"
           @blur="focused = false"
@@ -254,6 +254,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { processFileForAi, type AttachedMediaFile } from '../../lib/ai/attachmentHelper.js'
 import { toast } from '../../lib/toast.js'
+import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
 
 defineOptions({ name: 'ChatInputDock' })
 
@@ -288,6 +289,12 @@ const ds = useDataStore()
 
 const attachedFilesList = computed(() => ui.aiAttachedFiles)
 const hasAttachments = computed(() => props.attachedCardsList.length > 0 || attachedFilesList.value.length > 0)
+
+const hasInputContent = computed(() => Boolean(query.value && query.value.trim()))
+const { currentPlaceholder: rotatingPlaceholder } = useRotatingPlaceholder({
+  isFocused: focused,
+  hasContent: hasInputContent,
+})
 
 function getBookmarkIcon(id: string): string | undefined {
   return ds.bookmarkMap[id]?.icon

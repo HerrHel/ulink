@@ -587,7 +587,8 @@ const displayCards = computed<TierCardView[]>(() => {
     const aiChars = f['ai.tokens.monthly'] ? `${Math.round((f['ai.tokens.monthly'] * 2) / 10000)} 万` : '40 万'
 
     const bullets: FeatureBullet[] = [
-      { text: 'AI 智能提取与自动补齐', sub: '自动抓取网页与视频正文，补齐标题与摘要', highlight: true },
+      { text: '视频灵感收割与深度提取', sub: '粘贴 B站/YouTube 链接，自动挖掘视频中的工具网站并生成笔记', highlight: true },
+      { text: 'AI 智能提取与自动补齐', sub: '自动抓取网页与正文，智能推荐分类并补齐摘要', highlight: true },
       { text: 'AI 自然语言模糊搜索', sub: '忘记标题也没关系，用日常口语意图精准找书签', highlight: true },
       { text: `每月 ${aiChars}字高阶 AI 额度`, sub: '畅享深度提炼、阅读问答与长文总结', highlight: true },
       { text: '全自动定期死链检测', sub: '每周后台静默巡检，失效链接一眼知晓' },
