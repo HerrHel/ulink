@@ -606,7 +606,7 @@
               <div v-show="currentTab === 'ai'" class="settings-tab-panel" data-testid="settings-panel-ai">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAi') }}</h3>
-                  <p class="sp-tab-desc">配置智能书签提炼、自然语言意图检索与大模型服务工作流</p>
+                  <p class="sp-tab-desc">配置智能书签提炼、自然语言意图检索与智能工作流</p>
                 </div>
 
                 <div class="sp-card" data-testid="lv-search-fill-section">
@@ -652,30 +652,6 @@
                   </div>
                 </div>
 
-                <div class="sp-card">
-                  <div class="sp-card-head">{{ t('settings.aiProviders') }}</div>
-                  <div class="sp-card-row" @click="showAiProviders = !showAiProviders" style="cursor: pointer;" data-testid="lv-ai-providers-toggle">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">服务商合规与算法透明度</span>
-                      <span class="sp-row-desc">{{ t('settings.aiProvidersHint') }}</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <span class="sp-sync-status">{{ showAiProviders ? '' : aiProvidersSummary }}</span>
-                      <span class="sp-caret" :class="{ open: showAiProviders }" aria-hidden="true">›</span>
-                    </div>
-                  </div>
-                  <div v-if="showAiProviders" class="sp-providers-list" data-testid="lv-ai-providers">
-                    <div v-for="p in aiProviders" :key="p.id" class="sp-provider-item">
-                      <div class="sp-provider-top">
-                        <span class="sp-provider-name">{{ p.name }}</span>
-                        <span class="sp-provider-product">{{ p.product }}</span>
-                      </div>
-                      <div class="sp-provider-filing">{{ p.filing }}</div>
-                      <a class="sp-provider-link" :href="p.website" target="_blank" rel="noopener noreferrer">{{ p.website }}</a>
-                    </div>
-                    <div class="sp-providers-footer">{{ t('settings.aiProvidersUpdated', { d: aiProvidersUpdatedAt }) }}</div>
-                  </div>
-                </div>
               </div>
 
               <!-- Tab 4: 维护与分享 -->
@@ -1056,7 +1032,7 @@ import { stopShareGroup, stopShareCategory, stopAllUserShares, fetchUserCategory
 import { SHARE_BASE } from '../../config/urls.js'
 import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME } from '../../version.js'
-import { AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT, LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
+import { LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
 import PurchaseModal from '../modals/PurchaseModal.vue'
@@ -1247,17 +1223,9 @@ const userDisplay = computed(() => {
 const isEditingProfile = ref(false)
 const savingProfile = ref(false)
 
-// AI 服务商清单 / 法律协议（可展开区块）
-const showAiProviders = ref(false)
+// 法律协议（可展开区块）
 const showLegal = ref(false)
-const aiProviders = AI_PROVIDERS
-const aiProvidersUpdatedAt = AI_PROVIDERS_UPDATED_AT
 const legalDocs = LEGAL_DOC_LINKS
-const aiProvidersSummary = computed(() =>
-  AI_PROVIDERS.length > 1
-    ? t('settings.aiProvidersCount', { n: AI_PROVIDERS.length })
-    : AI_PROVIDERS[0]?.name || '',
-)
 
 // 账号注销
 const deletingAccount = ref(false)
