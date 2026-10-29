@@ -66,4 +66,26 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     expect(consumeAiEnrichQuota()).toBe(true)
     expect(checkAiEnrichQuota().allowed).toBe(true)
   })
-})
+
+  it('4. 订阅已过期时自动降级阻断，isPaid 与 isPro 为 false', () => {
+    localStorage.setItem(
+      'ulink_entitlement_v1',
+      JSON.stringify({
+        planId: 'plus_monthly',
+        planName: 'Plus 月付',
+        status: 'expired',
+        expiresAt: '2020-01-01',
+        features: { 'linkcheck.auto': 1 },
+        isPaid: true,
+      })
+    )
+
+    const { isPaid, isPro, planId, features, checkAiEnrichQuota } = useEntitlement()
+    // 自动重置并降级
+    expect(isPaid.value).toBe(false)
+    expect(isPro.value).toBe(false)
+    expect(planId.value).toBe('free')
+    expect(features.value['linkcheck.auto']).toBeUndefined()
+    expect(checkAiEnrichQuota().isPro).toBe(false)
+  })
+});

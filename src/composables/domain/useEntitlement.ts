@@ -27,13 +27,17 @@ function getInitialEntitlement(): MyEntitlement {
     const raw = safeGetItem(ENTITLEMENT_CACHE_KEY) || safeGetItem(LEGACY_ENTITLEMENT_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
+      const planId = parsed.planId || 'free'
+      const status = parsed.status || 'active'
+      const isExpired = status === 'expired' || (parsed.expiresAt ? new Date(parsed.expiresAt).getTime() < Date.now() : false)
+      const isPaid = Boolean(parsed.isPaid) && !isExpired && status === 'active'
       return {
-        planId: parsed.planId || 'free',
-        planName: parsed.planName || 'free',
-        status: parsed.status || 'active',
+        planId: isPaid ? planId : 'free',
+        planName: isPaid ? (parsed.planName || planId) : (isExpired ? '免费版 (已过期)' : '免费版'),
+        status: isExpired ? 'expired' : status,
         expiresAt: parsed.expiresAt || null,
-        features: parsed.features || {},
-        isPaid: Boolean(parsed.isPaid),
+        features: isPaid ? (parsed.features || {}) : {},
+        isPaid,
       }
     }
   } catch { /* ignore */ }

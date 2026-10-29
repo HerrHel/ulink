@@ -41,13 +41,16 @@ export async function fetchMyEntitlement(): Promise<MyEntitlement> {
       features?: Record<string, number>
     }
     const planId = raw.plan_id || 'free'
+    const status = raw.status || 'active'
+    const isExpired = status === 'expired' || (raw.expires_at ? new Date(raw.expires_at).getTime() < Date.now() : false)
+    const isPaid = planId !== 'free' && !isExpired && status === 'active'
     return {
-      planId,
-      planName: raw.plan_name || planId,
-      status: raw.status || 'active',
+      planId: isPaid ? planId : 'free',
+      planName: isPaid ? (raw.plan_name || planId) : (isExpired ? '免费版 (已过期)' : '免费版'),
+      status: isExpired ? 'expired' : status,
       expiresAt: raw.expires_at || null,
-      features: raw.features || {},
-      isPaid: planId !== 'free',
+      features: isPaid ? (raw.features || {}) : {},
+      isPaid,
     }
   } catch {
     return FREE_PLAN
