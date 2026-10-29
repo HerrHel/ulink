@@ -12,6 +12,8 @@ import { supabase, isSupabaseConfigured } from '../supabase.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { askMiMo, sanitizeForPrompt } from './mimoClient.js'
 import { getLocale } from '../../i18n/index.js'
+import type { Category, CustomAttribute } from '../../types.js'
+import type { AiCandidateBookmark } from '../../types/ai.js'
 
 /** extract-video Edge Function 返回的统一内容结构 */
 export interface VideoExtractServerResult {
@@ -92,46 +94,74 @@ const SUMMARY_MAX_QUESTION_CHARS = 200
 /** 内容太短没有总结价值的下限 */
 const SUMMARY_MIN_INPUT_CHARS = 40
 
-/**
- * 文字源总结：对简介/字幕/评论区文本生成一段速览（仅基于给定文本，不编造）。
- * 携带 question（用户随链接提出的实际问题）时改为「回答用户问题」模式，避免答非所问；
- * 无可用 AI 通道（未登录且无 BYOK）或请求失败时返回 null，调用方跳过总结。
- */
-export async function generateVideoSummary(
-  contentText: string,
-  options: { signal?: AbortSignal; question?: string } = {}
-): Promise<string | null> {
-  const trimmed = (contentText || '').trim()
-  if (trimmed.length < SUMMARY_MIN_INPUT_CHARS) return null
+export interface VideoAiInsight {
+  summary: string | null
+  candidates: AiCandidateBookmark[]
+}
 
-  // 官方统一通道：未配置 Supabase 服务端时直接跳过，不做注定失败的请求
-  if (!isSupabaseConfigured) return null
+/**
+ * 视频内容深度 AI 洞察：同时提炼速览摘要与文中提及的工具/网站候选卡片。
+ * 若内容中仅提及工具名称而未附带完整网址，大模型将根据知识库补全官方主页。
+ */
+export async function extractVideoInsightsWithAI(
+  contentText: string,
+  categories: Category[] = [],
+  attributes: CustomAttribute[] = [],
+  options: { signal?: AbortSignal; question?: string } = {}
+): Promise<VideoAiInsight> {
+  const trimmed = (contentText || '').trim()
+  if (trimmed.length < SUMMARY_MIN_INPUT_CHARS) {
+    return { summary: null, candidates: [] }
+  }
+
+  const cbMode = isCloudBaseBackend()
+  if (!cbMode && !isSupabaseConfigured) {
+    return { summary: null, candidates: [] }
+  }
 
   const isZh = getLocale().startsWith('zh')
   const safeText = sanitizeForPrompt(trimmed, SUMMARY_MAX_INPUT_CHARS)
-  // 用户问题同样消毒截断后注入（防超长噪声与提示词注入面扩大）
   const safeQuestion = (options.question || '').trim()
     ? sanitizeForPrompt(options.question!.trim(), SUMMARY_MAX_QUESTION_CHARS)
     : ''
+
+  const cardFmtZh = '\n若内容中提及、演示或推荐了具体的工具、软件、网站或开源项目，请结合你的知识库补全其官方主页 URL，并在回复末尾以如下格式输出结构化卡片（没有则不输出）：\n```ulink-card\n[\n  { "title": "工具名", "url": "https://...", "notes": "核心功能" }\n]\n```'
+  const cardFmtEn = '\nIf any tools, software, websites, or open-source projects are mentioned or shown, complete their official homepages and output structured cards at the end (omit if none):\n```ulink-card\n[\n  { "title": "Tool Name", "url": "https://...", "notes": "Core feature" }\n]\n```'
+
   const prompt = safeQuestion
     ? (isZh
-        ? `用户提问：${safeQuestion}\n以下是一段视频/图文分享内容的公开文本（简介、字幕、语音转写/AI小结、评论等）。请只基于给定内容回答用户提问，回答中列出内容里出现的网站/工具（附网址），不超过 150 字，不要编造；若给定内容里没有能回答该提问的信息，如实说明：\n\n${safeText}`
-        : `User question: ${safeQuestion}\nBelow is public text from a video or post (description, subtitles, ASR transcript/AI summary, comments). Answer the user's question using only this content, listing the websites/tools it mentions (with URLs), under 100 words. If the content lacks information to answer, say so honestly:\n\n${safeText}`)
+        ? `用户提问：${safeQuestion}\n以下是一段视频/图文内容的公开文本（简介、字幕、语音转写/AI小结、评论等）。请基于给定内容回答用户提问，列出出现的网站与工具（附网址），不超过 160 字：${cardFmtZh}\n\n${safeText}`
+        : `User question: ${safeQuestion}\nBelow is public text from a video or post. Answer the question and list mentioned websites/tools, under 120 words:${cardFmtEn}\n\n${safeText}`)
     : (isZh
-        ? `以下是一段视频/图文分享内容的公开文本（简介、字幕、语音转写/AI小结、评论等）。请用中文提炼其中推荐的网站/工具与核心要点，不超过 120 字，只基于给定内容，不要编造：\n\n${safeText}`
-        : `Below is public text from a video or post (description, subtitles, ASR transcript/AI summary, comments). Summarize the websites/tools mentioned and key points in English, under 80 words, using only the given content:\n\n${safeText}`)
+        ? `以下是一段视频/图文分享内容的公开文本（简介、字幕、语音转写/AI小结、评论等）。请用中文提炼其中推荐的网站/工具与核心要点，不超过 130 字：${cardFmtZh}\n\n${safeText}`
+        : `Below is public text from a video or post. Summarize the websites/tools mentioned and key points, under 90 words:${cardFmtEn}\n\n${safeText}`)
 
   try {
     const res = await askMiMo(prompt, {
-      categories: [],
-      customAttributes: [],
+      categories,
+      customAttributes: attributes,
       isZh,
       signal: options.signal,
       enableTools: false,
     })
     const text = (res.cleanText || '').trim()
-    return text || null
+    return {
+      summary: text || null,
+      candidates: res.candidates || [],
+    }
   } catch {
-    return null
+    return { summary: null, candidates: [] }
   }
+}
+
+/**
+ * 文字源总结：对简介/字幕/评论区文本生成一段速览（仅基于给定文本，不编造）。
+ * 保持向下兼容既有调用方签名。
+ */
+export async function generateVideoSummary(
+  contentText: string,
+  options: { signal?: AbortSignal; question?: string } = {}
+): Promise<string | null> {
+  const result = await extractVideoInsightsWithAI(contentText, [], [], options)
+  return result.summary
 }
