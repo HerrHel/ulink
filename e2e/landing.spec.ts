@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('宣传落地页', () => {
   test('定价区：展示免费与 PRO 三档价格及权益对比', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/?stay=1')
     const pricing = page.locator('#pricing')
     await expect(pricing).toBeVisible()
     // 档位卡数量（免费 + 月付 + 季付 + 年付）
@@ -41,13 +41,17 @@ test.describe('宣传落地页', () => {
 
 
 
-  test('新访客看到落地页与星链画布，不跳转', async ({ page }) => {
+  test('直接访问 /：新老用户一律秒跳直达 /app 应用主体', async ({ page }) => {
     await page.goto('/')
-    // 干净环境下 landing.js 不应触发跳转
-    await page.waitForURL('/')
+    await page.waitForURL(/\/app/, { timeout: 10000 })
+    await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
+  })
+
+  test('?stay=1 显式停留：正常展示落地页与星链画布', async ({ page }) => {
+    await page.goto('/?stay=1')
+    await page.waitForURL(/stay=1/)
     await expect(page.locator('h1')).toContainText('随时随地')
     await expect(page.locator('.hero-ctas a[href="/app"]')).toHaveCount(1)
-    // 星链 canvas 已被 hero-visual.js 初始化（有实际像素尺寸）
     const canvas = page.locator('#constellation')
     await expect(canvas).toBeAttached()
     await expect.poll(async () =>
@@ -56,7 +60,7 @@ test.describe('宣传落地页', () => {
   })
 
   test('点击「开始使用」进入应用主体', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/?stay=1')
     await page.locator('.hero-ctas a[href="/app"]').click()
     await page.waitForURL(/\/app$/)
     // 应用挂载完成（进入应用内首启引导属正常路径，此处只验证入口打通）
@@ -64,24 +68,17 @@ test.describe('宣传落地页', () => {
   })
 
   test('顶栏「登录」→ /app?login=1 直开认证弹窗', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/?stay=1')
     await page.locator('a[href="/app?login=1"]').click()
     await page.waitForURL(/\/app/)
     // App.vue 读 login 参数后打开认证弹窗并清 query（H8）
     await expect(page.locator('.modal-mask.open').first()).toBeVisible({ timeout: 15000 })
   })
 
-  test('返客首次到访：曝光一次落地页并落标记，再次到访秒跳 /app', async ({ page }) => {
-    // persist.ts 每次保存都写 linkvault_v2 缓存；注入即模拟老用户
+  test('返客到访：无 stay 参数时直接秒跳 /app', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('linkvault_v2', '{}')
     })
-    await page.goto('/')
-    // 无 seen 标记 → 首次到访曝光落地页（一次性曝光策略），并写入标记
-    await page.waitForURL('/')
-    await expect(page.locator('h1')).toContainText('随时随地')
-    expect(await page.evaluate(() => localStorage.getItem('lv_landing_seen_v1'))).toBe('1')
-    // 再次到访 → 恢复秒跳
     await page.goto('/')
     await page.waitForURL(/\/app/, { timeout: 10000 })
     await expect(page.locator('#app').first()).toBeAttached({ timeout: 15000 })
@@ -114,7 +111,7 @@ test.describe('宣传落地页', () => {
   })
 
   test('语言切换：中文 ⇄ English', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/?stay=1')
     await expect(page.locator('h1')).toContainText('随时随地')
     // 切到英文（原地替换，无 reload）
     await page.locator('#lang-toggle').click()

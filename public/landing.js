@@ -86,7 +86,10 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
   // ?stay=1：显式要看落地页（应用内官网书签即带此参数），豁免秒跳
   var stayRequested = /[?&]stay=1/.test(search);
 
-  if (missionParams || (returning && !stayRequested && seen)) {
+  // 策略调整：宣传页暂不主动向新老用户直接展示（功能落后待重构），
+  // 直接访问 / 的访客一律秒跳直达 /app 应用主体；
+  // 仅在 URL 明确携带 ?stay=1 时（例如在应用内点击官网书签）才停留展示宣传页。
+  if (missionParams || !stayRequested) {
     location.replace(APP_PATH + search + hash);
     return; // 跳转中，不再做页面增强
   }
