@@ -47,7 +47,7 @@
               <div v-show="currentTab === 'account'" class="settings-tab-panel" data-testid="settings-panel-account">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAccount') }}</h3>
-                  <p class="sp-tab-desc">管理您的云端账户、同步状态、数据安全加密与会员权益</p>
+                  <p class="sp-tab-desc">管理您的云端账户、同步状态与端到端安全加密保护</p>
                 </div>
 
                 <!-- 账号与同步卡片 -->
@@ -283,6 +283,36 @@
                   </div>
                 </div>
 
+                <!-- 账号注销卡片 -->
+                <div v-if="auth.isLoggedIn" class="sp-card sp-danger-card">
+                  <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title text-danger">注销账号</span>
+                      <span class="sp-row-desc">根据《个人信息保护法》第47条行使删除权，永久抹除云端所有数据与关联关系</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <button
+                        type="button"
+                        class="btn btn-danger btn-sm"
+                        data-testid="lv-delete-account"
+                        :disabled="deletingAccount"
+                        @click.stop="onDeleteAccount"
+                      >
+                        {{ deletingAccount ? t('settings.deleteAccountDoing') : t('settings.deleteAccount') }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab: 会员与账单 -->
+              <div v-show="currentTab === 'billing'" class="settings-tab-panel" data-testid="settings-panel-billing">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabBilling') }}</h3>
+                  <p class="sp-tab-desc">{{ t('settings.tabBillingDesc') }}</p>
+                </div>
+
                 <!-- 会员与权益卡片 -->
                 <div class="sp-card">
                   <div class="sp-card-head">{{ t('settings.membership') }}</div>
@@ -461,28 +491,6 @@
                         &gt;
                       </button>
                       <span class="sp-tx-page-size">{{ t('settings.txPerPage', { n: txPageSize }) }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 账号注销卡片 -->
-                <div v-if="auth.isLoggedIn" class="sp-card sp-danger-card">
-                  <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
-                  <div class="sp-card-row">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title text-danger">注销账号</span>
-                      <span class="sp-row-desc">根据《个人信息保护法》第47条行使删除权，永久抹除云端所有数据与关联关系</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <button
-                        type="button"
-                        class="btn btn-danger btn-sm"
-                        data-testid="lv-delete-account"
-                        :disabled="deletingAccount"
-                        @click.stop="onDeleteAccount"
-                      >
-                        {{ deletingAccount ? t('settings.deleteAccountDoing') : t('settings.deleteAccount') }}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -1055,7 +1063,6 @@ import PurchaseModal from '../modals/PurchaseModal.vue'
 import { dbRpc } from '../../lib/dbApi.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import {
-  fetchMyEntitlement,
   redeemCode,
   type MyEntitlement,
   type RedeemError,
@@ -1065,7 +1072,7 @@ import { useTransactions } from '../../composables/domain/useTransactions.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
 
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
-export type SettingsTab = 'account' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
+export type SettingsTab = 'account' | 'billing' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
 const currentTab = ref<SettingsTab>('account')
 
 const { locale, setLocale } = useI18n()
@@ -1309,7 +1316,7 @@ const showPurchase = ref(false)
 /** 支付成功后刷新权益（后端发货已幂等，这里只负责把最新权益拉回来） */
 async function onPurchasePaid() {
   try {
-    entitlement.value = await fetchMyEntitlement()
+    await entService.refresh()
     void loadAiQuota()
     void fetchTransactions(1)
   } catch {
@@ -1343,11 +1350,11 @@ const entitlementLabel = computed(() => {
 
 async function refreshEntitlement() {
   if (!auth.isLoggedIn) {
-    entitlement.value = { planId: 'free', status: 'active', expiresAt: null, features: {}, isPaid: false }
+    entService.clear()
     await dl.refreshAutoCheckAllowed(entitlement.value)
     return
   }
-  entitlement.value = await fetchMyEntitlement()
+  await entService.refresh()
   // 权益变化会影响「自动全量检测」是否可用（Plus 专属）
   await dl.refreshAutoCheckAllowed(entitlement.value)
 }
@@ -1685,15 +1692,21 @@ watch(() => uiStore.panels.settings, (open) => {
       uiStore.settingsInitialTab = ''
     }
     loadUserCategoryShares()
-    if (currentTab.value === 'account' && auth.isLoggedIn) {
-      void fetchTransactions()
+    if (auth.isLoggedIn) {
+      void refreshEntitlement()
+      if (currentTab.value === 'billing' || currentTab.value === 'account') {
+        void fetchTransactions()
+        void loadAiQuota()
+      }
     }
   }
 })
 
 watch(() => currentTab.value, (tab) => {
-  if (tab === 'account' && uiStore.panels.settings && auth.isLoggedIn) {
+  if ((tab === 'billing' || tab === 'account') && uiStore.panels.settings && auth.isLoggedIn) {
     void fetchTransactions()
+    void refreshEntitlement()
+    void loadAiQuota()
   }
 })
 
@@ -2054,16 +2067,25 @@ const tabs = computed(() => [
     labelKey: 'settings.tabAccount',
     icon: I.user,
     badge: syncState.value?.level === 'error' ? '!' : undefined,
+    group: 'account',
+  },
+  {
+    id: 'billing' as SettingsTab,
+    labelKey: 'settings.tabBilling',
+    icon: I.creditCard || I.sparkles,
+    group: 'account',
   },
   {
     id: 'appearance' as SettingsTab,
     labelKey: 'settings.tabAppearance',
     icon: I.sun,
+    group: 'experience',
   },
   {
     id: 'ai' as SettingsTab,
     labelKey: 'settings.tabAi',
     icon: I.sparkles,
+    group: 'experience',
   },
   {
     id: 'maintenance' as SettingsTab,
@@ -2072,16 +2094,19 @@ const tabs = computed(() => [
     badge: (deadCount.value + blockedCount.value > 0)
       ? String(deadCount.value + blockedCount.value)
       : (allPublicShares.value.length > 0 ? String(allPublicShares.value.length) : undefined),
+    group: 'system',
   },
   {
     id: 'data' as SettingsTab,
     labelKey: 'settings.tabData',
     icon: I.database || I.import,
+    group: 'system',
   },
   {
     id: 'about' as SettingsTab,
     labelKey: 'settings.tabAbout',
     icon: I.info,
+    group: 'system',
   },
 ])
 

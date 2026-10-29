@@ -19,6 +19,7 @@ vi.mock('../../composables/domain/useRedeem.js', () => ({
 }))
 
 import UserPopover from '../../components/overlays/UserPopover.vue'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 
 // 模拟 toast
 vi.mock('../../lib/toast.js', () => ({
@@ -28,6 +29,7 @@ vi.mock('../../lib/toast.js', () => ({
 // 模拟 useCloudSync
 const fullSyncMock = vi.fn().mockResolvedValue(true)
 const resetSyncStateMock = vi.fn().mockResolvedValue(true)
+const pendingLockedCountMock = ref(0)
 vi.mock('../../composables/domain/useCloudSync.js', () => ({
   useCloudSync: () => ({
     fullSync: fullSyncMock,
@@ -37,7 +39,7 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
     syncLabel: ref('已就绪'),
     realtimeStatus: ref('connected'),
     pendingCount: ref(0),
-    pendingLockedCount: ref(0),
+    pendingLockedCount: pendingLockedCountMock,
     conflicts: ref([]),
   }),
 }))
@@ -46,6 +48,7 @@ describe('UserPopover.vue', () => {
   beforeEach(() => {
     fullSyncMock.mockClear()
     resetSyncStateMock.mockClear()
+    useEntitlement().clear()
   })
 
   it('does not render popover when store.open is false or not logged in', async () => {
@@ -178,7 +181,7 @@ describe('UserPopover.vue', () => {
     wrapper.unmount()
   })
 
-  it('triggers sync when clicking sync button', async () => {
+  it('triggers sync when clicking sync button and aligns icon with text', async () => {
     const popoverStore = useUserPopoverStore()
     const authStore = useAuthStore()
 
@@ -189,9 +192,30 @@ describe('UserPopover.vue', () => {
 
     const syncBtn = document.querySelector('.up-sync-trigger-btn') as HTMLButtonElement
     expect(syncBtn).not.toBeNull()
+    expect(syncBtn.querySelector('.up-spin-icon')).not.toBeNull()
+    expect(syncBtn.querySelector('.up-sync-btn-text')).not.toBeNull()
     await syncBtn.click()
 
     expect(fullSyncMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('renders concise pending locked label with tooltip when items are locked', async () => {
+    const popoverStore = useUserPopoverStore()
+    const authStore = useAuthStore()
+    pendingLockedCountMock.value = 2
+
+    authStore.user = { id: 'u1', email: 'alice@example.com' } as any
+    popoverStore.show()
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+
+    const statusText = document.querySelector('.up-status-text') as HTMLElement
+    expect(statusText).not.toBeNull()
+    expect(statusText.textContent).toContain('2 项待解锁')
+    expect(statusText.getAttribute('title')).toContain('等待解锁后同步')
+
+    pendingLockedCountMock.value = 0
     wrapper.unmount()
   })
 
@@ -347,6 +371,10 @@ describe('UserPopover.vue', () => {
     expect(upgradeBtn.classList.contains('is-paid')).toBe(true)
     expect(upgradeBtn.textContent).toContain('PRO 会员')
     expect(upgradeBtn.textContent).toContain('PRO 年付方案')
+
+    const heroProBadge = card?.querySelector('.up-hero .up-pro-badge')
+    expect(heroProBadge).not.toBeNull()
+    expect(heroProBadge?.textContent).toBe('PRO')
 
     wrapper.unmount()
   })

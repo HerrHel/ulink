@@ -47,6 +47,7 @@ async function _checkE2ECanaryConflict(): Promise<void> {
 // 删除由 saveFromExtension 单路径处理，消除重复且获得 favicon + 可撤销。
 
 import { useAuth } from './domain/useAuth.js'
+import { useEntitlement } from './domain/useEntitlement.js'
 import { useCloudSync } from './domain/useCloudSync.js'
 import { useE2E } from './domain/useE2E.js'
 import { updateCardTagsOverflow, initCardTags, destroyCardTags } from './ui/useUI.js'
@@ -107,6 +108,7 @@ export function useAppLifecycle() {
     // 重新检查才能从云端拉取 canary 并正确设置 isE2EEnabled = true（常见于移动端、
     // 换设备等本地无 canary 但云端已设置主密码的场景）。
     if (auth.isLoggedIn) {
+      void useEntitlement().refresh().catch(() => {})
       try {
         const e2e = useE2E()
         if (!e2e.isE2EEnabled.value) {

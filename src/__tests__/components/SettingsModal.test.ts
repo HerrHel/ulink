@@ -12,6 +12,7 @@ import { useAuthStore } from '../../stores/auth.js'
 import { useSyncStore } from '../../stores/sync.js'
 import * as useCloudSyncMod from '../../composables/domain/useCloudSync.js'
 import * as useDataShareModule from '../../composables/domain/useDataShare.js'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 
 describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
   let pinia: ReturnType<typeof createPinia>
@@ -47,7 +48,7 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
 
     // 6 个选项卡
     const tabs = wrapper.findAll('.settings-nav-item')
-    expect(tabs.length).toBe(6)
+    expect(tabs.length).toBe(7)
 
     // 检查选项卡不含任何 emoji
     const emojiRegex = /[\uD83C-\uDBFF\uDC00-\uDFFF]/
@@ -73,6 +74,14 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
         },
       },
     })
+
+    // 切换至会员与账单 (billing)
+    const billingTab = wrapper.find('[data-testid="settings-tab-billing"]')
+    expect(billingTab.exists()).toBe(true)
+    await billingTab.trigger('click')
+    expect(billingTab.classes()).toContain('active')
+    const billingPanel = wrapper.find('[data-testid="settings-panel-billing"]')
+    expect(billingPanel.isVisible()).toBe(true)
 
     // 切换至外观 (appearance)
     const appearanceTab = wrapper.find('[data-testid="settings-tab-appearance"]')
@@ -285,5 +294,73 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
     await reauthBtn.trigger('click')
     expect(authStore.authModalOpen).toBe(true)
     expect(ui.panels.settings).toBe(false)
+  })
+  it('8. 非 PRO 用户在 AI 设置中点击自然语言搜索开关会被拦截并提示升级', async () => {
+    ui.panels.settings = true
+    const { clear } = useEntitlement()
+    clear()
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    await aiTab.trigger('click')
+
+    const toggle = wrapper.find('[data-testid="lv-semantic-search-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    const pill = toggle.find('.sp-toggle-pill')
+    expect(pill.classes()).not.toContain('active')
+
+    const row = toggle.element.closest('.sp-card-row') as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
+
+    expect(pill.classes()).not.toContain('active')
+  })
+
+  it('9. PRO 会员在 AI 设置中可正常开启/关闭自然语言搜索', async () => {
+    ui.panels.settings = true
+    const { entitlement } = useEntitlement()
+    entitlement.value = {
+      planId: 'pro_yearly',
+      planName: 'PRO 年付',
+      status: 'active',
+      expiresAt: '2099-01-01',
+      features: {},
+      isPaid: true,
+    }
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    await aiTab.trigger('click')
+
+    const toggle = wrapper.find('[data-testid="lv-semantic-search-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    const pill = toggle.find('.sp-toggle-pill')
+
+    ui.semanticSearchEnabled = true
+    await wrapper.vm.$nextTick()
+    expect(pill.classes()).toContain('active')
+
+    const row = toggle.element.closest('.sp-card-row') as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
+    expect(ui.semanticSearchEnabled).toBe(false)
+    expect(pill.classes()).not.toContain('active')
+
+    row.click()
+    await wrapper.vm.$nextTick()
+    expect(ui.semanticSearchEnabled).toBe(true)
+    expect(pill.classes()).toContain('active')
   })
 })

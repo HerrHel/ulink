@@ -21,17 +21,17 @@
             <div class="up-meta">
               <div class="up-name-row">
                 <span class="up-name" :title="auth.displayName || userDisplay">{{ auth.displayName || userDisplay }}</span>
-                <button
-                  class="up-edit-btn"
-                  @click="toggleEditProfile"
-                  :title="isEditing ? t('userPopover.closeEdit') : t('userPopover.editProfile')"
-                >
-                  <span aria-hidden="true" v-html="I.edit"></span>
-                  <span>{{ isEditing ? t('userPopover.closeEdit') : t('userPopover.editProfile') }}</span>
-                </button>
+                <span v-if="memberIsPaid" class="up-pro-badge">PRO</span>
               </div>
               <span class="up-email" :title="auth.userEmail">{{ auth.userEmail }}</span>
             </div>
+            <button
+              class="up-edit-btn"
+              @click="toggleEditProfile"
+              :title="isEditing ? t('userPopover.closeEdit') : t('userPopover.editProfile')"
+            >
+              <span aria-hidden="true" v-html="I.edit"></span>
+            </button>
           </div>
 
           <!-- 就地编辑个人资料模式（展开态） -->
@@ -92,16 +92,15 @@
 
           <!-- 快捷操作列表 -->
           <div v-else class="up-menu">
-            <!-- 云端同步状态与手动触发 -->
+            <!-- 云端同步状态 (index 0) -->
             <div class="up-menu-item up-sync-item">
               <div class="up-item-left">
                 <span class="up-item-icon" aria-hidden="true" v-html="I.cloud"></span>
-                <div class="up-sync-info">
-                  <span class="up-item-title">{{ t('settings.cloudSync') }}</span>
-                  <span class="up-sync-status" :class="syncState.level">
-                    <span class="up-sync-dot" :class="syncState.dotClass"></span>{{ syncState.label }}
-                  </span>
-                </div>
+                <span class="up-item-title">{{ t('settings.cloudSync') }}</span>
+                <span class="up-sync-status" :class="syncState.level">
+                  <span class="up-sync-dot" :class="syncState.dotClass"></span>
+                  <span class="up-status-text" :title="syncState.label">{{ displaySyncLabel }}</span>
+                </span>
               </div>
               <button
                 class="up-sync-trigger-btn"
@@ -111,25 +110,23 @@
                 :title="t('userPopover.syncNow')"
               >
                 <span aria-hidden="true" v-html="I.refresh" class="up-spin-icon"></span>
-                <span>{{ isSyncing ? t('userPopover.syncing') : t('userPopover.syncNow') }}</span>
+                <span class="up-sync-btn-text">{{ isSyncing ? t('userPopover.syncing') : t('userPopover.syncNow') }}</span>
               </button>
             </div>
 
-            <!-- 数据解密 / 加密状态与切换 -->
+            <!-- 数据解密 / 加密状态 (index 1) -->
             <button class="up-menu-item" @click="handleE2EAction">
               <div class="up-item-left">
                 <span class="up-item-icon" aria-hidden="true" v-html="I.password"></span>
-                <div class="up-item-text">
-                  <span class="up-item-title">{{ t('userPopover.e2eTitle') }}</span>
-                  <span class="up-item-desc">{{ e2eStatusDesc }}</span>
-                </div>
+                <span class="up-item-title">{{ t('userPopover.e2eTitle') }}</span>
+                <span class="up-item-desc">{{ e2eStatusDesc }}</span>
               </div>
               <span class="up-tag" :class="e2eTagClass">
                 {{ e2eActionLabel }}
               </span>
             </button>
 
-            <!-- 完整设置入口 -->
+            <!-- 偏好设置 (index 2) -->
             <button class="up-menu-item" @click="openSettings">
               <div class="up-item-left">
                 <span class="up-item-icon" aria-hidden="true" v-html="I.settings"></span>
@@ -138,18 +135,7 @@
               <span class="up-chevron" aria-hidden="true" v-html="I.chevron"></span>
             </button>
 
-            <!-- 交易记录入口 -->
-            <button class="up-menu-item" data-testid="up-transactions-btn" @click="openTransactions">
-              <div class="up-item-left">
-                <span class="up-item-icon" aria-hidden="true" v-html="I.history"></span>
-                <span class="up-item-title">{{ t('settings.transactions') }}</span>
-              </div>
-              <span class="up-chevron" aria-hidden="true" v-html="I.chevron"></span>
-            </button>
-
-            <div class="up-divider"></div>
-
-            <!-- 会员与订阅入口 -->
+            <!-- 会员方案入口 (index 3) -->
             <button
               class="up-menu-item up-upgrade-item"
               :class="{ 'is-paid': memberIsPaid }"
@@ -158,19 +144,17 @@
             >
               <div class="up-item-left">
                 <span class="up-item-icon" aria-hidden="true" v-html="I.sparkles"></span>
-                <div class="up-item-text">
-                  <span class="up-item-title">{{ memberIsPaid ? t('userPopover.proMember') : t('userPopover.upgrade') }}</span>
-                  <span class="up-item-desc">{{ memberIsPaid ? (memberPlanName || t('userPopover.proDesc')) : t('userPopover.upgradeDesc') }}</span>
-                </div>
+                <span class="up-item-title">{{ memberIsPaid ? t('userPopover.proMember') : t('userPopover.upgrade') }}</span>
               </div>
-              <span class="up-upgrade-badge" :class="{ 'badge-pro': memberIsPaid }">
-                {{ memberIsPaid ? 'PRO' : t('userPopover.upgrade') }}
-              </span>
+              <div class="up-item-right">
+                <span class="up-item-meta">{{ memberIsPaid ? (memberPlanName || t('userPopover.proDesc')) : t('userPopover.upgradeDesc') }}</span>
+                <span class="up-chevron" aria-hidden="true" v-html="I.chevron"></span>
+              </div>
             </button>
 
             <div class="up-divider"></div>
 
-            <!-- 退出登录 -->
+            <!-- 退出登录 (index 4) -->
             <button class="up-menu-item up-danger-item" @click="onSignOut">
               <div class="up-item-left">
                 <span class="up-item-icon" aria-hidden="true" v-html="I.logout"></span>
@@ -193,7 +177,7 @@
 
 <script setup lang="ts">
 import { computed, ref, reactive, watch, onMounted, onUnmounted } from 'vue'
-import { fetchMyEntitlement } from '../../composables/domain/useRedeem.js'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import { prefetchPurchasePlans } from '../../composables/domain/usePurchasePlans.js'
 import PurchaseModal from '../modals/PurchaseModal.vue'
 import { useUserPopoverStore } from '../../stores/overlay.js'
@@ -214,44 +198,19 @@ const syncState = useSyncState()
 const e2e = useE2E()
 const uiStore = useUIStore()
 
-const ENTITLEMENT_CACHE_KEY = 'ulink_entitlement_v1'
-
-function getInitialEntitlement(): { isPaid: boolean; planId: string; planName: string } {
-  try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(ENTITLEMENT_CACHE_KEY) : null
-    if (raw) return JSON.parse(raw)
-  } catch {}
-  return { isPaid: false, planId: '', planName: '' }
-}
-
-const initialEnt = getInitialEntitlement()
+const entService = useEntitlement()
 const showPurchase = ref(false)
-const memberIsPaid = ref(initialEnt.isPaid)
-const memberPlanId = ref(initialEnt.planId)
-const memberPlanName = ref(initialEnt.planName)
+const memberIsPaid = entService.isPaid
+const memberPlanId = entService.planId
+const memberPlanName = entService.planName
 
 async function loadMember(): Promise<void> {
   if (!auth.isLoggedIn) {
-    memberIsPaid.value = false
-    memberPlanId.value = ''
-    memberPlanName.value = ''
-    try {
-      localStorage.removeItem(ENTITLEMENT_CACHE_KEY)
-    } catch {}
+    entService.clear()
     return
   }
   try {
-    const e = await fetchMyEntitlement()
-    memberIsPaid.value = e.isPaid
-    memberPlanId.value = e.planId
-    memberPlanName.value = e.planName
-    try {
-      localStorage.setItem(ENTITLEMENT_CACHE_KEY, JSON.stringify({
-        isPaid: e.isPaid,
-        planId: e.planId,
-        planName: e.planName,
-      }))
-    } catch {}
+    await entService.refresh()
   } catch {
     // 请求失败时保留缓存状态
   }
@@ -270,7 +229,12 @@ watch(
 
 function openPurchase() {
   close()
-  showPurchase.value = true
+  if (memberIsPaid.value) {
+    uiStore.settingsInitialTab = 'billing'
+    uiStore.panels.settings = true
+  } else {
+    showPurchase.value = true
+  }
 }
 
 async function onPurchasePaid() {
@@ -295,6 +259,14 @@ const userInitial = computed(() => {
 const userDisplay = computed(() => {
   if (!auth.userEmail) return ''
   return auth.userEmail.split('@')[0]
+})
+
+const displaySyncLabel = computed(() => {
+  const locked = sync.pendingLockedCount.value
+  if (locked > 0) {
+    return t('userPopover.pendingLocked', { n: locked })
+  }
+  return syncState.value.label
 })
 
 const isE2EEnabled = computed(() => !!e2e.isE2EEnabled.value)
@@ -331,11 +303,11 @@ const popoverStyle = computed(() => {
     bottom = Math.max(12, windowHeight - rect.bottom)
   } else {
     // 展开态：卡片正上方对齐
-    left = Math.max(12, rect.left)
+    left = Math.max(8, rect.left)
   }
 
   // 防止超出右边缘
-  const popoverWidth = 280
+  const popoverWidth = 268
   if (left + popoverWidth > windowWidth - 12) {
     left = windowWidth - popoverWidth - 12
   }
@@ -408,11 +380,6 @@ function openSettings() {
   uiStore.panels.settings = true
 }
 
-function openTransactions() {
-  close()
-  uiStore.settingsInitialTab = 'account'
-  uiStore.panels.settings = true
-}
 
 async function onSignOut() {
   close()

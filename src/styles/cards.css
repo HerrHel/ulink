@@ -456,12 +456,16 @@
   border-radius:var(--radius-md);
   border:1px solid var(--border-light);
   overflow:hidden;position:relative;
-  transition:border-color 0.2s ease,transform 0.2s var(--ease-spring),box-shadow 0.2s ease;
+  transform:translateZ(0);
+  transform-origin:center center;
+  backface-visibility:hidden;
+  will-change:transform;
+  transition:border-color 0.2s ease,transform 0.2s var(--ease-out),box-shadow 0.2s ease;
 }
 @media (hover: hover) and (pointer: fine) {
 .card-logo:hover{
   border-color:var(--accent);
-  transform:scale(1.1);
+  transform:scale(1.1) translateZ(0);
   box-shadow:0 2px 8px var(--accent-glow);
   z-index:2;
 }

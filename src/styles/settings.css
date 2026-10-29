@@ -12,12 +12,12 @@
 
 .settings-dialog,
 .settings-drawer{
-  width:920px;max-width:100%;
-  height:660px;max-height:calc(100vh - 48px);
+  width:980px;max-width:calc(100vw - 32px);
+  height:720px;max-height:calc(100vh - 48px);
   margin:auto;
   background:var(--surface);
   border:1px solid var(--border);
-  border-radius:var(--radius-lg);
+  border-radius:16px;
   box-shadow:0 24px 64px rgba(0,0,0,0.22), 0 4px 16px rgba(0,0,0,0.06);
   display:flex;flex-direction:column;
   overflow:hidden;
@@ -82,13 +82,23 @@
 
 /* ==================== LEFT SIDEBAR NAVIGATION ==================== */
 .settings-nav{
-  width:210px;flex-shrink:0;
+  width:220px;flex-shrink:0;
   background:var(--surface-alt, rgba(0,0,0,0.02));
   border-right:1px solid var(--border-light);
   padding:14px 10px;
   display:flex;flex-direction:column;gap:4px;
   overflow-y:auto;
   overscroll-behavior:contain;
+}
+.settings-nav-group-title{
+  font-size:var(--fs-2xs);
+  font-weight:600;
+  color:var(--text-muted);
+  letter-spacing:0.04em;
+  padding:12px 12px 4px;
+}
+.settings-nav-group-title:first-child{
+  padding-top:2px;
 }
 
 .settings-nav-item{

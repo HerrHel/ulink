@@ -10,7 +10,8 @@ import { ref, computed } from 'vue'
 import { fetchMyEntitlement, type MyEntitlement } from './useRedeem.js'
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../../lib/storageSafe.js'
 
-export const ENTITLEMENT_CACHE_KEY = 'lv_entitlement_v1'
+export const ENTITLEMENT_CACHE_KEY = 'ulink_entitlement_v1'
+export const LEGACY_ENTITLEMENT_CACHE_KEY = 'lv_entitlement_v1'
 const FREE_DAILY_AI_ENRICH_LIMIT = 3
 
 function getTodayKey(): string {
@@ -23,7 +24,7 @@ function getTodayKey(): string {
 
 function getInitialEntitlement(): MyEntitlement {
   try {
-    const raw = safeGetItem(ENTITLEMENT_CACHE_KEY)
+    const raw = safeGetItem(ENTITLEMENT_CACHE_KEY) || safeGetItem(LEGACY_ENTITLEMENT_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
       return {
@@ -68,6 +69,7 @@ export function useEntitlement() {
       currentEntitlement.value = e
       try {
         safeSetItem(ENTITLEMENT_CACHE_KEY, JSON.stringify(e))
+        safeSetItem(LEGACY_ENTITLEMENT_CACHE_KEY, JSON.stringify(e))
       } catch { /* ignore */ }
       return e
     } finally {
@@ -85,6 +87,7 @@ export function useEntitlement() {
       isPaid: false,
     }
     safeRemoveItem(ENTITLEMENT_CACHE_KEY)
+    safeRemoveItem(LEGACY_ENTITLEMENT_CACHE_KEY)
   }
 
   /**
