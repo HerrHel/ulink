@@ -29,7 +29,7 @@ export const purchaseZh = {
       sync: '同步与存储',
       linkcheck: '死链检查',
       ai: 'AI 能力',
-      video: '视频深度提取',
+      video: '视频内容解析',
     },
     features: {
       'history.days': '收藏历史保留',
@@ -40,7 +40,7 @@ export const purchaseZh = {
       'linkcheck.auto.max': '自动巡检链接上限',
       'ai.requests.daily': '每日 AI 请求',
       'ai.tokens.monthly': '每月 AI 额度',
-      'video.extract.daily': '每日视频灵感提取',
+      'video.extract.daily': '每日视频解析与提取',
     },
     compareTitle: '各档位权益对比',
     included: '包含',

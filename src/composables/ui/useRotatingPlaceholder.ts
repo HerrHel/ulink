@@ -19,8 +19,8 @@ export interface RotatingTipItem {
 
 export const WORKSPACE_TIPS: readonly RotatingTipItem[] = [
   {
-    zh: '粘贴 B站/YouTube 链接，自动挖掘视频中的网站与笔记…',
-    en: 'Paste Bilibili/YouTube links to extract mentioned sites & notes...',
+    zh: '粘贴 B站/YouTube/抖音等视频链接，自动提取文中网站并整理笔记…',
+    en: 'Paste video links (Bilibili/YouTube/TikTok) to extract sites & organize notes...',
   },
   {
     zh: '向与链提问，或拖拽卡片到此处直接引用…',
