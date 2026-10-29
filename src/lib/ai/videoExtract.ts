@@ -154,14 +154,30 @@ export async function extractVideoInsightsWithAI(
   }
 }
 
+export interface GenerateVideoSummaryOptions {
+  signal?: AbortSignal
+  question?: string
+  categories?: Category[]
+  attributes?: CustomAttribute[]
+  onCandidates?: (candidates: AiCandidateBookmark[]) => void
+}
+
 /**
  * 文字源总结：对简介/字幕/评论区文本生成一段速览（仅基于给定文本，不编造）。
- * 保持向下兼容既有调用方签名。
+ * 保持向下兼容既有调用方签名，同时支持通过 onCandidates 回传大模型提炼的结构化工具卡片。
  */
 export async function generateVideoSummary(
   contentText: string,
-  options: { signal?: AbortSignal; question?: string } = {}
+  options: GenerateVideoSummaryOptions = {}
 ): Promise<string | null> {
-  const result = await extractVideoInsightsWithAI(contentText, [], [], options)
+  const result = await extractVideoInsightsWithAI(
+    contentText,
+    options.categories || [],
+    options.attributes || [],
+    { signal: options.signal, question: options.question }
+  )
+  if (result.candidates && result.candidates.length > 0) {
+    options.onCandidates?.(result.candidates)
+  }
   return result.summary
 }

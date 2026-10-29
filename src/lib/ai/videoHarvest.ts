@@ -15,7 +15,7 @@ import { domain } from '../../utils.js'
 import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { fetchPageContentViaJina } from './jinaReader.js'
-import { fetchVideoExtractServer, extractVideoInsightsWithAI } from './videoExtract.js'
+import { fetchVideoExtractServer, generateVideoSummary } from './videoExtract.js'
 import {
   extractDeepLinksFromText,
   getCanonicalHostFamily,
@@ -208,27 +208,28 @@ export async function extractBookmarksFromVideo(
   let summary: string | undefined
   if (pageBody.trim()) {
     try {
-      const insight = await extractVideoInsightsWithAI(pageBody, categories, attributes, { question: questionText || undefined })
-      summary = insight.summary || undefined
-
-      // 将大模型结合上下文补全的工具卡片补充进候选列表（去重）
-      if (insight.candidates && insight.candidates.length > 0) {
-        for (const c of insight.candidates) {
-          const key = norm(c.url)
-          if (!seenUrls.has(key)) {
-            seenUrls.add(key)
-            rawBookmarks.push({
-              title: c.title,
-              url: c.url,
-              notes: c.notes || t('ai.extractedToolNotes', { dm: domain(c.url) }),
-              tag: t('ai.tagExtractTool'),
-              highlight: targetUrl
-                ? t('ai.extractHighlight', { source: t('ai.srcMention'), site: domain(targetUrl) })
-                : t('ai.extractHighlightNoSite', { source: t('ai.srcMention') }),
-            })
+      summary = (await generateVideoSummary(pageBody, {
+        question: questionText || undefined,
+        categories,
+        attributes,
+        onCandidates: (candidates) => {
+          for (const c of candidates) {
+            const key = norm(c.url)
+            if (!seenUrls.has(key)) {
+              seenUrls.add(key)
+              rawBookmarks.push({
+                title: c.title,
+                url: c.url,
+                notes: c.notes || t('ai.extractedToolNotes', { dm: domain(c.url) }),
+                tag: t('ai.tagExtractTool'),
+                highlight: targetUrl
+                  ? t('ai.extractHighlight', { source: t('ai.srcMention'), site: domain(targetUrl) })
+                  : t('ai.extractHighlightNoSite', { source: t('ai.srcMention') }),
+              })
+            }
           }
-        }
-      }
+        },
+      })) || undefined
     } catch {
       summary = undefined
     }
