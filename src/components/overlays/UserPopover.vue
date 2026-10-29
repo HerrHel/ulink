@@ -138,6 +138,15 @@
               <span class="up-chevron" aria-hidden="true" v-html="I.chevron"></span>
             </button>
 
+            <!-- 交易记录入口 -->
+            <button class="up-menu-item" data-testid="up-transactions-btn" @click="openTransactions">
+              <div class="up-item-left">
+                <span class="up-item-icon" aria-hidden="true" v-html="I.history"></span>
+                <span class="up-item-title">{{ t('settings.transactions') }}</span>
+              </div>
+              <span class="up-chevron" aria-hidden="true" v-html="I.chevron"></span>
+            </button>
+
             <div class="up-divider"></div>
 
             <!-- 会员与订阅入口 -->
@@ -396,6 +405,12 @@ function handleE2EAction() {
 
 function openSettings() {
   close()
+  uiStore.panels.settings = true
+}
+
+function openTransactions() {
+  close()
+  uiStore.settingsInitialTab = 'account'
   uiStore.panels.settings = true
 }
 

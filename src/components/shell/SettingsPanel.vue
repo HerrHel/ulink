@@ -356,6 +356,115 @@
                   </div>
                 </div>
 
+                <!-- 交易记录卡片 -->
+                <div v-if="auth.isLoggedIn" class="sp-card sp-card-transactions" data-testid="lv-transactions-card">
+                  <div class="sp-card-head sp-tx-card-head">
+                    <div class="sp-tx-title-group">
+                      <span class="sp-tx-title">{{ t('settings.transactions') }}</span>
+                      <span class="sp-tx-subtitle">{{ t('settings.transactionsDesc') }}</span>
+                    </div>
+                    <div class="sp-tx-head-actions">
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-xs sp-tx-refresh-btn"
+                        :class="{ 'is-spinning': loadingTx }"
+                        :disabled="loadingTx"
+                        :title="t('settings.txRefresh')"
+                        :aria-label="t('settings.txRefresh')"
+                        @click.stop="fetchTransactions()"
+                      >
+                        <span aria-hidden="true" v-html="I.refresh"></span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 空状态 -->
+                  <div v-if="!loadingTx && transactions.length === 0" class="sp-tx-empty">
+                    <span class="sp-tx-empty-icon" aria-hidden="true" v-html="I.history"></span>
+                    <div class="sp-tx-empty-title">{{ t('settings.txEmpty') }}</div>
+                    <div class="sp-tx-empty-desc">{{ t('settings.txEmptyDesc') }}</div>
+                  </div>
+
+                  <!-- 交易明细表格 -->
+                  <div v-else class="sp-tx-table-wrapper">
+                    <table class="sp-tx-table">
+                      <thead>
+                        <tr>
+                          <th>{{ t('settings.txTime') }}</th>
+                          <th>{{ t('settings.txOrderNo') }}</th>
+                          <th>{{ t('settings.txAmount') }}</th>
+                          <th>{{ t('settings.txType') }}</th>
+                          <th>{{ t('settings.txChannel') }}</th>
+                          <th>{{ t('settings.txStatus') }}</th>
+                          <th>{{ t('settings.txNotes') }}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="tx in transactions" :key="tx.orderId">
+                          <td class="sp-tx-cell-time">{{ formatTxTime(tx.paidAt || tx.createdAt) }}</td>
+                          <td class="sp-tx-cell-order">
+                            <div class="sp-tx-order-box">
+                              <span class="sp-tx-order-id" :title="tx.orderId">{{ tx.orderId }}</span>
+                              <button
+                                type="button"
+                                class="btn btn-ghost btn-xs sp-tx-copy-btn"
+                                :title="copiedTxOrderId === tx.orderId ? t('settings.txCopied') : t('common.copy')"
+                                :aria-label="t('common.copy')"
+                                @click.stop="copyOrderNo(tx.orderId)"
+                              >
+                                <span aria-hidden="true" v-html="copiedTxOrderId === tx.orderId ? I.check : I.copy"></span>
+                              </button>
+                            </div>
+                          </td>
+                          <td class="sp-tx-cell-amount">
+                            <span class="sp-tx-amount" :class="{ 'is-zero': tx.amountCents === 0 }">
+                              {{ tx.amountCents > 0 ? `¥ ${tx.amountYen}` : '¥ 0.00' }}
+                            </span>
+                          </td>
+                          <td class="sp-tx-cell-type">
+                            <span class="sp-tx-type-tag" :class="'type-' + tx.type">{{ tx.typeLabel }}</span>
+                          </td>
+                          <td class="sp-tx-cell-channel">{{ tx.channelLabel }}</td>
+                          <td class="sp-tx-cell-status">
+                            <span class="sp-tx-badge" :class="'status-' + tx.status">
+                              <span class="sp-tx-badge-dot"></span>
+                              {{ tx.statusLabel }}
+                            </span>
+                          </td>
+                          <td class="sp-tx-cell-notes" :title="tx.notes || '-'">{{ tx.notes || '-' }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- 分页条 -->
+                  <div v-if="totalTx > 0" class="sp-tx-pagination">
+                    <span class="sp-tx-total">{{ t('settings.txTotal', { total: totalTx }) }}</span>
+                    <div class="sp-tx-pager">
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-xs sp-tx-page-btn"
+                        :disabled="!hasPrevTx || loadingTx"
+                        @click="prevTxPage"
+                        aria-label="Previous page"
+                      >
+                        &lt;
+                      </button>
+                      <span class="sp-tx-page-box">{{ txPage }}</span>
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-xs sp-tx-page-btn"
+                        :disabled="!hasNextTx || loadingTx"
+                        @click="nextTxPage"
+                        aria-label="Next page"
+                      >
+                        &gt;
+                      </button>
+                      <span class="sp-tx-page-size">{{ t('settings.txPerPage', { n: txPageSize }) }}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- 账号注销卡片 -->
                 <div v-if="auth.isLoggedIn" class="sp-card sp-danger-card">
                   <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
@@ -952,10 +1061,43 @@ import {
   type RedeemError,
 } from '../../composables/domain/useRedeem.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
+import { useTransactions } from '../../composables/domain/useTransactions.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
 
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
+export type SettingsTab = 'account' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
+const currentTab = ref<SettingsTab>('account')
+
 const { locale, setLocale } = useI18n()
+
+// 用户交易明细与记录
+const {
+  transactions,
+  loading: loadingTx,
+  total: totalTx,
+  page: txPage,
+  pageSize: txPageSize,
+  hasPrev: hasPrevTx,
+  hasNext: hasNextTx,
+  fetchTransactions,
+  nextPage: nextTxPage,
+  prevPage: prevTxPage,
+  formatTxTime,
+} = useTransactions()
+
+const copiedTxOrderId = ref<string | null>(null)
+let copyTxTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyOrderNo(orderId: string) {
+  if (!orderId) return
+  await copyToClipboard(orderId)
+  copiedTxOrderId.value = orderId
+  toast(t('settings.txCopied'))
+  if (copyTxTimer) clearTimeout(copyTxTimer)
+  copyTxTimer = setTimeout(() => {
+    copiedTxOrderId.value = null
+  }, 2000)
+}
 
 
 function triggerImport() { const el = document.getElementById('importFile') as HTMLInputElement | null; if (el) { el.accept = '.json,.html,.htm,.csv'; el.click() } }
@@ -1168,7 +1310,8 @@ const showPurchase = ref(false)
 async function onPurchasePaid() {
   try {
     entitlement.value = await fetchMyEntitlement()
-  void loadAiQuota()
+    void loadAiQuota()
+    void fetchTransactions(1)
   } catch {
     /* 刷新失败不影响支付结果本身，下次打开设置会重新拉 */
   }
@@ -1240,6 +1383,7 @@ async function onRedeem() {
       toast(t('settings.redeemSuccess', { plan: r.planName || '', date: r.expiresAt || '' }))
       redeemInput.value = ''
       await refreshEntitlement()
+      void fetchTransactions(1)
     } else {
       toast(t(redeemErrKey(r.error)), false)
     }
@@ -1535,7 +1679,22 @@ async function loadUserCategoryShares() {
 }
 
 watch(() => uiStore.panels.settings, (open) => {
-  if (open) loadUserCategoryShares()
+  if (open) {
+    if (uiStore.settingsInitialTab) {
+      currentTab.value = uiStore.settingsInitialTab as SettingsTab
+      uiStore.settingsInitialTab = ''
+    }
+    loadUserCategoryShares()
+    if (currentTab.value === 'account' && auth.isLoggedIn) {
+      void fetchTransactions()
+    }
+  }
+})
+
+watch(() => currentTab.value, (tab) => {
+  if (tab === 'account' && uiStore.panels.settings && auth.isLoggedIn) {
+    void fetchTransactions()
+  }
 })
 
 watch(() => auth.isLoggedIn, (logged) => {
@@ -1887,9 +2046,7 @@ async function submitFeedback() {
 
 
 
-export type SettingsTab = 'account' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
 
-const currentTab = ref<SettingsTab>('account')
 
 const tabs = computed(() => [
   {

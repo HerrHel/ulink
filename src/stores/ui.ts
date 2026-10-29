@@ -133,6 +133,7 @@ export interface UIState {
   themeStyle: ThemeStyle
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
+  settingsInitialTab: string
   historyMax: number
   addToGid: string | null
   _addPopoverTrigger: { top: number; left: number; width: number } | null
@@ -203,6 +204,7 @@ export const useUIStore = defineStore('ui', {
       themeStyle: 'premium',
       historyItemId: '',
       historyItemType: 'bookmark',
+      settingsInitialTab: '',
       historyMax: 10,
       modals: {
         bookmark: false,

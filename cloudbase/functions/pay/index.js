@@ -320,6 +320,103 @@ async function handleAuthed(req, res, action, body, cors) {
     return
   }
 
+  if (action === 'transactions' || action === 'orders') {
+    const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 100)
+    const offset = Math.max(Number(body.offset) || 0, 0)
+
+    const ordersRes = await db
+      .from('orders')
+      .select('id, user_id, plan_id, amount_cents, currency, channel, channel_order_id, status, paid_at, created_at, expires_at, idempotency_key', { count: 'exact' })
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    if (ordersRes.error) {
+      console.error('[pay] list orders failed:', ordersRes.error)
+      sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
+      return
+    }
+
+    let plansMap = {}
+    try {
+      const pr = await db.rpc('list_purchase_plans')
+      if (Array.isArray(pr.data)) {
+        for (const p of pr.data) {
+          if (p.planId) plansMap[p.planId] = p.name
+        }
+      }
+    } catch { /* ignore */ }
+
+    const rawList = ordersRes.data || []
+    const total = typeof ordersRes.count === 'number' ? ordersRes.count : rawList.length
+
+    const list = rawList.map((o) => {
+      let type = 'purchase'
+      let typeLabel = '充值'
+      let channelLabel = '微信支付'
+      if (o.channel === 'wechat') channelLabel = '微信支付'
+      else if (o.channel === 'alipay') channelLabel = '支付宝'
+      else if (o.channel === 'redeem') {
+        type = 'redeem'
+        typeLabel = '兑换码'
+        channelLabel = '兑换码'
+      } else if (o.channel === 'manual') {
+        type = 'gift'
+        typeLabel = '赠送金额'
+        channelLabel = '-'
+      }
+
+      if (o.amount_cents === 0 && o.channel !== 'redeem') {
+        type = 'gift'
+        typeLabel = '赠送金额'
+        channelLabel = '-'
+      }
+
+      let statusLabel = '充值成功'
+      if (o.status === 'paid') {
+        statusLabel = type === 'gift' ? '额度到账' : (o.channel === 'redeem' ? '额度到账' : '充值成功')
+      } else if (o.status === 'pending') {
+        statusLabel = '待支付'
+      } else if (o.status === 'failed') {
+        statusLabel = '已取消'
+      } else if (o.status === 'refunded') {
+        statusLabel = '已退款'
+      }
+
+      const planName = plansMap[o.plan_id] || (o.plan_id === 'plus_yearly' ? 'PRO 年付' : o.plan_id === 'plus_monthly' ? 'PRO 月付' : o.plan_id === 'pro_quarterly' ? 'PRO 季付' : o.plan_id)
+      let notes = '-'
+      if (o.channel === 'redeem') {
+        notes = o.idempotency_key ? `兑换码: ${o.idempotency_key}` : (planName || '兑换码核销')
+      } else if (o.expires_at) {
+        notes = '有效期至 ' + new Date(o.expires_at).toISOString().slice(0, 10)
+      } else if (planName) {
+        notes = planName
+      }
+
+      return {
+        orderId: o.id,
+        channelOrderId: o.channel_order_id,
+        createdAt: o.created_at,
+        paidAt: o.paid_at,
+        amountYen: (o.amount_cents / 100).toFixed(2),
+        amountCents: o.amount_cents,
+        currency: o.currency || 'CNY',
+        type,
+        typeLabel,
+        channel: o.channel,
+        channelLabel,
+        status: o.status,
+        statusLabel,
+        planId: o.plan_id,
+        planName,
+        notes,
+      }
+    })
+
+    sendJson(res, 200, { ok: true, list, total }, cors)
+    return
+  }
+
   sendJson(res, 400, { error: 'unknown_action' }, cors)
 }
 
