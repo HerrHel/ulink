@@ -10,8 +10,10 @@
 
 import { supabase, isSupabaseConfigured } from '../supabase.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
+import { getApiToken } from '../authDriver.js'
+import { toast } from '../toast.js'
 import { askMiMo, sanitizeForPrompt } from './mimoClient.js'
-import { getLocale } from '../../i18n/index.js'
+import { getLocale, t } from '../../i18n/index.js'
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 
@@ -27,6 +29,10 @@ export interface VideoExtractServerResult {
   markdown?: string
   /** 是否走了通用降级路径（平台 API 不可用/风控时服务端如实标注） */
   degraded: boolean
+  /** 服务端判定今日视频解析额度已用完（调用方应停止继续抓取并提示用户） */
+  quotaExceeded?: boolean
+  /** 触发配额时的每日上限（免费 1 / PRO 10） */
+  quotaLimit?: number
 }
 
 /** 服务端可识别的来源：专用适配器 + yt-dlp 微服务归一后的平台标识 */
@@ -104,9 +110,12 @@ export async function fetchVideoExtractServer(
   if (!cbMode && !isSupabaseConfigured) return null
 
   try {
-    // CloudBase 云函数 v1 不验签（IP 哈希限流），无需会话 token
     let authHeaders: Record<string, string> = {}
-    if (!cbMode) {
+    if (cbMode) {
+      // 日配额按 uid 计量：必须带上 CloudBase 登录 token（匿名请求只会拿到匿名额度）
+      const token = await getApiToken()
+      if (token) authHeaders.Authorization = `Bearer ${token}`
+    } else {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
       if (!token) return null
@@ -127,6 +136,24 @@ export async function fetchVideoExtractServer(
       body: JSON.stringify({ url: targetUrl }),
       signal: options.signal,
     })
+
+    // 429：今日额度用完，不当作普通失败（调用方不得再降级去抓取，否则等于绕过配额）
+    if (res.status === 429) {
+      const body = (await res.json().catch(() => ({}))) as { quota?: { limit?: unknown } }
+      const limit = typeof body.quota?.limit === 'number' ? body.quota.limit : undefined
+      toast(t('ai.videoQuotaExceeded', limit != null ? { limit } : {}), false)
+      return {
+        source: 'generic',
+        url: targetUrl,
+        title: '',
+        description: '',
+        subtitles: '',
+        comments: [],
+        degraded: true,
+        quotaExceeded: true,
+        quotaLimit: limit,
+      }
+    }
     if (!res.ok) return null
 
     const data = await res.json()

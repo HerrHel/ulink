@@ -37,6 +37,11 @@ const JOBS = [
     from: 'supabase/functions/extract-video/video-adapters.ts',
     to: 'cloudbase/functions/jina-proxy/video-adapters.js',
   },
+  // extract-video 日配额需要识别调用者 uid（与 mimo-chat/share-admin 同一鉴权真源）
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/extract-video/cb-auth.js',
+  },
   {
     from: 'supabase/functions/mimo-chat/mimo-guard.ts',
     to: 'cloudbase/functions/mimo-chat/mimo-guard.js',

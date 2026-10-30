@@ -119,6 +119,20 @@ export async function extractBookmarksFromVideo(
       server = null
     }
 
+    // 今日视频解析额度用完：直接告诉用户，且**不得**降级 Jina 继续抓取（那等于绕过配额）
+    if (server?.quotaExceeded) {
+      const msg = t('ai.videoQuotaExceeded', server.quotaLimit != null ? { limit: server.quotaLimit } : {})
+      return {
+        sourceUrl: cleanInput,
+        videoTitle: t('ai.videoFallbackTitle'),
+        groupTitle: t('ai.shareGroupTitleDefault'),
+        groupNotes: msg,
+        bookmarks: [],
+        summary: msg,
+        question: questionText || undefined,
+      }
+    }
+
     if (server) {
       if (server.url) canonicalUrl = server.url
       pageTitle = server.title

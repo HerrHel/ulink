@@ -94,6 +94,16 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
     expect(await fetchVideoExtractServer('https://example.com/v')).toBeNull()
   })
 
+  it('429 今日额度用完：返回 quotaExceeded 标记与上限（调用方不得再降级抓取绕过配额）', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: 'quota', quota: { limit: 10, scope: 'user' } }),
+    })
+    const res = await fetchVideoExtractServer('https://www.douyin.com/video/7701700795477003571')
+    expect(res).toMatchObject({ quotaExceeded: true, quotaLimit: 10 })
+  })
+
   // ── generateVideoSummary ──
 
   it('总结输入注入提示词前消毒截断（防页面内容全量外送），并返回 cleanText', async () => {

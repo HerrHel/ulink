@@ -30,6 +30,7 @@ const {
   parseYouTubeComments,
 } = require('./video-adapters.js')
 const { isOriginAllowed, buildCorsHeaders } = require('./ssrf-guard.js')
+const { verifyCbToken } = require('./cb-auth.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
@@ -41,6 +42,14 @@ const UPSTREAM_TIMEOUT_MS = parseInt(process.env.EXTRACT_VIDEO_TIMEOUT_MS || '12
 const VIDEO_WORKER_URL = process.env.VIDEO_WORKER_URL || ''
 const VIDEO_WORKER_TOKEN = process.env.VIDEO_WORKER_TOKEN || ''
 const WORKER_TIMEOUT_MS = parseInt(process.env.EXTRACT_VIDEO_WORKER_TIMEOUT_MS || '45000', 10)
+// 日配额：metric 名与 plans.features 对齐（free=1，PRO=10）
+const QUOTA_METRIC = 'video.extract.daily'
+// 窗口略大于 1 天；key 里带日期，等于「自然日固定桶」而不是滚动 24h
+const QUOTA_WINDOW_SECS = 90000
+const FREE_DAILY_FALLBACK = parseInt(process.env.EXTRACT_VIDEO_FREE_DAILY || '1', 10)
+const ANON_DAILY_LIMIT = parseInt(process.env.EXTRACT_VIDEO_ANON_DAILY_LIMIT || '1', 10)
+// 充值/权益过期时回落免费额度，而不是沿用过期 PRO 额度
+const QUOTA_ENFORCE = (process.env.EXTRACT_VIDEO_QUOTA_ENFORCE || 'true') !== 'false'
 const GENERIC_MAX_CHARS = 30000
 const MAX_SHORT_LINK_HOPS = 5
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-extract-video'
@@ -287,6 +296,69 @@ function getDb() {
   return _db
 }
 
+/** 上海时区（UTC+8，无夏令时）自然日 key，与用户认知的「今天」一致 */
+function shanghaiDateKey(now) {
+  const ts = (typeof now === 'number' ? now : Date.now()) + 8 * 3600 * 1000
+  return new Date(ts).toISOString().slice(0, 10)
+}
+
+/**
+ * 日配额校验：登录用户按 plans.features['video.extract.daily']，匿名按 IP。
+ * 返回 { ok:true } 放行；否则带 HTTP 状态：
+ *   429 当天额度用完 / 401 令牌无效 / 503 配额服务不可用（fail-closed，绝不无限放行）
+ */
+async function checkDailyQuota(req, db, ipHash) {
+  if (!QUOTA_ENFORCE) return { ok: true, scope: 'disabled', limit: 0 }
+  const date = shanghaiDateKey()
+  const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID })
+
+  if (auth.ok) {
+    const ent = await db.rpc('resolve_entitlement', { p_uid: auth.uid })
+    if (ent.error) {
+      console.error('[extract-video] resolve_entitlement failed (fail-closed):', ent.error)
+      return { ok: false, status: 503, error: 'quota_unavailable' }
+    }
+    const features = (ent.data && ent.data.features) || {}
+    const expired = ent.data && ent.data.status === 'expired'
+    // 订阅过期回落免费额度，不沿用过期档位的额度
+    const limit = expired ? FREE_DAILY_FALLBACK : Number(features[QUOTA_METRIC] ?? FREE_DAILY_FALLBACK)
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return { ok: false, status: 429, scope: 'user', limit: 0 }
+    }
+    const rl = await db.rpc('consume_rate_limit', {
+      p_key: 'extract-video:uid:' + auth.uid + ':' + date,
+      p_limit: limit,
+      p_window_secs: QUOTA_WINDOW_SECS,
+    })
+    if (rl.error) {
+      console.error('[extract-video] quota rpc failed (fail-closed):', rl.error)
+      return { ok: false, status: 503, error: 'quota_unavailable' }
+    }
+    if (rl.data !== true) return { ok: false, status: 429, scope: 'user', limit }
+    return { ok: true, scope: 'user', limit }
+  }
+
+  // 带了令牌但验不过：fail-closed，不静默降级成匿名额度
+  if (auth.reason !== 'missing') {
+    return { ok: false, status: 401, error: 'invalid_token' }
+  }
+
+  if (ANON_DAILY_LIMIT <= 0) {
+    return { ok: false, status: 401, error: 'login_required' }
+  }
+  const rl = await db.rpc('consume_rate_limit', {
+    p_key: 'extract-video:anon:' + ipHash + ':' + date,
+    p_limit: ANON_DAILY_LIMIT,
+    p_window_secs: QUOTA_WINDOW_SECS,
+  })
+  if (rl.error) {
+    console.error('[extract-video] anon quota rpc failed (fail-closed):', rl.error)
+    return { ok: false, status: 503, error: 'quota_unavailable' }
+  }
+  if (rl.data !== true) return { ok: false, status: 429, scope: 'anonymous', limit: ANON_DAILY_LIMIT }
+  return { ok: true, scope: 'anonymous', limit: ANON_DAILY_LIMIT }
+}
+
 const server = http.createServer(async (req, res) => {
   const origin = req.headers['origin'] || null
   const cors = buildCorsHeaders(origin, ALLOWED_ORIGINS)
@@ -339,6 +411,27 @@ const server = http.createServer(async (req, res) => {
       parsed = validateInputUrl(rawUrl)
     } catch (e) {
       sendJson(res, 400, { error: (e && e.message) || 'Invalid URL' }, cors)
+      return
+    }
+
+    // 日配额：按登录 uid（免费 1/日、PRO 10/日）或匿名 IP，抓取前拦截
+    const quota = await checkDailyQuota(req, db, ipHash)
+    if (!quota.ok) {
+      const status = quota.status || 500
+      const message =
+        quota.error === 'quota_unavailable'
+          ? '解析服务暂时不可用，请稍后再试'
+          : quota.error === 'invalid_token'
+            ? '登录状态已失效，请重新登录后重试'
+            : quota.error === 'login_required'
+              ? '请先登录后再使用视频解析'
+              : '今日视频解析额度已用完（免费 1 次/日，PRO 10 次/日），明天再来或升级 PRO'
+      sendJson(
+        res,
+        status,
+        { error: message, quota: { limit: quota.limit, scope: quota.scope || null } },
+        status === 429 ? { ...cors, 'Retry-After': '3600' } : cors,
+      )
       return
     }
 

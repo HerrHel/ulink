@@ -181,6 +181,13 @@ const FN_EXTRA_ENV = {
     if (workerToken) out.VIDEO_WORKER_TOKEN = workerToken
     const workerTimeout = readEnvLocal('EXTRACT_VIDEO_WORKER_TIMEOUT_MS')
     if (workerTimeout) out.EXTRACT_VIDEO_WORKER_TIMEOUT_MS = workerTimeout
+    // 视频日配额：默认免费 1/日、匿名 1/日/IP；本地可覆盖或临时关闭（EXTRACT_VIDEO_QUOTA_ENFORCE=false）
+    const anonQuota = readEnvLocal('EXTRACT_VIDEO_ANON_DAILY_LIMIT')
+    if (anonQuota) out.EXTRACT_VIDEO_ANON_DAILY_LIMIT = anonQuota
+    const freeQuota = readEnvLocal('EXTRACT_VIDEO_FREE_DAILY')
+    if (freeQuota) out.EXTRACT_VIDEO_FREE_DAILY = freeQuota
+    const quotaMode = readEnvLocal('EXTRACT_VIDEO_QUOTA_ENFORCE')
+    if (quotaMode) out.EXTRACT_VIDEO_QUOTA_ENFORCE = quotaMode
     return out
   },
   'share-ssr': () => {

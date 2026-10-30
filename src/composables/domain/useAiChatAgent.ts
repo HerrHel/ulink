@@ -175,10 +175,15 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
             // 视频/图文平台：优先走 extract-video（服务端平台适配器 + yt-dlp 微服务），
             // 避免抖音这类强风控站点在 r.jina.ai 上直接 502
             const video = await fetchVideoExtractServer(targetUrl, { signal: controller.signal })
-            const videoText = video ? buildVideoContentText(video) : ''
-            resultText = videoText
-              ? `视频内容解析（来源：${video!.source}）\n\n${videoText.slice(0, 3200)}`
-              : await readPlainPage()
+            if (video?.quotaExceeded) {
+              // 今日额度用完：不再降级抓取（否则等于绕过配额），如实告知用户
+              resultText = t('ai.videoQuotaExceeded', video.quotaLimit != null ? { limit: video.quotaLimit } : {})
+            } else {
+              const videoText = video ? buildVideoContentText(video) : ''
+              resultText = videoText
+                ? `视频内容解析（来源：${video!.source}）\n\n${videoText.slice(0, 3200)}`
+                : await readPlainPage()
+            }
           } else {
             resultText = await readPlainPage()
           }
