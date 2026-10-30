@@ -37,6 +37,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Bo
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || ''
 const RATE_LIMIT_PER_MIN = parseInt(process.env.EXTRACT_VIDEO_RATE_LIMIT_PER_MIN || '20', 10)
 const UPSTREAM_TIMEOUT_MS = parseInt(process.env.EXTRACT_VIDEO_TIMEOUT_MS || '12000', 10)
+// yt-dlp + 无头浏览器微服务（scripts/video-worker）：未配置则完全跳过，行为与旧版一致
+const VIDEO_WORKER_URL = process.env.VIDEO_WORKER_URL || ''
+const VIDEO_WORKER_TOKEN = process.env.VIDEO_WORKER_TOKEN || ''
+const WORKER_TIMEOUT_MS = parseInt(process.env.EXTRACT_VIDEO_WORKER_TIMEOUT_MS || '45000', 10)
 const GENERIC_MAX_CHARS = 30000
 const MAX_SHORT_LINK_HOPS = 5
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-extract-video'
@@ -133,6 +137,142 @@ async function fetchText(url, signal) {
     })
     if (!res.ok) return null
     return await res.text()
+  } catch (e) {
+    return null
+  }
+}
+
+/**
+ * worker 只需处理视频/直播/图文笔记站点；普通网页仍走 r.jina.ai 全文抓取
+ * （worker 对普通页面只能给标题/摘要，反而劣于 jina 的正文）。
+ */
+const WORKER_VIDEO_HOSTS = [
+  'douyin.com',
+  'iesdouyin.com',
+  'tiktok.com',
+  'xiaohongshu.com',
+  'xhslink.com',
+  'bilibili.com',
+  'b23.tv',
+  'bili2233.cn',
+  'youtube.com',
+  'youtu.be',
+  'twitter.com',
+  'x.com',
+  'vimeo.com',
+  'dailymotion.com',
+  'kuaishou.com',
+  'weibo.com',
+  'ixigua.com',
+  'acfun.cn',
+  'twitch.tv',
+  'youku.com',
+  'iqiyi.com',
+  'mgtv.com',
+  'douyu.com',
+  'huya.com',
+]
+
+function shouldUseWorker(parsed) {
+  if (!parsed) return false
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+  return WORKER_VIDEO_HOSTS.some((h) => host === h || host.endsWith('.' + h))
+}
+
+/** worker 返回的 extractor 名归一成客户端约定的 source 标识 */
+function normalizeWorkerSource(source) {
+  const s = String(source || '').toLowerCase()
+  if (s.includes('douyin')) return 'douyin'
+  if (s.includes('tiktok')) return 'tiktok'
+  if (s.includes('xiaohongshu') || s.includes('rednote')) return 'xiaohongshu'
+  if (s.includes('bilibili') || s.includes('bili')) return 'bilibili'
+  if (s.includes('youtube') || s.includes('youtu')) return 'youtube'
+  if (s.includes('twitter') || s === 'x') return 'x'
+  return 'generic'
+}
+
+/** 平台风控空壳页的通用标题：不能当真实内容返回给大模型 */
+const MEANINGLESS_TITLES = [
+  '记录美好生活',
+  '在抖音记录美好生活',
+  '抖音-记录美好生活',
+  '你的生活指南',
+  '小红书-你的生活指南',
+  'Make Your Day',
+]
+
+function isMeaninglessText(text) {
+  const t = String(text || '').trim()
+  if (!t || t.length <= 2) return true
+  return MEANINGLESS_TITLES.some((p) => t === p || t.includes(p))
+}
+
+/** 平台错误页 / 已删除页：worker 抓到这种页面时不得当成功内容返回 */
+const DEAD_PAGE_PATTERNS = [
+  /出错啦/,
+  /页面不存在/,
+  /页面找不到了/,
+  /视频去哪了/,
+  /视频不见了/,
+  /稿件已被删除/,
+  /该稿件已被隐藏/,
+  /视频已被删除/,
+  /视频不存在/,
+  /访问异常/,
+  /请求过于频繁/,
+  /\b404\s*(not\s*found|错误|error)?\b/i,
+  /this\s+page\s+could\s+not\s+be\s+found/i,
+  /\bvideo\s+unavailable\b/i,
+  /this\s+video\s+has\s+been\s+removed/i,
+]
+
+function isDeadPageText(...texts) {
+  const combined = texts.filter(Boolean).join(' ')
+  return DEAD_PAGE_PATTERNS.some((re) => re.test(combined))
+}
+
+/**
+ * 调 yt-dlp 微服务（scripts/video-worker）提取简介/字幕/评论。
+ * 未配置 VIDEO_WORKER_URL、超时、非 2xx、success=false 或内容全空一律返回 null，
+ * 由调用方继续走 r.jina.ai 通用降级——绝不伪造结果。
+ */
+async function fetchViaWorker(href, signal) {
+  if (!VIDEO_WORKER_URL) return null
+  try {
+    const res = await fetch(VIDEO_WORKER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(VIDEO_WORKER_TOKEN ? { 'X-Worker-Token': VIDEO_WORKER_TOKEN } : {}),
+      },
+      body: JSON.stringify({ url: href }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(WORKER_TIMEOUT_MS)]),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data || data.success !== true) return null
+    const title = typeof data.title === 'string' ? data.title.slice(0, 500) : ''
+    const description = typeof data.description === 'string' ? data.description.slice(0, GENERIC_MAX_CHARS) : ''
+    const subtitles = typeof data.subtitles === 'string' ? data.subtitles.slice(0, GENERIC_MAX_CHARS) : ''
+    const comments = Array.isArray(data.comments)
+      ? data.comments.filter((c) => typeof c === 'string' && c.trim()).slice(0, 20).map((c) => c.slice(0, 300))
+      : []
+    // 只有平台空壳标题（如「在抖音记录美好生活」）或错误页时视为没抓到，交给 jina 兜底并如实失败
+    if (isMeaninglessText(title) && isMeaninglessText(description) && !subtitles && comments.length === 0) {
+      return null
+    }
+    if (isDeadPageText(title, description, subtitles)) {
+      return null
+    }
+    return {
+      source: normalizeWorkerSource(data.source),
+      url: typeof data.url === 'string' && data.url ? data.url : href,
+      title,
+      description,
+      subtitles,
+      comments,
+      degraded: false,
+    }
   } catch (e) {
     return null
   }
@@ -269,6 +409,13 @@ const server = http.createServer(async (req, res) => {
         }, cors)
         return
       }
+    }
+
+    // yt-dlp 微服务（B站/YouTube/Twitter/抖音/小红书等多平台）：未配置 VIDEO_WORKER_URL 时直接跳过
+    const worker = shouldUseWorker(resolved) ? await fetchViaWorker(resolved.href, signal) : null
+    if (worker) {
+      sendJson(res, 200, worker, cors)
+      return
     }
 
     // 通用降级：r.jina.ai 抓取（长尾平台 / 平台风控 / 无 YouTube key）

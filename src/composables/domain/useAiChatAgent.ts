@@ -17,6 +17,11 @@ import { createDedupDraftDiff } from '../../lib/ai/draftDiff.js'
 import { findDuplicateCandidates } from '../../lib/ai/localClustering.js'
 import { buildDagPlanActionCard, buildDraftDiffActionCard } from '../../lib/ai/siteHitl.js'
 import { fetchPageContentViaJina } from '../../lib/ai/jinaReader.js'
+import {
+  fetchVideoExtractServer,
+  isVideoPlatformUrl,
+  buildVideoContentText,
+} from '../../lib/ai/videoExtract.js'
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
@@ -152,13 +157,30 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       } else {
         const targetUrl = url.trim()
         if (!assistantTurn.steps) assistantTurn.steps = []
-        assistantTurn.steps.push({ text: `正在读取网页正文：${targetUrl}`, done: true })
-        try {
+        const isVideo = isVideoPlatformUrl(targetUrl)
+        assistantTurn.steps.push({
+          text: isVideo ? `正在解析视频内容：${targetUrl}` : `正在读取网页正文：${targetUrl}`,
+          done: true,
+        })
+        // 普通网页抓取兜底（视频平台解析失败时才走，仍如实回报失败原因）
+        const readPlainPage = async (): Promise<string> => {
           const pageData = await fetchPageContentViaJina(targetUrl, { signal: controller.signal, timeoutMs: 9000, maxChars: 25000 })
           if (!pageData.success || !pageData.markdown) {
-            resultText = `读取网页失败：${pageData.error || '未能成功获取该网页正文内容'}`
+            return `读取网页失败：${pageData.error || '未能成功获取该网页正文内容'}`
+          }
+          return `网页标题：「${pageData.title || '无标题'}」\n\n正文摘要提取：\n${pageData.markdown.slice(0, 3200)}`
+        }
+        try {
+          if (isVideo) {
+            // 视频/图文平台：优先走 extract-video（服务端平台适配器 + yt-dlp 微服务），
+            // 避免抖音这类强风控站点在 r.jina.ai 上直接 502
+            const video = await fetchVideoExtractServer(targetUrl, { signal: controller.signal })
+            const videoText = video ? buildVideoContentText(video) : ''
+            resultText = videoText
+              ? `视频内容解析（来源：${video!.source}）\n\n${videoText.slice(0, 3200)}`
+              : await readPlainPage()
           } else {
-            resultText = `网页标题：「${pageData.title || '无标题'}」\n\n正文摘要提取：\n${pageData.markdown.slice(0, 3200)}`
+            resultText = await readPlainPage()
           }
         } catch (fetchErr: any) {
           resultText = `抓取网页异常：${fetchErr?.message || '网络连接或服务异常'}`

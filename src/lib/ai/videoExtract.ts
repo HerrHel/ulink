@@ -17,7 +17,7 @@ import type { AiCandidateBookmark } from '../../types/ai.js'
 
 /** extract-video Edge Function 返回的统一内容结构 */
 export interface VideoExtractServerResult {
-  source: 'bilibili' | 'youtube' | 'generic'
+  source: VideoExtractSource
   url: string
   title: string
   description: string
@@ -27,6 +27,68 @@ export interface VideoExtractServerResult {
   markdown?: string
   /** 是否走了通用降级路径（平台 API 不可用/风控时服务端如实标注） */
   degraded: boolean
+}
+
+/** 服务端可识别的来源：专用适配器 + yt-dlp 微服务归一后的平台标识 */
+export type VideoExtractSource =
+  | 'bilibili'
+  | 'youtube'
+  | 'douyin'
+  | 'tiktok'
+  | 'xiaohongshu'
+  | 'x'
+  | 'generic'
+
+/** 视频/图文笔记平台域名（命中即优先走视频解析链路，而不是当普通网页抓取） */
+const VIDEO_PLATFORM_HOSTS = [
+  'douyin.com',
+  'iesdouyin.com',
+  'tiktok.com',
+  'xiaohongshu.com',
+  'xhslink.com',
+  'bilibili.com',
+  'b23.tv',
+  'youtube.com',
+  'youtu.be',
+  'x.com',
+  'twitter.com',
+  'vimeo.com',
+  'dailymotion.com',
+  'kuaishou.com',
+  'weibo.com',
+  'ixigua.com',
+  'acfun.cn',
+  'twitch.tv',
+  'youku.com',
+  'iqiyi.com',
+  'mgtv.com',
+  'douyu.com',
+  'huya.com',
+]
+
+const VIDEO_SHORT_LINK_HOSTS = ['v.douyin.com', 'vm.tiktok.com', 'vt.tiktok.com', 'b23.tv', 'bili2233.cn', 'xhslink.com']
+
+/** 是否是视频/图文笔记平台链接（含分享短链） */
+export function isVideoPlatformUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+    return [...VIDEO_PLATFORM_HOSTS, ...VIDEO_SHORT_LINK_HOSTS].some(
+      (h) => host === h || host.endsWith('.' + h)
+    )
+  } catch {
+    return false
+  }
+}
+
+/** 把服务端结构化内容拼成给大模型阅读的纯文本（空内容返回空串） */
+export function buildVideoContentText(result: VideoExtractServerResult): string {
+  const parts: string[] = []
+  if (result.title) parts.push(`标题：${result.title}`)
+  if (result.description) parts.push(`简介：${result.description}`)
+  if (result.subtitles) parts.push(`字幕：${result.subtitles}`)
+  if (result.comments.length) parts.push(`评论区：${result.comments.join('\n')}`)
+  if (result.markdown) parts.push(result.markdown)
+  return parts.join('\n\n')
 }
 
 /**

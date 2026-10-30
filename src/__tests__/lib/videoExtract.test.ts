@@ -20,7 +20,12 @@ vi.mock('../../lib/ai/mimoClient.js', async (importOriginal) => {
   }
 })
 
-import { fetchVideoExtractServer, generateVideoSummary } from '../../lib/ai/videoExtract.js'
+import {
+  fetchVideoExtractServer,
+  generateVideoSummary,
+  isVideoPlatformUrl,
+  buildVideoContentText,
+} from '../../lib/ai/videoExtract.js'
 import { supabase } from '../../lib/supabase.js'
 
 const fetchMock = vi.fn()
@@ -140,5 +145,45 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
     await generateVideoSummary(content, { question: '问'.repeat(1000) })
     const prompt2 = mockAskMiMo.mock.calls[0][0] as string
     expect(prompt2).not.toContain('问'.repeat(300))
+  })
+})
+
+describe('videoExtract — 视频平台识别与结构化文本拼装', () => {
+  it('isVideoPlatformUrl：识别抖音短链与主流视频平台，普通网页不误判', () => {
+    expect(isVideoPlatformUrl('https://v.douyin.com/EMhJLA__J9g/')).toBe(true)
+    expect(isVideoPlatformUrl('https://www.douyin.com/video/7701700795477003571')).toBe(true)
+    expect(isVideoPlatformUrl('https://b23.tv/fuBzhYU')).toBe(true)
+    expect(isVideoPlatformUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe(true)
+    expect(isVideoPlatformUrl('https://xhslink.com/a1b2c3')).toBe(true)
+    expect(isVideoPlatformUrl('https://example.com/page')).toBe(false)
+    expect(isVideoPlatformUrl('not-a-url')).toBe(false)
+  })
+
+  it('buildVideoContentText：拼接标题/简介/字幕/评论，无内容返回空串', () => {
+    const text = buildVideoContentText({
+      source: 'douyin',
+      url: 'https://www.douyin.com/video/1',
+      title: '视频标题',
+      description: '简介文本',
+      subtitles: '字幕文本',
+      comments: ['评论一'],
+      degraded: false,
+    })
+    expect(text).toContain('标题：视频标题')
+    expect(text).toContain('简介：简介文本')
+    expect(text).toContain('字幕：字幕文本')
+    expect(text).toContain('评论区：评论一')
+
+    expect(
+      buildVideoContentText({
+        source: 'generic',
+        url: 'https://example.com',
+        title: '',
+        description: '',
+        subtitles: '',
+        comments: [],
+        degraded: true,
+      })
+    ).toBe('')
   })
 })

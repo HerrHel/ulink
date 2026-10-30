@@ -174,6 +174,13 @@ const FN_EXTRA_ENV = {
     if (origins) out.ALLOWED_ORIGINS = origins
     const yt = readEnvLocal('YOUTUBE_API_KEY')
     if (yt) out.YOUTUBE_API_KEY = yt
+    // 视频微服务（scripts/video-worker）：未配置则函数保持旧链路（平台适配器 + r.jina.ai）
+    const worker = readEnvLocal('VIDEO_WORKER_URL')
+    if (worker) out.VIDEO_WORKER_URL = worker
+    const workerToken = readEnvLocal('VIDEO_WORKER_TOKEN')
+    if (workerToken) out.VIDEO_WORKER_TOKEN = workerToken
+    const workerTimeout = readEnvLocal('EXTRACT_VIDEO_WORKER_TIMEOUT_MS')
+    if (workerTimeout) out.EXTRACT_VIDEO_WORKER_TIMEOUT_MS = workerTimeout
     return out
   },
   'share-ssr': () => {
