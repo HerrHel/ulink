@@ -201,5 +201,6 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
   - `deploy`：`needs: [lint-test, e2e]`（**测试全绿才发布**）+ `if: refs/heads/main`（PR 与其它分支绝不发布）→ 复用 `lint-test` 构建产物 → `tcb hosting deploy ./dist --safe`（CloudBase 静态托管；`--safe` 发布前备份+失败回滚，免 `--verify` 加速跨洋部署）
     - 认证：`tcb login --cloudbase-api-key`（非交互），密钥取 `secrets.CLOUDBASE_APIKEY`；**未配该 secret 时跳过部署并告警**，门禁照常执行
     - 手动重部署：`gh workflow run ci.yml --ref main`
+    - 线上版本自检：`npm run check:prod` —— 比对 `https://ulink.ren/version.json` 的 `commit` 与本地 HEAD（构建时由 vite `buildInfoPlugin` 注入；设置→关于 也显示短提交号）。退出码 0=一致 / 1=不一致 / 2=线上无该端点（旧版本）/ 3=网络失败
     - ⚠️ **CI 部署与手动 `tcb hosting deploy` 互斥**（会互相覆盖），统一走 CI
   - Supabase 时代的 `supabase-db-test` 门禁已于 2026-10-27 移除（验证的是已停用的 schema，对现网无保护作用）；`supabase/` 现为历史归档，说明见 `supabase/README.md`

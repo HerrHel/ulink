@@ -475,6 +475,7 @@ export const zh = {
     about: '关于',
     version: '版本',
     buildTime: '构建时间',
+    buildCommit: '提交',
     aiProviders: 'AI 服务商',
     aiProvidersHint: '以下为当前实际处理您数据的 AI 模型服务商（对应《隐私政策》3.3）。',
     aiProvidersUpdated: '清单更新于 {d}',

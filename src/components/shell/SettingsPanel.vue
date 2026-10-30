@@ -873,11 +873,12 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.version') }}</span>
-                      <span class="sp-row-desc">{{ t('settings.buildTime') }}: {{ buildTimeText }}</span>
+                      <span class="sp-row-desc">{{ t('settings.buildTime') }}: {{ buildTimeText }}<template v-if="GIT_COMMIT"> · {{ t('settings.buildCommit') }} {{ GIT_COMMIT }}</template></span>
                     </div>
                     <div class="sp-row-ctrl">
                       <span class="sp-version-badge" data-testid="lv-app-version">v{{ APP_VERSION }}</span>
                       <span class="hidden" data-testid="lv-build-time">{{ buildTimeText }}</span>
+                      <span v-if="GIT_COMMIT" class="hidden" data-testid="lv-build-commit">{{ GIT_COMMIT }}</span>
                     </div>
                   </div>
                   <div class="sp-card-row">
@@ -1031,7 +1032,7 @@ import { copyToClipboard } from '../../utils.js'
 import { stopShareGroup, stopShareCategory, stopAllUserShares, fetchUserCategoryShares } from '../../composables/domain/useDataShare.js'
 import { SHARE_BASE } from '../../config/urls.js'
 import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
-import { APP_VERSION, BUILD_TIME } from '../../version.js'
+import { APP_VERSION, BUILD_TIME, GIT_COMMIT } from '../../version.js'
 import { LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'

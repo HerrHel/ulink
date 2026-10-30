@@ -26,7 +26,8 @@
     "verify:e2e": "npm run test:e2e",
     "prepare": "git config core.hooksPath .githooks || true",
     "ssl:status": "node scripts/ssl-renew.mjs",
-    "dns:list": "node scripts/dnspod-records.mjs list ulink.ren"
+    "dns:list": "node scripts/dnspod-records.mjs list ulink.ren",
+    "check:prod": "node scripts/check-prod-version.mjs"
   },
   "devDependencies": {
     "@cloudbase/manager-node": "^5.9.2",

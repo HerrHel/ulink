@@ -484,6 +484,7 @@ export const en = {
     about: 'About',
     version: 'Version',
     buildTime: 'Build time',
+    buildCommit: 'Commit',
     aiProviders: 'AI providers',
     aiProvidersHint: 'The AI model providers that currently process your data (see Privacy Policy §3.3).',
     aiProvidersUpdated: 'List updated on {d}',

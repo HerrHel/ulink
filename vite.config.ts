@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { PurgeCSS } from 'purgecss';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import pkg from './package.json';
 /**
@@ -28,6 +29,52 @@ function md(): MarkedLike {
 
 /** 以本配置文件为基准解析项目内路径（ESM 无 __dirname） */
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
+
+/* ── 构建元数据（配置加载时求值一次） ──
+ * __BUILD_TIME__ 只反映「构建时刻」，无法跨环境比对；补上 git 提交号后，
+ * 线上 /version.json 与本地 `git rev-parse HEAD` 可直接判定是否同一版本。
+ * git 不可用（如浅包/无 git 环境）时全部降级为 unknown，不阻断构建。 */
+function gitValue(args: string): string {
+  try {
+    return execSync(`git ${args}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return '';
+  }
+}
+const BUILD_TIME = new Date().toISOString();
+const GIT_COMMIT = gitValue('rev-parse HEAD') || 'unknown';
+const GIT_COMMIT_SHORT = GIT_COMMIT === 'unknown' ? 'unknown' : GIT_COMMIT.slice(0, 7);
+const GIT_BRANCH = gitValue('rev-parse --abbrev-ref HEAD') || 'unknown';
+const GIT_COMMIT_TIME = gitValue('log -1 --format=%cI') || '';
+
+/**
+ * 构建信息端点：产物根目录写入 /version.json。
+ * 线上自检：`npm run check:prod`（对比线上 commit 与本地 HEAD），
+ * 或直接 `curl https://ulink.ren/version.json`。
+ * 注意：该文件不进入 workbox precache（globPatterns 只含 js/css/svg/woff2），
+ * 因此始终走网络，不会被 PWA 缓存成旧值。
+ */
+function buildInfoPlugin(): Plugin {
+  const payload = JSON.stringify(
+    {
+      version: pkg.version,
+      commit: GIT_COMMIT,
+      commitShort: GIT_COMMIT_SHORT,
+      commitTime: GIT_COMMIT_TIME,
+      branch: GIT_BRANCH,
+      buildTime: BUILD_TIME,
+    },
+    null,
+    2
+  );
+  return {
+    name: 'ulink-build-info',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: payload });
+    },
+  };
+}
 
 /* ── 安全 & 缓存 HTTP 响应头 ── */
 const securityHeaders: Record<string, string> = {
@@ -1376,7 +1423,10 @@ export default defineConfig({
   define: {
     // 构建时注入版本信息：__BUILD_TIME__ 每次部署必变，设置面板显示以确认线上是否为最新构建
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+    // 与 /version.json 共用同一时刻，避免两处时间戳不一致
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
+    // 提交号（短）：设置面板直接显示，可与本地 `git rev-parse --short HEAD` 对照
+    __GIT_COMMIT__: JSON.stringify(GIT_COMMIT_SHORT),
   },
   plugins: [
     legalDocsPlugin(),
@@ -1450,7 +1500,8 @@ export default defineConfig({
     }),
     purgeCssPlugin(),
     mpaAliasPlugin(),
-    headersPlugin()],
+    headersPlugin(),
+    buildInfoPlugin()],
   root: '.',
   build: {
     outDir: 'dist',
