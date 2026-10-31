@@ -51,15 +51,11 @@ const DEFAULT_TIMEOUT_MS = parseInt(process.env.CHECK_LINK_TIMEOUT_MS || '10000'
 const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '1200', 10)
 const MAX_REDIRECTS = 5
 
-/** 按 Asia/Shanghai 取日键（YYYY-MM-DD），与 ai.requests.daily 口径一致 */
-function shanghaiDate(now) {
-  return new Date((now || Date.now()) + 8 * 3600 * 1000).toISOString().slice(0, 10)
-}
-
 /**
  * 登录用户的每日死链检查额度（plans.features['linkcheck.daily']）。
  * 只统计手动检查（body.mode === 'manual'）；自动巡检按 linkcheck.auto.max 另行限制，
  * 避免一次 500 条巡检把 PRO 的 50 次/日额度瞬间打满。
+ * 统一走 consume_daily_feature_quota（内部处理 expired/refunded 回落 free、UTC+8 自然日）。
  * 返回 { ok: true } 或 { ok: false, limit }；鉴权/配额 RPC 失败时 fail-open（不误伤用户）。
  */
 async function checkDailyQuota(req, db, mode) {
@@ -67,22 +63,19 @@ async function checkDailyQuota(req, db, mode) {
   try {
     const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID })
     if (!auth || !auth.ok || !auth.uid) return { ok: true }
-    const ent = await db.rpc('resolve_entitlement', { p_uid: auth.uid })
-    if (ent.error) return { ok: true }
-    const raw = ent.data?.features?.['linkcheck.daily']
-    if (raw === undefined || raw === null) return { ok: true }
-    const limit = Number(raw)
-    if (!Number.isFinite(limit) || limit <= 0) return { ok: false, limit: 0 }
-    const daily = await db.rpc('consume_rate_limit', {
-      p_key: `link-check:uid:${auth.uid}:${shanghaiDate()}`,
-      p_limit: limit,
-      p_window_secs: 86400,
+    const daily = await db.rpc('consume_daily_feature_quota', {
+      p_uid: auth.uid,
+      p_feature: 'linkcheck.daily',
+      p_key_prefix: 'link-check:uid:',
     })
     if (daily.error) {
       console.error('[check-link] daily quota rpc failed (fail-open):', daily.error)
       return { ok: true }
     }
-    return daily.data === true ? { ok: true, limit } : { ok: false, limit }
+    const d = daily.data || {}
+    return d.ok === false && d.limited === true
+      ? { ok: false, limit: d.limit }
+      : { ok: true }
   } catch (e) {
     console.error('[check-link] daily quota check failed (fail-open):', e)
     return { ok: true }

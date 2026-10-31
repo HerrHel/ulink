@@ -22,12 +22,13 @@
 ## 二、实现说明
 
 ### 1) `ai.requests.daily`
-- `mimo-chat` 在 token 月度额度检查之后、调用上游之前执行：读 `resolve_entitlement().features`，有该键则 `consume_rate_limit` 按自然日（Asia/Shanghai）计数；超额 429 `quota_exceeded`（`quota: ai.requests.daily`）。
+- `mimo-chat` 在 token 月度额度检查之后、调用上游之前执行：调用 `consume_daily_feature_quota(uid, 'ai.requests.daily', 'ai:req:')`；该 SQL 函数内部解析权益（**过期/退款自动回落 free 档**）、按 UTC+8 自然日消费 `consume_rate_limit`，返回 `{ok, limited, limit}`；超额 429 `quota_exceeded`（`quota: ai.requests.daily`）。
 - RPC 失败 **fail-open**（与 token 额度一致，配额系统故障不误伤用户），日志留痕。
 - 免费档此前无该键 → 等于免费用户无每日请求上限；迁移已补 20/日。
 
 ### 2) `linkcheck.daily`
 - `check-link` v1 原本没有用户身份（只按 IP 哈希限流）；本次增加**可选鉴权**：请求带 `Authorization: Bearer <token>` 时用 `cb-auth` 换 uid，按用户 plan 执行每日额度；**匿名请求不要求 token**，仍走 IP 分钟限流（本地/未登录用户不受影响）。
+- 额度消费同样走 `consume_daily_feature_quota(uid, 'linkcheck.daily', 'link-check:uid:')`，与 AI 日请求共用「过期回落 free」逻辑。
 - 前端 `invokeCbFunction` 增加可选 token 参数，死链检测会附带登录 token；`mode=manual|auto` 区分手动与自动巡检。
 - 口径：手动检查计 `linkcheck.daily`；自动巡检按 `linkcheck.auto.max`（单次上限）+ 分钟限流，避免一次 500 条巡检打满 PRO 的 50 次/日。
 - 已知边界：`mode` 由客户端上报，属于**防误用/成本控制**而非对抗性强制；对抗性滥用仍依赖 IP 分钟限流与后续风控。

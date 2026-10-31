@@ -42,11 +42,6 @@ function shanghaiPeriod(now) {
   return new Date((now || Date.now()) + 8 * 3600 * 1000).toISOString().slice(0, 7)
 }
 
-/** 按 Asia/Shanghai 取日键（YYYY-MM-DD），用于 ai.requests.daily 每日配额 */
-function shanghaiDate(now) {
-  return new Date((now || Date.now()) + 8 * 3600 * 1000).toISOString().slice(0, 10)
-}
-
 /** 影子计量：只写账本，任何失败都不影响主流程 */
 async function recordUsage(db, uid, metric, amount, ref) {
   try {
@@ -203,38 +198,26 @@ const server = http.createServer(async (req, res) => {
 
     // ── 每日请求数拦截（enforce）：plans.features['ai.requests.daily'] ──
     // 与 token 月度额度互补：防止单日高频刷（token 总量尚未耗尽时也能拦住）。
-    // 未配置该键的档位视为不限制；RPC 失败 fail-open，避免配额系统故障误伤。
+    // 统一走 consume_daily_feature_quota：内部处理 expired/refunded 回落 free、UTC+8 自然日。
+    // RPC 失败 fail-open，避免配额系统故障误伤用户。
     if (BILLING_MODE === 'enforce' && uid) {
       try {
-        const ent = await db.rpc('resolve_entitlement', { p_uid: uid })
-        const rawLimit = ent.error ? undefined : ent.data?.features?.['ai.requests.daily']
-        if (rawLimit !== undefined && rawLimit !== null) {
-          const limit = Number(rawLimit)
-          if (!Number.isFinite(limit) || limit <= 0) {
-            sendJson(res, 429, {
-              error: 'quota_exceeded',
-              quota: 'ai.requests.daily',
-              message: '当前档位未开放 AI 请求，请升级后再试。',
-            }, cors)
-            return
-          }
-          const daily = await db.rpc('consume_rate_limit', {
-            p_key: `ai:req:${uid}:${shanghaiDate()}`,
-            p_limit: limit,
-            p_window_secs: 86400,
-          })
-          if (daily.error) {
-            console.error('[mimo-chat] ai.requests quota rpc failed (fail-open):', daily.error)
-          } else if (daily.data !== true) {
-            console.warn('[mimo-chat] daily request quota exceeded for', uid, 'limit=', limit)
-            sendJson(res, 429, {
-              error: 'quota_exceeded',
-              quota: 'ai.requests.daily',
-              limit,
-              message: '今日 AI 请求次数已用完（免费版 20 次/日、PRO 100 次/日），请明天再试或升级。',
-            }, cors)
-            return
-          }
+        const daily = await db.rpc('consume_daily_feature_quota', {
+          p_uid: uid,
+          p_feature: 'ai.requests.daily',
+          p_key_prefix: 'ai:req:',
+        })
+        if (daily.error) {
+          console.error('[mimo-chat] ai.requests quota rpc failed (fail-open):', daily.error)
+        } else if (daily.data && daily.data.ok === false && daily.data.limited === true) {
+          console.warn('[mimo-chat] daily request quota exceeded for', uid, 'limit=', daily.data.limit)
+          sendJson(res, 429, {
+            error: 'quota_exceeded',
+            quota: 'ai.requests.daily',
+            limit: daily.data.limit,
+            message: '今日 AI 请求次数已用完（免费版 20 次/日、PRO 100 次/日），请明天再试或升级。',
+          }, cors)
+          return
         }
       } catch (e) {
         console.error('[mimo-chat] ai.requests quota throw (fail-open):', e)
