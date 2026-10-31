@@ -1,28 +1,23 @@
 # extension/lib/
 
-此目录包含扩展所需的第三方库 bundle 文件。
+此目录包含扩展所需的兼容库与第三方 bundle。
 
-## supabase.js
+## supabase.js（CloudBase shim）
 
-`supabase.js` 是 `@supabase/supabase-js` 的预编译 bundle，被 `sidepanel.html`
-以 `<script>` 标签加载。因 Chrome 扩展的 Content Security Policy 限制（不允许
-`eval` 及动态 import），无法直接使用 npm 包，故需要单独打包。
-
-### 重新生成
-
-```bash
-npm install
-npx esbuild --bundle --format=iife --global-name=supabase \
-  --outfile=extension/lib/supabase.js \
-  --define:process.env.NODE_ENV=\"production\" \
-  @supabase/supabase-js
-```
-
-生成的 `supabase.js` 会暴露 `window.supabase.createClient()` 供 sidepanel.js 使用。
+`supabase.js` 现在**不是** Supabase 官方 SDK，而是 CloudBase 兼容层：
+它把 `@cloudbase/js-sdk`（`cloudbase-sdk.js`，IIFE 挂 `window.CloudBaseSdk`）适配成
+`window.supabase.createClient(envId, publishableKey)` 形状，供历史 `sidepanel.js` 调用
+（`{ from, auth }`，含 `verifyOtp` 闭包适配）。扩展的认证/数据实际走腾讯云开发 CloudBase，
+**不要再安装或打包 `@supabase/supabase-js`**。
 
 ## 配置（L2）
 
-`extension/config.js` 集中存放 `SUPABASE_URL` / `SUPABASE_ANON_KEY`（与主项目
-`.env` 的 `VITE_SUPABASE_*` 对齐）。sidepanel 通过 `window.LinkVaultExtConfig` 读取。
-轮换 anon key 或切换项目时改 config.js 一处即可，无需改 sidepanel 业务代码。
-**切勿写入 service_role key**（anon key 本就公开，靠 RLS 保护）。
+`extension/config.js` 集中存放：
+
+- `CLOUDBASE_ENV_ID`：CloudBase 环境 ID（当前 `ulink-d1g5srvjo54b1886a`）；
+- `CLOUDBASE_PUBLISHABLE_KEY`：CloudBase publishable key（公开，可放前端；靠 RLS 保护）；
+- `MASTER_PASSWORD_TTL_MS`：主密码会话缓存 TTL。
+
+`window.supabase` 只是 CloudBase shim 的兼容命名，**不是 Supabase 后端**，manifest 里也
+不应再声明 `https://*.supabase.co/*` 这类历史 host permission。切换环境时改 config.js 一处即可，
+切勿写入 service_role / 服务端密钥。

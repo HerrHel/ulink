@@ -8,16 +8,16 @@
     window.chrome = window.browser
   }
 
-  // ── Supabase 配置（来自 config.js，与主项目 .env 对齐）──
+  // ── CloudBase 配置（来自 config.js；`window.supabase` 是兼容 shim，不是 Supabase 后端）──
   const _cfg = window.LinkVaultExtConfig || {}
-  const SUPABASE_URL = _cfg.SUPABASE_URL || ''
-  const SUPABASE_ANON_KEY = _cfg.SUPABASE_ANON_KEY || ''
+  const CLOUDBASE_ENV_ID = _cfg.CLOUDBASE_ENV_ID || ''
+  const CLOUDBASE_PUBLISHABLE_KEY = _cfg.CLOUDBASE_PUBLISHABLE_KEY || ''
   const MASTER_PASSWORD_TTL_MS = _cfg.MASTER_PASSWORD_TTL_MS || 60000
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error('[sidepanel] LinkVaultExtConfig missing SUPABASE_URL / SUPABASE_ANON_KEY')
+  if (!CLOUDBASE_ENV_ID || !CLOUDBASE_PUBLISHABLE_KEY) {
+    console.error('[sidepanel] LinkVaultExtConfig missing CLOUDBASE_ENV_ID / CLOUDBASE_PUBLISHABLE_KEY')
   }
 
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const sb = window.supabase.createClient(CLOUDBASE_ENV_ID, CLOUDBASE_PUBLISHABLE_KEY, {
     auth: { autoRefreshToken: true, persistSession: true, storage: localStorage, storageKey: 'linkvault_ext_auth' }
   })
 

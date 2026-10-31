@@ -64,7 +64,8 @@
   async function getSessionToken() {
     try {
       const cfg = window.LinkVaultExtConfig || {}
-      const sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY)
+      // window.supabase 是 CloudBase shim（lib/supabase.js），不是 Supabase 后端
+      const sb = window.supabase.createClient(cfg.CLOUDBASE_ENV_ID, cfg.CLOUDBASE_PUBLISHABLE_KEY)
       for (let i = 0; i < 10; i += 1) {
         const res = await sb.auth.getSession()
         const session = res && res.data && res.data.session
