@@ -115,6 +115,39 @@ const securityHeaders: Record<string, string> = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
 };
 
+/**
+ * 生产安全头的仓库内降级方案（2026-10-31）。
+ *
+ * 背景：CloudBase 静态托管**不支持自定义响应头**（控制台安全配置只有防盗链 / IP 黑白名单），
+ * `public/_headers` 只对 Cloudflare Pages 生效；主站 2026-10-28 切到 CloudBase 后，
+ * CSP / X-Content-Type-Options / Referrer-Policy 在线上全部消失（实测 ulink.ren 无这些头）。
+ *
+ * 这里把 CSP（剔除 meta 不支持的 frame-ancestors）与 Referrer-Policy 以 `<meta>` 注入
+ * 生产构建的两个 HTML 入口，作为**可版本化、可 CI 校验**的最小防线；dev/preview 仍走
+ * headersPlugin 的真实响应头。残留缺口（XCTO、frame-ancestors 防点击劫持）见 docs/TECH_DEBT.md，
+ * 需要在云开发控制台/支持工单层面补齐。
+ */
+function securityMetaPlugin(): Plugin {
+  const csp = securityHeaders['Content-Security-Policy']
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s && !s.startsWith('frame-ancestors'))
+    .join('; ')
+  return {
+    name: 'security-meta',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return {
+        html,
+        tags: [
+          { tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: csp }, injectTo: 'head-prepend' },
+          { tag: 'meta', attrs: { name: 'referrer', content: securityHeaders['Referrer-Policy'] }, injectTo: 'head-prepend' },
+        ],
+      }
+    },
+  }
+}
+
 /** Vite 插件：为 dev / preview 服务器注入安全 & 缓存头 */
 function headersPlugin(): Plugin {
   return {
@@ -1501,6 +1534,7 @@ export default defineConfig({
     purgeCssPlugin(),
     mpaAliasPlugin(),
     headersPlugin(),
+    securityMetaPlugin(),
     buildInfoPlugin()],
   root: '.',
   build: {

@@ -22,9 +22,12 @@
 
 ```bash
 # ① 迁移（按文件名顺序执行；每条都是幂等的）
-bash <tcb> db execute -e ulink-d1g5srvjo54b1886a --file cloudbase/migrations/20261025000001_share_password.sql
-bash <tcb> db execute -e ulink-d1g5srvjo54b1886a --file cloudbase/migrations/20261025000002_billing_core.sql
-bash <tcb> db execute -e ulink-d1g5srvjo54b1886a --file cloudbase/migrations/20261025000003_data_retention_cleanup.sql
+# ⚠️ `tcb db execute` 只有 --sql、没有 --file（CLI 3.8.7 实测），多行 SQL 用仓库脚本传参：
+node scripts/apply-cloudbase-migration.mjs cloudbase/migrations/20261025000001_share_password.sql
+node scripts/apply-cloudbase-migration.mjs cloudbase/migrations/20261025000002_billing_core.sql
+node scripts/apply-cloudbase-migration.mjs cloudbase/migrations/20261025000003_data_retention_cleanup.sql
+# 后续迁移同理按文件名顺序执行（redeem / payment_flow / free_tier_hooks / linkcheck_scan_limit /
+# video_deep_quota / deep_quota_refund / ai_quota_expiry…）；单文件 >10KB 时需先分批。
 
 # ② 派生资产（share-render / share-lock / cb-auth）
 node scripts/build-fn-assets.mjs

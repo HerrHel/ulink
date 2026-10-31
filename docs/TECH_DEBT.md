@@ -6,19 +6,19 @@
 
 ## 零、2026-10-31 新增（文档核对 + 线上状态，按优先级）
 
-| # | 级别 | 问题 | 证据（2026-10-31） | 建议 |
-|---|---|---|---|---|
-| 1 | **P0** | **生产安全响应头全缺**：`ulink.ren` 没有任何 CSP / X-Content-Type-Options / Referrer-Policy / Permissions-Policy | 线上探测（`/`、`/app`、`/legal/...`）均无这些头；`server: tcbgw`。`public/_headers` 是 Cloudflare Pages 专属，主站 2026-10-28 起已是 CloudBase 静态托管，该文件不再生效 | 在 CloudBase 托管侧配置响应头（或网关/函数统一注入），并把响应头探测加进 `npm run check:prod`；同步修 AGENTS/CLAUDE 中「生产在 `public/_headers`」的旧描述（本轮已改） |
-| 2 | **P0** | **`pay` 云函数状态 `Update failed`** | `tcb fn list`：`pay` Modification `2026-10-29 16:23`，Status `UpdateFailed`；但 `GET https://ulink.ren/pay?action=plans` 返回 405（服务可达），环境变量含 `WXPAY_*`、无 `ALIPAY_*` | 复核线上跑的是否为最新代码；重新部署后确认 Status；同时定案 `WXPAY_NOTIFY_URL` 是否从系统域名切到 `ulink.ren`（备案已通过） |
-| 3 | **P1** | **视频深度额度迁移未应用**：`plans.features` 里 `video.deep.daily` 全为 `null` | `tcb db execute` 查 `plans` 结果；`cloudbase/migrations/20261030000001_video_deep_quota.sql` 未执行（函数侧走 `EXTRACT_VIDEO_DEEP_DAILY` 回落），`20261031000001_deep_quota_refund.sql` 亦可能未执行 | 按序应用两条迁移，再核对 `plans.features`；上线清单同步勾选 |
-| 4 | **P1** | **文档状态与现网相反**（详见各文档，逐篇清单见本次审计报告） | `CLOUDBASE_MIGRATION.md`（DNS/函数基址/「未开始」段）、`AI_BACKEND_SPLIT.md`（问题已在 10-26 修复）、`CODE_CRITIQUE.md`（5 条发现均已修）、`BILLING_DESIGN.md` / `BILLING_OPS.md` / `PAYMENT_INTEGRATION.md` / `ALIPAY_ROLLOUT.md` / `WXPAY_ROLLOUT.md`（pay 已部署、`/pay` 路由已建、`WXPAY_*` 已配、`BILLING_MODE=enforce` 已生效）、`PRICING.md`（年付 ¥99 → 实际 ¥108，另有 ¥32/季付档）、`VIDEO_GO_LIVE_CHECKLIST.md`（"前端未发布"已不成立） | 本轮已给根文档 + 部分状态文档加注；其余按「最后核实时间 + 当前状态」补注，或直接改数字 |
-| 5 | **P1** | **法律文本与产品能力/实现不一致（需法务确认后改）** | ① 隐私政策仍写「支付尚未接入」，且两处引用「设置 → 关于 → AI 服务商」——该入口已于 `73c5f6e2`（10-29）删除；② 未披露 Cloudflare Pages 边缘处理（`/api/extract-metadata`、`/api/ai-candidates`、海外死链探针）与「不向境外提供」存在张力；③ 未披露扩展读取 `__playinfo__` 上报播放直链、添加书签默认自动读取页面（`smartFillEnabled` 默认 true）；④ 退款政策整节「自动续费」不存在（产品明确「到期不自动续费」），3.6「退款后降级」未实现（`mark_order_refunded` 只改 orders、不动 entitlements，且无调用方）；⑤ 协议 2.1 服务内容未列视频解析/深度解析 | 法务复核后统一改 `docs/legal/*.md`（只改 md，渲染器会自动出 HTML）；退款降级逻辑列入研发待办 |
-| 6 | **P1** | **订阅过期后 AI 额度不回落** | `resolve_entitlement` 过期仍返回原 plan 的 `features`；`ai_quota_check` 只读 `features` 不看 `status` → 过期 PRO 仍享 20 万 token/月（`extract-video` 有 free 回落，AI 没有） | 修 `ai_quota_check`：`status='expired'` 时取 free 的 `ai.tokens.monthly`；补一条单测 |
-| 7 | **P1** | **plans 中写入了未强制执行的额度** | `storage.bytes` / `sync.devices` / `history.days` / `linkcheck.daily` / `ai.requests.daily` 在 `cloudbase/` 与 `src/` 中无任何门控读取点（仅 plans JSON、购买页文案、测试） | 要么补强制点，要么从 plans/文案撤下这些承诺（对外宣传要能兑现） |
-| 8 | **P2** | **`pay` 的 `transactions`/`orders` action 永远 400** | `pay/index.js:544` 白名单仅 `create` / `status` / `plans`；`transactions` 在 `:323` 实现但进不来；`src/composables/domain/useTransactions.ts:67` 正在调用 → 设置→交易明细是坏的 | 修白名单并补测试 |
-| 9 | **P2** | **CLI 仍以 Supabase 为目标** | `cli/package.json` 依赖 `@supabase/supabase-js`，README 教「config set-url ...supabase.co」；后端 10-22 已迁 CloudBase | 明确标注「仅历史/参考实现」，或适配 CloudBase；`cli/README.md` 目前未入库（`.gitignore` 白名单缺 `!/cli/README.md`） |
-| 10 | **P2** | **AI 服务商名单入口与联系方式缺失** | `src/config/aiProviders.ts` 无联系方式字段；展示 UI 已删，隐私政策仍承诺可查阅（PIPL 23 条告知落空） | 恢复「设置 → 关于 → AI 服务商」并补联系方式；与法务口径统一 |
-| 11 | **P3** | **文档缺索引与状态机制** | 23 篇 docs 状态散落，判断是否最新只能翻 `git log`；本次审计发现多处「状态型」段落过期 | 新建 `docs/README.md`：每篇一行（状态 / 最后核实 / 负责范围）；每篇顶部加「最后核实：YYYY-MM-DD」 |
+| # | 级别 | 问题 | 处理结果（2026-10-31） |
+|---|---|---|---|
+| 1 | **P0** | **生产安全响应头**：`ulink.ren` 无 CSP / X-Content-Type-Options / Referrer-Policy / Permissions-Policy（CloudBase 静态托管不支持自定义响应头，`public/_headers` 只对 CF Pages 生效） | **部分修复**：新增 `securityMetaPlugin`，构建期把 CSP（无 frame-ancestors）+ Referrer-Policy 以 `<meta>` 注入两个 HTML 入口（`dist/index.html` / `dist/app.html` 已验证），`check:prod` 增加安全探测（缺失退出码 4）。**残留**：X-Content-Type-Options 与 frame-ancestors 无 meta 等价物，仍需平台侧支持（工单/反代） |
+| 2 | **P0** | **`pay` 云函数 `Update failed`** | ✅ **已修复**：2026-10-31 `node scripts/deploy-cloudbase-fn.mjs pay` 重新部署，`fn detail` 状态 `Active`、ModTime `21:31`；路由 `/pay` 仍为 WEB_SCF |
+| 3 | **P1** | **视频深度额度迁移未应用**（`plans.features.video.deep.daily` 为 null） | ✅ **已修复**：2026-10-31 应用 `20261030000001_video_deep_quota.sql`；现 free=0、PRO 各档=2（`test_1fen` 为测试档，未改）。`20261031000001`（退额度）此前已应用 |
+| 4 | **P1** | **文档状态与现网相反** | ✅ 2026-10-31 已批量修正：根文档 + 计费/支付/AI/品牌/视频/分享/备案/supabase README 等 20+ 篇；同步给 `pay` 文档补 transactions 说明 |
+| 5 | **P1** | **法律文本与产品能力/实现不一致** | **已修订待法务复核**：隐私政策（支付已接入、AI 名单改邮箱索取、补 Cloudflare 边缘/扩展读取/自动读页/公开图片桶披露、更新日期）；协议（服务内容补视频解析、统一 AI 表述、配额举例按实际、日期）；退款政策（删除不存在的"自动续费"整节、补季付、退款降级改"人工执行"）；PENDING 状态同步。**仍待**：AI 服务商入口恢复、退款自动降级系统联动 |
+| 6 | **P1** | **订阅过期后 AI 额度不回落** | ✅ **已修复**：新增并应用 `20261031000002_ai_quota_expiry.sql`，`ai_quota_check` 在 `expired` / `refunded` 时改用 `plans.free` 的 `ai.tokens.monthly`（已查 `pg_get_functiondef` 确认分支存在） |
+| 7 | **P1** | **plans 中写入了未强制执行的额度** | ⏳ **未修**（属产品决策）：`storage.bytes` / `sync.devices` / `history.days` / `linkcheck.daily` / `ai.requests.daily` 仍无门控实现。已在 `PRICING.md` 标注「目前真正强制的只有 AI token / 视频解析 / 深度解析 / 自动巡检」 |
+| 8 | **P2** | **`pay` 的 `transactions`/`orders` action 永远 400** | ✅ **已修复**：白名单改为 `Set(create,status,plans,transactions,orders)`；重部署后实测 `POST /pay {action:'transactions'}` 返回 `401 unauthorized`（不再 400 unknown_action） |
+| 9 | **P2** | **CLI 仍以 Supabase 为目标** | ⏳ **未适配**：已在 `cli/README.md` 顶部标注「参考实现，勿操作生产」，README 已入库（`.gitignore` 白名单） |
+| 10 | **P2** | **AI 服务商名单入口与联系方式缺失** | ⏳ **未恢复 UI**：法律文本已改为邮箱索取兜底；`aiProviders.ts` 仍缺联系方式字段，恢复「设置 → 关于 → AI 服务商」入列为后续待办（PIPL 23 条） |
+| 11 | **P3** | **文档缺索引与状态机制** | ⏳ 未做：建议新建 `docs/README.md`（状态/最后核实/负责范围） |
 
 ## 一、先排除的误报（非技术债）
 

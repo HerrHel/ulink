@@ -130,11 +130,11 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
 ## 5. 配额与隐私
 
 - 额度真源 `plans.features`：`video.deep.daily`，PRO 各档 2 次/日，free 0（需登录）。
-  迁移：`cloudbase/migrations/20261030000001_video_deep_quota.sql`（可选，缺省时云函数按
-  `EXTRACT_VIDEO_DEEP_DAILY` 回落：登录且 `video.extract.daily>=10` 视为 PRO → 2，否则 0）。
+  迁移 `20261030000001_video_deep_quota.sql` **已于 2026-10-31 应用**；缺省仍保留云函数
+  `EXTRACT_VIDEO_DEEP_DAILY` 回落（登录且 `video.extract.daily>=10` 视为 PRO → 2，否则 0）。
 - 深度解析会把**音视频内容**发往模型服务商（语音识别 / 多模态理解）与自建 worker；
   用户首次使用需明确告知。隐私政策**不写具体模型名称**，只写「境内已完成备案的大模型 / 语音识别服务商」，
-  实际生效名单放在产品内「设置 → 关于 → AI 服务商」维护，换模型时不需要改法律文本。
+  实际生效名单维护在 `src/config/aiProviders.ts`；原「设置 → 关于 → AI 服务商」入口已于 2026-10-29 移除，当前通过 herr@ulink.ren 索取（恢复入口是待办）。
 - 10 次/日 的轻量解析与 2 次/日 的深度解析分开计数，避免成本失控。
 
 ## 6. 部署清单
@@ -173,8 +173,7 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
   `HTTP 412`（yt-dlp 与浏览器兜底都会被风控），`deep` 任务会如实返回 `download_failed`；
   指纹修复后可先无账号重试，仍失败再考虑 `YTDLP_COOKIES`（专用小号 Cookie）或换出口 IP。
   YouTube 则必须 `YTDLP_PROXY`。MiMo 解决的是「模型能力与成本」，**不能**解决平台反爬。
-- 迁移 `20261030000001_video_deep_quota.sql` **尚未执行**；未执行时云函数按
-  `EXTRACT_VIDEO_DEEP_DAILY` 回落（`video.extract.daily>=10` 视为 PRO → 2，否则 0），功能不受影响。
+- 迁移 `20261030000001_video_deep_quota.sql` **已于 2026-10-31 应用**：`plans.features` 现为 free `video.deep.daily=0`、PRO 各档 `2`；失败退额度迁移 `20261031000001` 此前已应用。
 - 前端已发布（线上 `version.json` commit `8882cea9`，2026-10-31 构建；`deep_read_video` 工具已在线），`degraded` / `provider` 均已消费。
 - `WORKER_TOKEN` 尚未配置（worker 仍是公网可直调）；上线前建议按 `scripts/video-worker/README.md` 4.1 配置。
 - 部署细节（无需重建镜像）：环境变量通过 CloudBase tcbr API `UpdateCloudRunServer` 注入到新版本
@@ -222,8 +221,8 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
 
 - [x] 深度解析失败退额度（2026-10-31）：迁移 `20261031000001_deep_quota_refund.sql`
   （按 job_id 幂等退款），提交失败与异步任务 `failed` 都会退回 1 次体验额度；
-- `WORKER_TOKEN` 未配、`20261025000007_linkcheck_scan_limit` / `20261028000010_payment_flow` /
-  `20261030000001_video_deep_quota` 仍未应用（本次只应用了退款迁移）；
+- `WORKER_TOKEN` 未配（worker 仍是公网可直调，建议按 worker README 4.1 配置）；迁移方面
+  `20261030000001_video_deep_quota` 已于 2026-10-31 应用，其余历史迁移以 `cloudbase/migrations/` 与实际库为准；
 - 前端改动已发布（扩展 MVP 为实验性；抖音/小红书/代理冻结）。
 
 ## 10. 浏览器扩展 MVP（实验性，2026-10-31 收尾）

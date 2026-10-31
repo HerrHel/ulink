@@ -1,6 +1,6 @@
 # 支付接入（微信 Native / 支付宝当面付）
 
-> 状态（2026-10-31 复核）：**前后端已上线**——云函数 `pay` + `/pay` 网关路由（10-28）、前端 `PurchaseModal.vue` + `usePayment`（选套餐 → 二维码 → 轮询 → 到账）；微信 `WXPAY_*` 已配置，支付宝代码就绪、密钥未配置。**退款 API、对账、自动续费仍未实现**（退款政策里相应承诺需人工处理）。
+> 状态（2026-10-31 复核）：**前后端已上线**——云函数 `pay` + `/pay` 网关路由（10-28）、前端 `PurchaseModal.vue` + `usePayment`（选套餐 → 二维码 → 轮询 → 到账）；微信 `WXPAY_*` 已配置，支付宝代码就绪、密钥未配置。**退款 API 与对账仍未实现**（退款走人工在商户后台操作，退款后权益降级也由人工执行）。产品不提供自动续费，不存在"取消自动续费"逻辑。
 > **上线操作步骤见 `ALIPAY_ROLLOUT.md`**（支付宝账号 / 签约 / 密钥 / 部署 / 沙箱 / 首笔验收）
 > 与 `WXPAY_ROLLOUT.md`（微信商户号侧：小程序 AppID 绑定 / API 证书 / APIv3 密钥 / 部署 / 验收）。
 
@@ -36,7 +36,7 @@
 | `attach_pay_payload(orderId, payload, channelOrderId)` | 存二维码 | 仅 `pending` 可写 |
 | `settle_paid_order(orderId, channel, channelOrderId, paidCents, raw)` | **发货** | `FOR UPDATE` 锁行；`status='pending'` 条件更新防双发；金额不符拒绝；过期单拒绝 |
 | `fail_payment_order(orderId, reason)` | 置失败 | 仅 `pending` 可改 |
-| `mark_order_refunded(orderId, cents, raw)` | 退款留痕 | 仅 `paid`；累计退款不超过订单额 |
+| `mark_order_refunded(orderId, cents, raw)` | 退款留痕 | 仅 `paid`；单次退款额不超过订单额（**累计未校验**，多次部分退款可超过订单额，待补） |
 
 全部 `SECURITY DEFINER` + 固定 `search_path`，**只 GRANT 给 `service_role`**，anon/authenticated 不可执行。
 
@@ -117,16 +117,16 @@ POST https://ulink.ren/pay
 Authorization: Bearer <CloudBase access token>
 Content-Type: application/json
 
-{ "action": "create", "planId": "pro", "channel": "wechat" }   // channel: wechat | alipay
+{ "action": "create", "planId": "plus_monthly", "channel": "wechat" }   // channel: wechat | alipay
 ```
 
 ```json
-{ "ok": true, "orderId": "uuid", "planId": "pro", "planName": "专业版",
+{ "ok": true, "orderId": "3f9c2b7e1a4d4c0e9b8a7d6c5f4e3a2b", "planId": "plus_monthly", "planName": "Plus 月付",
   "amountCents": 1200, "currency": "CNY", "channel": "wechat",
   "qrCode": "weixin://wxpay/bizpayurl?pr=xxx", "expiresAt": "2026-10-28T03:30:00+08:00" }
 ```
 
-错误：`401 unauthorized` / `429 rate_limited`（10 次/10 分钟）/ `503 channel_not_configured`（未开通）/ `400 plan_not_payable`（免费档）。
+错误：`401 unauthorized` / `429 rate_limited`（10 次/10 分钟）/ `503 channel_not_configured`（未开通）/ `400 plan_not_payable`（免费档）/ `400 unknown_action`（action 不在白名单）。
 
 ### 查状态（轮询）
 
@@ -137,6 +137,16 @@ POST https://ulink.ren/pay
 
 `sync:true` 会**主动查渠道**（回调延迟时兜底）。返回 `order.status` ∈ `pending|paid|failed|refunded`。
 轮询建议 2s 起、指数退避到 10s，`paid` 或超时（对齐 `expiresAt`）即停。
+
+### 查交易记录（设置 → 交易明细）
+
+```http
+POST https://ulink.ren/pay
+{ "action": "transactions", "limit": 20, "offset": 0 }   // "orders" 为同义 action
+```
+
+返回 `{ ok, list[], total }`，只含当前登录用户的订单（服务端按 uid 过滤；未登录 401）。
+**2026-10-31 修复**：此前路由白名单只放行 `create/status/plans`，而实现里已有 `transactions/orders` 分支，导致交易明细恒 `400 unknown_action`；现白名单已补齐并重部署，实测返回 `401 unauthorized`（未登录）/ 正常列表（登录）。
 
 ## 5. 商户号接入清单
 

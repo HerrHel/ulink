@@ -90,7 +90,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 ## 安全与运维
 
-- CSP / 安全头：规则定义在 `vite.config.ts`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，**勿私自收紧**）。dev/preview 由 `headersPlugin` 注入；**生产（CloudBase 静态托管）当前没有安全头**：`public/_headers` 只对 Cloudflare Pages 生效，2026-10-31 实测 `ulink.ren` 无 CSP（修复项见 `docs/TECH_DEBT.md`）
+- CSP / 安全头：规则定义在 `vite.config.ts`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，**勿私自收紧**）。dev/preview 由 `headersPlugin` 注入响应头；CloudBase 静态托管不支持自定义响应头，生产由 `securityMetaPlugin` 构建期注入 `<meta>` CSP（无 frame-ancestors）与 Referrer-Policy，XCTO 仍缺（`docs/TECH_DEBT.md`）；`npm run check:prod` 缺失时退出码 4
 - 云函数 check-link（生产 `cloudbase/functions/check-link/`）：私有 IP 黑名单防 SSRF；CORS/超时/限流由云函数环境变量控制
 - 错误追踪：errorHandler → `src/lib/errorReporter.ts` → `report-error` 云函数 → CloudBase `error_logs`（5s 节流）
 - 公开分享：RLS 允许匿名 SELECT `is_public = true` 的组及其书签；分享页由 `share-ssr` 云函数渲染

@@ -541,7 +541,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
     const action = typeof body.action === 'string' ? body.action : ''
-    if (action !== 'create' && action !== 'status' && action !== 'plans') {
+    // 路由白名单必须与 handleAuthed 内实现保持一致（曾漏 transactions/orders，
+    // 导致「设置 → 交易明细」永远 400 unknown_action，见 TECH_DEBT §零）。
+    const ALLOWED_ACTIONS = new Set(['create', 'status', 'plans', 'transactions', 'orders'])
+    if (!ALLOWED_ACTIONS.has(action)) {
       sendJson(res, 400, { error: 'unknown_action' }, cors)
       return
     }

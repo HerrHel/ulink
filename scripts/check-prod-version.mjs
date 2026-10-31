@@ -10,10 +10,11 @@
  *   node scripts/check-prod-version.mjs <baseUrl>
  *
  * 退出码：
- *   0 = 线上 commit === 本地 HEAD（且工作区干净）
+ *   0 = 线上 commit === 本地 HEAD（且工作区干净、安全头/元数据完整）
  *   1 = 不一致（线上落后 / 本地落后 / 分叉）
  *   2 = 线上没有 /version.json（部署早于该机制，属旧版本）
  *   3 = 网络或解析失败
+ *   4 = 版本一致，但线上安全防护不完整（CSP / Referrer-Policy 缺失；XCTO 属平台限制仅提示）
  *
  * 注：不用 process.exit() —— Node 24 + Windows 下 fetch 的 undici 句柄会在退出时
  * 触发 libuv 断言（0xC0000409）；改为返回退出码交给 process.exitCode。
@@ -44,6 +45,45 @@ function isAncestor(a, b) {
 function fmt(iso) {
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? String(iso || '-') : d.toLocaleString('zh-CN', { hour12: false })
+}
+
+/**
+ * 线上安全防护探测（2026-10-31 新增）。
+ *
+ * CloudBase 静态托管不支持自定义响应头，`public/_headers` 只对 Cloudflare Pages 生效；
+ * 生产改为 `<meta http-equiv="Content-Security-Policy">` + `<meta name="referrer">` 降级，
+ * XCTO 无 meta 等价物。这里同时认「响应头」与「meta」，任一存在即视为已覆盖。
+ */
+async function checkSecurity(base) {
+  const res = await fetch(`${base}/?t=${Date.now()}`, { cache: 'no-store' })
+  const html = res.ok ? await res.text() : ''
+  return {
+    status: res.status,
+    cspHeader: !!res.headers.get('content-security-policy'),
+    cspMeta: /http-equiv=["']?content-security-policy/i.test(html),
+    referrerHeader: !!res.headers.get('referrer-policy'),
+    referrerMeta: /<meta[^>]+name=["']?referrer["']?/i.test(html),
+    xcto: !!res.headers.get('x-content-type-options'),
+  }
+}
+
+function printSecurity(sec) {
+  if (!sec) {
+    console.log('\n安全防护：⚠ 探测失败（网络错误）')
+    return []
+  }
+  const csp = sec.cspHeader ? 'HTTP 头' : sec.cspMeta ? '<meta>（托管无响应头，降级）' : '✗ 缺失'
+  const ref = sec.referrerHeader ? 'HTTP 头' : sec.referrerMeta ? '<meta>（降级）' : '✗ 缺失'
+  const xcto = sec.xcto ? 'HTTP 头' : '✗ 缺失（CloudBase 托管无响应头，平台限制）'
+  console.log('\n安全防护：')
+  console.log(`  CSP                    ${csp}`)
+  console.log(`  Referrer-Policy        ${ref}`)
+  console.log(`  X-Content-Type-Options ${xcto}`)
+  // 只有仓库能兜底的 CSP / Referrer 计入失败；XCTO 无 meta 等价物，仅提示
+  const missing = []
+  if (!sec.cspHeader && !sec.cspMeta) missing.push('CSP')
+  if (!sec.referrerHeader && !sec.referrerMeta) missing.push('Referrer-Policy')
+  return missing
 }
 
 async function main() {
@@ -90,6 +130,19 @@ async function main() {
 
   if (remoteCommit === localCommit) {
     console.log(`\n✅ 线上即本地 HEAD（${localShort}）${localDirty ? '；注意本地存在未提交修改，线上不包含这些改动' : ''}`)
+    let sec = null
+    try {
+      sec = await checkSecurity(base)
+    } catch (err) {
+      console.log(`\n安全防护：⚠ 探测失败（${err instanceof Error ? err.message : String(err)}）`)
+    }
+    const missing = printSecurity(sec)
+    if (missing.length > 0) {
+      console.log(`\n✗ 安全防护不完整：缺失 ${missing.join('、')}`)
+      console.log('  CSP/Referrer-Policy 的仓库内兜底是构建期 <meta>（见 vite.config.ts securityMetaPlugin），')
+      console.log('  推新构建后才会生效；X-Content-Type-Options 与 frame-ancestors 需平台侧支持（docs/TECH_DEBT.md §零 #1）。')
+      return 4
+    }
     return 0
   }
 

@@ -2,7 +2,7 @@
 
 > 配套：接口契约见 [`VIDEO_DEEP_EXTRACT.md`](./VIDEO_DEEP_EXTRACT.md)，worker 运维细节见
 > [`scripts/video-worker/README.md`](../scripts/video-worker/README.md)。
-> 当前状态（2026-10-31 复核）：**P0/P1/P2 已上线；worker 的 MiMo ASR/OCR 已启用；前端已发布（线上 `version.json` commit `8882cea9`，即视频深度解析 MVP 提交）**。仍有两处例外：① 迁移 `20261030000001_video_deep_quota` **未应用**（`plans.features` 中 `video.deep.daily` 仍为 null，额度走函数回落）；② 扩展商店上架未完成（`/extension-guide.html` 自述开发版）。下文标注 10-30 的「依赖未启用/前端未发布」均已过时。
+> 当前状态（2026-10-31 复核）：**P0/P1/P2 已上线；worker 的 MiMo ASR/OCR 已启用；前端已发布（线上 `version.json` commit `8882cea9`，即视频深度解析 MVP 提交）；数据库迁移已补齐**——`20261030000001_video_deep_quota` 已于 2026-10-31 应用（`plans.features` 现 free=0、PRO=2），`payment_flow`/`linkcheck_scan_limit` 也已可在库中验证。唯一未完成项：**扩展商店上架**（`/extension-guide.html` 自述开发版）。下文标注 10-30 的「依赖未启用/前端未发布/迁移未执行」均已过时。
 
 先定义本文反复用到的命令变量（PowerShell，仓库根执行）：
 
@@ -240,18 +240,17 @@ YTDLP_PROXY=http://user:pass@<host>:<port>
 
 ---
 
-## D7. 应用数据库迁移（3 个 pending）
+## D7. 应用数据库迁移（已完成）
 
-`2026-10-30` 实测 `migration up --dry-run` 显示 3 个待应用：
+`2026-10-30` 实测 `migration up --dry-run` 显示 3 个待应用；**2026-10-31 已全部应用**（`video_deep_quota` 当日补齐，`payment_flow`/`linkcheck_scan_limit` 早已可在库中验证）：
 
 ```
 + 20261025000007_linkcheck_scan_limit.sql   （plans 额度字段，安全）
 + 20261028000010_payment_flow.sql           （orders 字段 + 支付函数，DDL 增量）
-+ 20261030000001_video_deep_quota.sql       （plans 加 video.deep.daily，本次新增）
++ 20261030000001_video_deep_quota.sql       （plans 加 video.deep.daily）
 ```
 
-**不应用也能用**：深度额度有代码回落（登录且 `video.extract.daily>=10` → 2 次/日），只是不显式写进 `plans.features`。
-但迁移历史会一直落后，且 `payment_flow` 可能影响支付链路，建议尽快补齐。
+验证结果（2026-10-31）：`free=0`，`plus_monthly/plus_yearly/pro_quarterly=2`；`test_1fen` 为测试档，未改。
 
 ### 操作步骤
 
