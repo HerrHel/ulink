@@ -1,5 +1,7 @@
 # ULink 视频智能灵感提取微服务 (Video Intelligence Worker)
 
+> **2026-11-01 状态**：线上 `ulink-video-worker` 已配置 `WORKER_TOKEN`（与 `extract-video` 的 `VIDEO_WORKER_TOKEN` 同值），无 token 直调 `/api/video/*` 返回 401；代理类变量（`YTDLP_PROXY` / `BILI_PROXY_API`）仍未配置。
+>
 > **2026-10-31 校正（先读）**：线上方案是 **MiMo ASR/OCR**（`WORKER_ASR_PROVIDER=mimo` + `MIMO_API_KEY`），不是 `faster_whisper`/`rapidocr`（后者仅为离线备选）。因此：
 > - `include.transcript` 缺省 = ASR **真正就绪**（provider≠none 且依赖/密钥齐全）；`include.ocr` 缺省 = OCR 就绪（mimo 只看 provider+key，rapidocr 才要 `WORKER_OCR_ENABLED`）。
 > - `transcript.provider` 枚举为 `mimo | faster_whisper | http`；mimo 无时间戳 → `segments=[]` 且 `degraded=true`。

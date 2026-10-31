@@ -175,9 +175,8 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
   YouTube 则必须 `YTDLP_PROXY`。MiMo 解决的是「模型能力与成本」，**不能**解决平台反爬。
 - 迁移 `20261030000001_video_deep_quota.sql` **已于 2026-10-31 应用**：`plans.features` 现为 free `video.deep.daily=0`、PRO 各档 `2`；失败退额度迁移 `20261031000001` 此前已应用。
 - 前端已发布（线上 `version.json` commit `8882cea9`，2026-10-31 构建；`deep_read_video` 工具已在线），`degraded` / `provider` 均已消费。
-- `WORKER_TOKEN` 尚未配置（worker 仍是公网可直调）；上线前建议按 `scripts/video-worker/README.md` 4.1 配置。
-- 部署细节（无需重建镜像）：环境变量通过 CloudBase tcbr API `UpdateCloudRunServer` 注入到新版本
-  （`DeployInfo.ReleaseType=FULL` + `Items` 含 `EnvParams`）；控制台「服务设置 → 环境变量」等价。
+- `WORKER_TOKEN` **已于 2026-11-01 配置**：worker 环境变量与 `extract-video` 的 `VIDEO_WORKER_TOKEN` 同值；实测无 token 调 worker 返回 `401 {"detail":"invalid worker token"}`，带 token 正常。token 只存本机 `.env.local` 与云环境变量（不入库/不进前端），泄露后需同时轮换两侧。
+- 部署细节（无需重建镜像）：环境变量通过 CloudBase tcbr API `UpdateCloudRunServer` 注入新版本（`tcbr` 服务、API 版本 `2022-02-17`；CLI 的 `tcb run service:config` 已废弃且带 `-e` 解析 bug，可直接用 `tcb api tcbr UpdateCloudRunServer`，`DeployType=image` + 当前 `ImageUrl` 即可只改配置不重建）；控制台「服务设置 → 环境变量」等价。
 
 ## 8. 安全备注：X-Forwarded-For 与配额
 
@@ -217,11 +216,26 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
 2. **自建中继/出口**：家里公网 IPv4 / 家宽 + gost/sing-box，或 Tailscale exit node，或按小时租一台干净 VPS 跑 worker；属于"自建中站"路线，需要运维与实测。
 3. **购买静态 ISP / 隧道代理**：固定 IP、账密认证（不要用"提取链接"模式，CloudRun 可能调不通）；拿到 `host:port+user:pass` 后配 `YTDLP_PROXY` 即可。成本是唯一门槛，暂缓。
 
+### 代理接入所需信息（2026-11-01 更新）
+
+worker 只认 `HTTP(S)` / `SOCKS` 正向代理，**不认机场订阅链接（ss/vmess/trojan）**。要配置需要商家提供其中一种：
+
+| 变量 | 用途 | 需要的格式 | 备注 |
+|---|---|---|---|
+| `YTDLP_PROXY` | 全局出站（YouTube 等） | `http://user:pass@host:port` 或 `socks5h://...` | 必须是**海外**出口，且从腾讯云上海可连通；带宽够下载 ≤200MB/任务 |
+| `BILI_PROXY_API` | 仅 B站请求 | 一个 GET 返回纯文本 `ip:port` 的「提取链接」接口 | 当前代码只解析 `ip:port`，不支持账密；国内 IP |
+| （待实现）`BILI_PROXY_URL` | 仅 B站请求 | `http://user:pass@host:port` | 若只有账密代理，需要给 worker 加这个变量（约 10 行代码） |
+
+- 订阅链接（`https://sub.../...`）是机场节点清单，worker 不能直接用；需要先用客户端（Clash/mihomo）转成 HTTP/SOCKS 监听，或买商家的「HTTP 隧道代理 / 静态 ISP」。
+- 配置后 `/health` 的 `proxy_configured` 会变为 `true`；建议先在云函数/worker 环境验证：`curl -x http://user:pass@host:port https://www.youtube.com`。
+- B站 412 即使配了国内代理也可能仍触发风控（2026-10-31 实测 CloudRun 调提取接口失败）；优先级仍是浏览器扩展 `playinfo` 路线。
+
 ### 其他待收尾（与本功能相关）
 
 - [x] 深度解析失败退额度（2026-10-31）：迁移 `20261031000001_deep_quota_refund.sql`
   （按 job_id 幂等退款），提交失败与异步任务 `failed` 都会退回 1 次体验额度；
-- `WORKER_TOKEN` 未配（worker 仍是公网可直调，建议按 worker README 4.1 配置）；迁移方面
+- [x] `WORKER_TOKEN` 已配置（2026-11-01，worker + `extract-video` 同值，实测 401/200）；
+- [ ] 代理未配置（`YTDLP_PROXY` / `BILI_PROXY_API` 为空，YouTube 与 B站 412 仍受限）；迁移方面
   `20261030000001_video_deep_quota` 已于 2026-10-31 应用，其余历史迁移以 `cloudbase/migrations/` 与实际库为准；
 - 前端改动已发布（扩展 MVP 为实验性；抖音/小红书/代理冻结）。
 
