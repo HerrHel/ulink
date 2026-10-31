@@ -218,6 +218,22 @@ ON CONFLICT (user_id) DO UPDATE
 -- 走 account 云函数或：SELECT public.purge_user_data('<uid>');
 ```
 
+## 6.5 退款操作（人工退款 + 系统自动降级）
+
+2026-10-31 起：渠道退款仍由人工在商户后台操作，退款成功后调用数据库函数留痕，系统自动降级（**不实现渠道退款 API**，见 `docs/PAYMENT_INTEGRATION.md` §7 决策）。
+
+```sql
+-- 1) 在微信/支付宝商户后台完成退款
+-- 2) 留痕（cents 为本次退款金额；累计退款不得超过订单金额）
+SELECT public.mark_order_refunded('<order_id>', <cents>, '{"operator":"手工退款"}'::jsonb);
+
+-- 3) 全额退款会自动：orders.status='refunded'，用户 entitlements.status='refunded'、
+--    expires_at=now()（resolve_entitlement / ai_quota_check 因此回落 free 额度）
+-- 4) 误退需恢复权益：按上一节「人工开通一个月」处理，并在备注里写明原因
+```
+
+注意：多笔订单叠加时，全额退其中一笔会终止当前权益（简化语义）；若需按订单精确扣减，需先补 entitlement ↔ order 关联。
+
 ## 7. 回滚
 
 | 情形 | 操作 |

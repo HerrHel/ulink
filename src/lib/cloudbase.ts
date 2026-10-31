@@ -170,13 +170,17 @@ export async function invokeCbFunction(
   name: string,
   body: unknown,
   signal?: AbortSignal,
+  options?: { token?: string | null },
 ): Promise<{ error: { message: string; code?: string } | null; data?: unknown }> {
   const base = getCbFnBase()
   if (!base) return { error: { message: 'CloudBase 函数未配置' } }
   try {
     const res = await fetch(`${base}/${name}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      },
       body: JSON.stringify(body ?? {}),
       signal,
     })

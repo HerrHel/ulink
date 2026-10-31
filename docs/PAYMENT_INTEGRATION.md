@@ -36,7 +36,7 @@
 | `attach_pay_payload(orderId, payload, channelOrderId)` | 存二维码 | 仅 `pending` 可写 |
 | `settle_paid_order(orderId, channel, channelOrderId, paidCents, raw)` | **发货** | `FOR UPDATE` 锁行；`status='pending'` 条件更新防双发；金额不符拒绝；过期单拒绝 |
 | `fail_payment_order(orderId, reason)` | 置失败 | 仅 `pending` 可改 |
-| `mark_order_refunded(orderId, cents, raw)` | 退款留痕 | 仅 `paid`；单次退款额不超过订单额（**累计未校验**，多次部分退款可超过订单额，待补） |
+| `mark_order_refunded(orderId, cents, raw)` | 退款留痕 + **全额退款自动降级** | 仅 `paid`；累计退款不得超过订单额；全额退款时把 `entitlements` 置 `refunded` 并 `expires_at=now()`（2026-10-31） |
 
 全部 `SECURITY DEFINER` + 固定 `search_path`，**只 GRANT 给 `service_role`**，anon/authenticated 不可执行。
 
@@ -178,12 +178,11 @@ POST https://ulink.ren/pay
 - [ ] 用 1 分钱真实支付跑通一次（两个渠道各一次），核对 `orders.status='paid'` 与 `entitlements.expires_at` 正确叠加
 - [ ] 手动重放同一条回调（模拟渠道重推）→ 权益**不得**再次叠加
 
-## 7. 尚未实现
+## 7. 未实现（已决策）
 
-- **退款 API 调用**：`mark_order_refunded` 只记本地状态；真正调渠道退款（微信 `/v3/refund/domestic/refunds`、支付宝 `alipay.trade.refund`）待接。
-  政策见 `docs/legal/refund-policy.md`，流程建议：后台人工审核 → 调渠道 → 回调确认 → `mark_order_refunded`。
-- **对账**：建议每日拉渠道账单与 `orders` 比对，差异告警。
-- **前端购买页**：二维码渲染（需引入 `qrcode` 类库）、轮询、失败重试、`pending` 超时提示。
+- **退款 API 调用（决策：不做，2026-10-31）**：`mark_order_refunded` 只记本地状态并自动降级；真正调渠道退款（微信 `/v3/refund/domestic/refunds`、支付宝 `alipay.trade.refund`）不实现——需要商户退款权限、证书与真实订单联调，误操作风险高。
+  当前流程：人工在商户后台退款 → 调 `mark_order_refunded` 留痕并自动降级（见 `docs/BILLING_OPS.md`）。政策见 `docs/legal/refund-policy.md`。
+- **对账（决策：保持人工）**：继续用商户后台导出对账；如订单量上升再考虑每日拉账单与 `orders` 比对告警。
 - **自动续费**：当前是一次性订阅（到期不自动扣款），符合"不自动续费"的合规取向。
 
 ## 8. 测试

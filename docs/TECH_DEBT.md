@@ -8,17 +8,18 @@
 
 | # | 级别 | 问题 | 处理结果（2026-10-31） |
 |---|---|---|---|
-| 1 | **P0** | **生产安全响应头**：`ulink.ren` 无 CSP / XCTO / Referrer / Permissions-Policy（CloudBase 静态托管不支持自定义响应头） | ✅ **已补齐（入口页）**：新增云函数 `edge-headers` 反代 `/app` 与 `/legal/*`，下发 CSP（含 `frame-ancestors 'self'`）、XCTO、XFO、Referrer、HSTS；分享页 `/s/*` 由 `share-ssr` 下发 XCTO/XFO；首页 `/` 由 `securityMetaPlugin` 注入 meta CSP/Referrer。**残留**：`/`（营销页）无 XCTO/frame-ancestors（根路由为静态 catch-all，改反代需把所有资源吞进函数）。`check:prod` 已覆盖 `/app`、`/legal` 探测 |
+| 1 | **P0** | **生产安全响应头**：`ulink.ren` 无 CSP / XCTO / Referrer / Permissions-Policy（CloudBase 静态托管不支持自定义响应头） | ✅ **已补齐（入口页）**：新增云函数 `edge-headers` 反代 `/app` 与 `/legal/*`，下发 CSP（含 `frame-ancestors 'self'`）、XCTO、XFO、Referrer、HSTS；分享页 `/s/*` 由 `share-ssr` 下发 XCTO/XFO；首页 `/` 由 `securityMetaPlugin` 注入 meta CSP/Referrer。**决策（2026-10-31）**：`/`（营销页）无登录/付费/删除等敏感操作，**接受现状**、不为此把全部静态资源反代进函数；如未来上境内 CDN/EdgeOne，再统一加响应头。`check:prod` 已覆盖 `/app`、`/legal` 探测 |
 | 2 | **P0** | **`pay` 云函数 `Update failed`** | ✅ **已修复**：2026-10-31 `node scripts/deploy-cloudbase-fn.mjs pay` 重新部署，`fn detail` 状态 `Active`、ModTime `21:31`；路由 `/pay` 仍为 WEB_SCF |
 | 3 | **P1** | **视频深度额度迁移未应用**（`plans.features.video.deep.daily` 为 null） | ✅ **已修复**：2026-10-31 应用 `20261030000001_video_deep_quota.sql`；现 free=0、PRO 各档=2（`test_1fen` 为测试档，未改）。`20261031000001`（退额度）此前已应用 |
 | 4 | **P1** | **文档状态与现网相反** | ✅ 2026-10-31 已批量修正：根文档 + 计费/支付/AI/品牌/视频/分享/备案/supabase README 等 20+ 篇；同步给 `pay` 文档补 transactions 说明 |
-| 5 | **P1** | **法律文本与产品能力/实现不一致** | ✅ **已修订（待法务复核）**：隐私政策（支付已接入、AI 名单改邮箱索取、补 Cloudflare 边缘/扩展读取/自动读页/公开图片桶披露）；协议（服务内容补视频解析、统一 AI 表述、配额按实际）；退款政策（删除不存在的"自动续费"、补季付、**退款后自动降级已实现**）；PENDING 同步。**仍待**：AI 服务商入口恢复（邮箱兜底中） |
+| 5 | **P1** | **法律文本与产品能力/实现不一致** | ✅ **已修订并上线**：隐私政策（支付已接入、AI 服务商入口恢复、补 Cloudflare 边缘/扩展读取/自动读页/公开图片桶披露）；协议（服务内容补视频解析、统一 AI 表述、配额按实际）；退款政策（删除不存在的"自动续费"、补季付、**退款后自动降级已实现**）；PENDING 同步。**修订对照见 `docs/legal/CHANGELOG-2026-10-31.md`，待你/律师复核（已确认保持现状）** |
 | 6 | **P1** | **订阅过期后 AI 额度不回落** | ✅ **已修复**：新增并应用 `20261031000002_ai_quota_expiry.sql`，`ai_quota_check` 在 `expired` / `refunded` 时改用 `plans.free` 的 `ai.tokens.monthly`（已查 `pg_get_functiondef` 确认分支存在） |
-| 7 | **P1** | **plans 中写入了未强制执行的额度** | 📋 **已分析并给出推荐**：`docs/QUOTA_ENFORCEMENT.md`（逐项强制点/成本/推荐）。结论：优先补 `ai.requests.daily` + `linkcheck.daily`（各约 10-20 行）；`sync.devices` 建议撤下承诺；`storage.bytes` 先改文案再补图片配额；`history.days` 按保留期 cleanup。当前展示仍大于执行，属产品决策待排期 |
+| 7 | **P1** | **plans 中写入了未强制执行的额度** | ✅ **已修复（2026-10-31）**：补 `ai.requests.daily`（mimo-chat）与 `linkcheck.daily`（check-link 可选鉴权+手动检查）；`history.days` 落地为 cleanup 按 plan 保留期；`sync.devices` 从 plans 撤下；`storage.bytes` 购买页标注"展示值，暂未限额"。详见 `docs/QUOTA_ENFORCEMENT.md` |
 | 8 | **P2** | **`pay` 的 `transactions`/`orders` action 永远 400** | ✅ **已修复**：白名单改为 `Set(create,status,plans,transactions,orders)`；重部署后实测 `POST /pay {action:'transactions'}` 返回 `401 unauthorized`（不再 400 unknown_action） |
-| 9 | **P2** | **CLI 仍以 Supabase 为目标** | ⏳ **未适配**：已在 `cli/README.md` 顶部标注「参考实现，勿操作生产」，README 已入库（`.gitignore` 白名单）；是否保留待产品决策（见对话结论：面向零基础用户且不分发，建议归档） |
-| 10 | **P2** | **AI 服务商名单入口与联系方式缺失** | ✅ **已修复**：`aiProviders.ts` 增加 `contact` 字段；设置 → 关于 → AI 服务商 已恢复（`SettingsPanel.vue`，含服务商/产品/官网/联系方式/更新时间）；隐私政策与协议同步改为“产品内可查阅 + 邮箱兜底” |
-| 11 | **P3** | **文档缺索引与状态机制** | ⏳ 未做：建议新建 `docs/README.md`（状态/最后核实/负责范围） |
+| 9 | **P2** | **CLI 仍以 Supabase 为目标** | ✅ **已归档（2026-10-31）**：`cli/` 从活跃代码树移除（无分发渠道、仍指向 Supabase），代码留存 git `6cf8783`，见 `docs/ARCHIVED_CLI.md` |
+| 10 | **P2** | **AI 服务商名单入口与联系方式缺失** | ✅ **已修复**：`aiProviders.ts` 增加 `contact` 字段；设置 → 关于 → AI 服务商 已恢复（`SettingsPanel.vue`，含服务商/产品/官网/联系方式/更新时间）；隐私政策与协议同步改为"产品内可查阅 + 邮箱兜底" |
+| 11 | **P3** | **文档缺索引与状态机制** | ✅ **已建**：新增 `docs/README.md`（文档索引/最后核实/状态），并保留本文件作为技术债唯一账本 |
+| 12 | **P2** | **渠道退款 API 与对账** | ✅ **决策：不做（2026-10-31）**：真实退款调用需要商户退款权限、证书与真实订单联调；当前人工在商户后台退款 → 调 `mark_order_refunded` 自动降级可闭环。保留人工流程，不实现自动退款；对账继续用商户后台导出 |
 
 ## 一、先排除的误报（非技术债）
 

@@ -33,6 +33,14 @@ const {
   validateUrlShape,
 } = require('./ssrf-guard.js')
 
+// 可选鉴权：仅用于「带 token 的登录用户」执行 linkcheck.daily，匿名调用不要求 token
+let verifyCbToken = null
+try {
+  verifyCbToken = require('./cb-auth.js').verifyCbToken
+} catch (e) {
+  console.warn('[check-link] cb-auth unavailable, daily per-user quota disabled:', e && e.message)
+}
+
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 
@@ -42,6 +50,44 @@ const DEFAULT_TIMEOUT_MS = parseInt(process.env.CHECK_LINK_TIMEOUT_MS || '10000'
 /** 每 IP 限流（次/分钟）。原版是每用户 1200/min；v1 无用户身份，收紧到 120/min/IP */
 const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '1200', 10)
 const MAX_REDIRECTS = 5
+
+/** 按 Asia/Shanghai 取日键（YYYY-MM-DD），与 ai.requests.daily 口径一致 */
+function shanghaiDate(now) {
+  return new Date((now || Date.now()) + 8 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+/**
+ * 登录用户的每日死链检查额度（plans.features['linkcheck.daily']）。
+ * 只统计手动检查（body.mode === 'manual'）；自动巡检按 linkcheck.auto.max 另行限制，
+ * 避免一次 500 条巡检把 PRO 的 50 次/日额度瞬间打满。
+ * 返回 { ok: true } 或 { ok: false, limit }；鉴权/配额 RPC 失败时 fail-open（不误伤用户）。
+ */
+async function checkDailyQuota(req, db, mode) {
+  if (!verifyCbToken || mode === 'auto') return { ok: true }
+  try {
+    const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID })
+    if (!auth || !auth.ok || !auth.uid) return { ok: true }
+    const ent = await db.rpc('resolve_entitlement', { p_uid: auth.uid })
+    if (ent.error) return { ok: true }
+    const raw = ent.data?.features?.['linkcheck.daily']
+    if (raw === undefined || raw === null) return { ok: true }
+    const limit = Number(raw)
+    if (!Number.isFinite(limit) || limit <= 0) return { ok: false, limit: 0 }
+    const daily = await db.rpc('consume_rate_limit', {
+      p_key: `link-check:uid:${auth.uid}:${shanghaiDate()}`,
+      p_limit: limit,
+      p_window_secs: 86400,
+    })
+    if (daily.error) {
+      console.error('[check-link] daily quota rpc failed (fail-open):', daily.error)
+      return { ok: true }
+    }
+    return daily.data === true ? { ok: true, limit } : { ok: false, limit }
+  } catch (e) {
+    console.error('[check-link] daily quota check failed (fail-open):', e)
+    return { ok: true }
+  }
+}
 
 /** IP 哈希盐：独立于 report-error / send-feedback，防跨接口关联 */
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-check-link'
@@ -233,7 +279,18 @@ const server = http.createServer(async (req, res) => {
     }
 
     const body = await readJsonBody(req)
-    const { url, bookmark_id } = body
+    const { url, bookmark_id, mode } = body
+
+    // ── 登录用户每日手动检查额度（fail-open；匿名/自动巡检不消耗该额度）──
+    const dailyQuota = await checkDailyQuota(req, db, mode)
+    if (!dailyQuota.ok) {
+      sendJson(res, 429, {
+        error: 'linkcheck_daily_exceeded',
+        limit: dailyQuota.limit,
+        message: '今日死链检查次数已用完（免费版 3 次/日、PRO 50 次/日），请明天再试或升级。',
+      }, { ...cors, 'Retry-After': '3600' })
+      return
+    }
 
     let parsedUrl
     try {

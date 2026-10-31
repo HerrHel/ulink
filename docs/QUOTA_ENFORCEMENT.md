@@ -1,54 +1,50 @@
-# 额度强制执行现状与建议（Quota Enforcement）
+# 额度强制执行现状（Quota Enforcement）
 
-> 2026-10-31 审计结论。`plans.features` 里写了 11 个额度键，但**真正被服务端强制执行的只有 4 个**；
-> 其余只是展示/文案，用户理论上可以无限使用。本文逐项给出「现状 / 强制点在哪 / 成本 / 推荐」。
+> 2026-10-31 更新。目标：**对外展示的每个额度都有服务端可拒绝的执行点**；没有执行点的就从展示中撤下。
+> 结论：`plans.features` 的 10 个键中，**7 个已有服务端强制点**，1 个降级为展示值（storage.bytes），
+> 1 个撤下（sync.devices），`history.days` 已落地为按 plan 的历史保留期清理。
 
 ## 一、总览
 
 | 额度键 | 是否强制 | 强制点 | 备注 |
 |---|---|---|---|
-| `ai.tokens.monthly` | ✅ | `mimo-chat` 调 `ai_quota_check`（`BILLING_MODE=enforce`） | 唯一有月度总量的 AI 门控 |
-| `video.extract.daily` | ✅ | `extract-video`（`consume_rate_limit` + `writeJson` 校验） | 轻量解析 |
-| `video.deep.daily` | ✅ | `extract-video` deep 提交 / 状态查询（失败退额度） | 2026-10-31 迁移到 `plans.features` 正式生效 |
-| `linkcheck.auto` / `linkcheck.auto.max` | ✅ | 死链「自动巡检」开关与单用户上限（客户端 + check-link 约定） | 只有自动巡检受限 |
-| `ai.requests.daily` | ❌ | 无 | 只出现在 plans/购买页文案 |
-| `linkcheck.daily` | ❌ | 无 | 手动死链检测没有按日计数 |
-| `storage.bytes` | ❌ | 无 | 图片/笔记容量没有服务端校验 |
-| `sync.devices` | ❌ | 无 | 无设备注册表，无法判定 |
-| `history.days` | ❌ | 无（cleanup 按全局 365 天） | 本质是保留期而非配额 |
+| `ai.tokens.monthly` | ✅ | `mimo-chat` → `ai_quota_check`（`BILLING_MODE=enforce`） | 月度 token 总量 |
+| `ai.requests.daily` | ✅ **2026-10-31 补** | `mimo-chat` → `resolve_entitlement` + `consume_rate_limit('ai:req:{uid}:{date}')` | free 20/日、PRO 100/日（迁移 `20261031000004`） |
+| `video.extract.daily` | ✅ | `extract-video`（`consume_rate_limit`） | 轻量解析 |
+| `video.deep.daily` | ✅ | `extract-video` deep 提交 / 状态查询（失败退额度） | 2026-10-31 正式生效 |
+| `linkcheck.daily` | ✅ **2026-10-31 补** | `check-link` → 可选鉴权（`cb-auth`）+ `resolve_entitlement` + `consume_rate_limit('link-check:uid:{uid}:{date}')` | 只计**手动**检查（`mode=manual`）；自动巡检按 `linkcheck.auto.max` 另行限制 |
+| `linkcheck.auto` / `linkcheck.auto.max` | ✅ | 客户端按权益开关自动巡检；单次巡检条数上限 | 与 `linkcheck.daily` 分离，避免巡检打满每日额度 |
+| `history.days` | ✅ **2026-10-31 补** | `cleanup_expired_data` 按用户 plan 的 `history.days` 清理 `data_history` | 由 `maintenance` 日跑；无权益用户按 90 天 |
+| `storage.bytes` | ⚠️ **展示值** | 无（图片直传对象存储，未做容量统计/拦截） | 购买页标注「展示值，暂未限额」；实现图片配额需改上传链路，见下 |
+| `sync.devices` | ❌ **已撤下** | — | 无设备体系，无法执行；2026-10-31 从 `plans.features` 移除 |
+| `test_1fen` 测试档 | — | — | 仅测试用，未配置额度 |
 
-## 二、逐项分析与推荐
+## 二、实现说明
 
-### 1) `ai.requests.daily`（免费 0 / PRO 100）——**建议补，成本低**
-- 现状：`mimo-chat` 已有 `usage_ledger`（`metric='ai.chars'` 记字符）与 `ai_quota_check`，但只按 token 包月，不按日请求数。
-- 补法：`mimo-chat` 在 `record_usage` 时加一条 `metric='ai.request'` 的日计数（或直接 `consume_rate_limit(key='ai:req:{uid}:{date}', limit=plan值, window=86400)`），enforce 下超额 429。
-- 成本：约 20 行、一次云函数部署；不影响既有 token 口径。
-- 影响：能挡住「单日高频刷免费/PRO 额度做批量任务」的滥用；对正常用户几乎无感。
+### 1) `ai.requests.daily`
+- `mimo-chat` 在 token 月度额度检查之后、调用上游之前执行：读 `resolve_entitlement().features`，有该键则 `consume_rate_limit` 按自然日（Asia/Shanghai）计数；超额 429 `quota_exceeded`（`quota: ai.requests.daily`）。
+- RPC 失败 **fail-open**（与 token 额度一致，配额系统故障不误伤用户），日志留痕。
+- 免费档此前无该键 → 等于免费用户无每日请求上限；迁移已补 20/日。
 
-### 2) `linkcheck.daily`（免费 3 / PRO 50）——**建议补，成本低**
-- 现状：手动死链检测走 `check-link`，只受「每分钟 1200 次」限流，没有日额度。
-- 补法：`check-link` 入口处 `consume_rate_limit('linkcheck:{uid}:{date}', plan 值, 86400)`；匿名走 IP/全局额度（已知 IP 可伪造，见 AGENTS 警告）。
-- 成本：约 10 行 + 部署；`plans.features` 已有值，不需要迁移。
-- 影响：兑现「免费 3 次/日」的公开承诺；对正常用户（一次几十个书签）几乎无感；若担心误伤，可先 `shadow` 观察一周。
+### 2) `linkcheck.daily`
+- `check-link` v1 原本没有用户身份（只按 IP 哈希限流）；本次增加**可选鉴权**：请求带 `Authorization: Bearer <token>` 时用 `cb-auth` 换 uid，按用户 plan 执行每日额度；**匿名请求不要求 token**，仍走 IP 分钟限流（本地/未登录用户不受影响）。
+- 前端 `invokeCbFunction` 增加可选 token 参数，死链检测会附带登录 token；`mode=manual|auto` 区分手动与自动巡检。
+- 口径：手动检查计 `linkcheck.daily`；自动巡检按 `linkcheck.auto.max`（单次上限）+ 分钟限流，避免一次 500 条巡检打满 PRO 的 50 次/日。
+- 已知边界：`mode` 由客户端上报，属于**防误用/成本控制**而非对抗性强制；对抗性滥用仍依赖 IP 分钟限流与后续风控。
 
-### 3) `storage.bytes`（免费 200MB / PRO 5GB）——**建议先改文案，后补实现**
-- 现状：笔记图片写入公开存储桶，无容量统计与拦截；`purge_user_data`/`list_user_image_paths` 有按用户列举能力（`20261025000003`）。
-- 难点：容量 = 笔记 HTML 内嵌图片 + 上传对象合计；每次写入都要增量统计，跨云函数（`account`/图片上传走前端直传？）容易绕过。
-- 推荐：**短期不要把它当"已生效额度"宣传**（购买页/PRICING 已标注）；中期做「图片存储配额」——上传前查 `sum(size)`（`list_user_image_paths` + 对象元数据），超额拒绝并提示清理。笔记文本容量继续按 schema 截断兜底。
+### 3) `history.days`
+- `cleanup_expired_data` 新增第 ③ 步：按每个用户的 plan 保留期删除 `data_history` 早期版本（`resolve_entitlement → features['history.days']`，缺省 90 天）。
+- 无需改 `maintenance` 代码：它已调用该 RPC，下一次定时执行即生效（迁移后已手工调用验证返回 `history_deleted`）。
 
-### 4) `sync.devices`（免费 2 / PRO 3）——**建议移除承诺，不建议做**
-- 现状：同步无设备概念，登录态 token 即可在任何设备使用；要实现必须引入设备注册表 + 设备管理 UI + 踢下线逻辑。
-- 成本/风险：产品复杂度高、误踢真实用户风险大；收益仅是"防止账号共享"，而账号共享本身可用其他方式（如登录风控）处理。
-- 推荐：**从 plans/购买页移除该键**（或标注"规划中"），不实现。
+### 4) `storage.bytes`
+- 现状：笔记图片由前端直传对象存储，服务端没有容量统计/拦截；做真实配额需要改上传链路（服务端签发/校验 + 增量统计），成本较高。
+- 处理：购买页标注「展示值，暂未限额」，不把它当已生效承诺；后续实现见 `docs/TECH_DEBT.md` 待办。
 
-### 5) `history.days`（免费 90 / PRO 90）——**不是配额，建议按保留期处理**
-- 现状：`maintenance` 的 `cleanup_expired_data` 用全局 365 天；`history.days=90` 未被读取。
-- 补法：cleanup 按用户 plan 取 `history.days` 删除更早历史（已有清理框架，成本中等）。
-- 推荐：把它定位为「历史保留期」而非"额度"：实现按 plan 的 cleanup（P2），文档统一措辞；不阻塞收费。
+### 5) `sync.devices`
+- 同步没有设备注册表，无法执行；按产品决定撤下，不再展示（迁移同时从 `plans.features` 删除）。
 
-## 三、总体建议（按优先级）
+## 三、剩余建议
 
-1. **P1 立即补**：`ai.requests.daily` + `linkcheck.daily`（各 ~10-20 行，收益明确、风险低）。
-2. **P1 收口承诺**：`sync.devices` 从展示撤下；`storage.bytes` 标注"仅展示/规划"直到实现图片配额。
-3. **P2**：`history.days` 走 cleanup 按 plan 执行；`storage.bytes` 实现图片配额。
-4. **原则**：**对用户展示的每一个数字，都要有服务端可拒绝的执行点**；没有执行点的就不展示（比"宣称了但可无限用"更安全，尤其涉及付费权益）。
+1. `storage.bytes` 图片配额（P2）：上传前按用户汇总已用容量并拒绝超额；需要改 `imageStorage`/上传云函数。
+2. `linkcheck.daily` 的 `mode` 若要做强对抗，需要服务端区分「手动触发」的可靠信号（例如专用接口/一次性令牌），当前仅防误用。
+3. 任何新增额度键：先有服务端执行点，再加入 `plans.features` 与购买页，否则视为虚假承诺。

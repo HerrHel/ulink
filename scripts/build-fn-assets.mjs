@@ -51,6 +51,11 @@ const JOBS = [
     from: 'supabase/functions/_shared/cb-auth.ts',
     to: 'cloudbase/functions/mimo-chat/cb-auth.js',
   },
+  // check-link：可选鉴权（带 token 才按用户执行 linkcheck.daily，匿名仍走 IP 限流）
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/check-link/cb-auth.js',
+  },
   // 分享 SSR 渲染核（3400+ 行零依赖纯函数，bundle 自包含）
   {
     from: 'functions/_lib/share-render.ts',

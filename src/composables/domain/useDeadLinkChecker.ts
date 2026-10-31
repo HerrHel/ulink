@@ -3,6 +3,7 @@ import { useDataStore } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { supabase } from '../../lib/supabase.js'
 import { isCloudBaseBackend, invokeCbFunction } from '../../lib/cloudbase.js'
+import { getApiToken } from '../../lib/authDriver.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { fetchMyEntitlement, type MyEntitlement } from './useRedeem.js'
 import { NETWORK_PROBE_URLS, OVERSEAS_PROBE_URL } from '../../config/urls.js'
@@ -335,17 +336,23 @@ export async function probeOverseas(
   }
 }
 
-async function callEdgeFunction(url: string, bookmarkId?: string, retry429 = true): Promise<EdgeEvidence> {
+async function callEdgeFunction(
+  url: string,
+  bookmarkId?: string,
+  retry429 = true,
+  mode: 'manual' | 'auto' = 'manual',
+): Promise<EdgeEvidence> {
   try {
+    const token = await getApiToken().catch(() => null)
     const res = isCloudBaseBackend()
-      ? await invokeCbFunction('check-link', { url, bookmark_id: bookmarkId })
+      ? await invokeCbFunction('check-link', { url, bookmark_id: bookmarkId, mode }, undefined, { token })
       : await supabase.functions.invoke('check-link', {
-          body: { url, bookmark_id: bookmarkId },
+          body: { url, bookmark_id: bookmarkId, mode },
         })
     // 遇到限流 429 时，退避 800ms 后自动重试 1 次，避免批量扫描瞬时打爆导致大面积未确认
     if (res.error?.code === '429' && retry429) {
       await new Promise(r => setTimeout(r, 800))
-      return callEdgeFunction(url, bookmarkId, false)
+      return callEdgeFunction(url, bookmarkId, false, mode)
     }
     const { data, error } = res
     // 安全拒绝（ssrf_reject / redirect_denied）服务端回 400，但 body 里带 evidence，
@@ -368,7 +375,11 @@ async function callEdgeFunction(url: string, bookmarkId?: string, retry429 = tru
 
 
 export function useDeadLinkChecker() {
-  async function checkUrl(url: string, bookmarkId?: string): Promise<CheckResult> {
+  async function checkUrl(
+    url: string,
+    bookmarkId?: string,
+    mode: 'manual' | 'auto' = 'manual',
+  ): Promise<CheckResult> {
     if (!url || !url.startsWith('http')) {
       return makeCheckResult({ verdict: 'dead' })
     }
@@ -378,7 +389,7 @@ export function useDeadLinkChecker() {
     const [baselineMs, direct, edgeResult] = await Promise.all([
       measureNetworkBaseline(),
       checkDirect(url, 4000),
-      callEdgeFunction(url, bookmarkId),
+      callEdgeFunction(url, bookmarkId, true, mode),
     ])
 
     const localGrade = gradeLocalNetwork(baselineMs)
@@ -468,7 +479,7 @@ export function useDeadLinkChecker() {
       for (let i = 0; i < capped.length; i += RETRY_CONCURRENCY) {
         if (_abort?.signal.aborted) break
         const batch = capped.slice(i, i + RETRY_CONCURRENCY)
-        const settled = await Promise.allSettled(batch.map((bm) => checkUrl(bm.url, bm.id)))
+        const settled = await Promise.allSettled(batch.map((bm) => checkUrl(bm.url, bm.id, 'auto')))
         for (let j = 0; j < batch.length; j++) {
           const res = settled[j]
           if (res.status !== 'fulfilled') continue
@@ -579,7 +590,7 @@ export function useDeadLinkChecker() {
 
       const batch = toCheck.slice(i, i + batchSize)
       const batchResults = await Promise.allSettled(
-        batch.map(b => checkUrl(b.url, b.id))
+        batch.map(b => checkUrl(b.url, b.id, 'auto'))
       )
 
       for (let j = 0; j < batch.length; j++) {

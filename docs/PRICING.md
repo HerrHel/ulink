@@ -124,9 +124,9 @@ MiMo-V2.6-Flash 国内价（元 / 百万 tokens）：
 
 ## 3. 免费版额度：当前缺一个"钩子"
 
-现状 `free`（已按下方建议落地，见迁移 `20261025000006_free_tier_hooks.sql`）：storage 200MB / sync 2 设备 / ai 50,000 token / history 90 天，并含死链检查 3 次/日、视频解析 1 次/日——免费档已有"钩子"，不再是空白。
+现状 `free`（已按下方建议落地，见迁移 `20261025000006_free_tier_hooks.sql`）：storage 200MB / ai 50,000 token / history 90 天，并含死链检查 3 次/日、AI 请求 20 次/日、视频解析 1 次/日——免费档已有"钩子"，不再是空白。
 
-> **2026-10-31 口径**：`free` 实际已落库为 storage 200MB / sync 2 设备 / ai 50,000 token / history 90 天 / linkcheck 3 次/日 / video.extract 1 次/日（迁移 `20261025000006`），下表「现 free」列是调整**前**的旧值。另需注意：目前**被服务端真正强制**的只有 `ai.tokens.monthly`、`video.extract.daily`、`video.deep.daily`、`linkcheck.auto(.max)`；`storage.bytes`、`sync.devices`、`history.days`、`linkcheck.daily`、`ai.requests.daily` **没有门控实现**（见 `TECH_DEBT.md`），对外宣传前要确认。
+> **2026-10-31 口径（额度执行已收口）**：`free` 实际落库为 storage 200MB / ai 50,000 token / ai.requests 20 次/日 / history 90 天 / linkcheck 3 次/日 / video.extract 1 次/日；`sync.devices` 因无设备体系**已从 plans 撤下**。**服务端已强制**：`ai.tokens.monthly`、`ai.requests.daily`、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`（手动检查，需登录 token）、`linkcheck.auto(.max)`、`history.days`（cleanup 保留期）。**仅展示未强制**：`storage.bytes`（购买页已标注"展示值，暂未限额"）。详见 `docs/QUOTA_ENFORCEMENT.md`。
 
 > **2026-10-31 口径**：`video.deep`（口播 ASR + 画面 OCR）定位为**实验性实验室功能**（需浏览器扩展、仅桌面端，B站正式支持、抖音/小红书实验性），只给 PRO 2 次/日体验，不写入免费/PRO 的固定权益承诺，也不作为涨价依据。
 
@@ -135,8 +135,8 @@ MiMo-V2.6-Flash 国内价（元 / 百万 tokens）：
 | 项 | 现 free | 建议 free | plus |
 |---|---|---|---|
 | `storage.bytes` | 50MB | 200MB | 5GB |
-| `sync.devices` | 1 | 2 | 3 |
 | `ai.tokens.monthly` | 20,000 | 50,000 | 200,000 |
+| `ai.requests.daily` | 无 | 20 | 100 |
 | `linkcheck.daily` | 无 | 3 | 50 |
 | `video.extract.daily` | 无 | 1 | 10 |
 | `linkcheck.auto` | 无 | 无 | 1 |

@@ -33,9 +33,8 @@ export const purchaseZh = {
     },
     features: {
       'history.days': '收藏历史保留',
-      'sync.devices': '同步设备数',
-      'storage.bytes': '云端存储空间',
-      'linkcheck.daily': '每日死链检查',
+      'storage.bytes': '云端存储空间（展示值，暂未限额）',
+      'linkcheck.daily': '每日死链检查（手动）',
       'linkcheck.auto': '自动死链巡检',
       'linkcheck.auto.max': '自动巡检链接上限',
       'ai.requests.daily': '每日 AI 请求',
@@ -122,9 +121,8 @@ export const purchaseEn = {
     },
     features: {
       'history.days': 'Bookmark history',
-      'sync.devices': 'Sync devices',
-      'storage.bytes': 'Cloud storage',
-      'linkcheck.daily': 'Daily link checks',
+      'storage.bytes': 'Cloud storage (display only, not yet enforced)',
+      'linkcheck.daily': 'Daily manual link checks',
       'linkcheck.auto': 'Automatic link patrol',
       'linkcheck.auto.max': 'Patrol link limit',
       'ai.requests.daily': 'Daily AI requests',

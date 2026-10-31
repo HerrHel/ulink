@@ -69,7 +69,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 - `src/lib/editor.ts` — TipTap 实例注册表，GroupEditor.vue 在 onMounted 注册；Group.notes 存 TipTap HTML
 - 其余 lib：search（Fuse.js + pinyin-pro）、ai-classify、diffVersions、theme、toast（委托 useToastStore，setup 外可用）、errorReporter（→ report-error 云函数）、stats、head（SEO 注入）、recoveryKeyPDF；工具函数：newId、clone、storageSafe、withLock、boundedCache、dataReady、collectSubIds、download、dragHint、historyMax、preview、supabase（Supabase client 兼容层）
 - **AI 工作台**：`src/lib/ai/`（~45 模块：mimo 主链路、universalAgent/tools、knowledge/localRAG、smartIntake、video* 等）+ `components/chat/`（AiWorkspace 等 6 个组件）+ `useAiChat*`；云端 `mimo-chat`（SSE，按 uid 限流/额度，线上 `BILLING_MODE=enforce`）
-- **计费会员**：`pay`/`redeem`/`account` 云函数 + `PurchaseModal.vue` + `usePayment`/`usePurchasePlans`/`useRedeem`/`useEntitlement`/`useTransactions`；价格与权益唯一来源 = `plans` 表（`price_cents` + `features`），前端不硬编码
+- **计费会员**：`pay`/`redeem`/`account` 云函数 + `PurchaseModal.vue` + `usePayment`/`usePurchasePlans`/`useRedeem`/`useEntitlement`/`useTransactions`；价格与权益唯一来源 = `plans` 表（`price_cents` + `features`），前端不硬编码；额度执行现状见 `docs/QUOTA_ENFORCEMENT.md`（AI token/请求、视频、死链、历史保留期已强制；storage 仅展示；sync.devices 已撤下）
 - **i18n**：`src/i18n/index.ts`（`t`/`tN`/`detect`）+ `src/locales/{zh,en}.ts` + `src/locales/parts/*`；落地页 `public/landing.js` 自带词典（不引用 src），改文案两边同步
 
 ### 配置与视图
