@@ -14,7 +14,7 @@
  *   1 = 不一致（线上落后 / 本地落后 / 分叉）
  *   2 = 线上没有 /version.json（部署早于该机制，属旧版本）
  *   3 = 网络或解析失败
- *   4 = 版本一致，但线上安全防护不完整（CSP / Referrer-Policy 缺失；XCTO 属平台限制仅提示）
+ *   4 = 版本一致，但线上安全防护不完整（/app 的 CSP frame-ancestors、XCTO 缺失，或首页/法律页 CSP 缺失）
  *
  * 注：不用 process.exit() —— Node 24 + Windows 下 fetch 的 undici 句柄会在退出时
  * 触发 libuv 断言（0xC0000409）；改为返回退出码交给 process.exitCode。
@@ -48,41 +48,56 @@ function fmt(iso) {
 }
 
 /**
- * 线上安全防护探测（2026-10-31 新增）。
+ * 线上安全防护探测（2026-10-31 更新）。
  *
- * CloudBase 静态托管不支持自定义响应头，`public/_headers` 只对 Cloudflare Pages 生效；
- * 生产改为 `<meta http-equiv="Content-Security-Policy">` + `<meta name="referrer">` 降级，
- * XCTO 无 meta 等价物。这里同时认「响应头」与「meta」，任一存在即视为已覆盖。
+ * CloudBase 静态托管不支持自定义响应头，`public/_headers` 只对 Cloudflare Pages 生效：
+ * - 首页 `/`：构建期 `<meta>` CSP + Referrer（静态托管兜底）；
+ * - `/app` 与 `/legal/*`：经 `edge-headers` 云函数反代，带真实响应头（CSP frame-ancestors / XCTO / XFO / HSTS）；
+ * - 分享页 `/s/*`：share-ssr 自带 XCTO / XFO。
+ * 这里同时认「响应头」与「meta」，并检查入口页的关键头。
  */
-async function checkSecurity(base) {
-  const res = await fetch(`${base}/?t=${Date.now()}`, { cache: 'no-store' })
-  const html = res.ok ? await res.text() : ''
+async function probePage(url) {
+  const res = await fetch(url, { cache: 'no-store' })
+  const html = await res.text()
+  const csp = res.headers.get('content-security-policy') || ''
   return {
     status: res.status,
-    cspHeader: !!res.headers.get('content-security-policy'),
+    cspHeader: !!csp,
     cspMeta: /http-equiv=["']?content-security-policy/i.test(html),
-    referrerHeader: !!res.headers.get('referrer-policy'),
+    frameAncestors: /frame-ancestors/i.test(csp),
+    xcto: res.headers.get('x-content-type-options'),
+    xfo: res.headers.get('x-frame-options'),
+    referrer: res.headers.get('referrer-policy'),
     referrerMeta: /<meta[^>]+name=["']?referrer["']?/i.test(html),
-    xcto: !!res.headers.get('x-content-type-options'),
+    hsts: res.headers.get('strict-transport-security'),
   }
 }
 
+async function checkSecurity(base) {
+  const root = await probePage(`${base}/?t=${Date.now()}`)
+  let app = null
+  let legal = null
+  try { app = await probePage(`${base}/app`) } catch { /* 保留 null，报告缺失 */ }
+  try { legal = await probePage(`${base}/legal/privacy-policy.html`) } catch { /* 同上 */ }
+  return { root, app, legal }
+}
+
 function printSecurity(sec) {
-  if (!sec) {
+  if (!sec || !sec.root) {
     console.log('\n安全防护：⚠ 探测失败（网络错误）')
     return []
   }
-  const csp = sec.cspHeader ? 'HTTP 头' : sec.cspMeta ? '<meta>（托管无响应头，降级）' : '✗ 缺失'
-  const ref = sec.referrerHeader ? 'HTTP 头' : sec.referrerMeta ? '<meta>（降级）' : '✗ 缺失'
-  const xcto = sec.xcto ? 'HTTP 头' : '✗ 缺失（CloudBase 托管无响应头，平台限制）'
+  const { root, app, legal } = sec
+  const fmt = (v) => (v ? '✓' : '✗')
   console.log('\n安全防护：')
-  console.log(`  CSP                    ${csp}`)
-  console.log(`  Referrer-Policy        ${ref}`)
-  console.log(`  X-Content-Type-Options ${xcto}`)
-  // 只有仓库能兜底的 CSP / Referrer 计入失败；XCTO 无 meta 等价物，仅提示
+  console.log(`  首页 /        CSP  ${root.cspMeta ? '<meta>' : fmt(root.cspHeader)}   Referrer ${fmt(root.referrer || root.referrerMeta)}`)
+  console.log(`  应用 /app     CSP  ${fmt(app && app.cspHeader)} frame-ancestors ${fmt(app && app.frameAncestors)}  XCTO ${fmt(app && app.xcto)}  HSTS ${fmt(app && app.hsts)}`)
+  console.log(`  法律 /legal   CSP  ${fmt(legal && legal.cspHeader)} frame-ancestors ${fmt(legal && legal.frameAncestors)}  XCTO ${fmt(legal && legal.xcto)}`)
   const missing = []
-  if (!sec.cspHeader && !sec.cspMeta) missing.push('CSP')
-  if (!sec.referrerHeader && !sec.referrerMeta) missing.push('Referrer-Policy')
+  if (!(app && app.cspHeader) && !root.cspMeta) missing.push('CSP')
+  if (!(app && app.frameAncestors)) missing.push('frame-ancestors')
+  if (!(app && app.xcto)) missing.push('X-Content-Type-Options')
+  if (!(legal && legal.xcto)) missing.push('X-Content-Type-Options(legal)')
   return missing
 }
 

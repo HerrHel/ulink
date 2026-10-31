@@ -314,7 +314,8 @@ if (apiKey) {
         envVariables: {
           CLOUDBASE_ENV_ID: envId,
           CLOUDBASE_APIKEY: apiKey,
-          ...((FN_EXTRA_ENV[fnName] || ({}))()),
+          // 没有额外变量的函数（如 edge-headers）走空对象工厂；此处曾误把 {} 当函数调用
+          ...(typeof FN_EXTRA_ENV[fnName] === 'function' ? FN_EXTRA_ENV[fnName]() : {}),
         },
       },
     ],

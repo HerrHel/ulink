@@ -95,6 +95,14 @@ function readPasswordForm(req, limit = 4096) {
   })
 }
 
+/** 分享页安全响应头（2026-10-31）：分享页含用户内容与「保存到我的库」按钮，防嵌套点击劫持 */
+const SHARE_SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Strict-Transport-Security': 'max-age=31536000',
+}
+
 function sendHtml(res, status, html, extraHeaders) {
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
@@ -102,6 +110,7 @@ function sendHtml(res, status, html, extraHeaders) {
     'x-share-render': 'v2',
     // 私有分享禁止收录（与 <meta name="robots"> 双保险，覆盖不解析 HTML 的爬虫）
     'X-Robots-Tag': 'noindex, nofollow',
+    ...SHARE_SECURITY_HEADERS,
     ...extraHeaders,
   })
   res.end(html)
@@ -111,6 +120,7 @@ function sendText(res, status, text, extraHeaders) {
   res.writeHead(status, {
     'Content-Type': 'text/plain; charset=utf-8',
     'x-share-render': 'v2',
+    ...SHARE_SECURITY_HEADERS,
     ...extraHeaders,
   })
   res.end(text)

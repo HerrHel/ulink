@@ -11,7 +11,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 > **生产已全量切换 CloudBase**（`.env.production` 的 `VITE_BACKEND=cloudbase`），Supabase 仅作历史迁移来源，**不要再往 `supabase/` 目录加功能**。ICP 备案已于 **2026-10-27 通过**（`鄂ICP备2026061718号-1`，展示在 `src/config/site.ts` / `public/landing.js`），`ulink.ren` 自 **2026-10-28** 起解析到 CloudBase（网关 `/` → 静态托管），不再经 Cloudflare。
 >
 > - 环境 `ulink-d1g5srvjo54b1886a`（ap-shanghai，个人版），PG `postgres-2m9745ae`
-> - 11 个 HTTP 云函数 + `maintenance` 定时任务：`report-error / check-link / send-feedback / extract-video / jina-proxy / mimo-chat / share-ssr / pay / redeem / account / share-admin`，代码在 `cloudbase/functions/<name>/`
+> - 12 个 HTTP 云函数 + `maintenance` 定时任务：`report-error / check-link / send-feedback / extract-video / jina-proxy / mimo-chat / share-ssr / edge-headers / pay / redeem / account / share-admin`，代码在 `cloudbase/functions/<name>/`
 > - 视频解析微服务 `ulink-video-worker`（CloudBase 云托管，`scripts/video-worker/`，yt-dlp + Playwright + ffmpeg，可选 ASR/OCR 深度解析）；`extract-video` 函数通过 `VIDEO_WORKER_URL` 调用，接口契约见 `docs/VIDEO_DEEP_EXTRACT.md`
 > - 云函数部署：`node scripts/deploy-cloudbase-fn.mjs <fn>`（`--env-only` 只换环境变量）；派生资产 `node scripts/build-fn-assets.mjs`
 > - **前端部署**：`ulink.ren` = **CloudBase 静态托管**，由 `.github/workflows/ci.yml` 的 `deploy` job 用 `tcb hosting deploy ./dist --safe` 发布（测试全绿才发）。Cloudflare Pages（`ulink.pages.dev`）**已不是主站**，仅保留 `/api/*` 边缘函数（`functions/`）与历史兜底；`npm run pages:deploy` 是手动遗留通道，**不要用它发布主站**
@@ -27,7 +27,8 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 > - 自检：`bash <tcb> env list`（应见 `ulink-d1g5srvjo54b1886a`）
 > - 查库：`bash <tcb> db execute -e ulink-d1g5srvjo54b1886a --json --sql "SELECT ..."`（SQL ≤10KB/批）
 > - 函数/路由：`bash <tcb> fn list`、`bash <tcb> routes list --json`
-> - 应用迁移（多行 SQL；CLI 只有 `--sql` 没有 `--file`）：`node scripts/apply-cloudbase-migration.mjs cloudbase/migrations/<file>.sql`
+> - **HTML 入口边缘代理 `edge-headers`（2026-10-31 新增）**：`/app` 与 `/legal/*` 经该云函数反代静态托管文件，补 `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、CSP `frame-ancestors 'self'`、HSTS（CloudBase 静态托管无自定义响应头能力）。路由在网关 `*` 域（`/app`、`/legal`，均开 `enablePathTransmission`）；回滚=删除这两条路由，静态兜底会接管。`/`（营销首页）仍直连静态托管，只有构建期 meta CSP/Referrer。
+> - 迁移应用：`node scripts/apply-cloudbase-migration.mjs cloudbase/migrations/<file>.sql`（`tcb db execute` 只有 `--sql`，没有 `--file`）
 > - 部署（cwd 必须为仓库根）：`node scripts/deploy-cloudbase-fn.mjs <fn> [--env-only]`
 
 ## 常用命令
@@ -195,7 +196,7 @@ composables 按职责分三组：
 - **手动分包**：tiptap-core、tiptap-extensions、prosemirror、dexie、dompurify、supabase、fuse、pinyin-pro、vue-vendor、vendor（vite.config.ts）
 - **PurgeCSS**：自定义 Vite 插件，safelist 保护动态类名（`/^card-/`, `/^modal-/`, `/^ctx-/` 等前缀）
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
-- **安全头**：dev/preview 由 vite `headersPlugin` 注入真实响应头；生产（CloudBase 静态托管不支持响应头）由 `securityMetaPlugin` 在构建期注入 `<meta>` CSP（剔除 frame-ancestors）+ Referrer-Policy，法律页由 `renderLegalDoc` 注入 `default-src 'none'` 的严格 CSP；XCTO / frame-ancestors 仍缺（见 `docs/TECH_DEBT.md` §零 #1）
+- **安全头**：dev/preview 由 vite `headersPlugin` 注入真实响应头；生产分两层——静态入口（`/`）由 `securityMetaPlugin` 构建期注入 `<meta>` CSP + Referrer，`/app`、`/legal/*` 由 `edge-headers` 云函数反代并下发真实响应头（CSP 含 frame-ancestors、XCTO、X-Frame-Options、HSTS），分享页由 `share-ssr` 自带 XCTO/XFO；法律页另有 `default-src 'none'` 的严格 CSP meta
 - **未知路径**：CloudBase 静态托管（腾讯云 COS）对不存在路径返回 404（2026-10-31 实测），不再是 Cloudflare 的 SPA 回退；应用自身不依赖 history 路由（入口固定 `/app`，分享走网关 `/s/*`），新增前端路由需同时在托管侧配回退
 - **前端部署**：`npm run build` 产物由 CI 部署到 **CloudBase 静态托管**（`tcb hosting deploy ./dist --safe`）；**后端云函数**用 `node scripts/deploy-cloudbase-fn.mjs <fn>`。Cloudflare Pages 仅保留 `functions/` 下的 `/api/*` 边缘函数（手动 `npm run pages:deploy` 才更新，非主站发布通道）
 
@@ -233,7 +234,7 @@ CSS 按功能模块拆分到 `src/styles/` 目录：tokens.css（设计变量）
 
 ## 运维与安全
 
-- **CSP / 安全响应头**：规则定义仍是 `vite.config.ts` 的 `securityHeaders`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，勿私自收紧，见 SEC-05 注释）。dev/preview 由 `headersPlugin` 注入真实响应头；**生产（CloudBase 静态托管）不支持自定义响应头**（`public/_headers` 只对 CF Pages 生效），因此构建期由 `securityMetaPlugin` 把 CSP（剔除 meta 不支持的 `frame-ancestors`）与 Referrer-Policy 以 `<meta>` 注入两个 HTML 入口，零 JS 的法律页由 `renderLegalDoc` 自带更严格的 CSP meta（`default-src 'none'`）作为降级防线；**X-Content-Type-Options 与 frame-ancestors 仍缺**，需平台侧支持（见 `docs/TECH_DEBT.md` §零 #1）。`npm run check:prod` 会探测线上安全防护，缺失时退出码 4。
+- **CSP / 安全响应头**：规则定义仍是 `vite.config.ts` 的 `securityHeaders`（script-src `'self'`、无 unsafe-inline；connect-src 有意放宽 `'self' https: wss://*.supabase.co`——死链 checkDirect 直连任意 URL 所需，勿私自收紧，见 SEC-05 注释）。生产分两层：**静态入口**（`/` 与静态资源）由构建期 `securityMetaPlugin` 注入 `<meta>` CSP + Referrer；**入口 HTML**（`/app`、`/legal/*`）由 `edge-headers` 云函数反代静态托管并下发真实响应头——CSP（含 `frame-ancestors 'self'`）、`X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy`、HSTS；分享页 `/s/*` 由 `share-ssr` 下发 XCTO/XFO/Referrer/HSTS。`/`（营销页）仍只有 meta 级防护，无 XCTO/frame-ancestors（根路由是静态 catch-all，改为反代会把所有资源都吞进函数，不划算）。`npm run check:prod` 会探测 `/app`、`/legal` 的真实响应头，缺失退出码 4。
 - **页面/视频读取第三方转发（jina-proxy，2026-10-20 起无前端直连例外）**：AI 页面/视频读取的**降级链路**（`src/lib/ai/jinaReader.ts`）在 extract-video Edge Function 失败时经 `cloudbase/functions/jina-proxy/` 服务端转发（原 `supabase/functions/jina-proxy/` 已迁移）至 `r.jina.ai` 读取（国内网络降级），前端零直连第三方抓取服务。jina-proxy 防护对齐 extract-video/check-link 口径：鉴权（verify_jwt + getUser）+ 每用户限流（034 `consume_rate_limit`，fail-closed）+ SSRF 校验（复用 `check-link/ssrf-guard.ts` 与 `extract-video/video-adapters.ts` 真源，含 DNS fail-closed）+ CORS fail-closed + 上游超时 + 读取长度上限；目标 URL 仍会发送给第三方 r.jina.ai，前端每次触发以 toast 向用户披露。禁止前端直连外部抓取服务，也禁止移除该 toast 披露。
 - **视频解析链路（extract-video → worker → r.jina.ai）**：`extract-video` 云函数内部顺序为「B站原生适配器 → YouTube Data API（需 `YOUTUBE_API_KEY`）→ yt-dlp worker（`VIDEO_WORKER_URL`）→ r.jina.ai 兜底」，响应如实带 `provider` / `degraded` / `fallback_reason`，前端必须消费 `degraded` 并对用户披露降级。worker 公网暴露必须配 `WORKER_TOKEN`（云函数同值注入）。深度解析（口播 ASR + 画面 OCR）是异步任务（`action=deep` / `deep_status`），额度独立计 `video.deep.daily`；**实现上由 worker 直连境内大模型服务商**（`MIMO_API_KEY` 放云托管环境变量，不进前端、不进云函数请求体），音频/画面会离开服务端，隐私政策须同步披露（**只写服务类别、不写具体模型名称**；实际供应商名单维护在 `src/config/aiProviders.ts`，原「设置 → 关于 → AI 服务商」UI 已于 2026-10-29 `73c5f6e2` 移除，恢复入口是待办，见 `docs/TECH_DEBT.md`）。平台域名清单唯一真源 `src/config/videoPlatforms.json`，三端经 `node scripts/build-fn-assets.mjs` 派生，禁止再各写一份。⚠️ **CloudBase 网关不回填可信客户端 IP，`X-Forwarded-For` 可伪造**：任何按 IP 的配额/限流都能被绕过（2026-10-30 实测），`extract-video` 已加与 IP 无关的全局限流（`EXTRACT_VIDEO_RATE_LIMIT_GLOBAL_PER_MIN`）与匿名全局日额度（`EXTRACT_VIDEO_ANON_GLOBAL_DAILY`）兜底；登录用户按 uid 计量不受影响，其它函数同类改造待做。
 - **云函数 check-link**（生产 `cloudbase/functions/check-link/`，原 `supabase/functions/check-link/` 已迁移）：私有 IP 黑名单防 SSRF；超时/CORS/限流由云函数环境变量控制（`ALLOWED_ORIGINS`、`CHECK_LINK_TIMEOUT_MS`、`CHECK_LINK_RATE_LIMIT_PER_MIN`）；每用户限流（迁移 034 `consume_rate_limit` 计数器 + `private.rate_limit_counters`，默认 1200 次/分）；history 行数由迁移 033 剪枝触发器自动收敛（每书签留 5 条，与客户端 MAX_HIST 同口径）

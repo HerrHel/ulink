@@ -1,0 +1,8 @@
+{
+  "name": "ulink-edge-headers",
+  "version": "1.0.0",
+  "description": "HTML 入口边缘代理：为 CloudBase 静态托管补 XCTO / CSP frame-ancestors 等响应头",
+  "main": "index.js",
+  "private": true,
+  "scripts": { "start": "node index.js" }
+}
