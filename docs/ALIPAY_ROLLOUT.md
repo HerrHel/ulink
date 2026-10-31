@@ -1,8 +1,8 @@
 # 支付宝上线推进手册（Alipay Rollout）
 
 > 配套：`PAYMENT_INTEGRATION.md`（链路与接口契约）、`BILLING_OPS.md`（部署运维）、`PRICING.md`（定价）
-> 定位：**代码已就绪，只差支付宝侧账号 / 密钥 / 部署 / 验收**。本手册只讲"怎么把已有代码跑起来"。
-> 2026-10-28 实测现状见 §1。
+> 定位：**代码已就绪，只差支付宝侧账号 / 密钥 / 验收**。本手册只讲"怎么把已有代码跑起来"。
+> **状态（2026-10-31 复核）**：`pay` 云函数与 `/pay` 网关路由已于 2026-10-28 上线（微信 Native 可收款）；微信 `WXPAY_*` 已配置，**支付宝侧仍未配置**（`.env.local` 无 `ALIPAY_*`）。§1 的 10-28 实测表已按现状更新。
 
 ---
 
@@ -11,15 +11,15 @@
 | 层 | 状态 | 证据 |
 |---|---|---|
 | 数据层 | ✅ 已就绪 | `20261028000010_payment_flow.sql` 已应用，`create_payment_order / attach_pay_payload / settle_paid_order / fail_payment_order / mark_order_refunded` 五个函数均在库 |
-| 套餐 | ✅ 已就绪 | `plans`：`free`(¥0) / `plus_monthly`(¥12, 30d) / `plus_yearly`(¥108, 365d) |
+| 套餐 | ✅ 已就绪 | `plans`：`free`(¥0) / `plus_monthly`(¥12, 30d) / `plus_yearly`(¥108, 365d)；另有 `pro_quarterly`(¥32, 90d) 在落地页/前端/测试中使用（迁移未 seed，库中是否存在需人工确认） |
 | 支付宝渠道代码 | ✅ 已就绪 | `cloudbase/functions/pay/lib/alipay.js`：`alipay.trade.precreate` + RSA2 签名/验签 + `alipay.trade.query` 兜底 + 回调解析 |
-| 云函数 `pay` | ❌ **未部署** | `tcb fn list` 现有 12 个函数（redeem/maintenance/account/share-admin/share-ssr/extract-video/mimo-chat/jina-proxy/send-feedback/check-link/report-error + staticstore），**无 pay** |
-| 网关 `/pay` 路由 | ❌ 不存在 | `tcb routes list` 现有 `/`、`/account`、`/check-link`、`/extract-video`、`/jina-proxy`、`/mimo-chat`、`/redeem`、`/share-ssr` 等，**无 /pay** |
-| 渠道密钥 | ❌ 未配置 | 支付宝侧账号 / 应用 / 当面付签约均未开始；`.env.local` 无 `ALIPAY_*`（脚本映射 **2026-10-28 已补**，见 `WXPAY_ROLLOUT.md` §4） |
+| 云函数 `pay` | ✅ **已部署** | 2026-10-28 创建；`tcb fn list` 现含 `pay`（实测状态 `UpdateFailed`，需复核部署产物，见 `TECH_DEBT.md`） |
+| 网关 `/pay` 路由 | ✅ 已建 | `tcb routes list`：`/pay` → WEB_SCF（Domain `*`，2026-10-28 创建）；`GET https://ulink.ren/pay?action=plans` 返回 405（服务可达） |
+| 渠道密钥 | 微信 ✅ / 支付宝 ❌ | `.env.local` 已有 `WXPAY_*` 全套；**无 `ALIPAY_*`**，支付宝账号/应用/当面付签约仍未开始（脚本映射 10-28 已补） |
 | 前端购买页 | ✅ 代码在 | `src/composables/domain/usePayment.ts`（create / checkStatus / 轮询）+ `src/components/modals/PurchaseModal.vue` + `qrcode` 依赖已装 |
 | 单测 | ✅ 17 项 | `npx vitest run src/__tests__/pay-libs.test.ts` |
 
-**一句话**：数据、代码、前端都在，缺的是「支付宝账号 + 应用密钥 + 部署 + 路由 + 一笔真实小额验收」。
+**一句话**：微信侧已上线可收款；支付宝侧只差「支付宝账号 + 应用密钥 + 一笔真实小额验收」。备案已于 10-27 通过（原文「备案通过前只能走当面付」的前提已结束，可同时申请网站支付）。
 
 ---
 

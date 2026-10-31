@@ -1,5 +1,13 @@
 # ULink 视频智能灵感提取微服务 (Video Intelligence Worker)
 
+> **2026-10-31 校正（先读）**：线上方案是 **MiMo ASR/OCR**（`WORKER_ASR_PROVIDER=mimo` + `MIMO_API_KEY`），不是 `faster_whisper`/`rapidocr`（后者仅为离线备选）。因此：
+> - `include.transcript` 缺省 = ASR **真正就绪**（provider≠none 且依赖/密钥齐全）；`include.ocr` 缺省 = OCR 就绪（mimo 只看 provider+key，rapidocr 才要 `WORKER_OCR_ENABLED`）。
+> - `transcript.provider` 枚举为 `mimo | faster_whisper | http`；mimo 无时间戳 → `segments=[]` 且 `degraded=true`。
+> - §6.2 只写了 rapidocr 的开启方式，MiMo 路径见 §3（只需 provider=mimo + key，无需 `INSTALL_DEEP`）。
+> - 经云函数 `deep_status` 轮询时，worker 侧「job 不存在」会被映射为 **503 `deep_unavailable`**（直连 worker 才是 404）。
+> - 部署命令请用 `bash <tcb> ...`（Windows 用同目录 `tcb.cmd`），不要写成 `node <tcb> ...`。
+> - `/health` 示例里的 `deep_ready=false` 只是示例；实际 `deep_ready = asr_ready || ocr_ready`。
+
 基于 **yt-dlp + Playwright + ffmpeg + FastAPI** 的视频元数据 / 字幕 / 口播转写 / 画面网址提取微服务，配套与链（ulink）的「视频内容解析」会员权益。
 
 接口契约唯一真源：[`docs/VIDEO_DEEP_EXTRACT.md`](../../docs/VIDEO_DEEP_EXTRACT.md)。本 README 只写 worker 侧实现与运维细节，**字段结构以契约为准**。

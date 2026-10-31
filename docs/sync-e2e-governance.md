@@ -1,5 +1,6 @@
 # LinkVault 双轨治理：同步协议瘦身 × Playwright 分层 E2E
 
+> **状态（2026-10-31 校正）**：分层治理结论仍成立，但正文若干数字/口径已过期——`useCloudSync.ts` 现约 **473 行**（含 CloudBase 身份认领、熔断、去重编排，非 218 行）；Playwright 现为 **`workers: 3`**（文件级并行）；L2「真后端」仍只覆盖 **Supabase 分支**（`e2e/helpers/l2Session.ts` 只认 `VITE_SUPABASE_*`，不含 CloudBase）；同步 IO 已收口到 `syncRemotePort`（内含 Supabase / CloudBase 两实现）。新增子模块 `syncCircuit.ts`、`syncDedup.ts`、`syncPortCore.ts`、`syncRemotePort.cloudbase.ts`。
 > 状态：**Phase 0–3 主线已实施**（2026-07 收尾）  
 > 决策：双线并行；覆盖 Phase 0–3 全里程碑  
 > 约束：**不 big-bang 重写**；复用现有 export；默认 CI **无 secrets 必须绿**

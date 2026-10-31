@@ -1,5 +1,7 @@
 # check-link Edge Function
 
+> **状态（2026-10-31 核实）：已归档。** 生产实现是 `cloudbase/functions/check-link/`（Node 云函数），部署命令 `node scripts/deploy-cloudbase-fn.mjs check-link`；本目录为 Supabase 时代历史实现，下面「唯一部署源 / Supabase 部署」只对历史版本有效，**不要再按此部署**。另外「内联镜像已废除」（P2-6，`a3b33ee6`）：主实现已 `import './ssrf-guard.ts'`，无需再同步镜像。
+
 ## 部署说明
 
 - **唯一部署源：`index.ts`**。该文件是唯一受信任的 Edge Function 实现，包含完整鉴权链

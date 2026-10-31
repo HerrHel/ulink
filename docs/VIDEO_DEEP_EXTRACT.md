@@ -46,7 +46,7 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
 
 ```json
 { "error": "登录后可使用深度解析", "code": "login_required" }
-{ "error": "今日深度解析额度已用完（PRO 2 次/日）", "code": "deep_quota_exceeded", "quota": { "limit": 2 } }
+{ "error": "今日深度解析额度已用完（每日 N 次）", "code": "deep_quota_exceeded", "quota": { "limit": N } }
 { "error": "深度解析服务暂不可用", "code": "deep_unavailable" }
 ```
 
@@ -57,7 +57,7 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
   "job_id": "9f2c...",
   "status": "queued | running | done | failed",
   "progress": 0.0,
-  "stage": "download | asr | ocr | aggregate | done",
+  "stage": "queued | download | asr | ocr | aggregate | done",
   "result": {
     "success": true,
     "source": "bilibili",
@@ -68,19 +68,20 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
     "transcript": {
       "text": "转写全文",
       "segments": [{ "start": 0.0, "end": 3.2, "text": "..." }],
-      "provider": "faster_whisper | http",
+      "provider": "mimo | faster_whisper | http",  // mimo 无时间戳 → segments=[] 且 degraded=true
       "language": "zh"
     },
     "on_screen_urls": [
       { "url": "https://example.com", "confidence": 0.92, "frames": 3 }
     ],
-    "degraded": false
+    "degraded": false,
+    "quota_refunded": false  // 仅 failed 后可能为 true（20261031000001 退额度）
   },
   "error": { "code": "asr_unavailable", "message": "..." }
 }
 ```
 
-`error.code` 枚举：`download_failed` / `too_long` / `no_audio` / `asr_unavailable` / `asr_failed` / `ocr_unavailable` / `internal`。
+`error.code` 枚举（worker 任务）：`download_failed` / `too_long` / `no_audio` / `asr_unavailable` / `asr_failed` / `ocr_unavailable` / `internal`；云函数代理层另会返回：`invalid_token`(401) / `quota_unavailable`(503) / `invalid_url`(400) / `invalid_job_id`(400)。
 
 ## 3. worker 接口（scripts/video-worker）
 
@@ -174,8 +175,7 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
   YouTube 则必须 `YTDLP_PROXY`。MiMo 解决的是「模型能力与成本」，**不能**解决平台反爬。
 - 迁移 `20261030000001_video_deep_quota.sql` **尚未执行**；未执行时云函数按
   `EXTRACT_VIDEO_DEEP_DAILY` 回落（`video.extract.daily>=10` 视为 PRO → 2，否则 0），功能不受影响。
-- 前端改动尚未发布（需 push 到 main 由 CI 发静态托管）；在发布前，线上旧前端不会调用 `deep` 工具，
-  但会忽略新增的 `provider` 字段，行为兼容。
+- 前端已发布（线上 `version.json` commit `8882cea9`，2026-10-31 构建；`deep_read_video` 工具已在线），`degraded` / `provider` 均已消费。
 - `WORKER_TOKEN` 尚未配置（worker 仍是公网可直调）；上线前建议按 `scripts/video-worker/README.md` 4.1 配置。
 - 部署细节（无需重建镜像）：环境变量通过 CloudBase tcbr API `UpdateCloudRunServer` 注入到新版本
   （`DeployInfo.ReleaseType=FULL` + `Items` 含 `EnvParams`）；控制台「服务设置 → 环境变量」等价。
@@ -258,12 +258,13 @@ yt-dlp 本身**不做 ASR、不做 OCR**。本设计新增「深度解析」异�
   已部署 client 透传（无登录请求返回 401 login_required，符合预期）；
 - **抖音**：用用户提供的分享链接 `7627402647821208883` 实测，页面 `#RENDER_DATA` 未暴露 `play_addr`（0 条 CDN 地址）；已加 `douyin-hook.js`（MAIN world，document_start hook fetch/XHR 捕获 `aweme/detail` 响应），但该页面在未登录/无验证态下仍未触发详情接口（hook 捕获 0 条）。扩展会诚实提示「页面没有暴露可下载地址」；抖音适配仍是实验性，后续需在已登录真实浏览器验证 hook 是否生效，必要时补 `aweme/detail` 请求参数或登录态判定；
 - 后端 `client` 透传、worker CDN 下载/ASR 复用已经写完并通过 Python selftest / `node --check`；
-  `extract-video` 云函数与 worker 019 镜像已部署；前端静态资源尚未发布。
+  `extract-video` 云函数与 worker 019 镜像已部署；前端已发布（`8882cea9`，2026-10-31）。
 
 ### 待办
 
 - [x] 部署 `cloudbase/functions/extract-video` 与 worker 镜像（含 `client` 支持）；
 - [x] 用 B站 `__playinfo__` 音频地址直调 worker 做端到端：转写成功（扩展 UI 的登录态联调待真实账号）；
 - [ ] 抖音加网络响应 hook / 登录态判定；小红书同；
-- [ ] 扩展打包发布（商店或下载 zip）、`/extension-guide.html` 上线；
-- [ ] 前端发布（Pro 权益「需扩展」文案、深度失败引导已改）。
+- [x] `/extension-guide.html` 上线（页面自述「准备商店上架，当前为开发版」）；
+- [ ] 扩展商店上架（或提供下载 zip 的正式渠道）；
+- [x] 前端发布（Pro 权益「需扩展」文案、深度失败引导已改，线上 `8882cea9`）。

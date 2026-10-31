@@ -2,7 +2,7 @@
 
 > 配套：接口契约见 [`VIDEO_DEEP_EXTRACT.md`](./VIDEO_DEEP_EXTRACT.md)，worker 运维细节见
 > [`scripts/video-worker/README.md`](../scripts/video-worker/README.md)。
-> 当前状态（2026-10-30）：**P0 已上线并验证；P1/P2 代码已上线但依赖未启用；前端未发布；数据库迁移未执行。**
+> 当前状态（2026-10-31 复核）：**P0/P1/P2 已上线；worker 的 MiMo ASR/OCR 已启用；前端已发布（线上 `version.json` commit `8882cea9`，即视频深度解析 MVP 提交）**。仍有两处例外：① 迁移 `20261030000001_video_deep_quota` **未应用**（`plans.features` 中 `video.deep.daily` 仍为 null，额度走函数回落）；② 扩展商店上架未完成（`/extension-guide.html` 自述开发版）。下文标注 10-30 的「依赖未启用/前端未发布」均已过时。
 
 先定义本文反复用到的命令变量（PowerShell，仓库根执行）：
 
@@ -282,8 +282,7 @@ node $TCBJS db execute -e $ENV --json --sql $sql
 
 ## D8. 前端发布（静态托管）
 
-当前工作区改动**未提交**，所以线上 `https://ulink.ren` 还是旧前端（没有 `deep_read_video` 工具、
-没有降级披露、购买页文案未更新——购买页文案本来就在旧版，不受影响）。
+**已发布**（2026-10-31 复核）：线上 `version.json` commit `8882cea9`，已含 `deep_read_video` 工具与降级披露；「工作区未提交/线上是旧前端」的旧前提不再成立。以下步骤保留为下次发布参考。
 
 ### 步骤
 

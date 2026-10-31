@@ -1,5 +1,7 @@
 # share-html Edge Function
 
+> **状态（2026-10-31 核实）：已归档/非生产。** 分享页 SSR 现由 CloudBase `share-ssr` 云函数承载（`cloudbase/functions/share-ssr/`，网关 `/s`，渲染核 `share-render.js` 由 `functions/_lib/share-render.ts` 派生）；本文的「Cloudflare Pages 终态」已被取代，CF 版（`functions/s/[gid].ts`）仅保留兜底。部署命令 `npx wrangler pages deploy dist --project-name ulink`（`package.json` 的 `pages:deploy`），**不是 `linkvault`**。
+
 ## 用途
 
 公开分享页**服务端渲染**：爬虫（微信 / WhatsApp / Facebook / Twitter）不执行 JS，

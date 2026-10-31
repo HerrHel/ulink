@@ -1,7 +1,7 @@
 # 计费与合规运维手册（Billing Ops）
 
 > 配套文档：`BILLING_DESIGN.md`（设计）、`SHARE_PASSWORD.md`（分享密码）、`legal/`（法律文本）
-> 当前状态：**代码与迁移已就绪，待部署**。生产仍在免费模式，影子计量不拦截任何请求。
+> **当前状态（2026-10-31 核实）**：计费已部署上线——迁移已应用、`pay` 云函数与 `/pay` 网关路由已上线（微信 Native 可收款；支付宝代码就绪、密钥未配置）、`redeem`/`account` 已在 11 个 HTTP 函数之列；线上 `mimo-chat` 的 `BILLING_MODE=enforce`（仅强制 `ai.tokens.monthly`），**不再是影子计量**。本文 §7「回滚到 shadow」仍有效，但不要按旧文把 enforce 当成"暂勿开启"。
 
 ---
 

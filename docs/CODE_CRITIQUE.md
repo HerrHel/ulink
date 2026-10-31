@@ -1,5 +1,6 @@
 # LinkVault 代码审查 · 洁癖工程师视角（已核实修订版）
 
+> **状态（2026-10-31 核实）**：本文是 **2026-08-17 的历史快照**。文中「经核实成立的 5 条」此后**全部已修复**：`data.ts` 已拆为 46 行组合入口 + 7 个领域文件；biometric 环境判断已收口 `src/lib/secureContext.ts`；bridge 遗留注释已清；`welcome-data.ts` 重复串已抽 `_inlineCard()`；auto-opt 占比已降至 ~11.6%。**不要把本文当作待办清单重复施工**；现行技术债见 `TECH_DEBT.md`。
 > 立场：有代码洁癖的软件工程师。关注一致性、重复、双重真相源、约定是否被强制、以及"勉强能跑"的妥协。
 > **核实记录**：初版批判于 2026-08-17 撰写；同日 19:15 逐条 file:line 复跑 `grep`/`sed`/`read` 复核。复核发现初版中 4 条最"刺眼"的指控在当前工作树中**无法复现**——代码其实已经做了收口（集中常量 / `z.infer` 推导）。这 4 条已撤回。当前 git 工作树为 **dirty** 状态（utils.ts / useBookmark.ts / useDeadLinkChecker.ts / welcome-data.ts / ShareView.vue / constants.ts 等多个文件有未提交修改），以下以当前磁盘文件为准。
 

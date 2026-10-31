@@ -15,11 +15,11 @@
 | 数据库迁移 | ✅ 已应用 | `create_payment_order / attach_pay_payload / settle_paid_order / fail_payment_order / mark_order_refunded` 均在库；`plans` 有 free / plus_monthly ¥12 / plus_yearly ¥108 |
 | 渠道代码 | ✅ 已就绪 | `cloudbase/functions/pay/lib/wxpay.js`：Native 下单 / APIv3 签名 / 回调验签+解密 / 主动查单 / 关单 |
 | 前端购买页 | ✅ 代码在 | `src/composables/domain/usePayment.ts` + `src/components/modals/PurchaseModal.vue` + `qrcode` 依赖 |
-| **`pay` 云函数部署** | ❌ **未部署** | `tcb fn list` 现有 12 个函数无 `pay` |
-| **网关 `/pay` 路由** | ❌ 不存在 | `tcb routes list` 无 `/pay` |
-| **渠道密钥注入** | ❌ 未配置 | `.env.local` 里没有 `WXPAY_*`；**部署脚本此前也没有 `pay` 的环境变量映射**（本次已补，见 §4） |
-| ICP 备案 | ⏳ 未完成 | **不阻塞 Native 收款**，只阻塞 H5/JSAPI 与"支付域名权限申请"（见 §1） |
-| 落地页价目 | ❌ 缺失 | `index.html` 无任何价格（JSON-LD `offers.price` 仍是 `"0"`），微信经营场景审核要价目页 |
+| **`pay` 云函数部署** | ✅ **已部署** | 2026-10-28 创建；`tcb fn list` 已含 `pay`（最近一次更新状态 `UpdateFailed`，需复核，见 `TECH_DEBT.md`） |
+| **网关 `/pay` 路由** | ✅ 已建 | `tcb routes list`：`/pay` → WEB_SCF（Domain `*`，10-28 创建）；`GET https://ulink.ren/pay?action=plans` 返回 405（服务可达） |
+| **渠道密钥注入** | ✅ 已注入 | `.env.local` 已有 `WXPAY_APPID/MCHID/SERIAL_NO/PRIVATE_KEY/APIV3_KEY/PUBLIC_KEY/NOTIFY_URL`；上线前仍需核对平台证书/公钥模式二选一 |
+| ICP 备案 | ✅ 已通过 | 2026-10-27 通过，`鄂ICP备2026061718号-1` 已展示（`src/config/site.ts`）；公安联网备案仍在 30 日期限内，待办 |
+| 落地页价目 | ✅ 已上线 | `index.html` 已有四档价目（免费/PRO 月 ¥12/季 ¥32/年 ¥108）；仅 JSON-LD `offers.price` 仍为 `"0"`（待补） |
 
 ---
 

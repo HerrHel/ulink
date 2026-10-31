@@ -24,14 +24,19 @@
 
 ## 2. 令牌副本同步清单（改 accent 必读）
 
-accent 系令牌存在**四处副本**，改值必须逐字同步，否则主题切换/分享页/SSR 三处观感撕裂：
+accent 系令牌存在 **6 处 palette 副本 + 2 处值级副本**（2026-10-31 复核；此前写「四处/五处」口径不一致），改值必须逐字同步，否则应用内主题切换、分享页/SSR、扩展侧栏、落地页演示四类观感会撕裂：
 
 | # | 位置 | 作用 |
 |---|---|---|
-| 1 | `src/styles/tokens.css` | 应用内四主题（唯一交互源） |
-| 2 | `src/lib/theme.ts` → `THEME_COLOR` | 移动端浏览器状态栏 theme-color meta |
-| 3 | `cloudbase/functions/share-ssr/share-render.js` | CloudBase 分享 SSR 壳（需 `node scripts/deploy-cloudbase-fn.mjs share-ssr` 重新部署） |
-| 4 | `functions/_lib/share-render.ts` | CF Pages 分享 SSR 壳 |
+| 1 | `src/styles/tokens.css` | 应用内四主题（交互态唯一源） |
+| 2 | `src/lib/theme.ts` → `THEME_COLOR` | 移动端浏览器状态栏 theme-color meta（仅效率主题的 light/dark） |
+| 3 | `cloudbase/functions/share-ssr/share-render.js` | CloudBase 分享 SSR 壳（由 `functions/_lib/share-render.ts` 派生，见下） |
+| 4 | `functions/_lib/share-render.ts` | 分享 SSR 真源（CF Pages 与 CloudBase 均从它派生） |
+| 5 | `index.html` 的 `--d-accent` | 落地页「主题视图演示」四主题色板 |
+| 6 | `extension/sidepanel.html` | 扩展侧栏浅/深 accent 与 logo 色（2026-10-31 新增） |
+| 7 | `supabase/functions/share-html/index.ts` | 历史 Deno 兜底 SSR（T 字典/色值须与 share-render 同步） |
+
+值级副本（非独立 palette，但改色/改圆角时同样要跟）：`app.html` 的静态 `theme-color #122E8A`；`index.html` 的 `:root` radius/shadow/中性色值（与 tokens 浅色块对齐，但没有 `--radius-xs/base/xl`，不要按「整块逐字复制」理解）。
 
 同步后必须跑：`npx vitest run src/__tests__/lib/theme.test.ts src/__tests__/views/share-render-shell.test.ts`
 （两处测试锁定了具体色值字符串）。部署 share-ssr 后用探针 URL 验证线上 HTML 含新值。

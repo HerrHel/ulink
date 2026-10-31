@@ -1,5 +1,6 @@
 # Supabase → CloudBase 迁移与 ICP 备案方案
 
+> **状态（2026-10-31 核实，先读本行）**：迁移与备案**均已完成**——生产 2026-10-22 全量切 CloudBase；ICP 备案 2026-10-27 通过（`鄂ICP备2026061718号-1`）；`ulink.ren` 2026-10-28 起 CNAME 到 `ulink.ren.tcbaccess.tencentcloudbase.com`（静态托管 + 网关），不再经 Cloudflare。下文凡写「切解析前」「当前仍是 Supabase / Cloudflare」「未开始」的段落均为**历史方案记录**；现行部署事实见 `AGENTS.md` 顶部区块。
 > 状态：方案稿（2026-10-22）。基于实机核查，非纸面推演。凡标 ⚠️ 的是已确证会卡住的点。
 
 ## 1. 现状核查（已实测）

@@ -8,8 +8,8 @@
 
 | 路径 | 是什么 | 现在还用吗 |
 |---|---|---|
-| `migrations/` | 39 个 PostgreSQL 迁移 SQL（Supabase 时代） | **仅作历史记录**。`scripts/transform-migrations.mjs` 与 `src/__tests__/composables/syncResurrectGuard.test.ts` 会读它 |
-| `functions/` | 旧 Edge Functions（check-link / share-html / send-feedback / report-error / extract-video） | 已被 `cloudbase/functions/` 下的同名云函数取代 |
+| `migrations/` | 39 个 PostgreSQL 迁移 SQL（Supabase 时代） | **仅作历史记录**。`scripts/transform-migrations.mjs` 会读它；`src/__tests__/composables/syncResurrectGuard.test.ts` 只在注释里引用路径，不读文件 |
+| `functions/` | 旧 Edge Functions（check-link / share-html / send-feedback / report-error / extract-video / jina-proxy / mimo-chat） | 已被 `cloudbase/functions/` 下的云函数取代；注意 `share-html` 的对应物是 **`share-ssr`**（不是同名函数） |
 | `tests/database.test.sql` | pgTAP 不变量断言（曾防「history applied ≠ 实际 schema」型事故） | **不再被 CI 执行**（原 `supabase-db-test` job 已于 2026-10-27 移除，见 `.github/workflows/ci.yml` 注释） |
 | `email-templates/` | 旧邮件模板 | 已被 `cloudbase/` 下的腾讯云 exmail 模板取代（`scripts/apply-cloudbase-email-templates.mjs`） |
 | `verify/` | 历史校验脚本 | 归档 |
@@ -21,10 +21,10 @@
 
 1. `src/lib/supabase.ts` —— **双后端兼容层**。生产走 CloudBase，但该 shim 仍保留
    Supabase 分支，`@supabase/supabase-js` 依赖也因此不能从 `package.json` 移除。
-   （`src/lib/cloudbase-sdk.js` 走 CloudBase，`src/lib/supabase.js` 走 Supabase，
-   扩展与部分测试仍用到后者。）
+   （CloudBase 侧是 `src/lib/cloudbase.ts`；`extension/lib/supabase.js` 是扩展自带的
+   CloudBase shim，不引用 `src/lib`。）
 2. `scripts/transform-migrations.mjs` —— 读取 `migrations/` 做转换。
-3. `src/__tests__/composables/syncResurrectGuard.test.ts` —— 读 `migrations/` 做断言。
+3. ~~`src/__tests__/composables/syncResurrectGuard.test.ts` 读 `migrations/`~~ —— 仅头注释引用路径，不读文件。
 
 ## CloudBase 侧的对应物
 

@@ -1,6 +1,6 @@
 # 分享访问密码（Share Lock）实施与运维
 
-> 状态：代码完成，**待部署验证**
+> 状态：**已上线（2026-10-31 复核）**——`share-ssr` 密码门 + `share-admin` 均在线（`GET /share-admin` 返回函数自身 405、`GET /s/*` 返回 SSR 页面），部署/验证项见 §6。不要按「待部署」理解。
 > 目标：让分享链接具备「知道链接 + 知道密码」双重条件，支撑「私有链接」的合规定性（见 `BILLING_DESIGN.md` §8.5）
 
 ---
@@ -66,9 +66,9 @@ POST /s/<gid>   (form: password=xxx)
 | 变量 | 所属函数 | 必需 | 说明 |
 |---|---|---|---|
 | `SHARE_LOCK_SECRET` | share-ssr | 是（启用密码功能时） | 票据签名密钥，≥32 字节随机串。缺失时带密码的分享直接 503 |
-| `SHARE_SSR_IP_HASH_SALT` | share-ssr | 否 | 密码尝试限流的 IP 盐，默认 `ulink-share-ssr` |
-| `SHARE_ADMIN_IP_HASH_SALT` | share-admin | 否 | 同上，默认 `ulink-share-admin` |
-| `ALLOWED_ORIGINS` | share-admin | 是 | **必须**包含站点源，否则 CORS 拒绝 |
+| `SHARE_SSR_IP_HASH_SALT` | share-ssr | 否 | 密码尝试限流的 IP 盐，默认 `ulink-share-ssr`；**注入后运行时名为 `IP_HASH_SALT`** |
+| `SHARE_ADMIN_IP_HASH_SALT` | share-admin | 否 | 同上，默认 `ulink-share-admin`；注入后运行时名为 `IP_HASH_SALT` |
+| `ALLOWED_ORIGINS` | share-admin | 建议 | 代码语义：**未配置/为空 = 放行所有来源**；只有配置了不含请求 Origin 的列表才拒绝（fail-open，已记入 `TECH_DEBT.md`）。生产应显式配置站点源 |
 
 生成密钥：
 
@@ -92,7 +92,7 @@ node scripts/deploy-cloudbase-fn.mjs share-ssr
 node scripts/deploy-cloudbase-fn.mjs share-admin
 ```
 
-> `share-admin` 是新函数，首次部署会自动创建。路由无需手动配（浏览器直调函数 URL，不走 `/s` 网关）。
+> `share-admin` 首次部署由脚本自动创建；`node scripts/deploy-cloudbase-fn.mjs share-admin` 会同时建 `/share-admin` 网关路由（WEB_SCF）。前端走**同域** `https://ulink.ren/share-admin`（`VITE_CLOUDBASE_FN_BASE`），不是函数系统域名，也不经 `/s` 网关。
 
 ## 6. 验证清单
 
