@@ -36,8 +36,6 @@ task_plan.md
 !docs/**/*.md
 # 视频解析 worker 的部署/接口/安全说明是运维必需文档，必须入库（.md 全局忽略需显式豁免）
 !scripts/video-worker/README.md
-# CLI 说明随源码入库（此前被 *.md 通配挡住，团队/agent 看不到）
-!/cli/README.md
 # Python 本地自测产物
 __pycache__/
 *.pyc

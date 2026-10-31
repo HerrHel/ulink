@@ -17,7 +17,7 @@
 | 7 | **P1** | **plans 中写入了未强制执行的额度** | 📋 **已分析并给出推荐**：`docs/QUOTA_ENFORCEMENT.md`（逐项强制点/成本/推荐）。结论：优先补 `ai.requests.daily` + `linkcheck.daily`（各约 10-20 行）；`sync.devices` 建议撤下承诺；`storage.bytes` 先改文案再补图片配额；`history.days` 按保留期 cleanup。当前展示仍大于执行，属产品决策待排期 |
 | 8 | **P2** | **`pay` 的 `transactions`/`orders` action 永远 400** | ✅ **已修复**：白名单改为 `Set(create,status,plans,transactions,orders)`；重部署后实测 `POST /pay {action:'transactions'}` 返回 `401 unauthorized`（不再 400 unknown_action） |
 | 9 | **P2** | **CLI 仍以 Supabase 为目标** | ⏳ **未适配**：已在 `cli/README.md` 顶部标注「参考实现，勿操作生产」，README 已入库（`.gitignore` 白名单）；是否保留待产品决策（见对话结论：面向零基础用户且不分发，建议归档） |
-| 10 | **P2** | **AI 服务商名单入口与联系方式缺失** | ⏳ **未恢复 UI**：法律文本已改为邮箱索取兜底；`aiProviders.ts` 仍缺联系方式字段，恢复「设置 → 关于 → AI 服务商」入列为后续待办（PIPL 23 条） |
+| 10 | **P2** | **AI 服务商名单入口与联系方式缺失** | ✅ **已修复**：`aiProviders.ts` 增加 `contact` 字段；设置 → 关于 → AI 服务商 已恢复（`SettingsPanel.vue`，含服务商/产品/官网/联系方式/更新时间）；隐私政策与协议同步改为“产品内可查阅 + 邮箱兜底” |
 | 11 | **P3** | **文档缺索引与状态机制** | ⏳ 未做：建议新建 `docs/README.md`（状态/最后核实/负责范围） |
 
 ## 一、先排除的误报（非技术债）

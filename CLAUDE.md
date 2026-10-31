@@ -80,7 +80,7 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 ### 构建 / 扩展 / 样式
 
 - 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --safe`），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 仅保留 `functions/` 的 `/api/*` 边缘函数（非主站）
-- `cli/` — 独立命令行工具子项目（commander + Supabase，独立 tsconfig/node_modules，不参与主项目构建与测试）；**仍以 Supabase 为目标，未适配 CloudBase**
+- `cli/` — **已归档（2026-10-31 移除）**：无分发渠道且仍指向 Supabase，代码留存 git 历史 `6cf8783`，见 `docs/ARCHIVED_CLI.md`
 - `extension/` — Manifest V3 扩展（v1.2.1），Ctrl+Shift+S 保存当前页（manifest `save-to-linkvault` 命令）+ 视频深度解析入口
 - `src/styles/` — tokens/reset/layout/cards/group/editor/modals/overlays/header/nav/filter/batch/drag/settings/toast/responsive/utility.css，由 main.css 统一导入
 

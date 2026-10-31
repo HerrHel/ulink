@@ -19,6 +19,8 @@ export interface AiProviderInfo {
   product: string
   /** 官方站点 */
   website: string
+  /** 服务商联系方式（PIPL 23 条要求的接收方联系方式） */
+  contact: string
   /** 备案与数据处理说明 */
   filing: string
 }
@@ -33,6 +35,7 @@ export const AI_PROVIDERS: readonly AiProviderInfo[] = [
     name: '小米 MiMo',
     product: 'MiMo 大模型（mimo-v2.6-flash）',
     website: 'https://xiaomimimo.com',
+    contact: 'herr@ulink.ren（与链接口人，可转达服务商）',
     filing: '境内服务商，已依法完成生成式人工智能服务备案',
   },
 ]

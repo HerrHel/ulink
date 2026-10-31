@@ -903,6 +903,21 @@
                   </div>
                 </div>
 
+                <div class="sp-card" data-testid="lv-ai-providers">
+                  <div class="sp-card-head">{{ t('settings.aiProviders') }}</div>
+                  <div class="sp-row-desc" style="padding: 6px 16px 10px;">{{ t('settings.aiProvidersHint') }}</div>
+                  <div v-for="p in AI_PROVIDERS" :key="p.id" class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ p.name }} · {{ p.product }}</span>
+                      <span class="sp-row-desc">{{ p.filing }}；{{ p.contact }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <a class="sp-legal-link" :href="p.website" target="_blank" rel="noopener noreferrer">{{ p.website.replace(/^https?:\/\//, '') }}</a>
+                    </div>
+                  </div>
+                  <div class="sp-row-desc" style="padding: 4px 16px 12px;">{{ t('settings.aiProvidersUpdated', { d: AI_PROVIDERS_UPDATED_AT }) }}</div>
+                </div>
+
                 <div class="sp-card">
                   <div class="sp-card-head">{{ t('settings.legalDocs') }}</div>
                   <div class="sp-card-row" @click="showLegal = !showLegal" style="cursor: pointer;" data-testid="lv-legal-toggle">
@@ -1033,7 +1048,7 @@ import { stopShareGroup, stopShareCategory, stopAllUserShares, fetchUserCategory
 import { SHARE_BASE } from '../../config/urls.js'
 import { CATEGORY_SHARE_PATH } from '../../composables/domain/syncShare.js'
 import { APP_VERSION, BUILD_TIME, GIT_COMMIT } from '../../version.js'
-import { LEGAL_DOC_LINKS } from '../../config/aiProviders.js'
+import { LEGAL_DOC_LINKS, AI_PROVIDERS, AI_PROVIDERS_UPDATED_AT } from '../../config/aiProviders.js'
 import { purgeAccount } from '../../composables/domain/useAccountDeletion.js'
 import { ICP_NUMBER, MPS_NUMBER, MIIT_URL, mpsQueryUrl } from '../../config/site.js'
 import PurchaseModal from '../modals/PurchaseModal.vue'
