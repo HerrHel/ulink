@@ -224,6 +224,8 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.yes': 'Included',
     'price.no': 'Not included',
     'price.note1': 'No auto-renewal on any plan. Renew on demand.',
+    'price.deepNote':
+      'Deep video extraction is an experimental lab feature: browser extension required, desktop only; Bilibili supported, Douyin/Xiaohongshu experimental and not guaranteed.',
     'price.note2': 'See our',
     'price.refundLink': 'refund policy',
     'price.note3': '.',

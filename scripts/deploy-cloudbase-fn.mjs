@@ -188,6 +188,18 @@ const FN_EXTRA_ENV = {
     if (freeQuota) out.EXTRACT_VIDEO_FREE_DAILY = freeQuota
     const quotaMode = readEnvLocal('EXTRACT_VIDEO_QUOTA_ENFORCE')
     if (quotaMode) out.EXTRACT_VIDEO_QUOTA_ENFORCE = quotaMode
+    // 深度解析（ASR 口播转写 + 画面 OCR）：独立日额度，默认 PRO 2 次/日、free 0（需登录）
+    const deepQuota = readEnvLocal('EXTRACT_VIDEO_DEEP_DAILY')
+    if (deepQuota) out.EXTRACT_VIDEO_DEEP_DAILY = deepQuota
+    const deepSubmitTimeout = readEnvLocal('EXTRACT_VIDEO_DEEP_SUBMIT_TIMEOUT_MS')
+    if (deepSubmitTimeout) out.EXTRACT_VIDEO_DEEP_SUBMIT_TIMEOUT_MS = deepSubmitTimeout
+    const deepStatusTimeout = readEnvLocal('EXTRACT_VIDEO_DEEP_STATUS_TIMEOUT_MS')
+    if (deepStatusTimeout) out.EXTRACT_VIDEO_DEEP_STATUS_TIMEOUT_MS = deepStatusTimeout
+    // 与 IP 无关的全局兜底限流/匿名额度：X-Forwarded-For 可伪造时防止外呼成本被刷爆
+    const rateGlobal = readEnvLocal('EXTRACT_VIDEO_RATE_LIMIT_GLOBAL_PER_MIN')
+    if (rateGlobal) out.EXTRACT_VIDEO_RATE_LIMIT_GLOBAL_PER_MIN = rateGlobal
+    const anonGlobal = readEnvLocal('EXTRACT_VIDEO_ANON_GLOBAL_DAILY')
+    if (anonGlobal) out.EXTRACT_VIDEO_ANON_GLOBAL_DAILY = anonGlobal
     return out
   },
   'share-ssr': () => {

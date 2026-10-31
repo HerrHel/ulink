@@ -34,6 +34,13 @@ task_plan.md
 # 法律与计费文档必须入库留痕：合规文本需要可追溯的版本历史，
 # 否则发布过的条款可能被无声改动，事后无法举证"当时约定的是什么"。
 !docs/**/*.md
+# 视频解析 worker 的部署/接口/安全说明是运维必需文档，必须入库（.md 全局忽略需显式豁免）
+!scripts/video-worker/README.md
+# Python 本地自测产物
+__pycache__/
+*.pyc
+# tcb cloudrun deploy 在 worker 目录生成的临时项目配置（每次部署自动重建，不入库）
+/scripts/video-worker/cloudbaserc.json
 /test-results/
 /playwright-report/
 supabase/.temp/

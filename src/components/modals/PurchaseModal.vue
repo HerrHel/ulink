@@ -589,8 +589,13 @@ const displayCards = computed<TierCardView[]>(() => {
     const bullets: FeatureBullet[] = [
       {
         text: '视频内容智能解析与提取',
-        sub: '支持 B站、YouTube、抖音等主流平台，自动识别提取视频中出现的工具与网站，灵活支持一键收藏、分组整理或生成结构化笔记',
+        sub: '支持 B站、YouTube、抖音等主流平台，自动提取标题/简介/字幕/评论中出现的工具与网站；受平台风控影响时可能降级，不承诺每次完整',
         highlight: true,
+      },
+      {
+        text: '实验室：视频深度解析（实验性）',
+        sub: '口播转写 + 画面网址；需安装「与链」浏览器扩展（仅桌面端），B站正式支持，抖音/小红书实验性且不保证可用；每日 2 次体验额度',
+        highlight: false,
       },
       { text: 'AI 智能提取与自动补齐', sub: '自动抓取网页与正文，智能推荐分类并补齐摘要', highlight: true },
       { text: 'AI 自然语言模糊搜索', sub: '忘记标题也没关系，用日常口语意图精准找书签', highlight: true },

@@ -1,0 +1,53 @@
+{
+  "_comment": "视频/图文平台域名的唯一真源。客户端（src/lib/ai/videoPlatforms.ts）、云函数（经 build-fn-assets 内联）、worker（scripts/video-worker/video-platforms.json 由 scripts/build-fn-assets.mjs 复制）都从这里派生，禁止三处各写一份。改这里后执行 node scripts/build-fn-assets.mjs。",
+  "videoHosts": [
+    "douyin.com",
+    "iesdouyin.com",
+    "tiktok.com",
+    "xiaohongshu.com",
+    "xhslink.com",
+    "bilibili.com",
+    "b23.tv",
+    "bili2233.cn",
+    "youtube.com",
+    "youtu.be",
+    "twitter.com",
+    "x.com",
+    "vimeo.com",
+    "dailymotion.com",
+    "kuaishou.com",
+    "weibo.com",
+    "ixigua.com",
+    "acfun.cn",
+    "twitch.tv",
+    "youku.com",
+    "iqiyi.com",
+    "mgtv.com",
+    "douyu.com",
+    "huya.com"
+  ],
+  "videoShortLinkHosts": [
+    "v.douyin.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
+    "b23.tv",
+    "bili2233.cn",
+    "xhslink.com"
+  ],
+  "resolverShortLinkHosts": [
+    "v.douyin.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
+    "b23.tv",
+    "bili2233.cn",
+    "xhslink.com",
+    "t.cn"
+  ],
+  "browserFirstHosts": [
+    "douyin.com",
+    "iesdouyin.com",
+    "xiaohongshu.com",
+    "xhslink.com",
+    "tiktok.com"
+  ]
+}

@@ -1,9 +1,11 @@
 /**
  * videoExtract.ts — 视频深度提取的前端服务端客户端
  *
- * 1. fetchVideoExtractServer：调用 extract-video Edge Function（Cloudflare 海外节点转发抓取，
- *    不受国内网络 r.jina.ai 直连不可用的限制），平台适配器返回简介/字幕/评论区结构化文本。
- *    未登录/未配置/请求失败一律返回 null，由调用方降级本地 Jina 链路，绝不伪造结果。
+ * 1. fetchVideoExtractServer：调用 extract-video 云函数解析视频
+ *    （平台适配器 → yt-dlp worker → r.jina.ai 兜底），响应如实带
+ *    provider / degraded / fallback_reason / duration / uploader / chapters；
+ *    未登录/未配置/请求失败一律返回 null，由调用方降级本地链路，绝不伪造结果。
+ *    429 需区分「今日额度用完」（body 带 quota）与「每分钟限流」（body 无 quota）。
  * 2. generateVideoSummary：文字源总结（简介/字幕/评论区文本 → 大模型），输入注入提示词前
  *    统一消毒截断（防页面内容全量泄露进提示词），失败返回 null 不阻塞链接提取。
  */
@@ -16,6 +18,20 @@ import { askMiMo, sanitizeForPrompt } from './mimoClient.js'
 import { getLocale, t } from '../../i18n/index.js'
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
+
+// 平台域名清单唯一真源：src/config/videoPlatforms.json（经 videoPlatforms.ts 派生）。
+// 保留从本模块 re-export，兼容既有调用方（useAiChatAgent / 测试等）。
+export { isVideoPlatformUrl } from './videoPlatforms.js'
+
+/** extract-video Edge Function 返回的章节结构（yt-dlp info.chapters 归一） */
+export interface VideoChapter {
+  title: string
+  start_time?: number
+  end_time?: number
+}
+
+/** 服务端实际使用的解析通道（用于用户可见的来源披露与排障） */
+export type VideoExtractProvider = 'bilibili-native' | 'youtube-api' | 'worker' | 'jina'
 
 /** extract-video Edge Function 返回的统一内容结构 */
 export interface VideoExtractServerResult {
@@ -33,6 +49,16 @@ export interface VideoExtractServerResult {
   quotaExceeded?: boolean
   /** 触发配额时的每日上限（免费 1 / PRO 10） */
   quotaLimit?: number
+  /** 服务端实际使用的解析通道（契约 §2：bilibili-native / youtube-api / worker / jina） */
+  provider?: VideoExtractProvider
+  /** 降级原因（worker_unavailable / worker_no_proxy / adapter_empty / timeout 等） */
+  fallbackReason?: string
+  /** 视频时长（秒） */
+  duration?: number
+  /** 上传者/UP 主 */
+  uploader?: string
+  /** 视频章节（yt-dlp chapters） */
+  chapters?: VideoChapter[]
 }
 
 /** 服务端可识别的来源：专用适配器 + yt-dlp 微服务归一后的平台标识 */
@@ -45,45 +71,44 @@ export type VideoExtractSource =
   | 'x'
   | 'generic'
 
-/** 视频/图文笔记平台域名（命中即优先走视频解析链路，而不是当普通网页抓取） */
-const VIDEO_PLATFORM_HOSTS = [
-  'douyin.com',
-  'iesdouyin.com',
-  'tiktok.com',
-  'xiaohongshu.com',
-  'xhslink.com',
-  'bilibili.com',
-  'b23.tv',
-  'youtube.com',
-  'youtu.be',
-  'x.com',
-  'twitter.com',
-  'vimeo.com',
-  'dailymotion.com',
-  'kuaishou.com',
-  'weibo.com',
-  'ixigua.com',
-  'acfun.cn',
-  'twitch.tv',
-  'youku.com',
-  'iqiyi.com',
-  'mgtv.com',
-  'douyu.com',
-  'huya.com',
-]
+/** 来源标识 → 本地化展示文案的键（内部枚举绝不直接展示给用户） */
+const SOURCE_LABEL_KEYS: Record<VideoExtractSource, string> = {
+  bilibili: 'ai.videoSourceBilibili',
+  youtube: 'ai.videoSourceYoutube',
+  douyin: 'ai.videoSourceDouyin',
+  tiktok: 'ai.videoSourceTiktok',
+  xiaohongshu: 'ai.videoSourceXiaohongshu',
+  x: 'ai.videoSourceX',
+  generic: 'ai.videoSourceGeneric',
+}
 
-const VIDEO_SHORT_LINK_HOSTS = ['v.douyin.com', 'vm.tiktok.com', 'vt.tiktok.com', 'b23.tv', 'bili2233.cn', 'xhslink.com']
+/** 来源中文标签（未知来源回落「通用网页」，不泄露内部枚举） */
+export function videoSourceLabel(source: string | undefined | null): string {
+  return t(SOURCE_LABEL_KEYS[source as VideoExtractSource] || 'ai.videoSourceGeneric')
+}
 
-/** 是否是视频/图文笔记平台链接（含分享短链） */
-export function isVideoPlatformUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
-    return [...VIDEO_PLATFORM_HOSTS, ...VIDEO_SHORT_LINK_HOSTS].some(
-      (h) => host === h || host.endsWith('.' + h)
-    )
-  } catch {
-    return false
+/** 已知的解析通道枚举（服务端字段可能缺失或拼写异常，非法值一律丢弃） */
+const KNOWN_PROVIDERS: readonly VideoExtractProvider[] = ['bilibili-native', 'youtube-api', 'worker', 'jina']
+
+function parseProvider(raw: unknown): VideoExtractProvider | undefined {
+  return typeof raw === 'string' && (KNOWN_PROVIDERS as readonly string[]).includes(raw)
+    ? (raw as VideoExtractProvider)
+    : undefined
+}
+
+function parseChapters(raw: unknown): VideoChapter[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const chapters: VideoChapter[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const c = item as Record<string, unknown>
+    if (typeof c.title !== 'string' || !c.title) continue
+    const chapter: VideoChapter = { title: c.title }
+    if (typeof c.start_time === 'number') chapter.start_time = c.start_time
+    if (typeof c.end_time === 'number') chapter.end_time = c.end_time
+    chapters.push(chapter)
   }
+  return chapters.length > 0 ? chapters : undefined
 }
 
 /** 把服务端结构化内容拼成给大模型阅读的纯文本（空内容返回空串） */
@@ -137,10 +162,14 @@ export async function fetchVideoExtractServer(
       signal: options.signal,
     })
 
-    // 429：今日额度用完，不当作普通失败（调用方不得再降级去抓取，否则等于绕过配额）
+    // 429 分两种（云函数契约）：
+    // 1) 今日额度用完：body 带 quota 字段 → 置 quotaExceeded，且调用方不得再降级抓取（等于绕过配额）；
+    // 2) 每分钟限流：body 无 quota 字段 → 视为普通失败返回 null，不能误报「额度用完」。
     if (res.status === 429) {
-      const body = (await res.json().catch(() => ({}))) as { quota?: { limit?: unknown } }
-      const limit = typeof body.quota?.limit === 'number' ? body.quota.limit : undefined
+      const body = (await res.json().catch(() => ({}))) as { quota?: { limit?: unknown } } | null
+      const quota = body && typeof body === 'object' ? body.quota : undefined
+      if (!quota || typeof quota !== 'object') return null
+      const limit = typeof quota.limit === 'number' ? quota.limit : undefined
       toast(t('ai.videoQuotaExceeded', limit != null ? { limit } : {}), false)
       return {
         source: 'generic',
@@ -158,6 +187,7 @@ export async function fetchVideoExtractServer(
 
     const data = await res.json()
     if (!data || typeof data !== 'object') return null
+    const duration = typeof data.duration === 'number' && data.duration > 0 ? data.duration : undefined
     return {
       source: (data.source as VideoExtractServerResult['source']) || 'generic',
       url: typeof data.url === 'string' ? data.url : targetUrl,
@@ -167,6 +197,16 @@ export async function fetchVideoExtractServer(
       comments: Array.isArray(data.comments) ? data.comments.filter((c: unknown) => typeof c === 'string') : [],
       markdown: typeof data.markdown === 'string' ? data.markdown : undefined,
       degraded: Boolean(data.degraded),
+      provider: parseProvider(data.provider),
+      fallbackReason:
+        typeof data.fallback_reason === 'string'
+          ? data.fallback_reason
+          : typeof data.fallbackReason === 'string'
+            ? data.fallbackReason
+            : undefined,
+      duration,
+      uploader: typeof data.uploader === 'string' && data.uploader ? data.uploader : undefined,
+      chapters: parseChapters(data.chapters),
     }
   } catch {
     return null

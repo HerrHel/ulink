@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>与链 · 浏览器扩展安装说明</title>
+    <style>
+      :root {
+        --bg: #f5efea;
+        --card: #fffaf6;
+        --text: #2f2a26;
+        --muted: #7a6f66;
+        --line: #e6d9cd;
+        --accent: #2f6f6b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        line-height: 1.7;
+      }
+      main { max-width: 760px; margin: 0 auto; padding: 40px 20px 60px; }
+      h1 { font-size: 26px; margin: 0 0 8px; }
+      h2 { font-size: 18px; margin: 28px 0 8px; }
+      p, li { color: var(--text); }
+      .muted { color: var(--muted); }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 20px 22px;
+        margin-top: 18px;
+      }
+      .tag {
+        display: inline-block;
+        background: #e3f0ee;
+        color: var(--accent);
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 12px;
+        margin-left: 6px;
+      }
+      code {
+        background: #f0e7de;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 13px;
+      }
+      a { color: var(--accent); }
+      ol { padding-left: 20px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>与链浏览器扩展（内测 · 实验性功能）</h1>
+      <p class="muted">
+        用于 B站/抖音/小红书的「视频深度解析」：扩展只读取你当前打开的页面里已有的播放地址，
+        使用你自己的浏览器 IP 与登录态，不额外登录平台、不经过代理。
+      </p>
+      <p class="muted">
+        这是<strong>实验性实验室功能</strong>，不是主套餐的固定承诺：需要手动安装扩展、仅桌面端可用，
+        平台改版或风控变化时可能失败或下线；B站为正式支持，抖音/小红书为实验性且不保证可用。
+      </p>
+
+      <div class="card">
+        <h2>支持情况（诚实标注）</h2>
+        <ul>
+          <li><strong>B站</strong><span class="tag">正式支持</span>：读取页面 <code>__playinfo__</code>，口播转写 + 画面网址。</li>
+          <li><strong>抖音</strong><span class="tag">实验性</span>：依赖页面态，未登录/触发验证码/页面改版时可能失败。</li>
+          <li><strong>小红书</strong><span class="tag">实验性</span>：通常需要登录，可能拿不到视频地址。</li>
+          <li>其它平台：仍走原有解析链路，不需要扩展。</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>安装（Chrome / Edge，开发版）</h2>
+        <ol>
+          <li>打开扩展目录：<a href="https://github.com/HerrHel/ulink/tree/main/extension" target="_blank" rel="noreferrer">github.com/HerrHel/ulink/tree/main/extension</a>；</li>
+          <li>下载整个 <code>extension</code> 目录到本地；</li>
+          <li>浏览器地址栏打开 <code>chrome://extensions</code>（Edge 为 <code>edge://extensions</code>）；</li>
+          <li>打开右上角「开发者模式」→「加载已解压的扩展程序」→ 选择 <code>extension</code> 目录；</li>
+          <li>安装后在 <a href="https://ulink.ren/app?login=1">与链</a> 登录一次（扩展与网页共用登录态）。</li>
+        </ol>
+        <p class="muted">
+          正在准备商店上架；当前为开发版，需要手动加载。扩展只申请 <code>activeTab</code> / <code>scripting</code> /
+          <code>storage</code> 等必要权限，不会读取你未主动解析的页面。
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>怎么用</h2>
+        <ol>
+          <li>在 B站/抖音/小红书打开一个视频页；</li>
+          <li>页面空白处右键 →「与链：深度解析此视频」；</li>
+          <li>新标签页会显示进度、口播转写和画面中出现的网址；</li>
+          <li>解析消耗实验性深度解析体验额度（每日 2 次，可能调整）。</li>
+        </ol>
+        <p class="muted">
+          如果提示「页面没有暴露播放地址」：B站请刷新/登录后重试；抖音请先在网页版登录并播放一次——抖音适配仍是实验性，
+          不保证所有视频可用。我们不会为此伪造结果。
+        </p>
+        <p class="muted">
+          实验性功能可能随平台改版、浏览器政策或成本变化随时调整或下线，不构成付费套餐的固定承诺；
+          如无法接受请勿为此单独升级 PRO。
+        </p>
+      </div>
+
+      <p><a href="https://ulink.ren/app">← 返回与链</a></p>
+    </main>
+  </body>
+</html>

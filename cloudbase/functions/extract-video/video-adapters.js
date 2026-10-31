@@ -158,6 +158,61 @@ function isTargetDnsSafeSyncResults(hostname, records) {
   return true;
 }
 
+// src/config/videoPlatforms.json
+var videoPlatforms_default = {
+  _comment: "\u89C6\u9891/\u56FE\u6587\u5E73\u53F0\u57DF\u540D\u7684\u552F\u4E00\u771F\u6E90\u3002\u5BA2\u6237\u7AEF\uFF08src/lib/ai/videoPlatforms.ts\uFF09\u3001\u4E91\u51FD\u6570\uFF08\u7ECF build-fn-assets \u5185\u8054\uFF09\u3001worker\uFF08scripts/video-worker/video-platforms.json \u7531 scripts/build-fn-assets.mjs \u590D\u5236\uFF09\u90FD\u4ECE\u8FD9\u91CC\u6D3E\u751F\uFF0C\u7981\u6B62\u4E09\u5904\u5404\u5199\u4E00\u4EFD\u3002\u6539\u8FD9\u91CC\u540E\u6267\u884C node scripts/build-fn-assets.mjs\u3002",
+  videoHosts: [
+    "douyin.com",
+    "iesdouyin.com",
+    "tiktok.com",
+    "xiaohongshu.com",
+    "xhslink.com",
+    "bilibili.com",
+    "b23.tv",
+    "bili2233.cn",
+    "youtube.com",
+    "youtu.be",
+    "twitter.com",
+    "x.com",
+    "vimeo.com",
+    "dailymotion.com",
+    "kuaishou.com",
+    "weibo.com",
+    "ixigua.com",
+    "acfun.cn",
+    "twitch.tv",
+    "youku.com",
+    "iqiyi.com",
+    "mgtv.com",
+    "douyu.com",
+    "huya.com"
+  ],
+  videoShortLinkHosts: [
+    "v.douyin.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
+    "b23.tv",
+    "bili2233.cn",
+    "xhslink.com"
+  ],
+  resolverShortLinkHosts: [
+    "v.douyin.com",
+    "vm.tiktok.com",
+    "vt.tiktok.com",
+    "b23.tv",
+    "bili2233.cn",
+    "xhslink.com",
+    "t.cn"
+  ],
+  browserFirstHosts: [
+    "douyin.com",
+    "iesdouyin.com",
+    "xiaohongshu.com",
+    "xhslink.com",
+    "tiktok.com"
+  ]
+};
+
 // supabase/functions/extract-video/video-adapters.ts
 var PRIVATE_LITERAL_HOSTS2 = /* @__PURE__ */ new Set([
   "localhost",
@@ -211,14 +266,7 @@ async function isUrlDnsSafe(parsed, resolver) {
     return false;
   }
 }
-var SHORT_LINK_HOSTS = /* @__PURE__ */ new Set([
-  "b23.tv",
-  "bili2233.cn",
-  "v.douyin.com",
-  "vm.tiktok.com",
-  "vt.tiktok.com",
-  "xhslink.com"
-]);
+var SHORT_LINK_HOSTS = new Set(videoPlatforms_default.videoShortLinkHosts);
 function isShortLinkHost(hostname) {
   const host = hostname.toLowerCase().replace(/^www\./, "");
   return SHORT_LINK_HOSTS.has(host);

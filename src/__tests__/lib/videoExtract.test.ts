@@ -94,6 +94,86 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
     expect(await fetchVideoExtractServer('https://example.com/v')).toBeNull()
   })
 
+  it('透传 provider / fallback_reason / duration / uploader / chapters（契约的新增字段）', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        source: 'bilibili',
+        url: 'https://www.bilibili.com/video/BV1xx411c7mD',
+        title: '工具分享',
+        description: '',
+        subtitles: '',
+        comments: [],
+        degraded: false,
+        provider: 'bilibili-native',
+        fallback_reason: 'adapter_empty',
+        duration: 321,
+        uploader: '某 UP 主',
+        chapters: [
+          { title: '引言', start_time: 0, end_time: 60 },
+          { title: '正文' },
+          { bad: 'no-title' },
+        ],
+      }),
+    })
+
+    const res = await fetchVideoExtractServer('https://www.bilibili.com/video/BV1xx411c7mD')
+    expect(res).toMatchObject({
+      provider: 'bilibili-native',
+      fallbackReason: 'adapter_empty',
+      duration: 321,
+      uploader: '某 UP 主',
+      degraded: false,
+    })
+    expect(res?.chapters).toEqual([
+      { title: '引言', start_time: 0, end_time: 60 },
+      { title: '正文' },
+    ])
+  })
+
+  it('degraded 透传：服务端如实标注降级（前端据此披露「已降级为 r.jina.ai 网页正文」）', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        source: 'generic',
+        url: 'https://www.douyin.com/video/1',
+        title: '',
+        description: '',
+        subtitles: '',
+        comments: [],
+        markdown: '网页正文',
+        degraded: true,
+        provider: 'jina',
+        fallback_reason: 'worker_no_proxy',
+      }),
+    })
+
+    const res = await fetchVideoExtractServer('https://www.douyin.com/video/1')
+    expect(res).toMatchObject({
+      degraded: true,
+      provider: 'jina',
+      fallbackReason: 'worker_no_proxy',
+    })
+  })
+
+  it('未知 provider 枚举被丢弃（不把脏值当解析通道展示）', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        source: 'bilibili',
+        url: 'https://www.bilibili.com/video/BV1',
+        title: '',
+        description: '',
+        subtitles: '',
+        comments: [],
+        degraded: false,
+        provider: 'mystery-channel',
+      }),
+    })
+    const res = await fetchVideoExtractServer('https://www.bilibili.com/video/BV1')
+    expect(res?.provider).toBeUndefined()
+  })
+
   it('429 今日额度用完：返回 quotaExceeded 标记与上限（调用方不得再降级抓取绕过配额）', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
@@ -102,6 +182,16 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
     })
     const res = await fetchVideoExtractServer('https://www.douyin.com/video/7701700795477003571')
     expect(res).toMatchObject({ quotaExceeded: true, quotaLimit: 10 })
+  })
+
+  it('429 每分钟限流（body 无 quota 字段）：按普通失败返回 null，不误报「额度用完」', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({ error: 'rate limited', code: 'rate_limited' }),
+    })
+    const res = await fetchVideoExtractServer('https://www.bilibili.com/video/BV1xx411c7mD')
+    expect(res).toBeNull()
   })
 
   // ── generateVideoSummary ──

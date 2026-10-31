@@ -110,6 +110,9 @@ export async function extractBookmarksFromVideo(
   const contentParts: Array<{ text: string; source: DeepLinkSource }> = []
   let fallbackBody = ''
   let canonicalUrl = targetUrl
+  // 服务端降级披露：degraded=true 表示平台结构化解析失败、内容来自 r.jina.ai 网页正文，
+  // 必须在 summary/groupNotes 里如实告知用户（不得让用户以为拿到了平台字幕/评论）。
+  let degradedNotice = ''
 
   if (targetUrl) {
     let server: Awaited<ReturnType<typeof fetchVideoExtractServer>> = null
@@ -137,6 +140,7 @@ export async function extractBookmarksFromVideo(
       if (server.url) canonicalUrl = server.url
       pageTitle = server.title
       pageDesc = server.description
+      if (server.degraded) degradedNotice = t('ai.videoDegradedNotice')
       if (server.description.trim()) contentParts.push({ text: server.description, source: '简介' })
       if (server.subtitles.trim()) contentParts.push({ text: server.subtitles, source: '字幕' })
       if (server.comments.length) contentParts.push({ text: server.comments.join('\n'), source: '评论区' })
@@ -249,6 +253,12 @@ export async function extractBookmarksFromVideo(
     }
   }
 
+  // 服务端降级披露：内容本就来自 r.jina.ai 网页正文时，速览必须带上真实来源说明，
+  // 不能让用户误以为拿到了平台字幕/评论；模型总结为空时也照样披露。
+  if (degradedNotice) {
+    summary = summary ? `${degradedNotice}\n\n${summary}` : degradedNotice
+  }
+
   // 4. 语义中枢仲裁（脑手合一）：
   // 若判定页面已失效，或模型回复明确说明未提供/未出现任何工具，强制清除所有提取候选
   const isNoToolsSummary = isSummaryIndicatingNoTools(summary)
@@ -279,7 +289,9 @@ export async function extractBookmarksFromVideo(
     sourceUrl: cleanInput,
     videoTitle: pageTitle || t('ai.videoFallbackTitle'),
     groupTitle: cleanTitle,
-    groupNotes: t('ai.videoGroupNotes'),
+    groupNotes: degradedNotice
+      ? `${t('ai.videoGroupNotes')}<p>${degradedNotice}</p>`
+      : t('ai.videoGroupNotes'),
     bookmarks: rawBookmarks.map(b => enrichContext(b, categories, attributes)),
     summary,
     question: questionText || undefined,

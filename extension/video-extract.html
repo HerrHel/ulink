@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>与链 · 视频深度解析（实验性）</title>
+    <link rel="stylesheet" href="video-extract.css" />
+  </head>
+  <body>
+    <header class="uve-header">
+      <div class="uve-brand">与链 <span>视频深度解析（实验性）</span></div>
+      <div class="uve-badge" id="uve-platform">读取页面中…</div>
+    </header>
+
+    <main class="uve-main">
+      <section class="uve-card" id="uve-status-card">
+        <div class="uve-status-row">
+          <div class="uve-spinner" id="uve-spinner"></div>
+          <div>
+            <div class="uve-status-title" id="uve-status-title">正在读取当前页面的播放地址</div>
+            <div class="uve-status-desc" id="uve-status-desc">
+              实验性功能：只读取页面已有的签名地址，使用你自己的浏览器 IP 与登录态，不额外登录、不逆向签名。
+            </div>
+          </div>
+        </div>
+        <div class="uve-progress"><div class="uve-progress-bar" id="uve-progress"></div></div>
+        <div class="uve-hint" id="uve-hint"></div>
+      </section>
+
+      <section class="uve-card uve-hidden" id="uve-result-card">
+        <h2 class="uve-title" id="uve-title"></h2>
+        <div class="uve-meta" id="uve-meta"></div>
+        <div class="uve-degraded uve-hidden" id="uve-degraded"></div>
+
+        <h3 class="uve-subtitle">口播转写</h3>
+        <div class="uve-transcript" id="uve-transcript"></div>
+        <div class="uve-segments" id="uve-segments"></div>
+
+        <h3 class="uve-subtitle">画面中出现的网址</h3>
+        <div class="uve-links" id="uve-links"></div>
+      </section>
+
+      <section class="uve-card uve-hidden" id="uve-error-card">
+        <h2 class="uve-title">没能完成解析</h2>
+        <div class="uve-error" id="uve-error"></div>
+        <div class="uve-guide" id="uve-guide"></div>
+        <a class="uve-link" href="https://ulink.ren/app" target="_blank" rel="noreferrer">打开与链</a>
+      </section>
+    </main>
+
+    <footer class="uve-footer">
+      <span>与链 · 浏览器扩展内测（实验性功能，可能调整或下线）</span>
+      <span>仅处理你当前主动打开的视频，不上传无关页面数据</span>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="lib/cloudbase-sdk.js"></script>
+    <script src="lib/supabase.js"></script>
+    <script src="video-extract.js"></script>
+  </body>
+</html>

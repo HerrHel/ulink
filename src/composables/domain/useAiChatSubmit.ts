@@ -12,6 +12,7 @@ import {
   findSimilarWebsites,
   extractBookmarksFromVideo,
 } from '../../lib/ai/cloudAiClient.js'
+import { containsVideoPlatformUrl } from '../../lib/ai/videoPlatforms.js'
 import { askMiMoStream, getMiMoConfig, sanitizeToolResult, type MiMoChatMessage } from '../../lib/ai/mimoClient.js'
 import { dispatchSiteCommand } from '../../lib/ai/siteCommander.js'
 import { normalizeWorkspaceTopic } from '../../lib/ai/siteActions.js'
@@ -225,7 +226,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
         return
       }
 
-      const isVideo = /bilibili\.com|b23\.tv|douyin\.com|tiktok\.com|xiaohongshu\.com|xhslink\.com/.test(raw)
+      // 视频平台判定统一走单一真源（src/config/videoPlatforms.json），
+      // 不再手写域名正则——历史上客户端/云函数/worker 三份清单各写一份导致漂移。
+      const isVideo = containsVideoPlatformUrl(raw)
       const isUrl = /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(raw)
       loadingTextKey.value = isVideo ? 'ai.extracting' : isUrl ? 'ai.analyzing' : 'ai.thinking'
 

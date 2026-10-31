@@ -23,6 +23,10 @@
     "message": "保存选中文本到与链",
     "description": "右键菜单：保存选中文本"
   },
+  "menu_deep_extract": {
+    "message": "与链：深度解析此视频（实验性）",
+    "description": "右键菜单：读取页面态播放地址并做口播/画面解析"
+  },
   "login": {
     "message": "登录",
     "description": "登录按钮"

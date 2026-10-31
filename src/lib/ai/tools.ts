@@ -17,6 +17,7 @@
  * 12. manage_bookmarks: 全能书签治理（增删改查/移动/父子嵌套/置顶）
  * 13. manage_workspaces: 全能工作台装配（创建/命名/笔记/增删成员）
  * 14. manage_settings: 系统偏好与界面导航（主题/排版/跳转/清空回收站）
+ * 15. deep_read_video: 【实验性】视频深度解析（口播 ASR 转写 + 画面网址 OCR，异步任务；需浏览器扩展，B站正式/抖音小红书实验性）
  */
 
 export interface AgentToolParamProperty {
@@ -266,6 +267,28 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
           reason: {
             type: 'string',
             description: '抓取该网页正文的具体分析诉求说明',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deep_read_video',
+      description:
+        '【实验性】视频深度解析（异步任务，分钟级）：下载音视频后做口播语音转写（ASR），并可识别只出现在视频画面里的网址（OCR）。只在用户明确要求「口播/语音转写」「画面里出现的网址」「没有字幕的讲解内容」时调用；普通视频先用常规视频解析（标题/简介/字幕/评论），不要主动调用本工具。需登录且消耗实验性深度解析体验额度（每日 2 次）。注意：需安装「与链」浏览器扩展（仅桌面端），B站正式支持，抖音/小红书实验性且不保证可用；失败或额度用完要如实告知，不得改用其他方式伪造结果。',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: '视频平台链接（必须是 http:// 或 https:// 开头的完整网址）',
+          },
+          question: {
+            type: 'string',
+            description: '用户希望从口播/画面中回答的具体问题（可选，例如「视频里提到的网站有哪些」）',
           },
         },
         required: ['url'],

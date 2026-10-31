@@ -212,6 +212,36 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     expect(res.videoTitle).toBe('5 个设计神器分享')
   })
 
+  it('服务端降级（degraded=true）：summary 与 groupNotes 必须披露「已降级为 r.jina.ai 网页正文」', async () => {
+    mockServerExtract.mockResolvedValue({
+      source: 'generic',
+      url: 'https://www.bilibili.com/video/BV1xx411c7mD',
+      title: '工具分享',
+      description: '',
+      subtitles: '',
+      comments: [],
+      markdown: '推荐 https://excalidraw.com 白板工具',
+      degraded: true,
+      provider: 'jina',
+      fallbackReason: 'worker_unavailable',
+    })
+    mockSummary.mockResolvedValue(null)
+
+    const res = await extractBookmarksFromVideo(
+      'https://www.bilibili.com/video/BV1xx411c7mD',
+      testCategories,
+      testAttributes
+    )
+
+    // 服务端已给出 markdown（服务端侧 jina 兜底），本地不再重复抓取
+    expect(mockFetch).not.toHaveBeenCalled()
+    // 降级披露必须同时进入速览与组笔记，不能只字不提
+    expect(res.summary).toContain('r.jina.ai')
+    expect(res.groupNotes).toContain('r.jina.ai')
+    // 降级不影响可用内容的链接提取（不因披露而丢结果）
+    expect(res.bookmarks.map(b => b.url)).toContain('https://excalidraw.com')
+  })
+
   it('B站官方 AI 语音小结与分段大纲托底：UP主无 CC 字幕时仍能精准提取口播工具', async () => {
     mockServerExtract.mockResolvedValue({
       source: 'bilibili',

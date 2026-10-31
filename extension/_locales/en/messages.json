@@ -23,6 +23,10 @@
     "message": "Save selected text to ulink",
     "description": "Context menu: save selected text"
   },
+  "menu_deep_extract": {
+    "message": "ulink: Deep-read this video (experimental)",
+    "description": "Context menu: read page media URLs and transcribe/OCR"
+  },
   "login": {
     "message": "Log in",
     "description": "Login button"

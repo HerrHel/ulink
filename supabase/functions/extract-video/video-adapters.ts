@@ -111,13 +111,13 @@ export async function isUrlDnsSafe(parsed: URL, resolver: DnsResolver): Promise<
 
 // ── 平台识别 ──
 
+// 平台域名清单唯一真源（客户端 / 云函数 / worker 三端共用，经 scripts/build-fn-assets.mjs 派生）。
+// esbuild --bundle 会把这份 JSON 直接内联进云函数的 video-adapters.js，运行时无跨目录依赖。
+import platformManifest from '../../../src/config/videoPlatforms.json'
+
 /** 已知视频分享短链域：需先跟随重定向解析到 canonical 视频页，才能命中平台适配器；
  *  不解析直接抓只会拿到跳板页（generic 降级的答非所问根因） */
-const SHORT_LINK_HOSTS = new Set([
-  'b23.tv', 'bili2233.cn',
-  'v.douyin.com', 'vm.tiktok.com', 'vt.tiktok.com',
-  'xhslink.com',
-])
+const SHORT_LINK_HOSTS = new Set<string>(platformManifest.videoShortLinkHosts)
 
 /** 是否为已知分享短链域（index.ts 据此做重定向解析，纯函数可测） */
 export function isShortLinkHost(hostname: string): boolean {

@@ -82,6 +82,19 @@ const JOBS = [
   },
 ]
 
+// 纯数据文件复制（无类型剥离）：视频平台域名清单的单一真源 = src/config/videoPlatforms.json
+// worker（Python）运行时读同目录的 video-platforms.json；客户端与云函数直接 import/内联 JSON。
+const COPY_JOBS = [
+  {
+    from: 'src/config/videoPlatforms.json',
+    to: 'scripts/video-worker/video-platforms.json',
+  },
+  {
+    from: 'src/config/videoPlatforms.json',
+    to: 'cloudbase/functions/extract-video/video-platforms.json',
+  },
+]
+
 const HEADER = '// 本文件由 scripts/build-fn-assets.mjs 从 %FROM% 生成，请勿手改\n'
 
 // 用 node 直接跑本地 esbuild 的 JS 入口：
@@ -113,4 +126,17 @@ for (const job of JOBS) {
     writeFileSync(out, header + body, 'utf8')
   }
   console.log(`✔ ${job.to} ← ${job.from}`)
+}
+
+// 纯数据文件：原样复制（不包 header，保持合法 JSON）
+for (const job of COPY_JOBS) {
+  const src = resolve(job.from)
+  const out = resolve(job.to)
+  if (!existsSync(src)) {
+    console.log(`跳过 ${job.to}（找不到源 ${job.from}）`)
+    continue
+  }
+  const body = readFileSync(src, 'utf8')
+  writeFileSync(out, body, 'utf8')
+  console.log(`✔ ${job.to} ← ${job.from}（数据文件复制）`)
 }
