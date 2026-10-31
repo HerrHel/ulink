@@ -798,6 +798,9 @@ function pageShell(opts: { title: string; description: string; canonicalPath: st
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<!-- 法律页是零 JS 的自包含静态页：CloudBase 托管不下发响应头，这里用 meta 兜底最小安全策略 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(opts.title)}</title>
 <meta name="description" content="${escapeHtml(opts.description)}">
