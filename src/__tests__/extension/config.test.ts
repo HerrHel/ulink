@@ -2,8 +2,8 @@
  * extension/config.js 护栏测试（d1-111-extension-config-const-guard）。
  *
  * 测 extension/config.js 顶层常量赋值挂载的 `window.LinkVaultExtConfig` 全局对象的契约：
- *   - SUPABASE_URL（扩展端连 Supabase 后端的唯一 URL 承载）
- *   - SUPABASE_ANON_KEY（扩展端 anon 角色 JWT，RLS 保护，公开但不可漂移成 service_role）
+ *   - CLOUDBASE_ENV_ID（扩展端连 CloudBase 后端的唯一环境标识）
+ *   - CLOUDBASE_PUBLISHABLE_KEY（扩展端 anon 角色 JWT，RLS 保护，公开但不可漂移成 service_role）
  *   - MASTER_PASSWORD_TTL_MS（主密码会话缓存 TTL，与方向 E 跨端解密时机同源）
  *
  * d1-110 已 voucher「经 IIFE 全局 API 间接测纯分支 + 零基建 + 零生产源文件改动」范式：
@@ -11,12 +11,16 @@
  * `window.LinkVaultExtConfig`，经全局对象间接断言常量契约。config.js 一字不改。
  *
  * 配置常量快照护栏虽无分支逻辑，但真有回归价值：
- *   - anon key 漂移让扩展端连不上 Supabase 或验签失败；
+ *   - publishable key 漂移让扩展端连不上 CloudBase 或验签失败；
  *   - 误入 service_role key 越权（绕过 RLS）；
- *   - URL 漂移连错后端；
+ *   - envId 漂移连错环境；
  *   - TTL 漂移让主密码会话缓存时机错了，致跨端解密在窗口期失败
  *     （与 lv-extension-e2e-cross-end-bug 方向 E commit cf57035b 防回归同源安全面）。
- * 此前零直接验证——今把 URL/JWT 结构/TTL/无 service_role 四类不变量直锁为可回归断言。
+ * 此前零直接验证——今把 envId/JWT 结构/TTL/无 service_role 四类不变量直锁为可回归断言。
+ *
+ * 2026-10-31 起配置键由 SUPABASE_URL / SUPABASE_ANON_KEY 更名为
+ * CLOUDBASE_ENV_ID / CLOUDBASE_PUBLISHABLE_KEY（`window.supabase` 仅为 CloudBase shim），
+ * 本测试随 extension/config.js 同步更名。
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 
@@ -50,56 +54,62 @@ describe('extension/config.js — LinkVaultExtConfig 常量快照护栏', () => 
     it('window.LinkVaultExtConfig 恰好含 3 个键无多余无缺失', () => {
       const cfg = getCfg()
       expect(Object.keys(cfg).sort()).toEqual(
-        ['MASTER_PASSWORD_TTL_MS', 'SUPABASE_ANON_KEY', 'SUPABASE_URL'].sort(),
+        ['CLOUDBASE_ENV_ID', 'CLOUDBASE_PUBLISHABLE_KEY', 'MASTER_PASSWORD_TTL_MS'].sort(),
       )
       expect(Object.keys(cfg).length).toBe(3)
     })
 
     it('每个键均有 truthy 字符串/数字值（无 undefined/null 占位）', () => {
       const cfg = getCfg()
-      expect(typeof cfg.SUPABASE_URL).toBe('string')
-      expect((cfg.SUPABASE_URL as string).length).toBeGreaterThan(0)
-      expect(typeof cfg.SUPABASE_ANON_KEY).toBe('string')
-      expect((cfg.SUPABASE_ANON_KEY as string).length).toBeGreaterThan(0)
+      expect(typeof cfg.CLOUDBASE_ENV_ID).toBe('string')
+      expect((cfg.CLOUDBASE_ENV_ID as string).length).toBeGreaterThan(0)
+      expect(typeof cfg.CLOUDBASE_PUBLISHABLE_KEY).toBe('string')
+      expect((cfg.CLOUDBASE_PUBLISHABLE_KEY as string).length).toBeGreaterThan(0)
       expect(typeof cfg.MASTER_PASSWORD_TTL_MS).toBe('number')
       expect(Number.isFinite(cfg.MASTER_PASSWORD_TTL_MS as number)).toBe(true)
     })
+
+    it('不再保留历史 Supabase 键名（防 shim 读空值静默连错）', () => {
+      const cfg = getCfg()
+      expect(cfg.SUPABASE_URL).toBeUndefined()
+      expect(cfg.SUPABASE_ANON_KEY).toBeUndefined()
+    })
   })
 
-  describe('SUPABASE_URL — 扩展端后端标识承载（2026-10-22 起＝CloudBase envId，shim 约定）', () => {
+  describe('CLOUDBASE_ENV_ID — 扩展端后端标识承载（CloudBase envId，shim 约定）', () => {
     it('是 CloudBase envId 形态（<name>-<id>，无协议/无斜杠，防误填 URL）', () => {
-      const v = getCfg().SUPABASE_URL as string
+      const v = getCfg().CLOUDBASE_ENV_ID as string
       expect(v).toMatch(/^[a-z][a-z0-9]*-[a-z0-9]+$/)
       expect(v).not.toMatch(/[:/]/)
     })
 
-    it('与生产环境 id 前缀一致（防误改连错环境）', () => {
-      expect(getCfg().SUPABASE_URL).toBe('ulink-d1g5srvjo54b1886a')
+    it('与生产环境 id 一致（防误改连错环境）', () => {
+      expect(getCfg().CLOUDBASE_ENV_ID).toBe('ulink-d1g5srvjo54b1886a')
     })
 
     it('shim 的 createClient 以此为 envId 初始化（约定锁）', () => {
       // 值必须非空字符串（undefined/null 占位会让 shim init({env:''}) 静默连错）
-      expect(typeof getCfg().SUPABASE_URL).toBe('string')
-      expect((getCfg().SUPABASE_URL as string).length).toBeGreaterThan(8)
+      expect(typeof getCfg().CLOUDBASE_ENV_ID).toBe('string')
+      expect((getCfg().CLOUDBASE_ENV_ID as string).length).toBeGreaterThan(8)
     })
 
     it('无 URL 痕迹（历史形态残留检测：出现 :// 或 .supabase.co 即回退旧配置）', () => {
-      const v = getCfg().SUPABASE_URL as string
+      const v = getCfg().CLOUDBASE_ENV_ID as string
       expect(v.includes('://')).toBe(false)
       expect(v.includes('supabase.co')).toBe(false)
     })
   })
 
-  describe('SUPABASE_ANON_KEY — anon JWT 公开契约', () => {
-    const getKey = () => getCfg().SUPABASE_ANON_KEY as string
+  describe('CLOUDBASE_PUBLISHABLE_KEY — anon JWT 公开契约', () => {
+    const getKey = () => getCfg().CLOUDBASE_PUBLISHABLE_KEY as string
 
     it('是三段 JWT（恰好两 `.` 分隔 header.payload.signature）', () => {
       expect(getKey().split('.')).toHaveLength(3)
     })
 
-    it('无 service_role 越权 key 泄漏（注释明示「切勿写入 service_role key」）', () => {
-      // 护栏核心：anon key 必须是 anon 角色，payload.role === 'anon' !== 'service_role'。
-      // Supabase anon JWT payload 标准字段名是 `role`（首轮试错反推真实特性：
+    it('无 service_role 越权 key 泄漏（注释明示「切勿写入 service_role / 服务端密钥」）', () => {
+      // 护栏核心：publishable key 必须是 anon 角色，payload.role === 'anon' !== 'service_role'。
+      // JWT payload 标准字段名是 `role`（首轮试错反推真实特性：
       // 非我初记的 `rol`——六段 JWT base64url 实测 payload.role='anon'）。
       const payload = JSON.parse(decodeJwtPart(getKey().split('.')[1]))
       expect(payload.role).toBe('anon')
