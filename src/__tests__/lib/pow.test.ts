@@ -103,8 +103,8 @@ describe('solvePow ↔ verifyPowSolution 回环', () => {
     expect(powSrv.verifyPowSolution('test-secret', { ...good, exp: Date.now() - 1 })).toBe(false)
     // 降难度伪造（改 difficulty 必破坏 HMAC）
     expect(powSrv.verifyPowSolution('test-secret', { ...good, difficulty: 1 })).toBe(false)
-    // nonce 未达标（合法签名下用错误 nonce）
-    expect(powSrv.verifyPowSolution('test-secret', { ...good, nonce: '0'.repeat(11) })).toBe(false)
+    // nonce 非数字（合法签名下直接拒绝；固定 11 个 0 会满足难度，不能用作反例）
+    expect(powSrv.verifyPowSolution('test-secret', { ...good, nonce: 'abcdefghijk' })).toBe(false)
     // 形状非法
     expect(powSrv.verifyPowSolution('test-secret', null)).toBe(false)
     expect(powSrv.verifyPowSolution('test-secret', { ...good, nonce: 'abc' })).toBe(false)
