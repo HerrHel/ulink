@@ -579,6 +579,11 @@ const CLIENT_MEDIA_PLATFORMS = {
     referer: 'https://www.xiaohongshu.com/',
     hosts: ['xhscdn.com', 'xhsimg.com'],
   },
+  // 用户主动上传：CloudBase 存储公开 URL（gateway）/ COS 域名
+  upload: {
+    referer: 'https://ulink.ren/',
+    hosts: ['tcloudbasegateway.com', 'tcb.qcloud.la', 'myqcloud.com'],
+  },
 }
 
 function normalizeClientMedia(raw) {
@@ -615,7 +620,8 @@ function normalizeClientMedia(raw) {
   }
   const audio = cleanList(raw.audio_urls)
   const video = cleanList(raw.video_urls)
-  if (!audio.length && !video.length) return null
+  const images = cleanList(raw.image_urls)
+  if (!audio.length && !video.length && !images.length) return null
   const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
   const duration = Number(raw.duration)
   const client = {
@@ -623,6 +629,7 @@ function normalizeClientMedia(raw) {
     referer: rule.referer,
     audio_urls: audio,
     video_urls: video,
+    image_urls: images,
   }
   const title = text(raw.title, 200)
   const uploader = text(raw.uploader, 120)
@@ -630,6 +637,67 @@ function normalizeClientMedia(raw) {
   if (uploader) client.uploader = uploader
   if (Number.isFinite(duration) && duration > 0 && duration <= 36000) client.duration = Math.floor(duration)
   return client
+}
+
+/** 校验用户上传文件的 CloudBase 存储 URL（必须是 deep-media bucket 的 https 公开地址） */
+function validateUploadStorageUrl(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : ''
+  if (!text || text.length > 2048) throw new Error('invalid upload url')
+  const parsed = new URL(text)
+  if (parsed.protocol !== 'https:') throw new Error('invalid upload url')
+  if (parsed.username || parsed.password) throw new Error('invalid upload url')
+  const host = parsed.hostname.toLowerCase()
+  const hosts = CLIENT_MEDIA_PLATFORMS.upload.hosts
+  if (!hosts.some((suffix) => host === suffix || host.endsWith('.' + suffix))) {
+    throw new Error('invalid upload host')
+  }
+  if (!parsed.pathname.includes('/deep-media/')) throw new Error('invalid upload path')
+  return parsed.href
+}
+
+/** action=deep_upload：用户主动上传音频/视频/图片 → 复用 worker client 媒体通道 */
+async function handleDeepUpload(req, res, cors, body, db, signal) {
+  const upload = body && typeof body.upload === 'object' ? body.upload : null
+  const kind = upload && typeof upload.kind === 'string' ? upload.kind.trim() : ''
+  if (!upload || !['audio', 'video', 'image'].includes(kind)) {
+    sendJson(res, 400, { error: '不支持的媒体类型', code: 'unsupported_media' }, cors)
+    return
+  }
+  let fileUrl
+  try {
+    fileUrl = validateUploadStorageUrl(upload.url)
+  } catch (e) {
+    sendJson(res, 400, { error: '上传文件地址不合法', code: 'invalid_upload_url' }, cors)
+    return
+  }
+  if (!workerOrigin()) {
+    sendDeepError(res, cors, { status: 503, code: 'deep_unavailable' })
+    return
+  }
+  const quota = await checkDeepQuota(req, db)
+  if (!quota.ok) {
+    sendDeepError(res, cors, quota)
+    return
+  }
+  const include = kind === 'image'
+    ? { transcript: false, ocr: true }
+    : { transcript: true, ocr: kind === 'video' }
+  const client = {
+    platform: 'upload',
+    referer: 'https://ulink.ren/',
+    audio_urls: kind === 'audio' ? [fileUrl] : [],
+    video_urls: kind === 'video' ? [fileUrl] : [],
+    image_urls: kind === 'image' ? [fileUrl] : [],
+  }
+  const title = typeof upload.title === 'string' ? upload.title.trim().slice(0, 200) : ''
+  if (title) client.title = title
+  const job = await submitWorkerJob({ href: fileUrl }, include, signal, client)
+  if (!job) {
+    await refundDeepQuota(db, quota.uid, 'upload-failed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10))
+    sendDeepError(res, cors, { status: 503, code: 'deep_unavailable' })
+    return
+  }
+  sendJson(res, 200, job, cors)
 }
 
 /**
@@ -831,6 +899,12 @@ const server = http.createServer(async (req, res) => {
     // 深度任务查询：客户端 2s 一轮、上限 150s，套用 20/min 的提取限流会误杀，故提前分支并豁免
     if (action === 'deep_status') {
       await handleDeepStatus(req, res, cors, body, ipHash, signal, db)
+      return
+    }
+
+    // 用户上传媒体解析：只接受 CloudBase deep-media 存储对象，不碰第三方平台
+    if (action === 'deep_upload') {
+      await handleDeepUpload(req, res, cors, body, db, signal)
       return
     }
 

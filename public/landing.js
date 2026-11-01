@@ -225,7 +225,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.no': 'Not included',
     'price.note1': 'No auto-renewal on any plan. Renew on demand.',
     'price.deepNote':
-      'Deep video extraction is an experimental lab feature: browser extension required, desktop only; Bilibili supported, Douyin/Xiaohongshu experimental and not guaranteed.',
+      'Upload-media deep analysis is an experimental lab feature: analyze video/audio/image files you own or are authorized to use; no browser extension or proxy, and files are deleted after processing.',
     'price.note2': 'See our',
     'price.refundLink': 'refund policy',
     'price.note3': '.',

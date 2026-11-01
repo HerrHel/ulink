@@ -446,12 +446,13 @@ class DeepJobInclude(BaseModel):
 
 
 class DeepClientMedia(BaseModel):
-    """浏览器扩展上报的页面态媒体地址（只允许平台 CDN 直链，防止被当任意下载器）。"""
+    """浏览器扩展/上传通道上报的媒体地址（只允许平台 CDN/CloudBase 存储直链，防止被当任意下载器）。"""
 
     platform: str
     referer: str
     audio_urls: List[str] = []
     video_urls: List[str] = []
+    image_urls: List[str] = []
     title: Optional[str] = None
     uploader: Optional[str] = None
     duration: Optional[float] = None
@@ -521,7 +522,8 @@ def _sanitize_client_media(raw: Optional[Dict[str, Any]]) -> Optional[Dict[str, 
 
     audio = clean_urls(raw.get("audio_urls"))
     video = clean_urls(raw.get("video_urls"))
-    if not audio and not video:
+    images = clean_urls(raw.get("image_urls"))
+    if not audio and not video and not images:
         return None
     title = str(raw.get("title") or "").strip()[:200]
     uploader = str(raw.get("uploader") or "").strip()[:120]
@@ -534,6 +536,7 @@ def _sanitize_client_media(raw: Optional[Dict[str, Any]]) -> Optional[Dict[str, 
         "referer": CLIENT_MEDIA_REFERERS[platform],
         "audio_urls": audio,
         "video_urls": video,
+        "image_urls": images,
         "title": title,
         "uploader": uploader,
         "duration": duration_value,
@@ -1136,11 +1139,14 @@ CLIENT_MEDIA_HOSTS: Dict[str, Tuple[str, ...]] = {
     "bilibili": ("bilivideo.com", "bilivideo.cn", "bilibili.com"),
     "douyin": ("douyinvod.com", "bytecdn.cn", "byteimg.com", "snssdk.com", "amemv.com", "zjcdn.com"),
     "xiaohongshu": ("xhscdn.com", "xhsimg.com"),
+    # 用户主动上传：CloudBase 存储公开 URL（gateway）/ COS 域名
+    "upload": ("tcloudbasegateway.com", "tcb.qcloud.la", "myqcloud.com"),
 }
 CLIENT_MEDIA_REFERERS: Dict[str, str] = {
     "bilibili": "https://www.bilibili.com/",
     "douyin": "https://www.douyin.com/",
     "xiaohongshu": "https://www.xiaohongshu.com/",
+    "upload": "https://ulink.ren/",
 }
 
 
@@ -2575,6 +2581,42 @@ def _ocr_collect_on_screen_urls(
     return aggregate_url_votes(votes), False
 
 
+def _ocr_client_images(
+    urls: List[str],
+    referer: str,
+    tmpdir: str,
+    deadline: float,
+    job_id: str,
+    max_bytes: int,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """用户上传的图片：逐张下载后 OCR，跨图投票去重（不抽帧、不需要 ffmpeg）。"""
+    votes: List[List[Tuple[str, float]]] = []
+    total = max(1, len(urls))
+    for index, url in enumerate(urls[:9]):
+        _check_deadline(deadline)
+        path = _download_client_media(
+            [url],
+            referer,
+            tmpdir,
+            kind="image",
+            max_bytes=max_bytes,
+            job_id=job_id,
+            progress_base=0.62,
+            progress_span=0.10,
+        )
+        if OCR_PROVIDER == "mimo":
+            votes.append(_mimo_vision_urls(path, deadline))
+        else:
+            engine = _get_ocr_engine()
+            frame_urls: List[Tuple[str, float]] = []
+            for block_text, block_score in _ocr_frame(engine, path):
+                for found in extract_urls_from_text(block_text):
+                    frame_urls.append((found, block_score))
+            votes.append(frame_urls)
+        _set_progress(job_id, 0.72 + 0.23 * ((index + 1) / total), "ocr")
+    return aggregate_url_votes(votes), False
+
+
 def _deep_pipeline(
     job_id: str,
     url: str,
@@ -2647,6 +2689,9 @@ def _deep_pipeline(
 
     transcript: Optional[Dict[str, Any]] = None
     degraded = False
+    if client and not (client.get("audio_urls") or client.get("video_urls")):
+        # 纯图片上传：没有音轨可转写，只做 OCR
+        include["transcript"] = False
     if include.get("transcript"):
         _set_progress(job_id, 0.10, "download")
         if client and client.get("audio_urls"):
@@ -2696,7 +2741,19 @@ def _deep_pipeline(
             )
         if not _ffmpeg_ready():
             raise DeepTaskError("internal", "ffmpeg 未安装，无法抽帧做画面 OCR")
-        if client and not client.get("video_urls"):
+        if client and client.get("image_urls") and not client.get("video_urls"):
+            # 用户上传的图片：不需要 ffmpeg，逐张 OCR
+            _set_progress(job_id, 0.62, "ocr")
+            on_screen_urls, frames_degraded = _ocr_client_images(
+                client.get("image_urls") or [],
+                str(client.get("referer") or ""),
+                tmpdir,
+                deadline,
+                job_id,
+                max_bytes,
+            )
+            degraded = degraded or frames_degraded
+        elif client and not client.get("video_urls"):
             # 扩展只拿到音频：无法抽帧做 OCR，如实标记降级
             degraded = True
         else:
@@ -2925,10 +2982,13 @@ def create_deep_job(req: DeepJobRequest, request: Request):
     target_url = (req.url or "").strip()
     if not target_url:
         raise HTTPException(status_code=400, detail="Empty video URL")
+    client = _sanitize_client_media(req.client.model_dump() if req.client else None)
     # 提交时即做域名白名单 + DNS 校验（fail-closed），避免把任务排进去才发现不合法。
-    # YouTube 单独走严格预检：网络不可达时尽早 503，别让云函数扣了额度才失败。
+    # 用户上传（platform=upload）的 URL 是 CloudBase 存储，不走视频平台白名单，只校验 https/DNS 形状。
     validate_url_shape(target_url)
-    if detect_platform(target_url) == "youtube":
+    if client and client.get("platform") == "upload":
+        pass
+    elif detect_platform(target_url) == "youtube":
         # 未配代理时严格预检（网络不可达尽早 503，别让云函数扣了额度才失败）；
         # 配了 YTDLP_PROXY 时 DNS 由代理侧解析，跳过本地预检。
         if not YTDLP_PROXY:
@@ -2967,7 +3027,6 @@ def create_deep_job(req: DeepJobRequest, request: Request):
         )
 
     job_id = _new_job_id()
-    client = _sanitize_client_media(req.client.model_dump() if req.client else None)
     with _jobs_lock:
         _cleanup_jobs_locked()
         pending = sum(1 for job in _jobs.values() if job.get("status") in ("queued", "running"))

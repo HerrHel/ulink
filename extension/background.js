@@ -70,12 +70,6 @@ chrome.contextMenus.removeAll(function () {
     title: chrome.i18n.getMessage('menu_save_selection'),
     contexts: ['selection'],
   })
-  chrome.contextMenus.create({
-    id: 'deep-extract-video',
-    title: chrome.i18n.getMessage('menu_deep_extract'),
-    contexts: ['page'],
-    documentUrlPatterns: VIDEO_PAGE_PATTERNS,
-  })
 })
 
 // ── 安装/更新时 ──
@@ -97,8 +91,6 @@ chrome.contextMenus.onClicked.addListener(async function (info, tab) {
     const selection = meta.selection || info.selectionText || ''
     const finalTitle = meta.title || tab.title
     openPwaWithUrl(info.pageUrl || tab.url, finalTitle, selection)
-  } else if (info.menuItemId === 'deep-extract-video') {
-    await openVideoExtract(tab)
   }
 })
 

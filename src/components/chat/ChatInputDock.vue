@@ -209,6 +209,20 @@
             @change="handleFileInputChange"
           />
 
+          <!-- 上传媒体深度解析（视频/音频/图片；不再依赖平台反爬/扩展） -->
+          <button
+            type="button"
+            class="chat-tool-btn chat-upload-media-btn"
+            :title="t('ai.uploadDeepTitle')"
+            :aria-label="t('ai.uploadDeepTitle')"
+            @click="uploadOpen = true"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 16V4M7 9l5-5 5 5" />
+              <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+            </svg>
+          </button>
+
           <!-- 智能管家状态徽标（与截图中的左下角模型标签完全一致） -->
           <div class="toolbar-model-pill" title="与链全能资产管家 Agent">
             <span class="model-pill-dot"></span>
@@ -244,6 +258,7 @@
         </div>
       </div>
     </div>
+    <UploadMediaModal :open="uploadOpen" @close="uploadOpen = false" />
   </div>
 </template>
 
@@ -255,6 +270,7 @@ import { useDataStore } from '../../stores/data.js'
 import { processFileForAi, type AttachedMediaFile } from '../../lib/ai/attachmentHelper.js'
 import { toast } from '../../lib/toast.js'
 import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
+import UploadMediaModal from '../modals/UploadMediaModal.vue'
 
 defineOptions({ name: 'ChatInputDock' })
 
@@ -274,6 +290,7 @@ const props = defineProps<{
 const query = defineModel<string>('query', { required: true })
 const focused = defineModel<boolean>('focused', { required: true })
 const _activeIndex = defineModel<number>('activeIndex', { required: true })
+const uploadOpen = ref(false)
 
 const emit = defineEmits<{
   applySlash: [cmd: string]

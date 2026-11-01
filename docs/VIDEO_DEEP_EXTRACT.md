@@ -281,3 +281,38 @@ worker 只认 `HTTP(S)` / `SOCKS` 正向代理，**不认机场订阅链接（ss
 - [x] `/extension-guide.html` 上线（页面自述「准备商店上架，当前为开发版」）；
 - [ ] 扩展商店上架（或提供下载 zip 的正式渠道）；
 - [x] 前端发布（Pro 权益「需扩展」文案、深度失败引导已改，线上 `8882cea9`）。
+
+## 11. 2026-11-01 转向：用户上传媒体（平台深度解析下线）
+
+### 产品口径
+
+- **平台深度解析（B站/抖音/小红书 ASR/OCR、代理、浏览器扩展入口）全部下线/冻结**；
+- 深度解析只处理**用户主动上传**的视频/音频/图片，文件处理完即删除；
+- 轻量平台解析（标题/简介/字幕/评论 → AI 摘要 + 工具网址）保留，不抓取播放地址；
+- 轻量解析结果里会提示用户「如需口播转写/画面网址，请使用上传媒体解析」。
+
+### 接口与存储
+
+- CloudBase 存储 bucket：`deep-media`（迁移 `20261101000001_deep_media_storage.sql`）；
+  - 200MB、音频/视频/图片 MIME 白名单、public + RLS 仅本人可写/删；
+  - 路径 `{uid}/deep/{timestamp}-{random}-{filename}`；
+- 云函数 `extract-video` 新增 `action=deep_upload`：
+  - 入参 `{ upload: { kind: 'audio'|'video'|'image', url, title? } }`；
+  - 校验 URL 必须是 CloudBase 存储 host + `/deep-media/` 路径；
+  - 校验登录/额度后，复用 worker 的 `client` 媒体通道；
+  - 失败自动退额度（同 §9）；
+- worker `platform=upload`：支持音频（ASR）、视频（ASR + 抽帧 OCR）、图片（逐张 OCR 投票聚合）；
+- 前端：AI 输入框旁「上传媒体解析」按钮 → `UploadMediaModal.vue`；
+  - 上传到 `deep-media` → `submitDeepUpload` → `pollDeepVideo`；
+  - 结果展示转写/画面网址；处理完删除临时对象。
+
+### 扩展
+
+- Edge 扩展更新到 **1.2.2**：移除视频深度解析右键入口（平台深度解析下线），只保留保存书签/侧边栏；
+- 扩展仍可在商店更新；网页端上传解析不需要扩展。
+
+### 当前状态（2026-11-01）
+
+- 后端 `deep_upload` 云函数、worker 上传路径、`deep-media` bucket/RLS 已部署；
+- 前端上传入口、弹窗、Pro 文案、轻量解析后的引导已实现；
+- 待完成：真实登录用户上传端到端（音频/视频/图片各一条）、前端发布、扩展商店更新到 1.2.2。

@@ -286,6 +286,30 @@ export async function submitDeepVideo(
 }
 
 /**
+ * 提交「用户上传媒体」深度解析（音频 ASR / 视频 ASR+OCR / 图片 OCR）。
+ * fileUrl 必须是 CloudBase deep-media 存储的公开地址；服务端会校验 host/path。
+ */
+export async function submitDeepUpload(
+  upload: { kind: 'audio' | 'video' | 'image'; url: string; title?: string },
+  options: { signal?: AbortSignal } = {},
+): Promise<DeepVideoJob> {
+  if (!isDeepVideoAvailable()) {
+    throw new DeepVideoError('deep_unavailable', t('ai.deepUnavailable'))
+  }
+  const data = await postExtractVideo(
+    { action: 'deep_upload', upload },
+    { signal: options.signal, timeoutMs: SUBMIT_TIMEOUT_MS },
+  )
+  const jobId = typeof data.job_id === 'string' ? data.job_id : ''
+  if (!jobId) throw new DeepVideoError('deep_unavailable', t('ai.deepUnavailable'))
+  return {
+    job_id: jobId,
+    status: normalizeStatus(data.status === undefined ? 'queued' : data.status),
+    ...(typeof data.eta_seconds === 'number' ? { eta_seconds: data.eta_seconds } : {}),
+  }
+}
+
+/**
  * 轮询深度任务直到 done/failed（或超时/取消）。
  * onProgress 每次拿到最新状态时回调（stage 已做过校验，progress 归一到 0~1）。
  */
