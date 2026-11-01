@@ -24,6 +24,9 @@ const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 const ERROR_LOG_KEEP_DAYS = parseInt(process.env.ERROR_LOG_KEEP_DAYS || '365', 10)
 /** 回收站自动清理天数：0 = 关闭 */
 const TRASH_KEEP_DAYS = parseInt(process.env.TRASH_KEEP_DAYS || '0', 10)
+/** 用户上传媒体临时对象保留小时数：默认 24h；处理完前端/worker 会主动删，这里兜底 */
+const DEEP_MEDIA_KEEP_HOURS = parseInt(process.env.DEEP_MEDIA_KEEP_HOURS || '24', 10)
+const DEEP_MEDIA_BUCKET = 'deep-media'
 
 async function runCleanup() {
   if (!ENV_ID || !API_KEY) {
@@ -40,7 +43,28 @@ async function runCleanup() {
     console.error('[maintenance] cleanup_expired_data failed:', r.error)
     return { ok: false, error: String(r.error.message || r.error) }
   }
-  return r.data
+
+  // 兜底清理 deep-media 中用户中途关闭页面/失败残留的临时媒体
+  let deepMediaDeleted = 0
+  try {
+    const listed = await db.rpc('list_expired_deep_media', { p_keep_hours: DEEP_MEDIA_KEEP_HOURS })
+    if (listed.error) {
+      console.error('[maintenance] list_expired_deep_media failed:', listed.error)
+    } else if (Array.isArray(listed.data) && listed.data.length > 0) {
+      const fileList = listed.data
+        .filter((p) => typeof p === 'string' && p)
+        .map((p) => `cloud://${ENV_ID}.${DEEP_MEDIA_BUCKET}/${p}`)
+      if (fileList.length > 0) {
+        const del = await app.deleteFile({ fileList })
+        const results = (del && (del.fileList || (del.data && del.data.fileList))) || []
+        deepMediaDeleted = results.filter((f) => f && (f.code === 0 || f.code === '0' || f.status === 'ok')).length
+      }
+    }
+  } catch (e) {
+    console.error('[maintenance] deep-media cleanup failed:', (e && e.message) || e)
+  }
+
+  return { ...r.data, deepMediaDeleted }
 }
 
 // 定时触发器入口
