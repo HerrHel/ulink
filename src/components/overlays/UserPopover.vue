@@ -126,6 +126,15 @@
               </span>
             </button>
 
+            <!-- 外观主题快速切换 -->
+            <button class="up-menu-item" data-testid="up-theme-item" @click="toggleThemeQuick">
+              <div class="up-item-left">
+                <span class="up-item-icon" aria-hidden="true" v-html="uiStore.themeColor === 'dark' ? I.sun : I.moon"></span>
+                <span class="up-item-title">{{ t('settings.theme') }}</span>
+              </div>
+              <span class="up-item-meta">{{ currentThemeLabel }}</span>
+            </button>
+
             <!-- 偏好设置 (index 2) -->
             <button class="up-menu-item" @click="openSettings">
               <div class="up-item-left">
@@ -197,6 +206,14 @@ const sync = useCloudSync()
 const syncState = useSyncState()
 const e2e = useE2E()
 const uiStore = useUIStore()
+
+const currentThemeLabel = computed(() => {
+  return uiStore.themeColor === 'dark' ? t('settings.themeDark') : t('settings.themeLight')
+})
+
+function toggleThemeQuick(e?: MouseEvent) {
+  uiStore.toggleTheme(e)
+}
 
 const entService = useEntitlement()
 const showPurchase = ref(false)

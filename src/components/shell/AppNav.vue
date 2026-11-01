@@ -17,7 +17,20 @@
         {{ t('nav.aiChat') }}
       </button>
     </div>
-    <div class="rail-section-label">{{ t('nav.categories') }}</div>
+    <div class="rail-section-header">
+      <span class="rail-section-label">{{ t('nav.categories') }}</span>
+      <button
+        v-if="!shareMode"
+        class="rail-section-action-btn"
+        id="btnManageCats"
+        data-testid="btn-manage-cats"
+        @click="openCatModalNav"
+        :title="t('nav.manageCategories')"
+        :aria-label="t('nav.manageCategories')"
+      >
+        <span aria-hidden="true" v-html="I.settings"></span>
+      </button>
+    </div>
     <div class="rail-nav" id="railNav">
       <!-- Phase 2: Vue 模板渲染替代 innerHTML -->
       <button
@@ -39,23 +52,8 @@
         <span aria-hidden="true" v-html="I.back"></span>
         {{ t('nav.backToMain') }}
       </button>
-      <div v-if="!shareMode" class="rail-action-row">
-        <button class="rail-item rail-action-main" id="btnManageCats" @click="openCatModalNav" :title="t('nav.manageCategories')">
-          <span aria-hidden="true" v-html="I.settings"></span>
-          {{ t('nav.manageCategories') }}
-        </button>
-        <button
-          class="rail-action-icon-btn"
-          id="btnToggleThemeQuick"
-          data-testid="btn-toggle-theme-quick"
-          @click="toggleThemeQuick"
-          :title="t('nav.toggleThemeLabel')"
-          :aria-label="t('nav.toggleThemeLabel')"
-        >
-          <span class="icon-sun" aria-hidden="true" v-html="I.sun"></span>
-          <span class="icon-moon" aria-hidden="true" v-html="I.moon"></span>
-        </button>
-      </div>
+
+
       <!-- 专属账户底座 -->
       <div
         ref="railUserRef"
@@ -177,9 +175,7 @@ function onUserClick() {
   }
 }
 
-function toggleThemeQuick(e?: MouseEvent) {
-  uiStore.toggleTheme(e)
-}
+
 
 function openCatModalNav() { openCatModal() }
 </script>

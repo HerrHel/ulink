@@ -93,6 +93,17 @@
         <span aria-hidden="true" v-html="I.user" class="icon-sm"></span>
         <span class="header-login-text">{{ t('settings.loginRegister') }}</span>
       </button>
+      <button
+        v-show="!ui.focusedGroupId"
+        class="lt-btn header-theme-btn"
+        id="btnToggleThemeHeader"
+        data-testid="btn-toggle-theme-header"
+        @click="ui.toggleTheme($event)"
+        :title="t('nav.toggleThemeLabel')"
+        :aria-label="t('nav.toggleThemeLabel')"
+      >
+        <span aria-hidden="true" v-html="ui.themeColor === 'dark' ? I.sun : I.moon"></span>
+      </button>
       <span v-show="!ui.focusedGroupId" class="settings-wrap" @click.stop>
         <button class="lt-btn" id="btnSettings" data-testid="lv-btn-settings" @click="toggleSettings" :title="t('shell.settings')" :aria-label="t('shell.settings')">
             <span aria-hidden="true" v-html="I.settings" class="icon-sm"></span>
