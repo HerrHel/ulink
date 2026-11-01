@@ -12,12 +12,19 @@
 export interface AttachedMediaFile {
   id: string
   name: string
-  type: 'image' | 'video' | 'file'
+  type: 'image' | 'video' | 'audio' | 'file'
   mimeType: string
   size: number
   sizeFormatted: string
   dataUrl?: string // 图片压缩缩略图 / 预览 DataURL
   textContent?: string // 文本/代码/数据类文件的提取正文
+}
+
+/** 原始 File 只驻留内存，不随会话序列化（避免把二进制写进 localStorage/IDB） */
+const rawFileStore = new Map<string, File>()
+
+export function getRawAttachedFile(id: string): File | undefined {
+  return rawFileStore.get(id)
 }
 
 export function formatFileSize(bytes: number): string {
@@ -31,15 +38,26 @@ export function formatFileSize(bytes: number): string {
  */
 export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
   const id = 'file_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)
+  rawFileStore.set(id, file)
+  if (rawFileStore.size > 40) {
+    const first = rawFileStore.keys().next().value
+    if (first) rawFileStore.delete(first)
+  }
   const size = file.size
   const sizeFormatted = formatFileSize(size)
   const mimeType = file.type || 'application/octet-stream'
 
-  let type: 'image' | 'video' | 'file' = 'file'
-  if (mimeType.startsWith('image/')) {
+  let type: 'image' | 'video' | 'audio' | 'file' = 'file'
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  const imageExts = ['png', 'jpg', 'jpeg', 'webp', 'gif']
+  const videoExts = ['mp4', 'mov', 'webm', 'm4v']
+  const audioExts = ['mp3', 'm4a', 'wav', 'aac', 'ogg']
+  if (mimeType.startsWith('image/') || imageExts.includes(ext)) {
     type = 'image'
-  } else if (mimeType.startsWith('video/')) {
+  } else if (mimeType.startsWith('video/') || videoExts.includes(ext)) {
     type = 'video'
+  } else if (mimeType.startsWith('audio/') || audioExts.includes(ext)) {
+    type = 'audio'
   }
 
   let dataUrl: string | undefined
@@ -77,7 +95,6 @@ export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
     textContent,
   }
 }
-
 /**
  * 压缩图片生成轻量 DataURL 缩略图
  */
@@ -178,9 +195,13 @@ export function formatAttachedFilesForPrompt(files: AttachedMediaFile[], isZh: b
           ? isZh
             ? '视频'
             : 'Video'
-          : isZh
-          ? '文档/文件'
-          : 'Document/File'
+          : f.type === 'audio'
+            ? isZh
+              ? '音频'
+              : 'Audio'
+            : isZh
+              ? '文档/文件'
+              : 'Document/File'
 
       let block = `${i + 1}. 【${f.name}】（${typeLabel}，${f.sizeFormatted}）`
       if (f.type === 'image') {

@@ -679,9 +679,15 @@ async function handleDeepUpload(req, res, cors, body, db, signal) {
     sendDeepError(res, cors, quota)
     return
   }
-  const include = kind === 'image'
-    ? { transcript: false, ocr: true }
-    : { transcript: true, ocr: kind === 'video' }
+  const requested = normalizeDeepInclude(body.include)
+  let include = { transcript: requested.transcript === true, ocr: requested.ocr === true }
+  if (!include.transcript && !include.ocr) {
+    // 未显式指定时按媒体类型给默认：图片只 OCR；音频只转写；视频转写 + OCR
+    include =
+      kind === 'image'
+        ? { transcript: false, ocr: true }
+        : { transcript: true, ocr: kind === 'video' }
+  }
   const client = {
     platform: 'upload',
     referer: 'https://ulink.ren/',

@@ -190,11 +190,11 @@ export const aiZh = {
     deepFailed: '实验性深度解析失败（{code}）：{message}',
     deepResultEmpty: '实验性深度解析已完成，但没有拿到可读的口播转写或画面网址。',
     deepNeedsExtension:
-      '如需对无字幕视频/音频/画面做深度解析，请使用「上传媒体解析」上传你拥有权利或已获授权的文件；不需要浏览器扩展，也不经过代理。',
+      '需要口播转写/画面网址时，直接把图片、视频或音频上传到输入框即可：AI 会按你的问题自动判断是直接看图，还是做语音转写/画面 OCR。',
     deepQuotaRefunded: '本次实验性深度解析失败，已自动退回 1 次体验额度。',
-    uploadDeepTitle: '上传媒体解析',
+    uploadDeepTitle: '媒体解析',
     uploadDeepHint:
-      '上传你拥有权利或已获授权的视频 / 音频 / 图片，AI 会转写口播、识别画面文字与网址。文件仅用于本次处理，处理完即删除。',
+      '在输入框上传图片/视频/音频即可。AI 会根据你的问题自动选择：描述画面 → 直接看图；要转写/网址 → 自动 ASR/OCR。文件仅用于本次处理，处理完即删除。',
     uploadDeepPick: '选择文件',
     uploadDeepRights: '我确认拥有该内容的权利或已获得授权，且内容不含违法或他人隐私信息',
     uploadDeepStart: '开始解析',
@@ -209,7 +209,7 @@ export const aiZh = {
     uploadDeepTranscript: '口播转写',
     uploadDeepUrls: '画面中出现的网址',
     deepUploadGuide:
-      '如果该视频没有字幕，或你需要口播转写/画面中的网址，请使用输入框旁的「上传媒体解析」上传你拥有权利或已获授权的视频/音频/图片（不需要浏览器扩展，也不经过代理）。',
+      '需要口播转写/画面网址时，直接把视频、音频或图片上传到输入框即可；AI 会按你的问题自动选择直接看图或做 ASR/OCR，不需要浏览器扩展，也不经过代理。',
     jinaEmpty: '目标页面返回空内容或不可公开抓取',
     jinaTimeout: '页面读取超时或已被用户取消',
     jinaNetError: '网络或跨域读取异常: {msg}',
@@ -576,11 +576,11 @@ export const aiEn = {
     deepFailed: 'Experimental deep extraction failed ({code}): {message}',
     deepResultEmpty: 'Experimental deep extraction finished, but no readable transcript or on-screen URLs were produced.',
     deepNeedsExtension:
-      'To deep-analyze a video/audio/image without subtitles, use "Upload media for analysis" and upload a file you own or are authorized to use; no browser extension or proxy is needed.',
+      'For transcripts or on-screen URLs, just attach the image/video/audio to the chat input; AI will decide whether to read the image directly or run ASR/OCR based on your question.',
     deepQuotaRefunded: 'This experimental deep extraction failed; 1 trial quota has been refunded automatically.',
-    uploadDeepTitle: 'Upload media for analysis',
+    uploadDeepTitle: 'Media analysis',
     uploadDeepHint:
-      'Upload a video/audio/image you own or are authorized to use. AI will transcribe speech and extract on-screen text/URLs. Files are used only for this job and deleted afterwards.',
+      'Attach an image/video/audio to the input. AI picks the path automatically: describe the image → vision; transcript/URLs → ASR/OCR. Files are used only for this request and deleted afterwards.',
     uploadDeepPick: 'Choose file',
     uploadDeepRights: 'I confirm I own this content or have authorization, and it contains no illegal or private information',
     uploadDeepStart: 'Start analysis',
@@ -595,7 +595,7 @@ export const aiEn = {
     uploadDeepTranscript: 'Transcript',
     uploadDeepUrls: 'On-screen URLs',
     deepUploadGuide:
-      'If this video has no subtitles, or you need a speech transcript / on-screen URLs, use "Upload media for analysis" next to the input box to upload a video/audio/image you own or are authorized to use (no browser extension or proxy needed).',
+      'For transcripts or on-screen URLs, attach the video/audio/image directly to the chat input; AI will choose vision or ASR/OCR based on your question. No extension or proxy needed.',
     jinaEmpty: 'Target page returned empty content or is not publicly fetchable',
     jinaTimeout: 'Page read timed out or was cancelled',
     jinaNetError: 'Network or cross-origin read error: {msg}',

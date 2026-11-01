@@ -8,6 +8,7 @@ import {
   validateUploadFile,
   MAX_IMAGE_BYTES,
 } from '../../lib/ai/deepMediaUpload.js'
+import { detectMediaIntent } from '../../lib/ai/unifiedMedia.js'
 
 function makeFile(name: string, type: string, size: number): File {
   const file = new File(['x'], name, { type })
@@ -32,5 +33,12 @@ describe('deepMediaUpload 纯函数', () => {
     expect(formatUploadSize(512)).toBe('512 B')
     expect(formatUploadSize(2048)).toBe('2.0 KB')
     expect(formatUploadSize(2 * 1024 * 1024)).toBe('2.0 MB')
+  })
+
+  it('按用户问题区分「看图」与「转写/OCR」', () => {
+    expect(detectMediaIntent('这张图里有什么？')).toEqual({ wantsTranscript: false, wantsOcr: false })
+    expect(detectMediaIntent('截图里有哪些网址')).toEqual({ wantsTranscript: false, wantsOcr: true })
+    expect(detectMediaIntent('把这段录音转写一下')).toEqual({ wantsTranscript: true, wantsOcr: false })
+    expect(detectMediaIntent('总结这个视频并提取画面网址')).toEqual({ wantsTranscript: true, wantsOcr: true })
   })
 })

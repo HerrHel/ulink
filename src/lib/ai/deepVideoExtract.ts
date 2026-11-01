@@ -291,13 +291,13 @@ export async function submitDeepVideo(
  */
 export async function submitDeepUpload(
   upload: { kind: 'audio' | 'video' | 'image'; url: string; title?: string },
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; include?: { transcript?: boolean; ocr?: boolean } } = {},
 ): Promise<DeepVideoJob> {
   if (!isDeepVideoAvailable()) {
     throw new DeepVideoError('deep_unavailable', t('ai.deepUnavailable'))
   }
   const data = await postExtractVideo(
-    { action: 'deep_upload', upload },
+    { action: 'deep_upload', upload, ...(options.include ? { include: options.include } : {}) },
     { signal: options.signal, timeoutMs: SUBMIT_TIMEOUT_MS },
   )
   const jobId = typeof data.job_id === 'string' ? data.job_id : ''

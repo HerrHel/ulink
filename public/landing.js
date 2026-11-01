@@ -225,7 +225,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     'price.no': 'Not included',
     'price.note1': 'No auto-renewal on any plan. Renew on demand.',
     'price.deepNote':
-      'Upload-media deep analysis is an experimental lab feature: analyze video/audio/image files you own or are authorized to use; no browser extension or proxy, and files are deleted after processing.',
+      'Chat media analysis is an experimental lab feature: attach video/audio/image files you own or are authorized to use; AI chooses vision or ASR/OCR based on your question; no extension or proxy, files deleted after processing.',
     'price.note2': 'See our',
     'price.refundLink': 'refund policy',
     'price.note3': '.',

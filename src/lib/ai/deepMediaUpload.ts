@@ -46,6 +46,11 @@ export function detectUploadKind(file: File): DeepUploadKind | null {
   if (AUDIO_MIME.has(mime) || mime.startsWith('audio/')) return 'audio'
   if (VIDEO_MIME.has(mime) || mime.startsWith('video/')) return 'video'
   if (IMAGE_MIME.has(mime) || mime.startsWith('image/')) return 'image'
+  // 部分系统/浏览器对本地文件给空 MIME：按扩展名兜底
+  const ext = String(file.name || '').split('.').pop()?.toLowerCase() || ''
+  if (['mp3', 'm4a', 'wav', 'aac', 'ogg'].includes(ext)) return 'audio'
+  if (['mp4', 'mov', 'webm', 'm4v'].includes(ext)) return 'video'
+  if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image'
   return null
 }
 
@@ -81,7 +86,8 @@ export async function uploadDeepMediaFile(file: File, userId: string): Promise<D
     | null
   if (!st || typeof st.upload !== 'function') throw new Error('上传存储不可用')
   const path = `${userId}/deep/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName(file.name)}`
-  const { error } = await st.upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+  const fallbackMime = kind === 'audio' ? 'audio/mpeg' : kind === 'video' ? 'video/mp4' : 'image/jpeg'
+  const { error } = await st.upload(path, file, { contentType: file.type || fallbackMime, upsert: false })
   if (error) throw new Error((error as Error)?.message || '上传失败')
   const pub: any = await Promise.resolve(st.getPublicUrl?.(path))
   const url = pub?.data?.publicUrl || pub?.data?.publicURL || ''

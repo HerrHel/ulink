@@ -24,6 +24,8 @@ import {
   type ResolvedCardContext,
 } from '../../lib/ai/cardReader.js'
 import { formatAttachedFilesForPrompt } from '../../lib/ai/attachmentHelper.js'
+import { prepareUnifiedMedia } from '../../lib/ai/unifiedMedia.js'
+import { useAuthStore } from '../../stores/auth.js'
 import { vaultRAG } from '../../lib/ai/localRAG.js'
 import { expandQueryTerms } from '../../lib/ai/queryExpand.js'
 import { remember, buildProfilePrompt } from '../../lib/ai/aiProfile.js'
@@ -159,10 +161,23 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
     // 构建发给模型的完整提示词（内嵌详细卡片与多模态附件材料）
     const cardSection = resolvedCards.length > 0 ? formatAttachedCardsForPrompt(resolvedCards, isZh.value) : ''
+    // 统一媒体入口：图片/视频/音频都从这里走；按用户问题决定「直接看图」还是「ASR/OCR 深度解析」
+    let unifiedMedia: { images: string[]; extraPrompt: string } = { images: [], extraPrompt: '' }
+    if (attachedFiles.some((f) => f.type === 'image' || f.type === 'video' || f.type === 'audio')) {
+      loadingTextKey.value = 'ai.deepProcessing'
+      const authStore = useAuthStore()
+      unifiedMedia = await prepareUnifiedMedia(attachedFiles, raw, String(authStore.user?.id || ''), {
+        onProgress: () => {
+          loadingTextKey.value = 'ai.deepProcessing'
+        },
+      })
+      loadingTextKey.value = 'ai.thinking'
+    }
     const fileSection = attachedFiles.length > 0 ? formatAttachedFilesForPrompt(attachedFiles, isZh.value) : ''
+    const mediaSection = unifiedMedia.extraPrompt
     let promptWithCards = raw
-    if (cardSection || fileSection) {
-      const mergedSections = [cardSection, fileSection].filter(Boolean).join('\n')
+    if (cardSection || fileSection || mediaSection) {
+      const mergedSections = [cardSection, fileSection, mediaSection].filter(Boolean).join('\n')
       promptWithCards = `${mergedSections}\n${t('ai.userQuestionLabel')}${raw}`
     }
 
@@ -517,9 +532,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 history,
                 contextSlice,
                 profilePrompt,
-                images: attachedFiles
-                  .filter((f) => f.type === 'image' && typeof f.dataUrl === 'string' && f.dataUrl)
-                  .map((f) => f.dataUrl as string),
+                images: unifiedMedia.images,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {
