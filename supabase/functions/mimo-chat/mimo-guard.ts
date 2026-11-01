@@ -29,14 +29,41 @@ const ALLOWED_TOOL_CHOICES = new Set(['auto', 'none', 'required'])
 /** 模型名字符白名单：防注入超长/控制字符到上游请求 */
 const MODEL_NAME_RE = /^[a-zA-Z0-9._-]{1,64}$/
 
-/** 递归估算任意值的文本规模（字符数），用于 token 预算 */
+/** 递归估算任意值的文本规模（字符数），用于 token 预算；图片内容块不计入文本字符预算 */
 export function textLength(value: unknown): number {
   if (typeof value === 'string') return value.length
   if (Array.isArray(value)) return value.reduce((n: number, item) => n + textLength(item), 0)
   if (value && typeof value === 'object') {
-    return Object.values(value as Record<string, unknown>).reduce<number>((n, item) => n + textLength(item), 0)
+    const obj = value as Record<string, unknown>
+    // 多模态图片块（data URL 很大）：不计入文本预算，改用独立图片预算
+    if (obj.type === 'image_url' || obj.type === 'image') return 0
+    return Object.values(obj).reduce<number>((n, item) => n + textLength(item), 0)
   }
   return 0
+}
+
+/** 统计请求中的图片数量与 data URL 总字符数（多模态预算） */
+function imageStats(value: unknown): { count: number; chars: number } {
+  let count = 0
+  let chars = 0
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item)
+      return
+    }
+    const obj = node as Record<string, unknown>
+    if (obj.type === 'image_url' || obj.type === 'image') {
+      const image = (obj.image_url || obj.image) as Record<string, unknown> | undefined
+      const url = image && typeof image.url === 'string' ? image.url : ''
+      count += 1
+      chars += url.length
+      return
+    }
+    for (const item of Object.values(obj)) visit(item)
+  }
+  visit(value)
+  return { count, chars }
 }
 
 /**
@@ -99,6 +126,15 @@ export function validateChatBody(
     if (totalChars > maxTotalChars) {
       return { ok: false, status: 413, error: `Conversation too large (max ${maxTotalChars} chars)` }
     }
+  }
+
+  // ── 多模态图片预算：最多 4 张，data URL 总量 ≤ 3MB ──
+  const images = imageStats(b.messages)
+  if (images.count > 4) {
+    return { ok: false, status: 413, error: 'Too many images (max 4)' }
+  }
+  if (images.chars > 3_000_000) {
+    return { ok: false, status: 413, error: 'Images too large (max 3000000 chars)' }
   }
 
   const payload: Record<string, unknown> = {

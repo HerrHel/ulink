@@ -56,7 +56,7 @@ export interface AgentToolCall {
 /** 对话消息（含 tool 回传，支持真 Agent 循环） */
 export interface MiMoChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  content: string | Array<Record<string, unknown>>
   tool_call_id?: string
   tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>
 }
@@ -136,6 +136,8 @@ export async function askMiMoStream(
     contextSlice?: DynamicContextSlice
     /** 个人记忆小节（aiProfile.buildProfilePrompt 生成） */
     profilePrompt?: string
+    /** 当前轮用户图片（data URL；只发压缩缩略图，最多 4 张） */
+    images?: string[]
   },
   callbacks?: MiMoStreamCallbacks
 ): Promise<{
@@ -168,7 +170,21 @@ export async function askMiMoStream(
 
   // userQuery 为空表示 Agent 循环续轮（历史已含 tool 结果，无需新用户消息）
   if (userQuery) {
-    messages.push({ role: 'user', content: userQuery })
+    const imageUrls = (context.images || [])
+      .filter((url) => typeof url === 'string' && /^data:image\//i.test(url))
+      .slice(0, 4)
+    if (imageUrls.length > 0) {
+      // 多模态请求：文本 + image_url 内容块（MiMo v2.6-flash 支持图像理解）
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: userQuery },
+          ...imageUrls.map((url) => ({ type: 'image_url', image_url: { url } })),
+        ],
+      })
+    } else {
+      messages.push({ role: 'user', content: userQuery })
+    }
   }
 
   const requestBody: Record<string, any> = {

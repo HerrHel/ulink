@@ -183,6 +183,11 @@ export function formatAttachedFilesForPrompt(files: AttachedMediaFile[], isZh: b
           : 'Document/File'
 
       let block = `${i + 1}. 【${f.name}】（${typeLabel}，${f.sizeFormatted}）`
+      if (f.type === 'image') {
+        block += isZh
+          ? '\n   图片内容已随本条消息提供（多模态），请直接查看图片内容。'
+          : '\n   The image content is attached to this message; inspect it directly.'
+      }
       if (f.textContent) {
         block += `\n   文件正文提取内容如下：\n\`\`\`\n${f.textContent}\n\`\`\``
       }

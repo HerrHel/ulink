@@ -517,6 +517,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 history,
                 contextSlice,
                 profilePrompt,
+                images: attachedFiles
+                  .filter((f) => f.type === 'image' && typeof f.dataUrl === 'string' && f.dataUrl)
+                  .map((f) => f.dataUrl as string),
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {

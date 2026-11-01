@@ -210,7 +210,11 @@ describe('AI 提示词评测集（一）— 提问透传与情境注入', () => 
     expect(query).toContain('测试书签')
     expect(query).toContain('https://example.com')
     // 本轮 user 内容不重复出现在 history（双份注入回归锁）
-    expect((ctx.history || []).some((m) => m.content.includes('帮我分析这个书签的价值'))).toBe(false)
+    expect(
+      (ctx.history || []).some(
+        (m) => typeof m.content === 'string' && m.content.includes('帮我分析这个书签的价值'),
+      ),
+    ).toBe(false)
   })
 
   it('附件提问前缀双语：en 语言下走英文「User question:」标签（i18n 硬编码回归锁）', async () => {

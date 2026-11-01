@@ -42,9 +42,33 @@ function textLength(value) {
   if (typeof value === "string") return value.length;
   if (Array.isArray(value)) return value.reduce((n, item) => n + textLength(item), 0);
   if (value && typeof value === "object") {
-    return Object.values(value).reduce((n, item) => n + textLength(item), 0);
+    const obj = value;
+    if (obj.type === "image_url" || obj.type === "image") return 0;
+    return Object.values(obj).reduce((n, item) => n + textLength(item), 0);
   }
   return 0;
+}
+function imageStats(value) {
+  let count = 0;
+  let chars = 0;
+  const visit = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+    const obj = node;
+    if (obj.type === "image_url" || obj.type === "image") {
+      const image = obj.image_url || obj.image;
+      const url = image && typeof image.url === "string" ? image.url : "";
+      count += 1;
+      chars += url.length;
+      return;
+    }
+    for (const item of Object.values(obj)) visit(item);
+  };
+  visit(value);
+  return { count, chars };
 }
 function validateChatBody(body, opts) {
   const maxMessages = opts.maxMessages ?? MAX_MESSAGES_DEFAULT;
@@ -86,6 +110,13 @@ function validateChatBody(body, opts) {
     if (totalChars > maxTotalChars) {
       return { ok: false, status: 413, error: `Conversation too large (max ${maxTotalChars} chars)` };
     }
+  }
+  const images = imageStats(b.messages);
+  if (images.count > 4) {
+    return { ok: false, status: 413, error: "Too many images (max 4)" };
+  }
+  if (images.chars > 3e6) {
+    return { ok: false, status: 413, error: "Images too large (max 3000000 chars)" };
   }
   const payload = {
     model,
