@@ -1,11 +1,17 @@
 /**
- * 支付宝当面付（alipay.trade.precreate）—— 扫码支付
+ * 支付宝渠道集成
  *
- * 与微信的三处关键差异（写代码时最容易踩）：
+ * 支持产品能力：
+ *   1. 电脑网站支付（alipay.trade.page.pay）—— FAST_INSTANT_TRADE_PAY
+ *   2. 手机网站支付（alipay.trade.wap.pay）—— QUICK_WAP_PAY
+ *   3. 统一查单（alipay.trade.query）
+ *   4. 统一异步通知验签与解析
+ *
+ * 关键规则与签名要点：
  *   1. **金额单位是「元」的两位小数字符串**（如 "12.00"），不是分；
- *   2. 签名用 **RSA2（SHA256withRSA）**，待签名串是「排除 sign/sign_type 后
- *      按 key 字典序拼接的 key=value&...」，且**不强制 urlencode**（网关请求时
- *      参数各自 urlencode，回调验签时先 decode 再拼）；
+ *   2. 签名用 **RSA2（SHA256withRSA）**：
+ *      - **请求加签**：参数字典序拼接，必须排除 sign，保留 sign_type（支付宝网关验签必须包含 sign_type）；
+ *      - **回调验签**：参数字典序拼接，必须排除 sign 和 sign_type（符合支付宝异步通知规范）；
  *   3. 回调是 form-urlencoded，不是 JSON。
  *
  * 环境变量（未配置视为未开通）：
@@ -70,8 +76,23 @@ function yuanToCents(yuan) {
   return intPart * 100 + fracPart
 }
 
-/** 按 key 字典序拼接（排除空值与 sign/sign_type），得到待签名/待验签串 */
-function buildSignContent(params) {
+/**
+ * 请求待签名串：排除 sign 与空值（保留 sign_type）
+ * ⚠️ 支付宝网关在 RSA2 下把请求参数中的 sign_type 算入待签名串中。
+ */
+function buildRequestSignContent(params) {
+  return Object.keys(params)
+    .filter((k) => k !== 'sign' && params[k] !== undefined && params[k] !== null && params[k] !== '')
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join('&')
+}
+
+/**
+ * 回调验签待签名串：排除 sign、sign_type 与空值
+ * ⚠️ 支付宝异步通知官方规范明确要求排除 sign 与 sign_type。
+ */
+function buildVerifySignContent(params) {
   return Object.keys(params)
     .filter((k) => k !== 'sign' && k !== 'sign_type' && params[k] !== undefined && params[k] !== null && params[k] !== '')
     .sort()
@@ -79,61 +100,96 @@ function buildSignContent(params) {
     .join('&')
 }
 
+/** 保持历史接口兼容，默认同 buildVerifySignContent */
+const buildSignContent = buildVerifySignContent
+
 function signRSA2(content) {
   return createSign('RSA-SHA256').update(content, 'utf8').sign(privateKey(), 'base64')
 }
 
 /**
- * 当面付下单：返回 qr_code（前端渲染二维码）。
- * @param {{ outTradeNo: string, subject: string, totalCents: number, timeoutMinutes?: number }} p
+ * 构造收银台跳转 URL（电脑网站支付与手机网站支付通用引擎）
  */
-async function createPrecreateOrder({ outTradeNo, subject, totalCents, timeoutMinutes = 30 }) {
+function buildCashierUrl({ method, productCode, outTradeNo, subject, totalCents, timeoutMinutes = 30, returnUrl }) {
   if (!isAlipayConfigured()) throw new Error('alipay_not_configured')
 
   const bizContent = {
     out_trade_no: outTradeNo,
     total_amount: centsToYuan(totalCents),
     subject: String(subject).slice(0, 256),
-    // 超时关单：支付宝语法 m（分）；与本地 orders.expires_at 对齐，略长一点留缓冲
+    product_code: productCode,
     timeout_express: `${Math.max(5, timeoutMinutes + 5)}m`,
-}
+  }
 
   const params = {
     app_id: process.env.ALIPAY_APP_ID,
-    method: 'alipay.trade.precreate',
+    method,
     format: 'JSON',
     charset: 'utf-8',
     sign_type: 'RSA2',
     timestamp: nowTimestamp(),
     version: '1.0',
     notify_url: process.env.ALIPAY_NOTIFY_URL,
+    return_url: returnUrl || 'https://ulink.ren/#payment_success',
     biz_content: JSON.stringify(bizContent),
   }
-  params.sign = signRSA2(buildSignContent(params))
 
-  const body = new URLSearchParams(params).toString()
-  const res = await fetch(gateway(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-    body,
-  })
-  const text = await res.text()
-  let json
-  try {
-    json = JSON.parse(text)
-  } catch {
-    throw new Error(`alipay_bad_response: ${text.slice(0, 200)}`)
-  }
-
-  const node = json.alipay_trade_precreate_response
-  if (!node) throw new Error('alipay_missing_response_node')
-  if (node.code !== '10000' || !node.qr_code) {
-    throw new Error(`alipay_error: ${node.sub_code || node.code} ${node.sub_msg || node.msg || ''}`.trim())
-  }
-  return { qrCode: node.qr_code }
+  params.sign = signRSA2(buildRequestSignContent(params))
+  return `${gateway()}?${new URLSearchParams(params).toString()}`
 }
 
-/** 主动查单（回调丢失时的兜底） */
+/**
+ * 电脑网站支付（PC 跳转或扫码）
+ * product_code: FAST_INSTANT_TRADE_PAY
+ */
+async function createPagePayOrder({ outTradeNo, subject, totalCents, timeoutMinutes = 30, returnUrl }) {
+  const payUrl = buildCashierUrl({
+    method: 'alipay.trade.page.pay',
+    productCode: 'FAST_INSTANT_TRADE_PAY',
+    outTradeNo,
+    subject,
+    totalCents,
+    timeoutMinutes,
+    returnUrl,
+  })
+  return { payUrl, qrCode: payUrl }
+}
+
+/**
+ * 手机网站支付（H5 自动唤起支付宝 App）
+ * product_code: QUICK_WAP_PAY
+ */
+async function createWapPayOrder({ outTradeNo, subject, totalCents, timeoutMinutes = 30, returnUrl }) {
+  const payUrl = buildCashierUrl({
+    method: 'alipay.trade.wap.pay',
+    productCode: 'QUICK_WAP_PAY',
+    outTradeNo,
+    subject,
+    totalCents,
+    timeoutMinutes,
+    returnUrl,
+  })
+  return { payUrl, qrCode: payUrl }
+}
+
+/**
+ * 统一支付下单入口
+ */
+async function createOrder({ outTradeNo, subject, totalCents, timeoutMinutes = 30, isMobile = false, returnUrl }) {
+  if (isMobile) {
+    return createWapPayOrder({ outTradeNo, subject, totalCents, timeoutMinutes, returnUrl })
+  }
+  return createPagePayOrder({ outTradeNo, subject, totalCents, timeoutMinutes, returnUrl })
+}
+
+/**
+ * 兼容旧代码的预下单接口（直接导流到电脑网站支付，支持 PC 扫码/跳转）
+ */
+async function createPrecreateOrder({ outTradeNo, subject, totalCents, timeoutMinutes = 30, returnUrl }) {
+  return createPagePayOrder({ outTradeNo, subject, totalCents, timeoutMinutes, returnUrl })
+}
+
+/** 主动查单（统一交易查询接口，全产品线通用） */
 async function queryOrder(outTradeNo) {
   if (!isAlipayConfigured()) throw new Error('alipay_not_configured')
   const params = {
@@ -146,7 +202,7 @@ async function queryOrder(outTradeNo) {
     version: '1.0',
     biz_content: JSON.stringify({ out_trade_no: outTradeNo }),
   }
-  params.sign = signRSA2(buildSignContent(params))
+  params.sign = signRSA2(buildRequestSignContent(params))
 
   const res = await fetch(gateway(), {
     method: 'POST',
@@ -180,7 +236,7 @@ function verifyNotify(params) {
   const key = alipayPublicKey()
   if (!key) return { ok: false, reason: 'no_public_key' }
 
-  const content = buildSignContent(params)
+  const content = buildVerifySignContent(params)
   try {
     const ok = createVerify('RSA-SHA256').update(content, 'utf8').verify(key, sign, 'base64')
     return ok ? { ok: true } : { ok: false, reason: 'signature_mismatch' }
@@ -218,10 +274,15 @@ function parsePaidNotify(params) {
 module.exports = {
   isAlipayConfigured,
   createPrecreateOrder,
+  createPagePayOrder,
+  createWapPayOrder,
+  createOrder,
   queryOrder,
   verifyNotify,
   parsePaidNotify,
   centsToYuan,
   yuanToCents,
   buildSignContent,
+  buildRequestSignContent,
+  buildVerifySignContent,
 }

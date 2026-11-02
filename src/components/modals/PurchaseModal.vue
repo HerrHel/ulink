@@ -307,6 +307,15 @@
                   <p class="pur-countdown-tip">
                     {{ expired ? t('purchase.expired') : t('purchase.countdown', { time: countdown }) }}
                   </p>
+                  <a
+                    v-if="order?.payUrl && selectedChannel === 'alipay' && !expired"
+                    :href="order.payUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="pur-direct-pay-link"
+                  >
+                    跳转支付宝网页支付 &rarr;
+                  </a>
                 </template>
               </div>
 
@@ -1618,6 +1627,18 @@ onBeforeUnmount(() => {
   font-size: var(--fs-2xs, 0.72rem);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+.pur-direct-pay-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: var(--fs-2xs, 0.72rem);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: opacity var(--transition-fast);
+}
+.pur-direct-pay-link:hover {
+  opacity: 0.8;
 }
 
 /* 订单明细小卡（轻盈通透，杜绝大黄块） */

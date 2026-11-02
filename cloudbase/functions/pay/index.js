@@ -216,11 +216,14 @@ async function handleAuthed(req, res, action, body, cors) {
           expireMinutes: ORDER_TTL_MIN,
         })
       } else {
-        payResult = await alipay.createPrecreateOrder({
+        const isMobile = Boolean(body.isMobile || /Mobile|Android|iPhone|iPad/i.test(req.headers['user-agent'] || ''))
+        payResult = await alipay.createOrder({
           outTradeNo: order.order_id,
           subject: order.plan_name || 'ulink 订阅',
           totalCents: order.amount_cents,
           timeoutMinutes: ORDER_TTL_MIN,
+          isMobile,
+          returnUrl: typeof body.returnUrl === 'string' ? body.returnUrl : undefined,
         })
       }
     } catch (e) {
@@ -231,10 +234,11 @@ async function handleAuthed(req, res, action, body, cors) {
       return
     }
 
-    const qrCode = payResult.codeUrl || payResult.qrCode
+    const qrCode = payResult.codeUrl || payResult.qrCode || payResult.payUrl
+    const payUrl = payResult.payUrl || null
     await db.rpc('attach_pay_payload', {
       p_order_id: order.order_id,
-      p_payload: { qrCode, channel },
+      p_payload: { qrCode, payUrl, channel },
       p_channel_order_id: null,
     })
 
@@ -250,6 +254,7 @@ async function handleAuthed(req, res, action, body, cors) {
         currency: order.currency,
         channel,
         qrCode,
+        payUrl,
         expiresAt: order.expires_at,
       },
       cors,

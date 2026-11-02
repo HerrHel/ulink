@@ -24,6 +24,7 @@ export interface PaymentOrder {
   channel: PaymentChannel
   status: PaymentStatus
   qrCode: string | null
+  payUrl?: string | null
   expiresAt: string | null
 }
 
@@ -47,6 +48,7 @@ interface RawOrder {
   channel?: PaymentChannel
   status?: PaymentStatus
   qrCode?: string | null
+  payUrl?: string | null
   expiresAt?: string | null
 }
 
@@ -59,6 +61,7 @@ function normalizeOrder(raw: RawOrder | undefined | null): PaymentOrder | null {
     channel: raw.channel === 'alipay' ? 'alipay' : 'wechat',
     status: (raw.status as PaymentStatus) || 'pending',
     qrCode: raw.qrCode ?? null,
+    payUrl: raw.payUrl ?? null,
     expiresAt: raw.expiresAt ?? null,
   }
 }
@@ -170,7 +173,7 @@ export function usePayment() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'create', planId, channel }),
+        body: JSON.stringify({ action: 'create', planId, channel, isMobile: typeof navigator !== 'undefined' && /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent) }),
         signal: controller.signal,
       }).finally(() => clearTimeout(timer))
       const body = (await res.json().catch(() => ({}))) as RawOrder & { error?: string; ok?: boolean }
