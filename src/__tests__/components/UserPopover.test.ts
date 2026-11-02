@@ -46,6 +46,7 @@ vi.mock('../../composables/domain/useCloudSync.js', () => ({
 
 describe('UserPopover.vue', () => {
   beforeEach(() => {
+    document.body.innerHTML = ''
     fullSyncMock.mockClear()
     resetSyncStateMock.mockClear()
     useEntitlement().clear()
@@ -219,6 +220,26 @@ describe('UserPopover.vue', () => {
     wrapper.unmount()
   })
 
+  it('toggles theme when clicking quick theme switch item', async () => {
+    const popoverStore = useUserPopoverStore()
+    const authStore = useAuthStore()
+    const uiStore = useUIStore()
+    const toggleSpy = vi.spyOn(uiStore, 'toggleTheme').mockImplementation(() => {})
+
+    authStore.user = { id: 'u1', email: 'alice@example.com' } as any
+    popoverStore.show()
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+
+    const themeItem = document.querySelector('[data-testid="up-theme-item"]') as HTMLElement
+    expect(themeItem).not.toBeNull()
+    await themeItem.click()
+    await nextTick()
+
+    expect(toggleSpy).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('navigates to preferences settings when clicking settings item', async () => {
     const popoverStore = useUserPopoverStore()
     const authStore = useAuthStore()
@@ -230,7 +251,8 @@ describe('UserPopover.vue', () => {
     await nextTick()
 
     const card = document.querySelector('.user-popover-card')
-    const settingsItem = card?.querySelectorAll('.up-menu-item')[2]
+    const menuItems = Array.from(card?.querySelectorAll('.up-menu-item') || [])
+    const settingsItem = menuItems.find((el) => el.textContent?.includes('偏好设置'))
     expect(settingsItem?.textContent).toContain('偏好设置')
 
     await (settingsItem as HTMLElement).click()
