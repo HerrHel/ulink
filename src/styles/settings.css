@@ -179,6 +179,12 @@
   box-shadow:0 1px 3px rgba(44,40,36,0.03);
   overflow:hidden;
 }
+.sp-desc{
+  font-size:var(--fs-xs);
+  color:var(--text-muted);
+  line-height:1.45;
+  margin:0;
+}
 .sp-card-head{
   padding:10px 16px;
   background:var(--surface-hover, rgba(0,0,0,0.02));
@@ -631,120 +637,472 @@
   .settings-modal-wrap,
   .settings-drawer-wrap{
     padding:0;
-    align-items:flex-end;
+    align-items:stretch;
   }
   .settings-dialog,
   .settings-drawer{
-    width:100%;max-width:none;
-    height:92vh;max-height:92vh;
-    border-radius:16px 16px 0 0;
-    border-left:none;border-right:none;border-bottom:none;
-    /* 顶部抽屉手柄的可视暗示：让用户知道这是可下拉的弹层 */
-    box-shadow:0 -8px 32px rgba(0,0,0,.18);
+    width:100%;max-width:100vw;
+    height:100%;height:100dvh;max-height:100dvh;
+    border-radius:0;
+    border:none;
+    box-shadow:none;
   }
   .settings-dialog-body,
   .settings-drawer-body{
     flex-direction:column;
-    /* 让内容区独立滚动，tab 条保持可见 */
     overflow:hidden;
   }
 
-  /* ── 移动端抽屉过渡与把手暗示 ── */
+  /* ── 移动端抽屉过渡：从右侧推入（全高顶天立地，彻底消除悬空感） ── */
   .modal-enter-from .settings-dialog,
   .modal-leave-to .settings-dialog,
   .drawer-enter-from .settings-drawer,
   .drawer-leave-to .settings-drawer{
-    transform:translateY(100%);
+    transform:translateX(100%);
     opacity:1;
   }
   .settings-dialog,
   .settings-drawer{
-    transform:translateY(0);
+    transform:translateX(0);
     transition:transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .settings-dialog-head,
   .settings-drawer-head{
     position:relative;
-    padding-top:18px;
-    padding-bottom:12px;
+    padding:calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+    min-height:calc(50px + env(safe-area-inset-top, 0px));
   }
-  /* 顶部抽屉拖拽条视觉暗示 */
+  /* 移除无法交互的假把手，保持顶栏清爽利落 */
   .settings-dialog-head::before,
   .settings-drawer-head::before{
-    content:'';
-    position:absolute;
-    top:7px;
-    left:50%;
-    transform:translateX(-50%);
-    width:36px;
-    height:4px;
-    border-radius:2px;
-    background:var(--border-hover, var(--border));
+    display:none !important;
   }
 
   .sp-help-btn{
     display:none !important;
   }
 
-  /* ── 移动端移除横向滚动 Tab 栏，回归原生一滑到底 ── */
-  .settings-nav{
-    display:none !important;
+  /* ── 移动端返回按钮 ── */
+  .sp-mobile-back-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    background:none;
+    border:none;
+    padding:4px 8px 4px 0;
+    margin-right:4px;
+    color:var(--accent);
+    font-size:var(--fs-sm);
+    font-weight:600;
+    cursor:pointer;
+    border-radius:var(--radius-sm);
+    transition:opacity 0.15s ease;
+    line-height:1;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sp-mobile-back-btn:active{
+    opacity:0.6;
+  }
+  .sp-mobile-back-icon{
+    width:18px;height:18px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .sp-mobile-back-icon svg{
+    width:18px;height:18px;
   }
 
-  /* ── 所有设置分区自上而下顺畅连续排布 ── */
-  .settings-tab-panel{
-    display:flex !important;
-    max-width:100%;
-    animation:none;
-  }
-  .settings-tab-panel + .settings-tab-panel{
-    margin-top:28px;
-    padding-top:20px;
-    border-top:1px solid var(--border-light);
+  /* ── 移动端专属主菜单视图（iOS / 微信分级设置） ── */
+  .sp-mobile-menu{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:14px 14px calc(28px + env(safe-area-inset-bottom, 0px));
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    overscroll-behavior-y:contain;
   }
 
-  .sp-tab-header{
-    margin-bottom:12px;
+  /* 用户卡片（点击进账号设置） */
+  .sp-mobile-user-card{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:14px 16px;
+    background:var(--surface);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-xs);
+    cursor:pointer;
+    transition:background-color 0.15s ease;
+    -webkit-tap-highlight-color:transparent;
   }
-  .sp-tab-title{
-    font-size:var(--fs-base);
+  .sp-mobile-user-card:active{
+    background:var(--surface-active);
+  }
+  .sp-mobile-user-avatar{
+    width:44px;height:44px;
+    border-radius:50%;
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.4rem;
+    flex-shrink:0;
+    color:var(--accent);
+  }
+  .sp-mobile-cloud-icon svg{
+    width:22px;height:22px;
+  }
+  .sp-mobile-user-info{
+    flex:1;min-width:0;
+  }
+  .sp-mobile-user-name{
+    font-size:var(--fs-md);
     font-weight:700;
     color:var(--text);
-    margin:0 0 2px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .sp-mobile-user-sub{
+    font-size:var(--fs-xs);
+    color:var(--text-muted);
+    margin-top:2px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .sp-sync-dot-inline{
+    width:7px;height:7px;
+    border-radius:50%;
+    display:inline-block;
+    flex-shrink:0;
+  }
+  .sp-mobile-arrow{
+    width:16px;height:16px;
+    color:var(--text-muted);
+    opacity:0.5;
+    flex-shrink:0;
+    display:flex;align-items:center;
+  }
+  .sp-mobile-arrow svg{
+    width:16px;height:16px;
+  }
+
+  /* 分组菜单 */
+  .sp-mobile-group{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .sp-mobile-group-title{
+    font-size:var(--fs-2xs);
+    font-weight:700;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    padding:0 6px;
+  }
+  .sp-mobile-group-card{
+    background:var(--surface);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    overflow:hidden;
+    box-shadow:var(--shadow-xs);
+  }
+  .sp-mobile-menu-item{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:13px 14px;
+    background:transparent;
+    border:none;
+    text-align:left;
+    cursor:pointer;
+    transition:background-color 0.15s ease;
+    line-height:1.3;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .sp-mobile-menu-item:active{
+    background:var(--surface-active);
+  }
+  .sp-mobile-menu-item + .sp-mobile-menu-item{
+    border-top:1px solid var(--border-light);
+  }
+  .sp-m-icon{
+    width:32px;height:32px;
+    border-radius:8px;
+    background:var(--surface-hover);
+    color:var(--accent);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .sp-m-icon svg{
+    width:18px;height:18px;
+  }
+  .sp-m-info{
+    flex:1;min-width:0;
+  }
+  .sp-m-title{
+    display:block;
+    font-size:var(--fs-sm);
+    font-weight:600;
+    color:var(--text);
+  }
+  .sp-m-desc{
+    display:block;
+    font-size:var(--fs-2xs);
+    color:var(--text-muted);
+    margin-top:2px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .sp-m-badge{
+    font-size:var(--fs-2xs);
+    font-weight:700;
+    padding:1px 6px;
+    border-radius:999px;
+    background:var(--rose-light, rgba(244,63,94,0.12));
+    color:var(--rose, #ef4444);
+    flex-shrink:0;
+  }
+  .sp-m-arrow{
+    width:16px;height:16px;
+    color:var(--text-muted);
+    opacity:0.5;
+    flex-shrink:0;
+    display:flex;align-items:center;
+  }
+  .sp-m-arrow svg{
+    width:16px;height:16px;
+  }
+
+  /* 移动端子页面内容区保持独立单面板呈现，避免超长滚动 */
+  .settings-tab-panel{
+    display:flex;
+    flex-direction:column;
+    width:100%;
+    animation:none;
+  }
+
+  /* 移动端顶栏已有子分类标题，隐藏正文冗余大标题，仅保留简要说明 */
+  .sp-tab-header{
+    margin:2px 2px 14px;
+  }
+  .sp-tab-title{
+    display:none !important;
   }
   .sp-tab-desc{
     font-size:var(--fs-xs);
     color:var(--text-muted);
-    margin:0 0 8px;
-    line-height:1.4;
+    line-height:1.45;
+    margin:0;
   }
 
-  /* ── 内容区 ── */
+  /* ── 移动端内容区：充足舒服的 14px 外边距与安全区 ── */
   .settings-content-pane{
     flex:1;min-height:0;
     overflow-y:auto;
     -webkit-overflow-scrolling:touch;
-    padding:16px 16px calc(32px + env(safe-area-inset-bottom, 0px));
+    padding:12px 14px calc(36px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* 单行设置：label 与控件纵向排布；行高保证可点 */
-  .sp-card-row{
-    flex-direction:column;align-items:stretch;gap:12px;
-    min-height:52px;
-    padding:12px 0;
+  /* ── 移动端卡片规范：规范圆角、间距与阴影 ── */
+  .sp-card{
+    background:var(--surface);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius-lg);
+    margin-bottom:14px;
+    box-shadow:var(--shadow-xs);
+    overflow:hidden;
   }
-  .sp-row-meta{width:100%}
+  .sp-card + .sp-card{
+    margin-top:0;
+    margin-bottom:14px;
+  }
+  .sp-card-head{
+    padding:10px 14px 8px;
+    background:var(--surface-hover);
+    font-size:var(--fs-2xs);
+    font-weight:700;
+    color:var(--text-muted);
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    border-bottom:1px solid var(--border-light);
+  }
+
+  /* ── 移动端行排版：恢复优雅的横向两端对齐与充足左右 14px 内边距 ── */
+  .sp-card-row{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 14px;
+    min-height:48px;
+    background:var(--surface);
+    transition:background 0.15s ease;
+  }
+  .sp-card-row + .sp-card-row{
+    border-top:1px solid var(--border-light);
+  }
+  .sp-row-meta{
+    flex:1;
+    min-width:0;
+    width:auto;
+  }
+  .sp-row-title{
+    font-size:var(--fs-sm);
+    font-weight:600;
+    color:var(--text);
+    line-height:1.35;
+  }
+  .sp-row-desc{
+    font-size:var(--fs-2xs);
+    color:var(--text-muted);
+    line-height:1.4;
+    margin-top:2px;
+  }
   .sp-row-ctrl{
+    flex-shrink:0;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+    width:auto;
+  }
+  .sp-row-ctrl .btn{
+    padding:5px 12px;
+    font-size:var(--fs-xs);
+    min-height:32px;
+    border-radius:var(--radius-sm);
+  }
+
+  /* 移动端用户主资料行 */
+  .sp-user-main-row{
+    padding:14px;
+    gap:14px;
+    align-items:center;
+  }
+  .sp-user-avatar{
+    width:46px;height:46px;
+    border-radius:50%;
+    font-size:1.5rem;
+    flex-shrink:0;
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .sp-user-details{
+    flex:1;
+    min-width:0;
+  }
+  .sp-user-name{
+    font-size:var(--fs-md);
+    font-weight:700;
+    color:var(--text);
+  }
+  .sp-user-email{
+    font-size:var(--fs-xs);
+    color:var(--text-muted);
+    margin-top:2px;
+  }
+  .sp-edit-profile-btn{
+    font-size:var(--fs-2xs);
+    padding:2px 8px;
+    min-height:22px;
+  }
+
+  /* 云端同步多操作卡片行：适度纵向排列操作按钮 */
+  .sp-sync-card-row{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .sp-sync-actions{
+    width:100%;
+    display:flex;
+    gap:8px;
+  }
+  .sp-sync-actions .btn{
+    flex:1;
+    min-height:36px;
+    justify-content:center;
+    font-size:var(--fs-xs);
+  }
+  .sp-sync-actions .btn.btn-ghost{
+    border:1px solid var(--border);
+    background:var(--surface-hover);
+  }
+
+  /* 需全宽纵向换行的控件：分段选择器、兑换码输入框、存储配额条、版本滑块 */
+  .sp-card-row:has(.sp-seg),
+  .sp-card-row:has(.sp-redeem-ctrl),
+  .sp-card-row:has(.sp-storage-ctrl),
+  .sp-card-row:has(.sp-range-ctrl){
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+  }
+  .sp-seg{
+    width:100%;
+    display:flex;
+  }
+  .sp-seg-btn{
+    flex:1;
+    min-height:36px;
+    padding:6px 8px;
+    font-size:var(--fs-xs);
+    justify-content:center;
+  }
+
+  .sp-redeem-ctrl{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .sp-redeem-input{
+    flex:1;
+    width:auto;
+    min-height:36px;
+    padding:6px 12px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    background:var(--surface-hover);
+    color:var(--text);
+  }
+
+  .sp-storage-ctrl{
+    width:100%;
+  }
+  .sp-range-ctrl{
+    width:100%;
+  }
+
+  /* 外部法务/服务商外链行：保持左对齐并适度下移 */
+  .sp-card-row:has(.sp-legal-link){
+    flex-direction:column;
+    align-items:flex-start;
+    gap:6px;
+  }
+  .sp-card-row:has(.sp-legal-link) .sp-row-ctrl{
     width:100%;
     justify-content:flex-start;
-    /* 开关靠右更符合移动端惯例；纯展示型控件靠左 */
-    justify-content:flex-end;
   }
-  .sp-row-ctrl > .sp-toggle-pill,
-  .sp-row-ctrl > .sp-switch{margin-left:auto}
-  .sp-redeem-ctrl{width:100%}
-  .sp-redeem-input{flex:1;width:auto}
+
+  .sp-desc{
+    font-size:var(--fs-xs);
+    color:var(--text-muted);
+    padding:8px 14px 4px !important;
+  }
 
   /* iOS 聚焦放大防线：任何可输入元素不得小于 16px */
   .settings-drawer input[type="text"],
@@ -761,24 +1119,24 @@
   }
 
   /* 分段控件/按钮类：满足 44px 触控下限 */
-  .sp-seg-btn,
   .sp-legal-link,
   .sp-beian a{
     min-height:44px;
     display:inline-flex;align-items:center;
   }
 
-  /* 卡片之间加大间距，避免密集恐惧（每组 <=7~8 项的可读性前提） */
-  .sp-card + .sp-card{margin-top:14px}
-
   /* 危险操作：移动端单独强调 */
   .sp-danger-card{
-    border:1px solid var(--danger, var(--danger));
-    background:color-mix(in srgb, var(--danger, var(--danger)) 4%, transparent);
+    border-color:color-mix(in srgb, var(--rose) 24%, transparent);
+    background:color-mix(in srgb, var(--rose) 3%, transparent);
+  }
+  .sp-danger-card .sp-card-head{
+    background:color-mix(in srgb, var(--rose) 8%, transparent);
+    color:var(--rose);
   }
 
   /* 法务链接与备案信息在窄屏换行排布 */
-  .sp-legal-box{gap:4px 12px}
+  .sp-legal-box{gap:4px 12px;padding:12px 14px;}
   .sp-beian{padding:10px 0 0;gap:8px 12px}
 }
 

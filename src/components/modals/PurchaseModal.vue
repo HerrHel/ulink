@@ -354,7 +354,7 @@
 
               <div class="pur-plan-intro">
                 <h4 class="pur-intro-title">
-                  {{ props.currentPlanId === activePlan?.planId ? t('purchase.renewFor', { name: activePlan?.name }) : t('purchase.upgradeTo', { name: activePlan?.name }) }}
+                  {{ props.currentPlanId === activePlan?.planId ? t('purchase.renewFor', { name: activePlan?.chineseName || activePlan?.name }) : t('purchase.upgradeTo', { name: activePlan?.chineseName || activePlan?.name }) }}
                 </h4>
                 <p class="pur-intro-desc">
                   {{ activePlan?.desc }}
@@ -417,7 +417,7 @@ const initialPlans = getCachedPlans()
 const plans = ref<PlanRow[]>(initialPlans)
 const loadingPlans = ref(initialPlans.length === 0)
 const selectedPlan = ref('')
-const selectedCycle = ref<'monthly' | 'quarterly' | 'yearly'>('monthly')
+const selectedCycle = ref<'monthly' | 'quarterly' | 'yearly'>('yearly')
 const showCompareTable = ref(false)
 
 function applyPlanSelection(list: PlanRow[]) {
@@ -492,9 +492,9 @@ const displayCards = computed<TierCardView[]>(() => {
   if (free) {
     list.push({
       ...free,
-      name: t('purchase.freeTierTitle') || '体验套餐',
-      chineseName: '体验套餐',
-      desc: '永久免费 · 适合快速上手体验与个人日常基础整理。',
+      name: t('purchase.freeTierTitle') || '基础免费版',
+      chineseName: t('purchase.freeTierTitle') || '基础免费版',
+      desc: t('purchase.freeTierSlogan') || '轻量高效，适合日常书签收藏与本地管理。',
       isFree: true,
       isCurrent: isCurrentFree.value,
       isRecommended: false,
@@ -504,12 +504,12 @@ const displayCards = computed<TierCardView[]>(() => {
       perMonthText: '永久免费使用',
       footerNote: '永久免费使用，随心体验。',
       bullets: [
-        { text: '多端加密双向同步', sub: '支持 2 台设备实时协同' },
-        { text: 'AI 基础体验额度', sub: '每月约 10 万字（5 万 tokens）' },
-        { text: '云端安全存储', sub: '足额文本与加密数据空间' },
-        { text: '收藏历史保留', sub: '历史版本留存 90 天' },
-        { text: '完整多级分类树', sub: '无限层级与批量分类整理' },
-        { text: '死链手动检测', sub: '单条手动检测与状态标识' },
+        { text: '多端端到端加密同步', sub: '本地 PBKDF2/AES-GCM 加密，跨端即时协同' },
+        { text: '无限层级分类与 Group 笔记', sub: '支持无限嵌套树与 TipTap 富文本卡片排版' },
+        { text: 'AI 智能预填体验', sub: '存入 URL 自动提取标题与摘要（日限 20 次）' },
+        { text: '音视频轻量解析体验', sub: '解析 B站/YouTube/抖音等平台基础信息（日限 1 次）' },
+        { text: '本地秒级模糊与拼音检索', sub: '首字母拼音快速定位与概念模糊匹配' },
+        { text: '90 天收藏历史版本回溯', sub: '误删或改动随时从历史记录撤销还原' },
       ],
     })
   }
@@ -526,10 +526,6 @@ const displayCards = computed<TierCardView[]>(() => {
       return true
     })
     .sort((a, b) => a.priceCents - b.priceCents)
-
-  // 获取月付基准价（用于准确计算季付、年付对比月付的原价与省钱金额）
-  const monthlyTier = paid.find((p) => (p.periodDays || 0) >= 25 && (p.periodDays || 0) <= 35)
-  const baseMonthlyPriceCents = monthlyTier?.priceCents || 1200 // 默认基准 12 元/月
 
   for (const p of paid) {
     const isYearly = (p.periodDays || 0) >= 365
@@ -548,32 +544,25 @@ const displayCards = computed<TierCardView[]>(() => {
 
     if (isYearly) {
       chineseName = 'PRO 年付'
-      desc = '长期使用首选，折合仅 ¥9/月，尊享所有特权。'
-      footerNote = '单次开通即刻生效，未到期再次开通自动顺延。'
-      // 原价计算：12 个月 × 月付基准
-      const origYuan = (baseMonthlyPriceCents * 12) / 100
-      const currentYuan = p.priceCents / 100
-      const savedYuan = Math.round(origYuan - currentYuan)
-      if (savedYuan > 0) {
-        originalPrice = origYuan
-        savingsText = `立省 ¥${savedYuan}（省25%）· 相当于省下 3 个月`
-      }
+      desc = t('purchase.yearlySlogan') || '高频生产力首选，折合仅 ¥9/月（每天不到 3 毛钱），尊享全功能与优先通道。'
+      footerNote = t('purchase.earlyBirdFootnote') || '首发早鸟特权：一次开通终身锁价，随订随用，随时退款。'
+      // 原价标杆锚定：¥168（首发早鸟立省 ¥60，限时 6.4 折）
+      originalPrice = 168
+      savingsText = '首发早鸟立省 ¥60（限时 6.4 折）· 享永久续费原价锁定'
     } else if (isQuarterly) {
       chineseName = 'PRO 季付'
-      desc = '季度进阶订阅，折算性价比更高。'
-      footerNote = '单次开通即刻生效，到期不自动续费。'
-      // 原价计算：3 个月 × 月付基准
-      const origYuan = (baseMonthlyPriceCents * 3) / 100
-      const currentYuan = p.priceCents / 100
-      const savedYuan = Math.round(origYuan - currentYuan)
-      if (savedYuan > 0) {
-        originalPrice = origYuan
-        savingsText = `立省 ¥${savedYuan}（省11%）`
-      }
+      desc = t('purchase.quarterlySlogan') || '季度进阶首选，尽享高频自动化整理与音视频提取，折算更优惠。'
+      footerNote = t('purchase.quarterlyFootnote') || '单次开通即刻生效，季度进阶优选，到期不自动续费。'
+      // 原价标杆锚定：¥45（立省 ¥13，省 29%）
+      originalPrice = 45
+      savingsText = '进阶立省 ¥13（省29%）· 折合仅 ¥10.7/月'
     } else if (isMonthly) {
       chineseName = 'PRO 月付'
-      desc = '灵活按月订阅，随订随用，无续费压力。'
-      footerNote = '单次开通即刻生效，到期不自动续费。'
+      desc = t('purchase.monthlySlogan') || '灵活按月进阶，解锁音视频情报提炼与 AI 知识深加工，无续费压力。'
+      footerNote = t('purchase.monthlyFootnote') || '单次开通即刻生效，随订随用，到期不自动续费。'
+      // 原价标杆锚定：¥15（尝鲜立省 ¥3）
+      originalPrice = 15
+      savingsText = '限时尝鲜立省 ¥3 · 随订随用无续费压力'
     }
 
     let badge = ''
@@ -582,10 +571,13 @@ const displayCards = computed<TierCardView[]>(() => {
       badge = t('purchase.currentPlanBadge')
       badgeClass = 'badge-current'
     } else if (isRecommended) {
-      badge = `${t('purchase.recommended')} · 省25%`
+      badge = t('purchase.earlyBirdBadge') || `${t('purchase.recommended')} · 省¥60`
       badgeClass = 'badge-recommended'
     } else if (isQuarterly) {
-      badge = '省11%'
+      badge = t('purchase.quarterlyBadge') || '进阶特惠 · 省¥13'
+      badgeClass = 'badge-discount'
+    } else if (isMonthly) {
+      badge = t('purchase.monthlyBadge') || '限时尝鲜 · 省¥3'
       badgeClass = 'badge-discount'
     } else if (isTest) {
       badge = '测试'
@@ -597,31 +589,58 @@ const displayCards = computed<TierCardView[]>(() => {
 
     const bullets: FeatureBullet[] = [
       {
-        text: '视频内容智能解析与提取',
-        sub: '支持 B站、YouTube、抖音等主流平台，自动提取标题/简介/字幕/评论中出现的工具与网站；受平台风控影响时可能降级，不承诺每次完整',
+        text: '音视频深度情报提取（每日 10 次）',
+        sub: '支持 B站、YouTube、抖音等主流平台，一键提取视频中提及的网站、工具清单与核心摘要；受平台风控影响时可能降级',
         highlight: true,
       },
       {
-        text: '实验室：聊天媒体深度解析（实验性）',
-        sub: '在聊天框上传你拥有权利或已获授权的视频/音频/图片，按你的问题自动选择直接看图或 ASR/OCR；无需浏览器扩展、不经过代理，文件处理完即删除；每日 2 次体验额度',
+        text: 'AI 网页深度阅读与自动补齐',
+        sub: '全自动抓取正文、智能推荐分类与一句话精炼摘要，将普通书签升级为知识卡片',
+        highlight: true,
+      },
+      {
+        text: `每月 ${aiChars}字高阶 AI 智能额度（每日 100 次）`,
+        sub: '畅享深度长文提炼、多书签对比、AI 智能改写与管家式交互代办，从容满足高频工作流',
+        highlight: true,
+      },
+      {
+        text: '全库健康巡检与失效死链自愈',
+        sub: '每周后台静默巡检全部书签，自动标记并隔离失效/死链链接，告别赛博垃圾堆',
+        highlight: true,
+      },
+      {
+        text: '多端不限设备端到端加密同步',
+        sub: '手机、电脑即时无缝协同；军工级本地端到端加密，除你之外全网无人能见',
         highlight: false,
       },
-      { text: 'AI 智能提取与自动补齐', sub: '自动抓取网页与正文，智能推荐分类并补齐摘要', highlight: true },
-      { text: 'AI 自然语言模糊搜索', sub: '忘记标题也没关系，用日常口语意图精准找书签', highlight: true },
-      { text: `每月 ${aiChars}字高阶 AI 额度`, sub: '畅享深度提炼、阅读问答与长文总结', highlight: true },
-      { text: '全自动定期死链检测', sub: '每周后台静默巡检，失效链接一眼知晓' },
-      { text: '不限设备多端加密同步', sub: '多台电脑、手机端实时加密协同，无设备上限', highlight: true },
+      {
+        text: '实验室：多媒体 ASR/OCR 深度解析（每日 2 次体验）',
+        sub: '在聊天框上传视频/音频/截图，智能提取口播字幕与画面文字；文件处理完即删除，保护隐私',
+        highlight: false,
+      },
     ]
 
     if (isYearly) {
       bullets.unshift({
-        text: '全年立省 25% 优惠',
-        sub: '折合仅 ¥9/月（每天不到 3 毛钱）',
+        text: '首发早鸟特惠 · 锁定永久原价（仅 ¥9/月）',
+        sub: '每天不到 3 毛钱，立省 ¥60，尊享终身同价续费与专属早鸟特权',
         highlight: true,
       })
       bullets.push({
         text: '优先技术支持与新特性内测',
-        sub: '专属反馈通道与最新 AI 特性优先体验',
+        sub: '专属反馈绿色通道，抢先体验最新 AI 智能体与知识管理特性',
+        highlight: true,
+      })
+    } else if (isQuarterly) {
+      bullets.unshift({
+        text: '季度进阶优惠 · 立省 ¥13（省29%）',
+        sub: '折合仅 ¥10.7/月，中长期进阶性价比之选',
+        highlight: true,
+      })
+    } else if (isMonthly) {
+      bullets.unshift({
+        text: '按月灵活订阅 · 尝鲜立省 ¥3',
+        sub: '随订随用无续费负担，即刻解锁全部 PRO 智能特权',
         highlight: true,
       })
     }

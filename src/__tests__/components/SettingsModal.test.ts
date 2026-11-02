@@ -363,4 +363,166 @@ describe('SettingsPanel.vue — 双栏大弹窗与分类选项卡', () => {
     expect(ui.semanticSearchEnabled).toBe(true)
     expect(pill.classes()).toContain('active')
   })
-})
+  it('10. 未登录用户在设置中点击 AI 智能提取与补齐被拦截，不改变开关状态并弹出登录窗', async () => {
+    ui.panels.settings = true
+    const auth = useAuthStore()
+    auth.user = null
+    const { clear } = useEntitlement()
+    clear()
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    await aiTab.trigger('click')
+
+    const toggle = wrapper.find('[data-testid="lv-smart-fill-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    const pill = toggle.find('.sp-toggle-pill')
+    expect(pill.classes()).not.toContain('active')
+
+    const row = toggle.element.closest('.sp-card-row') as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
+
+    expect(auth.authModalOpen).toBe(true)
+    expect(pill.classes()).not.toContain('active')
+  })
+
+  it('11. 已登录但非 PRO 用户在设置中点击 AI 智能提取与补齐被拦截，不改变开关状态', async () => {
+    ui.panels.settings = true
+    const auth = useAuthStore()
+    auth.user = { id: 'u-free', email: 'free@example.com' } as any
+    const { clear } = useEntitlement()
+    clear()
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    await aiTab.trigger('click')
+
+    const toggle = wrapper.find('[data-testid="lv-smart-fill-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    const pill = toggle.find('.sp-toggle-pill')
+    expect(pill.classes()).not.toContain('active')
+
+    const row = toggle.element.closest('.sp-card-row') as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
+
+    expect(pill.classes()).not.toContain('active')
+  })
+
+  it('12. PRO 会员可正常开启/关闭 AI 智能提取与补齐', async () => {
+    ui.panels.settings = true
+    const auth = useAuthStore()
+    auth.user = { id: 'u-pro', email: 'pro@example.com' } as any
+    const { entitlement } = useEntitlement()
+    entitlement.value = {
+      planId: 'pro_monthly',
+      planName: 'PRO 月付',
+      status: 'active',
+      expiresAt: '2099-01-01',
+      features: {},
+      isPaid: true,
+    }
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    const aiTab = wrapper.findAll('.settings-nav-item')[3]
+    await aiTab.trigger('click')
+
+    const toggle = wrapper.find('[data-testid="lv-smart-fill-toggle"]')
+    expect(toggle.exists()).toBe(true)
+    const pill = toggle.find('.sp-toggle-pill')
+
+    ui.smartFillEnabled = true
+    await wrapper.vm.$nextTick()
+    expect(pill.classes()).toContain('active')
+
+    const row = toggle.element.closest('.sp-card-row') as HTMLElement
+    row.click()
+    await wrapper.vm.$nextTick()
+    expect(ui.smartFillEnabled).toBe(false)
+    expect(pill.classes()).not.toContain('active')
+
+    row.click()
+    await wrapper.vm.$nextTick()
+    expect(ui.smartFillEnabled).toBe(true)
+    expect(pill.classes()).toContain('active')
+  })
+
+  it('13. 移动端分级设置模式：默认展示主菜单，点选进入子页面并支持返回', async () => {
+    ui.isMobile = true
+    ui.panels.settings = true
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    // 默认展示移动端主菜单
+    const mobileMenu = wrapper.find('[data-testid="sp-mobile-menu"]')
+    expect(mobileMenu.exists()).toBe(true)
+    expect(mobileMenu.isVisible()).toBe(true)
+
+    // 不展示顶栏返回按钮
+    expect(wrapper.find('[data-testid="sp-mobile-back-btn"]').exists()).toBe(false)
+
+    // 点击外观选项卡进入子页面
+    const appearanceTab = wrapper.find('[data-testid="mobile-tab-appearance"]')
+    expect(appearanceTab.exists()).toBe(true)
+    await appearanceTab.trigger('click')
+
+    // 进入子页面后主菜单隐藏，返回按钮出现
+    expect(wrapper.find('[data-testid="sp-mobile-menu"]').exists()).toBe(false)
+    const backBtn = wrapper.find('[data-testid="sp-mobile-back-btn"]')
+    expect(backBtn.exists()).toBe(true)
+
+    // 仅显示外观面板
+    const appearancePanel = wrapper.find('[data-testid="settings-panel-appearance"]')
+    expect(appearancePanel.isVisible()).toBe(true)
+    const accountPanel = wrapper.find('[data-testid="settings-panel-account"]')
+    expect(accountPanel.isVisible()).toBe(false)
+
+    // 点击返回按钮回到主菜单
+    await backBtn.trigger('click')
+    expect(wrapper.find('[data-testid="sp-mobile-menu"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sp-mobile-back-btn"]').exists()).toBe(false)
+  })
+
+  it('14. 移动端携带 settingsInitialTab 时直接进入对应子页面', async () => {
+    ui.isMobile = true
+    ui.settingsInitialTab = 'billing'
+    ui.panels.settings = true
+
+    const wrapper = mount(SettingsPanel, {
+      global: {
+        plugins: [pinia],
+        stubs: { Teleport: true, Transition: false },
+      },
+    })
+
+    // 直接处于 billing 子页面
+    expect(wrapper.find('[data-testid="sp-mobile-menu"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sp-mobile-back-btn"]').exists()).toBe(true)
+    const billingPanel = wrapper.find('[data-testid="settings-panel-billing"]')
+    expect(billingPanel.isVisible()).toBe(true)
+  })
+});

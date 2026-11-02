@@ -199,6 +199,10 @@ function openUpgrade() {
 }
 
 function enableSmartFill() {
+  if (!ent.isPro.value) {
+    openUpgrade()
+    return
+  }
   ui.smartFillEnabled = true
   ui.saveUIState()
   toast(t('settings.smartFillOnToast'), true)

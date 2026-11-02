@@ -13,8 +13,23 @@
           <!-- 弹窗顶栏 -->
           <div class="settings-dialog-head settings-drawer-head">
             <div class="settings-dialog-title-row">
-              <span class="settings-dialog-icon" aria-hidden="true" v-html="I.settings"></span>
-              <h2 class="settings-dialog-title settings-drawer-title">{{ t('settings.title') }}</h2>
+              <!-- 移动端返回按钮：处于子页面时显示返回上一级 -->
+              <button
+                v-if="uiStore.isMobile && mobileSubPage"
+                type="button"
+                class="sp-mobile-back-btn"
+                data-testid="sp-mobile-back-btn"
+                @click.stop="onBackToMobileMenu"
+                :aria-label="t('common.back')"
+              >
+                <span class="sp-mobile-back-icon" aria-hidden="true" v-html="I.back"></span>
+                <span class="sp-mobile-back-text">{{ t('settings.title') }}</span>
+              </button>
+
+              <span v-if="!uiStore.isMobile || !mobileSubPage" class="settings-dialog-icon" aria-hidden="true" v-html="I.settings"></span>
+              <h2 class="settings-dialog-title settings-drawer-title">
+                {{ uiStore.isMobile && mobileSubPage ? currentMobileTabTitle : t('settings.title') }}
+              </h2>
             </div>
             <div class="settings-dialog-actions">
               <button class="sp-help-btn" @click.stop="onOpenShortcutHelp" :aria-label="t('settings.shortcutHelp')" :title="t('settings.shortcutHelp')">?</button>
@@ -25,7 +40,53 @@
           <!-- 弹窗主体：左侧分类导航 + 右侧设置内容 -->
           <div class="settings-dialog-body settings-drawer-body">
             <!-- 左侧导航选项卡（无 emoji） -->
-            <nav class="settings-nav" aria-label="Settings navigation">
+            <!-- 移动端专属主菜单视图（仅在移动端且未进入子页面时渲染） -->
+            <div v-if="uiStore.isMobile && !mobileSubPage" class="sp-mobile-menu" data-testid="sp-mobile-menu">
+              <!-- 顶部用户卡片 -->
+              <div class="sp-mobile-user-card" data-testid="sp-mobile-user-card" @click="onSelectMobileTab('account')">
+                <div class="sp-mobile-user-avatar">
+                  <span v-if="auth.avatar" class="sp-user-emoji">{{ auth.avatar }}</span>
+                  <span v-else-if="auth.isLoggedIn" class="sp-user-initial">{{ userInitial }}</span>
+                  <span v-else class="sp-mobile-cloud-icon" aria-hidden="true" v-html="I.user"></span>
+                </div>
+                <div class="sp-mobile-user-info">
+                  <div class="sp-mobile-user-name">
+                    {{ auth.isLoggedIn ? (auth.displayName || userDisplay) : t('nav.loginTitle') }}
+                  </div>
+                  <div class="sp-mobile-user-sub">
+                    <span v-if="auth.isLoggedIn" class="sp-sync-dot-inline" :class="syncState.dotClass"></span>
+                    {{ auth.isLoggedIn ? (auth.userEmail || syncState.label) : t('nav.loginSubtitle') }}
+                  </div>
+                </div>
+                <span class="sp-mobile-arrow" aria-hidden="true" v-html="I.chevron"></span>
+              </div>
+
+              <!-- 分组导航菜单 -->
+              <div v-for="grp in tabGroups" :key="grp.key" class="sp-mobile-group">
+                <div class="sp-mobile-group-title">{{ t(grp.titleKey) }}</div>
+                <div class="sp-mobile-group-card">
+                  <button
+                    v-for="tab in grp.tabs"
+                    :key="tab.id"
+                    type="button"
+                    class="sp-mobile-menu-item"
+                    :data-testid="'mobile-tab-' + tab.id"
+                    @click="onSelectMobileTab(tab.id)"
+                  >
+                    <span class="sp-m-icon" aria-hidden="true" v-html="tab.icon"></span>
+                    <div class="sp-m-info">
+                      <span class="sp-m-title">{{ t(tab.labelKey) }}</span>
+                      <span class="sp-m-desc">{{ getTabDesc(tab.id) }}</span>
+                    </div>
+                    <span v-if="tab.badge" class="sp-m-badge">{{ tab.badge }}</span>
+                    <span class="sp-m-arrow" aria-hidden="true" v-html="I.chevron"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- PC 端左侧导航（移动端隐藏） -->
+            <nav v-show="!uiStore.isMobile" class="settings-nav" aria-label="Settings navigation">
               <button
                 v-for="tab in tabs"
                 :key="tab.id"
@@ -42,7 +103,7 @@
             </nav>
 
             <!-- 右侧设置内容主视窗 -->
-            <div class="settings-content-pane">
+            <div v-show="!uiStore.isMobile || mobileSubPage" class="settings-content-pane">
               <!-- Tab 1: 账号与安全 -->
               <div v-show="currentTab === 'account'" class="settings-tab-panel" data-testid="settings-panel-account">
                 <div class="sp-tab-header">
@@ -631,7 +692,7 @@
                       <span class="sp-row-desc">{{ t('settings.smartFillHint') }}</span>
                     </div>
                     <div class="sp-row-ctrl" data-testid="lv-smart-fill-toggle">
-                      <div class="sp-toggle-pill" :class="{ active: uiStore.smartFillEnabled }">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.smartFillEnabled && isPro }">
                         <span class="sp-switch"></span>
                       </div>
                     </div>
@@ -1066,6 +1127,59 @@ import { t, tN, useI18n } from '../../i18n/index.js'
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
 export type SettingsTab = 'account' | 'billing' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
 const currentTab = ref<SettingsTab>('account')
+const mobileSubPage = ref<SettingsTab | null>(null)
+
+const currentMobileTabTitle = computed(() => {
+  if (!mobileSubPage.value) return t('settings.title')
+  const matched = tabs.value.find(tab => tab.id === mobileSubPage.value)
+  return matched ? t(matched.labelKey) : t('settings.title')
+})
+
+function onSelectMobileTab(id: SettingsTab) {
+  currentTab.value = id
+  mobileSubPage.value = id
+  nextTick(() => {
+    const pane = document.querySelector('.settings-content-pane')
+    if (pane) pane.scrollTop = 0
+  })
+}
+
+function onBackToMobileMenu() {
+  mobileSubPage.value = null
+}
+
+const tabDescriptions: Record<SettingsTab, { zh: string; en: string }> = {
+  account: { zh: '多端同步、登录密码与 E2E 加密', en: 'Sync, password & E2E encryption' },
+  billing: { zh: 'PRO 会员特权、兑换码与订单', en: 'PRO benefits, promo code & orders' },
+  appearance: { zh: '主题模式、配色与卡片布局', en: 'Theme mode, display & layout' },
+  ai: { zh: '大模型配置、Key 与视频解析', en: 'LLM providers, API keys & video' },
+  maintenance: { zh: '死链检测与公开分享管理', en: 'Dead links & shared groups' },
+  data: { zh: '导入、导出及本地备份恢复', en: 'Import, export & data backups' },
+  about: { zh: '版本信息、开源与合规政策', en: 'Version, legal terms & license' },
+}
+
+function getTabDesc(id: SettingsTab) {
+  const isZhLocale = locale.value?.startsWith('zh')
+  return isZhLocale ? tabDescriptions[id]?.zh : tabDescriptions[id]?.en
+}
+
+const tabGroups = computed(() => [
+  {
+    key: 'account',
+    titleKey: 'settings.navGroupAccount',
+    tabs: tabs.value.filter(t => t.group === 'account'),
+  },
+  {
+    key: 'experience',
+    titleKey: 'settings.navGroupExperience',
+    tabs: tabs.value.filter(t => t.group === 'experience'),
+  },
+  {
+    key: 'system',
+    titleKey: 'settings.navGroupSystem',
+    tabs: tabs.value.filter(t => t.group === 'system'),
+  },
+])
 
 const { locale, setLocale } = useI18n()
 
@@ -1521,12 +1635,27 @@ function onToggleGroupsOnTop() {
 }
 
 function onToggleSmartFill() {
+  if (!auth.isLoggedIn) {
+    toast(t('settings.smartFillNeedsLogin'), false)
+    auth.authModalOpen = true
+    return
+  }
+  if (!isPro.value) {
+    toast(t('settings.smartFillNeedsPro'), false)
+    showPurchase.value = true
+    return
+  }
   uiStore.smartFillEnabled = !uiStore.smartFillEnabled
   uiStore.saveUIState()
   toast(uiStore.smartFillEnabled ? t('settings.smartFillOnToast') : t('settings.smartFillOffToast'), true)
 }
 
 function onToggleSemanticSearch() {
+  if (!auth.isLoggedIn) {
+    toast(t('settings.semanticSearchNeedsLogin'), false)
+    auth.authModalOpen = true
+    return
+  }
   if (!isPro.value) {
     toast(t('settings.semanticSearchNeedsPro'), false)
     showPurchase.value = true
@@ -1630,6 +1759,11 @@ async function onToggleAutoDeadCheck() {
     dl.stopAutoCheck()
     return
   }
+  if (!auth.isLoggedIn) {
+    toast(t('settings.autoDeadCheckNeedsLogin'), false)
+    auth.authModalOpen = true
+    return
+  }
   // 自动全量检测是成本最高的路径（请求数与书签数成正比），需 Plus 权益
   const allowed = await dl.refreshAutoCheckAllowed()
   if (!allowed) {
@@ -1673,7 +1807,10 @@ watch(() => uiStore.panels.settings, (open) => {
   if (open) {
     if (uiStore.settingsInitialTab) {
       currentTab.value = uiStore.settingsInitialTab as SettingsTab
+      mobileSubPage.value = uiStore.settingsInitialTab as SettingsTab
       uiStore.settingsInitialTab = ''
+    } else {
+      mobileSubPage.value = null
     }
     loadUserCategoryShares()
     if (auth.isLoggedIn) {
@@ -1683,6 +1820,8 @@ watch(() => uiStore.panels.settings, (open) => {
         void loadAiQuota()
       }
     }
+  } else {
+    mobileSubPage.value = null
   }
 })
 
@@ -1701,6 +1840,11 @@ watch(() => auth.isLoggedIn, (logged) => {
 })
 
 if (uiStore.panels.settings) {
+  if (uiStore.settingsInitialTab) {
+    currentTab.value = uiStore.settingsInitialTab as SettingsTab
+    mobileSubPage.value = uiStore.settingsInitialTab as SettingsTab
+    uiStore.settingsInitialTab = ''
+  }
   loadUserCategoryShares()
 }
 

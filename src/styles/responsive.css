@@ -111,25 +111,25 @@
   .detail-panel.open{width:var(--detail-width,360px);min-width:300px}
   .detail-inner{min-width:0}
 
-  /* === Settings panel: bottom sheet on mobile === */
+  /* === Settings panel: full-screen drawer on mobile (no floating) === */
   .settings-dialog,
   .settings-drawer{
-    margin-left:0;width:100%;max-width:none;
-    border-left:none;border-right:none;border-bottom:none;
-    border-radius:18px 18px 0 0;
-    box-shadow:0 -8px 32px rgba(0,0,0,0.2);
-    height:90vh;max-height:90vh;
+    margin-left:0;width:100%;max-width:100vw;
+    border:none;
+    border-radius:0;
+    box-shadow:none;
+    height:100%;height:100dvh;max-height:100dvh;
   }
   .settings-modal-wrap,
   .settings-drawer-wrap{
     padding:0;
-    align-items:flex-end;
+    align-items:stretch;
   }
   .modal-enter-from .settings-dialog,
   .modal-leave-to .settings-dialog,
   .drawer-enter-from .settings-drawer,
   .drawer-leave-to .settings-drawer{
-    transform:translateY(100%);
+    transform:translateX(100%);
     opacity:1;
   }
 
