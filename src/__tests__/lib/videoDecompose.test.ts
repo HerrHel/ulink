@@ -6,6 +6,7 @@ import {
   formatTimestamp,
   calculateFrameQuality,
   MAX_VIDEO_FRAMES,
+  MIN_ADAPTIVE_FRAMES,
   extractKeyframesFromVideo,
   decomposeVideoForAi,
 } from '../../lib/ai/videoDecompose.js'
@@ -57,6 +58,10 @@ describe('视频音画拆解模块 (videoDecompose.ts)', () => {
 
   it('MAX_VIDEO_FRAMES 常量配置为 16', () => {
     expect(MAX_VIDEO_FRAMES).toBe(16)
+  })
+
+  it('时间预算自适应帧数底线配置为 8 帧', () => {
+    expect(MIN_ADAPTIVE_FRAMES).toBe(8)
   })
 
   it('在非 DOM 环境下 extractKeyframesFromVideo 安全返回空数组', async () => {
