@@ -76,6 +76,7 @@ function mediaStats(value) {
   let video = 0;
   let audio = 0;
   let chars = 0;
+  const audioUrls = [];
   const visit = (node) => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
@@ -84,9 +85,7 @@ function mediaStats(value) {
     }
     const obj = node;
     if (obj.type === "video_url") {
-      const v = obj.video_url;
       video += 1;
-      chars += v && typeof v.url === "string" ? v.url.length : 0;
       return;
     }
     if (obj.type === "input_audio" || obj.type === "audio_url") {
@@ -94,13 +93,14 @@ function mediaStats(value) {
       audio += 1;
       const data = a && typeof a.data === "string" ? a.data : "";
       const url = a && typeof a.url === "string" ? a.url : "";
-      chars += data.length + url.length;
+      chars += data.length;
+      if (url) audioUrls.push(url);
       return;
     }
     for (const item of Object.values(obj)) visit(item);
   };
   visit(value);
-  return { video, audio, chars };
+  return { video, audio, chars, audioUrls, audioInlineBytes: chars };
 }
 function validateChatBody(body, opts) {
   const maxMessages = opts.maxMessages ?? MAX_MESSAGES_DEFAULT;
@@ -147,8 +147,8 @@ function validateChatBody(body, opts) {
   if (images.count > 4) {
     return { ok: false, status: 413, error: "Too many images (max 4)" };
   }
-  if (images.chars > 3e6) {
-    return { ok: false, status: 413, error: "Images too large (max 3000000 chars)" };
+  if (images.chars > 4e5) {
+    return { ok: false, status: 413, error: "Images too large (max 400000 chars)" };
   }
   const media = mediaStats(b.messages);
   if (media.video > 1) {
@@ -157,8 +157,16 @@ function validateChatBody(body, opts) {
   if (media.audio > 1) {
     return { ok: false, status: 413, error: "Too many audio clips (max 1)" };
   }
-  if (media.chars > 5e6) {
-    return { ok: false, status: 413, error: "Audio too large (max 5000000 chars)" };
+  for (const u of media.audioUrls) {
+    if (!/^https:\/\//i.test(u)) {
+      return { ok: false, status: 400, error: "audio url must be https" };
+    }
+    if (u.length > 2048) {
+      return { ok: false, status: 400, error: "audio url too long" };
+    }
+  }
+  if (media.chars > 12e6) {
+    return { ok: false, status: 413, error: "Audio too large (max 12000000 chars)" };
   }
   const payload = {
     model,

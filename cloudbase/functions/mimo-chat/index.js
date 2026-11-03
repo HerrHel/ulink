@@ -28,7 +28,18 @@ const ALLOWED_MODELS = (process.env.MIMO_ALLOWED_MODELS || '').split(',').map((s
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean)
 const RATE_LIMIT_PER_MIN = parseInt(process.env.MIMO_CHAT_RATE_LIMIT_PER_MIN || '30', 10)
 /** 上游首响应超时（ms）；流式输出可超过此值，仅约束等待首字节 */
-const UPSTREAM_TIMEOUT_MS = parseInt(process.env.MIMO_CHAT_TIMEOUT_MS || '60000', 10)
+const UPSTREAM_TIMEOUT_MS = parseInt(process.env.MIMO_CHAT_TIMEOUT_MS || '110000', 10)
+/**
+ * 音频物化：前端只传存储 URL，函数侧下载转 base64。
+ * 起因（2026-11-03 实测）：CloudBase HTTP 访问服务入站 body 上限约 512KB~1MB
+ * （511KB 通过、1023KB 返回 430/406），而 MiMo 的 input_audio 只认 base64
+ * （远程 URL 报「`data` is not set」），且 MiMo 侧能处理 8.53MB / 11.9M 字符。
+ * 若由前端传 base64，3.5MB 以上的音频会被网关直接拒收 → 该上限形同虚设。
+ */
+const MAX_AUDIO_FETCH_BYTES = parseInt(process.env.MIMO_CHAT_MAX_AUDIO_BYTES || '10485760', 10)
+const AUDIO_FETCH_TIMEOUT_MS = parseInt(process.env.MIMO_CHAT_AUDIO_FETCH_TIMEOUT_MS || '25000', 10)
+/** 允许代拉的存储域名（防 SSRF：客户端给的 URL 不得指向任意/内网主机） */
+const AUDIO_URL_HOSTS = ['tcloudbasegateway.com', 'tcb.qcloud.la', 'myqcloud.com', 'tencentcloudbase.com']
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-mimo-chat'
 /**
  * 计费模式：
@@ -109,6 +120,70 @@ function getDb() {
   const app = cloudbase.init({ env: ENV_ID, accessKey: API_KEY })
   _db = app.rdb()
   return _db
+}
+
+function isAllowedAudioUrl(raw) {
+  let u
+  try {
+    u = new URL(raw)
+  } catch {
+    return false
+  }
+  if (u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  return AUDIO_URL_HOSTS.some((h) => host === h || host.endsWith('.' + h))
+}
+
+function audioFormatFromMime(mime) {
+  const m = String(mime || '').toLowerCase()
+  if (m.includes('wav')) return 'wav'
+  if (m.includes('flac')) return 'flac'
+  if (m.includes('ogg') || m.includes('opus')) return 'ogg'
+  if (m.includes('mp4') || m.includes('m4a') || m.includes('aac')) return 'm4a'
+  return 'mp3'
+}
+
+async function fetchAsDataUrl(url) {
+  const resp = await fetch(url, { signal: AbortSignal.timeout(AUDIO_FETCH_TIMEOUT_MS) })
+  if (!resp.ok) throw new Error('media fetch failed (' + resp.status + ')')
+  const declared = Number(resp.headers.get('content-length') || 0)
+  if (declared > MAX_AUDIO_FETCH_BYTES) throw new Error('audio too large')
+  const buf = Buffer.from(await resp.arrayBuffer())
+  if (buf.length > MAX_AUDIO_FETCH_BYTES) throw new Error('audio too large')
+  const mime = (resp.headers.get('content-type') || 'audio/mpeg').split(';')[0].trim()
+  return { data: 'data:' + mime + ';base64,' + buf.toString('base64'), mime }
+}
+
+/**
+ * 把 messages 里 input_audio.url 物化为 base64 data。
+ * 只处理 URL 形式；已内联的 data 原样保留（兼容旧客户端）。
+ */
+async function materializeAudioUrls(messages) {
+  const targets = []
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item)
+      return
+    }
+    if (node.type === 'input_audio' && node.input_audio && typeof node.input_audio === 'object') {
+      const a = node.input_audio
+      if (typeof a.url === 'string' && a.url && !a.data) targets.push(a)
+    }
+    for (const v of Object.values(node)) walk(v)
+  }
+  walk(messages)
+  if (targets.length === 0) return 0
+  await Promise.all(
+    targets.map(async (a) => {
+      if (!isAllowedAudioUrl(a.url)) throw new Error('audio url not allowed')
+      const { data, mime } = await fetchAsDataUrl(a.url)
+      a.data = data
+      if (!a.format) a.format = audioFormatFromMime(mime)
+      delete a.url
+    }),
+  )
+  return targets.length
 }
 
 const server = http.createServer(async (req, res) => {
@@ -222,6 +297,21 @@ const server = http.createServer(async (req, res) => {
       } catch (e) {
         console.error('[mimo-chat] ai.requests quota throw (fail-open):', e)
       }
+    }
+
+    // ── 音频物化（URL → base64）：必须在转发上游前完成 ──
+    try {
+      const n = await materializeAudioUrls(guard.value.messages || [])
+      if (n > 0) console.log('[mimo-chat] materialized audio parts:', n)
+    } catch (e) {
+      const msg = String((e && e.message) || e)
+      console.error('[mimo-chat] audio materialize failed:', msg)
+      const tooLarge = msg.includes('too large')
+      sendJson(res, tooLarge ? 413 : 400, {
+        error: tooLarge ? 'audio_too_large' : 'audio_unavailable',
+        message: tooLarge ? '音频过大，请截短后重试' : '音频读取失败，请重新上传',
+      }, cors)
+      return
     }
 
     const upstream = await fetch(MIMO_BASE_URL + '/chat/completions', {

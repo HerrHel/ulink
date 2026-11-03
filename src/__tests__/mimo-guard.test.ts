@@ -195,14 +195,54 @@ describe('mimo-guard 音视频多模态预算（2026-11-03 支持 video_url / in
     if (!r.ok) expect(r.error).toContain('Too many videos')
   })
 
-  it('input_audio 的 base64 不计入文本预算，但受 5M 字符独立上限约束', () => {
-    const okBody = { ...base, messages: [{ role: 'user', content: [audioPart(3_000_000)] }] }
+  it('input_audio 的 base64 不计入文本预算，独立上限 12M 字符（对齐 MiMo 实测容量）', () => {
+    // 8.53MB 源文件 → 11.9M 字符，实测 MiMo 可处理（44s），故上限设在 12M
+    const okBody = { ...base, messages: [{ role: 'user', content: [audioPart(11_900_000)] }] }
     expect(validateChatBody(okBody, opts).ok).toBe(true)
 
-    const tooBig = { ...base, messages: [{ role: 'user', content: [audioPart(5_200_000)] }] }
+    const tooBig = { ...base, messages: [{ role: 'user', content: [audioPart(12_500_000)] }] }
     const r = validateChatBody(tooBig, opts)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toContain('Audio too large')
+  })
+
+  it('input_audio 支持存储 URL（base64 由云函数物化），仅接受 https 且长度受限', () => {
+    const urlPart = (url: string) => ({ type: 'input_audio', input_audio: { url, format: 'mp3' } })
+
+    // 正常：自家存储 URL 通过，且不占 base64 预算
+    const ok = validateChatBody(
+      { ...base, messages: [{ role: 'user', content: [urlPart('https://xxx.tcb.qcloud.la/u/deep/a.mp3')] }] },
+      opts,
+    )
+    expect(ok.ok).toBe(true)
+
+    // 非 https 拒绝（防明文与 file:// 等协议）
+    const http = validateChatBody(
+      { ...base, messages: [{ role: 'user', content: [urlPart('http://xxx.tcb.qcloud.la/a.mp3')] }] },
+      opts,
+    )
+    expect(http.ok).toBe(false)
+    if (!http.ok) expect(http.error).toContain('must be https')
+
+    // 超长 URL 拒绝
+    const longUrl = 'https://x.tcb.qcloud.la/' + 'a'.repeat(2100) + '.mp3'
+    const tooLong = validateChatBody(
+      { ...base, messages: [{ role: 'user', content: [urlPart(longUrl)] }] },
+      opts,
+    )
+    expect(tooLong.ok).toBe(false)
+    if (!tooLong.ok) expect(tooLong.error).toContain('too long')
+  })
+
+  it('图片内联预算收紧到 40 万字符（对齐网关约 512KB 入站上限）', () => {
+    const imgPart = (len: number) => ({
+      type: 'image_url',
+      image_url: { url: 'data:image/jpeg;base64,' + 'A'.repeat(len) },
+    })
+    expect(validateChatBody({ ...base, messages: [{ role: 'user', content: [imgPart(300_000)] }] }, opts).ok).toBe(true)
+    const r = validateChatBody({ ...base, messages: [{ role: 'user', content: [imgPart(450_000)] }] }, opts)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toContain('Images too large')
   })
 
   it('mediaStats 统计视频/音频数量与载荷规模', () => {

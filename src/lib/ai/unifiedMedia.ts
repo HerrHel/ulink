@@ -27,7 +27,8 @@ export interface MediaIntent {
 /** 发往 MiMo 的多模态内容块（与 OpenAI content parts 同构） */
 export type MiMoMediaPart =
   | { type: 'video_url'; video_url: { url: string } }
-  | { type: 'input_audio'; input_audio: { data: string; format: string } }
+  /** 音频只传存储 URL：base64 由云函数物化（入站请求体上限约 512KB，传不得） */
+  | { type: 'input_audio'; input_audio: { url: string; format: string } }
 
 export interface UnifiedMediaResult {
   /** 直接发给模型的多模态图片（data URL） */
@@ -100,20 +101,26 @@ export async function prepareUnifiedMedia(
         continue
       }
 
-      // 音频：MiMo 的 input_audio 只认 base64 data URL（实测远程 URL 报「`data` is not set」），
-      // 故不上传存储，直接读原文件转 data URL。体积受限（8~32 字符合规除外），超限要求截短。
+      // 音频：只传存储 URL，base64 由云函数物化。
+      //
+      // 为什么不能前端传 base64（2026-11-03 实测）：
+      //   CloudBase HTTP 访问服务入站 body 上限约 512KB（511KB 通过、1023KB 返回 430），
+      //   而 base64 有 4/3 膨胀系数——1MB 原文件就必然被网关拒收。
+      //   MiMo 的 input_audio 又只认 base64（远程 URL 报「`data` is not set」），
+      //   所以只能由服务端下载后转码，请求体始终只有几十字节。
       const rawFile = getRawAttachedFile(file.id)
       if (!rawFile) throw new Error('原始文件不可用，请重新上传')
-      if (rawFile.size > MAX_AUDIO_BASE64_BYTES) {
+      if (rawFile.size > MAX_AUDIO_BYTES) {
         throw new Error(
-          `音频过大（上限 ${Math.round(MAX_AUDIO_BASE64_BYTES / 1024 / 1024 * 10) / 10}MB，约 4 分钟），请截短后重试`,
+          `音频过大（上限 ${MAX_AUDIO_BYTES / 1024 / 1024}MB，约 ${MAX_AUDIO_BYTES / 1024 / 1024} 分钟 mp3），请截短后重试`,
         )
       }
-      opts.onProgress?.(`${file.name} 处理中`)
-      const dataUrl = await fileToDataUrl(rawFile)
+      opts.onProgress?.(`${file.name} 上传中`)
+      // 对象不删除：云函数在后续请求中会来拉取，交给 maintenance 按保留期清理
+      const uploaded = await uploadDeepMediaFile(rawFile, userId)
       mediaParts.push({
         type: 'input_audio',
-        input_audio: { data: dataUrl, format: audioFormatOf(rawFile) },
+        input_audio: { url: uploaded.url, format: audioFormatOf(rawFile) },
       })
     } catch (e) {
       errors.push(`【${file.name}】媒体处理失败：${(e as Error)?.message || '未知错误'}`)
@@ -131,19 +138,16 @@ export async function prepareUnifiedMedia(
 const VIDEO_ACCEPTED = /mp4|quicktime|webm|video\//i
 
 /**
- * 单段音频源文件上限：base64 后约 ×1.37，需低于 mimo-guard 的 5,000,000 字符预算，
- * 换算约 3.5MB 源文件（≈4 分钟 mp3）。超过请用户截短——这是不用容器切片的前提。
+ * 单段音频源文件上限 10MB。
+ *
+ * 依据（均为实测，不是估算）：
+ *   · MiMo 侧能处理 8.53MB mp3（11.9M 字符 base64，44 秒出结果）
+ *   · 云函数侧下载上限 10MB（MIMO_CHAT_MAX_AUDIO_BYTES），base64 后在 128MB 内存内
+ *   · 128kbps mp3 约 1MB/分钟，故 ≈10 分钟；纯语音用 32kbps 可达 40 分钟
+ *
+ * 超过则请用户截短——不做服务端切片（切片需要 ffmpeg 容器，成本与收益不划算）。
  */
-const MAX_AUDIO_BASE64_BYTES = 3.5 * 1024 * 1024
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(new Error('读取本地文件失败'))
-    reader.readAsDataURL(file)
-  })
-}
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 /** MiMo input_audio.format 取值（实测支持 mp3/wav） */
 function audioFormatOf(file: File): string {

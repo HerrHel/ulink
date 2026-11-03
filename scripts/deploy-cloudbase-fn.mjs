@@ -284,7 +284,9 @@ const FN_EXTRA_ENV = {
  *     128MB 足够。
  */
 const FN_PROFILE = {
-  'mimo-chat': { timeout: 90, memorySize: 128 },
+  // timeout 120：音频多模态要「下载 → base64 → 上游解析」，8.5MB mp3 实测上游耗时 44s，
+  // 90s 会把长音频的流式中途掐断。timeout 只是上限，不改变按实际时长计费。
+  'mimo-chat': { timeout: 120, memorySize: 128 },
   'check-link': { timeout: 40, memorySize: 256 },
   'extract-video': { timeout: 60, memorySize: 256 },
   'jina-proxy': { timeout: 40, memorySize: 256 },

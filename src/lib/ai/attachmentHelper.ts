@@ -64,7 +64,7 @@ export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
   let textContent: string | undefined
 
   if (type === 'image') {
-    // 异步生成缩略图（限制最大边长 800px，压缩为 jpeg，体积通常仅 20~50KB，避免爆 localStorage）
+    // 异步生成缩略图（640px / q0.72，单张约 40~60KB；既有 localStorage 考虑，也受网关入站上限约束）
     try {
       dataUrl = await createImageThumbnail(file)
     } catch {
@@ -96,9 +96,14 @@ export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
   }
 }
 /**
- * 压缩图片生成轻量 DataURL 缩略图
+ * 压缩图片生成轻量 DataURL 缩略图。
+ *
+ * 默认 640px / 0.72：图片以 base64 直接进请求体，而 CloudBase HTTP 访问服务
+ * 入站 body 上限约 512KB（2026-11-03 实测 511KB 通过、1023KB 返回 430）。
+ * 4 张 640px/q0.72 的 JPEG 约 220KB，base64 后约 300KB，留足余量。
+ * 原来 800px/q0.8 时 4 张可达 600KB 以上，会被网关直接拒收。
  */
-export function createImageThumbnail(file: File, maxDim = 800, quality = 0.8): Promise<string> {
+export function createImageThumbnail(file: File, maxDim = 640, quality = 0.72): Promise<string> {
   return new Promise((resolve) => {
     if (typeof FileReader === 'undefined') {
       return resolve('')
