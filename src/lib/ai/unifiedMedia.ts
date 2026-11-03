@@ -18,6 +18,7 @@
 import type { AttachedMediaFile } from './attachmentHelper.js'
 import { getRawAttachedFile, MAX_DIRECT_VIDEO_DURATION_SEC } from './attachmentHelper.js'
 import { uploadDeepMediaFile } from './deepMediaUpload.js'
+import { maybeCompressAudio } from './audioCompress.js'
 
 export interface MediaIntent {
   wantsTranscript: boolean
@@ -113,17 +114,22 @@ export async function prepareUnifiedMedia(
       //   所以只能由服务端下载后转码，请求体始终只有几十字节。
       const rawFile = getRawAttachedFile(file.id)
       if (!rawFile) throw new Error('原始文件不可用，请重新上传')
-      if (rawFile.size > MAX_AUDIO_BYTES) {
+
+      // 若满足大文件/长音频条件，由客户端先行重采样为 16kHz 32kbps MP3（扩充 4 倍容量）
+      const prepared = await maybeCompressAudio(rawFile, opts.onProgress)
+      const targetFile = prepared.file
+
+      if (targetFile.size > MAX_AUDIO_BYTES) {
         throw new Error(
           `音频过大（上限 ${MAX_AUDIO_BYTES / 1024 / 1024}MB，约 ${MAX_AUDIO_BYTES / 1024 / 1024} 分钟 mp3），请截短后重试`,
         )
       }
-      opts.onProgress?.(`${file.name} 上传中`)
+      opts.onProgress?.(`${targetFile.name} 上传中`)
       // 对象不删除：云函数在后续请求中会来拉取，交给 maintenance 按保留期清理
-      const uploaded = await uploadDeepMediaFile(rawFile, userId)
+      const uploaded = await uploadDeepMediaFile(targetFile, userId)
       mediaParts.push({
         type: 'input_audio',
-        input_audio: { url: uploaded.url, format: audioFormatOf(rawFile) },
+        input_audio: { url: uploaded.url, format: audioFormatOf(targetFile) },
       })
     } catch (e) {
       errors.push(`【${file.name}】媒体处理失败：${(e as Error)?.message || '未知错误'}`)

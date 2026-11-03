@@ -57,6 +57,7 @@
     "vue-eslint-parser": "^10.4.1"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@cloudbase/js-sdk": "^3.10.3",
     "@supabase/supabase-js": "^2.110.7",
     "@tiptap/core": "^3.32.0",
