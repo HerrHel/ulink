@@ -235,6 +235,8 @@ export const aiZh = {
     copyContent: '复制内容',
     copyReply: '复制回答',
     copied: '已复制',
+    // 《人工智能生成合成内容标识办法》(2025-09-01 施行) 要求显式标识
+    generatedNotice: '内容由 AI 生成，仅供整理参考，请自行核实',
     revokeEdit: '撤回并重新编辑',
     sendSummaryTitle: '本次发送给 AI 的数据摘要',
     sendSummaryTaxonomy: '分类 {cats} 个 · 标签 {attrs} 个',
@@ -623,6 +625,7 @@ export const aiEn = {
     copyContent: 'Copy message',
     copyReply: 'Copy reply',
     copied: 'Copied',
+    generatedNotice: 'AI-generated. Please verify before relying on it.',
     revokeEdit: 'Revoke and edit',
     sendSummaryTitle: 'Data sent to AI this turn',
     sendSummaryTaxonomy: '{cats} categories · {attrs} tags',

@@ -318,6 +318,12 @@
                   </div>
                 </div>
 
+                <!-- AI 生成内容显式标识：《人工智能生成合成内容标识办法》(2025-09-01 施行)
+                     要求对生成内容添加可感知提示，此处常显、不随 hover 隐藏 -->
+                <div v-if="turn.content && !turn.loading" class="ai-gen-notice">
+                  {{ t('ai.generatedNotice') }}
+                </div>
+
                 <!-- 交互行动卡片 (Actionable Artifact / Generative UI) -->
                 <ChatDraftDiff
                   v-if="turn.actionCard && turn.actionCard.type === 'draft_diff'"
@@ -1048,6 +1054,14 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   50% { opacity: 0; }
 }
 
+.ai-gen-notice {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  opacity: 0.75;
+  user-select: none;
+}
 .chat-reply-body {
   display: flex;
   flex-direction: column;

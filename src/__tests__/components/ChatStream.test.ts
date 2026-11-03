@@ -48,6 +48,26 @@ describe('ChatStream — 预判建议按钮与写回笔记图标', () => {
     expect(newNoteBtn.text()).not.toContain('📝')
   })
 
+  it('AI 回复下方常显生成内容标识（《人工智能生成合成内容标识办法》要求）', () => {
+    const turn: ChatTurn = {
+      id: 'turn-asst-notice',
+      role: 'assistant',
+      content: '这是 AI 生成的内容',
+      loading: false,
+      timestamp: Date.now(),
+    }
+    const wrapper = mountStream([turn])
+    const notice = wrapper.find('.ai-gen-notice')
+    expect(notice.exists()).toBe(true)
+    // 必须可感知地说明“由 AI 生成”，不能只在 hover 时出现
+    expect(notice.text()).toContain('AI 生成')
+    // 加载中不显示（此时还没有生成内容）
+    const loadingWrapper = mountStream([
+      { id: 'turn-asst-loading', role: 'assistant', content: '', loading: true, timestamp: Date.now() },
+    ])
+    expect(loadingWrapper.find('.ai-gen-notice').exists()).toBe(false)
+  })
+
   it('预判按钮仅在最新且无后续用户回复的助手轮次渲染，用户输入后隐藏', () => {
     const turns: ChatTurn[] = [
       { id: 'u1', role: 'user', content: '第一问', timestamp: 1000 },
