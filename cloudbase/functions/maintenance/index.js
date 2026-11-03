@@ -69,21 +69,30 @@ async function runCleanup() {
     return { ok: false, error: String(r.error.message || r.error) }
   }
 
-  // 兜底清理 deep-media 中用户中途关闭页面/失败残留的临时媒体
+  // 兜底清理 deep-media 中用户中途关闭页面/失败残留的临时媒体（循环批次删除，防积压）
   let deepMediaDeleted = 0
   try {
-    const listed = await db.rpc('list_expired_deep_media', { p_keep_hours: DEEP_MEDIA_KEEP_HOURS })
-    if (listed.error) {
-      console.error('[maintenance] list_expired_deep_media failed:', listed.error)
-    } else if (Array.isArray(listed.data) && listed.data.length > 0) {
+    for (let round = 0; round < 10; round++) {
+      const listed = await db.rpc('list_expired_deep_media', { p_keep_hours: DEEP_MEDIA_KEEP_HOURS })
+      if (listed.error) {
+        console.error('[maintenance] list_expired_deep_media failed:', listed.error)
+        break
+      }
+      if (!Array.isArray(listed.data) || listed.data.length === 0) {
+        break
+      }
       const fileList = listed.data
         .filter((p) => typeof p === 'string' && p)
         .map((p) => `cloud://${ENV_ID}.${DEEP_MEDIA_BUCKET}/${p}`)
-      if (fileList.length > 0) {
-        const del = await app.deleteFile({ fileList })
-        const results = (del && (del.fileList || (del.data && del.data.fileList))) || []
-        deepMediaDeleted = results.filter((f) => f && (f.code === 0 || f.code === '0' || f.status === 'ok')).length
-      }
+      if (fileList.length === 0) break
+
+      const del = await app.deleteFile({ fileList })
+      const results = (del && (del.fileList || (del.data && del.data.fileList))) || []
+      const roundSuccess = results.filter((f) => f && (f.code === 0 || f.code === '0' || f.status === 'ok')).length
+      deepMediaDeleted += roundSuccess
+
+      // 若当前批次小于 200，说明已全部扫清
+      if (listed.data.length < 200) break
     }
   } catch (e) {
     console.error('[maintenance] deep-media cleanup failed:', (e && e.message) || e)

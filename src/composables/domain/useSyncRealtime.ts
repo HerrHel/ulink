@@ -24,6 +24,7 @@ import type { EntityType, Bookmark, SiblingGroup, Category, CustomAttribute } fr
 let _channel: ReturnType<typeof supabase.channel> | null = null
 /** CloudBase 轮询句柄与间隔：PG 无 postgres_changes，降级为定时拉取 */
 let _pollTimer: ReturnType<typeof setInterval> | null = null
+let _visibilityHandler: (() => void) | null = null
 const POLL_INTERVAL_MS = 60_000
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let _reconnectAttempts = 0
@@ -360,12 +361,35 @@ export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
   // CloudBase 降级（PG 无 postgres_changes）：定时触发 pullChanges 做轮询同步。
   // 合并走 syncMergeCore 既有幂等路径；无回调时只置状态不建定时器。
   if (isCloudBaseBackend()) {
-    if (_pollTimer) return
+    if (_pollTimer || _visibilityHandler) return
     syncStore.setRealtimeStatus('connected')
     if (onPullChanges) {
-      _pollTimer = setInterval(() => {
-        withLock('linkvault-sync', onPullChanges).catch(() => {})
-      }, POLL_INTERVAL_MS)
+      const startTimer = () => {
+        if (_pollTimer) clearInterval(_pollTimer)
+        _pollTimer = setInterval(() => {
+          withLock('linkvault-sync', onPullChanges).catch(() => {})
+        }, POLL_INTERVAL_MS)
+      }
+      const stopTimer = () => {
+        if (_pollTimer) {
+          clearInterval(_pollTimer)
+          _pollTimer = null
+        }
+      }
+      if (typeof document === 'undefined' || !document.hidden) {
+        startTimer()
+      }
+      if (typeof document !== 'undefined') {
+        _visibilityHandler = () => {
+          if (document.hidden) {
+            stopTimer()
+          } else {
+            withLock('linkvault-sync', onPullChanges).catch(() => {})
+            startTimer()
+          }
+        }
+        document.addEventListener('visibilitychange', _visibilityHandler)
+      }
     }
     return
   }
@@ -408,6 +432,10 @@ export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
 export function unsubscribeRealtime() {
   if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null }
+  if (_visibilityHandler && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', _visibilityHandler)
+    _visibilityHandler = null
+  }
   _reconnectAttempts = 0
   useSyncStore().setRealtimeStatus('disconnected')
   if (_channel) {

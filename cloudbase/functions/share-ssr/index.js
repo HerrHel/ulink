@@ -104,12 +104,17 @@ const SHARE_SECURITY_HEADERS = {
 }
 
 function sendHtml(res, status, html, extraHeaders) {
+  const defaultCacheControl =
+    status === 200
+      ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400'
+      : 'no-store'
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': Buffer.byteLength(html),
     'x-share-render': 'v2',
     // 私有分享禁止收录（与 <meta name="robots"> 双保险，覆盖不解析 HTML 的爬虫）
     'X-Robots-Tag': 'noindex, nofollow',
+    'Cache-Control': defaultCacheControl,
     ...SHARE_SECURITY_HEADERS,
     ...extraHeaders,
   })

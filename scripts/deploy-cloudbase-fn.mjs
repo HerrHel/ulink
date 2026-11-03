@@ -30,6 +30,7 @@ const pathArgIdx = args.indexOf('--path')
 const httpPath = pathArgIdx >= 0 ? args[pathArgIdx + 1] : `/${fnName}`
 /** --env-only：只重新注入环境变量（密钥轮换用），跳过代码包上传与路由步骤 */
 const envOnly = args.includes('--env-only')
+const isEventFn = fnName === 'maintenance'
 
 const ROOT = resolve('.')
 const FN_DIR = resolve('cloudbase/functions', fnName)
@@ -81,7 +82,9 @@ if (!envOnly) {
   try {
     // --force：函数已存在时覆盖更新（否则 tcb 直接拒绝）
     console.log(
-      tcb(FN_DIR, ['fn', 'deploy', fnName, '--force', '--httpFn', '--path', httpPath, '--runtime', 'Nodejs20.19', '--yes', '--deployMode', 'zip']),
+      tcb(FN_DIR, isEventFn
+        ? ['fn', 'deploy', fnName, '--force', '--runtime', 'Nodejs20.19', '--yes', '--deployMode', 'zip']
+        : ['fn', 'deploy', fnName, '--force', '--httpFn', '--path', httpPath, '--runtime', 'Nodejs20.19', '--yes', '--deployMode', 'zip']),
     )
   } catch (e) {
     const out = String((e && e.stdout) || '') + String((e && e.stderr) || '')
@@ -287,19 +290,20 @@ const FN_PROFILE = {
   // timeout 120：音频多模态要「下载 → base64 → 上游解析」，8.5MB mp3 实测上游耗时 44s，
   // 90s 会把长音频的流式中途掐断。timeout 只是上限，不改变按实际时长计费。
   'mimo-chat': { timeout: 120, memorySize: 128 },
-  'check-link': { timeout: 40, memorySize: 256 },
+  'check-link': { timeout: 40, memorySize: 128 },
   'extract-video': { timeout: 60, memorySize: 256 },
-  'jina-proxy': { timeout: 40, memorySize: 256 },
-  'share-ssr': { timeout: 20, memorySize: 256 },
-  'share-admin': { timeout: 20, memorySize: 256 },
-  'account': { timeout: 30, memorySize: 256 },
-  'redeem': { timeout: 20, memorySize: 256 },
-  // 支付：下单要同步调渠道 API（网络往返 + 验签），回调要解密 + 发货，
-  // 20s 偏紧；给 30s 留余量，内存不变（无流式）。
-  'pay': { timeout: 30, memorySize: 256 },
-  'maintenance': { timeout: 60, memorySize: 256 },
+  'jina-proxy': { timeout: 40, memorySize: 128 },
+  'share-ssr': { timeout: 20, memorySize: 128 },
+  'share-admin': { timeout: 20, memorySize: 128 },
+  'account': { timeout: 30, memorySize: 128 },
+  'redeem': { timeout: 20, memorySize: 128 },
+  'pay': { timeout: 30, memorySize: 128 },
+  'report-error': { timeout: 15, memorySize: 128 },
+  'send-feedback': { timeout: 20, memorySize: 128 },
+  'edge-headers': { timeout: 15, memorySize: 128 },
+  'maintenance': { timeout: 60, memorySize: 128 },
 }
-const DEFAULT_PROFILE = { timeout: 20, memorySize: 256 }
+const DEFAULT_PROFILE = { timeout: 20, memorySize: 128 }
 
 if (apiKey) {
   const rcPath = resolve(FN_DIR, 'cloudbaserc.json')
@@ -338,7 +342,7 @@ if (apiKey) {
 //      而 --httpFn 建的是 Web 函数，两者不匹配会让网关回
 //      `FUNCTIONS_PARAM_INVALID: FunctionType parameter is invalid`。
 //      必须显式改成 WEB_SCF。──
-if (!envOnly) {
+if (!envOnly && !isEventFn) {
   try {
     console.log(
       tcb(FN_DIR, [
