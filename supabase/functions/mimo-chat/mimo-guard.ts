@@ -210,8 +210,10 @@ export function validateChatBody(
       return { ok: false, status: 400, error: 'audio url too long' }
     }
   }
-  if (media.chars > 12_000_000) {
-    return { ok: false, status: 413, error: 'Audio too large (max 12000000 chars)' }
+  // 对齐前端 10MB 源文件上限：10MiB → base64 = ceil(10485760/3)*4 = 13,981,016 字符。
+  // 取 14,500,000 留余量；若按 12M 卡，实际只放行 8.7MB，与 UI 承诺的 10MB 不符。
+  if (media.chars > 14_500_000) {
+    return { ok: false, status: 413, error: 'Audio too large (max 14500000 chars)' }
   }
 
   const payload: Record<string, unknown> = {

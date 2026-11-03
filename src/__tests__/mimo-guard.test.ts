@@ -195,12 +195,12 @@ describe('mimo-guard 音视频多模态预算（2026-11-03 支持 video_url / in
     if (!r.ok) expect(r.error).toContain('Too many videos')
   })
 
-  it('input_audio 的 base64 不计入文本预算，独立上限 12M 字符（对齐 MiMo 实测容量）', () => {
-    // 8.53MB 源文件 → 11.9M 字符，实测 MiMo 可处理（44s），故上限设在 12M
+  it('input_audio 的 base64 不计入文本预算，独立上限 14.5M 字符（对齐 10MB 源文件）', () => {
+    // 10MB 源文件 → 13.98M 字符；实测 8.53MB（11.9M 字符）MiMo 可处理，故上限 14.5M
     const okBody = { ...base, messages: [{ role: 'user', content: [audioPart(11_900_000)] }] }
     expect(validateChatBody(okBody, opts).ok).toBe(true)
 
-    const tooBig = { ...base, messages: [{ role: 'user', content: [audioPart(12_500_000)] }] }
+    const tooBig = { ...base, messages: [{ role: 'user', content: [audioPart(14_600_000)] }] }
     const r = validateChatBody(tooBig, opts)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.error).toContain('Audio too large')

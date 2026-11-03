@@ -165,8 +165,8 @@ function validateChatBody(body, opts) {
       return { ok: false, status: 400, error: "audio url too long" };
     }
   }
-  if (media.chars > 12e6) {
-    return { ok: false, status: 413, error: "Audio too large (max 12000000 chars)" };
+  if (media.chars > 145e5) {
+    return { ok: false, status: 413, error: "Audio too large (max 14500000 chars)" };
   }
   const payload = {
     model,
