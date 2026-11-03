@@ -566,8 +566,8 @@ const displayCards = computed<TierCardView[]>(() => {
     if (isYearly) {
       chineseName = 'PRO 年付'
       desc = t('purchase.yearlySlogan') || '高频生产力首选，折合仅 ¥9/月（每天不到 3 毛钱），尊享全功能与优先通道。'
-      footerNote = t('purchase.earlyBirdFootnote') || '首发早鸟特权：一次开通终身锁价，随订随用，随时退款。'
-      if (savingCents > 0) savingsText = `首发早鸟立省 ${yen(savingCents)}（较按月省 ${savingPct}%）· 享终身同价续费`
+      footerNote = t('purchase.earlyBirdFootnote') || '首发早鸟特权：开通即锁定当期价格，整个订阅期内不再调价；到期续费按届时公示价格。'
+      if (savingCents > 0) savingsText = `首发早鸟立省 ${yen(savingCents)}（较按月省 ${savingPct}%）· 订阅期内不调价`
     } else if (isQuarterly) {
       chineseName = 'PRO 季付'
       desc = t('purchase.quarterlySlogan') || '季度进阶首选，尽享高频自动化整理与音视频提取，折算更优惠。'
@@ -637,8 +637,8 @@ const displayCards = computed<TierCardView[]>(() => {
 
     if (isYearly) {
       bullets.unshift({
-        text: '首发早鸟特惠 · 锁定永久同价续费',
-        sub: savingCents > 0 ? `较按月订阅省 ${yen(savingCents)}，享终身同价续费与专属早鸟特权` : '享终身同价续费与专属早鸟特权',
+        text: '首发早鸟特惠 · 订阅期内价格锁定',
+        sub: savingCents > 0 ? `较按月订阅省 ${yen(savingCents)}，整个订阅期内不调价` : '整个订阅期内不调价',
         highlight: true,
       })
       bullets.push({
