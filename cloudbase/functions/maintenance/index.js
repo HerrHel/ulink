@@ -27,6 +27,31 @@ const TRASH_KEEP_DAYS = parseInt(process.env.TRASH_KEEP_DAYS || '0', 10)
 /** 用户上传媒体临时对象保留小时数：默认 24h；处理完前端/worker 会主动删，这里兜底 */
 const DEEP_MEDIA_KEEP_HOURS = parseInt(process.env.DEEP_MEDIA_KEEP_HOURS || '24', 10)
 const DEEP_MEDIA_BUCKET = 'deep-media'
+/**
+ * 数据库备份保留天数：默认 30 天。
+ * 背景：CloudBase 个人版的 PG 跑在共享集群，控制台「备份」页明确提示
+ * 「当前共享集群暂不提供相关能力」（2026-11-03 核实），而安全评估报告承诺
+ * 「提供云端数据备份用于取证」——故自建每日全量导出，存 deep-media 的
+ * db-backup/ 前缀下，按天滚动清理。
+ * 设 0 可关闭备份（不推荐：等于放弃报告里的承诺）。
+ */
+const DB_BACKUP_KEEP_DAYS = parseInt(process.env.DB_BACKUP_KEEP_DAYS || '30', 10)
+
+/**
+ * 数据库全量备份：一个 RPC 完成「全库导出 → 入库 → 轮转」。
+ *
+ * 为什么不写到云存储：CloudBase 的 PG 环境下 node-sdk 不支持 uploadFile
+ * （STORAGE_NOT_SUPPORTED），且平台共享集群本身不提供备份能力。
+ * 落到 db_backup 表可覆盖最常见的事故——误删/代码 bug 批量删数据，
+ * 随时 SELECT payload 即可取回；保留 DB_BACKUP_KEEP_DAYS 天。
+ */
+async function backupDatabase(db) {
+  const r = await db.rpc('fn_create_db_backup', { p_keep_days: DB_BACKUP_KEEP_DAYS })
+  if (r.error) {
+    throw new Error('fn_create_db_backup: ' + String(r.error.message || r.error))
+  }
+  return r.data
+}
 
 async function runCleanup() {
   if (!ENV_ID || !API_KEY) {
@@ -64,7 +89,19 @@ async function runCleanup() {
     console.error('[maintenance] deep-media cleanup failed:', (e && e.message) || e)
   }
 
-  return { ...r.data, deepMediaDeleted }
+  // 每日数据库全量备份（CloudBase 共享集群无平台备份，自建兜底）
+  let dbBackup = null
+  if (DB_BACKUP_KEEP_DAYS > 0) {
+    try {
+      dbBackup = await backupDatabase(db)
+    } catch (e) {
+      // 备份失败不能影响日志清理结果，但要留下明确错误
+      console.error('[maintenance] db backup failed:', (e && e.message) || e)
+      dbBackup = { ok: false, error: String((e && e.message) || e) }
+    }
+  }
+
+  return { ...r.data, deepMediaDeleted, dbBackup }
 }
 
 // 定时触发器入口
