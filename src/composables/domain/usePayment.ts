@@ -13,6 +13,7 @@
 import { ref, computed, readonly } from 'vue'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
 import { getApiToken } from '../../lib/authDriver.js'
+import { getCachedPlans } from './usePurchasePlans.js'
 
 export type PaymentChannel = 'wechat' | 'alipay'
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
@@ -138,7 +139,8 @@ export function usePayment() {
         const mockOrder: PaymentOrder = {
           orderId: 'test_ord_' + now,
           planId,
-          amountCents: 1200,
+          // 演示模式金额也从套餐表取，避免 mock 里写死数字与真实价脱节
+          amountCents: getCachedPlans().find((p) => p.planId === planId)?.priceCents ?? 0,
           channel,
           status: 'pending',
           qrCode: 'https://ulink.ren/pay/test?channel=' + channel + '&t=' + now,

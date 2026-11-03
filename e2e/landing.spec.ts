@@ -29,14 +29,14 @@ test.describe('宣传落地页', () => {
     // 档位卡数量（免费 + 月付 + 季付 + 年付）
     await expect(pricing.locator('.price-card')).toHaveCount(4)
     // 关键价格
-    await expect(pricing).toContainText('¥12')
+    await expect(pricing).toContainText('¥15')
     await expect(pricing).toContainText('¥108')
-    // 划线原价只能等于「按月订满同周期」的真实支出：季付 ¥36（=12×3）、年付 ¥144（=12×12），
+    // 划线价只能等于「按月订满同周期」的真实支出：季付 ¥45（=15×3）、年付 ¥180（=15×12），
     // 月付为基准价故无划线价。虚构更高的"原价"属价格欺诈，此处锁死。
     await expect(pricing.locator('del')).toHaveCount(2)
-    await expect(pricing.locator('.price-featured del')).toHaveText('¥144')
-    await expect(pricing.locator('.price-featured .price-badge')).toContainText('首发早鸟 · 省¥36')
-    await expect(pricing).toContainText('进阶特惠 · 省¥4')
+    await expect(pricing.locator('.price-featured del')).toHaveText('¥180')
+    await expect(pricing.locator('.price-featured .price-badge')).toContainText('首发早鸟 · 省¥72')
+    await expect(pricing).toContainText('进阶特惠 · 省¥13')
     // 权益对比表的关键差异行（免费 200MB / PRO 5GB，且免费不支持全库巡检）
     await expect(pricing.locator('.price-compare')).toContainText('多端加密同步')
     await expect(pricing.locator('.price-compare')).toContainText('5 GB')

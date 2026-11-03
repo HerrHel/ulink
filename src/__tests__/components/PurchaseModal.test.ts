@@ -3,14 +3,14 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import PurchaseModal from '../../components/modals/PurchaseModal.vue'
 
-// 与线上 plans 表同构（2026-11-03 核对）：月付 ¥12 / 季付 ¥32 / 年付 ¥108，
+// 与线上 plans 表同构（2026-11-03 核对）：月付 ¥15 / 季付 ¥32 / 年付 ¥108，
 // plan id 也取真实库里的值（plus_monthly / pro_quarterly / plus_yearly），
 // 避免 mock 与生产漂移后测试仍"自说自话"。
 const { mockPlans, mockCreate } = vi.hoisted(() => {
   return {
     mockPlans: [
       { planId: 'free', name: '免费版', priceCents: 0, currency: 'CNY', periodDays: 0 },
-      { planId: 'plus_monthly', name: 'PRO 月付', priceCents: 1200, currency: 'CNY', periodDays: 30 },
+      { planId: 'plus_monthly', name: 'PRO 月付', priceCents: 1500, currency: 'CNY', periodDays: 30 },
       { planId: 'pro_quarterly', name: 'PRO 季付', priceCents: 3200, currency: 'CNY', periodDays: 90 },
       { planId: 'plus_yearly', name: 'PRO 年付', priceCents: 10800, currency: 'CNY', periodDays: 365 },
     ],
@@ -67,8 +67,9 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     const yearlyCard = wrapper.find('[data-testid="plan-plus_yearly"]')
     expect(yearlyCard.text()).toContain('PRO 年付')
     expect(yearlyCard.text()).toContain('¥108')
-    // 划线原价 = 月付 ¥12 × 12 = ¥144（不是虚高的 ¥168）
-    expect(yearlyCard.find('del').text()).toBe('¥144')
+    // 被比较价 = 按月订阅 12 个月合计 ¥180（真实可购方案，非虚构原价）
+    expect(yearlyCard.find('del').text()).toBe('¥180')
+    expect(yearlyCard.text()).toContain('按月订阅 12 个月合计 ¥180')
 
     wrapper.unmount()
   })
@@ -86,32 +87,33 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     expect(tabs[1].text()).toContain('包季')
     expect(tabs[2].text()).toContain('包年')
 
-    // 包季：¥32，划线 ¥36（= 月付 ×3），立省 ¥4
+    // 包季：¥32，划线 ¥45（= 月付 ¥15 × 3），立省 ¥13
     await tabs[1].trigger('click')
     await nextTick()
     const quarterlyCard = wrapper.find('[data-testid="plan-pro_quarterly"]')
     expect(quarterlyCard.exists()).toBe(true)
     expect(quarterlyCard.text()).toContain('PRO 季付')
-    expect(quarterlyCard.find('del').text()).toBe('¥36')
-    expect(quarterlyCard.text()).toContain('省 ¥4')
+    expect(quarterlyCard.find('del').text()).toBe('¥45')
+    expect(quarterlyCard.text()).toContain('省 ¥13')
+    expect(quarterlyCard.text()).toContain('按月订阅 3 个月合计 ¥45')
 
-    // 包年：¥108，划线 ¥144，立省 ¥36（25%），并标推荐
+    // 包年：¥108，划线 ¥180，立省 ¥72（40%），并标推荐
     await tabs[2].trigger('click')
     await nextTick()
     const yearlyCard = wrapper.find('[data-testid="plan-plus_yearly"]')
     expect(yearlyCard.exists()).toBe(true)
     expect(yearlyCard.text()).toContain('PRO 年付')
     expect(yearlyCard.text()).toContain('首发早鸟')
-    expect(yearlyCard.find('del').text()).toBe('¥144')
-    expect(yearlyCard.text()).toContain('省 ¥36')
+    expect(yearlyCard.find('del').text()).toBe('¥180')
+    expect(yearlyCard.text()).toContain('省 ¥72')
     expect(yearlyCard.classes()).toContain('is-recommended')
 
-    // 包月：¥12 且**不显示**划线原价（月付即基准价，没有可对比的更高参照）
+    // 包月：¥15 且**不显示**划线价（月付即基准价，没有可对比的更高参照）
     await tabs[0].trigger('click')
     await nextTick()
     const monthlyCard = wrapper.find('[data-testid="plan-plus_monthly"]')
     expect(monthlyCard.exists()).toBe(true)
-    expect(monthlyCard.text()).toContain('¥12')
+    expect(monthlyCard.text()).toContain('¥15')
     expect(monthlyCard.find('del').exists()).toBe(false)
 
     wrapper.unmount()
@@ -200,12 +202,12 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     await tabs[0].trigger('click')
     await nextTick()
     const monthlyCard = wrapper.find('[data-testid="plan-plus_monthly"]')
-    expect(monthlyCard.text()).not.toContain('折合 ¥12/月')
+    expect(monthlyCard.text()).not.toContain('折合 ¥15/月')
 
     await tabs[1].trigger('click')
     await nextTick()
     const quarterlyCard = wrapper.find('[data-testid="plan-pro_quarterly"]')
-    expect(quarterlyCard.text()).toContain('省 ¥4')
+    expect(quarterlyCard.text()).toContain('省 ¥13')
     const badge = quarterlyCard.find('.pur-tier-badge')
     expect(badge.classes()).toContain('badge-discount')
 

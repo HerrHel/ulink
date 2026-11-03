@@ -116,9 +116,10 @@
                   <div class="pur-price-main">
                     <span class="pur-amount-num">¥{{ (p.priceCents / 100).toFixed(p.priceCents % 100 === 0 ? 0 : 2) }}</span>
                     <span class="pur-period-tag">/ {{ p.periodLabel }}</span>
-                    <!-- 季付与年付原价划掉 -->
+                    <!-- 被比较价：按最低档（月付）订满同周期的真实合计，划掉展示 -->
                     <del v-if="p.originalPrice" class="pur-original-price">¥{{ p.originalPrice }}</del>
                   </div>
+                  <div v-if="p.baselineNote" class="pur-baseline-note">{{ p.baselineNote }}</div>
 
                   <!-- 立省金额一眼看清 -->
                   <div v-if="p.savingsText" class="pur-savings-row">
@@ -474,6 +475,8 @@ interface TierCardView extends PlanRow {
   badgeClass: string
   periodLabel: string
   originalPrice?: number
+  /** 被比较价的构成说明（例：按月订阅 12 个月合计 ¥180），避免只标一个无出处的数字 */
+  baselineNote?: string
   savingsText?: string
   perMonthText: string
   footerNote: string
@@ -556,6 +559,8 @@ const displayCards = computed<TierCardView[]>(() => {
     const savingYuan = Math.round(savingCents / 100)
     const savingPct = baseCents > 0 && savingCents > 0 ? Math.round((savingCents / baseCents) * 100) : 0
     const originalPrice: number | undefined = savingCents > 0 ? Math.round(baseCents / 100) : undefined
+    const baselineMonths = isYearly ? 12 : isQuarterly ? 3 : 0
+    const baselineNote = savingCents > 0 && baselineMonths > 0 ? `按月订阅 ${baselineMonths} 个月合计 ${yen(baseCents)}` : undefined
     let savingsText: string | undefined
 
     if (isYearly) {
@@ -666,6 +671,7 @@ const displayCards = computed<TierCardView[]>(() => {
       badge,
       badgeClass,
       originalPrice,
+      baselineNote,
       savingsText,
       periodLabel: isYearly ? '年' : isQuarterly ? '季' : isMonthly ? '月' : days(p.periodDays),
       perMonthText: perMonth(p),
@@ -1236,6 +1242,12 @@ onBeforeUnmount(() => {
   min-height: 20px;
   display: flex;
   align-items: center;
+}
+.pur-baseline-note {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  margin-top: 3px;
 }
 .pur-savings-tag {
   display: inline-flex;

@@ -11,7 +11,7 @@
 | 层 | 状态 | 证据 |
 |---|---|---|
 | 数据层 | ✅ 已就绪 | `20261028000010_payment_flow.sql` 已应用 |
-| 套餐 | ✅ 已就绪 | `plans`：`free`(¥0) / `plus_monthly`(¥12, 30d) / `plus_yearly`(¥108, 365d) |
+| 套餐 | ✅ 已就绪 | `plans`：`free`(¥0) / `plus_monthly`(**¥15**, 30d) / `pro_quarterly`(¥32, 90d) / `plus_yearly`(¥108, 365d) |
 | 支付宝渠道代码 | ✅ 已升级上线 | `cloudbase/functions/pay/lib/alipay.js`：电脑网站支付（`alipay.trade.page.pay`）+ 手机网站支付（`alipay.trade.wap.pay`）+ RSA2 请求加签与回调验签 + `alipay.trade.query` 兜底 |
 | 云函数 `pay` | ✅ **已部署生效** | 2026-11-02 部署完成，注入 `ALIPAY_*` 环境变量（15 项） |
 | 网关 `/pay` 路由 | ✅ 已连通 | `POST https://ulink.ren/pay/notify/alipay` 返回 400 failure（验签机制正常生效） |
