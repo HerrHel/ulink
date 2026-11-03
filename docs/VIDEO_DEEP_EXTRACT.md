@@ -1,6 +1,28 @@
 # 视频深度解析（口播 ASR + 画面网址 OCR）设计与接口契约
 
-> 状态：实现中（P0/P1/P2）。本文件是**接口契约的唯一真源**，前端 / 云函数 / worker 三端按此实现。
+> ## ⚠️ 当前状态（2026-11-03）：**已下线，容器已删除**
+>
+> `ulink-video-worker` 云托管服务已删除。原因与结论：
+>
+> 1. **成本**：1C2G 常驻 `alwaysScale`，按运行时长计费约 **12 元/天（≈365 元/月）**，
+>    而站点当时没有用户，属纯损耗。
+> 2. **法律风险**：深度解析需要对在线视频执行 `_deep_download()`
+>    （`format=bestaudio` / `bestvideo[height<=720]`，落盘临时文件）——这属于
+>    绕过平台技术措施获取内容，涉及《著作权法》第 53 条(六)；商业化规模下
+>    还可能触及《刑法》217 条。**产品决定放弃这条路径。**
+> 3. **技术已过时**：MiMo-V2.6-Flash 原生支持 `text/image/video/audio` 输入
+>    （1M 上下文，API 接受 `video_url`/`audio_url`/`input_audio`），
+>    用户上传的文件可以直接喂模型，无需下载/转码/抽帧。
+>
+> 恢复方法：`cd scripts/video-worker && tcb cloudrun deploy`（配置见 `cloudbaserc.json`）。
+> **恢复前请先决定是否保留 `_deep_download` 的在线视频下载分支**（见第 2 点）。
+>
+> 不受影响：**普通解析照常工作**（`extract-video` 的 `bilibili-native` 适配器与
+> yt-dlp 元数据探测 `skip_download=True` 均不依赖容器）。实测 B 站链接仍返回 200。
+>
+> ---
+
+> 状态：**深度解析已下线**（见上方）；本文件保留作为接口契约与历史设计记录。
 > 关联：[`scripts/video-worker/README.md`](../scripts/video-worker/README.md)、[`AGENTS.md`](../AGENTS.md) 安全段。
 
 ## 0. 背景与边界
