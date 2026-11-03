@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { getAuthDriver } from '../lib/authDriver.js'
+import { dbRpc } from '../lib/dbApi.js'
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../lib/storageSafe.js'
 import type { User, Session } from '@supabase/supabase-js'
 
@@ -300,6 +301,20 @@ export const useAuthStore = defineStore('auth', () => {
     return true
   }
 
+  /**
+   * 审计事件上报（fire-and-forget）：兑现《安全评估自评估报告》
+   * 「操作日志：登录等操作留痕」的承诺，落服务端 audit_log 表。
+   * 失败静默——审计失败不能阻断登录；未登录时服务端也会拒绝。
+   */
+  function _auditEvent(action: string): void {
+    // 双重防御：dbRpc 可能同步抛错（驱动未就绪/后端未配置），审计失败绝不阻断登录
+    try {
+      void Promise.resolve(dbRpc('audit_log_event', { p_action: action })).catch(() => undefined)
+    } catch {
+      /* 静默 */
+    }
+  }
+
   async function verifyOtp(email: string, token: string): Promise<boolean> {
     authError.value = null
     _ensureTicker()
@@ -329,6 +344,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     // 验证成功：清整条记录
     limits.value.delete(email)
+    _auditEvent('login')
     return true
   }
 
@@ -376,6 +392,7 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     }
     limits.value.delete(email)
+    _auditEvent('login_password')
     return true
   }
 
@@ -401,6 +418,7 @@ export const useAuthStore = defineStore('auth', () => {
       authError.value = error.message
       return false
     }
+    _auditEvent('password_reset')
     return true
   }
 
