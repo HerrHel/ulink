@@ -47,7 +47,7 @@ describe('AI 对话多模态附件处理 (attachmentHelper.ts)', () => {
       expect(res.mimeType).toBe('video/mp4')
     })
 
-    it('视频超过 60 秒上限时应抛出阻断异常并包含明确文案', async () => {
+    it('视频超过 30 分钟上限时应抛出阻断异常并包含明确文案', async () => {
       const mockFile = new File(['video-bytes'], 'long-lecture.mp4', { type: 'video/mp4' })
       const origCreateElement = document.createElement.bind(document)
       const origCreateObjectUrl = URL.createObjectURL
@@ -59,7 +59,7 @@ describe('AI 对话多模态附件处理 (attachmentHelper.ts)', () => {
         if (tagName === 'video') {
           const el = origCreateElement('video')
           setTimeout(() => {
-            Object.defineProperty(el, 'duration', { value: 90, configurable: true })
+            Object.defineProperty(el, 'duration', { value: 35 * 60, configurable: true })
             el.onloadedmetadata?.(new Event('loadedmetadata'))
           }, 10)
           return el
@@ -68,7 +68,7 @@ describe('AI 对话多模态附件处理 (attachmentHelper.ts)', () => {
       })
 
       try {
-        await expect(processFileForAi(mockFile)).rejects.toThrow(/60/)
+        await expect(processFileForAi(mockFile)).rejects.toThrow(/30|分钟/)
         expect(URL.revokeObjectURL).toHaveBeenCalled()
       } finally {
         spy.mockRestore()
@@ -77,7 +77,7 @@ describe('AI 对话多模态附件处理 (attachmentHelper.ts)', () => {
       }
     })
 
-    it('视频未超过 60 秒时应记录 durationSec 并正常放行', async () => {
+    it('视频在合理时长内时应记录 durationSec 并正常放行', async () => {
       const mockFile = new File(['video-bytes'], 'short-demo.mp4', { type: 'video/mp4' })
       const origCreateElement = document.createElement.bind(document)
       const origCreateObjectUrl = URL.createObjectURL

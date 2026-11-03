@@ -26,6 +26,7 @@ __export(mimo_guard_exports, {
   MAX_TOOLS_CHARS_DEFAULT: () => MAX_TOOLS_CHARS_DEFAULT,
   MAX_TOTAL_CHARS_DEFAULT: () => MAX_TOTAL_CHARS_DEFAULT,
   buildCorsHeaders: () => buildCorsHeaders,
+  imageStats: () => imageStats,
   isOriginAllowed: () => isOriginAllowed,
   mediaStats: () => mediaStats,
   textLength: () => textLength,
@@ -51,8 +52,9 @@ function textLength(value) {
   return 0;
 }
 function imageStats(value) {
-  let count = 0;
-  let chars = 0;
+  let inlineCount = 0;
+  let remoteCount = 0;
+  let inlineChars = 0;
   const visit = (node) => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
@@ -63,14 +65,18 @@ function imageStats(value) {
     if (obj.type === "image_url" || obj.type === "image") {
       const image = obj.image_url || obj.image;
       const url = image && typeof image.url === "string" ? image.url : "";
-      count += 1;
-      chars += url.length;
+      if (url.startsWith("data:")) {
+        inlineCount += 1;
+        inlineChars += url.length;
+      } else if (/^https?:\/\//i.test(url)) {
+        remoteCount += 1;
+      }
       return;
     }
     for (const item of Object.values(obj)) visit(item);
   };
   visit(value);
-  return { count, chars };
+  return { inlineCount, remoteCount, inlineChars };
 }
 function mediaStats(value) {
   let video = 0;
@@ -144,11 +150,14 @@ function validateChatBody(body, opts) {
     }
   }
   const images = imageStats(b.messages);
-  if (images.count > 4) {
+  if (images.inlineCount > 4) {
     return { ok: false, status: 413, error: "Too many images (max 4)" };
   }
-  if (images.chars > 4e5) {
+  if (images.inlineChars > 4e5) {
     return { ok: false, status: 413, error: "Images too large (max 400000 chars)" };
+  }
+  if (images.inlineCount + images.remoteCount > 24) {
+    return { ok: false, status: 413, error: "Too many images (max 24)" };
   }
   const media = mediaStats(b.messages);
   if (media.video > 1) {
@@ -216,6 +225,7 @@ function buildCorsHeaders(origin, allowed) {
   MAX_TOOLS_CHARS_DEFAULT,
   MAX_TOTAL_CHARS_DEFAULT,
   buildCorsHeaders,
+  imageStats,
   isOriginAllowed,
   mediaStats,
   textLength,

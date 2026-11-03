@@ -23,8 +23,11 @@ export interface AttachedMediaFile {
   textContent?: string // 文本/代码/数据类文件的提取正文
 }
 
-/** 视频直连 MiMo 的单次最长安全秒数（超过容易导致云函数 120s 超时） */
-export const MAX_DIRECT_VIDEO_DURATION_SEC = 60
+/** 视频直连 MiMo 的单次最长安全秒数（超过将自动转为端侧音画拆解） */
+export const MAX_DIRECT_VIDEO_DURATION_SEC = 30
+
+/** 端侧音画拆解的最长支持秒数：30 分钟（1800 秒） */
+export const MAX_DECOMPOSE_VIDEO_DURATION_SEC = 30 * 60
 
 /** 原始 File 只驻留内存，不随会话序列化（避免把二进制写进 localStorage/IDB） */
 const rawFileStore = new Map<string, File>()
@@ -75,17 +78,18 @@ export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
       const dur = await readVideoDuration(file)
       if (dur > 0) {
         durationSec = dur
-        if (dur > MAX_DIRECT_VIDEO_DURATION_SEC) {
-          const rounded = Math.round(dur)
+        if (dur > MAX_DECOMPOSE_VIDEO_DURATION_SEC) {
+          const maxMin = Math.round(MAX_DECOMPOSE_VIDEO_DURATION_SEC / 60)
+          const curMin = Math.round(dur / 60)
           throw new Error(
-            t('ai.videoTooLong', { max: MAX_DIRECT_VIDEO_DURATION_SEC, sec: rounded }) ||
-              `视频时长超过 ${MAX_DIRECT_VIDEO_DURATION_SEC} 秒（当前 ${rounded} 秒），为保障响应速度请截短后上传`,
+            t('ai.videoTooLong', { max: `${maxMin} 分钟`, sec: `${curMin} 分钟` }) ||
+              `视频时长超过 ${maxMin} 分钟（当前约 ${curMin} 分钟），为保障处理性能请截短后上传`,
           )
         }
       }
     } catch (err) {
       // 若是超过上限的主动抛错，继续向上抛出阻断上传；其他探测异常则忽略兜底
-      if (err instanceof Error && err.message.includes(String(MAX_DIRECT_VIDEO_DURATION_SEC))) {
+      if (err instanceof Error && (err.message.includes('分钟') || err.message.includes(String(MAX_DECOMPOSE_VIDEO_DURATION_SEC)))) {
         throw err
       }
     }

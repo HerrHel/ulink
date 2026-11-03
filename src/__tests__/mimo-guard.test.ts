@@ -245,6 +245,22 @@ describe('mimo-guard 音视频多模态预算（2026-11-03 支持 video_url / in
     if (!r.ok) expect(r.error).toContain('Images too large')
   })
 
+  it('远程图片放宽到 24 张且不计入内联 base64 字符预算', () => {
+    const remoteImgPart = (idx: number) => ({
+      type: 'image_url',
+      image_url: { url: `https://ulink-cos.myqcloud.com/deep-media/frame_${idx}.jpg` },
+    })
+    // 16 张远程图片（如长视频抽帧）：放行
+    const parts16 = Array.from({ length: 16 }, (_, i) => remoteImgPart(i))
+    expect(validateChatBody({ ...base, messages: [{ role: 'user', content: parts16 }] }, opts).ok).toBe(true)
+
+    // 25 张远程图片：超过 24 张上限被拒
+    const parts25 = Array.from({ length: 25 }, (_, i) => remoteImgPart(i))
+    const r25 = validateChatBody({ ...base, messages: [{ role: 'user', content: parts25 }] }, opts)
+    expect(r25.ok).toBe(false)
+    if (!r25.ok) expect(r25.error).toContain('Too many images (max 24)')
+  })
+
   it('mediaStats 统计视频/音频数量与载荷规模', () => {
     const value = {
       content: [videoPart('https://a/1.mp4'), audioPart(100)],

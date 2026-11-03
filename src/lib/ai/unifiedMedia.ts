@@ -19,6 +19,7 @@ import type { AttachedMediaFile } from './attachmentHelper.js'
 import { getRawAttachedFile, MAX_DIRECT_VIDEO_DURATION_SEC } from './attachmentHelper.js'
 import { uploadDeepMediaFile } from './deepMediaUpload.js'
 import { maybeCompressAudio } from './audioCompress.js'
+import { decomposeVideoForAi } from './videoDecompose.js'
 
 export interface MediaIntent {
   wantsTranscript: boolean
@@ -87,21 +88,50 @@ export async function prepareUnifiedMedia(
 
       if (file.type === 'video') {
         if (videoUsed) throw new Error('一次对话只能发送一个视频')
-        if (file.durationSec && file.durationSec > MAX_DIRECT_VIDEO_DURATION_SEC) {
-          throw new Error(`视频时长超过 ${MAX_DIRECT_VIDEO_DURATION_SEC} 秒，请截短后重试`)
-        }
         if (!VIDEO_ACCEPTED.test(file.mimeType || file.name || '')) {
           throw new Error('视频格式不支持，请使用 mp4 / mov / webm')
         }
         const rawFile = getRawAttachedFile(file.id)
         if (!rawFile) throw new Error('原始文件不可用，请重新上传')
-        opts.onProgress?.(`${file.name} 上传中`)
-        // 视频必须给模型一个可公网拉取的地址：上传存储取 publicUrl。
-        // 注意：这里**不删除**对象——模型在后续请求中会来拉取，交给 maintenance 按保留期清理。
-        const uploaded = await uploadDeepMediaFile(rawFile, userId)
-        mediaParts.push({ type: 'video_url', video_url: { url: uploaded.url } })
+
+        const duration = file.durationSec || 0
+        // 短视频（≤30s）：直接走原生 video_url 直传（全画质全声效，模型几秒完成）
+        if (duration > 0 && duration <= MAX_DIRECT_VIDEO_DURATION_SEC) {
+          opts.onProgress?.(`${file.name} 上传中`)
+          const uploaded = await uploadDeepMediaFile(rawFile, userId)
+          mediaParts.push({ type: 'video_url', video_url: { url: uploaded.url } })
+          videoUsed = true
+          opts.onProgress?.(`${file.name} 已就绪`)
+          continue
+        }
+
+        // 中长视频（>30s 或未探明时长的视频）：自动启动端侧智能「音画拆解」
+        opts.onProgress?.(`正在对 ${file.name} 执行端侧音画拆解与抽帧…`)
+        const decomposed = await decomposeVideoForAi(rawFile, duration, userId, opts.onProgress)
+
+        // 注入提取到的核心压缩音轨（16kHz 32kbps MP3）
+        if (decomposed.audioUrl) {
+          mediaParts.push({
+            type: 'input_audio',
+            input_audio: { url: decomposed.audioUrl, format: 'mp3' },
+          })
+        }
+
+        // 注入提取到的带时间戳时序关键帧（远程 URL，单张仅约 26 tokens）
+        if (decomposed.frames && decomposed.frames.length > 0) {
+          for (const frame of decomposed.frames) {
+            if (frame.url) {
+              images.push(frame.url)
+            }
+          }
+        }
+
+        if (decomposed.timeIndexPrompt) {
+          errors.push(decomposed.timeIndexPrompt)
+        }
+
         videoUsed = true
-        opts.onProgress?.(`${file.name} 已就绪`)
+        opts.onProgress?.(`${file.name} 音画拆解完成`)
         continue
       }
 

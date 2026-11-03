@@ -43,10 +43,15 @@ export function textLength(value: unknown): number {
   return 0
 }
 
-/** 统计请求中的图片数量与 data URL 总字符数（多模态预算） */
-function imageStats(value: unknown): { count: number; chars: number } {
-  let count = 0
-  let chars = 0
+/** 统计请求中的图片数量（区分内联 base64 与远程 URL）以及 data URL 总字符数 */
+export function imageStats(value: unknown): {
+  inlineCount: number
+  remoteCount: number
+  inlineChars: number
+} {
+  let inlineCount = 0
+  let remoteCount = 0
+  let inlineChars = 0
   const visit = (node: unknown): void => {
     if (!node || typeof node !== 'object') return
     if (Array.isArray(node)) {
@@ -57,14 +62,18 @@ function imageStats(value: unknown): { count: number; chars: number } {
     if (obj.type === 'image_url' || obj.type === 'image') {
       const image = (obj.image_url || obj.image) as Record<string, unknown> | undefined
       const url = image && typeof image.url === 'string' ? image.url : ''
-      count += 1
-      chars += url.length
+      if (url.startsWith('data:')) {
+        inlineCount += 1
+        inlineChars += url.length
+      } else if (/^https?:\/\//i.test(url)) {
+        remoteCount += 1
+      }
       return
     }
     for (const item of Object.values(obj)) visit(item)
   }
   visit(value)
-  return { count, chars }
+  return { inlineCount, remoteCount, inlineChars }
 }
 
 /**
@@ -177,15 +186,18 @@ export function validateChatBody(
     }
   }
 
-  // ── 多模态图片预算：最多 4 张，data URL 总量 ≤ 3MB ──
+  // ── 多模态图片预算 ──
+  // 1. 内联 data URL 图片（进请求体）：最多 4 张，且总字符 ≤ 400,000（对齐 CloudBase 网关 512KB 入站上限）
+  // 2. 远程 https URL 图片（由模型端拉取，如长视频关键帧）：放宽至 24 张，单张仅 ~26 tokens，不占网关入站体积
   const images = imageStats(b.messages)
-  if (images.count > 4) {
+  if (images.inlineCount > 4) {
     return { ok: false, status: 413, error: 'Too many images (max 4)' }
   }
-  // 图片以 base64 内联，必须对齐网关入站上限（约 512KB）；超限时给明确 413，
-  // 而不是让请求在网关层被 430/406 拒掉（用户看到的是"网络错误"，无法自查）。
-  if (images.chars > 400_000) {
+  if (images.inlineChars > 400_000) {
     return { ok: false, status: 413, error: 'Images too large (max 400000 chars)' }
+  }
+  if (images.inlineCount + images.remoteCount > 24) {
+    return { ok: false, status: 413, error: 'Too many images (max 24)' }
   }
 
   // ── 多模态音视频预算 ──
