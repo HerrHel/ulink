@@ -34,11 +34,12 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
     var host = document.getElementById('foot-beian')
     if (!host) return
     var parts = []
-    if (ICP_NUMBER) {
-      parts.push(
-        '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">' +
-          ICP_NUMBER +
-        '</a>'
+    // ICP 号已在 index.html 里静态写死（不依赖 JS，便于核查工具抓取）。
+    // 此处仅做兜底：若静态标记被误删，补回一个；已有则跳过，避免重复。
+    if (ICP_NUMBER && host.textContent.indexOf(ICP_NUMBER) === -1) {
+      host.insertAdjacentHTML(
+        'beforeend',
+        '<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">' + ICP_NUMBER + '</a>'
       )
     }
     if (MPS_NUMBER) {
@@ -51,7 +52,7 @@ var MPS_CODE = ''    // 公安平台下发的网站标识码（用于定位查�
         '</a>'
       )
     }
-    if (parts.length) host.innerHTML = parts.join('')
+    if (parts.length) host.insertAdjacentHTML('beforeend', parts.join(''))
   } catch (e) { /* 备案号渲染失败不影响落地页其它功能 */ }
 })();
 

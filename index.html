@@ -838,8 +838,12 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <span data-i18n="foot.rights">© 2026 ulink.ren · 与链</span>
       <span data-i18n="foot.note">开箱即用 · 隐私自主掌控 · 云同步可选</span>
     </div>
-    <!-- 备案号由 landing.js 注入：ICP 号链接工信部，公安备案号链接公安平台；号为空则不渲染 -->
-    <div class="foot-beian" id="foot-beian"></div>
+    <!-- 备案号必须**静态**出现在 HTML 里：核查工具/爬虫不一定执行 JS，
+         靠脚本注入会被判「未在首页底部标明备案号」。
+         ICP 号写死在此；公安联网备案号由 landing.js 在号下发后补入（同样落进静态可读的 DOM）。 -->
+    <div class="foot-beian" id="foot-beian">
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">鄂ICP备2026061718号-1</a>
+    </div>
   </div>
 </footer>
 
