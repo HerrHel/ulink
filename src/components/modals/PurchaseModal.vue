@@ -527,6 +527,14 @@ const displayCards = computed<TierCardView[]>(() => {
     })
     .sort((a, b) => a.priceCents - b.priceCents)
 
+  // 划线原价的唯一合法基准：最低档（月付）实价。季付 ×3、年付 ×12 即"按月订满同周期"的
+  // 真实支出；任何高于该值的"原价"都构成《明码标价和禁止价格欺诈规定》下的虚构原价。
+  const monthlyBaseCents =
+    all.find((p) => {
+      const d = p.periodDays || 0
+      return d >= 25 && d <= 35 && p.priceCents > 0
+    })?.priceCents ?? 0
+
   for (const p of paid) {
     const isYearly = (p.periodDays || 0) >= 365
     const isQuarterly = (p.periodDays || 0) >= 80 && (p.periodDays || 0) <= 120
@@ -539,30 +547,32 @@ const displayCards = computed<TierCardView[]>(() => {
     let chineseName = p.name || 'PRO'
     let desc = '适合高频使用与深度整理，随订随用。'
     let footerNote = '开通即刻生效，支持随订随用。'
-    let originalPrice: number | undefined
+
+    // 原价与立省一律由数据推导，不写死数字（改价后文案自动跟随，也不会出现"省 ¥60"与实价矛盾）
+    let baseCents = 0
+    if (isQuarterly && monthlyBaseCents > 0) baseCents = monthlyBaseCents * 3
+    else if (isYearly && monthlyBaseCents > 0) baseCents = monthlyBaseCents * 12
+    const savingCents = baseCents > p.priceCents ? baseCents - p.priceCents : 0
+    const savingYuan = Math.round(savingCents / 100)
+    const savingPct = baseCents > 0 && savingCents > 0 ? Math.round((savingCents / baseCents) * 100) : 0
+    const originalPrice: number | undefined = savingCents > 0 ? Math.round(baseCents / 100) : undefined
     let savingsText: string | undefined
 
     if (isYearly) {
       chineseName = 'PRO 年付'
       desc = t('purchase.yearlySlogan') || '高频生产力首选，折合仅 ¥9/月（每天不到 3 毛钱），尊享全功能与优先通道。'
       footerNote = t('purchase.earlyBirdFootnote') || '首发早鸟特权：一次开通终身锁价，随订随用，随时退款。'
-      // 原价标杆锚定：¥168（首发早鸟立省 ¥60，限时 6.4 折）
-      originalPrice = 168
-      savingsText = '首发早鸟立省 ¥60（限时 6.4 折）· 享永久续费原价锁定'
+      if (savingCents > 0) savingsText = `首发早鸟立省 ${yen(savingCents)}（较按月省 ${savingPct}%）· 享终身同价续费`
     } else if (isQuarterly) {
       chineseName = 'PRO 季付'
       desc = t('purchase.quarterlySlogan') || '季度进阶首选，尽享高频自动化整理与音视频提取，折算更优惠。'
       footerNote = t('purchase.quarterlyFootnote') || '单次开通即刻生效，季度进阶优选，到期不自动续费。'
-      // 原价标杆锚定：¥45（立省 ¥13，省 29%）
-      originalPrice = 45
-      savingsText = '进阶立省 ¥13（省29%）· 折合仅 ¥10.7/月'
+      if (savingCents > 0) savingsText = `进阶立省 ${yen(savingCents)}（省 ${savingPct}%）· ${perMonth(p)}`
     } else if (isMonthly) {
       chineseName = 'PRO 月付'
       desc = t('purchase.monthlySlogan') || '灵活按月进阶，解锁音视频情报提炼与 AI 知识深加工，无续费压力。'
       footerNote = t('purchase.monthlyFootnote') || '单次开通即刻生效，随订随用，到期不自动续费。'
-      // 原价标杆锚定：¥15（尝鲜立省 ¥3）
-      originalPrice = 15
-      savingsText = '限时尝鲜立省 ¥3 · 随订随用无续费压力'
+      // 月付即基准价，没有可对比的更高参照价——不显示划线原价与立省
     }
 
     let badge = ''
@@ -571,13 +581,13 @@ const displayCards = computed<TierCardView[]>(() => {
       badge = t('purchase.currentPlanBadge')
       badgeClass = 'badge-current'
     } else if (isRecommended) {
-      badge = t('purchase.earlyBirdBadge') || `${t('purchase.recommended')} · 省¥60`
+      badge = savingYuan > 0 ? `${t('purchase.earlyBirdBadge')} · 省 ${yen(savingCents)}` : t('purchase.earlyBirdBadge')
       badgeClass = 'badge-recommended'
     } else if (isQuarterly) {
-      badge = t('purchase.quarterlyBadge') || '进阶特惠 · 省¥13'
+      badge = savingYuan > 0 ? `${t('purchase.quarterlyBadge')} · 省 ${yen(savingCents)}` : t('purchase.quarterlyBadge')
       badgeClass = 'badge-discount'
     } else if (isMonthly) {
-      badge = t('purchase.monthlyBadge') || '限时尝鲜 · 省¥3'
+      badge = t('purchase.monthlyBadge')
       badgeClass = 'badge-discount'
     } else if (isTest) {
       badge = '测试'
@@ -622,8 +632,8 @@ const displayCards = computed<TierCardView[]>(() => {
 
     if (isYearly) {
       bullets.unshift({
-        text: '首发早鸟特惠 · 锁定永久原价（仅 ¥9/月）',
-        sub: '每天不到 3 毛钱，立省 ¥60，尊享终身同价续费与专属早鸟特权',
+        text: '首发早鸟特惠 · 锁定永久同价续费',
+        sub: savingCents > 0 ? `较按月订阅省 ${yen(savingCents)}，享终身同价续费与专属早鸟特权` : '享终身同价续费与专属早鸟特权',
         highlight: true,
       })
       bullets.push({
@@ -633,13 +643,13 @@ const displayCards = computed<TierCardView[]>(() => {
       })
     } else if (isQuarterly) {
       bullets.unshift({
-        text: '季度进阶优惠 · 立省 ¥13（省29%）',
-        sub: '折合仅 ¥10.7/月，中长期进阶性价比之选',
+        text: savingCents > 0 ? `季度进阶优惠 · 立省 ${yen(savingCents)}（省 ${savingPct}%）` : '季度进阶优惠',
+        sub: `${perMonth(p)}，中长期进阶性价比之选`,
         highlight: true,
       })
     } else if (isMonthly) {
       bullets.unshift({
-        text: '按月灵活订阅 · 尝鲜立省 ¥3',
+        text: '按月灵活订阅',
         sub: '随订随用无续费负担，即刻解锁全部 PRO 智能特权',
         highlight: true,
       })
@@ -750,11 +760,21 @@ function days(d: number): string {
   if (!d) return '永久'
   return d % 365 === 0 ? `${d / 365} 年` : d % 30 === 0 ? `${d / 30} 个月` : `${d} 天`
 }
+/** 周期折算月数：季 / 年按整月算（365 天视作 12 个月），避免 365/30 得到 12.17 个月 */
+function cycleMonths(periodDays: number): number {
+  if (!periodDays) return 0
+  if (periodDays >= 350) return 12
+  if (periodDays >= 80 && periodDays <= 120) return 3
+  if (periodDays >= 25 && periodDays <= 35) return 1
+  return Math.max(1, Math.round(periodDays / 30))
+}
 function perMonth(p: PlanRow): string {
   if (!p.periodDays) return ''
-  // 月付（约 30 天周期）原价本来就是按月计费，不需要重复显示「折合 ¥12/月」
+  // 月付（约 30 天周期）本来就是按月计费，不需要重复显示「折合 ¥12/月」
   if (p.periodDays >= 25 && p.periodDays <= 35) return ''
-  const perMonthCents = Math.round((p.priceCents / p.periodDays) * 30)
+  const months = cycleMonths(p.periodDays)
+  if (!months) return ''
+  const perMonthCents = Math.round(p.priceCents / months)
   return t('purchase.perMonth', { price: yen(perMonthCents) })
 }
 
