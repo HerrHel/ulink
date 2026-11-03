@@ -77,6 +77,11 @@ var T = {
     noBookmarksMatch: "\u672A\u627E\u5230\u5339\u914D\u7684\u4E66\u7B7E",
     footerBrand: "\u4E0E\u94FE \xB7 ulink",
     footerSlogan: "\u6536\u85CF \xB7 \u6574\u7406 \xB7 \u5206\u4EAB",
+    // 违法与不良信息举报入口（《网络安全法》第 47 条、《网络信息内容生态治理规定》）：
+    // 分享页是公网可读的 UGC，必须提供对外的投诉/举报通道，不能只留站内反馈。
+    reportLink: "\u4E3E\u62A5 / \u4FB5\u6743\u6295\u8BC9",
+    reportSubject: "\u4E3E\u62A5\u5206\u4EAB\u5185\u5BB9 \xB7 \u4E0E\u94FE ulink",
+    reportBody: "\u8BF7\u7C98\u8D34\u4F60\u8981\u4E3E\u62A5\u7684\u5206\u4EAB\u94FE\u63A5\uFF0C\u5E76\u7B80\u8981\u8BF4\u660E\u7406\u7531\uFF08\u5982\u8FDD\u6CD5\u4FE1\u606F\u3001\u4FB5\u6743\u5185\u5BB9\uFF09\u3002\u6211\u4EEC\u4F1A\u5728\u6536\u5230\u540E\u53CA\u65F6\u6838\u5B9E\u5904\u7406\uFF1A",
     themeToggle: "\u5207\u6362\u6DF1\u6D45\u8272\u4E3B\u9898",
     // ── 访问密码门 ──
     passTitle: "\u9700\u8981\u8BBF\u95EE\u5BC6\u7801 - \u4E0E\u94FE",
@@ -137,6 +142,9 @@ var T = {
     noBookmarksMatch: "No matching bookmarks found",
     footerBrand: "ulink",
     footerSlogan: "Collect \xB7 Organize \xB7 Share",
+    reportLink: "Report / DMCA",
+    reportSubject: "Report shared content \xB7 ulink",
+    reportBody: "Paste the share link and briefly explain the issue (illegal content, infringement):",
     themeToggle: "Toggle light/dark theme",
     // ── password gate ──
     passTitle: "Password required - ulink",
@@ -534,6 +542,7 @@ function buildAppShell(dict, appOrigin, opts) {
   const isZh = dict.lang === "zh-CN";
   const slogan = isZh ? "\u4E2A\u4EBA\u4E66\u7B7E\u4E0E\u77E5\u8BC6\u5E93 \xB7 \u968F\u65F6\u968F\u5730\u6574\u7406\u5206\u4EAB" : "Personal bookmarks & knowledge vault";
   const ctaFoot = isZh ? "\u514D\u8D39\u4F53\u9A8C\u4E0E\u94FE ulink \u2192" : "Try ulink for free \u2192";
+  const reportHref = `mailto:herr@ulink.ren?subject=${encodeURIComponent(dict.reportSubject)}&amp;body=${encodeURIComponent(dict.reportBody)}`;
   return [
     `<div class="share-app">`,
     `<header class="share-bar">`,
@@ -562,6 +571,7 @@ function buildAppShell(dict, appOrigin, opts) {
     `<p class="share-footer-slogan">${slogan}</p>`,
     `<a class="share-footer-cta" href="${esc(appOrigin)}/">${ctaFoot}</a>`,
     `<span class="share-footer-copy">\xA9 ${year} ulink \xB7 ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `<a class="share-footer-report" href="${reportHref}">${esc(dict.reportLink)}</a>`,
     `</div>`,
     `</footer>`,
     `</div>`
@@ -2966,6 +2976,18 @@ body:has(.group-focus-panel:target) #cardGrid {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+/* \u4E3E\u62A5 / \u4FB5\u6743\u6295\u8BC9\uFF1A\u516C\u7F51 UGC \u5FC5\u987B\u63D0\u4F9B\u7684\u5BF9\u5916\u5904\u7F6E\u901A\u9053\uFF0C\u5F31\u5316\u4F46\u53EF\u8FBE */
+.share-footer-report {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin-top: 6px;
+  transition: color 0.15s ease;
+}
+.share-footer-report:hover {
+  color: var(--accent);
 }
 
 /* ==================== 404 / 503 \u515C\u5E95 ==================== */

@@ -68,6 +68,11 @@ const T = {
     noBookmarksMatch: '未找到匹配的书签',
     footerBrand: '与链 · ulink',
     footerSlogan: '收藏 · 整理 · 分享',
+    // 违法与不良信息举报入口（《网络安全法》第 47 条、《网络信息内容生态治理规定》）：
+    // 分享页是公网可读的 UGC，必须提供对外的投诉/举报通道，不能只留站内反馈。
+    reportLink: '举报 / 侵权投诉',
+    reportSubject: '举报分享内容 · 与链 ulink',
+    reportBody: '请粘贴你要举报的分享链接，并简要说明理由（如违法信息、侵权内容）。我们会在收到后及时核实处理：',
     themeToggle: '切换深浅色主题',
     // ── 访问密码门 ──
     passTitle: '需要访问密码 - 与链',
@@ -128,6 +133,9 @@ const T = {
     noBookmarksMatch: 'No matching bookmarks found',
     footerBrand: 'ulink',
     footerSlogan: 'Collect · Organize · Share',
+    reportLink: 'Report / DMCA',
+    reportSubject: 'Report shared content · ulink',
+    reportBody: 'Paste the share link and briefly explain the issue (illegal content, infringement):',
     themeToggle: 'Toggle light/dark theme',
     // ── password gate ──
     passTitle: 'Password required - ulink',
@@ -759,6 +767,7 @@ function buildAppShell(
   const isZh = dict.lang === 'zh-CN'
   const slogan = isZh ? '个人书签与知识库 · 随时随地整理分享' : 'Personal bookmarks & knowledge vault'
   const ctaFoot = isZh ? '免费体验与链 ulink →' : 'Try ulink for free →'
+  const reportHref = `mailto:herr@ulink.ren?subject=${encodeURIComponent(dict.reportSubject)}&amp;body=${encodeURIComponent(dict.reportBody)}`
   return [
     `<div class="share-app">`,
     `<header class="share-bar">`,
@@ -790,6 +799,7 @@ function buildAppShell(
     `<p class="share-footer-slogan">${slogan}</p>`,
     `<a class="share-footer-cta" href="${esc(appOrigin)}/">${ctaFoot}</a>`,
     `<span class="share-footer-copy">© ${year} ulink · ${esc(appOrigin.replace(/^https?:\/\//, ""))}</span>`,
+    `<a class="share-footer-report" href="${reportHref}">${esc(dict.reportLink)}</a>`,
     `</div>`,
     `</footer>`,
     `</div>`,
@@ -3454,6 +3464,18 @@ body:has(.group-focus-panel:target) #cardGrid {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+/* 举报 / 侵权投诉：公网 UGC 必须提供的对外处置通道，弱化但可达 */
+.share-footer-report {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  margin-top: 6px;
+  transition: color 0.15s ease;
+}
+.share-footer-report:hover {
+  color: var(--accent);
 }
 
 /* ==================== 404 / 503 兜底 ==================== */
