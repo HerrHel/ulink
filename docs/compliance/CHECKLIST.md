@@ -19,7 +19,7 @@
 
 | # | 项 | 现状 | 动作 |
 |---|---|---|---|
-| 1 | 网络访问日志留存 ≥6 个月 | 🔶 **主题已建好（`ulink-audit`，365 天，2026-11-03 API 代建）；剩投递开关一步** | CloudBase 控制台 → 日志监控 → 日志管理 → 右上角「日志设置」→ 投递到 CLS → 选 `ulink-logs`/`ulink-audit` → 访问一次站点验证新日志进主题 |
+| 1 | 网络访问日志留存 ≥6 个月 | ✅ **已完成**：CLS 主题 `ulink-audit`（365 天），投递已开启（11-03 21:16），实测日志含 `caller_ip`/`user_id`/`function_name`/`request_id`——按 IP/账号/时间三维检索可用 | 无。后续只看费用（预计每月 <1 元）|
 | 2 | 内容处置台账 | ✅ 已建 `audit_log` 表（2026-11-03）；处置记录写入即成台账 | 处置时手动 INSERT（SQL 模板见下），或让 share-admin 云函数代记 |
 | 3 | **maintenance 定时触发器未触发** | 🔴 cron `daily-cleanup` 已配置（11-01 创建），但函数 **0 条调用记录**；`fn invoke` 因 CAM 权限失败 | 控制台 → 云函数 → maintenance → 定时触发器 → 查状态并**手动试运行**；已验证 RPC `cleanup_expired_data()` 本身可执行（ok:true） |
 | 4 | 数据库自动备份 | ❓ CLI 无 PG 备份命令 | 腾讯云控制台 → 数据库 postgres-2m9745ae → 备份恢复 → 确认自动备份开启，截图留档 |
