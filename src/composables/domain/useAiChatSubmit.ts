@@ -162,7 +162,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     // 构建发给模型的完整提示词（内嵌详细卡片与多模态附件材料）
     const cardSection = resolvedCards.length > 0 ? formatAttachedCardsForPrompt(resolvedCards, isZh.value) : ''
     // 统一媒体入口：图片/视频/音频都从这里走；按用户问题决定「直接看图」还是「ASR/OCR 深度解析」
-    let unifiedMedia: { images: string[]; extraPrompt: string } = { images: [], extraPrompt: '' }
+    let unifiedMedia: { images: string[]; mediaParts: Array<Record<string, unknown>>; extraPrompt: string } = {
+      images: [],
+      mediaParts: [],
+      extraPrompt: '',
+    }
     if (attachedFiles.some((f) => f.type === 'image' || f.type === 'video' || f.type === 'audio')) {
       loadingTextKey.value = 'ai.deepProcessing'
       const authStore = useAuthStore()
@@ -533,6 +537,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 contextSlice,
                 profilePrompt,
                 images: unifiedMedia.images,
+                mediaParts: unifiedMedia.mediaParts,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {

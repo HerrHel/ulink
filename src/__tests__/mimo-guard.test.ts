@@ -8,6 +8,7 @@ import {
   isOriginAllowed,
   buildCorsHeaders,
   textLength,
+  mediaStats,
   MAX_MESSAGES_DEFAULT,
   MAX_MESSAGE_CHARS_DEFAULT,
   MAX_TOTAL_CHARS_DEFAULT,
@@ -160,5 +161,57 @@ describe('mimo-guard.textLength', () => {
     expect(textLength(['ab', 'cd'])).toBe(4)
     expect(textLength({ a: 'x', b: { c: 'yz' } })).toBe(3)
     expect(textLength(null)).toBe(0)
+  })
+})
+
+describe('mimo-guard 音视频多模态预算（2026-11-03 支持 video_url / input_audio）', () => {
+  const base = {
+    model: 'mimo-v2.6-flash',
+    stream: true,
+  }
+  const videoPart = (url: string) => ({ type: 'video_url', video_url: { url } })
+  const audioPart = (len: number) => ({
+    type: 'input_audio',
+    input_audio: { data: 'data:audio/mpeg;base64,' + 'A'.repeat(len), format: 'mp3' },
+  })
+
+  it('video_url 不计入文本字符预算（长 URL 不会误触 12 万上限）', () => {
+    const url = 'https://cdn.example.com/' + 'x'.repeat(200000) + '.mp4'
+    const body = { ...base, messages: [{ role: 'user', content: [{ type: 'text', text: 'hi' }, videoPart(url)] }] }
+    const r = validateChatBody(body, opts)
+    expect(r.ok).toBe(true)
+  })
+
+  it('最多 1 个视频，第二个直接 413', () => {
+    const body = {
+      ...base,
+      messages: [{
+        role: 'user',
+        content: [videoPart('https://a/1.mp4'), videoPart('https://a/2.mp4')],
+      }],
+    }
+    const r = validateChatBody(body, opts)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toContain('Too many videos')
+  })
+
+  it('input_audio 的 base64 不计入文本预算，但受 5M 字符独立上限约束', () => {
+    const okBody = { ...base, messages: [{ role: 'user', content: [audioPart(3_000_000)] }] }
+    expect(validateChatBody(okBody, opts).ok).toBe(true)
+
+    const tooBig = { ...base, messages: [{ role: 'user', content: [audioPart(5_200_000)] }] }
+    const r = validateChatBody(tooBig, opts)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error).toContain('Audio too large')
+  })
+
+  it('mediaStats 统计视频/音频数量与载荷规模', () => {
+    const value = {
+      content: [videoPart('https://a/1.mp4'), audioPart(100)],
+    }
+    const st = mediaStats(value)
+    expect(st.video).toBe(1)
+    expect(st.audio).toBe(1)
+    expect(st.chars).toBeGreaterThan(100)
   })
 })

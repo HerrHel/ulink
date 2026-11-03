@@ -138,6 +138,8 @@ export async function askMiMoStream(
     profilePrompt?: string
     /** 当前轮用户图片（data URL；只发压缩缩略图，最多 4 张） */
     images?: string[]
+    /** 音视频多模态块（video_url / input_audio），由 unifiedMedia 构造 */
+    mediaParts?: Array<Record<string, unknown>>
   },
   callbacks?: MiMoStreamCallbacks
 ): Promise<{
@@ -173,14 +175,17 @@ export async function askMiMoStream(
     const imageUrls = (context.images || [])
       .filter((url) => typeof url === 'string' && /^data:image\//i.test(url))
       .slice(0, 4)
-    if (imageUrls.length > 0) {
-      // 多模态请求：文本 + image_url 内容块（MiMo v2.6-flash 支持图像理解）
+    const mediaParts = Array.isArray(context.mediaParts) ? context.mediaParts : []
+    if (imageUrls.length > 0 || mediaParts.length > 0) {
+      // 多模态请求：文本 + 图片 + 音视频内容块
+      // （MiMo v2.6-flash 原生支持 image/video/audio 输入；video 走远程 URL，audio 走 base64）
       messages.push({
         role: 'user',
         content: [
           { type: 'text', text: userQuery },
           ...imageUrls.map((url) => ({ type: 'image_url', image_url: { url } })),
-        ],
+          ...mediaParts,
+        ] as any,
       })
     } else {
       messages.push({ role: 'user', content: userQuery })

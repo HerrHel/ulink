@@ -35,8 +35,9 @@ export function textLength(value: unknown): number {
   if (Array.isArray(value)) return value.reduce((n: number, item) => n + textLength(item), 0)
   if (value && typeof value === 'object') {
     const obj = value as Record<string, unknown>
-    // 多模态图片块（data URL 很大）：不计入文本预算，改用独立图片预算
+    // 多模态媒体块（data URL / 长 URL 都很大）：不计入文本预算，改用独立媒体预算
     if (obj.type === 'image_url' || obj.type === 'image') return 0
+    if (obj.type === 'video_url' || obj.type === 'input_audio' || obj.type === 'audio_url') return 0
     return Object.values(obj).reduce<number>((n, item) => n + textLength(item), 0)
   }
   return 0
@@ -64,6 +65,41 @@ function imageStats(value: unknown): { count: number; chars: number } {
   }
   visit(value)
   return { count, chars }
+}
+
+/**
+ * 统计视频/音频块数量与载荷规模（多模态独立预算）。
+ * 视频走 video_url（远程 URL，模型端拉取）；音频走 input_audio（必须 base64 data URL）。
+ */
+export function mediaStats(value: unknown): { video: number; audio: number; chars: number } {
+  let video = 0
+  let audio = 0
+  let chars = 0
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item)
+      return
+    }
+    const obj = node as Record<string, unknown>
+    if (obj.type === 'video_url') {
+      const v = obj.video_url as Record<string, unknown> | undefined
+      video += 1
+      chars += v && typeof v.url === 'string' ? v.url.length : 0
+      return
+    }
+    if (obj.type === 'input_audio' || obj.type === 'audio_url') {
+      const a = (obj.input_audio || obj.audio_url) as Record<string, unknown> | undefined
+      audio += 1
+      const data = a && typeof a.data === 'string' ? a.data : ''
+      const url = a && typeof a.url === 'string' ? a.url : ''
+      chars += data.length + url.length
+      return
+    }
+    for (const item of Object.values(obj)) visit(item)
+  }
+  visit(value)
+  return { video, audio, chars }
 }
 
 /**
@@ -135,6 +171,20 @@ export function validateChatBody(
   }
   if (images.chars > 3_000_000) {
     return { ok: false, status: 413, error: 'Images too large (max 3000000 chars)' }
+  }
+
+  // ── 多模态音视频预算：视频 1 段（远程 URL）、音频 1 段（base64 data URL ≤ 5MB 字符）──
+  // 实测：video_url 由模型端拉取（10 秒视频约 600 video tokens）；input_audio 必须 base64，
+  // 无法用远程 URL，故限制单段音频载荷，超限要求用户截短。
+  const media = mediaStats(b.messages)
+  if (media.video > 1) {
+    return { ok: false, status: 413, error: 'Too many videos (max 1)' }
+  }
+  if (media.audio > 1) {
+    return { ok: false, status: 413, error: 'Too many audio clips (max 1)' }
+  }
+  if (media.chars > 5_000_000) {
+    return { ok: false, status: 413, error: 'Audio too large (max 5000000 chars)' }
   }
 
   const payload: Record<string, unknown> = {
