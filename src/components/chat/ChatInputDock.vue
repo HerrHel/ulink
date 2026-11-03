@@ -356,9 +356,13 @@ async function handleFiles(files: FileList | File[]) {
       toast(t('ai.fileTooLarge'))
       continue
     }
-    const processed = await processFileForAi(f)
-    ui.attachFileToAi(processed)
-    addedCount++
+    try {
+      const processed = await processFileForAi(f)
+      ui.attachFileToAi(processed)
+      addedCount++
+    } catch (err: unknown) {
+      toast((err as Error).message || t('ai.fileTooLarge'), false)
+    }
   }
   if (addedCount > 0) {
     if (addedCount === 1) {

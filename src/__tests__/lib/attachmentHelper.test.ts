@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   formatFileSize,
   processFileForAi,
   formatAttachedFilesForPrompt,
+  readVideoDuration,
   type AttachedMediaFile,
 } from '../../lib/ai/attachmentHelper.js'
 
@@ -44,6 +45,113 @@ describe('AI 对话多模态附件处理 (attachmentHelper.ts)', () => {
       expect(res.name).toBe('presentation.mp4')
       expect(res.type).toBe('video')
       expect(res.mimeType).toBe('video/mp4')
+    })
+
+    it('视频超过 60 秒上限时应抛出阻断异常并包含明确文案', async () => {
+      const mockFile = new File(['video-bytes'], 'long-lecture.mp4', { type: 'video/mp4' })
+      const origCreateElement = document.createElement.bind(document)
+      const origCreateObjectUrl = URL.createObjectURL
+      const origRevokeObjectUrl = URL.revokeObjectURL
+      URL.createObjectURL = vi.fn(() => 'blob:mock-video')
+      URL.revokeObjectURL = vi.fn()
+
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+        if (tagName === 'video') {
+          const el = origCreateElement('video')
+          setTimeout(() => {
+            Object.defineProperty(el, 'duration', { value: 90, configurable: true })
+            el.onloadedmetadata?.(new Event('loadedmetadata'))
+          }, 10)
+          return el
+        }
+        return origCreateElement(tagName)
+      })
+
+      try {
+        await expect(processFileForAi(mockFile)).rejects.toThrow(/60/)
+        expect(URL.revokeObjectURL).toHaveBeenCalled()
+      } finally {
+        spy.mockRestore()
+        URL.createObjectURL = origCreateObjectUrl
+        URL.revokeObjectURL = origRevokeObjectUrl
+      }
+    })
+
+    it('视频未超过 60 秒时应记录 durationSec 并正常放行', async () => {
+      const mockFile = new File(['video-bytes'], 'short-demo.mp4', { type: 'video/mp4' })
+      const origCreateElement = document.createElement.bind(document)
+      const origCreateObjectUrl = URL.createObjectURL
+      const origRevokeObjectUrl = URL.revokeObjectURL
+      URL.createObjectURL = vi.fn(() => 'blob:mock-video')
+      URL.revokeObjectURL = vi.fn()
+
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+        if (tagName === 'video') {
+          const el = origCreateElement('video')
+          setTimeout(() => {
+            Object.defineProperty(el, 'duration', { value: 25.5, configurable: true })
+            el.onloadedmetadata?.(new Event('loadedmetadata'))
+          }, 10)
+          return el
+        }
+        return origCreateElement(tagName)
+      })
+
+      try {
+        const res = await processFileForAi(mockFile)
+        expect(res.name).toBe('short-demo.mp4')
+        expect(res.type).toBe('video')
+        expect(res.durationSec).toBe(25.5)
+        expect(URL.revokeObjectURL).toHaveBeenCalled()
+      } finally {
+        spy.mockRestore()
+        URL.createObjectURL = origCreateObjectUrl
+        URL.revokeObjectURL = origRevokeObjectUrl
+      }
+    })
+
+    it('WebM 未索引 duration 为 Infinity 时能触发 seek 迫出真实时长', async () => {
+      const mockFile = new File(['webm-bytes'], 'screen-rec.webm', { type: 'video/webm' })
+      const origCreateElement = document.createElement.bind(document)
+      const origCreateObjectUrl = URL.createObjectURL
+      const origRevokeObjectUrl = URL.revokeObjectURL
+      URL.createObjectURL = vi.fn(() => 'blob:mock-video')
+      URL.revokeObjectURL = vi.fn()
+
+      const spy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+        if (tagName === 'video') {
+          const el = origCreateElement('video')
+          let durationVal = Infinity
+          Object.defineProperty(el, 'duration', {
+            get: () => durationVal,
+            configurable: true,
+          })
+          Object.defineProperty(el, 'currentTime', {
+            set: () => {
+              durationVal = 42
+              setTimeout(() => {
+                el.ondurationchange?.(new Event('durationchange'))
+              }, 5)
+            },
+            configurable: true,
+          })
+          setTimeout(() => {
+            el.onloadedmetadata?.(new Event('loadedmetadata'))
+          }, 10)
+          return el
+        }
+        return origCreateElement(tagName)
+      })
+
+      try {
+        const dur = await readVideoDuration(mockFile)
+        expect(dur).toBe(42)
+        expect(URL.revokeObjectURL).toHaveBeenCalled()
+      } finally {
+        spy.mockRestore()
+        URL.createObjectURL = origCreateObjectUrl
+        URL.revokeObjectURL = origRevokeObjectUrl
+      }
     })
 
     it('图片文件能正确识别为 image 类型', async () => {

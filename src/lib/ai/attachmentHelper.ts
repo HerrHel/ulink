@@ -9,6 +9,8 @@
  * 5. 将附件结构化内嵌至向 LLM 发送的 Prompt 中
  */
 
+import { t } from '../../i18n/index.js'
+
 export interface AttachedMediaFile {
   id: string
   name: string
@@ -16,9 +18,13 @@ export interface AttachedMediaFile {
   mimeType: string
   size: number
   sizeFormatted: string
+  durationSec?: number // 媒体时长（秒）
   dataUrl?: string // 图片压缩缩略图 / 预览 DataURL
   textContent?: string // 文本/代码/数据类文件的提取正文
 }
+
+/** 视频直连 MiMo 的单次最长安全秒数（超过容易导致云函数 120s 超时） */
+export const MAX_DIRECT_VIDEO_DURATION_SEC = 60
 
 /** 原始 File 只驻留内存，不随会话序列化（避免把二进制写进 localStorage/IDB） */
 const rawFileStore = new Map<string, File>()
@@ -62,8 +68,28 @@ export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
 
   let dataUrl: string | undefined
   let textContent: string | undefined
+  let durationSec: number | undefined
 
-  if (type === 'image') {
+  if (type === 'video') {
+    try {
+      const dur = await readVideoDuration(file)
+      if (dur > 0) {
+        durationSec = dur
+        if (dur > MAX_DIRECT_VIDEO_DURATION_SEC) {
+          const rounded = Math.round(dur)
+          throw new Error(
+            t('ai.videoTooLong', { max: MAX_DIRECT_VIDEO_DURATION_SEC, sec: rounded }) ||
+              `视频时长超过 ${MAX_DIRECT_VIDEO_DURATION_SEC} 秒（当前 ${rounded} 秒），为保障响应速度请截短后上传`,
+          )
+        }
+      }
+    } catch (err) {
+      // 若是超过上限的主动抛错，继续向上抛出阻断上传；其他探测异常则忽略兜底
+      if (err instanceof Error && err.message.includes(String(MAX_DIRECT_VIDEO_DURATION_SEC))) {
+        throw err
+      }
+    }
+  } else if (type === 'image') {
     // 异步生成缩略图（640px / q0.72，单张约 40~60KB；既有 localStorage 考虑，也受网关入站上限约束）
     try {
       dataUrl = await createImageThumbnail(file)
@@ -91,9 +117,67 @@ export async function processFileForAi(file: File): Promise<AttachedMediaFile> {
     mimeType,
     size,
     sizeFormatted,
+    durationSec,
     dataUrl,
     textContent,
   }
+}
+
+/**
+ * 探测视频时长（秒）。
+ *
+ * 坑点处理：
+ * 1. URL.revokeObjectURL 必须在所有分支调用，防止 File 对象常驻内存。
+ * 2. 部分安卓浏览器 preload=metadata 不触发 loadedmetadata，设置超时兜底返回 0（不阻断上传）。
+ * 3. WebM 常见 duration = Infinity（未写头索引），seek 到远端大值迫使其触发 ondurationchange 计算真实时长。
+ */
+export function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      return resolve(0)
+    }
+
+    let settled = false
+    const url = URL.createObjectURL(file)
+    const v = document.createElement('video')
+    v.preload = 'metadata'
+
+    const done = (d: number) => {
+      if (!settled) {
+        settled = true
+        clearTimeout(timer)
+        try {
+          URL.revokeObjectURL(url)
+        } catch {
+          // 容错释放
+        }
+        resolve(Number.isFinite(d) && d > 0 ? d : 0)
+      }
+    }
+
+    // 300ms 超时兜底（交接文档标准：部分安卓浏览器 preload=metadata 不触发事件时不阻断）
+    const timer = setTimeout(() => done(0), 300)
+
+    v.onloadedmetadata = () => {
+      if (Number.isFinite(v.duration) && v.duration > 0) {
+        done(v.duration)
+      } else if (v.duration === Infinity) {
+        // WebM 未索引视频，跳到极大值强制触发底层索引计算
+        v.currentTime = 1e101
+      } else {
+        done(0)
+      }
+    }
+
+    v.ondurationchange = () => {
+      if (Number.isFinite(v.duration) && v.duration > 0) {
+        done(v.duration)
+      }
+    }
+
+    v.onerror = () => done(0)
+    v.src = url
+  })
 }
 /**
  * 压缩图片生成轻量 DataURL 缩略图。

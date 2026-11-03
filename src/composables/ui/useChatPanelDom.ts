@@ -50,9 +50,13 @@ export function useChatPanelDom(deps: ChatPanelDomDeps) {
       for (let i = 0; i < files.length; i++) {
         const f = files[i]
         if (f.size > 50 * 1024 * 1024) continue
-        const processed = await processFileForAi(f)
-        ui.attachFileToAi(processed)
-        added++
+        try {
+          const processed = await processFileForAi(f)
+          ui.attachFileToAi(processed)
+          added++
+        } catch (err: unknown) {
+          toast((err as Error).message || '文件处理失败', false)
+        }
       }
       if (added > 0) {
         toast(t('ai.fileAttachedToast', { name: files[0].name }))

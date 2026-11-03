@@ -16,7 +16,7 @@
  * 处理失败会写入明确的错误段落，不伪造结果；上传的临时对象处理完即删除。
  */
 import type { AttachedMediaFile } from './attachmentHelper.js'
-import { getRawAttachedFile } from './attachmentHelper.js'
+import { getRawAttachedFile, MAX_DIRECT_VIDEO_DURATION_SEC } from './attachmentHelper.js'
 import { uploadDeepMediaFile } from './deepMediaUpload.js'
 
 export interface MediaIntent {
@@ -86,6 +86,9 @@ export async function prepareUnifiedMedia(
 
       if (file.type === 'video') {
         if (videoUsed) throw new Error('一次对话只能发送一个视频')
+        if (file.durationSec && file.durationSec > MAX_DIRECT_VIDEO_DURATION_SEC) {
+          throw new Error(`视频时长超过 ${MAX_DIRECT_VIDEO_DURATION_SEC} 秒，请截短后重试`)
+        }
         if (!VIDEO_ACCEPTED.test(file.mimeType || file.name || '')) {
           throw new Error('视频格式不支持，请使用 mp4 / mov / webm')
         }
