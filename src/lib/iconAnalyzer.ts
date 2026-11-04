@@ -13,6 +13,34 @@
 const STORAGE_KEY = 'lv_icon_invert_cache'
 const MAX_CACHE_ENTRIES = 500
 
+/**
+ * 现代知名网站官方原生深色模式 Favicon 资源映射（方案一：源头官方矢量双模）
+ * 深色模式下直接以官方高清原画呈现，100% 官方原汁原味，零反色失真。
+ */
+export const OFFICIAL_DARK_ICONS: Record<string, string> = {
+  'github.com': 'https://github.githubassets.com/favicons/favicon-dark.svg',
+  'github.io': 'https://github.githubassets.com/favicons/favicon-dark.svg',
+}
+
+/**
+ * 获取指定网址匹配的官方原生深色模式图标（方案一：源头官方原画）
+ */
+export function getOfficialDarkIcon(url?: string | null): string | undefined {
+  if (!url) return undefined
+  try {
+    const raw = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`
+    const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '')
+    for (const [domain, icon] of Object.entries(OFFICIAL_DARK_ICONS)) {
+      if (host === domain || host.endsWith('.' + domain)) {
+        return icon
+      }
+    }
+  } catch {
+    // 忽略非标准 URL
+  }
+  return undefined
+}
+
 /** 内存高速缓存：iconUrl -> 是否需要反色 */
 const memoryCache = new Map<string, boolean>()
 

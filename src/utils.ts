@@ -129,14 +129,16 @@ export function favicon(url: string, customIcon?: string): string {
   return dm ? FAVICON_PROVIDER_URL + dm : ''
 }
 
-import { getCachedIconInvert, requestIconAnalysis } from './lib/iconAnalyzer.js'
+import { getCachedIconInvert, requestIconAnalysis, getOfficialDarkIcon } from './lib/iconAnalyzer.js'
+export { getOfficialDarkIcon }
 
 /**
  * 判断指定网址、图标 URL 或属性是否属于深色模式下需反色为高对比度纯白的剪影图标。
  * 彻底废除写死域名白名单，采用浏览器 Canvas 像素特征自动分析（0 维护、0 误杀）：
  * 1. 属性逃生通道：attributes['dark-invert'] === true/false 可手动强制覆盖；
- * 2. 高速缓存直出：经像素分析过的已知图标直接同步返回分析结果；
- * 3. 异步分析调度：未测定时在后台触发轻量采样分析并写入持久化缓存。
+ * 2. 梯队 1 优先：若命中官方原生深色图标（方案一），直接呈现官方原画，绝对不反色；
+ * 3. 高速缓存直出：经像素分析过的已知图标直接同步返回分析结果；
+ * 4. 异步分析调度：未测定时在后台触发轻量采样分析并写入持久化缓存。
  */
 export function isDarkInvertSite(
   url?: string | null,
@@ -147,6 +149,11 @@ export function isDarkInvertSite(
     const v = attributes['dark-invert']
     if (v === true || v === '1' || v === 'true') return true
     if (v === false || v === '0' || v === 'false') return false
+  }
+
+  // 梯队 1：官方原生深色图标无需滤镜反色
+  if (getOfficialDarkIcon(url)) {
+    return false
   }
 
   const targetIcon = iconUrl || (url ? favicon(url) : '')

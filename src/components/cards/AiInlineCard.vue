@@ -68,7 +68,8 @@
 import { ref, computed } from 'vue'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { useDataStore } from '../../stores/data.js'
-import { favicon, domain, fixUrl, isDarkInvertSite } from '../../utils.js'
+import { useUIStore } from '../../stores/ui.js'
+import { favicon, domain, fixUrl, isDarkInvertSite, getOfficialDarkIcon } from '../../utils.js'
 import { analyzeImageElement } from '../../lib/iconAnalyzer.js'
 import { toast } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
@@ -86,24 +87,35 @@ const emit = defineEmits<{
 }>()
 
 const ds = useDataStore()
+const uiStore = useUIStore()
 const imgFailed = ref(false)
 
 const domainStr = computed(() => {
   return domain(props.candidate.url) || props.candidate.url
 })
 
+const isDark = computed(() => uiStore.themeColor === 'dark')
+const officialDarkIcon = computed(() => {
+  if (!isDark.value) return ''
+  return props.candidate.iconDark || getOfficialDarkIcon(props.candidate.url) || ''
+})
+
 const faviconSrc = computed(() => {
+  if (officialDarkIcon.value) return officialDarkIcon.value
   if (props.candidate.icon) return props.candidate.icon
   return favicon(props.candidate.url)
 })
 
 const dynamicInvert = ref<boolean | null>(null)
 const isDarkInvert = computed(() => {
+  // 梯队 1：命中官方原生深色图标时直接呈现原画，绝对不反色
+  if (officialDarkIcon.value) return false
   if (dynamicInvert.value !== null) return dynamicInvert.value
   return isDarkInvertSite(props.candidate.url, faviconSrc.value)
 })
 
 function onImgLoad(e: Event) {
+  if (officialDarkIcon.value) return
   const img = e.target as HTMLImageElement
   if (img) {
     analyzeImageElement(img, (shouldInvert) => {

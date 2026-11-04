@@ -218,11 +218,16 @@ describe('utils', () => {
     })
 
     it('从像素感知缓存中读取已分析的图标状态', () => {
-      setCachedIconInvert('https://api.icon.com/github.png', true)
+      setCachedIconInvert('https://api.icon.com/custom-black.png', true)
       setCachedIconInvert('https://api.icon.com/supabase.png', false)
 
-      expect(isDarkInvertSite('https://github.com', 'https://api.icon.com/github.png')).toBe(true)
+      expect(isDarkInvertSite('https://custom-black-site.com', 'https://api.icon.com/custom-black.png')).toBe(true)
       expect(isDarkInvertSite('https://supabase.com', 'https://api.icon.com/supabase.png')).toBe(false)
+    })
+
+    it('官方原生深色图标（方案一，如 GitHub）绝对无需反色', () => {
+      expect(isDarkInvertSite('https://github.com')).toBe(false)
+      expect(isDarkInvertSite('https://github.com/torvalds/linux')).toBe(false)
     })
 
     it('未测定图标安全返回 false（避免破坏未知图标），并静默降级', () => {

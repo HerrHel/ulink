@@ -51,6 +51,7 @@ export const BookmarkSchema = z.object({
   password: z.union([z.string(), EncryptedPasswordSchema]).catch(''),
   notes: z.string().catch('').transform(boundNotes),
   icon: z.string().catch('').transform(boundIcon),
+  iconDark: z.string().catch('').transform(boundIcon).optional(),
   categoryId: z.string().catch('uncategorized'),
   parentId: z.string().nullable().catch(null),
   // C2/D2-004：可降级语义字段；类型可修复时优先 coerce，避免整字段清空。

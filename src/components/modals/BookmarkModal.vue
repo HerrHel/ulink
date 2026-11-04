@@ -79,6 +79,15 @@
           </div>
           <button class="btn btn-ghost btn-sm mt-1" v-show="bmForm.clearIconVisible" @click="onClearIcon">{{ t('modal.bookmark.clearIcon') }}</button>
         </div>
+        <div class="form-group">
+          <label class="form-label" for="bmIconDark">{{ t('modal.bookmark.customIconDark') }}</label>
+          <div class="icon-input-row">
+            <input type="url" class="form-input" id="bmIconDark" v-model="bmForm.iconDark" :placeholder="t('modal.bookmark.iconDarkUrlPlaceholder')">
+            <div class="icon-thumbs" v-show="bmForm.iconDark">
+              <img :src="bmForm.iconDark" class="icon-thumb active" :title="t('modal.bookmark.currentDarkIcon')">
+            </div>
+          </div>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="bmCategoryId">{{ t('modal.bookmark.category') }}</label>

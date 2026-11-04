@@ -19,6 +19,7 @@ export interface AiCandidateBookmark {
   categoryId?: string
   suggestedAttrIds?: string[]
   icon?: string
+  iconDark?: string
   tag?: string          // 业务胶囊，如“开源平替”、“国内直连”、“免登即用”
   highlight?: string    // 核心亮点一句话说明
   generic?: boolean     // 通用发现入口（非个性化结果），UI 摘要不得称「甄选」

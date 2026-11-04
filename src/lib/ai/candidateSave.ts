@@ -32,6 +32,7 @@ export function candidateToBookmark(
     password: '',
     notes: c.notes || '',
     icon: icon || c.icon || '',
+    iconDark: c.iconDark || '',
     categoryId: c.categoryId || CAT_UNCATEGORIZED,
     parentId: null,
     order:

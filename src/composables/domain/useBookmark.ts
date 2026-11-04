@@ -69,6 +69,7 @@ interface BmFormState {
   password: string
   notes: string
   icon: string
+  iconDark: string
   categoryId: string
   parentId: string | null
   attributes: Record<string, boolean>
@@ -114,6 +115,7 @@ export const bmForm = reactive<BmFormState>({
   password: '',
   notes: '',
   icon: '',
+  iconDark: '',
   categoryId: '',
   parentId: null,
   attributes: {},
@@ -188,6 +190,7 @@ export async function openBmModal(editId?: string) {
     bmForm.username = displayText(bm?.username)
     bmForm.notes = displayText(bm?.notes)
     bmForm.icon = bm?.icon || ''
+    bmForm.iconDark = bm?.iconDark || ''
     bmForm.categoryId = editId ? (bm?.categoryId || '') : (ui.curCat === CAT_ALL ? CAT_UNCATEGORIZED : ui.curCat)
     bmForm.parentId = bm?.parentId || null
     bmForm.attributes = bm?.attributes ? { ...bm.attributes } : {}
@@ -354,6 +357,7 @@ export async function saveBm() {
       password: storedPassword,
       notes: bmForm.notes.trim(),
       icon: bmForm.icon.trim(),
+      iconDark: bmForm.iconDark.trim() || undefined,
       categoryId: bmForm.categoryId,
       parentId: bmForm.parentId || null,
       attributes: { ...bmForm.attributes },
