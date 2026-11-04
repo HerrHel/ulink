@@ -153,23 +153,6 @@ async function handleAuthed(req, res, action, body, cors) {
   }
 
   if (action === 'create') {
-    // 限流 fail-closed
-    const rl = await db.rpc('consume_rate_limit', {
-      p_key: `pay-create:${uid}:${sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)}`,
-      p_limit: CREATE_LIMIT,
-      p_window_secs: CREATE_WINDOW_SEC,
-    })
-    if (rl.error) {
-      console.error('[pay] rate limit failed (fail-closed):', rl.error)
-      sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
-      return
-    }
-    // 已知坑：拒绝时 data 可能是 {} 而非 false —— 必须显式判 true
-    if (rl.data !== true) {
-      sendJson(res, 429, { error: 'rate_limited' }, { ...cors, 'Retry-After': String(CREATE_WINDOW_SEC) })
-      return
-    }
-
     const planId = typeof body.planId === 'string' ? body.planId.trim() : ''
     const channel = typeof body.channel === 'string' ? body.channel.trim() : ''
     if (!planId || !['wechat', 'alipay'].includes(channel)) {
@@ -184,6 +167,72 @@ async function handleAuthed(req, res, action, body, cors) {
     }
     if (channel === 'alipay' && !alipay.isAlipayConfigured()) {
       sendJson(res, 503, { error: 'channel_not_configured', channel }, cors)
+      return
+    }
+
+    // 订单复用：检查是否在有效期内（剩余至少 3 分钟）已有同套餐同渠道 pending 订单，且已具备二维码
+    // 命中复用时直接返回已有二维码，无需重复调用渠道统一下单、不浪费限流配额、不刷库
+    try {
+      const minValidTime = new Date(Date.now() + 3 * 60 * 1000).toISOString()
+      const existing = await db
+        .from('orders')
+        .select('id, plan_id, amount_cents, currency, channel, pay_payload, expires_at')
+        .eq('user_id', uid)
+        .eq('plan_id', planId)
+        .eq('channel', channel)
+        .eq('status', 'pending')
+        .gt('expires_at', minValidTime)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      const reuse = existing?.data?.[0]
+      const payload = reuse?.pay_payload
+      if (reuse && payload && (payload.qrCode || payload.payUrl)) {
+        let planName = ''
+        try {
+          const pr = await db.rpc('list_purchase_plans')
+          const found = (Array.isArray(pr.data) ? pr.data : []).find((p) => p.planId === planId)
+          if (found) planName = found.name
+        } catch { /* ignore */ }
+
+        sendJson(
+          res,
+          200,
+          {
+            ok: true,
+            orderId: reuse.id,
+            planId: reuse.plan_id,
+            planName: planName || (reuse.plan_id === 'plus_yearly' ? 'PRO 年付' : reuse.plan_id === 'plus_monthly' ? 'PRO 月付' : reuse.plan_id),
+            amountCents: reuse.amount_cents,
+            currency: reuse.currency,
+            channel: reuse.channel,
+            qrCode: payload.qrCode,
+            payUrl: payload.payUrl || null,
+            expiresAt: reuse.expires_at,
+            reused: true,
+          },
+          cors,
+        )
+        return
+      }
+    } catch (e) {
+      console.warn('[pay] check existing order failed, fallback to create new:', e.message)
+    }
+
+    // 限流 fail-closed（真正新建订单时才消费限流计数）
+    const rl = await db.rpc('consume_rate_limit', {
+      p_key: `pay-create:${uid}:${sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)}`,
+      p_limit: CREATE_LIMIT,
+      p_window_secs: CREATE_WINDOW_SEC,
+    })
+    if (rl.error) {
+      console.error('[pay] rate limit failed (fail-closed):', rl.error)
+      sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
+      return
+    }
+    // 已知坑：拒绝时 data 可能是 {} 而非 false —— 必须显式判 true
+    if (rl.data !== true) {
+      sendJson(res, 429, { error: 'rate_limited' }, { ...cors, 'Retry-After': String(CREATE_WINDOW_SEC) })
       return
     }
 
@@ -290,6 +339,10 @@ async function handleAuthed(req, res, action, body, cors) {
     const row = first.order
 
     const expired = row.expiresAt ? new Date(row.expiresAt).getTime() < Date.now() : false
+    if (expired && row.status === 'pending') {
+      await db.rpc('fail_payment_order', { p_order_id: orderId, p_reason: 'expired' }).catch(() => {})
+      row.status = 'failed'
+    }
 
     // 主动查渠道（前端可选 sync=1，用于回调延迟时的兜底）
     const wantSync = body.sync === true
@@ -329,10 +382,21 @@ async function handleAuthed(req, res, action, body, cors) {
     const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 100)
     const offset = Math.max(Number(body.offset) || 0, 0)
 
-    const ordersRes = await db
+    let query = db
       .from('orders')
       .select('id, user_id, plan_id, amount_cents, currency, channel, channel_order_id, status, paid_at, created_at, expires_at, idempotency_key', { count: 'exact' })
       .eq('user_id', uid)
+
+    if (body.status === 'all') {
+      // 允许显式指定 'all' 查询包含待支付的所有订单
+    } else if (body.status && typeof body.status === 'string') {
+      query = query.eq('status', body.status)
+    } else {
+      // 交易账单默认只展示已完成/已生效交易（已支付、已退款），避免未支付待付款单混入账单
+      query = query.in('status', ['paid', 'refunded'])
+    }
+
+    const ordersRes = await query
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 

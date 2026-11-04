@@ -367,7 +367,113 @@
                 </div>
               </div>
 
-              <!-- Tab: 会员与账单 -->
+              <!-- Tab 2: 外观与视图 -->
+              <div v-show="currentTab === 'appearance'" class="settings-tab-panel" data-testid="settings-panel-appearance">
+                <div class="sp-tab-header">
+                  <h3 class="sp-tab-title">{{ t('settings.tabAppearance') }}</h3>
+                  <p class="sp-tab-desc">自定义界面色彩、卡片排布密度与书签排序模式</p>
+                </div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">色彩与主题</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.theme') }}</span>
+                      <span class="sp-row-desc">选择浅色明亮或深色低对比护眼模式</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click.stop="onSetThemeColor('light', $event)">
+                          <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
+                        </button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click.stop="onSetThemeColor('dark', $event)">
+                          <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">设计风格</span>
+                      <span class="sp-row-desc">效率模式注重紧凑信息密度，舒适模式具有更柔和的留白</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click.stop="onSetThemeStyle('premium')">{{ t('settings.themePremium') }}</button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click.stop="onSetThemeStyle('comfortable')">{{ t('settings.themeComfortable') }}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click.stop="onToggleAutoTheme" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.followSystem') }}</span>
+                      <span class="sp-row-desc">根据操作系统的外观自动在深色与浅色之间切换</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.themeMode === 'auto' }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card">
+                  <div class="sp-card-head">视图与排序</div>
+                  <div class="sp-card-row" v-if="!uiStore.isMobile">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.layout') }}</span>
+                      <span class="sp-row-desc">切换主视图书签卡片的大网格、紧凑列表或小宫格</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" :title="t('settings.gridView')"><span aria-hidden="true" v-html="I.grid"></span> {{ t('settings.gridView') }}</button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" @click="onSetLayout('list')" :title="t('settings.listView')"><span aria-hidden="true" v-html="I.list"></span> {{ t('settings.listView') }}</button>
+                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'mini-grid' }" @click="onSetLayout('mini-grid')" :title="t('settings.miniGridView')"><span aria-hidden="true" v-html="I.miniGrid"></span> {{ t('settings.miniGridView') }}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.sort') }}</span>
+                      <span class="sp-row-desc">选择卡片默认的排列次序</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg sp-seg-wrap">
+                        <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn" :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ t(s.labelKey) }}</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sp-card-row" @click="onToggleGroupsOnTop" style="cursor: pointer;">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.groupsOnTop') }}</span>
+                      <span class="sp-row-desc">总是将含有多书签的聚合笔记组卡片优先置顶于分类前列</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.groupsOnTop }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card" data-testid="lv-lang-switch">
+                  <div class="sp-card-head">{{ t('settings.language') }}</div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.language') }}</span>
+                      <span class="sp-row-desc">切换软件界面的操作语言 / Switch application interface language</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-seg">
+                        <button class="sp-seg-btn" :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">简体中文</button>
+                        <button class="sp-seg-btn" :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">English</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab 3: 会员与账单 -->
               <div v-show="currentTab === 'billing'" class="settings-tab-panel" data-testid="settings-panel-billing">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabBilling') }}</h3>
@@ -557,113 +663,7 @@
                 </div>
               </div>
 
-              <!-- Tab 2: 外观与视图 -->
-              <div v-show="currentTab === 'appearance'" class="settings-tab-panel" data-testid="settings-panel-appearance">
-                <div class="sp-tab-header">
-                  <h3 class="sp-tab-title">{{ t('settings.tabAppearance') }}</h3>
-                  <p class="sp-tab-desc">自定义界面色彩、卡片排布密度与书签排序模式</p>
-                </div>
-
-                <div class="sp-card">
-                  <div class="sp-card-head">色彩与主题</div>
-                  <div class="sp-card-row">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.theme') }}</span>
-                      <span class="sp-row-desc">选择浅色明亮或深色低对比护眼模式</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-seg">
-                        <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'light' }" @click.stop="onSetThemeColor('light', $event)">
-                          <span aria-hidden="true" v-html="I.sun" class="sp-icon"></span>{{ t('settings.themeLight') }}
-                        </button>
-                        <button class="sp-seg-btn" :class="{ active: uiStore.themeColor === 'dark' }" @click.stop="onSetThemeColor('dark', $event)">
-                          <span aria-hidden="true" v-html="I.moon" class="sp-icon"></span>{{ t('settings.themeDark') }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sp-card-row">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">设计风格</span>
-                      <span class="sp-row-desc">效率模式注重紧凑信息密度，舒适模式具有更柔和的留白</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-seg">
-                        <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'premium' }" @click.stop="onSetThemeStyle('premium')">{{ t('settings.themePremium') }}</button>
-                        <button class="sp-seg-btn" :class="{ active: uiStore.themeStyle === 'comfortable' }" @click.stop="onSetThemeStyle('comfortable')">{{ t('settings.themeComfortable') }}</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sp-card-row" @click.stop="onToggleAutoTheme" style="cursor: pointer;">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.followSystem') }}</span>
-                      <span class="sp-row-desc">根据操作系统的外观自动在深色与浅色之间切换</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-toggle-pill" :class="{ active: uiStore.themeMode === 'auto' }">
-                        <span class="sp-switch"></span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="sp-card">
-                  <div class="sp-card-head">视图与排序</div>
-                  <div class="sp-card-row" v-if="!uiStore.isMobile">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.layout') }}</span>
-                      <span class="sp-row-desc">切换主视图书签卡片的大网格、紧凑列表或小宫格</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-seg">
-                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'grid' }" @click="onSetLayout('grid')" :title="t('settings.gridView')"><span aria-hidden="true" v-html="I.grid"></span> {{ t('settings.gridView') }}</button>
-                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'list' }" @click="onSetLayout('list')" :title="t('settings.listView')"><span aria-hidden="true" v-html="I.list"></span> {{ t('settings.listView') }}</button>
-                        <button class="sp-seg-btn" :class="{ active: uiStore.layoutMode === 'mini-grid' }" @click="onSetLayout('mini-grid')" :title="t('settings.miniGridView')"><span aria-hidden="true" v-html="I.miniGrid"></span> {{ t('settings.miniGridView') }}</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sp-card-row">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.sort') }}</span>
-                      <span class="sp-row-desc">选择卡片默认的排列次序</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-seg sp-seg-wrap">
-                        <button v-for="s in sortModes" :key="s.id" class="sp-seg-btn" :class="{ active: uiStore.sortMode === s.id }" @click="onSetSortMode(s.id)">{{ t(s.labelKey) }}</button>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="sp-card-row" @click="onToggleGroupsOnTop" style="cursor: pointer;">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.groupsOnTop') }}</span>
-                      <span class="sp-row-desc">总是将含有多书签的聚合笔记组卡片优先置顶于分类前列</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-toggle-pill" :class="{ active: uiStore.groupsOnTop }">
-                        <span class="sp-switch"></span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="sp-card" data-testid="lv-lang-switch">
-                  <div class="sp-card-head">{{ t('settings.language') }}</div>
-                  <div class="sp-card-row">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('settings.language') }}</span>
-                      <span class="sp-row-desc">切换软件界面的操作语言 / Switch application interface language</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <div class="sp-seg">
-                        <button class="sp-seg-btn" :class="{ active: locale === 'zh-CN' }" @click="setLocale('zh-CN')">简体中文</button>
-                        <button class="sp-seg-btn" :class="{ active: locale === 'en-US' }" @click="setLocale('en-US')">English</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Tab 3: AI 与智能 -->
+              <!-- Tab 4: AI 与智能 -->
               <div v-show="currentTab === 'ai'" class="settings-tab-panel" data-testid="settings-panel-ai">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAi') }}</h3>
@@ -1125,7 +1125,7 @@ import { useTransactions } from '../../composables/domain/useTransactions.js'
 import { t, tN, useI18n } from '../../i18n/index.js'
 
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
-export type SettingsTab = 'account' | 'billing' | 'appearance' | 'ai' | 'maintenance' | 'data' | 'about'
+export type SettingsTab = 'account' | 'appearance' | 'billing' | 'ai' | 'maintenance' | 'data' | 'about'
 const currentTab = ref<SettingsTab>('account')
 const mobileSubPage = ref<SettingsTab | null>(null)
 
@@ -1150,8 +1150,8 @@ function onBackToMobileMenu() {
 
 const tabDescriptions: Record<SettingsTab, { zh: string; en: string }> = {
   account: { zh: '多端同步、登录密码与 E2E 加密', en: 'Sync, password & E2E encryption' },
-  billing: { zh: 'PRO 会员特权、兑换码与订单', en: 'PRO benefits, promo code & orders' },
   appearance: { zh: '主题模式、配色与卡片布局', en: 'Theme mode, display & layout' },
+  billing: { zh: 'PRO 会员特权、兑换码与订单', en: 'PRO benefits, promo code & orders' },
   ai: { zh: '大模型配置、Key 与视频解析', en: 'LLM providers, API keys & video' },
   maintenance: { zh: '死链检测与公开分享管理', en: 'Dead links & shared groups' },
   data: { zh: '导入、导出及本地备份恢复', en: 'Import, export & data backups' },
@@ -2198,15 +2198,15 @@ const tabs = computed(() => [
     group: 'account',
   },
   {
-    id: 'billing' as SettingsTab,
-    labelKey: 'settings.tabBilling',
-    icon: I.creditCard || I.sparkles,
-    group: 'account',
-  },
-  {
     id: 'appearance' as SettingsTab,
     labelKey: 'settings.tabAppearance',
     icon: I.sun,
+    group: 'account',
+  },
+  {
+    id: 'billing' as SettingsTab,
+    labelKey: 'settings.tabBilling',
+    icon: I.creditCard || I.sparkles,
     group: 'experience',
   },
   {

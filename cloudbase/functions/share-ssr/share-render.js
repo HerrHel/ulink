@@ -1367,7 +1367,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   padding: 7px 18px;
   border-radius: var(--radius-full);
   background: var(--accent-grad);
-  color: #fff;
+  color: var(--text-on-accent, #ffffff);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.1px;
