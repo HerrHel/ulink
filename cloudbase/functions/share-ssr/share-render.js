@@ -1436,7 +1436,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 [data-theme="dark"] .card-logo img[src*="vercel.com"],
 [data-theme="dark"] .card-logo img[src*="x.com"],
 [data-theme="dark"] .card-logo img[src*="apple.com"] {
-  filter: brightness(0) invert(0.96) !important;
+  filter: invert(0.94) !important;
 }
 [data-theme="dark"] .bm-icon img,
 [data-theme="dark"] .card-logo img,
@@ -1453,7 +1453,7 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   :root:not([data-theme="light"]) .card-logo img[src*="vercel.com"],
   :root:not([data-theme="light"]) .card-logo img[src*="x.com"],
   :root:not([data-theme="light"]) .card-logo img[src*="apple.com"] {
-    filter: brightness(0) invert(0.96) !important;
+    filter: invert(0.94) !important;
   }
   :root:not([data-theme="light"]) .bm-icon img,
   :root:not([data-theme="light"]) .card-logo img,

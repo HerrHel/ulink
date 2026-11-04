@@ -129,60 +129,38 @@ export function favicon(url: string, customIcon?: string): string {
   return dm ? FAVICON_PROVIDER_URL + dm : ''
 }
 
-/**
- * 已知在浅色模式下为纯黑/暗色剪影透明 Favicon 的知名站点域名白名单。
- * 在深色模式下，这些站点的图标需智能反色为高对比度象牙白，完美还原官方暗色 Logo 质感。
- */
-export const DARK_INVERT_DOMAINS = new Set([
-  'github.com',
-  'notion.so',
-  'notion.site',
-  'vercel.com',
-  'vercel.app',
-  'x.com',
-  'twitter.com',
-  'apple.com',
-  'threads.net',
-  'v2ex.com',
-  'linear.app',
-  'claude.ai',
-  'anthropic.com',
-  'medium.com',
-  'cursor.com',
-  'cursor.sh',
-  'huggingface.co',
-  'v0.dev',
-  'replit.com',
-  'sentry.io',
-  'npmjs.com',
-  'deno.land',
-  'deno.com',
-  'supabase.com',
-  'raycast.com',
-  'openai.com',
-  'chatgpt.com',
-  'resend.com',
-  'prisma.io',
-  'nextjs.org',
-  'shadcn.com',
-])
+import { getCachedIconInvert, requestIconAnalysis } from './lib/iconAnalyzer.js'
 
 /**
- * 判断指定网址、图标 URL 或属性是否属于已知深色剪影站点（深色模式下需反色为高对比度纯白）
+ * 判断指定网址、图标 URL 或属性是否属于深色模式下需反色为高对比度纯白的剪影图标。
+ * 彻底废除写死域名白名单，采用浏览器 Canvas 像素特征自动分析（0 维护、0 误杀）：
+ * 1. 属性逃生通道：attributes['dark-invert'] === true/false 可手动强制覆盖；
+ * 2. 高速缓存直出：经像素分析过的已知图标直接同步返回分析结果；
+ * 3. 异步分析调度：未测定时在后台触发轻量采样分析并写入持久化缓存。
  */
 export function isDarkInvertSite(
   url?: string | null,
   iconUrl?: string | null,
   attributes?: Record<string, any> | null
 ): boolean {
-  if (attributes && (attributes['dark-invert'] === true || attributes['dark-invert'] === '1' || attributes['dark-invert'] === 'true')) {
-    return true
+  if (attributes && attributes['dark-invert'] !== undefined) {
+    const v = attributes['dark-invert']
+    if (v === true || v === '1' || v === 'true') return true
+    if (v === false || v === '0' || v === 'false') return false
   }
-  const target = ((url || '') + ' ' + (iconUrl || '')).toLowerCase()
-  if (!target.trim()) return false
-  for (const d of DARK_INVERT_DOMAINS) {
-    if (target.includes(d)) return true
+
+  const targetIcon = iconUrl || (url ? favicon(url) : '')
+  if (!targetIcon) return false
+
+  const cached = getCachedIconInvert(targetIcon)
+  if (cached !== undefined) {
+    return cached
   }
+
+  if (typeof window !== 'undefined') {
+    requestIconAnalysis(targetIcon)
+  }
+
   return false
 }
 

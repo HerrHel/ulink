@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle, stripTags, isDarkInvertSite, DARK_INVERT_DOMAINS } from '../utils.js'
+import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle, stripTags, isDarkInvertSite } from '../utils.js'
+import { setCachedIconInvert } from '../lib/iconAnalyzer.js'
 import { safeAtob } from '../crypto.js'
 
 describe('utils', () => {
@@ -207,33 +208,25 @@ describe('utils', () => {
 
 
   describe('isDarkInvertSite', () => {
-    it('白名单集合包含主流黑标站点', () => {
-      expect(DARK_INVERT_DOMAINS.has('github.com')).toBe(true)
-      expect(DARK_INVERT_DOMAINS.size).toBeGreaterThan(20)
+    it('attributes 中显式指定 dark-invert 时遵循显式配置', () => {
+      expect(isDarkInvertSite('https://custom.com', '', { 'dark-invert': true })).toBe(true)
+      expect(isDarkInvertSite('https://custom.com', '', { 'dark-invert': '1' })).toBe(true)
+      expect(isDarkInvertSite('https://custom.com', '', { 'dark-invert': 'true' })).toBe(true)
+      expect(isDarkInvertSite('https://custom.com', '', { 'dark-invert': false })).toBe(false)
+      expect(isDarkInvertSite('https://custom.com', '', { 'dark-invert': '0' })).toBe(false)
+      expect(isDarkInvertSite('https://custom.com', '', { 'dark-invert': 'false' })).toBe(false)
     })
 
-    it('识别 GitHub、Notion、Vercel 等已知纯黑剪影站点', () => {
-      expect(isDarkInvertSite('https://github.com/facebook/react')).toBe(true)
-      expect(isDarkInvertSite('https://notion.so/my-page')).toBe(true)
-      expect(isDarkInvertSite('https://vercel.com/dashboard')).toBe(true)
-      expect(isDarkInvertSite('https://x.com/home')).toBe(true)
-      expect(isDarkInvertSite('https://apple.com')).toBe(true)
-      expect(isDarkInvertSite('https://claude.ai')).toBe(true)
+    it('从像素感知缓存中读取已分析的图标状态', () => {
+      setCachedIconInvert('https://api.icon.com/github.png', true)
+      setCachedIconInvert('https://api.icon.com/supabase.png', false)
+
+      expect(isDarkInvertSite('https://github.com', 'https://api.icon.com/github.png')).toBe(true)
+      expect(isDarkInvertSite('https://supabase.com', 'https://api.icon.com/supabase.png')).toBe(false)
     })
 
-    it('根据 iconUrl 命中深色剪影域名', () => {
-      expect(isDarkInvertSite('https://unknown.com', 'https://api.xinac.net/icon/?url=github.com')).toBe(true)
-    })
-
-    it('非暗色剪影站点（如 google、bilibili）返回 false', () => {
-      expect(isDarkInvertSite('https://google.com')).toBe(false)
-      expect(isDarkInvertSite('https://bilibili.com')).toBe(false)
-      expect(isDarkInvertSite('https://youtube.com')).toBe(false)
-    })
-
-    it('attributes 中带 dark-invert 标记时强制命中', () => {
-      expect(isDarkInvertSite('https://my-internal.site', '', { 'dark-invert': true })).toBe(true)
-      expect(isDarkInvertSite('https://my-internal.site', '', { 'dark-invert': '1' })).toBe(true)
+    it('未测定图标安全返回 false（避免破坏未知图标），并静默降级', () => {
+      expect(isDarkInvertSite('https://brand-new-site-xyz-123.com')).toBe(false)
     })
 
     it('空入参安全返回 false', () => {

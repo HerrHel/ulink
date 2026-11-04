@@ -9,6 +9,7 @@
           alt=""
           loading="lazy"
           :class="{ 'dark-invert': isDarkInvert }"
+          @load="onImgLoad"
           @error="imgFailed = true"
         >
         <span v-else class="inline-logo-fallback">{{ candidate.title.charAt(0) || '?' }}</span>
@@ -68,6 +69,7 @@ import { ref, computed } from 'vue'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { useDataStore } from '../../stores/data.js'
 import { favicon, domain, fixUrl, isDarkInvertSite } from '../../utils.js'
+import { analyzeImageElement } from '../../lib/iconAnalyzer.js'
 import { toast } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
@@ -95,7 +97,20 @@ const faviconSrc = computed(() => {
   return favicon(props.candidate.url)
 })
 
-const isDarkInvert = computed(() => isDarkInvertSite(props.candidate.url, faviconSrc.value))
+const dynamicInvert = ref<boolean | null>(null)
+const isDarkInvert = computed(() => {
+  if (dynamicInvert.value !== null) return dynamicInvert.value
+  return isDarkInvertSite(props.candidate.url, faviconSrc.value)
+})
+
+function onImgLoad(e: Event) {
+  const img = e.target as HTMLImageElement
+  if (img) {
+    analyzeImageElement(img, (shouldInvert) => {
+      dynamicInvert.value = shouldInvert
+    })
+  }
+}
 
 const categoryName = computed(() => {
   if (!props.candidate.categoryId) return ''
