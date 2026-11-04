@@ -65,7 +65,13 @@
   color:var(--text-muted);
 }
 
-.settings-wrap{position:relative;flex-shrink:0}
+.settings-wrap{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  height:30px;
+  flex-shrink:0;
+}
 
 .layout-toggle{
   display:flex;align-items:center;
@@ -93,6 +99,71 @@
 }
 .lt-btn:active{transform:scale(0.92);transition-duration:0.05s}
 .lt-btn.active{color:var(--accent);background:var(--accent-light)}
+
+.search-toggle-btn{display:none}
+
+/* 顶栏独立图标动作按钮：深浅色切换、设置、侧边栏展开及只读分享主题切换 */
+.header-theme-btn,
+#btnSettings,
+#btnToggleDetail,
+.share-theme-btn{
+  width:30px;
+  height:30px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:var(--radius-sm);
+  border:none;
+  background:transparent;
+  color:var(--text-muted);
+  cursor:pointer;
+  transition:transform 0.15s ease,background-color 0.15s ease,color 0.15s ease;
+  flex-shrink:0;
+  line-height:1;
+}
+.header-theme-btn>span,
+#btnSettings>span,
+#btnToggleDetail>span,
+.share-theme-btn>span{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:15px;
+  height:15px;
+  line-height:1;
+}
+.header-theme-btn svg,
+#btnSettings svg,
+#btnToggleDetail svg,
+.share-theme-btn svg{
+  width:15px;
+  height:15px;
+  display:block;
+}
+@media (hover: hover) and (pointer: fine) {
+  .header-theme-btn:hover,
+  #btnSettings:hover,
+  #btnToggleDetail:hover,
+  .share-theme-btn:hover{
+    color:var(--text);
+    background:var(--surface-hover);
+  }
+}
+.header-theme-btn:active,
+#btnSettings:active,
+#btnToggleDetail:active,
+.share-theme-btn:active{
+  transform:scale(0.92);
+  transition-duration:0.05s;
+}
+
+/* 浅色模式下月亮图标光学重心微调（-0.5px，使其与齿轮、太阳及侧栏展开等中心对称图形在同一直线上） */
+html:not([data-theme="dark"]) .header-theme-btn svg,
+html:not([data-theme="dark"]) .share-theme-btn svg{
+  transform:translateY(-0.5px);
+}
+
 .header-login-btn{
   display:inline-flex;align-items:center;gap:6px;
   padding:4px 10px;
@@ -178,7 +249,7 @@
   min-width:0;overflow:hidden;
 }
 .header-right{
-  display:flex;align-items:center;justify-content:flex-end;gap:8px;
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;
 }
 .search-box{
   position:relative;width:100%;

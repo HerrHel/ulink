@@ -30,6 +30,21 @@
   .header-right{grid-row:1;grid-column:2;gap:6px;align-items:center}
   .header-login-text{display:none}
   .header-login-btn{padding:4px 6px;height:32px}
+  .settings-wrap{height:32px}
+  .header-theme-btn,
+  #btnSettings,
+  #btnToggleDetail,
+  .share-theme-btn{
+    width:32px;
+    height:32px;
+  }
+  .header-theme-btn svg,
+  #btnSettings svg,
+  #btnToggleDetail svg,
+  .share-theme-btn svg{
+    width:16px;
+    height:16px;
+  }
   .header-search{
     position:static;transform:none;
     grid-row:2;grid-column:1/-1;
