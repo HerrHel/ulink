@@ -8,6 +8,7 @@
           :src="faviconSrc"
           alt=""
           loading="lazy"
+          :class="{ 'dark-invert': isDarkInvert }"
           @error="imgFailed = true"
         >
         <span v-else class="inline-logo-fallback">{{ candidate.title.charAt(0) || '?' }}</span>
@@ -66,7 +67,7 @@
 import { ref, computed } from 'vue'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { useDataStore } from '../../stores/data.js'
-import { favicon, domain, fixUrl } from '../../utils.js'
+import { favicon, domain, fixUrl, isDarkInvertSite } from '../../utils.js'
 import { toast } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { t } from '../../i18n/index.js'
@@ -93,6 +94,8 @@ const faviconSrc = computed(() => {
   if (props.candidate.icon) return props.candidate.icon
   return favicon(props.candidate.url)
 })
+
+const isDarkInvert = computed(() => isDarkInvertSite(props.candidate.url, faviconSrc.value))
 
 const categoryName = computed(() => {
   if (!props.candidate.categoryId) return ''

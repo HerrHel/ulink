@@ -1123,13 +1123,13 @@ var CSS = `
   --text: #EEE9E2;
   --text-secondary: #B5AFA6;
   --text-muted: #9B968E;
-  --accent: #F04A8A;
-  --brand-logo-blue: #F04A8A;
+  --accent: #4A90F7;
+  --brand-logo-blue: #4A90F7;
   --brand-logo-green: #E2E7BF;
-  --brand-logo-text: #F04A8A;
-  --accent-light: rgba(240, 74, 138, 0.1);
-  --accent-glow: rgba(240, 74, 138, 0.22);
-  --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
+  --brand-logo-text: #4A90F7;
+  --accent-light: rgba(74, 144, 247, 0.08);
+  --accent-glow: rgba(74, 144, 247, 0.10);
+  --accent-grad: linear-gradient(135deg, #4A90F7 0%, #2360DA 100%);
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
@@ -1155,13 +1155,13 @@ var CSS = `
     --text: #EEE9E2;
     --text-secondary: #B5AFA6;
     --text-muted: #9B968E;
-    --accent: #F04A8A;
-    --brand-logo-blue: #F04A8A;
+    --accent: #4A90F7;
+    --brand-logo-blue: #4A90F7;
     --brand-logo-green: #E2E7BF;
-    --brand-logo-text: #F04A8A;
-    --accent-light: rgba(240, 74, 138, 0.1);
-    --accent-glow: rgba(240, 74, 138, 0.22);
-    --accent-grad: linear-gradient(135deg, #E6397C 0%, #F43F5E 100%);
+    --brand-logo-text: #4A90F7;
+    --accent-light: rgba(74, 144, 247, 0.08);
+    --accent-glow: rgba(74, 144, 247, 0.10);
+    --accent-grad: linear-gradient(135deg, #4A90F7 0%, #2360DA 100%);
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
     --shadow-md: 0 4px 16px -2px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.25);
@@ -1231,10 +1231,10 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   stroke: var(--brand-logo-green, #10B981) !important;
   transition: stroke 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
-[data-theme="dark"] .brand-logo-blue, [data-theme="dark"] .s-b { stroke: #F04A8A !important; }
+[data-theme="dark"] .brand-logo-blue, [data-theme="dark"] .s-b { stroke: #4A90F7 !important; }
 [data-theme="dark"] .brand-logo-green, [data-theme="dark"] .s-g { stroke: #E2E7BF !important; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .brand-logo-blue, :root:not([data-theme="light"]) .s-b { stroke: #F04A8A !important; }
+  :root:not([data-theme="light"]) .brand-logo-blue, :root:not([data-theme="light"]) .s-b { stroke: #4A90F7 !important; }
   :root:not([data-theme="light"]) .brand-logo-green, :root:not([data-theme="light"]) .s-g { stroke: #E2E7BF !important; }
 }
 
@@ -1427,6 +1427,42 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 .gic-ic-fb {
   font-size: 10px;
 }
+
+[data-theme="dark"] .bm-icon img[src*="github.com"],
+[data-theme="dark"] .card-logo img[src*="github.com"],
+[data-theme="dark"] .bmcard-icon img[src*="github.com"],
+[data-theme="dark"] .gic-ic img[src*="github.com"],
+[data-theme="dark"] .card-logo img[src*="notion.so"],
+[data-theme="dark"] .card-logo img[src*="vercel.com"],
+[data-theme="dark"] .card-logo img[src*="x.com"],
+[data-theme="dark"] .card-logo img[src*="apple.com"] {
+  filter: brightness(0) invert(0.96) !important;
+}
+[data-theme="dark"] .bm-icon img,
+[data-theme="dark"] .card-logo img,
+[data-theme="dark"] .bmcard-icon img,
+[data-theme="dark"] .gic-ic img {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bm-icon img[src*="github.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="github.com"],
+  :root:not([data-theme="light"]) .bmcard-icon img[src*="github.com"],
+  :root:not([data-theme="light"]) .gic-ic img[src*="github.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="notion.so"],
+  :root:not([data-theme="light"]) .card-logo img[src*="vercel.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="x.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="apple.com"] {
+    filter: brightness(0) invert(0.96) !important;
+  }
+  :root:not([data-theme="light"]) .bm-icon img,
+  :root:not([data-theme="light"]) .card-logo img,
+  :root:not([data-theme="light"]) .bmcard-icon img,
+  :root:not([data-theme="light"]) .gic-ic img {
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+  }
+}
+
 .bm-icon img, .group-hero-icon img, .cat-hero-icon img, .gcard-icon img, .bmcard-icon img, .bmcard-child-ic img, .card-logo img, .gic-ic img {
   position: relative;
   z-index: 2;

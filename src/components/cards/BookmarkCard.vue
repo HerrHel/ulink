@@ -13,7 +13,7 @@
         <div class="card-logo" :title="t('cards.openLink')" @click.stop="onOpenClick">
           <BrandLogo v-if="isOfficialBrand" :size="28" />
           <template v-else>
-            <img v-if="iconSrc" :src="iconSrc" alt="" loading="lazy" decoding="async" :class="{ 'img-loaded': imgLoaded }" @load="imgLoaded = true" @error="onImgError">
+            <img v-if="iconSrc" :src="iconSrc" alt="" loading="lazy" decoding="async" :class="{ 'img-loaded': imgLoaded, 'dark-invert': isDarkInvert }" @load="imgLoaded = true" @error="onImgError">
             <span class="card-logo-fallback">{{ displayText(bookmark.title).charAt(0) || '?' }}</span>
           </template>
         </div>
@@ -72,7 +72,7 @@
       <div class="sub-sites" v-if="children.length">
         <span class="group-inline-card" v-for="sub in children" :key="sub.id" contenteditable="false" :data-bm-id="sub.id" :draggable="!uiStore.isMobile" @click.stop="visitSub(sub)">
           <BrandLogo v-if="isOfficialSubBrand(sub)" :size="16" />
-          <img v-else :src="favicon(sub.url, sub.icon)" alt="" @error="onSubImgError($event, sub.title)">
+          <img v-else :src="favicon(sub.url, sub.icon)" alt="" :class="{ 'dark-invert': isDarkInvertSite(sub.url, sub.icon, sub.attributes) }" @error="onSubImgError($event, sub.title)">
           <span class="gic-name">{{ displayText(sub.title) }}</span>
           <span v-if="!isShareReadonly" class="gic-btn" @click.stop="doOpenDetail(sub.id)">{{ t('cards.detailBtn') }}</span>
         </span>
@@ -95,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
-import { favicon, getTagNames, copyToClipboard, domain, displayText, stripEntranceAnim, faviconInitials } from '../../utils.js'
+import { favicon, getTagNames, copyToClipboard, domain, displayText, stripEntranceAnim, faviconInitials, isDarkInvertSite } from '../../utils.js'
 import { I } from '../../config/icons.js'
 import { decryptPasswordWithKey } from '../../crypto.js'
 import { highlight } from './highlight.js'
@@ -191,6 +191,7 @@ function isOfficialSubBrand(sub: Bookmark): boolean {
   return sub.id === OFFICIAL_SITE_LANDING_ID || sub.id === OFFICIAL_SITE_APP_ID || sub.icon === '/logo.svg' || sub.icon === '/favicon.svg'
 }
 const iconSrc = computed(() => favicon(props.bookmark.url, props.bookmark.icon))
+const isDarkInvert = computed(() => isDarkInvertSite(props.bookmark.url, iconSrc.value, props.bookmark.attributes))
 const tagNames = computed(() => getTagNames(props.bookmark, dataStore.customAttributes))
 const children = computed(() => dataStore.childrenMap[props.bookmark.id] || [])
 const hasExpandableContent = computed(() => !!(displayText(props.bookmark.username) || props.bookmark.password || children.value.length))

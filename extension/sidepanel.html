@@ -53,13 +53,13 @@
   --text:#EEE9E2;
   --text-secondary:#B5AFA6;
   --text-muted:#9B968E;
-  --accent:#F04A8A;
-  --accent-light:rgba(230,57,124,0.1);
-  --accent-glow:rgba(230,57,124,0.18);
-  --accent-hover:#F43F5E;
-  --brand-logo-blue:#F04A8A;
+  --accent:#4A90F7;
+  --accent-light:rgba(74,144,247,0.08);
+  --accent-glow:rgba(74,144,247,0.10);
+  --accent-hover:#2360DA;
+  --brand-logo-blue:#4A90F7;
   --brand-logo-green:#E2E7BF;
-  --brand-logo-text:#F04A8A;
+  --brand-logo-text:#4A90F7;
   --danger:#F87171;
   --danger-bg:#451212;
   --card-badge-bg:#2D2D35;
@@ -68,6 +68,7 @@
   --shadow-md:0 4px 14px rgba(0,0,0,0.22),0 2px 4px rgba(0,0,0,0.1);
   --toast-bg:#EEE9E2;
   --toast-color:#1A1A1D;
+  --text-on-accent:#ffffff;
 }
 @media(prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
@@ -83,13 +84,13 @@
     --text:#EEE9E2;
     --text-secondary:#B5AFA6;
     --text-muted:#9B968E;
-    --accent:#F04A8A;
-    --accent-light:rgba(230,57,124,0.1);
-    --accent-glow:rgba(230,57,124,0.18);
-    --accent-hover:#F43F5E;
-    --brand-logo-blue:#F04A8A;
+    --accent:#4A90F7;
+    --accent-light:rgba(74,144,247,0.08);
+    --accent-glow:rgba(74,144,247,0.10);
+    --accent-hover:#2360DA;
+    --brand-logo-blue:#4A90F7;
     --brand-logo-green:#E2E7BF;
-    --brand-logo-text:#F04A8A;
+    --brand-logo-text:#4A90F7;
     --danger:#F87171;
     --danger-bg:#451212;
     --card-badge-bg:#2D2D35;
@@ -98,6 +99,7 @@
     --shadow-md:0 4px 14px rgba(0,0,0,0.22),0 2px 4px rgba(0,0,0,0.1);
     --toast-bg:#EEE9E2;
     --toast-color:#1A1A1D;
+  --text-on-accent:#ffffff;
   }
 }
 body{
@@ -155,7 +157,7 @@ textarea{width:100%;resize:vertical;line-height:1.45;min-height:56px}
 }
 .btn-primary{
   background:var(--accent);
-  color:#fff;
+  color:var(--text-on-accent, #ffffff);
   font-weight:600;
   box-shadow:0 1px 2px rgba(0,0,0,.08);
 }
@@ -370,7 +372,7 @@ textarea{width:100%;resize:vertical;line-height:1.45;min-height:56px}
 }
 .bd-sub-item img{width:15px;height:15px;border-radius:3px;flex-shrink:0}
 .bd-sub-title{font-size:11.5px;font-weight:500;color:var(--text);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bd-sub-tag{font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--accent);color:#fff;flex-shrink:0}
+.bd-sub-tag{font-size:9.5px;font-weight:600;padding:1px 5px;border-radius:3px;background:var(--accent);color:var(--text-on-accent, #ffffff);flex-shrink:0}
 .bd-sub-btn{color:var(--text-muted);display:inline-flex;align-items:center;padding:2px;font-size:10.5px}
 
 /* 备注查看与编辑 */
@@ -895,6 +897,48 @@ textarea{width:100%;resize:vertical;line-height:1.45;min-height:56px}
   width:14px;
   height:14px;
 }
+
+/* 深色模式书签图标智能高对比度组合拳 */
+[data-theme="dark"] .bookmark-logo img[src*="github.com"],
+[data-theme="dark"] .bookmark-logo img[src*="notion.so"],
+[data-theme="dark"] .bookmark-logo img[src*="vercel.com"],
+[data-theme="dark"] .bookmark-logo img[src*="x.com"],
+[data-theme="dark"] .bookmark-logo img[src*="apple.com"],
+[data-theme="dark"] .bookmark-logo img[src*="v2ex.com"],
+[data-theme="dark"] .current-hero-favicon[src*="github.com"],
+[data-theme="dark"] .current-hero-favicon[src*="notion.so"],
+[data-theme="dark"] .current-hero-favicon[src*="vercel.com"],
+[data-theme="dark"] .current-hero-favicon[src*="x.com"],
+[data-theme="dark"] .current-hero-favicon[src*="apple.com"] {
+  filter: brightness(0) invert(0.96) !important;
+}
+[data-theme="dark"] .bookmark-logo img,
+[data-theme="dark"] .current-hero-favicon {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+}
+[data-theme="dark"] .bookmark-logo,
+[data-theme="dark"] .current-hero-favicon {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .bookmark-logo img[src*="github.com"],
+  :root:not([data-theme="light"]) .bookmark-logo img[src*="notion.so"],
+  :root:not([data-theme="light"]) .bookmark-logo img[src*="vercel.com"],
+  :root:not([data-theme="light"]) .bookmark-logo img[src*="x.com"],
+  :root:not([data-theme="light"]) .bookmark-logo img[src*="apple.com"],
+  :root:not([data-theme="light"]) .current-hero-favicon[src*="github.com"],
+  :root:not([data-theme="light"]) .current-hero-favicon[src*="notion.so"],
+  :root:not([data-theme="light"]) .current-hero-favicon[src*="vercel.com"] {
+    filter: brightness(0) invert(0.96) !important;
+  }
+  :root:not([data-theme="light"]) .bookmark-logo img,
+  :root:not([data-theme="light"]) .current-hero-favicon {
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+  }
+}
+
 </style>
 </head>
 <body>

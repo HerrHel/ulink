@@ -3,7 +3,7 @@
     .blue-ring { stroke: #122E8A; }
     .green-ring { stroke: #10B981; }
     @media (prefers-color-scheme: dark) {
-      .blue-ring { stroke: #F04A8A; }
+      .blue-ring { stroke: #4A90F7; }
       .green-ring { stroke: #E2E7BF; }
     }
   </style>

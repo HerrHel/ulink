@@ -930,3 +930,93 @@
   position: relative !important;
 }
 
+
+
+/* ==================== 深色模式书签图标智能高对比度组合拳 ==================== */
+/* 1. 主流纯黑/深色剪影站点在暗色模式下反色为高对比度纯净象牙白（96% 亮度，避免过曝纯白） */
+[data-theme="dark"] .card-logo img.dark-invert,
+[data-theme="dark"] .card-icon img.dark-invert,
+[data-theme="dark"] .bm-icon img.dark-invert,
+[data-theme="dark"] .group-inline-card img.dark-invert,
+[data-theme="dark"] .inline-card-logo img.dark-invert,
+[data-theme="dark"] .card-logo img[src*="github.com"],
+[data-theme="dark"] .card-logo img[src*="notion.so"],
+[data-theme="dark"] .card-logo img[src*="vercel.com"],
+[data-theme="dark"] .card-logo img[src*="x.com"],
+[data-theme="dark"] .card-logo img[src*="twitter.com"],
+[data-theme="dark"] .card-logo img[src*="apple.com"],
+[data-theme="dark"] .card-logo img[src*="threads.net"],
+[data-theme="dark"] .card-logo img[src*="v2ex.com"],
+[data-theme="dark"] .card-logo img[src*="linear.app"],
+[data-theme="dark"] .card-logo img[src*="claude.ai"],
+[data-theme="dark"] .card-logo img[src*="anthropic.com"],
+[data-theme="dark"] .card-logo img[src*="medium.com"],
+[data-theme="dark"] .card-logo img[src*="cursor.com"],
+[data-theme="dark"] .card-logo img[src*="cursor.sh"],
+[data-theme="dark"] .card-logo img[src*="huggingface.co"],
+[data-theme="dark"] .card-logo img[src*="v0.dev"],
+[data-theme="dark"] .card-logo img[src*="replit.com"],
+[data-theme="dark"] .card-logo img[src*="sentry.io"],
+[data-theme="dark"] .card-logo img[src*="npmjs.com"],
+[data-theme="dark"] .card-logo img[src*="deno.land"],
+[data-theme="dark"] .card-logo img[src*="deno.com"],
+[data-theme="dark"] .card-logo img[src*="supabase.com"],
+[data-theme="dark"] .card-logo img[src*="raycast.com"],
+[data-theme="dark"] .card-logo img[src*="openai.com"],
+[data-theme="dark"] .card-logo img[src*="chatgpt.com"],
+[data-theme="dark"] .card-logo img[src*="nextjs.org"],
+[data-theme="dark"] .card-logo img[src*="shadcn.com"],
+[data-theme="dark"] .card-icon img[src*="github.com"],
+[data-theme="dark"] .card-icon img[src*="notion.so"],
+[data-theme="dark"] .card-icon img[src*="vercel.com"],
+[data-theme="dark"] .card-icon img[src*="x.com"],
+[data-theme="dark"] .card-icon img[src*="apple.com"],
+[data-theme="dark"] .group-inline-card img[src*="github.com"],
+[data-theme="dark"] .group-inline-card img[src*="notion.so"],
+[data-theme="dark"] .group-inline-card img[src*="vercel.com"],
+[data-theme="dark"] .group-inline-card img[src*="x.com"],
+[data-theme="dark"] .group-inline-card img[src*="apple.com"] {
+  filter: brightness(0) invert(0.96) !important;
+}
+
+/* 2. 深色模式通用发丝微光兜底（未在白名单的未知黑色透明图标有清晰边界，彩色图标保持自然呈现） */
+[data-theme="dark"] .card-logo img:not(.dark-invert),
+[data-theme="dark"] .card-icon img:not(.dark-invert),
+[data-theme="dark"] .bm-icon img:not(.dark-invert),
+[data-theme="dark"] .inline-card-logo img:not(.dark-invert),
+[data-theme="dark"] .group-inline-card img:not(.dark-invert) {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+}
+
+/* 3. 深色模式下图标底座质感优化：微亮悬浮底板 + 极细内沿高光发丝 */
+[data-theme="dark"] .card-logo,
+[data-theme="dark"] .card-icon {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .card-logo img.dark-invert,
+  :root:not([data-theme="light"]) .card-icon img.dark-invert,
+  :root:not([data-theme="light"]) .bm-icon img.dark-invert,
+  :root:not([data-theme="light"]) .inline-card-logo img.dark-invert,
+  :root:not([data-theme="light"]) .group-inline-card img.dark-invert,
+  :root:not([data-theme="light"]) .card-logo img[src*="github.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="notion.so"],
+  :root:not([data-theme="light"]) .card-logo img[src*="vercel.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="x.com"],
+  :root:not([data-theme="light"]) .card-logo img[src*="apple.com"],
+  :root:not([data-theme="light"]) .card-icon img[src*="github.com"],
+  :root:not([data-theme="light"]) .group-inline-card img[src*="github.com"] {
+    filter: brightness(0) invert(0.96) !important;
+  }
+
+  :root:not([data-theme="light"]) .card-logo img:not(.dark-invert),
+  :root:not([data-theme="light"]) .card-icon img:not(.dark-invert),
+  :root:not([data-theme="light"]) .bm-icon img:not(.dark-invert),
+  :root:not([data-theme="light"]) .inline-card-logo img:not(.dark-invert),
+  :root:not([data-theme="light"]) .group-inline-card img:not(.dark-invert) {
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
+  }
+}

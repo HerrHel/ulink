@@ -759,3 +759,18 @@
 .share-footer-copy{font-size:11px;color:var(--text-muted);margin-top:4px}
 
 
+
+
+/* 深色模式下分组画布图标底板质感优化 */
+[data-theme="dark"] .bm-icon {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .bm-icon {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+}

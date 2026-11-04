@@ -130,6 +130,64 @@ export function favicon(url: string, customIcon?: string): string {
 }
 
 /**
+ * 已知在浅色模式下为纯黑/暗色剪影透明 Favicon 的知名站点域名白名单。
+ * 在深色模式下，这些站点的图标需智能反色为高对比度象牙白，完美还原官方暗色 Logo 质感。
+ */
+export const DARK_INVERT_DOMAINS = new Set([
+  'github.com',
+  'notion.so',
+  'notion.site',
+  'vercel.com',
+  'vercel.app',
+  'x.com',
+  'twitter.com',
+  'apple.com',
+  'threads.net',
+  'v2ex.com',
+  'linear.app',
+  'claude.ai',
+  'anthropic.com',
+  'medium.com',
+  'cursor.com',
+  'cursor.sh',
+  'huggingface.co',
+  'v0.dev',
+  'replit.com',
+  'sentry.io',
+  'npmjs.com',
+  'deno.land',
+  'deno.com',
+  'supabase.com',
+  'raycast.com',
+  'openai.com',
+  'chatgpt.com',
+  'resend.com',
+  'prisma.io',
+  'nextjs.org',
+  'shadcn.com',
+])
+
+/**
+ * 判断指定网址、图标 URL 或属性是否属于已知深色剪影站点（深色模式下需反色为高对比度纯白）
+ */
+export function isDarkInvertSite(
+  url?: string | null,
+  iconUrl?: string | null,
+  attributes?: Record<string, any> | null
+): boolean {
+  if (attributes && (attributes['dark-invert'] === true || attributes['dark-invert'] === '1' || attributes['dark-invert'] === 'true')) {
+    return true
+  }
+  const target = ((url || '') + ' ' + (iconUrl || '')).toLowerCase()
+  if (!target.trim()) return false
+  for (const d of DARK_INVERT_DOMAINS) {
+    if (target.includes(d)) return true
+  }
+  return false
+}
+
+
+/**
  * 首字母占位图标（本地降级）。当远程 favicon 加载失败或为空时使用，避免破图、
  * 避免强依赖第三方（隐私）、零网络请求。返回内联 SVG data URI。
  * @param name 取首字符（通常传书签标题 / 域名首字母）

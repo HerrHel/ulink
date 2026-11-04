@@ -1,5 +1,5 @@
 import { I } from '../config/icons.js'
-import { esc, domain, favicon, isMobile } from '../utils.js'
+import { esc, domain, favicon, isMobile, isDarkInvertSite } from '../utils.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
 // 移动端 inline card 关闭 draggable：Chrome 移动端会对长按 draggable 元素启动
@@ -11,7 +11,7 @@ const _draggable = isMobile() ? 'false' : 'true'
 export function inlineCardHTML(bm: Bookmark): string {
   // S1：所有插入属性/文本的值均经 esc()，避免 bm.id / domain / title 含 " 或 < 注入。
   return '<span class="group-inline-card" contenteditable="false" data-bm-id="' + esc(bm.id) + '" draggable="' + _draggable + '">'
-    + '<img src="' + esc(bm.icon || favicon(bm.url || '')) + '" alt="">'
+    + '<img src="' + esc(bm.icon || favicon(bm.url || '')) + '" alt=""' + (isDarkInvertSite(bm.url, bm.icon, bm.attributes) ? ' class="dark-invert"' : '') + '>'
     + '<span class="gic-name">' + esc(bm.title || '') + '</span>'
     + '<span class="gic-domain">' + esc(domain(bm.url || '')) + '</span>'
     + '<span class="gic-btn">详</span>'

@@ -149,13 +149,13 @@ test.describe('宣传落地页', () => {
       gliders.first().evaluate(el => getComputedStyle(el).backgroundColor)
     ).toBe('rgb(18, 46, 138)')
 
-    // 1. 切到深色模式：暗色效率主题色变为 #F04A8A（品红玫瑰粉，主站 tokens.css）
+    // 1. 切到深色模式：暗色效率主题色变为 #4A90F7（精工烤蓝黄金点，主站 tokens.css）
     await modeDark.click()
     await expect(modeDark).toHaveAttribute('aria-pressed', 'true')
     await expect(looks).toHaveAttribute('data-mode', 'dark')
     await expect.poll(async () =>
       gliders.first().evaluate(el => getComputedStyle(el).backgroundColor)
-    ).toBe('rgb(240, 74, 138)')
+    ).toBe('rgb(74, 144, 247)')
 
     // 2. 切到舒适模式：舒适深色主题色变为 #E2E7BF（米白奶油色，主站 tokens.css），字色为深色高对比
     await styleComfort.click()
