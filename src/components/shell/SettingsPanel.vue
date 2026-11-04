@@ -845,7 +845,7 @@
                   </div>
                 </div>
 
-                <div class="sp-card">
+                <div class="sp-card sp-overflow-visible">
                   <div class="sp-card-head">备份与数据迁移</div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
@@ -883,10 +883,6 @@
                           <button class="sp-export-item" @click="onExport('csv')">
                             <span class="sp-export-name">{{ t('settings.exportCsv') }}</span>
                             <span class="sp-export-hint">{{ t('settings.exportCsvHint') }}</span>
-                          </button>
-                          <button class="sp-export-item" @click="onExport('raindrop')">
-                            <span class="sp-export-name">Raindrop.io</span>
-                            <span class="sp-export-hint">{{ t('settings.exportRaindropHint') }}</span>
                           </button>
                         </div>
                       </div>
@@ -1093,7 +1089,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
 import { storageBarColorFor } from './storageBarColor.js'
 import { setThemeStyle as themeSetStyle } from '../../lib/theme.js'
-import { exportData, exportHTML, exportCSV, exportRaindrop, resetToDefaults, getExportKeepSensitive, setExportKeepSensitive } from '../../composables/domain/useDataIO.js'
+import { exportData, exportHTML, exportCSV, resetToDefaults, getExportKeepSensitive, setExportKeepSensitive } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
@@ -1684,11 +1680,10 @@ function onOpenTrash() { pushNavState(); uiStore.panels.trash = true; uiStore.pa
 function onTriggerImport() { triggerImport(); uiStore.panels.settings = false }
 
 const exportMenuOpen = ref(false)
-function onExport(fmt: 'json' | 'html' | 'csv' | 'raindrop') {
+function onExport(fmt: 'json' | 'html' | 'csv') {
   if (fmt === 'json') exportData()
   else if (fmt === 'html') exportHTML()
   else if (fmt === 'csv') exportCSV()
-  else if (fmt === 'raindrop') exportRaindrop()
   exportMenuOpen.value = false
   uiStore.panels.settings = false
 }
@@ -1702,7 +1697,7 @@ function onToggleExportKeepSensitive() {
 }
 function _closeExportMenu(e: MouseEvent) {
   const t = e.target as HTMLElement
-  if (!t.closest('.sp-export-wrap')) exportMenuOpen.value = false
+  if (!t.closest('.sp-export-dropdown')) exportMenuOpen.value = false
 }
 onMounted(() => { document.addEventListener('click', _closeExportMenu); e2e.checkE2EStatus() })
 onBeforeUnmount(() => document.removeEventListener('click', _closeExportMenu))

@@ -1438,12 +1438,6 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
 [data-theme="dark"] .card-logo img[src*="apple.com"] {
   filter: invert(0.94) !important;
 }
-[data-theme="dark"] .bm-icon img,
-[data-theme="dark"] .card-logo img,
-[data-theme="dark"] .bmcard-icon img,
-[data-theme="dark"] .gic-ic img {
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
-}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .bm-icon img[src*="github.com"],
   :root:not([data-theme="light"]) .card-logo img[src*="github.com"],
@@ -1454,12 +1448,6 @@ body, .share-bar, .group-hero, .cat-hero, .group-notes-card, .bm, .gcard, .bmcar
   :root:not([data-theme="light"]) .card-logo img[src*="x.com"],
   :root:not([data-theme="light"]) .card-logo img[src*="apple.com"] {
     filter: invert(0.94) !important;
-  }
-  :root:not([data-theme="light"]) .bm-icon img,
-  :root:not([data-theme="light"]) .card-logo img,
-  :root:not([data-theme="light"]) .bmcard-icon img,
-  :root:not([data-theme="light"]) .gic-ic img {
-    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
   }
 }
 

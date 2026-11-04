@@ -477,7 +477,7 @@ export const en = {
     exportHtmlHint: 'Chrome/Edge compatible · .html',
     exportCsv: 'CSV table',
     exportCsvHint: 'No accounts or passwords · .csv',
-    exportRaindropHint: 'For competitors · .json',
+
     exportKeepSensitive: 'Keep sensitive data in exports',
     exportKeepSensitiveHint: 'When on, exported files include usernames and passwords',
     exportSensitiveOn: 'Exports will keep sensitive data',

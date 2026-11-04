@@ -469,7 +469,7 @@ export const zh = {
     exportHtmlHint: 'Chrome/Edge 通用 · .html',
     exportCsv: 'CSV 表格',
     exportCsvHint: '不含账户密码 · .csv',
-    exportRaindropHint: '迁入竞品 · .json',
+
     exportKeepSensitive: '导出保留敏感内容',
     exportKeepSensitiveHint: '开启后导出文件包含用户名与密码',
     exportSensitiveOn: '导出将保留敏感内容',

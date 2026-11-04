@@ -942,16 +942,7 @@
   filter: invert(0.94) !important;
 }
 
-/* 2. 所有图标通用 Micro-Halo 光学发丝轮廓兜底（未反色的黑标清晰显形，彩色图标原汁原味） */
-[data-theme="dark"] .card-logo img,
-[data-theme="dark"] .card-icon img,
-[data-theme="dark"] .bm-icon img,
-[data-theme="dark"] .inline-card-logo img,
-[data-theme="dark"] .group-inline-card img {
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
-}
-
-/* 3. 深色模式下图标底座质感优化：微亮悬浮底板 + 极细内沿高光发丝 */
+/* 2. 深色模式下图标底座质感优化：微亮悬浮底板 + 极细内沿高光发丝，不施加图像滤镜，保持 100% 锐利高解析度 */
 [data-theme="dark"] .card-logo,
 [data-theme="dark"] .card-icon {
   background: rgba(255, 255, 255, 0.04);
@@ -966,13 +957,5 @@
   :root:not([data-theme="light"]) .inline-card-logo img.dark-invert,
   :root:not([data-theme="light"]) .group-inline-card img.dark-invert {
     filter: invert(0.94) !important;
-  }
-
-  :root:not([data-theme="light"]) .card-logo img,
-  :root:not([data-theme="light"]) .card-icon img,
-  :root:not([data-theme="light"]) .bm-icon img,
-  :root:not([data-theme="light"]) .inline-card-logo img,
-  :root:not([data-theme="light"]) .group-inline-card img {
-    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.45));
   }
 }
