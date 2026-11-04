@@ -297,4 +297,22 @@ describe('cardReader — 卡片解析与 AI 读取上下文构建', () => {
     const defPrompt = getDefaultAttachedPrompt([res!], true)
     expect(defPrompt).toContain('请帮我分析和整理「人工智能」分类下的内容')
   })
+
+  it('12. formatAttachedCardsForPrompt：卡片附注中的敏感凭证与API Key自动脱敏', () => {
+    const cards: ResolvedCardContext[] = [
+      {
+        type: 'bm',
+        id: 'bm-secret',
+        title: 'OpenAI 平台',
+        url: 'https://platform.openai.com',
+        notes: '生产环境密钥 sk-abcdef1234567890abcdef1234567890，password: mySuperSecretPassword123',
+      },
+    ]
+
+    const prompt = formatAttachedCardsForPrompt(cards, true)
+    expect(prompt).not.toContain('sk-abcdef1234567890abcdef1234567890')
+    expect(prompt).not.toContain('mySuperSecretPassword123')
+    expect(prompt).toContain('[REDACTED_API_KEY]')
+    expect(prompt).toContain('[REDACTED]')
+  })
 })

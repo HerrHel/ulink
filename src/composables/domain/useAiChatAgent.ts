@@ -5,6 +5,7 @@
  * 入参显式携带 assistantTurn 与 controller（等同原闭包捕获的同名变量），行为与拆分前逐字一致。
  */
 import { dispatchSiteCommand, batchTagBookmarks } from '../../lib/ai/siteCommander.js'
+import { mergeDuplicateBookmarks } from '../../lib/ai/siteActions.js'
 import {
   executeManageCategories,
   executeManageTags,
@@ -91,10 +92,17 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       }
       resultText = tN('ai.toolResultWorkspaceCard', (assistantTurn.candidates || []).length, { topic, n: (assistantTurn.candidates || []).length })
     } else if (call.name === 'merge_duplicates') {
-      const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app, signal: controller.signal })
-      if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
-      if (!assistantTurn.content) assistantTurn.content = siteRes.reply
-      resultText = siteRes.reply
+      const confirm = Boolean(call.arguments?.confirm)
+      if (confirm) {
+        const mergeRes = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app, signal: controller.signal })
+        resultText = mergeRes.message || t('aiCmd.mergeNone')
+        if (!assistantTurn.content) assistantTurn.content = resultText
+      } else {
+        const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app, signal: controller.signal })
+        if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
+        if (!assistantTurn.content) assistantTurn.content = siteRes.reply
+        resultText = siteRes.reply
+      }
     } else if (call.name === 'heal_deadlinks') {
       const target = call.arguments?.target
       if (target && target !== 'all') {

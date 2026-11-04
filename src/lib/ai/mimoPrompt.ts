@@ -209,7 +209,7 @@ ${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : '
       • Batch tagging -> invoke batch_tag_bookmarks;
       • Workspace & note management (assemble workspace, rename, edit notes, add/remove bookmarks) -> invoke manage_workspaces;
       • Preferences & navigation (toggle theme, change layout, navigate to category/workspace, empty trash) -> invoke manage_settings;
-      • Health audit & triage -> invoke audit_vault, inbox_zero, merge_duplicates, heal_deadlinks;
+      • Health audit & triage -> invoke audit_vault, inbox_zero, merge_duplicates, heal_deadlinks (when user confirms merging duplicates like 'Option A' or 'Merge all', invoke merge_duplicates with confirm: true; NEVER use manage_bookmarks to delete duplicates by title!);
       • Deep webpage reading -> invoke read_webpage.
     - All write operations are protected by a local undo transaction. You will receive the real execution result; formulate your polite response based strictly on that result, and never claim an action succeeded without seeing its result.
 11. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in ${FENCE}ulink-card:
@@ -251,7 +251,7 @@ ${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ?
       ④ 批量打标（为多个书签补齐标签属性） -> 立即调用 batch_tag_bookmarks 工具；
       ⑤ 工作台装配（围绕特定主题搭建工作台、改名、编辑笔记正文、向组内增删书签成员等） -> 立即调用 manage_workspaces 工具；
       ⑥ 偏好设置与界面调度（切换深色/浅色主题、切换排版布局、跳转到指定分类或工作台、清空回收站等） -> 立即调用 manage_settings 工具；
-      ⑦ 全库体检与智能归集 -> 调用 audit_vault / inbox_zero / merge_duplicates / heal_deadlinks 工具；
+      ⑦ 全库体检与智能归集 -> 调用 audit_vault / inbox_zero / merge_duplicates / heal_deadlinks 工具（当用户要求合并重复项或确认“方案A一键合并”时，必须调用 merge_duplicates 工具并传 confirm: true 落地合并，严禁调用 manage_bookmarks 逐个按标题删除重复项！）；
       ⑧ 深度抓取分析公开网页正文 -> 调用 read_webpage 工具。
     - 特别约束：执行全库资产体检 (audit_vault) 后，体检本身即为最终操作，严禁在后续答复中擅自调用其他修改类工具；必须将体检评分与现状结构化汇报给用户，并提出下一步建议选项供用户决策。
     - 当用户询问未打标书签或要求补打标签时：严格区分顶级独立站点与从属子书签（子书签不可与顶级网站大杂烩混谈），直接基于上下文中的待打标顶级独立站点明细与现有标签属性 [${attrNames}]，逐条给出最匹配的标签建议与推荐理由，并给出预判快捷按钮供用户确认。若用户确认执行标签方案（如说“好的，就按这条执行”、“好的，按方案执行”、“执行”），务必调用 batch_tag_bookmarks 工具执行批量打标。

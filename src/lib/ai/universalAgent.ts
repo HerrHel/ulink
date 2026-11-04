@@ -21,6 +21,7 @@ import { gid, favicon, domain } from '../../utils.js'
 import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { normalizeUrlForDedup } from './localClustering.js'
 import { pushUndoAction } from './siteUndoStack.js'
+import { askConfirm, buildTrashClearConfirmMessage } from './siteHitl.js'
 import { toastWithUndo } from '../toast.js'
 import { CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../../config/constants.js'
 import type { Bookmark, Category, SiblingGroup, CustomAttribute } from '../../types.js'
@@ -151,6 +152,10 @@ export async function executeManageCategories(
       return { success: false, message: '系统内置分类受保护，不支持删除。' }
     }
     const catName = cat.name
+    // 记录删除前挂在该分类下的书签与工作台 ID，确保撤销时能够完整复原挂载关系
+    const affectedBmIds = ds.bookmarks.filter((b: Bookmark) => !b.deletedAt && b.categoryId === cat.id).map((b: Bookmark) => b.id)
+    const affectedGrpIds = ds.siblingGroups.filter((g: SiblingGroup) => !g.deletedAt && g.categoryId === cat.id).map((g: SiblingGroup) => g.id)
+
     ds.deleteCategory(cat.id)
     app.save?.()
 
@@ -159,12 +164,32 @@ export async function executeManageCategories(
       description: `删除分类「${catName}」`,
       revert: () => {
         ds.restoreCategory(cat.id)
+        for (const bid of affectedBmIds) {
+          if (ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt) {
+            ds.updateBookmark(bid, { categoryId: cat.id })
+          }
+        }
+        for (const gid of affectedGrpIds) {
+          if (ds.groupMap[gid] && !ds.groupMap[gid].deletedAt) {
+            ds.updateGroup(gid, { categoryId: cat.id })
+          }
+        }
         app.save?.()
-        return `已恢复分类「${catName}」`
+        return `已恢复分类「${catName}」及所属书签/工作台`
       },
     })
     toastWithUndo(`分类「${catName}」已移入回收站`, () => {
       ds.restoreCategory(cat.id)
+      for (const bid of affectedBmIds) {
+        if (ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt) {
+          ds.updateBookmark(bid, { categoryId: cat.id })
+        }
+      }
+      for (const gid of affectedGrpIds) {
+        if (ds.groupMap[gid] && !ds.groupMap[gid].deletedAt) {
+          ds.updateGroup(gid, { categoryId: cat.id })
+        }
+      }
       app.save?.()
     })
 
@@ -614,6 +639,22 @@ export async function executeManageBookmarks(
   }
 
   if (action === 'delete') {
+    // 防同名/同网址歧义误删保护：若非按唯一 ID 定位，且库中存在多条同名书签，拒绝盲目删除
+    const qRaw = (targetQuery || '').trim()
+    const isExactIdMatch = bm.id === qRaw
+    if (!isExactIdMatch) {
+      const qLower = qRaw.toLowerCase()
+      const titleMatches = ds.bookmarks.filter(
+        (b: Bookmark) => !b.deletedAt && b.title?.trim().toLowerCase() === qLower,
+      )
+      if (titleMatches.length > 1) {
+        return {
+          success: false,
+          message: `检测到库中存在 ${titleMatches.length} 个名为「${bm.title}」的书签。为防止误删您的常用书签，请指定具体书签 ID 执行删除，或使用“合并重复项”功能（merge_duplicates）进行安全去重合并。`,
+        }
+      }
+    }
+
     const title = bm.title
     ds.deleteBookmark(bm.id)
     app.save?.()
@@ -704,6 +745,9 @@ export async function executeManageWorkspaces(
     const byId = ds.siblingGroups.find((g: SiblingGroup) => (includeDeleted || !g.deletedAt) && g.id === clean)
     if (byId) return byId
     const lower = clean.toLowerCase()
+    // 优先全名精确匹配，杜绝“极客工具”误伤“极客工具进阶”
+    const exactMatch = ds.siblingGroups.find((g: SiblingGroup) => (includeDeleted || !g.deletedAt) && g.name.trim().toLowerCase() === lower)
+    if (exactMatch) return exactMatch
     return ds.siblingGroups.find((g: SiblingGroup) => (includeDeleted || !g.deletedAt) && g.name.toLowerCase().includes(lower))
   }
 
@@ -867,6 +911,20 @@ export async function executeManageWorkspaces(
   }
 
   if (action === 'delete') {
+    const qRaw = (params.workspaceId || rawName).trim()
+    if (grp.id !== qRaw) {
+      const qLower = qRaw.toLowerCase()
+      const titleMatches = ds.siblingGroups.filter(
+        (g: SiblingGroup) => !g.deletedAt && g.name?.trim().toLowerCase() === qLower,
+      )
+      if (titleMatches.length > 1) {
+        return {
+          success: false,
+          message: `检测到库中存在 ${titleMatches.length} 个名为「${grp.name}」的工作台。为防误删，请指定具体工作台 ID 执行删除。`,
+        }
+      }
+    }
+
     ds.deleteGroup(grp.id)
     app.save?.()
 
@@ -1024,6 +1082,11 @@ export async function executeManageSettings(
     const totalTrash = bmsCount + grpsCount + catsCount
     if (totalTrash === 0) {
       return { success: true, message: '当前回收站内无任何暂存项目，无需清空。' }
+    }
+    const confirmed = await askConfirm(buildTrashClearConfirmMessage(totalTrash, bmsCount, grpsCount, catsCount))
+    if (context?.signal?.aborted) return { success: false, message: '操作已取消。' }
+    if (!confirmed) {
+      return { success: false, message: '清空回收站操作已取消，您的暂存数据未受影响。' }
     }
     ds.emptyTrash()
     app.save?.()

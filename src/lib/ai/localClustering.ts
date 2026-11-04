@@ -337,13 +337,40 @@ export function findUncategorizedGroups(
 }
 
 /**
+ * 计算书签完整度与留存权重评分（质量分越高，越应作为 primary 保留）
+ * 1. 真实点击频次权重最高；
+ * 2. 属于有效业务分类（非未分类 CAT_UNCATEGORIZED）权重极高，杜绝“未分类”覆盖已分类；
+ * 3. 拥有自定义属性/标签、备注说明等元数据加分；
+ * 4. 用户自建书签（非初始 seed 如 b1~b13）在平局时略微优先。
+ */
+function getBookmarkQualityScore(b: Bookmark): number {
+  let score = 0
+  if (b.useCount && b.useCount > 0) score += Math.min(b.useCount * 10, 100)
+  if (b.categoryId && b.categoryId !== CAT_UNCATEGORIZED) score += 50
+  if (b.attributes && Object.keys(b.attributes).length > 0) score += 20
+  if (b.notes && b.notes.trim()) score += 15
+  if (!/^b\d+$/.test(b.id)) score += 10
+  return score
+}
+
+/**
  * 查找疑似重复链接（基于规范化后的一致 URL）
  * 严格红线：
  * 1. 排除系统官方保留书签（如 bm_ulink_*）
  * 2. 排除子书签（子书签为卡片附属链接，绝不作为顶层重复项被剔除）
+ * 3. 严格去重同一 ID（防御同 ID 对象在数组内重复出现导致自删）
  */
 export function findDuplicateCandidates(bookmarks: Bookmark[]): DuplicateCluster[] {
-  const active = bookmarks.filter(b => !b.deletedAt && b.url && !isOfficialBookmark(b) && !b.parentId)
+  const seenIds = new Set<string>()
+  const active: Bookmark[] = []
+  for (const b of bookmarks) {
+    if (!b || !b.id || seenIds.has(b.id)) continue
+    if (!b.deletedAt && b.url && !isOfficialBookmark(b) && !b.parentId) {
+      seenIds.add(b.id)
+      active.push(b)
+    }
+  }
+
   const normMap = new Map<string, Bookmark[]>()
 
   for (const b of active) {
@@ -357,8 +384,12 @@ export function findDuplicateCandidates(bookmarks: Bookmark[]): DuplicateCluster
   const results: DuplicateCluster[] = []
   for (const [norm, bms] of normMap.entries()) {
     if (bms.length > 1) {
-      // 选出主书签：优先排序使用频次 highest useCount，次选 updatedAt 最新的
-      const sorted = [...bms].sort((a, b) => (b.useCount || 0) - (a.useCount || 0) || (b.updatedAt || 0) - (a.updatedAt || 0))
+      // 选出主书签：综合质量评分（分类完整度 > 点击频次 > 元数据 > 非预置seed）最高，次选 updatedAt 最新的
+      const sorted = [...bms].sort((a, b) => {
+        const scoreDiff = getBookmarkQualityScore(b) - getBookmarkQualityScore(a)
+        if (scoreDiff !== 0) return scoreDiff
+        return (b.updatedAt || 0) - (a.updatedAt || 0)
+      })
       const [primary, ...duplicates] = sorted
       results.push({
         primary,

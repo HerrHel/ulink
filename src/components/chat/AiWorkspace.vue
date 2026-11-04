@@ -784,7 +784,14 @@ function onWorkspaceDrop(e: DragEvent) {
 
 function handleApplySuggestedReply(reply: string, turn: ChatTurn) {
   turn.suggestedReplies = []
-  if ((reply.includes('执行') || reply.includes('确认')) && turn.actionCard && !turn.actionCard.completed) {
+  const isConfirmAction =
+    reply.includes('执行') ||
+    reply.includes('确认') ||
+    reply.includes('合并') ||
+    reply.includes('应用') ||
+    reply.includes('方案A') ||
+    reply.includes('方案 A')
+  if (isConfirmAction && turn.actionCard && !turn.actionCard.completed) {
     handleActionCardClick(turn.actionCard, turn)
     return
   }

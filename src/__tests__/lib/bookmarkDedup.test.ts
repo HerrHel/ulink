@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { findBestParentBookmark, isUrlSuffixVariant, isExactDuplicate } from '../../lib/bookmarkDedup.js'
+import { findDuplicateCandidates } from '../../lib/ai/localClustering.js'
+import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark } from '../../types.js'
 
 function makeBookmark(overrides: Partial<Bookmark>): Bookmark {
@@ -121,5 +123,43 @@ describe('bookmarkDedup 基础判定函数直测', () => {
     expect(isExactDuplicate('https://example.com', 'https://example.com/')).toBe(true)
     expect(isExactDuplicate('https://example.com/page', 'https://example.com/page')).toBe(true)
     expect(isExactDuplicate('https://example.com/page1', 'https://example.com/page2')).toBe(false)
+  })
+
+  it('findDuplicateCandidates 质量分优先保留有明确分类与元数据的书签作为 primary', () => {
+    // 模拟系统种子书签：在未分类，id 为 b13，0 点击
+    const seedGemini = makeBookmark({
+      id: 'b13',
+      title: 'Gemini',
+      url: 'https://gemini.google.com/',
+      categoryId: CAT_UNCATEGORIZED,
+      useCount: 0,
+      updatedAt: 1000,
+    })
+    // 模拟用户书签：在 AI 分类，有标签
+    const userGemini = makeBookmark({
+      id: 'custom_gemini_user',
+      title: 'Gemini',
+      url: 'https://gemini.google.com/',
+      categoryId: 'cat_ai',
+      attributes: { ai: true },
+      useCount: 0,
+      updatedAt: 500, // 哪怕更新时间更旧
+    })
+
+    const clusters = findDuplicateCandidates([seedGemini, userGemini])
+    expect(clusters.length).toBe(1)
+    expect(clusters[0].primary.id).toBe('custom_gemini_user')
+    expect(clusters[0].duplicates[0].id).toBe('b13')
+  })
+
+  it('findDuplicateCandidates 对数组内相同 ID 进行防御去重，防止自查重自删', () => {
+    const singleBm = makeBookmark({
+      id: 'bm_unique',
+      title: 'Gmail',
+      url: 'https://mail.google.com/',
+    })
+    // 数组中不小心放入了两次同一个书签引用
+    const clusters = findDuplicateCandidates([singleBm, singleBm])
+    expect(clusters.length).toBe(0)
   })
 })

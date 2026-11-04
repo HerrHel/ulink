@@ -392,6 +392,39 @@ describe('Universal Agent Operations & Undo Stack (universalAgent.ts)', () => {
       await undoAction?.revert()
       expect(mockDs.bookmarkMap['bm-1'].pinnedAt).toBeUndefined()
     })
+
+    it('同名书签按标题删除时应被安全拦截，防止误删用户书签', async () => {
+      mockDs.bookmarks.push({
+        id: 'bm-gemini-1',
+        title: 'Gemini',
+        url: 'https://gemini.google.com/',
+        categoryId: 'cat-ai',
+      } as any)
+      mockDs.bookmarks.push({
+        id: 'bm-gemini-2',
+        title: 'Gemini',
+        url: 'https://gemini.google.com/app',
+        categoryId: 'uncategorized',
+      } as any)
+
+      // 仅传 target: 'Gemini'，非精确 ID
+      const res = await executeManageBookmarks(
+        { action: 'delete', target: 'Gemini' },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(res.success).toBe(false)
+      expect(res.message).toContain('检测到库中存在 2 个名为「Gemini」的书签')
+      expect(mockDs.deleteBookmark).not.toHaveBeenCalledWith('bm-gemini-1')
+      expect(mockDs.deleteBookmark).not.toHaveBeenCalledWith('bm-gemini-2')
+
+      // 使用具体 ID 精确删除则放行
+      const resById = await executeManageBookmarks(
+        { action: 'delete', target: 'bm-gemini-2' },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(resById.success).toBe(true)
+      expect(mockDs.deleteBookmark).toHaveBeenCalledWith('bm-gemini-2')
+    })
   })
 
   describe('4. 工作台治理 (manage_workspaces)', () => {
@@ -496,6 +529,19 @@ describe('Universal Agent Operations & Undo Stack (universalAgent.ts)', () => {
       expect(res.success).toBe(true)
       expect(res.message).toContain('共永久抹除了 1 个暂存项目')
       expect(mockDs.emptyTrash).toHaveBeenCalled()
+    })
+
+    it('清空回收站时用户拒绝确认则取消操作，保护数据不丢失', async () => {
+      const { showConfirm } = await import('../../lib/toast.js')
+      ;(showConfirm as any).mockResolvedValueOnce(false)
+      mockDs.bookmarks[0].deletedAt = Date.now()
+      const res = await executeManageSettings(
+        { action: 'empty_trash' },
+        { ds: mockDs, app: mockApp, ui: mockUi },
+      )
+      expect(res.success).toBe(false)
+      expect(res.message).toContain('已取消')
+      expect(mockDs.emptyTrash).not.toHaveBeenCalled()
     })
   })
 

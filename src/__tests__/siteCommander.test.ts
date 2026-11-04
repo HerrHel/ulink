@@ -412,6 +412,35 @@ describe('siteCommander — 站内指令调度器 (In-App Agent CLI)', () => {
     expect(mockDs.deleteBookmark).not.toHaveBeenCalled()
   })
 
+  it('mergeDuplicateBookmarks 能够智能将副本的有效分类继承至未分类的主书签', async () => {
+    mockDs.deleteBookmark = vi.fn()
+    mockDs.updateBookmark = vi.fn()
+    mockDs.bookmarks.push({
+      id: 'bm_main',
+      title: 'Tool X',
+      url: 'https://tool-x.com/',
+      categoryId: 'uncategorized',
+      useCount: 10,
+    })
+    mockDs.bookmarks.push({
+      id: 'bm_dup_cat',
+      title: 'Tool X Copy',
+      url: 'https://tool-x.com/',
+      categoryId: 'cat_tools',
+      useCount: 0,
+    })
+
+    const res = await mergeDuplicateBookmarks({ ds: mockDs, ui: mockUi, app: mockApp })
+    expect(res.mergedCount).toBe(1)
+    expect(mockDs.deleteBookmark).toHaveBeenCalledWith('bm_dup_cat')
+    expect(mockDs.updateBookmark).toHaveBeenCalledWith(
+      'bm_main',
+      expect.objectContaining({
+        categoryId: 'cat_tools',
+      }),
+    )
+  })
+
   // ── 17. /health 全库资产体检 ──
   it('/health 生成健康指数与诊断建议行动卡片', async () => {
     const res = await dispatchSiteCommand('/health', {

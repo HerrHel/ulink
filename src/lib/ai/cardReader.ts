@@ -1,6 +1,7 @@
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 import { t } from '../../i18n/index.js'
 import { sanitizeForPrompt } from './mimoClient.js'
+import { redactSensitivePatterns } from './secretFilter.js'
 
 /** 附件注入提示词的字段级限长（防单字段撑爆消息、防隐私全量外送） */
 const MAX_ATTACH_TITLE = 80
@@ -23,7 +24,8 @@ const MAX_ATTACH_CARDS = 8
  * （防字段内容伪装成 """ 块定界符逃逸），供提示词注入使用。
  */
 function safe(text: string | undefined, maxLen: number): string {
-  return sanitizeForPrompt(text ?? '', maxLen).replace(/"{2,}/g, "'")
+  const sanitized = sanitizeForPrompt(text ?? '', maxLen).replace(/"{2,}/g, "'")
+  return redactSensitivePatterns(sanitized)
 }
 
 export interface ResolvedCardContext {

@@ -67,7 +67,7 @@ export async function mergeDuplicateBookmarks(
 
   let mergedCount = 0
   const deletedIds: string[] = []
-  const revertPrimaryMap = new Map<string, { notes?: string; attributes?: Record<string, any>; useCount?: number }>()
+  const revertPrimaryMap = new Map<string, { notes?: string; attributes?: Record<string, any>; useCount?: number; categoryId?: string }>()
   const revertGroupMap = new Map<string, string[]>()
 
   for (const cluster of dups) {
@@ -78,13 +78,15 @@ export async function mergeDuplicateBookmarks(
     const origPrimaryNotes = primary.notes
     const origPrimaryAttrs = { ...(primary.attributes || {}) }
     const origPrimaryUseCount = primary.useCount
+    const origPrimaryCatId = primary.categoryId
 
     let newNotes = primary.notes || ''
     const newAttrs = { ...(primary.attributes || {}) }
     let addUseCount = 0
+    let targetCatId = primary.categoryId
 
     for (const dup of cluster.duplicates) {
-      if (dup.id && !dup.deletedAt) {
+      if (dup.id && !dup.deletedAt && dup.id !== primary.id) {
         // 1. 元数据智能汇聚：将副本中独特的备注与标签汇入主书签
         if (dup.notes && !newNotes.includes(dup.notes)) {
           newNotes = newNotes ? `${newNotes}\n${dup.notes}` : dup.notes
@@ -102,7 +104,13 @@ export async function mergeDuplicateBookmarks(
           addUseCount += dup.useCount
         }
 
-        // 2. 避免制造笔记孤立引用：若副本存在于某个笔记组，自动将组内引用切换至主书签
+        // 2. 避免分类漂移：若主书签未分类，而副本有具体分类，继承副本分类
+        if ((!targetCatId || targetCatId === CAT_UNCATEGORIZED) && dup.categoryId && dup.categoryId !== CAT_UNCATEGORIZED) {
+          targetCatId = dup.categoryId
+          primaryUpdated = true
+        }
+
+        // 3. 避免制造笔记孤立引用：若副本存在于某个笔记组，自动将组内引用切换至主书签
         for (const grp of ds.siblingGroups || []) {
           if (!grp.deletedAt && grp.bookmarkIds?.includes(dup.id)) {
             if (!revertGroupMap.has(grp.id)) {
@@ -125,11 +133,13 @@ export async function mergeDuplicateBookmarks(
         notes: origPrimaryNotes,
         attributes: origPrimaryAttrs,
         useCount: origPrimaryUseCount,
+        categoryId: origPrimaryCatId,
       })
       ds.updateBookmark(primary.id, {
         notes: newNotes,
         attributes: newAttrs,
         useCount: (primary.useCount || 0) + addUseCount,
+        ...(targetCatId !== origPrimaryCatId ? { categoryId: targetCatId } : {}),
       })
     }
   }

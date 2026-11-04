@@ -106,13 +106,17 @@ export const ULINK_AGENT_TOOLS: AgentToolDefinition[] = [
     type: 'function',
     function: {
       name: 'merge_duplicates',
-      description: '扫描全库重复书签（相同或等价 URL），生成待用户确认的合并卡片；合并不会自动执行，需用户点击确认后才移入回收站（可撤销）。仅在用户明确要求查重/合并时调用。',
+      description: '扫描全库重复书签（相同或等价 URL）或执行安全合并去重。当仅查重时返回扫描清单与卡片；当用户明确要求“一键合并”、“全部合并”、“执行方案A”或确认清理重复项时，传 confirm: true 即可直接安全执行去重合并（多余副本移入回收站，可随时撤销）。严禁使用 manage_bookmarks 逐个删除重复项！',
       parameters: {
         type: 'object',
         properties: {
           reason: {
             type: 'string',
-            description: '触发查重合并的具体用户诉求说明',
+            description: '触发查重或合并的具体用户诉求说明',
+          },
+          confirm: {
+            type: 'boolean',
+            description: '是否确认执行合并。当用户明确要求全部合并、清理重复、执行方案A时传 true；若仅扫描查重则不传或传 false。',
           },
         },
         required: ['reason'],

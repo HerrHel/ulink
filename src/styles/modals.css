@@ -249,8 +249,8 @@
 .history-item-main{flex:1;min-width:0}
 .history-item-actions{display:flex;gap:6px;flex-shrink:0;justify-content:flex-end}
 .btn-xs.has-text,.history-item-actions .btn-xs{width:auto;height:26px;padding:0 10px;font-size:var(--fs-2xs);white-space:nowrap;border-radius:var(--radius-sm)}
-.history-item-actions .btn-xs.btn-primary{color:#fff;background:var(--accent-grad);box-shadow:0 2px 8px var(--accent-glow)}
-.history-item-actions .btn-xs.btn-primary:hover{color:#fff;transform:translateY(-1px);box-shadow:0 4px 16px var(--accent-glow)}
+.history-item-actions .btn-xs.btn-primary{color:var(--text-on-accent);background:var(--accent-grad);box-shadow:0 2px 8px var(--accent-glow)}
+.history-item-actions .btn-xs.btn-primary:hover{color:var(--text-on-accent);transform:translateY(-1px);box-shadow:0 4px 16px var(--accent-glow)}
 .history-item-actions .btn-xs .sp-icon{margin-right:4px}
 .history-item-actions .btn-xs .sp-icon svg{width:12px;height:12px}
 @media(max-width:520px){
