@@ -7,6 +7,7 @@
  */
 import { computed } from 'vue'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { t, tN } from '../../i18n/index.js'
 
 export type SyncLevel = 'ok' | 'syncing' | 'pending' | 'conflict' | 'offline' | 'error' | 'quota'
 
@@ -33,36 +34,36 @@ export function useSyncState() {
     const pending = sync.pendingCount.value
 
     if (conflicts > 0) {
-      return { level: 'conflict', dotClass: 'dot-conflict', label: `${conflicts} 项冲突`, count: conflicts, showBadge: true }
+      return { level: 'conflict', dotClass: 'dot-conflict', label: tN('sync.conflictsCount', conflicts), count: conflicts, showBadge: true }
     }
     if (sync.syncStatus.value === 'error') {
       // 配额触顶单独归因：文案必须让用户知道「本地数据安全」，与断网/故障区分开
       if (sync.syncErrorKind.value === 'quota') {
-        return { level: 'quota', dotClass: 'dot-error', label: '云端空间已满', count: 0, showBadge: false }
+        return { level: 'quota', dotClass: 'dot-error', label: t('sync.quotaFull'), count: 0, showBadge: false }
       }
       if (sync.syncErrorKind.value === 'auth') {
-        return { level: 'error', dotClass: 'dot-error', label: '登录已过期', count: 0, showBadge: false }
+        return { level: 'error', dotClass: 'dot-error', label: t('sync.authExpired'), count: 0, showBadge: false }
       }
-      return { level: 'error', dotClass: 'dot-error', label: '同步失败', count: 0, showBadge: false }
+      return { level: 'error', dotClass: 'dot-error', label: t('sync.failed'), count: 0, showBadge: false }
     }
     if (_isOffline(sync)) {
       // 离线：无论有无积压均报 offline，避免断网无积压时落到 ok
       return pending > 0
-        ? { level: 'offline', dotClass: 'dot-offline', label: `离线 · ${pending} 项待同步`, count: pending, showBadge: true }
-        : { level: 'offline', dotClass: 'dot-offline', label: '离线', count: 0, showBadge: false }
+        ? { level: 'offline', dotClass: 'dot-offline', label: t('sync.offlinePending', { n: pending }), count: pending, showBadge: true }
+        : { level: 'offline', dotClass: 'dot-offline', label: t('sync.offline'), count: 0, showBadge: false }
     }
     // 锁定期积压：E2E 启用但锁定时，敏感字段 op 静默留队列待解锁重推。比泛 pending
     // 更明确——告诉用户「不是同步坏了，是锁着所以没推」，解锁后自动清空。归因优先于
     // 纯 pending 计数展示，避免「81 项待同步」无原因、用户无从下手。
     const locked = sync.pendingLockedCount.value
     if (locked > 0) {
-      return { level: 'pending', dotClass: 'dot-pending', label: `${locked} 项等待解锁后同步`, count: locked, showBadge: true }
+      return { level: 'pending', dotClass: 'dot-pending', label: t('sync.pendingLocked', { n: locked }), count: locked, showBadge: true }
     }
     if (pending > 0) {
-      return { level: 'pending', dotClass: 'dot-pending', label: `${pending} 项待同步`, count: pending, showBadge: true }
+      return { level: 'pending', dotClass: 'dot-pending', label: t('sync.pendingCount', { n: pending }), count: pending, showBadge: true }
     }
     if (sync.syncStatus.value === 'syncing') {
-      return { level: 'syncing', dotClass: 'dot-syncing', label: '同步中...', count: 0, showBadge: false }
+      return { level: 'syncing', dotClass: 'dot-syncing', label: t('sync.syncing'), count: 0, showBadge: false }
     }
     return { level: 'ok', dotClass: 'dot-ok', label: sync.syncLabel.value, count: 0, showBadge: false }
   })

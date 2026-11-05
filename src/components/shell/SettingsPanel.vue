@@ -108,7 +108,7 @@
               <div v-show="currentTab === 'account'" class="settings-tab-panel" data-testid="settings-panel-account">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAccount') }}</h3>
-                  <p class="sp-tab-desc">管理您的云端账户、同步状态与端到端安全加密保护</p>
+                  <p class="sp-tab-desc">{{ t('settings.tabAccountDesc') }}</p>
                 </div>
 
                 <!-- 账号与同步卡片 -->
@@ -238,7 +238,7 @@
                           :disabled="savingProfile"
                           @click="onSaveProfile"
                         >
-                          {{ savingProfile ? (t('common.saving') || '保存中…') : t('common.save') }}
+                          {{ savingProfile ? t('common.saving') : t('common.save') }}
                         </button>
                         <button
                           class="btn btn-ghost btn-sm up-action-btn"
@@ -252,7 +252,7 @@
                     <div class="sp-card-row">
                       <div class="sp-row-meta">
                         <span class="sp-row-title">{{ t('settings.setPassword') }}</span>
-                        <span class="sp-row-desc">设置或修改您的独立登录密码，方便在其他设备快捷登录</span>
+                        <span class="sp-row-desc">{{ t('settings.setPasswordDesc') }}</span>
                       </div>
                       <div class="sp-row-ctrl">
                         <button class="btn btn-secondary btn-sm" id="spSetPasswordBtn" @click.stop="onOpenSetPassword">
@@ -265,7 +265,7 @@
                     <div class="sp-card-row">
                       <div class="sp-row-meta">
                         <span class="sp-row-title">{{ t('userPopover.signOut') }}</span>
-                        <span class="sp-row-desc">退出当前设备的登录态，本地数据仍将安全保存在本机</span>
+                        <span class="sp-row-desc">{{ t('settings.signOutDesc') }}</span>
                       </div>
                       <div class="sp-row-ctrl">
                         <button class="btn btn-ghost btn-sm text-danger" @click.stop="onLogout">
@@ -278,7 +278,7 @@
                   <template v-else>
                     <div class="sp-card-row">
                       <div class="sp-row-meta">
-                        <span class="sp-row-title">账号登录与多端同步</span>
+                        <span class="sp-row-title">{{ t('settings.loginAndSync') }}</span>
                         <span class="sp-row-desc">{{ t('settings.loginHint') }}</span>
                       </div>
                       <div class="sp-row-ctrl">
@@ -316,7 +316,7 @@
                         data-testid="lv-e2e-unlock-btn"
                         @click.stop="onOpenE2EUnlock"
                       >
-                        {{ e2e.isBiometricEnrolled.value ? (t('settings.biometricUnlock') || '指纹解密') : t('userPopover.decrypt') }}
+                        {{ e2e.isBiometricEnrolled.value ? t('settings.biometricUnlock') : t('userPopover.decrypt') }}
                       </button>
                       <button
                         v-else
@@ -330,8 +330,8 @@
                   </div>
                   <div v-if="e2eEnabled && e2eUnlocked" class="sp-card-row">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title">主密钥与生物识别安全</span>
-                      <span class="sp-row-desc">更换加密密码或管理指纹/面容无感解密</span>
+                      <span class="sp-row-title">{{ t('settings.masterKeySecurity') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.masterKeySecurityDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button class="btn btn-ghost btn-sm" data-testid="lv-e2e-changepw-btn" @click.stop="onOpenE2EChangePw">
@@ -349,8 +349,8 @@
                   <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title text-danger">注销账号</span>
-                      <span class="sp-row-desc">根据《个人信息保护法》第47条行使删除权，永久抹除云端所有数据与关联关系</span>
+                      <span class="sp-row-title text-danger">{{ t('settings.deleteAccount') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.deleteAccountDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button
@@ -371,15 +371,15 @@
               <div v-show="currentTab === 'appearance'" class="settings-tab-panel" data-testid="settings-panel-appearance">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAppearance') }}</h3>
-                  <p class="sp-tab-desc">自定义界面色彩、卡片排布密度与书签排序模式</p>
+                  <p class="sp-tab-desc">{{ t('settings.tabAppearanceDesc') }}</p>
                 </div>
 
                 <div class="sp-card">
-                  <div class="sp-card-head">色彩与主题</div>
+                  <div class="sp-card-head">{{ t('settings.colorAndTheme') }}</div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.theme') }}</span>
-                      <span class="sp-row-desc">选择浅色明亮或深色低对比护眼模式</span>
+                      <span class="sp-row-desc">{{ t('settings.themeDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-seg">
@@ -394,8 +394,8 @@
                   </div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title">设计风格</span>
-                      <span class="sp-row-desc">效率模式注重紧凑信息密度，舒适模式具有更柔和的留白</span>
+                      <span class="sp-row-title">{{ t('settings.designStyle') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.designStyleDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-seg">
@@ -407,7 +407,7 @@
                   <div class="sp-card-row" @click.stop="onToggleAutoTheme" style="cursor: pointer;">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.followSystem') }}</span>
-                      <span class="sp-row-desc">根据操作系统的外观自动在深色与浅色之间切换</span>
+                      <span class="sp-row-desc">{{ t('settings.followSystemDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-toggle-pill" :class="{ active: uiStore.themeMode === 'auto' }">
@@ -418,11 +418,11 @@
                 </div>
 
                 <div class="sp-card">
-                  <div class="sp-card-head">视图与排序</div>
+                  <div class="sp-card-head">{{ t('settings.viewAndSort') }}</div>
                   <div class="sp-card-row" v-if="!uiStore.isMobile">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.layout') }}</span>
-                      <span class="sp-row-desc">切换主视图书签卡片的大网格、紧凑列表或小宫格</span>
+                      <span class="sp-row-desc">{{ t('settings.layoutDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-seg">
@@ -435,7 +435,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.sort') }}</span>
-                      <span class="sp-row-desc">选择卡片默认的排列次序</span>
+                      <span class="sp-row-desc">{{ t('settings.sortDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-seg sp-seg-wrap">
@@ -446,7 +446,7 @@
                   <div class="sp-card-row" @click="onToggleGroupsOnTop" style="cursor: pointer;">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.groupsOnTop') }}</span>
-                      <span class="sp-row-desc">总是将含有多书签的聚合笔记组卡片优先置顶于分类前列</span>
+                      <span class="sp-row-desc">{{ t('settings.groupsOnTopDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-toggle-pill" :class="{ active: uiStore.groupsOnTop }">
@@ -461,7 +461,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.language') }}</span>
-                      <span class="sp-row-desc">切换软件界面的操作语言 / Switch application interface language</span>
+                      <span class="sp-row-desc">{{ t('settings.languageDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-seg">
@@ -489,7 +489,7 @@
                       <span class="sp-row-desc" v-if="entitlement.isPaid && entitlement.expiresAt">
                         {{ t('settings.expiresAt') }}: {{ formatExpiry(entitlement.expiresAt) }}
                       </span>
-                      <span class="sp-row-desc" v-else>享受无限制书签归档、本地闪电检索与基础同步</span>
+                      <span class="sp-row-desc" v-else>{{ t('settings.freePlanDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <span class="sp-sync-status" data-testid="lv-entitlement-plan">{{ entitlementLabel }}</span>
@@ -527,8 +527,8 @@
                   </div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title">激活兑换码</span>
-                      <span class="sp-row-desc">输入专属兑换码以升级至 PRO 会员权益</span>
+                      <span class="sp-row-title">{{ t('settings.activateRedeemCode') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.activateRedeemCodeDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl sp-redeem-ctrl">
                       <input
@@ -619,13 +619,13 @@
                             </span>
                           </td>
                           <td class="sp-tx-cell-type">
-                            <span class="sp-tx-type-tag" :class="'type-' + tx.type">{{ tx.typeLabel }}</span>
+                            <span class="sp-tx-type-tag" :class="'type-' + tx.type">{{ formatTxType(tx.type, tx.typeLabel) }}</span>
                           </td>
-                          <td class="sp-tx-cell-channel">{{ tx.channelLabel }}</td>
+                          <td class="sp-tx-cell-channel">{{ formatTxChannel(tx.channel, tx.channelLabel) }}</td>
                           <td class="sp-tx-cell-status">
                             <span class="sp-tx-badge" :class="'status-' + tx.status">
                               <span class="sp-tx-badge-dot"></span>
-                              {{ tx.statusLabel }}
+                              {{ formatTxStatus(tx.status, tx.statusLabel) }}
                             </span>
                           </td>
                           <td class="sp-tx-cell-notes" :title="tx.notes || '-'">{{ tx.notes || '-' }}</td>
@@ -667,11 +667,11 @@
               <div v-show="currentTab === 'ai'" class="settings-tab-panel" data-testid="settings-panel-ai">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAi') }}</h3>
-                  <p class="sp-tab-desc">配置智能书签提炼、自然语言意图检索与智能工作流</p>
+                  <p class="sp-tab-desc">{{ t('settings.tabAiDesc') }}</p>
                 </div>
 
                 <div class="sp-card" data-testid="lv-search-fill-section">
-                  <div class="sp-card-head">智能特性与工作流</div>
+                  <div class="sp-card-head">{{ t('settings.smartFeaturesWorkflow') }}</div>
                   <div class="sp-card-row" @click="onToggleAiRail" style="cursor: pointer;">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.aiRail') }}</span>
@@ -719,7 +719,7 @@
               <div v-show="currentTab === 'maintenance'" class="settings-tab-panel" data-testid="settings-panel-maintenance">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabMaintenance') }}</h3>
-                  <p class="sp-tab-desc">扫描书签库健康状态，集中管理所有对公分享的卡片与网页</p>
+                  <p class="sp-tab-desc">{{ t('settings.tabMaintenanceDesc') }}</p>
                 </div>
 
                 <div class="sp-card">
@@ -727,7 +727,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.checkDeadLinks') }}</span>
-                      <span class="sp-row-desc">扫描所有书签的可访问性，自动标记失效或超时地址</span>
+                      <span class="sp-row-desc">{{ t('settings.checkDeadLinksDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button class="btn btn-secondary btn-sm" :class="{ checking: dlChecking }" @click.stop="onCheckDeadLinks" :disabled="dlChecking">
@@ -766,11 +766,11 @@
 
                 <div class="sp-card sp-section-whitelist">
                   <div class="sp-card-head">
-                    <span>{{ t('settings.deadLinkWhitelist') || '死链检测白名单' }}</span>
+                    <span>{{ t('settings.deadLinkWhitelist') }}</span>
                   </div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
-                      <span class="sp-row-desc">{{ t('settings.deadLinkWhitelistDesc') || '白名单中的域名或主机在检测时将被自动跳过（支持内网 IP 与特定域名）' }}</span>
+                      <span class="sp-row-desc">{{ t('settings.deadLinkWhitelistDesc') }}</span>
                     </div>
                   </div>
                   <div class="sp-whitelist-body">
@@ -779,7 +779,7 @@
                         type="text"
                         class="sp-input flex-1"
                         v-model="whitelistInput"
-                        placeholder="例如：192.168.1.1 或 google.com"
+                        :placeholder="t('settings.deadLinkWhitelistPlaceholder')"
                         @keydown.enter="onAddWhitelist"
                       />
                       <button class="btn btn-secondary btn-sm" :disabled="!whitelistInput.trim()" @click="onAddWhitelist">
@@ -793,7 +793,7 @@
                       </span>
                     </div>
                     <div v-else class="sp-whitelist-empty">
-                      暂无白名单域名
+                      {{ t('settings.deadLinkWhitelistEmpty') }}
                     </div>
                   </div>
                 </div>
@@ -839,15 +839,15 @@
               <div v-show="currentTab === 'data'" class="settings-tab-panel" data-testid="settings-panel-data">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabData') }}</h3>
-                  <p class="sp-tab-desc">查看存储容量配额、备份还原及外部书签数据导入导出</p>
+                  <p class="sp-tab-desc">{{ t('settings.tabDataDesc') }}</p>
                 </div>
 
                 <div class="sp-card">
-                  <div class="sp-card-head">存储配额与快照</div>
+                  <div class="sp-card-head">{{ t('settings.storageAndSnapshots') }}</div>
                   <div v-if="storageInfo" class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.storageOccupied') }}</span>
-                      <span class="sp-row-desc">已使用 {{ storageInfo.label }}（约占可用配额 {{ storageInfo.percent }}%）</span>
+                      <span class="sp-row-desc">{{ t('settings.storageOccupiedDesc', { used: storageInfo.label, percent: storageInfo.percent }) }}</span>
                     </div>
                     <div class="sp-row-ctrl sp-storage-ctrl">
                       <div class="sp-storage-track">
@@ -858,7 +858,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.trash') }}</span>
-                      <span class="sp-row-desc">已删除的书签与分组可在回收站内随时撤销还原</span>
+                      <span class="sp-row-desc">{{ t('settings.trashDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button class="btn btn-secondary btn-sm" @click.stop="onOpenTrash">
@@ -870,7 +870,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.historyMax') }}</span>
-                      <span class="sp-row-desc">每个书签保留的历史版本深度（当前: {{ uiStore.historyMax }} 条）</span>
+                      <span class="sp-row-desc">{{ t('settings.historyMaxDesc', { n: uiStore.historyMax }) }}</span>
                     </div>
                     <div class="sp-row-ctrl sp-range-ctrl">
                       <input type="range" class="sp-range" min="5" max="30" step="1" v-model.number="uiStore.historyMax" @change="onHistoryMaxChange" />
@@ -880,11 +880,11 @@
                 </div>
 
                 <div class="sp-card sp-overflow-visible">
-                  <div class="sp-card-head">备份与数据迁移</div>
+                  <div class="sp-card-head">{{ t('settings.backupAndMigration') }}</div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.import') }}</span>
-                      <span class="sp-row-desc">从 Chrome、Edge 导出的 HTML 书签或 JSON 备份导入</span>
+                      <span class="sp-row-desc">{{ t('settings.importDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button class="btn btn-secondary btn-sm" @click.stop="onTriggerImport">
@@ -896,7 +896,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.export') }}</span>
-                      <span class="sp-row-desc">将书签完整导出为 JSON 快照、HTML 或 CSV 表格</span>
+                      <span class="sp-row-desc">{{ t('settings.exportDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <div class="sp-export-dropdown" @click.stop>
@@ -941,11 +941,11 @@
               <div v-show="currentTab === 'about'" class="settings-tab-panel" data-testid="settings-panel-about">
                 <div class="sp-tab-header">
                   <h3 class="sp-tab-title">{{ t('settings.tabAbout') }}</h3>
-                  <p class="sp-tab-desc">查看版本发布信息、快捷键速查及法律协议条款</p>
+                  <p class="sp-tab-desc">{{ t('settings.tabAboutDesc') }}</p>
                 </div>
 
                 <div class="sp-card">
-                  <div class="sp-card-head">应用信息</div>
+                  <div class="sp-card-head">{{ t('settings.appInfo') }}</div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.version') }}</span>
@@ -960,7 +960,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.shortcutHelp') }}</span>
-                      <span class="sp-row-desc">查看全局快捷键表以获得最佳键盘操作体验</span>
+                      <span class="sp-row-desc">{{ t('settings.shortcutHelpDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button class="btn btn-secondary btn-sm" @click.stop="onOpenShortcutHelp">
@@ -971,7 +971,7 @@
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.feedback') }}</span>
-                      <span class="sp-row-desc">遇到使用问题或功能建议？直接向我们反馈</span>
+                      <span class="sp-row-desc">{{ t('settings.feedbackDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <button class="btn btn-primary btn-sm" @click.stop="onFeedback">{{ t('settings.feedback') }}</button>
@@ -999,7 +999,7 @@
                   <div class="sp-card-row" @click="showLegal = !showLegal" style="cursor: pointer;" data-testid="lv-legal-toggle">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.legalDocs') }}</span>
-                      <span class="sp-row-desc">查看用户使用协议、个人隐私保护政策与退款细则</span>
+                      <span class="sp-row-desc">{{ t('settings.legalDocsDesc') }}</span>
                     </div>
                     <div class="sp-row-ctrl">
                       <span class="sp-sync-status">{{ showLegal ? '' : t('settings.legalDocsView') }}</span>
@@ -1167,19 +1167,8 @@ function onBackToMobileMenu() {
   mobileSubPage.value = null
 }
 
-const tabDescriptions: Record<SettingsTab, { zh: string; en: string }> = {
-  account: { zh: '多端同步、登录密码与 E2E 加密', en: 'Sync, password & E2E encryption' },
-  appearance: { zh: '主题模式、配色与卡片布局', en: 'Theme mode, display & layout' },
-  billing: { zh: 'PRO 会员特权、兑换码与订单', en: 'PRO benefits, promo code & orders' },
-  ai: { zh: '大模型配置、Key 与视频解析', en: 'LLM providers, API keys & video' },
-  maintenance: { zh: '死链检测与公开分享管理', en: 'Dead links & shared groups' },
-  data: { zh: '导入、导出及本地备份恢复', en: 'Import, export & data backups' },
-  about: { zh: '版本信息、开源与合规政策', en: 'Version, legal terms & license' },
-}
-
 function getTabDesc(id: SettingsTab) {
-  const isZhLocale = locale.value?.startsWith('zh')
-  return isZhLocale ? tabDescriptions[id]?.zh : tabDescriptions[id]?.en
+  return t('settings.tabNavDesc' + id.charAt(0).toUpperCase() + id.slice(1))
 }
 
 const tabGroups = computed(() => [
@@ -1216,6 +1205,36 @@ const {
   prevPage: prevTxPage,
   formatTxTime,
 } = useTransactions()
+
+
+function formatTxType(type: string, fallback?: string): string {
+  const map: Record<string, string> = {
+    purchase: t('settings.txTypePurchase'),
+    redeem: t('settings.txTypeRedeem'),
+    gift: t('settings.txTypeGift'),
+  }
+  return map[type] || fallback || type
+}
+
+function formatTxChannel(channel: string, fallback?: string): string {
+  const map: Record<string, string> = {
+    wxpay: t('settings.txChannelWxpay'),
+    alipay: t('settings.txChannelAlipay'),
+    redeem: t('settings.txChannelRedeem'),
+    gift: t('settings.txChannelGift'),
+  }
+  return map[channel] || fallback || channel
+}
+
+function formatTxStatus(status: string, fallback?: string): string {
+  const map: Record<string, string> = {
+    paid: t('settings.txStatusPaid'),
+    pending: t('settings.txStatusPending'),
+    failed: t('settings.txStatusFailed'),
+    refunded: t('settings.txStatusRefunded'),
+  }
+  return map[status] || fallback || status
+}
 
 const copiedTxOrderId = ref<string | null>(null)
 let copyTxTimer: ReturnType<typeof setTimeout> | null = null
@@ -1273,12 +1292,12 @@ async function onManualSync() {
   try {
     const ok = await sync.fullSync()
     if (ok) {
-      toast('同步完成', true)
+      toast(t('settings.syncDoneToast'), true)
     } else {
-      toast(sync.syncError.value || '同步失败', false)
+      toast(sync.syncError.value || t('settings.syncFailedToast'), false)
     }
   } catch (err) {
-    toast(err instanceof Error ? err.message : '同步失败', false)
+    toast(err instanceof Error ? err.message : t('settings.syncFailedToast'), false)
   } finally {
     isManualSyncing.value = false
   }
@@ -1311,26 +1330,26 @@ function onOpenAuthModal() {
 const syncDetailDesc = computed(() => {
   if (sync.lastSyncAt.value) {
     const diff = Date.now() - sync.lastSyncAt.value
-    let timeStr = '刚刚'
+    let timeStr = t('settings.syncJustNow')
     if (diff >= 3600000) {
-      timeStr = Math.floor(diff / 3600000) + ' 小时前'
+      timeStr = t('settings.syncHoursAgo', { n: Math.floor(diff / 3600000) })
     } else if (diff >= 60000) {
-      timeStr = Math.floor(diff / 60000) + ' 分钟前'
+      timeStr = t('settings.syncMinutesAgo', { n: Math.floor(diff / 60000) })
     }
-    return '上次同步于 ' + timeStr + ' · 云端多端自动保持实时一致'
+    return t('settings.syncLastSynced', { time: timeStr })
   }
-  return '书签、分组与个性化设置自动实时加密同步至云端'
+  return t('settings.syncDefaultDesc')
 })
 
 const syncErrorMessage = computed(() => {
   if (syncState.value.level === 'quota') {
-    return '云端存储空间已满，你的数据已安全保存在本机，不受影响；空间恢复后点「强制全量重传」自动追平。'
+    return t('settings.syncErrorQuotaMsg')
   }
   if (sync.syncErrorKind.value === 'auth') {
-    return '账号登录状态已失效或凭证已过期，请重新登录以恢复多端同步。'
+    return t('settings.syncErrorAuthMsg')
   }
   if (sync.syncErrorKind.value === 'network') {
-    return '网络连接失败或当前处于离线状态，恢复网络连接后将自动同步。'
+    return t('settings.syncErrorNetworkMsg')
   }
   if (syncState.value.level === 'error' && sync.syncError.value) {
     return sync.syncError.value
@@ -1339,23 +1358,23 @@ const syncErrorMessage = computed(() => {
 })
 
 const syncErrorSummary = computed(() => {
-  if (syncState.value.level === 'quota') return '云端存储空间已满'
-  if (sync.syncErrorKind.value === 'auth') return '登录凭证已失效'
-  if (sync.syncErrorKind.value === 'network') return '网络连接异常'
-  return '同步遇到问题'
+  if (syncState.value.level === 'quota') return t('settings.syncErrorQuota')
+  if (sync.syncErrorKind.value === 'auth') return t('settings.syncErrorAuth')
+  if (sync.syncErrorKind.value === 'network') return t('settings.syncErrorNetwork')
+  return t('settings.syncErrorGeneral')
 })
 
 const syncErrorDetail = computed(() => {
   if (syncState.value.level === 'quota') {
-    return '本地数据完整且安全，可清理空间后点击「强制全量重传」恢复推送。'
+    return t('settings.syncErrorQuotaDetail')
   }
   if (sync.syncErrorKind.value === 'auth') {
-    return '凭证失效通常由于长时间未登录或在其他设备修改了密码，点击「重新登录」即可。'
+    return t('settings.syncErrorAuthDetail')
   }
   if (sync.syncErrorKind.value === 'network') {
-    return '请检查当前网络连接或代理，网络恢复后系统会自动重新建立连接。'
+    return t('settings.syncErrorNetworkDetail')
   }
-  return sync.syncError.value || '部分数据未能成功同步至云端，可尝试点击「重试同步」或「强制全量重传」。'
+  return sync.syncError.value || t('settings.syncErrorGeneralDetail')
 })
 
 const userInitial = computed(() => {
@@ -1438,9 +1457,9 @@ async function onPurchasePaid() {
 
 /** 有效期格式化：ISO → 本地可读（例：2026/10/31 11:12） */
 function formatExpiry(iso: string): string {
-  const t = new Date(iso).getTime()
-  if (!Number.isFinite(t)) return iso
-  return new Date(t).toLocaleString('zh-CN', {
+  const time = new Date(iso).getTime()
+  if (!Number.isFinite(time)) return iso
+  return new Date(time).toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
   })
@@ -1451,7 +1470,7 @@ const entitlementLabel = computed(() => {
   const map: Record<string, string> = {
     pro_monthly: t('settings.planPlusMonthly'),
     pro_yearly: t('settings.planPlusYearly'),
-    pro_quarterly: 'PRO 季付',
+    pro_quarterly: t('settings.planPlusQuarterly'),
     plus_monthly: t('settings.planPlusMonthly'),
     plus_yearly: t('settings.planPlusYearly'),
   }
@@ -1794,13 +1813,13 @@ function onAddWhitelist() {
   dl.addToWhitelist(d)
   deadLinkWhitelist.value = dl.getWhitelist()
   whitelistInput.value = ''
-  toast(`已添加「${d}」至白名单`)
+  toast(t('settings.whitelistAdded', { d }))
 }
 
 function onRemoveWhitelist(d: string) {
   dl.removeFromWhitelist(d)
   deadLinkWhitelist.value = dl.getWhitelist()
-  toast(`已从白名单移除「${d}」`)
+  toast(t('settings.whitelistRemoved', { d }))
 }
 
 // ── 公开分享管理 ──
