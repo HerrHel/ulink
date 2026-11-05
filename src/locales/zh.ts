@@ -556,7 +556,7 @@ export const zh = {
     feedbackCount: '{n} / 2000',
     feedbackOrEmail: '如需直接联系，请发送邮件至',
     danger: '危险操作',
-    resetData: '重置所有数据',
+
   },
   cat: {
     all: '全部',

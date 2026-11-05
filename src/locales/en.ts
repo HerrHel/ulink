@@ -565,7 +565,7 @@ export const en = {
     feedbackCount: '{n} / 2000',
     feedbackOrEmail: 'To contact us directly, email',
     danger: 'Danger zone',
-    resetData: 'Reset all data',
+
   },
   cat: {
     all: 'All',

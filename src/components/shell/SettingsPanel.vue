@@ -901,21 +901,6 @@
                   </div>
                 </div>
 
-                <div class="sp-card sp-danger-card">
-                  <div class="sp-card-head text-danger">{{ t('settings.danger') }}</div>
-                  <div class="sp-card-row">
-                    <div class="sp-row-meta">
-                      <span class="sp-row-title text-danger">{{ t('settings.resetData') }}</span>
-                      <span class="sp-row-desc">清空本地存储的所有书签、自定义分组与偏好设置，恢复初始化状态</span>
-                    </div>
-                    <div class="sp-row-ctrl">
-                      <button class="btn btn-danger btn-sm" @click.stop="onResetData">
-                        <span aria-hidden="true" v-html="I.trash"></span>
-                        {{ t('settings.resetData') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               <!-- Tab 6: 关于与帮助 -->
@@ -1089,7 +1074,7 @@ import { useDataStore } from '../../stores/data.js'
 import { useAppStore } from '../../stores/app.js'
 import { storageBarColorFor } from './storageBarColor.js'
 import { setThemeStyle as themeSetStyle } from '../../lib/theme.js'
-import { exportData, exportHTML, exportCSV, resetToDefaults, getExportKeepSensitive, setExportKeepSensitive } from '../../composables/domain/useDataIO.js'
+import { exportData, exportHTML, exportCSV, getExportKeepSensitive, setExportKeepSensitive } from '../../composables/domain/useDataIO.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
@@ -1701,7 +1686,6 @@ function _closeExportMenu(e: MouseEvent) {
 }
 onMounted(() => { document.addEventListener('click', _closeExportMenu); e2e.checkE2EStatus() })
 onBeforeUnmount(() => document.removeEventListener('click', _closeExportMenu))
-function onResetData() { resetToDefaults(); uiStore.panels.settings = false }
 
 async function onOpenLogin() {
   auth.authModalOpen = true
