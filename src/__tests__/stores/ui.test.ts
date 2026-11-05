@@ -84,6 +84,7 @@ describe('UIStore', () => {
     })
 
     it('restoreUIState 存量迁移：数据层 isExpanded=true 一次性读入 expandedIds，不写回', () => {
+      ;(localStorage.getItem as any).mockReturnValue(JSON.stringify({ curCat: 'all' }))
       const dataStore = useDataStore()
       dataStore.bookmarks = [
         { id: 'b1', title: 't', url: 'u', isExpanded: true, deletedAt: null } as any,

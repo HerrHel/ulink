@@ -505,6 +505,7 @@ export const useUIStore = defineStore('ui', {
           if (this.isMobile && this.layoutMode === 'grid') {
             this.layoutMode = this._mobileLayoutMode
           }
+          this._migrateLegacyExpanded()
           return
         }
         const ds = useDataStore()
