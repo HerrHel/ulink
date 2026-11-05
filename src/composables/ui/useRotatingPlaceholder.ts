@@ -31,8 +31,8 @@ export const WORKSPACE_TIPS: readonly RotatingTipItem[] = [
     en: 'Try "organize uncategorized bookmarks" to auto-categorize...',
   },
   {
-    zh: '输入“帮我搭建前端技术工作台”，自动聚合专属卡片与笔记…',
-    en: 'Try "build a frontend workspace" to aggregate cards and notes...',
+    zh: '输入“整理所有学习相关书签”，一键智能归类到对应分类…',
+    en: 'Try "organize all my study bookmarks" to auto-group them...',
   },
 ]
 
@@ -45,7 +45,7 @@ export function useRotatingPlaceholder(options: {
   const {
     isFocused,
     hasContent,
-    intervalMs = 4500,
+    intervalMs = 7500,
     tips = WORKSPACE_TIPS,
   } = options
 

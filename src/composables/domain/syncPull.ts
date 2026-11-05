@@ -4,6 +4,7 @@
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
+import { useUIStore } from '../../stores/ui.js'
 import { useE2E } from './useE2E.js'
 import type { EntityType } from '../../types.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -30,6 +31,8 @@ export const PULL_SINCE_SAFETY_MS = 10 * 60 * 1000
 
 /** 拉取远端变更（full=true 时 since=0 且启用 full-absent 对账） */
 export async function pullChanges(full = false): Promise<boolean> {
+  const ui = useUIStore()
+  if (ui.curSpace !== 'main') return false
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId) return false

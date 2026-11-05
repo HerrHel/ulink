@@ -144,7 +144,14 @@
               <span class="up-chevron" aria-hidden="true" v-html="I.chevron"></span>
             </button>
 
-            <!-- 会员方案入口 (index 3) -->
+            <!-- 回收站 (index 3) -->
+            <button class="up-menu-item" data-testid="up-trash-item" @click="openTrash">
+              <div class="up-item-left">
+                <span class="up-item-icon" aria-hidden="true" v-html="I.trash"></span>
+                <span class="up-item-title">{{ t('cmd.openTrash') || '回收站' }}</span>
+              </div>
+              <span class="up-item-meta" v-if="trashCount > 0">{{ trashCount }}</span>
+            </button>
             <button
               class="up-menu-item up-upgrade-item"
               :class="{ 'is-paid': memberIsPaid }"
@@ -195,6 +202,8 @@ import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useDataStore } from '../../stores/data.js'
+import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { I } from '../../config/icons.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { toast } from '../../lib/toast.js'
@@ -206,6 +215,8 @@ const sync = useCloudSync()
 const syncState = useSyncState()
 const e2e = useE2E()
 const uiStore = useUIStore()
+const dataStore = useDataStore()
+const trashCount = computed(() => dataStore.bookmarks.filter(b => b.deletedAt).length)
 
 const currentThemeLabel = computed(() => {
   return uiStore.themeColor === 'dark' ? t('settings.themeDark') : t('settings.themeLight')
@@ -248,6 +259,7 @@ function openPurchase() {
   close()
   if (memberIsPaid.value) {
     uiStore.settingsInitialTab = 'billing'
+    if (!uiStore.panels.settings) pushNavState()
     uiStore.panels.settings = true
   } else {
     showPurchase.value = true
@@ -392,8 +404,15 @@ function handleE2EAction() {
   }
 }
 
+function openTrash() {
+  close()
+  if (!uiStore.panels.trash) pushNavState()
+  uiStore.panels.trash = true
+}
+
 function openSettings() {
   close()
+  if (!uiStore.panels.settings) pushNavState()
   uiStore.panels.settings = true
 }
 

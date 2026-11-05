@@ -244,7 +244,7 @@ export const bookmarkActions = {
       order,
       useCount: 0,
       attributes: {},
-      isExpanded: true,
+      isExpanded: false,
       createdAt: now,
       updatedAt: now,
     })

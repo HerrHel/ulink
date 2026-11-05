@@ -9,7 +9,7 @@
         <button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button>
       </div>
       <div class="modal-body">
-        <div class="flex-center gap-2 mb-3">
+        <div class="cat-add-row flex-center gap-2 mb-3">
           <input type="text" class="form-input flex-1" v-model="newName" ref="newNameRef" :placeholder="t('modal.category.newName')" :aria-label="t('modal.category.newName')" @keydown.enter="onAddCat">
           <button class="btn btn-primary btn-sm" @click="onAddCat">{{ t('common.add') }}</button>
         </div>

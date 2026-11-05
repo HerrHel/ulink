@@ -126,10 +126,16 @@ export function favicon(url: string, customIcon?: string): string {
   const safe = safeIconUrl(customIcon)
   if (safe) return safe
   const dm = domain(url)
-  return dm ? FAVICON_PROVIDER_URL + dm : ''
+  if (!dm) return ''
+  const lowerDm = dm.toLowerCase().replace(/^www\./, '')
+  if (lowerDm === 'github.com' || lowerDm.endsWith('.github.com') || lowerDm === 'github.io' || lowerDm.endsWith('.github.io')) {
+    return GITHUB_LIGHT_ICON
+  }
+  return FAVICON_PROVIDER_URL + dm
 }
 
-import { getCachedIconInvert, requestIconAnalysis, getOfficialDarkIcon } from './lib/iconAnalyzer.js'
+import { getCachedIconInvert, requestIconAnalysis, getOfficialDarkIcon, GITHUB_LIGHT_ICON } from './lib/iconAnalyzer.js'
+export { GITHUB_LIGHT_ICON }
 export { getOfficialDarkIcon }
 
 /**

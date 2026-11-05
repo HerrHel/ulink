@@ -464,6 +464,11 @@ function focusTextarea() {
 function adjustTextareaHeight() {
   const ta = activeTa.value
   if (!ta) return
+  if (!aiQuery.value.trim()) {
+    ta.style.height = '24px'
+    ta.style.overflowY = 'hidden'
+    return
+  }
   ta.style.height = 'auto'
   // 紧凑单行初始高度为 22px，告别空两行的旷量感；仅在多行时按需伸展
   const targetH = Math.min(Math.max(ta.scrollHeight, 22), 200)
@@ -702,7 +707,7 @@ function onNewConversation() {
   aiQuery.value = ''
   nextTick(() => {
     adjustTextareaHeight()
-    activeTa.value?.focus()
+    if (!ui.isMobile) activeTa.value?.focus()
   })
 }
 
@@ -816,7 +821,7 @@ watch(
     if (view === 'ai') {
       nextTick(() => {
         adjustTextareaHeight()
-        activeTa.value?.focus()
+        if (!ui.isMobile) activeTa.value?.focus()
       })
     }
   },
@@ -926,6 +931,13 @@ watch(aiQuery, () => {
   margin: 0;
   font-family: var(--font-display, inherit);
   line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+  .ai-hero-headline {
+    font-size: 1.375rem;
+    letter-spacing: -0.015em;
+  }
 }
 
 /* ── 核心胶囊输入框（Gemini 风格浑然一体大胶囊） ── */
@@ -1094,6 +1106,9 @@ watch(aiQuery, () => {
 .capsule-minimal-textarea::placeholder {
   color: var(--text-muted);
   opacity: 0.55;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
   line-height: 24px;
 }
 

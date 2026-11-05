@@ -558,7 +558,7 @@
                   <div class="sp-card-head sp-tx-card-head">
                     <div class="sp-tx-title-group">
                       <span class="sp-tx-title">{{ t('settings.transactions') }}</span>
-                      <span class="sp-tx-subtitle">{{ t('settings.transactionsDesc') }}</span>
+
                     </div>
                     <div class="sp-tx-head-actions">
                       <button
@@ -760,6 +760,40 @@
                       <div class="sp-toggle-pill" :class="{ active: dlAutoEnabled, locked: !dlAutoAllowed }">
                         <span class="sp-switch"></span>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sp-card sp-section-whitelist">
+                  <div class="sp-card-head">
+                    <span>{{ t('settings.deadLinkWhitelist') || '死链检测白名单' }}</span>
+                  </div>
+                  <div class="sp-card-row">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-desc">{{ t('settings.deadLinkWhitelistDesc') || '白名单中的域名或主机在检测时将被自动跳过（支持内网 IP 与特定域名）' }}</span>
+                    </div>
+                  </div>
+                  <div class="sp-whitelist-body">
+                    <div class="sp-whitelist-input-row">
+                      <input
+                        type="text"
+                        class="sp-input flex-1"
+                        v-model="whitelistInput"
+                        placeholder="例如：192.168.1.1 或 google.com"
+                        @keydown.enter="onAddWhitelist"
+                      />
+                      <button class="btn btn-secondary btn-sm" :disabled="!whitelistInput.trim()" @click="onAddWhitelist">
+                        {{ t('common.add') }}
+                      </button>
+                    </div>
+                    <div v-if="deadLinkWhitelist.length" class="sp-whitelist-chips">
+                      <span v-for="domain in deadLinkWhitelist" :key="domain" class="sp-whitelist-chip">
+                        <span>{{ domain }}</span>
+                        <button class="sp-chip-remove" @click="onRemoveWhitelist(domain)">&times;</button>
+                      </span>
+                    </div>
+                    <div v-else class="sp-whitelist-empty">
+                      暂无白名单域名
                     </div>
                   </div>
                 </div>
@@ -1098,7 +1132,7 @@ import { dbRpc } from '../../lib/dbApi.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import {
   redeemCode,
-  type MyEntitlement,
+
   type RedeemError,
 } from '../../composables/domain/useRedeem.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
@@ -1108,7 +1142,10 @@ import { t, tN, useI18n } from '../../i18n/index.js'
 // 语言切换：locale 为响应式 computed，切语言后本面板与全局文案立即更新
 export type SettingsTab = 'account' | 'appearance' | 'billing' | 'ai' | 'maintenance' | 'data' | 'about'
 const currentTab = ref<SettingsTab>('account')
-const mobileSubPage = ref<SettingsTab | null>(null)
+const mobileSubPage = computed<SettingsTab | null>({
+  get: () => uiStore.settingsMobileSubPage as SettingsTab | null,
+  set: (val) => { uiStore.settingsMobileSubPage = val },
+})
 
 const currentMobileTabTitle = computed(() => {
   if (!mobileSubPage.value) return t('settings.title')
@@ -1119,6 +1156,7 @@ const currentMobileTabTitle = computed(() => {
 function onSelectMobileTab(id: SettingsTab) {
   currentTab.value = id
   mobileSubPage.value = id
+  pushNavState()
   nextTick(() => {
     const pane = document.querySelector('.settings-content-pane')
     if (pane) pane.scrollTop = 0
@@ -1352,14 +1390,8 @@ const beianLinks = computed(() => {
 // 会员权益与兑换码
 const entService = useEntitlement()
 const isPro = entService.isPro
-const entitlement = ref<MyEntitlement>({
-  planId: 'free',
-  planName: 'free',
-  status: 'active',
-  expiresAt: null,
-  features: {},
-  isPaid: false,
-})
+const entitlement = entService.entitlement
+
 const redeemInput = ref('')
 const redeeming = ref(false)
 
@@ -1751,6 +1783,24 @@ async function onToggleAutoDeadCheck() {
     return
   }
   dl.startAutoCheck()
+}
+
+const whitelistInput = ref('')
+const deadLinkWhitelist = ref<string[]>(dl.getWhitelist())
+
+function onAddWhitelist() {
+  const d = whitelistInput.value.trim()
+  if (!d) return
+  dl.addToWhitelist(d)
+  deadLinkWhitelist.value = dl.getWhitelist()
+  whitelistInput.value = ''
+  toast(`已添加「${d}」至白名单`)
+}
+
+function onRemoveWhitelist(d: string) {
+  dl.removeFromWhitelist(d)
+  deadLinkWhitelist.value = dl.getWhitelist()
+  toast(`已从白名单移除「${d}」`)
 }
 
 // ── 公开分享管理 ──

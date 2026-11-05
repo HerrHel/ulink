@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { analyzePixelData, getOfficialDarkIcon } from '../../lib/iconAnalyzer.js'
+import { analyzePixelData, getOfficialDarkIcon, GITHUB_DARK_ICON } from '../../lib/iconAnalyzer.js'
 
 describe('iconAnalyzer - 像素特征自动视觉分析引擎', () => {
   it('正确识别纯黑透明剪影图标（如 GitHub/Apple/Vercel）', () => {
@@ -96,9 +96,9 @@ describe('iconAnalyzer - 像素特征自动视觉分析引擎', () => {
 
   describe('getOfficialDarkIcon - 官方原生深色双模图标映射（方案一）', () => {
     it('正确解析已知提供官方深色 Favicon 的站点（如 GitHub）', () => {
-      expect(getOfficialDarkIcon('https://github.com')).toBe('https://github.githubassets.com/favicons/favicon-dark.svg')
-      expect(getOfficialDarkIcon('https://github.com/torvalds/linux')).toBe('https://github.githubassets.com/favicons/favicon-dark.svg')
-      expect(getOfficialDarkIcon('https://sub.github.io/my-page')).toBe('https://github.githubassets.com/favicons/favicon-dark.svg')
+      expect(getOfficialDarkIcon('https://github.com')).toBe(GITHUB_DARK_ICON)
+      expect(getOfficialDarkIcon('https://github.com/torvalds/linux')).toBe(GITHUB_DARK_ICON)
+      expect(getOfficialDarkIcon('https://sub.github.io/my-page')).toBe(GITHUB_DARK_ICON)
     })
 
     it('未知站点或无官方深色 Favicon 时安全返回 undefined（供降级到方案二/三）', () => {

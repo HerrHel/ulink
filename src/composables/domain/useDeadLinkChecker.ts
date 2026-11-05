@@ -16,6 +16,7 @@ import {
   gradeLocalNetwork,
   decide,
   softenByHistory,
+  isPrivateOrLocalHost,
   STALE_ALIVE_WINDOW_MS,
   BASELINE_OFFLINE_MS,
   type CheckResult,
@@ -115,6 +116,56 @@ function _hasRecentAlive(bmId: string): boolean {
   if (!checks || checks.length === 0) return false
   const cutoff = Date.now() - STALE_ALIVE_WINDOW_MS
   return checks.some((c) => c.verdict === 'alive' && (c.checkedAt || 0) >= cutoff)
+}
+
+// ── 死链白名单（支持域名级与书签标记）──
+const WHITELIST_KEY = 'lv_deadLinkWhitelist'
+
+export function getDeadLinkWhitelist(): string[] {
+  const raw = safeGetItem(WHITELIST_KEY)
+  if (!raw) return []
+  const parsed = safeJsonParse<string[]>(raw, [])
+  return Array.isArray(parsed) ? parsed : []
+}
+
+export function saveDeadLinkWhitelist(list: string[]): void {
+  const normalized = Array.from(
+    new Set(
+      list
+        .map((s) => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''))
+        .filter(Boolean)
+    )
+  )
+  safeSetItem(WHITELIST_KEY, JSON.stringify(normalized))
+}
+
+export function addToDeadLinkWhitelist(domainOrUrl: string): void {
+  const current = getDeadLinkWhitelist()
+  const domain = domainOrUrl.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+  if (domain && !current.includes(domain)) {
+    current.push(domain)
+    saveDeadLinkWhitelist(current)
+  }
+}
+
+export function removeFromDeadLinkWhitelist(domain: string): void {
+  const current = getDeadLinkWhitelist()
+  const normalized = domain.trim().toLowerCase()
+  const updated = current.filter((d) => d.toLowerCase() !== normalized)
+  saveDeadLinkWhitelist(updated)
+}
+
+export function isUrlWhitelisted(url: string, attributes?: Record<string, unknown>): boolean {
+  if (attributes?.['dead-link-ignored'] || attributes?.['skip-dead-link']) {
+    return true
+  }
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    const whitelist = getDeadLinkWhitelist()
+    return whitelist.some((item) => host === item || host.endsWith('.' + item))
+  } catch {
+    return false
+  }
 }
 
 /** 删除某书签的检测历史（永久删除时调用） */
@@ -380,6 +431,24 @@ export function useDeadLinkChecker() {
     bookmarkId?: string,
     mode: 'manual' | 'auto' = 'manual',
   ): Promise<CheckResult> {
+    if (isUrlWhitelisted(url)) {
+      return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'no_edge' })
+    }
+
+    let isIntranet = false
+    try {
+      isIntranet = isPrivateOrLocalHost(new URL(url).hostname)
+    } catch { /* ignore */ }
+
+    if (isIntranet) {
+      const direct = await checkDirect(url, 3000)
+      if (direct.reachable) {
+        return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'ssrf' })
+      } else {
+        return makeCheckResult({ verdict: 'dead', reason: 'connect_err' })
+      }
+    }
+
     if (!url || !url.startsWith('http')) {
       return makeCheckResult({ verdict: 'dead' })
     }
@@ -402,7 +471,13 @@ export function useDeadLinkChecker() {
     // 由海外 Cloudflare 边缘自由节点做一次复测，精准终结未确认：
     // - 海外可达 (alive) + 国内不可达 = 100% 确认「被墙 (gfw)」！
     // - 海外明确不可达 (dead) = 100% 确认「死链 (dead)」！
-    if (verdictResult.verdict === 'inconclusive' && localGrade !== 'offline') {
+    const shouldProbeOverseas =
+      localGrade !== 'offline' &&
+      (verdictResult.verdict === 'inconclusive' ||
+        (verdictResult.verdict === 'dead' &&
+          (verdictResult.reason === 'connect_err' || verdictResult.reason === 'timeout')))
+
+    if (shouldProbeOverseas) {
       const overseas = await probeOverseas(url)
       if (overseas.outcome === 'alive') {
         verdictResult = makeCheckResult({
@@ -520,7 +595,7 @@ export function useDeadLinkChecker() {
     const ds = useDataStore()
     // RE-11：排除软删与 ignored，避免污染回收站项
     const all = ds.bookmarks.filter(
-      b => !b.deletedAt && b.url && b.url.startsWith('http') && !b.attributes?.['dead-link-ignored']
+      b => !b.deletedAt && b.url && b.url.startsWith('http') && !isUrlWhitelisted(b.url, b.attributes)
     )
     // 规模上限：自动全量扫描的成本与书签数**成正比**（每个书签一次服务端外呼），
     // 超大书签库会让单次自动检测吃掉整个资源点套餐。
@@ -884,6 +959,10 @@ export function useDeadLinkChecker() {
     getResult, isDead, isBlocked, isUnconfirmed, deadCount, blockedCount, inconclusiveCount,
     toastDeadCount, toastBlockedCount,
     autoCheckEnabled, autoCheckAllowed, refreshAutoCheckAllowed, startAutoCheck, stopAutoCheck,
+    getWhitelist: getDeadLinkWhitelist,
+    addToWhitelist: addToDeadLinkWhitelist,
+    removeFromWhitelist: removeFromDeadLinkWhitelist,
+    isWhitelisted: isUrlWhitelisted,
     _resetDeadLinkCache,
   }
 }

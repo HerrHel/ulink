@@ -134,6 +134,7 @@ export interface UIState {
   historyItemId: string
   historyItemType: 'bookmark' | 'group'
   settingsInitialTab: string
+  settingsMobileSubPage: string | null
   historyMax: number
   addToGid: string | null
   _addPopoverTrigger: { top: number; left: number; width: number } | null
@@ -205,6 +206,7 @@ export const useUIStore = defineStore('ui', {
       historyItemId: '',
       historyItemType: 'bookmark',
       settingsInitialTab: '',
+      settingsMobileSubPage: null,
       historyMax: 10,
       modals: {
         bookmark: false,
@@ -567,9 +569,10 @@ export const useUIStore = defineStore('ui', {
             const b = bMap[id]
             return !!b && !b.deletedAt
           })
+        } else {
+          // 存量迁移：仅在旧版无 expandedIds 字段时，从数据层 isExpanded=true 一次性读入
+          this._migrateLegacyExpanded()
         }
-        // 存量迁移：数据层 isExpanded=true → expandedIds（历史版本遗留，一次性读入不写回）
-        this._migrateLegacyExpanded()
         if (s._preferredLayoutMode === 'grid' || s._preferredLayoutMode === 'list' || s._preferredLayoutMode === 'mini-grid') {
           this._preferredLayoutMode = s._preferredLayoutMode
         }

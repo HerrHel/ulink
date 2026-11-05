@@ -73,6 +73,15 @@
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
               </svg>
             </button>
+            <button
+              class="pr-act-btn"
+              :title="t('deadlinks.whitelist') || '加入白名单'"
+              @click.stop="onWhitelist(b)"
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </button>
             <button class="pr-delete" @click.stop="onDelete(b.id)" :title="t('common.delete')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
@@ -162,6 +171,21 @@ function onDelete(bmId: string) {
 function onFindAlternative(b: { id: string; title: string; url: string }) {
   close()
   store.openAiAssistant(`为失效死链「${b.title}」（${b.url}）寻找平替并自愈`)
+}
+
+function onWhitelist(b: { id: string; url: string; title: string }) {
+  const host = domain(b.url)
+  _deadLinkChecker.addToWhitelist(host)
+  const bm = dataStore.bookmarkMap[b.id]
+  if (bm) {
+    const nextAttrs = { ...(bm.attributes || {}) }
+    delete nextAttrs['dead-link']
+    delete nextAttrs['gfw-blocked']
+    nextAttrs['dead-link-ignored'] = true
+    dataStore.updateBookmark(b.id, { attributes: nextAttrs })
+    debouncedSaveAppData()
+  }
+  toast(`已将「${host}」加入白名单`)
 }
 
 function enterSelectMode() {

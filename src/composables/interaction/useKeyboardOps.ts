@@ -110,7 +110,18 @@ export function restoreNavState(prev: NavState) {
       return false
     },
     // 旧实现曾有「prev.detail 开且当前关 → 重开」反向分支，与其他层只关不重开不一致，已删。
-    () => { if (prev.settings !== true && ui.panels.settings) { ui.panels.settings = false; return true } return false },
+    () => {
+      if (ui.panels.settings && ui.isMobile && ui.settingsMobileSubPage) {
+        ui.settingsMobileSubPage = null
+        return true
+      }
+      if (prev.settings !== true && ui.panels.settings) {
+        ui.panels.settings = false
+        ui.settingsMobileSubPage = null
+        return true
+      }
+      return false
+    },
     () => { if (prev.trash !== true && ui.panels.trash) { ui.panels.trash = false; return true } return false },
     () => { if (prev.deadLinks !== true && ui.overlays.deadLinks) { ui.overlays.deadLinks = false; return true } return false },
     () => { if (prev.shortcutHelp !== true && ui.panels.shortcutHelp) { ui.panels.shortcutHelp = false; return true } return false },

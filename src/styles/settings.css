@@ -1516,3 +1516,48 @@
   color: var(--text-secondary);
   font-size: 11px;
 }
+
+
+/* 死链白名单管理 */
+.sp-whitelist-body {
+  padding: 12px 20px 16px;
+}
+.sp-whitelist-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.sp-whitelist-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sp-whitelist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--text);
+}
+.sp-chip-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+}
+.sp-chip-remove:hover {
+  color: var(--danger);
+}
+.sp-whitelist-empty {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  padding: 4px 0;
+}

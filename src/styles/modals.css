@@ -279,6 +279,8 @@
 .e2e-info{font-size:var(--fs-sm);color:var(--text-secondary);line-height:1.6}
 .e2e-info p{margin-bottom:8px}
 .e2e-warn{background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.3);border-radius:var(--radius-sm);padding:12px}
+.e2e-warn .sp-icon{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;margin-right:4px}
+.e2e-warn .sp-icon svg,.modal .sp-icon svg{width:18px;height:18px;display:inline-block;vertical-align:middle}
 .e2e-error{color:var(--danger);font-size:var(--fs-sm);padding:8px;background:rgba(239,68,68,0.06);border-radius:var(--radius-sm)}
 .e2e-link{font-size:var(--fs-sm);color:var(--accent);cursor:pointer;text-align:center;padding:2px 0;margin-top:4px}
 .e2e-link:hover{text-decoration:underline}

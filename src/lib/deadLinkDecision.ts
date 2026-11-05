@@ -117,6 +117,22 @@ const GFW_KNOWN_HOST_SUFFIXES = [
   'change.org', 'amnesty.org', 'hrw.org', 'freedomhouse.org',
 ]
 
+export function isPrivateOrLocalHost(hostname: string): boolean {
+  if (!hostname) return false
+  const h = hostname.toLowerCase().split(':')[0]
+  if (h === 'localhost' || h === '127.0.0.1' || h.endsWith('.local') || h.endsWith('.lan') || h.endsWith('.internal')) return true
+  if (/^127\.\d+\.\d+\.\d+$/.test(h)) return true
+  if (/^10\.\d+\.\d+\.\d+$/.test(h)) return true
+  if (/^192\.168\.\d+\.\d+$/.test(h)) return true
+  if (/^169\.254\.\d+\.\d+$/.test(h)) return true
+  const m172 = h.match(/^172\.(\d+)\.\d+\.\d+$/)
+  if (m172) {
+    const octet = parseInt(m172[1], 10)
+    if (octet >= 16 && octet <= 31) return true
+  }
+  return false
+}
+
 export function isKnownGfwHost(hostname: string): boolean {
   if (!hostname) return false
   const h = hostname.toLowerCase().split(':')[0]
@@ -182,6 +198,7 @@ interface DecisionContext {
   isGfwHost: boolean
   /** 是否墙内（名单只在墙内有意义，见 decide 的 restrictedNetwork 说明） */
   restrictedNetwork: boolean
+  isIntranet: boolean
 }
 
 interface DecisionRule {
@@ -204,6 +221,17 @@ interface DecisionRule {
  *   3. 删除/调整规则前先看 `deadLinkDecision.test.ts` 的决策矩阵护栏。
  */
 const RULES: readonly DecisionRule[] = [
+  // ── ⓪ 内网/局域网设备：不受公网 Edge 影响，仅凭本机直连定生死 ──
+  {
+    id: 'intranet.reachable',
+    when: (c) => c.isIntranet && c.localReachable,
+    then: (c) => makeCheckResult({ verdict: 'alive', finalUrl: c.url, reason: 'ssrf' }),
+  },
+  {
+    id: 'intranet.dead',
+    when: (c) => c.isIntranet && !c.localReachable,
+    then: () => makeCheckResult({ verdict: 'dead', reason: 'connect_err' }),
+  },
   // ── ① 本机离线：远端结论都不可信，绝不落标 ──
   {
     id: 'local.offline',
@@ -332,7 +360,7 @@ const RULES: readonly DecisionRule[] = [
     then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'timeout' }),
   },
 
-  // ── ⑨ 安全拒绝：与用户端死/墙无关 ──
+  // ── ⑩ 安全拒绝：与用户端死/墙无关 ──
   {
     id: 'edge.security_reject',
     when: (c) => c.edge.fetch_outcome === 'ssrf_reject' || c.edge.fetch_outcome === 'redirect_denied',
@@ -356,8 +384,11 @@ export function decideWithRule(
   restrictedNetwork = true,
 ): { result: CheckResult; ruleId: string } {
   let isGfwHost = false
+  let isIntranet = false
   try {
-    isGfwHost = isKnownGfwHost(new URL(url).hostname)
+    const host = new URL(url).hostname
+    isGfwHost = isKnownGfwHost(host)
+    isIntranet = isPrivateOrLocalHost(host)
   } catch {
     /* invalid url：按非受限站点处理 */
   }
@@ -370,6 +401,7 @@ export function decideWithRule(
     localNetwork: local,
     isGfwHost,
     restrictedNetwork,
+    isIntranet,
   }
 
   const rule = RULES.find((r) => r.when(ctx)) ?? RULES[RULES.length - 1]

@@ -190,7 +190,7 @@
   }
   @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
   .modal-head{padding:14px 16px;position:sticky;top:0;background:var(--surface);z-index:1}
-  .modal-body{padding:0 16px 24px}
+  .modal-body{padding:14px 16px 24px}
   .modal-foot{
     padding:10px 16px calc(10px + env(safe-area-inset-bottom));
     position:sticky;bottom:0;

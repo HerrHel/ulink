@@ -128,7 +128,9 @@ export function useSpaceMove() {
     // 移入私密的书签改挂未分类（私密空间根级，无原始分类上下文）
     for (const b of bms) {
       b.categoryId = CAT_UNCATEGORIZED
-      b.parentId = null
+      if (!b.parentId || !allIds.has(b.parentId)) {
+        b.parentId = null
+      }
     }
     // 命中组：任一成员在迁入集合则整组迁入（组在主页其余成员则保留在主页一个无该成员的新组——
     // 但组结构复制语义较复杂，第一版简化：仅当组所有成员都被移入时整组迁入，否则组留在主页）
@@ -219,7 +221,14 @@ export function useSpaceMove() {
     const bms: Bookmark[] = []
     for (const id of descendantIds) {
       const b = dataStore.bookmarkMap[id]
-      if (b) bms.push({ ..._clean(b), categoryId: CAT_UNCATEGORIZED, parentId: null })
+      if (b) {
+        const cleaned = _clean(b)
+        bms.push({
+          ...cleaned,
+          categoryId: CAT_UNCATEGORIZED,
+          parentId: cleaned.parentId && descendantIds.has(cleaned.parentId) ? cleaned.parentId : null,
+        })
+      }
     }
     const groups = groupsRaw.map(_clean)
 

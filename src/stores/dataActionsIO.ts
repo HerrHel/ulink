@@ -92,16 +92,42 @@ export const ioActions = {
     _clearAllPendingSync()
     // 3) 载入目标数据集四数组：
     //    - 优先 IDB（权威）
-    //    - 两者皆无 → 真空四数组（categories=[] 即可，CAT_ALL/CAT_UNCATEGORIZED 由 categoryMap 兜底）
+    //    - 两者皆无 → 真空四数组（首进保底含有 CAT_ALL 与 CAT_UNCATEGORIZED）
     let target = await persist.loadFromIDB(space)
     if (!target) target = _maybeLoadLocalSpace(space)
-    if (!target) target = { bookmarks: [], siblingGroups: [], categories: [], customAttributes: [] }
+    const isFirstVault = !target && space === 'vault'
+    if (!target) {
+      target = {
+        bookmarks: [],
+        siblingGroups: [],
+        categories: space === 'vault'
+          ? [
+              { id: CAT_ALL, name: '全部', icon: 'grid', color: '#122E8A', order: 0 },
+              { id: CAT_UNCATEGORIZED, name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 },
+            ]
+          : [],
+        customAttributes: [],
+      }
+    }
     // 复用 importFromData 整集替换语义（runMigrations + _syncMaps + 清缓存）
     this.importFromData(target)
     // 私密空间首进：runMigrations 会从 DEFAULTS 注入全部示例分类（邮箱/工具/AI等），
-    // 私密空间只需 CAT_ALL + CAT_UNCATEGORIZED 两个基础项，多余分类在此过滤
+    // 首次进入只保留 CAT_ALL 与 CAT_UNCATEGORIZED；非首进则确保基础两项存在且保留用户在私密下的自定义分类
     if (space === 'vault') {
-      this.categories = this.categories.filter(c => c.id === CAT_ALL || c.id === CAT_UNCATEGORIZED)
+      const hasAll = this.categories.some(c => c.id === CAT_ALL)
+      const hasUncat = this.categories.some(c => c.id === CAT_UNCATEGORIZED)
+      const baseCats = []
+      if (!hasAll) baseCats.push({ id: CAT_ALL, name: '全部', icon: 'grid', color: '#122E8A', order: 0 })
+      if (!hasUncat) baseCats.push({ id: CAT_UNCATEGORIZED, name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 })
+      
+      if (isFirstVault) {
+        this.categories = [
+          { id: CAT_ALL, name: '全部', icon: 'grid', color: '#122E8A', order: 0 },
+          { id: CAT_UNCATEGORIZED, name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 },
+        ]
+      } else {
+        this.categories = [...baseCats, ...this.categories]
+      }
       this._syncMaps()
     }
     // 重置 curCat/focusedGroupId（新空间分类视图从全部分类开始）

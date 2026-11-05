@@ -5,6 +5,7 @@
  */
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
+import { useUIStore } from '../../stores/ui.js'
 import { useE2E } from './useE2E.js'
 import {
   enqueueSyncOps, drainSyncOps, removeSyncOps, updateSyncOpRetry, syncOpsCount,
@@ -137,6 +138,8 @@ async function refreshPendingCount() {
 
 /** 把内存 dirtyIds 转为持久化 ops（H3 标记 pending） */
 export function enqueueDirtyAsOps(): void {
+  const ui = useUIStore()
+  if (ui.curSpace !== 'main') return
   const ds = useDataStore()
   const userId = _getUserId()
   if (!userId) return
@@ -185,6 +188,8 @@ export function enqueueDirtyAsOps(): void {
 
 /** 从队列批量推送到远端 port */
 export async function pushFromQueue(): Promise<boolean> {
+  const ui = useUIStore()
+  if (ui.curSpace !== 'main') return true
   const syncStore = useSyncStore()
   const userId = _getUserId()
   if (!userId) return false
