@@ -75,11 +75,19 @@ async function callApi({ secretId, secretKey }, action, payload) {
   return resp
 }
 
-async function readPeriod(cred) {
+async function readTopic(cred) {
   const resp = await callApi(cred, 'DescribeTopics', { Filters: [{ Key: 'topicId', Values: [TOPIC_ID] }] })
   const topic = (resp.Topics || []).find((t) => t.TopicId === TOPIC_ID) || (resp.Topics || [])[0]
   if (!topic) throw new Error('未找到主题 ulink-audit')
-  return { period: topic.Period, name: topic.TopicName }
+  return {
+    name: topic.TopicName,
+    period: topic.Period,
+    storageType: topic.StorageType,
+    /** 1 = 迁移任务进行中；迁移期间 period/storage_type 会被锁定，重复修改报 InvalidParameter */
+    migrationStatus: topic.MigrationStatus,
+    newPeriod: topic.NewPeriod,
+    taskId: topic.TopicAsyncTaskID,
+  }
 }
 
 async function main() {
@@ -93,8 +101,17 @@ async function main() {
   }
 
   const cred = loadCredential()
-  const before = await readPeriod(cred)
-  console.log(`当前：主题 ${before.name}（${TOPIC_ID}）保留 ${before.period} 天`)
+  const before = await readTopic(cred)
+  console.log(`当前：主题 ${before.name}（${TOPIC_ID}）保留 ${before.period} 天，存储 ${before.storageType}`)
+
+  // 迁移中：修改已提交，正在执行，此时 period 是旧值、newPeriod 才是目标值
+  if (before.migrationStatus === 1) {
+    console.log(`⏳ 存储迁移任务进行中（task ${before.taskId}）`)
+    console.log(`   目标：${before.newPeriod} 天 / ${before.storageType}`)
+    console.log('   迁移期间 period 被锁定，重复提交会报 InvalidParameter，属正常现象。')
+    console.log('   完成后 Period 会自动变为目标值，无需再操作。')
+    return
+  }
 
   if (checkOnly) return
 
@@ -106,9 +123,11 @@ async function main() {
   console.log(`→ 修改为 ${period} 天…`)
   await callApi(cred, 'ModifyTopic', { TopicId: TOPIC_ID, Period: period })
 
-  const after = await readPeriod(cred)
+  const after = await readTopic(cred)
   if (after.period === period) {
     console.log(`✓ 已生效：${after.period} 天`)
+  } else if (after.migrationStatus === 1) {
+    console.log(`⏳ 已提交迁移：目标 ${after.newPeriod} 天（task ${after.taskId}），完成后自动生效`)
   } else {
     console.error(`⚠ 接口成功但读回仍为 ${after.period} 天，请到控制台确认`)
     process.exit(1)
