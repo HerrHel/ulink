@@ -618,6 +618,34 @@ const openSummaries = reactive<Record<string, boolean>>({})
 function getSendSummaryLines(summary: AiSendSummary): string[] {
   const lines: string[] = []
   lines.push(t('ai.sendSummaryTaxonomy', { cats: summary.categoriesCount, attrs: summary.attributesCount }))
+  // 分类/标签名单有注入上限：如实披露「实际注入 vs 库内总数」，避免大库下摘要失真
+  if (typeof summary.categoriesInjected === 'number') {
+    const truncated =
+      summary.categoriesInjected < summary.categoriesCount ||
+      summary.attributesInjected < summary.attributesCount
+    lines.push(
+      t('ai.sendSummaryTaxonomyInjected', {
+        cats: summary.categoriesInjected,
+        attrs: summary.attributesInjected,
+      }) + (truncated ? t('ai.sendSummaryTruncated') : ''),
+    )
+  }
+  // 按提问关键词触发的隐式情境注入：过去是静默外发，现在必须逐条披露
+  if (summary.untaggedInjected > 0) {
+    lines.push(t('ai.sendSummaryUntagged', { n: summary.untaggedInjected }))
+  }
+  if (summary.trashedInjected > 0) {
+    lines.push(t('ai.sendSummaryTrashed', { n: summary.trashedInjected }))
+  }
+  if (summary.hasMentalModel) {
+    lines.push(t('ai.sendSummaryMentalModel', { chars: summary.mentalModelChars }))
+  }
+  // 每轮必发的 tools schema 与媒体块：旧版 estimatedTotalChars 完全没算，这里补上
+  if (typeof summary.toolsSchemaChars === 'number') {
+    lines.push(
+      t('ai.sendSummaryTools', { chars: summary.toolsSchemaChars, media: summary.mediaPartsCount || 0 }),
+    )
+  }
   if (summary.focusedGroup) {
     const trunc = summary.focusedGroup.shown < summary.focusedGroup.total ? t('ai.sendSummaryTruncated') : ''
     lines.push(

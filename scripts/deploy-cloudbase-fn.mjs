@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { homedir } from 'node:os'
+import { randomBytes } from 'node:crypto'
 
 const TCB_BIN =
   process.env.TCB_BIN || resolve(homedir(), '.workbuddy/binaries/node/cli-connector-packages/tcb')
@@ -107,6 +108,21 @@ if (!envOnly) {
  * 早期版本统一回落 'ulink-report-error'，导致 check-link 拿到 report-error 的盐。
  * value 为 undefined 时跳过该项（可选变量未配置）。
  */
+/**
+ * ⚠️ IP_HASH_SALT 曾统一回落成仓库内公开的 'ulink-<fn>' 常量。
+ * CloudBase 网关不回填可信客户端 IP、X-Forwarded-For 可伪造，盐一旦可预测，
+ * 按 IP 的限流键就能被任意构造。未显式在 .env.local 配置时，改为部署期生成
+ * 每函数独立的随机盐（不下发公开值）。如需跨部署稳定，请把盐写进 .env.local。
+ */
+function sanitizeEnvSalts(env) {
+  const out = { ...env }
+  const salt = out.IP_HASH_SALT
+  if (typeof salt !== 'string' || salt.startsWith('ulink-')) {
+    out.IP_HASH_SALT = randomBytes(24).toString('hex')
+  }
+  return out
+}
+
 const FN_EXTRA_ENV = {
   'report-error': () => ({
     IP_HASH_SALT: readEnvLocal('IP_HASH_SALT') || 'ulink-report-error',
@@ -167,6 +183,10 @@ const FN_EXTRA_ENV = {
     if (origins) out.ALLOWED_ORIGINS = origins
     const model = readEnvLocal('MIMO_MODEL')
     if (model) out.MIMO_MODEL = model
+    // 上游流式超时：AbortSignal 覆盖整个 body，超时会把正在输出的回答掐断。
+    // 不注入时函数内默认 115s，与下面 FN_PROFILE 的 120s 上限留 5s 余量补发中断帧
+    const chatTimeout = readEnvLocal('MIMO_CHAT_TIMEOUT_MS')
+    if (chatTimeout) out.MIMO_CHAT_TIMEOUT_MS = chatTimeout
     return out
   },
   'extract-video': () => {
@@ -321,7 +341,9 @@ if (apiKey) {
           CLOUDBASE_ENV_ID: envId,
           CLOUDBASE_APIKEY: apiKey,
           // 没有额外变量的函数（如 edge-headers）走空对象工厂；此处曾误把 {} 当函数调用
-          ...(typeof FN_EXTRA_ENV[fnName] === 'function' ? FN_EXTRA_ENV[fnName]() : {}),
+          ...sanitizeEnvSalts(
+            typeof FN_EXTRA_ENV[fnName] === 'function' ? FN_EXTRA_ENV[fnName]() : {},
+          ),
         },
       },
     ],

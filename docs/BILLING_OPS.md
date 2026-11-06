@@ -1,7 +1,9 @@
 # 计费与合规运维手册（Billing Ops）
 
 > 配套文档：`BILLING_DESIGN.md`（设计）、`SHARE_PASSWORD.md`（分享密码）、`legal/`（法律文本）
-> **当前状态（2026-10-31 核实）**：计费已部署上线——迁移已应用、`pay` 云函数与 `/pay` 网关路由已上线（微信 Native 可收款；支付宝代码就绪、密钥未配置）、`redeem`/`account` 已在 11 个 HTTP 函数之列；线上 `mimo-chat` 的 `BILLING_MODE=enforce`（仅强制 `ai.tokens.monthly`），**不再是影子计量**。本文 §7「回滚到 shadow」仍有效，但不要按旧文把 enforce 当成"暂勿开启"。
+> **当前状态（2026-11-07 更新）**：计费已部署上线——迁移已应用、`pay` 云函数与 `/pay` 网关路由已上线（微信 Native 已配置、可收款；支付宝代码就绪、密钥未配置）、`redeem`/`account` 已在 11 个 HTTP 函数之列；**2026-11-07 经 `tcb fn detail mimo-chat -e ulink-d1g5srvjo54b1886a --json` 读到的环境变量 Value 实测，线上 `mimo-chat` 的 `BILLING_MODE=enforce`**（仅强制 `ai.tokens.monthly`），**不再是影子计量**；`reserve_quota → 调用 → settle_quota` **两段式计费已接入** `mimo-chat`（客户端断连亦会 settle）。成本口径与收费点选择于 2026-10-31 核实、2026-11-07 经线上实测复核。
+>
+> 本文 §7「回滚到 shadow」操作仍然有效；但 §3 表里「暂勿开启」、§4 的阶段划分、§5 的「支付尚未做」均为上线前口径，属**历史记录（已过时）**，勿据此判断当前状态。
 
 ---
 
@@ -12,7 +14,7 @@
 | 迁移 A | `cloudbase/migrations/20261025000002_billing_core.sql` | plans / entitlements / orders / usage_ledger + resolve_entitlement / reserve_quota / settle_quota / record_usage |
 | 迁移 B | `cloudbase/migrations/20261025000003_data_retention_cleanup.sql` | cleanup_expired_data / purge_user_data / list_user_image_paths |
 | 迁移 C | `cloudbase/migrations/20261025000001_share_password.sql` | share_password_hash + get_share_secret / set_share_password |
-| 云函数 | `cloudbase/functions/mimo-chat/` | 已是按 uid 限流 + **影子计量** |
+| 云函数 | `cloudbase/functions/mimo-chat/` | 已是按 uid 限流 + **`BILLING_MODE=enforce` 两段式计费（reserve_quota → 调用 → settle_quota）** |
 | 云函数 | `cloudbase/functions/account/` | 账号注销（删数据 + 删图片） |
 | 云函数 | `cloudbase/functions/maintenance/` | 定时清理错误日志（可清回收站） |
 | 云函数 | `cloudbase/functions/share-admin/` | 设置/清除分享访问密码 |
@@ -79,7 +81,7 @@ rm -f cloudbaserc.json
 | `SHARE_ADMIN_IP_HASH_SALT` | share-admin | `ulink-share-admin` | 同上 |
 | `IP_HASH_SALT` | account | 无 | 预留 |
 | `ALLOWED_ORIGINS` | share-admin / account | 无 | **必须**含站点源，否则 CORS 拒绝 |
-| `BILLING_MODE` | mimo-chat | `shadow` | `shadow`=只记录；`enforce`=按额度拦截（**暂勿开启**） |
+| `BILLING_MODE` | mimo-chat | `shadow`（代码默认） | `shadow`=只记录；`enforce`=按额度拦截。**线上现为 `enforce`**（2026-11-07 经 `tcb fn detail` 实测）；如需回退改回 `shadow`，见 §7 |
 | `ERROR_LOG_KEEP_DAYS` | maintenance | `365` | 错误日志保留天数（对应「最长 12 个月」承诺） |
 | `TRASH_KEEP_DAYS` | maintenance | `0` | 回收站自动清理；0=关闭（与政策「不设自动过期」一致） |
 
@@ -89,11 +91,13 @@ rm -f cloudbaserc.json
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-## 4. 影子计量 → 正式收费
+## 4. 影子计量 → 正式收费（阶段划分已完成）
 
-### 阶段 1：影子计量（当前，1~2 周）
+> **状态说明（2026-11-07）**：本节以下「阶段 1 → 阶段 3」是**上线前的推演与决策记录，现已完成，属于历史记录（已过时）**。线上现状：`BILLING_MODE=enforce`（2026-11-07 经 `tcb fn detail` 实测）、`reserve_quota → 调用 → settle_quota` 两段式计费已接入 `mimo-chat`、`pay` 云函数已上线。成本测算、收费点选择、校准条件等**历史决策依据保留如下**，仅供日后复盘，不再作为待办执行。
 
-- `BILLING_MODE=shadow`：只往 `usage_ledger` 写 `ai.requests` / `ai.chars`，**不拦截任何请求**
+### 阶段 1：影子计量（历史记录，已过时）
+
+- （当时）`BILLING_MODE=shadow`：只往 `usage_ledger` 写 `ai.requests` / `ai.chars`，**不拦截任何请求**
 - 用户体验完全不变；目标是拿到真实用量分布
 
 ### 阶段 2：额度怎么定（多数情况下**不需要**等数据）
@@ -155,18 +159,20 @@ UPDATE public.plans SET features = features || '{"linkcheck.daily": 30}'::jsonb 
 
 无需改代码、无需发版。
 
-> 补充：当前影子计量记的是 `ai.chars`（字符数），token 是估算值（中文约 1~1.5 字符/token，英文约 4 字符/token，混合保守取 2）。若将来需要精确 token，可在请求里加 `stream_options: { include_usage: true }` 并从 SSE 尾部解析 `usage` —— 但由于成本本就极低，暂不值得动核心流式转发逻辑。
+> 补充（历史记录）：影子计量阶段记的是 `ai.chars`（字符数），token 是估算值（中文约 1~1.5 字符/token，英文约 4 字符/token，混合保守取 2）。若将来需要精确 token，可在请求里加 `stream_options: { include_usage: true }` 并从 SSE 尾部解析 `usage` —— 但由于成本本就极低，暂不值得动核心流式转发逻辑。
 
-### 阶段 3：开启额度拦截（enforce）
+### 阶段 3：开启额度拦截（enforce，已完成）
 
-1. 先把 `reserve_quota` / `settle_quota` 在 mimo-chat 中接上（当前只接了 `record_usage`）；
-2. `BILLING_MODE=enforce` 灰度放量；
-3. 观察 `quota_exceeded` 计数与用户反馈，再全量。
+1. ~~先把 `reserve_quota` / `settle_quota` 在 mimo-chat 中接上~~ —— **已接入**：AI 请求现为 `reserve_quota → 调用 → settle_quota` 两段式，客户端断连亦会 settle；
+2. ~~`BILLING_MODE=enforce` 灰度放量~~ —— **已上线**：线上 `mimo-chat` 现为 `enforce`（2026-11-07 经 `tcb fn detail` 实测）；
+3. 持续观察 `quota_exceeded` 计数与用户反馈（常态运维，见 §8）。
 
-> ⚠️ **enforce 之前必须先做完**：AI 请求改成 `reserve → 调用 → settle` 两段式（客户端断连也要 settle），
+> ⚠️ 历史约束（上线前置条件，现已满足）：AI 请求须改成 `reserve → 调用 → settle` 两段式（客户端断连也要 settle），
 > 否则用户「发起后立刻断开」即可白嫖 token。详见 `BILLING_DESIGN.md` §4。
 
-## 5. 支付接入（尚未做，待资质）
+## 5. 支付接入（已上线）
+
+> **当前状态（2026-11-07）**：`pay` 云函数与 `/pay` 网关路由已上线，**微信 Native 已配置、可收款**；支付宝代码就绪、**密钥未配置**（待开通）。以下为接入时的设计要点与决策依据，保留备查，不再是「尚未做」的待办。
 
 个体户营业执照已具备，可开微信支付/支付宝商户号。接入时：
 
@@ -236,6 +242,8 @@ SELECT public.mark_order_refunded('<order_id>', <cents>, '{"operator":"手工退
 
 ## 7. 回滚
 
+> 线上现为 `enforce`。如发生误拦截，**回滚到 shadow 的路径仍然有效**：按下表首行把 `BILLING_MODE` 改回 `shadow` 并重新部署 `mimo-chat` 即可即时恢复；两段式计费代码保留，无需回退代码。
+
 | 情形 | 操作 |
 |---|---|
 | 计费误拦截 | `BILLING_MODE=shadow` → 重新部署 mimo-chat（即时恢复） |
@@ -251,5 +259,5 @@ SELECT public.mark_order_refunded('<order_id>', <cents>, '{"operator":"手工退
 | `record_usage` 失败率 | > 1% | 检查 usage_ledger 权限与 `record_usage` RPC 是否存在 |
 | `consume_rate_limit` 失败 | 持续 | 该 RPC 异常会导致 AI 整体不可用（fail-closed），优先排查 |
 | `get_share_secret` 失败 | 持续 | 分享页会返回 503（不降级放行） |
-| 悬挂 reserve 数量 | > 100 | 客户端断连未 settle，需补结算逻辑 |
+| 悬挂 reserve 数量 | > 100 | 客户端断连未 settle，检查 `settle_quota` 分支与补结算任务是否正常（两段式已接入） |
 | 定时清理未执行 | > 25 小时 | 检查 maintenance 触发器状态（承诺日志 ≤12 个月） |

@@ -11,6 +11,8 @@ import { safeGetItem, safeSetItem } from '../storageSafe.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import type { AiSendSummary } from './sendSummary.js'
 import type { AttachedMediaFile } from './attachmentHelper.js'
+import type { ToolExecStatus } from './toolResult.js'
+import { redactSensitivePatterns } from './secretFilter.js'
 
 export type { AttachedMediaFile }
 
@@ -50,6 +52,8 @@ export interface ChatToolResult {
   toolCallId: string
   name: string
   resultText: string
+  /** 语义状态：只有 executed 代表操作真的落地；proposed 只生成了待确认卡片 */
+  status?: ToolExecStatus
 }
 
 export interface AttachedCardMeta {
@@ -141,6 +145,16 @@ export function saveSessions(sessions: AiChatSession[]): void {
         ...t,
         loading: false, // 存盘时 loading 必须置 false
         isThinking: false, // 存盘时 isThinking 置 false
+        // 落盘前统一脱敏：secretFilter 过去只作用于「外发前」，而会话里的
+        // promptContent / toolResults 会明文带上密钥、Bearer、URL Basic Auth 等。
+        // 这里只做不可逆的敏感串替换，不改动展示结构。
+        promptContent: t.promptContent
+          ? redactSensitivePatterns(t.promptContent)
+          : t.promptContent,
+        toolResults: t.toolResults?.map((r) => ({
+          ...r,
+          resultText: redactSensitivePatterns(r.resultText),
+        })),
       })),
     }))
     safeSetItem(K_AI_SESSIONS, JSON.stringify(trimmed))

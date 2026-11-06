@@ -44,6 +44,7 @@ import { extractHostname } from './extractHostname.js'
 import { isProUser } from '../../composables/domain/useEntitlement.js'
 import { t, tN } from '../../i18n/index.js'
 import type { SearchResultItem } from '../../lib/search.js'
+import { PALETTE_SLASH_CMDS, SLASH_COMMAND_KEYS } from '../../lib/ai/slashCommands.js'
 
 interface CommandItem {
   id: string
@@ -105,18 +106,15 @@ const filtered = computed<CommandItem[]>(() => {
 
   const aiItems: CommandItem[] = []
   if (q.startsWith('/')) {
-    const slashList = [
-      { cmd: '/health', label: t('ai.slashHealthTitle'), desc: t('ai.slashHealthDesc') },
-      { cmd: '/inbox', label: t('ai.slashInboxTitle'), desc: t('ai.slashInboxDesc') },
-      { cmd: '/pack', label: t('ai.slashPackTitle'), desc: t('ai.slashPackDesc') },
-      { cmd: '/deadlink', label: t('ai.slashDeadlinkTitle'), desc: t('ai.slashDeadlinkDesc') },
-      { cmd: '/dedup', label: t('ai.slashDedupTitle'), desc: t('ai.slashDedupDesc') },
-      { cmd: '/theme', label: t('ai.slashThemeTitle'), desc: t('ai.slashThemeDesc') },
-      { cmd: '/view', label: t('ai.slashViewTitle'), desc: t('ai.slashViewDesc') },
-      { cmd: '/stats', label: t('ai.slashStatsTitle'), desc: t('ai.slashStatsDesc') },
-      { cmd: '/undo', label: t('ai.slashUndoTitle'), desc: t('ai.slashUndoDesc') },
-      { cmd: '/help', label: t('ai.slashHelpTitle'), desc: t('ai.slashHelpDesc') },
-    ]
+    // 命令表来自单一真源 slashCommands.ts：按 PALETTE_SLASH_CMDS 取子集，i18n 键一并取自该模块
+    const slashList = PALETTE_SLASH_CMDS.map((cmd) => {
+      const def = SLASH_COMMAND_KEYS.find((k) => k.cmd === cmd)
+      return {
+        cmd,
+        label: t(def?.titleKey ?? ''),
+        desc: t(def?.descKey ?? ''),
+      }
+    })
     const matchedSlash = slashList.filter(
       (s) => s.cmd.includes(q.split(' ')[0]) || q.startsWith(s.cmd),
     )

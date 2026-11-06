@@ -7,35 +7,34 @@
  * 3. 杜绝 Emoji 噪声，输出格式化 JSON。
  */
 
+import { cfCorsHeaders, guardCfRequest, cfPreflightResponse } from '../_lib/cf-guard.js'
+
 interface Env {
   MIMO_API_KEY?: string
 }
 
-const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-}
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      ...CORS_HEADERS,
-    },
-  })
-}
-
-export const onRequestOptions: PagesFunction<Env> = async () => {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  })
+export const onRequestOptions: PagesFunction<Env> = async (context) => {
+  return cfPreflightResponse(context.request)
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const { request } = context
+
+  // 统一防线（最前面）：Origin 白名单 + 软限流 + Bearer token 鉴权（无 Origin 放行，见 cf-guard 注释）
+  const guard = await guardCfRequest(request, { requireAuth: true })
+  if (guard) return guard
+
+  const cors = cfCorsHeaders(request) ?? {}
+  const jsonResponse = (data: unknown, status = 200): Response =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...cors,
+      },
+    })
+
   try {
     const body = (await context.request.json().catch(() => ({}))) as {
       type?: 'similar' | 'intent'

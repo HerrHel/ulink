@@ -13,7 +13,7 @@
  *    CloudBase token 的校验需要额外接口，v1 改为**按 IP 哈希限流**，user_id 落 NULL。
  *    本函数会代用户发起出站请求，是「无上限外呼放大器」的风险点，所以限流是
  *    fail-closed 的（consume_rate_limit RPC 失败直接 503，宁可不可用也不放行）。
- *    频次也比原版收紧（默认 120/min/IP vs 原 1200/min/user），等接上 token 校验再放开。
+ *    频次默认沿用原版量级（默认 1200/min/IP vs 原 1200/min/user），等接上 token 校验再评估收紧。
  * 2) **DNS 解析**：Deno.resolveDns → Node dns.promises.resolve4/resolve6，语义保持
  *    「解析失败 / 0 条记录 / 命中私网 全部拒绝」（H6 fail-closed）。
  *
@@ -47,7 +47,7 @@ const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 /** 允许的来源：优先取环境变量，缺省仅同源；S9 未配置则 fail-closed 拒绝跨域 */
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean)
 const DEFAULT_TIMEOUT_MS = parseInt(process.env.CHECK_LINK_TIMEOUT_MS || '10000', 10)
-/** 每 IP 限流（次/分钟）。原版是每用户 1200/min；v1 无用户身份，收紧到 120/min/IP */
+/** 每 IP 限流（次/分钟）。原版是每用户 1200/min；v1 无用户身份，改为按 IP 限流，默认同为 1200/min/IP */
 const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '1200', 10)
 const MAX_REDIRECTS = 5
 

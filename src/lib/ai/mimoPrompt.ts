@@ -10,6 +10,14 @@ import { domain } from '../../utils.js'
 
 /** contextSlice 注入上限：防大组/多选把整库倒进 prompt */
 const MAX_SLICE_ITEMS = 30
+/**
+ * 分类名 / 标签属性名注入上限。
+ * 历史实现对这两项**全量无上限** join，而 mimo-guard 对单条 system 消息有 4000 字符
+ * 硬上限：大库会直接把整轮请求顶成 413。其它情境字段都有 10/8/15/30 条上限，
+ * 这里必须一视同仁（截断后条数由 sendSummary 如实披露）。
+ */
+export const MAX_CATEGORY_NAMES = 60
+export const MAX_ATTR_NAMES = 60
 /** 单条标题/URL 截断长度 */
 const MAX_TITLE_LEN = 120
 /** 单条文本（备注/分类名等）截断长度 */
@@ -105,10 +113,14 @@ export function buildUlinkSystemPrompt(options: {
   const isZh = options.isZh !== false
   const catNames = options.categories
     .filter(c => c.id !== 'all' && c.id !== 'uncategorized')
+    .slice(0, MAX_CATEGORY_NAMES)
     .map(c => sanitizeForPrompt(c.name))
     .join(isZh ? '、' : ', ')
 
-  const attrNames = options.customAttributes.map(a => sanitizeForPrompt(a.name)).join(isZh ? '、' : ', ')
+  const attrNames = options.customAttributes
+    .slice(0, MAX_ATTR_NAMES)
+    .map(a => sanitizeForPrompt(a.name))
+    .join(isZh ? '、' : ', ')
 
   const slice = options.contextSlice || {}
   const groupItems = sliceItemsForPrompt(slice.focusedGroupBookmarks)
@@ -212,6 +224,7 @@ ${activeCat ? `6. ${activeCat}\n` : ''}${activeFocus ? `7. ${activeFocus}\n` : '
       • Health audit & triage -> invoke audit_vault, inbox_zero, merge_duplicates, heal_deadlinks (when user confirms merging duplicates like 'Option A' or 'Merge all', invoke merge_duplicates with confirm: true; NEVER use manage_bookmarks to delete duplicates by title!);
       • Deep webpage reading -> invoke read_webpage.
     - All write operations are protected by a local undo transaction. You will receive the real execution result; formulate your polite response based strictly on that result, and never claim an action succeeded without seeing its result.
+    - EVERY tool result begins with a bracketed status marker (工具结果状态 <status>). Only 'executed' means the operation was actually applied. 'proposed' means only an action card was generated and the user has NOT confirmed yet — never claim completion; tell the user to click the card to confirm. 'not_executed' and 'failed' mean nothing happened; report it honestly. Ignoring this marker and claiming success is a protocol violation.
 11. Structured Output: When recommending websites or tools, summarize concisely first, then append a valid JSON block enclosed in ${FENCE}ulink-card:
 ${FENCE}ulink-card
 [
@@ -256,6 +269,7 @@ ${activeCatZh ? `6. 实时浏览情境: ${activeCatZh}\n` : ''}${activeFocusZh ?
     - 特别约束：执行全库资产体检 (audit_vault) 后，体检本身即为最终操作，严禁在后续答复中擅自调用其他修改类工具；必须将体检评分与现状结构化汇报给用户，并提出下一步建议选项供用户决策。
     - 当用户询问未打标书签或要求补打标签时：严格区分顶级独立站点与从属子书签（子书签不可与顶级网站大杂烩混谈），直接基于上下文中的待打标顶级独立站点明细与现有标签属性 [${attrNames}]，逐条给出最匹配的标签建议与推荐理由，并给出预判快捷按钮供用户确认。若用户确认执行标签方案（如说“好的，就按这条执行”、“好的，按方案执行”、“执行”），务必调用 batch_tag_bookmarks 工具执行批量打标。
     - 所有写操作均内置安全可逆的本地 Undo 撤销事务。工具执行后你会收到真实执行结果，回答必须以真实结果为依据向用户温润汇报，严禁在未见结果时宣称操作已完成。
+    - 【工具结果状态标记】每条工具结果开头都有「工具结果状态 <status>」形式的方括号标记：只有 executed 代表操作已真实落地；proposed 代表仅生成了待确认的行动卡片、用户尚未点击，严禁宣称已完成，须提示用户点击卡片确认；not_executed / failed 代表本次调用没有产生任何效果，须如实说明。忽略该标记而向用户报成功，属于协议违规。
 11. 结构化随文内嵌卡片规范（图文混排排版标准）：
     当你推荐某个具体网站或工具时，必须采用「随文嵌入」模式：直接在介绍该工具的段落上方嵌入紧凑卡片标记，随后紧跟客观分析（核心亮点、适用人群、使用技巧）：
 ${FENCE}ulink-card

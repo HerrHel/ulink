@@ -139,7 +139,7 @@ describe('buildSendSummary — 发送摘要组装', () => {
     expect(s.historyTurnsIncluded).toBe(4)
   })
 
-  it('估算总字符 = 系统提示 + 本轮提问 + 历史切片 + 全库检索', () => {
+  it('估算总字符 = 系统提示 + 本轮提问 + 历史切片 + 全库检索 + 工具定义', () => {
     const history = [msg('user', 'q1'), msg('assistant', 'a1')]
     const s = buildSendSummary({
       ...baseInput,
@@ -150,6 +150,10 @@ describe('buildSendSummary — 发送摘要组装', () => {
     const historyChars = selectHistorySlice(history).reduce((n, m) => n + m.content.length, 0)
     expect(s.userPromptChars).toBe('PROMPT'.length)
     expect(s.systemPromptChars).toBeGreaterThan(0)
-    expect(s.estimatedTotalChars).toBe(s.systemPromptChars + s.userPromptChars + historyChars + 4)
+    // 2026-11-07：每轮必发的 tools schema 过去完全没计入「披露的即所发」，本断言锁住修正后的口径
+    expect(s.toolsSchemaChars).toBeGreaterThan(0)
+    expect(s.estimatedTotalChars).toBe(
+      s.systemPromptChars + s.userPromptChars + historyChars + 4 + s.toolsSchemaChars,
+    )
   })
 })

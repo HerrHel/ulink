@@ -15,6 +15,7 @@ import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { getApiToken } from '../authDriver.js'
 import { toast } from '../toast.js'
 import { askMiMo, sanitizeForPrompt } from './mimoClient.js'
+import { isAiEnabled } from './aiEnabled.js'
 import { getLocale, t } from '../../i18n/index.js'
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
@@ -131,6 +132,8 @@ export async function fetchVideoExtractServer(
   options: { signal?: AbortSignal } = {}
 ): Promise<VideoExtractServerResult | null> {
   if (!targetUrl) return null
+  // AI 总开关关闭：不发起视频解析的 AI 网络请求，返回 null 交由本地链路降级
+  if (!isAiEnabled()) return null
   const cbMode = isCloudBaseBackend()
   if (!cbMode && !isSupabaseConfigured) return null
 
@@ -238,6 +241,8 @@ export async function extractVideoInsightsWithAI(
   attributes: CustomAttribute[] = [],
   options: { signal?: AbortSignal; question?: string } = {}
 ): Promise<VideoAiInsight> {
+  // AI 总开关关闭：不发起大模型总结请求，直接返回既有空结果兜底
+  if (!isAiEnabled()) return { summary: null, candidates: [] }
   const trimmed = (contentText || '').trim()
   if (trimmed.length < SUMMARY_MIN_INPUT_CHARS) {
     return { summary: null, candidates: [] }

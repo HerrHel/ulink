@@ -14,6 +14,13 @@ function makeSummary(overrides: Partial<AiSendSummary> = {}): AiSendSummary {
   return {
     categoriesCount: 3,
     attributesCount: 2,
+    categoriesInjected: 3,
+    attributesInjected: 2,
+    mentalModelChars: 0,
+    untaggedInjected: 0,
+    trashedInjected: 0,
+    toolsSchemaChars: 9000,
+    mediaPartsCount: 0,
     focusedGroup: { name: '效率工具箱', shown: 2, total: 7 },
     selected: { shown: 1, total: 5 },
     attachedCardsCount: 1,

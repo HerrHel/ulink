@@ -14,6 +14,8 @@ import { isPrivateUrl } from './urlGuard.js'
 import { fetchPageContentViaJina } from './jinaReader.js'
 import { suggestCategory, suggestAttributes } from '../ai-classify.js'
 import { CATEGORY_SYNONYMS } from './knowledge.js'
+import { buildCfHeaders } from './cfHeaders.js'
+import { isAiEnabled } from './aiEnabled.js'
 
 export interface SmartIntakeResult {
   success: boolean
@@ -117,6 +119,12 @@ export async function fetchUrlMetadataAsync(
     return { success: false, reason: 'private_url_blocked' }
   }
 
+  // AI 总开关关闭（隐私政策「关闭后不发起任何 AI 请求」）：不发起 /api/extract-metadata
+  // 与 Jina Reader 转发等任何抓取请求，直接返回既有的「未提取到内容」兜底结果
+  if (!isAiEnabled()) {
+    return { success: false, reason: 'empty_extracted_content' }
+  }
+
   let rawTitle = ''
   let rawDesc = ''
   let serverCategoryId: string | undefined = undefined
@@ -128,7 +136,7 @@ export async function fetchUrlMetadataAsync(
     const activeCats = categories.filter(c => !c.deletedAt)
     const apiRes = await fetch(cfApiUrl('/api/extract-metadata'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await buildCfHeaders(),
       body: JSON.stringify({
         url,
         availableAttributes: activeAttrs.map(a => ({ id: a.id, name: a.name })),

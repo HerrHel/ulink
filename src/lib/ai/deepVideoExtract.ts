@@ -15,6 +15,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { getApiToken } from '../authDriver.js'
 import { t } from '../../i18n/index.js'
+import { isAiEnabled } from './aiEnabled.js'
 
 export type DeepVideoStage = 'download' | 'asr' | 'ocr' | 'aggregate' | 'done'
 export type DeepVideoStatus = 'queued' | 'running' | 'done' | 'failed'
@@ -200,6 +201,10 @@ async function postExtractVideo(
   body: Record<string, unknown>,
   options: { signal?: AbortSignal; timeoutMs: number },
 ): Promise<Record<string, unknown>> {
+  // AI 总开关关闭：绝不发起深度解析网络请求；按本模块既有约定抛结构化错误，不静默伪成功
+  if (!isAiEnabled()) {
+    throw new DeepVideoError('deep_unavailable', t('settings.aiDisabledTip'))
+  }
   const endpoint = edgeFnUrl('extract-video')
   if (!endpoint) throw new DeepVideoError('deep_unavailable', t('ai.deepUnavailable'))
 

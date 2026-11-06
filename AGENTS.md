@@ -176,10 +176,10 @@ composables 按职责分三组：
 
 ### 计费与会员（2026-10 上线）
 
-- 云函数：`pay`（微信 Native / 支付宝当面付：下单 / 回调 / 查单 + 幂等发货）、`redeem`（兑换码）、`account`（注销 + 交易记录）
+- 云函数：`pay`（微信 Native / 支付宝当面付：下单 / 回调 / 查单 + 幂等发货；**已上线，微信 Native 已配置可收款，支付宝代码就绪、密钥未配**）、`redeem`（兑换码）、`account`（注销 + 交易记录）
 - 数据：迁移 `20261025000002_billing_core.sql`（plans / entitlements / orders / usage_ledger）、`20261025000004_redeem_code.sql`、`20261028000010_payment_flow.sql`；**价格与权益唯一来源 = `plans` 表（`price_cents` + `features`）**，前端不硬编码
 - 前端：`PurchaseModal.vue` + `usePayment`（下单/轮询/到账）、`usePurchasePlans`、`useTransactions`、`useRedeem`、`useEntitlement`，设置面板会员区
-- 计费模式：`BILLING_MODE`（`shadow` 只计量 / `enforce` 超额 429）；线上 `mimo-chat` 已配 `enforce`。改额度展示前先读 `docs/BILLING_OPS.md`
+- 计费模式：`BILLING_MODE`（`shadow` 只计量 / `enforce` 超额 429）；**2026-11-07 经 `tcb fn detail mimo-chat -e ulink-d1g5srvjo54b1886a --json` 实测线上为 `enforce`**，`reserve_quota → 调用 → settle_quota` 两段式计费已接入云函数（客户端断连亦会 settle）。如需回退改回 `shadow`，见 `docs/BILLING_OPS.md` §7；改额度展示前先读 `docs/BILLING_OPS.md`
 - 上线手册：`docs/WXPAY_ROLLOUT.md`、`docs/ALIPAY_ROLLOUT.md`；当前仅微信渠道完成密钥配置（支付宝待开通）
 
 ### 国际化（i18n）

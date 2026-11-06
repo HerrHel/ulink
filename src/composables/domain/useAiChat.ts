@@ -23,13 +23,8 @@ import type { AiSearchPreference } from '../../types/ai.js'
 import { useAiChatSessions } from './useAiChatSessions.js'
 import { useAiChatSubmit } from './useAiChatSubmit.js'
 import { useAiActionCards } from './useAiActionCards.js'
-
-/** 斜杠指令项（title/desc 由 titleKey/descKey 经 t() 渲染） */
-interface SlashCommandItem {
-  cmd: string
-  titleKey: string
-  descKey: string
-}
+import { SLASH_COMMAND_KEYS as SLASH_COMMANDS } from '../../lib/ai/slashCommands.js'
+export type { SlashCommandItem } from '../../lib/ai/slashCommands.js'
 
 /** 空态快捷提示项 */
 interface QuickHint {
@@ -98,25 +93,6 @@ export function useAiChat(options: UseAiChatOptions = {}) {
   const inputHistory = ref<string[]>([])
   const historyCursor = ref(-1)
   const tempInput = ref('')
-
-  // ── 斜杠指令快捷联想（文案走 i18n，与语言包 slash* 键一一对应）──
-  const SLASH_COMMANDS: SlashCommandItem[] = [
-    { cmd: '/help', titleKey: 'ai.slashHelpTitle', descKey: 'ai.slashHelpDesc' },
-    { cmd: '/health', titleKey: 'ai.slashHealthTitle', descKey: 'ai.slashHealthDesc' },
-    { cmd: '/inbox', titleKey: 'ai.slashInboxTitle', descKey: 'ai.slashInboxDesc' },
-    { cmd: '/pack', titleKey: 'ai.slashPackTitle', descKey: 'ai.slashPackDesc' },
-    { cmd: '/theme', titleKey: 'ai.slashThemeTitle', descKey: 'ai.slashThemeDesc' },
-    { cmd: '/view', titleKey: 'ai.slashViewTitle', descKey: 'ai.slashViewDesc' },
-    { cmd: '/cat', titleKey: 'ai.slashCatTitle', descKey: 'ai.slashCatDesc' },
-    { cmd: '/trash', titleKey: 'ai.slashTrashTitle', descKey: 'ai.slashTrashDesc' },
-    { cmd: '/dedup', titleKey: 'ai.slashDedupTitle', descKey: 'ai.slashDedupDesc' },
-    { cmd: '/deadlink', titleKey: 'ai.slashDeadlinkTitle', descKey: 'ai.slashDeadlinkDesc' },
-    { cmd: '/export', titleKey: 'ai.slashExportTitle', descKey: 'ai.slashExportDesc' },
-    { cmd: '/stats', titleKey: 'ai.slashStatsTitle', descKey: 'ai.slashStatsDesc' },
-    { cmd: '/undo', titleKey: 'ai.slashUndoTitle', descKey: 'ai.slashUndoDesc' },
-    { cmd: '/clean', titleKey: 'ai.slashCleanTitle', descKey: 'ai.slashCleanDesc' },
-    { cmd: '/clear', titleKey: 'ai.slashClearTitle', descKey: 'ai.slashClearDesc' },
-  ]
 
   const dynamicQuickHints = computed<QuickHint[]>(() => {
     const hints: QuickHint[] = []

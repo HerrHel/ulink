@@ -672,6 +672,17 @@
 
                 <div class="sp-card" data-testid="lv-search-fill-section">
                   <div class="sp-card-head">{{ t('settings.smartFeaturesWorkflow') }}</div>
+                  <div class="sp-card-row" @click="onToggleAiEnabled" style="cursor: pointer;" data-testid="lv-ai-enabled-toggle">
+                    <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.aiEnabled') }}</span>
+                      <span class="sp-row-desc">{{ t('settings.aiEnabledHint') }}</span>
+                    </div>
+                    <div class="sp-row-ctrl">
+                      <div class="sp-toggle-pill" :class="{ active: uiStore.aiEnabled }">
+                        <span class="sp-switch"></span>
+                      </div>
+                    </div>
+                  </div>
                   <div class="sp-card-row" @click="onToggleAiRail" style="cursor: pointer;">
                     <div class="sp-row-meta">
                       <span class="sp-row-title">{{ t('settings.aiRail') }}</span>
@@ -1696,6 +1707,16 @@ function onToggleSemanticSearch() {
   uiStore.semanticSearchEnabled = !uiStore.semanticSearchEnabled
   uiStore.saveUIState()
   toast(uiStore.semanticSearchEnabled ? t('settings.semanticSearchOnToast') : t('settings.semanticSearchOffToast'), true)
+}
+
+function onToggleAiEnabled() {
+  uiStore.aiEnabled = !uiStore.aiEnabled
+  // 关闭总开关时若正处于 AI 视图，退回书签视图（否则会留下一个无法发请求的空工作台）
+  if (!uiStore.aiEnabled && uiStore.activeView === 'ai') {
+    uiStore.activeView = 'bookmarks'
+  }
+  uiStore.saveUIState()
+  toast(uiStore.aiEnabled ? t('settings.aiEnabledOnToast') : t('settings.aiEnabledOffToast'), true)
 }
 
 function onToggleAiRail() {

@@ -7,6 +7,7 @@ import { getApiToken } from '../../lib/authDriver.js'
 import { safeGetItem, safeSetItem, safeRemoveItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { fetchMyEntitlement, type MyEntitlement } from './useRedeem.js'
 import { NETWORK_PROBE_URLS, OVERSEAS_PROBE_URL } from '../../config/urls.js'
+import { buildCfHeaders } from '../../lib/ai/cfHeaders.js'
 import type { Bookmark } from '../../types.js'
 
 
@@ -372,7 +373,7 @@ export async function probeOverseas(
     const timer = setTimeout(() => controller.abort(), 4500)
     const res = await fetch(`${probeEndpoint}?url=${encodeURIComponent(url)}`, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: await buildCfHeaders(),
       signal: controller.signal,
     })
     clearTimeout(timer)

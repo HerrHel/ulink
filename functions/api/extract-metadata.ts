@@ -9,24 +9,9 @@
  * 5. 零伪造数据，失败诚实返回。
  */
 
+import { cfCorsHeaders, guardCfRequest, cfPreflightResponse } from '../_lib/cf-guard.js'
+
 interface Env {}
-
-const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-}
-
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      ...CORS_HEADERS,
-    },
-  })
-}
 
 const PRIVATE_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
 
@@ -107,19 +92,32 @@ function decodeHtmlBuffer(buffer: ArrayBuffer, contentTypeHeader = ''): string {
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
-export async function onRequestOptions(): Promise<Response> {
-  return new Response(null, {
-    status: 204,
-    headers: CORS_HEADERS,
-  })
+/** CORS 预检：合法 Origin → 204 + 白名单头，非法 → 403，无 Origin → 放行。 */
+export function onRequestOptions(context: { request: Request }): Response {
+  return cfPreflightResponse(context.request)
 }
 
 export async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
   const { request } = context
 
   if (request.method === 'OPTIONS') {
-    return onRequestOptions()
+    return onRequestOptions(context)
   }
+
+  // 统一防线：Origin 白名单 + 软限流 + Bearer token 鉴权（无 Origin 放行，见 cf-guard 注释）
+  const guard = await guardCfRequest(request, { requireAuth: true })
+  if (guard) return guard
+
+  const cors = cfCorsHeaders(request) ?? {}
+  const jsonResponse = (data: unknown, status = 200): Response =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        ...cors,
+      },
+    })
 
   let rawUrl = ''
   let availableAttributes: Array<{ id: string; name: string }> = []

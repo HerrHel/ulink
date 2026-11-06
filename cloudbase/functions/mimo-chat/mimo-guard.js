@@ -205,7 +205,7 @@ function validateChatBody(body, opts) {
 }
 function isOriginAllowed(origin, allowed) {
   if (!origin) return true;
-  return allowed.length > 0 && allowed.includes(origin);
+  return allowed.length > 0 && allowed.some((o) => o.trim() === origin);
 }
 function buildCorsHeaders(origin, allowed) {
   const headers = {

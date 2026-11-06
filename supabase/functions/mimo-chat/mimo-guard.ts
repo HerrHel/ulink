@@ -263,7 +263,7 @@ export function validateChatBody(
 /** CORS 来源判定（S9 fail-closed：白名单未配置则拒绝跨域；无 Origin 的非浏览器请求不设 CORS 头） */
 export function isOriginAllowed(origin: string | null, allowed: string[]): boolean {
   if (!origin) return true
-  return allowed.length > 0 && allowed.includes(origin)
+  return allowed.length > 0 && allowed.some((o) => o.trim() === origin)
 }
 
 export function buildCorsHeaders(origin: string | null, allowed: string[]): Record<string, string> {

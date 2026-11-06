@@ -15,6 +15,7 @@ import { suggestCategory, suggestAttributes } from '../../lib/ai-classify.js'
 import { getSmartPrefill } from '../../lib/ai/smartPrefill.js'
 import { fetchUrlMetadataAsync } from '../../lib/ai/smartIntake.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
+import { isAiEnabled } from '../../lib/ai/aiEnabled.js'
 import { useEntitlement } from './useEntitlement.js'
 import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
@@ -616,6 +617,12 @@ export async function triggerAiFetch(targetUrl?: string, isManual = false) {
   const ui = useUIStore()
   if (!ui.smartFillEnabled) {
     if (isManual) toast(t('modal.bookmark.smartFillDisabledHint'), false)
+    return
+  }
+
+  // AI 总开关关闭（隐私政策）：不得发起任何 AI 网络请求；手动触发给出明确提示，自动触发静默返回
+  if (!isAiEnabled()) {
+    if (isManual) toast(t('settings.aiDisabledTip'), false)
     return
   }
 

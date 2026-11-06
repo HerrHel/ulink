@@ -10,6 +10,8 @@ import { t, getLocale } from '../../i18n/index.js'
 import { cfApiUrl } from '../../config/urls.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { getSimilarExternalWebsites } from './similarWebsites.js'
+import { buildCfHeaders } from './cfHeaders.js'
+import { isAiEnabled } from './aiEnabled.js'
 
 /**
  * 远程动态 AI 候选生成器：调用后端大模型动态发散，打破本地写死预设
@@ -21,10 +23,12 @@ async function fetchDynamicCandidates(params: {
   targetTitle?: string
   signal?: AbortSignal
 }): Promise<AiCandidateBookmark[] | null> {
+  // AI 总开关关闭：不发起候选生成的 AI 网络请求，直接走本地静态知识库兜底
+  if (!isAiEnabled()) return null
   try {
     const res = await fetch(cfApiUrl('/api/ai-candidates'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await buildCfHeaders(),
       body: JSON.stringify(params),
       signal: params.signal || AbortSignal.timeout(16000),
     })

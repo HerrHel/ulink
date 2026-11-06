@@ -13,6 +13,7 @@ import { supabase, isSupabaseConfigured } from '../supabase.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { buildUlinkSystemPrompt, type DynamicContextSlice } from './mimoPrompt.js'
 import { parseMiMoReply } from './mimoReply.js'
+import { isAiEnabled } from './aiEnabled.js'
 
 export const DEFAULT_MIMO_BASE_URL = 'https://api.xiaomimimo.com/v1'
 export const DEFAULT_MIMO_MODEL = 'mimo-v2.6-flash'
@@ -35,7 +36,73 @@ export function getMiMoConfig(): MiMoConfig {
   return {
     baseUrl: DEFAULT_MIMO_BASE_URL,
     model: DEFAULT_MIMO_MODEL,
-    enabled: true,
+    enabled: isAiEnabled(),
+  }
+}
+
+/**
+ * 链路追踪 ID：优先用调用方透传的 traceId，其次 crypto.randomUUID()，
+ * 两者不可用/抛错时降级到简单随机串（仅用于链路追踪，非安全用途）。
+ */
+function resolveTraceId(provided?: string): string {
+  if (provided) return provided
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+  } catch {
+    // 忽略，走降级
+  }
+  return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/**
+ * 带有限重试的 fetch：**仅对 HTTP 5xx** 重试，最多 2 次，退避 400ms / 800ms；
+ * 响应带 Retry-After（秒，0~5s 内）时优先采用。2xx 立即返回（绝不重放已成功建立的
+ * SSE 流，避免重复计费）。
+ * ⚠️ 429 一律不重试：mimo-chat 把「分钟限流 / 日配额 / 月额度耗尽」都返回 429，
+ * 这些是终局性拒绝。若当可重试错误处理，一次用户点击会连发 3 次，把
+ * consume_rate_limit 计数、日配额与 reserve_quota 预扣同时放大 3 倍。
+ * 重试前读空被丢弃响应的 body 以释放连接；signal 取消立即停止重试。
+ * 返回的最终响应 body 未被消费，仍交给既有的错误解析逻辑。
+ */
+async function fetchWithRetry(
+  endpoint: string,
+  init: RequestInit,
+  signal?: AbortSignal
+): Promise<Response> {
+  const backoffs = [400, 800]
+  let attempt = 0
+  for (;;) {
+    const response = await fetch(endpoint, init)
+    if (response.ok) return response
+    // 429 是「限流 / 日配额 / 月额度耗尽」的终局性拒绝，绝不能重试（见函数头注释）
+    const retryable = response.status >= 500 && response.status < 600
+    if (!retryable || attempt >= backoffs.length || signal?.aborted) {
+      return response
+    }
+    let delayMs = backoffs[attempt]
+    const retryAfter = response.headers?.get?.('Retry-After')
+    if (retryAfter) {
+      const seconds = Number(retryAfter)
+      if (Number.isFinite(seconds) && seconds >= 0 && seconds <= 5) {
+        delayMs = seconds * 1000
+      }
+    }
+    // 读空将丢弃的响应 body，避免连接泄漏（最终响应不在此列）
+    await response.text().catch(() => '')
+    await new Promise<void>((resolve) => {
+      if (signal?.aborted) { resolve(); return }
+      const timer = setTimeout(finish, delayMs)
+      function finish() {
+        clearTimeout(timer)
+        signal?.removeEventListener('abort', finish)
+        resolve()
+      }
+      signal?.addEventListener('abort', finish, { once: true })
+    })
+    if (signal?.aborted) return response
+    attempt++
   }
 }
 
@@ -43,7 +110,16 @@ export interface MiMoStreamCallbacks {
   onReasoningDelta?: (delta: string, accumulatedReasoning: string) => void
   onContentDelta?: (delta: string, accumulatedContent: string) => void
   onToolCall?: (toolCall: AgentToolCall) => void
+  /**
+   * 流式空闲哨兵：连续 {@link STREAM_STALL_HINT_MS} 没收到任何增量时回调一次
+   * （同一段空闲只触发一次，恢复数据后可再次触发），供上层提示「模型响应缓慢」，
+   * 避免用户面对无限转圈无法判断。不中断请求。
+   */
+  onStall?: (idleMs: number) => void
 }
+
+/** 流式空闲提示阈值（毫秒）：超过该时长无任何增量即提示响应缓慢 */
+export const STREAM_STALL_HINT_MS = 30000
 
 export interface AgentToolCall {
   id: string
@@ -51,6 +127,23 @@ export interface AgentToolCall {
   arguments: Record<string, any>
   /** 参数 JSON 解析失败标记：携带此标记的调用不得执行（防空参数误执行副作用），应回错误结果给模型 */
   argsParseFailed?: boolean
+}
+
+/**
+ * SSE 流中断（响应体被掐断 / 上游报错）。
+ * 携带已生成的部分内容：上层据此保留已输出片段，而不是整段替换成失败文案。
+ * 用标记字段而非 instanceof 判定，避免测试 mock 掉 mimoClient Facade 后判定失效。
+ */
+export class MiMoStreamError extends Error {
+  readonly isStreamError = true
+  partialContent: string
+  partialReasoning: string
+  constructor(rawMessage: string, partialContent: string, partialReasoning: string) {
+    super(rawMessage || 'stream interrupted')
+    this.name = 'MiMoStreamError'
+    this.partialContent = partialContent
+    this.partialReasoning = partialReasoning
+  }
 }
 
 /** 对话消息（含 tool 回传，支持真 Agent 循环） */
@@ -140,6 +233,8 @@ export async function askMiMoStream(
     images?: string[]
     /** 音视频多模态块（video_url / input_audio），由 unifiedMedia 构造 */
     mediaParts?: Array<Record<string, unknown>>
+    /** 链路追踪 ID：透传到 X-Ulink-Trace-Id 请求头（云函数回写响应头） */
+    traceId?: string
   },
   callbacks?: MiMoStreamCallbacks
 ): Promise<{
@@ -229,15 +324,16 @@ export async function askMiMoStream(
   if (!endpoint) {
     throw new Error(t('ai.errNotConfigured'))
   }
-  const response = await fetch(endpoint, {
+  const response = await fetchWithRetry(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders,
+      'X-Ulink-Trace-Id': resolveTraceId(context.traceId),
     },
     body: JSON.stringify(requestBody),
     signal: context.signal,
-  })
+  }, context.signal)
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')
@@ -254,6 +350,8 @@ export async function askMiMoStream(
   let accumulatedReasoning = ''
   let accumulatedContent = ''
   let inThinkTag = false
+  /** 服务端补发的流中断错误码（非空即视为本次回答未完成） */
+  let serverStreamError = ''
   const toolCallsMap: Record<number, { id: string; name: string; argumentsStr: string }> = {}
 
   // think 标签的开闭字面量（拼接构造，避免模板串里出现标签字面量）
@@ -305,6 +403,12 @@ export async function askMiMoStream(
   function consumeSseData(dataStr: string) {
     try {
       const json = JSON.parse(dataStr)
+      // 服务端在流式中断时补发的错误帧（mimo-chat handleStreamError）：必须显式识别，
+      // 否则会被当成「无 delta 的普通块」忽略，中断就伪装成正常结束
+      if (json && typeof json === 'object' && json.error) {
+        serverStreamError = String(json.error)
+        return
+      }
       const delta = json.choices?.[0]?.delta
       if (!delta) return
 
@@ -344,10 +448,27 @@ export async function askMiMoStream(
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
+    // 空闲哨兵：连续无增量超过阈值只提示一次（不中断请求，最终仍由服务端超时兜底）
+    let lastActivityAt = Date.now()
+    let stallReported = false
+    const stallTimer: ReturnType<typeof setInterval> | null = callbacks?.onStall
+      ? setInterval(() => {
+          const idleMs = Date.now() - lastActivityAt
+          if (idleMs < STREAM_STALL_HINT_MS) {
+            // 数据恢复：允许下一次长时间空闲再次提示
+            stallReported = false
+            return
+          }
+          if (stallReported) return
+          stallReported = true
+          callbacks?.onStall?.(idleMs)
+        }, 5000)
+      : null
 
     try {
       while (true) {
         const { done, value } = await reader.read()
+        lastActivityAt = Date.now()
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
@@ -370,9 +491,24 @@ export async function askMiMoStream(
           consumeSseData(dataStr)
         }
       }
+    } catch (streamErr) {
+      // 外部主动停止（停止生成/切会话）：保留 AbortError 语义，交由调用方按 aborted 分支处理
+      if (context.signal?.aborted) throw streamErr
+      // 响应体被掐断（浏览器报 TypeError: network error）：带上已生成片段，别让上层只能显示一句失败
+      throw new MiMoStreamError(
+        streamErr instanceof Error ? streamErr.message : String(streamErr),
+        accumulatedContent,
+        accumulatedReasoning
+      )
     } finally {
+      if (stallTimer) clearInterval(stallTimer)
       reader.releaseLock()
     }
+  }
+
+  // 服务端明确告知流中断（已发头后上游断流/超时）：同样按「不完整回答」上抛
+  if (serverStreamError) {
+    throw new MiMoStreamError(serverStreamError, accumulatedContent, accumulatedReasoning)
   }
 
   // 解析并构建完整的 toolCalls
@@ -426,7 +562,7 @@ export async function askMiMoStream(
  */
 export async function askMiMoRaw(
   messages: MiMoChatMessage[],
-  opts?: { signal?: AbortSignal; temperature?: number }
+  opts?: { signal?: AbortSignal; temperature?: number; traceId?: string }
 ): Promise<string> {
   const config = getMiMoConfig()
   if (!config.enabled) {
@@ -456,11 +592,12 @@ export async function askMiMoRaw(
   if (!endpoint) {
     throw new Error(t('ai.errNotConfigured'))
   }
-  const response = await fetch(endpoint, {
+  const response = await fetchWithRetry(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders,
+      'X-Ulink-Trace-Id': resolveTraceId(opts?.traceId),
     },
     body: JSON.stringify({
       model: config.model,
@@ -469,7 +606,7 @@ export async function askMiMoRaw(
       stream: false,
     }),
     signal: opts?.signal,
-  })
+  }, opts?.signal)
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '')

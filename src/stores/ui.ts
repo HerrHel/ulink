@@ -117,6 +117,8 @@ export interface UIState {
   semanticSearchEnabled: boolean
   /** AI 智能提取与信息补齐服务开关（默认开启） */
   smartFillEnabled: boolean
+  /** AI 功能总开关（默认开启）：关闭后不发起任何 AI 请求，产品作为纯本地工具运行 */
+  aiEnabled: boolean
   /** 左侧分类栏顶部 AI 对话入口开关（默认开启，设置中可关闭） */
   aiRailEnabled: boolean
   /** 主区域当前视图：bookmarks 书签列表 / ai 沉浸式对话工作区 */
@@ -193,6 +195,7 @@ export const useUIStore = defineStore('ui', {
       detailCards: [],
       semanticSearchEnabled: true,
       smartFillEnabled: true,
+      aiEnabled: true,
       aiRailEnabled: true,
       activeView: 'bookmarks',
       aiNewChatTrigger: 0,
@@ -458,6 +461,7 @@ export const useUIStore = defineStore('ui', {
           detailCards: this.detailCards.slice(),
           semanticSearchEnabled: this.semanticSearchEnabled,
           smartFillEnabled: this.smartFillEnabled,
+          aiEnabled: this.aiEnabled,
           aiRailEnabled: this.aiRailEnabled,
           searchQuery: this.searchQuery || '',
           sortMode: this.sortMode || 'order',
@@ -494,6 +498,7 @@ export const useUIStore = defineStore('ui', {
           detailCards?: string[]
           semanticSearchEnabled?: boolean
           smartFillEnabled?: boolean
+          aiEnabled?: boolean
           aiRailEnabled?: boolean
           expandedIds?: string[]
           _preferredLayoutMode?: LayoutMode
@@ -556,6 +561,9 @@ export const useUIStore = defineStore('ui', {
         }
         if (typeof s.smartFillEnabled === 'boolean') {
           this.smartFillEnabled = s.smartFillEnabled
+        }
+        if (typeof s.aiEnabled === 'boolean') {
+          this.aiEnabled = s.aiEnabled
         }
         if (typeof s.aiRailEnabled === 'boolean') {
           this.aiRailEnabled = s.aiRailEnabled

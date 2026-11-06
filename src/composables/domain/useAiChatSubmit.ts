@@ -31,6 +31,13 @@ import { expandQueryTerms } from '../../lib/ai/queryExpand.js'
 import { remember, buildProfilePrompt } from '../../lib/ai/aiProfile.js'
 import { buildUserMentalModel, formatMentalModelPrompt } from '../../lib/ai/mentalModel.js'
 import { buildSendSummary } from '../../lib/ai/sendSummary.js'
+import { isAiEnabled } from '../../lib/ai/aiEnabled.js'
+import {
+  inferToolExecStatus,
+  formatToolResultForModel,
+  type ToolExecStatus,
+} from '../../lib/ai/toolResult.js'
+import { toast } from '../../lib/toast.js'
 import { createAiAgentToolRunner } from './useAiChatAgent.js'
 import type { AbortControllerSlot } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
@@ -100,6 +107,37 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     return videoTitle ? `${videoTitle} (${base})` : base
   }
 
+  /**
+   * 失败收尾（唯一收口点）：复位思考态、保留已生成片段、给出本地化原因。
+   * 旧实现只置 loading=false，isThinking 仍为 true → 界面永远停在「正在思考…」；
+   * 且把浏览器原始英文异常（如 network error）直接拼进中文提示，用户无法判断发生了什么。
+   */
+  function markTurnFailed(turn: ChatTurn, err: unknown) {
+    turn.loading = false
+    turn.isThinking = false
+    turn.candidates = []
+    const raw = err instanceof Error ? err.message : ''
+    const streamErr = err as { isStreamError?: boolean; partialContent?: string; partialReasoning?: string } | null
+    // 流式中断：已生成的思考/正文一律保留，正文后追加中断说明（可重试补齐）
+    if (streamErr?.isStreamError) {
+      if (streamErr.partialReasoning) turn.reasoning = streamErr.partialReasoning
+      if (streamErr.partialContent && streamErr.partialContent.trim()) {
+        turn.content = `${streamErr.partialContent}\n\n${t('ai.streamInterrupted')}`
+        return
+      }
+    }
+    // 服务端业务文案（额度超限 / 未配置等）本身已是可读中文，直接透出
+    if (raw && /[\u4e00-\u9fa5]/.test(raw)) {
+      turn.content = raw
+      return
+    }
+    // 浏览器/传输层异常统一本地化，界面不再出现 network error 之类英文原文
+    turn.content =
+      streamErr?.isStreamError || /(network|fetch|terminated|aborted|offline|ERR_)/i.test(raw)
+        ? t('ai.errNetwork')
+        : t('ai.searchFailed')
+  }
+
   /** 核心提交分流：自动识别视频 / 网址 / 自然语言需求 */
   async function handleAiSubmit() {
     // 1. 抓取并解析用户拖入附加的卡片与笔记、添加或粘贴的附件文件
@@ -140,6 +178,14 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
     if (raw === '/clear') {
       handleCreateSession()
+      return
+    }
+
+    // AI 总开关（隐私政策 §3.3/§3.4 的「关闭后不再外发」承诺）：
+    // 关闭时只保留纯本地的 /slash 站内指令，任何会发起网络请求的路径一律拦下。
+    // 其余入口（智能预填 / 候选推荐 / 网页解析 / 视频深度解析）由 isAiEnabled() 各自把关。
+    if (isAiEnabled() === false && !raw.startsWith('/')) {
+      toast(t('settings.aiDisabledTip'), false)
       return
     }
 
@@ -230,6 +276,25 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     const controller = new AbortController()
     abortSlot.current = controller
 
+    // 本轮是否失败收尾：错误轮次不得再挂载「换个方案 / 存为卡片」等预判胶囊
+    let replyFailed = false
+    const failTurn = (err: unknown) => {
+      replyFailed = true
+      markTurnFailed(assistantTurn, err)
+    }
+
+    // 流式空闲哨兵：长时间无任何增量时给出明确提示，避免用户面对无限转圈无从判断
+    const onStreamStall = (idleMs: number) => {
+      if (controller.signal.aborted) return
+      console.warn('[ulink AI] stream idle for', idleMs, 'ms')
+      if (!assistantTurn.reasoning && !assistantTurn.content) {
+        // 尚无任何输出：直接替换等待文案（呼吸点区域显示）
+        loadingTextKey.value = 'ai.slowResponse'
+        return
+      }
+      toast(t('ai.slowResponse'), false)
+    }
+
     try {
       // 优先尝试站内指令/In-App Agent CLI 调度（传 abort 信号：停止生成后不再执行命令副作用）
       const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app, signal: controller.signal })
@@ -289,6 +354,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       } else {
         const mimoConf = getMiMoConfig()
         let mimoSuccess = false
+        // 一次用户提交（最多 1 首轮 + 4 续轮 = 5 次 LLM 调用）共用同一个 traceId：
+        // 云函数把 X-Ulink-Trace-Id 写进结构化日志并回写响应头，Agent 会话才可串联。
+        const requestTraceId =
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `ai-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
         if (mimoConf.enabled) {
           try {
@@ -324,8 +395,14 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 })
                 for (const r of t.toolResults) {
                   // 回放同样过 sanitizeToolResult：持久化的历史可能来自修复前的版本，
-                  // 脱敏/限长在发送前统一兜底（与当轮回传同口径）
-                  history.push({ role: 'tool', tool_call_id: r.toolCallId || (r as any).id, content: sanitizeToolResult(r.resultText) })
+                  // 脱敏/限长在发送前统一兜底（与当轮回传同口径）。
+                  // 旧会话没有 status 字段时按工具名推断，保证协议链状态标记不缺失。
+                  const status = r.status || inferToolExecStatus({ name: r.name, resultText: r.resultText })
+                  history.push({
+                    role: 'tool',
+                    tool_call_id: r.toolCallId || (r as any).id,
+                    content: formatToolResultForModel(sanitizeToolResult(r.resultText), status, isZh.value),
+                  })
                 }
                 if (t.content) history.push({ role: 'assistant', content: replayText(t.content) })
               } else if (t.content) {
@@ -513,6 +590,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 history,
                 userPrompt: promptWithCards,
                 profilePrompt,
+                // 多模态载荷过去完全没进「披露的即所发」统计
+                mediaPartsCount:
+                  (unifiedMedia.images?.length || 0) + (unifiedMedia.mediaParts?.length || 0),
               })
             }
 
@@ -538,6 +618,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 profilePrompt,
                 images: unifiedMedia.images,
                 mediaParts: unifiedMedia.mediaParts,
+                traceId: requestTraceId,
               },
               {
                 onReasoningDelta(_delta, accumulatedReasoning) {
@@ -561,6 +642,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                   assistantTurn.content = accumulatedContent
                   onTurnsChanged?.()
                 },
+                onStall: onStreamStall,
               }
             )
 
@@ -594,21 +676,38 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             if (mimoRes.toolCalls?.length) {
               // 工具调用流已触发：清空首轮预发言草稿，避免在后续续轮流式输出时发生突兀覆盖闪烁
               assistantTurn.content = ''
-              const toolResults: Array<{ id: string; name: string; resultText: string }> = []
+              const toolResults: Array<{ id: string; name: string; resultText: string; status: ToolExecStatus }> = []
               for (const call of mimoRes.toolCalls) {
                 // 「停止生成」后不再执行后续工具副作用（已执行的照常持久化）
                 if (controller.signal.aborted) break
                 assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
                 // 单工具异常如实回传错误结果（role:'tool'），不冒充成功、不落入本地兜底改写
                 let resultText: string
+                let threw = false
                 try {
                   resultText = await runAgentToolCall(assistantTurn, controller, call)
                 } catch (toolErr) {
                   console.warn('[ulink AI] tool execution failed:', toolErr)
+                  threw = true
                   resultText = t('ai.toolResultError', { name: call.name })
                   assistantTurn.steps.push({ text: resultText, done: false })
                 }
-                toolResults.push({ id: call.id, name: call.name, resultText })
+                // 语义状态：多数工具只生成 HITL 待确认卡片，不能让模型误以为「已办成」。
+                // notExecutedTexts 用 t() 现算，避免依赖具体语言包字面量。
+                const status = inferToolExecStatus({
+                  name: call.name,
+                  args: call.arguments,
+                  argsParseFailed: call.argsParseFailed,
+                  resultText,
+                  threw,
+                  notExecutedTexts: [
+                    t('ai.toolResultArgsInvalid', { name: call.name }),
+                    t('ai.toolResultArgsRejected', { name: call.name }),
+                    t('ai.toolResultNotExecuted', { name: call.name }),
+                    t('ai.toolResultUnknown', { name: call.name }),
+                  ],
+                })
+                toolResults.push({ id: call.id, name: call.name, resultText, status })
               }
 
               // 持久化到会话轮次：多轮对话还原 assistant→tool→assistant 协议链用。
@@ -624,6 +723,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                 toolCallId: r.id,
                 name: r.name,
                 resultText: r.resultText,
+                status: r.status,
               }))
               sessions.value = updateSession(currentSessionId.value, chatTurns.value)
 
@@ -661,7 +761,13 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                   roundHistory.push({
                     role: 'tool',
                     tool_call_id: r.id,
-                    content: sanitizeToolResult(r.resultText),
+                    // 状态标记必须在脱敏/限长之后拼，保证不被截断；模型据此区分
+                    // 「卡片已生成但未确认」与「操作已真实落地」。
+                    content: formatToolResultForModel(
+                      sanitizeToolResult(r.resultText),
+                      r.status,
+                      isZh.value,
+                    ),
                   })
                 }
 
@@ -677,6 +783,11 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                       signal: controller.signal,
                       history: roundHistory,
                       enableTools: !isLastRound,
+                      // 续轮必须与首轮看到同一份动态情境，否则第 2 步起 Agent 在
+                      // 「失忆」状态下继续操作书签库（且 system prompt 前后不一致）。
+                      contextSlice,
+                      profilePrompt,
+                      traceId: requestTraceId,
                     },
                     {
                       onContentDelta(_delta, accumulatedContent) {
@@ -684,6 +795,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                         assistantTurn.content = accumulatedContent
                         onTurnsChanged?.()
                       },
+                      onStall: onStreamStall,
                     },
                   )
                   if (controller.signal.aborted) return
@@ -707,18 +819,33 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
                     assistantTurn.steps.push({ text: t('ai.toolCallStep', { name: call.name }), done: true })
                     // 同上：工具异常如实回传错误结果，不冒充成功
                     let resultText: string
+                    let threw = false
                     try {
                       resultText = await runAgentToolCall(assistantTurn, controller, call)
                     } catch (toolErr) {
                       console.warn('[ulink AI] tool execution failed:', toolErr)
+                      threw = true
                       resultText = t('ai.toolResultError', { name: call.name })
                       assistantTurn.steps.push({ text: resultText, done: false })
                     }
-                    pendingResults.push({ id: call.id, name: call.name, resultText })
+                    const status = inferToolExecStatus({
+                      name: call.name,
+                      args: call.arguments,
+                      argsParseFailed: call.argsParseFailed,
+                      resultText,
+                      threw,
+                      notExecutedTexts: [
+                        t('ai.toolResultArgsInvalid', { name: call.name }),
+                        t('ai.toolResultArgsRejected', { name: call.name }),
+                        t('ai.toolResultNotExecuted', { name: call.name }),
+                        t('ai.toolResultUnknown', { name: call.name }),
+                      ],
+                    })
+                    pendingResults.push({ id: call.id, name: call.name, resultText, status })
                     // 多轮工具链累积持久化：多轮对话回放 assistant→tool 协议链不失忆
                     if (assistantTurn.toolCalls && assistantTurn.toolResults) {
                       assistantTurn.toolCalls.push({ id: call.id, name: call.name, arguments: call.arguments })
-                      assistantTurn.toolResults.push({ toolCallId: call.id, name: call.name, resultText })
+                      assistantTurn.toolResults.push({ toolCallId: call.id, name: call.name, resultText, status })
                     }
                   }
                   sessions.value = updateSession(currentSessionId.value, chatTurns.value)
@@ -743,26 +870,22 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
             if (mimoSuccess) {
               console.warn('[ulink AI] post-response processing failed:', mimoErr)
               assistantTurn.loading = false
+              assistantTurn.isThinking = false
               if (!assistantTurn.content) assistantTurn.content = t('ai.searchFailed')
               return
             }
             console.warn('[ulink AI] MiMo API call failed:', mimoErr)
-            assistantTurn.loading = false
-            assistantTurn.candidates = []
-            if (!assistantTurn.content) {
-              const errMsg = mimoErr instanceof Error ? mimoErr.message : ''
-              assistantTurn.content = errMsg ? `${t('ai.searchFailed')} (${errMsg})` : t('ai.searchFailed')
-            }
+            // 统一失败收口：复位思考态 + 保留流式中断前已生成的内容 + 本地化原因
+            failTurn(mimoErr)
           }
         } else {
-          assistantTurn.loading = false
-          assistantTurn.candidates = []
-          assistantTurn.content = t('ai.searchFailed')
+          failTurn(new Error(t('ai.errDisabled')))
         }
 
         // 彻底废除保底假回复：AI 请求失败如实报错，绝不伪装成离线甄选搜索
         if (!mimoSuccess) {
           assistantTurn.loading = false
+          assistantTurn.isThinking = false
           assistantTurn.candidates = []
           if (!assistantTurn.content) {
             assistantTurn.content = t('ai.searchFailed')
@@ -793,7 +916,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       }
 
       // 智能附带预判快捷按钮：若尚未挂载预判选项，根据产物类型自动提供极简决策胶囊（报错轮次不展示假预判）
-      const isErrorReply = !assistantTurn.content || assistantTurn.content.startsWith(t('ai.searchFailed'))
+      const isErrorReply = replyFailed || !assistantTurn.content || assistantTurn.content.startsWith(t('ai.searchFailed'))
       if (!assistantTurn.suggestedReplies?.length && !isErrorReply) {
         if (assistantTurn.actionCard) {
           assistantTurn.suggestedReplies = ['✨ 好的，执行', '🔄 换个方案', '✏️ 我想调整一下']
@@ -805,9 +928,8 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       }
     } catch (err: unknown) {
       if (controller.signal.aborted) return
-      assistantTurn.loading = false
-      assistantTurn.content = t('ai.searchFailed')
       console.error('[ulink AI] search error:', err)
+      failTurn(err)
     } finally {
       // 兜底收尾：任何路径遗留的思考气泡（如 abort 竞态）一律置为已停止，防悬挂
       if (assistantTurn.loading) {

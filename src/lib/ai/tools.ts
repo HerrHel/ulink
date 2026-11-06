@@ -2,7 +2,7 @@
  * tools.ts — ULink Agent 工业级标准 Function Calling / Tool Calling 规范体系
  *
  * 遵循 OpenAI Tool Calling 标准格式（type: 'function', function: { name, description, parameters }）
- * 支持的大模型自主调用：
+ * 支持的大模型自主调用（顺序与 ULINK_AGENT_TOOLS 数组一致）：
  * 1. audit_vault: 全库资产健康体检与评分
  * 2. inbox_zero: 收件箱智能聚类与清零迁移
  * 3. create_workspace: 围绕特定主题装配专属笔记工作台并嵌入工具
@@ -11,13 +11,18 @@
  * 6. toggle_theme: 切换系统主题（深色/浅色/自动）
  * 7. change_view: 切换界面布局视图（宫格/列表/紧凑）
  * 8. export_data: 导出全量书签数据（HITL 二次确认后执行）
- * 9. batch_tag_bookmarks: 批量为指定书签写入标签属性（闭环落地）
- * 10. manage_categories: 全能分类管理（创建/重命名/删除/恢复/外观）
- * 11. manage_tags: 全能标签属性管理（创建/重命名/删除/恢复）
- * 12. manage_bookmarks: 全能书签治理（增删改查/移动/父子嵌套/置顶）
- * 13. manage_workspaces: 全能工作台装配（创建/命名/笔记/增删成员）
- * 14. manage_settings: 系统偏好与界面导航（主题/排版/跳转/清空回收站）
- * 15. deep_read_video: 【实验性】视频深度解析（口播 ASR 转写 + 画面网址 OCR，异步任务；需浏览器扩展，B站正式/抖音小红书实验性）
+ * 9. plan_task_dag: 复杂/多步骤治理需求的透明执行规划图（Task DAG，步骤拆解与依赖流）
+ * 10. preview_draft_diff: 批量重组/移动/合并前的可视化虚拟演练草稿层（Draft Diff Sandbox，供审查勾选）
+ * 11. read_webpage: 抓取并阅读指定公开网址的正文 Markdown 与元数据（标题/描述/正文）
+ * 12. deep_read_video: 【实验性】视频深度解析（口播 ASR 转写 + 画面网址 OCR，异步任务；需浏览器扩展，B站正式/抖音小红书实验性）
+ * 13. batch_tag_bookmarks: 批量为指定书签写入标签属性（闭环落地）
+ * 14. manage_categories: 全能分类管理（创建/重命名/删除/恢复/外观）
+ * 15. manage_tags: 全能标签属性管理（创建/重命名/删除/恢复）
+ * 16. manage_bookmarks: 全能书签治理（增删改查/移动/父子嵌套/置顶）
+ * 17. manage_workspaces: 全能工作台装配（创建/命名/笔记/增删成员）
+ * 18. manage_settings: 系统偏好与界面导航（主题/排版/跳转/清空回收站）
+ *
+ * 数量以 ULINK_AGENT_TOOLS 数组为准，增删工具须同步本注释。
  */
 
 export interface AgentToolParamProperty {
