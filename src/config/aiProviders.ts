@@ -75,7 +75,7 @@ export const AI_PROVIDERS: readonly AiProviderInfo[] = [
 ]
 
 /** 清单最后更新时间——展示在设置页，便于用户判断信息是否新鲜 */
-export const AI_PROVIDERS_UPDATED_AT = '2026-10-25'
+export const AI_PROVIDERS_UPDATED_AT = '2026-11-07'
 
 /**
  * 隐私政策与用户协议中引用的《隐私政策》地址（产品内可直接访问）
