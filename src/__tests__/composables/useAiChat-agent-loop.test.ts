@@ -364,7 +364,35 @@ describe('useAiChat — 真 Agent 多步工具链循环', () => {
     const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
     expect(searchMock).not.toHaveBeenCalled()
     expect(assistantTurn?.candidates).toEqual([])
-    expect(assistantTurn?.content).toMatch(/搜索失败|Rate limit/i)
+    expect(assistantTurn?.content).toMatch(/检索失败|Search failed/i)
+    // 底层英文异常不再直接透给用户（界面只给本地化原因，原文留在 console）
+    expect(assistantTurn?.content).not.toContain('Rate limit')
+    expect(assistantTurn?.suggestedReplies).toBeUndefined()
+  })
+
+  it('流式中断保留已生成片段并复位思考态，不把英文异常透给用户', async () => {
+    streamMock.mockReset()
+    // mimoStream 中断时上抛的 MiMoStreamError 形状（标记 + 已生成片段）
+    streamMock.mockRejectedValueOnce(
+      Object.assign(new Error('network error'), {
+        isStreamError: true,
+        partialContent: '已经生成的开头',
+        partialReasoning: '思考到这里被打断',
+      }),
+    )
+
+    const ai = useAiChat()
+    ai.aiQuery.value = '分析我的书库'
+    await ai.handleAiSubmit()
+
+    const assistantTurn = ai.chatTurns.value.find((t) => t.role === 'assistant')
+    // 思考态必须复位，否则界面永远停在「正在思考…」
+    expect(assistantTurn?.isThinking).toBe(false)
+    expect(assistantTurn?.loading).toBe(false)
+    // 已生成内容与已生成思考都保留，正文追加中断说明
+    expect(assistantTurn?.reasoning).toBe('思考到这里被打断')
+    expect(assistantTurn?.content).toContain('已经生成的开头')
+    expect(assistantTurn?.content).not.toContain('network error')
     expect(assistantTurn?.suggestedReplies).toBeUndefined()
   })
 

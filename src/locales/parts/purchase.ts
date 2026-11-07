@@ -11,6 +11,7 @@
 export const purchaseZh = {
   purchase: {
     title: '升级 与链 PRO',
+    renewTitle: '续费 与链 PRO',
     subtitle: '多模态音视频情报提炼 · AI 知识深加工 · 收藏夹全自动自愈 · 随订随用',
     noPlans: '暂无可购买的套餐',
     payNow: '立即支付',
@@ -55,6 +56,7 @@ export const purchaseZh = {
     currentPlanBadge: '当前方案',
     featuresStarter: '包含基础权益：',
     featuresPro: '包含免费版全部功能，升级即可尊享：',
+    featuresProActive: '包含免费版全部功能，尊享全部 PRO 特权：',
     fromLabel: '起步价',
     cycleAll: 'PRO',
     cycleMonthly: '包月',
@@ -105,6 +107,7 @@ export const purchaseZh = {
 export const purchaseEn = {
   purchase: {
     title: 'Upgrade to ulink PRO',
+    renewTitle: 'Renew ulink PRO',
     subtitle: 'Multimodal video intelligence · AI knowledge processing · Autonomous health patrol',
     noPlans: 'No plans available',
     payNow: 'Pay now',
@@ -149,6 +152,7 @@ export const purchaseEn = {
     currentPlanBadge: 'Current plan',
     featuresStarter: 'Get started with:',
     featuresPro: 'Everything in Free Plan, plus:',
+    featuresProActive: 'Includes all Free features, plus full PRO privileges:',
     fromLabel: 'From',
     cycleAll: 'PRO',
     cycleMonthly: 'Monthly',

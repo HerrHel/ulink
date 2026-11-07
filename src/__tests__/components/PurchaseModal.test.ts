@@ -172,23 +172,37 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     wrapper.unmount()
   })
 
-  it('5. 已购套餐卡片显示「续费」，未购套餐显示「升级」', async () => {
-    const wrapper = mount(PurchaseModal, {
+  it('5. 普通未购用户显示「升级」，已有 PRO 会员在任何 PRO 周期档位均显示「续费」', async () => {
+    // A. 免费版用户：PRO 方案显示「升级」
+    const freeWrapper = mount(PurchaseModal, {
+      props: { visible: true, currentPlanId: 'free' },
+      attachTo: document.body,
+    })
+    await nextTick()
+    const freeYearlyBtn = freeWrapper.find('[data-testid="plan-plus_yearly"] .pur-card-btn')
+    expect(freeYearlyBtn.text()).toBe('升级')
+    expect(freeWrapper.find('.pur-title').text()).toBe('升级 与链 PRO')
+    freeWrapper.unmount()
+
+    // B. 已有 PRO 用户：PRO 方案显示「续费」，弹窗标题显示「续费 与链 PRO」
+    const proWrapper = mount(PurchaseModal, {
       props: { visible: true, currentPlanId: 'plus_yearly' },
       attachTo: document.body,
     })
     await nextTick()
 
-    const yearlyBtn = wrapper.find('[data-testid="plan-plus_yearly"] .pur-card-btn')
+    expect(proWrapper.find('.pur-title').text()).toBe('续费 与链 PRO')
+    const yearlyBtn = proWrapper.find('[data-testid="plan-plus_yearly"] .pur-card-btn')
     expect(yearlyBtn.text()).toBe('续费')
+    expect(proWrapper.find('[data-testid="plan-plus_yearly"] .pur-features-heading').text()).toContain('尊享全部 PRO 特权')
 
-    const tabs = wrapper.findAll('.pur-cycle-tab')
+    const tabs = proWrapper.findAll('.pur-cycle-tab')
     await tabs[0].trigger('click')
     await nextTick()
-    const monthlyBtn = wrapper.find('[data-testid="plan-plus_monthly"] .pur-card-btn')
-    expect(monthlyBtn.text()).toBe('升级')
+    const monthlyBtn = proWrapper.find('[data-testid="plan-plus_monthly"] .pur-card-btn')
+    expect(monthlyBtn.text()).toBe('续费')
 
-    wrapper.unmount()
+    proWrapper.unmount()
   })
 
   it('6. 月付不显示冗余的折合单价，季付角标使用统一折扣类', async () => {

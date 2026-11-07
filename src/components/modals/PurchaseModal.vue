@@ -5,7 +5,7 @@
     :class="{ open: visible }"
     role="dialog"
     aria-modal="true"
-    :aria-label="t('purchase.title')"
+    :aria-label="isUserPro ? t('purchase.renewTitle') : t('purchase.title')"
     @mousedown="onMaskMouseDown"
     @click="onMaskClick"
   >
@@ -13,7 +13,7 @@
       <!-- 顶部标题与周期切换（极简克制风格） -->
       <div class="pur-head">
         <div class="pur-head-main">
-          <h3 class="pur-title">{{ t('purchase.title') }}</h3>
+          <h3 class="pur-title">{{ isUserPro ? t('purchase.renewTitle') : t('purchase.title') }}</h3>
           <p class="pur-subtitle">{{ t('purchase.subtitle') }}</p>
         </div>
 
@@ -98,8 +98,8 @@
                     type="button"
                     class="pur-card-btn"
                     :class="{
-                      'btn-primary-tier': !p.isCurrent && !p.isFree,
-                      'btn-renew-tier': p.isCurrent && !p.isFree,
+                      'btn-primary-tier': !isUserPro && !p.isFree,
+                      'btn-renew-tier': isUserPro && !p.isFree,
                       'btn-current-tier': p.isFree && isCurrentFree,
                       'btn-free-downgrade': p.isFree && !isCurrentFree,
                     }"
@@ -137,7 +137,7 @@
 
                 <!-- 特性分组标题 -->
                 <div class="pur-features-heading">
-                  {{ p.isFree ? t('purchase.featuresStarter') : t('purchase.featuresPro') }}
+                  {{ p.isFree ? t('purchase.featuresStarter') : (isUserPro ? t('purchase.featuresProActive') : t('purchase.featuresPro')) }}
                 </div>
 
                 <!-- 特性列表（站点主题色勾号清单） -->
@@ -375,7 +375,7 @@
 
               <div class="pur-plan-intro">
                 <h4 class="pur-intro-title">
-                  {{ props.currentPlanId === activePlan?.planId ? t('purchase.renewFor', { name: activePlan?.chineseName || activePlan?.name }) : t('purchase.upgradeTo', { name: activePlan?.chineseName || activePlan?.name }) }}
+                  {{ isUserPro ? t('purchase.renewFor', { name: activePlan?.chineseName || activePlan?.name }) : t('purchase.upgradeTo', { name: activePlan?.chineseName || activePlan?.name }) }}
                 </h4>
                 <p class="pur-intro-desc">
                   {{ activePlan?.desc }}
@@ -424,13 +424,38 @@ import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 import { fetchPurchasePlans, getCachedPlans, type PlanRow } from '../../composables/domain/usePurchasePlans.js'
 import { useAuthStore } from '../../stores/auth.js'
+import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 import { toast } from '../../lib/toast.js'
 
 const props = defineProps<{ visible: boolean; currentPlanId?: string }>()
 const authStore = useAuthStore()
+const entService = useEntitlement()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'paid'): void }>()
 
 const { onMaskMouseDown, onMaskClick } = useMaskClose(() => close())
+
+function isSamePlanTier(a?: string, b?: string): boolean {
+  if (!a || !b) return false
+  if (a === b) return true
+  const norm = (id: string) => id.replace(/^plus_/, 'pro_')
+  return norm(a) === norm(b)
+}
+
+const effectivePlanId = computed(() => {
+  if (props.currentPlanId && props.currentPlanId !== 'free') {
+    return props.currentPlanId
+  }
+  if (entService.isPaid.value && entService.planId.value) {
+    return entService.planId.value
+  }
+  return props.currentPlanId || 'free'
+})
+
+const isUserPro = computed(() => {
+  return entService.isPaid.value || (effectivePlanId.value !== '' && effectivePlanId.value !== 'free')
+})
+
+const isCurrentFree = computed(() => !isUserPro.value)
 
 const pay = usePayment()
 const stage = ref<'select' | 'paying' | 'done'>('select')
@@ -443,7 +468,8 @@ const showCompareTable = ref(false)
 
 function applyPlanSelection(list: PlanRow[]) {
   if (list.length > 0) {
-    const current = list.find((p) => p.planId === props.currentPlanId && p.priceCents > 0)
+    const curId = effectivePlanId.value
+    const current = list.find((p) => isSamePlanTier(curId, p.planId) && p.priceCents > 0)
     const monthly = list.find((p) => p.periodDays === 30 && p.priceCents > 0)
     const quarterly = list.find((p) => (p.periodDays || 0) >= 80 && (p.periodDays || 0) <= 120 && p.priceCents > 0)
     const yearly = list.find((p) => (p.periodDays || 0) >= 365 && p.priceCents > 0)
@@ -488,8 +514,6 @@ const order = computed(() => pay.order.value)
 const error = computed(() => pay.error.value)
 const creating = computed(() => pay.creating.value)
 const expired = computed(() => pay.expired.value)
-
-const isCurrentFree = computed(() => !props.currentPlanId || props.currentPlanId === 'free')
 
 interface FeatureBullet {
   text: string
@@ -576,7 +600,7 @@ const displayCards = computed<TierCardView[]>(() => {
     const isMonthly = (p.periodDays || 0) >= 25 && (p.periodDays || 0) <= 35
     const isTest = (p.periodDays || 0) <= 7
 
-    const isCurrent = props.currentPlanId === p.planId
+    const isCurrent = isSamePlanTier(effectivePlanId.value, p.planId)
     const isRecommended = isYearly // 年付设为推荐最划算档
 
     let chineseName = p.name || 'PRO'
@@ -738,8 +762,8 @@ function getCardButtonLabel(p: TierCardView): string {
   if (p.isFree) {
     return isCurrentFree.value ? t('purchase.current') : (t('purchase.freeTierTitle') || '体验套餐')
   }
-  // 只有当前用户已经购买了该套餐，才显示「续费」；否则一律显示「升级」
-  if (props.currentPlanId === p.planId) {
+  // 已拥有 PRO 会员的用户，在任何 PRO 档位均显示「续费」
+  if (isUserPro.value) {
     return t('purchase.renew') || '续费'
   }
   return t('purchase.upgrade') || '升级'
@@ -934,10 +958,18 @@ watch(
       qrDataUrl.value = ''
       pay.reset()
       void loadPlans()
+      void entService.refresh()
     } else {
       pay.stopPolling()
       stopCountdown()
     }
+  },
+)
+
+watch(
+  () => effectivePlanId.value,
+  () => {
+    applyPlanSelection(plans.value)
   },
 )
 

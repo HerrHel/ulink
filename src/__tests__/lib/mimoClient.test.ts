@@ -311,5 +311,98 @@ describe('mimoClient', () => {
         globalThis.fetch = origFetch
       }
     })
+    it('服务端补发流中断错误帧时抛出可识别的流中断错误并携带已生成内容', async () => {
+      const sseChunks = [
+        'data: {"choices":[{"delta":{"reasoning_content":"先想一下"}}]}' + String.fromCharCode(10, 10),
+        'data: {"choices":[{"delta":{"content":"部分回答"}}]}' + String.fromCharCode(10, 10),
+        'data: {"error":"stream_interrupted"}' + String.fromCharCode(10, 10),
+      ]
+
+      const stream = new ReadableStream({
+        start(controller) {
+          for (const chunk of sseChunks) controller.enqueue(new TextEncoder().encode(chunk))
+          controller.close()
+        },
+      })
+
+      const origFetch = globalThis.fetch
+      globalThis.fetch = async () =>
+        new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+
+      try {
+        await expect(
+          askMiMoStream('测试问题', { categories: dummyCats, customAttributes: dummyAttrs })
+        ).rejects.toMatchObject({
+          isStreamError: true,
+          partialContent: '部分回答',
+          partialReasoning: '先想一下',
+        })
+      } finally {
+        globalThis.fetch = origFetch
+      }
+    })
+
+    it('响应体中途断流时保留已生成片段，不整段丢弃', async () => {
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode('data: {"choices":[{"delta":{"content":"前半段"}}]}' + String.fromCharCode(10, 10))
+          )
+          // 先让首块被消费，再模拟传输层断流（同步 error 会清空队列，测不到已生成片段）
+          setTimeout(() => controller.error(new Error('network error')), 0)
+        },
+      })
+
+      const origFetch = globalThis.fetch
+      globalThis.fetch = async () =>
+        new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+
+      try {
+        await expect(
+          askMiMoStream('测试问题', { categories: dummyCats, customAttributes: dummyAttrs })
+        ).rejects.toMatchObject({
+          isStreamError: true,
+          partialContent: '前半段',
+        })
+      } finally {
+        globalThis.fetch = origFetch
+      }
+    })
+
+    it('长时间无增量时回调 onStall（提示响应缓慢），请求本身不中断', async () => {
+      // 用对象持有 controller，避免闭包赋值被 TS 收窄成 null
+      const streamCtl: { close?: () => void } = {}
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode('data: {"choices":[{"delta":{"content":"开头"}}]}' + String.fromCharCode(10, 10))
+          )
+          // 保持打开：模拟上游迟迟不再推数据
+          streamCtl.close = () => controller.close()
+        },
+      })
+
+      const origFetch = globalThis.fetch
+      globalThis.fetch = async () =>
+        new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+
+      const stalls: number[] = []
+      vi.useFakeTimers()
+      try {
+        const pending = askMiMoStream(
+          '测试问题',
+          { categories: dummyCats, customAttributes: dummyAttrs },
+          { onStall: (idleMs) => stalls.push(idleMs) }
+        )
+        await vi.advanceTimersByTimeAsync(35000)
+        expect(stalls.length).toBe(1)
+        // 请求未因空闲被中断：仍要等上游自己结束
+        streamCtl.close?.()
+        await pending
+      } finally {
+        vi.useRealTimers()
+        globalThis.fetch = origFetch
+      }
+    })
   })
 })

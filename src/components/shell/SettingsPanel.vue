@@ -511,7 +511,7 @@
                   <!-- 在线订阅入口：价格与套餐来自服务端 plans 表，前端不硬编码 -->
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
-                      <span class="sp-row-title">{{ t('purchase.title') }}</span>
+                      <span class="sp-row-title">{{ entitlement.isPaid ? t('purchase.renewTitle') : t('purchase.title') }}</span>
                       <span class="sp-row-desc">{{ t('purchase.subtitle') }}</span>
                     </div>
                     <div class="sp-row-ctrl">

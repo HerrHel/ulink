@@ -70,7 +70,7 @@
   <ShareModal />
 </template>
 <template v-if="store.modals.purchase">
-  <PurchaseModal :visible="store.modals.purchase" @close="store.modals.purchase = false" />
+  <PurchaseModal :visible="store.modals.purchase" :current-plan-id="entService.planId.value" @close="store.modals.purchase = false" />
 </template>
 <template v-if="store.modals.aiEnrich">
   <AiEnrichModal />
@@ -117,6 +117,7 @@ import { useAppLifecycle, onShareRoute, whenDataReady } from './composables/useA
 import { useE2E } from './composables/domain/useE2E.js'
 import { useCloudSync } from './composables/domain/useCloudSync.js'
 import { useVault } from './composables/domain/useVault.js'
+import { useEntitlement } from './composables/domain/useEntitlement.js'
 import { useE2EStore } from './stores/e2e.js'
 import { useVaultStore } from './stores/vault.js'
 import { useUIStore } from './stores/ui.js'
@@ -169,6 +170,7 @@ const AiEnrichModal = defineAsyncComponent(() => import('./components/modals/AiE
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
 const store = useAppStore()
+const entService = useEntitlement()
 useApp()
 useAppLifecycle()
 const { handlers } = useAppHandlers()
