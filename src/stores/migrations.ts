@@ -65,13 +65,15 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
       // dedup 后 customAttributes 删旧 id，组的 g.attributes 旧 id 永久失联
       // （attributeMap[旧id]=undefined → 组标签消失）。这里对 siblingGroups
       // 做与 bookmark 完全对称的 attr id 重写。
-      (d.bookmarks || []).forEach((b: Bookmark) => {
+      const bms = result.bookmarks || d.bookmarks || [];
+      bms.forEach((b: Bookmark) => {
         if (b.attributes && b.attributes[a.id]) {
           b.attributes[keep.id] = b.attributes[a.id]
           delete b.attributes[a.id]
         }
       });
-      (d.siblingGroups || []).forEach((g: SiblingGroup) => {
+      const grps = result.siblingGroups || d.siblingGroups || [];
+      grps.forEach((g: SiblingGroup) => {
         if (g.attributes && g.attributes[a.id]) {
           g.attributes[keep.id] = g.attributes[a.id]
           delete g.attributes[a.id]
@@ -163,7 +165,7 @@ export function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGr
   }
   let html = ''
   let lastIdx = 0
-  const re2 = /\[([^\]]+)\]\(([a-zA-Z0-9]+)\)|@(\S+)/g
+  const re2 = /\[([^\]]+)\]\(([a-zA-Z0-9]+)\)|(?<=^|\s)@([^\s@]+)/g
   let m2: RegExpExecArray | null
   while ((m2 = re2.exec(text)) !== null) {
     html += esc(text.slice(lastIdx, m2.index))

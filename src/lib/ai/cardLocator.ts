@@ -74,6 +74,11 @@ export async function locateAndHighlightCard(
     targetCatId = bm.categoryId
   }
 
+  // 1.5. 视图对齐：若当前处于 AI 工作区等非书签视图，自动切回主网格视图以挂载 CardGrid
+  if (ui.activeView !== 'bookmarks') {
+    ui.activeView = 'bookmarks'
+  }
+
   // 2. 状态对齐：若不在「全部分类」且目标不在当前分类，自动切分类
   if (targetCatId && ui.curCat !== CAT_ALL && ui.curCat !== targetCatId) {
     ui.curCat = targetCatId

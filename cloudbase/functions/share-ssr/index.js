@@ -49,9 +49,12 @@ const PASS_TRY_LIMIT = 10
 const PASS_TRY_WINDOW_SEC = 600
 
 function clientIp(req) {
+  const real = req.headers['x-real-ip']
+  if (typeof real === 'string' && real.trim()) return real.trim()
   const xff = String(req.headers['x-forwarded-for'] || '')
-  const first = xff.split(',')[0] || ''
-  return first.trim() || req.headers['x-real-ip'] || req.headers['cf-connecting-ip'] || 'unknown'
+  const hops = xff.split(',').map((s) => s.trim()).filter(Boolean)
+  if (hops.length) return hops[hops.length - 1]
+  return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
 }
 
 function sha256Hex(s) {

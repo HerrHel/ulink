@@ -3,7 +3,7 @@
     <div class="modal">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.alert" class="sp-icon"></span> {{ isUpgraded ? t('e2e.followTitle') : t('e2e.conflictTitle') }}</span>
-        <button class="modal-close" @click="close" :aria-label="t('common.close')">&times;</button>
+        <button class="modal-close" :disabled="loading || busy" @click="close" :aria-label="t('common.close')">&times;</button>
       </div>
       <div class="modal-body">
         <!-- 升级模式：其他设备主动改过主密码 → 跟随迁移（同步修改） -->
@@ -105,7 +105,7 @@ watch(() => props.open, (isOpen) => {
   }
 })
 
-function close() { emit('close') }
+function close() { if (loading.value || busy.value) return; emit('close') }
 
 /** 升级模式：跟随其他设备的主密码修改（同步迁移本机数据到同一把新 key） */
 async function onFollow() {

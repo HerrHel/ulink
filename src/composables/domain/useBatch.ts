@@ -45,26 +45,19 @@ export async function batchDelete() {
   if (!confirmed) return
   const ds = useDataStore()
   const removedGroupIds: string[] = []
-  const removedBookmarkIds: string[] = []
+  const uniqueBmIds = new Set<string>()
   ui.batchSelected.forEach(id => {
     if (id.startsWith('group:')) {
-      const gid = id.slice(6)
-      ds.deleteGroup(gid)
-      removedGroupIds.push(gid)
+      removedGroupIds.push(id.slice(6))
     } else {
-      // 递归含子书签。删除仅调 deleteBookmark——它会自动从所属组的 bookmarkIds
-      // 中剔除该 bid，并把「原本所属的组」记录到 store._deletedGroupMemberships，
-      // 供回收站 restoreBookmark 恢复组关系。旧代码在此又手动剔组一遍并自维护
-      // removedFromGroups，导致 deleteBookmark 内部 indexOf 找不到（已提前被剔）
-      // → _deletedGroupMemberships 记空 → 用户不撤销而进回收站恢复时组关系丢失。
-      // 统一走 deleteBookmark 的组关系记录，undo 与回收站共用同一恢复路径。
+      // 递归含子书签，使用 Set 去重，防止用户同时勾选父子项时重复操作与撤销栈重复
       const ids = collectSubIds(id)
-      ids.forEach(bid => {
-        ds.deleteBookmark(bid)
-        removedBookmarkIds.push(bid)
-      })
+      ids.forEach(bid => uniqueBmIds.add(bid))
     }
   })
+  removedGroupIds.forEach(gid => ds.deleteGroup(gid))
+  const removedBookmarkIds = Array.from(uniqueBmIds)
+  removedBookmarkIds.forEach(bid => ds.deleteBookmark(bid))
   saveAppData()
   ui.batchSelected.splice(0)
   ui.batchMode = false
@@ -86,18 +79,19 @@ export function batchMoveToCat(catId: string) {
   if (!ui.batchSelected.length) return
   const ds = useDataStore()
   const count = ui.batchSelected.length
+  const groupIds: string[] = []
+  const uniqueBmIds = new Set<string>()
   ui.batchSelected.forEach(id => {
     if (id.startsWith('group:')) {
-      ds.updateGroup(id.slice(6), { categoryId: catId })
+      groupIds.push(id.slice(6))
     } else {
-      // 递归移动子书签：与 batchDelete 保持一致的父子语义——
-      // 否则父移到新分类、子留在原分类，子书签将无法在原分类顶层显示
-      //（!b.parentId 过滤），又因父不在原分类而无从展开访问，分类归属与
-      // 可见性分裂。collectSubIds 返回 [id, ...所有子孙]，一并改 categoryId。
+      // 递归移动子书签：父子一并收集，并用 Set 去重
       const ids = collectSubIds(id)
-      ids.forEach(bid => ds.updateBookmark(bid, { categoryId: catId }))
+      ids.forEach(bid => uniqueBmIds.add(bid))
     }
   })
+  groupIds.forEach(gid => ds.updateGroup(gid, { categoryId: catId }))
+  uniqueBmIds.forEach(bid => ds.updateBookmark(bid, { categoryId: catId }))
   saveAppData()
   ui.batchMode = false
   ui.batchSelected.splice(0)

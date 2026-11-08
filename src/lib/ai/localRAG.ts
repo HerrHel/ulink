@@ -451,17 +451,26 @@ export class VaultKnowledgeEngine {
 
     let currentLength = lines[0].length
 
+    const sanitizeField = (text: string, maxLen = 300): string => {
+      return redactSensitivePatterns(String(text ?? ''))
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ')
+        .replace(/[`]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxLen)
+    }
+
     for (const chunk of chunks) {
       const typeLabel = chunk.sourceType === 'bookmark' ? '书签' : '笔记'
-      const cleanTitle = redactSensitivePatterns(chunk.title)
-      const cleanUrl = chunk.url ? ` (${redactSensitivePatterns(chunk.url)})` : ''
+      const cleanTitle = sanitizeField(chunk.title, 100)
+      const cleanUrl = chunk.url ? ` (${sanitizeField(chunk.url, 200)})` : ''
       // 分类名/标签同样是用户数据，外送前与 title/url/content 同口径脱敏截断
       const tagPart = chunk.tags.length
-        ? ` [标签: ${chunk.tags.map((tag) => redactSensitivePatterns(tag).slice(0, 20)).join('/')}]`
+        ? ` [标签: ${chunk.tags.map((tag) => sanitizeField(tag, 20)).join('/')}]`
         : ''
-      const catPart = chunk.category ? ` [分类: ${redactSensitivePatterns(chunk.category).slice(0, 40)}]` : ''
+      const catPart = chunk.category ? ` [分类: ${sanitizeField(chunk.category, 40)}]` : ''
 
-      const cleanContent = redactSensitivePatterns(chunk.content.replace(/\s+/g, ' ').slice(0, 150))
+      const cleanContent = sanitizeField(chunk.content, 150)
       const entry = `• [${typeLabel}] ${cleanTitle}${cleanUrl}${catPart}${tagPart}\n  内容: ${cleanContent}`
 
       if (currentLength + entry.length + 2 > maxChars) {

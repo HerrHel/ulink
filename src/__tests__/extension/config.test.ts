@@ -51,12 +51,12 @@ describe('extension/config.js — LinkVaultExtConfig 常量快照护栏', () => 
   })
 
   describe('挂载与键集契约', () => {
-    it('window.LinkVaultExtConfig 恰好含 3 个键无多余无缺失', () => {
+    it('window.LinkVaultExtConfig 恰好含 4 个键无多余无缺失', () => {
       const cfg = getCfg()
       expect(Object.keys(cfg).sort()).toEqual(
-        ['CLOUDBASE_ENV_ID', 'CLOUDBASE_PUBLISHABLE_KEY', 'MASTER_PASSWORD_TTL_MS'].sort(),
+        ['API_BASE', 'CLOUDBASE_ENV_ID', 'CLOUDBASE_PUBLISHABLE_KEY', 'MASTER_PASSWORD_TTL_MS'].sort(),
       )
-      expect(Object.keys(cfg).length).toBe(3)
+      expect(Object.keys(cfg).length).toBe(4)
     })
 
     it('每个键均有 truthy 字符串/数字值（无 undefined/null 占位）', () => {
@@ -67,6 +67,8 @@ describe('extension/config.js — LinkVaultExtConfig 常量快照护栏', () => 
       expect((cfg.CLOUDBASE_PUBLISHABLE_KEY as string).length).toBeGreaterThan(0)
       expect(typeof cfg.MASTER_PASSWORD_TTL_MS).toBe('number')
       expect(Number.isFinite(cfg.MASTER_PASSWORD_TTL_MS as number)).toBe(true)
+      expect(typeof cfg.API_BASE).toBe('string')
+      expect((cfg.API_BASE as string).startsWith('https://')).toBe(true)
     })
 
     it('不再保留历史 Supabase 键名（防 shim 读空值静默连错）', () => {

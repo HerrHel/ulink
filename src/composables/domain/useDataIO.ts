@@ -4,7 +4,7 @@
  *
  * A3: 支持多格式导入（LinkVault JSON、Chrome HTML、Raindrop JSON、CSV）
  */
-import { useDataStore, _cancelPendingHist } from '../../stores/data.js'
+import { useDataStore, _cancelPendingHist, DGM_KEY, DAM_KEY } from '../../stores/data.js'
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import * as persist from '../../stores/persist.js'
@@ -326,7 +326,7 @@ export function _mergeAttributes(ds: DataStore, customAttributes: AppData['custo
 /** 合并书签（去重：同 ID 或同 URL 跳过） */
 export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
   let imported = 0, skipped = 0
-  const existingUrls = new Set(ds.bookmarks.map(b => b.url?.toLowerCase()).filter(Boolean))
+  const existingUrls = new Set(ds.bookmarks.filter(b => !b.deletedAt).map(b => b.url?.toLowerCase()).filter(Boolean))
   // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
   const orderBase = ds.nextBookmarkOrder()
   for (const b of bookmarks) {
@@ -342,7 +342,7 @@ export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']):
       password: b.password || '',
       notes: b.notes || '',
       icon: b.icon || '',
-      categoryId: b.categoryId || CAT_UNCATEGORIZED,
+      categoryId: b.categoryId && ds.categoryMap[b.categoryId] ? b.categoryId : CAT_UNCATEGORIZED,
       parentId: b.parentId || null,
       order: orderBase + imported,
       useCount: b.useCount || 0,
@@ -466,6 +466,10 @@ export async function resetToDefaults() {
     : t('msg.resetAllConfirm')
   const ok = await showConfirm(msg)
   if (!ok) return
+  const damSnapshot = new Map<string, Array<{ entityId: string; kind: 'bookmark' | 'group' }>>()
+  for (const [k, v] of ds._deletedAttrMemberships) damSnapshot.set(k, v.map(m => ({ ...m })))
+  const dgmSnapshot = new Map<string, string[]>()
+  for (const [k, v] of ds._deletedGroupMemberships) dgmSnapshot.set(k, [...v])
   const snapshot = {
       categories: cloneDeep(ds.categories),
       bookmarks: cloneDeep(ds.bookmarks),
@@ -486,6 +490,10 @@ export async function resetToDefaults() {
     ds._deletedIds.clear()
     ds._changedFields.clear()
     ds._customCardOrder = null
+    ds._deletedGroupMemberships.clear()
+    ds._deletedAttrMemberships.clear()
+    safeSetItem(DGM_KEY, '[]')
+    safeSetItem(DAM_KEY, '[]')
     // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
     _cancelPendingHist()
     clearSearchCache()
@@ -504,6 +512,10 @@ export async function resetToDefaults() {
       ds.customAttributes = snapshot.customAttributes
       ds.siblingGroups = snapshot.siblingGroups
       ui.curCat = snapshot.curCat
+      ds._deletedGroupMemberships = dgmSnapshot
+      ds._deletedAttrMemberships = damSnapshot
+      ds._persistDeletedGroupMemberships()
+      ds._persistDeletedAttrMemberships()
       // 直接替换数组引用后必须重建索引：_bmMap/_grpMap/_catMap/_attrMap/_childrenIdx 仍指向
       // 重置前的旧数组元素，撤销恢复后全部失同步——后续 bookmarkMap[id]/childrenMap 查找
       // 会 miss、过滤/排序 getter 走懒回退分支（性能退化）、_syncMaps 才能恢复正常索引。

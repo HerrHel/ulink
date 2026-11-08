@@ -10,7 +10,7 @@ import { useAuth } from './useAuth.js'
 import { useE2E } from './useE2E.js'
 import { fetchLocalHistory, getLocalHistoryVersion, type LocalHistoryVersion } from '../../stores/storage.js'
 import { EditorManager } from '../../lib/editor.js'
-import type { EntityType } from '../../types.js'
+import type { EntityType, Bookmark } from '../../types.js'
 
 export function _getUserId(): string | null {
   const auth = useAuth()
@@ -51,7 +51,7 @@ export interface HistoryVersion {
 /** 取历史版本：本地 + 云端合并，按 created_at 降序，相同时间戳去重（保留云端） */
 export async function fetchHistory(itemId: string): Promise<HistoryVersion[]> {
   const ui = useUIStore()
-  const max = ui.historyMax
+  const max = ui.historyMax || 10
   const local = fetchLocalHistory(itemId)
 
   // HIST-1：未登录时跳过云端查询。旧实现未检查登录状态，_getUserId() 返回 null
@@ -136,14 +136,21 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
   }
 
   if (itemType === 'bookmark') {
+    const rawPid = plain.parentId as string | null
+    const safeParentId = (rawPid && ds.bookmarkMap[rawPid] && !ds.bookmarkMap[rawPid].deletedAt) ? rawPid : null
     ds.updateBookmark(itemId, {
-      title: plain.title as string, url: plain.url as string,
-      username: plain.username as string, password: plain.password as string,
-      notes: plain.notes as string, icon: plain.icon as string,
-      categoryId: plain.categoryId as string, parentId: plain.parentId as string | null,
-      order: plain.order as number, useCount: plain.useCount as number,
-      attributes: plain.attributes as Record<string, boolean>,
-      isExpanded: plain.isExpanded as boolean,
+      title: (plain.title as string) || '',
+      url: (plain.url as string) || '',
+      username: (plain.username as string) ?? '',
+      password: (plain.password as Bookmark['password']) ?? '',
+      notes: (plain.notes as string) ?? '',
+      icon: (plain.icon as string) ?? '',
+      categoryId: (plain.categoryId as string) || ds.bookmarkMap[itemId]?.categoryId || '',
+      parentId: safeParentId,
+      order: (plain.order as number) ?? 0,
+      useCount: (plain.useCount as number) ?? 0,
+      attributes: (plain.attributes as Record<string, boolean>) || {},
+      isExpanded: !!plain.isExpanded,
       // pinnedAt 复原：语义 A「恢复历史版本整套回滚含置顶态」。'pinnedAt' in plain 判老快照
       // schema 兼容（togglePin 加之前的历史快照无 pinnedAt 字段 → 不传 key，spread 保留 prev.pinnedAt
       // 不误取消置顶；含 pinnedAt 的快照恢复其值并进 _trackChange → 云同步 partial 推 pinned_at 列）。
@@ -155,12 +162,15 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
     // 对齐 useUndo.restoreSnapshot 的过滤策略。
     const filteredIds = (plain.bookmarkIds as string[] || []).filter(bid => ds.bookmarkMap[bid])
     ds.updateGroup(itemId, {
-      name: plain.name as string, categoryId: plain.categoryId as string,
-      icon: plain.icon as string, order: plain.order as number,
-      isExpanded: plain.isExpanded as boolean,
-      attributes: plain.attributes as Record<string, boolean>,
+      name: (plain.name as string) || '',
+      categoryId: (plain.categoryId as string) || ds.groupMap[itemId]?.categoryId || '',
+      icon: (plain.icon as string) ?? '',
+      order: (plain.order as number) ?? 0,
+      isExpanded: !!plain.isExpanded,
+      attributes: (plain.attributes as Record<string, boolean>) || {},
       bookmarkIds: filteredIds,
-      notes: plain.notes as string, useCount: plain.useCount as number,
+      notes: (plain.notes as string) ?? '',
+      useCount: (plain.useCount as number) ?? 0,
       // pinnedAt 复原（同 bookmark 分支语义 A + 老快照兼容）
       ...('pinnedAt' in plain ? { pinnedAt: plain.pinnedAt as number | undefined } : {}),
     })

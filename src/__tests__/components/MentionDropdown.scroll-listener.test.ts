@@ -36,7 +36,14 @@ vi.mock('../../composables/domain/useMention.js', () => ({
 
 // mock icons + utils 纯展示，避免拉真实 utils 依赖
 vi.mock('../../config/icons.js', () => ({ I: { note: '<svg/>' } }))
-vi.mock('../../utils.js', () => ({ favicon: () => '', domain: () => '' }))
+vi.mock('../../utils.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return {
+    ...mod,
+    favicon: () => '',
+    domain: () => '',
+  }
+})
 
 import MentionDropdown from '../../components/overlays/MentionDropdown.vue'
 

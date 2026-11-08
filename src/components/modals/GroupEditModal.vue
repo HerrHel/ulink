@@ -4,7 +4,7 @@
       <div class="modal-head"><h2>{{ t('ctx.editGroup') }}</h2><button class="modal-close" @click="onClose" :title="t('common.close')" :aria-label="t('common.close')" v-html="I.close"></button></div>
       <div class="modal-body">
         <div class="form-group"><label class="form-label" for="geName">{{ t('modal.groupEdit.name') }}</label><input type="text" class="form-input" id="geName" ref="geNameRef" v-model="geForm.name" :placeholder="t('modal.groupEdit.name')"></div>
-        <div class="form-group"><label class="form-label" for="geCatId">{{ t('modal.bookmark.category') }}</label><select class="form-select" id="geCatId" v-model="geForm.catId"><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+        <div class="form-group"><label class="form-label" for="geCatId">{{ t('modal.bookmark.category') }}</label><select class="form-select" id="geCatId" v-model="geForm.catId"><option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ displayText(c.name) }}</option></select></div>
         <div class="form-group">
           <label class="form-label" for="geIcon">{{ t('modal.bookmark.customIcon') }}</label>
           <input type="url" class="form-input" id="geIcon" v-model="geForm.icon" :placeholder="t('modal.bookmark.iconUrlPlaceholder')" @input="onPreviewGeIconUrl">
@@ -19,7 +19,7 @@
           <div class="check-group">
             <label v-for="a in selectableAttrs" :key="a.id" class="check-chip" :class="{ 'is-system-attr': a.id === ATTR_IS_GROUP }" :title="a.id === ATTR_IS_GROUP ? t('attr.systemDesc') : undefined">
               <input type="checkbox" :checked="a.id === ATTR_IS_GROUP || !!geForm.attrs[a.id]" :disabled="a.id === ATTR_IS_GROUP" @change="geForm.attrs[a.id] = ($event.target as HTMLInputElement).checked">
-              <span v-if="a.id === ATTR_IS_GROUP" class="check-chip-system-icon" aria-hidden="true" v-html="I.note"></span>{{ a.name }}<span v-if="a.id === ATTR_IS_GROUP" class="check-chip-system-tag">{{ t('attr.system') }}</span>
+              <span v-if="a.id === ATTR_IS_GROUP" class="check-chip-system-icon" aria-hidden="true" v-html="I.note"></span>{{ displayText(a.name) }}<span v-if="a.id === ATTR_IS_GROUP" class="check-chip-system-tag">{{ t('attr.system') }}</span>
             </label>
           </div>
         </div>
@@ -29,7 +29,7 @@
             <div v-if="!geBookmarkList.length" class="text-muted-sm pt-1">{{ t('cards.emptyTitle') }}</div>
             <div v-for="bm in geBookmarkList" :key="bm.id" class="list-item ge-bm-item">
               <img :src="bm.icon || faviconUrl(bm.url)" class="icon-xs" alt="">
-              <span class="flex-1 text-sm text-ellipsis">{{ bm.title }}</span>
+              <span class="flex-1 text-sm text-ellipsis">{{ displayText(bm.title) }}</span>
               <span class="text-xs text-muted">{{ domainName(bm.url) }}</span>
             </div>
           </div>
@@ -45,6 +45,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
+import { displayText } from '../../utils.js'
 import { faviconUrl, domainName } from './groupEditUrl.js'
 import { geForm, saveGroupEdit, closeGroupEdit, previewGeIconUrl, clearGeIcon } from '../../composables/domain/useGroup.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
@@ -61,11 +62,11 @@ watch(() => store.modals.groupEdit, (open) => {
   if (open) nextTick(() => geNameRef.value?.focus())
 })
 
-// A2-003：列表读 geForm 草稿，取消不写 store
+// A2-003：列表读 geForm 草稿，取消不写 store；排除软删除书签
 const geBookmarkList = computed(() => {
   return geForm.bookmarkIds
     .map(id => store.bookmarkMap[id])
-    .filter(Boolean)
+    .filter((bm): bm is NonNullable<typeof bm> => Boolean(bm && !bm.deletedAt))
 })
 
 function onClose() {

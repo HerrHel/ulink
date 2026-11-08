@@ -47,10 +47,10 @@
               </svg>
             </div>
             <div class="card-text-col">
-              <span class="card-main-title">{{ card.title }}</span>
+              <span class="card-main-title">{{ displayText(card.title) }}</span>
               <span class="card-sub-info">{{ getBookmarkDomain(card.id) || t('cards.bookmark') }}</span>
             </div>
-            <div class="attach-tooltip">{{ card.title }}<template v-if="card.url"> ({{ card.url }})</template></div>
+            <div class="attach-tooltip">{{ displayText(card.title) }}<template v-if="card.url"> ({{ card.url }})</template></div>
           </template>
 
           <!-- 笔记类型 -->
@@ -62,10 +62,10 @@
               </svg>
             </div>
             <div class="card-text-col">
-              <span class="card-main-title">{{ card.title }}</span>
+              <span class="card-main-title">{{ displayText(card.title) }}</span>
               <span class="card-sub-info">{{ getNoteMeta(card.id) }}</span>
             </div>
-            <div class="attach-tooltip">{{ card.title }} ({{ t('cards.note') }})</div>
+            <div class="attach-tooltip">{{ displayText(card.title) }} ({{ t('cards.note') }})</div>
           </template>
 
           <!-- 移除按钮（右上角圆底 ×） -->
@@ -211,7 +211,7 @@
 
 
           <!-- 智能管家状态徽标（与截图中的左下角模型标签完全一致） -->
-          <div class="toolbar-model-pill" title="与链全能资产管家 Agent">
+          <div class="toolbar-model-pill" :title="isZh ? '与链全能资产管家 Agent' : 'ULink Agent'">
             <span class="model-pill-dot"></span>
             <span class="model-pill-text">ULink Agent</span>
           </div>
@@ -256,6 +256,7 @@ import { useDataStore } from '../../stores/data.js'
 import { processFileForAi, type AttachedMediaFile } from '../../lib/ai/attachmentHelper.js'
 import { toast } from '../../lib/toast.js'
 import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
+import { displayText } from '../../utils.js'
 
 defineOptions({ name: 'ChatInputDock' })
 
@@ -284,7 +285,8 @@ const emit = defineEmits<{
   adjustHeight: []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const isZh = computed(() => locale.value.startsWith('zh'))
 const ui = useUIStore()
 const ds = useDataStore()
 
@@ -303,10 +305,10 @@ function getBookmarkIcon(id: string): string | undefined {
 
 function getBookmarkDomain(id: string): string {
   const b = ds.bookmarkMap[id]
-  if (!b?.url) return b?.categoryId ? (ds.categoryMap[b.categoryId]?.name || '') : ''
+  if (!b?.url) return b?.categoryId ? (displayText(ds.categoryMap[b.categoryId]?.name) || '') : ''
   try {
     const host = new URL(b.url).hostname.replace(/^www\./, '')
-    const cat = b?.categoryId ? ds.categoryMap[b.categoryId]?.name : ''
+    const cat = b?.categoryId ? displayText(ds.categoryMap[b.categoryId]?.name) : ''
     return cat ? `${host} • ${cat}` : host
   } catch {
     return ''
@@ -316,10 +318,11 @@ function getBookmarkDomain(id: string): string {
 function getNoteMeta(id: string): string {
   const g = ds.groupMap[id]
   if (!g) return t('cards.note')
-  const count = g.bookmarkIds?.length || 0
-  const cat = g.categoryId ? ds.categoryMap[g.categoryId]?.name : ''
+  const count = (g.bookmarkIds || []).filter(bid => !ds.bookmarkMap[bid]?.deletedAt).length
+  const rawCat = g.categoryId ? ds.categoryMap[g.categoryId]?.name : ''
+  const cat = rawCat ? displayText(rawCat) : ''
   const parts: string[] = [t('cards.note')]
-  if (count > 0) parts.push(`${count} 项`)
+  if (count > 0) parts.push(`${count} ${t('common.items')}`)
   if (cat && cat !== 'all' && cat !== 'uncategorized') parts.push(cat)
   return parts.join(' • ')
 }

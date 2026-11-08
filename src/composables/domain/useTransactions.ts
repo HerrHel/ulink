@@ -35,6 +35,13 @@ const page = ref(1)
 const pageSize = ref(10)
 const lastFetchedAt = ref(0)
 
+export function clearTransactions(): void {
+  transactions.value = []
+  total.value = 0
+  page.value = 1
+  lastFetchedAt.value = 0
+}
+
 export function formatTxTime(iso?: string | null): string {
   if (!iso) return '-'
   const d = new Date(iso)
@@ -60,6 +67,8 @@ export function useTransactions() {
         return { list: transactions.value, total: total.value }
       }
 
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 8000)
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -68,7 +77,8 @@ export function useTransactions() {
           offset: (page.value - 1) * pageSize.value,
           limit: pageSize.value,
         }),
-      })
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer))
 
       const body = (await res.json().catch(() => ({}))) as {
         ok?: boolean
@@ -122,6 +132,7 @@ export function useTransactions() {
     setPage,
     nextPage,
     prevPage,
+    clear: clearTransactions,
     formatTxTime,
   }
 }

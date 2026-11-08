@@ -4,7 +4,8 @@
 ;(function () {
   'use strict'
 
-  const API_BASE = 'https://ulink.ren'
+  const _cfg = window.LinkVaultExtConfig || {}
+  const API_BASE = _cfg.API_BASE || 'https://ulink.ren'
   const POLL_INTERVAL_MS = 2000
   const POLL_MAX_MS = 4 * 60 * 1000
   const PLATFORM_LABELS = {
@@ -101,6 +102,16 @@
     return '请刷新页面后重试；如果持续失败，请反馈该视频链接。'
   }
 
+  function isSafeHttpUrl(url) {
+    if (!url || typeof url !== 'string') return false
+    try {
+      const u = new URL(url.trim())
+      return u.protocol === 'http:' || u.protocol === 'https:'
+    } catch (_) {
+      return false
+    }
+  }
+
   function renderResult(result) {
     el.statusCard.classList.add('uve-hidden')
     el.errorCard.classList.add('uve-hidden')
@@ -128,10 +139,11 @@
 
     el.links.innerHTML = ''
     const urls = Array.isArray(result.on_screen_urls) ? result.on_screen_urls : []
-    if (!urls.length) {
+    const validUrls = urls.filter((item) => item && isSafeHttpUrl(item.url))
+    if (!validUrls.length) {
       el.links.textContent = '画面中没有识别到网址（或本次未启用OCR）。'
     } else {
-      for (const item of urls) {
+      for (const item of validUrls) {
         const a = document.createElement('a')
         a.href = item.url
         a.target = '_blank'
@@ -145,14 +157,22 @@
   async function pollJob(jobId, token) {
     const started = Date.now()
     while (Date.now() - started < POLL_MAX_MS) {
-      const res = await fetch(API_BASE + '/extract-video', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        },
-        body: JSON.stringify({ action: 'deep_status', job_id: jobId }),
-      })
+      let res
+      try {
+        res = await fetch(API_BASE + '/extract-video', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+          },
+          body: JSON.stringify({ action: 'deep_status', job_id: jobId }),
+          signal: AbortSignal.timeout(8000),
+        })
+      } catch (_) {
+        // 单次轮询网络抖动或超时，等待后继续下一轮
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+        continue
+      }
       const data = await res.json().catch(() => null)
       if (!res.ok || !data) {
         throw new Error((data && data.error) || '查询深度任务失败（HTTP ' + res.status + '）')
@@ -227,6 +247,7 @@
         ...(token ? { Authorization: 'Bearer ' + token } : {}),
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
     })
     const data = await res.json().catch(() => null)
     if (res.status === 401 || (data && data.code === 'login_required')) {

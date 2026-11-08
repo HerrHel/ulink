@@ -4,11 +4,34 @@
  * 旧功能：base64 编码/解码（safeAtob/safeDecodePassword）
  * P2 新增：PBKDF2 密钥派生 + AES-256-GCM 加密/解密
  */
-export function safeAtob(s: string): string { try { return atob(s) } catch (_) { return s } }
+export function safeBtoa(s: string): string {
+  try {
+    const bytes = new TextEncoder().encode(s)
+    let binary = ''
+    const chunk = 8192
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)))
+    }
+    return btoa(binary)
+  } catch {
+    return s
+  }
+}
+
+export function safeAtob(s: string): string {
+  try {
+    const binary = atob(s)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return new TextDecoder().decode(bytes)
+  } catch (_) {
+    return s
+  }
+}
 
 export function safeDecodePassword(storedPassword: string): string {
   if (!storedPassword) return ''
-  try { return atob(storedPassword) } catch (_) { return storedPassword }
+  return safeAtob(storedPassword)
 }
 
 // ══════════════════════════════════════════════════
@@ -56,7 +79,7 @@ export function isThreePartCipher(s: string): boolean {
   if (parts.length !== 3) return false
   const [salt, iv, data] = parts
   if (!salt || !iv || !data) return false
-  if (salt.length !== 44 || iv.length !== 16 || data.length < 24) return false
+  if (salt.length !== 44 || iv.length !== 16 || data.length < 24 || data.length % 4 !== 0) return false
   return B64_SEGMENT_RE.test(salt) && B64_SEGMENT_RE.test(iv) && B64_SEGMENT_RE.test(data)
 }
 
@@ -88,7 +111,10 @@ function _fromBuffer(buf: ArrayBuffer | Uint8Array): string {
 function _bufToBase64(buf: ArrayBuffer | Uint8Array): string {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
   let binary = ''
-  for (const b of bytes) binary += String.fromCharCode(b)
+  const chunk = 8192
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)))
+  }
   return btoa(binary)
 }
 
@@ -104,12 +130,14 @@ function _base64ToBuf(b64: string): Uint8Array {
  * @param iterations 可选迭代数——密文生成时的值（升级常量后旧密文需用其原始值才能解。
  *   见 PBKDF2_DEFAULT_ITERATIONS 注释）。未传则用当前默认常量，等价于历史行为。
  */
-export async function deriveKey(masterPassword: string, salt: Uint8Array, iterations: number = PBKDF2_ITERATIONS): Promise<CryptoKey> {
+export async function deriveKey(masterPassword: string, salt: Uint8Array | ArrayLike<number> | Record<string, number>, iterations: number = PBKDF2_ITERATIONS): Promise<CryptoKey> {
+  const saltBytes = salt instanceof Uint8Array ? salt : new Uint8Array(Array.isArray(salt) ? salt : Object.values(salt))
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', _bs(_toBuffer(masterPassword)), 'PBKDF2', false, ['deriveKey'],
+    'raw', _bs(_toBuffer(typeof masterPassword === 'string' && masterPassword.length > 512 ? masterPassword.slice(0, 512) : (masterPassword || ''))), 'PBKDF2', false, ['deriveKey'],
   )
+  const it = typeof iterations === 'number' && Number.isFinite(iterations) && iterations > 0 ? Math.floor(iterations) : PBKDF2_ITERATIONS
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: _bs(salt), iterations, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: _bs(saltBytes), iterations: it, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -138,17 +166,9 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
 
 /** AES-256-GCM 解密 */
 export async function decrypt(ciphertext: string, key: CryptoKey): Promise<string> {
-  if (!isThreePartCipher(ciphertext)) return ciphertext // 非加密数据，直接返回
+  if (!isThreePartCipher(ciphertext)) return ciphertext
   const parts = ciphertext.split('.')
-  // 优雅降级：若 ciphertext 长得像「3 段 . 分隔」但实际不是本系统产出的合法密文
-  //（如 E2E 关闭时以明文存云端的 title＝'a.b.c'，或 base64 段非法、密钥不匹配），
-  // base64 解码或 AES-GCM 认证会抛错。旧实现直接抛出，让单条坏字段污染整次
-  // _pullChanges（其 try 会把整个 pull 判失败，所有远端变更丢失）或 Realtime merge。
-  // 改为 catch 后返回原值——真密文（正确 key）必能解，失败只意味着非密文/解不开，
-  // 返回原值不崩同步，与锁定态「不解密」行为一致，安全性不降（GCM 认证保证不会
-  // 把非密文误解成有意义明文）。
   try {
-    const _salt = new Uint8Array(_base64ToBuf(parts[0])) // 解析但不使用，保留格式兼容
     const iv = new Uint8Array(_base64ToBuf(parts[1]))
     const data = _base64ToBuf(parts[2])
     const decrypted = await crypto.subtle.decrypt(
@@ -253,6 +273,7 @@ export async function decryptPasswordWithKey(
   if (!stored) return ''
   if (typeof stored === 'object' && stored.encrypted === true) {
     if (!cryptoKey) return ''
+    if (typeof stored.iv !== 'string' || typeof stored.data !== 'string' || stored.iv.length !== 16) return ''
     // 解不开即不显示，绝不把密文回吐 UI。
     //
     // 旧实现此处走 decrypt(ciphertext, cryptoKey)：decrypt 对「三段但 GCM 认证失败」
@@ -286,6 +307,12 @@ export async function decryptPasswordWithKey(
   // A1-004：E2E 已启用且未解锁时，禁止把旧 base64/string 解码进 UI（锁定态应与对象密文一致为空）
   // 调用方应在 isE2EEnabled && !isUnlocked 时不传 cryptoKey 且期望 ''；此处 string 仅在「无 E2E 或已解锁」语义下由调用方保证。
   // 为双保险：cryptoKey 显式为 null 且 string 时仍 decode 是旧路径——由 BookmarkCard 在锁定时跳过调用。
-  if (typeof stored === 'string') return safeDecodePassword(stored)
+  if (typeof stored === 'string') {
+    if (isThreePartCipher(stored)) {
+      if (!cryptoKey) return ''
+      return decryptForDisplay(stored, cryptoKey)
+    }
+    return safeDecodePassword(stored)
+  }
   return ''
 }

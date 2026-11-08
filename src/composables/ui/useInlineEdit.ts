@@ -6,6 +6,8 @@
  * 替代 BookmarkCard.vue 中的内联 DOM 操作。
  */
 
+import { onBeforeUnmount, getCurrentInstance } from 'vue'
+
 interface InlineEditOptions {
   onSave: (value: string) => void
   onCancel?: () => void
@@ -89,6 +91,12 @@ export function useInlineEdit() {
       return
     }
     if (!_multiline && ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); _save() }
+  }
+
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      _cancel()
+    })
   }
 
   return { startEditing }

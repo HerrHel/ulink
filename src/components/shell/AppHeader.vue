@@ -130,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
@@ -143,6 +143,7 @@ import { useShareStore } from '../../stores/share.js'
 import SearchSuggest from '../overlays/SearchSuggest.vue'
 import SettingsPanel from './SettingsPanel.vue'
 import SyncStatusPopover from '../overlays/SyncStatusPopover.vue'
+import { displayText } from '../../utils.js'
 import { t, tN } from '../../i18n/index.js'
 
 const ui = useUIStore()
@@ -193,7 +194,7 @@ function isUnnamed(v: string): boolean {
 }
 const displayName = computed(() =>
   focusedGroup.value && focusedGroup.value.name && !isUnnamed(focusedGroup.value.name)
-    ? focusedGroup.value.name
+    ? displayText(focusedGroup.value.name)
     : t('common.unnamed')
 )
 const panelTitle = computed(() => {
@@ -201,9 +202,9 @@ const panelTitle = computed(() => {
     return t('nav.aiChat')
   }
   if (shareMode.value?.kind === 'category' && share.category) {
-    return share.category.name || t('shell.allBookmarks')
+    return displayText(share.category.name) || t('shell.allBookmarks')
   }
-  return (dataStore.categoryMap[ui.curCat] || {}).name || t('shell.allBookmarks')
+  return displayText((dataStore.categoryMap[ui.curCat] || {}).name) || t('shell.allBookmarks')
 })
 const panelCountText = computed(() => {
   if (ui.activeView === 'ai') {
@@ -219,6 +220,10 @@ const panelCountText = computed(() => {
 const focusBookmarkCount = computed(() => {
   const g = ui.focusedGroupId ? dataStore.groupMap[ui.focusedGroupId] : null
   return g ? (g.bookmarkIds?.length || 0) : 0
+})
+
+onUnmounted(() => {
+  if (_searchTimer) clearTimeout(_searchTimer)
 })
 
 function toggleSettings() {

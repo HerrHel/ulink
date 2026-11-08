@@ -37,7 +37,13 @@ vi.mock('../../stores/persist.js', () => ({
   loadFromLocalStorage: vi.fn(),
   getStorageInfo: vi.fn(),
 }))
-vi.mock('../../utils.js', () => ({ isMobile: () => isMobileHolder.fn() }))
+vi.mock('../../utils.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return {
+    ...mod,
+    isMobile: () => isMobileHolder.fn(),
+  }
+})
 
 import AttrDropdown from '../../components/overlays/AttrDropdown.vue'
 

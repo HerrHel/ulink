@@ -10,8 +10,10 @@
  * - 进私密空间解锁 + 超时锁策略：解锁后 5 分钟无操作或页面后台 60s 自动锁
  *   （区别于全局 E2E 的 15 分钟——保险柜是更高密级，超时窗口更短）
  */
-import { ref, readonly } from 'vue'
+import { ref, shallowRef, readonly } from 'vue'
 import { defineStore } from 'pinia'
+import { useUndoStore } from './undo.js'
+import { useUIStore } from './ui.js'
 
 export const useVaultStore = defineStore('vault', () => {
   const isVaultEnabled = ref(false)
@@ -19,7 +21,7 @@ export const useVaultStore = defineStore('vault', () => {
   /** 是否已录入保险柜指纹凭据（持久态，与解锁态解耦，lock 不清零） */
   const isVaultBiometricEnrolled = ref(false)
   /** 缓存的保险柜独立 AES-256-GCM 密钥 — 仅在 isVaultUnlocked=true 时有效 */
-  const vaultCryptoKey = ref<CryptoKey | null>(null)
+  const vaultCryptoKey = shallowRef<CryptoKey | null>(null)
 
   const LOCK_TIMEOUT = 5 * 60 * 1000 // 5 分钟无操作自动锁定（区别于全局 15 分钟）
   const PRE_LOCK_DELAY = 60 * 1000 // 页面后台后 60s 锁定
@@ -36,11 +38,13 @@ export const useVaultStore = defineStore('vault', () => {
   /** 启动无操作自动锁定计时器（每次解锁/操作后调用重置） */
   function resetLockTimer() {
     if (_lockTimer) clearTimeout(_lockTimer)
+    if (!isVaultUnlocked.value) { _lockTimer = null; return }
     _lockTimer = setTimeout(() => { lock() }, LOCK_TIMEOUT)
   }
 
   /** 启动/重启可见性监听（页面隐藏后台过久自动锁定） */
   function initVisibilityLock() {
+    if (typeof document === 'undefined') return
     if (_visibilityHandler) return // 防止重复注册
     _visibilityHandler = () => {
       if (document.visibilityState === 'hidden') {
@@ -64,6 +68,7 @@ export const useVaultStore = defineStore('vault', () => {
   /** 锁定：清除密钥 + 停止所有定时器。离开私密空间或超时时调用。 */
   function lock() {
     vaultCryptoKey.value = null
+    try { if (useUIStore().curSpace === 'vault') useUndoStore().clearAllStacks() } catch { /* ignore */ }
     isVaultUnlocked.value = false
     if (_lockTimer) { clearTimeout(_lockTimer); _lockTimer = null }
     if (_preLockTimer) { clearTimeout(_preLockTimer); _preLockTimer = null }

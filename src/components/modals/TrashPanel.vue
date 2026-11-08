@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('settings.trash')" :class="{ open }" @click.self="emit('close')">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('settings.trash')" :class="{ open }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-md">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.trash" class="sp-icon"></span>{{ t('settings.trash') }}</span>
@@ -32,11 +32,11 @@
                 type="checkbox"
                 class="trash-item-check"
                 :checked="isSelected('bookmark', b.id)"
-                :aria-label="t('modal.trash.selectItem', { name: b.title || b.url })"
+                :aria-label="t('modal.trash.selectItem', { name: bmTitle(b) })"
                 @change="toggle('bookmark', b.id)"
               />
               <span class="trash-item-icon" aria-hidden="true" v-html="I.link"></span>
-              <span class="trash-item-name">{{ b.title || b.url }}</span>
+              <span class="trash-item-name">{{ bmTitle(b) }}</span>
               <span class="trash-item-time">{{ formatTime(b.deletedAt) }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('bookmark', b.id)">{{ t('modal.trash.restore') }}</button>
               <button class="btn btn-ghost btn-xs text-danger" @click="permanent('bookmark', b.id)">{{ t('common.delete') }}</button>
@@ -50,11 +50,11 @@
                 type="checkbox"
                 class="trash-item-check"
                 :checked="isSelected('group', g.id)"
-                :aria-label="t('modal.trash.selectItem', { name: g.name || t('common.unnamed') })"
+                :aria-label="t('modal.trash.selectItem', { name: groupTitle(g) })"
                 @change="toggle('group', g.id)"
               />
               <span class="trash-item-icon" aria-hidden="true" v-html="I.folder"></span>
-              <span class="trash-item-name">{{ g.name || t('common.unnamed') }}</span>
+              <span class="trash-item-name">{{ groupTitle(g) }}</span>
               <span class="trash-item-time">{{ formatTime(g.deletedAt) }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('group', g.id)">{{ t('modal.trash.restore') }}</button>
               <button class="btn btn-ghost btn-xs text-danger" @click="permanent('group', g.id)">{{ t('common.delete') }}</button>
@@ -68,11 +68,11 @@
                 type="checkbox"
                 class="trash-item-check"
                 :checked="isSelected('category', c.id)"
-                :aria-label="t('modal.trash.selectItem', { name: c.name })"
+                :aria-label="t('modal.trash.selectItem', { name: catTitle(c) })"
                 @change="toggle('category', c.id)"
               />
               <span class="trash-item-icon" aria-hidden="true" v-html="I.tag"></span>
-              <span class="trash-item-name">{{ c.name }}</span>
+              <span class="trash-item-name">{{ catTitle(c) }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('category', c.id)">{{ t('modal.trash.restore') }}</button>
               <button class="btn btn-ghost btn-xs text-danger" @click="permanent('category', c.id)">{{ t('common.delete') }}</button>
             </div>
@@ -85,11 +85,11 @@
                 type="checkbox"
                 class="trash-item-check"
                 :checked="isSelected('attribute', a.id)"
-                :aria-label="t('modal.trash.selectItem', { name: a.name })"
+                :aria-label="t('modal.trash.selectItem', { name: attrTitle(a) })"
                 @change="toggle('attribute', a.id)"
               />
               <span class="trash-item-icon" aria-hidden="true" v-html="I.tag"></span>
-              <span class="trash-item-name">{{ a.name }}</span>
+              <span class="trash-item-name">{{ attrTitle(a) }}</span>
               <button class="btn btn-ghost btn-xs" @click="restore('attribute', a.id)">{{ t('modal.trash.restore') }}</button>
               <button class="btn btn-ghost btn-xs text-danger" @click="permanent('attribute', a.id)">{{ t('common.delete') }}</button>
             </div>
@@ -110,15 +110,58 @@ import { useAppStore } from '../../stores/app.js'
 import { I } from '../../config/icons.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { formatTime } from './formatTimeEpoch.js'
+import { displayText } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { restoreItems, permanentDeleteItems, trashKey, splitTrashKey, type TrashType } from './trashOps.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t, tN } from '../../i18n/index.js'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
+const { onMaskMouseDown, onMaskClick } = useMaskClose(() => emit('close'))
+
 const ds = useDataStore()
 const appStore = useAppStore()
+
+function bmTitle(b: { title?: string; url?: string }): string {
+  const tStr = displayText(b.title || '')
+  if (tStr) return tStr
+  const uStr = displayText(b.url || '')
+  if (uStr) return uStr
+  if (isThreePartCipher(b.title || '') || isThreePartCipher(b.url || '')) {
+    return t('cards.encryptedFieldLocked')
+  }
+  return b.url || t('cards.unnamedBookmark')
+}
+
+function groupTitle(g: { name?: string }): string {
+  const n = displayText(g.name || '')
+  if (n) return n
+  if (isThreePartCipher(g.name || '')) {
+    return t('cards.encryptedFieldLocked')
+  }
+  return t('common.unnamed')
+}
+
+function catTitle(c: { name?: string }): string {
+  const n = displayText(c.name || '')
+  if (n) return n
+  if (isThreePartCipher(c.name || '')) {
+    return t('cards.encryptedFieldLocked')
+  }
+  return ''
+}
+
+function attrTitle(a: { name?: string }): string {
+  const n = displayText(a.name || '')
+  if (n) return n
+  if (isThreePartCipher(a.name || '')) {
+    return t('cards.encryptedFieldLocked')
+  }
+  return ''
+}
 
 const trashCount = computed(() => ds.trashCount)
 

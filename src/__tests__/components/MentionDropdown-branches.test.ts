@@ -43,7 +43,14 @@ vi.mock('../../composables/domain/useMention.js', () => {
 })
 
 vi.mock('../../config/icons.js', () => ({ I: { note: '<svg-note/>' } }))
-vi.mock('../../utils.js', () => ({ favicon: (u: string) => 'fav-' + u, domain: (u: string) => 'dom-' + u }))
+vi.mock('../../utils.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return {
+    ...mod,
+    favicon: (u: string) => 'fav-' + u,
+    domain: (u: string) => 'dom-' + u,
+  }
+})
 
 import MentionDropdown from '../../components/overlays/MentionDropdown.vue'
 

@@ -4,5 +4,7 @@
  * 不引入 file:// 等浏览器实现差异，WebAuthn PRF 派生仅在真安全上下文可用。
  */
 export function isBiometricCapableContext(): boolean {
+  if (typeof window === 'undefined' || typeof location === 'undefined') return false
+  if (typeof window.isSecureContext === 'boolean' && !window.isSecureContext) return false
   return location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1'
 }

@@ -16,6 +16,7 @@ import { saveAppData } from '../../stores/app.js'
 import { toast, toastWithUndo } from '../toast.js'
 import { t } from '../../i18n/index.js'
 import { gid } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { formatLightMarkdown } from './chatStreamParser.js'
 import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../../config/constants.js'
 import type { SiblingGroup } from '../../types.js'
@@ -68,6 +69,10 @@ export function appendAiContentToGroup(
     return { success: false, error: 'Group not found' }
   }
 
+  if (group.notes && isThreePartCipher(group.notes)) {
+    return { success: false, error: 'Group notes are encrypted and locked' }
+  }
+
   const oldNotes = EditorManager.getContentHTML(rawGid) ?? group.notes ?? ''
   const newSectionHtml = convertAiContentToNoteHtml(aiContent)
   if (!newSectionHtml) {
@@ -114,6 +119,10 @@ export function replaceAiContentToGroup(
 
   if (!group) {
     return { success: false, error: 'Group not found' }
+  }
+
+  if (group.notes && isThreePartCipher(group.notes)) {
+    return { success: false, error: 'Group notes are encrypted and locked' }
   }
 
   const oldNotes = EditorManager.getContentHTML(rawGid) ?? group.notes ?? ''

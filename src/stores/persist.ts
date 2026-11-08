@@ -36,6 +36,10 @@ export interface StorageInfo {
 }
 
 export function _stamp(data: AppData) {
+  const existingSeq = (data as { _writeSeq?: number })._writeSeq
+  if (typeof existingSeq === 'number' && existingSeq >= _writeSeq) {
+    _writeSeq = existingSeq
+  }
   _writeSeq++
   // 保留已有 _schemaVersion；禁止用 writeSeq 覆盖
   const schema =
@@ -58,7 +62,9 @@ export function _stamp(data: AppData) {
  * 保存数据到 IDB（权威）和 localStorage（缓存）
  * IDB 写入失败返回 false，localStorage 失败不阻塞
  */
-export async function saveData(data: AppData, space: Space = 'main'): Promise<boolean> {
+let _saveChain: Promise<boolean> = Promise.resolve(true)
+
+async function _saveDataCore(data: AppData, space: Space = 'main'): Promise<boolean> {
   const stamped = _stamp(data)
 
   // L14 修复：旧实现先 JSON.parse(JSON.stringify(stamped)) 给 IDB 再 JSON.stringify(stamped)
@@ -92,6 +98,12 @@ export async function saveData(data: AppData, space: Space = 'main'): Promise<bo
   }
 
   return true
+}
+
+export function saveData(data: AppData, space: Space = 'main'): Promise<boolean> {
+  const op = () => _saveDataCore(data, space)
+  _saveChain = _saveChain.then(op, op)
+  return _saveChain
 }
 
 /** 仅写 localStorage（用于备份/导出场景） */
@@ -137,7 +149,7 @@ export async function loadData(space: Space = 'main'): Promise<AppData> {
   }
 
   const lsData = loadFromLocalStorage(space)
-  if (lsData && lsData.bookmarks?.length) {
+  if (lsData && Array.isArray(lsData.bookmarks)) {
     // localStorage → IDB 异步回填
     saveToIDB(lsData, space)
   }

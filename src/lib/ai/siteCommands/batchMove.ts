@@ -12,6 +12,7 @@
 import { parseBatchMoveIntent } from '../siteIntents.js'
 import { pushUndoAction } from '../siteUndoStack.js'
 import { t, tN } from '../../../i18n/index.js'
+import { useAppStore } from '../../../stores/app.js'
 import type { Category } from '../../../types.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
@@ -22,7 +23,7 @@ export const batchMoveBlock: SiteCommandBlock = (
   const query = ctx.query
   const ds = ctx.ds
   const ui = ctx.ui
-  const app = ctx.app
+  const app = ctx.app ?? useAppStore()
   const batchMoveIntent = parseBatchMoveIntent(query)
   if (batchMoveIntent && ui.batchMode && ui.batchSelected && ui.batchSelected.length > 0) {
     const targetName = batchMoveIntent.targetName

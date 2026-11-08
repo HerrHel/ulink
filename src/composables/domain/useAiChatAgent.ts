@@ -24,11 +24,13 @@ import {
   buildVideoContentText,
   videoSourceLabel,
 } from '../../lib/ai/videoExtract.js'
+import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
 
 
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
+import { useAppStore } from '../../stores/app.js'
 import type { ChatTurn } from '../../lib/ai/chatSessions.js'
 
 /** 工具执行器依赖（由请求编排层注入） */
@@ -37,6 +39,15 @@ export interface AiAgentToolContext {
   ui: ReturnType<typeof useUIStore>
   t: ReturnType<typeof useI18n>['t']
   tN: ReturnType<typeof useI18n>['tN']
+}
+
+function resolveAppStore() {
+  try {
+    if (typeof useAppStore === 'function') return useAppStore()
+  } catch {
+    // 兼容部分仅 mock 了 saveAppData 的测试沙箱
+  }
+  return { save: () => {} } as unknown as ReturnType<typeof useAppStore>
 }
 
 export function createAiAgentToolRunner(context: AiAgentToolContext) {
@@ -59,6 +70,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
   }
 
   // Agent 工具执行器：首轮与续轮工具链共用同一分发（单一分发点，防多轮复刻同类分支）
+  const app = resolveAppStore()
   return async function runAgentToolCall(
     assistantTurn: ChatTurn,
     controller: AbortController,
@@ -68,12 +80,12 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
     if (call.argsParseFailed) return t('ai.toolResultArgsInvalid', { name: call.name })
     let resultText = ''
     if (call.name === 'audit_vault') {
-      const siteRes = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const siteRes = await dispatchSiteCommand('/health', { ds, ui, app, signal: controller.signal })
       if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
     } else if (call.name === 'inbox_zero') {
-      const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app, signal: controller.signal })
       if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
@@ -94,11 +106,11 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
     } else if (call.name === 'merge_duplicates') {
       const confirm = Boolean(call.arguments?.confirm)
       if (confirm) {
-        const mergeRes = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app, signal: controller.signal })
+        const mergeRes = await mergeDuplicateBookmarks({ ds, ui, app, signal: controller.signal })
         resultText = mergeRes.message || t('aiCmd.mergeNone')
         if (!assistantTurn.content) assistantTurn.content = resultText
       } else {
-        const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app: (ui as any).app, signal: controller.signal })
+        const siteRes = await dispatchSiteCommand('/dedup', { ds, ui, app, signal: controller.signal })
         if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
         if (!assistantTurn.content) assistantTurn.content = siteRes.reply
         resultText = siteRes.reply
@@ -115,7 +127,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         }
       }
       const targetParam = target && target !== 'all' ? ` ${target}` : ''
-      const siteRes = await dispatchSiteCommand(`/deadlink${targetParam}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const siteRes = await dispatchSiteCommand(`/deadlink${targetParam}`, { ds, ui, app, signal: controller.signal })
       if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
       if (!assistantTurn.content) assistantTurn.content = siteRes.reply
       resultText = siteRes.reply
@@ -125,7 +137,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       if (typeof mode !== 'string' || !mode.trim()) {
         resultText = t('ai.toolResultArgsRejected', { name: call.name })
       } else {
-        const siteRes = await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
+        const siteRes = await dispatchSiteCommand(`/theme ${mode}`, { ds, ui, app, signal: controller.signal })
         // 命令未命中（如非法枚举值）时 dispatch 返回 handled:false，同样不得伪报成功
         resultText = siteRes.handled && siteRes.reply
           ? siteRes.reply
@@ -136,14 +148,14 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       if (typeof layout !== 'string' || !layout.trim()) {
         resultText = t('ai.toolResultArgsRejected', { name: call.name })
       } else {
-        const siteRes = await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
+        const siteRes = await dispatchSiteCommand(`/view ${layout}`, { ds, ui, app, signal: controller.signal })
         resultText = siteRes.handled && siteRes.reply
           ? siteRes.reply
           : t('ai.toolResultNotExecuted', { name: call.name })
       }
     } else if (call.name === 'export_data') {
       const format = call.arguments?.format === 'html' ? 'html' : 'json'
-      const siteRes = await dispatchSiteCommand(`/export ${format}`, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const siteRes = await dispatchSiteCommand(`/export ${format}`, { ds, ui, app, signal: controller.signal })
       resultText = siteRes.handled && siteRes.reply
         ? siteRes.reply
         : t('ai.toolResultNotExecuted', { name: call.name })
@@ -173,7 +185,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         assistantTurn.actionCard = buildDraftDiffActionCard(diffPayload)
         resultText = t('ai.toolResultDedupDiffCreated', { count: diffPayload.stats.total })
       } else {
-        const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app, signal: controller.signal })
+        const siteRes = await dispatchSiteCommand('/inbox', { ds, ui, app, signal: controller.signal })
         if (siteRes.actionCard) assistantTurn.actionCard = siteRes.actionCard
         resultText = siteRes.reply
       }
@@ -181,6 +193,8 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       const url = call.arguments?.url
       if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) {
         resultText = '读取失败：未提供有效公开网址（必须以 http:// 或 https:// 开头）。'
+      } else if (isPrivateUrl(url.trim())) {
+        resultText = '安全拦截：禁止读取私有局域网或环回地址。'
       } else {
         const targetUrl = url.trim()
         if (!assistantTurn.steps) assistantTurn.steps = []
@@ -230,7 +244,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       if (items.length === 0) {
         resultText = '未提供待打标书签列表，未执行打标。'
       } else {
-        const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app, signal: controller.signal })
+        const res = await batchTagBookmarks(items, { ds, ui, app, signal: controller.signal })
         if (res.success && res.taggedCount > 0) {
           resultText = `${res.message}\n已打标明细：\n${res.details.map((d) => `• ${d.title}: [${d.tags.join(', ')}]`).join('\n')}`
           if (!assistantTurn.steps) assistantTurn.steps = []
@@ -249,21 +263,21 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         }
       }
     } else if (call.name === 'manage_categories') {
-      const res = await executeManageCategories((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const res = await executeManageCategories((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
       resultText = res.message
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })
       }
     } else if (call.name === 'manage_tags') {
-      const res = await executeManageTags((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const res = await executeManageTags((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
       resultText = res.message
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })
       }
     } else if (call.name === 'manage_bookmarks') {
-      const res = await executeManageBookmarks((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const res = await executeManageBookmarks((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
       resultText = res.message
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
@@ -281,7 +295,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         }
       }
     } else if (call.name === 'manage_workspaces') {
-      const res = await executeManageWorkspaces((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const res = await executeManageWorkspaces((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
       resultText = res.message
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
@@ -299,7 +313,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         }
       }
     } else if (call.name === 'manage_settings') {
-      const res = await executeManageSettings((call.arguments || {}) as any, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const res = await executeManageSettings((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
       resultText = res.message
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []

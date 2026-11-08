@@ -41,8 +41,8 @@ watch(() => [ctx.open, ctx.x, ctx.y], async ([open]) => {
   const w = el.offsetWidth, h = el.offsetHeight
   const margin = 8
   pos.value = {
-    x: Math.min(ctx.x, window.innerWidth - w - margin),
-    y: Math.min(ctx.y, window.innerHeight - h - margin),
+    x: Math.max(margin, Math.min(ctx.x, window.innerWidth - w - margin)),
+    y: Math.max(margin, Math.min(ctx.y, window.innerHeight - h - margin)),
   }
 })
 
@@ -85,12 +85,17 @@ function onItemClick(action: string) {
 }
 
 function _onDocClick(e: MouseEvent) { if (!(e.target as HTMLElement).closest('#ctxMenu')) ctx.hide() }
+function _onDocScroll() { if (ctx.open) ctx.hide() }
 
 onMounted(() => {
   document.addEventListener('click', _onDocClick)
+  window.addEventListener('scroll', _onDocScroll, true)
+  window.addEventListener('resize', _onDocScroll)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', _onDocClick)
+  window.removeEventListener('scroll', _onDocScroll, true)
+  window.removeEventListener('resize', _onDocScroll)
 })
 </script>

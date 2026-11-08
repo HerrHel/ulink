@@ -1,6 +1,7 @@
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 import { t } from '../../i18n/index.js'
 import { sanitizeForPrompt } from './mimoClient.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { redactSensitivePatterns } from './secretFilter.js'
 
 /** 附件注入提示词的字段级限长（防单字段撑爆消息、防隐私全量外送） */
@@ -24,7 +25,8 @@ const MAX_ATTACH_CARDS = 8
  * （防字段内容伪装成 """ 块定界符逃逸），供提示词注入使用。
  */
 function safe(text: string | undefined, maxLen: number): string {
-  const sanitized = sanitizeForPrompt(text ?? '', maxLen).replace(/"{2,}/g, "'")
+  if (!text || isThreePartCipher(text)) return ''
+  const sanitized = sanitizeForPrompt(text, maxLen).replace(/"{2,}/g, "'")
   return redactSensitivePatterns(sanitized)
 }
 
@@ -86,11 +88,15 @@ export function resolveCardContext(
     const childBookmarks = Object.values(stores.bookmarkMap)
       .filter((b) => b.categoryId === rawId && !b.deletedAt)
       .slice(0, MAX_ATTACH_CHILDREN)
-      .map((b) => ({ title: b.title, url: b.url, desc: b.notes || '' }))
+      .map((b) => ({
+        title: b.title && !isThreePartCipher(b.title) ? b.title : '',
+        url: b.url && !isThreePartCipher(b.url) ? b.url : '',
+        desc: b.notes && !isThreePartCipher(b.notes) ? b.notes : '',
+      }))
     const childGroups = Object.values(stores.groupMap)
       .filter((g) => g.categoryId === rawId && !g.deletedAt)
       .slice(0, 5)
-      .map((g) => g.name || '')
+      .map((g) => (g.name && !isThreePartCipher(g.name) ? g.name : ''))
       .filter(Boolean)
     const notesSummary = childGroups.length > 0 ? `包含笔记：${childGroups.join('、')}` : ''
     return {
@@ -108,15 +114,20 @@ export function resolveCardContext(
     const tags = customAttributes
       .filter((a) => bm.attributes && bm.attributes[a.id])
       .map((a) => a.name)
+    const bmTitle = bm.title && !isThreePartCipher(bm.title)
+      ? bm.title
+      : (bm.url && !isThreePartCipher(bm.url) ? bm.url : t('ai.unnamedBookmark'))
+    const bmUrl = bm.url && !isThreePartCipher(bm.url) ? bm.url : undefined
+    const bmNotes = bm.notes && !isThreePartCipher(bm.notes) ? bm.notes : ''
     return {
       type: 'bm',
       id: bm.id,
-      title: bm.title || bm.url || t('ai.unnamedBookmark'),
-      url: bm.url,
-      desc: bm.notes || '',
+      title: bmTitle,
+      url: bmUrl,
+      desc: bmNotes,
       categoryName: cat?.name,
       tags,
-      notes: bm.notes || '',
+      notes: bmNotes,
     }
   } else {
     const group = stores.groupMap[rawId]
@@ -125,15 +136,20 @@ export function resolveCardContext(
     const tags = customAttributes
       .filter((a) => group.attributes && group.attributes[a.id])
       .map((a) => a.name)
-    const bodyText = group.notes ? htmlToCleanText(group.notes) : ''
+    const groupTitle = group.name && !isThreePartCipher(group.name) ? group.name : t('ai.unnamedNote')
+    const bodyText = group.notes && !isThreePartCipher(group.notes) ? htmlToCleanText(group.notes) : ''
     const childBookmarks = (group.bookmarkIds || [])
       .map((bId) => stores.bookmarkMap[bId])
       .filter((b): b is Bookmark => !!b && !b.deletedAt)
-      .map((b) => ({ title: b.title, url: b.url, desc: b.notes || '' }))
+      .map((b) => ({
+        title: b.title && !isThreePartCipher(b.title) ? b.title : '',
+        url: b.url && !isThreePartCipher(b.url) ? b.url : '',
+        desc: b.notes && !isThreePartCipher(b.notes) ? b.notes : '',
+      }))
     return {
       type: 'group',
       id: group.id,
-      title: group.name || t('ai.unnamedNote'),
+      title: groupTitle,
       categoryName: cat?.name,
       tags,
       notes: bodyText,

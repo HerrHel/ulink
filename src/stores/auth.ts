@@ -2,6 +2,9 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { getAuthDriver } from '../lib/authDriver.js'
 import { dbRpc } from '../lib/dbApi.js'
+import { t } from '../i18n/index.js'
+import { useE2EStore } from './e2e.js'
+import { useVaultStore } from './vault.js'
 import { safeGetItem, safeSetItem, safeRemoveItem } from '../lib/storageSafe.js'
 import type { User, Session } from '@supabase/supabase-js'
 
@@ -188,31 +191,42 @@ export const useAuthStore = defineStore('auth', () => {
       // 全部冷却/锁到期则停表
       const allIdle = [...limits.value.values()].every(r => !r.lockUntil && !r.sendUntil)
       if (allIdle) {
-        clearInterval(_ticker!)
-        _ticker = null
+        _stopTicker()
       }
     }, 1000)
   }
 
+  function _stopTicker() {
+    if (_ticker) {
+      clearInterval(_ticker)
+      _ticker = null
+    }
+  }
+
+  function _normEmail(email: string): string {
+    return (email || '').trim().toLowerCase()
+  }
+
   function _rec(email: string): LimitRecord {
-    let r = limits.value.get(email)
+    const norm = _normEmail(email)
+    let r = limits.value.get(norm)
     if (!r) {
       r = { fails: 0, locks: 0, lockUntil: 0, sendUntil: 0 }
-      limits.value.set(email, r)
+      limits.value.set(norm, r)
     }
     return r
   }
 
   /** 当前该邮箱的发送冷却剩余秒数（0 表示可发） */
   function sendCooldownRemaining(email: string): number {
-    const rec = limits.value.get(email)
+    const rec = limits.value.get(_normEmail(email))
     if (!rec || !rec.sendUntil) return 0
     return Math.max(0, Math.ceil((rec.sendUntil - cooldownTick.value) / 1000))
   }
 
   /** 当前该邮箱的验证锁定剩余秒数（0 表示未锁） */
   function verifyLockRemaining(email: string): number {
-    const rec = limits.value.get(email)
+    const rec = limits.value.get(_normEmail(email))
     if (!rec || !rec.lockUntil) return 0
     return Math.max(0, Math.ceil((rec.lockUntil - cooldownTick.value) / 1000))
   }
@@ -278,7 +292,7 @@ export const useAuthStore = defineStore('auth', () => {
     // S12：发送冷却判定（发请求前）
     const remain = sendCooldownRemaining(email)
     if (remain > 0) {
-      authError.value = `验证码已发送，请 ${remain} 秒后再试`
+      authError.value = t('modal.auth.cooldownError', { n: remain })
       return false
     }
     const { error } = await getAuthDriver().sendOtp(email, captchaToken)
@@ -321,7 +335,7 @@ export const useAuthStore = defineStore('auth', () => {
     // S12：锁定判定（发请求前，阻断穷举）
     const lockRemain = verifyLockRemaining(email)
     if (lockRemain > 0) {
-      authError.value = `验证失败次数过多，请 ${lockRemain} 秒后重试或重新获取验证码`
+      authError.value = t('modal.auth.lockError', { n: lockRemain })
       return false
     }
     const { error } = await getAuthDriver().verifyOtp(email, token)
@@ -334,29 +348,29 @@ export const useAuthStore = defineStore('auth', () => {
         const { lockMs, label } = lockDurationFor(rec.locks - 1)
         rec.lockUntil = Date.now() + lockMs
         rec.fails = 0
-        authError.value = `验证失败次数过多，已锁定 ${label}，稍后请重新获取验证码`
+        authError.value = t('modal.auth.verifyLockedDuration', { label })
       } else {
         // 未达锁定阈值：仅提示失败（不暴露具体次数防节奏探测）
-        authError.value = '验证码错误，请检查后重试'
+        authError.value = t('modal.auth.verifyCodeError')
       }
       _ensureTicker()
       return false
     }
     // 验证成功：清整条记录
-    limits.value.delete(email)
+    limits.value.delete(_normEmail(email))
     _auditEvent('login')
     return true
   }
 
   /** 重新发送时清掉该邮箱的失败计数与锁（让用户有重置机会）；累计锁次数也清零 */
   function resetVerifyState(email: string) {
-    limits.value.delete(email)
+    limits.value.delete(_normEmail(email))
   }
 
   /** 密码强度：CloudBase 要求 8~32 位且同时含字母与数字（平台侧同规则，这里先拦一道） */
   function _validatePassword(pw: string): string | null {
-    if (pw.length < 8 || pw.length > 32) return '密码长度需在 8~32 位之间'
-    if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return '密码需同时包含字母与数字'
+    if (pw.length < 8 || pw.length > 32) return t('modal.auth.passwordLengthRule')
+    if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return t('modal.auth.passwordCharsRule')
     return null
   }
 
@@ -372,7 +386,7 @@ export const useAuthStore = defineStore('auth', () => {
     _ensureTicker()
     const lockRemain = verifyLockRemaining(email)
     if (lockRemain > 0) {
-      authError.value = `尝试次数过多，请 ${lockRemain} 秒后重试`
+      authError.value = t('modal.auth.tryTooManySeconds', { n: lockRemain })
       return false
     }
     const { error } = await getAuthDriver().signInWithPassword(email, password)
@@ -384,14 +398,14 @@ export const useAuthStore = defineStore('auth', () => {
         const { lockMs, label } = lockDurationFor(rec.locks - 1)
         rec.lockUntil = Date.now() + lockMs
         rec.fails = 0
-        authError.value = `尝试次数过多，已锁定 ${label}`
+        authError.value = t('modal.auth.tryTooManyLocked', { label })
       } else {
-        authError.value = '邮箱或密码不正确。若这是你第一次用密码登录，请先用验证码登录，再在设置里设置密码。'
+        authError.value = t('modal.auth.passwordWrongGuide')
       }
       _ensureTicker()
       return false
     }
-    limits.value.delete(email)
+    limits.value.delete(_normEmail(email))
     _auditEvent('login_password')
     return true
   }
@@ -410,7 +424,7 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     }
     if (!code.trim()) {
-      authError.value = '请输入邮箱验证码'
+      authError.value = t('modal.auth.inputEmailCode')
       return false
     }
     const { error } = await getAuthDriver().confirmPasswordReset(email, code.trim(), password)
@@ -428,7 +442,7 @@ export const useAuthStore = defineStore('auth', () => {
     _ensureTicker()
     const remain = sendCooldownRemaining(email)
     if (remain > 0) {
-      authError.value = `请 ${remain} 秒后再试`
+      authError.value = t('modal.auth.retrySecondsLater', { n: remain })
       return false
     }
     const { error } = await getAuthDriver().sendPasswordReset(email)
@@ -458,6 +472,43 @@ export const useAuthStore = defineStore('auth', () => {
     customAvatar.value = ''
     safeRemoveItem(K_CUSTOM_NICKNAME)
     safeRemoveItem(K_CUSTOM_AVATAR)
+
+    // 清空内存限流记录与停止 ticker，避免换号或重登录残留
+    limits.value.clear()
+    _stopTicker()
+
+    // 登出时重置/锁定 E2E 与 Vault 敏感解密密钥
+    try { useE2EStore().lock() } catch { /* ignore */ }
+    try { useVaultStore().lock() } catch { /* ignore */ }
+
+    // 登出时清空会员权益与交易明细缓存，防换号/登出信息泄露
+    try {
+      const { useEntitlement } = await import('../composables/domain/useEntitlement.js')
+      useEntitlement().clear()
+    } catch { /* ignore */ }
+    try {
+      const { clearTransactions } = await import('../composables/domain/useTransactions.js')
+      clearTransactions()
+    } catch { /* ignore */ }
+
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('lv_e2e_canary_conflict_checked')
+      }
+    } catch { /* ignore */ }
+
+    try {
+      const { useUIStore } = await import('./ui.js')
+      const ui = useUIStore()
+      if (ui.curSpace === 'vault') {
+        const { useDataStore } = await import('./data.js')
+        const ds = useDataStore()
+        await ds.switchSpace('main')
+      }
+    } catch { /* ignore */ }
+
+    user.value = null
+    session.value = null
     return true
   }
 

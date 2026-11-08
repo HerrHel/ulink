@@ -57,11 +57,14 @@ export async function fetchPurchasePlans(force = false): Promise<PlanRow[]> {
         const endpoint = edgeFnUrl('pay')
         const token = await getApiToken()
         if (endpoint && token) {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 8000)
           const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ action: 'plans' }),
-          })
+            signal: controller.signal,
+          }).finally(() => clearTimeout(timer))
           const body = (await res.json().catch(() => ({}))) as { ok?: boolean; plans?: PlanRow[] }
           if (body.ok && Array.isArray(body.plans) && body.plans.length > 0) {
             cachedPlans = body.plans

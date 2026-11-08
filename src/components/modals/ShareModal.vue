@@ -134,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
@@ -148,7 +148,8 @@ import {
   deletePublicCategoryShare,
   CATEGORY_SHARE_PATH,
 } from '../../composables/domain/syncShare.js'
-import { copyToClipboard } from '../../utils.js'
+import { copyToClipboard, displayText } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
@@ -168,6 +169,7 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const operating = ref(false)
 const copied = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | null = null
 const categoryShareId = ref<string | null>(null)
 
 // 访问密码（仅组分享）
@@ -190,16 +192,24 @@ const modalTitle = computed(() => {
 
 const targetName = computed(() => {
   if (isGroup.value) {
-    return groupItem.value?.name || t('cards.unnamedGroup')
+    const raw = groupItem.value?.name
+    const dt = raw ? displayText(raw) : ''
+    if (dt) return dt
+    if (raw && isThreePartCipher(raw)) return '••••••'
+    return raw || t('cards.unnamedGroup')
   }
-  return categoryItem.value?.name || t('modal.category.name')
+  const raw = categoryItem.value?.name
+  const dt = raw ? displayText(raw) : ''
+  if (dt) return dt
+  if (raw && isThreePartCipher(raw)) return '••••••'
+  return raw || t('modal.category.name')
 })
 
 
 
 const targetMetaText = computed(() => {
   if (isGroup.value) {
-    const count = groupItem.value?.bookmarkIds?.length || 0
+    const count = (groupItem.value?.bookmarkIds || []).filter(id => !dataStore.bookmarkMap[id]?.deletedAt).length
     return `${count} ${t('cards.bookmarksCount')}`
   }
   const count = dataStore.bookmarks.filter(b => b.categoryId === targetId.value && !b.deletedAt).length
@@ -401,7 +411,8 @@ async function onCopyLink() {
   if (!shareUrl.value) return
   copyToClipboard(shareUrl.value, t('msg.shareLinkLabel'))
   copied.value = true
-  setTimeout(() => {
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => {
     copied.value = false
   }, 2000)
   if (authStore.isLoggedIn) {
@@ -494,4 +505,10 @@ async function onTogglePublic() {
     await onEnableShare()
   }
 }
+onBeforeUnmount(() => {
+  if (copyTimer) {
+    clearTimeout(copyTimer)
+    copyTimer = null
+  }
+})
 </script>

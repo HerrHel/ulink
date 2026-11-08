@@ -430,7 +430,7 @@ export function useMobileDragReorder<T>(
         // B-6：只更新受影响区间的 order，不全员重排。
         // H12：见 applyIntervalOrder（下移取邻项 order、区间循环不误改 moved 自身）
         const toIdx = toIndex > fromIndex ? toIndex - 1 : toIndex
-        applyIntervalOrder(allItems, fromIndex, toIdx, (id) => dataStore._markDirty(id))
+        applyIntervalOrder(allItems, fromIndex, toIdx, (id) => { dataStore._trackChange?.(id, 'order'); dataStore._markDirty(id) })
         // PERF-3 修复：applyIntervalOrder 只改 order 不改 updatedAt，saveAppData 的
         // _fingerprint 判重会早退不落 IDB（刷新后 _customCardOrder 从 localStorage 恢复，
         // 但 order 字段还原）。同步更新区间内各项的 updatedAt 确保落盘。
@@ -439,6 +439,7 @@ export function useMobileDragReorder<T>(
         const end = Math.max(fromIndex, toIdx)
         for (let k = start; k <= end; k++) {
           allItems[k].data.updatedAt = now
+          dataStore._trackChange?.(allItems[k].data.id, 'order')
         }
         const newOrder: Array<{ t: 'g' | 'b'; id: string }> = allItems.map(it => ({ t: it.type === 'group' ? 'g' : 'b', id: it.data.id }))
 

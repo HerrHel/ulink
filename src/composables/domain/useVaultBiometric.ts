@@ -101,7 +101,7 @@ export function useVaultBiometric() {
 
     const prfSalt = crypto.getRandomValues(new Uint8Array(32))
     const challenge = crypto.getRandomValues(new Uint8Array(32))
-    const userId = crypto.getRandomValues(new Uint8Array(16))
+    const userId = _toBuffer('lv-vault-bio-uid')
 
     let credential: PublicKeyCredential
     try {
@@ -149,12 +149,12 @@ export function useVaultBiometric() {
     const stored = _readStored()
     if (!stored) return null
 
-    const prfSalt = _base64ToBuf(stored.prfSalt)
-    const credentialId = _base64UrlToBuf(stored.credentialId)
     const challenge = crypto.getRandomValues(new Uint8Array(32))
 
     let assertion: PublicKeyCredential
     try {
+      const prfSalt = _base64ToBuf(stored.prfSalt)
+      const credentialId = _base64UrlToBuf(stored.credentialId)
       assertion = (await navigator.credentials.get({
         publicKey: {
           challenge: _bs(challenge),

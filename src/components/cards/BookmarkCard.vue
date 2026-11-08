@@ -94,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { favicon, getTagNames, copyToClipboard, domain, displayText, stripEntranceAnim, faviconInitials, isDarkInvertSite, getOfficialDarkIcon } from '../../utils.js'
 import { analyzeImageElement } from '../../lib/iconAnalyzer.js'
 import { I } from '../../config/icons.js'
@@ -153,16 +153,14 @@ const imgLoaded = ref(false)
 const userCopied = ref(false)
 const pwCopied = ref(false)
 const decodedPw = ref('')
+let userTimer: ReturnType<typeof setTimeout> | null = null
+let pwTimer: ReturnType<typeof setTimeout> | null = null
 const { isVisible, toggle: togglePw } = usePasswordVisibility()
 const e2eStore = useE2EStore()
 const deadLinkChecker = useDeadLinkChecker()
 
-// 密码展示用：string 形态（E2E 未启 / 旧 base64）走 safeDecodePassword（同步）；
-// EncryptedPassword 对象形态（E2E 解锁时 saveBm 存的对象）需用已就绪的 e2e cryptoKey 解密。
-// 旧实现仅判 typeof === 'string'，对象态直接落空串 → 小眼睛点开后密码区显示空白，
-// 原本 '••••••' 占位也没了，看上去像「点眼睛把点删了」。此处按形态分支解密。
+// 密码展示用：按需解密以降低明文在内存中的暴露面并提升海量列表挂载性能。
 async function decodePassword() {
-  // A1-004：E2E 锁定时禁止 decode 旧 base64/string 明文路径
   if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
     decodedPw.value = ''
     return
@@ -178,9 +176,6 @@ onMounted(() => {
   stripEntranceAnim(cardEl.value)
 })
 watch(() => props.bookmark.password, decodePassword)
-// E2E 解锁后会补解密 store 密文条目（decryptStoreItems），但 password 是 EncryptedPassword
-// 对象态不在 ENCRYPT_FIELDS 里、不会被补解密扫到。解锁瞬间 key 入内存，重算一次 decodedPw，
-// 此后点眼睛才能看到对象态密码的明文；未解锁时 cryptoKey 仍空，decodePassword 安全返回 ''。
 watch(() => e2eStore.isUnlocked, decodePassword)
 watch(() => e2eStore.isE2EEnabled, decodePassword)
 
@@ -334,21 +329,22 @@ function copyUser() {
   if (v && !displayText(v)) { toast(t('cards.encryptedFieldLocked'), false); return }
   copyToClipboard(v, t('cards.account'))
   userCopied.value = true
-  setTimeout(() => { userCopied.value = false }, 1200)
+  if (userTimer) clearTimeout(userTimer)
+  userTimer = setTimeout(() => { userCopied.value = false }, 1200)
 }
-// 未解锁时 password 为 EncryptedPassword 对象、decryptPasswordWithKey 解不开返 ''；
-// 旧实现照常 copyToClipboard('') → utils toast「密码 已复制」误导用户以为复制成功，
-// 实则剪贴板是空串。先判 decodedPw 非空再复制，空就提示无法复制、不污染剪贴板。
-function copyPw() {
+
+async function copyPw() {
   // A1-004：锁定态禁止复制
   if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
     toast(t('cards.unlockMasterPasswordFirst'), false)
     return
   }
+  if (!decodedPw.value) await decodePassword()
   if (!decodedPw.value) { toast(t('cards.passwordLockedNoCopy'), false); return }
   copyToClipboard(decodedPw.value, t('cards.password'))
   pwCopied.value = true
-  setTimeout(() => { pwCopied.value = false }, 1200)
+  if (pwTimer) clearTimeout(pwTimer)
+  pwTimer = setTimeout(() => { pwCopied.value = false }, 1200)
 }
 
 function onTogglePw() {
@@ -357,6 +353,9 @@ function onTogglePw() {
     return
   }
   togglePw(props.bookmark.id)
+  if (isVisible(props.bookmark.id) && !decodedPw.value) {
+    void decodePassword()
+  }
 }
 
 const { startEditing } = useInlineEdit()
@@ -376,4 +375,15 @@ function editNotes(e: Event) {
     },
   })
 }
+
+onBeforeUnmount(() => {
+  if (userTimer) {
+    clearTimeout(userTimer)
+    userTimer = null
+  }
+  if (pwTimer) {
+    clearTimeout(pwTimer)
+    pwTimer = null
+  }
+})
 </script>

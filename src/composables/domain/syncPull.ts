@@ -112,12 +112,16 @@ export async function pullChanges(full = false): Promise<boolean> {
     const remoteAllIds: Record<EntityType, Set<string>> | null = full ? {
       category: new Set(), bookmark: new Set(), group: new Set(), attribute: new Set(),
     } : null
+    const allowReconcile: Record<EntityType, boolean> = {
+      category: true, bookmark: true, group: true, attribute: true,
+    }
     if (full && reconcileQueries) {
       for (let i = 0; i < SYNC_ENTITY_ORDER.length; i++) {
         const type = SYNC_ENTITY_ORDER[i]
         const r = reconcileQueries[i]
         if (r.error) {
           console.warn('[sync] reconcile id query failed, skipping reconcileDelete this round:', r.error)
+          allowReconcile[type] = false
           continue
         }
         for (const row of r.data || []) remoteAllIds![type].add((row as { id: string }).id)
@@ -178,12 +182,10 @@ export async function pullChanges(full = false): Promise<boolean> {
     }
 
     // 逐类判定是否允许对账删除（full-absent-delete + reconcileDelete 共用）
-    const allowReconcile: Record<EntityType, boolean> = {
-      category: true, bookmark: true, group: true, attribute: true,
-    }
     if (full && remoteAllIds) {
       for (let i = 0; i < SYNC_ENTITY_ORDER.length; i++) {
         const type = SYNC_ENTITY_ORDER[i]
+        if (!allowReconcile[type]) continue
         if (remoteAllIds[type].size > 0) continue
         if ((softDelResults[i].data?.length ?? 0) > 0) continue
         // 云端该类型一行都没有（含软删行）：判定「本地数据尚未上云」，整类不删。

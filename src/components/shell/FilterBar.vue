@@ -38,8 +38,8 @@
         <span aria-hidden="true" v-html="I.plus" class="icon-sm"></span>
       </button>
       <div class="add-dropdown ctx-menu" v-show="store.overlays.addDropdown">
-        <button class="ctx-item" @click.stop="$emit('add-bookmark')">{{ t('filter.newBookmark') }}</button>
-        <button class="ctx-item" @click.stop="$emit('add-group')">{{ t('filter.newGroup') }}</button>
+        <button class="ctx-item" @click.stop="onAddBookmarkItem">{{ t('filter.newBookmark') }}</button>
+        <button class="ctx-item" @click.stop="onAddGroupItem">{{ t('filter.newGroup') }}</button>
       </div>
     </span>
     <button v-show="!store.focusedGroupId" class="btn btn-secondary btn-sm" id="btnBatchHeader" :class="{ active: store.batchMode }" @click.stop="toggleBatch" :title="t('filter.batchManage')">
@@ -63,7 +63,7 @@ const store = useAppStore()
 const undo = useUndoStore()
 const share = useShareStore()
 const shareMode = computed(() => store.shareMode)
-defineEmits(['exit-focus', 'focus-add-bm', 'focus-edit-group', 'focus-undo', 'focus-redo', 'toggle-attr-filter', 'add-bookmark', 'add-group'])
+const emit = defineEmits(['exit-focus', 'focus-add-bm', 'focus-edit-group', 'focus-undo', 'focus-redo', 'toggle-attr-filter', 'add-bookmark', 'add-group'])
 
 const focusCanUndo = computed(() => !!store.focusedGroupId && !!undo.canUndo(store.focusedGroupId))
 const focusCanRedo = computed(() => !!store.focusedGroupId && !!undo.canRedo(store.focusedGroupId))
@@ -71,6 +71,36 @@ const focusCanRedo = computed(() => !!store.focusedGroupId && !!undo.canRedo(sto
 const toggleBatch = toggleBatchMode
 function onAddClick() { store.overlays.addDropdown = !store.overlays.addDropdown }
 function onExitShare() { share.exit() }
+
+function onAddBookmarkItem() {
+  store.overlays.addDropdown = false
+  emit('add-bookmark')
+}
+function onAddGroupItem() {
+  store.overlays.addDropdown = false
+  emit('add-group')
+}
+
+function onDocClick(e: MouseEvent) {
+  if (!store.overlays.addDropdown) return
+  const wrap = document.getElementById('addWrap')
+  if (wrap && !wrap.contains(e.target as Node)) {
+    store.overlays.addDropdown = false
+  }
+}
+function onDocScroll() {
+  if (store.overlays.addDropdown) store.overlays.addDropdown = false
+}
+
+import { onMounted, onUnmounted } from 'vue'
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  window.addEventListener('scroll', onDocScroll, true)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('scroll', onDocScroll, true)
+})
 </script>
 
 <style scoped>

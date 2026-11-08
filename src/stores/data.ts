@@ -10,7 +10,7 @@
  * 纯函数（_filterAttrs / _indexOfById / _sortItems / SortableItem）见 src/lib/dataQuery.ts。
  */
 import { defineStore } from 'pinia'
-import { makeDataState, _cancelPendingHist, __testHistDebounce, DGM_KEY } from './dataShared.js'
+import { makeDataState, _cancelPendingHist, _flushPendingHist, __testHistDebounce, DGM_KEY, DAM_KEY } from './dataShared.js'
 import { dataGetters } from './dataGetters.js'
 import { coreActions } from './dataActionsCore.js'
 import { bookmarkActions } from './dataActionsBookmarks.js'
@@ -22,7 +22,7 @@ import { ioActions } from './dataActionsIO.js'
 import { _filterAttrs, _indexOfById, _sortItems } from '../lib/dataQuery.js'
 export { _filterAttrs, _indexOfById, _sortItems }
 export type { SortableItem } from '../lib/dataQuery.js'
-export { _cancelPendingHist, __testHistDebounce, DGM_KEY }
+export { _cancelPendingHist, _flushPendingHist, __testHistDebounce, DGM_KEY, DAM_KEY }
 
 export const useDataStore = defineStore('data', {
   state: makeDataState,

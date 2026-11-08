@@ -9,7 +9,7 @@
     </div>
     <!-- 配额触顶：安抚文案优先于原始报错（用户最需要知道的是本地数据安全） -->
     <div v-if="state.level === 'quota'" class="ssp-error ssp-error-quota">
-      云端存储空间已满，你的数据已安全保存在本机，不受影响；空间恢复后点「重建同步队列」自动追平。
+      {{ t('sync.quotaFullNotice') }}
     </div>
     <div class="ssp-actions">
       <button

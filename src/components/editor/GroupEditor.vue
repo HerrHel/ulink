@@ -4,7 +4,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, provide, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, provide, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { isMobile, favicon, domain } from '../../utils.js'
 import { isThreePartCipher } from '../../crypto.js'
 import { t, tN } from '../../i18n/index.js'
@@ -30,6 +30,7 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useE2EStore } from '../../stores/e2e.js'
 import { debouncedSaveAppDataNotes } from '../../stores/app.js'
 import { EditorManager, isSilentSetContent } from '../../lib/editor.js'
 import { useMfbStore } from '../../stores/overlay.js'
@@ -134,15 +135,20 @@ const GroupRefCard = Node.create({
 const props = defineProps({ groupId: { type: String, required: true } })
 const ds = useDataStore()
 const ui = useUIStore()
+const e2eStore = useE2EStore()
+const isLockedCipher = computed(() => {
+  const n = ds.groupMap[props.groupId]?.notes
+  return Boolean(n && isThreePartCipher(n) && !e2eStore.isUnlocked)
+})
 const editorRef = ref<HTMLElement | null>(null)
 const editorInstance = ref<Editor | null>(null)
 let editor: Editor | null = null
 
 provide('tiptapEditor', editorInstance)
 
-function syncToStore(ed: Editor) {
-  const sg = ds.groupMap[props.groupId]
-  if (!sg) return
+const initialDocBmIds = new Set<string>()
+
+function extractDocBmIds(ed: Editor): string[] {
   const ids: string[] = [], seen: Record<string, boolean> = {}
   ed.state.doc.descendants(node => {
     if (node.type.name === 'inlineCard') {
@@ -153,9 +159,40 @@ function syncToStore(ed: Editor) {
       if (bm && !bm.deletedAt && !seen[bmid]) { seen[bmid] = true; ids.push(bmid) }
     }
   })
-  ds.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: ids })
+  return ids
+}
+
+function syncToStore(ed: Editor) {
+  const cur = ds.groupMap[props.groupId]
+  if (cur?.notes && isThreePartCipher(cur.notes)) {
+    return
+  }
+  const sg = ds.groupMap[props.groupId]
+  if (!sg) return
+  const currentDocIds = extractDocBmIds(ed)
+  for (const id of currentDocIds) initialDocBmIds.add(id)
+
+  // 保留原本存在于 sg.bookmarkIds 中、但从未作为 inlineCard 插入过文档的未软删有效书签，
+  // 杜绝编辑器内打字时将未嵌入正文的组内成员意外抹除清空。
+  const preservedUnembedded: string[] = []
+  const docIdSet = new Set(currentDocIds)
+  for (const bid of sg.bookmarkIds || []) {
+    if (!docIdSet.has(bid) && !initialDocBmIds.has(bid)) {
+      const bm = ds.bookmarkMap[bid]
+      if (bm && !bm.deletedAt) preservedUnembedded.push(bid)
+    }
+  }
+
+  const mergedIds = [...currentDocIds, ...preservedUnembedded]
+  ds.updateGroup(props.groupId, { notes: ed.getHTML(), bookmarkIds: mergedIds })
   debouncedSaveAppDataNotes(1200)
 }
+
+const canEdit = computed(() => {
+  if (isLockedCipher.value || ui.shareMode) return false
+  if (isMobile()) return ui.focusedGroupId === props.groupId
+  return true
+})
 
 onMounted(() => {
   const group = ds.groupMap[props.groupId]
@@ -192,7 +229,7 @@ onMounted(() => {
     content: isThreePartCipher(group.notes || '') ? '' : (group.notes || ''),
     // 分享只读态（ui.shareMode）一律不可编辑：他人内容不挂可编辑光标，
     // 且 TipTap 不可编辑时不触发 onUpdate → 不会走 syncToStore 的 store 写入。
-    editable: !ui.shareMode && (!isMobile() || ui.focusedGroupId === props.groupId),
+    editable: canEdit.value,
     editorProps: {
       attributes: { class: 'group-tiptap' },
       // 粘贴图片：压缩 → 上传 → 插入；返回 true 阻止默认粘贴，其余交给 TipTap
@@ -236,6 +273,10 @@ onMounted(() => {
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
 
+  for (const id of extractDocBmIds(editor)) {
+    initialDocBmIds.add(id)
+  }
+
   // 光标移到文档末尾，避免初始位置落在标题中导致 H1 按钮误亮
   editor.commands.setTextSelection(editor.state.doc.content.size)
 
@@ -246,12 +287,27 @@ onMounted(() => {
     el.addEventListener('focusout', _onFocusOut)
   }
 
-  // 移动端：只有聚焦后才可编辑（分享态永远不可编辑）
-  if (isMobile()) {
-    watch(() => [ui.focusedGroupId, ui.shareMode] as const, () => {
-      editor?.setEditable(!ui.shareMode && ui.focusedGroupId === props.groupId)
-    })
-  }
+  // 统一响应式监听：分享只读态、E2E锁定、移动端聚焦切换均驱动 editable
+  watch(canEdit, (editable) => {
+    editor?.setEditable(editable)
+  })
+
+  // 解锁后 decryptStoreItems 还原明文：自动回填至 TipTap 编辑器
+  watch(
+    () => ds.groupMap[props.groupId]?.notes,
+    (newNotes) => {
+      if (!editor) return
+      if (newNotes && !isThreePartCipher(newNotes)) {
+        const curHTML = editor.getHTML()
+        if (curHTML === '<p></p>' || curHTML === '' || isThreePartCipher(curHTML)) {
+          EditorManager.silentSetContent(props.groupId, newNotes)
+          for (const id of extractDocBmIds(editor)) {
+            initialDocBmIds.add(id)
+          }
+        }
+      }
+    }
+  )
 })
 
 let _mfbBlurTimer: ReturnType<typeof setTimeout> | null = null

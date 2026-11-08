@@ -19,6 +19,7 @@
 
 import { safeGetItem, safeSetItem, safeJsonParse } from '../storageSafe.js'
 import { tokenizeText } from './localRAG.js'
+import { isThreePartCipher } from '../../crypto.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../../types.js'
 
 export const K_AI_GRAPH = 'lv_ai_graph_v1'
@@ -248,10 +249,12 @@ export class EvolvingKnowledgeGraph {
         }
       }
 
-      // 标题关键词提取（2 字符以上）
-      const titleTokens = tokenizeText(bm.title || '')
-      for (const tok of titleTokens.slice(0, 4)) {
-        terms.push(tok)
+      // 标题关键词提取（2 字符以上，排除未解密 E2E 密文）
+      if (bm.title && !isThreePartCipher(bm.title)) {
+        const titleTokens = tokenizeText(bm.title)
+        for (const tok of titleTokens.slice(0, 4)) {
+          terms.push(tok)
+        }
       }
 
       // 建立两两共现
@@ -266,13 +269,13 @@ export class EvolvingKnowledgeGraph {
     for (const grp of groups) {
       if (grp.deletedAt) continue
       const groupName = grp.name?.trim()
-      if (!groupName) continue
+      if (!groupName || isThreePartCipher(groupName)) continue
       this.touchNode(groupName, 'concept')
 
       const memberTitles: string[] = []
       for (const bmId of grp.bookmarkIds || []) {
         const bm = bookmarks.find((b) => b.id === bmId && !b.deletedAt)
-        if (bm && bm.title) {
+        if (bm && bm.title && !isThreePartCipher(bm.title)) {
           memberTitles.push(bm.title)
           this.addAssociation(groupName, bm.title, 1.2)
         }

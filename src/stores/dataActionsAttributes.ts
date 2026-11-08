@@ -5,7 +5,8 @@
  */
 import { useUIStore } from './ui.js'
 import { _indexOfById } from '../lib/dataQuery.js'
-import { _denyWrite } from './dataShared.js'
+import { _denyWrite, DAM_KEY } from './dataShared.js'
+import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { ATTR_IS_GROUP } from '../config/constants.js'
 import { getLocale } from '../i18n/index.js'
 import type { DataStoreThis } from './dataShared.js'
@@ -49,6 +50,7 @@ export const attributeActions = {
     if (aIdx >= 0) {
       this.customAttributes[aIdx] = { ...this.customAttributes[aIdx], deletedAt: Date.now(), updatedAt: Date.now() }
       this._attrMap[id] = this.customAttributes[aIdx]
+      this._trackChange(id, 'deletedAt')
       this._markDirty(id)
     }
     const now = Date.now()
@@ -80,6 +82,7 @@ export const attributeActions = {
       return g
     })
     if (members.length) this._deletedAttrMemberships.set(id, members)
+    this._persistDeletedAttrMemberships()
     const ui = useUIStore()
     const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
     const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
@@ -130,6 +133,7 @@ export const attributeActions = {
       } else {
         this._deletedAttrMemberships.delete(id)
       }
+      this._persistDeletedAttrMemberships()
       this._searchIndexDirty = true
     }
   },
@@ -180,6 +184,7 @@ export const attributeActions = {
           const surviving = members.filter(m => !(m.entityId === entityId && m.kind === kind))
           this._deletedAttrMemberships.set(attrId, surviving)
         }
+        this._persistDeletedAttrMemberships()
       }
     }
   },
@@ -191,18 +196,30 @@ export const attributeActions = {
       const surviving = members.filter(m => m.entityId !== entityId)
       if (surviving.length === 0) this._deletedAttrMemberships.delete(attrId)
       else this._deletedAttrMemberships.set(attrId, surviving)
+      this._persistDeletedAttrMemberships()
     }
   },
 
-  permanentDeleteAttribute(this: DataStoreThis, id: string) {
+  permanentDeleteAttribute(this: DataStoreThis, id: string, opts?: { skipPersist?: boolean }) {
     if (_denyWrite()) return
     if (id === ATTR_IS_GROUP) return
     this._permanentDelete('custom_attributes', id)
     delete this._attrMap[id]
     this._deletedAttrMemberships.delete(id)
+    if (!opts?.skipPersist) this._persistDeletedAttrMemberships()
     this._searchIndexDirty = true
   },
 
+  /** 持久化 _deletedAttrMemberships 到 localStorage，用于恢复时跨会话保持属性关联 */
+  _persistDeletedAttrMemberships(this: DataStoreThis) {
+    const obj: Record<string, Array<{ entityId: string; kind: 'bookmark' | 'group' }>> = {}
+    for (const [id, members] of this._deletedAttrMemberships) obj[id] = members
+    safeSetItem(DAM_KEY, JSON.stringify(obj))
+  },
+  _restoreDeletedAttrMemberships(this: DataStoreThis) {
+    const obj = safeJsonParse<Record<string, Array<{ entityId: string; kind: 'bookmark' | 'group' }>> | null>(safeGetItem(DAM_KEY), null)
+    if (obj) this._deletedAttrMemberships = new Map(Object.entries(obj))
+  },
   ensureGroupAttribute(this: DataStoreThis): boolean {
     if (_denyWrite()) return false
     const isEn = getLocale() === 'en-US'
@@ -236,13 +253,15 @@ export const attributeActions = {
     for (let i = 0; i < this.siblingGroups.length; i++) {
       const g = this.siblingGroups[i]
       if (!g.attributes) {
-        this.siblingGroups[i] = { ...g, attributes: { [ATTR_IS_GROUP]: true } }
+        this.siblingGroups[i] = { ...g, attributes: { [ATTR_IS_GROUP]: true }, updatedAt: Date.now() }
         this._grpMap[g.id] = this.siblingGroups[i]
+        this._trackChange(g.id, 'attributes')
         this._markDirty(g.id)
         changed = true
       } else if (!g.attributes[ATTR_IS_GROUP]) {
-        this.siblingGroups[i] = { ...g, attributes: { ...g.attributes, [ATTR_IS_GROUP]: true } }
+        this.siblingGroups[i] = { ...g, attributes: { ...g.attributes, [ATTR_IS_GROUP]: true }, updatedAt: Date.now() }
         this._grpMap[g.id] = this.siblingGroups[i]
+        this._trackChange(g.id, 'attributes')
         this._markDirty(g.id)
         changed = true
       }

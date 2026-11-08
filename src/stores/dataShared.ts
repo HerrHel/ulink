@@ -4,13 +4,15 @@
  * 模块级 Map（历史防抖）是单例，由 data.ts re-export 保持既有导入路径不变。
  */
 import { useUIStore } from './ui.js'
-import { safeGetItem } from '../lib/storageSafe.js'
+import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
+import { localHistoryKey } from './storage.js'
 import * as persist from './persist.js'
 import { shadowData, shadowHasAny } from './shareShadow.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData, EncryptedPassword, TableName } from '../types.js'
 import type { Space } from './ui.js'
 
 export const DGM_KEY = 'lv_delGroupMems'
+export const DAM_KEY = 'lv_delAttrMems'
 
 /**
  * 分享只读态的写保护判据（供所有 mutation action 前置调用）。
@@ -65,9 +67,28 @@ export const _histDebounceTimers = new Map<string, ReturnType<typeof setTimeout>
 export const _histDebounceData = new Map<string, Record<string, unknown>>()
 export const _HISTORY_DEBOUNCE_MS = 500
 
-// R22：模块级历史防抖 Map，reset/import 时应一并清空，避免旧定时器按旧 id 写快照。
+// R22 / Flush：模块级历史防抖 Map，reset/import 时清空，关页/主动保存时 flush
 export function _cancelPendingHist() {
   for (const t of _histDebounceTimers.values()) clearTimeout(t)
+  _histDebounceTimers.clear()
+  _histDebounceData.clear()
+}
+
+/** 关页 / visibility hidden / 主动保存时，将排队中的历史快照立即刷入 localHistoryKey(id) */
+export function _flushPendingHist() {
+  if (!_histDebounceData.size) return
+  let max = 10
+  try { max = useUIStore().historyMax || 10 } catch { /* ignore */ }
+  for (const [id, data] of _histDebounceData.entries()) {
+    const t = _histDebounceTimers.get(id)
+    if (t) clearTimeout(t)
+    const key = localHistoryKey(id)
+    const arr = safeJsonParse<unknown[]>(safeGetItem(key), [])
+    if (Array.isArray(arr)) {
+      arr.unshift({ id: Date.now(), data, created_at: new Date().toISOString() })
+      safeSetItem(key, JSON.stringify(arr.slice(0, max)))
+    }
+  }
   _histDebounceTimers.clear()
   _histDebounceData.clear()
 }
@@ -238,10 +259,11 @@ export interface DataStoreThis {
   bumpBookmarkUseCount(id: string): void
   deleteBookmark(id: string): void
   restoreBookmark(id: string): void
-  permanentDeleteBookmark(id: string): void
+  permanentDeleteBookmark(id: string, opts?: { skipPersist?: boolean }): void
   // groups
   addGroup(g: SiblingGroup): void
   updateGroup(id: string, changes: Partial<SiblingGroup>): void
+  bumpGroupUseCount(id: string): void
   deleteGroup(id: string): void
   togglePin(entityType: 'bookmark' | 'group', id: string): void
   restoreGroup(id: string): void
@@ -263,7 +285,9 @@ export interface DataStoreThis {
   restoreAttribute(id: string): void
   _restoreAttrMemberships(entityId: string, kind: 'bookmark' | 'group'): void
   _dropAttrMemberships(entityId: string): void
-  permanentDeleteAttribute(id: string): void
+  _persistDeletedAttrMemberships(): void
+  _restoreDeletedAttrMemberships(): void
+  permanentDeleteAttribute(id: string, opts?: { skipPersist?: boolean }): void
   ensureGroupAttribute(): boolean
   // io
   loadFromStorage(): void

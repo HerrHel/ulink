@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('deadlinks.title')" :class="{ open: visible }" @click.self="close">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('deadlinks.title')" :class="{ open: visible }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-md" @click.stop>
       <!-- 标签切换 + 操作栏 -->
       <div class="modal-head">
@@ -46,7 +46,7 @@
           </div>
           <img :src="favicon(b.url)" alt="" @error="onImgError">
           <div class="pr-info">
-            <span class="pr-name">{{ b.title }}</span>
+            <span class="pr-name">{{ displayText(b.title) || displayText(b.url) || t('cards.encryptedFieldLocked') }}</span>
             <span class="pr-url">{{ domain(b.url) }}</span>
           </div>
           <span v-if="tab === 'dead'" class="pr-badge dead">{{ t('cards.deadLink') }}</span>
@@ -97,7 +97,8 @@ import { ref, computed, watch } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
-import { favicon, domain } from '../../utils.js'
+import { favicon, domain, displayText } from '../../utils.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { openBmModal, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { showConfirm, toast, toastWithUndo } from '../../lib/toast.js'
 import { debouncedSaveAppData, saveAppData } from '../../stores/app.js'
@@ -154,6 +155,8 @@ function switchTab(t: 'dead' | 'blocked') {
   tab.value = t
   selectedIds.value = new Set()
 }
+
+const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 
 function close() {
   store.overlays.deadLinks = false

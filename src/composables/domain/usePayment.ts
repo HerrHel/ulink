@@ -10,7 +10,7 @@
  *   · 轮询采用 2s 起、指数退避到 10s，到 `expiresAt` 即停（避免用户关掉页面还在跑请求）。
  */
 
-import { ref, computed, readonly } from 'vue'
+import { ref, computed, readonly, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
 import { getApiToken } from '../../lib/authDriver.js'
 import { getCachedPlans } from './usePurchasePlans.js'
@@ -203,12 +203,15 @@ export function usePayment() {
     if (!token) return null
 
     checking.value = true
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: 'status', orderId, sync }),
-      })
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer))
       const body = (await res.json().catch(() => ({}))) as {
         ok?: boolean
         order?: RawOrder
@@ -221,6 +224,7 @@ export function usePayment() {
     } catch {
       return null
     } finally {
+      clearTimeout(timer)
       checking.value = false
     }
   }
@@ -264,6 +268,12 @@ export function usePayment() {
     }
 
     pollTimer = setTimeout(tick, delay)
+  }
+
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      stopPolling()
+    })
   }
 
   return {

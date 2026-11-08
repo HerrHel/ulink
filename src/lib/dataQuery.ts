@@ -13,10 +13,22 @@ export type SortableItem = { useCount: number; order: number; updatedAt: number;
  * 属性过滤：按激活 / 排除属性集合过滤实体列表。
  * 纯函数，依次对 activeAttrs 求交集、对 excludedAttrs 排除，返回新数组。
  */
-export function _filterAttrs<T extends { attributes: Record<string, boolean> }>(items: T[], { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] }): T[] {
-  for (const aid of activeAttrs) items = items.filter(i => i.attributes[aid])
-  for (const aid of excludedAttrs) items = items.filter(i => !i.attributes[aid])
-  return items
+export function _filterAttrs<T extends { attributes?: Record<string, boolean> }>(
+  items: T[],
+  { activeAttrs, excludedAttrs }: { activeAttrs: string[]; excludedAttrs: string[] },
+): T[] {
+  if (!activeAttrs.length && !excludedAttrs.length) return items
+  return items.filter(i => {
+    const attrs = i.attributes
+    if (!attrs) return activeAttrs.length === 0
+    for (let k = 0; k < activeAttrs.length; k++) {
+      if (!attrs[activeAttrs[k]]) return false
+    }
+    for (let k = 0; k < excludedAttrs.length; k++) {
+      if (attrs[excludedAttrs[k]]) return false
+    }
+    return true
+  })
 }
 
 /**
@@ -42,7 +54,7 @@ export function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortD
     const bPin = b.pinnedAt ? 1 : 0
     if (aPin !== bPin) return bPin - aPin
     if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
-    if (sortMode === 'title') return String(a[nameKey]).localeCompare(String(b[nameKey])) * d
+    if (sortMode === 'title') return String(a[nameKey] ?? '').localeCompare(String(b[nameKey] ?? '')) * d
     // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir
     if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0))
     if (sortMode === 'dateAsc') return (((a[dateKey] as number) || 0) - ((b[dateKey] as number) || 0))

@@ -9,10 +9,13 @@
  * 账号记录本身（CloudBase auth 账号）由运营方人工核验后删除——云函数只有
  * publishable 级 APIKEY，没有管理密钥，无法调用账号删除接口。法律文档已按此口径表述。
  */
-import { supabase } from '../../lib/supabase.js'
+import { getApiToken } from '../../lib/authDriver.js'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
 import { clearAllLocalData } from '../../stores/storage.js'
 import { useAuthStore } from '../../stores/auth.js'
+import { useE2EStore } from '../../stores/e2e.js'
+import { useVaultStore } from '../../stores/vault.js'
+import { useDataStore } from '../../stores/data.js'
 
 export type AccountDeletionError = 'unauthorized' | 'network' | 'not_configured' | 'failed'
 
@@ -31,21 +34,18 @@ export async function purgeAccount(): Promise<AccountDeletionResult> {
   const endpoint = edgeFnUrl('account')
   if (!endpoint) return { ok: false, error: 'not_configured' }
 
-  let token = ''
-  try {
-    const { data } = await supabase.auth.getSession()
-    token = (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
-  } catch {
-    token = ''
-  }
+  const token = await getApiToken()
   if (!token) return { ok: false, error: 'unauthorized' }
 
   let result: AccountDeletionResult
+  const abortCtrl = new AbortController()
+  const timer = setTimeout(() => abortCtrl.abort(), 15000)
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ action: 'purge' }),
+      signal: abortCtrl.signal,
     })
     const body = (await res.json().catch(() => ({}))) as {
       ok?: boolean
@@ -65,6 +65,8 @@ export async function purgeAccount(): Promise<AccountDeletionResult> {
     }
   } catch {
     return { ok: false, error: 'network' }
+  } finally {
+    clearTimeout(timer)
   }
 
   if (!result.ok) return result
@@ -75,6 +77,17 @@ export async function purgeAccount(): Promise<AccountDeletionResult> {
   } catch {
     /* 清不干净也要继续登出，下面会重载页面 */
   }
+  // 安全加固：立即归零内存中的 E2E/Vault 密钥与数据，杜绝页面重载前内存滞留
+  try { useE2EStore().lock() } catch { /* ignore */ }
+  try { useVaultStore().lock() } catch { /* ignore */ }
+  try {
+    const ds = useDataStore()
+    ds.bookmarks = []
+    ds.siblingGroups = []
+    ds.categories = []
+    ds.customAttributes = []
+    ds._syncMaps()
+  } catch { /* ignore */ }
   try {
     await useAuthStore().signOut()
   } catch {

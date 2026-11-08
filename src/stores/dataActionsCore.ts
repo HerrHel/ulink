@@ -7,6 +7,7 @@ import { useUIStore } from './ui.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { localHistoryKey } from './storage.js'
 import { _indexOfById } from '../lib/dataQuery.js'
+import { cloneDeep } from '../lib/clone.js'
 import { _denyWrite, _histDebounceTimers, _histDebounceData, _HISTORY_DEBOUNCE_MS } from './dataShared.js'
 import { ATTR_IS_GROUP } from '../config/constants.js'
 import type { DataStoreThis } from './dataShared.js'
@@ -33,7 +34,7 @@ export const coreActions = {
 
     const childIdx: Record<string, string[]> = {}
     for (const b of this.bookmarks) {
-      if (b.parentId && !b.deletedAt) {
+      if (b.parentId && !b.deletedAt && bmMap[b.parentId] && !bmMap[b.parentId].deletedAt) {
         if (!childIdx[b.parentId]) childIdx[b.parentId] = []
         childIdx[b.parentId].push(b.id)
       }
@@ -77,20 +78,22 @@ export const coreActions = {
     fields.add(field)
     this._searchIndexDirty = true
   },
-  /** 保存旧状态到本地历史（C2：覆盖前留底）。含 500ms 防抖，同一 id 连续变更只保留最后一次快照。 */
+  /** 保存旧状态到本地历史（C2：覆盖前留底）。含 500ms 防抖，连续编辑保留初始基准快照。 */
   _saveLocalHistory(this: DataStoreThis, id: string, data: Record<string, unknown>) {
-    _histDebounceData.set(id, data)
-    if (_histDebounceTimers.has(id)) return  // 已有计时器运行中，仅更新最新 data
+    if (!_histDebounceData.has(id)) {
+      _histDebounceData.set(id, cloneDeep(data))
+    }
+    if (_histDebounceTimers.has(id)) return
     _histDebounceTimers.set(id, setTimeout(() => {
       _histDebounceTimers.delete(id)
-      const latestData = _histDebounceData.get(id)
+      const initialData = _histDebounceData.get(id)
       _histDebounceData.delete(id)
-      if (!latestData) return
+      if (!initialData) return
       const max = useUIStore().historyMax || 10
       const key = localHistoryKey(id)
       const arr = safeJsonParse<unknown[]>(safeGetItem(key), [])
       if (!Array.isArray(arr)) return
-      arr.unshift({ id: Date.now(), data: latestData, created_at: new Date().toISOString() })
+      arr.unshift({ id: Date.now(), data: initialData, created_at: new Date().toISOString() })
       safeSetItem(key, JSON.stringify(arr.slice(0, max)))
     }, _HISTORY_DEBOUNCE_MS))
   },
@@ -114,6 +117,7 @@ export const coreActions = {
     delete (next as { deletedAt?: unknown }).deletedAt
     arr[idx] = next
     map[id] = next
+    this._trackChange(id, 'deletedAt')
     this._markDirty(id); this._searchIndexDirty = true
   },
 
@@ -128,6 +132,7 @@ export const coreActions = {
     }
     handlers[key]?.()
     this._dirtyIds.delete(id)
+    this._newIds.delete(id)
     this._deletedIds.set(id, key)
   },
 
@@ -138,10 +143,12 @@ export const coreActions = {
     const groups = this.siblingGroups.filter(g => g.deletedAt)
     const cats = this.categories.filter(c => c.deletedAt)
     const attrs = this.customAttributes.filter(a => a.deletedAt)
-    for (const b of bms) this.permanentDeleteBookmark(b.id)
+    for (const b of bms) this.permanentDeleteBookmark(b.id, { skipPersist: true })
     for (const g of groups) this.permanentDeleteGroup(g.id)
     for (const c of cats) this.permanentDeleteCategory(c.id)
-    for (const a of attrs) this.permanentDeleteAttribute(a.id)
+    for (const a of attrs) this.permanentDeleteAttribute(a.id, { skipPersist: true })
+    this._persistDeletedGroupMemberships()
+    this._persistDeletedAttrMemberships()
     this._syncMaps()
   },
 }

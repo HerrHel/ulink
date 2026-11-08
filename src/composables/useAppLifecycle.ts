@@ -3,7 +3,7 @@
  * 从 useApp.js 拆分，职责单一：数据加载、UI 恢复、beforeunload 持久化。
  */
 import { onMounted, onUnmounted, watch } from 'vue'
-import { useDataStore } from '../stores/data.js'
+import { useDataStore, _flushPendingHist } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { flushSaveAppData, debouncedSaveAppData } from '../stores/app.js'
 import { useMentionStore } from '../stores/overlay.js'

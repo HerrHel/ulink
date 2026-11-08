@@ -5,7 +5,7 @@
  * （随文卡片解析合并 / 附件卡片回溯 / 附件笔记过滤）+ 复制消息（剪贴板 + 已复制态）。
  * 不触碰面板 DOM（滚动/输入框高度/手势等留在 DetailPanel）。
  */
-import { computed, ref, type Ref } from 'vue'
+import { computed, ref, onBeforeUnmount, getCurrentInstance, type Ref } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
 import { useDataStore } from '../../stores/data.js'
@@ -112,6 +112,15 @@ export function useChatDisplay(chatTurns: Ref<ChatTurn[]>) {
     } catch {
       toast(t('ai.copyFailed'), false)
     }
+  }
+
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      if (_copiedTimer) {
+        clearTimeout(_copiedTimer)
+        _copiedTimer = null
+      }
+    })
   }
 
   return {

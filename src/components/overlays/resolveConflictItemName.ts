@@ -1,4 +1,5 @@
 import type { SyncConflict } from '../../stores/sync.js'
+import { displayText } from '../../utils.js'
 
 /**
  * 同步冲突横幅「冲突项展示名」解析（D1-49）。
@@ -9,7 +10,7 @@ import type { SyncConflict } from '../../stores/sync.js'
  * 保留零行为变化（c6 typeLabel / c3 getPreview / d1-48 resolveGroupIconSvg 同款
  * 「抽独立纯模块」口径），仅把对 store 的 4 个 O(1) Map getter 依赖 maps 入参化。
  *
- * 四级联优先级（逐字保留原 itemName 实现）：
+ * 四级联优先级（逐字保留原 itemName 实现，统一经 displayText 过滤密文）：
  *   1. 命中对应 store Map 且有 name/title 字段 → 用 store 当前名（最新可见态）
  *   2. 否则取冲突快照 c.local 的同名字段（冲突发生时的本地态）
  *   3. 都无 → 回退 c.id（兜底不丢展示）
@@ -26,18 +27,19 @@ export function resolveConflictItemName(
   },
 ): string {
   const d = c.local as Record<string, unknown>
+  let raw = ''
   if (c.type === 'bookmark') {
     const bm = maps.bookmarkMap[c.id]
-    return bm?.title || (d?.title as string) || c.id
-  }
-  if (c.type === 'group') {
+    raw = bm?.title || (d?.title as string) || c.id
+  } else if (c.type === 'group') {
     const g = maps.groupMap[c.id]
-    return g?.name || (d?.name as string) || c.id
-  }
-  if (c.type === 'category') {
+    raw = g?.name || (d?.name as string) || c.id
+  } else if (c.type === 'category') {
     const cat = maps.categoryMap[c.id]
-    return cat?.name || (d?.name as string) || c.id
+    raw = cat?.name || (d?.name as string) || c.id
+  } else {
+    const attr = maps.attributeMap[c.id]
+    raw = attr?.name || (d?.name as string) || c.id
   }
-  const attr = maps.attributeMap[c.id]
-  return attr?.name || (d?.name as string) || c.id
+  return displayText(raw)
 }

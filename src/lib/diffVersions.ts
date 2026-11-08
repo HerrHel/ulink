@@ -27,17 +27,28 @@ const SENSITIVE_KEYS = new Set(['password'])
 
 function _truncate(val: unknown, max = 80): string {
   if (val === null || val === undefined) return '（空）'
-  const s = typeof val === 'object' ? JSON.stringify(val) : String(val)
+  let s: string
+  try {
+    s = typeof val === 'object' ? JSON.stringify(val) : String(val)
+  } catch {
+    s = String(val)
+  }
   return s.length > max ? s.slice(0, max) + '…' : s
 }
 
 /** 敏感字段的值占位——不暴露原值，仅示意「已修改/存在」 */
 const SENSITIVE_PLACEHOLDER = '••••'
 
+const DEFAULT_EXCLUDE_KEYS = [
+  'id', 'updatedAt', 'createdAt', 'updated_at', 'created_at',
+  'user_id', '_userId', '_isNew', '_changedFields',
+  '_deletedGroupMemberships', '_deletedAttrMemberships',
+]
+
 export function diffVersions(
   oldData: Record<string, unknown>,
   newData: Record<string, unknown>,
-  excludeKeys: string[] = ['id', 'updatedAt', 'createdAt', 'updated_at', 'created_at'],
+  excludeKeys: string[] = DEFAULT_EXCLUDE_KEYS,
 ): DiffField[] {
   const result: DiffField[] = []
   const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)])
@@ -47,8 +58,10 @@ export function diffVersions(
     const oldVal = oldData[key]
     const newVal = newData[key]
 
-    const oldStr = JSON.stringify(oldVal)
-    const newStr = JSON.stringify(newVal)
+    let oldStr: string | undefined
+    let newStr: string | undefined
+    try { oldStr = JSON.stringify(oldVal) } catch { oldStr = String(oldVal) }
+    try { newStr = JSON.stringify(newVal) } catch { newStr = String(newVal) }
     if (oldStr === newStr) continue
 
     const label = FIELD_LABELS[key] || key

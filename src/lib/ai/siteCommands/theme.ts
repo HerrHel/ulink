@@ -19,6 +19,7 @@ export const themeBlock: SiteCommandBlock = (
     const mode = themeIntent.mode
     if (mode === 'dark') {
       ui.setThemeColor('dark')
+      ui.saveUIState?.()
       return {
         handled: true,
         action: 'theme',
@@ -27,6 +28,7 @@ export const themeBlock: SiteCommandBlock = (
       }
     } else if (mode === 'light') {
       ui.setThemeColor('light')
+      ui.saveUIState?.()
       return {
         handled: true,
         action: 'theme',
@@ -35,6 +37,7 @@ export const themeBlock: SiteCommandBlock = (
       }
     } else if (mode === 'auto') {
       if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
+      ui.saveUIState?.()
       return {
         handled: true,
         action: 'theme',
@@ -43,6 +46,7 @@ export const themeBlock: SiteCommandBlock = (
       }
     } else {
       ui.toggleTheme()
+      ui.saveUIState?.()
       const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
       return {
         handled: true,
@@ -55,6 +59,7 @@ export const themeBlock: SiteCommandBlock = (
 
   if (themeIntent?.kind === 'nl-dark') {
     ui.setThemeColor('dark')
+    ui.saveUIState?.()
     return {
       handled: true,
       action: 'theme',
@@ -65,6 +70,7 @@ export const themeBlock: SiteCommandBlock = (
 
   if (themeIntent?.kind === 'nl-light') {
     ui.setThemeColor('light')
+    ui.saveUIState?.()
     return {
       handled: true,
       action: 'theme',
@@ -75,6 +81,7 @@ export const themeBlock: SiteCommandBlock = (
 
   if (themeIntent?.kind === 'nl-auto') {
     if (ui.themeMode !== 'auto') ui.toggleAutoTheme()
+    ui.saveUIState?.()
     return {
       handled: true,
       action: 'theme',
@@ -85,6 +92,7 @@ export const themeBlock: SiteCommandBlock = (
 
   if (themeIntent?.kind === 'nl-toggle') {
     ui.toggleTheme()
+    ui.saveUIState?.()
     const current = t(ui.themeColor === 'dark' ? 'aiCmd.themeNameDark' : 'aiCmd.themeNameLight')
     return {
       handled: true,

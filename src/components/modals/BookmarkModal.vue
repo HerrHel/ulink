@@ -92,14 +92,14 @@
           <div class="form-group">
             <label class="form-label" for="bmCategoryId">{{ t('modal.bookmark.category') }}</label>
             <select class="form-select" id="bmCategoryId" v-model="bmForm.categoryId" @change="onCategoryChange">
-              <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+              <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ displayText(cat.name) }}</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label" for="bmParentId">{{ t('modal.bookmark.parent') }}</label>
             <select class="form-select" id="bmParentId" v-model="bmForm.parentId" @change="onParentChange">
               <option :value="null">{{ t('common.none') }}</option>
-              <option v-for="b in parentOptions" :key="b.id" :value="b.id">{{ b.title }}</option>
+              <option v-for="b in parentOptions" :key="b.id" :value="b.id">{{ displayText(b.title) || b.url }}</option>
             </select>
           </div>
         </div>
@@ -109,7 +109,7 @@
             <label v-for="attr in selectableAttrs" :key="attr.id" class="check-chip" :class="{ 'ai-highlight': bmForm.aiSuggestAttrIds.includes(attr.id) }">
               <input type="checkbox" :checked="bmForm.attributes[attr.id]"
                      @change="toggleAttr(attr.id, $event)">
-              {{ attr.name }}
+              {{ displayText(attr.name) }}
             </label>
           </div>
         </div>
@@ -119,7 +119,7 @@
           <div class="child-bookmarks-list">
             <span v-for="child in childBookmarks" :key="child.id" class="group-inline-card">
               <img v-if="child.icon" :src="child.icon" alt="">
-              <span class="gic-name" :title="child.title || child.url">{{ child.title || child.url }}</span>
+              <span class="gic-name" :title="displayText(child.title) || child.url">{{ displayText(child.title) || child.url }}</span>
               <span class="gic-edit-btn" :title="t('modal.bookmark.editChildBm')" @click.stop="onEditChild(child.id)" v-html="I.edit"></span>
               <span class="gic-remove" :title="t('modal.bookmark.deleteChildBm')" @click.stop="onDeleteChild(child.id)" v-html="I.trash"></span>
             </span>
@@ -137,8 +137,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, nextTick, ref } from 'vue'
+import { computed, watch, nextTick, ref, onBeforeUnmount } from 'vue'
 import { useAppStore } from '../../stores/app.js'
+import { displayText } from '../../utils.js'
 import { bmForm, closeBmModal, saveBm, isBmSaving, previewIconUrl, clearIcon, autoFetchFromUrl, triggerAiFetch, applyAiCategory, applyAiAttributes, dismissAiSuggestions, deleteBookmarkWithUndo } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { ATTR_IS_GROUP } from '../../config/constants.js'
@@ -270,5 +271,12 @@ function onDismissAi() { dismissAiSuggestions() }
 // Auto-focus title input when modal opens
 watch(() => bmForm.isOpen, (open) => {
   if (open) nextTick(() => titleRef.value?.focus())
+})
+
+onBeforeUnmount(() => {
+  if (bmForm._fetchTimer) {
+    clearTimeout(bmForm._fetchTimer)
+    bmForm._fetchTimer = null
+  }
 })
 </script>

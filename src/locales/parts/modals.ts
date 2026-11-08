@@ -105,6 +105,15 @@ export const modalsZh = {
       github: 'GitHub 登录',
       google: 'Google 登录',
       oauthFailed: '第三方登录失败，请重试',
+      verifyCodeError: '验证码错误，请检查后重试',
+      verifyLockedDuration: '验证失败次数过多，已锁定 {label}，稍后请重新获取验证码',
+      tryTooManyLocked: '尝试次数过多，已锁定 {label}',
+      tryTooManySeconds: '尝试次数过多，请 {n} 秒后重试',
+      passwordLengthRule: '密码长度需在 8~32 位之间',
+      passwordCharsRule: '密码需同时包含字母与数字',
+      passwordWrongGuide: '邮箱或密码不正确。若这是你第一次用密码登录，请先用验证码登录，再在设置里设置密码。',
+      inputEmailCode: '请输入邮箱验证码',
+      retrySecondsLater: '请 {n} 秒后再试',
     }, // AuthModal
     confirm: {
       ariaLabel: '确认操作',
@@ -320,6 +329,15 @@ export const modalsEn = {
       github: 'GitHub',
       google: 'Google',
       oauthFailed: 'Sign in failed, please try again',
+      verifyCodeError: 'Invalid verification code. Please check and try again.',
+      verifyLockedDuration: 'Too many failed attempts. Locked for {label}. Please request a new code later.',
+      tryTooManyLocked: 'Too many attempts. Locked for {label}.',
+      tryTooManySeconds: 'Too many attempts. Please try again in {n}s.',
+      passwordLengthRule: 'Password must be between 8 and 32 characters.',
+      passwordCharsRule: 'Password must contain both letters and numbers.',
+      passwordWrongGuide: 'Incorrect email or password. If this is your first time using password login, please log in with a verification code first, then set your password in settings.',
+      inputEmailCode: 'Please enter the verification code.',
+      retrySecondsLater: 'Please try again in {n}s.',
     }, // AuthModal
     confirm: {
       ariaLabel: 'Confirm action',

@@ -32,7 +32,16 @@ let _setupGen = 0
 // ── 本地 canary 读写（键独立于 lv_e2e_canary） ──
 function _readLocalCanary(): Record<string, unknown> | null {
   const obj = safeJsonParse<Record<string, unknown> | null>(safeGetItem(LOCAL_CANARY_KEY), null)
-  return obj && typeof obj === 'object' ? obj : null
+  if (obj && typeof obj === 'object' && typeof obj.canary === 'string' && Array.isArray(obj.salt)) {
+    return obj
+  }
+  return null
+}
+
+function _toSaltBytes(salt: unknown): Uint8Array {
+  if (salt instanceof Uint8Array) return salt
+  if (!salt || typeof salt !== 'object') return new Uint8Array(0)
+  return new Uint8Array(Array.isArray(salt) ? salt : Object.values(salt as Record<string, number>))
 }
 
 function _writeLocalCanary(canaryData: Record<string, unknown>): boolean {
@@ -83,16 +92,22 @@ function _getCanaryData(): Promise<Record<string, unknown> | null> {
   }
 }
 
-function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> {
-  _writeLocalCanary(canaryData)
+async function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> {
+  const localOk = _writeLocalCanary(canaryData)
   const auth = useAuth()
-  const userId = auth.user?.id
-  if (!userId) return Promise.resolve(true)
-  return Promise.resolve(dbFrom('user_security').upsert({
-    user_id: userId,
-    vault_canary: canaryData,
-  }, { onConflict: 'user_id' })).then(r => !r.error).catch(() => false)
+  const userId = auth?.user?.id
+  if (!userId) return localOk
+  try {
+    const r = await dbFrom('user_security').upsert({
+      user_id: userId,
+      vault_canary: canaryData,
+    }, { onConflict: 'user_id' })
+    return !r?.error
+  } catch {
+    return false
+  }
 }
+
 
 export function useVault() {
   const vaultStore = useVaultStore()
@@ -156,11 +171,13 @@ export function useVault() {
 
     const ok = await _saveCanaryData(canaryData)
     if (gen !== _setupGen) {
-      // 取消时已写入的本地 canary 回滚（远端 upsert 不可逆，靠下次 setup 覆盖）
       _removeLocalCanary()
       return 'cancelled'
     }
-    if (!ok) return false
+    if (!ok) {
+      _removeLocalCanary()
+      return false
+    }
 
     vaultStore.setEnabled(true)
     _setKey(key)
@@ -177,7 +194,7 @@ export function useVault() {
     if (gen !== _setupGen) return 'cancelled'
 
     const rkIt = typeof canaryData.recovery_it === 'number' ? canaryData.recovery_it : PBKDF2_DEFAULT_ITERATIONS
-    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt as number[]), rkIt)
+    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), _toSaltBytes(canaryData.recovery_salt), rkIt)
     const ok = await verifyCanary(canaryData.recovery_canary as string, rkKey)
     if (!ok) return false
     if (gen !== _setupGen) return 'cancelled'
@@ -223,7 +240,7 @@ export function useVault() {
     if (!canaryData) return false
 
     const it = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
-    const salt = new Uint8Array(canaryData.salt)
+    const salt = _toSaltBytes(canaryData.salt)
     const key = await deriveKey(password, salt, it)
     const ok = await verifyCanary(canaryData.canary, key)
     if (!ok) return false

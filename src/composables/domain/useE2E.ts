@@ -40,11 +40,20 @@ const LOCAL_CANARY_KEY = 'lv_e2e_canary'
 // ── 本地 canary 读写 ──
 function _readLocalCanary(): Record<string, unknown> | null {
   const obj = safeJsonParse<Record<string, unknown> | null>(safeGetItem(LOCAL_CANARY_KEY), null)
-  return obj && typeof obj === 'object' ? obj : null
+  if (obj && typeof obj === 'object' && typeof obj.canary === 'string' && Array.isArray(obj.salt)) {
+    return obj
+  }
+  return null
 }
 
-function _writeLocalCanary(canaryData: Record<string, unknown>) {
-  safeSetItem(LOCAL_CANARY_KEY, JSON.stringify(canaryData))
+function _toSaltBytes(salt: unknown): Uint8Array {
+  if (salt instanceof Uint8Array) return salt
+  if (!salt || typeof salt !== 'object') return new Uint8Array(0)
+  return new Uint8Array(Array.isArray(salt) ? salt : Object.values(salt as Record<string, number>))
+}
+
+function _writeLocalCanary(canaryData: Record<string, unknown>): boolean {
+  return safeSetItem(LOCAL_CANARY_KEY, JSON.stringify(canaryData))
 }
 
 function _removeLocalCanary() {
@@ -87,17 +96,20 @@ function _getCanaryData(): Promise<Record<string, unknown> | null> {
   }
 }
 
-function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> {
-  // 总是写本地
-  _writeLocalCanary(canaryData)
-  // 登录用户额外写云端（多设备共享）
+async function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boolean> {
+  const localOk = _writeLocalCanary(canaryData)
   const auth = useAuth()
-  const userId = auth.user?.id
-  if (!userId) return Promise.resolve(true)
-  return Promise.resolve(dbFrom('user_security').upsert({
-    user_id: userId,
-    master_canary: canaryData,
-  }, { onConflict: 'user_id' })).then(r => !r.error).catch(() => false)
+  const userId = auth?.user?.id
+  if (!userId) return localOk
+  try {
+    const r = await dbFrom('user_security').upsert({
+      user_id: userId,
+      master_canary: canaryData,
+    }, { onConflict: 'user_id' })
+    return !r?.error && localOk
+  } catch {
+    return false
+  }
 }
 
 // ── 多设备主密码一致性检测（云端 canary 单槽冲突防护） ──
@@ -127,7 +139,15 @@ function _getCloudCanary(): Promise<Record<string, unknown> | null> {
 
 /** 两 canary 是否同源：canary 验证串与派生盐一致 → 同一主密码设置 */
 function _sameCanary(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
-  return a.canary === b.canary && JSON.stringify(a.salt) === JSON.stringify(b.salt)
+  if (a.canary !== b.canary) return false
+  if (!a.salt || !b.salt) return false
+  const sA = Array.isArray(a.salt) ? a.salt : Object.values(a.salt as Record<string, number>)
+  const sB = Array.isArray(b.salt) ? b.salt : Object.values(b.salt as Record<string, number>)
+  if (sA.length !== sB.length) return false
+  for (let i = 0; i < sA.length; i++) {
+    if (sA[i] !== sB[i]) return false
+  }
+  return true
 }
 
 
@@ -250,7 +270,10 @@ export function useE2E() {
       _removeLocalCanary()
       return 'cancelled'
     }
-    if (!ok) return false
+    if (!ok) {
+      _removeLocalCanary()
+      return false
+    }
 
     e2eStore.setEnabled(true)
     _setKey(key)
@@ -268,7 +291,7 @@ export function useE2E() {
     // 用 recovery canary 生成时的迭代数派生——旧数据无 recovery_it 字段则回退
     // PBKDF2_DEFAULT_ITERATIONS（固化 600000，不随 PBKDF2_ITERATIONS 演进，兼容现网旧数据）
     const rkIt = typeof canaryData.recovery_it === 'number' ? canaryData.recovery_it : PBKDF2_DEFAULT_ITERATIONS
-    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), new Uint8Array(canaryData.recovery_salt as number[]), rkIt)
+    const rkKey = await deriveKey(_parseRecoveryKey(recoveryKey), _toSaltBytes(canaryData.recovery_salt), rkIt)
     const ok = await verifyCanary(canaryData.recovery_canary as string, rkKey)
     if (!ok) return false
 
@@ -299,6 +322,10 @@ export function useE2E() {
     e2eStore.initVisibilityLock()
     await biometric.removeBiometric()
     e2eStore.setBiometricEnrolled(false)
+    const pending = e2eStore.pendingUnlock ? e2eStore.pendingUnlock.splice(0) : []
+    for (const resolve of pending) {
+      try { resolve(true) } catch { /* ignore */ }
+    }
     return true
   }
 
@@ -310,7 +337,7 @@ export function useE2E() {
     // 用 canary 生成时的迭代数派生——旧数据无 it 字段则回退 PBKDF2_DEFAULT_ITERATIONS
     // （固化 600000，不随 PBKDF2_ITERATIONS 演进，兼容现网旧数据）
     const it = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
-    const salt = new Uint8Array(canaryData.salt)
+    const salt = _toSaltBytes(canaryData.salt)
     const key = await deriveKey(password, salt, it)
     const ok = await verifyCanary(canaryData.canary, key)
     if (!ok) return false
@@ -350,7 +377,7 @@ export function useE2E() {
 
   async function encryptField(value: string): Promise<string> {
     const key = _getKey()
-    if (!key || !value) return value
+    if (!key || !value || isThreePartCipher(value)) return value
     return encrypt(value, key)
   }
 
@@ -455,13 +482,14 @@ export function useE2E() {
       // 解不开（decryptField 对三段但 GCM 认证失败 / 错 key 返 ''）时保留原密文，绝不置空：
       // 置空会让 UI 显示空白，且后续 saveAppData/push 把空值回写云端覆盖明文，永久丢失。
       // UI 乱码由渲染层兜底；此处以数据安全为优先。
-      if (decrypted !== '' && decrypted !== v) {
+      if (obj[f] === v && decrypted !== '' && decrypted !== v) {
         obj[f] = decrypted
         changed = true
         // 关键：历史遗留字段（title/url/notes/name）从密文解回明文后，标脏并更新时间戳，
         // 确保随下一次 push 将明文推上云端覆盖旧密文，避免云端长期驻留密文导致公开分享显示「（内容已加密）」
         if (LEGACY_DECRYPT_FIELDS[type].includes(f) && typeof obj.id === 'string') {
           ds._markDirty(obj.id)
+          ds._trackChange(obj.id, f)
           obj.updatedAt = Math.max(Number(obj.updatedAt || 0), Date.now())
         }
       }
@@ -471,20 +499,25 @@ export function useE2E() {
     const grpFields = fieldsOf('group')
     const catFields = fieldsOf('category')
     const attrFields = fieldsOf('attribute')
+    const batchDecrypt = async <T>(items: T[], fn: (item: T) => Promise<unknown>, batchSize = 50) => {
+      for (let i = 0; i < items.length; i += batchSize) {
+        await Promise.all(items.slice(i, i + batchSize).map(fn))
+      }
+    }
     await Promise.all([
-      ...ds.bookmarks.map(b => {
+      batchDecrypt(ds.bookmarks, b => {
         const o = b as unknown as Record<string, unknown>
         return Promise.all([...bmFields].map(f => tryField('bookmark', o, f)))
       }),
-      ...ds.siblingGroups.map(g => {
+      batchDecrypt(ds.siblingGroups, g => {
         const o = g as unknown as Record<string, unknown>
         return Promise.all([...grpFields].map(f => tryField('group', o, f)))
       }),
-      ...ds.categories.map(c => {
+      batchDecrypt(ds.categories, c => {
         const o = c as unknown as Record<string, unknown>
         return Promise.all([...catFields].map(f => tryField('category', o, f)))
       }),
-      ...ds.customAttributes.map(a => {
+      batchDecrypt(ds.customAttributes, a => {
         const o = a as unknown as Record<string, unknown>
         return Promise.all([...attrFields].map(f => tryField('attribute', o, f)))
       }),
@@ -542,7 +575,7 @@ export function useE2E() {
     } else {
       if (!oldPw) return false
       const oldIt = typeof canaryData.it === 'number' ? canaryData.it : PBKDF2_DEFAULT_ITERATIONS
-      const oldSalt = new Uint8Array(canaryData.salt as number[])
+      const oldSalt = _toSaltBytes(canaryData.salt)
       const derived = await deriveKey(oldPw, oldSalt, oldIt)
       if (!(await verifyCanary(canaryData.canary as string, derived))) return false
       oldKey = derived
@@ -618,9 +651,13 @@ export function useE2E() {
 
     let newBookmarks: Array<Record<string, unknown>>
     let newGroups: Array<Record<string, unknown>>
+    let newCategories: Array<Record<string, unknown>>
+    let newAttrs: Array<Record<string, unknown>>
     try {
       newBookmarks = await Promise.all(ds.bookmarks.map(async b => {
         const nb: Record<string, unknown> = { ...b }
+        nb.title = await reencryptFieldToPlain(b.title as string)
+        nb.url = await reencryptFieldToPlain(b.url as string)
         nb.username = await reencryptFieldToPlain(b.username as string)
         nb.notes = await reencryptFieldToPlain(b.notes as string)
         if (b.password != null && b.password !== '') nb.password = await reencryptPassword(b.password)
@@ -634,12 +671,22 @@ export function useE2E() {
         ng.updatedAt = now
         return ng
       }))
+      newCategories = await Promise.all(ds.categories.map(async c => {
+        const nc: Record<string, unknown> = { ...c }
+        nc.name = await reencryptFieldToPlain(c.name as string)
+        nc.updatedAt = now
+        return nc
+      }))
+      newAttrs = await Promise.all(ds.customAttributes.map(async a => {
+        const na: Record<string, unknown> = { ...a }
+        na.name = await reencryptFieldToPlain(a.name as string)
+        na.updatedAt = now
+        return na
+      }))
     } catch {
       // 步骤 4 任一字段抛错：store/IDB/canary 全未动，cryptoKey 旧值未变，零损失
       return false
     }
-    const newCategories = ds.categories.map(c => ({ ...c, updatedAt: now }))
-    const newAttrs = ds.customAttributes.map(a => ({ ...a, updatedAt: now }))
 
     // ── 步骤 5：提前切全局 key 为 newKey，为步骤 8 push 时 encryptItem 用 newKey ──
     // 此处尚未 mutate store，失败回滚只需 _setKey(oldKey)（store 仍是旧态）
@@ -705,6 +752,11 @@ export function useE2E() {
     } else {
       e2eStore.setCloudCanaryStale(false)
     }
+
+    try {
+      await biometric.removeBiometric()
+      e2eStore.setBiometricEnrolled(false)
+    } catch { /* ignore */ }
 
     return true
   }

@@ -1,5 +1,5 @@
 <template>
-  <div class="cmd-mask" :class="{ open: visible }" @click.self="close">
+  <div class="cmd-mask" :class="{ open: visible }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="cmd-palette">
       <div class="cmd-input-wrap">
         <span class="cmd-icon" aria-hidden="true" v-html="I.search"></span>
@@ -41,6 +41,8 @@ import { useAuth } from '../../composables/domain/useAuth.js'
 import { toast } from '../../lib/toast.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { extractHostname } from './extractHostname.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
+import { displayText } from '../../utils.js'
 import { isProUser } from '../../composables/domain/useEntitlement.js'
 import { t, tN } from '../../i18n/index.js'
 import type { SearchResultItem } from '../../lib/search.js'
@@ -150,7 +152,7 @@ const filtered = computed<CommandItem[]>(() => {
     .filter((r) => r._isGroup)
     .map((r) => ({
       id: 'g:' + r.id,
-      label: r.name || r._displayTitle || t('cards.unnamedGroup'),
+      label: displayText(r.name) || r._displayTitle || t('cards.unnamedGroup'),
       icon: I.note,
       hint: tN('count.bookmarks', r.bookmarkIds?.length || 0),
       section: 'group' as const,
@@ -163,7 +165,7 @@ const filtered = computed<CommandItem[]>(() => {
     .filter((r) => !r._isGroup)
     .map((r) => ({
       id: 'b:' + r.id,
-      label: r.title || '',
+      label: displayText(r.title) || extractHostname(r.url) || '',
       icon: I.chevron,
       hint: extractHostname(r.url),
       section: 'bookmark' as const,
@@ -212,6 +214,7 @@ function close() {
   visible.value = false
   query.value = ''
 }
+const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 
 function execute(item: CommandItem) {
   item.action()
@@ -221,14 +224,21 @@ function onInput() {
   activeIdx.value = 0
 }
 
+function scrollActiveIntoView() {
+  const activeEl = document.querySelector('.cmd-palette .cmd-item.active') as HTMLElement | null
+  activeEl?.scrollIntoView({ block: 'nearest' })
+}
+
 function onKeydown(e: KeyboardEvent) {
   const total = totalItems()
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     activeIdx.value = activeIdx.value < total - 1 ? activeIdx.value + 1 : 0
+    nextTick(scrollActiveIntoView)
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     activeIdx.value = activeIdx.value > 0 ? activeIdx.value - 1 : total - 1
+    nextTick(scrollActiveIntoView)
   } else if (e.key === 'Tab') {
     const item = filtered.value[activeIdx.value]
     if (item) {

@@ -114,7 +114,7 @@
                 <div class="pur-card-pricing">
                   <span class="pur-from-label">{{ t('purchase.fromLabel') || '起步价' }}</span>
                   <div class="pur-price-main">
-                    <span class="pur-amount-num">¥{{ (p.priceCents / 100).toFixed(p.priceCents % 100 === 0 ? 0 : 2) }}</span>
+                    <span class="pur-amount-num">¥{{ ((p.priceCents || 0) / 100).toFixed((p.priceCents || 0) % 100 === 0 ? 0 : 2) }}</span>
                     <span class="pur-period-tag">/ {{ p.periodLabel }}</span>
                     <!-- 被比较价：按最低档（月付）订满同周期的真实合计，划掉展示 -->
                     <del v-if="p.originalPrice" class="pur-original-price">¥{{ p.originalPrice }}</del>
@@ -278,24 +278,24 @@
                   <!-- 渠道未开通 -->
                   <div v-else-if="error === 'channel_not_configured'" class="pur-qr-state pur-qr-warn-state">
                     <div class="pur-state-icon pur-state-warn">!</div>
-                    <p class="pur-state-title">{{ selectedChannel === 'wechat' ? '微信支付暂未开通' : '支付宝暂未开通' }}</p>
-                    <p class="pur-state-desc">请尝试切换为{{ selectedChannel === 'wechat' ? '支付宝' : '微信支付' }}</p>
+                    <p class="pur-state-title">{{ selectedChannel === 'wechat' ? (isZh ? '微信支付暂未开通' : 'WeChat Pay Unavailable') : (isZh ? '支付宝暂未开通' : 'Alipay Unavailable') }}</p>
+                    <p class="pur-state-desc">{{ isZh ? ('请尝试切换为' + (selectedChannel === 'wechat' ? '支付宝' : '微信支付')) : ('Please switch to ' + (selectedChannel === 'wechat' ? 'Alipay' : 'WeChat Pay')) }}</p>
                     <button
                       type="button"
                       class="pur-btn-retry"
                       @click="onChangeChannelWhilePaying(selectedChannel === 'wechat' ? 'alipay' : 'wechat')"
                     >
-                      切换为{{ selectedChannel === 'wechat' ? '支付宝' : '微信支付' }}
+                      {{ isZh ? ('切换为' + (selectedChannel === 'wechat' ? '支付宝' : '微信支付')) : ('Switch to ' + (selectedChannel === 'wechat' ? 'Alipay' : 'WeChat Pay')) }}
                     </button>
                   </div>
 
                   <!-- 未登录 -->
                   <div v-else-if="error === 'unauthorized'" class="pur-qr-state pur-qr-error-state">
                     <div class="pur-state-icon">🔒</div>
-                    <p class="pur-state-title">请先登录账号</p>
-                    <p class="pur-state-desc">登录后即可开通并绑定会员特权</p>
+                    <p class="pur-state-title">{{ isZh ? '请先登录账号' : 'Please Sign In' }}</p>
+                    <p class="pur-state-desc">{{ isZh ? '登录后即可开通并绑定会员特权' : 'Sign in to activate and bind member privileges' }}</p>
                     <button type="button" class="pur-btn-retry" @click="authStore.authModalOpen = true">
-                      立即登录
+                      {{ isZh ? '立即登录' : 'Sign In Now' }}
                     </button>
                   </div>
 
@@ -308,10 +308,10 @@
                     </p>
                     <div class="pur-state-actions">
                       <button type="button" class="pur-btn-retry" @click="submit">
-                        点击重试
+                        {{ t('common.retry') || (isZh ? '点击重试' : 'Retry') }}
                       </button>
                       <button type="button" class="pur-btn-demo" @click="enableDemoPay">
-                        体验演示支付
+                        {{ isZh ? '体验演示支付' : 'Try Demo Pay' }}
                       </button>
                     </div>
                   </div>
@@ -335,7 +335,7 @@
                     rel="noopener noreferrer"
                     class="pur-direct-pay-link"
                   >
-                    跳转支付宝网页支付 &rarr;
+                    {{ isZh ? '跳转支付宝网页支付' : 'Open Alipay Web Pay' }} &rarr;
                   </a>
                 </template>
               </div>

@@ -13,6 +13,7 @@ import {
   buildTrashActionCard,
 } from '../siteHitl.js'
 import { t, tN } from '../../../i18n/index.js'
+import { useAppStore } from '../../../stores/app.js'
 import type { Category } from '../../../types.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
@@ -23,7 +24,7 @@ export const trashBlock: SiteCommandBlock = async (
   const query = ctx.query
   const ds = ctx.ds
   const ui = ctx.ui
-  const app = ctx.app
+  const app = ctx.app ?? useAppStore()
   const trashIntent = parseTrashIntent(query)
   if (trashIntent === 'clear') {
     const bms = ds.bookmarks.filter((b) => b.deletedAt).length

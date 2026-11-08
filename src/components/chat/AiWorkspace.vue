@@ -43,7 +43,7 @@
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                   </svg>
                 </span>
-                <span class="pill-title">{{ card.title }}</span>
+                <span class="pill-title">{{ displayText(card.title) }}</span>
                 <button class="pill-close" @click.stop="ui.removeAiAttachedCard(card.id)">&times;</button>
               </div>
               <div
@@ -302,7 +302,7 @@
         <div
           v-if="isHistoryDrawerOpen"
           class="ai-history-drawer-overlay"
-          @click.self="isHistoryDrawerOpen = false"
+          @mousedown="onDrawerMaskMouseDown" @click="onDrawerMaskClick"
         >
           <div class="ai-history-drawer" role="dialog" aria-modal="true">
             <!-- 抽屉头部 -->
@@ -420,6 +420,8 @@ import { processFileForAi } from '../../lib/ai/attachmentHelper.js'
 import { toast } from '../../lib/toast.js'
 import { useRotatingPlaceholder } from '../../composables/ui/useRotatingPlaceholder.js'
 import { PAYLOAD_KEY } from '../../config/constants.js'
+import { displayText } from '../../utils.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const ui = useUIStore()
 const dataStore = useDataStore()
@@ -635,6 +637,7 @@ function onSelectRecentSession(sid: string) {
 
 // ── 历史会话滑动抽屉（Raycast / Perplexity 级弹层） ──
 const isHistoryDrawerOpen = ref(false)
+const { onMaskMouseDown: onDrawerMaskMouseDown, onMaskClick: onDrawerMaskClick } = useMaskClose(() => { isHistoryDrawerOpen.value = false })
 const historySearchQuery = ref('')
 
 const filteredHistorySessions = computed(() => {
@@ -775,15 +778,23 @@ function onWorkspaceDrop(e: DragEvent) {
   if (type === 'cat' || rawId.startsWith('cat_') || dataStore.categoryMap[rawId]) {
     ui.attachCardToAi('cat', rawId)
     const cat = dataStore.categoryMap[rawId]
-    toast(t('ai.cardAttached', { title: cat?.name || t('nav.categories') }), true)
+    const catName = cat?.name ? displayText(cat.name) : ''
+    toast(t('ai.cardAttached', { title: catName || t('nav.categories') }), true)
   } else if (type === 'group' || rawId.startsWith('group:')) {
-    ui.attachCardToAi('group', rawId)
-    const g = dataStore.groupMap[rawId.replace(/^group:/, '')]
-    toast(t('ai.cardAttached', { title: g?.name || t('cards.note') }), true)
+    const gid = rawId.replace(/^group:/, '')
+    const g = dataStore.groupMap[gid]
+    if (g && !g.deletedAt) {
+      ui.attachCardToAi('group', rawId)
+      const gName = g.name ? displayText(g.name) : ''
+      toast(t('ai.cardAttached', { title: gName || t('cards.note') }), true)
+    }
   } else if (rawId && dataStore.bookmarkMap[rawId]) {
-    ui.attachCardToAi('bm', rawId)
     const b = dataStore.bookmarkMap[rawId]
-    toast(t('ai.cardAttached', { title: b?.title || t('cards.bookmark') }), true)
+    if (b && !b.deletedAt) {
+      ui.attachCardToAi('bm', rawId)
+      const bTitle = b.title ? displayText(b.title) : ''
+      toast(t('ai.cardAttached', { title: bTitle || t('cards.bookmark') }), true)
+    }
   }
 }
 

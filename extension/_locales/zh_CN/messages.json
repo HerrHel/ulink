@@ -27,6 +27,18 @@
     "message": "与链：深度解析此视频（实验性）",
     "description": "右键菜单：读取页面态播放地址并做口播/画面解析"
   },
+  "theme_toggle_light": {
+    "message": "切换到浅色模式",
+    "description": "主题切换按钮提示：浅色"
+  },
+  "theme_toggle_dark": {
+    "message": "切换到深色模式",
+    "description": "主题切换按钮提示：深色"
+  },
+  "err_timeout": {
+    "message": "超时",
+    "description": "网络请求超时提示"
+  },
   "login": {
     "message": "登录",
     "description": "登录按钮"

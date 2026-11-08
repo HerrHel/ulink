@@ -8,6 +8,7 @@ import { computed, type ComputedRef } from 'vue'
 import { useDataStore } from '../stores/data.js'
 import { useUIStore } from '../stores/ui.js'
 import { shadowData, shadowVersion } from '../stores/shareShadow.js'
+import { displayText } from '../utils.js'
 import type { CardItem, Bookmark, SiblingGroup } from '../types.js'
 
 export type CombinedMode = 'focus' | 'custom' | 'normal' | 'share-category'
@@ -17,11 +18,11 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
   const ui = useUIStore()
 
   const mode = computed<CombinedMode>(() => {
-    // 聚焦优先：分类分享态下聚焦有效影子组同样走聚焦视图
-    if (ui.focusedGroupId && ds.groupMap[ui.focusedGroupId]) return 'focus'
+    // 聚焦优先：排除已软删除的组（分类分享态下聚焦有效影子组同样走聚焦视图）
+    const focusedG = ui.focusedGroupId ? ds.groupMap[ui.focusedGroupId] : null
+    if (focusedG && !focusedG.deletedAt) return 'focus'
     // 分类分享态：列表直接来自影子数据（filtered* 看不到影子内容）
     if (ui.shareMode?.kind === 'category') return 'share-category'
-    if (ui.focusedGroupId) return 'focus'
     if (ds._customCardOrder != null && ui.sortMode === 'order') return 'custom'
     return 'normal'
   })
@@ -29,8 +30,8 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
   const combinedList = computed<CardItem[]>(() => {
     switch (mode.value) {
       case 'focus': {
-        const g = ds.groupMap[ui.focusedGroupId!]
-        return g ? [{ type: 'group' as const, data: g }] : []
+        const g = ui.focusedGroupId ? ds.groupMap[ui.focusedGroupId] : null
+        return g && !g.deletedAt ? [{ type: 'group' as const, data: g }] : []
       }
       case 'share-category': {
         // 显式依赖 shadowVersion，确保 shadowData 更新时触发重算
@@ -113,8 +114,8 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
             if (aPin !== bPin) return bPin - aPin
             if (sm === 'useCount') return ((da.useCount || 0) - (db.useCount || 0)) * d
             if (sm === 'title') {
-              const na = 'name' in da ? (da.name || '') : ('title' in da ? (da.title || '') : '')
-              const nb = 'name' in db ? (db.name || '') : ('title' in db ? (db.title || '') : '')
+              const na = displayText('name' in da ? (da.name || '') : ('title' in da ? (da.title || '') : ''))
+              const nb = displayText('name' in db ? (db.name || '') : ('title' in db ? (db.title || '') : ''))
               return na.localeCompare(nb) * d
             }
             // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir

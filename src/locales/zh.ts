@@ -301,6 +301,7 @@ export const zh = {
     resyncAllFailed: '仍有条目推送失败，请稍后重试',
     conflictsCount: '{n} 项冲突',
     quotaFull: '云端空间已满',
+    quotaFullNotice: '云端存储空间已满，你的数据已安全保存在本机，不受影响；空间恢复后点「重建同步队列」自动追平。',
     authExpired: '登录已过期',
     failed: '同步失败',
     offline: '离线',

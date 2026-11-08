@@ -11,6 +11,7 @@ import { getLocale } from '../../i18n/index.js'
 import { CURATED_SITES, GENERIC_SUBDOMAINS, SECOND_LEVEL_DOMAINS, CATEGORY_SYNONYMS } from './knowledge.js'
 import { inferUrlSemantics } from './universalUrlInference.js'
 import { suggestAttributes } from '../ai-classify.js'
+import { isThreePartCipher } from '../../crypto.js'
 
 export interface SmartPrefillResult {
   title: string
@@ -236,13 +237,22 @@ export function getSmartPrefill(
   customAttributes: CustomAttribute[] = [],
   lang?: string,
 ): SmartPrefillResult {
+  if (!rawUrl || isThreePartCipher(rawUrl.trim())) {
+    return {
+      title: '',
+      notes: '',
+      suggestedAttrIds: [],
+      confidence: 'fallback',
+    }
+  }
+
   const url = fixUrl(rawUrl)
   let urlObj: URL | null = null
   try {
     urlObj = new URL(url)
   } catch {
     return {
-      title: rawUrl,
+      title: isThreePartCipher(rawUrl) ? '' : rawUrl,
       notes: '',
       suggestedAttrIds: [],
       confidence: 'fallback',
@@ -304,7 +314,7 @@ export function getSmartPrefill(
   let inheritedCatId: string | undefined = undefined
   let inheritedUsername: string | undefined = undefined
   const candidateUsernames: string[] = []
-  const activeExistingBms = existingBookmarks.filter(b => !b.deletedAt && b.url)
+  const activeExistingBms = existingBookmarks.filter(b => !b.deletedAt && b.url && !isThreePartCipher(b.url))
   const sameDomainBms = activeExistingBms.filter(b => {
     const bHost = domain(b.url).toLowerCase().replace(/^www\./i, '')
     return bHost === fullHost || bHost === rootDomain

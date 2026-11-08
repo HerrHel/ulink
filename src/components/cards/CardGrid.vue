@@ -57,7 +57,7 @@ const { combinedList } = useCombinedList()
 // 可见片段且索引与 combinedList 错位，reorder 必然错误。批量模式本就需要全量 DOM
 // 才能拖拽排序，故 batchMode 时强制走非虚拟完整列表（normalGridRef 挂载），>100 项
 // 仅在非批量时启用虚拟滚动。
-const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMode)
+const useVirtual = computed(() => combinedList.value.length > 100 && !ui.batchMode && !ui.focusedGroupId)
 // 虚拟滚动强制 list-view：用户在 grid 布局下条目超过 100 会被静默切换渲染方式，
 // 布局与点击语义（行主体=主操作）一并变化，进入时提示一次避免困惑
 watch(useVirtual, (v, prev) => {

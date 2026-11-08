@@ -80,6 +80,7 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
           height: `${h}px`,
           width: '100%',
           left: '0',
+          overflow: 'hidden',
         }
         _styleCache.set(styleKey, style)
       }
@@ -95,7 +96,7 @@ export function useVirtualScroll<T>(items: Ref<T[]>, options: VirtualScrollOptio
   // 仅在依赖变化时重建。
   // 必须把 items 本身纳入依赖：endIndex 仅依赖 items.value.length，当过滤等长切换导致
   // items 引用变而长度不变时，endIndex 不变 → 不重建 → 列表显示陈旧（滚一下才自愈）。
-  watch([startIndex, endIndex, itemHeight, items], rebuildVisibleItems, { flush: 'sync' })
+  watch([startIndex, endIndex, itemHeight, items], rebuildVisibleItems, { immediate: true, flush: 'sync' })
 
   function onScroll() {
     // 已有 rAF 在途 → 本帧已 sched 合并，跳过新调度；下一个 rAF 会读最新 scrollTop

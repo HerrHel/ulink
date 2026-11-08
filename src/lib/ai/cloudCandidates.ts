@@ -12,6 +12,8 @@ import { getSmartPrefill } from './smartPrefill.js'
 import { getSimilarExternalWebsites } from './similarWebsites.js'
 import { buildCfHeaders } from './cfHeaders.js'
 import { isAiEnabled } from './aiEnabled.js'
+import { isThreePartCipher } from '../../crypto.js'
+import { isPrivateUrl } from './urlGuard.js'
 
 /**
  * 远程动态 AI 候选生成器：调用后端大模型动态发散，打破本地写死预设
@@ -274,11 +276,16 @@ export async function findSimilarWebsites(
   categories: Category[] = [],
   attributes: CustomAttribute[] = []
 ): Promise<AiCandidateBookmark[]> {
+  if (!targetUrl || isThreePartCipher(targetUrl) || isPrivateUrl(targetUrl)) {
+    return []
+  }
+  const safeTitle = isThreePartCipher(targetTitle) ? '' : targetTitle
+
   // 1. 优先调用大模型真智能动态挖掘同类工具与竞品平替
   const dynamicItems = await fetchDynamicCandidates({
     type: 'similar',
     targetUrl,
-    targetTitle,
+    targetTitle: safeTitle,
   })
   if (dynamicItems && dynamicItems.length > 0) {
     const filtered = filterByPreferences(dynamicItems, preferences)

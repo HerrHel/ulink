@@ -12,11 +12,11 @@
           @load="onImgLoad"
           @error="imgFailed = true"
         >
-        <span v-else class="inline-logo-fallback">{{ candidate.title.charAt(0) || '?' }}</span>
+        <span v-else class="inline-logo-fallback">{{ candidate.title?.charAt(0) || '?' }}</span>
       </div>
       <div class="inline-card-info">
         <div class="inline-title-row">
-          <span class="inline-title">{{ candidate.title }}</span>
+          <span class="inline-title">{{ displayText(candidate.title) || candidate.url }}</span>
           <span v-if="candidate.tag" class="inline-pill inline-pill-tag">{{ candidate.tag }}</span>
           <span v-if="categoryName" class="inline-pill inline-pill-cat">{{ categoryName }}</span>
         </div>
@@ -69,7 +69,7 @@ import { ref, computed } from 'vue'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
-import { favicon, domain, fixUrl, isDarkInvertSite, getOfficialDarkIcon } from '../../utils.js'
+import { favicon, domain, fixUrl, isDarkInvertSite, getOfficialDarkIcon, displayText } from '../../utils.js'
 import { analyzeImageElement } from '../../lib/iconAnalyzer.js'
 import { toast } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
@@ -126,8 +126,8 @@ function onImgLoad(e: Event) {
 
 const categoryName = computed(() => {
   if (!props.candidate.categoryId) return ''
-  const cat = ds.categories.find(c => c.id === props.candidate.categoryId)
-  return cat ? cat.name : ''
+  const cat = ds.categories.find(c => c.id === props.candidate.categoryId && !c.deletedAt)
+  return cat ? displayText(cat.name) : ''
 })
 
 const localSaved = ref(false)

@@ -10,6 +10,7 @@
  */
 
 import { t } from '../../i18n/index.js'
+import { redactSensitivePatterns } from './secretFilter.js'
 
 export interface AttachedMediaFile {
   id: string
@@ -303,7 +304,8 @@ export function formatAttachedFilesForPrompt(files: AttachedMediaFile[], isZh: b
           : '\n   The image content is attached to this message; inspect it directly.'
       }
       if (f.textContent) {
-        block += `\n   文件正文提取内容如下：\n\`\`\`\n${f.textContent}\n\`\`\``
+        const safeText = redactSensitivePatterns(f.textContent).replace(/`{3,}/g, "'''")
+        block += `\n   文件正文提取内容如下：\n\`\`\`\n${safeText}\n\`\`\``
       }
       return block
     })

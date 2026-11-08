@@ -69,19 +69,19 @@
         </span>
         <div class="diff-item-body">
           <div class="diff-item-title-row">
-            <span class="diff-item-name" :title="item.title">{{ item.title }}</span>
+            <span class="diff-item-name" :title="displayText(item.title)">{{ displayText(item.title) }}</span>
             <span v-if="item.url" class="diff-item-domain">{{ formatDomain(item.url) }}</span>
           </div>
 
           <!-- 差异演练指示 (Before ➜ After) -->
           <div class="diff-transition-chip">
             <template v-if="item.changeType === 'modify'">
-              <span class="diff-crumb before">{{ item.before?.categoryName || t('cat.uncategorized') }}</span>
+              <span class="diff-crumb before">{{ displayText(item.before?.categoryName) || t('cat.uncategorized') }}</span>
               <span class="diff-arrow">➜</span>
-              <span class="diff-crumb after">{{ item.after?.categoryName }}</span>
+              <span class="diff-crumb after">{{ displayText(item.after?.categoryName) }}</span>
             </template>
             <template v-else-if="item.changeType === 'nest'">
-              <span class="diff-crumb nest-crumb">↳ {{ t('ai.diffChangeNest') }}: {{ item.after?.parentTitle }}</span>
+              <span class="diff-crumb nest-crumb">↳ {{ t('ai.diffChangeNest') }}: {{ displayText(item.after?.parentTitle) }}</span>
             </template>
             <template v-else-if="item.changeType === 'remove'">
               <span class="diff-crumb remove-crumb">{{ item.detail || t('ai.diffChangeRemove') }}</span>
@@ -119,6 +119,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from '../../i18n/index.js'
+import { displayText } from '../../utils.js'
 import type { ChatActionCard } from '../../lib/ai/chatSessions.js'
 import type { DraftDiffPayload, DiffChangeType } from '../../lib/ai/draftDiff.js'
 

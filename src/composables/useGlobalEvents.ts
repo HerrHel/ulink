@@ -1,5 +1,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../stores/ui.js'
+import { useE2EStore } from '../stores/e2e.js'
+import { useVaultStore } from '../stores/vault.js'
 import { isMobile } from '../utils.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import { useAttrDropdownStore } from '../stores/attrDropdown.js'
@@ -27,6 +29,17 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     onRemoveGroupRef, onRemoveBmFromGroup,
     onVisit, onShowCtxMenu,
   } = options
+
+  let _lastActive = 0
+  function onUserActive() {
+    const now = Date.now()
+    if (now - _lastActive < 3000) return
+    _lastActive = now
+    const e2e = useE2EStore()
+    if (e2e.isUnlocked) e2e.resetLockTimer()
+    const vault = useVaultStore()
+    if (vault.isVaultUnlocked) vault.resetLockTimer()
+  }
 
   function onResize() {
     // 直接读 matchMedia 而非 isMobile()，避免 resize 与 matchMedia change 事件
@@ -129,10 +142,14 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     window.addEventListener('resize', onResize)
     document.addEventListener('click', onGlobalClick)
     document.addEventListener('contextmenu', onContextMenu)
+    document.addEventListener('pointerdown', onUserActive, { passive: true })
+    document.addEventListener('keydown', onUserActive, { passive: true })
   })
   onUnmounted(() => {
     window.removeEventListener('resize', onResize)
     document.removeEventListener('click', onGlobalClick)
     document.removeEventListener('contextmenu', onContextMenu)
+    document.removeEventListener('pointerdown', onUserActive)
+    document.removeEventListener('keydown', onUserActive)
   })
 }

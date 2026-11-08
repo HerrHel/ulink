@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" data-testid="lv-vault-setup-modal" role="dialog" aria-modal="true" :aria-label="t('vaultModal.setupTitle')" :class="{ open }" @click.self="emit('close')">
+  <div class="modal-mask" data-testid="lv-vault-setup-modal" role="dialog" aria-modal="true" :aria-label="t('vaultModal.setupTitle')" :class="{ open }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ t('vaultModal.setupTitle') }}</span>
@@ -83,6 +83,7 @@ import { useVault } from '../../composables/domain/useVault.js'
 import { generateRecoveryKeyPDF } from '../../lib/recoveryKeyPDF.js'
 import { toast } from '../../lib/toast.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -187,4 +188,6 @@ async function onEnrollBiometric() {
     bioLoading.value = false
   }
 }
+// 遮罩关闭统一走 useMaskClose：只有「在遮罩上按下、又在遮罩上松开」才算点击外部。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(() => emit('close'))
 </script>

@@ -6,7 +6,7 @@
  * 纯状态 + 行为，不依赖 useAiChat 的产出；打开联动（高度自适应/聚焦/自动提交）作为接线留在 DetailPanel。
  */
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { isMobile } from '../../utils.js'
+import { isMobile, displayText } from '../../utils.js'
 import { useI18n } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
@@ -57,7 +57,7 @@ export function useChatPanelShell() {
         return {
           type: 'cat' as const,
           id: ref.id,
-          title: c?.name || t('nav.categories'),
+          title: displayText(c?.name || '') || t('nav.categories'),
           url: '',
         }
       } else if (ref.type === 'group') {
@@ -65,7 +65,7 @@ export function useChatPanelShell() {
         return {
           type: 'group' as const,
           id: ref.id,
-          title: g?.name || t('cards.note'),
+          title: displayText(g?.name || '') || t('cards.note'),
           url: '',
         }
       } else {
@@ -73,7 +73,7 @@ export function useChatPanelShell() {
         return {
           type: 'bm' as const,
           id: ref.id,
-          title: b?.title || b?.url || t('cards.bookmark'),
+          title: displayText(b?.title || '') || displayText(b?.url || '') || t('cards.bookmark'),
           url: b?.url || '',
         }
       }

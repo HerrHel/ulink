@@ -100,11 +100,11 @@
       <div class="modal-foot">
         <template v-if="mode === 'unlock'">
           <button class="btn btn-primary" data-testid="lv-e2e-unlock-submit" :disabled="!masterPw" @click="onUnlock">{{ t('settings.unlock') }}</button>
-          <button class="btn btn-secondary" @click="onCancel">{{ t('e2e.skip') }}</button>
+          <button class="btn btn-secondary" :disabled="loading" @click="onCancel">{{ t('e2e.skip') }}</button>
         </template>
         <template v-else-if="mode === 'reset'">
           <button class="btn btn-primary" :disabled="!canReset || loading" @click="onReset">{{ loading ? t('e2e.resetting') : t('e2e.resetMasterPassword') }}</button>
-          <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
+          <button class="btn btn-secondary" :disabled="loading" @click="onCancel">{{ t('common.cancel') }}</button>
         </template>
         <template v-if="mode === 'changePw'">
           <button class="btn btn-primary" data-testid="lv-e2e-changepw-submit" :disabled="!canChangePw || loading" @click="onChangePw">{{ loading ? t('e2e.reencrypting') : t('settings.changeMasterPassword') }}</button>
@@ -291,6 +291,7 @@ async function onChangePw() {
 }
 
 function onCancel() {
+  if (loading.value) return
   emit('close')
 }
 

@@ -46,39 +46,39 @@ export function generateRecoveryKeyPDF(recoveryKey: string) {
   <div class="warning">
     <h3>${esc(t('recoveryKey.warningTitle'))}</h3>
     <ul>
-      <li>${t('recoveryKey.warning1')}</li>
-      <li>${t('recoveryKey.warning2')}</li>
-      <li>${t('recoveryKey.warning3')}</li>
-      <li>${t('recoveryKey.warning4')}</li>
-      <li>${t('recoveryKey.warning5')}</li>
+      <li>${esc(t('recoveryKey.warning1'))}</li>
+      <li>${esc(t('recoveryKey.warning2'))}</li>
+      <li>${esc(t('recoveryKey.warning3'))}</li>
+      <li>${esc(t('recoveryKey.warning4'))}</li>
+      <li>${esc(t('recoveryKey.warning5'))}</li>
     </ul>
   </div>
 
   <div class="section">
     <h2>${esc(t('recoveryKey.usageTitle'))}</h2>
     <p>
-      <strong>${esc(t('recoveryKey.forgotPwLabel'))}</strong>${t('recoveryKey.forgotPwBody')}
+      <strong>${esc(t('recoveryKey.forgotPwLabel'))}</strong>${esc(t('recoveryKey.forgotPwBody'))}
     </p>
     <p style="margin-top:8px;color:#856404">
-      <strong>${esc(t('recoveryKey.noteLabel'))}</strong>${t('recoveryKey.noteBody')}
+      <strong>${esc(t('recoveryKey.noteLabel'))}</strong>${esc(t('recoveryKey.noteBody'))}
     </p>
     <p style="margin-top:8px">
-      <strong>${esc(t('recoveryKey.newDeviceLabel'))}</strong>${t('recoveryKey.newDeviceBody')}
+      <strong>${esc(t('recoveryKey.newDeviceLabel'))}</strong>${esc(t('recoveryKey.newDeviceBody'))}
     </p>
   </div>
 
   <div class="section">
     <h2>${esc(t('recoveryKey.securityTitle'))}</h2>
     <p>
-      ${t('recoveryKey.security1')}<br>
-      ${t('recoveryKey.security2')}<br>
-      ${t('recoveryKey.security3')}<br>
-      ${t('recoveryKey.security4')}
+      ${esc(t('recoveryKey.security1'))}<br>
+      ${esc(t('recoveryKey.security2'))}<br>
+      ${esc(t('recoveryKey.security3'))}<br>
+      ${esc(t('recoveryKey.security4'))}
     </p>
   </div>
 
   <div class="footer">
-    ${t('recoveryKey.footer', { time: new Date().toLocaleString(getLocale() === 'zh-CN' ? 'zh-CN' : 'en-US', { hour12: false }), brand })}
+    ${esc(t('recoveryKey.footer', { time: new Date().toLocaleString(getLocale() === 'zh-CN' ? 'zh-CN' : 'en-US', { hour12: false }), brand }))}
   </div>
 </body>
 </html>`

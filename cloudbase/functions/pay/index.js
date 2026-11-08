@@ -107,9 +107,12 @@ function readRawBody(req, limit = 128 * 1024) {
 }
 
 function clientIp(req) {
-  const xff = req.headers['x-forwarded-for']
-  if (typeof xff === 'string' && xff) return xff.split(',')[0].trim()
-  return req.socket?.remoteAddress || '0.0.0.0'
+  const real = req.headers['x-real-ip']
+  if (typeof real === 'string' && real.trim()) return real.trim()
+  const xff = String(req.headers['x-forwarded-for'] || '')
+  const hops = xff.split(',').map((s) => s.trim()).filter(Boolean)
+  if (hops.length) return hops[hops.length - 1]
+  return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
 }
 
 function sha256Hex(s) {

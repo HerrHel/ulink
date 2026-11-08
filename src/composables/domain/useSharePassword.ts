@@ -5,7 +5,7 @@
  * 「可直接复用的凭证」——库一旦泄露即可绕过密码。因此前端只传明文，摘要由
  * share-admin 云函数在服务端计算，并经 cb-auth 验签确认「这组属于你」后写库。
  */
-import { supabase } from '../../lib/supabase.js'
+import { getApiToken } from '../../lib/authDriver.js'
 import { edgeFnUrl, isCloudBaseBackend } from '../../lib/cloudbase.js'
 
 export type SharePasswordError =
@@ -32,12 +32,7 @@ export function isSharePasswordAcceptable(pw: string): boolean {
 
 /** 取当前账号的会话令牌；无登录态返回空串 */
 async function currentToken(): Promise<string> {
-  try {
-    const { data } = await supabase.auth.getSession()
-    return (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
-  } catch {
-    return ''
-  }
+  return getApiToken()
 }
 
 /** 查询某分享是否已设密码（只回布尔） */
@@ -81,13 +76,10 @@ export async function setSharePassword(
   const endpoint = edgeFnUrl('share-admin')
   if (!endpoint) return { ok: false, error: 'not_configured' }
 
-  let token = ''
-  try {
-    const { data } = await supabase.auth.getSession()
-    token = (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
-  } catch {
-    token = ''
+  if (password !== null && password !== '' && !isSharePasswordAcceptable(password)) {
+    return { ok: false, error: 'weak_password' }
   }
+  const token = await getApiToken();
   if (!token) return { ok: false, error: 'unauthorized' }
 
   try {

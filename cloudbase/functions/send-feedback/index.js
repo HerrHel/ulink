@@ -97,9 +97,12 @@ function readJsonBody(req) {
 }
 
 function clientIp(req) {
-  const xff = req.headers['x-forwarded-for'] || ''
-  const first = String(xff).split(',')[0]?.trim()
-  return first || req.headers['x-real-ip'] || req.headers['cf-connecting-ip'] || 'unknown'
+  const real = req.headers['x-real-ip']
+  if (typeof real === 'string' && real.trim()) return real.trim()
+  const xff = String(req.headers['x-forwarded-for'] || '')
+  const hops = xff.split(',').map((s) => s.trim()).filter(Boolean)
+  if (hops.length) return hops[hops.length - 1]
+  return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
 }
 
 function sha256Hex(s) {

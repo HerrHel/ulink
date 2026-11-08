@@ -311,7 +311,7 @@ export function useCloudSync() {
         pushed = await pushFromQueue()
       }
       await pullChanges(false)
-      void refreshPendingCount()
+      await refreshPendingCount()
       return pushed
     })
   }
@@ -369,7 +369,7 @@ export function useCloudSync() {
     })
 
     subscribeRealtime(pullChanges)
-    void refreshPendingCount()
+    await refreshPendingCount()
   }
 
   function _onOnline() {
@@ -416,6 +416,8 @@ export function useCloudSync() {
   }
 
   function initOnlineListener() {
+    window.removeEventListener('online', _onOnline)
+    document.removeEventListener('visibilitychange', _onVisibilityChange)
     window.addEventListener('online', _onOnline)
     document.addEventListener('visibilitychange', _onVisibilityChange)
     if (isLoggedIn.value) subscribeRealtime(pullChanges)
@@ -429,6 +431,12 @@ export function useCloudSync() {
 
   async function resetSyncState() {
     _initialized = false
+    _claimTried = false
+    _lastClaim.value = null
+    if (_syncTimer) {
+      clearTimeout(_syncTimer)
+      _syncTimer = null
+    }
     syncStore.resetSyncState()
     unsubscribeRealtime()
     // 审计 R1：登出不清 IDB syncOps 队列与模块级 _pendingSyncIds 致跨账号残留——A 登录断网
@@ -437,6 +445,7 @@ export function useCloudSync() {
     // 书签内容）用 B userId 推到 B 云端 → A 的书签出现在 B 云端。登出/切账号必须清队列与 pending。
     await clearAllSyncOps()
     _clearAllPendingSync()
+    syncStore.setPendingCount(0)
   }
 
   return {

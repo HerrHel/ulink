@@ -80,7 +80,11 @@ export function createSupabaseAuthDriver(): AuthDriver {
     },
 
     async verifyOtp(email, token) {
-      const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+      const { error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email',
+      })
       return { error: error ?? null }
     },
 
@@ -208,15 +212,29 @@ export function createCloudBaseAuthDriver(
   injected?: CbAuthLike,
   injectedDb?: { rpc: <T>(name: string) => Promise<{ data: T | null; error: AuthErrorLike | null }> },
 ): AuthDriver {
-  // 按邮箱暂存 sendOtp 返回的 verifyOtp 闭包（messageId 绑在里面）
-  const pending = new Map<string, (arg: { token: string }) => Promise<{ error?: AuthErrorLike | null }>>()
-  // 按邮箱暂存 resetPasswordForEmail 返回的改密闭包（nonce = 邮件验证码）
+  // 内存暂存验证码闭包，附带时间戳做 TTL 防泄漏
+  interface PendingItem<T> { fn: T; ts: number }
+  const PENDING_TTL_MS = 10 * 60 * 1000
+  const pending = new Map<string, PendingItem<(arg: { token: string }) => Promise<{ error?: AuthErrorLike | null }>>>()
   const resetPending = new Map<
     string,
-    (arg: { nonce: string; password: string }) => Promise<{ error?: AuthErrorLike | null }>
+    PendingItem<(arg: { nonce: string; password: string }) => Promise<{ error?: AuthErrorLike | null }>>
   >()
 
-  const auth = () => injected ?? (getCbAuth() as CbAuthLike | null)
+  function sweepExpired<T>(map: Map<string, PendingItem<T>>) {
+    const now = Date.now()
+    for (const [k, v] of map.entries()) {
+      if (now - v.ts > PENDING_TTL_MS) map.delete(k)
+    }
+  }
+
+  const auth = () => {
+    try {
+      return injected ?? (typeof getCbAuth === 'function' ? (getCbAuth() as CbAuthLike | null) : null)
+    } catch {
+      return null
+    }
+  }
 
   return {
     async getSession() {
@@ -291,19 +309,21 @@ export function createCloudBaseAuthDriver(
       if (captchaToken) arg.options = { captchaToken }
       const { data, error } = await a.signInWithOtp(arg)
       if (!error && typeof data?.verifyOtp === 'function') {
-        pending.set(email, data.verifyOtp)
+        sweepExpired(pending)
+        pending.set(email.trim().toLowerCase(), { fn: data.verifyOtp, ts: Date.now() })
       }
       return { error: error ?? null }
     },
 
     async verifyOtp(email, token) {
-      const fn = pending.get(email)
-      if (!fn) {
-        // 没有闭包说明没有发起过 sendOtp（或页面刷新丢了内存态）——提示重新获取，而不是报 messageId 缺失
+      const norm = email.trim().toLowerCase()
+      const item = pending.get(norm)
+      if (!item || (Date.now() - item.ts > PENDING_TTL_MS)) {
+        if (item) pending.delete(norm)
         return { error: { message: '验证码已失效，请重新获取' } }
       }
-      const { error } = await fn({ token })
-      if (!error) pending.delete(email)
+      const { error } = await item.fn({ token })
+      if (!error) pending.delete(norm)
       return { error: error ?? null }
     },
 
@@ -330,17 +350,21 @@ export function createCloudBaseAuthDriver(
       // CloudBase 把「改密」做成了返回 data 上的闭包（与 signInWithOtp/verifyOtp 同款），
       // 必须存起来等用户输完验证码再用
       if (!error && typeof data?.updateUser === 'function') {
-        resetPending.set(email, data.updateUser)
+        sweepExpired(resetPending)
+        resetPending.set(email.trim().toLowerCase(), { fn: data.updateUser, ts: Date.now() })
       }
       return { error: error ?? null }
     },
 
     async confirmPasswordReset(email, code, newPassword) {
-      const fn = resetPending.get(email)
-      if (!fn) return { error: { message: '验证码已失效，请重新获取' } }
-      // 闭包参数是 { nonce, password }——nonce 就是邮件里的验证码
-      const { error } = await fn({ nonce: code, password: newPassword })
-      if (!error) resetPending.delete(email)
+      const norm = email.trim().toLowerCase()
+      const item = resetPending.get(norm)
+      if (!item || (Date.now() - item.ts > PENDING_TTL_MS)) {
+        if (item) resetPending.delete(norm)
+        return { error: { message: '验证码已失效，请重新获取' } }
+      }
+      const { error } = await item.fn({ nonce: code, password: newPassword })
+      if (!error) resetPending.delete(norm)
       return { error: error ?? null }
     },
 
@@ -400,9 +424,13 @@ export async function getApiToken(): Promise<string> {
   try {
     const driver = getAuthDriver()
     const { session } = await driver.getSession()
-    if (!session) return ''
-    const rec = session as unknown as Record<string, unknown>
-    return String(rec.accessToken ?? rec.access_token ?? '')
+    if (session) {
+      const rec = session as unknown as Record<string, unknown>
+      const tok = String(rec.accessToken ?? rec.access_token ?? '')
+      if (tok) return tok
+    }
+    const { data } = await supabase.auth.getSession();
+    return (data as { session?: { access_token?: string } } | null)?.session?.access_token || ''
   } catch {
     return ''
   }

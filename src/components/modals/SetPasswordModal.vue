@@ -127,6 +127,7 @@ const saving = ref(false)
 const msg = ref('')
 const msgKind = ref<'ok' | 'err'>('ok')
 const codeRef = ref<HTMLInputElement | null>(null)
+let _saveGen = 0
 
 const cooldown = computed(() => auth.sendCooldownRemaining(auth.userEmail))
 
@@ -142,7 +143,7 @@ function reset() {
 }
 
 watch(() => props.open, (open) => {
-  if (!open) return
+  if (!open) { _saveGen++; return }
   reset()
   auth.authError = null
   // 冷却中说明刚发过码（例如关掉弹窗又打开）：直接进第二步。
@@ -155,7 +156,8 @@ watch(() => props.open, (open) => {
 
 /** 关闭：保存中不响应，避免半途丢掉请求结果 */
 function onCancel() {
-  if (saving.value) return
+  if (saving.value || sending.value) return
+  _saveGen++
   ui.modals.setPassword = false
   emit('close')
 }
@@ -191,11 +193,13 @@ async function onSendCode() {
 }
 
 async function onSave() {
-  if (saving.value) return
+  if (saving.value || sending.value) return
   if (code.value.length < 6 || !password.value) return
+  const localGen = ++_saveGen
   saving.value = true
   msg.value = ''
   const ok = await auth.confirmSetPassword(auth.userEmail, code.value, password.value)
+  if (localGen !== _saveGen) return
   saving.value = false
   if (ok) {
     toast(t('settings.passwordSaved'))

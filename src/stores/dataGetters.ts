@@ -141,8 +141,10 @@ export const dataGetters = {
     // 索引未构建或不同步时回退到手动计算
     if (Object.keys(state._childrenIdx).length === 0 && state.bookmarks.some(b => b.parentId)) {
       const map: Record<string, Bookmark[]> = {}
+      const bmMap: Record<string, Bookmark> = {}
+      for (const b of state.bookmarks) bmMap[b.id] = b
       state.bookmarks.forEach(b => {
-        if (b.parentId && !b.deletedAt) {
+        if (b.parentId && !b.deletedAt && bmMap[b.parentId] && !bmMap[b.parentId].deletedAt) {
           if (!map[b.parentId]) map[b.parentId] = []
           map[b.parentId].push(b)
         }

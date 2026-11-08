@@ -25,6 +25,7 @@ let _channel: ReturnType<typeof supabase.channel> | null = null
 /** CloudBase 轮询句柄与间隔：PG 无 postgres_changes，降级为定时拉取 */
 let _pollTimer: ReturnType<typeof setInterval> | null = null
 let _visibilityHandler: (() => void) | null = null
+let _lastPullChangesCallback: (() => Promise<boolean>) | null = null
 const POLL_INTERVAL_MS = 60_000
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let _reconnectAttempts = 0
@@ -358,16 +359,21 @@ export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
   const userId = _getUserId()
   if (!userId || _channel) return
 
+  if (onPullChanges) {
+    _lastPullChangesCallback = onPullChanges
+  }
+  const effectivePull = onPullChanges || _lastPullChangesCallback
+
   // CloudBase 降级（PG 无 postgres_changes）：定时触发 pullChanges 做轮询同步。
   // 合并走 syncMergeCore 既有幂等路径；无回调时只置状态不建定时器。
   if (isCloudBaseBackend()) {
     if (_pollTimer || _visibilityHandler) return
     syncStore.setRealtimeStatus('connected')
-    if (onPullChanges) {
+    if (effectivePull) {
       const startTimer = () => {
         if (_pollTimer) clearInterval(_pollTimer)
         _pollTimer = setInterval(() => {
-          withLock('linkvault-sync', onPullChanges).catch(() => {})
+          withLock('linkvault-sync', effectivePull).catch(() => {})
         }, POLL_INTERVAL_MS)
       }
       const stopTimer = () => {
@@ -384,7 +390,7 @@ export function subscribeRealtime(onPullChanges?: () => Promise<boolean>) {
           if (document.hidden) {
             stopTimer()
           } else {
-            withLock('linkvault-sync', onPullChanges).catch(() => {})
+            withLock('linkvault-sync', effectivePull).catch(() => {})
             startTimer()
           }
         }

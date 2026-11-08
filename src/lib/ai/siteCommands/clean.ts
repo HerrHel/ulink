@@ -9,6 +9,7 @@
 import { parseCleanIntent } from '../siteIntents.js'
 import { pushUndoAction } from '../siteUndoStack.js'
 import { t } from '../../../i18n/index.js'
+import { useAppStore } from '../../../stores/app.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
 // ── 14. 孤儿与无效引用自检清理 (/clean, 清理孤立数据) ──
@@ -17,7 +18,7 @@ export const cleanBlock: SiteCommandBlock = (
 ): SiteCommandResult | null => {
   const query = ctx.query
   const ds = ctx.ds
-  const app = ctx.app
+  const app = ctx.app ?? useAppStore()
   if (parseCleanIntent(query)) {
     let fixedGroupRefs = 0
     let fixedParentRefs = 0

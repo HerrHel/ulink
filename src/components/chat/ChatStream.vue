@@ -36,7 +36,7 @@
                     :class="`pill-${c.type}`"
                   >
                     <span class="pill-badge">{{ c.type === 'group' ? t('cards.note') : t('cards.bookmark') }}</span>
-                    <span class="pill-text">{{ c.title }}</span>
+                    <span class="pill-text">{{ displayText(c.title) }}</span>
                   </span>
                 </div>
                 <!-- 附加的文件、图片与视频 -->
@@ -246,7 +246,7 @@
                           v-for="note in getAttachedNotes(turn)"
                           :key="'append-' + note.id"
                           class="writeback-btn writeback-append"
-                          :title="t('ai.writebackAppend') + ': ' + note.title"
+                          :title="t('ai.writebackAppend') + ': ' + displayText(note.title)"
                           @click="emit('handleAppendToNote', note.id, turn.content)"
                         >
                           <span class="writeback-btn-icon" aria-hidden="true" v-html="I.import"></span>
@@ -256,7 +256,7 @@
                           v-for="note in getAttachedNotes(turn)"
                           :key="'replace-' + note.id"
                           class="writeback-btn writeback-replace"
-                          :title="t('ai.writebackReplace') + ': ' + note.title"
+                          :title="t('ai.writebackReplace') + ': ' + displayText(note.title)"
                           @click="emit('handleReplaceNote', note.id, turn.content)"
                         >
                           <span class="writeback-btn-icon" aria-hidden="true" v-html="I.refresh"></span>
@@ -280,7 +280,7 @@
                         v-for="card in getTurnAttachedCards(turn)"
                         :key="'locate-' + card.id"
                         class="writeback-btn writeback-locate"
-                        :title="t('ai.locateInVault') + ': ' + card.title"
+                        :title="t('ai.locateInVault') + ': ' + displayText(card.title)"
                         @click="emit('handleLocateCard', card.id, card.type === 'group' ? 'group' : 'bookmark')"
                       >
                         <span class="writeback-btn-icon" aria-hidden="true">
@@ -471,6 +471,7 @@ import type { AiSendSummary } from '../../lib/ai/sendSummary.js'
 import { reactive, onUpdated, watch, nextTick } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import { I } from '../../config/icons.js'
+import { displayText } from '../../utils.js'
 import AiInlineCard from '../cards/AiInlineCard.vue'
 import ChatDraftDiff from './ChatDraftDiff.vue'
 import ChatDagPlan from './ChatDagPlan.vue'

@@ -278,6 +278,16 @@ function schedulePostLogin() {
     // isE2EEnabled 停留 false �?编辑加密书签解锁成功仍提示设置主密码，且新建密码�?
     // 误走 base64 而非 E2E 加密�?
     await e2e.checkE2EStatus()
+    try {
+      await e2e.ensureCloudCanarySynced()
+      const r = await e2e.detectCloudCanaryMismatch()
+      if (r.mismatch) {
+        const { useUIStore } = await import('../../stores/ui.js')
+        const ui = useUIStore()
+        ui.modals.e2eCanaryConflict = true
+        ui.modals.e2eCanaryConflictUpgraded = r.upgraded
+      }
+    } catch { /* ignore */ }
     await sync.initialSync()
     // CloudBase 迁移：老用户首次登录会认领历史数据，认领到东西时给个明确反馈，
     // 否则用户只会看到书架「突然有了东西」而不知道发生了什么�?

@@ -5,6 +5,7 @@
  */
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
 import { _indexOfById } from '../lib/dataQuery.js'
+import { useUIStore } from './ui.js'
 import { _denyWrite, DGM_KEY } from './dataShared.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { Bookmark } from '../types.js'
@@ -372,7 +373,12 @@ export const bookmarkActions = {
     const bm = this.bookmarks[idx]
     this.bookmarks[idx] = { ...bm, deletedAt: Date.now(), updatedAt: Date.now() }
     this._bmMap[id] = this.bookmarks[idx]
+    this._trackChange(id, 'deletedAt')
     this._markDirty(id)
+    const ui = useUIStore()
+    if (ui.quickLookBmId === id) ui.closeQuickLook()
+    const dIdx = ui.detailCards.indexOf(id)
+    if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
     // 从 childrenIdx 中移除
     if (bm.parentId) {
       const sib = this._childrenIdx[bm.parentId]
@@ -437,7 +443,7 @@ export const bookmarkActions = {
   },
 
   // ── 回收站：永久删除 ──
-  permanentDeleteBookmark(this: DataStoreThis, id: string) {
+  permanentDeleteBookmark(this: DataStoreThis, id: string, opts?: { skipPersist?: boolean }) {
     if (_denyWrite()) return
     // 先记录 children 关系，移除前清理索引
     const bm = this._bmMap[id]
@@ -451,22 +457,42 @@ export const bookmarkActions = {
     // 已删中间层 → filteredBookmarks 的 !parentId 过滤排除 → 孙书签永久不可见。
     // 用队列 BFS 遍历所有后代。
     const queue: string[] = this._childrenIdx[id] ? [...this._childrenIdx[id]] : []
+    const now = Date.now()
     while (queue.length) {
       const cid = queue.shift()!
       const cbm = this._bmMap[cid]
-      if (cbm) { cbm.parentId = null; this._markDirty(cid) }
-      // r10-attr-restore B1：子孙永久删，清其在 _deletedAttrMemberships 的预订 membership
-      this._dropAttrMemberships(cid)
+      if (cbm) {
+        cbm.parentId = null
+        cbm.updatedAt = now
+        this._trackChange(cid, 'parentId')
+        this._markDirty(cid)
+      }
+      // 注意：子孙书签并未被永久删除，只是将其 parentId 解绑提升为顶级，因此绝不能调用 _dropAttrMemberships(cid)
       if (this._childrenIdx[cid]) {
         queue.push(...this._childrenIdx[cid])
         delete this._childrenIdx[cid]
       }
     }
     delete this._childrenIdx[id]
+    // 从所有组中剔除对该书签的直接引用，防止悬空 ID（浅拷贝替换保证响应式感知）
+    for (let i = 0; i < this.siblingGroups.length; i++) {
+      const g = this.siblingGroups[i]
+      if (g.bookmarkIds && g.bookmarkIds.includes(id)) {
+        const remaining = g.bookmarkIds.filter(bid => bid !== id)
+        this.siblingGroups[i] = { ...g, bookmarkIds: remaining, updatedAt: now }
+        this._grpMap[g.id] = this.siblingGroups[i]
+        this._trackChange(g.id, 'bookmarkIds')
+        this._markDirty(g.id)
+      }
+    }
+    const ui = useUIStore()
+    if (ui.quickLookBmId === id) ui.closeQuickLook()
+    const dIdx = ui.detailCards.indexOf(id)
+    if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
     this._permanentDelete('bookmarks', id)
     delete this._bmMap[id]
     this._deletedGroupMemberships.delete(id)
-    this._persistDeletedGroupMemberships()
+    if (!opts?.skipPersist) this._persistDeletedGroupMemberships()
     // r10-attr-restore B1：本实体永久删，清其 _deletedAttrMemberships 预订 membership
     this._dropAttrMemberships(id)
     this._searchIndexDirty = true

@@ -79,11 +79,14 @@ export async function redeemCode(code: string): Promise<RedeemResult> {
   if (!token) return { ok: false, error: 'unauthorized' }
 
   try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ code: trimmed }),
-    })
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer))
     const body = (await res.json().catch(() => ({}))) as {
       ok?: boolean
       plan_name?: string

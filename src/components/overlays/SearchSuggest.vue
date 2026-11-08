@@ -16,7 +16,7 @@
            @click="select(item)" @mouseenter="activeIdx = selectableIdxAt[idx]">
         <span v-if="item._isGroup" class="ss-icon" aria-hidden="true" v-html="I.note"></span>
         <img v-else :src="favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url || '')">
-        <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', item._displayTitle || item.title || item.name || '')"></span>
+        <span class="ss-name" v-html="renderHighlight(item._highlights, item._isGroup ? 'name' : 'title', displayText(item._displayTitle || item.title || item.name || ''))"></span>
         <span v-if="item._semanticReason" class="ss-semantic-tag" :title="item._semanticReason">{{ item._semanticReason }}</span>
         <span class="ss-url">{{ item._isGroup ? tN('count.bookmarks', item.bookmarkIds?.length || 0) : domain(item.url || '') }}</span>
       </div>
@@ -30,7 +30,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { useToastStore } from '../../stores/toast.js'
 import { useAuthStore } from '../../stores/auth.js'
-import { favicon, domain, faviconInitials } from '../../utils.js'
+import { favicon, domain, faviconInitials, displayText } from '../../utils.js'
 import { renderHighlight } from './searchSuggestRender.js'
 import { openBookmark } from '../../composables/domain/useBookmark.js'
 import { toggleGroupFocus } from '../../composables/domain/useGroup.js'

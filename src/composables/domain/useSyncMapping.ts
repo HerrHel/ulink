@@ -183,7 +183,7 @@ export function toRemoteRow<K extends EntityType>(
       order: (item.order as number) || 0, use_count: (item.useCount as number) || 0,
       attributes: (item.attributes as Record<string, boolean>) || {},
       // is_expanded: !!item.isExpanded,  // UI-only 字段，不参与云端同步
-      created_at_num: item.createdAt as number,
+      created_at_num: (item.createdAt as number) || now,
       updated_at_num: (item.updatedAt as number) || now,
       pinned_at: (item.pinnedAt as number | undefined) ?? null,
       deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,

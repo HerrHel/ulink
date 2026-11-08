@@ -9,8 +9,9 @@ import type { Category, CustomAttribute } from '../../types.js'
 import type { AiCandidateBookmark } from '../../types/ai.js'
 import { t } from '../../i18n/index.js'
 import { ULINK_AGENT_TOOLS } from './tools.js'
-import { supabase, isSupabaseConfigured } from '../supabase.js'
+import { isSupabaseConfigured } from '../supabase.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
+import { getApiToken } from '../authDriver.js'
 import { buildUlinkSystemPrompt, type DynamicContextSlice } from './mimoPrompt.js'
 import { parseMiMoReply } from './mimoReply.js'
 import { isAiEnabled } from './aiEnabled.js'
@@ -304,8 +305,12 @@ export async function askMiMoStream(
   // 未登录 / 令牌缺失时服务端回退 IP 哈希限流，功能不受影响。
   const cbMode = isCloudBaseBackend()
   let authHeaders: Record<string, string> = {}
-  const { data: sessionData } = await supabase.auth.getSession()
-  const token = sessionData?.session?.access_token
+  let token = ''
+  try {
+    token = await getApiToken()
+  } catch {
+    token = ''
+  }
   if (!cbMode) {
     if (!isSupabaseConfigured) {
       throw new Error(t('ai.errNotConfigured'))
@@ -572,8 +577,12 @@ export async function askMiMoRaw(
   // 未登录 / 令牌缺失时服务端回退 IP 哈希限流，功能不受影响。
   const cbMode = isCloudBaseBackend()
   let authHeaders: Record<string, string> = {}
-  const { data: sessionData } = await supabase.auth.getSession()
-  const token = sessionData?.session?.access_token
+  let token = ''
+  try {
+    token = await getApiToken()
+  } catch {
+    token = ''
+  }
   if (!cbMode) {
     if (!isSupabaseConfigured) {
       throw new Error(t('ai.errNotConfigured'))

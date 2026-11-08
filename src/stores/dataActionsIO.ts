@@ -5,6 +5,7 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
+import { useUndoStore } from './undo.js'
 import { clearSearchCache } from '../lib/search.js'
 import { clearAllSyncOps } from './storage.js'
 import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
@@ -12,6 +13,8 @@ import { _denyWrite, _maybeLoadLocalSpace, _cancelPendingHist } from './dataShar
 import type { DataStoreThis } from './dataShared.js'
 import type { AppData } from '../types.js'
 import type { Space } from './ui.js'
+
+let _switchingSpaceTarget: Space | null = null
 
 export const ioActions = {
   loadFromStorage(this: DataStoreThis) {
@@ -21,6 +24,8 @@ export const ioActions = {
     this._syncMaps()
     this._normalizeCategoryOrders()
     this._restoreDeletedGroupMemberships()
+    this._restoreDeletedAttrMemberships()
+    _cancelPendingHist()
     clearSearchCache()
     this._searchVersion = 1
   },
@@ -33,6 +38,7 @@ export const ioActions = {
       this._syncMaps()
       this._normalizeCategoryOrders()
       this._restoreDeletedGroupMemberships()
+      this._restoreDeletedAttrMemberships()
       // R22：清空本地历史防抖 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
       _cancelPendingHist()
       clearSearchCache()
@@ -59,6 +65,7 @@ export const ioActions = {
     this.siblingGroups = result.siblingGroups
     this._syncMaps()
     this._normalizeCategoryOrders()
+    this._restoreDeletedAttrMemberships()
     // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
     _cancelPendingHist()
     clearSearchCache()
@@ -79,7 +86,15 @@ export const ioActions = {
   async switchSpace(this: DataStoreThis, space: Space): Promise<void> {
     const ui = useUIStore()
     const cur = ui.curSpace
-    if (cur === space) return
+    if (cur === space || _switchingSpaceTarget === space) return
+    _switchingSpaceTarget = space
+    try {
+    // 取消防抖保存定时器与在途本地历史，防止主/私密空间交错落盘
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer)
+      this._saveTimer = null
+    }
+    _cancelPendingHist()
     // 1) 当前空间落盘（防切换中途丢失未提交改动）
     await persist.saveData(this._dataSnapshot(), cur)
     // 2) 切空间 + 清 dirty/同步队列（私密 CRUD 不得进云端）
@@ -90,6 +105,7 @@ export const ioActions = {
     this._changedFields.clear()
     try { await clearAllSyncOps() } catch { /* ignore */ }
     _clearAllPendingSync()
+    try { useUndoStore().clearAllStacks() } catch { /* ignore */ }
     // 3) 载入目标数据集四数组：
     //    - 优先 IDB（权威）
     //    - 两者皆无 → 真空四数组（首进保底含有 CAT_ALL 与 CAT_UNCATEGORIZED）
@@ -133,6 +149,9 @@ export const ioActions = {
     // 重置 curCat/focusedGroupId（新空间分类视图从全部分类开始）
     ui.curCat = 'all'
     ui.focusedGroupId = null
+    } finally {
+      _switchingSpaceTarget = null
+    }
   },
 
   /**

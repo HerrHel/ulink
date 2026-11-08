@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('settings.shortcutHelp')" :class="{ open: ui.panels.shortcutHelp }" @click.self="close">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('settings.shortcutHelp')" :class="{ open: ui.panels.shortcutHelp }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-md sh-modal" @click.stop>
       <div class="modal-head">
         <span class="modal-title"><span class="sp-icon" v-html="keyboardIcon"></span>{{ t('settings.shortcutHelp') }}</span>
@@ -28,6 +28,7 @@
 import { onMounted, onBeforeUnmount } from 'vue'
 import { t } from '../../i18n/index.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { pushNavState } from '../../composables/interaction/useKeyboardOps.js'
 import { isTyping } from './isTyping.js'
 
@@ -36,6 +37,7 @@ const ui = useUIStore()
 const keyboardIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>'
 
 function close() { ui.panels.shortcutHelp = false }
+const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 
 interface ShortcutItem { desc: string; keys: string[] }
 interface ShortcutGroup { title: string; items: ShortcutItem[] }

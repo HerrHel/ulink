@@ -16,7 +16,7 @@
             <template v-else>
               <div class="flex-1 flex-center gap-2">
                 <span v-if="attr.id === ATTR_IS_GROUP" class="attr-icon-system" aria-hidden="true" v-html="I.note"></span>
-                <span>{{ attr.name }}</span>
+                <span>{{ displayText(attr.name) }}</span>
                 <span v-if="attr.id === ATTR_IS_GROUP" class="attr-system-badge" :title="t('attr.systemDesc')">{{ t('attr.system') }}</span>
               </div>
               <template v-if="attr.id !== ATTR_IS_GROUP">
@@ -34,7 +34,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
-import { gid } from '../../utils.js'
+import { gid, displayText } from '../../utils.js'
 import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { toast, toastWithUndo } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
@@ -67,7 +67,13 @@ function onAddAttr() {
   if ((byId && !byId.deletedAt) || store.attributeByName[name]) {
     toast(t('attr.existsToast'), false); return
   }
-  store.addAttribute({ id, name, type: 'boolean' })
+  const softDeletedAttr = store.customAttributes.find(a => a.deletedAt && (a.id === id || a.name.toLowerCase() === name.toLowerCase()))
+  if (softDeletedAttr) {
+    store.restoreAttribute(softDeletedAttr.id)
+    if (softDeletedAttr.name !== name) store.renameAttribute(softDeletedAttr.id, name)
+  } else {
+    store.addAttribute({ id, name, type: 'boolean' })
+  }
   store.save()
   newName.value = ''
   toast(t('attr.addedToast'))

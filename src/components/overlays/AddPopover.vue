@@ -47,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { favicon, domain, faviconInitials, displayText } from '../../utils.js'
@@ -89,8 +89,8 @@ const cardStyle = computed(() => {
   const maxLeft = window.innerWidth - 370
   const maxTop = window.innerHeight - 370
   return {
-    top: Math.min(t.top + 4, maxTop) + 'px',
-    left: Math.min(t.left, maxLeft) + 'px',
+    top: Math.max(8, Math.min(t.top + 4, maxTop)) + 'px',
+    left: Math.max(8, Math.min(t.left, maxLeft)) + 'px',
     transform: 'none'
   }
 })
@@ -98,7 +98,7 @@ const cardStyle = computed(() => {
 /** 书签搜索结果（密文不进匹配：锁定态遗留密文按 displayText 语义过滤为空，防假阳性+乱码） */
 const bookmarkResults = computed(() => {
   const q = query.value.toLowerCase()
-  let results = store.bookmarks.slice()
+  let results = store.bookmarks.filter(b => !b.deletedAt)
   if (q) results = results.filter(b =>
     displayText(b.title).toLowerCase().includes(q) ||
     displayText(b.url).toLowerCase().includes(q) ||
@@ -107,10 +107,10 @@ const bookmarkResults = computed(() => {
   return results.slice(0, 20)
 })
 
-/** 组搜索结果 —— 排除当前目标组自身 */
+/** 组搜索结果 —— 排除当前目标组自身且排除已软删除组 */
 const groupResults = computed(() => {
   const q = query.value.toLowerCase()
-  let results = store.siblingGroups.slice()
+  let results = store.siblingGroups.filter(g => !g.deletedAt)
   if (store.addToGid) results = results.filter(g => g.id !== store.addToGid)
   if (q) results = results.filter(g =>
     displayText(g.name || '').toLowerCase().includes(q)
@@ -192,6 +192,10 @@ function onAddNew() {
   bmForm.addToGroupMode = true
   close()
 }
+
+onUnmounted(() => {
+  if (_closeTimer) clearTimeout(_closeTimer)
+})
 
 defineExpose({ show, close })
 </script>

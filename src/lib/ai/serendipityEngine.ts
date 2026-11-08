@@ -18,6 +18,7 @@ import type { Bookmark } from '../../types.js'
 import { tokenizeText } from './localRAG.js'
 import { evolvingGraph } from './evolvingGraph.js'
 import { domain } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 
 export interface SerendipityMatch {
   candidate: Bookmark
@@ -59,6 +60,7 @@ export function findSerendipityMatches(
   const maxMatches = options?.maxMatches ?? 3
   const minScore = options?.minScore ?? 0.35
 
+  if (isThreePartCipher(target.title) || (target.notes && isThreePartCipher(target.notes))) return []
   const targetTokens = tokenizeText(`${target.title} ${target.notes || ''}`)
   if (targetTokens.length < 2) return []
 
@@ -73,6 +75,7 @@ export function findSerendipityMatches(
 
   for (const candidate of allBookmarks) {
     if (candidate.deletedAt || candidate.id === target.id) continue
+    if (isThreePartCipher(candidate.title) || (candidate.notes && isThreePartCipher(candidate.notes))) continue
     // 排除同域名主页或同一网址
     if (candidate.url && target.url && (candidate.url === target.url || domain(candidate.url) === targetDomain)) {
       continue

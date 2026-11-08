@@ -24,7 +24,7 @@
               <button class="btn btn-primary btn-sm" @click="confirmRename" :title="t('modal.category.confirmRename')" v-html="I.listCheck"></button>
             </template>
             <template v-else>
-              <span class="flex-1">{{ cat.name }}</span>
+              <span class="flex-1">{{ displayText(cat.name) }}</span>
               <button class="btn-xs icon-xs" @click="startRename(cat)" :title="t('common.edit')" v-html="I.edit"></button>
               <button class="btn-xs btn-danger icon-xs" @click="onDelete(cat.id)" :title="t('common.delete')" v-html="I.trash"></button>
             </template>
@@ -41,7 +41,7 @@ import { useAppStore } from '../../stores/app.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useVaultStore } from '../../stores/vault.js'
-import { addNewCategory } from '../../utils.js'
+import { addNewCategory, displayText } from '../../utils.js'
 import { toast, showConfirm } from '../../lib/toast.js'
 import { I } from '../../config/icons.js'
 import { useInlineRename } from '../../composables/ui/useInlineRename.js'
@@ -63,7 +63,13 @@ const catListRef = ref<HTMLElement | null>(null)
 // 当前是否在私密空间数据集（决定标题与"移入私密"按钮/入口可见性）
 const isVault = computed(() => uiStore.curSpace === 'vault')
 
-const uncategorizedCat = computed(() => dataStore.categoryMap[CAT_UNCATEGORIZED] || { id: CAT_UNCATEGORIZED, name: '未分类' })
+const uncategorizedCat = computed(() => {
+  const cat = dataStore.categoryMap[CAT_UNCATEGORIZED]
+  if (!cat || cat.name === '未分类' || cat.name === 'Uncategorized') {
+    return { id: CAT_UNCATEGORIZED, name: t('common.uncategorized') }
+  }
+  return { id: CAT_UNCATEGORIZED, name: displayText(cat.name) }
+})
 
 const sortableList = ref<Category[]>([])
 
@@ -110,6 +116,11 @@ function onVaultEntry() {
     uiStore.modals.vaultSetup = true
     return
   }
+  if (vaultStore.isVaultUnlocked) {
+    store.modals.category = false
+    void dataStore.switchSpace('vault')
+    return
+  }
   // 关分类弹窗避免进私密后还有遮挡；解锁成功后 App.vue 切空间
   store.modals.category = false
   uiStore.modals.vaultUnlock = true
@@ -126,13 +137,18 @@ function onAddCat() {
 
 function onDelete(id: string) {
   const cat = dataStore.categoryMap[id]
-  const catName = cat?.name || t('modal.category.thisCat')
-  const bmCount = dataStore.bookmarks.filter(b => b.categoryId === id).length
-  const msg = bmCount > 0
-    ? t('modal.category.deleteWithMove', { name: catName, n: bmCount })
+  const catName = displayText(cat?.name) || t('modal.category.thisCat')
+  const bmCount = dataStore.bookmarks.filter(b => !b.deletedAt && b.categoryId === id).length
+  const grpCount = dataStore.siblingGroups.filter(g => !g.deletedAt && g.categoryId === id).length
+  const totalCount = bmCount + grpCount
+  const msg = totalCount > 0
+    ? t('modal.category.deleteWithMove', { name: catName, n: totalCount })
     : t('modal.category.confirmDelete', { name: catName })
   showConfirm(msg).then(ok => {
     if (!ok) return
+    if (uiStore.curCat === id) {
+      uiStore.curCat = 'all'
+    }
     store.deleteCategory(id)
     store.save()
     toast(t('modal.category.deleted'))

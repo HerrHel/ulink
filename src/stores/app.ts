@@ -5,7 +5,7 @@
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
-import { useDataStore } from './data.js'
+import { useDataStore, _flushPendingHist } from './data.js'
 import { useUIStore } from './ui.js'
 import type { UIState } from './ui.js'
 import { useUndoStore } from './undo.js'
@@ -144,10 +144,16 @@ export const useAppStore = defineStore('app', () => {
     restoreGroup(id: string) { ds().restoreGroup(id) },
     restoreCategory(id: string) { ds().restoreCategory(id) },
     restoreAttribute(id: string) { ds().restoreAttribute(id) },
-    permanentDeleteBookmark(id: string) { ds().permanentDeleteBookmark(id) },
+    permanentDeleteBookmark(id: string, opts?: { skipPersist?: boolean }) {
+      if (opts !== undefined) ds().permanentDeleteBookmark(id, opts)
+      else ds().permanentDeleteBookmark(id)
+    },
     permanentDeleteGroup(id: string) { ds().permanentDeleteGroup(id) },
     permanentDeleteCategory(id: string) { ds().permanentDeleteCategory(id) },
-    permanentDeleteAttribute(id: string) { ds().permanentDeleteAttribute(id) },
+    permanentDeleteAttribute(id: string, opts?: { skipPersist?: boolean }) {
+      if (opts !== undefined) ds().permanentDeleteAttribute(id, opts)
+      else ds().permanentDeleteAttribute(id)
+    },
     ensureGroupAttribute() { return ds().ensureGroupAttribute() },
     emptyTrash() { ds().emptyTrash() },
     importFromData(data: Partial<AppData>) {
@@ -215,6 +221,7 @@ export const useAppStore = defineStore('app', () => {
 
     /** E1-003：取消防抖并 await 落盘 */
     flushDebouncedSave(): Promise<boolean> {
+      _flushPendingHist()
       const d = ds()
       if (d._saveTimer) {
         clearTimeout(d._saveTimer)

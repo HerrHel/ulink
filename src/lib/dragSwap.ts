@@ -29,6 +29,8 @@ export function _swapAndMarkDirty(a: { id: string; order: number; updatedAt?: nu
   a.updatedAt = now
   b.updatedAt = now
   const ds = useDataStore()
+  ds._trackChange?.(a.id, 'order')
+  ds._trackChange?.(b.id, 'order')
   ds._markDirty(a.id, b.id)
   // A1-003：已有自定义序时同步交换 _customCardOrder，避免 PC 拖拽 DOM 换位后 Vue 弹回
   // R25：原仅 sortMode==='order' 时同步，非 order 模式拖拽改 order 字段但不同步 _customCardOrder，
@@ -49,7 +51,7 @@ export function _swapAndMarkDirty(a: { id: string; order: number; updatedAt?: nu
       const tmp = order[ia]
       order[ia] = order[ib]
       order[ib] = tmp
-      ds._customCardOrder = order // 触发响应式
+      ds._customCardOrder = [...order] // 创建新数组触发响应式
       ui.saveUIState()
     }
   }

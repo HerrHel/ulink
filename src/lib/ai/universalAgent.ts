@@ -17,7 +17,8 @@
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore, type LayoutMode } from '../../stores/ui.js'
 import { useAppStore } from '../../stores/app.js'
-import { gid, favicon, domain } from '../../utils.js'
+import { gid, favicon, domain, sanitizeHTML } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 import { attrSlug } from '../../composables/domain/attrSlug.js'
 import { normalizeUrlForDedup } from './localClustering.js'
 import { pushUndoAction } from './siteUndoStack.js'
@@ -600,7 +601,21 @@ export async function executeManageBookmarks(
     const parentBm = findBookmark(parentQuery)
     if (!parentBm) return { success: false, message: `未找到父书签「${parentQuery}」。` }
     if (parentBm.id === bm.id) return { success: false, message: '不能将书签自身设置为其父级。' }
-    if (parentBm.parentId === bm.id) return { success: false, message: '检测到循环从属关系，无法嵌套。' }
+    // 递归回溯父链，彻底杜绝多级嵌套成环（A -> B -> C -> A）引发的栈溢出崩溃
+    let currPId: string | null = parentBm.parentId || null
+    let hasCycle = false
+    const visited = new Set<string>([parentBm.id])
+    while (currPId) {
+      if (currPId === bm.id) {
+        hasCycle = true
+        break
+      }
+      if (visited.has(currPId)) break
+      visited.add(currPId)
+      const ancestor = ds.bookmarks.find((b: Bookmark) => b.id === currPId)
+      currPId = ancestor?.parentId || null
+    }
+    if (hasCycle) return { success: false, message: '检测到循环从属关系，无法嵌套。' }
 
     const prevParent = bm.parentId
     ds.updateBookmark(bm.id, { parentId: parentBm.id })
@@ -847,8 +862,12 @@ export async function executeManageWorkspaces(
   }
 
   if (action === 'update_notes') {
+    if (grp.notes && isThreePartCipher(grp.notes)) {
+      return { success: false, message: '工作台当前处于加密锁定状态，为防密文损坏，禁止覆盖笔记。' }
+    }
     const prevNotes = grp.notes
-    ds.updateGroup(grp.id, { notes: params.notes || '' })
+    const safeNotes = sanitizeHTML(params.notes || '')
+    ds.updateGroup(grp.id, { notes: safeNotes })
     app.save?.()
 
     pushUndoAction({
@@ -1047,6 +1066,7 @@ export async function executeManageSettings(
       if (cat) {
         ui.curCat = cat.id
         ui.focusedGroupId = null
+        ui.activeView = 'bookmarks'
         return { success: true, message: `已为您跳转至分类视图：「${cat.name}」。` }
       }
       return { success: false, message: `未能定位到名称包含「${params.targetName}」的分类。` }
@@ -1059,6 +1079,7 @@ export async function executeManageSettings(
       if (grp) {
         ui.focusedGroupId = grp.id
         if (grp.categoryId) ui.curCat = grp.categoryId
+        ui.activeView = 'bookmarks'
         return { success: true, message: `已为您聚焦进入工作台：「${grp.name}」。` }
       }
       return { success: false, message: `未能定位到名称包含「${params.targetName}」的工作台。` }
@@ -1066,6 +1087,7 @@ export async function executeManageSettings(
 
     if (targetType === 'trash') {
       ui.panels.trash = true
+      ui.activeView = 'bookmarks'
       return { success: true, message: '已为您在右侧展开回收站管理面板。' }
     }
 

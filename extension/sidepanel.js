@@ -194,6 +194,12 @@
   if (tabBtnLibrary) tabBtnLibrary.addEventListener('click', function () { switchTab('library') })
 
   // ── 主题管理（对齐主站 lv_theme / tokens.css）──
+  function getThemeToggleTitle(isToLight) {
+    return isToLight
+      ? (chrome.i18n.getMessage('theme_toggle_light') || 'Switch to light mode')
+      : (chrome.i18n.getMessage('theme_toggle_dark') || 'Switch to dark mode')
+  }
+
   function applyTheme(theme) {
     if (theme === 'dark' || theme === 'light') {
       document.documentElement.setAttribute('data-theme', theme)
@@ -201,7 +207,7 @@
       localStorage.setItem('lv_theme', theme)
       if (btnThemeToggle) {
         btnThemeToggle.innerHTML = theme === 'dark' ? (Icons.sun || '') : (Icons.moon || '')
-        btnThemeToggle.title = theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'
+        btnThemeToggle.title = getThemeToggleTitle(theme === 'dark')
       }
     } else {
       document.documentElement.removeAttribute('data-theme')
@@ -210,7 +216,7 @@
       var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
       if (btnThemeToggle) {
         btnThemeToggle.innerHTML = isDark ? (Icons.sun || '') : (Icons.moon || '')
-        btnThemeToggle.title = isDark ? '切换到浅色模式' : '切换到深色模式'
+        btnThemeToggle.title = getThemeToggleTitle(isDark)
       }
     }
   }
@@ -223,7 +229,7 @@
       var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
       if (btnThemeToggle) {
         btnThemeToggle.innerHTML = isDark ? (Icons.sun || '') : (Icons.moon || '')
-        btnThemeToggle.title = isDark ? '切换到浅色模式' : '切换到深色模式'
+        btnThemeToggle.title = getThemeToggleTitle(isDark)
       }
     }
   }
@@ -644,7 +650,8 @@
       window._syncTimer = setInterval(updateSyncTime, 30000)
     } catch (err) {
       console.error('[sidepanel] loadFromCloud error:', err)
-      setStatus('err', chrome.i18n.getMessage('load_failed') + (err.message === 'TIMEOUT' ? '超时' : err.message || ''))
+      var timeoutMsg = chrome.i18n.getMessage('err_timeout') || 'Timeout'
+      setStatus('err', chrome.i18n.getMessage('load_failed') + (err.message === 'TIMEOUT' ? timeoutMsg : err.message || ''))
       applyFilterAndRender()
     } finally {
       bookmarkList.classList.remove('loading')
@@ -725,12 +732,8 @@
       var isTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(b.title) : false
       var rawTitle = b._decryptedTitle || (isTitleCipher ? (host || chrome.i18n.getMessage('encrypted_bookmark')) : (b.title || host))
       var initial = (rawTitle || '?').charAt(0).toUpperCase()
-      var titleHtml = esc(rawTitle)
-      var urlHtml = esc(host)
-      if (isSearching) {
-        titleHtml = highlightMatch(titleHtml, query)
-        urlHtml = highlightMatch(urlHtml, query)
-      }
+      var titleHtml = isSearching ? highlightMatch(rawTitle, query) : esc(rawTitle)
+      var urlHtml = isSearching ? highlightMatch(host, query) : esc(host)
 
       var catBadge = ''
       if (b.category_id && b.category_id !== 'uncategorized') {
@@ -740,10 +743,7 @@
       // 单行备注纯文本预览（对齐主站列表模式特征）
       var notesCandidate = b._decryptedNotes !== undefined ? b._decryptedNotes : b.notes
       var previewRaw = window.LinkVaultSidepanelMatch ? window.LinkVaultSidepanelMatch.getNotesPreviewText(notesCandidate, 75) : ''
-      var previewHtml = previewRaw ? esc(previewRaw) : ''
-      if (isSearching && previewHtml) {
-        previewHtml = highlightMatch(previewHtml, query)
-      }
+      var previewHtml = isSearching && previewRaw ? highlightMatch(previewRaw, query) : (previewRaw ? esc(previewRaw) : '')
 
       // 关联子书签
       var subsHtml = ''
@@ -754,10 +754,7 @@
           var sIcon = s.icon || (sHost ? 'https://www.google.com/s2/favicons?domain=' + sHost + '&sz=16' : '')
           var isSubTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(s.title) : false
           var sRawTitle = s._decryptedTitle || (isSubTitleCipher ? (sHost || chrome.i18n.getMessage('encrypted_bookmark')) : (s.title || sHost))
-          var sTitle = esc(sRawTitle)
-          if (isSearching) {
-            sTitle = highlightMatch(sTitle, query)
-          }
+          var sTitle = isSearching ? highlightMatch(sRawTitle, query) : esc(sRawTitle)
           return '<span class="bookmark-sub-card" data-url="' + esc(s.url) + '" title="' + esc(s.title || s.url) + '">'
             + (sIcon ? '<img src="' + esc(sIcon) + '" alt="">' : '')
             + '<span class="sub-title">' + sTitle + '</span>'
@@ -813,11 +810,12 @@
     applyFilterAndRender()
   }
 
-  function highlightMatch(text, query) {
-    if (!query) return text
-    var idx = text.toLowerCase().indexOf(query)
-    if (idx === -1) return text
-    return text.slice(0, idx) + '<mark>' + esc(text.slice(idx, idx + query.length)) + '</mark>' + text.slice(idx + query.length)
+  function highlightMatch(rawText, query) {
+    if (!rawText) return ''
+    if (!query) return esc(rawText)
+    var idx = rawText.toLowerCase().indexOf(query)
+    if (idx === -1) return esc(rawText)
+    return esc(rawText.slice(0, idx)) + '<mark>' + esc(rawText.slice(idx, idx + query.length)) + '</mark>' + esc(rawText.slice(idx + query.length))
   }
 
   searchInput.addEventListener('input', function () {
@@ -1080,7 +1078,7 @@
     if (saveOptionsWrap) saveOptionsWrap.classList.add('hidden')
     if (domainParentNotice) domainParentNotice.classList.add('hidden')
     bookmarkDetail.classList.remove('hidden')
-    passwordRevealed = false
+    maskRevealedPassword()
 
     if (bdCategorySelect) {
       bdCategorySelect.value = bm.category_id || 'uncategorized'

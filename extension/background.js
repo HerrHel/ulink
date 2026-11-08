@@ -70,6 +70,12 @@ chrome.contextMenus.removeAll(function () {
     title: chrome.i18n.getMessage('menu_save_selection'),
     contexts: ['selection'],
   })
+  chrome.contextMenus.create({
+    id: 'deep-extract-video',
+    title: chrome.i18n.getMessage('menu_deep_extract'),
+    contexts: ['page'],
+    documentUrlPatterns: VIDEO_PAGE_PATTERNS,
+  })
 })
 
 // ── 安装/更新时 ──
@@ -91,6 +97,8 @@ chrome.contextMenus.onClicked.addListener(async function (info, tab) {
     const selection = meta.selection || info.selectionText || ''
     const finalTitle = meta.title || tab.title
     openPwaWithUrl(info.pageUrl || tab.url, finalTitle, selection)
+  } else if (info.menuItemId === 'deep-extract-video') {
+    openVideoExtract(tab)
   }
 })
 
@@ -319,6 +327,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         selection: meta.selection,
         favIconUrl: meta.icon || tab.favIconUrl,
       })
+    }).catch(function () {
+      sendResponse(null)
     })
     return true
   }
@@ -326,6 +336,23 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.type === 'SAVE_TO_VAULT') {
     openPwaWithUrl(msg.url, msg.title, msg.notes).then(function (r) {
       sendResponse(r)
+    }).catch(function (err) {
+      sendResponse({ ok: false, reason: String(err) })
+    })
+    return true
+  }
+
+  if (msg.type === 'OPEN_VIDEO_EXTRACT') {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(async function (tabs) {
+      const tab = tabs && tabs[0]
+      if (tab) {
+        await openVideoExtract(tab)
+        sendResponse({ ok: true })
+      } else {
+        sendResponse({ ok: false, reason: 'no_active_tab' })
+      }
+    }).catch(function (err) {
+      sendResponse({ ok: false, reason: String(err) })
     })
     return true
   }

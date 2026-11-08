@@ -1,5 +1,5 @@
 <template>
-  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('vaultModal.enterPrivateSpace')" :class="{ open }" @click.self="onCancel">
+  <div class="modal-mask" role="dialog" aria-modal="true" :aria-label="t('vaultModal.enterPrivateSpace')" :class="{ open }" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="modal modal-sm">
       <div class="modal-head">
         <span class="modal-title"><span aria-hidden="true" v-html="I.password" class="sp-icon"></span> {{ mode === 'reset' ? t('vaultModal.resetMasterPw') : t('vaultModal.enterPrivateSpace') }}</span>
@@ -65,7 +65,7 @@
       <div class="modal-foot">
         <template v-if="mode === 'unlock'">
           <button class="btn btn-primary" data-testid="lv-vault-unlock-submit" :disabled="!masterPw" @click="onUnlock">{{ t('settings.unlock') }}</button>
-          <button class="btn btn-secondary" @click="onCancel">{{ t('common.cancel') }}</button>
+          <button class="btn btn-secondary" :disabled="loading" @click="onCancel">{{ t('common.cancel') }}</button>
         </template>
         <template v-else>
           <button class="btn btn-primary" :disabled="!canReset || loading" @click="onReset">{{ loading ? t('e2e.resetting') : t('e2e.resetMasterPassword') }}</button>
@@ -81,6 +81,7 @@ import { I } from '../../config/icons.js'
 import { useVault } from '../../composables/domain/useVault.js'
 import { recoveryKeyEmptyError, newPasswordLengthError, newPasswordMismatchError } from './validatePwResetInput.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; unlocked: [] }>()
@@ -204,8 +205,11 @@ async function onReset() {
 }
 
 function onCancel() {
+  if (loading.value) return
   emit('close')
 }
+
+const { onMaskMouseDown, onMaskClick } = useMaskClose(onCancel)
 
 async function onBiometricUnlock() {
   if (bioLoading.value || loading.value) return

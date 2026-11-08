@@ -7,12 +7,12 @@
       <template v-if="mentionType === 'group'">
         <img v-if="item.icon" :src="item.icon" alt="">
         <span v-else class="note-icon" v-html="noteIcon"></span>
-        <span class="mi-name">{{ item.name || t('cards.unnamedGroup') }}</span>
+        <span class="mi-name">{{ displayText(item.name) || t('cards.unnamedGroup') }}</span>
         <span class="mi-url">{{ tN('count.bookmarks', item.bookmarkIds?.length || 0) }}</span>
       </template>
       <template v-else>
         <img :src="item.icon || favicon(item.url || '')" alt="" @error="onFaviconError($event, item.title || item.url)">
-        <span class="mi-name">{{ item.title || '' }}</span>
+        <span class="mi-name">{{ displayText(item.title) || '' }}</span>
         <span class="mi-url">{{ domain(item.url || '') }}</span>
         <div v-if="item.subItems?.length" class="mention-sub-menu">
           <div v-for="(sub, subIdx) in item.subItems" :key="sub.id"
@@ -32,7 +32,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import { I } from '../../config/icons.js'
-import { favicon, domain, faviconInitials } from '../../utils.js'
+import { favicon, domain, faviconInitials, displayText } from '../../utils.js'
 import { useMention } from '../../composables/domain/useMention.js'
 import { t, tN } from '../../i18n/index.js'
 
@@ -70,8 +70,14 @@ function _onScroll() {
   if (!isVisible.value) return
   const sel = window.getSelection()
   if (sel && sel.rangeCount) {
-    const r = sel.getRangeAt(0).getClientRects()[0]
-    if (r) pos.value = { x: Math.min(r.left, window.innerWidth - 310), y: Math.min(r.bottom + 4, window.innerHeight - 220) }
+    const range = sel.getRangeAt(0)
+    const r = range.getClientRects()[0] || (typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : null)
+    if (r) {
+      pos.value = {
+        x: Math.max(8, Math.min(r.left, window.innerWidth - 310)),
+        y: Math.max(8, Math.min(r.bottom + 4, window.innerHeight - 220)),
+      }
+    }
   }
 }
 

@@ -174,6 +174,14 @@ export async function invokeCbFunction(
 ): Promise<{ error: { message: string; code?: string } | null; data?: unknown }> {
   const base = getCbFnBase()
   if (!base) return { error: { message: 'CloudBase 函数未配置' } }
+  let timeoutCtrl: AbortController | null = null
+  let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+  let reqSignal = signal
+  if (!reqSignal) {
+    timeoutCtrl = new AbortController()
+    timeoutTimer = setTimeout(() => timeoutCtrl?.abort(), 15000)
+    reqSignal = timeoutCtrl.signal
+  }
   try {
     const res = await fetch(`${base}/${name}`, {
       method: 'POST',
@@ -182,7 +190,7 @@ export async function invokeCbFunction(
         ...(options?.token ? { Authorization: `Bearer ${options.token}` } : {}),
       },
       body: JSON.stringify(body ?? {}),
-      signal,
+      signal: reqSignal,
     })
     // 非 2xx 也要读 body：死链检测对「安全拒绝」返回 400 + {fetch_outcome:'ssrf_reject'}，
     // 客户端要靠 body 里的 evidence 判定，不能只拿到一个 http_400。
@@ -196,6 +204,8 @@ export async function invokeCbFunction(
     return { error: null, data }
   } catch (e) {
     return { error: { message: e instanceof Error ? e.message : 'network_error' } }
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer)
   }
 }
 

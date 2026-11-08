@@ -2,7 +2,9 @@ import { reactive } from 'vue';
 import { useDataStore } from '../../stores/data.js';
 import { useUIStore } from '../../stores/ui.js';
 import { saveAppData, debouncedSaveAppData } from '../../stores/app.js';
-import { gid } from '../../utils.js';
+import { gid, displayText } from '../../utils.js';
+import { isThreePartCipher } from '../../crypto.js';
+import { useE2EStore } from '../../stores/e2e.js';
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js';
 import { t } from '../../i18n/index.js';
 import { EditorManager } from '../../lib/editor.js';
@@ -49,6 +51,7 @@ export function saveGroupBody(gid: string) {
   const ds = useDataStore();
   const sg = ds.groupMap[gid];
   if (!sg) return;
+  if (sg.notes && isThreePartCipher(sg.notes)) return;
   const editorHTML = EditorManager.getContentHTML(gid);
   if (editorHTML !== null) {
     ds.updateGroup(gid, { notes: editorHTML })
@@ -179,6 +182,7 @@ export function removeBmFromGroup(bmId: string, tGid: string) {
 }
 
 export function addGroupRefToGroup(refGid: string, targetGid: string, clientX?: number, clientY?: number) {
+  if (refGid === targetGid) return;
   const ds = useDataStore();
   const src = ds.groupMap[refGid];
   if (!src) return;
@@ -266,7 +270,7 @@ export function editGroup(eGid: string) {
   ui.lastFocusedEl = document.activeElement as HTMLElement;
   ui.editingGeId = eGid;
   geForm.id = eGid;
-  geForm.name = sg.name || '';
+  geForm.name = displayText(sg.name) || '';
   geForm.catId = sg.categoryId || '';
   geForm.icon = sg.icon || '';
   geForm.attrs = sg.attributes ? { ...sg.attributes } : {};
@@ -327,6 +331,15 @@ export function saveGroupEdit() {
   if (!gId) return;
   const sg = ds.groupMap[gId];
   if (!sg) return;
+
+  const e2eStore = useE2EStore();
+  if (e2eStore.isE2EEnabled && !e2eStore.isUnlocked) {
+    if ([sg.name, sg.notes].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
+      toast(t('modal.childBm.encryptedBlocked'), false);
+      return;
+    }
+  }
+
   // 保存前把草稿 bookmarkIds 固化；notes 以编辑器当前 HTML 为准（移除书签已反映在 DOM）
   const editorHTML = EditorManager.getContentHTML(gId);
   ds.updateGroup(gId, {
@@ -370,5 +383,6 @@ export function removeFromSrcGroup(srcGid: string, bmId: string): boolean {
   const ed = EditorManager.get(srcGid)
   if (ed) EditorManager.deleteNode(srcGid, isRef ? 'data-ref-gid' : 'data-bm-id', lookupId)
   saveGroupBody(srcGid)
+  saveAppData()
   return true
 }

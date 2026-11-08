@@ -189,6 +189,10 @@ export async function executeAllDagSteps(
 
     const readySteps = getExecutableSteps(plan)
     if (readySteps.length === 0) {
+      const progress = calculatePlanProgress(plan)
+      if (progress.completed < progress.total && plan.status === 'running') {
+        plan.status = 'failed'
+      }
       break
     }
 

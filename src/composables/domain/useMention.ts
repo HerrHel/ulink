@@ -47,15 +47,22 @@ export function useMention() {
     const isGroup = mentionStore.type === 'group'
     // 过滤+映射在同一 ternary 分支内完成：分支表达式内 g/b 即精确实体类型
     //（若先存 matches 联合数组再 map，元素类型无法随 isGroup 收窄，只能靠 index 签名 any 兜底）
+    const q = (query || '').trim().toLowerCase()
     const next: MentionItem[] = isGroup
       ? ds.siblingGroups
-          .filter(g => g.id !== mentionStore.gid && (g.name || '').toLowerCase().includes(query))
+          .filter(g => !g.deletedAt && g.id !== mentionStore.gid && (g.name || '').toLowerCase().includes(q))
           .slice(0, MAX_SUGGESTIONS)
           .map(g => ({ ...g, type: 'group' as const }))
       : ds.bookmarks
-          .filter(b => !b.parentId && (b.title.toLowerCase().includes(query) || b.url.toLowerCase().includes(query)))
+          .filter(b => !b.deletedAt && !b.parentId && ((b.title || '').toLowerCase().includes(q) || (b.url || '').toLowerCase().includes(q)))
           .slice(0, MAX_SUGGESTIONS)
-          .map(b => ({ ...b, type: 'bookmark' as const, subItems: ds.bookmarks.filter(s => s.parentId === b.id) || null }))
+          .map(b => ({
+            ...b,
+            type: 'bookmark' as const,
+            subItems: ds.childrenMap && ds.childrenMap[b.id]
+              ? ds.childrenMap[b.id].filter(s => !s.deletedAt)
+              : ds.bookmarks.filter(s => s.parentId === b.id && !s.deletedAt),
+          }))
 
     if (!next.length) { isVisible.value = false; return }
     candidates.value = next
@@ -181,6 +188,6 @@ export function useMention() {
   return {
     isVisible, candidates, activeIdx, activeSubIdx, mentionType, pos,
     hide, selectBookmark, selectGroupRef,
-    onTrigger, onInput, onKeydown
+    onTrigger, onInput, onKeydown, showNear
   }
 }

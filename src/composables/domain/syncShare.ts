@@ -128,6 +128,7 @@ export async function fetchPublicCategory(shareId: string): Promise<PublicCatego
         const bookmarks = (payload.bookmarks || [])
           .map(fromRemoteBookmark)
           .filter((b): b is Bookmark => !!b)
+          .map(b => ({ ...b, username: '', password: '' }))
         return { category, groups, bookmarks }
       })(),
       timeout,
@@ -214,12 +215,15 @@ export async function deleteAllPublicCategoryShares(): Promise<boolean> {
 /** 一键停止当前用户所有公开分享（包括所有公开组与公开分类） */
 export async function stopAllUserShares(): Promise<boolean> {
   const ds = useDataStore()
-  // 1. 关闭所有公开组
-  const publicGroups = ds.siblingGroups.filter(g => g.isPublic && !g.deletedAt)
+  let allOk = true
+  // 1. 关闭所有公开组（包含软删存量，确保云端彻底关闭）
+  const publicGroups = ds.siblingGroups.filter(g => g.isPublic)
   for (const g of publicGroups) {
-    await setGroupPublic(g.id, false)
+    const ok = await setGroupPublic(g.id, false)
+    if (!ok) allOk = false
   }
   // 2. 清空所有公开分类
-  await deleteAllPublicCategoryShares()
-  return true
+  const catOk = await deleteAllPublicCategoryShares()
+  if (!catOk) allOk = false
+  return allOk
 }

@@ -10,10 +10,21 @@
  * 解决方案：
  * 只有当 mousedown 和 mouseup 均落在遮罩层本身时，才认定为合法的遮罩点击关闭。
  */
+import { onBeforeUnmount, getCurrentInstance } from 'vue'
+
 export function useMaskClose(onClose: () => void) {
   let isMouseDownOnMask = false
+  let pendingMouseUpHandler: ((upEv: MouseEvent) => void) | null = null
+
+  function cleanupPending() {
+    if (pendingMouseUpHandler && typeof window !== 'undefined') {
+      window.removeEventListener('mouseup', pendingMouseUpHandler)
+      pendingMouseUpHandler = null
+    }
+  }
 
   function onMaskMouseDown(e: MouseEvent) {
+    cleanupPending()
     if (e.target !== e.currentTarget) {
       isMouseDownOnMask = false
       return
@@ -24,7 +35,9 @@ export function useMaskClose(onClose: () => void) {
       if (upEv.target !== e.currentTarget) {
         isMouseDownOnMask = false
       }
+      pendingMouseUpHandler = null
     }
+    pendingMouseUpHandler = onGlobalMouseUp
     window.addEventListener('mouseup', onGlobalMouseUp, { once: true })
   }
 
@@ -33,6 +46,14 @@ export function useMaskClose(onClose: () => void) {
       onClose()
     }
     isMouseDownOnMask = false
+    cleanupPending()
+  }
+
+  if (getCurrentInstance()) {
+    onBeforeUnmount(() => {
+      cleanupPending()
+      isMouseDownOnMask = false
+    })
   }
 
   return {

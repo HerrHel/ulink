@@ -2,7 +2,8 @@
  * dataActionsCategories.ts — data store 的分类 CRUD（自 data.ts 逐字迁移，逻辑零改动）
  * deleteCategory 级联把书签/组改挂「未分类」（RE-4：级联改写必须 dirty+track）。
  */
-import { CAT_UNCATEGORIZED } from '../config/constants.js'
+import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
+import { useUIStore } from './ui.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite } from './dataShared.js'
 import type { DataStoreThis } from './dataShared.js'
@@ -87,6 +88,10 @@ export const categoryActions = {
       this._catMap[id] = this.categories[cIdx]
       this._markDirty(id)
     }
+    const ui = useUIStore()
+    if (ui.curCat === id) {
+      ui.curCat = CAT_ALL
+    }
   },
   restoreCategory(this: DataStoreThis, id: string) { if (_denyWrite()) return; this._restoreItem('categories', id) },
   permanentDeleteCategory(this: DataStoreThis, id: string) { if (_denyWrite()) return; this._permanentDelete('categories', id); delete this._catMap[id]; this._searchIndexDirty = true },
@@ -108,6 +113,7 @@ export const categoryActions = {
       if ((c.order ?? 0) > MAX_INT) {
         c.order = idx
         c.updatedAt = now
+        this._trackChange(c.id, 'order')
         this._markDirty(c.id)
       }
       idx++

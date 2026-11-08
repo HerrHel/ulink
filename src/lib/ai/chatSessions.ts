@@ -13,6 +13,7 @@ import type { AiSendSummary } from './sendSummary.js'
 import type { AttachedMediaFile } from './attachmentHelper.js'
 import type { ToolExecStatus } from './toolResult.js'
 import { redactSensitivePatterns } from './secretFilter.js'
+import { isThreePartCipher } from '../../crypto.js'
 
 export type { AttachedMediaFile }
 
@@ -114,7 +115,7 @@ export function isDefaultSessionTitle(title: string | undefined | null): boolean
 /** 提取前 16 个字符作为会话标题（无可用文本时留空，展示侧回退到 i18n 默认标题） */
 export function extractSessionTitle(query: string): string {
   const clean = query.trim().replace(/^[\/\s]+/, '')
-  if (!clean) return ''
+  if (!clean || isThreePartCipher(clean)) return ''
   return clean.length > 16 ? clean.slice(0, 16) + '…' : clean
 }
 
@@ -148,8 +149,14 @@ export function saveSessions(sessions: AiChatSession[]): void {
         // 落盘前统一脱敏：secretFilter 过去只作用于「外发前」，而会话里的
         // promptContent / toolResults 会明文带上密钥、Bearer、URL Basic Auth 等。
         // 这里只做不可逆的敏感串替换，不改动展示结构。
+        // 避免多模态超大图片 Base64 击穿 localStorage 5MB 配额
+        attachedFiles: t.attachedFiles?.map((f) => ({
+          ...f,
+          dataUrl: f.dataUrl && f.dataUrl.length > 32768 ? undefined : f.dataUrl,
+          textContent: f.textContent ? f.textContent.slice(0, 4000) : undefined,
+        })),
         promptContent: t.promptContent
-          ? redactSensitivePatterns(t.promptContent)
+          ? redactSensitivePatterns(t.promptContent.slice(0, 8000))
           : t.promptContent,
         toolResults: t.toolResults?.map((r) => ({
           ...r,

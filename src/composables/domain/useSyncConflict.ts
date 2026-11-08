@@ -31,6 +31,9 @@ export function resolveConflict(id: string, keepLocal: boolean) {
   const ds = useDataStore()
   if (!keepLocal) {
     _applyRemoteToLocal(conflict.type, id, conflict.remote as Record<string, unknown>)
+    ds._dirtyIds.delete(id)
+    ds._newIds.delete(id)
+    ds._changedFields.delete(id)
     saveAppData()
   } else {
     // 保留本地：必须确保本地版本能够胜出并回推覆盖云端。

@@ -3,7 +3,7 @@
  * 从 group.js 迁移：performUndo, performRedo, restoreSnapshot, updateUndoRedoButtons
  * 使用 useUndoStore 替代 LV.undoStacks / LV.undoTimers
  */
-import { useDataStore } from '../../stores/data.js'
+import { useDataStore, _indexOfById } from '../../stores/data.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
 import { useUndoStore, type UndoSnapshot } from '../../stores/undo.js'
 import { MAX_UNDO, UNDO_WINDOW, MAX_UNDO_BYTES } from '../../config/constants.js'
@@ -83,40 +83,45 @@ export function pushUndo(gid: string) {
 }
 
 export function restoreSnapshot(gid: string, snap: UndoSnapshot) {
-  const ds = useDataStore()
-  const sg = ds.groupMap[gid]
-  if (!sg) return
-  // H15 配套：软删除书签仍在 bookmarkMap，恢复时也需过滤 deletedAt，
-  // 与 GroupEditor.syncToStore / 历史恢复一致，避免 undo 把悬空 id 写回 bookmarkIds。
-  const filteredIds = snap.bookmarkIds.filter(function (bid) {
-    const bm = ds.bookmarkMap[bid]
-    return !!(bm && !bm.deletedAt)
-  })
-  // L4：不走 updateGroup（会 _saveLocalHistory/_trackChange 把机器恢复态写进版本历史与字段脏追踪）；
-  // 直接写 notes/bookmarkIds + dirty，云同步仍能推送，HistoryPanel 不掺假版本。
-  // 经 groupMap 取当前数组引用再按 id 定位，避免对 siblingGroups 再扫一遍 findIndex。
-  const current = ds.groupMap[gid]
-  if (current) {
-    const idx = ds.siblingGroups.indexOf(current)
-    if (idx >= 0) {
-      ds.siblingGroups[idx] = {
-        ...ds.siblingGroups[idx],
-        notes: snap.notes,
-        bookmarkIds: filteredIds,
-        updatedAt: Date.now(),
+  _restoring = true
+  try {
+    const ds = useDataStore()
+    const sg = ds.groupMap[gid]
+    if (!sg) return
+    // H15 配套：软删除书签仍在 bookmarkMap，恢复时也需过滤 deletedAt，
+    // 与 GroupEditor.syncToStore / 历史恢复一致，避免 undo 把悬空 id 写回 bookmarkIds。
+    const filteredIds = snap.bookmarkIds.filter(function (bid) {
+      const bm = ds.bookmarkMap[bid]
+      return !!(bm && !bm.deletedAt)
+    })
+    // L4：不走 updateGroup（会 _saveLocalHistory/_trackChange 把机器恢复态写进版本历史与字段脏追踪）；
+    // 直接写 notes/bookmarkIds + dirty，云同步仍能推送，HistoryPanel 不掺假版本。
+    // 经 groupMap 取当前数组引用再按 id 定位，避免对 siblingGroups 再扫一遍 findIndex。
+    const current = ds.groupMap[gid]
+    if (current) {
+      const idx = _indexOfById(ds.siblingGroups, ds._grpMap, gid)
+      if (idx >= 0) {
+        ds.siblingGroups[idx] = {
+          ...ds.siblingGroups[idx],
+          notes: snap.notes,
+          bookmarkIds: filteredIds,
+          updatedAt: Date.now(),
+        }
+        ds._grpMap[gid] = ds.siblingGroups[idx]
+        ds._markDirty(gid)
+        ds._bumpSearchVersion()
       }
-      ds._grpMap[gid] = ds.siblingGroups[idx]
-      ds._markDirty(gid)
-      ds._bumpSearchVersion()
     }
+    // Sync TipTap editor if it's mounted (visible group).
+    // G1-003：用 silentSetContent 抑制 onUpdate→syncToStore→updateGroup 副作用链。
+    // plain setContent 默认 emitUpdate=true 会触发 onUpdate——_restoring 只挡 pushUndo 不挡
+    // syncToStore，于是机器恢复态经 updateGroup 的 _saveLocalHistory/_trackChange 写进版本历史
+    // 与字段脏追踪，绕过上方 L4 注释的设计意图。与 useSyncRealtime 远端 notes 写回同口径。
+    // If no editor (group not visible), silentSetContent 返回 false，Vue 响应式下次 mount 渲染 sg.notes。
+    EditorManager.silentSetContent(gid, snap.notes || '')
+  } finally {
+    _restoring = false
   }
-  // Sync TipTap editor if it's mounted (visible group).
-  // G1-003：用 silentSetContent 抑制 onUpdate→syncToStore→updateGroup 副作用链。
-  // plain setContent 默认 emitUpdate=true 会触发 onUpdate——_restoring 只挡 pushUndo 不挡
-  // syncToStore，于是机器恢复态经 updateGroup 的 _saveLocalHistory/_trackChange 写进版本历史
-  // 与字段脏追踪，绕过上方 L4 注释的设计意图。与 useSyncRealtime 远端 notes 写回同口径。
-  // If no editor (group not visible), silentSetContent 返回 false，Vue 响应式下次 mount 渲染 sg.notes。
-  EditorManager.silentSetContent(gid, snap.notes || '')
 }
 
 /** M7：undo/redo 成功后清掉该组 pushUndo 防抖 timer，

@@ -28,7 +28,13 @@ const BEARER_RE = /\b(Bearer\s+)[a-zA-Z0-9_\-.~+/=]{16,}\b/gi
 /** 4. URL 中的 HTTP Basic Auth 凭证 (http://user:password@...) */
 const URL_BASIC_AUTH_RE = /(https?:\/\/[^:@\s]+):([^:@\s]+)@/g
 
-/** 5. 键值对型凭证 (如 "password: 123456", "token=abcdef", "密码：xxxx", "api_key: xxx") */
+/** 5. 与链专属 24 位主密码恢复密钥 (XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) */
+const RECOVERY_KEY_RE = /\b[A-Za-z0-9]{4}(?:-[A-Za-z0-9]{4}){5}\b/g
+
+/** 6. E2E 三段式密文 (salt.iv.ciphertext 或 salt:iv:ciphertext) */
+const CIPHERTEXT_RE = /\b[A-Za-z0-9+/=]{44}[.:][A-Za-z0-9+/=]{16}[.:][A-Za-z0-9+/=]{24,}\b/g
+
+/** 7. 键值对型凭证 (如 "password: 123456", "token=abcdef", "密码：xxxx", "api_key: xxx") */
 const KV_SECRET_RE = /(?:(^|[\s,;；，\n(（])(password|passwd|pwd|secret|api_?key|auth_?token|access_?token|client_?secret|密码|口令|密钥)\s*[:：=]\s*)([^\s,;；，\n)）]+)/gi
 
 /**
@@ -47,6 +53,8 @@ export function redactSensitivePatterns(text: string): string {
     .replace(AWS_KEY_RE, '[REDACTED_KEY]')
     .replace(SLACK_TOKEN_RE, '[REDACTED_TOKEN]')
     .replace(JWT_TOKEN_RE, '[REDACTED_JWT]')
+    .replace(RECOVERY_KEY_RE, '[REDACTED_RECOVERY_KEY]')
+    .replace(CIPHERTEXT_RE, '[REDACTED_CIPHERTEXT]')
     .replace(KV_SECRET_RE, (_match, prefix, key) => `${prefix}${key}: [REDACTED]`)
 
   return out

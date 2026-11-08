@@ -27,6 +27,18 @@
     "message": "ulink: Deep-read this video (experimental)",
     "description": "Context menu: read page media URLs and transcribe/OCR"
   },
+  "theme_toggle_light": {
+    "message": "Switch to light mode",
+    "description": "Theme toggle button hint: light"
+  },
+  "theme_toggle_dark": {
+    "message": "Switch to dark mode",
+    "description": "Theme toggle button hint: dark"
+  },
+  "err_timeout": {
+    "message": "Timeout",
+    "description": "Network timeout error label"
+  },
   "login": {
     "message": "Log in",
     "description": "Login button"

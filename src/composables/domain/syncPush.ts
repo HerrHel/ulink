@@ -308,7 +308,7 @@ export async function pushFromQueue(): Promise<boolean> {
       if (!op.data) continue
       if (isLocked && lockedItemKeys.has(`${op.table}:${op.itemId}`)) continue
 
-      const data = op.data
+      const data = { ...op.data }
       const changedFields = data._changedFields as string[] | null
       const isNew = data._isNew as boolean || false
       delete data._changedFields
@@ -432,7 +432,12 @@ export async function pushFromQueue(): Promise<boolean> {
       await removeSyncOps(deadIds)
       await refreshPendingCount()
     }
-    for (const op of ops) ds._newIds.delete(op.itemId)
+    for (const r of results) {
+      const noMatch = r.result.count === 0
+      if (!r.result.error && !noMatch) {
+        ds._newIds.delete(r.op.itemId)
+      }
+    }
 
     const releasedIds = new Set<string>()
     for (const r of results) {

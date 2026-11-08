@@ -72,17 +72,36 @@ export const useActionSheetStore = defineStore('actionSheet', () => {
   }
 
   // ── Touch drag-to-dismiss ──
+  let startScrollTop = 0
+  let isScrollableTarget = false
 
   function onTouchStart(e: TouchEvent) {
     if (!visible.value) return
     startY = e.touches[0].clientY
     isDragging.value = false
+    const target = e.target as HTMLElement | null
+    const scrollEl = target?.closest?.('.bmp-list, .as-list') as HTMLElement | null
+    if (scrollEl) {
+      isScrollableTarget = true
+      startScrollTop = scrollEl.scrollTop
+    } else {
+      isScrollableTarget = false
+      startScrollTop = 0
+    }
   }
 
   function onTouchMove(e: TouchEvent) {
     if (!startY) return
+    if (isScrollableTarget && startScrollTop > 0) {
+      return
+    }
     const dy = e.touches[0].clientY - startY
-    if (dy > 0) { isDragging.value = true; dragY.value = dy }
+    if (dy > 0) {
+      isDragging.value = true
+      dragY.value = dy
+    } else if (isDragging.value) {
+      dragY.value = 0
+    }
   }
 
   function onTouchEnd() {

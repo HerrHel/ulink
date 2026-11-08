@@ -5,6 +5,7 @@
 import { cleanupGroupImagesOnDelete } from '../lib/imageStorage.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite } from './dataShared.js'
+import { useUIStore } from './ui.js'
 import { ATTR_IS_GROUP } from '../config/constants.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { SiblingGroup } from '../types.js'
@@ -29,7 +30,11 @@ export const groupActions = {
       if (appliedChanges.attributes) {
         appliedChanges.attributes = { ...appliedChanges.attributes, [ATTR_IS_GROUP]: true }
       }
-      for (const key of Object.keys(appliedChanges)) this._trackChange(id, key)
+      for (const key of Object.keys(appliedChanges)) {
+        if ((appliedChanges as Record<string, unknown>)[key] !== (this.siblingGroups[idx] as Record<string, unknown>)[key]) {
+          this._trackChange(id, key)
+        }
+      }
       const updated = { ...this.siblingGroups[idx], ...appliedChanges, updatedAt: Date.now() }
       if (!updated.attributes) {
         updated.attributes = { [ATTR_IS_GROUP]: true }
@@ -42,6 +47,13 @@ export const groupActions = {
       this._searchIndexDirty = true
     }
   },
+  /** 组 useCount 静默累加（R-RESURRECT）：聚焦/点击组时不 bump updatedAt、不标脏、不写历史，避免离线墓碑被复活 */
+  bumpGroupUseCount(this: DataStoreThis, id: string) {
+    if (_denyWrite()) return
+    const g: SiblingGroup | undefined = this._grpMap[id]
+    if (!g || g.deletedAt) return
+    g.useCount = (g.useCount || 0) + 1
+  },
   deleteGroup(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
     const idx = _indexOfById(this.siblingGroups, this._grpMap, id)
@@ -49,7 +61,12 @@ export const groupActions = {
     const g = this.siblingGroups[idx]
     this.siblingGroups[idx] = { ...g, deletedAt: Date.now(), updatedAt: Date.now() }
     this._grpMap[id] = this.siblingGroups[idx]
+    this._trackChange(id, 'deletedAt')
     this._markDirty(id)
+    const ui = useUIStore()
+    if (ui.focusedGroupId === id) ui.focusedGroupId = null
+    const dIdx = ui.detailCards.indexOf('group:' + id)
+    if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
     this._searchIndexDirty = true
   },
   /** 切换置顶状态：已置顶则取消，未置顶则设为当前时间 */
@@ -95,6 +112,10 @@ export const groupActions = {
     delete this._grpMap[id]
     // r10-attr-restore B1：永久删组时清其在 _deletedAttrMemberships 的预订 membership
     this._dropAttrMemberships(id)
+    const ui = useUIStore()
+    if (ui.focusedGroupId === id) ui.focusedGroupId = null
+    const dIdx = ui.detailCards.indexOf('group:' + id)
+    if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
     this._searchIndexDirty = true
   },
 }

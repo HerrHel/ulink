@@ -7,6 +7,8 @@
 import type { Category, CustomAttribute, Bookmark } from '../../types.js'
 import type { AiEnrichDiff } from '../../types/ai.js'
 import { domain } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
+import { isPrivateUrl } from './urlGuard.js'
 import { t } from '../../i18n/index.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { fetchUrlMetadataAsync } from './smartIntake.js'
@@ -20,7 +22,27 @@ export async function enrichBookmarkMetadata(
   attributes: CustomAttribute[] = []
 ): Promise<AiEnrichDiff> {
   const rawUrl = bookmark.url ? bookmark.url.trim() : ''
+  if (!rawUrl || isThreePartCipher(rawUrl)) {
+    return {
+      bookmarkId: bookmark.id,
+      currentTitle: bookmark.title || '',
+      currentNotes: bookmark.notes || '',
+      currentCategoryId: bookmark.categoryId || '',
+      suggestedNotes: '',
+      suggestedAttrIds: [],
+    }
+  }
   const validUrl = rawUrl.startsWith('http') ? rawUrl : (rawUrl ? 'https://' + rawUrl : '')
+  if (isPrivateUrl(validUrl)) {
+    return {
+      bookmarkId: bookmark.id,
+      currentTitle: bookmark.title || '',
+      currentNotes: bookmark.notes || '',
+      currentCategoryId: bookmark.categoryId || '',
+      suggestedNotes: '',
+      suggestedAttrIds: [],
+    }
+  }
   const dm = domain(validUrl || rawUrl)
   const prefill = getSmartPrefill(validUrl || rawUrl, [], categories, attributes)
 

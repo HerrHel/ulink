@@ -2,7 +2,7 @@
   <div class="attr-dropdown" id="attrDropdown" v-show="attrDrp.open" @click.stop>
     <div class="attr-drop-search">
       <input type="text" class="attr-search-input" id="attrSearchInput"
-             :placeholder="t('attr.searchCreatePlaceholder')" :aria-label="t('attr.searchPlaceholder')" v-model="query" @click.stop ref="searchInputRef">
+             :placeholder="t('attr.searchCreatePlaceholder')" :aria-label="t('attr.searchPlaceholder')" v-model="query" @keydown.enter="onAddAttr" @click.stop ref="searchInputRef">
       <button class="attr-search-add" @click.stop="onAddAttr" :title="t('attr.newAttribute')" v-html="I.plus"></button>
     </div>
     <div class="attr-drop-list" id="attrDropList">
@@ -16,7 +16,7 @@
            @touchend="onTouchEnd"
            @touchmove.passive="onTouchMove">
         <span class="attr-drop-main" @click="onToggleFilter(a.id)" :title="a.id === ATTR_IS_GROUP ? t('attr.systemDesc') : t('attr.include')">
-          <span class="attr-dot"></span><span v-if="a.id === ATTR_IS_GROUP" class="attr-icon-system" aria-hidden="true" v-html="I.note"></span><span>{{ a.name }}</span><span v-if="a.id === ATTR_IS_GROUP" class="attr-system-tag">{{ t('attr.system') }}</span>
+          <span class="attr-dot"></span><span v-if="a.id === ATTR_IS_GROUP" class="attr-icon-system" aria-hidden="true" v-html="I.note"></span><span>{{ displayText(a.name) }}</span><span v-if="a.id === ATTR_IS_GROUP" class="attr-system-tag">{{ t('attr.system') }}</span>
         </span>
         <button class="attr-drop-exclude" :class="{ on: isExcluded(a.id) }"
                 @click="onToggleExclude(a.id)"
@@ -39,7 +39,7 @@ import { toast, showConfirm } from '../../lib/toast.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAttrDropdownStore } from '../../stores/attrDropdown.js'
-import { isMobile } from '../../utils.js'
+import { isMobile, displayText } from '../../utils.js'
 import { t } from '../../i18n/index.js'
 
 const store = useAppStore()
@@ -50,7 +50,7 @@ const searchInputRef = ref<HTMLInputElement | null>(null)
 const filteredAttrs = computed(() => {
   const q = query.value.toLowerCase()
   // A2-001：只用未软删属性——软删（进回收站）的属性应立即从列表消失，而非等回收站清除
-  const userAttrs = store.selectableAttributes.filter(a => a.name.toLowerCase().indexOf(q) !== -1)
+  const userAttrs = store.selectableAttributes.filter(a => displayText(a.name).toLowerCase().indexOf(q) !== -1)
   return userAttrs
 })
 
@@ -87,7 +87,10 @@ function onDocumentClick(e: MouseEvent) {
 }
 
 onMounted(() => document.addEventListener('click', onDocumentClick, true))
-onUnmounted(() => document.removeEventListener('click', onDocumentClick, true))
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick, true)
+  if (_longPressTimer) clearTimeout(_longPressTimer)
+})
 
 // 长按/右键菜单
 let _longPressTimer: ReturnType<typeof setTimeout> | null = null

@@ -7,7 +7,7 @@
         <span class="bmp-item-icon" :style="{ color: cat.color || 'var(--accent)' }">
           <span v-html="getCategoryIcon(cat.icon)"></span>
         </span>
-        <span>{{ cat.name }}</span>
+        <span>{{ displayText(cat.name) }}</span>
       </button>
       <button v-if="showVaultOption" class="bmp-item bmp-item-vault"
               @click="onMoveToVault">
@@ -32,7 +32,7 @@ import { useUIStore } from '../../stores/ui.js'
 import { useVaultStore } from '../../stores/vault.js'
 import { useBatchMoveStore } from '../../stores/overlay.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
-import { addNewCategory } from '../../utils.js'
+import { addNewCategory, displayText } from '../../utils.js'
 import { batchMoveToCat } from '../../composables/domain/useBatch.js'
 import { moveBatchSelectedToVault } from '../../composables/domain/useSpaceMove.js'
 import { t } from '../../i18n/index.js'

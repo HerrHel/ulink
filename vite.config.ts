@@ -929,11 +929,18 @@ function legalDocsPlugin(): Plugin {
     }
   };
 
+  const isPublicLegalDoc = (fileName: string) => {
+    if (!fileName.endsWith('.md')) return false;
+    if (fileName.startsWith('.') || fileName.startsWith('_')) return false;
+    if (fileName === 'PENDING.md' || /^PENDING/i.test(fileName)) return false;
+    if (/^CHANGELOG/i.test(fileName)) return false;
+    return true;
+  };
+
   const list = () => {
     try {
-      // PENDING.md 是内部待办清单（含统一社会信用代码、未填占位、功能缺口），
-      // 属于内部管理文件，**不对外发布**。
-      return readdirSync(dir).filter((f) => f.endsWith('.md') && f !== 'PENDING.md');
+      // 仅公开发布正式对外协议，严格排除内部待办（PENDING.md）与内部修订复核记录（CHANGELOG-*.md）
+      return readdirSync(dir).filter(isPublicLegalDoc);
     } catch {
       return [] as string[];
     }
@@ -962,7 +969,9 @@ function legalDocsPlugin(): Plugin {
     // 原始 Markdown（保留可取证入口，不对外链接）
     const mdMatch = /^\/legal\/([\w.-]+\.md)$/.exec(path);
     if (mdMatch) {
-      const body = read(mdMatch[1]);
+      const fileName = mdMatch[1];
+      if (!isPublicLegalDoc(fileName)) return next();
+      const body = read(fileName);
       if (body === null) return next();
       res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
@@ -980,7 +989,9 @@ function legalDocsPlugin(): Plugin {
     // /legal/<slug> | /legal/<slug>/ | /legal/<slug>.html
     const pageMatch = /^\/legal\/([\w-]+?)(?:\.html)?\/?$/.exec(path);
     if (pageMatch) {
-      const md = read(`${pageMatch[1]}.md`);
+      const slug = pageMatch[1];
+      if (!isPublicLegalDoc(`${slug}.md`)) return next();
+      const md = read(`${slug}.md`);
       if (md === null) return next();
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');

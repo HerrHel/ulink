@@ -7,6 +7,7 @@
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { suggestCategory } from '../ai-classify.js'
+import { isThreePartCipher } from '../../crypto.js'
 
 export interface BookmarkCluster {
   id: string
@@ -61,7 +62,7 @@ function extractDomain(rawUrl: string): string {
  * 严格规范化 URL 进行重复比对
  */
 export function normalizeUrlForDedup(rawUrl: string): string {
-  if (!rawUrl) return ''
+  if (!rawUrl || isThreePartCipher(rawUrl.trim())) return ''
   try {
     const u = new URL(rawUrl.trim())
     // 过滤常见营销和追踪参数
@@ -225,7 +226,7 @@ export interface ParentChildLink {
  * 4. 同路径仅参数不同（如 /watch?v=1 与 /watch?v=2）互不为父子。
  */
 export function detectParentChildRelations(bookmarks: Bookmark[]): ParentChildLink[] {
-  const candidates = bookmarks.filter((b) => !b.deletedAt && b.url && !b.parentId && !isOfficialBookmark(b))
+  const candidates = bookmarks.filter((b) => !b.deletedAt && b.url && !isThreePartCipher(b.url) && !b.parentId && !isOfficialBookmark(b))
   const parsed = new Map<string, { host: string; segs: string[] }>()
   for (const b of candidates) {
     try {
@@ -316,7 +317,9 @@ export function findUncategorizedGroups(
 
     // 2. 次选：根据组名称与现有分类名匹配
     if (!bestCatId) {
-      const textLower = `${g.name || ''} ${g.notes ? g.notes.replace(/<[^>]+>/g, '') : ''}`.toLowerCase()
+      const plainNotes = g.notes && !isThreePartCipher(g.notes) ? g.notes.replace(/<[^>]+>/g, '') : ''
+      const plainName = g.name && !isThreePartCipher(g.name) ? g.name : ''
+      const textLower = `${plainName} ${plainNotes}`.toLowerCase()
       for (const cat of activeCats) {
         const catLower = cat.name.toLowerCase()
         if (textLower.includes(catLower) || (catLower.length >= 2 && catLower.split(/[\s/、]+/).some(p => p && textLower.includes(p)))) {
@@ -365,7 +368,7 @@ export function findDuplicateCandidates(bookmarks: Bookmark[]): DuplicateCluster
   const active: Bookmark[] = []
   for (const b of bookmarks) {
     if (!b || !b.id || seenIds.has(b.id)) continue
-    if (!b.deletedAt && b.url && !isOfficialBookmark(b) && !b.parentId) {
+    if (!b.deletedAt && b.url && !isThreePartCipher(b.url) && !isOfficialBookmark(b) && !b.parentId) {
       seenIds.add(b.id)
       active.push(b)
     }

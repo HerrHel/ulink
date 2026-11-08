@@ -19,6 +19,8 @@
  */
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
+import { useE2EStore } from '../../stores/e2e.js'
+import { isThreePartCipher } from '../../crypto.js'
 import * as persist from '../../stores/persist.js'
 import { collectDescendantIds } from '../../lib/collectSubIds.js'
 import { toast } from '../../lib/toast.js'
@@ -39,6 +41,24 @@ function _clean<T extends Record<string, unknown>>(item: T): T {
     if (k.startsWith('_')) delete copy[k]
   }
   return copy as T
+}
+
+function _hasCipherFields(bms: Bookmark[], groups: SiblingGroup[] = []): boolean {
+  for (const b of bms) {
+    if (typeof b.username === 'string' && isThreePartCipher(b.username)) return true
+    if (typeof b.notes === 'string' && isThreePartCipher(b.notes)) return true
+    if (typeof b.title === 'string' && isThreePartCipher(b.title)) return true
+    if (typeof b.url === 'string' && isThreePartCipher(b.url)) return true
+    if (b.password) {
+      if (typeof b.password === 'object' && (b.password as { encrypted?: boolean }).encrypted === true) return true
+      if (typeof b.password === 'string' && isThreePartCipher(b.password)) return true
+    }
+  }
+  for (const g of groups) {
+    if (typeof g.name === 'string' && isThreePartCipher(g.name)) return true
+    if (typeof g.notes === 'string' && isThreePartCipher(g.notes)) return true
+  }
+  return false
 }
 
 /** 以 id 为键合并：vault 已有同 id 则跳过（不覆盖，避免同 id 误合并） */
@@ -144,10 +164,24 @@ export function useSpaceMove() {
       }
     }
 
+    if (useE2EStore().isE2EEnabled && !useE2EStore().isUnlocked && _hasCipherFields(bms, groupsFull)) {
+      toast(t('modal.childBm.encryptFailHint') || '含加密字段，请先解锁主密码', false)
+      return
+    }
+
     const vault = await _loadVault()
     await _persistIntoVault(vault, bms, groupsFull, [])
 
-    // 从主页删除：整组先删（避免组引用悬空），再删书签（含子）
+    // 从主页删除：留在主页的组剔除已被移走的书签引用
+    const fullGroupIds = new Set(groupsFull.map(g => g.id))
+    for (const g of dataStore.siblingGroups) {
+      if (fullGroupIds.has(g.id)) continue
+      const remaining = (g.bookmarkIds || []).filter(bid => !allIds.has(bid))
+      if (remaining.length !== (g.bookmarkIds || []).length) {
+        dataStore.updateGroup(g.id, { bookmarkIds: remaining })
+      }
+    }
+    // 整组先删（避免组引用悬空），再删书签（含子）
     for (const g of groupsFull) dataStore.permanentDeleteGroup(g.id)
     for (const id of allIds) dataStore.permanentDeleteBookmark(id)
     dataStore._syncMaps()
@@ -191,6 +225,11 @@ export function useSpaceMove() {
     }
     const groups = groupsRaw.map(_clean)
 
+    if (useE2EStore().isE2EEnabled && !useE2EStore().isUnlocked && _hasCipherFields(bms, groupsRaw)) {
+      toast(t('modal.childBm.encryptFailHint') || '含加密字段，请先解锁主密码', false)
+      return
+    }
+
     const vault = await _loadVault()
     await _persistIntoVault(vault, bms, groups, [_clean(cat)])
 
@@ -198,6 +237,10 @@ export function useSpaceMove() {
     for (const g of groupsRaw) dataStore.permanentDeleteGroup(g.id)
     for (const id of allIds) dataStore.permanentDeleteBookmark(id)
     dataStore.permanentDeleteCategory(catId)
+    const uiStore = useUIStore()
+    if (uiStore.curCat === catId) {
+      uiStore.curCat = 'all'
+    }
     dataStore._syncMaps()
     await useDataStoreSave()
     toast(t('msg.categoryMovedToVault', { name: cat.name, bookmarks: bms.length, groups: groups.length }))
@@ -231,6 +274,11 @@ export function useSpaceMove() {
       }
     }
     const groups = groupsRaw.map(_clean)
+
+    if (useE2EStore().isE2EEnabled && !useE2EStore().isUnlocked && _hasCipherFields(bms, groupsRaw)) {
+      toast(t('modal.childBm.encryptFailHint') || '含加密字段，请先解锁主密码', false)
+      return
+    }
 
     const vault = await _loadVault()
     await _persistIntoVault(vault, bms, groups, [])
@@ -267,6 +315,8 @@ export async function moveBatchSelectedToVault(batchSelected: string[]): Promise
   const spaceMove = useSpaceMove()
   if (bmIds.length) await spaceMove.moveBookmarksToVault(bmIds)
   if (groupIds.length) await spaceMove.moveGroupsToVault(groupIds)
+  uiStore.batchSelected.splice(0)
+  uiStore.batchMode = false
 }
 
 /** 触发主页数据落盘（经 app facade save 走当前空间 key） */

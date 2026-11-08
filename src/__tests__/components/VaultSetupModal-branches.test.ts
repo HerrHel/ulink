@@ -313,7 +313,9 @@ describe('VaultSetupModal step1 动态提示与密码可见切换', () => {
 
   it('点击遮罩背景 → emit("close")（@click.self="emit(\'close\')"）', async () => {
     const w = mountComp(true)
-    await w.find('[data-testid="lv-vault-setup-modal"]').trigger('click')
+    const mask = w.find('[data-testid="lv-vault-setup-modal"]')
+    await mask.trigger('mousedown')
+    await mask.trigger('click')
     expect(w.emitted('close')).toBeTruthy()
     w.unmount()
   })

@@ -29,7 +29,8 @@ export function safeRemoveItem(key: string): void {
 export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
   if (raw == null || raw === '') return fallback
   try {
-    return JSON.parse(raw) as T
+    const res = JSON.parse(raw)
+    return (res === null && fallback !== null) ? fallback : (res as T)
   } catch {
     return fallback
   }

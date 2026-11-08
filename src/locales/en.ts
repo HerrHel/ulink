@@ -305,6 +305,7 @@ export const en = {
     conflictsCount: '{n} conflicts',
     conflictsCount_one: '{n} conflict',
     quotaFull: 'Cloud storage full',
+    quotaFullNotice: 'Cloud storage is full. Your data is safely stored locally and unaffected. Click "Force full re-upload" once space is available to sync.',
     authExpired: 'Session expired',
     failed: 'Sync failed',
     offline: 'Offline',

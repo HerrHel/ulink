@@ -451,6 +451,8 @@ export const useUIStore = defineStore('ui', {
 
     // ─── UI 状态持久化 ───
     saveUIState() {
+      // 分享只读态下严禁持久化 UI 状态，避免把被分享的分类/聚焦组覆盖写进本机本地存储
+      if (this.shareMode) return
       try {
         const ds = useDataStore()
         const s = {
@@ -534,7 +536,7 @@ export const useUIStore = defineStore('ui', {
           if (Array.isArray(s.excludedAttrs)) this.excludedAttrs = filterValidAttrs(s.excludedAttrs.slice())
           if (s.focusedGroupId) {
             const fg = ds.groupMap[s.focusedGroupId]
-            if (fg) this.focusedGroupId = s.focusedGroupId
+            if (fg && !fg.deletedAt) this.focusedGroupId = s.focusedGroupId
           }
         }
         if (s.sortMode) this.sortMode = s.sortMode

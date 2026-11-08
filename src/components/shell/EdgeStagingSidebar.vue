@@ -144,12 +144,12 @@
                   loading="lazy"
                   @error="onImgError(entry.rawId)"
                 />
-                <span v-else class="staged-initial">{{ getInitials(entry.name) }}</span>
+                <span v-else class="staged-initial">{{ getInitials(displayText(entry.name)) }}</span>
               </template>
             </div>
 
             <!-- 标题、域名与笔记组标识 -->
-            <div class="staged-info-box" :title="entry.name">
+            <div class="staged-info-box" :title="displayText(entry.name)">
               <div class="staged-title-row">
                 <span v-if="entry.isGroup" class="group-tag">{{ isZh ? '组' : 'Group' }}</span>
                 <span class="staged-title">{{ displayText(entry.name) }}</span>

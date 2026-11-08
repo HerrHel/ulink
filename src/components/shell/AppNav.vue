@@ -43,7 +43,7 @@
         @click="selectCat(cat.id)"
       >
         <span v-html="getCategoryIcon(cat.icon)"></span>
-        {{ cat.name }}
+        {{ getCatDisplayName(cat) }}
         <span class="rail-count">{{ cardCounts[cat.id] || 0 }}</span>
       </button>
     </div>
@@ -99,6 +99,8 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { useAuth } from '../../composables/domain/useAuth.js'
 import { useSyncState } from '../../composables/ui/useSyncStatus.js'
 import { t } from '../../i18n/index.js'
+import { displayText } from '../../utils.js'
+import { isThreePartCipher } from '../../crypto.js'
 
 const dataStore = useDataStore()
 const uiStore = useUIStore()
@@ -126,6 +128,15 @@ const categories = computed(() => {
   const restSorted = rest.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   return [...virtual, ...restSorted]
 })
+function getCatDisplayName(cat: { id: string; name: string }): string {
+  if (cat.id === CAT_ALL) return t('nav.all')
+  if (cat.id === CAT_UNCATEGORIZED) return t('common.uncategorized')
+  const dt = displayText(cat.name)
+  if (dt) return dt
+  if (typeof cat.name === 'string' && isThreePartCipher(cat.name)) return '••••••'
+  return cat.name || ''
+}
+
 const curCat = computed(() => uiStore.curCat)
 const cardCounts = computed(() => dataStore.cardCounts)
 

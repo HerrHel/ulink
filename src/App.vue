@@ -165,7 +165,7 @@ const CategoryModal = defineAsyncComponent(() => import('./components/modals/Cat
 const AttributeModal = defineAsyncComponent(() => import('./components/modals/AttributeModal.vue'))
 const GroupEditModal = defineAsyncComponent(() => import('./components/modals/GroupEditModal.vue'))
 const ShareModal = defineAsyncComponent(() => import('./components/modals/ShareModal.vue'))
-const PurchaseModal = defineAsyncComponent(() => import('./components/modals/PurchaseModal.vue'))
+import PurchaseModal from './components/modals/PurchaseModal.vue'
 const AiEnrichModal = defineAsyncComponent(() => import('./components/modals/AiEnrichModal.vue'))
 const TrashPanel = defineAsyncComponent(() => import('./components/modals/TrashPanel.vue'))
 const HistoryPanel = defineAsyncComponent(() => import('./components/modals/HistoryPanel.vue'))
@@ -328,6 +328,15 @@ function onVaultClose() {
  */
 watch(() => uiStore.curSpace, (next, prev) => {
   if (prev === 'vault' && next === 'main' && vaultStore.isVaultUnlocked) vault.lockVault()
+})
+
+/**
+ * 保险柜超时锁定或可见性后台锁触发时：如果仍在私密空间，自动安全返回主页空间
+ */
+watch(() => vaultStore.isVaultUnlocked, (unlocked) => {
+  if (!unlocked && uiStore.curSpace === 'vault') {
+    void dataStore.switchSpace('main')
+  }
 })
 </script>
 

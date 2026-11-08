@@ -67,8 +67,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
-import { fetchLocalHistory } from '../../stores/storage.js'
-import { useAuth } from '../../composables/domain/useAuth.js'
 import { I } from '../../config/icons.js'
 import { toast } from '../../lib/toast.js'
 import { showConfirm } from '../../lib/toast.js'
@@ -88,7 +86,6 @@ const props = defineProps<{ open: boolean; itemId: string; itemType: 'bookmark' 
 const emit = defineEmits<{ close: [] }>()
 
 const sync = useCloudSync()
-const auth = useAuth()
 const versions = ref<HistoryVersion[]>([])
 const loading = ref(false)
 const restoring = ref(false)
@@ -101,29 +98,17 @@ const diffCompareIdx = ref(-1)
 // AbortController，代际丢弃足矣）。
 let _gen = 0
 
-watch(() => props.open, async (isOpen) => {
-  if (isOpen && props.itemId) {
+watch([() => props.open, () => props.itemId], async ([isOpen, itemId]) => {
+  if (isOpen && itemId) {
     const gen = ++_gen
     loading.value = true
     selectedIdx.value = -1
     diffMode.value = false
     try {
-      // 本地历史（同步读取）
-      const local = fetchLocalHistory(props.itemId)
-      // 云端历史（登录用户）
-      let remote: HistoryVersion[] = []
-      if (auth.isLoggedIn) {
-        remote = await sync.fetchHistory(props.itemId)
-      }
+      const list = await sync.fetchHistory(props.itemId)
       // 丢弃过期请求结果：用户可能已切换到另一条目的历史面板
       if (gen !== _gen) return
-      // 合并去重：相同 created_at 保留云端
-      const seen = new Set<string>()
-      const merged: HistoryVersion[] = []
-      for (const v of remote) { seen.add(v.created_at); merged.push(v) }
-      for (const v of local) { if (!seen.has(v.created_at)) merged.push(v) }
-      merged.sort((a, b) => b.created_at.localeCompare(a.created_at))
-      versions.value = merged
+      versions.value = list
     } catch (e) {
       if (gen !== _gen) return
       console.warn('[history] fetch failed:', e)

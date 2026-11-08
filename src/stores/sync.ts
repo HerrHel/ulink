@@ -75,17 +75,18 @@ export const useSyncStore = defineStore('sync', () => {
 
   // 冲突管理
   function addConflict(c: SyncConflict) {
-    conflicts.value.push(c)
+    const list = conflicts.value
+    const idx = list.findIndex(item => item.id === c.id)
+    if (idx >= 0) {
+      list[idx] = c
+    } else {
+      list.push(c)
+    }
+    conflictBannerDismissed.value = false
   }
 
   function removeConflict(id: string) {
-    const list = conflicts.value
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].id === id) {
-        list.splice(i, 1)
-        return
-      }
-    }
+    conflicts.value = conflicts.value.filter(c => c.id !== id)
   }
 
   function getConflict(id: string): SyncConflict | undefined {

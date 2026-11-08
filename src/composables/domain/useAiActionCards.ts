@@ -24,6 +24,7 @@ import { executeDagStep, executeAllDagSteps, type TaskDagPlan } from '../../lib/
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
+import { useAppStore } from '../../stores/app.js'
 import type { Ref } from 'vue'
 
 /** 行动卡片 payload 内的候选条目（与原 DetailPanel 内联 any 形态一致） */
@@ -46,8 +47,18 @@ export interface AiActionCardsContext {
   onTurnsChanged?: () => void
 }
 
+function resolveAppStore() {
+  try {
+    if (typeof useAppStore === 'function') return useAppStore()
+  } catch {
+    // 兼容部分仅 mock 了 saveAppData 的测试沙箱
+  }
+  return { save: () => {} } as unknown as ReturnType<typeof useAppStore>
+}
+
 export function useAiActionCards(context: AiActionCardsContext) {
   const { ds, ui, chatTurns, sessions, currentSessionId, t, tN, onTurnsChanged } = context
+  const app = resolveAppStore()
 
   function getActionCardNavTarget(card: ChatActionCard): string | null {
     if (card.resultGid && ds.groupMap[card.resultGid]) {
@@ -69,6 +80,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
         ui.curCat = group.categoryId
       }
       ui.focusedGroupId = group.id
+      ui.activeView = 'bookmarks'
       if (typeof window !== 'undefined' && window.innerWidth < 768) {
         ui.panels.detail = false
       }
@@ -172,19 +184,19 @@ export function useAiActionCards(context: AiActionCardsContext) {
     try {
       await executeDagStep(plan, stepId, async (step) => {
         if (step.actionName === 'audit_vault') {
-          const res = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
+          const res = await dispatchSiteCommand('/health', { ds, ui, app })
           return { success: true, output: res.reply }
         } else if (step.actionName === 'inbox_zero') {
-          const res = await applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+          const res = await applyInboxZeroClustering({ ds, ui, app })
           const ok = (res.movedCount > 0 || res.nestedCount > 0) || !res.message.includes('取消')
           return { success: ok, output: res.message }
         } else if (step.actionName === 'merge_duplicates') {
-          const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
+          const res = await mergeDuplicateBookmarks({ ds, ui, app })
           const ok = res.mergedCount > 0 || !res.message.includes('取消')
           return { success: ok, output: res.message }
         } else if (step.actionName === 'batch_tag_bookmarks') {
           const items = Array.isArray((step.actionArgs as any)?.items) ? (step.actionArgs as any).items : []
-          const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app })
+          const res = await batchTagBookmarks(items, { ds, ui, app })
           return { success: res.success, output: res.message }
         }
         return { success: true, output: t('ai.dagStepSuccess') }
@@ -215,7 +227,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
       if (card.type === 'draft_diff' || card.actionName === 'apply_inbox_zero_diff' || card.actionName === 'apply_dedup_diff') {
         const payload = getDiffPayload(card)
         if (payload) {
-          const res = await applyDraftDiff(payload, { ds, app: (ui as any).app })
+          const res = await applyDraftDiff(payload, { ds, app })
           card.completed = true
           toast(res.message, true)
           chatTurns.value.push({
@@ -233,19 +245,19 @@ export function useAiActionCards(context: AiActionCardsContext) {
         if (plan) {
           await executeAllDagSteps(plan, async (step) => {
             if (step.actionName === 'audit_vault') {
-              const res = await dispatchSiteCommand('/health', { ds, ui, app: (ui as any).app })
+              const res = await dispatchSiteCommand('/health', { ds, ui, app })
               return { success: true, output: res.reply }
             } else if (step.actionName === 'inbox_zero') {
-              const res = await applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+              const res = await applyInboxZeroClustering({ ds, ui, app })
               const ok = (res.movedCount > 0 || res.nestedCount > 0) || !res.message.includes('取消')
               return { success: ok, output: res.message }
             } else if (step.actionName === 'merge_duplicates') {
-              const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
+              const res = await mergeDuplicateBookmarks({ ds, ui, app })
               const ok = res.mergedCount > 0 || !res.message.includes('取消')
               return { success: ok, output: res.message }
             } else if (step.actionName === 'batch_tag_bookmarks') {
               const items = Array.isArray((step.actionArgs as any)?.items) ? (step.actionArgs as any).items : []
-              const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app })
+              const res = await batchTagBookmarks(items, { ds, ui, app })
               return { success: res.success, output: res.message }
             }
             return { success: true, output: t('ai.dagStepSuccess') }
@@ -262,7 +274,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           sessions.value = updateSession(currentSessionId.value, chatTurns.value)
         }
       } else if (card.actionName === 'merge_dedup') {
-        const res = await mergeDuplicateBookmarks({ ds, ui, app: (ui as any).app })
+        const res = await mergeDuplicateBookmarks({ ds, ui, app })
         if (res.mergedCount > 0) {
           card.completed = true
           toast(res.message, true)
@@ -279,7 +291,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           if (res.message) toast(res.message, false)
         }
       } else if (card.actionName === 'trash_clear') {
-        const res = await dispatchSiteCommand('/trash clear', { ds, ui, app: (ui as any).app })
+        const res = await dispatchSiteCommand('/trash clear', { ds, ui, app })
         if (res.success !== false) {
           card.completed = true
         }
@@ -293,7 +305,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
         onTurnsChanged?.()
         sessions.value = updateSession(currentSessionId.value, chatTurns.value)
       } else if (card.actionName === 'inbox_zero') {
-        const res = await dispatchSiteCommand('/inbox', { ds, ui, app: (ui as any).app })
+        const res = await dispatchSiteCommand('/inbox', { ds, ui, app })
         chatTurns.value.push({
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
@@ -305,7 +317,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
         onTurnsChanged?.()
         sessions.value = updateSession(currentSessionId.value, chatTurns.value)
       } else if (card.actionName === 'apply_inbox_zero') {
-        const res = await applyInboxZeroClustering({ ds, ui, app: (ui as any).app })
+        const res = await applyInboxZeroClustering({ ds, ui, app })
         card.completed = true
         toast(res.message, true)
         chatTurns.value.push({
@@ -332,7 +344,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           payload.topic || t('ai.wsTopicDefault'),
           finalCandidates,
           payload.targetCatId,
-          { ds, ui, app: (ui as any).app },
+          { ds, ui, app },
         )
         if (res.success) {
           card.completed = true
@@ -368,7 +380,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           const res = await healDeadlink(payload.deadBmId, payload.replacement, {
             ds,
             ui,
-            app: (ui as any).app,
+            app,
           })
           if (res.success !== false && !res.message?.includes('取消')) {
             card.completed = true
@@ -395,7 +407,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
         }
         const items = payload.items || []
         if (items.length > 0) {
-          const res = await batchTagBookmarks(items, { ds, ui, app: (ui as any).app })
+          const res = await batchTagBookmarks(items, { ds, ui, app })
           if (res.success && res.taggedCount > 0) {
             card.completed = true
             chatTurns.value.push({

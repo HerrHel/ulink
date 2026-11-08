@@ -59,7 +59,7 @@
             <div class="ai-diff-content">
               <div class="ai-diff-row current">
                 <span class="ai-label-muted">{{ t('ai.diffCurrent') }}:</span>
-                <span>{{ diff.currentTitle }}</span>
+                <span>{{ displayText(diff.currentTitle) }}</span>
               </div>
               <div class="ai-diff-row suggested">
                 <span class="ai-label-muted">{{ t('ai.diffSuggested') }}:</span>
@@ -77,7 +77,7 @@
             <div class="ai-diff-content">
               <div v-if="diff.currentNotes" class="ai-diff-row current">
                 <span class="ai-label-muted">{{ t('ai.diffCurrent') }}:</span>
-                <span class="text-truncate">{{ diff.currentNotes }}</span>
+                <span class="text-truncate">{{ displayText(diff.currentNotes) }}</span>
               </div>
               <div class="ai-diff-row suggested">
                 <span class="ai-label-muted">{{ t('ai.diffSuggested') }}:</span>
@@ -150,6 +150,7 @@ import type { AiEnrichDiff } from '../../types/ai.js'
 import { enrichBookmarkMetadata } from '../../lib/ai/cloudAiClient.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
+import { displayText } from '../../utils.js'
 
 const ui = useUIStore()
 const ds = useDataStore()
@@ -166,7 +167,8 @@ const applyAttributes = ref(true)
 
 const targetBookmark = computed(() => {
   if (!ui.aiEnrichTargetBmId) return null
-  return ds.bookmarkMap[ui.aiEnrichTargetBmId] || null
+  const b = ds.bookmarkMap[ui.aiEnrichTargetBmId]
+  return (b && !b.deletedAt) ? b : null
 })
 
 async function fetchEnrich() {
@@ -230,13 +232,17 @@ watch(
 
 const suggestedCategoryName = computed(() => {
   if (!diff.value?.suggestedCategoryId) return ''
-  return ds.categoryMap[diff.value.suggestedCategoryId]?.name || ''
+  const cat = ds.categoryMap[diff.value.suggestedCategoryId]
+  return (cat?.name ? displayText(cat.name) : '') || ''
 })
 
 const suggestedTagNames = computed(() => {
   if (!diff.value?.suggestedAttrIds?.length) return []
   return diff.value.suggestedAttrIds
-    .map(id => ds.attributeMap[id]?.name)
+    .map(id => {
+      const raw = ds.attributeMap[id]?.name
+      return raw ? displayText(raw) : ''
+    })
     .filter(Boolean) as string[]
 })
 

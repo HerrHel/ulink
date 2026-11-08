@@ -126,11 +126,14 @@ async function loadFromStore() {
   form.showPassword = false
   // 密码解密（与 saveBm 同流程）
   const pw = bm.password
-  if (pw && typeof pw === 'object' && (pw as EncryptedPassword).encrypted) {
+  const isEncryptedPw = Boolean(
+    (pw && typeof pw === 'object' && (pw as EncryptedPassword).encrypted) ||
+    (typeof pw === 'string' && isThreePartCipher(pw))
+  )
+  if (isEncryptedPw) {
     if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
       try {
-        const ep = pw as EncryptedPassword
-        form.password = await decryptPasswordWithKey(ep, e2eStore.cryptoKey as CryptoKey)
+        form.password = await decryptPasswordWithKey(pw, e2eStore.cryptoKey as CryptoKey)
         if (localGen !== _loadGen) return // await 后 gen 失效则不写错表单
       } catch { if (localGen !== _loadGen) return; form.password = '' }
     } else if (e2eStore.isE2EEnabled) {
@@ -142,8 +145,7 @@ async function loadFromStore() {
       if (localGen !== _loadGen) return
       if (unlocked && e2eStore.cryptoKey) {
         try {
-          const ep = pw as EncryptedPassword
-          form.password = await decryptPasswordWithKey(ep, e2eStore.cryptoKey as CryptoKey)
+          form.password = await decryptPasswordWithKey(pw, e2eStore.cryptoKey as CryptoKey)
           if (localGen !== _loadGen) return // 二次 await 后再判一次 gen
         } catch { if (localGen !== _loadGen) return; form.password = '' }
       } else { form.password = '' }
@@ -204,7 +206,15 @@ async function doSave(): Promise<void> {
   // E2E 密文保护：原书签含加密字段（未解锁/解不开保留的密文）时禁止保存——否则空表单
   // 会覆盖原密文并经 saveAppData/push 回写云端丢失。须先解锁（decryptStoreItems 解回明文）。
   const orig = ds.bookmarkMap[props.childId]
-  if (orig && [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
+  const isOrigPasswordEncrypted = Boolean(
+    (orig?.password && typeof orig.password === 'object' && (orig.password as EncryptedPassword).encrypted) ||
+    (typeof orig?.password === 'string' && isThreePartCipher(orig.password))
+  )
+  const hasCipher = orig && (
+    [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f)) ||
+    (isOrigPasswordEncrypted && !e2eStore.isUnlocked)
+  )
+  if (hasCipher) {
     toast(t('modal.childBm.encryptedBlocked'), false)
     return
   }

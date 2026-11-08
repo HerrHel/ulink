@@ -123,6 +123,7 @@ const server = http.createServer(async (req, res) => {
         method: 'GET',
         redirect: 'follow',
         headers: { accept: req.headers.accept || 'text/html,application/xhtml+xml' },
+        signal: AbortSignal.timeout(8000),
       })
     } catch (e) {
       // 上游异常时：优先返回 STALE 兜底缓存

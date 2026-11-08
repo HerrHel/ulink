@@ -17,7 +17,7 @@ import { fetchUrlMetadataAsync } from '../../lib/ai/smartIntake.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
 import { isAiEnabled } from '../../lib/ai/aiEnabled.js'
 import { useEntitlement } from './useEntitlement.js'
-import { safeDecodePassword, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
+import { safeDecodePassword, safeBtoa, encrypt, decryptPasswordWithKey, isThreePartCipher } from '../../crypto.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import type { Bookmark, EncryptedPassword } from '../../types.js'
 import { isDataHydrated } from '../../lib/dataReady.js'
@@ -211,7 +211,11 @@ export async function openBmModal(editId?: string) {
     // 长串回吐进编辑框（用户报的「密码乱码」）。decryptPasswordWithKey 解不开返空串，
     // 与 crypto 的既定展示语义一致，绝不把密文形态泄漏给 UI（其内部已 catch，无需外层 try）。
     const pw = bm?.password
-    if (pw && typeof pw === 'object' && (pw as EncryptedPassword).encrypted) {
+    const isEncryptedPw = Boolean(
+      (pw && typeof pw === 'object' && (pw as EncryptedPassword).encrypted) ||
+      (typeof pw === 'string' && isThreePartCipher(pw))
+    )
+    if (isEncryptedPw) {
       const e2eStore = useE2EStore()
       if (e2eStore.isUnlocked && e2eStore.cryptoKey) {
         bmForm.password = await decryptPasswordWithKey(pw, e2eStore.cryptoKey as CryptoKey)
@@ -266,8 +270,10 @@ export function closeBmModal() {
   const ui = useUIStore()
   ui.modals.bookmark = false
   ui.editingId = null
-  if (ui.lastFocusedEl) ui.lastFocusedEl.focus()
-  ui.lastFocusedEl = null
+  if (ui.lastFocusedEl) {
+    try { ui.lastFocusedEl.focus() } catch { /* 元素可能已卸载 */ }
+    ui.lastFocusedEl = null
+  }
 }
 
 /** A2-004：在途保存锁，防双击产生重复书签 */
@@ -348,7 +354,7 @@ export async function saveBm() {
         return
       } else {
         // E2E 未启用：旧版兼容的 base64（非加密场景的预期形态）
-        storedPassword = btoa(bmForm.password)
+        storedPassword = safeBtoa(bmForm.password)
       }
     }
 
@@ -359,7 +365,7 @@ export async function saveBm() {
       notes: bmForm.notes.trim(),
       icon: bmForm.icon.trim(),
       iconDark: bmForm.iconDark.trim() || undefined,
-      categoryId: bmForm.categoryId,
+      categoryId: bmForm.categoryId || CAT_UNCATEGORIZED,
       parentId: bmForm.parentId || null,
       attributes: { ...bmForm.attributes },
     }
@@ -369,7 +375,15 @@ export async function saveBm() {
       // 编辑框里 displayText 过滤成的空值会覆盖原密文，并经 saveAppData/push 回写云端
       // 覆盖明文，造成不可逆丢失。须先解锁（decryptStoreItems 解回明文）再编辑。
       const orig = ds.bookmarkMap[bmForm.id]
-      if (orig && [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f))) {
+      const isOrigPasswordEncrypted = Boolean(
+        (orig?.password && typeof orig.password === 'object' && (orig.password as EncryptedPassword).encrypted) ||
+        (typeof orig?.password === 'string' && isThreePartCipher(orig.password))
+      )
+      const hasCipher = orig && (
+        [orig.url, orig.title, orig.notes, orig.username].some(f => typeof f === 'string' && f && isThreePartCipher(f)) ||
+        (isOrigPasswordEncrypted && !useE2EStore().isUnlocked)
+      )
+      if (hasCipher) {
         toast(t('modal.childBm.encryptedBlocked'), false)
         return
       }
@@ -742,15 +756,10 @@ export function clearIcon() { clearIconBase(bmForm) }
 function collectSubIds(id: string): string[] {
   const ds = useDataStore()
   const cm = ds.childrenMap
-  if (cm && Object.keys(cm).length > 0) {
-    return collectDescendantIds(pid => cm[pid], id)
-  }
-  // Fallback for when childrenMap is not available (e.g. in tests)
-  let ids = [id]
-  ds.bookmarks.filter(b => b.parentId === id).forEach(c => {
-    ids = ids.concat(collectSubIds(c.id))
-  })
-  return ids
+  return collectDescendantIds(
+    pid => (cm && Object.keys(cm).length > 0 ? cm[pid] : ds.bookmarks.filter(b => b.parentId === pid && !b.deletedAt)),
+    id,
+  )
 }
 
 export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) {
@@ -762,6 +771,9 @@ export async function deleteBookmarkWithUndo(id: string, skipConfirm?: boolean) 
     // 旧实现先 updateGroup 剔组再 delete，导致 memberships 记空，回收站恢复丢组关系（RE-5/DATA-1）。
     // 与 batchDelete 对齐：undo / 回收站统一走 restoreBookmark。
     const ids = collectSubIds(id)
+    if (bmForm.isOpen && (bmForm.id === id || ids.includes(bmForm.id))) {
+      closeBmModal()
+    }
     ids.forEach(bid => ds.deleteBookmark(bid))
     debouncedSaveAppData()
     toastWithUndo(t('msg.bookmarkDeleted'), () => {

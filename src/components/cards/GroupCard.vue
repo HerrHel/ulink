@@ -259,6 +259,29 @@ const colorBtnRef = ref<HTMLElement | null>(null)
 const paletteStyle = ref<Record<string, string>>({})
 const { fmt, colorOpen, syncFmt, fmtToggle: _fmtToggle, applyColor: _applyColor } = useEditorFormat(() => EditorManager.get(props.group.id))
 
+function onGlobalDocClick(e: MouseEvent) {
+  if (!colorOpen.value) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest('.color-palette-popup') || target?.closest('.ft-color-btn')) return
+  colorOpen.value = false
+}
+
+function onGlobalScroll() {
+  if (colorOpen.value) colorOpen.value = false
+}
+
+watch(colorOpen, (open) => {
+  if (open) {
+    document.addEventListener('mousedown', onGlobalDocClick)
+    window.addEventListener('scroll', onGlobalScroll, true)
+    window.addEventListener('resize', onGlobalScroll)
+  } else {
+    document.removeEventListener('mousedown', onGlobalDocClick)
+    window.removeEventListener('scroll', onGlobalScroll, true)
+    window.removeEventListener('resize', onGlobalScroll)
+  }
+})
+
 function toggleColorPalette() {
   if (colorOpen.value) { colorOpen.value = false; return }
   const btn = colorBtnRef.value
@@ -321,8 +344,20 @@ function _detach() {
   }
 }
 
-watch(isFocused, (v) => { v ? _attach() : _detach() }, { immediate: true })
-onBeforeUnmount(() => _detach())
+watch(isFocused, (v) => {
+  if (v) _attach()
+  else {
+    _detach()
+    colorOpen.value = false
+  }
+}, { immediate: true })
+onBeforeUnmount(() => {
+  _detach()
+  if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
+  document.removeEventListener('mousedown', onGlobalDocClick)
+  window.removeEventListener('scroll', onGlobalScroll, true)
+  window.removeEventListener('resize', onGlobalScroll)
+})
 
 function toggleFocus() { toggleGroupFocus(props.group.id) }
 function onDblClick(e: MouseEvent) { if ((e.target as HTMLElement).closest('button, input, [contenteditable], .gic-btn, .gic-remove')) return; toggleGroupFocus(props.group.id) }

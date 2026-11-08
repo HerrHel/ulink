@@ -5,7 +5,7 @@
  */
 import Dexie from 'dexie'
 import { cloneDeep } from '../lib/clone.js'
-import { safeGetItem, safeJsonParse } from '../lib/storageSafe.js'
+import { safeGetItem, safeJsonParse, safeRemoveItem } from '../lib/storageSafe.js'
 
 interface IDBRow {
   key: string
@@ -55,6 +55,9 @@ class LinkVaultDB extends Dexie {
       // pendingOps 是从未存有效 op 的空僵尸表，drop 即可，无数据需迁移。
       try { await tx.table('pendingOps').clear() } catch { /* 表已不存在则略过 */ }
     })
+    this.on?.('versionchange', () => {
+      this.close?.()
+    })
   }
 }
 
@@ -101,6 +104,12 @@ export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>)
       retries: 0,
     }))
     await db.syncOps.bulkAdd(plain)
+    const count = await db.syncOps.count()
+    if (count > 1000) {
+      const overflow = count - 1000
+      const oldestKeys = await db.syncOps.orderBy('id').limit(overflow).primaryKeys()
+      if (oldestKeys.length) await db.syncOps.bulkDelete(oldestKeys as number[])
+    }
   } catch (e) {
     console.warn('[IDB] enqueueSyncOps error:', e)
   }
@@ -170,7 +179,7 @@ export async function clearAllLocalData(): Promise<void> {
     const doomed: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
-      if (k && k.startsWith('lv_')) doomed.push(k)
+      if (k && (k.startsWith('lv_') || k.startsWith('linkvault_'))) doomed.push(k)
     }
     for (const k of doomed) localStorage.removeItem(k)
   } catch (e) {
@@ -187,6 +196,10 @@ export interface LocalHistoryVersion {
 }
 
 export const localHistoryKey = (itemId: string): string => 'lv_hist:' + itemId
+
+export function removeLocalHistory(itemId: string): void {
+  safeRemoveItem(localHistoryKey(itemId))
+}
 
 /**
  * 测试专用：清空持久层（data 表 + syncOps 队列）。

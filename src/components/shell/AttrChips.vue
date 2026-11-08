@@ -2,12 +2,12 @@
   <div class="attr-chips" id="attrChips" ref="chipsRef">
     <span v-for="chip in activeChips" :key="chip.id" class="attr-chip"
           @click="onToggleFilter(chip.id)">
-      <span class="attr-chip-txt">{{ chip.name }}</span>
+      <span class="attr-chip-txt">{{ displayText(chip.name) }}</span>
       <span class="attr-chip-x" aria-hidden="true" v-html="I.close"></span>
     </span>
     <span v-for="chip in excludedChips" :key="chip.id" class="attr-chip attr-chip-excluded"
           @click="onToggleExclude(chip.id)">
-      <span class="attr-chip-txt">{{ chip.name }}</span>
+      <span class="attr-chip-txt">{{ displayText(chip.name) }}</span>
       <span class="attr-chip-x" aria-hidden="true" v-html="I.close"></span>
     </span>
   </div>
@@ -18,6 +18,7 @@ import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useAppStore } from '../../stores/app.js'
 import { toggleAttrFilter, toggleAttrExclude } from '../../composables/domain/useAttrFilter.js'
 import { I } from '../../config/icons.js'
+import { displayText } from '../../utils.js'
 import type { CustomAttribute } from '../../types.js'
 
 const store = useAppStore()

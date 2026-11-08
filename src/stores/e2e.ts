@@ -6,7 +6,7 @@
  * - AES-256-GCM 密钥缓存（Web Crypto API CryptoKey）
  * - 自动锁定定时器（超时 + 后台可见性）
  */
-import { ref, readonly } from 'vue'
+import { ref, shallowRef, readonly } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useE2EStore = defineStore('e2e', () => {
@@ -22,7 +22,7 @@ export const useE2EStore = defineStore('e2e', () => {
    */
   const pendingUnlock = ref<((ok: boolean) => void)[]>([])
   /** 缓存的 AES-256-GCM 密钥 — 仅在 isUnlocked=true 时有效 */
-  const cryptoKey = ref<CryptoKey | null>(null)
+  const cryptoKey = shallowRef<CryptoKey | null>(null)
 
   /**
    * canaryData 云端写失败标记：changeMasterPassword 步骤 9 写 user_security 失败时置 true。
@@ -52,11 +52,13 @@ export const useE2EStore = defineStore('e2e', () => {
   /** 启动无操作自动锁定计时器（每次解锁/操作后调用重置） */
   function resetLockTimer() {
     if (_lockTimer) clearTimeout(_lockTimer)
+    if (!isUnlocked.value) { _lockTimer = null; return }
     _lockTimer = setTimeout(() => { lock() }, LOCK_TIMEOUT)
   }
 
   /** 启动/重启可见性监听（页面隐藏后台过久自动锁定） */
   function initVisibilityLock() {
+    if (typeof document === 'undefined') return
     if (_visibilityHandler) return // 防止重复注册
     _visibilityHandler = () => {
       if (document.visibilityState === 'hidden') {
@@ -77,12 +79,18 @@ export const useE2EStore = defineStore('e2e', () => {
     if (_preLockTimer) { clearTimeout(_preLockTimer); _preLockTimer = null }
   }
 
-  /** 锁定：清除密钥 + 停止所有定时器 */
+  /** 锁定：清除密钥 + 停止所有定时器 + 通知清空等待解锁队列 */
   function lock() {
     cryptoKey.value = null
     isUnlocked.value = false
     if (_lockTimer) { clearTimeout(_lockTimer); _lockTimer = null }
     if (_preLockTimer) { clearTimeout(_preLockTimer); _preLockTimer = null }
+    if (pendingUnlock.value.length > 0) {
+      const pending = pendingUnlock.value.splice(0)
+      for (const resolve of pending) {
+        try { resolve(false) } catch { /* ignore */ }
+      }
+    }
   }
 
   /** 清空所有定时器（用于组件卸载等清理场景） */

@@ -11,6 +11,7 @@ import { CAT_UNCATEGORIZED } from '../../../config/constants.js'
 import { pushUndoAction } from '../siteUndoStack.js'
 import { parseCatIntent } from '../siteIntents.js'
 import { t, tN } from '../../../i18n/index.js'
+import { useAppStore } from '../../../stores/app.js'
 import type { Category } from '../../../types.js'
 import type { SiteCommandBlock, SiteCommandBlockCtx, SiteCommandResult } from './types.js'
 
@@ -20,7 +21,7 @@ export const catBlock: SiteCommandBlock = (
 ): SiteCommandResult | null => {
   const query = ctx.query
   const ds = ctx.ds
-  const app = ctx.app
+  const app = ctx.app ?? useAppStore()
   const catIntent = parseCatIntent(query)
   if (catIntent?.kind === 'list') {
     const activeCats = ds.categories.filter((c: Category) => !c.deletedAt)

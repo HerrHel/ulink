@@ -43,6 +43,7 @@ import type { AbortControllerSlot } from './useAiChatSessions.js'
 import type { useI18n } from '../../i18n/index.js'
 import type { useDataStore } from '../../stores/data.js'
 import type { useUIStore } from '../../stores/ui.js'
+import { useAppStore } from '../../stores/app.js'
 import type { AiSearchPreference } from '../../types/ai.js'
 import { reactive, type Ref, type ComputedRef } from 'vue'
 
@@ -73,7 +74,17 @@ export interface AiChatSubmitContext {
   showAiTab?: () => void
 }
 
+function resolveAppStore() {
+  try {
+    if (typeof useAppStore === 'function') return useAppStore()
+  } catch {
+    // 兼容部分仅 mock 了 saveAppData 的测试沙箱
+  }
+  return { save: () => {} } as unknown as ReturnType<typeof useAppStore>
+}
+
 export function useAiChatSubmit(context: AiChatSubmitContext) {
+  const app = resolveAppStore()
   const {
     ds,
     ui,
@@ -205,6 +216,10 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     aiQuery.value = ''
     onQueryChanged?.()
 
+    // 捕获局部 controller 引用：提前初始化供多媒体预处理及流式全程取消守护
+    const controller = new AbortController()
+    abortSlot.current = controller
+
     // 构建发给模型的完整提示词（内嵌详细卡片与多模态附件材料）
     const cardSection = resolvedCards.length > 0 ? formatAttachedCardsForPrompt(resolvedCards, isZh.value) : ''
     // 统一媒体入口：图片/视频/音频都从这里走；按用户问题决定「直接看图」还是「ASR/OCR 深度解析」
@@ -216,11 +231,24 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     if (attachedFiles.some((f) => f.type === 'image' || f.type === 'video' || f.type === 'audio')) {
       loadingTextKey.value = 'ai.deepProcessing'
       const authStore = useAuthStore()
-      unifiedMedia = await prepareUnifiedMedia(attachedFiles, raw, String(authStore.user?.id || ''), {
-        onProgress: () => {
-          loadingTextKey.value = 'ai.deepProcessing'
-        },
-      })
+      try {
+        unifiedMedia = await prepareUnifiedMedia(attachedFiles, raw, String(authStore.user?.id || ''), {
+          onProgress: () => {
+            loadingTextKey.value = 'ai.deepProcessing'
+          },
+        })
+      } catch (mediaErr: any) {
+        console.warn('[ulink AI] prepareUnifiedMedia failed:', mediaErr)
+        toast(mediaErr?.message || t('ai.searchFailed'), false)
+        aiLoading.value = false
+        abortSlot.current = null
+        return
+      }
+      if (controller.signal.aborted) {
+        aiLoading.value = false
+        abortSlot.current = null
+        return
+      }
       loadingTextKey.value = 'ai.thinking'
     }
     const fileSection = attachedFiles.length > 0 ? formatAttachedFilesForPrompt(attachedFiles, isZh.value) : ''
@@ -271,11 +299,6 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     chatTurns.value.push(assistantTurn)
     onTurnsChanged?.()
 
-    // 捕获局部 controller 引用：handleStopGenerating 会把 currentAbortController 置 null，
-    // 在途代码必须读自己的 controller.signal，否则「停止生成」实际不生效
-    const controller = new AbortController()
-    abortSlot.current = controller
-
     // 本轮是否失败收尾：错误轮次不得再挂载「换个方案 / 存为卡片」等预判胶囊
     let replyFailed = false
     const failTurn = (err: unknown) => {
@@ -297,7 +320,7 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
 
     try {
       // 优先尝试站内指令/In-App Agent CLI 调度（传 abort 信号：停止生成后不再执行命令副作用）
-      const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app: (ui as any).app, signal: controller.signal })
+      const siteCmd = await dispatchSiteCommand(raw, { ds, ui, app, signal: controller.signal })
       if (controller.signal.aborted) return
       if (siteCmd.handled) {
         assistantTurn.loading = false
@@ -932,8 +955,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       failTurn(err)
     } finally {
       // 兜底收尾：任何路径遗留的思考气泡（如 abort 竞态）一律置为已停止，防悬挂
-      if (assistantTurn.loading) {
+      if (assistantTurn.loading || assistantTurn.isThinking) {
         assistantTurn.loading = false
+        assistantTurn.isThinking = false
         if (!assistantTurn.content) assistantTurn.content = t('ai.stopped')
       }
 
