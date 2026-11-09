@@ -63,6 +63,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.ai_quota_check(text) FROM PUBLIC;
+-- 【2026-11-09 已证伪】云函数身份实为 service_role；ai_quota_check 已在
+-- 20261109000006 改为「登录用户仅可查自己 + 仅 service_role/authenticated 可执行」。
 -- 云函数 rdb 身份是 anon/authenticated（见 20261028000010 批 8 的教训）
 GRANT EXECUTE ON FUNCTION public.ai_quota_check(text) TO anon, authenticated, service_role;
 

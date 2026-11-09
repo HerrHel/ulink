@@ -393,6 +393,10 @@ COMMENT ON FUNCTION public.get_payment_order(text, text) IS
 
 REVOKE ALL ON FUNCTION public.list_purchase_plans() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_payment_order(text, text) FROM PUBLIC;
+-- ⚠️ 【2026-11-09 已证伪】下方「云函数身份是 anon/authenticated」的判断不成立：
+--    生产 ACL 显示 resolve_entitlement / reserve_quota / settle_quota 只有 service_role 有权，
+--    而 extract-video / mimo-chat 线上正常调用 → 云函数身份是 service_role。
+--    按 uid 的敏感 RPC 已在 20261109000005 / 000006 收回公网角色（见那两个迁移）。
 -- ⚠️ 必须 GRANT anon + authenticated：云函数 node-sdk 的 rdb 走 tcbopenapi 身份，
 -- 映射到的 DB 角色是 anon/authenticated 而非 service_role —— 只 GRANT service_role
 -- 会在云端收到 42501 permission denied（本地管理员身份直查是通的，掩盖了这点）。
