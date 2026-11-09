@@ -813,6 +813,13 @@ async function handleDeepSubmit(req, res, cors, body, db, signal) {
     return
   }
 
+  // deep 分支的 URL 同样会被 worker 代下载，仅字符串校验挡不住 DNS 重绑定：
+  // 与主流程同口径做一次 DNS/私网校验，避免打到内网或云元数据端点。
+  if (!(await isUrlDnsSafe(parsed, nodeDnsResolver))) {
+    sendJson(res, 400, { error: '目标 DNS 解析到内网地址或无法解析', code: 'private_dns' }, cors)
+    return
+  }
+
   // 先确认 worker 可用再扣额度：worker 未配置时直接 503，不白烧用户当日深度额度
   if (!workerOrigin()) {
     console.error('[extract-video] deep submit: VIDEO_WORKER_URL 未配置')

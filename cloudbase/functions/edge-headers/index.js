@@ -22,7 +22,7 @@ const STATIC_ORIGIN = (process.env.STATIC_ORIGIN || 'https://ulink-d1g5srvjo54b1
 /** 与 vite securityMetaPlugin 的 CSP 保持一致，并补上 meta 不支持的 frame-ancestors */
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  "script-src 'self' 'wasm-unsafe-eval'",
   "frame-src 'self'",
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",

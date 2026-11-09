@@ -78,4 +78,30 @@ describe('2026-11-09 回归护栏', () => {
   it('5xx 不再无条件重试（服务端已预扣，重试会放大计费）', () => {
     expect(read('src/lib/ai/mimoStream.ts')).toContain("x-ulink-retry-safe")
   })
+
+  it('CSP 副本同步放行 WASM，但绝不引入 unsafe-eval', () => {
+    const vite = read('vite.config.ts')
+    for (const [name, src] of [
+      ['vite', vite],
+      ['edge-headers', read('cloudbase/functions/edge-headers/index.js')],
+      ['_headers', read('public/_headers')],
+    ] as const) {
+      expect(src, name + ' 缺少 wasm-unsafe-eval').toContain("'wasm-unsafe-eval'")
+    }
+    expect(vite).not.toContain("script-src 'self' 'unsafe-eval'")
+  })
+
+  it('extract-video 的 action=deep 分支也做 DNS/私网校验', () => {
+    const s = read('cloudbase/functions/extract-video/index.js')
+    const a = s.indexOf('async function handleDeepSubmit')
+    expect(a).toBeGreaterThan(0)
+    const body = s.slice(a, a + 2500)
+    expect(body).toContain('isUrlDnsSafe')
+    expect(body).toContain('private_dns')
+  })
+
+  it('AI 工具 runner 返回 success=false 时不会被判成 executed', () => {
+    expect(read('src/lib/ai/toolResult.ts')).toContain('DYNAMIC_NOT_EXECUTED_PREFIX')
+    expect(read('src/composables/domain/useAiChatAgent.ts')).toContain('DYNAMIC_NOT_EXECUTED_PREFIX')
+  })
 })

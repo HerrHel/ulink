@@ -100,7 +100,7 @@ const securityHeaders: Record<string, string> = {
   // 风险可控。生产部署（GitHub Pages 不带 CSP 头）不受影响。
   'Content-Security-Policy': [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "frame-src 'self'",
     "worker-src 'self' blob:",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",

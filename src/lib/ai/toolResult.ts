@@ -39,8 +39,12 @@ export const HARDCODED_NOT_EXECUTED_TEXTS = {
   fetchException: (reason: string) => `抓取网页异常：${reason}`,
 }
 
+/** runner 返回 res.success=false 时的动态消息前缀；产出方与判定方共用，避免误报 executed */
+export const DYNAMIC_NOT_EXECUTED_PREFIX = '未执行：'
+
 /** 上述硬编码失败文案的前缀（覆盖含动态原因分支），供 inferToolExecStatus 兜底前缀匹配 */
 export const NOT_EXECUTED_TEXT_PREFIXES: readonly string[] = [
+  DYNAMIC_NOT_EXECUTED_PREFIX,
   '未提供待打标书签列表，未执行打标。',
   '未匹配到可打标的书签。',
   '书签库中未找到与',

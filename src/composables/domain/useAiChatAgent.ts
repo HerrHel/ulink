@@ -26,7 +26,7 @@ import {
 } from '../../lib/ai/videoExtract.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
 // 硬编码失败文案统一取自 toolResult 登记常量，与状态判定兜底同源，保证失败不报成功
-import { HARDCODED_NOT_EXECUTED_TEXTS } from '../../lib/ai/toolResult.js'
+import { HARDCODED_NOT_EXECUTED_TEXTS, DYNAMIC_NOT_EXECUTED_PREFIX } from '../../lib/ai/toolResult.js'
 
 
 import type { useI18n } from '../../i18n/index.js'
@@ -261,26 +261,26 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
             payload: { items },
           }
         } else {
-          resultText = res.message || HARDCODED_NOT_EXECUTED_TEXTS.batchTagNone
+          resultText = `${DYNAMIC_NOT_EXECUTED_PREFIX}${res.message || HARDCODED_NOT_EXECUTED_TEXTS.batchTagNone}`
         }
       }
     } else if (call.name === 'manage_categories') {
       const res = await executeManageCategories((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
-      resultText = res.message
+      resultText = res.success ? res.message : `${DYNAMIC_NOT_EXECUTED_PREFIX}${res.message}`
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })
       }
     } else if (call.name === 'manage_tags') {
       const res = await executeManageTags((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
-      resultText = res.message
+      resultText = res.success ? res.message : `${DYNAMIC_NOT_EXECUTED_PREFIX}${res.message}`
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })
       }
     } else if (call.name === 'manage_bookmarks') {
       const res = await executeManageBookmarks((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
-      resultText = res.message
+      resultText = res.success ? res.message : `${DYNAMIC_NOT_EXECUTED_PREFIX}${res.message}`
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })
@@ -298,7 +298,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       }
     } else if (call.name === 'manage_workspaces') {
       const res = await executeManageWorkspaces((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
-      resultText = res.message
+      resultText = res.success ? res.message : `${DYNAMIC_NOT_EXECUTED_PREFIX}${res.message}`
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })
@@ -316,7 +316,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
       }
     } else if (call.name === 'manage_settings') {
       const res = await executeManageSettings((call.arguments || {}) as any, { ds, ui, app, signal: controller.signal })
-      resultText = res.message
+      resultText = res.success ? res.message : `${DYNAMIC_NOT_EXECUTED_PREFIX}${res.message}`
       if (res.success) {
         if (!assistantTurn.steps) assistantTurn.steps = []
         assistantTurn.steps.push({ text: res.message, done: true })

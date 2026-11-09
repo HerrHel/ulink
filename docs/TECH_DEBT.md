@@ -8,7 +8,7 @@
 
 | # | 级别 | 问题 | 处理结果（2026-10-31） |
 |---|---|---|---|
-| 1 | **P0** | **生产安全响应头**：`ulink.ren` 无 CSP / XCTO / Referrer / Permissions-Policy（CloudBase 静态托管不支持自定义响应头） | ✅ **已补齐（入口页）**：新增云函数 `edge-headers` 反代 `/app` 与 `/legal/*`，下发 CSP（含 `frame-ancestors 'self'`）、XCTO、XFO、Referrer、HSTS；分享页 `/s/*` 由 `share-ssr` 下发 XCTO/XFO；首页 `/` 由 `securityMetaPlugin` 注入 meta CSP/Referrer。**决策（2026-10-31）**：`/`（营销页）无登录/付费/删除等敏感操作，**接受现状**、不为此把全部静态资源反代进函数；如未来上境内 CDN/EdgeOne，再统一加响应头。`check:prod` 已覆盖 `/app`、`/legal` 探测 |
+| 1 | **P0** | **生产安全响应头**：`ulink.ren` 无 CSP / XCTO / Referrer / Permissions-Policy（CloudBase 静态托管不支持自定义响应头） | ✅ **已补齐（入口页）**：新增云函数 `edge-headers` 反代 `/app` 与 `/legal/*`，下发 CSP（含 `frame-ancestors 'self'`）、XCTO、XFO、Referrer、HSTS；分享页 `/s/*` 由 `share-ssr` 下发 XCTO/XFO；首页 `/` 由 `securityMetaPlugin` 注入 meta CSP/Referrer。**决策（2026-10-31）**：`/`（营销页）无登录/付费/删除等敏感操作，**接受现状**、不为此把全部静态资源反代进函数；如未来上境内 CDN/EdgeOne，再统一加响应头。`check:prod` 已覆盖 `/app`、`/legal` 探测。**2026-11-09 复核**：网关 `ulink.ren` 域 `/` → `STATIC_STORE` 是所有路径的兜底路由，改成 WEB_SCF 会把 `/assets/*` 一并代理进云函数导致整站静态资源失效；`edge-headers` 的 `isAllowed()` 已放行 `/`、`/index.html` 等 HTML 入口但**故意不改路由**，维持「接受现状」的决策，待上境内 CDN/EdgeOne 再统一加响应头（路由快照见 `.workbuddy/routes-backup.json`） |
 | 2 | **P0** | **`pay` 云函数 `Update failed`** | ✅ **已修复**：2026-10-31 `node scripts/deploy-cloudbase-fn.mjs pay` 重新部署，`fn detail` 状态 `Active`、ModTime `21:31`；路由 `/pay` 仍为 WEB_SCF |
 | 3 | **P1** | **视频深度额度迁移未应用**（`plans.features.video.deep.daily` 为 null） | ✅ **已修复**：2026-10-31 应用 `20261030000001_video_deep_quota.sql`；现 free=0、PRO 各档=2（`test_1fen` 为测试档，未改）。`20261031000001`（退额度）此前已应用 |
 | 4 | **P1** | **文档状态与现网相反** | ✅ 2026-10-31 已批量修正：根文档 + 计费/支付/AI/品牌/视频/分享/备案/supabase README 等 20+ 篇；同步给 `pay` 文档补 transactions 说明 |
