@@ -57,6 +57,42 @@ if (envOnly && !apiKey) {
   process.exit(1)
 }
 
+/**
+ * maintenance 依赖定时触发器跑「每日备份 + 数据清理」。触发器不在代码里，
+ * 一旦丢失（重建函数、手动删触发器）备份会**静默停摆**——2026-11-09 实际发生过：
+ * db_backup 只有建表当天（11-03）一份，之后 6 天无新备份，而函数本身完全正常
+ * （手动调 fn_create_db_backup 立即成功）。部署时幂等确保触发器存在。
+ */
+function ensureDailyBackupTrigger() {
+  const TRIGGER = 'daily-maintenance'
+  const CRON = '0 0 3 * * * *' // 7 位，北京时间 03:00
+  try {
+    const raw = String(tcb(ROOT, ['fn', 'detail', 'maintenance', '--json']) || '')
+    const parsed = JSON.parse(raw)
+    const info = parsed.data || parsed
+    const list = Array.isArray(info.Triggers) ? info.Triggers : []
+    if (list.some((t) => t && t.TriggerName === TRIGGER)) {
+      console.log(`✔ 每日备份触发器 ${TRIGGER} 已存在`)
+      return
+    }
+    console.log(`⚠ 未找到每日备份触发器 ${TRIGGER}，正在创建…`)
+  } catch (e) {
+    console.log('⚠ 查询触发器失败，尝试直接创建：', String((e && e.message) || e).slice(0, 120))
+  }
+  try {
+    tcb(ROOT, ['fn', 'trigger', 'create', 'maintenance', '--trigger-name', TRIGGER, '--cron', CRON])
+    console.log(`✔ 已创建每日备份触发器 ${TRIGGER}（${CRON}）`)
+  } catch (e) {
+    const out = String((e && (e.stdout || e.message)) || e)
+    // 已存在不算失败（并发部署 / CLI 判定差异）
+    if (/exist|已存在|duplicate/i.test(out)) {
+      console.log(`✔ 每日备份触发器 ${TRIGGER} 已存在`)
+      return
+    }
+    throw e
+  }
+}
+
 /** 在 tcb 工作目录跑命令；cwd 决定它在哪找 scf_bootstrap / cloudbaserc.json */
 function tcb(cwd, argv) {
   const directJs = resolve(homedir(), '.workbuddy/binaries/node/cli-connector-packages/node_modules/@cloudbase/cli/bin/tcb')
@@ -408,6 +444,11 @@ if (!envOnly && !isEventFn) {
   } catch (e) {
     console.log('⚠ 路由类型修正失败（若已是 WEB_SCF 可忽略）:', String(e.stdout || e.message).slice(0, 200))
   }
+}
+
+// ── 4) maintenance：确保每日备份触发器存在（丢失会让备份静默停摆）──
+if (!envOnly && fnName === 'maintenance') {
+  ensureDailyBackupTrigger()
 }
 
 console.log(`\n访问地址: https://${envId}.service.tcloudbase.com${httpPath}`)

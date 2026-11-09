@@ -9,6 +9,10 @@ on:
     branches: ["**"]
   # 手动触发：用于重新部署（如线上被旧版本覆盖）或单纯验证部署链路，无代码变更也能跑
   workflow_dispatch:
+# 最小权限：所有 job 只需要读仓库。写权限一律不授予，
+# 降低供应链投毒（恶意依赖在 CI 内执行）后可造成的破坏面。
+permissions:
+  contents: read
 jobs:
   lint-test:
     runs-on: ubuntu-latest
@@ -118,6 +122,9 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
+    # CLOUDBASE_APIKEY 是部署唯一的长期凭据。建议在仓库 Settings → Environments 建
+    # 一个 production 环境并设为本 job 的 environment，开启 required reviewers：
+    # 这样即使 CI 内某依赖被投毒，也无法在无人审批的情况下直接取到密钥。
     env:
       ENV_ID: ulink-d1g5srvjo54b1886a
     steps:
