@@ -276,7 +276,15 @@ export async function findSimilarWebsites(
   categories: Category[] = [],
   attributes: CustomAttribute[] = []
 ): Promise<AiCandidateBookmark[]> {
-  if (!targetUrl || isThreePartCipher(targetUrl) || isPrivateUrl(targetUrl)) {
+  if (!targetUrl || isThreePartCipher(targetUrl)) {
+    return []
+  }
+  const testUrl = /^https?:\/\//i.test(targetUrl)
+    ? targetUrl
+    : targetUrl.includes('://')
+      ? targetUrl
+      : `https://${targetUrl}`
+  if (isPrivateUrl(testUrl)) {
     return []
   }
   const safeTitle = isThreePartCipher(targetTitle) ? '' : targetTitle

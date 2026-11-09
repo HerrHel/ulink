@@ -357,6 +357,11 @@ export function useE2E() {
     // await 而非 fire-and-forget：unlock 真正完成补解密再返，调用方拿到「已就绪」状态，
     // 避免 UI 立刻读 store 仍见密文的瞬时窗口。
     try { await decryptStoreItems() } catch (e) { console.warn('[e2e] decryptStoreItems after unlock failed:', e) }
+    // 解锁成功：放行所有正在排队等待解锁的回调
+    const pending = e2eStore.pendingUnlock ? e2eStore.pendingUnlock.splice(0) : []
+    for (const resolve of pending) {
+      try { resolve(true) } catch { /* ignore */ }
+    }
     // 解锁后重推锁定期间积压队列：锁定态下带敏感字段的 upsert op 被 pushFromQueue 静默跳过
     // 留 syncOps 队列（见 syncPush lockedItemKeys 分支），unlock 前 key 不在内存、推不上去；
     // unlock 后 key 就绪，立即 fire 一次 push 把队列清空。否则这批 op 要等下次 autoSync

@@ -101,6 +101,7 @@ export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>)
       ...op,
       // 深度脱 reactive Proxy，避免 IndexedDB 结构化克隆 DataCloneError
       data: op.data ? cloneDeep(op.data) : null,
+      ts: typeof op.ts === 'number' && Number.isFinite(op.ts) ? op.ts : Date.now(),
       retries: 0,
     }))
     await db.syncOps.bulkAdd(plain)
@@ -121,6 +122,15 @@ export async function drainSyncOps(): Promise<SyncOp[]> {
   } catch (e) {
     console.warn('[IDB] drainSyncOps error:', e)
     return []
+  }
+}
+
+export async function removeSyncOpsByItemId(itemId: string): Promise<void> {
+  if (!itemId) return
+  try {
+    await db.syncOps.where('itemId').equals(itemId).delete()
+  } catch (e) {
+    console.warn('[IDB] removeSyncOpsByItemId error:', e)
   }
 }
 
@@ -179,7 +189,7 @@ export async function clearAllLocalData(): Promise<void> {
     const doomed: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
-      if (k && (k.startsWith('lv_') || k.startsWith('linkvault_'))) doomed.push(k)
+      if (k && (k.startsWith('lv_') || k.startsWith('linkvault_') || k.startsWith('ulink_'))) doomed.push(k)
     }
     for (const k of doomed) localStorage.removeItem(k)
   } catch (e) {

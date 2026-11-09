@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, h } from 'vue'
 
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
@@ -9,7 +9,16 @@ import { useE2EStore } from '../../stores/e2e.js'
 import { useContextMenuStore } from '../../stores/contextMenu.js'
 import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAppStore } from '../../stores/app.js'
+import { useAuthStore } from '../../stores/auth.js'
 import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
+import { useEntitlement, ENTITLEMENT_CACHE_KEY } from '../../composables/domain/useEntitlement.js'
+import { safeSetItem, safeGetItem } from '../../lib/storageSafe.js'
+import { ambientHub } from '../../lib/ai/ambientInsights.js'
+import { useInlineRename } from '../../composables/ui/useInlineRename.js'
+import ErrorBoundary from '../../components/ui/ErrorBoundary.vue'
+import DetailPanel from '../../components/shell/DetailPanel.vue'
+import ChatInputDock from '../../components/chat/ChatInputDock.vue'
+import PurchaseModal from '../../components/modals/PurchaseModal.vue'
 
 vi.mock('../../lib/toast.js', () => ({
   toast: vi.fn(),
@@ -872,5 +881,274 @@ describe('模块 6：界面交互、组件体系与 TipTap 编辑器深度审计
     expect(wrapper.text()).not.toContain(cipher)
     expect(wrapper.text()).toContain('••••••')
     wrapper.unmount()
+  })
+
+  // ── 33. UserPopover: 退出登录时安全调用 entService.clear() 且不抛 ReferenceError ──
+  it('33. UserPopover: 退出登录时调用 entService.clear() 清理会员缓存且不报未定义错误', async () => {
+    const authStore = useAuthStore()
+    const upStore = useUserPopoverStore()
+    const entService = useEntitlement()
+
+    authStore.user = { id: 'user_audit_6', email: 'test@example.com' } as any
+    upStore.open = true
+
+    // 设置缓存
+    safeSetItem(ENTITLEMENT_CACHE_KEY, JSON.stringify({ isPaid: true, planId: 'pro_monthly', status: 'active' }))
+    expect(safeGetItem(ENTITLEMENT_CACHE_KEY)).not.toBeNull()
+
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+
+    // 触发退出登录：必须安全执行 entService.clear() 并清空缓存，绝不抛 ENTITLEMENT_CACHE_KEY ReferenceError
+    const logoutBtn = document.body.querySelector('.up-danger-item') as HTMLElement | null
+    expect(logoutBtn).not.toBeNull()
+    logoutBtn?.click()
+    await flushPromises()
+
+    expect(entService.isPaid.value).toBe(false)
+    expect(safeGetItem(ENTITLEMENT_CACHE_KEY)).toBeNull()
+    wrapper.unmount()
+  })
+
+  // ── 34. ErrorBoundary: 异常捕获时妥善释放 useE2EStore 的 pendingUnlock Promise ──
+  it('34. ErrorBoundary: 异常捕获时通过 useE2EStore 释放 pendingUnlock 避免永挂', async () => {
+    const e2eStore = useE2EStore()
+    let resolvedValue: boolean | undefined = undefined
+    e2eStore.pendingUnlock.push((val) => { resolvedValue = val })
+
+    const CrashingChild = {
+      template: '<div>{{ crash() }}</div>',
+      methods: {
+        crash() {
+          throw new Error('Test crash in child component')
+        },
+      },
+    }
+
+    const wrapper = mount(ErrorBoundary, {
+      slots: {
+        default: () => h(CrashingChild),
+      },
+    })
+    await nextTick()
+
+    expect(wrapper.find('.error-boundary-fallback').exists()).toBe(true)
+    expect(resolvedValue).toBe(false)
+    expect(e2eStore.pendingUnlock.length).toBe(0)
+    wrapper.unmount()
+  })
+
+  // ── 35. DetailPanel: aiAttachedCards 监听正确识别 first.type === 'bm' ──
+  it('35. DetailPanel: aiAttachedCards 挂载书签时识别 first.type === "bm" 并触发 serendipity 探查', async () => {
+    const ds = useDataStore()
+    const ui = useUIStore()
+    const serendipitySpy = vi.spyOn(ambientHub, 'triggerSerendipityCheck')
+
+    const bm = makeBm({ id: 'bm_serendipity_test', title: 'Serendipity Target', url: 'https://example.com' })
+    ds.bookmarks = [bm]
+
+    const wrapper = mount(DetailPanel)
+    await nextTick()
+
+    ui.aiAttachedCards = [{ type: 'bm', id: 'bm_serendipity_test' }]
+    await nextTick()
+
+    expect(serendipitySpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'bm_serendipity_test' }), expect.any(Array))
+    serendipitySpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  // ── 36. ChatInputDock: 正确渲染卡片分类附件胶囊 ──
+  it('36. ChatInputDock: 支持卡片附件类型为 "cat" 并渲染分类胶囊', async () => {
+    const query = ref('')
+    const focused = ref(false)
+    const activeIndex = ref(0)
+    const textareaRef = ref<HTMLTextAreaElement | null>(null)
+
+    const wrapper = mount(ChatInputDock, {
+      props: {
+        attachedCardsList: [{ type: 'cat', id: 'cat_tech', title: '技术架构', url: '' }],
+        slashItems: [],
+        showSlash: false,
+        aiLoading: false,
+        textareaRef,
+        query: query.value,
+        focused: focused.value,
+        activeIndex: activeIndex.value,
+        'onUpdate:query': (val: string) => { query.value = val },
+        'onUpdate:focused': (val: boolean) => { focused.value = val },
+        'onUpdate:activeIndex': (val: number) => { activeIndex.value = val },
+      },
+    })
+    await nextTick()
+
+    const catPill = wrapper.find('.pill-cat')
+    expect(catPill.exists()).toBe(true)
+    expect(catPill.text()).toContain('技术架构')
+    wrapper.unmount()
+  })
+
+  // ── 37. PurchaseModal: selectedCycle 周期筛选正常工作 ──
+  it('37. PurchaseModal: 周期筛选正确过滤 monthly/quarterly/yearly', async () => {
+    const wrapper = mount(PurchaseModal, {
+      props: {
+        visible: true,
+        currentPlanId: 'free',
+      },
+    })
+    await nextTick()
+
+    expect(wrapper.exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  // ── 38. useInlineRename: 接收 appStore 与 setEditInputRef 回调安全运行 ──
+  it('38. useInlineRename: 接收标准 store 与 ref 设置回调无类型阻碍与异常', async () => {
+    const store = useAppStore()
+    const { editingId, editingName, startRename, setEditInputRef, cancelRename } = useInlineRename(store, 'renameCategory')
+
+    startRename({ id: 'cat_1', name: '旧分类名称' })
+    expect(editingId.value).toBe('cat_1')
+    expect(editingName.value).toBe('旧分类名称')
+
+    const inputEl = document.createElement('input')
+    setEditInputRef(inputEl)
+
+    cancelRename()
+    expect(editingId.value).toBeNull()
+  })
+  // ── 39. appStore: e2eUnlockInitialMode 属性代理并双向同步到 uiStore ──
+  it('39. appStore: e2eUnlockInitialMode 属性代理并双向同步到 uiStore', () => {
+    const appStore = useAppStore()
+    const uiStore = useUIStore()
+
+    expect(appStore.e2eUnlockInitialMode).toBe('unlock')
+    appStore.e2eUnlockInitialMode = 'changePw'
+    expect(uiStore.e2eUnlockInitialMode).toBe('changePw')
+
+    uiStore.e2eUnlockInitialMode = 'reset'
+    expect(appStore.e2eUnlockInitialMode).toBe('reset')
+  })
+
+  // ── 40. EdgeStagingSidebar: 删除当前速览条目或清空暂存架时联动关闭 quickLook ──
+  it('40. EdgeStagingSidebar: 删除当前速览条目或清空暂存架时联动关闭 quickLook', async () => {
+    const EdgeStagingSidebar = (await import('../../components/shell/EdgeStagingSidebar.vue')).default
+    const ui = useUIStore()
+    const ds = useDataStore()
+
+    ds.bookmarks = [
+      makeBm({ id: 'bm_staged_1', title: 'Staged 1', url: 'https://staged1.com' }),
+      makeBm({ id: 'bm_staged_2', title: 'Staged 2', url: 'https://staged2.com' }),
+    ]
+    ui.detailCards = ['bm_staged_1', 'bm_staged_2']
+    ui.quickLookBmId = 'bm_staged_1'
+    ui.modals.quickLook = true
+
+    const wrapper = mount(EdgeStagingSidebar, { attachTo: document.body })
+    await nextTick()
+
+    // 找到 staged-card-row 并点击删除第一项
+    const removeBtns = wrapper.findAll('.staged-act-btn.remove')
+    expect(removeBtns.length).toBe(2)
+
+    await removeBtns[0].trigger('click')
+    await nextTick()
+
+    expect(ui.detailCards).toEqual(['bm_staged_2'])
+    expect(ui.modals.quickLook).toBe(false)
+    expect(ui.quickLookBmId).toBeNull()
+
+    // 测试清空全部
+    ui.quickLookBmId = 'bm_staged_2'
+    ui.modals.quickLook = true
+    const clearBtn = wrapper.find('.dock-foot-btn.clear-all')
+    expect(clearBtn.exists()).toBe(true)
+
+    await clearBtn.trigger('click')
+    await nextTick()
+
+    expect(ui.detailCards.length).toBe(0)
+    expect(ui.modals.quickLook).toBe(false)
+    wrapper.unmount()
+  })
+
+  // ── 41. TrashPanel: 部分选中时通过 DOM 属性 .indeterminate 显示半选状态 ──
+  it('41. TrashPanel: 部分选中时通过 DOM 属性 .indeterminate 显示半选状态', async () => {
+    const ds = useDataStore()
+    ds.bookmarks = [
+      makeBm({ id: 'bm_t1', title: 'Trash 1', deletedAt: 100 }),
+      makeBm({ id: 'bm_t2', title: 'Trash 2', deletedAt: 200 }),
+    ]
+
+    const wrapper = mount(TrashPanel, {
+      props: { open: true },
+      attachTo: document.body,
+    })
+    await nextTick()
+
+    const itemChecks = wrapper.findAll('.trash-item-check')
+    expect(itemChecks.length).toBe(2)
+
+    // 选中第一项
+    await itemChecks[0].setValue(true)
+    await nextTick()
+
+    const selectAllInput = wrapper.find('.trash-batch-all input').element as HTMLInputElement
+    expect(selectAllInput.checked).toBe(false)
+    expect(selectAllInput.indeterminate).toBe(true)
+
+    // 选中第二项（全选）
+    await itemChecks[1].setValue(true)
+    await nextTick()
+
+    expect(selectAllInput.checked).toBe(true)
+    expect(selectAllInput.indeterminate).toBe(false)
+    wrapper.unmount()
+  })
+
+  // ── 42. BookmarkCard & GroupCard: 图标操作按钮均具有标准 aria-label 属性 ──
+  it('42. BookmarkCard & GroupCard: 图标操作按钮均具有标准 aria-label 属性', async () => {
+    const ds = useDataStore()
+    const bm = makeBm({ id: 'bm_aria', title: 'Aria BM', username: 'user1', password: 'pw1' })
+    ds.bookmarks = [bm]
+
+    const bmWrapper = mount(BookmarkCard, {
+      props: { bookmark: bm },
+    })
+    await nextTick()
+
+    const editBtn = bmWrapper.find('.card-actions .btn-xs:nth-child(2)')
+    expect(editBtn.attributes('aria-label')).toBeTruthy()
+    const delBtn = bmWrapper.find('.card-actions .btn-danger')
+    expect(delBtn.attributes('aria-label')).toBeTruthy()
+
+    bmWrapper.unmount()
+
+    const grp = {
+      id: 'g_aria',
+      name: 'Aria Group',
+      categoryId: 'c1',
+      icon: '',
+      order: 0,
+      useCount: 0,
+      isExpanded: true,
+      attributes: {},
+      bookmarkIds: [],
+      notes: '',
+      updatedAt: 1000,
+    }
+    ds.siblingGroups = [grp]
+
+    const grpWrapper = mount(GroupCard, {
+      props: { group: grp },
+    })
+    await nextTick()
+
+    const grpEditBtn = grpWrapper.find('.card-actions .btn-xs:nth-child(2)')
+    expect(grpEditBtn.attributes('aria-label')).toBeTruthy()
+    const grpDelBtn = grpWrapper.find('.card-actions .btn-danger')
+    expect(grpDelBtn.attributes('aria-label')).toBeTruthy()
+
+    grpWrapper.unmount()
   })
 })

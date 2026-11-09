@@ -30,6 +30,12 @@
   Cache-Control: public, max-age=300
 /hero-visual.js
   Cache-Control: public, max-age=300
+/manage-visual.js
+  Cache-Control: public, max-age=300
+/sync-visual.js
+  Cache-Control: public, max-age=300
+/share-visual.js
+  Cache-Control: public, max-age=300
 
 # PWA Service Worker——必须 no-cache，否则浏览器缓存住旧 SW 永不更新
 /sw.js

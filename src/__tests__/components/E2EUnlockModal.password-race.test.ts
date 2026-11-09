@@ -31,6 +31,7 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 const unlockMock = vi.hoisted(() => vi.fn())
+const lockMock = vi.hoisted(() => vi.fn())
 const resetWithRecoveryKeyMock = vi.hoisted(() => vi.fn())
 const changeMasterPasswordMock = vi.hoisted(() => vi.fn())
 const isBiometricEnrolledMock = vi.hoisted(() => vi.fn())
@@ -47,6 +48,7 @@ vi.mock('../../composables/domain/useE2E.js', () => ({
     isBiometricAvailable: isBiometricAvailableMock,
     unlockWithBiometric: vi.fn(),
     unlock: unlockMock,
+    lock: lockMock,
     resetWithRecoveryKey: resetWithRecoveryKeyMock,
     changeMasterPassword: changeMasterPasswordMock,
   }),
@@ -73,6 +75,7 @@ function mountComp(initialMode: 'unlock' | 'reset' | 'changePw' = 'unlock') {
 beforeEach(() => {
   setActivePinia(createPinia())
   unlockMock.mockReset()
+  lockMock.mockReset()
   resetWithRecoveryKeyMock.mockReset()
   changeMasterPasswordMock.mockReset()
   isBiometricEnrolledMock.mockReset()
@@ -121,6 +124,7 @@ describe('E2EUnlockModal onUnlock 密码路径跨取消 await 窗口 orphan emit
 
     // 修复后：watch 负向分支已推进 _pwGen → onUnlock 的 localGen 失效 → 短路 → 不 emit('unlocked')
     expect(w.emitted('unlocked'), '取消后 emit(unlocked) 不应触发').toBeFalsy()
+    expect(lockMock, '取消后但在途 unlock 成功，必须主动调用 lock 归还锁定态').toHaveBeenCalled()
 
     w.unmount()
   })

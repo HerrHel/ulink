@@ -220,6 +220,7 @@ export function createCloudBaseAuthDriver(
     string,
     PendingItem<(arg: { nonce: string; password: string }) => Promise<{ error?: AuthErrorLike | null }>>
   >()
+  let _authGen = 0
 
   function sweepExpired<T>(map: Map<string, PendingItem<T>>) {
     const now = Date.now()
@@ -240,22 +241,28 @@ export function createCloudBaseAuthDriver(
     async getSession() {
       const a = auth()
       if (!a?.getSession) return { session: null, error: { message: 'CloudBase 未配置' } }
-      const { data, error } = await a.getSession()
-      if (error) return { session: null, error }
-      if (!data) return { session: null, error: null }
-      if (data.session) {
-        const s = { ...(data.session as Record<string, unknown>) }
-        if (!s.user && data.user) s.user = data.user
-        return { session: mapSession(s), error: null }
+      try {
+        const { data, error } = await a.getSession()
+        if (error) return { session: null, error }
+        if (!data) return { session: null, error: null }
+        if (data.session) {
+          const s = { ...(data.session as Record<string, unknown>) }
+          if (!s.user && data.user) s.user = data.user
+          return { session: mapSession(s), error: null }
+        }
+        if (data.user) {
+          return { session: mapSession(data.user), error: null }
+        }
+        return { session: null, error: null }
+      } catch (err: unknown) {
+        return { session: null, error: { message: (err as Error)?.message || '获取会话失败' } }
       }
-      if (data.user) {
-        return { session: mapSession(data.user), error: null }
-      }
-      return { session: null, error: null }
     },
 
     onAuthStateChange(cb) {
       auth()?.onAuthStateChange?.((event, session) => {
+        _authGen++
+        const curGen = _authGen
         const mapped = mapSession(session)
         // 先同步交付，保持「回调即事件」的原有契约
         cb(mapped)
@@ -266,6 +273,8 @@ export function createCloudBaseAuthDriver(
         const a = auth()
         Promise.resolve(a?.getUser?.())
           .then((res) => {
+            // 防竞态：若在 getUser 挂起期间发生登出/切号，丢弃过期返回，防回写已登出会话
+            if (curGen !== _authGen) return
             const full = res?.data?.user
             if (!full) return
             const withProfile = mapSession({ user: full })
@@ -288,17 +297,21 @@ export function createCloudBaseAuthDriver(
         else if (k === 'avatar') req.avatar_url = v
         else req[k] = v
       }
-      let { data: updated, error } = await a.updateUser(req)
-      // 本项目的「头像」是 emoji 而不是 URL。若平台对 avatar_url 做格式校验而拒掉，
-      // 退一步只写昵称——总比整次保存失败、名字也丢了强。
-      if (error && 'avatar_url' in req) {
-        delete req.avatar_url
-        ;({ data: updated, error } = await a.updateUser(req))
-      }
-      const u = updated?.user as Record<string, unknown> | undefined
-      return {
-        user: u ? ({ ...u, user_metadata: u.user_metadata ?? {} } as unknown as User) : null,
-        error: error ?? null,
+      try {
+        let { data: updated, error } = await a.updateUser(req)
+        // 本项目的「头像」是 emoji 而不是 URL。若平台对 avatar_url 做格式校验而拒掉，
+        // 退一步只写昵称——总比整次保存失败、名字也丢了强。
+        if (error && 'avatar_url' in req) {
+          delete req.avatar_url
+          ;({ data: updated, error } = await a.updateUser(req))
+        }
+        const u = updated?.user as Record<string, unknown> | undefined
+        return {
+          user: u ? ({ ...u, user_metadata: u.user_metadata ?? {} } as unknown as User) : null,
+          error: error ?? null,
+        }
+      } catch (err: unknown) {
+        return { user: null, error: { message: (err as Error)?.message || '更新资料失败' } }
       }
     },
 
@@ -307,12 +320,16 @@ export function createCloudBaseAuthDriver(
       if (!a?.signInWithOtp) return { error: { message: 'CloudBase 未配置' } }
       const arg: Record<string, unknown> = { email }
       if (captchaToken) arg.options = { captchaToken }
-      const { data, error } = await a.signInWithOtp(arg)
-      if (!error && typeof data?.verifyOtp === 'function') {
-        sweepExpired(pending)
-        pending.set(email.trim().toLowerCase(), { fn: data.verifyOtp, ts: Date.now() })
+      try {
+        const { data, error } = await a.signInWithOtp(arg)
+        if (!error && typeof data?.verifyOtp === 'function') {
+          sweepExpired(pending)
+          pending.set(email.trim().toLowerCase(), { fn: data.verifyOtp, ts: Date.now() })
+        }
+        return { error: error ?? null }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '发送验证码失败' } }
       }
-      return { error: error ?? null }
     },
 
     async verifyOtp(email, token) {
@@ -322,38 +339,55 @@ export function createCloudBaseAuthDriver(
         if (item) pending.delete(norm)
         return { error: { message: '验证码已失效，请重新获取' } }
       }
-      const { error } = await item.fn({ token })
-      if (!error) pending.delete(norm)
-      return { error: error ?? null }
+      try {
+        const { error } = await item.fn({ token })
+        if (!error) pending.delete(norm)
+        return { error: error ?? null }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '验证码校验失败' } }
+      }
     },
 
     async signOut() {
+      _authGen++
       const a = auth()
       if (!a?.signOut) return { error: null }
       pending.clear()
       resetPending.clear()
-      const { error } = await a.signOut()
-      return { error: error ?? null }
+      try {
+        const { error } = await a.signOut()
+        return { error: error ?? null }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '退出登录失败' } }
+      }
     },
 
     async signInWithPassword(email, password) {
       const a = auth()
       if (!a?.signInWithPassword) return { error: { message: 'CloudBase 未配置' } }
-      const { error } = await a.signInWithPassword({ email, password })
-      return { error: error ?? null }
+      try {
+        const { error } = await a.signInWithPassword({ email, password })
+        return { error: error ?? null }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '登录失败' } }
+      }
     },
 
     async sendPasswordReset(email) {
       const a = auth()
       if (!a?.resetPasswordForEmail) return { error: { message: 'CloudBase 未配置' } }
-      const { data, error } = await a.resetPasswordForEmail(email)
-      // CloudBase 把「改密」做成了返回 data 上的闭包（与 signInWithOtp/verifyOtp 同款），
-      // 必须存起来等用户输完验证码再用
-      if (!error && typeof data?.updateUser === 'function') {
-        sweepExpired(resetPending)
-        resetPending.set(email.trim().toLowerCase(), { fn: data.updateUser, ts: Date.now() })
+      try {
+        const { data, error } = await a.resetPasswordForEmail(email)
+        // CloudBase 把「改密」做成了返回 data 上的闭包（与 signInWithOtp/verifyOtp 同款），
+        // 必须存起来等用户输完验证码再用
+        if (!error && typeof data?.updateUser === 'function') {
+          sweepExpired(resetPending)
+          resetPending.set(email.trim().toLowerCase(), { fn: data.updateUser, ts: Date.now() })
+        }
+        return { error: error ?? null }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '发送重置邮件失败' } }
       }
-      return { error: error ?? null }
     },
 
     async confirmPasswordReset(email, code, newPassword) {
@@ -363,32 +397,44 @@ export function createCloudBaseAuthDriver(
         if (item) resetPending.delete(norm)
         return { error: { message: '验证码已失效，请重新获取' } }
       }
-      const { error } = await item.fn({ nonce: code, password: newPassword })
-      if (!error) resetPending.delete(norm)
-      return { error: error ?? null }
+      try {
+        const { error } = await item.fn({ nonce: code, password: newPassword })
+        if (!error) resetPending.delete(norm)
+        return { error: error ?? null }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '设置密码失败' } }
+      }
     },
 
     async signInWithOAuth(provider, redirectTo) {
       const a = auth()
       if (!a?.signInWithOAuth) return { error: { message: 'CloudBase 暂不支持该第三方登录' } }
-      const { data, error } = await a.signInWithOAuth({ provider, options: { redirectTo } })
-      return { error: error ?? null, url: data?.url ?? undefined }
+      try {
+        const { data, error } = await a.signInWithOAuth({ provider, options: { redirectTo } })
+        return { error: error ?? null, url: data?.url ?? undefined }
+      } catch (err: unknown) {
+        return { error: { message: (err as Error)?.message || '第三方登录失败' } }
+      }
     },
 
     async claimLegacyIdentity() {
       const db = injectedDb ?? getCbDb()
-      const r = await db.rpc<{
-        claimed?: boolean
-        reason?: string
-        moved?: Record<string, number>
-      }>('claim_legacy_identity')
-      if (r.error) return { claimed: false, error: r.error }
-      const payload = (r.data || {}) as { claimed?: boolean; reason?: string; moved?: Record<string, number> }
-      return {
-        claimed: Boolean(payload.claimed),
-        reason: payload.reason,
-        moved: payload.moved,
-        error: null,
+      try {
+        const r = await db.rpc<{
+          claimed?: boolean
+          reason?: string
+          moved?: Record<string, number>
+        }>('claim_legacy_identity')
+        if (r.error) return { claimed: false, error: r.error }
+        const payload = (r.data || {}) as { claimed?: boolean; reason?: string; moved?: Record<string, number> }
+        return {
+          claimed: Boolean(payload.claimed),
+          reason: payload.reason,
+          moved: payload.moved,
+          error: null,
+        }
+      } catch (err: unknown) {
+        return { claimed: false, error: { message: (err as Error)?.message || '认领身份失败' } }
       }
     },
   }

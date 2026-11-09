@@ -22,9 +22,17 @@ export const OFFICIAL_SITE_EDGE_EXT_ID = 'bm_ulink_edge_ext'
 export const OFFICIAL_SITE_ICON = '/logo.svg'
 
 export const bookmarkActions = {
-  /** L10：现存书签最大 order + 1，新建书签统一入口 */
+  /** L10：现存书签最大 order + 1，新建书签统一入口（防负数、NaN 与毫秒时间戳整型溢出） */
   nextBookmarkOrder(this: DataStoreThis): number {
-    return this.bookmarks.reduce((m, b) => b.order > m ? b.order : m, -1) + 1
+    const MAX_SAFE_ORDER = 2147483647
+    let max = -1
+    for (const b of this.bookmarks) {
+      const ord = typeof b.order === 'number' && Number.isFinite(b.order) ? b.order : -1
+      if (ord > max && ord < MAX_SAFE_ORDER) {
+        max = ord
+      }
+    }
+    return max + 1
   },
 
   /**
@@ -40,6 +48,8 @@ export const bookmarkActions = {
       const idx = _indexOfById(this.bookmarks, this._bmMap, id)
       if (idx < 0) continue
       const prev = this.bookmarks[idx]
+      // 软删实体不更新 attributes，防污染 updatedAt 与云端墓碑
+      if (prev.deletedAt) continue
       this._saveLocalHistory(id, { ...prev })
       this._trackChange(id, 'attributes')
       this.bookmarks[idx] = {
@@ -68,6 +78,9 @@ export const bookmarkActions = {
   addBookmark(this: DataStoreThis, bm: Bookmark) {
     if (_denyWrite()) return
     const entry = { ...bm }
+    if (entry.parentId === entry.id) {
+      entry.parentId = null
+    }
     this.bookmarks = [...this.bookmarks, entry]
     this._bmMap[entry.id] = entry
     if (entry.parentId) {
@@ -309,6 +322,27 @@ export const bookmarkActions = {
   },
   updateBookmark(this: DataStoreThis, id: string, changes: Partial<Bookmark>) {
     if (_denyWrite()) return
+    if (changes.parentId) {
+      if (changes.parentId === id) {
+        changes = { ...changes, parentId: null }
+      } else {
+        const parent = this._bmMap[changes.parentId]
+        if (parent && parent.deletedAt) {
+          changes = { ...changes, parentId: null }
+        } else if (parent) {
+          // 深度防环检测：溯源祖先链，杜绝 A -> B -> A 间接循环与环状依赖导致的死循环
+          const visited = new Set<string>([id])
+          let ancestorId: string | null = changes.parentId
+          while (ancestorId && !visited.has(ancestorId)) {
+            visited.add(ancestorId)
+            ancestorId = this._bmMap[ancestorId]?.parentId || null
+          }
+          if (ancestorId === id) {
+            changes = { ...changes, parentId: null }
+          }
+        }
+      }
+    }
     const idx = _indexOfById(this.bookmarks, this._bmMap, id)
     if (idx >= 0) {
       const prev = this.bookmarks[idx]
@@ -376,9 +410,22 @@ export const bookmarkActions = {
     this._trackChange(id, 'deletedAt')
     this._markDirty(id)
     const ui = useUIStore()
-    if (ui.quickLookBmId === id) ui.closeQuickLook()
+    if (ui.editingId === id) ui.editingId = null
+    if (ui.aiEnrichTargetBmId === id) {
+      ui.aiEnrichTargetBmId = null
+      ui.modals.aiEnrich = false
+    }
+    if (ui.quickLookBmId === id) {
+      ui.closeQuickLook()
+    } else if (Array.isArray(ui.quickLookHistory)) {
+      ui.quickLookHistory = ui.quickLookHistory.filter(x => x !== id)
+    }
     const dIdx = ui.detailCards.indexOf(id)
     if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
+    const bSelIdx = ui.batchSelected.indexOf(id)
+    if (bSelIdx >= 0) ui.batchSelected.splice(bSelIdx, 1)
+    const expIdx = ui.expandedIds.indexOf(id)
+    if (expIdx >= 0) ui.expandedIds.splice(expIdx, 1)
     // 从 childrenIdx 中移除
     if (bm.parentId) {
       const sib = this._childrenIdx[bm.parentId]
@@ -387,6 +434,7 @@ export const bookmarkActions = {
         if (ci >= 0) sib.splice(ci, 1)
       }
     }
+    delete this._childrenIdx[id]
     // 记录被删除书签原本所属的组，以便恢复时还原
     const groupIds: string[] = []
     for (let gi = 0; gi < this.siblingGroups.length; gi++) {
@@ -419,9 +467,20 @@ export const bookmarkActions = {
         }
       } else {
         // 父已删：降为顶层，避免挂在幽灵父下
-        bm.parentId = null
+        const idx = _indexOfById(this.bookmarks, this._bmMap, id)
+        if (idx >= 0) {
+          this.bookmarks[idx] = { ...this.bookmarks[idx], parentId: null, updatedAt: Date.now() }
+          this._bmMap[id] = this.bookmarks[idx]
+        } else {
+          bm.parentId = null
+        }
         this._trackChange(id, 'parentId')
       }
+    }
+    // 若被恢复的书签自身是父书签，则为其重建 _childrenIdx（使未删子书签即时可见）
+    const activeChildren = this.bookmarks.filter(b => b.parentId === id && !b.deletedAt)
+    if (activeChildren.length > 0) {
+      this._childrenIdx[id] = activeChildren.map(c => c.id)
     }
     // 恢复被删除书签原本所属的组关系
     const groupIds = this._deletedGroupMemberships.get(id)
@@ -452,25 +511,48 @@ export const bookmarkActions = {
       if (ci >= 0) this._childrenIdx[bm.parentId].splice(ci, 1)
     }
     // RC-1：遍历所有子孙（非仅直接子项）清除 parentId，避免孤儿不可见。
-    // 旧实现只清一级 children parentId——若存在多层嵌套（虽 UI 层 addSub 仅顶层
-    // 可见、禁 >1 层，但 API 层 addBookmark 可编程挂多层），孙辈 parentId 仍指向
-    // 已删中间层 → filteredBookmarks 的 !parentId 过滤排除 → 孙书签永久不可见。
-    // 用队列 BFS 遍历所有后代。
-    const queue: string[] = this._childrenIdx[id] ? [...this._childrenIdx[id]] : []
+    // 旧实现只依赖 this._childrenIdx[id]，但在父书签处于回收站时 _syncMaps 未将其子放入索引，
+    // 致使永久删除时 queue 为空，存活子孙书签沦为悬空孤儿永久不可见。
+    // 现联合扫描 this.bookmarks 确保全量捕获直接与多代子孙。
+    const directChildIds = new Set<string>()
+    if (this._childrenIdx[id]) {
+      for (const cid of this._childrenIdx[id]) directChildIds.add(cid)
+    }
+    for (const b of this.bookmarks) {
+      if (b.parentId === id) directChildIds.add(b.id)
+    }
+    const queue: string[] = Array.from(directChildIds)
     const now = Date.now()
     while (queue.length) {
       const cid = queue.shift()!
-      const cbm = this._bmMap[cid]
-      if (cbm) {
-        cbm.parentId = null
-        cbm.updatedAt = now
+      const cIdx = _indexOfById(this.bookmarks, this._bmMap, cid)
+      if (cIdx >= 0) {
+        const next = { ...this.bookmarks[cIdx], parentId: null, updatedAt: now }
+        this.bookmarks[cIdx] = next
+        this._bmMap[cid] = next
         this._trackChange(cid, 'parentId')
         this._markDirty(cid)
+      } else {
+        const cbm = this._bmMap[cid]
+        if (cbm) {
+          cbm.parentId = null
+          cbm.updatedAt = now
+          this._trackChange(cid, 'parentId')
+          this._markDirty(cid)
+        }
       }
       // 注意：子孙书签并未被永久删除，只是将其 parentId 解绑提升为顶级，因此绝不能调用 _dropAttrMemberships(cid)
       if (this._childrenIdx[cid]) {
-        queue.push(...this._childrenIdx[cid])
+        for (const gcid of this._childrenIdx[cid]) {
+          if (!queue.includes(gcid)) queue.push(gcid)
+        }
         delete this._childrenIdx[cid]
+      } else {
+        for (const b of this.bookmarks) {
+          if (b.parentId === cid && !queue.includes(b.id)) {
+            queue.push(b.id)
+          }
+        }
       }
     }
     delete this._childrenIdx[id]
@@ -486,9 +568,22 @@ export const bookmarkActions = {
       }
     }
     const ui = useUIStore()
-    if (ui.quickLookBmId === id) ui.closeQuickLook()
+    if (ui.editingId === id) ui.editingId = null
+    if (ui.aiEnrichTargetBmId === id) {
+      ui.aiEnrichTargetBmId = null
+      ui.modals.aiEnrich = false
+    }
+    if (ui.quickLookBmId === id) {
+      ui.closeQuickLook()
+    } else if (Array.isArray(ui.quickLookHistory)) {
+      ui.quickLookHistory = ui.quickLookHistory.filter(x => x !== id)
+    }
     const dIdx = ui.detailCards.indexOf(id)
     if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
+    const bSelIdx = ui.batchSelected.indexOf(id)
+    if (bSelIdx >= 0) ui.batchSelected.splice(bSelIdx, 1)
+    const expIdx = ui.expandedIds.indexOf(id)
+    if (expIdx >= 0) ui.expandedIds.splice(expIdx, 1)
     this._permanentDelete('bookmarks', id)
     delete this._bmMap[id]
     this._deletedGroupMemberships.delete(id)

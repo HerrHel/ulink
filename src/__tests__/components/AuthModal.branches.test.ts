@@ -402,5 +402,28 @@ describe('AuthModal 分支契约', () => {
 
       expect(authState.authError).toBeTruthy()
     })
+    it('弹窗关闭或取消时立即清空内存中的 password 和 code 响应式引用', async () => {
+      const wrapper = mount(AuthModal)
+      await openModal(wrapper)
+      const s = wrapper.vm.$.setupState as any
+      s.password = 'SuperSecret123!'
+      s.code = '654321'
+      expect(s.password).toBe('SuperSecret123!')
+      expect(s.code).toBe('654321')
+
+      s.onClose()
+      await nextTick()
+      expect(s.password).toBe('')
+      expect(s.code).toBe('')
+      expect(authState.authModalOpen).toBe(false)
+
+      await openModal(wrapper)
+      s.password = 'AnotherSecret!'
+      s.code = '112233'
+      authState.authModalOpen = false
+      await nextTick()
+      expect(s.password).toBe('')
+      expect(s.code).toBe('')
+    })
   })
 })

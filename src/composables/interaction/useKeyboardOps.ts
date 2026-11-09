@@ -233,6 +233,12 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
       () => { if (!ui.modals.e2eSetup) return false; ui.modals.e2eSetup = false; return true },
       () => { if (!ui.modals.setPassword) return false; ui.modals.setPassword = false; return true },
       () => { if (!ui.modals.setupGuide) return false; ui.modals.setupGuide = false; return true },
+      () => { if (!ui.modals.purchase) return false; ui.modals.purchase = false; return true },
+      () => { if (!ui.modals.share) return false; ui.closeShareModal(); return true },
+      () => { if (!ui.modals.aiEnrich) return false; ui.modals.aiEnrich = false; ui.aiEnrichTargetBmId = null; return true },
+      () => { if (!ui.modals.vaultUnlock) return false; ui.modals.vaultUnlock = false; return true },
+      () => { if (!ui.modals.vaultSetup) return false; ui.modals.vaultSetup = false; return true },
+      () => { if (!ui.modals.e2eCanaryConflict) return false; ui.modals.e2eCanaryConflict = false; return true },
       () => { // A4-007
         if (!ui.overlays.feedback) return false
         ui.overlays.feedback = false; return true
@@ -244,6 +250,12 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
     // 兜底层：一次 Esc 清扫其余 modal / menu / panel（无 return，全部尝试）
     closeQuickLook(); closeBmModal(); closeCatModal(); closeAttrModal(); closeGroupEdit()
+    if (ui.modals.purchase) ui.modals.purchase = false
+    if (ui.modals.share) ui.closeShareModal()
+    if (ui.modals.aiEnrich) { ui.modals.aiEnrich = false; ui.aiEnrichTargetBmId = null }
+    if (ui.modals.vaultUnlock) ui.modals.vaultUnlock = false
+    if (ui.modals.vaultSetup) ui.modals.vaultSetup = false
+    if (ui.modals.e2eCanaryConflict) ui.modals.e2eCanaryConflict = false
     useContextMenuStore().hide(); hideSettingsMenu(); closeAddBmPopover(); hideAddDropdown()
     if (ui.panels.trash) ui.panels.trash = false
     if (ui.overlays.deadLinks) ui.overlays.deadLinks = false

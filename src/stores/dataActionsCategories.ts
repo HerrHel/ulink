@@ -23,6 +23,7 @@ export const categoryActions = {
   },
   addCategory(this: DataStoreThis, cat: Category) {
     if (_denyWrite()) return
+    if (cat.id === CAT_ALL || cat.id === CAT_UNCATEGORIZED) return
     cat.updatedAt = Date.now()
     this.categories = [...this.categories, cat]
     this._catMap[cat.id] = cat
@@ -53,16 +54,19 @@ export const categoryActions = {
   },
   renameCategory(this: DataStoreThis, id: string, name: string) {
     if (_denyWrite()) return
+    if (id === CAT_ALL || id === CAT_UNCATEGORIZED) return
     const idx = _indexOfById(this.categories, this._catMap, id)
     if (idx >= 0) {
       this._trackChange(id, 'name')
       this.categories[idx] = { ...this.categories[idx], name, updatedAt: Date.now() }
       this._catMap[id] = this.categories[idx]
-      this._markDirty(id), this._searchIndexDirty = true
+      this._markDirty(id)
+      this._searchIndexDirty = true
     }
   },
   deleteCategory(this: DataStoreThis, id: string) {
     if (_denyWrite()) return
+    if (id === CAT_ALL || id === CAT_UNCATEGORIZED) return
     const now = Date.now()
     // RE-4：级联改写的 bookmark/group 必须 _markDirty + _trackChange，否则跨设备不同步
     this.bookmarks = this.bookmarks.map(b => {
@@ -92,9 +96,41 @@ export const categoryActions = {
     if (ui.curCat === id) {
       ui.curCat = CAT_ALL
     }
+    if (ui.shareModalTarget?.type === 'category' && ui.shareModalTarget.id === id) {
+      ui.closeShareModal()
+    }
   },
   restoreCategory(this: DataStoreThis, id: string) { if (_denyWrite()) return; this._restoreItem('categories', id) },
-  permanentDeleteCategory(this: DataStoreThis, id: string) { if (_denyWrite()) return; this._permanentDelete('categories', id); delete this._catMap[id]; this._searchIndexDirty = true },
+  permanentDeleteCategory(this: DataStoreThis, id: string) {
+    if (_denyWrite()) return
+    if (id === CAT_ALL || id === CAT_UNCATEGORIZED) return
+    const now = Date.now()
+    // 永久删除分类时，彻底解除书签与组对该分类的残留引用，自动平滑归入未分类
+    this.bookmarks = this.bookmarks.map(b => {
+      if (b.categoryId !== id) return b
+      this._trackChange(b.id, 'categoryId')
+      this._markDirty(b.id)
+      const next = { ...b, categoryId: CAT_UNCATEGORIZED, updatedAt: now }
+      this._bmMap[b.id] = next
+      return next
+    })
+    this.siblingGroups = this.siblingGroups.map(g => {
+      if (g.categoryId !== id) return g
+      this._trackChange(g.id, 'categoryId')
+      this._markDirty(g.id)
+      const next = { ...g, categoryId: CAT_UNCATEGORIZED, updatedAt: now }
+      this._grpMap[g.id] = next
+      return next
+    })
+    this._permanentDelete('categories', id)
+    delete this._catMap[id]
+    const ui = useUIStore()
+    if (ui.curCat === id) ui.curCat = CAT_ALL
+    if (ui.shareModalTarget?.type === 'category' && ui.shareModalTarget.id === id) {
+      ui.closeShareModal()
+    }
+    this._searchIndexDirty = true
+  },
 
   /**
    * B-12：归一化分类 order（序号语义）。
@@ -110,7 +146,9 @@ export const categoryActions = {
     let idx = 0
     for (const c of this.categories) {
       if (c.deletedAt) continue
-      if ((c.order ?? 0) > MAX_INT) {
+      const ord = c.order
+      const isBadOrder = typeof ord !== 'number' || !Number.isFinite(ord) || ord < 0 || ord > MAX_INT
+      if (isBadOrder) {
         c.order = idx
         c.updatedAt = now
         this._trackChange(c.id, 'order')

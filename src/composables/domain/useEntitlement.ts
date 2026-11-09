@@ -22,6 +22,24 @@ function getTodayKey(): string {
   return `lv_ai_enrich_${y}-${m}-${day}`
 }
 
+export function pruneOldAiEnrichKeys(todayKey: string = getTodayKey()): void {
+  try {
+    if (typeof localStorage === 'undefined') return
+    const toRemove: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith('lv_ai_enrich_') && k !== todayKey) {
+        toRemove.push(k)
+      }
+    }
+    for (const k of toRemove) {
+      safeRemoveItem(k)
+    }
+  } catch {
+    /* ignore in restricted environments */
+  }
+}
+
 function getInitialEntitlement(): MyEntitlement {
   try {
     const raw = safeGetItem(ENTITLEMENT_CACHE_KEY) || safeGetItem(LEGACY_ENTITLEMENT_CACHE_KEY)
@@ -104,6 +122,7 @@ export function useEntitlement() {
       return { allowed: true, remaining: 999999, total: 999999, isPro: true }
     }
     const key = getTodayKey()
+    pruneOldAiEnrichKeys(key)
     const used = parseInt(safeGetItem(key) || '0', 10)
     const remaining = Math.max(0, FREE_DAILY_AI_ENRICH_LIMIT - used)
     return {
@@ -122,6 +141,7 @@ export function useEntitlement() {
     const quota = checkAiEnrichQuota()
     if (!quota.allowed) return false
     const key = getTodayKey()
+    pruneOldAiEnrichKeys(key)
     const used = parseInt(safeGetItem(key) || '0', 10)
     safeSetItem(key, String(used + 1))
     return true

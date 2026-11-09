@@ -6,8 +6,9 @@ import { supabase } from '../../lib/supabase.js'
 import { isCloudBaseBackend } from '../../lib/cloudbase.js'
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
+import { useUIStore } from '../../stores/ui.js'
 import { debouncedSaveAppData } from '../../stores/app.js'
-import { enqueueSyncOps } from '../../stores/storage.js'
+import { enqueueSyncOps, syncOpsCount } from '../../stores/storage.js'
 import { useE2E } from './useE2E.js'
 import { _getUserId } from './useSyncHistory.js'
 import { FROM_REMOTE, type RemoteRow, type AnyRemoteRow } from './useSyncMapping.js'
@@ -49,6 +50,12 @@ type RealtimeRowPayload = {
  *  channel filter 因配置错误/策略变更被绕过，也不处理他人数据）。
  *  导出含 _ 前缀（约定私有），供单测覆盖 S13 纵深防护逻辑。 */
 async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: EntityType) {
+  // 空间隔离：若当前处于私密空间（vault）等非 main 空间，严禁将远端云端变更合入内存中的私密数据
+  try {
+    if (useUIStore().curSpace !== 'main') return
+  } catch {
+    // Pinia 未就绪时防御性忽略
+  }
   // 重加密全量迁移期间短路所有远端变更：本标签页自己 push 的新密文会被 Realtime
   // 当作远端变更收回来，用旧 cryptoKey 解新密文 会解不开→冲突/写空污损正在迁移的内存。
   // 一律 skip，待 changeMasterPassword 结束后 pullChanges 全量对账拉齐。
@@ -81,6 +88,7 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
       // 已在回收站（或本地未收录）：远端执行了彻底删除/清空回收站，本地同步彻底物理抹除
       _permanentDeleteWithoutEcho(ds, type, id)
     }
+    try { useSyncStore().removeConflict(id) } catch { /* ignore */ }
     debouncedSaveAppData()
     return
   }
@@ -149,6 +157,7 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
         [{ remote: mapped as unknown as { id: string }, localId: dup.id }],
         type, userId,
       ))
+      try { useSyncStore().setPendingCount(await syncOpsCount()) } catch { /* ignore */ }
       console.info(
         `[sync] realtime 去重：远端 ${entityTypeToTable[type]}#${row.id} 与本地未上云项 ${dup.id} 内容重复，跳过插入并将远端行墓碑入队`,
       )
@@ -181,7 +190,9 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
         if (ds.bookmarkMap[m.id]) {
           const oldParentId = ds.bookmarkMap[m.id]?.parentId
           const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
-          ds.updateBookmark(m.id, m)
+          const curBm = ds.bookmarkMap[m.id]
+          const { isExpanded: _bmExp, ...bmUpdates } = m
+          ds.updateBookmark(m.id, curBm ? { ...bmUpdates, isExpanded: curBm.isExpanded } : bmUpdates)
           // 恢复远端 updatedAt，避免被 Date.now() 覆盖（updateBookmark 已同步 _bmMap 引用）
           const bm = ds.bookmarkMap[m.id]
           if (bm && remoteUpdatedAt) bm.updatedAt = remoteUpdatedAt
@@ -197,7 +208,11 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
             }
           }
         } else {
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.addBookmark(m)
+          const bm = ds.bookmarkMap[m.id]
+          if (bm && remoteUpdatedAt) bm.updatedAt = remoteUpdatedAt
+          if (bm && m.createdAt) bm.createdAt = m.createdAt
         }
         // Realtime 变更来自远端，不清除会在下次 sync 重新推送回 Supabase
         ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
@@ -218,7 +233,12 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
               mergedBookmarkIds = [...m.bookmarkIds, ...localExtra]
             }
           }
-          ds.updateGroup(m.id, { ...m, bookmarkIds: mergedBookmarkIds })
+          const { isExpanded: _grpExp, ...grpUpdates } = m
+          ds.updateGroup(m.id, {
+            ...grpUpdates,
+            bookmarkIds: mergedBookmarkIds,
+            isExpanded: localGrp ? localGrp.isExpanded : false,
+          })
           // 恢复远端 updatedAt（updateGroup 已同步 _grpMap 引用）
           const g = ds.groupMap[m.id]
           if (g && remoteUpdatedAt) g.updatedAt = remoteUpdatedAt
@@ -238,7 +258,10 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
             }
           }
         } else {
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.addGroup(m)
+          const g = ds.groupMap[m.id]
+          if (g && remoteUpdatedAt) g.updatedAt = remoteUpdatedAt
         }
         ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
       },
@@ -252,7 +275,10 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
           const cat = ds.categoryMap[m.id]
           if (cat && remoteUpdatedAt) cat.updatedAt = remoteUpdatedAt
         } else {
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.addCategory(m)
+          const cat = ds.categoryMap[m.id]
+          if (cat && remoteUpdatedAt) cat.updatedAt = remoteUpdatedAt
         }
         ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
         // B-12+：Realtime upsert 同样可能带入云端毫秒戳 order（B-12 修复前存量），
@@ -269,7 +295,10 @@ async function _handleRealtimeChangeInner(payload: RealtimeRowPayload, type: Ent
           const attr = ds.attributeMap[m.id]
           if (attr && remoteUpdatedAt) attr.updatedAt = remoteUpdatedAt
         } else {
+          const remoteUpdatedAt = sanitizeRemoteTimestamp(m.updatedAt)
           ds.addAttribute(m)
+          const attr = ds.attributeMap[m.id]
+          if (attr && remoteUpdatedAt) attr.updatedAt = remoteUpdatedAt
         }
         ds._dirtyIds.delete(m.id); ds._newIds.delete(m.id)
       },

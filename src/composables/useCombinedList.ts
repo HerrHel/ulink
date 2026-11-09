@@ -19,8 +19,15 @@ export function useCombinedList(): { combinedList: ComputedRef<CardItem[]>; mode
 
   const mode = computed<CombinedMode>(() => {
     // 聚焦优先：排除已软删除的组（分类分享态下聚焦有效影子组同样走聚焦视图）
-    const focusedG = ui.focusedGroupId ? ds.groupMap[ui.focusedGroupId] : null
-    if (focusedG && !focusedG.deletedAt) return 'focus'
+    if (ui.focusedGroupId) {
+      const focusedG = ds.groupMap[ui.focusedGroupId]
+      if (focusedG?.deletedAt) {
+        if (ui.shareMode?.kind === 'category') return 'share-category'
+        if (ds._customCardOrder != null && ui.sortMode === 'order') return 'custom'
+        return 'normal'
+      }
+      return 'focus'
+    }
     // 分类分享态：列表直接来自影子数据（filtered* 看不到影子内容）
     if (ui.shareMode?.kind === 'category') return 'share-category'
     if (ds._customCardOrder != null && ui.sortMode === 'order') return 'custom'

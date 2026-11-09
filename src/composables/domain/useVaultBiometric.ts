@@ -125,23 +125,27 @@ export function useVaultBiometric() {
       return false
     }
 
-    const extResults = credential.getClientExtensionResults() as Record<string, unknown>
-    const prfResult = extResults?.prf as { enabled?: boolean; results?: { first: ArrayBuffer } } | undefined
-    if (!prfResult?.enabled || !prfResult?.results?.first) {
+    try {
+      const extResults = credential.getClientExtensionResults() as Record<string, unknown>
+      const prfResult = extResults?.prf as { enabled?: boolean; results?: { first: ArrayBuffer } } | undefined
+      if (!prfResult?.enabled || !prfResult?.results?.first) {
+        return false
+      }
+
+      const credentialId = _bufToBase64Url(new Uint8Array(credential.rawId))
+      const aesKey = await _deriveAesFromPrf(prfResult.results.first)
+      const encrypted = await encrypt(masterPassword, aesKey)
+
+      // 契约消费：safeSetItem 返 boolean（配额满/隐私模式禁写→catch 返 false），
+      // 丢弃则谎报 true 致调用方误标 biometricEnrolled 但 BIO_KEY 未写盘→下次解锁被锁外
+      return safeSetItem(BIO_KEY, JSON.stringify({
+        credentialId,
+        prfSalt: _bufToBase64(prfSalt),
+        encrypted,
+      } satisfies BiometricData))
+    } catch {
       return false
     }
-
-    const credentialId = _bufToBase64Url(new Uint8Array(credential.rawId))
-    const aesKey = await _deriveAesFromPrf(prfResult.results.first)
-    const encrypted = await encrypt(masterPassword, aesKey)
-
-    // 契约消费：safeSetItem 返 boolean（配额满/隐私模式禁写→catch 返 false），
-    // 丢弃则谎报 true 致调用方误标 biometricEnrolled 但 BIO_KEY 未写盘→下次解锁被锁外
-    return safeSetItem(BIO_KEY, JSON.stringify({
-      credentialId,
-      prfSalt: _bufToBase64(prfSalt),
-      encrypted,
-    } satisfies BiometricData))
   }
 
   /** 弹指纹解锁，返回保险柜主密码或 null */
@@ -169,17 +173,21 @@ export function useVaultBiometric() {
       return null
     }
 
-    const extResults = assertion.getClientExtensionResults() as Record<string, unknown>
-    const prfResult = extResults?.prf as { results?: { first: ArrayBuffer } } | undefined
-    if (!prfResult?.results?.first) return null
+    try {
+      const extResults = assertion.getClientExtensionResults() as Record<string, unknown>
+      const prfResult = extResults?.prf as { results?: { first: ArrayBuffer } } | undefined
+      if (!prfResult?.results?.first) return null
 
-    const aesKey = await _deriveAesFromPrf(prfResult.results.first)
-    const masterPw = await decrypt(stored.encrypted, aesKey)
+      const aesKey = await _deriveAesFromPrf(prfResult.results.first)
+      const masterPw = await decrypt(stored.encrypted, aesKey)
 
-    // decrypt 对解不开的输入返回原密文串，此时应判为失败
-    if (masterPw === stored.encrypted) return null
+      // decrypt 对解不开的输入返回原密文串，此时应判为失败
+      if (masterPw === stored.encrypted) return null
 
-    return masterPw
+      return masterPw
+    } catch {
+      return null
+    }
   }
 
   /** 删除已录入的保险柜指纹凭据 */

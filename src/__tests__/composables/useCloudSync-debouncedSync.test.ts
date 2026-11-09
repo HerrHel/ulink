@@ -240,4 +240,30 @@ describe('debouncedSync 4 步编排护栏', () => {
     vi.advanceTimersByTime(3000)
     expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
   })
+
+  it('fullSync 执行时主动清除挂起的 debouncedSync 计时器，避免 3 秒后重复触发冗余推送', async () => {
+    const { debouncedSync, fullSync } = useCloudSync()
+    debouncedSync()
+    expect(_lock.withLockSpy).not.toHaveBeenCalled()
+
+    await fullSync()
+    expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
+
+    // 快进 5 秒，原防抖 timer 已被清理，不会产生第二次 withLock 推送
+    vi.advanceTimersByTime(5000)
+    expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('syncImmediate 执行时主动清除挂起的 debouncedSync 计时器', async () => {
+    const { debouncedSync, syncImmediate } = useCloudSync()
+    debouncedSync()
+    expect(_lock.withLockSpy).not.toHaveBeenCalled()
+
+    await syncImmediate()
+    expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
+
+    // 快进 5 秒，原防抖 timer 已被清理，不会产生第二次 withLock 推送
+    vi.advanceTimersByTime(5000)
+    expect(_lock.withLockSpy).toHaveBeenCalledTimes(1)
+  })
 })

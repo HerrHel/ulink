@@ -75,7 +75,7 @@
             </button>
             <button
               class="pr-act-btn"
-              :title="t('deadlinks.whitelist') || '加入白名单'"
+              :title="t('deadlinks.whitelist')" :aria-label="t('deadlinks.whitelist')"
               @click.stop="onWhitelist(b)"
             >
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -173,7 +173,9 @@ function onDelete(bmId: string) {
 
 function onFindAlternative(b: { id: string; title: string; url: string }) {
   close()
-  store.openAiAssistant(`为失效死链「${b.title}」（${b.url}）寻找平替并自愈`)
+  const name = displayText(b.title) || displayText(b.url) || ''
+  const u = displayText(b.url) || ''
+  store.openAiAssistant(`为失效死链「${name}」（${u}）寻找平替并自愈`)
 }
 
 function onWhitelist(b: { id: string; url: string; title: string }) {
@@ -188,7 +190,7 @@ function onWhitelist(b: { id: string; url: string; title: string }) {
     dataStore.updateBookmark(b.id, { attributes: nextAttrs })
     debouncedSaveAppData()
   }
-  toast(`已将「${host}」加入白名单`)
+  toast(t('settings.whitelistAdded', { d: host }))
 }
 
 function enterSelectMode() {

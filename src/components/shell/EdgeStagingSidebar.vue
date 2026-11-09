@@ -766,10 +766,21 @@ function removeEntry(rawId: string) {
   if (idx > -1) {
     ui.detailCards.splice(idx, 1)
   }
+  if (
+    ui.modals.quickLook &&
+    (ui.quickLookBmId === rawId ||
+      ui.quickLookBmId === ('group:' + rawId) ||
+      (rawId.startsWith('group:') && ui.quickLookBmId === rawId.slice(6)))
+  ) {
+    ui.closeQuickLook()
+  }
 }
 
 function clearAll() {
   ui.detailCards.splice(0)
+  if (ui.modals.quickLook) {
+    ui.closeQuickLook()
+  }
 }
 </script>
 

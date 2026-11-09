@@ -60,7 +60,19 @@ export async function fetchAllPages<T>(
   let from = 0
   const all: T[] = []
   while (true) {
-    const res = await queryFn(from, from + PAGE_SIZE - 1)
+    let res: {
+      data: T[] | null
+      error: { message: string; code?: string } | null
+      hasRange?: boolean
+    }
+    try {
+      res = await queryFn(from, from + PAGE_SIZE - 1)
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { message: err instanceof Error ? err.message : String(err) },
+      }
+    }
     if (res.error) {
       return { data: null, error: { message: res.error.message, code: res.error.code } }
     }

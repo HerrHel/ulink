@@ -4,6 +4,7 @@
  * 从 drag.js 完整迁入。
  */
 import { onMounted, onUnmounted } from 'vue'
+import { displayText } from '../../utils.js'
 import { PAYLOAD_KEY, DRAG_SRC_DETAIL, CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { toast } from '../../lib/toast.js'
 import { t } from '../../i18n/index.js'
@@ -658,7 +659,8 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (bm.categoryId === newCatId) return;
   ds.updateBookmark(bm.id, { categoryId: newCatId });
   debouncedSaveAppData();
-  toast(t('msg.movedToCategory', { name: ds.categoryMap[newCatId]?.name || newCatId }));
+  const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('common.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
+  toast(t('msg.movedToCategory', { name: catName }));
 }
 
 function handleGroupToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
@@ -678,7 +680,8 @@ function handleGroupToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (group.categoryId === newCatId) return;
   ds.updateGroup(gid, { categoryId: newCatId });
   debouncedSaveAppData();
-  toast(t('msg.movedToCategory', { name: ds.categoryMap[newCatId]?.name || newCatId }));
+  const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('common.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
+  toast(t('msg.movedToCategory', { name: catName }));
 }
 
 function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: number) {
@@ -700,11 +703,11 @@ function reorderInlineCard(gid: string, bmId: string, clientX: number, clientY: 
   if (!data) return;
   const html = isRef ? groupRefCardHTML(data as SiblingGroup) : inlineCardHTML(data as Bookmark);
   const $nodePos = ed.state.doc.resolve(nodePos);
-  const paragraphPos = $nodePos.before(1);
+  const paragraphPos = $nodePos.depth >= 1 ? $nodePos.before($nodePos.depth) : null;
   const cachedPos = (_lastInsertPos && _lastInsertPos.gid === gid) ? _lastInsertPos.pos : null;
   ed.chain().deleteRange({ from: nodePos, to: nodePos + node.nodeSize }).run();
-  const paragraph = ed.state.doc.nodeAt(paragraphPos);
-  if (paragraph && paragraph.type.name === 'paragraph' && paragraph.content.size === 0 && ed.state.doc.content.childCount > 1) {
+  const paragraph = paragraphPos !== null ? ed.state.doc.nodeAt(paragraphPos) : null;
+  if (paragraphPos !== null && paragraph && paragraph.type.name === 'paragraph' && paragraph.content.size === 0 && ed.state.doc.content.childCount > 1) {
     ed.chain().deleteRange({ from: paragraphPos, to: paragraphPos + 1 }).run();
   }
   if (cachedPos !== null) {

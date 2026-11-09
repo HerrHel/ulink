@@ -20,6 +20,8 @@ import { setActivePinia, createPinia } from 'pinia'
 import { redactSensitivePatterns } from '../../lib/ai/secretFilter.js'
 import { vaultRAG } from '../../lib/ai/localRAG.js'
 import {
+  executeManageCategories,
+  executeManageTags,
   executeManageBookmarks,
   executeManageWorkspaces,
   executeManageSettings,
@@ -656,6 +658,102 @@ describe('Module 5 Deep Audit Fixes Regression Suite', () => {
     it('当输入为三段密文时，extractSessionTitle 返回空字符串', () => {
       const title = extractSessionTitle(cipher)
       expect(title).toBe('')
+    })
+  })
+
+  // ─────────────────────────────────────────────────────────────
+  // 22. universalAgent.ts: 锁定态密文防篡改与 XSS 过滤
+  // ─────────────────────────────────────────────────────────────
+  describe('22. universalAgent.ts 锁定态密文保护与 XSS 过滤', () => {
+    const cipher = 'A'.repeat(44) + '.' + 'B'.repeat(16) + '.' + 'C'.repeat(24)
+
+    it('分类重命名遇到密文时拒绝修改', async () => {
+      const ds = useDataStore()
+      ds.categories = [mockCat({ id: 'cat-c1', name: cipher })]
+      const res = await executeManageCategories({
+        action: 'rename',
+        categoryId: 'cat-c1',
+        newName: '新分类',
+      })
+      expect(res.success).toBe(false)
+      expect(res.message).toContain('加密锁定状态')
+      expect(ds.categories[0].name).toBe(cipher)
+    })
+
+    it('标签重命名遇到密文时拒绝修改', async () => {
+      const ds = useDataStore()
+      ds.customAttributes = [{ id: 'tag-c1', name: cipher, type: 'boolean' }]
+      const res = await executeManageTags({
+        action: 'rename',
+        tagId: 'tag-c1',
+        newName: '新标签',
+      })
+      expect(res.success).toBe(false)
+      expect(res.message).toContain('加密锁定状态')
+      expect(ds.customAttributes[0].name).toBe(cipher)
+    })
+
+    it('工作台重命名遇到密文时拒绝修改', async () => {
+      const ds = useDataStore()
+      ds.siblingGroups = [mockGroup({ id: 'grp-c1', name: cipher })]
+      const res = await executeManageWorkspaces({
+        action: 'rename',
+        workspaceId: 'grp-c1',
+        newName: '新工作台',
+      })
+      expect(res.success).toBe(false)
+      expect(res.message).toContain('加密锁定状态')
+      expect(ds.siblingGroups[0].name).toBe(cipher)
+    })
+
+    it('书签更新遇到密文标题/网址/附注时拒绝修改', async () => {
+      const ds = useDataStore()
+      ds.bookmarks = [mockBm({ id: 'bm-c1', title: cipher, url: cipher, notes: cipher })]
+
+      const resTitle = await executeManageBookmarks({
+        action: 'update',
+        bookmarkId: 'bm-c1',
+        title: '新标题',
+      })
+      expect(resTitle.success).toBe(false)
+      expect(resTitle.message).toContain('书签标题当前处于加密锁定状态')
+
+      const resUrl = await executeManageBookmarks({
+        action: 'update',
+        bookmarkId: 'bm-c1',
+        url: 'https://newurl.com',
+      })
+      expect(resUrl.success).toBe(false)
+      expect(resUrl.message).toContain('书签网址当前处于加密锁定状态')
+
+      const resNotes = await executeManageBookmarks({
+        action: 'update',
+        bookmarkId: 'bm-c1',
+        notes: '新附注',
+      })
+      expect(resNotes.success).toBe(false)
+      expect(resNotes.message).toContain('书签附注当前处于加密锁定状态')
+    })
+
+    it('新建书签与工作台附注执行 sanitizeHTML 过滤恶意脚本', async () => {
+      const bmRes = await executeManageBookmarks({
+        action: 'add',
+        title: '测试',
+        url: 'https://example.com',
+        notes: '<p>正常</p><script>alert("xss")</script>',
+      })
+      expect(bmRes.success).toBe(true)
+      expect(bmRes.data?.notes).not.toContain('<script>')
+      expect(bmRes.data?.notes).toContain('正常')
+
+      const wsRes = await executeManageWorkspaces({
+        action: 'create',
+        name: '测试工作台',
+        notes: '<p>工作区</p><script>evil()</script>',
+      })
+      expect(wsRes.success).toBe(true)
+      expect(wsRes.data?.notes).not.toContain('<script>')
+      expect(wsRes.data?.notes).toContain('工作区')
     })
   })
 })

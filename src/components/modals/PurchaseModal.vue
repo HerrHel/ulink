@@ -396,7 +396,13 @@
               </div>
 
               <div class="pur-checkout-footnote">
-                {{ activePlan?.footerNote || '支付完成后权益立即生效，随订随用，随时取消。' }}
+                {{ activePlan?.footerNote || (isZh ? '支付完成后权益立即生效，随订随用，到期不自动扣款。' : 'Privileges take effect immediately upon payment. No auto-renewal.') }}
+              </div>
+              <div class="pur-checkout-agreements">
+                <span>{{ isZh ? '支付即代表已阅读并同意 ' : 'Payment indicates agreement with ' }}</span>
+                <a href="/legal/terms-of-service.html" target="_blank" rel="noopener noreferrer">{{ isZh ? '《用户服务协议》' : 'Terms of Service' }}</a>
+                <span>{{ isZh ? ' 与 ' : ' and ' }}</span>
+                <a href="/legal/refund-policy.html" target="_blank" rel="noopener noreferrer">{{ isZh ? '《退款政策》' : 'Refund Policy' }}</a>
               </div>
             </div>
           </div>
@@ -421,7 +427,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import QRCode from 'qrcode'
 import { usePayment, type PaymentChannel } from '../../composables/domain/usePayment.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
-import { t } from '../../i18n/index.js'
+import { t, useI18n } from '../../i18n/index.js'
 import { fetchPurchasePlans, getCachedPlans, type PlanRow } from '../../composables/domain/usePurchasePlans.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
@@ -430,6 +436,8 @@ import { toast } from '../../lib/toast.js'
 const props = defineProps<{ visible: boolean; currentPlanId?: string }>()
 const authStore = useAuthStore()
 const entService = useEntitlement()
+const { locale } = useI18n()
+const isZh = computed(() => locale.value.startsWith('zh'))
 const emit = defineEmits<{ (e: 'close'): void; (e: 'paid'): void }>()
 
 const { onMaskMouseDown, onMaskClick } = useMaskClose(() => close())
@@ -740,7 +748,6 @@ const displayCards = computed<TierCardView[]>(() => {
 
 /** 顶部周期筛选过滤后的卡片 */
 const filteredCards = computed(() => {
-  if (selectedCycle.value === 'all') return displayCards.value
   if (selectedCycle.value === 'monthly') {
     return displayCards.value.filter((c) => c.isFree || c.periodDays === 30)
   }
@@ -1945,6 +1952,20 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.4;
+}
+.pur-checkout-agreements {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.pur-checkout-agreements a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pur-checkout-agreements a:hover {
+  filter: brightness(1.15);
 }
 
 /* ── 支付成功 ── */

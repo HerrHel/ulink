@@ -49,6 +49,11 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   }
   let needsPersist = false
 
+  if (!Array.isArray(result.categories)) result.categories = DEFAULTS.categories.slice()
+  if (!Array.isArray(result.bookmarks)) result.bookmarks = []
+  if (!Array.isArray(result.siblingGroups)) result.siblingGroups = []
+  if (!Array.isArray(result.customAttributes)) result.customAttributes = []
+
   // 1. 确保默认分类存在
   DEFAULTS.categories.forEach(dc => {
     if (!result.categories.find(c => c.id === dc.id)) result.categories.push(dc)
@@ -59,6 +64,8 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   const seen: Record<string, CustomAttribute> = {}
   const deduped: CustomAttribute[] = []
   attrs.forEach((a: CustomAttribute) => {
+    if (!a || typeof a !== 'object' || !a.id) return
+    if (!a.name) { deduped.push(a); return }
     if (seen[a.name]) {
       const keep = seen[a.name];
       // 审计 R6：步骤2 属性去重只重写 bookmark 的 attributes，group 残留旧 attr id。
@@ -101,6 +108,7 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
   result.siblingGroups.forEach(g => {
     if (g.categoryId === CAT_ALL) g.categoryId = CAT_UNCATEGORIZED
     if (!g.attributes) g.attributes = { [ATTR_IS_GROUP]: true }
+    if (!Array.isArray(g.bookmarkIds)) { (g as { bookmarkIds: string[] }).bookmarkIds = []; needsPersist = true }
   })
   // D2-003：补齐分类 icon/color，避免旧盘缺字段在 schema 严格期整库回退
   result.categories.forEach(c => {
@@ -118,7 +126,8 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
 
   // 5. 展开状态迁移
   {
-    const _es = safeJsonParse<Record<string, unknown>>(safeGetItem('lv_expandStates'), {})
+    const rawEs = safeJsonParse<Record<string, unknown>>(safeGetItem('lv_expandStates'), {})
+    const _es = rawEs && typeof rawEs === 'object' && !Array.isArray(rawEs) ? rawEs : {}
     result.bookmarks.forEach(b => { if (_es[b.id]) b.isExpanded = true })
     result.siblingGroups.forEach(g => { if (_es[g.id]) g.isExpanded = true })
     safeRemoveItem('lv_expandStates')
@@ -182,6 +191,7 @@ export function _migrateTextNotes(text: string, bookmarks: Bookmark[], siblingGr
   }
   html += esc(text.slice(lastIdx))
   html = html.replace(/\n/g, '<br>')
+  if (!Array.isArray(group.bookmarkIds)) (group as { bookmarkIds: string[] }).bookmarkIds = []
   ids.forEach(id => { if (group.bookmarkIds.indexOf(id) < 0) group.bookmarkIds.push(id) })
   return html
 }

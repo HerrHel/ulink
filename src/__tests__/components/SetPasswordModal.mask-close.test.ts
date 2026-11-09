@@ -50,4 +50,25 @@ describe('SetPasswordModal — 遮罩关闭防误关', () => {
     expect(w.emitted('close')).toBeTruthy()
     w.unmount()
   })
+  it('弹窗关闭或取消时立即重置并清空 password 与 code', async () => {
+    const w = mount(SetPasswordModal, { props: { open: true } })
+    const s = w.vm.$.setupState as any
+    s.password = 'MyNewSecretPassword!'
+    s.code = '654321'
+    expect(s.password).toBe('MyNewSecretPassword!')
+    expect(s.code).toBe('654321')
+
+    await w.find('.modal-close').trigger('click')
+    expect(s.password).toBe('')
+    expect(s.code).toBe('')
+
+    await w.setProps({ open: false })
+    s.password = 'LingeringSecret!'
+    await w.setProps({ open: true })
+    s.password = 'AnotherSecret!'
+    await w.setProps({ open: false })
+    expect(s.password).toBe('')
+    expect(s.code).toBe('')
+    w.unmount()
+  })
 })

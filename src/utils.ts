@@ -16,6 +16,8 @@ interface AppStore {
   categories: Category[]
   addCategory: (cat: Category) => void
   save: () => void
+  restoreCategory?: (id: string) => void
+  renameCategory?: (id: string, name: string) => void
 }
 
 // ── ID / URL / 域名 ──
@@ -409,7 +411,17 @@ export function createCategory(name: string): Category {
 export function addNewCategory(name: string, store: AppStore): Category | null {
   const trimmed = name.trim()
   if (!trimmed) { toast(t('msg.enterCategoryName'), false); return null }
-  if (store.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) { toast(t('msg.categoryNameExists'), false); return null }
+  if (store.categories.some(c => !c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase())) { toast(t('msg.categoryNameExists'), false); return null }
+  const softDeletedCat = store.categories.find(c => c.deletedAt && c.name.toLowerCase() === trimmed.toLowerCase())
+  if (softDeletedCat && store.restoreCategory) {
+    store.restoreCategory(softDeletedCat.id)
+    if (softDeletedCat.name !== trimmed && store.renameCategory) {
+      store.renameCategory(softDeletedCat.id, trimmed)
+    }
+    store.save()
+    toast(t('msg.categoryAdded'))
+    return softDeletedCat
+  }
   const cat = createCategory(trimmed)
   // B-12：序号语义——新分类排最后（非软删分类计数），勿用毫秒时间戳（溢出远端 INTEGER order 列）
   cat.order = store.categories.filter(c => !c.deletedAt).length

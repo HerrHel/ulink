@@ -645,4 +645,253 @@ describe('模块 4 审计修复专项回归套件 — 安全认证、E2E 与权�
     expect(ds.categoryMap['cat_enc'].name).toBe(validCipherName)
   })
 
+  it('缺陷 38：CloudBase 驱动 onAuthStateChange 与 signOut 代际隔离防会话复活', async () => {
+    let authListener: ((event: string, session: unknown) => void) | null = null
+    let resolveGetUser: ((val: any) => void) | null = null
+
+    const mockAuthObj = {
+      onAuthStateChange: (cb: any) => {
+        authListener = cb
+        return { unsubscribe: () => {} }
+      },
+      getUser: vi.fn(() => new Promise((resolve) => {
+        resolveGetUser = resolve
+      })),
+      signOut: vi.fn(async () => ({ error: null })),
+    }
+
+    const driver = createCloudBaseAuthDriver(mockAuthObj as any)
+    const emittedSessions: any[] = []
+    driver.onAuthStateChange((s) => {
+      emittedSessions.push(s)
+    })
+
+    // 1. 触发 SIGNED_IN（无昵称，开启 getUser 异步查询）
+    authListener!('SIGNED_IN', { id: 'u1', email: 'test@example.com' })
+    expect(emittedSessions.length).toBe(1)
+    expect(emittedSessions[0]?.user?.email).toBe('test@example.com')
+
+    // 2. 在 getUser 还未 resolve 时，用户点击 signOut
+    await driver.signOut()
+
+    // 3. 此时旧的 getUser 终于 resolve
+    resolveGetUser!({
+      data: {
+        user: { id: 'u1', email: 'test@example.com', nickname: 'ResurrectedName' },
+      },
+    })
+    await Promise.resolve()
+
+    // 4. 代际计数改变，旧的 getUser 回调被丢弃，不会向外触发第二次带旧 profile 的 session
+    expect(emittedSessions.length).toBe(1)
+  })
+
+  it('缺陷 39：CloudBase 驱动所有核心方法在底层抛出异常时安全捕获并返回 error 对象', async () => {
+    const erroringAuth = {
+      getSession: async () => { throw new Error('Network timeout in getSession') },
+      signInWithOtp: async () => { throw new Error('SDK fault in signInWithOtp') },
+      signOut: async () => { throw new Error('Network crash in signOut') },
+      signInWithPassword: async () => { throw new Error('Network drop in signInWithPassword') },
+      resetPasswordForEmail: async () => { throw new Error('Network drop in resetPasswordForEmail') },
+      updateUser: async () => { throw new Error('Network drop in updateUser') },
+    }
+    const erroringDb = {
+      rpc: async () => { throw new Error('DB RPC crashed') },
+    }
+
+    const driver = createCloudBaseAuthDriver(erroringAuth as any, erroringDb as any)
+
+    const s = await driver.getSession()
+    expect(s.session).toBeNull()
+    expect(s.error?.message).toContain('Network timeout')
+
+    const otp = await driver.sendOtp('test@test.com')
+    expect(otp.error?.message).toContain('SDK fault')
+
+    const so = await driver.signOut()
+    expect(so.error?.message).toContain('Network crash')
+
+    const pw = await driver.signInWithPassword('test@test.com', 'pass')
+    expect(pw.error?.message).toContain('Network drop')
+
+    const rst = await driver.sendPasswordReset('test@test.com')
+    expect(rst.error?.message).toContain('Network drop')
+
+    const up = await driver.updateUserMeta({ display_name: 'Name' })
+    expect(up.user).toBeNull()
+    expect(up.error?.message).toContain('Network drop')
+
+    const claim = await driver.claimLegacyIdentity()
+    expect(claim.claimed).toBe(false)
+    expect(claim.error?.message).toContain('DB RPC crashed')
+  })
+
+  it('缺陷 40：authStore 会话远程失效/切出时自动锁定 E2E 与 Vault 敏感密钥', async () => {
+    let authListener: ((session: any) => void) | null = null
+    const mockDriver = {
+      getSession: async () => ({ session: { user: { id: 'u-initial', email: 'a@b.com' } } as any, error: null }),
+      onAuthStateChange: (cb: any) => { authListener = cb },
+    }
+
+    const { __setAuthDriverForTest } = await import('../../lib/authDriver.js')
+    __setAuthDriverForTest(mockDriver as any)
+
+    try {
+      const auth = useAuthStore()
+      const e2eStore = useE2EStore()
+      const vaultStore = useVaultStore()
+
+      await auth.init()
+      expect(auth.isLoggedIn).toBe(true)
+
+      // 解锁 E2E 与 Vault
+      e2eStore.setUnlocked(true)
+      vaultStore.setUnlocked(true)
+
+      // 模拟远端 Token 过期或被踢，onAuthStateChange 派发 null
+      authListener!(null)
+
+      expect(auth.isLoggedIn).toBe(false)
+      // E2E 与 Vault 密钥必须被立即锁定
+      expect(e2eStore.isUnlocked).toBe(false)
+      expect(vaultStore.isVaultUnlocked).toBe(false)
+    } finally {
+      __setAuthDriverForTest(null)
+    }
+  })
+
+  it('缺陷 41：useE2E().unlock(password) 成功时自动放行 pendingUnlock 队列', async () => {
+    const e2e = useE2E()
+    const e2eStore = useE2EStore()
+
+    const rk = e2e.generateRecoveryKey()
+    await e2e.setupMasterPassword('mySecurePassword123', rk)
+
+    e2e.lock()
+    expect(e2eStore.isUnlocked).toBe(false)
+
+    let resolvedResult = false
+    e2eStore.pendingUnlock.push((ok) => {
+      resolvedResult = ok
+    })
+    expect(e2eStore.pendingUnlock.length).toBe(1)
+
+    // 执行普通解锁
+    const ok = await e2e.unlock('mySecurePassword123')
+    expect(ok).toBe(true)
+    expect(e2eStore.isUnlocked).toBe(true)
+
+    // pendingUnlock 队列中的等待者必须被放行 (true)
+    expect(resolvedResult).toBe(true)
+    expect(e2eStore.pendingUnlock.length).toBe(0)
+  })
+
+  it('缺陷 42：useVault().unlockVault(password) 成功时确保 isVaultEnabled=true 不变量成立', async () => {
+    const vault = useVault()
+    const vaultStore = useVaultStore()
+
+    await vault.setupVaultPassword('vaultPass1234')
+    vault.lockVault()
+
+    // 模拟换设备或刚登录，内存中 isVaultEnabled 曾为 false
+    vaultStore.setEnabled(false)
+    expect(vaultStore.isVaultEnabled).toBe(false)
+
+    // 解锁保险柜
+    const ok = await vault.unlockVault('vaultPass1234')
+    expect(ok).toBe(true)
+    expect(vaultStore.isVaultUnlocked).toBe(true)
+    // 保证「已解锁 = 已启用」不变量
+    expect(vaultStore.isVaultEnabled).toBe(true)
+  })
+
+  it('缺陷 43：purgeAccount 账号注销时同步清空 undoStore 历史堆栈', async () => {
+    const { useUndoStore } = await import('../../stores/undo.js')
+    const undoStore = useUndoStore()
+
+    undoStore.ensureStack('g1').undo.push({ notes: 'secret notes', bookmarkIds: [] })
+    expect(undoStore.canUndo('g1')).toBe(true)
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      text: async () => JSON.stringify({ ok: true, dataDeleted: true }),
+      json: async () => ({ ok: true, dataDeleted: true }),
+    })) as any
+
+    try {
+      const res = await purgeAccount()
+      expect(res.ok).toBe(true)
+      // 撤销堆栈必须被清空
+      expect(undoStore.canUndo('g1')).toBe(false)
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('缺陷 44：useVaultBiometric 在 SubtleCrypto 抛出硬件或算法异常时安全降级', async () => {
+    const origCredentials = navigator.credentials
+    const origSubtle = crypto.subtle
+
+    try {
+      const mockCredentials = {
+        create: vi.fn(async () => ({
+          rawId: new Uint8Array(32),
+          getClientExtensionResults: () => ({
+            prf: { enabled: true, results: { first: new Uint8Array(32).buffer } },
+          }),
+        })),
+        get: vi.fn(async () => ({
+          rawId: new Uint8Array(32),
+          getClientExtensionResults: () => ({
+            prf: { results: { first: new Uint8Array(32).buffer } },
+          }),
+        })),
+      }
+      Object.defineProperty(navigator, 'credentials', {
+        value: mockCredentials,
+        configurable: true,
+        writable: true,
+      })
+
+      // 模拟底层 SubtleCrypto importKey 抛出 OperationError (如平台硬件模块暂不可用)
+      const mockSubtle = {
+        ...crypto.subtle,
+        importKey: vi.fn(async () => {
+          throw new DOMException('Hardware unavailable', 'OperationError')
+        }),
+      }
+      Object.defineProperty(crypto, 'subtle', {
+        value: mockSubtle,
+        configurable: true,
+        writable: true,
+      })
+
+      const vaultBio = useVaultBiometric()
+
+      // enrollBiometric 捕获并返回 false，不向外抛 unhandled rejection
+      const enrollRes = await vaultBio.enrollBiometric('mypassword')
+      expect(enrollRes).toBe(false)
+
+      // unlockWithBiometric 捕获并返回 null，不崩溃调用栈
+      localStorage.setItem('lv_vault_biometric', JSON.stringify({
+        credentialId: 'cred-123',
+        prfSalt: 'salt-123',
+        encrypted: 'enc-data',
+      }))
+      const unlockRes = await vaultBio.unlockWithBiometric()
+      expect(unlockRes).toBeNull()
+    } finally {
+      Object.defineProperty(navigator, 'credentials', {
+        value: origCredentials,
+        configurable: true,
+        writable: true,
+      })
+      Object.defineProperty(crypto, 'subtle', {
+        value: origSubtle,
+        configurable: true,
+        writable: true,
+      })
+    }
+  })
 })

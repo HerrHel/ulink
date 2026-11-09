@@ -143,7 +143,11 @@ function reset() {
 }
 
 watch(() => props.open, (open) => {
-  if (!open) { _saveGen++; return }
+  if (!open) {
+    _saveGen++
+    reset()
+    return
+  }
   reset()
   auth.authError = null
   // 冷却中说明刚发过码（例如关掉弹窗又打开）：直接进第二步。
@@ -158,6 +162,7 @@ watch(() => props.open, (open) => {
 function onCancel() {
   if (saving.value || sending.value) return
   _saveGen++
+  reset()
   ui.modals.setPassword = false
   emit('close')
 }
@@ -203,6 +208,7 @@ async function onSave() {
   saving.value = false
   if (ok) {
     toast(t('settings.passwordSaved'))
+    reset()
     ui.modals.setPassword = false
     emit('close')
   } else {

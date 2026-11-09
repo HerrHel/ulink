@@ -1782,7 +1782,15 @@
         resolve(false)
         return
       }
-      chrome.tabs.query({ url: ['https://ulink.ren/*', 'http://localhost:5173/*', 'https://localhost:5173/*'] }, function (tabs) {
+      var webUrlPatterns = [
+        'https://ulink.ren/*',
+        'http://localhost:5173/*',
+        'https://localhost:5173/*',
+        'http://127.0.0.1:5173/*',
+        'http://localhost:4173/*',
+        'http://localhost:5174/*',
+      ]
+      chrome.tabs.query({ url: webUrlPatterns }, function (tabs) {
         if (chrome.runtime.lastError || !tabs || !tabs.length) {
           if (showToast) toast(chrome.i18n.getMessage('sync_login_no_tab'), 2500)
           resolve(false)
@@ -1793,8 +1801,22 @@
           target: { tabId: targetTab.id },
           func: function () {
             try {
+              var auth = localStorage.getItem('linkvault_auth')
+              if (!auth) {
+                // CloudBase js-sdk 凭证检测（支持 credentials_<envId> 或 tcb_ 等存储键）
+                for (var i = 0; i < localStorage.length; i++) {
+                  var k = localStorage.key(i)
+                  if (k && (k.indexOf('credentials_') !== -1 || k.indexOf('tcb_') !== -1)) {
+                    var val = localStorage.getItem(k)
+                    if (val && (val.indexOf('access_token') !== -1 || val.indexOf('accessToken') !== -1 || val.indexOf('refresh_token') !== -1)) {
+                      auth = val
+                      break
+                    }
+                  }
+                }
+              }
               return {
-                auth: localStorage.getItem('linkvault_auth'),
+                auth: auth,
                 theme: localStorage.getItem('lv_theme'),
               }
             } catch (e) {
@@ -1814,10 +1836,12 @@
             }
             var authRaw = raw && raw.auth
             var sessionData = typeof authRaw === 'string' ? JSON.parse(authRaw) : authRaw
-            if (sessionData && sessionData.access_token && sessionData.refresh_token) {
+            var accessToken = sessionData && (sessionData.access_token || sessionData.accessToken)
+            var refreshToken = sessionData && (sessionData.refresh_token || sessionData.refreshToken)
+            if (sessionData && accessToken && refreshToken) {
               var res = await sb.auth.setSession({
-                access_token: sessionData.access_token,
-                refresh_token: sessionData.refresh_token,
+                access_token: accessToken,
+                refresh_token: refreshToken,
               })
               if (res.data && res.data.session && res.data.session.user) {
                 userId = res.data.session.user.id

@@ -95,7 +95,8 @@ export function _mergeOps(ops: SyncOp[]): SyncOp[] {
   for (const [, itemOps] of byItem) {
     const last = itemOps[itemOps.length - 1]
     if (last.action === 'delete') {
-      merged.push(last)
+      const maxRetries = itemOps.reduce((m, o) => Math.max(m, o.retries || 0), 0)
+      merged.push({ ...last, retries: maxRetries })
     } else {
       let maxRetries = 0
       let isNew = false
@@ -149,9 +150,6 @@ export function enqueueDirtyAsOps(): void {
   const _newIds = ds.drainNewIds()
   const changedFields = ds.drainChangedFields()
 
-  _markPendingSync(dirty)
-  _markPendingSync(Array.from(deleted.keys()))
-
   const ops: Array<Omit<SyncOp, 'id' | 'retries'>> = []
 
   const localByType: Record<EntityType, Array<{ id: string; updatedAt?: number }>> = {
@@ -180,6 +178,8 @@ export function enqueueDirtyAsOps(): void {
   }
 
   if (ops.length) {
+    // 仅为实际入队的有效 op 标记 pendingSync，避免脏集中的幽灵孤儿 ID 导致 pending 泄漏永不清除
+    _markPendingSync(ops.map(o => o.itemId))
     // 与历史行为一致：不等待 IDB 写完即返回；refresh 异步更新 badge
     void enqueueSyncOps(ops)
     void refreshPendingCount()

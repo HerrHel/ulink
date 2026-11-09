@@ -334,6 +334,7 @@ export const zh = {
     restored: '已恢复',
     wayback: '在 Wayback Machine 查看历史快照',
     findAlternative: 'AI 寻找平替自愈',
+    whitelist: '加入白名单',
   },
   conflict: {
     title: '同步冲突 ({n})',

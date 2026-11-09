@@ -7,14 +7,22 @@ export const EncryptedPasswordSchema = z.object({
   salt: z.string(),
 })
 
-/** D2-004：数字语义字段——字符串可 coerce，非法再兜 0；动态默认用函数 catch */
+/** D2-004：数字语义字段——字符串可 coerce，非法再兜 0；严格限定为有限数字，防 Infinity 序列化为 null */
 function coerceNum(fallback: number | (() => number) = 0) {
   const catchDef = typeof fallback === 'function' ? fallback : () => fallback
   return z.preprocess(
-    (v) => (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)) ? Number(v) : v),
-    z.number(),
+    (v) => (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v)) && Number.isFinite(Number(v)) ? Number(v) : v),
+    z.number().finite(),
   ).catch(catchDef)
 }
+
+/** 可选时间戳字段：容忍 null/空串/字符串数字并安全转为 undefined 或有限数字，防单条数据 null 导致整库校验失败 */
+const optionalEpochSchema = z.preprocess((v) => {
+  if (v == null || v === '') return undefined
+  if (typeof v === 'string' && !Number.isNaN(Number(v)) && Number.isFinite(Number(v))) return Number(v)
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  return undefined
+}, z.number().finite().optional())
 
 /** attributes：先 strip 非 boolean 键，整表非法再 {} */
 const attributesSchema = z.preprocess((v) => {
@@ -61,8 +69,8 @@ export const BookmarkSchema = z.object({
   isExpanded: z.boolean().catch(false),
   createdAt: coerceNum(() => Date.now()),
   updatedAt: coerceNum(() => Date.now()),
-  deletedAt: z.number().optional(),
-  pinnedAt: z.number().optional(),
+  deletedAt: optionalEpochSchema,
+  pinnedAt: optionalEpochSchema,
 })
 
 export const SiblingGroupSchema = z.object({
@@ -78,8 +86,8 @@ export const SiblingGroupSchema = z.object({
   updatedAt: coerceNum(() => Date.now()),
   useCount: coerceNum(0),
   isPublic: z.boolean().optional(),
-  deletedAt: z.number().optional(),
-  pinnedAt: z.number().optional(),
+  deletedAt: optionalEpochSchema,
+  pinnedAt: optionalEpochSchema,
 })
 
 // D2-003：icon/color 必须 .catch，单条坏分类不能拖垮 AppData → DEFAULTS
@@ -89,16 +97,16 @@ export const CategorySchema = z.object({
   icon: z.string().catch('').transform(boundIcon),
   color: z.string().catch(''),
   order: coerceNum(0),
-  updatedAt: z.number().optional(),
-  deletedAt: z.number().optional(),
+  updatedAt: optionalEpochSchema,
+  deletedAt: optionalEpochSchema,
 })
 
 export const CustomAttributeSchema = z.object({
   id: z.string(),
   name: z.string().transform(boundName),
   type: z.literal('boolean'),
-  updatedAt: z.number().optional(),
-  deletedAt: z.number().optional(),
+  updatedAt: optionalEpochSchema,
+  deletedAt: optionalEpochSchema,
 })
 
 export const AppDataSchema = z.object({
@@ -108,8 +116,8 @@ export const AppDataSchema = z.object({
   customAttributes: z.array(CustomAttributeSchema),
   _masterCanary: z.union([z.string(), EncryptedPasswordSchema]).catch('').optional(),
   /** @deprecated 兼容旧盘；迁移门控请用 _schemaVersion，写入序号用 _writeSeq */
-  _dataVersion: z.number().optional(),
-  _schemaVersion: z.number().optional(),
-  _writeSeq: z.number().optional(),
-  _savedAt: z.number().optional(),
+  _dataVersion: optionalEpochSchema,
+  _schemaVersion: optionalEpochSchema,
+  _writeSeq: optionalEpochSchema,
+  _savedAt: optionalEpochSchema,
 })

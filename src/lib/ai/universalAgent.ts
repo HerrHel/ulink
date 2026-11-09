@@ -119,6 +119,9 @@ export async function executeManageCategories(
     if (!cat) {
       return { success: false, message: `未找到欲重命名的分类「${rawName || params.categoryId}」。` }
     }
+    if (cat.name && isThreePartCipher(cat.name)) {
+      return { success: false, message: '分类当前处于加密锁定状态，为防密文损坏，禁止重命名。' }
+    }
     const nextName = (params.newName || '').trim()
     if (!nextName) {
       return { success: false, message: '重命名失败：新分类名称不能为空。' }
@@ -311,6 +314,9 @@ export async function executeManageTags(
   if (action === 'rename') {
     const tag = findTag(params.tagId || rawName)
     if (!tag) return { success: false, message: `未找到标签「${rawName || params.tagId}」。` }
+    if (tag.name && isThreePartCipher(tag.name)) {
+      return { success: false, message: '标签当前处于加密锁定状态，为防密文损坏，禁止重命名。' }
+    }
     const nextName = (params.newName || '').trim()
     if (!nextName) return { success: false, message: '重命名失败：新标签名称不能为空。' }
     const prevName = tag.name
@@ -480,7 +486,7 @@ export async function executeManageBookmarks(
       url: validUrl,
       username: '',
       password: '',
-      notes: (params.notes || '').trim(),
+      notes: sanitizeHTML(params.notes || '').trim(),
       icon: (params.icon || '').trim() || favicon(validUrl),
       categoryId: targetCatId,
       parentId,
@@ -528,9 +534,24 @@ export async function executeManageBookmarks(
       attributes: { ...(bm.attributes || {}) },
     }
     const patch: Partial<Bookmark> = {}
-    if (params.title) patch.title = params.title.trim()
-    if (params.url) patch.url = params.url.trim()
-    if (params.notes !== undefined) patch.notes = params.notes.trim()
+    if (params.title) {
+      if (bm.title && isThreePartCipher(bm.title)) {
+        return { success: false, message: '书签标题当前处于加密锁定状态，为防密文损坏，禁止修改。' }
+      }
+      patch.title = params.title.trim()
+    }
+    if (params.url) {
+      if (bm.url && isThreePartCipher(bm.url)) {
+        return { success: false, message: '书签网址当前处于加密锁定状态，为防密文损坏，禁止修改。' }
+      }
+      patch.url = params.url.trim()
+    }
+    if (params.notes !== undefined) {
+      if (bm.notes && isThreePartCipher(bm.notes)) {
+        return { success: false, message: '书签附注当前处于加密锁定状态，为防密文损坏，禁止覆盖。' }
+      }
+      patch.notes = sanitizeHTML(params.notes).trim()
+    }
     if (params.icon) patch.icon = params.icon.trim()
 
     if (Array.isArray(params.tags)) {
@@ -809,7 +830,7 @@ export async function executeManageWorkspaces(
       isExpanded: false,
       attributes: { [ATTR_IS_GROUP]: true },
       bookmarkIds: matchedIds,
-      notes: (params.notes || '').trim(),
+      notes: sanitizeHTML(params.notes || '').trim(),
       updatedAt: Date.now(),
       useCount: 0,
     }
@@ -843,6 +864,9 @@ export async function executeManageWorkspaces(
   }
 
   if (action === 'rename') {
+    if (grp.name && isThreePartCipher(grp.name)) {
+      return { success: false, message: '工作台当前处于加密锁定状态，为防密文损坏，禁止重命名。' }
+    }
     const nextName = (params.newName || '').trim()
     if (!nextName) return { success: false, message: '重命名失败：新工作台名称不能为空。' }
     const prevName = grp.name

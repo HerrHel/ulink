@@ -159,9 +159,11 @@ describe('renderLegalDocHtml：自包含页面', () => {
     expect(html).toContain('aria-current="page"')
   })
 
-  it('页脚披露运营主体与联系邮箱', () => {
+  it('页脚披露运营主体、工信部备案号与联系邮箱', () => {
     expect(html).toContain('92420113MAKNSDP56R')
     expect(html).toContain('herr@ulink.ren')
+    expect(html).toContain('鄂ICP备2026061718号-1')
+    expect(html).toContain('https://beian.miit.gov.cn/')
   })
 })
 

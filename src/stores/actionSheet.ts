@@ -8,6 +8,8 @@ import { defineStore } from 'pinia'
 import { useAppStore } from './app.js'
 import { toast } from '../lib/toast.js'
 import { t } from '../i18n/index.js'
+import { displayText } from '../utils.js'
+import { CAT_UNCATEGORIZED } from '../config/constants.js'
 
 interface ActionItem {
   label: string
@@ -68,7 +70,8 @@ export const useActionSheetStore = defineStore('actionSheet', () => {
     }
     store.save()
     const cat = store.categoryMap[catId]
-    toast(t('msg.movedTo', { name: cat ? cat.name : '' }))
+    const catName = displayText(cat?.name) || (catId === CAT_UNCATEGORIZED ? t('common.uncategorized') : (cat?.name || ''))
+    toast(t('msg.movedTo', { name: catName }))
   }
 
   // ── Touch drag-to-dismiss ──

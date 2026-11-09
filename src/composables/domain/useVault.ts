@@ -245,6 +245,8 @@ export function useVault() {
     const ok = await verifyCanary(canaryData.canary, key)
     if (!ok) return false
 
+    // 解锁成功即证明 canary 存在（本地或云端），保险柜必然已启用，保证「已解锁 = 已启用」不变量
+    vaultStore.setEnabled(true)
     _setKey(key)
     vaultStore.setUnlocked(true)
     vaultStore.initVisibilityLock()

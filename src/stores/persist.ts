@@ -23,7 +23,8 @@ const _keys = {
   vault: { ls: STORAGE_KEY_VAULT, idb: 'linkvault_vault_v1' },
 } as const
 function _keyOf(space: Space, kind: 'ls' | 'idb'): string {
-  return _keys[space][kind]
+  const s: Space = space === 'vault' ? 'vault' : 'main'
+  return _keys[s][kind]
 }
 
 /** 进程内单调写入序号（不表示 schema 版本） */
@@ -36,18 +37,19 @@ export interface StorageInfo {
 }
 
 export function _stamp(data: AppData) {
-  const existingSeq = (data as { _writeSeq?: number })._writeSeq
+  const safeData = data && typeof data === 'object' ? data : ({} as AppData)
+  const existingSeq = (safeData as { _writeSeq?: number })._writeSeq
   if (typeof existingSeq === 'number' && existingSeq >= _writeSeq) {
     _writeSeq = existingSeq
   }
   _writeSeq++
   // 保留已有 _schemaVersion；禁止用 writeSeq 覆盖
   const schema =
-    typeof (data as { _schemaVersion?: number })._schemaVersion === 'number'
-      ? (data as { _schemaVersion?: number })._schemaVersion
+    typeof (safeData as { _schemaVersion?: number })._schemaVersion === 'number'
+      ? (safeData as { _schemaVersion?: number })._schemaVersion
       : CURRENT_SCHEMA_VERSION
   return {
-    ...data,
+    ...safeData,
     _writeSeq,
     _schemaVersion: schema,
     // 兼容旧读者：_dataVersion 不再作迁移门控，仅镜像 writeSeq
@@ -150,8 +152,10 @@ export async function loadData(space: Space = 'main'): Promise<AppData> {
 
   const lsData = loadFromLocalStorage(space)
   if (lsData && Array.isArray(lsData.bookmarks)) {
-    // localStorage → IDB 异步回填
-    saveToIDB(lsData, space)
+    // localStorage → IDB 异步回填（排入 _saveChain，避免并发写入覆盖）
+    saveData(lsData, space).catch((e) => {
+      console.warn('[persist] localStorage → IDB backfill failed:', e)
+    })
   }
   return lsData
 }
@@ -174,12 +178,13 @@ export function loadFromLocalStorage(space: Space = 'main'): AppData {
         return cloneDeep(buildSeedDefaults())
       }
       const result: AppData = {
+        ...d,
         categories: d.categories || DEFAULTS.categories.slice(),
         bookmarks: d.bookmarks || [],
         customAttributes: d.customAttributes || [],
         siblingGroups: d.siblingGroups || []
       }
-      const needsPersist = runMigrations(d, result)
+      const needsPersist = runMigrations(result, result)
       // 迁移后再用 schema 严格校验：若补齐后仍不符合（schema 演进或真正损坏）才回退 DEFAULTS
       const parsed = AppDataSchema.safeParse(result)
       if (!parsed.success) {
@@ -207,6 +212,8 @@ export async function loadFromIDB(space: Space = 'main'): Promise<AppData | null
         console.warn('[persist] IDB data structure invalid, falling back to localStorage')
         return null
       }
+      if (!Array.isArray(idbData.categories)) idbData.categories = DEFAULTS.categories.slice()
+      if (!Array.isArray(idbData.customAttributes)) idbData.customAttributes = []
       // 与 loadFromLocalStorage 一样跑 runMigrations：IDB 是权威源，用户从旧版本升级时
       // 早期数据 _dataVersion 可能缺失/< CURRENT_VERSION，若 IDB 加载分支不迁移，旧格式数据
       // （文本笔记未转 HTML、categoryId=CAT_ALL、缺 updatedAt 等）会直入 store 且永不被清洗
@@ -229,7 +236,7 @@ export async function loadFromIDB(space: Space = 'main'): Promise<AppData | null
       }
       // L3 修复：迁移结果必须 await 落库后再返回，否则隐私模式/IDB 临时不可用时 saveToIDB
       // 静默失败，本次会话看到内存迁移态但下次刷新仍读旧未迁移态（_schemaVersion 未落库）。
-      if (needsm) await saveToIDB(parsed.data, space)
+      if (needsm) await saveData(parsed.data, space)
       return parsed.data
     }
   } catch (e) { console.warn('[persist] IDB load fallback:', (e as Error).message) }

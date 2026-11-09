@@ -376,6 +376,8 @@ const SITE_ORIGIN = 'https://ulink.ren'
 /** 站点运营主体（与 docs/legal/*.md 一致，仅供页脚展示） */
 const OPERATOR = '武汉市武汉开发区（汉南区）赫尔网络工作室'
 const CONTACT_EMAIL = 'herr@ulink.ren'
+const ICP_NUMBER = '鄂ICP备2026061718号-1'
+const MIIT_URL = 'https://beian.miit.gov.cn/'
 
 interface LegalDocInfo {
   slug: string
@@ -776,6 +778,7 @@ function switchHtml(activeSlug: string): string {
 }
 
 function footHtml(): string {
+  const icpLink = ICP_NUMBER ? ` · <a href="${MIIT_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(ICP_NUMBER)}</a>` : ''
   return `<footer class="foot">
   <div class="foot-in">
     <ul class="foot-links">
@@ -786,7 +789,7 @@ function footHtml(): string {
       <li><a href="/">返回首页</a></li>
     </ul>
     <div class="foot-meta">
-      运营主体：${OPERATOR}（个体工商户）· 统一社会信用代码 92420113MAKNSDP56R · 联系邮箱
+      运营主体：${OPERATOR}（个体工商户）· 统一社会信用代码 92420113MAKNSDP56R${icpLink} · 联系邮箱
       <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>
     </div>
   </div>

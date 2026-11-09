@@ -6,6 +6,7 @@ import { cleanupGroupImagesOnDelete } from '../lib/imageStorage.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { _denyWrite } from './dataShared.js'
 import { useUIStore } from './ui.js'
+import { useUndoStore } from './undo.js'
 import { ATTR_IS_GROUP } from '../config/constants.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { SiblingGroup } from '../types.js'
@@ -13,8 +14,9 @@ import type { SiblingGroup } from '../types.js'
 export const groupActions = {
   addGroup(this: DataStoreThis, g: SiblingGroup) {
     if (_denyWrite()) return
-    const attributes = { ...g.attributes, [ATTR_IS_GROUP]: true }
-    const group = { ...g, attributes }
+    const attributes = { ...(g.attributes || {}), [ATTR_IS_GROUP]: true }
+    const bookmarkIds = Array.isArray(g.bookmarkIds) ? [...g.bookmarkIds] : []
+    const group = { ...g, bookmarkIds, attributes }
     this.siblingGroups = [...this.siblingGroups, group]
     this._grpMap[group.id] = group
     this._markDirty(group.id)
@@ -27,6 +29,9 @@ export const groupActions = {
     if (idx >= 0) {
       this._saveLocalHistory(id, { ...this.siblingGroups[idx] })
       const appliedChanges = { ...changes }
+      if ('bookmarkIds' in appliedChanges && !Array.isArray(appliedChanges.bookmarkIds)) {
+        appliedChanges.bookmarkIds = []
+      }
       if (appliedChanges.attributes) {
         appliedChanges.attributes = { ...appliedChanges.attributes, [ATTR_IS_GROUP]: true }
       }
@@ -65,8 +70,25 @@ export const groupActions = {
     this._markDirty(id)
     const ui = useUIStore()
     if (ui.focusedGroupId === id) ui.focusedGroupId = null
+    if (ui.editingId === id || ui.editingId === 'group:' + id) ui.editingId = null
+    if (ui.editingGeId === id) ui.editingGeId = null
+    if (ui.addToGid === id) ui.addToGid = null
+    if (ui.saveToGroup === id) ui.saveToGroup = null
+    if (ui.ctxGid === id) ui.ctxGid = null
     const dIdx = ui.detailCards.indexOf('group:' + id)
     if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
+    const bSelIdx = ui.batchSelected.indexOf('group:' + id)
+    if (bSelIdx >= 0) ui.batchSelected.splice(bSelIdx, 1)
+    const expIdx = ui.expandedIds.indexOf(id)
+    if (expIdx >= 0) ui.expandedIds.splice(expIdx, 1)
+    if (ui.quickLookBmId === id || ui.quickLookBmId === 'group:' + id) {
+      ui.closeQuickLook()
+    } else if (Array.isArray(ui.quickLookHistory)) {
+      ui.quickLookHistory = ui.quickLookHistory.filter(x => x !== id && x !== 'group:' + id)
+    }
+    if (ui.shareModalTarget?.type === 'group' && ui.shareModalTarget.id === id) {
+      ui.closeShareModal()
+    }
     this._searchIndexDirty = true
   },
   /** 切换置顶状态：已置顶则取消，未置顶则设为当前时间 */
@@ -112,10 +134,42 @@ export const groupActions = {
     delete this._grpMap[id]
     // r10-attr-restore B1：永久删组时清其在 _deletedAttrMemberships 的预订 membership
     this._dropAttrMemberships(id)
+    // 永久删组时清其在 _deletedGroupMemberships 的残留关联（防止软删书签还原时引用已物理销毁的组 ID）
+    let dgmChanged = false
+    for (const [bmId, gids] of this._deletedGroupMemberships) {
+      if (gids.includes(id)) {
+        const remaining = gids.filter(gid => gid !== id)
+        if (remaining.length === 0) {
+          this._deletedGroupMemberships.delete(bmId)
+        } else {
+          this._deletedGroupMemberships.set(bmId, remaining)
+        }
+        dgmChanged = true
+      }
+    }
+    if (dgmChanged) this._persistDeletedGroupMemberships()
     const ui = useUIStore()
     if (ui.focusedGroupId === id) ui.focusedGroupId = null
+    if (ui.editingId === id || ui.editingId === 'group:' + id) ui.editingId = null
+    if (ui.editingGeId === id) ui.editingGeId = null
+    if (ui.addToGid === id) ui.addToGid = null
+    if (ui.saveToGroup === id) ui.saveToGroup = null
+    if (ui.ctxGid === id) ui.ctxGid = null
     const dIdx = ui.detailCards.indexOf('group:' + id)
     if (dIdx >= 0) ui.detailCards.splice(dIdx, 1)
+    const bSelIdx = ui.batchSelected.indexOf('group:' + id)
+    if (bSelIdx >= 0) ui.batchSelected.splice(bSelIdx, 1)
+    const expIdx = ui.expandedIds.indexOf(id)
+    if (expIdx >= 0) ui.expandedIds.splice(expIdx, 1)
+    if (ui.quickLookBmId === id || ui.quickLookBmId === 'group:' + id) {
+      ui.closeQuickLook()
+    } else if (Array.isArray(ui.quickLookHistory)) {
+      ui.quickLookHistory = ui.quickLookHistory.filter(x => x !== id && x !== 'group:' + id)
+    }
+    if (ui.shareModalTarget?.type === 'group' && ui.shareModalTarget.id === id) {
+      ui.closeShareModal()
+    }
+    try { useUndoStore().clearStack(id) } catch { /* ignore */ }
     this._searchIndexDirty = true
   },
 }

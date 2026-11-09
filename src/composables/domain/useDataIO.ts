@@ -21,6 +21,7 @@ import { runMigrations } from '../../stores/migrations.js'
 import { clearAllSyncOps } from '../../stores/storage.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { useVaultStore } from '../../stores/vault.js'
+import { useUndoStore } from '../../stores/undo.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { __testPendingSync } from './syncPending.js'
 import { newBookmarkId } from '../../lib/newId.js'
@@ -505,6 +506,7 @@ export async function resetToDefaults() {
     ui.activeAttrs = []
     ui.excludedAttrs = []
     ui.detailCards = []
+    useUndoStore().clearAllStacks()
     saveAppData()
     toastWithUndo(t('msg.dataResetToDefault'), () => {
       ds.categories = snapshot.categories

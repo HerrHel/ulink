@@ -88,4 +88,25 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     expect(features.value['linkcheck.auto']).toBeUndefined()
     expect(checkAiEnrichQuota().isPro).toBe(false)
   })
+
+  it('5. 自动清理过往日期的 lv_ai_enrich_* 键，避免 localStorage 无限累积', () => {
+    // 注入过往历史 key
+    localStorage.setItem('lv_ai_enrich_2026-10-01', '3')
+    localStorage.setItem('lv_ai_enrich_2026-10-02', '1')
+    localStorage.setItem('lv_ai_enrich_2026-10-03', '2')
+
+    const { checkAiEnrichQuota, consumeAiEnrichQuota } = useEntitlement()
+    const quota = checkAiEnrichQuota()
+    expect(quota.allowed).toBe(true)
+    expect(quota.remaining).toBe(3)
+
+    // 历史 key 应被自动清理
+    expect(localStorage.getItem('lv_ai_enrich_2026-10-01')).toBeNull()
+    expect(localStorage.getItem('lv_ai_enrich_2026-10-02')).toBeNull()
+    expect(localStorage.getItem('lv_ai_enrich_2026-10-03')).toBeNull()
+
+    // 消耗今天 1 次
+    expect(consumeAiEnrichQuota()).toBe(true)
+    expect(checkAiEnrichQuota().remaining).toBe(2)
+  })
 });

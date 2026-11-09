@@ -31,7 +31,18 @@ describe('extension/pwa-open.js — decideOpenPwa PWA 打开决策（B2）', () 
   })
 
   it('不安全协议 → shouldOpen=false', () => {
-    const apis = ['chrome://settings', 'edge://flags', 'about:blank', 'file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,<script>', 'blob:abc123', 'view-source:https://example.com']
+    const apis = [
+      'chrome://settings',
+      'edge://flags',
+      'about:blank',
+      'file:///etc/passwd',
+      'javascript:alert(1)',
+      'data:text/html,<script>',
+      'blob:abc123',
+      'view-source:https://example.com',
+      'chrome-extension://abcdef/popup.html',
+      'moz-extension://abcdef/popup.html',
+    ]
     for (const u of apis) {
       expect(getApi().decideOpenPwa(u, 't', null, 'https://app.example').shouldOpen, `应拒: ${u}`).toBe(false)
     }

@@ -40,7 +40,7 @@ export const attributeActions = {
       this._trackChange(id, 'name')
       this.customAttributes[idx] = { ...this.customAttributes[idx], name, updatedAt: Date.now() }
       this._attrMap[id] = this.customAttributes[idx]
-      this._markDirty(id), this._searchIndexDirty = true
+      this._markDirty(id); this._searchIndexDirty = true
     }
   },
   deleteAttribute(this: DataStoreThis, id: string) {
@@ -203,10 +203,37 @@ export const attributeActions = {
   permanentDeleteAttribute(this: DataStoreThis, id: string, opts?: { skipPersist?: boolean }) {
     if (_denyWrite()) return
     if (id === ATTR_IS_GROUP) return
+    const now = Date.now()
+    // 彻底清除实体上残留的被物理销毁的属性键，防止幽灵属性残留
+    this.bookmarks = this.bookmarks.map(b => {
+      if (b.attributes && id in b.attributes) {
+        const next = { ...b, attributes: { ...b.attributes }, updatedAt: now }
+        delete next.attributes[id]
+        this._bmMap[b.id] = next
+        this._trackChange(b.id, 'attributes')
+        this._markDirty(b.id)
+        return next
+      }
+      return b
+    })
+    this.siblingGroups = this.siblingGroups.map(g => {
+      if (g.attributes && id in g.attributes) {
+        const next = { ...g, attributes: { ...g.attributes }, updatedAt: now }
+        delete next.attributes[id]
+        this._grpMap[g.id] = next
+        this._trackChange(g.id, 'attributes')
+        this._markDirty(g.id)
+        return next
+      }
+      return g
+    })
     this._permanentDelete('custom_attributes', id)
     delete this._attrMap[id]
     this._deletedAttrMemberships.delete(id)
     if (!opts?.skipPersist) this._persistDeletedAttrMemberships()
+    const ui = useUIStore()
+    const ai = ui.activeAttrs.indexOf(id); if (ai >= 0) ui.activeAttrs.splice(ai, 1)
+    const ei = ui.excludedAttrs.indexOf(id); if (ei >= 0) ui.excludedAttrs.splice(ei, 1)
     this._searchIndexDirty = true
   },
 
@@ -239,12 +266,14 @@ export const attributeActions = {
       if (existing.deletedAt) {
         delete existing.deletedAt
         existing.updatedAt = Date.now()
+        this._trackChange(ATTR_IS_GROUP, 'deletedAt')
         this._markDirty(ATTR_IS_GROUP)
         changed = true
       }
       if (existing.name === '组') {
         existing.name = isEn ? 'Note' : '笔记'
         existing.updatedAt = Date.now()
+        this._trackChange(ATTR_IS_GROUP, 'name')
         this._markDirty(ATTR_IS_GROUP)
         changed = true
       }

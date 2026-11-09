@@ -33,11 +33,19 @@ export function toggleAttrExclude(attrId: string) {
 }
 
 export function addAttrQuick(name: string): boolean {
-  if (!name) return false
+  const trimmed = (name || '').trim()
+  if (!trimmed) return false
   const ds = useDataStore()
   const dsId = attrSlug(name) || gid()
-  if (ds.attributeMap[dsId] || ds.attributeByName[name]) return false
-  ds.addAttribute({ id: dsId, name: name, type: 'boolean' })
+  const byId = ds.attributeMap[dsId]
+  if ((byId && !byId.deletedAt) || ds.attributeByName[name]) return false
+  const softDeletedAttr = ds.customAttributes.find(a => a.deletedAt && (a.id === dsId || a.name.toLowerCase() === trimmed.toLowerCase()))
+  if (softDeletedAttr) {
+    ds.restoreAttribute(softDeletedAttr.id)
+    if (softDeletedAttr.name !== name) ds.renameAttribute(softDeletedAttr.id, name)
+  } else {
+    ds.addAttribute({ id: dsId, name: name, type: 'boolean' })
+  }
   saveAppData()
   return true
 }

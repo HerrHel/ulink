@@ -101,8 +101,8 @@
         <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i" @click.stop="filterByTagName(tag)">{{ tag }}</span>
       </div>
       <div class="group-head-actions" v-if="!ui.batchMode && !isShareReadonly">
-        <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" :title="t('common.undo')" v-html="I.undo"></button>
-        <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" :title="t('common.redo')" v-html="I.redo"></button>
+        <button class="btn-undo-group" :class="{ disabled: !hasUndo }" @click.stop="undo" :title="t('common.undo')" :aria-label="t('common.undo')" v-html="I.undo"></button>
+        <button class="btn-redo-group" :class="{ disabled: !hasRedo }" @click.stop="redo" :title="t('common.redo')" :aria-label="t('common.redo')" v-html="I.redo"></button>
       </div>
     </div>
     <div class="card-body" :class="{'grp-scroll-body':showFullBody}">
@@ -120,13 +120,13 @@
     <div class="card-foot">
       <span class="card-stat">{{ tN('count.bookmarks', group.bookmarkIds?.length ?? (group as any).bookmark_ids?.length ?? 0) }}</span>
       <span class="card-actions" v-if="!isShareReadonly">
-        <button class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
-        <button class="btn-xs" @click.stop="editGrp" :title="t('cards.editGroup')" v-html="I.edit"></button>
-        <button class="btn-xs btn-danger" @click.stop="delGrp" :title="t('cards.deleteGroup')" v-html="I.trash"></button>
+        <button class="btn-xs" @click.stop="addToGrp" :title="t('filter.addBookmarkOrGroup')" :aria-label="t('filter.addBookmarkOrGroup')" v-html="I.plus"></button>
+        <button class="btn-xs" @click.stop="editGrp" :title="t('cards.editGroup')" :aria-label="t('cards.editGroup')" v-html="I.edit"></button>
+        <button class="btn-xs btn-danger" @click.stop="delGrp" :title="t('cards.deleteGroup')" :aria-label="t('cards.deleteGroup')" v-html="I.trash"></button>
       </span>
     </div>
     <button v-if="hasBody && ui.layoutMode === 'list' && !detailMode && !ui.batchMode && !ui.isMobile" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
+    <button v-if="ui.layoutMode === 'list' && !detailMode && !ui.batchMode && ui.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" :aria-label="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="ui.batchMode && ui.isMobile && ui.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
   <Teleport to="body">
@@ -174,7 +174,7 @@ const listNav = useListNav()
 
 const cardEl = ref<HTMLElement | null>(null)
 let _entranceCleanup: (() => void) | null = null
-function setCardEl(el: Element | null) {
+function setCardEl(el: any) {
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }
   cardEl.value = el as HTMLElement | null
   if (el) _entranceCleanup = stripEntranceAnim(el as HTMLElement)

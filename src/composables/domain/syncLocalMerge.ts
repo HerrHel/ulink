@@ -9,6 +9,7 @@ import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { decideRemoteApply, sanitizeRemoteTimestamp } from './syncMergeCore.js'
 import { _isPendingSync } from './syncPending.js'
 import { cloneDeep } from '../../lib/clone.js'
+import { EditorManager } from '../../lib/editor.js'
 import type { EntityType } from '../../types.js'
 
 // UI-only 字段：不参与云端同步（展开/收起、聚焦、编辑态等纯本地状态）
@@ -43,9 +44,12 @@ function _collectLiveDescendants(ds: DataStore, rootId: string): string[] {
   const children = ds.childrenMap[rootId]
   if (!children?.length) return []
   const ids: string[] = []
+  const visited = new Set<string>([rootId])
   const stack = children.map(c => c.id)
   while (stack.length) {
     const cid = stack.pop()!
+    if (visited.has(cid)) continue
+    visited.add(cid)
     ids.push(cid)
     const grands = ds.childrenMap[cid]
     if (grands?.length) stack.push(...grands.map(g => g.id))
@@ -103,6 +107,7 @@ export function _permanentDeleteWithoutEcho(
   for (const cid of ds._changedFields.keys()) if (!changedBefore.has(cid) || affectedIds.has(cid)) ds._changedFields.delete(cid)
   for (const did of affectedIds) ds._newIds.delete(did)
   for (const did of ds._deletedIds.keys()) if (!deletedBefore.has(did) || affectedIds.has(did)) ds._deletedIds.delete(did)
+  try { useSyncStore().removeConflict(id) } catch { /* ignore */ }
 }
 
 /** 智能合并：远端 → 本地（decision → store 副作用）
@@ -146,6 +151,12 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
 
     switch (decision.action) {
       case 'insert':
+        if (rItem.updatedAt) {
+          rItem.updatedAt = sanitizeRemoteTimestamp(rItem.updatedAt)
+        }
+        if (type === 'bookmark' && rItem.id && (rItem as Record<string, unknown>).parentId === rItem.id) {
+          ;(rItem as Record<string, unknown>).parentId = null
+        }
         local.push(rItem)
         onWrite?.()
         break
@@ -173,12 +184,31 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           // 时钟偏差保护：规整远端时间戳，且确保本地 updatedAt 不倒退
           const safeRemoteUpdatedAt = sanitizeRemoteTimestamp(r.updatedAt as number | undefined)
           l.updatedAt = Math.max(Number(l.updatedAt || 0), safeRemoteUpdatedAt)
+          // 书签父自环防御
+          if (type === 'bookmark' && l.id && (l as Record<string, unknown>).parentId === l.id) {
+            ;(l as Record<string, unknown>).parentId = null
+          }
           // 组书签联合合并：保留本地存活但远端缺失的书签 ID，防止并发加书签时相互覆盖丢失
           if (type === 'group' && Array.isArray(r.bookmarkIds)) {
             const rIds = new Set(r.bookmarkIds as string[])
             const localExtra = prevBookmarkIds.filter(bid => !rIds.has(bid) && ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt)
             if (localExtra.length > 0) {
               l.bookmarkIds = [...(r.bookmarkIds as string[]), ...localExtra]
+            }
+          }
+          // 远端 notes 合并时静默同步编辑器内容，防止开着的编辑器携带旧内容并在 onUpdate 时覆盖远端新内容
+          if (type === 'group' && typeof r.notes === 'string') {
+            const ed = EditorManager.get(rItem.id)
+            if (ed && typeof ed.getHTML === 'function') {
+              try {
+                if (ed.getHTML() !== r.notes) {
+                  EditorManager.silentSetContent(rItem.id, r.notes)
+                  ds._dirtyIds.delete(rItem.id)
+                  ds._changedFields.delete(rItem.id)
+                }
+              } catch (e) {
+                console.warn('[sync] sync editor notes failed in revive-assign:', e)
+              }
             }
           }
           onWrite?.()
@@ -193,12 +223,31 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
           // 时钟偏差保护：规整远端时间戳，且确保本地 updatedAt 不倒退
           const safeRemoteUpdatedAt = sanitizeRemoteTimestamp(r.updatedAt as number | undefined)
           l.updatedAt = Math.max(Number(l.updatedAt || 0), safeRemoteUpdatedAt)
+          // 书签父自环防御
+          if (type === 'bookmark' && l.id && (l as Record<string, unknown>).parentId === l.id) {
+            ;(l as Record<string, unknown>).parentId = null
+          }
           // 组书签联合合并：保留本地存活但远端缺失的书签 ID，防止并发加书签时相互覆盖丢失
           if (type === 'group' && Array.isArray(r.bookmarkIds)) {
             const rIds = new Set(r.bookmarkIds as string[])
             const localExtra = prevBookmarkIds.filter(bid => !rIds.has(bid) && ds.bookmarkMap[bid] && !ds.bookmarkMap[bid].deletedAt)
             if (localExtra.length > 0) {
               l.bookmarkIds = [...(r.bookmarkIds as string[]), ...localExtra]
+            }
+          }
+          // 远端 notes 合并时静默同步编辑器内容，防止开着的编辑器携带旧内容并在 onUpdate 时覆盖远端新内容
+          if (type === 'group' && typeof r.notes === 'string') {
+            const ed = EditorManager.get(rItem.id)
+            if (ed && typeof ed.getHTML === 'function') {
+              try {
+                if (ed.getHTML() !== r.notes) {
+                  EditorManager.silentSetContent(rItem.id, r.notes)
+                  ds._dirtyIds.delete(rItem.id)
+                  ds._changedFields.delete(rItem.id)
+                }
+              } catch (e) {
+                console.warn('[sync] sync editor notes failed in assign:', e)
+              }
             }
           }
           onWrite?.()

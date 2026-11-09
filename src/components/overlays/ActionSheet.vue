@@ -9,7 +9,7 @@
       <div class="bmp-list">
         <button v-for="cat in store.categories" :key="cat.id" class="bmp-item" @click="store.onPickCategory(cat.id)">
           <span class="bmp-item-icon" :style="{ color: cat.color || 'var(--accent)' }" v-html="getCategoryIcon(cat.icon)"></span>
-          <span>{{ cat.name }}</span>
+          <span>{{ displayText(cat.name) }}</span>
         </button>
         <button v-if="showVaultOption" class="bmp-item bmp-item-vault"
                 @click="onMoveToVault">
@@ -42,7 +42,7 @@ import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useVaultStore } from '../../stores/vault.js'
 import { I, getCategoryIcon } from '../../config/icons.js'
-import { addNewCategory } from '../../utils.js'
+import { addNewCategory, displayText } from '../../utils.js'
 import { moveBatchSelectedToVault } from '../../composables/domain/useSpaceMove.js'
 import { t } from '../../i18n/index.js'
 

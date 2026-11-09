@@ -10,7 +10,14 @@ import { extractPageMetadataInTab } from './meta-extract.js'
 
 const PWA_URL = 'https://ulink.ren'
 // H10：仅按 PWA / 本地 dev 域名匹配已开标签，无需 tabs 权限遍历全部标签 URL
-const PWA_TAB_URL_PATTERNS = [PWA_URL + '/*', 'http://localhost:5173/*', 'https://localhost:5173/*']
+const PWA_TAB_URL_PATTERNS = [
+  PWA_URL + '/*',
+  'http://localhost:5173/*',
+  'https://localhost:5173/*',
+  'http://127.0.0.1:5173/*',
+  'http://localhost:4173/*',
+  'http://localhost:5174/*',
+]
 
 // ── 统一网页元数据抓取（方案二：现场提取 OpenGraph、SEO 描述与划词）──
 async function extractTabMeta(tab) {
@@ -131,6 +138,9 @@ function openPwaWithUrl(url, title, notes) {
       var existing = tabs && tabs[0]
       if (existing) {
         chrome.tabs.update(existing.id, { active: true, url: decision.targetUrl })
+        if (chrome.windows && typeof chrome.windows.update === 'function' && existing.windowId) {
+          chrome.windows.update(existing.windowId, { focused: true }).catch(function () {})
+        }
       } else {
         chrome.tabs.create({ url: decision.targetUrl })
       }

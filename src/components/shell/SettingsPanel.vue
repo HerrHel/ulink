@@ -1757,7 +1757,13 @@ function _closeExportMenu(e: MouseEvent) {
   if (!t.closest('.sp-export-dropdown')) exportMenuOpen.value = false
 }
 onMounted(() => { document.addEventListener('click', _closeExportMenu); e2e.checkE2EStatus() })
-onBeforeUnmount(() => document.removeEventListener('click', _closeExportMenu))
+onBeforeUnmount(() => {
+  document.removeEventListener('click', _closeExportMenu)
+  if (copyTxTimer) {
+    clearTimeout(copyTxTimer)
+    copyTxTimer = null
+  }
+})
 
 async function onOpenLogin() {
   auth.authModalOpen = true

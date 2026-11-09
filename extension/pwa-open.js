@@ -11,7 +11,8 @@ export function decideOpenPwa(url, title, notes, pwaUrl) {
   if (!url) return { shouldOpen: false, reason: 'NO_URL', targetUrl: null }
   if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:')
       || url.startsWith('file:') || url.startsWith('javascript:') || url.startsWith('data:')
-      || url.startsWith('blob:') || url.startsWith('view-source:')) {
+      || url.startsWith('blob:') || url.startsWith('view-source:')
+      || url.startsWith('chrome-extension://') || url.startsWith('moz-extension://')) {
     return { shouldOpen: false, reason: 'UNSAFE_PROTOCOL', targetUrl: null }
   }
   var params = new URLSearchParams({ ext_save_url: url, ext_save_title: title || url })

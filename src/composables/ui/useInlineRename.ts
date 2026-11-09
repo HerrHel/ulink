@@ -11,8 +11,8 @@ import { useE2EStore } from '../../stores/e2e.js'
 
 /** 行内重命名目标：任意含 save() 与动态重命名方法的对象（CategoryModal / AttributeModal 等） */
 export interface RenameTarget {
-  save: () => void
-  [method: string]: unknown
+  save: () => unknown
+  [method: string]: any
 }
 
 export function useInlineRename(store: RenameTarget, renameMethod: string) {
@@ -20,7 +20,7 @@ export function useInlineRename(store: RenameTarget, renameMethod: string) {
   const editingName = ref('')
   let editInputElement: HTMLInputElement | null = null
 
-  function setEditInputRef(el: Element | null) {
+  function setEditInputRef(el: any) {
     editInputElement = el as HTMLInputElement | null
   }
 

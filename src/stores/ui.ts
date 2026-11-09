@@ -321,6 +321,7 @@ export const useUIStore = defineStore('ui', {
       if (this.modals.quickLook && this.quickLookBmId && this.quickLookBmId !== bmId) {
         if (!this.quickLookHistory) this.quickLookHistory = []
         this.quickLookHistory.push(this.quickLookBmId)
+        if (this.quickLookHistory.length > 50) this.quickLookHistory.shift()
       }
       this.quickLookBmId = bmId
       this.modals.quickLook = true
@@ -465,13 +466,13 @@ export const useUIStore = defineStore('ui', {
           smartFillEnabled: this.smartFillEnabled,
           aiEnabled: this.aiEnabled,
           aiRailEnabled: this.aiRailEnabled,
-          searchQuery: this.searchQuery || '',
+          searchQuery: this.curSpace === 'vault' ? '' : (this.searchQuery || ''),
           sortMode: this.sortMode || 'order',
           sortDir: this.sortDir || 'desc',
           groupsOnTop: this.groupsOnTop,
           layoutMode: this.layoutMode,
           historyMax: this.historyMax,
-          docScrollTop: document.documentElement.scrollTop || 0,
+          docScrollTop: (typeof document !== 'undefined' && document.documentElement) ? (document.documentElement.scrollTop || 0) : 0,
           expandedIds: this.expandedIds.slice(),
           _preferredLayoutMode: this._preferredLayoutMode || null,
           _mobileLayoutMode: this._mobileLayoutMode,
@@ -601,7 +602,9 @@ export const useUIStore = defineStore('ui', {
             return !!target && !target.deletedAt
           })
         }
-        if (s.docScrollTop) document.documentElement.scrollTop = s.docScrollTop
+        if (s.docScrollTop && typeof document !== 'undefined' && document.documentElement) {
+          document.documentElement.scrollTop = s.docScrollTop
+        }
         // themeStyle 不入 UI state 持久化对象（单一真相源是 theme.ts 的 lv_themeStyle key
         // —— themeSetStyle 写、theme.ts IIFE 启动读回设 DOM 属性）。但 uiStore.themeStyle 内存态
         // 刷新后会重置为默认 'premium'，导致重启后 SettingsPanel 的 :class 高亮与实际 DOM 主题

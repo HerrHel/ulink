@@ -63,7 +63,8 @@ export const useUndoStore = defineStore('undo', {
     cleanStale() {
       const ds = useDataStore()
       for (const gid in this.stacks) {
-        if (!ds.groupMap[gid]) {
+        const g = ds.groupMap[gid]
+        if (!g || g.deletedAt) {
           this.clearStack(gid)
         }
       }

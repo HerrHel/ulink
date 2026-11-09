@@ -278,6 +278,9 @@ test.describe('AI 提问分流路由（mock）', () => {
     // 两个旁路 mock 均带计数：断言分流未误入其它链路（防假绿）
     let extractCalls = 0
     let mimoCalls = 0
+    await page.route((u) => u.pathname.includes('/api/ai-candidates'), async (route: Route) => {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ success: false }) })
+    })
     await page.route((u) => /\/(functions\/v1\/)?extract-video$/.test(u.pathname), async (route: Route) => {
       extractCalls++
       await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })

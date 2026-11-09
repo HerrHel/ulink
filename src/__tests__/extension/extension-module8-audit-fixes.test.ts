@@ -150,4 +150,19 @@ describe('模块 8：浏览器扩展体系、外部摄取与客户端微交互�
     // submitDeep 中挂载了超时信号
     expect(veCode).toContain('signal: AbortSignal.timeout(15000)')
   })
+
+  // ── 10. sidepanel.js 一键同步网页登录态支持 CloudBase 凭证 ──
+  it('10. sidepanel.js: trySyncSessionFromWeb 支持检测 CloudBase credentials_ 凭证', () => {
+    const spCode = fs.readFileSync(path.resolve('extension/sidepanel.js'), 'utf8')
+    expect(spCode).toContain("credentials_")
+    expect(spCode).toContain("access_token")
+    expect(spCode).toContain("refresh_token")
+    expect(spCode).toContain("webUrlPatterns")
+  })
+
+  // ── 11. background.js 激活已有 PWA 窗口同时恢复窗口焦点 ──
+  it('11. background.js: openPwaWithUrl 命中已有标签时聚焦目标窗口', () => {
+    const bgCode = fs.readFileSync(path.resolve('extension/background.js'), 'utf8')
+    expect(bgCode).toContain("chrome.windows.update(existing.windowId, { focused: true })")
+  })
 })

@@ -85,8 +85,12 @@ export function _flushPendingHist() {
     const key = localHistoryKey(id)
     const arr = safeJsonParse<unknown[]>(safeGetItem(key), [])
     if (Array.isArray(arr)) {
-      arr.unshift({ id: Date.now(), data, created_at: new Date().toISOString() })
-      safeSetItem(key, JSON.stringify(arr.slice(0, max)))
+      try {
+        arr.unshift({ id: Date.now(), data, created_at: new Date().toISOString() })
+        safeSetItem(key, JSON.stringify(arr.slice(0, max)))
+      } catch (e) {
+        console.warn('[LinkVault] Failed to flush local history for', id, e)
+      }
     }
   }
   _histDebounceTimers.clear()

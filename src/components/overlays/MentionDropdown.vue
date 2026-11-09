@@ -2,9 +2,9 @@
   <div id="mentionDrop" class="mention-drop" v-show="isVisible"
        :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
     <div v-for="(item, idx) in candidates" :key="item.id"
-         class="mention-item" :class="{ active: idx === activeIdx, 'has-sub': item.subItems?.length }"
+         class="mention-item" :class="{ active: idx === activeIdx, 'has-sub': item.type === 'bookmark' && item.subItems?.length }"
          @mousedown.prevent="onItemMousedown(idx, $event)">
-      <template v-if="mentionType === 'group'">
+      <template v-if="item.type === 'group'">
         <img v-if="item.icon" :src="item.icon" alt="">
         <span v-else class="note-icon" v-html="noteIcon"></span>
         <span class="mi-name">{{ displayText(item.name) || t('cards.unnamedGroup') }}</span>
@@ -37,7 +37,7 @@ import { useMention } from '../../composables/domain/useMention.js'
 import { t, tN } from '../../i18n/index.js'
 
 const {
-  isVisible, candidates, activeIdx, activeSubIdx, mentionType, pos,
+  isVisible, candidates, activeIdx, activeSubIdx, pos,
   selectBookmark, selectGroupRef,
   onTrigger, onInput, onKeydown
 } = useMention()
@@ -47,7 +47,7 @@ const noteIcon = I.note
 function onItemMousedown(idx: number, event: MouseEvent) {
   const item = candidates.value[idx]
   if (!item) return
-  if (item.subItems?.length && (event.target as HTMLElement).closest('.mention-sub-menu')) return
+  if (item.type === 'bookmark' && item.subItems?.length && (event.target as HTMLElement).closest('.mention-sub-menu')) return
   item.type === 'group' ? selectGroupRef(item.id) : selectBookmark(item.id)
 }
 

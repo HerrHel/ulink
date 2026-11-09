@@ -11,7 +11,7 @@
           <input
             type="checkbox"
             :checked="allSelected"
-            :indeterminate="someSelected && !allSelected"
+            .indeterminate="someSelected && !allSelected"
             @change="toggleAll"
           />
           <span>{{ allSelected ? t('deadlinks.deselectAll') : t('batch.selectAll') }}</span>

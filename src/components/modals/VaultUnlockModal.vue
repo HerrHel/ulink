@@ -170,7 +170,11 @@ async function onUnlock() {
   error.value = ''
   const ok = await vault.unlockVault(masterPw.value)
   // await 期间用户可能已点遮罩取消（watch 负向分支已推进 _pwGen）
-  if (localGen !== _pwGen) { loading.value = false; return }
+  if (localGen !== _pwGen) {
+    if (ok) vault.lockVault?.()
+    loading.value = false
+    return
+  }
   loading.value = false
   if (ok) {
     emit('unlocked')
@@ -226,7 +230,11 @@ async function onBiometricUnlock() {
   }
   const ok = await vault.unlockVault(pw)
   // 二次 await 后再判一次 gen：unlockVault 期间用户也可能取消
-  if (localGen !== _bioGen) { bioLoading.value = false; return }
+  if (localGen !== _bioGen) {
+    if (ok) vault.lockVault?.()
+    bioLoading.value = false
+    return
+  }
   bioLoading.value = false
   if (ok) {
     emit('unlocked')

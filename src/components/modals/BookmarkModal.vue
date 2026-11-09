@@ -186,12 +186,12 @@ const aiSuggestionText = computed(() => {
   const parts: string[] = []
   if (bmForm.aiSuggestCatId && bmForm.categoryId !== bmForm.aiSuggestCatId) {
     const cat = store.categoryMap[bmForm.aiSuggestCatId]
-    if (cat) parts.push(t('modal.bookmark.aiSuggestCat', { name: cat.name }))
+    if (cat) parts.push(t('modal.bookmark.aiSuggestCat', { name: displayText(cat.name) }))
   }
   if (bmForm.aiSuggestAttrIds.length) {
     const names = bmForm.aiSuggestAttrIds
       .filter(id => !bmForm.attributes[id])
-      .map(id => store.attributeMap[id]?.name)
+      .map(id => displayText(store.attributeMap[id]?.name))
       .filter(Boolean)
     if (names.length) parts.push(t('modal.bookmark.aiSuggestAttrs', { names: names.join(t('modal.bookmark.aiSuggestAttrSep')) }))
   }

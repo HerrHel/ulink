@@ -5,6 +5,7 @@
  * P2 新增：PBKDF2 密钥派生 + AES-256-GCM 加密/解密
  */
 export function safeBtoa(s: string): string {
+  if (typeof s !== 'string' || !s) return ''
   try {
     const bytes = new TextEncoder().encode(s)
     let binary = ''
@@ -19,6 +20,7 @@ export function safeBtoa(s: string): string {
 }
 
 export function safeAtob(s: string): string {
+  if (typeof s !== 'string' || !s) return ''
   try {
     const binary = atob(s)
     const bytes = new Uint8Array(binary.length)
@@ -84,6 +86,7 @@ export function isThreePartCipher(s: string): boolean {
 }
 
 function _toBuffer(str: string): Uint8Array {
+  if (typeof str !== 'string') return new Uint8Array(0)
   return new TextEncoder().encode(str)
 }
 
@@ -131,7 +134,9 @@ function _base64ToBuf(b64: string): Uint8Array {
  *   见 PBKDF2_DEFAULT_ITERATIONS 注释）。未传则用当前默认常量，等价于历史行为。
  */
 export async function deriveKey(masterPassword: string, salt: Uint8Array | ArrayLike<number> | Record<string, number>, iterations: number = PBKDF2_ITERATIONS): Promise<CryptoKey> {
+  if (!salt) throw new Error('deriveKey: salt is required')
   const saltBytes = salt instanceof Uint8Array ? salt : new Uint8Array(Array.isArray(salt) ? salt : Object.values(salt))
+  if (saltBytes.length === 0) throw new Error('deriveKey: salt must not be empty')
   const keyMaterial = await crypto.subtle.importKey(
     'raw', _bs(_toBuffer(typeof masterPassword === 'string' && masterPassword.length > 512 ? masterPassword.slice(0, 512) : (masterPassword || ''))), 'PBKDF2', false, ['deriveKey'],
   )
@@ -166,6 +171,8 @@ export async function encrypt(plaintext: string, key: CryptoKey): Promise<string
 
 /** AES-256-GCM 解密 */
 export async function decrypt(ciphertext: string, key: CryptoKey): Promise<string> {
+  if (typeof ciphertext !== 'string') return ''
+  if (!key) return ciphertext
   if (!isThreePartCipher(ciphertext)) return ciphertext
   const parts = ciphertext.split('.')
   try {
@@ -197,6 +204,8 @@ export async function decrypt(ciphertext: string, key: CryptoKey): Promise<strin
  * 这与 decrypt 对非密文的处理一致，差异仅在「三段 + 失败」分支。
  */
 export async function decryptForDisplay(ciphertext: string, key: CryptoKey): Promise<string> {
+  if (typeof ciphertext !== 'string') return ''
+  if (!key) return ''
   if (!isThreePartCipher(ciphertext)) return ciphertext
   const parts = ciphertext.split('.')
   try {

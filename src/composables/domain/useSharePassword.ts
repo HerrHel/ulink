@@ -46,11 +46,14 @@ export async function getSharePasswordState(
   const token = await currentToken()
   if (!token) return { ok: false, error: 'unauthorized' }
 
+  const abortCtrl = new AbortController()
+  const timer = setTimeout(() => abortCtrl.abort(), 10000)
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ gid, action: 'get' }),
+      signal: abortCtrl.signal,
     })
     const body = (await res.json().catch(() => ({}))) as { ok?: boolean; has_password?: boolean }
     if (res.ok && body.ok === true) return { ok: true, hasPassword: body.has_password === true }
@@ -59,6 +62,8 @@ export async function getSharePasswordState(
     return { ok: false, error: 'network' }
   } catch {
     return { ok: false, error: 'network' }
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -82,6 +87,8 @@ export async function setSharePassword(
   const token = await getApiToken();
   if (!token) return { ok: false, error: 'unauthorized' }
 
+  const abortCtrl = new AbortController()
+  const timer = setTimeout(() => abortCtrl.abort(), 10000)
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -90,6 +97,7 @@ export async function setSharePassword(
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ gid, password }),
+      signal: abortCtrl.signal,
     })
     const body = (await res.json().catch(() => ({}))) as {
       ok?: boolean
@@ -105,5 +113,7 @@ export async function setSharePassword(
     return { ok: false, error: 'network' }
   } catch {
     return { ok: false, error: 'network' }
+  } finally {
+    clearTimeout(timer)
   }
 }

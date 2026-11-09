@@ -176,10 +176,10 @@ export function toRemoteRow<K extends EntityType>(
   if (type === 'bookmark') {
     const row: RemoteBookmarkRow = {
       id: item.id as string, user_id: item._userId as string,
-      title: item.title as string, url: item.url as string,
+      title: (item.title as string) || '', url: (item.url as string) || '',
       username: (item.username as string) || '', password: _serializePassword(item.password),
       notes: (item.notes as string) || '', icon: (item.icon as string) || '',
-      category_id: item.categoryId as string, parent_id: (item.parentId as string) || null,
+      category_id: (item.categoryId as string) || CAT_UNCATEGORIZED, parent_id: (item.parentId as string) || null,
       order: (item.order as number) || 0, use_count: (item.useCount as number) || 0,
       attributes: (item.attributes as Record<string, boolean>) || {},
       // is_expanded: !!item.isExpanded,  // UI-only 字段，不参与云端同步
@@ -193,7 +193,7 @@ export function toRemoteRow<K extends EntityType>(
   if (type === 'group') {
     const row: RemoteGroupRow = {
       id: item.id as string, user_id: item._userId as string,
-      name: item.name as string, category_id: item.categoryId as string,
+      name: (item.name as string) || '', category_id: (item.categoryId as string) || CAT_UNCATEGORIZED,
       icon: (item.icon as string) || '', order: (item.order as number) || 0,
       // is_expanded: !!item.isExpanded,  // UI-only 字段，不参与云端同步
       attributes: (item.attributes as Record<string, boolean>) || {},
@@ -209,7 +209,7 @@ export function toRemoteRow<K extends EntityType>(
   if (type === 'category') {
     const row: RemoteCategoryRow = {
       id: item.id as string, user_id: item._userId as string,
-      name: item.name as string, icon: (item.icon as string) || '',
+      name: (item.name as string) || '', icon: (item.icon as string) || '',
       color: (item.color as string) || '',
       order: (item.order as number) || 0,
       updated_at_num: (item.updatedAt as number) || now,
@@ -219,7 +219,7 @@ export function toRemoteRow<K extends EntityType>(
   }
   const row: RemoteAttributeRow = {
     id: item.id as string, user_id: item._userId as string,
-    name: item.name as string, type: (item.type as string) || 'boolean',
+    name: (item.name as string) || '', type: (item.type as string) || 'boolean',
     updated_at_num: (item.updatedAt as number) || now,
     deleted_at: item.deletedAt ? new Date(item.deletedAt as number).toISOString() : null,
   }
@@ -247,8 +247,8 @@ export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {
     username: r.username || '', password: _parseRemotePassword(r.password),
     notes: r.notes || '', icon: r.icon || '',
     categoryId: r.category_id || CAT_UNCATEGORIZED,
-    parentId: r.parent_id || null,
-    order: r.order || 0, useCount: r.use_count || 0,
+    parentId: (r.parent_id && r.parent_id !== r.id) ? r.parent_id : null,
+    order: r.order ?? 0, useCount: r.use_count ?? 0,
     attributes: (r.attributes as Record<string, boolean>) || {},
     isExpanded: r.is_expanded || false,
     createdAt: r.created_at_num || 0,
@@ -262,11 +262,11 @@ export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
   return _validateWith(SiblingGroupSchema, {
     id: r.id, name: r.name,
     categoryId: r.category_id || CAT_UNCATEGORIZED,
-    icon: r.icon || '', order: r.order || 0,
+    icon: r.icon || '', order: r.order ?? 0,
     isExpanded: r.is_expanded || false,
     attributes: (r.attributes as Record<string, boolean>) || {},
     bookmarkIds: (r.bookmark_ids as string[]) || [],
-    notes: r.notes || '', useCount: r.use_count || 0,
+    notes: r.notes || '', useCount: r.use_count ?? 0,
     updatedAt: r.updated_at_num || 0,
     isPublic: r.is_public || false,
     pinnedAt: r.pinned_at ?? undefined,

@@ -53,11 +53,17 @@ export function _sortItems<T extends SortableItem>(items: T[], { sortMode, sortD
     const aPin = a.pinnedAt ? 1 : 0
     const bPin = b.pinnedAt ? 1 : 0
     if (aPin !== bPin) return bPin - aPin
-    if (sortMode === 'useCount') return (a.useCount - b.useCount) * d
+    const aUse = (typeof a.useCount === 'number' && Number.isFinite(a.useCount)) ? a.useCount : 0
+    const bUse = (typeof b.useCount === 'number' && Number.isFinite(b.useCount)) ? b.useCount : 0
+    if (sortMode === 'useCount') return (aUse - bUse) * d
     if (sortMode === 'title') return String(a[nameKey] ?? '').localeCompare(String(b[nameKey] ?? '')) * d
-    // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir
-    if (sortMode === 'dateDesc') return (((b[dateKey] as number) || 0) - ((a[dateKey] as number) || 0))
-    if (sortMode === 'dateAsc') return (((a[dateKey] as number) || 0) - ((b[dateKey] as number) || 0))
-    return (a.order - b.order) * d
+    // A1-001：dateDesc/dateAsc 已在比较式内编码方向，勿再乘 sortDir；安全校验有限数值
+    const aDate = (typeof a[dateKey] === 'number' && Number.isFinite(a[dateKey])) ? (a[dateKey] as number) : 0
+    const bDate = (typeof b[dateKey] === 'number' && Number.isFinite(b[dateKey])) ? (b[dateKey] as number) : 0
+    if (sortMode === 'dateDesc') return bDate - aDate
+    if (sortMode === 'dateAsc') return aDate - bDate
+    const aOrder = (typeof a.order === 'number' && Number.isFinite(a.order)) ? a.order : 0
+    const bOrder = (typeof b.order === 'number' && Number.isFinite(b.order)) ? b.order : 0
+    return (aOrder - bOrder) * d
   })
 }

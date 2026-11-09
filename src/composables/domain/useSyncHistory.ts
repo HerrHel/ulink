@@ -6,6 +6,7 @@ import { dbFrom } from '../../lib/dbApi.js'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { saveAppData } from '../../stores/app.js'
+import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { useAuth } from './useAuth.js'
 import { useE2E } from './useE2E.js'
 import { fetchLocalHistory, getLocalHistoryVersion, type LocalHistoryVersion } from '../../stores/storage.js'
@@ -60,10 +61,18 @@ export async function fetchHistory(itemId: string): Promise<HistoryVersion[]> {
   const userId = _getUserId()
   let remote: HistoryVersion[] = []
   if (userId) {
-    const { data } = await dbFrom('data_history')
-      .select('id, data, created_at').eq('user_id', userId).eq('item_id', itemId)
-      .order('created_at', { ascending: false }).limit(max)
-    remote = (data as HistoryVersion[]) || []
+    try {
+      const { data, error } = await dbFrom('data_history')
+        .select('id, data, created_at').eq('user_id', userId).eq('item_id', itemId)
+        .order('created_at', { ascending: false }).limit(max)
+      if (error) {
+        console.warn('[history] fetch remote history failed:', error)
+      } else {
+        remote = (data as HistoryVersion[]) || []
+      }
+    } catch (e) {
+      console.warn('[history] fetch remote history failed:', e)
+    }
   }
 
   // H4：云端 data_history 已对 E2E 启用项的敏感字段加密（见 useCloudSync._pushFromQueue
@@ -105,10 +114,15 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
   if (!histData) {
     const userId = _getUserId()
     if (!userId) return false
-    const { data, error } = await dbFrom('data_history')
-      .select('data').eq('id', historyId).eq('user_id', userId).single()
-    if (error || !data) { console.warn('[history] fetch version failed:', error); return false }
-    histData = data.data as Record<string, unknown>
+    try {
+      const { data, error } = await dbFrom('data_history')
+        .select('data').eq('id', historyId).eq('user_id', userId).single()
+      if (error || !data) { console.warn('[history] fetch version failed:', error); return false }
+      histData = data.data as Record<string, unknown>
+    } catch (e) {
+      console.warn('[history] fetch version failed:', e)
+      return false
+    }
   }
 
   const ds = useDataStore()
@@ -137,7 +151,7 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
 
   if (itemType === 'bookmark') {
     const rawPid = plain.parentId as string | null
-    const safeParentId = (rawPid && ds.bookmarkMap[rawPid] && !ds.bookmarkMap[rawPid].deletedAt) ? rawPid : null
+    const safeParentId = (rawPid && rawPid !== itemId && ds.bookmarkMap[rawPid] && !ds.bookmarkMap[rawPid].deletedAt) ? rawPid : null
     ds.updateBookmark(itemId, {
       title: (plain.title as string) || '',
       url: (plain.url as string) || '',
@@ -145,7 +159,7 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
       password: (plain.password as Bookmark['password']) ?? '',
       notes: (plain.notes as string) ?? '',
       icon: (plain.icon as string) ?? '',
-      categoryId: (plain.categoryId as string) || ds.bookmarkMap[itemId]?.categoryId || '',
+      categoryId: (plain.categoryId as string) || ds.bookmarkMap[itemId]?.categoryId || CAT_UNCATEGORIZED,
       parentId: safeParentId,
       order: (plain.order as number) ?? 0,
       useCount: (plain.useCount as number) ?? 0,
@@ -163,7 +177,7 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
     const filteredIds = (plain.bookmarkIds as string[] || []).filter(bid => ds.bookmarkMap[bid])
     ds.updateGroup(itemId, {
       name: (plain.name as string) || '',
-      categoryId: (plain.categoryId as string) || ds.groupMap[itemId]?.categoryId || '',
+      categoryId: (plain.categoryId as string) || ds.groupMap[itemId]?.categoryId || CAT_UNCATEGORIZED,
       icon: (plain.icon as string) ?? '',
       order: (plain.order as number) ?? 0,
       isExpanded: !!plain.isExpanded,

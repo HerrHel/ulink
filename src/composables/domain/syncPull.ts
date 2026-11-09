@@ -361,7 +361,8 @@ export async function pullChanges(full = false): Promise<boolean> {
     // 仅本次 pull 实际改写本地时落盘：空 pull（远端无新变更、无对账删除）跳过 IDB 写，
     // 避免 realtime/visible 高频触发的增量 pull 每次都无效落盘。lastSyncAt 仍推进，
     // 标记本次对账点；本地数据未变则无需持久化。
-    if (localChanged) saveAppData()
+    if (localChanged) await saveAppData()
+    try { syncStore.setPendingCount(await syncOpsCount()) } catch { /* ignore */ }
 
     syncStore.setLastSyncAt(Date.now())
     syncStore.setSyncStatus('success')

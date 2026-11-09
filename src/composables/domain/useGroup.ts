@@ -343,7 +343,7 @@ export function saveGroupEdit() {
   // 保存前把草稿 bookmarkIds 固化；notes 以编辑器当前 HTML 为准（移除书签已反映在 DOM）
   const editorHTML = EditorManager.getContentHTML(gId);
   ds.updateGroup(gId, {
-    name: geForm.name.trim() || '未命名',
+    name: geForm.name.trim() || t('common.unnamed'),
     categoryId: geForm.catId,
     icon: geForm.icon.trim(),
     attributes: { ...geForm.attrs, [ATTR_IS_GROUP]: true },

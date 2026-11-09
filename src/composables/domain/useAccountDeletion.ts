@@ -81,12 +81,20 @@ export async function purgeAccount(): Promise<AccountDeletionResult> {
   try { useE2EStore().lock() } catch { /* ignore */ }
   try { useVaultStore().lock() } catch { /* ignore */ }
   try {
+    const { useUndoStore } = await import('../../stores/undo.js')
+    useUndoStore().clearAllStacks()
+  } catch { /* ignore */ }
+  try {
     const ds = useDataStore()
     ds.bookmarks = []
     ds.siblingGroups = []
     ds.categories = []
     ds.customAttributes = []
     ds._syncMaps()
+  } catch { /* ignore */ }
+  try {
+    const { useEntitlement } = await import('./useEntitlement.js')
+    useEntitlement().clear()
   } catch { /* ignore */ }
   try {
     await useAuthStore().signOut()

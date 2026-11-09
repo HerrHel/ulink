@@ -85,12 +85,17 @@ export function useInlineEdit() {
     // E3-003：_cancel → _teardown 会清空 _onCancel，须先缓存再调用
     if (ev.key === 'Escape') {
       ev.preventDefault()
+      ev.stopPropagation()
       const cancel = _onCancel
       _cancel()
       cancel?.()
       return
     }
-    if (!_multiline && ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); _save() }
+    if (!_multiline && ev.key === 'Enter' && !ev.shiftKey) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      _save()
+    }
   }
 
   if (getCurrentInstance()) {

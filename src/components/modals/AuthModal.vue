@@ -94,6 +94,13 @@
               <span class="auth-oauth-label">{{ t('modal.auth.google') }}</span>
             </button>
           </div>
+
+          <div class="auth-legal-tip">
+            <span>{{ isZh ? '登录即表示已阅读并同意 ' : 'Signing in means you agree to ' }}</span>
+            <a href="/legal/terms-of-service.html" target="_blank" rel="noopener noreferrer">{{ isZh ? '《用户服务协议》' : 'Terms of Service' }}</a>
+            <span>{{ isZh ? ' 和 ' : ' and ' }}</span>
+            <a href="/legal/privacy-policy.html" target="_blank" rel="noopener noreferrer">{{ isZh ? '《隐私政策》' : 'Privacy Policy' }}</a>
+          </div>
         </template>
 
         <!-- Step 2: 输入验证�?-->
@@ -158,7 +165,7 @@ import { useAuth } from '../../composables/domain/useAuth.js'
 import { useCloudSync } from '../../composables/domain/useCloudSync.js'
 import { useE2E } from '../../composables/domain/useE2E.js'
 import { I } from '../../config/icons.js'
-import { t } from '../../i18n/index.js'
+import { t, getLocale } from '../../i18n/index.js'
 import { toast } from '../../lib/toast.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
@@ -184,6 +191,7 @@ const codeInputRef = ref<HTMLInputElement | null>(null)
 // 后系统不应再自作主张触发全量云端同步�?
 const syncTimer = ref<number | null>(null)
 
+const isZh = computed(() => getLocale().toLowerCase().startsWith('zh'))
 const emailTrim = computed(() => email.value.trim())
 const cooldownSec = computed(() => auth.sendCooldownRemaining(emailTrim.value))
 const lockSec = computed(() => auth.verifyLockRemaining(emailTrim.value))
@@ -205,6 +213,8 @@ watch(() => auth.authModalOpen, (open) => {
       inputRef.value?.focus()
     })
   } else {
+    password.value = ''
+    code.value = ''
     if (syncTimer.value !== null) {
       // 弹窗关闭（含手动 X / 遮罩 / 取消 / Esc 任一路径，均会置 authModalOpen=false）时
       // 取消 pending 的成功回�?timer，防 800ms 后仍触发 checkE2EStatus + initialSync�?
@@ -344,6 +354,8 @@ function focusCodeInput() {
 }
 
 function onClose() {
+  password.value = ''
+  code.value = ''
   auth.authModalOpen = false
 }
 
@@ -524,6 +536,22 @@ const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)
 }
 .auth-oauth-label{
   white-space:nowrap;
+}
+
+.auth-legal-tip {
+  font-size: 11px;
+  color: var(--text-tertiary, #999);
+  text-align: center;
+  margin-top: 12px;
+  line-height: 1.5;
+}
+.auth-legal-tip a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.auth-legal-tip a:hover {
+  filter: brightness(1.15);
 }
 
 /* ── 消息状�?── */

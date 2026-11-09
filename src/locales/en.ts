@@ -341,6 +341,7 @@ export const en = {
     restored: 'Restored',
     wayback: 'View snapshot on Wayback Machine',
     findAlternative: 'Find alternative & heal with AI',
+    whitelist: 'Add to whitelist',
   },
   conflict: {
     title: 'Sync conflicts ({n})',

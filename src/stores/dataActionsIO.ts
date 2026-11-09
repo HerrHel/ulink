@@ -2,6 +2,7 @@
  * dataActionsIO.ts — data store 的数据加载 / 导入 / 空间切换（自 data.ts 逐字迁移，逻辑零改动）
  */
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
+import { getLocale } from '../i18n/index.js'
 import * as persist from './persist.js'
 import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
@@ -21,6 +22,7 @@ export const ioActions = {
     const d = persist.loadFromLocalStorage()
     this.bookmarks = d.bookmarks; this.siblingGroups = d.siblingGroups
     this.categories = d.categories; this.customAttributes = d.customAttributes
+    if (d._masterCanary !== undefined) this._masterCanary = d._masterCanary ?? null
     this._syncMaps()
     this._normalizeCategoryOrders()
     this._restoreDeletedGroupMemberships()
@@ -35,6 +37,7 @@ export const ioActions = {
       runMigrations(idbData, idbData)
       this.bookmarks = idbData.bookmarks; this.siblingGroups = idbData.siblingGroups
       this.categories = idbData.categories; this.customAttributes = idbData.customAttributes
+      if (idbData._masterCanary !== undefined) this._masterCanary = idbData._masterCanary ?? null
       this._syncMaps()
       this._normalizeCategoryOrders()
       this._restoreDeletedGroupMemberships()
@@ -63,16 +66,28 @@ export const ioActions = {
     this.bookmarks = result.bookmarks
     this.customAttributes = result.customAttributes
     this.siblingGroups = result.siblingGroups
+    if (data._masterCanary !== undefined) {
+      this._masterCanary = data._masterCanary ?? null
+    }
     this._syncMaps()
     this._normalizeCategoryOrders()
+    this._restoreDeletedGroupMemberships()
     this._restoreDeletedAttrMemberships()
+    this._customCardOrder = null
     // R22：清空本地历史防抖模块级 Map，避免旧定时器按旧 id 写快照到重置后数据不对应的 ID。
     _cancelPendingHist()
     clearSearchCache()
     this._searchVersion = 1
   },
   _dataSnapshot(this: DataStoreThis) {
-    return { bookmarks: this.bookmarks, siblingGroups: this.siblingGroups, categories: this.categories, customAttributes: this.customAttributes }
+    const snap: AppData = {
+      bookmarks: this.bookmarks,
+      siblingGroups: this.siblingGroups,
+      categories: this.categories,
+      customAttributes: this.customAttributes,
+    }
+    if (this._masterCanary) snap._masterCanary = this._masterCanary
+    return snap
   },
 
   /**
@@ -103,6 +118,8 @@ export const ioActions = {
     this._deletedIds.clear()
     this._newIds.clear()
     this._changedFields.clear()
+    this._deletedGroupMemberships.clear()
+    this._deletedAttrMemberships.clear()
     try { await clearAllSyncOps() } catch { /* ignore */ }
     _clearAllPendingSync()
     try { useUndoStore().clearAllStacks() } catch { /* ignore */ }
@@ -111,6 +128,9 @@ export const ioActions = {
     //    - 两者皆无 → 真空四数组（首进保底含有 CAT_ALL 与 CAT_UNCATEGORIZED）
     let target = await persist.loadFromIDB(space)
     if (!target) target = _maybeLoadLocalSpace(space)
+    const isEn = getLocale() === 'en-US'
+    const allName = isEn ? 'All' : '全部'
+    const uncatName = isEn ? 'Uncategorized' : '未分类'
     const isFirstVault = !target && space === 'vault'
     if (!target) {
       target = {
@@ -118,8 +138,8 @@ export const ioActions = {
         siblingGroups: [],
         categories: space === 'vault'
           ? [
-              { id: CAT_ALL, name: '全部', icon: 'grid', color: '#122E8A', order: 0 },
-              { id: CAT_UNCATEGORIZED, name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 },
+              { id: CAT_ALL, name: allName, icon: 'grid', color: '#122E8A', order: 0 },
+              { id: CAT_UNCATEGORIZED, name: uncatName, icon: 'bookmark', color: '#6E6860', order: 1 },
             ]
           : [],
         customAttributes: [],
@@ -133,32 +153,52 @@ export const ioActions = {
       const hasAll = this.categories.some(c => c.id === CAT_ALL)
       const hasUncat = this.categories.some(c => c.id === CAT_UNCATEGORIZED)
       const baseCats = []
-      if (!hasAll) baseCats.push({ id: CAT_ALL, name: '全部', icon: 'grid', color: '#122E8A', order: 0 })
-      if (!hasUncat) baseCats.push({ id: CAT_UNCATEGORIZED, name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 })
+      if (!hasAll) baseCats.push({ id: CAT_ALL, name: allName, icon: 'grid', color: '#122E8A', order: 0 })
+      if (!hasUncat) baseCats.push({ id: CAT_UNCATEGORIZED, name: uncatName, icon: 'bookmark', color: '#6E6860', order: 1 })
       
       if (isFirstVault) {
         this.categories = [
-          { id: CAT_ALL, name: '全部', icon: 'grid', color: '#122E8A', order: 0 },
-          { id: CAT_UNCATEGORIZED, name: '未分类', icon: 'bookmark', color: '#6E6860', order: 1 },
+          { id: CAT_ALL, name: allName, icon: 'grid', color: '#122E8A', order: 0 },
+          { id: CAT_UNCATEGORIZED, name: uncatName, icon: 'bookmark', color: '#6E6860', order: 1 },
         ]
       } else {
         this.categories = [...baseCats, ...this.categories]
       }
       this._syncMaps()
     }
-    // 重置 curCat/focusedGroupId（新空间分类视图从全部分类开始）
+    // 重置 curCat/focusedGroupId 及批量/详情/搜索上下文（杜绝跨空间状态污染）
     ui.curCat = 'all'
     ui.focusedGroupId = null
+    ui.batchMode = false
+    ui.batchSelected.splice(0)
+    ui.detailCards.splice(0)
+    ui.editingId = null
+    ui.editingGeId = null
+    ui.addToGid = null
+    ui.saveToGroup = null
+    ui.ctxGid = null
+    ui.activeAttrs.splice(0)
+    ui.excludedAttrs.splice(0)
+    ui.searchQuery = ''
+    ui.expandedIds.splice(0)
+    if (ui.quickLookBmId) ui.closeQuickLook()
+    if (Array.isArray(ui.quickLookHistory)) ui.quickLookHistory.splice(0)
+    if (ui.shareModalTarget) ui.closeShareModal()
+    if (ui.aiEnrichTargetBmId) { ui.aiEnrichTargetBmId = null; ui.modals.aiEnrich = false }
+    if (Array.isArray(ui.aiAttachedCards)) ui.aiAttachedCards.splice(0)
+    if (ui.shareMode) ui.shareMode = null
     } finally {
       _switchingSpaceTarget = null
     }
   },
 
   /**
-   * 取指定空间的 IDB 快照（不移入内存），用于移入私密时不打断当前空间视图
-   * 直接读写私密数据集。返回 null 表示该空间暂无落库数据。
+   * 取指定空间的快照（不移入内存），用于移入私密时不打断当前空间视图
+   * 直接读写目标空间数据集。优先 IDB（权威），无 IDB 或隐私模式回退 localStorage。
    */
   async getSpaceSnapshot(this: DataStoreThis, space: Space): Promise<AppData | null> {
-    return persist.loadFromIDB(space)
+    const snap = await persist.loadFromIDB(space)
+    if (snap) return snap
+    return _maybeLoadLocalSpace(space)
   },
 }

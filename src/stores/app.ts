@@ -39,7 +39,12 @@ export function _fingerprint(data: AppData): string {
   }
   for (const c of cats) if ((c.updatedAt || 0) > maxUp) maxUp = c.updatedAt || 0
   for (const a of attrs) if ((a.updatedAt || 0) > maxUp) maxUp = a.updatedAt || 0
-  return `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${useCounts}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+  const base = `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${useCounts}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+  if (!data._masterCanary) return base
+  const canaryPart = typeof data._masterCanary === 'object' && data._masterCanary !== null
+    ? `${data._masterCanary.data || ''}:${data._masterCanary.iv || ''}`
+    : String(data._masterCanary)
+  return `${base}|${canaryPart}`
 }
 
 export const useAppStore = defineStore('app', () => {
@@ -123,6 +128,7 @@ export const useAppStore = defineStore('app', () => {
     lpFired: uiProp('lpFired'),
     _prevLayoutMode: uiProp('_prevLayoutMode'),
     shareModalTarget: uiProp('shareModalTarget'),
+    e2eUnlockInitialMode: uiProp('e2eUnlockInitialMode'),
     openShareModal(type: 'group' | 'category', id: string) { ui().openShareModal(type, id) },
     closeShareModal() { ui().closeShareModal() },
     openAiAssistant(query = '') { ui().openAiAssistant(query) },
@@ -159,8 +165,22 @@ export const useAppStore = defineStore('app', () => {
     importFromData(data: Partial<AppData>) {
       ds().importFromData(data)
       const u = ui()
-      u.curCat = 'all'; u.focusedGroupId = null
-      u.activeAttrs = []; u.excludedAttrs = []; u.detailCards = []
+      u.curCat = 'all'
+      u.focusedGroupId = null
+      u.activeAttrs.splice(0)
+      u.excludedAttrs.splice(0)
+      u.detailCards.splice(0)
+      u.batchMode = false
+      u.batchSelected.splice(0)
+      u.expandedIds.splice(0)
+      u.searchQuery = ''
+      u.editingId = null
+      u.editingGeId = null
+      u.addToGid = null
+      u.saveToGroup = null
+      u.ctxGid = null
+      if (u.quickLookBmId) u.closeQuickLook()
+      if (Array.isArray(u.quickLookHistory)) u.quickLookHistory.splice(0)
       this.save()
     },
 
@@ -179,6 +199,10 @@ export const useAppStore = defineStore('app', () => {
       // localStorage 缓存推高。返回 true 表示「无需保存」，避免误报存储失败。
       if (ui().shareMode) return Promise.resolve(true)
       const d = ds()
+      if (d._saveTimer) {
+        clearTimeout(d._saveTimer)
+        d._saveTimer = null
+      }
       const data = d._dataSnapshot()
       const fp = _fingerprint(data)
       const space = ui().curSpace

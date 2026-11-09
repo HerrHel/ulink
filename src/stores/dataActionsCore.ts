@@ -5,11 +5,11 @@
  */
 import { useUIStore } from './ui.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../lib/storageSafe.js'
-import { localHistoryKey } from './storage.js'
+import { localHistoryKey, removeLocalHistory } from './storage.js'
 import { _indexOfById } from '../lib/dataQuery.js'
 import { cloneDeep } from '../lib/clone.js'
 import { _denyWrite, _histDebounceTimers, _histDebounceData, _HISTORY_DEBOUNCE_MS } from './dataShared.js'
-import { ATTR_IS_GROUP } from '../config/constants.js'
+import { ATTR_IS_GROUP, CAT_ALL, CAT_UNCATEGORIZED } from '../config/constants.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { TableName } from '../types.js'
 
@@ -33,10 +33,40 @@ export const coreActions = {
     this._attrMap = attrMap
 
     const childIdx: Record<string, string[]> = {}
+    const hasCats = this.categories.length > 0
     for (const b of this.bookmarks) {
-      if (b.parentId && !b.deletedAt && bmMap[b.parentId] && !bmMap[b.parentId].deletedAt) {
-        if (!childIdx[b.parentId]) childIdx[b.parentId] = []
-        childIdx[b.parentId].push(b.id)
+      if (hasCats && b.categoryId && b.categoryId !== CAT_UNCATEGORIZED && b.categoryId !== CAT_ALL && (!catMap[b.categoryId] || catMap[b.categoryId].deletedAt)) {
+        b.categoryId = CAT_UNCATEGORIZED
+      }
+      if (b.parentId) {
+        const parent = bmMap[b.parentId]
+        if (b.parentId === b.id || !parent) {
+          b.parentId = null
+        } else {
+          // 深度防环：检测祖先链中是否回溯到自身或存在间接成环
+          let ancestorId: string | null = b.parentId
+          const visited = new Set<string>([b.id])
+          let hasCycle = false
+          while (ancestorId) {
+            if (visited.has(ancestorId)) {
+              hasCycle = true
+              break
+            }
+            visited.add(ancestorId)
+            ancestorId = bmMap[ancestorId]?.parentId || null
+          }
+          if (hasCycle) {
+            b.parentId = null
+          } else if (!parent.deletedAt && !b.deletedAt) {
+            if (!childIdx[b.parentId]) childIdx[b.parentId] = []
+            childIdx[b.parentId].push(b.id)
+          }
+        }
+      }
+    }
+    for (const g of this.siblingGroups) {
+      if (hasCats && g.categoryId && g.categoryId !== CAT_UNCATEGORIZED && g.categoryId !== CAT_ALL && (!catMap[g.categoryId] || catMap[g.categoryId].deletedAt)) {
+        g.categoryId = CAT_UNCATEGORIZED
       }
     }
     this._childrenIdx = childIdx
@@ -89,12 +119,17 @@ export const coreActions = {
       const initialData = _histDebounceData.get(id)
       _histDebounceData.delete(id)
       if (!initialData) return
-      const max = useUIStore().historyMax || 10
+      let max = 10
+      try { max = useUIStore().historyMax || 10 } catch { /* ignore */ }
       const key = localHistoryKey(id)
       const arr = safeJsonParse<unknown[]>(safeGetItem(key), [])
       if (!Array.isArray(arr)) return
-      arr.unshift({ id: Date.now(), data: initialData, created_at: new Date().toISOString() })
-      safeSetItem(key, JSON.stringify(arr.slice(0, max)))
+      try {
+        arr.unshift({ id: Date.now(), data: initialData, created_at: new Date().toISOString() })
+        safeSetItem(key, JSON.stringify(arr.slice(0, max)))
+      } catch (e) {
+        console.warn('[LinkVault] Failed to save local history for', id, e)
+      }
     }, _HISTORY_DEBOUNCE_MS))
   },
 
@@ -124,6 +159,7 @@ export const coreActions = {
   /** 内部辅助：永久删除项 */
   _permanentDelete(this: DataStoreThis, key: TableName, id: string) {
     if (key === 'custom_attributes' && id === ATTR_IS_GROUP) return
+    if (key === 'categories' && (id === CAT_ALL || id === CAT_UNCATEGORIZED)) return
     const handlers: Record<TableName, () => void> = {
       bookmarks: () => { this.bookmarks = this.bookmarks.filter(b => b.id !== id) },
       sibling_groups: () => { this.siblingGroups = this.siblingGroups.filter(g => g.id !== id) },
@@ -134,6 +170,15 @@ export const coreActions = {
     this._dirtyIds.delete(id)
     this._newIds.delete(id)
     this._deletedIds.set(id, key)
+    try {
+      removeLocalHistory(id)
+    } catch { /* ignore */ }
+    const pendingTimer = _histDebounceTimers.get(id)
+    if (pendingTimer) {
+      clearTimeout(pendingTimer)
+      _histDebounceTimers.delete(id)
+    }
+    _histDebounceData.delete(id)
   },
 
   /** 清空回收站（永久删除所有已软删除项） */

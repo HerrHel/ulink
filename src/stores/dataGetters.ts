@@ -2,7 +2,7 @@
  * dataGetters.ts — data store getters（自 data.ts 逐字迁移，逻辑零改动）
  * `this: DataStoreThis` 显式标注供跨 getter 互引（如 trashCount → trashedBookmarks）。
  */
-import { CAT_ALL } from '../config/constants.js'
+import { CAT_ALL, CAT_UNCATEGORIZED, ATTR_IS_GROUP } from '../config/constants.js'
 import { isProUser } from '../composables/domain/useEntitlement.js'
 import { useUIStore } from './ui.js'
 import { searchBookmarkIds, searchGroupIds } from '../lib/search.js'
@@ -18,7 +18,7 @@ export const dataGetters = {
   filteredBookmarks(state: DataState): Bookmark[] {
     const ui = useUIStore()
     let bm = state.bookmarks.filter(b => !b.deletedAt)
-    if (ui.curCat !== CAT_ALL) bm = bm.filter(b => b.categoryId === ui.curCat)
+    if (ui.curCat !== CAT_ALL) bm = bm.filter(b => (b.categoryId || CAT_UNCATEGORIZED) === ui.curCat)
     const q = ui.searchQuery
     if (q.trim()) {
       // 如果搜索索引脏了，直接递增 version 触发重建
@@ -52,7 +52,7 @@ export const dataGetters = {
   filteredGroups(this: DataStoreThis, state: DataState): SiblingGroup[] {
     const ui = useUIStore()
     let groups = state.siblingGroups.filter(g => !g.deletedAt)
-    if (ui.curCat !== CAT_ALL) groups = groups.filter(g => g.categoryId === ui.curCat)
+    if (ui.curCat !== CAT_ALL) groups = groups.filter(g => (g.categoryId || CAT_UNCATEGORIZED) === ui.curCat)
     const q = ui.searchQuery
     if (q.trim()) {
       // 如果搜索索引脏了，直接递增 version 触发重建
@@ -71,19 +71,27 @@ export const dataGetters = {
 
   /** 回收站：已软删除的书签 */
   trashedBookmarks(state: DataState): Bookmark[] {
-    return state.bookmarks.filter(b => b.deletedAt).sort((a, b) => (b.deletedAt! - a.deletedAt!))
+    return state.bookmarks
+      .filter(b => b.deletedAt)
+      .sort((a, b) => ((b.deletedAt || 0) - (a.deletedAt || 0)))
   },
   /** 回收站：已软删除的组 */
   trashedGroups(state: DataState): SiblingGroup[] {
-    return state.siblingGroups.filter(g => g.deletedAt).sort((a, b) => (b.deletedAt! - a.deletedAt!))
+    return state.siblingGroups
+      .filter(g => g.deletedAt)
+      .sort((a, b) => ((b.deletedAt || 0) - (a.deletedAt || 0)))
   },
-  /** 回收站：已软删除的分类 */
+  /** 回收站：已软删除的分类（排除系统内置分类） */
   trashedCategories(state: DataState): Category[] {
-    return state.categories.filter(c => c.deletedAt).sort((a, b) => (b.deletedAt! - a.deletedAt!))
+    return state.categories
+      .filter(c => c.deletedAt && c.id !== CAT_ALL && c.id !== CAT_UNCATEGORIZED)
+      .sort((a, b) => ((b.deletedAt || 0) - (a.deletedAt || 0)))
   },
-  /** 回收站：已软删除的自定义属性 */
+  /** 回收站：已软删除的自定义属性（排除系统内置属性，按删除时间倒序） */
   trashedAttributes(state: DataState): CustomAttribute[] {
-    return state.customAttributes.filter(a => a.deletedAt)
+    return state.customAttributes
+      .filter(a => a.deletedAt && a.id !== ATTR_IS_GROUP)
+      .sort((a, b) => ((b.deletedAt || 0) - (a.deletedAt || 0)))
   },
   /** 回收站总数 */
   trashCount(this: DataStoreThis): number {
@@ -144,7 +152,7 @@ export const dataGetters = {
       const bmMap: Record<string, Bookmark> = {}
       for (const b of state.bookmarks) bmMap[b.id] = b
       state.bookmarks.forEach(b => {
-        if (b.parentId && !b.deletedAt && bmMap[b.parentId] && !bmMap[b.parentId].deletedAt) {
+        if (b.parentId && b.parentId !== b.id && !b.deletedAt && bmMap[b.parentId] && !bmMap[b.parentId].deletedAt) {
           if (!map[b.parentId]) map[b.parentId] = []
           map[b.parentId].push(b)
         }
@@ -154,6 +162,7 @@ export const dataGetters = {
       // 按需将 ID 数组解析为 Bookmark 对象（_bmMap 权威，不再扫 bookmarks.find）
       const bmMap = state._bmMap
       for (const pid of Object.keys(state._childrenIdx)) {
+        if (!bmMap[pid] || bmMap[pid].deletedAt) continue
         result[pid] = state._childrenIdx[pid]
           .map(id => bmMap[id])
           .filter((b): b is Bookmark => !!b && !b.deletedAt)
@@ -184,8 +193,20 @@ export const dataGetters = {
   /** 各分类的卡片计数（排除软删除） */
   cardCounts(state: DataState): Record<string, number> {
     const counts: Record<string, number> = {}; let total = 0
-    state.bookmarks.forEach(b => { if (!b.parentId && !b.deletedAt) { counts[b.categoryId] = (counts[b.categoryId] || 0) + 1; total++ } })
-    state.siblingGroups.forEach(g => { if (!g.deletedAt) { counts[g.categoryId] = (counts[g.categoryId] || 0) + 1; total++ } })
+    state.bookmarks.forEach(b => {
+      if (!b.parentId && !b.deletedAt) {
+        const cid = b.categoryId || CAT_UNCATEGORIZED
+        counts[cid] = (counts[cid] || 0) + 1
+        total++
+      }
+    })
+    state.siblingGroups.forEach(g => {
+      if (!g.deletedAt) {
+        const cid = g.categoryId || CAT_UNCATEGORIZED
+        counts[cid] = (counts[cid] || 0) + 1
+        total++
+      }
+    })
     counts[CAT_ALL] = total
     return counts
   },

@@ -419,9 +419,7 @@ function openSettings() {
 
 async function onSignOut() {
   close()
-  try {
-    localStorage.removeItem(ENTITLEMENT_CACHE_KEY)
-  } catch {}
+  entService.clear()
   const ok = await auth.signOut()
   if (ok) {
     await sync.resetSyncState()

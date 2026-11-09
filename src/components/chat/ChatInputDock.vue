@@ -53,6 +53,21 @@
             <div class="attach-tooltip">{{ displayText(card.title) }}<template v-if="card.url"> ({{ card.url }})</template></div>
           </template>
 
+          <!-- 分类类型 -->
+          <template v-else-if="card.type === 'cat'">
+            <div class="card-icon-box cat-icon-box">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+              </svg>
+            </div>
+            <div class="card-text-col">
+              <span class="card-main-title">{{ displayText(card.title) }}</span>
+              <span class="card-sub-info">{{ t('nav.categories') }}</span>
+            </div>
+            <div class="attach-tooltip">{{ displayText(card.title) }} ({{ t('nav.categories') }})</div>
+          </template>
+
           <!-- 笔记类型 -->
           <template v-else>
             <div class="card-icon-box note-icon-box">
@@ -260,8 +275,8 @@ import { displayText } from '../../utils.js'
 
 defineOptions({ name: 'ChatInputDock' })
 
-/** 拖拽附加的卡片胶囊（组 / 书签） */
-interface DockCard { type: 'group' | 'bm'; id: string; title: string; url: string }
+/** 拖拽附加的卡片胶囊（组 / 书签 / 分类） */
+interface DockCard { type: 'group' | 'bm' | 'cat'; id: string; title: string; url: string }
 /** 斜杠指令联想项（title/desc 已由父侧 t() 渲染） */
 interface SlashItem { cmd: string; title: string; desc: string }
 

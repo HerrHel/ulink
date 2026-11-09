@@ -98,7 +98,7 @@ import { ambientHub } from '../../lib/ai/ambientInsights.js'
 import ChatInputDock from '../chat/ChatInputDock.vue'
 import ChatStream from '../chat/ChatStream.vue'
 import ChatTopBar from '../chat/ChatTopBar.vue'
-import { useAiChat } from '../../composables/domain/useAiChat.js'
+import { useAiChat, type ChatTurn } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatPanelDom } from '../../composables/ui/useChatPanelDom.js'
 import { useChatPanelShell } from '../../composables/ui/useChatPanelShell.js'
@@ -120,7 +120,7 @@ watch(
   (cards) => {
     if (cards && cards.length > 0) {
       const first = cards[0]
-      if (first.type === 'bookmark') {
+      if (first.type === 'bm') {
         const b = dataStore.bookmarkMap?.[first.id] || dataStore.bookmarks.find((x) => x.id === first.id)
         if (b) {
           ambientHub.triggerSerendipityCheck(b, dataStore.bookmarks)

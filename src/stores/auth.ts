@@ -241,8 +241,14 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = false
 
     driver.onAuthStateChange((s) => {
+      const prevUser = user.value
       session.value = s
       user.value = s?.user ?? null
+      if (prevUser && !s?.user) {
+        // 会话过期或远端登出：立即锁定 E2E 与 Vault 敏感解密密钥
+        try { useE2EStore().lock() } catch { /* ignore */ }
+        try { useVaultStore().lock() } catch { /* ignore */ }
+      }
       _syncFromMetadata(user.value)
     })
   }
@@ -278,6 +284,7 @@ export const useAuthStore = defineStore('auth', () => {
           console.warn('[auth] updateUser metadata failed:', error)
         } else if (updatedUser) {
           user.value = updatedUser
+          if (session.value) session.value.user = updatedUser
         }
       } catch (err) {
         console.warn('[auth] updateUser metadata error:', err)

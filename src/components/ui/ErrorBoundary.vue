@@ -22,6 +22,7 @@ import { ref, nextTick, onErrorCaptured } from 'vue'
 import { t } from '../../i18n/index.js'
 import { reportError } from '../../lib/errorReporter.js'
 import { I } from '../../config/icons.js'
+import { useE2EStore } from '../../stores/e2e.js'
 
 const props = defineProps<{ name?: string }>()
 

@@ -135,6 +135,11 @@ export function useCloudSync() {
   }
 
   async function fullSync(): Promise<boolean> {
+    if (!isLoggedIn.value) return false
+    if (_syncTimer) {
+      clearTimeout(_syncTimer)
+      _syncTimer = null
+    }
     enqueueDirtyAsOps()
     return withLock('linkvault-sync', async () => {
       const pushed = await pushFromQueue()
@@ -201,7 +206,7 @@ export function useCloudSync() {
     // 整表本地项按「云端缺失」入队——他端刚删除的墓碑会被旧存活快照整批复活
     // （push 是无条件 upsert 覆盖）。fail-closed 代价仅是该表本轮不补推，下轮重试。
     const probeFailed = new Set<SyncOp['table']>()
-    const remoteIds = new Set<string>()
+    const remoteIdsByTable = new Map<SyncOp['table'], Set<string>>()
     const probes: Array<[SyncOp['table'], typeof bmIds]> = [
       ['bookmarks', bmIds],
       ['sibling_groups', gIds],
@@ -214,7 +219,9 @@ export function useCloudSync() {
         probeFailed.add(table)
         continue
       }
-      for (const row of r.data || []) remoteIds.add((row as { id: string }).id)
+      const set = new Set<string>()
+      for (const row of r.data || []) set.add((row as { id: string }).id)
+      remoteIdsByTable.set(table, set)
     }
 
     // 墓园 id 集（table:id）。探测失败 fail-open：服务端 032 触发器仍会拦截存活重推。
@@ -254,8 +261,9 @@ export function useCloudSync() {
     const now = Date.now()
     const shouldPush = (table: SyncOp['table'], id: string, deletedAt?: number) => {
       if (graveyardKeys.has(`${table}:${id}`)) return false
+      const tableRemotes = remoteIdsByTable.get(table)
       return ds._dirtyIds.has(id) || ds._newIds.has(id) || !!deletedAt
-        || (!probeFailed.has(table) && !remoteIds.has(id))
+        || (!probeFailed.has(table) && (!tableRemotes || !tableRemotes.has(id)))
     }
 
     const pushIf = <T extends { id: string; updatedAt?: number; deletedAt?: number }>(
@@ -301,6 +309,10 @@ export function useCloudSync() {
     if (!isLoggedIn.value) return false
     const userId = _getUserId()
     if (!userId) return false
+    if (_syncTimer) {
+      clearTimeout(_syncTimer)
+      _syncTimer = null
+    }
     return withLock('linkvault-sync', async () => {
       await clearAllSyncOps()
       await _enqueueMissingToCloud(userId)

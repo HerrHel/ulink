@@ -144,4 +144,11 @@ describe('模块 7 审计：构建输出产物与离线 PWA 策略自检', () =>
     expect(edgeCode).toContain("'Strict-Transport-Security': 'max-age=31536000'")
     expect(edgeCode).toContain("frame-ancestors 'self'")
   })
+
+  it('法律文档与索引页页脚正确渲染 ICP 备案号与工信部超链接', () => {
+    const doc = parseLegalDoc('# 测试文档\n\n正文内容', 'terms-of-service')
+    const docHtml = renderLegalIndexHtml([doc])
+    expect(docHtml).toContain('鄂ICP备2026061718号-1')
+    expect(docHtml).toContain('https://beian.miit.gov.cn/')
+  })
 })

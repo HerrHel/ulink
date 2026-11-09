@@ -7,6 +7,9 @@
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { saveAppData } from '../../stores/app.js'
+import { EditorManager } from '../../lib/editor.js'
+import { _clearPendingSync } from './syncPending.js'
+import { removeSyncOpsByItemId } from '../../stores/storage.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
 
 /** 远端快照缓存（非响应式，用于去重判断） */
@@ -31,11 +34,19 @@ export function resolveConflict(id: string, keepLocal: boolean) {
   const ds = useDataStore()
   if (!keepLocal) {
     _applyRemoteToLocal(conflict.type, id, conflict.remote as Record<string, unknown>)
+    if (conflict.type === 'group' && typeof (conflict.remote as Record<string, unknown>)?.notes === 'string') {
+      try {
+        EditorManager.silentSetContent(id, (conflict.remote as Record<string, unknown>).notes as string)
+      } catch { /* ignore */ }
+    }
     ds._dirtyIds.delete(id)
     ds._newIds.delete(id)
     ds._changedFields.delete(id)
+    _clearPendingSync([id])
+    void removeSyncOpsByItemId(id)
     saveAppData()
   } else {
+    _clearPendingSync([id])
     // 保留本地：必须确保本地版本能够胜出并回推覆盖云端。
     // 1. 将 updatedAt 递增至严格大于远端时间戳与当前时间的较大值；
     // 2. 调用 update* 触发 _markDirty 与变更追踪，确保入队推送；

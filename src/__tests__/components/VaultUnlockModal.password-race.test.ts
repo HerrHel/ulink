@@ -31,6 +31,7 @@ import { nextTick } from 'vue'
 
 // unlockVaultMock / resetVaultWithRecoveryKeyMock 返回可手动 resolve 的 Promise，模拟 await 窗口
 const unlockVaultMock = vi.hoisted(() => vi.fn())
+const lockVaultMock = vi.hoisted(() => vi.fn())
 const resetVaultWithRecoveryKeyMock = vi.hoisted(() => vi.fn())
 const isVaultBiometricEnrolledMock = vi.hoisted(() => vi.fn())
 const isBiometricAvailableMock = vi.hoisted(() => vi.fn())
@@ -45,6 +46,7 @@ vi.mock('../../composables/domain/useVault.js', () => ({
     isVaultUnlocked: { value: false },
     unlockWithBiometric: vi.fn(),
     unlockVault: unlockVaultMock,
+    lockVault: lockVaultMock,
     resetVaultWithRecoveryKey: resetVaultWithRecoveryKeyMock,
     generateRecoveryKey: generateRecoveryKeyMock,
   }),
@@ -66,6 +68,7 @@ function mountComp() {
 beforeEach(() => {
   setActivePinia(createPinia())
   unlockVaultMock.mockReset()
+  lockVaultMock.mockReset()
   resetVaultWithRecoveryKeyMock.mockReset()
   isVaultBiometricEnrolledMock.mockReset()
   isBiometricAvailableMock.mockReset()
@@ -120,6 +123,7 @@ describe('VaultUnlockModal onUnlock 密码路径跨取消 await 窗口 orphan em
     // await unlockVault 后 `if (localGen !== _pwGen) return` 短路 → 不 emit('unlocked')
     // 红绿门：stash 源码（删 _pwGen 守门）后此处应为 truthy（emit 触发）证明复现 bug
     expect(w.emitted('unlocked'), '取消后 emit(unlocked) 不应触发').toBeFalsy()
+    expect(lockVaultMock, '取消后但在途 unlock 成功，必须主动调用 lockVault 归还锁定态').toHaveBeenCalled()
 
     w.unmount()
   })

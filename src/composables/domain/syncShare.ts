@@ -24,10 +24,15 @@ export async function setGroupPublic(gid: string, isPublic: boolean): Promise<bo
   if (!g) return false
   ds.updateGroup(gid, { isPublic })
   saveAppData()
-  const { error } = await dbFrom('sibling_groups')
-    .update({ is_public: isPublic }).eq('id', gid).eq('user_id', userId)
-  if (error) { console.warn('[share] setGroupPublic failed:', error); return false }
-  return true
+  try {
+    const { error } = await dbFrom('sibling_groups')
+      .update({ is_public: isPublic }).eq('id', gid).eq('user_id', userId)
+    if (error) { console.warn('[share] setGroupPublic failed:', error); return false }
+    return true
+  } catch (err) {
+    console.warn('[share] setGroupPublic error:', err)
+    return false
+  }
 }
 
 export async function fetchPublicGroup(
@@ -89,9 +94,14 @@ export const CATEGORY_SHARE_PATH = 'c'
 export async function upsertPublicCategoryShare(categoryId: string): Promise<string | null> {
   const userId = _getUserId()
   if (!userId || !categoryId) return null
-  const { data, error } = await dbRpc('upsert_public_category_share', { p_category_id: categoryId })
-  if (error) { console.warn('[share] upsert_public_category_share failed:', error); return null }
-  return (typeof data === 'string' && data) ? data : null
+  try {
+    const { data, error } = await dbRpc('upsert_public_category_share', { p_category_id: categoryId })
+    if (error) { console.warn('[share] upsert_public_category_share failed:', error); return null }
+    return (typeof data === 'string' && data) ? data : null
+  } catch (err) {
+    console.warn('[share] upsert_public_category_share error:', err)
+    return null
+  }
 }
 
 /** 拉取分类分享数据（实时读库 → 热更新；RPC 已列级隔离剔除 username/password/user_id） */

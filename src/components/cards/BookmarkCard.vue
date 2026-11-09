@@ -60,12 +60,12 @@
               </template>
               <template v-else>{{ displayText(bookmark.username) }}</template>
             </span>
-            <button class="acct-copy-btn" :class="{ copied: userCopied }" @click.stop="copyUser" :title="t('common.copy')" v-html="userCopied ? I.check : I.copy"></button>
+            <button class="acct-copy-btn" :class="{ copied: userCopied }" @click.stop="copyUser" :title="t('common.copy')" :aria-label="t('common.copy')" v-html="userCopied ? I.check : I.copy"></button>
           </div>
           <div class="acct-row" v-if="bookmark.password">
             <span class="acct-label">{{ t('cards.password') }}</span><span class="acct-val">{{ isVisible(bookmark.id) ? decodedPw : '••••••' }}</span>
             <button class="acct-show-pw" @click.stop="onTogglePw" :title="isVisible(bookmark.id) ? t('cards.hidePassword') : t('cards.showPassword')" :aria-label="isVisible(bookmark.id) ? t('cards.hidePassword') : t('cards.showPassword')" v-html="isVisible(bookmark.id) ? I.eyeOff : I.eye"></button>
-            <button class="acct-copy-btn" :class="{ copied: pwCopied }" @click.stop="copyPw" :title="t('common.copy')" v-html="pwCopied ? I.check : I.copy"></button>
+            <button class="acct-copy-btn" :class="{ copied: pwCopied }" @click.stop="copyPw" :title="t('common.copy')" :aria-label="t('common.copy')" v-html="pwCopied ? I.check : I.copy"></button>
           </div>
         </div>
       </template>
@@ -82,13 +82,13 @@
     <div class="card-foot" v-if="!isShareReadonly">
       <span v-if="(bookmark.useCount || 0) > 0" class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
       <span class="card-actions">
-        <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" v-html="I.plus"></button>
-        <button class="btn-xs" @click.stop="edit" :title="t('common.edit')" v-html="I.edit"></button>
-        <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" v-html="I.trash"></button>
+        <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" :aria-label="t('cards.addSubSite')" v-html="I.plus"></button>
+        <button class="btn-xs" @click.stop="edit" :title="t('common.edit')" :aria-label="t('common.edit')" v-html="I.edit"></button>
+        <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" :aria-label="t('common.delete')" v-html="I.trash"></button>
       </span>
     </div>
     <button v-if="!detailMode && hasExpandableContent && uiStore.layoutMode === 'list' && (!uiStore.isMobile || isShareReadonly)" class="list-expand-btn" @click.stop="toggleExpand" :title="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-label="isExpanded ? t('cards.collapse') : t('cards.expand')" :aria-expanded="isExpanded" v-html="I.chevronDown"></button>
-    <button v-if="!detailMode && uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" v-html="I.dotsV"></button>
+    <button v-if="!detailMode && uiStore.layoutMode === 'list' && !uiStore.batchMode && uiStore.isMobile" class="card-menu-btn" @click.stop="openMenu" :title="t('cards.details')" :aria-label="t('cards.details')" v-html="I.dotsV"></button>
     <div v-if="uiStore.batchMode && uiStore.isMobile && uiStore.layoutMode !== 'mini-grid'" class="batch-drag-handle" v-html="I.grip"></div>
   </div>
 </template>

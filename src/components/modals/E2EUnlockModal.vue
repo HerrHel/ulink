@@ -222,7 +222,11 @@ async function onUnlock() {
   error.value = ''
   const ok = await e2e.unlock(masterPw.value)
   // await 期间用户可能已点遮罩取消（watch 负向分支已推进 _pwGen）
-  if (localGen !== _pwGen) { loading.value = false; return }
+  if (localGen !== _pwGen) {
+    if (ok) e2e.lock?.()
+    loading.value = false
+    return
+  }
   loading.value = false
   if (ok) {
     emit('unlocked')
@@ -310,7 +314,11 @@ async function onBiometricUnlock() {
   }
   const ok = await e2e.unlock(pw)
   // 二次 await 后再判一次 gen：unlock 期间用户也可能取消
-  if (localGen !== _bioGen) { bioLoading.value = false; return }
+  if (localGen !== _bioGen) {
+    if (ok) e2e.lock?.()
+    bioLoading.value = false
+    return
+  }
   bioLoading.value = false
   if (ok) {
     emit('unlocked')
