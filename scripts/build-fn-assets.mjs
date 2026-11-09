@@ -11,7 +11,7 @@
  *
  * 用法: node scripts/build-fn-assets.mjs
  */
-import { execFileSync } from 'node:child_process'
+import { buildSync } from 'esbuild'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -107,10 +107,10 @@ const COPY_JOBS = [
 
 const HEADER = '// 本文件由 scripts/build-fn-assets.mjs 从 %FROM% 生成，请勿手改\n'
 
-// 用 node 直接跑本地 esbuild 的 JS 入口：
-//  - `npx.cmd` 在新版 Node 上 spawn 会报 EINVAL（.cmd 需要 shell）
-//  - 直接调 esbuild 的 JS 入口最稳，也不依赖 npx 的临时下载
-const ESBUILD_JS = resolve('node_modules/esbuild/bin/esbuild')
+// 用 esbuild 的 JS API（buildSync）而不是 `node node_modules/esbuild/bin/esbuild`：
+// 该 bin 在 Windows 上是 JS shim、在 Linux 上是 ELF 原生二进制，
+// 用 node 执行会在 CI 上直接 SyntaxError（2026-11-09 实际踩到）。
+// JS API 跨平台一致，也不依赖 npx 的临时下载。
 
 // 生成计数：结尾汇总打印，便于 CI 日志快速确认本轮实际生成了多少派生资产。
 let generated = 0
@@ -125,17 +125,16 @@ for (const job of JOBS) {
     console.error(`✖ 找不到源 ${job.from}（目标 ${job.to}），拒绝静默跳过`)
     process.exit(1)
   }
-  if (!existsSync(ESBUILD_JS)) {
-    console.log(`✖ 找不到本地 esbuild（${ESBUILD_JS}），请先执行：npm i -D esbuild`)
-    process.exit(1)
-  }
-  // --bundle：真源里的相对 import（如 video-adapters.ts → ../check-link/ssrf-guard.ts）
+  // bundle：真源里的相对 import（如 video-adapters.ts → ../check-link/ssrf-guard.ts）
   // 必须打进单文件——云函数目录是独立部署单元，运行时不存在跨目录的 .ts 依赖。
-  execFileSync(
-    process.execPath,
-    [ESBUILD_JS, src, '--format=cjs', '--platform=node', '--bundle', `--outfile=${out}`],
-    { stdio: 'pipe' },
-  )
+  buildSync({
+    entryPoints: [src],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile: out,
+    logLevel: 'silent',
+  })
   const body = readFileSync(out, 'utf8')
   const header = HEADER.replace('%FROM%', job.from)
   if (!body.startsWith('// 本文件由')) {
