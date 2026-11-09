@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { useEntitlement } from '../../composables/domain/useEntitlement.js'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { useEntitlement, ENTITLEMENT_CACHE_KEY } from '../../composables/domain/useEntitlement.js'
+import type { MyEntitlement } from '../../composables/domain/useRedeem.js'
+
+const mockFetchMyEntitlement = vi.hoisted(() => vi.fn())
+vi.mock('../../composables/domain/useRedeem.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../composables/domain/useRedeem.js')>()
+  return { ...actual, fetchMyEntitlement: mockFetchMyEntitlement }
+})
 
 describe('useEntitlement (会员权益与功能分层门控)', () => {
   beforeEach(() => {
@@ -108,5 +115,44 @@ describe('useEntitlement (会员权益与功能分层门控)', () => {
     // 消耗今天 1 次
     expect(consumeAiEnrichQuota()).toBe(true)
     expect(checkAiEnrichQuota().remaining).toBe(2)
+  })
+
+  it('6. clear() 后在途 refresh() 不写回缓存（退出登录竞态回归）', async () => {
+    let resolveFetch!: (v: MyEntitlement) => void
+    mockFetchMyEntitlement.mockImplementation(
+      () => new Promise<MyEntitlement>((resolve) => { resolveFetch = resolve }),
+    )
+    const pro: MyEntitlement = {
+      planId: 'pro_monthly',
+      planName: 'PRO 月付',
+      status: 'active',
+      expiresAt: '2099-01-01',
+      features: { 'ai.tokens.monthly': 200000 },
+      isPaid: true,
+    }
+    const { refresh, clear, isPaid } = useEntitlement()
+    const pending = refresh()
+    clear()
+    expect(localStorage.getItem(ENTITLEMENT_CACHE_KEY)).toBeNull()
+    resolveFetch(pro)
+    await pending
+    expect(isPaid.value).toBe(false)
+    expect(localStorage.getItem(ENTITLEMENT_CACHE_KEY)).toBeNull()
+  })
+
+  it('7. 最新一次 refresh() 仍正常更新权益与缓存', async () => {
+    const pro: MyEntitlement = {
+      planId: 'pro_monthly',
+      planName: 'PRO 月付',
+      status: 'active',
+      expiresAt: '2099-01-01',
+      features: {},
+      isPaid: true,
+    }
+    mockFetchMyEntitlement.mockResolvedValue(pro)
+    const { refresh, isPaid } = useEntitlement()
+    await refresh()
+    expect(isPaid.value).toBe(true)
+    expect(localStorage.getItem(ENTITLEMENT_CACHE_KEY)).not.toBeNull()
   })
 });

@@ -72,6 +72,13 @@ function getInitialEntitlement(): MyEntitlement {
 const currentEntitlement = ref<MyEntitlement>(getInitialEntitlement())
 const loadingEntitlement = ref(false)
 
+/**
+ * refresh 代次：clear()（退出登录 / 切换账号）会让所有在途 refresh() 失效。
+ * 否则退出登录瞬间仍在飞行的请求会在 clear 之后把 FREE_PLAN（甚至旧账号的
+ * 付费权益）写回缓存并覆盖内存态，造成「已登出却残留会员缓存」的竞态。
+ */
+let refreshGeneration = 0
+
 export function isProUser(): boolean {
   return currentEntitlement.value.isPaid
 }
@@ -85,9 +92,12 @@ export function useEntitlement() {
   const features = computed(() => currentEntitlement.value.features)
 
   async function refresh(): Promise<MyEntitlement> {
+    const gen = ++refreshGeneration
     loadingEntitlement.value = true
     try {
       const e = await fetchMyEntitlement()
+      // 已被 clear() 或更新的 refresh() 取代：丢弃旧结果，绝不覆盖状态/写回缓存
+      if (gen !== refreshGeneration) return currentEntitlement.value
       currentEntitlement.value = e
       try {
         safeSetItem(ENTITLEMENT_CACHE_KEY, JSON.stringify(e))
@@ -95,11 +105,14 @@ export function useEntitlement() {
       } catch { /* ignore */ }
       return e
     } finally {
-      loadingEntitlement.value = false
+      // 旧代次不得提前关掉新请求的 loading 标记
+      if (gen === refreshGeneration) loadingEntitlement.value = false
     }
   }
 
   function clear(): void {
+    ++refreshGeneration
+    loadingEntitlement.value = false
     currentEntitlement.value = {
       planId: 'free',
       planName: 'free',
