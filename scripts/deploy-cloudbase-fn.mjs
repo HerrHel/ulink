@@ -179,6 +179,14 @@ const FN_EXTRA_ENV = {
     if (to) out.JINA_PROXY_TIMEOUT_MS = to
     return out
   },
+  // 2026-11-09：AI 候选 / 元数据提取从 CF Pages 迁入（复用同一份 handler），
+  // 需要与 mimo-chat 同一把 MIMO_API_KEY；缺失时函数自身 503，不部署假 key。
+  'ai-api': () => {
+    const out = {}
+    const key = readEnvLocal('MIMO_API_KEY')
+    if (key) out.MIMO_API_KEY = key
+    return out
+  },
   'mimo-chat': () => {
     const out = {
       IP_HASH_SALT: readEnvLocal('MIMO_CHAT_IP_HASH_SALT') || 'ulink-mimo-chat',
@@ -331,6 +339,8 @@ const FN_PROFILE = {
   'send-feedback': { timeout: 20, memorySize: 128 },
   'edge-headers': { timeout: 15, memorySize: 128 },
   'maintenance': { timeout: 60, memorySize: 128 },
+  // extract-metadata 要「抓网页 + Jina 兜底 + MIMO 提炼」串行，最坏 30s 级
+  'ai-api': { timeout: 60, memorySize: 256 },
 }
 const DEFAULT_PROFILE = { timeout: 20, memorySize: 128 }
 

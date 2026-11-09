@@ -90,6 +90,17 @@ const JOBS = [
     from: 'supabase/functions/_shared/cb-auth.ts',
     to: 'cloudbase/functions/pay/cb-auth.js',
   },
+  // 2026-11-09：CF Pages 退役后把 /api/ai-candidates 与 /api/extract-metadata
+  // 迁到 CloudBase 云函数 ai-api。这里只派生 handler（TS→CJS），
+  // Node 适配层见 cloudbase/functions/ai-api/index.js（手写，不派生）。
+  {
+    from: 'functions/api/ai-candidates.ts',
+    to: 'cloudbase/functions/ai-api/ai-candidates.js',
+  },
+  {
+    from: 'functions/api/extract-metadata.ts',
+    to: 'cloudbase/functions/ai-api/extract-metadata.js',
+  },
 ]
 
 // 纯数据文件复制（无类型剥离）：视频平台域名清单的单一真源 = src/config/videoPlatforms.json

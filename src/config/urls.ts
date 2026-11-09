@@ -61,19 +61,25 @@ export const EDGE_ADDON_URL = 'https://microsoftedge.microsoft.com/addons/detail
 export const CF_FN_BASE =
   ((import.meta.env.VITE_CF_FN_BASE as string | undefined) || '').replace(/\/+$/, '')
 
-/** 出海端点是否可用；dev 有本地中间件模拟，视为可用 */
-export function isCfApiConfigured(): boolean {
-  return import.meta.env.DEV || CF_FN_BASE.length > 0
-}
-
 /** 海外探活端点；未配置出海跳板时为空，probeOverseas 会直接跳过 */
 export const OVERSEAS_PROBE_URL =
   (import.meta.env.VITE_OVERSEAS_PROBE_URL as string | undefined) ||
   (CF_FN_BASE ? `${CF_FN_BASE}/api/check-link` : '')
 
-/** 生成端点地址；未配置返回空串，调用方必须先判空再 fetch */
-export function cfApiUrl(path: string): string {
-  if (import.meta.env.DEV) return path
-  return CF_FN_BASE ? `${CF_FN_BASE}${path}` : ''
+/**
+ * AI 端点（CloudBase 云函数 ai-api，2026-11-09 从 CF Pages 迁入）。
+ *
+ * dev 保留相对路径 —— vite 中间件已模拟 /api/ai-candidates 与 /api/extract-metadata，
+ * 离线可开发且不消耗生产配额；生产走同域 `${VITE_CLOUDBASE_FN_BASE}/ai-api?action=...`。
+ * 返回空串表示当前环境没有可用端点，调用方必须直接走本地兜底、不要发请求。
+ */
+export function aiApiUrl(action: 'candidates' | 'extract'): string {
+  if (import.meta.env.DEV) {
+    return action === 'candidates' ? '/api/ai-candidates' : '/api/extract-metadata'
+  }
+  const base = (import.meta.env.VITE_CLOUDBASE_FN_BASE as string | undefined) || ''
+  return base ? `${base}/ai-api?action=${action}` : ''
 }
+
+
 

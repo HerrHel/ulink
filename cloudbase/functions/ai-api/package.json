@@ -1,0 +1,10 @@
+{
+  "name": "ulink-ai-api",
+  "version": "1.0.0",
+  "description": "AI 候选与网页元数据提取（复用 CF Pages 版 handler，CloudBase HTTP 云函数）",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "start": "node index.js"
+  }
+}

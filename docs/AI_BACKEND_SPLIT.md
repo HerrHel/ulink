@@ -1,5 +1,13 @@
 # AI 双后端架构与切解析必做项
 
+> **2026-11-09 二次更新**：两条真正需要出海的端点已**迁到 CloudBase 云函数 `ai-api`**
+> （`/ai-api?action=candidates|extract`），handler 仍复用 `functions/api/*.ts` 真源、
+> 由 `scripts/build-fn-assets.mjs` 派生到 `cloudbase/functions/ai-api/`，Node 适配层手写。
+> 前端改用 `aiApiUrl(action)`：dev 仍走 Vite 中间件模拟的 `/api/*`，生产走同域 `/ai-api`。
+> 海外探针（`OVERSEAS_PROBE_URL`）没有 CloudBase 等价物——CloudBase 上海机房无法提供
+> 海外视角，故保持"未配置即跳过"，不再伪造第二意见。CF Pages 侧 `functions/api/*` 仅作
+> 历史归档，不再承载生产流量。
+>
 > **状态（2026-11-09 更新）**：Cloudflare 部署已迁到国内 CloudBase，
 > `ulink.pages.dev` 不再是本站端点，方案 B 的「出海跳板」**已退役**。
 > `src/config/urls.ts` 改为「未配置 VITE_CF_FN_BASE 即禁用」：三条 /api/* 与海外探针
