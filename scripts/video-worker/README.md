@@ -1,6 +1,16 @@
 # ULink 视频智能灵感提取微服务 (Video Intelligence Worker)
 
-> **2026-11-01 状态**：线上 `ulink-video-worker` 已配置 `WORKER_TOKEN`（与 `extract-video` 的 `VIDEO_WORKER_TOKEN` 同值），无 token 直调 `/api/video/*` 返回 401；代理类变量（`YTDLP_PROXY` / `BILI_PROXY_API`）仍未配置。
+> **⚠️ 2026-11-10 已下线，本目录仅作历史归档，请勿重新部署。**
+> 线上 `ulink-video-worker` 云托管服务已删除：`tcb cloudrun list` 返回空表，
+> `DescribeCloudBaseRunServers` 为 `TotalCount=0`，环境无 VPC（`VpcId` / `SubnetIds` 均空）。
+> 云函数与前端已无任何 `WORKER_URL` / `VIDEO_WORKER_TOKEN` 引用，深度解析改走 MiMo 多模态直连。
+>
+> **成本提醒**：云托管按实例时长计费；若开启「固定出口 IP」，自
+> **2026-12-01 00:00（北京时间）** 起另按 **1000 资源点/天/环境** 计费。
+> 也就是说，一旦为了调试重新 `tcb cloudrun deploy` 并勾选固定出口 IP，
+> 会立刻产生持续费用。恢复深度解析请优先走云函数方案，不要复活这个容器。
+
+> **2026-11-01 状态（历史）**：线上 `ulink-video-worker` 已配置 `WORKER_TOKEN`（与 `extract-video` 的 `VIDEO_WORKER_TOKEN` 同值），无 token 直调 `/api/video/*` 返回 401；代理类变量（`YTDLP_PROXY` / `BILI_PROXY_API`）仍未配置。
 >
 > **2026-10-31 校正（先读）**：线上方案是 **MiMo ASR/OCR**（`WORKER_ASR_PROVIDER=mimo` + `MIMO_API_KEY`），不是 `faster_whisper`/`rapidocr`（后者仅为离线备选）。因此：
 > - `include.transcript` 缺省 = ASR **真正就绪**（provider≠none 且依赖/密钥齐全）；`include.ocr` 缺省 = OCR 就绪（mimo 只看 provider+key，rapidocr 才要 `WORKER_OCR_ENABLED`）。
