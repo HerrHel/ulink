@@ -12,7 +12,8 @@ export const purchaseZh = {
   purchase: {
     title: '升级 与链 PRO',
     renewTitle: '续费 与链 PRO',
-    subtitle: '多模态音视频情报提炼 · AI 知识深加工 · 收藏夹全自动自愈 · 随订随用',
+    // 合规修订：平台深度解析已下线，统一为留存能力「轻量平台解析」「聊天媒体解析」
+    subtitle: '轻量平台解析 · 聊天媒体解析 · AI 知识深加工 · 收藏夹全自动自愈 · 随订随用',
     noPlans: '暂无可购买的套餐',
     payNow: '立即支付',
     perMonth: '折合 {price}/月',
@@ -30,7 +31,8 @@ export const purchaseZh = {
       sync: '同步与数据安全',
       linkcheck: '健康巡检与死链自愈',
       ai: 'AI 智能与知识提炼',
-      video: '多模态音视频情报',
+      // 合规修订：能力名统一为轻量平台解析与聊天媒体解析
+      video: '轻量平台解析与聊天媒体解析',
     },
     features: {
       'history.days': '版本历史保留时长',
@@ -40,8 +42,8 @@ export const purchaseZh = {
       'linkcheck.auto.max': '单次自动巡检链接上限',
       'ai.requests.daily': '每日 AI 深度调用额度',
       'ai.tokens.monthly': '每月 AI 智能计算额度（Token）',
-      'video.extract.daily': '每日音视频情报提取（主流平台）',
-      'video.deep.daily': '聊天媒体 ASR/OCR 深度解析（实验性）',
+      'video.extract.daily': '每日轻量平台解析',
+      'video.deep.daily': '聊天媒体解析（实验性）',
     },
     compareTitle: '各档位权益对比',
     included: '包含',
@@ -49,10 +51,11 @@ export const purchaseZh = {
     recommended: '最划算',
     monthlyBadge: '灵活按月',
     quarterlyBadge: '进阶特惠',
-    earlyBirdBadge: '首发早鸟',
+    // 合规修订：改为中性表述「订阅期内价格锁定」，不暗示限时/限量（PRICING.md 记载相关名额仅为建议、未执行）
+    earlyBirdBadge: '订阅期内价格锁定',
     monthlyFootnote: '单次开通即刻生效，随订随用，到期不自动续费。',
     quarterlyFootnote: '单次开通即刻生效，季度进阶优选，到期不自动续费。',
-    earlyBirdFootnote: '首发早鸟特权：开通即锁定当期价格，整个订阅期内不再调价；到期续费按届时公示价格。',
+    earlyBirdFootnote: '订阅期内价格锁定：开通即锁定当期价格，整个订阅期内不再调价；到期续费按届时公示价格。',
     currentPlanBadge: '当前方案',
     featuresStarter: '包含基础权益：',
     featuresPro: '包含免费版全部功能，升级即可尊享：',
@@ -76,9 +79,10 @@ export const purchaseZh = {
     hideFullCompare: '收起参数对比',
     freeTierTitle: '基础免费版',
     freeTierSlogan: '轻量高效，适合日常书签收藏与本地管理',
-    monthlySlogan: '灵活按月进阶，解锁音视频提取与 AI 知识深加工',
-    quarterlySlogan: '季度进阶首选，尽享高频自动化整理与音视频提取，折算更优惠',
-    yearlySlogan: '高频生产力首选，折合仅 ¥9/月（每天不到 3 毛钱），尊享全功能与优先通道',
+    monthlySlogan: '灵活按月进阶，解锁轻量平台解析与 AI 知识深加工',
+    quarterlySlogan: '季度进阶首选，尽享高频自动化整理与轻量平台解析，折算更优惠',
+    // 合规修订：文案不写具体价格（顶部约定），月均金额由 perMonth 按 plans 推导
+    yearlySlogan: '高频生产力首选，订阅期内价格锁定，尊享全功能与优先通道',
     successTitle: '支付成功',
     successDesc: '权益已到账，返回设置即可查看当前方案。',
     channel: {
@@ -108,7 +112,8 @@ export const purchaseEn = {
   purchase: {
     title: 'Upgrade to ulink PRO',
     renewTitle: 'Renew ulink PRO',
-    subtitle: 'Multimodal video intelligence · AI knowledge processing · Autonomous health patrol',
+    // 合规修订：中英同步，能力名统一为 light platform parsing / chat media analysis
+    subtitle: 'Light platform parsing · Chat media analysis · AI knowledge processing · Autonomous health patrol',
     noPlans: 'No plans available',
     payNow: 'Pay now',
     perMonth: '{price}/mo',
@@ -126,7 +131,7 @@ export const purchaseEn = {
       sync: 'Sync & Security',
       linkcheck: 'Health & Dead Links',
       ai: 'AI & Knowledge Mining',
-      video: 'Multimodal Video Intelligence',
+      video: 'Light Platform Parsing & Chat Media Analysis',
     },
     features: {
       'history.days': 'Version history retention',
@@ -136,8 +141,8 @@ export const purchaseEn = {
       'linkcheck.auto.max': 'Max links per patrol run',
       'ai.requests.daily': 'Daily AI deep requests',
       'ai.tokens.monthly': 'Monthly AI token quota',
-      'video.extract.daily': 'Daily video extraction quota',
-      'video.deep.daily': 'Chat media ASR/OCR deep analysis (lab)',
+      'video.extract.daily': 'Daily light platform parses',
+      'video.deep.daily': 'Chat media analysis (lab)',
     },
     compareTitle: 'Plan comparison',
     included: 'Included',
@@ -145,10 +150,11 @@ export const purchaseEn = {
     recommended: 'Best value',
     monthlyBadge: 'Flexible monthly',
     quarterlyBadge: 'Quarterly deal',
-    earlyBirdBadge: 'Early bird',
+    // 合规修订：去 Early bird 限时包装，改为中性表述
+    earlyBirdBadge: 'Price locked for the term',
     monthlyFootnote: 'One-time subscription, active immediately, no auto-renewal.',
     quarterlyFootnote: 'One-time subscription, active immediately, no auto-renewal.',
-    earlyBirdFootnote: 'Early bird: your price is locked for the whole subscription term; renewal follows the price published at that time.',
+    earlyBirdFootnote: 'Price locked for the subscription term: your price is locked for the whole term; renewal follows the price published at that time.',
     currentPlanBadge: 'Current plan',
     featuresStarter: 'Get started with:',
     featuresPro: 'Everything in Free Plan, plus:',
@@ -172,9 +178,10 @@ export const purchaseEn = {
     hideFullCompare: 'Collapse comparison',
     freeTierTitle: 'Starter Free',
     freeTierSlogan: 'Essential for daily bookmarking and local-first management',
-    monthlySlogan: 'Flexible monthly tier for video intelligence and AI workflows',
+    monthlySlogan: 'Flexible monthly tier for light platform parsing and AI workflows',
     quarterlySlogan: 'Quarterly tier with higher value for continuous knowledge workers',
-    yearlySlogan: 'Best value at ¥9/mo: full features, priority support and lab experiments',
+    // 合规修订：文案不写具体价格，月均金额由计价逻辑推导
+    yearlySlogan: 'Best value: full features, priority support and lab experiments',
     successTitle: 'Payment successful',
     successDesc: 'Your plan is active. Go back to settings to see the current plan.',
     channel: {

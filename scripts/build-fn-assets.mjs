@@ -112,12 +112,18 @@ const HEADER = '// 本文件由 scripts/build-fn-assets.mjs 从 %FROM% 生成，
 //  - 直接调 esbuild 的 JS 入口最稳，也不依赖 npx 的临时下载
 const ESBUILD_JS = resolve('node_modules/esbuild/bin/esbuild')
 
+// 生成计数：结尾汇总打印，便于 CI 日志快速确认本轮实际生成了多少派生资产。
+let generated = 0
+
 for (const job of JOBS) {
   const src = resolve(job.from)
   const out = resolve(job.to)
   if (!existsSync(src)) {
-    console.log(`跳过 ${job.to}（找不到源 ${job.from}）`)
-    continue
+    // CI 用 `node build-fn-assets.mjs && git diff --exit-code` 做派生资产漂移守卫：
+    // 源缺失若 continue 静默跳过，对应派生 JS 会缺文件却仍绿灯，部署到半成品。
+    // 因此硬失败，逼出真源路径错误 / 误删。
+    console.error(`✖ 找不到源 ${job.from}（目标 ${job.to}），拒绝静默跳过`)
+    process.exit(1)
   }
   if (!existsSync(ESBUILD_JS)) {
     console.log(`✖ 找不到本地 esbuild（${ESBUILD_JS}），请先执行：npm i -D esbuild`)
@@ -136,6 +142,7 @@ for (const job of JOBS) {
     writeFileSync(out, header + body, 'utf8')
   }
   console.log(`✔ ${job.to} ← ${job.from}`)
+  generated++
 }
 
 // 纯数据文件：原样复制（不包 header，保持合法 JSON）
@@ -143,10 +150,17 @@ for (const job of COPY_JOBS) {
   const src = resolve(job.from)
   const out = resolve(job.to)
   if (!existsSync(src)) {
-    console.log(`跳过 ${job.to}（找不到源 ${job.from}）`)
-    continue
+    // CI 用 `node build-fn-assets.mjs && git diff --exit-code` 做派生资产漂移守卫：
+    // 源缺失若 continue 静默跳过，对应派生 JS 会缺文件却仍绿灯，部署到半成品。
+    // 因此硬失败，逼出真源路径错误 / 误删。
+    console.error(`✖ 找不到源 ${job.from}（目标 ${job.to}），拒绝静默跳过`)
+    process.exit(1)
   }
   const body = readFileSync(src, 'utf8')
   writeFileSync(out, body, 'utf8')
   console.log(`✔ ${job.to} ← ${job.from}（数据文件复制）`)
+  generated++
 }
+
+// CI 日志汇总：数量异常（如 0）一眼可见，配合前面的 git diff 守卫定位漂移/缺源。
+console.log(`生成完成：共 ${generated} 个派生资产`)

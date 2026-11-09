@@ -6,10 +6,12 @@
  * 只换两样东西：运行时（Deno → Node 云函数）与鉴权/写库（Supabase → CloudBase PG）。
  *
  * 原实现的防护（全部保留）：
- * 1) 按 IP 哈希限流：1 分钟 30 条，**DB 计数**（error_logs.ip_hash + 索引，跨实例一致）。
+ * 1) 全局限流键：网关不回填可信 IP、x-real-ip / X-Forwarded-For 可伪造，按 IP 限流可被
+ *    任意绕过。改为所有请求共用一个固定全局键 + 更严格全局配额，仍用 DB 计数
+ *    （error_logs.ip_hash + 索引，跨实例一致）。
  *    不能用实例内存计数——多实例无粘性路由，内存 Map 的粒度会随实例数放大
  *    （Supabase 侧首版实测 35 连发全过，证实内存限流失效）。
- * 2) H9 含密兜底：message/stack 含 JWT/API key/password 等直接丢弃。
+ * 2) H9 含密兜底：message/stack/url/component/user_agent 含 JWT/API key/password 等直接丢弃。
  *    逻辑镜像自 src/lib/errorReporter.ts 的 _SECRET_RE，**保持同步**。
  * 3) 字段裁剪：与 error_logs 表 CHECK 语义和前端 slice 上限对齐。
  * 4) 028 的 DB 层全局熔断（1min/200 触发器）作为最终兜底，对 service 也生效。
@@ -33,7 +35,10 @@ const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 /** IP 哈希盐：独立于 send-feedback 的盐，防跨接口关联 */
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-report-error'
 
-const RATE_PER_IP = 30
+// 网关不回填可信 IP、x-real-ip / X-Forwarded-For 可伪造，按 IP 限流可被任意绕过；
+// 改为全局固定限流键（所有请求共用一个桶）+ 更严格全局配额，DB 计数方式保持不变。
+const GLOBAL_RATE_KEY = 'ulink-report-error-global'
+const RATE_GLOBAL = 100          // 全局每分钟上限（低于 028 的 200/min DB 熔断，伪造 IP 无法绕过）
 const RATE_WINDOW_MS = 60_000
 
 // 字段上限（与 errorReporter.ts 的 slice 一致 + 表 CHECK 语义）
@@ -78,24 +83,31 @@ function readJsonBody(req) {
   })
 }
 
-function clientIp(req) {
-  const real = req.headers['x-real-ip']
-  if (typeof real === 'string' && real.trim()) return real.trim()
-  const xff = String(req.headers['x-forwarded-for'] || '')
-  const hops = xff.split(',').map((s) => s.trim()).filter(Boolean)
-  if (hops.length) return hops[hops.length - 1]
-  return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
-}
+// 不再从请求头取 IP 做限流键：x-real-ip / X-Forwarded-For 可伪造（网关不回填可信 IP），
+// 限流改用上面的全局固定键 GLOBAL_RATE_KEY，避免按 IP 限流被任意绕过
 
 function sha256Hex(s) {
   return crypto.createHash('sha256').update(s, 'utf8').digest('hex')
 }
 
 // ── H9 含密兜底：镜像自 src/lib/errorReporter.ts 的 _SECRET_RE，请保持同步 ──
+// 扩充覆盖 token=/secret=/api[_-]?key=、Google AIza、腾讯云 AKID 与 PEM 私钥头
 const SECRET_RE =
-  /(?:Bearer\s+[A-Za-z0-9\-._~+/]+=*|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{20,}|password\s*[:=]\s*\S+|apikey\s*[:=]\s*\S+)/i
+  /(?:Bearer\s+[A-Za-z0-9\-._~+/]+=*|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{20,}|password\s*[:=]\s*\S+|(?:token|secret|api[_-]?key)\s*[:=]\s*\S+|AIza[0-9A-Za-z_-]{20,}|AKID[0-9A-Za-z]{10,}|-----BEGIN[A-Z ]*PRIVATE KEY)/i
 function looksLikeSecret(text) {
   return !!text && SECRET_RE.test(text)
+}
+
+/** 服务端再消毒一次 URL：只保留 origin+pathname（去掉 query/hash），拒绝非 http/https */
+function sanitizeUrl(raw) {
+  if (typeof raw !== 'string' || !raw) return ''
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return ''
+    return (u.origin + u.pathname).slice(0, LIMIT.url)
+  } catch {
+    return ''
+  }
 }
 
 const trunc = (s, n) => String(s || '').slice(0, n)
@@ -139,7 +151,8 @@ const server = http.createServer(async (req, res) => {
   const message = trunc(payload.message, LIMIT.message).trim()
   const stack = trunc(payload.stack, LIMIT.stack)
   const component = trunc(payload.component, LIMIT.component)
-  const url = trunc(payload.url, LIMIT.url)
+  // 服务端再跑一次 URL 消毒（前端已做，但不可信入参必须服务端兜底）
+  const url = sanitizeUrl(payload.url)
   const userAgent = trunc(payload.user_agent || req.headers['user-agent'], LIMIT.user_agent)
 
   if (!message) {
@@ -148,12 +161,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   // H9：含密丢弃（服务端兜底，与前端双保险）
-  if (looksLikeSecret(message) || looksLikeSecret(stack)) {
+  // 旧版只查 message/stack；url/component/user_agent 也一律跑 looksLikeSecret
+  if (looksLikeSecret(message) || looksLikeSecret(stack) || looksLikeSecret(url) ||
+      looksLikeSecret(component) || looksLikeSecret(userAgent)) {
     sendJson(res, 200, { ok: true, dropped: 'secret_like' })
     return
   }
 
-  const ipHash = sha256Hex(`${clientIp(req)}|${IP_HASH_SALT}`)
+  // 全局固定限流键：不再用可伪造的请求头 IP，所有请求共用同一哈希桶
+  const ipHash = sha256Hex(`${GLOBAL_RATE_KEY}|${IP_HASH_SALT}`)
   const db = getDb()
 
   // DB 计数限流（跨实例一致；计数失败 fail-closed 拒收，宁可丢一条也不放行洪水）
@@ -169,7 +185,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 500, { error: 'rate_check_failed' })
       return
     }
-    if ((r.count ?? 0) >= RATE_PER_IP) {
+    if ((r.count ?? 0) >= RATE_GLOBAL) {
       sendJson(res, 429, { error: 'rate_limited', retry_after_s: RATE_WINDOW_MS / 1000 })
       return
     }

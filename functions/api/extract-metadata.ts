@@ -3,7 +3,8 @@
  *
  * 核心机制：
  * 1. 突破浏览器 CORS 跨域限制，在 Cloudflare 全球边缘节点安全读取公网网页；
- * 2. 严格的 SSRF 防护（拦截私有/回环网络）；
+ * 2. 严格的 SSRF 防护：手动跟随重定向逐跳重验协议/主机，拦截私有/回环/链路本地网络；
+ * 2b. 响应体上限 512KB，解析前截断，防超大页面撑爆边缘 isolate；
  * 3. 提取真实 HTML <title>、<meta description>、<meta og:title>、<meta og:description>；
  * 4. 对纯动态客户端渲染页面（SPA）自动降级至 Jina Reader 读取；
  * 5. 零伪造数据，失败诚实返回。
@@ -13,16 +14,32 @@ import { cfCorsHeaders, guardCfRequest, cfPreflightResponse } from '../_lib/cf-g
 
 interface Env {}
 
-const PRIVATE_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
+/** 回环/本机字面量（IPv6 去方括号后比对：URL.hostname 对 IPv6 会带 []）。 */
+const PRIVATE_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '::'])
 
-function isPrivateIp(hostname: string): boolean {
-  const host = hostname.toLowerCase().trim()
+/** 去方括号归一化 IPv6 字面量：new URL('http://[::1]/').hostname === '[::1]'。 */
+function normalizeHost(hostname: string): string {
+  return hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.$/, '')
+}
+
+/** 私网 / 回环 / 链路本地 / .local / .internal 拒绝（每跳重定向都要重跑，防 302 打到内网 SSRF）。 */
+function isPrivateHost(hostname: string): boolean {
+  const host = normalizeHost(hostname)
   if (PRIVATE_HOSTS.has(host)) return true
-  if (/^10\./.test(host)) return true
-  if (/^192\.168\./.test(host)) return true
-  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return true
-  if (/^169\.254\./.test(host)) return true
-  if (host.endsWith('.local') || host.endsWith('.internal')) return true
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
+  // IPv6 字面量一律拒绝，覆盖 ::1 / 0:0:...:1 / ULA / 链路本地 / IPv4 映射等全部形态
+  if (host.includes(':')) return true
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (m) {
+    const a = Number(m[1])
+    const b = Number(m[2])
+    if (m.slice(1).some((o) => Number(o) > 255)) return true
+    if (a === 127 || a === 10 || a === 0 || a >= 224) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    if (a === 169 && b === 254) return true
+    if (a === 100 && b >= 64 && b <= 127) return true
+  }
   return false
 }
 
@@ -106,6 +123,35 @@ function decodeHtmlBuffer(buffer: ArrayBuffer, contentTypeHeader = ''): string {
   return utf8Str
 }
 
+/** 响应体上限 512KB：解析前截断，防超大页面撑爆边缘 isolate / 解码耗时。 */
+const MAX_HTML_BYTES = 512 * 1024
+
+async function readCappedArrayBuffer(res: Response): Promise<ArrayBuffer> {
+  if (!res.body) return new ArrayBuffer(0)
+  const reader = res.body.getReader()
+  const parts: Uint8Array[] = []
+  let size = 0
+  while (size < MAX_HTML_BYTES) {
+    const { done, value } = await reader.read()
+    if (done || !value) break
+    const room = MAX_HTML_BYTES - size
+    const chunk = value.byteLength > room ? value.subarray(0, room) : value
+    parts.push(chunk)
+    size += chunk.byteLength
+    if (chunk.byteLength < value.byteLength) break
+  }
+  try {
+    await reader.cancel()
+  } catch {}
+  const buf = new Uint8Array(size)
+  let off = 0
+  for (const p of parts) {
+    buf.set(p, off)
+    off += p.byteLength
+  }
+  return buf.buffer as ArrayBuffer
+}
+
 const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
@@ -173,24 +219,61 @@ export async function onRequest(context: { request: Request; env: Env }): Promis
     return jsonResponse({ success: false, error: 'invalid_url_format' }, 400)
   }
 
-  if (isPrivateIp(targetUrl.hostname)) {
+  if ((targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') || isPrivateHost(targetUrl.hostname)) {
     return jsonResponse({ success: false, error: 'private_ip_forbidden' }, 400)
   }
 
-  try {
-    const tryFetch = async (target: string) => {
-      return await fetch(target, {
+  const MAX_REDIRECTS = 3
+  const REDIRECT_CODES = [301, 302, 303, 307, 308]
+
+  /**
+   * 手动跟随重定向（最多 3 跳），每跳重新校验协议/主机：
+   * `redirect:'follow'` 只校验初始 hostname，302 到内网即可 SSRF。
+   */
+  const fetchGuarded = async (start: URL, signal: AbortSignal): Promise<Response> => {
+    let current = start
+    for (let hop = 0; ; hop++) {
+      if ((current.protocol !== 'http:' && current.protocol !== 'https:') || isPrivateHost(current.hostname)) {
+        throw new Error('unsafe_redirect')
+      }
+      const res = await fetch(current.href, {
         method: 'GET',
-        redirect: 'follow',
-        signal: AbortSignal.timeout(4000),
+        redirect: 'manual',
+        signal,
         headers: {
           'User-Agent': BROWSER_UA,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         },
       })
+      const loc = REDIRECT_CODES.includes(res.status) ? res.headers.get('Location') : null
+      if (loc && hop < MAX_REDIRECTS) {
+        let next: URL
+        try {
+          next = new URL(loc, current.href)
+        } catch {
+          return res
+        }
+        current = next
+        continue
+      }
+      return res
     }
+  }
 
+  /** 合并「客户端断开」与「超时」：客户端断开时取消付费上游；运行时不支持 AbortSignal.any 时退化为仅超时。 */
+  const upstreamSignal = (timeoutMs: number): AbortSignal => {
+    const timeout = AbortSignal.timeout(timeoutMs)
+    const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any
+    if (typeof anyFn === 'function' && request.signal) {
+      return anyFn([request.signal, timeout])
+    }
+    return timeout
+  }
+
+  const tryFetch = async (target: string) => fetchGuarded(new URL(target), upstreamSignal(4000))
+
+  try {
     let res: Response | null = null
     try {
       res = await tryFetch(targetUrl.href)
@@ -211,7 +294,7 @@ export async function onRequest(context: { request: Request; env: Env }): Promis
     try {
       const contentType = res ? res.headers.get('content-type') || '' : ''
       if (res && res.ok && (contentType.includes('text/html') || contentType.includes('application/xhtml+xml') || !contentType)) {
-        const buf = await res.arrayBuffer()
+        const buf = await readCappedArrayBuffer(res)
         const html = decodeHtmlBuffer(buf, contentType)
         const headSlice = html.slice(0, 150000)
 
@@ -250,7 +333,7 @@ export async function onRequest(context: { request: Request; env: Env }): Promis
         try {
           const jinaRes = await fetch(`https://r.jina.ai/${jt}`, {
             headers: { Accept: 'text/plain' },
-            signal: AbortSignal.timeout(6000),
+            signal: upstreamSignal(6000),
           })
           if (jinaRes.ok) {
             const text = await jinaRes.text()
@@ -327,7 +410,7 @@ ${attrClause}${catClause}
             temperature: 0.1,
             max_tokens: 300,
           }),
-          signal: AbortSignal.timeout(10000),
+          signal: upstreamSignal(10000),
         })
 
         if (mimoRes.ok) {
@@ -369,10 +452,11 @@ ${attrClause}${catClause}
     })
   } catch (err: unknown) {
     const isTimeout = (err as Error)?.name === 'AbortError' || (err as Error)?.name === 'TimeoutError'
+    // 固定错误码，绝不回显 err.message（避免泄漏上游 URL / 内网拓扑 / 堆栈）
     return jsonResponse(
       {
         success: false,
-        error: isTimeout ? 'timeout' : (err as Error)?.message || 'network_error',
+        error: isTimeout ? 'timeout' : 'network_error',
       },
       502
     )

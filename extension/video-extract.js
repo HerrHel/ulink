@@ -112,6 +112,55 @@
     }
   }
 
+  // action=deep 提交前的统一 URL 白名单：只放行 https 且 hostname 精确匹配平台页面/CDN 后缀。
+  // body.url 是视频详情页（平台页面域），client 媒体数组是平台 CDN 域，共用同一份后缀清单；
+  // 用 new URL() 解析后精确比对，绝不做子串判定；CDN 域与云函数 CLIENT_MEDIA_PLATFORMS 同源。
+  const DEEP_URL_HOST_SUFFIXES = [
+    'bilibili.com', 'b23.tv', 'douyin.com', 'iesdouyin.com', 'xiaohongshu.com',
+    'bilivideo.com', 'bilivideo.cn', 'douyinvod.com', 'bytecdn.cn', 'byteimg.com',
+    'snssdk.com', 'amemv.com', 'zjcdn.com', 'xhscdn.com', 'xhsimg.com',
+  ]
+
+  function isPrivateDeepHost(hostname) {
+    var h = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '')
+    if (h === 'localhost' || h === '::1' || h === '::' || h === '0.0.0.0') return true
+    if (h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true
+    if (h.indexOf(':') !== -1) return true // IPv6 字面量一律拒绝（含回环/ULA/链路本地/映射）
+    var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h)
+    if (!m) return false
+    var a = Number(m[1])
+    var b = Number(m[2])
+    if (m.slice(1).some(function (o) { return Number(o) > 255 })) return true
+    return a === 127 || a === 10 || a === 0 || a >= 224 ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+      (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127)
+  }
+
+  function isSafeDeepUrl(value) {
+    if (!value || typeof value !== 'string') return false
+    try {
+      var u = new URL(value.trim())
+      if (u.protocol !== 'https:') return false
+      if (u.username || u.password) return false
+      var host = u.hostname.toLowerCase()
+      if (isPrivateDeepHost(host)) return false
+      return DEEP_URL_HOST_SUFFIXES.some(function (suffix) {
+        return host === suffix || host.endsWith('.' + suffix)
+      })
+    } catch (_) {
+      return false
+    }
+  }
+
+  function filterSafeDeepUrls(value) {
+    if (!Array.isArray(value)) return []
+    var out = []
+    for (var i = 0; i < value.length; i++) {
+      if (isSafeDeepUrl(value[i]) && out.indexOf(value[i]) === -1) out.push(value[i])
+    }
+    return out
+  }
+
   function renderResult(result) {
     el.statusCard.classList.add('uve-hidden')
     el.errorCard.classList.add('uve-hidden')
@@ -224,18 +273,32 @@
 
   async function submitDeep(state, token) {
     const payload = state.payload || {}
-    const includeOcr = Array.isArray(payload.video_urls) && payload.video_urls.length > 0
+    // 提交前统一过滤：body.url 与 client 媒体数组都只保留 https + 平台后缀白名单 + 非私网 IP
+    const pageUrl = state.url || payload.url
+    if (!isSafeDeepUrl(pageUrl)) {
+      throw Object.assign(new Error('页面地址不合法，已阻止提交'), {
+        guide: '请回到视频详情页重新右键使用「与链：深度解析此视频」。',
+      })
+    }
+    const audioUrls = filterSafeDeepUrls(payload.audio_urls)
+    const videoUrls = filterSafeDeepUrls(payload.video_urls)
+    if (!audioUrls.length && !videoUrls.length) {
+      throw Object.assign(new Error('没有可用的安全播放地址，已阻止提交'), {
+        guide: '请等视频开始播放后重新右键解析。',
+      })
+    }
+    const includeOcr = videoUrls.length > 0
     const body = {
       action: 'deep',
-      url: state.url || payload.url,
+      url: pageUrl,
       include: { transcript: true, ocr: includeOcr },
       client: {
         platform: payload.platform,
         title: payload.title,
         duration: payload.duration,
         uploader: payload.uploader,
-        audio_urls: payload.audio_urls || [],
-        video_urls: payload.video_urls || [],
+        audio_urls: audioUrls,
+        video_urls: videoUrls,
         referer: payload.referer,
       },
     }

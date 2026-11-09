@@ -17,9 +17,10 @@
     console.error('[sidepanel] LinkVaultExtConfig missing CLOUDBASE_ENV_ID / CLOUDBASE_PUBLISHABLE_KEY')
   }
 
-  const sb = window.supabase.createClient(CLOUDBASE_ENV_ID, CLOUDBASE_PUBLISHABLE_KEY, {
-    auth: { autoRefreshToken: true, persistSession: true, storage: localStorage, storageKey: 'linkvault_ext_auth' }
-  })
+  // createClient 仅接收 (envId, publishableKey)：CloudBase shim 不透传 Supabase 风格 auth 配置，
+  // 登录态真实存储键是 credentials_<envId> / tcb_*（见 trySyncSessionFromWeb 扫描逻辑），
+  // 故不再传 storageKey / persistSession 等无效选项，避免「看似生效实则被丢弃」的假契约。
+  const sb = window.supabase.createClient(CLOUDBASE_ENV_ID, CLOUDBASE_PUBLISHABLE_KEY)
 
   // ── 静态 HTML 国际化替换（Chrome 仅对 manifest/CSS 自动替换，HTML 需脚本替换）──
   function localizeHtml() {
@@ -700,6 +701,12 @@
     renderBookmarks(filtered)
   }
 
+  /** 列表/属性里的安全标题：未解锁的三段密文不落 DOM，回退域名或「加密书签」。 */
+  function displayTitle(b, host) {
+    var isCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(b.title) : false
+    return b._decryptedTitle || (isCipher ? (host || chrome.i18n.getMessage('encrypted_bookmark')) : (b.title || host || ''))
+  }
+
   function renderBookmarks(list) {
     var displayList = list || allBookmarks
     var isSearching = searchQuery.trim().length > 0
@@ -729,8 +736,7 @@
     bookmarkList.innerHTML = displayList.slice(0, 50).map(function (b) {
       var host = domain(b.url)
       var icon = b.icon || (host ? 'https://www.google.com/s2/favicons?domain=' + host + '&sz=32' : '')
-      var isTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(b.title) : false
-      var rawTitle = b._decryptedTitle || (isTitleCipher ? (host || chrome.i18n.getMessage('encrypted_bookmark')) : (b.title || host))
+      var rawTitle = displayTitle(b, host)
       var initial = (rawTitle || '?').charAt(0).toUpperCase()
       var titleHtml = isSearching ? highlightMatch(rawTitle, query) : esc(rawTitle)
       var urlHtml = isSearching ? highlightMatch(host, query) : esc(host)
@@ -752,10 +758,9 @@
         subsHtml = '<div class="bookmark-sub-sites">' + subs.map(function (s) {
           var sHost = domain(s.url)
           var sIcon = s.icon || (sHost ? 'https://www.google.com/s2/favicons?domain=' + sHost + '&sz=16' : '')
-          var isSubTitleCipher = window.LinkVaultCrypto ? window.LinkVaultCrypto.isThreePartCipher(s.title) : false
-          var sRawTitle = s._decryptedTitle || (isSubTitleCipher ? (sHost || chrome.i18n.getMessage('encrypted_bookmark')) : (s.title || sHost))
+          var sRawTitle = displayTitle(s, sHost)
           var sTitle = isSearching ? highlightMatch(sRawTitle, query) : esc(sRawTitle)
-          return '<span class="bookmark-sub-card" data-url="' + esc(s.url) + '" title="' + esc(s.title || s.url) + '">'
+          return '<span class="bookmark-sub-card" data-url="' + esc(s.url) + '" title="' + esc(displayTitle(s, sHost)) + '">'
             + (sIcon ? '<img src="' + esc(sIcon) + '" alt="">' : '')
             + '<span class="sub-title">' + sTitle + '</span>'
             + '<span class="sub-arrow">↗</span>'
@@ -779,7 +784,7 @@
         + catBadge
         + '</div>'
         + '</div>'
-        + '<span class="bookmark-del-btn" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(b.title) + '" title="' + deleteTitle + '">' + closeSvg + '</span>'
+        + '<span class="bookmark-del-btn" data-action="delete" data-id="' + esc(b.id) + '" data-title="' + esc(displayTitle(b, host)) + '" title="' + deleteTitle + '">' + closeSvg + '</span>'
         + '</div>'
         + (previewHtml ? '<div class="bookmark-preview">' + previewHtml + '</div>' : '')
         + subsHtml
@@ -1801,22 +1806,23 @@
           target: { tabId: targetTab.id },
           func: function () {
             try {
-              var auth = localStorage.getItem('linkvault_auth')
-              if (!auth) {
-                // CloudBase js-sdk 凭证检测（支持 credentials_<envId> 或 tcb_ 等存储键）
-                for (var i = 0; i < localStorage.length; i++) {
-                  var k = localStorage.key(i)
-                  if (k && (k.indexOf('credentials_') !== -1 || k.indexOf('tcb_') !== -1)) {
-                    var val = localStorage.getItem(k)
-                    if (val && (val.indexOf('access_token') !== -1 || val.indexOf('accessToken') !== -1 || val.indexOf('refresh_token') !== -1)) {
-                      auth = val
-                      break
-                    }
+              // 候选收集 + 逐个尝试：优先枚举 CloudBase credentials_<envId> / tcb_* 凭证键，
+              // 旧 Supabase 残留键 linkvault_auth 仅最后回退（旧键非空曾短路掉 CloudBase 扫描，
+              // 让「一键同步网页端登录」永久失败）。
+              var candidates = []
+              var legacy = localStorage.getItem('linkvault_auth')
+              for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i)
+                if (k && (k.indexOf('credentials_') !== -1 || k.indexOf('tcb_') !== -1)) {
+                  var val = localStorage.getItem(k)
+                  if (val && (val.indexOf('access_token') !== -1 || val.indexOf('accessToken') !== -1 || val.indexOf('refresh_token') !== -1)) {
+                    candidates.push(val)
                   }
                 }
               }
+              if (legacy) candidates.push(legacy)
               return {
-                auth: auth,
+                candidates: candidates,
                 theme: localStorage.getItem('lv_theme'),
               }
             } catch (e) {
@@ -1829,16 +1835,19 @@
             resolve(false)
             return
           }
-          try {
-            var raw = results[0].result
-            if (raw && raw.theme && (raw.theme === 'light' || raw.theme === 'dark')) {
-              applyTheme(raw.theme)
-            }
-            var authRaw = raw && raw.auth
-            var sessionData = typeof authRaw === 'string' ? JSON.parse(authRaw) : authRaw
-            var accessToken = sessionData && (sessionData.access_token || sessionData.accessToken)
-            var refreshToken = sessionData && (sessionData.refresh_token || sessionData.refreshToken)
-            if (sessionData && accessToken && refreshToken) {
+          var raw = results[0].result
+          if (raw && raw.theme && (raw.theme === 'light' || raw.theme === 'dark')) {
+            applyTheme(raw.theme)
+          }
+          // 逐个尝试候选：CloudBase 凭证优先、旧键最后；坏候选跳过而不是中断整轮
+          var candidates = (raw && Array.isArray(raw.candidates)) ? raw.candidates : []
+          for (var ci = 0; ci < candidates.length; ci++) {
+            try {
+              var authRaw = candidates[ci]
+              var sessionData = typeof authRaw === 'string' ? JSON.parse(authRaw) : authRaw
+              var accessToken = sessionData && (sessionData.access_token || sessionData.accessToken)
+              var refreshToken = sessionData && (sessionData.refresh_token || sessionData.refreshToken)
+              if (!sessionData || !accessToken || !refreshToken) continue
               var res = await sb.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken,
@@ -1852,8 +1861,8 @@
                 resolve(true)
                 return
               }
-            }
-          } catch (e) { }
+            } catch (e) { /* 单个候选无效，继续尝试下一个 */ }
+          }
           if (showToast) toast(chrome.i18n.getMessage('sync_login_no_tab'), 2500)
           resolve(false)
         })

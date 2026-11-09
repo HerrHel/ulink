@@ -14,6 +14,13 @@ const isProd = !!process.env.LV_E2E_PROD || process.env.npm_lifecycle_event === 
 // dev 模式仍走 5173（vite 默认端口）。
 const port = isProd ? 5174 : 5173
 
+// process.env 的值类型是 string | undefined，而 Playwright 的 webServer.env 只接受
+// Record<string, string>（含 undefined 既过不了类型检查、运行时还可能注入 "undefined" 字符串）。
+// 先收敛成纯字符串表，作为 L1/L2 两种形态共用的底座。
+const baseEnv: Record<string, string> = Object.fromEntries(
+  Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined),
+)
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
@@ -41,15 +48,22 @@ export default defineConfig({
       ? `npm run build && npm run preview -- --port ${port} --strictPort`
       : 'npm run dev',
     url: `http://localhost:${port}`,
-    reuseExistingServer: isProd ? false : !process.env.CI,
+    // dev 也一律不复用常驻 server：常驻进程可能带开发机 .env.local（VITE_BACKEND=cloudbase 等），
+    // 会把本地配置泄漏进 CI；false 强制用下面注入的干净 env 起新进程。
+    reuseExistingServer: false,
     timeout: isProd ? 300000 : 120000,
-    // 默认 / L1：CI 无 .env 时注入 mock 占位，保证 supabase-js 非 null client，
-    // 请求由 e2e/helpers/supabaseMock page.route 拦截。
-    // L2：禁止 mock fallback，避免误连 l1mock 或盖住 .env 真项目。
+    // L1/dev：显式把 VITE_BACKEND 钉成 ''（Supabase 形态），避免开发机 .env.local 的
+    //   VITE_BACKEND=cloudbase 泄漏进 CI；VITE_CLOUDBASE_FN_BASE 同样显式化给假值。
+    //   注入 Supabase 假凭证保证 supabase-js 非 null client（请求由 supabaseMock 拦截）。
+    //   session mock 按 VITE_BACKEND 分流：Supabase 写 linkvault_auth；切到 cloudbase 形态时
+    //   e2e/helpers/supabaseMock.ts 的 installSupabaseMock 改写 credentials_*/tcb_* 键（见该文件）。
+    // L2：纯透传真实环境（真后端），不注入任何 mock fallback。
     env: isL2
-      ? { ...process.env }
+      ? baseEnv
       : {
-          ...process.env,
+          ...baseEnv,
+          VITE_BACKEND: '',
+          VITE_CLOUDBASE_FN_BASE: 'https://test.ulink.ren',
           VITE_SUPABASE_URL:
             process.env.VITE_SUPABASE_URL || 'https://l1mock.supabase.co',
           VITE_SUPABASE_ANON_KEY:

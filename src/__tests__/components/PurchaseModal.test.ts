@@ -103,7 +103,8 @@ describe('PurchaseModal.vue（图2新格局）', () => {
     const yearlyCard = wrapper.find('[data-testid="plan-plus_yearly"]')
     expect(yearlyCard.exists()).toBe(true)
     expect(yearlyCard.text()).toContain('PRO 年付')
-    expect(yearlyCard.text()).toContain('首发早鸟')
+    // 合规修订：徽标文案由「首发早鸟」改为「订阅期内价格锁定」（见 locales/parts/purchase.ts）
+    expect(yearlyCard.text()).toContain('订阅期内价格锁定')
     expect(yearlyCard.find('del').text()).toBe('¥180')
     expect(yearlyCard.text()).toContain('省 ¥72')
     expect(yearlyCard.classes()).toContain('is-recommended')

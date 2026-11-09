@@ -969,18 +969,11 @@ function legalDocsPlugin(): Plugin {
   ) => {
     const path = (req.url || '').split('?')[0].split('#')[0];
 
-    // 原始 Markdown（保留可取证入口，不对外链接）
+    // 2026-11-09：原始 Markdown 含内部法务批注（internal:start / 发布前检查），
+    // 此前构建期直接 emit 到 /legal/<slug>.md 导致线上公开可下载。取证改走 git 历史，
+    // dev/preview 也不再提供原文。
     const mdMatch = /^\/legal\/([\w.-]+\.md)$/.exec(path);
-    if (mdMatch) {
-      const fileName = mdMatch[1];
-      if (!isPublicLegalDoc(fileName)) return next();
-      const body = read(fileName);
-      if (body === null) return next();
-      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.end(body);
-      return;
-    }
+    if (mdMatch) return next();
 
     if (path === '/legal' || path === '/legal/' || path === '/legal/index.html') {
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -1020,13 +1013,9 @@ function legalDocsPlugin(): Plugin {
       const docs = parseAll();
       for (const doc of docs) {
         const html = renderLegalDocHtml(doc);
-        const source = read(`${doc.slug}.md`);
         this.emitFile({ type: 'asset', fileName: `legal/${doc.slug}.html`, source: html });
         // 目录形态兜底：某些托管不做扩展名省略，直接按目录默认文档命中
         this.emitFile({ type: 'asset', fileName: `legal/${doc.slug}/index.html`, source: html });
-        if (source !== null) {
-          this.emitFile({ type: 'asset', fileName: `legal/${doc.slug}.md`, source });
-        }
       }
       this.emitFile({ type: 'asset', fileName: 'legal/index.html', source: renderLegalIndexHtml(docs) });
     },

@@ -7,7 +7,10 @@
  */
 export function newId(prefix: string, uniqHint?: number | string): string {
   const ts = Date.now().toString(36)
-  const rand = Math.random().toString(36).slice(2, 8)
+  // 缺陷9：改用 crypto.getRandomValues（Math.random 可预测）；6 个 base36 字符，
+  // 保留原有「6 位随机片段 + 前缀 + uniqHint 同毫秒兜底」的 id 形状。
+  const bytes = crypto.getRandomValues(new Uint8Array(6))
+  const rand = Array.from(bytes, b => (b % 36).toString(36)).join('')
   const hint = uniqHint == null ? '' : uniqHint.toString(36)
   return `${prefix}${ts}${rand}${hint}`
 }

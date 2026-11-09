@@ -280,6 +280,22 @@ export function useE2E() {
     e2eStore.setUnlocked(true)
     e2eStore.setCloudCanaryStale(false)
     e2eStore.initVisibilityLock()
+    // 缺陷3：首次启用 E2E 也要把存量明文 username 重加密并推云（对齐 changeMasterPassword），
+    // 否则云端历史行长期明文、UI 却显示已加密。_reencryptCloudPush 在本函数之后定义、
+    // 同一闭包内（函数声明提升可用）；失败不阻断 setup 成功，仅告警并标记可重试。
+    try {
+      const pushed = await _reencryptCloudPush()
+      if (!pushed) {
+        // 失败 op 已留 syncOps 队列、syncStore 已置 error，标记可重试（下次 online/手动同步补推）
+        console.warn('[e2e] setup 后存量数据重加密推云未完成：已保留队列，待下次同步重试')
+      }
+    } catch (e) {
+      console.warn('[e2e] setup 后存量数据重加密推云异常，标记可重试:', e)
+      // 异常路径 pushFromQueue 可能未跑到，显式置 error 态确保有可重试标记
+      const syncStore = useSyncStore()
+      syncStore.setSyncStatus('error')
+      syncStore.setSyncError('E2E 启用后存量数据重加密待重试')
+    }
     return true
   }
 
@@ -369,7 +385,8 @@ export function useE2E() {
     // 误导成「同步坏了」。与 _reencryptCloudPush 末尾用法一致（enqueue + withLock push），
     // fire-and-forget：unlock 不必等云端返回，补解密已 await 保证视图可用即足够。
     if (_getUserId()) {
-      enqueueDirtyAsOps()
+      // 缺陷6：enqueueDirtyAsOps 现为 async，等 IDB 入队完成再触发 push
+      await enqueueDirtyAsOps()
       void withLock('linkvault-sync', pushFromQueue)
     }
     return true
@@ -802,7 +819,8 @@ export function useE2E() {
       for (const g of ds.siblingGroups) { ds._markDirty(g.id); ds._newIds.add(g.id) }
       for (const c of ds.categories) { ds._markDirty(c.id); ds._newIds.add(c.id) }
       for (const a of ds.customAttributes) { ds._markDirty(a.id); ds._newIds.add(a.id) }
-      enqueueDirtyAsOps()
+      // 缺陷6：等 IDB 入队完成再 push，避免 op 未落盘即被 drain
+      await enqueueDirtyAsOps()
       const pushed = await withLock('linkvault-sync', () => pushFromQueue())
       // pushed=false：失败 op 留 syncOps 队列下次 online 重试（幂等，无双重加密）
       // canary 在调用方（changeMasterPassword 步骤 9）无条件覆盖，避免本机 unlock 失败

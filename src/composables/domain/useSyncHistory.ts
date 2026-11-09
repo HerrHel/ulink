@@ -103,7 +103,9 @@ export async function fetchHistory(itemId: string): Promise<HistoryVersion[]> {
   for (const v of local) {
     if (!seen.has(v.created_at)) merged.push(v)
   }
-  merged.sort((a, b) => b.created_at.localeCompare(a.created_at))
+  // 缺陷10：ISO 时间戳走字典序（定长格式字典序等价时间序），避免 localeCompare
+  // 在不同端 ICU/语言规则下排序不一致导致版本顺序漂移。
+  merged.sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0))
   return merged.slice(0, max)
 }
 

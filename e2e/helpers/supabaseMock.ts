@@ -75,7 +75,7 @@ function json(route: Route, body: unknown, status = 200) {
  */
 export async function installSupabaseMock(
   page: Page,
-  opts?: { db?: Partial<MockDb>; skipSession?: boolean },
+  opts?: { db?: Partial<MockDb>; skipSession?: boolean; backend?: 'supabase' | 'cloudbase' },
 ) {
   const db: MockDb = { ...EMPTY_DB(), ...opts?.db }
   const stats = {
@@ -84,13 +84,37 @@ export async function installSupabaseMock(
     authHits: 0,
   }
 
+  // 会话持久化按后端形态分流：supabase-js 用单一 linkvault_auth；CloudBase(js-sdk)
+  // 把令牌/用户分散在 credentials_<envId> 与 tcb_* 键里。webServer.env 决定产物里的
+  // import.meta.env.VITE_BACKEND，测试进程按同名环境变量（或显式 opts.backend）选同一形态；
+  // L1 默认 '' → supabase，保持既有行为不变。l1-sync-mock 的 happy path 一旦切到
+  // cloudbase 形态即可用本分支拿到假会话（当前该 spec 仍是 test.fixme，见报告）。
+  const backend = opts?.backend ?? (process.env.VITE_BACKEND === 'cloudbase' ? 'cloudbase' : 'supabase')
+
   // 假 session 必须在任何脚本读 storage 之前写入
   if (!opts?.skipSession) {
     const session = fakeSession()
-    await page.addInitScript((s) => {
-      localStorage.setItem('lv_setup_done', '1')
-      localStorage.setItem('linkvault_auth', JSON.stringify(s))
-    }, session)
+    if (backend === 'cloudbase') {
+      // CloudBase 形态：写 credentials_*/tcb_* 键而非 linkvault_auth，
+      // 供 js-sdk 的 auth.getSession() 从 localStorage 恢复假用户。
+      await page.addInitScript((s) => {
+        localStorage.setItem('lv_setup_done', '1')
+        const envId = 'test-env'
+        localStorage.setItem(`credentials_${envId}`, JSON.stringify({
+          access_token: s.access_token,
+          refresh_token: s.refresh_token,
+          expires_at: s.expires_at,
+        }))
+        localStorage.setItem('tcb_access_token', s.access_token)
+        localStorage.setItem('tcb_refresh_token', s.refresh_token)
+        localStorage.setItem('tcb_user', JSON.stringify(s.user))
+      }, session)
+    } else {
+      await page.addInitScript((s) => {
+        localStorage.setItem('lv_setup_done', '1')
+        localStorage.setItem('linkvault_auth', JSON.stringify(s))
+      }, session)
+    }
   } else {
     await page.addInitScript(() => {
       localStorage.setItem('lv_setup_done', '1')

@@ -125,4 +125,65 @@ export default [
       'vue/require-default-prop': 'off',
     },
   },
+
+  // F1：e2e 与根级配置里的 .ts/.js —— 过去完全不在 eslint 覆盖内（只有 src/**）。
+  // 用 TS parser 解析，只开「未使用变量」这一条高价值规则；no-undef 交给 tsc 门禁，
+  // 因为 core no-undef 对 TS 全局工具类型（Record/Partial…）会误报。
+  // 不套 vue/recommended 整包风格规则，避免把存量格式噪音变成错误。
+  {
+    files: ['e2e/**/*.{js,ts}', 'scripts/**/*.ts', 'playwright.config.ts', 'vitest*.config.ts', 'eslint.config.js'],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: 2022,
+      sourceType: 'module',
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', { args: 'none', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+    },
+  },
+
+  // F2：scripts/ 的 JS/MJS/CJS 脚本 —— Node 侧无类型检查，靠 no-undef 抓拼错的
+  // process/require/Buffer 等标识符，no-unused-vars 抓废弃变量。手动补齐 Node 全局，
+  // 免得把「合法但 ESLint 不认识」的内置量误判成未定义。
+  {
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        process: 'readonly', console: 'readonly', require: 'readonly',
+        module: 'readonly', exports: 'writable',
+        __dirname: 'readonly', __filename: 'readonly',
+        Buffer: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
+        fetch: 'readonly', Headers: 'readonly', Request: 'readonly', Response: 'readonly',
+        FormData: 'readonly', Blob: 'readonly', File: 'readonly',
+        setTimeout: 'readonly', clearTimeout: 'readonly',
+        setInterval: 'readonly', clearInterval: 'readonly',
+        setImmediate: 'readonly', clearImmediate: 'readonly',
+        AbortController: 'readonly', AbortSignal: 'readonly',
+        TextEncoder: 'readonly', TextDecoder: 'readonly',
+        structuredClone: 'readonly', performance: 'readonly',
+        crypto: 'readonly', atob: 'readonly', btoa: 'readonly',
+        // verify_*.cjs 会把函数注入页面上下文执行，这些是合法的浏览器全局
+        window: 'readonly', document: 'readonly', localStorage: 'readonly',
+        sessionStorage: 'readonly', location: 'readonly', navigator: 'readonly',
+        history: 'readonly', getComputedStyle: 'readonly', globalThis: 'readonly',
+        HTMLElement: 'readonly', Event: 'readonly', MouseEvent: 'readonly',
+        CustomEvent: 'readonly', KeyboardEvent: 'readonly',
+        requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly',
+        Image: 'readonly', DOMParser: 'readonly', Node: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'error',
+      // 存量脚本里有若干历史遗留的废弃变量，按任务要求「不把大量风格问题变成错误」，
+      // 这里降为 warn 只提示不门禁；真正的未定义标识符仍由 no-undef 硬拦。
+      'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
+    },
+  },
 ]

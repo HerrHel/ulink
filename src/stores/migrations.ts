@@ -61,13 +61,17 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
 
   // 2. 属性去重
   const attrs = d.customAttributes || []
-  const seen: Record<string, CustomAttribute> = {}
+  // 缺陷4：用 Map 而非 {} 作去重索引，避免 a.name 为 '__proto__'/'constructor'/'toString'
+  // 等原型链键时命中原型、赋值污染数据（keep.id=undefined）；并对 name 做字符串型
+  // 与黑名单校验，畸形名不参与索引（按无 name 保留，绝不写进索引）。
+  const seen = new Map<string, CustomAttribute>()
+  const UNSAFE_ATTR_NAMES = new Set(['__proto__', 'constructor', 'prototype', 'toString', 'valueOf', 'hasOwnProperty'])
   const deduped: CustomAttribute[] = []
   attrs.forEach((a: CustomAttribute) => {
     if (!a || typeof a !== 'object' || !a.id) return
-    if (!a.name) { deduped.push(a); return }
-    if (seen[a.name]) {
-      const keep = seen[a.name];
+    if (typeof a.name !== 'string' || !a.name || UNSAFE_ATTR_NAMES.has(a.name)) { deduped.push(a); return }
+    const keep = seen.get(a.name)
+    if (keep) {
       // 审计 R6：步骤2 属性去重只重写 bookmark 的 attributes，group 残留旧 attr id。
       // dedup 后 customAttributes 删旧 id，组的 g.attributes 旧 id 永久失联
       // （attributeMap[旧id]=undefined → 组标签消失）。这里对 siblingGroups
@@ -86,7 +90,7 @@ export function runMigrations(d: Partial<AppData>, result: MigrationResult): boo
           delete g.attributes[a.id]
         }
       })
-    } else { seen[a.name] = a; deduped.push(a) }
+    } else { seen.set(a.name, a); deduped.push(a) }
   })
   result.customAttributes = deduped
   if (attrs.length !== deduped.length) needsPersist = true

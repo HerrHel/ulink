@@ -1,0 +1,15 @@
+{
+  // 单独类型检查 e2e / playwright / vitest 配置：主 tsconfig.json 的 include 只有 src/**，
+  // 这些文件此前完全不进 tsc 门禁（改名、拼错 import、配置字段写错都无人发现）。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "e2e/**/*.ts",
+    "playwright.config.ts",
+    "vitest*.config.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

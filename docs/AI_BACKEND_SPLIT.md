@@ -1,6 +1,13 @@
 # AI 双后端架构与切解析必做项
 
-> **状态（2026-10-31 核实）**：本文写于 2026-10-26 的方案阶段；文中 §2 的「阻断性问题」（相对路径 `/api/*` 在非 CF 域名下 404）**已在同日 `24c7c206` 按方案 B 修复并上线**：`src/config/urls.ts` 的 `cfApiUrl()` 在生产构建返回绝对地址（`CF_FN_BASE` 默认 `https://ulink.pages.dev`），`OVERSEAS_PROBE_URL` 也是绝对地址。阅读时把 §2/§3 当作「已解决的历史问题」，现行事实见 `AGENTS.md`。
+> **状态（2026-11-09 更新）**：Cloudflare 部署已迁到国内 CloudBase，
+> `ulink.pages.dev` 不再是本站端点，方案 B 的「出海跳板」**已退役**。
+> `src/config/urls.ts` 改为「未配置 VITE_CF_FN_BASE 即禁用」：三条 /api/* 与海外探针
+> 在端点缺失时直接走本地兜底，不再请求失效域名；`functions/_routes.json` 移除 `/s/*`，
+> 历史 CF 分享 SSR 改为 302 到主站验密网关。若日后恢复出海跳板，配 `VITE_CF_FN_BASE`
+> 与 `VITE_OVERSEAS_PROBE_URL` 即可重新启用。下文 §2/§3 保留为历史决策记录。
+>
+> **状态（2026-10-31 核实，历史）**：本文写于 2026-10-26 的方案阶段；文中 §2 的「阻断性问题」（相对路径 `/api/*` 在非 CF 域名下 404）**已在同日 `24c7c206` 按方案 B 修复并上线**：`src/config/urls.ts` 的 `cfApiUrl()` 在生产构建返回绝对地址（`CF_FN_BASE` 默认 `https://ulink.pages.dev`），`OVERSEAS_PROBE_URL` 也是绝对地址。阅读时把 §2/§3 当作「已解决的历史问题」，现行事实见 `AGENTS.md`。
 > 记录 2026-10-26 全面转向「真智能」后的后端分布现状。
 > **切解析（`ulink.ren` 指向哪个平台）之前必须读完本文。**
 

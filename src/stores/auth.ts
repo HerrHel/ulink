@@ -11,6 +11,33 @@ import type { User, Session } from '@supabase/supabase-js'
 export const K_CUSTOM_NICKNAME = 'lv_user_nickname'
 export const K_CUSTOM_AVATAR = 'lv_user_avatar'
 
+// 缺陷7：跨账号切换标记。持久化 lastUserId，检测「已登录 A → 登录 B」时置位，
+// 供 useCloudSync.initialSync（不在本次可改范围，由主代理接线）跳过
+// _enqueueMissingToCloud，防止把上一账号的本地存量误补推到新账号。
+// 本地书签数据是有意保留的本地权威数据，登出不清 IDB。
+const K_LAST_USER_ID = 'lv_last_user_id'
+const K_ACCOUNT_SWITCHED = 'lv_account_switched'
+
+/** 记录当前已建立会话的 userId；与上次不同（且上次非空）时标记账号切换 */
+function _observeUserId(nextId: string | null): void {
+  const prevId = safeGetItem(K_LAST_USER_ID) || ''
+  if (nextId && prevId && prevId !== nextId) {
+    safeSetItem(K_ACCOUNT_SWITCHED, '1')
+    console.warn('[auth] 检测到账号切换，标记待 useCloudSync 跳过跨账号补推')
+  }
+  if (nextId) safeSetItem(K_LAST_USER_ID, nextId)
+}
+
+/** 是否刚发生账号切换（供 useCloudSync.initialSync 守卫 _enqueueMissingToCloud） */
+export function hasAccountSwitched(): boolean {
+  return safeGetItem(K_ACCOUNT_SWITCHED) === '1'
+}
+
+/** 主代理在跳过/完成本账号基线补推后调用，清标记避免后续轮次一直跳过 */
+export function clearAccountSwitched(): void {
+  safeRemoveItem(K_ACCOUNT_SWITCHED)
+}
+
 /**
  * 读取用户资料时要同时认 Supabase 与 CloudBase 两套字段名。
  *
@@ -238,12 +265,16 @@ export const useAuthStore = defineStore('auth', () => {
     session.value = initial
     user.value = initial?.user ?? null
     _syncFromMetadata(user.value)
+    // 缺陷7：会话恢复时记录 userId（跨刷新的账号切换检测）
+    _observeUserId(user.value?.id ?? null)
     loading.value = false
 
     driver.onAuthStateChange((s) => {
       const prevUser = user.value
       session.value = s
       user.value = s?.user ?? null
+      // 缺陷7：登录/换账号时检测 userId 变化并置跨账号标记
+      _observeUserId(s?.user?.id ?? null)
       if (prevUser && !s?.user) {
         // 会话过期或远端登出：立即锁定 E2E 与 Vault 敏感解密密钥
         try { useE2EStore().lock() } catch { /* ignore */ }
@@ -479,6 +510,13 @@ export const useAuthStore = defineStore('auth', () => {
     customAvatar.value = ''
     safeRemoveItem(K_CUSTOM_NICKNAME)
     safeRemoveItem(K_CUSTOM_AVATAR)
+
+    // 缺陷7：登出清空 AI 会话，防换账号后把上一账号的隐私对话加载进 UI；
+    // 书签 IDB 数据不动（本地数据权威是有意设计）。
+    try {
+      const { clearAllSessions } = await import('../lib/ai/chatSessions.js')
+      clearAllSessions()
+    } catch { /* ignore */ }
 
     // 清空内存限流记录与停止 ticker，避免换号或重登录残留
     limits.value.clear()

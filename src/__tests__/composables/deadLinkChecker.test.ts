@@ -289,16 +289,13 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
   })
 
   describe('路线 A：海外探针（Second Opinion）复核契约', () => {
-    it('境内 timeout(inconclusive) + 海外探针 alive → 判定为 gfw', async () => {
+    it('未配置海外探针（CF 跳板已退役）→ 不发探测请求、保持 inconclusive', async () => {
       invokeMock.mockResolvedValue(edge('timeout', 0))
-      // mock fetch: 目标直连不可达，探针返回 alive
+      // 2026-11-09：CF Pages 已迁 CloudBase，OVERSEAS_PROBE_URL 为空。
+      // 此时必须直接跳过，绝不能再请求失效域名（旧实现会拿到 HTML 再 JSON.parse 抛错）。
+      const probeCalls: string[] = []
       vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-        if (String(url).includes('check-link')) {
-          return new Response(JSON.stringify({ outcome: 'alive', status: 200 }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
+        if (String(url).includes('check-link')) probeCalls.push(String(url))
         if (/baidu|gstatic|cloudflare/.test(String(url))) {
           return new Response(null, { status: 200 })
         }
@@ -307,21 +304,15 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
 
       const { checkUrl } = useDeadLinkChecker()
       const r = await checkUrl('https://obscure-foreign-blog.xyz')
-      expect(r.verdict).toBe('gfw')
-      expect(r.reason).toBe('gfw_blocked')
-      expect(r.blocked).toBe(true)
+      expect(probeCalls).toHaveLength(0)
+      expect(r.verdict).toBe('inconclusive')
     })
 
-    it('境内 timeout(inconclusive) + 海外探针 dead → 判定为 dead', async () => {
+    it('海外探针不可用时不把「海外 404」误判成 dns_not_found（不再永久跳过复核）', async () => {
       invokeMock.mockResolvedValue(edge('timeout', 0))
-      // mock fetch: 目标直连不可达，探针返回 dead
+      const probeCalls: string[] = []
       vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-        if (String(url).includes('check-link')) {
-          return new Response(JSON.stringify({ outcome: 'dead', status: 404 }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          })
-        }
+        if (String(url).includes('check-link')) probeCalls.push(String(url))
         if (/baidu|gstatic|cloudflare/.test(String(url))) {
           return new Response(null, { status: 200 })
         }
@@ -330,9 +321,10 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
 
       const { checkUrl } = useDeadLinkChecker()
       const r = await checkUrl('https://obscure-foreign-dead.xyz')
-      expect(r.verdict).toBe('dead')
-      expect(r.reason).toBe('dns_not_found')
-      expect(r.alive).toBe(false)
+      expect(probeCalls).toHaveLength(0)
+      // 旧逻辑把海外 dead 改判成 dead + reason=dns_not_found，而 dns_not_found 在
+      // _retryTransientFailures 里是「永不重试」，真实 404/临时故障会被永久误标。
+      expect(r.reason).not.toBe('dns_not_found')
     })
   })
 })

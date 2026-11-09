@@ -66,6 +66,23 @@ const VIDEO_PAGE_PATTERNS = [
   'https://www.xiaohongshu.com/*',
 ]
 
+// 由右键菜单同源的 URL Pattern 派生精确主机名集合：只用 new URL().hostname 精确比对，
+// 绝不对整条 URL 做子串判定（否则 https://attacker.tld/?x=bilibili.com 会被误放行）。
+const VIDEO_PAGE_HOSTS = VIDEO_PAGE_PATTERNS.map(function (p) {
+  try { return new URL(p).hostname.toLowerCase() } catch (_) { return '' }
+}).filter(Boolean)
+
+function isVideoPageUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  try {
+    var u = new URL(url)
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return false
+    return VIDEO_PAGE_HOSTS.indexOf(u.hostname.toLowerCase()) !== -1
+  } catch (_) {
+    return false
+  }
+}
+
 chrome.contextMenus.removeAll(function () {
   chrome.contextMenus.create({
     id: 'save-to-linkvault',
@@ -281,15 +298,19 @@ function readXiaohongshuVideoState() {
 
 async function extractTabVideoState(tab) {
   const url = (tab && tab.url) || ''
+  // 精确 hostname 判定：不再用 /bilibili\.com|b23\.tv/i 对整条 URL 做子串匹配，
+  // 否则 https://attacker.tld/?x=bilibili.com 可绕过并注入任意页面
+  if (!isVideoPageUrl(url)) return { ok: false, platform: '', reason: 'unsupported_page' }
+  const hostname = new URL(url).hostname.toLowerCase()
   let platform = ''
   let func = null
-  if (/bilibili\.com|b23\.tv/i.test(url)) {
+  if (hostname === 'www.bilibili.com' || hostname === 'b23.tv') {
     platform = 'bilibili'
     func = readBilibiliVideoState
-  } else if (/douyin\.com|iesdouyin\.com/i.test(url)) {
+  } else if (hostname === 'www.douyin.com' || hostname === 'www.iesdouyin.com') {
     platform = 'douyin'
     func = readDouyinVideoState
-  } else if (/xiaohongshu\.com/i.test(url)) {
+  } else if (hostname === 'www.xiaohongshu.com') {
     platform = 'xiaohongshu'
     func = readXiaohongshuVideoState
   }
@@ -323,6 +344,8 @@ async function openVideoExtract(tab) {
 
 // ── 消息路由：side panel ↔ PWA ──
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+  // 只接受本扩展自身（side panel / 扩展页）发出的消息，拒绝外部页面/其它扩展伪造指令
+  if (!sender || sender.id !== chrome.runtime.id) return
   if (msg.type === 'GET_CURRENT_TAB') {
     chrome.tabs.query({ active: true, currentWindow: true }).then(async function (tabs) {
       const tab = tabs && tabs[0]
@@ -356,6 +379,11 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     chrome.tabs.query({ active: true, currentWindow: true }).then(async function (tabs) {
       const tab = tabs && tabs[0]
       if (tab) {
+        // 补齐白名单：右键菜单入口有 documentUrlPatterns，消息入口此前对活动标签无 URL 校验
+        if (!isVideoPageUrl(tab.url)) {
+          sendResponse({ ok: false, reason: 'unsupported_page' })
+          return
+        }
         await openVideoExtract(tab)
         sendResponse({ ok: true })
       } else {

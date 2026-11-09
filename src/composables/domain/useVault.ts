@@ -102,7 +102,8 @@ async function _saveCanaryData(canaryData: Record<string, unknown>): Promise<boo
       user_id: userId,
       vault_canary: canaryData,
     }, { onConflict: 'user_id' })
-    return !r?.error
+    // 缺陷8：对齐 useE2E._saveCanaryData，本地 canary 写结果也要参与判定
+    return !r?.error && localOk
   } catch {
     return false
   }

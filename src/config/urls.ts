@@ -47,37 +47,33 @@ export const SHARE_FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL || ''}/f
 export const EDGE_ADDON_URL = 'https://microsoftedge.microsoft.com/addons/detail/%E4%B8%8E%E9%93%BE/epjlkfndeonlpjocdafoiaomdigopeeh'
 
 /**
- * Cloudflare Pages Functions 基址（「出海跳板」）。
+ * 出海跳板（Cloudflare Pages Functions）基址。
  *
- * 为什么必须用绝对地址：`/api/ai-candidates`、`/api/extract-metadata`、`/api/check-link`
- * 这三条能力都要访问境外网络（网页抓取、海外探活），而 CloudBase 云函数在国内机房，
- * 目标站点常不可达（`r.jina.ai` 即不通）——只有 Cloudflare 边缘能提供这个出口。
+ * 2026-11-09：Cloudflare 部署已迁到国内 CloudBase，`ulink.pages.dev` 不再是本站端点
+ * （线上实测该域返回无关静态页，/api/* 在 CloudBase 全部 404）。继续默认指向它，会让
+ * 三条 /api/* 请求拿到 HTML 再 JSON.parse 抛错，白白浪费 18s 超时与用户流量。
  *
- * 相对路径 `fetch('/api/...')` 会打到**当前站点域名**，而主站部署在 CloudBase 静态托管
- * （没有 Functions）→ 实测全部 404，用户拿到的是本地兜底结果而非真模型输出。
- * 详见 docs/AI_BACKEND_SPLIT.md。
+ * 因此改为「未配置即禁用」：CF_FN_BASE 为空时 cfApiUrl 返回空串、OVERSEAS_PROBE_URL
+ * 为空，调用方在发请求前直接走本地兜底。若日后恢复出海跳板，只需在
+ * .env.production 配 VITE_CF_FN_BASE=<可用域> 与 VITE_OVERSEAS_PROBE_URL。
+ * dev 仍返回相对路径，由 Vite 中间件模拟，不消耗生产配额。
  */
 export const CF_FN_BASE =
-  ((import.meta.env.VITE_CF_FN_BASE as string | undefined) || 'https://ulink.pages.dev').replace(/\/+$/, '')
+  ((import.meta.env.VITE_CF_FN_BASE as string | undefined) || '').replace(/\/+$/, '')
 
-/**
- * 路线 A：海外轻量探活端点（Cloudflare Pages 边缘服务）。
- * 用于国内（CloudBase 上海）探测无法定性（inconclusive）时，提供自由公网的客观第二视角。
- * 默认跟随 VITE_CF_FN_BASE（与其余 /api/* 同源），仅显式配置 VITE_OVERSEAS_PROBE_URL 时覆盖；
- * 不再硬编码 ulink.pages.dev，换部署环境只需改一处（CF_FN_BASE 自带合理默认兜底）。
- */
+/** 出海端点是否可用；dev 有本地中间件模拟，视为可用 */
+export function isCfApiConfigured(): boolean {
+  return import.meta.env.DEV || CF_FN_BASE.length > 0
+}
+
+/** 海外探活端点；未配置出海跳板时为空，probeOverseas 会直接跳过 */
 export const OVERSEAS_PROBE_URL =
-  (import.meta.env.VITE_OVERSEAS_PROBE_URL as string | undefined) || `${CF_FN_BASE}/api/check-link`
+  (import.meta.env.VITE_OVERSEAS_PROBE_URL as string | undefined) ||
+  (CF_FN_BASE ? `${CF_FN_BASE}/api/check-link` : '')
 
-/**
- * 生成 CF Functions 端点地址。
- *
- * dev 环境保留相对路径 —— Vite 中间件已模拟这两个端点（vite.config.ts 里
- * `/api/ai-candidates` 与 `/api/extract-metadata`），既保证离线可开发，
- * 也避免开发时消耗生产侧配额。
- */
+/** 生成端点地址；未配置返回空串，调用方必须先判空再 fetch */
 export function cfApiUrl(path: string): string {
   if (import.meta.env.DEV) return path
-  return `${CF_FN_BASE}${path}`
+  return CF_FN_BASE ? `${CF_FN_BASE}${path}` : ''
 }
 

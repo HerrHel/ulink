@@ -9,7 +9,7 @@
  */
 
 import type { Category, CustomAttribute } from '../../types.js'
-import { cfApiUrl } from '../../config/urls.js'
+import { cfApiUrl, isCfApiConfigured } from '../../config/urls.js'
 import { isPrivateUrl } from './urlGuard.js'
 import { fetchPageContentViaJina } from './jinaReader.js'
 import { suggestCategory, suggestAttributes } from '../ai-classify.js'
@@ -134,6 +134,8 @@ export async function fetchUrlMetadataAsync(
 
   // 1. 优先尝试边缘/服务端元数据端点 /api/extract-metadata（支持 Cloudflare Pages Edge 及 Vite Dev）
   try {
+    // 未配置出海端点时不发请求（旧默认域返回 HTML，JSON.parse 必抛错）
+    if (!isCfApiConfigured()) throw new Error('cf_api_disabled')
     const activeAttrs = attributes.filter(a => !a.deletedAt && a.id !== 'is-group')
     const activeCats = categories.filter(c => !c.deletedAt)
     const apiRes = await fetch(cfApiUrl('/api/extract-metadata'), {

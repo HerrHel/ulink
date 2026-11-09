@@ -10,8 +10,12 @@
  *
  * 用法：
  *   node scripts/set-cls-retention.mjs          # 设为 210 天
- *   node scripts/set-cls-retention.mjs 180      # 设为 180 天（不推荐：不满 6 自然月）
+ *   node scripts/set-cls-retention.mjs 180 --force-below-181  # 强制低于 181 天（会二次警告，不推荐）
  *   node scripts/set-cls-retention.mjs --check  # 只查询当前值
+ *
+ * 安全护栏：保留期下限 181 天（6 个自然月最长天数）。低于该值会不可逆删除仍在
+ * 合规留存期内的日志，必须显式 --force-below-181 且脚本会二次打印警告；ModifyTopic
+ * 前还会明确打印将被不可逆清理的日志天数。
  *
  * 前提：腾讯云账户不能处于欠费隔离状态，否则所有 CLS 接口返回
  *      OperationDenied.AccountIsolate。
@@ -90,14 +94,29 @@ async function readTopic(cred) {
   }
 }
 
+/** 6 个自然月最长天数（31+28+31+30+31+30）；低于它就会删掉合规承诺期内的日志 */
+const MIN_PERIOD = 181
+
 async function main() {
-  const arg = process.argv[2]
-  const checkOnly = arg === '--check'
-  const period = checkOnly ? null : Number(arg || 210)
+  const args = process.argv.slice(2)
+  const checkOnly = args.includes('--check')
+  const forceBelow181 = args.includes('--force-below-181')
+  const periodArg = args.find((a) => !a.startsWith('--'))
+  const period = checkOnly ? null : Number(periodArg || 210)
 
   if (!checkOnly && (!Number.isInteger(period) || period < 1)) {
     console.error('✖ 天数必须是正整数')
     process.exit(1)
+  }
+  // 低于 181 天会不可逆清理合规日志：旧版 period<1 就放行，1 天也能改；这里必须显式 --force-below-181
+  if (!checkOnly && period < MIN_PERIOD && !forceBelow181) {
+    console.error(`✖ 保留期 ${period} 天低于下限 ${MIN_PERIOD} 天，会不可逆删除「不少于六个月」承诺期内的日志。`)
+    console.error('  如确需缩短，请显式追加 --force-below-181（脚本会二次打印警告）。')
+    process.exit(1)
+  }
+  // 第一次警告：强制低于下限时，提前告知不可逆后果
+  if (!checkOnly && period < MIN_PERIOD && forceBelow181) {
+    console.warn(`\n⚠⚠ 警告：目标 ${period} 天低于下限 ${MIN_PERIOD} 天，超期日志将被不可逆删除且无法恢复。`)
   }
 
   const cred = loadCredential()
@@ -121,6 +140,16 @@ async function main() {
   }
 
   console.log(`→ 修改为 ${period} 天…`)
+  // 第二次警告：强制低于下限时再确认一次（与前面的首次警告构成「二次打印警告」）
+  if (period < MIN_PERIOD && forceBelow181) {
+    console.warn(`⚠⚠ 再次警告：目标 ${period} 天低于合规下限 ${MIN_PERIOD} 天，请确认已知悉不可逆清理风险。`)
+  }
+  // ModifyTopic 前明确打印将不可逆删除多少天前的日志
+  if (period < before.period) {
+    console.warn(`   ⚠ 本次缩短 ${before.period - period} 天：${period} 天前（原 ${before.period} 天内）的历史日志将被 CLS 不可逆清理、无法恢复。`)
+  } else {
+    console.log(`  保留期由 ${before.period} 天调整为 ${period} 天（未缩短，不触发历史日志清理）`)
+  }
   await callApi(cred, 'ModifyTopic', { TopicId: TOPIC_ID, Period: period })
 
   const after = await readTopic(cred)

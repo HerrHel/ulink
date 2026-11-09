@@ -138,7 +138,8 @@ async function refreshPendingCount() {
 }
 
 /** 把内存 dirtyIds 转为持久化 ops（H3 标记 pending） */
-export function enqueueDirtyAsOps(): void {
+// 缺陷6：改为 async 并等待 IDB 入队结果，失败时回填 dirty 标记避免离线写永久丢失
+export async function enqueueDirtyAsOps(): Promise<void> {
   const ui = useUIStore()
   if (ui.curSpace !== 'main') return
   const ds = useDataStore()
@@ -180,8 +181,19 @@ export function enqueueDirtyAsOps(): void {
   if (ops.length) {
     // 仅为实际入队的有效 op 标记 pendingSync，避免脏集中的幽灵孤儿 ID 导致 pending 泄漏永不清除
     _markPendingSync(ops.map(o => o.itemId))
-    // 与历史行为一致：不等待 IDB 写完即返回；refresh 异步更新 badge
-    void enqueueSyncOps(ops)
+    // 缺陷6：必须 await IDB 写完；失败时 op 未入队，若不回填 dirty，离线写后
+    // 立刻关页变更永久丢失、徽章显示 0、重连后本地变更被远端覆盖。
+    const ok = await enqueueSyncOps(ops)
+    if (!ok) {
+      // 回填 drain 掉的标记，让后续同步重新入队（可重试）；该批 op 未入队，
+      // 清掉其 pending 避免 pull 侧误以为正在同步而跳过合并（不破坏 pending 语义）。
+      for (const id of dirty) ds._markDirty(id)
+      for (const id of _newIds) ds._newIds.add(id)
+      for (const [id, table] of deleted) ds._deletedIds.set(id, table)
+      for (const [id, fields] of changedFields) ds._changedFields.set(id, fields)
+      _clearPendingSync(new Set(ops.map(o => o.itemId)))
+      console.error('[sync] enqueueSyncOps 失败：本地变更未入队，已保留 dirty 标记等待重试')
+    }
     void refreshPendingCount()
   }
 }

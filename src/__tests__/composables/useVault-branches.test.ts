@@ -342,7 +342,7 @@ describe('useVault _getCanaryData / _saveCanaryData 云端分支', () => {
     expect(vault.isVaultUnlocked.value).toBe(false)
   })
 
-  it('_saveCanaryData 有 user + 本地配额满（safeSetItem catch 吞错返 false）→ _saveCanaryData 忽略 _writeLocalCanary 返回值走 upsert，远端成功即 setup 启用（锁当前真实行为）', async () => {
+  it('_saveCanaryData 有 user + 本地配额满（safeSetItem catch 吞错返 false）→ _saveCanaryData 忽略 _writeLocalCanary 返回值走 upsert，远端成功即 setup 启用（2026-11-09 修复：本地写失败即不启用）', async () => {
     // 行为契约：safeSetItem 包 try/catch 吞配额满错误返 false 不抛错；
     // _saveCanaryData line 87 调 _writeLocalCanary 但不接返回值（_writeLocalCanary 注释自陈「契约消费透传
     // safeSetItem 结果供 _saveCanaryData 判定」，实际 _saveCanaryData 未判定——本地配额满致 canary 未写盘，
@@ -361,9 +361,9 @@ describe('useVault _getCanaryData / _saveCanaryData 云端分支', () => {
       throw new DOMException('quota', 'QuotaExceededError')
     })
     const ok = await vault.setupVaultPassword('pw-quota')
-    // 当前真实行为：safeSetItem 吞错不抛 + _saveCanaryData 忽略本地结果 + 远端 upsert 成功 → setup 启用
-    expect(ok).toBe(true)
-    expect(vault.isVaultEnabled.value).toBe(true)
+    // 修复后：本地 canary 写失败（配额满）即判定失败，避免「显示已启用但离线读不到 canary」
+    expect(ok).toBe(false)
+    expect(vault.isVaultEnabled.value).toBe(false)
   })
 })
 

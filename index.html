@@ -10,27 +10,30 @@
 <!-- 品牌：中文「与链」，英文「ulink」。落地页静态 SEO 默认中文（与全站惯例一致），
      英文由 /landing.js 按 ?lang= / lv_locale / 浏览器语言 即时切换（同 /s/* 的 resolveLocale 顺序） -->
 <title>与链 ulink — 随时随地收藏、整理、分享</title>
-<meta name="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，密码端到端加密，支持专属私有链接定向分享。">
+<!-- 合规修订：description / og / itemprop / twitter 四处 meta 统一改为仅账号字段端到端加密，其余内容云端明文 -->
+<meta name="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，仅账号字段端到端加密，支持专属私有链接定向分享。">
 <link rel="canonical" href="https://ulink.ren/">
 <!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ulink">
 <meta property="og:title" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta property="og:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，凭据端到端加密，专属私有链接定向分享。">
+<meta property="og:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，仅账号字段端到端加密，专属私有链接定向分享。">
 <meta property="og:url" content="https://ulink.ren/">
 <meta property="og:image" content="https://ulink.ren/share-cover.png">
 <meta property="og:locale" content="zh_CN">
 <meta property="og:locale:alternate" content="en_US">
 <!-- QQ / 微信爬虫识别标签（Microdata / itemprop） -->
 <meta itemprop="name" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta itemprop="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，密码端到端加密，支持专属私有链接定向分享。">
+<meta itemprop="description" content="与链（ulink）是免注册即用的个人书签管理器：子书签、分类、属性标签深度整理收藏，多端云同步不丢失，仅账号字段端到端加密，支持专属私有链接定向分享。">
 <meta itemprop="image" content="https://ulink.ren/share-cover.png">
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="与链 ulink — 随时随地收藏、整理、分享">
-<meta name="twitter:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，凭据端到端加密，专属私有链接定向分享。">
+<meta name="twitter:description" content="免注册即用的个人书签管理器：子书签、分类、属性标签深度整理，多端云同步，仅账号字段端到端加密，专属私有链接定向分享。">
 <meta name="twitter:image" content="https://ulink.ren/share-cover.png">
 <!-- 应用级结构化数据（/ 是 SEO 主场） -->
+<!-- 合规修订：JSON-LD description / featureList 同步为仅账号字段加密口径；
+     offers 改用 priceSpecification 列出免费与三档 PRO，不再写死单一 price="0" -->
 <script type="application/ld+json" data-lv-jsonld="app">
 {
   "@context": "https://schema.org",
@@ -38,11 +41,21 @@
   "name": "与链 ulink",
   "applicationCategory": "ProductivityApplication",
   "operatingSystem": "Web",
-  "description": "免注册即用的个人书签管理器：子书签、分类、属性深度整理，多端云同步，密码端到端加密，支持专属私有链接定向分享。",
+  "description": "免注册即用的个人书签管理器：子书签、分类、属性深度整理，多端云同步，仅账号字段端到端加密，支持专属私有链接定向分享。",
   "url": "https://ulink.ren/",
   "inLanguage": "zh-CN",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
-  "featureList": "子书签与富文本笔记, 自定义属性标签, 多端云同步, 账号密码端到端加密, 专属私有链接分享, 浏览器扩展快捷保存, 拼音模糊搜索, 离线 PWA"
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": "CNY",
+    "priceSpecification": [
+      { "@type": "UnitPriceSpecification", "name": "免费版", "price": "0", "priceCurrency": "CNY", "description": "永久免费起步" },
+      { "@type": "UnitPriceSpecification", "name": "PRO 月付", "price": "15", "priceCurrency": "CNY" },
+      { "@type": "UnitPriceSpecification", "name": "PRO 季付", "price": "32", "priceCurrency": "CNY" },
+      { "@type": "UnitPriceSpecification", "name": "PRO 年付", "price": "108", "priceCurrency": "CNY" }
+    ],
+    "description": "免费起步，另有 PRO 三档付费方案（月付 ¥15 / 季付 ¥32 / 年付 ¥108），均无自动续费"
+  },
+  "featureList": "子书签与富文本笔记, 自定义属性标签, 多端云同步, 仅账号字段端到端加密, 专属私有链接分享, 浏览器扩展快捷保存, 拼音模糊搜索, 离线 PWA"
 }
 </script>
 
@@ -497,14 +510,15 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   <section class="hero">
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <div class="hero-pill reveal"><span class="pill-dot" aria-hidden="true"></span><span class="pill-tag" data-i18n="hero.pillTag">免注册</span> <span data-i18n="hero.pill">离线优先架构 · 凭据端到端加密 · 专属私有链接分享</span></div>
+        <!-- 合规修订：hero.pill / hero.sub / hero.note 改为仅账号字段端到端加密，标题、网址、笔记明文存储 -->
+        <div class="hero-pill reveal"><span class="pill-dot" aria-hidden="true"></span><span class="pill-tag" data-i18n="hero.pillTag">免注册</span> <span data-i18n="hero.pill">离线优先架构 · 仅账号字段端到端加密 · 专属私有链接分享</span></div>
         <h1><em data-i18n="hero.title1">随时随地，</em><span data-i18n="hero.title2">收藏、整理、分享</span></h1>
-        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是一款本地优先的个人书签管理工具：支持子书签多级嵌套与富文本笔记，账号与密码于本机完成加密后上传，多端登录同一账号即可同步，数据亦可随时完整导出。</p>
+        <p class="hero-sub" data-i18n="hero.sub">与链 ulink 是一款本地优先的个人书签管理工具：支持子书签多级嵌套与富文本笔记，仅账号字段端到端加密，标题、网址、笔记明文存储，多端登录同一账号即可同步，数据亦可随时完整导出。</p>
         <div class="hero-ctas">
           <a class="btn btn-solid" href="/app" data-i18n="cta.start">开始使用</a>
           <a class="btn btn-ghost" href="#why" data-i18n="hero.explore">探索特性</a>
         </div>
-        <p class="hero-note" data-i18n="hero.note">开箱即用 · 本地权威存储 · 凭据端到端加密 · 专属私有链接分享</p>
+        <p class="hero-note" data-i18n="hero.note">开箱即用 · 本地权威存储 · 仅账号字段端到端加密 · 专属私有链接分享</p>
       </div>
       <div class="hero-visual" aria-hidden="true">
         <canvas id="constellation"></canvas>
@@ -561,7 +575,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       </div>
       <div class="copy reveal d1">
         <div class="eyebrow" data-i18n="sync.eyebrow">Sync & Privacy</div>
-        <h3 data-i18n="sync.title">多端实时同频，凭据端到端加密</h3>
+        <!-- 合规修订：sync.title 改为仅账号字段端到端加密；下方 sync.d2 已是如实说明，按真源保留不改 -->
+        <h3 data-i18n="sync.title">多端实时同频，仅账号字段端到端加密</h3>
         <p class="lead" data-i18n="sync.d1">摆脱单一浏览器生态绑定与数据丢失风险。全端设备增量同步，冲突可择一保留，历史版本随时回溯。</p>
         <p data-i18n="sync.d2">账号与密码于本机完成加密后上传：密钥由主密码经 PBKDF2 派生，以 AES-256-GCM 封装，密钥不出设备，服务端无法解密。标题、网址、笔记等内容为明文存储——加密范围如实说明，不作夸大。</p>
       </div>
@@ -677,9 +692,11 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <div class="sect-head reveal">
         <div class="eyebrow" data-i18n="price.eyebrow">PRICING</div>
         <h2 data-i18n="price.title">简单透明的价格</h2>
-        <p class="sect-sub" data-i18n="price.sub">免费版永久可用，PRO 解锁音视频情报提取与全自动知识整理。无自动续费，按需选购。</p>
+        <!-- 合规修订：平台视频深度解析已下线，能力名统一为「轻量平台解析」「聊天媒体解析」 -->
+        <p class="sect-sub" data-i18n="price.sub">免费版永久可用，PRO 解锁轻量平台解析、聊天媒体解析与全自动知识整理。无自动续费，按需选购。</p>
       </div>
 
+      <!-- 合规修订：定价区加密口径改为仅账号字段加密；能力名与徽标同步（去早鸟包装、省额注明较按月订阅同周期合计） -->
       <div class="price-grid reveal">
         <div class="price-card">
           <div class="price-name" data-i18n="price.free">免费版</div>
@@ -687,11 +704,11 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="price-period" data-i18n="price.freeSub">适合轻量收藏与检索</div>
           <ul class="price-feats">
             <li data-i18n="price.f1">无限书签与嵌套分类</li>
-            <li data-i18n="price.f2">多端端到端加密同步</li>
+            <li data-i18n="price.f2">仅账号字段端到端加密同步</li>
             <li data-i18n="price.f3">200 MB 云端存储空间</li>
             <li data-i18n="price.f4">每日 3 次手动死链排查</li>
             <li data-i18n="price.f5">每月 10 万字（5 万 tokens）AI 额度</li>
-            <li data-i18n="price.f6">每日 1 次音视频解析体验</li>
+            <li data-i18n="price.f6">每日 1 次轻量平台解析体验</li>
           </ul>
           <a class="btn btn-ghost" href="/app" data-i18n="price.freeCta">免费开始</a>
         </div>
@@ -703,48 +720,50 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <div class="price-period" data-i18n="price.days30">30 天 · 按月灵活订阅，随订随用</div>
           <ul class="price-feats">
             <li data-i18n="price.p1">包含免费版全部功能</li>
-            <li data-i18n="price.p2">多端不限设备加密同步</li>
-            <li data-i18n="price.p3">每日 10 次音视频深度情报提取</li>
+            <li data-i18n="price.p2">仅账号字段端到端加密 · 不限设备</li>
+            <li data-i18n="price.p3">每日 10 次轻量平台解析</li>
             <li data-i18n="price.p4">每周全库后台自动死链巡检（每日 50 次）</li>
             <li data-i18n="price.p5">每月 40 万字（20 万 tokens）AI 额度</li>
-            <li data-i18n="price.p6">每日 2 次多媒体 ASR/OCR 深度解析体验</li>
+            <li data-i18n="price.p6">每日 2 次聊天媒体解析体验</li>
           </ul>
           <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
         </div>
 
         <div class="price-card">
-          <span class="price-badge" data-i18n="price.quarterlyBadge" style="background:#5C6B82;">进阶特惠 · 省¥13</span>
+          <span class="price-badge" data-i18n="price.quarterlyBadge" style="background:#5C6B82;">进阶特惠 · 较按月订阅同周期合计省 ¥13</span>
           <div class="price-name" data-i18n="price.quarterly">PRO 季付</div>
           <div class="price-amount"><del style="font-size:16px;color:var(--text-sub);margin-right:6px;font-weight:normal;">¥45</del>¥32<span data-i18n="price.perQuarter">/ 季</span></div>
           <div class="price-period" data-i18n="price.quarterUnit">90 天 · 折合 ¥10.7/月（按月买 3 个月需 ¥45，省 29%）</div>
           <ul class="price-feats">
             <li data-i18n="price.p1">包含免费版全部功能</li>
-            <li data-i18n="price.p2">多端不限设备加密同步</li>
-            <li data-i18n="price.p3">每日 10 次音视频深度情报提取</li>
+            <li data-i18n="price.p2">仅账号字段端到端加密 · 不限设备</li>
+            <li data-i18n="price.p3">每日 10 次轻量平台解析</li>
             <li data-i18n="price.p4">每周全库后台自动死链巡检（每日 50 次）</li>
             <li data-i18n="price.p5">每月 40 万字（20 万 tokens）AI 额度</li>
-            <li data-i18n="price.p6">每日 2 次多媒体 ASR/OCR 深度解析体验</li>
+            <li data-i18n="price.p6">每日 2 次聊天媒体解析体验</li>
           </ul>
           <a class="btn btn-ghost" href="/app" data-i18n="price.proCta">升级 PRO</a>
         </div>
 
         <div class="price-card price-featured">
-          <span class="price-badge" data-i18n="price.best">首发早鸟 · 省¥72</span>
+          <span class="price-badge" data-i18n="price.best">订阅期内价格锁定 · 较按月订阅同周期合计省 ¥72</span>
           <div class="price-name" data-i18n="price.yearly">PRO 年付</div>
           <div class="price-amount"><del style="font-size:16px;color:var(--text-sub);margin-right:6px;font-weight:normal;">¥180</del>¥108<span data-i18n="price.perYear">/ 年</span></div>
           <div class="price-period" data-i18n="price.yearUnit">365 天 · 折合仅 ¥9/月（按月买 12 个月需 ¥180，省 40%）</div>
           <ul class="price-feats">
             <li data-i18n="price.p1">包含免费版全部功能</li>
-            <li data-i18n="price.p2">多端不限设备加密同步</li>
-            <li data-i18n="price.p3">每日 10 次音视频深度情报提取</li>
+            <li data-i18n="price.p2">仅账号字段端到端加密 · 不限设备</li>
+            <li data-i18n="price.p3">每日 10 次轻量平台解析</li>
             <li data-i18n="price.p4">每周全库后台自动死链巡检（每日 50 次）</li>
             <li data-i18n="price.p5">每月 40 万字（20 万 tokens）AI 额度</li>
-            <li data-i18n="price.p6">每日 2 次多媒体 ASR/OCR 深度解析体验</li>
+            <li data-i18n="price.p6">每日 2 次聊天媒体解析体验</li>
           </ul>
           <a class="btn btn-solid" href="/app" data-i18n="price.proCta">升级 PRO</a>
         </div>
       </div>
 
+      <!-- EN 定价表：拆 price.yes / price.unlimited / price.weekly 三键；
+           数值单元补 data-i18n 键 + EN 翻译，避免英文页残留「次 / 万字」等中文量词 -->
       <div class="price-compare reveal">
         <div class="price-compare-row head">
           <span data-i18n="price.cmp.feature">权益</span>
@@ -753,12 +772,12 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
           <span data-i18n="price.quarterly">PRO 季付</span>
           <span data-i18n="price.yearly">PRO 年付</span>
         </div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.devices">多端加密同步</span><span data-i18n="price.yes">支持</span><span data-i18n="price.yes">不限设备</span><span data-i18n="price.yes">不限设备</span><span data-i18n="price.yes">不限设备</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.devices">仅账号字段端到端加密同步</span><span data-i18n="price.yes">支持</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span><span data-i18n="price.unlimited">不限设备</span></div>
         <div class="price-compare-row"><span data-i18n="price.cmp.storage">云端存储空间</span><span>200 MB</span><span>5 GB</span><span>5 GB</span><span>5 GB</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.linkcheck">每日死链排查</span><span>3 次</span><span>50 次</span><span>50 次</span><span>50 次</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.patrol">全库自动死链巡检</span><span data-i18n="price.no">不支持</span><span data-i18n="price.yes">每周巡检</span><span data-i18n="price.yes">每周巡检</span><span data-i18n="price.yes">每周巡检</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.ai">每月 AI 计算额度</span><span>10 万字（5 万 tokens）</span><span>40 万字（20 万 tokens）</span><span>40 万字（20 万 tokens）</span><span>40 万字（20 万 tokens）</span></div>
-        <div class="price-compare-row"><span data-i18n="price.cmp.video">每日音视频提取</span><span>1 次</span><span>10 次</span><span>10 次</span><span>10 次</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.linkcheck">每日死链排查</span><span data-i18n="price.cmp.times3">3 次</span><span data-i18n="price.cmp.times50">50 次</span><span data-i18n="price.cmp.times50">50 次</span><span data-i18n="price.cmp.times50">50 次</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.patrol">全库自动死链巡检</span><span data-i18n="price.no">不支持</span><span data-i18n="price.weekly">每周巡检</span><span data-i18n="price.weekly">每周巡检</span><span data-i18n="price.weekly">每周巡检</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.ai">每月 AI 计算额度</span><span data-i18n="price.cmp.aiFree">10 万字（5 万 tokens）</span><span data-i18n="price.cmp.aiPro">40 万字（20 万 tokens）</span><span data-i18n="price.cmp.aiPro">40 万字（20 万 tokens）</span><span data-i18n="price.cmp.aiPro">40 万字（20 万 tokens）</span></div>
+        <div class="price-compare-row"><span data-i18n="price.cmp.video">每日轻量平台解析</span><span data-i18n="price.cmp.times1">1 次</span><span data-i18n="price.cmp.times10">10 次</span><span data-i18n="price.cmp.times10">10 次</span><span data-i18n="price.cmp.times10">10 次</span></div>
       </div>
 
       <p class="price-note reveal">
@@ -780,7 +799,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
       <div class="faq-list reveal">
         <details>
           <summary data-i18n="q2">我的数据存放在哪里？</summary>
-          <p data-i18n="a2">数据默认仅存储于本机浏览器（IndexedDB），不会主动上传。开启云同步后，变更增量同步至你的账号：账号与密码于本机加密后上传，标题、网址、笔记为明文存储；笔记内嵌图片写入公开存储桶，持有链接者均可访问，请勿放置敏感图片。如需完整备份，可随时导出全量 JSON。</p>
+          <!-- 合规修订：FAQ 加密口径改为仅账号字段本机加密，标题、网址、笔记明文存储 -->
+          <p data-i18n="a2">数据默认仅存储于本机浏览器（IndexedDB），不会主动上传。开启云同步后，变更增量同步至你的账号：仅账号字段于本机加密后上传，标题、网址、笔记为明文存储；笔记内嵌图片写入公开存储桶，持有链接者均可访问，请勿放置敏感图片。如需完整备份，可随时导出全量 JSON。</p>
         </details>
         <details>
           <summary data-i18n="q3">换设备或换浏览器怎么办？</summary>

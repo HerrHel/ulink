@@ -35,14 +35,25 @@ test.describe('宣传落地页', () => {
     // 月付为基准价故无划线价。虚构更高的"原价"属价格欺诈，此处锁死。
     await expect(pricing.locator('del')).toHaveCount(2)
     await expect(pricing.locator('.price-featured del')).toHaveText('¥180')
-    await expect(pricing.locator('.price-featured .price-badge')).toContainText('首发早鸟 · 省¥72')
-    await expect(pricing).toContainText('进阶特惠 · 省¥13')
+    // 合规修订：徽标改为中性表述，省额注明「较按月订阅同周期合计省」
+    await expect(pricing.locator('.price-featured .price-badge')).toContainText('订阅期内价格锁定 · 较按月订阅同周期合计省 ¥72')
+    await expect(pricing).toContainText('进阶特惠 · 较按月订阅同周期合计省 ¥13')
     // 权益对比表的关键差异行（免费 200MB / PRO 5GB，且免费不支持全库巡检）
-    await expect(pricing.locator('.price-compare')).toContainText('多端加密同步')
+    // 合规修订：加密口径改为「仅账号字段端到端加密同步」，不再用无限定措辞
+    await expect(pricing.locator('.price-compare')).toContainText('仅账号字段端到端加密同步')
     await expect(pricing.locator('.price-compare')).toContainText('5 GB')
     await expect(pricing.locator('.price-compare')).toContainText('每周巡检')
     // 退款政策链接可达（支付经营审核需要）
     await expect(pricing.locator('a[href="/legal/refund-policy.html"]')).toBeVisible()
+  })
+
+  test('加密口径：页面任意处不得出现无限定的「端到端加密」裸宣称', async ({ page }) => {
+    await page.goto('/?stay=1')
+    // 合规修订：所有「端到端加密」字样都必须带「仅账号字段」限定；
+    // 剔除如实限定后不得再残留裸宣称（含 >端到端加密< 一类裸文本节点）。
+    // sync.d2 是「加密范围如实说明」，本身不含该字样，不在此列。
+    const html = await page.content()
+    expect(html.split('仅账号字段端到端加密').join('')).not.toContain('端到端加密')
   })
 
 

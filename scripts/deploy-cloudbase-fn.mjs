@@ -50,6 +50,12 @@ function readEnvLocal(key) {
 const envId = readEnvLocal('VITE_CLOUDBASE_ENV_ID') || process.env.VITE_CLOUDBASE_ENV_ID
 const apiKey = readEnvLocal('CLOUDBASE_APIKEY') || process.env.CLOUDBASE_APIKEY
 if (!envId) throw new Error('缺少 VITE_CLOUDBASE_ENV_ID')
+// --env-only 是密钥轮换唯一入口：缺 CLOUDBASE_APIKEY 时旧版会整块跳过注入、继续跑并 exit 0（假绿），
+// 这里直接报错退出 1
+if (envOnly && !apiKey) {
+  console.error('✖ --env-only 需要 CLOUDBASE_APIKEY（密钥轮换唯一入口），未找到，拒绝继续')
+  process.exit(1)
+}
 
 /** 在 tcb 工作目录跑命令；cwd 决定它在哪找 scf_bootstrap / cloudbaserc.json */
 function tcb(cwd, argv) {
@@ -91,9 +97,10 @@ if (!envOnly) {
     )
   } catch (e) {
     const out = String((e && e.stdout) || '') + String((e && e.stderr) || '')
-    // 二次部署时路由已存在会报「Path '/xxx' is used」——代码包此时已上传完成，
-    // 路由本身还指着本函数（类型修正在后面步骤），视为可继续的非致命错误。
-    if (/is used/.test(out)) {
+    // 精确匹配已知「Path '/xxx' is used」文案；旧版 /is used/ 太宽，会吞掉其它真实错误
+    const escapedPath = httpPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const pathUsedRe = new RegExp(`Path\\s+['"]?${escapedPath}['"]?\\s+is used`, 'i')
+    if (pathUsedRe.test(out)) {
       console.log(`⚠ 路由 ${httpPath} 已存在（代码包已更新，继续注入配置）`)
     } else {
       throw e
@@ -352,7 +359,16 @@ if (apiKey) {
   }
   writeFileSync(rcPath, JSON.stringify(rc, null, 2), 'utf8')
   try {
-    console.log(tcb(FN_DIR, ['config', 'update', 'fn', fnName]))
+    const updateOut = String(tcb(FN_DIR, ['config', 'update', 'fn', fnName]) || '')
+    console.log(updateOut)
+    // 无论 env-only 与否，都要在 config update 输出里确认成功；未命中成功标记或出现失败标记即非零退出
+    // （env-only 尤其关键：它是密钥轮换唯一入口，旧版完全不检查输出就 exit 0）
+    const ok = /(?:success|成功|√|已更新|更新完成|updated)/i.test(updateOut)
+    const bad = /(?:failed|失败|✖|error:)/i.test(updateOut)
+    if (!ok || bad) {
+      console.error(`✖ config update 输出未确认成功（envOnly=${envOnly}），拒绝继续：\n${updateOut.slice(-800)}`)
+      process.exit(1)
+    }
   } finally {
     // 含密文件绝不落地过夜
     rmSync(rcPath, { force: true })

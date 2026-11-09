@@ -369,6 +369,8 @@ export async function probeOverseas(
 ): Promise<{ outcome: 'alive' | 'dead' | 'timeout' | 'error'; status: number }> {
   try {
     const probeEndpoint = OVERSEAS_PROBE_URL
+    // CF 跳板退役后无海外第二视角；直接返回 error，让调用方保持国内原判
+    if (!probeEndpoint) return { outcome: 'error', status: 0 }
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 4500)
     const res = await fetch(`${probeEndpoint}?url=${encodeURIComponent(url)}`, {
@@ -480,19 +482,18 @@ export function useDeadLinkChecker() {
 
     if (shouldProbeOverseas) {
       const overseas = await probeOverseas(url)
-      if (overseas.outcome === 'alive') {
+      // 只有明确 2xx/3xx 才证明海外可达；403/429/5xx 是反爬或临时故障，不能改判被墙
+      const overseasAlive = overseas.outcome === 'alive' &&
+        overseas.status >= 200 && overseas.status < 400
+      if (overseasAlive) {
         verdictResult = makeCheckResult({
           verdict: 'gfw',
           status: overseas.status || 200,
           reason: 'gfw_blocked',
         })
-      } else if (overseas.outcome === 'dead') {
-        verdictResult = makeCheckResult({
-          verdict: 'dead',
-          status: overseas.status || 404,
-          reason: 'dns_not_found',
-        })
       }
+      // 海外 404/410 不等于权威 NXDOMAIN：旧逻辑复用 dns_not_found 会让
+      // _retryTransientFailures 永久跳过复核。此处保持国内原判，不改判。
     }
 
     // 历史软化：7 天内曾可达却本次判死 → 多半是临时故障，降级为「不落标」

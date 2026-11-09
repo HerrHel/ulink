@@ -89,8 +89,9 @@ export async function idbGet(key: string): Promise<any | null> {
 
 // ── 结构化同步队列（P0）──
 
-export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>): Promise<void> {
-  if (!ops.length) return
+/** 缺陷6：返回 boolean 如实上报 IDB 入队结果（旧实现吞错恒 resolve → op 永久丢失） */
+export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>): Promise<boolean> {
+  if (!ops.length) return true
   try {
     // op.data 多来自 Pinia reactive 对象经 { ...item } 浅 spread：顶层属性虽被拷出，
     // 但嵌套的 attributes / bookmarkIds / password 等仍是 reactive Proxy。
@@ -108,8 +109,11 @@ export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>)
     // 5MB 限制，按 id 删最老一批会静默丢掉首次全量同步的本地数据，随后被 pull
     // 对账误判为「远端已物理删」软删进回收站。死信清理由 pushFromQueue 按 retries 负责。
     await db.syncOps.bulkAdd(plain)
+    return true
   } catch (e) {
+    // 缺陷6：保留错误并明确返回 false，供 syncPush 判定、保留 dirty 标记与上报
     console.warn('[IDB] enqueueSyncOps error:', e)
+    return false
   }
 }
 

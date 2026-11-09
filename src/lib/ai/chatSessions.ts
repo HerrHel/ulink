@@ -140,20 +140,38 @@ export function loadSessions(): AiChatSession[] {
 /** 保存会话列表到本地存储 */
 export function saveSessions(sessions: AiChatSession[]): void {
   try {
+    // 缺陷2：可选文本字段统一脱敏，保持 undefined（字段缺失）语义与展示结构
+    const redactText = (v: string | undefined): string | undefined =>
+      v === undefined ? undefined : redactSensitivePatterns(v)
+    // toolCalls.arguments 是对象：仅对其中字符串值脱敏，其余类型原样保留
+    const redactArgs = (args: Record<string, unknown> | undefined): Record<string, unknown> | undefined => {
+      if (!args) return args
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(args)) out[k] = typeof v === 'string' ? redactSensitivePatterns(v) : v
+      return out
+    }
     const trimmed = sessions.slice(0, MAX_SESSIONS).map((s) => ({
       ...s,
       turns: (s.turns || []).slice(-MAX_TURNS_PER_SESSION).map((t) => ({
         ...t,
         loading: false, // 存盘时 loading 必须置 false
         isThinking: false, // 存盘时 isThinking 置 false
-        // 落盘前统一脱敏：secretFilter 过去只作用于「外发前」，而会话里的
-        // promptContent / toolResults 会明文带上密钥、Bearer、URL Basic Auth 等。
-        // 这里只做不可逆的敏感串替换，不改动展示结构。
-        // 避免多模态超大图片 Base64 击穿 localStorage 5MB 配额
+        // 缺陷2：落盘前对全部文本字段统一脱敏（旧实现只覆盖 promptContent 与
+        // toolResults[].resultText，content/steps/reasoning/... 曾明文落盘）。
+        content: redactSensitivePatterns(t.content),
+        reasoning: redactText(t.reasoning),
+        preToolContent: redactText(t.preToolContent),
+        steps: t.steps?.map((step) => ({ ...step, text: redactSensitivePatterns(step.text) })),
+        toolCalls: t.toolCalls?.map((c) => ({ ...c, arguments: redactArgs(c.arguments) })),
+        suggestedReplies: t.suggestedReplies?.map((r) => redactSensitivePatterns(r)),
+        actionCard: t.actionCard
+          ? { ...t.actionCard, desc: redactText(t.actionCard.desc) }
+          : t.actionCard,
+        // 避免多模态超大图片 Base64 击穿 localStorage 5MB 配额（保留 dataUrl 裁剪与 textContent 截断）
         attachedFiles: t.attachedFiles?.map((f) => ({
           ...f,
           dataUrl: f.dataUrl && f.dataUrl.length > 32768 ? undefined : f.dataUrl,
-          textContent: f.textContent ? f.textContent.slice(0, 4000) : undefined,
+          textContent: f.textContent ? redactSensitivePatterns(f.textContent.slice(0, 4000)).slice(0, 4000) : undefined,
         })),
         promptContent: t.promptContent
           ? redactSensitivePatterns(t.promptContent.slice(0, 8000))

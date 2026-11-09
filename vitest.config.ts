@@ -1,4 +1,6 @@
-import { defineConfig, UserConfig } from 'vitest/config'
+// 修复：vitest/config 在此版本不导出 UserConfig（tsconfig.e2e.json 纳入 *.config.ts 后暴露），
+// 且本文件也从未用到该类型，删除以免类型门禁报错。
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath } from 'node:url'
 

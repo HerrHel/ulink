@@ -5,7 +5,8 @@
  * - 测试真实浏览器行为，不 mock 任何内部模块
  * - 覆盖关键用户路径：加载→查看→搜索→设置→分享路由
  * - 依赖 dev server（playwright.config.ts 自动启动）
- * - 优先 data-testid（lv-*）；环境限制用 test.skip + 注释，禁止 .catch silent pass
+ * - 优先 data-testid（lv-*）；右键菜单改用真实 dispatchEvent 断言，
+ *   不再用「失败转 test.skip(true)」把失败洗成跳过（杜绝 silent pass）
  */
 import { test, expect } from '@playwright/test'
 
@@ -31,18 +32,24 @@ test.describe('LinkVault 核心功能', () => {
     await expect(errorOverlay).not.toBeVisible()
     // 默认数据至少有一张卡
     await expect(page.locator('.bookmark-card, .group-card, .card').first()).toBeVisible({ timeout: 10000 })
+    // 内容断言：默认种子书签确实渲染出标题（不是空壳卡片）；正则覆盖多张默认卡更抗数据微调
+    await expect(page.getByTestId('lv-card-grid')).toContainText(/Steam|抖音|DeepSeek|Gmail/)
   })
 
   test('分类导航工作', async ({ page }) => {
     await page.goto('/app')
-    await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
-    // 只用分类导航区域内的按钮：宽泛的 '.icon-rail button' 会命中侧栏顶部的
-    // AI 工作台入口（rail-item-ai），点它切到 AI 视图后卡片网格本就该消失 ——
-    // 该用例的意图是「分类切换后列表仍在」，所以要限定在 #railNav 里选。
-    const navCat = page.locator('#railNav .rail-item').first()
+    const grid = page.getByTestId('lv-card-grid')
+    await expect(grid).toBeAttached({ timeout: 10000 })
+    // 点具体分类（游戏平台）而非「全部」：只有切到子分类才能验证列表被过滤。
+    // 仍限定在 #railNav 内，避免命中侧栏顶部的 AI 工作台入口（点它会切视图隐藏网格）。
+    const navCat = page.locator('#railNav .rail-item[data-cat-id="game"]')
     await expect(navCat).toBeVisible({ timeout: 5000 })
     await navCat.click()
-    await expect(page.getByTestId('lv-card-grid')).toBeAttached()
+    await expect(grid).toBeAttached()
+    // 文本变化断言：过滤后网格只含该分类的 Steam 卡，不再含其它分类的「抖音」。
+    // 两条都是 web-first 断言，自动等待 Vue 重渲染，不引入 sleep / flaky。
+    await expect(grid).toContainText('Steam')
+    await expect(grid).not.toContainText('抖音')
   })
 
   test('布局切换（设置抽屉强断言）', async ({ page }) => {
@@ -76,24 +83,24 @@ test.describe('LinkVault 核心功能', () => {
     await expect(modal).toBeHidden({ timeout: 3000 })
   })
 
-  // 部分 CI/浏览器可能拦截 contextmenu；无法保证菜单必出时显式 skip，禁止 silent catch pass
-  test('右键菜单显示', async ({ page }, testInfo) => {
+  // 真实 DOM 事件派发替代「失败转 skip」：click({button:'right'}) 在部分无头环境不触发
+  // 原生 contextmenu，显式 dispatchEvent 让 document 级委托监听器一定收到；随后断言菜单出现，
+  // 失败即失败，不再用 test.skip(true) 把失败洗成跳过。
+  test('右键菜单显示', async ({ page }) => {
     await page.goto('/app')
     await expect(page.getByTestId('lv-card-grid')).toBeAttached({ timeout: 10000 })
     const card = page.locator('.bookmark-card, .card, .group-card').first()
     await expect(card).toBeVisible({ timeout: 10000 })
-    await card.click({ button: 'right' })
-    const ctxMenu = page.locator('#ctxMenu, .ctx-menu, .context-menu').first()
-    try {
-      await expect(ctxMenu).toBeVisible({ timeout: 3000 })
-    } catch {
-      // 环境限制（例如无真实 pointer contextmenu）：不强行 pass，记 skip
-      testInfo.annotations.push({
-        type: 'skip-reason',
-        description: '浏览器/环境可能拦截 contextmenu，右键菜单未出现',
-      })
-      test.skip(true, 'contextmenu 未弹出（环境限制），非 silent pass')
-    }
+    await card.dispatchEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 200,
+      clientY: 200,
+    })
+    // 用稳定的 #ctxMenu 而非宽泛 .ctx-menu（后者会命中 FilterBar 里隐藏的 add-dropdown）
+    const ctxMenu = page.locator('#ctxMenu')
+    await expect(ctxMenu).toBeVisible({ timeout: 5000 })
     await expect(page.locator('.error-boundary-fallback')).not.toBeVisible()
   })
 
@@ -104,6 +111,11 @@ test.describe('LinkVault 核心功能', () => {
     await expect(searchInput).toBeVisible({ timeout: 5000 })
     await searchInput.fill('GitHub')
     await expect(searchInput).toHaveValue('GitHub')
+    // 内容断言：搜索（输入有 150ms 防抖）后结果集包含目标卡片、且不含无关卡片。
+    // 两条都是 web-first 断言，自动等待防抖与 Vue 重渲染，不引入 sleep / flaky。
+    const grid = page.getByTestId('lv-card-grid')
+    await expect(grid).toContainText('GitHub', { timeout: 5000 })
+    await expect(grid).not.toContainText('抖音', { timeout: 5000 })
     await searchInput.clear()
     await expect(searchInput).toHaveValue('')
   })

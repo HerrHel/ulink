@@ -25,8 +25,9 @@ interface Call {
   range?: [number, number]
 }
 
-/** 可控 fake RdbClient：记录每次终端调用（含链式过滤条件），按调用返回配置结果 */
-function makeFakeDb(respond: (call: Call) => FakeRow) {
+/** 可控 fake RdbClient：记录每次终端调用（含链式过滤条件），按调用返回配置结果。
+ *  respond 允许抛错或返回 rejected Promise，用于覆盖「rdb reject 时产品代码不吞错」。 */
+function makeFakeDb(respond: (call: Call) => FakeRow | Promise<FakeRow>) {
   const calls: Call[] = []
 
   function builder(table: string) {
@@ -86,9 +87,20 @@ function makeFakeDb(respond: (call: Call) => FakeRow) {
       single() {
         return b
       },
-      then(resolve: (v: FakeRow) => void) {
+      // then 同时接 resolve / reject：respond 抛错或返回 rejected Promise 时，
+      // 把异常交给 await 链向上透传，而不是被 thenable 悄悄吞成成功 FakeRow。
+      then(resolve: (v: FakeRow) => void, reject: (e: unknown) => void = () => {}) {
         calls.push(call)
-        return resolve(respond(call))
+        try {
+          const r = respond(call)
+          if (r instanceof Promise) {
+            r.then(resolve, reject)
+          } else {
+            resolve(r)
+          }
+        } catch (e) {
+          reject(e)
+        }
       },
     }
     return b
@@ -276,5 +288,18 @@ describe('createCloudBaseSyncPort — 墓园查询', () => {
     expect(calls[0].columns).toBe('table_name, item_id')
     expect(calls[0].filters).toEqual([{ method: 'eq', args: ['user_id', 'u1'] }])
     expect(r.data).toEqual([{ table_name: 'bookmarks', item_id: 'b9' }])
+  })
+})
+
+describe('createCloudBaseSyncPort — rdb rejection', () => {
+  it('rdb reject 时产品代码不吞错（异常向上透传，而非静默转成 {error:null}）', async () => {
+    // 情形 1：respond 返回 rejected Promise（rdb 返回 rejection）
+    const rejectDb = makeFakeDb(() => Promise.reject(new Error('rdb connection reset')))
+    await expect(createCloudBaseSyncPort(rejectDb.client).upsert('bookmarks', { id: 'b1' }))
+      .rejects.toThrow('rdb connection reset')
+    // 情形 2：respond 同步抛错（rdb 抛异常），同样不能被吞
+    const throwDb = makeFakeDb(() => { throw new Error('rdb boom') })
+    await expect(createCloudBaseSyncPort(throwDb.client).upsert('bookmarks', { id: 'b1' }))
+      .rejects.toThrow('rdb boom')
   })
 })

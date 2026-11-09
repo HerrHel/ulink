@@ -35,10 +35,13 @@ export async function putShareCache(
   html: string,
   ttlS: number,
 ): Promise<void> {
+  // 退役收口：分享内容不得进 CDN 共享缓存，对外一律 private, no-store；
+  // 函数内 caches.default 命中/双写逻辑保持不变，ttlS 仅作内部记账参数保留（调用方签名不变）。
+  void ttlS
   const res = new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": `public, max-age=${ttlS}`,
+      "cache-control": "private, no-store",
     },
   })
   waitUntil(edgeCache.put(new Request(key, { method: "GET" }), res))

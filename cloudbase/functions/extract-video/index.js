@@ -106,6 +106,23 @@ const nodeDnsResolver = {
   resolve: (hostname, type) => (type === 'A' ? dns.resolve4(hostname) : dns.resolve6(hostname)),
 }
 
+// client 媒体 URL 的 DNS/私网判定缓存（实例内有效）：同一 host 只解析一次，避免列表里重复 host 反复 DNS。
+// 缓存 Promise 去重串行/并发调用；设上限防止长生命周期实例内无限增长；失败不入缓存以便下次重试。
+const _clientMediaDnsCache = new Map()
+function isUrlDnsSafeCached(parsed) {
+  const host = parsed.hostname.toLowerCase()
+  let pending = _clientMediaDnsCache.get(host)
+  if (!pending) {
+    if (_clientMediaDnsCache.size > 512) _clientMediaDnsCache.clear()
+    // isUrlDnsSafe 接收 URL 对象（内部读 parsed.hostname），不是字符串
+    pending = isUrlDnsSafe(parsed, nodeDnsResolver)
+      .then((safe) => { if (!safe) _clientMediaDnsCache.delete(host); return safe })
+      .catch(() => { _clientMediaDnsCache.delete(host); return false })
+    _clientMediaDnsCache.set(host, pending)
+  }
+  return pending
+}
+
 function sendJson(res, status, body, extraHeaders) {
   const payload = JSON.stringify(body)
   res.writeHead(status, {
@@ -589,7 +606,8 @@ const CLIENT_MEDIA_PLATFORMS = {
   },
 }
 
-function normalizeClientMedia(raw) {
+// 注意：返回 Promise（内部要做 DNS/私网复核）；云函数对外的 HTTP 请求/响应契约不变。
+async function normalizeClientMedia(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const allowedPorts = new Set(['', '443', '8082', '8443'])
   const platform = typeof raw.platform === 'string' ? raw.platform.trim().toLowerCase() : ''
@@ -621,9 +639,20 @@ function normalizeClientMedia(raw) {
     }
     return out
   }
-  const audio = cleanList(raw.audio_urls)
-  const video = cleanList(raw.video_urls)
-  const images = cleanList(raw.image_urls)
+  // DNS 复核：字符串域名后缀白名单挡不住 DNS 重绑定（域名可解析到内网），
+  // 返回前对每个 URL 再验一次解析结果，不通过剔除；同一 host 走缓存避免重复解析。
+  const dnsSafeList = async (value) => {
+    const out = []
+    for (const href of cleanList(value)) {
+      let parsed
+      try { parsed = new URL(href) } catch (_) { continue }
+      if (await isUrlDnsSafeCached(parsed)) out.push(href)
+    }
+    return out
+  }
+  const audio = await dnsSafeList(raw.audio_urls)
+  const video = await dnsSafeList(raw.video_urls)
+  const images = await dnsSafeList(raw.image_urls)
   if (!audio.length && !video.length && !images.length) return null
   const text = (value, max) => (typeof value === 'string' ? value.trim().slice(0, max) : '')
   const duration = Number(raw.duration)
@@ -837,7 +866,7 @@ async function handleDeepSubmit(req, res, cors, body, db, signal) {
     parsed,
     normalizeDeepInclude(body.include),
     signal,
-    normalizeClientMedia(body.client),
+    await normalizeClientMedia(body.client),
   )
   if (!job) {
     // worker 未接单：本次扣的额度立即退回（job_id 用一次性合成值，天然幂等）

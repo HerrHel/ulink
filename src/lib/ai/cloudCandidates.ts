@@ -7,7 +7,7 @@
 import type { Category, CustomAttribute } from '../../types.js'
 import type { AiSearchPreference, AiCandidateBookmark } from '../../types/ai.js'
 import { t, getLocale } from '../../i18n/index.js'
-import { cfApiUrl } from '../../config/urls.js'
+import { cfApiUrl, isCfApiConfigured } from '../../config/urls.js'
 import { getSmartPrefill } from './smartPrefill.js'
 import { getSimilarExternalWebsites } from './similarWebsites.js'
 import { buildCfHeaders } from './cfHeaders.js'
@@ -27,6 +27,8 @@ async function fetchDynamicCandidates(params: {
 }): Promise<AiCandidateBookmark[] | null> {
   // AI 总开关关闭：不发起候选生成的 AI 网络请求，直接走本地静态知识库兜底
   if (!isAiEnabled()) return null
+  // CF 出海跳板已退役且未配置新端点：直接走本地静态知识库兜底
+  if (!isCfApiConfigured()) return null
   try {
     const res = await fetch(cfApiUrl('/api/ai-candidates'), {
       method: 'POST',

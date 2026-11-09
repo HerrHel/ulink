@@ -23,14 +23,29 @@ jobs:
       - run: npm ci
       - name: Lint
         run: npm run lint
-      # F2-006：类型检查进入门禁
+      # 独立覆盖 e2e/ 与 scripts/（默认 lint 只扫 src/）：no-undef 硬拦，存量风格仅 warn
+      - name: Lint (e2e & scripts)
+        run: npm run lint:scripts
+      # F2-006：类型检查进入门禁（现串联主 tsconfig 与 e2e/config 专用 tsconfig.e2e.json）
       - name: Typecheck
         run: npm run typecheck
       - name: Unit Tests
         run: npm run test
-      # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错
-      - name: Dependency Audit
-        run: npm audit --omit=dev --audit-level=high
+      # CloudBase 形态定向单测：默认套件 VITE_BACKEND='' 使 isCloudBaseBackend()===true
+      # 分支在 CI 零执行，这里用独立配置单独跑一组契约子集补齐盲区。
+      - name: Unit Tests (CloudBase)
+        run: npm run test:cloudbase
+      # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错。
+      # 拆两步：原 --omit=dev --audit-level=high 放过整条 dev 工具链漏洞与 prod moderate，
+      # 现分别覆盖 full tree high+ 与 生产依赖 moderate+。
+      - name: Dependency Audit (all deps, high+)
+        run: npm audit --audit-level=high
+      - name: Dependency Audit (prod-only, moderate+)
+        run: npm audit --omit=dev --audit-level=moderate
+      # 派生 JS 资产一致性守卫：由 TS 真源重新生成 cloudbase/functions 下的 JS，
+      # 若与提交产物有 diff（手改/漏跑生成器）立即红灯，杜绝部署漂移版本。
+      - name: Derived fn assets (no drift)
+        run: node scripts/build-fn-assets.mjs && git diff --exit-code -- cloudbase/functions
       # 生产构建进入门禁验证（提前捕获构建期错误），产物供 deploy 复用，避免重复构建
       - name: Build
         run: npm run build
@@ -68,6 +83,14 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
+      # test:e2e:prod（PurgeCSS/minify 回归）此前从未进 CI：默认 test:e2e 走 dev server，
+      # 复现不了仅生产构建生效的问题。LV_E2E_PROD=1 让 webServer 改走 build + preview，
+      # 只跑 app / landing 两个核心文件控制耗时（全量 prod 太慢）。
+      - name: E2E Tests (prod build)
+        run: npx playwright test e2e/app.spec.ts e2e/landing.spec.ts --config playwright.config.ts
+        env:
+          CI: true
+          LV_E2E_PROD: '1'
   # 「后端门禁」原为 supabase-db-test（本地栈 + pgTAP），已于 2026-10-27 移除：
   #   生产后端已于 2026-10-22 全量切到 CloudBase，Supabase 只剩历史迁移源的身份，
   #   起本地栈跑 pgTAP 验证的是**已不再使用的**那套 schema，对现网无保护作用，

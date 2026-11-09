@@ -5,7 +5,8 @@
  * 不含明文业务数据或主密码）存本机 localStorage、不随数据快照走。导出 JSON 若不附带它，
  * 新设备导入后会引导"重新设置主密码"生成新 key → 旧主密码加密的历史密文永久解不开
  * （用户报的换设备密码乱码的根因场景之一）。本护栏锁三条行为契约：
- *  - exportData：本机有 E2E/保险柜 canary 时，导出 JSON 附带 __e2eCanary / __vaultCanary
+ *  - exportData：仅显式开启 lv_exportKeepSensitive='1' 且本机有 canary 时，导出 JSON
+ *    才附带 __e2eCanary / __vaultCanary（默认不附带，canary 含 KDF salt 不随普通备份外泄）
  *  - importFromDataInternal：带 __e2eCanary 且本机无 canary → 写回本地 + e2e store 置 enabled
  *  - 本机已有 canary → 绝不覆盖（本地优先；覆盖会破坏本机既有解锁）
  */
@@ -103,9 +104,11 @@ describe('canary 随备份导出导入往返', () => {
 
   // ═══ 导出侧：附带 canary ═══
 
-  it('exportData：本机有 E2E/保险柜 canary 时，导出 JSON 附带 __e2eCanary / __vaultCanary', async () => {
+  it('exportData：显式开启 lv_exportKeepSensitive 且本机有 canary 时，导出 JSON 附带 __e2eCanary / __vaultCanary', async () => {
     localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(E2E_CANARY))
     localStorage.setItem(VAULT_CANARY_KEY, JSON.stringify(VAULT_CANARY))
+    // 产品行为变更：canary 只在用户显式选择「保留敏感内容」时才随备份导出
+    localStorage.setItem('lv_exportKeepSensitive', '1')
     useDataStore().addBookmark(makeBookmark('bk1') as any)
 
     const dl = captureDownload()
@@ -115,6 +118,23 @@ describe('canary 随备份导出导入往返', () => {
       const json = JSON.parse(await dl.captured()!.text()) as Record<string, unknown>
       expect(json.__e2eCanary).toEqual(E2E_CANARY)
       expect(json.__vaultCanary).toEqual(VAULT_CANARY)
+    } finally {
+      dl.restore()
+    }
+  })
+
+  it('exportData：默认（未开启开关）即使本机有 canary 也不附带加密元数据字段', async () => {
+    // 默认不附带：canary 含 KDF salt/it，可被离线字典爆破，普通备份不得携带。
+    localStorage.setItem(E2E_CANARY_KEY, JSON.stringify(E2E_CANARY))
+    localStorage.setItem(VAULT_CANARY_KEY, JSON.stringify(VAULT_CANARY))
+    useDataStore().addBookmark(makeBookmark('bk1') as any)
+
+    const dl = captureDownload()
+    try {
+      exportData()
+      const json = JSON.parse(await dl.captured()!.text()) as Record<string, unknown>
+      expect(json.__e2eCanary).toBeUndefined()
+      expect(json.__vaultCanary).toBeUndefined()
     } finally {
       dl.restore()
     }

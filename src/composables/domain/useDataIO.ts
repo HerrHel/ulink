@@ -14,7 +14,7 @@ import { downloadFile, dateStamp } from '../../lib/download.js'
 import { esc as escHtml } from '../../utils.js'
 
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
-import { BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
+import { AppDataSchema, BookmarkSchema, SiblingGroupSchema, CategorySchema, CustomAttributeSchema } from '../../schemas.js'
 import { clearSearchCache } from '../../lib/search.js'
 import { buildSeedDefaults } from '../../config/constants.js'
 import { runMigrations } from '../../stores/migrations.js'
@@ -24,6 +24,7 @@ import { useVaultStore } from '../../stores/vault.js'
 import { useUndoStore } from '../../stores/undo.js'
 import { safeGetItem, safeSetItem, safeJsonParse } from '../../lib/storageSafe.js'
 import { __testPendingSync } from './syncPending.js'
+import { normalizeSyncUrl } from './syncDedup.js' // 缺陷11：导入与同步共用同一 URL 内容键
 import { newBookmarkId } from '../../lib/newId.js'
 import { cloneDeep } from '../../lib/clone.js'
 import type { AppData, Bookmark } from '../../types.js'
@@ -53,6 +54,41 @@ function _writeVaultCanary(data: Record<string, unknown>): boolean {
   return safeSetItem(VAULT_CANARY_KEY, JSON.stringify(data))
 }
 
+/**
+ * 缺陷5：导入 canary 的最小结构校验。canary 是随备份附带的主密码离线验证器
+ * （canary + KDF salt + it），伪造/畸形值写回本地会把解锁入口永久锁死
+ * （checkE2EStatus 判为「已设置」→ 引导输入原主密码 → 永远验不过）。
+ * 只认：canary 非空字符串、salt 为有限数数组、it 若提供必须是有限数
+ *（旧备份可能无 it，缺失时容忍以兼容现网）。
+ */
+function _isValidCanaryShape(v: unknown): boolean {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+  const o = v as Record<string, unknown>
+  if (typeof o.canary !== 'string' || !o.canary) return false
+  if (!Array.isArray(o.salt) || o.salt.length === 0 || !o.salt.every(n => typeof n === 'number' && Number.isFinite(n))) return false
+  if (o.it !== undefined && (typeof o.it !== 'number' || !Number.isFinite(o.it))) return false
+  return true
+}
+
+/** 缺陷5：恢复导入备份里的 canary；结构不合法则跳过并提示，防伪造 canary 锁死解锁入口 */
+function _restoreCanary(raw: unknown, label: string, opts: {
+  read: () => Record<string, unknown> | null
+  write: (o: Record<string, unknown>) => boolean
+  enable: () => void
+}): void {
+  if (raw == null) return
+  if (!_isValidCanaryShape(raw)) {
+    console.warn(`[import] ${label} 结构非法，跳过恢复以防伪造 canary 锁死入口`)
+    toast(t('msg.jsonFormatUnrecognized'), false)
+    return
+  }
+  // 仅当本机尚无对应 canary 时恢复，绝不覆盖已有主密码设置（本地优先）
+  if (!opts.read()) {
+    opts.write(raw as Record<string, unknown>)
+    opts.enable()
+  }
+}
+
 // ── 导出 ──
 
 /**
@@ -71,10 +107,14 @@ export function setExportKeepSensitive(v: boolean): void {
   safeSetItem(EXPORT_SENSITIVE_KEY, v ? '1' : '0')
 }
 
-/** 按开关清洗书签敏感字段：关闭时 username/password 一律置空（含 E2E 加密密码对象） */
-function _stripSensitive<T extends { username?: unknown; password?: unknown }>(b: T): T {
+/** 按开关清洗书签敏感字段：关闭时 username/password 一律置空（含 E2E 加密密码对象）；
+ *  alsoNotes=true 时连 notes 一并剔除（完整备份：E2E 解锁后 notes 也是明文）。 */
+function _stripSensitive<T extends { username?: unknown; password?: unknown; notes?: unknown }>(b: T, alsoNotes = false): T {
   if (!getExportKeepSensitive()) {
-    return { ...b, username: '', password: '' }
+    const out: T = { ...b, username: '', password: '' }
+    // 缺陷1：完整备份关闭开关时也剔除 notes 明文
+    if (alsoNotes) Object.assign(out, { notes: '' })
+    return out
   }
   return b
 }
@@ -109,7 +149,8 @@ export function exportCategory(catId: string) {
     for (const g of catGroups) for (const bid of g.bookmarkIds || []) refIds.add(bid)
     const refBookmarks = ds.bookmarks.filter(b => !b.deletedAt && refIds.has(b.id) && b.categoryId !== catId)
 
-    const bookmarks = [...catBookmarks, ...refBookmarks].map(_stripSensitive)
+    // 缺陷1：显式箭头调用，避免 map 把 index 当作 _stripSensitive 的 alsoNotes 参数
+    const bookmarks = [...catBookmarks, ...refBookmarks].map(b => _stripSensitive(b))
     const groups = catGroups.map(g => ({ ...g }))
     // 用到的属性（去重、按 id 保序）
     const attrIds = new Set<string>()
@@ -149,14 +190,26 @@ export function exportData() {
   const ds = useDataStore()
   try {
     const snapshot = ds._dataSnapshot() as Record<string, unknown>
-    // 附带 E2E/保险柜 canary 元数据：本机 canary 存 localStorage、不随数据快照走，
-    // 若导出不带它，新设备导入后会引导"重新设置主密码"生成新 key → 旧主密码加密的
-    // 历史数据永久解不开（换设备数据丢失）。带上后新设备导入能识别加密设置 →
-    // 引导"输入原主密码解锁"，旧数据可正常解密（正确换设备姿势）。
-    const e2eCanary = _readE2ECanary()
-    if (e2eCanary) snapshot.__e2eCanary = e2eCanary
-    const vaultCanary = _readVaultCanary()
-    if (vaultCanary) snapshot.__vaultCanary = vaultCanary
+    const keepSensitive = getExportKeepSensitive()
+    // 缺陷1：E2E 解锁后内存里 username/notes 是明文、password 是 EncryptedPassword 对象，
+    // 默认开关关闭时沿用 _stripSensitive 把三者一并剔除，避免明文账号信息随备份外泄。
+    if (!keepSensitive && Array.isArray(snapshot.bookmarks)) {
+      snapshot.bookmarks = (snapshot.bookmarks as Bookmark[]).map(b => _stripSensitive(b, true))
+    }
+    // 缺陷1：canary（含 KDF salt/it 的主密码离线验证器，可被离线字典爆破）只在用户
+    // 显式选择「保留敏感内容」时附带；否则不写，默认备份不再携带该验证器。
+    if (keepSensitive) {
+      const e2eCanary = _readE2ECanary()
+      if (e2eCanary) snapshot.__e2eCanary = e2eCanary
+      const vaultCanary = _readVaultCanary()
+      if (vaultCanary) snapshot.__vaultCanary = vaultCanary
+      // 缺陷1：备份确含明文敏感字段时，导出前用现有 i18n 键明确提示妥善保管
+      //（放在 downloadFile 之前，保持「数据已导出」为最后一次 toast）。
+      const bms = snapshot.bookmarks as Bookmark[] | undefined
+      if (bms?.some(b => b.username || b.password || b.notes)) {
+        toast(t('settings.exportKeepSensitiveHint'), false)
+      }
+    }
     downloadFile('linkvault-backup-' + dateStamp() + '.json',
       JSON.stringify(snapshot, null, 2), 'application/json')
     toast(t('msg.dataExported'))
@@ -260,6 +313,9 @@ export function importData(file: File) {
         const data = JSON.parse(content)
         // 判断是与链（ulink）原生 JSON 还是 Raindrop.io JSON
         if (validateImportData(data) === null) {
+          // 缺陷5：校验通过后由 importFromDataInternal 以 AppDataSchema.safeParse(data).data
+          // 作为合并输入（此处仍传原始 data 以保留 __e2eCanary 等非 schema 元数据，
+          // 该函数内部会单独校验并恢复 canary）。
           importFromDataInternal(data, t('app.fullName'))
         } else if (data.items && Array.isArray(data.items)) {
           // Raindrop.io 格式：{ items: [...] }
@@ -327,13 +383,16 @@ export function _mergeAttributes(ds: DataStore, customAttributes: AppData['custo
 /** 合并书签（去重：同 ID 或同 URL 跳过） */
 export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']): MergeStats {
   let imported = 0, skipped = 0
-  const existingUrls = new Set(ds.bookmarks.filter(b => !b.deletedAt).map(b => b.url?.toLowerCase()).filter(Boolean))
+  // 缺陷11：与同步去重（syncDedup.normalizeSyncUrl）共用同一 URL 内容键，
+  // 避免导入按 toLowerCase、同步按 URL 归一化去尾斜杠导致同一内容两套判据。
+  const existingUrls = new Set(ds.bookmarks.filter(b => !b.deletedAt).map(b => normalizeSyncUrl(b.url || '')).filter(Boolean))
   // order 基线用现存最大 order+1（而非 bookmarks.length），避免永久删缩短后新值与现存项重复
   const orderBase = ds.nextBookmarkOrder()
   for (const b of bookmarks) {
     if (!b.title || !b.url) continue
     if (ds.bookmarks.some(existing => existing.id === b.id)) continue
-    if (existingUrls.has(b.url.toLowerCase())) continue
+    const urlKey = normalizeSyncUrl(b.url)
+    if (existingUrls.has(urlKey)) continue
     const now = Date.now()
     const parsed = BookmarkSchema.safeParse({
       id: b.id || newBookmarkId(imported),
@@ -354,7 +413,7 @@ export function _mergeBookmarks(ds: DataStore, bookmarks: AppData['bookmarks']):
     })
     if (!parsed.success) { skipped++; continue }
     ds.addBookmark(parsed.data)
-    existingUrls.add(b.url.toLowerCase())
+    existingUrls.add(urlKey)
     imported++
   }
   return { imported, skipped }
@@ -397,34 +456,35 @@ export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroup
 export function importFromDataInternal(data: Partial<AppData>, source: string) {
   const ds = useDataStore()
 
+  // 缺陷5：canary 是 AppDataSchema 未声明的附带字段（safeParse 会 strip），必须在
+  // 换成校验后数据之前先从原始 data 取出校验并写回本地；不合法结构跳过并提示，
+  // 避免伪造 canary 写回后把解锁入口永久锁死。仅本机尚无对应 canary 时恢复（本地优先）。
+  const importDataAny = data as Partial<AppData> & { __e2eCanary?: unknown; __vaultCanary?: unknown }
+  _restoreCanary(importDataAny.__e2eCanary, '__e2eCanary', {
+    read: _readE2ECanary, write: _writeE2ECanary, enable: () => useE2EStore().setEnabled(true),
+  })
+  _restoreCanary(importDataAny.__vaultCanary, '__vaultCanary', {
+    read: _readVaultCanary, write: _writeVaultCanary, enable: () => useVaultStore().setEnabled(true),
+  })
+
+  // 缺陷5：以 Zod 校验后的数据作为合并/迁移输入，令 AppDataSchema 的 strip/coerce
+  // 真正生效（旧实现只判 safeParse.success 却继续用原始 data，畸形/多余字段原样入库）。
+  // 非 LinkVault 格式（Raindrop/HTML/CSV）元素可能不满足严格 schema，解析失败时回退
+  // 原始 data，保持既有兼容行为。
+  const parsed = AppDataSchema.safeParse(data)
+  const effective: Partial<AppData> = parsed.success ? parsed.data : data
   // 执行数据迁移（处理旧版格式）
   const result = {
-    categories: [...(data.categories || [])],
-    bookmarks: [...(data.bookmarks || [])],
-    customAttributes: [...(data.customAttributes || [])],
-    siblingGroups: [...(data.siblingGroups || [])],
+    categories: [...(effective.categories || [])],
+    bookmarks: [...(effective.bookmarks || [])],
+    customAttributes: [...(effective.customAttributes || [])],
+    siblingGroups: [...(effective.siblingGroups || [])],
   }
-  runMigrations(data, result)
+  runMigrations(effective, result)
 
   const { categories, bookmarks, customAttributes, siblingGroups } = result
 
   try { persist.saveToLocalStorage(ds._dataSnapshot(), useUIStore().curSpace) } catch (e) { console.warn('[import] backup before import failed:', e) }
-
-  // 恢复 E2E/保险柜 canary（换设备正确姿势）：导出 JSON 附带的加密元数据写回本地，
-  // 使导入后 checkE2EStatus 识别为"已设置主密码"→ 引导输入原主密码解锁，而非重新设置
-  // 生成新 key（新 key 解不开旧主密码加密的历史密文 → 数据永久丢失）。
-  // 仅当本机尚无对应 canary 时恢复，绝不覆盖已有主密码设置（本地优先，覆盖会破坏本机解锁）。
-  // 直接置 store 的 enabled 标记刷新状态：不调 checkE2EStatus——它会经 useBiometric /
-  // 云端查询，数据导入路径不应引入该依赖链；写回本地后 enabled=true 即让解锁引导可用。
-  const importDataAny = data as Partial<AppData> & { __e2eCanary?: Record<string, unknown>; __vaultCanary?: Record<string, unknown> }
-  if (importDataAny.__e2eCanary && !_readE2ECanary()) {
-    _writeE2ECanary(importDataAny.__e2eCanary)
-    useE2EStore().setEnabled(true)
-  }
-  if (importDataAny.__vaultCanary && !_readVaultCanary()) {
-    _writeVaultCanary(importDataAny.__vaultCanary)
-    useVaultStore().setEnabled(true)
-  }
 
   // 顺序固定：先 cat/attr，再 bm，最后 group（group 依赖 bm 已入库做悬空过滤）
   const cats = _mergeCategories(ds, categories)

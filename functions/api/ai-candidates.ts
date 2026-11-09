@@ -15,6 +15,17 @@ interface Env {
 
 /** 用户 query 注入长度上限：防超长粘贴把 prompt / 请求体撑爆 */
 const MAX_QUERY_LEN = 2000
+/** 控制字符、零宽/双向控制符统一清洗（防不可见字符注入提示词），与 extract-metadata 同口径 */
+const CTRL_RE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]/g
+/** 单字段消毒：去控制字符与反引号、折叠空白、限量截断（similar / intent 分支共用） */
+function sanitizeForPrompt(value: unknown): string {
+  return String(value ?? '')
+    .replace(CTRL_RE, ' ')
+    .replace(/`/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_QUERY_LEN)
+}
 
 export const onRequestOptions: PagesFunction<Env> = async (context) => {
   return cfPreflightResponse(context.request)
@@ -48,6 +59,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const { type, query, targetUrl, targetTitle } = body
 
+    // type 显式白名单：非 similar / intent 一律 400，避免绕过字段校验或落进默认分支
+    if (type !== 'similar' && type !== 'intent') {
+      return jsonResponse({ success: false, error: 'invalid_type' }, 400)
+    }
+
     const mimoKey = context.env.MIMO_API_KEY || ''
     if (!mimoKey) {
       return jsonResponse({ success: false, error: 'mimo_key_not_configured' }, 503)
@@ -55,7 +71,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     let prompt = ''
     if (type === 'similar') {
-      const site = targetTitle ? `${targetTitle} (${targetUrl || ''})` : targetUrl || '该网站'
+      // similar 分支此前无上限内插书签标题/URL：同样截断 + 消毒，防撑爆 prompt / 提示词注入
+      const safeTitle = sanitizeForPrompt(targetTitle)
+      const safeUrl = sanitizeForPrompt(targetUrl)
+      const site = safeTitle ? `${safeTitle} (${safeUrl || ''})` : safeUrl || '该网站'
       prompt = `你是一个资深互联网工具与高价值软件挖掘专家。
 用户正在寻找与网站【${site}】功能相近、定位相似的优秀同类平台、优质竞品或开源平替工具。
 
@@ -76,8 +95,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 ]
 直接输出 JSON，不要任何 Markdown 标记或多余文字。`
     } else {
-      // 长度上限 + trim（并容错非字符串入参），防止超长/脏 query 直灌 prompt
-      const q = String(query ?? '').trim().slice(0, MAX_QUERY_LEN)
+      // 复用统一消毒：长度上限 + 去控制字符/反引号 + 折叠空白，防超长/脏 query 直灌 prompt
+      const q = sanitizeForPrompt(query)
       if (!q) {
         return jsonResponse({ success: false, error: 'empty_query' }, 400)
       }
@@ -135,7 +154,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     return jsonResponse({ success: false, error: 'empty_result' })
-  } catch (err: any) {
-    return jsonResponse({ success: false, error: err?.message || 'internal_error' }, 500)
+  } catch {
+    // 固定错误码，绝不回显 err.message（避免泄漏上游响应 / 堆栈 / 内部 URL）
+    return jsonResponse({ success: false, error: 'internal_error' }, 500)
   }
 }

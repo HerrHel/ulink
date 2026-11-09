@@ -571,10 +571,11 @@ const displayCards = computed<TierCardView[]>(() => {
       perMonthText: '永久免费使用',
       footerNote: '永久免费使用，随心体验。',
       bullets: [
-        { text: '多端端到端加密同步', sub: '本地 PBKDF2/AES-GCM 加密，跨端即时协同' },
+        // 合规修订：加密范围改为仅账号字段，其余明文；已下线能力改为轻量平台解析
+        { text: '仅账号字段端到端加密同步', sub: '仅账号字段本机加密，标题、网址、笔记明文存储' },
         { text: '无限层级分类与 Group 笔记', sub: '支持无限嵌套树与 TipTap 富文本卡片排版' },
         { text: 'AI 智能预填体验', sub: '存入 URL 自动提取标题与摘要（日限 20 次）' },
-        { text: '音视频轻量解析体验', sub: '解析 B站/YouTube/抖音等平台基础信息（日限 1 次）' },
+        { text: '轻量平台解析体验', sub: '解析视频公开标题、简介与字幕并生成摘要（日限 1 次）' },
         { text: '本地秒级模糊与拼音检索', sub: '首字母拼音快速定位与概念模糊匹配' },
         { text: '90 天收藏历史版本回溯', sub: '误删或改动随时从历史记录撤销还原' },
       ],
@@ -628,18 +629,19 @@ const displayCards = computed<TierCardView[]>(() => {
     let savingsText: string | undefined
 
     if (isYearly) {
+      // 合规修订：去限时/限量包装与硬编码月均金额；省额注明「较按月订阅同周期合计省」
       chineseName = 'PRO 年付'
-      desc = t('purchase.yearlySlogan') || '高频生产力首选，折合仅 ¥9/月（每天不到 3 毛钱），尊享全功能与优先通道。'
-      footerNote = t('purchase.earlyBirdFootnote') || '首发早鸟特权：开通即锁定当期价格，整个订阅期内不再调价；到期续费按届时公示价格。'
-      if (savingCents > 0) savingsText = `首发早鸟立省 ${yen(savingCents)}（较按月省 ${savingPct}%）· 订阅期内不调价`
+      desc = t('purchase.yearlySlogan') || '高频生产力首选，订阅期内价格锁定，尊享全功能与优先通道。'
+      footerNote = t('purchase.earlyBirdFootnote') || '订阅期内价格锁定：开通即锁定当期价格，整个订阅期内不再调价；到期续费按届时公示价格。'
+      if (savingCents > 0) savingsText = `较按月订阅同周期合计省 ${yen(savingCents)}（省 ${savingPct}%）· 订阅期内不调价`
     } else if (isQuarterly) {
       chineseName = 'PRO 季付'
-      desc = t('purchase.quarterlySlogan') || '季度进阶首选，尽享高频自动化整理与音视频提取，折算更优惠。'
+      desc = t('purchase.quarterlySlogan') || '季度进阶首选，尽享高频自动化整理与轻量平台解析，折算更优惠。'
       footerNote = t('purchase.quarterlyFootnote') || '单次开通即刻生效，季度进阶优选，到期不自动续费。'
       if (savingCents > 0) savingsText = `进阶立省 ${yen(savingCents)}（省 ${savingPct}%）· ${perMonth(p)}`
     } else if (isMonthly) {
       chineseName = 'PRO 月付'
-      desc = t('purchase.monthlySlogan') || '灵活按月进阶，解锁音视频情报提炼与 AI 知识深加工，无续费压力。'
+      desc = t('purchase.monthlySlogan') || '灵活按月进阶，解锁轻量平台解析与 AI 知识深加工，无续费压力。'
       footerNote = t('purchase.monthlyFootnote') || '单次开通即刻生效，随订随用，到期不自动续费。'
       // 月付即基准价，没有可对比的更高参照价——不显示划线原价与立省
     }
@@ -667,9 +669,10 @@ const displayCards = computed<TierCardView[]>(() => {
     const aiChars = f['ai.tokens.monthly'] ? `${Math.round((f['ai.tokens.monthly'] * 2) / 10000)} 万` : '40 万'
 
     const bullets: FeatureBullet[] = [
+      // 合规修订：平台视频深度解析已下线，能力名统一为轻量平台解析与聊天媒体解析
       {
-        text: '音视频深度情报提取（每日 10 次）',
-        sub: '支持 B站、YouTube、抖音等主流平台，一键提取视频中提及的网站、工具清单与核心摘要；受平台风控影响时可能降级',
+        text: '轻量平台解析（每日 10 次）',
+        sub: '解析视频公开标题、简介与字幕，生成 AI 摘要与工具网址；不抓取播放地址',
         highlight: true,
       },
       {
@@ -688,21 +691,23 @@ const displayCards = computed<TierCardView[]>(() => {
         highlight: true,
       },
       {
-        text: '多端不限设备端到端加密同步',
-        sub: '手机、电脑即时无缝协同；军工级本地端到端加密，除你之外全网无人能见',
+        // 合规修订：加密范围如实说明为仅账号字段，其余内容明文存储
+        text: '仅账号字段端到端加密 · 不限设备',
+        sub: '手机、电脑即时无缝协同；仅账号字段本机加密，标题、网址、笔记等明文存储',
         highlight: false,
       },
       {
-        text: '实验室：多媒体 ASR/OCR 深度解析（每日 2 次体验）',
+        text: '实验室：聊天媒体解析（每日 2 次体验）',
         sub: '在聊天框上传视频/音频/截图，智能提取口播字幕与画面文字；文件处理完即删除，保护隐私',
         highlight: false,
       },
     ]
 
     if (isYearly) {
+      // 合规修订：改为中性表述「订阅期内价格锁定」，不暗示限时/限量
       bullets.unshift({
-        text: '首发早鸟特惠 · 订阅期内价格锁定',
-        sub: savingCents > 0 ? `较按月订阅省 ${yen(savingCents)}，整个订阅期内不调价` : '整个订阅期内不调价',
+        text: '订阅期内价格锁定',
+        sub: savingCents > 0 ? `较按月订阅同周期合计省 ${yen(savingCents)}，整个订阅期内不调价` : '整个订阅期内不调价',
         highlight: true,
       })
       bullets.push({

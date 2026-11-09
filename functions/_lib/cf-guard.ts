@@ -7,22 +7,20 @@
  *  3. 轻量进程内软限流（单 isolate 软闸，非全局硬闸）。
  *
  * 设计前提：生产主站在 CloudBase（https://ulink.ren），本函数部署在
- * https://ulink.pages.dev。浏览器跨站 fetch 一定带 Origin；无 Origin 的请求
- * 只可能是同源 / 本地开发 / 服务端直连，一律放行（见 guardCfRequest 注释）。
+ * https://ulink.pages.dev（CF Pages 已退役，不再承载本站生产流量）。浏览器跨站
+ * fetch 一定带 Origin；无 Origin 的请求只可能是同源 / 本地开发 / 服务端直连，
+ * 一律放行（见 guardCfRequest 注释）。
  */
 
-/** 精确白名单（origin 归一化后比较，端口参与匹配）。 */
+/** 精确白名单：退役收口后只放行主站 / 已退役的 CF Pages apex / 本地 dev（origin 归一化后比较，端口参与匹配）。 */
 const ALLOWED_ORIGINS = new Set<string>([
   'https://ulink.ren',
+  'https://ulink.pages.dev',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
-  'https://ulink.pages.dev',
 ])
-
-/** Cloudflare Pages 预览子域后缀（配合 URL.hostname 解析，不对整条 Origin 做 includes）。 */
-const PREVIEW_SUFFIX = '.ulink.pages.dev'
 
 /** CloudBase OIDC userinfo 端点：带 Authorization: Bearer <token> 访问，成功即 200。 */
 const OIDC_USERINFO_URL =
@@ -32,9 +30,10 @@ const OIDC_USERINFO_URL =
 const AUTH_TIMEOUT_MS = 8000
 
 /**
- * Origin 白名单判定：一律先经 URL 解析，再基于 hostname 判断，
- * 绝不对整条 Origin 做 `includes(...)`（否则 `https://evil.com/?x=ulink.pages.dev`
- * 之类会被误放行）。
+ * Origin 白名单判定：一律先经 URL 解析，再做精确 origin 比对。
+ * 退役收口：不再用 `endsWith('.ulink.pages.dev')` 放行任意预览子域，也不对整条 Origin
+ * 做 `includes(...)`（否则 `https://evil.com/?x=ulink.pages.dev` 之类会被误放行）。
+ * 本模块没有环境变量白名单机制，故直接采用上面的显式枚举。
  */
 function isAllowedOrigin(origin: string): boolean {
   let parsed: URL
@@ -44,18 +43,7 @@ function isAllowedOrigin(origin: string): boolean {
     // 例如 `Origin: null`（沙箱 iframe / file://）或非法字符串 → 不放行
     return false
   }
-
-  if (ALLOWED_ORIGINS.has(parsed.origin)) return true
-
-  // *.ulink.pages.dev 预览子域：仅 https，且必须是 ulink.pages.dev 的子域
-  // （apex 由上面的精确白名单处理，hostname 不带前导点，不会命中这里）。
-  if (parsed.protocol === 'https:' && parsed.hostname.endsWith(PREVIEW_SUFFIX)) {
-    const sub = parsed.hostname.slice(0, -PREVIEW_SUFFIX.length)
-    // 只允许合法的 DNS 标签（可多级），排除空串与异常字符
-    if (/^[a-z0-9-]+(\.[a-z0-9-]+)*$/i.test(sub)) return true
-  }
-
-  return false
+  return ALLOWED_ORIGINS.has(parsed.origin)
 }
 
 /**

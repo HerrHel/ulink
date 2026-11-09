@@ -1,36 +1,19 @@
 /**
- * /s/c/[sid] — 分类分享同域 SSR（Cloudflare Pages Function）。
+ * /s/c/[sid] — 历史 CF 版分类分享页同域 SSR（已退役，仅保留重定向）。
  *
- * 分类分享链接 `https://ulink.ren/s/c/<share_id>`（share_id 为 public_category_shares
- * 表主键，由 upsert_public_category_share RPC 幂等生成）。本函数服务端渲染完整 HTML，
- * 与组分享 /s/<gid> 同款 head/样式，社交爬虫可读 og:*（含分类名 + 书签/组计数）。
+ * 退役收口：生产主站已迁国内 CloudBase，ulink.pages.dev 不再是本站端点，
+ * CF Functions 不承载生产流量。本函数历史上完全没有 get_share_secret / 票据 /
+ * get_public_group_verified 密码判定，且 24h stale 缓存在取数前命中——一旦 CF Pages
+ * 被重新部署，就会复活成「绕过主站验密的第二入口」。
  *
- * 数据：复用 Supabase RPC `get_public_category`（SECURITY DEFINER，列级隔离，
- * 已排除 username/password/user_id），以 anon key 调用即可——最小权限。
- * 热更新：每次请求实时读库，分享者增删改分类下书签/组后分享页自动反映。
- *
- * 环境变量（同 /s/[gid].ts）：
- *   SUPABASE_URL / SUPABASE_ANON_KEY / APP_ORIGIN
+ * 因此这里不做任何缓存读取、不取数、不渲染 HTML：在任何缓存/取数之前直接 302 到
+ * https://ulink.ren/s/c/<sid>，把验密交给 CloudBase 网关。旧 Supabase RPC 与边缘缓存
+ * 代码路径已整体删除，仅保留 onRequestGet 导出名以维持路由契约。
  */
-import { renderShareCategoryPage, renderNotFoundPage, renderUnavailablePage, type ShareLocale, type PublicGroup, type PublicBookmark, type CatLayout } from "../../_lib/share-render.js"
-// 函数内边缘缓存（Cache API）：与 s/[gid].ts 同口径，设计见 _lib/share-cache.ts
-import {
-  matchShareCache, putShareCache, shareCacheKey, shareStaleKey,
-  EDGE_TTL_S, STALE_TTL_S,
-} from "../../_lib/share-cache.js"
-
-interface ShareEnv {
-  SUPABASE_URL?: string
-  SUPABASE_ANON_KEY?: string
-  APP_ORIGIN?: string
-}
 
 interface ShareContext {
   params: { sid?: string }
-  env: ShareEnv
   request: Request
-  /** Pages Functions 运行时提供；类型面手动声明（functions 不参与 tsc 门禁） */
-  waitUntil: (p: Promise<unknown>) => void
 }
 
 /** 校验分享 id：与组分享同口径（字母数字 _ -，2-64 位）。 */
@@ -38,124 +21,23 @@ function isValidShareId(sid: string): boolean {
   return /^[a-zA-Z0-9_-]{2,64}$/.test(sid)
 }
 
-/** 解析渲染语言：显式 ?lang= 优先，其次 Accept-Language 头，兜底 zh-CN。 */
-function resolveLocale(url: URL, acceptLanguage: string): ShareLocale {
-  const explicit = url.searchParams.get("lang")
-  if (explicit === "zh-CN" || explicit === "en-US") return explicit
-  const al = (acceptLanguage || "").toLowerCase()
-  if (al.startsWith("zh")) return "zh-CN"
-  return "en-US"
-}
-
-/** 检测是否为移动端请求（用于无显式 layout 参数时的智能自适应：手机默认为 list，电脑默认为 grid） */
-function isMobileRequest(request: Request): boolean {
-  const chMobile = request.headers.get("sec-ch-ua-mobile")
-  if (chMobile === "?1") return true
-  const ua = (request.headers.get("user-agent") || "").toLowerCase()
-  return /android|iphone|ipad|ipod|mobile|windows phone/i.test(ua)
-}
-
 export async function onRequestGet(context: ShareContext): Promise<Response> {
+  // 退役收口：不读边缘缓存、不打 Supabase 旧库，直接交给主站验密网关接管
+  const noStoreHeaders = {
+    "cache-control": "no-store",
+    "x-robots-tag": "noindex, nofollow",
+  }
+
   const sid = String(context.params.sid || "").trim()
   if (!isValidShareId(sid)) {
-    return new Response("bad request", { status: 400, headers: { "x-share-render": "v2" } })
+    return new Response("bad request", { status: 400, headers: noStoreHeaders })
   }
 
   const url = new URL(context.request.url)
-  const locale = resolveLocale(url, context.request.headers.get("accept-language") || "")
-  const rawLayout = url.searchParams.get("layout")
-  const isMobile = isMobileRequest(context.request)
-  const defaultLayout: CatLayout = isMobile ? "list" : "grid"
-  const layout: CatLayout = rawLayout === "list" || rawLayout === "mini-grid" || rawLayout === "grid" ? rawLayout : defaultLayout
-
-  // 边缘新鲜命中：直接返回，不打 Supabase RPC（无显式 layout 时隔离设备类型，避免手机命中桌面缓存）
-  const cacheSearch = rawLayout ? url.search : (url.search ? `${url.search}&_dev=${isMobile ? 'm' : 'd'}` : `?_dev=${isMobile ? 'm' : 'd'}`)
-  const cacheKey = shareCacheKey(url.origin, url.pathname, cacheSearch)
-  const hit = await matchShareCache(cacheKey)
-  if (hit) {
-    const res = new Response(hit.body, hit)
-    res.headers.set("x-share-cache", "HIT")
-    res.headers.set("x-share-render", "v2")
-    return res
-  }
-
-  const supabaseUrl = (context.env.SUPABASE_URL || "").replace(/\/+$/, "")
-  const anonKey = context.env.SUPABASE_ANON_KEY || ""
-  const appOrigin = (context.env.APP_ORIGIN || "https://ulink.ren").replace(/\/+$/, "")
-  if (!supabaseUrl || !anonKey) {
-    return new Response("server misconfigured", { status: 500, headers: { "x-share-render": "v2" } })
-  }
-
-  let data: { category?: unknown; groups?: unknown; bookmarks?: unknown } | null = null
-  let upstreamFailed = false
-  try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/rpc/get_public_category`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        authorization: `Bearer ${anonKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ p_share_id: sid }),
-    })
-    if (res.ok) {
-      data = (await res.json()) as { category?: unknown; groups?: unknown; bookmarks?: unknown }
-    } else {
-      upstreamFailed = true
-    }
-  } catch {
-    upstreamFailed = true
-  }
-
-  // 与 /s/[gid].ts 同口径：上游故障先试 24h 兜底副本（STALE），没有才 503（no-store）
-  if (upstreamFailed) {
-    const stale = await matchShareCache(shareStaleKey(cacheKey))
-    if (stale) {
-      const res = new Response(stale.body, stale)
-      res.headers.set("x-share-cache", "STALE")
-      res.headers.set("x-share-render", "v2")
-      res.headers.set("cache-control", "public, max-age=60")
-      return res
-    }
-    return new Response(renderUnavailablePage(locale), {
-      status: 503,
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "no-store",
-        "x-share-render": "v2",
-      },
-    })
-  }
-
-  if (!data || !data.category) {
-    return new Response(renderNotFoundPage(locale), {
-      status: 404,
-      headers: { "content-type": "text/html; charset=utf-8", "x-share-render": "v2" },
-    })
-  }
-
-  // 同域 canonical/og:url：直接用 /s/c/<share_id> 完整 URL。
-  const shareUrl = `${appOrigin}/s/c/${encodeURIComponent(sid)}`
-  const html = renderShareCategoryPage(
-    data.category as Parameters<typeof renderShareCategoryPage>[0],
-    (data.groups || []) as PublicGroup[],
-    (data.bookmarks || []) as PublicBookmark[],
-    sid,
-    shareUrl,
-    appOrigin,
-    locale,
-    layout,
-  )
-  // 双写边缘缓存：主键 5 分钟新鲜 + 24h 故障兜底副本
-  context.waitUntil((async () => {
-    await putShareCache(context.waitUntil, cacheKey, html, EDGE_TTL_S)
-    await putShareCache(context.waitUntil, shareStaleKey(cacheKey), html, STALE_TTL_S)
-  })())
-  return new Response(html, {
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "x-share-render": "v2",
-      "x-share-cache": "MISS",
-    },
+  // 保留 query（如 ?lang=zh-CN），目标路径与本站同构，由 CloudBase 验密网关处理
+  const target = `https://ulink.ren/s/c/${encodeURIComponent(sid)}${url.search}`
+  return new Response(null, {
+    status: 302,
+    headers: { location: target, ...noStoreHeaders },
   })
 }

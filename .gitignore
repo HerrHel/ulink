@@ -45,7 +45,6 @@ __pycache__/
 /test-results/
 /playwright-report/
 supabase/.temp/
-/extension/lib/supabase.js
 .dev.vars
 .wrangler/
 dist_deploy/

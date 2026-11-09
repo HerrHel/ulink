@@ -12,7 +12,6 @@
   },
   "permissions": [
     "sidePanel",
-    "tabs",
     "activeTab",
     "contextMenus",
     "scripting",

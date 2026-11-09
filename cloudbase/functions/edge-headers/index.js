@@ -123,16 +123,31 @@ const server = http.createServer(async (req, res) => {
     }
 
     const upstreamUrl = STATIC_ORIGIN + url.pathname + url.search
+    const staticOrigin = new URL(STATIC_ORIGIN).origin
     let upstream
     try {
-      upstream = await fetch(upstreamUrl, {
-        method: 'GET',
-        redirect: 'follow',
-        headers: { accept: req.headers.accept || 'text/html,application/xhtml+xml' },
-        signal: AbortSignal.timeout(8000),
-      })
+      // redirect:'manual'：不自动跟随，逐跳校验 Location 的 origin 必须等于静态源，
+      // 否则按失败处理（旧版 redirect:'follow' 不校验最终 URL，可能被导向外部地址）
+      let target = upstreamUrl
+      for (let hop = 0; hop < 3; hop++) {
+        upstream = await fetch(target, {
+          method: 'GET',
+          redirect: 'manual',
+          headers: { accept: req.headers.accept || 'text/html,application/xhtml+xml' },
+          signal: AbortSignal.timeout(8000),
+        })
+        const loc = upstream.headers.get('location')
+        const isRedirect = [301, 302, 303, 307, 308].includes(upstream.status) && loc
+        if (!isRedirect) break
+        const next = new URL(loc, target)
+        if (next.origin !== staticOrigin) {
+          throw new Error(`upstream redirect to non-static origin: ${next.origin}`)
+        }
+        target = next.toString()
+        if (hop === 2) throw new Error('too many redirects')
+      }
     } catch (e) {
-      // 上游异常时：优先返回 STALE 兜底缓存
+      // 上游异常/重定向到外部：优先 STALE 兜底缓存
       if (cached && cached.body) {
         console.warn('[edge-headers] upstream failed, serving stale cache:', e && e.message)
         res.writeHead(cached.status, { ...cached.headers, 'x-edge-cache': 'STALE' })
@@ -140,10 +155,11 @@ const server = http.createServer(async (req, res) => {
         else res.end(cached.body)
         return
       }
-      // 无缓存兜底则 302 到静态托管原文
+      // 无缓存兜底则返回带 SECURITY_HEADERS 的 502：旧版 302 到静态托管原文，
+      // 该响应与后续页面都没有任何安全头
       console.error('[edge-headers] upstream failed:', e && e.message)
-      res.writeHead(302, { Location: upstreamUrl })
-      res.end()
+      res.writeHead(502, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' })
+      res.end('bad gateway')
       return
     }
 

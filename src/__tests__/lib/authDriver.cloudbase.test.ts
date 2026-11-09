@@ -11,7 +11,9 @@
 import { describe, it, expect } from 'vitest'
 import { createCloudBaseAuthDriver } from '../../lib/authDriver.js'
 
-type VerifyFn = (arg: { token: string }) => Promise<{ error?: { message: string } | null }>
+// 真实契约是 { data, error }：verifyOtp / 改密闭包也应带 data，fake 不能只给 error，
+// 否则上层将来读 data 的分支会被 fake 掩盖（返回契约要如实）。
+type VerifyFn = (arg: { token: string }) => Promise<{ data?: unknown; error?: { message: string } | null }>
 
 /** 最小可用的 fake CloudBase auth：记录调用、可控返回 */
 function makeFakeAuth(opts?: {
@@ -44,13 +46,13 @@ function makeFakeAuth(opts?: {
       const verify: VerifyFn = async (v) => {
         lastVerify = verify
         calls.push({ method: 'verifyOtpClosure', args: v })
-        return { error: opts?.verifyError ?? null }
+        return { data: {}, error: opts?.verifyError ?? null }
       }
       return { data: opts?.noClosure ? {} : { verifyOtp: verify }, error: null }
     },
     async signOut() {
       calls.push({ method: 'signOut' })
-      return { error: null }
+      return { data: null, error: null }
     },
     async signInWithPassword(arg: { email: string; password: string }) {
       calls.push({ method: 'signInWithPassword', args: arg })
@@ -63,7 +65,7 @@ function makeFakeAuth(opts?: {
         data: {
           updateUser: async (arg: { nonce: string; password: string }) => {
             calls.push({ method: 'resetClosure', args: arg })
-            return { error: opts?.verifyError ?? null }
+            return { data: {}, error: opts?.verifyError ?? null }
           },
         },
         error: null,

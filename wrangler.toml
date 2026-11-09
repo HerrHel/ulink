@@ -11,6 +11,8 @@ name = "ulink"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-09-01"
 
+# 历史配置：CF Pages 已不作为本站部署目标（生产已迁国内 CloudBase），
+# 以下 Supabase / APP_ORIGIN 变量仅保留回滚可能，勿删除取值。
 [vars]
 SUPABASE_URL = "https://yqouglfopbmujkqmjgpu.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlxb3VnbGZvcGJtdWprcW1qZ3B1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NjI2NjAsImV4cCI6MjA5NTUzODY2MH0.jiS802kT9rZZibDC8N3hB1cyvSxHV5xHs9pNjE7Wmnw"

@@ -12,6 +12,7 @@
 import { computed, ref, toRef } from 'vue'
 import { useAuth } from './useAuth.js'
 import { useDataStore } from '../../stores/data.js'
+import { hasAccountSwitched, clearAccountSwitched } from '../../stores/auth.js'
 import { useSyncStore } from '../../stores/sync.js'
 import {
   enqueueSyncOps, syncOpsCount, clearAllSyncOps, type SyncOp,
@@ -109,7 +110,7 @@ export function useCloudSync() {
   /** 绕过 3 秒防抖即刻推送（用于清空回收站/单项彻底删除等高危操作） */
   async function syncImmediate(): Promise<boolean> {
     if (!isLoggedIn.value) return false
-    enqueueDirtyAsOps()
+    await enqueueDirtyAsOps()
     if (_syncTimer) {
       clearTimeout(_syncTimer)
       _syncTimer = null
@@ -364,7 +365,14 @@ export function useCloudSync() {
       // 按「云端缺失」补推会把 A 端已删除的条目以旧存活快照推回云端（复活）。故
       // pull 成功才补推；失败侧的本地脏数据由 _onOnline/_onVisibilityChange 的
       // 常规增量链路补上，不因跳过本轮补推而丢失。
-      if (pulled) await _enqueueMissingToCloud(userId)
+      if (pulled) {
+        // 换账号登录时本地仍保留上一账号的数据（本地权威是有意设计），
+        // 但绝不能把这份存量当作新账号基线补推到 B 的云端。
+        if (hasAccountSwitched()) {
+          console.warn('[sync] 检测到账号切换，跳过跨账号补推（保留本地数据）')
+          clearAccountSwitched()
+        } else await _enqueueMissingToCloud(userId)
+      }
 
       // 首轮基线上传失败退避重试：首次登录/注册的用户要把本机长期积累的成百上千条
       // 数据一次性上云，瞬时故障（限流、握手、冷启动）概率远高于日常增量。
@@ -415,7 +423,7 @@ export function useCloudSync() {
       void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
         await pullChanges()
         if (syncStore.autoSync) {
-          enqueueDirtyAsOps()
+          await enqueueDirtyAsOps()
           await pushFromQueue()
         }
       }))

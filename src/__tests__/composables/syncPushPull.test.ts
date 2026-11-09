@@ -35,6 +35,9 @@ vi.mock('../../stores/storage.js', async (importOriginal) => {
           retries: 0,
         })
       }
+      // 与真实实现一致：成功返回 true。产品代码据此判断是否回填 dirty / 清 pending，
+      // mock 返回 undefined 会被 fail-closed 当成入队失败，导致 pending 断言全红。
+      return true
     },
     drainSyncOps: async () => [..._ops],
     removeSyncOps: async (ids: number[]) => {
