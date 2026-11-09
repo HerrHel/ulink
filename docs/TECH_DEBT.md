@@ -4,17 +4,22 @@
 > **2026-10-31 追加**：新增 §零（文档核对 + 线上状态发现），并修正正文中已失效的数字/结论；历史表格保留「当时快照」语义，引用前先看行内注记。
 > 重要澄清：此前统计的「106 处 TODO」为**误报**——正则把恢复密钥占位符 `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` 里的 `XXX` 当成了 HACK 标记，加上测试文件里的同类占位符。源码内**没有任何真实的 TODO/FIXME/HACK 注释**。
 
-## 依赖：dev 工具链已知漏洞（2026-11-09）
+## 依赖：dev 工具链已知漏洞（2026-11-09，2026-11-09 晚更新）
 
-生产依赖经 `npm audit --omit=dev --audit-level=moderate` 为 **0 漏洞**；以下 high 漏洞全部位于 devDependencies 的传递依赖，不进入 `dist/`：
+生产依赖经 `npm audit --omit=dev --audit-level=moderate` 为 **0 漏洞**。dev 侧分三类：
 
-| 包 | 来源链 | 处置 |
-|---|---|---|
-| `brace-expansion` 2.0.0-2.1.6 / 4.0.0-5.0.11 | vitest / eslint / filelist | `npm audit fix` 可修，但本仓执行会崩（历史已知），待手工定向升级 |
-| `decode-uri-component` <=0.5.0 | `@cloudbase/manager-node` → cos-nodejs-sdk-v5 → conf | 修复需 `--force` 升级 manager-node 4.10.6（breaking），只影响部署 CLI，暂缓 |
-| `ajv` / `conf` / `@vitest/mocker`（moderate） | 同上 + vitest | 同上 |
+**已修（overrides 定向 patch）**
+- `brace-expansion`：`overrides` 固定 `^2 → 2.1.7`、`^5 → 5.0.12`，消掉 4 个 DoS advisory（GHSA-mh99-v99m-4gvg / rgw5-rvv9-x895 / q2hr-2g5m-vwhr / qhr7-859c-m2p7 / 6j4f-fj2g-mc7p）。不动 minimatch/glob 主版本，`npm ci` 后全量 5725 用例与 `ext:pack` 均正常。
 
-门禁口径：CI 对 **生产依赖** 阻塞（moderate+），对 **dev 工具链** 只输出 warning。若日后 dev 依赖进入生产 bundle（例如把 CLI 逻辑搬进前端），必须同步升级并恢复阻塞。
+**暂缓（升级成本 > 收益）**
+
+| 包 | 级别 | 来源链 | 为什么不修 |
+|---|---|---|---|
+| `vite` 8.1.5 | high | 直接 devDependency | advisory 是**非 Windows 本地 dev server** 的路径匹配问题；生产是静态产物 + CloudBase，不暴露 dev server。当前 8.1.5 → 最新 8.3.7 跨两个 minor，需重新验证 PWA/purgecss 产物，收益不足 |
+| `@cloudbase/manager-node` 5.9.2 及其链（`request` / `decompress` / `form-data` / `fast-xml-parser` / `decode-uri-component` / `query-string` / `@cloudbase/cloud-api` / `@cloudbase/toolbox`） | 4 critical + 5 high | 部署 CLI（devDependency） | 唯一修复是**降级**到 4.10.6，会破坏现有 `deploy-cloudbase-fn.mjs`（当前按 5.x 的 `fn deploy --httpFn --path` / `config update` 交互写）。且只影响本地运维处理不受信输入，不在生产路径 |
+| `undici` / `fast-uri` | high | vite / ajv 传递 | `npm audit fix` 本仓会崩（历史已知），待定向 overrides 并回归 |
+
+门禁口径：CI 对**生产依赖**阻塞（moderate+），对 **dev 工具链**只输出 warning（见 `.github/workflows/ci.yml` 的「Dependency Audit (dev toolchain, advisory)」）。若日后 dev 依赖进入生产 bundle（例如把 CLI 逻辑搬进前端），必须同步升级并恢复阻塞。
 
 ## 零、2026-10-31 新增（文档核对 + 线上状态，按优先级）
 
