@@ -39,6 +39,7 @@ export default defineConfig({
       VITE_BACKEND: '',
       VITE_SUPABASE_URL: 'https://test.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'test-anon-key',
+      VITE_CLOUDBASE_FN_BASE: 'https://test.ulink.ren',
     },
     // 默认 5s 对真实 PBKDF2（600K 迭代）× 多次派生的重测试过紧：低核/高负载机器上
     // 4s 级用例（useVault resetVaultWithRecoveryKey / forkPublicGroup 等）偶发超时红，

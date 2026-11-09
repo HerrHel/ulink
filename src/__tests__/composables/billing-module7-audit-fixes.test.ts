@@ -216,16 +216,21 @@ describe('模块 7：计费、会员权益、交易链路与云函数微服务�
 
   // ── 8. invokeCbFunction: 未传 signal 时自动挂载默认超时守护 ──
   it('8. invokeCbFunction: 当调用方未提供 signal 时自动挂载 15s 兜底超时信号，杜绝死链扫描等无界挂起', async () => {
+    vi.stubEnv('VITE_CLOUDBASE_FN_BASE', 'https://test.ulink.ren')
     let capturedSignal: any = null
     vi.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
       capturedSignal = init?.signal
       return Promise.resolve(new Response(JSON.stringify({ fetch_outcome: 'ok', http_status: 200 }), { status: 200 }))
     })
 
-    const res = await invokeCbFunction('check-link', { url: 'https://example.com' })
-    expect(capturedSignal).toBeInstanceOf(AbortSignal)
-    expect(res.error).toBeNull()
-    expect(res.data).toEqual({ fetch_outcome: 'ok', http_status: 200 })
+    try {
+      const res = await invokeCbFunction('check-link', { url: 'https://example.com' })
+      expect(capturedSignal).toBeInstanceOf(AbortSignal)
+      expect(res.error).toBeNull()
+      expect(res.data).toEqual({ fetch_outcome: 'ok', http_status: 200 })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   // ── 9. 云函数 IP 防伪造提取规范：优先 x-real-ip，其次 XFF 最后一跳 ──
