@@ -93,11 +93,22 @@ function verifyJwtWithJwks(token, jwks, opts = {}) {
     return { ok: false, reason: "bad_signature", detail: e.message };
   }
   if (!verified) return { ok: false, reason: "bad_signature" };
+  if (opts.envId) {
+    const expectedIss = `https://${opts.envId}.api.tcloudbasegateway.com`;
+    if (parsed.payload.iss !== expectedIss) {
+      return { ok: false, reason: "rejected", detail: "iss mismatch" };
+    }
+    const aud = parsed.payload.aud;
+    const audiences = Array.isArray(aud) ? aud : [aud];
+    if (!audiences.includes(opts.envId)) {
+      return { ok: false, reason: "rejected", detail: "aud mismatch" };
+    }
+  }
   const sub = parsed.payload.sub;
   if (typeof sub !== "string" || sub.trim() === "") {
     return { ok: false, reason: "no_sub" };
   }
-  return { ok: true, uid: sub, claims: parsed.payload, mode: "offline" };
+  return { ok: true, uid: sub.trim(), claims: parsed.payload, mode: "offline" };
 }
 var JWKS_CACHE = /* @__PURE__ */ new Map();
 var JWKS_TTL_MS = 60 * 60 * 1e3;
@@ -166,13 +177,16 @@ async function verifyCbToken(authHeader, opts) {
     if (keys) {
       offline = verifyJwtWithJwks(token, keys, {
         now: opts.now,
-        clockToleranceSec: opts.clockToleranceSec
+        clockToleranceSec: opts.clockToleranceSec,
+        envId: opts.envId
+        // 传入 envId 才会校验 iss/aud
       });
       if (!offline.ok && offline.reason === "unknown_kid") {
         try {
           offline = verifyJwtWithJwks(token, await loadKeys(true), {
             now: opts.now,
-            clockToleranceSec: opts.clockToleranceSec
+            clockToleranceSec: opts.clockToleranceSec,
+            envId: opts.envId
           });
         } catch {
         }

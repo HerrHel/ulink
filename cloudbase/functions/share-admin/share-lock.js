@@ -124,7 +124,11 @@ function parseCookies(header) {
     const k = seg.slice(0, idx).trim();
     const v = seg.slice(idx + 1).trim();
     if (!k || k in out) continue;
-    out[k] = decodeURIComponent(v);
+    try {
+      out[k] = decodeURIComponent(v);
+    } catch {
+      continue;
+    }
   }
   return out;
 }

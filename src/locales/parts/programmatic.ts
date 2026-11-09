@@ -61,6 +61,9 @@ export const programmaticZh = {
     movedOutOfGroup: '已移出笔记',
     onlySameLevelReorder: '只能在同级书签间拖拽排序',
     movedToCategory: '已移动到分类: {name}',
+    imageNeedFocus: '请先聚焦一个笔记再插入图片',
+    imageInvalid: '仅支持 PNG/JPEG/WebP/GIF/SVG 图片，且单张不超过 {n}MB',
+    imageSkipped: '部分图片超过体积上限或类型不支持，已跳过',
     groupRefAdded: '已添加笔记引用',
 
     // ── 私密空间（useSpaceMove）──
@@ -177,6 +180,9 @@ export const programmaticEn = {
     movedOutOfGroup: 'Moved out of note',
     onlySameLevelReorder: 'Can only reorder bookmarks at the same level',
     movedToCategory: 'Moved to category: {name}',
+    imageNeedFocus: 'Focus a note before inserting images',
+    imageInvalid: 'Only PNG/JPEG/WebP/GIF/SVG images up to {n}MB are supported',
+    imageSkipped: 'Some images were skipped (size limit or unsupported type)',
     groupRefAdded: 'Note reference added',
 
     // ── Private space (useSpaceMove) ──

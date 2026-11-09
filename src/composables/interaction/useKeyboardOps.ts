@@ -205,6 +205,10 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
     }
   }
   if (e.key === 'Escape') {
+    // 根因：confirm/choice 弹窗已在 capture 阶段用 stopImmediatePropagation 独占处理 Esc，
+    // 全局兜底层必须直接 return 交还弹窗自处理，否则会连带关闭底层编辑弹窗丢失未保存内容。
+    const toastStore = useToastStore()
+    if (toastStore.confirmOpen || toastStore.choiceOpen) return
     // 优先层：命中即 return（独占关闭）。顺序即优先级。
     const priority: Array<() => boolean> = [
       () => {

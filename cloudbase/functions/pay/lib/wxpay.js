@@ -128,6 +128,10 @@ async function queryOrder(outTradeNo) {
     // SUCCESS / REFUND / NOTPAY / CLOSED / REVOKED / USERPAYING / PAYERROR
     tradeState: json?.trade_state,
     transactionId: json?.transaction_id || null,
+    // 与 alipay.queryOrder / 本文件 parsePaidNotify 保持同一契约：
+    // pay/index.js 的查单兜底分支读取 paidCents / channelOrderId。
+    channelOrderId: json?.transaction_id || null,
+    paidCents: json?.amount?.total ?? null,
     totalCents: json?.amount?.total ?? null,
     successTime: json?.success_time || null,
     raw: json,
@@ -221,6 +225,15 @@ function parsePaidNotify(headers, rawBody) {
 
   if (resource.trade_state !== 'SUCCESS') {
     return { ok: false, reason: 'not_success', tradeState: resource.trade_state }
+  }
+
+  // 平台证书只能证明「回调由微信签发」，不能证明属于本商户；必须核对商户身份，
+  // 否则另一商户的合法回调可按 out_trade_no 命中本机订单发货（对照 alipay.js:256）。
+  if (process.env.WXPAY_MCHID && resource.mchid && resource.mchid !== process.env.WXPAY_MCHID) {
+    return { ok: false, reason: 'mchid_mismatch' }
+  }
+  if (process.env.WXPAY_APPID && resource.appid && resource.appid !== process.env.WXPAY_APPID) {
+    return { ok: false, reason: 'appid_mismatch' }
   }
 
   return {

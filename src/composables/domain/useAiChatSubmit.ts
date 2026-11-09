@@ -759,10 +759,29 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
               // 真 Agent 多步循环：tool 结果以 role:'tool' 回传后继续放开 Tool Calling，
               // 模型可自主串联多步工具链（如体检 → 收件箱清零 → 建工作台），直至收束结论或达到轮次上限
               const MAX_AGENT_ROUNDS = 4
-              // history 已跳过本轮 user 轮，这里补回一次（与首轮请求同内容，含附件上下文）
+              // 首轮 user 消息由 askMiMoStream 组装成「文本 + image_url + mediaParts」多模态 content；
+              // 续轮若只补回纯文本，模型从第 2 次 LLM 调用起就看不到图片/音视频。这里按首轮
+              // 同口径重构多模态 content 复用为续轮 user 消息，保证 Agent 多步全程可见附件。
+              const roundImageUrls = (unifiedMedia.images || [])
+                .filter((url) => typeof url === 'string' && /^data:image\//i.test(url))
+                .slice(0, 4)
+              const roundMediaParts = Array.isArray(unifiedMedia.mediaParts) ? unifiedMedia.mediaParts : []
+              const imageParts: Array<Record<string, unknown>> = roundImageUrls.map((url) => ({
+                type: 'image_url',
+                image_url: { url },
+              }))
+              let multimodalUserContent: MiMoChatMessage['content'] = promptWithCards
+              if (imageParts.length > 0 || roundMediaParts.length > 0) {
+                const parts: Array<Record<string, unknown>> = [
+                  { type: 'text', text: promptWithCards },
+                  ...imageParts,
+                  ...roundMediaParts,
+                ]
+                multimodalUserContent = parts
+              }
               const roundHistory: MiMoChatMessage[] = [
                 ...history,
-                { role: 'user', content: promptWithCards },
+                { role: 'user', content: multimodalUserContent },
               ]
               let pendingCalls = mimoRes.toolCalls
               let pendingResults = toolResults

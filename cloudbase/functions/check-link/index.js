@@ -50,35 +50,71 @@ const DEFAULT_TIMEOUT_MS = parseInt(process.env.CHECK_LINK_TIMEOUT_MS || '10000'
 /** 每 IP 限流（次/分钟）。原版是每用户 1200/min；v1 无用户身份，改为按 IP 限流，默认同为 1200/min/IP */
 const RATE_LIMIT_PER_MIN = parseInt(process.env.CHECK_LINK_RATE_LIMIT_PER_MIN || '1200', 10)
 const MAX_REDIRECTS = 5
+/** 匿名手动死链检查日额度：无令牌时按 IP 哈希走独立匿名配额键，避免「直接放行」变成无限外呼 */
+const ANON_DAILY_LIMIT = parseInt(process.env.CHECK_LINK_ANON_DAILY_LIMIT || '20', 10)
+/** 窗口略大于 1 天；key 带日期 → 自然日固定桶（与 extract-video 匿名额度同口径） */
+const ANON_QUOTA_WINDOW_SECS = 90000
+
+/** 上海时区（UTC+8）自然日 key：与 extract-video 的日配额口径一致 */
+function shanghaiDateKey() {
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+}
 
 /**
  * 登录用户的每日死链检查额度（plans.features['linkcheck.daily']）。
  * 只统计手动检查（body.mode === 'manual'）；自动巡检按 linkcheck.auto.max 另行限制，
  * 避免一次 500 条巡检把 PRO 的 50 次/日额度瞬间打满。
  * 统一走 consume_daily_feature_quota（内部处理 expired/refunded 回落 free、UTC+8 自然日）。
- * 返回 { ok: true } 或 { ok: false, limit }；鉴权/配额 RPC 失败时 fail-open（不误伤用户）。
+ * 返回 { ok:true } 放行；否则带 status：429 额度耗尽 / 401 令牌无效 / 503 配额服务不可用。
+ * fail-closed：带无效 token 或任何异常都不再 return {ok:true} 静默跳过日配额（对齐 extract-video）。
  */
 async function checkDailyQuota(req, db, mode) {
+  // 自动巡检不消耗手动额度；cb-auth 缺失时无法验签，保持原放行（部署问题另行告警）
   if (!verifyCbToken || mode === 'auto') return { ok: true }
   try {
     const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID })
-    if (!auth || !auth.ok || !auth.uid) return { ok: true }
-    const daily = await db.rpc('consume_daily_feature_quota', {
-      p_uid: auth.uid,
-      p_feature: 'linkcheck.daily',
-      p_key_prefix: 'link-check:uid:',
-    })
-    if (daily.error) {
-      console.error('[check-link] daily quota rpc failed (fail-open):', daily.error)
-      return { ok: true }
+
+    // 登录用户：按 uid 走 linkcheck.daily
+    if (auth.ok) {
+      const daily = await db.rpc('consume_daily_feature_quota', {
+        p_uid: auth.uid,
+        p_feature: 'linkcheck.daily',
+        p_key_prefix: 'link-check:uid:',
+      })
+      if (daily.error) {
+        // fail-closed：配额服务异常不无限放行
+        console.error('[check-link] daily quota rpc failed (fail-closed):', daily.error)
+        return { ok: false, status: 503, error: 'quota_unavailable' }
+      }
+      const d = daily.data || {}
+      return d.ok === false && d.limited === true
+        ? { ok: false, status: 429, limit: d.limit }
+        : { ok: true }
     }
-    const d = daily.data || {}
-    return d.ok === false && d.limited === true
-      ? { ok: false, limit: d.limit }
-      : { ok: true }
+
+    // 带了令牌但验签失败：fail-closed 回 401，绝不静默降级成匿名额度（对齐 extract-video）
+    if (auth.reason !== 'missing') {
+      return { ok: false, status: 401, error: 'invalid_token' }
+    }
+
+    // 确属匿名（无令牌）：走独立匿名配额键，而非直接放行
+    const ipHash = sha256Hex(`${clientIp(req)}|${IP_HASH_SALT}`)
+    const anon = await db.rpc('consume_rate_limit', {
+      p_key: 'link-check:anon:' + ipHash + ':' + shanghaiDateKey(),
+      p_limit: ANON_DAILY_LIMIT,
+      p_window_secs: ANON_QUOTA_WINDOW_SECS,
+    })
+    if (anon.error) {
+      console.error('[check-link] anon quota rpc failed (fail-closed):', anon.error)
+      return { ok: false, status: 503, error: 'quota_unavailable' }
+    }
+    return anon.data === true
+      ? { ok: true, scope: 'anonymous' }
+      : { ok: false, status: 429, scope: 'anonymous', limit: ANON_DAILY_LIMIT }
   } catch (e) {
-    console.error('[check-link] daily quota check failed (fail-open):', e)
-    return { ok: true }
+    // 任何异常都 fail-closed，不再 return {ok:true} 静默跳过日配额
+    console.error('[check-link] daily quota check failed (fail-closed):', e)
+    return { ok: false, status: 503, error: 'quota_unavailable' }
   }
 }
 
@@ -277,17 +313,23 @@ const server = http.createServer(async (req, res) => {
     const body = await readJsonBody(req)
     const { url, bookmark_id, mode } = body
 
-    // ── 登录用户每日手动检查额度（fail-open；匿名/自动巡检不消耗该额度）──
+    // ── 登录用户每日手动检查额度 / 匿名独立额度（fail-closed；自动巡检不消耗）──
     const dailyQuota = await checkDailyQuota(req, db, mode)
     if (!dailyQuota.ok) {
-      sendJson(res, 429, {
-        error: 'linkcheck_daily_exceeded',
-        limit: dailyQuota.limit,
-        message: '今日死链检查次数已用完（免费版 3 次/日、PRO 50 次/日），请明天再试或升级。',
-      }, { ...cors, 'Retry-After': '3600' })
+      const status = dailyQuota.status || 429
+      const error = status === 401 ? 'unauthorized' : status === 503 ? 'quota_unavailable' : 'linkcheck_daily_exceeded'
+      const message = status === 401
+        ? '登录状态已失效，请重新登录后重试'
+        : status === 503
+          ? '服务暂时不可用，请稍后再试'
+          : '今日死链检查次数已用完（免费版 3 次/日、PRO 50 次/日），请明天再试或升级。'
+      const body = { error, message }
+      if (status === 429) body.limit = dailyQuota.limit
+      sendJson(res, status, body, status === 429 ? { ...cors, 'Retry-After': '3600' } : cors)
       return
     }
 
+    const startTime = Date.now()
     let parsedUrl
     try {
       parsedUrl = await _validateUrl(url || '')
@@ -313,7 +355,6 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    const startTime = Date.now()
     let fetch_outcome = 'connect_error'
     let http_status = 0
     let details = {}

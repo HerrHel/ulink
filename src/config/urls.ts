@@ -47,13 +47,6 @@ export const SHARE_FUNCTION_BASE = `${import.meta.env.VITE_SUPABASE_URL || ''}/f
 export const EDGE_ADDON_URL = 'https://microsoftedge.microsoft.com/addons/detail/%E4%B8%8E%E9%93%BE/epjlkfndeonlpjocdafoiaomdigopeeh'
 
 /**
- * 路线 A：海外轻量探活端点（Cloudflare Pages 边缘服务）。
- * 用于国内（CloudBase 上海）探测无法定性（inconclusive）时，提供自由公网的客观第二视角。
- */
-export const OVERSEAS_PROBE_URL =
-  (import.meta.env.VITE_OVERSEAS_PROBE_URL as string | undefined) || 'https://ulink.pages.dev/api/check-link'
-
-/**
  * Cloudflare Pages Functions 基址（「出海跳板」）。
  *
  * 为什么必须用绝对地址：`/api/ai-candidates`、`/api/extract-metadata`、`/api/check-link`
@@ -66,6 +59,15 @@ export const OVERSEAS_PROBE_URL =
  */
 export const CF_FN_BASE =
   ((import.meta.env.VITE_CF_FN_BASE as string | undefined) || 'https://ulink.pages.dev').replace(/\/+$/, '')
+
+/**
+ * 路线 A：海外轻量探活端点（Cloudflare Pages 边缘服务）。
+ * 用于国内（CloudBase 上海）探测无法定性（inconclusive）时，提供自由公网的客观第二视角。
+ * 默认跟随 VITE_CF_FN_BASE（与其余 /api/* 同源），仅显式配置 VITE_OVERSEAS_PROBE_URL 时覆盖；
+ * 不再硬编码 ulink.pages.dev，换部署环境只需改一处（CF_FN_BASE 自带合理默认兜底）。
+ */
+export const OVERSEAS_PROBE_URL =
+  (import.meta.env.VITE_OVERSEAS_PROBE_URL as string | undefined) || `${CF_FN_BASE}/api/check-link`
 
 /**
  * 生成 CF Functions 端点地址。

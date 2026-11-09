@@ -104,13 +104,10 @@ export async function enqueueSyncOps(ops: Array<Omit<SyncOp, 'id' | 'retries'>>)
       ts: typeof op.ts === 'number' && Number.isFinite(op.ts) ? op.ts : Date.now(),
       retries: 0,
     }))
+    // 不再对「刚入队、尚未推送」的 op 做数量裁剪：IndexedDB 没有 localStorage 的
+    // 5MB 限制，按 id 删最老一批会静默丢掉首次全量同步的本地数据，随后被 pull
+    // 对账误判为「远端已物理删」软删进回收站。死信清理由 pushFromQueue 按 retries 负责。
     await db.syncOps.bulkAdd(plain)
-    const count = await db.syncOps.count()
-    if (count > 1000) {
-      const overflow = count - 1000
-      const oldestKeys = await db.syncOps.orderBy('id').limit(overflow).primaryKeys()
-      if (oldestKeys.length) await db.syncOps.bulkDelete(oldestKeys as number[])
-    }
   } catch (e) {
     console.warn('[IDB] enqueueSyncOps error:', e)
   }

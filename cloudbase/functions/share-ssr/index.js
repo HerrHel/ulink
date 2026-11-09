@@ -107,10 +107,10 @@ const SHARE_SECURITY_HEADERS = {
 }
 
 function sendHtml(res, status, html, extraHeaders) {
-  const defaultCacheControl =
-    status === 200
-      ? 'public, max-age=60, s-maxage=300, stale-while-revalidate=86400'
-      : 'no-store'
+  // 分享内容页禁共享缓存：主人加上访问密码后，public/s-maxage 缓存会让未验密
+  // 访客在 TTL 内继续拿到加密码前的完整 HTML（绕过 SSR 验密前置判定）。
+  // 缓存只保留在函数内 mem-cache，由 get_share_secret 前置判定保护。
+  const defaultCacheControl = status === 200 ? 'private, no-store' : 'no-store'
   res.writeHead(status, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Length': Buffer.byteLength(html),
@@ -305,7 +305,7 @@ const server = http.createServer(async (req, res) => {
         : `?_dev=${isMobile ? 'm' : 'd'}`
   }
 
-  const cacheKey = `${url.pathname}${cacheSearch}`
+  const cacheKey = `${url.pathname}${cacheSearch}|${locale}`
 
   // 有密码的组：先验票据。
   // 未通过 → 只吐密码门（可缓存，但与内容缓存键分离）；
@@ -344,7 +344,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const r = isCategory
       ? await db.rpc('get_public_category', { p_share_id: id })
-      : await db.rpc('get_public_group', { p_gid: id })
+      : await db.rpc('get_public_group_verified', { p_gid: id })
     if (r.error) {
       console.error('[share-ssr] rpc failed:', r.error)
       upstreamFailed = true

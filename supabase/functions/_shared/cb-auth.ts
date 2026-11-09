@@ -38,7 +38,7 @@ export interface CbClaims {
   exp?: number
   iat?: number
   iss?: string
-  aud?: string
+  aud?: string | string[]
   email?: string
   [key: string]: unknown
 }
@@ -136,7 +136,7 @@ export function parseJwt(token: string): ParsedJwt | null {
 export function verifyJwtWithJwks(
   token: string,
   jwks: CbJwk[],
-  opts: { now?: number; clockToleranceSec?: number } = {},
+  opts: { now?: number; clockToleranceSec?: number; envId?: string } = {},
 ): VerifyResult {
   const now = opts.now ?? Date.now()
   const tol = (opts.clockToleranceSec ?? 60) * 1000
@@ -180,11 +180,27 @@ export function verifyJwtWithJwks(
   }
   if (!verified) return { ok: false, reason: 'bad_signature' }
 
+  // 绑定签发方 iss 与受众 aud（实测见 docs/BILLING_DESIGN.md §5.1）：
+  // iss = https://<envId>.api.tcloudbasegateway.com，aud = envId。
+  // 只有传入 envId（生产经 verifyCbToken）才校验；纯函数直测不传则跳过，保持可测性。
+  if (opts.envId) {
+    const expectedIss = `https://${opts.envId}.api.tcloudbasegateway.com`
+    if (parsed.payload.iss !== expectedIss) {
+      return { ok: false, reason: 'rejected', detail: 'iss mismatch' }
+    }
+    const aud = parsed.payload.aud
+    const audiences = Array.isArray(aud) ? aud : [aud]
+    if (!audiences.includes(opts.envId)) {
+      return { ok: false, reason: 'rejected', detail: 'aud mismatch' }
+    }
+  }
+
   const sub = parsed.payload.sub
   if (typeof sub !== 'string' || sub.trim() === '') {
     return { ok: false, reason: 'no_sub' }
   }
-  return { ok: true, uid: sub, claims: parsed.payload, mode: 'offline' }
+  // uid 用 sub.trim()：避免空白字符把不同用户折叠成同一个权益主键
+  return { ok: true, uid: sub.trim(), claims: parsed.payload, mode: 'offline' }
 }
 
 // ── 公钥集拉取（模块级缓存）──────────────────────────────────────────
@@ -308,6 +324,7 @@ export async function verifyCbToken(
       offline = verifyJwtWithJwks(token, keys, {
         now: opts.now,
         clockToleranceSec: opts.clockToleranceSec,
+        envId: opts.envId, // 传入 envId 才会校验 iss/aud
       })
       // kid 未命中 → 密钥可能已轮换，强刷一次再试
       if (!offline.ok && offline.reason === 'unknown_kid') {
@@ -315,6 +332,7 @@ export async function verifyCbToken(
           offline = verifyJwtWithJwks(token, await loadKeys(true), {
             now: opts.now,
             clockToleranceSec: opts.clockToleranceSec,
+            envId: opts.envId,
           })
         } catch {
           /* 保持首次失败结果 */

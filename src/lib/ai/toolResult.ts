@@ -24,6 +24,32 @@ export const PROPOSE_ONLY_TOOLS = new Set([
 /** 后端能力已下线、调用恒为「未执行」的工具（保留分发分支仅为兼容旧会话） */
 export const DISABLED_TOOLS = new Set(['deep_read_video'])
 
+/**
+ * Agent 工具分支里以中文硬编码（非 i18n）的「未执行 / 失败」文案统一在此登记。
+ * 产出方 useAiChatAgent 引用同一份，判定方下方兜底匹配，防两侧漂移导致的
+ * 「失败被判成 executed、模型虚假宣称成功」；含动态原因的用函数构造。
+ */
+export const HARDCODED_NOT_EXECUTED_TEXTS = {
+  batchTagEmpty: '未提供待打标书签列表，未执行打标。',
+  batchTagNone: '未匹配到可打标的书签。',
+  deadlinkNotFound: (target: string) => `书签库中未找到与「${target}」相关的有效书签，未执行死链替换。`,
+  readInvalidUrl: '读取失败：未提供有效公开网址（必须以 http:// 或 https:// 开头）。',
+  readPrivateBlocked: '安全拦截：禁止读取私有局域网或环回地址。',
+  readFailed: (reason: string) => `读取网页失败：${reason}`,
+  fetchException: (reason: string) => `抓取网页异常：${reason}`,
+}
+
+/** 上述硬编码失败文案的前缀（覆盖含动态原因分支），供 inferToolExecStatus 兜底前缀匹配 */
+export const NOT_EXECUTED_TEXT_PREFIXES: readonly string[] = [
+  '未提供待打标书签列表，未执行打标。',
+  '未匹配到可打标的书签。',
+  '书签库中未找到与',
+  '读取失败：',
+  '安全拦截：',
+  '读取网页失败：',
+  '抓取网页异常：',
+]
+
 export interface ToolStatusInput {
   name: string
   args?: Record<string, any>
@@ -43,6 +69,9 @@ export function inferToolExecStatus(input: ToolStatusInput): ToolExecStatus {
   if (input.threw || input.argsParseFailed) return 'failed'
   const text = (input.resultText || '').trim()
   if (input.notExecutedTexts?.some((s) => s && s === text)) return 'not_executed'
+  // 兜底：硬编码失败文案（非 i18n、部分含动态原因）统一按前缀识别，
+  // 避免落到默认 'executed' 让模型虚假宣称成功；旧会话回放无 status 时同样受益
+  if (NOT_EXECUTED_TEXT_PREFIXES.some((p) => text.startsWith(p))) return 'not_executed'
   if (DISABLED_TOOLS.has(input.name)) return 'not_executed'
   if (PROPOSE_ONLY_TOOLS.has(input.name)) return 'proposed'
   // merge_duplicates 只有显式 confirm:true 才真的合并，否则只是出体检卡片

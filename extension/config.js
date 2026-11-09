@@ -1,6 +1,7 @@
 // extension/config.js — 扩展运行时配置（CloudBase：envId + publishable key）
 // L2：集中配置，避免 sidepanel 内联硬编码与主项目漂移；publishable key 本就公开（RLS 保护），
-// 此处仅解决「轮换/多环境」时一处改即可。发布扩展前请与 .env 的 VITE_CLOUDBASE_* 保持一致。
+// 此处仅解决「轮换/多环境」时一处改即可。发布扩展前请与 .env 的 VITE_PUBLISHABLE_KEY 保持一致。
+// （.env 实际变量名是 VITE_PUBLISHABLE_KEY；其值即下方 anon PublishableKey，公开设计，勿改勿外泄。）
 // 切勿写入 service_role / 服务端密钥。
 window.LinkVaultExtConfig = {
   CLOUDBASE_ENV_ID: 'ulink-d1g5srvjo54b1886a',

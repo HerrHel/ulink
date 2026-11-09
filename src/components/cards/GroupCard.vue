@@ -156,7 +156,8 @@ import { openDetail } from '../../composables/ui/useUI.js'
 import { toggleAttrFilter } from '../../composables/domain/useAttrFilter.js'
 import { performUndo, performRedo } from '../../composables/domain/useUndo.js'
 import { useEditorFormat, type FormatKey } from '../../composables/ui/useEditorFormat.js'
-import { uploadAndInsertImages } from '../../composables/domain/useImageUpload.js'
+import { uploadAndInsertImages, isImageFile } from '../../composables/domain/useImageUpload.js'
+import { toast } from '../../lib/toast.js'
 import { handleListCardKeydown } from '../../composables/interaction/listCardKeyboard.js'
 import { useListNav } from '../../composables/useListNav.js'
 import { t, tN } from '../../i18n/index.js'
@@ -296,6 +297,11 @@ function applyColor(hex: string) { _applyColor(hex); saveGroupBody(props.group.i
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
+// 选图前端约束：10MB 上限 + 与 useImageUpload 一致的类型白名单，避免被静默过滤。
+const MAX_IMAGE_SIZE_MB = 10
+const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+
 function pickImage() {
   fileInputRef.value?.click()
 }
@@ -303,8 +309,24 @@ function pickImage() {
 function onPickImage(e: Event) {
   const input = e.target as HTMLInputElement
   const files = Array.from(input.files || [])
-  if (files.length) void uploadAndInsertImages(props.group.id, files)
   input.value = '' // 允许重复选择同一文件
+  if (!files.length) return
+  const focusGid = ui.focusedGroupId
+  // 根因：聚焦组丢失时原实现仍静默上传/被过滤，用户拿不到任何反馈。
+  if (!focusGid) {
+    toast(t('msg.imageNeedFocus'), false)
+    return
+  }
+  // 根因：uploadAndInsertImages 会静默过滤掉非白名单类型/超大文件，需前端先过滤并提示。
+  const valid = files.filter(f => f.size <= MAX_IMAGE_SIZE && isImageFile(f))
+  if (!valid.length) {
+    toast(t('msg.imageInvalid', { n: MAX_IMAGE_SIZE_MB }), false)
+    return
+  }
+  if (valid.length < files.length) {
+    toast(t('msg.imageSkipped'), false)
+  }
+  void uploadAndInsertImages(focusGid, valid)
 }
 
 function askAiAboutGroup() {

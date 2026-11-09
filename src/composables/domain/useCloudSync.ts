@@ -282,7 +282,10 @@ export function useCloudSync() {
     pushIf(ds.siblingGroups, 'sibling_groups')
     pushIf(ds.categories, 'categories')
     pushIf(ds.customAttributes, 'custom_attributes')
-    if (allOps.length) await enqueueSyncOps(allOps)
+    // 分批入队，避免一次性写入超大事务；队列已不再做数量裁剪，故不会丢 op
+    for (let i = 0; i < allOps.length; i += 200) {
+      await enqueueSyncOps(allOps.slice(i, i + 200))
+    }
     return allOps.length
   }
 

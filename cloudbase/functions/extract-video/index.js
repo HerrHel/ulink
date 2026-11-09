@@ -46,7 +46,7 @@ const {
   pickFallbackReason,
   isValidJobId,
 } = require('./routing.js')
-const { isOriginAllowed, buildCorsHeaders } = require('./ssrf-guard.js')
+const { isOriginAllowed, buildCorsHeaders, SsrfRejectError } = require('./ssrf-guard.js')
 const { verifyCbToken } = require('./cb-auth.js')
 
 // 平台域名清单单一真源（scripts/build-fn-assets.mjs 从 src/config/videoPlatforms.json 复制）。
@@ -163,7 +163,10 @@ async function resolveShortLink(parsed, signal) {
   if (!isShortLinkHost(parsed.hostname)) return parsed
   let current = parsed
   for (let hop = 0; hop < MAX_SHORT_LINK_HOPS; hop++) {
-    if (!(await isUrlDnsSafe(current, nodeDnsResolver))) break
+    if (!(await isUrlDnsSafe(current, nodeDnsResolver))) {
+      // DNS/私网校验失败必须 fail-closed 抛错；不能 break 后仍返回 current 继续抓取
+      throw new SsrfRejectError('private_dns', '目标 DNS 解析到内网地址或无法解析')
+    }
     try {
       const res = await fetch(current.href, {
         method: 'GET',
@@ -966,6 +969,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 400, { error: (e && e.message) || 'Invalid URL' }, cors)
       return
     }
+    // 统一 DNS/私网校验：非短链路径此前完全没校验（字符串校验可被 DNS 重绑定绕过），
+    // 所有入口 URL 先过一遍；短链后续每跳再由 resolveShortLink 逐跳复核。
+    if (!(await isUrlDnsSafe(parsed, nodeDnsResolver))) {
+      throw new SsrfRejectError('private_dns', '目标 DNS 解析到内网地址或无法解析')
+    }
 
     // 日配额：按登录 uid（免费 1/日、PRO 10/日）或匿名 IP，抓取前拦截
     const quota = await checkDailyQuota(req, db, ipHash)
@@ -1167,6 +1175,11 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 502, { error: '页面读取超时或网络异常' }, cors)
     }
   } catch (error) {
+    // 入口 / 短链逐跳的 DNS/私网拒绝：对外统一 400，不落到「Internal server error」
+    if (error instanceof SsrfRejectError) {
+      sendJson(res, 400, { error: '目标地址被安全策略拒绝', code: 'ssrf_reject' }, cors)
+      return
+    }
     console.error('[extract-video] internal error:', error)
     sendJson(res, 500, { error: 'Internal server error' }, cors)
   }

@@ -19,6 +19,7 @@ import {
 } from './syncShare.js'
 import { SHARE_BASE } from '../../config/urls.js'
 import { newId as genId } from '../../lib/newId.js'
+import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { t, tN } from '../../i18n/index.js'
 import type { Bookmark, Category, SiblingGroup } from '../../types.js'
 
@@ -182,6 +183,8 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     newBookmarks.push({
       ...stripCipherBookmark(b),
       id: newId,
+      // 组 fork 必须重置分类：分享者 categoryId 在访问者库中不存在，
+      categoryId: CAT_UNCATEGORIZED,
       password: '',  // 不复制密码
       username: '',  // 不复制用户名
       createdAt: now,
@@ -248,6 +251,7 @@ export async function forkPublicGroup(group: SiblingGroup, bookmarks: Bookmark[]
     ...group,
     id: newGroupId,
     bookmarkIds: newBookmarkIds,
+    categoryId: CAT_UNCATEGORIZED,
     isPublic: false,
     updatedAt: now,
     useCount: 0,

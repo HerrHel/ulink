@@ -25,6 +25,8 @@ import {
   videoSourceLabel,
 } from '../../lib/ai/videoExtract.js'
 import { isPrivateUrl } from '../../lib/ai/urlGuard.js'
+// 硬编码失败文案统一取自 toolResult 登记常量，与状态判定兜底同源，保证失败不报成功
+import { HARDCODED_NOT_EXECUTED_TEXTS } from '../../lib/ai/toolResult.js'
 
 
 import type { useI18n } from '../../i18n/index.js'
@@ -122,7 +124,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
           (b) => !b.deletedAt && (b.id === target || b.title?.includes(target) || b.url?.includes(target))
         )
         if (!found) {
-          resultText = `书签库中未找到与「${target}」相关的有效书签，未执行死链替换。`
+          resultText = HARDCODED_NOT_EXECUTED_TEXTS.deadlinkNotFound(target)
           return resultText
         }
       }
@@ -192,9 +194,9 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
     } else if (call.name === 'read_webpage') {
       const url = call.arguments?.url
       if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url.trim())) {
-        resultText = '读取失败：未提供有效公开网址（必须以 http:// 或 https:// 开头）。'
+        resultText = HARDCODED_NOT_EXECUTED_TEXTS.readInvalidUrl
       } else if (isPrivateUrl(url.trim())) {
-        resultText = '安全拦截：禁止读取私有局域网或环回地址。'
+        resultText = HARDCODED_NOT_EXECUTED_TEXTS.readPrivateBlocked
       } else {
         const targetUrl = url.trim()
         if (!assistantTurn.steps) assistantTurn.steps = []
@@ -207,7 +209,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
         const readPlainPage = async (): Promise<string> => {
           const pageData = await fetchPageContentViaJina(targetUrl, { signal: controller.signal, timeoutMs: 9000, maxChars: 25000 })
           if (!pageData.success || !pageData.markdown) {
-            return `读取网页失败：${pageData.error || '未能成功获取该网页正文内容'}`
+            return HARDCODED_NOT_EXECUTED_TEXTS.readFailed(pageData.error || '未能成功获取该网页正文内容')
           }
           return `网页标题：「${pageData.title || '无标题'}」\n\n正文摘要提取：\n${pageData.markdown.slice(0, 3200)}`
         }
@@ -233,7 +235,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
             resultText = await readPlainPage()
           }
         } catch (fetchErr: any) {
-          resultText = `抓取网页异常：${fetchErr?.message || '网络连接或服务异常'}`
+          resultText = HARDCODED_NOT_EXECUTED_TEXTS.fetchException(fetchErr?.message || '网络连接或服务异常')
         }
       }
     } else if (call.name === 'deep_read_video') {
@@ -242,7 +244,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
     } else if (call.name === 'batch_tag_bookmarks') {
       const items = Array.isArray(call.arguments?.items) ? call.arguments.items : []
       if (items.length === 0) {
-        resultText = '未提供待打标书签列表，未执行打标。'
+        resultText = HARDCODED_NOT_EXECUTED_TEXTS.batchTagEmpty
       } else {
         const res = await batchTagBookmarks(items, { ds, ui, app, signal: controller.signal })
         if (res.success && res.taggedCount > 0) {
@@ -259,7 +261,7 @@ export function createAiAgentToolRunner(context: AiAgentToolContext) {
             payload: { items },
           }
         } else {
-          resultText = res.message || '未匹配到可打标的书签。'
+          resultText = res.message || HARDCODED_NOT_EXECUTED_TEXTS.batchTagNone
         }
       }
     } else if (call.name === 'manage_categories') {

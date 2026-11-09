@@ -34,6 +34,14 @@ export function resolveConflict(id: string, keepLocal: boolean) {
   const ds = useDataStore()
   if (!keepLocal) {
     _applyRemoteToLocal(conflict.type, id, conflict.remote as Record<string, unknown>)
+    // 采用远端后必须恢复远端 updatedAt：updateBookmark 会无条件写 Date.now()，
+    // 否则本地时间戳可能晚于他端后续更新，isRemoteNewer 判定反转导致静默拒收。
+    const remoteTs = Number((conflict.remote as { updatedAt?: number })?.updatedAt)
+    if (Number.isFinite(remoteTs) && remoteTs > 0) {
+      const arr = conflict.type === 'group' ? ds.siblingGroups : ds.bookmarks
+      const item = arr.find(x => x.id === id)
+      if (item) (item as { updatedAt: number }).updatedAt = remoteTs
+    }
     if (conflict.type === 'group' && typeof (conflict.remote as Record<string, unknown>)?.notes === 'string') {
       try {
         EditorManager.silentSetContent(id, (conflict.remote as Record<string, unknown>).notes as string)

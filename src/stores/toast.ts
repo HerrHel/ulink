@@ -3,7 +3,7 @@
  *
  * Toast / Confirm / Undo / Choice 全部走 Pinia action，无模块级可变状态；
  */
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { defineStore } from 'pinia'
 import { TOAST_FADE_MS, TOAST_REMOVE_MS } from '../config/constants.js'
 
@@ -54,10 +54,11 @@ export const useToastStore = defineStore('toast', () => {
 
   function show(msg: string, ok = true) {
     const id = ++toastIdCounter
-    const item: ToastItem = {
+    // 必须用 reactive：ref([]) 中 push 后模板持有的是 proxy，改原始对象不会触发渲染
+    const item = reactive<ToastItem>({
       id, ok, msg,
       opacity: '1', transform: '', transition: '',
-    }
+    })
     toasts.value.push(item)
 
     setTimeout(() => {
@@ -76,6 +77,12 @@ export const useToastStore = defineStore('toast', () => {
 
   function showWithUndo(msg: string, undoFn: () => void, duration = 6000) {
     dismissUndo()
+    // dismissUndo 为旧 toast 建的 300ms 退场 timer 占用了 _dismissTimer；
+    // 下面要覆盖该引用，必须先取消它，否则旧 timer 会在 300ms 后清掉新 toast。
+    if (_dismissTimer) {
+      clearTimeout(_dismissTimer)
+      _dismissTimer = null
+    }
 
     const gen = ++_undoGeneration
     undoToast.value = {
@@ -118,11 +125,11 @@ export const useToastStore = defineStore('toast', () => {
       _dismissTimer = null
     }
     if (undoToast.value) {
+      const gen = _undoGeneration
       undoToast.value.cls = 'undo-toast-out'
-      // 动画 300ms 后清除 DOM —— 必须赋给 _dismissTimer 受管，否则下次
-      // showWithUndo → dismissUndo 清不掉此 timer：新 toast 设完后 300ms 旧 timer
-      // fire 把 undoToast.value = null，连新 toast 一并清掉（B-13 根因）。
+      // 动画 300ms 后清除 DOM；generation 校验防止旧退场回调清掉新一轮 toast
       _dismissTimer = setTimeout(() => {
+        if (gen !== _undoGeneration) return
         _dismissTimer = null
         undoToast.value = null
       }, 300)

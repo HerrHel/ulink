@@ -16,6 +16,8 @@ import { suggestCategory, suggestAttributes } from '../ai-classify.js'
 import { CATEGORY_SYNONYMS } from './knowledge.js'
 import { buildCfHeaders } from './cfHeaders.js'
 import { isAiEnabled } from './aiEnabled.js'
+// 与提示词侧同一组上限常量，保证「发送侧截断」和「prompt 侧截断」口径一致
+import { MAX_CATEGORY_NAMES, MAX_ATTR_NAMES } from './mimoPrompt.js'
 
 export interface SmartIntakeResult {
   success: boolean
@@ -139,8 +141,9 @@ export async function fetchUrlMetadataAsync(
       headers: await buildCfHeaders(),
       body: JSON.stringify({
         url,
-        availableAttributes: activeAttrs.map(a => ({ id: a.id, name: a.name })),
-        availableCategories: activeCats.map(c => ({ id: c.id, name: c.name })),
+        // 发送侧同样限量，避免把整库分类/标签塞进请求体（大库会顶成 413）
+        availableAttributes: activeAttrs.slice(0, MAX_ATTR_NAMES).map(a => ({ id: a.id, name: a.name })),
+        availableCategories: activeCats.slice(0, MAX_CATEGORY_NAMES).map(c => ({ id: c.id, name: c.name })),
       }),
       signal: AbortSignal.timeout(18000),
     })

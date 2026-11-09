@@ -13,6 +13,9 @@ interface Env {
   MIMO_API_KEY?: string
 }
 
+/** 用户 query 注入长度上限：防超长粘贴把 prompt / 请求体撑爆 */
+const MAX_QUERY_LEN = 2000
+
 export const onRequestOptions: PagesFunction<Env> = async (context) => {
   return cfPreflightResponse(context.request)
 }
@@ -73,7 +76,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 ]
 直接输出 JSON，不要任何 Markdown 标记或多余文字。`
     } else {
-      const q = (query || '').trim()
+      // 长度上限 + trim（并容错非字符串入参），防止超长/脏 query 直灌 prompt
+      const q = String(query ?? '').trim().slice(0, MAX_QUERY_LEN)
       if (!q) {
         return jsonResponse({ success: false, error: 'empty_query' }, 400)
       }

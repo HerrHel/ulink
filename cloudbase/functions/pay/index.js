@@ -355,12 +355,15 @@ async function handleAuthed(req, res, action, body, cors) {
           row.channel === 'wechat'
             ? await wxpay.queryOrder(orderId)
             : await alipay.queryOrder(orderId)
-        if (remote.tradeState === 'SUCCESS' && remote.paidCents != null) {
+        // 容忍两个渠道的字段命名差异；金额缺失时绝不发货（NULL 会跳过金额校验）
+        const paidCents = remote.paidCents ?? remote.totalCents ?? null
+        const channelOrderId = remote.channelOrderId || remote.transactionId || null
+        if (remote.tradeState === 'SUCCESS' && paidCents != null) {
           await db.rpc('settle_paid_order', {
             p_order_id: orderId,
             p_channel: row.channel,
-            p_channel_order_id: remote.channelOrderId,
-            p_paid_cents: remote.paidCents,
+            p_channel_order_id: channelOrderId,
+            p_paid_cents: paidCents,
             p_raw: remote.raw || {},
           })
           const again = await fetchOrder()
@@ -508,6 +511,13 @@ async function handleWxpayNotify(req, res) {
     return
   }
 
+  // 金额解析失败必须拒绝回调让渠道重推：settle_paid_order 对 NULL 会跳过金额校验
+  if (parsed.paidCents == null) {
+    console.warn('[pay] wxpay notify missing amount, reject for retry')
+    sendJson(res, 400, { code: 'FAIL', message: 'amount_missing' })
+    return
+  }
+
   const db = getDb()
   const r = await db.rpc('settle_paid_order', {
     p_order_id: parsed.outTradeNo,
@@ -540,6 +550,13 @@ async function handleAlipayNotify(req, res) {
   if (!parsed.ok) {
     console.warn('[pay] alipay notify rejected:', parsed.reason)
     sendText(res, parsed.reason === 'not_success' ? 200 : 400, parsed.reason === 'not_success' ? 'success' : 'failure')
+    return
+  }
+
+  // 金额解析失败必须拒绝回调让渠道重推：settle_paid_order 对 NULL 会跳过金额校验
+  if (parsed.paidCents == null) {
+    console.warn('[pay] alipay notify missing amount, reject for retry')
+    sendText(res, 400, 'failure')
     return
   }
 

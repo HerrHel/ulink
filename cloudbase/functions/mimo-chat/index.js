@@ -114,17 +114,34 @@ function approximateTextLength(value) {
   return String(value).length
 }
 
+// ── 媒体固定 token 估算（单位：token）────────────────────────────────────
+// finalize 里 actualTokens = ceil((inChars + outBytes) / 2)，故媒体估算计入 inChars 前统一 ×2。
+// ⚠️ 绝不能把内联 base64 当文本按字符折算：音频 data 可达 11.9M 字符，按「字符/2」
+// ≈5.95M token，free 5 万 / PRO 20 万的额度一次就被打穿。媒体一律「类型固定 + 封顶」，
+// 与 base64 长度脱钩。
+const MEDIA_TOKENS_PER_IMAGE = 1024        // 图片：每张固定
+const MEDIA_TOKENS_PER_VIDEO = 2048        // 视频：每个固定
+const MEDIA_AUDIO_BYTES_PER_TOKEN = 8192   // 音频：按解码字节粗估
+const MEDIA_TOKENS_PER_AUDIO_CAP = 2048    // 音频：单段硬封顶
+const MEDIA_TOKENS_TOTAL_CAP = 16384       // 单请求媒体合计封顶（防多图/多视频叠加）
+
+/** 从 base64 data URL 估计解码字节数；仅用于音频字节折算且立即封顶，绝不把 base64 字符数当文本 token */
+function mediaDataBytes(dataUrl) {
+  const s = typeof dataUrl === 'string' ? dataUrl : ''
+  const comma = s.indexOf(',')
+  if (comma < 0 || !/^data:[^;]*;base64/i.test(s.slice(0, comma))) return 0
+  // 只把 base64 长度换算成解码字节（×3/4）；随后还要除以系数并双重封顶，不是「字符/2」线性折算
+  return Math.floor(((s.length - comma - 1) * 3) / 4)
+}
+
 /**
- * 计费口径的字符数：只累加文本，跳过媒体块。
- *
- * ⚠️ 不能用 approximateTextLength(guard.value) 直接折算 token：音频经
- * materializeAudioUrls 内联成 base64 后可达 11.9M 字符，按「字符/2」会得出
- * ≈5.95M token，free 档 5 万 / PRO 20 万的额度瞬间被打穿，多模态请求
- * 在 enforce 下必然被拒（或一次结算耗尽整月额度）。
- * 上游按 token 计费的是文本内容与媒体自身的 token，不是 base64 字符数。
+ * 计费口径的字符数：文本 + 媒体的「有上限固定 token 等价量」。
+ * 图片按张、视频按个、音频按字节折算并封顶，全部计入 inChars 的 token 等价量；
+ * 绝不以 base64 字符数线性折算（会一次打穿额度）。
  */
 function approximateBillableTextLength(payload) {
   let total = 0
+  let mediaTokens = 0
   const messages = Array.isArray(payload?.messages) ? payload.messages : []
   for (const m of messages) {
     const content = m?.content
@@ -132,14 +149,28 @@ function approximateBillableTextLength(payload) {
       total += content.length
     } else if (Array.isArray(content)) {
       for (const part of content) {
-        // input_audio / image_url / video_url 一律跳过
-        if (part?.type === 'text') total += String(part.text || '').length
+        if (part?.type === 'text') {
+          total += String(part.text || '').length
+        } else if (part?.type === 'image_url' || part?.type === 'image') {
+          mediaTokens += MEDIA_TOKENS_PER_IMAGE
+        } else if (part?.type === 'video_url') {
+          mediaTokens += MEDIA_TOKENS_PER_VIDEO
+        } else if (part?.type === 'input_audio' || part?.type === 'audio_url') {
+          const bytes = mediaDataBytes(part?.input_audio?.data || part?.audio_url?.data)
+          // 按字节折算但单段硬封顶；无可用字节时给固定下限，始终与 base64 长度脱钩
+          mediaTokens += Math.min(
+            MEDIA_TOKENS_PER_AUDIO_CAP,
+            Math.max(64, Math.ceil(bytes / MEDIA_AUDIO_BYTES_PER_TOKEN)),
+          )
+        }
       }
     }
     if (Array.isArray(m?.tool_calls)) total += JSON.stringify(m.tool_calls).length
   }
   // tools schema 每轮必发，按一次固定开销计入（发送摘要里也是同一口径）
   if (Array.isArray(payload?.tools)) total += JSON.stringify(payload.tools).length
+  // 媒体合计先封顶，再 ×2 折算成字符口径（finalize 里按 /2 折回 token）
+  total += Math.min(mediaTokens, MEDIA_TOKENS_TOTAL_CAP) * 2
   return total
 }
 
@@ -208,6 +239,22 @@ function getDb() {
   return _db
 }
 
+/** 手动跟随 30x 的最大跳数：白名单存储域名即便被劫持，也只允许再跟 2 跳 */
+const MAX_AUDIO_REDIRECTS = 2
+
+/** 私网/环回/IPv6 字面量主机：白名单后缀本已排除，这里再兜一层防十进制/IPv6 写法 */
+function isPrivateAudioHostLiteral(host) {
+  if (host === 'localhost' || host === '::1' || host.endsWith('.localhost')) return true
+  if (host.includes(':')) return true // IPv6 字面量一律拒
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
+  if (!m) return false
+  const a = Number(m[1])
+  const b = Number(m[2])
+  return a === 127 || a === 10 || a === 0 || a >= 224 ||
+    (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+    (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127)
+}
+
 function isAllowedAudioUrl(raw) {
   let u
   try {
@@ -215,8 +262,11 @@ function isAllowedAudioUrl(raw) {
   } catch {
     return false
   }
-  if (u.protocol !== 'https:') return false
-  const host = u.hostname.toLowerCase()
+  // 强制 https；拒绝 URL 内嵌凭证，避免 userinfo 混淆真实主机
+  if (u.protocol !== 'https:' || u.username || u.password) return false
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  // 显式拒绝私网字面量，再校验主机必须命中存储白名单（含子域）
+  if (isPrivateAudioHostLiteral(host)) return false
   return AUDIO_URL_HOSTS.some((h) => host === h || host.endsWith('.' + h))
 }
 
@@ -229,15 +279,34 @@ function audioFormatFromMime(mime) {
   return 'mp3'
 }
 
+/**
+ * 下载音频转 base64 data。
+ * SSRF 防护：redirect:'manual' 下 fetch 不自动跟随 30x；入口 URL 与每跳 Location
+ * 都逐跳重新过 isAllowedAudioUrl（强制 https + 白名单主机 + 拒绝私网），防止白名单域名
+ * （myqcloud.com / tcb.qcloud.la）302 到内网地址；最多跟 2 跳，超限即拒。
+ */
 async function fetchAsDataUrl(url) {
-  const resp = await fetch(url, { signal: AbortSignal.timeout(AUDIO_FETCH_TIMEOUT_MS) })
-  if (!resp.ok) throw new Error('media fetch failed (' + resp.status + ')')
-  const declared = Number(resp.headers.get('content-length') || 0)
-  if (declared > MAX_AUDIO_FETCH_BYTES) throw new Error('audio too large')
-  const buf = Buffer.from(await resp.arrayBuffer())
-  if (buf.length > MAX_AUDIO_FETCH_BYTES) throw new Error('audio too large')
-  const mime = (resp.headers.get('content-type') || 'audio/mpeg').split(';')[0].trim()
-  return { data: 'data:' + mime + ';base64,' + buf.toString('base64'), mime }
+  const signal = AbortSignal.timeout(AUDIO_FETCH_TIMEOUT_MS)
+  let current = url
+  for (let hop = 0; hop <= MAX_AUDIO_REDIRECTS; hop++) {
+    // 循环开头复核：入口 URL 与上一跳的 Location 都在此逐跳校验
+    if (!isAllowedAudioUrl(current)) throw new Error('audio url not allowed')
+    const resp = await fetch(current, { redirect: 'manual', signal })
+    const loc = resp.headers.get('Location')
+    if (resp.status >= 300 && resp.status < 400 && loc) {
+      if (hop === MAX_AUDIO_REDIRECTS) throw new Error('audio redirect too many hops')
+      current = new URL(loc, current).href
+      continue
+    }
+    if (!resp.ok) throw new Error('media fetch failed (' + resp.status + ')')
+    const declared = Number(resp.headers.get('content-length') || 0)
+    if (declared > MAX_AUDIO_FETCH_BYTES) throw new Error('audio too large')
+    const buf = Buffer.from(await resp.arrayBuffer())
+    if (buf.length > MAX_AUDIO_FETCH_BYTES) throw new Error('audio too large')
+    const mime = (resp.headers.get('content-type') || 'audio/mpeg').split(';')[0].trim()
+    return { data: 'data:' + mime + ';base64,' + buf.toString('base64'), mime }
+  }
+  throw new Error('audio redirect too many hops')
 }
 
 /**
@@ -289,6 +358,8 @@ const server = http.createServer(async (req, res) => {
   let uid = null
   let db = null
   let settled = false
+  let reserved = false          // 两段式预扣是否已完成（决定断连时是否需结算）
+  let connectionClosed = false  // 客户端连接是否已关闭（长 await 后据此尽早收口）
   let inChars = 0
   let outBytes = 0
 
@@ -323,7 +394,7 @@ const server = http.createServer(async (req, res) => {
    * 影子计量（失败/拒绝/断连也记 ai.requests）+ settle_quota 结算都在此收口；
    * 任何 RPC 失败都只经 logEvent('warn') 输出（底层 console.warn），不影响已发/将发的响应。
    */
-  function finalize(event, extra) {
+  async function finalize(event, extra) {
     if (settled) return
     settled = true
     const e = extra || {}
@@ -337,13 +408,14 @@ const server = http.createServer(async (req, res) => {
     // 两段式结算：对 enforce 且已验签的请求无条件调 settle_quota（不再判断 reserve 是否成功）。
     // SQL 按 ref 幂等（同 ref 只结算一次），且无 reserve 行时直接 no-op，
     // 故 guard/限流/reserve 拒绝等「预扣前」出口也可安全调用；匿名/未验签出口无预扣，不触发。
+    // 尽量 await 而非 void fire-and-forget：SCF 可能在响应发出后冻结实例，
+    // 未 await 的结算 RPC 会丢失，预扣就永远不冲正。
     if (BILLING_MODE === 'enforce' && uid && db) {
-      void settleQuota(db, ref, actualTokens, period).then((ok) => {
-        logEvent(ok ? 'info' : 'warn', 'settle_quota', {
-          status: res.statusCode,
-          tokens: actualTokens,
-          errorKind: ok ? null : 'settle_failed',
-        })
+      const ok = await settleQuota(db, ref, actualTokens, period)
+      logEvent(ok ? 'info' : 'warn', 'settle_quota', {
+        status: res.statusCode,
+        tokens: actualTokens,
+        errorKind: ok ? null : 'settle_failed',
       })
     }
     logEvent('info', event || 'finish', {
@@ -357,24 +429,35 @@ const server = http.createServer(async (req, res) => {
   // 上游取消链路：客户端断连即 abort 上游，不再空耗配额
   const upstreamAbort = new AbortController()
   res.on('finish', () => finalize('finish'))
+
+  /** 长 await 后统一检查：连接已关则尽早收口，避免断连后继续预扣或空耗上游 */
+  async function bailIfDisconnected(event) {
+    if (!connectionClosed && !res.destroyed) return false
+    // 已预扣则 finalize 结算冲正；未预扣时 settle_quota 无 reserve 行直接 no-op
+    await finalize(event || 'close', { errorKind: 'client_disconnect', status: res.statusCode })
+    return true
+  }
+
   res.on('close', () => {
-    // 不因 writableEnded 直接 return：res.end() 后若 socket 在 finish 事件前被销毁，
-    // close 先到而 finish 可能不再触发，会导致本次请求完全不结算。
-    // 统一调 finalize()，由 settled 布尔保证只结算一次。
-    if (!res.writableEnded && res.headersSent) {
-      logEvent('warn', 'client_disconnect', { errorKind: 'client_disconnect', status: res.statusCode })
+    connectionClosed = true
+    // 断连（响应尚未正常结束）即 abort 上游：不再以 res.headersSent 为前提，
+    // 客户端可能在发响应头之前的长 await 阶段就断开，旧的 headersSent 门槛会漏 abort 空耗配额。
+    if (!res.writableEnded) {
       upstreamAbort.abort()
+      logEvent('warn', 'client_disconnect', { errorKind: 'client_disconnect', status: res.statusCode })
     }
-    finalize('close', {
-      errorKind: res.writableEnded ? null : 'client_disconnect',
-      status: res.statusCode,
-    })
+    // ⚠️ 预扣前（reserved=false）不在此永久 finalize：否则 settled 被提前置位，
+    // 后续 reserve 成功后的 settle 会被幂等去重跳过 → 预扣永不结算。
+    // 预扣前断连由各长 await 后的 bailIfDisconnected() 收口；预扣后则在此立即结算兜底。
+    if (reserved) finalize('close', { errorKind: 'client_disconnect', status: res.statusCode })
   })
   // 客户端连接自身出错同样不得变成未捕获异常
   res.on('error', (e) => {
     logEvent('error', 'response_stream_error', { errorKind: 'response_error', error: String((e && e.message) || e) })
+    connectionClosed = true
     upstreamAbort.abort()
-    finalize('response_error', { errorKind: 'response_error', status: res.statusCode })
+    // 同 close：预扣前不永久收口，避免挡住后续预扣的结算
+    if (reserved) finalize('response_error', { errorKind: 'response_error', status: res.statusCode })
   })
 
   if (req.method === 'OPTIONS') {
@@ -452,6 +535,8 @@ const server = http.createServer(async (req, res) => {
     const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID }).catch(() => null)
     uid = auth && auth.ok ? auth.uid : null
     db = getDb()
+    // 每个长 await 后检查连接是否已关闭：断连则尽早收口，不再继续预扣/空耗上游
+    if (await bailIfDisconnected()) return
 
     // 限流 fail-closed：转发计费通道宁可暂时不可用，也不无限放行
     const ipHash = sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)
@@ -461,6 +546,7 @@ const server = http.createServer(async (req, res) => {
       p_limit: RATE_LIMIT_PER_MIN,
       p_window_secs: 60,
     })
+    if (await bailIfDisconnected()) return
     if (rl.error) {
       logEvent('error', 'rate_limit_rpc_failed', { status: 503, errorKind: 'rate_limit_rpc_failed' })
       sendJson(res, 503, { error: 'AI 服务暂时不可用，请稍后再试' }, cors)
@@ -480,6 +566,7 @@ const server = http.createServer(async (req, res) => {
         p_limit: ANON_GLOBAL_LIMIT_PER_MIN,
         p_window_secs: 60,
       })
+      if (await bailIfDisconnected()) return
       if (ag.error) {
         logEvent('error', 'anon_rate_limit_rpc_failed', { status: 503, errorKind: 'rate_limit_rpc_failed' })
         sendJson(res, 503, { error: 'AI 服务暂时不可用，请稍后再试' }, cors)
@@ -500,6 +587,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 400, { error: 'Invalid JSON body' }, cors)
       return
     }
+    if (await bailIfDisconnected()) return
     const guard = validateChatBody(body, {
       defaultModel: MIMO_MODEL,
       allowedModels: ALLOWED_MODELS,
@@ -540,6 +628,7 @@ const server = http.createServer(async (req, res) => {
         logEvent('warn', 'daily_quota_rpc_failed', { errorKind: 'quota_exception', error: String((e && e.message) || e) })
       }
     }
+    if (await bailIfDisconnected()) return
 
     // ── 音频物化（URL → base64）：必须在转发上游前完成 ──
     try {
@@ -555,8 +644,10 @@ const server = http.createServer(async (req, res) => {
       }, cors)
       return
     }
+    // 关键：断连检查必须在预扣之前，否则「预扣后永不结算」
+    if (await bailIfDisconnected()) return
 
-    // 计量口径：只算文本，跳过媒体块内联 base64（否则一次音频就按 5.95M token 记账）
+    // 计量口径：文本 + 媒体有上限的固定 token 等价量（不按 base64 字符数线性折算）
     inChars = approximateBillableTextLength(guard.value)
 
     // ── 两段式预扣（enforce）：按「输入文本 + 4096 输出余量」估 token ──
@@ -584,12 +675,16 @@ const server = http.createServer(async (req, res) => {
           }, cors)
           return
         } else {
+          // 预扣成功：标记 reserved，断连时 finalize 必须按 ref 结算冲正
+          reserved = true
           logEvent('info', 'reserve_ok', { tokens: reserveAmount })
         }
       } catch (e) {
         logEvent('warn', 'reserve_error', { tokens: reserveAmount, errorKind: 'reserve_exception', error: String((e && e.message) || e) })
       }
     }
+    // 预扣之后若连接已关闭：在此结算冲正（reserved=true），避免预扣挂账
+    if (await bailIfDisconnected()) return
 
     const upstream = await fetch(MIMO_BASE_URL + '/chat/completions', {
       method: 'POST',
@@ -600,6 +695,7 @@ const server = http.createServer(async (req, res) => {
       body: JSON.stringify(guard.value),
       signal: AbortSignal.any([upstreamAbort.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
     })
+    if (await bailIfDisconnected()) return
 
     if (!upstream.ok) {
       // S11：不透传上游原始错误体（可能含 key 片段），只回状态码；
@@ -642,7 +738,7 @@ const server = http.createServer(async (req, res) => {
     } else {
       logEvent('error', 'internal_error', { status, errorKind: kind, error: String((error && error.message) || error) })
     }
-    finalize('request_error', { status, errorKind: kind })
+    await finalize('request_error', { status, errorKind: kind })
     if (!res.headersSent) {
       sendJson(
         res,

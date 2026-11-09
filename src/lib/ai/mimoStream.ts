@@ -78,7 +78,9 @@ async function fetchWithRetry(
     const response = await fetch(endpoint, init)
     if (response.ok) return response
     // 429 是「限流 / 日配额 / 月额度耗尽」的终局性拒绝，绝不能重试（见函数头注释）
-    const retryable = response.status >= 500 && response.status < 600
+    // mimo-chat 的 502 发生在 reserve_quota / 日配额 / 限流计数之后，重试会把
+    // 一次点击放大成 3 份计费。只有服务端明确标记「本次未计费」才允许重试。
+    const retryable = response.headers?.get?.('x-ulink-retry-safe') === '1'
     if (!retryable || attempt >= backoffs.length || signal?.aborted) {
       return response
     }

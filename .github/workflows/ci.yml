@@ -109,8 +109,9 @@ jobs:
           CLOUDBASE_APIKEY: ${{ secrets.CLOUDBASE_APIKEY }}
         run: |
           if [ -z "$CLOUDBASE_APIKEY" ]; then
-            echo "::warning::未配置 CLOUDBASE_APIKEY，跳过部署（门禁仍照常执行）"
-            exit 0
+            # 缺 key 必须显式失败，不能 exit 0 假绿（否则 CI 全绿却从未部署）
+            echo "::error::未配置 CLOUDBASE_APIKEY，无法部署"
+            exit 1
           fi
           # ⚠️ 必须用 -p 显式指定可执行文件：@cloudbase/cli 暴露了三个 bin
           # （tcb / cloudbase / cloudbase-mcp），直接 `npx @cloudbase/cli` 会报
@@ -118,9 +119,8 @@ jobs:
           CLI="npx --yes -p @cloudbase/cli tcb"
 
           # ── 诊断（只输出长度与前缀，不泄露密钥本体）──
-          # 该 Key 是 JWT，固定以 eyJ 开头、全长 908 字符（本地实测）。
-          # 若长度/前缀不符，多半是复制不完整或混入了换行/不可见字符。
-          echo "::notice::API Key 长度=${#CLOUDBASE_APIKEY} 前缀=${CLOUDBASE_APIKEY:0:3}（预期 长度=908 前缀=eyJ）"
+          # JWT 固定以 eyJ 开头；轮换后长度会变，不再校验总长度，只查前缀与复制污染。
+          echo "::notice::API Key 长度=${#CLOUDBASE_APIKEY} 前缀=${CLOUDBASE_APIKEY:0:3}（预期前缀=eyJ）"
           case "$CLOUDBASE_APIKEY" in
             eyJ*) : ;;
             *) echo "::error::API Key 前缀异常，应以 eyJ 开头（JWT）；请重新完整复制"; exit 1 ;;
@@ -130,12 +130,27 @@ jobs:
             *CLOUDBASE_APIKEY*|*\ *|*\"*|*\'*)
               echo "::error::API Key 含变量名/引号/空白，请只复制值本身"; exit 1 ;;
           esac
-          if [ "${#CLOUDBASE_APIKEY}" -ne 908 ]; then
-            echo "::error::API Key 长度应为 908（JWT 全长），实际 ${#CLOUDBASE_APIKEY}；差值 ${#CLOUDBASE_APIKEY}-908，请重新完整复制"
-            exit 1
-          fi
 
           # --cloudbase-api-key 支持非交互认证，无需设备码
           $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
           # --safe：发布前备份，上传失败自动回滚（省去跨洋 --verify 哈希对比耗时）
           $CLI hosting deploy ./dist -e "$ENV_ID" --safe
+      # 部署后校验线上实际版本：带时间戳穿透缓存，比对 version.json.commit 与本次
+      # github.sha，杜绝「CI 全绿但线上仍是旧版本」（CDN 传播有秒级延迟，故少量重试）
+      - name: Verify deployed version
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3; do
+            URL="https://ulink.ren/version.json?t=$(date +%s)"
+            RESPONSE=$(curl -fsSL "$URL" 2>/dev/null) || RESPONSE=""
+            DEPLOYED_SHA=$(printf '%s' "$RESPONSE" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const c=JSON.parse(s).commit;if(typeof c==='string')process.stdout.write(c)}catch(e){}})")
+            if [ -n "$DEPLOYED_SHA" ] && [ "$DEPLOYED_SHA" = "$EXPECTED_SHA" ]; then
+              echo "::notice::线上版本校验通过：$DEPLOYED_SHA（第 $attempt 次）"
+              exit 0
+            fi
+            echo "::warning::第 $attempt 次线上版本未匹配（期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}）"
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          echo "::error::线上 version.json commit 与本次提交不一致：期望 $EXPECTED_SHA，实际 ${DEPLOYED_SHA:-无}；线上可能仍是旧版本"
+          exit 1

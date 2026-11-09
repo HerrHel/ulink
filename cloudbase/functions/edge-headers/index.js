@@ -43,9 +43,15 @@ const SECURITY_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000',
 }
 
-/** 只允许代理入口文档，避免变成开放代理 */
+// 入口 HTML 白名单：仅这些明确的文档路径经本函数反代补安全头，其余一律 404，
+// 不按任意路径透传，避免沦为开放代理
+const ALLOWED_HTML_PATHS = new Set([
+  '/', '/index.html',
+  '/app', '/app/', '/app.html',
+  '/privacy.html', '/terms.html', '/extension-guide.html',
+])
 function isAllowed(pathname) {
-  return pathname === '/app' || pathname === '/app/' || pathname === '/legal' || pathname.startsWith('/legal/')
+  return ALLOWED_HTML_PATHS.has(pathname) || pathname === '/legal' || pathname.startsWith('/legal/')
 }
 
 function passHeaders(upstream, body) {
@@ -144,8 +150,10 @@ const server = http.createServer(async (req, res) => {
     const buf = Buffer.from(await upstream.arrayBuffer())
     const headers = passHeaders(upstream, buf)
 
-    // 只有 200/404 成功响应才写缓存（避免缓存临时 5xx）
-    if (upstream.status === 200 || upstream.status === 404) {
+    // 只缓存 200 且上游未声明 no-store/no-cache 的响应：404 多为部署窗口的短暂
+    // 状态，写进 60s 缓存会被固化；尊重上游 no-store 也让新版 HTML 即时生效
+    const upstreamCC = (upstream.headers.get('cache-control') || '').toLowerCase()
+    if (upstream.status === 200 && !/(no-store|no-cache)/.test(upstreamCC)) {
       setCache(cacheKey, upstream.status, headers, buf)
     }
 

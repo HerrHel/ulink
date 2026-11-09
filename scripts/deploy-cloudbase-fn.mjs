@@ -61,9 +61,11 @@ function tcb(cwd, argv) {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env: { ...process.env, MSYS_NO_PATHCONV: '1' },
-    // `tcb config update fn` 在配置里有环境变量时会交互式询问「覆盖 / 合并」，
-    // 管道里没有 TTY 会直接挂死。喂一个回车选中默认项（Override）。
-    input: '\n',
+    // `tcb config update fn` 在配置里有环境变量时会交互式询问「覆盖 / 合并」。
+    // 默认项 Override 会用本地 env 完全替换线上，一旦 .env.local 缺少某个线上
+    // 密钥（如 WXPAY_PLATFORM_CERT）就会被静默删掉；这里用下箭头选中第二项
+    // Merge（本地覆盖同名、线上独有项保留）。其它交互（routes edit 的 Y/n）仍喂回车。
+    input: argv[0] === 'config' && argv[1] === 'update' ? '\x1b[B\n' : '\n',
   })
 }
 
@@ -153,7 +155,7 @@ const FN_EXTRA_ENV = {
       REQUIRE_CAPTCHA: readEnvLocal('REQUIRE_CAPTCHA') || 'true',
       // PoW 无感验证（主闸）默认开启：有效 PoW 直接放行，失败回落图形验证码
       REQUIRE_POW: readEnvLocal('REQUIRE_POW') || 'true',
-      POW_SECRET: readEnvLocal('POW_SECRET') || '',
+      POW_SECRET: readEnvLocal('POW_SECRET') || randomBytes(32).toString('hex'),
     }
     if (smtpPass) out.SMTP_PASS = smtpPass
     return out

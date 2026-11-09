@@ -20,6 +20,9 @@ export function useScrollHeader() {
   let searchBtn: HTMLElement | null = null
   let attached = false
   let retryRaf = 0
+  // 受管资源：滚动 rAF 与 focus 定时器，detach 时必须取消，否则悬挂回调读 null / ticking 卡死
+  let scrollRaf = 0
+  let focusTimer: ReturnType<typeof setTimeout> | null = null
 
   const THRESHOLD_SEARCH = 60
   const THRESHOLD_HEADER = 120
@@ -29,29 +32,41 @@ export function useScrollHeader() {
   function onScroll() {
     if (ticking || !content || !wrapper) return
     ticking = true
-    requestAnimationFrame(() => {
-      const y = content!.scrollTop
-      const hasSearch = wrapper!.classList.contains('scrolled-search')
-      const hasHeader = wrapper!.classList.contains('scrolled-header')
+    scrollRaf = requestAnimationFrame(() => {
+      scrollRaf = 0
+      // 根因：detach 后 content/wrapper 已置空，悬挂回调读 null 会抛异常且 ticking 永久卡死；
+      // 回调开头先判空并复位 ticking，主逻辑再用 try/finally 保证 ticking 一定复位。
+      if (!content || !wrapper) { ticking = false; return }
+      try {
+        const y = content!.scrollTop
+        const hasSearch = wrapper!.classList.contains('scrolled-search')
+        const hasHeader = wrapper!.classList.contains('scrolled-header')
 
-      if (y > THRESHOLD_HEADER + (hasHeader ? 0 : HYSTERESIS)) {
-        if (!hasSearch) wrapper!.classList.add('scrolled-search')
-        if (!hasHeader) wrapper!.classList.add('scrolled-header')
-      } else if (y > THRESHOLD_SEARCH + (hasSearch ? 0 : HYSTERESIS)) {
-        if (!hasSearch) wrapper!.classList.add('scrolled-search')
-        if (hasHeader) wrapper!.classList.remove('scrolled-header')
-      } else {
-        if (hasSearch) wrapper!.classList.remove('scrolled-search')
-        if (hasHeader) wrapper!.classList.remove('scrolled-header')
+        if (y > THRESHOLD_HEADER + (hasHeader ? 0 : HYSTERESIS)) {
+          if (!hasSearch) wrapper!.classList.add('scrolled-search')
+          if (!hasHeader) wrapper!.classList.add('scrolled-header')
+        } else if (y > THRESHOLD_SEARCH + (hasSearch ? 0 : HYSTERESIS)) {
+          if (!hasSearch) wrapper!.classList.add('scrolled-search')
+          if (hasHeader) wrapper!.classList.remove('scrolled-header')
+        } else {
+          if (hasSearch) wrapper!.classList.remove('scrolled-search')
+          if (hasHeader) wrapper!.classList.remove('scrolled-header')
+        }
+      } finally {
+        ticking = false
       }
-      ticking = false
     })
   }
 
   function onSearchToggle() {
     wrapper?.classList.remove('scrolled-search', 'scrolled-header')
     if (content) content.scrollTop = 0
-    setTimeout(() => { document.getElementById('searchInput')?.focus() }, 350)
+    // focus 定时器受管清理：detach 后不再聚焦到已卸载的输入框
+    if (focusTimer) clearTimeout(focusTimer)
+    focusTimer = setTimeout(() => {
+      focusTimer = null
+      document.getElementById('searchInput')?.focus()
+    }, 350)
   }
 
   function attach(): boolean {
@@ -68,6 +83,10 @@ export function useScrollHeader() {
 
   function detach() {
     if (retryRaf) { cancelAnimationFrame(retryRaf); retryRaf = 0 }
+    if (scrollRaf) { cancelAnimationFrame(scrollRaf); scrollRaf = 0 }
+    if (focusTimer) { clearTimeout(focusTimer); focusTimer = null }
+    // 悬挂 rAF 被取消后不会再复位 ticking，必须手动清零，否则重新 attach 后 onScroll 永久空转
+    ticking = false
     if (content) content.removeEventListener('scroll', onScroll)
     if (searchBtn) searchBtn.removeEventListener('click', onSearchToggle)
     wrapper?.classList.remove('scrolled-search', 'scrolled-header')

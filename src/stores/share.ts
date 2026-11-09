@@ -398,6 +398,8 @@ function _applyGroupHead(g: SiblingGroup, bms: Bookmark[]) {
   const notesPlain = g.notes ? stripTags(g.notes).replace(/\s+/g, ' ').trim() : ''
   const desc = (notesPlain && notesPlain.slice(0, 120)) || tN('shareView.shareDesc', bms.length)
   setTitle(title)
+  // SPA/hash 分享形态没有 X-Robots-Tag 响应头，必须补 robots meta
+  setMetaByAttr('name', 'robots', 'noindex, nofollow')
   setMetaByAttr('name', 'description', desc)
   setMetaByAttr('property', 'og:title', title)
   setMetaByAttr('property', 'og:description', desc)
@@ -416,6 +418,8 @@ function _applyCategoryHead(data: PublicCategoryData) {
     groups: data.groups.length,
   })
   setTitle(title)
+  // SPA/hash 分享形态没有 X-Robots-Tag 响应头，必须补 robots meta
+  setMetaByAttr('name', 'robots', 'noindex, nofollow')
   setMetaByAttr('name', 'description', desc)
   setMetaByAttr('property', 'og:title', title)
   setMetaByAttr('property', 'og:description', desc)

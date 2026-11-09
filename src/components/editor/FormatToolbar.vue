@@ -69,12 +69,13 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount, inject } from 'vue'
 import { isMobile } from '../../utils.js'
 import { t } from '../../i18n/index.js'
+import { toast } from '../../lib/toast.js'
 import { useAppStore } from '../../stores/app.js'
 import { useUIStore } from '../../stores/ui.js'
 import { EditorManager } from '../../lib/editor.js'
 import { I } from '../../config/icons.js'
 import { saveGroupBody } from '../../composables/domain/useGroup.js'
-import { uploadAndInsertImages } from '../../composables/domain/useImageUpload.js'
+import { uploadAndInsertImages, isImageFile } from '../../composables/domain/useImageUpload.js'
 import { useEditorFormat, PALETTE } from '../../composables/ui/useEditorFormat.js'
 import { useMfbStore } from '../../stores/overlay.js'
 import type { FormatKey } from '../../composables/ui/useEditorFormat.js'
@@ -114,6 +115,12 @@ function applyColor(hex: string) { _applyColor(hex) }
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
+// 选图前端约束：10MB 上限 + 与 useImageUpload 一致的类型白名单，
+// 避免非白名单/超大文件被上传层静默丢弃而用户毫无反馈。
+const MAX_IMAGE_SIZE_MB = 10
+const MAX_IMAGE_SIZE = MAX_IMAGE_SIZE_MB * 1024 * 1024
+
+
 function pickImage() {
   fileInputRef.value?.click()
 }
@@ -121,9 +128,25 @@ function pickImage() {
 function onPickImage(e: Event) {
   const input = e.target as HTMLInputElement
   const files = Array.from(input.files || [])
-  const gid = store.focusedGroupId
-  if (gid && files.length) void uploadAndInsertImages(gid, files)
   input.value = '' // 允许重复选择同一文件
+  if (!files.length) return
+  const focusGid = store.focusedGroupId
+  // 根因：未聚焦任何笔记时原实现静默 return，选图无任何反馈。
+  if (!focusGid) {
+    toast(t('msg.imageNeedFocus'), false)
+    return
+  }
+  // 根因：uploadAndInsertImages 会静默过滤掉非白名单类型/超大文件，用户以为选图失效；
+  // 前端先过滤，并对「全部被过滤」「部分被跳过」分别给出 toast 与白名单/体积提示。
+  const valid = files.filter(f => f.size <= MAX_IMAGE_SIZE && isImageFile(f))
+  if (!valid.length) {
+    toast(t('msg.imageInvalid', { n: MAX_IMAGE_SIZE_MB }), false)
+    return
+  }
+  if (valid.length < files.length) {
+    toast(t('msg.imageSkipped'), false)
+  }
+  void uploadAndInsertImages(focusGid, valid)
 }
 
 function askAiAboutSelection() {

@@ -203,48 +203,28 @@ const server = http.createServer(async (req, res) => {
 
   const db = getDb()
 
-  // ── PoW 无感验证（主闸）：有效解答直接放行，用户全程无感 ──
-  // 校验＝HMAC 签名（timing-safe）+ 未过期 + 难度达标；jti 一次性消费
-  // （consume_rate_limit 单次窗口）防重放。缺失/无效/重放 → 回落图形验证码。
-  let powSatisfied = false
-  if (REQUIRE_POW && POW_SECRET) {
-    const powSol = payload.pow
-    if (powSol && verifyPowSolution(POW_SECRET, powSol)) {
-      const claim = await db.rpc('consume_rate_limit', {
-        p_key: 'fb-pow:' + String(powSol.jti),
-        p_limit: 1,
-        p_window_secs: 600,
-      })
-      // fail-closed：只认显式 true（consume_rate_limit 拒绝时 data 是 {}）
-      if (!claim.error && claim.data === true) powSatisfied = true
-    }
-    if (!powSatisfied && !REQUIRE_CAPTCHA) {
-      // 无图形验证码兜底时附新挑战（前端自动重解重交一次）
-      sendJson(res, 400, { error: 'pow_required', pow: issuePowChallenge(POW_SECRET) })
-      return
-    }
+  // ── 人机验证：PoW 是唯一主闸，缺密钥必须 fail-closed ──
+  // 旧实现的 captcha_token 分支只做一次性计数、从不验真，任意字符串即可绕过；
+  // 且 POW_SECRET 缺省时整个 PoW 主闸被跳过。前端 lib/pow.ts 会自动预解，
+  // 因此强制 PoW 不影响正常用户，未通过一律回 pow_required 附新挑战。
+  if (!POW_SECRET) {
+    sendJson(res, 503, { error: 'feedback_unavailable' })
+    return
   }
-
-  // 人机验证（CloudBase auth captcha，按需挑战）：无 token → captcha_required
-  // （前端拉起图形验证码、verifyCaptchaData 拿 captcha_token 后重交）；
-  // 有 token → **一次性消费**（consume_rate_limit 单次窗口防重放），重复/失败
-  // 一律回 captcha_required 要求重新验证（fail-closed）。
-  // PoW 已满足时跳过——图形验证只是 PoW 失败/缺失时的兜底。
-  const captchaToken = String(payload.captcha_token ?? '').trim()
-  if (REQUIRE_CAPTCHA && !powSatisfied) {
-    if (!captchaToken) {
-      sendJson(res, 400, { error: 'captcha_required' })
-      return
-    }
+  let powSatisfied = false
+  const powSol = payload.pow
+  if (powSol && verifyPowSolution(POW_SECRET, powSol)) {
     const claim = await db.rpc('consume_rate_limit', {
-      p_key: 'fb-captcha:' + sha256Hex(captchaToken),
+      p_key: 'fb-pow:' + String(powSol.jti),
       p_limit: 1,
-      p_window_secs: 1800,
+      p_window_secs: 600,
     })
-    if (claim.error || claim.data !== true) {
-      sendJson(res, 400, { error: 'captcha_required' })
-      return
-    }
+    // fail-closed：只认显式 true（consume_rate_limit 拒绝时 data 是 {}）
+    if (!claim.error && claim.data === true) powSatisfied = true
+  }
+  if (!powSatisfied) {
+    sendJson(res, 400, { error: 'pow_required', pow: issuePowChallenge(POW_SECRET) })
+    return
   }
 
   // 限流：同 IP 1 小时内提交数（DB 计数跨实例一致；查询失败 fail-closed）

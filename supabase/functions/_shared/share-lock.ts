@@ -147,7 +147,12 @@ export function parseCookies(header: string | null | undefined): Record<string, 
     const k = seg.slice(0, idx).trim()
     const v = seg.slice(idx + 1).trim()
     if (!k || k in out) continue
-    out[k] = decodeURIComponent(v)
+    try {
+      out[k] = decodeURIComponent(v)
+    } catch {
+      // 畸形 %-escape 不应让整个带密分享请求 500；跳过该 cookie 段
+      continue
+    }
   }
   return out
 }

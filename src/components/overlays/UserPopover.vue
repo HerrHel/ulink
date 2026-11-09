@@ -4,7 +4,8 @@
       <div
         v-if="store.open && auth.isLoggedIn"
         class="user-popover-mask"
-        @click="close"
+        @mousedown="onMaskMouseDown"
+        @click="onMaskClick"
         @keydown.esc="close"
       >
         <div
@@ -208,6 +209,7 @@ import { I } from '../../config/icons.js'
 import { PRESET_AVATAR_EMOJIS } from '../../lib/avatar.js'
 import { toast } from '../../lib/toast.js'
 import { t } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const store = useUserPopoverStore()
 const auth = useAuth()
@@ -351,6 +353,10 @@ function close() {
   store.hide()
   isEditing.value = false
 }
+
+// 根因：裸 @click=close 在「卡片内框选文本、拖到遮罩上松开」时会被判定为点击外部而误关，
+// 导致正在编辑的个人资料丢失。统一走 useMaskClose（mousedown 记录起点 + click 判定）防误触。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 
 function toggleEditProfile() {
   if (!isEditing.value) {

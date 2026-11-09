@@ -30,9 +30,11 @@ export function useMaskClose(onClose: () => void) {
       return
     }
     isMouseDownOnMask = true
+    // 事件派发结束后 Event.currentTarget 会被置为 null，必须在同步阶段缓存遮罩元素
+    const maskEl = e.currentTarget
 
     const onGlobalMouseUp = (upEv: MouseEvent) => {
-      if (upEv.target !== e.currentTarget) {
+      if (upEv.target !== maskEl) {
         isMouseDownOnMask = false
       }
       pendingMouseUpHandler = null

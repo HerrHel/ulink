@@ -85,6 +85,11 @@ const JOBS = [
     from: 'supabase/functions/_shared/cb-auth.ts',
     to: 'cloudbase/functions/redeem/cb-auth.js',
   },
+  // pay（支付回调 / 查单）涉及资损，验签实现必须与真源同步
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/pay/cb-auth.js',
+  },
 ]
 
 // 纯数据文件复制（无类型剥离）：视频平台域名清单的单一真源 = src/config/videoPlatforms.json

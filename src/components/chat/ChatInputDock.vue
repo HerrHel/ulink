@@ -368,6 +368,7 @@ function triggerFileInput() {
 async function handleFiles(files: FileList | File[]) {
   if (!files || files.length === 0) return
   let addedCount = 0
+  let lastAddedName = '' // 记录实际成功附加的文件名
   for (let i = 0; i < files.length; i++) {
     const f = files[i]
     if (f.size > 200 * 1024 * 1024) {
@@ -378,13 +379,15 @@ async function handleFiles(files: FileList | File[]) {
       const processed = await processFileForAi(f)
       ui.attachFileToAi(processed)
       addedCount++
+      lastAddedName = f.name
     } catch (err: unknown) {
       toast((err as Error).message || t('ai.fileTooLarge'), false)
     }
   }
   if (addedCount > 0) {
     if (addedCount === 1) {
-      toast(t('ai.fileAttachedToast', { name: files[0].name }))
+      // 根因：files[0] 可能是被 200MB 上限跳过或处理失败的文件，应显示真正成功的文件名
+      toast(t('ai.fileAttachedToast', { name: lastAddedName }))
     } else {
       toast(t('ai.attachedFilesCount', { n: addedCount }))
     }

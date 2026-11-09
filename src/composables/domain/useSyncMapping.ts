@@ -232,13 +232,15 @@ export function toRemoteRow<K extends EntityType>(
  * Zod 验证辅助：远端映射数据通过 schema 校验后才采用。
  * 校验失败时跳过该条目（远端坏数据不污染本地），并 console.warn 便于排查。
  */
-function _validateWith<T>(schema: { safeParse: (data: unknown) => { success: boolean; error?: { issues: unknown[] } } }, item: T, label: string): T | null {
+function _validateWith<T>(schema: { safeParse: (data: unknown) => { success: boolean; data?: unknown; error?: { issues: unknown[] } } }, item: T, label: string): T | null {
   const result = schema.safeParse(item)
-  if (!result.success) {
+  if (!result.success || result.data == null) {
     console.warn(`[sync] 远端 ${label} 数据校验失败，已跳过:`, result.error?.issues)
     return null
   }
-  return item
+  // 必须返回 Zod 清洗后的对象：transform / catch / coerce / strip 都只作用于
+  // result.data，返回原 item 会让这些兜底全部失效，坏远端数据直接进本地 store。
+  return result.data as T
 }
 
 export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {

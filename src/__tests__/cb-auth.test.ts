@@ -33,7 +33,13 @@ function mint(
   header: Record<string, unknown> = { alg: 'RS256', kid: KID, typ: 'JWT' },
   key: KeyObject = privateKey,
 ): string {
-  const input = `${b64url(header)}.${b64url(payload)}`
+  // cb-auth 生产路径按 envId 校验 iss/aud；测试网关 envId 固定为 env-test
+  const fullPayload = {
+    iss: 'https://env-test.api.tcloudbasegateway.com',
+    aud: 'env-test',
+    ...payload,
+  }
+  const input = `${b64url(header)}.${b64url(fullPayload)}`
   const sig = cryptoSign('RSA-SHA256', Buffer.from(input), key).toString('base64url')
   return `${input}.${sig}`
 }

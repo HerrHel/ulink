@@ -30,7 +30,10 @@ const REDEEM_WINDOW_SEC = 600
 const BODY_LIMIT = 2048
 
 function isOriginAllowed(origin) {
-  return !origin || ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)
+  if (!origin) return true // 无 Origin 的服务端/同源调用放行
+  // 未配置白名单即拒绝跨域（fail-closed），与 ssrf-guard.js / pay/index.js 口径一致
+  if (ALLOWED_ORIGINS.length === 0) return false
+  return ALLOWED_ORIGINS.includes(origin)
 }
 
 function corsHeaders(origin) {

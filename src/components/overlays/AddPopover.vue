@@ -1,5 +1,5 @@
 <template>
-  <div class="popover-mask" :class="{ 'popover-mask-visible': isMobileDevice && sheetEnter }" v-show="visible" @click="close">
+  <div class="popover-mask" :class="{ 'popover-mask-visible': isMobileDevice && sheetEnter }" v-show="visible" @mousedown="onMaskMouseDown" @click="onMaskClick">
     <div class="popover-card" :class="cardClasses" :style="cardStyle" @click.stop>
       <!-- 类型切换标签 -->
       <div class="popover-tabs">
@@ -55,6 +55,7 @@ import { addToGroupDirect, addGroupRefToGroup } from '../../composables/domain/u
 import { openBmModal, bmForm } from '../../composables/domain/useBookmark.js'
 import { I } from '../../config/icons.js'
 import { t, tN } from '../../i18n/index.js'
+import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 
 const store = useAppStore()
 const uiStore = useUIStore()
@@ -170,6 +171,10 @@ function close() {
   store.addToGid = null
   store._addPopoverTrigger = null
 }
+
+// 根因：裸 @click=close 在「弹窗内框选文本、拖到遮罩上松开」时会被判定为点击外部而误关，
+// 导致输入内容丢失。统一走 useMaskClose（mousedown 记录起点 + click 判定）防误触。
+const { onMaskMouseDown, onMaskClick } = useMaskClose(close)
 
 function onSelectBm(bmId: string) {
   if (bmId && store.addToGid) {
