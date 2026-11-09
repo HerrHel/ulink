@@ -30,6 +30,8 @@ export const zh = {
     description: '与链（ulink）是支持云同步与端到端加密的个人书签管理器，支持私有链接定向分享书签笔记供他人查看与收藏。',
   },
   common: {
+    appName: '与链',
+    items: '个',
     unnamed: '未命名',
     confirm: '确定',
     cancel: '取消',
@@ -74,6 +76,7 @@ export const zh = {
     virtualSwitchToast: '条目较多，已切换为列表视图',
     group: '笔记',
     unnamedGroup: '未命名笔记',
+    unnamedBookmark: '未命名书签',
     pinned: '已置顶',
     isPublic: '公开分享中（点击管理）',
     bookmarksCount: '个书签',
@@ -224,6 +227,9 @@ export const zh = {
     newGroup: '新建笔记',
     addBookmarkOrGroup: '添加书签或笔记',
     batchManage: '批量管理',
+    layoutGrid: '网格视图',
+    layoutList: '列表视图',
+    layoutMiniGrid: '小宫格视图',
   },
   detail: {
     panel: '辅助栏',

@@ -659,7 +659,7 @@ function handleBmToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (bm.categoryId === newCatId) return;
   ds.updateBookmark(bm.id, { categoryId: newCatId });
   debouncedSaveAppData();
-  const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('common.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
+  const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('cat.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
   toast(t('msg.movedToCategory', { name: catName }));
 }
 
@@ -680,7 +680,7 @@ function handleGroupToCatDrop(e: DragEvent, item: Element, p: DragPayload) {
   if (group.categoryId === newCatId) return;
   ds.updateGroup(gid, { categoryId: newCatId });
   debouncedSaveAppData();
-  const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('common.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
+  const catName = displayText(ds.categoryMap[newCatId]?.name) || (newCatId === CAT_UNCATEGORIZED ? t('cat.uncategorized') : (ds.categoryMap[newCatId]?.name || newCatId))
   toast(t('msg.movedToCategory', { name: catName }));
 }
 

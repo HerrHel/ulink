@@ -27,6 +27,8 @@ export const en = {
     description: 'ulink is a personal bookmark manager with cloud sync and end-to-end encryption. Share bookmark notes publicly for anyone to view and save.',
   },
   common: {
+    appName: 'ulink',
+    items: 'items',
     unnamed: 'Untitled',
     confirm: 'Confirm',
     cancel: 'Cancel',
@@ -71,6 +73,7 @@ export const en = {
     virtualSwitchToast: 'Too many items — switched to list view',
     group: 'Note',
     unnamedGroup: 'Untitled note',
+    unnamedBookmark: 'Untitled bookmark',
     pinned: 'Pinned',
     isPublic: 'Publicly shared (click to manage)',
     bookmarksCount: 'bookmarks',
@@ -226,6 +229,9 @@ export const en = {
     newGroup: 'New note',
     addBookmarkOrGroup: 'Add bookmark or note',
     batchManage: 'Batch manage',
+    layoutGrid: 'Grid view',
+    layoutList: 'List view',
+    layoutMiniGrid: 'Mini grid view',
   },
   detail: {
     panel: 'Detail panel',

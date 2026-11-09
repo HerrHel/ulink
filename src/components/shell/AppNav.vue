@@ -129,8 +129,8 @@ const categories = computed(() => {
   return [...virtual, ...restSorted]
 })
 function getCatDisplayName(cat: { id: string; name: string }): string {
-  if (cat.id === CAT_ALL) return t('nav.all')
-  if (cat.id === CAT_UNCATEGORIZED) return t('common.uncategorized')
+  if (cat.id === CAT_ALL) return t('cat.all')
+  if (cat.id === CAT_UNCATEGORIZED) return t('cat.uncategorized')
   const dt = displayText(cat.name)
   if (dt) return dt
   if (typeof cat.name === 'string' && isThreePartCipher(cat.name)) return '••••••'

@@ -66,7 +66,7 @@ const isVault = computed(() => uiStore.curSpace === 'vault')
 const uncategorizedCat = computed(() => {
   const cat = dataStore.categoryMap[CAT_UNCATEGORIZED]
   if (!cat || cat.name === '未分类' || cat.name === 'Uncategorized') {
-    return { id: CAT_UNCATEGORIZED, name: t('common.uncategorized') }
+    return { id: CAT_UNCATEGORIZED, name: t('cat.uncategorized') }
   }
   return { id: CAT_UNCATEGORIZED, name: displayText(cat.name) }
 })

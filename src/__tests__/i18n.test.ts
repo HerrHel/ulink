@@ -89,4 +89,55 @@ describe('i18n 运行时行为', () => {
     expect(tN('count.bookmarks', 1)).toBe('1 个书签')
     expect(tN('count.bookmarks', 3)).toBe('3 个书签')
   })
+
+  it('虚拟分类名：cat.all / cat.uncategorized 双语可读', () => {
+    setLocale('zh-CN')
+    expect(t('cat.all')).toBe('全部')
+    expect(t('cat.uncategorized')).toBe('未分类')
+    setLocale('en-US')
+    expect(t('cat.all')).toBe('All')
+    expect(t('cat.uncategorized')).toBe('Uncategorized')
+  })
+})
+
+/**
+ * 源码键引用护栏：t() 找不到键时会原样返回键名（界面直接显示 "nav.all" 之类），
+ * 而上面的 zh/en 对齐测试只校验语言包之间的一致性，发现不了「调用点写了不存在的键」。
+ * 2026-11-09 侧栏「全部 / 未分类」显示键名即由此漏出，故补静态扫描。
+ */
+describe('i18n 源码键引用护栏', () => {
+  it('源码中 t("字面量键") 全部存在于 zh 语言包', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    // vitest 下 import.meta.url 不是 file:// scheme，改用 vitest root（= 仓库根）
+    const srcDir = join(process.cwd(), 'src')
+    const files: string[] = []
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (['__tests__', 'locales', 'node_modules'].includes(entry.name)) continue
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) walk(full)
+        else if (/\.(ts|vue|js)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) files.push(full)
+      }
+    }
+    walk(srcDir)
+    // 仅匹配完整字面量调用 t('a.b') / t('a.b', {...})，排除 t('a.b' + suffix) 动态拼接
+    const re = /\bt\(\s*['"]([A-Za-z0-9_.]+)['"]\s*[,)]/g
+    const missing = new Map<string, Set<string>>()
+    for (const file of files) {
+      const code = readFileSync(file, 'utf8')
+      let m: RegExpExecArray | null
+      while ((m = re.exec(code)) !== null) {
+        if (zhFlat[m[1]] == null) {
+          if (!missing.has(m[1])) missing.set(m[1], new Set())
+          missing.get(m[1])!.add(file)
+        }
+      }
+    }
+    const detail = [...missing]
+      .map(([key, refs]) => `${key} <- ${[...refs].join(', ')}`)
+      .sort()
+      .join('\n')
+    expect(detail, `源码引用了语言包中不存在的键（界面会显示 key 字面量）：\n${detail}`).toBe('')
+  })
 })

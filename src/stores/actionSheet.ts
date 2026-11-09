@@ -70,7 +70,7 @@ export const useActionSheetStore = defineStore('actionSheet', () => {
     }
     store.save()
     const cat = store.categoryMap[catId]
-    const catName = displayText(cat?.name) || (catId === CAT_UNCATEGORIZED ? t('common.uncategorized') : (cat?.name || ''))
+    const catName = displayText(cat?.name) || (catId === CAT_UNCATEGORIZED ? t('cat.uncategorized') : (cat?.name || ''))
     toast(t('msg.movedTo', { name: catName }))
   }
 
