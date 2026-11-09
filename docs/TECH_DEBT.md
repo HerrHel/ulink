@@ -4,6 +4,18 @@
 > **2026-10-31 追加**：新增 §零（文档核对 + 线上状态发现），并修正正文中已失效的数字/结论；历史表格保留「当时快照」语义，引用前先看行内注记。
 > 重要澄清：此前统计的「106 处 TODO」为**误报**——正则把恢复密钥占位符 `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX` 里的 `XXX` 当成了 HACK 标记，加上测试文件里的同类占位符。源码内**没有任何真实的 TODO/FIXME/HACK 注释**。
 
+## 依赖：dev 工具链已知漏洞（2026-11-09）
+
+生产依赖经 `npm audit --omit=dev --audit-level=moderate` 为 **0 漏洞**；以下 high 漏洞全部位于 devDependencies 的传递依赖，不进入 `dist/`：
+
+| 包 | 来源链 | 处置 |
+|---|---|---|
+| `brace-expansion` 2.0.0-2.1.6 / 4.0.0-5.0.11 | vitest / eslint / filelist | `npm audit fix` 可修，但本仓执行会崩（历史已知），待手工定向升级 |
+| `decode-uri-component` <=0.5.0 | `@cloudbase/manager-node` → cos-nodejs-sdk-v5 → conf | 修复需 `--force` 升级 manager-node 4.10.6（breaking），只影响部署 CLI，暂缓 |
+| `ajv` / `conf` / `@vitest/mocker`（moderate） | 同上 + vitest | 同上 |
+
+门禁口径：CI 对 **生产依赖** 阻塞（moderate+），对 **dev 工具链** 只输出 warning。若日后 dev 依赖进入生产 bundle（例如把 CLI 逻辑搬进前端），必须同步升级并恢复阻塞。
+
 ## 零、2026-10-31 新增（文档核对 + 线上状态，按优先级）
 
 | # | 级别 | 问题 | 处理结果（2026-10-31） |
