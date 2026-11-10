@@ -11,6 +11,12 @@
  */
 
 import { cfCorsHeaders, guardCfRequest, cfPreflightResponse } from '../_lib/cf-guard.js'
+// SSRF 纯逻辑真源（与 check-link / jina-proxy 同一份）：字面量 + IPv4/IPv6 私有段判断
+import {
+  isPrivateHost as isPrivateIpOrHost,
+  parseIPv4Hostname,
+  parseIPv6Hostname,
+} from '../../supabase/functions/check-link/ssrf-guard.js'
 
 interface Env {}
 
@@ -22,25 +28,57 @@ function normalizeHost(hostname: string): string {
   return hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.$/, '')
 }
 
-/** 私网 / 回环 / 链路本地 / .local / .internal 拒绝（每跳重定向都要重跑，防 302 打到内网 SSRF）。 */
+/** 私网 / 回环 / 链路本地 / .local / .internal 拒绝（每跳重定向都要重跑，防 302 打到内网 SSRF）。
+ *  字面量判断复用 ssrf-guard 真源：公网 IPv6 不再被误杀，私有 IPv6 / IPv4 映射仍全拦。 */
 function isPrivateHost(hostname: string): boolean {
   const host = normalizeHost(hostname)
   if (PRIVATE_HOSTS.has(host)) return true
-  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
-  // IPv6 字面量一律拒绝，覆盖 ::1 / 0:0:...:1 / ULA / 链路本地 / IPv4 映射等全部形态
-  if (host.includes(':')) return true
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host)
-  if (m) {
-    const a = Number(m[1])
-    const b = Number(m[2])
-    if (m.slice(1).some((o) => Number(o) > 255)) return true
-    if (a === 127 || a === 10 || a === 0 || a >= 224) return true
-    if (a === 172 && b >= 16 && b <= 31) return true
-    if (a === 192 && b === 168) return true
-    if (a === 169 && b === 254) return true
-    if (a === 100 && b >= 64 && b <= 127) return true
+  if (host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true
+  return isPrivateIpOrHost(host)
+}
+
+/** 带兜底的超时包装：DNS 解析异常/超时按不安全处理（fail-closed）。 */
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms)
+    p.then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      () => {
+        clearTimeout(timer)
+        resolve(fallback)
+      },
+    )
+  })
+}
+
+/**
+ * DNS 层 SSRF 校验（CloudBase/Node 运行时）：
+ * 仅校验 hostname 字面量挡不住「域名解析到内网 IP」——攻击者可用
+ * localtest.me 之类域名指向 127.0.0.1 / 169.254.0.23（云元数据）。
+ * 这里解析 A/AAAA，任一记录落入私有段即拒绝（fail-closed）。
+ * CF Pages 边缘无 node:dns，退化为字面量校验（该部署已退役，生产走 CloudBase）。
+ */
+async function isHostDnsSafe(hostname: string): Promise<boolean> {
+  const host = normalizeHost(hostname)
+  if (isPrivateHost(host)) return false
+  // 公网 IP 字面量：isPrivateHost 已判过私有段，无需再做 DNS（resolve4 对 IP 字面量会失败）
+  if (parseIPv4Hostname(host) || parseIPv6Hostname(host)) return true
+  if (typeof process === 'undefined' || !process.versions?.node) return true
+  try {
+    const dns = await import('node:dns/promises')
+    const [v4, v6] = await Promise.all([
+      withTimeout(dns.resolve4(host).catch(() => [] as string[]), 2000, [] as string[]),
+      withTimeout(dns.resolve6(host).catch(() => [] as string[]), 2000, [] as string[]),
+    ])
+    const all = [...v4, ...v6]
+    if (all.length === 0) return false
+    return all.every((ip) => !isPrivateHost(ip))
+  } catch {
+    return false
   }
-  return false
 }
 
 /** 与 src/lib/ai/mimoPrompt.ts 同口径：分类/标签注入上限，防大库全量拼接把请求顶成 413 */
@@ -219,7 +257,11 @@ export async function onRequest(context: { request: Request; env: Env }): Promis
     return jsonResponse({ success: false, error: 'invalid_url_format' }, 400)
   }
 
-  if ((targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') || isPrivateHost(targetUrl.hostname)) {
+  if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+    return jsonResponse({ success: false, error: 'private_ip_forbidden' }, 400)
+  }
+  // 字面量 + DNS 双重校验：域名解析到内网同样拒绝
+  if (!(await isHostDnsSafe(targetUrl.hostname))) {
     return jsonResponse({ success: false, error: 'private_ip_forbidden' }, 400)
   }
 
@@ -233,7 +275,11 @@ export async function onRequest(context: { request: Request; env: Env }): Promis
   const fetchGuarded = async (start: URL, signal: AbortSignal): Promise<Response> => {
     let current = start
     for (let hop = 0; ; hop++) {
-      if ((current.protocol !== 'http:' && current.protocol !== 'https:') || isPrivateHost(current.hostname)) {
+      if (current.protocol !== 'http:' && current.protocol !== 'https:') {
+        throw new Error('unsafe_redirect')
+      }
+      // 每跳都做 DNS 校验：302 到「解析为内网 IP 的域名」同样拦截
+      if (!(await isHostDnsSafe(current.hostname))) {
         throw new Error('unsafe_redirect')
       }
       const res = await fetch(current.href, {

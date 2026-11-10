@@ -1,8 +1,10 @@
 // 本文件由 scripts/build-fn-assets.mjs 从 functions/api/extract-metadata.ts 生成，请勿手改
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -16,6 +18,14 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // functions/api/extract-metadata.ts
@@ -137,28 +147,164 @@ async function guardCfRequest(request, opts = {}) {
   return null;
 }
 
+// supabase/functions/check-link/ssrf-guard.ts
+var PRIVATE_LITERAL_HOSTS = /* @__PURE__ */ new Set([
+  "localhost",
+  "127.0.0.1",
+  "0.0.0.0",
+  "::1",
+  "metadata.google.internal",
+  "metadata"
+]);
+function isPrivateIPv4(octets) {
+  if (octets.length !== 4 || octets.some((o) => o < 0 || o > 255)) return false;
+  const [a, b] = octets;
+  if (a === 127) return true;
+  if (a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 0) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 192 && b === 0) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a >= 224) return true;
+  return false;
+}
+function isPrivateIPv6(hextets) {
+  if (hextets.length !== 8) return false;
+  const a = hextets[0];
+  const b = hextets[1];
+  if (hextets.slice(0, 7).every((h) => h === 0) && hextets[7] === 1) return true;
+  if (hextets.every((h) => h === 0)) return true;
+  if ((a & 65024) === 64512) return true;
+  if ((a & 65472) === 65152) return true;
+  if (a === 8193 && b === 3512) return true;
+  if (hextets.slice(0, 5).every((h) => h === 0) && hextets[5] === 65535) {
+    const ipv4 = [hextets[6] >> 8 & 255, hextets[6] & 255, hextets[7] >> 8 & 255, hextets[7] & 255];
+    return isPrivateIPv4(ipv4);
+  }
+  if (hextets.slice(0, 5).every((h) => h === 0) && hextets[5] === 0) {
+    const ipv4 = [hextets[6] >> 8 & 255, hextets[6] & 255, hextets[7] >> 8 & 255, hextets[7] & 255];
+    return isPrivateIPv4(ipv4);
+  }
+  return false;
+}
+function parseIPv4Hostname(hostname) {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+  if (m) {
+    const octets = m.slice(1).map(Number);
+    if (octets.some((o) => Number.isNaN(o) || o > 255)) return null;
+    return octets;
+  }
+  const mm = /^(0x[0-9a-f]+|0[0-7]+|\d+)$/i.exec(hostname);
+  if (mm) {
+    const isHex = /^0x/i.test(hostname);
+    const isOct = /^0[0-7]+$/i.test(hostname);
+    const base = isHex ? 16 : isOct ? 8 : 10;
+    const n = parseInt(hostname, base);
+    if (Number.isNaN(n) || n < 0 || n > 4294967295) return null;
+    return [n >>> 24 & 255, n >>> 16 & 255, n >>> 8 & 255, n & 255];
+  }
+  return null;
+}
+function parseIPv6Hostname(hostname) {
+  let h = hostname.toLowerCase();
+  if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+  if (!h.includes(":")) return null;
+  const parts = h.split("::");
+  if (parts.length > 2) return null;
+  function expandLastDottedQuad(segs2) {
+    if (segs2.length === 0) return segs2;
+    const last = segs2[segs2.length - 1];
+    if (last.includes(".")) {
+      const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(last);
+      if (!m) return null;
+      const octets = m.slice(1).map(Number);
+      if (octets.some((o) => Number.isNaN(o) || o > 255)) return null;
+      const hi = octets[0] << 8 | octets[1];
+      const lo = octets[2] << 8 | octets[3];
+      return [...segs2.slice(0, -1), hi.toString(16), lo.toString(16)];
+    }
+    return segs2;
+  }
+  if (parts.length === 2) {
+    let left = parts[0] ? parts[0].split(":") : [];
+    let right = parts[1] ? parts[1].split(":") : [];
+    left = expandLastDottedQuad(left);
+    right = expandLastDottedQuad(right);
+    if (left === null || right === null) return null;
+    const fill = 8 - left.length - right.length;
+    if (fill < 1) return null;
+    h = [...left, ...Array(fill).fill("0"), ...right].join(":");
+  } else {
+    const segs2 = expandLastDottedQuad(parts[0].split(":"));
+    if (segs2 === null) return null;
+    h = segs2.join(":");
+  }
+  const segs = h.split(":");
+  if (segs.length !== 8) return null;
+  const hextets = segs.map((s) => {
+    const v = parseInt(s, 16);
+    return Number.isNaN(v) || v < 0 || v > 65535 ? null : v;
+  });
+  if (hextets.some((x) => x === null)) return null;
+  return hextets;
+}
+function isPrivateHost(hostname) {
+  let lower = hostname.toLowerCase();
+  if (lower.startsWith("[") && lower.endsWith("]")) lower = lower.slice(1, -1);
+  if (PRIVATE_LITERAL_HOSTS.has(lower)) return true;
+  const ipv4 = parseIPv4Hostname(lower);
+  if (ipv4) return isPrivateIPv4(ipv4);
+  const ipv6 = parseIPv6Hostname(lower);
+  if (ipv6) return isPrivateIPv6(ipv6);
+  return false;
+}
+
 // functions/api/extract-metadata.ts
 var PRIVATE_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "::"]);
 function normalizeHost(hostname) {
   return hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "").replace(/\.$/, "");
 }
-function isPrivateHost(hostname) {
+function isPrivateHost2(hostname) {
   const host = normalizeHost(hostname);
   if (PRIVATE_HOSTS.has(host)) return true;
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true;
-  if (host.includes(":")) return true;
-  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (m) {
-    const a = Number(m[1]);
-    const b = Number(m[2]);
-    if (m.slice(1).some((o) => Number(o) > 255)) return true;
-    if (a === 127 || a === 10 || a === 0 || a >= 224) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;
+  if (host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true;
+  return isPrivateHost(host);
+}
+function withTimeout(p, ms, fallback) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+async function isHostDnsSafe(hostname) {
+  const host = normalizeHost(hostname);
+  if (isPrivateHost2(host)) return false;
+  if (parseIPv4Hostname(host) || parseIPv6Hostname(host)) return true;
+  if (typeof process === "undefined" || !process.versions?.node) return true;
+  try {
+    const dns = await import("node:dns/promises");
+    const [v4, v6] = await Promise.all([
+      withTimeout(dns.resolve4(host).catch(() => []), 2e3, []),
+      withTimeout(dns.resolve6(host).catch(() => []), 2e3, [])
+    ]);
+    const all = [...v4, ...v6];
+    if (all.length === 0) return false;
+    return all.every((ip) => !isPrivateHost2(ip));
+  } catch {
+    return false;
   }
-  return false;
 }
 var MAX_CATEGORY_NAMES = 60;
 var MAX_ATTR_NAMES = 60;
@@ -290,7 +436,10 @@ async function onRequest(context) {
   } catch {
     return jsonResponse({ success: false, error: "invalid_url_format" }, 400);
   }
-  if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:" || isPrivateHost(targetUrl.hostname)) {
+  if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
+    return jsonResponse({ success: false, error: "private_ip_forbidden" }, 400);
+  }
+  if (!await isHostDnsSafe(targetUrl.hostname)) {
     return jsonResponse({ success: false, error: "private_ip_forbidden" }, 400);
   }
   const MAX_REDIRECTS = 3;
@@ -298,7 +447,10 @@ async function onRequest(context) {
   const fetchGuarded = async (start, signal) => {
     let current = start;
     for (let hop = 0; ; hop++) {
-      if (current.protocol !== "http:" && current.protocol !== "https:" || isPrivateHost(current.hostname)) {
+      if (current.protocol !== "http:" && current.protocol !== "https:") {
+        throw new Error("unsafe_redirect");
+      }
+      if (!await isHostDnsSafe(current.hostname)) {
         throw new Error("unsafe_redirect");
       }
       const res = await fetch(current.href, {
