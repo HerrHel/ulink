@@ -408,7 +408,8 @@ app = FastAPI(title="ULink Video Intelligence Worker", version=WORKER_VERSION, l
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    # 服务端只用 X-Worker-Token，不依赖 Cookie；带 credentials 的 * 会回显任意 Origin
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -757,9 +758,14 @@ def check_rate_limit(request: Request) -> None:
 
 
 def require_worker_token(request: Request) -> None:
-    """WORKER_TOKEN 校验（同步 / 深度接口共用）：配置后必须带 X-Worker-Token。"""
+    """WORKER_TOKEN 校验（同步 / 深度接口共用）：未配置即 fail-closed。
+
+    该服务会代用户调用 yt-dlp / ffmpeg / ASR，并消耗 MIMO_API_KEY；
+    容器一旦公网暴露而环境变量漏配，旧逻辑会直接放行成免费算力。
+    当前服务已下线（见 README），此处按 fail-closed 固化，复活前必须配 token。
+    """
     if not WORKER_TOKEN:
-        return
+        raise HTTPException(status_code=503, detail="worker token not configured")
     token = request.headers.get("x-worker-token") or ""
     if not hmac.compare_digest(token, WORKER_TOKEN):
         raise HTTPException(status_code=401, detail="invalid worker token")
