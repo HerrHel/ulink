@@ -26,12 +26,12 @@ import {
 const SECRET = 'test-secret-please-change'
 
 describe('validatePasswordInput', () => {
-  it('长度在 [4,128] 内通过', () => {
-    expect(validatePasswordInput('abcd').ok).toBe(true)
+  it('长度在 [6,128] 内通过', () => {
+    expect(validatePasswordInput('abcdef').ok).toBe(true)
     expect(validatePasswordInput('a'.repeat(128)).ok).toBe(true)
   })
   it('过短 / 过长 / 非字符串被拒', () => {
-    expect(validatePasswordInput('abc')).toEqual({ ok: false, reason: 'too_short' })
+    expect(validatePasswordInput('abcde')).toEqual({ ok: false, reason: 'too_short' })
     expect(validatePasswordInput('a'.repeat(129))).toEqual({ ok: false, reason: 'too_long' })
     expect(validatePasswordInput(1234)).toEqual({ ok: false, reason: 'not_string' })
     expect(validatePasswordInput(null)).toEqual({ ok: false, reason: 'not_string' })

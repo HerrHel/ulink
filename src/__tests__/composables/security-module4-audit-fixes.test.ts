@@ -338,7 +338,7 @@ describe('模块 4 审计修复专项回归套件 — 安全认证、E2E 与权�
     expect(e2eStore.isBiometricEnrolled).toBe(false)
   })
 
-  it('缺陷 15：setSharePassword 前置拦截过短密码（<4 字符）返回 weak_password', async () => {
+  it('缺陷 15：setSharePassword 前置拦截过短密码（<6 字符）返回 weak_password', async () => {
     const res = await setSharePassword('g1', '123')
     expect(res.ok).toBe(false)
     expect(res.error).toBe('weak_password')

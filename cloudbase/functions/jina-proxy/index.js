@@ -6,29 +6,32 @@
  * 上游超时 + 客户端断连取消、读取长度上限。真源仍是 supabase 侧 TS（ssrf-guard.ts /
  * video-adapters.ts），本目录的 .js 由 build-fn-assets.mjs esbuild 派生。
  *
- * 迁移差异（与 check-link 同口径）：
- * 1) 鉴权：原 Supabase getUser 校验 → v1 改 **IP 哈希限流**（consume_rate_limit，
- *    fail-closed——转发层是外呼放大器，宁可不可用也不无限放行），频次收紧到 60/min/IP。
- * 2) DNS：Deno.resolveDns → dns.promises.resolve4/resolve6（DnsResolver 契约不变）。
- * 3) 断连：req.signal → res 'close' 事件（未正常结束即 abort 上游）。
+ * 迁移差异（与 extract-video / share-admin 同口径）：
+ * 1) 鉴权：必须带 `Authorization: Bearer <CloudBase access_token>`，cb-auth 离线验签得 uid。
+ *    转发层会代用户外呼第三方，匿名开放等于免费「任意网页转 Markdown」代理。
+ * 2) 限流：按 uid 60/min + 与身份无关的全局 600/min（防批量注册账号绕过）。
+ * 3) DNS：Deno.resolveDns → dns.promises.resolve4/resolve6（DnsResolver 契约不变）。
+ * 4) 断连：req.signal → res 'close' 事件（未正常结束即 abort 上游）。
  */
 
 const http = require('http')
 const dns = require('dns').promises
-const crypto = require('crypto')
 const { validateInputUrl, isUrlDnsSafe } = require('./video-adapters.js')
 const { isOriginAllowed, buildCorsHeaders } = require('./ssrf-guard.js')
+const { verifyCbToken } = require('./cb-auth.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
 const API_KEY = process.env.CLOUDBASE_APIKEY || ''
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean)
-/** 每 IP 限流（次/分钟）。原版每用户 60；v1 无用户身份，按 IP 同口径 */
+/** 每用户限流（次/分钟） */
 const rlVal = parseInt(process.env.JINA_PROXY_RATE_LIMIT_PER_MIN || '60', 10)
 const RATE_LIMIT_PER_MIN = Number.isFinite(rlVal) && rlVal > 0 ? rlVal : 60
+/** 与用户身份无关的全局兜底（次/分钟）：防批量注册账号把转发层当免费代理 */
+const glVal = parseInt(process.env.JINA_PROXY_RATE_LIMIT_GLOBAL_PER_MIN || '600', 10)
+const GLOBAL_RATE_LIMIT_PER_MIN = Number.isFinite(glVal) && glVal > 0 ? glVal : 600
 const toVal = parseInt(process.env.JINA_PROXY_TIMEOUT_MS || '12000', 10)
 const UPSTREAM_TIMEOUT_MS = Number.isFinite(toVal) && toVal > 0 ? toVal : 12000
 const READ_MAX_CHARS = 30000
-const IP_HASH_SALT = process.env.IP_HASH_SALT || 'ulink-jina-proxy'
 
 /** DnsResolver 契约：resolve(hostname, 'A'|'AAAA') -> Promise<string[]> */
 const nodeDnsResolver = {
@@ -67,19 +70,6 @@ function readJsonBody(req) {
   })
 }
 
-function clientIp(req) {
-  const real = req.headers['x-real-ip']
-  if (typeof real === 'string' && real.trim()) return real.trim()
-  const xff = String(req.headers['x-forwarded-for'] || '')
-  const hops = xff.split(',').map((s) => s.trim()).filter(Boolean)
-  if (hops.length) return hops[hops.length - 1]
-  return req.headers['cf-connecting-ip'] || req.socket?.remoteAddress || 'unknown'
-}
-
-function sha256Hex(s) {
-  return crypto.createHash('sha256').update(s, 'utf8').digest('hex')
-}
-
 let _db = null
 function getDb() {
   if (_db) return _db
@@ -98,8 +88,33 @@ const server = http.createServer(async (req, res) => {
     res.end()
     return
   }
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed' }, { ...cors, Allow: 'POST, OPTIONS' })
+    return
+  }
   if (!ENV_ID || !API_KEY) {
     sendJson(res, 500, { error: 'not_configured' }, cors)
+    return
+  }
+  // 带 Origin 的浏览器请求必须在白名单内（未配置白名单 = fail-closed）。
+  // 无 Origin 的服务端调用仍要求下方 Bearer 鉴权，不构成匿名入口。
+  if (origin && !isOriginAllowed(origin, ALLOWED_ORIGINS)) {
+    sendJson(res, 403, { error: 'Origin not allowed' }, cors)
+    return
+  }
+
+  // 鉴权：fail-closed。转发层会代用户外呼第三方，匿名放开即免费开放代理。
+  let uid = ''
+  try {
+    const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID })
+    if (!auth.ok) {
+      sendJson(res, 401, { error: 'unauthorized' }, cors)
+      return
+    }
+    uid = auth.uid
+  } catch (e) {
+    console.error('[jina-proxy] auth failed (fail-closed):', e)
+    sendJson(res, 503, { error: 'Service temporarily unavailable' }, cors)
     return
   }
 
@@ -110,22 +125,30 @@ const server = http.createServer(async (req, res) => {
   })
 
   try {
-    // 限流 fail-closed：外呼放大器不做 fail-open（与 check-link 同口径）
-    const ipHash = sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)
+    // 限流 fail-closed（与 extract-video 同口径）：
+    //  1) 按 uid 60/min —— 单用户配额；
+    //  2) 全局 600/min —— 与身份无关，防批量注册账号绕过。
     const db = getDb()
-    const rl = await db.rpc('consume_rate_limit', {
-      p_key: 'jina-proxy:ip:' + ipHash,
-      p_limit: RATE_LIMIT_PER_MIN,
-      p_window_secs: 60,
-    })
-    if (rl.error) {
-      console.error('[jina-proxy] rate limit rpc failed (fail-closed):', rl.error)
-      sendJson(res, 503, { error: 'Service temporarily unavailable' }, cors)
-      return
-    }
-    if (rl.data !== true) {
-      sendJson(res, 429, { error: 'Rate limit exceeded' }, { ...cors, 'Retry-After': '60' })
-      return
+    const buckets = [
+      { key: 'jina-proxy:uid:' + uid, limit: RATE_LIMIT_PER_MIN },
+      { key: 'jina-proxy:global', limit: GLOBAL_RATE_LIMIT_PER_MIN },
+    ]
+    for (const b of buckets) {
+      const rl = await db.rpc('consume_rate_limit', {
+        p_key: b.key,
+        p_limit: b.limit,
+        p_window_secs: 60,
+      })
+      if (rl.error) {
+        console.error('[jina-proxy] rate limit rpc failed (fail-closed):', rl.error)
+        sendJson(res, 503, { error: 'Service temporarily unavailable' }, cors)
+        return
+      }
+      // 已知坑：拒绝时 data 可能是 {} 而非 false
+      if (rl.data !== true) {
+        sendJson(res, 429, { error: 'Rate limit exceeded' }, { ...cors, 'Retry-After': '60' })
+        return
+      }
     }
 
     let body

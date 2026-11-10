@@ -468,8 +468,10 @@ function sanitizeNotesHtml(html: string, bmMap?: NotesBmMap): string {
             hasSrc = true
           }
         }
+        // 错误降级不写内联 onerror（分享页 CSP 为 script-src-attr 'none'）：
+        // FALLBACK_JS 统一监听 img[data-fb] 的 error 事件并补 .img-err
         if (hasSrc) {
-          attrs.push('data-fb', `onerror="this.classList.add('img-err')"` )
+          attrs.push('data-fb')
         }
       }
       return attrs.length ? `<${tag} ${attrs.join(" ")}>` : `<${tag}>`
@@ -552,11 +554,13 @@ function buildHead(
 /**
  * 图标位：favicon/URL 图标 + 首字母占位共存（App cards.css 同款 :has() 方案，杜绝重叠）：
  *  - img 加载成功（非 .img-err）→ :has() 匹配，隐藏首字母；
- *  - img 加载失败（onerror/FALLBACK_JS 加 .img-err）→ 隐藏 img，露出首字母。
+ *  - img 加载失败（FALLBACK_JS 监听 error 后加 .img-err）→ 隐藏 img，露出首字母。
  */
 function iconMarkup(imgSrc: string, letter: string, cls: string): string {
+  // 错误降级交给 FALLBACK_JS（监听 img[data-fb] 的 error）：
+  // 分享页 CSP 为 script-src-attr 'none'，不允许内联事件处理器。
   const img = imgSrc
-    ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.classList.add('img-err', '${cls}-img-err')">`
+    ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb>`
     : ""
   const fbCls = cls === "card-logo" ? "card-logo-fallback card-logo-fb" : `${cls}-fb`
   return `${img}<span class="${fbCls}">${esc(letter)}</span>`
@@ -1503,7 +1507,7 @@ export function renderPasswordGate(
         `<h1 class="nf-title">${esc(d.passHeading)}</h1>`,
         `<p class="nf-body">${esc(d.passBody)}</p>`,
         `<form class="pw-form" method="POST" autocomplete="off">`,
-        `<input class="pw-input" type="password" name="password" placeholder="${esc(d.passPlaceholder)}" aria-label="${esc(d.passLabel)}" required minlength="4" maxlength="128" autocomplete="current-password" autofocus>`,
+        `<input class="pw-input" type="password" name="password" placeholder="${esc(d.passPlaceholder)}" aria-label="${esc(d.passLabel)}" required maxlength="128" autocomplete="current-password" autofocus>`,
         `<button class="pw-submit" type="submit">${esc(d.passSubmit)}</button>`,
         opts.error ? `<p class="pw-error" role="alert">${esc(d.passError)}</p>` : '',
         `</form>`,

@@ -369,7 +369,7 @@ function sanitizeNotesHtml(html, bmMap) {
         }
       }
       if (hasSrc) {
-        attrs.push("data-fb", `onerror="this.classList.add('img-err')"`);
+        attrs.push("data-fb");
       }
     }
     return attrs.length ? `<${tag} ${attrs.join(" ")}>` : `<${tag}>`;
@@ -422,7 +422,7 @@ function buildHead(dict, group, bookmarks, shareUrl, ogImage) {
   ].join("\n");
 }
 function iconMarkup(imgSrc, letter, cls) {
-  const img = imgSrc ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb onerror="this.classList.add('img-err', '${cls}-img-err')">` : "";
+  const img = imgSrc ? `<img src="${esc(imgSrc)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fb>` : "";
   const fbCls = cls === "card-logo" ? "card-logo-fallback card-logo-fb" : `${cls}-fb`;
   return `${img}<span class="${fbCls}">${esc(letter)}</span>`;
 }
@@ -1025,7 +1025,7 @@ function renderPasswordGate(locale = "zh-CN", opts = {}) {
         `<h1 class="nf-title">${esc(d.passHeading)}</h1>`,
         `<p class="nf-body">${esc(d.passBody)}</p>`,
         `<form class="pw-form" method="POST" autocomplete="off">`,
-        `<input class="pw-input" type="password" name="password" placeholder="${esc(d.passPlaceholder)}" aria-label="${esc(d.passLabel)}" required minlength="4" maxlength="128" autocomplete="current-password" autofocus>`,
+        `<input class="pw-input" type="password" name="password" placeholder="${esc(d.passPlaceholder)}" aria-label="${esc(d.passLabel)}" required maxlength="128" autocomplete="current-password" autofocus>`,
         `<button class="pw-submit" type="submit">${esc(d.passSubmit)}</button>`,
         opts.error ? `<p class="pw-error" role="alert">${esc(d.passError)}</p>` : "",
         `</form>`,

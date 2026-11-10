@@ -26,8 +26,9 @@ const SALT_LEN = 16
 /** 票据有效期：24 小时（访客不必每次访问都重输） */
 export const TICKET_TTL_SEC = 24 * 60 * 60
 
-/** 密码策略：最短 4 位（分享场景，不追求强口令），最长 128 防滥用 */
-export const PASSWORD_MIN_LEN = 4
+/** 密码策略（仅约束「新设/修改」）：最短 6 位，最长 128 防滥用。
+ *  验密侧不套用该下限——历史上允许 4 位，抬高下限后旧分享仍必须能解锁。 */
+export const PASSWORD_MIN_LEN = 6
 export const PASSWORD_MAX_LEN = 128
 
 export interface PasswordPolicyResult {

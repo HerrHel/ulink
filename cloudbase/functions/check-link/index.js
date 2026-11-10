@@ -286,6 +286,14 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
+  // 带 Origin 的浏览器请求必须在白名单内（未配置白名单 = fail-closed）。
+  // 仅校验 OPTIONS 不够：任意站点可用 `Content-Type: text/plain` 的简单请求
+  // 跳过预检直接 POST，借受害者浏览器消耗 IP 配额并触发服务端外呼。
+  if (origin && !isOriginAllowed(origin, ALLOWED_ORIGINS)) {
+    sendJson(res, 403, { error: 'Origin not allowed' }, cors)
+    return
+  }
+
   if (!ENV_ID || !API_KEY) {
     sendJson(res, 500, { error: 'not_configured' }, cors)
     return

@@ -25,6 +25,11 @@ const JOBS = [
     from: 'supabase/functions/check-link/ssrf-guard.ts',
     to: 'cloudbase/functions/jina-proxy/ssrf-guard.js',
   },
+  // jina-proxy 必须鉴权（转发第三方抓取服务，匿名开放会沦为免费代理）
+  {
+    from: 'supabase/functions/_shared/cb-auth.ts',
+    to: 'cloudbase/functions/jina-proxy/cb-auth.js',
+  },
   {
     from: 'supabase/functions/check-link/ssrf-guard.ts',
     to: 'cloudbase/functions/extract-video/ssrf-guard.js',

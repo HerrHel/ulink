@@ -156,6 +156,8 @@ describe('S6/S7 SSR 外壳骨架', () => {
     expect(html).toContain('src="/logo.svg"')
     expect(html).toContain('data-fb')
     expect(html).toContain('img-err')
+    // CSP 为 script-src-attr 'none'：不得输出内联事件处理器（错误降级由 FALLBACK_JS 接管）
+    expect(html).not.toContain('onerror=')
     // 验证 taskItem 对勾采用中心对齐的矢量 SVG
     expect(html).toContain("background-position: center")
     expect(html).toContain("background-size: 11px 11px")

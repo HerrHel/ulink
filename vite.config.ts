@@ -1513,7 +1513,10 @@ export default defineConfig({
         runtimeCaching: [{
           // 导航（页面跳转/刷新）网络优先：网络返回新 HTML 并更新 pages-cache；
           // 网络失败（离线）回退最近缓存的页面。10s 内网络无响应也回退缓存（慢网保护）。
-          urlPattern: ({ request }) => request.mode === 'navigate',
+          // 排除 /s/*：分享页响应带 `Cache-Control: private, no-store`（含验密后的私密内容），
+          // Workbox 的 NetworkFirst 只按 status 200 落盘、不读 Cache-Control，若不排除，
+          // 已撤销/已加密码的分享会在同一浏览器残留 7 天，离线时可被回放。
+          urlPattern: ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/s/'),
           handler: 'NetworkFirst',
           options: {
             cacheName: 'pages-cache',

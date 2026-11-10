@@ -13,6 +13,7 @@
 import { t } from '../../i18n/index.js'
 import { toast } from '../toast.js'
 import { supabase, isSupabaseConfigured } from '../supabase.js'
+import { getApiToken } from '../authDriver.js'
 import { isCloudBaseBackend, edgeFnUrl } from '../cloudbase.js'
 import { isPrivateUrl, sanitizeUrlForExternalService } from './urlGuard.js'
 
@@ -47,10 +48,25 @@ export async function fetchPageContentViaJina(
   }
 
   // 服务端转发需登录态：未配置/未登录时如实报错，绝不回退成前端直连第三方
-  //（CloudBase 云函数 v1 不验签、走 IP 哈希限流，无需会话 token）
+  //（CloudBase 云函数同样校验 Bearer token —— 转发层不开放匿名调用，否则会沦为免费代理）
   const cbMode = isCloudBaseBackend()
   let authHeaders: Record<string, string> = {}
-  if (!cbMode) {
+  if (cbMode) {
+    let token = ''
+    try {
+      token = await getApiToken()
+    } catch {
+      token = ''
+    }
+    if (!token) {
+      return {
+        success: false,
+        url: cleanUrl,
+        error: t('ai.jinaUnavailable'),
+      }
+    }
+    authHeaders = { Authorization: `Bearer ${token}` }
+  } else {
     if (!isSupabaseConfigured) {
       return {
         success: false,

@@ -42,7 +42,7 @@ var SCRYPT_P = 1;
 var KEY_LEN = 32;
 var SALT_LEN = 16;
 var TICKET_TTL_SEC = 24 * 60 * 60;
-var PASSWORD_MIN_LEN = 4;
+var PASSWORD_MIN_LEN = 6;
 var PASSWORD_MAX_LEN = 128;
 function validatePasswordInput(pw) {
   if (typeof pw !== "string") return { ok: false, reason: "not_string" };

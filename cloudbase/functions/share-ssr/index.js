@@ -34,7 +34,6 @@ const {
   ticketCookieName,
   parseCookies,
   buildTicketCookie,
-  validatePasswordInput,
 } = require('./share-lock.js')
 
 const ENV_ID = process.env.CLOUDBASE_ENV_ID || ''
@@ -46,6 +45,9 @@ const SHARE_LOCK_SECRET = process.env.SHARE_LOCK_SECRET || ''
 const IP_HASH_SALT = process.env.IP_HASH_SALT || ''
 /** 密码尝试：10 次 / 10 分钟 / (gid, IP) */
 const PASS_TRY_LIMIT = 10
+/** 密码尝试的 per-gid 全局上限：与 IP 无关，防伪造 IP 头 / 分布式换 IP 绕过。
+ *  阈值高于单人正常输错次数，但把「无限次在线爆破」收敛到有界速率。 */
+const PASS_TRY_GID_LIMIT = 30
 const PASS_TRY_WINDOW_SEC = 600
 
 function clientIp(req) {
@@ -98,12 +100,37 @@ function readPasswordForm(req, limit = 4096) {
   })
 }
 
-/** 分享页安全响应头（2026-10-31）：分享页含用户内容与「保存到我的库」按钮，防嵌套点击劫持 */
+/**
+ * 分享页安全响应头：分享页含用户内容与「保存到我的库」按钮，防嵌套点击劫持。
+ *
+ * CSP 说明：
+ * - `script-src 'self' 'unsafe-inline'`：页面需要自有的内联脚本（主题防闪烁 / 初始数据 /
+ *   渐进增强）。用户内容先经白名单清洗，`<script>` 标签整体剥离，不可能注入脚本元素。
+ * - `script-src-attr 'none'`：禁止一切内联事件处理器与 `javascript:` URL。分享页与 /app
+ *   同源（会话 token 在 localStorage），这层是 sanitizer 万一漏一处时的兜底。
+ * - `style-src 'unsafe-inline'`：页面内联 `<style>` 与 style 属性（分类主题色等）。
+ * - 字体/图标按实际来源放行：Google Fonts、任意 https 图标、data: 内联图。
+ */
+const SHARE_CSP = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline'",
+  "script-src-attr 'none'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https:",
+  "img-src 'self' data: https: http:",
+  "connect-src 'self' https: wss:",
+].join('; ')
+
 const SHARE_SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'SAMEORIGIN',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=31536000',
+  'Content-Security-Policy': SHARE_CSP,
 }
 
 function sendHtml(res, status, html, extraHeaders) {
@@ -233,26 +260,36 @@ const server = http.createServer(async (req, res) => {
         return
       }
 
-      // 爆破防护：(gid, IP) 维度，10 次 / 10 分钟
+      // 爆破防护双层（缺一不可）：
+      //  1) (gid, IP) 10 次 / 10 分钟 —— 限制单个客户端；
+      //  2) gid 全局 30 次 / 10 分钟 —— 与 IP 无关。网关不回填可信客户端 IP，
+      //     X-Real-IP / X-Forwarded-For 可伪造；只有第 1 层时，攻击者每次换头
+      //     就得到全新计数桶，可对分享密码做无限次在线爆破。
       const ipHash = sha256Hex(clientIp(req) + '|' + IP_HASH_SALT)
       try {
-        const rl = await db.rpc('consume_rate_limit', {
-          p_key: `share-pass:${id}:${ipHash}`,
-          p_limit: PASS_TRY_LIMIT,
-          p_window_secs: PASS_TRY_WINDOW_SEC,
-        })
-        if (rl.error) {
-          console.error('[share-ssr] pass rate limit failed (fail-closed):', rl.error)
-          sendText(res, 503, 'temporarily unavailable', { 'cache-control': 'no-store' })
-          return
-        }
-        // 本仓已知坑：拒绝时 data 可能是 {} 而非 false —— 必须显式判 true
-        if (rl.data !== true) {
-          sendHtml(res, 429, renderPasswordGate(locale, { error: true }), {
-            'cache-control': 'no-store',
-            'Retry-After': String(PASS_TRY_WINDOW_SEC),
+        const buckets = [
+          { key: `share-pass:${id}:${ipHash}`, limit: PASS_TRY_LIMIT },
+          { key: `share-pass-gid:${id}`, limit: PASS_TRY_GID_LIMIT },
+        ]
+        for (const b of buckets) {
+          const rl = await db.rpc('consume_rate_limit', {
+            p_key: b.key,
+            p_limit: b.limit,
+            p_window_secs: PASS_TRY_WINDOW_SEC,
           })
-          return
+          if (rl.error) {
+            console.error('[share-ssr] pass rate limit failed (fail-closed):', rl.error)
+            sendText(res, 503, 'temporarily unavailable', { 'cache-control': 'no-store' })
+            return
+          }
+          // 本仓已知坑：拒绝时 data 可能是 {} 而非 false —— 必须显式判 true
+          if (rl.data !== true) {
+            sendHtml(res, 429, renderPasswordGate(locale, { error: true }), {
+              'cache-control': 'no-store',
+              'Retry-After': String(PASS_TRY_WINDOW_SEC),
+            })
+            return
+          }
         }
       } catch (e) {
         console.error('[share-ssr] pass rate limit threw:', e)
@@ -261,8 +298,9 @@ const server = http.createServer(async (req, res) => {
       }
 
       const pw = await readPasswordForm(req)
-      const policy = validatePasswordInput(pw)
-      const passed = policy.ok && verifyPassword(pw, passwordHash)
+      // 验密不套用「新密码最短长度」：历史上允许 4 位，抬高下限后旧分享必须仍可解锁。
+      // 表单体上限 4KB 已挡超长输入，verifyPassword 对畸形摘要/异常格式一律 fail-closed。
+      const passed = verifyPassword(pw, passwordHash)
       if (!passed) {
         sendHtml(res, 401, renderPasswordGate(locale, { error: true }), {
           'cache-control': 'no-store',

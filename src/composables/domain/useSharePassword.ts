@@ -22,8 +22,9 @@ export interface SetSharePasswordResult {
   error?: SharePasswordError
 }
 
-/** 与服务端保持一致的密码策略（前端先拦一遍，服务端仍会再校验） */
-export const SHARE_PASSWORD_MIN = 4
+/** 与服务端保持一致的密码策略（前端先拦一遍，服务端仍会再校验）。
+ *  仅约束新设/修改；历史上 4 位旧密码仍可在分享页解锁。 */
+export const SHARE_PASSWORD_MIN = 6
 export const SHARE_PASSWORD_MAX = 128
 
 export function isSharePasswordAcceptable(pw: string): boolean {
