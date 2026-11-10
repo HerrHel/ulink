@@ -22,14 +22,17 @@ const opts = {
 const okMessages = [{ role: 'user', content: '你好' }]
 
 describe('mimo-guard.validateChatBody', () => {
-  it('合法请求放行：返回 model/messages/stream，默认流式', () => {
+  it('合法请求放行：返回 model/messages/stream，未显式请求时不流式', () => {
     const res = validateChatBody({ messages: okMessages }, opts)
     expect(res.ok).toBe(true)
     if (res.ok) {
       expect(res.value.model).toBe('mimo-v2.6-flash')
       expect(res.value.messages).toEqual(okMessages)
-      expect(res.value.stream).toBe(true)
+      // 尊重调用方选择：主聊天显式传 stream:true；省略时按非流式（JSON）处理
+      expect(res.value.stream).toBe(false)
     }
+    const streaming = validateChatBody({ messages: okMessages, stream: true }, opts)
+    expect(streaming.ok && streaming.value.stream).toBe(true)
   })
 
   it('model 真白名单：默认模型与显式白名单放行', () => {
