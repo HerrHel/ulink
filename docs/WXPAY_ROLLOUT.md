@@ -12,14 +12,14 @@
 |---|---|---|
 | 商户号 / Native 产品 | ✅ 已开通 | 你确认 |
 | 小程序认证 | ✅ 已认证 | 可作 Native 下单的 `appid`（需与商户号建立绑定关系，见 §2） |
-| 数据库迁移 | ✅ 已应用 | `create_payment_order / attach_pay_payload / settle_paid_order / fail_payment_order / mark_order_refunded` 均在库；`plans` 有 free / plus_monthly ¥12 / plus_yearly ¥108 |
+| 数据库迁移 | ✅ 已应用 | `create_payment_order / attach_pay_payload / settle_paid_order / fail_payment_order / mark_order_refunded` 均在库；`plans` 现为 free / plus_monthly ¥15 / pro_quarterly ¥32 / plus_yearly ¥108 |
 | 渠道代码 | ✅ 已就绪 | `cloudbase/functions/pay/lib/wxpay.js`：Native 下单 / APIv3 签名 / 回调验签+解密 / 主动查单 / 关单 |
 | 前端购买页 | ✅ 代码在 | `src/composables/domain/usePayment.ts` + `src/components/modals/PurchaseModal.vue` + `qrcode` 依赖 |
 | **`pay` 云函数部署** | ✅ **已部署** | 2026-10-28 创建；`tcb fn list` 已含 `pay`（最近一次更新状态 `UpdateFailed`，需复核，见 `TECH_DEBT.md`） |
 | **网关 `/pay` 路由** | ✅ 已建 | `tcb routes list`：`/pay` → WEB_SCF（Domain `*`，10-28 创建）；`GET https://ulink.ren/pay?action=plans` 返回 405（服务可达） |
 | **渠道密钥注入** | ✅ 已注入 | `.env.local` 已有 `WXPAY_APPID/MCHID/SERIAL_NO/PRIVATE_KEY/APIV3_KEY/PUBLIC_KEY/NOTIFY_URL`；上线前仍需核对平台证书/公钥模式二选一 |
 | ICP 备案 | ✅ 已通过 | 2026-10-27 通过，`鄂ICP备2026061718号-1` 已展示（`src/config/site.ts`）；公安联网备案仍在 30 日期限内，待办 |
-| 落地页价目 | ✅ 已上线 | `index.html` 已有四档价目（免费/PRO 月 ¥12/季 ¥32/年 ¥108）；仅 JSON-LD `offers.price` 仍为 `"0"`（待补） |
+| 落地页价目 | ✅ 已上线 | `index.html` 已有四档价目（免费/PRO 月 ¥15/季 ¥32/年 ¥108）；JSON-LD `offers.price` 已同步为 `"15"` |
 
 ---
 
@@ -201,7 +201,7 @@ Native（扫码）能用，但体验是"页内弹二维码"。小程序已认证
 3. 提交「支付产品-产品权限申请」（支付域名 + ICP 备案截图 + 经营场景截图）→ 开通 H5/JSAPI 支付；
    - 备案主体须与商户主体一致，个体户一般不接受备案授权函；
    - 经营场景截图要含**浏览器地址栏**，且页面要有**价格与商品名称**；
-4. 补落地页价目（免费版 + Plus ¥12/月 + ¥108/年），同步修 `index.html` 的 JSON-LD `offers.price`（现在还是 `"0"`）。
+4. 落地页价目（免费版 + PRO 月 ¥15/季 ¥32/年 ¥108，JSON-LD `offers.price` 已同步为 `"15"`）。
 
 ---
 

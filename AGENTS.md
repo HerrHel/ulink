@@ -6,18 +6,19 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 与链（ulink，原 LinkVault）— 单页书签管理器（PWA）+ AI 工作台，Vue 3 + Pinia + TipTap 编辑器，Vite 构建，TypeScript。数据持久化于 localStorage + IndexedDB（Dexie），云端同步/认证走**腾讯云开发 CloudBase**；另有订阅会员（PRO，`plans` 表为价格/权益唯一来源）与视频解析能力。**双语文案**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板；首页静态 SEO 默认中文（应用内可在中文 / English 间切换，文档/首装/重置数据均跟随当前语言）。
 
-> ## ⚠️ 后端与线上部署现状（2026-10-31 核对，务必先读）
+> ## ⚠️ 后端与线上部署现状（2026-11-10 核对，务必先读）
 >
 > **生产已全量切换 CloudBase**（`.env.production` 的 `VITE_BACKEND=cloudbase`），Supabase 仅作历史迁移来源，**不要再往 `supabase/` 目录加功能**。ICP 备案已于 **2026-10-27 通过**（`鄂ICP备2026061718号-1`，展示在 `src/config/site.ts` / `public/landing.js`），`ulink.ren` 自 **2026-10-28** 起解析到 CloudBase（网关 `/` → 静态托管），不再经 Cloudflare。
 >
 > - 环境 `ulink-d1g5srvjo54b1886a`（ap-shanghai，个人版），PG `postgres-2m9745ae`
-> - 12 个 HTTP 云函数 + `maintenance` 定时任务：`report-error / check-link / send-feedback / extract-video / jina-proxy / mimo-chat / share-ssr / edge-headers / pay / redeem / account / share-admin`，代码在 `cloudbase/functions/<name>/`
-> - 视频解析微服务 `ulink-video-worker`（CloudBase 云托管，`scripts/video-worker/`，yt-dlp + Playwright + ffmpeg，可选 ASR/OCR 深度解析）；`extract-video` 函数通过 `VIDEO_WORKER_URL` 调用，接口契约见 `docs/VIDEO_DEEP_EXTRACT.md`
-> - 云函数部署：`node scripts/deploy-cloudbase-fn.mjs <fn>`（`--env-only` 只换环境变量）；派生资产 `node scripts/build-fn-assets.mjs`
-> - **前端部署**：`ulink.ren` = **CloudBase 静态托管**，由 `.github/workflows/ci.yml` 的 `deploy` job 用 `tcb hosting deploy ./dist --safe` 发布（测试全绿才发）。Cloudflare Pages（`ulink.pages.dev`）**已不是主站**，仅保留 `/api/*` 边缘函数（`functions/`）与历史兜底；`npm run pages:deploy` 是手动遗留通道，**不要用它发布主站**
+> - 13 个 HTTP 云函数 + `maintenance` 定时任务：`account / ai-api / check-link / edge-headers / extract-video / jina-proxy / mimo-chat / pay / redeem / report-error / send-feedback / share-admin / share-ssr`，代码在 `cloudbase/functions/<name>/`
+> - 视频/媒体解析现状：`ulink-video-worker` 云托管容器已于 2026-11 **下线并删除**（消除每月 ~365 元常驻成本与版权下载风险；`scripts/video-worker/` 仅归档保留，切勿重新部署）；深度媒体解析已升级为音视频直连境内大模型（MiMo-V2.6-Flash 原生多模态，音频客户端 16kHz 压缩并物化、视频关键帧秒级对齐），用户在聊天面板直接上传拥有权利的媒体文件；`extract-video` 保留 B 站原生适配器与 r.jina.ai 兜底
+> - 云函数部署：`node scripts/deploy-cloudbase-fn.mjs <fn>`（`--env-only` 只换环境变量；`maintenance` 会自动幂等补建每日 03:00 备份触发器）；派生资产 `node scripts/build-fn-assets.mjs`
+> - **前端部署**：`ulink.ren` = **CloudBase 静态托管**，由 `.github/workflows/ci.yml` 的 `deploy` job 用 `tcb hosting deploy ./dist --safe` 发布（测试全绿才发）。Cloudflare Pages **已全面退役**（原 `/api/ai-candidates` 与 `/api/extract-metadata` 已于 2026-11-09 迁入 CloudBase `ai-api`，`CF_FN_BASE` 默认置空），不要用 `npm run pages:deploy`
 > - 线上自检：`npm run check:prod`（比对 `https://ulink.ren/version.json` 的 commit 与本地 HEAD；构建时 `buildInfoPlugin` 注入）
 > - 客户端双后端入口：`src/lib/dbApi.ts`（`dbFrom`/`dbRpc`）；`VITE_BACKEND` 在 `vitest.config.ts` 钉死为空
-> - 网络策略：公开读只能走 SECURITY DEFINER RPC；`consume_rate_limit` 拒绝时返回 `{}`，判定必须 `data !== true`
+> - 网络策略：公开读只能走 SECURITY DEFINER RPC；`consume_rate_limit` 拒绝时返回 `{}`，判定必须 `data !== true`；分享访问密码最短 6 位，`share-admin` CORS 为 fail-closed
+> - 数据库运维与备份：共享集群不提供平台备份，由 `maintenance` 云函数每日 03:00 执行 `fn_create_db_backup`（保留 30 天）；恢复脚本 `scripts/restore-db-backup.mjs`；审计日志 `audit_log_event` + 账号封禁 `user_security`
 > - 完整操作手册与坑：`docs/CLOUDBASE_MIGRATION.md`（迁移/备案均已完成，文中"切解析前"属历史方案记录）；备案底稿：`docs/ICP_FILING_PREP.md`（2026-10-27 已通过，保留取证）；**文档索引与状态**：`docs/README.md`
 > - ⚠️ **改 UI 配色/排版/动效前必读 `docs/BRAND.md`**：四主题四色相（浅蓝/暗粉/绿/米白）是品牌签名而非漂移，accent 令牌有五处副本需逐字同步
 >
@@ -50,7 +51,7 @@ npm run coverage    # 单元测试覆盖率
 运行单个测试文件：`npx vitest run src/__tests__/utils.test.ts`
 Playwright 单个文件：`npx playwright test e2e/app.spec.ts`
 
-**测试按需跑**：日常改动跑定向测试（改动文件对应的单测、相关 spec）即可；全量 `npm run test`（约 5200 个用例 / 360+ 测试文件）与全量 e2e 仅在门禁场景跑（提交前自检、CI）。全量 vitest 固定 8 并发（`vitest.config.ts` maxWorkers）、e2e 文件级并行 3 worker；怀疑生产构建（PurgeCSS/minify）回归时用 `npm run test:e2e:prod`——dev server 无法复现该类问题，必须对生产产物测。e2e 首跑单条失败先多轮复跑判定 flake 再定性，勿直接当代码缺陷。
+**测试按需跑**：日常改动跑定向测试（改动文件对应的单测、相关 spec）即可；全量 `npm run test`（约 5700+ 个用例 / 380 个测试文件）与全量 e2e 仅在门禁场景跑（提交前自检、CI）。全量 vitest 固定 8 并发（`vitest.config.ts` maxWorkers）、e2e 文件级并行 3 worker；怀疑生产构建（PurgeCSS/minify）回归时用 `npm run test:e2e:prod`——dev server 无法复现该类问题，必须对生产产物测。e2e 首跑单条失败先多轮复跑判定 flake 再定性，勿直接当代码缺陷。
 
 ## ESLint
 
@@ -164,23 +165,23 @@ composables 按职责分三组：
 
 - 入口：`ui.activeView = 'ai'`；`App.vue` 异步加载 `components/chat/AiWorkspace.vue`（不进首屏 bundle）
 - 内核 `src/lib/ai/`（约 45 个模块，按职责）：
-  - 主链路：mimoClient / mimoStream / mimoPrompt / mimoReply（经 `mimo-chat` 云函数 SSE 流式，**前端不直连模型**）
+  - 主链路：mimoClient / mimoStream / mimoPrompt / mimoReply（经 `mimo-chat` 云函数 SSE 流式，**前端不直连模型**）；候选寻站与网页元数据提取经 `ai-api` 云函数（`action=candidates|extract`）
   - 智能体：universalAgent、tools、siteCommander / siteActions / siteIntents / siteHitl / siteUndoStack、taskPlanner
   - 检索与知识：knowledge、localRAG、evolvingGraph、semanticSearch、localClustering、mentalModel、queryExpand、serendipityEngine、ambientInsights / ambientGrooming
   - 录入与整理：smartIntake、smartPrefill、bookmarkEnrich、candidateSave、cloudCandidates、similarWebsites、noteWriteback、draftDiff
   - 卡片与场景：cardReader、cardLocator、chatSessions、chatStreamParser、attachmentHelper、sendSummary
-  - 视频/网页：videoExtract、videoHarvest、deepVideoExtract、videoPlatforms、jinaReader、deepLinkExtract、universalUrlInference
+  - 视频/媒体/网页：unifiedMedia（媒体统一分流：图片多模态直传、视频抽帧秒级对齐、音频 16kHz 客户端压缩物化直传）、videoExtract、videoHarvest、deepVideoExtract、videoPlatforms、jinaReader、deepLinkExtract、universalUrlInference
   - 安全：secretFilter、urlGuard、aiProfile
-- 云端：`cloudbase/functions/mimo-chat/`（按 uid 限流 + 额度；线上 `BILLING_MODE=enforce`）；模型密钥只在云函数/云托管环境变量，**绝不进前端**
+- 云端：`cloudbase/functions/mimo-chat/`（按 uid 限流 + 额度；线上 `BILLING_MODE=enforce`）；`ai-api`（AI 候选与元数据提取）；模型密钥只在云函数环境变量，**绝不进前端**
 - 额度口径见 `docs/PRICING.md` 与 `docs/QUOTA_ENFORCEMENT.md`；改额度先改 `plans.features`，再同步文档。已服务端强制：`ai.tokens.monthly`、`ai.requests.daily`（2026-10-31 补，free 20/PRO 100）、`video.extract.daily`、`video.deep.daily`、`linkcheck.daily`、`linkcheck.auto(.max)`、`history.days`；`storage.bytes` 仅展示（购买页已标注），`sync.devices` 已撤下
 
 ### 计费与会员（2026-10 上线）
 
-- 云函数：`pay`（微信 Native / 支付宝当面付：下单 / 回调 / 查单 + 幂等发货；**已上线，微信 Native 已配置可收款，支付宝代码就绪、密钥未配**）、`redeem`（兑换码）、`account`（注销 + 交易记录）
-- 数据：迁移 `20261025000002_billing_core.sql`（plans / entitlements / orders / usage_ledger）、`20261025000004_redeem_code.sql`、`20261028000010_payment_flow.sql`；**价格与权益唯一来源 = `plans` 表（`price_cents` + `features`）**，前端不硬编码
+- 云函数：`pay`（微信 Native / 支付宝电脑与手机网站支付：下单 / 回调 / 查单 + 幂等发货；微信 Native 已上线可收款，支付宝电脑网站支付 `alipay.trade.page.pay` + 手机网站支付 `alipay.trade.wap.pay` 代码就绪已接入自适应收银台）、`redeem`（兑换码）、`account`（注销 + 交易记录）
+- 数据：迁移 `20261025000002_billing_core.sql`（plans / entitlements / orders / usage_ledger）、`20261025000004_redeem_code.sql`、`20261028000010_payment_flow.sql`；**价格与权益唯一来源 = `plans` 表（`price_cents` + `features`，PRO 月付 ¥15 / 季付 ¥32 / 年付 ¥108）**，前端不硬编码；全额退款由 `mark_order_refunded` 自动把 entitlements 设为 `refunded`
 - 前端：`PurchaseModal.vue` + `usePayment`（下单/轮询/到账）、`usePurchasePlans`、`useTransactions`、`useRedeem`、`useEntitlement`，设置面板会员区
 - 计费模式：`BILLING_MODE`（`shadow` 只计量 / `enforce` 超额 429）；**2026-11-07 经 `tcb fn detail mimo-chat -e ulink-d1g5srvjo54b1886a --json` 实测线上为 `enforce`**，`reserve_quota → 调用 → settle_quota` 两段式计费已接入云函数（客户端断连亦会 settle）。如需回退改回 `shadow`，见 `docs/BILLING_OPS.md` §7；改额度展示前先读 `docs/BILLING_OPS.md`
-- 上线手册：`docs/WXPAY_ROLLOUT.md`、`docs/ALIPAY_ROLLOUT.md`；当前仅微信渠道完成密钥配置（支付宝待开通）
+- 上线手册：`docs/WXPAY_ROLLOUT.md`、`docs/ALIPAY_ROLLOUT.md`；微信与支付宝双渠道接入细节详见两份手册
 
 ### 国际化（i18n）
 
@@ -198,7 +199,7 @@ composables 按职责分三组：
 - **PWA**：vite-plugin-pwa，缓存策略见 vite.config.ts 中 workbox 配置（favicon-cache、font-cache）
 - **安全头**：dev/preview 由 vite `headersPlugin` 注入真实响应头；生产分两层——静态入口（`/`）由 `securityMetaPlugin` 构建期注入 `<meta>` CSP + Referrer，`/app`、`/legal/*` 由 `edge-headers` 云函数反代并下发真实响应头（CSP 含 frame-ancestors、XCTO、X-Frame-Options、HSTS），分享页由 `share-ssr` 自带 XCTO/XFO；法律页另有 `default-src 'none'` 的严格 CSP meta
 - **未知路径**：CloudBase 静态托管（腾讯云 COS）对不存在路径返回 404（2026-10-31 实测），不再是 Cloudflare 的 SPA 回退；应用自身不依赖 history 路由（入口固定 `/app`，分享走网关 `/s/*`），新增前端路由需同时在托管侧配回退
-- **前端部署**：`npm run build` 产物由 CI 部署到 **CloudBase 静态托管**（`tcb hosting deploy ./dist --safe`）；**后端云函数**用 `node scripts/deploy-cloudbase-fn.mjs <fn>`。Cloudflare Pages 仅保留 `functions/` 下的 `/api/*` 边缘函数（手动 `npm run pages:deploy` 才更新，非主站发布通道）
+- **前端部署**：`npm run build` 产物由 CI 部署到 **CloudBase 静态托管**（`tcb hosting deploy ./dist --safe`）；**后端云函数**用 `node scripts/deploy-cloudbase-fn.mjs <fn>`。Cloudflare Pages 已全面退役（原 `/api/*` 已迁入 CloudBase `ai-api` 云函数，`ulink.pages.dev` 不再承载端点）
 
 ### CLI（已归档，2026-10-31）
 
@@ -206,7 +207,7 @@ composables 按职责分三组：
 
 ### 浏览器扩展
 
-`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc 等多浏览器；通过 `npm run ext:pack` 打包），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏（side_panel / sidebar_action）沉浸式操作。**当前版本 1.2.2**（2026-11-01：平台视频深度解析下线，移除右键解析入口；只保留保存书签/侧边栏；同日移除遗留 Supabase host 权限、`config.js` 改为 CloudBase 配置）。**网页端新增「上传媒体解析」**：用户上传自己拥有权利的视频/音频/图片 → `extract-video` 的 `deep_upload` → worker ASR/OCR（不走平台抓取、不用扩展/代理）。**双语文案**：扩展使用标准 WebExtensions i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` **现为 CloudBase shim**（`window.supabase.createClient(envId, publishableKey)` → `{ from: rdb().from, auth }`，`verifyOtp` 闭包适配），配套 `lib/cloudbase-sdk.js`（@cloudbase/js-sdk IIFE bundle）；`npm run ext:bundle-supabase` 的 supabase-js 生成物已废弃。
+`extension/` 目录包含通用 Manifest V3 浏览器扩展（兼容 Edge、Chrome、Firefox、Brave、Arc 等多浏览器；通过 `npm run ext:pack` 打包），支持快捷键保存当前页面到 ulink（Ctrl+Shift+S，manifest 中 save-to-linkvault 命令），侧边栏（side_panel / sidebar_action）沉浸式操作。**当前版本 1.2.2**（2026-11-01：平台视频深度解析下线，移除右键解析入口；只保留保存书签/侧边栏；同日移除遗留 Supabase host 权限、`config.js` 改为 CloudBase 配置）。**网页端多模态媒体解析**：用户上传自己拥有权利的视频/音频/图片 → 前端 `unifiedMedia` 压缩/分流 → 直连境内大模型 MiMo-V2.6-Flash（不走平台抓取、无需容器微服务、不用扩展/代理）。**双语文案**：扩展使用标准 WebExtensions i18n（`_locales/zh_CN` + `_locales/en`，`manifest.default_locale = "zh_CN"`），所有用户可见字段（manifest name/description/title 与 context menu/sidepanel 文本）走 `__MSG_xxx__` 占位 + `chrome.i18n.getMessage()`。`extension/lib/supabase.js` **现为 CloudBase shim**（`window.supabase.createClient(envId, publishableKey)` → `{ from: rdb().from, auth }`，`verifyOtp` 闭包适配），配套 `lib/cloudbase-sdk.js`（@cloudbase/js-sdk IIFE bundle）；`npm run ext:bundle-supabase` 的 supabase-js 生成物已废弃。
 
 ### 样式
 

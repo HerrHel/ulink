@@ -1,7 +1,7 @@
 # 计费与合规运维手册（Billing Ops）
 
 > 配套文档：`BILLING_DESIGN.md`（设计）、`SHARE_PASSWORD.md`（分享密码）、`legal/`（法律文本）
-> **当前状态（2026-11-07 更新）**：计费已部署上线——迁移已应用、`pay` 云函数与 `/pay` 网关路由已上线（微信 Native 已配置、可收款；支付宝代码就绪、密钥未配置）、`redeem`/`account` 已在 11 个 HTTP 函数之列；**2026-11-07 经 `tcb fn detail mimo-chat -e ulink-d1g5srvjo54b1886a --json` 读到的环境变量 Value 实测，线上 `mimo-chat` 的 `BILLING_MODE=enforce`**（仅强制 `ai.tokens.monthly`），**不再是影子计量**；`reserve_quota → 调用 → settle_quota` **两段式计费已接入** `mimo-chat`（客户端断连亦会 settle）。成本口径与收费点选择于 2026-10-31 核实、2026-11-07 经线上实测复核。
+> **当前状态（2026-11-10 更新）**：计费已部署上线——迁移已应用、`pay` 云函数与 `/pay` 网关路由已上线（微信 Native 已配置收款；支付宝电脑/手机网站支付代码就绪并支持自适应收银台）、`redeem`/`account` 已在 13 个 HTTP 函数之列；**2026-11-07 经 `tcb fn detail mimo-chat -e ulink-d1g5srvjo54b1886a --json` 实测线上 `mimo-chat` 的 `BILLING_MODE=enforce`**，`reserve_quota → 调用 → settle_quota` **两段式计费已接入** `mimo-chat`（客户端断连亦会 settle）。成本口径与收费点选择于 2026-10-31 核实、2026-11-07 经线上实测复核，PRO 套餐月付为 ¥15。
 >
 > 本文 §7「回滚到 shadow」操作仍然有效；但 §3 表里「暂勿开启」、§4 的阶段划分、§5 的「支付尚未做」均为上线前口径，属**历史记录（已过时）**，勿据此判断当前状态。
 
@@ -41,32 +41,14 @@ node scripts/deploy-cloudbase-fn.mjs share-admin
 node scripts/deploy-cloudbase-fn.mjs account
 ```
 
-`maintenance` 是**事件型**函数（定时触发器），不走上面的 HTTP 脚本（它没有 `--httpFn` 路由）：
+`maintenance` 是**事件型**定时任务函数（每日 03:00 备份 + 清理），已纳入统一部署脚本支持：
 
 ```bash
-# ① 写临时 cloudbaserc.json（含环境变量），随函数一起提交
-cd cloudbase/functions/maintenance
-cat > cloudbaserc.json <<'EOF'
-{"envId":"ulink-d1g5srvjo54b1886a","functions":[{"name":"maintenance","timeout":60,
-"runtime":"Nodejs20.19","installDependency":true,
-"envVariables":{"CLOUDBASE_ENV_ID":"ulink-d1g5srvjo54b1886a","CLOUDBASE_APIKEY":"<APIKEY>",
-"ERROR_LOG_KEEP_DAYS":"365","TRASH_KEEP_DAYS":"0"}}]}
-EOF
-
-# ② 部署（--dir . 必给：tcb 默认在 cwd 下找 functions/<name>，找不到会报
-#    "Directory for function [maintenance] not found"）
-printf '\n' | MSYS_NO_PATHCONV=1 bash <tcb> fn deploy maintenance --dir . --runtime Nodejs20.19 --force --yes
-
-# ③ 注入/更新环境变量（会交互询问 Override / Merge，管道里喂回车选默认 Override）
-printf '\n' | MSYS_NO_PATHCONV=1 bash <tcb> config update fn maintenance
-
-# ④ 建定时触发器（cron 是 **7 位**：秒 分 时 日 月 周；UTC 03:00 = 北京 11:00）
-printf '\n' | MSYS_NO_PATHCONV=1 bash <tcb> fn trigger create maintenance \
-  -e ulink-d1g5srvjo54b1886a --trigger-name daily-cleanup --cron "0 0 3 * * * *"
-
-# ⑤ 删掉含密钥的临时文件，绝不落仓库
-rm -f cloudbaserc.json
+# 部署 maintenance 并自动确保 daily-maintenance 定时触发器（0 0 3 * * * *）
+node scripts/deploy-cloudbase-fn.mjs maintenance
 ```
+
+> 手动部署说明（历史参考）：原先通过手写临时 `cloudbaserc.json` + `tcb fn trigger create`，现由 `scripts/deploy-cloudbase-fn.mjs` 全自动幂等处理，防触发器丢失。
 
 > 校验：`bash <tcb> fn detail maintenance -e <envId>` 的 `Triggers` 行应显示
 > `daily-cleanup：{"cron":"0 0 3 * * * *"}`。

@@ -6,9 +6,9 @@
 
 `supabase.js` 现在**不是** Supabase 官方 SDK，而是 CloudBase 兼容层：
 它把 `@cloudbase/js-sdk`（`cloudbase-sdk.js`，IIFE 挂 `window.CloudBaseSdk`）适配成
-`window.supabase.createClient(envId, publishableKey)` 形状，供 `sidepanel.js` 与
-`video-extract.js` 调用（`{ from, auth }`，含 `verifyOtp` 闭包适配）。扩展的认证/数据实际走腾讯云开发 CloudBase，
-**不要再安装或打包 `@supabase/supabase-js`**。另：`package.json` 的 `ext:bundle-supabase` 脚本已废弃——执行它会把官方 SDK 覆盖到本目录，不要运行。
+`window.supabase.createClient(envId, publishableKey)` 形状，供 `sidepanel.js`（以及历史 `video-extract.js`）
+调用（`{ from, auth }`，含 `verifyOtp` 闭包适配）。扩展的认证/数据实际走腾讯云开发 CloudBase，
+**不要再安装或打包 `@supabase/supabase-js`**。另：`package.json` 的 `ext:bundle-supabase` 脚本已废弃——执行它会把官方 SDK 覆盖到本目录，不要运行。扩展 1.2.2 已移除右键深度解析入口，仅保留保存书签与侧边栏。
 
 ## 配置（L2）
 

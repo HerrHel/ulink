@@ -6,7 +6,7 @@
  *    必须 MSYS_NO_PATHCONV=1；本脚本用 execFileSync 传 argv，天然规避。
  * 2) 环境变量（服务端 API Key 等）只能写在 cloudbaserc.json 里再 `tcb config update fn`，
  *    而 cloudbaserc.json 含密**绝不能进仓库**——脚本用完即删。
- * 3) 5 个函数逐个手敲这些命令容易漏；脚本统一入口。
+ * 3) 14 个云函数逐个手敲这些命令容易漏；脚本统一入口。
  *
  * 用法：
  *   node scripts/deploy-cloudbase-fn.mjs report-error

@@ -1,6 +1,6 @@
 # 分享访问密码（Share Lock）实施与运维
 
-> 状态：**已上线（2026-10-31 复核）**——`share-ssr` 密码门 + `share-admin` 均在线（`GET /share-admin` 返回函数自身 405、`GET /s/*` 返回 SSR 页面），部署/验证项见 §6。不要按「待部署」理解。
+> 状态：**已上线（2026-11-10 复核）**——`share-ssr` 密码门 + `share-admin` 均在线，密码最短 6 位，`ALLOWED_ORIGINS` fail-closed 拦截，部署/验证项见 §6。不要按「待部署」理解。
 > 目标：让分享链接具备「知道链接 + 知道密码」双重条件，支撑「私有链接」的合规定性（见 `BILLING_DESIGN.md` §8.5）
 
 ---
@@ -68,7 +68,7 @@ POST /s/<gid>   (form: password=xxx)
 | `SHARE_LOCK_SECRET` | share-ssr | 是（启用密码功能时） | 票据签名密钥，≥32 字节随机串。缺失时带密码的分享直接 503 |
 | `SHARE_SSR_IP_HASH_SALT` | share-ssr | 否 | 密码尝试限流的 IP 盐，默认 `ulink-share-ssr`；**注入后运行时名为 `IP_HASH_SALT`** |
 | `SHARE_ADMIN_IP_HASH_SALT` | share-admin | 否 | 同上，默认 `ulink-share-admin`；注入后运行时名为 `IP_HASH_SALT` |
-| `ALLOWED_ORIGINS` | share-admin | 建议 | 代码语义：**未配置/为空 = 放行所有来源**；只有配置了不含请求 Origin 的列表才拒绝（fail-open，已记入 `TECH_DEBT.md`）。生产应显式配置站点源 |
+| `ALLOWED_ORIGINS` | share-admin | 必需 | CORS 白名单：**fail-closed**（未配置或请求 Origin 不在白名单中均返回 403；无 Origin 的服务端调用放行）。生产由部署脚本自动注入站点源 |
 
 生成密钥：
 
@@ -129,7 +129,7 @@ curl -s https://ulink.ren/s/<gid> | grep -c 'pw-form'   # 期望 1
 | 项 | 现状 |
 |---|---|
 | 分类分享（`/s/c/<sid>`） | **尚不支持密码**，POST 返回 405 |
-| 密码强度 | 最低 4 位（分享场景，不追求强口令），最长 128 |
+| 密码强度 | 最低 6 位（`PASSWORD_MIN_LEN = 6`，防暴力猜测），最长 128 |
 | 爆破防护 | 10 次 / 10 分钟 / (gid, IP)，超限 429 |
 | 票据有效期 | 24 小时，重新输密码即换新票据 |
 | 改密码后 | 旧票据**不会失效**（票据只绑定 gid，不含密码版本）。若需「改密即踢下线」，要在票据里加入密码摘要的前 8 位作为版本号 |

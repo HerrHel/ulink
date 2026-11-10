@@ -59,6 +59,7 @@ verify_*.html
 # 各 AI 工具的工作目录（skills / plans / documents 缓存，不进仓库）
 .agents/
 .trae/
+.trae-html-share-packages/
 .zcode/
 
 # 临时排查产物（curl/接口调试输出）

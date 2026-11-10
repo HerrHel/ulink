@@ -7,8 +7,8 @@
  * 2. **未配置降级**：未提供 envId / publishable key 时返回 null client，形状与真实
  *    客户端一致（builder 可无限链式调用、await 得 `{data:null,error}`），调用方无需
  *    null 判断——与 `lib/supabase.ts` 的 null client 策略保持一致。
- * 3. **后端开关**：`VITE_BACKEND=cloudbase` 才启用；默认仍是 Supabase 链路，
- *    切换前不影响线上。
+ * 3. **后端开关**：生产环境已全量切换 CloudBase（.env.production 中 `VITE_BACKEND=cloudbase`）；
+ *    Supabase 分支仅保留供历史兼容与部分单测 mock 使用。
  *
  * CloudBase PG 与 Supabase 的关键差异（均对目标环境实测确认）：
  * - `auth.uid()` 返回 **text**（JWT `sub`），不是 uuid → owner 列一律 TEXT

@@ -5,11 +5,8 @@
  *      并可选清理回收站中的软删除数据（默认关闭，与隐私政策「不设自动过期」的表述一致）。
  *
  * 事件型函数（非 HTTP）：由 CloudBase 定时触发器调用。
- * 部署（在 cloudbase/functions/maintenance 目录内执行）：
- *   bash <tcb> fn deploy maintenance --runtime Nodejs20.19 --yes
- * 配置定时触发器：
- *   bash <tcb> fn trigger create maintenance --cron "0 3 * * *" --name daily-cleanup
- *   （UTC 每日 03:00；北京时间 11:00）
+ * 推荐部署方式（仓库根目录执行，全自动注入配置并幂等创建 7 位北京时间 03:00 定时触发器）：
+ *   node scripts/deploy-cloudbase-fn.mjs maintenance
  *
  * 也支持被 HTTP 直调（便于手工验证）：
  *   curl -X POST https://<fnbase>/maintenance

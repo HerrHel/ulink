@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 与链（ulink，原 LinkVault）— 单页书签管理器（PWA）。Vue 3 + Pinia + TipTap 编辑器，Vite + TypeScript，localStorage + IndexedDB（Dexie）持久化，云端同步/认证走**腾讯云开发 CloudBase**。**双语**：中文「与链」/英文「ulink」，UI 语言切换入口在设置面板（设置→语言）；源码注释沿用中文。
 
-> ⚠️ **后端现状（2026-10-22 起）**：生产已全量切换 CloudBase（`VITE_BACKEND=cloudbase` 在 `.env.production`），Supabase 仅为历史迁移来源，**勿在 `supabase/` 目录加功能**。云函数在 `cloudbase/functions/<name>/`，部署 `node scripts/deploy-cloudbase-fn.mjs <fn>`。完整说明见 `AGENTS.md` 顶部「后端现状」区块与 `docs/CLOUDBASE_MIGRATION.md`。
+> ⚠️ **后端现状（2026-11-10 核对）**：生产已全量切换 CloudBase（`VITE_BACKEND=cloudbase` 在 `.env.production`），Supabase 仅为历史迁移来源，**勿在 `supabase/` 目录加功能**。13 个 HTTP 云函数 + `maintenance` 定时任务，Cloudflare Pages 退役且 `/api/*` 迁入 `ai-api` 云函数，`video-worker` 容器已下线改走 MiMo 多模态直连。部署 `node scripts/deploy-cloudbase-fn.mjs <fn>`。完整说明见 `AGENTS.md` 顶部「后端现状」区块与 `docs/CLOUDBASE_MIGRATION.md`。
 
 > 本文档为精简版，完整架构与模块清单见根目录 `AGENTS.md`（两者需同步维护）。
 
@@ -68,8 +68,8 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 - `src/crypto.ts` — PBKDF2（600K iterations）密钥派生 + AES-256-GCM；`encryptPassword` 生成 EncryptedPassword，`autoMigratePassword` 自动识别 3 种格式（对象/字符串/空）
 - `src/lib/editor.ts` — TipTap 实例注册表，GroupEditor.vue 在 onMounted 注册；Group.notes 存 TipTap HTML
 - 其余 lib：search（Fuse.js + pinyin-pro）、ai-classify、diffVersions、theme、toast（委托 useToastStore，setup 外可用）、errorReporter（→ report-error 云函数）、stats、head（SEO 注入）、recoveryKeyPDF；工具函数：newId、clone、storageSafe、withLock、boundedCache、dataReady、collectSubIds、download、dragHint、historyMax、preview、supabase（Supabase client 兼容层）
-- **AI 工作台**：`src/lib/ai/`（~45 模块：mimo 主链路、universalAgent/tools、knowledge/localRAG、smartIntake、video* 等）+ `components/chat/`（AiWorkspace 等 6 个组件）+ `useAiChat*`；云端 `mimo-chat`（SSE，按 uid 限流/额度，线上 `BILLING_MODE=enforce`）
-- **计费会员**：`pay`/`redeem`/`account` 云函数 + `PurchaseModal.vue` + `usePayment`/`usePurchasePlans`/`useRedeem`/`useEntitlement`/`useTransactions`；价格与权益唯一来源 = `plans` 表（`price_cents` + `features`），前端不硬编码；额度执行现状见 `docs/QUOTA_ENFORCEMENT.md`（AI token/请求、视频、死链、历史保留期已强制；storage 仅展示；sync.devices 已撤下）
+- **AI 工作台**：`src/lib/ai/`（~45 模块：mimo 主链路、universalAgent/tools、knowledge/localRAG、smartIntake、unifiedMedia 多模态媒体分流等）+ `components/chat/`（AiWorkspace 等 6 个组件）+ `useAiChat*`；云端 `mimo-chat`（SSE，按 uid 限流/额度，线上 `BILLING_MODE=enforce`）与 `ai-api`（AI 候选与元数据提取）
+- **计费会员**：`pay`/`redeem`/`account` 云函数 + `PurchaseModal.vue` + `usePayment`/`usePurchasePlans`/`useRedeem`/`useEntitlement`/`useTransactions`；价格与权益唯一来源 = `plans` 表（`price_cents` + `features`，PRO 月付 ¥15 / 季付 ¥32 / 年付 ¥108），前端不硬编码；微信 Native + 支付宝电脑/手机网站支付自适应收银台；额度执行现状见 `docs/QUOTA_ENFORCEMENT.md`（AI token/请求、视频、死链、历史保留期已强制；storage 仅展示；sync.devices 已撤下）
 - **i18n**：`src/i18n/index.ts`（`t`/`tN`/`detect`）+ `src/locales/{zh,en}.ts` + `src/locales/parts/*`；落地页 `public/landing.js` 自带词典（不引用 src），改文案两边同步
 
 ### 配置与视图
@@ -79,9 +79,9 @@ npm run test:e2e     # Playwright E2E（e2e/，自动起 dev server）
 
 ### 构建 / 扩展 / 样式
 
-- 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --safe`），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 仅保留 `functions/` 的 `/api/*` 边缘函数（非主站）
+- 别名 `@/*` → `src/*`；`vite.config.ts` 手动分包 + PurgeCSS（safelist `/^card-/`、`/^modal-/`、`/^ctx-/` 等前缀）+ PWA（workbox）+ 安全头（dev/preview）；**生产部署 = CloudBase 静态托管**（CI `tcb hosting deploy ./dist --safe`），GitHub Pages / spa404Plugin 均已停用，Cloudflare Pages 已全面退役（原 `/api/*` 迁入 `ai-api` 云函数，不要用 `pages:deploy`）
 - `cli/` — **已归档（2026-10-31 移除）**：无分发渠道且仍指向 Supabase，代码留存 git 历史 `6cf8783`，见 `docs/ARCHIVED_CLI.md`
-- `extension/` — Manifest V3 扩展（v1.2.1），Ctrl+Shift+S 保存当前页（manifest `save-to-linkvault` 命令）+ 视频深度解析入口
+- `extension/` — Manifest V3 扩展（v1.2.2），Ctrl+Shift+S 保存当前页（manifest `save-to-linkvault` 命令）+ 侧边栏，右键深度解析已移除，媒体解析改走网页端多模态直传，仅保留 `https://ulink.ren/*` host 权限
 - `src/styles/` — tokens/reset/layout/cards/group/editor/modals/overlays/header/nav/filter/batch/drag/settings/toast/responsive/utility.css，由 main.css 统一导入
 
 ### 移动端拖拽（`useMobileDragReorder.ts`）

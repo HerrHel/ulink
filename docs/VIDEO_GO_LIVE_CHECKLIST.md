@@ -1,8 +1,18 @@
-# 视频解析（P0/P1/P2）上线决策与操作指南
+# 视频解析（P0/P1/P2）上线决策与操作指南（历史手册）
 
-> 配套：接口契约见 [`VIDEO_DEEP_EXTRACT.md`](./VIDEO_DEEP_EXTRACT.md)，worker 运维细节见
+> ## ⚠️ 状态更新（2026-11-10 核实，务必先读）：**容器微服务已下线删除**
+>
+> **线上 `ulink-video-worker` 云托管容器已下线并删除**（见 `docs/VIDEO_DEEP_EXTRACT.md` 与 `scripts/video-worker/README.md`）。
+> 原因：
+> 1. 常驻容器约 365 元/月，且开启固定出口 IP 将产生额外 1000 资源点/天费用；
+> 2. yt-dlp 在线视频下载存在《著作权法》第 53 条(六) 版权合规风险；
+> 3. **架构已全面升级**：改走前端用户上传媒体 → `unifiedMedia` 压缩/分流 → 直连境内大模型 **MiMo-V2.6-Flash 原生多模态**（无需容器、无需抽帧转码服务）。
+>
+> **下文所有关于 `$WORKER` 云托管配置、镜像构建与 ASR/OCR 环境变量的内容均为历史记录，请勿重新部署该容器。**
+> 普通视频轻量解析（标题/简介/自带字幕）由云函数 `extract-video` 的 B 站原生适配器与 r.jina.ai 正常支撑，不受容器下线影响。
+
+> 配套：接口契约见 [`VIDEO_DEEP_EXTRACT.md`](./VIDEO_DEEP_EXTRACT.md)，worker 历史运维细节见
 > [`scripts/video-worker/README.md`](../scripts/video-worker/README.md)。
-> 当前状态（2026-10-31 复核）：**P0/P1/P2 已上线；worker 的 MiMo ASR/OCR 已启用；前端已发布（线上 `version.json` commit `8882cea9`，即视频深度解析 MVP 提交）；数据库迁移已补齐**——`20261030000001_video_deep_quota` 已于 2026-10-31 应用（`plans.features` 现 free=0、PRO=2），`payment_flow`/`linkcheck_scan_limit` 也已可在库中验证。唯一未完成项：**扩展商店上架**（`/extension-guide.html` 自述开发版）。下文标注 10-30 的「依赖未启用/前端未发布/迁移未执行」均已过时。
 
 先定义本文反复用到的命令变量（PowerShell，仓库根执行）：
 

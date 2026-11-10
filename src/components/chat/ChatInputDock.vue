@@ -819,8 +819,8 @@ function bindTa(el: unknown) {
 }
 
 :global([data-theme="dark"]) .attach-card-thumb {
-  background: #18181b;
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--surface-hover);
+  border-color: var(--border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
@@ -862,14 +862,14 @@ function bindTa(el: unknown) {
 }
 
 :global([data-theme="dark"]) .attach-card-pill {
-  background: #18181b;
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--surface);
+  border-color: var(--border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 :global([data-theme="dark"]) .attach-card-pill:hover {
-  background: #202024;
-  border-color: rgba(255, 255, 255, 0.18);
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
 }
 
 /* 图标容器框 */
@@ -981,13 +981,14 @@ function bindTa(el: unknown) {
 }
 
 :global([data-theme="dark"]) .attach-close-btn {
-  background: rgba(30, 30, 35, 0.85);
-  border-color: #242428;
-  color: #f4f4f5;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 :global([data-theme="dark"]) .attach-close-btn:hover {
   background: rgba(239, 68, 68, 0.95);
+  color: #fff;
 }
 
 /* 浮动提示 Tooltip（贴合截图中的上方深色浮现气泡） */
@@ -996,8 +997,8 @@ function bindTa(el: unknown) {
   bottom: calc(100% + 7px);
   left: 50%;
   transform: translateX(-50%) translateY(4px);
-  background: #18181b;
-  color: #f4f4f5;
+  background: var(--surface-alt, #18181b);
+  color: var(--text);
   padding: 4px 8px;
   border-radius: 6px;
   font-size: 11px;

@@ -863,8 +863,7 @@ watch(aiQuery, () => {
   background-color: var(--bg);
   background-image: radial-gradient(
     ellipse 860px 520px at 50% 42%,
-    rgba(66, 133, 244, 0.05) 0%,
-    rgba(255, 255, 255, 0.6) 45%,
+    var(--accent-glow, rgba(66, 133, 244, 0.05)) 0%,
     transparent 80%
   );
   position: relative;
@@ -873,11 +872,10 @@ watch(aiQuery, () => {
 }
 
 :root[data-theme="dark"] .ai-workspace {
-  background-color: #131314;
+  background-color: var(--bg);
   background-image: radial-gradient(
     ellipse 860px 520px at 50% 42%,
-    rgba(30, 80, 220, 0.12) 0%,
-    rgba(20, 50, 160, 0.04) 45%,
+    var(--accent-glow, rgba(74, 144, 247, 0.08)) 0%,
     transparent 78%
   );
 }
@@ -971,17 +969,17 @@ watch(aiQuery, () => {
 }
 
 :root[data-theme="dark"] .ai-capsule-input-container {
-  background: rgba(30, 31, 35, 0.85);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border-color: var(--border);
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
-    0 4px 20px rgba(0, 0, 0, 0.4),
-    0 16px 44px -8px rgba(0, 0, 0, 0.55);
+    0 4px 20px rgba(0, 0, 0, 0.35),
+    0 16px 44px -8px rgba(0, 0, 0, 0.45);
 }
 
 .ai-capsule-input-container.focused,
 .ai-capsule-input-container:focus-within {
-  border-color: rgba(66, 133, 244, 0.55);
+  border-color: var(--accent);
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.9) inset,
     0 0 0 1px var(--accent),
@@ -990,11 +988,11 @@ watch(aiQuery, () => {
 
 :root[data-theme="dark"] .ai-capsule-input-container.focused,
 :root[data-theme="dark"] .ai-capsule-input-container:focus-within {
-  border-color: rgba(66, 133, 244, 0.4);
+  border-color: var(--accent);
   box-shadow:
     0 1px 0 0 rgba(255, 255, 255, 0.1) inset,
     0 0 0 1px var(--accent),
-    0 16px 48px -8px var(--accent-glow, rgba(240, 74, 138, 0.25));
+    0 16px 48px -8px var(--accent-glow, rgba(74, 144, 247, 0.25));
 }
 
 /* 附件条 */
@@ -1379,8 +1377,8 @@ watch(aiQuery, () => {
 }
 
 :root[data-theme="dark"] .ai-history-drawer {
-  background: #191a1e;
-  border-left-color: rgba(255, 255, 255, 0.08);
+  background: var(--surface);
+  border-left-color: var(--border);
   box-shadow: -10px 0 44px rgba(0, 0, 0, 0.65);
 }
 
