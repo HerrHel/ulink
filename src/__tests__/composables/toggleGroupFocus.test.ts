@@ -13,6 +13,11 @@ const mockData = {
     const g = mockData.groupMap[id]
     if (g) Object.assign(g, changes)
   }),
+  // 聚焦只走静默计数（不写历史/不标脏/不刷 updatedAt），与 updateGroup 解耦
+  bumpGroupUseCount: vi.fn((id: string) => {
+    const g = mockData.groupMap[id]
+    if (g) g.useCount = (g.useCount || 0) + 1
+  }),
 }
 
 // 稳定 mockUI 承载 toggleGroupFocus 直接读写的 4 个 ui 状态字段
@@ -106,6 +111,7 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
     ;(saveAppData as any).mockClear()
     ;(pushNavState as any).mockClear()
     mockData.updateGroup.mockClear()
+    mockData.bumpGroupUseCount.mockClear()
   })
 
   afterEach(() => {
@@ -125,9 +131,10 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
     expect(saveAppData).not.toHaveBeenCalled()
     // entering=true（null!==tGid）
     expect(mockUI.focusedGroupId).toBe('t1')
-    // sg 命中 → updateGroup(tGid, {useCount: 1})
-    expect(mockData.updateGroup).toHaveBeenCalledTimes(1)
-    expect(mockData.updateGroup).toHaveBeenCalledWith('t1', expect.objectContaining({ useCount: 1 }))
+    // sg 命中 → 静默 bump useCount（不调用 updateGroup，避免写历史/标脏）
+    expect(mockData.bumpGroupUseCount).toHaveBeenCalledWith('t1')
+    expect(mockData.updateGroup).not.toHaveBeenCalled()
+    expect(sg.useCount).toBe(1)
     // 进入分支恒 pushNavState
     expect(pushNavState).toHaveBeenCalledTimes(1)
     // _prevLayoutMode 快照当前 layoutMode（进入时未被改变，仍 'grid'）
@@ -151,7 +158,8 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
     expect(saveAppData).toHaveBeenCalledTimes(1)
     // entering=false（t1===t1）→ focusedGroupId 设 null
     expect(mockUI.focusedGroupId).toBe(null)
-    // 退出分支不 updateGroup（sg useCount 不再递增）
+    // 退出分支不 bump useCount
+    expect(mockData.bumpGroupUseCount).not.toHaveBeenCalled()
     expect(mockData.updateGroup).not.toHaveBeenCalled()
     // 退出分支不 pushNavState
     expect(pushNavState).not.toHaveBeenCalled()
@@ -177,9 +185,10 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
     expect(saveAppData).toHaveBeenCalledTimes(1)
     // entering=true（gA!==gB）
     expect(mockUI.focusedGroupId).toBe('gB')
-    // gB 命中 → updateGroup(gB, {useCount: 3})
-    expect(mockData.updateGroup).toHaveBeenCalledTimes(1)
-    expect(mockData.updateGroup).toHaveBeenCalledWith('gB', expect.objectContaining({ useCount: 3 }))
+    // gB 命中 → 静默 bump（不调用 updateGroup）
+    expect(mockData.bumpGroupUseCount).toHaveBeenCalledTimes(1)
+    expect(mockData.bumpGroupUseCount).toHaveBeenCalledWith('gB')
+    expect(mockData.updateGroup).not.toHaveBeenCalled()
     // 进入分支 pushNavState
     expect(pushNavState).toHaveBeenCalledTimes(1)
     // _prevLayoutMode 重新快照当前 layoutMode='focus'（覆盖之前的 'grid'）
@@ -195,7 +204,8 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
 
     toggleGroupFocus('ghost')
 
-    // sg 缺失 → updateGroup 不调
+    // sg 缺失 → bump 不调
+    expect(mockData.bumpGroupUseCount).not.toHaveBeenCalled()
     expect(mockData.updateGroup).not.toHaveBeenCalled()
     // 但聚焦态仍生效
     expect(mockUI.focusedGroupId).toBe('ghost')
@@ -211,30 +221,35 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
     mockData.groupMap = { c0: sg0 }
     toggleGroupFocus('c0')
     expect(sg0.useCount).toBe(1)
-    expect(mockData.updateGroup).toHaveBeenLastCalledWith('c0', expect.objectContaining({ useCount: 1 }))
+    expect(mockData.bumpGroupUseCount).toHaveBeenLastCalledWith('c0')
+    expect(mockData.updateGroup).not.toHaveBeenCalled()
 
     // 重置后 5 → 6
     resetState()
     ;(pushNavState as any).mockClear()
     ;(saveAppData as any).mockClear()
     mockData.updateGroup.mockClear()
+    mockData.bumpGroupUseCount.mockClear()
     const sg5 = makeGroup({ id: 'c5', useCount: 5 })
     mockData.groupMap = { c5: sg5 }
     toggleGroupFocus('c5')
     expect(sg5.useCount).toBe(6)
-    expect(mockData.updateGroup).toHaveBeenLastCalledWith('c5', expect.objectContaining({ useCount: 6 }))
+    expect(mockData.bumpGroupUseCount).toHaveBeenLastCalledWith('c5')
+    expect(mockData.updateGroup).not.toHaveBeenCalled()
 
     // 重置后 undefined → 1（旧数据 group 缺 useCount 字段的隐兜底）
     resetState()
     ;(pushNavState as any).mockClear()
     ;(saveAppData as any).mockClear()
     mockData.updateGroup.mockClear()
+    mockData.bumpGroupUseCount.mockClear()
     const sgUndef = makeGroup({ id: 'cu' })
     delete (sgUndef as any).useCount
     mockData.groupMap = { cu: sgUndef }
     toggleGroupFocus('cu')
     expect(sgUndef.useCount).toBe(1)
-    expect(mockData.updateGroup).toHaveBeenLastCalledWith('cu', expect.objectContaining({ useCount: 1 }))
+    expect(mockData.bumpGroupUseCount).toHaveBeenLastCalledWith('cu')
+    expect(mockData.updateGroup).not.toHaveBeenCalled()
   })
 
   it('F. layout 快照恢复 + 清空完整链：进入时 grid → _prevLayoutMode=grid，改 layoutMode=list，同 id 再点退出 → layoutMode 恢复 grid + _prevLayoutMode 清 null', () => {
@@ -319,16 +334,15 @@ describe('toggleGroupFocus — 聚焦组 toggle 切换 + prev 保存 + useCount 
 
     toggleGroupFocus('gB')
 
-    // updateGroup 至少两次：先 saveGroupBody(gA,{notes}) 再 toggleGroup(gB,{useCount+1})
+    // updateGroup 仅一次：saveGroupBody(gA,{notes})；useCount 走静默 bump 不再写 updateGroup
     const calls = mockData.updateGroup.mock.calls
-    expect(calls.length).toBeGreaterThanOrEqual(2)
+    expect(calls.length).toBe(1)
     // 第一次：saveGroupBody(gA) → updateGroup('gA', {notes: '<p>editor snapshot</p>'})
     expect(calls[0][0]).toBe('gA')
     expect(calls[0][1]).toEqual(expect.objectContaining({ notes: '<p>editor snapshot</p>' }))
-    // 第二次（或最后一次）：toggleGroupFocus 进入分支 updateGroup('gB', {useCount: 1})
-    const lastCall = calls[calls.length - 1]
-    expect(lastCall[0]).toBe('gB')
-    expect(lastCall[1]).toEqual(expect.objectContaining({ useCount: 1 }))
+    // 进入分支对 gB 只做静默计数
+    expect(mockData.bumpGroupUseCount).toHaveBeenCalledWith('gB')
+    expect(gB.useCount).toBe(1)
     // 证 saveGroupBody(gA) 真执行并写 notes，gA.notes 被更新
     expect(gA.notes).toBe('<p>editor snapshot</p>')
   })

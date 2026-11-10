@@ -82,6 +82,11 @@ describe('evolvingGraph.ts — 端侧自进化概念与实体关系图谱', () =
     // 验证「图形渲染」或「WebGL」能够关联出组名和书签
     const neighbors = graph.getRelatedNeighbors(['图形渲染'], 5)
     expect(neighbors.length).toBeGreaterThan(0)
+
+    // 删除书签后重新挖掘：陈旧概念节点与边应被清理，不再参与提权
+    graph.mineFromKnowledge([], mockGroups, mockCategories, mockAttributes)
+    expect(graph.nodeCount).toBeLessThan(80)
+    expect(graph.getRelatedNeighbors(['threejs'], 5).length).toBe(0)
   })
 
   it('支持持久化与存储恢复', () => {

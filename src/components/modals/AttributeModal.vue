@@ -53,7 +53,7 @@ const attributes = computed(() => store.selectableAttributes)
 
 watch(() => store.modals.attribute, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())
-})
+}, { immediate: true })
 
 function onClose() { store.modals.attribute = false }
 const { onMaskMouseDown, onMaskClick } = useMaskClose(onClose)

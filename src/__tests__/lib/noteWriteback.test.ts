@@ -47,6 +47,21 @@ describe('noteWriteback — AI 对话产物反向沉淀与写回笔记引擎', (
     expect(html).not.toContain('```ulink-card')
   })
 
+  it('convertAiContentToNoteHtml：数组式 ulink-card 所有链接都保留，不产生「参考网站(#)」占位', () => {
+    const html = convertAiContentToNoteHtml(`
+\`\`\`ulink-card
+[
+  { "title": "Alpha", "url": "https://alpha.example" },
+  { "title": "Beta", "url": "https://beta.example" }
+]
+\`\`\`
+`)
+    expect(html).toContain('https://alpha.example')
+    expect(html).toContain('https://beta.example')
+    expect(html).not.toContain('参考网站')
+    expect(html).not.toContain('(#)')
+  })
+
   it('2. appendAiContentToGroup：追加到原笔记，同步 TipTap 编辑器并支持撤销恢复', () => {
     const grp: SiblingGroup = {
       id: 'sg-demo',

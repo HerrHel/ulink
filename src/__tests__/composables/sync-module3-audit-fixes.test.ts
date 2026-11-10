@@ -205,8 +205,8 @@ describe('模块 3 审计修复护栏测试集 (Sync Engine & Conflict Resolutio
     const ok = await restoreFromHistory(1, 'g-hist', 'group')
     expect(ok).toBe(true)
 
-    // 软删除书签根据契约保留在组内，物理彻底不存在的书签被过滤
-    expect(ds.groupMap['g-hist'].bookmarkIds).toEqual(['bm-live', 'bm-dead'])
+    // 软删书签也不再进入组引用（与 useUndo 同口径），物理不存在与软删项都过滤
+    expect(ds.groupMap['g-hist'].bookmarkIds).toEqual(['bm-live'])
   })
 
   it('7. restoreFromHistory 恢复书签历史时若父书签已删除，parentId 自动置空避免幽灵孤儿', async () => {

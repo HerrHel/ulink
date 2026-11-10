@@ -43,9 +43,10 @@ describe('D1-55 BookmarkSchema catch/coerce 软降级', () => {
     const r = BookmarkSchema.safeParse({ title: '测试', url: 'https://x.com' })
     expect(r.success).toBe(false)
   })
-  it('title 缺失 success===false 硬拒（不软降级，无 catch）', () => {
+  it('title 缺失 → catch(\'\') 软降级（单条坏字段不拖垮整库）', () => {
     const r = BookmarkSchema.safeParse({ id: 'b1', url: 'https://x.com' })
-    expect(r.success).toBe(false)
+    expect(r.success).toBe(true)
+    expect(r.success && r.data.title).toBe('')
   })
   it('url 缺失 success===false 硬拒（不软降级，无 catch）', () => {
     const r = BookmarkSchema.safeParse({ id: 'b1', title: '测试' })

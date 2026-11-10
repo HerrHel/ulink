@@ -174,9 +174,12 @@ export async function restoreFromHistory(historyId: number, itemId: string, item
     })
   } else {
     // bookmarkIds 过滤掉已删书签——历史快照里的 bookmarkIds 引用了之后被删除的书签 id。
-    // 原样保留会让组引用悬空 id（bookmarkMap 查不到 → 组内空卡位 + 推云后远端也悬空）。
+    // 原样保留会让组引用悬空 id（bookmarkMap 含软删项，必须显式排除 deletedAt）。
     // 对齐 useUndo.restoreSnapshot 的过滤策略。
-    const filteredIds = (plain.bookmarkIds as string[] || []).filter(bid => ds.bookmarkMap[bid])
+    const filteredIds = (plain.bookmarkIds as string[] || []).filter(bid => {
+      const bm = ds.bookmarkMap[bid]
+      return !!bm && !bm.deletedAt
+    })
     ds.updateGroup(itemId, {
       name: (plain.name as string) || '',
       categoryId: (plain.categoryId as string) || ds.groupMap[itemId]?.categoryId || CAT_UNCATEGORIZED,

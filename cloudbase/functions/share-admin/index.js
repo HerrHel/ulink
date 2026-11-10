@@ -155,12 +155,13 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // action=get：查询该分享是否已设密码（只回布尔，绝不回摘要）
+    // action=get：查询「自己的」分享是否已设密码（只回布尔，绝不回摘要）。
+    // 用 owned 变体按 uid 过滤：任意登录用户不能拿别人的 gid 探测其是否设密。
     if (body.action === 'get') {
       const dbq = getDb()
-      const sec = await dbq.rpc('get_share_secret', { p_gid: gid })
+      const sec = await dbq.rpc('get_share_secret_owned', { p_gid: gid, p_uid: uid })
       if (sec.error) {
-        console.error('[share-admin] get_share_secret failed:', sec.error)
+        console.error('[share-admin] get_share_secret_owned failed:', sec.error)
         sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
         return
       }
@@ -172,9 +173,13 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // password === null / '' / 缺失 → 清除密码
+    // password === null / '' → 清除密码；字段缺失 → 视为坏请求，禁止静默清空密码。
+    if (!Object.prototype.hasOwnProperty.call(body, 'password')) {
+      sendJson(res, 400, { error: 'missing_password' }, cors)
+      return
+    }
     const raw = body.password
-    const clearing = raw === null || raw === '' || raw === undefined
+    const clearing = raw === null || raw === ''
     let hash = null
     if (!clearing) {
       const policy = validatePasswordInput(raw)

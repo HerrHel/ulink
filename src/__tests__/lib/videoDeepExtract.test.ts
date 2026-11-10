@@ -448,7 +448,7 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     expect(res.bookmarks).toEqual([])
   })
 
-  it('模型语义仲裁（脑手合一）：当模型总结明确说明未出现其他网站/工具时，候选书签强制置空', async () => {
+  it('模型语义仲裁：总结措辞「未出现工具」不能清空页面原文已提取到的硬链接', async () => {
     mockSummary.mockResolvedValue('给定内容中视频已失效（页面提示“视频不见了”），未出现其他网站或工具，因此无法总结。')
     mockFetch.mockResolvedValue({
       success: true,
@@ -461,7 +461,9 @@ describe('视频深度提取 — 简介/字幕/评论区链接抓取', () => {
     })
 
     const res = await extractBookmarksFromVideo('https://example.com/some-page', testCategories, testAttributes)
-    expect(res.bookmarks).toEqual([])
+    // 页面原文的硬证据优先于模型软措辞；也不能退化成保存视频页自身
+    expect(res.bookmarks.map((b) => b.url)).toContain('https://random-docs.io')
+    expect(res.bookmarks.some((b) => b.url === 'https://example.com/some-page')).toBe(false)
     expect(res.summary).toContain('未出现其他网站或工具')
   })
 });

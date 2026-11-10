@@ -253,14 +253,14 @@ describe('restoreFromHistory — 历史恢复编排核心契约', () => {
     ds.siblingGroups = [makeGroup({ id: 'g-1', bookmarkIds: ['bm-old'] })] as any
     ds.bookmarks = [
       makeBookmark({ id: 'bm-1' }),
-      makeBookmark({ id: 'bm-soft', deletedAt: Date.now() }), // 软删但仍在 bookmarkMap → 不过滤
+      makeBookmark({ id: 'bm-soft', deletedAt: Date.now() }), // 软删 → 与新口径一致应过滤
     ] as any
     // bm-dangling 不在 bookmarks 数组 → bookmarkMap 无此 id → 被过滤
     const updateSpy = vi.spyOn(ds, 'updateGroup').mockImplementation(() => {})
     const ok = await restoreFromHistory(8, 'g-1', 'group')
     expect(ok).toBe(true)
     const [, changesArg] = updateSpy.mock.calls[0]
-    expect(changesArg.bookmarkIds).toEqual(['bm-1', 'bm-soft']) // 直锁真实行为：只过滤 map 无 id，软删仍存活
+    expect(changesArg.bookmarkIds).toEqual(['bm-1']) // 软删与悬空 id 均过滤，避免组内空卡位
   })
 
   it('★group 分支 + 编辑器挂载 → 调 ed.commands.setContent(notes)（防 GroupEditor 覆盖 restore）', async () => {

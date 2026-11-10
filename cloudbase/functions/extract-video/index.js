@@ -135,15 +135,20 @@ function sendJson(res, status, body, extraHeaders) {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = ''
+    const chunks = []
+    let size = 0
     req.on('data', (c) => {
-      raw += c
-      if (raw.length > 100_000) {
+      const buf = Buffer.isBuffer(c) ? c : Buffer.from(c)
+      chunks.push(buf)
+      size += buf.length
+      if (size > 100_000) {
         reject(new Error('body_too_large'))
         req.destroy()
       }
     })
     req.on('end', () => {
+      if (!chunks.length) return resolve({})
+      const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try {
         resolve(JSON.parse(raw))
@@ -387,6 +392,30 @@ function shanghaiDateKey(now) {
 }
 
 /**
+ * 深度任务能力令牌：提交时签发 HMAC(job_id)，轮询时必须带回。
+ * worker 不记录 uid，若只靠 128-bit job_id 做归属校验，一旦 id 出现在日志/分享里，
+ * 任何登录用户都能读他人转写/OCR 结果并触发退款。令牌把「提交者」与任务绑定。
+ */
+const JOB_TOKEN_SECRET =
+  process.env.DEEP_JOB_SECRET || process.env.VIDEO_WORKER_TOKEN || process.env.CLOUDBASE_APIKEY || ''
+
+function signJobId(jobId) {
+  if (!JOB_TOKEN_SECRET) return ''
+  return crypto.createHmac('sha256', JOB_TOKEN_SECRET).update(String(jobId)).digest('hex').slice(0, 32)
+}
+
+function verifyJobToken(jobId, token) {
+  if (!JOB_TOKEN_SECRET) return true
+  const expected = signJobId(jobId)
+  if (!expected || typeof token !== 'string' || token.length !== expected.length) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(token))
+  } catch {
+    return false
+  }
+}
+
+/**
  * 日配额校验：登录用户按 plans.features['video.extract.daily']，匿名按 IP。
  * 返回 { ok:true } 放行；否则带 HTTP 状态：
  *   429 当天额度用完 / 401 令牌无效 / 503 配额服务不可用（fail-closed，绝不无限放行）
@@ -532,27 +561,30 @@ const DEEP_ERROR_MESSAGES = {
  */
 async function refundDeepQuota(db, uid, jobId) {
   if (!QUOTA_ENFORCE || !uid || !jobId) return false
-  try {
-    const key = 'extract-video:deep:' + uid + ':' + shanghaiDateKey()
-    const r = await db.rpc('refund_deep_quota', {
-      p_uid: uid,
-      p_job_id: jobId,
-      p_key: key,
-      p_window_secs: QUOTA_WINDOW_SECS,
-    })
-    if (r.error) {
-      console.error('[extract-video] deep refund rpc failed:', r.error)
-      return false
+  // 提交与失败轮询可能跨自然日（23:5x 提交、次日 00:0x 才 failed），
+  // 退款 key 必须同时尝试今天与昨天，否则昨天的预扣永远退不掉。
+  for (const offsetDays of [0, -1]) {
+    try {
+      const key = 'extract-video:deep:' + uid + ':' + shanghaiDateKey(Date.now() + offsetDays * 86400000)
+      const r = await db.rpc('refund_deep_quota', {
+        p_uid: uid,
+        p_job_id: jobId,
+        p_key: key,
+        p_window_secs: QUOTA_WINDOW_SECS,
+      })
+      if (r.error) {
+        console.error('[extract-video] deep refund rpc failed:', r.error)
+        continue
+      }
+      if (r.data === true) {
+        console.log('[extract-video] deep quota refunded, job=' + jobId)
+        return true
+      }
+    } catch (e) {
+      console.error('[extract-video] deep refund error:', (e && e.message) || e)
     }
-    if (r.data === true) {
-      console.log('[extract-video] deep quota refunded, job=' + jobId)
-      return true
-    }
-    return false
-  } catch (e) {
-    console.error('[extract-video] deep refund error:', (e && e.message) || e)
-    return false
   }
+  return false
 }
 
 function sendDeepError(res, cors, result) {
@@ -760,7 +792,8 @@ async function submitWorkerJob(parsed, include, signal, client) {
     if (!res.ok) {
       const detail = await res.text().catch(() => '')
       console.error('[extract-video] deep submit failed: HTTP', res.status, String(detail || '').slice(0, 200))
-      return null
+      // 明确的非 2xx：worker 未接单，可安全退额度
+      return { ok: false, ambiguous: false }
     }
     const data = await res.json().catch(() => null)
     if (!data || typeof data !== 'object' || !isValidJobId(data.job_id)) {
@@ -768,7 +801,7 @@ async function submitWorkerJob(parsed, include, signal, client) {
         '[extract-video] deep submit bad payload:',
         data && typeof data === 'object' ? JSON.stringify(data).slice(0, 200) : typeof data,
       )
-      return null
+      return { ok: false, ambiguous: false }
     }
     const job = {
       job_id: data.job_id,
@@ -778,10 +811,16 @@ async function submitWorkerJob(parsed, include, signal, client) {
     }
     const eta = Number(data.eta_seconds)
     if (Number.isFinite(eta) && eta >= 0) job.eta_seconds = eta
-    return job
+    const token = signJobId(job.job_id)
+    if (token) job.job_token = token
+    return { ok: true, job }
   } catch (e) {
-    console.error('[extract-video] deep submit error:', (e && e.message) || e)
-    return null
+    // 超时/网络中断时 worker 可能已入队（它先入库再返回），无法确认是否接单：
+    // 标记 ambiguous，调用方不得直接退额度，避免「退费 + 任务继续跑」白送一次。
+    const name = (e && e.name) || ''
+    const ambiguous = name === 'TimeoutError' || name === 'AbortError' || /timeout|abort/i.test((e && e.message) || '')
+    console.error('[extract-video] deep submit error:', (e && e.message) || e, ambiguous ? '(ambiguous)' : '')
+    return { ok: false, ambiguous }
   }
 }
 
@@ -868,13 +907,15 @@ async function handleDeepSubmit(req, res, cors, body, db, signal) {
     signal,
     await normalizeClientMedia(body.client),
   )
-  if (!job) {
-    // worker 未接单：本次扣的额度立即退回（job_id 用一次性合成值，天然幂等）
-    await refundDeepQuota(db, quota.uid, 'submit-failed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10))
+  if (!job.ok) {
+    // 只有 worker 明确拒绝（非 2xx）才退额度；超时/断连时任务可能已入队，退了会白送一次
+    if (!job.ambiguous) {
+      await refundDeepQuota(db, quota.uid, 'submit-failed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10))
+    }
     sendDeepError(res, cors, { status: 503, code: 'deep_unavailable' })
     return
   }
-  sendJson(res, 200, job, cors)
+  sendJson(res, 200, job.job, cors)
 }
 
 /** action=deep_status：校验 job_id 后透传 worker 实时状态（不扣配额、不缓存） */
@@ -886,6 +927,12 @@ async function handleDeepStatus(req, res, cors, body, ipHash, signal, db) {
   const jobId = typeof body.job_id === 'string' ? body.job_id.trim() : ''
   if (!isValidJobId(jobId)) {
     sendJson(res, 400, { error: 'Invalid job_id', code: 'invalid_job_id' }, cors)
+    return
+  }
+  // 能力令牌校验：缺失/不匹配一律拒绝，防止拿到 job_id 就能读他人结果并触发退款
+  const jobToken = typeof body.job_token === 'string' ? body.job_token.trim() : ''
+  if (!verifyJobToken(jobId, jobToken)) {
+    sendJson(res, 403, { error: 'forbidden', code: 'invalid_job_token' }, cors)
     return
   }
   const data = await fetchWorkerJob(jobId, signal)

@@ -238,7 +238,9 @@ export function toggleGroupFocus(tGid: string) {
   ui.focusedGroupId = entering ? tGid : null;
   if (entering) {
     const sg = ds.groupMap[tGid];
-    if (sg) { ds.updateGroup(tGid, { useCount: (sg.useCount || 0) + 1 }); }
+    // R-RESURRECT：聚焦只做内存计数，不写历史/不标脏/不刷 updatedAt，
+    // 避免离线墓碑被本地存活快照复活（updateGroup 会触发这三件事）。
+    if (sg) { ds.bumpGroupUseCount(tGid); }
     pushNavState();
     ui._prevLayoutMode = ui.layoutMode;
   } else {

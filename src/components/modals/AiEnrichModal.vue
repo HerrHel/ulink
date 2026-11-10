@@ -140,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { I } from '../../config/icons.js'
@@ -171,9 +171,14 @@ const targetBookmark = computed(() => {
   return (b && !b.deletedAt) ? b : null
 })
 
+// 代际令牌：关闭/切换目标后，旧请求的结果不得写回当前书签并二次扣额度
+let enrichGen = 0
+
 async function fetchEnrich() {
   if (!ui.modals.aiEnrich || !targetBookmark.value || !ui.smartFillEnabled) return
   if (!quota.value.allowed) return
+  const gen = ++enrichGen
+  const targetId = targetBookmark.value.id
   loading.value = true
   diff.value = null
   try {
@@ -182,6 +187,8 @@ async function fetchEnrich() {
       ds.categories,
       ds.customAttributes
     )
+    // 已关闭/已切换目标/已有更新的请求 → 丢弃结果，避免写到另一本书签
+    if (gen !== enrichGen || !ui.modals.aiEnrich || ui.aiEnrichTargetBmId !== targetId) return
     diff.value = result
     ent.consumeAiEnrichQuota()
     applyTitle.value = !!result.suggestedTitle
@@ -189,9 +196,9 @@ async function fetchEnrich() {
     applyCategory.value = !!result.suggestedCategoryId
     applyAttributes.value = (result.suggestedAttrIds?.length || 0) > 0
   } catch {
-    diff.value = null
+    if (gen === enrichGen) diff.value = null
   } finally {
-    loading.value = false
+    if (gen === enrichGen) loading.value = false
   }
 }
 
@@ -211,18 +218,15 @@ function enableSmartFill() {
   void fetchEnrich()
 }
 
-onMounted(() => {
-  if (ui.modals.aiEnrich && targetBookmark.value) {
-    void fetchEnrich()
-  }
-})
-
+// 组件由 App.vue 的 v-if 在打开瞬间创建，immediate watch 已覆盖首次拉取；
+// 旧实现 onMounted 再拉一次，导致一次点击发两次请求、扣两次额度。
 watch(
   [() => ui.modals.aiEnrich, () => ui.aiEnrichTargetBmId],
   ([open, bmId]) => {
     if (open && bmId) {
       void fetchEnrich()
     } else if (!open) {
+      enrichGen++
       diff.value = null
       loading.value = false
     }

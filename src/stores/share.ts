@@ -172,7 +172,9 @@ export const useShareStore = defineStore('share', () => {
     }
     uiSnapshot.value = null
     cleanupInjectedHead()
-    setCanonical(APP_CANONICAL_BASE)
+    // app.html 的静态 canonical 是 /app；退出分享后 URL 也会剥回 /app，
+    // 不能回写成站点根（会造成 canonical 与实际页面不一致）。
+    setCanonical(APP_CANONICAL_BASE.replace(/\/+$/, '') + '/app')
     if (stripUrl) _stripSharePath()
     _resetData()
   }
@@ -285,6 +287,9 @@ export const useShareStore = defineStore('share', () => {
   }
 
   function exit() {
+    // 使在途 enter 的 seq 守卫失效：否则退出后旧的 fetch 仍会回填 shadow/head/focusedGroupId，
+    // 导致应用标题/canonical 变成他人分享、聚焦到本机不存在的组。
+    _enterSeq++
     _teardown(true)
   }
 

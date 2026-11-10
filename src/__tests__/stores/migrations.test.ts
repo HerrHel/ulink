@@ -64,17 +64,16 @@ describe('_readSchemaVersion / 版本门控四分支', () => {
     expect(_readSchemaVersion({ _schemaVersion: 2 })).toBe(2)
     expect(_readSchemaVersion({ _schemaVersion: 0 })).toBe(0)
   })
-  it('_schemaVersion 非有限 number（undefined/字符串/NaN/Infinity）→ 退到 legacy 判定', () => {
-    // undefined → 去看 legacy
-    expect(_readSchemaVersion({ _dataVersion: 1 })).toBe(1)
-    // 字符串不算 number，NaN/Infinity 非有限 → 落 legacy/0
+  it('_schemaVersion 非有限 number（undefined/字符串/NaN/Infinity）→ 一律视为 0', () => {
+    // legacy _dataVersion 可能是 writeSeq，不再作为 schema 版本信任
+    expect(_readSchemaVersion({ _dataVersion: 1 })).toBe(0)
     expect(_readSchemaVersion({ _schemaVersion: '2' as unknown as number })).toBe(0)
     expect(_readSchemaVersion({ _schemaVersion: Number.NaN })).toBe(0)
     expect(_readSchemaVersion({ _schemaVersion: Number.POSITIVE_INFINITY })).toBe(0)
   })
-  it('legacy _dataVersion 真小整数（>0 且 <= CURRENT）→ 信任', () => {
-    expect(_readSchemaVersion({ _dataVersion: 1 })).toBe(1)
-    expect(_readSchemaVersion({ _dataVersion: CURRENT_SCHEMA_VERSION })).toBe(CURRENT_SCHEMA_VERSION)
+  it('legacy _dataVersion 即使是小整数也不信任（可能是 writeSeq）', () => {
+    expect(_readSchemaVersion({ _dataVersion: 1 })).toBe(0)
+    expect(_readSchemaVersion({ _dataVersion: CURRENT_SCHEMA_VERSION })).toBe(0)
   })
   it('legacy _dataVersion 为 writeSeq 污染大值或 0/负 → 强制再迁移返 0', () => {
     // 旧 saveData 把进程计数写进 _dataVersion，远大于 CURRENT
@@ -94,17 +93,14 @@ describe('runMigrations / 已是当前 schema 分支', () => {
     const needs = runMigrations(d, result)
     expect(needs).toBe(false)
   })
-  it('from >= CURRENT 但 d 缺 _schemaVersion（仅靠 legacy _dataVersion=2 达到 from≥CURRENT）→ 仅回写 schema 字段返 true（一次回写）', () => {
-    // _readSchemaVersion({ _dataVersion: 2 }) → legacy 2（>0 且 ≤CURRENT）→ from=2。
-    // d 无 _schemaVersion 字段 → d._schemaVersion !== CURRENT 为真 → 回写 result 并返 true。
-    // （仅回写 schema 字段，跳过全部旧盘迁移步骤）
+  it('仅靠 legacy _dataVersion 不会再达到 from≥CURRENT；迁移完整执行并回写 schema', () => {
     const d = { _dataVersion: CURRENT_SCHEMA_VERSION } as Partial<AppData>
     const result = {} as AppData
     const needs = runMigrations(d, result)
     expect(needs).toBe(true)
     expect((result as { _schemaVersion?: number })._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
-    // 旧盘迁移步骤未执行：DEFAULTS 未注入、result 字段维持（{} 未初始化 categories）
-    expect(result.categories).toBeUndefined()
+    // 旧盘迁移步骤已执行：DEFAULTS 被注入
+    expect(Array.isArray(result.categories)).toBe(true)
   })
 })
 

@@ -348,8 +348,9 @@ async function handleAuthed(req, res, action, body, cors) {
     }
 
     // 主动查渠道（前端可选 sync=1，用于回调延迟时的兜底）
+    // 仅微信/支付宝订单可查渠道；redeem/manual 等订单没有渠道单可查，避免无意义报错刷日志
     const wantSync = body.sync === true
-    if (wantSync && row.status === 'pending' && !expired) {
+    if (wantSync && row.status === 'pending' && !expired && (row.channel === 'wechat' || row.channel === 'alipay')) {
       try {
         const remote =
           row.channel === 'wechat'
@@ -532,9 +533,18 @@ async function handleWxpayNotify(req, res) {
     return
   }
   const data = r.data || {}
-  // 幂等命中（already_settled / not_pending）也回 SUCCESS：让渠道停止重推
-  const ok = data.ok === true || data.reason === 'already_settled' || data.reason === 'not_pending'
-  if (!ok) console.error('[pay] settle rejected (wechat):', JSON.stringify(data))
+  // 幂等命中才回 SUCCESS：already_settled，或订单本来就已经是 paid 的 not_pending。
+  // 若 not_pending 的订单实际是 failed/refunded（超时清理后用户仍完成支付），
+  // 说明发生「已扣款但无法发货」——必须高标准日志 + 回 FAIL 让渠道持续重试提示人工介入，
+  // 绝不能静默回 SUCCESS 吞掉这笔钱。
+  const alreadyPaid = data.reason === 'already_settled' || (data.reason === 'not_pending' && data.status === 'paid')
+  const unfulfillable = data.reason === 'not_pending' && data.status !== 'paid'
+  const ok = data.ok === true || alreadyPaid
+  if (unfulfillable) {
+    console.error('[pay] CRITICAL: paid callback for closed order, manual refund required (wechat):', JSON.stringify(data))
+  } else if (!ok) {
+    console.error('[pay] settle rejected (wechat):', JSON.stringify(data))
+  }
   sendJson(res, ok ? 200 : 400, { code: ok ? 'SUCCESS' : 'FAIL', message: ok ? '成功' : data.reason })
 }
 
@@ -574,8 +584,16 @@ async function handleAlipayNotify(req, res) {
     return
   }
   const data = r.data || {}
-  const ok = data.ok === true || data.reason === 'already_settled' || data.reason === 'not_pending'
-  if (!ok) console.error('[pay] settle rejected (alipay):', JSON.stringify(data))
+  // 同微信侧：只有「本已 paid」才算幂等成功；failed/refunded 订单收到真实付款
+  // 属不可履约，必须留 CRITICAL 日志并回 failure 触发渠道重试，禁止静默吞单。
+  const alreadyPaid = data.reason === 'already_settled' || (data.reason === 'not_pending' && data.status === 'paid')
+  const unfulfillable = data.reason === 'not_pending' && data.status !== 'paid'
+  const ok = data.ok === true || alreadyPaid
+  if (unfulfillable) {
+    console.error('[pay] CRITICAL: paid callback for closed order, manual refund required (alipay):', JSON.stringify(data))
+  } else if (!ok) {
+    console.error('[pay] settle rejected (alipay):', JSON.stringify(data))
+  }
   sendText(res, ok ? 200 : 400, ok ? 'success' : 'failure')
 }
 

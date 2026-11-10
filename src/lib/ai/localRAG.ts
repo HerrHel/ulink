@@ -156,6 +156,8 @@ export class VaultKnowledgeEngine {
   private docFrequencies: Map<string, number> = new Map()
   private avgDocLength = 0
   private isIndexed = false
+  /** 上次建索引的数据签名：无数据变化时跳过全量重建（避免每条消息都 O(n²) 重扫） */
+  private _lastSignature = ''
 
   /**
    * 将全库书签与笔记结构化切片并构建倒排统计索引
@@ -166,6 +168,23 @@ export class VaultKnowledgeEngine {
     categories: Category[] = [],
     customAttributes: CustomAttribute[] = []
   ): void {
+    // 廉价签名：条数 + 最大 updatedAt + 分类/属性名。数据未变直接复用现有索引，
+    // 避免每次提交都全量重建 + 重跑图谱挖掘。
+    let maxUp = 0
+    for (const b of bookmarks) if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
+    for (const g of groups) if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
+    for (const c of categories) if (((c as { updatedAt?: number }).updatedAt || 0) > maxUp) maxUp = (c as { updatedAt?: number }).updatedAt || 0
+    for (const a of customAttributes) if (((a as { updatedAt?: number }).updatedAt || 0) > maxUp) maxUp = (a as { updatedAt?: number }).updatedAt || 0
+    const signature = [
+      bookmarks.length, groups.length, categories.length, customAttributes.length, maxUp,
+      categories.map((c) => c.name || '').join('\u0001'),
+      customAttributes.map((a) => a.name || '').join('\u0001'),
+    ].join('\u0002')
+    if (this.isIndexed && signature === this._lastSignature) return
+
+    // id → bookmark：父站点与组内成员查找不再对每个元素做 O(n) find
+    const bmById = new Map(bookmarks.map((b) => [b.id, b] as const))
+
     const catMap = new Map<string, string>()
     for (const c of categories) {
       if (c && !c.deletedAt && c.id) catMap.set(c.id, c.name)
@@ -205,8 +224,8 @@ export class VaultKnowledgeEngine {
         title,
         url,
         content: (() => {
-          const parentBm = b.parentId ? bookmarks.find((p) => p.id === b.parentId && !p.deletedAt) : null
-          const hierarchy = parentBm ? `从属父站点: ${_plain(parentBm.title)}; ` : ''
+          const parentBm = b.parentId ? bmById.get(b.parentId) : null
+          const hierarchy = parentBm && !parentBm.deletedAt ? `从属父站点: ${_plain(parentBm.title)}; ` : ''
           return `${hierarchy}${notes ? `简介/笔记: ${notes}` : `域名: ${host}`}`
         })(),
         tags,
@@ -234,8 +253,8 @@ export class VaultKnowledgeEngine {
 
       // 获取组内关联书签的概览
       const memberBms = (g.bookmarkIds || [])
-        .map(id => bookmarks.find(b => b.id === id && !b.deletedAt))
-        .filter((b): b is Bookmark => !!b)
+        .map(id => bmById.get(id))
+        .filter((b): b is Bookmark => !!b && !b.deletedAt)
 
       const memberSummary = memberBms
         .slice(0, 8)
@@ -292,6 +311,8 @@ export class VaultKnowledgeEngine {
     } catch (graphErr) {
       console.warn('[ulink localRAG] evolvingGraph mine failed:', graphErr)
     }
+    // 全部成功后才记录签名：中途异常下次仍会重建
+    this._lastSignature = signature
   }
 
   /**
@@ -360,6 +381,7 @@ export class VaultKnowledgeEngine {
 
     // 2. 第一阶段：全库 BM25 计算与概念加权
     const scoredChunks: Array<{ chunk: KnowledgeChunk; score: number; reason: string }> = []
+    const graphMaxWeight = graphNeighbors.reduce((m, n) => Math.max(m, n.weight), 0)
 
     for (let i = 0; i < this.chunks.length; i++) {
       const chunk = this.chunks[i]
@@ -384,7 +406,10 @@ export class VaultKnowledgeEngine {
         for (const gn of graphNeighbors) {
           const gnLower = gn.name.toLowerCase()
           if (titleLower.includes(gnLower) || contentLower.includes(gnLower)) {
-            score += Math.min(3.0, gn.weight * 1.5)
+            // 按最强邻居归一化：图谱权重会随学习次数增长，直接用绝对权重会很快全部顶到
+            // +3 上限，使排序退化为无序；归一化后只保留相对强弱。
+            const rel = graphMaxWeight > 0 ? gn.weight / graphMaxWeight : 0
+            score += Math.min(3.0, rel * 3.0)
             reasons.push(`动态图谱关联「${gn.name}」`)
           }
         }

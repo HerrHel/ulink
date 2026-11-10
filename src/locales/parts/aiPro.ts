@@ -226,6 +226,8 @@ export const aiZh = {
     wsTopicSuffixAlt: '工具箱',
     // 提示词侧：附件卡内容后追加的用户提问前缀
     userQuestionLabel: '用户具体问题：',
+    promptTooLong: '单条消息过长（上限 {max} 字符），请精简后重试。',
+    attachmentTruncated: '\n…（附件内容过长，已截断）',
     foundCountGeneric: '为你找到 {n} 个匹配站点',
     foundCountFallback: '未找到个性化匹配，以下为 {n} 个通用发现入口（非个性化结果）。',
     selectAll: '全选',
@@ -369,6 +371,7 @@ export const aiZh = {
     savedToast: '已保存「{title}」',
     dagStepExecute: '单步执行',
     dagStepSuccess: '执行成功',
+    dagDependencyUnmet: '前置步骤尚未完成：{steps}',
     dagStepFailed: '执行失败',
     dagStepRunning: '执行中…',
     dagStepPending: '等待前置就绪',
@@ -626,6 +629,8 @@ export const aiEn = {
     wsTopicSuffixAlt: 'Toolbox',
     // 提示词侧：附件卡内容后追加的用户提问前缀
     userQuestionLabel: 'User question: ',
+    promptTooLong: 'Message is too long (max {max} characters). Please shorten it and retry.',
+    attachmentTruncated: '\n… (attachment content truncated due to length limit)',
     foundCountGeneric: 'Found {n} matching sites for you',
     foundCountFallback: 'No personalized matches found. Below are {n} generic discovery entry points (not personalized).',
     selectAll: 'Select all',
@@ -769,6 +774,7 @@ export const aiEn = {
     savedToast: 'Saved "{title}"',
     dagStepExecute: 'Execute',
     dagStepSuccess: 'Succeeded',
+    dagDependencyUnmet: 'Prerequisite steps are not complete: {steps}',
     dagStepFailed: 'Failed',
     dagStepRunning: 'Running…',
     dagStepPending: 'Waiting for prerequisites',

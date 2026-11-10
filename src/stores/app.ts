@@ -28,18 +28,26 @@ export function _fingerprint(data: AppData): string {
   const cats = data.categories || []
   const attrs = data.customAttributes || []
   let maxUp = 0
+  let updSum = 0
+  const bump = (ts: unknown) => {
+    const v = typeof ts === 'number' && Number.isFinite(ts) ? ts : 0
+    if (v > maxUp) maxUp = v
+    // 累加校验和：只看 max 时，若存在「未来时间戳」条目（远端时钟超前 ≤120s），
+    // 之后的普通编辑把 updatedAt 设为 now（仍小于 max），指纹不变会导致 save() 静默跳过落盘。
+    updSum = (updSum + (v % 2147483647)) % 2147483647
+  }
   let useCounts = 0
   for (const b of bms) {
-    if ((b.updatedAt || 0) > maxUp) maxUp = b.updatedAt || 0
+    bump(b.updatedAt)
     useCounts += b.useCount || 0
   }
   for (const g of grps) {
-    if ((g.updatedAt || 0) > maxUp) maxUp = g.updatedAt || 0
+    bump(g.updatedAt)
     useCounts += g.useCount || 0
   }
-  for (const c of cats) if ((c.updatedAt || 0) > maxUp) maxUp = c.updatedAt || 0
-  for (const a of attrs) if ((a.updatedAt || 0) > maxUp) maxUp = a.updatedAt || 0
-  const base = `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${useCounts}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
+  for (const c of cats) bump(c.updatedAt)
+  for (const a of attrs) bump(a.updatedAt)
+  const base = `${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${updSum}|${useCounts}|${(data as { _schemaVersion?: number })._schemaVersion ?? ''}`
   if (!data._masterCanary) return base
   const canaryPart = typeof data._masterCanary === 'object' && data._masterCanary !== null
     ? `${data._masterCanary.data || ''}:${data._masterCanary.iv || ''}`

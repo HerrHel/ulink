@@ -51,6 +51,9 @@ describe('extractImplicitPreference 隐式偏好抽取', () => {
 
   it('请求类句子不误判为偏好', () => {
     expect(extractImplicitPreference('帮我找我喜欢的旅行网站')).toBeNull()
+    // 一次性需求（「我想要…」）不是长期偏好，不能注入后续每轮提示词
+    expect(extractImplicitPreference('我想要一个能画流程图的工具')).toBeNull()
+    expect(extractImplicitPreference('我想找本地优先的笔记软件')).toBeNull()
     expect(extractImplicitPreference('今天天气不错')).toBeNull()
     expect(extractImplicitPreference('')).toBeNull()
   })

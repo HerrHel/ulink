@@ -269,9 +269,10 @@ function onApplyAi() {
 function onDismissAi() { dismissAiSuggestions() }
 
 // Auto-focus title input when modal opens
+// 组件由 App.vue 的 v-if 在打开瞬间创建，isOpen 在 setup 时已为 true，必须 immediate。
 watch(() => bmForm.isOpen, (open) => {
   if (open) nextTick(() => titleRef.value?.focus())
-})
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   if (bmForm._fetchTimer) {

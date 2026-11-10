@@ -297,13 +297,20 @@ const shareUrl = computed(() => {
   return ''
 })
 
+// 代际令牌：快速切换分享目标时，慢响应的旧请求不得覆盖新目标的状态
+let categoryShareGen = 0
 async function checkCategoryShare() {
   if (isGroup.value || !targetId.value) return
+  const gen = ++categoryShareGen
+  const targetAtStart = targetId.value
   loading.value = true
   try {
-    categoryShareId.value = await getCategoryShareId(targetId.value)
+    const id = await getCategoryShareId(targetAtStart)
+    // 目标已变化/已切到组/已有更新的请求 → 丢弃本次结果
+    if (gen !== categoryShareGen || isGroup.value || targetId.value !== targetAtStart) return
+    categoryShareId.value = id
   } finally {
-    loading.value = false
+    if (gen === categoryShareGen) loading.value = false
   }
 }
 
@@ -316,6 +323,7 @@ watch(
         checkCategoryShare()
       }
     } else {
+      categoryShareGen++
       categoryShareId.value = null
     }
   },

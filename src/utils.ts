@@ -98,14 +98,14 @@ export function stripTags(html: string): string {
   )
   // 剥除所有剩余 HTML 标签（行内标签不插入额外空格）
   out = out.replace(/<[^>]+>/g, '')
-  // 还原常见 HTML 实体
+  // 还原常见 HTML 实体：&amp; 必须最后解，否则 &amp;lt; 会被先解成 &lt; 再解成 <（双重解码）
   out = out
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&#x27;/g, "'")
+    .replace(/&amp;/g, '&')
   // 规范化空格与空白行，以换行符连接各非空行
   return out
     .split(/\r?\n/)
@@ -186,7 +186,10 @@ export function isDarkInvertSite(
  * @param name 取首字符（通常传书签标题 / 域名首字母）
  */
 export function faviconInitials(name: string | null | undefined): string {
-  const ch = ((name || '').toString().trim().charAt(0) || '?').toUpperCase()
+  // 按 Unicode 码点取首字符：charAt(0) 会截断 emoji 代理对，得到孤立高代理，
+  // 后面 encodeURIComponent 直接抛 URIError: malformed，导致降级图标/整块渲染失败。
+  const chars = Array.from(((name || '').toString().trim()))
+  const ch = (chars[0] || '?').toUpperCase()
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#6e7681"/><text x="16" y="16" dy=".35em" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16" fill="#ffffff">${ch}</text></svg>`
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg)
 }

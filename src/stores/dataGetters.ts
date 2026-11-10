@@ -44,7 +44,9 @@ export const dataGetters = {
       if (matchIds) bm = bm.filter(b => matchIds.has(b.id))
     }
     bm = _filterAttrs(bm, ui)
-    _sortItems(bm, ui, 'title', 'createdAt')
+    // 与 filteredGroups / useCombinedList 统一用 updatedAt：同一「新→旧」排序
+    // 不能因书签网格用 createdAt 而与合并列表顺序不一致。
+    _sortItems(bm, ui, 'title', 'updatedAt')
     return bm
   },
 

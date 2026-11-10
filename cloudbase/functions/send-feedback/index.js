@@ -100,15 +100,20 @@ function sendJson(res, status, body) {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = ''
+    const chunks = []
+    let size = 0
     req.on('data', (chunk) => {
-      raw += chunk
-      if (raw.length > 100_000) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      chunks.push(buf)
+      size += buf.length
+      if (size > 100_000) {
         reject(new Error('body_too_large'))
         req.destroy()
       }
     })
     req.on('end', () => {
+      if (!chunks.length) return resolve({})
+      const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try {
         resolve(JSON.parse(raw))

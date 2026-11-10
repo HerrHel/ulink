@@ -144,7 +144,16 @@ const server = http.createServer(async (req, res) => {
       // 不阻断：PG 数据必须删，图片可后补
     }
 
-    // ③ 删对象存储图片
+    // ③ 先删 PG 数据（关键路径）：purge 失败时用户可原样重试，且不会出现
+    //    「图片已永久删除、书签/组仍在」的破图半成品状态。
+    const purge = await db.rpc('purge_user_data', { p_uid: uid })
+    if (purge.error) {
+      console.error('[account] purge_user_data failed:', purge.error)
+      sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
+      return
+    }
+
+    // ④ 再删对象存储图片（best effort；失败只影响 imagesPending，不阻断注销）
     let imagesDeleted = 0
     if (imagePaths.length > 0) {
       try {
@@ -156,14 +165,6 @@ const server = http.createServer(async (req, res) => {
         console.error('[account] deleteFile failed:', e)
         // 失败不谎报：图片删除结果为 0，由运维补删
       }
-    }
-
-    // ④ 删 PG 数据
-    const purge = await db.rpc('purge_user_data', { p_uid: uid })
-    if (purge.error) {
-      console.error('[account] purge_user_data failed:', purge.error)
-      sendJson(res, 503, { error: 'temporarily_unavailable' }, cors)
-      return
     }
 
     sendJson(

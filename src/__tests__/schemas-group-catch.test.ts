@@ -37,9 +37,10 @@ describe('D1-54 SiblingGroupSchema catch/coerce 软降级', () => {
     const r = SiblingGroupSchema.safeParse({ name: 'g' })
     expect(r.success).toBe(false)
   })
-  it('name 缺失 success===false 硬拒（不软降级，无 catch）', () => {
+  it('name 缺失 → catch(\'\') 软降级（组仍保留，避免整库回退）', () => {
     const r = SiblingGroupSchema.safeParse({ id: 'g1' })
-    expect(r.success).toBe(false)
+    expect(r.success).toBe(true)
+    expect(r.success && r.data.name).toBe('')
   })
   it('id/name 全齐 success===true（合法基线路径）', () => {
     const r = SiblingGroupSchema.safeParse(validGroup)
@@ -221,9 +222,11 @@ describe('D1-54 CustomAttributeSchema literal/optional', () => {
     const r = CustomAttributeSchema.safeParse({ id: 'a1', name: '标签一' })
     expect(r.success).toBe(false)
   })
-  it('id/name 缺失 → success===false 硬拒', () => {
+  it('id 缺失硬拒；name 缺失软降级为空串', () => {
     expect(CustomAttributeSchema.safeParse({ name: 'x', type: 'boolean' }).success).toBe(false)
-    expect(CustomAttributeSchema.safeParse({ id: 'y', type: 'boolean' }).success).toBe(false)
+    const r = CustomAttributeSchema.safeParse({ id: 'y', type: 'boolean' })
+    expect(r.success).toBe(true)
+    expect(r.success && r.data.name).toBe('')
   })
   it('合法 type=boolean → success=true（与生产 useDataIO.ts:219 入参一致）', () => {
     const r = CustomAttributeSchema.safeParse({ id: 'a1', name: '标签一', type: 'boolean', updatedAt: 1700000000000 })

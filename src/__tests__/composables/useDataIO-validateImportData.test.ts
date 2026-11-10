@@ -115,13 +115,12 @@ describe('validateImportData 导入 JSON 格式校验前哨', () => {
     expect(msg).toMatch(/bookmarks\.0\.id|^数据格式错误/)
   })
 
-  it('categories 含缺 name 的坏项 → 返回含「categories.0.name」的错误串（catch 只兜 icon/color 不兜 name）', () => {
+  it('categories 含缺 name 的坏项 → schema 容忍（catch 空串），由合并侧跳过该条', () => {
     const app = validSample()
     delete (app.categories[0] as { name?: string }).name
     const msg = validateImportData(app)
-    expect(msg).not.toBeNull()
-    expect(msg).toContain('categories')
-    expect(msg).toContain('name')
+    // 单条坏记录不再拖垮整个导入文件；_mergeCategories 会跳过 name 为空的项
+    expect(msg).toBeNull()
   })
 
   it('customAttributes 含坏 type（非 "boolean"）→ 返回含 type 的错误串', () => {

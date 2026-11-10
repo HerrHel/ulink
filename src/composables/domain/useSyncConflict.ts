@@ -65,6 +65,10 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     else if (conflict.type === 'group') ds.updateGroup(id, { updatedAt: now })
     else if (conflict.type === 'category') ds.updateCategory(id, { updatedAt: now })
     else if (conflict.type === 'attribute') ds.updateAttribute(id, { updatedAt: now })
+    // 强制整行推送：若本地变更来自无字段追踪的路径（undo restoreSnapshot 只 _markDirty、
+    // pull 去重只 _markDirty），changedFields 可能只含 updatedAt，partial 更新会把内容
+    // 留在本机、云端仍是旧值。删除追踪后 syncPush 走 isNew||!changedFields 的全量分支。
+    ds._changedFields.delete(id)
   }
   _remoteSnapshots.delete(`${conflict.type}:${id}`)
   store.removeConflict(id)

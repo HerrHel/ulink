@@ -2,6 +2,7 @@
  * diffVersions.ts — 版本差异对比工具
  * 比较两个版本的字段级差异，用于历史版本 diff UI
  */
+import { t } from '../i18n/index.js'
 export interface DiffField {
   key: string
   label: string
@@ -64,7 +65,7 @@ export function diffVersions(
     try { newStr = JSON.stringify(newVal) } catch { newStr = String(newVal) }
     if (oldStr === newStr) continue
 
-    const label = FIELD_LABELS[key] || key
+    const label = FIELD_LABELS[key] ? t('ctx.diffField.' + key) : key
     // 敏感字段（password）：只标注「已修改」或「新增/移除」不显示原值，避免历史 diff UI 泄露密码
     if (SENSITIVE_KEYS.has(key)) {
       if (oldVal === undefined && newVal !== undefined) {

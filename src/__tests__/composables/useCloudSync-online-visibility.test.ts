@@ -19,10 +19,15 @@ vi.mock('../../composables/domain/useAuth.js', async () => {
   return { useAuth: () => reactive({ isLoggedIn: isLoggedInRef }) }
 })
 
-const _push = vi.hoisted(() => ({ enqueueSpy: vi.fn(), pushFromQueueSpy: vi.fn(async () => true) }))
+const _push = vi.hoisted(() => ({
+  enqueueSpy: vi.fn(),
+  pushFromQueueSpy: vi.fn(async () => true),
+  reenqueueSpy: vi.fn(async () => 0),
+}))
 vi.mock('../../composables/domain/syncPush.js', () => ({
   enqueueDirtyAsOps: _push.enqueueSpy,
   pushFromQueue: _push.pushFromQueueSpy,
+  reenqueueDeadDeletes: _push.reenqueueSpy,
   _opNeedsUnlock: vi.fn(() => false),
 }))
 
@@ -109,6 +114,7 @@ describe('useCloudSync online/visibility 核心契约护栏', () => {
     _docRmSpy = vi.spyOn(document, 'removeEventListener').mockImplementation((() => {}) as any)
     _push.enqueueSpy.mockClear()
     _push.pushFromQueueSpy.mockClear()
+    _push.reenqueueSpy.mockClear()
     _pull.pullChangesSpy.mockClear()
     _rt.subscribeSpy.mockClear()
     _rt.unsubscribeSpy.mockClear()

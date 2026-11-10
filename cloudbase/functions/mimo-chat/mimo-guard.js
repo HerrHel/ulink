@@ -180,7 +180,9 @@ function validateChatBody(body, opts) {
   const payload = {
     model,
     messages: b.messages,
-    stream: b.stream !== false
+    // 尊重调用方 stream 选择：主聊天显式传 true；queryExpand 等非流式调用传 false，
+    // 旧实现强制 true 会让它们按 JSON 解析 SSE 文本 → 永远拿到空结果。
+    stream: b.stream === true
   };
   if (typeof b.temperature === "number" && Number.isFinite(b.temperature)) {
     payload.temperature = Math.min(2, Math.max(0, b.temperature));

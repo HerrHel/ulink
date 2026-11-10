@@ -221,7 +221,15 @@ interface DecisionRule {
  *   3. 删除/调整规则前先看 `deadLinkDecision.test.ts` 的决策矩阵护栏。
  */
 const RULES: readonly DecisionRule[] = [
-  // ── ⓪ 内网/局域网设备：不受公网 Edge 影响，仅凭本机直连定生死 ──
+  // ── ⓪ 本机离线：远端/内网直连结论都不可信，绝不落标 ──
+  // 必须排在 intranet.* 之前：断网时 192.168.x.x 直连必然失败，
+  // 若先命中 intranet.dead 会把正常的局域网书签错误标成死链并持久化。
+  {
+    id: 'local.offline',
+    when: (c) => c.localNetwork === 'offline',
+    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'offline' }),
+  },
+  // ── ① 内网/局域网设备：不受公网 Edge 影响，仅凭本机直连定生死 ──
   {
     id: 'intranet.reachable',
     when: (c) => c.isIntranet && c.localReachable,
@@ -232,13 +240,6 @@ const RULES: readonly DecisionRule[] = [
     when: (c) => c.isIntranet && !c.localReachable,
     then: () => makeCheckResult({ verdict: 'dead', reason: 'connect_err' }),
   },
-  // ── ① 本机离线：远端结论都不可信，绝不落标 ──
-  {
-    id: 'local.offline',
-    when: (c) => c.localNetwork === 'offline',
-    then: () => makeCheckResult({ verdict: 'inconclusive', reason: 'offline' }),
-  },
-
   // ── ② Edge 无响应：仅凭本机直连 ──
   {
     id: 'edge.none.reachable',

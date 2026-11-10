@@ -53,7 +53,10 @@ const boundIcon = boundedString(8_192)
 
 export const BookmarkSchema = z.object({
   id: z.string(),
-  title: z.string().transform(boundTitle),
+  // title 与其它可降级字段同口径：类型异常（null/数字）不能拖垮整条 BookmarkSchema，
+  // 否则 AppDataSchema 整体失败会让加载侧回退示例数据、用户整库丢失。
+  // url 仍保持严格校验：缺 url 的记录本身不可用，保留「坏数据 → 回退 localStorage」的安全网。
+  title: z.string().transform(boundTitle).catch(''),
   url: z.string().transform(boundUrl),
   username: z.string().catch(''),
   password: z.union([z.string(), EncryptedPasswordSchema]).catch(''),
@@ -75,7 +78,7 @@ export const BookmarkSchema = z.object({
 
 export const SiblingGroupSchema = z.object({
   id: z.string(),
-  name: z.string().transform(boundName),
+  name: z.string().transform(boundName).catch(''),
   categoryId: z.string().catch('uncategorized'),
   icon: z.string().catch('').transform(boundIcon),
   order: coerceNum(0),
@@ -93,7 +96,7 @@ export const SiblingGroupSchema = z.object({
 // D2-003：icon/color 必须 .catch，单条坏分类不能拖垮 AppData → DEFAULTS
 export const CategorySchema = z.object({
   id: z.string(),
-  name: z.string().transform(boundName),
+  name: z.string().transform(boundName).catch(''),
   icon: z.string().catch('').transform(boundIcon),
   color: z.string().catch(''),
   order: coerceNum(0),
@@ -103,7 +106,7 @@ export const CategorySchema = z.object({
 
 export const CustomAttributeSchema = z.object({
   id: z.string(),
-  name: z.string().transform(boundName),
+  name: z.string().transform(boundName).catch(''),
   type: z.literal('boolean'),
   updatedAt: optionalEpochSchema,
   deletedAt: optionalEpochSchema,

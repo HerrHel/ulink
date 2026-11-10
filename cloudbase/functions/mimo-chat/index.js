@@ -211,15 +211,22 @@ function sendJson(res, status, body, extraHeaders) {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = ''
+    // 按 Buffer 分片收集、结束一次性 utf8 解码：`raw += chunk` 会对每个 Buffer 独立
+    // utf8 解码，中文/emoji 跨 TCP 分片边界时被拆成 U+FFFD。
+    const chunks = []
+    let size = 0
     req.on('data', (c) => {
-      raw += c
-      if (raw.length > 2_000_000) {
+      const buf = Buffer.isBuffer(c) ? c : Buffer.from(c)
+      chunks.push(buf)
+      size += buf.length
+      if (size > 2_000_000) {
         reject(new Error('body_too_large'))
         req.destroy()
       }
     })
     req.on('end', () => {
+      if (!chunks.length) return resolve({})
+      const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try {
         resolve(JSON.parse(raw))
@@ -373,6 +380,7 @@ const server = http.createServer(async (req, res) => {
   let db = null
   let settled = false
   let reserved = false          // 两段式预扣是否已完成（决定断连时是否需结算）
+  let dailyConsumed = false     // 每日请求数是否已消费（失败出口需退回）
   let connectionClosed = false  // 客户端连接是否已关闭（长 await 后据此尽早收口）
   let inChars = 0
   let outBytes = 0
@@ -413,6 +421,24 @@ const server = http.createServer(async (req, res) => {
     settled = true
     const e = extra || {}
     const actualTokens = Math.ceil((inChars + outBytes) / 2)
+    // 失败请求退回每日次数：上游 5xx/超时、音频物化失败等由服务端原因导致的失败
+    // 不应消耗用户当天额度（客户端主动断连不在此列）。
+    const effectiveStatus = typeof e.status === 'number' ? e.status : res.statusCode
+    if (dailyConsumed && effectiveStatus >= 400 && uid && db) {
+      dailyConsumed = false
+      try {
+        const refund = await db.rpc('refund_daily_feature_quota', {
+          p_uid: uid,
+          p_feature: 'ai.requests.daily',
+        })
+        logEvent(refund.error ? 'warn' : 'info', 'daily_quota_refund', {
+          status: effectiveStatus,
+          errorKind: refund.error ? 'refund_failed' : null,
+        })
+      } catch (err) {
+        logEvent('warn', 'daily_quota_refund_exception', { error: String((err && err.message) || err) })
+      }
+    }
     // 计量补齐：所有出口都记 ai.requests / ai.chars（不再只在 finish && uid 时记）
     if (uid && db) {
       // 独立 ref：与两段式预扣的 kind='reserve' 行隔离开，避免 settle_quota 取错行
@@ -635,6 +661,8 @@ const server = http.createServer(async (req, res) => {
             message: '今日 AI 请求次数已用完（免费版 20 次/日、PRO 100 次/日），请明天再试或升级。',
           }, cors)
           return
+        } else {
+          dailyConsumed = true
         }
       } catch (e) {
         logEvent('warn', 'daily_quota_rpc_failed', { errorKind: 'quota_exception', error: String((e && e.message) || e) })

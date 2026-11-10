@@ -61,6 +61,8 @@ export interface DeepVideoJob {
   job_id: string
   status: DeepVideoStatus
   eta_seconds?: number
+  /** 轮询能力令牌：必须原样带回 deep_status，服务端据此校验任务归属 */
+  job_token?: string
 }
 
 /** 轮询返回的任务状态 */
@@ -287,6 +289,7 @@ export async function submitDeepVideo(
     job_id: jobId,
     status: normalizeStatus(data.status === undefined ? 'queued' : data.status),
     ...(typeof data.eta_seconds === 'number' ? { eta_seconds: data.eta_seconds } : {}),
+    ...(typeof data.job_token === 'string' && data.job_token ? { job_token: data.job_token } : {}),
   }
 }
 
@@ -311,6 +314,7 @@ export async function submitDeepUpload(
     job_id: jobId,
     status: normalizeStatus(data.status === undefined ? 'queued' : data.status),
     ...(typeof data.eta_seconds === 'number' ? { eta_seconds: data.eta_seconds } : {}),
+    ...(typeof data.job_token === 'string' && data.job_token ? { job_token: data.job_token } : {}),
   }
 }
 
@@ -322,6 +326,8 @@ export async function pollDeepVideo(
   jobId: string,
   options: {
     signal?: AbortSignal
+    /** submitDeepVideo/submitDeepUpload 返回的 job_token，服务端校验任务归属 */
+    jobToken?: string
     onProgress?: (stage: DeepVideoStage | undefined, progress: number) => void
     intervalMs?: number
     maxMs?: number
@@ -338,7 +344,11 @@ export async function pollDeepVideo(
     if (options.signal?.aborted) throw new DeepVideoError('aborted', t('ai.stopped'))
 
     const data = await postExtractVideo(
-      { action: 'deep_status', job_id: id },
+      {
+        action: 'deep_status',
+        job_id: id,
+        ...(options.jobToken ? { job_token: options.jobToken } : {}),
+      },
       { signal: options.signal, timeoutMs: POLL_TIMEOUT_MS },
     )
     const status = normalizeStatus(data.status)

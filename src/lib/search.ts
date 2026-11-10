@@ -7,6 +7,7 @@
 import type { Bookmark, SiblingGroup, CustomAttribute } from '../types.js'
 import { isThreePartCipher } from '../crypto.js'
 import { searchSemanticBookmarks } from './ai/semanticSearch.js'
+import { t } from '../i18n/index.js'
 
 /**
  * E2E 锁定态遗留密文不进搜索索引 / 不参与匹配：encryptItem 加密整字段 → 整串三段
@@ -482,7 +483,7 @@ export function searchWithHighlights(
     const grpIds = _fallbackGrpIds(groups, q, bookmarkMap)
     groupResults = groups.filter(g => grpIds.has(g.id)).slice(0, GROUP_SUGGEST_LIMIT).map(g => ({
       id: g.id, name: _plain(g.name || ''), _isGroup: true,
-      _displayTitle: _plain(g.name || '') || '未命名组',
+      _displayTitle: _plain(g.name || '') || t('cards.unnamedGroup'),
       bookmarkIds: g.bookmarkIds,
       _highlights: {},
     }))
@@ -502,7 +503,7 @@ export function searchWithHighlights(
         id: r.item.id,
         name: (r.item as GroupSearchItem).name,
         _isGroup: true,
-        _displayTitle: (r.item as GroupSearchItem).name || '未命名组',
+        _displayTitle: (r.item as GroupSearchItem).name || t('cards.unnamedGroup'),
         bookmarkIds: (r.item as GroupSearchItem).bookmarkIds,
         _highlights: _extractHighlights(r as unknown as FuseResult, GRP_KEY_MAP),
       }))
@@ -524,7 +525,7 @@ export function searchWithHighlights(
             id: sm.id,
             name: _plain(sm.title),
             _isGroup: true,
-            _displayTitle: _plain(sm.title) || '未命名组',
+            _displayTitle: _plain(sm.title) || t('cards.unnamedGroup'),
             bookmarkIds: g?.bookmarkIds,
             _highlights: {},
             _semanticReason: sm.reason,

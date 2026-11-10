@@ -1054,6 +1054,13 @@ describe('模块 2 补漏第五阶段：QuickLook 联动关闭、历史栈清理
     ui.openAiEnrich('b_secret')
     ui.shareMode = { kind: 'group', id: 'g_share' }
 
+    // 分享只读态禁止切换空间（防止半切换后把主页数据写进私密键）→ 完全 no-op
+    await ds.switchSpace('vault')
+    expect(ui.shareMode).not.toBeNull()
+    expect(ui.aiAttachedCards).toEqual([{ type: 'bm', id: 'b_secret' }])
+
+    // 退出分享后再切空间：临时 UI 上下文照旧彻底重置
+    ui.shareMode = null
     await ds.switchSpace('vault')
 
     expect(ui.aiAttachedCards).toEqual([])

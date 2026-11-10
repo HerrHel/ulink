@@ -39,7 +39,9 @@ const EXPLICIT_RE = /(?:^|[，。！？!?\s])(?:请|帮我|麻烦)?(?:记住|记
 
 /** 隐式偏好句式（按子句锚定匹配，避免把「帮我找我喜欢的…」这类请求误判为偏好） */
 const IMPLICIT_CLAUSE_RES = [
-  /^我.{0,6}(喜欢|偏好|常用|想要|习惯|倾向)/,
+  // 不再把「我想要 / 我想找」当长期偏好：那是单次请求（如「我想要一个能画流程图的工具」）。
+  // 仅保留真正的长期倾向表述（喜欢/偏好/习惯/常用/倾向）。
+  /^我(?:一直|平时|通常|一般|比较|更|最)?(?:喜欢|偏好|习惯|倾向|常用)/,
   /^(以后|今后|往后|接下来).{0,24}(优先|别再|不要|尽量|多推荐|少推荐)/,
   /^优先(推荐|使用|考虑)/,
   /^(别再|不要再|不要)(推荐|给我|显示)/,
@@ -75,6 +77,8 @@ export function extractImplicitPreference(input: string): string | null {
   for (const clause of clauses) {
     const trimmed = clause.trim()
     if (!trimmed) continue
+    // 一次性请求（想要/想找/帮我找…）不写入长期记忆，避免污染后续每一轮提示词
+    if (/想要|想找|帮我找|给我找|推荐一?个/.test(trimmed)) continue
     if (IMPLICIT_CLAUSE_RES.some((re) => re.test(trimmed))) {
       const text = sanitizeForPrompt(trimmed, MAX_TEXT_LEN)
       return text || null

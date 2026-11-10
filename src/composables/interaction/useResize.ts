@@ -23,12 +23,16 @@ export const DETAIL_WIDTH_MIN = 320
 export const DETAIL_WIDTH_MAX = 800
 
 export function useResize() {
-  onMounted(() => {
+  let observer: MutationObserver | null = null
+  let teardown: (() => void) | null = null
+
+  /** 绑定手柄与宽度状态；节点尚未渲染时返回 false，由 MutationObserver 等待其出现 */
+  function setup(): boolean {
     const leftHandle = document.getElementById('resizeLeft')
     const rightHandle = document.getElementById('resizeRight')
     const leftPanel = document.querySelector('.icon-rail') as HTMLElement
     const rightPanel = document.getElementById('detailPanel')
-    if (!leftHandle || !rightHandle || !leftPanel || !rightPanel) return
+    if (!leftHandle || !rightHandle || !leftPanel || !rightPanel) return false
 
     // 恢复保存的宽度
     const savedLeft = safeGetItem('lv_railWidth')
@@ -130,13 +134,35 @@ export function useResize() {
     leftHandle.addEventListener('mousedown', onLeftDown)
     rightHandle.addEventListener('mousedown', onRightDown)
 
-    onUnmounted(() => {
+    teardown = () => {
       cancelAnimationFrame(raf!)
       handle = null; panel = null
       leftHandle.removeEventListener('mousedown', onLeftDown)
       rightHandle.removeEventListener('mousedown', onRightDown)
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+    }
+    return true
+  }
+
+  onMounted(() => {
+    if (setup()) return
+    // 分享只读态下 .icon-rail/#detailPanel 不渲染，而退出分享后根组件不会重新 mount；
+    // 等待节点出现后再绑定，避免拖宽手柄与宽度记忆永久失效。
+    if (typeof MutationObserver === 'undefined' || !document.body) return
+    observer = new MutationObserver(() => {
+      if (setup() && observer) {
+        observer.disconnect()
+        observer = null
+      }
     })
+    observer.observe(document.body, { childList: true, subtree: true })
+  })
+
+  onUnmounted(() => {
+    observer?.disconnect()
+    observer = null
+    teardown?.()
+    teardown = null
   })
 }

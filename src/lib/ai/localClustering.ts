@@ -38,6 +38,20 @@ export interface VaultHygieneStats {
 }
 
 /**
+ * 分类名命中判定：
+ * - 中文名直接子串匹配；
+ * - 拉丁/ASCII 名（尤其 2 字母「AI」「UI」「GO」）必须命中词边界，
+ *   否则 Gmail / Trainline / Tailwind 都会被误归到「AI」。
+ */
+function _categoryTokenHit(textLower: string, token: string): boolean {
+  const t = token.trim().toLowerCase()
+  if (!t) return false
+  if (/[\u3400-\u9fff]/.test(t)) return textLower.includes(t)
+  const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`).test(textLower)
+}
+
+/**
  * 判定是否为系统官方内置书签（如官网落地页、Edge扩展、App入口等）
  * 必须受到保护，杜绝参与重复剔除、误删或无意义的整理干扰
  */
@@ -168,7 +182,7 @@ export function clusterUncategorizedBookmarks(
         const textLower = `${b.title || ''} ${b.url || ''}`.toLowerCase()
         for (const cat of activeCategories) {
           const catLower = cat.name.toLowerCase()
-          if (textLower.includes(catLower) || (catLower.length >= 2 && catLower.split(/[\s/、]+/).some(part => part && textLower.includes(part)))) {
+          if (_categoryTokenHit(textLower, catLower) || (catLower.length >= 2 && catLower.split(/[\s/、]+/).some(part => _categoryTokenHit(textLower, part)))) {
             bestCatId = cat.id
             break
           }
@@ -322,7 +336,7 @@ export function findUncategorizedGroups(
       const textLower = `${plainName} ${plainNotes}`.toLowerCase()
       for (const cat of activeCats) {
         const catLower = cat.name.toLowerCase()
-        if (textLower.includes(catLower) || (catLower.length >= 2 && catLower.split(/[\s/、]+/).some(p => p && textLower.includes(p)))) {
+        if (_categoryTokenHit(textLower, catLower) || (catLower.length >= 2 && catLower.split(/[\s/、]+/).some(p => _categoryTokenHit(textLower, p)))) {
           bestCatId = cat.id
           break
         }

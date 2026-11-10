@@ -75,7 +75,7 @@ const sortableList = ref<Category[]>([])
 
 watch(() => store.modals.category, (open) => {
   if (open) nextTick(() => newNameRef.value?.focus())
-})
+}, { immediate: true })
 
 watch(() => dataStore.selectableCategories, (val) => {
   sortableList.value = val.filter(c => c.id !== CAT_UNCATEGORIZED).map(c => ({ ...c }))

@@ -3,7 +3,11 @@
  *
  * `_fingerprint(data: AppData): string` 是 PERF-3 写盘去重的轻量指纹——save() 调它
  * 与上次成功指纹 `_lastSavedFp[space]` 比较，相同则跳过 Zod 校验 + 双写 localStorage/IDB
- * 早退。指纹串格式：`${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${useCounts}|${_schemaVersion}`。
+ * 早退。指纹串格式：`${bms.length}|${grps.length}|${cats.length}|${attrs.length}|${maxUp}|${updSum}|${useCounts}|${_schemaVersion}`。
+ *
+ * updSum：所有实体 updatedAt 的校验和。只取 maxUp 时，若库中存在「未来时间戳」条目
+ * （远端时钟超前 ≤120s 仍被视为合法），后续普通编辑把 updatedAt 设为 now（< maxUp）
+ * 不会改变 maxUp，指纹相同会误跳过落盘；校验和保证任一实体时间变化都能感知。
  *
  * **审计 H1 核心契约**：纯 rename category/attribute 只改自身 name+updatedAt，四数组 length
  * 不变、bookmarks/siblingGroups 的 maxUp 也不顶高——若指纹漏纳 cats/attrs 的 max updatedAt，
@@ -57,7 +61,7 @@ function data(p: Partial<AppData> & { _schemaVersion?: number } = {}): AppData {
 
 describe('_fingerprint', () => {
   // ─── 基本格式 ───
-  it('七段格式：length×4 | maxUp | useCounts | _schemaVersion，分隔符 |', () => {
+  it('八段格式：length×4 | maxUp | updSum | useCounts | _schemaVersion，分隔符 |', () => {
     const d = data({
       bookmarks: [mkBm({ id: 'b1', updatedAt: 100 })],
       siblingGroups: [mkGrp({ id: 'g1', updatedAt: 200 })],
@@ -65,17 +69,17 @@ describe('_fingerprint', () => {
       customAttributes: [mkAttr({ id: 'a1' })],
       _schemaVersion: 2,
     } as Partial<AppData>)
-    expect(_fingerprint(d)).toBe('1|1|1|1|200|0|2')
+    expect(_fingerprint(d)).toBe('1|1|1|1|200|300|0|2')
   })
 
-  it('空 AppData（四数组全空、无 schemaVersion）→ 0|0|0|0|0|0|', () => {
-    expect(_fingerprint(data())).toBe('0|0|0|0|0|0|')
+  it('空 AppData（四数组全空、无 schemaVersion）→ 0|0|0|0|0|0|0|', () => {
+    expect(_fingerprint(data())).toBe('0|0|0|0|0|0|0|')
   })
 
   // ─── 四数组兜底 || [] ───
   it('四数组 undefined/null 各走 ||[]，length 段全 0', () => {
     const d = { bookmarks: undefined, siblingGroups: null, categories: undefined, customAttributes: null } as unknown as AppData
-    expect(_fingerprint(d)).toBe('0|0|0|0|0|0|')
+    expect(_fingerprint(d)).toBe('0|0|0|0|0|0|0|')
   })
 
   it('四数组各自长度独立计入（多元素）', () => {
@@ -85,7 +89,7 @@ describe('_fingerprint', () => {
       categories: [mkCat({})],
       customAttributes: [mkAttr({}), mkAttr({ id: 'a2' }), mkAttr({ id: 'a3' }), mkAttr({ id: 'a4' })],
     })
-    expect(_fingerprint(d)).toBe('3|2|1|4|0|0|')
+    expect(_fingerprint(d)).toBe('3|2|1|4|0|0|0|')
   })
 
   // ─── maxUp：跨四数组取最大 ───
@@ -96,16 +100,16 @@ describe('_fingerprint', () => {
       categories: [mkCat({ id: 'c1' })], // Category 无 updatedAt 字段（类型不要求）
       customAttributes: [mkAttr({ id: 'a1' })],
     })
-    // bookmark updatedAt 500 > 300/0/0 → maxUp=500
-    expect(_fingerprint(d)).toBe('2|1|1|1|500|0|')
+    // bookmark updatedAt 500 > 300/0/0 → maxUp=500；updSum=100+500+300=900
+    expect(_fingerprint(d)).toBe('2|1|1|1|500|900|0|')
   })
 
   it('updatedAt 缺失实体走 ||0，不影响 maxUp', () => {
     const b = mkBm({ updatedAt: 100 })
     delete (b as Partial<Bookmark>).updatedAt
     const d = data({ bookmarks: [b, mkBm({ id: 'b2', updatedAt: 100 })] })
-    // 缺失 updatedAt 视 0，另一实体 100 → maxUp=100
-    expect(_fingerprint(d)).toBe('2|0|0|0|100|0|')
+    // 缺失 updatedAt 视 0，另一实体 100 → maxUp=100；updSum=0+100=100
+    expect(_fingerprint(d)).toBe('2|0|0|0|100|100|0|')
   })
 
   it('updatedAt=0 是合法值（0 || 0 = 0，不被替换）', () => {
@@ -113,7 +117,7 @@ describe('_fingerprint', () => {
       bookmarks: [mkBm({ updatedAt: 0 })],
     })
     // 0 是合法 updatedAt 不顶 maxUp（0 > 0 false），故 maxUp=0
-    expect(_fingerprint(d)).toBe('1|0|0|0|0|0|')
+    expect(_fingerprint(d)).toBe('1|0|0|0|0|0|0|')
   })
 
   // ─── 审计 H1 核心契约：cats/attrs 的 max updatedAt 纳入指纹 ───
@@ -134,7 +138,7 @@ describe('_fingerprint', () => {
     const fpAfter = _fingerprint(after)
     // 核心契约：categories 单独 updatedAt 升高也顶高 maxUp，指纹变化
     expect(fpBefore).not.toBe(fpAfter)
-    expect(fpAfter).toBe('1|0|1|0|200|0|') // maxUp 100→200
+    expect(fpAfter).toBe('1|0|1|0|200|300|0|') // maxUp 100→200，updSum 100→300
   })
 
   it('H1：纯改 attribute updatedAt 顶高 maxUp（同上 attribute 维度）', () => {
@@ -151,7 +155,7 @@ describe('_fingerprint', () => {
       customAttributes: [attrAfter],
     }) as AppData
     expect(_fingerprint(before)).not.toBe(_fingerprint(after))
-    expect(_fingerprint(after)).toBe('1|0|0|1|300|0|')
+    expect(_fingerprint(after)).toBe('1|0|0|1|300|400|0|')
   })
 
   it('H1 反证：若指纹漏纳 cats/attrs maxUp 则 rename 前后指纹相同（锁现有正确行为不为回归）', () => {
@@ -168,28 +172,28 @@ describe('_fingerprint', () => {
       categories: [catBumped],
     }) as AppData
     // before 的 c1 无 updatedAt → maxUp=100（来自 bookmark）
-    expect(_fingerprint(before)).toBe('1|0|1|0|100|0|')
+    expect(_fingerprint(before)).toBe('1|0|1|0|100|100|0|')
     // after 的 c1 updatedAt=999 → maxUp 应升到 999（H1 修复保留）
-    expect(_fingerprint(after)).toBe('1|0|1|0|999|0|')
+    expect(_fingerprint(after)).toBe('1|0|1|0|999|1099|0|')
     expect(_fingerprint(after)).not.toBe(_fingerprint(before))
   })
 
   // ─── _schemaVersion ?? '' 边界 ───
   it('_schemaVersion 缺失走 ?? → 末段空串', () => {
     const d = data({ bookmarks: [mkBm({ updatedAt: 5 })] }) as AppData // 无 _schemaVersion
-    expect(_fingerprint(d)).toBe('1|0|0|0|5|0|')
+    expect(_fingerprint(d)).toBe('1|0|0|0|5|5|0|')
   })
 
   it('_schemaVersion=0 保留为字面 0（非 nullish 不走 ??）', () => {
     const d = data({ bookmarks: [mkBm({})] }) as AppData & { _schemaVersion?: number }
     ;(d as { _schemaVersion?: number })._schemaVersion = 0
-    expect(_fingerprint(d)).toBe('1|0|0|0|0|0|0')
+    expect(_fingerprint(d)).toBe('1|0|0|0|0|0|0|0')
   })
 
   it('_schemaVersion=2 保留为字面 2', () => {
     const d = data({}) as AppData & { _schemaVersion?: number }
     ;(d as { _schemaVersion?: number })._schemaVersion = 2
-    expect(_fingerprint(d)).toBe('0|0|0|0|0|0|2')
+    expect(_fingerprint(d)).toBe('0|0|0|0|0|0|0|2')
   })
 
   // ─── 各 updatedAt 0/negative 边界 ───
@@ -198,7 +202,7 @@ describe('_fingerprint', () => {
       bookmarks: [mkBm({ updatedAt: 0 }), mkBm({ id: 'b2', updatedAt: 0 })],
       siblingGroups: [mkGrp({ updatedAt: 0 })],
     })
-    expect(_fingerprint(d)).toBe('2|1|0|0|0|0|')
+    expect(_fingerprint(d)).toBe('2|1|0|0|0|0|0|')
   })
 
   it('取最大正 updatedAt（不取首个）', () => {
@@ -206,7 +210,19 @@ describe('_fingerprint', () => {
       bookmarks: [mkBm({ updatedAt: 10 }), mkBm({ id: 'b2', updatedAt: 5 }), mkBm({ id: 'b3', updatedAt: 999 })],
       siblingGroups: [mkGrp({ updatedAt: 100 })],
     })
-    expect(_fingerprint(d)).toBe('3|1|0|0|999|0|')
+    expect(_fingerprint(d)).toBe('3|1|0|0|999|1114|0|')
+  })
+
+  // ─── 未来时间戳下仍能感知普通编辑（updSum 护栏） ───
+  it('存在未来时间戳时，编辑其它条目（now < maxUp）仍改变指纹', () => {
+    const future = 2_000_000_000_000
+    const before = data({
+      bookmarks: [mkBm({ id: 'b1', updatedAt: future }), mkBm({ id: 'b2', updatedAt: 100 })],
+    })
+    const after = data({
+      bookmarks: [mkBm({ id: 'b1', updatedAt: future }), mkBm({ id: 'b2', updatedAt: 200 })],
+    })
+    expect(_fingerprint(after)).not.toBe(_fingerprint(before))
   })
 
   // ─── 纯函数幂等性 ───
@@ -218,6 +234,6 @@ describe('_fingerprint', () => {
     const a = _fingerprint(d)
     const b = _fingerprint(d)
     expect(a).toBe(b)
-    expect(a).toBe('1|0|1|0|42|0|')
+    expect(a).toBe('1|0|1|0|42|42|0|')
   })
 })

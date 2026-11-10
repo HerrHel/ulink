@@ -438,8 +438,6 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   .demo-col,.cchip.a,.cchip.b,.cchip.c,.hero-pill .pill-dot{animation:none}
   .demo-kids{max-height:120px;opacity:1}
 }
-</style>
-<noscript><style>html[data-lv-boot] body{visibility:visible}
 /* ── 定价区 ── */
 .price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:36px}
 .price-card{position:relative;border:1px solid #E8E4DF;border-radius:16px;background:#fff;padding:22px 18px;display:flex;flex-direction:column;gap:8px;transition:transform .15s ease,box-shadow .15s ease}
@@ -469,7 +467,8 @@ html:not(.js) .seg button[aria-pressed="true"]{background:var(--brand);color:#ff
   .price-compare-row{grid-template-columns:1.3fr repeat(4,1fr);padding:9px 12px;font-size:.72rem}
 }
 
-</style></noscript>
+</style>
+<noscript><style>html[data-lv-boot] body{visibility:visible}</style></noscript>
 </head>
 <body>
 <!-- 微信/QQ 爬虫首图兜底（display:none，优先抓取该图作为分享缩略图，>= 300x300） -->

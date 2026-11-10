@@ -141,9 +141,11 @@ export function useAppLifecycle() {
     // E1-003：beforeunload 同步写 localStorage 兜底；visibility hidden 链式 await flush
     const flushAndSave = () => {
       // 同步 localStorage 快照（关页时浏览器可完成同步写，难等 IDB）
+      // 必须按当前空间写对应 key：私密空间数据绝不能落到主页 linkvault_v2，
+      // 否则主页 IDB 读取失败回退 LS 时会把私密内容回填进主页库（空间隔离破坏）。
       try {
         const snap = ds._dataSnapshot()
-        persistSaveToLocalStorage(snap)
+        persistSaveToLocalStorage(snap, useUIStore().curSpace)
       } catch (_) { /* ignore */ }
       void flushSaveAppData()
     }
@@ -154,7 +156,7 @@ export function useAppLifecycle() {
         // 先同步 LS 兜底，再 await IDB flush（hidden 生命周期内尽量完成）
         try {
           const snap = ds._dataSnapshot()
-          persistSaveToLocalStorage(snap)
+          persistSaveToLocalStorage(snap, useUIStore().curSpace)
         } catch (_) { /* ignore */ }
         void flushSaveAppData()
         // A4-005：切后台/杀进程前落盘 UI 偏好

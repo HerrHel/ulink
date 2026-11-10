@@ -28,7 +28,7 @@ import { normalizeSyncUrl } from './syncDedup.js' // 缺陷11：导入与同步�
 import { newBookmarkId } from '../../lib/newId.js'
 import { cloneDeep } from '../../lib/clone.js'
 import type { AppData, Bookmark } from '../../types.js'
-import { detectFormat, parseRaindropJSON, parseBookmarkHTML, parseCSV, resolveCsvColumns, validateImportData } from '../../lib/importParse.js'
+import { detectFormat, parseRaindropJSON, parseBookmarkHTML, parseCSV, resolveCsvColumns, validateImportData, CSV_CATEGORY_PREFIX } from '../../lib/importParse.js'
 export { detectFormat, parseRaindropJSON, parseBookmarkHTML, parseCSV, resolveCsvColumns, validateImportData }
 export type { CsvColumns } from '../../lib/importParse.js'
 
@@ -337,7 +337,9 @@ export function importData(file: File) {
       } else if (fmt === 'csv') {
         const bookmarks = parseCSV(content)
         if (!bookmarks.length) { toast(t('msg.csvInvalid'), false); return }
-        importFromDataInternal({ categories: [], bookmarks, customAttributes: [], siblingGroups: [] }, 'CSV')
+        // 分类列还原：优先复用同名现有分类，缺失时按同名创建（id 为解析阶段的稳定合成 id）
+        const categories = _materializeCsvCategories(bookmarks)
+        importFromDataInternal({ categories, bookmarks, customAttributes: [], siblingGroups: [] }, 'CSV')
       } else {
         toast(t('msg.unsupportedFormat'), false)
       }
@@ -351,6 +353,36 @@ export function importData(file: File) {
 
 type DataStore = ReturnType<typeof useDataStore>
 interface MergeStats { imported: number; skipped: number }
+
+/**
+ * CSV 分类列落地：parseCSV 用 `csvcat:<encodeURIComponent(名称)>` 合成 id。
+ * - 本地已有同名分类 → 直接改写为现有 id，避免导入后出现重复分类；
+ * - 本地没有 → 返回待创建分类（_mergeCategories 先于 _mergeBookmarks 执行）。
+ */
+export function _materializeCsvCategories(bookmarks: AppData['bookmarks']): AppData['categories'] {
+  const ds = useDataStore()
+  const byName = new Map<string, string>()
+  for (const c of ds.categories) {
+    if (!c.deletedAt && c.name) byName.set(c.name.trim(), c.id)
+  }
+  const created: AppData['categories'] = []
+  const seen = new Set<string>()
+  for (const b of bookmarks) {
+    if (!b.categoryId || !b.categoryId.startsWith(CSV_CATEGORY_PREFIX)) continue
+    let name = ''
+    try {
+      name = decodeURIComponent(b.categoryId.slice(CSV_CATEGORY_PREFIX.length)).trim()
+    } catch { /* 非法编码按未分类处理 */ }
+    if (!name) { b.categoryId = CAT_UNCATEGORIZED; continue }
+    const existing = byName.get(name)
+    if (existing) { b.categoryId = existing; continue }
+    if (!seen.has(b.categoryId)) {
+      seen.add(b.categoryId)
+      created.push({ id: b.categoryId, name, icon: 'star', color: '', order: ds.categories.length + created.length })
+    }
+  }
+  return created
+}
 
 /** 合并分类（去重：同 ID 跳过；Zod 失败计入 skipped） */
 export function _mergeCategories(ds: DataStore, categories: AppData['categories']): MergeStats {
@@ -429,7 +461,10 @@ export function _mergeGroups(ds: DataStore, siblingGroups: AppData['siblingGroup
   for (const g of siblingGroups) {
     if (!g.id || !g.name) continue
     if (ds.siblingGroups.some(existing => existing.id === g.id)) continue
-    const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => ds.bookmarkMap[bid])
+    const liveBookmarkIds = (g.bookmarkIds || []).filter(bid => {
+      const bm = ds.bookmarkMap[bid]
+      return !!bm && !bm.deletedAt
+    })
     // categoryId 兜底：源 categoryId 为空 或 指向不存在分类（导出者填错/源数据被半删/
     // 同名分类被合并跳过未建 id）时，安全兜底到 CAT_UNCATEGORIZED，避免组挂悬空分类 id
     // 致分类筛选下组卡消失、侧栏分类引用悬空。仅当本地 categoryMap 真有该 id 才用之。

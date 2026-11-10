@@ -61,6 +61,18 @@ if (import.meta.env.DEV) {
 // Vite 专门提供 vite:preloadError 监听器应对动态 import 报错
 if (typeof window !== 'undefined') {
   window.addEventListener('vite:preloadError', (event) => {
+    // preventDefault 阻止 Vite 默认抛错；同时用一次性的会话级守卫防「chunk 持续 404 →
+    // reload → 再 404」的白屏刷新死循环。
+    event.preventDefault()
+    try {
+      const key = 'lv_preload_reloaded_at'
+      const last = Number(sessionStorage.getItem(key) || 0)
+      if (last && Date.now() - last < 60000) {
+        console.error('Vite preload error persists, skip reload to avoid loop:', event)
+        return
+      }
+      sessionStorage.setItem(key, String(Date.now()))
+    } catch { /* 隐私模式无 sessionStorage：仍执行一次刷新 */ }
     console.warn('Vite preload error, reloading...', event)
     window.location.reload()
   })

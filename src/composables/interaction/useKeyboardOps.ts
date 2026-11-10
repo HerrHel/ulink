@@ -18,6 +18,7 @@ import { useActionSheetStore } from '../../stores/actionSheet.js'
 import { useAuthStore } from '../../stores/auth.js'
 import { useE2EStore } from '../../stores/e2e.js'
 import { toast } from '../../lib/toast.js'
+import { safeSetItem } from '../../lib/storageSafe.js'
 import { t } from '../../i18n/index.js'
 
 interface NavState {
@@ -236,7 +237,14 @@ export function _onGlobalKeydown(e: KeyboardEvent) {
       },
       () => { if (!ui.modals.e2eSetup) return false; ui.modals.e2eSetup = false; return true },
       () => { if (!ui.modals.setPassword) return false; ui.modals.setPassword = false; return true },
-      () => { if (!ui.modals.setupGuide) return false; ui.modals.setupGuide = false; return true },
+      () => {
+        if (!ui.modals.setupGuide) return false
+        // 与 SetupGuide.finish 同口径落盘：Esc 关闭也算「已看过引导」，
+        // 否则下次启动仍会弹出打断用户。
+        safeSetItem('lv_setup_done', '1')
+        ui.modals.setupGuide = false
+        return true
+      },
       () => { if (!ui.modals.purchase) return false; ui.modals.purchase = false; return true },
       () => { if (!ui.modals.share) return false; ui.closeShareModal(); return true },
       () => { if (!ui.modals.aiEnrich) return false; ui.modals.aiEnrich = false; ui.aiEnrichTargetBmId = null; return true },

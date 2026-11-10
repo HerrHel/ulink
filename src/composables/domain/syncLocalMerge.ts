@@ -7,7 +7,8 @@ import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { decideRemoteApply, sanitizeRemoteTimestamp } from './syncMergeCore.js'
-import { _isPendingSync } from './syncPending.js'
+import { _isPendingSync, isDeadDelete } from './syncPending.js'
+import { entityTypeToTable } from './syncMappingTables.js'
 import { cloneDeep } from '../../lib/clone.js'
 import { EditorManager } from '../../lib/editor.js'
 import type { EntityType } from '../../types.js'
@@ -139,6 +140,10 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
   const localMap = new Map(local.map(i => [i.id, i]))
 
   for (const rItem of remote) {
+    // 本地已彻底删除、但 DELETE 因重试上限进了死信（尚未成功上云）：
+    // 忽略远端仍存活的行，否则 fullSync/增量 pull 会把它重新插回本机（删除复活）。
+    // 墓碑在 DELETE 真正成功后被 syncPush 清除。
+    if (isDeadDelete(entityTypeToTable[type], rItem.id)) continue
     const lItem = localMap.get(rItem.id) ?? null
     const decision = decideRemoteApply({
       localItem: lItem,

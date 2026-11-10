@@ -33,10 +33,19 @@ export function convertAiContentToNoteHtml(aiContent: string): string {
   let processed = aiContent.replace(cardBlockRegex, (_, jsonStr) => {
     try {
       const parsed = JSON.parse(jsonStr.trim())
-      const title = parsed.title || parsed.url || '参考网站'
-      const url = parsed.url || '#'
-      const notes = parsed.notes ? ` — ${parsed.notes}` : ''
-      return `\n- 🔗 **[${title}](${url})**${notes}\n`
+      // 模型按系统提示输出的是数组（可能一次推荐多个站点）；只按单对象取字段会
+      // 把数组解析成「参考网站 / #」，真实标题与链接全部丢失。
+      const list = Array.isArray(parsed) ? parsed : [parsed]
+      const lines = list
+        .map((item: any) => {
+          if (!item || typeof item !== 'object') return ''
+          const title = item.title || item.url || '参考网站'
+          const url = item.url || '#'
+          const notes = item.notes ? ` — ${item.notes}` : ''
+          return `- 🔗 **[${title}](${url})**${notes}`
+        })
+        .filter(Boolean)
+      return lines.length ? `\n${lines.join('\n')}\n` : ''
     } catch {
       return ''
     }

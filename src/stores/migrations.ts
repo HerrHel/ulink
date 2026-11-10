@@ -25,9 +25,10 @@ interface MigrationResult extends AppData {
 export function _readSchemaVersion(d: Partial<AppData>): number {
   const schema = (d as { _schemaVersion?: number })._schemaVersion
   if (typeof schema === 'number' && Number.isFinite(schema)) return schema
-  // 旧字段：仅当明显是「真实 schema 小整数」时信任；否则当 writeSeq 污染，强制再迁移
-  const legacy = d._dataVersion
-  if (typeof legacy === 'number' && legacy > 0 && legacy <= CURRENT_SCHEMA_VERSION) return legacy
+  // 旧字段 _dataVersion 历史上承载的是写入序号（writeSeq），小整数（如 3）同样可能是
+  // 序号而非真实 schema 版本。把它当 schema 版本会让迁移在 from>=CURRENT 处整体早退，
+  // 默认分类补种/笔记转 HTML/属性 id 重写等清洗被永久跳过且无提示。
+  // 缺 _schemaVersion 时一律视为 0，跑完全部幂等迁移（各步骤均可重复执行）。
   return 0
 }
 

@@ -8,8 +8,6 @@ import { runMigrations } from './migrations.js'
 import { useUIStore } from './ui.js'
 import { useUndoStore } from './undo.js'
 import { clearSearchCache } from '../lib/search.js'
-import { clearAllSyncOps } from './storage.js'
-import { _clearAllPendingSync } from '../composables/domain/syncPending.js'
 import { _denyWrite, _maybeLoadLocalSpace, _cancelPendingHist } from './dataShared.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { AppData } from '../types.js'
@@ -100,6 +98,9 @@ export const ioActions = {
    */
   async switchSpace(this: DataStoreThis, space: Space): Promise<void> {
     const ui = useUIStore()
+    // 分享只读态禁止切换数据空间：写入被 _denyWrite 拦下会导致 curSpace 已切、
+    // 数组仍是主页数据的半切换态，后续 save 可能把主页数据写进私密空间键。
+    if (ui.shareMode) return
     const cur = ui.curSpace
     if (cur === space || _switchingSpaceTarget === space) return
     _switchingSpaceTarget = space
@@ -112,7 +113,16 @@ export const ioActions = {
     _cancelPendingHist()
     // 1) 当前空间落盘（防切换中途丢失未提交改动）
     await persist.saveData(this._dataSnapshot(), cur)
-    // 2) 切空间 + 清 dirty/同步队列（私密 CRUD 不得进云端）
+    // 1.1) 离开主页前把内存 dirty 落成持久化 sync op（离线也能写入 IDB 队列）。
+    //      旧实现直接 clearAllSyncOps + 清 dirty，会把主页尚未推送的改动连同重试队列
+    //      一起丢弃，且 queueBackedUp 守卫失效后全量对账可能把本地存活项误删。
+    if (cur === 'main') {
+      try {
+        const { enqueueDirtyAsOps } = await import('../composables/domain/syncPush.js')
+        await enqueueDirtyAsOps()
+      } catch { /* 同步模块不可用时保持 dirty，至少本地已落盘 */ }
+    }
+    // 2) 切空间 + 清内存 dirty（私密 CRUD 不得进云端；持久化 op 队列属于主页，绝不清空）
     ui.curSpace = space
     this._dirtyIds.clear()
     this._deletedIds.clear()
@@ -120,8 +130,6 @@ export const ioActions = {
     this._changedFields.clear()
     this._deletedGroupMemberships.clear()
     this._deletedAttrMemberships.clear()
-    try { await clearAllSyncOps() } catch { /* ignore */ }
-    _clearAllPendingSync()
     try { useUndoStore().clearAllStacks() } catch { /* ignore */ }
     // 3) 载入目标数据集四数组：
     //    - 优先 IDB（权威）

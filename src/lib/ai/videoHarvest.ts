@@ -260,9 +260,10 @@ export async function extractBookmarksFromVideo(
   }
 
   // 4. 语义中枢仲裁（脑手合一）：
-  // 若判定页面已失效，或模型回复明确说明未提供/未出现任何工具，强制清除所有提取候选
+  // 仅「页面已失效」才清除候选；模型措辞「未发现工具」不能推翻页面原文已提取到的硬链接，
+  // 否则「未发现」这种软总结会把真实候选清空并退化成保存视频页自身。
   const isNoToolsSummary = isSummaryIndicatingNoTools(summary)
-  if (isDeadPage || isNoToolsSummary) {
+  if (isDeadPage) {
     rawBookmarks.length = 0
   }
 

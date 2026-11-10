@@ -158,10 +158,10 @@ export function saveSessions(sessions: AiChatSession[]): void {
         isThinking: false, // 存盘时 isThinking 置 false
         // 缺陷2：落盘前对全部文本字段统一脱敏（旧实现只覆盖 promptContent 与
         // toolResults[].resultText，content/steps/reasoning/... 曾明文落盘）。
-        content: redactSensitivePatterns(t.content),
-        reasoning: redactText(t.reasoning),
-        preToolContent: redactText(t.preToolContent),
-        steps: t.steps?.map((step) => ({ ...step, text: redactSensitivePatterns(step.text) })),
+        content: redactSensitivePatterns(t.content).slice(0, 20000),
+        reasoning: redactText(t.reasoning)?.slice(0, 8000),
+        preToolContent: redactText(t.preToolContent)?.slice(0, 8000),
+        steps: t.steps?.map((step) => ({ ...step, text: redactSensitivePatterns(step.text).slice(0, 2000) })),
         toolCalls: t.toolCalls?.map((c) => ({ ...c, arguments: redactArgs(c.arguments) })),
         suggestedReplies: t.suggestedReplies?.map((r) => redactSensitivePatterns(r)),
         actionCard: t.actionCard
@@ -178,11 +178,37 @@ export function saveSessions(sessions: AiChatSession[]): void {
           : t.promptContent,
         toolResults: t.toolResults?.map((r) => ({
           ...r,
-          resultText: redactSensitivePatterns(r.resultText),
+          resultText: redactSensitivePatterns(r.resultText).slice(0, 8000),
         })),
       })),
     }))
-    safeSetItem(K_AI_SESSIONS, JSON.stringify(trimmed))
+    // 配额护栏：localStorage 约 5MB（UTF-16 字符数口径）。单轮 reasoning/工具结果无上限时，
+    // 长对话 + 多会话会直接超限；旧实现忽略 safeSetItem 返回值，内存里正常、刷新后整段丢失。
+    const MAX_JSON_CHARS = 4_500_000
+    let payload = trimmed
+    let json = JSON.stringify(payload)
+    while (json.length > MAX_JSON_CHARS && payload.length > 1) {
+      payload = payload.slice(0, -1) // 丢最旧会话
+      json = JSON.stringify(payload)
+    }
+    if (json.length > MAX_JSON_CHARS) {
+      // 单个会话仍超限：只保留最近 5 轮并去掉可重建/大体积字段
+      payload = payload.map((s) => ({
+        ...s,
+        turns: (s.turns || []).slice(-5).map((t) => ({
+          ...t,
+          reasoning: t.reasoning?.slice(0, 2000),
+          content: t.content?.slice(0, 8000),
+          promptContent: undefined,
+          attachedFiles: undefined,
+          toolResults: undefined,
+        })),
+      }))
+      json = JSON.stringify(payload)
+    }
+    if (!safeSetItem(K_AI_SESSIONS, json)) {
+      console.error('[ulink] saveSessions: localStorage 写入失败（配额满），本次会话未持久化')
+    }
   } catch (e) {
     console.warn('[ulink] saveSessions failed:', e)
   }

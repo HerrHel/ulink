@@ -261,6 +261,9 @@ export function fromRemoteBookmark(r: RemoteBookmarkRow): Bookmark | null {
 }
 
 export function fromRemoteGroup(r: RemoteGroupRow): SiblingGroup | null {
+  // 远端行必须带组名：Schema 对 name 做了本地容错 catch('')，但分享/同步来的
+  // 无名组属于坏 payload，宁可丢弃也不要在本机生成一个空名组。
+  if (!r.name || !String(r.name).trim()) return null
   return _validateWith(SiblingGroupSchema, {
     id: r.id, name: r.name,
     categoryId: r.category_id || CAT_UNCATEGORIZED,

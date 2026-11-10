@@ -69,10 +69,45 @@ function shanghaiDateKey() {
  * fail-closed：带无效 token 或任何异常都不再 return {ok:true} 静默跳过日配额（对齐 extract-video）。
  */
 async function checkDailyQuota(req, db, mode) {
-  // 自动巡检不消耗手动额度；cb-auth 缺失时无法验签，保持原放行（部署问题另行告警）
-  if (!verifyCbToken || mode === 'auto') return { ok: true }
+  // cb-auth 缺失时无法验签，保持原放行（部署问题另行告警）
+  if (!verifyCbToken) return { ok: true }
   try {
     const auth = await verifyCbToken(req.headers.authorization, { envId: ENV_ID })
+
+    // ── 自动巡检（mode=auto）：PRO 专属，且受独立的每日调用上限保护 ──
+    // 旧实现直接 return {ok:true}，任何人传 mode:'auto' 就能绕过手动额度，
+    // 同时把按书签数量无界的自动扫描变成免费无限外呼。
+    if (mode === 'auto') {
+      if (!auth.ok) {
+        return auth.reason === 'missing'
+          ? { ok: false, status: 401, error: 'login_required' }
+          : { ok: false, status: 401, error: 'invalid_token' }
+      }
+      const ent = await db.rpc('resolve_entitlement', { p_uid: auth.uid })
+      if (ent.error) {
+        console.error('[check-link] entitlement rpc failed (fail-closed):', ent.error)
+        return { ok: false, status: 503, error: 'quota_unavailable' }
+      }
+      const features = (ent.data && ent.data.features) || {}
+      const status = (ent.data && ent.data.status) || 'active'
+      if (status === 'expired' || status === 'refunded' || !features['linkcheck.auto']) {
+        return { ok: false, status: 403, error: 'auto_not_in_plan' }
+      }
+      const autoLimit = Number(process.env.LINKCHECK_AUTO_DAILY || 1000)
+      const daily = await db.rpc('consume_rate_limit', {
+        p_key: 'link-check:auto:' + auth.uid + ':' + shanghaiDateKey(),
+        p_limit: Number.isFinite(autoLimit) && autoLimit > 0 ? autoLimit : 1000,
+        p_window_secs: ANON_QUOTA_WINDOW_SECS,
+      })
+      if (daily.error) {
+        console.error('[check-link] auto quota rpc failed (fail-closed):', daily.error)
+        return { ok: false, status: 503, error: 'quota_unavailable' }
+      }
+      if (daily.data !== true) {
+        return { ok: false, status: 429, error: 'auto_daily_exceeded', limit: autoLimit }
+      }
+      return { ok: true, scope: 'auto' }
+    }
 
     // 登录用户：按 uid 走 linkcheck.daily
     if (auth.ok) {
@@ -143,15 +178,20 @@ function sendJson(res, status, body, extraHeaders) {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = ''
+    const chunks = []
+    let size = 0
     req.on('data', (c) => {
-      raw += c
-      if (raw.length > 100_000) {
+      const buf = Buffer.isBuffer(c) ? c : Buffer.from(c)
+      chunks.push(buf)
+      size += buf.length
+      if (size > 100_000) {
         reject(new Error('body_too_large'))
         req.destroy()
       }
     })
     req.on('end', () => {
+      if (!chunks.length) return resolve({})
+      const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try {
         resolve(JSON.parse(raw))
@@ -332,12 +372,14 @@ const server = http.createServer(async (req, res) => {
     const dailyQuota = await checkDailyQuota(req, db, mode)
     if (!dailyQuota.ok) {
       const status = dailyQuota.status || 429
-      const error = status === 401 ? 'unauthorized' : status === 503 ? 'quota_unavailable' : 'linkcheck_daily_exceeded'
+      const error = status === 401 ? 'unauthorized' : status === 503 ? 'quota_unavailable' : status === 403 ? 'auto_not_in_plan' : 'linkcheck_daily_exceeded'
       const message = status === 401
         ? '登录状态已失效，请重新登录后重试'
         : status === 503
           ? '服务暂时不可用，请稍后再试'
-          : '今日死链检查次数已用完（免费版 3 次/日、PRO 50 次/日），请明天再试或升级。'
+          : status === 403
+            ? '自动巡检为 PRO 专属功能，请升级后使用。'
+            : '今日死链检查次数已用完（免费版 3 次/日、PRO 50 次/日），请明天再试或升级。'
       const body = { error, message }
       if (status === 429) body.limit = dailyQuota.limit
       sendJson(res, status, body, status === 429 ? { ...cors, 'Retry-After': '3600' } : cors)

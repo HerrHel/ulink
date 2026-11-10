@@ -86,16 +86,21 @@ function sendJson(res, status, body) {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let raw = ''
+    const chunks = []
+    let size = 0
     req.on('data', (chunk) => {
-      raw += chunk
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      chunks.push(buf)
+      size += buf.length
       // 防超大 body 打爆内存：1MB 封顶
-      if (raw.length > 1_000_000) {
+      if (size > 1_000_000) {
         reject(new Error('body_too_large'))
         req.destroy()
       }
     })
     req.on('end', () => {
+      if (!chunks.length) return resolve({})
+      const raw = Buffer.concat(chunks).toString('utf8')
       if (!raw) return resolve({})
       try {
         resolve(JSON.parse(raw))

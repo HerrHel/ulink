@@ -34,6 +34,9 @@ export function useLongPress(getActions: (card: HTMLElement) => ActionItem[] | n
 
   function onPtrDown(e: PointerEvent) {
     if (!isMobile()) return
+    // 防上一个 pointerdown 的 pointerup 丢失（系统手势抢占/拖出窗口）时旧定时器残留，
+    // 500ms 后突然弹出上一张卡片的操作菜单。
+    cancel()
     if (useUIStore().batchMode) return
     if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')) return
     // 分类（rail-item）长按优先：rail-item 自身是 <button>，须在 button 排除前命中。

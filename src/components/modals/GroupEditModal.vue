@@ -60,7 +60,7 @@ const selectableAttrs = computed(() => store.selectableAttributes)
 
 watch(() => store.modals.groupEdit, (open) => {
   if (open) nextTick(() => geNameRef.value?.focus())
-})
+}, { immediate: true })
 
 // A2-003：列表读 geForm 草稿，取消不写 store；排除软删除书签
 const geBookmarkList = computed(() => {

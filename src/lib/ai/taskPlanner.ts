@@ -134,10 +134,21 @@ export async function executeDagStep(
   plan: TaskDagPlan,
   stepId: string,
   executor: DagStepExecutor,
-): Promise<{ success: boolean; plan: TaskDagPlan }> {
+): Promise<{ success: boolean; plan: TaskDagPlan; error?: string }> {
   const step = plan.steps.find((s) => s.id === stepId)
   if (!step) {
     return { success: false, plan }
+  }
+
+  // 依赖校验：单步执行（用户直接点某一步）也必须等上游成功，不能跳过前置扫描直接合并。
+  const unmet = (step.dependsOn || []).filter((id) => {
+    const dep = plan.steps.find((s) => s.id === id)
+    return !dep || dep.status !== 'success'
+  })
+  if (unmet.length > 0) {
+    step.status = 'skipped'
+    step.error = t('ai.dagDependencyUnmet', { steps: unmet.join(', ') })
+    return { success: false, plan, error: step.error }
   }
 
   step.status = 'running'

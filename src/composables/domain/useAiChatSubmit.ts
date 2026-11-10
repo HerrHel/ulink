@@ -179,12 +179,12 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     // （此前清空在守卫之前，生成中带附件按 Enter 会把附件丢掉）
     if (!raw || aiLoading.value) return
 
-    // 清空输入框附带槽位（卡片与附件已装载进本轮问答，持久化至该 userTurn）
-    if (ui.aiAttachedCards?.length) {
-      ui.clearAiAttachedCards?.()
-    }
-    if (ui.aiAttachedFiles?.length) {
-      ui.clearAiAttachedFiles?.()
+    // 服务端 mimo-guard 对单条消息硬限 4000 字符；这里预留余量，超限直接提示并保留输入，
+    // 避免把长文/大附件发出去后只收到 413 与笼统的「搜索失败」。
+    const MAX_USER_MESSAGE_CHARS = 3800
+    if (raw.length > MAX_USER_MESSAGE_CHARS) {
+      toast(t('ai.promptTooLong', { max: MAX_USER_MESSAGE_CHARS }), false)
+      return
     }
 
     if (raw === '/clear') {
@@ -213,8 +213,6 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     showAiTab?.()
     aiLoading.value = true
     loadingTextKey.value = 'ai.thinking'
-    aiQuery.value = ''
-    onQueryChanged?.()
 
     // 捕获局部 controller 引用：提前初始化供多媒体预处理及流式全程取消守护
     const controller = new AbortController()
@@ -253,11 +251,36 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
     }
     const fileSection = attachedFiles.length > 0 ? formatAttachedFilesForPrompt(attachedFiles, isZh.value) : ''
     const mediaSection = unifiedMedia.extraPrompt
+    const questionLabel = t('ai.userQuestionLabel')
+    const mergedSections = [cardSection, fileSection, mediaSection].filter(Boolean).join('\n')
     let promptWithCards = raw
-    if (cardSection || fileSection || mediaSection) {
-      const mergedSections = [cardSection, fileSection, mediaSection].filter(Boolean).join('\n')
-      promptWithCards = `${mergedSections}\n${t('ai.userQuestionLabel')}${raw}`
+    if (mergedSections) {
+      // 把「用户问题 + 结构化前缀」控制在服务端单条消息上限内：
+      // 附件正文（单文件最多 15000 字）很容易越界，超出部分截断并显式告知，而不是整个请求被 413 拒绝。
+      const budget = MAX_USER_MESSAGE_CHARS - questionLabel.length - raw.length
+      let sections = mergedSections
+      if (sections.length > budget) {
+        const safeBudget = Math.max(0, budget - t('ai.attachmentTruncated').length)
+        sections = Array.from(sections).slice(0, safeBudget).join('') + t('ai.attachmentTruncated')
+      }
+      promptWithCards = `${sections}\n${questionLabel}${raw}`
     }
+    if (promptWithCards.length > MAX_USER_MESSAGE_CHARS) {
+      toast(t('ai.promptTooLong', { max: MAX_USER_MESSAGE_CHARS }), false)
+      aiLoading.value = false
+      abortSlot.current = null
+      return
+    }
+
+    // 校验/解析全部通过后再清空输入与附件槽位：解析失败时用户可直接重试，无需重打重传
+    if (ui.aiAttachedCards?.length) {
+      ui.clearAiAttachedCards?.()
+    }
+    if (ui.aiAttachedFiles?.length) {
+      ui.clearAiAttachedFiles?.()
+    }
+    aiQuery.value = ''
+    onQueryChanged?.()
 
     // 随机后缀保证唯一：纯 Date.now() 在同毫秒连发时会产生重复 id，
     // 使历史防双份注入的 id 跳过与发送摘要挂载全部错位
@@ -336,7 +359,9 @@ export function useAiChatSubmit(context: AiChatSubmitContext) {
       // 视频平台判定统一走单一真源（src/config/videoPlatforms.json），
       // 不再手写域名正则——历史上客户端/云函数/worker 三份清单各写一份导致漂移。
       const isVideo = containsVideoPlatformUrl(raw)
-      const isUrl = /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(raw)
+      // 仅「纯 URL」走相似站点分支；URL + 用户问题（含空白）必须交给模型，
+      // 否则 domain(raw) 解析失败 → 相似站点返回空，用户的问题被整段丢弃。
+      const isUrl = !/\s/.test(raw) && /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/.test(raw)
       loadingTextKey.value = isVideo ? 'ai.extracting' : isUrl ? 'ai.analyzing' : 'ai.thinking'
 
       if (isVideo) {

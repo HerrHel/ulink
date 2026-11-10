@@ -995,6 +995,10 @@ describe('sync 逆回归（81e926a3 降频把对账入口关死 + redact 漏 pas
     ds._deletedIds.clear()
     // 已同步账号（lastSyncAt>0）：本地有一条远端已被物理删除的残留书签 bm-ghost
     ds.addBookmark(makeBm({ id: 'bm-ghost', title: '幽灵残留' }) as any)
+    // addBookmark 会标 dirty+new；这里模拟「早已同步过的残留行」，清掉本地待推标记，
+    // 否则 fullSync 前置 enqueue 会把它标记 pending，pull 的对账守卫会（正确地）保护它。
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
     useSyncStore().setLastSyncAt(9000)
 
     // 远端任何查询都没有 bm-ghost：sinceRows 无（增量拉不回）、allIds 无（对账判它远端已删）。
@@ -1047,6 +1051,9 @@ describe('sync 逆回归（81e926a3 降频把对账入口关死 + redact 漏 pas
     ds._newIds.clear()
     ds._deletedIds.clear()
     ds.addBookmark(makeBm({ id: 'bm-orphan', title: '孤儿残留' }) as any)
+    // 同上：模拟已同步过的残留行，清掉 addBookmark 产生的待推标记
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
     useSyncStore().setLastSyncAt(9000)
 
     // bookmarks 表无存活行但有软删行 ⇒ 云端确实曾有过该类型数据（用户在别处删光了），

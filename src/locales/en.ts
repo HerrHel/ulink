@@ -122,6 +122,12 @@ export const en = {
     copyUrl: 'Copy URL',
     visit: 'Open site',
     history: 'Version history',
+    diffField: {
+      title: 'Title', name: 'Name', url: 'URL', username: 'Username',
+      password: 'Password', notes: 'Notes', icon: 'Icon', categoryId: 'Category',
+      parentId: 'Parent', order: 'Order', useCount: 'Use count',
+      attributes: 'Attributes', bookmarkIds: 'Bookmark list', isPublic: 'Public', deletedAt: 'Deleted at',
+    },
     pin: 'Pin',
     unpin: 'Unpin',
     moveToCat: 'Move to',

@@ -51,7 +51,9 @@ export function runAmbientGroomingScan(params: {
   const uncatBookmarks = validBookmarks.filter((b) => isUncategorized(b, groupedIds))
   if (uncatBookmarks.length >= 8) {
     insights.push({
-      id: `groom-inbox-${Date.now()}`,
+      // 稳定 id：dismissedIds 才能跨扫描生效（旧实现拼 Date.now() → 每次都是新 id，
+      // 用户点掉后下一次扫描立刻复活）。
+      id: 'groom-inbox',
       type: 'inbox',
       title: t('ai.ambientInboxTitle', { count: uncatBookmarks.length }),
       description: t('ai.ambientInboxDesc', { count: uncatBookmarks.length }),
@@ -104,7 +106,7 @@ export function runAmbientGroomingScan(params: {
 
   if (vagueBms.length >= 3) {
     insights.push({
-      id: `groom-vague-${Date.now()}`,
+      id: 'groom-vague',
       type: 'vague',
       title: t('ai.ambientVagueTitle', { count: vagueBms.length }),
       description: t('ai.ambientVagueDesc', { count: vagueBms.length }),
@@ -120,7 +122,7 @@ export function runAmbientGroomingScan(params: {
   const totalDups = dups.reduce((acc, d) => acc + d.duplicates.length, 0)
   if (totalDups >= 2) {
     insights.push({
-      id: `groom-dups-${Date.now()}`,
+      id: 'groom-dups',
       type: 'duplicates',
       title: t('ai.ambientDupsTitle', { count: totalDups }),
       description: t('ai.ambientDupsDesc', { count: totalDups }),

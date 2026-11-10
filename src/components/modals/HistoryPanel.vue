@@ -154,7 +154,9 @@ async function onRestore(v: HistoryVersion) {
 
 async function onRestoreDiff() {
   if (restoring.value) return
-  const targetIdx = Math.min(selectedIdx.value, diffCompareIdx.value)
+  // versions 按 created_at 降序（索引越小越新）；「恢复较旧版本」必须取两者中更大的索引。
+  // 旧实现 Math.min 恒取较新版本，按钮语义与实际恢复版本相反。
+  const targetIdx = Math.max(selectedIdx.value, diffCompareIdx.value)
   if (targetIdx < 0) return
   const v = versions.value[targetIdx]
   if (!v) return

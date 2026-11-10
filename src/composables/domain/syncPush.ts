@@ -16,7 +16,7 @@ import { toRemoteRow, camelToSnake } from './useSyncMapping.js'
 // EntityType used by _opNeedsUnlock callers / ENCRYPT_FIELDS path
 import { _saveHistory, _getUserId } from './useSyncHistory.js'
 import { getSyncRemotePort, type SyncPortResult } from './syncRemotePort.js'
-import { _markPendingSync, _clearPendingSync } from './syncPending.js'
+import { _markPendingSync, _clearPendingSync, rememberDeadDelete, forgetDeadDelete, listDeadDeletes } from './syncPending.js'
 import { recordSyncFailure, recordSyncSuccess, classifySyncError } from './syncCircuit.js'
 
 /** 单条 sync op 最大推送重试次数 */
@@ -198,6 +198,41 @@ export async function enqueueDirtyAsOps(): Promise<void> {
   }
 }
 
+/** 已在本会话补推过的死信 delete key（防 online/visible 高频触发重复入队） */
+const _deadDeletesQueued = new Set<string>()
+
+/**
+ * 把死信 delete 墓碑重新入队（幂等）。
+ * force=true 用于 resyncAllToCloud（队列刚被清空，必须重新补）。
+ * 返回本次实际入队条数。
+ */
+export async function reenqueueDeadDeletes(force = false): Promise<number> {
+  const list = listDeadDeletes()
+  if (!list.length) {
+    _deadDeletesQueued.clear()
+    return 0
+  }
+  // 墓碑已被成功删除清除的，同步清理本地去重集合
+  for (const key of Array.from(_deadDeletesQueued)) {
+    if (!list.some((d) => `${d.table}:${d.itemId}` === key)) _deadDeletesQueued.delete(key)
+  }
+  const pending = list.filter((d) => force || !_deadDeletesQueued.has(`${d.table}:${d.itemId}`))
+  if (!pending.length) return 0
+  const ok = await enqueueSyncOps(pending.map((d) => ({
+    action: 'delete' as const,
+    table: d.table as SyncOp['table'],
+    itemId: d.itemId,
+    data: null,
+    ts: d.ts,
+  })))
+  if (!ok) {
+    console.warn('[sync] 死信 delete 补偿入队失败，留待下次重试')
+    return 0
+  }
+  for (const d of pending) _deadDeletesQueued.add(`${d.table}:${d.itemId}`)
+  return pending.length
+}
+
 /** 从队列批量推送到远端 port */
 export async function pushFromQueue(): Promise<boolean> {
   const ui = useUIStore()
@@ -213,7 +248,33 @@ export async function pushFromQueue(): Promise<boolean> {
   const rawOps = await drainSyncOps()
   if (!rawOps.length) return true
 
-  const ops = _mergeOps(rawOps)
+  // 未解决冲突的实体暂停推送：否则本地存活快照会把远端刚写入的墓碑覆盖掉（删除复活）。
+  // 冲突 op 原样放回队列（retries 归零可接受：它不是失败，只是在等用户决策）。
+  let pushableRawOps = rawOps
+  const conflictIds = new Set(syncStore.conflicts.map(c => c.id))
+  if (conflictIds.size > 0) {
+    const blocked = rawOps.filter(o => conflictIds.has(o.itemId))
+    if (blocked.length > 0) {
+      pushableRawOps = rawOps.filter(o => !conflictIds.has(o.itemId))
+      const requeued = await enqueueSyncOps(blocked.map(({ id: _id, retries: _retries, ...rest }) => rest))
+      if (!requeued) {
+        syncStore.setSyncStatus('error')
+        syncStore.setSyncError('冲突项回队失败，已暂停同步')
+        return false
+      }
+      // 入队成功后移除旧 raw 行（drain 非破坏性）：否则同一 op 会双份留在 IDB。
+      // 入队失败则保留旧行，下次推送仍在队列里。
+      const blockedRawIds = blocked.map(o => o.id).filter((id): id is number => typeof id === 'number')
+      if (blockedRawIds.length) await removeSyncOps(blockedRawIds)
+      if (!pushableRawOps.length) {
+        syncStore.setSyncStatus('idle')
+        await refreshPendingCount()
+        return true
+      }
+    }
+  }
+
+  const ops = _mergeOps(pushableRawOps)
   syncStore.setSyncStatus('syncing')
   syncStore.setSyncError(null)
   syncStore.setSyncErrorKind(null)
@@ -374,7 +435,7 @@ export async function pushFromQueue(): Promise<boolean> {
     // 失败则同 key 全部 raw 同步 retry+1（用 merged.retries=max 而非末条 raw.retries，
     // 与 _mergeOps 死信判定对称，否则持续编辑的坏 op 多绕几轮才进死信）。
     const rawsByKey = new Map<string, SyncOp[]>()
-    for (const ro of rawOps) {
+    for (const ro of pushableRawOps) {
       const k = `${ro.table}:${ro.itemId}`
       const arr = rawsByKey.get(k) || []
       arr.push(ro)
@@ -403,7 +464,8 @@ export async function pushFromQueue(): Promise<boolean> {
     for (const r of results) {
       // 无匹配 update 视失败：Supabase update 不命中行时返 { data:null, error:null }，
       // 仅靠 error 会被误判成功而永久出队，丢本地变更。port 层透传 count：0=无匹配行。
-      const noMatch = r.result.count === 0
+      // 例外：delete 的 count=0 表示远端行本就不存在，删除目标已达成，按成功处理。
+      const noMatch = r.result.count === 0 && r.op.action !== 'delete'
       if (r.result.error || noMatch) {
         // r.op 是 _mergeOps 产出的 merged op（含 retries=max），用它做死信判定与下轮 retry 计数
         const nextRetry = (r.op.retries || 0) + 1
@@ -416,6 +478,9 @@ export async function pushFromQueue(): Promise<boolean> {
         })
         if (nextRetry >= MAX_PUSH_RETRIES) {
           console.warn(`[sync] op 达到重试上限(${MAX_PUSH_RETRIES})，移出队列 table=${r.op.table} id=${r.op.itemId}`)
+          // delete 死信必须留墓碑：本地已无该实体，常规补推找不到它；墓碑用于后续重新入队
+          // 并在 pull 时忽略云端存活行，避免彻底删除项被拉回。
+          if (r.op.action === 'delete') rememberDeadDelete(r.op.table, r.op.itemId)
           for (const rw of keyRaws) if (rw.id != null) deadIds.push(rw.id)
         } else {
           for (const rw of keyRaws) if (rw.id != null) retryUpdateOps.push({ id: rw.id, retries: nextRetry })
@@ -445,15 +510,16 @@ export async function pushFromQueue(): Promise<boolean> {
       await refreshPendingCount()
     }
     for (const r of results) {
-      const noMatch = r.result.count === 0
+      const noMatch = r.result.count === 0 && r.op.action !== 'delete'
       if (!r.result.error && !noMatch) {
         ds._newIds.delete(r.op.itemId)
+        if (r.op.action === 'delete') forgetDeadDelete(r.op.table, r.op.itemId)
       }
     }
 
     const releasedIds = new Set<string>()
     for (const r of results) {
-      const noMatch = r.result.count === 0
+      const noMatch = r.result.count === 0 && r.op.action !== 'delete'
       if (!r.result.error && !noMatch) releasedIds.add(r.op.itemId)
       else {
         const nextRetry = (r.op.retries || 0) + 1
@@ -492,7 +558,9 @@ export async function pushFromQueue(): Promise<boolean> {
     // 部分跳过（isLocked 但有非敏感 op 仍成功推送）：跳过的那批留队列，计数如实反映。
     syncStore.setPendingLockedCount(lockedItemKeys.size)
     if (tasks.length > 0) {
-      syncStore.setLastSyncAt(Date.now())
+      // 注意：不能在此推进 lastSyncAt —— 它是 pull 的增量游标（syncPull 的 since）。
+      // 若某轮 pull 失败、随后的 push 成功把游标推到现在，失败期间未拉到的远端变更
+      // 将永久落在 gt 过滤之外（只有 fullSync 能救）。lastSyncAt 只由 pull 成功推进。
       syncStore.setSyncErrorKind(null)
       recordSyncSuccess()
     }

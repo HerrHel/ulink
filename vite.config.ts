@@ -201,16 +201,12 @@ function purgeCssPlugin(): Plugin {
           if (chunk.type === 'asset' && typeof chunk.source === 'string') {
             const raw = chunk.source as string
 
-            // PurgeCSS 8.x 无法正确解析 Vue scoped CSS 的 [data-v-xxxxx]
-            // 属性选择器——会将 .foo[data-v-abc] 视为整体而找不到类名 .foo，
-            // 导致全部 scoped 样式被误删（issue 复现：AuthModal/SetupGuide 等
-            // 异步组件的 CSS 文件被清空为 0 字节）。
-            // 解法：剥离 data-v-* hash → PurgeCSS → 恢复 hash 到类/ID 选择器。
-            const scopeHashes = new Set<string>()
-            const stripped = raw.replace(/\[data-v-[a-f0-9]+\]/g, (m) => {
-              scopeHashes.add(m)
-              return ''
-            })
+            // Vue scoped CSS 带 [data-v-*]：PurgeCSS 8 无法正确匹配，而「剥离全部 hash
+            // 再逐条恢复」会把每个 hash 叠加到每条选择器（.a[data-v-A][data-v-B]），
+            // 体积反而变大 → 命中 newSize<originalSize 假分支，主 CSS 实际从未净化；
+            // 一旦体积条件反转还会让全站 scoped 规则失效。这里直接跳过 scoped CSS
+            // （保持现状：不净化但绝不改坏），全局 CSS 仍继续 Purge。
+            if (raw.includes('[data-v-')) continue
 
             const result = await new PurgeCSS().purge({
               content: [
@@ -220,7 +216,7 @@ function purgeCssPlugin(): Plugin {
                 './src/**/*.js',
                 './src/**/*.ts'
               ],
-              css: [{ raw: stripped }],
+              css: [{ raw }],
               safelist: {
                 standard: [
                   'open', 'show', 'active', 'visible', 'dragging',
@@ -253,14 +249,7 @@ function purgeCssPlugin(): Plugin {
             })
 
             if (result[0] && result[0].css) {
-              let purged = result[0].css
-              // 恢复 data-v-* hash：加回到每个 class / ID 选择器后面
-              for (const hash of scopeHashes) {
-                purged = purged.replace(
-                  /(?<=[}\s,{;]|^)([.#][a-zA-Z_-][\w-]*)/g,
-                  `$1${hash}`
-                )
-              }
+              const purged = result[0].css as string
               const originalSize = raw.length
               const newSize = purged.length
               if (newSize < originalSize) {
@@ -1476,7 +1465,9 @@ export default defineConfig({
       manifest: {
         name: '与链',
         short_name: 'ulink',
-        description: '与链（ulink）— 个人书签管理器，支持云同步与端到端加密',
+        lang: 'zh-CN',
+        // 合规口径：只有账号字段端到端加密，其余内容明文存储
+        description: '与链（ulink）— 个人书签管理器，支持云同步；仅账号字段端到端加密，其余内容明文存储',
         theme_color: '#122E8A',
         background_color: '#F5EFEA',
         display: 'standalone',

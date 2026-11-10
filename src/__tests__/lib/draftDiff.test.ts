@@ -158,6 +158,36 @@ describe('draftDiff.ts — 虚拟演练草稿层', () => {
       expect(mockBookmarks.bm3.deletedAt).toBeNull()
     })
 
+    it('remove 项按 mergeIntoId 合并备注/属性/使用次数/分类并改写组引用', async () => {
+      const mockBookmarks: Record<string, any> = {
+        p1: { id: 'p1', notes: '<p>P</p>', attributes: { a: true }, categoryId: 'uncategorized', useCount: 2, deletedAt: null },
+        d1: { id: 'd1', notes: '<p>D</p>', attributes: { b: true }, categoryId: 'cat2', useCount: 3, deletedAt: null },
+      }
+      const groups: any[] = [{ id: 'g1', bookmarkIds: ['d1', 'x'], deletedAt: null }]
+      const ds: any = {
+        bookmarkMap: mockBookmarks,
+        siblingGroups: groups,
+        updateBookmark: vi.fn((id, patch) => { Object.assign(mockBookmarks[id], patch) }),
+        deleteBookmark: vi.fn((id) => { mockBookmarks[id].deletedAt = Date.now() }),
+        restoreBookmark: vi.fn((id) => { mockBookmarks[id].deletedAt = null }),
+        updateGroup: vi.fn((id, patch) => { Object.assign(groups[0], patch) }),
+      }
+      const app: any = { save: vi.fn() }
+      const payload: any = {
+        items: [{ id: 'diff-dup-d1', changeType: 'remove', mergeIntoId: 'p1', selected: true }],
+      }
+
+      const result = await applyDraftDiff(payload, { ds, app })
+      expect(result.appliedCount).toBe(1)
+      expect(mockBookmarks.p1.notes).toContain('<p>P</p>')
+      expect(mockBookmarks.p1.notes).toContain('<p>D</p>')
+      expect(mockBookmarks.p1.attributes).toEqual({ a: true, b: true })
+      expect(mockBookmarks.p1.useCount).toBe(5)
+      expect(mockBookmarks.p1.categoryId).toBe('cat2')
+      expect(groups[0].bookmarkIds).toEqual(['p1', 'x'])
+      expect(mockBookmarks.d1.deletedAt).toBeTruthy()
+    })
+
     it('无选中项时优雅取消', async () => {
       const ds: any = { bookmarkMap: {} }
       const app: any = { save: vi.fn() }

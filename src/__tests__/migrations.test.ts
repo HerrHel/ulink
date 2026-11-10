@@ -171,6 +171,16 @@ describe('runMigrations', () => {
     expect((result as any)._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
   })
 
+  it('旧盘 _dataVersion 恰为小整数（可能是 writeSeq）时仍跑迁移', () => {
+    const d = { _dataVersion: 3 }
+    const result = makeResult({
+      bookmarks: [{ id: 'b1', categoryId: 'tools', attributes: {}, updatedAt: Date.now() }],
+    })
+    const needsPersist = runMigrations(d as any, result)
+    expect(needsPersist).toBe(true)
+    expect((result as any)._schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
+  })
+
   it('无版本字段时迁移后写入 _schemaVersion', () => {
     const d = {}
     const result = makeResult({

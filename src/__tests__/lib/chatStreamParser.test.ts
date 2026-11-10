@@ -228,6 +228,13 @@ describe('chatStreamParser', () => {
       expect(merged?.map((c) => c.title)).toEqual(['b', 'a'])
     })
 
+    it('同一 URL 标题被流式补全时不产生重复卡片', () => {
+      const existing = [cand('A', { url: 'https://same.example/' })]
+      const parsed = [cand('A 完整标题', { url: 'https://same.example' })]
+      const merged = mergeParsedCandidates(existing, parsed)
+      expect(merged).toBe(existing)
+    })
+
     it('既有条目优先保留，不重置 isAdded 等用户操作状态', () => {
       const existing = [cand('a', { isAdded: true, notes: '已存入前的备注' })]
       const merged = mergeParsedCandidates(existing, [cand('a', { isAdded: false, notes: '重解析的备注' }), cand('b')])

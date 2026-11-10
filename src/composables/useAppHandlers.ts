@@ -12,6 +12,7 @@ import { hideAddDropdown } from './ui/useUI.js'
 import { showBatchMovePopover, batchDelete } from './domain/useBatch.js'
 import { importData } from './domain/useDataIO.js'
 import { performUndo, performRedo } from './domain/useUndo.js'
+import { t } from '../i18n/index.js'
 
 export function useAppHandlers() {
   const ds = useDataStore()
@@ -23,9 +24,10 @@ export function useAppHandlers() {
       if (!ui.focusedGroupId) return
       const target = e.target as HTMLElement
       const raw = (target.textContent || '').trim()
-      const name = raw || '未命名'
+      // 空标题使用当前语言的「未命名」，避免英文界面把中文占位名持久化进组数据
+      const name = raw || t('cards.unnamedGroup')
       target.textContent = name
-      target.classList.toggle('focus-title-unnamed', !raw || raw === '未命名')
+      target.classList.toggle('focus-title-unnamed', !raw)
       ds.updateGroup(ui.focusedGroupId, { name }); saveAppData()
     },
     onSearch() { if (ui.focusedGroupId) searchInFocusedGroup() },

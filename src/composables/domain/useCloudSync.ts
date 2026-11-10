@@ -28,11 +28,11 @@ import {
 } from './useSyncRealtime.js'
 import { getSyncRemotePort } from './syncRemotePort.js'
 import { getAuthDriver } from '../../lib/authDriver.js'
-import { enqueueDirtyAsOps, pushFromQueue } from './syncPush.js'
+import { enqueueDirtyAsOps, pushFromQueue, reenqueueDeadDeletes } from './syncPush.js'
 import { pullChanges } from './syncPull.js'
 import { _clearAllPendingSync } from './syncPending.js'
 import { setGroupPublic, fetchPublicGroup } from './syncShare.js'
-import { canAttemptSync, takeSyncRecovered, classifySyncError } from './syncCircuit.js'
+import { canAttemptSync, takeSyncRecovered } from './syncCircuit.js'
 import { withLock } from '../../lib/withLock.js'
 import { saveAppData } from '../../stores/app.js'
 import { _permanentDeleteWithoutEcho } from './syncLocalMerge.js'
@@ -143,35 +143,29 @@ export function useCloudSync() {
     }
     enqueueDirtyAsOps()
     return withLock('linkvault-sync', async () => {
+      // R-RESURRECT：与 _onOnline 同口径，先 pull 后 push。
+      // 旧顺序先推后拉——离线积压的 op.data 是入队时的存活快照，会把远端新写入的
+      // 软删墓碑盖掉（删除复活，且复活行 updated_at_num 回退，删除端 gt 增量永远看不到）。
+      // 先 pull 让 dirty/pending 项经 decideRemoteApply 转 conflict/软删，再推剩余 op。
+      // 死信 delete 先重新入队：pull 合并对墓碑 id 会跳过远端行，随后 push 补删。
+      await reenqueueDeadDeletes()
+      const pulled = await pullChanges(true)
+      // pullChanges 成功会覆盖 sync 状态；若 pull 失败，先把错误暂存，push 成功后再恢复，
+      // 避免「pull 失败被 push 的 success 覆盖」而让用户误以为同步正常。
+      const pullErr = pulled ? null : syncStore.syncError
+      const pullErrKind = pulled ? null : syncStore.syncErrorKind
+      // full=true：手动全量同步才跑全量 ID 对账（selectAllIds × 4 + full-absent-delete +
+      // reconcileDelete），兜底远端物理删除。freq 降频（81e926a3）把对账入口整个改成
+      // `if(full)`，但生产无任何调用方传 true——不在此补上，对账就是不可达死代码。
+      // 安全：_mergeIntoLocal 的 full-absent-delete 与 reconcileDelete 都各自要求
+      // lastSyncAt>0 + 非 dirty + 非 pending，fresh(未首登)状态不会误删本地。
       const pushed = await pushFromQueue()
-      // 审计 R12：pushed 单布尔守门 → 任一 op 失败 pushFromQueue 即返回 false，
-      // 旧实现 `if (pushed) await pullChanges()` 使 1 条坏 op 整体跳过 pull，
-      // 长期阻断多设备变更拉取（坏 op 进死信前 pull 一直不跑）。远端变更拉取应独立于
-      // 推送成败：push 失败的 op 已留队列待重试/死信、syncStore 已记 error 状态，
-      // 但 pullChanges 会先置 syncing 再置 success 覆盖 push 错误——故 pull 后若 push
-      // 确有失败，恢复 error 状态让用户感知，不吞错。
-      if (!pushed) {
-        const pushErr = syncStore.syncError
-        // full=true：手动全量同步才跑全量 ID 对账（selectAllIds × 4 + full-absent-delete +
-        // reconcileDelete），兜底远端物理删除。freq 降频（81e926a3）把对账入口整个改成
-        // `if(full)`，但生产无任何调用方传 true——不在此补上，对账就是不可达死代码。
-        // 安全：_mergeIntoLocal 的 full-absent-delete 与 reconcileDelete 都各自要求
-        // lastSyncAt>0 + 非 dirty + 非 pending，fresh(未首登)状态不会误删本地。
-        await pullChanges(true)
-        // R-RESURRECT：pullChanges(full) 的墓碑重申可能已入队（云端存活但早于本地
-        // 墓碑的分叉残留），补一轮 push 让重申即刻上云；队列为空时是无副作用 no-op。
-        const retried = await pushFromQueue()
-        if (pushErr && !retried) {
-          syncStore.setSyncStatus('error')
-          syncStore.setSyncError(pushErr)
-          // pullChanges 成功路径已清 kind；此处恢复 push 的错误态时同步恢复归因
-          syncStore.setSyncErrorKind(classifySyncError(pushErr))
-        }
-        return pushed
+      if (!pushed) return pushed
+      if (pullErr) {
+        syncStore.setSyncStatus('error')
+        syncStore.setSyncError(pullErr)
+        syncStore.setSyncErrorKind(pullErrKind)
       }
-      await pullChanges(true)
-      // R-RESURRECT：同上，墓碑重申补推（空队列 no-op）。
-      await pushFromQueue()
       return pushed
     })
   }
@@ -319,6 +313,11 @@ export function useCloudSync() {
     }
     return withLock('linkvault-sync', async () => {
       await clearAllSyncOps()
+      // 清队列必须同时清 pending 标记：否则这些 id 永久被视为「正在同步」，
+      // decideRemoteApply 只能 conflict/skip，远端后续更新再也合不进来。
+      _clearAllPendingSync()
+      // 队列被清空，死信 delete 必须强制重新入队（本会话去重集合不能拦住它）
+      await reenqueueDeadDeletes(true)
       await _enqueueMissingToCloud(userId)
       // 与 initialSync 一致：首轮失败退避 1s 重试一轮，给瞬时故障留恢复窗口
       let pushed = await pushFromQueue()
@@ -371,7 +370,11 @@ export function useCloudSync() {
         if (hasAccountSwitched()) {
           console.warn('[sync] 检测到账号切换，跳过跨账号补推（保留本地数据）')
           clearAccountSwitched()
-        } else await _enqueueMissingToCloud(userId)
+        } else {
+          // 死信 delete 补偿：重新入队后再统一推送（墓碑已在 pull 合并时阻止复活）
+          await reenqueueDeadDeletes()
+          await _enqueueMissingToCloud(userId)
+        }
       }
 
       // 首轮基线上传失败退避重试：首次登录/注册的用户要把本机长期积累的成百上千条
@@ -410,6 +413,7 @@ export function useCloudSync() {
     // pull 让 dirty/pending 项经 decideRemoteApply 转 conflict/soft-delete，再推剩余
     // op；服务端 032 触发器对残留的旧快照复活做最终兜底。
     void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
+      await reenqueueDeadDeletes()
       await pullChanges()
       await pushFromQueue()
     }))
@@ -421,6 +425,7 @@ export function useCloudSync() {
       unsubscribeRealtime()
       subscribeRealtime()
       void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
+        await reenqueueDeadDeletes()
         await pullChanges()
         if (syncStore.autoSync) {
           await enqueueDirtyAsOps()
@@ -430,6 +435,7 @@ export function useCloudSync() {
       return
     }
     void guardedBackgroundSync(() => withLock('linkvault-sync', async () => {
+      await reenqueueDeadDeletes()
       await pullChanges()
       if (syncStore.autoSync) {
         enqueueDirtyAsOps()

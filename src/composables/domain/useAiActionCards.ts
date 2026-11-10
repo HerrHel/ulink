@@ -180,6 +180,10 @@ export function useAiActionCards(context: AiActionCardsContext) {
   async function runSingleDagStep(card: ChatActionCard, stepId: string) {
     const plan = getDagPlan(card)
     if (!plan || card.completed || card.executing) return
+    // 捕获执行开始时的会话：await 期间用户可能切换会话，结果必须写回原会话
+    const sessionIdAtStart = currentSessionId.value
+    const turnsAtStart = chatTurns.value
+    const persistTurns = () => { sessions.value = updateSession(sessionIdAtStart, turnsAtStart) }
     card.executing = true
     try {
       await executeDagStep(plan, stepId, async (step) => {
@@ -206,13 +210,18 @@ export function useAiActionCards(context: AiActionCardsContext) {
       }
     } finally {
       card.executing = false
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+      persistTurns()
       onTurnsChanged?.()
     }
   }
 
   async function handleActionCardClick(card: ChatActionCard, _turn: ChatTurn) {
     if (card.completed || card.executing) return
+    // 捕获执行开始时的会话：确认弹窗/网络等待期间切换会话时，结果必须回写原会话，
+    // 不能 push 到切换后的 chatTurns 并被 updateSession 持久化到错误的会话。
+    const sessionIdAtStart = currentSessionId.value
+    const turnsAtStart = chatTurns.value
+    const persistTurns = () => { sessions.value = updateSession(sessionIdAtStart, turnsAtStart) }
     const candidatesInCard = getCardCandidateList(card)
     if (
       card.actionName === 'create_topic_workspace' &&
@@ -230,7 +239,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           const res = await applyDraftDiff(payload, { ds, app })
           card.completed = true
           toast(res.message, true)
-          chatTurns.value.push({
+          turnsAtStart.push({
             id: 'turn-' + Date.now() + '-assistant',
             role: 'assistant',
             content: res.message,
@@ -238,7 +247,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             timestamp: Date.now(),
           })
           onTurnsChanged?.()
-          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          persistTurns()
         }
       } else if (card.type === 'dag_plan' || card.actionName === 'execute_dag_plan') {
         const plan = getDagPlan(card)
@@ -271,14 +280,14 @@ export function useAiActionCards(context: AiActionCardsContext) {
             toast(t('ai.actionFailed'), false)
           }
           onTurnsChanged?.()
-          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          persistTurns()
         }
       } else if (card.actionName === 'merge_dedup') {
         const res = await mergeDuplicateBookmarks({ ds, ui, app })
         if (res.mergedCount > 0) {
           card.completed = true
           toast(res.message, true)
-          chatTurns.value.push({
+          turnsAtStart.push({
             id: 'turn-' + Date.now() + '-assistant',
             role: 'assistant',
             content: res.message,
@@ -286,7 +295,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             timestamp: Date.now(),
           })
           onTurnsChanged?.()
-          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          persistTurns()
         } else {
           if (res.message) toast(res.message, false)
         }
@@ -295,7 +304,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
         if (res.success !== false) {
           card.completed = true
         }
-        chatTurns.value.push({
+        turnsAtStart.push({
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
           content: res.reply,
@@ -303,10 +312,10 @@ export function useAiActionCards(context: AiActionCardsContext) {
           timestamp: Date.now(),
         })
         onTurnsChanged?.()
-        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        persistTurns()
       } else if (card.actionName === 'inbox_zero') {
         const res = await dispatchSiteCommand('/inbox', { ds, ui, app })
-        chatTurns.value.push({
+        turnsAtStart.push({
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
           content: res.reply,
@@ -315,12 +324,12 @@ export function useAiActionCards(context: AiActionCardsContext) {
           timestamp: Date.now(),
         })
         onTurnsChanged?.()
-        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        persistTurns()
       } else if (card.actionName === 'apply_inbox_zero') {
         const res = await applyInboxZeroClustering({ ds, ui, app })
         card.completed = true
         toast(res.message, true)
-        chatTurns.value.push({
+        turnsAtStart.push({
           id: 'turn-' + Date.now() + '-assistant',
           role: 'assistant',
           content: res.message,
@@ -328,7 +337,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           timestamp: Date.now(),
         })
         onTurnsChanged?.()
-        sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+        persistTurns()
       } else if (card.actionName === 'create_topic_workspace') {
         const payload = (card.payload || {}) as {
           topic?: string
@@ -353,7 +362,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             card.resultCatId = res.group.categoryId
           }
           toast(res.message, true)
-          chatTurns.value.push({
+          turnsAtStart.push({
             id: 'turn-' + Date.now() + '-assistant',
             role: 'assistant',
             content: res.message,
@@ -367,7 +376,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
             timestamp: Date.now(),
           })
           onTurnsChanged?.()
-          sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+          persistTurns()
         } else {
           if (res.message) toast(res.message, false)
         }
@@ -385,7 +394,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           if (res.success !== false && !res.message?.includes('取消')) {
             card.completed = true
             toast(res.message, true)
-            chatTurns.value.push({
+            turnsAtStart.push({
               id: 'turn-' + Date.now() + '-assistant',
               role: 'assistant',
               content: res.message,
@@ -396,7 +405,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
               timestamp: Date.now(),
             })
             onTurnsChanged?.()
-            sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+            persistTurns()
           } else {
             if (res.message) toast(res.message, false)
           }
@@ -410,7 +419,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
           const res = await batchTagBookmarks(items, { ds, ui, app })
           if (res.success && res.taggedCount > 0) {
             card.completed = true
-            chatTurns.value.push({
+            turnsAtStart.push({
               id: 'turn-' + Date.now() + '-assistant',
               role: 'assistant',
               content: res.message,
@@ -418,7 +427,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
               timestamp: Date.now(),
             })
             onTurnsChanged?.()
-            sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+            persistTurns()
           } else {
             toast(res.message || t('ai.actionFailed'), false)
           }
@@ -429,7 +438,7 @@ export function useAiActionCards(context: AiActionCardsContext) {
       toast(err?.message || t('ai.actionFailed'), false)
     } finally {
       card.executing = false
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+      persistTurns()
     }
   }
 

@@ -272,19 +272,29 @@ export function formatLightMarkdown(raw: string): string {
  * 将流式解析出的随文卡片增量合并进既有 candidates（去重保序）。
  * 流式期间每次解析都是对「已到达内容」的全量解析，需持续合并而非只取首批，
  * 否则后到的卡片不进 turn.candidates（一键全部存入/持久化会漏卡）。
- * 去重键为 url|title；既有条目优先保留（保住 isAdded 等用户操作状态）。
+ * 去重键为 URL（归一化后），无 URL 才退回标题；既有条目优先保留（保住 isAdded 等用户操作状态）。
  * 无新增时原样返回既有数组（调用方据此跳过赋值，避免渲染期反复改写状态）。
  */
+/**
+ * 候选去重键：以 URL 为身份（归一化去尾斜杠/大小写），无 URL 才退回标题。
+ * 旧实现用 url|title：模型流式期间同一 URL 先给短标题、后补全标题时会产出两张卡，
+ * 用户一键全选即写入重复书签。
+ */
+function _candidateKey(c: AiCandidateBookmark): string {
+  const url = (c.url || '').trim().toLowerCase().replace(/\/+$/, '')
+  return url || `title:${(c.title || '').trim().toLowerCase()}`
+}
+
 export function mergeParsedCandidates(
   existing: AiCandidateBookmark[] | undefined,
   parsed: AiCandidateBookmark[]
 ): AiCandidateBookmark[] | undefined {
   if (!parsed.length) return existing
   const base = existing || []
-  const seen = new Set(base.map((c) => `${c.url}|${c.title}`))
+  const seen = new Set(base.map((c) => _candidateKey(c)))
   const merged = [...base]
   for (const c of parsed) {
-    const key = `${c.url}|${c.title}`
+    const key = _candidateKey(c)
     if (!seen.has(key)) {
       seen.add(key)
       merged.push(c)

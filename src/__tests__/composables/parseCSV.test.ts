@@ -177,6 +177,15 @@ describe('parseCSV（CSV 书签解析护栏）', () => {
       expect(parseCSV(csv)).toEqual([])
     })
 
+    it('category/icon/created_at 列被解析（分类用合成 id 供导入侧落地）', () => {
+      const csv = 'title,url,category,icon,created_at\nT,example.com,工具,https://i.example/f.ico,2024-01-02T03:04:05.000Z'
+      const out = parseCSV(csv)
+      expect(out).toHaveLength(1)
+      expect(out[0].categoryId).toBe('csvcat:' + encodeURIComponent('工具'))
+      expect(out[0].icon).toBe('https://i.example/f.ico')
+      expect(out[0].createdAt).toBe(Date.parse('2024-01-02T03:04:05.000Z'))
+    })
+
     it('无 title 列时用 url 作 title 兜底', () => {
       const csv = 'url\nexample.com'
       const out = parseCSV(csv)

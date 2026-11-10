@@ -104,6 +104,21 @@ describe('taskPlanner.ts — 目标驱动任务规划器', () => {
       expect(plan.status).toBe('failed')
     })
 
+    it('单步执行时会校验 dependsOn：前置未成功不执行', async () => {
+      const plan = createTaskDagPlan({
+        title: '依赖守卫',
+        steps: [
+          { id: 's1', title: '扫描' },
+          { id: 's2', title: '合并', dependsOn: ['s1'] },
+        ],
+      })
+      const executor = vi.fn().mockResolvedValue({ success: true })
+      const res = await executeDagStep(plan, 's2', executor)
+      expect(res.success).toBe(false)
+      expect(executor).not.toHaveBeenCalled()
+      expect(plan.steps[1].status).toBe('skipped')
+    })
+
     it('executeAllDagSteps 顺序自动执行全量步骤', async () => {
       const plan = createTaskDagPlan({
         title: '自动流水线',

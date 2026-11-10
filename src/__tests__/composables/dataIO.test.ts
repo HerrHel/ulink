@@ -149,16 +149,16 @@ describe('parseRaindropJSON 坏 tags 防御', () => {
 describe('resolveCsvColumns 表头列定位', () => {
   it('识别标准列名 title/url/tags/notes', () => {
     const r = resolveCsvColumns(['title', 'url', 'tags', 'notes'])
-    expect(r).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: 2, notesIdx: 3 })
+    expect(r).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: 2, notesIdx: 3, categoryIdx: -1, iconIdx: -1, createdAtIdx: -1 })
   })
 
   it('识别各类第一个别名', () => {
-    expect(resolveCsvColumns(['name', 'link', 'labels', 'excerpt'])).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: 2, notesIdx: 3 })
-    expect(resolveCsvColumns(['href', 'tag', 'description'])).toEqual({ titleIdx: -1, urlIdx: 0, tagsIdx: 1, notesIdx: 2 })
+    expect(resolveCsvColumns(['name', 'link', 'labels', 'excerpt'])).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: 2, notesIdx: 3, categoryIdx: -1, iconIdx: -1, createdAtIdx: -1 })
+    expect(resolveCsvColumns(['href', 'tag', 'description'])).toEqual({ titleIdx: -1, urlIdx: 0, tagsIdx: 1, notesIdx: 2, categoryIdx: -1, iconIdx: -1, createdAtIdx: -1 })
   })
 
   it('缺失的字段下标为 -1', () => {
-    expect(resolveCsvColumns(['url'])).toEqual({ titleIdx: -1, urlIdx: 0, tagsIdx: -1, notesIdx: -1 })
+    expect(resolveCsvColumns(['url'])).toEqual({ titleIdx: -1, urlIdx: 0, tagsIdx: -1, notesIdx: -1, categoryIdx: -1, iconIdx: -1, createdAtIdx: -1 })
   })
 
   it('未识别的列名被忽略，不会污染已定位下标', () => {
@@ -170,7 +170,7 @@ describe('resolveCsvColumns 表头列定位', () => {
 
   it('同类别重复列名只记录首次出现的下标', () => {
     // 第二个 url 别名 href 不覆盖已定位的 url 下标 1
-    expect(resolveCsvColumns(['title', 'url', 'href'])).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: -1, notesIdx: -1 })
+    expect(resolveCsvColumns(['title', 'url', 'href'])).toEqual({ titleIdx: 0, urlIdx: 1, tagsIdx: -1, notesIdx: -1, categoryIdx: -1, iconIdx: -1, createdAtIdx: -1 })
   })
 })
 

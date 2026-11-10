@@ -8,10 +8,12 @@
  * 用法：
  *   node scripts/gen-redeem-codes.mjs --count 20 --plan plus_monthly
  *   node scripts/gen-redeem-codes.mjs --count 5 --plan plus_yearly --dry-run
+ *   node scripts/gen-redeem-codes.mjs --count 5 --plan plus_yearly --expires-days 30
  *
  * 选项：
  *   --count N      生成数量（默认 10）
  *   --plan ID      套餐 id（默认 plus_monthly）
+ *   --expires-days N  兑换码有效期（天）；不传则永久有效
  *   --dry-run      只打印将要执行的 SQL，不落库
  *   --print-only   只打印码，不写库（已存在时补打）
  *
@@ -34,6 +36,7 @@ const has = (name) => process.argv.includes(`--${name}`)
 
 const count = Math.max(1, Math.min(500, parseInt(arg('count', '10'), 10) || 10))
 const planId = arg('plan', 'plus_monthly')
+const expiresDays = Math.max(0, parseInt(arg('expires-days', '0'), 10) || 0)
 const dryRun = has('dry-run')
 const printOnly = has('print-only')
 
@@ -81,12 +84,14 @@ for (let i = 0; i < list.length; i += BATCH) {
   const values = chunk
     .map(
       (c) =>
-        `('${randomUUID()}','unassigned','${esc(planId)}',0,'CNY','redeem',NULL,'pending','${esc(c)}',now())`,
+        `('${randomUUID()}','unassigned','${esc(planId)}',0,'CNY','redeem',NULL,'pending','${esc(c)}',now(),${
+          expiresDays > 0 ? `now() + interval '${expiresDays} days'` : 'NULL'
+        })`,
     )
     .join(',')
   const sql =
     `INSERT INTO public.orders ` +
-    `(id,user_id,plan_id,amount_cents,currency,channel,channel_order_id,status,idempotency_key,created_at) ` +
+    `(id,user_id,plan_id,amount_cents,currency,channel,channel_order_id,status,idempotency_key,created_at,expires_at) ` +
     `VALUES ${values}`
 
   if (dryRun) {

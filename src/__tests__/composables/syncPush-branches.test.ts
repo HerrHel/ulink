@@ -105,13 +105,16 @@ import {
   enqueueSyncOps, drainSyncOps, clearAllSyncOps, syncOpsCount,
 } from '../../stores/storage.js'
 import {
-  useCloudSync, __testPendingSync, setSyncRemotePort, createMemorySyncPort,
+  useCloudSync, __testPendingSync, setSyncRemotePort, createMemorySyncPort, _mergeIntoLocal,
 } from '../../composables/domain/useCloudSync.js'
 import { getSyncCircuitSnapshot } from '../../composables/domain/syncCircuit.js'
 import {
   _opNeedsUnlock, _mergeOps, _redactOpData, enqueueDirtyAsOps,
-  MAX_PUSH_RETRIES,
+  MAX_PUSH_RETRIES, reenqueueDeadDeletes,
 } from '../../composables/domain/syncPush.js'
+import {
+  rememberDeadDelete, forgetDeadDelete, isDeadDelete,
+} from '../../composables/domain/syncPending.js'
 import { CAT_UNCATEGORIZED } from '../../config/constants.js'
 
 function makeBm(partial: Record<string, unknown> = {}) {
@@ -158,6 +161,7 @@ beforeEach(async () => {
   _ops = []
   _nextId = 1
   await clearAllSyncOps()
+  try { localStorage.removeItem('lv_sync_dead_deletes') } catch { /* ignore */ }
   setSyncRemotePort(null)
   const auth = useAuthStore()
   ;(auth as any).user = { id: 'user-sp', email: 'sp@test.com' }
@@ -168,7 +172,61 @@ afterEach(async () => {
   setSyncRemotePort(null)
   __testPendingSync.clear()
   await clearAllSyncOps()
+  try { localStorage.removeItem('lv_sync_dead_deletes') } catch { /* ignore */ }
   Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+})
+
+describe('pushFromQueue 冲突阻断', () => {
+  it('未解决冲突的实体不推送，op 原样留在队列', async () => {
+    const port = createMemorySyncPort()
+    setSyncRemotePort(port)
+    const syncStore = useSyncStore()
+    syncStore.addConflict({ id: 'bm-cf', type: 'bookmark', local: {}, remote: {} })
+    await enqueueSyncOps([{
+      action: 'upsert', table: 'bookmarks', itemId: 'bm-cf',
+      data: { ...makeBm({ id: 'bm-cf' }), _userId: 'user-sp' }, ts: 1,
+    }])
+
+    const ok = await useCloudSync().pushToCloud()
+    expect(ok).toBe(true)
+    expect(port.upserts.length + port.updates.length).toBe(0)
+    expect(await syncOpsCount()).toBe(1)
+    expect((await drainSyncOps())[0].itemId).toBe('bm-cf')
+    syncStore.clearConflicts()
+  })
+})
+
+describe('死信 delete 补偿', () => {
+  it('DELETE 达重试上限 → 写墓碑；可重新入队并在成功后清除', async () => {
+    const failPort = createMemorySyncPort({ deleteError: () => ({ message: 'simulated delete fail' }) })
+    setSyncRemotePort(failPort)
+    await enqueueSyncOps([{ action: 'delete', table: 'bookmarks', itemId: 'bm-gone', data: null, ts: 1 }])
+
+    for (let i = 0; i < MAX_PUSH_RETRIES; i++) {
+      await useCloudSync().pushToCloud()
+    }
+    expect(await syncOpsCount()).toBe(0)
+    expect(isDeadDelete('bookmarks', 'bm-gone')).toBe(true)
+
+    const requeued = await reenqueueDeadDeletes(true)
+    expect(requeued).toBe(1)
+    expect(await syncOpsCount()).toBe(1)
+
+    const okPort = createMemorySyncPort()
+    setSyncRemotePort(okPort)
+    await useCloudSync().pushToCloud()
+    expect(okPort.deletes.map(d => d.id)).toContain('bm-gone')
+    expect(isDeadDelete('bookmarks', 'bm-gone')).toBe(false)
+    forgetDeadDelete('bookmarks', 'bm-gone')
+  })
+
+  it('pull 合并跳过墓碑对应的远端行，避免已彻底删除项被拉回', () => {
+    rememberDeadDelete('bookmarks', 'bm-gone')
+    const local: any[] = []
+    _mergeIntoLocal(local, [{ id: 'bm-gone', updatedAt: 1 }], 'bookmark', true)
+    expect(local).toHaveLength(0)
+    forgetDeadDelete('bookmarks', 'bm-gone')
+  })
 })
 
 describe('_opNeedsUnlock — 锁定态判定所用的敏感字段表', () => {
@@ -710,7 +768,6 @@ describe('pushFromQueue 部分锁定跳过 + success', () => {
       ts: 1001,
     }])
 
-    const before = Date.now()
     const ok = await useCloudSync().pushToCloud()
     expect(ok).toBe(true)
     expect(port.updates.length).toBe(1) // 非敏感 op 走 update 推成功
@@ -720,7 +777,9 @@ describe('pushFromQueue 部分锁定跳过 + success', () => {
     expect(remain[0].itemId).toBe('bm-skip')
     expect(syncStore.syncStatus).toBe('success')
     expect(syncStore.pendingLockedCount).toBe(1) // 1 个敏感被跳过
-    expect(syncStore.lastSyncAt).toBeGreaterThanOrEqual(before) // tasks>0 设 lastSyncAt
+    // push 成功不得推进 pull 增量游标（lastSyncAt 只由 pull 成功推进，
+    // 否则 pull 失败期间漏掉的远端变更会被永久跳过）
+    expect(syncStore.lastSyncAt).toBe(0)
   })
 })
 

@@ -124,6 +124,12 @@ export const zh = {
     copyUrl: '复制网址',
     visit: '打开网站',
     history: '版本历史',
+    diffField: {
+      title: '标题', name: '名称', url: '链接', username: '账户',
+      password: '密码', notes: '备注', icon: '图标', categoryId: '分类',
+      parentId: '父级', order: '排序', useCount: '使用次数',
+      attributes: '属性', bookmarkIds: '书签列表', isPublic: '公开', deletedAt: '删除时间',
+    },
     pin: '置顶',
     unpin: '取消置顶',
     moveToCat: '移动到',

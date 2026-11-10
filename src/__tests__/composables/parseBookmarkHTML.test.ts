@@ -218,6 +218,18 @@ describe('parseBookmarkHTML（Netscape 书签解析护栏）', () => {
       expect(out[0].notes).toBe('[未命名]')
     })
 
+    it('导出 round-trip：TAGS 还原 attributes，<DD> 还原 notes', () => {
+      const html = `<DL>
+        <DT><A HREF="https://round.example/" TAGS="Work,Tech Notes">Round</A>
+        <DD>原始笔记正文</DD>
+      </DL>`
+      const out = parseBookmarkHTML(html)
+      expect(out).toHaveLength(1)
+      expect(out[0].notes).toBe('原始笔记正文')
+      expect(out[0].attributes['tag_work']).toBe(true)
+      expect(out[0].attributes['tag_tech_notes']).toBe(true)
+    })
+
     it('DL>DT>H3 不带 <a> 时仅建分类不产书签（不误把 H3 当链接）', () => {
       // DT 里有 h3 但无 a → 不 push 书签
       const html = `<DL><DT><H3>仅分类</H3></DT></DL>`

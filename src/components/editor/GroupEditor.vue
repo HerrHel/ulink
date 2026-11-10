@@ -133,6 +133,7 @@ const GroupRefCard = Node.create({
 })
 
 const props = defineProps({ groupId: { type: String, required: true } })
+const emit = defineEmits<{ (e: 'ready'): void }>()
 const ds = useDataStore()
 const ui = useUIStore()
 const e2eStore = useE2EStore()
@@ -272,6 +273,8 @@ onMounted(() => {
   ;(editor as unknown as { _lvGid?: string })._lvGid = props.groupId
   EditorManager.register(props.groupId, editor)
   editorInstance.value = editor
+  // 通知父组件编辑器已可绑定 selectionUpdate（父组件格式栏高亮依赖此事件）
+  emit('ready')
 
   for (const id of extractDocBmIds(editor)) {
     initialDocBmIds.add(id)

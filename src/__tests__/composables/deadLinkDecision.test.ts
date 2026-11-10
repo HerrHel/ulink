@@ -200,6 +200,13 @@ describe('decide 决策矩阵护栏', () => {
     expect(r.reason).toBe('offline')
   })
 
+  it('local=offline + 内网 URL：离线规则优先于 intranet.dead，不落死链标', () => {
+    const r = decide({ fetch_outcome: null, http_status: 0 }, { reachable: false }, 'offline', 'http://192.168.1.1')
+    expect(r.verdict).toBe('inconclusive')
+    expect(r.reason).toBe('offline')
+    expect(r.persist).toBe(false)
+  })
+
   it('edge.fetch_outcome=null（无远端视角）+ direct 可达 → alive（no_edge）', () => {
     const r = decide({ fetch_outcome: null, http_status: 0 }, { reachable: true }, 'online', url)
     expect(r.verdict).toBe('alive')

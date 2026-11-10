@@ -364,46 +364,64 @@ export async function askMiMoStream(
   // think 标签的开闭字面量（拼接构造，避免模板串里出现标签字面量）
   const THINK_OPEN = '<' + 'think' + '>'
   const THINK_CLOSE = '<' + '/' + 'think' + '>'
+  // 跨 chunk 分片保护：SSE 分片边界任意，`<thi` + `nk>` 这种切法不能让标签漏进正文。
+  // 末尾若恰好是某个标签的前缀，暂存到下一片再统一状态机处理。
+  let tagCarry = ''
+
+  function emitContent(text: string) {
+    if (!text) return
+    accumulatedContent += text
+    callbacks?.onContentDelta?.(text, accumulatedContent)
+  }
+  function emitReasoning(text: string) {
+    if (!text) return
+    accumulatedReasoning += text
+    callbacks?.onReasoningDelta?.(text, accumulatedReasoning)
+  }
+
+  /** 在「正文 / 思考」两态间逐段消费缓冲，支持一片内多次开闭标签 */
+  function processContentBuffer(buf: string) {
+    let rest = buf
+    while (rest) {
+      if (!inThinkTag) {
+        const open = rest.indexOf(THINK_OPEN)
+        if (open < 0) { emitContent(rest); return }
+        if (open > 0) emitContent(rest.slice(0, open))
+        inThinkTag = true
+        rest = rest.slice(open + THINK_OPEN.length)
+      } else {
+        const close = rest.indexOf(THINK_CLOSE)
+        if (close < 0) { emitReasoning(rest); return }
+        if (close > 0) emitReasoning(rest.slice(0, close))
+        inThinkTag = false
+        rest = rest.slice(close + THINK_CLOSE.length)
+      }
+    }
+  }
 
   function handleContentChunk(chunk: string) {
     if (!chunk) return
-    // 兼容可能通过 think 标签输出思考的模型/代理
-    if (!inThinkTag && chunk.includes(THINK_OPEN)) {
-      const parts = chunk.split(THINK_OPEN)
-      if (parts[0]) {
-        accumulatedContent += parts[0]
-        callbacks?.onContentDelta?.(parts[0], accumulatedContent)
+    let buf = tagCarry + chunk
+    tagCarry = ''
+    const maxTagLen = Math.max(THINK_OPEN.length, THINK_CLOSE.length) - 1
+    const maxCheck = Math.min(maxTagLen, buf.length)
+    for (let len = maxCheck; len > 0; len--) {
+      const suffix = buf.slice(-len)
+      if (THINK_OPEN.startsWith(suffix) || THINK_CLOSE.startsWith(suffix)) {
+        tagCarry = suffix
+        buf = buf.slice(0, -len)
+        break
       }
-      inThinkTag = true
-      const rest = parts.slice(1).join(THINK_OPEN)
-      handleThinkChunk(rest)
-      return
     }
-    if (inThinkTag) {
-      handleThinkChunk(chunk)
-      return
-    }
-    accumulatedContent += chunk
-    callbacks?.onContentDelta?.(chunk, accumulatedContent)
+    processContentBuffer(buf)
   }
 
-  function handleThinkChunk(chunk: string) {
-    if (chunk.includes(THINK_CLOSE)) {
-      const parts = chunk.split(THINK_CLOSE)
-      if (parts[0]) {
-        accumulatedReasoning += parts[0]
-        callbacks?.onReasoningDelta?.(parts[0], accumulatedReasoning)
-      }
-      inThinkTag = false
-      const after = parts.slice(1).join(THINK_CLOSE)
-      if (after) {
-        accumulatedContent += after
-        callbacks?.onContentDelta?.(after, accumulatedContent)
-      }
-      return
-    }
-    accumulatedReasoning += chunk
-    callbacks?.onReasoningDelta?.(chunk, accumulatedReasoning)
+  /** 流结束时把暂存的不完整标签按当前状态吐出，避免最后几个字符丢失 */
+  function flushTagCarry() {
+    if (!tagCarry) return
+    if (inThinkTag) emitReasoning(tagCarry)
+    else emitContent(tagCarry)
+    tagCarry = ''
   }
 
   /** 消费单个 SSE data JSON 块（思考流 / 正文流 / tool_calls 增量），唯一消费点 */
@@ -501,6 +519,8 @@ export async function askMiMoStream(
     } catch (streamErr) {
       // 外部主动停止（停止生成/切会话）：保留 AbortError 语义，交由调用方按 aborted 分支处理
       if (context.signal?.aborted) throw streamErr
+      // 断流前把暂存的不完整标签吐出，避免最后几个字符静默丢失
+      flushTagCarry()
       // 响应体被掐断（浏览器报 TypeError: network error）：带上已生成片段，别让上层只能显示一句失败
       throw new MiMoStreamError(
         streamErr instanceof Error ? streamErr.message : String(streamErr),
@@ -513,7 +533,8 @@ export async function askMiMoStream(
     }
   }
 
-  // 服务端明确告知流中断（已发头后上游断流/超时）：同样按「不完整回答」上抛
+  // 流结束：吐出不完整标签暂存的字符，再判断服务端是否补发过中断错误
+  flushTagCarry()
   if (serverStreamError) {
     throw new MiMoStreamError(serverStreamError, accumulatedContent, accumulatedReasoning)
   }

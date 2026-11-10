@@ -16,7 +16,10 @@ const dataStore = useDataStore()
 const uiStore = useUIStore()
 
 function selectAll() {
-  const filtered = dataStore.filteredBookmarks
+  // 与 uiStore.selectAllBatch 同口径：批量集合只收顶层可见卡 + 组。
+  // filteredBookmarks 含 parentId 子书签（列表展开时可见但属从属卡），
+  // 直接全选会导致「已选 N」大于可见卡片数，并连带删除/移动肉眼看不见的子书签。
+  const filtered = dataStore.filteredBookmarks.filter(b => !b.parentId)
   const groups = dataStore.filteredGroups
   const allIds = filtered.map(b => b.id).concat(groups.map(g => 'group:' + g.id))
   const allSelected = allIds.length > 0 && allIds.every(id => uiStore.batchSelected.indexOf(id) !== -1)

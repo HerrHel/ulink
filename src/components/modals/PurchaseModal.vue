@@ -567,17 +567,17 @@ const displayCards = computed<TierCardView[]>(() => {
       isRecommended: false,
       badge: isCurrentFree.value ? t('purchase.currentPlanBadge') : '',
       badgeClass: 'badge-current',
-      periodLabel: '永久',
-      perMonthText: '永久免费使用',
-      footerNote: '永久免费使用，随心体验。',
+      periodLabel: t('purchase.card.lifetime'),
+      perMonthText: t('purchase.card.freeForever'),
+      footerNote: t('purchase.card.freeFooter'),
       bullets: [
         // 合规修订：加密范围改为仅账号字段，其余明文；已下线能力改为轻量平台解析
-        { text: '仅账号字段端到端加密同步', sub: '仅账号字段本机加密，标题、网址、笔记明文存储' },
-        { text: '无限层级分类与 Group 笔记', sub: '支持无限嵌套树与 TipTap 富文本卡片排版' },
-        { text: 'AI 智能预填体验', sub: '存入 URL 自动提取标题与摘要（日限 20 次）' },
-        { text: '轻量平台解析体验', sub: '解析视频公开标题、简介与字幕并生成摘要（日限 1 次）' },
-        { text: '本地秒级模糊与拼音检索', sub: '首字母拼音快速定位与概念模糊匹配' },
-        { text: '90 天收藏历史版本回溯', sub: '误删或改动随时从历史记录撤销还原' },
+        { text: t('purchase.card.freeB1'), sub: t('purchase.card.freeB1Sub') },
+        { text: t('purchase.card.freeB2'), sub: t('purchase.card.freeB2Sub') },
+        { text: t('purchase.card.freeB3'), sub: t('purchase.card.freeB3Sub') },
+        { text: t('purchase.card.freeB4'), sub: t('purchase.card.freeB4Sub') },
+        { text: t('purchase.card.freeB5'), sub: t('purchase.card.freeB5Sub') },
+        { text: t('purchase.card.freeB6'), sub: t('purchase.card.freeB6Sub') },
       ],
     })
   }
@@ -613,8 +613,8 @@ const displayCards = computed<TierCardView[]>(() => {
     const isRecommended = isYearly // 年付设为推荐最划算档
 
     let chineseName = p.name || 'PRO'
-    let desc = '适合高频使用与深度整理，随订随用。'
-    let footerNote = '开通即刻生效，支持随订随用。'
+    let desc = t('purchase.card.proDesc')
+    let footerNote = t('purchase.card.proFooter')
 
     // 原价与立省一律由数据推导，不写死数字（改价后文案自动跟随，也不会出现"省 ¥60"与实价矛盾）
     let baseCents = 0
@@ -625,22 +625,24 @@ const displayCards = computed<TierCardView[]>(() => {
     const savingPct = baseCents > 0 && savingCents > 0 ? Math.round((savingCents / baseCents) * 100) : 0
     const originalPrice: number | undefined = savingCents > 0 ? Math.round(baseCents / 100) : undefined
     const baselineMonths = isYearly ? 12 : isQuarterly ? 3 : 0
-    const baselineNote = savingCents > 0 && baselineMonths > 0 ? `按月订阅 ${baselineMonths} 个月合计 ${yen(baseCents)}` : undefined
+    const baselineNote = savingCents > 0 && baselineMonths > 0
+      ? t('purchase.card.baselineNote', { months: baselineMonths, price: yen(baseCents) })
+      : undefined
     let savingsText: string | undefined
 
     if (isYearly) {
       // 合规修订：去限时/限量包装与硬编码月均金额；省额注明「较按月订阅同周期合计省」
-      chineseName = 'PRO 年付'
+      chineseName = t('purchase.card.planYearly')
       desc = t('purchase.yearlySlogan') || '高频生产力首选，订阅期内价格锁定，尊享全功能与优先通道。'
       footerNote = t('purchase.earlyBirdFootnote') || '订阅期内价格锁定：开通即锁定当期价格，整个订阅期内不再调价；到期续费按届时公示价格。'
-      if (savingCents > 0) savingsText = `较按月订阅同周期合计省 ${yen(savingCents)}（省 ${savingPct}%）· 订阅期内不调价`
+      if (savingCents > 0) savingsText = t('purchase.card.savingYearly', { price: yen(savingCents), pct: savingPct })
     } else if (isQuarterly) {
-      chineseName = 'PRO 季付'
+      chineseName = t('purchase.card.planQuarterly')
       desc = t('purchase.quarterlySlogan') || '季度进阶首选，尽享高频自动化整理与轻量平台解析，折算更优惠。'
       footerNote = t('purchase.quarterlyFootnote') || '单次开通即刻生效，季度进阶优选，到期不自动续费。'
-      if (savingCents > 0) savingsText = `进阶立省 ${yen(savingCents)}（省 ${savingPct}%）· ${perMonth(p)}`
+      if (savingCents > 0) savingsText = t('purchase.card.savingQuarterly', { price: yen(savingCents), pct: savingPct, perMonth: perMonth(p) })
     } else if (isMonthly) {
-      chineseName = 'PRO 月付'
+      chineseName = t('purchase.card.planMonthly')
       desc = t('purchase.monthlySlogan') || '灵活按月进阶，解锁轻量平台解析与 AI 知识深加工，无续费压力。'
       footerNote = t('purchase.monthlyFootnote') || '单次开通即刻生效，随订随用，到期不自动续费。'
       // 月付即基准价，没有可对比的更高参照价——不显示划线原价与立省
@@ -652,53 +654,53 @@ const displayCards = computed<TierCardView[]>(() => {
       badge = t('purchase.currentPlanBadge')
       badgeClass = 'badge-current'
     } else if (isRecommended) {
-      badge = savingYuan > 0 ? `${t('purchase.earlyBirdBadge')} · 省 ${yen(savingCents)}` : t('purchase.earlyBirdBadge')
+      badge = savingYuan > 0 ? `${t('purchase.earlyBirdBadge')}${t('purchase.card.savingSuffix', { price: yen(savingCents) })}` : t('purchase.earlyBirdBadge')
       badgeClass = 'badge-recommended'
     } else if (isQuarterly) {
-      badge = savingYuan > 0 ? `${t('purchase.quarterlyBadge')} · 省 ${yen(savingCents)}` : t('purchase.quarterlyBadge')
+      badge = savingYuan > 0 ? `${t('purchase.quarterlyBadge')}${t('purchase.card.savingSuffix', { price: yen(savingCents) })}` : t('purchase.quarterlyBadge')
       badgeClass = 'badge-discount'
     } else if (isMonthly) {
       badge = t('purchase.monthlyBadge')
       badgeClass = 'badge-discount'
     } else if (isTest) {
-      badge = '测试'
+      badge = t('purchase.card.testBadge')
       badgeClass = 'badge-test'
     }
 
     const f = p.features || {}
-    const aiChars = f['ai.tokens.monthly'] ? `${Math.round((f['ai.tokens.monthly'] * 2) / 10000)} 万` : '40 万'
+    const aiCharsNum = f['ai.tokens.monthly'] ? Math.round((f['ai.tokens.monthly'] * 2) / 10000) : Number(t('purchase.card.aiCharsFallback'))
 
     const bullets: FeatureBullet[] = [
       // 合规修订：平台视频深度解析已下线，能力名统一为轻量平台解析与聊天媒体解析
       {
-        text: '轻量平台解析（每日 10 次）',
-        sub: '解析视频公开标题、简介与字幕，生成 AI 摘要与工具网址；不抓取播放地址',
+        text: t('purchase.card.b1'),
+        sub: t('purchase.card.b1Sub'),
         highlight: true,
       },
       {
-        text: 'AI 网页深度阅读与自动补齐',
-        sub: '全自动抓取正文、智能推荐分类与一句话精炼摘要，将普通书签升级为知识卡片',
+        text: t('purchase.card.b2'),
+        sub: t('purchase.card.b2Sub'),
         highlight: true,
       },
       {
-        text: `每月 ${aiChars}字高阶 AI 智能额度（每日 100 次）`,
-        sub: '畅享深度长文提炼、多书签对比、AI 智能改写与管家式交互代办，从容满足高频工作流',
+        text: t('purchase.card.b3', { n: aiCharsNum }),
+        sub: t('purchase.card.b3Sub'),
         highlight: true,
       },
       {
-        text: '全库健康巡检与失效死链自愈',
-        sub: '每周后台静默巡检全部书签，自动标记并隔离失效/死链链接，告别赛博垃圾堆',
+        text: t('purchase.card.b4'),
+        sub: t('purchase.card.b4Sub'),
         highlight: true,
       },
       {
         // 合规修订：加密范围如实说明为仅账号字段，其余内容明文存储
-        text: '仅账号字段端到端加密 · 不限设备',
-        sub: '手机、电脑即时无缝协同；仅账号字段本机加密，标题、网址、笔记等明文存储',
+        text: t('purchase.card.b5'),
+        sub: t('purchase.card.b5Sub'),
         highlight: false,
       },
       {
-        text: '实验室：聊天媒体解析（每日 2 次体验）',
-        sub: '在聊天框上传视频/音频/截图，智能提取口播字幕与画面文字；文件处理完即删除，保护隐私',
+        text: t('purchase.card.b6'),
+        sub: t('purchase.card.b6Sub'),
         highlight: false,
       },
     ]
@@ -706,25 +708,27 @@ const displayCards = computed<TierCardView[]>(() => {
     if (isYearly) {
       // 合规修订：改为中性表述「订阅期内价格锁定」，不暗示限时/限量
       bullets.unshift({
-        text: '订阅期内价格锁定',
-        sub: savingCents > 0 ? `较按月订阅同周期合计省 ${yen(savingCents)}，整个订阅期内不调价` : '整个订阅期内不调价',
+        text: t('purchase.card.yearlyExtraTitle'),
+        sub: savingCents > 0 ? t('purchase.card.yearlyExtraSubSaving', { price: yen(savingCents) }) : t('purchase.card.yearlyExtraSub'),
         highlight: true,
       })
       bullets.push({
-        text: '优先技术支持与新特性内测',
-        sub: '专属反馈绿色通道，抢先体验最新 AI 智能体与知识管理特性',
+        text: t('purchase.card.yearlyPriorityTitle'),
+        sub: t('purchase.card.yearlyPrioritySub'),
         highlight: true,
       })
     } else if (isQuarterly) {
       bullets.unshift({
-        text: savingCents > 0 ? `季度进阶优惠 · 立省 ${yen(savingCents)}（省 ${savingPct}%）` : '季度进阶优惠',
-        sub: `${perMonth(p)}，中长期进阶性价比之选`,
+        text: savingCents > 0
+          ? t('purchase.card.quarterlyExtraTitle', { price: yen(savingCents), pct: savingPct })
+          : t('purchase.card.quarterlyExtraTitleNoSaving'),
+        sub: t('purchase.card.quarterlyExtraSub', { perMonth: perMonth(p) }),
         highlight: true,
       })
     } else if (isMonthly) {
       bullets.unshift({
-        text: '按月灵活订阅',
-        sub: '随订随用无续费负担，即刻解锁全部 PRO 智能特权',
+        text: t('purchase.card.monthlyExtraTitle'),
+        sub: t('purchase.card.monthlyExtraSub'),
         highlight: true,
       })
     }
@@ -742,7 +746,7 @@ const displayCards = computed<TierCardView[]>(() => {
       originalPrice,
       baselineNote,
       savingsText,
-      periodLabel: isYearly ? '年' : isQuarterly ? '季' : isMonthly ? '月' : days(p.periodDays),
+      periodLabel: isYearly ? t('purchase.card.yearUnit') : isQuarterly ? t('purchase.card.quarterUnit') : isMonthly ? t('purchase.card.monthUnit') : days(p.periodDays),
       perMonthText: perMonth(p),
       bullets,
     })
@@ -831,8 +835,12 @@ function yen(cents: number): string {
   return `¥${(cents / 100).toFixed(2).replace(/\.00$/, '')}`
 }
 function days(d: number): string {
-  if (!d) return '永久'
-  return d % 365 === 0 ? `${d / 365} 年` : d % 30 === 0 ? `${d / 30} 个月` : `${d} 天`
+  if (!d) return t('purchase.card.lifetime')
+  return d % 365 === 0
+    ? t('purchase.card.years', { n: d / 365 })
+    : d % 30 === 0
+      ? t('purchase.card.months', { n: d / 30 })
+      : t('purchase.card.days', { n: d })
 }
 /** 周期折算月数：季 / 年按整月算（365 天视作 12 个月），避免 365/30 得到 12.17 个月 */
 function cycleMonths(periodDays: number): number {
@@ -976,6 +984,9 @@ watch(
       stopCountdown()
     }
   },
+  // 组件由 App.vue 的 v-if 在打开瞬间创建，visible 在 setup 时已是 true，
+  // 非 immediate 的 watch 永远不会触发 → 冷缓存时永久停在「加载中」。
+  { immediate: true },
 )
 
 watch(

@@ -7,6 +7,7 @@
 import { useDataStore } from '../stores/data.js'
 import { sanitizeHTML } from '../utils.js'
 import { isThreePartCipher } from '../crypto.js'
+import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup } from '../types.js'
 
 /** 纯文本摘要字符上限（超出省略号），约四行小宫格所见 */
@@ -31,7 +32,9 @@ function htmlToText(html: string): string {
 
 function truncate(s: string): string {
   if (!s) return ''
-  return s.length > PREVIEW_MAX ? s.slice(0, PREVIEW_MAX) + '…' : s
+  if (s.length <= PREVIEW_MAX) return s
+  // 按码点截断：直接 slice 可能切在代理对中间，留下孤立高代理渲染成 �
+  return Array.from(s).slice(0, PREVIEW_MAX).join('') + '…'
 }
 
 /** 书签摘要：notes 纯文本（截断） */
@@ -52,7 +55,7 @@ export function groupPreview(grp: SiblingGroup): string {
   if (ids.length) {
     const names = ids.map(id => {
       const g = grpMap[id]
-      if (g) return `【${g.name || '未命名组'}】`
+      if (g) return `【${g.name || t('cards.unnamedGroup')}】`
       const b = bmMap[id]
       if (b) return `【${b.title || b.url || ''}】`
       return ''

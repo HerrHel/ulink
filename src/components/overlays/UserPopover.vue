@@ -218,7 +218,7 @@ const syncState = useSyncState()
 const e2e = useE2E()
 const uiStore = useUIStore()
 const dataStore = useDataStore()
-const trashCount = computed(() => dataStore.bookmarks.filter(b => b.deletedAt).length)
+const trashCount = computed(() => dataStore.trashCount)
 
 const currentThemeLabel = computed(() => {
   return uiStore.themeColor === 'dark' ? t('settings.themeDark') : t('settings.themeLight')

@@ -15,7 +15,13 @@ export interface CsvColumns {
   urlIdx: number
   tagsIdx: number
   notesIdx: number
+  categoryIdx: number
+  iconIdx: number
+  createdAtIdx: number
 }
+
+/** CSV 分类列合成的稳定 id 前缀（导入时由 useDataIO 转为真实分类） */
+export const CSV_CATEGORY_PREFIX = 'csvcat:'
 
 /**
  * CSV 表头列定位：alias → kind 表驱动。
@@ -23,11 +29,14 @@ export interface CsvColumns {
  * 改为单次遍历构建 alias→kind map，O(n) 一次定位四类列下标。
  * 抽成纯函数便于单测。
  */
-const CSV_COLUMN_ALIASES: Record<string, 'title' | 'url' | 'tags' | 'notes'> = {
+const CSV_COLUMN_ALIASES: Record<string, 'title' | 'url' | 'tags' | 'notes' | 'category' | 'icon' | 'createdAt'> = {
   title: 'title', name: 'title',
   url: 'url', link: 'url', href: 'url',
   tags: 'tags', tag: 'tags', labels: 'tags',
   notes: 'notes', description: 'notes', excerpt: 'notes',
+  category: 'category', categoryname: 'category', collection: 'category',
+  icon: 'icon', favicon: 'icon',
+  createdat: 'createdAt', created: 'createdAt', adddate: 'createdAt',
 }
 
 export function detectFormat(filename: string, content: string): 'json' | 'html' | 'csv' | null {
@@ -43,12 +52,22 @@ export function detectFormat(filename: string, content: string): 'json' | 'html'
 }
 
 export function resolveCsvColumns(headers: string[]): CsvColumns {
-  const idx: Record<'title' | 'url' | 'tags' | 'notes', number> = { title: -1, url: -1, tags: -1, notes: -1 }
+  const idx: Record<'title' | 'url' | 'tags' | 'notes' | 'category' | 'icon' | 'createdAt', number> = {
+    title: -1, url: -1, tags: -1, notes: -1, category: -1, icon: -1, createdAt: -1,
+  }
   for (let i = 0; i < headers.length; i++) {
     const kind = CSV_COLUMN_ALIASES[headers[i]]
     if (kind && idx[kind] < 0) idx[kind] = i
   }
-  return { titleIdx: idx.title, urlIdx: idx.url, tagsIdx: idx.tags, notesIdx: idx.notes }
+  return {
+    titleIdx: idx.title,
+    urlIdx: idx.url,
+    tagsIdx: idx.tags,
+    notesIdx: idx.notes,
+    categoryIdx: idx.category,
+    iconIdx: idx.icon,
+    createdAtIdx: idx.createdAt,
+  }
 }
 
 export function parseCSV(text: string): Bookmark[] {
@@ -84,8 +103,9 @@ export function parseCSV(text: string): Bookmark[] {
 
   if (lines.length < 2) return []
 
-  // 表头解析：alias → kind 表驱动，单次构建 idx，替代原 4 次线性 findIndex
-  const { titleIdx, urlIdx, tagsIdx, notesIdx } = resolveCsvColumns(lines[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, '')))
+  // 表头解析：alias → kind 表驱动，单次构建 idx，替代原地多次线性查找
+  const { titleIdx, urlIdx, tagsIdx, notesIdx, categoryIdx, iconIdx, createdAtIdx } =
+    resolveCsvColumns(lines[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, '')))
   if (urlIdx < 0) return []
 
   const now = Date.now()
@@ -97,6 +117,10 @@ export function parseCSV(text: string): Bookmark[] {
     if (!title) continue
     const tags = tagsIdx >= 0 ? (cols[tagsIdx] || '').trim() : ''
     const notes = notesIdx >= 0 ? (cols[notesIdx] || '').trim() : ''
+    const categoryName = categoryIdx >= 0 ? (cols[categoryIdx] || '').trim() : ''
+    const icon = iconIdx >= 0 ? (cols[iconIdx] || '').trim() : ''
+    const createdRaw = createdAtIdx >= 0 ? (cols[createdAtIdx] || '').trim() : ''
+    const createdMs = createdRaw ? Date.parse(createdRaw) : NaN
     const attributes: Record<string, boolean> = {}
     if (tags) {
       for (const t of tags.split(/[;|,]/)) {
@@ -108,14 +132,15 @@ export function parseCSV(text: string): Bookmark[] {
       id: newBookmarkId(r),
       title, url,
       username: '', password: '',
-      notes, icon: '',
-      categoryId: CAT_UNCATEGORIZED,
+      notes, icon,
+      // 合成 id：importData 会按名称复用已有分类或创建同名分类后再落库
+      categoryId: categoryName ? CSV_CATEGORY_PREFIX + encodeURIComponent(categoryName) : CAT_UNCATEGORIZED,
       parentId: null,
       order: r - 1,
       useCount: 0,
       attributes,
       isExpanded: false,
-      createdAt: now,
+      createdAt: Number.isFinite(createdMs) ? createdMs : now,
       updatedAt: now,
     })
   }
@@ -159,6 +184,9 @@ export function parseBookmarkHTML(html: string): Bookmark[] {
   const doc = parser.parseFromString(html, 'text/html')
   const bookmarks: Bookmark[] = []
   let currentCategory = '导入的书签'
+  // 最近一条解析出的书签：Netscape 格式的 <DD> 描述是 <DT><A> 的兄弟节点，
+  // 靠它把导出时写入的 notes 原样收回（此前 <DD> 被完全忽略，自导出再导入丢笔记）。
+  let lastBookmark: Bookmark | null = null
   const now = Date.now()
 
   function walk(nodes: NodeList) {
@@ -175,6 +203,7 @@ export function parseBookmarkHTML(html: string): Bookmark[] {
         if (h3) {
           const parentCat = currentCategory
           currentCategory = (h3.textContent || '').trim() || '未命名'
+          lastBookmark = null
           walk(node.childNodes)
           currentCategory = parentCat
         } else if (a) {
@@ -183,7 +212,16 @@ export function parseBookmarkHTML(html: string): Bookmark[] {
           const title = (a.textContent || '').trim() || href
           const addDate = parseInt(a.getAttribute('add_date') || '0', 10) || 0
           const icon = a.getAttribute('icon') || ''
-          bookmarks.push({
+          // 收回导出写入的 TAGS（逗号分隔，tag 名去除首尾空白）为 attributes
+          const attributes: Record<string, boolean> = {}
+          const tagsRaw = a.getAttribute('tags') || ''
+          if (tagsRaw.trim()) {
+            for (const rawTag of tagsRaw.split(',')) {
+              const tag = rawTag.trim()
+              if (tag) attributes['tag_' + tag.replace(/\s+/g, '_').toLowerCase()] = true
+            }
+          }
+          const bm: Bookmark = {
             id: newBookmarkId(bookmarks.length),
             title, url: href,
             username: '', password: '',
@@ -193,7 +231,7 @@ export function parseBookmarkHTML(html: string): Bookmark[] {
             parentId: null,
             order: bookmarks.length,
             useCount: 0,
-            attributes: {},
+            attributes,
             isExpanded: false,
             // Netscape ADD_DATE 规范是 Unix 秒；个别导出器可能写毫秒。
             // 阈值歧义修正：>= 1e12（13 位，JS Date.now() 量级）算毫秒原样采用；
@@ -202,8 +240,14 @@ export function parseBookmarkHTML(html: string): Bookmark[] {
             // 时间显示回到 1970，且与导出侧 Math.floor(createdAt/1000) round-trip 失效。
             createdAt: addDate >= 1e12 ? addDate : addDate > 0 ? addDate * 1000 : now,
             updatedAt: now,
-          })
+          }
+          bookmarks.push(bm)
+          lastBookmark = bm
         }
+      } else if (tag === 'DD') {
+        // 描述节点：覆盖分类占位 notes，保留导出时的原笔记正文
+        const desc = (node.textContent || '').trim()
+        if (lastBookmark && desc) lastBookmark.notes = desc
       } else if (tag === 'H3') {
         // 顶级 H3 直接出现在 DL 外
         currentCategory = (node.textContent || '').trim() || '未命名'

@@ -149,7 +149,7 @@ export class EvolvingKnowledgeGraph {
       }
       this.nodes.set(id, node)
     } else {
-      node.frequency++
+      node.frequency = Math.min(100, node.frequency + 1)
       node.lastSeenAt = now
     }
     return node
@@ -180,7 +180,9 @@ export class EvolvingKnowledgeGraph {
 
     if (existing) {
       existing.coOccurrenceCount += 1
-      existing.weight = Math.min(10.0, existing.weight * 0.95 + boost)
+      // 旧公式 *0.95 + boost 会很快顶到 10 上限，导致所有强关联权重相同、排序失效。
+      // 改为更强衰减 + 上限 6：权重体现「近期共现强度」而非累计次数。
+      existing.weight = Math.min(6.0, existing.weight * 0.9 + boost * 0.5)
       existing.lastUpdated = timestamp
     } else {
       // 控制单个节点出度
@@ -226,6 +228,9 @@ export class EvolvingKnowledgeGraph {
       if (a && !a.deletedAt && a.id) attrMap.set(a.id, a.name)
     }
 
+    // 当前知识库仍活跃的词条集合：用于清理已删除书签/分类/属性留下的陈旧节点与边
+    const liveIds = new Set<string>()
+
     // 1. 书签级共现挖掘：[分类, 属性标签, 标题关键词]
     for (const bm of bookmarks) {
       if (bm.deletedAt) continue
@@ -258,6 +263,10 @@ export class EvolvingKnowledgeGraph {
       }
 
       // 建立两两共现
+      for (const t of terms) {
+        const id = this.normalizeId(t)
+        if (id) liveIds.add(id)
+      }
       for (let i = 0; i < terms.length; i++) {
         for (let j = i + 1; j < terms.length; j++) {
           this.addAssociation(terms[i], terms[j], 0.8)
@@ -271,12 +280,15 @@ export class EvolvingKnowledgeGraph {
       const groupName = grp.name?.trim()
       if (!groupName || isThreePartCipher(groupName)) continue
       this.touchNode(groupName, 'concept')
+      liveIds.add(this.normalizeId(groupName))
 
       const memberTitles: string[] = []
       for (const bmId of grp.bookmarkIds || []) {
         const bm = bookmarks.find((b) => b.id === bmId && !b.deletedAt)
         if (bm && bm.title && !isThreePartCipher(bm.title)) {
           memberTitles.push(bm.title)
+          const titleId = this.normalizeId(bm.title)
+          if (titleId) liveIds.add(titleId)
           this.addAssociation(groupName, bm.title, 1.2)
         }
       }
@@ -286,6 +298,20 @@ export class EvolvingKnowledgeGraph {
         for (let j = i + 1; j < Math.min(memberTitles.length, 6); j++) {
           this.addAssociation(memberTitles[i], memberTitles[j], 0.4)
         }
+      }
+    }
+
+    // 2.1 清理已不存在于当前知识库的节点与边（删除书签后其概念不应继续参与提权）
+    for (const id of Array.from(this.nodes.keys())) {
+      if (!liveIds.has(id)) this.nodes.delete(id)
+    }
+    for (const [src, edgeMap] of Array.from(this.adjacency.entries())) {
+      if (!liveIds.has(src)) {
+        this.adjacency.delete(src)
+        continue
+      }
+      for (const tgt of Array.from(edgeMap.keys())) {
+        if (!liveIds.has(tgt)) edgeMap.delete(tgt)
       }
     }
 

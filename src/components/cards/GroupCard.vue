@@ -20,7 +20,7 @@
             <span class="card-tag tag-custom" v-for="(tag, i) in tagNames" :key="tag + '-' + i">{{ tag }}</span>
           </div>
           <!-- 聚焦态始终挂编辑器（分享态下 GroupEditor 以 editable:false 只读渲染） -->
-          <GroupEditor :groupId="group.id" />
+          <GroupEditor :groupId="group.id" @ready="onEditorReady" />
           <!-- 分享态：展示组内收录的书签列表 -->
           <div v-if="isShareReadonly && fallbackEntries.length" class="group-bookmarks-section">
             <div class="section-header">
@@ -113,7 +113,7 @@
         <!-- 辅助栏 / 分享只读态：只读 HTML（分享态不挂可编辑 TipTap，避免写本地库） -->
         <div v-if="detailMode || (isShareReadonly && hasBody)" class="group-body group-body-readonly" :class="{ 'can-edit': detailMode && !isShareReadonly }" :title="detailMode && !isShareReadonly ? t('cards.focusGroup') : undefined" @click.stop="onReadonlyClick" v-html="safeNotesHtml"></div>
         <!-- grid 折叠态 / list 展开态挂 TipTap；mini-grid 用纯文本摘要 -->
-        <GroupEditor v-else-if="showEditor" :groupId="group.id" />
+        <GroupEditor v-else-if="showEditor" :groupId="group.id" @ready="onEditorReady" />
         <div class="card-preview" v-else-if="previewText">{{ previewText }}</div>
       </div>
     </div>
@@ -373,6 +373,11 @@ watch(isFocused, (v) => {
     colorOpen.value = false
   }
 }, { immediate: true })
+// GroupEditor 是异步组件，setup 阶段的 immediate watch 触发时编辑器尚未注册；
+// 编辑器 ready 后再补一次绑定，否则格式栏按钮高亮永远不刷新。
+function onEditorReady() {
+  if (isFocused.value) _attach()
+}
 onBeforeUnmount(() => {
   _detach()
   if (_entranceCleanup) { _entranceCleanup(); _entranceCleanup = null }

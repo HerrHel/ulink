@@ -2990,23 +2990,29 @@ def create_deep_job(req: DeepJobRequest, request: Request):
         raise HTTPException(status_code=400, detail="Empty video URL")
     client = _sanitize_client_media(req.client.model_dump() if req.client else None)
     # 提交时即做域名白名单 + DNS 校验（fail-closed），避免把任务排进去才发现不合法。
-    # 用户上传（platform=upload）的 URL 是 CloudBase 存储，不走视频平台白名单，只校验 https/DNS 形状。
-    validate_url_shape(target_url)
+    # 用户上传（platform=upload）的 URL 是 CloudBase 存储，不走视频平台白名单，
+    # 只校验 http(s)/host 形状——必须在 validate_url_shape 之前分流，否则存储域名会被
+    # 白名单直接 400（上传解析 100% 失败）。
     if client and client.get("platform") == "upload":
-        pass
-    elif detect_platform(target_url) == "youtube":
-        # 未配代理时严格预检（网络不可达尽早 503，别让云函数扣了额度才失败）；
-        # 配了 YTDLP_PROXY 时 DNS 由代理侧解析，跳过本地预检。
-        if not YTDLP_PROXY:
-            preflight = _youtube_preflight(_host(target_url))
-            if not preflight["ok"]:
-                raise HTTPException(
-                    status_code=503,
-                    detail="deep_unavailable：YouTube DNS 预检失败（%s：%s），本机无法直连 YouTube，需配置 YTDLP_PROXY"
-                    % (_youtube_unreachable_reason(preflight["reason"]), preflight["detail"]),
-                )
+        if not re.match(r"^https?://", target_url, re.I):
+            raise HTTPException(status_code=400, detail="Only http(s) URLs are supported")
+        if not _host(target_url):
+            raise HTTPException(status_code=400, detail="Invalid URL host")
     else:
-        validate_target_url(target_url)
+        validate_url_shape(target_url)
+        if detect_platform(target_url) == "youtube":
+            # 未配代理时严格预检（网络不可达尽早 503，别让云函数扣了额度才失败）；
+            # 配了 YTDLP_PROXY 时 DNS 由代理侧解析，跳过本地预检。
+            if not YTDLP_PROXY:
+                preflight = _youtube_preflight(_host(target_url))
+                if not preflight["ok"]:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="deep_unavailable：YouTube DNS 预检失败（%s：%s），本机无法直连 YouTube，需配置 YTDLP_PROXY"
+                        % (_youtube_unreachable_reason(preflight["reason"]), preflight["detail"]),
+                    )
+        else:
+            validate_target_url(target_url)
 
     include = resolve_include_request(
         req.include.transcript if req.include else None,

@@ -443,7 +443,11 @@ export function useDeadLinkChecker() {
       isIntranet = isPrivateOrLocalHost(new URL(url).hostname)
     } catch { /* ignore */ }
 
+    // 本机明确离线：内网直连必然失败，不能据此落 dead 标（离线结论一律 inconclusive）
     if (isIntranet) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return makeCheckResult({ verdict: 'inconclusive', reason: 'offline' })
+      }
       const direct = await checkDirect(url, 3000)
       if (direct.reachable) {
         return makeCheckResult({ verdict: 'alive', finalUrl: url, reason: 'ssrf' })

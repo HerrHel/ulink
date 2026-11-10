@@ -395,7 +395,12 @@ const server = http.createServer(async (req, res) => {
   if (upstreamFailed) {
     const stale = getStale(cacheKey)
     if (stale) {
-      sendHtml(res, 200, stale, { 'x-share-cache': 'STALE', 'cache-control': 'public, max-age=60' })
+      // 带密码的分享即使本次票据校验通过，也绝不能标 public：响应未按 Cookie 区分，
+      // 中间层若缓存会把完整内容发给未验密访客。与验密门 no-store 口径保持一致。
+      sendHtml(res, 200, stale, {
+        'x-share-cache': 'STALE',
+        'cache-control': hasPassword ? 'private, no-store' : 'public, max-age=60',
+      })
       return
     }
     sendHtml(res, 503, renderUnavailablePage(locale), { 'cache-control': 'no-store', 'x-share-cache': 'MISS' })

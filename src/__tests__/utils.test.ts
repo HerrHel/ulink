@@ -1,9 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
-import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle, stripTags, isDarkInvertSite } from '../utils.js'
+import { esc, domain, fixUrl, cleanZeroWidth, isMobile, favicon, gid, copyToClipboard, getTagNames, safeIconUrl, isValidShareGroupId, displayText, extractGroupTitle, stripTags, isDarkInvertSite, faviconInitials } from '../utils.js'
 import { setCachedIconInvert } from '../lib/iconAnalyzer.js'
 import { safeAtob } from '../crypto.js'
 
 describe('utils', () => {
+  describe('faviconInitials 代理对安全', () => {
+    it('emoji 开头名称不抛 URIError，返回合法 data URI', () => {
+      expect(() => faviconInitials('🚀 项目')).not.toThrow()
+      expect(faviconInitials('🚀 项目')).toContain('data:image/svg+xml')
+    })
+
+    it('stripTags 不再双重解码实体：&amp;lt; 保持为 &lt;', () => {
+      expect(stripTags('&amp;lt;div&amp;gt;')).toBe('&lt;div&gt;')
+    })
+  })
+
   describe('stripTags & extractGroupTitle', () => {
     it('显式组名优先返回', () => {
       expect(extractGroupTitle('我的知识库', '<h1>其他标题</h1>')).toBe('我的知识库')
