@@ -324,23 +324,19 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  // 分类分享的 layout 自适应（与 s/c/[sid].ts 同口径；无显式 layout 时按设备类型隔离缓存键）
-  let cacheSearch = url.search
+  // 分类分享的 layout 自适应（与 s/c/[sid].ts 同口径；无显式 layout 时按设备类型隔离缓存键）。
+  // 缓存键只纳入真正影响渲染结果的参数：组分享不依赖 query；分类只依赖 layout / 设备类型。
+  // 其余 query（utm_*、随机串等）一律忽略——否则 /s/<gid>?x=<random> 可刷出无限缓存键，
+  // 把 mem-cache 的 300 条上限挤爆并对上游 RPC 形成请求放大。
+  let cacheSearch = ''
   let layout = null
   if (isCategory) {
     const rawLayout = url.searchParams.get('layout')
     const isMobile = isMobileRequest(req)
-    layout =
-      rawLayout === 'list' || rawLayout === 'mini-grid' || rawLayout === 'grid'
-        ? rawLayout
-        : isMobile
-          ? 'list'
-          : 'grid'
-    cacheSearch = rawLayout
-      ? url.search
-      : url.search
-        ? `${url.search}&_dev=${isMobile ? 'm' : 'd'}`
-        : `?_dev=${isMobile ? 'm' : 'd'}`
+    const explicitLayout =
+      rawLayout === 'list' || rawLayout === 'mini-grid' || rawLayout === 'grid' ? rawLayout : null
+    layout = explicitLayout || (isMobile ? 'list' : 'grid')
+    cacheSearch = explicitLayout ? `?layout=${explicitLayout}` : `?_dev=${isMobile ? 'm' : 'd'}`
   }
 
   const cacheKey = `${url.pathname}${cacheSearch}|${locale}`
