@@ -18,8 +18,8 @@
 
 import { marked } from 'marked'
 
-/** 三份对外法律文档的展示顺序与短标签（长标题取自各文件 h1） */
-export const LEGAL_DOC_SEQUENCE = ['terms-of-service', 'privacy-policy', 'refund-policy'] as const
+/** 对外法律文档的展示顺序与短标签（长标题取自各文件 h1） */
+export const LEGAL_DOC_SEQUENCE = ['terms-of-service', 'privacy-policy', 'third-party-sharing', 'refund-policy'] as const
 
 /**
  * 判定文件是否属于对外公开发布的正式法律文档。
@@ -40,6 +40,7 @@ export function isPublicLegalDoc(fileName: string): boolean {
 const DOC_SHORT_LABEL: Record<string, string> = {
   'terms-of-service': '用户协议',
   'privacy-policy': '隐私政策',
+  'third-party-sharing': '第三方共享清单',
   'refund-policy': '退款政策',
 }
 

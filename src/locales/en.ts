@@ -525,6 +525,7 @@ export const en = {
     legalDocsView: 'Read',
     legalTerms: 'Terms of Service',
     legalPrivacy: 'Privacy Policy',
+    legalSharing: 'Third-party Sharing List',
     legalRefund: 'Refund Policy',
     deleteAccount: 'Delete account',
     deleteAccountDoing: 'Deleting…',

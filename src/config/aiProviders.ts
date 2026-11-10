@@ -38,31 +38,13 @@ export const AI_PROVIDERS: readonly AiProviderInfo[] = [
     contact: 'herr@ulink.ren（与链接口人，可转达服务商）',
     filing: '境内服务商，已依法完成生成式人工智能服务备案',
   },
-  // 以下为《隐私政策》§3.1 / §3.3 所列的实际接收方 / 处理方（非大模型服务商）。
-  // product 字段描述服务本身，不写具体模型名称，与对外合规口径一致。
   {
     id: 'jina-reader',
     name: 'Jina Reader（r.jina.ai）',
     product: '网页正文读取服务',
     website: 'https://jina.ai',
     contact: 'herr@ulink.ren（与链接口人，可转达服务商）',
-    filing: '境外服务；当网页标题/描述抓取失败或平台接口降级时，将待读取网页 URL 提交该服务以读取公开页面正文，相关处理亦可能经境外边缘节点发起',
-  },
-  {
-    id: 'cloudflare-pages',
-    name: 'Cloudflare, Inc.（Cloudflare Pages / Workers）',
-    product: '边缘函数托管与内容分发',
-    website: 'https://www.cloudflare.com',
-    contact: 'herr@ulink.ren（与链接口人，可转达服务商）',
-    filing: '境外边缘节点；承载意图寻站、网页元数据提取与海外死链探测，处理网页 URL、页面公开元数据及部分提示词内容，相关模型调用由该节点发起至境内第三方大模型服务商',
-  },
-  {
-    id: 'youtube-data-api',
-    name: 'Google LLC（YouTube Data API）',
-    product: '公开视频元数据接口',
-    website: 'https://developers.google.com/youtube/v3',
-    contact: 'herr@ulink.ren（与链接口人，可转达服务商）',
-    filing: '境外服务；仅在视频解析功能启用时读取公开视频元数据（标题、简介、字幕、公开评论）',
+    filing: '境外公开网页读取服务；当网页标题/描述抓取失败或平台接口降级时，将待读取网页公开 URL 提交该服务以读取正文',
   },
   {
     id: 'favicon-xinac',
@@ -70,12 +52,12 @@ export const AI_PROVIDERS: readonly AiProviderInfo[] = [
     product: '网站图标（favicon）获取服务',
     website: 'https://api.xinac.net',
     contact: 'herr@ulink.ren（与链接口人，可转达服务商）',
-    filing: '第三方服务；按待添加书签的域名请求站点图标，处理书签域名 / URL；运营主体以该服务方官网公示为准',
+    filing: '第三方公开图标服务；按待添加书签的域名请求站点图标，仅处理书签公开域名',
   },
 ]
 
 /** 清单最后更新时间——展示在设置页，便于用户判断信息是否新鲜 */
-export const AI_PROVIDERS_UPDATED_AT = '2026-11-07'
+export const AI_PROVIDERS_UPDATED_AT = '2026-11-10'
 
 /**
  * 隐私政策与用户协议中引用的《隐私政策》地址（产品内可直接访问）
@@ -86,5 +68,6 @@ export const AI_PROVIDERS_UPDATED_AT = '2026-11-07'
 export const LEGAL_DOC_LINKS = [
   { key: 'terms', path: '/legal/terms-of-service.html', labelKey: 'settings.legalTerms' },
   { key: 'privacy', path: '/legal/privacy-policy.html', labelKey: 'settings.legalPrivacy' },
+  { key: 'sharing', path: '/legal/third-party-sharing.html', labelKey: 'settings.legalSharing' },
   { key: 'refund', path: '/legal/refund-policy.html', labelKey: 'settings.legalRefund' },
 ] as const

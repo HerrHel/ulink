@@ -180,10 +180,10 @@ describe('真实法律文档（docs/legal）', () => {
     expect(doc.bodyHtml.length).toBeGreaterThan(1500)
   })
 
-  it('索引页列出全部三份文档', () => {
+  it('索引页列出全部对外文档', () => {
     const docs = LEGAL_DOC_SEQUENCE.map((slug) => parseLegalDoc(readDoc(`${slug}.md`), slug))
     const html = renderLegalIndexHtml(docs)
     for (const slug of LEGAL_DOC_SEQUENCE) expect(html).toContain(`/legal/${slug}.html`)
-    expect(html.match(/class="card"/g)?.length).toBe(3)
+    expect(html.match(/class="card"/g)?.length).toBe(LEGAL_DOC_SEQUENCE.length)
   })
 })

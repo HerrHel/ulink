@@ -351,11 +351,12 @@ function mpaAliasPlugin(): Plugin {
 
 
 /** 三份对外法律文档的展示顺序与短标签（长标题取自各文件 h1） */
-const LEGAL_DOC_SEQUENCE = ['terms-of-service', 'privacy-policy', 'refund-policy'] as const
+const LEGAL_DOC_SEQUENCE = ['terms-of-service', 'privacy-policy', 'third-party-sharing', 'refund-policy'] as const
 
 const DOC_SHORT_LABEL: Record<string, string> = {
   'terms-of-service': '用户协议',
   'privacy-policy': '隐私政策',
+  'third-party-sharing': '第三方共享清单',
   'refund-policy': '退款政策',
 }
 

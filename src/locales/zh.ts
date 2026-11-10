@@ -515,6 +515,7 @@ export const zh = {
     legalDocsView: '查看全文',
     legalTerms: '用户服务协议',
     legalPrivacy: '隐私政策',
+    legalSharing: '第三方个人信息共享清单',
     legalRefund: '退款政策',
     deleteAccount: '注销账号',
     deleteAccountDoing: '正在注销…',

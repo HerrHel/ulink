@@ -42,11 +42,12 @@ describe('AI 服务商清单', () => {
     expect(AI_PROVIDERS_UPDATED_AT).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
-  it('法律文档链接覆盖协议/隐私/退款三份', () => {
+  it('法律文档链接覆盖协议/隐私/第三方共享/退款文档', () => {
     const paths = LEGAL_DOC_LINKS.map((d) => d.path)
     // 指向渲染后的 HTML 页（裸 .md 用户不可读，见 renderLegalDoc.ts 说明）
     expect(paths).toContain('/legal/terms-of-service.html')
     expect(paths).toContain('/legal/privacy-policy.html')
+    expect(paths).toContain('/legal/third-party-sharing.html')
     expect(paths).toContain('/legal/refund-policy.html')
     for (const p of paths) expect(p.endsWith('.md')).toBe(false)
   })
