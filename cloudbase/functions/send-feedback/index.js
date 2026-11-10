@@ -58,16 +58,40 @@ const RATE_LIMIT = 5
 const RATE_WINDOW_MS = 60 * 60 * 1000
 const SMTP_TIMEOUT_MS = 20_000
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+/** 允许的来源：环境变量优先；未注入时回落到主站/默认域/本地 dev（不开放 *） */
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://ulink.ren',
+  'https://ulink.pages.dev',
+  'https://ulink-d1g5srvjo54b1886a-1436146693.tcloudbaseapp.com',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+]
+const ENV_ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+const ALLOWED_ORIGINS = ENV_ALLOWED_ORIGINS.length ? ENV_ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS
+
+function isOriginAllowed(origin) {
+  return !!origin && ALLOWED_ORIGINS.includes(origin)
+}
+
+function corsHeaders(origin) {
+  const h = {
+    Vary: 'Origin',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  }
+  if (isOriginAllowed(origin)) h['Access-Control-Allow-Origin'] = origin
+  return h
 }
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body)
   res.writeHead(status, {
-    ...CORS,
+    ...(res._cors || {}),
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload),
   })
@@ -142,9 +166,18 @@ function getDb() {
 }
 
 const server = http.createServer(async (req, res) => {
+  const origin = req.headers.origin || ''
+  res._cors = corsHeaders(origin)
+
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, CORS)
+    // 白名单外的预检直接拒（不再回 ACAO: *）
+    res.writeHead(isOriginAllowed(origin) ? 204 : 403, res._cors)
     res.end()
+    return
+  }
+  // 带 Origin 的浏览器请求必须在白名单内；无 Origin 的服务端直调仍需 PoW
+  if (origin && !isOriginAllowed(origin)) {
+    sendJson(res, 403, { error: 'origin_not_allowed' })
     return
   }
   // GET = 签发 PoW 挑战（前端开弹窗时预取、后台静默解题，用户零感知）

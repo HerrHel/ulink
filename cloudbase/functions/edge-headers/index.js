@@ -105,13 +105,32 @@ const server = http.createServer(async (req, res) => {
       return
     }
     const url = new URL(req.url || '/', 'http://edge.local')
-    if (!isAllowed(url.pathname)) {
+    // 反代前先解码并拒绝路径穿越：静态托管会对 %2e%2e 做归一化，
+    // 若只按原始 pathname 做 startsWith('/legal/') 判定，/legal/%2e%2e/app
+    // 会被放行并取到 /app。这里连续解码两轮，含 .. / 反斜杠 / NUL 一律拒绝。
+    let pathname = url.pathname
+    for (let i = 0; i < 2; i++) {
+      let decoded
+      try {
+        decoded = decodeURIComponent(pathname)
+      } catch {
+        break
+      }
+      if (decoded === pathname) break
+      pathname = decoded
+    }
+    if (
+      pathname.includes('..') ||
+      pathname.includes('\\') ||
+      pathname.includes('\0') ||
+      !isAllowed(pathname)
+    ) {
       res.writeHead(404, { ...SECURITY_HEADERS, 'content-type': 'text/plain; charset=utf-8' })
       res.end('not found')
       return
     }
 
-    const cacheKey = url.pathname + url.search
+    const cacheKey = pathname + url.search
     const cached = getCache(cacheKey)
 
     // 缓存新鲜命中：1ms 极速返回
@@ -122,7 +141,7 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    const upstreamUrl = STATIC_ORIGIN + url.pathname + url.search
+    const upstreamUrl = STATIC_ORIGIN + pathname + url.search
     const staticOrigin = new URL(STATIC_ORIGIN).origin
     let upstream
     try {

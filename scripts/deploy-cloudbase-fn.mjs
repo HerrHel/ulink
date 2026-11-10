@@ -169,9 +169,15 @@ function sanitizeEnvSalts(env) {
 }
 
 const FN_EXTRA_ENV = {
-  'report-error': () => ({
-    IP_HASH_SALT: readEnvLocal('IP_HASH_SALT') || 'ulink-report-error',
-  }),
+  'report-error': () => {
+    const out = {
+      IP_HASH_SALT: readEnvLocal('IP_HASH_SALT') || 'ulink-report-error',
+    }
+    // CORS 白名单：未注入时函数内回落到内置主站列表
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
+    return out
+  },
   'check-link': () => {
     const out = {
       IP_HASH_SALT: readEnvLocal('CHECK_LINK_IP_HASH_SALT') || 'ulink-check-link',
@@ -201,6 +207,9 @@ const FN_EXTRA_ENV = {
       POW_SECRET: readEnvLocal('POW_SECRET') || randomBytes(32).toString('hex'),
     }
     if (smtpPass) out.SMTP_PASS = smtpPass
+    // CORS 白名单：未注入时函数内回落到内置主站列表
+    const origins = readEnvLocal('ALLOWED_ORIGINS')
+    if (origins) out.ALLOWED_ORIGINS = origins
     return out
   },
   'jina-proxy': () => {

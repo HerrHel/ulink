@@ -31,7 +31,21 @@ const MIMO_API_KEY = process.env.MIMO_API_KEY || ''
 const MIMO_BASE_URL = (process.env.MIMO_BASE_URL || 'https://api.xiaomimimo.com/v1').replace(/\/+$/, '')
 const MIMO_MODEL = process.env.MIMO_MODEL || 'mimo-v2.6-flash'
 const ALLOWED_MODELS = (process.env.MIMO_ALLOWED_MODELS || '').split(',').map((s) => s.trim()).filter(Boolean)
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)
+/** 环境变量优先；未注入时回落到主站/默认域/本地 dev，避免「空配置 = 任意 Origin」 */
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://ulink.ren',
+  'https://ulink.pages.dev',
+  'https://ulink-d1g5srvjo54b1886a-1436146693.tcloudbaseapp.com',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+]
+const ENV_ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+const ALLOWED_ORIGINS = ENV_ALLOWED_ORIGINS.length ? ENV_ALLOWED_ORIGINS : DEFAULT_ALLOWED_ORIGINS
 const RATE_LIMIT_PER_MIN = parseInt(process.env.MIMO_CHAT_RATE_LIMIT_PER_MIN || '30', 10)
 /** 匿名全局限流：与 IP 无关，兜底 XFF 可伪造（AGENTS.md 2026-10-30 实测），默认 120/min */
 const ANON_GLOBAL_LIMIT_PER_MIN = parseInt(process.env.MIMO_CHAT_ANON_GLOBAL_PER_MIN || '120', 10)
@@ -466,10 +480,8 @@ const server = http.createServer(async (req, res) => {
     return
   }
   // POST：带 Origin 但不在白名单 → 403（无 Origin 的非浏览器直调不拦截，避免误伤）。
-  // ⚠️ 防呆：ALLOWED_ORIGINS 未注入时为空数组，isOriginAllowed 恒 false；
-  // 若此时仍做 POST 校验，会把所有浏览器请求一律 403（死链检测曾踩过这个坑）。
-  // 空配置时跳过 POST 校验、只保留 OPTIONS 行为，并在启动日志里告警。
-  if (req.method === 'POST' && origin && ALLOWED_ORIGINS.length > 0 && !isOriginAllowed(origin, ALLOWED_ORIGINS)) {
+  // ALLOWED_ORIGINS 未注入时已回落到内置主站列表，不再「空配置 = 放行任意 Origin」。
+  if (req.method === 'POST' && origin && !isOriginAllowed(origin, ALLOWED_ORIGINS)) {
     logEvent('warn', 'origin_rejected', { status: 403, errorKind: 'origin_not_allowed' })
     sendJson(res, 403, { error: 'Origin not allowed' }, cors)
     return

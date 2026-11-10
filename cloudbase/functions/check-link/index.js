@@ -318,7 +318,14 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    const body = await readJsonBody(req)
+    let body
+    try {
+      body = await readJsonBody(req)
+    } catch {
+      // 非法 JSON 是客户端输入问题，按 400 返回；旧实现落进外层 catch 变成 500
+      sendJson(res, 400, { error: 'invalid_json' }, cors)
+      return
+    }
     const { url, bookmark_id, mode } = body
 
     // ── 登录用户每日手动检查额度 / 匿名独立额度（fail-closed；自动巡检不消耗）──
