@@ -42,7 +42,7 @@ describe('模块 7 审计：法律文档公开性判定与泄露防护', () => {
     expect(isPublicLegalDoc('terms.txt')).toBe(false)
   })
 
-  it('真实 docs/legal 目录经 isPublicLegalDoc 过滤后，恰好包含且仅包含 3 份对外法律协议', () => {
+  it('真实 docs/legal 目录经 isPublicLegalDoc 过滤后，恰好包含且仅包含 4 份对外法律协议', () => {
     const legalDir = resolve(process.cwd(), 'docs/legal')
     const allFiles = readdirSync(legalDir)
     const publicDocs = allFiles.filter(isPublicLegalDoc)
@@ -51,6 +51,7 @@ describe('模块 7 审计：法律文档公开性判定与泄露防护', () => {
       'privacy-policy.md',
       'refund-policy.md',
       'terms-of-service.md',
+      'third-party-sharing.md',
     ])
 
     // 内部 CHANGELOG 文件依然物理存在于代码库中供归档核验，但绝未被误判定为 public
@@ -61,7 +62,7 @@ describe('模块 7 审计：法律文档公开性判定与泄露防护', () => {
     }
   })
 
-  it('对外法律索引页渲染仅包含 3 份正式文档卡片，绝无内部修订记录', () => {
+  it('对外法律索引页渲染仅包含正式文档卡片，绝无内部修订记录', () => {
     const legalDir = resolve(process.cwd(), 'docs/legal')
     const publicDocs = readdirSync(legalDir)
       .filter(isPublicLegalDoc)
@@ -73,11 +74,11 @@ describe('模块 7 审计：法律文档公开性判定与泄露防护', () => {
 
     const indexHtml = renderLegalIndexHtml(publicDocs)
 
-    // 卡片数量严格为 3
+    // 卡片数量与 LEGAL_DOC_SEQUENCE 一致（4 份）
     const cardMatches = indexHtml.match(/class="card"/g) || []
-    expect(cardMatches.length).toBe(3)
+    expect(cardMatches.length).toBe(LEGAL_DOC_SEQUENCE.length)
 
-    // 包含 3 份协议链接
+    // 包含全部协议链接
     for (const slug of LEGAL_DOC_SEQUENCE) {
       expect(indexHtml).toContain(`/legal/${slug}.html`)
     }
@@ -118,10 +119,10 @@ describe('模块 7 审计：构建输出产物与离线 PWA 策略自检', () =>
     const leakedChangelog = distFiles.filter((f) => /changelog/i.test(f))
     expect(leakedChangelog).toEqual([])
 
-    // 校验 dist/legal/index.html 卡片数
+    // 校验 dist/legal/index.html 卡片数与对外协议一致（4 份）
     const distIndexHtml = readFileSync(resolve(distLegal, 'index.html'), 'utf8')
     const cardMatches = distIndexHtml.match(/class="card"/g) || []
-    expect(cardMatches.length).toBe(3)
+    expect(cardMatches.length).toBe(LEGAL_DOC_SEQUENCE.length)
   })
 
   it('vite.config.ts 保证 version.json 不进入 precache，且导航请求走 NetworkFirst', () => {
