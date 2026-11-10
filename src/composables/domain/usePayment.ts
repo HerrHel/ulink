@@ -129,8 +129,11 @@ export function usePayment() {
   async function create(planId: string, channel: PaymentChannel): Promise<PaymentOrder | null> {
     error.value = null
 
-    // 允许带有 test_pay=1 参数时直接进入演示模式（方便无真实商户号时体验完整弹层与支付交互）
-    const isTestParam = typeof window !== 'undefined' && window.location.search.includes('test_pay=1')
+    // 演示模式：仅开发环境可用（?test_pay=1）。
+    // 生产构建中 import.meta.env.DEV 恒为 false，避免线上出现「可伪造的支付成功流程」——
+    // 虽然前端 mock 不会真实发放权益，但安全评估与渗透测试会把生产环境的测试后门列为问题。
+    const isTestParam =
+      import.meta.env.DEV && typeof window !== 'undefined' && window.location.search.includes('test_pay=1')
     if (isTestParam) {
       creating.value = true
       try {
