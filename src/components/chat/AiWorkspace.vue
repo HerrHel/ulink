@@ -861,23 +861,9 @@ watch(aiQuery, () => {
   height: 100%;
   width: 100%;
   background-color: var(--bg);
-  background-image: radial-gradient(
-    ellipse 860px 520px at 50% 42%,
-    var(--accent-glow, rgba(66, 133, 244, 0.05)) 0%,
-    transparent 80%
-  );
   position: relative;
   overflow: hidden;
   transition: background-color 0.2s ease;
-}
-
-:root[data-theme="dark"] .ai-workspace {
-  background-color: var(--bg);
-  background-image: radial-gradient(
-    ellipse 860px 520px at 50% 42%,
-    var(--accent-glow, rgba(74, 144, 247, 0.08)) 0%,
-    transparent 78%
-  );
 }
 
 .ai-workspace.drop-active,
