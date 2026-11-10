@@ -261,3 +261,29 @@ SELECT public.mark_order_refunded('<order_id>', <cents>, '{"operator":"手工退
 | `get_share_secret` 失败 | 持续 | 分享页会返回 503（不降级放行） |
 | 悬挂 reserve 数量 | > 100 | 客户端断连未 settle，检查 `settle_quota` 分支与补结算任务是否正常（两段式已接入） |
 | 定时清理未执行 | > 25 小时 | 检查 maintenance 触发器状态（承诺日志 ≤12 个月） |
+
+## 9. 平台侧计费项核实：云托管固定出口 IP（2026-11-10）
+
+腾讯云站内信：**2026-12-01 00:00（北京时间）起，云托管固定出口 IP 结束公测并开始计费，1000 资源点/天，按环境计费**。
+
+**结论：本环境未启用该能力，无扣费风险，控制台也没有可关闭的开关（本就关闭）。**
+
+核实证据（只读）：
+
+| 检查 | 实测结果 |
+|---|---|
+| `tcb cloudrun list -e ulink-d1g5srvjo54b1886a` | 空表，**0 个云托管服务** |
+| `tcb api tcb DescribeCloudBaseRunServers --body '{"EnvId":"…","Limit":100}'` | **`TotalCount = 0`**（CLI 列表背后的权威接口） |
+| `tcb api tcb DescribeCloudBaseRunResource` | `VpcId: ""`、`SubnetIds: []`，仅残留 `VirtualClusterId: cls-9tdt3upd`（无服务挂载的空集群） |
+| `tcb fn detail <fn> --json`（14 个函数逐个） | 全部 `EipConfig: {"EipFixed":"FALSE","Eips":[]}`、`VpcConfig: {"VpcId":"","SubnetId":""}` |
+| 仓库检索 | 无云托管运行时配置；`WORKER_URL` / `VIDEO_WORKER_TOKEN` **0 引用** |
+
+依据官方文档 <https://docs.cloudbase.net/run/deploy/networking/staticip>：该能力配置在**云托管服务的「环境设置」**中，且「如果服务同时启用了 VPC 私有网络，公网请求会默认走 VPC，需要在 NAT 网关上做固定出口」。本环境既无服务也无 VPC → 该能力从未被创建，不产生费用。
+
+**为什么会收到通知**：账号曾在 2026-10 为视频深度解析起过 `ulink-video-worker` 云托管服务（2026-11-01 已删除），平台按「曾使用云托管」的人群推送，不代表当前在用。
+
+**自查路径（需要人工点两下确认）**：控制台 → 云开发 CloudBase → 对应环境 → 云托管，服务列表应为空；再看该页「环境设置」里的「固定公网 IP」卡片，应为未启用。
+
+**若日后需要重启云托管**（例如复活视频解析 worker）：除实例时长费用外，一旦在服务「环境设置」里启用固定公网 IP，自 2026-12-01 起会额外按 **1000 资源点/天/环境** 计费。`scripts/video-worker/README.md` 顶部已加同样的成本提醒。
+
+> 备注：`DescribeBillSummaryByProduct` 等账单接口用当前 CLI 凭证无权限（`finance:*` 未授权），无法从账单侧反证；以上结论基于资源面证据。
