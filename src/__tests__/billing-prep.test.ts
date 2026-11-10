@@ -53,9 +53,9 @@ describe('AI 服务商清单', () => {
 })
 
 describe('分享密码：密码策略', () => {
-  it('长度边界与前端一致（4~128）', () => {
-    expect(isSharePasswordAcceptable('abcd')).toBe(true)
-    expect(isSharePasswordAcceptable('abc')).toBe(false)
+  it('长度边界与前端一致（6~128）', () => {
+    expect(isSharePasswordAcceptable('abcdef')).toBe(true)
+    expect(isSharePasswordAcceptable('abcde')).toBe(false)
     expect(isSharePasswordAcceptable('a'.repeat(128))).toBe(true)
     expect(isSharePasswordAcceptable('a'.repeat(129))).toBe(false)
   })
@@ -100,18 +100,18 @@ describe('分享密码：设置 / 查询', () => {
     const mk = (status: number) =>
       vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status })))
     mk(401)
-    expect((await setSharePassword('g', 'abcd')).error).toBe('unauthorized')
+    expect((await setSharePassword('g', 'abcdef')).error).toBe('unauthorized')
     mk(403)
-    expect((await setSharePassword('g', 'abcd')).error).toBe('forbidden')
+    expect((await setSharePassword('g', 'abcdef')).error).toBe('forbidden')
     mk(429)
-    expect((await setSharePassword('g', 'abcd')).error).toBe('rate_limited')
+    expect((await setSharePassword('g', 'abcdef')).error).toBe('rate_limited')
   })
 
   it('网络异常 → network（不谎报成功）', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => {
       throw new Error('offline')
     }))
-    const r = await setSharePassword('g', 'abcd')
+    const r = await setSharePassword('g', 'abcdef')
     expect(r.ok).toBe(false)
     expect(r.error).toBe('network')
   })
