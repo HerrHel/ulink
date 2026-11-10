@@ -288,18 +288,40 @@ function withTimeout(p, ms, fallback) {
     );
   });
 }
+async function dohAnswer(host, type) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`,
+      { headers: { accept: "application/dns-json" }, signal: controller.signal }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.Answer || []).filter((a) => (a.type === 1 || a.type === 28) && typeof a.data === "string").map((a) => String(a.data));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
 async function isHostDnsSafe(hostname) {
   const host = normalizeHost(hostname);
   if (isPrivateHost2(host)) return false;
   if (parseIPv4Hostname(host) || parseIPv6Hostname(host)) return true;
-  if (typeof process === "undefined" || !process.versions?.node) return true;
   try {
-    const dns = await import("node:dns/promises");
-    const [v4, v6] = await Promise.all([
-      withTimeout(dns.resolve4(host).catch(() => []), 2e3, []),
-      withTimeout(dns.resolve6(host).catch(() => []), 2e3, [])
-    ]);
-    const all = [...v4, ...v6];
+    let all = [];
+    if (typeof process === "undefined" || !process.versions?.node) {
+      const [v4, v6] = await Promise.all([dohAnswer(host, "A"), dohAnswer(host, "AAAA")]);
+      all = [...v4, ...v6];
+    } else {
+      const dns = await import("node:dns/promises");
+      const [v4, v6] = await Promise.all([
+        withTimeout(dns.resolve4(host).catch(() => []), 2e3, []),
+        withTimeout(dns.resolve6(host).catch(() => []), 2e3, [])
+      ]);
+      all = [...v4, ...v6];
+    }
     if (all.length === 0) return false;
     return all.every((ip) => !isPrivateHost2(ip));
   } catch {

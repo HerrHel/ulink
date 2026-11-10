@@ -59,21 +59,48 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
  * 仅校验 hostname 字面量挡不住「域名解析到内网 IP」——攻击者可用
  * localtest.me 之类域名指向 127.0.0.1 / 169.254.0.23（云元数据）。
  * 这里解析 A/AAAA，任一记录落入私有段即拒绝（fail-closed）。
- * CF Pages 边缘无 node:dns，退化为字面量校验（该部署已退役，生产走 CloudBase）。
+ * CloudBase/Node 走 node:dns；CF Pages 边缘无 node:dns，改用 DoH 兜底。
  */
+/** CF 边缘无 node:dns 时的 DoH 兜底（Cloudflare DNS JSON 接口）。 */
+async function dohAnswer(host: string, type: 'A' | 'AAAA'): Promise<string[]> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 2500)
+  try {
+    const res = await fetch(
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=${type}`,
+      { headers: { accept: 'application/dns-json' }, signal: controller.signal },
+    )
+    if (!res.ok) return []
+    const data = (await res.json()) as { Answer?: Array<{ type?: number; data?: string }> }
+    return (data.Answer || [])
+      .filter((a) => (a.type === 1 || a.type === 28) && typeof a.data === 'string')
+      .map((a) => String(a.data))
+  } catch {
+    return []
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function isHostDnsSafe(hostname: string): Promise<boolean> {
   const host = normalizeHost(hostname)
   if (isPrivateHost(host)) return false
   // 公网 IP 字面量：isPrivateHost 已判过私有段，无需再做 DNS（resolve4 对 IP 字面量会失败）
   if (parseIPv4Hostname(host) || parseIPv6Hostname(host)) return true
-  if (typeof process === 'undefined' || !process.versions?.node) return true
   try {
-    const dns = await import('node:dns/promises')
-    const [v4, v6] = await Promise.all([
-      withTimeout(dns.resolve4(host).catch(() => [] as string[]), 2000, [] as string[]),
-      withTimeout(dns.resolve6(host).catch(() => [] as string[]), 2000, [] as string[]),
-    ])
-    const all = [...v4, ...v6]
+    let all: string[] = []
+    if (typeof process === 'undefined' || !process.versions?.node) {
+      // CF 边缘：无 node:dns，用 DoH（与 CF 版 check-link 同口径）
+      const [v4, v6] = await Promise.all([dohAnswer(host, 'A'), dohAnswer(host, 'AAAA')])
+      all = [...v4, ...v6]
+    } else {
+      const dns = await import('node:dns/promises')
+      const [v4, v6] = await Promise.all([
+        withTimeout(dns.resolve4(host).catch(() => [] as string[]), 2000, [] as string[]),
+        withTimeout(dns.resolve6(host).catch(() => [] as string[]), 2000, [] as string[]),
+      ])
+      all = [...v4, ...v6]
+    }
     if (all.length === 0) return false
     return all.every((ip) => !isPrivateHost(ip))
   } catch {
