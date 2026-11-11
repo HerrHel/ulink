@@ -75,9 +75,14 @@
                     </svg>
                   </span>
                 </button>
-                <div v-if="openSummaries[turn.id]" class="send-summary-body">
-                  <div v-for="(line, lIdx) in getSendSummaryLines(turn.sendSummary)" :key="lIdx" class="send-summary-line">{{ line }}</div>
-                  <div class="send-summary-note">{{ t('ai.sendSummaryNote') }}</div>
+                <!-- 折叠体：容器先长高、内容后浮现（与左侧点带同一套动效语言） -->
+                <div class="motion-collapse" :class="{ 'is-open': !!openSummaries[turn.id] }" :aria-hidden="!openSummaries[turn.id]">
+                  <div class="motion-collapse-inner">
+                    <div class="send-summary-body">
+                      <div v-for="(line, lIdx) in getSendSummaryLines(turn.sendSummary)" :key="lIdx" class="send-summary-line">{{ line }}</div>
+                      <div class="send-summary-note">{{ t('ai.sendSummaryNote') }}</div>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="chat-msg-actions user-actions">
@@ -168,13 +173,16 @@
                     </span>
                   </button>
 
-                  <div
-                    v-if="turn._thinkingOpen"
-                    :ref="(el) => setThinkingBodyRef(turn.id, el as HTMLElement | null)"
-                    class="chat-thinking-body"
-                    @scroll="handleThinkingScroll(turn.id, $event)"
-                  >
-                    <div class="chat-thinking-text">{{ turn.reasoning }}<span v-if="turn.isThinking" class="thinking-stream-cursor" aria-hidden="true"></span></div>
+                  <div class="motion-collapse" :class="{ 'is-open': !!turn._thinkingOpen }" :aria-hidden="!turn._thinkingOpen">
+                    <div class="motion-collapse-inner">
+                      <div
+                        :ref="(el) => setThinkingBodyRef(turn.id, el as HTMLElement | null)"
+                        class="chat-thinking-body"
+                        @scroll="handleThinkingScroll(turn.id, $event)"
+                      >
+                        <div class="chat-thinking-text">{{ turn.reasoning }}<span v-if="turn.isThinking" class="thinking-stream-cursor" aria-hidden="true"></span></div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -194,14 +202,18 @@
                       </svg>
                     </span>
                   </button>
-                  <div v-if="turn._traceOpen" class="chat-trace-dropdown">
-                    <div v-for="(step, sIdx) in turn.steps" :key="sIdx" class="chat-trace-step-item">
-                      <span class="trace-step-icon">
-                        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </span>
-                      <span class="trace-step-text">{{ step.text }}</span>
+                  <div class="motion-collapse" :class="{ 'is-open': !!turn._traceOpen }" :aria-hidden="!turn._traceOpen">
+                    <div class="motion-collapse-inner">
+                      <div class="chat-trace-dropdown">
+                        <div v-for="(step, sIdx) in turn.steps" :key="sIdx" class="chat-trace-step-item">
+                          <span class="trace-step-icon">
+                            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </span>
+                          <span class="trace-step-text">{{ step.text }}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1393,10 +1405,13 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   background: var(--amber-light, rgba(245, 158, 11, 0.1));
 }
 
+/* 绿色在本站是「成功 / 已完成」语义（已复制、diff 完成、DAG 完成），
+   存为笔记只是一个普通动作：hover 与同组的追加/定位一样走品牌色，
+   绿色留给真正落地的成功态（否则悬停时的青绿会被误读成「已保存」）。 */
 .writeback-new:hover {
-  border-color: var(--green);
-  color: var(--green);
-  background: var(--green-light);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
 }
 
 .writeback-locate:hover {

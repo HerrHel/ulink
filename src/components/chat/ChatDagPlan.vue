@@ -88,19 +88,23 @@
 
     <!-- 底部一键执行全部栏 -->
     <div class="dag-card-footer">
-      <button
-        v-if="!card.completed"
-        type="button"
-        class="dag-execute-all-btn"
-        :disabled="card.executing"
-        @click="emit('executeAll')"
-      >
-        <span v-if="card.executing" class="dag-spin">⏳</span>
-        <span>{{ card.executing ? t('ai.dagPlanExecuting') : t('ai.dagPlanExecuteButton') }}</span>
-      </button>
-      <div v-else class="dag-completed-notice">
-        <span>✓ {{ t('ai.dagPlanCompleted') }}</span>
-      </div>
+      <!-- 执行完成不是「换一张卡」，而是同一位置的状态交接：旧态先退、新态再进 -->
+      <Transition name="card-swap" mode="out-in">
+        <button
+          v-if="!card.completed"
+          key="execute"
+          type="button"
+          class="dag-execute-all-btn"
+          :disabled="card.executing"
+          @click="emit('executeAll')"
+        >
+          <span v-if="card.executing" class="dag-spin">⏳</span>
+          <span>{{ card.executing ? t('ai.dagPlanExecuting') : t('ai.dagPlanExecuteButton') }}</span>
+        </button>
+        <div v-else key="done" class="dag-completed-notice">
+          <span>✓ {{ t('ai.dagPlanCompleted') }}</span>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>

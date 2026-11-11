@@ -78,6 +78,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     handleStopGenerating,
     handleCreateSession,
     switchSession,
+    handleRenameSession,
     handleDeleteSession,
     handleClearAllSessions,
   } = useAiChatSessions({
@@ -270,6 +271,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     currentSessionTitle,
     handleCreateSession,
     switchSession,
+    handleRenameSession,
     handleDeleteSession,
     handleClearAllSessions,
     persistCurrentSession,

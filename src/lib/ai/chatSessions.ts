@@ -275,6 +275,29 @@ export function updateSession(
   return all
 }
 
+/**
+ * 手动重命名会话。
+ * - 空标题 = 交还给自动命名（丢弃自定义标题，重新由首条提问提炼），而不是留一个空壳；
+ * - 不动 updatedAt：改名不是「有新内容」，历史列表不该因此重排；
+ * - 返回重新排序后的全量列表，供调用方直接回写响应式状态。
+ */
+export function renameSession(sessionId: string, title: string): AiChatSession[] {
+  const all = loadSessions()
+  const idx = all.findIndex((s) => s.id === sessionId)
+  if (idx === -1) return all
+  const cur = all[idx]
+  const clean = title.trim().replace(/\s+/g, ' ')
+  const firstUserTurn = cur.turns.find((t) => t.role === 'user')
+  const next = clean
+    ? clean.slice(0, 60)
+    : firstUserTurn
+      ? extractSessionTitle(firstUserTurn.content)
+      : ''
+  all[idx] = { ...cur, title: next }
+  saveSessions(all)
+  return loadSessions()
+}
+
 /** 删除指定会话 */
 export function deleteSessionById(sessionId: string): AiChatSession[] {
   const all = loadSessions().filter((s) => s.id !== sessionId)

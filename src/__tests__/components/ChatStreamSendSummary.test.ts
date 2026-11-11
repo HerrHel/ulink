@@ -74,8 +74,10 @@ describe('ChatStream — 发送前透明摘要条', () => {
 
     const toggle = wrapper.get('.send-summary-toggle')
     expect(toggle.text()).toContain(t('ai.sendSummaryTitle'))
-    // 初始折叠：不披露明细
-    expect(wrapper.find('.send-summary-body').exists()).toBe(false)
+    // 初始折叠：明细不占位（高度收成 0，且对读屏隐藏）
+    const collapse = wrapper.get('.chat-send-summary .motion-collapse')
+    expect(collapse.classes()).not.toContain('is-open')
+    expect(collapse.attributes('aria-hidden')).toBe('true')
 
     await toggle.trigger('click')
     const body = wrapper.get('.send-summary-body')
@@ -99,7 +101,7 @@ describe('ChatStream — 发送前透明摘要条', () => {
 
     // 再点收起
     await toggle.trigger('click')
-    expect(wrapper.find('.send-summary-body').exists()).toBe(false)
+    expect(wrapper.get('.chat-send-summary .motion-collapse').classes()).not.toContain('is-open')
   })
 
   it('未截断的切片不显示截断标注，未注入全库检索如实标注', async () => {

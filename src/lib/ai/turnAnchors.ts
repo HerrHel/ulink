@@ -30,3 +30,49 @@ export function buildTurnAnchors(
   }
   return out
 }
+
+export interface VisibleTurnAnchor extends TurnAnchor {
+  /** 在完整会话中的序号（0 起），用于「第 N 轮」的无障碍标签 */
+  index: number
+  /** 窗口上方还有被折叠的轮次 → 用这个点做「更上面还有」的淡化提示 */
+  fadeTop: boolean
+  /** 窗口下方还有被折叠的轮次 → 用这个点做「更下面还有」的淡化提示 */
+  fadeBottom: boolean
+}
+
+/**
+ * 点列窗口化：会话再多也只铺 maxDots 个点，用两端淡化表示「还有」。
+ *
+ * 规则（与设计约定一致）：
+ *   - 当前轮在开头、下面还有 → 最后一个点淡化；
+ *   - 当前轮在中间、上下都有 → 首尾都淡化；
+ *   - 当前轮在末尾、上面还有 → 第一个点淡化；
+ *   - 当前轮本身永远不淡化（它是当前定位）。
+ *
+ * 窗口以当前轮为中心滑动，并 clamp 在 [0, total - maxDots]，保证窗口内始终
+ * 是连续的 maxDots 轮。
+ */
+export function computeVisibleAnchors(
+  anchors: readonly TurnAnchor[],
+  activeId: string | null,
+  maxDots: number,
+): VisibleTurnAnchor[] {
+  const limit = Math.max(2, Math.floor(Number(maxDots) || 0))
+  const total = anchors.length
+  if (total <= limit) {
+    return anchors.map((a, i) => ({ ...a, index: i, fadeTop: false, fadeBottom: false }))
+  }
+
+  const found = anchors.findIndex(a => a.id === activeId)
+  const activeIdx = found < 0 ? 0 : found
+  const start = Math.max(0, Math.min(Math.round(activeIdx - (limit - 1) / 2), total - limit))
+  const hasAbove = start > 0
+  const hasBelow = start + limit < total
+
+  return anchors.slice(start, start + limit).map((a, i) => ({
+    ...a,
+    index: start + i,
+    fadeTop: hasAbove && i === 0 && a.id !== activeId,
+    fadeBottom: hasBelow && i === limit - 1 && a.id !== activeId,
+  }))
+}

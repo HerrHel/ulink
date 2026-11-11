@@ -28,5 +28,8 @@
 @import './batch.css';
 @import './settings.css';
 
+/* 共享动效语法（折叠体 / 卡片状态互换 / 视图换上） */
+@import './motion.css';
+
 /* Responsive */
 @import './responsive.css';

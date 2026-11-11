@@ -1,0 +1,86 @@
+/* ==================== MOTION ====================
+ * 站内共享的「动效语法」，统一在这里定义，避免每个组件各写一套。
+ *
+ * 目前只有一条语法：**容器先长，内容后跟随**。
+ * 参考实现是 AI 工作台左侧的点带（ChatTurnRail）：展开时外壳先获得空间，
+ * 文字/轴线随后浮现；收起时反过来，且比展开快。凡是「点一下多出一块内容」
+ * 的地方都应该走这里，而不是 v-if 直接挂/卸。
+ */
+
+/* ── 1. 折叠体：0fr → 1fr ─────────────────────────────────────────────
+ * 用法：
+ *   <div class="motion-collapse" :class="{ 'is-open': open }">
+ *     <div class="motion-collapse-inner"> …内容… </div>
+ *   </div>
+ *
+ * 用 grid 轨道而不是 max-height：折叠内容的高度往往不可预知（摘要行数、
+ * 工具步数、思考长度都会变），max-height 要么截断、要么收起时留一段空白等待。
+ * grid 按真实高度插值，不需要 JS 测高，也不用给每个实例配一个魔法数字。
+ */
+.motion-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  overflow: hidden;
+  /* 收起方向：快而不拖 */
+  transition: grid-template-rows 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.motion-collapse-inner {
+  min-height: 0;
+  /* flow-root：挡住子元素 margin 外溢，否则 0fr 轨道会被子元素的上边距撑开 */
+  display: flow-root;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.motion-collapse.is-open {
+  grid-template-rows: 1fr;
+  /* 展开方向：可感知的 0.26s，容器先动 */
+  transition: grid-template-rows 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.motion-collapse.is-open > .motion-collapse-inner {
+  opacity: 1;
+  /* 内容让位给容器：等外壳有空间了再浮现 */
+  transition: opacity 0.16s ease 0.08s;
+}
+
+/* ── 2. 卡片内状态互换（按钮 ⇄ 已完成提示）──────────────────────────
+ * 配合 <Transition name="card-swap" mode="out-in">：旧状态先退场，新状态再进场，
+ * 避免两个状态在同一位置硬切造成「闪一下」。
+ */
+.card-swap-enter-active,
+.card-swap-leave-active {
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px) scale(0.985);
+}
+
+.card-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-3px) scale(0.985);
+}
+
+/* ── 3. 视图内容整体换上（切换会话）─────────────────────────────────
+ * 只做一次轻量上浮淡入，不做交叉淡入：40 轮节点同时动画既贵又糊。
+ */
+.view-swap-in {
+  animation: viewSwapIn 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes viewSwapIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

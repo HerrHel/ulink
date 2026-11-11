@@ -162,35 +162,9 @@
         </div>
       </div>
 
-      <!-- 2. 对话态：居中多轮瀑布流（max-width 760px） -->
-      <div v-else class="ai-dialogue-stream-wrap">
-        <!-- 多轮对话时轻量展示的会话微顶栏 -->
-        <div class="ai-stream-meta-header">
-          <div class="stream-session-title">
-            <span class="stream-title-text">{{ currentSessionTitle }}</span>
-            <button
-              class="stream-history-pill-btn"
-              @click="openHistoryDrawer"
-              :title="isZh ? '打开会话历史' : 'Open history'"
-            >
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-              </svg>
-              <span>{{ sessions.length }}</span>
-            </button>
-          </div>
-          <button
-            class="stream-new-chat-btn"
-            @click="onNewConversation"
-            :title="t('nav.aiChatAction')"
-          >
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span>{{ isZh ? '开启新对话' : 'New Chat' }}</span>
-          </button>
-        </div>
-
+      <!-- 2. 对话态：居中多轮瀑布流（max-width 760px）
+           key 跟着会话走：换会话时整列重挂一次，播一遍轻上浮，避免硬切 -->
+      <div v-else :key="currentSessionId" class="ai-dialogue-stream-wrap view-swap-in">
         <ChatStream
           :chat-turns="chatTurns"
           :dynamic-quick-hints="dynamicQuickHints"
@@ -230,13 +204,24 @@
       </div>
     </div>
 
+    <!-- 对话态常驻顶栏：历史会话 / 会话标题（可就地改名） / 新对话，滚到哪都在 -->
+    <Transition name="conv-header-in">
+      <ChatConvHeader
+        v-if="!isCurrentSessionEmpty"
+        :title="convHeaderTitle"
+        :session-count="sessions.length"
+        @open-history="openHistoryDrawer"
+        @new-chat="onNewConversation"
+        @rename="onRenameSession"
+      />
+    </Transition>
+
     <!-- 左侧消息锚点：hover 展开本会话各轮提问，点击快速跳转（不占阅读宽度） -->
     <ChatTurnRail
       v-if="!isCurrentSessionEmpty"
       :turns="chatTurns"
       :active-id="activeTurnId"
       @jump="jumpToTurn"
-      @open-history="openHistoryDrawer"
     />
 
     <!-- 对话态悬浮居中输入框 -->
@@ -369,10 +354,11 @@
                 {{ historySearchQuery ? (isZh ? '无匹配会话' : 'No matches found') : (isZh ? '暂无历史会话' : 'No chat history') }}
               </div>
               <div
-                v-for="s in filteredHistorySessions"
+                v-for="(s, rowIdx) in filteredHistorySessions"
                 :key="s.id"
                 class="drawer-session-card"
                 :class="{ active: s.id === currentSessionId }"
+                :style="{ '--row-i': Math.min(rowIdx, 9) }"
                 @click="selectSessionFromDrawer(s.id)"
               >
                 <div class="session-card-main">
@@ -421,8 +407,10 @@ import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { t, isZh } from '../../i18n/index.js'
 import ChatStream from './ChatStream.vue'
+import ChatConvHeader from './ChatConvHeader.vue'
 import ChatTurnRail from './ChatTurnRail.vue'
 import { buildTurnAnchors } from '../../lib/ai/turnAnchors.js'
+import { extractSessionTitle, isDefaultSessionTitle } from '../../lib/ai/chatSessions.js'
 import { useAiChat, type ChatTurn } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
@@ -494,9 +482,9 @@ const {
   currentSessionId,
   chatTurns,
   isCurrentSessionEmpty,
-  currentSessionTitle,
   handleCreateSession,
   switchSession,
+  handleRenameSession,
   handleDeleteSession,
   handleClearAllSessions,
   aiQuery,
@@ -639,6 +627,17 @@ const recentSessionsList = computed(() => {
   return sessions.value.slice(0, 5)
 })
 
+/**
+ * 顶栏标题：自定义/自动标题 > 首句提炼 > 中性兜底。
+ * 不复用面板标题「AI 工作台」——顶栏里再写一次面板名，等于没说这条会话是什么。
+ */
+const convHeaderTitle = computed(() => {
+  const stored = sessions.value.find((s) => s.id === currentSessionId.value)?.title
+  if (stored && !isDefaultSessionTitle(stored)) return stored
+  const firstUser = chatTurns.value.find((turn) => turn.role === 'user')
+  return extractSessionTitle(firstUser?.content || '') || t('ai.convUntitled')
+})
+
 function onSelectRecentSession(sid: string) {
   switchSession(sid)
   nextTick(() => {
@@ -707,13 +706,14 @@ let spyRafId = 0
 function updateActiveTurnId() {
   spyRafId = 0
   const container = scrollContainerRef.value
-  if (!container || isCurrentSessionEmpty.value) return
+  if (!container) return
+  if (isCurrentSessionEmpty.value) return
   const els = Array.from(container.querySelectorAll<HTMLElement>('[data-turn-id]'))
   if (els.length === 0) {
     activeTurnId.value = null
     return
   }
-  // 让出 sticky 会话顶栏：只有滚过这条线的提问才算「当前轮」
+  // 让出常驻会话顶栏：只有滚过这条线的提问才算「当前轮」
   const threshold = container.getBoundingClientRect().top + 88
   let current: string | null = null
   for (const el of els) {
@@ -736,9 +736,14 @@ function jumpToTurn(id: string) {
     .find(node => node.dataset.turnId === id)
   if (!el) return
   activeTurnId.value = id
-  // jsdom / 旧浏览器未实现时静默跳过，不抛错
-  if (typeof el.scrollIntoView === 'function') {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  // 只滚内层 .ai-scroll-view：scrollIntoView 会连带滚动外层 .panel-content / 页面，
+  // 用户实测「定位一条消息却把整个页面上移」（左侧导航与标题一起跑掉）。
+  const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top
+  const target = Math.max(0, container.scrollTop + delta - 56) // 让出常驻会话顶栏（46px）
+  if (typeof container.scrollTo === 'function') {
+    container.scrollTo({ top: target, behavior: 'smooth' })
+  } else {
+    container.scrollTop = target
   }
 }
 
@@ -766,23 +771,84 @@ onUnmounted(() => {
   if (spyRafId && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(spyRafId)
 })
 
+/**
+ * 输入胶囊的形态迁移（FLIP）：首问提交 / 开新对话时，输入框在「居中大胶囊」与
+ * 「底部 dock」之间是一段位移，而不是两个控件硬切。
+ *
+ * 做法：拿到源胶囊的 rect → 等 DOM 换成目标胶囊 → 先把目标胶囊用 transform 摆回
+ * 源位置，再放回原位。缩放只按宽度比（约 0.94），文字不会被拉变形。
+ * 结构不同（例如带附件行导致高度差）或系统要求减少动效时直接跳过，不硬凑。
+ */
+function findCapsule(el: HTMLElement | null | undefined): HTMLElement | null {
+  return (el?.closest('.ai-capsule-input-container') as HTMLElement | null) ?? null
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+async function morphCapsule(from: DOMRect | null, getTarget: () => HTMLElement | null) {
+  if (!from || prefersReducedMotion()) return
+  await nextTick()
+  const to = getTarget()
+  if (!to) return
+  const rect = to.getBoundingClientRect()
+  if (!rect.width || !rect.height) return
+  // 高度差过大说明两边结构不一样（比如一侧多了附件行），位移会在结尾「跳」一下
+  if (Math.abs(rect.height - from.height) > 10) return
+  const dy = from.top - rect.top
+  if (Math.abs(dy) < 40) return
+  const dx = from.left - rect.left
+  // 用真实宽度比做缩放，两端才能严丝合缝地接上；比例差太多说明不是同一个形态，直接跳过
+  const scale = from.width / rect.width
+  if (!Number.isFinite(scale) || scale < 0.75 || scale > 1.35) return
+  to.style.transformOrigin = 'top left'
+  to.style.willChange = 'transform'
+  to.style.transition = 'none'
+  to.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`
+  void to.offsetWidth // 提交起始帧，否则浏览器会把两次赋值合并成「没有动画」
+  requestAnimationFrame(() => {
+    to.style.transition = 'transform 0.34s cubic-bezier(0.4, 0, 0.2, 1)'
+    to.style.transform = 'translate(0, 0) scale(1)'
+  })
+  window.setTimeout(() => {
+    to.style.transform = ''
+    to.style.transition = ''
+    to.style.willChange = ''
+    to.style.transformOrigin = ''
+  }, 420)
+}
+
 function submitQuery() {
   const ta = activeTa.value
   if (ta && ta.value && !aiQuery.value) {
     aiQuery.value = ta.value
   }
   if (!hasSubmittableContent.value) return
+  // 先记下首问胶囊的位置，等对话态渲染出来再播放位移
+  const heroRect = findCapsule(aiTextareaRef.value)?.getBoundingClientRect() ?? null
   handleAiSubmit()
+  void morphCapsule(heroRect, () => findCapsule(aiTextareaDockRef.value))
   scrollToBottom()
 }
 
 function onNewConversation() {
+  const dockRect = findCapsule(aiTextareaDockRef.value)?.getBoundingClientRect() ?? null
   handleCreateSession()
   aiQuery.value = ''
+  void morphCapsule(dockRect, () => findCapsule(aiTextareaRef.value))
   nextTick(() => {
     adjustTextareaHeight()
     if (!ui.isMobile) activeTa.value?.focus()
   })
+}
+
+/** 顶栏就地改名：空串 = 交还给自动命名（由 store 从首条提问重新提炼） */
+function onRenameSession(title: string) {
+  if (!currentSessionId.value) return
+  handleRenameSession(currentSessionId.value, title)
 }
 
 function triggerFileInput() {
@@ -1297,55 +1363,23 @@ watch(aiQuery, () => {
   white-space: nowrap;
 }
 
-/* ── 对话态：多轮流与微型会话栏 ── */
+/* ── 对话态：多轮流（顶部留出常驻会话顶栏的高度，静止时正文不钻到雾化层下） ── */
 .ai-dialogue-stream-wrap {
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 16px 20px 120px;
+  padding: 58px 20px 120px;
   flex: 1;
 }
 
-.ai-stream-meta-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--border-light);
-  /* 会话很长时「开启新对话」也要随时可点：钉在主滚动视口顶部，不随内容滚走。
-     不透明背景防止消息从下方透过；z-index 低于底部悬浮输入框(15)，高于消息流。 */
-  position: sticky;
-  top: 0;
-  z-index: 12;
-  background: var(--bg);
+/* 顶栏随会话态淡入淡出（首条消息发出后出现，新对话回空态时消失） */
+.conv-header-in-enter-active,
+.conv-header-in-leave-active {
+  transition: opacity 0.2s ease;
 }
-
-.stream-title-text {
-  font-size:var(--fs-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.stream-new-chat-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  font-size:var(--fs-sm);
-  font-weight: 500;
-  color: var(--text-muted);
-  background: transparent;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm, 6px);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.stream-new-chat-btn:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-light);
+.conv-header-in-enter-from,
+.conv-header-in-leave-to {
+  opacity: 0;
 }
 
 .ai-dock-floating-container {
@@ -1392,27 +1426,6 @@ watch(aiQuery, () => {
   border-radius: var(--radius-full);
   border: 1px solid var(--border-light);
   line-height: 1.1;
-}
-
-.stream-history-pill-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  background: var(--surface-hover);
-  border: 1px solid var(--border-light);
-  color: var(--text-muted);
-  font-size:var(--fs-xs);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  margin-left: 8px;
-}
-
-.stream-history-pill-btn:hover {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--border);
 }
 
 /* ── 历史会话滑动抽屉（Raycast / Perplexity 级滑出抽屉） ── */
@@ -1583,6 +1596,20 @@ watch(aiQuery, () => {
   border: 1px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
+  /* 行比容器慢半拍：抽屉先滑到位，列表再依次浮现（与点带同一套节奏） */
+  animation: drawerRowIn 0.24s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: calc(var(--row-i, 0) * 18ms);
+}
+
+@keyframes drawerRowIn {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .drawer-session-card:hover {
@@ -1714,7 +1741,7 @@ watch(aiQuery, () => {
     padding: 20px 14px 60px;
   }
   .ai-dialogue-stream-wrap {
-    padding: 12px 12px 110px;
+    padding: 52px 12px 110px;
   }
   .ai-dock-floating-container {
     padding: 6px 12px 14px;

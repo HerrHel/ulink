@@ -212,13 +212,13 @@ describe('AI 专属栏与沉浸式视图状态流', () => {
 
     // 切换到了非空会话 session-1，因此进入了对话流（不再是 clean-hero）
     expect(wrapper.find('.ai-clean-hero').exists()).toBe(false)
-    expect(wrapper.find('.stream-title-text').text()).toContain('Vue3')
+    expect(wrapper.find('.conv-title-text').text()).toContain('Vue3')
 
     // 抽屉已自动关闭
     expect(document.body.querySelector('.ai-history-drawer')).toBeNull()
 
-    // 5. 对话流顶栏的历史胶囊按钮也能再次打开抽屉
-    const streamHistoryBtn = wrapper.find('.stream-history-pill-btn')
+    // 5. 常驻顶栏的历史按钮也能再次打开抽屉
+    const streamHistoryBtn = wrapper.find('.conv-history-btn')
     expect(streamHistoryBtn.exists()).toBe(true)
     await streamHistoryBtn.trigger('click')
     await nextTick()
@@ -309,5 +309,40 @@ describe('AI 专属栏与沉浸式视图状态流', () => {
     ui.panels.detail = true
     ui.triggerAiNewChat()
     expect(ui.panels.detail).toBe(false)
+  })
+
+  it('11. 常驻顶栏就地改名：写回 localStorage；清空标题则交还自动命名', async () => {
+    const now = Date.now()
+    localStorage.setItem('lv_ai_sessions_v1', JSON.stringify([
+      {
+        id: 'session-a',
+        title: '自动标题',
+        turns: [{ id: 't1', role: 'user', content: '帮我找 bug', timestamp: now }],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]))
+    localStorage.setItem('lv_ai_cur_session_v1', 'session-a')
+
+    const wrapper = mount(AiWorkspace, { attachTo: document.body })
+    expect(wrapper.find('.conv-title-text').text()).toBe('自动标题')
+
+    await wrapper.find('.conv-title').trigger('click')
+    await wrapper.find('.conv-title-input').setValue('季度复盘')
+    await wrapper.find('.conv-title-input').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+
+    expect(wrapper.find('.conv-title-text').text()).toBe('季度复盘')
+    const saved = JSON.parse(localStorage.getItem('lv_ai_sessions_v1') || '[]')
+    expect(saved[0].title).toBe('季度复盘')
+
+    // 清空标题 → 交还自动命名（由首条提问重新提炼），不留空壳
+    await wrapper.find('.conv-title').trigger('click')
+    await wrapper.find('.conv-title-input').setValue('   ')
+    await wrapper.find('.conv-title-input').trigger('keydown', { key: 'Enter' })
+    await nextTick()
+    expect(wrapper.find('.conv-title-text').text()).toBe('帮我找 bug')
+
+    wrapper.unmount()
   })
 })

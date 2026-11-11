@@ -96,22 +96,26 @@
 
     <!-- 底部确认应用按钮 -->
     <div class="diff-card-footer">
-      <button
-        v-if="!card.completed"
-        type="button"
-        class="diff-apply-btn"
-        :disabled="card.executing || selectedCount === 0"
-        @click="emit('applyDiff')"
-      >
-        <span v-if="card.executing" class="diff-spin-icon">⏳</span>
-        <span>
-          {{ card.executing ? t('ai.executing') : t('ai.draftDiffApplyButton') }}
-          <template v-if="!card.executing && selectedCount > 0"> ({{ selectedCount }})</template>
-        </span>
-      </button>
-      <div v-else class="diff-completed-notice">
-        <span>✓ {{ t('ai.diffApplied') }}</span>
-      </div>
+      <!-- 执行完成不是「换一张卡」，而是同一位置的状态交接：旧态先退、新态再进 -->
+      <Transition name="card-swap" mode="out-in">
+        <button
+          v-if="!card.completed"
+          key="apply"
+          type="button"
+          class="diff-apply-btn"
+          :disabled="card.executing || selectedCount === 0"
+          @click="emit('applyDiff')"
+        >
+          <span v-if="card.executing" class="diff-spin-icon">⏳</span>
+          <span>
+            {{ card.executing ? t('ai.executing') : t('ai.draftDiffApplyButton') }}
+            <template v-if="!card.executing && selectedCount > 0"> ({{ selectedCount }})</template>
+          </span>
+        </button>
+        <div v-else key="done" class="diff-completed-notice">
+          <span>✓ {{ t('ai.diffApplied') }}</span>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>

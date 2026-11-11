@@ -14,6 +14,7 @@ import {
   saveSessions,
   createNewSession,
   updateSession,
+  renameSession,
   deleteSessionById,
   clearAllSessions,
   getCurrentSessionId,
@@ -87,6 +88,12 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     if (!s || isDefaultSessionTitle(s.title)) return t('ai.sessionDefaultTitle')
     return s.title
   })
+
+  /** 手动重命名当前/指定会话；空标题 = 恢复自动命名 */
+  function handleRenameSession(id: string, title: string) {
+    if (!id) return
+    sessions.value = renameSession(id, title)
+  }
 
   // ── 停止生成 ──
   const abortSlot: AbortControllerSlot = { current: null }
@@ -215,6 +222,7 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     handleStopGenerating,
     handleCreateSession,
     switchSession,
+    handleRenameSession,
     handleDeleteSession,
     handleClearAllSessions,
   }
