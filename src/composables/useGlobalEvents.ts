@@ -103,6 +103,9 @@ export function useGlobalEvents(options: GlobalEventsOptions = {}) {
     // 分享只读态：一律不弹右键菜单（菜单项全是写操作），并阻止浏览器默认菜单
     if (ui.shareMode) { e.preventDefault(); return }
     if (isMobile()) { e.preventDefault(); return }
+    // AI 工作台与聊天面板区域：显示浏览器原生右键菜单（复制/粘贴/划词检索等），不触发书签自定义菜单
+    if (ui.activeView === 'ai' && (e.target as HTMLElement).closest('#panelContent, .ai-workspace, #aiWorkspace')) return
+    if ((e.target as HTMLElement).closest('.ai-workspace, #aiWorkspace, .chat-stream, .chat-panel-shell, .chat-dock-wrap')) return
     if (ui.batchMode && (e.target as HTMLElement).closest('.card, .group-card, .group-body, .sub-sites')) return
     if (!onShowCtxMenu) return
 

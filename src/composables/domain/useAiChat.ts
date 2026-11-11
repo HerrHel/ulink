@@ -217,19 +217,23 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     const idx = chatTurns.value.findIndex((t) => t.id === turn.id)
     if (idx === -1) return
 
+    // 0. 若当前有在途生成请求，立即中止
+    abortInFlight()
+
     // 1. 将原输入内容填回输入框
     aiQuery.value = turn.content
     onQueryChanged?.()
 
-    // 2. 从对话流中移除该条消息及其伴随的助手回复
-    const nextTurn = chatTurns.value[idx + 1]
-    const removeCount = nextTurn && nextTurn.role === 'assistant' ? 2 : 1
-    chatTurns.value.splice(idx, removeCount)
+    // 2. 从对话流中截断移除该条消息及其后续所有消息（因果链回滚到该轮发起前，对齐主流 Agent 标准行为）
+    chatTurns.value.splice(idx)
 
     // 3. 持久化当前会话
     sessions.value = updateSession(currentSessionId.value, chatTurns.value)
 
-    // 4. 聚焦输入框便于修改重发（视觉状态已清晰直达，无需全局弹窗阻断）
+    // 4. 通知对话流变化
+    onTurnsChanged?.()
+
+    // 5. 聚焦输入框便于修改重发（视觉状态已清晰直达，无需全局弹窗阻断）
     focusInput?.()
   }
 
@@ -282,6 +286,7 @@ export function useAiChat(options: UseAiChatOptions = {}) {
     hasUnaddedInTurn,
     addAllInTurn,
     revokeUserMessage,
+    abortSlot,
     abortInFlight,
     handleStopGenerating,
     // 卡片辅助
