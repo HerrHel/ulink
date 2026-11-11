@@ -274,7 +274,9 @@ function _onDrop(e: DragEvent) {
   _hideDragCursor();
   _hideDragHint();
   const p = dragPayload(e);
-  if (!p) return;
+  if (!p) { clearDragState(); return; }
+
+  try {
 
   // 0. 落入 AI 助手对话框、顶栏 AI 按钮或沉浸式 AI 工作台（由 AI 读取此卡片/笔记/分类）
   const aiTarget = (target as HTMLElement)?.closest?.(
@@ -350,6 +352,9 @@ function _onDrop(e: DragEvent) {
   ) {
     handleGridDrop(e, p);
     return;
+  }
+  } finally {
+    clearDragState();
   }
 }
 
@@ -726,9 +731,17 @@ export function useDragDrop() {
   const onVisibilityChange = () => { if (document.visibilityState === 'hidden') clearDragState() }
   const onBlur = () => clearDragState()
 
+  const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') clearDragState() }
+  const onMouseUp = () => {
+    try { if (useUIStore().isDraggingCard) clearDragState() } catch (_) { /* store unready */ }
+  }
+
   onMounted(() => {
     document.addEventListener('dragstart', _onDragStart)
     document.addEventListener('dragend', _onDragEnd)
+    window.addEventListener('dragend', _onDragEnd)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('mouseup', onMouseUp)
     document.addEventListener('dragover', _onDragOver)
     document.addEventListener('drop', _onDrop)
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -738,6 +751,9 @@ export function useDragDrop() {
   onUnmounted(() => {
     document.removeEventListener('dragstart', _onDragStart)
     document.removeEventListener('dragend', _onDragEnd)
+    window.removeEventListener('dragend', _onDragEnd)
+    document.removeEventListener('keydown', onKeyDown)
+    window.removeEventListener('mouseup', onMouseUp)
     document.removeEventListener('dragover', _onDragOver)
     document.removeEventListener('drop', _onDrop)
     document.removeEventListener('visibilitychange', onVisibilityChange)

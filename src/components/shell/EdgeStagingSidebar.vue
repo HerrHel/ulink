@@ -13,7 +13,7 @@
     <!-- 1. Drag Drop Target [+] (仅在暂存区完全为空且拖拽卡片时滑出) -->
     <Transition name="drop-zone-slide">
       <div
-        v-if="entries.length === 0 && ui.isDraggingCard"
+        v-if="!isDockVisible && entries.length === 0 && ui.isDraggingCard"
         class="edge-staging-drop-zone empty-state"
         :style="dockPanelStyle"
         :title="t('staging.dropToStage')"
@@ -608,7 +608,7 @@ const userExpandedEmpty = ref(false)
 // 面板展示判断：有数据时常驻（除非手动收起）；空态时若用户主动点击展开则展示（移动端无拖拽暂存，彻底隐藏）
 const isDockVisible = computed(() => {
   if (ui.isMobile) return false
-  if (ui.isDraggingCard) return true
+  if (ui.isDraggingCard && entries.value.length > 0) return true
   if (isCollapsed.value) return false
   if (entries.value.length > 0) return true
   return userExpandedEmpty.value
