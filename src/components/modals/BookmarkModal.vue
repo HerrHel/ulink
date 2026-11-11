@@ -95,12 +95,86 @@
               <option v-for="cat in categoryOptions" :key="cat.id" :value="cat.id">{{ displayText(cat.name) }}</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="bmParentId">{{ t('modal.bookmark.parent') }}</label>
-            <select class="form-select" id="bmParentId" v-model="bmForm.parentId" @change="onParentChange">
-              <option :value="null">{{ t('common.none') }}</option>
-              <option v-for="b in parentOptions" :key="b.id" :value="b.id">{{ displayText(b.title) || b.url }}</option>
-            </select>
+          <!-- 父级书签可搜索下拉框 -->
+          <div class="form-group parent-select-wrap" ref="parentDropdownRef">
+            <label class="form-label">{{ t('modal.bookmark.parent') }}</label>
+            <button
+              ref="parentTriggerRef"
+              type="button"
+              class="form-select parent-trigger"
+              :class="{ 'is-open': parentDropdownOpen }"
+              @click="toggleParentDropdown"
+              :aria-expanded="parentDropdownOpen"
+              aria-haspopup="listbox"
+            >
+              <span class="parent-trigger-text">{{ selectedParentLabel }}</span>
+              <span class="parent-chevron" aria-hidden="true" v-html="I.chevronDown" />
+            </button>
+            <Teleport to="body">
+              <div
+                v-if="parentDropdownOpen"
+                ref="parentMenuRef"
+                class="parent-dropdown"
+                :style="parentDropdownStyle"
+                role="listbox"
+              >
+                <div class="parent-search-wrap">
+                  <input
+                    ref="parentSearchRef"
+                    type="text"
+                    class="parent-search-input"
+                    v-model="parentSearchQuery"
+                    :placeholder="t('modal.bookmark.parentSearchPlaceholder')"
+                    @keydown="onParentKeydown"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="parent-options-list" ref="parentListRef">
+                  <!-- 「无」选项 -->
+                  <div
+                    class="parent-option"
+                    :class="{ 'is-selected': !bmForm.parentId, 'is-active': parentActiveIdx === 0 }"
+                    data-opt-idx="0"
+                    @click="selectParent(null)"
+                    @mouseenter="parentActiveIdx = 0"
+                    role="option"
+                    :aria-selected="!bmForm.parentId"
+                  >
+                    <span class="parent-opt-title">{{ t('common.none') }}</span>
+                  </div>
+                  <!-- 排序+过滤后的父级列表 -->
+                  <div
+                    v-for="(b, idx) in filteredParentOptions"
+                    :key="b.id"
+                    class="parent-option"
+                    :class="{ 'is-selected': bmForm.parentId === b.id, 'is-active': parentActiveIdx === idx + 1 }"
+                    :data-opt-idx="idx + 1"
+                    @click="selectParent(b.id)"
+                    @mouseenter="parentActiveIdx = idx + 1"
+                    role="option"
+                    :aria-selected="bmForm.parentId === b.id"
+                  >
+                    <img
+                      v-if="b.icon"
+                      :src="b.icon"
+                      class="parent-opt-icon"
+                      alt=""
+                      loading="lazy"
+                      @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+                    />
+                    <span v-else class="parent-opt-icon-placeholder" />
+                    <div class="parent-opt-info">
+                      <span class="parent-opt-title">{{ displayText(b.title) || b.url }}</span>
+                      <span v-if="b.url && isValidUrl(b.url)" class="parent-opt-domain">{{ new URL(b.url).hostname }}</span>
+                    </div>
+                    <span v-if="bmForm.parentId === b.id" class="parent-opt-check" v-html="I.check" />
+                  </div>
+                  <div v-if="filteredParentOptions.length === 0 && parentSearchQuery" class="parent-no-results">
+                    {{ t('common.noResults') }}
+                  </div>
+                </div>
+              </div>
+            </Teleport>
           </div>
         </div>
         <div class="form-group">
@@ -147,7 +221,7 @@ import { useE2E } from '../../composables/domain/useE2E.js'
 import E2ELockOverlay from '../ui/E2ELockOverlay.vue'
 import ChildBookmarkEditModal from './ChildBookmarkEditModal.vue'
 import { e2eFieldsOpen as e2eFieldsOpenLogic, e2eHintAccount as e2eHintAccountLogic, e2eHintPassword as e2eHintPasswordLogic } from './e2eHintText.js'
-import { selectableParents, selectableChildren } from './bookmarkFormFilters.js'
+import { selectableParents, selectableChildren, sortedParents, filterParents } from './bookmarkFormFilters.js'
 import { useMaskClose } from '../../composables/ui/useMaskClose.js'
 import { t } from '../../i18n/index.js'
 
@@ -175,6 +249,130 @@ const selectableAttrs = computed(() =>
   store.selectableAttributes.filter(a => a.id !== ATTR_IS_GROUP)
 )
 const parentOptions = computed(() => selectableParents(store.bookmarks, bmForm.id, bmForm.parentId))
+
+// ── 父级书签可搜索下拉框 ──
+const parentSearchQuery = ref('')
+const parentDropdownOpen = ref(false)
+const parentSearchRef = ref<HTMLInputElement | null>(null)
+const parentDropdownRef = ref<HTMLElement | null>(null)
+const parentTriggerRef = ref<HTMLButtonElement | null>(null)
+const parentMenuRef = ref<HTMLElement | null>(null)
+const parentListRef = ref<HTMLElement | null>(null)
+const parentActiveIdx = ref(-1)
+const parentDropdownStyle = ref<Record<string, string>>({})
+
+const sortedParentOptions = computed(() => sortedParents(parentOptions.value))
+const filteredParentOptions = computed(() => filterParents(sortedParentOptions.value, parentSearchQuery.value))
+
+const selectedParentLabel = computed(() => {
+  if (!bmForm.parentId) return t('common.none')
+  const found = parentOptions.value.find(b => b.id === bmForm.parentId)
+  return found ? (displayText(found.title) || found.url) : t('common.none')
+})
+
+function isValidUrl(url: string): boolean {
+  try { new URL(url); return true } catch { return false }
+}
+
+function updateParentDropdownPos() {
+  const trigger = parentTriggerRef.value
+  if (!trigger) return
+  const rect = trigger.getBoundingClientRect()
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const width = Math.min(Math.max(rect.width, 240), vw - 16)
+  const left = Math.max(8, Math.min(rect.left, vw - width - 8))
+  const spaceBelow = vh - rect.bottom - 8
+  const spaceAbove = rect.top - 8
+  const preferUp = spaceBelow < 260 && spaceAbove > spaceBelow
+  const style: Record<string, string> = {
+    left: `${left}px`,
+    width: `${width}px`,
+  }
+  if (preferUp) {
+    style.bottom = `${vh - rect.top + 4}px`
+    style.maxHeight = `${Math.max(140, Math.min(280, spaceAbove - 4))}px`
+  } else {
+    style.top = `${rect.bottom + 4}px`
+    style.maxHeight = `${Math.max(140, Math.min(280, spaceBelow - 4))}px`
+  }
+  parentDropdownStyle.value = style
+}
+
+function openParentDropdown() {
+  updateParentDropdownPos()
+  parentDropdownOpen.value = true
+  parentSearchQuery.value = ''
+  parentActiveIdx.value = -1
+  nextTick(() => parentSearchRef.value?.focus())
+}
+
+function toggleParentDropdown() {
+  if (parentDropdownOpen.value) closeParentDropdown()
+  else openParentDropdown()
+}
+
+function closeParentDropdown() {
+  parentDropdownOpen.value = false
+  parentSearchQuery.value = ''
+  parentActiveIdx.value = -1
+}
+
+function selectParent(id: string | null) {
+  bmForm.parentId = id
+  onParentChange()
+  closeParentDropdown()
+}
+
+function scrollActiveOptionIntoView() {
+  nextTick(() => {
+    const el = parentListRef.value?.querySelector(`[data-opt-idx="${parentActiveIdx.value}"]`) as HTMLElement | null
+    el?.scrollIntoView({ block: 'nearest' })
+  })
+}
+
+function onParentKeydown(e: KeyboardEvent) {
+  const opts = filteredParentOptions.value
+  const total = opts.length + 1 // +1 for "无" option
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    parentActiveIdx.value = Math.min(parentActiveIdx.value + 1, total - 1)
+    scrollActiveOptionIntoView()
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    parentActiveIdx.value = Math.max(parentActiveIdx.value - 1, 0)
+    scrollActiveOptionIntoView()
+  } else if (e.key === 'Enter') {
+    e.preventDefault()
+    if (parentActiveIdx.value === 0) selectParent(null)
+    else if (parentActiveIdx.value > 0 && opts[parentActiveIdx.value - 1]) selectParent(opts[parentActiveIdx.value - 1].id)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    e.stopPropagation()
+    closeParentDropdown()
+    parentTriggerRef.value?.focus()
+  }
+}
+
+watch(parentSearchQuery, () => {
+  parentActiveIdx.value = -1
+})
+
+function onParentOutsideClick(e: MouseEvent) {
+  const target = e.target as Node
+  if (parentDropdownRef.value?.contains(target) || parentMenuRef.value?.contains(target)) return
+  closeParentDropdown()
+}
+
+watch(parentDropdownOpen, (open) => {
+  if (open) {
+    document.addEventListener('click', onParentOutsideClick, true)
+    window.addEventListener('resize', updateParentDropdownPos)
+  } else {
+    document.removeEventListener('click', onParentOutsideClick, true)
+    window.removeEventListener('resize', updateParentDropdownPos)
+  }
+})
 
 // 当前书签的子书签列表（仅编辑模式显示）
 const childBookmarks = computed(() => {
@@ -272,6 +470,7 @@ function onDismissAi() { dismissAiSuggestions() }
 // 组件由 App.vue 的 v-if 在打开瞬间创建，isOpen 在 setup 时已为 true，必须 immediate。
 watch(() => bmForm.isOpen, (open) => {
   if (open) nextTick(() => titleRef.value?.focus())
+  else closeParentDropdown()
 }, { immediate: true })
 
 onBeforeUnmount(() => {
@@ -279,5 +478,7 @@ onBeforeUnmount(() => {
     clearTimeout(bmForm._fetchTimer)
     bmForm._fetchTimer = null
   }
+  document.removeEventListener('click', onParentOutsideClick, true)
+  window.removeEventListener('resize', updateParentDropdownPos)
 })
 </script>

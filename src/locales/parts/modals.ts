@@ -40,6 +40,7 @@ export const modalsZh = {
       aiFetchFail: '未能获取网页信息，可直接手动填写',
       smartFillDisabledHint: '智能提取与信息补齐已在设置中关闭',
       multiAccounts: '历史账号',
+      parentSearchPlaceholder: '搜索名称、拼音或网址…',
     }, // BookmarkModal
     childBm: {
       needUrl: '请填写网址',
@@ -264,6 +265,7 @@ export const modalsEn = {
       aiFetchFail: 'Failed to extract page info, you can enter manually',
       smartFillDisabledHint: 'AI extraction & auto-completion is disabled in Settings',
       multiAccounts: 'History Accounts',
+      parentSearchPlaceholder: 'Search by name or URL…',
     }, // BookmarkModal
     childBm: {
       needUrl: 'Please enter a URL',

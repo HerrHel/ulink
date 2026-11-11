@@ -47,6 +47,7 @@ export const zh = {
     done: '完成',
     all: '全部',
     none: '无',
+    noResults: '无匹配结果',
     yes: '是',
     no: '否',
     optional: '可选',

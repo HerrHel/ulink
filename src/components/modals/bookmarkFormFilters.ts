@@ -10,9 +10,56 @@
  * 约束语义：
  *   - selectableParents：无 parentId（顶层书签可作父）、且未软删、且不是当前编辑项自身
  *   - selectableChildren：parentId 指向当前编辑项、且未软删
+ *   - sortedParents：按拼音/字母 A-Z 排序的父级列表
+ *   - filterParents：支持中文/英文/拼音首字母/URL 多维实时过滤
  */
 
 import type { Bookmark } from '../../types.js'
+import { displayText } from '../../utils.js'
+import { pinyin, match } from 'pinyin-pro'
+
+/** 把汉字/混合字符串转为拼音排序键（静默降级为原字符串） */
+function getSortKey(str: string): string {
+  if (!str) return ''
+  try {
+    return pinyin(str, { toneType: 'none', nonZh: 'consecutive' }).toLowerCase()
+  } catch {
+    return str.toLowerCase()
+  }
+}
+
+/**
+ * 对父级候选列表按拼音/字母 A-Z 排序（原地不修改，返回新数组）
+ */
+export function sortedParents(parents: Bookmark[]): Bookmark[] {
+  return [...parents].sort((a, b) => {
+    const ka = getSortKey(displayText(a.title) || a.url || '')
+    const kb = getSortKey(displayText(b.title) || b.url || '')
+    return ka.localeCompare(kb, 'en', { numeric: true })
+  })
+}
+
+/**
+ * 实时过滤父级候选：支持中文文本、英文文本、拼音首字母（dy→抖音）、全拼、URL/域名
+ */
+export function filterParents(parents: Bookmark[], query: string): Bookmark[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return parents
+  return parents.filter(b => {
+    const title = (displayText(b.title) || '').toLowerCase()
+    const url = (b.url || '').toLowerCase()
+    // 1. 文本直接包含
+    if (title.includes(q) || url.includes(q)) return true
+    // 2. 拼音首字母 / 全拼匹配
+    try {
+      if (match(displayText(b.title) || '', q) !== null) return true
+    } catch { /* pinyin-pro 不可用时跳过拼音匹配 */ }
+    // 3. 拼音全拼包含
+    const py = getSortKey(displayText(b.title) || '')
+    if (py && py.includes(q)) return true
+    return false
+  })
+}
 
 /**
  * 可选父级候选：顶层（无 parentId）且未软删、排除当前编辑项自身；

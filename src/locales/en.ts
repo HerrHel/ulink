@@ -44,6 +44,7 @@ export const en = {
     done: 'Done',
     all: 'All',
     none: 'None',
+    noResults: 'No results',
     yes: 'Yes',
     no: 'No',
     optional: 'Optional',
