@@ -315,5 +315,14 @@ describe('findDuplicateBookmarks — 去重编排层护栏', () => {
       expect(r.exact).toBeNull()
       expect(r.suffix).toBeNull()
     })
+
+    it('子书签（parentId 非空）绝不作为 suffix 后缀变体候选（防把已有子书签错误推荐为新书签的父级）', () => {
+      // 库中只有子书签 child_bm（同域根或同前缀），无顶层父书签
+      const childBm = makeBm('child_bm', 'https://example.com', { parentId: 'top_parent' })
+      setBookmarks([childBm])
+      const r = findDuplicateBookmarks('https://example.com/page')
+      expect(r.exact).toBeNull()
+      expect(r.suffix).toBeNull()
+    })
   })
 })

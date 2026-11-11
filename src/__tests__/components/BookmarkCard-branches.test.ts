@@ -545,10 +545,30 @@ describe('BookmarkCard — 转发函数契约', () => {
     expect(mocks.deleteBookmarkWithUndo).toHaveBeenCalledWith('b1')
   })
 
-  it('doAddSub → addSub(bookmark.id) （仅非 parentId 卡有按钮）', async () => {
+  it('doAddSub → addSub(bookmark.id) （非 parentId 顶层卡有按钮）', async () => {
     const w = mountCard({ bm: { parentId: null } })
     await w.vm.doAddSub()
     expect(mocks.addSub).toHaveBeenCalledWith('b1')
+  })
+
+  it('doAddSub: detailMode 详情模式下，子书签（parentId 非空）也展示加号并可添加孙子书签', async () => {
+    const parent = makeBm({ id: 'parent_top', parentId: null })
+    const child = makeBm({ id: 'child1', parentId: 'parent_top' })
+    ds.bookmarks = [parent, child]
+    ;(ds as any)._syncMaps()
+    const w = mount(BookmarkCard, { props: { bookmark: child, detailMode: true } })
+    expect(w.findAll('.card-actions .btn-xs')).toHaveLength(3)
+    await w.vm.doAddSub()
+    expect(mocks.addSub).toHaveBeenCalledWith('child1')
+  })
+
+  it('普通网格模式下（detailMode 为 false），子书签不展示加号按钮', () => {
+    const parent = makeBm({ id: 'parent_top', parentId: null })
+    const child = makeBm({ id: 'child1', parentId: 'parent_top' })
+    ds.bookmarks = [parent, child]
+    ;(ds as any)._syncMaps()
+    const w = mount(BookmarkCard, { props: { bookmark: child } })
+    expect(w.findAll('.card-actions .btn-xs')).toHaveLength(2)
   })
 
   it('doOpenDetail(bmId) → openQuickLook(bmId)', async () => {

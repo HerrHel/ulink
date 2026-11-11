@@ -78,6 +78,15 @@ describe('selectableParents — 「父级」下拉候选过滤', () => {
     ], 'self')
     expect(out.map(b => b.id)).toEqual(['alive'])
   })
+
+  it('传入 currentParentId 时，即使该父级自身也是子书签（parentId 非空），仍纳入候选项以供正常回显', () => {
+    const out = selectableParents([
+      mk({ id: 'top', parentId: null }),
+      mk({ id: 'childParent', parentId: 'top' }), // 自身是子书签
+      mk({ id: 'otherChild', parentId: 'top' }),
+    ], undefined, 'childParent')
+    expect(out.map(b => b.id).sort()).toEqual(['childParent', 'top'])
+  })
 })
 
 describe('selectableChildren — 当前编辑项的子书签候选（与父级同源防漂）', () => {

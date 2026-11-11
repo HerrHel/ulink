@@ -82,7 +82,7 @@
     <div class="card-foot" v-if="!isShareReadonly">
       <span v-if="(bookmark.useCount || 0) > 0" class="card-stat"><span aria-hidden="true" v-html="I.click"></span> {{ tN('cards.useCount', bookmark.useCount || 0) }}</span>
       <span class="card-actions">
-        <button v-if="!bookmark.parentId" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" :aria-label="t('cards.addSubSite')" v-html="I.plus"></button>
+        <button v-if="!bookmark.parentId || detailMode" class="btn-xs" @click.stop="doAddSub" :title="t('cards.addSubSite')" :aria-label="t('cards.addSubSite')" v-html="I.plus"></button>
         <button class="btn-xs" @click.stop="edit" :title="t('common.edit')" :aria-label="t('common.edit')" v-html="I.edit"></button>
         <button class="btn-xs btn-danger" @click.stop="del" :title="t('common.delete')" :aria-label="t('common.delete')" v-html="I.trash"></button>
       </span>

@@ -850,6 +850,56 @@ describe('useBookmark', () => {
       expect(newBm.parentId).toBe('parent-bm')
     })
 
+    it('添加子书签时，即使存在同域不同路径的兄弟子书签或同域书签，也绝不弹 showChoice 弹窗，直接作为子项保存', async () => {
+      // 准备父书签以及已有的兄弟子书签 uncensored
+      mockData.bookmarks = [
+        {
+          id: 'parent-bm',
+          title: 'Konachan',
+          url: 'https://konachan.com',
+          categoryId: 'cat-1',
+          parentId: null,
+          useCount: 0,
+          order: 1,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        {
+          id: 'child-uncensored',
+          title: 'uncensored',
+          url: 'https://konachan.com/tag/uncensored',
+          categoryId: 'cat-1',
+          parentId: 'parent-bm',
+          useCount: 0,
+          order: 2,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ]
+      mockData.bookmarkMap = {
+        'parent-bm': mockData.bookmarks[0],
+        'child-uncensored': mockData.bookmarks[1],
+      }
+
+      addSub('parent-bm')
+      await vi.waitFor(() => bmForm.isOpen === true)
+
+      // 输入与 child-uncensored 路径前缀重叠的新 URL
+      bmForm.url = 'https://konachan.com/tag/uncensored/wallpapers'
+      bmForm.title = 'Wallpapers'
+
+      const { showChoice } = await import('../../lib/toast.js')
+      vi.mocked(showChoice).mockClear()
+
+      await saveBm()
+
+      // 绝不弹出 showChoice 询问是否成为 uncensored 的子书签
+      expect(showChoice).not.toHaveBeenCalled()
+      expect(mockData.addBookmark).toHaveBeenCalled()
+      const newBm = mockData.addBookmark.mock.calls[0][0]
+      expect(newBm.parentId).toBe('parent-bm')
+    })
+
     // d1-91：换扫法深挖断言浅护栏——addSub 11 行编排此前 it1 仅断 4 字段，
     // 7 行真实副作用（saveToGroup carry-over 清除 / openBmModal 调用 / icon 清空 / 两个 previewVisible 视觉态重置）
     // 零护栏。下面"顺序敏感"例锁先清后开的执行序，"一次性 7 字段"例锁全部重置不变量，"空 parentId"例锁入参容错。

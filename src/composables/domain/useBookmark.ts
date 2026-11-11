@@ -54,7 +54,8 @@ export function findDuplicateBookmarks(url: string, excludeIds?: string[], exclu
       exact = bm
       break
     }
-    if (isUrlSuffixVariant(bm.url, url) && !suffix) {
+    // 后缀变体候选：必须是顶层书签（!bm.parentId），子书签不可作为后缀推断的父级
+    if (!bm.parentId && isUrlSuffixVariant(bm.url, url) && !suffix) {
       suffix = bm
     }
   }
@@ -301,8 +302,10 @@ export async function saveBm() {
         return
       }
 
-      // 后缀变体：弹窗让用户选择
-      if (suffix) {
+      // 后缀变体：仅在无明确 parentId（全局新建顶级书签）时弹窗让用户选择。
+      // 若用户通过卡片或详情进入明确指定了 parentId，用户意图 100% 明确（为该卡片添加子项），
+      // 绝不弹窗询问或把兄弟子书签推选为父级。
+      if (suffix && !bmForm.parentId) {
         const action = await showSuffixVariantDialog(suffix, url)
         if (action === 'cancel') {
           closeBmModal()

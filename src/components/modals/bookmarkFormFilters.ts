@@ -15,12 +15,18 @@
 import type { Bookmark } from '../../types.js'
 
 /**
- * 可选父级候选：顶层（无 parentId）且未软删、排除当前编辑项自身
+ * 可选父级候选：顶层（无 parentId）且未软删、排除当前编辑项自身；
+ * 若当前已指定某个父级（如孙子书签的当前父级），该父级也必须包含在列表中以确保正常回显。
  * @param bookmarks 全量书签（含软删）
  * @param excludeId 当前编辑书签 id，排除以防「自挂为父」
+ * @param currentParentId 当前选中的父级 ID（确保其能被回显）
  */
-export function selectableParents(bookmarks: Bookmark[], excludeId: string | undefined): Bookmark[] {
-  return bookmarks.filter(b => !b.parentId && !b.deletedAt && b.id !== excludeId)
+export function selectableParents(
+  bookmarks: Bookmark[],
+  excludeId: string | undefined,
+  currentParentId?: string | null,
+): Bookmark[] {
+  return bookmarks.filter(b => (!b.parentId || (currentParentId && b.id === currentParentId)) && !b.deletedAt && b.id !== excludeId)
 }
 
 /**

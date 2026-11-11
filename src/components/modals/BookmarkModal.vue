@@ -174,7 +174,7 @@ const categoryOptions = computed(() => store.selectableCategories)
 const selectableAttrs = computed(() =>
   store.selectableAttributes.filter(a => a.id !== ATTR_IS_GROUP)
 )
-const parentOptions = computed(() => selectableParents(store.bookmarks, bmForm.id))
+const parentOptions = computed(() => selectableParents(store.bookmarks, bmForm.id, bmForm.parentId))
 
 // 当前书签的子书签列表（仅编辑模式显示）
 const childBookmarks = computed(() => {
