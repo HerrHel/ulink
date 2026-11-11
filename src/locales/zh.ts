@@ -638,6 +638,7 @@ export const zh = {
 
     // 死链白名单
     deadLinkWhitelist: '死链检测白名单',
+    whitelistAdd: '添加白名单规则',
     deadLinkWhitelistDesc: '白名单中的域名或主机在检测时将被自动跳过（支持内网 IP 与特定域名）',
     deadLinkWhitelistPlaceholder: '例如：192.168.1.1 或 google.com',
     deadLinkWhitelistEmpty: '暂无白名单域名',

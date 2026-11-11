@@ -776,36 +776,51 @@
                 </div>
 
                 <div class="sp-card sp-section-whitelist">
-                  <div class="sp-card-head">
-                    <span>{{ t('settings.deadLinkWhitelist') }}</span>
+                  <div class="sp-card-head sp-shares-header">
+                    <div class="sp-shares-head-title">
+                      <span>{{ t('settings.deadLinkWhitelist') }}</span>
+                      <span v-if="deadLinkWhitelist.length > 0" class="sp-shares-count">({{ deadLinkWhitelist.length }})</span>
+                    </div>
                   </div>
                   <div class="sp-card-row">
                     <div class="sp-row-meta">
+                      <span class="sp-row-title">{{ t('settings.whitelistAdd') }}</span>
                       <span class="sp-row-desc">{{ t('settings.deadLinkWhitelistDesc') }}</span>
                     </div>
-                  </div>
-                  <div class="sp-whitelist-body">
-                    <div class="sp-whitelist-input-row">
+                    <div class="sp-row-ctrl sp-whitelist-ctrl">
                       <input
                         type="text"
-                        class="sp-input flex-1"
+                        class="form-input sp-whitelist-input"
                         v-model="whitelistInput"
                         :placeholder="t('settings.deadLinkWhitelistPlaceholder')"
                         @keydown.enter="onAddWhitelist"
                       />
-                      <button class="btn btn-secondary btn-sm" :disabled="!whitelistInput.trim()" @click="onAddWhitelist">
+                      <button class="btn btn-primary btn-sm" :disabled="!whitelistInput.trim()" @click="onAddWhitelist">
                         {{ t('common.add') }}
                       </button>
                     </div>
-                    <div v-if="deadLinkWhitelist.length" class="sp-whitelist-chips">
+                  </div>
+                  <div v-if="deadLinkWhitelist.length" class="sp-whitelist-chips-row">
+                    <div class="sp-whitelist-chips">
                       <span v-for="domain in deadLinkWhitelist" :key="domain" class="sp-whitelist-chip">
-                        <span>{{ domain }}</span>
-                        <button class="sp-chip-remove" @click="onRemoveWhitelist(domain)">&times;</button>
+                        <span class="sp-chip-dot" aria-hidden="true"></span>
+                        <span class="sp-chip-domain">{{ domain }}</span>
+                        <button
+                          type="button"
+                          class="sp-chip-remove"
+                          :title="t('common.delete')"
+                          @click.stop="onRemoveWhitelist(domain)"
+                        >
+                          <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.2">
+                            <line x1="3" y1="3" x2="13" y2="13" stroke-linecap="round" />
+                            <line x1="13" y1="3" x2="3" y2="13" stroke-linecap="round" />
+                          </svg>
+                        </button>
                       </span>
                     </div>
-                    <div v-else class="sp-whitelist-empty">
-                      {{ t('settings.deadLinkWhitelistEmpty') }}
-                    </div>
+                  </div>
+                  <div v-else class="sp-whitelist-empty">
+                    {{ t('settings.deadLinkWhitelistEmpty') }}
                   </div>
                 </div>
 

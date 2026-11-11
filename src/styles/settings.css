@@ -1059,7 +1059,8 @@
   .sp-card-row:has(.sp-seg),
   .sp-card-row:has(.sp-redeem-ctrl),
   .sp-card-row:has(.sp-storage-ctrl),
-  .sp-card-row:has(.sp-range-ctrl){
+  .sp-card-row:has(.sp-range-ctrl),
+  .sp-card-row:has(.sp-whitelist-ctrl){
     flex-direction:column;
     align-items:stretch;
     gap:10px;
@@ -1074,6 +1075,19 @@
     padding:6px 8px;
     font-size:var(--fs-xs);
     justify-content:center;
+  }
+
+  .sp-whitelist-ctrl{
+    width:100%;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .sp-whitelist-input{
+    flex:1;
+    width:auto;
+    min-height:36px;
+    padding:6px 12px;
   }
 
   .sp-redeem-ctrl{
@@ -1519,45 +1533,94 @@
 
 
 /* 死链白名单管理 */
-.sp-whitelist-body {
-  padding: 12px 20px 16px;
-}
-.sp-whitelist-input-row {
+.sp-whitelist-ctrl {
   display: flex;
-  gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sp-whitelist-input {
+  width: 240px;
+  max-width: 100%;
+  height: 32px;
+  font-size: var(--fs-xs);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.sp-whitelist-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-light);
+  outline: none;
+}
+.sp-whitelist-chips-row {
+  padding: 12px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
 }
 .sp-whitelist-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 .sp-whitelist-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 8px 3px 10px;
   background: var(--surface-hover);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   font-size: var(--fs-xs);
   color: var(--text);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.sp-whitelist-chip:hover {
+  background: var(--surface-active, var(--surface-hover));
+  border-color: var(--border-hover, var(--border));
+}
+.sp-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--emerald, #10b981);
+  flex-shrink: 0;
+}
+.sp-chip-domain {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 .sp-chip-remove {
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
   border: none;
+  background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 0 2px;
-  font-size: 14px;
-  line-height: 1;
+  padding: 0;
+  transition: all 0.15s ease;
 }
 .sp-chip-remove:hover {
-  color: var(--danger);
+  background: var(--rose-light, rgba(244, 63, 94, 0.15));
+  color: var(--danger, #ef4444);
+  transform: scale(1.1);
 }
 .sp-whitelist-empty {
+  padding: 18px 16px;
+  text-align: center;
   font-size: var(--fs-xs);
   color: var(--text-muted);
-  padding: 4px 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
 }

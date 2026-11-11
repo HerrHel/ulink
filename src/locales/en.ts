@@ -648,6 +648,7 @@ export const en = {
 
     // Dead link whitelist
     deadLinkWhitelist: 'Dead Link Whitelist',
+    whitelistAdd: 'Add Whitelist Rule',
     deadLinkWhitelistDesc: 'Domains or hosts in the whitelist will be skipped during checks (supports local IPs and domains)',
     deadLinkWhitelistPlaceholder: 'e.g. 192.168.1.1 or google.com',
     deadLinkWhitelistEmpty: 'No whitelisted domains',
