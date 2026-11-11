@@ -1,5 +1,12 @@
 <template>
-  <nav class="icon-rail" :class="{ open: uiStore.panels.rail }" :aria-label="t('nav.rail')">
+  <nav
+    ref="navRef"
+    class="icon-rail"
+    :class="{ open: uiStore.panels.rail, 'is-pill-ready': pillReady }"
+    :aria-label="t('nav.rail')"
+  >
+    <!-- 选中态滑块：整条导航只有这一块背景，切换时滑过去而不是各自亮灭 -->
+    <span v-if="pillVisible" class="rail-active-pill" :style="pillStyle" aria-hidden="true"></span>
     <div class="rail-logo">
       <BrandLogo :size="22" />
       <span class="rail-logo-text" :data-space="uiStore.curSpace">{{ isVault ? t('nav.vaultSpace') : t('nav.brand') }}</span>
@@ -87,7 +94,7 @@
   </nav>
 </template>
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useDataStore } from '../../stores/data.js'
 import { useUIStore } from '../../stores/ui.js'
 import { useUserPopoverStore } from '../../stores/overlay.js'
@@ -109,6 +116,53 @@ const vault = useVault()
 const auth = useAuth()
 const syncState = useSyncState()
 const railUserRef = ref<HTMLElement | null>(null)
+
+/* ── 选中态滑块：量出当前条目，把位置写进 transform ────────────────────
+ * 坐标用「内容坐标系」（rect 差值 + 容器 scrollTop），这样导航自身滚动时
+ * 滑块跟着内容走，不需要监听 scroll。
+ */
+const navRef = ref<HTMLElement | null>(null)
+const pillVisible = ref(false)
+const pillReady = ref(false)
+const pillStyle = ref<Record<string, string>>({})
+let resizeObserver: ResizeObserver | null = null
+
+function syncPill() {
+  const nav = navRef.value
+  if (!nav) {
+    pillVisible.value = false
+    return
+  }
+  const active = nav.querySelector<HTMLElement>('.rail-item.active')
+  if (!active) {
+    pillVisible.value = false
+    return
+  }
+  const navRect = nav.getBoundingClientRect()
+  const itemRect = active.getBoundingClientRect()
+  pillStyle.value = {
+    opacity: '1',
+    width: `${itemRect.width}px`,
+    height: `${itemRect.height}px`,
+    transform: `translate3d(${itemRect.left - navRect.left}px, ${itemRect.top - navRect.top + nav.scrollTop}px, 0)`,
+  }
+  pillVisible.value = true
+}
+
+onMounted(() => {
+  // 先量位置、再开过渡：两步都在首帧绘制前完成，所以不会从 (0,0) 飞过来
+  syncPill()
+  pillReady.value = true
+  if (typeof ResizeObserver !== 'undefined' && navRef.value) {
+    resizeObserver = new ResizeObserver(() => syncPill())
+    resizeObserver.observe(navRef.value)
+  }
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
 
 // 分享只读态：隐藏「管理分类」等写类入口（点分类/切走即退出分享，见 share store 的 watch）
 const shareMode = computed(() => uiStore.shareMode)
@@ -189,4 +243,11 @@ function onUserClick() {
 
 
 function openCatModalNav() { openCatModal() }
+
+// 视图切换、分类切换、分类增删排序、窄屏抽屉开合后都要重新对位
+const catKey = computed(() => categories.value.map((c) => c.id).join('|'))
+watch(
+  () => [uiStore.activeView, uiStore.curCat, catKey.value, shareMode.value, uiStore.aiRailEnabled, uiStore.panels.rail],
+  () => nextTick(syncPill),
+)
 </script>

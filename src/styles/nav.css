@@ -1,5 +1,6 @@
 /* ==================== ICON RAIL ==================== */
 .icon-rail{
+  position:relative;
   width:clamp(58px, 14vw, 220px);flex-shrink:0;
   display:flex;flex-direction:column;
   background:var(--rail-bg);
@@ -71,6 +72,8 @@
 }
 .rail-item{
   position:relative;
+  /* 压在选中态滑块之上：文字/图标/计数不被滑块盖住 */
+  z-index:1;
   width:100%;height:36px;
   display:flex;align-items:center;gap:10px;
   padding:0 10px;
@@ -83,17 +86,43 @@
   text-overflow:ellipsis;
 }
 @media (hover: hover) and (pointer: fine) {
-.rail-item:hover{color:var(--text);background:var(--surface-hover);transform:translateX(3px)}
+/* 选中项不再叠 hover 底纹：底纹是「选中态滑块」，再盖一层灰会把它吃掉 */
+.rail-item:not(.active):hover{color:var(--text);background:var(--surface-hover);transform:translateX(3px)}
+.rail-item.active:hover{color:var(--accent)}
 }
 .rail-item:active{transform:scale(0.98);transition-duration:0.05s}
 .rail-item.active{
-  color:var(--accent);background:var(--accent-light);font-weight:600;
+  color:var(--accent);font-weight:600;
   transform:translateX(0);
 }
-.rail-item.active::before{
+
+/* ── 选中态滑块（2026-11-12）──────────────────────────────────────────
+   整条导航只留一个滑块，切换分类时它在条目之间滑过去，而不是「这边灭、那边亮」。
+   位置由 AppNav 用 getBoundingClientRect 量出来写进 transform（内容坐标系，
+   导航自身滚动时不需要重算）。 */
+.rail-active-pill{
+  position:absolute;
+  left:0;top:0;
+  z-index:0;
+  border-radius:var(--radius-md);
+  background:var(--accent-light);
+  pointer-events:none;
+  opacity:0;
+  will-change:transform;
+}
+/* 左侧强调条跟着滑块一起走 */
+.rail-active-pill::before{
   content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);
   width:3px;height:18px;background:var(--accent-grad);border-radius:0 3px 3px 0;
   box-shadow:0 0 6px var(--accent-glow);
+}
+/* 首帧定位完成后再开过渡，避免从 (0,0) 飞过来 */
+.icon-rail.is-pill-ready .rail-active-pill{
+  transition:
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.2s ease,
+    opacity 0.16s ease;
 }
 .rail-item>span:not(.rail-count){display:contents}
 .rail-item svg{width:18px;height:18px;flex-shrink:0}

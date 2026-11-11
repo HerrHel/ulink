@@ -252,7 +252,7 @@
   .icon-rail .rail-user .rail-user-meta{display:none}
   .icon-rail .rail-item .rail-count{display:none}
   .icon-rail .rail-item > span{display:flex}
-  .icon-rail .rail-item.active::before{left:auto;right:0;width:3px;height:14px}
+  .rail-active-pill::before{left:auto;right:0;width:3px;height:14px}
   #resizeLeft{display:none}
   .icon-rail .rail-bottom{border-top:none}
 
