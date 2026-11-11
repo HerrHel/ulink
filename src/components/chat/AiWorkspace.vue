@@ -230,6 +230,15 @@
       </div>
     </div>
 
+    <!-- 左侧消息锚点：hover 展开本会话各轮提问，点击快速跳转（不占阅读宽度） -->
+    <ChatTurnRail
+      v-if="!isCurrentSessionEmpty"
+      :turns="chatTurns"
+      :active-id="activeTurnId"
+      @jump="jumpToTurn"
+      @open-history="openHistoryDrawer"
+    />
+
     <!-- 对话态悬浮居中输入框 -->
     <div v-if="!isCurrentSessionEmpty" class="ai-dock-floating-container">
       <div
@@ -407,11 +416,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useUIStore } from '../../stores/ui.js'
 import { useDataStore } from '../../stores/data.js'
 import { t, isZh } from '../../i18n/index.js'
 import ChatStream from './ChatStream.vue'
+import ChatTurnRail from './ChatTurnRail.vue'
+import { buildTurnAnchors } from '../../lib/ai/turnAnchors.js'
 import { useAiChat, type ChatTurn } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
@@ -689,10 +700,70 @@ watch(isHistoryDrawerOpen, (open) => {
   }
 })
 
+// ── 左侧消息锚点：滚动高亮 + 点击跳转 ──
+const activeTurnId = ref<string | null>(null)
+let spyRafId = 0
+
+function updateActiveTurnId() {
+  spyRafId = 0
+  const container = scrollContainerRef.value
+  if (!container || isCurrentSessionEmpty.value) return
+  const els = Array.from(container.querySelectorAll<HTMLElement>('[data-turn-id]'))
+  if (els.length === 0) {
+    activeTurnId.value = null
+    return
+  }
+  // 让出 sticky 会话顶栏：只有滚过这条线的提问才算「当前轮」
+  const threshold = container.getBoundingClientRect().top + 88
+  let current: string | null = null
+  for (const el of els) {
+    if (el.getBoundingClientRect().top > threshold) break
+    current = el.dataset.turnId || null
+  }
+  activeTurnId.value = current || els[0].dataset.turnId || null
+}
+
+function onScrollSpy() {
+  if (spyRafId || typeof requestAnimationFrame !== 'function') return
+  spyRafId = requestAnimationFrame(updateActiveTurnId)
+}
+
+function jumpToTurn(id: string) {
+  const container = scrollContainerRef.value
+  if (!container) return
+  // 用 dataset 比对而不是拼 CSS 选择器，避免 turn.id 里出现特殊字符导致选择器异常
+  const el = Array.from(container.querySelectorAll<HTMLElement>('[data-turn-id]'))
+    .find(node => node.dataset.turnId === id)
+  if (!el) return
+  activeTurnId.value = id
+  // jsdom / 旧浏览器未实现时静默跳过，不抛错
+  if (typeof el.scrollIntoView === 'function') {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
+// 会话切换 / 新消息后重算高亮；首次渲染给一个默认值，避免所有点都不亮
+watch(chatTurns, () => {
+  nextTick(() => {
+    updateActiveTurnId()
+    if (!activeTurnId.value) {
+      const anchors = buildTurnAnchors(chatTurns.value)
+      activeTurnId.value = anchors.length ? anchors[anchors.length - 1].id : null
+    }
+  })
+})
+
+onMounted(() => {
+  scrollContainerRef.value?.addEventListener('scroll', onScrollSpy, { passive: true })
+  updateActiveTurnId()
+})
+
 onUnmounted(() => {
   window.removeEventListener('keydown', onDrawerKeyDown)
   window.removeEventListener('dragend', resetDragState)
   window.removeEventListener('drop', resetDragState)
+  scrollContainerRef.value?.removeEventListener('scroll', onScrollSpy)
+  if (spyRafId && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(spyRafId)
 })
 
 function submitQuery() {
@@ -1242,6 +1313,12 @@ watch(aiQuery, () => {
   padding-bottom: 12px;
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border-light);
+  /* 会话很长时「开启新对话」也要随时可点：钉在主滚动视口顶部，不随内容滚走。
+     不透明背景防止消息从下方透过；z-index 低于底部悬浮输入框(15)，高于消息流。 */
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: var(--bg);
 }
 
 .stream-title-text {

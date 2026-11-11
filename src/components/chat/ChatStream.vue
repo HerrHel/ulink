@@ -24,6 +24,7 @@
             :key="turn.id"
             class="chat-turn-item"
             :class="`turn-${turn.role}`"
+            :data-turn-id="turn.role === 'user' ? turn.id : undefined"
           >
             <!-- 用户消息：轻量气泡与微操作栏（复制 / 撤回） -->
             <div v-if="turn.role === 'user'" class="chat-user-wrap">
@@ -806,6 +807,8 @@ function getSendSummaryLines(summary: AiSendSummary): string[] {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  /* 锚点跳转时让出 sticky 会话顶栏的高度，避免目标消息被压在栏下 */
+  scroll-margin-top: 72px;
   animation: chat-fade-in-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
