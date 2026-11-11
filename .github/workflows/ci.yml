@@ -86,7 +86,21 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        # 缓存命中时浏览器二进制已在 ~/.cache/ms-playwright；runner 镜像自带浏览器系统库，
+        # 再跑 --with-deps 只会无谓触发 apt，把整轮 CI 绑死在 Ubuntu 镜像的 DNS 上
+        # （2026-11-12 就因 archive/security.ubuntu.com 解析失败挂了 10 分钟）。
+        # 只有缓存未命中（playwright 版本变化）才需要装系统依赖；命中时先做启动冒烟，
+        # 万一镜像缺库再回退 --with-deps，不赌「依赖一定齐全」。
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = 'true' ]; then
+            npx playwright install chromium
+            if ! node -e "import('playwright').then(async ({chromium}) => { const b = await chromium.launch({headless:true}); await b.close() }).catch(e => { console.error(e); process.exit(1) })"; then
+              echo '::warning::缓存命中但系统库缺失，回退到 --with-deps'
+              npx playwright install --with-deps chromium
+            fi
+          else
+            npx playwright install --with-deps chromium
+          fi
       - name: E2E Tests
         run: npm run test:e2e
         env:
@@ -165,8 +179,24 @@ jobs:
               echo "::error::API Key 含变量名/引号/空白，请只复制值本身"; exit 1 ;;
           esac
 
-          # --cloudbase-api-key 支持非交互认证，无需设备码
-          $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"
+          # --cloudbase-api-key 支持非交互认证，无需设备码。
+          # CloudBase 鉴权偶发 "Authorization was not completed"（2026-11-12 整轮 CI
+          # 因此变红、重跑即通过），给 3 次机会，避免瞬时抖动卡掉「测试全绿」的发布。
+          login_ok=0
+          for attempt in 1 2 3; do
+            echo "::group::CloudBase login (attempt ${attempt}/3)"
+            if $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"; then
+              login_ok=1
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            if [ "$attempt" -lt 3 ]; then sleep 15; fi
+          done
+          if [ "$login_ok" -ne 1 ]; then
+            echo "::error::CloudBase 登录连续 3 次失败"
+            exit 1
+          fi
           # --safe：发布前备份，上传失败自动回滚（省去跨洋 --verify 哈希对比耗时）
           $CLI hosting deploy ./dist -e "$ENV_ID" --safe
       # 部署后校验线上实际版本：带时间戳穿透缓存，比对 version.json.commit 与本次
