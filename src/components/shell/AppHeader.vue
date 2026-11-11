@@ -81,9 +81,10 @@
           <span aria-hidden="true" v-html="I.share"></span>
         </button>
       </template>
-      <!-- 未登录时顶栏显式登录入口 -->
+      <!-- 未登录入口只在导航收进抽屉的移动端出现；
+           桌面端左下角账户卡已经承担同一入口，两处并排会显得重复 -->
       <button
-        v-if="!auth.isLoggedIn && !ui.focusedGroupId"
+        v-if="!auth.isLoggedIn && !ui.focusedGroupId && ui.isMobile"
         class="btn btn-ghost btn-sm header-login-btn"
         data-testid="header-login-btn"
         @click="auth.authModalOpen = true"

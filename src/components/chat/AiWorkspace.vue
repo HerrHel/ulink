@@ -1280,9 +1280,12 @@ watch(aiQuery, () => {
   cursor: not-allowed;
 }
 
+/* 停止生成不是「危险操作」：本站红色只用于删除/清空这类不可逆动作，
+   这里沿用发送键的品牌底，仅把箭头换成方块（形状本身就是最强的停止信号）。 */
 .capsule-send-btn.stop {
-  background: var(--rose, var(--danger));
+  background: var(--accent);
   color: #fff;
+  box-shadow: 0 2px 10px var(--accent-glow);
 }
 
 .stop-box {
