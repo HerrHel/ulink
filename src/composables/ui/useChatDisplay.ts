@@ -41,9 +41,14 @@ export function useChatDisplay(chatTurns: Ref<ChatTurn[]>) {
     return content.replace(/```ulink-card\s*([\s\S]*?)```/gi, '').trim()
   }
 
-  /** 会话列表标题：未命名（含存量旧默认标题）回退到 i18n 默认标题 */
+  /**
+   * 会话列表标题：未命名（含存量旧默认标题）回退到 i18n 默认标题。
+   * 与顶栏 convHeaderTitle 用同一个键（ai.convUntitled，审计 #16）——此前列表
+   * 用 sessionDefaultTitle「AI 工作台」、顶栏用「未命名对话」，同一条会话在两个
+   * 位置显示不同名字，且两个键各改各的，迟早再漂。
+   */
   function sessionItemTitle(s: AiChatSession): string {
-    return isDefaultSessionTitle(s.title) ? t('ai.sessionDefaultTitle') : s.title
+    return isDefaultSessionTitle(s.title) ? t('ai.convUntitled') : s.title
   }
 
   function getTurnAttachedCards(turn: ChatTurn): AttachedCardMeta[] {

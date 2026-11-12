@@ -96,7 +96,8 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
 
   const currentSessionTitle = computed(() => {
     const s = sessions.value.find((x) => x.id === currentSessionId.value)
-    if (!s || isDefaultSessionTitle(s.title)) return t('ai.sessionDefaultTitle')
+    // 与列表/顶栏共用 ai.convUntitled（审计 #16），不再各自维护兜底文案
+    if (!s || isDefaultSessionTitle(s.title)) return t('ai.convUntitled')
     return s.title
   })
 
@@ -111,9 +112,17 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
 
   /** 持久化当前会话；会话可能已被删除，守卫防 updateSession 重建已删会话 */
   function persistCurrentSession() {
-    if (currentSessionId.value && sessions.value.some((s) => s.id === currentSessionId.value)) {
-      sessions.value = updateSession(currentSessionId.value, chatTurns.value)
+    const id = currentSessionId.value
+    if (!id) return
+    // 跨实例守卫（审计 #24）：AiWorkspace 与 DetailPanel 各持一份本 composable，
+    // 内存里的 sessions 可能是旧快照。若该会话已被另一实例删除（磁盘上不存在），
+    // 这里落盘会让 updateSession 走「找不到就新增」分支把会话**复活**。
+    // 以磁盘为准：不存在就只把本地引用剔除，不写回。
+    if (!loadSessions().some((s) => s.id === id)) {
+      sessions.value = sessions.value.filter((s) => s.id !== id)
+      return
     }
+    sessions.value = updateSession(id, chatTurns.value)
   }
 
   /** 中止在途检索并收尾：终止请求、收起思考气泡、持久化当前会话（停止按钮/切会话/新建会话共用） */

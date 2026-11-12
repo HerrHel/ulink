@@ -412,6 +412,7 @@ import ChatConvHeader from './ChatConvHeader.vue'
 import ChatTurnRail from './ChatTurnRail.vue'
 import { buildTurnAnchors } from '../../lib/ai/turnAnchors.js'
 import { extractSessionTitle, isDefaultSessionTitle } from '../../lib/ai/chatSessions.js'
+import { matchesSessionQuery } from '../../lib/ai/sessionSearch.js'
 import { useAiChat, type ChatTurn } from '../../composables/domain/useAiChat.js'
 import { useChatDisplay } from '../../composables/ui/useChatDisplay.js'
 import { useChatInputInteraction } from '../../composables/ui/useChatInputInteraction.js'
@@ -652,13 +653,11 @@ const { onMaskMouseDown: onDrawerMaskMouseDown, onMaskClick: onDrawerMaskClick }
 const historySearchQuery = ref('')
 
 const filteredHistorySessions = computed(() => {
-  const q = historySearchQuery.value.trim().toLowerCase()
-  if (!q) return sessions.value
-  return sessions.value.filter((s) => {
-    const title = (s.title || '').toLowerCase()
-    if (title.includes(q)) return true
-    return s.turns.some((t) => t.content && t.content.toLowerCase().includes(q))
-  })
+  const q = historySearchQuery.value
+  if (!q.trim()) return sessions.value
+  // 匹配逻辑抽到 lib/ai/sessionSearch（类型收窄 + 可单测，审计 #17）：
+  // 坏数据里的非字符串 content/title 不再让整个抽屉列表渲染中断。
+  return sessions.value.filter((s) => matchesSessionQuery(s, q))
 })
 
 function openHistoryDrawer() {

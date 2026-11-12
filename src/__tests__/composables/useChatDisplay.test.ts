@@ -73,8 +73,9 @@ describe('useChatDisplay 格式化', () => {
   it('sessionItemTitle：默认/空标题回退 i18n，自定义标题保留', () => {
     const { sessionItemTitle } = mountWith([])
     const s = (title: string) => ({ id: 's1', title, turns: [] } as unknown as AiChatSession)
-    expect(sessionItemTitle(s(''))).not.toBe('')
-    expect(sessionItemTitle(s('新会话'))).not.toBe('新会话')
+    // 审计 #16：必须与顶栏/当前会话标题同一个键（ai.convUntitled），不再各显一套
+    expect(sessionItemTitle(s(''))).toBe('未命名对话')
+    expect(sessionItemTitle(s('新会话'))).toBe('未命名对话')
     expect(sessionItemTitle(s('我的会话'))).toBe('我的会话')
   })
 })

@@ -628,6 +628,18 @@ watch(
 // 发送摘要展开态：组件内部纯 UI 状态（不影响 vm 绑定的展示函数与动作事件）
 const openSummaries = reactive<Record<string, boolean>>({})
 
+// 展开态按 turn.id 存键，切会话/清理轮次后旧键没人删，键集合随会话切换单调增长
+// （审计 #18）。turns 变更时把已不在列表里的键删掉，内存与响应式依赖都收敛。
+watch(
+  () => props.chatTurns.map((t) => t.id).join('|'),
+  () => {
+    const alive = new Set(props.chatTurns.map((t) => t.id))
+    for (const key of Object.keys(openSummaries)) {
+      if (!alive.has(key)) delete openSummaries[key]
+    }
+  },
+)
+
 /** 发送摘要展示行（i18n 渲染，按实际注入字段动态拼装；截断情况如实标注） */
 function getSendSummaryLines(summary: AiSendSummary): string[] {
   const lines: string[] = []
