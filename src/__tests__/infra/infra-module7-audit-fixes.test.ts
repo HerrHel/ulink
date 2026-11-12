@@ -146,6 +146,24 @@ describe('模块 7 审计：构建输出产物与离线 PWA 策略自检', () =>
     expect(edgeCode).toContain("frame-ancestors 'self'")
   })
 
+  it('edge-headers 放行静态资源扩展名（根路径反代后 logo/landing.js 不再 404）', () => {
+    const edgeCode = readFileSync(resolve(process.cwd(), 'cloudbase/functions/edge-headers/index.js'), 'utf8')
+
+    // 2026-11-12：/ 路由切到 edge-headers 以补 HSTS，若白名单只放行 HTML，
+    // 根级静态资源（logo.png / landing.js / sitemap.xml …）会全部 404，页面变白。
+    expect(edgeCode).toContain('STATIC_ASSET_RE')
+    const m = edgeCode.match(/const STATIC_ASSET_RE = \/(.+?)\/i/)
+    expect(m).toBeTruthy()
+    const re = new RegExp(m![1], 'i')
+    for (const p of ['/landing.js', '/logo.png', '/logo.svg', '/favicon.svg', '/sitemap.xml', '/manifest.webmanifest', '/version.json', '/fonts/x.woff2']) {
+      expect(re.test(p)).toBe(true)
+    }
+    // 仍不接受任意路径透传（无扩展名的未知路径必须被拒）
+    for (const p of ['/nothing-here', '/admin', '/api/internal']) {
+      expect(re.test(p)).toBe(false)
+    }
+  })
+
   it('法律文档与索引页页脚正确渲染 ICP 备案号与工信部超链接', () => {
     const doc = parseLegalDoc('# 测试文档\n\n正文内容', 'terms-of-service')
     const docHtml = renderLegalIndexHtml([doc])

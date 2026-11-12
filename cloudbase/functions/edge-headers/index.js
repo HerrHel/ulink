@@ -50,8 +50,18 @@ const ALLOWED_HTML_PATHS = new Set([
   '/app', '/app/', '/app.html',
   '/privacy.html', '/terms.html', '/extension-guide.html',
 ])
+// 静态资源按扩展名放行：根路径走本函数反代后，logo / landing.js / sitemap.xml
+// 这类根级小文件必须能取到（大体积的 /assets 与 /fonts 已由网关直连静态托管，
+// 不进函数）。只按扩展名判定，仍不接受任意路径透传。
+const STATIC_ASSET_RE = /\.(?:js|mjs|css|png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot|xml|txt|json|webmanifest|map|mp4|webm|pdf)$/i
+
 function isAllowed(pathname) {
-  return ALLOWED_HTML_PATHS.has(pathname) || pathname === '/legal' || pathname.startsWith('/legal/')
+  return (
+    ALLOWED_HTML_PATHS.has(pathname) ||
+    pathname === '/legal' ||
+    pathname.startsWith('/legal/') ||
+    STATIC_ASSET_RE.test(pathname)
+  )
 }
 
 function passHeaders(upstream, body) {
