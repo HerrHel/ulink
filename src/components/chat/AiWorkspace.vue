@@ -209,6 +209,7 @@
       <ChatConvHeader
         v-if="!isCurrentSessionEmpty"
         :title="convHeaderTitle"
+        :session-id="currentSessionId"
         :session-count="sessions.length"
         @open-history="openHistoryDrawer"
         @new-chat="onNewConversation"
@@ -845,10 +846,13 @@ function onNewConversation() {
   })
 }
 
-/** 顶栏就地改名：空串 = 交还给自动命名（由 store 从首条提问重新提炼） */
-function onRenameSession(title: string) {
-  if (!currentSessionId.value) return
-  handleRenameSession(currentSessionId.value, title)
+/** 顶栏就地改名：用 emit 带回的「编辑开始时」的会话 id，空串 = 交还自动命名 */
+function onRenameSession(sessionId: string, title: string) {
+  if (!sessionId) return
+  const firstQuery = sessionId === currentSessionId.value
+    ? chatTurns.value.find((turn) => turn.role === 'user')?.content
+    : undefined
+  handleRenameSession(sessionId, title, firstQuery)
 }
 
 function triggerFileInput() {
@@ -1024,7 +1028,9 @@ watch(aiQuery, () => {
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scroll-behavior: smooth;
+  /* 不要写 scroll-behavior:smooth：scrollToBottom / 流式贴底靠直接赋值 scrollTop，
+     CSS smooth 会把「立刻贴底」变成一段动画，每个 token 都重启一次，永远追不上内容。
+     需要平滑的锚点跳转已在 jumpToTurn 里显式 scrollTo({behavior:'smooth'})。 */
   position: relative;
 }
 

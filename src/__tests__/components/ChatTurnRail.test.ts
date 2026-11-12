@@ -18,6 +18,13 @@ const turns: ChatTurn[] = [
   turn('u3', 'user', ''), // 纯附件消息
 ]
 
+/** jsdom 没有 PointerEvent；用普通 Event + defineProperty 挂只读坐标属性 */
+function pointerEvent(type: string, init: Record<string, number>): Event {
+  const e = new Event(type, { bubbles: true })
+  for (const [k, v] of Object.entries(init)) Object.defineProperty(e, k, { value: v })
+  return e
+}
+
 function mountRail(activeId: string | null = 'u2') {
   return mount(ChatTurnRail, { props: { turns, activeId } })
 }
@@ -100,6 +107,50 @@ describe('ChatTurnRail — 左侧消息锚点导航（点带自身展开）', ()
     expect(w.findAll('.turn-rail-item')[0].classes()).toContain('is-active')
   })
 
+  it('拖出轨道松手后补收起（mouseleave 在 dragging 期间被吞掉）', async () => {
+    const many: ChatTurn[] = []
+    for (let i = 0; i < 20; i++) {
+      many.push(turn('u' + i, 'user', '问题 ' + i), turn('a' + i, 'assistant', '答 ' + i))
+    }
+    const w = mount(ChatTurnRail, { props: { turns: many, activeId: 'u10' } })
+    // jsdom 无布局：显式给出可滚动几何，让自绘滚动条渲染出来
+    const itemsEl = w.find('.turn-rail-items').element as HTMLElement
+    Object.defineProperty(itemsEl, 'scrollHeight', { value: 600, configurable: true })
+    Object.defineProperty(itemsEl, 'clientHeight', { value: 200, configurable: true })
+    await w.trigger('mouseenter')
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 0)) // watch(expanded) 内部还有一次 nextTick
+    expect(w.classes()).toContain('is-expanded')
+    const bar = w.find('.turn-rail-scrollbar')
+    expect(bar.exists()).toBe(true)
+    bar.element.dispatchEvent(pointerEvent('pointerdown', { pointerId: 7, clientX: 10, clientY: 10 }))
+    window.dispatchEvent(pointerEvent('pointerup', { pointerId: 7, clientX: 800, clientY: 600 }))
+    await nextTick()
+    expect(w.classes()).not.toContain('is-expanded')
+    w.unmount()
+  })
+
+  it('pointercancel / 卸载会解除拖动锁，不会把栏目卡在展开态', async () => {
+    const many: ChatTurn[] = []
+    for (let i = 0; i < 20; i++) {
+      many.push(turn('u' + i, 'user', '问题 ' + i), turn('a' + i, 'assistant', '答 ' + i))
+    }
+    const w = mount(ChatTurnRail, { props: { turns: many, activeId: 'u10' } })
+    const itemsEl = w.find('.turn-rail-items').element as HTMLElement
+    Object.defineProperty(itemsEl, 'scrollHeight', { value: 600, configurable: true })
+    Object.defineProperty(itemsEl, 'clientHeight', { value: 200, configurable: true })
+    await w.trigger('mouseenter')
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 0))
+    w.find('.turn-rail-scrollbar').element.dispatchEvent(
+      pointerEvent('pointerdown', { pointerId: 3, clientX: 10, clientY: 10 }),
+    )
+    window.dispatchEvent(pointerEvent('pointercancel', { pointerId: 3 }))
+    await nextTick()
+    expect(w.classes()).not.toContain('is-expanded')
+    w.unmount()
+  })
+
   it('键盘聚焦同样展开，焦点移出后收起', async () => {
     const w = mountRail()
     await w.trigger('focusin')
@@ -133,14 +184,14 @@ describe('接线防回退断言（静态）', () => {
   it('会话标题可就地重命名（输入框 + Enter/失焦提交 + Esc 取消）', () => {
     const header = read('src/components/chat/ChatConvHeader.vue')
     expect(header).toContain('conv-title-input')
-    expect(header).toContain("@keydown.enter.prevent=\"commit\"")
+    expect(header).toContain('@keydown.enter="onEnterKeyDown"')
     expect(header).toContain("@keydown.esc.prevent=\"cancel\"")
     expect(header).toContain('@blur="commit"')
     expect(header).toContain("emit('rename'")
     // 空标题不是空壳，交给 store 恢复自动命名
     const store = read('src/lib/ai/chatSessions.ts')
     expect(store).toContain('export function renameSession')
-    expect(store).toContain('extractSessionTitle(firstUserTurn.content)')
+    expect(store).toContain('extractSessionTitle(query)')
   })
 
   it('展开态可滚动挑选历史：自绘滚动条 + 全量轮次 + 当前轮自动滚到中部', () => {

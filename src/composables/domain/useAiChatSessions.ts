@@ -7,7 +7,7 @@
  * 共享状态（aiQuery/aiLoading/在途控制器槽位）由 useAiChat Facade 显式注入，
  * 不建模块级单例；行为与拆分前逐字一致。
  */
-import { computed, ref, type Ref } from 'vue'
+import { computed, onUnmounted, ref, type Ref } from 'vue'
 import { toast, toastWithUndo, showConfirm } from '../../lib/toast.js'
 import {
   loadSessions,
@@ -20,6 +20,7 @@ import {
   getCurrentSessionId,
   setCurrentSessionId,
   isDefaultSessionTitle,
+  setSessionStorageErrorHandler,
   type AiChatSession,
   type ChatTurn,
 } from '../../lib/ai/chatSessions.js'
@@ -47,6 +48,16 @@ export interface AiChatSessionsContext {
 
 export function useAiChatSessions(context: AiChatSessionsContext) {
   const { aiQuery, aiLoading, t, onTurnsChanged, onQueryChanged, focusInput, closeSessionMenu } = context
+
+  // 写盘失败不能只 console.error：界面看起来正常、刷新却丢整段，必须让用户看见
+  setSessionStorageErrorHandler(() => toast(t('ai.sessionStorageWriteFailed'), false))
+
+  /**
+   * 单次撤销窗口内被删的所有会话。toastWithUndo 是单例（第二次会顶掉第一次），
+   * 但闭包持有同一个数组，所以最后一次 toast 的撤销能一次性恢复全部，不再丢数据。
+   */
+  const deletedForUndo: AiChatSession[] = []
+  let undoBatchTimer: ReturnType<typeof setTimeout> | null = null
 
   // ── 多会话管理 (方案 A) ──
   const sessions = ref<AiChatSession[]>(loadSessions())
@@ -89,10 +100,10 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     return s.title
   })
 
-  /** 手动重命名当前/指定会话；空标题 = 恢复自动命名 */
-  function handleRenameSession(id: string, title: string) {
+  /** 手动重命名当前/指定会话；空标题 = 用内存首问恢复自动命名 */
+  function handleRenameSession(id: string, title: string, fallbackQuery?: string) {
     if (!id) return
-    sessions.value = renameSession(id, title)
+    sessions.value = renameSession(id, title, fallbackQuery)
   }
 
   // ── 停止生成 ──
@@ -169,17 +180,20 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
   }
 
   async function handleDeleteSession(id: string) {
+    const isCurrent = currentSessionId.value === id
+    // 非当前会话的磁盘副本可能落后，先同步一次；当前会话直接用内存 chatTurns 备份，
+    // 否则「生成中删除再撤销」会恢复成空/旧会话。
+    if (!isCurrent) persistCurrentSession()
     const target = sessions.value.find((s) => s.id === id)
     if (!target) return
     const title = target.title || t('ai.thisSession')
 
-    // 体验升级（消灭全屏阻断大弹窗）：即时移除 + 保持菜单开启（支持连点清理）+ Toast 撤销
     const backupSession: AiChatSession = {
       ...target,
-      turns: target.turns.map((turn) => ({ ...turn })),
+      turns: (isCurrent ? chatTurns.value : target.turns).map((turn) => ({ ...turn })),
     }
     sessions.value = deleteSessionById(id)
-    if (currentSessionId.value === id) {
+    if (isCurrent) {
       if (sessions.value.length > 0) {
         switchSession(sessions.value[0].id)
       } else {
@@ -187,16 +201,29 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
       }
     }
 
-    toastWithUndo(
-      t('ai.sessionDeleted', { title }),
-      () => {
-        const all = loadSessions()
-        all.unshift(backupSession)
-        saveSessions(all)
-        sessions.value = loadSessions()
-        switchSession(backupSession.id)
-      },
-    )
+    deletedForUndo.push(backupSession)
+    if (undoBatchTimer) clearTimeout(undoBatchTimer)
+    undoBatchTimer = setTimeout(() => {
+      deletedForUndo.length = 0
+      undoBatchTimer = null
+    }, 6500)
+
+    const msg = deletedForUndo.length > 1
+      ? t('ai.sessionDeletedMany', { n: deletedForUndo.length })
+      : t('ai.sessionDeleted', { title })
+    toastWithUndo(msg, () => {
+      const all = loadSessions()
+      for (const backup of deletedForUndo) {
+        if (!all.some((s) => s.id === backup.id)) all.unshift(backup)
+      }
+      saveSessions(all)
+      const firstId = deletedForUndo[0]?.id
+      deletedForUndo.length = 0
+      if (undoBatchTimer) clearTimeout(undoBatchTimer)
+      undoBatchTimer = null
+      sessions.value = loadSessions()
+      if (firstId) switchSession(firstId)
+    })
   }
 
   async function handleClearAllSessions() {
@@ -209,6 +236,17 @@ export function useAiChatSessions(context: AiChatSessionsContext) {
     handleCreateSession()
     toast(t('ai.clearedAllToast'), true)
   }
+
+  // AiWorkspace 与 DetailPanel 各持一份本 composable；切视图时旧组件卸载，
+  // 若不中止在途请求，旧实例的 finally 会用旧 chatTurns 覆盖磁盘。
+  onUnmounted(() => {
+    if (abortSlot.current) {
+      abortSlot.current.abort()
+      abortSlot.current = null
+    }
+    if (chatTurns.value.length > 0) persistCurrentSession()
+    if (undoBatchTimer) clearTimeout(undoBatchTimer)
+  })
 
   return {
     sessions,

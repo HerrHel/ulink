@@ -20,7 +20,7 @@
  *   180ms 文字从点带一侧以 clip-path 揭示；
  *   220ms 轴线浮现，把散开的点重新串成时间轴。
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { t } from '../../i18n/index.js'
 import { buildTurnAnchors, computeVisibleAnchors } from '../../lib/ai/turnAnchors.js'
 import type { ChatTurn } from '../../lib/ai/chatSessions.js'
@@ -80,36 +80,6 @@ function updateScrollbar() {
 }
 
 /**
- * 自绘滚动条的拖动：按「滑块位移 → scrollTop」等比映射，
- * 拖动期间锁住收起（指针一旦滑出栏目宽度，mouseleave 会把整个栏目收掉）。
- */
-const dragging = ref(false)
-
-function onScrollbarPointerDown(e: PointerEvent) {
-  const box = itemsRef.value
-  if (!box || !scrollable.value) return
-  e.preventDefault()
-  const startY = e.clientY
-  const startTop = thumbTop.value
-  const barH = Math.max(1, box.clientHeight - SCROLLBAR_INSET * 2)
-  const maxTop = Math.max(1, barH - thumbH.value)
-  const maxScroll = Math.max(1, box.scrollHeight - box.clientHeight)
-  const ratio = maxScroll / maxTop
-  dragging.value = true
-  const onMove = (ev: PointerEvent) => {
-    const next = Math.min(maxTop, Math.max(0, startTop + ev.clientY - startY))
-    box.scrollTop = next * ratio
-  }
-  const onUp = () => {
-    dragging.value = false
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
-}
-
-/**
  * 容器高度恒定按「min(总轮数, 上限) × 30px + 留白」：展开态多出来的轮次靠
  * 滚动条消化，容器本身不变高 → 点列中心不跳。
  */
@@ -143,9 +113,83 @@ function labelOf(label: string): string {
   return label || t('ai.turnRailAttachment')
 }
 
-/** 拖滚动条时指针可能跑到栏目外，此时不能收 */
+/**
+ * 自绘滚动条的拖动：按「滑块位移 → scrollTop」等比映射。
+ * 拖动期间锁住收起（指针滑出栏目宽度时 mouseleave 会把整个栏目收掉），
+ * 但松手/中断时必须补一次判断，否则那次被吞掉的 mouseleave 就没有下文了。
+ */
+const dragging = ref(false)
+const rootRef = ref<HTMLElement | null>(null)
+let stopDrag: (() => void) | null = null
+
+function isPointerInRail(x: number, y: number): boolean {
+  const root = rootRef.value
+  if (!root) return false
+  const r = root.getBoundingClientRect()
+  return x >= r.left - 2 && x <= r.right + 2 && y >= r.top - 2 && y <= r.bottom + 2
+}
+
+function onScrollbarPointerDown(e: PointerEvent) {
+  const box = itemsRef.value
+  if (!box || !scrollable.value || stopDrag) return
+  e.preventDefault()
+  const pointerId = e.pointerId
+  const startY = e.clientY
+  const startTop = thumbTop.value
+  const barH = Math.max(1, box.clientHeight - SCROLLBAR_INSET * 2)
+  const maxTop = Math.max(1, barH - thumbH.value)
+  const maxScroll = Math.max(1, box.scrollHeight - box.clientHeight)
+  const ratio = maxScroll / maxTop
+  let lastX = e.clientX
+  let lastY = e.clientY
+  dragging.value = true
+
+  const onMove = (ev: PointerEvent) => {
+    if (ev.pointerId !== pointerId) return
+    lastX = ev.clientX
+    lastY = ev.clientY
+    const next = Math.min(maxTop, Math.max(0, startTop + ev.clientY - startY))
+    box.scrollTop = next * ratio
+  }
+  const finish = () => {
+    stopDrag?.()
+    // dragging 期间被吞掉的 mouseleave 不会重来，这里按最终指针位置补一次收起
+    const focusInside = rootRef.value?.contains(document.activeElement) ?? false
+    if (!focusInside && !isPointerInRail(lastX, lastY)) expanded.value = false
+  }
+  const onUp = (ev: PointerEvent) => { if (ev.pointerId === pointerId) finish() }
+  const onCancel = () => finish()
+
+  stopDrag = () => {
+    dragging.value = false
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onCancel)
+    window.removeEventListener('blur', onCancel)
+    stopDrag = null
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onCancel)
+  window.addEventListener('blur', onCancel)
+}
+
+onMounted(() => {
+  // 容器高度含 62vh，窗口缩放后滑块比例必须重算（不重算会出现「滑块超出轨道」）
+  window.addEventListener('resize', updateScrollbar)
+  nextTick(updateScrollbar)
+})
+
+onBeforeUnmount(() => {
+  stopDrag?.()
+  window.removeEventListener('resize', updateScrollbar)
+})
+
+/** 拖滚动条时指针可能跑到栏目外，此时不能收；键盘焦点在栏内时也不能收 */
 function onLeave() {
   if (dragging.value) return
+  const root = rootRef.value
+  if (root?.contains(document.activeElement)) return
   expanded.value = false
 }
 
@@ -160,6 +204,7 @@ function onFocusOut(e: FocusEvent) {
 <template>
   <div
     v-if="visibleAnchors.length >= 2"
+    ref="rootRef"
     class="chat-turn-rail"
     :class="{ 'is-expanded': expanded }"
     :style="railStyle"

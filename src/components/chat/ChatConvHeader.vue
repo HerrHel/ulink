@@ -11,26 +11,32 @@
  * 悬浮控件，底色只在中轴附近铺开、两侧用 mask 渐隐，正文从它下方穿过时像被雾化
  * 而不是被切了一刀。`pointer-events` 只落在三个控件上，其余区域让给正文。
  */
-import { nextTick, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { t } from '../../i18n/index.js'
+import { truncateCodePoints } from '../../lib/ai/chatSessions.js'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** 当前会话标题（自定义 / 自动提炼 / i18n 兜底，父级已算好） */
   title: string
   /** 历史会话数量 */
   sessionCount: number
-}>()
+  /** 会话 id：编辑开始时捕获，随 rename 一起回传，杜绝跨会话写错对象 */
+  sessionId?: string
+}>(), { sessionId: '' })
 
 const emit = defineEmits<{
   openHistory: []
   newChat: []
-  rename: [title: string]
+  rename: [sessionId: string, title: string]
 }>()
 
 const editing = ref(false)
 const draft = ref('')
 const inputRef = ref<HTMLInputElement | null>(null)
 const titleRef = ref<HTMLElement | null>(null)
+/** 编辑开始时的会话与标题快照：会话切换/流式自动命名期间 props 会变，不能用实时值 */
+const sessionAtStart = ref('')
+const titleAtStart = ref('')
 
 /**
  * 标题 ⇄ 输入框不是硬切：从当前标题的宽度「长」到输入框宽度，收起时再缩回去。
@@ -47,7 +53,9 @@ function animateWidth(el: HTMLElement | null, from: number | null) {
 
 async function startEdit() {
   const fromWidth = titleRef.value?.getBoundingClientRect().width ?? null
-  draft.value = (props.title || '').trim()
+  sessionAtStart.value = props.sessionId
+  titleAtStart.value = (props.title || '').trim()
+  draft.value = titleAtStart.value
   editing.value = true
   await nextTick()
   animateWidth(inputRef.value, fromWidth)
@@ -55,20 +63,44 @@ async function startEdit() {
   inputRef.value?.select()
 }
 
+/** 卸载输入框后把焦点还给标题按钮，避免键盘导航从文档开头重来 */
+function restoreFocus() {
+  void nextTick(() => titleRef.value?.focus())
+}
+
 /** 提交：Enter / 失焦；空串交给父级恢复自动命名 */
 function commit() {
   if (!editing.value) return
   editing.value = false
   const next = draft.value.trim().replace(/\s+/g, ' ')
-  if (next === (props.title || '').trim()) return
-  emit('rename', next.slice(0, 60))
+  restoreFocus()
+  if (next === titleAtStart.value) return
+  emit('rename', sessionAtStart.value, truncateCodePoints(next, 60))
 }
 
 /** 取消：Esc；先落 editing 再卸载输入框，避免随后的 blur 二次提交 */
 function cancel() {
   if (!editing.value) return
   editing.value = false
+  restoreFocus()
 }
+
+/** 中文输入法「按 Enter 选词」不能当作提交（Vue 的 .enter 不检查 isComposing） */
+function onEnterKeyDown(e: KeyboardEvent) {
+  if (e.isComposing || e.keyCode === 229) return
+  e.preventDefault()
+  commit()
+}
+
+/** 会话真的换了就取消编辑：草稿属于旧会话，不能落到新会话上 */
+watch(() => props.sessionId, (id) => {
+  if (editing.value && id !== sessionAtStart.value) cancel()
+})
+
+/** 组件被卸载时（切视图 / 会话被删）兜底提交，避免已输入的草稿静默丢失 */
+onBeforeUnmount(() => {
+  if (editing.value) commit()
+})
 </script>
 
 <template>
@@ -102,7 +134,7 @@ function cancel() {
           maxlength="60"
           :placeholder="t('ai.convRenameHint')"
           :aria-label="t('ai.convRename')"
-          @keydown.enter.prevent="commit"
+          @keydown.enter="onEnterKeyDown"
           @keydown.esc.prevent="cancel"
           @blur="commit"
         />

@@ -20,7 +20,7 @@
  * 注：不用 process.exit() —— Node 24 + Windows 下 fetch 的 undici 句柄会在退出时
  * 触发 libuv 断言（0xC0000409）；改为返回退出码交给 process.exitCode。
  */
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -36,11 +36,17 @@ function sh(cmd) {
 function isAncestor(a, b) {
   if (!a || !b) return false
   try {
-    execSync(`git merge-base --is-ancestor ${a} ${b}`, { stdio: 'ignore' })
+    // 参数数组而非字符串拼接：外部 version.json 的 commit 不能进 shell
+    execFileSync('git', ['merge-base', '--is-ancestor', a, b], { stdio: 'ignore' })
     return true
   } catch {
     return false
   }
+}
+
+/** version.json 来自远端，commit 必须先按 git sha 形态白名单校验 */
+function isGitSha(value) {
+  return typeof value === 'string' && /^[0-9a-f]{7,40}$/i.test(value)
 }
 
 function fmt(iso) {
@@ -144,8 +150,10 @@ async function main() {
     return 3
   }
 
-  const remoteCommit = typeof remote.commit === 'string' ? remote.commit : ''
-  const remoteShort = remoteCommit && remoteCommit !== 'unknown' ? remoteCommit.slice(0, 7) : (remote.commitShort || 'unknown')
+  const rawCommit = typeof remote.commit === 'string' ? remote.commit : ''
+  // 未通过白名单的值只用于展示，绝不用于 git 命令
+  const remoteCommit = isGitSha(rawCommit) ? rawCommit : ''
+  const remoteShort = isGitSha(rawCommit) ? rawCommit.slice(0, 7) : 'unknown'
 
   console.log('本地:')
   console.log(`  分支      ${localBranch}`)
@@ -191,7 +199,7 @@ async function main() {
     return 0
   }
 
-  if (isAncestor(remoteCommit, localCommit)) {
+  if (isGitSha(remoteCommit) && isAncestor(remoteCommit, localCommit)) {
     const behind = sh(`git rev-list --count ${remoteCommit}..HEAD`) || '?'
     console.log(`\n✗ 线上落后本地 ${behind} 个提交（线上 ${remoteShort} → 本地 ${localShort}）`)
     console.log('  若刚推送过，确认 CI deploy job 是否成功（gh run list --limit 3）。')

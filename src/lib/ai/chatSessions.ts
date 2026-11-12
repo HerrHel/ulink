@@ -112,11 +112,17 @@ export function isDefaultSessionTitle(title: string | undefined | null): boolean
   return !title || title === '新会话'
 }
 
+/** 按 Unicode 码点截断：String.slice 会按 UTF-16 码元切，emoji 会被切成半个代理对 */
+export function truncateCodePoints(text: string, max: number): string {
+  const chars = Array.from(text)
+  return chars.length > max ? chars.slice(0, max).join('') : text
+}
+
 /** 提取前 16 个字符作为会话标题（无可用文本时留空，展示侧回退到 i18n 默认标题） */
 export function extractSessionTitle(query: string): string {
   const clean = query.trim().replace(/^[\/\s]+/, '')
   if (!clean || isThreePartCipher(clean)) return ''
-  return clean.length > 16 ? clean.slice(0, 16) + '…' : clean
+  return Array.from(clean).length > 16 ? truncateCodePoints(clean, 16) + '…' : clean
 }
 
 /** 从本地存储加载所有会话（元素级校验：坏数据/半截 JSON 不进会话列表） */
@@ -135,6 +141,12 @@ export function loadSessions(): AiChatSession[] {
   } catch {
     return []
   }
+}
+
+/** localStorage 写失败时由 UI 层注册的通知钩子（纯数据层不直接依赖 toast） */
+let storageErrorHandler: (() => void) | null = null
+export function setSessionStorageErrorHandler(fn: (() => void) | null): void {
+  storageErrorHandler = fn
 }
 
 /** 保存会话列表到本地存储 */
@@ -208,6 +220,7 @@ export function saveSessions(sessions: AiChatSession[]): void {
     }
     if (!safeSetItem(K_AI_SESSIONS, json)) {
       console.error('[ulink] saveSessions: localStorage 写入失败（配额满），本次会话未持久化')
+      storageErrorHandler?.()
     }
   } catch (e) {
     console.warn('[ulink] saveSessions failed:', e)
@@ -221,7 +234,10 @@ export function getCurrentSessionId(): string | null {
 
 /** 设置当前激活的会话 ID */
 export function setCurrentSessionId(id: string): void {
-  safeSetItem(K_AI_CUR_SESSION, id)
+  if (!safeSetItem(K_AI_CUR_SESSION, id)) {
+    console.error('[ulink] setCurrentSessionId: localStorage 写入失败')
+    storageErrorHandler?.()
+  }
 }
 
 /** 创建新会话 */
@@ -281,18 +297,21 @@ export function updateSession(
  * - 不动 updatedAt：改名不是「有新内容」，历史列表不该因此重排；
  * - 返回重新排序后的全量列表，供调用方直接回写响应式状态。
  */
-export function renameSession(sessionId: string, title: string): AiChatSession[] {
+export function renameSession(
+  sessionId: string,
+  title: string,
+  fallbackQuery?: string,
+): AiChatSession[] {
   const all = loadSessions()
   const idx = all.findIndex((s) => s.id === sessionId)
   if (idx === -1) return all
   const cur = all[idx]
   const clean = title.trim().replace(/\s+/g, ' ')
   const firstUserTurn = cur.turns.find((t) => t.role === 'user')
-  const next = clean
-    ? clean.slice(0, 60)
-    : firstUserTurn
-      ? extractSessionTitle(firstUserTurn.content)
-      : ''
+  // 磁盘 turns 已被 saveSessions 截断到最近 30 轮且全部脱敏，拿不到「真正的首问」；
+  // 调用方传入内存中的首问（未脱敏、未截断）优先，避免长会话/含密钥时标题错乱。
+  const query = fallbackQuery || firstUserTurn?.content || ''
+  const next = clean ? truncateCodePoints(clean, 60) : extractSessionTitle(query)
   all[idx] = { ...cur, title: next }
   saveSessions(all)
   return loadSessions()

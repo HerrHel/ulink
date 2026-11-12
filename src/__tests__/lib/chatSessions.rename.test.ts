@@ -48,6 +48,22 @@ describe('renameSession — 会话标题就地重命名', () => {
     expect(renameSession('s1', '   ')[0].title).toBe('')
   })
 
+  it('空标题优先用调用方传入的内存首问，避免磁盘已截断/已脱敏的数据', () => {
+    const turns: ChatTurn[] = [turn('user', '真正的第一条提问')]
+    for (let i = 1; i <= 40; i++) turns.push(turn('user', `第${i + 1}条提问内容`))
+    saveSessions([session('s1', '自定义', turns, 100)])
+    expect(renameSession('s1', '', '真正的第一条提问')[0].title).toBe('真正的第一条提问')
+    // 不传 fallbackQuery 时仍回落到磁盘副本（保留旧调用兼容）
+    expect(renameSession('s1', '')[0].title).not.toBe('真正的第一条提问')
+  })
+
+  it('自动命名与自定义标题都按码点截断，不产生孤立代理项', () => {
+    saveSessions([session('s1', '', [turn('user', 'hi')], 100)])
+    const title = renameSession('s1', '😀'.repeat(70))[0].title
+    expect(Array.from(title)).toHaveLength(60)
+    expect(title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+
   it('改名不动 updatedAt，历史列表不会因此重排', () => {
     saveSessions([
       session('old', '旧的', [turn('user', 'a')], 100),
