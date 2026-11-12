@@ -20,10 +20,12 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.describe('L1 同步 mock', () => {
-  // fixme(2026-10-22)：CloudBase 形态下 js-sdk 假 session 注入待适配——mock 写的
-// linkvault_auth 是 supabase-js storageKey，js-sdk 的 session 持久化键/结构不同，
-// 导致 getSession 读不到假会话（登录态未建立）。浏览器实摸存储形态后解除。
-test.fixme('假 session + 手动同步 happy path', async ({ page }) => {
+  // 2026-10-22 曾 test.fixme：CloudBase 形态下 js-sdk 假 session 注入待适配。
+  // 现已不成立：① playwright.config 把 L1/dev 钉死 VITE_BACKEND=''（Supabase 形态，
+  // 假 session 写 linkvault_auth 即可被 supabase-js 读回）；② supabaseMock 本身已支持
+  // backend:'cloudbase' 分流（写 credentials_*/tcb_* 键）。永久 fixme 会让同步 happy path
+  // 零覆盖（审计 #27），解除后由本用例真实执行；若再切形态失败，会红而不是静默跳过。
+  test('假 session + 手动同步 happy path', async ({ page }) => {
     test.setTimeout(60000)
     const { stats } = await installSupabaseMock(page)
 

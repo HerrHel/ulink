@@ -163,8 +163,26 @@ describe('ChatTurnRail — 左侧消息锚点导航（点带自身展开）', ()
 describe('接线防回退断言（静态）', () => {
   const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8')
 
+  /**
+   * 读源码并剥离注释后再断言（审计 #28）：
+   * toContain 类静态断言的最大假绿源是「注释里恰好写了同样的字样」——
+   * 代码被删干净、只剩注释，断言照样绿。统一在去注释后的源码上匹配，
+   * 注释不再能伪造接线证据；反之文档性注释也不再触发 not.toContain 假红。
+   * 剥离规则（刻意保守，宁可少剥也不误吃代码）：
+   *   - HTML 注释 `<!-- -->`
+   *   - 行注释 `// ...`（`://` 不剥，避免误伤 URL；且要求前面非冒号）
+   *   - 块注释仅当 `/*` 出现在行首/空白之后（模板属性 accept="image/*" 这类
+   *     字符串里的 `/*` 前面是字母，不当作注释起点）
+   * 剥离过猛会让断言立刻红（本测试的失败方向安全：只有假绿需要防，假红会被发现）。
+   */
+  const readCode = (p: string) =>
+    read(p)
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/(^|\s)\/\*[\s\S]*?\*\//g, '$1')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+
   it('AiWorkspace 挂载 ChatTurnRail 与常驻会话顶栏；不再有滚动浮出胶囊', () => {
-    const s = read('src/components/chat/AiWorkspace.vue')
+    const s = readCode('src/components/chat/AiWorkspace.vue')
     expect(s).toContain('<ChatTurnRail')
     expect(s).toContain('@jump="jumpToTurn"')
     // 历史 / 标题 / 新对话三件套常驻在 ChatConvHeader 里，滚动与否都能用
@@ -176,26 +194,26 @@ describe('接线防回退断言（静态）', () => {
     expect(s).not.toContain('ai-new-chat-float')
     expect(s).not.toContain('showFloatNewChat')
     // 顶栏是绝对定位的雾化层，绝不 sticky（否则又变成一条横带）
-    const header = read('src/components/chat/ChatConvHeader.vue')
+    const header = readCode('src/components/chat/ChatConvHeader.vue')
     expect(header).not.toContain('position: sticky')
     expect(header).toContain('position: absolute')
   })
 
   it('会话标题可就地重命名（输入框 + Enter/失焦提交 + Esc 取消）', () => {
-    const header = read('src/components/chat/ChatConvHeader.vue')
+    const header = readCode('src/components/chat/ChatConvHeader.vue')
     expect(header).toContain('conv-title-input')
     expect(header).toContain('@keydown.enter="onEnterKeyDown"')
     expect(header).toContain("@keydown.esc.prevent=\"cancel\"")
     expect(header).toContain('@blur="commit"')
     expect(header).toContain("emit('rename'")
     // 空标题不是空壳，交给 store 恢复自动命名
-    const store = read('src/lib/ai/chatSessions.ts')
+    const store = readCode('src/lib/ai/chatSessions.ts')
     expect(store).toContain('export function renameSession')
     expect(store).toContain('extractSessionTitle(query)')
   })
 
   it('展开态可滚动挑选历史：自绘滚动条 + 全量轮次 + 当前轮自动滚到中部', () => {
-    const s = read('src/components/chat/ChatTurnRail.vue')
+    const s = readCode('src/components/chat/ChatTurnRail.vue')
     // 原生滚动条隐藏，改用自绘（overlay 滚动条在部分环境不可见）
     expect(s).toContain('scrollbar-width: none')
     expect(s).toContain('turn-rail-scrollbar')
@@ -209,21 +227,28 @@ describe('接线防回退断言（静态）', () => {
   })
 
   it('跳转只滚内层容器，绝不用 scrollIntoView（避免整页上移）', () => {
-    const s = read('src/components/chat/AiWorkspace.vue')
-    const fn = s.slice(s.indexOf('function jumpToTurn'), s.indexOf('// 会话切换 / 新消息后重算高亮'))
+    // 切片断言必须在原始源码上做：起点锚点是函数声明（代码），终点锚点本身是注释。
+    const raw = read('src/components/chat/AiWorkspace.vue')
+    const start = raw.indexOf('function jumpToTurn')
+    const end = raw.indexOf('// 会话切换 / 新消息后重算高亮')
+    // 锚点必须真实存在且有序：任一失效时 slice 会切出空串/错段，后面的断言全部假绿。
+    // 显式断言锚点，让「锚点被改名/删除」红在这里，而不是静默滑过（审计 #28）。
+    expect(start, 'jumpToTurn 函数锚点不存在（被改名/删除？）').toBeGreaterThanOrEqual(0)
+    expect(end, '切片终点注释锚点不存在（被改写？）').toBeGreaterThan(start)
+    const fn = raw.slice(start, end)
     expect(fn).toContain('container.scrollTo')
     // 注释里会提到这个 API 名，所以只禁止「实际调用」而非字符串出现
     expect(fn).not.toMatch(/\.\s*scrollIntoView\s*\(/)
   })
 
   it('ChatStream 每条用户消息都带 data-turn-id 锚点', () => {
-    const s = read('src/components/chat/ChatStream.vue')
+    const s = readCode('src/components/chat/ChatStream.vue')
     expect(s).toContain(':data-turn-id="turn.role === \'user\' ? turn.id : undefined"')
     expect(s).toContain('scroll-margin-top: 72px')
   })
 
   it('悬停的会话行不会盖住滚动条（滑块压在条目之上，且右侧留出安全距）', () => {
-    const s = read('src/components/chat/ChatTurnRail.vue')
+    const s = readCode('src/components/chat/ChatTurnRail.vue')
     // 条目 hover 底纹整行铺满，滚动条若在它下面就会被吃掉
     expect(s).toContain('z-index: 2')
     expect(s).toContain('padding: 6px 5px 6px 0')
@@ -234,7 +259,7 @@ describe('接线防回退断言（静态）', () => {
   })
 
   it('收起点距紧凑、展开才拉开，且容器高度不随展开变化（中心不跳）', () => {
-    const s = read('src/components/chat/ChatTurnRail.vue')
+    const s = readCode('src/components/chat/ChatTurnRail.vue')
     expect(s).toContain('width: 32px')
     expect(s).toContain('width: 300px')
     expect(s).not.toContain('rail-panel')
@@ -257,7 +282,7 @@ describe('接线防回退断言（静态）', () => {
   })
 
   it('展开形变由点带自身长出：表面与宽度同步、文字从左揭示', () => {
-    const s = read('src/components/chat/ChatTurnRail.vue')
+    const s = readCode('src/components/chat/ChatTurnRail.vue')
     // 表面绝不能加横向缩放：宽度先飞出去、材质追不上会变成「透明骨架先弹出」
     expect(s).not.toContain('scaleX')
     // 文字从左向右揭示，像被点带拉出来

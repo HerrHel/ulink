@@ -58,7 +58,12 @@ export default defineConfig({
     //   session mock 按 VITE_BACKEND 分流：Supabase 写 linkvault_auth；切到 cloudbase 形态时
     //   e2e/helpers/supabaseMock.ts 的 installSupabaseMock 改写 credentials_*/tcb_* 键（见该文件）。
     // L2：纯透传真实环境（真后端），不注入任何 mock fallback。
-    env: isL2
+    // prod：与 L2 一样只透传 baseEnv——构建必须读 .env.production（VITE_BACKEND=cloudbase
+    //   + 真基址 https://ulink.ren）。此前把 L1 的 VITE_BACKEND:'' 也注入给 prod 构建，
+    //   导致「E2E Tests (prod build)」测的是 Supabase 形态 + 假基址，与线上形态相反，
+    //   复现不了仅生产构建生效的问题（审计 #7）。CI runner 无 VITE_* 环境变量，
+    //   不会覆盖 .env.production；本地跑 prod 模式时也以 .env.production 为准。
+    env: isL2 || isProd
       ? baseEnv
       : {
           ...baseEnv,
