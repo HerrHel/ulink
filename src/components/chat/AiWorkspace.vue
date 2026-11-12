@@ -770,6 +770,9 @@ onUnmounted(() => {
   window.removeEventListener('drop', resetDragState)
   scrollContainerRef.value?.removeEventListener('scroll', onScrollSpy)
   if (spyRafId && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(spyRafId)
+  // 在途 morph 的收尾统一执行：清掉 inline transform/transition 与兜底 timer（审计 #14）
+  for (const cleanup of [...morphCleanups]) cleanup()
+  morphCleanups.clear()
 })
 
 /**
@@ -790,6 +793,15 @@ function prefersReducedMotion(): boolean {
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+/**
+ * morph 的重入代次与收尾队列：
+ * - 同一胶囊被连续 morph（提交后立刻开新对话）时，旧代次的 rAF 回调与收尾
+ *   直接作废，避免两套 inline transform 互相覆盖（审计 #14）。
+ * - 收尾任务登记进集合，卸载时统一执行，不留悬空 timer 监听。
+ */
+const morphToken = new WeakMap<HTMLElement, number>()
+const morphCleanups = new Set<() => void>()
+
 async function morphCapsule(from: DOMRect | null, getTarget: () => HTMLElement | null) {
   if (!from || prefersReducedMotion()) return
   await nextTick()
@@ -805,21 +817,40 @@ async function morphCapsule(from: DOMRect | null, getTarget: () => HTMLElement |
   // 用真实宽度比做缩放，两端才能严丝合缝地接上；比例差太多说明不是同一个形态，直接跳过
   const scale = from.width / rect.width
   if (!Number.isFinite(scale) || scale < 0.75 || scale > 1.35) return
+  const token = (morphToken.get(to) ?? 0) + 1
+  morphToken.set(to, token)
   to.style.transformOrigin = 'top left'
   to.style.willChange = 'transform'
   to.style.transition = 'none'
   to.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`
   void to.offsetWidth // 提交起始帧，否则浏览器会把两次赋值合并成「没有动画」
   requestAnimationFrame(() => {
+    if (morphToken.get(to) !== token) return
     to.style.transition = 'transform 0.34s cubic-bezier(0.4, 0, 0.2, 1)'
     to.style.transform = 'translate(0, 0) scale(1)'
   })
-  window.setTimeout(() => {
+  // 收尾用 transitionend 而不是固定 420ms timer（审计 #14/#15）：
+  // 1) 动画被打断/页面切后台时 timer 与真实结束时刻脱节，inline
+  //    transition/transform 会多覆盖一段 drag-over 与 focus 的 CSS 过渡；
+  // 2) 600ms 只是兜底保险（transitionend 万一不触发），先到先清。
+  const cleanup = () => {
+    to.removeEventListener('transitionend', onEnd)
+    window.clearTimeout(fallback)
+    morphCleanups.delete(cleanup)
+    if (morphToken.get(to) !== token) return
+    morphToken.delete(to)
     to.style.transform = ''
     to.style.transition = ''
     to.style.willChange = ''
     to.style.transformOrigin = ''
-  }, 420)
+  }
+  const onEnd = (e: TransitionEvent) => {
+    if (e.target !== to || e.propertyName !== 'transform') return
+    cleanup()
+  }
+  to.addEventListener('transitionend', onEnd)
+  const fallback = window.setTimeout(cleanup, 600)
+  morphCleanups.add(cleanup)
 }
 
 function submitQuery() {
@@ -1444,7 +1475,10 @@ watch(aiQuery, () => {
   background: rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  z-index: 1000;
+  /* sheet 层（2500）：必须高于移动端导航 rail 的 calc(--z-drawer + 200)=2000，
+     否则 430px 视口下导航浮在抽屉遮罩之上（审计 #12）。不用裸 1000 这种
+     脱离令牌体系的字面量——z 层级只此一处收敛在 tokens.css。 */
+  z-index: var(--z-sheet, 2500);
   display: flex;
   justify-content: flex-end;
 }
@@ -1750,7 +1784,9 @@ watch(aiQuery, () => {
     padding: 20px 14px 60px;
   }
   .ai-dialogue-stream-wrap {
-    padding: 52px 12px 110px;
+    /* 移动端雾化顶栏高 44px + 12px 呼吸距 = 56px（桌面 46+12=58 同步放大约
+       1.2 倍）：此前只让 52px，首条消息上沿会钻进顶栏雾层底下（审计 #11） */
+    padding: 56px 12px 110px;
   }
   .ai-dock-floating-container {
     padding: 6px 12px 14px;

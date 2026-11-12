@@ -75,12 +75,12 @@
 }
 
 @keyframes viewSwapIn {
+  /* 只声明 from：to 落回元素自然样式（transform:none / opacity:1）。
+     若显式写 to{transform:translateY(0)}，fill-mode both 会把终态钉成
+     matrix(1,0,0,1,0,0)——非 none 的 transform 凭空创建层叠上下文，还会把
+     该元素变成其后代 position:fixed 的包含块（审计 #22 实测残留）。 */
   from {
     opacity: 0;
     transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
   }
 }

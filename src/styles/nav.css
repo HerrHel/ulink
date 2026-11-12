@@ -89,7 +89,14 @@
 /* 选中项不再叠 hover 底纹：底纹是「选中态滑块」，再盖一层灰会把它吃掉 */
 .rail-item:not(.active):hover{color:var(--text);background:var(--surface-hover);transform:translateX(3px)}
 .rail-item.active:hover{color:var(--accent)}
+/* 按压反馈：与上一行同特异性（0,3,0）且声明在后，才能压过 hover 位移。
+   此前 :active 规则特异性只有 0,2,0，被 :not(.active):hover 永远盖住，
+   scale(0.98) 从未生效（审计 #13）。按压时保留 hover 的 3px 位移再缩放，
+   避免按下瞬间先跳回原位。 */
+.rail-item:not(.active):active{transform:translateX(3px) scale(0.98);transition-duration:0.05s}
+.rail-item.active:active{transform:scale(0.98);transition-duration:0.05s}
 }
+/* 触屏无 hover 态：按压只缩放、不位移 */
 .rail-item:active{transform:scale(0.98);transition-duration:0.05s}
 .rail-item.active{
   color:var(--accent);font-weight:600;

@@ -157,6 +157,14 @@ onMounted(() => {
     resizeObserver = new ResizeObserver(() => syncPill())
     resizeObserver.observe(navRef.value)
   }
+  // 字体/图标异步就绪后条目宽度会变，而容器尺寸不变 → ResizeObserver 不触发，
+  // 滑块会按加载前的旧宽度停着。字体就绪后补测一次（审计 #29）；
+  // 环境无 document.fonts 时退化为下一帧补测。
+  if (typeof document !== 'undefined' && document.fonts?.ready) {
+    void document.fonts.ready.then(() => syncPill())
+  } else if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => syncPill())
+  }
 })
 
 onBeforeUnmount(() => {
@@ -244,10 +252,12 @@ function onUserClick() {
 
 function openCatModalNav() { openCatModal() }
 
-// 视图切换、分类切换、分类增删排序、窄屏抽屉开合后都要重新对位
+// 视图切换、分类切换、分类增删排序、窄屏抽屉开合、数据空间切换后都要重新对位。
+// curSpace（审计 #29）：切私密空间会换一组入口，条目高/位置都变，此前漏在依赖外，
+// 滑块会停在旧条目的几何上。
 const catKey = computed(() => categories.value.map((c) => c.id).join('|'))
 watch(
-  () => [uiStore.activeView, uiStore.curCat, catKey.value, shareMode.value, uiStore.aiRailEnabled, uiStore.panels.rail],
+  () => [uiStore.activeView, uiStore.curCat, uiStore.curSpace, catKey.value, shareMode.value, uiStore.aiRailEnabled, uiStore.panels.rail],
   () => nextTick(syncPill),
 )
 </script>

@@ -174,15 +174,36 @@ function onScrollbarPointerDown(e: PointerEvent) {
   window.addEventListener('blur', onCancel)
 }
 
+/**
+ * 窗口 resize 的节流包装（审计 #30）：拖动缩放窗口时 resize 事件密集触发，
+ * 每次同步读 scrollHeight/clientHeight 都是强制回流。合并到下一帧再量一次。
+ */
+let resizeRafId = 0
+function onViewportResize() {
+  if (typeof requestAnimationFrame !== 'function') {
+    updateScrollbar()
+    return
+  }
+  if (resizeRafId) return
+  resizeRafId = requestAnimationFrame(() => {
+    resizeRafId = 0
+    updateScrollbar()
+  })
+}
+
 onMounted(() => {
   // 容器高度含 62vh，窗口缩放后滑块比例必须重算（不重算会出现「滑块超出轨道」）
-  window.addEventListener('resize', updateScrollbar)
+  window.addEventListener('resize', onViewportResize)
   nextTick(updateScrollbar)
 })
 
 onBeforeUnmount(() => {
   stopDrag?.()
-  window.removeEventListener('resize', updateScrollbar)
+  window.removeEventListener('resize', onViewportResize)
+  if (resizeRafId && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(resizeRafId)
+    resizeRafId = 0
+  }
 })
 
 /** 拖滚动条时指针可能跑到栏目外，此时不能收；键盘焦点在栏内时也不能收 */

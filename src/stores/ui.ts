@@ -123,7 +123,7 @@ export interface UIState {
   aiRailEnabled: boolean
   /** 主区域当前视图：bookmarks 书签列表 / ai 沉浸式对话工作区 */
   activeView: 'bookmarks' | 'ai'
-  /** 触发开启新对话的时间戳信号（非持久化） */
+  /** 触发开启新对话的序号信号（非持久化，单调递增；消费方只关心「变了」） */
   aiNewChatTrigger: number
   editingId: string | null
   /** 当前数据空间：main = 主页公共数据集；vault = 私密空间独立数据集 */
@@ -358,7 +358,9 @@ export const useUIStore = defineStore('ui', {
       this.focusedGroupId = null
       this.panels.detail = false
       if (triggerNewChat) {
-        this.aiNewChatTrigger = Date.now()
+        // 单调递增而不是 Date.now()：同一毫秒内连点两次「新对话」会拿到相同
+        // 时间戳，watch 认为值没变、第二次触发被吞掉（审计 #21）。
+        this.aiNewChatTrigger += 1
       }
       if (this.isMobile) this.panels.rail = false
     },
@@ -368,7 +370,8 @@ export const useUIStore = defineStore('ui', {
       this.activeView = 'ai'
       this.focusedGroupId = null
       this.panels.detail = false
-      this.aiNewChatTrigger = Date.now()
+      // 同上：序号自增，保证每次触发都是可观测的新值
+      this.aiNewChatTrigger += 1
       if (this.isMobile) this.panels.rail = false
     },
 

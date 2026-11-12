@@ -112,7 +112,7 @@
             <template v-if="!card.executing && selectedCount > 0"> ({{ selectedCount }})</template>
           </span>
         </button>
-        <div v-else key="done" class="diff-completed-notice">
+        <div v-else key="done" class="diff-completed-notice" tabindex="-1" :ref="focusOnDone">
           <span>✓ {{ t('ai.diffApplied') }}</span>
         </div>
       </Transition>
@@ -126,6 +126,15 @@ import { useI18n } from '../../i18n/index.js'
 import { displayText } from '../../utils.js'
 import type { ChatActionCard } from '../../lib/ai/chatSessions.js'
 import type { DraftDiffPayload, DiffChangeType } from '../../lib/ai/draftDiff.js'
+
+/**
+ * 完成提示接管焦点（审计 #19）：out-in 交接期间旧按钮被卸载，焦点会抛回
+ * body。给提示 tabindex="-1" 并在挂载时 programmatic focus——不进 Tab 序，
+ * 只作焦点落点，读屏可播报「已应用」。与 ChatDagPlan 同一套修法。
+ */
+function focusOnDone(el: unknown) {
+  if (el instanceof HTMLElement) el.focus({ preventScroll: true })
+}
 
 const props = defineProps<{
   card: ChatActionCard
@@ -393,6 +402,8 @@ function formatDomain(url: string): string {
 
 .diff-card-footer {
   margin-top: 4px;
+  /* 高度预留（审计 #19）：out-in 交接空档 footer 不塌陷，与 ChatDagPlan 同一套修法 */
+  min-height: 36px;
 }
 
 .diff-apply-btn {

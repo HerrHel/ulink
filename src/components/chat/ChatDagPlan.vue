@@ -101,7 +101,7 @@
           <span v-if="card.executing" class="dag-spin">⏳</span>
           <span>{{ card.executing ? t('ai.dagPlanExecuting') : t('ai.dagPlanExecuteButton') }}</span>
         </button>
-        <div v-else key="done" class="dag-completed-notice">
+        <div v-else key="done" class="dag-completed-notice" tabindex="-1" :ref="focusOnDone">
           <span>✓ {{ t('ai.dagPlanCompleted') }}</span>
         </div>
       </Transition>
@@ -114,6 +114,15 @@ import { computed } from 'vue'
 import { useI18n } from '../../i18n/index.js'
 import type { ChatActionCard } from '../../lib/ai/chatSessions.js'
 import { calculatePlanProgress, type TaskDagPlan, type TaskStepStatus } from '../../lib/ai/taskPlanner.js'
+
+/**
+ * 完成提示接管焦点（审计 #19）：out-in 交接期间旧按钮被卸载，浏览器会把焦点
+ * 抛回 body，键盘/读屏用户瞬间失去位置。给提示 tabindex="-1" 并在挂载时
+ * programmatic focus——不进 Tab 序，只作焦点落点，读屏可播报「已完成」。
+ */
+function focusOnDone(el: unknown) {
+  if (el instanceof HTMLElement) el.focus({ preventScroll: true })
+}
 
 const props = defineProps<{
   card: ChatActionCard
@@ -365,6 +374,9 @@ function getStatusLabel(status: TaskStepStatus): string {
 
 .dag-card-footer {
   margin-top: 4px;
+  /* 高度预留（审计 #19）：out-in 交接有一帧空档，footer 无内容时会塌陷，
+     卡片底边跳一下再弹回。预留一个按钮行高，交接期高度恒定。 */
+  min-height: 36px;
 }
 
 .dag-execute-all-btn {

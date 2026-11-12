@@ -252,7 +252,10 @@
   .icon-rail .rail-user .rail-user-meta{display:none}
   .icon-rail .rail-item .rail-count{display:none}
   .icon-rail .rail-item > span{display:flex}
-  .rail-active-pill::before{left:auto;right:0;width:3px;height:14px}
+  /* 紧凑态条移到右缘（贴内容区分界），外露边变成左侧：圆角方向要跟着翻转，
+     否则右缘条的左角是直角、贴边的右角反而被磨圆（审计 #20）。
+     基础形态（左缘条）radius 为 0 3px 3px 0。 */
+  .rail-active-pill::before{left:auto;right:0;width:3px;height:14px;border-radius:3px 0 0 3px}
   #resizeLeft{display:none}
   .icon-rail .rail-bottom{border-top:none}
 

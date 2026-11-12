@@ -340,3 +340,30 @@ describe('UIStore', () => {
     })
   })
 })
+
+// 审计 #21：新对话触发信号曾是 Date.now()，同一毫秒内连点两次得到相同值，
+// AiWorkspace 的 watch 认为「没变」→ 第二次「新对话」被吞。改为单调自增后，
+// 任意连续两次触发都必须是可观测的新值。
+describe('aiNewChatTrigger 单调性（审计 #21）', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('连续两次 triggerAiNewChat 都产出不同值', () => {
+    const store = useUIStore()
+    const seen = new Set<number>()
+    for (let i = 0; i < 5; i++) {
+      store.triggerAiNewChat()
+      seen.add(store.aiNewChatTrigger)
+    }
+    expect(seen.size).toBe(5)
+  })
+
+  it('switchToAiView(true) 与 triggerAiNewChat 共用同一单调序列', () => {
+    const store = useUIStore()
+    store.switchToAiView(true)
+    const first = store.aiNewChatTrigger
+    store.triggerAiNewChat()
+    expect(store.aiNewChatTrigger).toBeGreaterThan(first)
+    store.switchToAiView(true)
+    expect(store.aiNewChatTrigger).toBeGreaterThan(first + 1)
+  })
+})
