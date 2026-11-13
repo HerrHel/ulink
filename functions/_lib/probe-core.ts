@@ -2,13 +2,15 @@
  * probe-core — 海外探针的核心处理逻辑（与部署形态无关）
  *
  * 历史：这段逻辑原本只存在于 `functions/api/check-link.ts`（Cloudflare Pages Functions）。
- * 2026-11-09 Cloudflare Pages 退役后，`ulink.pages.dev` 被无关项目占用（实测 /api/*
- * 全部返回同一个 1519B HTML，POST 405），探针端点随之消失，前端 `probeOverseas`
- * 因 `OVERSEAS_PROBE_URL` 为空而直接跳过。
+ * 2026-11-09 Cloudflare Pages 退役后，`ulink.pages.dev` 子域被释放——`*.pages.dev`
+ * 是全局命名空间，随后被另一个账号的同名项目占用（实测有 A 记录、`CF-RAY` 来自 CF
+ * 边缘、页面是第三方 link-in-bio 模板站；未分配子域本应 NXDOMAIN）。
+ * 探针端点随之消失，前端 `probeOverseas` 因 `OVERSEAS_PROBE_URL` 为空而直接跳过。
  *
  * 2026-11-13：把纯逻辑抽到本文件，供两种形态复用（避免又出现「两份探测逻辑各自漂移」）：
  *   1. `functions/api/check-link.ts` —— Pages Functions 薄壳（历史兼容，已无生产流量）
- *   2. `probe-worker/src/index.ts`  —— 独立 Cloudflare Worker（恢复海外视角的实际部署单元）
+ *   2. `probe-pages/`                —— 当前生产形态（Pages 项目 ulink-probe）
+ *   3. `probe-worker/src/index.ts`   —— Worker 备选（workers.dev 国内不可直连，未启用）
  *
  * 判定口径（三态，刻意保守）：
  * - 2xx/3xx       → alive（海外可达；配合国内不可达 = 确认被墙）

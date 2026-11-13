@@ -32,11 +32,19 @@
 | 死链二次判定（海外探针） | **Cloudflare Pages**（`probe-pages/`，2026-11-13 起） | 自动（inconclusive 时） | CF 免费额度 + CF 出网 |
 
 > **海外探针现状（2026-11-13 更新）**：原实现是 CF Pages Functions `/api/check-link`。
-> Pages 退役后 `ulink.pages.dev` 被无关项目占用（实测 `/api/*` 全部返回同一份
-> 1519B HTML、POST 405），探针随之失效，前端 `OVERSEAS_PROBE_URL` 置空、
-> `probeOverseas` 直接跳过。探测逻辑已抽到 `functions/_lib/probe-core.ts`，
-> 现部署为**独立 Pages 项目 `ulink-probe`**（`probe-pages/`，端点
+> **`ulink.pages.dev` 已不属于本项目**，机制值得记住：`*.pages.dev` 是全局命名空间
+> （同账号内项目名唯一、跨账号不唯一），未分配的子域直接 NXDOMAIN；本项目释放该
+> 子域后，另一个账号注册了同名 Pages 项目并占用。证据：该域有 A 记录（172.66.x）、
+> 响应头 `Server: cloudflare` + `CF-RAY: …-LAX`、页面是第三方 link-in-bio 模板站
+> （`config/config.json` 仍是模板默认值 `"Proud Ulink User"`）。
+> 探针端点随之失效，前端 `OVERSEAS_PROBE_URL` 置空、`probeOverseas` 直接跳过。
+> 探测逻辑已抽到 `functions/_lib/probe-core.ts`，现部署为**独立 Pages 项目
+> `ulink-probe`**（`probe-pages/`，端点
 > `https://ulink-probe.pages.dev/api/check-link`），`.env.production` 已指向它。
+>
+> 本账号现存 Pages 项目（`wrangler pages project list`）：`ulink`（默认域
+> `herrhel.pages.dev`，绑自定义域 `ulink.ren` / `www.ulink.ren`）与 `ulink-probe`。
+> 前者 DNS 已指 CloudBase、不承载流量，但自定义域绑定仍在，若 DNS 被误改会回退到旧站。
 >
 > 曾尝试 Worker 形态（`probe-worker/`，代码保留作绑自有域名时的备选）：
 > `*.workers.dev` 在国内**直连超时**（DNS 通、TCP 20s 不通），同一时刻
@@ -64,7 +72,7 @@
 | `ulink.pages.dev`（Cloudflare Pages） | 200 | 200 | 200 |
 
 （`OVERSEAS_PROBE_URL` 历史上用绝对地址 `https://ulink.pages.dev/api/check-link`；
-该域已于 2026-11 被无关项目占用，现由 `probe-worker/` 承接，未部署时为空=禁用。）
+该子域已于 2026-11 被其他账号的同名 Pages 项目占用，现由 `probe-pages/` 承接。）
 
 **后果**：站点当前挂在 CloudBase 域名上 → 意图寻站与网页抓取**一直在走本地兜底降级**，
 用户拿到的是预置映射库的候选，不是真模型动态生成的结果。

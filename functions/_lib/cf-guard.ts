@@ -15,10 +15,15 @@
 /**
  * 精确白名单：只放行主站与本地 dev（origin 归一化后比较，端口参与匹配）。
  *
- * ⚠️ 2026-11-13 移除 `https://ulink.pages.dev`：该 Pages 项目已退役，域名如今
- * 托管着一个无关项目（实测 /api/* 返回同一份 1519B HTML）。若继续把它列为
- * 可信来源，等于让**别人的页面**获得调用本探针/跳板的资格（CORS 白名单失效）。
- * 探针现由 `probe-worker/` 独立部署，主站来源仍是 `https://ulink.ren`。
+ * ⚠️ 2026-11-13 移除 `https://ulink.pages.dev`：该子域**已不属于本项目**。
+ * 证据：① `*.pages.dev` 是全局命名空间，未分配的子域直接 NXDOMAIN，而该域名有
+ * A 记录（172.66.x）；② 响应头 `Server: cloudflare` + `CF-RAY: …-LAX`，确系 CF
+ * 边缘返回；③ 页面是第三方 link-in-bio 模板站（`config/config.json` 里还是
+ * 模板默认值 `"Proud Ulink User"` / `instagram.com/benmmonster`）。
+ * 即：Pages 项目释放后子域被回收，另一个账号注册了同名项目。
+ * 继续把它列为可信来源，等于让**别人的页面**获得调用本探针/跳板的资格。
+ * 探针现由 `probe-pages/` 独立部署（`ulink-probe.pages.dev`），主站来源仍是
+ * `https://ulink.ren`。
  */
 const ALLOWED_ORIGINS = new Set<string>([
   'https://ulink.ren',

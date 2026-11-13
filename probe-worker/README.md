@@ -18,10 +18,12 @@
 
 ## 为什么不是原来的 `ulink.pages.dev`
 
-原实现是 Cloudflare Pages Functions（`functions/api/check-link.ts`）。Pages 项目
-退役后 `ulink.pages.dev` 被无关项目占用：实测 `/api/check-link` 的 GET 返回
-`200 text/html 1519B`（和根路径同一份无关落地页），POST 返回 `405`。前端因此
-在 2026-11-09 起把 `OVERSEAS_PROBE_URL` 置空、`probeOverseas` 直接跳过。
+原实现是 Cloudflare Pages Functions（`functions/api/check-link.ts`）。`*.pages.dev`
+是全局命名空间：项目释放/改名后子域被回收，另一个账号注册同名项目即可占用。
+证据：该域有 A 记录（未分配子域本应 NXDOMAIN）、响应头 `Server: cloudflare` +
+`CF-RAY: …-LAX`、页面是第三方 link-in-bio 模板站（配置仍是模板默认值
+`"Proud Ulink User"`）。前端因此在 2026-11-09 起把 `OVERSEAS_PROBE_URL` 置空、
+`probeOverseas` 直接跳过。
 
 探测逻辑没有丢，已抽到 `functions/_lib/probe-core.ts`；本 Worker 只是它的一个
 新的部署形态，SSRF 校验仍复用 `supabase/functions/check-link/ssrf-guard.ts` 真源。

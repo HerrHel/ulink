@@ -29,8 +29,14 @@ OPTIONS（Origin: https://ulink.ren）            → 204 + ACAO 回显 + Allow-
 
 ## 为什么不是 `ulink.pages.dev`，也不是 Worker
 
-- **`ulink.pages.dev`**：原 Pages 项目退役后被无关项目占用（`/api/*` 全返回同一份 1519B HTML、POST 405），
-  探针随之失效。
+- **`ulink.pages.dev` 已不属于本项目**：`*.pages.dev` 是**全局命名空间**（同账号内
+  项目名唯一，跨账号不唯一），项目释放/改名后子域被回收，另一个账号注册同名项目即可占用。
+  证据链：① 未分配子域是 NXDOMAIN，而该域有 A 记录（172.66.x）；
+  ② 响应头 `Server: cloudflare` + `CF-RAY: …-LAX`，确系 CF 边缘返回（不是劫持）；
+  ③ 页面是第三方 link-in-bio 模板站，`config/config.json` 仍是模板默认值
+  （`"name": "Proud Ulink User"`、`instagram.com/benmmonster`）。
+  因此我们换到自有子域 `ulink-probe.pages.dev`，并把 `https://ulink.pages.dev`
+  从 CORS 白名单移除（否则那个站能调用本端点）。
 - **`*.workers.dev`**：2026-11-13 部署过 Worker（代码见 `../probe-worker/`），本机直连
   **20s 超时**（DNS 通、TCP 不通），同一时刻 `pages.dev` 直连 200 / 0.43s 建连。
   结论：workers.dev 域名在国内不可直连，绑自有域名才有意义。
