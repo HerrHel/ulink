@@ -29,7 +29,6 @@ module.exports = __toCommonJS(ai_candidates_exports);
 // functions/_lib/cf-guard.ts
 var ALLOWED_ORIGINS = /* @__PURE__ */ new Set([
   "https://ulink.ren",
-  "https://ulink.pages.dev",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:5174",
