@@ -68,3 +68,11 @@ verify_*.html
 
 # Supabase 导出的业务数据（含用户内容，绝不入库）
 cloudbase/data-export/
+
+# 海外探针：部署方式与安全边界是运维必需文档（.md 全局忽略需显式豁免）
+!probe-pages/README.md
+!probe-worker/README.md
+# 探针 Pages 项目的静态占位产物：dist/ 被全局忽略，但 Pages 部署必须有产物目录，
+# 这份 index.html 是唯一需要入库的 dist 文件（noindex 占位页，不含业务）
+!probe-pages/dist/
+!probe-pages/dist/index.html

@@ -131,7 +131,18 @@ export default [
   // 因为 core no-undef 对 TS 全局工具类型（Record/Partial…）会误报。
   // 不套 vue/recommended 整包风格规则，避免把存量格式噪音变成错误。
   {
-    files: ['e2e/**/*.{js,ts}', 'scripts/**/*.ts', 'playwright.config.ts', 'vitest*.config.ts', 'eslint.config.js'],
+    // functions/ 只覆盖探针相关的两个新文件：其余（share-render 等）是存量代码，
+    // 有历史 unused-vars，纳入会平白扩大门禁面（另案清理）。
+    files: [
+      'e2e/**/*.{js,ts}',
+      'scripts/**/*.ts',
+      'probe-worker/**/*.ts',
+      'functions/_lib/probe-core.ts',
+      'functions/api/check-link.ts',
+      'playwright.config.ts',
+      'vitest*.config.ts',
+      'eslint.config.js',
+    ],
     languageOptions: {
       parser: tsParser,
       ecmaVersion: 2022,

@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src/ --max-warnings 0",
-    "lint:scripts": "eslint \"e2e/**/*.{js,ts}\" \"scripts/**/*.{js,ts,mjs,cjs}\" playwright.config.ts \"vitest*.config.ts\" eslint.config.js",
+    "lint:scripts": "eslint \"e2e/**/*.{js,ts}\" \"scripts/**/*.{js,ts,mjs,cjs}\" \"probe-worker/**/*.ts\" functions/_lib/probe-core.ts functions/api/check-link.ts playwright.config.ts \"vitest*.config.ts\" eslint.config.js",
     "lint:style": "stylelint \"src/styles/**/*.css\"",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run",

@@ -51,11 +51,14 @@ jobs:
       - name: Dependency Audit (dev toolchain, advisory)
         run: npm audit --audit-level=high || echo "::warning::dev 工具链存在已知漏洞（不进入生产产物），见 docs/TECH_DEBT.md"
       # 派生 JS 资产一致性守卫：由 TS 真源重新生成派生资产，若与提交产物有 diff
-      # （手改/漏跑生成器）立即红灯，杜绝部署漂移版本。diff 范围必须覆盖 build-fn-assets.mjs
-      # 的**全部**产出：此前只盯 cloudbase/functions，scripts/video-worker/video-platforms.json
-      # 也是从 src/config/videoPlatforms.json 复制的派生资产，漂移不在守卫范围内（审计 #26）。
+      # （手改/漏跑生成器）立即红灯，杜绝部署漂移版本。diff 范围必须覆盖两个生成器的
+      # **全部**产出：build-fn-assets.mjs（云函数 + video-worker 清单）与
+      # build-probe-pages.mjs（海外探针 Pages bundle）。
       - name: Derived fn assets (no drift)
-        run: node scripts/build-fn-assets.mjs && git diff --exit-code -- cloudbase/functions scripts/video-worker/video-platforms.json
+        run: |
+          node scripts/build-fn-assets.mjs
+          node scripts/build-probe-pages.mjs
+          git diff --exit-code -- cloudbase/functions scripts/video-worker/video-platforms.json probe-pages/functions
       # 生产构建进入门禁验证（提前捕获构建期错误），产物供 deploy 复用，避免重复构建
       - name: Build
         run: npm run build

@@ -29,7 +29,19 @@
 | AI 对话、AI 补齐（标题/备注/分类建议） | CloudBase 云函数 `mimo-chat` | 用户主动 | CloudBase 资源点 + MiMo API |
 | 意图寻站、类似平替（真模型） | **Cloudflare Pages Functions** `/api/ai-candidates` | 用户主动 | CF 函数调用 + CF 出网 + MiMo API |
 | 网页元数据抓取 | **Cloudflare Pages Functions** `/api/extract-metadata` | 用户主动 | 同上 |
-| 死链二次判定（海外探针） | **Cloudflare Pages Functions** `/api/check-link` | 自动（inconclusive 时） | 同上 |
+| 死链二次判定（海外探针） | **Cloudflare Pages**（`probe-pages/`，2026-11-13 起） | 自动（inconclusive 时） | CF 免费额度 + CF 出网 |
+
+> **海外探针现状（2026-11-13 更新）**：原实现是 CF Pages Functions `/api/check-link`。
+> Pages 退役后 `ulink.pages.dev` 被无关项目占用（实测 `/api/*` 全部返回同一份
+> 1519B HTML、POST 405），探针随之失效，前端 `OVERSEAS_PROBE_URL` 置空、
+> `probeOverseas` 直接跳过。探测逻辑已抽到 `functions/_lib/probe-core.ts`，
+> 现部署为**独立 Pages 项目 `ulink-probe`**（`probe-pages/`，端点
+> `https://ulink-probe.pages.dev/api/check-link`），`.env.production` 已指向它。
+>
+> 曾尝试 Worker 形态（`probe-worker/`，代码保留作绑自有域名时的备选）：
+> `*.workers.dev` 在国内**直连超时**（DNS 通、TCP 20s 不通），同一时刻
+> `*.pages.dev` 直连 200 / 0.43s 建连，故最终仍用 Pages。
+> 部署与安全边界见 `probe-pages/README.md`。
 
 **关键设计事实**：最高频的"智能"（预填、语义搜索、去重、分类）是**纯本地算法**，
 不调模型、不产生 token 成本。这让"AI 融入日常使用"的成本影响远小于直觉——
@@ -51,7 +63,8 @@
 | `ulink-d1g5srvjo54b1886a-1436146693.tcloudbaseapp.com`（CloudBase 静态托管） | **404** | **404** | **404** |
 | `ulink.pages.dev`（Cloudflare Pages） | 200 | 200 | 200 |
 
-（`OVERSEAS_PROBE_URL` 用的是绝对地址 `https://ulink.pages.dev/api/check-link`，不受影响 ✓）
+（`OVERSEAS_PROBE_URL` 历史上用绝对地址 `https://ulink.pages.dev/api/check-link`；
+该域已于 2026-11 被无关项目占用，现由 `probe-worker/` 承接，未部署时为空=禁用。）
 
 **后果**：站点当前挂在 CloudBase 域名上 → 意图寻站与网页抓取**一直在走本地兜底降级**，
 用户拿到的是预置映射库的候选，不是真模型动态生成的结果。

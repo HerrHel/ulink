@@ -12,10 +12,16 @@
  * 一律放行（见 guardCfRequest 注释）。
  */
 
-/** 精确白名单：退役收口后只放行主站 / 已退役的 CF Pages apex / 本地 dev（origin 归一化后比较，端口参与匹配）。 */
+/**
+ * 精确白名单：只放行主站与本地 dev（origin 归一化后比较，端口参与匹配）。
+ *
+ * ⚠️ 2026-11-13 移除 `https://ulink.pages.dev`：该 Pages 项目已退役，域名如今
+ * 托管着一个无关项目（实测 /api/* 返回同一份 1519B HTML）。若继续把它列为
+ * 可信来源，等于让**别人的页面**获得调用本探针/跳板的资格（CORS 白名单失效）。
+ * 探针现由 `probe-worker/` 独立部署，主站来源仍是 `https://ulink.ren`。
+ */
 const ALLOWED_ORIGINS = new Set<string>([
   'https://ulink.ren',
-  'https://ulink.pages.dev',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5174',

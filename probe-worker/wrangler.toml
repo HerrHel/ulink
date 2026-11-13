@@ -1,0 +1,17 @@
+# ulink-probe — 海外探针 Worker（部署配置）
+#
+# 部署：npx wrangler deploy --config probe-worker/wrangler.toml
+# 说明：本 Worker 只做「海外视角单页探活」，不返回目标内容，不存储任何数据。
+
+# 注意：生产 Pages 项目也叫 ulink-probe（不同命名空间，互不影响）。
+# 这里刻意用 -worker 后缀，避免 deploy/delete 时误操作到 Pages 项目。
+name = "ulink-probe-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+# 先用免费子域 <name>.<subdomain>.workers.dev；国内若实测不稳，
+# 再考虑绑自有域名（需该域名接入 Cloudflare，见 README「边界与风险」）。
+workers_dev = true
+
+[observability]
+enabled = true
