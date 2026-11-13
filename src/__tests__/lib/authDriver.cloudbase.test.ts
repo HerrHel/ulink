@@ -22,6 +22,11 @@ function makeFakeAuth(opts?: {
   session?: unknown
   noClosure?: boolean
   passwordError?: { message: string; code?: string } | null
+  /** refreshSession 的返回/抛错：默认给一对新凭证 */
+  refresh?: () => Promise<{
+    data?: { session?: unknown; user?: unknown } | null
+    error?: { message: string } | null
+  }>
 }) {
   const calls: { method: string; args?: unknown }[] = []
   let lastVerify: VerifyFn | null = null
@@ -30,6 +35,14 @@ function makeFakeAuth(opts?: {
     async getSession() {
       calls.push({ method: 'getSession' })
       return { data: { session: opts?.session ?? null }, error: null }
+    },
+    async refreshSession() {
+      calls.push({ method: 'refreshSession' })
+      if (opts?.refresh) return opts.refresh()
+      return {
+        data: { session: { access_token: 'tok-new', refresh_token: 'rt-new', user: { id: 'u1', email: 'a@b.com' } } },
+        error: null,
+      }
     },
     onAuthStateChange(cb: (event: string, session: unknown) => void) {
       calls.push({ method: 'onAuthStateChange' })
@@ -348,5 +361,48 @@ describe('CloudBase auth driver — 邮箱密码', () => {
     await expect(d.signInWithPassword('a@b.com', 'x')).resolves.toHaveProperty('error')
     await expect(d.sendPasswordReset('a@b.com')).resolves.toHaveProperty('error')
     await expect(d.confirmPasswordReset('a@b.com', '1', 'x')).resolves.toHaveProperty('error')
+  })
+})
+
+describe('CloudBase auth driver — refreshSession（令牌过期抢救）', () => {
+  it('成功时返回补全 user_metadata 的 session', async () => {
+    const f = makeFakeAuth()
+    const d = createCloudBaseAuthDriver(f.auth)
+    const r = await d.refreshSession()
+    expect(r.error).toBeNull()
+    expect(r.session?.user?.email).toBe('a@b.com')
+    // mapSession 会给 CloudBase 的裸 user 补空 user_metadata，上层 displayName 才不会崩
+    expect(r.session?.user?.user_metadata).toEqual({})
+    expect(f.calls.some((c) => c.method === 'refreshSession')).toBe(true)
+  })
+
+  it('session 缺 user 时用 data.user 补（SDK 某些路径只回 user）', async () => {
+    const f = makeFakeAuth({
+      refresh: async () => ({ data: { session: { access_token: 't' }, user: { id: 'u9', email: 'z@b.com' } }, error: null }),
+    })
+    const d = createCloudBaseAuthDriver(f.auth)
+    const r = await d.refreshSession()
+    expect(r.session?.user?.id).toBe('u9')
+  })
+
+  it('平台返回 error（invalid_grant）时原样透出，session 为 null', async () => {
+    const f = makeFakeAuth({ refresh: async () => ({ data: null, error: { message: 'invalid_grant' } }) })
+    const d = createCloudBaseAuthDriver(f.auth)
+    const r = await d.refreshSession()
+    expect(r.session).toBeNull()
+    expect(r.error?.message).toBe('invalid_grant')
+  })
+
+  it('抛异常时返回 error 而不是向上抛（调用方按未登录处理）', async () => {
+    const f = makeFakeAuth({ refresh: async () => { throw new Error('network down') } })
+    const d = createCloudBaseAuthDriver(f.auth)
+    await expect(d.refreshSession()).resolves.toMatchObject({ session: null, error: { message: 'network down' } })
+  })
+
+  it('客户端未提供 refreshSession 时降级返回错误', async () => {
+    const d = createCloudBaseAuthDriver({} as never)
+    const r = await d.refreshSession()
+    expect(r.session).toBeNull()
+    expect(r.error?.message).toContain('CloudBase 未配置')
   })
 })

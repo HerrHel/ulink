@@ -20,6 +20,10 @@ function makeDriver(overrides: Partial<AuthDriver> = {}) {
     async getSession() {
       return { session: null, error: null }
     },
+    async refreshSession() {
+      calls.push('refreshSession')
+      return { session: null, error: { message: 'no refresh token' } }
+    },
     onAuthStateChange() {},
     async updateUserMeta() {
       return { user: null, error: null }

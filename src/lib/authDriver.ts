@@ -25,6 +25,18 @@ export interface AuthErrorLike {
 export interface AuthDriver {
   /** 读取当前会话；未登录时 session 为 null */
   getSession(): Promise<{ session: Session | null; error: AuthErrorLike | null }>
+  /**
+   * 用本地 refresh_token 换一对新凭证。
+   *
+   * 为什么需要它：CloudBase 的 `getSession()` 只读本地凭证（`getCredentials()` 不比较
+   * `expires_at`），真正会刷新的是 `getUser(true)`；而 `getSession` 内部调的是
+   * `getUser(false)`。于是 access token（约 2h）过期后，一次页面刷新就会拿到 401 →
+   * 前端判定未登录并显示「自己退出了登录」，其实 refresh_token 还活着。
+   * 启动与「会话消失」时先走这里，能把这一类掉登录彻底消掉。
+   *
+   * 失败（refresh_token 真过期 / 已被轮换）时返回 error，调用方按未登录处理。
+   */
+  refreshSession(): Promise<{ session: Session | null; error: AuthErrorLike | null }>
   /** 订阅登录态变化；只回传 session，订阅/退订细节留在驱动内 */
   onAuthStateChange(cb: (session: Session | null) => void): void
   /** 更新用户元数据（昵称/头像） */
@@ -62,6 +74,15 @@ export function createSupabaseAuthDriver(): AuthDriver {
     async getSession() {
       const { data, error } = await supabase.auth.getSession()
       return { session: data.session, error: error ?? null }
+    },
+
+    async refreshSession() {
+      try {
+        const { data, error } = await supabase.auth.refreshSession()
+        return { session: data.session ?? null, error: error ?? null }
+      } catch (err: unknown) {
+        return { session: null, error: { message: (err as Error)?.message || '刷新会话失败' } }
+      }
     },
 
     onAuthStateChange(cb) {
@@ -160,6 +181,11 @@ interface CbAuthLike {
     error?: AuthErrorLike | null
   }>
   signOut?: () => Promise<{ error?: AuthErrorLike | null }>
+  /** 用 refresh_token 换新凭证（SDK 暴露的公开方法，不会自动被 getSession 调用） */
+  refreshSession?: (refreshToken?: string) => Promise<{
+    data?: { session?: unknown; user?: unknown } | null
+    error?: AuthErrorLike | null
+  }>
   signInWithOAuth?: (arg: Record<string, unknown>) => Promise<{
     data?: { url?: string } | null
     error?: AuthErrorLike | null
@@ -256,6 +282,29 @@ export function createCloudBaseAuthDriver(
         return { session: null, error: null }
       } catch (err: unknown) {
         return { session: null, error: { message: (err as Error)?.message || '获取会话失败' } }
+      }
+    },
+
+    async refreshSession() {
+      const a = auth()
+      if (!a?.refreshSession) return { session: null, error: { message: 'CloudBase 未配置' } }
+      try {
+        const { data, error } = await a.refreshSession()
+        if (error) return { session: null, error }
+        if (!data) return { session: null, error: null }
+        // 与 getSession 同形状：session 优先，缺 user 时用 data.user 补
+        const raw = data.session
+          ? { ...(data.session as Record<string, unknown>) }
+          : data.user
+            ? { ...(data.user as Record<string, unknown>) }
+            : null
+        if (!raw) return { session: null, error: null }
+        if (!raw.user && data.user) raw.user = data.user
+        // 刷新成功意味着换了一对凭证：递增代次，作废在途的旧 getUser 回写
+        _authGen++
+        return { session: mapSession(raw), error: null }
+      } catch (err: unknown) {
+        return { session: null, error: { message: (err as Error)?.message || '刷新会话失败' } }
       }
     },
 
@@ -469,7 +518,13 @@ export function __setAuthDriverForTest(driver: AuthDriver | null): void {
 export async function getApiToken(): Promise<string> {
   try {
     const driver = getAuthDriver()
-    const { session } = await driver.getSession()
+    let { session } = await driver.getSession()
+    if (!session && typeof driver.refreshSession === 'function') {
+      // access token 过期时 getSession 会拿不到会话（SDK 不自动刷新），
+      // 这里补一次抢救，否则登录用户调 AI/支付/探针会带着空 token 401。
+      // 未登录时 refreshSession 会立即失败（本地无 refresh_token，不发请求）。
+      session = (await driver.refreshSession()).session
+    }
     if (session) {
       const rec = session as unknown as Record<string, unknown>
       const tok = String(rec.accessToken ?? rec.access_token ?? '')

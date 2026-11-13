@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { getAuthDriver } from '../lib/authDriver.js'
+import { getAuthDriver, type AuthDriver } from '../lib/authDriver.js'
 import { dbRpc } from '../lib/dbApi.js'
 import { t } from '../i18n/index.js'
 import { useE2EStore } from './e2e.js'
@@ -258,10 +258,78 @@ export const useAuthStore = defineStore('auth', () => {
     return Math.max(0, Math.ceil((rec.lockUntil - cooldownTick.value) / 1000))
   }
 
+  /** 用户主动点「退出登录」时置位：期间收到的无会话事件不抢救，直接走登出收尾 */
+  let _manualSignOut = false
+  /** 抢救进行中标记：避免一次登出事件触发多次 refresh 造成并发轮换 */
+  let _recovering = false
+  /** 上次抢救时间：30s 内不重复抢救，防 SDK 反复发无会话事件造成刷新死循环 */
+  let _lastRecoverAt = 0
+  const RECOVER_THROTTLE_MS = 30_000
+
+  /**
+   * 单一入口写登录态：userId 观察与敏感密钥上锁都收在这里，
+   * 避免「抢救成功」和「真登出」两条路径漏掉其中一步。
+   */
+  function applySession(s: Session | null) {
+    const prevUser = user.value
+    session.value = s
+    user.value = s?.user ?? null
+    // 缺陷7：登录/换账号时检测 userId 变化并置跨账号标记
+    _observeUserId(s?.user?.id ?? null)
+    if (prevUser && !s?.user) {
+      // 会话过期或远端登出：立即锁定 E2E 与 Vault 敏感解密密钥
+      try { useE2EStore().lock() } catch { /* ignore */ }
+      try { useVaultStore().lock() } catch { /* ignore */ }
+    }
+    _syncFromMetadata(user.value)
+  }
+
+  /**
+   * 会话「消失」时的抢救：先拿 refresh_token 换新凭证，成功则原地恢复登录态。
+   *
+   * 为什么需要：CloudBase 的 getSession 只读本地凭证、不比较 expires_at，
+   * 内部调的 getUser(false) 也不 refresh。access token（约 2h）一过期，
+   * 页面刷新就会拿到 401 → 判定未登录，而 refresh_token 其实还活着。
+   * 失败（refresh_token 真过期 / 已被多标签轮换挤掉）才按未登录处理。
+   */
+  async function recoverSession(driver: AuthDriver) {
+    if (typeof driver.refreshSession !== 'function') {
+      // 驱动未实现刷新（测试替身 / 未来第三方实现）：无法抢救，按登出处理。
+      // 放在第一个 await 之前，保证同步路径与改造前行为一致。
+      applySession(null)
+      return
+    }
+    if (_recovering) return
+    if (Date.now() - _lastRecoverAt < RECOVER_THROTTLE_MS) {
+      // 刚抢救过又被判定无会话：说明刷新拿到的凭证立刻又失效（多为 refresh_token
+      // 已被其它标签/设备轮换挤掉）。不再反复打认证接口，直接落定为登出。
+      applySession(null)
+      return
+    }
+    _lastRecoverAt = Date.now()
+    _recovering = true
+    try {
+      const { session: refreshed } = await driver.refreshSession()
+      if (refreshed?.user) {
+        applySession(refreshed)
+        return
+      }
+    } catch { /* 落回登出 */ } finally {
+      _recovering = false
+    }
+    applySession(null)
+  }
+
   async function init() {
     loading.value = true
     const driver = getAuthDriver()
-    const { session: initial } = await driver.getSession()
+    let { session: initial, error: sessionError } = await driver.getSession()
+    // 同上：access token 过期时 getSession 返回 error 而 refresh_token 仍有效。
+    // 此前这里丢弃 error 直接当未登录（表现为「自己退出登录」），先抢救一次再判定。
+    if (!initial && sessionError) {
+      const { session: refreshed } = await driver.refreshSession()
+      if (refreshed) initial = refreshed
+    }
     session.value = initial
     user.value = initial?.user ?? null
     _syncFromMetadata(user.value)
@@ -270,17 +338,13 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = false
 
     driver.onAuthStateChange((s) => {
-      const prevUser = user.value
-      session.value = s
-      user.value = s?.user ?? null
-      // 缺陷7：登录/换账号时检测 userId 变化并置跨账号标记
-      _observeUserId(s?.user?.id ?? null)
-      if (prevUser && !s?.user) {
-        // 会话过期或远端登出：立即锁定 E2E 与 Vault 敏感解密密钥
-        try { useE2EStore().lock() } catch { /* ignore */ }
-        try { useVaultStore().lock() } catch { /* ignore */ }
+      // 「从有用户变无用户」不一定真的登出：access token 过期、刷新令牌被轮换挤掉、
+      // 网络抖动都会抛一次无会话事件。先抢救；用户主动退出时不抢救。
+      if (user.value && !s?.user && !_manualSignOut) {
+        void recoverSession(driver)
+        return
       }
-      _syncFromMetadata(user.value)
+      applySession(s)
     })
   }
 
@@ -501,8 +565,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function signOut(): Promise<boolean> {
     authError.value = null
+    // 主动登出：期间 SDK 可能抛无会话事件，标记后不再触发「抢救」，
+    // 否则会拿还没清干净的 refresh_token 把人登回来。
+    _manualSignOut = true
     const { error } = await getAuthDriver().signOut()
     if (error) {
+      _manualSignOut = false
       authError.value = error.message
       return false
     }
@@ -554,6 +622,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     user.value = null
     session.value = null
+    _manualSignOut = false
     return true
   }
 

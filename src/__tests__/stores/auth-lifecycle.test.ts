@@ -106,9 +106,10 @@ describe('auth 生命周期 — init / signOut / ticker 停表', () => {
     expect(auth.session).toEqual(sess)
     expect(auth.user?.email).toBe('signed-in@x.com')
 
-    // 派发 SIGNED_OUT → session/user 清空
+    // 派发 SIGNED_OUT → 先尝试用 refresh_token 抢救（异步，防 access token 过期被误判），
+    // 抢救失败后才清空会话。所以这里要等异步收尾，不能同步断言。
     stateCb!('SIGNED_OUT', null)
-    expect(auth.session).toBeNull()
+    await vi.waitFor(() => expect(auth.session).toBeNull())
     expect(auth.user).toBeNull()
     expect(auth.isLoggedIn).toBe(false)
   })
