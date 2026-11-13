@@ -397,7 +397,16 @@ function onRequestOptions(context) {
   return cfPreflightResponse(context.request);
 }
 async function onRequest(context) {
-  return handleProbe(context.request, { requireOrigin: true });
+  return handleProbe(context.request, {
+    // 探针只服务浏览器（前端跨站 fetch 必带 Origin）。拒绝无 Origin 的脚本直连，
+    // 避免这个无鉴权端点被当成免费开放代理刷。Origin 可伪造、限流是单 isolate
+    // 软闸，属纵深防御而非硬边界（见 cf-guard 注释）。
+    requireOrigin: true,
+    // 客户端 probeOverseas 在 4500ms 自行 abort（useDeadLinkChecker.ts）。
+    // 服务端必须更早收口，否则客户端放弃后 Worker 还在跑，白耗一次出网探测。
+    // 与 probe-worker 的取值保持一致，避免两个形态行为漂移。
+    timeoutMs: 3500
+  });
 }
 export {
   onRequest,

@@ -1,13 +1,13 @@
 /**
- * functions/api/check-link.ts — Pages Functions 薄壳（历史形态，已无生产流量）
+ * functions/api/check-link.ts — Pages Functions 薄壳（海外探针的入口）
  *
- * 探测逻辑已抽到 `functions/_lib/probe-core.ts`，与 `probe-worker/src/index.ts`
- * 共用同一份实现（2026-11-13）。本文件只保留 Pages 的 handler 签名，方便：
- *   - 本地/历史调用方仍能按 onRequest 方式使用；
- *   - 若日后重新启用 CF Pages，无需再搬一遍逻辑。
+ * 探测逻辑抽在 `functions/_lib/probe-core.ts`，本文件负责把它包成 Pages 的
+ * handler 形态，并被 `scripts/build-probe-pages.mjs` 打包成
+ * `probe-pages/functions/api/check-link.js` 部署到 Pages 项目 `ulink-probe`
+ * （生产端点 `https://ulink-probe.pages.dev/api/check-link`）。
  *
- * 说明：`ulink.pages.dev` 自 2026-11-09 起已不承载本站，实际生产探针请用
- * `probe-worker/`（见该目录 README）。
+ * Worker 形态（`probe-worker/`）当前不用：`*.workers.dev` 国内直连超时。
+ * 两者共用同一份 probe-core，切换只改薄壳。
  */
 
 import { handleProbe } from '../_lib/probe-core.js'
@@ -19,8 +19,14 @@ export function onRequestOptions(context: { request: Request }): Response {
 }
 
 export async function onRequest(context: { request: Request }): Promise<Response> {
-  // requireOrigin：探针只服务浏览器（前端跨站 fetch 必带 Origin）。
-  // 拒绝无 Origin 的脚本直连，避免这个无鉴权端点被当成免费开放代理刷。
-  // Origin 可伪造、限流是单 isolate 软闸，属纵深防御而非硬边界（见 cf-guard 注释）。
-  return handleProbe(context.request, { requireOrigin: true })
+  return handleProbe(context.request, {
+    // 探针只服务浏览器（前端跨站 fetch 必带 Origin）。拒绝无 Origin 的脚本直连，
+    // 避免这个无鉴权端点被当成免费开放代理刷。Origin 可伪造、限流是单 isolate
+    // 软闸，属纵深防御而非硬边界（见 cf-guard 注释）。
+    requireOrigin: true,
+    // 客户端 probeOverseas 在 4500ms 自行 abort（useDeadLinkChecker.ts）。
+    // 服务端必须更早收口，否则客户端放弃后 Worker 还在跑，白耗一次出网探测。
+    // 与 probe-worker 的取值保持一致，避免两个形态行为漂移。
+    timeoutMs: 3500,
+  })
 }

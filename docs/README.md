@@ -14,7 +14,8 @@
 | `AGENTS.md`（根） | **核心指引**：完整架构、13 个 HTTP 云函数 + maintenance、部署与测试约定，改动前必读 | 2026-11-10 |
 | `CLAUDE.md`（根） | `AGENTS.md` 的精简版，两者同步维护 | 2026-11-10 |
 | `docs/CLOUDBASE_MIGRATION.md` | CloudBase 迁移与操作手册（生产已切 CloudBase，文内"切解析前"属历史方案记录） | 2026-11-10 |
-| `docs/AI_BACKEND_SPLIT.md` | AI 能力分布与端点迁入：CF Pages 退役，`/api/*` 迁入 CloudBase 云函数 `ai-api` | 2026-11-10 |
+| `docs/AI_BACKEND_SPLIT.md` | AI 能力分布与端点迁入：CF Pages 退役，`/api/*` 迁入 CloudBase 云函数 `ai-api`（**例外：海外死链探针仍在 CF Pages，见下条**） | 2026-11-13 |
+| `probe-pages/README.md` | **海外探针**（死链第二视角）：端点 `ulink-probe.pages.dev/api/check-link`，经 CF 境外节点；部署命令、三态判定口径、SSRF/Origin 边界 | 2026-11-13 |
 | `docs/QUOTA_ENFORCEMENT.md` | 额度强制执行现状：AI 请求/Token、视频、死链、历史天数已在服务端强制；storage 为展示值 | 2026-11-10 |
 | `docs/PRICING.md` | 定价与额度口径（唯一真源是 `plans` 表，PRO 月付 ¥15 / 季付 ¥32 / 年付 ¥108） | 2026-11-10 |
 | `docs/BILLING_OPS.md` | 计费运维（套餐/订单/退款/迁移操作；`mimo-chat` 线上已实测 `enforce` 两段式计费） | 2026-11-10 |
