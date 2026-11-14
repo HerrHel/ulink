@@ -1527,9 +1527,11 @@ export default defineConfig({
           // 缓存里的旧 HTML，其引用的旧 hashed asset 已 404 → 白屏。旧值 7 天 + 20 条
           // 让「7 天内任意一次部署」都可能留下可回放的过期 HTML。这里保守收敛为 1 天 +
           // 10 条，把可回放窗口压到最短（不代表根除：离线且恰好跨部署仍可能白屏）。
-          // 真正的「revision 校验」（比对缓存 HTML 的 asset hash 与当前 precache 清单，
-          // 不一致则不回退）需要自定义 Workbox 插件或切 injectManifest，属改构建配置，
-          // 侵入过大，本批次不做。
+          // 2026-11-14 补充：白屏不再只靠缩短 TTL 兜。`src/lib/chunkLoadRecovery.ts`
+          // 监听 /assets/ 产物的加载失败（capture 阶段）与 Vite 的 vite:preloadError，
+          // 命中即清 workbox-* 缓存并整页刷新一次（60s 内只救一次，防刷新死循环）。
+          // 这比「在 SW 里做 revision 比对」更直接：真正会在意的就是「资源拿不到 → 白屏」，
+          // 而 injectManifest 自写路由的改造面远大于此。TTL 收敛仍保留，减少触发概率。
           //
           // #50 换代刷新丢未保存编辑：registerType:'autoUpdate'（下方）只是让 SW 换代
           // 自动 skipWaiting，真正无条件 `window.location.reload()` 在

@@ -4,6 +4,11 @@ import './styles/main.css'
 import App from './App.vue'
 import { vueErrorHandler, unhandledRejectionHandler } from './lib/errorReporter.js'
 import { t, tN } from './i18n/index.js'
+import { installChunkLoadRecovery } from './lib/chunkLoadRecovery.js'
+
+// #50：旧缓存 HTML 指向已清理的 hashed asset 时，脚本 404 会白屏。
+// 在最早时机挂上自愈监听：清 Workspace 缓存 + 整页刷新一次（60s 内只救一次）。
+installChunkLoadRecovery()
 
 const pinia = createPinia()
 const app = createApp(App)
