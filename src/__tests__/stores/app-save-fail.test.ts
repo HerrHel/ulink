@@ -127,16 +127,11 @@ describe('useAppStore.save() 存储失败节流 + Zod 校验护栏', () => {
 
   // #56（审计 2026-11-14）：原 it.skip 断言「app.save() 内置 AppDataSchema.safeParse 校验，
   // 失败返 false + console.error + 不调 saveData」。核查结论：当前 app.save()
-  // （app.ts:204）与 persist.saveData（persist.ts:105）都**没有**写入侧 schema 拦截，
-  // 该分支不存在，断言与实现不符才被无原因 skip 掩盖。写入侧校验目前由持久化
-  // **读取侧**兜底：loadFromLocalStorage / loadFromIDB 的 AppDataSchema.safeParse
-  // 拒绝损坏数据并回退 DEFAULTS/null（见 persist-branches.test.ts 的
-  // 「迁移后 safeParse 仍失败回退 DEFAULTS」用例），损坏数据不会被读回 store。
-  // 这里解除 skip，改为断言当前真实存在的契约：损坏快照仍会委托 saveData 落盘，
-  // 但该快照经 AppDataSchema.safeParse 必被拒（读取侧不会污染 store）。
-  // 若要在 app.save() 恢复写入侧拦截（返 false + 不落盘），需改生产代码 app.ts，
-  // 不在本次可写清单，见任务报告。
-  it('损坏数据快照会被读取侧 AppDataSchema.safeParse 拒绝（写入侧拦截现状）', async () => {
+  // #56：写入侧 schema 守卫（2026-11-14 补齐）。此前 app.save() 不做校验，损坏快照会被
+  // 直接落盘、覆盖上一份好数据，而读取侧 AppDataSchema 校验失败会回退 DEFAULTS ——
+  // 等于「一次坏写 = 整库消失」。现在 save() 用同一份 AppDataSchema 先校验，
+  // 不通过就拒绝落盘并提示（保留上一份好快照）。
+  it('损坏数据快照被写入侧 schema 守卫拦下：不落盘 + 提示 + 返 false', async () => {
     makeDirty()
     saveSpy = vi.spyOn(persist, 'saveData').mockResolvedValue(true)
 
@@ -146,14 +141,40 @@ describe('useAppStore.save() 存储失败节流 + Zod 校验护栏', () => {
 
     const ok = await app.save()
 
-    // 当前实现：写入侧不拦截 → 仍委托 persist.saveData 落盘
-    expect(ok).toBe(true)
-    expect(saveSpy).toHaveBeenCalledTimes(1)
-    // 读取侧真源：这份损坏快照经 AppDataSchema.safeParse 必被拒，不会污染 store
+    expect(ok).toBe(false)
+    // 关键：一次都不能落盘，否则好快照已被覆盖
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(showSpy.mock.calls.filter((c: unknown[]) => String(c[0]).includes('数据结构异常')).length).toBe(1)
+    // 与读取侧同一份真源：这份快照确实会被 AppDataSchema 拒绝
     const { AppDataSchema } = await import('../../schemas.js')
-    const written = saveSpy.mock.calls[0][0]
-    expect(AppDataSchema.safeParse(written).success).toBe(false)
-    expect(storageFailToastCalls()).toBe(0)
+    expect(AppDataSchema.safeParse(ds._dataSnapshot() as any).success).toBe(false)
+  })
+
+  it('坏快照修好后能正常落盘（守卫不粘滞）', async () => {
+    makeDirty()
+    saveSpy = vi.spyOn(persist, 'saveData').mockResolvedValue(true)
+    const ds = useDataStore()
+    ds.bookmarks.push({ notABookmark: true } as any)
+    expect(await app.save()).toBe(false)
+
+    // 移除坏 entry → 应恢复落盘
+    ds.bookmarks.pop()
+    expect(await app.save()).toBe(true)
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('损坏快照持续存在时 5min 内不重复提示（防 toast 刷屏）', async () => {
+    makeDirty()
+    saveSpy = vi.spyOn(persist, 'saveData').mockResolvedValue(true)
+    const ds = useDataStore()
+    ds.bookmarks.push({ notABookmark: true } as any)
+
+    await app.save()
+    await app.save()
+    await app.save()
+
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(showSpy.mock.calls.filter((c: unknown[]) => String(c[0]).includes('数据结构异常')).length).toBe(1)
   })
 
   it('saveData 返 true 成功路径：不 toast「存储不可用」+ save 返 true', async () => {

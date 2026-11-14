@@ -105,6 +105,7 @@ export const programmaticZh = {
 
     // ── 其它（stores / ui）──
     storageUnavailable: '存储不可用（如隐私模式/配额满），刷新后数据可能丢失，请尽快导出备份',
+    storageInvalidSnapshot: '数据结构异常，本次未写入（已保留上一次正常快照）；请导出备份并反馈',
     movedTo: '已移动到 {name}',
     renamed: '已重命名',
     orderUpdated: '排序已更新',
@@ -233,6 +234,7 @@ export const programmaticEn = {
 
     // ── Others (stores / ui) ──
     storageUnavailable: 'Storage unavailable (e.g. private mode or quota full) — data may be lost after refresh, please export a backup soon',
+    storageInvalidSnapshot: 'Data structure is invalid, so this save was skipped (the last good snapshot is kept). Please export a backup and report it.',
     movedTo: 'Moved to {name}',
     renamed: 'Renamed',
     orderUpdated: 'Order updated',

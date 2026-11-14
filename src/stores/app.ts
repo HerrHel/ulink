@@ -13,6 +13,7 @@ import * as persist from './persist.js'
 import { toast } from '../lib/toast.js'
 import { t } from '../i18n/index.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, AppData } from '../types.js'
+import { AppDataSchema } from '../schemas.js'
 
 /**
  * 轻量指纹：长度 + 实体数 + 关键时间戳；避免每次完整 JSON.stringify 两遍。
@@ -81,6 +82,9 @@ export const useAppStore = defineStore('app', () => {
   let _storageFailWarned = false
   let _lastStorageFailToastAt = 0
   const STORAGE_FAIL_REMIND_MS = 5 * 60 * 1000
+  // #56 写入侧 schema 守卫：快照不合法时同样的节流口径（首次必提示，之后每 5min 一次）
+  let _invalidSnapshotWarned = false
+  let _lastInvalidSnapshotToastAt = 0
   // PERF-3：上次成功写入的快照指纹（per space），相同则跳过 Zod/双写。
   // 切换数据空间后，按当前空间取该空间的指纹——私密空间与主页指纹独立，避免互相早退跳过落盘。
   const _lastSavedFp: Record<'main' | 'vault', string> = { main: '', vault: '' }
@@ -234,6 +238,27 @@ export const useAppStore = defineStore('app', () => {
       const fp = _fingerprint(data)
       const space = ui().curSpace
       if (fp && fp === _lastSavedFp[space]) return Promise.resolve(true)
+      // #56 写入侧 schema 守卫：绝不落盘「读取侧会拒绝」的快照。
+      // 读取侧 AppDataSchema 校验失败会回退 DEFAULTS（用户看到整库消失），
+      // 所以只要内存态已经不合法，就必须拦在写入前 —— 否则一次坏写会覆盖掉
+      // 上一份好快照，把「可恢复」变成「真丢数据」。
+      // 用同一份 AppDataSchema（不是另写一套规则），保证「写进去的必能读回来」。
+      const shape = AppDataSchema.safeParse(data)
+      if (!shape.success) {
+        const detail = shape.error.issues
+          .slice(0, 3)
+          .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+          .join('; ')
+        console.error('[app.save] 快照未通过 schema 校验，已拒绝落盘（保留上一份好快照）：', detail)
+        const now = Date.now()
+        const due = !_invalidSnapshotWarned || (now - _lastInvalidSnapshotToastAt >= STORAGE_FAIL_REMIND_MS)
+        if (due) {
+          _invalidSnapshotWarned = true
+          _lastInvalidSnapshotToastAt = now
+          toast(t('msg.storageInvalidSnapshot'), false)
+        }
+        return Promise.resolve(false)
+      }
       d._storageInfoDirty = true
       d._saveCount++
       // IDB 权威写入（含 localStorage 尽力缓存）；按当前数据空间选存储键——
