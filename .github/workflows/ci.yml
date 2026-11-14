@@ -172,7 +172,7 @@ jobs:
           node-version: '20'
       # 复用 lint-test 构建并经测试验证的产物，免去重复 npm ci 和 build
       - name: Download build dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist-artifacts
           path: dist
