@@ -73,15 +73,13 @@ test.describe('L1 同步 mock', () => {
       { timeout: 10000 },
     )
 
-    // 初始 pull 可能与本地示例数据（Edge扩展 / 与链ulink / 宣传页）产生冲突，
-    // 数量取决于 mock 时序。先「全部保留本地」清干净，再把本次要验证的冲突注进去 ——
-    // 否则下面 .first() 点的可能是别的条目，横幅不会消失（CI 上就是这样偶发卡住的）。
     const banner = page.getByTestId('lv-conflict-banner')
-    if (await banner.isVisible()) {
-      await page.getByTestId('lv-conflict-keep-all-local').click()
-      await expect(banner).toBeHidden({ timeout: 10000 })
-    }
 
+    // 注入一条可识别的冲突，并**按行定位**断言：
+    // 断言目标是「这一条冲突点『保留本地』后从横幅里消失」，不是「横幅整体消失」。
+    // 后者之前偶发失败：初始 pull 与本地示例数据（Edge扩展 / 与链ulink / 宣传页）之间
+    // 也会产生冲突，数量取决于 mock 时序；整横幅断言会把「别人的冲突还在」当成失败，
+    // 而那不是本用例要验的行为。（先清理再注入的做法也是竞态的：横幅此刻不可见≠之后不会出现。）
     const injected = await injectConflictViaTestHook(page, {
       id: 'l1-conflict-bm',
       type: 'bookmark',
@@ -91,14 +89,21 @@ test.describe('L1 同步 mock', () => {
     expect(injected).toBe(true)
 
     await expect(banner).toBeVisible({ timeout: 5000 })
-    // 此刻应只剩注入的这一条：逐条按钮点了就应收敛
-    await expect(banner.getByTestId('lv-conflict-keep-local')).toHaveCount(1)
     await expect(banner.getByText(/同步冲突/)).toBeVisible()
-    await expect(page.getByTestId('lv-conflict-keep-local').first()).toBeVisible()
-    await expect(page.getByTestId('lv-conflict-use-remote').first()).toBeVisible()
 
-    // 点保留本地 → 冲突清掉、横幅消失
-    await page.getByTestId('lv-conflict-keep-local').first().click()
-    await expect(banner).toBeHidden({ timeout: 5000 })
+    const row = banner.locator('.conflict-item', { hasText: 'L1 本地' })
+    await expect(row).toHaveCount(1, { timeout: 5000 })
+    const keepLocal = row.getByTestId('lv-conflict-keep-local')
+    const useRemote = row.getByTestId('lv-conflict-use-remote')
+    await expect(keepLocal).toBeVisible()
+    await expect(useRemote).toBeVisible()
+
+    // 点这一行的「保留本地」→ 该行消失（其余历史冲突若有，不影响本断言）
+    await keepLocal.click()
+    await expect(row).toHaveCount(0, { timeout: 5000 })
+
+    // 若这是最后一条冲突，横幅也该收起
+    const left = await banner.getByTestId('lv-conflict-keep-local').count()
+    if (left === 0) await expect(banner).toBeHidden({ timeout: 5000 })
   })
 })
