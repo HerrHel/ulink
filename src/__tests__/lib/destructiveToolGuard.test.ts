@@ -28,8 +28,10 @@ import {
   createAiAgentToolRunner,
   isDestructiveToolCall,
   confirmDestructiveTool,
+  executeConfirmedDestructiveTool,
   resetDestructiveConfirmations,
 } from '../../composables/domain/useAiChatAgent.js'
+import { DYNAMIC_NOT_EXECUTED_PREFIX } from '../../lib/ai/toolResult.js'
 
 function makeRunner() {
   return createAiAgentToolRunner({
@@ -117,5 +119,61 @@ describe('#9 runAgentToolCall 破坏性门槛', () => {
     const res2 = await runner(turn, new AbortController(), call)
     expect(executeManageBookmarks).toHaveBeenCalledTimes(1)
     expect(res2).toContain('未执行')
+  })
+})
+
+describe('#9 确认即执行（executeConfirmedDestructiveTool）', () => {
+  const ctx = () => ({
+    ds: {} as any,
+    ui: {} as any,
+    t: ((k: string) => k) as any,
+    tN: ((_k: string, n: number) => String(n)) as any,
+  })
+
+  it('用户点确认后直接执行同一调用，无需重发指令', async () => {
+    const turn: any = { id: 't-confirm', role: 'assistant', content: '', steps: [] }
+    const res = await executeConfirmedDestructiveTool(
+      { name: 'manage_bookmarks', arguments: { action: 'delete', target: 'x' } },
+      ctx(),
+      turn,
+    )
+    expect(executeManageBookmarks).toHaveBeenCalledTimes(1)
+    expect(res).toBe('已删除书签')
+    // 执行痕迹回写到同一回合，UI 才能像模型自行执行一样展示
+    expect(turn.steps).toHaveLength(1)
+    expect(turn.actionCard?.actionName).toBe('manage_bookmarks')
+  })
+
+  it('清空回收站确认后真的执行', async () => {
+    const turn: any = { id: 't2', role: 'assistant', content: '', steps: [] }
+    const res = await executeConfirmedDestructiveTool(
+      { name: 'manage_settings', arguments: { action: 'empty_trash' } },
+      ctx(),
+      turn,
+    )
+    expect(executeManageSettings).toHaveBeenCalledTimes(1)
+    expect(res).toBe('已清空回收站')
+  })
+
+  it('执行失败返回「未执行：」前缀文本，调用方据此提示失败并保留卡片可点', async () => {
+    executeManageBookmarks.mockResolvedValue({ success: false, message: '目标不存在' })
+    const turn: any = { id: 't3', role: 'assistant', content: '', steps: [] }
+    const res = await executeConfirmedDestructiveTool(
+      { name: 'manage_bookmarks', arguments: { action: 'delete', target: 'gone' } },
+      ctx(),
+      turn,
+    )
+    expect(res.startsWith(DYNAMIC_NOT_EXECUTED_PREFIX)).toBe(true)
+    expect(res).toContain('目标不存在')
+  })
+
+  it('许可只消费一次：确认执行一次后，同签名再调 runner 仍被拒', async () => {
+    const call = { name: 'merge_duplicates', arguments: { confirm: true } }
+    const turn: any = { id: 't4', role: 'assistant', content: '', steps: [] }
+    await executeConfirmedDestructiveTool(call, ctx(), turn)
+    expect(mergeDuplicateBookmarks).toHaveBeenCalledTimes(1)
+    const again = await makeRunner()({ id: 't5', role: 'assistant' } as any, new AbortController(), call)
+    expect(mergeDuplicateBookmarks).toHaveBeenCalledTimes(1)
+    expect(again).toContain('未执行')
   })
 })

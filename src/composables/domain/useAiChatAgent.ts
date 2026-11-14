@@ -65,12 +65,30 @@ export function isDestructiveToolCall(call: { name: string; arguments?: Record<s
 }
 
 /**
- * #9 UI 接线点：用户在破坏性操作的 actionCard 上点「确认」时调用，登记该调用的一次性许可。
- * 随后模型续轮重发同一调用，runAgentToolCall 消费许可并放行执行。
- * 需接线位置见文末报告（useAiActionCards.ts 的 handleActionCardClick 新增分支）。
+ * 登记该调用的一次性许可（内部使用；UI 侧请调 executeConfirmedDestructiveTool）。
+ * runAgentToolCall 执行时消费许可并放行。
  */
 export function confirmDestructiveTool(call: { name: string; arguments?: Record<string, any> }): void {
   DESTRUCTIVE_CONFIRMED.add(destructiveToolSignature(call))
+}
+
+/**
+ * #9：用户在破坏性操作的 actionCard 上点「确认」→ 直接执行同一个 tool call。
+ *
+ * 旧实现只登记许可并提示「请重新发送上一条指令」，把确认动作甩回给用户；这里改为
+ * 确认即执行，语义与「模型续轮重发同一调用」完全一致（同一分发器、同一道门槛），
+ * 只是不再需要用户手动重发。返回值为模型侧工具结果的同构文本：失败以
+ * DYNAMIC_NOT_EXECUTED_PREFIX 开头，调用方据此判定成败。
+ */
+export async function executeConfirmedDestructiveTool(
+  call: { name: string; arguments?: Record<string, any> },
+  context: AiAgentToolContext,
+  assistantTurn: ChatTurn,
+): Promise<string> {
+  confirmDestructiveTool(call)
+  const runner = createAiAgentToolRunner(context)
+  const controller = new AbortController()
+  return runner(assistantTurn, controller, call)
 }
 
 /** 清空全部确认许可（新会话 / 停止生成 / 切换账号 / 测试复位） */

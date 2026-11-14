@@ -10,7 +10,8 @@
  * 共享状态由 useAiChat Facade 显式注入，行为与拆分前逐字一致。
  */
 import { toast } from '../../lib/toast.js'
-import { confirmDestructiveTool } from './useAiChatAgent.js'
+import { executeConfirmedDestructiveTool } from './useAiChatAgent.js'
+import { DYNAMIC_NOT_EXECUTED_PREFIX } from '../../lib/ai/toolResult.js'
 import {
   dispatchSiteCommand,
   mergeDuplicateBookmarks,
@@ -435,15 +436,37 @@ export function useAiActionCards(context: AiActionCardsContext) {
         }
       } else if (card.actionName === 'confirm_destructive_tool') {
         // 2026-11-14 审计 #9：破坏性写工具（删除/移动/清空回收站/导出/合并去重）
-        // 必须由用户显式确认。这里登记一次性许可，并提示用户重发上一条指令，
-        // 让模型续轮重新发起同一个 tool call 时通过 useAiChatAgent 的门槛。
+        // 必须由用户显式确认。确认后**直接执行**同一个 tool call（走同一分发器与门槛），
+        // 并把结果作为一条 assistant 回合回写 —— 不再要求用户「重发上一条指令」。
         const toolCall = (card.payload as {
           toolCall?: { name: string; arguments?: Record<string, any> }
         } | null)?.toolCall
-        if (toolCall) {
-          confirmDestructiveTool(toolCall)
-          card.completed = true
-          toast(t('ai.destructiveToolConfirmed'), true)
+        if (!toolCall) {
+          toast(t('ai.actionFailed'), false)
+        } else {
+          const turn: ChatTurn = {
+            id: 'turn-' + Date.now() + '-assistant',
+            role: 'assistant',
+            content: '',
+            timestamp: Date.now(),
+          }
+          const msg = await executeConfirmedDestructiveTool(toolCall, { ds, ui, t, tN }, turn)
+          const failed = msg.startsWith(DYNAMIC_NOT_EXECUTED_PREFIX)
+          if (failed) {
+            // 执行失败：卡片保持可点，用户可再试；错误如实回显（不吞）
+            toast(msg.slice(DYNAMIC_NOT_EXECUTED_PREFIX.length) || t('ai.actionFailed'), false)
+          } else {
+            card.completed = true
+            turnsAtStart.push({
+              ...turn,
+              content: turn.content || msg,
+              ...(turn.steps ? { steps: turn.steps } : {}),
+              ...(turn.actionCard ? { actionCard: turn.actionCard } : {}),
+            })
+            onTurnsChanged?.()
+            persistTurns()
+            toast(t('ai.destructiveToolConfirmed'), true)
+          }
         }
       }
     } catch (err: any) {
