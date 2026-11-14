@@ -98,7 +98,7 @@ jobs:
           node -e "import('marked').then(() => console.log('marked dynamic import OK')).catch(e => { console.error('::error::marked 动态 import 失败:', e.code || e.message); process.exit(1) })"
       # C1-002 / F2-002：Playwright 进入 PR 门禁；缓存 Chromium 运行时避免每次全量下载
       - name: Cache Playwright browser
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
