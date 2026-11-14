@@ -113,8 +113,13 @@ if (import.meta.env.PROD) {
 
         // 定期轮询检查新版本——浏览器默认最长 24h 才检查一次 SW 更新，
         // 这里改为 30 分钟主动调 update() 触发更新检测。
+        //
+        // 必须 catch：离线/休眠唤醒/弱网时 fetch sw.js 会失败，update() 返回 rejected
+        // promise。漏 catch 就会变成 unhandledrejection，被 errorReporter 记为线上错误——
+        // 线上 22 条「Failed to update a ServiceWorker」全是这条轮询的噪音（不是用户可见
+        // 故障），把真错误淹没了。与上面 checkUpdate 的口径保持一致。
         const POLL_MS = Number(import.meta.env.VITE_SW_UPDATE_INTERVAL) || 30 * 60 * 1000
-        setInterval(() => { registration.update() }, POLL_MS)
+        setInterval(() => { registration.update().catch(() => {}) }, POLL_MS)
       },
     })
 
