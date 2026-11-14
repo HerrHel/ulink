@@ -207,19 +207,24 @@ jobs:
           # --cloudbase-api-key 支持非交互认证，无需设备码。
           # CloudBase 鉴权偶发 "Authorization was not completed"（2026-11-12 整轮 CI
           # 因此变红、重跑即通过），给 3 次机会，避免瞬时抖动卡掉「测试全绿」的发布。
+          # 2026-11-14 复现：同一分钟里 16:15 成功、16:29 连试 3 次全失败、16:37 又成功
+          # —— 确认是 CloudBase 鉴权侧的瞬时故障（与 2026-11-12 同款），不是 key 过期。
+          # 3 次 × 15s 的窗口太窄（那次仍然红了整轮），改为 5 次 + 递增退避（15/30/45/60s），
+          # 总窗口约 2.5 分钟，足以跨过这类抖动，又不至于把真凭据失效拖成 10 分钟假绿。
           login_ok=0
-          for attempt in 1 2 3; do
-            echo "::group::CloudBase login (attempt ${attempt}/3)"
+          delays=(15 30 45 60)
+          for attempt in 1 2 3 4 5; do
+            echo "::group::CloudBase login (attempt ${attempt}/5)"
             if $CLI login --cloudbase-api-key "$CLOUDBASE_APIKEY" -e "$ENV_ID"; then
               login_ok=1
               echo "::endgroup::"
               break
             fi
             echo "::endgroup::"
-            if [ "$attempt" -lt 3 ]; then sleep 15; fi
+            if [ "$attempt" -lt 5 ]; then sleep "${delays[$((attempt-1))]}"; fi
           done
           if [ "$login_ok" -ne 1 ]; then
-            echo "::error::CloudBase 登录连续 3 次失败"
+            echo "::error::CloudBase 登录连续 5 次失败（约 2.5 分钟）；若持续失败请刷新 CLOUDBASE_APIKEY"
             exit 1
           fi
           # --safe：发布前备份，上传失败自动回滚（省去跨洋 --verify 哈希对比耗时）
