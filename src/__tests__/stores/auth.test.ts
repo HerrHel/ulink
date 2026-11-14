@@ -8,6 +8,15 @@ import { setActivePinia, createPinia } from 'pinia'
  * 策略：mock supabase.auth.signInWithOtp / verifyOtp 按需返回 error，
  *      不打网络；断言 store 的冷却/锁定状态与按钮可见文案。
  */
+// #20 双形态：本文件测的是 **auth store 的逻辑**（OTP 冷却/锁定、资料更新、登出清理），
+// 与后端形态无关。把驱动钉在 Supabase 实现上（同样是生产代码，只是不随 VITE_BACKEND
+// 切换），断言在两种形态下强度完全一致；CloudBase 驱动本身由
+// lib/authDriver.cloudbase.test.ts 专项覆盖。
+vi.mock('../../lib/authDriver.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return { ...mod, getAuthDriver: () => mod.createSupabaseAuthDriver() }
+})
+
 vi.mock('../../lib/supabase.js', () => {
   return {
     supabase: {

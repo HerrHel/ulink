@@ -22,6 +22,84 @@ describe('模块 3 审计修复护栏测试集 (Sync Engine & Conflict Resolutio
     vi.restoreAllMocks()
   })
 
+  // 注：本用例（原 34）刻意放在文件最前。它是自洽的（自带 memory port + 数据），
+  // 但 initialSync 的幂等守卫与同步队列都是模块级状态，前序用例遗留的异步收尾
+  // （debounce 落盘/推送）会跨用例执行并把守卫提前置位，导致本用例静默「什么都没做」。
+  // 放在首位可消除这条隐式顺序依赖（CloudBase 形态下曾因此稳定失败）。
+  it('34. initialSync 跨表 ID 不碰撞：分类拥有的 ID 不会误阻断同名书签的补推', async () => {
+    const { createMemorySyncPort, setSyncRemotePort, useCloudSync } = await import('../../composables/domain/useCloudSync.js')
+    const authStore = (await import('../../stores/auth.js')).useAuthStore()
+    ;(authStore as any).user = { id: 'user-shared-id' }
+    // 同时钉住 _getUserId：CloudBase 形态下 userId 由驱动侧解析，只改 auth store 字段
+    // 不足以保证 initialSync 走到补推（两种形态统一用同一个显式桩，避免形状差异）。
+    const hist = await import('../../composables/domain/useSyncHistory.js')
+    const uidSpy = vi.spyOn(hist, '_getUserId').mockReturnValue('user-shared-id')
+
+    // 远端 categories 包含 'shared-id'，但 bookmarks 不包含
+    // 用例卫生：清掉前序用例可能残留的模块级缓存（远端快照 / 待同步队列）。
+    // 不断的话本用例的「补推」判定会被历史状态影响，在 CloudBase 形态下表现为偶发失败
+    // （同一用例单独跑必过，全文件跑才挂 —— 典型的顺序污染）。
+    const { _remoteSnapshots } = await import('../../composables/domain/useSyncConflict.js')
+    _remoteSnapshots.clear()
+    const { __testPendingSync } = await import('../../composables/domain/syncPending.js')
+    __testPendingSync.clear()
+
+    const port = createMemorySyncPort({
+      allIds: {
+        categories: [{ id: 'shared-id' }],
+        bookmarks: [],
+      },
+    })
+    setSyncRemotePort(port)
+
+    const ds = useDataStore()
+    ds.bookmarks = [{
+      id: 'shared-id',
+      title: 'Bookmark with Same ID as Category',
+      url: 'https://example.com',
+      username: '',
+      password: '',
+      notes: '',
+      icon: '',
+      categoryId: 'uncategorized',
+      parentId: null,
+      order: 0,
+      useCount: 0,
+      attributes: {},
+      isExpanded: false,
+      createdAt: 1000,
+      updatedAt: 1000,
+    }]
+    ds.categories = [{
+      id: 'shared-id',
+      name: 'Category with Same ID',
+      icon: '',
+      color: '',
+      order: 0,
+      updatedAt: 1000,
+    }]
+    ds._syncMaps()
+    ds._dirtyIds.clear()
+    ds._newIds.clear()
+
+    const sync = useCloudSync()
+    // 用例卫生：前一个用例可能留下未完成的异步同步（debounce 定时器），它会在本用例
+    // 执行期间抢先调用 initialSync 并把模块级幂等守卫置 true，导致这里的 initialSync
+    // 直接早退、一条都没补推。复位守卫后再调，确保本用例真的跑完整条链路。
+    __resetInitialSync()
+    // 同时清同步态（lastSyncAt / 锁 / 积压计数）：前序用例留下的同步态会让本轮的
+    // pull 走「已有基线」分支，补推判定与用例意图不符。
+    const { useSyncStore: _useSyncStore } = await import('../../stores/sync.js')
+    _useSyncStore().resetSyncState()
+    await sync.initialSync()
+
+    // 验证 bookmarks 的 'shared-id' 成功推送（未被 categories 的 remoteIds 误抑制）
+    const pushedBm = port.upserts.find(u => u.table === 'bookmarks' && (u.row as any)?.id === 'shared-id')
+    uidSpy.mockRestore()
+    expect(pushedBm).toBeDefined()
+  })
+
+
   it('1. syncStore.resetSyncState 契约：重置锁定积压/错误/状态，保留 pendingCount 供 push 刷新', () => {
     const store = useSyncStore()
     store.setPendingCount(42)
@@ -1056,58 +1134,6 @@ describe('模块 3 审计修复护栏测试集 (Sync Engine & Conflict Resolutio
 
     const ok = await restoreFromHistory(999, 'bm-item', 'bookmark')
     expect(ok).toBe(false)
-  })
-
-  it('34. initialSync 跨表 ID 不碰撞：分类拥有的 ID 不会误阻断同名书签的补推', async () => {
-    const { createMemorySyncPort, setSyncRemotePort, useCloudSync } = await import('../../composables/domain/useCloudSync.js')
-    const authStore = (await import('../../stores/auth.js')).useAuthStore()
-    ;(authStore as any).user = { id: 'user-shared-id' }
-
-    // 远端 categories 包含 'shared-id'，但 bookmarks 不包含
-    const port = createMemorySyncPort({
-      allIds: {
-        categories: [{ id: 'shared-id' }],
-        bookmarks: [],
-      },
-    })
-    setSyncRemotePort(port)
-
-    const ds = useDataStore()
-    ds.bookmarks = [{
-      id: 'shared-id',
-      title: 'Bookmark with Same ID as Category',
-      url: 'https://example.com',
-      username: '',
-      password: '',
-      notes: '',
-      icon: '',
-      categoryId: 'uncategorized',
-      parentId: null,
-      order: 0,
-      useCount: 0,
-      attributes: {},
-      isExpanded: false,
-      createdAt: 1000,
-      updatedAt: 1000,
-    }]
-    ds.categories = [{
-      id: 'shared-id',
-      name: 'Category with Same ID',
-      icon: '',
-      color: '',
-      order: 0,
-      updatedAt: 1000,
-    }]
-    ds._syncMaps()
-    ds._dirtyIds.clear()
-    ds._newIds.clear()
-
-    const sync = useCloudSync()
-    await sync.initialSync()
-
-    // 验证 bookmarks 的 'shared-id' 成功推送（未被 categories 的 remoteIds 误抑制）
-    const pushedBm = port.upserts.find(u => u.table === 'bookmarks' && (u.row as any)?.id === 'shared-id')
-    expect(pushedBm).toBeDefined()
   })
 
   it('35. Realtime 远端变更合并时保留本地 isExpanded，防止折叠状态被冲掉', async () => {

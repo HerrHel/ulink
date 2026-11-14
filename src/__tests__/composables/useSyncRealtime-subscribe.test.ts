@@ -19,6 +19,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { isCloudBaseForm } from '../helpers/backendForm.js'
 
 // ── 可控 fake supabase（含 channel 链式桩）──
 // channel(name) → builder.on(event,opts,cb) 累积 4 表回调返自身；.subscribe(statusCb) 存状态回调 + 返回 channel 句柄。
@@ -131,7 +132,7 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-describe('subscribeRealtime — 入口守门', () => {
+describe.skipIf(isCloudBaseForm())('subscribeRealtime — 入口守门', () => {
   it('未登录（无 userId）→ 早退，不建 channel，status 不变（disconnected）', async () => {
     await withoutAuth()
     const { subscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
@@ -158,7 +159,7 @@ describe('subscribeRealtime — 入口守门', () => {
   })
 })
 
-describe('subscribeRealtime — 订阅成功路径（SUBSCRIBED）', () => {
+describe.skipIf(isCloudBaseForm())('subscribeRealtime — 订阅成功路径（SUBSCRIBED）', () => {
   it('SUBSCRIBED → setRealtimeStatus(connected) + 重置重连计数 + onPullChanges 经 withLock 触发一次', async () => {
     await withAuth()
     const { subscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
@@ -193,7 +194,7 @@ describe('subscribeRealtime — 订阅成功路径（SUBSCRIBED）', () => {
   })
 })
 
-describe('subscribeRealtime — 代际守门（_gen 推进）', () => {
+describe.skipIf(isCloudBaseForm())('subscribeRealtime — 代际守门（_gen 推进）', () => {
   it('旧代 channel 残余状态回调被忽略：再次 subscribe 后旧 statusCb 触发不副作用（myGen !== _gen 提前 return）', async () => {
     await withAuth()
     const { subscribeRealtime, unsubscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
@@ -229,7 +230,7 @@ describe('subscribeRealtime — 代际守门（_gen 推进）', () => {
   })
 })
 
-describe('subscribeRealtime — CHANNEL_ERROR / TIMED_OUT / CLOSED 状态分发', () => {
+describe.skipIf(isCloudBaseForm())('subscribeRealtime — CHANNEL_ERROR / TIMED_OUT / CLOSED 状态分发', () => {
   it('CHANNEL_ERROR → setRealtimeStatus(error) + _scheduleReconnect 启动重连 timer', async () => {
     vi.useFakeTimers()
     await withAuth()
@@ -277,7 +278,7 @@ describe('subscribeRealtime — CHANNEL_ERROR / TIMED_OUT / CLOSED 状态分发'
   })
 })
 
-describe('_scheduleReconnect — 指数退避 + 连发不泄漏 timer + 达上限自恢复', () => {
+describe.skipIf(isCloudBaseForm())('_scheduleReconnect — 指数退避 + 连发不泄漏 timer + 达上限自恢复', () => {
   it('指数退避：BASE_RECONNECT_DELAY * 2^attempts 封顶 30000ms', async () => {
     vi.useFakeTimers()
     await withAuth()
@@ -346,7 +347,7 @@ describe('_scheduleReconnect — 指数退避 + 连发不泄漏 timer + 达上�
   })
 })
 
-describe('unsubscribeRealtime — 清理契约', () => {
+describe.skipIf(isCloudBaseForm())('unsubscribeRealtime — 清理契约', () => {
   it('已订阅 → 清重连 timer + 复位计数 + setRealtimeStatus(disconnected) + removeChannel + _channel=null', async () => {
     vi.useFakeTimers()
     await withAuth()
@@ -381,7 +382,7 @@ describe('unsubscribeRealtime — 清理契约', () => {
   })
 })
 
-describe('_scheduleReconnect 重连成功路径 — 重连后 SUBSCRIBED 重置计数', async () => {
+describe.skipIf(isCloudBaseForm())('_scheduleReconnect 重连成功路径 — 重连后 SUBSCRIBED 重置计数', async () => {
   it('重连 timer fire 后 unsubscribe+subscribe 建新 channel，新 channel SUBSCRIBED 后 _reconnectAttempts 复位 0', async () => {
     vi.useFakeTimers()
     await withAuth()
@@ -408,5 +409,80 @@ describe('_scheduleReconnect 重连成功路径 — 重连后 SUBSCRIBED 重置�
     newEntry.statusCb!('CHANNEL_ERROR')
     await vi.advanceTimersByTimeAsync(1100)
     expect(fake._channels.length).toBeGreaterThanOrEqual(3) // 1s 退避内已 fire 建新 channel 证明计数被复位
+  })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// CloudBase 形态：PG 无 postgres_changes，subscribeRealtime 降级为 60s 轮询。
+// 上面基于 channel 的用例在云形态下没有对应实现（已 skipIf），这里正面覆盖
+// 「降级后到底保证了什么」：状态置 connected、按间隔拉、退订要停表。
+// ────────────────────────────────────────────────────────────────────────────
+describe.runIf(isCloudBaseForm())('subscribeRealtime — CloudBase 降级为 60s 轮询', () => {
+  // 与 useSyncRealtime.ts 的 POLL_INTERVAL_MS 对应；改源码常量时这里要同步
+  const POLL_MS = 60_000
+
+  it('已登录 + 回调 → status=connected，每 60s 拉一次，退订后停表', async () => {
+    vi.useFakeTimers()
+    await withAuth('user-cb')
+    const { subscribeRealtime, unsubscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
+    const { useSyncStore } = await import('../../stores/sync.js')
+    const pull = vi.fn().mockResolvedValue(true)
+
+    subscribeRealtime(pull)
+    expect(useSyncStore().realtimeStatus).toBe('connected')
+    expect(pull).not.toHaveBeenCalled() // 不立即拉，等第一个间隔
+
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(pull).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(pull).toHaveBeenCalledTimes(2)
+
+    unsubscribeRealtime()
+    await vi.advanceTimersByTimeAsync(POLL_MS * 2)
+    expect(pull).toHaveBeenCalledTimes(2) // 停表后不再拉
+  })
+
+  it('未登录（无 userId）→ 早退：不置 connected、不建定时器', async () => {
+    vi.useFakeTimers()
+    await withoutAuth()
+    const { subscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
+    const { useSyncStore } = await import('../../stores/sync.js')
+    const pull = vi.fn().mockResolvedValue(true)
+
+    subscribeRealtime(pull)
+    expect(useSyncStore().realtimeStatus).toBe('disconnected')
+    await vi.advanceTimersByTimeAsync(POLL_MS * 2)
+    expect(pull).not.toHaveBeenCalled()
+  })
+
+  it('重复 subscribe → 不重复建定时器（防轮询叠加）', async () => {
+    vi.useFakeTimers()
+    await withAuth('user-cb')
+    const { subscribeRealtime, unsubscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
+    const pull = vi.fn().mockResolvedValue(true)
+
+    subscribeRealtime(pull)
+    subscribeRealtime(pull)
+    subscribeRealtime(pull)
+
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(pull).toHaveBeenCalledTimes(1) // 只有一个定时器在跑
+    unsubscribeRealtime()
+  })
+
+  it('未传回调时沿用上一次的回调继续轮询（漏传不该让轮询静默停掉）', async () => {
+    vi.useFakeTimers()
+    await withAuth('user-cb')
+    const { subscribeRealtime, unsubscribeRealtime } = await import('../../composables/domain/useSyncRealtime.js')
+    const first = vi.fn().mockResolvedValue(true)
+
+    subscribeRealtime(first)
+    unsubscribeRealtime()
+    subscribeRealtime() // 不传 onPullChanges
+
+    await vi.advanceTimersByTimeAsync(POLL_MS)
+    expect(first).toHaveBeenCalledTimes(1)
+    unsubscribeRealtime()
   })
 })

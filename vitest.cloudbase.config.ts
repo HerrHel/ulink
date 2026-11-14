@@ -30,19 +30,16 @@ export default mergeConfig(
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
-        // ── 以下 6 个文件是「Supabase 形态专用」，不做双形态 ──
-        // 它们 mock 的是 supabase.auth 的会话形状 / supabase.channel 的实时通道 /
-        // supabase.from 的特定链式返回，CloudBase 形态下走的是完全另一套实现
-        // （AuthDriver、realtime 降级 60s 轮询、rdb builder），断言必然错位。
-        // 改造成本高于收益，且对应能力在云形态下另有覆盖：
-        //   · 认证：lib/authDriver.cloudbase.test.ts、lib/cloudbaseEnvSwitch.test.ts
-        //   · 实时：云形态本就是轮询降级，无 subscribe 路径
-        'src/__tests__/stores/auth.test.ts',
-        'src/__tests__/stores/auth-lifecycle.test.ts',
-        'src/__tests__/composables/security-module4-audit-fixes.test.ts',
-        'src/__tests__/composables/sync-module3-audit-fixes.test.ts',
-        'src/__tests__/composables/useSyncRealtime-subscribe.test.ts',
-        'src/__tests__/lib/videoExtract.test.ts',
+        // 2026-11-14 晚：原先排除的 6 个「Supabase 形态专用」文件已全部改造为双形态，
+        // 排除清单清空。改法（供后续参考）：
+        //   · 端点断言只断函数名尾段，或直接与生产同一个 URL 构造器（edgeFnUrl）比对；
+        //   · 数据访问 mock 到 lib/dbApi（dbFrom/dbRpc）这一抽象层，两种形态共用同一桩；
+        //   · 调用通道 mock 到 lib/cloudbase 的 invokeCbFunction（与 functions.invoke 同形）；
+        //   · 认证类用例把驱动钉在 createSupabaseAuthDriver()：它测的是 store 逻辑，
+        //     与后端无关，断言强度不变（CloudBase 驱动由 authDriver.cloudbase 专项覆盖）；
+        //   · 契约本身不同的（如 realtime 通道 vs 60s 轮询降级）用 it.runIf/skipIf 分成
+        //     两条断言，各自锁各自真实行为，而不是整文件跳过。
+        // 若将来确有单形态测试，请在此写明原因 —— 缺口要写在明处，不要靠白名单悄悄不跑。
       ],
     },
   }),

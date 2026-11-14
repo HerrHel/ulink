@@ -593,12 +593,12 @@ export const useAuthStore = defineStore('auth', () => {
     // 主动登出：期间 SDK 可能抛无会话事件，标记后不再触发「抢救」，
     // 否则会拿还没清干净的 refresh_token 把人登回来。
     _manualSignOut = true
+    // 登出以「本地」为权威：远端 signOut 失败（离线 / 令牌已失效 / 服务端抖动）时
+    // 若直接返回，E2E/Vault 解密密钥、自定义昵称头像、权益缓存都会留在设备上，
+    // 而用户认为自己已经退出 —— 安全上比「没退干净」更糟。所以先把本地清干净，
+    // 再按远端结果决定返回值与提示。
     const { error } = await getAuthDriver().signOut()
-    if (error) {
-      _manualSignOut = false
-      authError.value = error.message
-      return false
-    }
+    if (error) authError.value = error.message
     customNickname.value = ''
     customAvatar.value = ''
     safeRemoveItem(K_CUSTOM_NICKNAME)
@@ -648,7 +648,8 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     session.value = null
     _manualSignOut = false
-    return true
+    // 远端失败：本地已登出（返回值 false 让调用方提示「服务端未确认」）
+    return !error
   }
 
   async function signInWithOAuth(provider: 'github' | 'google'): Promise<boolean> {

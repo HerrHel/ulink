@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
+// #20 双形态：取 token 在 Supabase 形态走 supabase.auth.getSession，
+// 在 CloudBase 形态走 authDriver.getApiToken。两者用同一个可控开关驱动，
+// 用例（未登录 / 已登录）在两种后端形态下语义一致。
+const _token = vi.hoisted(() => ({ value: 'test-token' as string | null }))
+vi.mock('../../lib/authDriver.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return { ...mod, getApiToken: async () => _token.value }
+})
+
 // supabase 客户端桩：登录态可控
 vi.mock('../../lib/supabase.js', () => ({
   supabase: {
@@ -27,6 +36,8 @@ import {
   buildVideoContentText,
 } from '../../lib/ai/videoExtract.js'
 import { supabase } from '../../lib/supabase.js'
+import { edgeFnUrl } from '../../lib/cloudbase.js'
+import { isCloudBaseForm } from '../helpers/backendForm.js'
 
 const fetchMock = vi.fn()
 
@@ -34,6 +45,7 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', fetchMock)
+    _token.value = 'test-token'
     vi.mocked(supabase.auth.getSession).mockResolvedValue({
       data: { session: { access_token: 'test-token' } },
     } as never)
@@ -45,11 +57,26 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
 
   // ── fetchVideoExtractServer ──
 
-  it('未登录：返回 null 且不发请求（由调用方降级本地链路）', async () => {
+  // 未登录的处理在两种形态下**契约不同**，分两条锁各自真实行为（而不是跳过其一）：
+  // - Supabase：无 session 直接不发请求（Edge Function 要求登录）
+  // - CloudBase：仍发请求但不带 Authorization（按匿名身份消耗匿名额度，不伪造身份）
+  it.runIf(!isCloudBaseForm())('未登录（Supabase 形态）：返回 null 且不发请求（由调用方降级本地链路）', async () => {
     vi.mocked(supabase.auth.getSession).mockResolvedValue({ data: { session: null } } as never)
     const res = await fetchVideoExtractServer('https://www.bilibili.com/video/BV1xx411c7mD')
     expect(res).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.runIf(isCloudBaseForm())('未登录（CloudBase 形态）：仍发请求但不带 Authorization（匿名额度，不伪造身份）', async () => {
+    _token.value = null
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ source: 'bilibili', title: 't', description: '', subtitles: '', comments: [], degraded: false }),
+    })
+    await fetchVideoExtractServer('https://www.bilibili.com/video/BV1xx411c7mD')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
   })
 
   it('正常链路：POST extract-video 并解析简介/字幕/评论区结构化结果', async () => {
@@ -68,13 +95,14 @@ describe('videoExtract — 服务端提取客户端与文字源总结', () => {
 
     const res = await fetchVideoExtractServer('https://www.bilibili.com/video/BV1xx411c7mD')
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/functions/v1/extract-video'),
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ url: 'https://www.bilibili.com/video/BV1xx411c7mD' }),
-      })
-    )
+    // 与生产代码用同一个 URL 构造器：Supabase 形态 → /functions/v1/extract-video，
+    // CloudBase 形态 → <fnBase>/extract-video，断言在两种形态下都精确成立
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(String(calledUrl)).toBe(edgeFnUrl('extract-video'))
+    expect(calledInit).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ url: 'https://www.bilibili.com/video/BV1xx411c7mD' }),
+    })
     expect(res).toMatchObject({
       source: 'bilibili',
       title: '工具分享',
