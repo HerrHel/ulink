@@ -21,19 +21,23 @@ vi.mock('../../composables/domain/useRedeem.js', () => ({
 import UserPopover from '../../components/overlays/UserPopover.vue'
 import { useEntitlement } from '../../composables/domain/useEntitlement.js'
 
-// 模拟 toast
+// 模拟 toast（hoisted 引用，便于断言「远端失败不提示成功」）
+const toastMock = vi.hoisted(() => vi.fn())
 vi.mock('../../lib/toast.js', () => ({
-  toast: vi.fn(),
+  toast: toastMock,
 }))
 
 // 模拟 useCloudSync
 const fullSyncMock = vi.fn().mockResolvedValue(true)
 const resetSyncStateMock = vi.fn().mockResolvedValue(true)
+// 登出唯一入口：signOutAndReset（登出 + 无条件清同步态），见 useCloudSync 注释
+const signOutAndResetMock = vi.fn().mockResolvedValue(true)
 const pendingLockedCountMock = ref(0)
 vi.mock('../../composables/domain/useCloudSync.js', () => ({
   useCloudSync: () => ({
     fullSync: fullSyncMock,
     resetSyncState: resetSyncStateMock,
+    signOutAndReset: signOutAndResetMock,
     syncStatus: ref('idle'),
     syncErrorKind: ref(null),
     syncLabel: ref('已就绪'),
@@ -49,6 +53,8 @@ describe('UserPopover.vue', () => {
     document.body.innerHTML = ''
     fullSyncMock.mockClear()
     resetSyncStateMock.mockClear()
+    signOutAndResetMock.mockClear()
+    toastMock.mockClear()
     useEntitlement().clear()
   })
 
@@ -264,10 +270,9 @@ describe('UserPopover.vue', () => {
     wrapper.unmount()
   })
 
-  it('signs out when clicking sign out item', async () => {
+  it('点「退出登录」走 signOutAndReset（登出 + 无条件清同步态）', async () => {
     const popoverStore = useUserPopoverStore()
     const authStore = useAuthStore()
-    const signOutSpy = vi.spyOn(authStore, 'signOut').mockResolvedValue(true)
 
     authStore.user = { id: 'u1', email: 'alice@example.com' } as any
     popoverStore.show()
@@ -281,8 +286,28 @@ describe('UserPopover.vue', () => {
     await signOutItem.click()
     await nextTick()
 
-    expect(signOutSpy).toHaveBeenCalledTimes(1)
+    // 必须走统一入口：远端登出失败时也要清同步态（离线登出回归的保护点）
+    expect(signOutAndResetMock).toHaveBeenCalledTimes(1)
     expect(popoverStore.open).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('远端登出未确认（返回 false）时不弹「已退出」成功提示', async () => {
+    signOutAndResetMock.mockResolvedValueOnce(false)
+    const popoverStore = useUserPopoverStore()
+    const authStore = useAuthStore()
+    authStore.user = { id: 'u1', email: 'alice@example.com' } as any
+    popoverStore.show()
+    const wrapper = mount(UserPopover, { attachTo: document.body })
+    await nextTick()
+
+    const signOutItem = document.querySelector('.user-popover-card .up-danger-item') as HTMLElement
+    await signOutItem.click()
+    await nextTick()
+
+    expect(signOutAndResetMock).toHaveBeenCalledTimes(1)
+    expect(toastMock).not.toHaveBeenCalledWith(expect.stringContaining('已退出'), true)
 
     wrapper.unmount()
   })
