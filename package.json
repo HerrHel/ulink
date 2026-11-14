@@ -60,7 +60,7 @@
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "@cloudbase/js-sdk": "^3.10.3",
-    "@supabase/supabase-js": "^2.110.7",
+    "@supabase/supabase-js": "^2.118.0",
     "@tiptap/core": "^3.32.0",
     "@tiptap/extension-color": "^3.32.0",
     "@tiptap/extension-history": "^3.32.0",
