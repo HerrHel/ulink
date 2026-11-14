@@ -1776,8 +1776,8 @@ async function onOpenLogin() {
 }
 
 async function onLogout() {
-  const ok = await auth.signOut()
-  if (ok) await sync.resetSyncState()
+  // signOutAndReset：无论远端是否确认都清同步态（详见 useCloudSync 里的注释）
+  await sync.signOutAndReset()
 }
 
 // ── 设置/修改密码：表单在 SetPasswordModal 里，面板只负责唤起 ──

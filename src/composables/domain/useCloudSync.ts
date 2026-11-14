@@ -489,10 +489,32 @@ export function useCloudSync() {
     unsubscribeRealtime()
   }
 
+  /**
+   * 登出 + 清同步态（UI 唯一入口）。
+   *
+   * 为什么要包一层：`auth.signOut()` 在远端失败时返回 false（本地已登出，见 auth store
+   * 的「本地登出权威」语义），而调用点原来写的是 `if (ok) await resetSyncState()` ——
+   * 离线登出就会跳过清理，把 A 账号残留的 syncOps / _pendingSyncIds 留给 B 账号 push
+   * 上云（审计 R1 的原样复现）。清理必须无条件执行，返回值只用于决定是否提示。
+   */
+  async function signOutAndReset(): Promise<boolean> {
+    const ok = await _auth.signOut()
+    try {
+      await resetSyncState()
+    } catch { /* 清理失败也不能让登出流程中断；下次登录 initialSync 仍会走 pull */ }
+    return ok
+  }
+
   async function resetSyncState() {
     _initialized = false
     _claimTried = false
     _lastClaim.value = null
+    // 跨账号残留的远端快照会让「内容去重」判定串号（A 的快照参与 B 的 pull 决策），
+    // 登出/切账号必须清掉。动态 import 避免 useCloudSync ↔ useSyncConflict 的循环求值。
+    try {
+      const { _remoteSnapshots } = await import('./useSyncConflict.js')
+      _remoteSnapshots.clear()
+    } catch { /* 模块未初始化时忽略 */ }
     if (_syncTimer) {
       clearTimeout(_syncTimer)
       _syncTimer = null
@@ -521,7 +543,7 @@ export function useCloudSync() {
     lastClaim,
 
     pushToCloud: pushFromQueue, pullFromCloud: pullChanges, fullSync,
-    debouncedSync, syncImmediate, initialSync, resetSyncState, resyncAllToCloud,
+    debouncedSync, syncImmediate, initialSync, resetSyncState, signOutAndReset, resyncAllToCloud,
     initOnlineListener, destroyOnlineListener,
     refreshPendingCount,
 

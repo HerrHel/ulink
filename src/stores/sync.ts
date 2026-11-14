@@ -69,7 +69,10 @@ export const useSyncStore = defineStore('sync', () => {
     syncStatus.value = 'idle'
     syncError.value = null
     syncErrorKind.value = null
-    conflicts.value = []
+    // 走 clearConflicts 而不是直接清数组：它同时清「已裁决冲突」记忆
+    // （syncResolvedConflicts）。否则 A 账号裁掉过的 (type:id, 远端版本) 会残留到
+    // B 账号，让同一 id 的冲突被静默抑制。
+    clearConflicts()
     conflictBannerDismissed.value = false
     pendingLockedCount.value = 0
   }

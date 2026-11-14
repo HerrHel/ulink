@@ -431,11 +431,9 @@ function openSettings() {
 async function onSignOut() {
   close()
   entService.clear()
-  const ok = await auth.signOut()
-  if (ok) {
-    await sync.resetSyncState()
-    toast(t('settings.logout'))
-  }
+  // signOutAndReset：无论远端是否确认都清同步态（详见 useCloudSync 里的注释）
+  const ok = await sync.signOutAndReset()
+  if (ok) toast(t('settings.logout'))
 }
 
 function onKeydown(e: KeyboardEvent) {
