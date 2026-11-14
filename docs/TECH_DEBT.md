@@ -44,7 +44,7 @@
 |---|---|---|---|
 | 13 | **P0** | **Cloudflare 依赖退役与端点迁入** | ✅ **已彻底完成**：`ulink.pages.dev` 停止承载业务，原 CF Functions `/api/ai-candidates` 与 `/api/extract-metadata` 迁移至国内 CloudBase 云函数 `ai-api`（路由 `/ai-api?action=...`）；`CF_FN_BASE` 默认置空，彻底消除跨洋无效请求 |
 | 14 | **P0** | **视频微服务常驻成本与版权隐患** | ✅ **已重构上线**：删除 `ulink-video-worker` 常驻容器（节省约 365 元/月，防固定出口 IP 计费），彻底废除第三方平台在线视频绕过下载；升级为用户端直传媒体 → 前端 `unifiedMedia` 压缩与音频物化 → 直连境内大模型 MiMo-V2.6-Flash 原生多模态 |
-| 15 | **P1** | **共享数据库缺失备份能力** | ✅ **已闭环自建**：CloudBase 共享集群不提供备份，自建 `db_backup` 表 + `fn_create_db_backup`，`maintenance` 云函数每日 03:00 自动快照（保留 30 天）；部署脚本幂等维护 `daily-maintenance` 触发器；配套恢复脚本 `scripts/restore-db-backup.mjs` |
+| 15 | **P1** | **共享数据库缺失备份能力** | ✅ **已闭环自建**：CloudBase 共享集群不提供备份，自建 `db_backup` 表 + `fn_create_db_backup`，`maintenance` 云函数每日 03:00 自动快照（保留 30 天）；部署脚本幂等维护 `daily-maintenance` 触发器；配套恢复脚本 `scripts/restore-db-backup.mjs`。**恢复路径可执行且已演练**（2026-11-14）：分片暂存（≤8KB/批，单条语句可跨片）+ 单条 DO 块单事务逐条 `EXECUTE`，绕过 ExecutePGSql 10KB 限制同时保持全有或全无；`--apply --dry-run` 用真实备份跑全部语句后强制回滚（实测 800KB / 1412 条 / 数据零变化），当场暴露并修复了 jsonb 列编码缺陷 |
 | 16 | **P1** | **安全合规与审计风控** | ✅ **已补齐**：上线 `audit_log_event`（带体积与每日频次上限）与 `user_security` 账号封禁机制；DNS 校验补齐 DoH SSRF 校验（含重定向逐跳防 DNS 重绑定）；分享密码最低位长升级为 6 位；`share-admin` 等写接口 CORS 严格 fail-closed 白名单化 |
 | 17 | **P1** | **定价合规消除虚构原价** | ✅ **已规范**：PRO 月付定价 12→15 元，年付划线价改为按月订阅同周期真实合计（180 元），消除价格欺诈合规风险；文案改为「订阅期内锁价」 |
 
