@@ -20,21 +20,21 @@ export default mergeConfig(
         VITE_CLOUDBASE_ENV_ID: 'test-env',
         VITE_PUBLISHABLE_KEY: 'test-publishable-key',
       },
-      // #20（审计 2026-11-14）：原 include 硬编码 5 文件，约 5800 测中绝大多数从未
-      // 在 cloudbase（生产）形态下跑过。改为按目录覆盖主要测试目录，让
-      // isCloudBaseBackend()===true 的分支在更大面上被执行，而非只靠 5 个白名单文件。
+      // #20（审计 2026-11-14）第一版把 include 扩到 lib/composables/stores/components
+      // 四个目录，CI 实测 21 个文件 / 117 条失败：这些测试大量直接 mock 了
+      // supabase.auth / supabase.from 的返回形状，在 VITE_BACKEND=cloudbase 下走的是
+      // 另一条驱动分支，断言必然错位。它们不是「双形态测试」，而是 Supabase 形态专用。
       //
-      // 为何不直接 src/__tests__/**/*.test.ts 全量：① 默认套件已把同一批测试在
-      // Supabase 形态下全量跑过一遍，全量再跑一遍会让 CI 时间翻倍（#20 明确要求
-      // 「别让 CI 时间爆炸」）；② ai-eval 真模型评测走 vitest.ai-eval.config.ts
-      // 独立门控，不在此重复（其结构性检查已在默认套件常跑，见 #55）。
-      // 故取 lib / composables / stores / components 四个主要目录，覆盖后端形态敏感的
-      // 绝大多数单测，增量可控。e2e / node_modules / .workbuddy 由 baseConfig.exclude 继承排除。
+      // 因此保持精确清单：只跑**明确按双形态写**（不依赖 supabase mock 形状）的文件。
+      // 想真正扩面需要逐个把测试改造成双形态，属独立工程，不在本次范围。
       include: [
-        'src/__tests__/lib/**/*.test.ts',
-        'src/__tests__/composables/**/*.test.ts',
-        'src/__tests__/stores/**/*.test.ts',
-        'src/__tests__/components/**/*.test.ts',
+        'src/__tests__/lib/cloudbaseEnvSwitch.test.ts',
+        'src/__tests__/lib/authDriver.cloudbase.test.ts',
+        'src/__tests__/lib/authDriver.race.test.ts',
+        'src/__tests__/composables/syncRemotePort.cloudbase.test.ts',
+        'src/__tests__/composables/syncDataIntegrity-audit.test.ts',
+        'src/__tests__/composables/usePurchasePlans.test.ts',
+        'src/__tests__/composables/billing-module7-audit-fixes.test.ts',
       ],
     },
   }),
