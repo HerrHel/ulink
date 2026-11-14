@@ -13,6 +13,36 @@ import { shadowVersion, shadowData, shadowHasAny } from './shareShadow.js'
 import type { DataStoreThis } from './dataShared.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute } from '../types.js'
 
+/**
+ * 搜索索引脏标记 → 版本号递增（getter 内唯一的 state 写，见下方 AUDIT-R11 权衡记录）。
+ *
+ * 为什么要包一层：线上真实遥测里出现过 72 次
+ * `RangeError: Maximum call stack size exceeded`，栈形如
+ * `Proxy.filteredGroups → Reflective set → computed effect → trigger → filteredGroups …`，
+ * 即**在 getter 求值期间写 state 触发了自身重入**。Vue 的 computed 在被写入的依赖
+ * invalidate 后可能在同一次 flush 里再次求值，若此时又碰到 `_searchIndexDirty` 为真，
+ * 就会形成 set → 求值 → set 的无限递归，最终栈溢出、整页掉进 ErrorBoundary。
+ *
+ * `_bumpInFlight` 只挡「同一调用栈内的同步重入」：正常路径下永远是 false，
+ * 递增时机与 AUDIT-R11 的「首次求值立即 bump」语义完全一致；一旦发生重入，
+ * 第二次直接返回（本次不 bump），递归链即被打断，最坏退化成「这一 tick 用旧索引」，
+ * 远好于整页崩溃。
+ */
+let _bumpInFlight = false
+
+/** 供 getter 与单测使用：脏才 bump，重入时不再 bump */
+export function _bumpSearchVersionIfDirty(state: Pick<DataState, '_searchIndexDirty' | '_searchVersion'>): boolean {
+  if (!state._searchIndexDirty || _bumpInFlight) return false
+  _bumpInFlight = true
+  try {
+    state._searchVersion++
+    state._searchIndexDirty = false
+    return true
+  } finally {
+    _bumpInFlight = false
+  }
+}
+
 export const dataGetters = {
   /** 过滤后的书签列表（排除软删除） */
   filteredBookmarks(state: DataState): Bookmark[] {
@@ -21,8 +51,8 @@ export const dataGetters = {
     if (ui.curCat !== CAT_ALL) bm = bm.filter(b => (b.categoryId || CAT_UNCATEGORIZED) === ui.curCat)
     const q = ui.searchQuery
     if (q.trim()) {
-      // 如果搜索索引脏了，直接递增 version 触发重建
-      if (state._searchIndexDirty) { state._searchVersion++; state._searchIndexDirty = false }
+      // 如果搜索索引脏了，直接递增 version 触发重建（重入保护见 _bumpSearchVersionIfDirty）
+      _bumpSearchVersionIfDirty(state)
       // AUDIT-R11 权衡记录：此处 getter 内写 state（state._searchVersion++）是 Vue 反模式（getter 副作用），
       // 但是「立即性」的刻意设计，非可随意消除。
       // · CRUD action（addBookmark/updateBookmark/...）末尾仅设 `_searchIndexDirty=true` 不递增 version——
@@ -57,8 +87,8 @@ export const dataGetters = {
     if (ui.curCat !== CAT_ALL) groups = groups.filter(g => (g.categoryId || CAT_UNCATEGORIZED) === ui.curCat)
     const q = ui.searchQuery
     if (q.trim()) {
-      // 如果搜索索引脏了，直接递增 version 触发重建
-      if (state._searchIndexDirty) { state._searchVersion++; state._searchIndexDirty = false }
+      // 如果搜索索引脏了，直接递增 version 触发重建（重入保护见 _bumpSearchVersionIfDirty）
+      _bumpSearchVersionIfDirty(state)
       // AUDIT-R11：同 filteredBookmarks，此处 getter 副作用是「立即性」刻意设计，见上方完整权衡记录。
       // 同 filteredBookmarks：在全量 siblingGroups 上搜复用 Fuse 缓存（见上注释），
       // 再用 groups.filter 限定当前分类。旧实现传每次新建的 groups 子集 → ref 永变 → 重建。
