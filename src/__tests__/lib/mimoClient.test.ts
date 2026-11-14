@@ -197,7 +197,8 @@ describe('mimoClient', () => {
       try {
         await askMiMoStream('hi', { categories: dummyCats, customAttributes: dummyAttrs })
         expect(calls.length).toBe(1)
-        expect(calls[0].url).toContain('/functions/v1/mimo-chat')
+        // 双形态：只断言函数名尾段（Supabase /functions/v1/mimo-chat vs CloudBase /mimo-chat）
+        expect(calls[0].url).toMatch(/\/mimo-chat$/)
         const headers = calls[0].init.headers as Record<string, string>
         expect(headers.Authorization).toBe('Bearer sb-test-token')
         expect(JSON.stringify(calls[0].init)).not.toContain('sk-')

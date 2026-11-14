@@ -40,6 +40,14 @@ vi.mock('../../stores/app.js', () => ({
   debouncedSaveAppData: vi.fn(),
 }))
 
+// #20 双形态：CloudBase 形态下 SUT 走 invokeCbFunction（返回同构的 { data, error }），
+// 这里让它也指向同一个 invokeMock —— 两种后端都命中同一份桩，判定用例在两边同样成立。
+vi.mock('../../lib/cloudbase.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return { ...mod, invokeCbFunction: invokeMock }
+})
+
+
 import { useDeadLinkChecker } from '../../composables/domain/useDeadLinkChecker.js'
 import { useDataStore } from '../../stores/data.js'
 import { localStorageMock } from '../setup.js'
@@ -376,7 +384,11 @@ describe('checkAll 边界与中断契约', () => {
     invokeMock.mockResolvedValue(edge('ok', 200))
     const { checkAll } = useDeadLinkChecker()
     await checkAll(10, 0)
-    const urls = invokeMock.mock.calls.map((c: unknown[]) => (c[1] as { body?: { url?: string } })?.body?.url)
+    // 双形态取参：Supabase 走 { body: { url } }，CloudBase 的 payload 直接在第 2 参
+    const urls = invokeMock.mock.calls.map((c: unknown[]) => {
+      const arg = c[1] as { body?: { url?: string }; url?: string } | undefined
+      return arg?.body?.url ?? arg?.url
+    })
     expect(urls).toContain('https://same.example')
   })
 

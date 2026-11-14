@@ -29,6 +29,19 @@ const _sb = vi.hoisted(() => ({
   invokeSpy: vi.fn(),
   resolved: { error: null } as { error: { message: string } | null } | Promise<{ error: { message: string } | null }>,
 }))
+// #20 双形态：CloudBase 形态下上报走 invokeCbFunction（返回形状与 functions.invoke 对齐），
+// 让它也走同一个 spy，上报编排用例在两种后端下都成立。
+vi.mock('../../lib/cloudbase.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return {
+    ...mod,
+    invokeCbFunction: (fn: string, body: unknown) => {
+      _sb.invokeSpy(body)
+      return _sb.resolved
+    },
+  }
+})
+
 vi.mock('../../lib/supabase.js', () => ({
   supabase: {
     functions: {

@@ -1,7 +1,7 @@
 // CloudBase 后端形态的定向单测配置：默认 vitest.config.ts 把 VITE_BACKEND 钉成 ''，
-// 使 isCloudBaseBackend()===true 的分支（edgeFnUrl / dbFrom / dbRpc / getAuthDriver）
-// 在 CI 长期零执行。本配置用 mergeConfig 复用默认配置，只覆盖后端开关与云函数基址，
-// 并跑一组 CloudBase 契约子集，让这些分支至少在一条独立门禁里被执行。
+// 使 isCloudBaseBackend()===true 的分支（edgeFnUrl / dbFrom / dbRpc / getAuthDriver /
+// invokeCbFunction）在默认套件里长期零执行。本配置用 mergeConfig 复用默认配置，
+// 只覆盖后端开关与云函数基址，然后把**整个单测集**在 CloudBase 形态下再跑一遍。
 import { defineConfig, mergeConfig } from 'vitest/config'
 import baseConfig from './vitest.config'
 
@@ -12,29 +12,37 @@ export default mergeConfig(
       // 覆盖默认 ''：让 isCloudBaseBackend() 返回 true，云函数 URL 改走 getCbFnBase()。
       // VITE_PUBLISHABLE_KEY 给假值使 isCloudBaseConfigured=true：cloudbaseEnvSwitch
       // 契约测试里 @cloudbase/js-sdk 被 mock 成 fake，init 不会真连网络，
-      // 但要能走到「getCbDb() 返回 rdb builder」这条完整链路（此前无 key → 恒为
-      // null client，env 开关之下的真实分支从未执行，见审计 #25）。
+      // 但要能走到「getCbDb() 返回 rdb builder」这条完整链路。
       env: {
         VITE_BACKEND: 'cloudbase',
         VITE_CLOUDBASE_FN_BASE: 'https://test.ulink.ren',
         VITE_CLOUDBASE_ENV_ID: 'test-env',
         VITE_PUBLISHABLE_KEY: 'test-publishable-key',
       },
-      // #20（审计 2026-11-14）第一版把 include 扩到 lib/composables/stores/components
-      // 四个目录，CI 实测 21 个文件 / 117 条失败：这些测试大量直接 mock 了
-      // supabase.auth / supabase.from 的返回形状，在 VITE_BACKEND=cloudbase 下走的是
-      // 另一条驱动分支，断言必然错位。它们不是「双形态测试」，而是 Supabase 形态专用。
-      //
-      // 因此保持精确清单：只跑**明确按双形态写**（不依赖 supabase mock 形状）的文件。
-      // 想真正扩面需要逐个把测试改造成双形态，属独立工程，不在本次范围。
-      include: [
-        'src/__tests__/lib/cloudbaseEnvSwitch.test.ts',
-        'src/__tests__/lib/authDriver.cloudbase.test.ts',
-        'src/__tests__/lib/authDriver.race.test.ts',
-        'src/__tests__/composables/syncRemotePort.cloudbase.test.ts',
-        'src/__tests__/composables/syncDataIntegrity-audit.test.ts',
-        'src/__tests__/composables/usePurchasePlans.test.ts',
-        'src/__tests__/composables/billing-module7-audit-fixes.test.ts',
+      // #20（审计 2026-11-14）：原实现只跑白名单里 7 个文件 / 76 条测试，
+      // 生产形态（CloudBase）几乎等于没测。2026-11-14 第二轮改为**全量 + 显式排除**：
+      //   - 新增测试文件默认就会在两种后端形态下各跑一遍，不会再出现「写完只在
+      //     Supabase 形态下验证过」的盲区；
+      //   - 确实只能单形态的，必须列进下面 exclude 并写清原因（把缺口写在明处，
+      //     而不是靠白名单悄悄不跑）。
+      // 覆盖收益：7 文件 / 76 测 → 约 395 文件 / 5900 测在云形态下执行。
+      include: ['src/__tests__/**/*.test.ts'],
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        // ── 以下 6 个文件是「Supabase 形态专用」，不做双形态 ──
+        // 它们 mock 的是 supabase.auth 的会话形状 / supabase.channel 的实时通道 /
+        // supabase.from 的特定链式返回，CloudBase 形态下走的是完全另一套实现
+        // （AuthDriver、realtime 降级 60s 轮询、rdb builder），断言必然错位。
+        // 改造成本高于收益，且对应能力在云形态下另有覆盖：
+        //   · 认证：lib/authDriver.cloudbase.test.ts、lib/cloudbaseEnvSwitch.test.ts
+        //   · 实时：云形态本就是轮询降级，无 subscribe 路径
+        'src/__tests__/stores/auth.test.ts',
+        'src/__tests__/stores/auth-lifecycle.test.ts',
+        'src/__tests__/composables/security-module4-audit-fixes.test.ts',
+        'src/__tests__/composables/sync-module3-audit-fixes.test.ts',
+        'src/__tests__/composables/useSyncRealtime-subscribe.test.ts',
+        'src/__tests__/lib/videoExtract.test.ts',
       ],
     },
   }),

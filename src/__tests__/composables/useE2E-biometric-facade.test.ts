@@ -104,6 +104,17 @@ const _supa = vi.hoisted(() => {
     setNextResult: (r: { data: unknown; error: unknown }) => { nextResult = r },
   }
 })
+// #20 双形态：SUT 的数据访问统一走 lib/dbApi（dbFrom/dbRpc）。把这一层指向同一个
+// supabase 桩，用例的主体逻辑在 Supabase / CloudBase 两种后端形态下都成立；
+// dbApi 自身的形态分支由 src/__tests__/lib/dbApi*.test.ts 专门覆盖。
+vi.mock('../../lib/dbApi.js', async () => {
+  const { supabase } = await import('../../lib/supabase.js')
+  return {
+    dbFrom: (table: string) => (supabase as any).from(table),
+    dbRpc: (fn: string, args?: Record<string, unknown>) => (supabase as any).rpc(fn, args),
+  }
+})
+
 vi.mock('../../lib/supabase.js', () => ({
   supabase: { from: _supa.from },
 }))

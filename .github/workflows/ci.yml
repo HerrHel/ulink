@@ -39,9 +39,10 @@ jobs:
       # 复用同一轮全量测试，不额外再跑一遍，避免 CI 时间翻倍（与 #20 同源考量）。
       - name: Unit Tests + Coverage (thresholds gate)
         run: npm run coverage
-      # CloudBase 形态定向单测：默认套件 VITE_BACKEND='' 使 isCloudBaseBackend()===true
-      # 分支在 CI 零执行；独立配置（vitest.cloudbase.config.ts，见 #20）按主要目录
-      # 覆盖 lib/composables/stores/components，让这些分支在 cloudbase 形态下被执行。
+      # CloudBase 形态单测（生产形态）：默认套件 VITE_BACKEND='' 使 isCloudBaseBackend()===true
+      # 分支在 CI 零执行。独立配置（vitest.cloudbase.config.ts，见 #20）现在把**整个单测集**
+      # 在云形态下再跑一遍（约 395 文件），只排除 6 个「Supabase 形态专用」文件（清单与原因
+      # 写在配置里）。新增测试默认自动获得双形态覆盖，别再往 exclude 里加而不写原因。
       - name: Unit Tests (CloudBase)
         run: npm run test:cloudbase
       # F2-001：audit 必须 blocking；豁免请用正式 allowlist，禁止 || true 吞错。

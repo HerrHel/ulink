@@ -20,6 +20,13 @@ vi.mock('../../lib/supabase.js', () => ({
   },
 }))
 
+// #20 双形态：CloudBase 形态下 SUT 走 invokeCbFunction（返回同构的 { data, error }），
+// 这里让它也指向同一个 invokeMock —— 两种后端都命中同一份桩，判定用例在两边同样成立。
+vi.mock('../../lib/cloudbase.js', async (importOriginal) => {
+  const mod = await importOriginal<Record<string, any>>()
+  return { ...mod, invokeCbFunction: invokeMock }
+})
+
 vi.mock('../../stores/app.js', () => ({
   saveAppData: vi.fn(),
   debouncedSaveAppData: vi.fn(),
@@ -211,7 +218,12 @@ describe('checkAll / isDead（RE-11 + attributes）', () => {
     await checkAll(10, 0)
 
     expect(progress.value.total).toBe(1)
-    const urls = invokeMock.mock.calls.map((c: unknown[]) => (c[1] as { body?: { url?: string } })?.body?.url)
+    // 双形态取参：Supabase 是 invoke('check-link', { body: { url } })，
+    // CloudBase 是 invokeCbFunction('check-link', { url }, ...) —— payload 直接在第 2 参。
+    const urls = invokeMock.mock.calls.map((c: unknown[]) => {
+      const arg = c[1] as { body?: { url?: string }; url?: string } | undefined
+      return arg?.body?.url ?? arg?.url
+    })
     expect(urls.every((u: string | undefined) => u === 'https://a.com' || u === undefined || !u)).toBe(true)
     expect(invokeMock.mock.calls.length).toBeGreaterThanOrEqual(1)
   })

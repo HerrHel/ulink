@@ -45,7 +45,8 @@ describe('jinaReader — 隐私披露与护栏', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
       const [endpoint, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
       // 请求只发往自家 jina-proxy Edge Function
-      expect(String(endpoint)).toContain('/functions/v1/jina-proxy')
+      // 双形态：只断言函数名尾段（Supabase /functions/v1/jina-proxy vs CloudBase /jina-proxy）
+      expect(String(endpoint)).toMatch(/\/jina-proxy$/)
       expect(String(endpoint)).not.toContain('r.jina.ai')
       // 目标 URL 走请求体交给服务端转发
       expect(String(init.body)).toContain('https://example.com/page')

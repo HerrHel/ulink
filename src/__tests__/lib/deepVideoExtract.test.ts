@@ -56,7 +56,9 @@ describe('deepVideoExtract — 提交与轮询', () => {
     expect(job).toEqual({ job_id: 'job-abc123', status: 'queued', eta_seconds: 60 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [endpoint, init] = fetchMock.mock.calls[0]
-    expect(String(endpoint)).toContain('/functions/v1/extract-video')
+    // 双形态：Supabase 走 /functions/v1/<fn>，CloudBase 走 /<fn>；只断言函数名尾段，
+    // 这样同一份用例能在两种后端形态下都跑到真实分支（#20）。
+    expect(String(endpoint)).toMatch(/\/extract-video$/)
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({
       action: 'deep',
