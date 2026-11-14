@@ -243,13 +243,28 @@ export const useAppStore = defineStore('app', () => {
       // 所以只要内存态已经不合法，就必须拦在写入前 —— 否则一次坏写会覆盖掉
       // 上一份好快照，把「可恢复」变成「真丢数据」。
       // 用同一份 AppDataSchema（不是另写一套规则），保证「写进去的必能读回来」。
-      const shape = AppDataSchema.safeParse(data)
-      if (!shape.success) {
-        const detail = shape.error.issues
-          .slice(0, 3)
-          .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
-          .join('; ')
-        console.error('[app.save] 快照未通过 schema 校验，已拒绝落盘（保留上一份好快照）：', detail)
+      //
+      // 注意：parse 本身可能因异常输入（非 plain object / 抛错 getter）而抛，
+      // 这个守卫绝不能把异常抛给调用方 —— save() 的调用点遍布同步冲突解决、
+      // 撤销、批量操作，抛出去会打断它们后续的状态收尾（E2E 曾因此挂在冲突横幅）。
+      // 所以「解析抛错」与「解析不通过」一律按「跳过本次写入」处理。
+      let valid: boolean
+      let invalidDetail = ''
+      try {
+        const shape = AppDataSchema.safeParse(data)
+        valid = shape.success
+        if (!shape.success) {
+          invalidDetail = shape.error.issues
+            .slice(0, 3)
+            .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+            .join('; ')
+        }
+      } catch (e) {
+        valid = false
+        invalidDetail = `schema 校验抛错：${(e as Error)?.message || String(e)}`
+      }
+      if (!valid) {
+        console.error('[app.save] 快照未通过 schema 校验，已拒绝落盘（保留上一份好快照）：', invalidDetail)
         const now = Date.now()
         const due = !_invalidSnapshotWarned || (now - _lastInvalidSnapshotToastAt >= STORAGE_FAIL_REMIND_MS)
         if (due) {

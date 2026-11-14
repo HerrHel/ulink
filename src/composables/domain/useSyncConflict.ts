@@ -13,10 +13,22 @@ import { useCloudSync } from './useCloudSync.js'
 import { EditorManager } from '../../lib/editor.js'
 import { _clearPendingSync } from './syncPending.js'
 import { removeSyncOpsByItemId } from '../../stores/storage.js'
+import { markConflictResolved } from '../../lib/syncResolvedConflicts.js'
 import type { Bookmark, SiblingGroup, Category, CustomAttribute, EntityType } from '../../types.js'
 
 /** 远端快照缓存（非响应式，用于去重判断） */
 export const _remoteSnapshots = new Map<string, unknown>()
+
+/**
+ * 落盘失败（校验不通过 / 存储不可用 / 意外抛错）不能打断冲突解决：
+ * resolveConflict 必须走到 removeConflict，否则横幅会挂在那里、用户点不动。
+ * 这里只保证「不抛」，失败由 app.save() 内部提示与日志承载。
+ */
+function _safeSave(): void {
+  try {
+    void Promise.resolve(saveAppData()).catch(() => {})
+  } catch { /* 忽略：持久化问题不应阻塞冲突状态收敛 */ }
+}
 
 /** 按实体类型把远端字段写回 data store（走 update* 保证 dirty/track/map） */
 export function _applyRemoteToLocal(type: EntityType, id: string, remote: Record<string, unknown>) {
@@ -55,7 +67,7 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     ds._changedFields.delete(id)
     _clearPendingSync([id])
     void removeSyncOpsByItemId(id)
-    saveAppData()
+    _safeSave()
   } else {
     _clearPendingSync([id])
     // 保留本地：必须确保本地版本能够胜出并回推覆盖云端。
@@ -85,13 +97,16 @@ export function resolveConflict(id: string, keepLocal: boolean) {
     // #26: 补落盘与同步调度（keepLocal=false 分支已有 saveAppData）。keepLocal 的选择
     // 必须持久化并触发推送把本地版本覆盖云端，否则刷新回退 / 本地版本永不上云。
     // debouncedSync 内含 autoSync / isLoggedIn 门控，关闭自动同步或未登录时安全 no-op。
-    saveAppData()
+    _safeSave()
     try {
       void Promise.resolve(useCloudSync().debouncedSync()).catch(() => {})
     } catch {
       // 未登录或 facade 尚未初始化时忽略，不让异常打断冲突解决
     }
   }
+  // 记住「这个远端版本已由用户裁决」：随后触发的 debouncedSync 若拉到同一版本，
+  // 不再重新判定冲突（否则横幅刚关就被挂回来）。
+  markConflictResolved(conflict.type, id, Number((conflict.remote as { updatedAt?: number })?.updatedAt) || 0)
   _remoteSnapshots.delete(`${conflict.type}:${id}`)
   store.removeConflict(id)
 }

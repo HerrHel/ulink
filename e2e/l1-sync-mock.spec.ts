@@ -73,6 +73,15 @@ test.describe('L1 同步 mock', () => {
       { timeout: 10000 },
     )
 
+    // 初始 pull 可能与本地示例数据（Edge扩展 / 与链ulink / 宣传页）产生冲突，
+    // 数量取决于 mock 时序。先「全部保留本地」清干净，再把本次要验证的冲突注进去 ——
+    // 否则下面 .first() 点的可能是别的条目，横幅不会消失（CI 上就是这样偶发卡住的）。
+    const banner = page.getByTestId('lv-conflict-banner')
+    if (await banner.isVisible()) {
+      await page.getByTestId('lv-conflict-keep-all-local').click()
+      await expect(banner).toBeHidden({ timeout: 10000 })
+    }
+
     const injected = await injectConflictViaTestHook(page, {
       id: 'l1-conflict-bm',
       type: 'bookmark',
@@ -81,8 +90,9 @@ test.describe('L1 同步 mock', () => {
     })
     expect(injected).toBe(true)
 
-    const banner = page.getByTestId('lv-conflict-banner')
     await expect(banner).toBeVisible({ timeout: 5000 })
+    // 此刻应只剩注入的这一条：逐条按钮点了就应收敛
+    await expect(banner.getByTestId('lv-conflict-keep-local')).toHaveCount(1)
     await expect(banner.getByText(/同步冲突/)).toBeVisible()
     await expect(page.getByTestId('lv-conflict-keep-local').first()).toBeVisible()
     await expect(page.getByTestId('lv-conflict-use-remote').first()).toBeVisible()

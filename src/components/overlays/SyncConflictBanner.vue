@@ -23,8 +23,8 @@
             </div>
           </div>
           <div class="conflict-banner-foot">
-            <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(true)">{{ t('conflict.keepAllLocal') }}</button>
-            <button class="btn btn-ghost btn-xs" @click="sync.resolveAllConflicts(false)">{{ t('conflict.useAllRemote') }}</button>
+            <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-keep-all-local" @click="sync.resolveAllConflicts(true)">{{ t('conflict.keepAllLocal') }}</button>
+            <button class="btn btn-ghost btn-xs" data-testid="lv-conflict-use-all-remote" @click="sync.resolveAllConflicts(false)">{{ t('conflict.useAllRemote') }}</button>
           </div>
       </div>
     </Transition>

@@ -5,6 +5,7 @@
  * 此前分散在 useCloudSync / useSyncRealtime / useSyncConflict 的模块级 ref，
  * 统一归入此 Store，消除 singleton composable 模式带来的测试状态泄漏。
  */
+import { clearResolvedConflicts } from '../lib/syncResolvedConflicts.js'
 import { ref, readonly } from 'vue'
 import { defineStore } from 'pinia'
 // 仅类型引入（运行时零依赖，不产生 store↔composable 循环）
@@ -95,6 +96,8 @@ export const useSyncStore = defineStore('sync', () => {
 
   function clearConflicts() {
     conflicts.value = []
+    // 裁决记忆随冲突一起清（换账号/退出登录时不能把上个账号的裁决带到新账号）
+    clearResolvedConflicts()
   }
 
   function dismissConflictBanner() {

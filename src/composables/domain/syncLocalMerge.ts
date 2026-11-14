@@ -5,6 +5,7 @@
  */
 import { useDataStore } from '../../stores/data.js'
 import { useSyncStore } from '../../stores/sync.js'
+import { isConflictVersionResolved } from '../../lib/syncResolvedConflicts.js'
 import { CAT_ALL, CAT_UNCATEGORIZED } from '../../config/constants.js'
 import { decideRemoteApply, sanitizeRemoteTimestamp } from './syncMergeCore.js'
 import { _isPendingSync, isDeadDelete } from './syncPending.js'
@@ -169,7 +170,14 @@ export function _mergeIntoLocal<T extends { id: string; updatedAt?: number; dele
         onWrite?.()
         break
       case 'conflict':
-        if (lItem && !syncStore.getConflict(rItem.id)) {
+        // 用户已在**同一远端版本**上裁决过（保留本地/采用云端）就不再重复弹：
+        // 否则 resolveConflict 触发的 debouncedSync 会立刻把横幅又挂回来。
+        // 远端版本严格更新时（updatedAt 前进）仍然照常判定冲突。
+        if (
+          lItem
+          && !syncStore.getConflict(rItem.id)
+          && !isConflictVersionResolved(type, rItem.id, Number(rItem.updatedAt) || 0)
+        ) {
           syncStore.addConflict({
             id: rItem.id, type,
             local: cloneDeep(lItem),
